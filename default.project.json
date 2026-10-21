@@ -47,7 +47,7 @@
       "$className": "Workspace",
       "$properties": {
         "StreamingEnabled": true,
-        "StreamingMinRadius": 96,
+        "StreamingMinRadius": 112,
         "StreamingTargetRadius": 384,
         "FallenPartsDestroyHeight": -700
       }

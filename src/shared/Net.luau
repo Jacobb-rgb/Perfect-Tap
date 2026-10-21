@@ -29,6 +29,8 @@ Net.Events = {
 	CarryPickup = { Rate = 8, Burst = 10 },
 	CarryDrop = { Rate = 8, Burst = 10 },
 	CarryThrow = { Rate = 6, Burst = 8 },
+	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
+	Emote = { Rate = 2, Burst = 4 }, -- (name: an EmoteConfig.List name, or "" to stop) the EMOTES menu; EmoteService sets the character attribute
 	-- cleaning minigame
 	CleanStart = { Rate = 2, Burst = 3 },
 	CleanSubmit = { Rate = 2, Burst = 3 },
@@ -188,13 +190,19 @@ Net.Events = {
 	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
 	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
 	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
+	QuestAction = { Rate = 2, Burst = 4 }, -- daily / weekly quests and the login streak (QuestService,
+	--   QuestConfig): ("Claim", { Kind = "Daily", Index = 1..QuestConfig.DailyCount, Day? } |
+	--   { Kind = "Weekly", Week? }) a finished quest's reward (Day / Week: the number the
+	--   client saw, another one is "Stale") | ("Streak") today's login streak day. Every
+	--   request read gets an ActionResult { Action = "Quest", Op, Ok, Reason?, Index? };
+	--   a reward also gets QuestReward ("InventoryFull": day 7's capsule waits for room)
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
 	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
-	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean, FastSpin: boolean })
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake, Rumble, FastSpin, ReduceMotion: boolean })
 	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
 	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
 	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
@@ -277,6 +285,11 @@ Net.Events = {
 	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
 	--   shards: ArtifactAction "Restore", no rock) }
 	ArtifactFound = false,
+	-- a quest or streak reward paid: { Kind: "Daily" | "Weekly" | "Streak", Index?, Day? (streak
+	--   day 1..7), Coins?, Shards?, Boost?, Seconds? (boost seconds really added), Capsule?,
+	--   Golem? { Id, Kind } (the capsule's golem: its CapsuleResult opening follows), Full?
+	--   (the capsule was paid as Coins: no room / restricted) }
+	QuestReward = false,
 	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
 	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
 	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)

@@ -260,6 +260,18 @@ return function(T, Loader)
 		T.eq(w.boards().Owned.NeonComet, nil, "refunded: revoked on the next load")
 	end)
 
+	withWorld("passes: a pass bought while the save was still loading is granted by the load's check", function(w)
+		w.loaded = false
+		m.purchaseFinished(w.player, COMET, true)
+		T.eq(w.data.Hoverboards.Owned.NeonComet, nil, "no save yet: nothing to grant into")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache: owned")
+		w.loaded = true
+		w.owned[COMET] = true
+		w.owned[PHOENIX] = false
+		m.checkAll(w.player)
+		T.eq(w.boards().Owned.NeonComet, true, "granted once the save loaded")
+	end)
+
 	withWorld("passes: a player who leaves stops the checks quietly; no save = no change", function(w)
 		w.owned[COMET] = function()
 			w.player.Parent = nil

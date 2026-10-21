@@ -79,6 +79,11 @@ for _, ore in OreData.List do
 	if not models[name] then
 		models[name] = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id, Grade = "Clean" }, CF.new(), name)
 	end
+	-- every ore's ingot (the Foundry's rows; in the game a live ViewportFrame)
+	local ingot = "item_Ingot_" .. ore.Id
+	if not models[ingot] then
+		models[ingot] = ItemBuilder.build({ Kind = "Ingot", OreId = ore.Id, Grade = "Pristine" }, CF.new(), ingot)
+	end
 end
 
 -- the older machines without a Soft-style model (MachineBuilder)
@@ -94,6 +99,13 @@ local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.Star
 local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
+end
+
+-- every hoverboard (the hoverboards window's cards, the shop's board passes; in the game a live ViewportFrame)
+local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
+for _, board in HoverboardData.List do
+	models["board_" .. board.Id] = HoverboardBuilder.build(board.Id)
 end
 
 -- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
@@ -119,6 +131,26 @@ for _, set in LimitedUpcoming.Sets do
 		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
 	end
 	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
+end
+
+-- asked for by name and not above: any item ("item_<Kind>_<Ore>", the Pop
+-- windows' live item pictures) or machine ("machine_<Id>", MachineBuilder)
+for _, name in process.args do
+	if not models[name] then
+		local kind, ore = string.match(name, "^item_(%a+)_(%w+)$")
+		local machine = string.match(name, "^machine_(%w+)$")
+		if kind and ore then
+			local ok, model = pcall(ItemBuilder.build, { Kind = kind, OreId = ore, Grade = "Clean" }, CF.new(), name)
+			if ok then
+				models[name] = model
+			end
+		elseif machine then
+			local ok, model = pcall(MachineBuilder.build, machine)
+			if ok then
+				models[name] = model
+			end
+		end
+	end
 end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula

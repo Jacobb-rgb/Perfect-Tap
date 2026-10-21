@@ -181,15 +181,20 @@ function LightWorldController.start()
 	for _, d in Workspace:GetDescendants() do
 		skinLabel(d)
 	end
+	-- (filtered before deferring: a streamed-in region adds thousands of parts at once)
 	Workspace.DescendantAdded:Connect(function(d)
-		task.defer(skinLabel, d)
+		if d:IsA("BillboardGui") then
+			task.defer(skinLabel, d)
+		end
 	end)
 	local playerGui = player:WaitForChild("PlayerGui")
 	for _, d in playerGui:GetDescendants() do
 		skinLabel(d)
 	end
 	playerGui.DescendantAdded:Connect(function(d)
-		task.defer(skinLabel, d)
+		if d:IsA("BillboardGui") then
+			task.defer(skinLabel, d)
+		end
 	end)
 	if UIConfig.CustomPrompts then
 		startPrompts()

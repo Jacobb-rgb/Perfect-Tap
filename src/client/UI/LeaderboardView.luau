@@ -11,9 +11,12 @@
 	         LeaderboardConfig.TopCount that was read, "~#4" when your live
 	         value would place you there before your next write lands,
 	         else "#11+")
-	  panel  the side menu's HALL OF FAME panel (a MenuPanel): a tab per board
-	         (LB / RB on a gamepad), the top LeaderboardConfig.TopCount and
-	         YOUR line
+	  panel  the side menu's HALL OF FAME panel (a MenuPanel in the Pop
+	         look): a bright tab per board (LB / RB on a gamepad), the top
+	         LeaderboardConfig.TopCount as painted rows in a dark studded
+	         well (#1 gold, #2 silver, #3 bronze, the rest slate, yours
+	         blue; a big rank number, the name and value in white with
+	         black edges) and YOUR line
 
 	Both use one canvas builder; LeaderboardView.lines turns the server's
 	Leaderboards payload into the texts (tested in Lune). Values go through
@@ -24,7 +27,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LeaderboardConfig = require(Shared.Config.LeaderboardConfig)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local MenuPanel = require(script.Parent.MenuPanel)
 
 local LeaderboardView = {}
@@ -62,6 +67,26 @@ LeaderboardView.Medals = {
 }
 LeaderboardView.RowText = Color3.fromRGB(236, 242, 255)
 LeaderboardView.MineColor = Color3.fromRGB(255, 176, 64)
+-- the panel's painted rows (Pop): #1 gold, #2 silver, #3 bronze, the rest slate, yours blue
+LeaderboardView.MedalPaints = {
+	PopTheme.Paints.Yellow,
+	{ Top = Color3.fromRGB(246, 250, 255), Bottom = Color3.fromRGB(150, 162, 186), Edge = PopTheme.Outline },
+	{ Top = Color3.fromRGB(250, 178, 118), Bottom = Color3.fromRGB(176, 92, 40), Edge = PopTheme.Outline },
+} :: { Pop.Paint }
+LeaderboardView.RowPaint = {
+	Top = Color3.fromRGB(84, 90, 108),
+	Bottom = Color3.fromRGB(56, 60, 74),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
+LeaderboardView.MinePaint = PopTheme.Paints.Blue
+LeaderboardView.EmptyText = Color3.fromRGB(176, 184, 204)
+-- each board's tab colour (the picked tab is painted, the rest slate)
+LeaderboardView.TabPaints = {
+	MoneyPerSec = "Green",
+	TotalEarned = "Yellow",
+	Artifacts = "Purple",
+	HoursPlayed = "Blue",
+} :: { [string]: string }
 LeaderboardView.Empty = "—"
 LeaderboardView.Short = {
 	MoneyPerSec = "MONEY/S",
@@ -167,7 +192,11 @@ function LeaderboardView.lines(boardId: string, data: BoardData?, own: Own?, myU
 	end
 	local value = if own and type(own.Value) == "number" then own.Value else 0
 	local ownRank: string
-	local estimate = if value > 0 and data and data.Ready ~= false then LeaderboardView.estimateRank(boardId, list, value, myUserId) else nil
+	local estimate = if value > 0
+			and data
+			and data.Ready ~= false
+		then LeaderboardView.estimateRank(boardId, list, value, myUserId)
+		else nil
 	if own and type(own.Rank) == "number" then
 		ownRank = "#" .. tostring(own.Rank)
 	elseif estimate then
@@ -228,21 +257,36 @@ end
 
 -- The board content inside `parent` (sized by scale, so it fits the board
 -- part or a panel; `width` = its width in pixels, for fitting the texts).
--- `title` = room for a title band on top.
+-- `title` = room for a title band on top. `pop` = the side menu panel's
+-- look: painted rows (MedalPaints / RowPaint / MinePaint), a big rank
+-- number, white words with black edges (the lobby boards keep the navy
+-- board's plain rows, readable from the plaza).
 function LeaderboardView.canvas(
 	parent: Instance,
 	board: LeaderboardConfig.Board,
 	rowCount: number,
 	title: boolean,
 	textSize: number,
-	width: number
+	width: number,
+	pop: boolean?
 ): Canvas
+	local isPop = pop == true
+	local function text(where: Instance, words: string, size: number, props: { [string]: any }): TextLabel
+		if isPop then
+			local made = Pop.text(where, words, size, props)
+			made.ZIndex = 6
+			return made
+		end
+		return UIKit.label(where, words, size, props)
+	end
 	local root = UIKit.new("Frame", {
 		Name = "Canvas",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
+		ZIndex = 3,
 	}, parent)
-	local top = if title then 0.21 else 0
+	root:SetAttribute("Pop", isPop)
+	local top = if title then 0.21 elseif isPop then 0.01 else 0
 	local ownH = if title then 0.15 else 0.12
 	local bottom = 1 - ownH - 0.02
 	local titleLabel = UIKit.label(root, board.Title, textSize + 4, {
@@ -256,40 +300,47 @@ function LeaderboardView.canvas(
 	})
 	local rows: { RowRefs } = {}
 	local rowH = (bottom - top) / rowCount
+	local white = PopTheme.Ink
 	for i = 1, rowCount do
 		local frame = UIKit.new("Frame", {
 			Name = "Row" .. i,
 			Position = UDim2.fromScale(0.03, top + (i - 1) * rowH),
-			Size = UDim2.new(0.94, 0, rowH, -2),
+			Size = UDim2.new(0.94, 0, rowH, if isPop then -5 else -2),
 			BackgroundColor3 = Color3.new(1, 1, 1),
 			BackgroundTransparency = if i % 2 == 1 then 0.93 else 1,
 			BorderSizePixel = 0,
+			ZIndex = 4,
 		}, root)
-		UIKit.corner(frame, 6)
+		if isPop then
+			Pop.face(frame, LeaderboardView.RowPaint, 8, false)
+			Pop.studs(frame, 8, 0.6, 32, 4)
+		else
+			UIKit.corner(frame, 6)
+		end
 		local cols = LeaderboardView.Columns
-		local rank = UIKit.label(frame, tostring(i), textSize, {
+		local rank = text(frame, tostring(i), if isPop then textSize + 4 else textSize, {
 			Name = "Rank",
 			Position = UDim2.fromScale(cols.Rank[1], 0),
 			Size = UDim2.fromScale(cols.Rank[2], 1),
-			FontFace = Theme.TitleFont,
-			TextColor3 = LeaderboardView.RowText,
+			FontFace = if isPop then PopTheme.Font else Theme.TitleFont,
+			TextColor3 = if isPop then white else LeaderboardView.RowText,
 			TextWrapped = false,
 		})
-		local name = UIKit.label(frame, LeaderboardView.Empty, textSize, {
+		local name = text(frame, LeaderboardView.Empty, textSize, {
 			Name = "PlayerName",
 			Position = UDim2.fromScale(cols.Name[1], 0),
 			Size = UDim2.fromScale(cols.Name[2], 1),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = LeaderboardView.RowText,
+			TextColor3 = if isPop then white else LeaderboardView.RowText,
 			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		})
-		local value = UIKit.label(frame, "", textSize, {
+		local value = text(frame, "", textSize, {
 			Name = "Value",
 			Position = UDim2.fromScale(cols.Value[1], 0),
 			Size = UDim2.fromScale(cols.Value[2], 1),
 			TextXAlignment = Enum.TextXAlignment.Right,
-			TextColor3 = Theme.Coin,
+			TextColor3 = if isPop then white else Theme.Coin,
 			TextWrapped = false,
 		})
 		table.insert(rows, { Frame = frame, Rank = rank, Name = name, Value = value })
@@ -302,41 +353,47 @@ function LeaderboardView.canvas(
 		BackgroundColor3 = LeaderboardView.MineColor,
 		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, root)
-	UIKit.corner(own, 8)
-	UIKit.stroke(own, 2, LeaderboardView.MineColor, 0.2)
-	local ownRank = UIKit.label(own, LeaderboardView.Empty, textSize, {
+	if isPop then
+		Pop.face(own, LeaderboardView.MinePaint, 10, false)
+		Pop.studs(own, 10, 0.5, 36, 4)
+	else
+		UIKit.corner(own, 8)
+		UIKit.stroke(own, 2, LeaderboardView.MineColor, 0.2)
+	end
+	local ownRank = text(own, LeaderboardView.Empty, textSize, {
 		Name = "Rank",
 		Size = UDim2.fromScale(0.22, 1),
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Text,
+		FontFace = if isPop then PopTheme.Font else Theme.TitleFont,
+		TextColor3 = if isPop then white else Theme.Text,
 		TextWrapped = false,
 	})
-	local ownLabel = UIKit.label(own, "YOU", textSize, {
+	local ownLabel = text(own, "YOU", textSize, {
 		Name = "You",
 		Position = UDim2.fromScale(0.23, 0),
 		Size = UDim2.fromScale(0.3, 1),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Text,
+		FontFace = if isPop then PopTheme.Font else Theme.TitleFont,
+		TextColor3 = if isPop then white else Theme.Text,
 		TextWrapped = false,
 	})
-	local ownValue = UIKit.label(own, "", textSize, {
+	local ownValue = text(own, "", textSize, {
 		Name = "Value",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(0.97, 0),
 		Size = UDim2.fromScale(0.46, 1),
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.Coin,
+		TextColor3 = if isPop then white else Theme.Coin,
 		TextWrapped = false,
 	})
 	-- a short note in the last row's place (Studio test / loading)
-	local note = UIKit.label(root, "", math.max(12, textSize - 4), {
+	local note = text(root, "", math.max(12, textSize - 4), {
 		Name = "Note",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, top + (rowCount - 0.5) * rowH),
 		Size = UDim2.fromScale(0.94, rowH),
-		TextColor3 = Theme.TextDim,
+		TextColor3 = if isPop then LeaderboardView.EmptyText else Theme.TextDim,
 		TextWrapped = false,
 		Visible = false,
 	})
@@ -382,6 +439,7 @@ function LeaderboardView.fill(canvas: Canvas, lines: Lines)
 	local rowW = canvas.Width * 0.94
 	local max, min = canvas.TextSize, LeaderboardView.MinText
 	local size = LeaderboardView.rowTextSize(lines, count, canvas.Width, max)
+	local pop = canvas.Root:GetAttribute("Pop") == true
 	for i, refs in canvas.Rows do
 		local line = lines.Rows[i]
 		refs.Name.TextSize = size
@@ -392,15 +450,35 @@ function LeaderboardView.fill(canvas: Canvas, lines: Lines)
 			refs.Name.Text = ""
 			refs.Value.Text = ""
 			refs.Frame.BackgroundTransparency = 1
+			if pop then
+				refs.Frame.Visible = false
+			end
 		elseif line then
 			refs.Rank.Text = line.Rank
 			refs.Name.Text = line.Name
 			refs.Value.Text = line.Value
-			local medal = if line.Medal then LeaderboardView.Medals[line.Medal] else nil
-			refs.Rank.TextColor3 = medal or LeaderboardView.RowText
-			refs.Name.TextColor3 = if line.Mine then LeaderboardView.MineColor else LeaderboardView.RowText
-			refs.Frame.BackgroundColor3 = if line.Mine then LeaderboardView.MineColor else Color3.new(1, 1, 1)
-			refs.Frame.BackgroundTransparency = if line.Mine then 0.7 elseif i % 2 == 1 then 0.93 else 1
+			if pop then
+				-- painted rows: #1 gold, #2 silver, #3 bronze, the rest slate, yours blue
+				refs.Frame.Visible = true
+				refs.Frame.BackgroundTransparency = 0
+				local medal = if line.Medal then LeaderboardView.MedalPaints[line.Medal] else nil
+				Pop.repaint(refs.Frame, medal or (if line.Mine then LeaderboardView.MinePaint else LeaderboardView.RowPaint), false)
+				local border = refs.Frame:FindFirstChild("Border") :: UIStroke?
+				if border then
+					border.Color = if line.Mine and medal then Color3.new(1, 1, 1) else PopTheme.Outline
+					border.Thickness = if line.Mine and medal then 4 else PopTheme.Edge
+				end
+				local ink = if line.Name == LeaderboardView.Empty then LeaderboardView.EmptyText else PopTheme.Ink
+				refs.Rank.TextColor3 = ink
+				refs.Name.TextColor3 = ink
+				refs.Value.TextColor3 = ink
+			else
+				local medal = if line.Medal then LeaderboardView.Medals[line.Medal] else nil
+				refs.Rank.TextColor3 = medal or LeaderboardView.RowText
+				refs.Name.TextColor3 = if line.Mine then LeaderboardView.MineColor else LeaderboardView.RowText
+				refs.Frame.BackgroundColor3 = if line.Mine then LeaderboardView.MineColor else Color3.new(1, 1, 1)
+				refs.Frame.BackgroundTransparency = if line.Mine then 0.7 elseif i % 2 == 1 then 0.93 else 1
+			end
 		end
 	end
 	canvas.OwnRank.Text = lines.OwnRank
@@ -450,15 +528,32 @@ LeaderboardView.PanelMetrics = {
 	Compact = { Width = 760, Height = 640, TabBar = 82, TabHeight = 72, Text = 20, TabText = 20 },
 }
 
+-- A tab's painted word (Pop.button's "Label").
+local function tabWord(button: TextButton): TextLabel
+	return button:FindFirstChild("Label") :: TextLabel
+end
+
 function LeaderboardView.buildPanel(compact: boolean?): Panel
-	local frame = MenuPanel.build("TerraForgeHallOfFame", "HALL OF FAME", "The best Forgekeepers of all servers. Updated every minute.", 16)
-	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1 }, frame.Body)
+	local frame =
+		MenuPanel.build("TerraForgeHallOfFame", "HALL OF FAME", "The best Forgekeepers of all servers. Updated every minute.", 16, true)
+	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1, ZIndex = 3 }, frame.Body)
 	local tabs: { [string]: TextButton } = {}
 	for _, board in LeaderboardConfig.Boards do
-		tabs[board.Id] = UIKit.button(tabBar, LeaderboardView.Short[board.Id] or board.Title, Theme.Accent, Theme.AccentDark, {
+		-- a painted tab in a holder (MenuPanel.holderOf: the layout sizes it)
+		local holder = UIKit.new("Frame", {
+			Name = "Tab" .. board.Id .. "Holder",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(120, 48),
+			ZIndex = 3,
+		}, tabBar)
+		local paint = LeaderboardView.TabPaints[board.Id] or "Blue"
+		local button = Pop.button(holder, LeaderboardView.Short[board.Id] or board.Title, paint, Vector2.new(120, 48), {
 			Name = "Tab" .. board.Id,
-			TextSize = 18,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 3,
 		})
+		button:SetAttribute("TabPaint", paint)
+		tabs[board.Id] = button
 	end
 	local glyphs: { ImageLabel } = {}
 	for _, name in { "GlyphL", "GlyphR" } do
@@ -470,26 +565,23 @@ function LeaderboardView.buildPanel(compact: boolean?): Panel
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Size = UDim2.fromOffset(30, 30),
 				Visible = false,
-				ZIndex = 4,
+				ZIndex = 6,
 			}, tabBar)
 		)
 	end
-	local sheet = UIKit.new("Frame", {
-		Name = "Sheet",
-		BackgroundColor3 = LeaderboardView.Board,
-		BorderSizePixel = 0,
-	}, frame.Body)
-	UIKit.corner(sheet, 12)
-	UIKit.stroke(sheet, 3)
+	-- the rows in a dark studded well
+	local sheet = Pop.well(frame.Body, { Name = "Sheet" })
 	local canvases: { [string]: Canvas } = {}
 	for _, board in LeaderboardConfig.Boards do
 		local holder = UIKit.new("Frame", {
 			Name = "Board" .. board.Id,
 			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
+			Position = UDim2.fromOffset(0, 6),
+			Size = UDim2.new(1, 0, 1, -10),
 			Visible = board.Index == 1,
+			ZIndex = 3,
 		}, sheet)
-		canvases[board.Id] = LeaderboardView.canvas(holder, board, LeaderboardConfig.TopCount, false, 22, 560)
+		canvases[board.Id] = LeaderboardView.canvas(holder, board, LeaderboardConfig.TopCount, false, 22, 560, true)
 	end
 	local panel: Panel = {
 		Frame = frame,
@@ -522,25 +614,26 @@ function LeaderboardView.layoutPanel(panel: Panel, compact: boolean, maxWidth: n
 		holder.Position = UDim2.fromOffset(inset + (board.Index - 1) * (tabW + gap), 6)
 		holder.Size = UDim2.fromOffset(tabW, m.TabHeight)
 		panel.Tabs[board.Id].TextSize = m.TabText
+		tabWord(panel.Tabs[board.Id]).TextSize = m.TabText + 4
 	end
-	panel.TabGlyphs[1].Position = UDim2.new(0, 10, 0, 6 + m.TabHeight / 2 - 3)
-	panel.TabGlyphs[2].Position = UDim2.new(1, -10, 0, 6 + m.TabHeight / 2 - 3)
+	panel.TabGlyphs[1].Position = UDim2.new(0, 10, 0, 6 + m.TabHeight / 2)
+	panel.TabGlyphs[2].Position = UDim2.new(1, -10, 0, 6 + m.TabHeight / 2)
 	panel.Sheet.Position = UDim2.fromOffset(0, m.TabBar + 4)
 	panel.Sheet.Size = UDim2.new(1, 0, 1, -(m.TabBar + 8))
 	-- rows of the sheet: as big as the room allows (between 14 and the
 	-- metric); fill() fits long names and values into their columns
-	local rowH = (body.Y - m.TabBar - 12) * 0.86 / LeaderboardConfig.TopCount
-	local size = math.clamp(math.floor(rowH * 0.62), 14, m.Text)
+	local rowH = (body.Y - m.TabBar - 22) * 0.86 / LeaderboardConfig.TopCount
+	local size = math.clamp(math.floor(rowH * 0.7), 14, m.Text)
 	for _, canvas in panel.Canvases do
 		canvas.Width = body.X
 		canvas.TextSize = size
 		for _, row in canvas.Rows do
-			row.Rank.TextSize = size
+			row.Rank.TextSize = size + 4
 			row.Name.TextSize = size
 			row.Value.TextSize = size
 		end
 		canvas.OwnRank.TextSize = size
-		canvas.OwnLabel.TextSize = size
+		canvas.OwnLabel.TextSize = size + 2
 		canvas.OwnValue.TextSize = size
 		canvas.Note.TextSize = math.max(12, size - 6)
 	end
@@ -553,8 +646,9 @@ function LeaderboardView.setTab(panel: Panel, boardId: string)
 	panel.Tab = boardId
 	for id, button in panel.Tabs do
 		local on = id == boardId
-		MenuPanel.style(button, if on then Theme.Accent else Theme.PanelLight, if on then Theme.AccentDark else Theme.PanelDark)
-		button.TextColor3 = if on then Theme.Text else Theme.TextDim
+		local paint = (button:GetAttribute("TabPaint") :: string?) or "Blue"
+		Pop.repaint(button, if on then paint else "Slate")
+		tabWord(button).TextTransparency = if on then 0 else 0.2
 	end
 	for id, canvas in panel.Canvases do
 		local holder = canvas.Root.Parent :: Frame

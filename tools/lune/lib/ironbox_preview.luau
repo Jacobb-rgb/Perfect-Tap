@@ -135,9 +135,11 @@ function Preview.build(Loader: any, parent: any): { [string]: any }
 
 	local placed = {}
 	local belts = {}
+	-- (bigger plots) the layout is on a 12-cell grid: keep it at the pad's centre
+	local gridShift = (GameConfig.PlotCells - 12) / 2
 	for _, entry in Preview.Layout do
 		local model = MachineBuilder.build(entry.Id)
-		model:PivotTo(Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
+		model:PivotTo(Grid.localCFrame(entry.Id, entry.X + gridShift, entry.Z + gridShift, entry.R))
 		model.Parent = root
 		Gallery.paintGuis(Loader, root, model)
 		if entry.Id == "Conveyor" then

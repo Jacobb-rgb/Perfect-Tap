@@ -1,9 +1,10 @@
 --[[
 	GridOverlay: the build-mode grid drawn on your plot (client only).
 
-	26 thin lines (13 each way, one per cell edge) plus a few named plates
-	(the ghost's footprint, its output cell, the cursor, the chute cells...),
-	some with a floating text tag (tag(): the chutes' labels). Everything is
+	2 * (PlotCells + 1) thin lines (one per cell edge each way, 26 at 12
+	cells) plus a few named plates (the ghost's footprint, its output cell,
+	the cursor, the chute cells...), some with a floating text tag (tag():
+	the chutes' labels). Everything is
 	created once and kept in one folder, Workspace.BuildClient, which is
 	parented to nil while build mode is closed, so the overlay costs nothing
 	the rest of the time. The build ghost lives in the same folder

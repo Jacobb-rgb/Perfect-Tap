@@ -633,6 +633,7 @@ end
 	                       the 0.62 phone scale: compact panel
 	  ui_hover_hud_phone   the phone HUD with the RIDE button and stand-ins for
 	                       Roblox's touch thumbstick and jump button
+	  ui_hover_phone_small a small 568 x 320 pt phone: the compact panel's cards scroll
 	The Robux cards show their live R$ button (game pass ids simulated; with id 0
 	the game shows COMING SOON).
 ]]
@@ -740,6 +741,11 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		local phonePanel = hud(phone, 0.62, false, true)
 		table.insert(phonePanel, panel(phone, true, 667 / 0.62, (375 - 36) / 0.62))
 		exports.ui_hover_phone = UiExport.export(phonePanel)
+		-- a small 568 x 320 pt phone: the cards scroll (the second row peeks in)
+		local small = 0.62 * 900 / 320
+		local smallPanel = hud(small, 0.62, false, true)
+		table.insert(smallPanel, panel(small, true, 568 / 0.62, (320 - 36) / 0.62))
+		exports.ui_hover_phone_small = UiExport.export(smallPanel)
 		local phoneHud = hud(phone, 0.62, true, true)
 		table.insert(phoneHud, touchControls())
 		exports.ui_hover_hud_phone = UiExport.export(phoneHud)

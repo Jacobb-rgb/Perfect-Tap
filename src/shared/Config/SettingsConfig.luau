@@ -1,6 +1,6 @@
 --[[
 	The player's settings (the side menu's SETTINGS panel): music volume,
-	sound volume, camera shake on/off, gamepad rumble on/off. Saved per player
+	sound volume, camera shake on/off, gamepad rumble on/off, reduce motion. Saved per player
 	in data.Settings (SettingsService), sent back in the State snapshot
 	(snapshot.Settings) and applied on the client (SettingsController):
 
@@ -13,17 +13,19 @@
 	  FastSpin bool the Spin & Win wheel's Fast Spin box (WheelController:
 	                WheelConfig.FastSpinSeconds instead of SpinSeconds; set
 	                on the wheel screen, not a row of the SETTINGS panel)
+	  ReduceMotion bool calmer menus (UI/Motion through UIMotionController:
+	                no pops, bounces, pulses or flying cash; off by default)
 
 	sanitize() turns anything (an old save, a client's request) into a whole,
 	valid record: volumes are clamped to 0..1 and snapped to whole percent,
 	unknown keys are dropped, missing or broken values take the default.
 ]]
 
-export type Settings = { Music: number, Sfx: number, Shake: boolean, Rumble: boolean, FastSpin: boolean }
+export type Settings = { Music: number, Sfx: number, Shake: boolean, Rumble: boolean, FastSpin: boolean, ReduceMotion: boolean }
 
 local SettingsConfig = {}
 
-SettingsConfig.Defaults = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true, FastSpin = false } :: Settings
+SettingsConfig.Defaults = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true, FastSpin = false, ReduceMotion = false } :: Settings
 SettingsConfig.Step = 0.1 -- the - / + buttons and gamepad left / right
 SettingsConfig.MusicGroup = "TerraForgeMusic"
 SettingsConfig.SfxGroup = "TerraForgeSfx"
@@ -31,7 +33,7 @@ SettingsConfig.SfxGroup = "TerraForgeSfx"
 -- sends one request, not one per frame), and at once when the panel closes
 SettingsConfig.SaveDelay = 1.5
 SettingsConfig.Volumes = { "Music", "Sfx" }
-SettingsConfig.Toggles = { "Shake", "Rumble" }
+SettingsConfig.Toggles = { "Shake", "Rumble", "ReduceMotion" }
 
 local function volume(value: any, default: number): number
 	if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge then
@@ -51,7 +53,7 @@ end
 function SettingsConfig.sanitize(raw: any): Settings
 	local d = SettingsConfig.Defaults
 	if type(raw) ~= "table" then
-		return { Music = d.Music, Sfx = d.Sfx, Shake = d.Shake, Rumble = d.Rumble, FastSpin = d.FastSpin }
+		return { Music = d.Music, Sfx = d.Sfx, Shake = d.Shake, Rumble = d.Rumble, FastSpin = d.FastSpin, ReduceMotion = d.ReduceMotion }
 	end
 	return {
 		Music = volume(raw.Music, d.Music),
@@ -59,6 +61,7 @@ function SettingsConfig.sanitize(raw: any): Settings
 		Shake = toggle(raw.Shake, d.Shake),
 		Rumble = toggle(raw.Rumble, d.Rumble),
 		FastSpin = toggle(raw.FastSpin, d.FastSpin),
+		ReduceMotion = toggle(raw.ReduceMotion, d.ReduceMotion),
 	}
 end
 
@@ -73,7 +76,12 @@ function SettingsConfig.merge(saved: any, changed: { [string]: any }): Settings
 end
 
 function SettingsConfig.equal(a: Settings, b: Settings): boolean
-	return a.Music == b.Music and a.Sfx == b.Sfx and a.Shake == b.Shake and a.Rumble == b.Rumble and a.FastSpin == b.FastSpin
+	return a.Music == b.Music
+		and a.Sfx == b.Sfx
+		and a.Shake == b.Shake
+		and a.Rumble == b.Rumble
+		and a.FastSpin == b.FastSpin
+		and a.ReduceMotion == b.ReduceMotion
 end
 
 -- One step up or down (dir = 1 / -1), snapped to the step grid.

@@ -1,8 +1,10 @@
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
@@ -17,6 +19,45 @@ return function(T, Loader)
 					local d = a.Center - b.Center
 					T.truthy(math.abs(d.X) >= size or math.abs(d.Z) >= size, "plots " .. i .. "/" .. j .. " overlap")
 				end
+			end
+		end
+	end)
+
+	T.test("plot columns, yards and rails follow the plot grid and stay in the zones", function()
+		local grid = WorldLayout.PlotGrid
+		local island = WorldLayout.Island
+		local pad = 2 * grid.Half + 2 -- the pad (walls at +-(Half + 1))
+		for i, a in WorldLayout.Plots do
+			-- the pad's road-side front and its column's ends
+			T.eq(math.abs(a.Center.X) - pad / 2, grid.FrontX, `plot {i} front`)
+			T.truthy(a.Center.Z - pad / 2 >= grid.NorthZ and a.Center.Z + pad / 2 <= grid.SouthZ, `plot {i} inside its column`)
+			-- the alley between neighbouring pads stays walkable
+			for j, b in WorldLayout.Plots do
+				if i < j and a.Center.X == b.Center.X then
+					T.truthy(math.abs(a.Center.Z - b.Center.Z) - pad >= 6, `plots {i}/{j}: alley of 6 studs`)
+				end
+			end
+			-- every corner of the yard and its pieces, and the rail point, lie on the island in a
+			-- surface zone (music, the HUD zone name, teleports and lighting need one)
+			local cf = WorldLayout.plotCFrame(a)
+			local rects = BaseLayout.pieces()
+			rects.Yard = BaseLayout.Yard
+			local points = { Rail = Vector3.new(0, 0, BaseLayout.RailZ) }
+			for name, rect in rects do
+				for _, sx in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local x = rect.Center.X + sx * rect.Size.X / 2
+						local z = rect.Center.Z + sz * rect.Size.Z / 2
+						points[`{name} ({x}, {z})`] = Vector3.new(x, 0, z)
+					end
+				end
+			end
+			for name, localPos in points do
+				local world = cf:PointToWorldSpace(localPos)
+				local label = `plot {i} {name}`
+				T.truthy(math.abs(world.X) < island.Max.X and world.Z > island.Min.Z and world.Z < island.Max.Z, label .. " on the island")
+				local zone = WorldLayout.zoneAt(world + Vector3.new(0, 3, 0))
+				T.truthy(zone and zone.Lighting == "Surface", label .. " in a surface zone")
 			end
 		end
 	end)

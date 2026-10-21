@@ -16,6 +16,15 @@
 	(SellView.layout). Helpers: entries (a State summary as rows), plan
 	(what a Sell-all button would sell, the same rules as SellService),
 	needsConfirm and the confirm texts.
+
+	The look is the Robux Shop's Pop kit (owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"; Pop.luau, PopTheme): a black
+	frame, the green header band (the stall's colour, LightSkin.BandRoles
+	"Shop") with shine stripes and studs, white chunky titles with a drop
+	shadow, a dark studded body, one row per item painted in its rarity
+	colour with the item's live 3D picture (ItemBuilder.display in a
+	ViewportFrame; Dirty Ore: a dirty chunk under a "?") on a light burst,
+	prices in big green money text, big green SELL buttons and the red X.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,9 +35,11 @@ local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local SellView = {}
@@ -131,6 +142,8 @@ type Metrics = {
 	PriceWidth: number,
 	Title: number,
 	Text: number,
+	Band: number, -- the header band's height (the title and the X sit in it)
+	Close: number,
 }
 
 local PAD = 16
@@ -140,7 +153,7 @@ local METRICS: { [string]: Metrics } = {
 	Normal = {
 		Width = 720,
 		Height = 580,
-		Header = 84,
+		Header = 96, -- the band, then the line under it (the subtitle or the last sale)
 		Footer = 100,
 		Row = 70,
 		Button = 54,
@@ -149,12 +162,14 @@ local METRICS: { [string]: Metrics } = {
 		PriceWidth = 104,
 		Title = 34,
 		Text = 20,
+		Band = 64,
+		Close = 50,
 	},
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
 		Width = 900,
 		Height = 560,
-		Header = 58,
+		Header = 84, -- the band (the last sale sits next to the title)
 		Footer = 106,
 		Row = 86,
 		Button = 72,
@@ -163,6 +178,8 @@ local METRICS: { [string]: Metrics } = {
 		PriceWidth = 112,
 		Title = 30,
 		Text = 22,
+		Band = 78,
+		Close = 64,
 	},
 }
 
@@ -413,34 +430,299 @@ function SellView.confirmPlanText(plan: Plan, filter: string): string
 	return `Sell {itemsText(plan.Count)}{price}? You keep your {SellView.KeepBest} best clean ores and your {ItemData.DirtyName}.{capped}`
 end
 
+---------------------------------------------------------------- the Pop look (the kit pieces this window needs)
+
+SellView.Paint = "Green" -- the header band: the stall's colour (LightSkin.BandRoles TerraForgeSell = "Shop")
+-- the Dirty Ore row: a dirt brown (it never says which ore it is)
+SellView.DirtyPaint = {
+	Top = Color3.fromRGB(190, 162, 132),
+	Bottom = Color3.fromRGB(104, 82, 64),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
+
+local WHITE = Color3.new(1, 1, 1)
+local SOFT = Color3.fromRGB(214, 220, 232) -- quieter white text (hints, "each")
+local ROW_CORNER = 10
+local HOLDER_KEYS = { Size = true, Position = true, AnchorPoint = true, LayoutOrder = true, Visible = true }
+
+-- A chip's colour from a grade colour: a shade deeper, so its white word reads.
+local function chipColor(color: Color3): Color3
+	return color:Lerp(Color3.new(0, 0, 0), 0.14)
+end
+
+-- A text's black edge (its Contextual UIStroke, made when missing).
+local function edgeOf(label: GuiObject): UIStroke
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			return child
+		end
+	end
+	return Pop.edge(label)
+end
+
+-- White chunky text with a black edge (a UIKit label or button), or `color`.
+local function ink(label: GuiObject, color: Color3?, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = color or PopTheme.Ink
+	local edge = edgeOf(label)
+	edge.Color = PopTheme.Outline
+	edge.Thickness = Pop.edgeFor(text.TextSize)
+	edge.Transparency = 0
+	edge.LineJoinMode = Enum.LineJoinMode.Round
+end
+
+-- Drops a frame's border strokes (a UIKit stroke), so Pop.face draws its own.
+local function dropBorders(frame: GuiObject)
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child:Destroy()
+		end
+	end
+end
+
+--[[
+	A Pop button that keeps UIKit.button's shape: the returned TextButton
+	(clear, its own word: controllers and views set its Text, TextSize and
+	TextTransparency) fills its holder, and the holder is the painted face
+	(Pop.face: the glossy paint, the black border, the light rim, studs).
+	(A UIGradient on the button itself would tint its word too.) Size /
+	Position / AnchorPoint / LayoutOrder / Visible go on the holder (layouts
+	move it), the rest on the button. paintButton recolours the face.
+]]
+local HOVER = Color3.fromRGB(236, 236, 236)
+local PRESS = Color3.fromRGB(200, 200, 200)
+
+local function popButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local name = if props and type(props.Name) == "string" then props.Name else text
+	local face = UIKit.new("Frame", {
+		Name = name .. "Holder",
+		Size = UDim2.fromOffset(160, 52),
+		ZIndex = 4,
+	}, parent)
+	Pop.face(face, paint)
+	Pop.studs(face, PopTheme.Corner, 0.45, 28, 4)
+	local button = UIKit.new("TextButton", {
+		Name = "Button",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		FontFace = PopTheme.Font,
+		TextColor3 = PopTheme.Ink,
+		TextSize = 22,
+		Selectable = true,
+		ZIndex = 5,
+	}, face)
+	Pop.edge(button, 2.5)
+	if props then
+		for key, value in props do
+			local target: any = if HOLDER_KEYS[key] then face else button
+			if key ~= "Name" then
+				target[key] = value
+			end
+		end
+	end
+	-- hover / press darken the face (AutoButtonColor would only darken the clear button)
+	pcall(function()
+		local b: any = button
+		b:GetPropertyChangedSignal("GuiState"):Connect(function()
+			local state = b.GuiState
+			face.BackgroundColor3 = if state == Enum.GuiState.Press then PRESS elseif state == Enum.GuiState.Hover then HOVER else WHITE
+		end)
+	end)
+	return button
+end
+
+-- Recolours a popButton's face.
+local function paintButton(button: TextButton, paint: string | Pop.Paint)
+	local face = button.Parent
+	if face and face:IsA("GuiObject") then
+		Pop.repaint(face, paint)
+	end
+end
+
+-- A small round chip (a UIKit.chip): one bright colour (a gradient would tint its word), a black border, white text.
+local function popChip(chip: TextLabel, color: Color3)
+	dropBorders(chip)
+	chip.BackgroundColor3 = color
+	chip.BackgroundTransparency = 0
+	Pop.border(chip, 2)
+	ink(chip)
+end
+
+--[[
+	The window's chrome on an old panel: the black frame, a dark studded
+	body and the bright header band (shine stripes, studs); both sit under
+	everything else (ZIndex 0). setBand sizes them for a band `band` tall.
+]]
+local function chrome(panel: Frame, paint: string | Pop.Paint)
+	panel.BackgroundColor3 = PopTheme.Outline
+	local old = panel:FindFirstChildOfClass("UIGradient")
+	if old then
+		old:Destroy()
+	end
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	end
+	local stroke = panel:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PopTheme.Outline
+		stroke.Thickness = 4
+	end
+	local body = UIKit.new("Frame", {
+		Name = "Body",
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, panel)
+	UIKit.corner(body, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	Pop.studs(body, 4, 0.5, 36, 0)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 0,
+	}, body)
+	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
+	local head = UIKit.new("Frame", {
+		Name = "Header",
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 4),
+		ClipsDescendants = true,
+		ZIndex = 0,
+	}, panel)
+	Pop.face(head, paint, 4, false)
+	local headBorder = head:FindFirstChild("Border") :: UIStroke
+	headBorder.Thickness = 3
+	Pop.studs(head, 4, 0.35, 40, 0)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 0,
+	}, head)
+	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 0,
+		}, head)
+	end
+end
+
+-- Sizes the header band (`band` units tall, the frame included) and the body under it.
+local function setBand(panel: Frame, band: number)
+	local head = panel:FindFirstChild("Header") :: Frame?
+	local body = panel:FindFirstChild("Body") :: Frame?
+	if head and body then
+		head.Size = UDim2.new(1, -8, 0, band - 8)
+		body.Position = UDim2.fromOffset(4, band)
+		body.Size = UDim2.new(1, -8, 1, -(band + 4))
+	end
+end
+
+-- The title's 3D drop shadow (Pop.shadow), kept on the title as layouts move it.
+local function syncShadow(title: TextLabel)
+	local parent = title.Parent
+	local found = if parent then parent:FindFirstChild(title.Name .. "Shadow") else nil
+	local shade: TextLabel = if found and found:IsA("TextLabel") then found else Pop.shadow(title)
+	shade.Position = title.Position + UDim2.fromOffset(0, 4)
+	shade.Size = title.Size
+	shade.AnchorPoint = title.AnchorPoint
+	shade.Text = title.Text
+	shade.TextSize = title.TextSize
+	shade.TextXAlignment = title.TextXAlignment
+	shade.Visible = title.Visible
+	shade.ZIndex = math.max(1, title.ZIndex - 1)
+end
+
+-- The paint of a row: its rarity's (Pop.rarityPaint); Dirty Ore a dirt brown.
+function SellView.rowPaint(entry: Entry): Pop.Paint
+	if entry.Dirty then
+		return SellView.DirtyPaint
+	end
+	local info = Rarity.List[entry.RarityOrder]
+	return Pop.rarityPaint(if info then info.Id else nil)
+end
+
+--[[
+	The item a row shows: its picture name (the preview's icon) and the
+	description ItemBuilder.display draws, from the row's first storage
+	key. Dirty Ore: a dirty chunk that never tells which ore it is.
+]]
+function SellView.pictureOf(entry: Entry): (string, ItemData.Desc)
+	local dirty: ItemData.Desc = { K = "Raw", O = "Copper" }
+	if entry.Dirty then
+		return "ore_raw", dirty
+	end
+	local key = next(entry.Keys)
+	local desc = if type(key) == "string" then ItemData.parseKey(key) else nil
+	if not desc then
+		return "ore_raw", dirty
+	end
+	return `item_{desc.K}_{desc.O}`, desc
+end
+
+-- A row's live 3D picture (built once: a row's item never changes).
+local function fillPicture(icon: Frame, entry: Entry)
+	if icon:FindFirstChild("Picture") then
+		return
+	end
+	local name, desc = SellView.pictureOf(entry)
+	local ok, model = pcall(ItemBuilder.display, desc, CFrame.new(), name)
+	Pop.model(icon, name, 10, if ok then model else nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.52),
+		Size = UDim2.fromScale(1.12, 1.12),
+		ZIndex = 3,
+	}, Vector3.new(-0.5, 0.55, -1))
+end
+
 ---------------------------------------------------------------- building
 
 local function sectionHeader(list: ScrollingFrame, section: Section): TextLabel
-	return UIKit.label(list, SECTION_TITLE[section], 20, {
+	local header = UIKit.label(list, SECTION_TITLE[section], 22, {
 		Name = section .. "Header",
 		LayoutOrder = SECTION_ORDER[section],
-		Size = UDim2.new(1, -SCROLLBAR, 0, 32),
+		Size = UDim2.new(1, -SCROLLBAR, 0, 34),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
+		TextWrapped = false,
 	})
+	ink(header, WHITE, PopTheme.Heavy)
+	local gold = PopTheme.Titles.Gold
+	UIKit.new("UIGradient", { Color = ColorSequence.new(gold[1], gold[#gold]), Rotation = 90 }, header)
+	return header
 end
 
 local function emptyLabel(list: ScrollingFrame, section: Section): TextLabel
-	return UIKit.label(list, SECTION_EMPTY[section], 17, {
+	local label = UIKit.label(list, SECTION_EMPTY[section], 17, {
 		Name = section .. "Empty",
 		LayoutOrder = SECTION_ORDER[section] + 1000,
 		Size = UDim2.new(1, -SCROLLBAR, 0, 44),
-		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
+	ink(label, SOFT)
+	return label
 end
 
 function SellView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeSell", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("Pop", true)
 
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
@@ -449,37 +731,39 @@ function SellView.build(compact: boolean?): Refs
 		Size = UDim2.fromOffset(METRICS.Normal.Width, METRICS.Normal.Height),
 		Active = true,
 	})
+	chrome(panel, SellView.Paint)
 
 	local title = UIKit.label(panel, "TOBIN'S ORE STALL", 34, {
 		Name = "Title",
-		Position = UDim2.fromOffset(PAD, 8),
-		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 40),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
+		TextWrapped = false,
+		ZIndex = 3,
 	})
+	ink(title)
 	local subtitle = UIKit.label(panel, "Tobin buys any ore. Dirty Ore sells at the raw price; you see what it was after.", 16, {
 		Name = "Subtitle",
-		Position = UDim2.fromOffset(PAD, 48),
-		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 22),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
+	ink(subtitle, SOFT)
 	local receipt = UIKit.label(panel, "", 17, {
 		Name = "Receipt",
-		Position = UDim2.fromOffset(PAD, 48),
-		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 24),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Good,
 		Visible = false,
+		ZIndex = 3,
+		-- a dark pill behind it: any message colour reads on the band or the body
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.2,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
+	UIKit.corner(receipt, 8)
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, receipt)
+	ink(receipt, Theme.Good)
+	local close = popButton(panel, "X", PopTheme.Close, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -PAD, 0, 14),
-		Size = UDim2.fromOffset(54, 54),
-		TextSize = 26,
+		TextSize = 30,
+		FontFace = PopTheme.Heavy,
 	})
 
 	local list = UIKit.new("ScrollingFrame", {
@@ -487,11 +771,12 @@ function SellView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
+		ZIndex = 2,
 	}, panel)
 	UIKit.list(list, Enum.FillDirection.Vertical, 8)
 	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, list)
@@ -500,12 +785,13 @@ function SellView.build(compact: boolean?): Refs
 		Name = "Footer",
 		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
+		ZIndex = 2,
 	}, panel)
-	local sellDirty = UIKit.button(footer, "Sell all Dirty Ore", Theme.Accent, Theme.AccentDark, {
+	local sellDirty = popButton(footer, "Sell all Dirty Ore", "Orange", {
 		Name = "SellDirty",
 		TextSize = 20,
 	})
-	local sellRest = UIKit.button(footer, `Sell all but best {SellView.KeepBest}`, Theme.Good, Theme.GoodDark, {
+	local sellRest = popButton(footer, `Sell all but best {SellView.KeepBest}`, "Green", {
 		Name = "SellRest",
 		TextSize = 20,
 	})
@@ -514,8 +800,9 @@ function SellView.build(compact: boolean?): Refs
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.new(1, 0, 0, 20),
-		TextColor3 = Theme.TextDim,
+		ZIndex = 3,
 	})
+	ink(hint, SOFT)
 
 	-- confirm step: a dim layer over the panel (click outside the box = cancel)
 	local confirm = UIKit.new("TextButton", {
@@ -530,34 +817,42 @@ function SellView.build(compact: boolean?): Refs
 		Visible = false,
 		ZIndex = 5,
 	}, panel)
-	UIKit.corner(confirm)
-	local box = UIKit.panel(confirm, {
+	UIKit.corner(confirm, PopTheme.WindowCorner)
+	local box = UIKit.new("Frame", {
 		Name = "Box",
 		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(500, 230),
 		Active = true,
 		ZIndex = 6,
-	})
+	}, confirm)
+	UIKit.corner(box, PopTheme.WindowCorner)
+	Pop.border(box, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, box)
+	Pop.rim(box, Color3.fromRGB(110, 116, 134), PopTheme.WindowCorner, 4, 6)
+	Pop.studs(box, PopTheme.WindowCorner, 0.5, 36, 6)
 	local confirmText = UIKit.label(box, "", 22, {
 		Name = "Text",
 		Position = UDim2.fromOffset(PAD, PAD),
 		Size = UDim2.new(1, -PAD * 2, 1, -(PAD * 3 + 72)),
 		ZIndex = 7,
 	})
-	local yes = UIKit.button(box, "Sell", Theme.Good, Theme.GoodDark, {
+	ink(confirmText)
+	local yes = popButton(box, "SELL", "Green", {
 		Name = "Yes",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, PAD, 1, -PAD),
 		Size = UDim2.new(0.5, -PAD * 1.5, 0, 66),
-		TextSize = 24,
+		TextSize = 26,
 	})
-	local no = UIKit.button(box, "Cancel", Theme.Bad, Theme.BadDark, {
+	local no = popButton(box, "CANCEL", PopTheme.Close, {
 		Name = "No",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -PAD, 1, -PAD),
 		Size = UDim2.new(0.5, -PAD * 1.5, 0, 66),
-		TextSize = 24,
+		TextSize = 26,
 	})
 	for _, button in { yes, no } do
 		local holder = button.Parent :: Frame
@@ -591,6 +886,10 @@ function SellView.build(compact: boolean?): Refs
 		Compact = false,
 	}
 	SellView.layout(refs, compact == true, math.huge, math.huge)
+	-- (the light UI: an open window hides the touch thumbstick)
+	if UIConfig.lightUI() then
+		TouchControls.follow(gui)
+	end
 	return refs
 end
 
@@ -601,11 +900,11 @@ end
 local function placeRow(row: Row, m: Metrics)
 	local frame = row.Frame
 	frame.Size = UDim2.new(1, -SCROLLBAR, 0, m.Row)
-	local iconSize = m.Row - 16
+	local iconSize = m.Row - 12
 	row.Icon.Size = UDim2.fromOffset(iconSize, iconSize)
-	row.Icon.Position = UDim2.fromOffset(8, 8)
-	row.IconText.TextSize = math.floor(iconSize * 0.6)
-	local buttonTop = (m.Row - m.Button) / 2 + 2 -- the face sits 5 units above its lip
+	row.Icon.Position = UDim2.fromOffset(8, 6)
+	row.IconText.TextSize = math.floor(iconSize * 0.62)
+	local buttonTop = (m.Row - m.Button) / 2
 	local sellAll = holderOf(row.SellAll)
 	sellAll.AnchorPoint = Vector2.new(1, 0)
 	sellAll.Position = UDim2.new(1, -8, 0, buttonTop)
@@ -616,72 +915,105 @@ local function placeRow(row: Row, m: Metrics)
 	sellOne.Size = UDim2.fromOffset(m.SellOne, m.Button)
 	local right = 24 + m.SellAll + m.SellOne
 	row.Price.AnchorPoint = Vector2.new(1, 0)
-	row.Price.Position = UDim2.new(1, -(right + 6), 0, m.Row / 2 - 22)
-	row.Price.Size = UDim2.fromOffset(m.PriceWidth, 26)
-	row.Price.TextSize = m.Text
+	row.Price.Position = UDim2.new(1, -(right + 6), 0, m.Row / 2 - 26)
+	row.Price.Size = UDim2.fromOffset(m.PriceWidth, 30)
+	row.Price.TextSize = m.Text + 4
 	row.Each.AnchorPoint = Vector2.new(1, 0)
 	row.Each.Position = UDim2.new(1, -(right + 6), 0, m.Row / 2 + 4)
 	row.Each.Size = UDim2.fromOffset(m.PriceWidth, 18)
 	local left = iconSize + 20
 	local middle = right + m.PriceWidth + 12
-	row.Name.Position = UDim2.fromOffset(left, m.Row / 2 - 25)
-	row.Name.Size = UDim2.new(1, -(left + middle), 0, 26)
-	row.Name.TextSize = m.Text
+	row.Name.Position = UDim2.fromOffset(left, m.Row / 2 - 27)
+	row.Name.Size = UDim2.new(1, -(left + middle), 0, 28)
+	row.Name.TextSize = m.Text + 2
+	local chipH = if m.Row > 70 then 26 else 22
 	row.Chip.Position = UDim2.fromOffset(left, m.Row / 2 + 4)
-	row.Count.Position = UDim2.fromOffset(left + (if row.Chip.Visible then 96 else 0), m.Row / 2 + 2)
-	row.Count.Size = UDim2.fromOffset(90, 24)
-	row.Count.TextSize = m.Text
-	row.SellOne.TextSize = if m.Row > 70 then 21 else 19
-	row.SellAll.TextSize = if m.Row > 70 then 21 else 19
+	row.Chip.Size = UDim2.fromOffset(if m.Row > 70 then 100 else 88, chipH)
+	row.Chip.TextSize = if m.Row > 70 then 16 else 14
+	row.Count.Position = UDim2.fromOffset(left + (if row.Chip.Visible then row.Chip.Size.X.Offset + 8 else 0), m.Row / 2 + 2)
+	row.Count.Size = UDim2.fromOffset(90, chipH + 4)
+	row.Count.TextSize = m.Text + 2
+	row.SellOne.TextSize = if m.Row > 70 then 22 else 20
+	row.SellAll.TextSize = if m.Row > 70 then 22 else 20
 end
 
 local function newRow(refs: Refs, entry: Entry): Row
 	local frame = UIKit.new("Frame", {
 		Name = "Row",
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true, -- (the light burst behind the picture)
 	}, refs.List)
-	UIKit.corner(frame, 12)
-	UIKit.stroke(frame, 2.5)
+	Pop.face(frame, SellView.rowPaint(entry), ROW_CORNER, false)
+	Pop.studs(frame, ROW_CORNER, 0.5, 40, 1)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	-- the picture: a light burst and a soft glow behind the item's live 3D look
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, frame)
-	UIKit.corner(icon, 10)
-	UIKit.gradient(icon, Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 150))
-	UIKit.stroke(icon, 3)
+	Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 84, 0.45, 1)
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.7,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.86, 0.86),
+		ZIndex = 2,
+	}, icon)
+	UIKit.corner(glow, 999)
+	Pop.sparkle(icon, UDim2.fromScale(0.9, 0.14), 16, 4, 0.15)
+	Pop.sparkle(icon, UDim2.fromScale(0.08, 0.82), 12, 4, 0.35)
+	fillPicture(icon, entry)
 	local iconText = UIKit.label(icon, "", 30, {
 		Name = "Mark",
 		Size = UDim2.fromScale(1, 1),
-		FontFace = Theme.TitleFont,
+		TextWrapped = false,
+		ZIndex = 5,
 	})
-	local name = UIKit.label(frame, "", 20, {
+	ink(iconText, WHITE, PopTheme.Heavy)
+	local name = UIKit.label(frame, "", 22, {
 		Name = "ItemName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextWrapped = false,
+		ZIndex = 4,
 	})
+	ink(name)
 	local chip = UIKit.chip(frame, "", Theme.PanelDark, {
 		Name = "Chip",
 		Size = UDim2.fromOffset(88, 22),
 		TextSize = 14,
+		ZIndex = 4,
 	})
-	local count = UIKit.label(frame, "x0", 20, {
+	popChip(chip, chipColor(SellView.DirtyColor))
+	local count = UIKit.label(frame, "x0", 22, {
 		Name = "Count",
 		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 4,
 	})
-	local price = UIKit.label(frame, "", 20, {
+	ink(count)
+	local price = UIKit.label(frame, "", 24, {
 		Name = "Price",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.Coin,
+		TextWrapped = false,
+		ZIndex = 4,
 	})
+	ink(price, PopTheme.Money, PopTheme.Heavy)
 	local each = UIKit.label(frame, "each", 14, {
 		Name = "Each",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.TextDim,
+		ZIndex = 4,
 	})
-	local sellOne = UIKit.button(frame, "Sell 1", Theme.Accent, Theme.AccentDark, { Name = "SellOne" })
-	local sellAll = UIKit.button(frame, "Sell all", Theme.Good, Theme.GoodDark, { Name = "SellAll" })
+	ink(each, SOFT)
+	local sellOne = popButton(frame, "SELL 1", "Green", { Name = "SellOne" })
+	local sellAll = popButton(frame, "SELL ALL", "Green", { Name = "SellAll" })
 	local row: Row = {
 		Id = entry.Id,
 		Frame = frame,
@@ -703,17 +1035,12 @@ end
 local function fillRow(row: Row, entry: Entry, index: number, m: Metrics)
 	row.Entry = entry
 	row.Frame.LayoutOrder = SECTION_ORDER[entry.Section] + index
-	row.Icon.BackgroundColor3 = entry.Color
-	local stroke = row.Icon:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = entry.Edge
-	end
+	Pop.repaint(row.Frame, SellView.rowPaint(entry), false)
 	row.IconText.Text = if entry.Dirty then "?" else ""
 	row.Name.Text = entry.Name
-	row.Name.TextColor3 = if entry.Dirty or entry.RarityOrder <= 1 then Theme.Text else entry.Edge
 	row.Chip.Visible = entry.ChipText ~= nil
 	row.Chip.Text = entry.ChipText or ""
-	row.Chip.BackgroundColor3 = entry.ChipColor or Theme.PanelDark
+	row.Chip.BackgroundColor3 = chipColor(entry.ChipColor or SellView.DirtyColor)
 	row.Count.Text = "x" .. Format.commas(entry.Count)
 	row.Price.Text = SellView.priceText(entry.Price)
 	holderOf(row.SellAll).Visible = entry.Count > 1
@@ -759,21 +1086,22 @@ end
 
 -- The footer buttons: their labels, greyed out when they'd sell nothing.
 function SellView.setFooter(refs: Refs, dirty: Plan, rest: Plan)
-	local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-		button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-		holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
-		button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
+	local function style(button: TextButton, enabled: boolean, paint: string)
+		paintButton(button, if enabled then paint else PopTheme.Gray)
+		button.TextTransparency = if enabled then 0 else 0.3
 	end
 	refs.SellDirty.Text = if dirty.Eligible > 0 then `Sell all Dirty Ore ({Format.commas(dirty.Eligible)})` else "Sell all Dirty Ore"
-	style(refs.SellDirty, dirty.Eligible > 0, Theme.Accent, Theme.AccentDark)
+	style(refs.SellDirty, dirty.Eligible > 0, "Orange")
 	refs.SellRest.Text = `Sell all but best {SellView.KeepBest}`
-	style(refs.SellRest, rest.Eligible > 0, Theme.Good, Theme.GoodDark)
+	style(refs.SellRest, rest.Eligible > 0, "Green")
 end
 
 --[[
 	Sizes everything for the normal or compact (phone) layout and fits the
 	panel into `maxWidth` x `maxHeight` design units (the screen divided by
-	the UI scale; math.huge = no limit).
+	the UI scale; math.huge = no limit). The title and the X sit in the
+	header band, the line under it (the subtitle or the last sale) on the
+	body; phones: the last sale next to the title, in the band.
 ]]
 function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
@@ -781,29 +1109,35 @@ function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeig
 	local width = math.max(560, math.min(m.Width, maxWidth - 24))
 	local height = math.max(400, math.min(m.Height, maxHeight - 16))
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	setBand(refs.Panel, m.Band)
 	refs.Title.TextSize = m.Title
+	refs.Title.Position = UDim2.fromOffset(PAD, 0)
 	refs.Subtitle.Visible = not compact and not refs.Receipt.Visible
+	local closeRoom = m.Close + 24
 	if compact then
 		-- next to the title, two short lines
 		local titleWidth = 330
-		refs.Title.Size = UDim2.fromOffset(titleWidth, 40)
-		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth + 8, 6)
-		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + titleWidth + 8 + 76), 0, 48)
+		refs.Title.Size = UDim2.fromOffset(titleWidth, m.Band)
+		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth + 8, 12)
+		refs.Receipt.Size = UDim2.new(1, -(PAD + titleWidth + 8 + closeRoom), 0, m.Band - 24)
 		refs.Receipt.TextWrapped = true
 		refs.Receipt.TextTruncate = Enum.TextTruncate.None
 		refs.Receipt.TextSize = 18
 	else
-		refs.Title.Size = UDim2.new(1, -(PAD * 2 + 80), 0, 40)
-		refs.Receipt.Position = UDim2.fromOffset(PAD, 48)
-		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + 80), 0, 24)
+		refs.Title.Size = UDim2.new(1, -(PAD + closeRoom), 0, m.Band)
+		refs.Receipt.Position = UDim2.fromOffset(PAD, m.Band + 3)
+		refs.Receipt.Size = UDim2.new(1, -PAD * 2, 0, 26)
 		refs.Receipt.TextWrapped = false
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
 	end
-	local closeSize = if compact then 64 else 54
+	refs.Subtitle.Position = UDim2.fromOffset(PAD, m.Band + 5)
+	refs.Subtitle.Size = UDim2.new(1, -PAD * 2, 0, 22)
+	syncShadow(refs.Title)
 	local close = holderOf(refs.Close)
-	close.Size = UDim2.fromOffset(closeSize, closeSize)
-	close.Position = UDim2.new(1, -PAD, 0, if compact then 6 else 14)
+	close.Size = UDim2.fromOffset(m.Close, m.Close)
+	close.Position = UDim2.new(1, -12, 0, math.floor((m.Band - m.Close) / 2))
+	refs.Close.TextSize = math.floor(m.Close * 0.62)
 	refs.List.Position = UDim2.fromOffset(PAD, m.Header)
 	refs.List.Size = UDim2.new(1, -PAD, 1, -(m.Header + m.Footer))
 	refs.Footer.Position = UDim2.new(0, PAD, 1, -8)
@@ -813,7 +1147,7 @@ function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeig
 		local holder = holderOf(button)
 		holder.Size = UDim2.new(0.5, -6, 0, m.Button)
 		holder.Position = UDim2.new(if i == 1 then 0 else 0.5, if i == 1 then 0 else 6, 0, buttonTop)
-		button.TextSize = if compact then 22 else 20
+		button.TextSize = if compact then 24 else 22
 	end
 	refs.Hint.Visible = not compact
 	refs.ConfirmText.TextSize = if compact then 24 else 22
@@ -826,7 +1160,7 @@ function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeig
 	end
 end
 
--- Shows a message in the header (instead of the subtitle).
+-- Shows a message (instead of the subtitle).
 function SellView.showReceipt(refs: Refs, text: string, color: Color3)
 	refs.Receipt.Text = text
 	refs.Receipt.TextColor3 = color
@@ -857,20 +1191,6 @@ function SellView.firstRow(refs: Refs): Row?
 		end
 	end
 	return first
-end
-
-
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin: white panels, navy outlines, dark text, light buttons).
-local darkBuild = SellView.build
-SellView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-		TouchControls.follow(refs.Gui)
-	end
-	return refs
 end
 
 return SellView

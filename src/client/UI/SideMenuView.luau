@@ -103,6 +103,16 @@ SideMenuView.Entries = {
 		Dark = rgb(28, 78, 190),
 	},
 	{ Id = "Shop", Label = "SHOP", Group = "Main", Order = 4, IconName = "Shop", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
+	-- daily / weekly quests + the login streak (QuestController; badge: things to claim)
+	{
+		Id = "Quests",
+		Label = "QUESTS",
+		Group = "More",
+		Order = 0,
+		IconName = "Quests",
+		Color = rgb(255, 120, 200),
+		Dark = rgb(178, 50, 130),
+	},
 	{ Id = "Codex", Label = "CODEX", Group = "More", Order = 1, IconName = "Codex", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
 	{
 		Id = "Collection",

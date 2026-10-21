@@ -82,9 +82,10 @@ FoundryBuilder.MaxParts = 110 -- the building with the silhouette (a mobile budg
 FoundryBuilder.BuildingParts = 69
 FoundryBuilder.ReceiverMaxParts = 10
 
--- Plot-local frame of the building: the platform's front edge centre.
+-- Plot-local frame of the building: the platform's front edge centre, 2
+-- studs behind the front of the Foundry rect (z 41 at 12 cells).
 -- x grows toward the plot's right wall, z toward the sea (as BaseLayout).
-local ORIGIN = Vector3.new(BaseLayout.Foundry.Center.X, 0, 41)
+local ORIGIN = Vector3.new(BaseLayout.Foundry.Center.X, 0, BaseLayout.Foundry.Center.Z - BaseLayout.Foundry.Size.Z / 2 + 2)
 local FLOOR = 0.3 -- platform top
 local WIDTH, DEPTH = 16, 11
 

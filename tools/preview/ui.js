@@ -152,11 +152,14 @@ function gradientStops(grad, base, alpha) {
     [0, 2, 4].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - f) + parseInt(b.slice(i, i + 2), 16) * f).toString(16).padStart(2, "0")).join("");
   const fades = grad.tkeys && grad.tkeys.length >= 2 ? grad.tkeys : [[0, 0], [1, 0]];
   const times = [...new Set([...grad.keys.map((k) => k[0]), ...fades.map((k) => k[0])])].sort((a, b) => a - b);
+  // UIGradient.Offset (UI/Motion's shine): the stops move along the gradient's direction
+  const rad = ((grad.rot || 0) * Math.PI) / 180;
+  const shift = grad.off ? grad.off[0] * Math.cos(rad) + grad.off[1] * Math.sin(rad) : 0;
   return times
     .map((t) => {
       const c = lerp(grad.keys, t, mixHex);
       const tr = lerp(fades, t, (a, b, f) => a + (b - a) * f);
-      return `${rgba(mulHex(base, c), alpha * (1 - tr))} ${t * 100}%`;
+      return `${rgba(mulHex(base, c), alpha * (1 - tr))} ${(t + shift) * 100}%`;
     })
     .join(", ");
 }
@@ -195,7 +198,12 @@ function styleElement(el, node, w, h) {
       }
     }
   }
-  if (node.icon) {
+  if (node.icon && node.tile) {
+    // a repeating texture (ScaleType Tile, TileSize in px)
+    const t = document.createElement("div");
+    t.style.cssText = `position:absolute;inset:0;background:url(/scenes/icons/${node.icon}.png) 0 0/${node.tile}px ${node.tile}px repeat;opacity:${1 - (node.it || 0)};border-radius:inherit;`;
+    el.appendChild(t);
+  } else if (node.icon) {
     // 3D UI icon (tools/preview/render_icons.mjs output), ScaleType Fit
     if (node.ic && node.ic !== "ffffff") {
       // ImageColor3 tints the picture (Roblox multiplies; a flat tint is close enough here)
@@ -211,7 +219,8 @@ function styleElement(el, node, w, h) {
       el.appendChild(img);
     }
   }
-  if (node.rot) el.style.transform = `rotate(${node.rot}deg)`;
+  // (after a UIScale's scale: both apply)
+  if (node.rot) el.style.transform = `${el.style.transform || ""} rotate(${node.rot}deg)`.trim();
   if (node.clip) el.style.overflow = "hidden";
   el.style.zIndex = String(node.z ?? 1);
 
@@ -219,7 +228,9 @@ function styleElement(el, node, w, h) {
     const span = document.createElement("div");
     const font = fontFamily(node.font);
     span.style.position = "absolute";
-    span.style.inset = "0";
+    // (Roblox insets a text by its UIPadding)
+    const textPad = child(node, "UIPadding");
+    span.style.inset = textPad ? textPad.p.map((v) => `${v}px`).join(" ") : "0";
     span.style.display = "flex";
     span.style.alignItems = node.ty === "Top" ? "flex-start" : node.ty === "Bottom" ? "flex-end" : "center";
     span.style.justifyContent = node.tx === "Left" ? "flex-start" : node.tx === "Right" ? "flex-end" : "center";
@@ -295,7 +306,11 @@ function layoutChildren(node, el, w, h) {
         y = list.va === "Center" ? (ch - sz.h) / 2 : list.va === "Bottom" ? ch - sz.h : 0;
         cursor += sz.w + gap;
       }
-      placed.push({ k, x: x + pl, y: y + pt, w: sz.w, h: sz.h });
+      // where a UI/Motion scale holds it: a list re-places a scaled child by its alignment
+      const origin = vertical
+        ? [list.ha === "Center" ? 0 : list.ha === "Right" ? sz.w / 2 : -sz.w / 2, -sz.h / 2]
+        : [-sz.w / 2, list.va === "Center" ? 0 : list.va === "Bottom" ? sz.h / 2 : -sz.h / 2];
+      placed.push({ k, x: x + pl, y: y + pt, w: sz.w, h: sz.h, origin });
     });
   } else if (grid) {
     const cellW = grid.cell[0] * cw + grid.cell[1];
@@ -336,7 +351,14 @@ function layoutChildren(node, el, w, h) {
     childEl.dataset.name = p.k.n;
     const scale = child(p.k, "UIScale");
     if (scale && scale.s !== 1) {
-      childEl.style.transform = `scale(${scale.s})`;
+      if (scale.n && scale.n.startsWith("Motion")) {
+        // UI/Motion's scales: about the AnchorPoint like Roblox (rotation stays about the centre)
+        const ax = p.origin ? p.origin[0] : (p.k.anchor[0] - 0.5) * p.w;
+        const ay = p.origin ? p.origin[1] : (p.k.anchor[1] - 0.5) * p.h;
+        childEl.style.transform = `translate(${ax}px, ${ay}px) scale(${scale.s}) translate(${-ax}px, ${-ay}px)`;
+      } else {
+        childEl.style.transform = `scale(${scale.s})`;
+      }
       childEl.style.transformOrigin = "center center";
     }
     styleElement(childEl, p.k, p.w, p.h);

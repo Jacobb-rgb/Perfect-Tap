@@ -27,6 +27,7 @@
 	    Rumble -> MiningController.setRumble; turning it off also stops the
 	              gamepad motors at once (a vibration already running). The
 	              row shows only while a gamepad is connected
+	    ReduceMotion -> UI/Motion (UIMotionController listens with onChanged)
 	  Other code can read SettingsController.get() and listen with onChanged.
 	- Opens from the side menu (SettingsController.open / toggle); closes with
 	  the X button, B (gamepad), Backspace, respawning, another panel

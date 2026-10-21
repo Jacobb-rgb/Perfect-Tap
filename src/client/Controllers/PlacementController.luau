@@ -101,13 +101,13 @@ local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local WorldLayout = require(Shared.Config.WorldLayout)
-local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local Grid = require(Shared.Machines.Grid)
 local Placement = require(Shared.Machines.Placement)
 local MachineInfo = require(Shared.Machines.MachineInfo)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local Net = require(Shared.Net)
 local BuildView = require(script.Parent.Parent.UI.BuildView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local GridOverlay = require(script.Parent.Parent.Effects.GridOverlay)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -155,7 +155,10 @@ local HALF = CELLS * CELL / 2
 -- camera: a road-side overview of the plot
 local PITCH = math.rad(55)
 local FOV = 50
-local ZOOM_DEFAULT, ZOOM_MIN, ZOOM_MAX = 60, 40, 80
+-- (tuned on the 12-cell grid, 48 studs: a bigger grid starts and zooms out further
+-- by its size, 80 / 107 at 16 cells; the closest zoom stays; no extra local: this
+-- module is at Luau's 200 local registers)
+local ZOOM_DEFAULT, ZOOM_MIN, ZOOM_MAX = 60 * CELLS / 12, 40, 80 * CELLS / 12
 local PAN_START_Z = -3 -- a little toward the road, so the tray hides less of the plot
 local FLY_TIME = 0.6
 local RETURN_TIME = 0.4
@@ -748,7 +751,8 @@ local function ghostFor(id: string): Model
 	if cached then
 		return cached
 	end
-	local model = MachineBuilder.build(id)
+	-- (required here, not at the top: this module is at Luau's 200 local registers)
+	local model = require(Shared.Builders.MachineBuilder).build(id)
 	model.Name = "Ghost_" .. id
 	model:SetAttribute("MachineId", nil)
 	model:SetAttribute("Ghost", true)
@@ -2634,7 +2638,9 @@ function PlacementController.refreshButton()
 			TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = 1.12 }
 		)
-		tween:Play()
+		if not Motion.reduced() then -- (Reduce motion: the BUILD tile stays still)
+			tween:Play()
+		end
 		pulse = tween
 	elseif not wanted and pulse then
 		pulse:Cancel()

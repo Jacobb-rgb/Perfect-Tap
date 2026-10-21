@@ -1,40 +1,49 @@
 --[[
 	Hoverboards on screen (pure builder + pure helpers; HoverboardController
-	fills it in and animates it). Same look as the elevator panel
-	(ElevatorView: dark navy panel in a glowing neon frame, chunky buttons).
+	fills it in and animates it). Look: the bright "Pop" window kit (Pop.luau,
+	like the Robux Shop; owner 2026-10-21: "new, modern, colourful, clean
+	items, more Roblox style"), the same chrome as the elevator window
+	(ElevatorView.popWindow).
 
-	  panel    header: a small board icon, a big "HOVERBOARDS" and a subtitle
-	           ("Ride anywhere, faster." or the last server message); a red X;
-	           a footer pill with the control hint (not on phones)
+	  panel    a Pop window: a blue header band (the side menu's Hover colour,
+	           BubbleTheme Lobby) with shine stripes and studs, a small board
+	           icon, "HOVERBOARDS" in white with a 3D shadow, the red square X;
+	           a dark studded body; under the band the pitch ("Ride anywhere,
+	           faster." or the last server message); a dark footer pill with
+	           the control hint (not on phones)
 	  cards    one per board (HoverboardData order: 3 coin boards, then the 2
-	           Robux boards with a gold "ROBUX" ribbon): the board drawn from
-	           Frames (side view, nose left, its hover glow), the name, the speed
-	           with "+28%", one perk line, the price ($ coin or R$) and the
-	           button: BUY (green) / BUY with a lock (grey: not enough coins) /
-	           EQUIP (blue) / EQUIPPED (navy, a check) / R$ 49 (green, Robux) /
-	           COMING SOON (grey: the product id is still 0)
+	           Robux boards with a gold "ROBUX" ribbon): a bright painted Pop
+	           card (CardPaints) with light rays and a glow behind the board's
+	           live 3D model (PictureModels "board_<Id>": HoverboardBuilder in a
+	           ViewportFrame; drawn from Frames only if the model can't be
+	           built), the name, the speed as chips ("SPEED 23" and "+44%"),
+	           one perk line, the coin price (a Robux board: its trail, the
+	           price is only on its button) or an OWNED chip, and the button:
+	           BUY (green) / BUY with a lock (grey:
+	           not enough coins) / EQUIP (blue) / EQUIPPED (gold, a check; the
+	           card gets a gold outline and halo) / the green Pop.price "49"
+	           (Robux) / COMING SOON (grey: the product id is still 0)
 	  (the panel opens from main's left side menu: its HOVER entry, SideMenuView)
 	  ride     the RIDE toggle for the HUD's right menu (rideButton): RIDE /
 	           STOP with a key chip ("H") or the gamepad glyph
 
-	Every bit of art is drawn from Frames (images need uploads under the
-	owner's account; set BoardImages[boardId] to asset ids
-	and ImageLabels are used instead).
-
 	Designed for 720 design units of height (HudController scales every
-	TerraForge gui). Five cards in a row when they fit, else 3 + 2; the
-	compact layout (phones, uiScale 0.62) has 72-unit buttons (about 44 pt).
-	A gamepad selection stays inside the panel (SelectionGroup).
+	TerraForge gui). Five tall cards in a row when they fit, else 3 + 2 wide
+	cards (the picture on the left); the compact layout (phones, uiScale 0.62)
+	has 72-unit buttons (about 44 pt). A gamepad selection stays inside the
+	panel (SelectionGroup); only the card buttons and the X are selectable.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MonetizationConfig = require(Shared:WaitForChild("Config"):WaitForChild("MonetizationConfig"))
 local HoverboardData = require(Shared.Config.HoverboardData)
+local PopTheme = require(Shared.Config.PopTheme)
+local PictureModels = require(Shared.Builders.PictureModels)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local HudView = require(script.Parent.HudView)
+local Pop = require(script.Parent.Pop)
 local ElevatorView = require(script.Parent.ElevatorView)
 
 local HoverboardView = {}
@@ -42,36 +51,32 @@ local HoverboardView = {}
 export type CardState = "Buy" | "BuyLocked" | "Equip" | "Equipped" | "Robux" | "Soon"
 export type HintKind = "Mouse" | "Gamepad" | "Touch"
 
-export type ButtonRefs = {
-	Holder: Frame,
-	Edge: UIStroke,
-	Button: TextButton,
-	Gradient: UIGradient,
-	Row: Frame,
-	Icons: { [string]: Frame },
-	Label: TextLabel,
-	LabelStroke: UIStroke,
-	Style: string,
-}
+-- a Pop button (ElevatorView.popButton: Pop.price's face with the drawn icons and the robux mark)
+export type ButtonRefs = ElevatorView.ButtonRefs
 
 export type Card = {
 	Board: HoverboardData.Board,
-	Frame: Frame,
+	Frame: Frame, -- the holder (the layout places it; the drop-in scales it)
 	Scale: UIScale,
-	Stroke: UIStroke,
-	Glow: Frame,
-	ArtBack: Frame,
-	Canvas: Frame,
+	Face: TextButton, -- the painted Pop card (not selectable: its button is)
+	Stroke: UIStroke, -- the card's black edge (gold when equipped)
+	Glow: Frame, -- the equipped board's gold halo
+	ArtBack: Frame, -- where the picture sits
+	Picture: ImageLabel?, -- the live 3D board (nil: drawn on the Canvas instead)
+	Canvas: Frame, -- the board drawn from Frames (only without a model)
 	CanvasScale: UIScale,
 	Ribbon: Frame?,
 	Name: TextLabel,
+	SpeedChip: Frame,
 	Speed: TextLabel,
+	BonusChip: Frame,
 	Bonus: TextLabel,
 	Perk: TextLabel,
-	PriceRow: Frame,
+	PriceRow: Frame, -- a coin board's price (a Robux board's price is its green button)
 	Coin: Frame,
-	Robux: Frame,
 	Price: TextLabel,
+	Extra: TextLabel, -- a Robux board's extra perk where a coin board shows its price
+	Owned: Frame, -- the OWNED chip where the price was
 	Button: TextButton,
 	Look: ButtonRefs,
 	State: CardState,
@@ -81,7 +86,10 @@ export type Refs = {
 	Gui: ScreenGui,
 	Root: Frame,
 	Pop: UIScale,
-	Panel: Frame,
+	Panel: Frame, -- the Pop window
+	Header: Frame, -- the blue band
+	Body: Frame, -- the dark studded body
+	Chrome: ElevatorView.Chrome,
 	Icon: Frame,
 	Title: TextLabel,
 	TitleShadow: TextLabel,
@@ -89,7 +97,8 @@ export type Refs = {
 	Message: TextLabel,
 	Close: TextButton,
 	CloseLook: ButtonRefs,
-	CardPage: Frame,
+	CardPage: ScrollingFrame, -- the cards (they scroll on very short screens)
+	Scrolls: boolean, -- the last layout's cards scroll
 	Cards: { Card },
 	Footer: Frame,
 	Hint: TextLabel,
@@ -119,31 +128,35 @@ end
 
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
-local NAVY_TOP = rgb(26, 34, 72)
-local NAVY_BOTTOM = rgb(12, 16, 38)
-local NAVY_CARD = rgb(20, 26, 54)
 local NAVY_DEEP = rgb(10, 14, 32)
-local NEON = rgb(70, 170, 255)
 local NEON_BRIGHT = rgb(120, 210, 255)
-local NEON_DEEP = rgb(36, 84, 190)
-local TEXT = rgb(245, 248, 255)
-local TEXT_SOFT = rgb(196, 208, 236)
+local TEXT = rgb(255, 255, 255)
 local GOLD = rgb(255, 204, 64)
-local ROBUX_GREEN = rgb(120, 236, 120)
+local PERK_GOLD = rgb(255, 228, 120)
 local INK = rgb(10, 12, 26)
 
 HoverboardView.Title = "HOVERBOARDS"
 HoverboardView.Pitch = "Ride anywhere, faster. Bought once, yours forever."
+HoverboardView.Paint = "Blue" -- the header band (the side menu's Hover colour)
 HoverboardView.OpenTime = 0.42
 HoverboardView.CloseTime = 0.2
--- asset ids for the owner's uploaded art ("" = draw it from Frames)
+-- asset ids for the owner's uploaded art ("" = draw it from Frames; only used without a 3D model)
 HoverboardView.BoardImages = {} :: { [string]: string }
+-- each board's card paint (PopTheme.Paints; the Robux boards as in the shop's passes)
+HoverboardView.CardPaints = {
+	TimberDrifter = "Orange",
+	CartCruiser = "Blue",
+	EmberglassGlider = "Red",
+	NeonComet = "Teal",
+	RoyalPhoenix = "Purple",
+} :: { [string]: string }
 
 type Metrics = {
 	Width: number,
 	Height: number,
 	Pad: number,
-	Header: number,
+	Band: number, -- the coloured header band
+	Header: number, -- the band + the pitch line: where the cards start
 	Title: number,
 	Icon: number,
 	Text: number,
@@ -156,6 +169,7 @@ type Metrics = {
 	Close: number,
 	Footer: number,
 	MinCard: number,
+	MinHeight: number, -- a card is at least this tall, else the cards scroll
 }
 
 local METRICS: { [string]: Metrics } = {
@@ -163,9 +177,10 @@ local METRICS: { [string]: Metrics } = {
 		Width = 1080,
 		Height = 470,
 		Pad = 20,
-		Header = 104,
-		Title = 60,
-		Icon = 62,
+		Band = 76,
+		Header = 110,
+		Title = 46,
+		Icon = 52,
 		Text = 20,
 		Gap = 14,
 		Button = 56,
@@ -173,18 +188,20 @@ local METRICS: { [string]: Metrics } = {
 		Name = 22,
 		Small = 17,
 		Price = 26,
-		Close = 60,
+		Close = 62,
 		Footer = 36,
 		MinCard = 176,
+		MinHeight = 200,
 	},
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
 		Width = 1320,
 		Height = 560,
 		Pad = 18,
-		Header = 92,
-		Title = 48,
-		Icon = 58,
+		Band = 76,
+		Header = 104,
+		Title = 46,
+		Icon = 50,
 		Text = 22,
 		Gap = 12,
 		Button = 72,
@@ -192,9 +209,10 @@ local METRICS: { [string]: Metrics } = {
 		Name = 25,
 		Small = 20,
 		Price = 28,
-		Close = 68,
+		Close = 64,
 		Footer = 0,
 		MinCard = 230,
+		MinHeight = 196,
 	},
 }
 
@@ -274,6 +292,11 @@ function HoverboardView.columns(width: number, compact: boolean): number
 	local count = #HoverboardData.List
 	local need = count * m.MinCard + (count - 1) * m.Gap + m.Pad * 2
 	return if width >= need then count else math.ceil(count / 2)
+end
+
+-- A board's card paint.
+function HoverboardView.cardPaint(board: HoverboardData.Board): Pop.Paint
+	return Pop.paint(HoverboardView.CardPaints[board.Id] or "Slate")
 end
 
 ---------------------------------------------------------------- drawing kit
@@ -537,14 +560,6 @@ local function ink(parent: Instance, cx: number, cy: number, w: number, h: numbe
 	return frame
 end
 
-local function tint(icon: Instance, color: Color3)
-	for _, d in icon:GetDescendants() do
-		if d:IsA("Frame") and d.Name == "Ink" then
-			d.BackgroundColor3 = color
-		end
-	end
-end
-
 local Icons = {}
 
 -- a check mark (EQUIPPED)
@@ -563,16 +578,6 @@ function Icons.lock(parent: Instance, color: Color3): Frame
 	shackle.Name = "Shackle"
 	UIKit.stroke(shackle, 2.5, color)
 	ink(box, 0.5, 0.68, 0.76, 0.5, color, 0, 0.16)
-	return box
-end
-
--- the Robux hexagon (two rotated squares with a hole)
-function Icons.robux(parent: Instance, color: Color3): Frame
-	local box = iconBox(parent, "Robux")
-	ink(box, 0.5, 0.5, 0.78, 0.78, color, 0, 0.18)
-	ink(box, 0.5, 0.5, 0.72, 0.72, color, 45, 0.12)
-	local hole = ink(box, 0.5, 0.5, 0.32, 0.32, INK, 45, 0.1)
-	hole.Name = "Hole"
 	return box
 end
 
@@ -605,320 +610,194 @@ function Icons.board(parent: Instance, color: Color3, glowColor: Color3): Frame
 	return box
 end
 
----------------------------------------------------------------- chunky buttons
+---------------------------------------------------------------- buttons
 
 type ButtonStyle = {
-	Top: Color3,
-	Mid: Color3,
-	Bottom: Color3,
-	Lip: Color3,
-	Edge: Color3,
-	Text: Color3,
-	TextStroke: Color3,
-	Icon: string?,
-	IconColor: Color3,
+	Paint: Pop.Paint,
+	Mid: Color3, -- the face's colour at its glossy step (Pop.face)
+	Icon: string?, -- a drawn icon before the word
+	Mark: boolean, -- the robux mark before the price (Pop.price)
 }
 
+local function buttonStyle(paint: Pop.Paint, icon: string?, mark: boolean?): ButtonStyle
+	return { Paint = paint, Mid = paint.Top:Lerp(paint.Bottom, 0.42), Icon = icon, Mark = mark == true }
+end
+
 local STYLES: { [string]: ButtonStyle } = {
-	Buy = {
-		Top = rgb(170, 250, 130),
-		Mid = rgb(76, 214, 72),
-		Bottom = rgb(46, 172, 54),
-		Lip = rgb(22, 106, 34),
-		Edge = INK,
-		Text = TEXT,
-		TextStroke = rgb(18, 84, 28),
-		Icon = nil,
-		IconColor = TEXT,
-	},
-	BuyLocked = {
-		Top = rgb(70, 76, 98),
-		Mid = rgb(54, 60, 80),
-		Bottom = rgb(42, 47, 64),
-		Lip = rgb(24, 27, 38),
-		Edge = INK,
-		Text = rgb(172, 178, 200),
-		TextStroke = rgb(18, 20, 30),
-		Icon = "Lock",
-		IconColor = rgb(166, 172, 194),
-	},
-	Equip = {
-		Top = rgb(130, 210, 255),
-		Mid = rgb(56, 150, 246),
-		Bottom = rgb(34, 104, 214),
-		Lip = rgb(18, 58, 140),
-		Edge = INK,
-		Text = TEXT,
-		TextStroke = rgb(12, 40, 110),
-		Icon = nil,
-		IconColor = TEXT,
-	},
-	Equipped = {
-		Top = rgb(30, 46, 98),
-		Mid = rgb(18, 28, 66),
-		Bottom = rgb(12, 18, 46),
-		Lip = rgb(8, 12, 30),
-		Edge = NEON,
-		Text = rgb(140, 210, 255),
-		TextStroke = rgb(6, 16, 50),
-		Icon = "Check",
-		IconColor = rgb(110, 214, 92),
-	},
-	Robux = {
-		Top = rgb(170, 250, 130),
-		Mid = rgb(76, 214, 72),
-		Bottom = rgb(46, 172, 54),
-		Lip = rgb(22, 106, 34),
-		Edge = INK,
-		Text = TEXT,
-		TextStroke = rgb(18, 84, 28),
-		Icon = "Robux",
-		IconColor = TEXT,
-	},
-	Soon = {
-		Top = rgb(70, 76, 98),
-		Mid = rgb(54, 60, 80),
-		Bottom = rgb(42, 47, 64),
-		Lip = rgb(24, 27, 38),
-		Edge = INK,
-		Text = rgb(172, 178, 200),
-		TextStroke = rgb(18, 20, 30),
-		Icon = "Clock",
-		IconColor = rgb(166, 172, 194),
-	},
-	Close = {
-		Top = rgb(255, 128, 112),
-		Mid = rgb(236, 62, 62),
-		Bottom = rgb(196, 38, 44),
-		Lip = rgb(120, 22, 28),
-		Edge = INK,
-		Text = TEXT,
-		TextStroke = rgb(90, 14, 20),
-		Icon = nil,
-		IconColor = TEXT,
-	},
+	Buy = buttonStyle(PopTheme.Price),
+	BuyLocked = buttonStyle(PopTheme.Gray, "Lock"),
+	Equip = buttonStyle(Pop.paint("Blue")),
+	Equipped = buttonStyle(Pop.paint("Yellow"), "Check"),
+	Robux = buttonStyle(PopTheme.Price, nil, true), -- the green Pop.price: the robux mark and "49"
+	Soon = buttonStyle(PopTheme.Gray, "Clock"),
+	Close = buttonStyle(PopTheme.Close),
 }
 HoverboardView.ButtonStyles = STYLES
 
 local ICON_MAKERS: { [string]: (Instance, Color3) -> Frame } = {
 	Check = Icons.check,
 	Lock = Icons.lock,
-	Robux = Icons.robux,
 	Clock = Icons.clock,
 }
 
-local function chunkyButton(parent: Instance, name: string): ButtonRefs
-	local holder: Frame = UIKit.new("Frame", {
-		Name = name .. "Holder",
-		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(160, 56),
-	}, parent)
-	UIKit.corner(holder, 14)
-	local edge = ring(holder, 3, INK)
-	local button: TextButton = UIKit.new("TextButton", {
-		Name = "Button",
-		AutoButtonColor = false,
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, -5),
-		Size = UDim2.fromScale(1, 1),
-		Text = "",
-	}, holder)
-	UIKit.corner(button, 14)
-	local g = gradient3(button, WHITE, WHITE, WHITE)
-	local row: Frame = UIKit.new("Frame", {
-		Name = "Row",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, button)
-	UIKit.list(row, Enum.FillDirection.Horizontal, 8, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-	local made: { [string]: Frame } = {}
-	for kind, maker in ICON_MAKERS do
-		local icon = maker(row, TEXT)
-		icon.LayoutOrder = 1
-		icon.Visible = false
-		made[kind] = icon
-	end
-	local label = UIKit.label(row, "", 24, {
-		Name = "Label",
-		LayoutOrder = 10,
-		TextWrapped = false,
-		Size = UDim2.fromOffset(60, 30),
-	})
-	local labelStroke = label:FindFirstChildOfClass("UIStroke") :: UIStroke
-	labelStroke.Thickness = 2.5
-	return {
-		Holder = holder,
-		Edge = edge,
-		Button = button,
-		Gradient = g,
-		Row = row,
-		Icons = made,
-		Label = label,
-		LabelStroke = labelStroke,
-		Style = "",
-	}
-end
-
-local function styleButton(look: ButtonRefs, styleName: string, text: string, textSize: number, title: boolean?)
+local function styleButton(look: ButtonRefs, styleName: string, text: string, textSize: number)
 	local style = STYLES[styleName]
 	look.Style = styleName
-	setGradient3(look.Gradient, style.Top, style.Mid, style.Bottom)
-	look.Holder.BackgroundColor3 = style.Lip
-	look.Edge.Color = style.Edge
-	look.Label.Text = text
-	look.Label.TextSize = textSize
-	look.Label.FontFace = if title then Theme.TitleFont else Theme.Font
-	look.Label.TextColor3 = style.Text
-	look.LabelStroke.Color = style.TextStroke
-	look.Label.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(text, textSize, title)) + 4, textSize + 8)
-	local iconSize = math.floor(textSize * 0.95)
-	for kind, icon in look.Icons do
-		local shown = kind == style.Icon
-		icon.Visible = shown
-		if shown then
-			icon.Size = UDim2.fromOffset(iconSize, iconSize)
-			tint(icon, style.IconColor)
-		end
+	ElevatorView.paintButton(look, style.Paint, text, textSize, style.Icon, false)
+	local mark = look.Row:FindFirstChild("Mark") :: ImageLabel?
+	if mark then
+		mark.Visible = style.Mark
+		mark.Size = UDim2.fromOffset(textSize + 4, textSize + 4)
 	end
 end
 
 ---------------------------------------------------------------- building
 
-local function newCard(page: Frame, board: HoverboardData.Board): Card
+-- the size a card is built at (the layout resizes it; Pop.card sizes its rays and glow from it)
+local CARD_BUILD = Vector2.new(200, 320)
+-- Pop.card's light burst (rays and glow): it follows the picture
+local CARD_FX = { "Rays", "Glow", "Glow1", "Glow2" }
+-- the room round the cards inside their scroll (the equipped board's gold halo is not clipped)
+local CARD_MARGIN = 6
+
+local function newCard(page: GuiObject, board: HoverboardData.Board): Card
 	local robux = board.Kind == "Robux"
 	local frame: Frame = UIKit.new("Frame", {
 		Name = board.Id,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = NAVY_CARD,
-		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
 		LayoutOrder = board.Order,
+		Size = UDim2.fromOffset(CARD_BUILD.X, CARD_BUILD.Y),
 	}, page)
-	UIKit.corner(frame, 16)
-	local stroke = ring(frame, 3, if robux then GOLD else board.Colors.Glow)
 	local scale: UIScale = UIKit.new("UIScale", { Name = "Drop", Scale = 1 }, frame)
-	-- the equipped card's glow ring
+	-- the equipped board's soft gold halo (outside the card's own gold edge)
 	local glow: Frame = UIKit.new("Frame", {
 		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 8, 1, 8),
 		Visible = false,
+		ZIndex = 1,
 	}, frame)
-	UIKit.corner(glow, 16)
-	ring(glow, 9, NEON, 0.55)
-	-- the art box: a dark gradient in the board's glow colour, the board on it
+	UIKit.corner(glow, PopTheme.Corner + 4)
+	ring(glow, 6, GOLD, 0.45)
+	-- the painted card: light rays and a glow behind the board, studs, sparkles, the light rim
+	local face = Pop.card(frame, HoverboardView.cardPaint(board), {
+		Name = "Face",
+		Size = UDim2.fromOffset(CARD_BUILD.X, CARD_BUILD.Y),
+		Selectable = false,
+		ZIndex = 2,
+	}, UDim2.fromScale(0.5, 0.36))
+	face.Size = UDim2.fromScale(1, 1)
+	local stroke = face:FindFirstChild("Border") :: UIStroke
+	-- the board: its live 3D model (like the shop's board passes), else drawn from Frames
 	local artBack: Frame = UIKit.new("Frame", {
 		Name = "ArtBack",
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-	}, frame)
-	UIKit.corner(artBack, 12)
-	UIKit.new("UIGradient", {
-		Color = ColorSequence.new(NAVY_DEEP, board.Colors.Glow:Lerp(NAVY_DEEP, 0.6)),
-		Rotation = 90,
-	}, artBack)
+		BackgroundTransparency = 1,
+		ZIndex = 4,
+	}, face)
+	local model, from = PictureModels.build("board_" .. board.Id)
+	local picture: ImageLabel? = nil
+	if model then
+		-- (a bit bigger than its spot: the camera frames the board's bounding sphere, a flat board
+		-- leaves room round it)
+		picture = Pop.model(artBack, "board_" .. board.Id, 160, model, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1.3, 1.3),
+			ZIndex = 4,
+		}, from)
+	end
 	local canvas: Frame = UIKit.new("Frame", {
 		Name = "Art",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(200, 110),
-	}, frame)
+		ZIndex = 4,
+	}, face)
 	local canvasScale: UIScale = UIKit.new("UIScale", { Scale = 1 }, canvas)
-	HoverboardView.drawBoard(canvas, board)
+	if not picture then
+		HoverboardView.drawBoard(canvas, board)
+	end
+	-- the gold ROBUX ribbon on the picture's corner
 	local ribbon: Frame? = nil
 	if robux then
-		local r: Frame = UIKit.new("Frame", {
-			Name = "Ribbon",
-			BackgroundColor3 = WHITE,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -8, 0, 8),
-			Size = UDim2.fromOffset(78, 24),
-			ZIndex = 3,
-		}, frame)
-		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, r)
-		gradient3(r, rgb(255, 232, 140), GOLD, rgb(214, 150, 30))
-		ring(r, 2, INK)
-		UIKit.label(r, "ROBUX", 15, {
-			Name = "Text",
-			Size = UDim2.fromScale(1, 1),
-			FontFace = Theme.TitleFont,
-			TextColor3 = TEXT,
-			TextWrapped = false,
-			ZIndex = 3,
-		})
-		ribbon = r
+		ribbon = Pop.ribbon(face, "ROBUX", 86)
 	end
-	local name = UIKit.label(frame, board.Name, 22, {
+	local name = Pop.text(face, board.Name, 22, {
 		Name = "BoardName",
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextWrapped = false,
-		TextColor3 = TEXT,
+		ZIndex = 6,
 	})
-	local speed = UIKit.label(frame, HoverboardView.speedText(board), 18, {
-		Name = "Speed",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		TextColor3 = TEXT_SOFT,
-	})
-	local bonus = UIKit.label(frame, HoverboardView.bonusText(board), 16, {
-		Name = "Bonus",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0,
-		TextWrapped = false,
-		TextColor3 = TEXT,
-	})
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, bonus)
-	gradient3(bonus, rgb(130, 236, 110), rgb(64, 186, 60), rgb(40, 140, 44))
-	local perk = UIKit.label(frame, board.Perks[2] or board.Perks[1] or "", 16, {
+	-- the speed as chips: "SPEED 23" and the bonus "+44%"
+	local speedChip = Pop.chip(face, HoverboardView.speedText(board), "Slate", Vector2.new(100, 26), { ZIndex = 6 })
+	speedChip.Name = "SpeedChip"
+	local speed = speedChip:FindFirstChild("Label") :: TextLabel
+	local bonusChip = Pop.chip(face, HoverboardView.bonusText(board), "Green", Vector2.new(70, 26), { ZIndex = 6 })
+	bonusChip.Name = "BonusChip"
+	local bonus = bonusChip:FindFirstChild("Label") :: TextLabel
+	local perk = Pop.text(face, board.Perks[2] or board.Perks[1] or "", 16, {
 		Name = "Perk",
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextWrapped = false,
-		TextColor3 = if robux then GOLD else TEXT_SOFT,
+		TextColor3 = if robux then PERK_GOLD else TEXT,
+		ZIndex = 6,
 	})
+	-- the coin price (a gold coin and the amount) or, once owned, the OWNED chip; a Robux
+	-- board's price is only on its green button, its line shows one more perk (its trail)
 	local priceRow: Frame = UIKit.new("Frame", {
 		Name = "PriceRow",
 		BackgroundTransparency = 1,
-	}, frame)
-	UIKit.list(priceRow, Enum.FillDirection.Horizontal, 6, { VerticalAlignment = Enum.VerticalAlignment.Center })
-	local coin = HudView.coinIcon(priceRow, 24)
-	coin.LayoutOrder = 1
-	coin.Visible = not robux
-	local robuxIcon = Icons.robux(priceRow, ROBUX_GREEN)
-	robuxIcon.LayoutOrder = 1
-	robuxIcon.Visible = robux
-	local price = UIKit.label(priceRow, HoverboardView.priceText(board), 24, {
+		Visible = not robux,
+		ZIndex = 6,
+	}, face)
+	UIKit.list(priceRow, Enum.FillDirection.Horizontal, 6, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local coin = Pop.coin(priceRow, 26, { LayoutOrder = 1 })
+	local price = Pop.text(priceRow, HoverboardView.priceText(board), 26, {
 		Name = "Price",
 		LayoutOrder = 2,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		FontFace = Theme.TitleFont,
-		TextColor3 = if robux then ROBUX_GREEN else Theme.Coin,
+		FontFace = PopTheme.Heavy,
+		TextColor3 = Theme.Coin,
+		ZIndex = 7,
 	})
-	local look = chunkyButton(frame, "Action")
+	local extra = Pop.text(face, "", 18, {
+		Name = "Extra",
+		TextColor3 = PERK_GOLD,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Visible = robux,
+		ZIndex = 6,
+	})
+	local owned = Pop.chip(face, "OWNED", "Green", Vector2.new(110, 28), { Visible = false, ZIndex = 6 })
+	owned.Name = "Owned"
+	-- the button (over the card, not clipped by it): BUY / EQUIP / EQUIPPED / the Robux price / COMING SOON
+	local look = ElevatorView.popButton(frame, "Action", { "Check", "Lock", "Clock" }, ICON_MAKERS)
+	look.Holder.ZIndex = 3
 	return {
 		Board = board,
 		Frame = frame,
 		Scale = scale,
+		Face = face,
 		Stroke = stroke,
 		Glow = glow,
 		ArtBack = artBack,
+		Picture = picture,
 		Canvas = canvas,
 		CanvasScale = canvasScale,
 		Ribbon = ribbon,
 		Name = name,
+		SpeedChip = speedChip,
 		Speed = speed,
+		BonusChip = bonusChip,
 		Bonus = bonus,
 		Perk = perk,
 		PriceRow = priceRow,
 		Coin = coin,
-		Robux = robuxIcon,
 		Price = price,
+		Extra = extra,
+		Owned = owned,
 		Button = look.Button,
 		Look = look,
 		State = "Buy",
@@ -926,26 +805,8 @@ local function newCard(page: Frame, board: HoverboardData.Board): Card
 end
 
 local function newFooter(root: Frame): (Frame, TextLabel, ImageLabel)
-	local footer: Frame = UIKit.new("Frame", {
-		Name = "Footer",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromOffset(460, 36),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-	}, root)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, footer)
-	gradient3(footer, rgb(24, 32, 66), rgb(14, 20, 46), rgb(10, 14, 34))
-	ring(footer, 2, NEON, 0.15)
-	local row: Frame = UIKit.new("Frame", {
-		Name = "Row",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, footer)
-	UIKit.list(row, Enum.FillDirection.Horizontal, 8, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
+	local footer, row = ElevatorView.popFooter(root)
+	footer.Size = UDim2.fromOffset(460, 36)
 	local glyph: ImageLabel = UIKit.new("ImageLabel", {
 		Name = "Glyph",
 		BackgroundTransparency = 1,
@@ -953,11 +814,9 @@ local function newFooter(root: Frame): (Frame, TextLabel, ImageLabel)
 		LayoutOrder = 1,
 		Visible = false,
 	}, row)
-	local hint = UIKit.label(row, "", 17, {
+	local hint = Pop.text(row, "", 17, {
 		Name = "Hint",
 		LayoutOrder = 2,
-		TextWrapped = false,
-		TextColor3 = TEXT,
 	})
 	return footer, hint, glyph
 end
@@ -979,41 +838,16 @@ function HoverboardView.build(compact: boolean?): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, gui)
 	local pop: UIScale = UIKit.new("UIScale", { Name = "OpenPop", Scale = 1 }, root)
-	for i, spec in { { 16, 0.86 }, { 8, 0.62 } } do
-		local glow: Frame = UIKit.new("Frame", {
-			Name = "Glow" .. i,
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-		}, root)
-		UIKit.corner(glow, 26)
-		ring(glow, spec[1], NEON, spec[2])
-	end
-	local panel: Frame = UIKit.new("Frame", {
-		Name = "Panel",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		Active = true,
-	}, root)
-	UIKit.corner(panel, 24)
-	gradient3(panel, NAVY_TOP, rgb(18, 24, 54), NAVY_BOTTOM)
-	ring(panel, 4, NEON_BRIGHT)
-	local bevel: Frame = UIKit.new("Frame", {
-		Name = "Bevel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -14, 1, -14),
-		BackgroundTransparency = 1,
-	}, panel)
-	UIKit.corner(bevel, 18)
-	ring(bevel, 2, NEON_DEEP, 0.35)
-	-- header
+	-- the Pop window: the blue band (icon, title, X) over the dark studded body
+	local chrome = ElevatorView.popWindow(root, HoverboardView.Title, HoverboardView.Paint, METRICS.Normal.Band)
+	local panel = chrome.Panel
+	-- the band's icon: a violet tile with a white board
 	local icon: Frame = UIKit.new("Frame", {
 		Name = "HeaderIcon",
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
-	}, panel)
+		ZIndex = 5,
+	}, chrome.Header)
 	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, icon)
 	gradient3(icon, rgb(170, 100, 255), rgb(118, 56, 220), rgb(72, 30, 160))
 	ring(icon, 3, INK)
@@ -1021,72 +855,56 @@ function HoverboardView.build(compact: boolean?): Refs
 	board.AnchorPoint = Vector2.new(0.5, 0.5)
 	board.Position = UDim2.fromScale(0.5, 0.5)
 	board.Size = UDim2.fromScale(0.8, 0.8)
-	local titleShadow = UIKit.label(panel, HoverboardView.Title, 56, {
-		Name = "TitleShadow",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = NEON_DEEP,
-		TextWrapped = false,
-	})
-	local shadowStroke = titleShadow:FindFirstChildOfClass("UIStroke")
-	if shadowStroke then
-		shadowStroke.Color = rgb(8, 18, 60)
-		shadowStroke.Thickness = 3
-	end
-	local title = UIKit.label(panel, HoverboardView.Title, 56, {
-		Name = "Title",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = TEXT,
-		TextWrapped = false,
-	})
-	local titleStroke = title:FindFirstChildOfClass("UIStroke")
-	if titleStroke then
-		titleStroke.Color = rgb(20, 50, 150)
-		titleStroke.Thickness = 3
-	end
-	local subtitle = UIKit.label(panel, HoverboardView.Pitch, 20, {
+	-- the pitch under the band (or the last server message)
+	local subtitle = Pop.text(panel, HoverboardView.Pitch, 20, {
 		Name = "Subtitle",
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextWrapped = false,
-		TextColor3 = TEXT_SOFT,
+		ZIndex = 3,
 	})
-	local message = UIKit.label(panel, "", 20, {
+	local message = Pop.text(panel, "", 20, {
 		Name = "Message",
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextWrapped = false,
 		TextColor3 = Theme.Bad,
 		Visible = false,
+		ZIndex = 3,
 	})
-	-- cards
-	local page: Frame = UIKit.new("Frame", {
+	-- the cards (a scroll that only scrolls when they don't fit: very short screens)
+	local page: ScrollingFrame = UIKit.new("ScrollingFrame", {
 		Name = "Cards",
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = rgb(196, 200, 212),
+		ScrollingEnabled = false,
+		Selectable = false,
+		VerticalScrollBarInset = Enum.ScrollBarInset.None,
+		ZIndex = 3,
 	}, panel)
 	local cards: { Card } = {}
 	for _, b in HoverboardData.List do
 		table.insert(cards, newCard(page, b))
 	end
-	-- on the root (over the frame): the X and the footer pill
-	local closeLook = chunkyButton(root, "Close")
-	closeLook.Holder.AnchorPoint = Vector2.new(1, 0)
-	styleButton(closeLook, "Close", "X", 36, true)
+	-- the footer pill on the root (over the frame's bottom edge)
 	local footer, hint, glyph = newFooter(root)
 	local refs: Refs = {
 		Gui = gui,
 		Root = root,
 		Pop = pop,
 		Panel = panel,
+		Header = chrome.Header,
+		Body = chrome.Body,
+		Chrome = chrome,
 		Icon = icon,
-		Title = title,
-		TitleShadow = titleShadow,
+		Title = chrome.Title,
+		TitleShadow = chrome.TitleShadow,
 		Subtitle = subtitle,
 		Message = message,
-		Close = closeLook.Button,
-		CloseLook = closeLook,
+		Close = chrome.CloseLook.Button,
+		CloseLook = chrome.CloseLook,
 		CardPage = page,
+		Scrolls = false,
 		Cards = cards,
 		Footer = footer,
 		Hint = hint,
@@ -1117,10 +935,17 @@ function HoverboardView.setCards(refs: Refs, owned: { [string]: boolean }, equip
 			HoverboardView.buttonText(state, card.Board),
 			if state == "Soon" then m.ButtonText - 6 else m.ButtonText
 		)
-		card.Glow.Visible = state == "Equipped"
-		card.Button.Selectable = state ~= "Equipped"
-		local owns = state == "Equip" or state == "Equipped"
-		card.PriceRow.Visible = not owns
+		-- the equipped board: a gold edge and the soft gold halo
+		local on = state == "Equipped"
+		card.Glow.Visible = on
+		card.Stroke.Color = if on then GOLD else PopTheme.Outline
+		card.Stroke.Thickness = if on then 4 else PopTheme.Edge
+		card.Button.Selectable = not on
+		local owns = state == "Equip" or on
+		local robux = card.Board.Kind == "Robux"
+		card.PriceRow.Visible = not owns and not robux
+		card.Extra.Visible = not owns and robux
+		card.Owned.Visible = owns
 	end
 end
 
@@ -1161,58 +986,152 @@ end
 
 ---------------------------------------------------------------- layout
 
--- Inside a card: the art on top, the name, speed + bonus, the perk line and the
--- price, the button at the bottom. Short cards (phones, two rows) drop the perk
--- line and put the price at the end of the speed line.
-local function layoutCard(card: Card, m: Metrics, w: number, h: number)
-	local pad = 12
-	local buttonHeight = m.Button
-	local textRows = (m.Name + 6) + (m.Small + 8)
-	local full = pad + 70 + 8 + textRows + (m.Small + 8) + (m.Price + 4) + 8 + buttonHeight + pad
-	local tight = h < full
-	local below = if tight then textRows + 8 else textRows + (m.Small + 8) + (m.Price + 4) + 8
-	local artHeight = math.max(40, h - pad - 8 - below - buttonHeight - pad)
-	card.ArtBack.Position = UDim2.fromOffset(pad, pad)
-	card.ArtBack.Size = UDim2.new(1, -pad * 2, 0, artHeight)
-	card.CanvasScale.Scale = math.min(artHeight * 1.12 / 110, (w - pad * 2) / 200)
-	card.Canvas.Position = UDim2.new(0.5, 0, 0, pad + artHeight / 2)
-	local y = pad + artHeight + 8
-	card.Name.Position = UDim2.fromOffset(pad + 2, y)
-	card.Name.Size = UDim2.new(1, -pad * 2, 0, m.Name + 4)
-	card.Name.TextSize = m.Name
-	y += m.Name + 6
-	card.Speed.TextSize = m.Small
-	local speedWidth = math.ceil(ElevatorView.measure(card.Speed.Text, m.Small)) + 4
-	card.Speed.Position = UDim2.fromOffset(pad + 2, y)
-	card.Speed.Size = UDim2.fromOffset(speedWidth, m.Small + 6)
-	card.Bonus.TextSize = m.Small - 2
-	local bonusWidth = math.ceil(ElevatorView.measure(card.Bonus.Text, m.Small - 2)) + 16
-	card.Bonus.Position = UDim2.fromOffset(pad + 2 + speedWidth + 6, y + 1)
-	card.Bonus.Size = UDim2.fromOffset(bonusWidth, m.Small + 4)
-	local priceSize = if tight then m.Small + 2 else m.Price
-	card.Price.TextSize = priceSize
-	local priceWidth = math.ceil(ElevatorView.measure(card.Price.Text, priceSize, true)) + 6
-	card.Price.Size = UDim2.fromOffset(priceWidth, priceSize + 4)
-	card.Coin.Size = UDim2.fromOffset(priceSize - 2, priceSize - 2)
-	card.Robux.Size = UDim2.fromOffset(priceSize - 2, priceSize - 2)
-	card.Perk.Visible = not tight
-	if tight then
-		local rowWidth = priceSize + 6 + priceWidth
-		card.PriceRow.Position = UDim2.fromOffset(w - pad - rowWidth, y)
-		card.PriceRow.Size = UDim2.fromOffset(rowWidth, m.Small + 6)
-	else
-		y += m.Small + 8
-		card.Perk.TextSize = m.Small - 1
-		card.Perk.Position = UDim2.fromOffset(pad + 2, y)
-		card.Perk.Size = UDim2.new(1, -pad * 2, 0, m.Small + 4)
-		y += m.Small + 8
-		card.PriceRow.Position = UDim2.fromOffset(pad + 2, y)
-		card.PriceRow.Size = UDim2.new(1, -pad * 2, 0, m.Price + 4)
+-- A label's text size for `room` design units (never under `least`), its black edge to match.
+local function fitText(label: TextLabel, size: number, room: number, least: number)
+	local wide = ElevatorView.measure(label.Text, size)
+	label.TextSize = if wide > room then math.max(least, math.floor(size * room / wide)) else size
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = Pop.edgeFor(label.TextSize)
 	end
+end
+
+-- Sizes a row of chips for `textSize` (smaller when they don't fit `room`); returns the row's width.
+local function sizeChips(chips: { Frame }, textSize: number, height: number, room: number, gap: number): number
+	local function total(size: number): number
+		local sum = gap * (#chips - 1)
+		for _, chip in chips do
+			local label = chip:FindFirstChildOfClass("TextLabel")
+			if label then
+				sum += math.ceil(ElevatorView.measure(label.Text, size)) + 18
+			end
+		end
+		return sum
+	end
+	local size = textSize
+	local width = total(size)
+	if width > room then
+		size = math.max(11, math.floor(textSize * room / width))
+		width = total(size)
+	end
+	for _, chip in chips do
+		local label = chip:FindFirstChildOfClass("TextLabel")
+		if label then
+			label.TextSize = size
+			local edge = label:FindFirstChild("Edge") :: UIStroke?
+			if edge then
+				edge.Thickness = Pop.edgeFor(size)
+			end
+			chip.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(label.Text, size)) + 18, height)
+		end
+	end
+	return width
+end
+
+--[[
+	Inside a card: the button at the bottom. A tall card (PC, five a row): the
+	name, the picture, the speed chips, the perk line and the price (or OWNED;
+	a Robux board: its trail) above it. A wide card (phones, 3 + 2): the
+	picture on the left, the name, the chips and the price (a Robux board: its
+	"No carry slowdown") on the right (no perk line).
+]]
+local function layoutCard(card: Card, m: Metrics, w: number, h: number)
+	local pad = 10
 	local holder = card.Look.Holder
 	holder.AnchorPoint = Vector2.new(0, 1)
 	holder.Position = UDim2.new(0, pad, 1, -pad)
-	holder.Size = UDim2.new(1, -pad * 2, 0, buttonHeight)
+	holder.Size = UDim2.new(1, -pad * 2, 0, m.Button)
+	local bottom = h - pad - m.Button - 6 -- the words and the picture end here
+	local chipHeight = m.Small + 8
+	local priceHeight = m.Price + 6
+	local chips = { card.SpeedChip, card.BonusChip }
+	local px, py, pw, ph
+	if w <= h then
+		card.Name.TextXAlignment = Enum.TextXAlignment.Center
+		card.Name.Position = UDim2.fromOffset(pad, pad)
+		card.Name.Size = UDim2.fromOffset(w - pad * 2, m.Name + 6)
+		fitText(card.Name, m.Name, w - pad * 2 - 4, 13)
+		local priceTop = bottom - priceHeight
+		local perkTop = priceTop - 2 - (m.Small + 4)
+		local chipsTop = perkTop - 4 - chipHeight
+		card.Perk.Visible = true
+		card.Perk.TextXAlignment = Enum.TextXAlignment.Center
+		card.Perk.Position = UDim2.fromOffset(pad, perkTop)
+		card.Perk.Size = UDim2.fromOffset(w - pad * 2, m.Small + 4)
+		fitText(card.Perk, m.Small - 1, w - pad * 2 - 4, 12)
+		local chipsWidth = sizeChips(chips, m.Small - 2, chipHeight, w - pad * 2, 6)
+		local x = math.floor((w - chipsWidth) / 2)
+		card.SpeedChip.Position = UDim2.fromOffset(x, chipsTop)
+		card.BonusChip.Position = UDim2.fromOffset(x + card.SpeedChip.Size.X.Offset + 6, chipsTop)
+		card.PriceRow.Position = UDim2.fromOffset(pad, priceTop)
+		card.PriceRow.Size = UDim2.fromOffset(w - pad * 2, priceHeight)
+		card.Owned.AnchorPoint = Vector2.new(0.5, 0.5)
+		card.Owned.Position = UDim2.fromOffset(math.floor(w / 2), priceTop + math.floor(priceHeight / 2))
+		local perks = card.Board.Perks
+		card.Extra.Text = perks[3] or perks[1] or ""
+		card.Extra.TextXAlignment = Enum.TextXAlignment.Center
+		card.Extra.Position = UDim2.fromOffset(pad, priceTop)
+		card.Extra.Size = UDim2.fromOffset(w - pad * 2, priceHeight)
+		fitText(card.Extra, m.Small + 1, w - pad * 2 - 4, 12)
+		px, py = pad, pad + m.Name + 8
+		pw, ph = w - pad * 2, chipsTop - 4 - (pad + m.Name + 8)
+	else
+		pw, ph = math.floor(w * 0.44), bottom - pad
+		px, py = pad, pad
+		local x = pad + pw + 8
+		local room = w - x - pad
+		card.Name.TextXAlignment = Enum.TextXAlignment.Left
+		card.Name.Position = UDim2.fromOffset(x, pad)
+		card.Name.Size = UDim2.fromOffset(room, m.Name + 6)
+		fitText(card.Name, m.Name, room - 2, 13)
+		local chipsTop = pad + m.Name + 10
+		sizeChips(chips, m.Small - 2, chipHeight, room, 6)
+		card.SpeedChip.Position = UDim2.fromOffset(x, chipsTop)
+		card.BonusChip.Position = UDim2.fromOffset(x + card.SpeedChip.Size.X.Offset + 6, chipsTop)
+		card.Perk.Visible = false
+		local priceTop = chipsTop + chipHeight + 6
+		card.PriceRow.Position = UDim2.fromOffset(x, priceTop)
+		card.PriceRow.Size = UDim2.fromOffset(room, priceHeight)
+		card.Owned.AnchorPoint = Vector2.new(0, 0.5)
+		card.Owned.Position = UDim2.fromOffset(x, priceTop + math.floor(priceHeight / 2))
+		local perks = card.Board.Perks
+		card.Extra.Text = perks[2] or perks[1] or ""
+		card.Extra.TextXAlignment = Enum.TextXAlignment.Left
+		card.Extra.Position = UDim2.fromOffset(x, priceTop)
+		card.Extra.Size = UDim2.fromOffset(room, priceHeight)
+		fitText(card.Extra, m.Small + 1, room - 2, 12)
+	end
+	local list = card.PriceRow:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list.HorizontalAlignment = if w <= h then Enum.HorizontalAlignment.Center else Enum.HorizontalAlignment.Left
+	end
+	-- the price: the coin and the amount
+	card.Price.TextSize = m.Price
+	card.Price.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(card.Price.Text, m.Price, true)) + 6, priceHeight)
+	card.Coin.Size = UDim2.fromOffset(m.Price, m.Price)
+	local coinMark = card.Coin:FindFirstChild("Mark") :: TextLabel?
+	if coinMark then
+		coinMark.TextSize = math.floor(m.Price * 0.62)
+	end
+	sizeChips({ card.Owned }, m.Small - 1, chipHeight + 2, w, 0)
+	-- the picture and the light burst behind it
+	card.ArtBack.Position = UDim2.fromOffset(px, py)
+	card.ArtBack.Size = UDim2.fromOffset(pw, math.max(20, ph))
+	local cx, cy = px + pw / 2, py + ph / 2
+	card.Canvas.Position = UDim2.fromOffset(cx, cy)
+	card.CanvasScale.Scale = math.max(0.2, math.min(ph * 1.12 / 110, pw / 200))
+	for _, fxName in CARD_FX do
+		local fx = card.Face:FindFirstChild(fxName)
+		if fx and fx:IsA("GuiObject") then
+			fx.Position = UDim2.fromOffset(cx, cy)
+		end
+	end
+	-- the ROBUX ribbon on the picture's top-right corner
+	local ribbon = card.Ribbon
+	if ribbon then
+		ribbon.AnchorPoint = Vector2.new(1, 0)
+		ribbon.Position = UDim2.fromOffset(px + pw, py)
+	end
 end
 
 --[[
@@ -1233,49 +1152,47 @@ function HoverboardView.layout(refs: Refs, compact: boolean, maxWidth: number, m
 	refs.Root.Size = UDim2.fromOffset(width, height)
 	refs.Root.AnchorPoint = if compact then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5)
 	refs.Root.Position = if compact then UDim2.new(0.5, 0, 1, -10) else UDim2.fromScale(0.5, 0.5)
-	-- header
-	refs.Icon.Position = UDim2.fromOffset(m.Pad + 4, 16)
-	refs.Icon.Size = UDim2.fromOffset(m.Icon, m.Icon)
-	local textLeft = m.Pad + 4 + m.Icon + 14
-	local titleWidth = width - textLeft - (m.Close + m.Pad + 12)
-	refs.Title.Position = UDim2.fromOffset(textLeft, 8)
-	refs.Title.Size = UDim2.fromOffset(titleWidth, m.Title + 4)
-	refs.Title.TextSize = m.Title
-	refs.TitleShadow.Position = UDim2.fromOffset(textLeft + 2, 12)
-	refs.TitleShadow.Size = refs.Title.Size
-	refs.TitleShadow.TextSize = m.Title
-	refs.Subtitle.Position = UDim2.fromOffset(textLeft, 8 + m.Title + 4)
-	refs.Subtitle.Size = UDim2.fromOffset(titleWidth, m.Text + 8)
+	-- the band: the icon, the title (with its shadow) and the X
+	ElevatorView.fitWindow(refs.Chrome, refs.Icon, m.Band, m.Title, m.Icon, m.Close)
+	-- the pitch line under the band
+	refs.Subtitle.Position = UDim2.fromOffset(m.Pad, m.Band + 2)
+	refs.Subtitle.Size = UDim2.new(1, -m.Pad * 2, 0, m.Header - m.Band - 4)
 	refs.Subtitle.TextSize = m.Text
 	refs.Message.Position = refs.Subtitle.Position
 	refs.Message.Size = refs.Subtitle.Size
 	refs.Message.TextSize = m.Text
-	local close = refs.CloseLook.Holder
-	close.Size = UDim2.fromOffset(m.Close, m.Close)
-	close.Position = UDim2.new(1, -12, 0, 16)
-	refs.CloseLook.Label.TextSize = if compact then 40 else 36
 	refs.Footer.Visible = not compact
 	refs.Footer.Size = UDim2.fromOffset(refs.Footer.Size.X.Offset, math.max(m.Footer, 30))
-	-- the cards: one row of five, or 3 + 2 (the second row centred)
+	-- the cards: one row of five, or 3 + 2 (the second row centred); on a very short screen
+	-- (a 568 x 320 phone) the cards keep MinHeight and the page scrolls (the next row peeks in)
 	local top = m.Header
 	local bottom = if compact then m.Pad else m.Pad + 14
-	refs.CardPage.Position = UDim2.fromOffset(m.Pad, top)
-	refs.CardPage.Size = UDim2.new(1, -m.Pad * 2, 1, -(top + bottom))
-	local inner = width - m.Pad * 2
+	local page = refs.CardPage
+	page.Position = UDim2.fromOffset(m.Pad - CARD_MARGIN, top - CARD_MARGIN)
+	page.Size = UDim2.new(1, -(m.Pad - CARD_MARGIN) * 2, 1, -(top + bottom) + CARD_MARGIN * 2)
+	local pageHeight = height - top - bottom
+	local fitHeight = math.floor((pageHeight - m.Gap * (rows - 1)) / rows)
+	local scrolls = rows > 1 and fitHeight < m.MinHeight
+	refs.Scrolls = scrolls
+	local barRoom = if scrolls then page.ScrollBarThickness + 4 else 0
+	local inner = width - m.Pad * 2 - barRoom
 	local cardWidth = math.floor((inner - m.Gap * (columns - 1)) / columns)
-	local cardHeight = math.floor((height - top - bottom - m.Gap * (rows - 1)) / rows)
+	local cardHeight = if scrolls then m.MinHeight else fitHeight
 	for i, card in refs.Cards do
 		local row = math.floor((i - 1) / columns)
 		local column = (i - 1) % columns
 		local inRow = math.min(columns, #refs.Cards - row * columns)
 		local rowWidth = inRow * cardWidth + (inRow - 1) * m.Gap
-		local x = (inner - rowWidth) / 2 + column * (cardWidth + m.Gap) + cardWidth / 2
-		local y = row * (cardHeight + m.Gap) + cardHeight / 2
+		local x = CARD_MARGIN + (inner - rowWidth) / 2 + column * (cardWidth + m.Gap) + cardWidth / 2
+		local y = CARD_MARGIN + row * (cardHeight + m.Gap) + cardHeight / 2
 		card.Frame.Position = UDim2.fromOffset(x, y)
 		card.Frame.Size = UDim2.fromOffset(cardWidth, cardHeight)
 		card.Frame:SetAttribute("BaseY", y)
 		layoutCard(card, m, cardWidth, cardHeight)
 	end
+	page.CanvasSize = UDim2.fromOffset(0, CARD_MARGIN * 2 + rows * cardHeight + (rows - 1) * m.Gap)
+	page.ScrollingEnabled = scrolls
+	page.ScrollBarImageTransparency = if scrolls then 0.2 else 1
 	-- a new layout re-sized the buttons' text
 	for _, card in refs.Cards do
 		styleButton(card.Look, card.State, card.Look.Label.Text, if card.State == "Soon" then m.ButtonText - 6 else m.ButtonText)

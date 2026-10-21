@@ -31,6 +31,15 @@
 	Pure helpers (tested): entries (the State snapshot as chips), modeOf,
 	hasList, modeText, predict (what an IronBoxAction does to KeepMode / KeepList:
 	the same rules as IronBoxService.apply, so a tap shows at once).
+
+	The look is the Robux Shop's Pop kit (owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"; Pop.luau, PopTheme): a black
+	frame, the steel blue header band (LightSkin.BandRoles "Settings") with
+	the title and the red X, bright mode tabs (the picked one painted, the
+	others slate, like Pop.tabs), every ore a card painted in its rarity
+	colour with the ore's live 3D picture (ItemBuilder.display) on a light
+	burst: KEEP bright with its income in money green, SEND ON shaded; the
+	presets are big Pop buttons.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,9 +49,11 @@ local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
@@ -118,7 +129,7 @@ local HUD_CLEAR = 16 + HudView.CoinsWidth + 8
 -- compact holders are 72 tall, 44.6 pt at the 0.62 floor).
 local LAYOUTS = {
 	Normal = {
-		ChipW = 160,
+		ChipW = 176,
 		ChipH = 58,
 		ModeH = 50,
 		PresetH = 46,
@@ -137,7 +148,7 @@ local LAYOUTS = {
 		HintGap = 8,
 	},
 	Compact = {
-		ChipW = 172,
+		ChipW = 180,
 		ChipH = 72,
 		ModeH = 78,
 		PresetH = 78,
@@ -286,10 +297,211 @@ function IronBoxView.predict(state: { [string]: any }, action: string, arg: any)
 	return copy
 end
 
+---------------------------------------------------------------- the Pop look (the kit pieces this window needs)
+
+-- the header band: the keep list's steel blue (LightSkin.BandRoles TerraForgeIronBox = "Settings")
+IronBoxView.Paint = {
+	Top = Color3.fromRGB(150, 176, 226),
+	Bottom = Color3.fromRGB(62, 84, 134),
+	Edge = Color3.fromRGB(14, 14, 18),
+} :: Pop.Paint
+-- each mode's tab paint (the picked tab is painted, the others slate: Pop.selectTab)
+IronBoxView.ModePaints = { RarePlus = "Purple", List = "Yellow", All = "Green" } :: { [string]: string }
+
+local WHITE = Color3.new(1, 1, 1)
+local SOFT = Color3.fromRGB(214, 220, 232) -- quieter white text (info, hints, SEND ON)
+local CHIP_CORNER = 10
+local HOLDER_KEYS = { Size = true, Position = true, AnchorPoint = true, LayoutOrder = true, Visible = true }
+local HOVER = Color3.fromRGB(236, 236, 236)
+local PRESS = Color3.fromRGB(200, 200, 200)
+
+-- A text's black edge (its Contextual UIStroke, made when missing).
+local function edgeOf(label: GuiObject): UIStroke
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			return child
+		end
+	end
+	return Pop.edge(label)
+end
+
+-- White chunky text with a black edge (a UIKit label or button), or `color`.
+local function ink(label: GuiObject, color: Color3?, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = color or PopTheme.Ink
+	local edge = edgeOf(label)
+	edge.Color = PopTheme.Outline
+	edge.Thickness = Pop.edgeFor(text.TextSize)
+	edge.Transparency = 0
+	edge.LineJoinMode = Enum.LineJoinMode.Round
+end
+
+--[[
+	A Pop button that keeps UIKit.button's shape: the returned TextButton
+	(clear, its own word: controllers and views set its Text, TextSize and
+	TextTransparency) fills its holder, and the holder is the painted face
+	(Pop.face: the glossy paint, the black border, the light rim, studs).
+	(A UIGradient on the button itself would tint its word too.) Size /
+	Position / AnchorPoint / LayoutOrder / Visible go on the holder (layouts
+	move it), the rest on the button. paintButton recolours the face.
+]]
+local function popButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local name = if props and type(props.Name) == "string" then props.Name else text
+	local face = UIKit.new("Frame", {
+		Name = name .. "Holder",
+		Size = UDim2.fromOffset(160, 52),
+		ZIndex = 4,
+	}, parent)
+	Pop.face(face, paint)
+	Pop.studs(face, PopTheme.Corner, 0.45, 28, 4)
+	local button = UIKit.new("TextButton", {
+		Name = "Button",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		FontFace = PopTheme.Font,
+		TextColor3 = PopTheme.Ink,
+		TextSize = 22,
+		Selectable = true,
+		ZIndex = 5,
+	}, face)
+	Pop.edge(button, 2.5)
+	if props then
+		for key, value in props do
+			local target: any = if HOLDER_KEYS[key] then face else button
+			if key ~= "Name" then
+				target[key] = value
+			end
+		end
+	end
+	-- hover / press darken the face (AutoButtonColor would only darken the clear button)
+	pcall(function()
+		local b: any = button
+		b:GetPropertyChangedSignal("GuiState"):Connect(function()
+			local state = b.GuiState
+			face.BackgroundColor3 = if state == Enum.GuiState.Press then PRESS elseif state == Enum.GuiState.Hover then HOVER else WHITE
+		end)
+	end)
+	return button
+end
+
+-- Recolours a popButton's face.
+local function paintButton(button: TextButton, paint: string | Pop.Paint)
+	local face = button.Parent
+	if face and face:IsA("GuiObject") then
+		Pop.repaint(face, paint)
+	end
+end
+
+--[[
+	The window's chrome on an old panel: the black frame, a dark studded
+	body and the bright header band (shine stripes, studs); both sit under
+	everything else (ZIndex 0). setBand sizes them for a band `band` tall.
+]]
+local function chrome(panel: Frame, paint: string | Pop.Paint)
+	panel.BackgroundColor3 = PopTheme.Outline
+	local old = panel:FindFirstChildOfClass("UIGradient")
+	if old then
+		old:Destroy()
+	end
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	end
+	local stroke = panel:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PopTheme.Outline
+		stroke.Thickness = 4
+	end
+	local body = UIKit.new("Frame", {
+		Name = "Body",
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, panel)
+	UIKit.corner(body, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	Pop.studs(body, 4, 0.5, 36, 0)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 0,
+	}, body)
+	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
+	local head = UIKit.new("Frame", {
+		Name = "Header",
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 4),
+		ClipsDescendants = true,
+		ZIndex = 0,
+	}, panel)
+	Pop.face(head, paint, 4, false)
+	local headBorder = head:FindFirstChild("Border") :: UIStroke
+	headBorder.Thickness = 3
+	Pop.studs(head, 4, 0.35, 40, 0)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 0,
+	}, head)
+	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 0,
+		}, head)
+	end
+end
+
+-- Sizes the header band (`band` units tall, the frame included) and the body under it.
+local function setBand(panel: Frame, band: number)
+	local head = panel:FindFirstChild("Header") :: Frame?
+	local body = panel:FindFirstChild("Body") :: Frame?
+	if head and body then
+		head.Size = UDim2.new(1, -8, 0, band - 8)
+		body.Position = UDim2.fromOffset(4, band)
+		body.Size = UDim2.new(1, -8, 1, -(band + 4))
+	end
+end
+
+-- The title's 3D drop shadow (Pop.shadow), kept on the title as layouts move it.
+local function syncShadow(title: TextLabel)
+	local parent = title.Parent
+	local found = if parent then parent:FindFirstChild(title.Name .. "Shadow") else nil
+	local shade: TextLabel = if found and found:IsA("TextLabel") then found else Pop.shadow(title)
+	shade.Position = title.Position + UDim2.fromOffset(0, 4)
+	shade.Size = title.Size
+	shade.AnchorPoint = title.AnchorPoint
+	shade.Text = title.Text
+	shade.TextSize = title.TextSize
+	shade.TextXAlignment = title.TextXAlignment
+	shade.Visible = title.Visible
+	shade.ZIndex = math.max(1, title.ZIndex - 1)
+end
+
+-- A chip's paint: its ore's rarity (Pop.rarityPaint).
+function IronBoxView.chipPaint(oreId: string): Pop.Paint
+	local ore = OreData.ById[oreId]
+	return Pop.rarityPaint(if ore then ore.Rarity else nil)
+end
+
 ---------------------------------------------------------------- building
 
 local function modeButton(parent: Instance, mode: string, order: number): TextButton
-	local button = UIKit.button(parent, IronBoxView.ModeLabels[mode], Theme.PanelLight, Theme.PanelDark, {
+	local button = popButton(parent, IronBoxView.ModeLabels[mode], "Slate", {
 		Name = "Mode" .. mode,
 		LayoutOrder = order,
 		TextSize = 19,
@@ -302,6 +514,7 @@ function IronBoxView.build(): Refs
 	local gui = UIKit.screen("TerraForgeIronBox", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("Pop", true)
 
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
@@ -309,52 +522,60 @@ function IronBoxView.build(): Refs
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(680, 500),
 	})
+	chrome(panel, IronBoxView.Paint)
 	local title = UIKit.label(panel, IronBoxView.Title, 28, {
 		Name = "Title",
 		Position = UDim2.fromOffset(PAD, 8),
 		Size = UDim2.new(1, -(PAD * 2 + 80), 0, TITLE_H),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
+		ZIndex = 3,
 	})
+	ink(title)
 	local info = UIKit.label(panel, IronBoxView.Info, 16, {
 		Name = "Info",
-		Position = UDim2.fromOffset(PAD, 8 + TITLE_H),
-		Size = UDim2.new(1, -(PAD * 2 + 70), 0, INFO_H),
+		Position = UDim2.fromOffset(PAD, 8 + TITLE_H + 11),
+		Size = UDim2.new(1, -PAD * 2, 0, INFO_H - 8),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
+	ink(info, SOFT)
+	local close = popButton(panel, "X", PopTheme.Close, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -PAD, 0, 14),
 		Size = UDim2.fromOffset(LAYOUTS.Normal.Close, LAYOUTS.Normal.Close),
-		TextSize = 26,
+		TextSize = 32,
+		FontFace = PopTheme.Heavy,
 	})
 
-	-- mode buttons in one row
+	-- mode tabs in one row
 	local modesRow = UIKit.new("Frame", {
 		Name = "Modes",
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 	}, panel)
-	UIKit.list(modesRow, Enum.FillDirection.Horizontal, GAP, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	UIKit.list(modesRow, Enum.FillDirection.Horizontal, GAP, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+	})
 	local modes: { [string]: TextButton } = {}
 	for i, mode in MachineData.Keep.Modes do
 		modes[mode] = modeButton(modesRow, mode, i)
 	end
 	local modeText = UIKit.label(panel, "", 15, {
 		Name = "ModeText",
-		TextColor3 = Theme.TextDim,
 		TextWrapped = true,
+		ZIndex = 3,
 	})
+	ink(modeText, SOFT)
 
 	-- the scroll bar's groove (shown when there are more chips than rows),
 	-- behind the list so the bar itself runs in it
 	local track = UIKit.new("Frame", {
 		Name = "Track",
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = PopTheme.Well,
 		BorderSizePixel = 0,
 		Visible = false,
 		ZIndex = 1,
@@ -366,7 +587,7 @@ function IronBoxView.build(): Refs
 		BorderSizePixel = 0,
 		ZIndex = 2,
 		ScrollBarThickness = BAR,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
@@ -385,16 +606,17 @@ function IronBoxView.build(): Refs
 	)
 	local empty = UIKit.label(panel, IronBoxView.Empty, 19, {
 		Name = "Empty",
-		TextColor3 = Theme.TextDim,
 		Visible = false,
+		ZIndex = 3,
 	})
+	ink(empty, SOFT)
 
-	local presets = UIKit.new("Frame", { Name = "Presets", BackgroundTransparency = 1 }, panel)
+	local presets = UIKit.new("Frame", { Name = "Presets", BackgroundTransparency = 1, ZIndex = 2 }, panel)
 	UIKit.list(presets, Enum.FillDirection.Horizontal, GAP * 2, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
 	local labels = IronBoxView.PresetLabels
-	local allKeep = UIKit.button(presets, labels.Keep, Theme.Good, Theme.GoodDark, { Name = "AllKeep", LayoutOrder = 1, TextSize = 19 })
-	local allSend = UIKit.button(presets, labels.Send, Theme.Accent, Theme.AccentDark, { Name = "AllSend", LayoutOrder = 2, TextSize = 19 })
-	local reset = UIKit.button(presets, labels.Reset, Theme.PanelLight, Theme.PanelDark, {
+	local allKeep = popButton(presets, labels.Keep, "Green", { Name = "AllKeep", LayoutOrder = 1, TextSize = 19 })
+	local allSend = popButton(presets, labels.Send, "Orange", { Name = "AllSend", LayoutOrder = 2, TextSize = 19 })
+	local reset = popButton(presets, labels.Reset, "Red", {
 		Name = "Reset",
 		LayoutOrder = 3,
 		TextSize = 19,
@@ -406,8 +628,9 @@ function IronBoxView.build(): Refs
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, PAD, 1, -6),
 		Size = UDim2.new(1, -PAD * 2, 0, 20),
-		TextColor3 = Theme.TextDim,
+		ZIndex = 3,
 	})
+	ink(hint, SOFT)
 	local padHint = UIKit.new("Frame", {
 		Name = "PadHint",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -415,6 +638,7 @@ function IronBoxView.build(): Refs
 		Size = UDim2.fromOffset(300, 24),
 		BackgroundTransparency = 1,
 		Visible = false,
+		ZIndex = 3,
 	}, panel)
 	UIKit.list(padHint, Enum.FillDirection.Horizontal, 6, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -426,17 +650,20 @@ function IronBoxView.build(): Refs
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(24, 24),
 			BackgroundTransparency = 1,
+			ZIndex = 3,
 		}, padHint)
 	end
 	local function word(order: number, text: string): TextLabel
-		return UIKit.label(padHint, text, 16, {
+		local label = UIKit.label(padHint, text, 16, {
 			Name = "Word" .. order,
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(90, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
+			ZIndex = 3,
 		})
+		ink(label, SOFT)
+		return label
 	end
 	local padA = glyph(1)
 	local padAText = word(2, "keep / send")
@@ -473,6 +700,10 @@ function IronBoxView.build(): Refs
 	}
 	IronBoxView.layout(refs, false, 1600, 720)
 	IronBoxView.setMode(refs, MachineData.Keep.Default)
+	-- (the light UI: an open window hides the touch thumbstick)
+	if UIConfig.lightUI() then
+		TouchControls.follow(gui)
+	end
 	return refs
 end
 
@@ -510,11 +741,30 @@ function IronBoxView.fitColumns(compact: boolean, maxWidth: number): (number, nu
 	return columns, panelWidth(l, columns)
 end
 
+-- Places a chip's parts: the words on the left, the big picture on the
+-- right (cut a little by the card's edge, the words may run over it).
+local function placeChip(chip: Chip, l: typeof(LAYOUTS.Normal))
+	local h = l.ChipH
+	local pic = h + 2
+	chip.Swatch.Position = UDim2.new(1, 6, 0.5, 0)
+	chip.Swatch.Size = UDim2.fromOffset(pic, pic)
+	local x = 10
+	local right = 16 + math.floor(pic * 0.3)
+	chip.Name.Position = UDim2.new(0, x, 0, 5)
+	chip.Name.Size = UDim2.new(1, -(x + right), 0.52, -3)
+	chip.Name.TextSize = l.Name
+	chip.State.Position = UDim2.new(0, x, 0.52, 0)
+	chip.State.Size = UDim2.new(1, -(x + right), 0.44, -4)
+	chip.State.TextSize = l.State
+end
+
 --[[
 	Sizes and places everything for a layout (compact = phones) inside
 	`maxWidth` x `maxHeight` design units (the screen divided by the UI
 	scale): chip columns that fit the width (fitColumns), as many chip rows
-	as fit (1..MaxRows), the rest scrolls.
+	as fit (1..MaxRows), the rest scrolls. The header band holds the title
+	and the X (phones: the mode tabs too, beside the X); the info line, the
+	tabs and the chips sit on the body.
 ]]
 function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
@@ -543,10 +793,16 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	-- phones: on the right (thumb side), clear of the HUD coins top left
 	refs.Panel.AnchorPoint = if compact then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5)
 	refs.Panel.Position = if compact then UDim2.new(1, -EDGE, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
-	refs.Title.TextSize = l.Title
+	-- the band: the title and the X (beside the X, the tabs too)
+	local band = if besideClose then modesY + l.ModeH + 6 else 8 + TITLE_H + 10
+	setBand(refs.Panel, band)
+	refs.Title.TextSize = l.Title + 4
+	syncShadow(refs.Title)
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
-	refs.Info.Size = UDim2.new(1, -(PAD * 2 + l.Close + 8), 0, INFO_H)
+	closeHolder.Position = UDim2.new(1, -PAD, 0, if besideClose then 14 else math.floor((band - l.Close) / 2))
+	refs.Close.TextSize = math.floor(l.Close * 0.62)
+	refs.Info.Size = UDim2.new(1, -PAD * 2, 0, INFO_H - 8)
 	local modesRow = (refs.Modes.RarePlus.Parent :: Frame).Parent :: Frame
 	modesRow.Position = UDim2.fromOffset(PAD, modesY)
 	modesRow.Size = UDim2.fromOffset(modesW, l.ModeH)
@@ -555,7 +811,7 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		local holder = button.Parent :: Frame
 		holder.Size = UDim2.fromOffset(modeW, l.ModeH - 6)
 		-- "EVERYTHING" still fits a narrow button
-		button.TextSize = math.min(l.ModeText, math.floor(modeW / 6.2))
+		button.TextSize = math.min(l.ModeText + 2, math.floor(modeW / 6.2))
 	end
 	refs.ModeText.Position = UDim2.fromOffset(PAD, modeTextY)
 	refs.ModeText.Size = UDim2.new(1, -PAD * 2, 0, MODE_TEXT_H)
@@ -579,73 +835,117 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		button.TextSize = math.floor(l.PresetText * math.max(0.7, squeeze))
 	end
 	for _, chip in refs.Chips do
-		chip.Name.TextSize = l.Name
-		chip.State.TextSize = l.State
+		placeChip(chip, l)
 	end
 	syncTrack(refs)
 end
 
+-- A chip's live 3D ore picture (built once per chip: its ore never changes).
+local function fillPicture(swatch: Frame, oreId: string)
+	if swatch:FindFirstChild("Picture") then
+		return
+	end
+	local name = "item_Clean_" .. oreId
+	local ok, model = pcall(ItemBuilder.display, { K = "Clean", O = oreId, G = "Pristine" }, CFrame.new(), name)
+	Pop.model(swatch, name, 10, if ok then model else nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1.1, 1.1),
+		ZIndex = 3,
+	}, Vector3.new(-0.5, 0.55, -1))
+end
+
 local function newChip(refs: Refs, oreId: string): Chip
+	-- a painted Pop card in the ore's rarity colour
 	local button = UIKit.new("TextButton", {
 		Name = "Chip",
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.PanelDark,
+		AutoButtonColor = true,
 		BorderSizePixel = 0,
+		ClipsDescendants = true, -- (the light burst behind the picture)
 		Text = "",
+		ZIndex = 2,
 	}, refs.List)
 	button:SetAttribute("Ore", oreId)
-	UIKit.corner(button, 12)
-	local stroke = UIKit.stroke(button, 3)
-	UIKit.gradient(button, Color3.new(1, 1, 1), Color3.fromRGB(196, 196, 196))
+	Pop.face(button, IronBoxView.chipPaint(oreId), CHIP_CORNER, false)
+	local stroke = button:FindFirstChild("Border") :: UIStroke
+	Pop.studs(button, CHIP_CORNER, 0.5, 40, 1)
+	local rim = button:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 4
+	end
+	-- the picture: a light burst and a soft glow behind the ore's live 3D look
 	local swatch = UIKit.new("Frame", {
 		Name = "Swatch",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0),
-		Size = UDim2.new(0, 14, 0.62, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, button)
-	UIKit.corner(swatch, 7)
-	UIKit.stroke(swatch, 2)
+	Pop.rays(swatch, UDim2.fromScale(0.5, 0.5), 8, 72, 0.45, 1)
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.7,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.86, 0.86),
+		ZIndex = 2,
+	}, swatch)
+	UIKit.corner(glow, 999)
+	fillPicture(swatch, oreId)
+	-- SEND ON: a shade over the paint and the picture (the words stay bright)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		ZIndex = 3,
+	}, button)
+	UIKit.corner(shade, CHIP_CORNER)
 	local l = layoutOf(refs.Compact)
 	local name = UIKit.label(button, "", l.Name, {
 		Name = "OreName",
-		Position = UDim2.new(0, 28, 0, 4),
-		Size = UDim2.new(1, -34, 0.56, -2),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		TextScaled = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	ink(name)
 	local state = UIKit.label(button, "", l.State, {
 		Name = "State",
-		Position = UDim2.new(0, 28, 0.56, 0),
-		Size = UDim2.new(1, -34, 0.4, -4),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	ink(state)
 	local chip: Chip = { Ore = oreId, Button = button, Swatch = swatch, Name = name, State = state, Stroke = stroke }
+	placeChip(chip, l)
 	refs.Chips[oreId] = chip
 	return chip
 end
 
--- One chip's look: kept = filled in the ore's colour with a lit light,
--- sent on = dark with the ore's colour as the light.
+-- One chip's look: kept = bright in its rarity paint, "KEEP" and its podium
+-- income in money green; sent on = shaded, "SEND ON" in soft white.
 local function paintChip(chip: Chip, entry: Entry, index: number)
 	chip.Button.LayoutOrder = index
 	chip.Name.Text = entry.Name
-	chip.Stroke.Color = entry.RarityColor
-	chip.Swatch.BackgroundColor3 = if entry.Keep then Theme.Text else entry.Color
+	local shade = chip.Button:FindFirstChild("Shade") :: Frame?
+	if shade then
+		shade.Visible = not entry.Keep
+	end
 	if entry.Keep then
-		chip.Button.BackgroundColor3 = entry.Color
 		chip.State.Text = "KEEP · " .. Format.perSecond(entry.Income)
-		chip.State.TextColor3 = Theme.Text
-		chip.Name.TextColor3 = Theme.Text
+		chip.State.TextColor3 = PopTheme.Money
+		chip.Name.TextColor3 = PopTheme.Ink
 	else
-		chip.Button.BackgroundColor3 = Theme.PanelDark
 		chip.State.Text = "SEND ON"
-		chip.State.TextColor3 = Theme.TextDim
-		chip.Name.TextColor3 = Theme.TextDim
+		chip.State.TextColor3 = SOFT
+		chip.Name.TextColor3 = SOFT
 	end
 	chip.Button:SetAttribute("Keep", entry.Keep)
 end
@@ -683,16 +983,14 @@ function IronBoxView.setEntries(refs: Refs, list: { Entry }): { Chip }
 	return created
 end
 
--- The chosen mode: its button lit and the line under the buttons
--- (`hasList`: a custom list is saved, see modeText).
+-- The chosen mode: its tab painted (the others slate, like Pop.selectTab)
+-- and the line under the tabs (`hasList`: a custom list is saved, see modeText).
 function IronBoxView.setMode(refs: Refs, mode: KeepMode, hasList: boolean?)
 	refs.Mode = mode
 	for id, button in refs.Modes do
 		local on = id == mode
-		local holder = button.Parent :: Frame
-		button.BackgroundColor3 = if on then Theme.Accent else Theme.PanelLight
-		holder.BackgroundColor3 = if on then Theme.AccentDark else Theme.PanelDark
-		button.TextColor3 = if on then Theme.Text else Theme.TextDim
+		paintButton(button, if on then IronBoxView.ModePaints[id] or "Blue" else "Slate")
+		button.TextTransparency = if on then 0 else 0.25
 		button:SetAttribute("Selected", on)
 	end
 	refs.ModeText.Text = IronBoxView.modeText(mode, hasList)
@@ -711,20 +1009,6 @@ function IronBoxView.setHint(refs: Refs, text: string, glyphA: string?, glyphB: 
 		refs.PadA.Image = glyphA :: string
 		refs.PadB.Image = glyphB :: string
 	end
-end
-
-
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin: white panels, navy outlines, dark text, light buttons).
-local darkBuild = IronBoxView.build
-IronBoxView.build = function(): Refs
-	local refs = darkBuild()
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-		TouchControls.follow(refs.Gui)
-	end
-	return refs
 end
 
 return IronBoxView

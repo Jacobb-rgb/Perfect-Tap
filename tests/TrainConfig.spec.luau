@@ -4,6 +4,7 @@ return function(T, Loader)
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local CFrame = Loader.CFrame
+	local Vector3 = (require("@lune/roblox") :: any).Vector3
 
 	T.test("Train: upgrades get better and pricier", function()
 		for _, list in { TrainConfig.Capacity, TrainConfig.Speed } do
@@ -46,6 +47,28 @@ return function(T, Loader)
 			T.near(rail.X, stop.X, 1e-6, "plot " .. plot.Id .. " rail x")
 			T.near(rail.Z, stop.Z, 1e-6, "plot " .. plot.Id .. " rail z")
 		end
+	end)
+
+	T.test("Train: the coastal lines follow the plot grid", function()
+		local grid = WorldLayout.PlotGrid
+		local railX = grid.CenterX + BaseLayout.RailZ -- 166 at 12 cells
+		local southmost = -math.huge
+		for _, plot in WorldLayout.Plots do
+			southmost = math.max(southmost, plot.Center.Z)
+		end
+		-- the south portal stays 42 studs past the south-most plot (126 at 12 cells): the
+		-- trains' coming out and passing are timed for that leg; the buffer stop never moves
+		T.eq(TrainConfig.SouthPortalZ, southmost + 42, "south portal")
+		T.eq(TrainConfig.BufferZ, -100, "buffer stop")
+		for _, pair in { { TrainConfig.CoastWest, -1 }, { TrainConfig.CoastEast, 1 } } do
+			local line, side = pair[1], pair[2]
+			T.eq(#line, 2, "a straight line")
+			T.eq(line[1], Vector3.new(side * railX, 0, TrainConfig.SouthPortalZ), "starts at the south portal")
+			T.eq(line[2], Vector3.new(side * railX, 0, TrainConfig.BufferZ), "ends at the buffer stop")
+		end
+		-- the rail and the portals stay on the island
+		T.lt(railX, WorldLayout.Island.Max.X, "rail inside the island")
+		T.lt(TrainConfig.SouthPortalZ, WorldLayout.Island.Max.Z, "portal inside the island")
 	end)
 
 	T.test("Train: the station, track and lifts are kept free of rocks", function()
