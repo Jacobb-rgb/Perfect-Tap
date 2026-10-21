@@ -573,12 +573,9 @@ return function(T, Loader)
 				BoostChips = ui("BoostView").buildChips().Gui,
 				Capsule = ui("CapsuleView").build(false).Gui,
 				Opening = ui("CapsuleView").buildOpening(false).Gui,
-				Collection = ui("CollectionView").build(false).Gui,
-				Banner = ui("CollectionView").buildBanner(false).Gui,
 				Enchant = ui("EnchantView").build(false).Gui,
 				Gear = ui("GearShopView").build(false).Gui,
 				Golem = ui("GolemView").build(false).Gui,
-				Story = ui("StoryView").build(false).Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -589,6 +586,39 @@ return function(T, Loader)
 			for name, gui in builds() do
 				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
 			end
+		end)
+	end)
+
+	-- the windows rebuilt in the Pop kit (owner 2026-10-21: "every window new,
+	-- modern, colourful, Roblox style") never wear the LightSkin recolouring
+	T.test("LightUI: the Pop windows (codex, settings, hall of fame, book, journal) skip the light skin", function()
+		local function builds(): { [string]: any }
+			return {
+				Codex = ui("CodexView").build(false).Gui,
+				Settings = ui("SettingsView").build(false).Gui,
+				Boards = ui("LeaderboardView").buildPanel(false).Gui,
+				Collection = ui("CollectionView").build(false).Gui,
+				Banner = ui("CollectionView").buildBanner(false).Gui,
+				Reveal = ui("CollectionView").buildReveal(false).Gui,
+				Story = ui("StoryView").build(false).Gui,
+			}
+		end
+		local function check(label: string)
+			for name, gui in builds() do
+				T.falsy(gui:GetAttribute("LightSkin"), `{label}: no LightSkin on {name}`)
+				T.truthy(gui:GetAttribute("PopSkin"), `{label}: the Pop {name}`)
+				gui:Destroy()
+			end
+		end
+		check("switch off")
+		withLight(function()
+			check("switch on")
+		end)
+		-- the shared frame: a window still built from the old kit inside keeps the skin
+		withLight(function()
+			local gui = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui
+			T.truthy(gui:GetAttribute("LightSkin"))
+			T.falsy(gui:GetAttribute("PopSkin"))
 		end)
 	end)
 
