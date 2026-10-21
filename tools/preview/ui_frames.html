@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Terra Forge UI frames</title>
+    <!-- UI-only frames over a still backdrop (tools/preview/render_ui_frames.mjs) -->
+    <style>
+      @font-face {
+        font-family: "Fredoka One";
+        src: url("/node_modules/@fontsource/fredoka-one/files/fredoka-one-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Comic Neue Angular";
+        src: url("/fonts/ComicNeue-Angular-Bold.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Luckiest Guy";
+        src: url("/node_modules/@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2") format("woff2");
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      #stage {
+        position: relative;
+        overflow: hidden;
+      }
+      #bg {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: block;
+      }
+      #ui {
+        position: absolute;
+        left: 0;
+        top: 0;
+        overflow: hidden;
+      }
+      #caption {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        padding: 6px 18px;
+        border-radius: 12px;
+        background: rgba(10, 10, 14, 0.72);
+        color: #fff;
+        /* (captions for the owner, in Czech: a font with the accents) */
+        font: 26px "Arial Rounded MT Bold", "Helvetica Neue", sans-serif;
+        white-space: nowrap;
+        display: none;
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><img id="bg" /><div id="ui"></div><div id="caption"></div></div>
+    <script type="module">
+      import { renderUI } from "./ui.js";
+      const params = new URLSearchParams(location.search);
+      const W = Number(params.get("w") || 1600);
+      const H = Number(params.get("h") || 900);
+      const stage = document.getElementById("stage");
+      const bg = document.getElementById("bg");
+      const ui = document.getElementById("ui");
+      const caption = document.getElementById("caption");
+      for (const el of [stage, bg, ui]) {
+        el.style.width = `${W}px`;
+        el.style.height = `${H}px`;
+      }
+      bg.src = `/scenes/${params.get("bg")}`;
+      // Draws one exported frame (an array of ScreenGuis) with an optional caption.
+      window.renderFrame = async (file, text) => {
+        const guis = await fetch(`/scenes/${file}`).then((r) => r.json());
+        ui.innerHTML = "";
+        renderUI(ui, guis, W, H);
+        caption.textContent = text || "";
+        caption.style.display = text ? "block" : "none";
+        await Promise.all([...ui.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
+      };
+      Promise.all([document.fonts.ready, bg.decode().catch(() => {})]).then(() => (window.__ready = true));
+    </script>
+  </body>
+</html>

@@ -8,6 +8,9 @@
 	  Sounds          [-] [=======o---] [+]  80%   volume slider
 	  Camera shake                       [ ON ]    toggle (green / grey)
 	  Gamepad rumble                     [ OFF ]   toggle
+	  Reduce motion                      [ OFF ]   toggle (UI/Motion; while AnimConfig.UIMotion
+	                                               is off it calms only the golem followers, and
+	                                               its note says so)
 
 	Each row: a big white word, a small note under it; the sliders are a
 	dark well with a glossy green fill and a white knob; - / + and ON / OFF
@@ -23,6 +26,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local AnimConfig = require(Shared.Config.AnimConfig)
 local SettingsConfig = require(Shared.Config.SettingsConfig)
 local PopTheme = require(Shared.Config.PopTheme)
 local UIKit = require(script.Parent.UIKit)
@@ -73,6 +77,15 @@ SettingsView.Rows = {
 	{ Id = "Sfx", Kind = "Volume", Icon = "", Title = "Sounds", Note = "Every game sound" },
 	{ Id = "Shake", Kind = "Toggle", Icon = "", Title = "Camera shake", Note = "When rocks crack" },
 	{ Id = "Rumble", Kind = "Toggle", Icon = "", Title = "Gamepad rumble", Note = "Vibration while you blast" },
+	-- (the UI motion switched off: the menus never pop, so it calms what it reaches now, the golems
+	-- running after you: smaller steps, no lean, no hops; the emotes stay as picked)
+	{
+		Id = "ReduceMotion",
+		Kind = "Toggle",
+		Icon = "",
+		Title = "Reduce motion",
+		Note = if AnimConfig.UIMotion then "Calm menus: no pops or bounces" else "Calmer golems: no hops or lean",
+	},
 } :: { RowSpec }
 
 type Metrics = { Width: number, Row: number, Button: number, Toggle: number, Title: number, Note: number, Value: number }

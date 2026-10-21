@@ -891,6 +891,7 @@ HudBubble.EntryLooks = {
 	Wheel = { Icon = "wheel", Role = "Wheel" },
 	Gear = { Icon = "helmet", Role = "Gear" },
 	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE
+	Emotes = { Icon = "emotes", Role = "Lobby" }, -- the EMOTES menu (EmoteController; no sheet cell: the word shows)
 } :: { [string]: { Icon: string, Role: string } }
 
 export type TileSpec = { Label: string?, IconName: string?, Order: number? }
