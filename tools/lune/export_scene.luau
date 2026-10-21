@@ -324,6 +324,17 @@ elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced b
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
 elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
 	require("./lib/nature_wilds_preview").kit(Loader, workspace)
+elseif sceneName == "npc_lineup" or sceneName == "npc_world" or sceneName == "npc_spawn" then
+	-- quest giver NPC prototypes (NpcBuilder): the lineup stage / all 8 placed into the world / the same seen from the
+	-- town spawn (tools/lune/lib/npc_preview.luau, shots in tools/preview/npc_shots.json)
+	local NpcPreview = require("./lib/npc_preview")
+	if sceneName == "npc_world" or sceneName == "npc_spawn" then
+		local map = WorldBuilder.build(workspace)
+		addNodes(workspace, map)
+		NpcPreview.world(Loader, workspace, if sceneName == "npc_spawn" then NpcPreview.SpawnCamera else nil)
+	else
+		NpcPreview.lineup(Loader, workspace)
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

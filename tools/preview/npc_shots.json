@@ -1,0 +1,17 @@
+{
+  "npc_lineup": {"scene": "npc_lineup", "position": [0, 5.2, -37], "target": [0, 6.5, 0], "fov": 38, "width": 2000, "height": 860, "preset": "Surface", "sunDir": [0.4, 0.62, -0.68], "shadowExtent": 40, "maxLights": 8},
+  "npc_close_scholar_polisher": {"scene": "npc_lineup", "position": [24, 5.2, -12.5], "target": [19.8, 4.4, 0], "fov": 42, "preset": "Surface", "sunDir": [0.4, 0.62, -0.68], "shadowExtent": 24, "maxLights": 8},
+  "npc_close_explorer_smith": {"scene": "npc_lineup", "position": [10.8, 5.2, -12.5], "target": [6.6, 4.4, 0], "fov": 42, "preset": "Surface", "sunDir": [0.4, 0.62, -0.68], "shadowExtent": 24, "maxLights": 8},
+  "npc_close_miner_guard": {"scene": "npc_lineup", "position": [-2.4, 5.2, -12.5], "target": [-6.6, 4.4, 0], "fov": 42, "preset": "Surface", "sunDir": [0.4, 0.62, -0.68], "shadowExtent": 24, "maxLights": 8},
+  "npc_close_storm_shaman": {"scene": "npc_lineup", "position": [-15.6, 5.2, -12.5], "target": [-19.8, 4.4, 0], "fov": 42, "preset": "Surface", "sunDir": [0.4, 0.62, -0.68], "shadowExtent": 24, "maxLights": 8},
+  "npc_lineup_back": {"scene": "npc_lineup", "position": [4, 8, 52], "target": [0, 4.2, 80], "fov": 48, "width": 2000, "height": 860, "preset": "Surface", "sunDir": [-0.3, 0.7, -0.65], "shadowExtent": 40, "maxLights": 8},
+  "npc_world_spawn": {"scene": "npc_spawn", "position": [0, 6, 32], "target": [0, 3.5, 0], "fov": 70, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24},
+  "npc_world_plaza": {"scene": "npc_world", "position": [-12, 5.4, -5.4], "target": [-19.4, 3.8, -14.4], "fov": 58, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "npc_world_plaza_east": {"scene": "npc_world", "position": [7.9, 5.4, 19.6], "target": [16.4, 3.8, 11.6], "fov": 58, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "npc_world_station": {"scene": "npc_world", "position": [11.3, -7.0, -129.5], "target": [22.8, -8.6, -127.3], "fov": 58, "preset": "Quarry", "shadowExtent": 80, "maxLights": 24},
+  "npc_world_ember": {"scene": "npc_world", "position": [1.4, -7.0, -266.2], "target": [2.7, -8.6, -277.8], "fov": 58, "preset": "EmberCaves", "shadowExtent": 80, "maxLights": 24},
+  "npc_world_lagoon": {"scene": "npc_world", "position": [-5.3, -35.0, -406.1], "target": [-13.4, -36.6, -414.4], "fov": 58, "preset": "Lagoon", "shadowExtent": 80, "maxLights": 24},
+  "npc_world_palace": {"scene": "npc_world", "position": [-17.3, -212.6, -752.9], "target": [-6.0, -214.2, -755.3], "fov": 58, "preset": "Palace", "shadowExtent": 80, "maxLights": 24},
+  "npc_world_rift": {"scene": "npc_world", "position": [-14.2, -295.0, -767.9], "target": [-25.8, -296.6, -768.7], "fov": 58, "preset": "Storm", "shadowExtent": 80, "maxLights": 24},
+  "npc_world_core": {"scene": "npc_world", "position": [-4.4, -393.7, -749.1], "target": [0.6, -395.3, -759.6], "fov": 58, "preset": "Core", "shadowExtent": 80, "maxLights": 24}
+}
