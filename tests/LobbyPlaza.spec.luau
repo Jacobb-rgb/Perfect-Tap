@@ -962,6 +962,7 @@ return function(T, Loader)
 		T.truthy(#list >= 30, `lamps all over the map ({#list})`)
 		T.le(lamps:GetAttribute("Skipped"), 3, "few planned lamps left out")
 		local perRoad: { [string]: number } = {}
+		local feetOn: { [string]: { any } } = {}
 		local lit = 0
 		local feet = {}
 		for _, lamp in list do
@@ -974,6 +975,8 @@ return function(T, Loader)
 				T.truthy((other - p).Magnitude >= StreetLampPlan.MinGap - 0.01, `lamps at {p} and {other} stand apart`)
 			end
 			table.insert(feet, p)
+			feetOn[road] = feetOn[road] or {}
+			table.insert(feetOn[road], p)
 			for _, strip in Common.strips() do
 				T.truthy(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, p) > 0.3, `lamp foot at {p} stands off {strip.Id}`)
 			end
@@ -1001,7 +1004,24 @@ return function(T, Loader)
 		for road in StreetLampPlan.Roads do
 			T.truthy((perRoad[road] or 0) >= 1, road .. " has street lamps")
 		end
-		T.truthy((perRoad.EastPlotRoad or 0) >= 6 and (perRoad.WestPlotRoad or 0) >= 6, "the plot roads are lit end to end")
+		-- the plot roads are lit end to end, however long the plot columns make
+		-- them (WorldLayout.PlotGrid): a lamp every plan.Every studs, a couple
+		-- left out at the junctions, the first and the last near the road ends
+		for _, id in { "EastPlotRoad", "WestPlotRoad" } do
+			local strip = Common.strip(id)
+			local plan = StreetLampPlan.Roads[id]
+			local length = (strip.To - strip.From).Magnitude
+			local dir = (strip.To - strip.From).Unit
+			local slots = math.floor((length - 1 - plan.First) / plan.Every) + 1
+			local along = {}
+			for _, p in feetOn[id] or {} do
+				table.insert(along, (p - strip.From):Dot(dir))
+			end
+			T.truthy(#along >= slots - 2, `{id} has {#along} street lamps of {slots} planned`)
+			table.sort(along)
+			T.truthy(#along > 0 and along[1] <= 1.5 * plan.Every, `{id}: the first lamp near the north end`)
+			T.truthy(#along > 0 and along[#along] >= length - 1.5 * plan.Every, `{id}: the last lamp near the south end`)
+		end
 		-- they replace the road lanterns, the belt lantern posts and the west street's posts
 		T.falsy(world().plaza:FindFirstChild("RoadLanterns"), "no road lanterns besides the street lamps")
 		local flora = world().map.Emberfall.Lobby.Flora
