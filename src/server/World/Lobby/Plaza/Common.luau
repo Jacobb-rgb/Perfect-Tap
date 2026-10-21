@@ -94,7 +94,8 @@ export type Strip = {
 }
 
 -- Strips paved as dark neon walkways: the roads and paths that leave the
--- plaza (the south road only up to the creek bridge, see Roads).
+-- plaza, and (owner 2026-10-20: "every road like the ones to the forge")
+-- the plot roads, the rim road and every far path too.
 Common.NeonStrips = {
 	SouthRoad = true,
 	EastSpur = true,
@@ -105,6 +106,15 @@ Common.NeonStrips = {
 	ToUpgrades = true,
 	ToWheel = true,
 	ToFossil = true,
+	EastPlotRoad = true,
+	WestPlotRoad = true,
+	RimRoad = true,
+	ToScanner = true,
+	MineLane = true,
+	ToMine = true,
+	HamletLane = true,
+	ToMap = true,
+	ToNextArea = true,
 }
 
 local function roadName(road: WorldLayout.Road): string
@@ -456,6 +466,34 @@ local function edgeVisible(p: Vector3, selfId: string?): boolean
 	return true
 end
 
+-- Does another strip win the junction at p over the walkway `selfId`? A
+-- cobble/dirt strip always does; a walkway that lies lower (the plot roads
+-- under the spurs, the rim road under the forge paths) or as low and
+-- earlier in Common.strips() (two lanes meeting end to end) does too, so
+-- slabs never stack or z-fight.
+local function covered(p: Vector3, selfId: string?): boolean
+	local strips = Common.strips()
+	local own: Strip? = nil
+	local ownIndex = 0
+	for i, s in strips do
+		if s.Id == selfId then
+			own, ownIndex = s, i
+			break
+		end
+	end
+	for i, s in strips do
+		if s.Id ~= selfId and LobbyLayout.distanceToStrip(s.From, s.To, s.Width, p) < 0.05 then
+			if not s.Neon then
+				return true
+			end
+			if own and (s.Lift < own.Lift - 1e-6 or (math.abs(s.Lift - own.Lift) <= 1e-6 and i < ownIndex)) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 export type WalkwayOpts = {
 	Lift: number?, -- extra height so overlapping strips never z-fight
 	Name: string?,
@@ -495,27 +533,25 @@ function Common.walkway(parent: Instance, from: Vector3, to: Vector3, width: num
 	local mid = Vector3.new((from.X + to.X) / 2, lift, (from.Z + to.Z) / 2)
 	-- local -Z runs from `from` to `to`; t (studs from `from`) sits at z = length/2 - t
 	local frame = CFrame.fromMatrix(mid, right, Vector3.new(0, 1, 0), -dir)
-	-- the far end stops at the edge of a crossing cobble/dirt road (no dark
-	-- slab over the plot roads and the rim road)
+	-- both ends stop at the edge of a crossing strip that wins the junction
+	-- (no stacked slabs: the spurs end at the plot roads, the forge paths
+	-- at the rim road, the far lanes where they leave a road)
+	local startT = -width / 2
+	while startT < math.min(length, width) and covered(from + dir * startT, o.Self) do
+		startT += 0.25
+	end
 	local endT = length + width / 2
-	local scan = math.max(0, length - width)
+	-- (from where the start overlap ends: a short lane starts and ends on roads)
+	local scan = math.max(startT, length - width)
 	while scan < endT do
-		local p = from + dir * scan
-		local onOther = false
-		for _, s in Common.strips() do
-			if s.Id ~= o.Self and not s.Neon and LobbyLayout.distanceToStrip(s.From, s.To, s.Width, p) < 0.05 then
-				onOther = true
-				break
-			end
-		end
-		if onOther then
+		if covered(from + dir * scan, o.Self) then
 			endT = scan
 			break
 		end
 		scan += 0.25
 	end
-	local full = endT + width / 2
-	local zMid = length / 2 - (endT - width / 2) / 2 -- local z of the slab center
+	local full = endT - startT
+	local zMid = length / 2 - (startT + endT) / 2 -- local z of the slab center
 	local top = Common.WalkwayTop
 	local base = Style.block(
 		m,

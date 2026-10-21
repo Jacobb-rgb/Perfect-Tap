@@ -249,7 +249,8 @@ MineFloors.List = {
 
 -- Where each floor area stands in the world (ground center; +Z = front/entrance), see
 -- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves; 4-6 lie deep below
--- and far north (beyond the streaming radius of the town, above FallenPartsDestroyHeight -500).
+-- and far north (beyond the streaming radius of the town, above Workspace.FallenPartsDestroyHeight
+-- -700 in default.project.json: tests/FallHeights.spec.luau keeps every floor well above it).
 -- The Rift (local y -11.5 .. +50) sits between the palace (its ground at -222) and the core's
 -- void enclosure (its top at -316).
 MineFloors.Placement = {

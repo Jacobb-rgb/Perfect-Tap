@@ -9,7 +9,8 @@
 	  (0.5 s). A change after a quiet spell (a buy, a golem equip, the first
 	  push after a join) goes out at once (next resumption); changes that
 	  come within PushSeconds of the last push wait for the rest of it and
-	  go out together.
+	  go out together. The answer to a player's own press (a train sent, a
+	  train upgrade bought) skips that wait once: StateService.pushNow.
 	- Only the top-level sections whose content changed since the last push
 	  to that player go out (compared by fingerprint). A section the client
 	  already has is left out: the client (StateController) keeps its copy,
@@ -70,7 +71,9 @@ StateService.Sticky = { "Gear", "Enchants", "Golems", "Artifacts", "Bonuses", "D
 StateService.Reserved = { Full = true, Kept = true, Removed = true, Patch = true }
 
 local providers: { Provider } = {}
-local pending: { [Player]: boolean } = {}
+-- player -> the number of the push waiting to go out (a pushNow replaces it)
+local pending: { [Player]: number } = {}
+local pushCount = 0
 -- player -> section -> fingerprint of what that player's client has
 local sent: { [Player]: { [string]: string } } = {}
 -- player -> flat section -> a copy of what that player's client has (for patches)
@@ -453,8 +456,14 @@ function StateService.push(player: Player)
 	if pending[player] then
 		return
 	end
-	pending[player] = true
+	pushCount += 1
+	local number = pushCount
+	pending[player] = number
 	local function flush()
+		-- (a pushNow took this push's place: that one goes out instead)
+		if pending[player] ~= number then
+			return
+		end
 		pending[player] = nil
 		if player.Parent then
 			StateService.send(player)
@@ -466,6 +475,21 @@ function StateService.push(player: Player)
 	else
 		task.delay(wait, flush)
 	end
+end
+
+--[[
+	Pushes at the next resumption, whatever the throttle says (once): the
+	answer to a player's own press (TrainService: a train sent, a train
+	upgrade bought) must not wait up to PushSeconds for a window that other
+	changes opened. A push already waiting goes out with this one (its
+	changes are in it); the pushes after it are throttled from it as usual.
+	Only for presses the server limits itself (a rate limit, a price or a
+	trip in between), never for changes that come by themselves.
+]]
+function StateService.pushNow(player: Player)
+	pending[player] = nil
+	lastSent[player] = nil
+	StateService.push(player)
 end
 
 -- The client missed the whole push (StateSync): forget what it has and
