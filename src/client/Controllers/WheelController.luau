@@ -96,6 +96,7 @@ local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local WheelView = require(script.Parent.Parent.UI.WheelView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
@@ -1009,7 +1010,9 @@ local function buildChip()
 	local pulse = Instance.new("UIScale")
 	pulse.Name = "Pulse"
 	pulse.Parent = holder
-	TweenService:Create(pulse, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	if not Motion.reduced() then -- (Reduce motion: the chip stays still)
+		TweenService:Create(pulse, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	end
 	-- a spin that is already ready when the player joins doesn't chime at once
 	chipReady = isReady()
 end

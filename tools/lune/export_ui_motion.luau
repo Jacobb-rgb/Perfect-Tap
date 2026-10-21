@@ -277,6 +277,15 @@ local T_TOGGLE_HOVER = 9.8
 local moneyTab = store.Tabs.Money
 local megaCard = store.Cards.CoinsMega
 local megaPrice = megaCard.Price
+local megaAnchor = megaPrice.AnchorPoint -- (bottom right: Motion moves the anchor so it squashes about its middle)
+-- the pointer's spot on that price, from where it rests (not the moved anchor)
+local function megaPoint(): any
+	local now = megaPrice.AnchorPoint
+	megaPrice.AnchorPoint = megaAnchor
+	local point = pointOn(megaPrice)
+	megaPrice.AnchorPoint = now
+	return point
+end
 local toggle = settings.Toggles.ReduceMotion.Button
 local scrollTarget = StoreView.sectionTop(store, "Money")
 
@@ -356,9 +365,9 @@ local function cursorAt(t: number): any?
 	elseif t < 3.6 then
 		return tab
 	elseif t < T_CARD_HOVER then
-		return between(tab, pointOn(megaPrice), 3.6, T_CARD_HOVER)
+		return between(tab, megaPoint(), 3.6, T_CARD_HOVER)
 	elseif t < T_CLOSE then
-		return pointOn(megaPrice)
+		return megaPoint()
 	end
 	local target = pointOn(toggle)
 	if t < T_TOGGLE_HOVER then
@@ -390,7 +399,9 @@ local function frameAt(t: number): ({ any }, string?)
 		store.Scroller.CanvasPosition = Vector2.new(0, scrollTarget * s)
 		-- buttons
 		moneyTab:FindFirstChildOfClass("UIScale").Scale = pressScale(t, T_TAB_HOVER, T_TAB_PRESS, 3.6)
-		megaPrice:FindFirstChildOfClass("UIScale").Scale = pressScale(t, T_CARD_HOVER, T_CARD_PRESS)
+		local megaScale = pressScale(t, T_CARD_HOVER, T_CARD_PRESS)
+		megaPrice:FindFirstChildOfClass("UIScale").Scale = megaScale
+		megaPrice.AnchorPoint = Motion.pivotAnchor(megaAnchor, megaScale)
 		-- the loops (from the moment the store shows)
 		for _, b in breathers do
 			b:FindFirstChildOfClass("UIScale").Scale = Motion.breatheScale(since)

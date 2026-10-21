@@ -31,7 +31,10 @@
 	  button squashes the selected button; touch squashes on the finger.
 	- Reduce motion: the SETTINGS toggle (SettingsConfig.ReduceMotion) and
 	  Roblox's own GuiService.ReducedMotionEnabled -> Motion.setReduced /
-	  setSystemReduced.
+	  setSystemReduced. The windows that pop themselves (their own OpenPop
+	  tween) and the chips' endless "Pulse" tweens are stilled too
+	  (Motion.calm): in every gui that opens while it is on, and in the whole
+	  PlayerGui the moment it turns on.
 	- Loops (breathe, shine) run only while their gui shows: re-checked when
 	  a watched gui opens or closes and once a second while there are loops.
 ]]
@@ -184,8 +187,10 @@ end
 	A button that fills its holder (the old kit's chunky button over its lip,
 	a Pop tile's face: Size 1 x 1, AnchorPoint 0, 0) is held by its middle
 	instead, in the very same place: Roblox scales a UIScale about the
-	AnchorPoint, so the squash then shrinks it toward its centre. Only these:
-	their holder is what layouts move, never the button. True when it changed.
+	AnchorPoint, so the squash then shrinks it toward its centre with no
+	anchor tween at all. Only these: their holder is what layouts move, never
+	the button. (Every other button squashes about its centre too: Motion
+	moves its AnchorPoint along with the scale.) True when it changed.
 ]]
 function UIMotionController.centre(button: GuiObject): boolean
 	local size = button.Size
@@ -288,7 +293,14 @@ end
 
 local function onOpened(gui: ScreenGui)
 	Motion.refreshLoops()
-	if not gui.Enabled or UIMotionController.Skip[gui.Name] or gui:GetAttribute("MotionSkip") then
+	if not gui.Enabled then
+		return
+	end
+	if Motion.reduced() then
+		-- (a window that pops itself: its OpenPop tween stops at 1 before it shows)
+		Motion.calm(gui)
+	end
+	if UIMotionController.Skip[gui.Name] or gui:GetAttribute("MotionSkip") then
 		return
 	end
 	local screen = designScreen(gui)
@@ -334,19 +346,29 @@ function UIMotionController.start()
 	local SettingsController = require(script.Parent.SettingsController)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
-	-- reduce motion: Roblox's own setting, and the game's (SETTINGS panel)
+	-- reduce motion: Roblox's own setting, and the game's (SETTINGS panel); when
+	-- it turns on, the other controllers' pops and pulses still running stop too
+	local function calmIfReduced(was: boolean)
+		if Motion.reduced() and not was then
+			Motion.calm(playerGui)
+		end
+	end
 	local function systemReduced()
 		local ok, on = pcall(function()
 			return GuiService.ReducedMotionEnabled
 		end)
+		local was = Motion.reduced()
 		Motion.setSystemReduced(ok and on == true)
+		calmIfReduced(was)
 	end
 	systemReduced()
 	pcall(function()
 		GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(systemReduced)
 	end)
 	SettingsController.onChanged(function(current)
+		local was = Motion.reduced()
 		Motion.setReduced(current.ReduceMotion == true)
+		calmIfReduced(was)
 	end)
 
 	-- the pointer: hover only for the mouse

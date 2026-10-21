@@ -106,8 +106,10 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	end
 	task.delay(3.2, function()
 		if frame.Parent then
-			TweenService:Create(scale, TweenInfo.new(0.2), { Scale = 0 }):Play()
-			task.wait(0.22)
+			if not Motion.reduced() then -- (Reduce motion: it just goes)
+				TweenService:Create(scale, TweenInfo.new(0.2), { Scale = 0 }):Play()
+				task.wait(0.22)
+			end
 			frame:Destroy()
 		end
 	end)
@@ -348,7 +350,7 @@ function HudController.earned(amount: number)
 		comboAt = now
 		label.Text = "+" .. Format.money(comboAmount)
 		local pop = label:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
-		pop.Scale = 1.25
+		pop.Scale = if Motion.reduced() then 1 else 1.25
 		pop.Parent = label
 		TweenService:Create(pop, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 		return
@@ -423,10 +425,7 @@ function HudController.showOffline(amount: number, seconds: number, hours: numbe
 	shown.Amount.Text = "+" .. Format.money(amount)
 	shown.Detail.Text = HudController.offlineDetail(seconds, hours)
 	shown.Gui.Enabled = true
-	local scale = shown.Panel:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
-	scale.Scale = 0.6
-	scale.Parent = shown.Panel
-	TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	Motion.pop(shown.Panel, shown.Dim) -- (UI/Motion: none with Reduce motion)
 	Sfx.play("CoinBurst")
 	ContextActionService:BindActionAtPriority(OFFLINE_CLOSE, function(_, state)
 		if state == Enum.UserInputState.Begin then
@@ -536,7 +535,7 @@ function HudController.start()
 		if diff ~= 0 then
 			-- a jump bigger than a few seconds of income is a sale or a reward
 			if diff > math.max(1, income * 3) then
-				if not Motion.isCounting(refs.Coins) then
+				if not Motion.isCounting(refs.Coins) and not Motion.reduced() then
 					coinScale.Scale = 1.12
 					TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
 					Motion.flyTo(nil, cashPile or refs.CoinsPanel, "cash")
