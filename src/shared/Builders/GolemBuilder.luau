@@ -54,11 +54,17 @@
 	                              and "BottomRoot" (the halves), so PivotTo
 	                              moves them from the center. base = the
 	                              pill's center, the window faces -Z.
+	                              A capsule with an EGG (Builders/CapsuleEggs:
+	                              Stone, Crystal, Royal) or a limited set's
+	                              shard (GolemGearLimited) builds that instead,
+	                              with the same halves, pivots, Band and
+	                              cracks (at most ShardMaxParts).
 ]]
 
 local CapsuleConfig = require(script.Parent.Parent.Config.CapsuleConfig)
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
 local GolemGearLimited = require(script.Parent.GolemGearLimited)
+local CapsuleEggs = require(script.Parent.CapsuleEggs)
 local LimitedUpcoming = require(script.Parent.Parent.Config.LimitedUpcoming)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 
@@ -425,6 +431,8 @@ local KIT = {
 	darker = darker,
 	lighter = lighter,
 }
+-- the regular capsules' eggs (Builders/CapsuleEggs; capsule id -> builder)
+local EGGS = CapsuleEggs.eggs(KIT, GolemGearLimited.tools(KIT))
 for name, add in GolemGearLimited.accessories(KIT) do
 	ACCESSORIES[name] = add :: any
 end
@@ -645,11 +653,59 @@ end
 ---------------------------------------------------------------- capsules
 
 -- The capsule for the opening animation (see the header).
+local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((GolemGearLimited.Shard) -> ())?): Model
+	local center = base or CFrame.new()
+	local tint = color or STONE
+	local model = Instance.new("Model")
+	model.Name = "Capsule"
+	local top = Instance.new("Model")
+	top.Name = "Top"
+	top.Parent = model
+	local bottom = Instance.new("Model")
+	bottom.Name = "Bottom"
+	bottom.Parent = model
+	local function pivot(parent: Instance, name: string): Part
+		local p = part(parent, name, center, Vector3.new(0.2, 0.2, 0.2), tint)
+		p.Transparency = 1
+		return p
+	end
+	model.PrimaryPart = pivot(model, "Root")
+	top.PrimaryPart = pivot(top, "TopRoot")
+	bottom.PrimaryPart = pivot(bottom, "BottomRoot")
+	if build then
+		build({
+			Top = top,
+			Bottom = bottom,
+			Center = center,
+			Color = tint,
+			Glow = glow or rgb(255, 170, 80),
+			Room = function(): number
+				return GolemBuilder.ShardMaxParts - GolemBuilder.partCount(model)
+			end,
+		})
+	end
+	for i = 1, 3 do
+		local crack = bottom:FindFirstChild("Crack" .. i)
+		if crack and crack:IsA("BasePart") then
+			crack.Transparency = 1
+		end
+	end
+	return model
+end
+
 function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
 	local capsule = CapsuleConfig.ById[capsuleId]
 	if capsule and capsule.Limited and GolemGearLimited.shard(capsule.Limited, KIT) then
 		local model = GolemBuilder.shard(capsule.Limited, base, capsule.Color, capsule.Glow)
 		model:SetAttribute("Capsule", capsuleId)
+		return model
+	end
+	-- the regular capsules are EGGS now (owner 2026-10-21: "an egg instead of capsules")
+	local egg = EGGS[capsuleId]
+	if capsule and egg then
+		local model = eggFrame(base, capsule.Color, capsule.Glow, egg)
+		model:SetAttribute("Capsule", capsuleId)
+		model:SetAttribute("Egg", capsuleId)
 		return model
 	end
 	local color = if capsule then capsule.Color else STONE
@@ -708,43 +764,7 @@ end
 -- ShardMaxParts. base = the shard's center, its front faces -Z. A set
 -- without a shard (or an unknown one) builds a plain egg-less pill frame.
 function GolemBuilder.shard(setId: string, base: CFrame?, color: Color3?, glow: Color3?): Model
-	local center = base or CFrame.new()
-	local tint = color or STONE
-	local model = Instance.new("Model")
-	model.Name = "Capsule"
-	local top = Instance.new("Model")
-	top.Name = "Top"
-	top.Parent = model
-	local bottom = Instance.new("Model")
-	bottom.Name = "Bottom"
-	bottom.Parent = model
-	local function pivot(parent: Instance, name: string): Part
-		local p = part(parent, name, center, Vector3.new(0.2, 0.2, 0.2), tint)
-		p.Transparency = 1
-		return p
-	end
-	model.PrimaryPart = pivot(model, "Root")
-	top.PrimaryPart = pivot(top, "TopRoot")
-	bottom.PrimaryPart = pivot(bottom, "BottomRoot")
-	local build = GolemGearLimited.shard(setId, KIT)
-	if build then
-		build({
-			Top = top,
-			Bottom = bottom,
-			Center = center,
-			Color = tint,
-			Glow = glow or rgb(255, 170, 80),
-			Room = function(): number
-				return GolemBuilder.ShardMaxParts - GolemBuilder.partCount(model)
-			end,
-		})
-	end
-	for i = 1, 3 do
-		local crack = bottom:FindFirstChild("Crack" .. i)
-		if crack and crack:IsA("BasePart") then
-			crack.Transparency = 1
-		end
-	end
+	local model = eggFrame(base, color, glow, GolemGearLimited.shard(setId, KIT))
 	model:SetAttribute("Shard", setId)
 	return model
 end
