@@ -270,6 +270,11 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "quests" then -- the world + the QUESTS window / streak popup overlays (tools/lune/lib/quests_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/quests_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/store_preview").build(Loader) do

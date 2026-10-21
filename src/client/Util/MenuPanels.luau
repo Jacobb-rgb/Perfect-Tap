@@ -49,6 +49,7 @@ MenuPanels.Names = {
 	"ElevatorController",
 	"HoverboardController",
 	"RebirthController",
+	"QuestController",
 }
 
 local cache: { [string]: any } = {}

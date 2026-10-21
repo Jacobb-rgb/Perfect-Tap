@@ -725,3 +725,28 @@ What to test in Studio:
    stick moves the ring, A or R2 sprays, B leaves (twice once some dirt is off).
 5. A dusty relic at the Cleaning Station: wash it, the relic rises, the card says RELIC CLEANED.
 6. Leave half way: the ore stays in the vise; F starts again with new dirt.
+
+## Daily / weekly quests + the 7-day login streak (2026-10-21, branch claude/daily-quests-streak-fe1830)
+Retention plan (owner 2026-10-21). Design: docs/plans/DAILY_QUESTS_PLAN.md.
+- Shared: `Config/QuestConfig` (pools, rewards, streak days), `Quests/QuestLogic` (pure: UTC day / Monday week,
+  seeded roll per player + day, goals by blaster level / income, deltas from data.Stats, claims, the streak).
+- Server: `QuestService` (QuestAction "Claim" / "Streak", Rate 2 Burst 4; the policy first, then check + mark claimed
+  + grant with no yield; QuestReward + ActionResult; State provider `Quests`; a 30 s day check). Save: data.Quests,
+  data.Streak (no Version bump; refresh repairs broken lists). Day 7's Crystal Capsule goes through
+  CapsuleService.grantFree; a full golem inventory refuses the claim ("make room"), the day stays claimable.
+- Client: `QuestView` (Pop window QUESTS + the DAILY REWARD popup, odds panel), `QuestController` (side menu QUESTS
+  in the MORE flyout with a badge, "Quest done!" toasts, the popup once per session after the loading screen and
+  never over the tutorial bubble / another panel / the minigame / build mode).
+- Review: rewards are never Robux-only; the only random reward (day 7) shows exact odds; no rewards for likes or
+  favorites; server os.time() only; capsule quests and Triple Lucky are swapped for coins where every capsule is a
+  restricted paid random item.
+What to test in Studio:
+1. Join: after the loading screen the DAILY REWARD popup shows day 1 glowing (TODAY!). CLAIM: coins toast, the
+   popup closes. Rejoin: no popup (claimed today), the QUESTS tile has no streak badge.
+2. MORE > QUESTS: 3 dailies + 1 weekly with progress bars. Mine / sell / clean: the bars move, a finished quest
+   toasts "Quest done!", the MORE tile shows a red badge, CLAIM pays and shows DONE. Rejoin: the same quests.
+3. Change the server clock (or wait for 00:00 UTC): new dailies; Monday 00:00 UTC: a new weekly.
+4. Streak day 7 with a full golem inventory: refused with "make room"; delete a golem, CLAIM: the capsule opening plays.
+5. ODDS (window and popup): the Crystal Capsule's golems and chances in two columns; B / BACK closes it.
+6. Phone emulator (568 x 320 and 844 x 390): every button is easy to tap, nothing overlaps; controller: the first
+   thing to claim is selected, B closes.

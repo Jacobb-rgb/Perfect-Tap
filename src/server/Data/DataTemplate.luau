@@ -104,6 +104,13 @@ local DataTemplate = {
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
 	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
 	Wheel = { NextSpinAt = 0, Spins = 0 },
+	-- daily / weekly quests (QuestService, QuestLogic): Day / Week = the UTC day / week number
+	-- the lists are for; Daily / Weekly = { { Id, Base (the Stat when given), Goal, Claimed } }
+	-- (QuestLogic.refresh rerolls a stale or broken list, so no migration is needed)
+	Quests = { Day = 0, Daily = {}, Week = 0, Weekly = {} },
+	-- the 7-day login streak: Day = the streak day last claimed (1..7, 0 = never),
+	-- Last = the UTC day number of that claim (a missed day starts at day 1 again)
+	Streak = { Day = 0, Last = 0 },
 	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
 	Artifacts = { Found = {}, Chapters = {} },
 

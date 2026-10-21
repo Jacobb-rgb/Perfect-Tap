@@ -1,0 +1,198 @@
+{
+  "quests_pc": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_quests_pc"
+  },
+  "quests_pc_odds": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_quests_pc_odds"
+  },
+  "quests_hud_pc": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_quests_hud_pc"
+  },
+  "streak_pc": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_streak_pc"
+  },
+  "quests_phone": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_quests_phone",
+    "width": 1688,
+    "height": 780,
+    "uiInset": 72
+  },
+  "streak_phone": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_streak_phone",
+    "width": 1688,
+    "height": 780,
+    "uiInset": 72
+  },
+  "quests_phone_small": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_quests_phone_small",
+    "width": 1704,
+    "height": 960,
+    "uiInset": 108
+  },
+  "streak_phone_small": {
+    "scene": "quests",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_streak_phone_small",
+    "width": 1704,
+    "height": 960,
+    "uiInset": 108
+  }
+}
