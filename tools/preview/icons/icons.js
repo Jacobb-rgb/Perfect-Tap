@@ -1122,6 +1122,8 @@ async function main() {
     (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null) ||
     (/^star_/.test(iconName) ? { file: iconName, yaw: 90, pitch: 12, roll: 0 } : null) ||
     (/^cash_/.test(iconName) ? { file: iconName, yaw: 152, pitch: 24 } : null) ||
+    // board_<Id>: the hoverboards (PictureModels' camera: from the left, above, a bit in front)
+    (/^board_/.test(iconName) ? { file: iconName, yaw: 125, pitch: 28 } : null) ||
     (/^artifact_/.test(iconName) ? { file: iconName, yaw: 160, pitch: 16 } : null);
   if (!ICONS[iconName] && !partSpec) throw new Error("unknown icon " + iconName);
   const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(partSpec.file, partSpec);
