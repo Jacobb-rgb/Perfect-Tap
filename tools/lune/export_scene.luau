@@ -165,6 +165,13 @@ elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common 
 	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
 	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
+elseif sceneName == "dropper_shop" then -- the DROPPER WORKS shop house (tools/lune/lib/dropper_preview.luau)
+	require("./lib/dropper_preview").buildShop(Loader, workspace)
+elseif sceneName == "droppers" then -- the seven droppers, Money Laser and SELL by the mine (tools/lune/lib/dropper_preview.luau)
+	require("./lib/dropper_preview").build(Loader, workspace)
+	for name, guis in require("./lib/dropper_preview").ui(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
@@ -212,6 +219,9 @@ elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) an
 	end
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
+elseif sceneName == "hoverboard_fx" or sceneName == "hoverboard_fx_boost" or sceneName == "hoverboard_fx_start" then -- all five boards with their ride effects / bursts
+	local moment = if sceneName == "hoverboard_fx_boost" then "Boost" elseif sceneName == "hoverboard_fx_start" then "Start" else nil
+	require("./lib/hoverboard_preview").buildFx(Loader, workspace, moment)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
 	local HoverboardPreview = require("./lib/hoverboard_preview")
 	HoverboardPreview.buildRide(Loader, workspace, sceneName == "hoverboard_hero")
@@ -268,6 +278,11 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 	WorldBuilder.build(workspace)
 	require("./lib/rebirth_preview").buildWorld(Loader, workspace)
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "quests" then -- the world + the QUESTS window / streak popup overlays (tools/lune/lib/quests_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/quests_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)

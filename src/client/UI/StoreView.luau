@@ -41,6 +41,7 @@ local Pop = require(script.Parent.Pop)
 local StoreView = {}
 
 local sizeBanner: (refs: any) -> () -- (below: the banner's buttons follow the layout)
+local floatTab: (parent: Instance, section: any, size: number, order: number) -> TextButton
 
 export type CardRefs = {
 	Spec: StoreConfig.CardSpec,
@@ -212,6 +213,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		Selectable = false, -- (one gamepad stop per card: the card buys)
 		ZIndex = 6,
 	})
+	price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
 	local priceAmount = (price:FindFirstChild("Row") :: Frame):FindFirstChild("Amount") :: TextLabel
 	local shade = UIKit.new("Frame", {
 		Name = "Shade",
@@ -277,11 +279,12 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 			Position = UDim2.new(0.5, 0, 0, math.floor((h - below) * 0.44) + 4),
 			ZIndex = 5,
 		})
-		refs.Amount = Pop.text(button, "$0", 36, {
+		refs.Amount = Pop.title(button, "$0", 40, "Green", {
 			Name = "Amount",
 			AnchorPoint = Vector2.new(0.5, 1),
+			FontFace = PopTheme.Heavy,
 			Position = UDim2.new(0.5, 0, 1, -(below - 2)),
-			Size = UDim2.new(1, -12, 0, 42),
+			Size = UDim2.new(1, -12, 0, 46),
 			ZIndex = 7,
 		})
 	elseif spec.Look == "Capsule" then
@@ -368,7 +371,12 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		})
 	end
 	if spec.Ribbon then
-		Pop.ribbon(button, spec.Ribbon, 136)
+		local ribbon = Pop.ribbon(button, spec.Ribbon, 136)
+		-- the same place, held by its middle: it breathes (UIMotionController) from its centre
+		local size = ribbon.Size
+		ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
+		ribbon.Position = UDim2.new(1, -8 - size.X.Offset / 2, 0, 12 + size.Y.Offset / 2)
+		ribbon:SetAttribute("Motion", "Breathe")
 	end
 	return refs
 end
@@ -636,7 +644,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 8,
 	})
-	Pop.title(frame, edition.Title, 50, b.Title, {
+	local bannerTitle = Pop.title(frame, edition.Title, 50, b.Title, {
 		Name = "Title",
 		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(122, 26),
@@ -644,6 +652,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 8,
 	})
+	Pop.shadow(bannerTitle)
 	Pop.text(frame, edition.Tagline, 21, {
 		Name = "Tagline",
 		Position = UDim2.fromOffset(18, 84),
@@ -729,13 +738,18 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		local product = if key then MonetizationConfig.Products[key] else nil
 		if product then
 			local bx = buyGap + (i - 1) * (buttonW + buyGap)
+			-- (held by the middle: the x50 breathes from its centre, sizeBanner keeps the bottom line)
 			local button = Pop.price(frame, product.Robux, Vector2.new(buttonW, buttonH), {
 				Name = "Buy" .. n,
-				Position = UDim2.fromOffset(bx, h - buttonH - 30),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(bx + buttonW / 2, h - buttonH / 2 - 30),
 				ZIndex = 8,
 			})
 			if n == StoreView.BannerCounts[1] then
 				Pop.repaint(button, "Red") -- (the photo: the biggest pack stands out)
+				button:SetAttribute("Motion", "Breathe")
+			else
+				button:SetAttribute("Motion", "Shine")
 			end
 			Pop.text(frame, `{n} Golem{if n == 1 then "" else "s"}`, 20, {
 				Name = "Count" .. n,
@@ -804,6 +818,65 @@ function StoreView.setTimer(refs: Refs, secondsLeft: number)
 	if banner then
 		banner.Timer.Text = StoreView.countdown(secondsLeft)
 	end
+end
+
+--[[
+	A section tab right of the window (the photos: a big floating picture with
+	its word under it, no box): the live 3D model when there is one (works
+	before any upload), else the icon, else the word alone in the middle.
+	Returns the button; its Parent is the holder the layout sizes.
+]]
+floatTab = function(parent: Instance, section: StoreConfig.Section, size: number, order: number): TextButton
+	local holder = UIKit.new("Frame", {
+		Name = section.Id,
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Size = UDim2.fromOffset(size, size),
+	}, parent)
+	local face = UIKit.new("TextButton", {
+		Name = "Face",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		Selectable = true,
+		ZIndex = 2,
+	}, holder)
+	local name = section.TabModel or section.TabIcon
+	local model, from = PictureModels.build(name)
+	local shows = model ~= nil or IconAssets.shows(section.TabIcon)
+	if model then
+		Pop.model(face, section.TabIcon, size, model, {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.fromScale(0.86, 0.86),
+			ZIndex = 3,
+		}, from)
+	elseif shows then
+		local icon = UIKit.new("ImageLabel", {
+			Name = "Picture",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0),
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromScale(0.86, 0.86),
+			ZIndex = 3,
+		}, face)
+		IconAssets.apply(icon, section.TabIcon)
+		icon:SetAttribute("Icon", section.TabIcon)
+	end
+	local label = Pop.text(face, section.Tab, 22, {
+		Name = "Label",
+		AnchorPoint = if shows then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5),
+		FontFace = PopTheme.Font,
+		Position = if shows then UDim2.fromScale(0.5, 1) else UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -4, 0.3, 0),
+		TextScaled = true,
+		ZIndex = 5,
+	})
+	local edge = label:FindFirstChild("Edge") :: UIStroke
+	edge.Thickness = 3
+	return face
 end
 
 function StoreView.build(): Refs
@@ -899,15 +972,7 @@ function StoreView.build(): Refs
 	}, group)
 	UIKit.list(tabColumn, Enum.FillDirection.Vertical, StoreView.TabListGap)
 	for i, section in StoreConfig.Sections do
-		local face = Pop.tile(tabColumn, {
-			Name = section.Id,
-			Label = section.Tab,
-			Icon = section.TabIcon,
-			Paint = section.TabPaint,
-			Size = StoreView.TabSize,
-			LayoutOrder = i,
-		})
-		tabs[section.Id] = face
+		tabs[section.Id] = floatTab(tabColumn, section, StoreView.TabSize, i)
 	end
 
 	local status = Pop.text(window.Body, "", 20, {
@@ -1004,6 +1069,7 @@ function StoreView.build(): Refs
 		Position = UDim2.new(0.72, 0, 1, -14),
 		ZIndex = 22,
 	})
+	buy:SetAttribute("Motion", "Shine")
 
 	local refs: Refs = {
 		Gui = gui,
@@ -1049,7 +1115,8 @@ sizeBanner = function(refs: Refs)
 	end
 	for _, button in banner.Buys do
 		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)
-		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH - 30)
+		-- (AnchorPoint 0.5, 0.5: the bottom edge stays 30 above the banner's bottom)
+		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH / 2 - 30)
 	end
 end
 

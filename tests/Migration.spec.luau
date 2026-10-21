@@ -1,6 +1,7 @@
--- Save migrations up to version 3: type clean-up, idempotent, no known
+-- Save migrations up to version 4: type clean-up, idempotent, no known
 -- machine or well-formed item is ever deleted (retired machines are refunded
--- and their contents go to the pen).
+-- and their contents go to the pen); version 4 moves a 12-cell layout onto the
+-- 16-cell grid once, against the back wall and on its chutes.
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
@@ -43,20 +44,20 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 3", function()
-		T.eq(DataTemplate.Version, 3)
-		T.eq(Migrations.Latest, 3)
+	T.test("Migration: template is version 4", function()
+		T.eq(DataTemplate.Version, 5)
+		T.eq(Migrations.Latest, 5)
 	end)
 
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 3)
+		T.eq(data.Version, 5)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
-		T.eq(furnace.X, 2, "X floored")
-		T.eq(furnace.Z, 3)
+		T.eq(furnace.X, 2 + 2, "X floored, then moved onto the 16-cell grid")
+		T.eq(furnace.Z, 3 + 4)
 		T.eq(furnace.R, 3, "R -1 becomes 3")
 		T.eq(#furnace.In, 1, "bad queue item dropped")
 		T.eq(furnace.In[1].O, "Copper")
@@ -156,10 +157,169 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 3)
+		T.eq(data.Version, 5)
 		local newer = { Version = 7, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, 7, "a newer save's version is not lowered")
+	end)
+
+	---------------------------------------------------------------- version 4: the 16-cell grid
+
+	-- A version 3 save's layout on the 12-cell grid: a belt on every cell, the belts on
+	-- the old chutes (X 3 / 6 / 9 on the back row 11) turned the way they work there.
+	local OLD_CELLS = 12
+	local OLD_CHUTES = { Pen = 3, Train = 6, Foundry = 9 }
+	local function v3Grid(): { [string]: any }
+		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 3
+		data.PlacedMachines = {}
+		for z = 0, OLD_CELLS - 1 do
+			for x = 0, OLD_CELLS - 1 do
+				local r = if z == OLD_CELLS - 1 and x == OLD_CHUTES.Foundry then BaseLayout.SinkRotation else 0
+				table.insert(data.PlacedMachines, { Id = "Conveyor", X = x, Z = z, R = r })
+			end
+		end
+		-- a queue and a setting ride along unchanged
+		data.PlacedMachines[1].In = { { K = "Raw", O = "Copper" } }
+		data.PlacedMachines[2].C = 3
+		return data
+	end
+
+	T.test("Migration v4: a 12-cell layout moves to 2..13 / 4..15, its chute belts onto chutes 5 / 8 / 11 on row 15", function()
+		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		T.eq(GameConfig.PlotCells, 16)
+		for name, x in { Pen = 5, Train = 8, Foundry = 11 } do
+			local cx, cz = BaseLayout.chuteCell(name)
+			T.eq(cx, x, name .. " chute X")
+			T.eq(cz, 15, name .. " chute on the back row")
+		end
+		local data = v3Grid()
+		local before = ProfileStore.deepCopy(data.PlacedMachines)
+		local report = Migrations.run(data)
+		T.eq(data.Version, 5)
+		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair")
+		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
+		local cells = {}
+		local onChute = {}
+		for i, entry in data.PlacedMachines do
+			local old = before[i]
+			T.eq(entry.X, old.X + 2, `X of ({old.X}, {old.Z})`)
+			T.eq(entry.Z, old.Z + 4, `Z of ({old.X}, {old.Z})`)
+			T.truthy(entry.X >= 2 and entry.X <= 13 and entry.Z >= 4 and entry.Z <= 15, "inside 2..13 / 4..15")
+			T.eq(entry.R, old.R, "the turn stays")
+			cells[entry.X * 100 + entry.Z] = true
+			local chute = BaseLayout.chuteAt(entry.X, entry.Z)
+			if chute then
+				onChute[chute] = entry
+			end
+			if old.Z == OLD_CELLS - 1 then
+				for name, x in OLD_CHUTES do
+					if old.X == x then
+						T.eq(chute, name, `the belt on the old {name} chute is on the {name} chute`)
+					end
+				end
+			end
+		end
+		T.eq(data.PlacedMachines[1].In[1].O, "Copper", "queues untouched")
+		T.eq(data.PlacedMachines[2].C, 3, "settings untouched")
+		local count = 0
+		for _ in cells do
+			count += 1
+		end
+		T.eq(count, OLD_CELLS * OLD_CELLS, "no two machines on one cell")
+		T.eq(onChute.Foundry.R, BaseLayout.SinkRotation, "the FOUNDRY belt still delivers off the edge")
+		T.truthy(onChute.Pen and onChute.Train, "the PEN and TRAIN chutes keep their belts")
+		-- a second run (every later load) changes nothing
+		local copy = ProfileStore.deepCopy(data)
+		report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "moved once only")
+		T.eq(report.Moved + report.Dropped, 0)
+	end)
+
+	T.test("Migration v4: a v3 factory (chute belts, a deck belt, a 3x3 furnace) loads with nothing displaced", function()
+		local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 3
+		data.PlacedMachines = {
+			{ Id = "Conveyor", X = 3, Z = 11, R = 0 }, -- off the PEN chute
+			{ Id = "Conveyor", X = 3, Z = 10, R = 0 },
+			{ Id = "Conveyor", X = 6, Z = 11, R = 0 }, -- off the TRAIN chute
+			{ Id = "Conveyor", X = 9, Z = 10, R = BaseLayout.SinkRotation },
+			{ Id = "Conveyor", X = 9, Z = 11, R = BaseLayout.SinkRotation }, -- into the FOUNDRY
+			{ Id = "Platform", X = 0, Z = 0, R = 0 },
+			{ Id = "Conveyor", X = 0, Z = 0, R = 1, L = 1 }, -- on the deck
+			{ Id = "BlastFurnace", X = 5, Z = 5, R = 0 },
+		}
+		Migrations.run(data)
+		local displaced = Placement.sanitize(data)
+		T.eq(#displaced, 0, "nothing displaced")
+		T.eq(#data.PlacedMachines, 8)
+		T.eq(BaseLayout.chuteAt(data.PlacedMachines[1].X, data.PlacedMachines[1].Z), "Pen")
+		T.eq(BaseLayout.chuteAt(data.PlacedMachines[3].X, data.PlacedMachines[3].Z), "Train")
+		T.eq(BaseLayout.chuteAt(data.PlacedMachines[5].X, data.PlacedMachines[5].Z), "Foundry")
+		local deck = data.PlacedMachines[7]
+		T.eq(deck.X, 2, "the deck belt moved with its platform")
+		T.eq(deck.Z, 4)
+		T.eq(deck.L, 1)
+		-- without the move the belts would miss the chutes (why version 4 exists)
+		T.eq(BaseLayout.chuteAt(3, 11), nil, "the old PEN cell is no chute on the 16-cell grid")
+	end)
+
+	T.test("Migration v4: a save of version 4 or more is never moved; an old one without a Version is", function()
+		for _, version in { 4, 5, Migrations.Latest + 1 } do
+			local data = ProfileStore.deepCopy(DataTemplate)
+			data.Version = version
+			data.PlacedMachines = { { Id = "Conveyor", X = 0, Z = 0, R = 0 }, { Id = "Crusher", X = 14, Z = 14, R = 1 } }
+			Migrations.run(data)
+			T.eq(data.PlacedMachines[1].X, 0, `version {version}: X stays`)
+			T.eq(data.PlacedMachines[1].Z, 0, `version {version}: Z stays`)
+			T.eq(data.PlacedMachines[2].X, 14, `version {version}: X stays`)
+			T.eq(data.PlacedMachines[2].Z, 14, `version {version}: Z stays`)
+			T.eq(data.Version, math.max(version, Migrations.Latest), "a newer save's version is not lowered")
+		end
+		-- a fresh save (DataTemplate, version 4: the StarterKit is placed on the new grid) stays
+		local fresh = ProfileStore.deepCopy(DataTemplate)
+		fresh.PlacedMachines = { { Id = "Conveyor", X = 1, Z = 1, R = 0 } }
+		Migrations.run(fresh)
+		T.eq(fresh.PlacedMachines[1].X, 1)
+		T.eq(fresh.PlacedMachines[1].Z, 1)
+		-- no usable Version (DataService makes a missing one 1): an old save, moved
+		for _, version in { 1, 2, 3, 3.5, "4", 0 / 0 } do
+			local data = ProfileStore.deepCopy(DataTemplate)
+			data.Version = version
+			data.PlacedMachines = { { Id = "Conveyor", X = 0, Z = 0, R = 0 } }
+			Migrations.run(data)
+			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
+			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
+			T.eq(data.Version, 5)
+		end
+	end)
+
+	T.test("Migration v4: junk X/Z still goes to the inventory; floored before the move", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 3
+		data.Coins = 0
+		data.MachineInventory = {}
+		data.PlacedMachines = {
+			{ Id = "Crusher", X = 0 / 0, Z = 1, R = 0, In = { { K = "Raw", O = "Gold" } } },
+			{ Id = "ClayFurnace", X = math.huge, Z = 3, R = 0 },
+			{ Id = "BlastFurnace", X = 4, Z = "far", R = 0 },
+			{ Id = "Conveyor", X = 2.7, Z = 3.2, R = 6 },
+		}
+		local report = Migrations.run(data)
+		T.eq(#data.PlacedMachines, 1)
+		local belt = data.PlacedMachines[1]
+		T.eq(belt.X, 4, "2.7 floored to 2, then + 2")
+		T.eq(belt.Z, 7, "3.2 floored to 3, then + 4")
+		T.eq(belt.R, 2)
+		T.eq(data.MachineInventory.Crusher, 1, "the Crusher went back to the inventory")
+		T.eq(data.MachineInventory.ClayFurnace, 1)
+		T.eq(data.MachineInventory.BlastFurnace, 1)
+		T.eq(data.Storage[#data.Storage].O, "Gold", "its queue went to the pen")
+		T.eq(report.Moved, 4, "3 machines and 1 item")
 	end)
 
 	T.test("Migration v3: retired machines, pickaxes, podiums and money", function()
@@ -181,7 +341,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 3)
+		T.eq(data.Version, 5)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")

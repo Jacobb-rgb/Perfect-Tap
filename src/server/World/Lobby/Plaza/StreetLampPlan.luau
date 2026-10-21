@@ -15,6 +15,10 @@
 	road over the creek bridge (Flora lights the bridge and the vault's
 	approach), the bridge garden and the plaza itself (its entrance lantern
 	pillars) get none.
+
+	The spots follow the road ends (Common.strips: WorldLayout.Roads and
+	LobbyLayout.Paths), so the plot roads, which run the length of the plot
+	columns (WorldLayout.PlotGrid), get more lamps when the plots grow.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

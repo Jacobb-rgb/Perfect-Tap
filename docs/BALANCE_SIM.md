@@ -291,3 +291,55 @@ are worth about 10 × the floor before, so the level after it has to cost a lot 
 ## Who decides
 Blaster / step 6 prices and balance: "TERRA FORGE Roblox hra vývoj" (integrator). Floors, elevator and hoverboard
 prices: the mine-floors chat. This file only proposes; nothing here changes the game.
+
+## The 2x Money pass (2026-10-21)
+
+The pass doubles podium income (offline too) and every sale, outside the StatConfig caps
+(`EconomyService.addIncomeFactor` "MoneyPass", `Bonuses.sellMult`). The sim's `IncomeMult`
+assumption does exactly that ("podium income and every sale"), so a payer is:
+
+```bash
+echo '{"IncomeMult":2}' > build/balance_2x/x2.json
+lune run tools/lune/balance_sim.luau override=build/balance_2x/x2.json
+```
+
+Medians of 120 players each, same seed, main at 75ecbd5 (no Acts bonus, no Starter Pack):
+
+| Profile | Blaster 9 free | Blaster 9 with 2x | Blaster 10 free | Blaster 10 with 2x | Faster |
+|---|---|---|---|---|---|
+| Typical (0.5) | 5h 00m | 2h 33m | 8h 00m | 4h 04m | x1.97 |
+| Skilled (0.8) | 3h 30m | 1h 53m | 5h 26m | 2h 53m | x1.88 |
+| Casual (0.3) | 7h 11m | 3h 37m | past 10 h | 5h 54m | x1.99 (blaster 9) |
+
+Inside the owner's rule (a paying player ~2-3x faster, target 1.6-2.5x for this pass alone):
+the pass halves the coin grind but not the time spent on non-coin gates, so it lands just
+under x2. It buys no story step and no mega machine. The Starter Pack (one Rare +10 % income
+golem and 20 minutes of income once) is a one-time head start of minutes, not a multiplier.
+With the Acts income bonus (feature/acts, also outside the cap) the pass doubles that too:
+re-run this table on the Acts branch when it lands.
+
+## Player levels (2026-10-21)
+
+The player LEVEL (LevelConfig, LevelService): XP from the save's counters, level-up coins
+(max(25 x level, 45 s of podium income), x5 every 10th level) and +1 % podium income per
+level (cap +50 % at level 51, outside the IncomePct cap; stacks with the 2x Money pass).
+The model (`A.Levels`, off by default) pays XP per 5 s step with the game's weights on its
+flows (rocks, ores, cleans, sales, active play time, one Upgrades weight per buy).
+
+```bash
+echo '{"Levels":true}' > build/balance_lv/lv.json
+echo '{"Levels":true,"IncomeMult":2}' > build/balance_lv/lv2.json
+lune run tools/lune/balance_sim.luau override=build/balance_lv/lv.json
+```
+
+Median of 120 players per profile:
+
+| Profile | Blaster 10 | with levels | Faster | 2x pass | 2x + levels | Faster |
+|---|---|---|---|---|---|---|
+| Typical | 8h 00m | 7h 32m | 5.8 % | 4h 04m | 3h 51m | 5.3 % |
+| Skilled | 5h 26m | 5h 12m | 4.3 % | 2h 53m | 2h 46m | 4.0 % |
+| Casual | (B9 7h 11m) | (B9 6h 42m) | 6.7 % | 5h 54m | 5h 33m | 5.9 % |
+
+Levels reached (Typical): 10 at 48 min, 20 at 2h 25m, 30 at 6h. Skilled: 40 at 7h.
+Every case stays under the 10 % limit the integrator set, so the +1 %/level share and the
++50 % cap stay as they are.

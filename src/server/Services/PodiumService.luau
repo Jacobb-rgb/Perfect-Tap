@@ -26,7 +26,7 @@
 	  LastSeen = now, and DataService.changed runs once (only when paid).
 	- Offline: on load, EconomyConfig.offlineEarnings(income, now - LastSeen,
 	  OfflineExtension perk) is paid after OfflineDelay, once the passes
-	  giving the OfflinePerks (Night Shift's 12 h, the Podiums pass's slots)
+	  giving the OfflinePerks (Night Shift's 12 h, the Podiums pass's slots, 2x Money)
 	  answered (MonetizationService.perkAtJoin), else when the load's first
 	  check round is done or at most PassWait seconds more. Paid while such
 	  a check kept failing: a later check that says the player owned the
@@ -48,6 +48,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
@@ -103,7 +104,7 @@ local perkConnections: { [Player]: RBXScriptConnection } = {}
 local waitingPasses: { [Player]: boolean } = {}
 -- an offline payout made while a pass check for an offline perk kept failing
 -- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
-type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean }
+type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean, Money: boolean }
 local topUps: { [Player]: TopUp } = {}
 -- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
 -- (nil while its check hasn't answered)
@@ -175,10 +176,11 @@ local function incomeAllSlots(player: Player, data: { [string]: any }): number
 			total += ItemData.income(desc) * multiplier
 		end
 	end
-	return total
+	-- the droppers earn on top of every podium
+	return total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
 end
 
--- Coins per second from all podiums.
+-- Coins per second from all podiums and the plot's droppers.
 function PodiumService.incomeOf(player: Player, data: { [string]: any }?): number
 	local d = data or DataService.get(player)
 	if not d then
@@ -189,6 +191,8 @@ function PodiumService.incomeOf(player: Player, data: { [string]: any }?): numbe
 	for slot = 1, MAX do
 		total += PodiumService.slotIncome(player, d, slot, multiplier)
 	end
+	-- the droppers on the plot (and their Money Lasers)
+	total += DropperConfig.placedIncome(d.PlacedMachines) * multiplier
 	return total
 end
 
@@ -733,6 +737,7 @@ local function payOffline(player: Player, popup: boolean): number
 			IncomeAll = incomeAllSlots(player, data),
 			Extended = extended,
 			Podiums = Perks.has(player, "Podiums"),
+			Money = Perks.has(player, MonetizationConfig.MoneyPassPerk),
 		}
 	end
 	if amount < 0.001 then
@@ -776,11 +781,18 @@ local function topUpOffline(player: Player): number
 	end
 	local extended = record.Extended or perkAtJoin(player, "OfflineExtension") == true
 	local podiums = record.Podiums or perkAtJoin(player, "Podiums") == true
-	if extended == record.Extended and podiums == record.Podiums then
+	local money = record.Money or perkAtJoin(player, MonetizationConfig.MoneyPassPerk) == true
+	if extended == record.Extended and podiums == record.Podiums and money == record.Money then
 		return 0
 	end
 	record.Extended = extended
 	record.Podiums = podiums
+	if money and not record.Money then
+		-- the 2x Money pass answered late: the incomes recorded at the payout lacked it
+		record.Income *= MonetizationConfig.MoneyPassMult
+		record.IncomeAll *= MonetizationConfig.MoneyPassMult
+	end
+	record.Money = money
 	local income = if podiums then record.IncomeAll else record.Income
 	local full = EconomyConfig.offlineEarnings(income, record.Seconds, extended)
 	local extra = full - record.Paid
@@ -899,7 +911,27 @@ end
 ---------------------------------------------------------------- lifecycle
 
 -- Internals for the Lune tests only (tests/PodiumService.spec.luau).
+-- The State snapshot's income: podiums + droppers (= incomeOf), per podium, the slots.
+local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
+	local multiplier = EconomyService.incomeMultiplier(player)
+	local perSlot = {}
+	local total = 0
+	for slot = 1, MAX do
+		local income = PodiumService.slotIncome(player, data, slot, multiplier)
+		perSlot[slot] = income
+		total += income
+	end
+	-- (the same total as incomeOf: the HUD chip, predicted coins, the wheel and store cards)
+	snapshot.Income = total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
+	snapshot.PodiumIncome = perSlot
+	snapshot.PodiumSlots = PodiumService.slotsFor(player)
+	-- the whole podium multiplier (IncomePct, the player level, the 2x Money pass...): the Ore
+	-- Pen's "+$X/s" (PenView.incomeMult)
+	snapshot.IncomeMult = multiplier
+end
+
 PodiumService._test = {
+	provide = provide,
 	action = onAction,
 	prompt = onPrompt,
 	openPicker = openPicker,
@@ -960,19 +992,7 @@ end
 function PodiumService.init()
 	Net.on("PodiumAction", onAction)
 	PenService.setPodiumPlacer(PodiumService.place)
-	StateService.addProvider(function(player, data, snapshot)
-		local multiplier = EconomyService.incomeMultiplier(player)
-		local perSlot = {}
-		local total = 0
-		for slot = 1, MAX do
-			local income = PodiumService.slotIncome(player, data, slot, multiplier)
-			perSlot[slot] = income
-			total += income
-		end
-		snapshot.Income = total
-		snapshot.PodiumIncome = perSlot
-		snapshot.PodiumSlots = PodiumService.slotsFor(player)
-	end)
+	StateService.addProvider(PodiumService._test.provide)
 	for _, plot in WorldLayout.Plots do
 		setupPrompts(plot.Id)
 		refreshLocks(plot.Id, nil)

@@ -13,6 +13,7 @@ return function(T, Loader)
 	local task = require("@lune/task")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local CELLS = GameConfig.PlotCells -- the build grid's cells per side
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -122,7 +123,7 @@ return function(T, Loader)
 		local ids = { "Crusher", "ClayFurnace", "Anvil", "Polisher", "Sorter", "Splitter", "RobotArm", "PowerPole" }
 		for i = 1, 70 do
 			local id = if i % 3 == 0 then ids[(i // 3) % #ids + 1] else "Conveyor"
-			table.insert(data.PlacedMachines, { Id = id, X = i % 12, Z = i // 12, R = i % 4 })
+			table.insert(data.PlacedMachines, { Id = id, X = i % CELLS, Z = i // CELLS, R = i % 4 })
 		end
 		local ores = {}
 		for i, ore in OreData.List do
@@ -241,7 +242,7 @@ return function(T, Loader)
 		T.eq(table.concat(sections(fourth), ","), "Placed", "a turned machine")
 		T.eq(#fourth.Placed, 70)
 		-- a new belt: Placed, its count and the slots
-		table.insert(data.PlacedMachines, { Id = "Conveyor", X = 11, Z = 11, R = 0 })
+		table.insert(data.PlacedMachines, { Id = "Conveyor", X = CELLS - 1, Z = CELLS - 1, R = 0 })
 		local fifth = StateService.trim(p, StateService.snapshot(p) :: any)
 		T.eq(table.concat(sections(fifth), ","), "Build,Placed,PlacedCount", "a placed belt")
 		T.truthy(fifth.Patch and fifth.Patch.Build and fifth.Patch.Build.Set.ConveyorsUsed, "Build: only the belt count")
@@ -693,7 +694,7 @@ return function(T, Loader)
 				data.Coins += 3.5 -- the quiet podium payout every second
 			end
 			if i == events // 2 then
-				data.PlacedMachines[5].X = (data.PlacedMachines[5].X + 1) % 12
+				data.PlacedMachines[5].X = (data.PlacedMachines[5].X + 1) % CELLS
 			end
 			if i == events // 3 then
 				GolemConfig.add(data.Golems, "PebbleGolem")

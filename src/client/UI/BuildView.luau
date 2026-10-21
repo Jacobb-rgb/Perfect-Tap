@@ -127,6 +127,7 @@ BuildView.CategoryColors = {
 	Logistics = rgb(90, 160, 230),
 	Selling = rgb(110, 214, 92),
 	Power = rgb(250, 204, 70),
+	Droppers = rgb(190, 110, 255),
 } :: { [string]: Color3 }
 
 -- The Deck / Ground toggle's text for each layer (BuildView.setLayer).

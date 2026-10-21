@@ -86,6 +86,9 @@ that line.
 | Ordered-store writes | 30 + 5n = 70 | 0 | 0 | ≤ 16 (23 %) |
 | GetSortedAsync | 5 + 2n = 21 | 0 | 0 | 4 (19 %) |
 
+- Five boards since the player LEVEL (2026-10-22, review of feat/levels): worst case **20 of 70** ordered-store
+  writes and **5 of 21** GetSortedAsync per minute at 8 players (the Level board writes on the same 120 s
+  throttle as the others, never per level up).
 - main saves one player every 5 s after a 120 s wait, so each player saves about every **160 s**;
   `fix/save-safety` (ec76d00) makes it exactly 60 s and is **not yet in main or in integrate/steps67**.
 - Biggest save ≈ 120-140 KB (PlacedMachines with queued items ~85 KB, Storage 300 items ~20 KB, golems ~5 KB)

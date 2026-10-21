@@ -121,7 +121,7 @@ return function(T, Loader)
 		T.eq(ItemData.income(nil), 0)
 		T.eq(ItemData.displayName("Raw", "Heartstone"), "Dirty Ore", "rarity stays hidden")
 		T.eq(ItemData.displayName("Clean", "Diamond", "Pristine"), "Pristine Diamond")
-		T.eq(ItemData.value("Clean", "Coal", "Rough"), 30, "Tobin pays 30 s of income")
+		T.eq(ItemData.value("Clean", "Coal", "Rough"), OreData.get("Coal").Income * 30, "Tobin pays 30 s of income")
 	end)
 
 	T.test("v2: offline earnings and pen capacity", function()
@@ -190,5 +190,19 @@ return function(T, Loader)
 			local rail = (WorldLayout.plotCFrame(plot) * CFrame.new(0, 0, BaseLayout.RailZ)).Position
 			T.lt(math.abs(rail.X), WorldLayout.Island.Max.X, "rail of plot " .. plot.Id)
 		end
+	end)
+
+	T.test("v2: the build range reaches every corner of the base yard from the plot centre", function()
+		-- (PlotService.isNear measures flat from the plot centre; a bigger grid moves the yard out)
+		for name, piece in BaseLayout.pieces() do
+			for _, sx in { -1, 1 } do
+				for _, sz in { -1, 1 } do
+					local x = piece.Center.X + sx * piece.Size.X / 2
+					local z = piece.Center.Z + sz * piece.Size.Z / 2
+					T.lt(math.sqrt(x * x + z * z), GameConfig.BuildRange, `{name} corner ({x}, {z})`)
+				end
+			end
+		end
+		T.eq(GameConfig.BuildRange, 70 + (GameConfig.PlotCells - 12) * GameConfig.CellSize / 2, "70 at 12 cells")
 	end)
 end

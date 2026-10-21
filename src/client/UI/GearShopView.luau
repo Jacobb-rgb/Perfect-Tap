@@ -5,14 +5,18 @@
 	  header   GEAR SHOP, a line about the shop (or the last message: HUD
 	           toasts hide behind the panel), your coins, the X button
 	  cards    the five GearConfig lines side by side (Boots, Helmet Lamp,
-	           Backpack, Gloves, Magnet), each:
-	             a showcase with the item drawn from frames (the SHOP
-	             stall's colors: yellow helmet, red boots, green pack, copper
-	             glove, red / white magnet) and the level chip ("LV 2/5",
-	             "MAX"); the name; five level pips; what it does; the effect
-	             box: what you have now -> what the next level gives (big),
-	             its unit, a second stat (lamp brightness, throw power); the
-	             price (Format.money, red when you can't afford it); BUY
+	           Backpack, Gloves, Magnet), each a painted Pop card in its own
+	           colour (GearShopView.Paints; the window is a Pop window,
+	           BoostView.popWindow):
+	             a showcase: the item's picture (IconAssets boots, helmet...;
+	             drawn from frames until the sheet is uploaded) on light
+	             rays, and the level chip ("LV 2/5", "MAX"); the name; five
+	             glossy level pips; what it does; the effect well: what you
+	             have now -> what the next level gives (big white), its unit,
+	             a second stat (lamp brightness, throw power); the price
+	             (Format.money, gold, white when you can't afford it); the
+	             gold coin BUY button (grey when you can't afford it; MAX and
+	             BOUGHT! green)
 	  footer   the control hint (GearShopView.hintText; "All gear at the
 	           top level" once every line is MAX); with a gamepad the
 	           platform's own button glyphs (GearShopView.setHint). The
@@ -41,12 +45,16 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UIConfig = require(Shared.Config.UIConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local TechShopView = require(script.Parent.TechShopView)
+-- (the shared Pop pieces: popWindow, popButton, style, backing, burst)
+local BoostView = require(script.Parent.BoostView)
 
 local GearShopView = {}
 
@@ -114,6 +122,8 @@ export type Slot = {
 	Button: TextButton,
 	Boxes: Boxes,
 	Card: Card?,
+	Picture: ImageLabel, -- the uploaded picture (IconAssets: boots, helmet...); Art draws it until then
+	Burst: Frame, -- the light rays behind the picture
 }
 
 export type Refs = {
@@ -164,6 +174,31 @@ GearShopView.StatusText = {
 }
 
 local rgb = Color3.fromRGB
+
+--[[
+	The Pop look (owner 2026-10-21: "new, modern, colourful, clean items,
+	Roblox style"): each card painted in its own bright colour (picked so its
+	picture stands out: red boots on teal, the yellow helmet on purple...),
+	light rays behind the big picture, the level on a chip, glossy pips, the
+	stat in big white on a dark well and a gold coin BUY button.
+]]
+GearShopView.WindowPaint = "Blue" -- the Gear colour (BubbleTheme.Roles.Gear)
+GearShopView.Paints = {
+	Boots = "Teal",
+	HelmetLamp = "Purple",
+	Backpack = "Blue",
+	Gloves = "Pink",
+	Magnet = "Green",
+} :: { [string]: string }
+-- the level pips: lit (gold), every one at the top level (green), not yet (dark)
+GearShopView.PipColors = {
+	On = rgb(255, 214, 50),
+	Done = rgb(120, 240, 70),
+	Off = rgb(28, 30, 38),
+}
+-- the price's gold (affordable) and plain white (not yet: the BUY button is grey)
+local PRICE_GOLD = ColorSequence.new(rgb(255, 246, 120), rgb(255, 176, 20))
+local WHITE = Color3.new(1, 1, 1)
 
 -- The SHOP stall's item colors (Lobby/Districts/Stalls) and the showcase's blue neon.
 local C = {
@@ -605,54 +640,93 @@ local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
 end
 
--- Colors a button: enabled in its own colors, or greyed out.
-local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-	holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
-	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
-end
+-- Paints a button (the controllers pass UITheme colours: Accent a gold coin
+-- button, Good green; disabled grey): BoostView.style, the Pop look.
+local style = BoostView.style
 GearShopView.style = style
+-- Shows a button's Text on its face again (the game does it on every Text change; the previews call it).
+GearShopView.syncButton = BoostView.syncButton
+
+-- The IconAssets picture of a gear line's Icon ("Boots" -> boots).
+function GearShopView.pictureName(kind: string): string
+	return string.lower(kind)
+end
+
+-- Shows a card's uploaded picture (and in the previews), else the drawing (Art).
+local function setPicture(slot: Slot, kind: string)
+	local name = GearShopView.pictureName(kind)
+	if slot.Picture:GetAttribute("Icon") ~= name then
+		IconAssets.apply(slot.Picture, name)
+		slot.Picture:SetAttribute("Icon", name)
+	end
+	local shows = IconAssets.shows(name)
+	slot.Picture.Visible = shows
+	slot.Art.Visible = not shows
+end
 
 local function newSlot(refs: Refs, line: GearConfig.GearLine, order: number, m: Metrics): Slot
+	-- the card: painted in the line's own colour, light rays behind the picture (it clips them)
 	local frame = UIKit.new("Frame", {
 		Name = line.Id,
 		LayoutOrder = order,
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, refs.List)
-	UIKit.corner(frame, 12)
-	UIKit.stroke(frame, 2.5)
-	-- the showcase: the SHOP stall's blue neon case with the item inside
+	Pop.face(frame, GearShopView.Paints[line.Id] or "Blue", 12, false)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	local burst = BoostView.burst(frame, 10, 1)
+	Pop.studs(frame, 12, 0.5, 44, 2)
+	-- the showcase: the picture's box (see-through: the picture sits on the rays)
 	local showcase = UIKit.new("Frame", {
 		Name = "Showcase",
-		BackgroundColor3 = C.Case,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, frame)
-	UIKit.corner(showcase, 10)
-	UIKit.stroke(showcase, 2.5, C.Neon)
-	UIKit.gradient(showcase, Color3.new(1, 1, 1), Color3.fromRGB(120, 120, 140))
+	for i, spot in { { 0.14, 0.24, 18 }, { 0.84, 0.72, 16 }, { 0.2, 0.82, 12 } } do
+		Pop.sparkle(showcase, UDim2.fromScale(spot[1], spot[2]), spot[3], 1, 0.15 + i * 0.1)
+	end
 	local art = UIKit.new("Frame", {
 		Name = "Art",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundTransparency = 1,
+		ZIndex = 2,
 	}, showcase)
 	GearShopView.setIcon(art, line.Icon)
+	local picture = UIKit.new("ImageLabel", {
+		Name = "Picture",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Visible = false,
+		ZIndex = 2,
+	}, showcase)
+	-- the level chip ("LV 2/5", "MAX") on its pill
 	local chip = UIKit.chip(showcase, "", Theme.PanelDark, {
 		Name = "Chip",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -5, 0, 5),
-		ZIndex = 3,
+		ZIndex = 4,
 	})
+	BoostView.strip(chip)
+	chip.BackgroundTransparency = 1
+	BoostView.popText(chip, false, WHITE)
+	BoostView.backing(chip, BoostView.DarkPaint)
 	local title = UIKit.label(frame, "", m.Title, {
 		Name = "ItemName",
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
+		ZIndex = 5,
 	})
+	BoostView.popText(title, true, WHITE)
 	local pipBar = UIKit.new("Frame", {
 		Name = "Pips",
 		BackgroundTransparency = 1,
+		ZIndex = 5,
 	}, frame)
 	UIKit.list(pipBar, Enum.FillDirection.Horizontal, 5, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -664,54 +738,69 @@ local function newSlot(refs: Refs, line: GearConfig.GearLine, order: number, m: 
 			Name = "Pip" .. i,
 			LayoutOrder = i,
 			Size = UDim2.fromOffset(20, 10),
-			BackgroundColor3 = Theme.PanelDark,
+			BackgroundColor3 = GearShopView.PipColors.Off,
 			BorderSizePixel = 0,
+			ZIndex = 5,
 		}, pipBar)
 		UIKit.corner(pip, 5)
-		UIKit.stroke(pip, 1.5)
+		UIKit.stroke(pip, 2, PopTheme.Outline)
+		-- (a glossy top: the colour stays BackgroundColor3)
+		UIKit.new("UIGradient", { Color = ColorSequence.new(WHITE, rgb(200, 200, 200)), Rotation = 90 }, pip)
 		table.insert(pips, pip)
 	end
 	local description = UIKit.label(frame, "", m.Description, {
 		Name = "Description",
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
 		ClipsDescendants = true,
+		ZIndex = 5,
 	})
+	BoostView.popText(description, false, WHITE)
+	-- the effect: a dark well with the stat in big white
 	local effectBox = UIKit.new("Frame", {
 		Name = "EffectBox",
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
+		ZIndex = 5,
 	}, frame)
 	UIKit.corner(effectBox, 10)
-	UIKit.stroke(effectBox, 2)
+	Pop.border(effectBox, 2.5)
 	local effect = UIKit.label(effectBox, "", m.Effect, {
 		Name = "Effect",
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 	})
+	BoostView.popText(effect, true, WHITE)
 	local unit = UIKit.label(effectBox, "", m.Unit, {
 		Name = "Unit",
-		TextColor3 = Theme.Text,
 		TextWrapped = false,
 	})
+	BoostView.popText(unit, false, WHITE)
 	local extra = UIKit.label(effectBox, "", m.Extra, {
 		Name = "Extra",
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 	})
+	BoostView.popText(extra, false, rgb(255, 236, 150))
 	local status = UIKit.label(effectBox, "", m.Unit, {
 		Name = "Status",
 		TextWrapped = true,
 		Visible = false,
 	})
+	BoostView.popText(status)
+	-- the price: big gold words (white while you can't afford it: the button is grey then)
 	local price = UIKit.label(frame, "", m.Price, {
 		Name = "Price",
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Coin,
 		TextWrapped = false,
+		ZIndex = 5,
 	})
+	BoostView.popText(price, true, WHITE)
+	UIKit.new("UIGradient", { Name = "Gold", Color = PRICE_GOLD, Rotation = 90 }, price)
+	-- the gold coin BUY button (grey when you can't afford it; green MAX / BOUGHT!)
 	local button = UIKit.button(frame, "BUY", Theme.Accent, Theme.AccentDark, { Name = "Buy" })
+	holderOf(button).ZIndex = 5
+	BoostView.popButton(button, "Yellow", 10)
+	BoostView.setMark(button, "coin")
 	local slot: Slot = {
 		Line = line.Id,
 		Frame = frame,
@@ -744,7 +833,10 @@ local function newSlot(refs: Refs, line: GearConfig.GearLine, order: number, m: 
 			Button = 22,
 		},
 		Card = nil,
+		Picture = picture,
+		Burst = burst,
 	}
+	setPicture(slot, line.Icon)
 	refs.Slots[line.Id] = slot
 	table.insert(refs.SlotList, slot)
 	return slot
@@ -754,6 +846,7 @@ function GearShopView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeGearShop", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true) -- the Pop look, never LightSkin's recolouring
 
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
@@ -793,28 +886,15 @@ function GearShopView.build(compact: boolean?): Refs
 	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
-		TextSize = 26,
+		TextSize = 34,
 	})
 	-- your coins, next to the close button (the HUD's may be covered on phones)
-	local balance = UIKit.new("Frame", {
-		Name = "Balance",
-		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-	}, panel)
-	UIKit.corner(balance, 10)
-	UIKit.stroke(balance, 2)
-	local coin = HudView.coinIcon(balance, 26)
-	coin.Position = UDim2.fromOffset(8, 7)
-	local balanceAmount = UIKit.label(balance, "$0", 24, {
-		Name = "Amount",
-		Position = UDim2.fromOffset(42, 0),
-		Size = UDim2.new(1, -50, 1, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Coin,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	})
+	local balance, balanceAmount = BoostView.balance(panel)
+	-- the Pop window: the blue header band (the Gear colour), the dark body
+	BoostView.popWindow(panel, title, GearShopView.WindowPaint)
+	BoostView.popText(subtitle, false, WHITE)
+	BoostView.popText(receipt, false, WHITE)
+	BoostView.popButton(close, PopTheme.Close, 6, true)
 
 	-- the cards: side by side, scrolling sideways when they don't fit
 	local list = UIKit.new("ScrollingFrame", {
@@ -822,7 +902,7 @@ function GearShopView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = rgb(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.X,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
@@ -834,6 +914,7 @@ function GearShopView.build(compact: boolean?): Refs
 		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 	})
+	BoostView.popText(hint)
 	-- gamepads: the platform's own button glyphs (Xbox or PlayStation), set by the controller
 	local padHint = UIKit.new("Frame", {
 		Name = "PadHint",
@@ -862,7 +943,7 @@ function GearShopView.build(compact: boolean?): Refs
 	end
 	local function padWord(name: string, text: string, width: number, visible: boolean?)
 		order += 1
-		UIKit.label(padHint, text, 15, {
+		local word = UIKit.label(padHint, text, 15, {
 			Name = name,
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(width, 24),
@@ -871,6 +952,7 @@ function GearShopView.build(compact: boolean?): Refs
 			TextWrapped = false,
 			Visible = visible ~= false,
 		})
+		BoostView.popText(word)
 	end
 	-- (every line at the top level: "All gear at the top level  [B] close")
 	padWord("WordDone", GearShopView.DoneHint, 196, false)
@@ -931,9 +1013,12 @@ local function fitSlot(slot: Slot)
 	TechShopView.fitText(slot.Extra, inner, b.Extra * 1.25, b.Extra, math.max(10, b.Extra - 4))
 	TechShopView.fitText(slot.Status, inner, b.StatusHeight, b.Status, math.max(11, b.Status - 4))
 	TechShopView.fitText(slot.Price, b.Width, b.Price * 1.25, b.Price, math.max(14, b.Price - 8))
-	-- (a TextButton measures like a TextLabel)
+	-- (a TextButton measures like a TextLabel; the coin beside the words takes its room)
 	local button: any = slot.Button
-	TechShopView.fitText(button, b.Width - 16, b.Button * 1.3, b.Button, math.max(14, b.Button - 8))
+	local mark = button:GetAttribute("Mark")
+	local markRoom = if type(mark) == "string" and mark ~= "" then math.floor(b.Button * 1.1 + 4) + 5 else 0
+	TechShopView.fitText(button, b.Width - 16 - markRoom, b.Button * 1.3, b.Button, math.max(14, b.Button - 8))
+	BoostView.syncButton(button)
 end
 GearShopView.fitSlot = fitSlot
 
@@ -1059,6 +1144,17 @@ local function placeSlot(
 		slot.Art.Position = UDim2.fromOffset(6 + art / 2, iconSize / 2)
 		slot.Art.Size = UDim2.fromOffset(art, art)
 	end
+	-- the picture over the drawing's box (a little bigger: the pictures have a margin),
+	-- the light burst behind it, the chip's pill
+	slot.Picture.Position = slot.Art.Position
+	slot.Picture.Size = UDim2.fromOffset(slot.Art.Size.X.Offset * 1.15, slot.Art.Size.Y.Offset * 1.15)
+	local artCentre = slot.Art.Position
+	BoostView.placeBurst(
+		slot.Burst,
+		UDim2.fromOffset(m.Pad + artCentre.X.Scale * inner + artCentre.X.Offset, m.Pad + artCentre.Y.Offset),
+		math.max(width, iconSize) * 1.15
+	)
+	BoostView.placeBacking(slot.Chip)
 	y += iconSize + 6
 	slot.Title.Position = UDim2.fromOffset(m.Pad, y)
 	slot.Title.Size = UDim2.fromOffset(inner, m.Title * 1.3)
@@ -1206,6 +1302,9 @@ function GearShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
 	end
+	refs.Close.TextSize = if compact then 46 else 36
+	BoostView.syncButton(refs.Close)
+	BoostView.placeWindow(refs.Panel, m.Header - 8)
 
 	-- the cards
 	refs.LayoutWidth = maxWidth
@@ -1255,28 +1354,38 @@ local function fillSlot(refs: Refs, slot: Slot, card: Card)
 	slot.Card = card
 	slot.Title.Text = string.upper(card.Title)
 	slot.Chip.Text = card.Chip
-	slot.Chip.BackgroundColor3 = card.ChipColor
+	-- the level chip: a dark pill, green at the top level
+	BoostView.placeBacking(slot.Chip, nil, if card.Done then Pop.paint("Green") else BoostView.DarkPaint)
+	local pips = GearShopView.PipColors
 	for i, pip in slot.Pips do
-		pip.BackgroundColor3 = if i <= card.Level then (if card.Done then Theme.Good else Theme.Accent) else Theme.PanelDark
+		pip.BackgroundColor3 = if i <= card.Level then (if card.Done then pips.Done else pips.On) else pips.Off
 	end
 	slot.Description.Text = card.Description
 	slot.Effect.Text = card.Effect
-	slot.Effect.TextColor3 = card.EffectColor
+	slot.Effect.TextColor3 = if card.Done then rgb(170, 255, 120) else WHITE
 	slot.Unit.Text = card.Unit
 	slot.Extra.Text = card.Extra
 	slot.Price.Text = card.PriceText
-	slot.Price.TextColor3 = card.PriceColor
+	-- the price: gold while you can buy it, green at the top level, white while you can't afford it
+	local gold = slot.Price:FindFirstChild("Gold") :: UIGradient?
+	if gold then
+		gold.Enabled = not card.Done and card.Buy.CanBuy
+	end
+	slot.Price.TextColor3 = if card.Done then rgb(150, 255, 100) else WHITE
 	GearShopView.setIcon(slot.Art, card.Icon)
+	setPicture(slot, card.Icon)
 	local button = slot.Button
 	-- a button showing an answer ("BOUGHT!", "...") keeps its text and
 	-- colors until the controller frees it (and refreshes the card)
 	if button:GetAttribute("Busy") ~= true then
 		button.Text = GearShopView.buttonText(refs, card)
 		if card.Done then
-			style(button, false, Theme.Good, Theme.GoodDark)
-			button.TextColor3 = Theme.Good
+			-- MAX: a green tag (no coin)
+			BoostView.paintButton(button, "Green")
+			BoostView.setMark(button, "")
 		else
 			style(button, card.Buy.CanBuy, Theme.Accent, Theme.AccentDark)
+			BoostView.setMark(button, "coin")
 		end
 	end
 	fitSlot(slot)
@@ -1296,7 +1405,7 @@ function GearShopView.setCoins(refs: Refs, coins: number)
 	refs.BalanceAmount.Text = Format.money(math.max(0, num(coins)))
 end
 
--- A card's status (the server's answer) in its effect box: text in `color`, or nil to show the effect again.
+-- A card's status (the server's answer) in its effect box: text in `color` (a bright ink), or nil to show the effect again.
 function GearShopView.setStatus(refs: Refs, lineId: string, text: string?, color: Color3?)
 	local slot = refs.Slots[lineId]
 	if not slot then
@@ -1308,7 +1417,7 @@ function GearShopView.setStatus(refs: Refs, lineId: string, text: string?, color
 	slot.Unit.Visible = not on
 	slot.Extra.Visible = not on and refs.ShowExtra
 	slot.Status.Text = text or ""
-	slot.Status.TextColor3 = color or Theme.Text
+	slot.Status.TextColor3 = BoostView.ink(color or Theme.Text)
 	local b = slot.Boxes
 	if b.Width > 0 then
 		TechShopView.fitText(slot.Status, b.Width - 8, b.StatusHeight, b.Status, math.max(11, b.Status - 4))
@@ -1372,9 +1481,10 @@ function GearShopView.setHint(refs: Refs, text: string, glyphs: { string }?, gam
 end
 
 -- Shows a message in the header (instead of the subtitle).
-function GearShopView.showReceipt(refs: Refs, text: string, color: Color3)
+-- (white: readable on the blue band)
+function GearShopView.showReceipt(refs: Refs, text: string, _color: Color3)
 	refs.Receipt.Text = text
-	refs.Receipt.TextColor3 = color
+	refs.Receipt.TextColor3 = WHITE
 	refs.Receipt.Visible = true
 	refs.Subtitle.Visible = false
 end
@@ -1404,15 +1514,14 @@ function GearShopView.touchTargets(refs: Refs): { GuiObject }
 	return list
 end
 
-
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = GearShopView.build
+-- The window wears the Pop look switch on or off (never LightSkin's
+-- recolouring); with the light UI on it also hides Roblox's touch controls
+-- while open.
+local popBuild = GearShopView.build
 GearShopView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
+	local refs = popBuild(compact)
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 		TouchControls.follow(refs.Gui)
 	end
 	return refs

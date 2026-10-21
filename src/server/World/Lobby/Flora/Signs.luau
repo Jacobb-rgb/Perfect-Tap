@@ -9,11 +9,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local LobbyLayout = require(Shared.Config.LobbyLayout)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 
 local C = Style.C
+
+-- what sits on the outer coast moves out with it (bigger plots; 0 at 12 cells)
+local COAST_SHIFT = WorldLayout.PlotGrid.CoastShift
 
 local Signs = {}
 
@@ -128,7 +132,7 @@ function Signs.nextArea(parent: Instance, rng: Rng.Rng)
 	Kit.flowerPatch(m, (frame * CFrame.new(-1.3, 0, 0.7)).Position, C.FlowerPurple, rng, 3)
 	-- closed rope gate where the boardwalk starts (players come from the west)
 	local gate = Style.model("RopeGate", m)
-	local gx, gz = 168, -115
+	local gx, gz = 168 + COAST_SHIFT, -115
 	local postTop = 3.2
 	for _, dz in { -2.8, 2.8 } do
 		Style.block(gate, CFrame.new(gx, postTop / 2, gz + dz), Vector3.new(0.8, postTop, 0.8), C.WoodDark)
@@ -158,23 +162,23 @@ end
 
 --[[
 	Boardwalk: a 6-wide plank deck from the end of the ToNextArea path at
-	x 166 on the ground, up a short flight of plank steps over the rim
-	rocks of the east cliff, then on posts over the sea to a landing at
-	x ~240 where NextIsland's bridge stub is. It runs along the path's line
-	z = -115, so it continues the path and stays clear of the east bases'
-	yards, which start at z > -112 there.
+	x 166 (+ the coast shift) on the ground, up a short flight of plank
+	steps over the rim rocks of the east cliff, then on posts over the sea
+	to a landing at x ~240 where NextIsland's bridge stub is. It runs along
+	the path's line z = -115, so it continues the path and stays clear of
+	the east bases' yards, which start at z > -112 there.
 ]]
 Signs.Boardwalk = {
 	Z = -115,
 	Width = 6,
-	StartX = 166,
-	StepX = 169, -- first step (the rope gate stands at x 168)
+	StartX = 166 + COAST_SHIFT,
+	StepX = 169 + COAST_SHIFT, -- first step (the rope gate stands at x 168 + COAST_SHIFT)
 	StepCount = 6,
 	StepRun = 1,
 	StepRise = 0.8,
 	EndX = 240,
 	TopY = 0.45,
-	PostsFromX = 188, -- the rim rocks hide the posts before this
+	PostsFromX = 188 + COAST_SHIFT, -- the rim rocks hide the posts before this
 }
 
 function Signs.boardwalk(parent: Instance, rng: Rng.Rng)

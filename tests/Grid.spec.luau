@@ -51,7 +51,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Grid: localCFrame and cellFromLocal round-trip for all 144 cells", function()
+	T.test("Grid: localCFrame and cellFromLocal round-trip for every cell", function()
 		for r = 0, 3 do
 			for z = 0, CELLS - 1 do
 				for x = 0, CELLS - 1 do

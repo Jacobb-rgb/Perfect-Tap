@@ -40,8 +40,12 @@
 
 local Geo = require(script.Parent.Geo)
 local KitMachines = require(script.Parent.KitMachines)
+local DropperBuilder = require(script.Parent.DropperBuilder)
+local BlockKit = require(script.Parent.BlockKit)
+local LaserBuilder = require(script.Parent.LaserBuilder)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
+local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local Grid = require(script.Parent.Parent.Machines.Grid)
 
 local MachineBuilder = {}
@@ -2099,7 +2103,57 @@ function MachineBuilder.build(id: string, level: number?): Model
 		return KitMachines.build(id, level)
 	end
 	local model: Model
-	if id == "Conveyor" or id == "ExpressConveyor" then
+	if DropperConfig.ById[id] or id == DropperConfig.Laser.Id then
+		-- the droppers and the Money Laser (DropperBuilder / LaserBuilder) on a
+		-- plain invisible base the size of their 2 x 2 footprint
+		-- (built facing +Z, turned to face the machines' front, -Z)
+		local turn = CFrame.Angles(0, math.pi, 0)
+		model = if id == DropperConfig.Laser.Id then LaserBuilder.build(turn) else DropperBuilder.build(id, turn)
+		model.Name = id
+		model:SetAttribute("MachineId", id)
+		local cell = GameConfig.CellSize
+		-- shrink it to stay inside its footprint (crystals, orbs and the rainbow reach out)
+		local reach, height = 0, 0
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				local cf, size = d.CFrame, d.Size
+				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+				local ex = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
+				local ey = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2
+				local ez = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
+				reach = math.max(reach, math.abs(cf.Position.X) + ex, math.abs(cf.Position.Z) + ez)
+				height = math.max(height, cf.Position.Y + ey)
+			end
+		end
+		if reach > cell - 0.1 then
+			local fit = (cell - 0.1) / reach
+			BlockKit.scale(model, CFrame.new(), fit)
+			height *= fit
+		end
+		-- one invisible box the build mode's taps hit (the decor doesn't take queries)
+		local hit = Instance.new("Part")
+		hit.Name = "HitBox"
+		hit.Size = Vector3.new(2 * cell - 0.4, math.max(height - 0.2, 1), 2 * cell - 0.4)
+		hit.CFrame = CFrame.new(0, 0.2 + hit.Size.Y / 2, 0)
+		hit.Transparency = 1
+		hit.Anchored = true
+		hit.CanCollide = false
+		hit.CanTouch = false
+		hit.CanQuery = true
+		hit.CastShadow = false
+		hit.Parent = model
+		local floor = Instance.new("Part")
+		floor.Name = "Base"
+		floor.Size = Vector3.new(2 * cell - 0.3, 0.2, 2 * cell - 0.3)
+		floor.CFrame = CFrame.new(0, 0.1, 0)
+		floor.Transparency = 1
+		floor.CanCollide = false
+		floor.CanTouch = false
+		floor.CanQuery = true
+		floor.Parent = model
+		model.PrimaryPart = floor
+		attach(floor, "Prompt", CFrame.new(0, 2.0, -3.4))
+	elseif id == "Conveyor" or id == "ExpressConveyor" then
 		model = KitMachines.conveyor(nil, id == "ExpressConveyor")
 	elseif id == "Platform" then
 		model = KitMachines.platform()

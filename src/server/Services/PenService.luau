@@ -441,8 +441,18 @@ local function putIn(player: Player, plotId: number): string?
 		Net.fire("Fx", player, "PenIn", PenService.gateCFrame(plotId).Position + Vector3.new(0, 1, 0))
 		PenService.arrived(player, stored, "Pen")
 	end
-	if #CarryService.list(player) > 0 then
+	local held = CarryService.list(player)
+	if #held > 0 then
 		local left = PenService.refusal(data)
+		local onlyRelics = true
+		for _, record in held do
+			onlyRelics = onlyRelics and record.Kind == "Relic"
+		end
+		if not left and onlyRelics then
+			-- room left: only dusty relics stayed in the hands (never stored)
+			toast(player, ItemData.RelicRefused, "Info")
+			return nil
+		end
 		toast(player, PenService.refusalText(data, left))
 		return left
 	end
@@ -1163,8 +1173,10 @@ local BOARD_TEXT = Color3.fromRGB(255, 244, 228)
 local BOARD_DIM = Color3.fromRGB(206, 196, 180)
 local BOARD_DECOR = { CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false }
 -- on the pen's front wall, left of the gate as seen from the grid (clear of
--- the ORE PEN sign over the gate), facing the grid (plot-local)
-PenService.BoardCenter = Vector3.new(-3.9, 4.0, BaseLayout.Pen.Area.Center.Z - BaseLayout.Pen.Area.Size.Z / 2 + 0.47)
+-- the ORE PEN sign over the gate), facing the grid (plot-local): 2.9 in from
+-- the pen's right edge (x -1 at any grid size, so the board stays at x -3.9)
+local penArea = BaseLayout.Pen.Area
+PenService.BoardCenter = Vector3.new(penArea.Center.X + penArea.Size.X / 2 - 2.9, 4.0, penArea.Center.Z - penArea.Size.Z / 2 + 0.47)
 PenService.BoardSize = Vector3.new(4.6, 2.6, 0.22)
 local STRIP_DEPTH = 0.02
 

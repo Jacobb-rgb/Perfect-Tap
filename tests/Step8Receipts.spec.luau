@@ -38,6 +38,8 @@ return function(T, Loader)
 	local ServerBoostService = Loader.requirePath("ServerScriptService.Server.Services.ServerBoostService")
 	local VaultService = Loader.requirePath("ServerScriptService.Server.Services.VaultService")
 	local WheelService = Loader.requirePath("ServerScriptService.Server.Services.WheelService")
+	local StarterPackService = Loader.requirePath("ServerScriptService.Server.Services.StarterPackService")
+	local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
 	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 
@@ -89,6 +91,9 @@ return function(T, Loader)
 		DragonforgeCapsule3 = "Capsule",
 		DragonforgeCapsule10 = "Capsule",
 		DragonforgeCapsule50 = "Capsule",
+		-- the 2x Money pass and the one-time Starter Pack (2026-10-21)
+		DoubleMoney = "Perks",
+		StarterPack = "StarterPack",
 	}
 
 	local function deepCopy(v: any): any
@@ -117,6 +122,7 @@ return function(T, Loader)
 		ServerBoostService.registerGrants()
 		VaultService.registerGrants()
 		WheelService.registerGrants()
+		StarterPackService.registerGrants()
 	end
 
 	local function setup(): any
@@ -340,10 +346,22 @@ return function(T, Loader)
 				T.truthy(entry.Kind == "Product" and BoostConfig.Kinds[entry.Boost] and entry.Seconds, `{entry.Key}: a boost`)
 			elseif entry.Grant == "CoinPack" then
 				T.truthy(entry.Kind == "Product" and entry.CoinPack and entry.CoinSeconds, `{entry.Key}: a coin pack`)
+			elseif entry.Grant == "StarterPack" then
+				T.truthy(
+					entry.Kind == "Product" and entry.Once and entry.Golem and GolemConfig.ById[entry.Golem] and entry.CoinSeconds,
+					`{entry.Key}: a one-time pack with a fixed golem and coins`
+				)
+				T.falsy(entry.PaidRandom, `{entry.Key}: nothing random in it`)
 			elseif entry.Grant == "BlasterLevel" then
-				T.truthy(entry.Kind == "Product" and entry.MinLevel and entry.MaxLevel and entry.MinLevel <= entry.MaxLevel, `{entry.Key}: a level band`)
+				T.truthy(
+					entry.Kind == "Product" and entry.MinLevel and entry.MaxLevel and entry.MinLevel <= entry.MaxLevel,
+					`{entry.Key}: a level band`
+				)
 			elseif entry.Grant == "ServerBoost" then
-				T.truthy(entry.Kind == "Product" and entry.ServerBoost and entry.Seconds and entry.PaidRandom, `{entry.Key}: a paid random server boost`)
+				T.truthy(
+					entry.Kind == "Product" and entry.ServerBoost and entry.Seconds and entry.PaidRandom,
+					`{entry.Key}: a paid random server boost`
+				)
 			elseif entry.Grant == "WheelSpins" then
 				T.truthy(
 					entry.Kind == "Product" and entry.Spins and entry.Spins >= 1 and entry.PaidRandom,
@@ -375,6 +393,7 @@ return function(T, Loader)
 		initCalls("src/server/Services/ServerBoostService.luau", "ServerBoostService", "ServerBoostService.registerGrants()")
 		initCalls("src/server/Services/VaultService.luau", "VaultService", "VaultService.registerGrants()")
 		initCalls("src/server/Services/WheelService.luau", "WheelService", "WheelService.registerGrants()")
+		initCalls("src/server/Services/StarterPackService.luau", "StarterPackService", "StarterPackService.registerGrants()")
 		local hover = fs.readFile("src/server/Services/HoverboardService.luau")
 		T.truthy(string.find(hover, 'MonetizationService.registerPass("Hoverboard"', 1, true) ~= nil, "HoverboardService registers")
 		local rebirth = fs.readFile("src/server/Services/RebirthService.luau")
@@ -400,7 +419,7 @@ return function(T, Loader)
 		-- a pass handler missing
 		local perks = m.passHandlers.Perks
 		m.passHandlers.Perks = nil
-		T.eq(#MonetizationService.unhandled(), 4, "the four perk passes")
+		T.eq(#MonetizationService.unhandled(), 5, "the five perk passes")
 		T.falsy(MonetizationService.openGate(), "closed")
 		m.passHandlers.Perks = perks
 		-- nothing registered at all: every live id is listed
@@ -822,9 +841,10 @@ return function(T, Loader)
 		m.checkAll(w.player)
 		T.eq(#order, #MonetizationConfig.list("GamePass"), "every live pass once")
 		T.eq(order[1], "BigPass", "the big pass first")
-		T.eq(order[2], "OfflineExtension", "then Night Shift")
-		T.eq(order[3], "Podiums", "then the Podiums pass")
-		T.eq(order[4], "EnchantHeartfire", "then the rest by key")
+		T.eq(order[2], "DoubleMoney", "then 2x Money (the offline payout is doubled too)")
+		T.eq(order[3], "OfflineExtension", "then Night Shift")
+		T.eq(order[4], "Podiums", "then the Podiums pass")
+		T.eq(order[5], "EnchantHeartfire", "then the rest by key")
 		T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), false, "known: not owned")
 	end)
 
@@ -988,5 +1008,150 @@ return function(T, Loader)
 		Migrations.run(old, NOW)
 		T.eq(old.Golems.Pending, nil, "no Pending added")
 		T.eq(old.Enchants.Passes, nil, "no Passes added")
+	end)
+
+	---------------------------------------------------------------- the Starter Pack and 2x Money (2026-10-21)
+
+	withWorld("Starter Pack: golem, coins, skin; the receipt rules; never sold twice", function(w)
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		local entry = MonetizationConfig.Products.StarterPack
+		local coins = w.data.Coins
+		local each = MonetizationConfig.coinPackAmount("StarterPack", 0)
+		T.eq(each, 15000, "no income: the minimum")
+		T.truthy(StarterPackService.offerOpen(w.data), "a new save: the offer is open")
+		T.eq(StarterPackService.promptState(w.data), "Open", "sold")
+		receiptRules(w, "StarterPack", function()
+			return math.floor((w.data.Coins - coins) / each + 0.5)
+		end, "StarterPack")
+		-- two receipts were granted by receiptRules (a second purchase id): both in full
+		T.eq(w.data.StarterPack.Count, 2, "two receipts, two grants")
+		T.truthy(w.data.StarterPack.BoughtAt > 0, "recorded")
+		local porters = 0
+		for _, golem in w.data.Golems.Owned do
+			if golem.Kind == entry.Golem then
+				porters += 1
+				T.truthy(golem.Paid and golem.Locked, "paid and locked")
+			end
+		end
+		T.eq(porters, 2, "the fixed Rare golem, once per receipt")
+		T.truthy(#w.data.Golems.Equipped >= 1, "equipped into a free slot")
+		T.eq(w.data.PaidCoins, 2 * each, "the bought coins are counted")
+		T.falsy(StarterPackService.offerOpen(w.data), "bought: the offer is closed")
+		T.eq(StarterPackService.promptState(w.data), "Owned", "never prompted again")
+		local skin = StarterPackService.summary(w.data)
+		T.truthy(skin.Bought and not skin.Open, "State: bought, not offered")
+		-- the bought coins survive a rebirth while unspent (owner 2026-10-20)
+		w.data.Coins += 5000 -- earned coins: gone after the rebirth
+		RebirthConfig.reset(w.data)
+		T.eq(w.data.Coins, 2 * each, "only the bought coins stay")
+		T.eq(w.data.PaidCoins, 2 * each, "still counted")
+	end)
+
+	withWorld("Starter Pack: the first hour only, coins buyable only, golem credit past MaxSaved", function(w)
+		w.data.Stats.PlaySeconds = MonetizationConfig.StarterOffer.Seconds - 1
+		T.truthy(StarterPackService.offerOpen(w.data), "the last second of the first hour")
+		T.eq(StarterPackService.left(w.data), 1, "1 s left")
+		w.data.Stats.PlaySeconds = MonetizationConfig.StarterOffer.Seconds
+		T.falsy(StarterPackService.offerOpen(w.data), "after the first hour: over")
+		T.eq(StarterPackService.promptState(w.data), "Over", "answered Unknown by StoreService")
+		-- a late receipt (prompt opened in time) is still granted
+		T.eq(w.decide("sp1", "StarterPack"), GRANTED, "granted after the window")
+		-- coins not buyable: the receipt waits, nothing written
+		MonetizationConfig.CoinPacksEnabled = false
+		T.eq(MonetizationConfig.promptStatus("StarterPack", false, false, false), "Unknown", "not offered without coin packs")
+		local count = w.data.StarterPack.Count
+		T.eq(w.decide("sp2", "StarterPack"), NOT_YET, "waits")
+		T.eq(w.data.StarterPack.Count, count, "nothing granted")
+		MonetizationConfig.CoinPacksEnabled = true
+		-- inventory at MaxSaved: the golem waits as a pending credit, never coins instead
+		w.data.Golems.Owned = {}
+		for i = 1, GolemConfig.MaxSaved do
+			table.insert(w.data.Golems.Owned, { Id = 1000 + i, Kind = "EmberImp" })
+		end
+		T.eq(w.decide("sp3", "StarterPack"), GRANTED, "granted")
+		local pending = w.data.Golems.Pending
+		T.eq(pending[#pending].Kind, MonetizationConfig.Products.StarterPack.Golem, "the golem waits for room")
+	end)
+
+	T.test("Starter Pack: the title and skin, the save field, no random contents", function()
+		local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+		local entry = MonetizationConfig.Products.StarterPack
+		T.truthy(ArtifactConfig.PodiumSkins[entry.PodiumSkin] ~= nil, "its podium skin exists")
+		T.eq(DataTemplate.StarterPack.BoughtAt, 0, "template: not bought")
+		T.eq(DataTemplate.StarterPack.Count, 0, "template: no receipts")
+		T.falsy(entry.PaidRandom or entry.Capsule or entry.Boost, "nothing random in it")
+		T.eq(entry.Robux, 99, "99 R$")
+		local source = fs.readFile("src/server/Services/ArtifactService.luau")
+		T.truthy(string.find(source, "ArtifactService.starterReward(data)", 1, true) ~= nil, "the skin and title show")
+	end)
+
+	withWorld("2x Money: income and sell value x2 outside the caps; revoke = x1", function(w)
+		local entry = MonetizationConfig.Products.DoubleMoney
+		T.eq(entry.Kind, "GamePass", "a pass")
+		Bonuses.attachIncome() -- (another spec may have reset EconomyService's bonuses)
+		T.eq(entry.Perks[1], MonetizationConfig.MoneyPassPerk, "its perk")
+		T.eq(EconomyService.incomeMultiplier(w.player), 1, "no perk: x1 income")
+		T.eq(Bonuses.sellMult(Bonuses.stats(w.player)), 1, "no perk: x1 sales")
+		-- the pass bought (PromptGamePassPurchaseFinished)
+		m.purchaseFinished(w.player, w.ids.DoubleMoney, true)
+		T.truthy(w.player.attrs["Perk_DoubleMoney"] == true, "the perk")
+		T.eq(EconomyService.incomeMultiplier(w.player), 2, "perk: x2 income")
+		T.eq(Bonuses.sellMult(Bonuses.stats(w.player)), 2, "perk: x2 sales")
+		T.eq(Bonuses.sellAmount(Bonuses.stats(w.player), 100), 200, "a sale of 100 pays 200")
+		T.eq(Bonuses.summary(w.player).MoneyMult, 2, "State.Bonuses.MoneyMult")
+		-- at the IncomePct / SellPct caps it still doubles
+		Bonuses.register("CapTest", function()
+			return { IncomePct = 50, SellPct = 50 }
+		end)
+		local stats = Bonuses.stats(w.player)
+		T.eq(stats.IncomePct, 2, "IncomePct capped")
+		T.eq(EconomyService.incomeMultiplier(w.player), (1 + 2) * 2, "x2 on top of the capped income")
+		T.eq(Bonuses.sellMult(stats), (1 + 3) * 2, "x2 on top of the capped sell value")
+		Bonuses.unregister("CapTest")
+		-- a refund: the next check says not owned -> x1
+		m.forget(w.player)
+		w.owned[w.ids.DoubleMoney] = false
+		m.checkAll(w.player)
+		T.falsy(w.player.attrs["Perk_DoubleMoney"] == true, "the perk is gone")
+		T.eq(EconomyService.incomeMultiplier(w.player), 1, "x1 again")
+		T.eq(Bonuses.sellMult(Bonuses.stats(w.player)), 1, "x1 sales again")
+		-- owned at join: granted by the load check
+		m.forget(w.player)
+		w.owned[w.ids.DoubleMoney] = true
+		m.checkAll(w.player)
+		T.eq(EconomyService.incomeMultiplier(w.player), 2, "owned at join: x2")
+	end)
+
+	T.test("EconomyService.addIncomeFactor: keyed, multiplies the summed bonuses, never lowers", function()
+		local player = { Name = "F" } :: any
+		local saved = EconomyService._test
+		local function multiplier(): number
+			return EconomyService.incomeMultiplier(player)
+		end
+		local base = multiplier()
+		EconomyService.addIncomeFactor(function()
+			return 3
+		end, "SpecFactor")
+		T.eq(multiplier(), base * 3, "x3")
+		EconomyService.addIncomeFactor(function()
+			return 2
+		end, "SpecFactor")
+		T.eq(multiplier(), base * 2, "same key: replaced")
+		EconomyService.addIncomeFactor(function()
+			return 0.5
+		end, "SpecFactor")
+		T.eq(multiplier(), base, "below 1: ignored")
+		EconomyService.addIncomeFactor(function()
+			error("boom")
+		end, "SpecFactor")
+		T.eq(multiplier(), base, "an error: ignored")
+		EconomyService.addIncomeFactor(function()
+			return 0 / 0
+		end, "SpecFactor")
+		T.eq(multiplier(), base, "NaN: ignored")
+		EconomyService.addIncomeFactor(function()
+			return 1
+		end, "SpecFactor")
+		T.truthy(saved ~= nil, "test seam")
 	end)
 end

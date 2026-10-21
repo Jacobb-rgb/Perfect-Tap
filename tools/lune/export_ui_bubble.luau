@@ -670,9 +670,7 @@ for _, light in { false, true } do
 		SellView.setEntries(view, "Pen", SellView.entries(penSummary, "Pen"))
 		SellView.setEntries(view, "Hands", SellView.entries(handsSummary, "Hands"))
 		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "Dirty"), SellView.plan(penSummary, handsSummary, "AllButBest"))
-		if light then
-			LightSkin.refresh(view.Gui)
-		end
+		-- (the Pop look: the window is no longer re-skinned)
 		local name = "ui_sell_" .. spec[1] .. (if light then "_light" else "")
 		fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))
 		print("Exported UI " .. name)
@@ -718,7 +716,6 @@ for _, d in DEVICES do
 	TechShopView.setCoins(view, 48250)
 	TechShopView.setCards(view, TechShopView.cards(TechPreview.State, 48250))
 	TechShopView.setHint(view, if tenFoot then "A: buy   B: close" elseif touch then "Tap BUY" else "Click a tab, then BUY · Backspace: close", nil)
-	LightSkin.refresh(view.Gui)
 	fs.writeFile(root .. "/build/preview/ui_dev_tech_" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))
 	print("Exported UI ui_dev_tech_" .. name)
 end

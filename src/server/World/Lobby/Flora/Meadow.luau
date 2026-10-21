@@ -47,8 +47,12 @@ local C = Style.C
 
 local Meadow = {}
 
--- Where the meadow may grow (the town ground) and what stays clear.
-Meadow.Area = { Min = Vector3.new(-168, 0, -118), Max = Vector3.new(168, 0, 148) }
+-- Where the meadow may grow (the town ground: 2 studs inside the island's
+-- coasts, x +-168 and z 148 at 12 cells) and what stays clear.
+Meadow.Area = {
+	Min = Vector3.new(WorldLayout.Island.Min.X + 2, 0, -118),
+	Max = Vector3.new(WorldLayout.Island.Max.X - 2, 0, WorldLayout.Island.Max.Z - 2),
+}
 Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 156) }
 Meadow.SpawnClear = 12
 -- the bridge garden under and behind THE GREAT FORGE's roof (Plaza/BridgeGarden, owner 2026-10-20)
@@ -79,6 +83,7 @@ local FLOWERS = { C.FlowerYellow, C.FlowerWhite, C.FlowerPurple, C.LeafPink, C.L
 
 type Box = { Min: Vector3, Max: Vector3 }
 local CELL = 8
+local TOWN_NORTH_Z = -122 -- the town ground's north edge (the quarry rim road)
 
 local function bounds(part: BasePart): Box
 	local cf, size = part.CFrame, part.Size
@@ -132,7 +137,19 @@ function Meadow.index(map: Instance, skip: Instance?): Index
 			local box = bounds(d)
 			local parent = d.Parent
 			if d.Name == "Ground" and parent and parent.Name == "Land" then
-				index.Ground = box
+				-- the town ground: one slab, or (bigger plots) the slab and the two
+				-- strips beside the sea bay behind the Vault, as one box (allowed()
+				-- keeps out of the bay); the strips beside the quarry, north of the
+				-- town (z -122), are not the town's
+				if box.Max.Z > TOWN_NORTH_Z + 1 then
+					local g = index.Ground
+					index.Ground = if g
+						then {
+							Min = Vector3.new(math.min(g.Min.X, box.Min.X), math.min(g.Min.Y, box.Min.Y), math.min(g.Min.Z, box.Min.Z)),
+							Max = Vector3.new(math.max(g.Max.X, box.Max.X), math.max(g.Max.Y, box.Max.Y), math.max(g.Max.Z, box.Max.Z)),
+						}
+						else box
+				end
 			elseif box.Max.Y > -0.5 and box.Min.Y < 160 and box.Max.X - box.Min.X < 600 and not isLawn(d, box) then
 				add(index, box)
 			end
@@ -197,10 +214,14 @@ local function inBox(p: Vector3, box: { Min: Vector3, Max: Vector3 }, margin: nu
 end
 
 -- Allowed for the meadow at all: in the town area (or `area`), off the plots
--- and their yards, the keep-outs, the spawn and the vault approach.
+-- and their yards, the keep-outs, the spawn, the vault approach and the sea
+-- bay behind the Vault.
 function Meadow.allowed(p: Vector3, r: number, area: Box?): boolean
 	if not inBox(p, area or Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
 		return false
+	end
+	if LobbyLayout.inBay(p, r) then
+		return false -- the sea bay behind the Vault (bigger plots)
 	end
 	if Vector3.new(p.X - WorldLayout.SpawnPoint.X, 0, p.Z - WorldLayout.SpawnPoint.Z).Magnitude < Meadow.SpawnClear + r then
 		return false
@@ -273,10 +294,14 @@ Meadow.MinPonds = 3 -- tests/Meadow.spec.luau (owner: "more ponds")
 -- the old spots)
 Meadow.SmallPond = Vector2.new(7.5, 6.5)
 Meadow.MaxLobbyTrees = 22
+-- (bigger plots) no lobby jungle trees south of the 12-cell island's south coast:
+-- the new lawns beside the sea bay keep their ponds and meadow (phones)
+Meadow.LobbyTreesMaxZ = WorldLayout.Island.Max.Z - WorldLayout.PlotGrid.SouthShift
 Meadow.MaxMountainTrees = 40
 -- The pond the hamlet lane (LobbyLayout HamletLane / ToMap) now leads to,
--- where the MAP tower and its hamlet stood.
-Meadow.LanePond = { Center = Vector3.new(101, 0, 127), Size = Vector2.new(17, 12) }
+-- where the MAP tower and its hamlet stood (the south band: it moves south
+-- with the plot columns, WorldLayout.PlotGrid.SouthShift).
+Meadow.LanePond = { Center = Vector3.new(101, 0, 127 + WorldLayout.PlotGrid.SouthShift), Size = Vector2.new(17, 12) }
 
 local AUTUMN = { "Yellow", "Orange", "Pink", "Red" }
 
@@ -544,6 +569,9 @@ local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rn
 	for _, p in spots do
 		if lobby >= Meadow.MaxLobbyTrees then
 			break
+		end
+		if p.Z > Meadow.LobbyTreesMaxZ then
+			continue
 		end
 		-- (the town's lawns are small: smaller jungle trees than on the mountains)
 		local h, R = rng:range(11, 15), rng:range(3.8, 4.8)

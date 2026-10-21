@@ -94,7 +94,7 @@ MonetizationService.RetryDelay = 2 -- seconds before the 2nd attempt (then x2)
 MonetizationService.RecheckDelay = 60 -- seconds before a pass whose check kept failing is asked again
 MonetizationService.Rechecks = 5 -- such later rounds per load (then: the next load)
 -- the perks the offline payout depends on (PodiumService): passes giving them are checked first
-MonetizationService.OfflinePerks = { "OfflineExtension", "Podiums" }
+MonetizationService.OfflinePerks = { "OfflineExtension", "Podiums", "DoubleMoney" }
 
 local grants: { [string]: Grant } = {}
 local passHandlers: { [string]: PassHandler } = {}
@@ -280,10 +280,13 @@ local function checkRound(player: Player, entries: { MonetizationConfig.Entry })
 		local owned = checkPass(player, entry)
 		if owned == nil then
 			table.insert(failed, entry)
-		elseif player.Parent and DataService.get(player) and not boughtNow(player, entry.Key) then
+		elseif player.Parent and DataService.get(player) and (owned or not boughtNow(player, entry.Key)) then
 			-- (a pass bought while or before this check ran keeps its purchase: Roblox may
-			-- answer from before it; a refund shows on a later load)
-			mark(joinOwned, player, entry.Key, owned)
+			-- answer from before it, so only a "not owned" waits for a later load; an "owned"
+			-- still grants: a pass bought while the save was loading had nothing to grant into)
+			if not boughtNow(player, entry.Key) then
+				mark(joinOwned, player, entry.Key, owned) -- (perkAtJoin: never for a pass bought this session)
+			end
 			applyPass(player, entry, owned)
 		end
 	end

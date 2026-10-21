@@ -144,7 +144,7 @@
 	  (DataService.onLoaded, after this chain), next to the code that owns
 	  their rules.
 	Every step above runs once per load, in this order, inside run(); the
-	Version stays 3 (all of it is additive and idempotent).
+	Version stayed 3 (all of it is additive and idempotent).
 
 	Step 8 (Robux receipts, same Version 3):
 	- PurchaseLog: [purchaseId] = { Product = a short string, At = finite
@@ -154,6 +154,18 @@
 	  boolean? } entries, renamed kinds renamed, at most
 	  GolemConfig.MaxPending; junk dropped.
 	- Enchants.Passes (when present): owned enchant ids -> true.
+
+	Version 4 (bigger plots: the build grid went from 12x12 to 16x16 cells,
+	docs: build/reviews/bigger_plots_plan.md section 4):
+	- A save loaded with a Version below 4 (or none that is a number) moves
+	  every PlacedMachines entry by X + 2, Z + 4, once: the old layout keeps
+	  its plot-local place, centred across and against the back wall, so its
+	  belts stay on the PEN / TRAIN / FOUNDRY chutes (X 3/6/9 -> 5/8/11 on
+	  the back row Z 11 -> 15). Decks (L) move with their platform; queues
+	  and settings stay. Junk X/Z still goes to the inventory, as above.
+	- The trigger is the loaded Version, never a template field: ProfileStore
+	  reconciles the template in BEFORE this runs, so a new field would
+	  already read "done". Saves with Version 4 or more are never moved.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -165,6 +177,7 @@ local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LevelConfig = require(Shared.Config.LevelConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
@@ -174,7 +187,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 3
+Migrations.Latest = 5 -- 5: the player LEVEL record (repaired below on every load)
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -183,6 +196,11 @@ local MAX_INVENTORY = MachineData.MaxInventory
 -- TrainService uses the same GameConfig number).
 local MAX_LEVEL_KEPT = GameConfig.MaxLevelKept
 local PODIUM_SLOTS = 4
+-- Version 4: the 12 -> 16 grid move of a placed machine's cell. Frozen numbers of
+-- THIS step, never derived from GameConfig.PlotCells: a later resize would then
+-- mis-move the version 3 saves (a later resize adds its own step).
+local V4_SHIFT_X = 2 -- (16 - 12) / 2: keeps the old layout's plot-local X (centred across)
+local V4_SHIFT_Z = 4 -- 16 - 12: keeps it against the back wall, on the chutes
 -- a newer build may sell more podiums: its slots past PODIUM_SLOTS are kept up to here
 local MAX_PODIUM_SLOTS_KEPT = 16
 -- and more enchant slots: kept past EnchantConfig.MaxSlots up to here
@@ -790,6 +808,10 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 end
 
 function Migrations.run(data: { [string]: any }, now: number?): Report
+	-- read FIRST: the end of run() sets data.Version to Latest
+	local loadedVersion = data.Version
+	-- a save from before the 16-cell grid moves its layout once (Version 4)
+	local gridShift = not (isFinite(loadedVersion) and loadedVersion >= 4)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -876,6 +898,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		if isFinite(entry.X) and isFinite(entry.Z) then
 			entry.X = math.floor(entry.X)
 			entry.Z = math.floor(entry.Z)
+			if gridShift then
+				entry.X += V4_SHIFT_X
+				entry.Z += V4_SHIFT_Z
+			end
 			entry.R = if isFinite(entry.R) then math.floor(entry.R) % 4 else 0
 			table.insert(kept, entry)
 		else
@@ -1011,6 +1037,39 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		data.PaidCoins = 0
 	elseif data.PaidCoins > data.Coins then
 		data.PaidCoins = data.Coins
+	end
+	-- daily / weekly quests and the 7-day login streak: the record shapes and the streak
+	-- numbers (QuestService rerolls broken quest lists on load, QuestLogic.refresh)
+	if type(data.Quests) ~= "table" then
+		data.Quests = { Day = 0, Daily = {}, Week = 0, Weekly = {} }
+	end
+	local streak = data.Streak
+	if
+		type(streak) ~= "table"
+		or not isFinite(streak.Last)
+		or not isFinite(streak.Day)
+		or streak.Day ~= math.floor(streak.Day)
+		or streak.Day < 0
+		or streak.Day > 7
+	then
+		data.Streak = { Day = 0, Last = 0 }
+	end
+	-- the player LEVEL record (LevelConfig): a whole level 1..MaxLevel, XP 0..need, known
+	-- counters only in Seen (fractions stay: play time pays 1/30 XP a second)
+	LevelConfig.sanitize(data)
+	-- the Starter Pack record (StarterPackService): when it was bought, how many times
+	local starter = data.StarterPack
+	if type(starter) ~= "table" then
+		data.StarterPack = { BoughtAt = 0, Count = 0 }
+	else
+		if not isFinite(starter.BoughtAt) or starter.BoughtAt < 0 then
+			starter.BoughtAt = 0
+		end
+		if not isFinite(starter.Count) or starter.Count < 0 then
+			starter.Count = 0
+		else
+			starter.Count = math.floor(starter.Count)
+		end
 	end
 
 	-- trains: levels in range, clean cargo lists, sane trip times

@@ -60,6 +60,7 @@ local ORDER = {
 	"AnalyticsService", -- onboarding funnel, progression and coin flow (Roblox AnalyticsService)
 	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
 	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
+	"LevelService", -- the player LEVEL: XP from the counters, level-up coins + income bonus (before LeaderboardService)
 	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
 	"ChampionService", -- the #1 avatars hopping on the HALL OF FAME (after LeaderboardService)
 	"SettingsService", -- the side menu's SETTINGS record
@@ -67,7 +68,11 @@ local ORDER = {
 	"RebirthService", -- rebirth STAR FORGE: the reset, Forge Stars, the Star Shop (after Plot, Train, Podium)
 	"ServerBoostService", -- Server Luck: x2 ore luck for the whole server (the "ServerBoost" receipts)
 	"StoreService", -- the Robux STORE window: StoreAction -> purchase prompts (grants: MonetizationService)
+	"QuestService", -- daily / weekly quests + the 7-day login streak (after Capsule, Wheel, Podium, State)
+	"StarterPackService", -- the one-time Starter Pack: its receipt handler and the State offer
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
+	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray / Hammer loops
+	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
 }
 
 local loaded = {}

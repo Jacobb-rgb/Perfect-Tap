@@ -1,0 +1,5 @@
+{
+ "hover_fx": {"scene": "hoverboard_fx", "position": [1, 8, 40], "target": [0.5, 2.4, 20], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.72, 0.48], "shadowExtent": 90, "maxLights": 24},
+ "hover_fx_boost": {"scene": "hoverboard_fx_boost", "position": [1, 8, 40], "target": [0.5, 2.4, 20], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.72, 0.48], "shadowExtent": 90, "maxLights": 24},
+ "hover_fx_start": {"scene": "hoverboard_fx_start", "position": [0, 8.5, 30], "target": [0, 2.0, 12], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.72, 0.48], "shadowExtent": 90, "maxLights": 24}
+}

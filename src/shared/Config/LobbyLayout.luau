@@ -24,6 +24,7 @@
 	your own footprint you are free.
 ]]
 
+local BaseLayout = require(script.Parent.BaseLayout)
 local WorldLayout = require(script.Parent.WorldLayout)
 
 export type Piece = {
@@ -52,10 +53,11 @@ local LobbyLayout = {}
 
 LobbyLayout.Packages = { "Sky", "Backdrop", "Plaza", "Districts", "Flora", "Vault" }
 
--- The lobby budget area (same box as the Emberfall zone, any height).
+-- The lobby budget area (same box as the Emberfall zone, any height): the
+-- island from the quarry rim road's north edge to the south coast.
 LobbyLayout.Area = {
-	Min = Vector3.new(-170, -60, -122),
-	Max = Vector3.new(170, 400, 150),
+	Min = Vector3.new(WorldLayout.Island.Min.X, -60, -122),
+	Max = Vector3.new(WorldLayout.Island.Max.X, 400, WorldLayout.Island.Max.Z),
 }
 
 -- Mobile budgets. Map = every BasePart in Workspace.Map; Lobby = parts and
@@ -87,7 +89,9 @@ LobbyLayout.Budget = {
 	-- MineKit.PartBudget; ~8,160 in all after the trims, + ~1,900 for the
 	-- Stormglass Rift; floors 4-6 sit far north and deep and never stream in
 	-- near the town).
-	MapParts = 32200, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors
+	-- (bigger plots 2026-10-21, 16x16 grid: the map 31,773 + nodes 294 + museums 352 = 32,419 measured,
+	-- + 200 for the podium and pen ores, + ~250 headroom; 32,200 at 12 cells)
+	MapParts = 32850, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -95,7 +99,10 @@ LobbyLayout.Budget = {
 	-- headroom is a deliberate buffer, so a small merge from a parallel
 	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
 	-- budget; spend it on purpose, not by accident.
-	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
+	-- (bigger plots 2026-10-21: 14,226 measured with the museums, + ~250 headroom; 13,700 at 12 cells. The
+	-- bigger lobby area now counts the Vault's south trees and the bay's cliffs (~160), + the street
+	-- lamps along the longer plot roads (~110), + the meadow on the lawns beside the sea bay (~300))
+	LobbyParts = 14500, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
 	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
@@ -112,7 +119,7 @@ LobbyLayout.Budget = {
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
-		Flora = { Parts = 3800, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way)
+		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new lawns beside the sea bay behind the Vault, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -136,6 +143,33 @@ local function toward(from: Vector3, to: Vector3): Vector3
 	return d.Unit
 end
 
+-- Bigger plots (WorldLayout.PlotGrid): pieces in the south band (past the
+-- plot roads' south end) move south with the plot columns, pieces on the
+-- outer coast move out with it. Both shifts are 0 at 12 cells.
+local GRID = WorldLayout.PlotGrid
+local function south(p: Vector3): Vector3
+	return p + Vector3.new(0, 0, GRID.SouthShift)
+end
+local function coast(x: number): number
+	return x + math.sign(x) * GRID.CoastShift
+end
+
+--[[
+	The sea bay behind the Blaster Vault (bigger plots; owner 2026-10-21: the
+	sea stays south of the Vault, no new lawn there). It lies between the
+	plot roads, from the 12-cell island's south coast (z 150) to the island's
+	south coast, open to the sea on its south side. Its three edges are
+	coasts like the island's own: Land builds the rim cliffs, the sea and the
+	invisible walls there, and nothing else stands in it (isFree). x +-52
+	leaves 13 studs of shore beside the plot roads (the MINE yard's rails
+	reach x -59). nil at 12 cells, where the south coast runs straight.
+]]
+local southBay: { Min: Vector3, Max: Vector3 }? = nil
+if GRID.SouthShift > 0 then
+	southBay = { Min = v(-52, 0, 150), Max = v(52, 0, WorldLayout.Island.Max.Z) }
+end
+LobbyLayout.SouthBay = southBay
+
 local PLAZA = v(0, 0, 0)
 local SHOP = v(-46, 0, -22)
 local UPGRADES = v(46, 0, -22)
@@ -156,7 +190,7 @@ local VAULT = v(0, 0, 112.4)
 -- the MINE (Backdrop: hill + yard): designed at MINE_DESIGN facing east,
 -- built in the south-west corner (see the MineEntrance piece)
 local MINE_DESIGN = v(-46, 0, 88)
-local MINE = v(-100, 0, 134)
+local MINE = south(v(-100, 0, 134))
 local MINE_FACING = v(1, 0, 0)
 local function mineMoved(p: Vector3): Vector3
 	local from = CFrame.lookAt(MINE_DESIGN, MINE_DESIGN + v(1, 0, 0))
@@ -361,8 +395,9 @@ LobbyLayout.Pieces = {
 	{
 		Id = "NextAreaBoardwalk",
 		Package = "Flora",
-		Center = v(205, 0, -112),
-		Size = v(8, 3, 70),
+		-- (from the coast to the landing at x 240, which stays put)
+		Center = v(205 + GRID.CoastShift / 2, 0, -112),
+		Size = v(8, 3, 70 - GRID.CoastShift),
 		Facing = v(1, 0, 0),
 		Walkable = true,
 		Note = "Plank boardwalk on posts from the east coast out over the sea toward the Sky package's NextIsland.",
@@ -390,7 +425,7 @@ LobbyLayout.Pieces = {
 		Package = "Flora",
 		-- (behind the MINE hill in the south-west corner: the Vault's jungle
 		-- trees took its old spot)
-		Center = v(-139, 0, 130),
+		Center = south(v(-139, 0, 130)),
 		Size = v(24, 18, 24),
 		Radius = 12,
 		Facing = v(0, 0, 1),
@@ -615,7 +650,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "WestPier",
 		Package = "Sky",
-		Center = v(-196, -22, -36),
+		Center = v(coast(-196), -22, -36),
 		Size = v(10, 26, 44),
 		Facing = v(-1, 0, 0),
 		Walkable = true,
@@ -700,7 +735,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "NearSea",
 		Package = "Sky",
-		Center = v(-250, -21, -20),
+		Center = v(coast(-250), -21, -20),
 		Size = v(160, 12, 560), -- (12 tall: a small far sail on its south end)
 		Facing = v(0, 0, 1),
 		Walkable = true,
@@ -722,14 +757,14 @@ LobbyLayout.Paths = {
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
 	-- the MINE in the south-west corner: a dirt lane from the west plot road's
 	-- end to the yard, a dirt track under the rails to the portal
-	{ Id = "MineLane", From = v(-70, 0, 118), To = v(-70, 0, 125), Width = 9, Kind = "Dirt" },
+	{ Id = "MineLane", From = south(v(-70, 0, 118)), To = south(v(-70, 0, 125)), Width = 9, Kind = "Dirt" },
 	{ Id = "ToMine", From = mineMoved(v(-13, 0, 88)), To = mineMoved(v(-34, 0, 88)), Width = 9, Kind = "Dirt" },
 	-- the south-east hamlet: a dirt lane from the east plot road's end to the
 	-- MAP door, round the south of the ore outcrop at (82, 118); it stops
 	-- 2 studs short of the MAP facade (the town site stays free ground)
-	{ Id = "HamletLane", From = v(70, 0, 119), To = v(80, 0, 127.5), Width = 5, Kind = "Dirt" },
-	{ Id = "ToMap", From = v(80, 0, 127.5), To = v(88, 0, 125), Width = 5, Kind = "Dirt" },
-	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Dirt" },
+	{ Id = "HamletLane", From = south(v(70, 0, 119)), To = south(v(80, 0, 127.5)), Width = 5, Kind = "Dirt" },
+	{ Id = "ToMap", From = south(v(80, 0, 127.5)), To = south(v(88, 0, 125)), Width = 5, Kind = "Dirt" },
+	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(coast(160), 0, -115), Width = 6, Kind = "Dirt" },
 } :: { Path }
 
 LobbyLayout.ById = {} :: { [string]: Piece }
@@ -764,6 +799,16 @@ end
 
 function LobbyLayout.inArea(position: Vector3): boolean
 	return WorldLayout.isInBox(position, LobbyLayout.Area.Min, LobbyLayout.Area.Max)
+end
+
+-- Is a ground point within `margin` of the sea bay behind the Vault (never
+-- while there is no bay)? Y is ignored.
+function LobbyLayout.inBay(p: Vector3, margin: number): boolean
+	local bay = LobbyLayout.SouthBay
+	if not bay then
+		return false
+	end
+	return p.X > bay.Min.X - margin and p.X < bay.Max.X + margin and p.Z > bay.Min.Z - margin
 end
 
 -- A piece standing on the lobby ground (not in the sky, not outside the island).
@@ -803,12 +848,14 @@ function LobbyLayout.distanceToStrip(from: Vector3, to: Vector3, width: number, 
 	return math.sqrt(lx * lx + lz * lz)
 end
 
--- Is a ground point on a player base: the plot pad (+-28) or its yard and
--- train stop on the sea side (plot-local z up to BASE_BACK, docs BaseLayout)?
-local BASE_BACK = 66
+-- Is a ground point on a player base: the plot pad (+-BASE_HALF: +-28 at
+-- 12 cells) or its yard and train stop on the sea side (plot-local z up to
+-- BASE_BACK, 4 past the rail: 66 at 12 cells, docs BaseLayout)?
+local BASE_HALF = GRID.Half + 4
+local BASE_BACK = BaseLayout.RailZ + 4
 function LobbyLayout.onBase(plot: WorldLayout.Plot, p: Vector3, radius: number): boolean
 	local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(p.X, plot.Center.Y, p.Z))
-	return math.abs(localPos.X) < 28 + radius and localPos.Z > -28 - radius and localPos.Z < BASE_BACK + radius
+	return math.abs(localPos.X) < BASE_HALF + radius and localPos.Z > -BASE_HALF - radius and localPos.Z < BASE_BACK + radius
 end
 
 --[[
@@ -823,6 +870,9 @@ function LobbyLayout.isFree(p: Vector3, radius: number): boolean
 	end
 	local island = WorldLayout.Island
 	if p.X < island.Min.X + radius or p.X > island.Max.X - radius or p.Z > island.Max.Z - radius then
+		return false
+	end
+	if LobbyLayout.inBay(p, radius) then
 		return false
 	end
 	if p.Z < -122 + radius then

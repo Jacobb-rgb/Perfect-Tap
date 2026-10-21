@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Terra Forge World Animations</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      #stage {
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      #vignette {
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.42) 100%);
+      }
+      #title {
+        font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+        color: #fff;
+      }
+      #title {
+        background: linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 24%);
+      }
+      #title .box {
+        position: absolute;
+        left: 3.2%;
+        bottom: 5.5%;
+        opacity: 0;
+      }
+      #title .main {
+        font-weight: 800;
+        font-size: 2.8vw;
+        letter-spacing: 0.06vw;
+        text-shadow: 0 0.25vw 0 rgba(0, 0, 0, 0.55), 0 0 1.2vw rgba(0, 0, 0, 0.45);
+      }
+      #title .sub {
+        margin-top: 0.5vw;
+        font-weight: 600;
+        font-size: 1.45vw;
+        color: #e9f2ff;
+        text-shadow: 0 0.15vw 0 rgba(0, 0, 0, 0.6), 0 0 0.8vw rgba(0, 0, 0, 0.5);
+      }
+      #slow {
+        position: absolute;
+        right: 3.2%;
+        top: 5.5%;
+        font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+        font-weight: 800;
+        font-size: 1.7vw;
+        color: #1b2230;
+        background: #ffd34d;
+        border-radius: 2vw;
+        padding: 0.35vw 1.3vw;
+        box-shadow: 0 0.3vw 0 rgba(0, 0, 0, 0.35);
+        opacity: 0;
+      }
+      #caption {
+        position: absolute;
+        right: 2.2%;
+        bottom: 3%;
+        font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+        font-weight: 600;
+        font-size: 1.05vw;
+        color: rgba(255, 255, 255, 0.82);
+        text-shadow: 0 0.1vw 0.3vw rgba(0, 0, 0, 0.8);
+      }
+      #popups .pop {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        text-align: center;
+        font-family: "Fredoka One", "Avenir Next", sans-serif;
+        white-space: nowrap;
+      }
+      #popups .amount {
+        font-size: 3.2vw;
+        color: #ffd84a;
+        -webkit-text-stroke: 0.22vw #2d4a12;
+        paint-order: stroke fill;
+        text-shadow: 0 0.3vw 0 rgba(0, 0, 0, 0.45);
+      }
+      #popups .line {
+        font-size: 1.35vw;
+        color: #ffffff;
+        -webkit-text-stroke: 0.14vw #2d4a12;
+        paint-order: stroke fill;
+      }
+      #fade {
+        background: #000;
+        opacity: 0;
+      }
+      @font-face {
+        font-family: "Fredoka One";
+        src: url("/node_modules/@fontsource/fredoka-one/files/fredoka-one-latin-400-normal.woff2") format("woff2");
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="vignette" class="layer"></div>
+      <div id="popups" class="layer"></div>
+      <div id="title" class="layer">
+        <div class="box"><div class="main"></div><div class="sub"></div></div>
+      </div>
+      <div id="slow">ZPOMALENĚ</div>
+      <div id="caption">náhled z herního kódu · Terra Forge</div>
+      <div id="fade" class="layer"></div>
+    </div>
+    <script type="module" src="/world_anim.js"></script>
+  </body>
+</html>

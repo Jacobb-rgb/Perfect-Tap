@@ -319,20 +319,20 @@ return function(T, Loader)
 		T.truthy(DecorController.sphereInView(Vector3.new(1700, 450, 50), 20, view, 70), "a big model whose edge is in view")
 	end)
 
-	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
+	T.test("districts: five leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")
-		T.eq(#boards, 4, "four Leaderboard parts")
+		T.eq(#boards, 5, "five Leaderboard parts (LEVEL: owner 2026-10-21)")
 		-- (round 2: the hall turned toward the koi pond lane and the hero camera;
 		-- its boards face the point 30 studs in front of it, the arc's center)
 		local hall = LobbyLayout.get("HallOfFame")
 		local spawn = hall.Center + hall.Facing.Unit * 30
-		for i = 1, 4 do
+		for i = 1, 5 do
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			T.truthy(board and board:IsA("BasePart"), "Board" .. i .. " is a part")
 			T.truthy(hasTag(board, "Leaderboard"), "Board" .. i .. " tagged Leaderboard")
 			T.eq(board:GetAttribute("Board"), i, "Board" .. i .. " attribute")
-			T.truthy(board.Size.X >= 4 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
+			T.truthy(board.Size.X >= 3.7 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
 			local at = board.CFrame.Position
 			local toSpawn = Vector3.new(spawn.X - at.X, 0, spawn.Z - at.Z).Unit
 			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the arc's center")

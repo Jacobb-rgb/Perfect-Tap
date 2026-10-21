@@ -147,10 +147,10 @@ end
 	position of the board's tail line `d` studs back along its flight (d = 0 at
 	the board); trail ribbons turn their face to `viewer` (Trail.FaceCamera).
 ]]
-local function effectStandIns(parent: any, model: any, boardId: string, path: (number) -> any, viewer: any, length: number?)
+local function effectStandIns(parent: any, model: any, boardId: string, path: (number) -> any, viewer: any, length: number?): any
 	local set = Fx.create(boardId)
 	if not set then
-		return
+		return nil
 	end
 	local folder = roblox.Instance.new("Model")
 	folder.Name = "FxStandIns"
@@ -186,16 +186,67 @@ local function effectStandIns(parent: any, model: any, boardId: string, path: (n
 		local mount = e:GetAttribute("Mount")
 		local at = worldOf(model, mount).Position
 		local list = keyColors(e.Color)
-		if string.sub(mount, 1, 7) == "Exhaust" then
-			local flame = string.find(e.Name, "Flame") ~= nil
+		local flame = e.Texture == Fx.Fire
+		local kind = if flame then "GunFlame" else "GunSpark"
+		if e.LightEmission < 0.5 then
+			-- dust: a few soft grey puffs just above the ground behind the board
+			for k, d in { 0.6, 1.8, 3.2 } do
+				local p = path(d) + (at - path(0)) + V3.new(0, -0.35, 0)
+				sparkleBox(folder, p, 0.5 + d * 0.2, colorAt(list, (k - 1) / 2), "GunSpark")
+			end
+		elseif string.sub(mount, 1, 7) == "Exhaust" then
 			for k, d in { 0.3, 1.2, 2.4, 3.8 } do
 				local p = path(d) + (at - path(0))
-				sparkleBox(folder, p, 0.35 + d * 0.22, colorAt(list, (k - 1) / 3), if flame then "GunFlame" else "GunSpark")
+				sparkleBox(folder, p, 0.35 + d * 0.22, colorAt(list, (k - 1) / 3), kind)
+			end
+		elseif mount == "Pad" then
+			-- drips / star dust falling behind the board
+			for k, d in { 0.4, 1.4, 2.6 } do
+				local p = path(d) + (at - path(0)) + V3.new(0, -0.25 * k, 0)
+				sparkleBox(folder, p, 0.3, colorAt(list, (k - 1) / 2), kind)
 			end
 		elseif mount == "Aura" then
-			sparkleBox(folder, at + V3.new(0, 0.6, 0), 2.6, list[1], "GunFlame")
+			sparkleBox(folder, at + V3.new(0, 0.6, 0), 2.6, list[1], kind)
+		elseif string.sub(mount, 1, 3) == "Tip" and flame then
+			-- wings of fire: flames rising off the tips
+			sparkleBox(folder, at + V3.new(0, 0.3, 0), 0.6, colorAt(list, 0.2), kind)
+			sparkleBox(folder, at + V3.new(0, 0.9, 0), 0.45, colorAt(list, 0.6), kind)
 		else
-			sparkleBox(folder, at, 0.6, colorAt(list, 0.3), "GunSpark")
+			sparkleBox(folder, at, 0.6, colorAt(list, 0.3), kind)
+		end
+	end
+	return set
+end
+
+-- Draws one burst of a board's effect set ("Start": a splash ring on the ground
+-- under the pad; "Boost": a cone out of the exhausts / a flare up through the rider).
+local function burstStandIns(parent: any, model: any, set: any, kind: string, path: (number) -> any)
+	for _, e in set.Bursts do
+		if e:GetAttribute("Burst") ~= kind then
+			continue
+		end
+		local mount = e:GetAttribute("Mount")
+		local at = worldOf(model, mount).Position
+		local list = keyColors(e.Color)
+		local style = if e.Texture == Fx.Fire then "GunFlame" else "GunSpark"
+		if mount == "Pad" then
+			local n = 10
+			for i = 1, n do
+				local a = (i - 1) / n * math.pi * 2
+				local r = 2.2 + (i % 2) * 0.5
+				local p = V3.new(at.X + math.cos(a) * r, at.Y - 0.3, at.Z + math.sin(a) * r)
+				sparkleBox(parent, p, 0.55, colorAt(list, (i - 1) / (n - 1)), style)
+			end
+		elseif string.sub(mount, 1, 7) == "Exhaust" then
+			for k, d in { 1.2, 2.6, 4.2 } do
+				local p = path(d) + (at - path(0))
+				sparkleBox(parent, p, 0.5 + d * 0.35, colorAt(list, (k - 1) / 2), style)
+			end
+		elseif mount == "Aura" then
+			sparkleBox(parent, at + V3.new(0, 1.6, 0), 2.2, colorAt(list, 0.2), style)
+			sparkleBox(parent, at + V3.new(0, 3.4, 0), 1.6, colorAt(list, 0.6), style)
+		else
+			sparkleBox(parent, at, 1.6, colorAt(list, 0), style)
 		end
 	end
 end
@@ -512,6 +563,63 @@ function Preview.buildRide(Loader: any, workspace: any, hero: boolean?)
 	end
 end
 
+Preview.FX_VIEWER = V3.new(1, 8, 40) -- the effects shots' camera
+
+--[[
+	All five boards racing out of the quarry gate toward the camera with their
+	ride effects (scene "hoverboard_fx", shot hover_fx); moment = "Boost" adds
+	the top-speed bursts, "Start" shows the five standing with their hop-on
+	splash (scene "hoverboard_fx_start").
+]]
+function Preview.buildFx(Loader: any, workspace: any, moment: string?)
+	init(Loader)
+	local floor = require("./mine_floor_scene").build(Loader, workspace, 1)
+	for _, d in floor:GetChildren() do
+		if d.Name == "Dummy" then
+			d.Parent = nil
+		end
+	end
+	local folder = roblox.Instance.new("Model")
+	folder.Name = "Riders"
+	folder.Parent = workspace
+	local shirts = {
+		C3.fromRGB(186, 98, 48),
+		C3.fromRGB(60, 140, 90),
+		C3.fromRGB(200, 60, 60),
+		C3.fromRGB(40, 170, 220),
+		C3.fromRGB(120, 60, 200),
+	}
+	local start = moment == "Start"
+	for i, board in Data.List do
+		-- racing to the left across the sand in two staggered rows (effects stream out to
+		-- the right); "Start": standing in a row facing the camera
+		local x = if start then (i - 3) * 6.2 else (i - 3) * 6.2 + 1.5
+		local z = if start then 14 else (if i % 2 == 1 then 23 else 19.5)
+		local yaw = if start then math.pi + (i - 3) * -0.08 else math.pi / 2 + 0.22
+		local bank = if start then 0 else 0.1
+		local cf = CF.new(x, if start then 0.2 else 0.5, z) * CF.Angles(0, yaw, 0) * CF.Angles(0, 0, bank)
+		local model =
+			ridingBoard(folder, board.Id, cf, { shirt = shirts[i], pants = C3.fromRGB(50, 46, 66), hair = C3.fromRGB(70, 46, 30) })
+		local back = cf.LookVector * -1
+		local tail = (worldOf(model, "TrailLeft").Position + worldOf(model, "TrailRight").Position) / 2
+		local function path(d: number): any
+			return tail + back * d
+		end
+		if start then
+			local set = Fx.create(board.Id)
+			if set then
+				burstStandIns(folder, model, set, "Start", path)
+			end
+		else
+			local set = effectStandIns(folder, model, board.Id, path, Preview.FX_VIEWER, if board.Kind == "Robux" then 12 else nil)
+			if set and moment == "Boost" then
+				burstStandIns(folder, model, set, "Boost", path)
+			end
+		end
+		lamp(folder, cf.Position + V3.new(0, 0.4, 0), board.Colors.Glow, 9, 1.0)
+	end
+end
+
 ---------------------------------------------------------------- UI overlays
 
 --[[
@@ -525,6 +633,7 @@ end
 	                       the 0.62 phone scale: compact panel
 	  ui_hover_hud_phone   the phone HUD with the RIDE button and stand-ins for
 	                       Roblox's touch thumbstick and jump button
+	  ui_hover_phone_small a small 568 x 320 pt phone: the compact panel's cards scroll
 	The Robux cards show their live R$ button (game pass ids simulated; with id 0
 	the game shows COMING SOON).
 ]]
@@ -632,6 +741,11 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		local phonePanel = hud(phone, 0.62, false, true)
 		table.insert(phonePanel, panel(phone, true, 667 / 0.62, (375 - 36) / 0.62))
 		exports.ui_hover_phone = UiExport.export(phonePanel)
+		-- a small 568 x 320 pt phone: the cards scroll (the second row peeks in)
+		local small = 0.62 * 900 / 320
+		local smallPanel = hud(small, 0.62, false, true)
+		table.insert(smallPanel, panel(small, true, 568 / 0.62, (320 - 36) / 0.62))
+		exports.ui_hover_phone_small = UiExport.export(smallPanel)
 		local phoneHud = hud(phone, 0.62, true, true)
 		table.insert(phoneHud, touchControls())
 		exports.ui_hover_hud_phone = UiExport.export(phoneHud)

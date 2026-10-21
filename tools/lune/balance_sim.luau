@@ -51,6 +51,7 @@ local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
 local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
@@ -64,6 +65,7 @@ local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.Artif
 local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+local LevelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LevelConfig")
 
 -- The real rock mix (MineFloors): Small / Big / Crystal shares, seconds and ores per rock.
 local spawn = MineFloors.SpawnChance
@@ -119,6 +121,9 @@ local A = {
 	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
 	IncomeMult = 1, -- podium income and every sale
+	-- the player LEVEL (LevelConfig, owner 2026-10-21): XP from rocks, ores, cleans, sales,
+	-- play time and buys; level-up coins; +BonusPerLevel podium income (outside the IncomePct cap)
+	Levels = false,
 	DamageMult = 1, -- blaster damage
 	LuckMult = 1, -- the crystal-rock share (better ores)
 	CleanSpeedMult = 1, -- Auto Cleaner speed
@@ -129,6 +134,10 @@ local A = {
 	CapsulePrices = nil :: { [string]: number }?, -- coin capsule base price (x LevelScale) instead of CapsuleConfig's
 	LevelScale = nil :: { number }?, -- capsule price multiplier per blaster level instead of CapsuleConfig's
 	CrystalMode = "Mixed", -- a label only (the floors come from MineFloors / FloorTables; kept for old override files)
+	-- the droppers (DropperConfig, 2026-10-21): buy the next dropper (one of each, in order) or a Money
+	-- Laser (at most one per dropper) when it costs at most DropperMinutes of the current total income
+	Droppers = false,
+	DropperMinutes = 30,
 }
 
 -- Scenarios run one after the other (each overrides some assumptions).
@@ -570,8 +579,10 @@ local function podiumIncome(p: any): number
 	for _, v in p.Podium do
 		sum += v
 	end
-	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+	local level = if A.Levels then LevelConfig.bonusFor(p.Level or 1) else 0
+	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0) + level)
 end
+
 
 local function incomeRate(p: any): number
 	local cleaned, raw, floor = flow(p)
@@ -1116,6 +1127,29 @@ end
 
 -- `start`: a checkpoint (calibration) - the player, the clock, the random
 -- state and the series at the moment a run stopped; the run continues from it.
+-- The player LEVEL: XP for this step (the game's LevelConfig weights on the
+-- model's flows), level ups pay their coins.
+local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t: number)
+	if not A.Levels then
+		return
+	end
+	local w = LevelConfig.ById
+	local xp = A.Step
+		* (rocks * w.RocksBroken.Xp + (cleaned + raw) * w.OresMined.Xp + cleaned * w.OresCleaned.Xp + raw * w.ItemsSold.Xp + w.PlaySeconds.Xp)
+	xp += (p.BuysSeen and #p.Log - p.BuysSeen or 0) * w.Upgrades.Xp -- every buy: a machine, an upgrade, a level
+	p.BuysSeen = #p.Log
+	p.LevelRecord = p.LevelRecord or { Level = 1, Xp = 0, Seen = {}, Ready = true }
+	for _, level in LevelConfig.add(p.LevelRecord, xp) do
+		local coins = LevelConfig.coinsFor(level, podiumIncome(p))
+		p.Coins += coins
+		p.Earned += coins
+		if level % 10 == 0 then
+			mark(p, "Level " .. level, t)
+		end
+	end
+	p.Level = p.LevelRecord.Level
+end
+
 local function simulate(seed: number, start: any?): any
 	local rng = Rng.new(seed)
 	local p = newPlayer()
@@ -1169,8 +1203,13 @@ local function simulate(seed: number, start: any?): any
 			end
 		end
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
+		if A.Droppers and p.Placed then
+			-- the game's rule: the droppers earn through the same income multiplier as the podiums
+			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+		end
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
+		levelStep(p, rocks, cleaned, raw, t)
 		findAndSpendShards(p, rng, rocks, cleaned, floor, t)
 		t += A.Step
 
@@ -1193,6 +1232,32 @@ local function simulate(seed: number, start: any?): any
 				p.EnchantStats = nil
 				refillSlots(p) -- a new enchant slot may be open
 				mark(p, "Blaster " .. p.Blaster, t)
+			end
+		end
+		-- 1b) the droppers (off by default)
+		if A.Droppers then
+			p.Placed = p.Placed or {}
+			p.DropperNext = p.DropperNext or 1
+			p.Lasers = p.Lasers or 0
+			local nextDropper = DropperConfig.List[p.DropperNext]
+			local owned = p.DropperNext - 1
+			local laser = DropperConfig.Laser
+			local pick: { Id: string, Price: number, Name: string }? = nil
+			if nextDropper then
+				pick = { Id = nextDropper.Id, Price = nextDropper.Price, Name = nextDropper.Name }
+			end
+			if p.Lasers < owned and (pick == nil or laser.Price < pick.Price) then
+				pick = { Id = laser.Id, Price = laser.Price, Name = laser.Name }
+			end
+			if pick and pick.Price <= income * A.DropperMinutes * 60 and p.Coins >= pick.Price then
+				buy(p, pick.Name, pick.Price, t)
+				table.insert(p.Placed, { Id = pick.Id })
+				if pick.Id == laser.Id then
+					p.Lasers += 1
+				else
+					p.DropperNext += 1
+				end
+				mark(p, pick.Name, t)
 			end
 		end
 		-- 2) the elevator once floor 4 is in reach
