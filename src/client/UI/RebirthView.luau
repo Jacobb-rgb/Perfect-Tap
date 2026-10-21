@@ -47,7 +47,6 @@ local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
 local MenuPanel = require(script.Parent.MenuPanel)
 local TechShopView = require(script.Parent.TechShopView)
-local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local RebirthView = {}
 
