@@ -43,6 +43,13 @@
 	GuiService.ReducedMotionEnabled): half the bits, no pop look-alike, no
 	spikes, no spins, golems only do a small hop on equip.
 	No inputs are bound here.
+
+	Switches (Config/AnimConfig, owner 2026-10-21): GolemMotion = the golem
+	part (run / fly / idle / equip jump / hops; off: golemOffset is identity
+	and GolemController moves its golems on its own, as before). WorldFx =
+	the ore pop, the hit flash and the sell burst (off: none of their remotes
+	or signals are connected, every hook returns at once, no pool is made and
+	no chunk is ever hidden). Read when used, so flipping one in Studio works.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -54,6 +61,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local AnimConfig = require(Shared.Config.AnimConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local Net = require(Shared.Net)
 local Logic = require(script.Parent.Parent.Effects.WorldMotionLogic)
@@ -192,6 +200,16 @@ end
 local function now(): number
 	local r = rig
 	return if r then r.Clock else os.clock()
+end
+
+-- AnimConfig.WorldFx: the ore pop, the hit flash and debris, the sell burst.
+local function worldFxOn(): boolean
+	return AnimConfig.WorldFx == true
+end
+
+-- AnimConfig.GolemMotion: the golem followers' run / fly / idle / equip jump / hops.
+local function golemMotionOn(): boolean
+	return AnimConfig.GolemMotion == true
 end
 
 local function isPhone(): boolean
@@ -438,7 +456,13 @@ stepLimbs = function(state: PetState)
 	placeGroup(rigged.Head, GolemGait.jointFrame(body, rigged.Head, pose.HeadPitch, pose.HeadYaw, 0, 0))
 end
 
-local function ensureLoop()
+local loopAsks = { WorldFx = 0, Golems = 0 } -- who asked for the frame loop (tests: "off" asks nothing)
+local listens = 0 -- remotes listened to (tests)
+
+-- The one frame loop, connected while something moves (`who`: "WorldFx" or "Golems").
+local function ensureLoop(who: string?)
+	local key = who or "WorldFx"
+	loopAsks[key] = (loopAsks[key] or 0) + 1
 	if connection or rig then
 		return -- a rig steps by hand
 	end
@@ -673,6 +697,8 @@ local function takeEquip(owner: Player, kind: string, at: number): number?
 	return nil
 end
 
+local LIMB_KEYS = { "LegL", "LegR", "ArmL", "ArmR", "Head" } -- (one list, no table per call)
+
 -- The limbs go back on their welds, at rest on the Body (a golem that stops running its limbs).
 local function releaseLimbs(state: PetState)
 	state.Animated = false
@@ -681,7 +707,8 @@ local function releaseLimbs(state: PetState)
 		return
 	end
 	local body = rigged.Body.CFrame
-	for _, group in { rigged.LegL, rigged.LegR, rigged.ArmL, rigged.ArmR, rigged.Head } do
+	for _, key in LIMB_KEYS do
+		local group = (rigged :: any)[key] :: GolemGait.Group
 		for i, part in group.Parts do
 			if part.Parent then
 				part.CFrame = body * group.Rest[i]
@@ -702,7 +729,8 @@ local function grabLimbs(state: PetState)
 		return
 	end
 	state.Animated = true
-	for _, group in { rigged.LegL, rigged.LegR, rigged.ArmL, rigged.ArmR, rigged.Head } do
+	for _, key in LIMB_KEYS do
+		local group = (rigged :: any)[key] :: GolemGait.Group
 		for i, part in group.Parts do
 			part.Anchored = true
 			local weld = group.Welds[part]
@@ -781,7 +809,7 @@ local function selectGolems(now: number)
 		end
 	end
 	if #animated > 0 then
-		ensureLoop()
+		ensureLoop("Golems")
 	end
 end
 
@@ -804,6 +832,17 @@ function WorldMotionController.golemOffset(
 	near: boolean,
 	speed: number?
 ): CFrame
+	if not golemMotionOn() then
+		-- switched off: GolemController's own motion, nothing added (running limbs go back on their welds)
+		if #animated > 0 then
+			for _, running in animated do
+				releaseLimbs(running)
+			end
+			table.clear(animated)
+			limbParts = 0
+		end
+		return CFrame.identity
+	end
 	local state = petStates[pet]
 	if not state then
 		local celebrate: number? = nil
@@ -827,7 +866,8 @@ function WorldMotionController.golemOffset(
 		petStates[pet] = state
 	end
 	local s = state :: PetState
-	if now >= nextSelect then
+	-- (a clock that went back, a new rig: pick again now)
+	if now >= nextSelect or now < nextSelect - 1 then
 		selectGolems(now)
 	end
 	local since: number? = nil
@@ -1006,6 +1046,9 @@ end
 
 -- A new item in Workspace.Items: a Raw chunk near a fresh crack pops; others wait a moment for theirs.
 function WorldMotionController.onItemAdded(model: Instance)
+	if not worldFxOn() then
+		return -- (switched off: the chunk shows as it is, nothing hidden)
+	end
 	if not model:IsA("Model") or model:GetAttribute("Kind") ~= "Raw" then
 		return
 	end
@@ -1158,6 +1201,9 @@ end
 
 -- A rock lost HP: when your beam is on it, a hit at the beam's end (other players' hits come as BlastHit).
 function WorldMotionController.onHealthDrop(rock: Model)
+	if not worldFxOn() then
+		return
+	end
 	if not firing() then
 		return
 	end
@@ -1213,6 +1259,9 @@ end
 
 -- The Fx remote: other players' BlastHit, and the cracks / shatters that drop chunks.
 function WorldMotionController.onFx(kind: any, a: any, b: any, _stage: any, d: any)
+	if not worldFxOn() then
+		return
+	end
 	if typeof(a) ~= "Vector3" or a.X ~= a.X or a.Y ~= a.Y or a.Z ~= a.Z then
 		return
 	end
@@ -1240,6 +1289,9 @@ end
 
 -- Earned { Source = "Sell", Position, Count }: banknotes and coins burst out of the sell spot.
 function WorldMotionController.onEarned(payload: any)
+	if not worldFxOn() then
+		return
+	end
 	if type(payload) ~= "table" or payload.Source ~= "Sell" then
 		return
 	end
@@ -1273,6 +1325,7 @@ end
 function WorldMotionController.useRig(value: Rig?)
 	rig = value
 	table.clear(rockSet)
+	nextSelect = -math.huge
 	if value then
 		-- idle pooled parts move into the rig's folder
 		for _, pool in pools do
@@ -1310,6 +1363,23 @@ function WorldMotionController.stats(): (number, number, number, number, number)
 	return #live, #pops, flashes, made, rockScans
 end
 
+--[[
+	What the controller holds and has asked for so far (tests: a switch that
+	is off costs nothing): (pools made, cached rocks, frame loop asks by the
+	world effects, by the golems, remotes listened to, loop connected now).
+]]
+function WorldMotionController.costs(): (number, number, number, number, number, boolean)
+	local poolCount = 0
+	for _ in pools do
+		poolCount += 1
+	end
+	local rocks = 0
+	for _ in rockSet do
+		rocks += 1
+	end
+	return poolCount, rocks, loopAsks.WorldFx, loopAsks.Golems, listens, connection ~= nil
+end
+
 local function track(owner: Player)
 	WorldMotionController.noteEquipped(owner, owner:GetAttribute(GolemConfig.EquippedAttribute))
 	owner:GetAttributeChangedSignal(GolemConfig.EquippedAttribute):Connect(function()
@@ -1317,21 +1387,22 @@ local function track(owner: Player)
 	end)
 end
 
+-- What start() connects for each switch (tests read it).
+WorldMotionController.connected = { WorldFx = false, GolemMotion = false }
+
 function WorldMotionController.init()
+	if not worldFxOn() then
+		return -- (the world effects are switched off: their remotes are not even listened to)
+	end
 	Net.listen("Fx", function(kind, ...)
 		WorldMotionController.onFx(kind, ...)
 	end)
 	Net.listen("Earned", WorldMotionController.onEarned)
+	listens += 2
 end
 
 function WorldMotionController.start()
 	refreshCaps()
-	-- the rocks (other players' hits take their crystal colour from the nearest one)
-	for _, rock in CollectionService:GetTagged("Rock") do
-		addRock(rock)
-	end
-	CollectionService:GetInstanceAddedSignal("Rock"):Connect(addRock)
-	CollectionService:GetInstanceRemovedSignal("Rock"):Connect(removeRock)
 	-- the SETTINGS Reduce motion toggle applies at once (not only on the next once-a-second read)
 	reduceMotion()
 	local settings = settingsModule
@@ -1340,10 +1411,24 @@ function WorldMotionController.start()
 			reduceAt = -math.huge
 		end)
 	end
-	for _, p in Players:GetPlayers() do
-		track(p)
+	if golemMotionOn() then
+		WorldMotionController.connected.GolemMotion = true
+		-- who equips what (a golem built right after its equip jumps)
+		for _, p in Players:GetPlayers() do
+			track(p)
+		end
+		Players.PlayerAdded:Connect(track)
 	end
-	Players.PlayerAdded:Connect(track)
+	if not worldFxOn() then
+		return -- the world effects are switched off: no rock list, no hit hook, no chunk watch
+	end
+	WorldMotionController.connected.WorldFx = true
+	-- the rocks (other players' hits take their crystal colour from the nearest one)
+	for _, rock in CollectionService:GetTagged("Rock") do
+		addRock(rock)
+	end
+	CollectionService:GetInstanceAddedSignal("Rock"):Connect(addRock)
+	CollectionService:GetInstanceRemovedSignal("Rock"):Connect(removeRock)
 	-- your own hits: the Health drops of the rocks near you (RockLabels watches them)
 	local labels = script.Parent.Parent.UI:FindFirstChild("RockLabels")
 	if labels and labels:IsA("ModuleScript") then
