@@ -105,28 +105,92 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 
 	local E: { [string]: (Shard) -> () } = {}
 
+	-- a wing of three smooth feathers on `side`, fanning up and out from the
+	-- upper shell (flat ellipsoids: no upload)
+	local function wing(s: Shard, side: number, color: Color3, tip: Color3, material: Enum.Material)
+		for i = 1, 3 do
+			if s.Room() < 1 then
+				return
+			end
+			local length = 1.75 - (i - 1) * 0.3
+			local angle = side * (0.35 + (i - 1) * 0.42)
+			local cf = at(s, side * (1.05 + length * 0.42), 1.1 + (i - 1) * 0.14, 0.25)
+				* CFrame.Angles(0, -side * 0.35, 0)
+				* CFrame.Angles(0, 0, angle - side * PI / 2 + side * 0.9)
+			T.ellipsoid(
+				s.Top,
+				`Feather{side > 0 and 2 or 1}_{i}`,
+				cf,
+				Vector3.new(length, 0.5, 0.12),
+				if i == 1 then tip else color,
+				material
+			)
+		end
+	end
+
+	-- a ring of `n` segments circling the egg, tilted (an orbit)
+	local function orbit(s: Shard, name: string, y: number, radius: number, tilt: number, n: number, width: number, color: Color3)
+		local frame = at(s, 0, y, 0) * CFrame.Angles(tilt, 0, tilt * 0.4)
+		for i = 1, n do
+			if s.Room() < 1 then
+				return
+			end
+			local a0, a1 = (i - 1) / n * 2 * PI, i / n * 2 * PI
+			local p0 = (frame * CFrame.new(math.cos(a0) * radius, 0, math.sin(a0) * radius)).Position
+			local p1 = (frame * CFrame.new(math.cos(a1) * radius, 0, math.sin(a1) * radius)).Position
+			T.seg(s.Top, name .. i, p0, p1, width, width, color, NEON)
+		end
+	end
+
+	-- small glowing motes floating round the egg
+	local function motes(s: Shard, list: { { number } }, color: Color3)
+		for i, k in list do
+			if s.Room() < 1 then
+				return
+			end
+			K.part(s.Top, "Mote" .. i, at(s, k[1], k[2], k[3]), Vector3.new(k[4], k[4], k[4]), color, NEON, BALL)
+		end
+	end
+
 	---------------------------------------------------------------- Stone
 
 	E.Stone = function(s: Shard)
-		local granite, graniteLow = rgb(152, 146, 136), rgb(118, 110, 102)
-		local moss, mossDark = rgb(110, 180, 70), rgb(70, 130, 50)
-		body(s, granite, graniteLow, M.SmoothPlastic, s.Glow)
-		-- amber ore veins running up the shell
-		for i, k in { { -0.5, 0.35, 1.1 }, { 0.6, 0.4, 1.25 }, { 1.7, 0.3, 1.0 } } do
-			local a0, a1 = onTop(s, k[1], k[2], 0.02), onTop(s, k[1] + 0.25, k[3], 0.02)
-			T.seg(s.Top, "Vein" .. i, a0, a1, 0.1, 0.06, s.Glow, NEON)
-		end
-		-- copper and gold nuggets set in the stone
-		local list1: { { any } } =
-			{ { -0.2, 0.75, rgb(214, 120, 60) }, { 0.95, 1.0, GOLD }, { -1.0, 0.55, GOLD }, { 0.35, 1.45, rgb(214, 120, 60) } }
-		for i, k in list1 do
+		local slate, slateLow = rgb(122, 118, 112), rgb(86, 82, 80)
+		local moss, mossDark = rgb(110, 190, 70), rgb(66, 130, 48)
+		local rune = rgb(90, 240, 200)
+		local bark = rgb(110, 72, 44)
+		body(s, slate, slateLow, M.SmoothPlastic, s.Glow)
+		-- the RUNE STONE: a glowing rune circle carved on the front, its glyph
+		local front = onShell(s, onTop(s, 0, 1.05, 0.0))
+		K.facing(s.Top, "RuneRing", front * CFrame.new(0, 0, -0.02), 0.06, 0.92, rune, NEON)
+		K.facing(s.Top, "RuneDisc", front * CFrame.new(0, 0, -0.05), 0.06, 0.74, rgb(70, 68, 66), M.Slate)
+		K.part(s.Top, "Glyph1", front * CFrame.new(0, 0, -0.09), Vector3.new(0.08, 0.5, 0.04), rune, NEON)
+		K.part(s.Top, "Glyph2", front * CFrame.new(0, 0.08, -0.09) * CFrame.Angles(0, 0, 1.0), Vector3.new(0.08, 0.36, 0.04), rune, NEON)
+		-- rune lines running round the sides
+		for i, k in { { -1.0, 0.3, 1.2 }, { 1.05, 0.4, 1.35 }, { 2.6, 0.3, 1.1 } } do
 			if s.Room() < 1 then
 				break
 			end
-			local p = onTop(s, k[1] :: number, k[2] :: number, 0.02)
-			diamond(s.Top, "Nugget" .. i, onShell(s, p), 0.26, 0.12, k[3] :: Color3, M.Foil)
+			T.seg(s.Top, "RuneLine" .. i, onTop(s, k[1], k[2], 0.02), onTop(s, k[1] + 0.3, k[3], 0.02), 0.08, 0.05, rune, NEON)
 		end
-		-- the moss cap over the tip, moss dripping down, two red mushrooms
+		-- big amber crystals breaking out of both sides
+		local ambers: { { number } } = {
+			{ 1.45, 0.55, 1.0, 0.34, -0.85 },
+			{ 1.75, 0.25, 0.7, 0.26, -1.15 },
+			{ 1.2, 0.95, 0.55, 0.22, -0.6 },
+			{ -1.45, 0.6, 0.95, 0.32, 0.85 },
+			{ -1.8, 0.3, 0.65, 0.24, 1.15 },
+			{ -1.15, 1.05, 0.5, 0.2, 0.6 },
+		}
+		for i, k in ambers do
+			if s.Room() < 1 then
+				break
+			end
+			local p = onTop(s, k[1], k[2], -0.05)
+			local cf = CFrame.new(p) * CFrame.Angles(0, -k[1], 0) * CFrame.Angles(0, 0, k[5]) * CFrame.Angles(0, PI / 4, 0)
+			K.part(s.Top, "Amber" .. i, cf, Vector3.new(k[4], k[3], k[4]), if i % 3 == 0 then rgb(255, 230, 120) else s.Glow, NEON)
+		end
+		-- the moss cap, its drips, two red mushrooms and a sprout
 		T.ellipsoid(s.Top, "Moss", at(s, 0, tipY - 0.36, 0), Vector3.new(1.7, 0.9, 1.6), moss, M.Grass)
 		for i, k in { { -0.75, tipY - 0.75, -0.55 }, { 0.8, tipY - 0.85, 0.3 } } do
 			if s.Room() < 1 then
@@ -134,7 +198,7 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 			end
 			T.ellipsoid(s.Top, "MossDrip" .. i, at(s, k[1], k[2], k[3]), Vector3.new(0.7, 0.5, 0.7), mossDark, M.Grass)
 		end
-		for i, k in { { 0.42, tipY - 0.3, -0.25, 1 }, { -0.36, tipY - 0.24, 0.12, 0.8 } } do
+		for i, k in { { 0.42, tipY - 0.3, -0.25, 1.15 }, { -0.36, tipY - 0.24, 0.12, 0.9 } } do
 			if s.Room() < 3 then
 				break
 			end
@@ -158,67 +222,94 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 				BALL
 			)
 		end
-		-- glowing amber crystals breaking out of the stone
-		local ambers = { { 1.5, 0.45, 0.7, 0.3, -0.9 }, { -1.4, 0.8, 0.6, 0.26, 0.85 }, { 2.4, 0.2, 0.5, 0.22, -1.0 } }
-		for i, k in ambers do
-			if s.Room() < 1 then
-				break
-			end
-			local p = onTop(s, k[1], k[2], -0.05)
-			local cf = CFrame.new(p) * CFrame.Angles(0, -k[1], 0) * CFrame.Angles(0, 0, k[5]) * CFrame.Angles(0, PI / 4, 0)
-			K.part(s.Top, "Amber" .. i, cf, Vector3.new(k[4], k[3], k[4]), s.Glow, NEON)
-		end
-		-- a little sprout on the moss
 		if s.Room() >= 2 then
 			T.seg(
 				s.Top,
 				"Sprout",
 				at(s, 0.05, tipY, 0.3).Position,
-				at(s, 0.1, tipY + 0.35, 0.35).Position,
+				at(s, 0.1, tipY + 0.4, 0.35).Position,
 				0.06,
 				0.06,
 				rgb(70, 150, 60),
 				M.Grass
 			)
-			K.part(s.Top, "Leaf", at(s, 0.22, tipY + 0.4, 0.35) * CFrame.Angles(0, 0, 0.5), Vector3.new(0.34, 0.06, 0.2), moss, M.Grass)
+			T.ellipsoid(
+				s.Top,
+				"Leaf",
+				at(s, 0.24, tipY + 0.44, 0.35) * CFrame.Angles(0, 0, 0.5),
+				Vector3.new(0.4, 0.08, 0.24),
+				moss,
+				M.Grass
+			)
 		end
-		-- a stone slab, pebbles round the egg's foot
-		K.upright(s.Bottom, "Slab", at(s, 0, -r + 0.05, 0), 0.24, 2.6, rgb(100, 94, 88), M.Slate)
-		for i = 1, 6 do
+		-- old roots gripping the egg's foot
+		for i = 1, 3 do
+			local a = (i - 1) * 2 * PI / 3 + 0.4
+			local p0 = onLow(s, a, -0.25, 0.04)
+			local p1 = onLow(s, a + 0.25, -0.85, 0.1)
+			local p2 = (s.Center * CFrame.new(math.sin(a + 0.4) * 1.55, -r + 0.12, -math.cos(a + 0.4) * 1.55)).Position
+			if s.Room() < 2 then
+				break
+			end
+			T.seg(s.Bottom, `Root{i}_1`, p0, p1, 0.2, 0.2, bark, M.Wood)
+			T.seg(s.Bottom, `Root{i}_2`, p1, p2, 0.16, 0.16, bark, M.Wood)
+		end
+		-- a boulder base split by glowing cracks
+		K.upright(s.Bottom, "Slab", at(s, 0, -r + 0.05, 0), 0.26, 2.7, rgb(96, 90, 86), M.Slate)
+		for i, k in { { 0.9, 0.6 }, { -1.0, 0.5 }, { 0.2, 0.55 } } do
 			if s.Room() < 1 then
 				break
 			end
-			local a = (i - 0.5) * 2 * PI / 6 + 0.3
-			local size = 0.32 + (i % 3) * 0.08
+			local a = k[1] * 2.2
 			K.part(
 				s.Bottom,
-				"Pebble" .. i,
-				at(s, math.sin(a) * 1.15, -r + 0.25, -math.cos(a) * 1.15) * CFrame.Angles(0.5 * i, 0.9 * i, 0.3),
-				Vector3.new(size, size * 0.75, size * 0.9),
-				if i % 2 == 0 then rgb(128, 120, 112) else rgb(96, 90, 86),
+				"Boulder" .. i,
+				at(s, math.sin(a) * 1.25, -r + 0.3, -math.cos(a) * 1.25) * CFrame.Angles(0.4 * i, 0.9 * i, 0.3),
+				Vector3.new(k[2], k[2] * 0.8, k[2] * 0.9),
+				rgb(110, 104, 98),
 				M.Slate
 			)
 		end
+		for i, a in { 0.5, 2.6 } do
+			if s.Room() < 1 then
+				break
+			end
+			K.part(
+				s.Bottom,
+				"SlabCrack" .. i,
+				at(s, math.sin(a) * 1.0, -r + 0.19, -math.cos(a) * 1.0) * CFrame.Angles(0, a, 0),
+				Vector3.new(0.08, 0.04, 0.7),
+				s.Glow,
+				NEON
+			)
+		end
+		-- fireflies
+		motes(s, { { 1.7, 1.9, -0.4, 0.12 }, { -1.6, 2.3, 0.2, 0.1 }, { 1.2, 2.7, 0.6, 0.09 } }, rgb(220, 255, 140))
 	end
 
 	---------------------------------------------------------------- Crystal
 
 	E.Crystal = function(s: Shard)
-		local ice, violet = rgb(176, 226, 255), rgb(120, 86, 220)
-		local cyan, pink = rgb(90, 230, 255), rgb(200, 120, 255)
-		body(s, ice, violet, M.SmoothPlastic, s.Glow)
-		-- silver rings round the upper shell
-		ring(s, "Ring1", 0.95, 0.1, SILVER, M.Metal)
-		ring(s, "Ring2", 1.65, 0.08, SILVER, M.Metal)
-		-- a crown of glowing crystals on the tip, the tallest in the middle
-		local list3: { { any } } = {
-			{ 0, 0, 1.3, 0.42, 0, cyan },
-			{ -0.36, 0.05, 0.9, 0.32, 0.4, pink },
-			{ 0.36, 0, 0.95, 0.32, -0.4, pink },
-			{ 0.05, 0.35, 0.8, 0.28, -0.1, cyan },
-			{ -0.1, -0.35, 0.75, 0.26, 0.15, cyan },
+		local sapphire, violet = rgb(40, 60, 150), rgb(96, 50, 170)
+		local cyan, pink, white = rgb(90, 235, 255), rgb(220, 120, 255), rgb(235, 250, 255)
+		body(s, sapphire, violet, M.SmoothPlastic, cyan)
+		-- glowing crystal seams across the dark shell
+		for i, k in { { -0.55, 0.2, 0.9 }, { 0.4, 0.9, 1.6 }, { 1.4, 0.25, 1.05 }, { -1.5, 0.8, 1.55 } } do
+			if s.Room() < 1 then
+				break
+			end
+			T.seg(s.Top, "Seam" .. i, onTop(s, k[1], k[2], 0.02), onTop(s, k[1] + 0.35, k[3], 0.02), 0.08, 0.05, cyan, NEON)
+		end
+		-- the crown of crystals on the tip, a white-hot core crystal inside
+		local crown: { { any } } = {
+			{ 0, 0, 1.5, 0.46, 0, cyan },
+			{ -0.4, 0.05, 1.0, 0.34, 0.45, pink },
+			{ 0.4, 0, 1.05, 0.34, -0.45, pink },
+			{ 0.05, 0.38, 0.9, 0.3, -0.1, cyan },
+			{ -0.1, -0.38, 0.85, 0.28, 0.15, cyan },
+			{ 0, 0, 0.95, 0.22, 0, white },
 		}
-		for i, k in list3 do
+		for i, k in crown do
 			if s.Room() < 1 then
 				break
 			end
@@ -228,28 +319,35 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 				* CFrame.Angles(0, PI / 4, 0)
 			K.part(s.Top, "CrownCrystal" .. i, cf, Vector3.new(w, h, w), k[6] :: Color3, NEON)
 		end
-		-- crystals breaking out of both sides
-		local list4: { { any } } = {
-			{ 1.25, 0.55, 1.15, 0.42, -0.9 },
-			{ 1.75, 0.2, 0.75, 0.32, -1.2 },
-			{ -1.3, 0.6, 1.1, 0.4, 0.9 },
-			{ -1.8, 0.25, 0.7, 0.3, 1.2 },
-			{ 0.75, 1.5, 0.6, 0.26, -0.6 },
-		}
-		for i, k in list4 do
-			if s.Room() < 1 then
-				break
+		-- crystal wings: three long shards fanning from each side
+		for _, side in { -1, 1 } do
+			for i = 1, 3 do
+				if s.Room() < 1 then
+					break
+				end
+				local length = 1.4 - (i - 1) * 0.25
+				local cf = at(s, side * (1.0 + length * 0.35), 0.8 + (i - 1) * 0.28, 0.3)
+					* CFrame.Angles(0, -side * 0.3, -side * (0.55 + (i - 1) * 0.35))
+					* CFrame.Angles(0, PI / 4, 0)
+				K.part(
+					s.Top,
+					`WingShard{side > 0 and 2 or 1}_{i}`,
+					cf,
+					Vector3.new(0.26, length, 0.26),
+					if i == 2 then pink else cyan,
+					NEON
+				)
 			end
-			local p = onTop(s, k[1], k[2], -0.05)
-			local cf = CFrame.new(p) * CFrame.Angles(0, -k[1], 0) * CFrame.Angles(0, 0, k[5]) * CFrame.Angles(0, PI / 4, 0)
-			K.part(s.Top, "SideCrystal" .. i, cf, Vector3.new(k[4], k[3], k[4]), if i % 2 == 0 then pink else cyan, NEON)
 		end
-		-- a violet gem in a silver setting on the front
-		local gem = onShell(s, onTop(s, 0, 1.3, 0.02))
-		diamond(s.Top, "GemSetting", gem, 0.6, 0.1, SILVER, M.Metal)
-		diamond(s.Top, "Gem", gem * CFrame.new(0, 0, -0.05), 0.42, 0.1, pink, NEON)
-		-- shards floating round the egg
-		for i, k in { { 1.75, 1.6, -0.3 }, { -1.7, 1.9, 0.1 }, { 1.2, 2.4, 0.5 } } do
+		-- the big gem on the front: a silver setting, the gem, a sparkle
+		local gem = onShell(s, onTop(s, 0, 1.05, 0.02))
+		diamond(s.Top, "GemSetting", gem, 0.78, 0.1, SILVER, M.Metal)
+		diamond(s.Top, "Gem", gem * CFrame.new(0, 0, -0.05), 0.56, 0.1, pink, NEON)
+		K.part(s.Top, "GemSparkle", gem * CFrame.new(-0.1, 0.1, -0.1), Vector3.new(0.1, 0.1, 0.04), white, NEON)
+		-- a glowing orbit ring circling the egg
+		orbit(s, "Orbit", 0.35, 1.8, 0.22, 10, 0.07, pink)
+		-- floating shards
+		for i, k in { { 1.85, 1.9, -0.3 }, { -1.8, 2.2, 0.1 }, { 1.0, 2.75, 0.5 } } do
 			if s.Room() < 1 then
 				break
 			end
@@ -262,25 +360,31 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 				NEON
 			)
 		end
-		-- the silver claw stand: a ring and three crystal legs
-		K.upright(s.Bottom, "StandRing", at(s, 0, -r + 0.12, 0), 0.22, 1.6, SILVER, M.Metal)
-		for i = 1, 3 do
+		-- a crystal cluster base round a silver ring
+		K.upright(s.Bottom, "StandRing", at(s, 0, -r + 0.1, 0), 0.2, 1.7, SILVER, M.Metal)
+		for i = 1, 5 do
 			if s.Room() < 1 then
 				break
 			end
-			local a = (i - 1) * 2 * PI / 3 + PI / 6
-			local from = at(s, math.sin(a) * 0.7, -r + 0.12, -math.cos(a) * 0.7).Position
-			local to = onLow(s, a, -0.55, 0.06)
-			T.seg(s.Bottom, "StandLeg" .. i, from, to, 0.18, 0.18, SILVER, M.Metal)
+			local a = (i - 1) * 2 * PI / 5 + 0.3
+			local h = 0.55 + (i % 2) * 0.25
+			local cf = at(s, math.sin(a) * 1.15, -r + h * 0.35, -math.cos(a) * 1.15)
+				* CFrame.Angles(0, -a, (if i % 2 == 0 then 0.35 else -0.35))
+				* CFrame.Angles(0, PI / 4, 0)
+			K.part(s.Bottom, "BaseCrystal" .. i, cf, Vector3.new(0.28, h, 0.28), if i % 2 == 0 then pink else cyan, NEON)
 		end
 	end
 
 	---------------------------------------------------------------- Royal
 
 	E.Royal = function(s: Shard)
-		local crimson = rgb(170, 26, 64)
+		local crimson = rgb(150, 16, 58)
 		local ruby, sapphire, emerald = rgb(255, 40, 80), rgb(60, 140, 255), rgb(40, 220, 120)
+		local pearl = rgb(250, 244, 236)
 		body(s, crimson, GOLD, M.SmoothPlastic, s.Glow, M.Foil)
+		-- golden wings of three smooth feathers each
+		wing(s, -1, GOLD, rgb(255, 236, 160), M.Foil)
+		wing(s, 1, GOLD, rgb(255, 236, 160), M.Foil)
 		-- gold filigree: two rings and four straps from the waist to the crown
 		ring(s, "Ring1", 0.85, 0.12, GOLD, M.Foil)
 		ring(s, "Ring2", 1.7, 0.1, GOLD, M.Foil)
@@ -295,40 +399,53 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 				T.seg(s.Top, `Strap{i}_{j}`, a0, a1, 0.1, 0.06, GOLD, M.Foil)
 			end
 		end
-		-- three jewels on the front
-		local list2: { { any } } = { { 0, 1.28, ruby, 0.44 }, { -0.62, 0.85, sapphire, 0.3 }, { 0.62, 0.85, emerald, 0.3 } }
-		for i, k in list2 do
+		-- a string of pearls draped across the front
+		for i = 1, 7 do
+			if s.Room() < 1 then
+				break
+			end
+			local az = (i - 4) * 0.22
+			local y = 0.5 - 0.12 * math.cos((i - 4) / 3 * PI / 2)
+			K.part(s.Top, "Pearl" .. i, CFrame.new(onTop(s, az, y, 0.06)), Vector3.new(0.16, 0.16, 0.16), pearl, M.SmoothPlastic, BALL)
+		end
+		-- the big ruby in the middle, a sapphire and an emerald beside it
+		local jewels: { { any } } = { { 0, 1.25, ruby, 0.5 }, { -0.68, 1.15, sapphire, 0.3 }, { 0.68, 1.15, emerald, 0.3 } }
+		for i, k in jewels do
 			if s.Room() < 2 then
 				break
 			end
 			local cf = onShell(s, onTop(s, k[1] :: number, k[2] :: number, 0.02))
 			local w = k[4] :: number
-			diamond(s.Top, "JewelSet" .. i, cf, w + 0.14, 0.08, GOLD, M.Foil)
+			diamond(s.Top, "JewelSet" .. i, cf, w + 0.16, 0.08, GOLD, M.Foil)
 			diamond(s.Top, "Jewel" .. i, cf * CFrame.new(0, 0, -0.05), w, 0.08, k[3] :: Color3, NEON)
+			if i == 1 and s.Room() >= 1 then
+				K.part(s.Top, "JewelSparkle", cf * CFrame.new(-0.1, 0.1, -0.1), Vector3.new(0.1, 0.1, 0.04), Color3.new(1, 1, 1), NEON)
+			end
 		end
-		-- the jewelled crown on the tip
-		local crownY = tipY - 0.2
-		K.upright(s.Top, "CrownBand", at(s, 0, crownY, 0), 0.26, 1.1, GOLD, M.Foil)
+		-- the crown: a gold band round a red velvet cap, five points, gems, an orb
+		local crownY = tipY - 0.25
+		T.ellipsoid(s.Top, "CrownCap", at(s, 0, crownY + 0.18, 0), Vector3.new(1.0, 0.7, 1.0), rgb(190, 20, 46), M.Fabric)
+		K.upright(s.Top, "CrownBand", at(s, 0, crownY, 0), 0.3, 1.2, GOLD, M.Foil)
 		for i = 1, 5 do
 			if s.Room() < 1 then
 				break
 			end
 			local a = (i - 3) * 0.7
-			local h = if i == 3 then 0.44 else 0.34
-			local cf = at(s, math.sin(a) * 0.52, crownY + 0.2 + h * 0.2, -math.cos(a) * 0.52) * CFrame.Angles(0, -a, 0)
+			local h = if i == 3 then 0.5 else 0.38
+			local cf = at(s, math.sin(a) * 0.57, crownY + 0.22 + h * 0.2, -math.cos(a) * 0.57) * CFrame.Angles(0, -a, 0)
 			diamond(s.Top, "CrownPoint" .. i, cf, h, 0.08, GOLD, M.Foil)
 		end
 		for i, a in { -0.7, 0, 0.7 } do
 			if s.Room() < 1 then
 				break
 			end
-			local cf = at(s, math.sin(a) * 0.57, crownY, -math.cos(a) * 0.57) * CFrame.Angles(0, -a, 0)
-			diamond(s.Top, "CrownGem" .. i, cf, 0.14, 0.05, if i == 2 then ruby else sapphire, NEON)
+			local cf = at(s, math.sin(a) * 0.62, crownY, -math.cos(a) * 0.62) * CFrame.Angles(0, -a, 0)
+			diamond(s.Top, "CrownGem" .. i, cf, 0.16, 0.05, if i == 2 then ruby else sapphire, NEON)
 		end
 		if s.Room() >= 1 then
-			K.part(s.Top, "CrownOrb", at(s, 0, crownY + 0.48, 0), Vector3.new(0.24, 0.24, 0.24), GOLD, M.Foil, BALL)
+			K.part(s.Top, "CrownOrb", at(s, 0, crownY + 0.6, 0), Vector3.new(0.26, 0.26, 0.26), GOLD, M.Foil, BALL)
 		end
-		-- the red velvet cushion with gold tassels at its corners
+		-- the red velvet cushion with gold tassels
 		T.ellipsoid(s.Bottom, "Cushion", at(s, 0, -r + 0.12, 0), Vector3.new(3.0, 0.62, 3.0), rgb(190, 20, 46), M.Fabric)
 		for i = 1, 4 do
 			if s.Room() < 1 then
@@ -345,6 +462,7 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 				BALL
 			)
 		end
+		motes(s, { { 1.9, 1.9, -0.3, 0.1 }, { -1.9, 2.1, 0.1, 0.1 } }, rgb(255, 236, 160))
 	end
 
 	return E
