@@ -29,4 +29,20 @@ return function(T, Loader)
 		T.eq(data.Streak.Last, 20000)
 		T.eq(data.Quests.Day, 20000, "a good quest record stays")
 	end)
+
+	T.test("starter pack migration: junk records are repaired, a real purchase kept", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.StarterPack = "junk"
+		Migrations.run(data)
+		T.eq(data.StarterPack.BoughtAt, 0)
+		T.eq(data.StarterPack.Count, 0)
+		data.StarterPack = { BoughtAt = 0 / 0, Count = 2.7 }
+		Migrations.run(data)
+		T.eq(data.StarterPack.BoughtAt, 0)
+		T.eq(data.StarterPack.Count, 2)
+		data.StarterPack = { BoughtAt = 1761000000, Count = 1 }
+		Migrations.run(data)
+		T.eq(data.StarterPack.BoughtAt, 1761000000, "a real purchase stays")
+		T.eq(data.StarterPack.Count, 1)
+	end)
 end
