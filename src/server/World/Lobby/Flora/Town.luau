@@ -37,15 +37,16 @@
 	Every building stays inside its site rectangle (`Town.Sites`, world XZ,
 	axis-aligned), every point of a site is LobbyLayout.isFree(p, 1) (off
 	roads, paths, plots, the bases' yards, outcrops, keep-outs and every
-	lobby piece), off the coastal rail line (world |x| 160..172), and the
-	ground for 6 studs in front of each site's Facing side is clear of the
-	other packages. No lights: windows, signs and lanterns glow with Neon.
+	lobby piece), off the coastal rail line (world |x| 160..172 at 12
+	cells), and the ground for 6 studs in front of each site's Facing side
+	is clear of the other packages. No lights: windows, signs and lanterns glow with Neon.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Buildings = require(script.Parent.Buildings)
@@ -67,8 +68,9 @@ export type Site = {
 	Blade: boolean?, -- a double-sided blade sign turned to the street and the hero
 }
 
--- Rail line of the plots' train stops (BaseLayout.RailZ = 62 plot-local).
-Town.RailMinX = 160
+-- Rail line of the plots' train stops (BaseLayout.RailZ = 62 plot-local at
+-- 12 cells, world |x| 166); it moves out with the coast for bigger plots.
+Town.RailMinX = 160 + WorldLayout.PlotGrid.CoastShift
 
 -- Clear ground in front of every facade (studs).
 Town.FrontClearance = 6

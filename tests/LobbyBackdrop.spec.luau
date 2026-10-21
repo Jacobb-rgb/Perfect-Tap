@@ -277,17 +277,52 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- the east and west rim stays outside |x| 171 next to the yards
+		-- the east and west rim stays outside the island's edge + 1 next to the
+		-- yards (|x| 171 at 12 cells); the bay behind the vault has its own rim
+		local island = WorldLayout.Island
+		local rimX = island.Max.X + 1
+		local boardwalkX = 166 + WorldLayout.PlotGrid.CoastShift
 		for _, part in parts(map.Land.Cliffs) do
 			local min, max = bounds(part)
-			if max.Y > 0 and min.Z < 150 then
-				T.truthy(min.X > 171 or max.X < -171, part:GetFullName() .. " rim block inside |x| 171")
+			local inBay = LobbyLayout.inBay((min + max) / 2, 0)
+			if max.Y > 0 and min.Z < island.Max.Z and not inBay then
+				T.truthy(min.X > rimX or max.X < -rimX, `{part:GetFullName()} rim block inside |x| {rimX}`)
 			end
 			-- the NEXT AREA boardwalk crosses the east rim at deck height ~5
-			if max.X > 166 and min.Z < -111 and max.Z > -119 then
+			if max.X > boardwalkX and min.Z < -111 and max.Z > -119 then
 				T.truthy(max.Y <= 5, part:GetFullName() .. " clips the NEXT AREA boardwalk")
 			end
 		end
+	end)
+
+	T.test("the bay behind the vault stays sea (bigger plots)", function()
+		local bay = LobbyLayout.SouthBay
+		if not bay then
+			-- 12 cells: the south coast runs straight
+			T.eq(WorldLayout.PlotGrid.SouthShift, 0, "a bay only once the south band moves")
+			T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea at 12 cells")
+			return
+		end
+		T.truthy(map.Land.Bay:FindFirstChild("Sea"), "the bay has its sea")
+		-- between the plot roads, open to the south sea
+		for _, road in WorldLayout.Roads do
+			if road.Width == 9 and math.abs(road.From.X) == 70 then
+				T.truthy(math.abs(road.From.X) - road.Width / 2 > bay.Max.X + 6, "the bay stays off the plot roads")
+			end
+		end
+		T.eq(bay.Max.Z, WorldLayout.Island.Max.Z, "the bay reaches the south coast")
+		-- no ground over it, no free ground in it, walls on its three coasts
+		for _, part in map.Land:GetChildren() do
+			if part.Name == "Ground" then
+				local min, max = bounds(part)
+				local covers = min.X < bay.Max.X - 6 and max.X > bay.Min.X + 6 and max.Z > bay.Min.Z + 6
+				T.falsy(covers, `{part:GetFullName()} covers the bay at {part.CFrame.Position}`)
+			end
+		end
+		local centre = (bay.Min + bay.Max) / 2
+		T.falsy(LobbyLayout.isFree(centre, 1), "the bay is not free ground")
+		T.falsy(LobbyLayout.isFree(Vector3.new(bay.Min.X - 0.5, 0, centre.Z), 1), "nor its west shore")
+		T.eq(#map.Land.Bounds:GetChildren(), 7, "the island's 4 invisible walls + the bay's 3")
 	end)
 
 	T.test("the backdrop build is deterministic", function()
