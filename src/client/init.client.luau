@@ -51,6 +51,7 @@ local ORDER = {
 	"SideMenuController", -- the button column on the left (after the panels it opens)
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 	"LightWorldController", -- the light UI's world labels and prompts (only with UIConfig.LightUI on)
+	"UIMotionController", -- UI/Motion everywhere: windows pop, buttons squash, shop cards breathe, cash flies in
 }
 
 local loaded = {}

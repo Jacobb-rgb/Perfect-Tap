@@ -194,7 +194,7 @@ Net.Events = {
 	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
-	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean, FastSpin: boolean })
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake, Rumble, FastSpin, ReduceMotion: boolean })
 	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
 	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
 	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
