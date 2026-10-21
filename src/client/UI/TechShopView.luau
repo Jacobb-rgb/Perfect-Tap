@@ -66,8 +66,6 @@ local UIConfig = require(Shared.Config.UIConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
-local DropperConfig = require(Shared.Config.DropperConfig)
-local DropperBuilder = require(Shared.Builders.DropperBuilder)
 local Theme = require(Shared.Config.UITheme)
 local PopTheme = require(Shared.Config.PopTheme)
 local IconAssets = require(Shared.Config.IconAssets)
@@ -1269,23 +1267,6 @@ local DRAW: { [string]: (Frame) -> () } = {
 	end,
 }
 
--- the droppers and the Money Laser: a little "7" in the dropper's colours
-for _, dropper in DropperConfig.List do
-	local look = DropperBuilder.Styles[dropper.Id]
-	DRAW[dropper.Id] = function(a: Frame)
-		bit(a, "Base", 0.36, 0.78, 0.92, 0.94, look.Face, 0.2)
-		bit(a, "Column", 0.52, 0.2, 0.76, 0.8, look.Face, 0.1)
-		bit(a, "Arm", 0.12, 0.08, 0.8, 0.28, look.Face, 0.15)
-		bit(a, "Spout", 0.14, 0.28, 0.32, 0.38, look.Glow[1], 0.2)
-		bit(a, "Ore", 0.18, 0.56, 0.3, 0.68, look.Crystal[1], 0.5)
-	end
-end
-DRAW[DropperConfig.Laser.Id] = function(a: Frame)
-	bit(a, "Body", 0.24, 0.34, 0.76, 0.94, rgb(20, 120, 60), 0.15)
-	bit(a, "Beam", 0.45, 0.02, 0.55, 0.36, rgb(120, 255, 150))
-	glyph(a, "2X", 0.3, 0.5, 0.7, 0.8, rgb(200, 255, 210))
-end
-
 --[[
 	The kind's live 3D picture (the Pop look): a machine id is the build
 	tray's own picture (BuildView.picture: the placed model; an uploaded
@@ -1432,7 +1413,8 @@ TechShopView.Paint = "Yellow" -- the header band: the shop's colour (LightSkin.B
 -- each tab's paint (the picked tab is painted, the others slate: Pop.selectTab)
 TechShopView.TabPaints = { Machines = "Orange", Upgrades = "Blue", Automation = "Purple" } :: { [string]: string }
 -- the cards' paints: a machine (and its upgrades) by category, the rest by item
-TechShopView.CategoryPaints = { Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal" } :: { [string]: string }
+TechShopView.CategoryPaints =
+	{ Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal", Droppers = "Purple" } :: { [string]: string }
 TechShopView.ItemPaints = { Bellows = "Pink", Slots = "Purple", Billboard = "Purple", Train = "Pink" } :: { [string]: string }
 
 local WHITE = Color3.new(1, 1, 1)

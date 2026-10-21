@@ -35,7 +35,7 @@ local DOLLAR = {
 }
 
 local function decor(): { [string]: any }
-	return { CanTouch = false, CanQuery = false, CastShadow = false }
+	return { CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
 end
 
 function LaserBuilder.build(cf: CFrame, scale: number?): Model
@@ -52,6 +52,7 @@ function LaserBuilder.build(cf: CFrame, scale: number?): Model
 		CanTouch = false,
 		CanQuery = false,
 		CastShadow = false,
+		CanCollide = false,
 	})
 	-- the "2X" on the emitter's front and the floating dollar signs
 	BlockKit.text(
@@ -66,9 +67,8 @@ function LaserBuilder.build(cf: CFrame, scale: number?): Model
 	)
 	for i, p in
 		{
-			Vector3.new(-2.0, 3.5, 0.4),
-			Vector3.new(2.0, 6.5, -0.2),
-			Vector3.new(-1.8, 10.0, -0.4),
+			Vector3.new(-2.0, 4.0, 0.4),
+			Vector3.new(2.0, 8.5, -0.2),
 		}
 	do
 		local turn = CFrame.Angles(0, 0.3 * (i % 2 * 2 - 1), 0.15 * (i - 3))

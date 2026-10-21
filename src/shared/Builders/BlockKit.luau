@@ -29,7 +29,8 @@ BlockKit.Rim = 0.16 -- how much of each face edge is rim (studs)
 BlockKit.Lift = 0.03 -- how far a face sticks out of its rim
 
 local function decor(cast: boolean?): { [string]: any }
-	return { CanTouch = false, CanQuery = false, CastShadow = cast == true }
+	-- (decor never collides; the framed blocks' outer shells, cast = true, do)
+	return { CanTouch = false, CanQuery = false, CastShadow = cast == true, CanCollide = cast == true }
 end
 
 -- A framed block: the rim colour all over, the face colour inset on every side.
@@ -181,10 +182,20 @@ function BlockKit.text(
 	end
 	local plate = Geo.block(parent, cf, size, board, PLASTIC, decor())
 	plate.Name = "Sign"
+	-- (like SoftKit.label: a canvas by pixels per stud, a scaled transparent label)
 	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Gui"
 	gui.Face = Enum.NormalId.Back
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0.3
 	gui.Parent = plate
 	local label = Instance.new("TextLabel")
+	label.Name = "Text"
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.fromScale(0.04, 0.08)
+	label.Size = UDim2.fromScale(0.92, 0.84)
+	label.TextScaled = true
 	label.Text = words
 	label.TextColor3 = ink
 	label.FontFace = Font.fromEnum(font or Enum.Font.FredokaOne)

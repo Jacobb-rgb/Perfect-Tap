@@ -57,7 +57,102 @@ return function(T, Loader)
 					count += 1
 				end
 			end
-			T.truthy(count <= 240, id .. " part budget (" .. count .. ")")
+			T.truthy(count <= 140, id .. " part budget (" .. count .. ")")
+		end
+	end)
+
+	T.test("droppers: the State snapshot's income is incomeOf (podiums + droppers), so the HUD chip matches", function()
+		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
+		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+		local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+		local function deepCopy(t: any): any
+			if type(t) ~= "table" then
+				return t
+			end
+			local out = {}
+			for k, v in t do
+				out[k] = deepCopy(v)
+			end
+			return out
+		end
+		local data = deepCopy(DataTemplate)
+		data.PlacedMachines = { { Id = "BasicDropper", X = 1, Z = 1, R = 0 }, { Id = DropperConfig.Laser.Id, X = 4, Z = 1, R = 0 } }
+		local player: any = { UserId = 7701, Name = "Dropper", Parent = true, attributes = {} }
+		player.GetAttribute = function(self, key)
+			return self.attributes[key]
+		end
+		local oldGet = rawget(DataService, "get")
+		rawset(DataService, "get", function(p)
+			return if p == player then data else nil
+		end)
+		local ok, err = pcall(function()
+			local snapshot: any = {}
+			PodiumService._test.provide(player, data, snapshot)
+			local expected = PodiumService.incomeOf(player, data)
+			T.truthy(expected >= DropperConfig.ById.BasicDropper.Income * 2, "the laser doubles the Basic Dropper")
+			T.eq(snapshot.Income, expected)
+		end)
+		rawset(DataService, "get", oldGet)
+		assert(ok, err)
+	end)
+
+	T.test("droppers: a rebirth takes the placed droppers and lasers away (owner decision pending), other machines stay", function()
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+		local function deepCopy(t: any): any
+			if type(t) ~= "table" then
+				return t
+			end
+			local out = {}
+			for k, v in t do
+				out[k] = deepCopy(v)
+			end
+			return out
+		end
+		local data = deepCopy(DataTemplate)
+		data.BlasterLevel = 10
+		data.PlacedMachines = {
+			{ Id = "BasicDropper", X = 1, Z = 1, R = 0 },
+			{ Id = "Conveyor", X = 4, Z = 1, R = 0 },
+			{ Id = DropperConfig.Laser.Id, X = 6, Z = 1, R = 0 },
+			{ Id = "GoldDropper", X = 8, Z = 1, R = 0 },
+		}
+		RebirthConfig.reset(data)
+		T.eq(#data.PlacedMachines, 1)
+		T.eq(data.PlacedMachines[1].Id, "Conveyor")
+		T.eq(DropperConfig.placedIncome(data.PlacedMachines), 0, "no dropper income left for the new run")
+	end)
+
+	T.test("droppers: a plot full of droppers (22 machine slots) stays inside a phone budget", function()
+		local most = 0
+		for _, id in
+			{
+				"BasicDropper",
+				"BlueDropper",
+				"RedDropper",
+				"PurpleDropper",
+				"GoldDropper",
+				"RainbowDropper",
+				"DarkMatterDropper",
+				DropperConfig.Laser.Id,
+			}
+		do
+			local count = 0
+			for _, d in MachineBuilder.build(id):GetDescendants() do
+				if d:IsA("BasePart") then
+					count += 1
+				end
+			end
+			most = math.max(most, count)
+		end
+		T.truthy(most * 22 <= 2500, `22 of the biggest ({most} parts) stay under 2500 parts`)
+	end)
+
+	T.test("droppers: Grid's outputCell is nil exactly when outputLocal is nil, for every machine", function()
+		local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
+		for _, machine in MachineData.List do
+			local cx = Grid.outputCell(machine.Id, 4, 4, 0)
+			T.eq(cx == nil, Grid.outputLocal(machine.Id) == nil, machine.Id)
 		end
 	end)
 end

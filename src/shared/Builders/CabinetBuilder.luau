@@ -27,7 +27,7 @@ CabinetBuilder.PillarH = 7.6 -- the corner pillars (base top -> roof)
 CabinetBuilder.Height = 9.4 -- base bottom -> roof top
 
 local function decor(): { [string]: any }
-	return { CanTouch = false, CanQuery = false, CastShadow = false }
+	return { CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
 end
 
 local DARK = rgb(22, 20, 35)
@@ -149,7 +149,7 @@ local function crest(model: Instance, cf: CFrame, kind: string, color: Color3)
 			Vector3.new(1.7, 1.7, 1.7),
 			rgb(255, 196, 60),
 			GLASS,
-			{ Transparency = 0.25, CanTouch = false, CanQuery = false, CastShadow = false }
+			{ Transparency = 0.25, CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
 		)
 		Geo.block(model, core, Vector3.new(0.9, 0.9, 0.9), rgb(255, 150, 30), NEON, decor())
 		local ring = cf * CFrame.new(0, 2.2, 0) * CFrame.Angles(0.35, 0, 0.25)
@@ -183,16 +183,16 @@ function CabinetBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, pr
 	end
 
 	-- base with a neon top
-	BlockKit.cube(model, at(0, 0.35, 0), Vector3.new(W, 0.7, D), dim, rim)
+	BlockKit.cube(model, at(0, 0.35, 0), Vector3.new(W, 0.7, D), dim, rim, "side")
 	Geo.block(model, at(0, 0.73, 0), Vector3.new(W - 0.3, 0.08, D - 0.3), color, NEON, decor())
 
 	-- the tray in front, with its price plate and the poured shards
 	local trayZ = D / 2 + 0.7
-	BlockKit.cube(model, at(0, 0.6, trayZ), Vector3.new(W - 0.4, 1.2, 1.8), DARK, DARK_RIM)
+	BlockKit.cube(model, at(0, 0.6, trayZ), Vector3.new(W - 0.4, 1.2, 1.8), DARK, DARK_RIM, "side")
 	for _, side in { -1, 1 } do
 		Geo.block(model, at(side * (W / 2 - 0.25), 0.6, trayZ), Vector3.new(0.12, 1.22, 1.82), color, NEON, decor())
 	end
-	heap(model, at(0, 1.2, trayZ - 0.1), W - 1.4, 1.2, 7, color, 3)
+	heap(model, at(0, 1.2, trayZ - 0.1), W - 1.4, 1.2, 4, color, 3)
 	if price then
 		BlockKit.text(
 			model,
@@ -227,23 +227,25 @@ function CabinetBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, pr
 	for _, side in { -1, 1 } do
 		BlockKit.cube(model, at(side * (W / 2 - 0.5), chamberY, 0), Vector3.new(0.3, chamberH, D - 1.6), DARK, DARK_RIM, "side")
 	end
-	BlockKit.cube(model, at(0, 0.7 + 1.05, -0.3), Vector3.new(W - 1.4, 0.3, D - 1.8), DARK, DARK_RIM)
-	heap(model, at(0, 0.7 + 1.2, -0.6), W - 2.2, D - 2.6, 8, color, 7)
+	BlockKit.cube(model, at(0, 0.7 + 1.05, -0.3), Vector3.new(W - 1.4, 0.3, D - 1.8), DARK, DARK_RIM, "side")
+	heap(model, at(0, 0.7 + 1.2, -0.6), W - 2.2, D - 2.6, 4, color, 7)
 	Geo.block(model, at(0, chamberY + 0.2, D / 2 - 0.45), Vector3.new(W - 1.5, chamberH - 0.4, 0.1), color, GLASS, {
 		Transparency = 0.88,
 		CanTouch = false,
 		CanQuery = false,
 		CastShadow = false,
+		CanCollide = false,
 	})
 
 	-- the funnel under the roof, its light stream and the slide into the tray
-	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.3, 0), Vector3.new(2.4, 0.6, 2.4), dim, rim)
-	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.8, 0), Vector3.new(1.2, 0.5, 1.2), DARK, DARK_RIM)
+	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.3, 0), Vector3.new(2.4, 0.6, 2.4), dim, rim, "side")
+	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.8, 0), Vector3.new(1.2, 0.5, 1.2), DARK, DARK_RIM, "side")
 	Geo.block(model, at(0, chamberY, 0.3), Vector3.new(0.4, chamberH - 1.6, 0.4), color, NEON, {
 		Transparency = 0.45,
 		CanTouch = false,
 		CanQuery = false,
 		CastShadow = false,
+		CanCollide = false,
 	})
 	local slide = at(0, 1.35, D / 2 - 0.2) * CFrame.Angles(-0.55, 0, 0)
 	Geo.block(model, slide, Vector3.new(1.6, 0.15, 2.4), DARK, PLASTIC, decor())
@@ -261,7 +263,7 @@ function CabinetBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, pr
 
 	-- the roof: a slab in the colour, a neon top edge, corner blocks
 	local roofY = 0.7 + pillarH + 0.35
-	BlockKit.cube(model, at(0, roofY, 0), Vector3.new(W + 0.2, 0.7, D + 0.2), dim, rim)
+	BlockKit.cube(model, at(0, roofY, 0), Vector3.new(W + 0.2, 0.7, D + 0.2), dim, rim, "side")
 	Geo.block(model, at(0, roofY + 0.38, 0), Vector3.new(W, 0.08, D), color, NEON, decor())
 	for _, c in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
 		BlockKit.cube(model, at(c.X * (W / 2 - 0.3), roofY + 0.75, c.Y * (D / 2 - 0.3)), Vector3.new(0.7, 0.7, 0.7), dim, rim, "flat")

@@ -2113,19 +2113,35 @@ function MachineBuilder.build(id: string, level: number?): Model
 		model:SetAttribute("MachineId", id)
 		local cell = GameConfig.CellSize
 		-- shrink it to stay inside its footprint (crystals, orbs and the rainbow reach out)
-		local reach = 0
+		local reach, height = 0, 0
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") then
 				local cf, size = d.CFrame, d.Size
-				local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = cf:GetComponents()
+				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
 				local ex = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
+				local ey = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2
 				local ez = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
 				reach = math.max(reach, math.abs(cf.Position.X) + ex, math.abs(cf.Position.Z) + ez)
+				height = math.max(height, cf.Position.Y + ey)
 			end
 		end
 		if reach > cell - 0.1 then
-			BlockKit.scale(model, CFrame.new(), (cell - 0.1) / reach)
+			local fit = (cell - 0.1) / reach
+			BlockKit.scale(model, CFrame.new(), fit)
+			height *= fit
 		end
+		-- one invisible box the build mode's taps hit (the decor doesn't take queries)
+		local hit = Instance.new("Part")
+		hit.Name = "HitBox"
+		hit.Size = Vector3.new(2 * cell - 0.4, math.max(height - 0.2, 1), 2 * cell - 0.4)
+		hit.CFrame = CFrame.new(0, 0.2 + hit.Size.Y / 2, 0)
+		hit.Transparency = 1
+		hit.Anchored = true
+		hit.CanCollide = false
+		hit.CanTouch = false
+		hit.CanQuery = true
+		hit.CastShadow = false
+		hit.Parent = model
 		local floor = Instance.new("Part")
 		floor.Name = "Base"
 		floor.Size = Vector3.new(2 * cell - 0.3, 0.2, 2 * cell - 0.3)

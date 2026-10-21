@@ -176,7 +176,8 @@ local function incomeAllSlots(player: Player, data: { [string]: any }): number
 			total += ItemData.income(desc) * multiplier
 		end
 	end
-	return total
+	-- the droppers earn on top of every podium
+	return total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
 end
 
 -- Coins per second from all podiums and the plot's droppers.
@@ -910,7 +911,24 @@ end
 ---------------------------------------------------------------- lifecycle
 
 -- Internals for the Lune tests only (tests/PodiumService.spec.luau).
+-- The State snapshot's income: podiums + droppers (= incomeOf), per podium, the slots.
+local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
+	local multiplier = EconomyService.incomeMultiplier(player)
+	local perSlot = {}
+	local total = 0
+	for slot = 1, MAX do
+		local income = PodiumService.slotIncome(player, data, slot, multiplier)
+		perSlot[slot] = income
+		total += income
+	end
+	-- (the same total as incomeOf: the HUD chip, predicted coins, the wheel and store cards)
+	snapshot.Income = total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
+	snapshot.PodiumIncome = perSlot
+	snapshot.PodiumSlots = PodiumService.slotsFor(player)
+end
+
 PodiumService._test = {
+	provide = provide,
 	action = onAction,
 	prompt = onPrompt,
 	openPicker = openPicker,
@@ -971,19 +989,7 @@ end
 function PodiumService.init()
 	Net.on("PodiumAction", onAction)
 	PenService.setPodiumPlacer(PodiumService.place)
-	StateService.addProvider(function(player, data, snapshot)
-		local multiplier = EconomyService.incomeMultiplier(player)
-		local perSlot = {}
-		local total = 0
-		for slot = 1, MAX do
-			local income = PodiumService.slotIncome(player, data, slot, multiplier)
-			perSlot[slot] = income
-			total += income
-		end
-		snapshot.Income = total
-		snapshot.PodiumIncome = perSlot
-		snapshot.PodiumSlots = PodiumService.slotsFor(player)
-	end)
+	StateService.addProvider(PodiumService._test.provide)
 	for _, plot in WorldLayout.Plots do
 		setupPrompts(plot.Id)
 		refreshLocks(plot.Id, nil)

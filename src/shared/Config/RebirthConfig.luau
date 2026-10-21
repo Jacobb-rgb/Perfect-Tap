@@ -23,7 +23,9 @@
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
 	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
 	  the podiums (unless Podium Keeper), the Foundry's ingots, the train's
-	  cargo, the machines' queues (RebirthService also takes your loose and
+	  cargo, the machines' queues, the placed droppers and Money Lasers (owner
+	  decision pending: keep or lose droppers; lost for now, so their income
+	  can't carry the new run) (RebirthService also takes your loose and
 	  carried items out of the world). Dusty relics are artifacts, never
 	  ore: the ones in those lists wait in the pen (RebirthService hands them
 	  to the relic keeper, which adds them to the collection). The enchants
@@ -73,6 +75,7 @@
 	Pure: rules and save math only (server and client both read it).
 ]]
 
+local DropperConfig = require(script.Parent.DropperConfig)
 local BlasterData = require(script.Parent.BlasterData)
 local EnchantConfig = require(script.Parent.EnchantConfig)
 
@@ -521,6 +524,17 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 			if type(entry) == "table" then
 				entry.In = nil
 				entry.Out = nil
+			end
+		end
+		-- the droppers and Money Lasers come down, like the podiums' ore (owner
+		-- decision pending: keep or lose droppers); not back to the Build menu,
+		-- placing them again would keep their income
+		local list = data.PlacedMachines
+		for i = #list, 1, -1 do
+			local entry = list[i]
+			local id = if type(entry) == "table" then entry.Id else nil
+			if type(id) == "string" and (DropperConfig.ById[id] or id == DropperConfig.Laser.Id) then
+				table.remove(list, i)
 			end
 		end
 	end

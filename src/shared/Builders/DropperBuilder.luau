@@ -66,7 +66,7 @@ DropperBuilder.Depth = 7 -- the stage along z
 DropperBuilder.Height = 10.6 -- stage bottom -> arm top (before Scale)
 
 local function decor(extra: { [string]: any }?): { [string]: any }
-	local props = { CanTouch = false, CanQuery = false, CastShadow = false }
+	local props = { CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
 	if extra then
 		for k, v in extra do
 			props[k] = v
@@ -167,7 +167,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 	local stageH = 0.5
 
 	---------------------------------------------------------------- the stage, its glowing front edge and the price
-	cube(at(0, stageH / 2, 0), Vector3.new(W, stageH, D), DARK, DARK_RIM)
+	cube(at(0, stageH / 2, 0), Vector3.new(W, stageH, D), DARK, DARK_RIM, "flat")
 	Geo.block(model, at(0, stageH + 0.01, D / 2 - 0.2), Vector3.new(W - 0.2, 0.04, 0.16), glow, NEON, decor())
 	BlockKit.text(
 		model,
@@ -182,22 +182,22 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 
 	---------------------------------------------------------------- the stepped pedestal and its glowing step
 	local p1y = stageH + 0.8
-	cube(at(bx, p1y, -0.2), Vector3.new(5.0, 1.6, 4.6))
+	cube(at(bx, p1y, -0.2), Vector3.new(5.0, 1.6, 4.6), nil, nil, "side")
 	local p2y = stageH + 1.6 + 0.6
-	cube(at(bx + 0.3, p2y, -0.4), Vector3.new(3.8, 1.2, 3.6))
-	cube(at(bx - 0.4, stageH + 0.4, 2.55), Vector3.new(2.6, 0.8, 0.9))
+	cube(at(bx + 0.3, p2y, -0.4), Vector3.new(3.8, 1.2, 3.6), nil, nil, "side")
+	cube(at(bx - 0.4, stageH + 0.4, 2.55), Vector3.new(2.6, 0.8, 0.9), nil, nil, "flat")
 	Geo.block(model, at(bx - 0.4, stageH + 0.42, 3.02), Vector3.new(2.2, 0.22, 0.05), glowOf(st, 2), NEON, decor())
 	Geo.block(model, at(bx, stageH + 1.6, 2.12), Vector3.new(4.6, 0.12, 0.06), glowOf(st, 3), NEON, decor())
 
 	---------------------------------------------------------------- the leaning column and the ladder of slot blocks
 	local lowerY = p2y + 0.6 + 1.5
-	cube(at(bx + 0.1, lowerY, -0.4) * CFrame.Angles(0, 0, 0.06), Vector3.new(2.3, 3.0, 2.5))
+	cube(at(bx + 0.1, lowerY, -0.4) * CFrame.Angles(0, 0, 0.06), Vector3.new(2.3, 3.0, 2.5), nil, nil, "side")
 	local upperY = lowerY + 2.9
-	cube(at(bx - 0.15, upperY, -0.4) * CFrame.Angles(0, 0, 0.13), Vector3.new(2.1, 2.9, 2.3))
+	cube(at(bx - 0.15, upperY, -0.4) * CFrame.Angles(0, 0, 0.13), Vector3.new(2.1, 2.9, 2.3), nil, nil, "side")
 	for i = 1, 4 do
 		local ly = p2y + 0.2 + i * 1.25
 		local lx = bx + 1.55 - (i - 1) * 0.12
-		cube(at(lx, ly, -0.3 + (i % 2) * 0.12), Vector3.new(1.0, 1.15, 1.9), nil, nil, "side")
+		cube(at(lx, ly, -0.3 + (i % 2) * 0.12), Vector3.new(1.0, 1.15, 1.9), nil, nil, "flat")
 		Geo.block(model, at(lx, ly, 0.68 + (i % 2) * 0.12), Vector3.new(0.62, 0.28, 0.05), glowOf(st, i + 1), NEON, decor())
 	end
 
@@ -205,7 +205,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 	local armY = upperY + 1.45 + 0.9
 	local armRight, armLeft = bx + 1.6, sx - 1.0
 	local armLen = armRight - armLeft
-	cube(at((armRight + armLeft) / 2, armY, -0.4), Vector3.new(armLen, 1.8, 2.6))
+	cube(at((armRight + armLeft) / 2, armY, -0.4), Vector3.new(armLen, 1.8, 2.6), nil, nil, "side")
 	Geo.block(
 		model,
 		at((armRight + armLeft) / 2 - 0.4, armY - 0.92, 0.82),
@@ -214,7 +214,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		NEON,
 		decor()
 	)
-	cube(at(bx + 0.4, armY + 1.25, -0.4), Vector3.new(2.6, 0.7, 2.3))
+	cube(at(bx + 0.4, armY + 1.25, -0.4), Vector3.new(2.6, 0.7, 2.3), nil, nil, "flat")
 	Geo.block(model, at((armRight + armLeft) / 2, armY + 0.92, 0.82), Vector3.new(armLen - 0.2, 0.12, 0.1), glow, NEON, decor())
 	Geo.block(
 		model,
@@ -238,7 +238,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 
 	---------------------------------------------------------------- the spout, its light beam, the falling ores and the pad
 	local spoutY = armY - 0.9 - 0.45
-	cube(at(sx, spoutY, -0.4), Vector3.new(1.7, 0.9, 1.7))
+	cube(at(sx, spoutY, -0.4), Vector3.new(1.7, 0.9, 1.7), nil, nil, "flat")
 	Geo.block(model, at(sx, spoutY - 0.47, -0.4), Vector3.new(1.2, 0.06, 1.2), glow, NEON, decor())
 	local lamp = Geo.block(model, at(sx, spoutY - 0.8, -0.4), Vector3.new(0.2, 0.2, 0.2), glow, NEON, decor({ Transparency = 1 }))
 	local light = Instance.new("PointLight")
@@ -253,7 +253,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		local oreId = dropper.Ores[(i - 1) % #dropper.Ores + 1]
 		dropOre(oreId, sx + (i - 1.5) * 0.2, beamTop - 0.6 - i * 1.9, -0.4 + (i % 2) * 0.15, CFrame.Angles(i, i * 2, 0.4), 30 + i)
 	end
-	cube(at(sx - 0.1, padY, 0.2), Vector3.new(2.8, 0.7, 3.4), DARK, DARK_RIM)
+	cube(at(sx - 0.1, padY, 0.2), Vector3.new(2.8, 0.7, 3.4), DARK, DARK_RIM, "flat")
 	for _, side in { -1, 1 } do
 		Geo.block(model, at(sx - 0.1 + side * 1.36, padY, 0.2), Vector3.new(0.1, 0.72, 3.42), glow, NEON, decor())
 		Geo.block(model, at(sx - 0.1, padY, 0.2 + side * 1.66), Vector3.new(2.82, 0.72, 0.1), glow, NEON, decor())
@@ -266,7 +266,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 	---------------------------------------------------------------- crystals around the pedestal and the pad
 	cluster(model, at(bx + 2.6, stageH, 2.0), st, 1, 4)
 	cluster(model, at(bx - 2.3, stageH, 1.9), st, 3, 3)
-	cluster(model, at(bx + 2.4, stageH, -2.4), st, 5, 3)
+	cluster(model, at(bx + 2.4, stageH, -2.4), st, 5, 2)
 	cluster(model, at(sx - 1.4, stageH, 2.2), st, 2, 3)
 
 	---------------------------------------------------------------- what each one is made of
@@ -321,10 +321,10 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		end
 	elseif kind == "rainbow" then
 		-- a block rainbow behind it
-		for band = 1, 6, 2 do
+		for band = 1, 5, 4 do
 			local r = 4.6 - band * 0.3
-			for k = 0, 6 do
-				local a = k / 6 * math.pi
+			for k = 0, 5 do
+				local a = k / 5 * math.pi
 				Geo.block(
 					model,
 					at(math.cos(a) * r, stageH + 1 + math.sin(a) * r, -3.6),
@@ -337,7 +337,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		end
 	elseif kind == "dark" then
 		-- stars on the blocks, violet cracks, the spiral, the swirl ring and the orbs
-		for i = 1, 6 do
+		for i = 1, 4 do
 			local a = i * 2.1
 			Geo.block(
 				model,
@@ -353,7 +353,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		BlockKit.pixelArt(model, at(bx - 0.15, upperY, 0.82) * CFrame.Angles(0, 0, 0.13), SPIRAL, 0.26, { ["#"] = glow }, 0.05, NEON)
 		for k = 1, 18 do
 			local a = k / 18 * math.pi * 2
-			if k % 2 == 0 then
+			if k % 3 == 0 then
 				Geo.block(
 					model,
 					at(bx + math.cos(a) * 3.6, stageH + 1.2 + math.sin(a * 2) * 0.25, -0.2 + math.sin(a) * 3.0) * CFrame.Angles(0, -a, 0),
