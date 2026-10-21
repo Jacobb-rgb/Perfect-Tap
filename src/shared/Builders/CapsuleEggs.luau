@@ -117,7 +117,9 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 			T.seg(s.Top, "Vein" .. i, a0, a1, 0.1, 0.06, s.Glow, NEON)
 		end
 		-- copper and gold nuggets set in the stone
-		for i, k in { { -0.2, 0.75, rgb(214, 120, 60) }, { 0.95, 1.0, GOLD }, { -1.0, 0.55, GOLD }, { 0.35, 1.45, rgb(214, 120, 60) } } do
+		local list1: { { any } } =
+			{ { -0.2, 0.75, rgb(214, 120, 60) }, { 0.95, 1.0, GOLD }, { -1.0, 0.55, GOLD }, { 0.35, 1.45, rgb(214, 120, 60) } }
+		for i, k in list1 do
 			if s.Room() < 1 then
 				break
 			end
@@ -209,15 +211,14 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 		ring(s, "Ring1", 0.95, 0.1, SILVER, M.Metal)
 		ring(s, "Ring2", 1.65, 0.08, SILVER, M.Metal)
 		-- a crown of glowing crystals on the tip, the tallest in the middle
-		for i, k in
-			{
-				{ 0, 0, 1.3, 0.42, 0, cyan },
-				{ -0.36, 0.05, 0.9, 0.32, 0.4, pink },
-				{ 0.36, 0, 0.95, 0.32, -0.4, pink },
-				{ 0.05, 0.35, 0.8, 0.28, -0.1, cyan },
-				{ -0.1, -0.35, 0.75, 0.26, 0.15, cyan },
-			}
-		do
+		local list3: { { any } } = {
+			{ 0, 0, 1.3, 0.42, 0, cyan },
+			{ -0.36, 0.05, 0.9, 0.32, 0.4, pink },
+			{ 0.36, 0, 0.95, 0.32, -0.4, pink },
+			{ 0.05, 0.35, 0.8, 0.28, -0.1, cyan },
+			{ -0.1, -0.35, 0.75, 0.26, 0.15, cyan },
+		}
+		for i, k in list3 do
 			if s.Room() < 1 then
 				break
 			end
@@ -228,15 +229,14 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 			K.part(s.Top, "CrownCrystal" .. i, cf, Vector3.new(w, h, w), k[6] :: Color3, NEON)
 		end
 		-- crystals breaking out of both sides
-		for i, k in
-			{
-				{ 1.25, 0.55, 1.15, 0.42, -0.9 },
-				{ 1.75, 0.2, 0.75, 0.32, -1.2 },
-				{ -1.3, 0.6, 1.1, 0.4, 0.9 },
-				{ -1.8, 0.25, 0.7, 0.3, 1.2 },
-				{ 0.75, 1.5, 0.6, 0.26, -0.6 },
-			}
-		do
+		local list4: { { any } } = {
+			{ 1.25, 0.55, 1.15, 0.42, -0.9 },
+			{ 1.75, 0.2, 0.75, 0.32, -1.2 },
+			{ -1.3, 0.6, 1.1, 0.4, 0.9 },
+			{ -1.8, 0.25, 0.7, 0.3, 1.2 },
+			{ 0.75, 1.5, 0.6, 0.26, -0.6 },
+		}
+		for i, k in list4 do
 			if s.Room() < 1 then
 				break
 			end
@@ -296,7 +296,8 @@ function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 			end
 		end
 		-- three jewels on the front
-		for i, k in { { 0, 1.28, ruby, 0.44 }, { -0.62, 0.85, sapphire, 0.3 }, { 0.62, 0.85, emerald, 0.3 } } do
+		local list2: { { any } } = { { 0, 1.28, ruby, 0.44 }, { -0.62, 0.85, sapphire, 0.3 }, { 0.62, 0.85, emerald, 0.3 } }
+		for i, k in list2 do
 			if s.Room() < 2 then
 				break
 			end
