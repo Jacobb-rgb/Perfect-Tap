@@ -2,30 +2,35 @@
 	GALAXY (limited edition, upcoming): the costumes of the set's 6 golems
 	and the set's shard (GolemGearLimited explains the contract and the tools).
 
-	  SpaceHelmet   Astro Cadet (Rare): a round glass bubble helmet on a white
-	                collar with an antenna, a backpack with two thrusters
-	                blasting flame, a chest control panel, its own star flag
-	  Comet         Comet Cub (Rare): a blazing comet crashed on its head, a
-	                fiery tail swooshing up and back, flight goggles pushed up
-	                on its forehead, meteor cracks glowing in its body
-	  Orbiters      Orbit Keeper (Epic): a glowing orbit ring round its head
-	                carrying a ringed planet, a red planet and a cratered moon,
-	                a little sun hovering over it, a constellation on its chest
-	  StarHat       Cosmo Wizard (Epic): a tall stepped star-spangled wizard
-	                hat with a bent tip and a crescent moon, a fluffy beard, a
-	                staff with a glowing star, a spellbook, a starry robe
-	  StarCrown     Nova Guardian (Legendary): a gold crown with a nova star,
-	                a ring of light standing behind its head, a star-shaped
-	                shield, a sword of light, gold armour and a cape, embers
+	  SpaceHelmet   Astro Cadet (Rare): a round glass bubble helmet with an
+	                antenna, a jetpack with red fins and two thrusters blasting
+	                flame, a control panel, moon boots, a tool pouch, its star
+	                flag and a tiny satellite buddy with solar wings
+	  Comet         Comet Cub (Rare): a blazing comet crashed on its head,
+	                flight goggles, a red aviator scarf streaming back, a
+	                short fiery cape, rocket boots with flame jets
+	  Orbiters      Orbit Keeper (Epic): a glowing orbit ring of planets round
+	                its head, a little sun over it, a constellation on its
+	                chest, a brass telescope, a midnight star cloak with a
+	                mantle and a star clasp, boots
+	  StarHat       Cosmo Wizard (Epic): a tall star-spangled wizard hat, a
+	                fluffy beard, a star staff, a spellbook with a floating
+	                crystal ball, a long starry cape with a high pointed
+	                collar and a glowing clasp, wizard shoes
+	  StarCrown     Nova Guardian (Legendary): a gold crown with a nova star
+	                and a winged helm, a ring of light behind its head, a star
+	                shield, a sword of light, gold armour and greaves, a royal
+	                cape with a nova clasp, embers
 	  NebulaCrown   Nebula Titan (Mythic): a gold crown under an orbit ring of
-	                planets, a nebula orb, a high cosmic collar and cape, a
-	                sceptre with a ringed planet, a galaxy in its chest, a
-	                nebula cloud at its feet, embers and its own light
+	                planets, a nebula orb, a high cosmic collar, nebula wings
+	                with glowing edges, a cosmic cape, a sceptre, a galaxy in
+	                its chest, gold boots, a nebula cloud at its feet, embers
+	                and its own light
 
-	The shard: a GALAXY EGG: a glossy deep-space egg with nebula clouds and
-	stars on its shell, a planet ring round it with two moons riding it, a
-	gold star emblem on the front, a comet streaking past, a crystal tip and
-	a gold stand.
+	The shard: a GALAXY EGG: a glossy deep-space egg with nebula clouds,
+	stars and a shine on its shell, a planet ring with two moons, gold star
+	wings with glowing feathers, a gold star emblem, a comet and a little
+	rocket zooming past, sparkles, a crystal tip and a gold stand.
 ]]
 
 local Types = require(script.Parent.Parent.LimitedGearTypes)
@@ -186,6 +191,95 @@ local function belt(c: Ctx, color: Color3, buckle: boolean)
 	end
 end
 
+--[[
+	A CAPE hanging behind the body from the shoulders (z 0.68 at the top,
+	`back` at the hem): the cloth, two flares spreading out at the hem
+	(right-angled tri() wedges, so they show past the fists from the front),
+	a hem trim across the bottom, and (when given) a mantle over the
+	shoulders and a clasp under the chin. Added in that order while there is
+	room. Returns the cape's frame (the cloth's center, unscaled offsets
+	below are in its plane) for decorations on it.
+]]
+type CapeOpts = {
+	Cloth: Color3,
+	Flare: Color3?,
+	Hem: Color3,
+	HemMaterial: Enum.Material?,
+	Mantle: Color3?,
+	Clasp: Color3?,
+	ClaspMaterial: Enum.Material?,
+	Bottom: number?, -- the hem's height (unscaled)
+	Width: number?,
+	Spread: number?, -- how far each flare reaches past the cloth
+	Back: number?, -- the hem's z
+	Material: Enum.Material?,
+}
+local function cape(c: Ctx, o: CapeOpts): (CFrame, number, number)
+	local top, bottom = 1.42, o.Bottom or 0.12
+	local zTop, zBot = 0.69, o.Back or 0.92
+	local width, spread = o.Width or 1.9, o.Spread or 0.42
+	local material = o.Material or M.Fabric
+	local len = math.sqrt((top - bottom) ^ 2 + (zBot - zTop) ^ 2)
+	local tilt = math.atan2(zBot - zTop, top - bottom)
+	local frame = c.At(0, (top + bottom) / 2, (zTop + zBot) / 2) * CFrame.Angles(-tilt, 0, 0)
+	local function on(u: number, v: number, w: number): Vector3
+		return (frame * CFrame.new(u * c.S, v * c.S, w * c.S)).Position
+	end
+	if c.Room() >= 1 then
+		K.part(c.Model, "Cape", frame, c.V(width, len, 0.06), o.Cloth, material)
+	end
+	for i, side in { -1, 1 } do
+		if c.Room() < 1 then
+			break
+		end
+		local x = side * width / 2
+		T.tri(
+			c.Model,
+			"CapeFlare" .. i,
+			on(x, len * 0.12, -0.005),
+			on(x, -len / 2, -0.005),
+			on(x + side * spread, -len / 2, -0.005),
+			0.06 * c.S,
+			o.Flare or o.Cloth,
+			material,
+			1
+		)
+	end
+	if c.Room() >= 1 then
+		K.part(
+			c.Model,
+			"CapeHem",
+			frame * CFrame.new(0, (-len / 2 + 0.05) * c.S, -0.01 * c.S),
+			c.V(width + 2 * spread, 0.1, 0.09),
+			o.Hem,
+			o.HemMaterial or M.Foil
+		)
+	end
+	if o.Mantle and c.Room() >= 1 then
+		K.part(c.Model, "Mantle", c.At(0, 1.47, 0.24), c.V(1.96, 0.14, 0.98), o.Mantle, material)
+	end
+	if o.Clasp and c.Room() >= 1 then
+		diamond(c.Model, "Clasp", c.At(0, 1.36, -0.46), 0.2 * c.S, 0.2 * c.S, 0.06 * c.S, o.Clasp, o.ClaspMaterial or M.Foil)
+	end
+	return frame, width, len
+end
+
+-- chunky boots over the stone legs (a sole in `sole` when there is room)
+local function boots(c: Ctx, color: Color3, material: Enum.Material, toe: Color3?)
+	for i, x in { -0.3, 0.3 } do
+		if c.Room() >= 1 then
+			K.part(c.Model, "Boot" .. i, c.At(x, 0.16, -0.04), c.V(0.52, 0.32, 0.64), color, material)
+		end
+	end
+	if toe then
+		for i, x in { -0.3, 0.3 } do
+			if c.Room() >= 1 then
+				K.part(c.Model, "Toe" .. i, c.At(x, 0.1, -0.33), c.V(0.54, 0.2, 0.12), toe, M.Foil)
+			end
+		end
+	end
+end
+
 ---------------------------------------------------------------- the costumes
 
 local function astroCadet(c: Ctx): number
@@ -248,6 +342,42 @@ local function astroCadet(c: Ctx): number
 		star(c.Model, "Badge", c.At(-0.8, 1.42, -0.3), 0.2 * c.S, 0.04 * c.S, GOLD, M.Foil)
 	end
 	cute(c, -0.58, M.SmoothPlastic)
+	-- chunky white moon boots with navy soles
+	boots(c, WHITE, M.SmoothPlastic, nil)
+	for i, x in { -0.3, 0.3 } do
+		if c.Room() >= 1 then
+			K.part(c.Model, "Sole" .. i, c.At(x, 0.04, -0.04), c.V(0.56, 0.08, 0.68), c.Look.Trim, M.SmoothPlastic)
+		end
+	end
+	-- red fins on the jetpack
+	for i, side in { -1, 1 } do
+		if c.Room() < 1 then
+			break
+		end
+		local x = side * 0.53
+		T.tri(
+			c.Model,
+			"Fin" .. i,
+			T.P(c, x, 1.32, 0.72),
+			T.P(c, x, 0.66, 0.72),
+			T.P(c, side * 0.9, 0.66, 0.72),
+			0.06 * c.S,
+			MARS,
+			M.SmoothPlastic,
+			1
+		)
+	end
+	-- a tiny satellite buddy orbiting over its shoulder: gold body, blue solar wings
+	if c.Room() >= 3 then
+		local sat = c.At(1.3, 2.86, -0.2) * CFrame.Angles(0.3, 0.5, 0.35)
+		K.part(c.Model, "Satellite", sat, c.V(0.26, 0.26, 0.3), GOLD, M.Foil)
+		K.part(c.Model, "SolarL", sat * CFrame.new(-0.3 * c.S, 0, 0), c.V(0.34, 0.2, 0.03), rgb(60, 110, 230), M.SmoothPlastic)
+		K.part(c.Model, "SolarR", sat * CFrame.new(0.3 * c.S, 0, 0), c.V(0.34, 0.2, 0.03), rgb(60, 110, 230), M.SmoothPlastic)
+	end
+	-- a tool pouch on the belt
+	if c.Room() >= 1 then
+		K.part(c.Model, "Pouch", c.At(-0.42, 0.56, -0.47), c.V(0.28, 0.24, 0.12), c.Look.Trim, M.SmoothPlastic)
+	end
 	return top
 end
 
@@ -332,6 +462,24 @@ local function cometCub(c: Ctx): number
 	end
 	T.redress(c, "Core", c.At(0, 0.92, -0.46) * CFrame.Angles(0, 0, PI / 4), c.V(0.26, 0.26, 0.04), c.Glow, NEON)
 	cute(c, -0.65, nil)
+	-- a red aviator scarf, its ends streaming back in the comet's wind
+	local scarf, scarfEnd = rgb(220, 44, 50), rgb(255, 110, 40)
+	if c.Room() >= 1 then
+		K.part(c.Model, "Scarf", c.At(0, 1.42, 0.02), c.V(1.3, 0.2, 0.96), scarf, M.Fabric)
+	end
+	if c.Room() >= 2 then
+		T.seg(c.Model, "ScarfEnd1", T.P(c, -0.3, 1.42, 0.5), T.P(c, -0.86, 1.5, 1.04), 0.06 * c.S, 0.3 * c.S, scarf, M.Fabric)
+		T.seg(c.Model, "ScarfEnd2", T.P(c, -0.86, 1.5, 1.04), T.P(c, -1.36, 1.74, 1.3), 0.06 * c.S, 0.24 * c.S, scarfEnd, M.Fabric)
+	end
+	-- rocket boots with little jets of flame at the heels
+	boots(c, rgb(84, 84, 104), M.Metal, nil)
+	for i, x in { -0.3, 0.3 } do
+		if c.Room() >= 1 then
+			T.ellipsoid(c.Model, "Jet" .. i, c.At(x, 0.16, 0.44), c.V(0.22, 0.22, 0.34), FLAME_HOT, NEON)
+		end
+	end
+	-- a short fiery cape with a gold hem
+	cape(c, { Cloth = rgb(200, 50, 40), Flare = FLAME, Hem = GOLD, Bottom = 0.36, Width = 1.8, Spread = 0.4, Back = 0.88 })
 	return top
 end
 
@@ -402,6 +550,23 @@ local function orbitKeeper(c: Ctx): number
 	end
 	belt(c, rgb(80, 40, 150), true)
 	cute(c, -0.65, M.SmoothPlastic)
+	-- the astronomer's star cloak: midnight cloth, silver hem, a purple
+	-- mantle and a star clasp, stars glowing on its flares
+	local frame, width, len = cape(c, {
+		Cloth = rgb(30, 26, 92),
+		Hem = rgb(200, 214, 255),
+		Mantle = c.Look.Trim,
+		Clasp = STAR_YELLOW,
+		Width = 1.9,
+		Spread = 0.46,
+	})
+	for i, side in { -1, 1 } do
+		if c.Room() >= 1 then
+			local at = frame * CFrame.new(side * (width / 2 + 0.14) * c.S, -len * 0.36 * c.S, -0.05 * c.S)
+			diamond(c.Model, "CapeStar" .. i, at, 0.14 * c.S, 0.14 * c.S, 0.03 * c.S, STAR_WHITE, NEON)
+		end
+	end
+	boots(c, rgb(40, 30, 90), M.SmoothPlastic, nil)
 	return top
 end
 
@@ -467,6 +632,45 @@ local function cosmoWizard(c: Ctx): number
 		K.part(c.Model, "Book", book, c.V(0.18, 0.62, 0.5), rgb(200, 40, 90), M.SmoothPlastic)
 		K.part(c.Model, "Pages", book * CFrame.new(0.03 * c.S, 0, 0), c.V(0.16, 0.56, 0.46), rgb(255, 244, 214), M.SmoothPlastic)
 	end
+	-- the long starry wizard cape: violet cloth, a gold hem, a star clasp
+	cape(c, {
+		Cloth = hat,
+		Flare = hatDark,
+		Hem = GOLD,
+		Mantle = hatDark,
+		Clasp = c.Glow,
+		ClaspMaterial = NEON,
+		Bottom = 0.06,
+		Width = 1.96,
+		Spread = 0.5,
+		Back = 0.98,
+	})
+	-- the tall pointed collar standing behind the head
+	for i, side in { -1, 1 } do
+		if c.Room() < 1 then
+			break
+		end
+		T.tri(
+			c.Model,
+			"Collar" .. i,
+			T.P(c, side * 0.12, 1.5, 0.74),
+			T.P(c, side * 0.98, 1.5, 0.74),
+			T.P(c, side * 0.98, 2.64, 0.86),
+			0.06 * c.S,
+			hatDark,
+			M.Fabric,
+			1
+		)
+	end
+	-- a crystal ball floating over the spellbook, a star glowing inside
+	if c.Room() >= 2 then
+		local orb = c.At(-1.02, 1.62, -0.42)
+		local glass = K.part(c.Model, "CrystalBall", orb, c.V(0.46, 0.46, 0.46), rgb(190, 230, 255), M.Glass, BALL)
+		glass.Transparency = 0.35
+		diamond(c.Model, "BallStar", orb, 0.16 * c.S, 0.16 * c.S, 0.16 * c.S, c.Glow, NEON)
+	end
+	-- curly wizard shoes
+	boots(c, hatDark, M.Fabric, nil)
 	-- magic sparkles in the air
 	for i, k in { { -1.1, 2.4, -0.3 }, { -0.9, 3.3, -0.2 } } do
 		if c.Room() >= 1 then
@@ -538,11 +742,38 @@ local function novaGuardian(c: Ctx): number
 			)
 		end
 	end
-	belt(c, GOLD_DARK, false)
-	-- the cape and its gold collar
-	if c.Room() >= 1 then
-		K.part(c.Model, "Cape", c.At(0, 0.94, 0.52) * CFrame.Angles(0.14, 0, 0), c.V(1.3, 1.2, 0.06), rgb(24, 30, 96), M.Fabric)
+	-- the royal cape: deep blue, gold-edged flares, a gold hem, a nova clasp
+	cape(c, {
+		Cloth = rgb(24, 30, 110),
+		Flare = rgb(36, 46, 150),
+		Hem = GOLD,
+		Clasp = c.Glow,
+		ClaspMaterial = NEON,
+		Bottom = 0.04,
+		Width = 2.0,
+		Spread = 0.56,
+		Back = 1.0,
+	})
+	-- the winged helm: gold wings sweeping up from the sides of the head
+	for i, side in { -1, 1 } do
+		if c.Room() < 2 then
+			break
+		end
+		T.tri(
+			c.Model,
+			"HelmWing" .. i,
+			T.P(c, side * 0.77, 1.98, 0.05),
+			T.P(c, side * 0.77, 2.62, 0.2),
+			T.P(c, side * 1.32, 3.16, 0.46),
+			0.06 * c.S,
+			GOLD,
+			M.Foil,
+			2
+		)
 	end
+	-- gold greaves
+	boots(c, GOLD_DARK, M.Foil, nil)
+	belt(c, GOLD_DARK, false)
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, c.Glow, 4)
@@ -608,8 +839,47 @@ local function nebulaTitan(c: Ctx): number
 			diamond(c.Model, "CollarPoint" .. i, cf, 0.34 * c.S, 0.34 * c.S, 0.1 * c.S, GOLD, M.Foil)
 		end
 	end
-	if c.Room() >= 1 then
-		K.part(c.Model, "Cape", c.At(0, 0.92, 0.56) * CFrame.Angles(0.16, 0, 0), c.V(1.6, 1.36, 0.06), SPACE, M.Fabric)
+	-- the cosmic cape: deep space cloth, nebula-violet flares, a gold hem
+	cape(c, {
+		Cloth = SPACE,
+		Flare = rgb(80, 30, 150),
+		Hem = GOLD,
+		Bottom = 0.04,
+		Width = 2.04,
+		Spread = 0.6,
+		Back = 1.02,
+	})
+	-- nebula wings fanning out behind the collar: a violet sail, a pink one
+	for i, side in { -1, 1 } do
+		if c.Room() < 2 then
+			break
+		end
+		T.tri(
+			c.Model,
+			"Wing" .. i,
+			T.P(c, side * 0.5, 2.3, 1.06),
+			T.P(c, side * 2.0, 3.4, 1.24),
+			T.P(c, side * 1.6, 1.5, 1.18),
+			0.05 * c.S,
+			rgb(120, 70, 230),
+			M.SmoothPlastic,
+			2
+		)
+	end
+	-- their glowing pink leading edges
+	for i, side in { -1, 1 } do
+		if c.Room() >= 1 then
+			T.seg(
+				c.Model,
+				"WingEdge" .. i,
+				T.P(c, side * 0.5, 2.3, 1.04),
+				T.P(c, side * 2.04, 3.43, 1.22),
+				0.1 * c.S,
+				0.1 * c.S,
+				rgb(255, 120, 230),
+				NEON
+			)
+		end
 	end
 	-- the sceptre with a ringed planet in the right fist
 	if c.Room() >= 3 then
@@ -672,6 +942,8 @@ local function nebulaTitan(c: Ctx): number
 			diamond(c.Model, "Speck" .. i, c.At(k[1], k[2], k[3]), k[4] * c.S, k[4] * c.S, 0.03 * c.S, STAR_WHITE, NEON)
 		end
 	end
+	-- gold boots with violet toes
+	boots(c, GOLD, M.Foil, nil)
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, c.Glow, 5)
@@ -726,8 +998,8 @@ function Galaxy.shard(kit: Kit, tools: Tools, s: Shard)
 		local p = P(x, y, z)
 		return CFrame.lookAt(p, P(x * 2, y, z * 2))
 	end
-	local deep = rgb(34, 20, 96)
-	local deepLow = rgb(20, 14, 64)
+	local deep = rgb(56, 32, 150)
+	local deepLow = rgb(34, 22, 104)
 	local glow = s.Glow
 
 	-- Bottom: the round lower shell, the glowing band at the waist, the cracks
@@ -780,14 +1052,14 @@ function Galaxy.shard(kit: Kit, tools: Tools, s: Shard)
 		end
 		local cf = surface(k[1], k[2], -0.06) * CFrame.Angles(0, 0, k[5])
 		local tint = ({ rgb(255, 90, 210), rgb(80, 160, 255), rgb(170, 90, 255) })[i]
-		local cloud = T.ellipsoid(s.Top, "Nebula" .. i, cf, Vector3.new(k[3], k[4], 0.24), tint, NEON)
-		cloud.Transparency = 0.45
+		local cloud = T.ellipsoid(s.Top, "Nebula" .. i, cf, Vector3.new(k[3], k[4], 0.24), tint, M.SmoothPlastic)
+		cloud.Transparency = 0.2
 	end
 	-- the planet ring round the egg: a wide pale ring and a glowing inner one
 	local ringCf = at(0, 0.5, 0) * CFrame.Angles(-0.28, 0, 0.18)
 	local outer = K.upright(s.Top, "RingOuter", ringCf, 0.05, 3.9, rgb(255, 214, 150), M.SmoothPlastic)
 	outer.Transparency = 0.15
-	K.upright(s.Top, "RingInner", ringCf, 0.09, 3.2, glow, NEON)
+	K.upright(s.Top, "RingInner", ringCf, 0.09, 3.1, K.darker(glow, 0.15), M.SmoothPlastic)
 	-- two moons riding the ring
 	for i, k in { { -1.7, 0.18, -0.6, 0.42 }, { 1.72, 0.0, 0.5, 0.34 } } do
 		if s.Room() < 1 then
@@ -853,6 +1125,45 @@ function Galaxy.shard(kit: Kit, tools: Tools, s: Shard)
 		tail1.Transparency = 0.25
 		local tail2 = T.ellipsoid(s.Top, "CometTail2", dir * CFrame.new(0, 0, -0.95), Vector3.new(0.22, 0.22, 0.7), FLAME, NEON)
 		tail2.Transparency = 0.45
+	end
+	-- the glossy shine on the shell (a pet-egg highlight)
+	if s.Room() >= 1 then
+		local shine = T.ellipsoid(
+			s.Top,
+			"Shine",
+			surface(-0.55, 1.45, 0.0) * CFrame.Angles(0, 0, 0.5),
+			Vector3.new(0.22, 0.62, 0.08),
+			WHITE,
+			M.SmoothPlastic
+		)
+		shine.Transparency = 0.25
+	end
+	-- golden star wings on its sides: a gold sail and a glowing inner feather
+	for i, side in { -1, 1 } do
+		if s.Room() < 2 then
+			break
+		end
+		local root = P(side * 1.05, 0.7, 0.25)
+		T.tri(s.Top, "Wing" .. i, root, P(side * 2.35, 2.05, 0.55), P(side * 2.0, 0.3, 0.5), 0.08, GOLD, M.Foil, 2)
+	end
+	for i, side in { -1, 1 } do
+		if s.Room() < 1 then
+			break
+		end
+		T.seg(s.Top, "WingGlow" .. i, P(side * 1.15, 0.8, 0.2), P(side * 2.2, 1.85, 0.48), 0.12, 0.12, rgb(255, 120, 220), NEON)
+	end
+	-- sparkles floating round it
+	for i, k in { { -1.65, 2.35, -0.3, 0.3 }, { 1.75, -0.35, -0.5, 0.24 }, { -1.45, -0.7, -0.6, 0.2 } } do
+		if s.Room() < 1 then
+			break
+		end
+		diamond(s.Top, "Sparkle" .. i, at(k[1], k[2], k[3]), k[4], k[4], 0.05, STAR_WHITE, NEON)
+	end
+	-- a little rocket zooming round the ring
+	if s.Room() >= 2 then
+		local rocket = at(-1.95, 0.9, -0.55) * CFrame.Angles(0, 0, 0.9)
+		K.upright(s.Top, "Rocket", rocket, 0.5, 0.22, WHITE, M.SmoothPlastic)
+		T.ellipsoid(s.Top, "RocketFlame", rocket * CFrame.new(0, -0.36, 0), Vector3.new(0.16, 0.3, 0.16), FLAME_HOT, NEON)
 	end
 	local band = s.Bottom:FindFirstChild("Band")
 	if band and band:IsA("BasePart") then
