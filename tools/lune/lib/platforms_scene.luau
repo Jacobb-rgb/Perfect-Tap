@@ -62,6 +62,9 @@ function Scene.build(Loader: any, parent: any, build: boolean?)
 	local CELLS = GameConfig.PlotCells
 	local HALF = CELLS * CELL / 2
 	local DECK = MachineData.DeckHeight
+	-- (bigger plots) the cells here are on a 12-cell grid: a bigger one moves
+	-- them with it (BaseLayout.GridShift across, PlotCells - 12 back)
+	local SX, SZ = (CELLS - 12) / 2, CELLS - 12
 
 	local plot = { Id = 1, Center = V3.new(0, 0.3, 0), Facing = V3.new(0, 0, -1) }
 	local plotCF = CF.lookAt(plot.Center, plot.Center + plot.Facing)
@@ -80,7 +83,7 @@ function Scene.build(Loader: any, parent: any, build: boolean?)
 	local entries = {}
 	local partCounts: { [string]: number } = {}
 	for _, row in Scene.Layout do
-		local id, x, z, r, level = row[1], row[2], row[3], row[4], row[5]
+		local id, x, z, r, level = row[1], row[2] + SX, row[3] + SZ, row[4], row[5]
 		local ok, why = Placement.validate(entries, id, x, z, r, nil, nil, level)
 		assert(ok, `{id} at {x},{z} level {level}: {why}`)
 		table.insert(entries, { Id = id, X = x, Z = z, R = r, L = if level == 1 then 1 else nil })
@@ -102,14 +105,17 @@ function Scene.build(Loader: any, parent: any, build: boolean?)
 	end
 
 	-- ore on its way: on the ground belt, half way up the lift, on the deck, on the slide, under the deck
+	local function at(x: number, z: number, w: number, d: number, level: number?): any
+		return cellCF(x + SX, z + SZ, w, d, level)
+	end
 	local items = {
-		{ cellCF(5, 11, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Gold" } },
-		{ cellCF(5, 8, 1, 3) * CF.new(0, 1.05 + DECK * 0.55, -0.6), { Kind = "Clean", OreId = "Amethyst" } },
-		{ cellCF(5, 7, 1, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Sapphire" } },
-		{ cellCF(5, 4, 1, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Ingot", OreId = "Gold", Grade = "Clean" } },
-		{ cellCF(5, 1, 1, 3) * CF.new(0, 1.05 + DECK * 0.4, -1), { Kind = "Ingot", OreId = "Bronze", Grade = "Clean" } },
-		{ cellCF(3, 5, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Copper" } },
-		{ cellCF(7, 5, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Emberite" } },
+		{ at(5, 11, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Gold" } },
+		{ at(5, 8, 1, 3) * CF.new(0, 1.05 + DECK * 0.55, -0.6), { Kind = "Clean", OreId = "Amethyst" } },
+		{ at(5, 7, 1, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Sapphire" } },
+		{ at(5, 4, 1, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Ingot", OreId = "Gold", Grade = "Clean" } },
+		{ at(5, 1, 1, 3) * CF.new(0, 1.05 + DECK * 0.4, -1), { Kind = "Ingot", OreId = "Bronze", Grade = "Clean" } },
+		{ at(3, 5, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Copper" } },
+		{ at(7, 5, 1, 1) * CF.new(0, 1.05, 0), { Kind = "Clean", OreId = "Emberite" } },
 	}
 	for i, it in items do
 		local model = ItemBuilder.build(it[2], it[1] * CF.Angles(0, 0.5 * i, 0), i)
@@ -159,12 +165,12 @@ function Scene.build(Loader: any, parent: any, build: boolean?)
 		end
 		local OK, BAD = C3.fromRGB(80, 220, 120), C3.fromRGB(235, 80, 70)
 		-- a belt ghost on a free deck cell (allowed), a Belt Lift ghost whose top end reaches no deck (refused)
-		local okBelt = Placement.validate(entries, "Conveyor", 4, 4, 1, nil, nil, 1)
+		local okBelt = Placement.validate(entries, "Conveyor", 4 + SX, 4 + SZ, 1, nil, nil, 1)
 		assert(okBelt, "the belt ghost's spot is free on the deck")
-		ghost("Conveyor", 4, 4, 1, 1, OK)
-		local okLift, why = Placement.validate(entries, "BeltLift", 9, 8, 0, nil, nil, 0)
+		ghost("Conveyor", 4 + SX, 4 + SZ, 1, 1, OK)
+		local okLift, why = Placement.validate(entries, "BeltLift", 9 + SX, 8 + SZ, 0, nil, nil, 0)
 		assert(not okLift and why == "DeckEdge", "the lift ghost is refused: " .. tostring(why))
-		ghost("BeltLift", 9, 8, 0, 0, BAD)
+		ghost("BeltLift", 9 + SX, 8 + SZ, 0, 0, BAD)
 	end
 
 	print(

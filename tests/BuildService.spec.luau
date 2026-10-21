@@ -23,7 +23,8 @@ return function(T, Loader)
 	local PLOT = 3
 	local USER, OTHER = 301, 302
 	local CELL = GameConfig.CellSize
-	local HALF = GameConfig.PlotCells * CELL / 2
+	local CELLS = GameConfig.PlotCells
+	local HALF = CELLS * CELL / 2
 	local build = BuildService._test
 
 	local function deepCopy(v: any): any
@@ -212,7 +213,7 @@ return function(T, Loader)
 			T.eq(r.Reason, "BadInput", "bad seq " .. tostring(seq))
 		end
 		local cases = {
-			{ "ClayFurnace", 12, 0, 0 },
+			{ "ClayFurnace", CELLS, 0, 0 },
 			{ "ClayFurnace", 0, -1, 0 },
 			{ "ClayFurnace", 0, 0, 4 },
 			{ "ClayFurnace", 0 / 0, 0, 0 },
@@ -267,7 +268,7 @@ return function(T, Loader)
 		T.eq(result(w, 26, "Place").Reason, "NoneOwned", "not owned")
 		build.place(w.player, 27, "ClayFurnace", 1, 1, 0)
 		T.eq(result(w, 27, "Place").Reason, "Overlap", "overlap")
-		build.place(w.player, 28, "ClayFurnace", 11, 0, 0)
+		build.place(w.player, 28, "ClayFurnace", CELLS - 1, 0, 0)
 		T.eq(result(w, 28, "Place").Reason, "OutOfBounds", "out of bounds")
 		T.eq(#data.PlacedMachines, 1, "nothing else placed")
 		T.eq(data.MachineInventory.ClayFurnace, 1, "inventory only spent once")
@@ -304,7 +305,7 @@ return function(T, Loader)
 		T.eq(m.Entry.X, 7, "saved")
 		T.eq(last(w, "Fx").Args[1], "Placed", "puff where it landed")
 
-		build.move(w.player, 7, m.Model, 11, 11, 0)
+		build.move(w.player, 7, m.Model, CELLS - 1, CELLS - 1, 0)
 		r = result(w, 7, "Move")
 		T.falsy(r.Ok, "refused")
 		T.eq(r.Reason, "OutOfBounds", "reason")
@@ -451,7 +452,7 @@ return function(T, Loader)
 		m.Entry.In = { { K = "Clean", O = "Copper", G = "Rough" } }
 		placedOne(w, "Conveyor", 9, 9, 2)
 		placedOne(w, "Conveyor", 9, 8, 2)
-		table.insert(w.data.PlacedMachines, { Id = "FutureMachine", X = 0, Z = 11, R = 0 })
+		table.insert(w.data.PlacedMachines, { Id = "FutureMachine", X = 0, Z = CELLS - 1, R = 0 })
 		local snapshot: any = {}
 		build.provide(w.player, w.data, snapshot)
 		T.eq(#snapshot.Placed, 4, "every saved entry")
