@@ -871,20 +871,20 @@ return function(T, Loader)
 		T.falsy(SettingsView.setShown(refs, "Nope", false))
 		T.falsy(refs.Volumes.Music.Frame.Visible)
 		T.falsy(refs.Toggles.Rumble.Frame.Visible)
-		T.eq(#SettingsView.shown(refs), 2)
+		T.eq(#SettingsView.shown(refs), 3, "Sounds, Camera shake, Reduce motion")
 		SettingsView.layout(refs, false, 1280, 684)
 		T.lt(refs.Frame.Panel.Size.Y.Offset, full, "shorter")
 		for _, target in SettingsView.touchTargets(refs) do
 			T.truthy(target ~= MenuPanel.holderOf(refs.Volumes.Music.Minus), "a hidden row isn't a target")
 		end
-		T.eq(#SettingsView.touchTargets(refs), 1 + 3 + 1, "close, Sounds (-, +, bar), Camera shake")
+		T.eq(#SettingsView.touchTargets(refs), 1 + 3 + 2, "close, Sounds (-, +, bar), Camera shake, Reduce motion")
 		T.eq(SettingsView.firstButton(refs), refs.Volumes.Sfx.Minus)
 		-- Sounds hidden too (never in the game): the first row that shows
 		SettingsView.setShown(refs, "Sfx", false)
 		T.eq(SettingsView.firstButton(refs), refs.Toggles.Shake.Button)
 		SettingsView.setShown(refs, "Sfx", true)
 		SettingsView.setShown(refs, "Music", true)
-		T.eq(#SettingsView.shown(refs), 3)
+		T.eq(#SettingsView.shown(refs), 4)
 		-- the phone layout with two rows still fits and keeps 44 pt
 		SettingsView.setShown(refs, "Music", false)
 		SettingsView.layout(refs, true, 667 / PHONE, (375 - 58) / PHONE)

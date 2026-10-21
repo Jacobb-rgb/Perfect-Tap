@@ -6,6 +6,7 @@
 	  Sounds          - [=======o---] +  80%   volume slider
 	  Camera shake    [ ON ]                   toggle
 	  Gamepad rumble  [ ON ]                   toggle
+	  Reduce motion   [ OFF ]                  toggle (UI/Motion)
 
 	A slider follows a click or a drag on its bar (mouse and touch); the
 	- / + buttons move it one SettingsConfig.Step (and are what a gamepad
@@ -67,6 +68,7 @@ SettingsView.Rows = {
 	{ Id = "Sfx", Kind = "Volume", Icon = "", Title = "Sounds", Note = "Every game sound" },
 	{ Id = "Shake", Kind = "Toggle", Icon = "", Title = "Camera shake", Note = "When rocks crack" },
 	{ Id = "Rumble", Kind = "Toggle", Icon = "", Title = "Gamepad rumble", Note = "Vibration while you blast" },
+	{ Id = "ReduceMotion", Kind = "Toggle", Icon = "", Title = "Reduce motion", Note = "Calm menus: no pops or bounces" },
 } :: { RowSpec }
 
 type Metrics = { Width: number, Row: number, Button: number, Toggle: number, Title: number, Note: number, Value: number }
