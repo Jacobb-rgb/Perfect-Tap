@@ -293,6 +293,54 @@ return function(T, Loader)
 		T.truthy(last.Player == w.stranger, "to the item's owner")
 	end)
 
+	withWorld("IntakeService: a drop into a full hopper pops FULL for its owner", function(w)
+		local base = w.furnace.Model.PrimaryPart
+		local hopper = (base.CFrame * base:FindFirstChild("Intake").CFrame).Position
+		local inHopper = PlotService.plotCFrame(PLOT):PointToObjectSpace(hopper)
+		local function pops(): { any }
+			local list = {}
+			for _, note in w.notes do
+				if note.Name == "Fx" and note.A == "Full" then
+					table.insert(list, note)
+				end
+			end
+			return list
+		end
+		w.full = true
+		local dropped = item("Clean", inHopper)
+		intake.scanOne(dropped, 10)
+		T.eq(#pops(), 1, "one pop")
+		local pop = pops()[1]
+		T.truthy(pop.Player == w.player, "to the item's owner")
+		T.near((pop.B - hopper).Magnitude, 0, 1e-4, "over the hopper")
+		T.eq(dropped.State, "Loose", "the item waits in the hopper")
+		T.eq(#w.ejects, 0, "not bounced")
+		T.eq(#w.inserts, 0, "not put in")
+		-- a whole stack dropped at once: one pop per machine at a time
+		local second = item("Clean", inHopper)
+		intake.scanOne(second, 10.1)
+		T.eq(#pops(), 1, "not again so soon on the same machine")
+		-- still lying there, scan after scan: no new pop
+		for i = 1, 10 do
+			intake.scanOne(dropped, 10 + i * GameConfig.IntakeTick)
+			intake.scanOne(second, 10.1 + i * GameConfig.IntakeTick)
+		end
+		T.eq(#pops(), 1, "one pop per drop")
+		-- picked up and thrown in again later: a new drop, a new pop
+		intake.scanOne(dropped, 15)
+		T.eq(#pops(), 2, "thrown in again")
+		-- a belt backing up into the full machine is normal: no pop
+		local onBelt = item("Clean", Vector3.new(-HALF + 4 * CELL - 0.3, 1, -HALF + 4.5 * CELL))
+		intake.scanOne(onBelt, 30)
+		T.eq(#pops(), 2, "belts stay quiet")
+		T.eq(onBelt.State, "Loose", "the belt item waits too")
+		-- room again: the item goes in, nothing pops
+		w.full = false
+		intake.scanOne(dropped, 40)
+		T.eq(#w.inserts, 1, "goes in")
+		T.eq(#pops(), 2, "no pop")
+	end)
+
 	withWorld("IntakeService: belts, other forges and town zones", function(w)
 		-- an item riding a belt that feeds nothing goes to the belt handler
 		local calls = {}
