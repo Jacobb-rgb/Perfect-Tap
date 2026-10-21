@@ -725,3 +725,41 @@ What to test in Studio:
    stick moves the ring, A or R2 sprays, B leaves (twice once some dirt is off).
 5. A dusty relic at the Cleaning Station: wash it, the relic rises, the card says RELIC CLEANED.
 6. Leave half way: the ore stays in the vise; F starts again with new dirt.
+
+## World animations (2026-10-21, branch anim/world)
+The owner wants "perfect animations in the game world" (his reels: a punch with a white impact flash, coloured cubes
+and cash flying out). New `Controllers/WorldMotionController` (client ORDER after GolemController) with the pure math
+in `Effects/WorldMotionLogic` (the showreel runs the same code):
+- Golem followers: GolemController multiplies `WorldMotionController.golemOffset(pet, owner, now, walking, near)` onto
+  every follower (one line in its step + the require): rounder hops with a wiggle and a nod while walking; a sway and
+  now and then a little double hop in place, turning left and right ("waving"), while standing; the happy jump with
+  one spin when a golem was just equipped (its kind appeared in the owner's EquippedGolems and the model was built
+  within 3 s; golems built because you walk up to their owner don't jump). Premium golems keep their hover: they
+  rise and spin, never hop. Far golems (beyond FollowerLodDistance) get nothing but the jump.
+- Ore popping out of a rock: a Raw chunk that appears in Workspace.Items within 1.2 s and 16 studs of a NodeCrack /
+  NodeShatter Fx pops: dust cubes puff out, the real chunk is hidden on this client (LocalTransparencyModifier, put
+  back after) and a pooled look-alike follows it with an arc on top, one extra spin, a pop-in scale and a squash on
+  landing (more dust). Physics are never touched; picking the chunk up ends the pop at once.
+- Hit: a short white flash, a star of white spikes and cubes in the rock's crystal colour (the colour the rock shows,
+  never the secret ore). Your hits: each Health drop of the rock you face while firing (RockLabels.onHealthDrop);
+  other players' hits: their BlastHit Fx. BlasterFx keeps its sparks, chips, rings and sounds.
+- Sell: Earned { Source = "Sell" } (SellService, LogisticsService): green banknotes flutter out of the sell spot,
+  gold coins burst up and fly into you (within 45 studs); SellController keeps its +$ popup.
+- Perf: all parts pooled (anchored, no collide / query / touch), one RenderStepped connection only while something
+  moves, one BulkMoveTo a frame, no tables per frame; caps PC 64 bits / 6 pops / 3 flashes, phones 32 / 3 / 2;
+  effects beyond 80-110 studs or off screen are skipped; Reduce motion (SettingsConfig ReduceMotion when it exists,
+  else GuiService.ReducedMotionEnabled): half the bits, no look-alike, no spikes, no spins, golems only hop on equip.
+- Tests: tests/WorldMotion.spec.luau (curves, plans, caps, pool reuse, the controller's hooks on a rig).
+- Preview: `lune run tools/lune/export_world_motion.luau` + `node tools/preview/render_world_anim.mjs` ->
+  docs/screenshots/animations/svet_animace.mp4 / .jpg.
+What to test in Studio:
+1. Equip a golem (GOLEMS panel): it appears behind you and does a jump with a full turn; a Legendary rises and turns.
+   EQUIP BEST: every new one jumps once. Walk away and back (out of 120 studs): no jump when they are built again.
+2. Walk: the golems hop with a little left-right wiggle; stand still: they sway and sometimes hop in place.
+3. Blast a rock: every ~0.3 s a white flash with spikes and small cubes in the rock's crystal colour flies toward you.
+   A second player blasting the same rock: their hits flash on their side.
+4. Break a stage that drops an ore: the chunk pops up higher than before, spins once, squashes when it lands, dust
+   puffs at both ends; pick it up right away: it is never invisible. Check with two players (the other one sees it).
+5. Sell at Tobin's stall and at a sell box: notes flutter out, coins fly into you; spam SELL: never more than a few
+   dozen pieces, FPS steady on the phone emulator.
+6. Turn on Roblox's Reduce Motion (or the ReduceMotion setting when it lands): no spins, smaller bursts, no pop copy.
