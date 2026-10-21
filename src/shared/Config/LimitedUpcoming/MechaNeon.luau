@@ -84,7 +84,7 @@ return {
 			Accessory = "Rockets",
 			Scale = 1.15,
 			Bonus = { Type = "MiningSpeed", Value = 0.18 },
-			Lore = "Two rocket pods on its shoulders. They launch confetti.",
+			Lore = "Rocket pods on its shoulders, a firework in its claw. Everything it launches is confetti.",
 			Edition = "MechaNeon",
 		}),
 		golem({
