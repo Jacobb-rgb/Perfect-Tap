@@ -143,7 +143,7 @@ IconAssets.Fallbacks = {
 -- prefix -> emoji for the big families (golem_*, capsule_*, machine_*, ...)
 local FAMILY: { [string]: string } = {
 	golem_ = "🤖", capsule_ = "🥚", machine_ = "⚙️", artifact_ = "🏺", item_ = "💎",
-	hopper_ = "🏗️", ore_ = "🪨", ingot_ = "🧈", enchant_ = "✨", blaster_ = "⚡",
+	dropper_ = "🏗️", ore_ = "🪨", ingot_ = "🧈", enchant_ = "✨", blaster_ = "⚡",
 }
 
 -- The emoji standing in for an icon (nil: none), used while its sheet has no id.

@@ -1,7 +1,7 @@
 --[[
-	The HOPPER WORKS shop window (concept, owner 2026-10-21: like Sandbox
+	The DROPPER WORKS shop window (concept, owner 2026-10-21: like Sandbox
 	Tycoon's build menu, in Terra Forge's fonts): a white panel with blue tab
-	buttons on top (HOPPERS / LASERS) and the red X, a pink title strip, a grid
+	buttons on top (DROPPERS / LASERS) and the red X, a pink title strip, a grid
 	of square tiles (name on top, the item's picture, the green price at the
 	bottom; a locked tile is dark with its yellow lock text), the detail pane on
 	the right for the picked tile with the big BUY button, and the "max counts"
@@ -9,7 +9,7 @@
 
 	  build()                    the window (hidden); Refs.Tiles[id]
 	  layout(refs, w, h)         fits the window into w x h design units
-	  setTab(refs, tab)          "Hoppers" | "Lasers"
+	  setTab(refs, tab)          "Droppers" | "Lasers"
 	  setTile(refs, id, state)   { Owned, CanAfford, Locked: string? }
 	  showDetail(refs, id, state) the right pane for one item
 	  setCounts(refs, text)      the max counts box
@@ -20,18 +20,18 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local HopperConfig = require(Shared.Config.HopperConfig)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local IconAssets = require(Shared.Config.IconAssets)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 
-local HopperShopView = {}
+local DropperShopView = {}
 
 local rgb = Color3.fromRGB
 
 -- the look (Sandbox Tycoon's light build menu)
-HopperShopView.Colors = {
+DropperShopView.Colors = {
 	Panel = rgb(246, 248, 252),
 	PanelEdge = rgb(190, 202, 222),
 	Tab = rgb(150, 196, 255),
@@ -56,11 +56,11 @@ HopperShopView.Colors = {
 	CloseEdge = rgb(140, 24, 36),
 	Income = rgb(64, 200, 60),
 }
-HopperShopView.Font = Font.fromEnum(Enum.Font.FredokaOne)
-HopperShopView.Size = Vector2.new(1080, 620)
-HopperShopView.Tile = Vector2.new(150, 172)
-HopperShopView.Gap = 12
-HopperShopView.Columns = 4
+DropperShopView.Font = Font.fromEnum(Enum.Font.FredokaOne)
+DropperShopView.Size = Vector2.new(1080, 620)
+DropperShopView.Tile = Vector2.new(150, 172)
+DropperShopView.Gap = 12
+DropperShopView.Columns = 4
 
 export type TileRefs = {
 	Id: string,
@@ -95,12 +95,12 @@ export type Refs = {
 
 export type TileState = { Owned: number, CanAfford: boolean, Locked: string? }
 
-local C = HopperShopView.Colors
+local C = DropperShopView.Colors
 
 local function text(parent: Instance, words: string, size: number, color: Color3, props: { [string]: any }?): TextLabel
 	local label = UIKit.new("TextLabel", {
 		BackgroundTransparency = 1,
-		FontFace = HopperShopView.Font,
+		FontFace = DropperShopView.Font,
 		Text = words,
 		TextSize = size,
 		TextColor3 = color,
@@ -140,19 +140,19 @@ end
 
 local function items(tab: string): { { Id: string, Name: string, Price: number, Icon: string } }
 	local list = {}
-	if tab == "Hoppers" then
-		for _, hopper in HopperConfig.List do
-			table.insert(list, { Id = hopper.Id, Name = hopper.Name, Price = hopper.Price, Icon = "hopper_" .. hopper.Id })
+	if tab == "Droppers" then
+		for _, dropper in DropperConfig.List do
+			table.insert(list, { Id = dropper.Id, Name = dropper.Name, Price = dropper.Price, Icon = "dropper_" .. dropper.Id })
 		end
 	else
-		local laser = HopperConfig.Laser
-		table.insert(list, { Id = laser.Id, Name = laser.Name, Price = laser.Price, Icon = "hopper_" .. laser.Id })
+		local laser = DropperConfig.Laser
+		table.insert(list, { Id = laser.Id, Name = laser.Name, Price = laser.Price, Icon = "dropper_" .. laser.Id })
 	end
 	return list
 end
 
 local function buildTile(grid: Instance, item: { Id: string, Name: string, Price: number, Icon: string }, index: number): TileRefs
-	local size, gap, cols = HopperShopView.Tile, HopperShopView.Gap, HopperShopView.Columns
+	local size, gap, cols = DropperShopView.Tile, DropperShopView.Gap, DropperShopView.Columns
 	local col, row = (index - 1) % cols, (index - 1) // cols
 	local tile = button(grid, C.Tile, C.TileEdge, {
 		Name = item.Id,
@@ -182,7 +182,7 @@ local function buildTile(grid: Instance, item: { Id: string, Name: string, Price
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -4, 0, 28),
 		Size = UDim2.fromOffset(52, 22),
-		FontFace = HopperShopView.Font,
+		FontFace = DropperShopView.Font,
 		Text = "x1",
 		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
@@ -226,8 +226,8 @@ local function buildTile(grid: Instance, item: { Id: string, Name: string, Price
 	return { Id = item.Id, Frame = tile, Price = price, Owned = owned, Lock = lock, LockText = lockText }
 end
 
-function HopperShopView.build(): Refs
-	local gui = UIKit.screen("TerraForgeHoppers", 16)
+function DropperShopView.build(): Refs
+	local gui = UIKit.screen("TerraForgeDroppers", 16)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
 	local holder = UIKit.new("Frame", {
@@ -238,7 +238,7 @@ function HopperShopView.build(): Refs
 		Size = UDim2.fromScale(1, 1),
 	}, gui)
 	UIKit.new("UIScale", { Name = "FitScale", Scale = 1 }, holder)
-	local size = HopperShopView.Size
+	local size = DropperShopView.Size
 	local root = UIKit.new("Frame", {
 		Name = "Window",
 		Active = true,
@@ -255,7 +255,7 @@ function HopperShopView.build(): Refs
 
 	-- the tab buttons (icon + word) and the X
 	local tabs: { [string]: TextButton } = {}
-	for i, tab in { { "Hoppers", "hopper_EpicHopper" }, { "Lasers", "hopper_MoneyLaser2X" } } do
+	for i, tab in { { "Droppers", "dropper_BasicDropper" }, { "Lasers", "dropper_MoneyLaser2X" } } do
 		local b = button(root, C.Tab, C.TabEdge, {
 			Name = tab[1],
 			Position = UDim2.fromOffset(16 + (i - 1) * 178, 14),
@@ -286,24 +286,24 @@ function HopperShopView.build(): Refs
 		BackgroundColor3 = C.Strip,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(16, 84),
-		Size = UDim2.fromOffset(4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap, 40),
+		Size = UDim2.fromOffset(4 * DropperShopView.Tile.X + 3 * DropperShopView.Gap, 40),
 		ZIndex = 3,
 	}, root)
 	UIKit.corner(strip, 8)
 	UIKit.new("UIStroke", { Color = C.StripEdge, Thickness = 3 }, strip)
-	local title = bold(strip, "Hoppers", 26, Color3.new(1, 1, 1), C.StripEdge, { Size = UDim2.fromScale(1, 1) })
+	local title = bold(strip, "Droppers", 26, Color3.new(1, 1, 1), C.StripEdge, { Size = UDim2.fromScale(1, 1) })
 
 	-- one grid per tab
 	local grids: { [string]: Frame } = {}
 	local tiles: { [string]: TileRefs } = {}
 	local order: { string } = {}
-	for _, tab in { "Hoppers", "Lasers" } do
+	for _, tab in { "Droppers", "Lasers" } do
 		local grid = UIKit.new("Frame", {
 			Name = tab .. "Grid",
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(16, 136),
-			Size = UDim2.fromOffset(4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap, 2 * HopperShopView.Tile.Y + HopperShopView.Gap),
-			Visible = tab == "Hoppers",
+			Size = UDim2.fromOffset(4 * DropperShopView.Tile.X + 3 * DropperShopView.Gap, 2 * DropperShopView.Tile.Y + DropperShopView.Gap),
+			Visible = tab == "Droppers",
 			ZIndex = 3,
 		}, root)
 		grids[tab] = grid
@@ -314,7 +314,7 @@ function HopperShopView.build(): Refs
 	end
 
 	-- the detail pane on the right
-	local paneX = 16 + 4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap + 16
+	local paneX = 16 + 4 * DropperShopView.Tile.X + 3 * DropperShopView.Gap + 16
 	local pane = UIKit.new("Frame", {
 		Name = "Detail",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -325,8 +325,12 @@ function HopperShopView.build(): Refs
 	}, root)
 	UIKit.corner(pane, 10)
 	UIKit.new("UIStroke", { Color = C.TileEdge, Thickness = 3 }, pane)
-	local picture =
-		Bubble.icon(pane, "hopper_EpicHopper", 170, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 34), ZIndex = 4 })
+	local picture = Bubble.icon(
+		pane,
+		"dropper_BasicDropper",
+		170,
+		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 34), ZIndex = 4 }
+	)
 	local name = text(pane, "", 26, C.Ink, { Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 0, 30) })
 	local income = bold(pane, "", 30, C.Income, C.PriceEdge, { Position = UDim2.fromOffset(8, 206), Size = UDim2.new(1, -16, 0, 34) })
 	local ores = UIKit.new(
@@ -365,7 +369,7 @@ function HopperShopView.build(): Refs
 	local status = text(root, "", 17, C.InkSoft, {
 		Name = "Status",
 		Position = UDim2.new(0, 330, 1, -56),
-		Size = UDim2.new(0, 4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap - 314, 0, 40),
+		Size = UDim2.new(0, 4 * DropperShopView.Tile.X + 3 * DropperShopView.Gap - 314, 0, 40),
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
 
@@ -382,14 +386,14 @@ function HopperShopView.build(): Refs
 		Status = status,
 		Close = close,
 	}
-	HopperShopView.setTab(refs, "Hoppers")
-	HopperShopView.layout(refs, 1280, 720)
+	DropperShopView.setTab(refs, "Droppers")
+	DropperShopView.layout(refs, 1280, 720)
 	return refs
 end
 
 -- Fits the window into a w x h design-unit screen (the HUD's top bar and coins stay in sight).
-function HopperShopView.layout(refs: Refs, w: number, h: number)
-	local size = HopperShopView.Size
+function DropperShopView.layout(refs: Refs, w: number, h: number)
+	local size = DropperShopView.Size
 	local fit = math.min(1, (w - 40) / size.X, (h - 150) / size.Y)
 	local holder = refs.Root.Parent
 	local scale = if holder then holder:FindFirstChild("FitScale") else nil
@@ -398,7 +402,7 @@ function HopperShopView.layout(refs: Refs, w: number, h: number)
 	end
 end
 
-function HopperShopView.setTab(refs: Refs, tab: string)
+function DropperShopView.setTab(refs: Refs, tab: string)
 	for name, b in refs.Tabs do
 		b.BackgroundColor3 = if name == tab then C.TabOn else C.Tab
 	end
@@ -408,7 +412,7 @@ function HopperShopView.setTab(refs: Refs, tab: string)
 	refs.Title.Text = tab
 end
 
-function HopperShopView.setTile(refs: Refs, id: string, state: TileState)
+function DropperShopView.setTile(refs: Refs, id: string, state: TileState)
 	local tile = refs.Tiles[id]
 	if not tile then
 		return
@@ -420,8 +424,8 @@ function HopperShopView.setTile(refs: Refs, id: string, state: TileState)
 	tile.Price.TextColor3 = if state.CanAfford then C.Price else C.InkSoft
 end
 
--- The right pane for item `id` (a hopper or the laser); `picked` outlines its tile.
-function HopperShopView.showDetail(refs: Refs, id: string, state: TileState)
+-- The right pane for item `id` (a dropper or the laser); `picked` outlines its tile.
+function DropperShopView.showDetail(refs: Refs, id: string, state: TileState)
 	local d = refs.Detail
 	for tileId, tile in refs.Tiles do
 		local edge = tile.Frame:FindFirstChild("Edge") :: UIStroke?
@@ -435,29 +439,29 @@ function HopperShopView.showDetail(refs: Refs, id: string, state: TileState)
 			child:Destroy()
 		end
 	end
-	local hopper = HopperConfig.ById[id]
+	local dropper = DropperConfig.ById[id]
 	local price: number
-	if hopper then
-		d.Name.Text = hopper.Name
-		d.Income.Text = Format.perSecond(hopper.Income)
-		for i, oreId in hopper.Ores do
+	if dropper then
+		d.Name.Text = dropper.Name
+		d.Income.Text = Format.perSecond(dropper.Income)
+		for i, oreId in dropper.Ores do
 			Bubble.icon(d.Ores, "item_Clean_" .. oreId, 34, { LayoutOrder = i, ZIndex = 5 })
 		end
-		local minutes = math.max(5, math.floor(HopperConfig.payback(hopper) / 300 + 0.5) * 5)
+		local minutes = math.max(5, math.floor(DropperConfig.payback(dropper) / 300 + 0.5) * 5)
 		local back = if minutes < 60
 			then `~{minutes} min`
 			else `~{minutes // 60} h{if minutes % 60 > 0 then " " .. minutes % 60 .. " min" else ""}`
-		d.Lines.Text = `{hopper.Tagline}\nPays back in {back}\nSell back: {Format.money(hopper.Resale)}`
-		price = hopper.Price
+		d.Lines.Text = `{dropper.Tagline}\nPays back in {back}\nSell back: {Format.money(dropper.Resale)}`
+		price = dropper.Price
 	else
-		local laser = HopperConfig.Laser
+		local laser = DropperConfig.Laser
 		d.Name.Text = laser.Name
 		d.Income.Text = `x{laser.Mult} MONEY`
-		d.Lines.Text = `{laser.Tagline}\nPut it on a hopper's belt\nSell back: {Format.money(laser.Resale)}`
+		d.Lines.Text = `{laser.Tagline}\nPut it on a dropper's belt\nSell back: {Format.money(laser.Resale)}`
 		price = laser.Price
 	end
-	d.Picture:SetAttribute("Icon", "hopper_" .. id)
-	IconAssets.apply(d.Picture, "hopper_" .. id)
+	d.Picture:SetAttribute("Icon", "dropper_" .. id)
+	IconAssets.apply(d.Picture, "dropper_" .. id)
 	local can = state.CanAfford and state.Locked == nil
 	d.Buy.BackgroundColor3 = if can then C.Buy else C.Grey
 	local edge = d.Buy:FindFirstChild("Edge") :: UIStroke?
@@ -467,12 +471,12 @@ function HopperShopView.showDetail(refs: Refs, id: string, state: TileState)
 	d.BuyText.Text = if state.Locked then state.Locked else "BUY  " .. Format.money(price)
 end
 
-function HopperShopView.setCounts(refs: Refs, words: string)
+function DropperShopView.setCounts(refs: Refs, words: string)
 	refs.Counts.Text = words
 end
 
-function HopperShopView.setStatus(refs: Refs, words: string?)
+function DropperShopView.setStatus(refs: Refs, words: string?)
 	refs.Status.Text = words or ""
 end
 
-return HopperShopView
+return DropperShopView

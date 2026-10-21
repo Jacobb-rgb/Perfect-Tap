@@ -1,25 +1,26 @@
 --[[
-	The hopper concepts (Config/HopperConfig, Builders/HopperBuilder):
-	  scene "hoppers"  the owner's concept picture (docs/art/hoppers_concept.webp):
-	                   the seven hopper cabinets, the Money Laser and SELL in a
+	The dropper concepts (Config/DropperConfig, Builders/DropperBuilder):
+	  scene "droppers"  the owner's pictures (docs/art/hoppers_concept.webp for the scene,
+	                   docs/art/droppers_concept.webp for the droppers):
+	                   the seven droppers, the Money Laser and SELL in a
 	                   row on a stone platform, the mine entrance, block cliffs,
 	                   trees and a lookout behind, sunset
-	  scene "hopper_shop"  the HOPPER WORKS house (Preview.buildShop), a cosy
+	  scene "dropper_shop"  the DROPPER WORKS house (Preview.buildShop), a cosy
 	                   Sandbox-Tycoon-style brick + plank house in forge colours:
-	                   stepped slate roof, shop windows with hoppers inside,
+	                   stepped slate roof, shop windows with droppers inside,
 	                   flower boxes, lanterns, a forge chimney, the like board and
-	                   a showcase line (Epic Hopper -> 2X laser -> SELL) in the yard
-	UI overlays (Preview.ui, drawn with HopperShopView over the stage):
-	  ui_hoppers_pc        PC: HOPPERS tab, the Legendary Hopper picked (two
-	                       Epic Hoppers owned, Rift / Terra Core locked)
-	  ui_hoppers_pc_more   PC: LASERS tab, the 2X Money Laser picked
-	  ui_hoppers_phone     667 x 375 pt phone, the locked Terra Core picked
-	Shots in tools/preview/hopper_shots.json.
+	                   a showcase line (Basic Dropper -> 2X laser -> SELL) in the yard
+	UI overlays (Preview.ui, drawn with DropperShopView over the stage):
+	  ui_droppers_pc        PC: DROPPERS tab, the Blue Dropper picked (two
+	                       Basic Droppers owned, Rainbow / Dark Matter locked)
+	  ui_droppers_pc_more   PC: LASERS tab, the 2X Money Laser picked
+	  ui_droppers_phone     667 x 375 pt phone, the locked Dark Matter picked
+	Shots in tools/preview/dropper_shots.json.
 ]]
 
 local Preview = {}
 
--- x of each hopper on the stage (filled by build)
+-- x of each dropper on the stage (filled by build)
 Preview.Spots = {} :: { [string]: number }
 
 function Preview.build(Loader: any, workspace: any)
@@ -32,13 +33,13 @@ function Preview.build(Loader: any, workspace: any)
 	local NEON = Enum.Material.Neon
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local BlockKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit")
-	local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
+	local DropperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperBuilder")
 	local LaserBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder")
-	local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
+	local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 	local rgb = C3.fromRGB
 
 	local stage = Instance.new("Model")
-	stage.Name = "HopperStage"
+	stage.Name = "DropperStage"
 	stage.Parent = workspace
 	local function cube(cf: any, size: any, face: any, rim: any, mode: string?): any
 		return BlockKit.cube(stage, cf, size, face, rim, mode)
@@ -49,14 +50,14 @@ function Preview.build(Loader: any, workspace: any)
 	local TILE, TILE_RIM = rgb(176, 174, 196), rgb(134, 132, 160)
 	local WOOD, WOOD_RIM = rgb(126, 80, 44), rgb(86, 52, 26)
 
-	-- the row: 7 hoppers, the Money Laser and SELL, 8 studs apart
-	local spacing = 7.2
-	local items = #HopperConfig.List + 2
+	-- the row: 7 droppers, the Money Laser and SELL, 8 studs apart
+	local spacing = 10
+	local items = #DropperConfig.List + 2
 	local firstX = -(items - 1) * spacing / 2
 
 	-- grass in front, the stone platform with tiles, the glowing dots along its edge
 	Geo.block(stage, CF.new(0, -0.5, 20), V3.new(260, 1, 60), GRASS, Enum.Material.Grass)
-	cube(CF.new(0, 0.5, 0), V3.new(items * spacing + 6, 1, 16), TILE, TILE_RIM)
+	cube(CF.new(0, 0.5, -1), V3.new(items * spacing + 6, 1, 20), TILE, TILE_RIM)
 	for i = 0, items * 2 + 2 do
 		local x = -(items * spacing + 6) / 2 + i * 4 + 1
 		Geo.block(stage, CF.new(x, 1.01, 0), V3.new(0.08, 0.02, 16), TILE_RIM)
@@ -67,8 +68,8 @@ function Preview.build(Loader: any, workspace: any)
 	cube(CF.new(0, 0.35, 9.5), V3.new(items * spacing + 6, 0.7, 3), TILE, TILE_RIM)
 	for i = 1, items do
 		local x = firstX + (i - 1) * spacing
-		local color = if i <= #HopperConfig.List
-			then HopperBuilder.Styles[HopperConfig.List[i].Id].Color
+		local color = if i <= #DropperConfig.List
+			then DropperBuilder.Styles[DropperConfig.List[i].Id].Glow[1]
 			elseif i == items - 1 then LaserBuilder.Color
 			else rgb(0, 160, 255)
 		Geo.block(stage, CF.new(x, 0.55, 11.05), V3.new(0.9, 0.5, 0.1), color:Lerp(C3.new(1, 1, 1), 0.3), NEON)
@@ -82,13 +83,13 @@ function Preview.build(Loader: any, workspace: any)
 		end
 	end
 
-	-- the hoppers, the laser and SELL
-	for i, hopper in HopperConfig.List do
+	-- the droppers, the laser and SELL
+	for i, dropper in DropperConfig.List do
 		local x = firstX + (i - 1) * spacing
-		Preview.Spots[hopper.Id] = x
-		HopperBuilder.build(hopper.Id, CF.new(x, 1, -1)).Parent = stage
+		Preview.Spots[dropper.Id] = x
+		DropperBuilder.build(dropper.Id, CF.new(x, 1, -1) * CF.Angles(0, 0.3, 0)).Parent = stage
 	end
-	local laserX = firstX + #HopperConfig.List * spacing
+	local laserX = firstX + #DropperConfig.List * spacing
 	Preview.Spots.Laser = laserX
 	LaserBuilder.build(CF.new(laserX, 1, -1)).Parent = stage
 	-- SELL: a blue block machine with a dark screen and an intake slot
@@ -169,7 +170,7 @@ function Preview.build(Loader: any, workspace: any)
 		glow.Range = 12
 		glow.Parent = bulb
 	end
-	print(string.format("Hopper row: %d hoppers, laser at x %.1f, SELL at x %.1f", #HopperConfig.List, laserX, sellX))
+	print(string.format("Dropper row: %d droppers, laser at x %.1f, SELL at x %.1f", #DropperConfig.List, laserX, sellX))
 	return stage
 end
 
@@ -177,11 +178,11 @@ function Preview.ui(Loader: any): { [string]: any }
 	local UiExport = require("./uiexport")
 	local roblox = Loader.roblox
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
-	local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
+	local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
-	local HopperShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HopperShopView")
+	local DropperShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.DropperShopView")
 
 	local coins, income = 41.6e9, 2.9e6
 	local scale = 1.25 -- 900 px tall render / 720 design height
@@ -200,36 +201,36 @@ function Preview.ui(Loader: any): { [string]: any }
 		return refs
 	end
 	local function shop(uiScale: number, w: number, h: number, tab: string, pick: string): any
-		local refs = HopperShopView.build()
+		local refs = DropperShopView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
-		HopperShopView.layout(refs, w, h)
-		HopperShopView.setTab(refs, tab)
+		DropperShopView.layout(refs, w, h)
+		DropperShopView.setTab(refs, tab)
 		local states = {}
-		for _, hopper in HopperConfig.List do
-			states[hopper.Id] = {
-				Owned = if hopper.Id == "EpicHopper" then 2 else 0,
-				CanAfford = hopper.Price <= coins,
-				Locked = if hopper.Order == 6 then "REBIRTH 1" elseif hopper.Order == 7 then "REBIRTH 3" else nil,
+		for _, dropper in DropperConfig.List do
+			states[dropper.Id] = {
+				Owned = if dropper.Id == "BasicDropper" then 2 else 0,
+				CanAfford = dropper.Price <= coins,
+				Locked = if dropper.Order == 6 then "REBIRTH 1" elseif dropper.Order == 7 then "REBIRTH 3" else nil,
 			}
 		end
-		local laser = HopperConfig.Laser
+		local laser = DropperConfig.Laser
 		states[laser.Id] = { Owned = 1, CanAfford = laser.Price <= coins }
 		for id, state in states do
-			HopperShopView.setTile(refs, id, state)
+			DropperShopView.setTile(refs, id, state)
 		end
-		HopperShopView.showDetail(refs, pick, states[pick])
-		HopperShopView.setCounts(refs, "Hoppers 2/4  ·  Lasers 1/4")
-		HopperShopView.setStatus(refs, "Bought Epic Hopper! Place it on a belt in Build mode.")
+		DropperShopView.showDetail(refs, pick, states[pick])
+		DropperShopView.setCounts(refs, "Droppers 2/4  ·  Lasers 1/4")
+		DropperShopView.setStatus(refs, "Bought Basic Dropper! Place it on your plot in Build mode.")
 		return refs
 	end
 	local exports: { [string]: any } = {}
 	local pcW, pcH = 1600 / scale, (900 - 36) / scale
-	exports.ui_hoppers_pc = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Hoppers", "LegendaryHopper").Gui })
-	exports.ui_hoppers_pc_more = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Lasers", "MoneyLaser2X").Gui })
-	exports.ui_hoppers_phone = UiExport.export({
+	exports.ui_droppers_pc = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Droppers", "BlueDropper").Gui })
+	exports.ui_droppers_pc_more = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Lasers", "MoneyLaser2X").Gui })
+	exports.ui_droppers_phone = UiExport.export({
 		hud(phoneScale).Gui,
-		shop(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, "Hoppers", "TerraCoreHopper").Gui,
+		shop(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, "Droppers", "DarkMatterDropper").Gui,
 	})
 	return exports
 end
@@ -245,14 +246,14 @@ function Preview.buildShop(Loader: any, workspace: any)
 	local GLASS = Enum.Material.Glass
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local BlockKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit")
-	local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
+	local DropperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperBuilder")
 	local LaserBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local rgb = C3.fromRGB
 	local rng = Rng.new(2026)
 
 	local shop = Instance.new("Model")
-	shop.Name = "HopperWorks"
+	shop.Name = "DropperWorks"
 	shop.Parent = workspace
 	-- the block palette (Sandbox Tycoon's brick + plank + stone house, in forge colours)
 	local BRICK, BRICK_DARK, MORTAR = rgb(178, 82, 58), rgb(138, 58, 42), rgb(214, 190, 168)
@@ -342,7 +343,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 	end
 	flat(CF.new(0, foundation + H - 1.4, z0 - D + 0.56), V3.new(W - 6, 0.25, 0.1), GLOW, NEON)
 
-	-- the shop windows: plank frames, a cross, glass; two small hoppers on show inside
+	-- the shop windows: plank frames, a cross, glass; two small droppers on show inside
 	for i, wx in { lwx, rwx } do
 		local f = CF.new(wx, winY, z0 + 0.35)
 		for _, dy in { -1, 1 } do
@@ -365,9 +366,9 @@ function Preview.buildShop(Loader: any, workspace: any)
 				if (k + i) % 2 == 0 then rgb(255, 90, 120) else rgb(255, 214, 60)
 			)
 		end
-		local id = if i == 1 then "HeartHopper" else "StarHopper"
+		local id = if i == 1 then "PurpleDropper" else "GoldDropper"
 		local show = CF.new(wx, foundation + 0.2, z0 - 4) * CF.Angles(0, if i == 1 then 0.3 else -0.3, 0)
-		local model = HopperBuilder.build(id, show)
+		local model = DropperBuilder.build(id, show)
 		BlockKit.scale(model, show, 0.55)
 		model.Parent = shop
 	end
@@ -387,7 +388,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 	end
 
 	-- the stepped roof: slate blocks stepping in toward the ridge (it runs front to back),
-	-- the front gable filled with planks and a pixel hopper
+	-- the front gable filled with planks and a pixel dropper
 	local layers = 8
 	local step = (W + 2) / (2 * layers)
 	for k = 0, layers - 1 do
@@ -414,12 +415,12 @@ function Preview.buildShop(Loader: any, workspace: any)
 	cube(CF.new(0, foundation + 8.45, z0 + porch / 2 + 0.4), V3.new(W + 0.4, 0.5, porch + 1.2), SLATE, SLATE_RIM)
 	cube(CF.new(0, foundation + 8.1, z0 + porch + 0.6), V3.new(W + 0.4, 0.3, 0.3), PLANK, PLANK_RIM, "flat")
 
-	-- the HOPPER WORKS board on the porch roof, the small board under it
+	-- the DROPPER WORKS board on the porch roof, the small board under it
 	BlockKit.text(
 		shop,
 		CF.new(0, foundation + 10.1, z0 + 3.9),
 		V3.new(16, 2.4, 0.3),
-		"HOPPER WORKS",
+		"DROPPER WORKS",
 		rgb(255, 238, 190),
 		rgb(86, 54, 30),
 		GLOW,
@@ -480,11 +481,11 @@ function Preview.buildShop(Loader: any, workspace: any)
 		"...#...",
 	}, 0.4, { ["#"] = rgb(255, 80, 130) }, 0.4)
 
-	-- a showcase line in the yard: Epic Hopper -> 2X laser -> SELL
+	-- a showcase line in the yard: Basic Dropper -> 2X laser -> SELL
 	local lineZ = 6
 	local hx = -40
-	HopperBuilder.build("EpicHopper", CF.new(hx, 0.1, lineZ)).Parent = shop
-	local lx = hx + HopperBuilder.Plate / 2 + LaserBuilder.Length / 2
+	DropperBuilder.build("BasicDropper", CF.new(hx, 0.1, lineZ)).Parent = shop
+	local lx = hx + DropperBuilder.Width * DropperBuilder.Scale / 2 + LaserBuilder.Length / 2
 	LaserBuilder.build(CF.new(lx, 0.1, lineZ)).Parent = shop
 	local sx = lx + LaserBuilder.Length / 2 + 2.6
 	BlockKit.cube(shop, CF.new(sx, 1.7, lineZ), V3.new(5.2, 3.2, 4.4), rgb(54, 120, 220), rgb(28, 64, 150))
@@ -511,7 +512,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 		cube(CF.new(t[1], 6.2, t[2]), V3.new(5, 3.4, 5), rgb(76, 160, 62), rgb(50, 116, 44))
 		cube(CF.new(t[1], 8.4, t[2]), V3.new(3, 1.6, 3), rgb(76, 160, 62), rgb(50, 116, 44))
 	end
-	print("Hopper Works house built")
+	print("Dropper Works house built")
 	return shop
 end
 

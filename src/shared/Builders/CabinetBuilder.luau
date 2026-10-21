@@ -1,69 +1,30 @@
 --[[
-	The hoppers (Config/HopperConfig) like the owner's concept picture
-	(docs/art/hoppers_concept.webp, 2026-10-21): a tall glowing block cabinet
-	in the hopper's colour. A base with a neon top, four corner pillars with a
-	neon strip and pixel marks, a dark chamber behind a tinted window full of
-	shards, a stream of light from the funnel onto a slide that pours shards
-	into the tray at the front (the price plate on the tray), a roof with a
-	neon edge and corner blocks, the name plate under the roof and a crest of
-	glowing shards on top with the hopper's own emblem:
+	The glowing block cabinet (the owner's first concept picture,
+	docs/art/hoppers_concept.webp): base with a neon top, corner pillars with
+	neon strips, a shard chamber behind a window, a light stream onto a slide
+	into the priced tray, a roof with corner blocks and the name plate.
+	Used by the Money Laser (LaserBuilder); the droppers have their own shape
+	(DropperBuilder).
 
-	  EpicHopper       purple shard cluster
-	  LegendaryHopper  yellow shard cluster around a big gem
-	  MythicHopper     a red heart-cut gem
-	  HeartHopper      a pink pixel heart
-	  StarHopper       a blue pixel star
-	  RiftHopper       a purple vortex (two rings of blocks around a dark core)
-	  TerraCoreHopper  a golden cube in an orange ring
-
-	build(id, cf) -> Model (anchored; origin = the middle of the base's bottom;
-	front = +Z, toward the player). buildCabinet(cf, color, name, price, crest)
-	builds the same cabinet for the Money Laser (LaserBuilder).
+	buildCabinet(cf, color, name, price?, crest?) -> Model (anchored; origin =
+	the middle of the base's bottom; front = +Z).
 ]]
 
-local Shared = script.Parent.Parent
 local Geo = require(script.Parent.Geo)
 local BlockKit = require(script.Parent.BlockKit)
-local HopperConfig = require(Shared.Config.HopperConfig)
-local Format = require(Shared.Util.Format)
 
-local HopperBuilder = {}
+local CabinetBuilder = {}
 
 local rgb = Color3.fromRGB
 local NEON = Enum.Material.Neon
 local PLASTIC = Enum.Material.SmoothPlastic
 local GLASS = Enum.Material.Glass
 
-export type Style = {
-	Scale: number,
-	Color: Color3, -- the hopper's colour (the concept picture)
-	Trim: { Color3 }, -- its glow (the shop, the previews)
-	Crest: string,
-}
-
-local function style(color: Color3, crest: string): Style
-	return { Scale = 1, Color = color, Trim = { color }, Crest = crest }
-end
-
-HopperBuilder.Styles = {
-	EpicHopper = style(rgb(175, 45, 255), "cluster"),
-	LegendaryHopper = style(rgb(255, 190, 25), "gem"),
-	MythicHopper = style(rgb(255, 40, 55), "heartgem"),
-	HeartHopper = style(rgb(255, 55, 175), "heart"),
-	StarHopper = style(rgb(20, 185, 255), "star"),
-	RiftHopper = style(rgb(125, 45, 255), "vortex"),
-	TerraCoreHopper = style(rgb(255, 135, 20), "cube"),
-} :: { [string]: Style }
-
 -- Sizes (studs).
-HopperBuilder.Plate = 5.8 -- the base's width (x)
-HopperBuilder.Depth = 5.0 -- the base's depth (z), the tray sticks out in front
-HopperBuilder.PillarH = 7.6 -- the corner pillars (base top -> roof)
-HopperBuilder.Height = 9.4 -- base bottom -> roof top
-
-function HopperBuilder.height(_id: string): number
-	return HopperBuilder.Height
-end
+CabinetBuilder.Plate = 5.8 -- the base's width (x)
+CabinetBuilder.Depth = 5.0 -- the base's depth (z), the tray sticks out in front
+CabinetBuilder.PillarH = 7.6 -- the corner pillars (base top -> roof)
+CabinetBuilder.Height = 9.4 -- base bottom -> roof top
 
 local function decor(): { [string]: any }
 	return { CanTouch = false, CanQuery = false, CastShadow = false }
@@ -211,12 +172,12 @@ end
 	shards, the light stream, the slide, the tray with the price, the roof and
 	the name. `crestKind` nil: no crest (the laser adds its own beam).
 ]]
-function HopperBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, price: string?, crestKind: string?): Model
+function CabinetBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, price: string?, crestKind: string?): Model
 	local model = Instance.new("Model")
 	local dim = color:Lerp(Color3.new(0, 0, 0), 0.35)
 	local rim = color:Lerp(Color3.new(0, 0, 0), 0.6)
 	local light = color:Lerp(Color3.new(1, 1, 1), 0.45)
-	local W, D = HopperBuilder.Plate, HopperBuilder.Depth
+	local W, D = CabinetBuilder.Plate, CabinetBuilder.Depth
 	local function at(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
 	end
@@ -247,7 +208,7 @@ function HopperBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, pri
 
 	-- four corner pillars with a neon strip and two pixel marks each
 	local px, pz = W / 2 - 0.4, D / 2 - 0.4
-	local pillarH = HopperBuilder.PillarH
+	local pillarH = CabinetBuilder.PillarH
 	for _, c in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
 		local pc = at(c.X * px, 0.7 + pillarH / 2, c.Y * pz)
 		BlockKit.cube(model, pc, Vector3.new(0.8, pillarH, 0.8), dim, rim, "side")
@@ -339,13 +300,4 @@ function HopperBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, pri
 	return model
 end
 
-function HopperBuilder.build(id: string, cf: CFrame): Model
-	local hopper = HopperConfig.ById[id]
-	local s = HopperBuilder.Styles[id]
-	assert(hopper and s, "Unknown hopper " .. tostring(id))
-	local model = HopperBuilder.buildCabinet(cf, s.Color, string.upper(hopper.Name), Format.money(hopper.Price), s.Crest)
-	model.Name = id
-	return model
-end
-
-return HopperBuilder
+return CabinetBuilder

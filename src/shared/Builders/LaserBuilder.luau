@@ -1,9 +1,9 @@
 --[[
 	The MONEY LASER (owner's concept picture docs/art/hoppers_concept.webp,
-	2026-10-21): the hopper cabinet (HopperBuilder.buildCabinet) in green, a
+	2026-10-21): the hopper cabinet (CabinetBuilder.buildCabinet) in green, a
 	tall green laser beam out of its roof and glowing pixel dollar signs
 	floating around the beam. It makes the ores that pass it worth double
-	(HopperConfig.Laser).
+	(DropperConfig.Laser).
 
 	build(cf, scale?) -> Model (anchored; origin = the middle of the base's
 	bottom; front = +Z).
@@ -12,8 +12,8 @@
 local Shared = script.Parent.Parent
 local Geo = require(script.Parent.Geo)
 local BlockKit = require(script.Parent.BlockKit)
-local HopperBuilder = require(script.Parent.HopperBuilder)
-local HopperConfig = require(Shared.Config.HopperConfig)
+local CabinetBuilder = require(script.Parent.CabinetBuilder)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local Format = require(Shared.Util.Format)
 
 local LaserBuilder = {}
@@ -22,7 +22,7 @@ local rgb = Color3.fromRGB
 local NEON = Enum.Material.Neon
 
 LaserBuilder.Color = rgb(0, 255, 105)
-LaserBuilder.Length = HopperBuilder.Plate -- (the row spacing in the previews)
+LaserBuilder.Length = CabinetBuilder.Plate -- (the row spacing in the previews)
 
 local DOLLAR = {
 	"..#..",
@@ -40,10 +40,10 @@ end
 
 function LaserBuilder.build(cf: CFrame, scale: number?): Model
 	local green = LaserBuilder.Color
-	local laser = HopperConfig.Laser
-	local model = HopperBuilder.buildCabinet(cf, green, "MONEY LASER", Format.money(laser.Price), nil)
+	local laser = DropperConfig.Laser
+	local model = CabinetBuilder.buildCabinet(cf, green, "MONEY LASER", Format.money(laser.Price), nil)
 	model.Name = "MoneyLaser2X"
-	local roofTop = 0.7 + HopperBuilder.PillarH + 0.75
+	local roofTop = 0.7 + CabinetBuilder.PillarH + 0.75
 	-- the emitter on the roof and the beam: a bright core in a soft wide glow
 	BlockKit.cube(model, cf * CFrame.new(0, roofTop + 0.4, 0), Vector3.new(1.8, 0.8, 1.8), rgb(10, 70, 45), rgb(4, 36, 22))
 	Geo.block(model, cf * CFrame.new(0, roofTop + 7.5, 0), Vector3.new(0.5, 13.4, 0.5), rgb(200, 255, 210), NEON, decor())

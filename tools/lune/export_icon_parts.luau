@@ -94,13 +94,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
--- the hoppers (the HOPPERS shop cards; in the game a live ViewportFrame)
-local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
-local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
-for _, hopper in HopperConfig.List do
-	models["hopper_" .. hopper.Id] = HopperBuilder.build(hopper.Id, CF.new())
+-- the droppers (the DROPPERS shop tiles; in the game a live ViewportFrame)
+local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
+local DropperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperBuilder")
+for _, dropper in DropperConfig.List do
+	models["dropper_" .. dropper.Id] = DropperBuilder.build(dropper.Id, CF.new())
 end
-models.hopper_MoneyLaser2X = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder").build(CF.new())
+models.dropper_MoneyLaser2X = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder").build(CF.new())
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
