@@ -343,7 +343,13 @@ return function(T, Loader)
 	-- models are checked over their whole sweep), or nil.
 	local function outside(root, piece): string?
 		local frame = LobbyLayout.frame(piece)
-		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
+		-- (the egg stall's giant egg and light beam rise over the 16-stud
+		-- layout height, owner 2026-10-21: its own cap is Capsules.Top; the
+		-- footprint stays the layout's, LobbyLayout is unchanged)
+		local height = if piece.Id == "CapsuleStall"
+			then Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Capsules").Top
+			else piece.Size.Y
+		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, height + TOLERANCE
 		for _, d in root:GetDescendants() do
 			if d:IsA("BasePart") then
 				local points = corners(d)
@@ -719,7 +725,7 @@ return function(T, Loader)
 			Shop = "SHOP",
 			Upgrades = "UPGRADES",
 			SpinWheel = "SPIN & WIN",
-			CapsuleStall = "CAPSULES",
+			CapsuleStall = "EGGS",
 			ShopFront = "SELL",
 			EnchantShop = "ENCHANT",
 			HallOfFame = "HALL OF FAME",
