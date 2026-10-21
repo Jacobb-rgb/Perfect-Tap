@@ -647,10 +647,9 @@ function ElevatorService.start()
 	while true do
 		task.wait(CATCH_CHECK)
 		-- (one bad round never ends floor 6's void rescue for the rest of the server)
-		local ok, err = pcall(checkCatchers)
-		if not ok then
+		xpcall(checkCatchers, function(err: any)
 			warn("[ElevatorService] void check failed: " .. tostring(err))
-		end
+		end)
 	end
 end
 

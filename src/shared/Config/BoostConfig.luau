@@ -690,7 +690,7 @@ function BoostConfig.hasEffect(kindId: string, blasterLevel: any, vip: boolean?)
 				return true
 			end
 		end
-		for oreId in BoostConfig.crystalWeights(zone) or {} do
+		for oreId in (BoostConfig.crystalWeights(zone) or {}) :: { [string]: number } do
 			if BoostConfig.isLuckyOre(oreId) then
 				return true
 			end

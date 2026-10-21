@@ -400,7 +400,7 @@ function BoostView.defaultZone(rawState: any, currentZone: string?): string?
 		for oreId in BoostConfig.zoneWeights(zone) do
 			lucky = lucky or BoostConfig.isLuckyOre(oreId)
 		end
-		for oreId in BoostConfig.crystalWeights(zone) or {} do
+		for oreId in (BoostConfig.crystalWeights(zone) or {}) :: { [string]: number } do
 			lucky = lucky or BoostConfig.isLuckyOre(oreId)
 		end
 		return (if lucky then 1000 else 0) + zone.MinBlaster * 10 + (if zone.VipOnly then 0 else 1)
