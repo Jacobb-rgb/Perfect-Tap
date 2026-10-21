@@ -8,6 +8,9 @@
 	  ui_store_pc_stars    PC: the end of the row, the five STAR blasters (3 rebirths)
 	  ui_store_pc_odds     PC: the odds panel before a Royal Capsule x5 buy
 	  ui_store_phone       667 x 375 pt phone
+	  ui_store_pc_starter  PC: FEATURED with the Starter Pack card
+	  ui_store_pc_money    PC: MONEY with the 2x Money pass
+	  ui_starter_popup_pc  PC: the Starter Pack popup (first hour of play)
 ]]
 
 local UiExport = require("./uiexport")
@@ -179,6 +182,16 @@ function Preview.build(Loader: any): { [string]: any }
 		hud(phoneScale).Gui,
 		store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, nil, true).Gui,
 	})
+	-- the 2x Money pass and the Starter Pack (2026-10-21): the FEATURED row with
+	-- the Starter Pack, the MONEY section with 2x Money, and the first-hour popup
+	exports.ui_store_pc_starter = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Featured").Gui })
+	local money = store(scale, pcW, pcH, "Money")
+	exports.ui_store_pc_money = UiExport.export({ hud(scale).Gui, money.Gui })
+	local StarterPackView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StarterPackView")
+	local popup = StarterPackView.build()
+	popup.Gui.Scale.Scale = scale
+	popup.Gui.Enabled = true
+	exports.ui_starter_popup_pc = UiExport.export({ hud(scale).Gui, popup.Gui })
 	return exports
 end
 

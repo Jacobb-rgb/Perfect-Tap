@@ -21,6 +21,8 @@
 	  ServerBoost     "Full" when it would pass ServerBoostService.MaxSeconds
 	  RebirthWeapon   a STAR blaster's pass: "Full" until the player's rebirths
 	                  reach it (StarBlasterData.unlocked), "Owned" once owned
+	  StarterPack     once per account (StarterPackService.promptState):
+	                  "Owned" once bought, "Unknown" when the offer is over
 	  Perks, Hoverboard (passes), CoinPack: promptStatus with owns()
 	Paid random products read the player's policy first (it may yield).
 ]]
@@ -115,7 +117,16 @@ function StoreService.buy(player: Player, key: string)
 		return
 	end
 	local full = false
-	if grant == "BlasterLevel" then
+	local owned = product.Kind == "GamePass" and MonetizationService.owns(player, key)
+	if grant == "StarterPack" then
+		local StarterPackService = require(script.Parent.StarterPackService) :: any
+		local offer = StarterPackService.promptState(data)
+		if offer == "Over" then
+			answer(player, key, "Unknown")
+			return
+		end
+		owned = offer == "Owned"
+	elseif grant == "BlasterLevel" then
 		full = StoreService.blasterStatus(data, product) ~= "Prompt"
 	elseif grant == "RebirthWeapon" then
 		-- a STAR blaster is sold once the player's rebirths reach it
@@ -124,7 +135,6 @@ function StoreService.buy(player: Player, key: string)
 		local ServerBoostService = require(script.Parent.ServerBoostService) :: any
 		full = ServerBoostService.full(product.Seconds or 0)
 	end
-	local owned = product.Kind == "GamePass" and MonetizationService.owns(player, key)
 	-- promptPurchase reads the policy for a paid random product, gates and prompts
 	BoostService.promptPurchase(player, key, owned, full)
 end

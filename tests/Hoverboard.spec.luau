@@ -34,7 +34,7 @@ return function(T, Loader)
 				T.eq(robux, 0, board.Id .. ": coin boards come first")
 				T.truthy(type(board.Price) == "number" and board.Price > lastPrice, board.Id .. " costs more than the coin board before")
 				lastPrice = board.Price
-				T.eq(board.Effect, "None", board.Id .. ": effects are a Robux perk")
+				T.truthy(board.Effect ~= "None", board.Id .. ": small thruster effects")
 				T.falsy(board.IgnoresCarrySlow, board.Id .. " keeps the full carry slowdown")
 				T.falsy(HoverboardData.canPrompt(board), board.Id .. " is never prompted for Robux")
 			else
@@ -250,15 +250,28 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("hoverboard fx: Robux boards only, mobile budget, mount and pool", function()
+	T.test("hoverboard fx: every board, trails for Robux only, mobile budget, bursts, mount and pool", function()
 		for _, board in HoverboardData.List do
 			local set = HoverboardFx.create(board.Id)
 			if board.Effect == "None" then
 				T.eq(set, nil, board.Id .. " has no effects")
 			else
 				T.truthy(set ~= nil, board.Id .. " effect set")
-				T.truthy(#set.Trails >= 1, board.Id .. " has a trail")
-				T.le(HoverboardFx.rate(set), 40, board.Id .. " particles per second")
+				if board.Kind == "Robux" then
+					T.truthy(#set.Trails >= 1, board.Id .. " has a trail")
+					T.le(HoverboardFx.rate(set), 40, board.Id .. " particles per second")
+				else
+					T.eq(#set.Trails, 0, board.Id .. ": the trail stays a Robux perk")
+					T.le(HoverboardFx.rate(set), 14, board.Id .. " small effects (particles per second)")
+				end
+				for _, kind in { "Start", "Boost" } do
+					local count = HoverboardFx.burstCount(set, kind :: any)
+					T.truthy(count > 0 and count <= 30, board.Id .. " " .. kind .. " burst size " .. count)
+				end
+				T.truthy(
+					HoverboardFx.burstCount(HoverboardFx.create(board.Id, true) :: any, "Start") < HoverboardFx.burstCount(set, "Start"),
+					board.Id .. " lite bursts are smaller"
+				)
 				local lite = HoverboardFx.create(board.Id, true)
 				T.le(HoverboardFx.rate(lite), HoverboardFx.rate(set) / 2 + 0.01, board.Id .. " lite halves the rate")
 				local model = HoverboardBuilder.build(board.Id)
@@ -269,6 +282,10 @@ return function(T, Loader)
 						e.Name .. " on its attachment"
 					)
 					T.falsy(e.Enabled, e.Name .. " starts disabled")
+				end
+				for _, e in set.Bursts do
+					T.truthy(e.Parent and e.Parent.Name == e:GetAttribute("Mount"), e.Name .. " burst on its attachment")
+					T.eq(e.Rate, 0, e.Name .. " bursts never stream")
 				end
 				for _, t in set.Trails do
 					T.eq(t.Attachment0.Name, "TrailLeft", t.Name .. " attachment 0")
@@ -296,6 +313,6 @@ return function(T, Loader)
 				T.eq(HoverboardFx.acquire(board.Id), set, "acquire reuses the pooled set")
 			end
 		end
-		T.eq(HoverboardFx.acquire("TimberDrifter"), nil, "coin boards acquire nothing")
+		T.eq(HoverboardFx.acquire("NoSuchBoard"), nil, "unknown boards acquire nothing")
 	end)
 end

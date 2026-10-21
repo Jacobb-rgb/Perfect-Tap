@@ -14,6 +14,9 @@
 	  (src/server/Bonuses.luau) adds its capped IncomePct total once under the
 	  key "Bonuses". A keyed bonus replaces the one with the same key, so a
 	  source can never count twice.
+	- addIncomeFactor(fn, key): a multiplier ON TOP of that sum (the 2x Money
+	  pass: Bonuses adds it under "MoneyPass"), so it doubles the capped
+	  bonuses too instead of being cut off by them. Keyed like the bonuses.
 	Amounts that are not finite, below 0.001 or above EconomyConfig.MaxAward
 	are ignored (a bug, never a real payout).
 ]]
@@ -36,6 +39,7 @@ local earnedCallbacks: { EarnedCallback } = {}
 local spentCallbacks: { SpentCallback } = {}
 local incomeBonuses: { IncomeBonus } = {}
 local incomeKeys: { [string]: number } = {} -- key -> index in incomeBonuses
+local incomeFactors: { [string]: IncomeBonus } = {} -- key -> multiplier (1 = none)
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -124,8 +128,15 @@ function EconomyService.addIncomeBonus(bonus: IncomeBonus, key: string?)
 	end
 end
 
+-- A multiplier of the whole podium income (2 = double), applied after the
+-- summed bonuses. Adding again under the same key replaces it.
+function EconomyService.addIncomeFactor(factor: IncomeBonus, key: string)
+	incomeFactors[key] = factor
+end
+
 -- Total podium income multiplier for a player (1 = no bonus). A bonus that
--- fails or is not a finite number >= 0 counts as 0.
+-- fails or is not a finite number >= 0 counts as 0; a factor that fails or
+-- is not a finite number >= 1 counts as 1 (a factor never lowers income).
 function EconomyService.incomeMultiplier(player: Player): number
 	local list: { number } = {}
 	for _, bonus in incomeBonuses do
@@ -134,7 +145,14 @@ function EconomyService.incomeMultiplier(player: Player): number
 			table.insert(list, value)
 		end
 	end
-	return EconomyConfig.multiplier(list)
+	local total = EconomyConfig.multiplier(list)
+	for _, factor in incomeFactors do
+		local ok, value = pcall(factor, player)
+		if ok and finite(value) and value > 1 then
+			total *= value
+		end
+	end
+	return total
 end
 
 -- Internals for the Lune tests only.
@@ -142,6 +160,7 @@ EconomyService._test = {
 	reset = function()
 		table.clear(incomeBonuses)
 		table.clear(incomeKeys)
+		table.clear(incomeFactors)
 	end,
 	bonusCount = function(): number
 		return #incomeBonuses
