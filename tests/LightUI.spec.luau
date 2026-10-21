@@ -261,10 +261,9 @@ return function(T, Loader)
 			return {
 				Sell = ui("SellView").build(false).Gui,
 				TechShop = ui("TechShopView").build(false).Gui,
-				Train = ui("TrainView").build(false).Gui,
+				TrainChip = ui("TrainView").build(false).Chip, -- (the panel wears the Pop look)
 				IronBox = ui("IronBoxView").build().Gui,
-				Foundry = ui("FoundryView").build().Gui,
-				Forge = ui("FoundryView").buildForge(false).Gui,
+				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}
 		end
@@ -274,6 +273,143 @@ return function(T, Loader)
 		withLight(function()
 			for name, gui in builds() do
 				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
+			end
+		end)
+	end)
+
+	-- the train panel, the Foundry, the Blaster Vault and the Star Forge wear the Pop
+	-- look (owner 2026-10-21): never the LightSkin recolouring; the same refs, every
+	-- touch target still >= 44 pt on phones, the BUY states as before
+	T.test("LightUI: the Pop windows (train, foundry, vault, star forge) keep their behaviour", function()
+		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+		local TrainView = ui("TrainView")
+		local FoundryView = ui("FoundryView")
+		local VaultView = ui("VaultView")
+		local RebirthView = ui("RebirthView")
+		local MenuPanel = ui("MenuPanel")
+		local PHONE = 0.62
+		-- a gui object's size in design units (scale sizes resolved against the parents)
+		local function absolute(gui: any): (number, number)
+			local size = gui.Size
+			local w, h = size.X.Offset, size.Y.Offset
+			if (size.X.Scale ~= 0 or size.Y.Scale ~= 0) and gui.Parent and gui.Parent:IsA("GuiObject") then
+				local pw, ph = absolute(gui.Parent)
+				w += pw * size.X.Scale
+				h += ph * size.Y.Scale
+			end
+			return w, h
+		end
+		local function bigEnough(label: string, target: any)
+			local w, h = absolute(target)
+			T.le(44, w * PHONE, `{label} {target.Name} wide enough`)
+			T.le(44, h * PHONE, `{label} {target.Name} tall enough`)
+		end
+		for name, gui in
+			{
+				Train = TrainView.build(false).Gui,
+				Foundry = FoundryView.build().Gui,
+				Vault = VaultView.build().Gui,
+				Rebirth = RebirthView.build().Gui,
+			}
+		do
+			T.falsy(gui:GetAttribute("PopSkin"), "switch off: today's " .. name)
+		end
+		withLight(function()
+			-- the train panel (the HUD chip keeps the light skin)
+			local train = TrainView.build(true)
+			T.truthy(train.Gui:GetAttribute("PopSkin"), "Pop train panel")
+			T.falsy(train.Gui:GetAttribute("LightSkin"), "no LightSkin on the train panel")
+			T.truthy(train.Chip:GetAttribute("LightSkin"), "the HUD chip keeps the light skin")
+			T.truthy(train.Card:FindFirstChild("Picture"), "the live locomotive")
+			for _, screen in { { 667, 375 }, { 568, 320 } } do
+				TrainView.layout(train, true, screen[1] / PHONE, (screen[2] - 58) / PHONE)
+				for _, target in TrainView.touchTargets(train) do
+					bigEnough(`train {screen[1]}x{screen[2]}`, target)
+				end
+			end
+			local capacity = train.Rows.Capacity
+			TrainView.setUpgrades(train, TrainView.read({ Cargo = 8, Capacity = 8, CapacityLevel = 1 }), 100)
+			T.eq(capacity.Buy.BackgroundColor3, Theme.PanelLight, "can't afford: greyed (the state colour)")
+			TrainView.setUpgrades(train, TrainView.read({ Cargo = 8, Capacity = 8, CapacityLevel = 1 }), 1e9)
+			T.eq(capacity.Buy.Text, "BUY")
+			local face = capacity.Buy:FindFirstChild("PopFace") :: any
+			T.truthy(face and face.Visible, "the gold coin and the price on BUY")
+			T.eq(face:FindFirstChild("Amount").Text, capacity.Price.Text, "the row's price")
+			-- the controller's states: "BOUGHT!" (greyed) and "…" show as words
+			capacity.Buy.Text = "BOUGHT!"
+			TrainView.style(capacity.Buy, false, Theme.Good, Theme.GoodDark)
+			T.eq(capacity.Buy.TextTransparency, 0, "BOUGHT! shows")
+			T.falsy(face.Visible, "no price on BOUGHT!")
+			T.eq(capacity.Buy.BackgroundColor3, Theme.PanelLight, "BOUGHT! is greyed")
+			T.eq(train.Express.Buy.Text, "SOON", "Express is a placeholder")
+			local robux = train.Express.Buy:FindFirstChild("PopFace") :: any
+			T.truthy(robux and robux.Visible, "the green Robux button")
+			T.eq(robux:FindFirstChild("Amount").Text, tostring(TrainView.ExpressPrice))
+
+			-- the Foundry (the hammer moment keeps the light skin)
+			local foundry = FoundryView.build()
+			T.truthy(foundry.Gui:GetAttribute("PopSkin"), "Pop Foundry")
+			T.falsy(foundry.Gui:GetAttribute("LightSkin"), "no LightSkin on the Foundry")
+			FoundryView.setCompact(foundry, true)
+			local state = { FoundryStock = { ["Ingot|Gold|Clean|"] = 2, ["Ingot|Coal||"] = 4 }, BlasterLevel = 3, Coins = 1e9 }
+			FoundryView.setRows(foundry, FoundryView.oreRows(state.FoundryStock, 3), 6)
+			FoundryView.setCard(foundry, FoundryView.status(state, nil), state)
+			T.truthy(foundry.Rows.Gold.Frame:FindFirstChild("Picture"), "a live ingot per row")
+			T.eq(foundry.Rows.Gold.Take.Text, "TAKE")
+			T.eq(foundry.Rows.Coal.Take.Text, "TAKE ALL")
+			local coalShade = foundry.Rows.Coal.Frame:FindFirstChild("Shade") :: any
+			T.truthy(coalShade and coalShade.Visible, "a row the next level can't use is shaded")
+			T.truthy(foundry.Card:FindFirstChild("Picture"), "the next blaster's picture")
+			for _, button in { foundry.Close, foundry.Forge, foundry.Rows.Gold.Take, foundry.LookPrev } do
+				bigEnough("foundry", button.Parent)
+			end
+			-- (the TAKE switch's faces fit the header band: their buttons reach past them)
+			for _, button in { foundry.TakeOne, foundry.TakeEvery } do
+				bigEnough("foundry switch", button)
+			end
+
+			-- the Blaster Vault
+			local vault = VaultView.build()
+			T.truthy(vault.Gui:GetAttribute("PopSkin"), "Pop vault")
+			for _, screen in { { 667, 375 }, { 568, 320 } } do
+				VaultView.layout(vault, true, screen[1] / PHONE, (screen[2] - 58) / PHONE)
+				VaultView.setCards(vault, VaultView.cards(3, 1e9))
+				for _, target in VaultView.touchTargets(vault) do
+					bigEnough(`vault {screen[1]}x{screen[2]}`, target)
+				end
+			end
+			local nextTile = VaultView.tileFor(vault, 4) :: any
+			T.eq(nextTile.ButtonText.Text, "BUY")
+			local coin = nextTile.Button:FindFirstChild("PopFace") :: any
+			T.truthy(coin and coin.Visible, "the gold coin BUY with the price")
+			T.truthy(nextTile.Ribbon.Visible, "the NEXT chip")
+			local owned = VaultView.tileFor(vault, 2) :: any
+			T.eq(owned.ButtonText.Text, "OWNED")
+			T.truthy(owned.Check.Visible, "the owned tick")
+			T.truthy((VaultView.tileFor(vault, 6) :: any).Dim.Visible, "a locked case is shaded")
+
+			-- the Star Forge
+			local rebirth = RebirthView.build()
+			T.truthy(rebirth.Gui:GetAttribute("PopSkin"), "Pop Star Forge")
+			T.falsy(rebirth.Gui:GetAttribute("LightSkin"), "no LightSkin on the Star Forge")
+			RebirthView.layout(rebirth, true, 568 / PHONE, (320 - 58) / PHONE)
+			for _, button in RebirthView.buttons(rebirth) do
+				bigEnough("star forge", MenuPanel.holderOf(button))
+			end
+			bigEnough("star forge", MenuPanel.holderOf(rebirth.Frame.Close))
+			-- the requirement line still fits over the (taller, glowing) REBIRTH!
+			local TechShopView = ui("TechShopView")
+			local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+			local ready = { Count = 1, Stars = 3, Perks = {}, Level = 8, Ready = true, StarsNow = RebirthConfig.starsFor(8) }
+			for _, screen in { { false, 1280, 720 - 36 }, { true, 568 / PHONE, (320 - 58) / PHONE } } do
+				RebirthView.layout(rebirth, screen[1], screen[2], screen[3])
+				RebirthView.setInfo(rebirth, ready)
+				local need = rebirth.Need
+				T.truthy(
+					TechShopView.fits(need.Text, need.Size.X.Offset, need.Size.Y.Offset, need.TextSize, true),
+					"the requirement line fits"
+				)
+				T.truthy((rebirth.Pages.Rebirth:FindFirstChild("PopGlow") :: any).Visible, "REBIRTH! glows while ready")
 			end
 		end)
 	end)
