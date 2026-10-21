@@ -89,7 +89,9 @@ LobbyLayout.Budget = {
 	-- MineKit.PartBudget; ~8,160 in all after the trims, + ~1,900 for the
 	-- Stormglass Rift; floors 4-6 sit far north and deep and never stream in
 	-- near the town).
-	MapParts = 32200, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors
+	-- (bigger plots 2026-10-21, 16x16 grid: the map 31,773 + nodes 294 + museums 352 = 32,419 measured,
+	-- + 200 for the podium and pen ores, + ~250 headroom; 32,200 at 12 cells)
+	MapParts = 32850, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -97,7 +99,10 @@ LobbyLayout.Budget = {
 	-- headroom is a deliberate buffer, so a small merge from a parallel
 	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
 	-- budget; spend it on purpose, not by accident.
-	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
+	-- (bigger plots 2026-10-21: 14,226 measured with the museums, + ~250 headroom; 13,700 at 12 cells. The
+	-- bigger lobby area now counts the Vault's south trees and the bay's cliffs (~160), + the street
+	-- lamps along the longer plot roads (~110), + the meadow on the lawns beside the sea bay (~300))
+	LobbyParts = 14500, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
 	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
@@ -114,7 +119,7 @@ LobbyLayout.Budget = {
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
-		Flora = { Parts = 3800, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way)
+		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new lawns beside the sea bay behind the Vault, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the

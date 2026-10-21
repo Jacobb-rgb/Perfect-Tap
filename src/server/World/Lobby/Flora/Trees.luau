@@ -109,6 +109,10 @@ end
 -- the quarry rim to the south shore: a continuous town edge in the hero view;
 -- the south end is the plot columns' end, WorldLayout.PlotGrid.SouthZ, 112 at 12 cells)
 Trees.BeltZ = { -104, WorldLayout.PlotGrid.SouthZ }
+-- (bigger plots) the town-side row and its hedges end where the 12-cell plot
+-- columns ended (z 112 at any size): past it, along the shore of the sea bay
+-- behind the Vault, only the road-side row runs on (phones: ~60 parts fewer)
+Trees.TownRowEndZ = WorldLayout.PlotGrid.SouthZ - WorldLayout.PlotGrid.SouthShift
 -- Lift: extra trunk height of the road-side rows (crowns over head height).
 -- Inner: the third, inner row (z -60..40 only, the hero's mid-depth
 -- flanks), staggered against the town-side row, mixed autumn, cherry and
@@ -226,7 +230,7 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 		local townSide: { number } = {}
 		for _, row in Trees.BeltRows do
 			local z = (if row.Inner then Trees.InnerZ[1] else Trees.BeltZ[1]) + row.Phase
-			local zEnd = if row.Inner then Trees.InnerZ[2] else Trees.BeltZ[2]
+			local zEnd = if row.Inner then Trees.InnerZ[2] elseif row.Lean then Trees.BeltZ[2] else Trees.TownRowEndZ
 			while z <= zEnd do
 				local p = Vector3.new(side * row.X, 0, z + rng:range(-0.8, 0.8))
 				local scale = rng:range(row.Scale[1], row.Scale[2])
