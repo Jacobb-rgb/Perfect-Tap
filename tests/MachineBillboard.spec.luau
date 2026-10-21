@@ -303,11 +303,15 @@ return function(T, Loader)
 		MachineBillboard.update(refs, 0, 1, 4, 0, "NeedsOtherOre", nil)
 		T.truthy(refs.Status.Visible, "status shown")
 		T.eq(refs.Status.Text, "Needs an ingot of another ore")
+		-- the word sizes to its text next to the lamp, in a row wider than the sign
 		T.truthy(
-			lineWidth(refs.Status.Text, refs.Status.TextSize) <= refs.Status.Size.X.Offset,
-			"one line in the (centred, wider) status label"
+			lineWidth(refs.Status.Text, refs.Status.TextSize) <= MachineBillboard.StatusWidth,
+			"one line next to the lamp in the (centred, wider) status row"
 		)
-		T.eq(refs.Status.AnchorPoint.X, 0.5, "centred")
+		T.falsy(refs.Status.TextWrapped, "never wraps")
+		T.eq(refs.Status.AutomaticSize, roblox.Enum.AutomaticSize.X, "as wide as its text")
+		T.eq(refs.StatusRow.AnchorPoint.X, 0.5, "centred")
+		T.truthy(refs.StatusRow.Size.X.Offset >= MachineBillboard.StatusWidth + 18, "room for the lamp and the word")
 		MachineBillboard.detach(refs)
 	end)
 
@@ -362,5 +366,264 @@ return function(T, Loader)
 		for _, text in samples do
 			T.truthy(lineWidth(text, size) <= width, `"{text}" fits {width} px`)
 		end
+	end)
+
+	---------------------------------------------------------------- status row, stack lights, FULL pop (machine UX)
+
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+
+	T.test("MachineBillboard: statusOf reads a machine's attributes in order", function()
+		local function of(id: string, attrs: { [string]: any }): string
+			return MachineBillboard.statusOf(attrs, MachineData.ById[id])
+		end
+		-- a processor: idle with an empty queue waits; a job or a queue works
+		T.eq(of("Crusher", { Queue = 0, Status = "" }), "Waiting", "idle crusher waits")
+		T.eq(of("Crusher", {}), "Waiting", "no attributes yet: waiting")
+		T.eq(of("Crusher", { Working = true, Queue = 1 }), "Working", "a job runs")
+		T.eq(of("Crusher", { Queue = 2, Working = false }), "Working", "items queued for the next job")
+		T.eq(of("Crusher", { Job = "3|100|3|Copper", Queue = 1 }), "Working", "Working read from the packed Job")
+		T.eq(of("Crusher", { Job = "3|||", Queue = 0 }), "Waiting", "an idle packed Job")
+		-- a block comes first, even while a job runs
+		T.eq(of("Crusher", { Working = true, Queue = 4, Status = "OutputBlocked" }), "OutputBlocked")
+		T.eq(of("IronBox", { Queue = 1, PenFull = true }), "PenFull", "the Iron Box's full pen")
+		T.eq(of("IronBox", { Queue = 1, PenFull = true, Status = "TooManyItems" }), "TooManyItems", "a Status before PenFull")
+		T.eq(of("AlloyFurnace", { Queue = 1, Status = "NeedsOtherOre" }), "NeedsOtherOre")
+		-- power: no powered network is news, working or not; low power is not
+		local unpowered = { PowerSpeed = 0.6, Powered = false, Queue = 0 }
+		T.eq(of("BrickFurnace", unpowered), "NoPower", "idle without power")
+		T.eq(of("BrickFurnace", { PowerSpeed = 0.6, Powered = false, Working = true, Queue = 1 }), "NoPower", "slow job")
+		T.eq(of("BrickFurnace", { PowerSpeed = 0.6, Queue = 0 }), "NoPower", "Powered missing counts as no")
+		T.eq(of("BrickFurnace", { PowerSpeed = 0.8, Powered = true, Queue = 0 }), "Waiting", "low power")
+		T.eq(of("BrickFurnace", { PowerSpeed = 1, Powered = true, Working = true }), "Working", "full power")
+		T.eq(of("BrickFurnace", { PowerSpeed = 0.6, Powered = false, Status = "OutputBlocked" }), "OutputBlocked")
+		T.eq(of("RobotArm", { PowerSpeed = 0.6, Powered = false }), "NoPower", "any machine that uses power")
+		-- no jobs of its own: nothing to say while idle
+		for _, id in { "Splitter", "SellBox", "CleaningStation", "RobotArm", "Conveyor", "PowerPole", "WindTurbine" } do
+			T.eq(of(id, { Queue = 0 }), "", id .. " idle")
+		end
+		T.eq(of("Splitter", { Working = true }), "Working", "a busy splitter")
+		T.eq(of("WindTurbine", { PowerOut = 40, Network = "" }), "", "generators have none")
+		T.eq(MachineBillboard.statusOf({ Queue = 0 }, nil), "", "unknown machine")
+	end)
+
+	T.test("MachineBillboard: a waiting machine says what it needs (one line)", function()
+		local expected = {
+			AutoCleaner = "Needs dirty ore",
+			ClayFurnace = "Needs clean or crushed ore",
+			BlastFurnace = "Needs clean or crushed ore",
+			Crusher = "Needs clean ore",
+			Polisher = "Needs clean ore",
+			CrystalExtractor = "Needs crushed ore",
+			IronBox = "Needs ore or ingots",
+			AlloyFurnace = "Needs ingots",
+			RestorationTable = "Needs a relic",
+		}
+		for id, text in expected do
+			T.eq(MachineBillboard.needsText(MachineData.ById[id]), text, id)
+		end
+		T.eq(MachineBillboard.needsText(nil), "Waiting", "unknown machine")
+		T.eq(MachineBillboard.needsText(MachineData.ById.PowerPole), "Waiting", "takes nothing")
+		-- every machine that can wait: its words fit next to the lamp
+		local size = MachineBillboard.StatusTextSize
+		for _, info in MachineData.List do
+			if MachineBillboard.statusOf({ Queue = 0 }, info) == "Waiting" then
+				local text = MachineBillboard.needsText(info)
+				T.truthy(text:sub(1, 6) == "Needs ", info.Id .. " names its input")
+				T.truthy(lineWidth(text, size) <= MachineBillboard.StatusWidth, `"{text}" fits`)
+			end
+		end
+		for _, status in { "OutputBlocked", "TooManyItems", "PenFull", "NeedsOtherOre", "Working" } do
+			local text = MachineBillboard.StatusText[status]
+			T.truthy(lineWidth(text, size) <= MachineBillboard.StatusWidth, `"{text}" fits`)
+		end
+		T.truthy(lineWidth("No power: 100%", size) <= MachineBillboard.StatusWidth, "no power fits")
+	end)
+
+	-- the glyph frames on the lamp, by name prefix
+	local function glyphOf(refs: any): (string, number)
+		local name, count = "", 0
+		for _, child in refs.Glyph:GetChildren() do
+			count += 1
+			name = child.Name:gsub("%d+$", "")
+		end
+		return name, count
+	end
+
+	T.test("MachineBillboard: the status row - lamp, glyph and words for each status", function()
+		local model = MachineBuilder.build("BrickFurnace")
+		withAttrs(model, {})
+		local refs = MachineBillboard.attach(model)
+		T.falsy(refs.StatusRow.Visible, "no row at first")
+
+		-- idle and waiting: only the status row (no bar, no queue)
+		MachineBillboard.update(refs, 0, 0, 4, 0, "Waiting", nil)
+		T.truthy(refs.StatusRow.Visible and refs.Status.Visible, "row shown")
+		T.eq(refs.Status.Text, "Needs clean or crushed ore")
+		T.truthy(refs.Status.TextColor3 == Theme.TextDim, "grey words")
+		local glyph, bars = glyphOf(refs)
+		T.eq(glyph, "Pause", "pause glyph")
+		T.eq(bars, #MachineBillboard.Glyphs.Pause)
+		T.falsy(refs.Bar.Visible, "no bar while idle")
+		T.falsy(refs.PipRow.Visible, "no queue while idle")
+		T.eq(refs.Gui.Size.Y.Offset, 20, "just the status row")
+		T.truthy(refs.Gui.Enabled, "shown")
+
+		-- working: the bar and queue come back under the row
+		MachineBillboard.update(refs, 0.3, 1, 4, 0, "Working", nil)
+		T.eq(refs.Status.Text, "Working")
+		T.truthy(refs.Icon.BackgroundColor3 == Theme.Good, "green lamp")
+		T.truthy(refs.Status.TextColor3 == Theme.Good, "green words")
+		glyph, bars = glyphOf(refs)
+		T.eq(glyph, "Play", "play glyph")
+		T.eq(bars, #MachineBillboard.Glyphs.Play, "the old glyph is gone")
+		T.truthy(refs.Bar.Visible and refs.PipRow.Visible, "bar and queue")
+		T.eq(refs.Bar.Position.Y.Offset, 20, "the bar under the row")
+		T.eq(refs.Gui.Size.Y.Offset, 58)
+
+		-- blocked: red, the no-entry bar
+		MachineBillboard.update(refs, 1, 4, 4, 2, "OutputBlocked", nil)
+		T.eq(refs.Status.Text, "Output blocked")
+		T.truthy(refs.Icon.BackgroundColor3 == Theme.Bad, "red lamp")
+		T.truthy(refs.Status.TextColor3 == Theme.Bad, "red words")
+		T.eq((glyphOf(refs)), "Stop")
+
+		-- no power: yellow with the speed; the power line (the same news) hides
+		withAttrs(model, { PowerSpeed = 0.6, Powered = false })
+		MachineBillboard.update(refs, 0, 0, 4, 0, "NoPower", nil)
+		T.eq(refs.Status.Text, "No power: 60%")
+		T.truthy(refs.Icon.BackgroundColor3 == Theme.Coin, "yellow lamp")
+		T.truthy(refs.Status.TextColor3 == Theme.Coin, "yellow words")
+		T.eq((glyphOf(refs)), "Bolt")
+		for _, bar in refs.Glyph:GetChildren() do
+			T.truthy(bar.BackgroundColor3 == Theme.Outline, "a dark bolt on yellow")
+		end
+		T.falsy(refs.Power.Visible, "no second no-power line")
+		T.eq(refs.Gui.Size.Y.Offset, 20, "idle: just the row")
+		-- powered again: the row says what it does, the power line is back
+		withAttrs(model, { PowerSpeed = 1, Powered = true })
+		MachineBillboard.update(refs, 0, 0, 4, 0, "Waiting", nil)
+		T.truthy(refs.Power.Visible, "power line back")
+		T.eq(refs.Power.Text, "⚡ 100%")
+		T.eq(refs.Power.Position.Y.Offset, 20, "under the status row")
+		T.eq(refs.Gui.Size.Y.Offset, 20 + MachineBillboard.InfoSize.Y)
+
+		-- nothing to say and idle: hidden
+		withAttrs(model, {})
+		MachineBillboard.update(refs, 0, 0, 4, 0, "", nil)
+		T.falsy(refs.StatusRow.Visible, "row hidden")
+		T.falsy(refs.Gui.Enabled, "empty sign hidden")
+		MachineBillboard.detach(refs)
+	end)
+
+	T.test("MachineBillboard: the status row in the light UI (and the dark look)", function()
+		local LightSkin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LightSkin")
+		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local model = MachineBuilder.build("Crusher")
+		withAttrs(model, {})
+		local dark = MachineBillboard.attach(model)
+		MachineBillboard.update(dark, 0, 0, 4, 0, "Waiting", nil)
+		-- dark look: the kit's colours, a white glyph
+		for _, bar in dark.Glyph:GetChildren() do
+			T.truthy(bar.BackgroundColor3 == Color3.new(1, 1, 1), "white glyph")
+		end
+		MachineBillboard.detach(dark)
+
+		local refs = MachineBillboard.attach(model)
+		MachineBillboard.update(refs, 0.5, 1, 4, 0, "Working", nil)
+		LightSkin.world(refs.Gui)
+		T.truthy(refs.Icon.BackgroundColor3 == BubbleTheme.Roles.Go.Base, "the light skin's green")
+		for _, bar in refs.Glyph:GetChildren() do
+			T.truthy(bar.BackgroundColor3 == Color3.new(1, 1, 1), "the glyph stays white")
+		end
+		local edge = nil
+		for _, child in refs.Status:GetChildren() do
+			if child:IsA("UIStroke") and child.Enabled then
+				edge = child
+			end
+		end
+		T.truthy(edge and edge.Color == BubbleTheme.Outline, "the words get the light look's navy edge")
+		T.truthy(refs.Status.TextColor3 == Theme.Good, "green words over the world")
+		MachineBillboard.detach(refs)
+	end)
+
+	T.test("MachineBillboard: lampOf - the stack light tells the truth", function()
+		local function lamp(id: string, attrs: { [string]: any }): string
+			return MachineBillboard.lampOf(attrs, MachineData.ById[id])
+		end
+		for _, id in { "Crusher", "BlastFurnace", "AutoCleaner" } do
+			T.eq(lamp(id, { Working = true, Queue = 1 }), "StackGreen", id .. " working")
+			T.eq(lamp(id, { Queue = 0 }), "StackAmber", id .. " waiting")
+			T.eq(lamp(id, { Working = true, Queue = 4, Status = "OutputBlocked" }), "StackRed", id .. " blocked")
+			T.eq(lamp(id, { Queue = 4, Status = "TooManyItems" }), "StackRed", id .. " too many items")
+		end
+		T.eq(lamp("BlastFurnace", { PowerSpeed = 0.6, Powered = false, Working = true }), "StackAmber", "no power")
+		T.eq(lamp("BlastFurnace", { PowerSpeed = 1, Powered = true, Working = true }), "StackGreen", "powered")
+		T.eq(lamp("AlloyFurnace", { Queue = 1, Status = "NeedsOtherOre" }), "StackAmber", "waits for an ore")
+		T.eq(lamp("IronBox", { Queue = 1, PenFull = true }), "StackRed", "full pen")
+		-- the Fusion Reactor (a generator): green while a pole takes its power
+		T.eq(lamp("FusionReactor", { PowerOut = 450, Network = "3,3" }), "StackGreen", "feeds a network")
+		T.eq(lamp("FusionReactor", { PowerOut = 450, Network = "" }), "StackAmber", "no pole")
+		T.eq(lamp("FusionReactor", {}), "StackAmber", "not computed yet")
+	end)
+
+	T.test("MachineBillboard: stack lights on every machine that has one, one lamp lit", function()
+		local Stack = MachineBuilder.Stack
+		for _, id in { "Crusher", "BlastFurnace", "FusionReactor", "AutoCleaner" } do
+			local model = MachineBuilder.build(id)
+			local lamps = MachineBillboard.stackLamps(model)
+			T.truthy(lamps, id .. " has a stack light")
+			for name in Stack.Lamps do
+				T.truthy(lamps[name] and lamps[name].Parent == model, `{id} {name}`)
+			end
+			for _, lit in { "StackRed", "StackAmber", "StackGreen" } do
+				MachineBillboard.lightStack(lamps, lit)
+				for name, part in lamps do
+					local on = name == lit
+					T.eq(part.Material, if on then roblox.Enum.Material.Neon else roblox.Enum.Material.SmoothPlastic, `{id} {lit}: {name}`)
+					local color = Stack.Lamps[name]:Lerp(Color3.new(0, 0, 0), if on then Stack.Glow else Stack.Dim)
+					T.truthy(part.Color == color, `{id} {lit}: {name} keeps its hue`)
+				end
+			end
+		end
+		for _, id in { "ClayFurnace", "PowerPole", "Conveyor" } do
+			T.eq(MachineBillboard.stackLamps(MachineBuilder.build(id)), nil, id .. " has none")
+		end
+	end)
+
+	T.test("MachineBillboard: wants - which of your machines get a sign", function()
+		local busy = { Queue = 2, Working = true }
+		local idle = { Queue = 0 }
+		T.truthy(MachineBillboard.wants(busy, "Working", 45), "busy within Range")
+		T.falsy(MachineBillboard.wants(busy, "Working", MachineBillboard.Range + 1), "never beyond Range")
+		T.truthy(MachineBillboard.wants(idle, "Waiting", MachineBillboard.StatusRange), "waiting within StatusRange")
+		T.falsy(MachineBillboard.wants(idle, "Waiting", MachineBillboard.StatusRange + 1), "an idle status only up close")
+		T.truthy(MachineBillboard.wants(idle, "NoPower", 12), "no power")
+		T.falsy(MachineBillboard.wants(idle, "", 5), "nothing to say")
+		T.truthy(MachineBillboard.wants({ Queue = 0, Status = "OutputBlocked" }, "OutputBlocked", 40), "blocked is busy")
+		T.truthy(MachineBillboard.wants({ Queue = 1, PenFull = true }, "PenFull", 40), "full pen is busy")
+		local odds = { Queue = 0, QualityOdds = "60% Rough · 40% Clean" }
+		T.truthy(MachineBillboard.wants(odds, "", MachineBillboard.OddsRange), "the plant's odds up close")
+		T.falsy(MachineBillboard.wants(odds, "", MachineBillboard.OddsRange + 1), "not from afar")
+		T.truthy(MachineBillboard.StatusRange <= 45, "the sign shows that far (MaxDistance 45)")
+	end)
+
+	T.test("MachineBillboard: the FULL / BUSY pop over a hopper", function()
+		local LightSkin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LightSkin")
+		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local part = roblox.Instance.new("Part")
+		local pop = MachineBillboard.buildPop(part)
+		T.eq(pop.Gui.Name, MachineBillboard.PopName)
+		T.truthy(pop.Gui.Parent == part and pop.Gui.Adornee == part, "on its anchor part")
+		T.falsy(pop.Gui.Enabled, "hidden until popped")
+		T.truthy(pop.Gui.AlwaysOnTop, "seen over the machine")
+		T.eq(pop.Chip.Text, "FULL")
+		T.truthy(pop.Chip.BackgroundColor3 == Theme.Bad, "red chip")
+		T.truthy(pop.Scale:IsA("UIScale") and pop.Scale.Parent == pop.Chip, "scales for the pop-in")
+		T.eq(MachineBillboard.popText("Full"), "FULL")
+		T.eq(MachineBillboard.popText("Busy"), "BUSY")
+		T.eq(MachineBillboard.popText(nil), "FULL", "junk reads as full")
+		T.truthy(lineWidth("BUSY", pop.Chip.TextSize) <= pop.Chip.Size.X.Offset, "the words fit the chip")
+		LightSkin.world(pop.Gui)
+		T.truthy(pop.Chip.BackgroundColor3 == BubbleTheme.Roles.Danger.Base, "the light skin's red")
 	end)
 end

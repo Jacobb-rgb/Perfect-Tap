@@ -14,6 +14,10 @@
 	- Items lying on someone else's plot go back to their owner's Storage
 	  after ForeignItemReturn seconds.
 	- Put In prompts (addLoadPrompt): load what you carry into a machine.
+	- An item dropped into a hopper that is full (or busy) waits there; its
+	  owner gets an Fx 'Full' ("FULL" / "BUSY" pops over the hopper with
+	  the deny sound, MachineFxController) once per drop, at most once per
+	  FULL_POP_GAP per machine.
 
 	Zones are pure maths in a per-plot cell index, rebuilt on every layout
 	change, so the 5 Hz scan costs a few box tests per item and no spatial
@@ -74,6 +78,12 @@ local EDGE = 0.01
 -- Put In prompt: at most this many items per press (more than any carry stack)
 local MAX_LOAD = 64
 local WARN_COOLDOWN = 10
+-- Full / Busy feedback: a refusal after this many seconds without one is a
+-- new drop (an item picked up and thrown in again; one lying in the hopper
+-- is refused every scan)...
+local FULL_SEEN_GAP = 1
+-- ...and one machine pops at most this often (a whole stack dropped at once: one pop)
+local FULL_POP_GAP = 1.5
 
 -- plotId -> cell key -> zones on that cell (hoppers before feeders)
 local plotZones: { [number]: { [number]: { Zone } } } = {}
@@ -85,6 +95,9 @@ local plotStatic: { [number]: { StaticZone } } = {}
 local townStatic: { [number]: { StaticZone } } = {}
 local beltHandler: BeltHandler? = nil
 local lastReject: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
+-- the last Full / Busy refusal of each dropped item, the last pop of each machine
+local fullSeen: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
+local fullPopAt: { [PlacedMachine]: number } = setmetatable({}, { __mode = "k" }) :: any
 local foreignSince: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
 local hintTimes: { [Player]: { [string]: number } } = {}
 local lastWarn: { [string]: number } = {}
@@ -329,23 +342,58 @@ local function beltUnder(record: ItemRecord): PlacedMachine?
 	return nil
 end
 
+-- World position of a machine's hopper (its Intake attachment), else its pivot.
+local function hopperPosition(machine: PlacedMachine): Vector3
+	local base = machine.Model.PrimaryPart
+	local intake = base and base:FindFirstChild("Intake")
+	if base and intake and intake:IsA("Attachment") then
+		return (base.CFrame * intake.CFrame).Position
+	end
+	return machine.Model:GetPivot().Position
+end
+
+-- A dropped item a full or busy hopper refused: the owner's Fx 'Full' (see the header).
+local function announceFull(machine: PlacedMachine, record: ItemRecord, reason: Reason, now: number)
+	local last = fullSeen[record]
+	fullSeen[record] = now
+	if last and now - last <= FULL_SEEN_GAP then
+		return -- still lying there since the last scan
+	end
+	if now - (fullPopAt[machine] or -math.huge) < FULL_POP_GAP then
+		return
+	end
+	local owner = Players:GetPlayerByUserId(record.Owner)
+	if owner then
+		fullPopAt[machine] = now
+		Net.fire("Fx", owner, "Full", hopperPosition(machine), reason)
+	end
+end
+
 --[[
-	What happens to an item a machine refused. 'Full' and 'Busy': nothing,
-	the item waits. 'Wrong', 'Mixed' and 'Foreign' (at most once per
-	RejectCooldown per item): a dropped item bounces out of the hopper's
-	front, a belt item is pushed off the belt's side, the owner sees a
-	Reject effect and (not for 'Foreign') the machine's WrongHint.
+	What happens to an item a machine refused. 'Full' and 'Busy': the item
+	waits; a dropped one tells its owner the hopper is full (announceFull;
+	`now` defaults to os.clock(), the scan passes its own). 'Wrong', 'Mixed'
+	and 'Foreign' (at most once per RejectCooldown per item): a dropped item
+	bounces out of the hopper's front, a belt item is pushed off the belt's
+	side, the owner sees a Reject effect and (not for 'Foreign') the
+	machine's WrongHint.
 ]]
-function IntakeService.react(machine: PlacedMachine, record: ItemRecord, reason: Reason, via: Via, belt: PlacedMachine?)
-	if reason == "Full" or reason == "Busy" or record.State == "Consumed" then
+function IntakeService.react(machine: PlacedMachine, record: ItemRecord, reason: Reason, via: Via, belt: PlacedMachine?, now: number?)
+	if record.State == "Consumed" then
 		return
 	end
-	local now = os.clock()
+	if reason == "Full" or reason == "Busy" then
+		if via == "Drop" and record.State == "Loose" then
+			announceFull(machine, record, reason, now or os.clock())
+		end
+		return
+	end
+	local clock = os.clock()
 	local last = lastReject[record]
-	if last and now - last < GameConfig.RejectCooldown then
+	if last and clock - last < GameConfig.RejectCooldown then
 		return
 	end
-	lastReject[record] = now
+	lastReject[record] = clock
 	if record.State == "Loose" then
 		if via == "Drop" then
 			local look = machine.Model:GetPivot().LookVector
@@ -475,7 +523,7 @@ local function scanOne(record: ItemRecord, now: number)
 				local via: Via = if zone.Kind == "Hopper" then "Drop" else "Belt"
 				local ok, reason = MachineService.insertRecord(zone.Machine, record, via)
 				if not ok and reason then
-					IntakeService.react(zone.Machine, record, reason :: Reason, via, zone.Belt)
+					IntakeService.react(zone.Machine, record, reason :: Reason, via, zone.Belt, now)
 				end
 				return
 			end
@@ -531,6 +579,8 @@ IntakeService._test = {
 		table.clear(plotZones)
 		table.clear(staticZones)
 		table.clear(hintTimes)
+		table.clear(fullSeen)
+		table.clear(fullPopAt)
 		beltHandler = nil
 		staticDirty = true
 	end,
