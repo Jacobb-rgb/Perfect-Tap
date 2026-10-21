@@ -31,6 +31,10 @@ export type Backdrop = {
 	Ground: Color3, -- the stage the golems stand on
 	Accent: Color3, -- the set's glow (title, rim lights)
 	Title: { Color3 }, -- the title text gradient (top -> bottom)
+	-- the banner's painted background (the set's scene rendered without its
+	-- golems: tools/preview/limited_golems.sh -> NAHRAJ_DO_ROBLOXU), an image
+	-- asset id the owner uploads; 0 = not uploaded (the drawn sky shows)
+	Image: number?,
 }
 
 -- One set (forever: its golems and capsule stay after it ends).
@@ -75,6 +79,7 @@ LimitedGolems.Sets = {
 			Ground = rgb(40, 30, 34),
 			Accent = rgb(255, 128, 30),
 			Title = { rgb(255, 236, 110), rgb(255, 90, 20) },
+			Image = 0, -- banner_Dragonforge.png (owner uploads it)
 		},
 		CapsuleId = "Dragonforge",
 	},

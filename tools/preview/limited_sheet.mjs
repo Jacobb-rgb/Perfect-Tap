@@ -18,7 +18,9 @@ const out = path.join(repo, "docs/screenshots/limited_golems");
 fs.mkdirSync(out, { recursive: true });
 
 // the sets, their banner shot and picture name
-const SETS = [{ id: "Dragonforge", shot: "limited_dragonforge", file: "dragonforge" }];
+// (node tools/preview/limited_sheet.mjs [SetId ...]; no ids: Dragonforge)
+const ids = process.argv.slice(2).length ? process.argv.slice(2) : ["Dragonforge"];
+const SETS = ids.map((id) => ({ id, shot: `limited_${id.toLowerCase()}`, file: id.toLowerCase() }));
 
 const b64 = (file) => fs.readFileSync(file).toString("base64");
 const font = (name, file) =>
@@ -61,7 +63,7 @@ for (const s of SETS) {
       <div style="font-family:'Fredoka One';font-size:20px;color:${g.Color}">${g.Rarity.toUpperCase()} ${Math.round(g.Odds * 100)} %</div>
       <div style="font-family:'Fredoka One';font-size:18px;color:#8cf06a">${g.Bonus}</div></div>`,
   );
-  cards.push(`<div style="width:${cell}px;text-align:center">${icon(`capsule_${info.CapsuleId}`)}
+  cards.push(`<div style="width:${cell}px;text-align:center">${icon(info.CapsuleId.startsWith("shard_") ? info.CapsuleId : `capsule_${info.CapsuleId}`)}
       <div style="font-family:'Fredoka One';font-size:23px">${info.Title} Capsule</div>
       <div style="font-family:'Fredoka One';font-size:20px;color:#ffb030">1 / 3 / 10 / 50</div></div>`);
   const html = `<html><head>${STYLE}</head><body>

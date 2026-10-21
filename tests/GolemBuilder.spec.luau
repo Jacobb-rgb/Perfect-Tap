@@ -35,11 +35,17 @@ return function(T, Loader)
 	T.test("GolemBuilder: every golem kind builds within the part budget", function()
 		T.eq(GolemBuilder.MaxParts, 20, "the package budget: 20 parts")
 		T.le(GolemBuilder.MaxParts, GolemConfig.MaxParts, "within GolemConfig.MaxParts")
-		T.le(GolemBuilder.LimitedMaxParts, GolemConfig.MaxParts, "a limited edition golem too")
+		-- a limited edition golem's costume: its rarity's budget, rarer = richer
+		local last = GolemConfig.MaxParts
+		for _, rarity in { "Rare", "Epic", "Legendary", "Mythic" } do
+			local budget = GolemConfig.LimitedMaxParts[rarity]
+			T.truthy(budget and budget > last and budget <= 96, rarity .. " limited budget grows and stays phone-friendly")
+			last = budget
+		end
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
 			local n = GolemBuilder.partCount(model)
-			local budget = if golem.Edition then GolemBuilder.LimitedMaxParts else GolemBuilder.MaxParts
+			local budget = if golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity] else GolemBuilder.MaxParts
 			T.eq(GolemBuilder.budget(golem.Id), budget, golem.Id .. " budget")
 			T.le(n, budget, golem.Id .. " parts")
 			T.truthy(n >= 14, golem.Id .. " has its body, head, limbs and gear")
@@ -133,7 +139,9 @@ return function(T, Loader)
 					T.truthy(part.Name == "Body" or part.Name == "Head", "only Body and Head cast shadows")
 				end
 			end
-			T.le(neon, if golem.Edition then 12 else 9, golem.Id .. " glowing parts")
+			-- (a limited costume may glow more: fire wings, lava, crowns; under half of it)
+			local glowCap = if golem.Edition then math.floor(GolemBuilder.budget(golem.Id) * 0.45) else 9
+			T.le(neon, glowCap, golem.Id .. " glowing parts")
 			T.truthy(neon >= 3, golem.Id .. " eyes and core glow")
 		end
 	end)
@@ -229,6 +237,9 @@ return function(T, Loader)
 
 	T.test("GolemBuilder: the opening capsule has its halves and hidden cracks", function()
 		for _, capsule in CapsuleConfig.List do
+			if capsule.Limited then
+				continue -- a limited edition's shard (its own test below)
+			end
 			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
 			T.eq(GolemBuilder.partCount(model), GolemBuilder.CapsuleParts, capsule.Id .. " parts")
 			local top = model:FindFirstChild("Top")
@@ -260,5 +271,82 @@ return function(T, Loader)
 			T.near(highest - lowest, GolemBuilder.CapsuleHeight, 0.05, "tip to tip")
 			T.truthy(model:FindFirstChild("Window", true).CFrame.Position.Z < 0, "the window faces -Z")
 		end
+	end)
+
+	T.test("GolemBuilder: a limited edition's shard keeps the capsule's contract", function()
+		local shards = 0
+		for _, capsule in CapsuleConfig.List do
+			if not capsule.Limited then
+				continue
+			end
+			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
+			shards += 1
+			T.eq(model:GetAttribute("Shard"), capsule.Limited, capsule.Id .. " is its set's shard")
+			T.eq(model:GetAttribute("Capsule"), capsule.Id)
+			local n = GolemBuilder.partCount(model)
+			T.truthy(n > GolemBuilder.CapsuleParts and n <= GolemBuilder.ShardMaxParts, `{capsule.Id}: {n} parts`)
+			local top = model:FindFirstChild("Top")
+			local bottom = model:FindFirstChild("Bottom")
+			T.truthy(top and top:IsA("Model") and top.PrimaryPart and top.PrimaryPart.Name == "TopRoot", "Top half")
+			T.truthy(bottom and bottom:IsA("Model") and bottom.PrimaryPart and bottom.PrimaryPart.Name == "BottomRoot", "Bottom half")
+			T.eq(model.PrimaryPart.Name, "Root")
+			for _, root in { model.PrimaryPart, top.PrimaryPart, bottom.PrimaryPart } do
+				T.eq(root.Transparency, 1, root.Name .. " invisible")
+				T.near(root.CFrame.Position.Y, 3, 1e-3, root.Name .. " at the center")
+				T.near(root.CFrame.UpVector.Y, 1, 1e-6, root.Name .. " upright")
+			end
+			for i = 1, 3 do
+				local crack = bottom:FindFirstChild("Crack" .. i)
+				T.truthy(crack and crack:IsA("BasePart") and crack.Transparency == 1, "crack " .. i .. " hidden")
+			end
+			local band = bottom:FindFirstChild("Band")
+			T.truthy(band and band:IsA("BasePart") and band.Material == roblox.Enum.Material.Neon, "a Neon band to tint")
+			for _, part in parts(model) do
+				T.falsy(part.CanCollide)
+			end
+			-- every shard part sits in a half (they fly apart) or is a pivot
+			for _, part in parts(model) do
+				local inHalf = part:IsDescendantOf(top) or part:IsDescendantOf(bottom)
+				T.truthy(inHalf or part == model.PrimaryPart, part.Name .. " in a half")
+			end
+		end
+		T.truthy(shards >= 1, "the Dragonforge capsule is a shard")
+	end)
+
+	T.test("GolemBuilder: the upcoming limited sets' golems build in budget and are not real kinds", function()
+		local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+		local rarities = { "Rare", "Rare", "Epic", "Epic", "Legendary", "Mythic" }
+		for _, id in LimitedUpcoming.Order do
+			local set = LimitedUpcoming.Sets[id]
+			T.truthy(set and #set.Golems == 6, id .. " has 6 golems")
+			for i, golem in set.Golems do
+				T.eq(golem.Rarity, rarities[i], golem.Id .. " rarity")
+				T.eq(golem.Edition, id, golem.Id .. " edition")
+				T.falsy(GolemConfig.ById[golem.Id], golem.Id .. " is not a real kind yet")
+				local model = GolemBuilder.build(golem.Id)
+				local n = GolemBuilder.partCount(model)
+				T.le(n, GolemConfig.LimitedMaxParts[golem.Rarity], golem.Id .. " parts")
+				T.eq(model:GetAttribute("Golem"), golem.Id)
+			end
+			local shard = GolemBuilder.shard(id, CFrame.new(0, 3, 0), set.Backdrop.Ground, set.Backdrop.Accent)
+			T.le(GolemBuilder.partCount(shard), GolemBuilder.ShardMaxParts, id .. " shard parts")
+		end
+	end)
+
+	T.test("GolemBuilder: limited followers carry no light, the full build does", function()
+		local full = GolemBuilder.build("DragonKing")
+		local follower = GolemBuilder.build("DragonKing", CFrame.new(), { Welded = true })
+		local function lights(m: any): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("PointLight") then
+					n += 1
+				end
+			end
+			return n
+		end
+		T.eq(lights(full), 1, "the Mythic's one light")
+		T.eq(lights(follower), 0, "none on a follower")
+		T.eq(GolemBuilder.partCount(follower), GolemBuilder.partCount(full), "the same costume")
 	end)
 end
