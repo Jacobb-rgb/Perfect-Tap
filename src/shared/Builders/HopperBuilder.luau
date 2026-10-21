@@ -1,29 +1,31 @@
 --[[
-	The hoppers (Config/HopperConfig) in the block-tycoon look (owner
-	2026-10-21, after Sandbox Tycoon; BlockKit): a framed block bin full of ores
-	on four block legs, a stepped block funnel under it and a spout that drops
-	ores onto the conveyor running between the legs. Each hopper is made of
-	its own "material" with bright pixels in the corners and a pixel-art crest
-	on top:
+	The hoppers (Config/HopperConfig) like the owner's concept picture
+	(docs/art/hoppers_concept.webp, 2026-10-21): a tall glowing block cabinet
+	in the hopper's colour. A base with a neon top, four corner pillars with a
+	neon strip and pixel marks, a dark chamber behind a tinted window full of
+	shards, a stream of light from the funnel onto a slide that pours shards
+	into the tray at the front (the price plate on the tray), a roof with a
+	neon edge and corner blocks, the name plate under the roof and a crest of
+	glowing shards on top with the hopper's own emblem:
 
-	  EpicHopper       iron: navy blocks, purple pixels, bolts
-	  LegendaryHopper  gold blocks, orange pixels, a block crown
-	  MythicHopper     ruby: dark red blocks, block crystals on the corners
-	  HeartHopper      rose quartz: pink blocks, a pixel heart over it
-	  StarHopper       diamond: white + ice-blue blocks, a pixel star
-	  RiftHopper       obsidian: black blocks, rainbow pixels, floating cubes
-	  TerraCoreHopper  gold + lava: a lava core cube in a gold cage, magma pixels
+	  EpicHopper       purple shard cluster
+	  LegendaryHopper  yellow shard cluster around a big gem
+	  MythicHopper     a red heart-cut gem
+	  HeartHopper      a pink pixel heart
+	  StarHopper       a blue pixel star
+	  RiftHopper       a purple vortex (two rings of blocks around a dark core)
+	  TerraCoreHopper  a golden cube in an orange ring
 
 	build(id, cf) -> Model (anchored; origin = the middle of the base's bottom;
-	the conveyor runs along +X, the name sign faces +Z toward the player).
+	front = +Z, toward the player). buildCabinet(cf, color, name, price, crest)
+	builds the same cabinet for the Money Laser (LaserBuilder).
 ]]
 
 local Shared = script.Parent.Parent
 local Geo = require(script.Parent.Geo)
 local BlockKit = require(script.Parent.BlockKit)
-local ItemBuilder = require(script.Parent.ItemBuilder)
 local HopperConfig = require(Shared.Config.HopperConfig)
-local OreData = require(Shared.Config.OreData)
+local Format = require(Shared.Util.Format)
 
 local HopperBuilder = {}
 
@@ -34,344 +36,315 @@ local GLASS = Enum.Material.Glass
 
 export type Style = {
 	Scale: number,
-	Face: Color3, -- block faces
-	Rim: Color3, -- block rims
-	Dark: Color3, -- legs and base
-	DarkRim: Color3,
-	Pixel: { Color3 }, -- the bright corner pixels (take turns)
-	Trim: { Color3 }, -- kept for the shop / previews: the hopper's main glow
-	Deco: string,
+	Color: Color3, -- the hopper's colour (the concept picture)
+	Trim: { Color3 }, -- its glow (the shop, the previews)
+	Crest: string,
 }
 
+local function style(color: Color3, crest: string): Style
+	return { Scale = 1, Color = color, Trim = { color }, Crest = crest }
+end
+
 HopperBuilder.Styles = {
-	EpicHopper = {
-		Scale = 1,
-		Face = rgb(58, 66, 104),
-		Rim = rgb(34, 38, 64),
-		Dark = rgb(46, 50, 70),
-		DarkRim = rgb(26, 28, 42),
-		Pixel = { rgb(176, 110, 255) },
-		Trim = { rgb(180, 92, 255) },
-		Deco = "bolts",
-	},
-	LegendaryHopper = {
-		Scale = 1.08,
-		Face = rgb(250, 196, 64),
-		Rim = rgb(196, 128, 26),
-		Dark = rgb(96, 64, 36),
-		DarkRim = rgb(62, 40, 22),
-		Pixel = { rgb(255, 250, 200) },
-		Trim = { rgb(255, 176, 32) },
-		Deco = "crown",
-	},
-	MythicHopper = {
-		Scale = 1.16,
-		Face = rgb(186, 32, 62),
-		Rim = rgb(110, 14, 36),
-		Dark = rgb(52, 36, 44),
-		DarkRim = rgb(30, 18, 24),
-		Pixel = { rgb(255, 130, 170) },
-		Trim = { rgb(255, 59, 122) },
-		Deco = "crystals",
-	},
-	HeartHopper = {
-		Scale = 1.24,
-		Face = rgb(248, 156, 196),
-		Rim = rgb(214, 92, 146),
-		Dark = rgb(120, 56, 86),
-		DarkRim = rgb(78, 30, 54),
-		Pixel = { rgb(255, 240, 248) },
-		Trim = { rgb(255, 120, 180) },
-		Deco = "heart",
-	},
-	StarHopper = {
-		Scale = 1.34,
-		Face = rgb(226, 246, 255),
-		Rim = rgb(110, 206, 240),
-		Dark = rgb(70, 120, 160),
-		DarkRim = rgb(40, 74, 108),
-		Pixel = { rgb(90, 220, 255), rgb(255, 214, 80) },
-		Trim = { rgb(120, 220, 255) },
-		Deco = "star",
-	},
-	RiftHopper = {
-		Scale = 1.44,
-		Face = rgb(40, 30, 64),
-		Rim = rgb(18, 12, 30),
-		Dark = rgb(30, 24, 46),
-		DarkRim = rgb(12, 8, 20),
-		Pixel = { rgb(255, 96, 96), rgb(255, 196, 64), rgb(120, 230, 90), rgb(70, 190, 255), rgb(190, 110, 255) },
-		Trim = { rgb(190, 110, 255) },
-		Deco = "rift",
-	},
-	TerraCoreHopper = {
-		Scale = 1.56,
-		Face = rgb(255, 202, 70),
-		Rim = rgb(176, 104, 20),
-		Dark = rgb(64, 40, 34),
-		DarkRim = rgb(36, 20, 18),
-		Pixel = { rgb(255, 110, 30), rgb(255, 236, 140) },
-		Trim = { rgb(255, 150, 30) },
-		Deco = "core",
-	},
+	EpicHopper = style(rgb(175, 45, 255), "cluster"),
+	LegendaryHopper = style(rgb(255, 190, 25), "gem"),
+	MythicHopper = style(rgb(255, 40, 55), "heartgem"),
+	HeartHopper = style(rgb(255, 55, 175), "heart"),
+	StarHopper = style(rgb(20, 185, 255), "star"),
+	RiftHopper = style(rgb(125, 45, 255), "vortex"),
+	TerraCoreHopper = style(rgb(255, 135, 20), "cube"),
 } :: { [string]: Style }
 
--- Sizes at Scale 1 (studs).
-HopperBuilder.Plate = 7.2 -- the base's side
-HopperBuilder.LegHeight = 5.0
-HopperBuilder.Bin = 6.4 -- the bin's side
-HopperBuilder.BinHeight = 2.4
+-- Sizes (studs).
+HopperBuilder.Plate = 5.8 -- the base's width (x)
+HopperBuilder.Depth = 5.0 -- the base's depth (z), the tray sticks out in front
+HopperBuilder.PillarH = 7.6 -- the corner pillars (base top -> roof)
+HopperBuilder.Height = 9.4 -- base bottom -> roof top
 
--- How tall a hopper is (studs, without its crest).
-function HopperBuilder.height(id: string): number
-	local s = HopperBuilder.Styles[id].Scale
-	return (0.6 + HopperBuilder.LegHeight + 1.0 + HopperBuilder.BinHeight) * s
+function HopperBuilder.height(_id: string): number
+	return HopperBuilder.Height
 end
 
 local function decor(): { [string]: any }
 	return { CanTouch = false, CanQuery = false, CastShadow = false }
 end
 
-local function pixel(style: Style, i: number): Color3
-	return style.Pixel[(i - 1) % #style.Pixel + 1]
+local DARK = rgb(22, 20, 35)
+local DARK_RIM = rgb(12, 10, 20)
+
+-- a glowing shard: a turned block with a smaller tip (the picture's crystals)
+local function shard(parent: Instance, cf: CFrame, size: number, color: Color3)
+	Geo.block(parent, cf, Vector3.new(0.55, 1.2, 0.55) * size, color, GLASS, decor())
+	Geo.block(
+		parent,
+		cf * CFrame.new(0, 0.72 * size, 0) * CFrame.Angles(0, math.pi / 4, 0),
+		Vector3.new(0.36, 0.36, 0.36) * size,
+		color,
+		NEON,
+		decor()
+	)
 end
 
-local function ore(parent: Instance, id: string, grade: string, cf: CFrame, seed: number, full: boolean?)
-	local info = { Kind = "Clean", OreId = id, Grade = grade }
-	local model = if full then ItemBuilder.build(info, cf, seed) else ItemBuilder.buildLight(info, cf, seed)
-	for _, part in model:GetDescendants() do
-		if part:IsA("BasePart") then
-			part.Anchored = true
-			part.CanCollide = false
+-- a heap of small shards (window pile, tray pile)
+local function heap(parent: Instance, cf: CFrame, w: number, d: number, n: number, color: Color3, seed: number)
+	for i = 1, n do
+		local a = (i * 2.399 + seed) % (math.pi * 2)
+		local r = (i * 0.618 + seed * 0.1) % 1
+		local x = math.cos(a) * r * w / 2
+		local z = math.sin(a) * r * d / 2
+		local tint = if i % 3 == 0 then color:Lerp(Color3.new(1, 1, 1), 0.5) else color
+		shard(
+			parent,
+			cf * CFrame.new(x, 0.15 + (1 - r) * 0.35, z) * CFrame.Angles(0.4 * math.sin(i), i * 0.9, 0.5 * math.cos(i)),
+			0.5 + (i % 3) * 0.12,
+			tint
+		)
+	end
+end
+
+local HEART = {
+	".##.##.",
+	"#######",
+	"#######",
+	".#####.",
+	"..###..",
+	"...#...",
+}
+local STAR = {
+	"...#...",
+	"..###..",
+	"#######",
+	".#####.",
+	"..###..",
+	".##.##.",
+	"##...##",
+}
+
+local function crest(model: Instance, cf: CFrame, kind: string, color: Color3)
+	local light = color:Lerp(Color3.new(1, 1, 1), 0.45)
+	-- every crest stands in a ring of small shards
+	for i = 1, 6 do
+		local a = i / 6 * math.pi * 2
+		shard(
+			model,
+			cf
+				* CFrame.new(math.cos(a) * 1.9, 0.5 + (i % 2) * 0.4, math.sin(a) * 1.5)
+				* CFrame.Angles(math.cos(a) * 0.5, a, math.sin(a) * 0.5),
+			0.75,
+			if i % 2 == 0 then light else color
+		)
+	end
+	if kind == "cluster" then
+		for i, p in { Vector3.new(0, 1.6, 0), Vector3.new(-0.9, 1.1, 0.3), Vector3.new(0.9, 1.2, -0.2), Vector3.new(0.3, 0.9, 0.8) } do
+			shard(
+				model,
+				cf * CFrame.new(p) * CFrame.Angles(0.2 * (i - 2), i, -0.25 * (i - 2)),
+				1.5 - i * 0.15,
+				if i == 1 then light else color
+			)
+		end
+	elseif kind == "gem" then
+		Geo.block(
+			model,
+			cf * CFrame.new(0, 2.0, 0) * CFrame.Angles(0, math.pi / 4, math.pi / 4),
+			Vector3.new(1.6, 1.6, 1.6),
+			color,
+			NEON,
+			decor()
+		)
+		for i, p in { Vector3.new(-1.0, 1.0, 0.2), Vector3.new(1.0, 1.1, -0.2), Vector3.new(0.4, 0.8, 0.9) } do
+			shard(model, cf * CFrame.new(p) * CFrame.Angles(0.2, i, 0.3 * (i - 2)), 1.0, light)
+		end
+	elseif kind == "heartgem" then
+		BlockKit.pixelArt(model, cf * CFrame.new(0, 2.2, 0), HEART, 0.42, { ["#"] = color }, 0.9, NEON)
+		BlockKit.pixelArt(model, cf * CFrame.new(-0.42, 2.6, 0.48), { "##", "#." }, 0.42, { ["#"] = light }, 0.1, NEON)
+	elseif kind == "heart" then
+		BlockKit.pixelArt(model, cf * CFrame.new(0, 2.3, 0), HEART, 0.5, { ["#"] = color }, 0.6, NEON)
+	elseif kind == "star" then
+		BlockKit.pixelArt(model, cf * CFrame.new(0, 2.5, 0), STAR, 0.48, { ["#"] = color }, 0.6, NEON)
+	elseif kind == "vortex" then
+		local core = cf * CFrame.new(0, 2.2, 0)
+		Geo.block(model, core, Vector3.new(1.1, 1.1, 0.5), rgb(30, 10, 60), PLASTIC, decor())
+		for ring, r in { 1.1, 1.8 } do
+			local n = if ring == 1 then 8 else 12
+			for i = 1, n do
+				local a = i / n * math.pi * 2 + ring * 0.3
+				local even = (i + ring) % 2 == 0
+				Geo.block(
+					model,
+					core * CFrame.new(math.cos(a) * r, math.sin(a) * r, 0) * CFrame.Angles(0, 0, a),
+					Vector3.new(0.45, 0.7, 0.4),
+					if even then color else light,
+					if even then NEON else PLASTIC,
+					decor()
+				)
+			end
+		end
+	elseif kind == "cube" then
+		local core = cf * CFrame.new(0, 2.2, 0) * CFrame.Angles(0.5, 0.6, 0.3)
+		Geo.block(
+			model,
+			core,
+			Vector3.new(1.7, 1.7, 1.7),
+			rgb(255, 196, 60),
+			GLASS,
+			{ Transparency = 0.25, CanTouch = false, CanQuery = false, CastShadow = false }
+		)
+		Geo.block(model, core, Vector3.new(0.9, 0.9, 0.9), rgb(255, 150, 30), NEON, decor())
+		local ring = cf * CFrame.new(0, 2.2, 0) * CFrame.Angles(0.35, 0, 0.25)
+		for i = 1, 14 do
+			local a = i / 14 * math.pi * 2
+			Geo.block(
+				model,
+				ring * CFrame.new(math.cos(a) * 1.7, 0, math.sin(a) * 1.7) * CFrame.Angles(0, -a, 0),
+				Vector3.new(0.18, 0.18, 0.8),
+				color,
+				NEON,
+				decor()
+			)
 		end
 	end
-	model.Parent = parent
+end
+
+--[[
+	The cabinet in `color`: base, pillars, chamber with the window and its
+	shards, the light stream, the slide, the tray with the price, the roof and
+	the name. `crestKind` nil: no crest (the laser adds its own beam).
+]]
+function HopperBuilder.buildCabinet(cf: CFrame, color: Color3, name: string, price: string?, crestKind: string?): Model
+	local model = Instance.new("Model")
+	local dim = color:Lerp(Color3.new(0, 0, 0), 0.35)
+	local rim = color:Lerp(Color3.new(0, 0, 0), 0.6)
+	local light = color:Lerp(Color3.new(1, 1, 1), 0.45)
+	local W, D = HopperBuilder.Plate, HopperBuilder.Depth
+	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z)
+	end
+
+	-- base with a neon top
+	BlockKit.cube(model, at(0, 0.35, 0), Vector3.new(W, 0.7, D), dim, rim)
+	Geo.block(model, at(0, 0.73, 0), Vector3.new(W - 0.3, 0.08, D - 0.3), color, NEON, decor())
+
+	-- the tray in front, with its price plate and the poured shards
+	local trayZ = D / 2 + 0.7
+	BlockKit.cube(model, at(0, 0.6, trayZ), Vector3.new(W - 0.4, 1.2, 1.8), DARK, DARK_RIM)
+	for _, side in { -1, 1 } do
+		Geo.block(model, at(side * (W / 2 - 0.25), 0.6, trayZ), Vector3.new(0.12, 1.22, 1.82), color, NEON, decor())
+	end
+	heap(model, at(0, 1.2, trayZ - 0.1), W - 1.4, 1.2, 7, color, 3)
+	if price then
+		BlockKit.text(
+			model,
+			at(0, 0.6, trayZ + 0.93),
+			Vector3.new(W - 1.4, 0.9, 0.08),
+			price,
+			Color3.new(1, 1, 1),
+			DARK,
+			color,
+			Enum.Font.LuckiestGuy
+		)
+	end
+
+	-- four corner pillars with a neon strip and two pixel marks each
+	local px, pz = W / 2 - 0.4, D / 2 - 0.4
+	local pillarH = HopperBuilder.PillarH
+	for _, c in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
+		local pc = at(c.X * px, 0.7 + pillarH / 2, c.Y * pz)
+		BlockKit.cube(model, pc, Vector3.new(0.8, pillarH, 0.8), dim, rim, "side")
+		if c.Y > 0 then
+			Geo.block(model, pc * CFrame.new(0, 0, 0.42), Vector3.new(0.16, pillarH - 1.4, 0.06), color, NEON, decor())
+			for _, y in { -pillarH / 2 + 0.4, pillarH / 2 - 0.4 } do
+				Geo.block(model, pc * CFrame.new(0, y, 0.42), Vector3.new(0.4, 0.4, 0.06), light, NEON, decor())
+			end
+		end
+	end
+
+	-- the chamber: dark back and sides, a dark floor shelf, the tinted window
+	local chamberH = pillarH - 2.8
+	local chamberY = 0.7 + 1.2 + chamberH / 2
+	BlockKit.cube(model, at(0, chamberY, -D / 2 + 0.5), Vector3.new(W - 1.4, chamberH, 0.4), DARK, DARK_RIM, "side")
+	for _, side in { -1, 1 } do
+		BlockKit.cube(model, at(side * (W / 2 - 0.5), chamberY, 0), Vector3.new(0.3, chamberH, D - 1.6), DARK, DARK_RIM, "side")
+	end
+	BlockKit.cube(model, at(0, 0.7 + 1.05, -0.3), Vector3.new(W - 1.4, 0.3, D - 1.8), DARK, DARK_RIM)
+	heap(model, at(0, 0.7 + 1.2, -0.6), W - 2.2, D - 2.6, 8, color, 7)
+	Geo.block(model, at(0, chamberY + 0.2, D / 2 - 0.45), Vector3.new(W - 1.5, chamberH - 0.4, 0.1), color, GLASS, {
+		Transparency = 0.88,
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+	})
+
+	-- the funnel under the roof, its light stream and the slide into the tray
+	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.3, 0), Vector3.new(2.4, 0.6, 2.4), dim, rim)
+	BlockKit.cube(model, at(0, chamberY + chamberH / 2 - 0.8, 0), Vector3.new(1.2, 0.5, 1.2), DARK, DARK_RIM)
+	Geo.block(model, at(0, chamberY, 0.3), Vector3.new(0.4, chamberH - 1.6, 0.4), color, NEON, {
+		Transparency = 0.45,
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+	})
+	local slide = at(0, 1.35, D / 2 - 0.2) * CFrame.Angles(-0.55, 0, 0)
+	Geo.block(model, slide, Vector3.new(1.6, 0.15, 2.4), DARK, PLASTIC, decor())
+	for _, side in { -1, 1 } do
+		Geo.block(model, slide * CFrame.new(side * 0.85, 0.15, 0), Vector3.new(0.14, 0.3, 2.4), color, NEON, decor())
+	end
+	for i = 1, 3 do
+		shard(
+			model,
+			slide * CFrame.new((i - 2) * 0.35, 0.35, (i - 2) * 0.7) * CFrame.Angles(0.3, i, 0.2),
+			0.55,
+			if i == 2 then light else color
+		)
+	end
+
+	-- the roof: a slab in the colour, a neon top edge, corner blocks
+	local roofY = 0.7 + pillarH + 0.35
+	BlockKit.cube(model, at(0, roofY, 0), Vector3.new(W + 0.2, 0.7, D + 0.2), dim, rim)
+	Geo.block(model, at(0, roofY + 0.38, 0), Vector3.new(W, 0.08, D), color, NEON, decor())
+	for _, c in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
+		BlockKit.cube(model, at(c.X * (W / 2 - 0.3), roofY + 0.75, c.Y * (D / 2 - 0.3)), Vector3.new(0.7, 0.7, 0.7), dim, rim, "flat")
+		Geo.block(model, at(c.X * (W / 2 - 0.3), roofY + 1.12, c.Y * (D / 2 - 0.3)), Vector3.new(0.4, 0.05, 0.4), light, NEON, decor())
+	end
+	-- the name plate under the roof's front edge
+	BlockKit.text(
+		model,
+		at(0, roofY - 0.95, D / 2 + 0.05),
+		Vector3.new(W - 1.0, 1.1, 0.1),
+		name,
+		Color3.new(1, 1, 1),
+		DARK,
+		color,
+		Enum.Font.LuckiestGuy
+	)
+
+	-- one light so the cabinet glows on the ground around it
+	local lamp = Geo.block(model, at(0, chamberY, 0), Vector3.new(0.2, 0.2, 0.2), color, NEON, decor())
+	lamp.Transparency = 1
+	local glow = Instance.new("PointLight")
+	glow.Color = color
+	glow.Brightness = 1.6
+	glow.Range = 12
+	glow.Parent = lamp
+
+	if crestKind then
+		local top = at(0, roofY + 0.4, 0)
+		local crestModel = Instance.new("Model")
+		crest(crestModel, top, crestKind, color)
+		BlockKit.scale(crestModel, top, 1.35)
+		for _, part in crestModel:GetChildren() do
+			part.Parent = model
+		end
+	end
 	return model
 end
 
--- pixel art crests (a "#" is the main colour, "o" the light one, "x" the dark one)
-local HEART = {
-	".##...##.",
-	"#oo#.####",
-	"#o#######",
-	"#########",
-	".#######.",
-	"..#####..",
-	"...###...",
-	"....#....",
-}
-local STAR = {
-	"....#....",
-	"...#o#...",
-	"...#o#...",
-	"#########",
-	".##ooo##.",
-	"..#ooo#..",
-	".##.#.##.",
-	"##.....##",
-}
-
 function HopperBuilder.build(id: string, cf: CFrame): Model
 	local hopper = HopperConfig.ById[id]
-	local style = HopperBuilder.Styles[id]
-	assert(hopper and style, "Unknown hopper " .. tostring(id))
-	local s = style.Scale
-	local model = Instance.new("Model")
+	local s = HopperBuilder.Styles[id]
+	assert(hopper and s, "Unknown hopper " .. tostring(id))
+	local model = HopperBuilder.buildCabinet(cf, s.Color, string.upper(hopper.Name), Format.money(hopper.Price), s.Crest)
 	model.Name = id
-	local function at(x: number, y: number, z: number): CFrame
-		return cf * CFrame.new(x * s, y * s, z * s)
-	end
-	local function cube(x: number, y: number, z: number, size: Vector3, face: Color3, rim: Color3, mode: string?): Part
-		return BlockKit.cube(model, at(x, y, z), size * s, face, rim, mode)
-	end
-
-	local plate = HopperBuilder.Plate
-	local legH = HopperBuilder.LegHeight
-	local bin, binH = HopperBuilder.Bin, HopperBuilder.BinHeight
-	local baseH = 0.6
-	local legTop = baseH + legH
-	local binBottom = legTop + 1.0 -- (the top frame is 1 stud)
-	local binTop = binBottom + binH
-	local legX = bin / 2 - 0.6
-
-	---------------------------------------------------------------- base and the conveyor between the legs
-	cube(0, baseH / 2, 0, Vector3.new(plate, baseH, plate), style.Dark, style.DarkRim)
-	BlockKit.belt(model, at(0, baseH, 0), plate * s, 2.4 * s)
-
-	---------------------------------------------------------------- four legs and the top frame
-	for i, c in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
-		local x, z = c.X * legX, c.Y * legX
-		cube(x, baseH + legH / 2, z, Vector3.new(1.2, legH, 1.2), style.Dark, style.DarkRim, "side")
-		cube(x, baseH + 0.35, z, Vector3.new(1.5, 0.7, 1.5), style.Face, style.Rim, "side")
-		if c.Y > 0 then
-			BlockKit.pixels(model, at(x, baseH + legH * 0.6, z), Vector3.new(1.2, legH * 0.4, 1.2) * s, pixel(style, i), 2)
-		end
-	end
-	for i = 0, 3 do
-		local turn = cf * CFrame.Angles(0, i * math.pi / 2, 0)
-		BlockKit.cube(
-			model,
-			turn * CFrame.new(0, (legTop + 0.5) * s, legX * s),
-			Vector3.new(bin, 1.0, 1.2) * s,
-			style.Face,
-			style.Rim,
-			"all"
-		)
-	end
-
-	---------------------------------------------------------------- the stepped funnel and the spout under the frame
-	cube(0, legTop - 0.1, 0, Vector3.new(bin - 2.2, 0.9, bin - 2.2), style.Face, style.Rim)
-	cube(0, legTop - 0.95, 0, Vector3.new(2.6, 0.8, 2.6), style.Face, style.Rim)
-	cube(0, legTop - 1.7, 0, Vector3.new(1.6, 0.7, 1.6), style.Dark, style.DarkRim)
-	local main = OreData.get(hopper.Ores[#hopper.Ores])
-	Geo.block(model, at(0, legTop - 2.07, 0), Vector3.new(1.0, 0.06, 1.0) * s, main.Glow, NEON, decor())
-
-	---------------------------------------------------------------- the bin with its ores and the name
-	cube(0, binBottom + binH / 2, 0, Vector3.new(bin, binH, bin), style.Face, style.Rim)
-	-- a dark rim band around the bin's top edge and the ore fill
-	for i = 0, 3 do
-		local turn = cf * CFrame.Angles(0, i * math.pi / 2, 0)
-		BlockKit.cube(
-			model,
-			turn * CFrame.new(0, (binTop + 0.3) * s, (bin / 2 - 0.3) * s),
-			Vector3.new(bin + 0.01, 0.6, 0.6) * s,
-			style.Dark,
-			style.DarkRim,
-			"side"
-		)
-	end
-	Geo.block(model, at(0, binTop + 0.15, 0), Vector3.new(bin - 1.2, 0.3, bin - 1.2) * s, main.Color, PLASTIC, decor())
-	local heap = {
-		Vector3.new(-1.2, 0, -1.0),
-		Vector3.new(1.1, 0, -1.1),
-		Vector3.new(0, 0.2, 0.1),
-		Vector3.new(-1.0, 0, 1.1),
-		Vector3.new(1.2, 0, 1.0),
-	}
-	for i, p in heap do
-		local oreId = hopper.Ores[(i - 1) % #hopper.Ores + 1]
-		ore(model, oreId, hopper.Grade, at(p.X, binTop + 0.6 + p.Y, p.Z) * CFrame.Angles(0.3 * i, i * 1.3, -0.2 * i), i, i == 3)
-	end
-	BlockKit.pixels(model, at(0, binBottom + binH / 2, 0), Vector3.new(bin, binH, bin) * s, pixel(style, 1), 4)
-	BlockKit.text(
-		model,
-		at(0, binBottom + binH / 2, bin / 2 + 0.06),
-		Vector3.new(bin - 1.6, binH - 0.9, 0.08) * s,
-		string.upper(hopper.Name),
-		rgb(255, 250, 236),
-		rgb(20, 22, 30),
-		style.Rim
-	)
-
-	---------------------------------------------------------------- ores falling onto the belt and riding it
-	for i = 1, 2 do
-		local oreId = hopper.Ores[(i * 2 - 1) % #hopper.Ores + 1]
-		ore(model, oreId, hopper.Grade, at(0, legTop - 2.6 - (i - 1) * 1.3, 0) * CFrame.Angles(i, i * 2, 0.4), 10 + i)
-	end
-	for i, x in { -2.2, 0.4, 2.6 } do
-		local oreId = hopper.Ores[(i + 1) % #hopper.Ores + 1]
-		ore(model, oreId, hopper.Grade, at(x, baseH + 1.2, 0) * CFrame.Angles(0.2, i * 1.9, 0.3), 20 + i)
-	end
-
-	---------------------------------------------------------------- the crest of each hopper
-	local deco = style.Deco
-	local top = binTop + 0.6
-	local corners = { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) }
-	local cx = bin / 2 - 0.3
-	if deco == "bolts" then
-		for i, c in corners do
-			cube(c.X * cx, top + 0.3, c.Y * cx, Vector3.new(0.8, 0.6, 0.8), style.Dark, style.DarkRim, "flat")
-			Geo.block(model, at(c.X * cx, top + 0.65, c.Y * cx), Vector3.new(0.4, 0.1, 0.4) * s, pixel(style, i), NEON, decor())
-		end
-	elseif deco == "crown" then
-		for i, c in corners do
-			cube(c.X * cx, top + 0.6, c.Y * cx, Vector3.new(0.9, 1.2, 0.9), style.Face, style.Rim)
-			Geo.block(model, at(c.X * cx, top + 1.35, c.Y * cx), Vector3.new(0.4, 0.3, 0.4) * s, rgb(255, 80, 60), NEON, decor())
-		end
-		for i = 0, 3 do
-			local turn = cf * CFrame.Angles(0, i * math.pi / 2, 0)
-			BlockKit.cube(
-				model,
-				turn * CFrame.new(0, (top + 0.4) * s, cx * s),
-				Vector3.new(0.7, 0.8, 0.7) * s,
-				style.Face,
-				style.Rim,
-				"flat"
-			)
-		end
-	elseif deco == "crystals" then
-		for i, c in corners do
-			local base = at(c.X * cx, top + 0.7, c.Y * cx) * CFrame.Angles(-c.Y * 0.25, math.pi / 4, c.X * 0.25)
-			Geo.block(model, base, Vector3.new(0.7, 1.6, 0.7) * s, rgb(230, 50, 90), GLASS, decor())
-			Geo.block(model, base * CFrame.new(0, 1.0 * s, 0), Vector3.new(0.45, 0.5, 0.45) * s, pixel(style, i), NEON, decor())
-		end
-	elseif deco == "heart" then
-		BlockKit.pixelArt(model, at(0, top + 2.6, 0), HEART, 0.42 * s, {
-			["#"] = rgb(255, 70, 130),
-			o = rgb(255, 214, 230),
-		}, 0.42 * s)
-	elseif deco == "star" then
-		BlockKit.pixelArt(model, at(0, top + 2.6, 0), STAR, 0.42 * s, {
-			["#"] = rgb(255, 200, 50),
-			o = rgb(255, 246, 190),
-		}, 0.42 * s)
-		cube(0, top + 0.4, 0, Vector3.new(0.6, 0.8, 0.6), style.Rim, style.Dark, "flat")
-	elseif deco == "rift" then
-		for i, p in
-			{
-				Vector3.new(-2.4, 1.6, 0.6),
-				Vector3.new(2.2, 2.3, -0.8),
-				Vector3.new(0.2, 3.0, 0.2),
-				Vector3.new(-0.8, 1.2, -2.0),
-				Vector3.new(1.6, 1.0, 2.0),
-			}
-		do
-			local size = 0.5 + (i % 3) * 0.2
-			Geo.block(
-				model,
-				at(p.X, top + p.Y, p.Z) * CFrame.Angles(i * 0.6, i * 0.9, 0.4),
-				Vector3.new(size, size, size) * s,
-				pixel(style, i),
-				NEON,
-				decor()
-			)
-		end
-		-- a ring of block "rift" pixels behind the bin
-		for i = 1, 12 do
-			local a = i / 12 * math.pi * 2
-			Geo.block(
-				model,
-				at(math.cos(a) * 3.6, binTop - 0.6 + math.sin(a) * 3.6, -bin / 2 - 1.2),
-				Vector3.new(0.8, 0.8, 0.5) * s,
-				pixel(style, i),
-				NEON,
-				decor()
-			)
-		end
-	elseif deco == "core" then
-		-- the lava core in a gold cage
-		local coreY = top + 2.0
-		Geo.block(model, at(0, coreY, 0), Vector3.new(2.0, 2.0, 2.0) * s, rgb(236, 64, 18), NEON, decor())
-		for _, c in corners do
-			cube(c.X * 1.35, coreY, c.Y * 1.35, Vector3.new(0.45, 2.9, 0.45), style.Face, style.Rim, "flat")
-		end
-		for i = 0, 3 do
-			local turn = cf * CFrame.Angles(0, i * math.pi / 2, 0)
-			BlockKit.cube(
-				model,
-				turn * CFrame.new(0, (coreY + 1.45) * s, 1.35 * s),
-				Vector3.new(3.15, 0.45, 0.45) * s,
-				style.Face,
-				style.Rim,
-				"flat"
-			)
-		end
-		cube(0, coreY - 1.45, 0, Vector3.new(3.15, 0.45, 3.15), style.Face, style.Rim, "flat")
-		cube(0, coreY + 2.0, 0, Vector3.new(0.8, 0.8, 0.8), rgb(255, 236, 140), style.Rim, "flat")
-		for i, c in corners do
-			Geo.block(model, at(c.X * cx, top + 0.25, c.Y * cx), Vector3.new(0.6, 0.5, 0.6) * s, pixel(style, i), NEON, decor())
-		end
-	end
 	return model
 end
 

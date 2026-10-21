@@ -1,8 +1,9 @@
 --[[
 	The hopper concepts (Config/HopperConfig, Builders/HopperBuilder):
-	  scene "hoppers"  the seven hoppers (block-tycoon look) on one conveyor
-	                   line on a tycoon plot, then the 2X money laser and the
-	                   collector; a price plate in front of each
+	  scene "hoppers"  the owner's concept picture (docs/art/hoppers_concept.webp):
+	                   the seven hopper cabinets, the Money Laser and SELL in a
+	                   row on a stone platform, the mine entrance, block cliffs,
+	                   trees and a lookout behind, sunset
 	  scene "hopper_shop"  the HOPPER WORKS house (Preview.buildShop), a cosy
 	                   Sandbox-Tycoon-style brick + plank house in forge colours:
 	                   stepped slate roof, shop windows with hoppers inside,
@@ -27,79 +28,148 @@ function Preview.build(Loader: any, workspace: any)
 	local V3 = roblox.Vector3
 	local CF = Loader.CFrame
 	local C3 = roblox.Color3
+	local Enum = roblox.Enum
+	local NEON = Enum.Material.Neon
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local BlockKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit")
 	local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
 	local LaserBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder")
 	local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
-	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local rgb = C3.fromRGB
 
 	local stage = Instance.new("Model")
 	stage.Name = "HopperStage"
 	stage.Parent = workspace
+	local function cube(cf: any, size: any, face: any, rim: any, mode: string?): any
+		return BlockKit.cube(stage, cf, size, face, rim, mode)
+	end
+	local GRASS, GRASS_RIM = rgb(84, 168, 60), rgb(56, 124, 42)
+	local DIRT, DIRT_RIM = rgb(132, 96, 64), rgb(94, 66, 42)
+	local STONE, STONE_RIM = rgb(104, 100, 126), rgb(70, 66, 92)
+	local TILE, TILE_RIM = rgb(176, 174, 196), rgb(134, 132, 160)
+	local WOOD, WOOD_RIM = rgb(126, 80, 44), rgb(86, 52, 26)
 
-	-- a tycoon plot: grass, a light tile floor with a grid, the build area
-	Geo.block(stage, CF.new(0, -0.5, -6), V3.new(320, 1, 200), rgb(104, 182, 76), roblox.Enum.Material.Grass)
-	local floorW, floorD = 150, 40
-	Geo.block(stage, CF.new(0, 0.05, -1), V3.new(floorW, 0.1, floorD), rgb(226, 232, 242))
-	for i = -floorW / 4, floorW / 4 do
-		Geo.block(stage, CF.new(i * 2 * 2, 0.11, -1), V3.new(0.12, 0.02, floorD), rgb(188, 204, 228))
+	-- the row: 7 hoppers, the Money Laser and SELL, 8 studs apart
+	local spacing = 7.2
+	local items = #HopperConfig.List + 2
+	local firstX = -(items - 1) * spacing / 2
+
+	-- grass in front, the stone platform with tiles, the glowing dots along its edge
+	Geo.block(stage, CF.new(0, -0.5, 20), V3.new(260, 1, 60), GRASS, Enum.Material.Grass)
+	cube(CF.new(0, 0.5, 0), V3.new(items * spacing + 6, 1, 16), TILE, TILE_RIM)
+	for i = 0, items * 2 + 2 do
+		local x = -(items * spacing + 6) / 2 + i * 4 + 1
+		Geo.block(stage, CF.new(x, 1.01, 0), V3.new(0.08, 0.02, 16), TILE_RIM)
 	end
-	for j = -5, 5 do
-		Geo.block(stage, CF.new(0, 0.11, -1 + j * 4), V3.new(floorW, 0.02, 0.12), rgb(188, 204, 228))
+	for j = -3, 3 do
+		Geo.block(stage, CF.new(0, 1.01, j * 4 / 1.0 * 0.5 * 2 / 2 * 2), V3.new(items * spacing + 6, 0.02, 0.08), TILE_RIM)
+	end
+	cube(CF.new(0, 0.35, 9.5), V3.new(items * spacing + 6, 0.7, 3), TILE, TILE_RIM)
+	for i = 1, items do
+		local x = firstX + (i - 1) * spacing
+		local color = if i <= #HopperConfig.List
+			then HopperBuilder.Styles[HopperConfig.List[i].Id].Color
+			elseif i == items - 1 then LaserBuilder.Color
+			else rgb(0, 160, 255)
+		Geo.block(stage, CF.new(x, 0.55, 11.05), V3.new(0.9, 0.5, 0.1), color:Lerp(C3.new(1, 1, 1), 0.3), NEON)
+	end
+	-- block grass tufts and white flowers along the front
+	for i = 1, 16 do
+		local x = -58 + i * 7.3 + (i % 3)
+		cube(CF.new(x, 0.5, 15 + (i % 4)), V3.new(2, 1, 2), GRASS, GRASS_RIM, "flat")
+		if i % 3 == 0 then
+			Geo.block(stage, CF.new(x + 0.4, 1.1, 15.5 + (i % 4)), V3.new(0.35, 0.35, 0.35), rgb(255, 255, 240))
+		end
 	end
 
-	-- the seven hoppers on one conveyor line, then the 2X laser and the collector
-	local gap = 2.4
-	local x = -66
-	local y = 0.1
-	for _, hopper in HopperConfig.List do
-		local s = HopperBuilder.Styles[hopper.Id].Scale
-		local w = HopperBuilder.Plate * s
-		local cx = x + w / 2
-		Preview.Spots[hopper.Id] = cx
-		HopperBuilder.build(hopper.Id, CF.new(cx, y, -2)).Parent = stage
-		-- the price on the floor in front
-		BlockKit.text(
-			stage,
-			CF.new(cx, 0.6, -2 + w / 2 + 1.4) * CF.Angles(-0.9, 0, 0),
-			V3.new(math.min(w - 0.6, 6), 1.1, 0.1),
-			Format.money(hopper.Price),
-			rgb(255, 222, 90),
-			rgb(24, 26, 34),
-			HopperBuilder.Styles[hopper.Id].Trim[1]
-		)
-		x += w
-		-- a belt piece to the next one (the belt sits on a 0.6 base like the hoppers)
-		BlockKit.cube(stage, CF.new(x + gap / 2, y + 0.3, -2), V3.new(gap, 0.6, 3.8), rgb(56, 60, 76), rgb(32, 34, 46))
-		BlockKit.belt(stage, CF.new(x + gap / 2, y + 0.6, -2), gap, 2.4)
-		x += gap
+	-- the hoppers, the laser and SELL
+	for i, hopper in HopperConfig.List do
+		local x = firstX + (i - 1) * spacing
+		Preview.Spots[hopper.Id] = x
+		HopperBuilder.build(hopper.Id, CF.new(x, 1, -1)).Parent = stage
 	end
-	-- the 2X laser
-	local laserScale = 1.4
-	local laserX = x + LaserBuilder.Length * laserScale / 2
+	local laserX = firstX + #HopperConfig.List * spacing
 	Preview.Spots.Laser = laserX
-	LaserBuilder.build(CF.new(laserX, y, -2), laserScale).Parent = stage
-	x += LaserBuilder.Length * laserScale
-	BlockKit.cube(stage, CF.new(x + 2, y + 0.3, -2), V3.new(4, 0.6, 3.8), rgb(56, 60, 76), rgb(32, 34, 46))
-	BlockKit.belt(stage, CF.new(x + 2, y + 0.6, -2), 4, 2.4)
-	x += 4
-	-- the collector: a blue block with a white top that eats the ores
-	BlockKit.cube(stage, CF.new(x + 2.2, y + 1.6, -2), V3.new(4.4, 3.2, 4.4), rgb(54, 120, 220), rgb(28, 64, 150))
-	BlockKit.cube(stage, CF.new(x + 2.2, y + 3.45, -2), V3.new(4.8, 0.5, 4.8), rgb(238, 242, 250), rgb(176, 186, 206))
-	Geo.block(stage, CF.new(x + 0.02, y + 1.3, -2), V3.new(0.1, 1.2, 2.2), rgb(20, 22, 30))
+	LaserBuilder.build(CF.new(laserX, 1, -1)).Parent = stage
+	-- SELL: a blue block machine with a dark screen and an intake slot
+	local sellX = laserX + spacing
+	Preview.Spots.Collector = sellX
+	local blue, blueRim = rgb(30, 110, 230), rgb(14, 56, 130)
+	cube(CF.new(sellX, 1.35, -1), V3.new(5.4, 0.7, 5), blue, blueRim)
+	Geo.block(stage, CF.new(sellX, 1.73, -1), V3.new(5.1, 0.08, 4.7), rgb(0, 180, 255), NEON)
+	cube(CF.new(sellX, 4.0, -1.3), V3.new(4.6, 4.6, 3.8), blue, blueRim)
+	cube(CF.new(sellX, 6.6, -1.3), V3.new(5.0, 0.6, 4.2), rgb(70, 150, 255), blueRim)
 	BlockKit.text(
 		stage,
-		CF.new(x + 2.2, y + 1.6, 0.25),
-		V3.new(3.4, 0.9, 0.08),
+		CF.new(sellX, 4.9, 0.62),
+		V3.new(3.6, 1.8, 0.08),
 		"SELL",
-		rgb(255, 250, 236),
-		rgb(20, 24, 36),
-		rgb(90, 255, 110)
+		C3.new(1, 1, 1),
+		rgb(10, 30, 70),
+		rgb(0, 180, 255),
+		Enum.Font.LuckiestGuy
 	)
-	Preview.Spots.Collector = x + 2.2
-	print(string.format("Hopper line: %d hoppers, laser at x %.1f, collector at x %.1f", #HopperConfig.List, laserX, x + 2.2))
+	cube(CF.new(sellX, 2.6, 0.9), V3.new(3.6, 1.0, 1.6), rgb(16, 30, 60), rgb(8, 16, 34))
+	for k = 1, 3 do
+		Geo.block(stage, CF.new(sellX, 2.95, 0.3 + k * 0.4), V3.new(3.2, 0.06, 0.12), rgb(0, 180, 255), NEON)
+	end
+
+	-- behind: stone terraces and cliffs with grass on top, the mine entrance, trees, lamps
+	for i = 0, 13 do
+		local x = -78 + i * 12
+		local h = 6 + (i % 3) * 3 + (if i % 4 == 0 then 4 else 0)
+		cube(CF.new(x, h / 2, -16 - (i % 2) * 3), V3.new(12.2, h, 10), if i % 2 == 0 then STONE else rgb(90, 86, 114), STONE_RIM)
+		cube(CF.new(x, h + 0.5, -16 - (i % 2) * 3), V3.new(12.2, 1, 10), GRASS, GRASS_RIM)
+		cube(CF.new(x + 3, h - 1.5, -10.9 - (i % 2) * 3), V3.new(3, 2, 0.4), DIRT, DIRT_RIM, "flat")
+	end
+	-- the mine entrance (left), wooden frame, the MINE sign, two lanterns
+	local mx = firstX + 4
+	Geo.block(stage, CF.new(mx, 4.5, -10.7), V3.new(9, 8, 0.4), rgb(14, 12, 22))
+	for _, side in { -1, 1 } do
+		cube(CF.new(mx + side * 5, 5, -10.2), V3.new(1.2, 10, 1.2), WOOD, WOOD_RIM, "side")
+		cube(CF.new(mx + side * 6.2, 6.8, -9.6), V3.new(0.7, 1.0, 0.7), rgb(40, 34, 30), rgb(20, 16, 14), "flat")
+		Geo.block(stage, CF.new(mx + side * 6.2, 6.8, -9.6), V3.new(0.5, 0.7, 0.75), rgb(255, 176, 70), NEON)
+	end
+	cube(CF.new(mx, 10.4, -10.2), V3.new(12.4, 1.2, 1.4), WOOD, WOOD_RIM)
+	BlockKit.text(
+		stage,
+		CF.new(mx, 12.0, -9.9),
+		V3.new(6, 1.8, 0.3),
+		"MINE",
+		rgb(255, 226, 170),
+		rgb(92, 58, 32),
+		rgb(150, 100, 56),
+		Enum.Font.LuckiestGuy
+	)
+	for k = 1, 3 do
+		Geo.block(stage, CF.new(mx - 2 + k * 1.2, 2.4 + k * 0.7, -10.4), V3.new(0.5, 0.5, 0.3), rgb(255, 220, 90), NEON)
+	end
+	-- block trees on the cliffs
+	for _, t in { { -66, 14, -18 }, { -56, 11, -20 }, { -30, 13, -19 }, { -6, 10, -18 }, { 22, 13, -19 }, { 46, 16, -18 }, { 64, 11, -20 } } do
+		local x, y, z = t[1], t[2], t[3]
+		cube(CF.new(x, y + 2, z), V3.new(1.4, 4, 1.4), WOOD, WOOD_RIM, "side")
+		cube(CF.new(x, y + 5, z), V3.new(6, 3, 6), GRASS, GRASS_RIM)
+		cube(CF.new(x, y + 7, z), V3.new(4, 1.6, 4), rgb(96, 182, 70), GRASS_RIM)
+	end
+	-- a wooden lookout on the right cliff
+	local wx = 58
+	for _, c in { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } } do
+		cube(CF.new(wx + c[1] * 2.4, 16, -19 + c[2] * 2.4), V3.new(0.8, 8, 0.8), WOOD, WOOD_RIM, "side")
+	end
+	cube(CF.new(wx, 20.2, -19), V3.new(6.4, 0.6, 6.4), WOOD, WOOD_RIM)
+	cube(CF.new(wx, 23.6, -19), V3.new(7, 0.8, 7), rgb(150, 92, 52), WOOD_RIM)
+	Geo.block(stage, CF.new(wx, 21.4, -15.9), V3.new(0.6, 0.8, 0.2), rgb(255, 176, 70), NEON)
+	-- lamps on the platform's ends
+	for _, x in { firstX - 6, -(firstX - 6) } do
+		cube(CF.new(x, 3, 3), V3.new(0.5, 4, 0.5), rgb(60, 52, 52), rgb(30, 26, 26), "flat")
+		local bulb = Geo.block(stage, CF.new(x, 5.4, 3), V3.new(1, 1, 1), rgb(255, 185, 70), NEON)
+		local glow = Instance.new("PointLight")
+		glow.Color = rgb(255, 185, 70)
+		glow.Brightness = 2
+		glow.Range = 12
+		glow.Parent = bulb
+	end
+	print(string.format("Hopper row: %d hoppers, laser at x %.1f, SELL at x %.1f", #HopperConfig.List, laserX, sellX))
 	return stage
 end
 

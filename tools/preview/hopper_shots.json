@@ -1,166 +1,201 @@
 {
  "hoppers_lineup": {
+  "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 110,
-  "maxLights": 12,
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
+  "position": [
+   0,
+   12,
+   30
+  ],
+  "target": [
+   0,
+   7,
+   -3
+  ],
+  "fov": 66
+ },
+ "hoppers_small": {
   "scene": "hoppers",
+  "preset": "Surface",
+  "sunDir": [
+   0.7,
+   0.3,
+   -0.65
+  ],
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
    -18,
-   24,
-   66
+   9,
+   20
   ],
   "target": [
    -18,
-   6,
-   -2
+   7,
+   -1
   ],
   "fov": 55
  },
- "hoppers_small": {
-  "preset": "Surface",
-  "sunDir": [
-   -0.45,
-   0.75,
-   0.5
-  ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
-  "scene": "hoppers",
-  "position": [
-   -52,
-   12,
-   24
-  ],
-  "target": [
-   -52,
-   5.5,
-   -2
-  ],
-  "fov": 50
- },
  "hoppers_mid": {
+  "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
-  "scene": "hoppers",
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   -20,
-   13,
-   27
+   3.6,
+   9,
+   20
   ],
   "target": [
-   -20,
-   6.5,
-   -2
+   3.6,
+   7,
+   -1
   ],
-  "fov": 50
+  "fov": 55
  },
  "hoppers_big": {
+  "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
-  "scene": "hoppers",
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   -8,
-   15,
-   34
+   20,
+   10,
+   21
   ],
   "target": [
-   -8,
+   20,
    8,
-   -2
+   -1
   ],
-  "fov": 52
+  "fov": 55
  },
  "hopshop_pc": {
   "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   -20,
-   13,
-   27
+   0,
+   12,
+   30
   ],
   "target": [
-   -20,
-   6.5,
-   -2
+   0,
+   7,
+   -3
   ],
-  "fov": 50,
+  "fov": 66,
   "ui": "ui_hoppers_pc"
  },
  "hopshop_pc_more": {
   "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   -20,
-   13,
-   27
+   0,
+   12,
+   30
   ],
   "target": [
-   -20,
-   6.5,
-   -2
+   0,
+   7,
+   -3
   ],
-  "fov": 50,
+  "fov": 66,
   "ui": "ui_hoppers_pc_more"
  },
  "hopshop_phone": {
   "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   -20,
-   13,
-   27
+   0,
+   12,
+   30
   ],
   "target": [
-   -20,
-   6.5,
-   -2
+   0,
+   7,
+   -3
   ],
-  "fov": 50,
+  "fov": 66,
   "ui": "ui_hoppers_phone",
   "uiInset": 58
  },
@@ -211,36 +246,41 @@
   "fov": 50
  },
  "laser_close": {
+  "scene": "hoppers",
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
-  "shadowExtent": 60,
-  "maxLights": 12,
-  "scene": "hoppers",
+  "sunColor": [
+   1.0,
+   0.72,
+   0.55
+  ],
+  "exposure": 0.85,
+  "shadowExtent": 90,
+  "maxLights": 16,
   "position": [
-   36,
-   10,
-   15
+   26,
+   11,
+   17
   ],
   "target": [
-   19.5,
-   3.5,
-   -2
+   25.2,
+   10,
+   -1
   ],
-  "fov": 50
+  "fov": 60
  },
  "laser_line": {
   "preset": "Surface",
   "sunDir": [
-   -0.45,
-   0.75,
-   0.5
+   0.7,
+   0.3,
+   -0.65
   ],
-  "exposure": 1.15,
+  "exposure": 0.85,
   "shadowExtent": 60,
   "maxLights": 12,
   "scene": "hoppers",
