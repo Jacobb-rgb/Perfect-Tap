@@ -77,7 +77,7 @@ GolemBuilder.MaxParts = 20
 GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
 -- a limited edition's SHARD (its set's egg, GolemGearLimited.shard) instead
 -- of the pill: only one is ever built at a time (the opening, a picture)
-GolemBuilder.ShardMaxParts = 56
+GolemBuilder.ShardMaxParts = 66
 -- a limited golem's rounded corners (GolemBuilder.round on its body and head / helm)
 GolemBuilder.RoundRadius = 0.3 -- unscaled
 GolemBuilder.RoundParts = 10

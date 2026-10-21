@@ -42,6 +42,7 @@
 ]]
 
 local Types = require(script.Parent.Parent.LimitedGearTypes)
+local CapsuleEggs = require(script.Parent.Parent.CapsuleEggs)
 
 type Ctx = Types.Ctx
 type Kit = Types.Kit
@@ -861,154 +862,10 @@ end
 
 ---------------------------------------------------------------- the shard
 
---[[
-	The MECHA EGG shard (units: studs, the shard's center at s.Center, the
-	front -Z): a sphere below the waist and a tall ellipsoid above it (the
-	halves of the opening) in glossy chrome; a neon band at the waist, neon
-	circuit lines with glowing nodes, a visor window with cute eyes, ear
-	bolts, antennas, a little V-fin crown, and a jet ring it hovers on.
-]]
+-- the set's SHARD: the premium egg in the set's theme (Builders/CapsuleEggs,
+-- owner 2026-10-21: "clean like the dragon egg, built from what it is for")
 function MechaNeon.shard(kit: Kit, tools: Tools, s: Shard)
-	K, T = kit, tools
-	local C = s.Center
-	local r = 1.25
-	local topCenter = 0.4 * r
-	local cyan = s.Glow
-	local function at(x: number, y: number, z: number): CFrame
-		return C * CFrame.new(x, y, z)
-	end
-	local function P(x: number, y: number, z: number): Vector3
-		return at(x, y, z).Position
-	end
-	-- the shell's radius at height y (lower sphere / upper ellipsoid)
-	local function radiusAt(y: number): number
-		if y <= 0 then
-			return math.sqrt(math.max(r * r - y * y, 0))
-		end
-		local yy = (y - topCenter) / (1.4 * r)
-		return r * math.sqrt(math.max(1 - yy * yy, 0))
-	end
-	-- a frame on the shell at height y, angle a round it (0 = front), facing out
-	local function onShell(y: number, a: number, out: number?): CFrame
-		local rr = radiusAt(y) + (out or 0)
-		return at(math.sin(a) * rr, y, -math.cos(a) * rr) * CFrame.Angles(0, -a, 0)
-	end
-	local chrome = rgb(200, 206, 226)
-	local chromeLow = rgb(150, 160, 190)
-	local purple = rgb(168, 40, 200)
-
-	-- Bottom: the round lower shell, the neon band, the cracks
-	T.ellipsoid(s.Bottom, "Shell", at(0, 0, 0), Vector3.new(2 * r, 2 * r, 2 * r), purple, METAL)
-	K.upright(s.Bottom, "Band", at(0, 0.02, 0), 0.16, 2 * r + 0.06, cyan, NEON)
-	for i, k in { { -0.55, -0.35, 0.5 }, { 0.42, -0.62, -0.6 }, { 0.06, -0.9, 0.35 } } do
-		local a = math.asin(math.clamp(k[1] / r, -1, 1))
-		K.part(s.Bottom, "Crack" .. i, onShell(k[2], a, 0.02) * CFrame.Angles(0, 0, k[3]), Vector3.new(0.09, 0.62, 0.04), WHITE, NEON)
-	end
-	-- the hover jet ring under the egg: a dark disc, a magenta glow ring, three struts
-	K.upright(s.Bottom, "JetRing", at(0, -r - 0.05, 0), 0.18, 1.7, DARK, METAL)
-	K.upright(s.Bottom, "JetGlow", at(0, -r - 0.05, 0), 0.08, 1.86, MAGENTA, NEON)
-	K.upright(s.Bottom, "JetCore", at(0, -r - 0.22, 0), 0.08, 0.7, FLAME_HOT, NEON)
-	-- a row of chrome bolts under the band
-	for i = 1, 4 do
-		if s.Room() < 1 then
-			break
-		end
-		local a = (i - 2.5) * 0.55
-		K.part(s.Bottom, "Bolt" .. i, onShell(-0.28, a, -0.02), Vector3.new(0.16, 0.16, 0.16), chrome, METAL, BALL)
-	end
-	-- magenta circuit lines on the lower shell
-	for i, k in { { -0.9, -0.55, 0.25 }, { 0.9, -0.55, -0.25 } } do
-		if s.Room() < 1 then
-			break
-		end
-		K.part(s.Bottom, "LowCircuit" .. i, onShell(k[2], k[1], 0.0) * CFrame.Angles(0, 0, k[3]), Vector3.new(0.07, 0.5, 0.05), cyan, NEON)
-	end
-
-	-- Top: the tall glossy upper shell
-	T.ellipsoid(s.Top, "Shell", at(0, topCenter, 0), Vector3.new(2 * r, 2.8 * r, 2 * r), chrome, METAL)
-	-- the visor window: a dark screen with a cyan frame and two cute eyes
-	local vy = 0.72
-	local vz = -radiusAt(vy)
-	T.ellipsoid(s.Top, "VisorFrame", at(0, vy, vz + 0.12), Vector3.new(1.62, 0.9, 0.3), cyan, NEON)
-	T.ellipsoid(s.Top, "Visor", at(0, vy, vz + 0.08), Vector3.new(1.48, 0.76, 0.3), GLASS, M.SmoothPlastic)
-	for i, x in { -0.32, 0.32 } do
-		T.ellipsoid(s.Top, "Eye" .. i, at(x, vy + 0.02, vz - 0.07), Vector3.new(0.24, 0.32, 0.06), cyan, NEON)
-		if s.Room() >= 1 then
-			K.part(s.Top, "Shine" .. i, at(x - 0.05, vy + 0.1, vz - 0.1), Vector3.new(0.07, 0.07, 0.04), WHITE, NEON)
-		end
-	end
-	if s.Room() >= 1 then
-		K.part(s.Top, "Smile", at(0, vy - 0.2, vz - 0.06), Vector3.new(0.22, 0.05, 0.04), MAGENTA, NEON)
-	end
-	-- ear bolts with neon rings
-	for i, side in { -1, 1 } do
-		if s.Room() >= 2 then
-			local y = 0.55
-			local x = side * radiusAt(y)
-			K.part(s.Top, "Ear" .. i, at(x, y, 0), Vector3.new(0.24, 0.62, 0.62), DARK, METAL, CYL)
-			K.part(s.Top, "EarLight" .. i, at(x + side * 0.12, y, 0), Vector3.new(0.06, 0.4, 0.4), MAGENTA, NEON, CYL)
-		end
-	end
-	-- neon circuit lines climbing the shell, a glowing node at each end
-	for i, k in { { -0.62, 1.15, 1.8 }, { 0.62, 1.15, 1.8 }, { -1.5, 0.35, 1.4 }, { 1.5, 0.35, 1.4 } } do
-		if s.Room() < 2 then
-			break
-		end
-		local a, y0, y1 = k[1], k[2], k[3]
-		local p0 = onShell(y0, a, -0.01).Position
-		local p1 = onShell(y1, a * 0.7, -0.01).Position
-		T.seg(s.Top, "Circuit" .. i, p0, p1, 0.07, 0.07, if i <= 2 then cyan else MAGENTA, NEON)
-		K.part(s.Top, "Node" .. i, onShell(y1, a * 0.7, -0.02), Vector3.new(0.16, 0.16, 0.16), if i <= 2 then MAGENTA else cyan, NEON, BALL)
-	end
-	-- the little V-fin crown and its gem
-	local tipY = topCenter + 1.4 * r
-	if s.Room() >= 3 then
-		for i, side in { -1, 1 } do
-			T.seg(s.Top, "Fin" .. i, P(side * 0.08, tipY - 0.32, -0.46), P(side * 0.62, tipY + 0.22, -0.5), 0.2, 0.08, GOLD, M.Foil)
-		end
-		K.part(s.Top, "Gem", at(0, tipY - 0.3, -0.52) * CFrame.Angles(0, 0, PI / 4), Vector3.new(0.24, 0.24, 0.08), MAGENTA, NEON)
-	end
-	-- two antennas with blinking balls
-	for i, side in { -1, 1 } do
-		if s.Room() >= 2 then
-			local base = P(side * 0.45, tipY - 0.3, 0.2)
-			local tip = P(side * 0.75, tipY + 0.45, 0.35)
-			T.seg(s.Top, "Antenna" .. i, base, tip, 0.07, 0.07, chromeLow, METAL)
-			K.part(s.Top, "AntennaBall" .. i, CFrame.new(tip), Vector3.new(0.24, 0.24, 0.24), if i == 1 then cyan else MAGENTA, NEON, BALL)
-		end
-	end
-	-- the tilted neon orbit ring round the egg (dipping in front), two cyan
-	-- satellites riding it
-	local orbit = C * CFrame.new(0, -0.15, 0) * CFrame.Angles(0.5, 0, 0)
-	local rr = 1.78
-	local n = 8
-	local function onOrbit(a: number): Vector3
-		return (orbit * CFrame.new(math.sin(a) * rr, 0, -math.cos(a) * rr)).Position
-	end
-	for i = 1, n do
-		if s.Room() < 1 then
-			break
-		end
-		local a0, a1 = (i - 1) * 2 * PI / n, i * 2 * PI / n
-		local a, b = onOrbit(a0), onOrbit(a1)
-		local dir = (b - a).Unit
-		T.seg(s.Bottom, "Orbit" .. i, a - dir * 0.05, b + dir * 0.05, 0.1, 0.1, MAGENTA, NEON)
-	end
-	for i, a in { -0.9, 2.3 } do
-		if s.Room() >= 1 then
-			K.part(s.Bottom, "Satellite" .. i, CFrame.new(onOrbit(a)), Vector3.new(0.26, 0.26, 0.26), cyan, NEON, BALL)
-		end
-	end
-	-- twinkling stars floating round the egg (four-point: two thin diamonds)
-	for i, k in { { -1.55, 1.55, -0.3, 0.36 }, { 1.6, 0.9, -0.4, 0.26 } } do
-		if s.Room() >= 1 then
-			K.part(s.Top, "Star" .. i, at(k[1], k[2], k[3]) * CFrame.Angles(0, 0, PI / 4), Vector3.new(k[4], k[4], 0.05), WHITE, NEON)
-		end
-	end
-	local band = s.Bottom:FindFirstChild("Band")
-	if band and band:IsA("BasePart") then
-		T.embers(band, cyan, 5, 0.22)
-	end
+	CapsuleEggs.premium(kit, tools, s, CapsuleEggs.Themes.MechaNeon)
 end
 
 return MechaNeon
