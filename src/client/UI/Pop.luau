@@ -926,4 +926,213 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 	return face :: TextButton, holder
 end
 
+--[[
+	Window kit (owner 2026-10-21: "every window new, modern, colourful,
+	clean items, Roblox style"): the pieces every window is rebuilt from.
+	  rarityPaint  a bright paint per rarity (Common slate .. Mythic pink)
+	  coinButton   the gold coin-price button (a drawn coin, the amount)
+	  tabs         a row of bright tabs: the picked one painted, the rest slate
+	  chip         a small round label ("LV 3", "NEW", "x2")
+	  bar          a progress bar: a dark well, a glossy painted fill, a word
+	  well         a dark studded inset that groups things inside a window
+]]
+Pop.RarityPaints = {
+	Common = "Slate",
+	Uncommon = "Green",
+	Rare = "Blue",
+	Epic = "Purple",
+	Legendary = "Yellow",
+	Mythic = "Pink",
+} :: { [string]: string }
+
+function Pop.rarityPaint(rarity: string?): Paint
+	return Pop.paint(if rarity then (Pop.RarityPaints[rarity] or "Slate") else "Slate")
+end
+
+-- A drawn gold coin (a round face, a darker ring, a "$") `size` units across.
+function Pop.coin(parent: Instance, size: number, props: Props?): Frame
+	local coin = UIKit.new("Frame", {
+		Name = "Coin",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 6,
+	}, parent)
+	UIKit.corner(coin, 999)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(255, 236, 120), Color3.fromRGB(240, 160, 20)), Rotation = 90 }, coin)
+	Pop.border(coin, 2)
+	local inner = UIKit.new("Frame", {
+		Name = "Ring",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.7, 0.7),
+		ZIndex = 6,
+	}, coin)
+	UIKit.corner(inner, 999)
+	UIKit.new("UIStroke", { Color = Color3.fromRGB(196, 120, 10), Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, inner)
+	Pop.text(coin, "$", math.floor(size * 0.62), {
+		Name = "Mark",
+		Size = UDim2.fromScale(1, 1),
+		FontFace = PopTheme.Heavy,
+		TextColor3 = Color3.fromRGB(255, 250, 220),
+		ZIndex = 7,
+	})
+	apply(coin, props)
+	return coin
+end
+
+-- The gold coin-price button ("$2.5K" with a drawn coin). Returns the button; its word is "Amount".
+function Pop.coinButton(parent: Instance, text: string, size: Vector2, props: Props?): TextButton
+	local button = UIKit.new("TextButton", {
+		Name = "CoinButton",
+		AutoButtonColor = true,
+		Text = "",
+		Size = UDim2.fromOffset(size.X, size.Y),
+		Selectable = true,
+		ZIndex = 4,
+	}, parent)
+	Pop.face(button, "Yellow")
+	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
+	local textSize = math.floor(math.min(size.Y * 0.56, 40))
+	local row = UIKit.new("Frame", {
+		Name = "Row",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 5,
+	}, button)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 5, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	Pop.coin(row, textSize + 2, { LayoutOrder = 1 })
+	Pop.text(row, text, textSize, {
+		Name = "Amount",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(Pop.textWidth(text, textSize), textSize + 6),
+		ZIndex = 6,
+	})
+	apply(button, props)
+	return button
+end
+
+-- A coin button's amount, and whether the player can afford it (grey when not).
+function Pop.setCoinButton(button: GuiObject, text: string, affordable: boolean)
+	local row = button:FindFirstChild("Row")
+	local amount = if row then row:FindFirstChild("Amount") :: TextLabel? else nil
+	if amount then
+		amount.Text = text
+		amount.Size = UDim2.fromOffset(Pop.textWidth(text, amount.TextSize), amount.Size.Y.Offset)
+	end
+	Pop.repaint(button, if affordable then "Yellow" else PopTheme.Gray)
+end
+
+export type TabSpec = { Id: string, Label: string, Paint: (string | Paint)? }
+
+-- A row of bright tabs; the picked one is painted and a little taller. Returns id -> button.
+function Pop.tabs(parent: Instance, list: { TabSpec }, selected: string, size: Vector2, props: Props?): { [string]: TextButton }
+	local row = UIKit.new("Frame", {
+		Name = "Tabs",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(#list * (size.X + 8), size.Y + 6),
+		ZIndex = 4,
+	}, parent)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
+	apply(row, props)
+	local out: { [string]: TextButton } = {}
+	for i, tab in list do
+		local button = Pop.button(row, tab.Label, tab.Paint or "Blue", size, { Name = tab.Id, LayoutOrder = i })
+		button:SetAttribute("TabPaint", if type(tab.Paint) == "string" then tab.Paint else "Blue")
+		out[tab.Id] = button
+	end
+	Pop.selectTab(out, selected)
+	return out
+end
+
+-- Paints the picked tab, greys the rest.
+function Pop.selectTab(tabs: { [string]: TextButton }, selected: string)
+	for id, button in tabs do
+		local on = id == selected
+		local paint = (button:GetAttribute("TabPaint") :: string?) or "Blue"
+		Pop.repaint(button, if on then paint else "Slate")
+		local label = button:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.TextTransparency = if on then 0 else 0.25
+		end
+	end
+end
+
+-- A small round label ("LV 3", "NEW").
+function Pop.chip(parent: Instance, text: string, paint: string | Paint, size: Vector2, props: Props?): Frame
+	local chip = Pop.tag(parent, text, paint, size, props)
+	chip.Name = "Chip"
+	local corner = chip:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, math.floor(size.Y / 2))
+	end
+	local rim = chip:FindFirstChild("Rim")
+	if rim then
+		rim:Destroy()
+	end
+	return chip
+end
+
+-- A progress bar: a dark well, a glossy painted fill and a word on top.
+function Pop.bar(parent: Instance, fraction: number, paint: string | Paint, size: Vector2, text: string?, props: Props?): Frame
+	local well = UIKit.new("Frame", {
+		Name = "Bar",
+		BackgroundColor3 = PopTheme.Well,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		ZIndex = 4,
+	}, parent)
+	UIKit.corner(well, math.floor(size.Y / 2))
+	Pop.border(well, 3)
+	local fill = UIKit.new("Frame", {
+		Name = "Fill",
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1),
+		ZIndex = 4,
+	}, well)
+	Pop.face(fill, paint, math.floor(size.Y / 2), true, false)
+	local fillBorder = fill:FindFirstChild("Border")
+	if fillBorder then
+		fillBorder:Destroy()
+	end
+	Pop.text(well, text or "", math.floor(size.Y * 0.6), {
+		Name = "Label",
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 6,
+	})
+	apply(well, props)
+	return well
+end
+
+function Pop.setBar(bar: GuiObject, fraction: number, text: string?)
+	local fill = bar:FindFirstChild("Fill") :: Frame?
+	if fill then
+		fill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
+		fill.Visible = fraction > 0.001
+	end
+	local label = bar:FindFirstChild("Label") :: TextLabel?
+	if label and text then
+		label.Text = text
+	end
+end
+
+-- A dark studded inset grouping things inside a window (lists, details, odds).
+function Pop.well(parent: Instance, props: Props?): Frame
+	local well = UIKit.new("Frame", {
+		Name = "Well",
+		BackgroundColor3 = PopTheme.Well,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+	}, parent)
+	UIKit.corner(well, PopTheme.WindowCorner)
+	Pop.border(well, 3)
+	apply(well, props)
+	Pop.studs(well, PopTheme.WindowCorner, 0.6, 36, well.ZIndex)
+	return well
+end
+
 return Pop
