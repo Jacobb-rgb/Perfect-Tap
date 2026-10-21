@@ -2,7 +2,11 @@
 	The luck boosts view (pure builder + pure helpers; BoostController fills
 	it in) and the boost chips under the HUD coins.
 
-	Panel (one ScreenGui):
+	Panel (one ScreenGui, in the Pop look: a green Pop window, Pop.tabs, the
+	boost card painted in its colour with its live 3D picture on light rays,
+	the offers as dark strips with a gold coin / green Robux price button,
+	the odds in a dark studded well with rarity-coloured rows; the shared
+	pieces: "the Pop look" below):
 	  header   LUCK BOOSTS, a line about boosts (or the last message), your
 	           coins, the X button
 	  tabs     TRIPLE LUCKY · HEXA LUCKY (LB / RB on a gamepad); opened
@@ -58,13 +62,18 @@ local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LimitedGolems = require(Shared.Config.LimitedGolems)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local PictureModels = require(Shared.Builders.PictureModels)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local LightSkin = require(script.Parent.LightSkin)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
@@ -396,7 +405,10 @@ function BoostView.defaultZone(rawState: any, currentZone: string?): string?
 	local best: WorldLayout.Zone? = nil
 	local function score(zone: WorldLayout.Zone): number
 		local lucky = false
-		for oreId in zone.Ores do
+		for oreId in BoostConfig.zoneWeights(zone) do
+			lucky = lucky or BoostConfig.isLuckyOre(oreId)
+		end
+		for oreId in (BoostConfig.crystalWeights(zone) or {}) :: { [string]: number } do
 			lucky = lucky or BoostConfig.isLuckyOre(oreId)
 		end
 		return (if lucky then 1000 else 0) + zone.MinBlaster * 10 + (if zone.VipOnly then 0 else 1)
@@ -418,11 +430,14 @@ function BoostView.cycle(ids: { string }, current: string?, step: number): strin
 	return ids[(index - 1 + step) % #ids + 1]
 end
 
--- The capsules whose odds the Triple Lucky card shows (the ones the player may open).
-function BoostView.capsules(restricted: boolean): { string }
+-- The capsules whose odds the Triple Lucky card shows (the ones the player
+-- may open; a limited edition's only while it is on sale at `now`, unix
+-- seconds, default the clock: LimitedGolems.onSale).
+function BoostView.capsules(restricted: boolean, now: number?): { string }
 	local list = {}
+	local t = if type(now) == "number" then now else os.time()
 	for _, capsule in CapsuleConfig.List do
-		if not (restricted and CapsuleConfig.isPaidRandom(capsule.Id)) then
+		if not (restricted and CapsuleConfig.isPaidRandom(capsule.Id)) and LimitedGolems.onSale(capsule.Id, t) then
 			table.insert(list, capsule.Id)
 		end
 	end
@@ -623,22 +638,36 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local summary: OddsRow? = nil
 	local note = `Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with Hexa Lucky. Chance per ore in a rock you break.`
 	if zone then
-		local after: { [string]: number } = {}
-		for _, line in BoostConfig.oreOdds(zone.Ores, with) do
-			after[line.Ore] = line.Chance
+		-- one block of rows per table the server rolls from (BoostConfig.zoneWeights; a mine
+		-- floor's crystal rocks roll their own richer table, labelled as such)
+		local function block(weights: { [string]: number }, suffix: string): { OddsRow }
+			local after: { [string]: number } = {}
+			for _, line in BoostConfig.oreOdds(weights, with) do
+				after[line.Ore] = line.Chance
+			end
+			local list: { OddsRow } = {}
+			local orders: { number } = {}
+			for _, line in BoostConfig.oreOdds(weights, without) do
+				local ore = OreData.ById[line.Ore]
+				local info = Rarity.get(ore.Rarity)
+				table.insert(list, BoostView.row(ore.Name .. suffix, info.Color, line.Chance, after[line.Ore] or 0))
+				table.insert(orders, info.Order)
+			end
+			return BoostView.rarestFirst(list, orders)
 		end
-		local orders: { number } = {}
-		for _, line in BoostConfig.oreOdds(zone.Ores, without) do
-			local ore = OreData.ById[line.Ore]
-			local info = Rarity.get(ore.Rarity)
-			table.insert(rows, BoostView.row(ore.Name, info.Color, line.Chance, after[line.Ore] or 0))
-			table.insert(orders, info.Order)
+		local weights = BoostConfig.zoneWeights(zone)
+		local crystal = BoostConfig.crystalWeights(zone)
+		rows = block(weights, "")
+		if crystal then
+			for _, row in block(crystal, " (crystal rock)") do
+				table.insert(rows, row)
+			end
 		end
-		rows = BoostView.rarestFirst(rows, orders)
-		local before = BoostConfig.rareShare(zone.Ores, without)
+		local before = BoostConfig.rareShare(weights, without)
+		local crystalBefore = if crystal then BoostConfig.rareShare(crystal, without) else 0
 		if before > 0 then
-			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(zone.Ores, with))
-		else
+			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(weights, with))
+		elseif crystalBefore <= 0 then
 			note = "No Rare ores in this zone: Hexa Lucky changes nothing here."
 		end
 	end
@@ -718,6 +747,657 @@ function BoostView.chips(rawState: any, now: number): { Chip }
 	return list
 end
 
+---------------------------------------------------------------- the Pop look (shared)
+
+--[[
+	The owner (2026-10-21): "all of these look like terribly old UI: make
+	them new, modern, colourful, clean items, more Roblox style". The luck
+	boosts, the Enchant shop and the Gear shop wear the Robux Shop's Pop
+	look (Pop.luau) instead of LightSkin's recolouring. The pieces they
+	share (EnchantView and GearShopView use them too):
+	  popWindow / placeWindow  a UIKit.panel becomes a Pop window: a black
+	           frame, a bright header band in the window's colour (shine,
+	           diagonal stripes, studs) behind the title, a dark studded body
+	  popText  a label in white (or a bright ink: ink) with a black edge
+	  popButton a UIKit.button becomes a painted Pop button. Its holder is
+	           the face (paint, black border, light rim, studs); the
+	           TextButton covers it and keeps its Text (the controllers set
+	           "...", "BOUGHT!"), shown by a row in white with an optional
+	           mark beside it (setMark: a drawn coin, the Robux mark, a
+	           crystal): syncButton
+	  style    the controllers' UITheme colours as Pop paints (paintFor)
+	  backing  a painted pill right behind a label (chips: "LV 2/5", "NEW")
+	  burst    light rays and a soft glow behind a picture
+]]
+
+local function holderOf(button: TextButton): Frame
+	return button.Parent :: Frame
+end
+BoostView.holderOf = holderOf
+
+local WHITE = Color3.new(1, 1, 1)
+
+local function colorKey(c: Color3): string
+	return string.format("%d,%d,%d", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+end
+
+BoostView.ShardButton = rgb(70, 170, 220) -- EnchantView's SHARDS buttons
+-- a dark face (the chips on bright cards, the money pills)
+BoostView.DarkPaint = { Top = rgb(58, 60, 74), Bottom = rgb(24, 25, 32), Edge = PopTheme.Outline } :: Pop.Paint
+
+-- the UITheme colours the controllers style buttons with -> Pop paints
+local PAINTS: { [string]: string } = {
+	[colorKey(Theme.Accent)] = "Yellow",
+	[colorKey(Theme.Coin)] = "Yellow",
+	[colorKey(Theme.Good)] = "Green",
+	[colorKey(Theme.Bad)] = "Red",
+	[colorKey(Theme.Info)] = "Blue",
+	[colorKey(BoostView.ShardButton)] = "Blue",
+	[colorKey(Theme.PanelLight)] = "Slate",
+	[colorKey(Theme.Panel)] = "Slate",
+}
+
+function BoostView.paintFor(color: Color3): Pop.Paint
+	return Pop.paint(PAINTS[colorKey(color)] or "Slate")
+end
+
+-- the UITheme text colours -> bright inks for the dark Pop body
+local INKS: { [string]: Color3 } = {
+	[colorKey(Theme.Text)] = WHITE,
+	[colorKey(Theme.TextDim)] = rgb(208, 214, 228),
+	[colorKey(Theme.Good)] = rgb(140, 255, 90),
+	[colorKey(Theme.Bad)] = rgb(255, 112, 104),
+	[colorKey(Theme.Info)] = rgb(120, 212, 255),
+	[colorKey(Theme.Accent)] = rgb(255, 214, 72),
+	[colorKey(Theme.Coin)] = rgb(255, 222, 72),
+}
+
+function BoostView.ink(color: Color3): Color3
+	return INKS[colorKey(color)] or color
+end
+
+-- A paint for a rarity / ore / golem colour (a pale or grey one: slate).
+function BoostView.paintOf(color: Color3): Pop.Paint
+	local _, saturation = color:ToHSV()
+	if saturation < 0.25 then
+		return Pop.paint("Slate")
+	end
+	return { Top = color:Lerp(WHITE, 0.15), Bottom = color:Lerp(Color3.new(0, 0, 0), 0.35), Edge = PopTheme.Outline }
+end
+
+local function contextualStroke(label: Instance): UIStroke?
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			return child
+		end
+	end
+	return nil
+end
+
+-- A label (or a text button) in the Pop look: the chunky font, a bright ink, a black edge.
+function BoostView.popText(label: GuiObject, heavy: boolean?, color: Color3?)
+	local text: any = label
+	text.FontFace = if heavy then PopTheme.Heavy else PopTheme.Font
+	text.TextColor3 = color or BoostView.ink(text.TextColor3)
+	text.TextStrokeTransparency = 1
+	local edge = contextualStroke(label) or Pop.edge(label)
+	edge.Color = PopTheme.Outline
+	edge.Thickness = Pop.edgeFor(text.TextSize)
+	edge.Transparency = 0
+	edge.LineJoinMode = Enum.LineJoinMode.Round
+end
+
+-- Removes a frame's old look (UIKit strokes and gradients) before it is painted.
+local function strip(frame: Instance)
+	for _, child in frame:GetChildren() do
+		if (child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border) or child:IsA("UIGradient") then
+			child:Destroy()
+		end
+	end
+end
+BoostView.strip = strip
+
+--[[
+	A UIKit.panel as a Pop window (`paint`: the window's colour): the black
+	frame, the header band behind `title` (its height: placeWindow) and the
+	dark studded body under it. The title turns white with a 3D shadow.
+]]
+function BoostView.popWindow(panel: Frame, title: TextLabel, paint: string)
+	panel.BackgroundColor3 = PopTheme.Outline
+	panel.BackgroundTransparency = 0
+	for _, child in panel:GetChildren() do
+		if child:IsA("UIGradient") then
+			child:Destroy()
+		elseif child:IsA("UIStroke") then
+			child.Color = PopTheme.Outline
+			child.Thickness = 4
+		elseif child:IsA("UICorner") then
+			child.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+		end
+	end
+	local band = UIKit.new("Frame", {
+		Name = "PopBand",
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 0, 70),
+		ZIndex = 0,
+	}, panel)
+	Pop.face(band, paint, 4, false)
+	local border = band:FindFirstChild("Border") :: UIStroke
+	border.Thickness = 3
+	local rim = band:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	Pop.studs(band, 4, 0.35, 40, 1)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0.42),
+		ZIndex = 2,
+	}, band)
+	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.6, 0),
+			ZIndex = 2,
+		}, band)
+	end
+	local body = UIKit.new("Frame", {
+		Name = "PopBody",
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 74),
+		Size = UDim2.new(1, -8, 1, -78),
+		ZIndex = 0,
+	}, panel)
+	UIKit.corner(body, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	Pop.studs(body, 4, 0.5, 36, 1)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 2,
+	}, body)
+	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
+	BoostView.popText(title, false, WHITE)
+	title.ZIndex = 3
+	Pop.shadow(title).ZIndex = 2
+end
+
+-- The header band `band` units tall (from 4 under the top edge), the body under it; the title's shadow follows it.
+function BoostView.placeWindow(panel: Frame, band: number)
+	local bandFrame = panel:FindFirstChild("PopBand") :: Frame?
+	local body = panel:FindFirstChild("PopBody") :: Frame?
+	if not bandFrame or not body then
+		return
+	end
+	bandFrame.Size = UDim2.new(1, -8, 0, band)
+	body.Position = UDim2.fromOffset(4, 4 + band)
+	body.Size = UDim2.new(1, -8, 1, -(band + 8))
+	local title = panel:FindFirstChild("Title") :: TextLabel?
+	local shadow = panel:FindFirstChild("TitleShadow") :: TextLabel?
+	if title and shadow then
+		shadow.AnchorPoint = title.AnchorPoint
+		shadow.Position = title.Position + UDim2.fromOffset(0, 4)
+		shadow.Size = title.Size
+		shadow.Text = title.Text
+		shadow.TextSize = title.TextSize
+		shadow.Visible = title.Visible
+		local edge = title:FindFirstChild("Edge") or contextualStroke(title)
+		local shadowEdge = shadow:FindFirstChildOfClass("UIStroke")
+		if edge and edge:IsA("UIStroke") and shadowEdge then
+			edge.Thickness = Pop.edgeFor(title.TextSize)
+			shadowEdge.Thickness = edge.Thickness
+		end
+	end
+end
+
+-- An offer strip's texts (popOffer): the duration, and the price (or, while Busy, the button's Text) on its price button.
+function BoostView.syncOffer(button: TextButton)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local price = button:FindFirstChild("Price") :: Frame?
+	local row = if price then price:FindFirstChild("Row") else nil
+	local priceLabel = if row then row:FindFirstChild("Label") :: TextLabel? else nil
+	if not label or not price or not row or not priceLabel then
+		return
+	end
+	local busy = button:GetAttribute("Busy") == true
+	label.Text = tostring(button:GetAttribute("Label") or "")
+	local text = if busy then button.Text else tostring(button:GetAttribute("PriceText") or "")
+	priceLabel.Text = text
+	local size = tonumber(button:GetAttribute("PriceSize")) or 20
+	local kind = button:GetAttribute("Mark")
+	local mark = row:FindFirstChild("Mark") :: GuiObject?
+	local showMark = mark ~= nil and type(kind) == "string" and kind ~= "" and not busy
+	local markSize = math.floor(size * 1.1 + 4)
+	local room = price.Size.X.Offset - 14 - (if showMark then markSize + 5 else 0)
+	local fit = size
+	while fit > 10 and TechShopView.textWidth(text, fit) * 0.92 > room do
+		fit -= 1
+	end
+	priceLabel.TextSize = fit
+	local edge = priceLabel:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = Pop.edgeFor(fit)
+	end
+	priceLabel.Size = UDim2.fromOffset(math.max(10, math.min(math.ceil(TechShopView.textWidth(text, fit) * 0.92) + 4, room)), fit + 8)
+	if mark then
+		mark.Visible = showMark
+		mark.Size = UDim2.fromOffset(markSize, markSize)
+		local sign = mark:FindFirstChild("Mark") :: TextLabel?
+		if sign then
+			sign.TextSize = math.floor(markSize * 0.62)
+		end
+	end
+end
+
+-- Shows a button's Text in its row (the words, the mark beside them; no mark while it is Busy).
+function BoostView.syncButton(button: TextButton)
+	if holderOf(button):GetAttribute("PopOffer") then
+		BoostView.syncOffer(button)
+		return
+	end
+	local row = button:FindFirstChild("Row")
+	local label = if row then row:FindFirstChild("Label") :: TextLabel? else nil
+	if not row or not label then
+		return
+	end
+	local text = button.Text
+	local size = button.TextSize
+	label.Text = text
+	label.TextSize = size
+	label.TextTransparency = 0
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = Pop.edgeFor(size)
+	end
+	local width, lines = 0, 0
+	for _, line in string.split(text, "\n") do
+		width = math.max(width, TechShopView.textWidth(line, size) * 0.92)
+		lines += 1
+	end
+	local kind = button:GetAttribute("Mark")
+	local mark = row:FindFirstChild("Mark") :: GuiObject?
+	local showMark = mark ~= nil and type(kind) == "string" and kind ~= "" and button:GetAttribute("Busy") ~= true
+	local markSize = math.floor(size * 1.1 + 4)
+	if mark then
+		mark.Visible = showMark
+		mark.Size = UDim2.fromOffset(markSize, markSize)
+		local sign = mark:FindFirstChild("Mark") :: TextLabel?
+		if sign then
+			sign.TextSize = math.floor(markSize * 0.62)
+		end
+	end
+	local holder = holderOf(button)
+	local room = if holder.Size.X.Scale == 0 and holder.Size.X.Offset > 0 then holder.Size.X.Offset - 8 else math.huge
+	if showMark then
+		room -= markSize + 5
+	end
+	label.Size = UDim2.fromOffset(math.max(10, math.min(math.ceil(width) + 4, room)), math.ceil(lines * size * 1.12) + 4)
+end
+
+-- A drawn crystal (the shards' mark).
+function BoostView.crystal(parent: Instance, size: number, props: { [string]: any }?): Frame
+	local holder = UIKit.new("Frame", {
+		Name = "Crystal",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(size, size),
+	}, parent)
+	local gem = UIKit.new("Frame", {
+		Name = "Gem",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Rotation = 45,
+		Size = UDim2.fromScale(0.62, 0.62),
+		ZIndex = 6,
+	}, holder)
+	UIKit.corner(gem, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(rgb(200, 252, 255), rgb(40, 180, 240)), Rotation = 90 }, gem)
+	Pop.border(gem, 2)
+	if props then
+		for key, value in props do
+			(holder :: any)[key] = value
+		end
+	end
+	return holder
+end
+
+-- The mark beside a button's words: "coin", "robux", "shard" or "" (none).
+function BoostView.setMark(button: TextButton, kind: string?)
+	local price = button:FindFirstChild("Price")
+	local row = button:FindFirstChild("Row") or (if price then price:FindFirstChild("Row") else nil)
+	if not row then
+		return
+	end
+	local want = kind or ""
+	local old = row:FindFirstChild("Mark")
+	if old and old:GetAttribute("Kind") ~= want then
+		old:Destroy()
+		old = nil
+	end
+	if not old and want ~= "" then
+		local textSize = if price then tonumber(button:GetAttribute("PriceSize")) or 20 else button.TextSize
+		local size = math.floor(textSize * 1.1 + 4)
+		local mark: GuiObject
+		if want == "coin" then
+			mark = Pop.coin(row, size, { Name = "Mark", LayoutOrder = 1, ZIndex = 3 })
+		elseif want == "robux" then
+			local image = UIKit.new("ImageLabel", {
+				Name = "Mark",
+				BackgroundTransparency = 1,
+				LayoutOrder = 1,
+				ScaleType = Enum.ScaleType.Fit,
+				Size = UDim2.fromOffset(size, size),
+				ZIndex = 3,
+			}, row)
+			IconAssets.apply(image, "robux")
+			image:SetAttribute("Icon", "robux")
+			mark = image
+		else
+			mark = BoostView.crystal(row, size, { Name = "Mark", LayoutOrder = 1, ZIndex = 3 })
+		end
+		mark:SetAttribute("Kind", want)
+	end
+	button:SetAttribute("Mark", want)
+	BoostView.syncButton(button)
+end
+
+--[[
+	A UIKit.button (a holder "lip" with the TextButton face on it) as a
+	painted Pop button: the holder is the face, the TextButton covers it
+	(transparent) and a row shows its Text. Returns the holder.
+]]
+function BoostView.popButton(button: TextButton, paint: string | Pop.Paint, corner: number?, heavy: boolean?): Frame
+	local holder = holderOf(button)
+	local radius = corner or 8
+	strip(holder)
+	local holderCorner = holder:FindFirstChildOfClass("UICorner")
+	if holderCorner then
+		holderCorner.CornerRadius = UDim.new(0, radius)
+	end
+	Pop.face(holder, paint, radius)
+	local rim = holder:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 1
+	end
+	Pop.studs(holder, radius, 0.5, 28, 1)
+	for _, child in button:GetChildren() do
+		if child:IsA("UIStroke") or child:IsA("UIGradient") then
+			child:Destroy()
+		end
+	end
+	button.AutoButtonColor = false
+	button.BackgroundTransparency = 1
+	button.Position = UDim2.new()
+	button.Size = UDim2.fromScale(1, 1)
+	button.TextTransparency = 1
+	button.TextStrokeTransparency = 1
+	button.ZIndex = 2
+	local row = UIKit.new("Frame", {
+		Name = "Row",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 3,
+	}, button)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 5, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	Pop.text(row, button.Text, button.TextSize, {
+		Name = "Label",
+		LayoutOrder = 2,
+		FontFace = if heavy then PopTheme.Heavy else PopTheme.Font,
+		ZIndex = 3,
+	})
+	holder:SetAttribute("PopButton", true)
+	pcall(function()
+		local function sync()
+			BoostView.syncButton(button)
+		end
+		button:GetPropertyChangedSignal("Text"):Connect(sync)
+		button:GetPropertyChangedSignal("TextSize"):Connect(sync)
+		button:GetAttributeChangedSignal("Busy"):Connect(sync)
+	end)
+	BoostView.syncButton(button)
+	return holder
+end
+
+--[[
+	An offer strip (the boost card's offers, popOffer): the holder a dark
+	face, the TextButton over it (its Text stays: the tests fit it, the
+	controller sets "..." and "BOUGHT!"), the duration on the left
+	(attribute Label) and a price button (attribute PriceText, its mark:
+	setMark) painted gold / green / grey (style, paintOffer); while Busy the
+	price button shows the Text.
+]]
+function BoostView.popOffer(button: TextButton): Frame
+	local holder = holderOf(button)
+	strip(holder)
+	local holderCorner = holder:FindFirstChildOfClass("UICorner")
+	if holderCorner then
+		holderCorner.CornerRadius = UDim.new(0, 10)
+	end
+	Pop.face(holder, BoostView.DarkPaint, 10)
+	local rim = holder:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 1
+	end
+	for _, child in button:GetChildren() do
+		if child:IsA("UIStroke") or child:IsA("UIGradient") then
+			child:Destroy()
+		end
+	end
+	button.AutoButtonColor = false
+	button.BackgroundTransparency = 1
+	button.Position = UDim2.new()
+	button.Size = UDim2.fromScale(1, 1)
+	button.TextTransparency = 1
+	button.TextStrokeTransparency = 1
+	button.ZIndex = 2
+	Pop.text(button, "", 22, {
+		Name = "Label",
+		FontFace = PopTheme.Heavy,
+		ZIndex = 3,
+	})
+	local price = UIKit.new("Frame", { Name = "Price", BorderSizePixel = 0, ZIndex = 3 }, button)
+	Pop.face(price, "Yellow", 8)
+	Pop.studs(price, 8, 0.5, 28, 1)
+	local priceRim = price:FindFirstChild("Rim") :: Frame?
+	if priceRim then
+		priceRim.ZIndex = 1
+	end
+	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, price)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 5, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	Pop.text(row, "", 20, { Name = "Label", LayoutOrder = 2, ZIndex = 3 })
+	holder:SetAttribute("PopButton", true)
+	holder:SetAttribute("PopOffer", true)
+	pcall(function()
+		local function sync()
+			BoostView.syncOffer(button)
+		end
+		button:GetPropertyChangedSignal("Text"):Connect(sync)
+		button:GetAttributeChangedSignal("Busy"):Connect(sync)
+	end)
+	return holder
+end
+
+--[[
+	Paints a button (the controllers pass UITheme colours: Accent = a gold
+	coin button, Good = green, Info = blue, Bad = red); a disabled one
+	turns grey. Old-look buttons (not popButton'd) keep their colours.
+]]
+local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
+	local holder = holderOf(button)
+	local price = button:FindFirstChild("Price") :: Frame?
+	if holder:GetAttribute("PopOffer") and price then
+		Pop.repaint(price, if enabled then BoostView.paintFor(color) else PopTheme.Gray)
+		BoostView.syncOffer(button)
+		return
+	end
+	if holder:GetAttribute("PopButton") then
+		Pop.repaint(holder, if enabled then BoostView.paintFor(color) else PopTheme.Gray)
+		holder:SetAttribute("Enabled", enabled)
+		BoostView.syncButton(button)
+		return
+	end
+	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
+	holder.BackgroundColor3 = if enabled then dark else Theme.PanelDark
+	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
+end
+BoostView.style = style
+
+-- Paints a Pop button directly (a Pop paint name or paint).
+function BoostView.paintButton(button: TextButton, paint: string | Pop.Paint)
+	Pop.repaint(holderOf(button), paint)
+	BoostView.syncButton(button)
+end
+
+--[[
+	A painted pill right behind `label` (a sibling named <label>Back, one
+	ZIndex under it; no rim, like Pop.chip). placeBacking puts it on the
+	label: its whole box, or `width` wide on the side the text sits.
+]]
+function BoostView.backing(label: GuiObject, paint: string | Pop.Paint): Frame
+	local back = UIKit.new("Frame", {
+		Name = label.Name .. "Back",
+		BorderSizePixel = 0,
+		ZIndex = math.max(1, label.ZIndex - 1),
+	}, label.Parent)
+	UIKit.corner(back, 999)
+	Pop.face(back, paint, 999, true, false)
+	local border = back:FindFirstChild("Border") :: UIStroke
+	border.Thickness = 2.5
+	label.ZIndex = back.ZIndex + 1
+	return back
+end
+
+function BoostView.placeBacking(label: GuiObject, width: number?, paint: (string | Pop.Paint)?)
+	local parent = label.Parent
+	local back = if parent then parent:FindFirstChild(label.Name .. "Back") :: Frame? else nil
+	if not back then
+		return
+	end
+	back.Visible = label.Visible
+	back.AnchorPoint = label.AnchorPoint
+	back.Rotation = label.Rotation
+	if width then
+		local text: any = label
+		local align = text.TextXAlignment
+		local h = label.Size.Y.Offset
+		local x = label.Position
+		-- a left / right aligned label's text starts at its anchor side
+		if align == Enum.TextXAlignment.Left and label.AnchorPoint.X == 0 then
+			back.Position = x + UDim2.fromOffset(-8, 0)
+		elseif align == Enum.TextXAlignment.Right and label.AnchorPoint.X == 1 then
+			back.Position = x + UDim2.fromOffset(8, 0)
+		else
+			back.Position = x
+		end
+		back.Size = UDim2.fromOffset(width, h)
+	else
+		back.Position = label.Position
+		back.Size = label.Size
+	end
+	if paint then
+		Pop.repaint(back, paint)
+	end
+end
+
+--[[
+	Light rays and a soft glow behind a picture (as Pop.card's): `parent`
+	should clip. Returns the holder (placeBurst moves and sizes it).
+]]
+function BoostView.burst(parent: Instance, count: number, z: number): Frame
+	local holder = UIKit.new("Frame", {
+		Name = "Burst",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(200, 200),
+		ZIndex = z,
+	}, parent)
+	local rays = Pop.fx(holder, "fx_rays", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 0.35,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(2.2, 2.2),
+		ZIndex = z,
+	})
+	if not rays then
+		-- (bars twice the burst's size, like Pop.card's: they reach the corners)
+		local made = Pop.rays(holder, UDim2.fromScale(0.5, 0.5), count, 100, 0.6, z)
+		made.Size = UDim2.fromScale(2, 2)
+		for _, ray in made:GetChildren() do
+			if ray:IsA("Frame") then
+				ray.Size = UDim2.new(1, 0, 0.08, 0)
+			end
+		end
+	end
+	local glow = Pop.fx(holder, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = rgb(255, 255, 240),
+		ImageTransparency = 0.3,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.55, 0.55),
+		ZIndex = z,
+	})
+	if not glow then
+		for i, k in { 0.32, 0.22 } do
+			local disc = UIKit.new("Frame", {
+				Name = "Glow" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = if i == 1 then 0.8 else 0.7,
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(k, k),
+				ZIndex = z,
+			}, holder)
+			UIKit.corner(disc, 999)
+		end
+	end
+	return holder
+end
+
+-- Centres a burst at `at` (its parent's units), `size` across (the rays reach the corners).
+function BoostView.placeBurst(burst: GuiObject, at: UDim2, size: number)
+	burst.Position = at
+	burst.Size = UDim2.fromOffset(size, size)
+end
+
+-- A dark studded well (Pop.well's look) on an existing frame.
+function BoostView.popWell(frame: Frame, transparency: number?)
+	strip(frame)
+	frame.BackgroundColor3 = PopTheme.Well
+	frame.BackgroundTransparency = transparency or 0
+	local corner = frame:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	else
+		UIKit.corner(frame, PopTheme.WindowCorner)
+	end
+	Pop.border(frame, 3)
+	Pop.studs(frame, PopTheme.WindowCorner, 0.6, 36, 0)
+end
+
 ---------------------------------------------------------------- icons
 
 local function bit(parent: Instance, x0: number, y0: number, x1: number, y1: number, color: Color3, round: number?, stroke: number?): Frame
@@ -742,29 +1422,67 @@ end
 	four-leaf clover, Hexa Lucky a cut gold gem; a badge with the
 	multiplier in the corner. Unknown kinds: a plain tile.
 ]]
+-- The boost cards' live 3D pictures (the Shop's luck cards): PictureModels name, preview icon.
+BoostView.Pictures = {
+	TripleLucky = { Model = "clover", Icon = "clover" },
+	HexaLucky = { Model = "item_Diamond", Icon = "rainbow" },
+} :: { [string]: { Model: string, Icon: string } }
+-- the boost's paint (its card, its tab), the window's (the Boosts colour: BubbleTheme.Roles.Boosts)
+BoostView.Paints = { TripleLucky = "Yellow", HexaLucky = "Blue" } :: { [string]: string }
+BoostView.WindowPaint = "Green"
+
 function BoostView.icon(parent: Instance, size: number, kindId: string): Frame
 	local tile = UIKit.new("Frame", {
 		Name = "Icon",
 		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, parent)
-	UIKit.corner(tile, 12)
-	UIKit.stroke(tile, 2.5)
 	BoostView.setIcon(tile, kindId)
 	return tile
 end
 
+--[[
+	The boost's picture in a tile: the live 3D model (PictureModels, like
+	the Shop's luck cards; a bit bigger than the tile, a sticker), else the
+	drawn art; the multiplier on a chip in the corner.
+]]
 function BoostView.setIcon(tile: Frame, kindId: string)
 	if tile:GetAttribute("Kind") == kindId then
 		return
 	end
 	tile:SetAttribute("Kind", kindId)
-	local old = tile:FindFirstChild("Art")
-	if old then
-		old:Destroy()
+	for _, name in { "Art", "Picture", "MultChip" } do
+		local old = tile:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
 	end
-	BoostView.art(tile, kindId, true)
+	local art = BoostView.art(tile, kindId, false)
+	art.ZIndex = 2
+	local spec = BoostView.Pictures[kindId]
+	local model, from = nil, Vector3.new(0, 0.1, -1)
+	if spec then
+		model, from = PictureModels.build(spec.Model)
+	end
+	if spec and model then
+		Pop.model(tile, spec.Icon, 10, model, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1.22, 1.22),
+			ZIndex = 3,
+		}, from)
+		art.Visible = false
+	end
+	local kind = BoostConfig.Kinds[kindId]
+	if kind then
+		Pop.chip(tile, string.upper(BoostView.mult(kind.Mult)), "Pink", Vector2.new(58, 28), {
+			Name = "MultChip",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, 4, 1, 6),
+			ZIndex = 5,
+		})
+	end
 end
 
 --[[
@@ -826,8 +1544,8 @@ end
 type TableMetrics = { Select: number, Head: number, Row: number, Text: number, Col: number, Note: number }
 
 local TABLE_METRICS: { [string]: TableMetrics } = {
-	Normal = { Select = 44, Head = 22, Row = 28, Text = 17, Col = 96, Note = 40 },
-	Compact = { Select = 72, Head = 26, Row = 32, Text = 20, Col = 116, Note = 48 },
+	Normal = { Select = 44, Head = 22, Row = 28, Text = 19, Col = 96, Note = 40 },
+	Compact = { Select = 72, Head = 26, Row = 32, Text = 22, Col = 116, Note = 48 },
 }
 
 local function tableMetrics(compact: boolean): TableMetrics
@@ -835,33 +1553,45 @@ local function tableMetrics(compact: boolean): TableMetrics
 end
 BoostView.tableMetrics = tableMetrics
 
+-- An odds row: a rounded pill painted in its rarity's colour (fillRow), the
+-- name left and the two numbers right, white with black edges.
 local function newRow(parent: Instance, name: string, order: number): RowRefs
 	local frame = UIKit.new("Frame", {
 		Name = name,
 		LayoutOrder = order,
-		BackgroundColor3 = Theme.PanelLight,
-		BackgroundTransparency = if order % 2 == 0 then 1 else 0.55,
+		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, parent)
-	UIKit.corner(frame, 6)
-	local label = UIKit.label(frame, "", 17, {
+	UIKit.corner(frame, 8)
+	UIKit.new("UIGradient", { Name = "Paint", Rotation = 90 }, frame)
+	local label = Pop.text(frame, "", 17, {
 		Name = "Name",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
-	local before = UIKit.label(frame, "", 17, {
+	local before = Pop.text(frame, "", 17, {
 		Name = "Before",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(232, 236, 246),
+		ZIndex = 3,
 	})
-	local after = UIKit.label(frame, "", 17, {
+	local after = Pop.text(frame, "", 17, {
 		Name = "After",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextWrapped = false,
+		ZIndex = 3,
 	})
 	return { Frame = frame, Name = label, Before = before, After = after }
+end
+
+-- Paints an odds row: its rarity's colour (the summary row gold).
+local function paintRow(row: RowRefs, color: Color3)
+	local paint = if row.Frame.Name == "Summary" then Pop.paint("Yellow") else BoostView.paintOf(color)
+	local gradient = row.Frame:FindFirstChild("Paint") :: UIGradient?
+	if gradient then
+		gradient.Color = ColorSequence.new(paint.Top, paint.Bottom)
+	end
 end
 
 -- The value columns' width in a table `width` wide: narrower in a narrow
@@ -898,7 +1628,7 @@ local function fillRow(row: RowRefs, data: OddsRow?)
 		return
 	end
 	row.Name.Text = data.Name
-	row.Name.TextColor3 = data.Color
+	paintRow(row, data.Color)
 	local fitWidth = tonumber(row.Name:GetAttribute("FitWidth"))
 	if fitWidth then
 		local size = tonumber(row.Name:GetAttribute("FullSize")) or row.Name.TextSize
@@ -906,7 +1636,8 @@ local function fillRow(row: RowRefs, data: OddsRow?)
 	end
 	row.Before.Text = data.Before
 	row.After.Text = data.After
-	row.After.TextColor3 = if data.Change > 0 then Theme.Good elseif data.Change < 0 then Theme.TextDim else Theme.Text
+	-- (a boosted number in full white, the same or a lower one a little dimmer)
+	row.After.TextColor3 = if data.Change > 0 then WHITE else rgb(214, 220, 232)
 end
 
 --[[
@@ -916,55 +1647,58 @@ end
 	rows and a note at the bottom.
 ]]
 function BoostView.buildTable(parent: Instance, selector: boolean): TableRefs
+	-- a dark studded well (Pop.well) with rarity-coloured rows: the odds in
+	-- big white numbers, always in full view (paid random items: Roblox rule)
 	local frame = UIKit.new("Frame", {
 		Name = "Odds",
-		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
 	}, parent)
-	UIKit.corner(frame, 12)
-	UIKit.stroke(frame, 2.5)
+	BoostView.popWell(frame)
 	local prev = UIKit.button(frame, "<", Theme.PanelLight, Theme.Panel, { Name = "Prev", TextSize = 26 })
 	local nextButton = UIKit.button(frame, ">", Theme.PanelLight, Theme.Panel, { Name = "Next", TextSize = 26 })
-	local title = UIKit.label(frame, "", 22, {
+	BoostView.popButton(prev, "Blue", 8, true)
+	BoostView.popButton(nextButton, "Blue", 8, true)
+	local title = Pop.title(frame, "", 22, "Gold", {
 		Name = "Title",
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
-		TextWrapped = false,
+		FontFace = PopTheme.Heavy,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
 	local head: { TextLabel } = {}
 	for i, name in { "HeadName", "HeadBefore", "HeadAfter" } do
 		table.insert(
 			head,
-			UIKit.label(frame, "", 14, {
+			Pop.text(frame, "", 14, {
 				Name = name,
 				TextXAlignment = if i == 1 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Right,
-				TextColor3 = Theme.TextDim,
-				TextWrapped = false,
+				TextColor3 = rgb(214, 220, 232),
+				ZIndex = 3,
 			})
 		)
 	end
 	local summary = newRow(frame, "Summary", 1)
-	summary.Frame.BackgroundColor3 = Theme.Panel
-	summary.Frame.BackgroundTransparency = 0
-	UIKit.stroke(summary.Frame, 2)
+	Pop.border(summary.Frame, 2.5)
+	summary.Name.FontFace = PopTheme.Heavy
 	local list = UIKit.new("ScrollingFrame", {
 		Name = "List",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = SCROLLBAR,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = rgb(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
+		ZIndex = 2,
 	}, frame)
 	UIKit.list(list, Enum.FillDirection.Vertical, 2)
-	local note = UIKit.label(frame, "", 15, {
+	local note = Pop.text(frame, "", 15, {
 		Name = "Note",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
+		TextWrapped = true,
+		TextColor3 = rgb(214, 220, 232),
+		ZIndex = 3,
 	})
 	return {
 		Frame = frame,
@@ -987,11 +1721,6 @@ function BoostView.buildTable(parent: Instance, selector: boolean): TableRefs
 		WithNote = true,
 	}
 end
-
-local function holderOf(button: TextButton): Frame
-	return button.Parent :: Frame
-end
-BoostView.holderOf = holderOf
 
 -- The height a table needs to show `rows` rows without scrolling (layoutTable's sums);
 -- `selector`: the arrows show; `withNote` false: no note under the rows.
@@ -1021,8 +1750,10 @@ function BoostView.layoutTable(t: TableRefs, width: number, height: number, comp
 		nextHolder.AnchorPoint = Vector2.new(1, 0)
 		nextHolder.Size = UDim2.fromOffset(m.Select, m.Select)
 		nextHolder.Position = UDim2.new(1, -10, 0, y + 4)
-		t.Prev.TextSize = if compact then 30 else 26
+		t.Prev.TextSize = if compact then 32 else 28
 		t.Next.TextSize = t.Prev.TextSize
+		BoostView.syncButton(t.Prev)
+		BoostView.syncButton(t.Next)
 		t.Title.Position = UDim2.fromOffset(18 + m.Select, y)
 		t.Title.Size = UDim2.new(1, -(36 + m.Select * 2), 0, m.Select)
 		t.Title.TextSize = if compact then 26 else 22
@@ -1251,6 +1982,7 @@ function BoostView.padHint(parent: Instance, parts: { { Glyphs: number, Word: st
 			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
 		})
+		BoostView.popText(word)
 		word:SetAttribute("BaseWidth", part.Width)
 	end
 	return frame, glyphs
@@ -1283,26 +2015,31 @@ function BoostView.showHint(hint: TextLabel, padHint: Frame, compact: boolean, p
 	BoostView.scalePadHint(padHint, if compact then BoostView.PadHintScale else 1)
 end
 
--- A coins chip like the HUD's (icon + amount) for a panel header.
+-- The coins on a dark pill in a window's header band (a drawn gold coin + the green money, like the HUD's).
 function BoostView.balance(parent: Instance): (Frame, TextLabel)
 	local balance = UIKit.new("Frame", {
 		Name = "Balance",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, parent)
-	UIKit.corner(balance, 10)
-	UIKit.stroke(balance, 2)
-	local coin = HudView.coinIcon(balance, 26)
-	coin.Position = UDim2.fromOffset(8, 7)
-	local amount = UIKit.label(balance, "$0", 24, {
+	UIKit.corner(balance, 999)
+	Pop.face(balance, BoostView.DarkPaint, 999, true, false)
+	Pop.coin(balance, 30, {
+		Name = "Coin",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 6, 0.5, 0),
+		ZIndex = 3,
+	})
+	local amount = Pop.text(balance, "$0", 24, {
 		Name = "Amount",
+		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(42, 0),
 		Size = UDim2.new(1, -50, 1, 0),
+		TextColor3 = PopTheme.MoneyNumber,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Coin,
-		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
 	return balance, amount
 end
@@ -1311,6 +2048,7 @@ function BoostView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeBoosts", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true) -- the Pop look, never LightSkin's recolouring
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1345,15 +2083,21 @@ function BoostView.build(compact: boolean?): Refs
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Visible = false,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, { Name = "Close", AnchorPoint = Vector2.new(1, 0), TextSize = 26 })
+	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, { Name = "Close", AnchorPoint = Vector2.new(1, 0), TextSize = 34 })
 	local balance, balanceAmount = BoostView.balance(panel)
+	-- the Pop window: the green header band (the Boosts colour), the dark body
+	BoostView.popWindow(panel, title, BoostView.WindowPaint)
+	BoostView.popText(subtitle, false, WHITE)
+	BoostView.popText(receipt, false, WHITE)
+	BoostView.popButton(close, PopTheme.Close, 6, true)
 
-	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1 }, panel)
-	local tabs: { [string]: TextButton } = {}
+	-- the tabs: bright Pop tabs, the picked one in its boost's colour
+	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1, ZIndex = 2 }, panel)
+	local specs: { Pop.TabSpec } = {}
 	for _, kindId in BoostView.Tabs do
-		tabs[kindId] =
-			UIKit.button(tabBar, BoostView.TabTitles[kindId], Theme.Accent, Theme.AccentDark, { Name = "Tab" .. kindId, TextSize = 22 })
+		table.insert(specs, { Id = kindId, Label = BoostView.TabTitles[kindId], Paint = BoostView.Paints[kindId] or "Blue" })
 	end
+	local tabs = Pop.tabs(tabBar, specs, BoostView.Tabs[1], Vector2.new(300, 48), { Name = "Tabs", ZIndex = 2 })
 	local glyphs: { ImageLabel } = {}
 	for _, name in { "GlyphL", "GlyphR" } do
 		table.insert(
@@ -1369,59 +2113,82 @@ function BoostView.build(compact: boolean?): Refs
 		)
 	end
 
-	-- the boost card (left)
+	-- the boost card (left): painted in the boost's colour, rays behind its 3D picture
 	local cardFrame = UIKit.new("Frame", {
 		Name = "Card",
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		ZIndex = 2,
 	}, panel)
-	UIKit.corner(cardFrame, 12)
-	UIKit.stroke(cardFrame, 2.5)
+	Pop.face(cardFrame, BoostView.Paints[BoostView.Tabs[1]] or "Yellow", 10, false)
+	local cardRim = cardFrame:FindFirstChild("Rim") :: Frame?
+	if cardRim then
+		cardRim.ZIndex = 3
+	end
+	BoostView.burst(cardFrame, 10, 1)
+	Pop.studs(cardFrame, 10, 0.5, 44, 2)
+	for i, spot in { { 0.06, 0.06, 18 }, { 0.3, 0.05, 14 }, { 0.92, 0.1, 20 } } do
+		Pop.sparkle(cardFrame, UDim2.fromScale(spot[1], spot[2]), spot[3], 2, 0.2 + i * 0.08)
+	end
 	local icon = BoostView.icon(cardFrame, 84, "TripleLucky")
+	icon.ZIndex = 4
 	local name = UIKit.label(cardFrame, "", 28, {
 		Name = "BoostName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
+		ZIndex = 5,
 	})
+	BoostView.popText(name, true, WHITE)
 	local status = UIKit.label(cardFrame, "", 18, {
 		Name = "Status",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
+		ZIndex = 5,
 	})
+	BoostView.popText(status)
+	BoostView.backing(status, BoostView.DarkPaint)
 	local description = UIKit.label(cardFrame, "", 16, {
 		Name = "Description",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
 		ClipsDescendants = true,
+		ZIndex = 5,
 	})
+	BoostView.popText(description, false, WHITE)
 	local keyLine = UIKit.label(cardFrame, "", 18, {
 		Name = "KeyLine",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	BoostView.popText(keyLine, false, WHITE)
+	-- the offers: dark strips with the duration and a coin / Robux price button
 	local offers: { TextButton } = {}
 	for i = 1, 3 do
-		table.insert(offers, UIKit.button(cardFrame, "", Theme.Accent, Theme.AccentDark, { Name = "Offer" .. i, TextSize = 20 }))
+		local button = UIKit.button(cardFrame, "", Theme.Accent, Theme.AccentDark, { Name = "Offer" .. i, TextSize = 20 })
+		holderOf(button).ZIndex = 5
+		BoostView.popOffer(button)
+		table.insert(offers, button)
 	end
 	local note = UIKit.label(cardFrame, "", 15, {
 		Name = "Note",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
+		ZIndex = 5,
 	})
+	BoostView.popText(note, false, WHITE)
 
 	local odds = BoostView.buildTable(panel, true)
+	odds.Frame.ZIndex = 2
 	local hint = UIKit.label(panel, "", 15, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
 		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 	})
+	BoostView.popText(hint)
 	local padHint, padGlyphs = BoostView.padHint(panel, {
 		{ Glyphs = 2, Word = "switch boost", Width = 110 },
 		{ Glyphs = 1, Word = "buy / pick", Width = 90 },
@@ -1526,19 +2293,35 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
 	end
+	refs.Close.TextSize = if compact then 46 else 36
+	BoostView.syncButton(refs.Close)
+	BoostView.placeWindow(refs.Panel, m.Header - 8)
 
-	-- tabs: equal buttons, room for the LB / RB glyphs at the ends
+	-- tabs: equal Pop tabs, room for the LB / RB glyphs at the ends
 	refs.TabBar.Position = UDim2.fromOffset(PAD, m.Header)
 	refs.TabBar.Size = UDim2.new(1, -(PAD * 2 + m.TabGap), 0, m.TabBar)
 	local count = #BoostView.Tabs
 	local inset = 26
-	local share = 1 / count
-	local fixed = (2 * inset + GAP * (count - 1)) / count
-	for i, kindId in BoostView.Tabs do
-		local holder = holderOf(refs.Tabs[kindId])
-		holder.Position = UDim2.new(share * (i - 1), inset + (i - 1) * (GAP - fixed), 0, 6)
-		holder.Size = UDim2.new(share, -fixed, 0, m.TabHeight)
-		refs.Tabs[kindId].TextSize = if compact then 24 else 22
+	local barWidth = width - (PAD * 2 + m.TabGap)
+	local each = math.floor((barWidth - 2 * inset - GAP * (count - 1)) / count)
+	local row = refs.TabBar:FindFirstChild("Tabs") :: Frame?
+	if row then
+		row.Position = UDim2.fromOffset(inset, 6)
+		row.Size = UDim2.new(1, -2 * inset, 0, m.TabHeight)
+	end
+	for _, kindId in BoostView.Tabs do
+		local tab = refs.Tabs[kindId]
+		tab.Size = UDim2.fromOffset(each, m.TabHeight)
+		local label = tab:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.Size = UDim2.new(1, -12, 1, 0)
+			label.Position = UDim2.fromOffset(6, 0)
+			TechShopView.fitText(label, each - 16, m.TabHeight - 8, if compact then 28 else 26, 14)
+			local edge = label:FindFirstChild("Edge") :: UIStroke?
+			if edge then
+				edge.Thickness = Pop.edgeFor(label.TextSize)
+			end
+		end
 	end
 	refs.TabGlyphs[1].Position = UDim2.new(0, 12, 0, 6 + m.TabHeight / 2 - 3)
 	refs.TabGlyphs[2].Position = UDim2.new(1, -12, 0, 6 + m.TabHeight / 2 - 3)
@@ -1587,6 +2370,12 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	card.KeyLine.Position = UDim2.fromOffset(12, y)
 	card.KeyLine.Size = UDim2.new(1, -24, 0, m.Key + 8)
 	y += m.Key + 8 + 12
+	-- the light burst behind the picture, the status on its dark pill
+	local burst = card.Frame:FindFirstChild("Burst") :: Frame?
+	if burst then
+		BoostView.placeBurst(burst, UDim2.fromOffset(12 + m.Icon / 2, 10 + m.Icon / 2), math.max(left, 260))
+	end
+	BoostView.placeStatus(refs)
 	card.Frame:SetAttribute("OffersTop", y)
 	card.Frame:SetAttribute("Width", left)
 	card.Frame:SetAttribute("DescriptionHeight", descHeight)
@@ -1610,6 +2399,48 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 end
 
 --[[
+	An offer strip's insides for a `w` x `h` strip: the duration left and the
+	price button right (a column of wide strips), or the duration on top and
+	the price button under it (compact: three strips side by side).
+]]
+function BoostView.placeOffer(button: TextButton, w: number, h: number, compact: boolean)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local price = button:FindFirstChild("Price") :: Frame?
+	if not label or not price then
+		return
+	end
+	if compact then
+		label.AnchorPoint = Vector2.new(0.5, 0)
+		label.Position = UDim2.new(0.5, 0, 0, 4)
+		label.Size = UDim2.new(1, -8, 0, 26)
+		label.TextXAlignment = Enum.TextXAlignment.Center
+		TechShopView.fitText(label, w - 12, 26, 22, 14)
+		price.AnchorPoint = Vector2.new(0.5, 1)
+		price.Position = UDim2.new(0.5, 0, 1, -6)
+		price.Size = UDim2.fromOffset(math.floor(w - 12), h - 38)
+		button:SetAttribute("PriceSize", 20)
+	else
+		local priceWidth = math.floor(math.min(230, w * 0.56))
+		label.AnchorPoint = Vector2.new(0, 0.5)
+		label.Position = UDim2.new(0, 14, 0.5, 0)
+		label.Size = UDim2.new(0, w - priceWidth - 30, 1, -6)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		TechShopView.fitText(label, w - priceWidth - 30, h - 8, 26, 14)
+		price.AnchorPoint = Vector2.new(1, 0.5)
+		price.Position = UDim2.new(1, -7, 0.5, 0)
+		price.Size = UDim2.fromOffset(priceWidth, h - 12)
+		button:SetAttribute("PriceSize", 22)
+	end
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = Pop.edgeFor(label.TextSize)
+	end
+	local mark = button:GetAttribute("Mark")
+	BoostView.setMark(button, "")
+	BoostView.setMark(button, if type(mark) == "string" then mark else "")
+end
+
+--[[
 	Places the `n` shown offer buttons of the card and the note under them:
 	a column of wide buttons (normal), or one row with the price on a
 	second line (compact: three 72-unit buttons side by side, so a phone
@@ -1630,6 +2461,7 @@ function BoostView.placeOffers(refs: Refs, n: number)
 			holder.Size = UDim2.fromOffset(each, m.Offer)
 			holder.Position = UDim2.fromOffset(12 + i * (each + GAP), y)
 			button.TextSize = 20
+			BoostView.placeOffer(button, each, m.Offer, true)
 			if holder.Visible then
 				i += 1
 			end
@@ -1639,8 +2471,9 @@ function BoostView.placeOffers(refs: Refs, n: number)
 		for _, button in card.Offers do
 			local holder = holderOf(button)
 			holder.Position = UDim2.fromOffset(12, y)
-			holder.Size = UDim2.new(1, -24, 0, m.Offer)
+			holder.Size = UDim2.fromOffset(width - 24, m.Offer)
 			button.TextSize = 20
+			BoostView.placeOffer(button, width - 24, m.Offer, false)
 			if holder.Visible then
 				y += m.Offer + GAP
 			end
@@ -1684,23 +2517,10 @@ end
 
 ---------------------------------------------------------------- filling in
 
-local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-	holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
-	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
-end
-BoostView.style = style
-
--- Shows one boost's tab (and marks its tab button).
+-- Shows one boost's tab (Pop.selectTab: its tab painted in the boost's colour, the other grey).
 function BoostView.setTab(refs: Refs, kindId: string)
 	refs.Tab = kindId
-	for _, id in BoostView.Tabs do
-		local on = id == kindId
-		local button = refs.Tabs[id]
-		button.BackgroundColor3 = if on then Theme.Accent else Theme.PanelLight
-		holderOf(button).BackgroundColor3 = if on then Theme.AccentDark else Theme.PanelDark
-		button.TextColor3 = if on then Theme.Text else Theme.TextDim
-	end
+	Pop.selectTab(refs.Tabs, kindId)
 end
 
 -- The tab after (dir = 1) or before (dir = -1) `kindId`, wrapping.
@@ -1708,13 +2528,58 @@ function BoostView.nextTab(kindId: string, dir: number): string
 	return BoostView.cycle(BoostView.Tabs, kindId, if dir < 0 then -1 else 1) or BoostView.Tabs[1]
 end
 
+-- The status ("ACTIVE: 4:59 left") on its dark pill, as wide as its words.
+function BoostView.placeStatus(refs: Refs)
+	local status = refs.Card.Status
+	local card = refs.Card.Frame
+	local room = (tonumber(card:GetAttribute("Width")) or card.Size.X.Offset) - status.Position.X.Offset - 4
+	local width = math.ceil(TechShopView.textWidth(status.Text, status.TextSize) * 0.92) + 24
+	BoostView.placeBacking(status, math.min(width, room))
+	local back = status.Parent and status.Parent:FindFirstChild(status.Name .. "Back") :: Frame?
+	if back then
+		back.Visible = status.Text ~= ""
+		back.Size = UDim2.fromOffset(back.Size.X.Offset, status.TextSize + 12)
+		back.Position = status.Position + UDim2.fromOffset(-10, math.floor((status.Size.Y.Offset - status.TextSize - 12) / 2))
+	end
+end
+
+-- An offer's price as its button shows it: the coins, the Robux number (the mark beside it), or COMING SOON.
+function BoostView.priceWords(offer: Offer): (string, string)
+	if offer.Robux then
+		local number = string.match(offer.PriceText, "^(%d+) R%$$")
+		if number then
+			return number, "robux"
+		end
+		return offer.PriceText, ""
+	end
+	if offer.Reason == "ComingSoon" then
+		return offer.PriceText, ""
+	end
+	return offer.PriceText, "coin"
+end
+
+-- Fills an offer strip: the duration, the price button (gold coins, green Robux, grey when it can't be bought).
+function BoostView.paintOffer(button: TextButton, offer: Offer)
+	local words, mark = BoostView.priceWords(offer)
+	button:SetAttribute("Label", offer.Label)
+	button:SetAttribute("PriceText", words)
+	local price = button:FindFirstChild("Price") :: Frame?
+	if price then
+		local paint = if not offer.CanBuy then PopTheme.Gray elseif offer.Robux then PopTheme.Price else Pop.paint("Yellow")
+		Pop.repaint(price, paint)
+	end
+	BoostView.setMark(button, mark)
+end
+
 -- Fills the card from BoostView.cards. Buttons that show an answer (Busy) keep their text.
 function BoostView.setCard(refs: Refs, card: Card)
 	local c = refs.Card
 	BoostView.setIcon(c.Icon, card.Kind)
+	Pop.repaint(c.Frame, BoostView.Paints[card.Kind] or "Yellow", false)
 	c.Name.Text = string.upper(card.Name)
 	c.Status.Text = card.Status
-	c.Status.TextColor3 = card.StatusColor
+	c.Status.TextColor3 = BoostView.ink(card.StatusColor)
+	BoostView.placeStatus(refs)
 	local short = c.Frame:GetAttribute("Short") == true
 	c.Description.Text = if short then card.Short else card.Description
 	c.KeyLine.Text = card.KeyLine
@@ -1727,29 +2592,34 @@ function BoostView.setCard(refs: Refs, card: Card)
 	for i, button in c.Offers do
 		local offer = card.Offers[i]
 		holderOf(button).Visible = offer ~= nil
-		if offer and button:GetAttribute("Busy") ~= true then
-			button.Text = if refs.Compact then `{offer.Label}\n{offer.PriceText}` else offer.Text
-			if offer.Robux then
-				style(button, offer.CanBuy, Theme.Good, Theme.GoodDark)
-			else
-				style(button, offer.CanBuy, Theme.Accent, Theme.AccentDark)
+		if offer then
+			button:SetAttribute("Label", offer.Label)
+			if button:GetAttribute("Busy") ~= true then
+				button.Text = if refs.Compact then `{offer.Label}\n{offer.PriceText}` else offer.Text
+				BoostView.paintOffer(button, offer)
 			end
 		end
 	end
 	BoostView.placeOffers(refs, math.min(#card.Offers, #c.Offers))
 	for _, button in c.Offers do
 		BoostView.fitButton(button, refs.Compact)
+		BoostView.syncOffer(button)
 	end
 	c.Note.Text = card.Note
 	local noteHeight = tonumber(c.Frame:GetAttribute("NoteHeight")) or 40
 	TechShopView.fitText(c.Note, width - 24, noteHeight, m.Note, m.Note - 3)
 end
 
--- The card's note line shows a status (an answer) for a moment; nil puts the note back.
+-- The card's note line shows a status (an answer) for a moment, on a dark pill; nil puts the note back.
 function BoostView.setStatus(refs: Refs, text: string?, color: Color3?, note: string)
 	local c = refs.Card
 	c.Note.Text = text or note
-	c.Note.TextColor3 = if text then color or Theme.Text else Theme.TextDim
+	c.Note.TextColor3 = if text then BoostView.ink(color or Theme.Text) else WHITE
+	c.Note.BackgroundColor3 = PopTheme.Outline
+	c.Note.BackgroundTransparency = if text then 0.35 else 1
+	if not c.Note:FindFirstChildOfClass("UICorner") then
+		UIKit.corner(c.Note, 8)
+	end
 end
 
 function BoostView.setCoins(refs: Refs, coins: number)
@@ -1774,9 +2644,10 @@ function BoostView.setHint(refs: Refs, text: string, glyphs: { string }?)
 	BoostView.showHint(refs.Hint, refs.PadHint, refs.Compact, refs.PadMode)
 end
 
-function BoostView.showReceipt(refs: Refs, text: string, color: Color3)
+-- The last message in the header band (white: readable on every window's colour).
+function BoostView.showReceipt(refs: Refs, text: string, _color: Color3)
 	refs.Receipt.Text = text
-	refs.Receipt.TextColor3 = color
+	refs.Receipt.TextColor3 = WHITE
 	refs.Receipt.Visible = true
 	refs.Subtitle.Visible = false
 end
@@ -1796,7 +2667,7 @@ end
 function BoostView.touchTargets(refs: Refs): { GuiObject }
 	local list: { GuiObject } = { holderOf(refs.Close), holderOf(refs.Odds.Prev), holderOf(refs.Odds.Next) }
 	for _, kindId in BoostView.Tabs do
-		table.insert(list, holderOf(refs.Tabs[kindId]))
+		table.insert(list, refs.Tabs[kindId]) -- (a Pop tab is its own button)
 	end
 	for _, button in refs.Card.Offers do
 		table.insert(list, holderOf(button))
@@ -2003,15 +2874,14 @@ function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
 	refs.Launcher.Visible = launcher and #chips == 0
 end
 
-
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = BoostView.build
+-- The window wears the Pop look switch on or off (never LightSkin's
+-- recolouring); with the light UI on it also hides Roblox's touch controls
+-- while open. The HUD chips keep LightSkin.
+local popBuild = BoostView.build
 BoostView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
+	local refs = popBuild(compact)
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 		TouchControls.follow(refs.Gui)
 	end
 	return refs

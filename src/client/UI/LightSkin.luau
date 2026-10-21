@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local BubbleTheme = require(Shared.Config.BubbleTheme)
+local Pop = require(script.Parent.Pop)
 
 local LightSkin = {}
 
@@ -40,7 +41,7 @@ end
 local BACKGROUNDS: { [string]: Color3 } = {
 	[key(Theme.Panel)] = BubbleTheme.Panel,
 	[key(Theme.PanelLight)] = BubbleTheme.PanelTint,
-	[key(Theme.PanelDark)] = rgb(20, 22, 27),
+	[key(Theme.PanelDark)] = rgb(36, 38, 46), -- (PopTheme.Well)
 	[key(Theme.Good)] = Roles.Go.Base,
 	[key(Theme.GoodDark)] = Roles.Go.Lip,
 	[key(Theme.Bad)] = Roles.Danger.Base,
@@ -99,8 +100,14 @@ local function backdrop(object: Instance): Color3?
 	return nil
 end
 
+-- (the Pop look: only near-white faces take dark ink; bright colours keep
+-- white text with a black edge, like the Shop's buttons)
 local function isLight(c: Color3?): boolean
-	return c ~= nil and luminance(c :: Color3) > 0.72
+	if c == nil then
+		return false
+	end
+	local _, sat = (c :: Color3):ToHSV()
+	return luminance(c :: Color3) > 0.8 and sat < 0.3
 end
 
 -- A light text colour meant for the dark panels, readable on white: near
@@ -114,10 +121,49 @@ local function readable(c: Color3): Color3
 	return Color3.fromHSV(h, math.max(sat, 0.75), math.min(v, 0.66))
 end
 
+-- the Pop buttons' glossy face: a bright top half, a step, a shaded bottom
+local POP_GLOSS = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+	ColorSequenceKeypoint.new(0.48, rgb(246, 246, 246)),
+	ColorSequenceKeypoint.new(0.52, rgb(222, 222, 222)),
+	ColorSequenceKeypoint.new(1, rgb(196, 196, 196)),
+})
+
+-- The Pop glow on an old chunky button (the Roblox shop photos): a light
+-- edge inside its border and the stud texture; follows its colour.
+local function glowButton(button: GuiObject)
+	local corner = button:FindFirstChildOfClass("UICorner")
+	local radius = if corner then corner.CornerRadius.Offset else 8
+	local light = button.BackgroundColor3:Lerp(Color3.new(1, 1, 1), 0.45)
+	local rim = button:FindFirstChild("Rim")
+	if rim then
+		local stroke = rim:FindFirstChild("Light")
+		if stroke and stroke:IsA("UIStroke") then
+			stroke.Color = light
+		end
+	else
+		Pop.rim(button, light, radius, 3, button.ZIndex)
+	end
+	-- (studs only under child labels: a button that draws its own Text would get them over its words)
+	if not button:FindFirstChild("Studs") and (button :: any).Text == "" then
+		Pop.studs(button, radius, 0.5, 28, button.ZIndex)
+	end
+end
+
 local function skinBackground(gui: GuiObject)
 	local mapped = BACKGROUNDS[key(gui.BackgroundColor3)]
 	if mapped then
 		gui.BackgroundColor3 = mapped
+	end
+	if gui:IsA("TextButton") and gui.BackgroundTransparency < 0.5 then
+		-- an old chunky button (UIKit.button: a white -> grey gradient): the Pop gloss
+		local gradient = gui:FindFirstChildOfClass("UIGradient")
+		if gradient and gradient.Rotation == 90 and gradient.Color.Keypoints[1].Value == Color3.new(1, 1, 1) and #gradient.Color.Keypoints == 2 then
+			gradient.Color = POP_GLOSS
+		end
+		if gradient and gradient.Color == POP_GLOSS then
+			glowButton(gui)
+		end
 	end
 	if isLight(gui.BackgroundColor3) and gui.BackgroundTransparency < 0.5 then
 		-- the old panels' dark-bottom gradient would grey a white panel
@@ -173,6 +219,10 @@ local function skinText(object: GuiObject)
 		if stroke then
 			stroke.Enabled = true
 			stroke.Color = BubbleTheme.Outline
+			-- (the Pop look: a bold black edge on every word)
+			local size = if label.TextScaled then 24 else label.TextSize
+			stroke.Thickness = math.max(stroke.Thickness, if size >= 26 then 3 elseif size >= 18 then 2.2 else 1.6)
+			stroke.Transparency = 0
 		end
 	end
 end
@@ -264,13 +314,11 @@ local function addBand(title: TextLabel, roleName: string)
 	band.BorderSizePixel = 0
 	band.ClipsDescendants = true
 	band.ZIndex = 0 -- under every other part of the window
-	local colours = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, role.Base),
-		ColorSequenceKeypoint.new(0.6, role.Base:Lerp(role.Top, 0.5)),
-		ColorSequenceKeypoint.new(1, role.Top),
-	})
+	-- the Pop header: the window's colour, lighter at the top
+	local colours = ColorSequence.new(role.Top, role.Base)
 	local gradient = Instance.new("UIGradient")
 	gradient.Color = colours
+	gradient.Rotation = 90
 	gradient.Parent = band
 	if corner then
 		local round = Instance.new("UICorner")
@@ -286,23 +334,35 @@ local function addBand(title: TextLabel, roleName: string)
 		fill.Size = UDim2.new(1, 0, 0.5, 0)
 		fill.ZIndex = 0
 		local fillGradient = Instance.new("UIGradient")
-		fillGradient.Color = colours
+		fillGradient.Color = ColorSequence.new(role.Top:Lerp(role.Base, 0.5), role.Base)
+		fillGradient.Rotation = 90
 		fillGradient.Parent = fill
 		fill.Parent = band
 	end
-	for i = 0, 60 do
+	-- the shine: a light top strip and three wide diagonal stripes (Pop.window)
+	local shine = Instance.new("Frame")
+	shine.Name = "Shine"
+	shine.BackgroundColor3 = Color3.new(1, 1, 1)
+	shine.BackgroundTransparency = 0.8
+	shine.BorderSizePixel = 0
+	shine.Size = UDim2.new(1, 0, 0.42, 0)
+	shine.ZIndex = 0
+	shine.Parent = band
+	for i, spec in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
 		local stripe = Instance.new("Frame")
-		stripe.Name = "Stripe"
+		stripe.Name = "Stripe" .. i
 		stripe.AnchorPoint = Vector2.new(0.5, 0.5)
 		stripe.BackgroundColor3 = Color3.new(1, 1, 1)
-		stripe.BackgroundTransparency = 0.86
+		stripe.BackgroundTransparency = 0.8
 		stripe.BorderSizePixel = 0
-		stripe.Position = UDim2.new(0, 14 + i * 26, 0.5, 0)
-		stripe.Rotation = 35
-		stripe.Size = UDim2.new(0, 8, 2, 0)
+		stripe.Position = UDim2.new(spec[1], (i - 1) * 40, 0.5, 0)
+		stripe.Rotation = 32
+		stripe.Size = UDim2.new(0, spec[2], 2.4, 0)
 		stripe.ZIndex = 0
 		stripe.Parent = band
 	end
+	-- the studs over the band (the photos' studded headers)
+	Pop.studs(band, if corner then corner.CornerRadius.Offset else 0, 0.35, 40, 0)
 	local line = Instance.new("Frame")
 	line.Name = "Line"
 	line.BackgroundColor3 = BubbleTheme.Outline
@@ -315,7 +375,7 @@ local function addBand(title: TextLabel, roleName: string)
 	band.Parent = panel
 	sizeBand(band)
 	title.FontFace = BubbleTheme.CardFont
-	title.TextColor3 = BubbleTheme.Ink
+	title.TextColor3 = Color3.new(1, 1, 1)
 	local edge = textStroke(title)
 	if not edge then
 		local made = Instance.new("UIStroke")
@@ -326,7 +386,7 @@ local function addBand(title: TextLabel, roleName: string)
 	local stroke = edge :: UIStroke
 	stroke.Enabled = true
 	stroke.Color = BubbleTheme.Outline
-	stroke.Thickness = 3
+	stroke.Thickness = 3.5
 	stroke.Transparency = 0
 	pcall(function()
 		title:GetPropertyChangedSignal("Position"):Connect(function()

@@ -62,6 +62,12 @@ function Export.collect(root: any, scene: any?)
 					end
 				end
 				local size = d.Size
+				-- a Sphere SpecialMesh (no upload): an ellipsoid of the part's size
+				local mesh = d:FindFirstChildOfClass("SpecialMesh")
+				if mesh and mesh.MeshType == roblox.Enum.MeshType.Sphere then
+					shape = SHAPES.Ball
+					size = size * mesh.Scale
+				end
 				local entry = {
 					shape,
 					round(size.X),

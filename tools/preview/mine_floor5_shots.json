@@ -12,5 +12,12 @@
  "elevator_floors_pc": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_pc" },
  "elevator_floors_phone": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_phone", "uiInset": 86 },
  "elevator_ride_floor5": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_ride_pc" },
- "elevator_banner_floor5": { "scene": "elevator_ui", "position": [0, 9, 60], "target": [0, 7, 20], "fov": 66, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_banner_pc" }
+ "elevator_banner_floor5": { "scene": "elevator_ui", "position": [0, 9, 60], "target": [0, 7, 20], "fov": 66, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_banner_pc" },
+ "elevator_buy_pc": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_buy_pc" },
+ "elevator_buy_phone": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_buy_phone", "uiInset": 86 },
+ "elevator_floors_pc_light": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_pc_light" },
+ "elevator_floors_phone_light": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_phone_light", "uiInset": 86 },
+ "elevator_buy_pc_light": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_buy_pc_light" },
+ "elevator_buy_phone_light": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_buy_phone_light", "uiInset": 86 },
+ "elevator_floors_phone_small_light": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_phone_small_light", "uiInset": 101 }
 }

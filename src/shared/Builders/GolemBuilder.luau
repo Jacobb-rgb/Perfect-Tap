@@ -22,6 +22,12 @@
 	                              local -Z, +Y up). At most MaxParts (20)
 	                              parts: the body, the accessory, the aura,
 	                              then the vein while the budget allows.
+	                              LIMITED EDITION golems (GolemConfig
+	                              Edition, Config/LimitedGolems) wear their
+	                              set's themed gear (GolemGearLimited) and
+	                              may use GolemConfig.LimitedMaxParts (by
+	                              rarity) instead; their Height is measured
+	                              from the parts.
 	                              PrimaryPart = "Body" (the torso); the
 	                              model's attribute "RootHeight" is the Body
 	                              center's height above the base (the hover
@@ -31,7 +37,7 @@
 	                              base to the top of the head gear) and
 	                              "Hover" (studs; 0 unless Premium).
 	    opts.Size     extra scale (1 = the golem's own Scale)
-	    opts.Welded   followers: every part but Body is unanchored, massless
+	    opts.Welded   followers (no PointLight): every part but Body is unanchored, massless
 	                  and welded to the anchored Body (moving Body moves the
 	                  golem: one CFrame write per frame)
 	    No part collides, touches or is queried; only Body and Head cast
@@ -48,10 +54,18 @@
 	                              and "BottomRoot" (the halves), so PivotTo
 	                              moves them from the center. base = the
 	                              pill's center, the window faces -Z.
+	                              A capsule with an EGG (Builders/CapsuleEggs:
+	                              Stone, Crystal, Royal) or a limited set's
+	                              shard (GolemGearLimited) builds that instead,
+	                              with the same halves, pivots, Band and
+	                              cracks (at most ShardMaxParts).
 ]]
 
 local CapsuleConfig = require(script.Parent.Parent.Config.CapsuleConfig)
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
+local GolemGearLimited = require(script.Parent.GolemGearLimited)
+local CapsuleEggs = require(script.Parent.CapsuleEggs)
+local LimitedUpcoming = require(script.Parent.Parent.Config.LimitedUpcoming)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 
 local GolemBuilder = {}
@@ -59,7 +73,14 @@ local GolemBuilder = {}
 export type Opts = { Size: number?, Welded: boolean? }
 
 GolemBuilder.MaxParts = 20
+-- (a limited edition golem's budget: GolemConfig.LimitedMaxParts by rarity)
 GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
+-- a limited edition's SHARD (its set's egg, GolemGearLimited.shard) instead
+-- of the pill: only one is ever built at a time (the opening, a picture)
+GolemBuilder.ShardMaxParts = 66
+-- a limited golem's rounded corners (GolemBuilder.round on its body and head / helm)
+GolemBuilder.RoundRadius = 0.3 -- unscaled
+GolemBuilder.RoundParts = 10
 GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
 GolemBuilder.Hover = 0.25 -- how high a Premium golem's feet float (unscaled)
 GolemBuilder.AuraSize = 2.3 -- the aura disc's diameter (unscaled)
@@ -199,7 +220,7 @@ end
 
 -- The look of a kind (a plain stone golem for an unknown kind).
 local function lookOf(kind: string): GolemConfig.Golem
-	local golem = GolemConfig.ById[kind]
+	local golem = GolemConfig.ById[kind] or LimitedUpcoming.ById[kind]
 	if golem then
 		return golem
 	end
@@ -229,7 +250,18 @@ type Ctx = {
 	S: number, -- the scale (studs per unit)
 	Glow: Color3, -- the glow for Neon parts (glowShade)
 	Top: number, -- the top of the head (unscaled units)
+	Room: () -> number, -- parts the gear may still add (the budget minus the aura)
 }
+
+-- Gear that covers the face: "Closed" (a closed helm: no brow, the eyes a
+-- little forward, glowing through the slit) or "Visor" (no brow).
+GolemBuilder.Faces = {
+	KnightHelm = "Closed",
+	Visor = "Visor",
+} :: { [string]: string }
+for name, face in GolemGearLimited.Faces do
+	GolemBuilder.Faces[name] = face
+end
 
 -- Each returns the top of what it added (unscaled), for the model's Height.
 local ACCESSORIES: { [string]: (Ctx) -> number } = {}
@@ -371,7 +403,51 @@ ACCESSORIES.Crown = function(c)
 	return 3.18
 end
 
+-- (a wedge: its slope faces -Z and up, the tall side at +Z)
+local function wedge(parent: Instance, name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?): BasePart
+	return make("WedgePart", {
+		Name = name,
+		Anchored = true,
+		CanCollide = false,
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+		Massless = true,
+		TopSurface = Enum.SurfaceType.Smooth,
+		BottomSurface = Enum.SurfaceType.Smooth,
+		Material = material or Enum.Material.SmoothPlastic,
+		Color = color,
+		Size = size,
+		CFrame = cf,
+	}, parent)
+end
+
+-- the limited edition gear (GolemGearLimited)
+local KIT = {
+	part = part,
+	upright = upright,
+	facing = facing,
+	wedge = wedge,
+	darker = darker,
+	lighter = lighter,
+}
+-- the regular capsules' eggs (Builders/CapsuleEggs; capsule id -> builder)
+local EGGS = CapsuleEggs.eggs(KIT, GolemGearLimited.tools(KIT))
+for name, add in GolemGearLimited.accessories(KIT) do
+	ACCESSORIES[name] = add :: any
+end
+
 ---------------------------------------------------------------- golems
+
+-- The part budget of a kind: GolemConfig.LimitedMaxParts[rarity] for a
+-- limited edition golem (an upcoming set's preview look too).
+function GolemBuilder.budget(kind: string): number
+	local golem = GolemConfig.ById[kind] or LimitedUpcoming.ById[kind]
+	if golem and golem.Edition ~= nil then
+		return GolemConfig.LimitedMaxParts[golem.Rarity] or GolemConfig.MaxParts
+	end
+	return GolemBuilder.MaxParts
+end
 
 -- A golem Model (see the header).
 function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
@@ -380,6 +456,7 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	local s = (look.Scale or 1) * size
 	local ground = base or CFrame.new()
 	local premium = GolemBuilder.premium(kind)
+	local budget = GolemBuilder.budget(kind)
 	local hover = if premium then GolemBuilder.Hover else 0
 	-- the feet (Premium golems float `hover` over the base)
 	local feet = ground * CFrame.new(0, hover * s, 0)
@@ -411,22 +488,16 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	local arm = body:Lerp(trim, 0.3)
 	for i, side in { -1, 1 } do
 		part(model, "Arm" .. i, at(side * 0.8, 1.12, 0) * CFrame.Angles(0, 0, side * 0.1), v(0.38, 0.62, 0.48), arm, material)
-		part(
-			model,
-			"Fist" .. i,
-			at(side * 0.86, 0.68, -0.03) * CFrame.Angles(0.3, side * 0.45, side * 0.2),
-			v(0.5, 0.46, 0.48),
-			trim,
-			rock
-		)
+		part(model, "Fist" .. i, at(side * 0.86, 0.68, -0.03) * CFrame.Angles(0.3, side * 0.45, side * 0.2), v(0.5, 0.46, 0.48), trim, rock)
 	end
 	-- the big head under a heavy stone brow, two glowing eyes in its shadow
 	local headY = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y / 2
 	local head = part(model, "Head", at(0, headY, 0), v(1.5, 1.25, 1.3), lighter(body, 0.05), material)
 	head.CastShadow = true
 	-- (a closed helm or a diving visor covers the face: no brow under it)
-	local closed = look.Accessory == "KnightHelm"
-	if not closed and look.Accessory ~= "Visor" then
+	local face = GolemBuilder.Faces[look.Accessory]
+	local closed = face == "Closed"
+	if face == nil then
 		part(model, "Brow", at(0, 2.36, -0.6) * CFrame.Angles(-0.3, 0, 0), v(1.58, 0.3, 0.36), darker(trim, 0.1), rock)
 	end
 	local eyeZ = if closed then -0.75 else -0.68
@@ -443,19 +514,47 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		lighter(look.Glow, 0.1),
 		crystalMaterial
 	)
-	-- the gear
-	local ctx: Ctx =
-		{ Model = model, At = at, V = v, Look = look, S = s, Glow = glow, Top = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y }
+	-- the gear (a limited golem keeps RoundParts for its rounded head and body)
+	local reserve = (if premium then 1 else 0) + (if look.Edition ~= nil then GolemBuilder.RoundParts else 0)
+	local function room(): number
+		return budget - GolemBuilder.partCount(model) - reserve
+	end
+	local ctx: Ctx = {
+		Model = model,
+		At = at,
+		V = v,
+		Look = look,
+		S = s,
+		Glow = glow,
+		Top = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y,
+		Room = room,
+	}
 	local add = ACCESSORIES[look.Accessory] or ACCESSORIES.None
 	local top = math.max(ctx.Top, add(ctx))
+	-- a limited golem's big blocks get rounded vertical edges (a clean, soft look)
+	if look.Edition ~= nil then
+		local helm = model:FindFirstChild("Helm")
+		for _, name in { "Body", if helm then "Helm" else "Head" } do
+			local p = model:FindFirstChild(name)
+			if p and p:IsA("Part") then
+				GolemBuilder.round(p, GolemBuilder.RoundRadius * s)
+			end
+		end
+	end
 	-- Premium: the aura disc under the floating feet (on the base)
 	if premium then
-		local aura = upright(model, "Aura", ground * CFrame.new(0, 0.025 * s, 0), 0.05 * s, GolemBuilder.AuraSize * s, glow, Enum.Material.Neon)
+		local aura =
+			upright(model, "Aura", ground * CFrame.new(0, 0.025 * s, 0), 0.05 * s, GolemBuilder.AuraSize * s, glow, Enum.Material.Neon)
 		aura.Transparency = 0.35
 	end
 	-- a glowing ore vein cracking the chest above the core, while the budget allows
-	if GolemBuilder.partCount(model) < GolemBuilder.MaxParts then
+	if GolemBuilder.partCount(model) < budget then
 		part(model, "Vein", at(-0.4, 1.27, -0.435) * CFrame.Angles(0, 0, 0.6), v(0.06, 0.3, 0.04), glow, Enum.Material.Neon)
+	end
+	-- a limited edition golem's gear (wings, hats, halos) is too varied to
+	-- guess: its Height is measured from its parts
+	if look.Edition ~= nil then
+		top = GolemBuilder.topOver(model, feet) / s
 	end
 
 	model.PrimaryPart = torso
@@ -464,6 +563,13 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	model:SetAttribute("Height", (top + hover) * s)
 	model:SetAttribute("Hover", hover * s)
 	if opts and opts.Welded then
+		-- a follower keeps no light (the opening and the pictures do): many
+		-- followers may walk round one phone, lights cost the most
+		for _, d in model:GetDescendants() do
+			if d:IsA("PointLight") then
+				d:Destroy()
+			end
+		end
 		for _, child in model:GetChildren() do
 			if child:IsA("BasePart") and child ~= torso then
 				child.Anchored = false
@@ -477,14 +583,60 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	return model
 end
 
+--[[
+	Rounds a block's four vertical edges (Roblox has no bevels): the block
+	keeps its name, color and material but loses 2r of depth, a twin block
+	(Name .. "Fill") 2r narrower fills the full depth, and four upright
+	cylinders (Name .. "Edge1..4") of diameter 2r round the corners. The
+	outer bounds stay the same; 5 parts more (GolemBuilder.RoundParts).
+]]
+function GolemBuilder.round(p: Part, radius: number)
+	if p.Shape ~= Enum.PartType.Block or p:FindFirstChildOfClass("SpecialMesh") then
+		return
+	end
+	local size = p.Size
+	local r = math.min(radius, size.X * 0.25, size.Z * 0.25)
+	if r <= 0.01 then
+		return
+	end
+	local cf = p.CFrame
+	p.Size = Vector3.new(size.X, size.Y, size.Z - 2 * r)
+	local fill = part(p.Parent :: Instance, p.Name .. "Fill", cf, Vector3.new(size.X - 2 * r, size.Y, size.Z), p.Color, p.Material)
+	fill.Transparency = p.Transparency
+	local i = 0
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			i += 1
+			local corner = cf * CFrame.new(sx * (size.X / 2 - r), 0, sz * (size.Z / 2 - r))
+			local edge = upright(p.Parent :: Instance, p.Name .. "Edge" .. i, corner, size.Y, 2 * r, p.Color, p.Material)
+			edge.Transparency = p.Transparency
+		end
+	end
+end
+
 -- Is `kind` a Premium golem (Legendary or rarer: it hovers on an aura)?
 function GolemBuilder.premium(kind: string): boolean
-	local golem = GolemConfig.ById[kind]
+	local golem = GolemConfig.ById[kind] or LimitedUpcoming.ById[kind]
 	if not golem then
 		return false
 	end
 	local info = Rarity.ById[GolemBuilder.PremiumFrom]
-	return info ~= nil and GolemConfig.order(kind) >= info.Order
+	local own = Rarity.ById[golem.Rarity]
+	return info ~= nil and own ~= nil and own.Order >= info.Order
+end
+
+-- The highest point of a model's parts over `ground` (studs, along its up).
+function GolemBuilder.topOver(model: Instance, ground: CFrame): number
+	local top = 0
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local rel = ground:ToObjectSpace(d.CFrame)
+			local h = d.Size / 2
+			local up = math.abs(rel.RightVector.Y) * h.X + math.abs(rel.UpVector.Y) * h.Y + math.abs(rel.LookVector.Y) * h.Z
+			top = math.max(top, rel.Position.Y + up)
+		end
+	end
+	return top
 end
 
 -- Parts in a golem model (the budget the tests check).
@@ -501,8 +653,63 @@ end
 ---------------------------------------------------------------- capsules
 
 -- The capsule for the opening animation (see the header).
-function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
+local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((GolemGearLimited.Shard) -> ())?, calm: boolean?): Model
+	local center = base or CFrame.new()
+	local tint = color or STONE
+	local model = Instance.new("Model")
+	model.Name = "Capsule"
+	local top = Instance.new("Model")
+	top.Name = "Top"
+	top.Parent = model
+	local bottom = Instance.new("Model")
+	bottom.Name = "Bottom"
+	bottom.Parent = model
+	local function pivot(parent: Instance, name: string): Part
+		local p = part(parent, name, center, Vector3.new(0.2, 0.2, 0.2), tint)
+		p.Transparency = 1
+		return p
+	end
+	model.PrimaryPart = pivot(model, "Root")
+	top.PrimaryPart = pivot(top, "TopRoot")
+	bottom.PrimaryPart = pivot(bottom, "BottomRoot")
+	if build then
+		build({
+			Top = top,
+			Bottom = bottom,
+			Center = center,
+			Color = tint,
+			Glow = glow or rgb(255, 170, 80),
+			Calm = calm,
+			Room = function(): number
+				return GolemBuilder.ShardMaxParts - GolemBuilder.partCount(model)
+			end,
+		})
+	end
+	for i = 1, 3 do
+		local crack = bottom:FindFirstChild("Crack" .. i)
+		if crack and crack:IsA("BasePart") then
+			crack.Transparency = 1
+		end
+	end
+	return model
+end
+
+-- opts.Calm: an egg standing in the world (the egg stall: fewer glowing parts)
+function GolemBuilder.capsule(capsuleId: string, base: CFrame?, opts: { Calm: boolean? }?): Model
 	local capsule = CapsuleConfig.ById[capsuleId]
+	if capsule and capsule.Limited and GolemGearLimited.shard(capsule.Limited, KIT) then
+		local model = GolemBuilder.shard(capsule.Limited, base, capsule.Color, capsule.Glow)
+		model:SetAttribute("Capsule", capsuleId)
+		return model
+	end
+	-- the regular capsules are EGGS now (owner 2026-10-21: "an egg instead of capsules")
+	local egg = EGGS[capsuleId]
+	if capsule and egg then
+		local model = eggFrame(base, capsule.Color, capsule.Glow, egg, opts ~= nil and opts.Calm == true)
+		model:SetAttribute("Capsule", capsuleId)
+		model:SetAttribute("Egg", capsuleId)
+		return model
+	end
 	local color = if capsule then capsule.Color else STONE
 	local glow = if capsule then capsule.Glow else rgb(255, 170, 80)
 	local center = base or CFrame.new()
@@ -524,7 +731,7 @@ function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
 		return p
 	end
 	local root = pivot(model, "Root")
-	local shell = lighter(color, 0.55)
+	local shell = if capsule and capsule.Shell then capsule.Shell else lighter(color, 0.55)
 	upright(top, "Shell", center * CFrame.new(0, mid / 2, 0), mid, 2 * r, shell)
 	part(top, "Dome", center * CFrame.new(0, mid, 0), Vector3.new(2 * r, 2 * r, 2 * r), shell, nil, Enum.PartType.Ball)
 	-- a small window on the front of the top shell
@@ -549,6 +756,18 @@ function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
 	bottom.PrimaryPart = pivot(bottom, "BottomRoot")
 	model.PrimaryPart = root
 	model:SetAttribute("Capsule", capsuleId)
+	return model
+end
+
+-- A limited edition's SHARD (its set's egg-shaped capsule: GolemGearLimited)
+-- with the capsule's contract: sub-models "Top" and "Bottom" with upright
+-- invisible pivots "TopRoot" / "BottomRoot" and the model's "Root" at the
+-- center, a Neon "Band" and hidden "Crack1..3" in Bottom; at most
+-- ShardMaxParts. base = the shard's center, its front faces -Z. A set
+-- without a shard (or an unknown one) builds a plain egg-less pill frame.
+function GolemBuilder.shard(setId: string, base: CFrame?, color: Color3?, glow: Color3?): Model
+	local model = eggFrame(base, color, glow, GolemGearLimited.shard(setId, KIT))
+	model:SetAttribute("Shard", setId)
 	return model
 end
 

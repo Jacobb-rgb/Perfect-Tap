@@ -58,7 +58,8 @@ return function(T, Loader)
 		T.eq(layout.Left, SideMenuView.Left)
 		T.truthy(layout.Top >= SideMenuView.TopMin, "below the train chip and the boost chips")
 		T.le(layout.Top + SideMenuView.Drop + layout.Size.Y, 720 - 36 - SideMenuView.BottomMargin)
-		T.eq(layout.Columns, 2, "a 720p window: two columns under the chips")
+		-- (eleven buttons since QUESTS: the dark fallback column may take a third column)
+		T.truthy(layout.Columns >= 2 and layout.Columns <= 3, "a 720p window: two or three columns under the chips")
 		-- a 1080p screen (HUD scale 1.25): one column
 		local hd = SideMenuView.layout(1.25, (1080 - 36) / 1.25, { Count = 6 })
 		T.eq(hd.Columns, 1)
@@ -99,11 +100,11 @@ return function(T, Loader)
 		local refs = SideMenuView.build()
 		-- the open grid (MENU + the buttons) is the biggest the menu gets
 		SideMenuView.setExpanded(refs, true)
-		for _, count in { 10, 9, 7 } do
+		for _, count in { 11, 10, 8 } do
 			for i, id in refs.Order do
-				-- 10: every button; 9: STORE hidden (step 8 isn't in the game: today's menu);
-				-- 7: GOLEMS and ARTIFACTS hidden too (their packages not in the game)
-				local hide = (count <= 9 and id == "Store") or (count <= 7 and (id == "Golems" or id == "Collection"))
+				-- 11: every button; 10: STORE hidden (step 8 isn't in the game: today's menu);
+				-- 8: GOLEMS and ARTIFACTS hidden too (their packages not in the game)
+				local hide = (count <= 10 and id == "Store") or (count <= 8 and (id == "Golems" or id == "Collection"))
 				SideMenuView.setHidden(refs, id, hide)
 				T.eq(refs.Buttons[id].Parent.Visible, not refs.Hidden[id], `{id} visibility ({i})`)
 			end
@@ -114,7 +115,9 @@ return function(T, Loader)
 				-- every button at once (STORE too) on the smallest phone: ten buttons and MENU fit
 				-- no grid at 44 pt there. STORE is hidden until step 8 (today's menu: nine), so
 				-- that phone gets the nine; when STORE lands, it needs a decision (docs/QA_REPORTS.md)
-				if count == 10 and w <= 568 then
+				-- (QUESTS made it eleven: the dark fallback grid fits them all from 667 pt on;
+				-- the shipping light UI puts QUESTS in its MORE flyout)
+				if (count == 11 and w <= 640) or (count == 10 and w <= 568) then
 					continue
 				end
 				local designW, designH = w / scale, (h - 58) / scale
@@ -148,7 +151,7 @@ return function(T, Loader)
 	T.test("side menu: on touch screens one MENU button opens and shuts the grid", function()
 		local refs = SideMenuView.build()
 		-- five buttons: SHOP, CODEX, BOARDS, SETTINGS, STORE
-		for _, id in { "Golems", "Collection", "Elevator", "Hoverboards", "Rebirth" } do
+		for _, id in { "Golems", "Collection", "Elevator", "Hoverboards", "Rebirth", "Quests" } do
 			SideMenuView.setHidden(refs, id, true)
 		end
 		local designW, designH = 667 / PHONE, (375 - 58) / PHONE
@@ -344,8 +347,8 @@ return function(T, Loader)
 		T.truthy(elevator and hover, "both entries")
 		T.truthy(elevator.Group == "Main" and elevator.Order == 3 and elevator.Label == "ELEVATOR", "ELEVATOR: Main 3")
 		T.truthy(hover.Group == "More" and hover.Order == 6 and hover.Label == "HOVER", "HOVER: More 6 (BOARDS is the leaderboards)")
-		T.eq(SideMenuView.Icons.Elevator, "🛗")
-		T.eq(SideMenuView.Icons.Hoverboards, "🛹")
+		T.eq(elevator.IconName, "Elevator")
+		T.eq(hover.IconName, "Hoverboards")
 		-- the controllers need a LocalPlayer, so their sources are read as text
 		local fs = require("@lune/fs")
 		local menu = fs.readFile("src/client/Controllers/SideMenuController.luau")
@@ -411,6 +414,7 @@ return function(T, Loader)
 	end)
 
 	T.test("side menu: entries are data (Group, Order, IconName) shown by Group then Order", function()
+		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 		local ids: { [string]: boolean } = {}
 		local places: { [string]: boolean } = {}
 		local mains: { string } = {}
@@ -422,31 +426,36 @@ return function(T, Loader)
 			local place = `{entry.Group}:{entry.Order}`
 			T.falsy(places[place], place .. " is one entry's")
 			places[place] = true
-			T.truthy(SideMenuView.Icons[entry.IconName], entry.Id .. " has an icon through SideMenuView.Icons")
-			T.eq(SideMenuView.icon(entry.IconName), SideMenuView.Icons[entry.IconName])
+			T.truthy(HudBubble.EntryLooks[entry.IconName], entry.Id .. " has a light-HUD icon through HudBubble.EntryLooks")
 			if entry.Group == "Main" then
 				table.insert(mains, entry.Id)
 			end
 		end
-		T.eq(SideMenuView.icon("NoSuchIcon"), "")
 		table.sort(mains)
 		T.eq(table.concat(mains, ","), "Elevator,Golems,Shop", "GOLEMS, ELEVATOR and SHOP are the main tiles")
 		local order = {}
 		for _, entry in SideMenuView.sorted() do
 			table.insert(order, entry.Id)
 		end
-		T.eq(table.concat(order, ","), "Golems,Elevator,Shop,Codex,Collection,Boards,Settings,Store,Hoverboards,Rebirth")
+		T.eq(table.concat(order, ","), "Golems,Elevator,Shop,Quests,Codex,Collection,Boards,Settings,Store,Hoverboards,Rebirth")
 		local refs = SideMenuView.build()
 		T.eq(table.concat(refs.Order, ","), table.concat(order, ","), "the buttons follow the sorted entries")
 		T.eq(refs.Buttons.Golems:GetAttribute("MenuGroup"), "Main")
 		T.eq(refs.Buttons.Codex:GetAttribute("MenuGroup"), "More")
-		T.eq((refs.Buttons.Shop:FindFirstChild("Icon") :: any).Text, SideMenuView.Icons.Shop)
+		-- words only (no emoji icon): the name sits in the middle of the button
+		T.falsy(refs.Buttons.Shop:FindFirstChild("Icon"), "no emoji icon")
+		local label = refs.Buttons.Shop:FindFirstChild("Label") :: any
+		T.eq(label.Text, "SHOP")
+		T.truthy(label.AnchorPoint.X == 0.5 and label.AnchorPoint.Y == 0.5, "centred")
+		T.truthy(label.Position.X.Scale == 0.5 and label.Position.Y.Scale == 0.5, "in the middle")
 	end)
 
 	T.test("side menu: the view places every button, badges, SOON chips and hidden buttons", function()
 		local refs = SideMenuView.build()
-		T.eq(#refs.Order, 10)
-		for _, id in { "Shop", "Golems", "Elevator", "Codex", "Collection", "Boards", "Settings", "Store", "Hoverboards", "Rebirth" } do
+		T.eq(#refs.Order, 11)
+		for _, id in
+			{ "Shop", "Golems", "Elevator", "Quests", "Codex", "Collection", "Boards", "Settings", "Store", "Hoverboards", "Rebirth" }
+		do
 			T.truthy(refs.Buttons[id], id)
 		end
 		-- under the HUD: its popups and toasts show on top
@@ -454,7 +463,7 @@ return function(T, Loader)
 		local layout = SideMenuView.layout(PHONE, (375 - 58) / PHONE)
 		refs.Expanded = true
 		SideMenuView.apply(refs, layout)
-		T.eq(#SideMenuView.touchTargets(refs), 11, "MENU and 10 buttons")
+		T.eq(#SideMenuView.touchTargets(refs), 12, "MENU and 11 buttons")
 		checkTouch(SideMenuView.touchTargets(refs), PHONE, "menu")
 		-- no two buttons overlap
 		local boxes = {}
@@ -493,7 +502,7 @@ return function(T, Loader)
 		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Codex), codexCell - 1, "CODEX moved up a cell")
 		T.falsy(refs.Buttons.Golems.Parent.Visible)
 		SideMenuView.setHidden(refs, "Golems", false)
-		T.eq(#SideMenuView.shown(refs), 10)
+		T.eq(#SideMenuView.shown(refs), 11)
 		SideMenuView.setHidden(refs, "Nope", true) -- unknown ids are ignored
 	end)
 
@@ -867,20 +876,20 @@ return function(T, Loader)
 		T.falsy(SettingsView.setShown(refs, "Nope", false))
 		T.falsy(refs.Volumes.Music.Frame.Visible)
 		T.falsy(refs.Toggles.Rumble.Frame.Visible)
-		T.eq(#SettingsView.shown(refs), 2)
+		T.eq(#SettingsView.shown(refs), 3, "Sounds, Camera shake, Reduce motion")
 		SettingsView.layout(refs, false, 1280, 684)
 		T.lt(refs.Frame.Panel.Size.Y.Offset, full, "shorter")
 		for _, target in SettingsView.touchTargets(refs) do
 			T.truthy(target ~= MenuPanel.holderOf(refs.Volumes.Music.Minus), "a hidden row isn't a target")
 		end
-		T.eq(#SettingsView.touchTargets(refs), 1 + 3 + 1, "close, Sounds (-, +, bar), Camera shake")
+		T.eq(#SettingsView.touchTargets(refs), 1 + 3 + 2, "close, Sounds (-, +, bar), Camera shake, Reduce motion")
 		T.eq(SettingsView.firstButton(refs), refs.Volumes.Sfx.Minus)
 		-- Sounds hidden too (never in the game): the first row that shows
 		SettingsView.setShown(refs, "Sfx", false)
 		T.eq(SettingsView.firstButton(refs), refs.Toggles.Shake.Button)
 		SettingsView.setShown(refs, "Sfx", true)
 		SettingsView.setShown(refs, "Music", true)
-		T.eq(#SettingsView.shown(refs), 3)
+		T.eq(#SettingsView.shown(refs), 4)
 		-- the phone layout with two rows still fits and keeps 44 pt
 		SettingsView.setShown(refs, "Music", false)
 		SettingsView.layout(refs, true, 667 / PHONE, (375 - 58) / PHONE)

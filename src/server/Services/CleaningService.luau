@@ -33,6 +33,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Net = require(Shared.Net)
 local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
 local SprayScoring = require(Shared.Cleaning.SprayScoring)
@@ -231,23 +232,26 @@ local function makePrompt(
 	machine: MachineService.PlacedMachine,
 	name: string,
 	actionText: string,
+	role: PromptConfig.Role,
 	hold: number,
-	order: number
+	slot: number,
+	exclusivity: Enum.ProximityPromptExclusivity?,
+	enabled: boolean?
 ): ProximityPrompt
 	local base = machine.Model.PrimaryPart :: BasePart
 	local attachment = base:FindFirstChild("Prompt") :: Attachment
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = name
-	prompt.ActionText = actionText
-	prompt.ObjectText = "Cleaning Station"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = hold
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, order * 72)
-	prompt.Parent = attachment
-	return prompt
+	return PromptConfig.make({
+		Role = role,
+		Name = name,
+		ActionText = actionText,
+		ObjectText = "Cleaning Station",
+		Hold = hold,
+		Distance = 10,
+		Slot = slot,
+		Exclusivity = exclusivity,
+		Enabled = enabled,
+		Parent = attachment,
+	})
 end
 
 local function onSubmit(player: Player, sessionId: any, payload: any)
@@ -447,17 +451,13 @@ end
 local stationBehaviour: MachineService.Behaviour = {
 	spawned = function(machine)
 		stations[machine] = true
-		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
-		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
-		-- keys G / gamepad B (F and Y stay "Clean Ore"), always shown next to "Clean Ore".
-		-- G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics (Sorter)
-		-- prompts use them too, on their own machines / anchors (8-10 studs reach, default
-		-- OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the station)
-		-- a G press in reach of one of those too fires both.
-		take.KeyboardKeyCode = Enum.KeyCode.G
-		take.GamepadKeyCode = Enum.KeyCode.ButtonB
-		take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
-		take.Enabled = false
+		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
+		-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
+		-- "Clean Ore". G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics
+		-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
+		-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
+		-- station) a G press in reach of one of those too fires both.
+		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", "Second", 0.4, 1, Enum.ProximityPromptExclusivity.AlwaysShow, false)
 		machine.State.MainPrompt = main
 		machine.State.TakePrompt = take
 		main.Triggered:Connect(function(player)

@@ -26,7 +26,7 @@
 	  LastSeen = now, and DataService.changed runs once (only when paid).
 	- Offline: on load, EconomyConfig.offlineEarnings(income, now - LastSeen,
 	  OfflineExtension perk) is paid after OfflineDelay, once the passes
-	  giving the OfflinePerks (Night Shift's 12 h, the Podiums pass's slots)
+	  giving the OfflinePerks (Night Shift's 12 h, the Podiums pass's slots, 2x Money)
 	  answered (MonetizationService.perkAtJoin), else when the load's first
 	  check round is done or at most PassWait seconds more. Paid while such
 	  a check kept failing: a later check that says the player owned the
@@ -53,6 +53,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -103,7 +104,7 @@ local perkConnections: { [Player]: RBXScriptConnection } = {}
 local waitingPasses: { [Player]: boolean } = {}
 -- an offline payout made while a pass check for an offline perk kept failing
 -- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
-type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean }
+type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean, Money: boolean }
 local topUps: { [Player]: TopUp } = {}
 -- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
 -- (nil while its check hasn't answered)
@@ -633,15 +634,12 @@ local function setupPrompts(plotId: number)
 		if top then
 			local anchor = top:FindFirstChild("Prompt") or top
 			for _, info in PROMPTS do
-				local prompt = Instance.new("ProximityPrompt")
-				prompt.Name = info.Name
-				prompt.ActionText = info.Text
-				prompt.ObjectText = "Podium " .. slot
-				prompt.KeyboardKeyCode = Enum.KeyCode.F
-				prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-				prompt.HoldDuration = 0
-				prompt.MaxActivationDistance = 9
-				prompt.RequiresLineOfSight = false
+				local prompt = PromptConfig.make({
+					Name = info.Name,
+					ActionText = info.Text,
+					ObjectText = "Podium " .. slot,
+					Distance = 9,
+				})
 				prompt:SetAttribute("PlotId", plotId)
 				prompt:SetAttribute("Slot", slot)
 				prompt:SetAttribute("Action", info.Action)
@@ -738,6 +736,7 @@ local function payOffline(player: Player, popup: boolean): number
 			IncomeAll = incomeAllSlots(player, data),
 			Extended = extended,
 			Podiums = Perks.has(player, "Podiums"),
+			Money = Perks.has(player, MonetizationConfig.MoneyPassPerk),
 		}
 	end
 	if amount < 0.001 then
@@ -781,11 +780,18 @@ local function topUpOffline(player: Player): number
 	end
 	local extended = record.Extended or perkAtJoin(player, "OfflineExtension") == true
 	local podiums = record.Podiums or perkAtJoin(player, "Podiums") == true
-	if extended == record.Extended and podiums == record.Podiums then
+	local money = record.Money or perkAtJoin(player, MonetizationConfig.MoneyPassPerk) == true
+	if extended == record.Extended and podiums == record.Podiums and money == record.Money then
 		return 0
 	end
 	record.Extended = extended
 	record.Podiums = podiums
+	if money and not record.Money then
+		-- the 2x Money pass answered late: the incomes recorded at the payout lacked it
+		record.Income *= MonetizationConfig.MoneyPassMult
+		record.IncomeAll *= MonetizationConfig.MoneyPassMult
+	end
+	record.Money = money
 	local income = if podiums then record.IncomeAll else record.Income
 	local full = EconomyConfig.offlineEarnings(income, record.Seconds, extended)
 	local extra = full - record.Paid

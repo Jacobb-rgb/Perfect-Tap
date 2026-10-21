@@ -1,0 +1,94 @@
+{
+ "mux_build_pc": {
+  "scene": "machine_ux_build",
+  "useSceneCamera": true,
+  "position": [
+   0,
+   0,
+   0
+  ],
+  "target": [
+   0,
+   0,
+   0
+  ],
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "ui": "ui_mux_build_pc",
+  "uiInset": 58
+ },
+ "mux_build_phone": {
+  "scene": "machine_ux_build",
+  "useSceneCamera": true,
+  "position": [
+   0,
+   0,
+   0
+  ],
+  "target": [
+   0,
+   0,
+   0
+  ],
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "width": 1688,
+  "height": 780,
+  "ui": "ui_mux_build_phone",
+  "uiInset": 116
+ },
+ "mux_power_pc": {
+  "scene": "machine_ux_power",
+  "useSceneCamera": true,
+  "position": [
+   0,
+   0,
+   0
+  ],
+  "target": [
+   0,
+   0,
+   0
+  ],
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "ui": "ui_mux_power_pc",
+  "uiInset": 58
+ },
+ "mux_yard_pc": {
+  "scene": "machine_ux_yard",
+  "useSceneCamera": true,
+  "position": [
+   0,
+   0,
+   0
+  ],
+  "target": [
+   0,
+   0,
+   0
+  ],
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "ui": "ui_mux_yard_pc",
+  "uiInset": 58
+ },
+ "mux_close_pc": {
+  "scene": "machine_ux_close",
+  "useSceneCamera": true,
+  "position": [
+   0,
+   0,
+   0
+  ],
+  "target": [
+   0,
+   0,
+   0
+  ],
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "ui": "ui_mux_close_pc",
+  "uiInset": 58
+ }
+}

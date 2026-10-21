@@ -3,21 +3,24 @@
 	menu panel in the MenuPanel frame. Pure builder + layout math, so the
 	Lune previews draw the same thing.
 
-	  tabs      REBIRTH | STAR SHOP | BLASTERS (with your unspent stars)
-	  REBIRTH   three columns, each a coloured chip over short rows:
+	  tabs      REBIRTH | STAR SHOP | BLASTERS (with your unspent stars: "12 STARS")
+	  REBIRTH   three columns, each a coloured chip over short rows (a dot
+	            in the column's colour before each):
 	            YOU LOSE (red), YOU KEEP (blue), YOU GET (green): the
 	            exact lists of RebirthConfig.reset (Head Start's level and
 	            Podium Keeper change the rows); under them what a rebirth
 	            needs and the big REBIRTH! button (grey until your blaster
 	            reaches MinBlaster; the first press turns it red "SURE?")
-	  STAR SHOP a card per perk: icon, name, what a level does, the level
-	            (2/10), and its BUY button with the star price (MAX at the top,
-	            grey without the stars)
+	  STAR SHOP a card per perk: name, what a level does, the level (2/10),
+	            and its BUY button with the star price ("BUY 2 STARS"; MAX at
+	            the top, grey without the stars)
 	  BLASTERS  a card per STAR blaster (StarBlasterData): its picture (in
 	            the game a live ViewportFrame of the gun, fillPicture; the
 	            preview draws the icon "star_<id>"), name, damage and the
-	            rebirth that opens it; buttons by weaponCard: ⭐ price + R$
-	            price (to buy), EQUIP / EQUIPPED, or a grey 🔒 REBIRTH n
+	            rebirth that opens it; buttons by weaponCard: the star price
+	            ("20 STARS") + R$ price (to buy), EQUIP / EQUIPPED, or a grey
+	            "LOCKED: REBIRTH n"
+	Words only, no emoji (the owner's "text only"; NoEmoji.spec).
 
 	setInfo(refs, info) fills both pages from the State's Rebirth field and
 	the blaster level. layout(refs, compact, maxWidth, maxHeight) sizes the
@@ -28,6 +31,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
+local UIConfig = require(Shared.Config.UIConfig)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local BlasterData = require(Shared.Config.BlasterData)
@@ -38,6 +44,7 @@ local Geo = require(Shared.Builders.Geo)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local Rng = require(Shared.Util.Rng)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local MenuPanel = require(script.Parent.MenuPanel)
 local TechShopView = require(script.Parent.TechShopView)
 
@@ -74,7 +81,6 @@ export type Column = { Frame: Frame, Chip: TextLabel, Rows: { TextLabel } }
 export type Card = {
 	Id: string,
 	Frame: Frame,
-	Icon: TextLabel,
 	Name: TextLabel,
 	Text: TextLabel,
 	Level: TextLabel,
@@ -140,6 +146,9 @@ RebirthView.TabIds = { "Rebirth", "Shop", "Blasters" }
 RebirthView.TitleRoom = 250
 -- the star count's room right of the tabs (design units)
 RebirthView.StarsRoom = 120
+-- a column row's bullet dot and the room it takes left of the row's text (design units)
+RebirthView.Dot = 8
+RebirthView.DotRoom = 18
 
 -- The rows of the three columns for a save (Head Start's level, Podium Keeper;
 -- `lifted` = the level the rebirth starts with when Robux levels lift it: RebirthConfig.startFor).
@@ -147,34 +156,39 @@ function RebirthView.lists(perks: any, lifted: number?): { [string]: { string } 
 	local start = lifted or RebirthConfig.startLevel(perks)
 	local open = EnchantConfig.unlockedSlots(start)
 	local enchantRow = if open < EnchantConfig.MaxSlots
-		then `✨  Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
-		else "✨  Enchant slots stay open"
+		then `Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
+		else "Enchant slots stay open"
 	local keepsPodiums = RebirthConfig.levelOf(perks, "PodiumKeeper") > 0
 	return {
 		Lose = {
-			"💰  Earned coins",
-			`🔫  Blaster back to LV {start}`,
-			"⛏️  Floors and elevator",
-			"⚙️  Machine speed",
-			"🚂  Train and backpack levels",
+			"Earned coins",
+			`Blaster back to LV {start}`,
+			"Floors and elevator",
+			"Machine speed",
+			"Train and backpack levels",
 			enchantRow,
-			if keepsPodiums then "🪨  Ore (podiums stay)" else "🪨  All your ore",
+			if keepsPodiums then "Ore (podiums stay)" else "All your ore",
 		},
 		Keep = {
-			"🏭  Your whole factory",
-			"🤖  Golems and enchants",
-			"🏺  Artifacts and codex",
-			"🛹  Boards, gear, star blasters",
-			"💎  Shards, Robux items",
-			"💰  Coins bought with Robux",
-			"🏆  Stats and records",
+			"Your whole factory",
+			"Golems and enchants",
+			"Artifacts and codex",
+			"Boards, gear, star blasters",
+			"Shards, Robux items",
+			"Coins bought with Robux",
+			"Stats and records",
 		},
 		Get = {
-			"⭐  Forge Stars",
-			"🔁  A new rebirth",
-			"🛒  Star Shop perks",
+			"Forge Stars",
+			"A new rebirth",
+			"Star Shop perks",
 		},
 	}
+end
+
+-- A star amount on the buttons, by the tabs and over the heads ("1 STAR", "12 STARS").
+function RebirthView.starsLabel(count: number): string
+	return string.upper(RebirthConfig.starsText(count))
 end
 
 -- What the bottom line says (the requirement, or what a rebirth pays now).
@@ -185,7 +199,7 @@ function RebirthView.needText(info: Info): string
 		return "Nothing left to forge: a rebirth now pays no stars"
 	end
 	if info.Ready then
-		return `Blaster LV {reached}: a rebirth now pays ⭐ {info.StarsNow}`
+		return `Blaster LV {reached}: a rebirth now pays {RebirthConfig.starsText(info.StarsNow)}`
 	end
 	if info.Level >= RebirthConfig.MinBlaster then
 		return RebirthView.forgeText(info.Level)
@@ -208,19 +222,19 @@ function RebirthView.cardText(perks: any, stars: number, id: string, start: numb
 	if not cost or (id == "HeadStart" and start and start >= BlasterData.MaxLevel - 1) then
 		return `{level}/{top}`, "MAX", false
 	end
-	return `{level}/{top}`, `⭐ {cost}  BUY`, stars >= cost
+	return `{level}/{top}`, `BUY {RebirthView.starsLabel(cost)}`, stars >= cost
 end
 
 -- A STAR blaster card's texts and buttons for the save (Info).
 function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): WeaponState
 	local data = { Rebirths = info.Count, Stars = info.Stars, RebirthWeapons = info.Weapons or {}, StarBlaster = info.Weapon or "" }
 	local state = StarBlasterData.cardState(data, star.Id)
-	local power = `⚡ x{star.Mult} damage`
+	local power = `Damage x{star.Mult}`
 	if state == "Locked" then
 		return {
 			State = state,
 			Line = power,
-			Main = `🔒 REBIRTH {star.Unlock}`,
+			Main = `LOCKED: REBIRTH {star.Unlock}`,
 			Style = "Off",
 			RobuxOn = false,
 		}
@@ -228,12 +242,12 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 		return {
 			State = state,
 			Line = `Yours! It opens at rebirth {star.Unlock}`,
-			Main = `🔒 REBIRTH {star.Unlock}`,
+			Main = `LOCKED: REBIRTH {star.Unlock}`,
 			Style = "Off",
 			RobuxOn = false,
 		}
 	elseif state == "Equipped" then
-		return { State = state, Line = `{power} · equipped`, Main = "EQUIPPED ✓", Style = "Equipped", RobuxOn = false }
+		return { State = state, Line = `{power} · equipped`, Main = "EQUIPPED", Style = "Equipped", RobuxOn = false }
 	elseif state == "Owned" then
 		return { State = state, Line = `{power} · yours`, Main = "EQUIP", Style = "Equip", RobuxOn = false }
 	end
@@ -242,7 +256,7 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 	return {
 		State = state,
 		Line = power,
-		Main = `⭐ {star.Stars}`,
+		Main = RebirthView.starsLabel(star.Stars),
 		Style = if info.Stars >= star.Stars then "Buy" else "Off",
 		Robux = `R$ {star.Robux}`,
 		RobuxOn = live and info.RobuxOn == true,
@@ -277,7 +291,6 @@ local function newCard(parent: Instance, perk: RebirthConfig.Perk, order: number
 	}, parent)
 	UIKit.corner(frame, 12)
 	UIKit.stroke(frame, 2, RebirthView.Colors.RebirthDark)
-	local icon = UIKit.label(frame, perk.Icon, 34, { Name = "Icon", TextWrapped = false })
 	local name = UIKit.label(frame, perk.Name, 20, {
 		Name = "PerkName",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -293,7 +306,7 @@ local function newCard(parent: Instance, perk: RebirthConfig.Perk, order: number
 	local level = UIKit.label(frame, "0/0", 16, { Name = "Level", TextColor3 = RebirthView.Colors.Star, TextWrapped = false })
 	local buy = chunky(frame, "BUY", Theme.Good, Theme.GoodDark, "Buy")
 	local pick = if perk.Id == "PlotGlow" then chunky(frame, "OFF", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "Pick") else nil
-	return { Id = perk.Id, Frame = frame, Icon = icon, Name = name, Text = text, Level = level, Buy = buy, Pick = pick }
+	return { Id = perk.Id, Frame = frame, Name = name, Text = text, Level = level, Buy = buy, Pick = pick }
 end
 
 local function newWeaponCard(parent: Instance, star: StarBlasterData.StarBlaster): WeaponCard
@@ -397,14 +410,442 @@ function RebirthView.fillPicture(card: WeaponCard)
 	view.CurrentCamera = camera
 end
 
+---------------------------------------------------------------- the Pop look (UIConfig.LightUI)
+--[[
+	While the light UI is on (it ships on) the window wears the bright Pop
+	look of the Robux Shop (UI/Pop; owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"): an indigo header band (the
+	window's colour) with shine stripes and studs over a dark studded body
+	(MenuPanel's Pop frame without the LightSkin, the same refs), the
+	tabs as Pop tabs, YOU LOSE / KEEP / GET as painted red / blue / green
+	cards, the star shop's and the blasters' cards bright and painted (the
+	live gun in a light burst), the green Robux buttons with the robux
+	mark, and a big glowing gold REBIRTH! (grey until ready, red SURE?).
+	The buttons keep their state colour in BackgroundColor3 (MenuPanel.style,
+	unseen on a Pop button): popRestyle paints the faces from it.
+]]
+
+RebirthView.PopPaint = { Top = rgb(176, 160, 255), Bottom = rgb(84, 70, 226), Edge = PopTheme.Outline } :: Pop.Paint
+RebirthView.PopColumns = { Lose = "Red", Keep = "Blue", Get = "Green" } :: { [string]: string }
+RebirthView.PopCards = { "Blue", "Purple", "Teal", "Pink", "Orange", "Green" } -- the star shop's cards in turn
+
+local GLOW_GOLD = rgb(255, 214, 70)
+
+-- The black edge of a text (its Contextual UIStroke, made when missing).
+local function popEdge(label: GuiObject)
+	local t: any = label
+	local edge: UIStroke? = nil
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			edge = child
+		end
+	end
+	local made = edge or Pop.edge(label)
+	made.Color = PopTheme.Outline
+	made.Transparency = 0
+	made.LineJoinMode = Enum.LineJoinMode.Round
+	made.Thickness = Pop.edgeFor(if t.TextScaled then 24 else t.TextSize)
+end
+
+-- White chunky words with a black edge.
+local function popText(label: GuiObject, font: Font?)
+	local t: any = label
+	t.FontFace = font or PopTheme.Font
+	t.TextColor3 = PopTheme.Ink
+	popEdge(label)
+end
+
+-- A lip button (UIKit.button) as a Pop button: the holder painted, the button see-through on it.
+local function popButton(button: TextButton, paint: string | Pop.Paint, role: string?)
+	local holder = MenuPanel.holderOf(button)
+	for _, child in holder:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		end
+	end
+	local corner = holder:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, 10)
+	end
+	Pop.face(holder, paint, 10)
+	local rim = holder:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 1
+	end
+	Pop.studs(holder, 10, 0.45, 28, 1)
+	holder:SetAttribute("Pop", true)
+	if role then
+		holder:SetAttribute("PopRole", role)
+	end
+	local gradient = button:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient:Destroy()
+	end
+	button.BackgroundTransparency = 1
+	button.Position = UDim2.new()
+	button.Size = UDim2.fromScale(1, 1)
+	button.ZIndex = 3
+	popText(button)
+end
+
+-- A painted card face on an old frame (paint, studs, light rim, sparkles); its
+-- own children move above the decoration (ZIndex 5+).
+local function popCard(frame: Frame, paint: string | Pop.Paint)
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		elseif child:IsA("GuiObject") then
+			child.ZIndex = math.max(child.ZIndex, 5)
+		end
+	end
+	local round = frame:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, 12)
+	end
+	Pop.face(frame, paint, 12, false)
+	frame.ClipsDescendants = true
+	Pop.studs(frame, 12, 0.5, 44, 2)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	for i, spot in { { 0.92, 0.18, 16 }, { 0.84, 0.82, 12 }, { 0.5, 0.1, 12 } } do
+		Pop.sparkle(frame, UDim2.fromScale(spot[1], spot[2]), spot[3], 3, 0.2 + i * 0.1)
+	end
+end
+
+-- A chip (UIKit.chip) as a Pop chip: a dark well, a black edge, white words.
+local function popChip(chip: TextLabel)
+	chip.BackgroundColor3 = PopTheme.Well
+	for _, child in chip:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child.Color = PopTheme.Outline
+			child.Thickness = 2.5
+		end
+	end
+	popText(chip)
+end
+
+-- The face of a button from its state colour (BackgroundColor3, set by MenuPanel.style).
+local function popPaintOf(button: TextButton): string | Pop.Paint
+	local c = button.BackgroundColor3
+	local role = MenuPanel.holderOf(button):GetAttribute("PopRole")
+	if c == RebirthView.Colors.Off then
+		return if role == "Tab" then "Slate" else PopTheme.Gray
+	elseif c == RebirthView.Colors.Rebirth then
+		return if role == "Rebirth" then "Yellow" else RebirthView.PopPaint
+	elseif c == Theme.Good then
+		return if role == "Weapon" then "Yellow" else "Green" -- (a star blaster's star price in gold)
+	elseif c == Theme.Bad then
+		return "Red"
+	elseif c == RebirthView.Colors.Star then
+		return if role == "Weapon" then "Green" else "Yellow" -- (EQUIPPED / MAX)
+	elseif c == RebirthView.Colors.Equip then
+		return "Blue"
+	elseif c == RebirthView.Colors.Robux then
+		return PopTheme.Price
+	end
+	-- (Plot Glow's colours)
+	return { Top = c:Lerp(Color3.new(1, 1, 1), 0.3), Bottom = c:Lerp(Color3.new(0, 0, 0), 0.25), Edge = PopTheme.Outline }
+end
+
+-- The robux mark and the price on a star blaster's R$ button ("R$ 125"), like Pop.price.
+local function syncRobux(button: TextButton)
+	local amount = string.match(button.Text, "^R%$ (%d+)$")
+	local face = button:FindFirstChild("PopFace") :: Frame?
+	button.TextTransparency = if amount then 1 else 0
+	local edge = button:FindFirstChildOfClass("UIStroke")
+	if edge then
+		edge.Transparency = if amount then 1 else 0
+	end
+	if not amount then
+		if face then
+			face.Visible = false
+		end
+		return
+	end
+	local holder = MenuPanel.holderOf(button)
+	local w, h = holder.Size.X.Offset, holder.Size.Y.Offset
+	local key = `{amount}|{w}|{h}`
+	if face and face:GetAttribute("Key") == key then
+		face.Visible = true
+		return
+	end
+	if face then
+		face:Destroy()
+	end
+	local size = math.clamp(math.floor(math.min(h * 0.55, (w - 16 - h * 0.55) / (#amount * 0.6))), 12, 40)
+	local row = UIKit.new("Frame", {
+		Name = "PopFace",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 4,
+	}, button)
+	row:SetAttribute("Key", key)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 4, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local mark = UIKit.new("ImageLabel", {
+		Name = "Mark",
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(size + 2, size + 2),
+		ZIndex = 5,
+	}, row)
+	IconAssets.apply(mark, "robux")
+	mark:SetAttribute("Icon", "robux")
+	Pop.text(row, amount, size, {
+		Name = "Amount",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(Pop.textWidth(amount, size), size + 6),
+		ZIndex = 6,
+	})
+end
+
+local function isPop(refs: Refs): boolean
+	return refs.Gui:GetAttribute("PopSkin") == true
+end
+
+-- The pages in the Pop look (after the dark build made them).
+local function popSkin(refs: Refs)
+	for _, id in RebirthView.TabIds do
+		popButton(refs.Tabs[id], "Slate", "Tab")
+	end
+	popEdge(refs.Stars)
+	refs.Stars.FontFace = PopTheme.Heavy
+	-- YOU LOSE / KEEP / GET: painted red / blue / green cards, white dots
+	for id, column in refs.Columns do
+		column.Frame.ZIndex = 2
+		popCard(column.Frame, RebirthView.PopColumns[id] or "Slate")
+		popChip(column.Chip)
+		for _, row in column.Rows do
+			popText(row)
+			local dot = row:FindFirstChild("Dot") :: Frame?
+			if dot then
+				dot.BackgroundColor3 = Color3.new(1, 1, 1)
+				UIKit.stroke(dot, 1.5, PopTheme.Outline)
+			end
+		end
+	end
+	-- the requirement line and the big glowing REBIRTH! over the YOU GET card
+	for _, label in { refs.Need, refs.Message } do
+		label.ZIndex = 6
+		popText(label)
+	end
+	local rebirthHolder = MenuPanel.holderOf(refs.Rebirth)
+	rebirthHolder.ZIndex = 7
+	local glow = UIKit.new("Frame", {
+		Name = "PopGlow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = GLOW_GOLD,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 6,
+	}, refs.Pages.Rebirth)
+	UIKit.corner(glow, 18)
+	UIKit.stroke(glow, 6, rgb(255, 244, 170), 0.25)
+	popButton(refs.Rebirth, PopTheme.Gray, "Rebirth")
+	refs.Rebirth.FontFace = PopTheme.Heavy
+	local forgeStar = UIKit.new("ImageLabel", {
+		Name = "PopStar",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Visible = false,
+		ZIndex = 6,
+	}, refs.Pages.Rebirth)
+	IconAssets.apply(forgeStar, "star_token")
+	forgeStar:SetAttribute("Icon", "star_token")
+	-- the star shop's cards
+	for i, card in refs.Cards do
+		popCard(card.Frame, RebirthView.PopCards[(i - 1) % #RebirthView.PopCards + 1])
+		popText(card.Name)
+		popText(card.Text)
+		popEdge(card.Level)
+		card.Level.FontFace = PopTheme.Heavy
+		popButton(card.Buy, PopTheme.Gray)
+		local pick = card.Pick
+		if pick then
+			popButton(pick, PopTheme.Gray)
+		end
+	end
+	-- the blasters' cards: the live gun in a light burst on its glow colour
+	for _, card in refs.Weapons do
+		local star = StarBlasterData.get(card.Id)
+		local glowColor = if star then star.Glow else rgb(160, 168, 255)
+		popCard(
+			card.Frame,
+			{ Top = glowColor:Lerp(Color3.new(1, 1, 1), 0.25), Bottom = glowColor:Lerp(Color3.new(0, 0, 0), 0.4), Edge = PopTheme.Outline }
+		)
+		local picture = card.Picture
+		picture.BackgroundTransparency = 1
+		picture.ZIndex = 4
+		for _, child in picture:GetChildren() do
+			if child:IsA("UIStroke") then
+				child:Destroy()
+			end
+		end
+		-- (a sibling under the picture: layoutWeapons puts it at the picture's centre)
+		local burst = UIKit.new("Frame", {
+			Name = "Burst",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(0, 0),
+			ZIndex = 1,
+		}, card.Frame)
+		local rays = Pop.fx(burst, "fx_rays", {
+			Name = "Rays",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			ImageTransparency = 0.4,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(300, 300),
+			ZIndex = 1,
+		})
+		if not rays then
+			Pop.rays(burst, UDim2.fromScale(0.5, 0.5), 10, 150, 0.65, 1)
+		end
+		local glowDisc = Pop.fx(burst, "fx_glow", {
+			Name = "Glow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			ImageTransparency = 0.35,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(130, 130),
+			ZIndex = 1,
+		})
+		if not glowDisc then
+			local disc = UIKit.new("Frame", {
+				Name = "Glow",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.75,
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(84, 84),
+				ZIndex = 1,
+			}, burst)
+			UIKit.corner(disc, 999)
+		end
+		popText(card.Name)
+		popText(card.Text)
+		popButton(card.Main, PopTheme.Gray, "Weapon")
+		popButton(card.Robux, PopTheme.Price)
+	end
+	for _, page in { refs.Pages.Shop, refs.Pages.Blasters } do
+		local scroll = page :: any
+		scroll.ScrollBarImageColor3 = rgb(220, 224, 236)
+	end
+end
+
+-- Paints every button's face from its state colour and the texts that change colour.
+local function popRestyle(refs: Refs)
+	local buttons = RebirthView.buttons(refs)
+	for _, card in refs.Weapons do
+		if not card.Robuxed then
+			table.insert(buttons, card.Robux)
+		end
+	end
+	for _, button in buttons do
+		local holder = MenuPanel.holderOf(button)
+		if holder:GetAttribute("Pop") then
+			holder.BackgroundColor3 = Color3.new(1, 1, 1)
+			Pop.repaint(holder, popPaintOf(button))
+			button.TextColor3 = PopTheme.Ink
+			local tab = holder:GetAttribute("PopRole") == "Tab"
+			button.TextTransparency = if tab and button.BackgroundColor3 == RebirthView.Colors.Off then 0.25 else 0
+			popEdge(button)
+		end
+	end
+	for _, card in refs.Weapons do
+		syncRobux(card.Robux)
+	end
+	refs.Need.TextColor3 = if refs.Ready then rgb(255, 250, 200) else PopTheme.Ink
+	-- the big gold REBIRTH! glows while it is ready (not while it asks SURE?)
+	local glow = refs.Pages.Rebirth:FindFirstChild("PopGlow") :: Frame?
+	if glow then
+		glow.Visible = refs.Ready and not refs.Confirm and MenuPanel.holderOf(refs.Rebirth).Visible
+	end
+end
+
+-- Places the Pop pieces after the layout (the band, the title's shadow, the glow).
+local function popLayout(refs: Refs)
+	local frame = refs.Frame
+	local m = if refs.Compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
+	local band = frame.Panel:FindFirstChild("PopHeader") :: Frame?
+	if band then
+		band.Size = UDim2.new(1, -8, 0, m.Header - 8)
+	end
+	popEdge(frame.Title)
+	local shade = frame.Panel:FindFirstChild("TitleShadow")
+	if shade and shade:IsA("TextLabel") then
+		shade.Position = frame.Title.Position + UDim2.fromOffset(0, 4)
+		shade.Size = frame.Title.Size
+		shade.TextSize = frame.Title.TextSize
+	end
+	frame.Close.TextSize = math.floor(m.Close * 0.6)
+	popEdge(frame.Close)
+	-- the big REBIRTH! (a little taller on PC; the requirement line gives the room)
+	local metrics = RebirthView.metrics(refs.Compact)
+	local holder = MenuPanel.holderOf(refs.Rebirth)
+	local tall = math.max(metrics.Button, 60)
+	local grow = math.max(0, tall - holder.Size.Y.Offset)
+	holder.Position = UDim2.fromOffset(holder.Position.X.Offset, holder.Position.Y.Offset - grow)
+	holder.Size = UDim2.fromOffset(holder.Size.X.Offset, holder.Size.Y.Offset + grow)
+	for _, label in { refs.Need, refs.Message } do
+		-- (6 more: clear of the button's glow)
+		label.Size = UDim2.fromOffset(label.Size.X.Offset, math.max(0, label.Size.Y.Offset - grow - 6))
+	end
+	refs.Rebirth.TextSize = math.floor(tall * 0.62)
+	-- the Forge Star (the star_token picture, once uploaded) in the YOU GET card's
+	-- free room over the requirement line; without it the line stays in the middle
+	local star = refs.Pages.Rebirth:FindFirstChild("PopStar") :: ImageLabel?
+	if star then
+		local need = refs.Need
+		local room = need.Size.Y.Offset - 56
+		local size = math.min(120, room)
+		local shows = IconAssets.shows("star_token") and size >= 48
+		star.Visible = shows
+		star.Size = UDim2.fromOffset(size, size)
+		star.Position = UDim2.fromOffset(need.Position.X.Offset + need.Size.X.Offset / 2, need.Position.Y.Offset + 4 + size / 2)
+		for _, label in { refs.Need, refs.Message } do
+			label.TextYAlignment = if shows then Enum.TextYAlignment.Bottom else Enum.TextYAlignment.Center
+		end
+	end
+	local glow = refs.Pages.Rebirth:FindFirstChild("PopGlow") :: Frame?
+	if glow then
+		glow.Position =
+			UDim2.fromOffset(holder.Position.X.Offset + holder.Size.X.Offset / 2, holder.Position.Y.Offset + holder.Size.Y.Offset / 2)
+		glow.Size = UDim2.fromOffset(holder.Size.X.Offset + 16, holder.Size.Y.Offset + 16)
+	end
+	for _, column in refs.Columns do
+		popEdge(column.Chip)
+		for _, row in column.Rows do
+			popEdge(row)
+		end
+	end
+	for _, label in { refs.Need, refs.Message, refs.Stars } do
+		popEdge(label)
+	end
+	for _, card in refs.Cards do
+		for _, label in { card.Name, card.Text, card.Level } do
+			popEdge(label)
+		end
+	end
+	popRestyle(refs)
+end
+
 function RebirthView.build(): Refs
-	local frame = MenuPanel.build("TerraForgeRebirth", "STAR FORGE", "Rebirth: start over with your factory and earn Forge Stars")
+	local title, subtitle = "STAR FORGE", "Rebirth: start over with your factory and earn Forge Stars"
+	-- (the light UI: MenuPanel's Pop frame without the LightSkin, which would recolour the Pop faces)
+	local frame = MenuPanel.build("TerraForgeRebirth", title, subtitle, nil, UIConfig.lightUI())
 	local body = frame.Body
 	local tabs: { [string]: TextButton } = {}
 	tabs.Rebirth = chunky(body, "REBIRTH", RebirthView.Colors.Rebirth, RebirthView.Colors.RebirthDark, "TabRebirth")
 	tabs.Shop = chunky(body, "STAR SHOP", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "TabShop")
 	tabs.Blasters = chunky(body, "BLASTERS", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "TabBlasters")
-	local stars = UIKit.label(body, "⭐ 0", 24, {
+	local stars = UIKit.label(body, RebirthView.starsLabel(0), 24, {
 		Name = "Stars",
 		TextColor3 = RebirthView.Colors.Star,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -418,17 +859,26 @@ function RebirthView.build(): Refs
 		Get = newColumn(rebirthPage, "Get", "YOU GET", RebirthView.Colors.Get),
 	}
 	local lists = RebirthView.lists(nil)
+	local dotColors: { [string]: Color3 } = { Lose = RebirthView.Colors.Lose, Keep = RebirthView.Colors.Keep, Get = RebirthView.Colors.Get }
 	for id: string, column: Column in columns do
 		for i = 1, #lists[id] do
-			table.insert(
-				column.Rows,
-				UIKit.label(column.Frame, "", 18, {
-					Name = "Row" .. i,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextWrapped = false,
-					TextTruncate = Enum.TextTruncate.AtEnd,
-				})
-			)
+			local row = UIKit.label(column.Frame, "", 18, {
+				Name = "Row" .. i,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = false,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			})
+			-- the row's bullet: a dot in the column's colour in the DotRoom left of the text
+			local dot = UIKit.new("Frame", {
+				Name = "Dot",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0, -RebirthView.DotRoom / 2, 0.5, 0),
+				Size = UDim2.fromOffset(RebirthView.Dot, RebirthView.Dot),
+				BackgroundColor3 = dotColors[id] or Theme.TextDim,
+				BorderSizePixel = 0,
+			}, row)
+			UIKit.corner(dot, RebirthView.Dot / 2)
+			table.insert(column.Rows, row)
 		end
 	end
 	local need = UIKit.label(rebirthPage, "", 18, {
@@ -481,7 +931,7 @@ function RebirthView.build(): Refs
 		table.insert(weapons, newWeaponCard(weaponPage, star))
 	end
 
-	return {
+	local refs: Refs = {
 		Gui = frame.Gui,
 		Frame = frame,
 		Tabs = tabs,
@@ -499,6 +949,11 @@ function RebirthView.build(): Refs
 		Compact = false,
 		Laid = false,
 	}
+	if isPop(refs) then
+		popSkin(refs)
+		popRestyle(refs)
+	end
+	return refs
 end
 
 ---------------------------------------------------------------- layout
@@ -556,7 +1011,8 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		place(tab, tabX + (i - 1) * (tabW + 10), tabY, tabW, m.Tab)
 		TechShopView.fitText(tab :: any, tabW - 12, m.Tab, m.Text + 4, m.Text - 6)
 	end
-	refs.Stars.TextSize = m.Text + 8
+	-- "12 STARS" in the star room (smaller rather than cut off)
+	TechShopView.fitText(refs.Stars, refs.Stars.Size.X.Offset, m.Tab, m.Text + 8, m.Text - 4)
 	local pageH = h - top
 	rect(refs.Pages.Rebirth, 0, top, w, pageH)
 	rect(refs.Pages.Shop, 0, top, w, pageH)
@@ -572,9 +1028,12 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		rect(column.Frame, x, 0, colW, pageH)
 		rect(column.Chip, 10, 8, colW - 20, m.Chip)
 		column.Chip.TextSize = m.Text + 2
+		-- the rows' text starts DotRoom right of the column's padding (the bullet dot is there)
+		local rowX = 12 + RebirthView.DotRoom
+		local rowW = math.floor(colW - rowX - 12) -- (an Offset is whole: fit to what the label gets)
 		for i, row in column.Rows do
-			rect(row, 12, 8 + m.Chip + 8 + (i - 1) * m.Row, colW - 24, m.Row)
-			TechShopView.fitText(row, colW - 24, m.Row, m.Text, m.Text - 6)
+			rect(row, rowX, 8 + m.Chip + 8 + (i - 1) * m.Row, rowW, m.Row)
+			TechShopView.fitText(row, rowW, m.Row, m.Text, m.Text - 6)
 			if id == "Get" then
 				rowsEnd = 8 + m.Chip + 8 + i * m.Row
 			end
@@ -599,16 +1058,18 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local cardW = math.floor((w - 8 - (columns - 1) * 10) / columns)
 	local grid = refs.Pages.Shop:FindFirstChild("Grid") :: UIGridLayout
 	grid.CellSize = UDim2.fromOffset(cardW, m.Card)
+	-- (no icon: the name and the text start at the card's left padding)
+	local pad = 12
 	for _, card in refs.Cards do
-		rect(card.Icon, 8, 8, 48, 48)
-		rect(card.Name, 62, 8, cardW - 62 - 70, 28)
-		TechShopView.fitText(card.Name, cardW - 62 - 70, 28, m.Text + 2, m.Text - 4)
+		rect(card.Name, pad, 8, cardW - pad - 70, 28)
+		TechShopView.fitText(card.Name, cardW - pad - 70, 28, m.Text + 2, m.Text - 4)
 		rect(card.Level, cardW - 70, 8, 62, 28)
 		card.Level.TextSize = m.Text
-		rect(card.Text, 62, 38, cardW - 70, m.Card - 38 - m.Button - 14)
-		TechShopView.fitText(card.Text, cardW - 70, m.Card - 38 - m.Button - 14, m.Text - 2, m.Text - 6)
+		rect(card.Text, pad, 38, cardW - pad - 8, m.Card - 38 - m.Button - 14)
+		TechShopView.fitText(card.Text, cardW - pad - 8, m.Card - 38 - m.Button - 14, m.Text - 2, m.Text - 6)
 		place(card.Buy, cardW - 190, m.Card - m.Button - 8, 182, m.Button)
-		card.Buy.TextSize = m.Text + 2
+		-- "BUY 12 STARS" (it shrinks a little before it would leave the button)
+		TechShopView.fitText(card.Buy :: any, 182 - 12, m.Button - 6, m.Text + 2, m.Text - 6)
 		local pick = card.Pick
 		if pick then
 			place(pick, 8, m.Card - m.Button - 8, cardW - 190 - 16, m.Button)
@@ -690,8 +1151,8 @@ end
 -- Fills both pages.
 function RebirthView.setInfo(refs: Refs, info: Info)
 	local lists = RebirthView.lists(info.Perks, info.Start)
-	lists.Get[1] = if info.Ready then `⭐  {info.StarsNow} Forge Stars` else `⭐  Stars from LV {RebirthConfig.MinBlaster}`
-	lists.Get[2] = `🔁  Rebirth #{info.Count + 1}`
+	lists.Get[1] = if info.Ready then `{info.StarsNow} Forge Stars` else `Stars from LV {RebirthConfig.MinBlaster}`
+	lists.Get[2] = `Rebirth #{info.Count + 1}`
 	for id, column in refs.Columns do
 		for i, row in column.Rows do
 			row.Text = lists[id][i] or ""
@@ -705,7 +1166,11 @@ function RebirthView.setInfo(refs: Refs, info: Info)
 	refs.Need.TextColor3 = if info.Ready then RebirthView.Colors.Get else Theme.TextDim
 	refs.Ready = info.Ready
 	RebirthView.setConfirm(refs, refs.Confirm)
-	refs.Stars.Text = `⭐ {info.Stars}`
+	refs.Stars.Text = RebirthView.starsLabel(info.Stars)
+	if refs.Laid then
+		local m = RebirthView.metrics(refs.Compact)
+		TechShopView.fitText(refs.Stars, refs.Stars.Size.X.Offset, refs.Stars.Size.Y.Offset, m.Text + 8, m.Text - 4)
+	end
 	refs.Tabs.Shop.Text = "STAR SHOP"
 	for _, card in refs.Cards do
 		local level, buy, affordable = RebirthView.cardText(info.Perks, info.Stars, card.Id, info.Start)
@@ -811,8 +1276,10 @@ function RebirthView.buildMoment(count: number, stars: number, seed: number?): M
 	local rng = Rng.new(seed or 7)
 	local list = {}
 	for i = 1, 18 do
-		local star = UIKit.label(gui, "⭐", rng:int(26, 44), {
+		-- a plain text star in gold (U+2605 BLACK STAR, not the emoji)
+		local star = UIKit.label(gui, "★", rng:int(26, 44), {
 			Name = "Star" .. i,
+			TextColor3 = RebirthView.Colors.Star,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(rng:range(0.1, 0.9), rng:range(0.05, 0.95)),
 			Size = UDim2.fromOffset(50, 50),
@@ -840,6 +1307,69 @@ function RebirthView.buttons(refs: Refs): { TextButton }
 		end
 	end
 	return list
+end
+
+---------------------------------------------------------------- the Pop look: after every state change
+
+local plainLayout = RebirthView.layout
+RebirthView.layout = function(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	plainLayout(refs, compact, maxWidth, maxHeight)
+	if isPop(refs) then
+		popLayout(refs)
+	end
+end
+
+local plainLayoutWeapons = RebirthView.layoutWeapons
+RebirthView.layoutWeapons = function(refs: Refs)
+	plainLayoutWeapons(refs)
+	if isPop(refs) then
+		for _, card in refs.Weapons do
+			local picture = card.Picture
+			local burst = card.Frame:FindFirstChild("Burst") :: Frame?
+			if burst then
+				burst.Position = UDim2.fromOffset(
+					picture.Position.X.Offset + picture.Size.X.Offset / 2,
+					picture.Position.Y.Offset + picture.Size.Y.Offset / 2
+				)
+			end
+			local labels: { GuiObject } = { card.Name, card.Text, card.Main, card.Robux }
+			for _, label in labels do
+				popEdge(label)
+			end
+		end
+	end
+end
+
+local plainSetTab = RebirthView.setTab
+RebirthView.setTab = function(refs: Refs, tab: string)
+	plainSetTab(refs, tab)
+	if isPop(refs) then
+		popRestyle(refs)
+	end
+end
+
+local plainSetConfirm = RebirthView.setConfirm
+RebirthView.setConfirm = function(refs: Refs, on: boolean)
+	plainSetConfirm(refs, on)
+	if isPop(refs) then
+		popRestyle(refs)
+	end
+end
+
+local plainSetInfo = RebirthView.setInfo
+RebirthView.setInfo = function(refs: Refs, info: Info)
+	plainSetInfo(refs, info)
+	if isPop(refs) then
+		popRestyle(refs)
+	end
+end
+
+local plainSetWeapons = RebirthView.setWeapons
+RebirthView.setWeapons = function(refs: Refs, info: Info)
+	plainSetWeapons(refs, info)
+	if isPop(refs) then
+		popRestyle(refs)
+	end
 end
 
 return RebirthView

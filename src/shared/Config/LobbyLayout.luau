@@ -96,7 +96,7 @@ LobbyLayout.Budget = {
 	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
 	-- budget; spend it on purpose, not by accident.
 	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
-	LobbyLights = 45,
+	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
 	-- (steps 6-7): ~15,510 parts (tests/PhoneBudget.spec.luau, map v26)
@@ -110,9 +110,9 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 2750, LobbyParts = 2750, Lights = 11, LobbyLights = 11 }, -- (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
+		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
-		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
+		Flora = { Parts = 3800, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the

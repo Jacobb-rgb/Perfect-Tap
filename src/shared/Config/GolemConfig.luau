@@ -6,7 +6,10 @@
 	(helmets, visors, crowns, crystals on the back...). No Minecraft look or
 	names.
 
-	- 18 kinds, Common..Mythic. Each gives one bonus (BonusTypes) while
+	- 18 capsule kinds, Common..Mythic, plus the LIMITED EDITION sets
+	  (Edition = the set's id, Config/LimitedGolems: sold only as their Robux
+	  capsule in the shop's banner while the edition runs; once woken they
+	  are ordinary golems forever). Each gives one bonus (BonusTypes) while
 	  equipped; Golem Bond (enchant) and the Golemworks collection raise every
 	  equipped golem's bonus by GolemBondPct.
 	- 3 equipped at once (EquipSlots); at most InventoryCap golems in the
@@ -17,8 +20,9 @@
 	  in the save (Migrations), count toward InventoryCap, give nothing, can't
 	  be equipped, and are never deleted here (they may be paid ones).
 	- Budgets (mobile, 8 players x 3 followers): a golem model has at most
-	  MaxParts parts, no lights (the Glow is a Neon part; Mythics may add one
-	  small PointLight). Followers are BUILT AND ANIMATED ON EACH CLIENT from
+	  MaxParts parts (a limited edition golem: LimitedMaxParts by rarity), no
+	  lights (the Glow is a Neon part; Mythics may add one small PointLight,
+	  Legendary and Mythic limited golems one slow ember ParticleEmitter). Followers are BUILT AND ANIMATED ON EACH CLIENT from
 	  the player attribute EquippedAttribute ("PebbleGolem,EmberImp,..."): the
 	  server replicates no golem parts or CFrames. Clients hide followers
 	  further than FollowerHideDistance studs away and skip the idle bobbing
@@ -66,6 +70,9 @@ export type Golem = {
 	Scale: number, -- model scale (rarer golems are a bit bigger)
 	Bonus: { Type: BonusType, Value: number },
 	Lore: string,
+	-- a LIMITED EDITION golem: its set's id (Config/LimitedGolems); its model
+	-- may use GolemConfig.LimitedMaxParts[Rarity] for the set's costume
+	Edition: string?,
 }
 
 export type Owned = { Id: number, Kind: string, Paid: boolean?, Locked: boolean? }
@@ -78,6 +85,12 @@ GolemConfig.MaxSaved = 80 -- Migrations hard cap (see above)
 GolemConfig.MaxPending = 200 -- paid golems waiting past MaxSaved (Golems.Pending; more: the receipt waits)
 GolemConfig.MaxDelete = 60 -- ids per "Delete"
 GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
+-- a LIMITED EDITION golem's budget by rarity (its set's costume: segmented
+-- horns and tails, boned wings, armour, crowns). They are rare (a Mythic is
+-- 1 % of one Robux capsule), so the worst case (8 players x 3 Mythic
+-- followers x 96 = 2304; 10 of each go to its rounded corners welded, non-colliding parts, hidden beyond
+-- FollowerHideDistance) stays far below a phone's budget.
+GolemConfig.LimitedMaxParts = { Rare = 66, Epic = 72, Legendary = 80, Mythic = 96 } :: { [string]: number }
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
@@ -106,6 +119,12 @@ GolemConfig.Accessories = {
 	KnightHelm = true, -- a closed helm with a slit
 	Halo = true, -- a floating ring of light
 	Crown = true, -- a little crown
+	-- the LIMITED EDITION gear (Builders/GolemGearLimited)
+	DragonHorns = true, -- Dragonforge: curved horns, a snout, little wings and a tail
+	DragonEgg = true, -- Dragonforge: a cracked dragon eggshell cap, stubby wings and a tail
+	DragonHelm = true, -- Dragonforge: a horned dragon-head helm and a dragon shield
+	DragonWings = true, -- Dragonforge: big fiery wings, horns, a snout (Legendary: lava hands, a tail)
+	DragonCrown = true, -- Dragonforge: a crown of flames and huge gold-boned wings (the Dragon King)
 } :: { [string]: boolean }
 
 -- GolemAction / ActionResult reason codes -> text for the player
@@ -129,6 +148,11 @@ local function oreGolem(entry: { [string]: any }): Golem
 	entry.Body = entry.Body or ore.Color
 	entry.Glow = entry.Glow or ore.Glow
 	entry.Material = entry.Material or ore.Material
+	return (entry :: any) :: Golem
+end
+
+-- One limited edition golem (no ore: its colours are its own).
+local function limited(entry: { [string]: any }): Golem
 	return (entry :: any) :: Golem
 end
 
@@ -340,6 +364,92 @@ GolemConfig.List = {
 		Scale = 1.3,
 		Bonus = { Type = "MiningSpeed", Value = 0.4 },
 		Lore = "Woken by a true shard of the Heartstone. Small, but it beats like a forge.",
+	}),
+	---------------------------------------------------------------- Limited edition: Dragonforge
+	-- (LimitedGolems: only from the Dragonforge capsule in the shop's banner)
+	limited({
+		Id = "CinderWhelp",
+		Name = "Cinder Whelp",
+		Rarity = "Rare",
+		Body = rgb(74, 66, 72),
+		Trim = rgb(40, 32, 38),
+		Glow = rgb(255, 128, 30),
+		Material = Enum.Material.Basalt,
+		Accessory = "DragonHorns",
+		Scale = 1.1,
+		Bonus = { Type = "MiningSpeed", Value = 0.11 },
+		Lore = "A baby dragon golem. When it sneezes, sparks fly.",
+		Edition = "Dragonforge",
+	}),
+	limited({
+		Id = "EmberHatchling",
+		Name = "Ember Hatchling",
+		Rarity = "Rare",
+		Body = rgb(186, 56, 38),
+		Trim = rgb(104, 26, 22),
+		Glow = rgb(255, 196, 40),
+		Material = Enum.Material.Slate,
+		Accessory = "DragonEgg",
+		Scale = 1.1,
+		Bonus = { Type = "Luck", Value = 0.11 },
+		Lore = "Just hatched from a dragon egg and still wears the shell as a hat.",
+		Edition = "Dragonforge",
+	}),
+	limited({
+		Id = "ScaleKnight",
+		Name = "Dragonscale Knight",
+		Rarity = "Epic",
+		Body = rgb(48, 42, 54),
+		Trim = rgb(160, 32, 42),
+		Glow = rgb(255, 80, 40),
+		Material = Enum.Material.Basalt,
+		Accessory = "DragonHelm",
+		Scale = 1.15,
+		Bonus = { Type = "SellValue", Value = 0.19 },
+		Lore = "Its armour is made of real dragon scales. They were a gift, it says.",
+		Edition = "Dragonforge",
+	}),
+	limited({
+		Id = "Flamewing",
+		Name = "Flamewing",
+		Rarity = "Epic",
+		Body = rgb(200, 48, 44),
+		Trim = rgb(96, 22, 28),
+		Glow = rgb(255, 176, 40),
+		Material = Enum.Material.Slate,
+		Accessory = "DragonWings",
+		Scale = 1.15,
+		Bonus = { Type = "WalkSpeed", Value = 0.12 },
+		Lore = "Its wings are a bit too small to fly. It flaps them anyway, very fast.",
+		Edition = "Dragonforge",
+	}),
+	limited({
+		Id = "MagmaWyvern",
+		Name = "Magma Wyvern",
+		Rarity = "Legendary",
+		Body = rgb(40, 30, 36),
+		Trim = rgb(20, 14, 20),
+		Glow = rgb(255, 104, 20),
+		Material = Enum.Material.CrackedLava,
+		Accessory = "DragonWings",
+		Scale = 1.22,
+		Bonus = { Type = "MiningSpeed", Value = 0.28 },
+		Lore = "Lava runs in its cracks. Rocks melt a little when it stares at them.",
+		Edition = "Dragonforge",
+	}),
+	limited({
+		Id = "DragonKing",
+		Name = "Dragon King",
+		Rarity = "Mythic",
+		Body = rgb(38, 26, 36),
+		Trim = rgb(200, 140, 40),
+		Glow = rgb(255, 150, 30),
+		Material = Enum.Material.Basalt,
+		Accessory = "DragonCrown",
+		Scale = 1.3,
+		Bonus = { Type = "Income", Value = 0.45 },
+		Lore = "Crowned in the heart of the volcano. Every dragon in the sky bows to it.",
+		Edition = "Dragonforge",
 	}),
 } :: { Golem }
 

@@ -40,6 +40,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
@@ -580,16 +581,13 @@ local function hookCounter(counter: Instance)
 	point.Name = "SellPromptPoint"
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 0.6, -part.Size.Z / 2)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "SellOrePrompt"
-	prompt.ActionText = "Sell Ore"
-	prompt.ObjectText = SellService.NpcName
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = PROMPT_DISTANCE
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = "SellOrePrompt",
+		ActionText = "Sell Ore",
+		ObjectText = SellService.NpcName,
+		Distance = PROMPT_DISTANCE,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

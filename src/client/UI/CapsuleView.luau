@@ -2,23 +2,32 @@
 	The golem capsule screens (pure builders + pure helpers;
 	CapsuleController fills them in).
 
+	Both wear the bright Pop look of the Robux Shop (owner 2026-10-21: "new,
+	modern, colourful, clean items, Roblox style"; GolemView's Pop pieces):
+	the purple Golems band over a dark studded body, never the LightSkin.
+
 	Shop panel (ScreenGui "TerraForgeCapsules"):
-	  header   GOLEM CAPSULES, a line about odds, your coins, MY GOLEMS, X
-	  tabs     one per capsule the player may open (LB / RB on a gamepad):
-	           STONE · CRYSTAL · ROYAL. Hidden where it isn't allowed: the
+	  header   GOLEM EGGS, a line about odds, your coins, MY GOLEMS, X
+	  tabs     one bright tab per capsule the player may open (LB / RB on a gamepad):
+	           STONE · CRYSTAL · ROYAL (CapsuleConfig.Stall: a limited
+	           edition's capsule is sold only in the Robux shop's banner,
+	           but its opening plays here). Hidden where it isn't allowed: the
 	           Royal capsule (Robux) where paid random items are restricted
 	           or the policy isn't known yet, coin capsules too while coins
 	           can be bought with Robux (CapsuleConfig.isPaidRandom).
-	  left     the capsule (drawn from frames), its name and description, the
-	           Triple Lucky banner while it runs, OPEN x1 / x3 / x10 with the
-	           price of each (coins at the player's blaster level; Royal:
-	           Robux per button, a greyed "Coming soon" button while that
+	  left     a big painted card with the capsule's live 3D model (PictureModels
+	           "capsule_<Id>"), its name and description, the Triple Lucky
+	           banner while it runs, OPEN x1 / x3 / x10 with the price of each
+	           (gold coin buttons at the player's blaster level; Royal: green
+	           Robux buttons, a greyed "Coming soon" button while that
 	           product's id is a placeholder or step 8's receipts aren't
 	           ready, and "Coming soon!" instead of the buttons when none of
 	           them is live), a status line and the golem room ("Golems 12 / 60")
-	  right    the EXACT odds of every golem in the capsule: rarity color,
-	           name, rarity, bonus, chance (CapsuleConfig.odds; with Triple
-	           Lucky on, the boosted odds, the lucky golems marked "x3")
+	  right    the EXACT odds of every golem in the capsule on a dark studded
+	           well: rarity bar, name, a rarity chip, bonus, the chance in big
+	           numbers (CapsuleConfig.odds; with Triple Lucky on, the boosted
+	           odds, the lucky golems marked "x3"). Always fully shown: a paid
+	           random item.
 	  footer   the control hint (not on phones)
 	cards(state, coins, restricted, now, stateAt?, receipts?) says what each tab shows,
 	from the State snapshot, so the cards always match what the server
@@ -28,10 +37,13 @@
 	for the other looks exactly like one built for it.
 
 	Opening overlay (ScreenGui "TerraForgeCapsuleOpen", above everything):
-	  a dim backdrop, rotating rarity rays, the ViewportFrame "Hero" (the
-	  controller animates the capsule and the golems in it), a full-screen
-	  flash, the name plate (name, rarity, NEW!, bonus), a counter (2 / 3),
-	  the result grid (x3: 3 cards, x10: 5 x 2) and SKIP / OK / OPEN AGAIN
+	  a dim backdrop, rotating rarity rays over a soft glow, the
+	  ViewportFrame "Hero" (the controller animates the capsule and the
+	  golems in it), a full-screen flash, the name plate (a chunky name with
+	  a 3D shadow, rarity and NEW! chips, the bonus chip), a counter (2 / 3),
+	  the result grid of bright rarity cards with rays behind each golem's
+	  live 3D picture (x3: 3 cards, x10: 5 x 2, more: a card per kind with
+	  its count, summary) and SKIP / OK / OPEN AGAIN
 	  (in the "Controls" frame, a SelectionGroup that stops at its edges: a
 	  gamepad never leaves the overlay for the shop behind it).
 
@@ -43,18 +55,19 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
+local PictureModels = require(Shared.Builders.PictureModels)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
-local HudView = require(script.Parent.HudView)
 local GolemView = require(script.Parent.GolemView)
 local TechShopView = require(script.Parent.TechShopView)
 
@@ -242,7 +255,7 @@ local METRICS: { [string]: Metrics } = {
 	Compact = {
 		Width = 1180,
 		Height = 600,
-		Header = 76,
+		Header = 80, -- (the band holds the 72-unit X and MY GOLEMS)
 		TabBar = 84,
 		TabHeight = 72,
 		TabWidth = 210,
@@ -355,14 +368,7 @@ end
 -- `stateAt`: when the snapshot came (luckyNow). `receipts`: step 8 takes
 -- Royal receipts (ReceiptsAttribute; nil = not yet): a Robux button is
 -- live only with a real product id AND receipts.
-function CapsuleView.cards(
-	state: any,
-	coins: number,
-	restricted: boolean,
-	now: number,
-	stateAt: number?,
-	receipts: boolean?
-): { Card }
+function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: number, stateAt: number?, receipts: boolean?): { Card }
 	-- coin prices follow State.PriceLevel (BlasterData.priceLevel: a rebirth never lowers them)
 	local level = if type(state) == "table" then (if state.PriceLevel ~= nil then state.PriceLevel else state.BlasterLevel) else nil
 	local room = GolemConfig.room(golemsOf(state))
@@ -371,7 +377,7 @@ function CapsuleView.cards(
 	local lucky = CapsuleView.luckyNow(state, now, stateAt)
 	local cash = num(coins)
 	local cards: { Card } = {}
-	for _, capsule in CapsuleConfig.List do
+	for _, capsule in CapsuleConfig.Stall do
 		local robux = capsule.Currency == "Robux"
 		local buys: { Buy } = {}
 		local live = not robux -- Robux: decided per button below
@@ -456,7 +462,7 @@ function CapsuleView.art(parent: Instance, capsuleId: string, w: number, h: numb
 	local capsule = CapsuleConfig.ById[capsuleId]
 	local color = if capsule then capsule.Color else rgb(150, 140, 130)
 	local glow = if capsule then capsule.Glow else rgb(255, 170, 80)
-	local top = color:Lerp(Color3.new(1, 1, 1), 0.55)
+	local top = if capsule and capsule.Shell then capsule.Shell else color:Lerp(Color3.new(1, 1, 1), 0.55)
 	local box = UIKit.new("Frame", {
 		Name = "Art",
 		Size = UDim2.fromOffset(w, h),
@@ -529,11 +535,106 @@ local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
 end
 
--- A button's look: enabled in its colors, or greyed out.
+-- the capsules' tab and picture-card paints (Pop.Paints names)
+CapsuleView.Paints = {
+	Stone = "Orange",
+	Crystal = "Purple",
+	Royal = "Blue",
+} :: { [string]: string }
+
+function CapsuleView.paintOf(capsuleId: string): string
+	return CapsuleView.Paints[capsuleId] or "Pink"
+end
+
+-- A button's look: its Pop paint when enabled, else grey (GolemView.style).
 function CapsuleView.style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-	holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
-	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
+	GolemView.style(button, enabled, color, dark)
+end
+
+--[[
+	An OPEN button: a painted Pop button whose own Text ("OPEN 3\n$7.5K",
+	what the controller and the tests read) stays hidden while the button
+	shows it as "OPEN 3" over a gold coin (or the robux mark) and the price.
+	A one-line Text (the controller's "..." while it waits) shows as it is.
+]]
+local function openButton(parent: Instance, count: number, index: number): TextButton
+	local button = GolemView.popButton(parent, `OPEN {count}`, "Yellow", {
+		Name = "Open" .. count,
+		LayoutOrder = index,
+		TextSize = 18,
+	})
+	button.TextWrapped = true
+	button.LineHeight = 1.05
+	GolemView.text(button, `OPEN {count}`, 18, { Name = "Label", ZIndex = 5 })
+	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, ZIndex = 5 }, button)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 4, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	Pop.coin(row, 22, { LayoutOrder = 1 })
+	local mark = UIKit.new("ImageLabel", {
+		Name = "Robux",
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Visible = false,
+		ZIndex = 6,
+	}, row)
+	IconAssets.apply(mark, "robux")
+	mark:SetAttribute("Icon", "robux")
+	GolemView.text(row, "", 22, { Name = "Amount", LayoutOrder = 2, ZIndex = 6 })
+	-- the controller writes "..." into the button while it waits
+	pcall(function()
+		button:GetPropertyChangedSignal("Text"):Connect(function()
+			CapsuleView.syncOpen(button)
+		end)
+	end)
+	return button
+end
+
+-- Shows an OPEN button's Text as its Pop face (see openButton).
+function CapsuleView.syncOpen(button: TextButton)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local row = button:FindFirstChild("Row") :: Frame?
+	if not label or not row then
+		return
+	end
+	local top, bottom = string.match(button.Text, "^(.-)\n(.*)$")
+	local split = top ~= nil and bottom ~= nil
+	button.TextTransparency = if split then 1 else 0
+	local edge = button:FindFirstChild("Edge")
+	if edge and edge:IsA("UIStroke") then
+		edge.Transparency = if split then 1 else 0
+	end
+	label.Visible = split
+	row.Visible = split
+	if not top or not bottom then
+		return
+	end
+	local holder = holderOf(button)
+	local w = holder.Size.X.Offset
+	label.Text = top
+	TechShopView.fitText(label, w - 10, label.Size.Y.Offset, (label:GetAttribute("Max") :: number?) or 20, 10)
+	GolemView.fitEdge(label)
+	local currency = button:GetAttribute("Currency")
+	local robux = currency == "Robux" and string.sub(bottom, 1, 3) == "R$ "
+	local coin = row:FindFirstChild("Coin") :: Frame?
+	local mark = row:FindFirstChild("Robux") :: ImageLabel?
+	if coin then
+		coin.Visible = currency == "Coins"
+	end
+	if mark then
+		mark.Visible = robux
+	end
+	local amount = row:FindFirstChild("Amount") :: TextLabel?
+	if amount then
+		amount.Text = if robux then string.sub(bottom, 4) else bottom
+		local icon = if (coin and coin.Visible) or robux then (if coin then coin.Size.X.Offset else 22) + 4 else 0
+		local rowH = row.Size.Y.Offset
+		TechShopView.fitText(amount, w - 14 - icon, rowH, (amount:GetAttribute("Max") :: number?) or 22, 10)
+		amount.Size = UDim2.fromOffset(math.ceil(TechShopView.textWidth(amount.Text, amount.TextSize)) + 4, rowH)
+		GolemView.fitEdge(amount)
+	end
 end
 
 local function newRow(refs: Refs, index: number, m: Metrics): Row
@@ -541,23 +642,22 @@ local function newRow(refs: Refs, index: number, m: Metrics): Row
 		Name = "Row" .. index,
 		LayoutOrder = index,
 		Size = UDim2.new(1, -10, 0, m.Row),
-		BackgroundColor3 = if index % 2 == 0 then Theme.PanelLight else Theme.PanelDark,
-		BackgroundTransparency = 0.35,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = if index % 2 == 0 then 0.92 else 0.965,
 		BorderSizePixel = 0,
 	}, refs.List)
 	UIKit.corner(frame, 6)
 	local bar = UIKit.new("Frame", {
 		Name = "Bar",
-		Position = UDim2.new(0, 4, 0.5, -(m.Row - 10) / 2),
-		Size = UDim2.fromOffset(8, m.Row - 10),
+		Position = UDim2.new(0, 4, 0.5, -(m.Row - 8) / 2),
+		Size = UDim2.fromOffset(8, m.Row - 8),
 		BorderSizePixel = 0,
 	}, frame)
-	UIKit.corner(bar, 3)
+	UIKit.corner(bar, 4)
 	local function cell(name: string, size: number, align: Enum.TextXAlignment): TextLabel
-		return UIKit.label(frame, "", size, {
+		return GolemView.text(frame, "", size, {
 			Name = name,
 			TextXAlignment = align,
-			TextWrapped = false,
 			-- never runs into the next cell (fitText shrinks it first)
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		})
@@ -566,17 +666,24 @@ local function newRow(refs: Refs, index: number, m: Metrics): Row
 		Frame = frame,
 		Bar = bar,
 		Name = cell("GolemName", m.Text - 1, Enum.TextXAlignment.Left),
-		Rarity = cell("Rarity", m.Small, Enum.TextXAlignment.Left),
+		-- the rarity as a chip in its colour
+		Rarity = GolemView.solidChip(frame, "", GolemView.ChipDark, Vector2.new(90, m.Row - 6), {
+			Name = "Rarity",
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 5,
+		}),
 		Bonus = cell("Bonus", m.Small, Enum.TextXAlignment.Left),
-		Chance = cell("Chance", m.Text - 1, Enum.TextXAlignment.Right),
-		Lucky = UIKit.chip(frame, "x3", LUCKY, {
+		-- the chance: big chunky numbers
+		Chance = cell("Chance", m.Text + 2, Enum.TextXAlignment.Right),
+		Lucky = GolemView.solidChip(frame, "x3", LUCKY_DARK, Vector2.new(34, m.Row - 8), {
 			Name = "Lucky",
 			AnchorPoint = Vector2.new(1, 0.5),
-			TextSize = m.Small - 1,
 			Visible = false,
+			ZIndex = 5,
 		}),
 	}
-	row.Bonus.TextColor3 = Theme.TextDim
+	row.Chance.FontFace = PopTheme.Heavy
+	row.Bonus.TextColor3 = rgb(206, 212, 226)
 	refs.Rows[index] = row
 	return row
 end
@@ -593,29 +700,62 @@ function CapsuleView.oddsColumns(rest: number): (number, number, number)
 	return nameW, rarityW, rest - nameW - rarityW
 end
 
--- Places a row's cells for a list `width` wide.
+local function chanceWidth(m: Metrics): number
+	return if m.Row > 28 then 120 else 96
+end
+
+-- Places a row's cells for a list `width` wide (every size from the layout).
 local function placeRow(row: Row, m: Metrics, width: number)
 	local h = m.Row
-	local chanceW = if m.Row > 28 then 120 else 96
+	local chanceW = chanceWidth(m)
 	local luckyW = 34
 	local rest = width - 20 - chanceW - luckyW - 12
 	local nameW, rarityW, bonusW = CapsuleView.oddsColumns(rest)
 	row.Rarity.Visible = rarityW > 0
 	row.Frame.Size = UDim2.new(1, -10, 0, h)
-	row.Bar.Position = UDim2.new(0, 4, 0.5, -(h - 10) / 2)
-	row.Bar.Size = UDim2.fromOffset(8, h - 10)
-	row.Lucky.TextSize = m.Small - 1
+	row.Bar.Position = UDim2.new(0, 5, 0.5, -(h - 8) / 2)
+	row.Bar.Size = UDim2.fromOffset(7, h - 8)
 	row.Name.Position = UDim2.fromOffset(18, 0)
-	row.Name.Size = UDim2.fromOffset(nameW, h)
-	row.Rarity.Position = UDim2.fromOffset(18 + nameW, 0)
-	row.Rarity.Size = UDim2.fromOffset(rarityW, h)
-	row.Bonus.Position = UDim2.fromOffset(18 + nameW + rarityW, 0)
-	row.Bonus.Size = UDim2.fromOffset(bonusW, h)
+	row.Name.Size = UDim2.fromOffset(nameW - 6, h)
+	-- (the chip fills its column; the bonus starts a little after it)
+	row.Rarity.Position = UDim2.fromOffset(18 + nameW, 3)
+	GolemView.sizeChip(row.Rarity, rarityW, h - 6)
+	row.Bonus.Position = UDim2.fromOffset(18 + nameW + rarityW + 6, 0)
+	row.Bonus.Size = UDim2.fromOffset(math.max(0, bonusW - 6), h)
 	row.Lucky.Position = UDim2.new(1, -(chanceW + 8), 0.5, 0)
-	row.Lucky.Size = UDim2.fromOffset(luckyW, h - 8)
+	GolemView.sizeChip(row.Lucky, luckyW, h - 8)
+	row.Lucky.TextSize = m.Small - 1
 	row.Chance.AnchorPoint = Vector2.new(1, 0)
 	row.Chance.Position = UDim2.new(1, -6, 0, 0)
 	row.Chance.Size = UDim2.fromOffset(chanceW - 6, h)
+end
+
+-- Fits a row's words (after its texts or its layout changed).
+local function fitRow(row: Row, m: Metrics)
+	TechShopView.fitText(row.Name, row.Name.Size.X.Offset, m.Row, m.Text - 1, 11)
+	TechShopView.fitText(row.Rarity, row.Rarity.Size.X.Offset - 10, m.Row - 6, m.Small - 1, 9)
+	TechShopView.fitText(row.Bonus, row.Bonus.Size.X.Offset, m.Row, m.Small, 10)
+	TechShopView.fitText(row.Chance, row.Chance.Size.X.Offset, m.Row, m.Text + 2, 11)
+	for _, label in { row.Name, row.Rarity, row.Bonus, row.Chance } do
+		GolemView.fitEdge(label)
+	end
+end
+
+-- The odds well's head: the note at the right as wide as its words, the
+-- title in the room left of it (shrunk to fit; the note keeps its size).
+local function placeOddsHead(refs: Refs, m: Metrics)
+	local rightW = refs.Right.Size.X.Offset
+	local note = refs.OddsNote
+	note.TextSize = m.Small - 1
+	local noteW = math.min(math.ceil(TechShopView.textWidth(note.Text, note.TextSize)) + 8, math.floor(rightW * 0.5))
+	note.AnchorPoint = Vector2.new(1, 0)
+	note.Position = UDim2.new(1, -12, 0, 8)
+	note.Size = UDim2.fromOffset(noteW, 26)
+	local titleW = rightW - noteW - 36
+	refs.OddsTitle.Position = UDim2.fromOffset(12, 6)
+	refs.OddsTitle.Size = UDim2.fromOffset(titleW, 30)
+	TechShopView.fitText(refs.OddsTitle, titleW, 30, m.Text + 3, 10)
+	GolemView.fitEdge(refs.OddsTitle)
 end
 
 function CapsuleView.build(compact: boolean?): Refs
@@ -624,8 +764,9 @@ function CapsuleView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeCapsules", 16)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true) -- the Pop look: no LightSkin (it would recolour the faces)
 
-	local panel = UIKit.panel(gui, {
+	local panel = UIKit.new("Frame", {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -636,52 +777,63 @@ function CapsuleView.build(compact: boolean?): Refs
 		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
-	})
-	local title = UIKit.label(panel, "GOLEM CAPSULES", m.Title, {
-		Name = "Title",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
-		TextWrapped = false,
-	})
-	local subtitle = UIKit.label(panel, "Each capsule wakes a sleeping golem: the odds of every golem are listed.", m.Small + 1, {
+	}, gui)
+	local title = GolemView.chrome(panel, "GOLEM EGGS", GolemView.WindowPaint)
+	local subtitle = GolemView.text(panel, "Each egg hatches a sleeping golem: the odds of every golem are listed.", m.Small + 1, {
 		Name = "Subtitle",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(246, 236, 255),
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 6,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, { Name = "Close", TextSize = 26 })
-	local golems = UIKit.button(panel, "MY GOLEMS", Theme.Info, rgb(50, 110, 170), { Name = "MyGolems", TextSize = 19 })
+	local close = GolemView.popButton(panel, "X", PopTheme.Close, {
+		Name = "Close",
+		FontFace = PopTheme.Heavy,
+		TextSize = 34,
+		ZIndex = 6,
+	})
+	local golems = GolemView.popButton(panel, "MY GOLEMS", "Blue", { Name = "MyGolems", TextSize = 19, ZIndex = 6 })
+	-- the coins: a dark pill with a gold coin
 	local balance = UIKit.new("Frame", {
 		Name = "Balance",
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = GolemView.ChipDark,
 		BorderSizePixel = 0,
+		ZIndex = 6,
 	}, panel)
-	UIKit.corner(balance, 10)
-	UIKit.stroke(balance, 2)
-	local coin = HudView.coinIcon(balance, 26)
-	coin.Position = UDim2.fromOffset(8, 7)
-	local balanceAmount = UIKit.label(balance, "$0", 22, {
+	UIKit.corner(balance, 20)
+	Pop.border(balance, 3)
+	Pop.coin(balance, 28, { Position = UDim2.fromOffset(7, 6) })
+	local balanceAmount = GolemView.text(balance, "$0", 24, {
 		Name = "Amount",
 		Position = UDim2.fromOffset(40, 0),
 		Size = UDim2.new(1, -46, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Coin,
-		TextWrapped = false,
+		TextColor3 = rgb(255, 226, 92),
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 7,
 	})
 
-	-- tabs: one per capsule
-	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1 }, panel)
-	UIKit.list(tabBar, Enum.FillDirection.Horizontal, GAP, { VerticalAlignment = Enum.VerticalAlignment.Center })
+	-- tabs: one bright tab per capsule (Pop.selectTab paints the shown one)
+	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1, ZIndex = 4 }, panel)
+	UIKit.list(tabBar, Enum.FillDirection.Horizontal, GAP, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
 	local tabs: { [string]: TextButton } = {}
-	for i, capsule in CapsuleConfig.List do
-		tabs[capsule.Id] = UIKit.button(tabBar, string.upper(capsule.Id), capsule.Color, capsule.Color:Lerp(DARK, 0.45), {
-			Name = "Tab" .. capsule.Id,
+	for i, capsule in CapsuleConfig.Stall do
+		local holder = UIKit.new("Frame", {
+			Name = "Tab" .. capsule.Id .. "Holder",
+			BackgroundTransparency = 1,
 			LayoutOrder = i,
-			TextSize = if isCompact then 24 else 21,
+			Size = UDim2.fromOffset(m.TabWidth, m.TabHeight),
+		}, tabBar)
+		local paint = CapsuleView.paintOf(capsule.Id)
+		local tab = Pop.button(holder, string.upper(capsule.Id), paint, Vector2.new(m.TabWidth, m.TabHeight), {
+			Name = "Button",
+			Size = UDim2.fromScale(1, 1),
 		})
+		tab:SetAttribute("TabPaint", paint)
+		tabs[capsule.Id] = tab
 	end
 	local glyphs: { ImageLabel } = {}
 	for _, name in { "GlyphL", "GlyphR" } do
@@ -693,99 +845,85 @@ function CapsuleView.build(compact: boolean?): Refs
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Size = UDim2.fromOffset(34, 34),
 				Visible = false,
-				ZIndex = 4,
+				ZIndex = 6,
 			}, panel)
 		)
 	end
 
-	-- left: the capsule and its buttons
-	local left = UIKit.new("Frame", { Name = "Left", BackgroundTransparency = 1 }, panel)
-	local artHolder = UIKit.new("Frame", { Name = "ArtHolder", BackgroundTransparency = 1 }, left)
-	local capsuleName = UIKit.label(left, "", m.Text + 7, {
+	-- left: the capsule's painted card (its live 3D capsule), the OPEN buttons
+	local left = UIKit.new("Frame", { Name = "Left", BackgroundTransparency = 1, ZIndex = 4 }, panel)
+	local artHolder = UIKit.new("Frame", { Name = "ArtHolder", BackgroundTransparency = 1, ZIndex = 2 }, left)
+	local capsuleName = GolemView.text(left, "", m.Text + 9, {
 		Name = "CapsuleName",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextWrapped = false,
+		FontFace = PopTheme.Heavy,
+		TextWrapped = true,
+		ZIndex = 5,
 	})
-	local description = UIKit.label(left, "", m.Small, {
+	local description = GolemView.text(left, "", m.Small, {
 		Name = "Description",
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
+		ZIndex = 5,
 	})
 	local luckyBanner = UIKit.new("Frame", {
 		Name = "LuckyBanner",
-		BackgroundColor3 = LUCKY,
 		BorderSizePixel = 0,
 		Visible = false,
+		ZIndex = 6,
 	}, left)
-	UIKit.corner(luckyBanner, 10)
-	UIKit.stroke(luckyBanner, 2, LUCKY_DARK)
-	local luckyText = UIKit.label(luckyBanner, "", m.Small, {
+	Pop.face(luckyBanner, "Yellow", 8)
+	local luckyText = GolemView.text(luckyBanner, "", m.Small, {
 		Name = "Text",
 		Position = UDim2.fromOffset(8, 0),
 		Size = UDim2.new(1, -16, 1, 0),
-		TextWrapped = false,
+		TextColor3 = rgb(52, 34, 6),
+		ZIndex = 7,
 	})
+	local luckyEdge = luckyText:FindFirstChild("Edge") :: UIStroke
+	luckyEdge.Color = Color3.new(1, 1, 1)
+	luckyEdge.Thickness = 1.5
 	local buttons: { TextButton } = {}
 	for i, count in CapsuleConfig.Counts do
-		local button = UIKit.button(left, `OPEN {count}`, Theme.Good, Theme.GoodDark, {
-			Name = "Open" .. count,
-			LayoutOrder = i,
-			TextSize = if isCompact then 21 else 18,
-		})
-		button.TextWrapped = true
-		button.LineHeight = 1.05
-		table.insert(buttons, button)
+		table.insert(buttons, openButton(left, count, i))
 	end
-	local note = UIKit.label(left, "", m.Text + 4, {
+	local note = Pop.title(left, "", m.Text + 6, "Gold", {
 		Name = "Note",
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
+		FontFace = PopTheme.Heavy,
+		TextWrapped = true,
 		Visible = false,
+		ZIndex = 5,
 	})
-	local status = UIKit.label(left, "", m.Small, {
+	local status = GolemView.text(left, "", m.Small, {
 		Name = "Status",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Theme.Info,
-		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
-	local room = UIKit.label(left, "", m.Small, {
+	local room = GolemView.text(left, "", m.Small, {
 		Name = "Room",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(206, 212, 226),
 	})
 
-	-- right: the odds
-	local right = UIKit.new("Frame", {
-		Name = "Right",
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-	}, panel)
-	UIKit.corner(right, 12)
-	UIKit.stroke(right, 2)
-	local oddsTitle = UIKit.label(right, "ODDS FOR EACH CAPSULE", m.Text, {
+	-- right: the exact odds on a dark studded well (paid random items: always shown)
+	local right = Pop.well(panel, { Name = "Right", ZIndex = 3 })
+	local oddsTitle = Pop.title(right, "ODDS FOR EACH EGG", m.Text + 3, "Gold", {
 		Name = "OddsTitle",
+		FontFace = PopTheme.Heavy,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
-		TextWrapped = false,
+		ZIndex = 5,
 	})
-	local oddsNote = UIKit.label(right, "", m.Small - 1, {
+	local oddsNote = GolemView.text(right, "", m.Small - 1, {
 		Name = "OddsNote",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(206, 212, 226),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
-	local heads = UIKit.new("Frame", { Name = "Heads", BackgroundTransparency = 1 }, right)
+	local heads = UIKit.new("Frame", { Name = "Heads", BackgroundTransparency = 1, ZIndex = 4 }, right)
 	for _, k in { { "HeadGolem", "GOLEM" }, { "HeadRarity", "RARITY" }, { "HeadBonus", "BONUS" }, { "HeadChance", "CHANCE" } } do
-		UIKit.label(heads, k[2], m.Small - 2, {
+		GolemView.text(heads, k[2], m.Small - 2, {
 			Name = k[1],
-			TextColor3 = Theme.TextDim,
-			TextWrapped = false,
+			TextColor3 = rgb(178, 184, 200),
 			TextXAlignment = if k[1] == "HeadChance" then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
 		})
 	end
@@ -794,24 +932,24 @@ function CapsuleView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = rgb(220, 224, 236),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		-- a gamepad can scroll the odds (it has nothing to press)
 		Selectable = true,
+		ZIndex = 4,
 	}, right)
 	UIKit.list(list, Enum.FillDirection.Vertical, 1)
 
-	local hint = UIKit.label(panel, "", m.Small, {
+	local hint = GolemView.text(panel, "", m.Small, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(200, 205, 218),
 	})
-	local empty = UIKit.label(panel, "Capsules aren't available where you play.", m.Text + 2, {
+	local empty = GolemView.text(panel, "Eggs aren't available where you play.", m.Text + 2, {
 		Name = "Empty",
-		TextColor3 = Theme.TextDim,
+		TextWrapped = true,
 		Visible = false,
 	})
 
@@ -845,11 +983,13 @@ function CapsuleView.build(compact: boolean?): Refs
 		Rows = {},
 		Hint = hint,
 		Empty = empty,
-		Tab = CapsuleConfig.List[1].Id,
+		Tab = CapsuleConfig.Stall[1].Id,
 		ArtFor = nil,
 		Compact = isCompact,
 	}
 	CapsuleView.layout(refs, isCompact, math.huge, math.huge)
+	-- like every window: Roblox's touch controls hide while it is open
+	TouchControls.follow(gui)
 	return refs
 end
 
@@ -866,33 +1006,35 @@ end
 
 --[[
 	Fits the panel into `maxWidth` x `maxHeight` design units: the normal or
-	compact metrics, shrunk to the space the screen has.
+	compact metrics, shrunk to the space the screen has. Every size,
+	position and text size comes from here, so a panel built for one layout
+	and laid out for the other looks exactly like one built for it.
 ]]
 function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	local m = metrics(compact)
 	local width = math.max(math.min(m.Width, maxWidth - 16), m.Left + 420)
 	local height = math.max(math.min(m.Height, maxHeight - 12), 400)
 	refs.Panel.Size = UDim2.fromOffset(width, height)
-	if refs.Compact ~= compact then
-		-- the capsule art is drawn at the layout's size: draw it again
-		refs.ArtHolder:ClearAllChildren()
-		refs.ArtFor = nil
-	end
 	refs.Compact = compact
 
 	-- every text size from the metrics (the build's sizes are only a start)
 	for _, tab in refs.Tabs do
-		tab.TextSize = if compact then 24 else 21
+		local label = tab:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.TextSize = if compact then 30 else 24
+			GolemView.fitEdge(label)
+		end
 	end
 	for _, button in refs.Buttons do
 		button.TextSize = if compact then 21 else 18
 	end
 	refs.Golems.TextSize = if compact then 21 else 19
-	refs.Note.TextSize = m.Text + 4
+	refs.Close.TextSize = math.floor(m.Close * 0.62)
+	refs.Note.TextSize = m.Text + 6
 	refs.Status.TextSize = m.Small
 	refs.Room.TextSize = m.Small
 	refs.LuckyText.TextSize = m.Small
-	refs.OddsTitle.TextSize = m.Text
+	refs.OddsTitle.TextSize = m.Text + 3
 	refs.OddsNote.TextSize = m.Small - 1
 	for _, child in refs.Heads:GetChildren() do
 		if child:IsA("TextLabel") then
@@ -901,32 +1043,38 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	end
 	refs.Hint.TextSize = m.Small
 	refs.Empty.TextSize = m.Text + 2
+	for _, label in { refs.Note, refs.Status, refs.Room, refs.OddsTitle, refs.OddsNote, refs.Hint, refs.Empty } do
+		GolemView.fitEdge(label)
+	end
 
-	-- header: title + subtitle left, coins / MY GOLEMS / X right
+	-- header: title + subtitle on the band, coins / MY GOLEMS / X right
 	local h = m.Header
+	GolemView.layoutChrome(refs.Panel, h)
 	local closeHolder = holderOf(refs.Close)
 	closeHolder.AnchorPoint = Vector2.new(1, 0)
-	closeHolder.Position = UDim2.new(1, -PAD, 0, (h - m.Close) / 2 + 3)
+	closeHolder.Position = UDim2.new(1, -(PAD - 4), 0, math.floor((h - m.Close) / 2))
 	closeHolder.Size = UDim2.fromOffset(m.Close, m.Close)
 	local golemsW = if compact then 200 else 150
 	local golemsH = if compact then m.Close else 48
 	local golemsHolder = holderOf(refs.Golems)
 	golemsHolder.AnchorPoint = Vector2.new(1, 0)
-	golemsHolder.Position = UDim2.new(1, -(PAD + m.Close + GAP), 0, (h - golemsH) / 2 + 3)
+	golemsHolder.Position = UDim2.new(1, -(PAD - 4 + m.Close + GAP), 0, math.floor((h - golemsH) / 2))
 	golemsHolder.Size = UDim2.fromOffset(golemsW, golemsH)
 	local balanceW = if compact then 190 else 160
 	refs.Balance.AnchorPoint = Vector2.new(1, 0)
-	refs.Balance.Position = UDim2.new(1, -(PAD + m.Close + 2 * GAP + golemsW), 0, (h - 40) / 2)
+	refs.Balance.Position = UDim2.new(1, -(PAD - 4 + m.Close + 2 * GAP + golemsW), 0, math.floor((h - 40) / 2))
 	refs.Balance.Size = UDim2.fromOffset(balanceW, 40)
 	local textW = width - (2 * PAD + m.Close + 3 * GAP + golemsW + balanceW)
-	place(refs.Title, PAD + 4, 8, textW, m.Title + 4)
-	place(refs.Subtitle, PAD + 4, 8 + m.Title + 4, textW, 20)
+	GolemView.placeTitle(refs.Title, PAD + 4, 6, textW, m.Title + 6, m.Title + 2)
+	TechShopView.fitText(refs.Title, textW, m.Title + 6, m.Title + 2, 20)
+	GolemView.placeTitle(refs.Title, PAD + 4, 6, textW, m.Title + 6, refs.Title.TextSize)
+	place(refs.Subtitle, PAD + 6, m.Title + 12, textW, 20)
 	refs.Subtitle.Visible = textW > 260
-	TechShopView.fitText(refs.Title, textW, m.Title + 4, m.Title, 20)
 	TechShopView.fitText(refs.Subtitle, textW, 20, m.Small + 1, 11)
+	GolemView.fitEdge(refs.Subtitle)
 
 	-- tabs
-	local tabY = h
+	local tabY = h + 2
 	place(refs.TabBar, PAD + 40, tabY, width - 2 * PAD - 80, m.TabBar)
 	for _, tab in refs.Tabs do
 		local holder = holderOf(tab)
@@ -940,42 +1088,96 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local bodyH = height - bodyY - m.Footer - 6
 	local leftW = m.Left
 	place(refs.Left, PAD, bodyY, leftW, bodyH)
-	local art = m.Art
-	place(refs.ArtHolder, 0, 4, art.X, art.Y)
-	local textX = art.X + 12
-	local nameH = m.Text + 12
-	place(refs.CapsuleName, textX, 4, leftW - textX, nameH)
-	place(refs.Description, textX, 4 + nameH, leftW - textX, art.Y - nameH)
-	TechShopView.fitText(refs.Description, leftW - textX, art.Y - nameH, m.Small, 11)
-	local y = art.Y + 12
-	local bannerH = if compact then 40 else 36
-	place(refs.LuckyBanner, 0, y, leftW, bannerH)
-	-- the three OPEN buttons side by side; the room and status lines under them
+	-- the OPEN buttons side by side at the bottom, the status and room lines under them
 	local statusH = 22
-	local buttonsY = math.min(y + bannerH + 10, bodyH - m.Button - 2 * statusH - 10)
+	local buttonsY = bodyH - (m.Button + 10 + 2 * statusH)
 	local buttonW = math.floor((leftW - 2 * GAP) / 3)
 	for i, button in refs.Buttons do
-		placeButton(button, (i - 1) * (buttonW + GAP), buttonsY + 5, buttonW, m.Button)
+		placeButton(button, (i - 1) * (buttonW + GAP), buttonsY, buttonW, m.Button)
+		local labelH = math.floor(m.Button * 0.4)
+		local label = button:FindFirstChild("Label") :: TextLabel
+		place(label, 5, 5, buttonW - 10, labelH)
+		label:SetAttribute("Max", if compact then 21 else 18)
+		local row = button:FindFirstChild("Row") :: Frame
+		local rowH = m.Button - labelH - 9
+		place(row, 0, 5 + labelH, buttonW, rowH)
+		local icon = math.min(rowH - 4, if compact then 28 else 24)
+		local coin = row:FindFirstChild("Coin") :: Frame
+		coin.Size = UDim2.fromOffset(icon, icon)
+		local coinMark = coin:FindFirstChild("Mark") :: TextLabel?
+		if coinMark then
+			coinMark.TextSize = math.floor(icon * 0.62)
+		end
+		local mark = row:FindFirstChild("Robux") :: ImageLabel
+		mark.Size = UDim2.fromOffset(icon, icon)
+		local amount = row:FindFirstChild("Amount") :: TextLabel
+		amount:SetAttribute("Max", if compact then 26 else 22)
+		CapsuleView.syncOpen(button)
 	end
 	place(refs.Note, 0, buttonsY, leftW, m.Button)
 	place(refs.Status, 0, buttonsY + m.Button + 10, leftW, statusH)
 	place(refs.Room, 0, buttonsY + m.Button + 10 + statusH, leftW, statusH)
+	-- the capsule's card above them, down to the buttons
+	local bannerH = if compact then 40 else 36
+	local artY = 4
+	local artH = buttonsY - 10 - artY
+	local old = refs.ArtHolder.Size
+	place(refs.ArtHolder, 0, artY, leftW, artH)
+	if refs.ArtFor ~= nil and (old.X.Offset ~= leftW or old.Y.Offset ~= artH) then
+		-- the card is drawn at its size: draw it again
+		refs.ArtHolder:ClearAllChildren()
+		refs.ArtFor = nil
+	end
+	-- tall card: the name on top, the capsule in the middle, the words under it;
+	-- short card: the capsule on the left, the name and words right of it.
+	-- The Triple Lucky banner takes the words' place while it runs.
+	local tall = artH >= leftW * 0.55
+	local pic, picX, picY
+	local nameSize = m.Text + 9
+	if tall then
+		local nameH = nameSize + 10
+		local descH = math.max(bannerH, math.floor(m.Small * 2 * 1.15) + 6)
+		place(refs.CapsuleName, 12, artY + 8, leftW - 24, nameH)
+		place(refs.Description, 14, artY + artH - descH - 10, leftW - 28, descH)
+		place(refs.LuckyBanner, 12, artY + artH - descH - 10 + math.floor((descH - bannerH) / 2), leftW - 24, bannerH)
+		refs.CapsuleName.TextXAlignment = Enum.TextXAlignment.Center
+		refs.Description.TextXAlignment = Enum.TextXAlignment.Center
+		pic = math.min(artH - nameH - descH - 26, math.floor(leftW * 0.62))
+		picX = leftW / 2
+		picY = 8 + nameH + (artH - nameH - descH - 18) / 2
+	else
+		pic = math.min(artH - 14, math.floor(leftW * 0.36))
+		picX = 8 + pic / 2
+		picY = artH / 2
+		local wordsX = pic + 18
+		local wordsW = leftW - wordsX - 10
+		local nameH = math.min(math.floor(nameSize * 2 * 1.12) + 4, math.floor(artH * 0.5))
+		local descH = math.max(0, artH - nameH - 18)
+		place(refs.CapsuleName, wordsX, artY + 8, wordsW, nameH)
+		place(refs.Description, wordsX, artY + 10 + nameH, wordsW, descH)
+		place(refs.LuckyBanner, wordsX, artY + artH - bannerH - 8, wordsW, bannerH)
+		refs.CapsuleName.TextXAlignment = Enum.TextXAlignment.Left
+		refs.Description.TextXAlignment = Enum.TextXAlignment.Left
+	end
+	refs.ArtHolder:SetAttribute("Picture", math.max(24, pic))
+	refs.ArtHolder:SetAttribute("PictureX", picX)
+	refs.ArtHolder:SetAttribute("PictureY", picY)
+	refs.CapsuleName:SetAttribute("Max", nameSize)
 
-	-- right: the odds list
+	-- right: the odds list on its well
 	local rightX = PAD + leftW + PAD
 	local rightW = width - rightX - PAD
 	place(refs.Right, rightX, bodyY, rightW, bodyH)
-	place(refs.OddsTitle, 12, 6, rightW * 0.5, 28)
-	place(refs.OddsNote, rightW * 0.5, 6, rightW * 0.5 - 12, 28)
-	place(refs.Heads, 8, 34, rightW - 16, 18)
+	placeOddsHead(refs, m)
+	place(refs.Heads, 8, 38, rightW - 16, 18)
 	local listW = rightW - 16
-	local chanceW = if m.Row > 28 then 120 else 96
+	local chanceW = chanceWidth(m)
 	local rest = listW - 10 - 20 - chanceW - 34 - 12
 	local nameW, rarityW, bonusW = CapsuleView.oddsColumns(rest)
 	local headCells = {
 		HeadGolem = { 18, nameW },
 		HeadRarity = { 18 + nameW, rarityW },
-		HeadBonus = { 18 + nameW + rarityW, bonusW },
+		HeadBonus = { 18 + nameW + rarityW + 6, bonusW - 6 },
 	}
 	local headRarity = refs.Heads:FindFirstChild("HeadRarity")
 	if headRarity and headRarity:IsA("TextLabel") then
@@ -985,7 +1187,7 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		if child:IsA("TextLabel") then
 			local cell = headCells[child.Name]
 			if cell then
-				place(child, cell[1], 0, cell[2], 18)
+				place(child, cell[1], 0, math.max(0, cell[2]), 18)
 			else
 				child.AnchorPoint = Vector2.new(1, 0)
 				child.Position = UDim2.new(1, -16, 0, 0)
@@ -993,16 +1195,14 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 			end
 		end
 	end
-	place(refs.List, 8, 56, listW, bodyH - 62)
+	place(refs.List, 8, 58, listW, bodyH - 64)
 	for _, row in refs.Rows do
 		placeRow(row, m, listW - 10)
 		row.Name.TextSize = m.Text - 1
-		row.Chance.TextSize = m.Text - 1
-		row.Rarity.TextSize = m.Small
+		row.Chance.TextSize = m.Text + 2
+		row.Rarity.TextSize = m.Small - 1
 		row.Bonus.TextSize = m.Small
-		TechShopView.fitText(row.Name, row.Name.Size.X.Offset, m.Row, m.Text - 1, 11)
-		TechShopView.fitText(row.Rarity, row.Rarity.Size.X.Offset - 4, m.Row, m.Small, 10)
-		TechShopView.fitText(row.Bonus, row.Bonus.Size.X.Offset, m.Row, m.Small, 10)
+		fitRow(row, m)
 	end
 
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -4)
@@ -1016,31 +1216,59 @@ local function showCard(refs: Refs, card: Card)
 	local m = metrics(refs.Compact)
 	if refs.ArtFor ~= card.Id then
 		refs.ArtHolder:ClearAllChildren()
-		CapsuleView.art(refs.ArtHolder, card.Id, m.Art.X, m.Art.Y)
+		local size = refs.ArtHolder.Size
+		local w, h = size.X.Offset, size.Y.Offset
+		local pic = (refs.ArtHolder:GetAttribute("Picture") :: number?) or 100
+		local at = UDim2.fromOffset(
+			(refs.ArtHolder:GetAttribute("PictureX") :: number?) or w / 2,
+			(refs.ArtHolder:GetAttribute("PictureY") :: number?) or h / 2
+		)
+		GolemView.glowCard(refs.ArtHolder, CapsuleView.paintOf(card.Id), Vector2.new(w, h), { Name = "Card" }, at)
+		local model, from = PictureModels.build("capsule_" .. card.Id)
+		if model then
+			Pop.model(refs.ArtHolder, "capsule_" .. card.Id, pic, model, {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = at,
+				ZIndex = 4,
+			}, from)
+		else
+			local drawn = CapsuleView.art(refs.ArtHolder, card.Id, math.floor(pic * 0.7), pic)
+			drawn.AnchorPoint = Vector2.new(0.5, 0.5)
+			drawn.Position = at
+			drawn.ZIndex = 4
+		end
 		refs.ArtFor = card.Id
 	end
 	refs.CapsuleName.Text = string.upper(card.Name)
-	refs.CapsuleName.TextColor3 = card.Color:Lerp(Color3.new(1, 1, 1), 0.35)
-	TechShopView.fitText(refs.CapsuleName, refs.CapsuleName.Size.X.Offset, refs.CapsuleName.Size.Y.Offset, m.Text + 7, 14)
+	local nameMax = (refs.CapsuleName:GetAttribute("Max") :: number?) or (m.Text + 9)
+	TechShopView.fitText(refs.CapsuleName, refs.CapsuleName.Size.X.Offset, refs.CapsuleName.Size.Y.Offset, nameMax, 14)
+	GolemView.fitEdge(refs.CapsuleName)
 	refs.Description.Text = card.Description
+	TechShopView.fitText(refs.Description, refs.Description.Size.X.Offset, refs.Description.Size.Y.Offset, m.Small + 1, 11)
+	GolemView.fitEdge(refs.Description)
 	refs.LuckyBanner.Visible = card.Lucky
+	refs.Description.Visible = not card.Lucky -- (the banner takes its place)
 	refs.LuckyText.Text = CapsuleView.luckyText(card)
-	TechShopView.fitText(refs.LuckyText, refs.LuckyBanner.Size.X.Offset - 16, refs.LuckyBanner.Size.Y.Offset, m.Small, 10)
+	TechShopView.fitText(refs.LuckyText, refs.LuckyBanner.Size.X.Offset - 16, refs.LuckyBanner.Size.Y.Offset, m.Small + 1, 10)
 	local showButtons = card.Note == nil
 	for i, button in refs.Buttons do
 		local buy = card.Buys[i]
 		holderOf(button).Visible = showButtons and buy ~= nil
 		if buy and button:GetAttribute("Busy") ~= true then
+			button:SetAttribute("Currency", if card.Robux then (if buy.Reason == "ComingSoon" then "None" else "Robux") else "Coins")
 			button.Text = `{buy.Text}\n{buy.PriceText}`
-			CapsuleView.style(button, buy.CanBuy, Theme.Good, Theme.GoodDark)
+			-- coins gold, Robux green, grey when it can't be opened now
+			GolemView.setPaint(button, if card.Robux then PopTheme.Price else "Yellow", buy.CanBuy)
+			CapsuleView.syncOpen(button)
 		end
 	end
 	refs.Note.Visible = not showButtons
 	refs.Note.Text = card.Note or ""
 	refs.Room.Text = `Golems: {card.Owned} / {GolemConfig.InventoryCap}`
-	refs.Room.TextColor3 = if card.Room < 1 then Theme.Bad else Theme.TextDim
+	refs.Room.TextColor3 = if card.Room < 1 then Theme.Bad else rgb(206, 212, 226)
 	refs.OddsNote.Text = if card.Lucky then "Triple Lucky odds (x3 = boosted)" else "the chance of each golem"
-	refs.OddsNote.TextColor3 = if card.Lucky then LUCKY else Theme.TextDim
+	refs.OddsNote.TextColor3 = if card.Lucky then LUCKY else rgb(206, 212, 226)
+	placeOddsHead(refs, m)
 	-- odds rows (pooled)
 	for i, line in card.Odds do
 		local existing: Row? = refs.Rows[i]
@@ -1054,16 +1282,14 @@ local function showCard(refs: Refs, card: Card)
 		row.Frame.Visible = true
 		row.Bar.BackgroundColor3 = line.Color
 		row.Name.Text = line.Name
-		row.Name.TextColor3 = line.Color:Lerp(Color3.new(1, 1, 1), 0.25)
-		row.Rarity.Text = line.Rarity
-		row.Rarity.TextColor3 = line.Color
+		row.Name.TextColor3 = line.Color:Lerp(Color3.new(1, 1, 1), 0.3)
+		row.Rarity.Text = string.upper(line.Rarity)
+		row.Rarity.BackgroundColor3 = GolemView.rarityChip(line.Rarity)
 		row.Bonus.Text = line.Bonus
 		row.Chance.Text = line.Text
-		row.Chance.TextColor3 = if line.Lucky then LUCKY else Theme.Text
+		row.Chance.TextColor3 = if line.Lucky then LUCKY else PopTheme.Ink
 		row.Lucky.Visible = line.Lucky
-		TechShopView.fitText(row.Name, row.Name.Size.X.Offset, m.Row, m.Text - 1, 11)
-		TechShopView.fitText(row.Rarity, row.Rarity.Size.X.Offset - 4, m.Row, m.Small, 10)
-		TechShopView.fitText(row.Bonus, row.Bonus.Size.X.Offset, m.Row, m.Small, 10)
+		fitRow(row, m)
 	end
 	for i = #card.Odds + 1, #refs.Rows do
 		refs.Rows[i].Frame.Visible = false
@@ -1099,19 +1325,7 @@ function CapsuleView.setCards(refs: Refs, cards: { Card }): string
 		return ""
 	end
 	refs.Tab = card.Id
-	for id, tab in refs.Tabs do
-		local selected = id == card.Id
-		local capsule = CapsuleConfig.ById[id]
-		tab.BackgroundColor3 = if selected then capsule.Color:Lerp(Color3.new(1, 1, 1), 0.2) else capsule.Color:Lerp(DARK, 0.25)
-		tab.TextColor3 = if selected then Theme.Text else Theme.TextDim
-		local stroke = tab:FindFirstChild("Selected") :: UIStroke?
-		if selected and not stroke then
-			local made = UIKit.stroke(tab, 3, Color3.new(1, 1, 1))
-			made.Name = "Selected"
-		elseif not selected and stroke then
-			stroke:Destroy()
-		end
-	end
+	Pop.selectTab(refs.Tabs, card.Id)
 	showCard(refs, card)
 	return card.Id
 end
@@ -1180,6 +1394,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 	local gui = UIKit.screen("TerraForgeCapsuleOpen", 40)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true)
 	local dim = UIKit.new("TextButton", {
 		Name = "Dim",
 		Text = "",
@@ -1191,6 +1406,8 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
 	}, gui)
+	-- the light burst behind the golem: a soft glow and wide rays (the
+	-- controller turns them and paints them the golem's rarity colour)
 	local rays = UIKit.new("Frame", {
 		Name = "Rays",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1199,15 +1416,28 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 	}, gui)
+	for i, k in { 0.62, 0.4 } do
+		local disc = UIKit.new("Frame", {
+			Name = "Glow" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = if i == 1 then 0.8 else 0.66,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(k, k),
+			ZIndex = 2,
+		}, rays)
+		UIKit.corner(disc, 999)
+	end
 	for i = 1, RAYS do
 		local ray = UIKit.new("Frame", {
 			Name = "Ray" .. i,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(0, 46, 1, 0),
+			Size = UDim2.new(0.085, 0, 1, 0),
 			Rotation = (i - 1) * 180 / RAYS,
 			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = 0.82,
+			BackgroundTransparency = 0.55,
 			BorderSizePixel = 0,
 			ZIndex = 2,
 		}, rays)
@@ -1215,7 +1445,9 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 			Rotation = 90,
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1),
-				NumberSequenceKeypoint.new(0.5, 0),
+				NumberSequenceKeypoint.new(0.3, 0.2),
+				NumberSequenceKeypoint.new(0.5, 1),
+				NumberSequenceKeypoint.new(0.7, 0.2),
 				NumberSequenceKeypoint.new(1, 1),
 			}),
 		}, ray)
@@ -1226,8 +1458,8 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Position = UDim2.fromScale(0.5, 0.42),
 		Size = UDim2.fromOffset(460, 460),
 		BackgroundTransparency = 1,
-		Ambient = rgb(160, 150, 150),
-		LightColor = rgb(255, 244, 228),
+		Ambient = rgb(170, 166, 170),
+		LightColor = rgb(255, 248, 236),
 		LightDirection = Vector3.new(-0.5, -1, 0.7),
 		ZIndex = 3,
 	}, gui)
@@ -1245,6 +1477,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		BorderSizePixel = 0,
 		ZIndex = 9,
 	}, gui)
+	-- the name plate: a chunky name with a 3D shadow, the rarity and NEW! chips, the bonus
 	local plate = UIKit.new("Frame", {
 		Name = "Plate",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1252,62 +1485,45 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Visible = false,
 		ZIndex = 5,
 	}, gui)
-	local plateName = UIKit.label(plate, "", if isCompact then 48 else 44, {
+	local plateName = GolemView.text(plate, "", if isCompact then 50 else 46, {
 		Name = "GolemName",
-		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.new(1, 0, 0, 52),
-		FontFace = Theme.TitleFont,
-		TextWrapped = false,
-		ZIndex = 5,
+		FontFace = PopTheme.Heavy,
+		ZIndex = 6,
 	})
-	local nameStroke = plateName:FindFirstChildOfClass("UIStroke")
-	if nameStroke then
-		nameStroke.Thickness = 3
-	end
+	Pop.shadow(plateName, 5)
 	local chips = UIKit.new("Frame", {
 		Name = "Chips",
-		Position = UDim2.fromOffset(0, 56),
-		Size = UDim2.new(1, 0, 0, 28),
 		BackgroundTransparency = 1,
 		ZIndex = 5,
 	}, plate)
-	UIKit.list(chips, Enum.FillDirection.Horizontal, 8, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
-	local plateRarity = UIKit.chip(chips, "", Theme.PanelLight, {
+	UIKit.list(chips, Enum.FillDirection.Horizontal, 8, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local plateRarity = GolemView.solidChip(chips, "", GolemView.ChipDark, Vector2.new(150, 32), {
 		Name = "Rarity",
 		LayoutOrder = 1,
-		Size = UDim2.fromOffset(130, 28),
-		TextSize = 18,
-		ZIndex = 5,
 	})
-	local plateNew = UIKit.chip(chips, "NEW!", Theme.Accent, {
+	local plateNew = GolemView.solidChip(chips, "NEW!", Pop.paint("Yellow").Bottom, Vector2.new(84, 32), {
 		Name = "New",
 		LayoutOrder = 2,
-		Size = UDim2.fromOffset(70, 28),
-		TextSize = 18,
-		ZIndex = 5,
 	})
-	local plateBonus = UIKit.label(plate, "", if isCompact then 26 else 24, {
+	local plateBonus = GolemView.solidChip(plate, "", GolemView.ChipDark, Vector2.new(320, 34), {
 		Name = "Bonus",
-		Position = UDim2.fromOffset(0, 90),
-		Size = UDim2.new(1, 0, 0, 30),
-		TextColor3 = Theme.Good,
-		TextWrapped = false,
-		ZIndex = 5,
+		AnchorPoint = Vector2.new(0.5, 0),
+		TextColor3 = GolemView.BonusColor,
 	})
-	local counter = UIKit.label(gui, "", if isCompact then 28 else 24, {
+	local counter = Pop.title(gui, "", if isCompact then 30 else 26, "Gold", {
 		Name = "Counter",
 		AnchorPoint = Vector2.new(0.5, 0),
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Text,
-		TextWrapped = false,
-		ZIndex = 5,
+		FontFace = PopTheme.Heavy,
+		ZIndex = 6,
 	})
-	local note = UIKit.label(gui, "", if isCompact then 20 else 18, {
+	local note = GolemView.text(gui, "", if isCompact then 20 else 18, {
 		Name = "Note",
 		AnchorPoint = Vector2.new(0.5, 0),
 		TextColor3 = LUCKY,
-		TextWrapped = false,
-		ZIndex = 5,
+		ZIndex = 6,
 	})
 	local grid = UIKit.new("Frame", {
 		Name = "Grid",
@@ -1336,20 +1552,20 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, gui)
-	local skip = UIKit.button(controls, "SKIP", Theme.PanelLight, Theme.PanelDark, {
+	local skip = GolemView.popButton(controls, "SKIP", PopTheme.Gray, {
 		Name = "Skip",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Size = UDim2.fromOffset(200, button),
 		TextSize = 24,
 	})
-	local ok = UIKit.button(controls, "OK", Theme.Good, Theme.GoodDark, {
+	local ok = GolemView.popButton(controls, "OK", "Green", {
 		Name = "Ok",
 		AnchorPoint = Vector2.new(1, 1),
 		Size = UDim2.fromOffset(200, button),
 		TextSize = 26,
 		Visible = false,
 	})
-	local again = UIKit.button(controls, "OPEN AGAIN", Theme.Accent, Theme.AccentDark, {
+	local again = GolemView.popButton(controls, "OPEN AGAIN", "Yellow", {
 		Name = "Again",
 		AnchorPoint = Vector2.new(0, 1),
 		Size = UDim2.fromOffset(if isCompact then 340 else 300, button),
@@ -1360,11 +1576,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		holderOf(b).ZIndex = 6
 		b.ZIndex = 6
 	end
-	local hint = UIKit.label(gui, "", if isCompact then 20 else 17, {
+	local hint = GolemView.text(gui, "", if isCompact then 20 else 17, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = rgb(214, 218, 230),
 		ZIndex = 6,
 	})
 	local refs: OpenRefs = {
@@ -1401,11 +1616,13 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Compact = compact
 	local button = if compact then 76 else 60
 	-- every text size from the layout (the build's sizes are only a start)
-	refs.PlateName.TextSize = if compact then 48 else 44
-	refs.PlateBonus.TextSize = if compact then 26 else 24
-	refs.Counter.TextSize = if compact then 28 else 24
+	refs.PlateBonus.TextSize = if compact then 24 else 22
+	refs.Counter.TextSize = if compact then 30 else 26
 	refs.Note.TextSize = if compact then 20 else 18
 	refs.Hint.TextSize = if compact then 20 else 17
+	for _, label in { refs.PlateBonus, refs.Counter, refs.Note, refs.Hint } do
+		GolemView.fitEdge(label)
+	end
 	local bottom = height - 18
 	-- the hero sits in the upper part, the plate under it, the buttons at the bottom
 	local hero = math.clamp(math.floor(height * 0.5), 220, 460)
@@ -1415,11 +1632,26 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Rays.Size = UDim2.fromOffset(hero * 1.7, hero * 1.7)
 	refs.Rays.Position = UDim2.fromOffset(width / 2, heroY)
 	local plateY = math.min(heroY + hero * 0.38, bottom - button - 132)
+	local plateW = math.min(width - 40, 700)
 	refs.Plate.Position = UDim2.fromOffset(width / 2, plateY)
-	refs.Plate.Size = UDim2.fromOffset(math.min(width - 40, 700), 124)
-	refs.Counter.Position = UDim2.fromOffset(width / 2, 12)
-	refs.Counter.Size = UDim2.fromOffset(400, 34)
-	refs.Note.Position = UDim2.fromOffset(width / 2, 46)
+	refs.Plate.Size = UDim2.fromOffset(plateW, 128)
+	local nameSize = if compact then 50 else 46
+	GolemView.placeTitle(refs.PlateName, 0, 0, plateW, 54, nameSize)
+	local shadow = refs.Plate:FindFirstChild("GolemNameShadow")
+	if shadow and shadow:IsA("TextLabel") then
+		shadow.Position = UDim2.fromOffset(0, 5)
+	end
+	local chips = refs.PlateRarity.Parent :: Frame
+	place(chips, 0, 58, plateW, 32)
+	GolemView.sizeChip(refs.PlateRarity, 150, 32)
+	GolemView.sizeChip(refs.PlateNew, 84, 32)
+	refs.PlateRarity.TextSize = 20
+	refs.PlateNew.TextSize = 20
+	refs.PlateBonus.Position = UDim2.new(0.5, 0, 0, 94)
+	GolemView.sizeChip(refs.PlateBonus, math.min(plateW, 340), 34)
+	refs.Counter.Position = UDim2.fromOffset(width / 2, 10)
+	refs.Counter.Size = UDim2.fromOffset(500, 38)
+	refs.Note.Position = UDim2.fromOffset(width / 2, 48)
 	refs.Note.Size = UDim2.fromOffset(math.min(width - 40, 700), 24)
 	-- the grid between the note and the buttons
 	local top = 76
@@ -1451,12 +1683,20 @@ function CapsuleView.setPlate(refs: OpenRefs, kind: string?, isNew: boolean)
 	end
 	local color = Rarity.ById[golem.Rarity].Color
 	refs.PlateName.Text = string.upper(golem.Name)
-	refs.PlateName.TextColor3 = color
-	TechShopView.fitText(refs.PlateName, refs.Plate.Size.X.Offset, 52, if refs.Compact then 48 else 44, 24)
+	refs.PlateName.TextColor3 = color:Lerp(Color3.new(1, 1, 1), 0.2)
+	local size = refs.PlateName.Size
+	TechShopView.fitText(refs.PlateName, size.X.Offset, size.Y.Offset, if refs.Compact then 50 else 46, 24)
+	GolemView.placeTitle(refs.PlateName, 0, 0, size.X.Offset, size.Y.Offset, refs.PlateName.TextSize)
+	local shadow = refs.Plate:FindFirstChild("GolemNameShadow")
+	if shadow and shadow:IsA("TextLabel") then
+		shadow.Position = UDim2.fromOffset(0, 5)
+	end
 	refs.PlateRarity.Text = string.upper(golem.Rarity)
-	refs.PlateRarity.BackgroundColor3 = color
+	refs.PlateRarity.BackgroundColor3 = GolemView.rarityChip(golem.Rarity)
 	refs.PlateNew.Visible = isNew
 	refs.PlateBonus.Text = GolemConfig.describe(golem.Id)
+	TechShopView.fitText(refs.PlateBonus, refs.PlateBonus.Size.X.Offset - 20, 34, if refs.Compact then 24 else 22, 12)
+	GolemView.fitEdge(refs.PlateBonus)
 end
 
 -- The rarity color of a kind (the rays, the flash, the cell frames).
@@ -1476,12 +1716,53 @@ function CapsuleView.best(kinds: { string }): string?
 	return best
 end
 
+-- More golems than this (a limited capsule's x50) show one card per kind with its count.
+CapsuleView.GridMax = 10
+
 --[[
-	The result grid: one card per woken golem (opening order), hidden until
-	the controller pops them; `new` marks kinds the player didn't own
-	before. 1-3 golems: one row of big cards; more: 5 per row.
+	A big opening as one card per kind (summary of `kinds` / `new`): the
+	kinds rarest first (GolemConfig.score), how many of each woke and
+	whether any of them is NEW.
 ]]
-function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]: boolean }, best: number?)
+function CapsuleView.summary(kinds: { string }, new: { [number]: boolean }): ({ string }, { [number]: boolean }, { [number]: number })
+	local order: { string } = {}
+	local counts: { [string]: number } = {}
+	local fresh: { [string]: boolean } = {}
+	for i, kind in kinds do
+		if counts[kind] == nil then
+			table.insert(order, kind)
+			counts[kind] = 0
+		end
+		counts[kind] += 1
+		if new[i] then
+			fresh[kind] = true
+		end
+	end
+	table.sort(order, function(a: string, b: string): boolean
+		local sa, sb = GolemConfig.score(a), GolemConfig.score(b)
+		if sa ~= sb then
+			return sa > sb
+		end
+		return a < b
+	end)
+	local outNew: { [number]: boolean } = {}
+	local outCounts: { [number]: number } = {}
+	for i, kind in order do
+		outNew[i] = fresh[kind] == true
+		outCounts[i] = counts[kind]
+	end
+	return order, outNew, outCounts
+end
+
+--[[
+	The result grid: one bright rarity card per woken golem (opening order:
+	light rays behind its live 3D picture, the name, the bonus chip), hidden
+	until the controller pops them; `new` marks kinds the player didn't own
+	before (NEW!), `best` gets a gold outline. 1-3 golems: one row of big
+	cards; more: 5 per row. `counts` (CapsuleView.summary): each card is a
+	kind, "x12" on it.
+]]
+function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]: boolean }, best: number?, counts: { [number]: number }?)
 	for _, cell in refs.Cells do
 		cell.Frame:Destroy()
 	end
@@ -1502,53 +1783,61 @@ function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]:
 	refs.GridLayout.CellSize = UDim2.fromOffset(cellSize.X, cellSize.Y)
 	-- exactly `cols` cards per row (x10: 5 x 2)
 	refs.Grid.Size = UDim2.fromOffset(cols * cellSize.X + (cols - 1) * gap, rows * cellSize.Y + (rows - 1) * gap)
-	local nameSize = math.max(11, math.floor((if many then 15 else 19) * math.max(k, 0.75)))
+	local nameSize = math.max(11, math.floor((if many then 16 else 21) * math.max(k, 0.75)))
 	local bonusSize = math.max(10, math.floor((if many then 13 else 16) * math.max(k, 0.75)))
 	local nameH = nameSize + 7
-	local bonusH = bonusSize + 7
+	local bonusH = bonusSize + 9
 	for i, kind in kinds do
 		local golem = GolemConfig.ById[kind]
-		local color = CapsuleView.rarityColor(kind)
-		local frame = UIKit.new("Frame", {
+		local portraitSize = math.max(24, math.min(cellSize.X - 24, cellSize.Y - nameH - bonusH - 20))
+		local frame = GolemView.glowCard(refs.Grid, GolemView.rarityPaint(if golem then golem.Rarity else nil), cellSize, {
 			Name = "Cell" .. i,
 			LayoutOrder = i,
-			BackgroundColor3 = Theme.Panel,
-			BorderSizePixel = 0,
 			Visible = false,
 			ZIndex = 4,
-		}, refs.Grid)
-		UIKit.corner(frame, 14)
-		UIKit.stroke(frame, if best == i then 5 else 3, if best == i then Color3.new(1, 1, 1) else color)
-		UIKit.gradient(frame, color:Lerp(Theme.Panel, 0.55), Theme.PanelDark)
-		local portraitSize = math.max(24, math.min(cellSize.X - 34, cellSize.Y - nameH - bonusH - 20))
-		local portrait = GolemView.portrait(frame, kind, portraitSize)
-		portrait.AnchorPoint = Vector2.new(0.5, 0)
-		portrait.Position = UDim2.new(0.5, 0, 0, 10)
-		local name = UIKit.label(frame, if golem then golem.Name else "???", nameSize, {
+		}, UDim2.new(0.5, 0, 0, 8 + portraitSize / 2))
+		local border = frame:FindFirstChild("Border") :: UIStroke
+		if best == i then
+			border.Color = GolemView.SelectColor
+			border.Thickness = 5
+		end
+		GolemView.picture(frame, kind, portraitSize, {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 8),
+			ZIndex = 4,
+		})
+		local name = GolemView.text(frame, if golem then golem.Name else "???", nameSize, {
 			Name = "GolemName",
-			Position = UDim2.new(0, 6, 1, -(nameH + bonusH + 6)),
-			Size = UDim2.new(1, -12, 0, nameH),
-			TextColor3 = color,
-			TextWrapped = false,
-			ZIndex = 5,
+			Position = UDim2.new(0, 5, 1, -(nameH + bonusH + 8)),
+			Size = UDim2.new(1, -10, 0, nameH),
+			ZIndex = 6,
 		})
-		TechShopView.fitText(name, cellSize.X - 12, nameH, nameSize, 9)
-		local bonus = UIKit.label(frame, GolemConfig.describe(kind), bonusSize, {
+		TechShopView.fitText(name, cellSize.X - 10, nameH, nameSize, 9)
+		GolemView.fitEdge(name)
+		local bonus = GolemView.solidChip(frame, GolemConfig.describe(kind), GolemView.ChipDark, Vector2.new(cellSize.X - 12, bonusH), {
 			Name = "Bonus",
-			Position = UDim2.new(0, 6, 1, -(bonusH + 4)),
-			Size = UDim2.new(1, -12, 0, bonusH),
-			TextColor3 = Theme.Good,
-			TextWrapped = false,
-			ZIndex = 5,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -6),
+			TextColor3 = GolemView.BonusColor,
 		})
-		TechShopView.fitText(bonus, cellSize.X - 12, bonusH, bonusSize, 8)
+		TechShopView.fitText(bonus, cellSize.X - 24, bonusH, bonusSize, 8)
+		GolemView.fitEdge(bonus)
 		if new[i] then
-			UIKit.chip(frame, "NEW!", Theme.Accent, {
+			GolemView.solidChip(frame, "NEW!", Pop.paint("Yellow").Bottom, Vector2.new(58, 24), {
 				Name = "New",
 				Position = UDim2.fromOffset(6, 6),
-				Size = UDim2.fromOffset(52, 22),
-				TextSize = 14,
-				ZIndex = 6,
+				TextSize = 15,
+				ZIndex = 7,
+			})
+		end
+		local count = if counts then counts[i] else nil
+		if count and count > 1 then
+			GolemView.solidChip(frame, `x{count}`, GolemView.ChipDark, Vector2.new(50, 24), {
+				Name = "Count",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -6, 0, 6),
+				TextSize = 16,
+				ZIndex = 7,
 			})
 		end
 		local scale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, frame)
@@ -1556,11 +1845,11 @@ function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]:
 	end
 end
 
--- The rays and flash color.
+-- The rays and flash color (the glow discs too).
 function CapsuleView.setRayColor(refs: OpenRefs, color: Color3)
 	for _, ray in refs.Rays:GetChildren() do
 		if ray:IsA("Frame") then
-			ray.BackgroundColor3 = color
+			ray.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.25)
 		end
 	end
 end
@@ -1655,29 +1944,6 @@ function CapsuleView.fillBoard(gui: Instance, capsuleId: string, lucky: boolean)
 			Enum.TextXAlignment.Right
 		)
 	end
-end
-
-
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = CapsuleView.build
-CapsuleView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-		TouchControls.follow(refs.Gui)
-	end
-	return refs
-end
-
-local darkBuildOpening = CapsuleView.buildOpening
-CapsuleView.buildOpening = function(compact: boolean?): OpenRefs
-	local refs = darkBuildOpening(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-	end
-	return refs
 end
 
 return CapsuleView

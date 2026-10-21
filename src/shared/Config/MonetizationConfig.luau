@@ -17,7 +17,8 @@
 	  calls Receipts.setReady(true): only when every live id has a handler
 	  (MonetizationService.unhandled() is empty; ReceiptsAttribute tells the
 	  clients).
-	- PaidRandom = true: buying it gives a random result (Royal capsules) or
+	- PaidRandom = true: buying it gives a random result (Royal and limited capsules, the
+	  Spin & Win wheel's bought spins) or
 	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
 	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
 	  for players whose PolicyService ArePaidRandomItemsRestricted is true
@@ -56,6 +57,19 @@
 	    "ServerBoost" products: Seconds of the ServerBoost effect for everyone
 	                 on the server (ServerBoostService; not saved: it ends
 	                 with the server)
+	    "WheelSpins" products: Spins bought spins of the Spin & Win wheel,
+	                 held in data.Wheel.Spins (WheelService). The prompt
+	                 answers "Full" past WheelConfig.MaxSpins held; a receipt
+	                 is never refused and always credits all of them
+	    "StarterPack" products: the Starter Pack (StarterPackService): its
+	                 Golem (paid, past the cap like a Royal capsule's), its
+	                 coins (coinPackAmount: CoinSeconds of income, at least
+	                 MinCoins) and its PodiumSkin + title, recorded in
+	                 data.StarterPack.BoughtAt. Once = true: prompted only
+	                 while not bought ("Owned" after) and in the offer window
+	                 (StarterPackService.offerOpen); a second receipt of the
+	                 same account (two prompts open at once) is still
+	                 granted in full, never dropped
 	  Every grant is recorded in data.Purchases[PurchaseId] = os.time() and
 	  data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() }.
 
@@ -133,6 +147,10 @@ export type Product = {
 	MaxLevel: number?, -- within MinLevel..MaxLevel (the price band; VaultService)
 	ServerBoost: string?, -- Grant "ServerBoost": the server-wide effect ("Luck")
 	WeaponId: string?, -- Grant "RebirthWeapon": the StarBlasterData id it gives
+	Spins: number?, -- Grant "WheelSpins": bought spins of the Spin & Win wheel (WheelService)
+	Golem: string?, -- Grant "StarterPack": the GolemConfig kind it gives (one, fixed: not random)
+	PodiumSkin: string?, -- Grant "StarterPack": the ArtifactConfig.PodiumSkins id it unlocks
+	Once: boolean?, -- a developer product sold once per account ("Owned" after; StarterPackService)
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -208,6 +226,16 @@ local LIST: { Product } = {
 		Perks = { "OfflineExtension" },
 	},
 	{
+		Key = "DoubleMoney",
+		Grant = "Perks",
+		Kind = "GamePass",
+		Id = 0,
+		Robux = 199,
+		Name = "2x Money",
+		Description = "Double coins forever: your podiums earn twice as much (offline too) and Tobin pays twice as much for everything you sell.",
+		Perks = { "DoubleMoney" },
+	},
+	{
 		Key = "TrainExpress",
 		Grant = "Perks",
 		Kind = "GamePass",
@@ -238,6 +266,25 @@ local LIST: { Product } = {
 		Grant = "Hoverboard",
 		BoardId = "RoyalPhoenix",
 	},
+	---------------------------------------------------------------- the Starter Pack
+	-- (one per account, offered in the first hour of play: StarterPackService.
+	-- Nothing random in it, so it is not a paid random item: no Triple Lucky,
+	-- no capsule. Its coins are "coins for Robux": offered only while
+	-- coinsBuyable(), like the coin packs.)
+	{
+		Key = "StarterPack",
+		Grant = "StarterPack",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "Starter Pack",
+		Description = 'Once per player: the Rare golem Gilded Porter (+10% podium income), 20 minutes of your podium income in coins (at least 15,000) and the Pioneer podium skin with the title "Pioneer".',
+		Golem = "GildedPorter",
+		CoinSeconds = 1200,
+		MinCoins = 15000,
+		PodiumSkin = "Pioneer",
+		Once = true,
+	},
 	---------------------------------------------------------------- golem capsules
 	{
 		Key = "RoyalCapsule1",
@@ -245,7 +292,7 @@ local LIST: { Product } = {
 		Kind = "Product",
 		Id = 0,
 		Robux = 49,
-		Name = "Royal Capsule",
+		Name = "Royal Egg",
 		Description = "Wakes 1 golem from a Royal Capsule (odds shown before buying).",
 		PaidRandom = true,
 		Capsule = "Royal",
@@ -257,7 +304,7 @@ local LIST: { Product } = {
 		Kind = "Product",
 		Id = 0,
 		Robux = 139,
-		Name = "Royal Capsule x3",
+		Name = "Royal Egg x3",
 		Description = "Wakes 3 golems from Royal Capsules (odds shown before buying).",
 		PaidRandom = true,
 		Capsule = "Royal",
@@ -269,7 +316,7 @@ local LIST: { Product } = {
 		Kind = "Product",
 		Id = 0,
 		Robux = 229,
-		Name = "Royal Capsule x5",
+		Name = "Royal Egg x5",
 		Description = "Wakes 5 golems from Royal Capsules (odds shown before buying).",
 		PaidRandom = true,
 		Capsule = "Royal",
@@ -281,11 +328,61 @@ local LIST: { Product } = {
 		Kind = "Product",
 		Id = 0,
 		Robux = 429,
-		Name = "Royal Capsule x10",
+		Name = "Royal Egg x10",
 		Description = "Wakes 10 golems from Royal Capsules (odds shown before buying).",
 		PaidRandom = true,
 		Capsule = "Royal",
 		Count = 10,
+	},
+	-- the LIMITED EDITION capsule (Config/LimitedGolems: sold only while its
+	-- edition runs; a receipt is always granted)
+	{
+		Key = "DragonforgeCapsule1",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "Dragonforge Shard",
+		Description = "Wakes 1 golem of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 1,
+	},
+	{
+		Key = "DragonforgeCapsule3",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 249,
+		Name = "Dragonforge Shard x3",
+		Description = "Wakes 3 golems of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 3,
+	},
+	{
+		Key = "DragonforgeCapsule10",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 799,
+		Name = "Dragonforge Shard x10",
+		Description = "Wakes 10 golems of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 10,
+	},
+	{
+		Key = "DragonforgeCapsule50",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 3499,
+		Name = "Dragonforge Shard x50",
+		Description = "Wakes 50 golems of the limited Dragonforge edition (odds shown before buying). Golems that don't fit wake as soon as there is room.",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 50,
 	},
 	---------------------------------------------------------------- luck boosts
 	{
@@ -481,6 +578,47 @@ local LIST: { Product } = {
 		ServerBoost = "Luck",
 		Seconds = 900,
 	},
+	---------------------------------------------------------------- Spin & Win wheel spins
+	-- (owner 2026-10-20: "yes, sell spins for Robux"; the left BUY SPINS panel
+	-- of the wheel screen). A bought spin turns the same wheel as the free
+	-- daily spin, so it is a paid random item: every segment's exact odds
+	-- are on the wheel's face and in Details before buying, it is hidden and
+	-- refused where paid random items are restricted (WheelService), and the
+	-- free daily spin stays free. Bought spins are held in data.Wheel.Spins
+	-- and never expire; the free spin is used first.
+	{
+		Key = "WheelSpins1",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 25,
+		Name = "1 Wheel Spin",
+		Description = "1 spin of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 1,
+	},
+	{
+		Key = "WheelSpins5",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "5 Wheel Spins",
+		Description = "5 spins of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 5,
+	},
+	{
+		Key = "WheelSpins10",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 179,
+		Name = "10 Wheel Spins",
+		Description = "10 spins of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 10,
+	},
 }
 -- the five STAR blasters (StarBlasterData): one-time passes, kept through every rebirth;
 -- they open at their rebirth count (a pass bought earlier waits). Keys StarComet ... StarSingularity.
@@ -509,6 +647,18 @@ MonetizationConfig.PromptMemorySeconds = 15 * 60
 -- (src/server/Receipts.luau, Receipts.setReady). Until then no product is
 -- prompted, live id or not, and the cards show "Coming soon".
 MonetizationConfig.ReceiptsAttribute = "ReceiptsReady"
+
+-- The 2x Money pass (perk "DoubleMoney"): podium income and sell value are
+-- multiplied by this AFTER every capped bonus (StatConfig IncomePct cap 2,
+-- SellPct cap 3), so the pass always doubles what the player earns
+-- (Bonuses.moneyMult: EconomyService.addIncomeFactor and Bonuses.sellMult).
+MonetizationConfig.MoneyPassPerk = "DoubleMoney"
+MonetizationConfig.MoneyPassMult = 2
+
+-- The Starter Pack offer (StarterPackService, StarterPackController): open
+-- for the first Seconds of play (data.Stats.PlaySeconds) while not bought;
+-- the small popup shows once per session after PopupAfter seconds of play.
+MonetizationConfig.StarterOffer = { Seconds = 3600, PopupAfter = 300 }
 
 MonetizationConfig.List = LIST
 MonetizationConfig.Products = {} :: { [string]: Product }
@@ -591,7 +741,7 @@ end
 -- for a GamePass, PromptProductPurchase for a Product - and sends "Prompted").
 function MonetizationConfig.promptStatus(key: any, restricted: boolean, owned: boolean?, full: boolean?): string
 	local product = MonetizationConfig.get(key)
-	if not product or (product.CoinPack and not MonetizationConfig.coinsBuyable()) then
+	if not product or ((product.CoinPack or product.CoinSeconds) and not MonetizationConfig.coinsBuyable()) then
 		return "Unknown"
 	end
 	if product.PaidRandom and restricted then

@@ -72,6 +72,7 @@ local LightingController = require(script.Parent.LightingController)
 local HudController = require(script.Parent.HudController)
 local InteractController = require(script.Parent.InteractController)
 local MiningController = require(script.Parent.MiningController)
+local PromptController = require(script.Parent.PromptController)
 
 local CleaningController = {}
 
@@ -302,6 +303,9 @@ local function enter(ctx: any)
 	MenuPanels.closeAll()
 	MiningController.setBusy(true)
 	InteractController.suspend()
+	-- no prompt behind the close-up: the station's "Clean Ore" comes back the moment you
+	-- submit, and E on the result card (Collect) must not fire it too
+	PromptController.setSuppressed("Cleaning", true)
 	playerControls(false)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -399,6 +403,7 @@ local function exit(ctx: any)
 	end)
 	playerControls(true)
 	InteractController.resume()
+	PromptController.setSuppressed("Cleaning", false)
 	MiningController.setBusy(false)
 	if active == ctx then
 		active = nil

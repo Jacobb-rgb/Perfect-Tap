@@ -2,7 +2,7 @@
 	FoundryController: your Foundry on the client (FoundryService is the truth).
 
 	- Prompts: "Open Foundry" (G / gamepad B) only on your own Foundry,
-	  "Put In" (F / gamepad Y) only while you carry an ingot (Open moves up
+	  "Put In" (E / gamepad Y) only while you carry an ingot (Open moves up
 	  into its place when Put In is hidden).
 	- Panel (FoundryView): opens on OpenUI "Foundry". Rows and the NEXT
 	  BLASTER card come from the State snapshot (FoundryStock, BlasterLevel,
@@ -59,6 +59,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local GameConfig = require(Shared.Config.GameConfig)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -94,7 +95,7 @@ local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local RANGE_CHECK = 0.25
 local INTRO = FoundryView.Intro -- the camera flies in; taps wait until it is there
 local REVEAL_LOCK = 1.2 -- seconds into the reveal before AWESOME / its keys work
-local OPEN_OFFSET = 72 -- "Open Foundry" sits this far below "Put In" (pixels)
+local OPEN_OFFSET = PromptConfig.SlotHeight -- "Open Foundry" sits this far below "Put In" (pixels, slot 1)
 local RESULT_WAIT = 8
 local PROMPT_TAG = "FoundryPrompt"
 local BUILDING_TAG = "FoundryBuilding"

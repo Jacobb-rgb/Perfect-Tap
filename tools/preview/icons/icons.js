@@ -1092,7 +1092,7 @@ async function main() {
   rim.position.set(1, 2, -3);
   scene.add(rim);
 
-  // golem_<Kind> / capsule_<Id>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
+  // golem_<Kind> / capsule_<Id> / shard_<Set>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
   if (RUNES[iconName]) {
     const [mark, hex] = RUNES[iconName];
     ICONS[iconName] = () => {
@@ -1117,11 +1117,14 @@ async function main() {
   }
   const partSpec =
     PART_ICONS[iconName] ||
-    (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
+    (/^(golem|capsule|shard)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
     (/^item_/.test(iconName) ? { file: iconName, yaw: -24, pitch: 24 } : null) ||
     (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null) ||
     (/^dropper_/.test(iconName) ? { file: iconName, yaw: -32, pitch: 12 } : null) ||
     (/^star_/.test(iconName) ? { file: iconName, yaw: 90, pitch: 12, roll: 0 } : null) ||
+    (/^cash_/.test(iconName) ? { file: iconName, yaw: 152, pitch: 24 } : null) ||
+    // board_<Id>: the hoverboards (PictureModels' camera: from the left, above, a bit in front)
+    (/^board_/.test(iconName) ? { file: iconName, yaw: 125, pitch: 28 } : null) ||
     (/^artifact_/.test(iconName) ? { file: iconName, yaw: 160, pitch: 16 } : null);
   if (!ICONS[iconName] && !partSpec) throw new Error("unknown icon " + iconName);
   const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(partSpec.file, partSpec);

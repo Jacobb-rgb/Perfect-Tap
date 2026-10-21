@@ -923,7 +923,7 @@ return function(T, Loader)
 		T.eq(refs.Use:GetAttribute("Equip"), "CrownOfKaldrum")
 		all.Equipped = "CrownOfKaldrum"
 		CollectionView.fill(refs, all)
-		T.eq(refs.Use.Text, "IN USE ✓")
+		T.eq(refs.Use.Text, "IN USE")
 		T.eq(refs.Use:GetAttribute("Equip"), "", "a press takes it off")
 		-- the last completed collection shows by itself (nothing picked)
 		all.Equipped = nil
@@ -959,7 +959,10 @@ return function(T, Loader)
 		local journalLeft = panelW + journal.Position.X.Offset - journal.Size.X.Offset
 		T.truthy(journalLeft >= refs.Detail.Position.X.Offset - 1, "over the detail column, not the tiles")
 		T.truthy(journal.Position.Y.Offset + journal.Size.Y.Offset <= refs.Detail.Position.Y.Offset, "above it")
-		local totalRight = panelW + refs.Total.Position.X.Offset
+		-- (the count is a Pop bar, its right edge at its Position: AnchorPoint 1, 0)
+		local totalBar = refs.Total.Parent :: Frame
+		T.eq(totalBar.AnchorPoint.X, 1)
+		local totalRight = panelW + totalBar.Position.X.Offset
 		T.truthy(totalRight <= journalLeft, "the count left of JOURNAL")
 	end)
 

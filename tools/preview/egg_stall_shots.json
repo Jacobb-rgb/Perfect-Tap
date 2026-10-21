@@ -1,0 +1,13 @@
+{
+  "eggstall_A": {"scene": "eggstall_A", "position": [-15.5, 10.5, 12.7], "target": [-41.9, 6.5, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "eggstall_A_side": {"scene": "eggstall_A", "position": [-29.0, 6.0, 19.6], "target": [-41.9, 4.0, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24},
+  "eggstall_B": {"scene": "eggstall_B", "position": [-15.5, 10.5, 12.7], "target": [-41.9, 6.5, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "eggstall_B_side": {"scene": "eggstall_B", "position": [-29.0, 6.0, 19.6], "target": [-41.9, 4.0, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24},
+  "eggstall_C": {"scene": "eggstall_C", "position": [-15.5, 10.5, 12.7], "target": [-41.9, 6.5, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "eggstall_C_side": {"scene": "eggstall_C", "position": [-29.0, 6.0, 19.6], "target": [-41.9, 4.0, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24},
+  "eggstall_A_close": {"scene": "eggstall_A", "position": [-27.0, 6.2, 12.6], "target": [-41.9, 4.8, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "eggstall_B_close": {"scene": "eggstall_B", "position": [-27.0, 6.2, 12.6], "target": [-41.9, 4.8, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "eggstall_C_close": {"scene": "eggstall_C", "position": [-27.0, 6.2, 12.6], "target": [-41.9, 4.8, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85},
+  "egg_offer_stone": {"scene": "eggstall_A", "position": [-27.0, 6.2, 12.6], "target": [-41.9, 4.8, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85, "ui": "ui_egg_offer_stone"},
+  "egg_offer_royal": {"scene": "eggstall_A", "position": [-27.0, 6.2, 12.6], "target": [-41.9, 4.8, 12.4], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24, "exposure": 0.85, "ui": "ui_egg_offer_royal"}
+}

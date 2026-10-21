@@ -37,6 +37,13 @@ local function exportNode(instance): any?
 		node.lo = instance.LayoutOrder
 		node.rot = instance.Rotation
 		node.clip = instance.ClipsDescendants
+		local auto = safe(instance, "AutomaticSize")
+		if auto and auto.Name ~= "None" then
+			node.auto = auto.Name -- "X" | "Y" | "XY": grows to fit its text and children
+		end
+		if class == "ViewportFrame" then
+			node.icon = instance:GetAttribute("Icon") -- a preview stand-in for the live 3D picture
+		end
 		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
 			node.text = instance.Text
 			node.ts = instance.TextSize
@@ -61,6 +68,9 @@ local function exportNode(instance): any?
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
 			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
+			if instance.ScaleType.Name == "Tile" then
+				node.tile = instance.TileSize.X.Offset -- a repeating texture (the Pop studs)
+			end
 		end
 	elseif class == "UICorner" then
 		node.r = { instance.CornerRadius.Scale, instance.CornerRadius.Offset }
@@ -81,6 +91,10 @@ local function exportNode(instance): any?
 		end
 		node.tkeys = fade
 		node.rot = instance.Rotation
+		local offset = instance.Offset
+		if offset.X ~= 0 or offset.Y ~= 0 then
+			node.off = { offset.X, offset.Y } -- (UI/Motion's shine sweeps it)
+		end
 	elseif class == "UIListLayout" then
 		node.dir = instance.FillDirection.Name
 		node.pad = { instance.Padding.Scale, instance.Padding.Offset }
@@ -103,6 +117,12 @@ local function exportNode(instance): any?
 		node.s = instance.Scale
 	elseif class == "UIAspectRatioConstraint" then
 		node.ar = instance.AspectRatio
+	elseif class == "UISizeConstraint" then
+		local function finite(n: number): number
+			return math.min(n, 1e6) -- math.huge isn't JSON
+		end
+		node.min = { instance.MinSize.X, instance.MinSize.Y }
+		node.max = { finite(instance.MaxSize.X), finite(instance.MaxSize.Y) }
 	elseif class == "ScreenGui" then
 		node.inset = not instance.IgnoreGuiInset
 		node.order = instance.DisplayOrder

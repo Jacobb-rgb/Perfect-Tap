@@ -12,7 +12,7 @@
 	  Attachment "PromptPoint"), also the ones added later. Each gets one
 	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; the
 	  client turns the action into "Buy $3.3M" while the player doesn't own it).
-	  F / gamepad Y / tap. Triggering it opens the client's view:
+	  E / gamepad Y / tap. Triggering it opens the client's view:
 	  OpenUI "Elevator" { Stop, Floor, Owned }. This prompt is the only way in
 	  (owner 2026-10-18): the HUD's elevator button teleports you to a stop
 	  first (TeleportService "Elevator").
@@ -56,6 +56,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local MineFloors = require(Shared.Config.MineFloors)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
@@ -537,16 +538,13 @@ local function hookStop(instance: Instance)
 	if old then
 		old:Destroy()
 	end
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = ElevatorService.PromptName
-	prompt.ObjectText = "Elevator"
-	prompt.ActionText = "Use"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = ElevatorService.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = parent
+	local prompt = PromptConfig.make({
+		Name = ElevatorService.PromptName,
+		ObjectText = "Elevator",
+		ActionText = "Use",
+		Distance = ElevatorService.PromptDistance,
+		Parent = parent,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, model)
 	end)
@@ -648,7 +646,10 @@ function ElevatorService.start()
 	hookTagged(ElevatorService.CatcherTag, hookCatcher, unhookCatcher)
 	while true do
 		task.wait(CATCH_CHECK)
-		checkCatchers()
+		-- (one bad round never ends floor 6's void rescue for the rest of the server)
+		xpcall(checkCatchers, function(err: any)
+			warn("[ElevatorService] void check failed: " .. tostring(err))
+		end)
 	end
 end
 

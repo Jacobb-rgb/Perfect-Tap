@@ -15,6 +15,7 @@ return function(T, Loader)
 	local Instance = roblox.Instance
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
@@ -503,6 +504,7 @@ return function(T, Loader)
 	end)
 
 	withWorld("Capsules: where paid random items are restricted, Royal answers Restricted", function(w)
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		local name, answer = act(w, "Open", { Capsule = "Royal", Count = 1 })
 		T.eq(name, "PurchasePrompt")
 		T.eq(answer.Status, "Restricted")
@@ -693,8 +695,9 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(CapsuleService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"))
 		T.eq(prompt.ActionText, "Capsules")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E, like every prompt")
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
+		T.eq(prompt.Style, roblox.Enum.ProximityPromptStyle.Default, "the stock Roblox prompt")
 		T.falsy(prompt.RequiresLineOfSight)
 		caps.open(w.player, stall)
 		local opened = notes(w, "OpenUI")
@@ -823,6 +826,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Capsules view: Royal is hidden where restricted, 'Coming soon' while not live", function()
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		local s = state()
 		local open = CapsuleView.cards(s, 1e9, false, NOW)
 		local royal = cardOf(open, "Royal")
@@ -913,6 +917,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Capsules view: the shop panel fills, switches tabs and fits phones (44 pt buttons)", function()
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		for _, compact in { false, true } do
 			local refs = CapsuleView.build(compact)
 			local sizes = if compact then { { 1076, 547 }, { 916, 423 } } else { { 1280, 684 }, { 1100, 620 } }

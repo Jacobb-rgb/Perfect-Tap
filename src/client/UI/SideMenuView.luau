@@ -12,12 +12,12 @@
 	which the light UI had reserved for BUILD, is ELEVATOR since the mine
 	floors (2026-10-18), so BUILD needs another slot; BACKPACK has no side
 	menu controller yet; HOVER, the hoverboards, is "More" order 6: "BOARDS"
-	is the leaderboards) and an IconName
-	that ONE table (SideMenuView.Icons) maps to today's emoji. There is no
-	MORE flyout yet, so every entry shows, sorted by Group then Order
-	(SideMenuView.sorted).
+	is the leaderboards) and an IconName (the light HUD's 3D icon:
+	HudBubble.EntryLooks). There is no MORE flyout yet, so every entry
+	shows, sorted by Group then Order (SideMenuView.sorted).
 
-	Chunky buttons in their own colours, an emoji icon over a short label.
+	Chunky buttons in their own colours with a short label in the middle:
+	words only, no emoji (the owner's "text only"; NoEmoji.spec).
 	A red badge shows a count (CODEX: ores discovered since you last looked);
 	a "SOON" chip inside a button's top-right corner marks a feature that
 	isn't in the game yet (STORE). A button can be hidden (setHidden:
@@ -81,28 +81,13 @@ export type Entry = {
 	Label: string,
 	Group: Group, -- "Main" stays on screen, "More" goes behind the MORE flyout
 	Order: number, -- stable place inside the group (gaps are kept for new entries)
-	IconName: string, -- a key of SideMenuView.Icons
+	IconName: string, -- a key of HudBubble.EntryLooks (the light HUD's 3D icon)
 	Color: Color3,
 	Dark: Color3,
 }
 
 -- The groups in the order they show.
 SideMenuView.Groups = { "Main", "More" } :: { Group }
-
--- IconName -> today's icon (an emoji). The light-UI restyle swaps this one
--- table for its sprite icons.
-SideMenuView.Icons = {
-	Shop = "🛒",
-	Golems = "🤖",
-	Codex = "📖",
-	Artifacts = "🏺",
-	Boards = "🏆",
-	Settings = "⚙️",
-	Store = "💰",
-	Elevator = "🛗",
-	Hoverboards = "🛹",
-	Rebirth = "⭐",
-} :: { [string]: string }
 
 SideMenuView.Entries = {
 	{ Id = "Golems", Label = "GOLEMS", Group = "Main", Order = 2, IconName = "Golems", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
@@ -118,6 +103,16 @@ SideMenuView.Entries = {
 		Dark = rgb(28, 78, 190),
 	},
 	{ Id = "Shop", Label = "SHOP", Group = "Main", Order = 4, IconName = "Shop", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
+	-- daily / weekly quests + the login streak (QuestController; badge: things to claim)
+	{
+		Id = "Quests",
+		Label = "QUESTS",
+		Group = "More",
+		Order = 0,
+		IconName = "Quests",
+		Color = rgb(255, 120, 200),
+		Dark = rgb(178, 50, 130),
+	},
 	{ Id = "Codex", Label = "CODEX", Group = "More", Order = 1, IconName = "Codex", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
 	{
 		Id = "Collection",
@@ -168,11 +163,6 @@ SideMenuView.Entries = {
 		Dark = rgb(60, 64, 172),
 	},
 } :: { Entry }
-
--- An IconName's icon ("" for a name the table doesn't know).
-function SideMenuView.icon(name: string): string
-	return SideMenuView.Icons[name] or ""
-end
 
 -- The entries in the order they show: by Group (SideMenuView.Groups), then Order, then Id.
 function SideMenuView.sorted(): { Entry }
@@ -363,17 +353,11 @@ local function newButton(column: Frame, entry: Entry, order: number): (TextButto
 	})
 	button:SetAttribute("Menu", entry.Id)
 	button:SetAttribute("MenuGroup", entry.Group)
-	UIKit.label(button, SideMenuView.icon(entry.IconName), 28, {
-		Name = "Icon",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 4),
-		Size = UDim2.new(1, 0, 0, 34),
-		TextWrapped = false,
-	})
+	-- the name in the middle (no icon: words only)
 	UIKit.label(button, entry.Label, SideMenuView.LabelText, {
 		Name = "Label",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.new(1, -4, 0, 18),
 		FontFace = Theme.TitleFont,
 		TextWrapped = false,

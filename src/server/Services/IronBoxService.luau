@@ -49,7 +49,7 @@
 	while the owner's Upgrades.PenAutomation is at least that level, their
 	plot has a board at the Ore Pen gate (MachineBuilder.sortingBoard, at
 	boardPoint, in the yard) showing what the keep list keeps (the mode and
-	the kept ores' colours). Its "Keep List" prompt (F / gamepad Y: its
+	the kept ores' colours). Its "Keep List" prompt (E / gamepad Y: its
 	only prompt, while G / B is the gate's "Open Pen" a few steps away, so
 	both show at the gate; tagged like the pen's prompts, so only the owner
 	sees it) opens the same IronBoxView (OpenUI "IronBox" { Box = board,
@@ -68,6 +68,7 @@ local BaseLayout = require(Shared.Config.BaseLayout)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
@@ -373,17 +374,15 @@ local function spawned(machine: PlacedMachine)
 		PenFull = false,
 	})
 	local base = machine.Model.PrimaryPart :: BasePart
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = IronBoxService.PromptName
-	prompt.ActionText = "Keep List"
-	prompt.ObjectText = machine.Info.Name
-	prompt.KeyboardKeyCode = Enum.KeyCode.G
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonB
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, 72)
-	prompt.Parent = base:FindFirstChild("Prompt") or base
+	local prompt = PromptConfig.make({
+		Role = "Second",
+		Name = IronBoxService.PromptName,
+		ActionText = "Keep List",
+		ObjectText = machine.Info.Name,
+		Distance = 10,
+		Slot = 1,
+		Parent = base:FindFirstChild("Prompt") or base,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openList(player, machine)
 	end)
@@ -496,18 +495,15 @@ local function buildBoard(plotId: number): Model?
 	board:SetAttribute("PlotId", plotId)
 	board:PivotTo(PlotService.plotCFrame(plotId) * IronBoxService.boardPoint())
 	local base = board.PrimaryPart :: BasePart
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = IronBoxService.BoardPromptName
-	prompt.ActionText = "Keep List"
-	prompt.ObjectText = "Sorting Board"
-	-- its only prompt: F / Y, so it never hides behind the gate's "Open Pen"
-	-- (G / B, a few steps away; one prompt per key shows). "Put In" (F / Y)
-	-- at the gate only shows while you carry ore, and then the nearer wins.
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 8
-	prompt.RequiresLineOfSight = false
+	-- its only prompt: "Main" (E / Y), so it never hides behind the gate's
+	-- "Open Pen" (G / B, a few steps away; one prompt per key shows). "Put In"
+	-- (E / Y) at the gate only shows while you carry ore, and then the nearer wins.
+	local prompt = PromptConfig.make({
+		Name = IronBoxService.BoardPromptName,
+		ActionText = "Keep List",
+		ObjectText = "Sorting Board",
+		Distance = 8,
+	})
 	-- like the pen's own prompts: PenController shows it on your plot only
 	prompt:SetAttribute("PlotId", plotId)
 	prompt:AddTag(PenService.PromptTag)

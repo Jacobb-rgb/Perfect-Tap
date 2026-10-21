@@ -29,6 +29,8 @@ Net.Events = {
 	CarryPickup = { Rate = 8, Burst = 10 },
 	CarryDrop = { Rate = 8, Burst = 10 },
 	CarryThrow = { Rate = 6, Burst = 8 },
+	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
+	Emote = { Rate = 2, Burst = 4 }, -- (name: an EmoteConfig.List name, or "" to stop) the EMOTES menu; EmoteService sets the character attribute
 	-- cleaning minigame
 	CleanStart = { Rate = 2, Burst = 3 },
 	CleanSubmit = { Rate = 2, Burst = 3 },
@@ -67,6 +69,9 @@ Net.Events = {
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
 	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed", Level = the level bought }?: "Stale" unless Level = current + 1)
+	--   Every request read gets a TrainResult; a sent train or a bought level pushes State at once
+	--   (StateService.pushNow). TrainController keeps its own copy of this limit (a click over it
+	--   gets a sound there instead of being dropped here without a word).
 	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
@@ -171,24 +176,33 @@ Net.Events = {
 	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |
 	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers; locked ones are
 	--   skipped) } (GolemConfig helpers)
-	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
-	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
+	WheelAction = { Rate = 1, Burst = 3 }, -- ("Spin"): the free daily spin when
+	--   WheelConfig.ready(data.Wheel.NextSpinAt, now), else one bought spin (data.Wheel.Spins,
+	--   not where paid random items are restricted); answer WheelResult (the player's wheel:
 	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
 	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
-	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise) |
+	--   ("Buy", { Count = 1 | 5 | 10 }): the BUY SPINS row's product (WheelConfig.Packs) is
+	--   prompted; answer PurchasePrompt { Product, Status } (never granted here)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
 	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
 	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
 	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
 	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
 	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
+	QuestAction = { Rate = 2, Burst = 4 }, -- daily / weekly quests and the login streak (QuestService,
+	--   QuestConfig): ("Claim", { Kind = "Daily", Index = 1..QuestConfig.DailyCount, Day? } |
+	--   { Kind = "Weekly", Week? }) a finished quest's reward (Day / Week: the number the
+	--   client saw, another one is "Stale") | ("Streak") today's login streak day. Every
+	--   request read gets an ActionResult { Action = "Quest", Op, Ok, Reason?, Index? };
+	--   a reward also gets QuestReward ("InventoryFull": day 7's capsule waits for room)
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
 	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
-	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake, Rumble, FastSpin, ReduceMotion: boolean })
 	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
 	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
 	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
@@ -210,6 +224,10 @@ Net.Events = {
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
+	-- the answer to a TrainAction: { Action: "Send" | "Upgrade", Ok, Reason?: "Stale" | "Max" |
+	--   "Coins" (Upgrade), Kind?, Level?: the level the request named }; the client drops what it
+	--   showed ahead of the server for a refused one (TrainController)
+	TrainResult = false,
 	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
 	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number to be used,
 	--   Coins: the price, taken only on success (see FoundryAction) }
@@ -267,6 +285,11 @@ Net.Events = {
 	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
 	--   shards: ArtifactAction "Restore", no rock) }
 	ArtifactFound = false,
+	-- a quest or streak reward paid: { Kind: "Daily" | "Weekly" | "Streak", Index?, Day? (streak
+	--   day 1..7), Coins?, Shards?, Boost?, Seconds? (boost seconds really added), Capsule?,
+	--   Golem? { Id, Kind } (the capsule's golem: its CapsuleResult opening follows), Full?
+	--   (the capsule was paid as Coins: no room / restricted) }
+	QuestReward = false,
 	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
 	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
 	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)

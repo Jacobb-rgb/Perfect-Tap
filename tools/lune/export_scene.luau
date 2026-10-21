@@ -19,6 +19,8 @@ local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
+-- previews draw every icon (IconAssets.shows: the uploaded look)
+Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 
 local sceneName = process.args[1] or "world"
 
@@ -111,6 +113,7 @@ end
 
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
+local scene_surface: any = nil -- a scene's own "Surface" preset (its sky and light), replacing LightingConfig's in its JSON
 
 -- The artifact museum ArtifactService builds into every plot's yard at
 -- server start (MuseumBuilder), empty (the relics show near the camera for
@@ -216,6 +219,9 @@ elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) an
 	end
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
+elseif sceneName == "hoverboard_fx" or sceneName == "hoverboard_fx_boost" or sceneName == "hoverboard_fx_start" then -- all five boards with their ride effects / bursts
+	local moment = if sceneName == "hoverboard_fx_boost" then "Boost" elseif sceneName == "hoverboard_fx_start" then "Start" else nil
+	require("./lib/hoverboard_preview").buildFx(Loader, workspace, moment)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
 	local HoverboardPreview = require("./lib/hoverboard_preview")
 	HoverboardPreview.buildRide(Loader, workspace, sceneName == "hoverboard_hero")
@@ -274,6 +280,11 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "quests" then -- the world + the QUESTS window / streak popup overlays (tools/lune/lib/quests_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/quests_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/store_preview").build(Loader) do
@@ -311,8 +322,23 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	for name, guis in require("./lib/loading_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif
+	sceneName == "machine_ux_build"
+	or sceneName == "machine_ux_power"
+	or sceneName == "machine_ux_yard"
+	or sceneName == "machine_ux_close"
+then
+	-- the machine UX: build mode's info card, tray, keys and power preview; the status signs (tools/lune/lib/machine_ux_preview.luau)
+	WorldBuilder.build(workspace)
+	local camera, guis = require("./lib/machine_ux_preview").build(Loader, workspace, string.sub(sceneName, 12))
+	scene_extra = camera
+	for name, g in guis do
+		uiExports[name] = g
+	end
 elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
+elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
+	require("./lib/nature_wilds_preview").kit(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
@@ -499,7 +525,14 @@ elseif sceneName == "cleaning" then
 		local rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new(5)
 		for _ = 1, 9 do
 			local offset = workCf:VectorToWorldSpace(roblox.Vector3.new(rng:range(-0.5, 0.5), rng:range(-0.4, 0.5), rng:range(0.1, 0.6)))
-			Geo.ball(fx, hit + offset, rng:range(0.05, 0.1), SprayParts.JetColor, roblox.Enum.Material.Neon, { CanCollide = false, Transparency = 0.3 })
+			Geo.ball(
+				fx,
+				hit + offset,
+				rng:range(0.05, 0.1),
+				SprayParts.JetColor,
+				roblox.Enum.Material.Neon,
+				{ CanCollide = false, Transparency = 0.3 }
+			)
 		end
 		view.Instruction.Text = if #pattern.Crystals > 0
 			then "Wash the dirt off. Don't blast the glowing crystals!"
@@ -763,6 +796,25 @@ elseif sceneName == "ores" then
 			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
 		end
 	end
+elseif string.match(sceneName, "^eggstall_") then -- the egg stall concepts (tools/lune/lib/egg_stall_preview.luau)
+	local EggStall = require("./lib/egg_stall_preview")
+	EggStall.build(Loader, workspace, string.sub(sceneName, #"eggstall_" + 1))
+	for name, guis in EggStall.ui(Loader) do
+		uiExports[name] = guis
+	end
+elseif string.match(sceneName, "^limitedbg_") then -- a limited edition's shop banner background (limited_golems_preview)
+	local LimitedPreview = require("./lib/limited_golems_preview")
+	scene_surface, scene_extra = LimitedPreview.build(Loader, workspace, string.sub(sceneName, #"limitedbg_" + 1), true)
+elseif string.match(sceneName, "^limitedshard_") then -- a limited edition's SHARD showcase (limited_golems_preview)
+	local LimitedPreview = require("./lib/limited_golems_preview")
+	scene_surface, scene_extra = LimitedPreview.buildShard(Loader, workspace, string.sub(sceneName, #"limitedshard_" + 1))
+elseif string.match(sceneName, "^limited_") then -- the LIMITED EDITION golem proposals (tools/lune/lib/limited_golems_preview.luau)
+	local themeId = string.sub(sceneName, #"limited_" + 1)
+	local LimitedPreview = require("./lib/limited_golems_preview")
+	scene_surface, scene_extra = LimitedPreview.build(Loader, workspace, themeId)
+	uiExports["ui_" .. sceneName] = LimitedPreview.ui(Loader, themeId)
+	fs.writeDir(root .. "/build/preview")
+	fs.writeFile(root .. "/build/preview/" .. sceneName .. "_info.json", serde.encode("json", LimitedPreview.info(Loader, themeId)))
 else
 	error("Unknown scene: " .. sceneName)
 end
@@ -772,6 +824,9 @@ local presets = {}
 for name, preset in LightingConfig.Presets do
 	presets[name] = presetToJson(preset)
 end
+if scene_surface then
+	presets.Surface = presetToJson(scene_surface)
+end
 scene.presets = presets
 if scene_extra then
 	scene.camera = scene_extra
@@ -780,8 +835,9 @@ end
 fs.writeDir(root .. "/build/preview")
 local outName = if sceneName == "mine_floor"
 	then "mine_floor_" .. (process.args[2] or "1")
-	elseif sceneName == "cleaning"
-	then "cleaning_" .. (process.args[3] or "spray") .. (if process.args[4] == "phone" then "_phone" else "")
+	elseif sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "spray") .. (if process.args[4] == "phone"
+		then "_phone"
+		else "")
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do

@@ -1,10 +1,11 @@
 --[[
 	InteractController: pick up / drop / throw physical items.
 
-	  Grab / Drop : E        | gamepad X  | touch button "Grab"
+	  Grab / Drop : F        | gamepad X  | touch button "Grab"
 	  Throw       : hold Q   | gamepad RB | touch button "Throw" (hold to charge)
-	  (machine prompts use F / gamepad Y; the Cleaning Station's "Take Ore
-	  Back" uses G / gamepad B)
+	  (every prompt, shops and machines, is on E / gamepad Y; the second one
+	  on a spot, like the Cleaning Station's "Take Ore Back", on G / gamepad
+	  B: PromptConfig. E stays free for them, owner 2026-10-20)
 
 	The nearest item you own (or the one under the mouse) is highlighted with
 	its rarity color and a small hint shows its name and value. The server
@@ -31,6 +32,7 @@ local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local StateController = require(script.Parent.StateController)
 
 local InteractController = {}
@@ -211,9 +213,9 @@ local function updateHint()
 	local base = (target:GetAttribute("Value") :: number?) or 0
 	local value = math.floor(base * StateController.sellMult() + 0.5)
 	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled
-		then "X"
+		then MenuPanels.padName(Enum.KeyCode.ButtonX) -- (Square on PlayStation, where Cross jumps)
 		elseif UserInputService.TouchEnabled then "Grab"
-		else "E"
+		else "F"
 	hintAction.Text = if kind == "Relic"
 		then `[{key}] Pick up   •   clean it at a Cleaning Station or Restoration Table`
 		elseif dirty then `[{key}] Pick up   •   clean it to see what it is`
@@ -261,6 +263,7 @@ local function throw(_: string, state: Enum.UserInputState): Enum.ContextActionR
 					direction = (root.CFrame.LookVector + Vector3.new(0, 0.35, 0)).Unit
 				end
 			end
+			pcall(require(script.Parent.MoveController).playLocal, "Throw") -- the throw move (MoveController); never blocks the throw
 			Net.send("CarryThrow", direction, charge)
 		end
 	end
@@ -311,7 +314,7 @@ end
 
 function InteractController.start()
 	bindGrab = function()
-		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.E, Enum.KeyCode.ButtonX)
+		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
 		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
 		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
 		updateBindings()

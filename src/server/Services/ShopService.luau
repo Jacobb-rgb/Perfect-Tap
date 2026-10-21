@@ -3,7 +3,9 @@
 	step 3, docs/plans/STEP3_PLAN.md "WP-TechShop"). Machines, machine
 	upgrades, Bellows, machine slots and pen automation are bought here for
 	coins; the Robux items (big pass, podiums, offline extension, Express
-	train) are not sold here.
+	train) are not sold here. Machines can also be bought at your own base
+	(build mode's SHOP button opens the same window there:
+	TechShopController.openMachines).
 
 	- UpgradeCounter (tag, a BasePart of the lobby's UPGRADES stall): this
 	  service adds a "Tech Shop" prompt at runtime on the customer side of
@@ -19,8 +21,13 @@
 	  Levelled items buy exactly one level: Level must be the level being
 	  bought (the one the card shows), else "Stale" (EconomyConfig.techQuote),
 	  so a double tap or a lagging card never buys two levels.
-	  Only within ShopService.Range of an UpgradeCounter ("TooFar"; the
-	  client closes the shop nearer than that, so lag never refuses a BUY).
+	  Where (ShopService.placeFor): within ShopService.Range of an
+	  UpgradeCounter, or (machines only, owner 2026-10-21: the SHOP button
+	  in build mode) within GameConfig.BuildRange of your OWN plot, the
+	  same PlotService.isNear test build mode uses (BuildService). Upgrades,
+	  Bellows, Slots and pen automation still need the counter. Anywhere
+	  else "TooFar" (the client closes a counter shop nearer than Range and
+	  a base shop nearer than BuildRange, so lag never refuses a BUY).
 	- Every ShopBuy the server reads gets a ShopResult { Item, Ok, Reason?,
 	  Level?, Count? } (Reason: an EconomyConfig.TechShop.Reasons code; the
 	  client shows the text on the card), also one from a player whose save
@@ -28,7 +35,9 @@
 	  successful buy also sends a "Reward" toast; a refused one only the
 	  ShopResult (the client shows the reason on the card, or as a toast
 	  when the shop is closed), so the player never reads the same message
-	  twice.
+	  twice. A machine toast says how to place it: "Open BUILD" at your
+	  base, "Go to your BASE and open BUILD" at the counter (no key: B,
+	  D-pad Up and a tap differ per device; the shop's notes name it).
 	- Atomic: quote (techQuote), spend (EconomyService.spend) and write the
 	  inventory / level happen in one step with no yield in between, and
 	  every table the write needs is made before the coins are taken, so two
@@ -45,13 +54,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Placement = require(Shared.Machines.Placement)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local PlotService = require(script.Parent.PlotService)
 
 local ShopService = {}
 
@@ -68,6 +80,8 @@ export type Bought = {
 	Price: number, -- coins paid
 }
 export type BoughtCallback = (Player, Bought) -> ...any
+-- Where a buy happened: at an UpgradeCounter in the lobby, or at your own plot (machines only).
+export type Place = "Counter" | "Base"
 
 -- studs from an UpgradeCounter's surface the server accepts: the prompt reaches
 -- 12, the client closes the shop past 24 (TechShopController), so the server is
@@ -124,6 +138,24 @@ function ShopService.counterNear(player: Player, range: number): BasePart?
 	return best
 end
 
+-- Is the player within GameConfig.BuildRange of their own plot (the test build mode uses)?
+function ShopService.nearOwnPlot(player: Player): boolean
+	local plotId = PlotService.plotOf(player)
+	return plotId ~= nil and PlotService.isNear(player, plotId, GameConfig.BuildRange)
+end
+
+-- Where the player may buy `entry` right now: "Base" (a machine, at their
+-- own plot), "Counter" (anything, at an UpgradeCounter), or nil (too far).
+function ShopService.placeFor(player: Player, entry: TechItem): Place?
+	if entry.Kind == "Machine" and ShopService.nearOwnPlot(player) then
+		return "Base"
+	end
+	if ShopService.counterNear(player, ShopService.Range) then
+		return "Counter"
+	end
+	return nil
+end
+
 ---------------------------------------------------------------- texts
 
 -- "Conveyors", "Iron Boxes", "Cleaning Plants"
@@ -141,15 +173,17 @@ local function machineName(id: string?): string
 	return if machine then machine.Name else "machine"
 end
 
--- The toast after a successful buy.
-function ShopService.boughtText(player: Player?, bought: Bought): string
+-- The toast after a successful buy (`place`: where it was bought, the
+-- counter when nil). A machine's says how to place it from there.
+function ShopService.boughtText(player: Player?, bought: Bought, place: Place?): string
 	if bought.Kind == "Machine" then
 		local name = machineName(bought.Machine)
+		local how = if place == "Base" then "Open BUILD" else "Go to your BASE and open BUILD"
 		if bought.Count == 1 then
 			local article = if name:match("^[AEIOUaeiou]") then "an" else "a"
-			return `Bought {article} {name}! Place it in Build mode.`
+			return `Bought {article} {name}! {how} to place it.`
 		end
-		return `Bought {bought.Count} {ShopService.plural(name)}! Place them in Build mode.`
+		return `Bought {bought.Count} {ShopService.plural(name)}! {how} to place them.`
 	end
 	local level = bought.Level or 0
 	if bought.Kind == "Upgrade" then
@@ -207,7 +241,7 @@ end
 	machines, level = the level being bought for levelled items), spends and
 	writes in one step with no yield. Returns (true, nil, Bought) or
 	(false, reason) with a TechShop.Reasons code (or "NoData"). No range
-	check here (the ShopBuy handler checks it).
+	check here (the ShopBuy handler checks it with placeFor).
 ]]
 function ShopService.buy(player: Player, entry: TechItem, count: any?, level: any?): (boolean, string?, Bought?)
 	local data = DataService.get(player)
@@ -278,7 +312,8 @@ local function onShopBuy(player: Player, payload: any)
 		answer(player, echo, false, "BadItem")
 		return
 	end
-	if not ShopService.counterNear(player, ShopService.Range) then
+	local place: Place? = ShopService.placeFor(player, entry)
+	if not place then
 		answer(player, echo, false, "TooFar")
 		return
 	end
@@ -288,7 +323,7 @@ local function onShopBuy(player: Player, payload: any)
 		return
 	end
 	answer(player, echo, true, nil, bought.Level, if bought.Kind == "Machine" then bought.Count else nil)
-	Net.fire("Notify", player, { Text = ShopService.boughtText(player, bought), Kind = "Reward" })
+	Net.fire("Notify", player, { Text = ShopService.boughtText(player, bought, place), Kind = "Reward" })
 end
 
 ---------------------------------------------------------------- the counter
@@ -329,16 +364,13 @@ local function hookCounter(counter: Instance)
 	point.Name = ShopService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 0.6, -part.Size.Z / 2)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = ShopService.PromptName
-	prompt.ActionText = "Tech Shop"
-	prompt.ObjectText = "Machines & Upgrades"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = PROMPT_DISTANCE
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = ShopService.PromptName,
+		ActionText = "Tech Shop",
+		ObjectText = "Machines & Upgrades",
+		Distance = PROMPT_DISTANCE,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

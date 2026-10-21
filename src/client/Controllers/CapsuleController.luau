@@ -707,11 +707,15 @@ local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, ind
 	o.Plate.Visible = false
 end
 
--- The result grid pops in, card by card.
-local function showGrid(o: CapsuleView.OpenRefs, kinds: { string }, new: { [number]: boolean })
+-- The result grid pops in, card by card (a big opening: a card per kind with its count).
+local function showGrid(o: CapsuleView.OpenRefs, allKinds: { string }, allNew: { [number]: boolean })
 	clearHero(o)
 	o.Plate.Visible = false
-	o.Counter.Text = `{#kinds} GOLEMS WOKE UP!`
+	o.Counter.Text = `{#allKinds} GOLEMS WOKE UP!`
+	local kinds, new, counts = allKinds, allNew, nil :: { [number]: number }?
+	if #allKinds > CapsuleView.GridMax then
+		kinds, new, counts = CapsuleView.summary(allKinds, allNew)
+	end
 	local bestIndex: number? = nil
 	local best = CapsuleView.best(kinds)
 	for i, kind in kinds do
@@ -720,7 +724,7 @@ local function showGrid(o: CapsuleView.OpenRefs, kinds: { string }, new: { [numb
 			break
 		end
 	end
-	CapsuleView.setGrid(o, kinds, new, if #kinds > 1 then bestIndex else nil)
+	CapsuleView.setGrid(o, kinds, new, if #kinds > 1 then bestIndex else nil, counts)
 	o.Grid.Visible = true
 	setRays(o, if best then CapsuleView.rarityColor(best) else nil, best ~= nil and GolemConfig.order(best) >= 4)
 	for _, cell in o.Cells do
@@ -1097,7 +1101,7 @@ local boardQueued = false
 -- The capsule the board shows now (cycles through those the player may open).
 local function boardCapsule(): string?
 	local list = {}
-	for _, capsule in CapsuleConfig.List do
+	for _, capsule in CapsuleConfig.Stall do
 		if CapsuleView.visible(capsule.Id, restricted()) then
 			table.insert(list, capsule.Id)
 		end

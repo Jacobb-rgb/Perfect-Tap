@@ -26,8 +26,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
-local Card = require(script.Parent.Card)
-local CardTheme = require(Shared.Config.CardTheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local CashBuilder = require(Shared.Builders.CashBuilder)
+local Pop = require(script.Parent.Pop)
 
 local HudBubble = {}
 
@@ -73,7 +74,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 			Compact = true,
 			Narrow = narrow,
 			Tile = 78,
-			TileGap = 16,
+			TileGap = 12,
 			Columns = 3,
 			TabWidth = if narrow then 74 else 118,
 			TabHeight = 72,
@@ -85,8 +86,8 @@ function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 	return {
 		Compact = false,
 		Narrow = false,
-		Tile = 88,
-		TileGap = 16,
+		Tile = 82,
+		TileGap = 12,
 		Columns = 2,
 		TabWidth = 140,
 		TabHeight = 52,
@@ -139,53 +140,52 @@ local function coinsPill(gui: ScreenGui, layout: Layout): (TextLabel, TextButton
 	return amount, plusFace :: TextButton, income
 end
 
-HudBubble.MoneyGreen = Color3.fromRGB(110, 236, 70)
-HudBubble.MoneyEdge = Color3.fromRGB(18, 60, 12)
 
 --[[
-	The money at the bottom-left (owner 2026-10-20: "green and plain, K for
-	thousand, M for million, bottom-left"): the cash icon, the big green
-	amount and the income per second above it. Returns (panel, amount,
-	income); the panel pops on big gains (HudController).
+	The money at the bottom-left (owner 2026-10-20, his egg-game photo: "the
+	banknotes, then the amount", green, K / M / B...): a 3D cash pile (a live
+	ViewportFrame, CashBuilder.pile: no upload needed), the big green amount
+	in the heavy font with a thick black edge, and the income per second over
+	it. Returns (panel, amount, income); the panel pops on big gains
+	(HudController).
 ]]
 local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLabel)
-	local size = if layout.Compact then 40 else 46
+	local size = if layout.Compact then 42 else 48
+	local pic = size + 36
 	local panel = UIKit.new("Frame", {
 		Name = "Coins",
 		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 20, 1, if layout.Compact then -24 else -18),
-		Size = UDim2.fromOffset(HudBubble.CoinsWidth + 30, size + 34),
+		Position = UDim2.new(0, 18, 1, if layout.Compact then -22 else -16),
+		Size = UDim2.fromOffset(HudBubble.CoinsWidth + 40, size + 36),
 	}, gui)
-	Bubble.icon(panel, "coins", size + 14, {
+	Pop.model(panel, "cash_pile", pic, CashBuilder.pile(), {
+		Name = "Cash",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, -4, 1, 4),
+		Position = UDim2.new(0, -10, 1, 14),
+		ZIndex = 3,
 	})
-	local amount = Card.text(panel, "$0", size, {
+	local amount = Pop.text(panel, "$0", size, {
 		Name = "Amount",
 		AnchorPoint = Vector2.new(0, 1),
-		FontFace = CardTheme.NumberFont,
-		Position = UDim2.new(0, size + 14, 1, 0),
-		Size = UDim2.new(1, -(size + 14), 0, size + 6),
-		TextColor3 = HudBubble.MoneyGreen,
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.new(0, pic - 12, 1, 4),
+		Size = UDim2.new(1, -(pic - 12), 0, size + 8),
+		TextColor3 = PopTheme.MoneyNumber,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
 	})
 	local amountEdge = amount:FindFirstChildOfClass("UIStroke") :: UIStroke
-	amountEdge.Color = HudBubble.MoneyEdge
-	amountEdge.Thickness = 3.5
-	local income = Card.text(panel, "+$0/s", math.floor(size * 0.5), {
+	amountEdge.Thickness = 4
+	local small = math.floor(size * 0.5)
+	local income = Pop.text(panel, "+$0/s", small, {
 		Name = "Income",
 		AnchorPoint = Vector2.new(0, 1),
-		FontFace = CardTheme.NumberFont,
-		Position = UDim2.new(0, size + 16, 1, -(size + 4)),
-		Size = UDim2.new(1, -(size + 16), 0, math.floor(size * 0.5) + 6),
-		TextColor3 = Color3.fromRGB(196, 255, 170),
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.new(0, pic - 8, 1, -(size + 2)),
+		Size = UDim2.new(1, -(pic - 8), 0, small + 6),
+		TextColor3 = Color3.fromRGB(214, 255, 190),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
 	})
-	local incomeEdge = income:FindFirstChildOfClass("UIStroke") :: UIStroke
-	incomeEdge.Color = HudBubble.MoneyEdge
 	return panel, amount, income
 end
 
@@ -262,8 +262,8 @@ export type MenuMetrics = {
 -- Where the left menu sits (pure layout math, also used by the MORE flyout).
 function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	local rows = math.ceil((count or #HudBubble.Menu) / layout.Columns)
-	local cellH = layout.Tile + Theme.Lip
-	local rowGap = layout.TileGap + 8 -- room for the icons popping out of the row below
+	local cellH = layout.Tile -- (Pop tiles: the icon inside, no lip)
+	local rowGap = layout.TileGap
 	local width = layout.Columns * layout.Tile + (layout.Columns - 1) * layout.TileGap
 	local height = rows * cellH + (rows - 1) * rowGap
 	-- phones: under the coins and the income chip (it sits under the pill so
@@ -275,13 +275,50 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
 end
 
+-- A menu tile's colour (owner's tile photo: every tile its own bright colour).
+HudBubble.RolePaints = {
+	Backpack = "Orange",
+	Golems = "Purple",
+	Build = "Yellow",
+	Boosts = "Green",
+	More = "Pink",
+	Base = "Blue",
+	Lobby = "Teal",
+	Vault = "Purple",
+	Codex = "Blue",
+	Artifacts = "Yellow",
+	Boards = "Orange",
+	Settings = "Slate",
+	Shop = "Green",
+	Wheel = "Pink",
+	Gear = "Red",
+	Rebirth = "Purple",
+	Quests = "Pink",
+	Plain = "Slate",
+} :: { [string]: string }
+
+-- A left menu tile in the Pop look (Pop.tile): returns (face, holder).
+function HudBubble.tile(parent: Instance, o: { Name: string, Label: string, Icon: string, Role: string, Size: number, LayoutOrder: number? }): (TextButton, Frame)
+	return Pop.tile(parent, {
+		Name = o.Name,
+		Label = o.Label,
+		Icon = o.Icon,
+		Paint = HudBubble.RolePaints[o.Role] or "Slate",
+		Size = o.Size,
+		LayoutOrder = o.LayoutOrder,
+	})
+end
+
 HudBubble.MenuTop = 8 -- the tiles' top under Roblox's top bar (CoreUISafeInsets)
 HudBubble.ChipGap = 12
 
 -- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
 function HudBubble.chipTop(layout: Layout): number
 	local m = HudBubble.menuMetrics(layout, #HudBubble.GameMenu)
-	return HudBubble.MenuTop + m.Height + HudBubble.ChipGap
+	-- (phones: the Shop pill rides on this row's right end, under the touch
+	-- tutorial bubble; the flat Pop tiles are shorter, so keep the old row)
+	local extra = if layout.Compact then 28 else 0
+	return HudBubble.MenuTop + m.Height + HudBubble.ChipGap + extra
 end
 
 -- Top-left of menu tile `index` (1-based).
@@ -313,7 +350,7 @@ local function menuTiles(gui: ScreenGui, layout: Layout): { [string]: TextButton
 	}, menu)
 	local tiles = {}
 	for i, entry in HudBubble.Menu do
-		local face = Bubble.tile(menu, {
+		local face = HudBubble.tile(menu, {
 			Name = entry.Id,
 			Label = entry.Label,
 			Icon = entry.Icon,
@@ -439,7 +476,7 @@ function HudBubble.moreMenu(refs: Refs, uiScale: number): MoreRefs
 	}, grid)
 	local tiles = {}
 	for i, entry in HudBubble.More do
-		tiles[entry.Id] = Bubble.tile(grid, {
+		tiles[entry.Id] = HudBubble.tile(grid, {
 			Name = entry.Id,
 			Label = entry.Label,
 			Icon = entry.Icon,
@@ -599,6 +636,60 @@ function HudBubble.screenWidth(): number?
 	return if ok and type(width) == "number" and width > 0 then width else nil
 end
 
+-- The teleport bar (owner 2026-10-20: BASE / MINE / SPAWN in his photo, text
+-- only, at the very top): button sizes per layout, design units.
+HudBubble.TopBarPad = 5
+HudBubble.TopBarGap = 8
+HudBubble.PreviewInset = 36 -- the preview renderer's top bar inset (px)
+
+function HudBubble.topBarButton(layout: Layout): Vector2
+	if layout.Narrow then
+		return Vector2.new(88, 72) -- (the smallest phones: as wide as the old icon tabs)
+	elseif layout.Compact then
+		return Vector2.new(128, 72)
+	end
+	return Vector2.new(150, 46)
+end
+
+function HudBubble.topBarSize(layout: Layout): Vector2
+	local b = HudBubble.topBarButton(layout)
+	local count = #HudBubble.Spots
+	return Vector2.new(
+		count * b.X + (count - 1) * HudBubble.TopBarGap + 2 * HudBubble.TopBarPad,
+		b.Y + 2 * HudBubble.TopBarPad
+	)
+end
+
+HudBubble.TopBarUnderRow = 6 -- the bar's Y under Roblox's row when the row has no room
+
+--[[
+	The bar's X offset (design units from the centre) and whether it fits in
+	Roblox's top row: `free` is the row's free span in screen pixels
+	(GuiService.TopbarInset min / max x; nil = unknown: centred in the row),
+	the HUD gui spans guiLeft..guiLeft + guiWidth px, the bar is `width` design
+	units at `scale`. Pure (specs).
+]]
+function HudBubble.topBarX(free: Vector2?, guiLeft: number, guiWidth: number, width: number, scale: number): (number, boolean)
+	if not free then
+		return 0, true
+	end
+	local w = width * scale
+	local margin = 6
+	local lo, hi = free.X + w / 2 + margin, free.Y - w / 2 - margin
+	if lo > hi then
+		return 0, false -- the row is too full: under it, centred
+	end
+	local centre = guiLeft + guiWidth / 2
+	local placed = math.clamp(centre, lo, hi)
+	return math.floor((placed - centre) / scale), true
+end
+
+-- The bar's Y in the HUD gui (CoreUISafeInsets starts under Roblox's top bar):
+-- lifted by the top inset (px) at `scale` so it sits 4 px from the screen top.
+function HudBubble.topBarY(insetTop: number, scale: number): number
+	return -math.floor(insetTop / math.max(scale, 0.01)) + 6
+end
+
 function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	local layout = HudBubble.layout(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth())
 	local gui = UIKit.screen("TerraForgeHud", 5)
@@ -619,22 +710,31 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Size = UDim2.fromOffset(HudBubble.CoinsWidth, 60),
 	}, gui)
 
-	-- top bar (TeleportView fills it), zone name and toasts under it
+	-- the teleport bar at the very top, in Roblox's top bar row (owner: "put it
+	-- right at the top"; TeleportView fills it, HudController.placeTopBar lifts
+	-- it by the real top inset); zone name and toasts under the safe area's top
+	local barSize = HudBubble.topBarSize(layout)
 	local topBar = UIKit.new("Frame", {
 		Name = "TopBar",
 		AnchorPoint = Vector2.new(0.5, 0),
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, 12),
-		Size = UDim2.fromOffset(3 * layout.TabWidth + 3 * 14 + 40, layout.TabHeight + Theme.Lip),
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 0, 0, HudBubble.topBarY(HudBubble.PreviewInset, 1)),
+		Size = UDim2.fromOffset(barSize.X, barSize.Y),
 	}, gui)
+	UIKit.corner(topBar, 12)
+	Pop.border(topBar, 3)
+	UIKit.padding(topBar, HudBubble.TopBarPad)
+	topBar:SetAttribute("Pop", true)
 	topBar:SetAttribute("Bubble", true)
 	topBar:SetAttribute("Compact", layout.Compact)
 	topBar:SetAttribute("Narrow", layout.Narrow)
-	UIKit.list(topBar, Enum.FillDirection.Horizontal, 14, {
+	UIKit.list(topBar, Enum.FillDirection.Horizontal, HudBubble.TopBarGap, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	})
-	local below = 12 + layout.TabHeight + Theme.Lip + 10
+	local below = 28
 	local zone = Bubble.text(gui, "Emberfall", 30, {
 		Name = "Zone",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -672,7 +772,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	-- and the FREE SPIN chip, so it sits at the right end of the TRAIN chip's row
 	local pill = HudBubble.ShopPill
 	local moneyTop = -coinsPanel.Position.Y.Offset + coinsPanel.Size.Y.Offset
-	local shop = Card.pill(gui, "Shop", "cart", Color3.fromRGB(110, 226, 52), Color3.fromRGB(34, 110, 20), pill, {
+	local shop = Pop.pill(gui, "Shop", "cart", "Green", pill, {
 		Name = "ShopPill",
 		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
 		Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout)) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
@@ -680,7 +780,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	shop:SetAttribute("Opens", "StoreController")
 	gui:SetAttribute("ShortLuck", layout.Compact) -- (phones: the Server Luck line without "thanks name")
 	-- Server Luck running (StoreController fills it from ServerLuckUntil): next to the pill
-	Card.text(gui, "", 22, {
+	Pop.text(gui, "", 22, {
 		Name = "ServerLuck",
 		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
 		Position = if layout.Compact
@@ -689,7 +789,6 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		-- (phones: no wider than the pill's corner, clear of the tabs; the text shrinks to fit)
 		Size = if layout.Compact then UDim2.fromOffset(HudBubble.ShopPill.X + 90, 26) else UDim2.fromOffset(420, 28),
 		TextScaled = layout.Compact,
-		FontFace = CardTheme.NumberFont,
 		TextColor3 = Color3.fromRGB(140, 255, 120),
 		TextXAlignment = if layout.Compact then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
 		TextWrapped = false,
@@ -704,7 +803,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, menu)
 	for i, entry in HudBubble.GameMenu do
-		local _, holder = Bubble.tile(menu, {
+		local _, holder = HudBubble.tile(menu, {
 			Name = entry.Id,
 			Label = entry.Label,
 			Icon = entry.Icon,
@@ -779,7 +878,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}
 end
 
--- The side menu's IconNames (SideMenuView.Icons keys) -> 3D icon + colour role.
+-- The side menu's IconNames (SideMenuView.Entries) -> 3D icon + colour role.
 HudBubble.EntryLooks = {
 	Golems = { Icon = "golem_GildedPorter", Role = "Golems" },
 	Shop = { Icon = "clover", Role = "Boosts" }, -- the luck boosts (the Robux STORE is the green Shop pill)
@@ -789,10 +888,12 @@ HudBubble.EntryLooks = {
 	Settings = { Icon = "cog", Role = "Settings" },
 	Store = { Icon = "coins", Role = "Shop" },
 	Elevator = { Icon = "lift", Role = "Base" },
-	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: the emoji stands in)
+	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: empty until uploaded, the label shows)
 	Wheel = { Icon = "wheel", Role = "Wheel" },
 	Gear = { Icon = "helmet", Role = "Gear" },
 	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE
+	Quests = { Icon = "medal", Role = "Quests" }, -- daily / weekly quests + the login streak
+	Emotes = { Icon = "emotes", Role = "Lobby" }, -- the EMOTES menu (EmoteController; no sheet cell: the word shows)
 } :: { [string]: { Icon: string, Role: string } }
 
 export type TileSpec = { Label: string?, IconName: string?, Order: number? }
@@ -809,7 +910,7 @@ function HudBubble.claimTile(menu: Instance, id: string, spec: TileSpec?): TextB
 	local holder = menu:FindFirstChild(id)
 	if not holder then
 		local look = if spec and spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
-		local _, created = Bubble.tile(menu, {
+		local _, created = HudBubble.tile(menu, {
 			Name = id,
 			Label = if spec and spec.Label then spec.Label else string.upper(id),
 			Icon = if look then look.Icon else "more",
@@ -903,7 +1004,8 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 		local size = tileSize(menu)
 		local created = UIKit.new("Frame", {
 			Name = "MoreFlyout",
-			BackgroundColor3 = Theme.Panel,
+			BackgroundColor3 = PopTheme.Well,
+			BackgroundTransparency = 0.08,
 			BorderSizePixel = 0,
 			Position = UDim2.new(
 				(menu :: any).Position.X.Scale,
@@ -911,19 +1013,19 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 				(menu :: any).Position.Y.Scale,
 				(menu :: any).Position.Y.Offset
 			),
-			Size = UDim2.fromOffset(columns * size + (columns - 1) * 16 + 32, 0),
+			Size = UDim2.fromOffset(columns * size + (columns - 1) * 12 + 32, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Visible = false,
 			ZIndex = 5,
 		}, gui)
 		created:SetAttribute("Columns", columns)
-		Bubble.corner(created, 24)
-		Bubble.stroke(created)
+		UIKit.corner(created, 12)
+		Pop.border(created, 3)
 		local pad = UIKit.padding(created, 16)
-		pad.PaddingTop = UDim.new(0, 24)
+		pad.PaddingTop = UDim.new(0, 16)
 		UIKit.new("UIGridLayout", {
-			CellSize = UDim2.fromOffset(size, size + Theme.Lip),
-			CellPadding = UDim2.fromOffset(16, 24),
+			CellSize = UDim2.fromOffset(size, size),
+			CellPadding = UDim2.fromOffset(12, 12),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}, created)
 		flyout = created
@@ -933,7 +1035,7 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 		end)
 	end
 	local look = if spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
-	local face = Bubble.tile(flyout :: Frame, {
+	local face = HudBubble.tile(flyout :: Frame, {
 		Name = id,
 		Label = spec.Label or string.upper(id),
 		Icon = if look then look.Icon else "more",

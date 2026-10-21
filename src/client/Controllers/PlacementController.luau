@@ -14,14 +14,16 @@
 	  PC       mouse cursor. Click places (drag lays a line of belts),
 	           R rotates. Click one of your machines to select it, then
 	           M moves it and X / Delete packs it up. Right-click or C
-	           cancels. WASD or right-drag pans, the wheel zooms, B closes.
+	           cancels. Clicking the selected machine again moves it too.
+	           WASD or right-drag pans, the wheel zooms, B closes.
 	  Touch    tap a cell to put the ghost there (or tap one of your
 	           machines), then use the big buttons. One finger pans,
 	           pinch zooms.
 	  Gamepad  the left stick moves the cursor (the machine under it is
 	           selected). A places or picks the selection up to move it,
 	           X rotates, hold Y packs it up, LB / RB pick from the tray,
-	           the right stick pans, LT / RT zoom, B goes back or closes.
+	           the right stick pans, LT / RT zoom, B goes back or closes,
+	           D-pad Left opens SHOP.
 
 	The ghost uses the same Placement rules as the server, checked on the
 	latest State snapshot plus our own requests still in flight (Seq
@@ -41,6 +43,38 @@
 	top end must reach (amber), and every refusal says the Placement reason
 	("That needs a platform under it", "Only belts fit under a platform",
 	"Clear the platform first"...).
+
+	Making it explain itself (owner's playtest, build/reviews/machine_ux_map.md):
+	  - the machine info card (BuildView.setInfo, MachineInfo.describe) shows
+	    for the tray card under the mouse (or a gamepad's selection), the
+	    machine being placed or moved and the selected one (with its power
+	    state now, from PowerService's attributes)
+	  - the controls row: keycap chips for the device and mode
+	    (BuildView.keys; the platform's glyphs on a gamepad, what to tap on
+	    touch)
+	  - mouse: your machine under the pointer gets a soft outline; clicking
+	    the selected machine again picks it up to move it (like gamepad A
+	    and the touch MOVE button)
+	  - a click or tap on build mode's own UI (the info card, the controls,
+	    the reason line, the tray...) never acts on the plot under it, and
+	    the ghost doesn't follow the mouse there (Ux.overUi)
+	  - phones (touch, or the HUD's UIScale at about its floor): bigger
+	    texts and a shorter info card that fits under the slot pill
+	    (BuildView.setCompact, Ux.compact)
+	  - power preview: a Power Pole being placed, moved or selected shows
+	    its reach (PoleReach) and link (PoleLink) squares and a line to
+	    every pole it would link; a machine that needs or makes power a
+	    line to the pole it would hang on, and the reason line says whether
+	    it will be powered (MachineInfo.powerPreview: PowerLogic on our
+	    layout plus the ghost, the server's own rules)
+	  - SHOP (the build HUD, the empty tray, gamepad D-pad Left) opens the
+	    Tech shop's machines (TechShopController.openMachines): build mode
+	    closes for it, and closing the shop (X, B, Backspace) at your base
+	    opens it again (the shop's own hand-off: Ux.openShop)
+	  - the HUD's BUILD tile shows its key (B / the D-pad Up glyph) and how
+	    many machines wait to be placed, and pulses for a new one; BUILD
+	    away from your base takes you there (the BASE teleport) and then
+	    opens build mode
 
 	Chutes (step 3, BaseLayout.Chutes): the three chute cells on the back
 	row get a plate in their colour with their label floating over it (PEN,
@@ -70,9 +104,11 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local Grid = require(Shared.Machines.Grid)
 local Placement = require(Shared.Machines.Placement)
+local MachineInfo = require(Shared.Machines.MachineInfo)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local Net = require(Shared.Net)
 local BuildView = require(script.Parent.Parent.UI.BuildView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local GridOverlay = require(script.Parent.Parent.Effects.GridOverlay)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -168,29 +204,8 @@ local DENY_REPEAT = 1.2 -- the same refusal toasts at most this often (belt pain
 local MAX_SEQ = 2 ^ 31 - 1
 local RANGE_CHECK = 0.5
 
-local ENTER_TEXT = "Go to your forge to build!"
+local ENTER_TEXT = "Your base isn't ready yet."
 local BUSY_TEXT = "Finish what you're doing first!"
-
-local HINTS: { [string]: { [string]: string } } = {
-	Mouse = {
-		Idle = "Pick a machine below, or click one of yours   •   WASD: pan   •   Wheel: zoom   •   B: done",
-		Placing = "Click: place   •   R: rotate   •   Right-click: cancel",
-		PlacingBelt = "Click or drag: lay belts   •   R: rotate   •   Right-click: cancel",
-		Selected = "M: move   •   X: pack up   •   Right-click: cancel",
-		Moving = "Click: put it here   •   R: rotate   •   X: pack up   •   Right-click: cancel",
-	},
-	Gamepad = {
-		Idle = "LB / RB: pick a machine   •   Left stick: move   •   B: done",
-		Placing = "A: place   •   X: rotate   •   LB / RB: change   •   B: cancel",
-		Selected = "A: move   •   Hold Y: pack up   •   B: back",
-		Moving = "A: put it here   •   X: rotate   •   Hold Y: pack up   •   B: cancel",
-	},
-	Touch = {
-		Idle = "Tap a machine below, or tap one of yours",
-		Placing = "Tap where it goes, then PLACE",
-		Moving = "Tap where it goes, then PLACE",
-	},
-}
 
 local player = Players.LocalPlayer
 
@@ -212,16 +227,42 @@ local Deck = {}
 Deck.Y = MachineData.DeckHeight
 Deck.Color = Color3.fromRGB(120, 200, 255)
 Deck.Lift = 0.02 -- deck plates sit just over the deck top, under a ghost's footprint plate
--- the Deck / Ground toggle, added to the hint while the plot has decks
-Deck.Hints = {
-	Mouse = "V: deck / ground",
-	Gamepad = "D-pad Up: deck / ground",
-} :: { [string]: string }
 -- the Deck / Ground toggle: true = flat belts go under the decks, picking prefers the ground
 Deck.Ground = false
 -- the deck cells of our layout (Grid.key -> platform), refreshed with the visuals
 Deck.Cells = {} :: { [number]: Entry }
 Deck.Shown = {} :: { [number]: boolean }
+-- The machine UX (the info card, the controls row, hover, the power
+-- preview, SHOP, the BUILD tile, the way home): one table too.
+local Ux = {}
+Ux.hover = nil :: string? -- the tray card under the mouse / a gamepad's selection
+Ux.hoverBy = nil :: string? -- the device that set it (Kind)
+Ux.mouseAt = nil :: Vector2? -- where the mouse was when build mode's UI under it was last looked up...
+Ux.mouseNext = 0 -- ...and when to look again even if it stays (Ux.mouseUi)
+Ux.mouseOver = false -- the mouse is over build mode's own UI
+Ux.mouseCard = nil :: string? -- the tray card under the mouse
+Ux.hoverModel = nil :: Model? -- your machine under the mouse (Idle / Selected)
+Ux.hoverLight = nil :: Highlight?
+Ux.hoverNext = 0
+Ux.HoverEvery = 0.08 -- seconds between two hover raycasts
+Ux.seen = nil :: number? -- machines waiting to be placed when you last looked (more: BUILD pulses)
+Ux.menuDevice = nil :: string? -- the device the BUILD tile's key shows
+Ux.squares = false -- the power squares are shown
+Ux.lines = 0 -- power preview lines shown
+Ux.ReachColor = Color3.fromRGB(255, 214, 70)
+Ux.LinkColor = Color3.fromRGB(120, 200, 255)
+Ux.LineColor = Color3.fromRGB(255, 240, 150)
+Ux.Strip = 0.35 -- studs: the squares' outline and the lines
+Ux.Inset = 0.3 -- GridOverlay plates stop this short of their size
+Ux.SquareNames = {} :: { string }
+for _, prefix in { "PowerReach", "PowerLink" } do
+	for _, side in { "N", "S", "W", "E" } do
+		table.insert(Ux.SquareNames, prefix .. side)
+	end
+end
+Ux.homeToken = 0
+Ux.HomeWait = 8 -- seconds the trip home may take before build mode gives up opening
+Ux.ShopText = "Buy machines at the Tech Shop (LOBBY, UPGRADES stall)"
 local selected: Model? = nil -- placed machine (Selected / Moving)
 local rotation = 0
 local cursorX, cursorZ = math.floor(CELLS / 2), math.floor(CELLS / 2)
@@ -946,24 +987,42 @@ end
 
 ---------------------------------------------------------------- visuals
 
-local function hintFor(): string?
-	local hints = HINTS[kind]
-	if not hints then
-		return nil
+-- The controls row for the device and mode (the Deck / Ground key while the plot has decks).
+function Ux.showKeys(refs: BuildView.Refs)
+	local placing = info(pickId)
+	local keys = BuildView.keys(kind, mode, {
+		Belt = mode == "Placing" and placing ~= nil and placing.IsConveyor == true,
+		Decks = next(Deck.Cells) ~= nil,
+	})
+	BuildView.setKeys(refs, keys, if kind == "Gamepad" then MenuPanels.glyph else nil)
+end
+
+-- A tray card hovered (mouse) or selected (gamepad): its info card shows.
+-- Touch has no hover (a tap there picks the machine).
+function Ux.onHover(id: string, on: boolean)
+	if kind == "Touch" then
+		return
 	end
-	local text = hints[mode]
-	if mode == "Placing" then
-		local placing = info(pickId)
-		if placing and placing.IsConveyor and hints.PlacingBelt then
-			text = hints.PlacingBelt
-		end
+	if on then
+		Ux.hover = id
+		Ux.hoverBy = kind
+	elseif Ux.hover == id then
+		Ux.hover = nil
+	else
+		return
 	end
-	-- the Deck / Ground toggle (not in Idle: that line is long already)
-	local layer = Deck.Hints[kind]
-	if text and layer and mode ~= "Idle" and next(Deck.Cells) ~= nil then
-		text = `{text}   •   {layer}`
-	end
-	return text
+	dirty = true
+end
+
+-- Phones: touch, or a screen small enough for the HUD's UIScale floor (BuildView.setCompact).
+function Ux.compact(): boolean
+	return kind == "Touch" or HudController.uiScale() <= BuildView.CompactScale
+end
+
+-- The info card's room on this screen (design units; the build Gui doesn't ignore the top bar inset).
+function Ux.infoRoom(): number
+	local height = camera().ViewportSize.Y - GuiService:GetGuiInset().Y
+	return BuildView.infoRoom(height / HudController.uiScale())
 end
 
 local function refreshUI()
@@ -974,13 +1033,14 @@ local function refreshUI()
 	local entries, inventory, limits = layout()
 	BuildView.setInventory(refs, inventory, if mode == "Placing" then pickId else nil, function(id: string)
 		PlacementController.pick(id)
-	end)
+	end, Ux.onHover)
 	local machines, conveyors = Placement.counts(entries)
 	BuildView.setCounts(refs, machines, if limits then limits.Machines else 0, conveyors, if limits then limits.Conveyors else 0)
 	Deck.Cells = Placement.decks(entries)
 	BuildView.setMode(refs, mode, kind == "Touch", next(Deck.Cells) ~= nil)
 	BuildView.setLayer(refs, Deck.Ground)
-	BuildView.setHint(refs, hintFor())
+	BuildView.setCompact(refs, Ux.compact(), Ux.infoRoom())
+	Ux.showKeys(refs)
 end
 
 -- The chute under a cell (plot grid), if any.
@@ -1007,6 +1067,229 @@ local function updateChutes(entries: { Entry })
 	end
 end
 
+---------------------------------------------------------------- machine UX: info card, hover, power preview
+
+-- The selected machine's power state now (PowerService's attributes), when it is short of power.
+function Ux.noteFor(model: Model): string?
+	local speed = model:GetAttribute("PowerSpeed")
+	if type(speed) ~= "number" or speed >= 1 then
+		return nil
+	end
+	local percent = math.floor(speed * 100 + 0.5)
+	if model:GetAttribute("Powered") ~= true then
+		return `Now: no power, runs at {percent}%`
+	end
+	return `Now: not enough power, runs at {percent}%`
+end
+
+-- The info card: the hovered tray card first, then the machine being
+-- placed, moved or selected (a selected one adds its state now).
+function Ux.showInfo(refs: BuildView.Refs)
+	local id: string? = nil
+	local note: string? = nil
+	local hovered = Ux.hover
+	if hovered then
+		local card = refs.Cards[hovered]
+		if card and card.Button.Visible and kind ~= "Touch" then
+			id = hovered
+		else
+			Ux.hover = nil
+		end
+	end
+	local model = selected
+	if not id then
+		if mode == "Placing" then
+			id = pickId
+		elseif (mode == "Selected" or mode == "Moving") and model then
+			local spot = spotOf(model)
+			id = if spot then spot.Id else nil
+			if mode == "Selected" then
+				note = Ux.noteFor(model)
+			end
+		end
+	end
+	BuildView.setInfo(refs, MachineInfo.describe(id), note)
+end
+
+-- Build mode's own UI at a point (viewport pixels, like GetMouseLocation):
+-- whether there is any, and the tray card there (its machine id).
+function Ux.uiAt(position: Vector2): (boolean, string?)
+	local refs = view
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+	if not refs or not playerGui then
+		return false, nil
+	end
+	local inset = GuiService:GetGuiInset()
+	local over = false
+	local card: string? = nil
+	for _, object in playerGui:GetGuiObjectsAtPosition(position.X - inset.X, position.Y - inset.Y) do
+		if object:IsDescendantOf(refs.Gui) then
+			over = true
+			local entry = refs.Cards[object.Name]
+			if entry and entry.Button == object then
+				card = object.Name
+			end
+		end
+	end
+	return over, card
+end
+
+-- Is the point over build mode's own UI (the info card, the controls row,
+-- the reason line, the tray...)? Then a click or tap there is not on the plot.
+function Ux.overUi(position: Vector2): boolean
+	local over = Ux.uiAt(position)
+	return over
+end
+
+-- Is the mouse over build mode's own UI? Looked up when it moved, else
+-- every HoverEvery (not every frame); also notes the tray card under it.
+function Ux.mouseUi(position: Vector2, now: number): boolean
+	if position ~= Ux.mouseAt or now >= Ux.mouseNext then
+		Ux.mouseAt = position
+		Ux.mouseNext = now + Ux.HoverEvery
+		Ux.mouseOver, Ux.mouseCard = Ux.uiAt(position)
+	end
+	return Ux.mouseOver
+end
+
+--[[
+	Mouse: your machine under the pointer gets a soft outline (Idle and
+	Selected, not the selected one itself), a few times a second. With the
+	mouse the tray card hover is the card really under the pointer (a
+	MouseLeave can be missed when the pointer leaves fast or leaves the
+	window, and the info card would keep showing that machine); a mouse
+	hover ends when another device takes over.
+]]
+function Ux.updateHover(now: number)
+	local model: Model? = Ux.hoverModel
+	if kind == "Mouse" then
+		local position = UserInputService:GetMouseLocation()
+		local over = Ux.mouseUi(position, now)
+		local card = Ux.mouseCard
+		if card ~= Ux.hover then
+			Ux.hover = card
+			Ux.hoverBy = kind
+			dirty = true
+		end
+		if mode == "Idle" or mode == "Selected" then
+			if now < Ux.hoverNext then
+				return
+			end
+			Ux.hoverNext = now + Ux.HoverEvery
+			model = if over then nil else machineUnder(position)
+			if model == selected then
+				model = nil
+			end
+		else
+			model = nil
+		end
+	else
+		if Ux.hover ~= nil and Ux.hoverBy == "Mouse" then
+			Ux.hover = nil
+			dirty = true
+		end
+		model = nil
+	end
+	if model ~= Ux.hoverModel then
+		Ux.hoverModel = model
+		local light = Ux.hoverLight
+		if light then
+			light.Adornee = model
+		end
+	end
+end
+
+-- Hides the power preview (the squares and the lines).
+function Ux.clearPower()
+	if Ux.squares then
+		Ux.squares = false
+		for _, name in Ux.SquareNames do
+			GridOverlay.hidePlate(name)
+		end
+	end
+	for i = 1, Ux.lines do
+		GridOverlay.hidePlate("PowerLine" .. i)
+	end
+	Ux.lines = 0
+end
+
+-- An outline of plates around the cells x0..x1, z0..z1 (inclusive) on `level`.
+function Ux.square(prefix: string, x0: number, z0: number, x1: number, z1: number, color: Color3, level: number)
+	local cw, cd = x1 - x0 + 1, z1 - z0 + 1
+	local w, d = cw * CELL, cd * CELL
+	local centre = cellsCFrame(x0, z0, cw, cd, level) * CFrame.new(0, Deck.Lift * 4, 0)
+	local strip, half = Ux.Strip + Ux.Inset, Ux.Strip / 2
+	GridOverlay.plate(prefix .. "N", centre * CFrame.new(0, 0, -d / 2 + half), w + Ux.Inset, strip, color)
+	GridOverlay.plate(prefix .. "S", centre * CFrame.new(0, 0, d / 2 - half), w + Ux.Inset, strip, color)
+	GridOverlay.plate(prefix .. "W", centre * CFrame.new(-w / 2 + half, 0, 0), strip, d + Ux.Inset, color)
+	GridOverlay.plate(prefix .. "E", centre * CFrame.new(w / 2 - half, 0, 0), strip, d + Ux.Inset, color)
+end
+
+-- Preview cable number `index`, flat over the plot from the cell point
+-- (ax, az) to (bx, bz) (cell units: a cell's centre is x + 0.5).
+function Ux.line(index: number, ax: number, az: number, bx: number, bz: number, level: number)
+	local mx, mz, length, yaw = MachineInfo.segment(ax, az, bx, bz)
+	local cf = plotCF * CFrame.new(-HALF + mx * CELL, Grid.levelY(level) + Deck.Lift * 5, -HALF + mz * CELL) * CFrame.Angles(0, yaw, 0)
+	GridOverlay.plate("PowerLine" .. index, cf, Ux.Strip + Ux.Inset, length * CELL + Ux.Inset, Ux.LineColor)
+end
+
+--[[
+	The power preview of `id` at (x, z, r) on `level` (held, or a selected
+	pole; `ignore` = its own spot when it stands on the plot already): a
+	pole shows its reach and link squares and a line to every pole it would
+	link, a machine or generator a line to the pole it would hang on.
+	Returns what PowerLogic will say (nil: no part in power).
+]]
+function Ux.showPower(id: string, x: number, z: number, r: number, level: number, ignore: Entry?): MachineInfo.Preview?
+	local machine = info(id)
+	if not machine or not (machine.IsPole or (machine.Power or 0) > 0 or (machine.PowerOut or 0) > 0) then
+		Ux.clearPower()
+		return nil
+	end
+	local entries = layout()
+	local skip = if ignore then findSpot(entries, ignore) else nil
+	local others: { MachineInfo.Entry } = {}
+	for i, entry in entries do
+		if i ~= skip then
+			table.insert(others, { Id = entry.Id, X = entry.X, Z = entry.Z, R = entry.R })
+		end
+	end
+	local state = StateController.get()
+	local upgrades = if state then state.MachineUpgrades else nil
+	local preview = MachineInfo.powerPreview(others, { Id = id, X = x, Z = z, R = r }, upgrades)
+	local rules = MachineData.PowerRules
+	local count = 0
+	if machine.IsPole then
+		local rx0, rz0, rx1, rz1 = MachineInfo.area(x, z, rules.PoleReach, CELLS)
+		Ux.square("PowerReach", rx0, rz0, rx1, rz1, Ux.ReachColor, level)
+		local lx0, lz0, lx1, lz1 = MachineInfo.area(x, z, rules.PoleLink, CELLS)
+		Ux.square("PowerLink", lx0, lz0, lx1, lz1, Ux.LinkColor, level)
+		Ux.squares = true
+		for _, pole in preview.Links do
+			count += 1
+			Ux.line(count, x + 0.5, z + 0.5, pole.X + 0.5, pole.Z + 0.5, level)
+		end
+	else
+		if Ux.squares then
+			Ux.squares = false
+			for _, name in Ux.SquareNames do
+				GridOverlay.hidePlate(name)
+			end
+		end
+		local pole = preview.Pole
+		if pole then
+			local w, d = Grid.footprint(id, r)
+			count = 1
+			Ux.line(1, x + w / 2, z + d / 2, pole.X + 0.5, pole.Z + 0.5, level)
+		end
+	end
+	for i = count + 1, Ux.lines do
+		GridOverlay.hidePlate("PowerLine" .. i)
+	end
+	Ux.lines = count
+	return preview
+end
+
 -- Ghost, plates, highlight colours and the reason line for the current
 -- mode, cursor and layout. Runs only after something changed.
 local function updateVisuals()
@@ -1018,6 +1301,7 @@ local function updateVisuals()
 	Deck.Cells = Placement.decks(entries)
 	updateChutes(entries)
 	Deck.showDecks(mode == "Placing" or mode == "Moving")
+	Ux.showInfo(refs)
 	local id: string? = nil
 	local ignore: Entry? = nil
 	if mode == "Placing" then
@@ -1043,6 +1327,7 @@ local function updateVisuals()
 		GridOverlay.hidePlate("Cursor")
 		GridOverlay.hidePlate("Selected")
 		GridOverlay.hidePlate("SelectedOut")
+		local power = Ux.showPower(id, x, z, rotation, level, ignore)
 		local highlight = ghostHighlight
 		if highlight then
 			highlight.FillColor = if ok then OK_COLOR else BAD_COLOR
@@ -1053,6 +1338,9 @@ local function updateVisuals()
 			BuildView.setReason(refs, Placement.Reasons[code or "Invalid"] or Placement.Reasons.Invalid, "Bad")
 		elseif warning then
 			BuildView.setReason(refs, warning, "Warn")
+		elseif power and power.Text then
+			-- powered (green) or how slow it will run without power (yellow)
+			BuildView.setReason(refs, power.Text, if power.Good then "Good" else "Warn")
 		elseif chute then
 			BuildView.setReason(refs, chute.Hint, "Info")
 		else
@@ -1076,14 +1364,21 @@ local function updateVisuals()
 		local plateLevel = if Placement.isPlatform(spot.Id) then 1 else level
 		GridOverlay.plate("Selected", cellsCFrame(spot.X, spot.Z, w, d, plateLevel), w * CELL, d * CELL, SELECT_COLOR)
 		showOutput("SelectedOut", spot.Id, spot.X, spot.Z, spot.R, level)
+		-- a selected pole shows its reach, links and lines; the info card says what the rest is
+		if spotInfo.IsPole then
+			Ux.showPower(spot.Id, spot.X, spot.Z, spot.R, level, spot)
+		else
+			Ux.clearPower()
+		end
 		if model:GetAttribute("Busy") == true then
 			BuildView.setReason(refs, `{spotInfo.Name}: {Placement.Reasons.Busy}`, "Warn")
 		else
-			BuildView.setReason(refs, spotInfo.Name, "Info")
+			BuildView.setReason(refs, nil)
 		end
 	else
 		GridOverlay.hidePlate("Selected")
 		GridOverlay.hidePlate("SelectedOut")
+		Ux.clearPower()
 		local chute = chuteInfo(cursorX, cursorZ)
 		BuildView.setReason(refs, if chute then `{chute.Label} chute: {chute.Hint}` else nil, "Info")
 	end
@@ -1566,6 +1861,9 @@ end
 ---------------------------------------------------------------- pointer input
 
 local function onPrimaryDown(position: Vector2)
+	if Ux.overUi(position) then
+		return -- on the info card, the controls, the reason line...: not on the plot under them
+	end
 	if (mode == "Placing" or mode == "Moving") and not holdCell and not cursorCellAt(position) then
 		return -- clicked well off the plot: the cursor there is stale
 	end
@@ -1582,7 +1880,9 @@ local function onPrimaryDown(position: Vector2)
 		commit()
 	else
 		local model = machineUnder(position)
-		if model then
+		if model and model == selected and mode == "Selected" then
+			startMove() -- clicking the selected machine again picks it up (like gamepad A, touch MOVE)
+		elseif model then
 			selectModel(model)
 		elseif mode ~= "Idle" then
 			setMode("Idle")
@@ -1591,6 +1891,9 @@ local function onPrimaryDown(position: Vector2)
 end
 
 local function tap(position: Vector2)
+	if Ux.overUi(position) then
+		return -- a tap on build mode's own UI never moves the ghost under it
+	end
 	local gx, gz = cursorCellAt(position)
 	if mode == "Placing" or mode == "Moving" then
 		if gx and gz then
@@ -1724,8 +2027,12 @@ local function onInputEnded(input: InputObject, _: boolean)
 	end
 end
 
-local function updateMouseCursor()
-	local gx, gz = cursorCellAt(UserInputService:GetMouseLocation())
+local function updateMouseCursor(now: number)
+	local position = UserInputService:GetMouseLocation()
+	if Ux.mouseUi(position, now) then
+		return -- over build mode's own UI: the ghost stays where the player can see it
+	end
+	local gx, gz = cursorCellAt(position)
 	local hold = holdCell
 	if hold then
 		if gx == hold.X and gz == hold.Y then
@@ -1800,6 +2107,8 @@ local function onPad(_: string, state: Enum.UserInputState, input: InputObject):
 		elseif key == Enum.KeyCode.DPadUp then
 			-- while building D-pad Up is the Deck / Ground toggle (B closes build mode)
 			Deck.toggleLayer()
+		elseif key == Enum.KeyCode.DPadLeft then
+			Ux.openShop()
 		end
 	elseif ended and key == Enum.KeyCode.ButtonY then
 		-- a short press on a selected machine picks it up to move it
@@ -1911,10 +2220,11 @@ local function step(dt: number)
 		zoomBy(-ZOOM_SPEED * triggerR * dt)
 	end
 	if kind == "Mouse" then
-		updateMouseCursor()
+		updateMouseCursor(now)
 	elseif kind == "Gamepad" then
 		updateStickCursor(now)
 	end
+	Ux.updateHover(now)
 	local held = yDown
 	if held and now - held >= HOLD_TIME then
 		yDown = nil
@@ -1957,15 +2267,79 @@ local function connect(signal: RBXScriptSignal, handler: (...any) -> ())
 	table.insert(connections, signal:Connect(handler))
 end
 
--- Opens build mode (B, D-pad Up, the BUILD button). Refuses with a toast
--- when you're away from your plot or busy with something else.
+--[[
+	BUILD away from your base: the BASE teleport (TeleportController.request,
+	the top bar's own path: its fade, cooldown and refusals), then build
+	mode opens as soon as you stand at your plot (within HomeWait).
+]]
+function Ux.goHome()
+	if CleaningController.isActive() or PlayerControls.owner() ~= nil then
+		HudController.toast(BUSY_TEXT, "Deny")
+		return
+	end
+	local teleport = MenuPanels.controller("TeleportController")
+	local requestTrip = if type(teleport) == "table" then teleport.request else nil
+	if type(requestTrip) ~= "function" then
+		HudController.toast("Go to your base to build!", "Deny")
+		return
+	end
+	local ok, err = pcall(requestTrip, "Base")
+	if not ok then
+		warn(`[PlacementController] the BASE teleport failed: {err}`)
+		return
+	end
+	Ux.homeToken += 1
+	local token = Ux.homeToken
+	task.spawn(function()
+		local deadline = os.clock() + Ux.HomeWait
+		while token == Ux.homeToken and not active and os.clock() < deadline do
+			task.wait(0.2)
+			local plot = myPlotId()
+			if plot and isNearPlot(plot) then
+				task.wait(0.35) -- the screen fades back in first
+				if token == Ux.homeToken and not active then
+					PlacementController.enter()
+				end
+				return
+			end
+		end
+	end)
+end
+
+--[[
+	SHOP (the build HUD's button, the empty tray's, gamepad D-pad Left): the
+	Tech shop's machines (TechShopController.openMachines; a hint where the
+	shop is if that controller is missing). The shop takes the screen, so
+	build mode closes for it; `fromBuild` hands the way back to the shop:
+	when the player closes it (X, B, Backspace) still at their base, it
+	opens build mode again, where the new machine waits in the tray. Any
+	other close (walking away, respawning, another panel) leaves build mode
+	closed.
+]]
+function Ux.openShop()
+	local shop = MenuPanels.controller("TechShopController")
+	if type(shop) ~= "table" or type(shop.openMachines) ~= "function" then
+		HudController.toast(Ux.ShopText, "Info")
+		return
+	end
+	local fromBuild = active
+	PlacementController.exit()
+	MenuPanels.call("TechShopController", "openMachines", fromBuild)
+end
+
+-- Opens build mode (B, D-pad Up, the BUILD button). Away from your plot it
+-- takes you there first (Ux.goHome); refuses with a toast while you have
+-- no plot or are busy with something else.
 function PlacementController.enter()
 	if active then
 		return
 	end
 	local id = myPlotId()
-	if not id or not isNearPlot(id) then
+	if not id then
 		HudController.toast(ENTER_TEXT, "Deny")
+		return
+	elseif not isNearPlot(id) then
+		Ux.goHome()
 		return
 	end
 	local character = player.Character
@@ -2029,6 +2403,11 @@ function PlacementController.enter()
 	if not selectHighlight then
 		selectHighlight = newHighlight("BuildSelectHighlight", SELECT_COLOR, 0.85)
 	end
+	if not Ux.hoverLight then
+		Ux.hoverLight = newHighlight("BuildHoverHighlight", CURSOR_COLOR, 0.9)
+	end
+	Ux.hover = nil
+	Ux.homeToken += 1 -- a trip home that is still waiting is done
 	local refs = view
 	if refs then
 		refs.Gui.Enabled = true
@@ -2050,7 +2429,8 @@ function PlacementController.enter()
 		Enum.KeyCode.ButtonR2,
 		Enum.KeyCode.Thumbstick1,
 		Enum.KeyCode.Thumbstick2,
-		Enum.KeyCode.DPadUp
+		Enum.KeyCode.DPadUp,
+		Enum.KeyCode.DPadLeft
 	)
 	ContextActionService:BindActionAtPriority(
 		"TerraForgeBuildKeys",
@@ -2147,10 +2527,18 @@ function PlacementController.exit()
 	if highlight then
 		highlight.Adornee = nil
 	end
+	Ux.hover = nil
+	Ux.hoverModel = nil
+	local hoverLight = Ux.hoverLight
+	if hoverLight then
+		hoverLight.Adornee = nil
+	end
+	Ux.clearPower()
 	GridOverlay.hide()
 	local refs = view
 	if refs then
 		refs.Gui.Enabled = false
+		BuildView.setInfo(refs, nil)
 	end
 
 	-- camera back to the character
@@ -2190,8 +2578,32 @@ function PlacementController.isActive(): boolean
 	return active
 end
 
--- The HUD's BUILD button pulses while your Cleaning Station waits in the
--- inventory (it's the first thing to place after packing it up).
+-- The BUILD tile's key hint for the device in use: B, the gamepad's D-pad
+-- Up glyph, nothing on touch (the tile itself is the way in).
+function Ux.menuKey()
+	local button = buildButton
+	if not button then
+		return
+	end
+	local device = currentKind()
+	if device == Ux.menuDevice then
+		return
+	end
+	Ux.menuDevice = device
+	if device == "Touch" then
+		BuildView.setMenuKey(button, nil, nil)
+	elseif device == "Gamepad" then
+		local image = MenuPanels.glyph(Enum.KeyCode.DPadUp)
+		BuildView.setMenuKey(button, if image == "" then "UP" else nil, image)
+	else
+		BuildView.setMenuKey(button, "B", nil)
+	end
+end
+
+-- The HUD's BUILD tile: a badge with every machine waiting to be placed,
+-- and a pulse while your Cleaning Station waits in the inventory (it's the
+-- first thing to place after packing it up) or since you bought another
+-- machine (until you open build mode).
 function PlacementController.refreshButton()
 	local button = buildButton
 	local holder = button and button.Parent
@@ -2200,8 +2612,16 @@ function PlacementController.refreshButton()
 	end
 	local state = StateController.get()
 	local inventory = state and state.MachineInventory
-	local count = if type(inventory) == "table" then tonumber(inventory.CleaningStation) or 0 else 0
-	local wanted = not active and count > 0
+	local station = if type(inventory) == "table" then tonumber(inventory.CleaningStation) or 0 else 0
+	local count = MachineInfo.unplaced(inventory)
+	local seen = Ux.seen
+	if state and (seen == nil or active or count < seen) then
+		-- the first snapshot, build mode open, or machines placed: nothing new
+		Ux.seen = count
+		seen = count
+	end
+	BuildView.setMenuBadge(button, count)
+	local wanted = not active and (station > 0 or count > (seen or count))
 	local scale = holder:FindFirstChild("Pulse")
 	if wanted and not pulse then
 		if not scale then
@@ -2215,7 +2635,9 @@ function PlacementController.refreshButton()
 			TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = 1.12 }
 		)
-		tween:Play()
+		if not Motion.reduced() then -- (Reduce motion: the BUILD tile stays still)
+			tween:Play()
+		end
 		pulse = tween
 	elseif not wanted and pulse then
 		pulse:Cancel()
@@ -2259,6 +2681,8 @@ function PlacementController.start()
 	refs.Move.Activated:Connect(startMove)
 	refs.PackUp.Activated:Connect(packUp)
 	refs.Layer.Activated:Connect(Deck.toggleLayer)
+	refs.Shop.Activated:Connect(Ux.openShop)
+	refs.EmptyShop.Activated:Connect(Ux.openShop)
 
 	local hud = HudController.refs()
 	if hud then
@@ -2273,6 +2697,8 @@ function PlacementController.start()
 		end)
 	end
 	ContextActionService:BindAction("TerraForgeBuildToggle", onToggle, false, Enum.KeyCode.B, Enum.KeyCode.DPadUp)
+	Ux.menuKey()
+	UserInputService.LastInputTypeChanged:Connect(Ux.menuKey)
 	PlacementController.refreshButton()
 end
 

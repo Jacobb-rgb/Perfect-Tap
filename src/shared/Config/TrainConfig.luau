@@ -14,6 +14,7 @@
 local WorldLayout = require(script.Parent.WorldLayout)
 local BaseLayout = require(script.Parent.BaseLayout)
 local MineFloors = require(script.Parent.MineFloors)
+local PromptConfig = require(script.Parent.PromptConfig)
 
 export type Level = { Value: number, Price: number }
 
@@ -53,8 +54,9 @@ TrainConfig.MaxTripSpan = 600 -- clients refuse a TrainTrip with ArriveAt - Depa
 -- docs/plans/STEP2_PLAN.md): UIOffset = (0, slot * PromptSlotHeight). Load and
 -- Send are the server's (tagged PromptTag, attribute Action = "Load" | "Send"),
 -- Panel is the client's own untagged "Train" prompt. No two share a slot.
+-- Keys: PromptConfig roles Main (Load), Second (Send), Panel (Train).
 TrainConfig.PromptTag = "TrainPrompt"
-TrainConfig.PromptSlotHeight = 72 -- UIOffset pixels per slot (the machine prompts' step)
+TrainConfig.PromptSlotHeight = PromptConfig.SlotHeight -- UIOffset pixels per slot (72, every stacked prompt's step)
 TrainConfig.PromptSlots = { Load = 0, Send = 1, Panel = 2 }
 
 -- What a client shows when (share of the trip, 0..1).

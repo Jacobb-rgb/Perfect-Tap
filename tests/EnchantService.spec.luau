@@ -20,6 +20,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
@@ -231,8 +232,8 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(EnchantService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "prompt")
 		T.eq(prompt.ActionText, "Enchant")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		T.falsy(prompt.RequiresLineOfSight)
 		shop.hookCounter(w.counter)
 		local n = 0
@@ -616,9 +617,12 @@ return function(T, Loader)
 		T.falsy(byId.Power.Odds)
 		-- where paid random items are restricted: Starbreaker's pass goes, Heartfire's stays
 		local restricted = {}
+		local packs = MonetizationConfig.CoinPacksEnabled
+		MonetizationConfig.CoinPacksEnabled = false -- (coins can't be bought: a coin enchant is no paid random item)
 		for _, card in EnchantView.cards(state(), 5e6, true) do
 			restricted[card.Id] = card
 		end
+		MonetizationConfig.CoinPacksEnabled = packs
 		local function has(card: any, currency: string): boolean
 			for _, option in card.Buys do
 				if option.Currency == currency then
@@ -696,7 +700,11 @@ return function(T, Loader)
 					else
 						T.eq(tbl.Summary.Before, BoostView.pct(effect.Before))
 						T.eq(tbl.Summary.After, BoostView.pct(effect.After))
-						T.truthy(effect.After > effect.Before, "Rare+ grows")
+						if effect.Before < 1 - 1e-9 then
+							T.truthy(effect.After > effect.Before, "Rare+ grows")
+						else
+							T.near(effect.After, 1, 1e-9, "every ore already Rare+")
+						end
 					end
 				end
 			end

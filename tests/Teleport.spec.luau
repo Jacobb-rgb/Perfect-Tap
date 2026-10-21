@@ -64,7 +64,8 @@ return function(T, Loader)
 			patch(TeleportService, "isCleaning", function(p: any)
 				return p == w.player and w.cleaning
 			end)
-			patch(TeleportService, "groundAt", function(p: any)
+			patch(TeleportService, "groundAt", function(p: any, lift: number?)
+				w.lift = lift
 				return Vector3.new(p.X, 0, p.Z)
 			end)
 			patch(TeleportService, "elevatorStop", function(floor: number?)
@@ -159,6 +160,12 @@ return function(T, Loader)
 		local localPos = base.CFrame:PointToObjectSpace(w.at())
 		T.near(localPos.Z, -(base.Size.Z / 2 + 3), 1e-6, "in front of the plate (-Z)")
 		T.near(localPos.X, 0, 1e-6, "no spread at the elevator")
+		-- the ground ray starts just above the plate (under the cave roofs of floors 2 and 3)
+		T.eq(w.lift, TeleportService.IndoorLift, "an indoor ground ray")
+		T.truthy(TeleportService.IndoorLift <= 8, "below every cave roof")
+		TeleportService._test.reset()
+		T.truthy(w.go("Lobby").Ok)
+		T.eq(w.lift, nil, "outdoor jumps keep the long ray")
 	end)
 
 	withWorld("Teleport: the elevator jump asks for the stop of the mine floor you are on", function(w)
@@ -252,23 +259,23 @@ return function(T, Loader)
 
 	T.test("TeleportView: phone buttons are big enough to tap and the bar fits next to the coins", function()
 		local phone = TeleportView.layout(0.62)
-		T.truthy(phone.IconTop, "icon on top on phones")
+		T.truthy(phone.Tall, "taller buttons on phones")
 		T.truthy(phone.Height * 0.62 >= 44, "at least 44 pt tall at uiScale 0.62")
 		T.truthy(phone.Width * 0.62 >= 44, "and wide")
 		local big = TeleportView.layout(1)
-		T.falsy(big.IconTop, "icon left of the name on big screens")
+		T.falsy(big.Tall, "the shorter buttons on big screens")
 		-- the smallest landscape phone (iPhone SE, 667 x 375 pt): the bar stays clear of the coins panel
 		local coinsRight = (16 + 236) * 0.62
 		local half = TeleportView.barWidth(phone, 3) * 0.62 / 2
 		T.truthy(667 / 2 - half > coinsRight + 8, "clear of the coins panel")
 		T.eq(TeleportView.barWidth(big, 3), 3 * big.Width + 2 * big.Gap)
-		-- the smallest phones (568 pt wide): icons only, still big enough to tap, clear of the coins
+		-- the smallest phones (568 pt wide): square buttons, still big enough to tap, clear of the coins
 		local tiny = TeleportView.layout(0.62, 568)
-		T.truthy(tiny.IconOnly, "icons only below NarrowWidth")
+		T.truthy(tiny.Narrow, "squares below NarrowWidth")
 		T.truthy(tiny.Height * 0.62 >= 44 and tiny.Width * 0.62 >= 44, "44 pt targets")
 		local tinyHalf = TeleportView.barWidth(tiny, 3) * 0.62 / 2
 		T.truthy(568 / 2 - tinyHalf > coinsRight + 12, "clear of the coins panel at 568 pt")
-		T.falsy(TeleportView.layout(0.62, 667).IconOnly, "667 pt keeps the names")
+		T.falsy(TeleportView.layout(0.62, 667).Narrow, "667 pt keeps the wide buttons")
 	end)
 
 	T.test("TeleportView: three bar buttons (no elevator icon: the side menu has it), cooldown covers", function()
@@ -285,6 +292,7 @@ return function(T, Loader)
 			count += 1
 			T.truthy(button:IsDescendantOf(topBar), id .. " in the bar")
 			T.eq(button:FindFirstChild("Label").Text, spot.Label)
+			T.falsy(button:FindFirstChild("Icon"), id .. ": words only, no emoji icon")
 		end
 		T.eq(count, 3, "BASE, LOBBY, VAULT")
 		T.eq(refs.Buttons.Elevator, nil, "no LIFT icon (ElevatorController's side button sends the jump)")
@@ -302,9 +310,18 @@ return function(T, Loader)
 		local base = refs.Buttons.Base.Parent
 		T.eq(base.Size.Y.Offset, TeleportView.layout(0.62).Height, "phone height after a relayout")
 		TeleportView.relayout(refs, topBar, 0.62, 568)
-		T.falsy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names hidden on the smallest phones")
-		T.eq(base.Size.X.Offset, TeleportView.layout(0.62, 568).Width)
+		-- the smallest phones: the names stay (words only, no icon), smaller, and still fit the squares
+		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+		local narrow = TeleportView.layout(0.62, 568)
+		for id, button in refs.Buttons do
+			local name = button:FindFirstChild("Label") :: any
+			T.truthy(name.Visible, id .. ": the name shows on the smallest phones")
+			T.eq(name.TextSize, TeleportView.NarrowText)
+			T.truthy(TechShopView.fits(name.Text, narrow.Width - 8, narrow.Height, name.TextSize, false), id .. " fits the square")
+		end
+		T.eq(base.Size.X.Offset, narrow.Width)
 		TeleportView.relayout(refs, topBar, 1, 1920)
-		T.truthy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names back on a big screen")
+		T.truthy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names on a big screen")
+		T.eq((refs.Buttons.Base:FindFirstChild("Label") :: any).TextSize, TeleportView.LabelText, "the big name again")
 	end)
 end

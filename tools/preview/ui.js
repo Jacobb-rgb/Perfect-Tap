@@ -1,6 +1,7 @@
 // Renders exported Roblox ScreenGuis as HTML (approximation of Roblox layout):
 // UDim2 position/size, AnchorPoint, UIListLayout, UIGridLayout, UIPadding,
-// UIScale, UICorner, UIStroke, UIGradient, TextScaled. For preview images only.
+// UIScale, UICorner, UIStroke, UIGradient, TextScaled, AutomaticSize,
+// UISizeConstraint. For preview images only.
 
 const TOPBAR_INSET = 36;
 const measureCanvas = document.createElement("canvas");
@@ -25,12 +26,88 @@ function fontFamily(family) {
   return "Fredoka One";
 }
 
-const isGui = (n) => ["Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame", "CanvasGroup"].includes(n.c);
+const isGui = (n) => ["Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame", "CanvasGroup", "ViewportFrame"].includes(n.c);
 const child = (n, cls) => (n.ch || []).find((c) => c.c === cls);
 
+const LINE_HEIGHT = 1.05; // the text spans' line-height below
+
+// Lines of `text` at the current measureCtx font, wrapped at maxW when `wrap` (Roblox breaks at "\n" too).
+function textLines(text, maxW, wrap) {
+  const out = [];
+  for (const para of String(text).split("\n")) {
+    if (!wrap) {
+      out.push(para);
+      continue;
+    }
+    let line = "";
+    for (const word of para.split(/\s+/)) {
+      const test = line ? line + " " + word : word;
+      if (line && measureCtx.measureText(test).width > maxW) {
+        out.push(line);
+        line = word;
+      } else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+// What an AutomaticSize node holds at size w x h: its text and its children (a
+// list's run, else the furthest child edge), plus its padding.
+function contentSize(node, w, h) {
+  const pad = child(node, "UIPadding");
+  const [pt, pr, pb, pl] = pad ? pad.p : [0, 0, 0, 0];
+  const cw = Math.max(0, w - pl - pr);
+  const chh = Math.max(0, h - pt - pb);
+  let cx = 0;
+  let cy = 0;
+  if (node.text !== undefined && node.text !== "" && !node.scaled) {
+    measureCtx.font = `${node.ts}px "${fontFamily(node.font)}"`;
+    const lines = textLines(node.text, cw, node.wrap && !node.auto.includes("X"));
+    cx = Math.max(...lines.map((l) => measureCtx.measureText(l).width));
+    cy = lines.length * node.ts * LINE_HEIGHT;
+  }
+  const kids = (node.ch || []).filter((c) => isGui(c) && c.vis !== false);
+  const list = child(node, "UIListLayout");
+  if (list) {
+    const vertical = list.dir === "Vertical";
+    const gap = vertical ? list.pad[0] * chh + list.pad[1] : list.pad[0] * cw + list.pad[1];
+    let main = gap * Math.max(0, kids.length - 1);
+    let cross = 0;
+    for (const k of kids) {
+      const s = resolveSize(k, cw, chh);
+      main += vertical ? s.h : s.w;
+      cross = Math.max(cross, vertical ? s.w : s.h);
+    }
+    cx = Math.max(cx, vertical ? cross : main);
+    cy = Math.max(cy, vertical ? main : cross);
+  } else {
+    for (const k of kids) {
+      const s = resolveSize(k, cw, chh);
+      cx = Math.max(cx, k.pos[0] * cw + k.pos[1] + (1 - k.anchor[0]) * s.w);
+      cy = Math.max(cy, k.pos[2] * chh + k.pos[3] + (1 - k.anchor[1]) * s.h);
+    }
+  }
+  return { w: cx + pl + pr, h: cy + pt + pb };
+}
+
+// A node's size in its parent: UDim2, grown by AutomaticSize (never below the
+// set size, like Roblox), then held inside a UISizeConstraint.
 function resolveSize(node, parentW, parentH) {
   const [xs, xo, ys, yo] = node.size;
-  return { w: parentW * xs + xo, h: parentH * ys + yo };
+  let w = parentW * xs + xo;
+  let h = parentH * ys + yo;
+  if (node.auto) {
+    const content = contentSize(node, w, h);
+    if (node.auto.includes("X")) w = Math.max(w, content.w);
+    if (node.auto.includes("Y")) h = Math.max(h, content.h);
+  }
+  const limit = child(node, "UISizeConstraint");
+  if (limit) {
+    w = Math.min(Math.max(w, limit.min[0]), limit.max[0]);
+    h = Math.min(Math.max(h, limit.min[1]), limit.max[1]);
+  }
+  return { w, h };
 }
 
 function fitText(text, font, maxW, maxH, wrap) {
@@ -75,11 +152,14 @@ function gradientStops(grad, base, alpha) {
     [0, 2, 4].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - f) + parseInt(b.slice(i, i + 2), 16) * f).toString(16).padStart(2, "0")).join("");
   const fades = grad.tkeys && grad.tkeys.length >= 2 ? grad.tkeys : [[0, 0], [1, 0]];
   const times = [...new Set([...grad.keys.map((k) => k[0]), ...fades.map((k) => k[0])])].sort((a, b) => a - b);
+  // UIGradient.Offset (UI/Motion's shine): the stops move along the gradient's direction
+  const rad = ((grad.rot || 0) * Math.PI) / 180;
+  const shift = grad.off ? grad.off[0] * Math.cos(rad) + grad.off[1] * Math.sin(rad) : 0;
   return times
     .map((t) => {
       const c = lerp(grad.keys, t, mixHex);
       const tr = lerp(fades, t, (a, b, f) => a + (b - a) * f);
-      return `${rgba(mulHex(base, c), alpha * (1 - tr))} ${t * 100}%`;
+      return `${rgba(mulHex(base, c), alpha * (1 - tr))} ${(t + shift) * 100}%`;
     })
     .join(", ");
 }
@@ -118,7 +198,12 @@ function styleElement(el, node, w, h) {
       }
     }
   }
-  if (node.icon) {
+  if (node.icon && node.tile) {
+    // a repeating texture (ScaleType Tile, TileSize in px)
+    const t = document.createElement("div");
+    t.style.cssText = `position:absolute;inset:0;background:url(/scenes/icons/${node.icon}.png) 0 0/${node.tile}px ${node.tile}px repeat;opacity:${1 - (node.it || 0)};border-radius:inherit;`;
+    el.appendChild(t);
+  } else if (node.icon) {
     // 3D UI icon (tools/preview/render_icons.mjs output), ScaleType Fit
     if (node.ic && node.ic !== "ffffff") {
       // ImageColor3 tints the picture (Roblox multiplies; a flat tint is close enough here)
@@ -134,7 +219,8 @@ function styleElement(el, node, w, h) {
       el.appendChild(img);
     }
   }
-  if (node.rot) el.style.transform = `rotate(${node.rot}deg)`;
+  // (after a UIScale's scale: both apply)
+  if (node.rot) el.style.transform = `${el.style.transform || ""} rotate(${node.rot}deg)`.trim();
   if (node.clip) el.style.overflow = "hidden";
   el.style.zIndex = String(node.z ?? 1);
 
@@ -142,7 +228,9 @@ function styleElement(el, node, w, h) {
     const span = document.createElement("div");
     const font = fontFamily(node.font);
     span.style.position = "absolute";
-    span.style.inset = "0";
+    // (Roblox insets a text by its UIPadding)
+    const textPad = child(node, "UIPadding");
+    span.style.inset = textPad ? textPad.p.map((v) => `${v}px`).join(" ") : "0";
     span.style.display = "flex";
     span.style.alignItems = node.ty === "Top" ? "flex-start" : node.ty === "Bottom" ? "flex-end" : "center";
     span.style.justifyContent = node.tx === "Left" ? "flex-start" : node.tx === "Right" ? "flex-end" : "center";
@@ -153,7 +241,7 @@ function styleElement(el, node, w, h) {
     if (node.scaled && node.maxts) size = Math.min(size, node.maxts);
     if (node.scaled && node.mints) size = Math.max(size, node.mints);
     span.style.fontSize = `${size}px`;
-    span.style.lineHeight = "1.05";
+    span.style.lineHeight = String(LINE_HEIGHT);
     span.style.color = rgba(node.tc, 1 - node.tt);
     // Roblox always breaks lines at "\n" (wrapped or not)
     span.style.whiteSpace = node.wrap ? "pre-line" : "pre";
@@ -218,7 +306,11 @@ function layoutChildren(node, el, w, h) {
         y = list.va === "Center" ? (ch - sz.h) / 2 : list.va === "Bottom" ? ch - sz.h : 0;
         cursor += sz.w + gap;
       }
-      placed.push({ k, x: x + pl, y: y + pt, w: sz.w, h: sz.h });
+      // where a UI/Motion scale holds it: a list re-places a scaled child by its alignment
+      const origin = vertical
+        ? [list.ha === "Center" ? 0 : list.ha === "Right" ? sz.w / 2 : -sz.w / 2, -sz.h / 2]
+        : [-sz.w / 2, list.va === "Center" ? 0 : list.va === "Bottom" ? sz.h / 2 : -sz.h / 2];
+      placed.push({ k, x: x + pl, y: y + pt, w: sz.w, h: sz.h, origin });
     });
   } else if (grid) {
     const cellW = grid.cell[0] * cw + grid.cell[1];
@@ -259,7 +351,14 @@ function layoutChildren(node, el, w, h) {
     childEl.dataset.name = p.k.n;
     const scale = child(p.k, "UIScale");
     if (scale && scale.s !== 1) {
-      childEl.style.transform = `scale(${scale.s})`;
+      if (scale.n && scale.n.startsWith("Motion")) {
+        // UI/Motion's scales: about the AnchorPoint like Roblox (rotation stays about the centre)
+        const ax = p.origin ? p.origin[0] : (p.k.anchor[0] - 0.5) * p.w;
+        const ay = p.origin ? p.origin[1] : (p.k.anchor[1] - 0.5) * p.h;
+        childEl.style.transform = `translate(${ax}px, ${ay}px) scale(${scale.s}) translate(${-ax}px, ${-ay}px)`;
+      } else {
+        childEl.style.transform = `scale(${scale.s})`;
+      }
       childEl.style.transformOrigin = "center center";
     }
     styleElement(childEl, p.k, p.w, p.h);

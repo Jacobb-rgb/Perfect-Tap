@@ -141,6 +141,13 @@ return function(T, Loader)
 			add(product.Name)
 			add(product.Description)
 		end
+		-- the LIMITED EDITION sets (their golems are in GolemConfig.List)
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		for _, set in LimitedGolems.Sets do
+			add(set.Id)
+			add(set.Title)
+			add(set.Tagline)
+		end
 		return names
 	end
 
@@ -412,8 +419,16 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- golems + capsules
 
-	T.test("Step67: 18 original golems from Common to Mythic", function()
-		T.eq(#GolemConfig.List, 18)
+	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones", function()
+		T.eq(#GolemConfig.List, 24)
+		local editions = {}
+		for _, golem in GolemConfig.List do
+			if golem.Edition then
+				editions[golem.Edition] = (editions[golem.Edition] or 0) + 1
+			end
+		end
+		T.eq(editions.Dragonforge, 6, "the Dragonforge set")
+		T.eq(#GolemConfig.List - 6, 18, "the capsule golems")
 		local names, rarities = {}, {}
 		for _, golem in GolemConfig.List do
 			T.falsy(names[golem.Name], "unique name " .. golem.Name)
@@ -640,7 +655,10 @@ return function(T, Loader)
 	end)
 
 	T.test("Step67: capsules: exact odds sum to 1, Triple Lucky triples the rarest and keeps the sum", function()
-		T.eq(#CapsuleConfig.List, 3)
+		T.eq(#CapsuleConfig.List, 4)
+		T.eq(#CapsuleConfig.Stall, 3, "the limited capsule is shop-only")
+		T.eq(CapsuleConfig.ById.Dragonforge.Currency, "Robux")
+		T.eq(CapsuleConfig.ById.Dragonforge.Limited, "Dragonforge")
 		T.eq(CapsuleConfig.ById.Stone.Currency, "Coins")
 		T.eq(CapsuleConfig.ById.Crystal.Currency, "Coins")
 		T.eq(CapsuleConfig.ById.Royal.Currency, "Robux")
@@ -817,7 +835,8 @@ return function(T, Loader)
 		T.eq(BoostConfig.nextExpiry(times, NOW + 50), nil)
 		-- Hexa Lucky: does it do anything here? (zones with Rare+ ores)
 		T.truthy(BoostConfig.hasEffect("TripleLucky", 1))
-		T.truthy(BoostConfig.hasEffect("HexaLucky", 1), "the Quarry has Gold")
+		T.falsy(BoostConfig.hasEffect("HexaLucky", 1), "floor 1's rocks hold no Rare+ ores")
+		T.truthy(BoostConfig.hasEffect("HexaLucky", 3), "the Ember Caves have Bronze and Silver")
 		T.falsy(BoostConfig.hasEffect("Nope", 1))
 		local effects = BoostConfig.zoneEffects(1, false, 1, 2.5)
 		local byZone = {}
@@ -828,12 +847,19 @@ return function(T, Loader)
 		T.eq(byZone.Outcrops.Before, 0)
 		T.eq(byZone.Outcrops.After, 0)
 		T.eq(#byZone.Outcrops.Rarities, 0)
-		T.truthy(byZone.Quarry and not byZone.Quarry.NoEffect)
-		T.truthy(byZone.Quarry.After > byZone.Quarry.Before, "Quarry: Gold more likely")
-		T.eq(#byZone.Quarry.Rarities, 1, "the Quarry's only lucky rarity: Rare (Gold)")
-		T.eq(byZone.Quarry.Rarities[1].Rarity, "Rare")
-		T.near(byZone.Quarry.Rarities[1].Before, byZone.Quarry.Before, EPS)
+		T.truthy(byZone.Quarry and byZone.Quarry.NoEffect, "floor 1's rocks: no Rare+ ores, no effect")
 		T.eq(byZone.EmberCaves, nil, "a zone the blaster can't mine yet isn't listed")
+		local caves: any = nil
+		for _, effect in BoostConfig.zoneEffects(3, false, 1, 2.5) do
+			if effect.Zone == "EmberCaves" then
+				caves = effect
+			end
+		end
+		T.truthy(caves and not caves.NoEffect, "blaster 3: the Ember Caves")
+		T.truthy(caves.After > caves.Before, "Ember Caves: Bronze and Silver more likely")
+		T.eq(#caves.Rarities, 1, "the Ember Caves' only lucky rarity: Rare")
+		T.eq(caves.Rarities[1].Rarity, "Rare")
+		T.near(caves.Rarities[1].Before, caves.Before, EPS)
 		T.eq(byZone.Grotto, nil, "VIP zones only for VIP players")
 		T.truthy(#BoostConfig.zoneEffects(10, true, 1, 2.5) > #effects)
 		local now, with = BoostConfig.hexaLuck(0.5)
@@ -925,51 +951,50 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- Deep Hollow (the end game, mostly Rare+ already): luck still matters a lot
-		local plain = BoostConfig.zoneOdds("DeepHollow", 1)
-		local hexa = BoostConfig.zoneOdds("DeepHollow", 2.5)
-		local capped = BoostConfig.zoneOdds("DeepHollow", StatConfig.MaxOreLuck)
-		local mythic, mythicHexa = rarityShare(plain, "Mythic"), rarityShare(hexa, "Mythic")
-		-- without luck: exactly the map weights (the Mythic share of Deep Hollow's weights, ~0.16 %)
-		local deepTotal, deepMythic = 0, 0
-		for oreId, weight in WorldLayout.ZoneById.DeepHollow.Ores do
-			deepTotal += weight
-			if OreData.ById[oreId].Rarity == "Mythic" then
-				deepMythic += weight
-			end
-		end
-		T.truthy(deepMythic > 0, "Deep Hollow has Mythic ores")
-		T.near(mythic, deepMythic / deepTotal, 1e-12, "Mythic share without luck")
-		T.truthy(mythicHexa > 3 * mythic, "Hexa Lucky: Mythic more than x3")
-		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the luck cap: Mythic more than x5")
-		T.truthy(rarityShare(hexa, "Legendary") > 2 * rarityShare(plain, "Legendary"), "Legendary more than x2")
-		T.truthy(chanceOf(hexa, "Heartstone") > 3 * chanceOf(plain, "Heartstone"), "Heartstone more than x3")
-		-- the factors BoostConfig's header quotes for Deep Hollow (change the
-		-- comment with these when the map weights change)
+		-- the zone weights (the WorldLayout map) keep the factors BoostConfig's header quotes
+		-- for Deep Hollow (change the comment with these when the map weights change)
 		local deepShares = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 1)
 		local deepHexa = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 2.5)
 		T.near(deepHexa.Mythic / deepShares.Mythic, 3.8, 0.05, "header: Mythic about x3.8")
 		T.near(deepHexa.Legendary / deepShares.Legendary, 2.4, 0.05, "header: Legendary about x2.4")
-		-- the Quarry's Bronze (its only Rare+ ore) is exactly x2.5 against the commons
-		local quarryRare = {}
-		for oreId in WorldLayout.ZoneById.Quarry.Ores do
-			if BoostConfig.isLuckyOre(oreId) then
-				table.insert(quarryRare, oreId)
+		-- a mine floor's odds are its own rock weights (MiningService rolls and lucks from
+		-- MineFloors, never from the zone's map weights), and every floor is on the luck cards
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local minable: { [string]: boolean } = {}
+		for _, zone in BoostConfig.minableZones(BlasterData.MaxLevel, true) do
+			minable[zone.Id] = true
+		end
+		for _, floor in MineFloors.List do
+			local zone = WorldLayout.ZoneById[floor.ZoneId]
+			T.eq(BoostConfig.zoneWeights(zone), floor.Ores, floor.Id .. ": its rocks' weights")
+			T.eq(BoostConfig.crystalWeights(zone), floor.CrystalOres, floor.Id .. ": its crystal rocks' weights")
+			T.truthy(minable[floor.ZoneId], floor.Id .. ": on the luck cards")
+			local odds = BoostConfig.zoneOdds(floor.ZoneId, 2.5)
+			local direct = BoostConfig.oreOdds(floor.Ores, 2.5)
+			T.eq(#odds, #direct, floor.Id)
+			for i, line in direct do
+				T.eq(odds[i].Ore, line.Ore)
+				T.near(odds[i].Chance, line.Chance, 1e-12, floor.Id .. " " .. line.Ore)
 			end
 		end
-		T.eq(table.concat(quarryRare, ","), "Bronze", "the Quarry's only Rare+ ore")
-		local quarry = BoostConfig.zoneOdds("Quarry", 2.5)
-		local q1 = BoostConfig.zoneOdds("Quarry", 1)
-		T.truthy(chanceOf(q1, "Bronze") > 0 and chanceOf(q1, "Coal") > 0, "both in the Quarry")
-		T.near((chanceOf(quarry, "Bronze") / chanceOf(quarry, "Coal")) / (chanceOf(q1, "Bronze") / chanceOf(q1, "Coal")), 2.5, 1e-9)
-		-- rarityShares / rareShare agree with the odds
-		local shares = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 2.5)
-		T.near(shares.Mythic, mythicHexa, EPS)
-		T.near(
-			BoostConfig.rareShare(WorldLayout.ZoneById.DeepHollow.Ores, 2.5),
-			1 - rarityShare(hexa, "Uncommon") - rarityShare(hexa, "Common"),
-			EPS
+		T.eq(BoostConfig.crystalWeights(WorldLayout.ZoneById.Outcrops), nil, "not a mine floor")
+		-- the Ember Caves (Rare Bronze and Silver among Uncommons): Hexa Lucky lifts Rare+,
+		-- Bronze exactly x2.5 against an Uncommon
+		local plain = BoostConfig.zoneOdds("EmberCaves", 1)
+		local hexa = BoostConfig.zoneOdds("EmberCaves", 2.5)
+		T.truthy(rarityShare(hexa, "Rare") > 1.5 * rarityShare(plain, "Rare"), "Ember Caves: Rare up")
+		T.near((chanceOf(hexa, "Bronze") / chanceOf(hexa, "Cobalt")) / (chanceOf(plain, "Bronze") / chanceOf(plain, "Cobalt")), 2.5, 1e-9)
+		-- the Sunken Palace: its Legendary Royal Aurum grows
+		T.truthy(
+			chanceOf(BoostConfig.zoneOdds("SunkenPalace", 2.5), "RoyalAurum")
+				> chanceOf(BoostConfig.zoneOdds("SunkenPalace", 1), "RoyalAurum")
 		)
+		-- rarityShares / rareShare agree with the odds
+		local deepWeights = BoostConfig.zoneWeights(WorldLayout.ZoneById.DeepHollow)
+		local deepOdds = BoostConfig.zoneOdds("DeepHollow", 2.5)
+		local shares = BoostConfig.rarityShares(deepWeights, 2.5)
+		T.near(shares.Epic, rarityShare(deepOdds, "Epic"), EPS)
+		T.near(BoostConfig.rareShare(deepWeights, 2.5), 1 - rarityShare(deepOdds, "Uncommon") - rarityShare(deepOdds, "Common"), EPS)
 		-- rolls: luck 1 = the plain weights
 		local weights = { Coal = 1, Gold = 1 }
 		T.eq(BoostConfig.rollOre(weights, 1, 0.49), "Coal")
@@ -990,10 +1015,17 @@ return function(T, Loader)
 		end
 	end
 
+	-- the odds of a zone's map weights (WorldLayout; the luck maths on any weights table:
+	-- mine floor rocks roll their own MineFloors weights, see BoostConfig.zoneWeights)
+	local function mapOdds(zoneId: string, luck: number): { any }
+		local zone = WorldLayout.ZoneById[zoneId]
+		return if zone then BoostConfig.oreOdds(zone.Ores, luck) else {}
+	end
+
 	-- rolls a rock's ore from plain odds, then lets luck upgrade it: N samples
 	local function sample(zoneId: string, luck: number, n: number): { [string]: number }
 		local weights = WorldLayout.ZoneById[zoneId].Ores
-		local base = BoostConfig.zoneOdds(zoneId, 1)
+		local base = mapOdds(zoneId, 1)
 		local counts: { [string]: number } = {}
 		for _ = 1, n do
 			local roll = math.random()
@@ -1026,7 +1058,7 @@ return function(T, Loader)
 		end
 		T.truthy(#BoostConfig.gains(caves, 2.5) > 0)
 		-- a dropping ore: upgraded below the chance 1 - p'/p, kept above it
-		local plain, lucky = BoostConfig.zoneOdds("EmberCaves", 1), BoostConfig.zoneOdds("EmberCaves", 2.5)
+		local plain, lucky = mapOdds("EmberCaves", 1), mapOdds("EmberCaves", 2.5)
 		local chance = BoostConfig.upgradeChance(caves, 2.5, "Iron")
 		T.near(chance, 1 - chanceOf(lucky, "Iron") / chanceOf(plain, "Iron"), 1e-12, "1 - p'/p")
 		T.near(BoostConfig.upgradeChance(caves, 2.5), chance, 1e-12, "no ore = a lower (x1) ore")
@@ -1061,7 +1093,7 @@ return function(T, Loader)
 		T.eq(#BoostConfig.gains(WorldLayout.ZoneById.Outcrops.Ores, 4), 0)
 		-- exact: rock ores rolled with the plain weights, then upgraded, give oreOdds(weights, luck)
 		for _, zone in WorldLayout.Zones do
-			local base = BoostConfig.zoneOdds(zone.Id, 1)
+			local base = mapOdds(zone.Id, 1)
 			if #base == 0 then
 				continue
 			end
@@ -1079,7 +1111,7 @@ return function(T, Loader)
 				for _, line in gains do
 					final[line.Ore] += moved * line.Chance / totalGain
 				end
-				for _, line in BoostConfig.zoneOdds(zone.Id, luck) do
+				for _, line in mapOdds(zone.Id, luck) do
 					T.near(final[line.Ore], line.Chance, 1e-12, `{zone.Id} {line.Ore} at luck {luck}`)
 				end
 			end
@@ -1088,7 +1120,7 @@ return function(T, Loader)
 		math.randomseed(12345)
 		local N = 100000
 		local counts = sample("EmberCaves", 2.5, N)
-		for _, line in BoostConfig.zoneOdds("EmberCaves", 2.5) do
+		for _, line in mapOdds("EmberCaves", 2.5) do
 			T.near((counts[line.Ore] or 0) / N, line.Chance, 0.006, "sampled " .. line.Ore)
 		end
 		counts = sample("DeepHollow", 2.5, N)
@@ -1097,7 +1129,7 @@ return function(T, Loader)
 			local rarity = OreData.ById[oreId].Rarity
 			byRarity[rarity] = (byRarity[rarity] or 0) + n
 		end
-		local deepOdds = BoostConfig.zoneOdds("DeepHollow", 2.5)
+		local deepOdds = mapOdds("DeepHollow", 2.5)
 		for _, info in Rarity.List do
 			local expected = rarityShare(deepOdds, info.Id)
 			local tolerance = if info.Id == "Mythic" then 0.0012 else 0.006
@@ -1116,15 +1148,15 @@ return function(T, Loader)
 			zones[effect.Zone] = effect
 		end
 		T.truthy(zones.DeepHollow, "blaster 5 mines Deep Hollow")
-		local mythic
+		local epic
 		for _, line in zones.DeepHollow.Rarities do
-			if line.Rarity == "Mythic" then
-				mythic = line
+			if line.Rarity == "Epic" then
+				epic = line
 			end
 		end
-		T.truthy(mythic and mythic.After > 3 * mythic.Before, "the card shows Mythic 0.17 % -> 0.59 %")
-		T.near(mythic.Before, rarityShare(BoostConfig.zoneOdds("DeepHollow", 1), "Mythic"), EPS)
-		T.near(mythic.After, rarityShare(BoostConfig.zoneOdds("DeepHollow", 2.5), "Mythic"), EPS)
+		T.truthy(epic and epic.After > 1.3 * epic.Before, "the card shows Deep Hollow's Epic share growing")
+		T.near(epic.Before, rarityShare(BoostConfig.zoneOdds("DeepHollow", 1), "Epic"), EPS)
+		T.near(epic.After, rarityShare(BoostConfig.zoneOdds("DeepHollow", 2.5), "Epic"), EPS)
 		for _, line in hexa.Artifacts do
 			T.eq(line.Before, line.After, "Hexa Lucky doesn't touch artifacts")
 		end
@@ -1816,7 +1848,11 @@ return function(T, Loader)
 		T.eq(#data.Enchants.Slots, 4)
 		T.eq(data.Enchants.Slots[1], "Power")
 		T.eq(data.Enchants.Slots[2], "", "an id sits in one slot only")
-		T.eq(data.Enchants.Slots[3], "Midas", "slot 3 isn't open at blaster level 4: kept, read only once it opens (a rebirth never unslots)")
+		T.eq(
+			data.Enchants.Slots[3],
+			"Midas",
+			"slot 3 isn't open at blaster level 4: kept, read only once it opens (a rebirth never unslots)"
+		)
 		T.eq(EnchantConfig.stats(data.Enchants, data.BlasterLevel).SellPct, nil, "a slot that isn't open gives nothing")
 		T.eq(data.Enchants.Slots[4], "")
 		T.eq(data.Enchants.Slots[5], nil)

@@ -31,26 +31,28 @@ models.ingot_gold = ItemBuilder.build({ Kind = "Ingot", OreId = "Gold", Grade = 
 
 -- Ore Pen items for the backpack window (in the game these show as live 3D
 -- ViewportFrames, so they need no uploads; the preview uses these pictures)
-for _, row in {
-	{ "Clean", "Ruby", "Pristine" },
-	{ "Clean", "Silver", "Flawless" },
-	{ "Ingot", "Gold", "Pristine" },
-	{ "Clean", "Diamond", "Clean" },
-	{ "Raw", "Copper" },
-	{ "Clean", "Copper", "Rough" },
-	{ "Clean", "Amethyst", "Clean" },
-	{ "Ingot", "Silver", "Clean" },
-	{ "Raw", "Stormcore" },
-	{ "Clean", "Jade", "Pristine" },
-	{ "Clean", "Stormcore", "Flawless" },
-	{ "Crushed", "Iron", "Clean" },
-	{ "Clean", "Quartz", "Clean" },
-	{ "Clean", "Heartstone", "Pristine" },
-	{ "Raw", "Silver" },
-	{ "Ingot", "Copper", "Clean" },
-	{ "Clean", "Emerald", "Clean" },
-	{ "Clean", "Coal", "Rough" },
-} do
+for _, row in
+	{
+		{ "Clean", "Ruby", "Pristine" },
+		{ "Clean", "Silver", "Flawless" },
+		{ "Ingot", "Gold", "Pristine" },
+		{ "Clean", "Diamond", "Clean" },
+		{ "Raw", "Copper" },
+		{ "Clean", "Copper", "Rough" },
+		{ "Clean", "Amethyst", "Clean" },
+		{ "Ingot", "Silver", "Clean" },
+		{ "Raw", "Stormcore" },
+		{ "Clean", "Jade", "Pristine" },
+		{ "Clean", "Stormcore", "Flawless" },
+		{ "Crushed", "Iron", "Clean" },
+		{ "Clean", "Quartz", "Clean" },
+		{ "Clean", "Heartstone", "Pristine" },
+		{ "Raw", "Silver" },
+		{ "Ingot", "Copper", "Clean" },
+		{ "Clean", "Emerald", "Clean" },
+		{ "Clean", "Coal", "Rough" },
+	}
+do
 	local name = "item_" .. row[1] .. "_" .. row[2]
 	local ok, model = pcall(ItemBuilder.build, { Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
 	if ok then
@@ -77,6 +79,11 @@ for _, ore in OreData.List do
 	if not models[name] then
 		models[name] = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id, Grade = "Clean" }, CF.new(), name)
 	end
+	-- every ore's ingot (the Foundry's rows; in the game a live ViewportFrame)
+	local ingot = "item_Ingot_" .. ore.Id
+	if not models[ingot] then
+		models[ingot] = ItemBuilder.build({ Kind = "Ingot", OreId = ore.Id, Grade = "Pristine" }, CF.new(), ingot)
+	end
 end
 
 -- the older machines without a Soft-style model (MachineBuilder)
@@ -101,6 +108,57 @@ for _, dropper in DropperConfig.List do
 	models["dropper_" .. dropper.Id] = DropperBuilder.build(dropper.Id, CF.new())
 end
 models.dropper_MoneyLaser2X = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder").build(CF.new())
+-- every hoverboard (the hoverboards window's cards, the shop's board passes; in the game a live ViewportFrame)
+local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
+for _, board in HoverboardData.List do
+	models["board_" .. board.Id] = HoverboardBuilder.build(board.Id)
+end
+
+-- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
+local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
+for name, make in CashBuilder.Pictures do
+	models[name] = make()
+end
+
+-- every golem and capsule (IconAssets' Golems sheet; the shop banner's cards)
+local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+for _, golem in GolemConfig.List do
+	models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+end
+for _, capsule in CapsuleConfig.List do
+	models["capsule_" .. capsule.Id] = GolemBuilder.capsule(capsule.Id)
+end
+-- the upcoming limited editions' golems and every set's shard (previews)
+local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+for _, set in LimitedUpcoming.Sets do
+	for _, golem in set.Golems do
+		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+	end
+	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
+end
+
+-- asked for by name and not above: any item ("item_<Kind>_<Ore>", the Pop
+-- windows' live item pictures) or machine ("machine_<Id>", MachineBuilder)
+for _, name in process.args do
+	if not models[name] then
+		local kind, ore = string.match(name, "^item_(%a+)_(%w+)$")
+		local machine = string.match(name, "^machine_(%w+)$")
+		if kind and ore then
+			local ok, model = pcall(ItemBuilder.build, { Kind = kind, OreId = ore, Grade = "Clean" }, CF.new(), name)
+			if ok then
+				models[name] = model
+			end
+		elseif machine then
+			local ok, model = pcall(MachineBuilder.build, machine)
+			if ok then
+				models[name] = model
+			end
+		end
+	end
+end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args

@@ -160,7 +160,7 @@ function Preview.build(Loader: any, workspace: any)
 		plate(
 			base * CFrame.new(0, 0.75, 1.75),
 			Vector3.new(5.6, 0.8, 0.2),
-			{ `REBIRTH {star.Unlock} · R$ {star.Robux} · ⭐ {star.Stars}` },
+			{ `REBIRTH {star.Unlock} · R$ {star.Robux} · {star.Stars} STARS` },
 			Color3.new(1, 1, 1)
 		)
 	end

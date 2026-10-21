@@ -259,6 +259,10 @@ return function(T, Loader)
 			table.insert(plain, copy)
 		end
 		WorldLayout.Zones = plain
+		-- (the mine floors' rock weights too: BoostConfig.zoneWeights)
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local byZone = MineFloors.ByZone
+		MineFloors.ByZone = {}
 		w.data.Boosts.HexaLuckyUntil = 0
 		local ok2, err2 = pcall(function()
 			refused(w, "BuyCoins", "HexaLucky5", "NoEffect", "no Rare ores anywhere")
@@ -267,6 +271,7 @@ return function(T, Loader)
 			T.eq(result(w, "BuyCoins", "TripleLucky5").Reason, "NoCoins", "Triple Lucky always has an effect")
 		end)
 		WorldLayout.Zones = zones
+		MineFloors.ByZone = byZone
 		if not ok2 then
 			error(err2, 0)
 		end
@@ -580,7 +585,10 @@ return function(T, Loader)
 							if offer.Robux then
 								T.eq(
 									offer.Reason,
-									if BoostConfig.canExtend(s.Boosts, offer.Kind, offer.Seconds, NOW) then "ComingSoon" else "Full",
+									if offer.Kind == "HexaLucky" and not BoostConfig.hasEffect("HexaLucky", level)
+										then "NoEffect" -- (floors 1's rocks: no Rare+ ores to luck into)
+										elseif BoostConfig.canExtend(s.Boosts, offer.Kind, offer.Seconds, NOW) then "ComingSoon"
+										else "Full",
 									"Robux packs: Coming soon while the id is 0"
 								)
 								T.falsy(offer.CanBuy, "never buyable while the id is 0")
@@ -601,6 +609,7 @@ return function(T, Loader)
 			end
 		end
 		-- restricted players see no Robux packs (coin top-ups stay while coins can't be bought)
+		MonetizationConfig.CoinPacksEnabled = false
 		for _, card in BoostView.cards(state(), 1e9, NOW, true) do
 			for _, offer in card.Offers do
 				T.falsy(offer.Robux, "no Robux pack where restricted")
@@ -639,11 +648,19 @@ return function(T, Loader)
 		local s = state({ Bonuses = { OreLuckPct = 0.3, OreLuckMult = 1, ArtifactPct = 0 } })
 		local without, with = BoostConfig.hexaLuck(0.3)
 		for _, zone in WorldLayout.Zones do
-			if next(zone.Ores) ~= nil then
+			local weights = BoostConfig.zoneWeights(zone)
+			local crystal = BoostConfig.crystalWeights(zone)
+			if next(weights) ~= nil then
 				local t = BoostView.hexaOdds(s, zone.Id)
-				local before = BoostConfig.oreOdds(zone.Ores, without)
-				local after = BoostConfig.oreOdds(zone.Ores, with)
-				T.eq(#t.Rows, #before, zone.Id .. ": every ore")
+				local before = BoostConfig.oreOdds(weights, without)
+				local after = BoostConfig.oreOdds(weights, with)
+				local crystalRows = if crystal then #BoostConfig.oreOdds(crystal, without) else 0
+				T.eq(#t.Rows, #before + crystalRows, zone.Id .. ": every ore (and every crystal rock ore)")
+				for i = #before + 1, #t.Rows do
+					T.truthy(t.Rows[i].Name:find("(crystal rock)", 1, true), zone.Id .. ": crystal rock rows last")
+				end
+				t = table.clone(t)
+				t.Rows = table.move(t.Rows, 1, #before, 1, {})
 				local byName = {}
 				local order = math.huge
 				for _, row in t.Rows do
@@ -664,11 +681,17 @@ return function(T, Loader)
 					T.eq(after[i].Ore, line.Ore)
 					T.eq(row.After, BoostView.pct(after[i].Chance), zone.Id .. " " .. line.Ore .. " after")
 				end
-				local rare = BoostConfig.rareShare(zone.Ores, without)
+				local rare = BoostConfig.rareShare(weights, without)
 				if rare > 0 then
 					T.eq(t.Summary.Before, BoostView.pct(rare))
-					T.eq(t.Summary.After, BoostView.pct(BoostConfig.rareShare(zone.Ores, with)))
-					T.truthy(t.Summary.Change > 0, zone.Id .. ": Rare+ grows")
+					T.eq(t.Summary.After, BoostView.pct(BoostConfig.rareShare(weights, with)))
+					if rare < 1 - 1e-9 then
+						T.truthy(t.Summary.Change > 0, zone.Id .. ": Rare+ grows")
+					else
+						T.eq(t.Summary.Change, 0, zone.Id .. ": every ore already Rare+")
+					end
+				elseif crystal and BoostConfig.rareShare(crystal, without) > 0 then
+					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores in plain rocks, no summary")
 				else
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores, no summary")
 					T.truthy(t.Note:find("changes nothing"), zone.Id .. ": says so")
@@ -707,13 +730,19 @@ return function(T, Loader)
 			T.near(sumAfter, 1, 1e-9)
 			T.truthy(t.Summary.Change > 0, capsule.Id .. ": the lucky golems grow")
 		end
-		-- the capsules shown: the Royal one (Robux) is hidden where restricted
-		T.eq(#BoostView.capsules(false), #CapsuleConfig.List)
-		T.falsy(table.find(BoostView.capsules(true), "Royal"), "no Royal where restricted")
+		-- the capsules shown: the Royal one (Robux) is hidden where restricted; a
+		-- limited edition's capsule only while it is on sale
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		local during = LimitedGolems.Current.EndsAt - 3600
+		T.eq(#BoostView.capsules(false, during), #CapsuleConfig.List)
+		T.truthy(table.find(BoostView.capsules(false, during), "Dragonforge"), "the limited capsule while it runs")
+		T.eq(#BoostView.capsules(false, LimitedGolems.Current.EndsAt + 1), #CapsuleConfig.List - 1, "not after its end")
+		T.falsy(table.find(BoostView.capsules(true, during), "Royal"), "no Royal where restricted")
+		T.falsy(table.find(BoostView.capsules(true, during), "Dragonforge"), "no limited capsule where restricted")
 		-- the zone a table starts on
 		T.eq(BoostView.defaultZone(s, "Quarry"), "Quarry", "where you stand")
 		T.eq(BoostView.defaultZone(s, "Emberfall"), "DeepHollow", "in town: the hardest zone you can mine")
-		T.eq(BoostView.defaultZone(state({ BlasterLevel = 1 }), nil), "Quarry", "level 1")
+		T.truthy(BoostView.defaultZone(state({ BlasterLevel = 1 }), nil), "level 1: a zone (none has Rare+ ores yet)")
 		T.eq(BoostView.cycle({ "A", "B", "C" }, "C", 1), "A", "wraps")
 		T.eq(BoostView.cycle({ "A", "B", "C" }, "A", -1), "C")
 		T.eq(BoostView.cycle({}, "A", 1), nil)

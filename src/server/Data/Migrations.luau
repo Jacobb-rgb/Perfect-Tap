@@ -122,6 +122,9 @@
 	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
 	  wheel: docs/plans/V2_PLAN.md) is removed.
 	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
+	  Wheel.Spins (the bought spins held): a whole number >= 0 (junk = 0), at
+	  most WheelConfig.MaxSavedSpins (a junk guard no purchase gets near:
+	  bought spins are never cut).
 	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
 	  Chapters: string ids -> true; Equipped: a string of at most
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
@@ -632,6 +635,16 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	else
 		wheel.NextSpinAt = math.min(math.floor(spinAt), now + WheelConfig.CooldownSeconds)
 	end
+	-- the bought spins held: a whole count (paid: kept, only junk repaired)
+	local spins = wheel.Spins
+	if spins == nil then
+		wheel.Spins = 0
+	elseif not isFinite(spins) or spins < 0 then
+		wheel.Spins = 0
+		report.Dropped += 1
+	else
+		wheel.Spins = math.min(math.floor(spins), WheelConfig.MaxSavedSpins)
+	end
 
 	-- artifacts: string ids with whole counts, chapters read (unknown ids kept)
 	local artifacts = record(data, "Artifacts", report)
@@ -998,6 +1011,36 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		data.PaidCoins = 0
 	elseif data.PaidCoins > data.Coins then
 		data.PaidCoins = data.Coins
+	end
+	-- daily / weekly quests and the 7-day login streak: the record shapes and the streak
+	-- numbers (QuestService rerolls broken quest lists on load, QuestLogic.refresh)
+	if type(data.Quests) ~= "table" then
+		data.Quests = { Day = 0, Daily = {}, Week = 0, Weekly = {} }
+	end
+	local streak = data.Streak
+	if
+		type(streak) ~= "table"
+		or not isFinite(streak.Last)
+		or not isFinite(streak.Day)
+		or streak.Day ~= math.floor(streak.Day)
+		or streak.Day < 0
+		or streak.Day > 7
+	then
+		data.Streak = { Day = 0, Last = 0 }
+	end
+	-- the Starter Pack record (StarterPackService): when it was bought, how many times
+	local starter = data.StarterPack
+	if type(starter) ~= "table" then
+		data.StarterPack = { BoughtAt = 0, Count = 0 }
+	else
+		if not isFinite(starter.BoughtAt) or starter.BoughtAt < 0 then
+			starter.BoughtAt = 0
+		end
+		if not isFinite(starter.Count) or starter.Count < 0 then
+			starter.Count = 0
+		else
+			starter.Count = math.floor(starter.Count)
+		end
 	end
 
 	-- trains: levels in range, clean cargo lists, sane trip times

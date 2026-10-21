@@ -1,5 +1,6 @@
 --[[
-	WheelController: the daily wheel of fortune on this screen (step 7).
+	WheelController: the Spin & Win wheel on this screen (step 7; the Pop
+	look and the bought spins, owner 2026-10-20).
 
 	- Opens on OpenUI "Wheel" (the "Spin & Win" prompt at the EmberChest,
 	  added by WheelService) or the HUD's FREE SPIN! chip (a click / tap;
@@ -15,42 +16,67 @@
 	  chimes when it comes. The chip follows the teleport bar's width for
 	  the uiScale and the screen width (icon-only bar on small phones),
 	  also when the screen changes. The screen (WheelView) shows the
-	  player's 8 segments with their exact odds, what each pays them, and
-	  the countdown from State.Wheel.NextSpinAt (os.time() seconds, compared
-	  with Workspace:GetServerTimeNow()). A row opens its details card (the
-	  whole text, a capsule's chance of every golem); X, B or the row again
-	  close it.
-	- SPIN! sends WheelAction "Spin" (one request per WheelConfig.
-	  ClientCooldown; the button waits for the answer). WheelResult: the
-	  disc turns WheelView.Turns times and stops with the won segment under
-	  the pointer (WheelConfig.SpinSeconds, ticking past every segment),
-	  then the prize card, confetti and the row lights up. Meanwhile the
-	  HUD's coin counter holds (HudController.holdCoins), so a coin prize
-	  doesn't show in the balance before the wheel stops. A capsule prize
-	  asks for its opening (WheelAction "Reveal") 1.5 s after the card,
-	  only while the screen is still open; a free capsule opening
-	  (CapsuleResult Free) closes the wheel screen, so the opening never
-	  plays on top of it. A refusal (ActionResult
-	  "NotReady") or no answer within WheelConfig.ResultTimeout gives the
-	  button back; a WheelResult that comes later is still shown (or, with
-	  the screen closed, a toast says what was won).
+	  player's 8 segments with their exact odds on the wheel's faces, the
+	  jackpot's golem odds, the countdown from State.Wheel.NextSpinAt
+	  (os.time() seconds, compared with Workspace:GetServerTimeNow()) and
+	  SPIN (n): the free spin when ready + the bought spins
+	  (State.Wheel.Spins; 0 where paid random items are restricted).
+	- BUY SPINS (WheelConfig.Packs): a price button opens the BUY step
+	  first (WheelView.showBuy): every segment's exact odds and what it pays
+	  this player, the pack and its Robux price; only that window's price
+	  button sends WheelAction "Buy" { Count }. The answer is PurchasePrompt
+	  { Product, Status }: "Prompted" closes the window (Roblox's purchase
+	  dialog shows), anything else says why (MonetizationConfig.StatusText).
+	  Where paid random items are restricted, or while the policy isn't
+	  known (the server's PaidRandomRestricted attribute; unknown = strict),
+	  the rows hide and nothing is sent (the server refuses with
+	  "Restricted" all the same). The spins arrive with the receipt's State
+	  push and a thank-you Notify. With a full golem inventory a bought
+	  spin can't be used (the server refuses it, "InventoryFull"): the BUY
+	  step's hint says so, a "Full" answer reads WheelConfig.Reasons.
+	  InventoryFull (else MaxSpins), and SPIN with only bought spins left
+	  says it without asking; the rows (WheelView.info: GolemRoom, PenFull)
+	  say what the capsule / ore prizes pay instead.
+	- Details (or the jackpot card) opens ALL ODDS: a row opens its details
+	  card (the whole text, a capsule's chance of every golem); X, B or the
+	  row again close it.
+	- Fast Spin: the box turns the spin into WheelConfig.FastSpinSeconds
+	  (WheelView.spinTurns full turns); saved with the player's settings
+	  (SettingsController "FastSpin", data.Settings), so it stays on.
+	- SPIN (n) sends WheelAction "Spin" (one request per WheelConfig.
+	  ClientCooldown; the button waits for the answer; the server uses the
+	  free spin first, then a bought one). WheelResult: the disc turns
+	  and stops with the won segment under the pointer (spinSeconds,
+	  ticking past every segment), then the prize card, confetti and the
+	  row lights up. Meanwhile the HUD's coin counter holds
+	  (HudController.holdCoins), so a coin prize doesn't show in the balance
+	  before the wheel stops. A capsule prize asks for its opening
+	  (WheelAction "Reveal") 1.5 s after the card, only while the screen is
+	  still open; a free capsule opening (CapsuleResult Free) closes the
+	  wheel screen, so the opening never plays on top of it. A refusal
+	  (ActionResult "NotReady" / "Restricted") or no answer within
+	  WheelConfig.ResultTimeout gives the button back; a WheelResult that
+	  comes later is still shown (or, with the screen closed, a toast says
+	  what was won).
 	- The big lobby wheel (SpinWheel's "Wheel" sub-model, tag Spin) shows
 	  WheelConfig's 8 prizes in the screen's order and turns idly
 	  (DecorController). When this player's spin result comes, every lobby
 	  wheel within LobbyRange lands on the same segment with the same
-	  jitter as the screen disc (DecorController.hold / setAngle from its
-	  own RenderStepped, so closing the screen mid-spin still lands it;
-	  WheelView.spinTarget, the same clockwise angle), fires confetti from
-	  its hub, rests on the prize LobbyHold seconds and then turns on
-	  (release). Client-only: everyone else keeps seeing the idle turn.
-	  Players who can't buy capsules see the substitute prizes' icons on it
-	  (WheelConfig.Substitutes: the "Icon<Id>" sub-models with the
-	  Substitute attribute; swapped locally, lobbyIcons).
+	  jitter, time and turns as the screen disc (Fast Spin too;
+	  DecorController.hold / setAngle from its own RenderStepped, so closing
+	  the screen mid-spin still lands it; WheelView.spinTarget, the same
+	  clockwise angle), fires confetti from its hub, rests on the prize
+	  LobbyHold seconds and then turns on (release). Client-only: everyone
+	  else keeps seeing the idle turn. Players who can't buy capsules see
+	  the substitute prizes' icons on it (WheelConfig.Substitutes: the
+	  "Icon<Id>" sub-models with the Substitute attribute; swapped locally,
+	  lobbyIcons).
 	- Closes with the X, B (gamepad), Backspace, respawning or another big
 	  panel opening (OtherPanels, plus the side menu's MenuPanels.Names
-	  when that module is in the game); it never locks movement. Gamepads
-	  start on SPIN! (or the X when the spin isn't ready); the rows are
-	  selectable.
+	  when that module is in the game); B / Backspace first close the prize
+	  card, a details card or the odds window. It never locks movement.
+	  Gamepads start on SPIN (or the X when there is no spin); every button
+	  is selectable.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -65,9 +91,12 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
+local GolemConfig = require(Shared.Config.GolemConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local WheelView = require(script.Parent.Parent.UI.WheelView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
@@ -77,6 +106,7 @@ local CleaningController = require(script.Parent.CleaningController)
 local DecorController = require(script.Parent.DecorController)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
+local SettingsController = require(script.Parent.SettingsController)
 local StateController = require(script.Parent.StateController)
 
 local WheelController = {}
@@ -86,6 +116,7 @@ type Panel = { isOpen: () -> boolean, close: () -> () }
 local CLOSE_ACTION = "TerraForgeWheelClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local REVEAL_DELAY = 1.5 -- seconds after the prize card before a capsule's opening
+local PROMPT_MEMORY = 10 -- seconds a "Buy" waits for its PurchasePrompt answer
 -- Every big panel of the game so far (missing ones are skipped); the side
 -- menu's MenuPanels.Names are added when that module is in the game.
 WheelController.OtherPanels = {
@@ -120,14 +151,18 @@ local openedAt = 0
 local busy = false -- a spin is in flight or the disc is turning
 local waitUntil = 0 -- os.clock() when an unanswered spin is given up on
 local lastSent = -math.huge
+local lastBuy = -math.huge
 local animating = false
 local animToken = 0
 local noCapsulesShown: boolean? = nil
 local litId: string? = nil -- the odds row of the last prize
 local rowsKey = "" -- what the odds rows show now (rebuilt only when it changes)
+local jackpotLucky: boolean? = nil -- the Triple Lucky state the jackpot tiles show
 local current: { [string]: any }? = nil -- the WheelResult the disc is turning to
 local others: { Panel }? = nil
 local chipReady = false -- the free spin was ready at the last chip update
+local fast = false -- Fast Spin (the player's setting)
+local pending: { [string]: number } = {} -- product key -> os.clock() of its "Buy"
 
 function WheelController.isOpen(): boolean
 	return open
@@ -202,36 +237,58 @@ end
 
 ---------------------------------------------------------------- state
 
+-- Paid random items restricted for this player (unknown = restricted, like
+-- the server's strict default): no bought spins, no BUY SPINS rows.
+local function restricted(): boolean
+	return player:GetAttribute(RESTRICTED_ATTRIBUTE) ~= false
+end
+
 local function noCapsules(): boolean
-	-- unknown (no attribute yet) counts as restricted, like the server's strict default
-	return CapsuleConfig.allRestricted(player:GetAttribute(RESTRICTED_ATTRIBUTE) ~= false)
+	return CapsuleConfig.allRestricted(restricted())
 end
 
 -- What the odds rows need (WheelView.Info) from the latest State snapshot.
-function WheelController.info(state: { [string]: any }?, restricted: boolean): WheelView.Info
-	local s: { [string]: any } = state or {}
-	local bonuses = if type(s.Bonuses) == "table" then s.Bonuses else {}
-	local income = tonumber(s.Income) or 0
-	return {
-		NoCapsules = restricted,
-		Income = if income == income then income else 0,
-		Ore = {
-			BlasterLevel = tonumber(s.BlasterLevel) or 1,
-			BestIncome = WheelConfig.bestIncome(s.Discovered),
-		},
-		TripleLucky = bonuses.TripleLucky == true,
-	}
+-- (also the golem room and a full Ore Pen: the rows say what those prizes pay then)
+function WheelController.info(state: { [string]: any }?, restrictedNow: boolean): WheelView.Info
+	return WheelView.info(state, restrictedNow)
+end
+
+-- No room in the golem inventory for a bought spin's capsule (the server
+-- refuses that spin: WheelConfig.Reasons.InventoryFull).
+local function inventoryBlocks(): boolean
+	local state = StateController.get()
+	if not state or type(state.Golems) ~= "table" or CapsuleConfig.allRestricted(false) then
+		return false
+	end
+	return GolemConfig.room(state.Golems) < 1
+end
+
+local function wheelRecord(): { [string]: any }?
+	local state = StateController.get()
+	return if state and type(state.Wheel) == "table" then state.Wheel else nil
 end
 
 -- Seconds until the free spin (0 = ready) from the latest snapshot.
 local function secondsLeft(): number
-	local state = StateController.get()
-	local wheel = if state and type(state.Wheel) == "table" then state.Wheel else nil
+	local wheel = wheelRecord()
 	return WheelConfig.secondsLeft(if wheel then wheel.NextSpinAt else 0, serverNow())
 end
 
 local function isReady(): boolean
 	return StateController.get() ~= nil and secondsLeft() <= 0
+end
+
+-- The bought spins this player can use now (none where restricted).
+local function usableSpins(): number
+	if restricted() then
+		return 0
+	end
+	return WheelConfig.heldSpins(wheelRecord())
+end
+
+-- SPIN (n): the free spin when ready + the usable bought spins.
+local function spinsNow(): number
+	return WheelView.spinCount(isReady(), usableSpins())
 end
 
 ---------------------------------------------------------------- the lobby wheel
@@ -300,8 +357,9 @@ local function lobbyIcons(substitutes: boolean)
 end
 
 -- Every lobby wheel near the player lands on segment `index` (with the
--- screen disc's `jitter`), rests there LobbyHold seconds, then turns on.
-local function landLobby(index: number, jitter: number)
+-- screen disc's `jitter`, `seconds` and `turns`), rests there LobbyHold
+-- seconds, then turns on.
+local function landLobby(index: number, jitter: number, seconds: number, turns: number)
 	lobbyToken += 1
 	local token = lobbyToken
 	local character = player.Character
@@ -309,12 +367,14 @@ local function landLobby(index: number, jitter: number)
 	local count = #WheelConfig.Segments
 	for _, model in lobbyWheels() do
 		local hub = model.PrimaryPart
-		local from = if hub and root and (hub.Position - root.Position).Magnitude < WheelController.LobbyRange
+		local from = if hub
+				and root
+				and (hub.Position - root.Position).Magnitude < WheelController.LobbyRange
 			then DecorController.hold(model)
 			else nil
 		if from then
 			local start = from :: number
-			local target = math.rad(WheelView.spinTarget(math.deg(start), index, count, WheelView.Turns, jitter))
+			local target = math.rad(WheelView.spinTarget(math.deg(start), index, count, turns, jitter))
 			local started = os.clock()
 			local connection: RBXScriptConnection
 			connection = RunService.RenderStepped:Connect(function()
@@ -322,7 +382,7 @@ local function landLobby(index: number, jitter: number)
 					connection:Disconnect() -- a newer spin holds the wheel now
 					return
 				end
-				local t = (os.clock() - started) / WheelConfig.SpinSeconds
+				local t = (os.clock() - started) / seconds
 				DecorController.setAngle(model, start + (target - start) * WheelView.ease(t))
 				if t >= 1 then
 					connection:Disconnect()
@@ -349,14 +409,17 @@ local function padName(key: Enum.KeyCode): string
 	return name
 end
 
+-- The odds window's hint (its header, when it fits).
 local function updateHint(view: WheelView.Refs)
+	local text
 	if usingGamepad() then
-		view.Hint.Text = `{padName(Enum.KeyCode.ButtonA)}: spin / details  ·  {padName(Enum.KeyCode.ButtonB)}: close`
+		text = `{padName(Enum.KeyCode.ButtonA)}: details  ·  {padName(Enum.KeyCode.ButtonB)}: back`
 	elseif isTouch() then
-		view.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
+		text = "Tap a row for details"
 	else
-		view.Hint.Text = "Click a row for details  ·  Backspace: close"
+		text = "Click a row for details  ·  Backspace: back"
 	end
+	WheelView.setHint(view, text)
 end
 
 -- A row opens its details card (the same row again, X or B close it).
@@ -381,13 +444,14 @@ local function refresh()
 	if not view or not open then
 		return
 	end
-	local restricted = noCapsules()
-	if noCapsulesShown ~= restricted and not animating then
-		noCapsulesShown = restricted
-		WheelView.setSegments(view, WheelConfig.segments(restricted))
+	local restrictedNow = noCapsules()
+	if noCapsulesShown ~= restrictedNow and not animating then
+		noCapsulesShown = restrictedNow
+		WheelView.setSegments(view, WheelConfig.segments(restrictedNow))
 	end
 	-- the rows only change with the player's income, blaster, finds or luck
-	local rows = WheelView.rows(WheelController.info(StateController.get(), restricted))
+	local info = WheelController.info(StateController.get(), restrictedNow)
+	local rows = WheelView.rows(info)
 	local parts = {}
 	for _, row in rows do
 		table.insert(parts, row.Id .. "=" .. row.Detail)
@@ -414,9 +478,16 @@ local function refresh()
 			GuiService.SelectedObject = view.Rows[selectedId]
 		end
 	end
+	-- the jackpot's golem odds follow Triple Lucky
+	if jackpotLucky ~= info.TripleLucky then
+		jackpotLucky = info.TripleLucky
+		local _, lines = WheelView.jackpot(info.TripleLucky)
+		WheelView.setJackpot(view, lines)
+	end
 	WheelView.highlight(view, litId)
+	WheelView.setBuy(view, restricted())
 	if not animating then
-		WheelView.setReady(view, isReady(), secondsLeft(), busy)
+		WheelView.setReady(view, isReady(), secondsLeft(), busy, usableSpins())
 	end
 end
 
@@ -426,6 +497,7 @@ local function fit(view: WheelView.Refs)
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
 	WheelView.layout(view, size.X / scale, (size.Y - inset.Y) / scale)
+	updateHint(view)
 end
 
 local function selectDefault(view: WheelView.Refs)
@@ -434,7 +506,9 @@ local function selectDefault(view: WheelView.Refs)
 	end
 	if view.Result.Visible then
 		GuiService.SelectedObject = view.ResultOk
-	elseif isReady() and not busy then
+	elseif WheelView.oddsOpen(view) then
+		GuiService.SelectedObject = if view.OddsBuy.Visible then view.OddsBuy else view.OddsClose
+	elseif spinsNow() > 0 and not busy then
 		GuiService.SelectedObject = view.Spin
 	else
 		GuiService.SelectedObject = view.Close
@@ -446,6 +520,14 @@ local function compactNow(): boolean
 end
 
 local onSpin: () -> ()
+local openBuy: (count: number) -> ()
+local confirmBuy: () -> ()
+
+-- Closes the odds window (and its details card); the selection goes back.
+local function closeOdds(view: WheelView.Refs)
+	WheelView.hideOdds(view)
+	selectDefault(view)
+end
 
 local function ensureView(): WheelView.Refs
 	local existing = refs
@@ -478,10 +560,128 @@ local function ensureView(): WheelView.Refs
 	view.Odds:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
 		WheelView.updateMore(view)
 	end)
+	-- BUY SPINS: a row opens the buy step (the odds first), its price button buys
+	for count, button in view.BuyButtons do
+		button.Activated:Connect(function()
+			openBuy(count)
+		end)
+	end
+	view.OddsBuy.Activated:Connect(function()
+		confirmBuy()
+	end)
+	view.OddsClose.Activated:Connect(function()
+		closeOdds(view)
+		Sfx.play("UIClick")
+	end)
+	view.Details.Activated:Connect(function()
+		if WheelView.oddsOpen(view) then
+			closeOdds(view)
+		else
+			WheelView.showOdds(view)
+			updateHint(view)
+			selectDefault(view)
+		end
+		Sfx.play("UIClick")
+	end)
+	-- the jackpot card: its whole odds card
+	view.Jackpot.Activated:Connect(function()
+		WheelView.showOdds(view)
+		updateHint(view)
+		WheelView.showInfo(view, WheelConfig.JackpotId)
+		WheelView.highlight(view, litId)
+		if usingGamepad() then
+			GuiService.SelectedObject = view.InfoClose
+		end
+		Sfx.play("UIClick")
+	end)
+	local function toggleFast()
+		fast = not fast
+		WheelView.setFast(view, fast)
+		SettingsController.set("FastSpin", fast)
+		Sfx.play("UIClick")
+	end
+	view.FastSpin.Activated:Connect(toggleFast)
+	view.FastCheck.Activated:Connect(toggleFast)
+	WheelView.setFast(view, fast)
 	refs = view
 	noCapsulesShown = nil
 	rowsKey = ""
+	jackpotLucky = nil
 	return view
+end
+
+---------------------------------------------------------------- buying spins
+
+-- A BUY SPINS row: the buy step with every segment's odds (nothing is sent yet).
+openBuy = function(count: number)
+	local view = refs
+	if not view or not open then
+		return
+	end
+	if restricted() then
+		view.Status.Text = MonetizationConfig.StatusText.Restricted
+		Sfx.play("UIDeny")
+		return
+	end
+	WheelView.showBuy(view, count)
+	-- a full golem inventory: said before buying (the server answers "Full")
+	WheelView.setHint(view, if inventoryBlocks() then WheelConfig.Reasons.InventoryFull else "The odds of every spin")
+	if usingGamepad() then
+		GuiService.SelectedObject = view.OddsBuy
+	end
+	Sfx.play("UIClick")
+end
+
+-- The buy step's price button: WheelAction "Buy" (the server prompts).
+confirmBuy = function()
+	local view = refs
+	local count = if view then view.BuyPack else nil
+	local pack = if count then WheelConfig.packFor(count) else nil
+	if not view or not pack or restricted() then
+		return
+	end
+	if os.clock() - lastBuy < WheelConfig.ClientCooldown then
+		Sfx.play("UIDeny")
+		return
+	end
+	lastBuy = os.clock()
+	pending[pack.Product] = os.clock()
+	WheelView.setHint(view, "Opening the purchase...")
+	Sfx.play("UIClick")
+	Net.send("WheelAction", "Buy", { Count = pack.Count })
+end
+
+local function onPurchasePrompt(payload: any)
+	if type(payload) ~= "table" or type(payload.Product) ~= "string" then
+		return
+	end
+	local asked = pending[payload.Product]
+	if not asked then
+		return -- another window's buy
+	end
+	pending[payload.Product] = nil
+	if os.clock() - asked > PROMPT_MEMORY then
+		return
+	end
+	local view = refs
+	if not view or not open then
+		return
+	end
+	if payload.Status == "Prompted" then
+		-- Roblox's purchase dialog is up: back to the wheel
+		WheelView.hideOdds(view)
+		return
+	end
+	local text = MonetizationConfig.StatusText[payload.Status] or MonetizationConfig.StatusText.Unknown
+	if payload.Status == "Full" then
+		-- the wheel's two "Full"s: no golem room for a bought spin's prize, or the most spins held
+		text = if inventoryBlocks() then WheelConfig.Reasons.InventoryFull else WheelConfig.Reasons.MaxSpins
+	end
+	if WheelView.oddsOpen(view) then
+		WheelView.setHint(view, text)
+	end
+	view.Status.Text = text
+	Sfx.play("UIDeny")
 end
 
 ---------------------------------------------------------------- spinning
@@ -538,17 +738,21 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 	if view.SegmentIds[segment.Index] ~= id then
 		noCapsulesShown = substitute
 		WheelView.setSegments(view, WheelConfig.segments(substitute))
+		fit(view) -- (the new labels take the wheel's text size)
 	end
 	WheelView.hideResult(view)
-	WheelView.hideInfo(view)
+	WheelView.hideOdds(view)
 	litId = nil
 	WheelView.highlight(view, nil)
 	current = result
 	animating = true
 	busy = true
 	WheelView.setReady(view, false, 0, true)
+	-- Fast Spin: the same landing, sooner (the lobby wheel too)
+	local seconds = WheelView.spinSeconds(fast)
+	local turns = WheelView.spinTurns(fast)
 	if paysCoins(result) then
-		HudController.holdCoins(WheelConfig.SpinSeconds + 1)
+		HudController.holdCoins(seconds + 1)
 	end
 	animToken += 1
 	local token = animToken
@@ -556,8 +760,8 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 	local from = view.Disc.Rotation % 360
 	-- one jitter for the screen disc and the lobby wheel: both stop on the same spot
 	local jitter = math.random() - 0.5
-	local target = WheelView.spinTarget(from, segment.Index, count, WheelView.Turns, jitter)
-	landLobby(segment.Index, jitter)
+	local target = WheelView.spinTarget(from, segment.Index, count, turns, jitter)
+	landLobby(segment.Index, jitter, seconds, turns)
 	local started = os.clock()
 	local lastSegment = WheelView.segmentAt(from, count)
 	local connection: RBXScriptConnection
@@ -566,7 +770,7 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 			connection:Disconnect()
 			return
 		end
-		local t = (os.clock() - started) / WheelConfig.SpinSeconds
+		local t = (os.clock() - started) / seconds
 		local rotation = from + (target - from) * WheelView.ease(t)
 		view.Disc.Rotation = rotation
 		local now = WheelView.segmentAt(rotation, count)
@@ -583,7 +787,7 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 			for _, stud in view.Studs do
 				stud.BackgroundTransparency = 0
 			end
-			finish(view, result, segment.Color)
+			finish(view, result, WheelView.faceColor(segment.Index))
 		end
 	end)
 end
@@ -599,7 +803,7 @@ local function onResult(payload: any)
 	else
 		busy = false
 		local prize, detail = WheelView.prizeText(payload)
-		HudController.toast(`Daily wheel: {prize}. {detail}`, "Reward")
+		HudController.toast(`Spin & Win: {prize}. {detail}`, "Reward")
 	end
 end
 
@@ -630,8 +834,14 @@ onSpin = function()
 		Sfx.play("UIDeny")
 		return
 	end
-	if not isReady() then
-		view.Status.Text = "Next free spin in " .. WheelView.countdown(secondsLeft())
+	if spinsNow() <= 0 then
+		view.Status.Text = WheelConfig.Reasons.NotReady
+		Sfx.play("UIDeny")
+		return
+	end
+	if not isReady() and inventoryBlocks() then
+		-- only bought spins left and no golem room: the server would refuse it
+		view.Status.Text = WheelConfig.Reasons.InventoryFull
 		Sfx.play("UIDeny")
 		return
 	end
@@ -660,7 +870,7 @@ function WheelController.close()
 		HudController.releaseCoins()
 		if result then
 			local prize, detail = WheelView.prizeText(result)
-			HudController.toast(`Daily wheel: {prize}. {detail}`, "Reward")
+			HudController.toast(`Spin & Win: {prize}. {detail}`, "Reward")
 		end
 	end
 	-- no capsule opening for a closed screen (the toast / card told it)
@@ -673,7 +883,7 @@ function WheelController.close()
 			GuiService.SelectedObject = nil
 		end
 		WheelView.hideResult(view)
-		WheelView.hideInfo(view)
+		WheelView.hideOdds(view)
 		view.Gui.Enabled = false
 	end
 end
@@ -689,6 +899,8 @@ local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActio
 	elseif view and view.InfoId then
 		toggleInfo(view, view.InfoId)
 		return Enum.ContextActionResult.Sink
+	elseif view and WheelView.oddsOpen(view) then
+		closeOdds(view)
 	else
 		WheelController.close()
 	end
@@ -714,11 +926,11 @@ function WheelController.open()
 	local view = ensureView()
 	open = true
 	openedAt = os.clock()
-	-- like every panel: no world prompt (the Cleaning Station's F / Y) fires behind it
+	-- like every panel: no world prompt (the Cleaning Station's E / Y) fires behind it
 	PromptController.setSuppressed("Wheel", true)
 	fit(view)
-	updateHint(view)
 	WheelView.hideResult(view)
+	WheelView.hideOdds(view)
 	view.Gui.Enabled = true
 	refresh()
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
@@ -798,7 +1010,9 @@ local function buildChip()
 	local pulse = Instance.new("UIScale")
 	pulse.Name = "Pulse"
 	pulse.Parent = holder
-	TweenService:Create(pulse, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	if not Motion.reduced() then -- (Reduce motion: the chip stays still)
+		TweenService:Create(pulse, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	end
 	-- a spin that is already ready when the player joins doesn't chime at once
 	chipReady = isReady()
 end
@@ -813,7 +1027,7 @@ local function step()
 			refresh()
 			view.Status.Text = "No answer, try again"
 		elseif not animating then
-			WheelView.setReady(view, isReady(), secondsLeft(), busy)
+			WheelView.setReady(view, isReady(), secondsLeft(), busy, usableSpins())
 		end
 		if screenBusy() then
 			-- the cleaning close-up, build mode or a hidden HUD took the screen
@@ -842,6 +1056,7 @@ function WheelController.init()
 	end)
 	Net.listen("WheelResult", onResult)
 	Net.listen("ActionResult", onActionResult)
+	Net.listen("PurchasePrompt", onPurchasePrompt)
 	-- a free capsule's opening (the wheel's prize) plays instead of the wheel screen
 	Net.listen("CapsuleResult", function(payload: any)
 		if open and type(payload) == "table" and payload.Free == true then
@@ -854,6 +1069,14 @@ function WheelController.init()
 		end
 		updateChip()
 	end)
+	-- Fast Spin is one of the player's settings (saved): the box follows it
+	SettingsController.onChanged(function(settings)
+		fast = settings.FastSpin == true
+		local view = refs
+		if view then
+			WheelView.setFast(view, fast)
+		end
+	end)
 	player:GetAttributeChangedSignal(RESTRICTED_ATTRIBUTE):Connect(function()
 		if open and not animating then
 			refresh()
@@ -864,7 +1087,7 @@ function WheelController.init()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs
-		if view and open then
+		if view and open and not view.OddsBuy.Visible then
 			updateHint(view)
 		end
 	end)

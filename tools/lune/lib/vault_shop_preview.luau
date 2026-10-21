@@ -84,6 +84,8 @@ function Preview.build(Loader: any): { [string]: any }
 				local p = tile.Holder.Position
 				tile.Holder.Position = UDim2.fromOffset(p.X.Offset - shift, p.Y.Offset)
 			end
+			-- (the exporter now writes CanvasPosition too: the renderer would shift them twice)
+			refs.Cards.CanvasPosition = refs.Cards.CanvasPosition * 0
 		end
 		return refs
 	end

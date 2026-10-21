@@ -27,7 +27,7 @@
 	hoist rock (local +30 = WorldLayout.Caves.HeartstoneCore.Max.Y).
 	opts.Cutaway (preview pictures): no enclosure, so cameras outside see in.
 	Everything stays within local y -77 .. +50 (FallenPartsDestroyHeight is
-	world -500). About 2350 parts in the game build (MineKit.PartBudget 2500),
+	world -700, default.project.json). About 2350 parts in the game build (MineKit.PartBudget 2500),
 	19 lights.
 ]]
 

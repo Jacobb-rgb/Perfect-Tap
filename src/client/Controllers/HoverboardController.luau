@@ -30,8 +30,10 @@
 	  a slow bob, a nose-up lean with speed and a roll into turns. Range
 	  (StreamingEnabled friendly, checked every LodInterval): beyond ShowRange
 	  studs or streamed out = no board; beyond FxRange = no effects; your own
-	  board always shows. Robux boards get their HoverboardFx (pooled; lite on
-	  phones and with many riders), the rates follow the speed.
+	  board always shows. Every board gets its HoverboardFx (pooled; lite on
+	  phones and with many riders), the rates follow the speed; the "Start"
+	  burst fires when a rider hops on (within StartBurstWindow), the "Boost"
+	  burst when a rider reaches top speed (HoverboardFx.BoostAt).
 	- Riding pose (your own character only; animations replicate): the
 	  character's own idle animation (Animate.idle, nothing uploaded) plays at
 	  Action priority and the walk / run tracks are silenced (weight 0, so the
@@ -71,6 +73,7 @@ HoverboardController.FxRange = 80 -- studs: farther boards get no particles / tr
 HoverboardController.LodInterval = 0.3
 HoverboardController.PoolPerBoard = 3
 HoverboardController.LiteRiders = 4 -- more riders with effects than this: lite effects
+HoverboardController.StartBurstWindow = 1.5 -- seconds after hopping on: the Start burst still fires
 HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
@@ -96,6 +99,9 @@ type Rider = {
 	Model: Model?,
 	Weld: Weld?,
 	Fx: HoverboardFx.FxSet?,
+	Since: number, -- os.clock() when the rider hopped on (or came into view)
+	Started: boolean, -- the Start burst has had its chance
+	Fast: boolean, -- at top speed (the Boost burst fired)
 	Phase: number,
 	Pitch: number,
 	Roll: number,
@@ -314,6 +320,9 @@ local function show(rider: Rider): boolean
 		model:Destroy()
 		return false
 	end
+	-- put the board under the rider before it enters the world (a pooled or freshly
+	-- built model sits wherever it was made; owner's playtest 2026-10-20: board unseen)
+	model:PivotTo(root.CFrame * offset)
 	local weld = Instance.new("Weld")
 	weld.Name = "HoverboardWeld"
 	weld.Part0 = root
@@ -348,6 +357,12 @@ local function showFx(rider: Rider)
 	end
 	if HoverboardFx.mount(set, model) then
 		rider.Fx = set
+		-- the hop-on splash, only right after the rider appeared (not when a rider who
+		-- rode out of range comes back; once for riders already riding when you join)
+		if not rider.Started and os.clock() - rider.Since <= HoverboardController.StartBurstWindow then
+			HoverboardFx.burst(set, "Start")
+		end
+		rider.Started = true
 	else
 		HoverboardFx.release(set)
 	end
@@ -384,6 +399,9 @@ local function refreshRider(p: Player)
 			Model = nil,
 			Weld = nil,
 			Fx = nil,
+			Since = os.clock(),
+			Started = false,
+			Fast = false,
 			Phase = math.random() * math.pi * 2,
 			Pitch = 0,
 			Roll = 0,
@@ -467,7 +485,14 @@ local function lodStep()
 			if set then
 				local velocity = root.AssemblyLinearVelocity
 				local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
-				HoverboardFx.setActive(set, true, math.max(0.2, math.clamp(speed / rider.Speed, 0, 1)))
+				local k = math.clamp(speed / rider.Speed, 0, 1)
+				HoverboardFx.setActive(set, true, math.max(0.2, k))
+				if not rider.Fast and k >= HoverboardFx.BoostAt then
+					rider.Fast = true
+					HoverboardFx.burst(set, "Boost")
+				elseif rider.Fast and k < HoverboardFx.BoostReset then
+					rider.Fast = false
+				end
 			end
 		else
 			hideFx(rider)

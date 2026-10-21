@@ -22,6 +22,8 @@
 	             and the H key stay in the HUD)
 	  REBIRTH    RebirthController (STAR FORGE; badge: a rebirth is ready
 	             and the window wasn't opened since)
+	QUESTS     QuestController (daily / weekly quests + the login streak;
+	             badge: quests and the streak day waiting to be claimed)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
@@ -98,11 +100,12 @@ SideMenuController.Actions = {
 	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
 	Rebirth = { Controller = "RebirthController", Missing = "Rebirth is coming soon!", Soon = false, Hide = true },
+	Quests = { Controller = "QuestController", Missing = "Quests are coming soon!", Soon = false, Hide = true },
 } :: { [string]: Action }
 
 -- Buttons whose controller has onUnseenChanged(callback(count)): its count
 -- is the button's badge.
-SideMenuController.Badges = { "Codex", "Collection", "Rebirth" }
+SideMenuController.Badges = { "Codex", "Collection", "Rebirth", "Quests" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
@@ -112,6 +115,7 @@ SideMenuController.Panels = {
 	"LeaderboardController",
 	"ElevatorController",
 	"HoverboardController",
+	"QuestController",
 }
 -- the touch grid shuts by itself after this many seconds without a tap
 SideMenuController.AutoShut = 10
@@ -133,9 +137,19 @@ function SideMenuController.refs(): SideMenuView.Refs?
 	return refs
 end
 
+-- Is `object` one of the light UI's menu tiles (the HUD's tile grid or its MORE flyout)?
+local function inLightMenu(object: GuiObject?): boolean
+	local hud = if light and object then HudController.refs() else nil
+	if not hud or not object then
+		return false
+	end
+	local flyout = (hud.Menu.Parent :: Instance):FindFirstChild("MoreFlyout")
+	return object:IsDescendantOf(hud.Menu) or (flyout ~= nil and object:IsDescendantOf(flyout))
+end
+
 local function inMenu(object: GuiObject?): boolean
 	local view = refs
-	return object ~= nil and view ~= nil and object:IsDescendantOf(view.Column)
+	return object ~= nil and view ~= nil and (object:IsDescendantOf(view.Column) or inLightMenu(object))
 end
 
 -- Opens or shuts the touch layout's grid (no-op on other layouts). An open
@@ -202,6 +216,10 @@ local function leave()
 	if inMenu(GuiService.SelectedObject) then
 		GuiService.SelectedObject = nil
 	end
+	local hud = if light then HudController.refs() else nil
+	if hud then
+		HudBubble.toggleMore(hud.Menu, false)
+	end
 	SideMenuController.setExpanded(false)
 end
 
@@ -228,10 +246,28 @@ end
 
 local function onJump(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	local view = refs
-	if light and state == Enum.UserInputState.Begin and GuiService.SelectedObject == nil then
-		-- the light UI: D-pad Left jumps onto the first light tile
+	if light and state == Enum.UserInputState.Begin and inLightMenu(GuiService.SelectedObject) then
+		-- the light UI: D-pad Left from a tile in the grid's left column leaves the menu
+		-- (further right, or in the MORE flyout, it moves left as usual; B leaves from anywhere)
+		local selected = GuiService.SelectedObject :: GuiObject
 		local hud = HudController.refs()
-		local faces = if hud then HudBubble.linkMenu(hud.Menu) else {}
+		if not hud or not selected:IsDescendantOf(hud.Menu) then
+			return Enum.ContextActionResult.Pass
+		end
+		local columns = (hud.Menu:GetAttribute("Columns") :: number?) or 2
+		for i, face in HudBubble.linkMenu(hud.Menu) do
+			if (selected == face or selected:IsDescendantOf(face)) and (i - 1) % columns ~= 0 then
+				return Enum.ContextActionResult.Pass
+			end
+		end
+		leave()
+		return Enum.ContextActionResult.Sink
+	end
+	if light and state == Enum.UserInputState.Begin and GuiService.SelectedObject == nil then
+		-- the light UI: D-pad Left jumps onto the first light tile (not while the HUD is hidden:
+		-- the cleaning minigame, the Foundry moment)
+		local hud = HudController.refs()
+		local faces = if hud and hudVisible then HudBubble.linkMenu(hud.Menu) else {}
 		if faces[1] then
 			GuiService.SelectedObject = faces[1]
 			Sfx.play("UIClick")

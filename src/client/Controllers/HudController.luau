@@ -9,7 +9,9 @@
 	  (StateService writes them at most every 0.25 s, also for the quiet
 	  podium payouts); the State snapshot's Coins / Income are the fallback
 	  while the attributes aren't there.
-	  Bigger jumps (a sale) pop the panel. holdCoins(seconds) keeps the
+	  Bigger jumps (a sale) pop the panel, roll the number up and send cash
+	  flying into the pile (UI/Motion.countUp / flyTo; with UI motion off,
+	  Config/AnimConfig, the number glides up instead). holdCoins(seconds) keeps the
 	  counter still while another screen still has to reveal a reward (the
 	  daily wheel's disc turning); releaseCoins shows it.
 	- Earned { Amount, Source } shows a floating "+$X" under the coins;
@@ -41,6 +43,7 @@ local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
 
@@ -96,10 +99,8 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	end
 	local frame = HudView.toast(refs.Toasts, text, color or TOAST_COLORS[kind or "Info"] or Theme.Info)
 	frame.LayoutOrder = math.floor(os.clock() * 100) % 1e6
-	local scale = Instance.new("UIScale")
-	scale.Scale = 0.6
-	scale.Parent = frame
-	TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	-- (UI/Motion's bounce in, none with Reduce motion; UI motion off: the pop main has)
+	local scale = if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)
 	if kind == "Deny" then
 		Sfx.play("UIDeny")
 	elseif kind == "Discovery" then
@@ -107,8 +108,10 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	end
 	task.delay(3.2, function()
 		if frame.Parent then
-			TweenService:Create(scale, TweenInfo.new(0.2), { Scale = 0 }):Play()
-			task.wait(0.22)
+			if not Motion.reduced() then -- (Reduce motion: it just goes)
+				TweenService:Create(scale, TweenInfo.new(0.2), { Scale = 0 }):Play()
+				task.wait(0.22)
+			end
 			frame:Destroy()
 		end
 	end)
@@ -124,6 +127,18 @@ function HudController.uiScale(): number
 	return math.clamp(math.min(size.Y / Theme.BaseHeight, size.X / 1100), 0.62, 1.25)
 end
 
+-- The top bar row's free part in screen pixels (min x, max x), or nil when
+-- Roblox doesn't say (GuiService.TopbarInset).
+local function topBarFree(): (Vector2?)
+	local ok, rect = pcall(function()
+		return (GuiService :: any).TopbarInset
+	end)
+	if ok and typeof(rect) == "Rect" and rect.Width > 0 then
+		return Vector2.new(rect.Min.X, rect.Max.X)
+	end
+	return nil
+end
+
 local function updateScale()
 	local camera = Workspace.CurrentCamera
 	if not camera then
@@ -135,6 +150,15 @@ local function updateScale()
 		if uiScale and uiScale:IsA("UIScale") and gui:GetAttribute("TerraForge") then
 			uiScale.Scale = scale
 		end
+	end
+	-- the Pop teleport bar sits in Roblox's top bar row: lifted by the real inset,
+	-- centred but kept inside the row's free space (GuiService.TopbarInset: clear of
+	-- Roblox's own buttons); if it doesn't fit there, it drops under the row
+	local topBar = refs and refs.TopBar
+	if topBar and topBar:GetAttribute("Pop") then
+		local inset = GuiService:GetGuiInset()
+		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
+		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
 end
 
@@ -328,7 +352,7 @@ function HudController.earned(amount: number)
 		comboAt = now
 		label.Text = "+" .. Format.money(comboAmount)
 		local pop = label:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
-		pop.Scale = 1.25
+		pop.Scale = if Motion.reduced() then 1 else 1.25
 		pop.Parent = label
 		TweenService:Create(pop, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 		return
@@ -403,10 +427,11 @@ function HudController.showOffline(amount: number, seconds: number, hours: numbe
 	shown.Amount.Text = "+" .. Format.money(amount)
 	shown.Detail.Text = HudController.offlineDetail(seconds, hours)
 	shown.Gui.Enabled = true
-	local scale = shown.Panel:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
-	scale.Scale = 0.6
-	scale.Parent = shown.Panel
-	TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	if Motion.enabled() then
+		Motion.pop(shown.Panel, shown.Dim) -- (UI/Motion: none with Reduce motion)
+	else
+		Motion.classicPop(shown.Panel, nil, 0.6, 0.3) -- (UI motion off: the pop main has)
+	end
 	Sfx.play("CoinBurst")
 	ContextActionService:BindActionAtPriority(OFFLINE_CLOSE, function(_, state)
 		if state == Enum.UserInputState.Begin then
@@ -481,6 +506,9 @@ function HudController.start()
 	updateScale()
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+		pcall(function() -- (Roblox's top row changes: voice chat, self view...)
+			GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateScale)
+		end)
 	end
 	player:WaitForChild("PlayerGui").ChildAdded:Connect(function()
 		task.defer(updateScale)
@@ -497,9 +525,12 @@ function HudController.start()
 
 	task.spawn(zoneLoop)
 
-	-- coin counter: glides toward the predicted coins; big jumps pop the panel
+	-- coin counter: follows the predicted coins; a big jump pops the panel, rolls
+	-- the number up and sends cash flying into the pile (UI/Motion: at most one
+	-- burst a second; with Reduce motion the number just changes)
 	local coinScale = Instance.new("UIScale")
 	coinScale.Parent = refs.CoinsPanel
+	local cashPile = refs.CoinsPanel:FindFirstChild("Cash") :: GuiObject?
 	local shownText = ""
 	while true do
 		if heldCoins and os.clock() >= holdUntil then
@@ -509,23 +540,35 @@ function HudController.start()
 		local diff = target - shownCoins
 		if diff ~= 0 then
 			-- a jump bigger than a few seconds of income is a sale or a reward
-			if diff > math.max(1, income * 3) then
+			local big = diff > math.max(1, income * 3)
+			if big and not Motion.enabled() then
+				-- (UI motion off, Config/AnimConfig: the glide main has, the panel popping as it goes)
 				coinScale.Scale = 1.12
 				TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
 				shownCoins += diff * 0.35
-			elseif diff < 0 then
-				shownCoins = target -- spending: no counting down
+				if math.abs(target - shownCoins) < 0.01 then
+					shownCoins = target
+				end
 			else
-				shownCoins = target
-			end
-			if math.abs(target - shownCoins) < 0.01 then
+				if big then
+					if not Motion.isCounting(refs.Coins) and not Motion.reduced() then
+						coinScale.Scale = 1.12
+						TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
+						Motion.flyTo(nil, cashPile or refs.CoinsPanel, "cash")
+					end
+					Motion.countUp(refs.Coins, math.max(0, shownCoins), target, Format.money)
+					shownText = ""
+				end
+				-- (spending: no counting down)
 				shownCoins = target
 			end
 		end
-		local text = Format.money(math.max(0, shownCoins))
-		if text ~= shownText then
-			shownText = text
-			refs.Coins.Text = text
+		if not Motion.isCounting(refs.Coins) then
+			local text = Format.money(math.max(0, shownCoins))
+			if text ~= shownText then
+				shownText = text
+				refs.Coins.Text = text
+			end
 		end
 		task.wait(0.05)
 	end

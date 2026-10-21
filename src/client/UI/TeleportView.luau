@@ -4,8 +4,9 @@
 
 	  bar      HudView's TopBar at the top centre: BASE / LOBBY / VAULT, chunky
 	           buttons in the spot colours (TeleportConfig.Spots, Bar = true),
-	           the icon left of the name; on phones (compact) the icon sits on
-	           top so the button is tall enough to tap (>= 44 pt at uiScale 0.62)
+	           the name in the middle (words only, no emoji: the owner's "text
+	           only"); on phones (compact) the buttons are taller so they are
+	           big enough to tap (>= 44 pt at uiScale 0.62)
 	  (the elevator's button is not here: ElevatorController draws it in the
 	  left side menu and sends the "Elevator" teleport; owner 2026-10-18)
 	  hint     the gamepad glyph left of the bar (D-pad down jumps into the bar)
@@ -23,12 +24,15 @@ local TeleportConfig = require(Shared.Config.TeleportConfig)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 local HudBubble = require(script.Parent.HudBubble)
+local Pop = require(script.Parent.Pop)
+local PopTheme = require(Shared.Config.PopTheme)
 
 local TeleportView = {}
 
 type Spot = TeleportConfig.Spot
 
-export type Layout = { Width: number, Height: number, Gap: number, IconTop: boolean, IconOnly: boolean }
+-- Tall: the phones' taller buttons; Narrow: the smallest phones' squares (a smaller name)
+export type Layout = { Width: number, Height: number, Gap: number, Tall: boolean, Narrow: boolean }
 
 export type Refs = {
 	Buttons: { [string]: TextButton },
@@ -37,17 +41,17 @@ export type Refs = {
 }
 
 TeleportView.CompactScale = 0.75 -- at this uiScale and below the bar uses the tall phone buttons
-TeleportView.NarrowWidth = 600 -- screens narrower than this (pt) show icons only (the coins panel needs the room)
+TeleportView.NarrowWidth = 600 -- screens narrower than this (pt) get square buttons (the coins panel needs the room)
 
 -- Button sizes for a uiScale and the screen width in pt (design units).
 function TeleportView.layout(uiScale: number, screenWidth: number?): Layout
 	if screenWidth and screenWidth < TeleportView.NarrowWidth then
-		-- small phones: square icon buttons, still >= 44 pt at uiScale 0.62
-		return { Width = 74, Height = 72, Gap = 8, IconTop = false, IconOnly = true }
+		-- small phones: square buttons, still >= 44 pt at uiScale 0.62
+		return { Width = 74, Height = 72, Gap = 8, Tall = true, Narrow = true }
 	elseif uiScale <= TeleportView.CompactScale then
-		return { Width = 112, Height = 72, Gap = 8, IconTop = true, IconOnly = false }
+		return { Width = 112, Height = 72, Gap = 8, Tall = true, Narrow = false }
 	end
-	return { Width = 132, Height = 54, Gap = 10, IconTop = false, IconOnly = false }
+	return { Width = 132, Height = 54, Gap = 10, Tall = false, Narrow = false }
 end
 
 -- Width of the bar's buttons in a layout (design units).
@@ -55,34 +59,21 @@ function TeleportView.barWidth(layout: Layout, count: number): number
 	return count * layout.Width + math.max(0, count - 1) * layout.Gap
 end
 
+TeleportView.LabelText = 22 -- the name on the buttons
+TeleportView.NarrowText = 18 -- on the narrow squares ("LOBBY" still fits 74 units)
+
+-- The name in the middle of the button (no icon: words only).
 local function place(button: TextButton, layout: Layout)
-	local icon = button:FindFirstChild("Icon") :: TextLabel?
 	local label = button:FindFirstChild("Label") :: TextLabel?
-	if not icon or not label then
+	if not label then
 		return
 	end
-	label.Visible = not layout.IconOnly
-	if layout.IconOnly then
-		icon.AnchorPoint = Vector2.new(0.5, 0.5)
-		icon.Position = UDim2.fromScale(0.5, 0.5)
-		icon.Size = UDim2.fromOffset(40, 40)
-	elseif layout.IconTop then
-		icon.AnchorPoint = Vector2.new(0.5, 0)
-		icon.Position = UDim2.new(0.5, 0, 0, 6)
-		icon.Size = UDim2.new(1, 0, 0, 34)
-		label.AnchorPoint = Vector2.new(0.5, 1)
-		label.Position = UDim2.new(0.5, 0, 1, -6)
-		label.Size = UDim2.new(1, -8, 0, 24)
-		label.TextXAlignment = Enum.TextXAlignment.Center
-	else
-		icon.AnchorPoint = Vector2.new(0, 0.5)
-		icon.Position = UDim2.new(0, 8, 0.5, 0)
-		icon.Size = UDim2.fromOffset(34, 34)
-		label.AnchorPoint = Vector2.new(0, 0.5)
-		label.Position = UDim2.new(0, 46, 0.5, 0)
-		label.Size = UDim2.new(1, -52, 0, 30)
-		label.TextXAlignment = Enum.TextXAlignment.Left
-	end
+	label.Visible = true
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
+	label.Size = UDim2.new(1, -8, 0, 30)
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextSize = if layout.Narrow then TeleportView.NarrowText else TeleportView.LabelText
 end
 
 local function spotButton(parent: Instance, spot: Spot, order: number, size: Vector2): (TextButton, TextLabel)
@@ -92,12 +83,7 @@ local function spotButton(parent: Instance, spot: Spot, order: number, size: Vec
 		Size = UDim2.fromOffset(size.X, size.Y),
 	})
 	button:SetAttribute("Teleport", spot.Id)
-	UIKit.label(button, spot.Icon, 30, {
-		Name = "Icon",
-		TextScaled = false,
-		TextWrapped = false,
-	})
-	UIKit.label(button, spot.Label, 22, {
+	UIKit.label(button, spot.Label, TeleportView.LabelText, {
 		Name = "Label",
 		FontFace = Theme.TitleFont,
 		TextScaled = false,
@@ -172,9 +158,102 @@ local function buildBubble(topBar: Frame, uiScale: number): Refs
 	return { Buttons = buttons, Covers = covers, Hint = hint }
 end
 
+-- The bar's colours (owner's BASE / MINE / SPAWN photo: blue, teal, purple).
+TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [string]: string }
+
+--[[
+	The Pop bar (owner 2026-10-20): a dark rounded strip at the very top with
+	a bright button per spot, a light rim inside each, the word in white with
+	a black edge; text only. A dark cover shows the seconds left.
+]]
+local function buildPop(topBar: Frame): Refs
+	local compact = topBar:GetAttribute("Compact") == true
+	local narrow = topBar:GetAttribute("Narrow") == true
+	local layout = HudBubble.layout(if compact then 0.62 else 1, if narrow then 0 else nil)
+	local size = HudBubble.topBarButton(layout)
+	local buttons: { [string]: TextButton } = {}
+	local covers: { [string]: TextLabel } = {}
+	-- the gamepad glyph (D-pad down jumps into the bar): just left of the bar, so
+	-- the bar keeps its width; it follows the bar when HudController moves it
+	local hint = UIKit.new("ImageLabel", {
+		Name = "GamepadHint",
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(40, 40),
+		Visible = false,
+		ZIndex = 3,
+	}, topBar.Parent or topBar)
+	local function placeHint()
+		local p = topBar.Position
+		hint.Position = UDim2.new(
+			p.X.Scale,
+			p.X.Offset - topBar.Size.X.Offset * topBar.AnchorPoint.X - 6,
+			p.Y.Scale,
+			p.Y.Offset + math.floor(topBar.Size.Y.Offset / 2)
+		)
+	end
+	placeHint()
+	pcall(function()
+		topBar:GetPropertyChangedSignal("Position"):Connect(placeHint)
+		topBar:GetPropertyChangedSignal("Size"):Connect(placeHint)
+	end)
+	local order: { TextButton } = {}
+	for i, spot in TeleportConfig.Spots do
+		if spot.Bar then
+			local paint = Pop.paint(TeleportView.Paints[spot.Id] or "Slate")
+			local button = Pop.button(topBar, spot.Label, paint, size, {
+				Name = spot.Id,
+				LayoutOrder = i,
+			})
+			button:SetAttribute("Teleport", spot.Id)
+			local label = button:FindFirstChild("Label") :: TextLabel
+			label.TextSize = if narrow then 24 elseif compact then 28 else 26
+			-- the light rim inside the black border (the photo's glow)
+			local rim = UIKit.new("Frame", {
+				Name = "Rim",
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(3, 3),
+				Size = UDim2.new(1, -6, 1, -6),
+				ZIndex = 5,
+			}, button)
+			UIKit.corner(rim, 4)
+			UIKit.new("UIStroke", {
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				Color = paint.Top:Lerp(Color3.new(1, 1, 1), 0.55),
+				Thickness = 2,
+				Transparency = 0.15,
+			}, rim)
+			local cover = Pop.text(button, "", 26, {
+				Name = "Cooldown",
+				BackgroundColor3 = PopTheme.Outline,
+				BackgroundTransparency = 0.35,
+				Size = UDim2.fromScale(1, 1),
+				Visible = false,
+				ZIndex = 8,
+			})
+			UIKit.corner(cover, PopTheme.Corner)
+			buttons[spot.Id], covers[spot.Id] = button, cover
+			table.insert(order, button)
+		end
+	end
+	for i, button in order do
+		local links: any = button
+		pcall(function() -- (Lune's instances can't hold a nil Ref)
+			links.NextSelectionLeft = order[i - 1]
+		end)
+		pcall(function()
+			links.NextSelectionRight = order[i + 1]
+		end)
+	end
+	return { Buttons = buttons, Covers = covers, Hint = hint }
+end
+
 -- Fills HudView's TopBar with the bar spots (Bar = true; the elevator is in the left side menu).
 function TeleportView.build(topBar: Frame, uiScale: number, screenWidth: number?): Refs
-	if topBar:GetAttribute("Bubble") then
+	if topBar:GetAttribute("Pop") then
+		return buildPop(topBar)
+	elseif topBar:GetAttribute("Bubble") then
 		return buildBubble(topBar, uiScale)
 	end
 	local layout = TeleportView.layout(uiScale, screenWidth)

@@ -72,6 +72,15 @@ return function(T, Loader)
 			T.truthy(left >= 0 and left + s.X.Offset <= w + 0.5, `{label}: {card.Board.Id} inside the panel horizontally`)
 			T.truthy(top >= 0 and top + s.Y.Offset <= h + 0.5, `{label}: {card.Board.Id} inside the panel vertically`)
 			T.truthy(card.Look.Holder.Size.Y.Offset >= (if refs.Compact then 72 else 50), `{label}: {card.Board.Id} button height`)
+			-- the words and the picture stay above the button
+			local buttonTop = s.Y.Offset - 10 - card.Look.Holder.Size.Y.Offset
+			for _, part in { card.PriceRow, card.SpeedChip, card.BonusChip, card.Name, card.ArtBack } do
+				T.le(part.Position.Y.Offset + part.Size.Y.Offset, buttonTop + 0.5, `{label}: {card.Board.Id} {part.Name} above the button`)
+				T.truthy(
+					part.Position.X.Offset >= 0 and part.Position.X.Offset + part.Size.X.Offset <= s.X.Offset + 0.5,
+					`{label}: {card.Board.Id} {part.Name} inside the card`
+				)
+			end
 		end
 	end
 
@@ -86,8 +95,18 @@ return function(T, Loader)
 		for i, card in refs.Cards do
 			T.eq(card.Board, HoverboardData.List[i], "card order = board order")
 			T.eq(card.Ribbon ~= nil, card.Board.Kind == "Robux", card.Board.Id .. " ROBUX ribbon only on Robux boards")
-			T.truthy(#card.Canvas:GetChildren() > 3, card.Board.Id .. " has its board art")
+			-- the live 3D board (PictureModels "board_<Id>": HoverboardBuilder in a ViewportFrame)
+			local picture = card.Picture
+			T.truthy(picture ~= nil, card.Board.Id .. " has its live 3D board")
+			T.eq(picture:GetAttribute("Icon"), "board_" .. card.Board.Id, card.Board.Id .. " picture name")
+			T.truthy(picture:FindFirstChild("View"):FindFirstChildOfClass("Model") ~= nil, card.Board.Id .. " model in the view")
+			T.eq(#card.Canvas:GetChildren(), 1, card.Board.Id .. " no drawn stand-in (only its UIScale)")
+			T.falsy(card.Face.Selectable, card.Board.Id .. " the card itself is not a gamepad stop")
 		end
+		-- without a model the board is drawn from Frames
+		local canvas = roblox.Instance.new("Frame")
+		HoverboardView.drawBoard(canvas, HoverboardData.List[1])
+		T.truthy(#canvas:GetChildren() > 3, "the drawn stand-in")
 		HoverboardView.layout(refs, false, 1600, 900)
 		T.eq(refs.Columns, 5, "five in a row")
 		insidePanel(refs, "PC")
@@ -104,7 +123,37 @@ return function(T, Loader)
 		local w, h = panelSize(refs)
 		T.truthy(w <= 844 / 0.62 - 24 + 0.5 and h <= (390 - 36) / 0.62 - 16 + 0.5, "fits the phone screen")
 		T.falsy(refs.Footer.Visible, "no footer on phones")
+		T.falsy(refs.Scrolls, "everything shows")
 		insidePanel(refs, "phone")
+		-- a 667 x 375 pt phone: still no scrolling
+		HoverboardView.layout(refs, true, 667 / 0.62, (375 - 36) / 0.62)
+		T.falsy(refs.Scrolls, "667 x 375: everything shows")
+		insidePanel(refs, "667 x 375")
+		-- a small 568 x 320 pt phone: the cards keep their height and the page scrolls (the second row peeks in)
+		local smallW, smallH = 568 / 0.62, (320 - 36) / 0.62
+		HoverboardView.layout(refs, true, smallW, smallH)
+		w, h = panelSize(refs)
+		T.truthy(w <= smallW - 24 + 0.5 and h <= math.max(380, smallH - 16) + 0.5, "fits the small phone")
+		T.truthy(refs.Scrolls and refs.CardPage.ScrollingEnabled, "568 x 320: the cards scroll")
+		T.eq(refs.CardPage.ScrollingDirection, roblox.Enum.ScrollingDirection.Y, "up and down only")
+		T.falsy(refs.CardPage.Selectable, "the gamepad selects the buttons, not the scroll")
+		local page = refs.CardPage
+		local pageW = w + page.Size.X.Offset
+		for _, card in refs.Cards do
+			local p, s = card.Frame.Position, card.Frame.Size
+			T.truthy(
+				p.X.Offset - s.X.Offset / 2 >= 0 and p.X.Offset + s.X.Offset / 2 <= pageW + 0.5,
+				`{card.Board.Id} inside the page width`
+			)
+			T.le(
+				card.Frame:GetAttribute("BaseY") + s.Y.Offset / 2,
+				page.CanvasSize.Y.Offset + 0.5,
+				`{card.Board.Id} inside the scroll canvas`
+			)
+			T.truthy(card.Look.Holder.Size.Y.Offset >= 72, `{card.Board.Id} button is a thumb target`)
+			local buttonTop = s.Y.Offset - 10 - card.Look.Holder.Size.Y.Offset
+			T.le(card.PriceRow.Position.Y.Offset + card.PriceRow.Size.Y.Offset, buttonTop + 0.5, `{card.Board.Id} price above the button`)
+		end
 	end)
 
 	T.test("HoverboardView: setCards paints every card", function()
@@ -117,8 +166,23 @@ return function(T, Loader)
 		T.eq(byId.TimberDrifter.State, "Equip", "owned")
 		T.eq(byId.CartCruiser.State, "Equipped", "equipped")
 		T.truthy(byId.CartCruiser.Glow.Visible, "equipped glow")
+		T.eq(byId.CartCruiser.Stroke.Color, roblox.Color3.fromRGB(255, 204, 64), "equipped: a gold outline")
+		T.falsy(byId.TimberDrifter.Glow.Visible, "no glow on the others")
 		T.falsy(byId.CartCruiser.Button.Selectable, "nothing to do on EQUIPPED")
 		T.falsy(byId.TimberDrifter.PriceRow.Visible, "no price on owned boards")
+		T.truthy(byId.TimberDrifter.Owned.Visible and byId.CartCruiser.Owned.Visible, "OWNED chips")
+		T.falsy(byId.EmberglassGlider.Owned.Visible, "not owned: no chip")
+		T.eq(byId.TimberDrifter.Look.Style, "Equip", "EQUIP")
+		T.truthy(byId.CartCruiser.Look.Icons.Check.Visible, "EQUIPPED has a check")
+		local mark = byId.NeonComet.Look.Row:FindFirstChild("Mark")
+		T.eq(mark.Visible, byId.NeonComet.State == "Robux", "the robux mark only on the Robux price (Pop.price)")
+		-- a Robux board's price is only on its green button: its price line shows one more perk
+		for _, id in { "NeonComet", "RoyalPhoenix" } do
+			T.falsy(byId[id].PriceRow.Visible, id .. ": no second price")
+			T.truthy(byId[id].Extra.Visible, id .. ": its perk instead")
+			T.truthy(byId[id].Extra.Text ~= "" and not string.find(byId[id].Extra.Text, "R$", 1, true), id .. ": a perk, not a price")
+		end
+		T.falsy(byId.EmberglassGlider.Extra.Visible, "coin boards keep their price line")
 		T.eq(byId.EmberglassGlider.State, "BuyLocked", "too expensive")
 		T.truthy(byId.EmberglassGlider.Look.Icons.Lock.Visible, "lock icon")
 		T.truthy(byId.EmberglassGlider.PriceRow.Visible, "price shown")

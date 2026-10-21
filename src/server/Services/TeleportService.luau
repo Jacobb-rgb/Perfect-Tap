@@ -57,7 +57,9 @@ local function reply(player: Player, destination: string, ok: boolean, reason: R
 end
 
 -- The ground under a point (characters and loose items don't count), else the point itself.
-function TeleportService.groundAt(position: Vector3): Vector3
+-- The ray starts `lift` studs above the point (default 40): an indoor target (a mine floor's
+-- elevator stop) passes a small lift, or the ray would start above the cave roof and land on it.
+function TeleportService.groundAt(position: Vector3, lift: number?): Vector3
 	local params = RaycastParams.new()
 	local ignore: { Instance } = {}
 	for _, player in Players:GetPlayers() do
@@ -71,18 +73,22 @@ function TeleportService.groundAt(position: Vector3): Vector3
 	end
 	params.FilterDescendantsInstances = ignore
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	local hit = Workspace:Raycast(position + Vector3.new(0, 40, 0), Vector3.new(0, -120, 0), params)
+	local up = lift or 40
+	local hit = Workspace:Raycast(position + Vector3.new(0, up, 0), Vector3.new(0, -(up + 80), 0), params)
 	return if hit then hit.Position else position
 end
 
+-- How high above an indoor target (the elevator stops, under the cave roofs) the ground ray starts.
+TeleportService.IndoorLift = 6
+
 -- A standing frame on the ground at `at`, looking toward `toward` (level).
-local function standAt(at: Vector3, toward: Vector3, spread: number?): CFrame
+local function standAt(at: Vector3, toward: Vector3, spread: number?, lift: number?): CFrame
 	local offset = Vector3.zero
 	if spread and spread > 0 then
 		local angle = math.random() * math.pi * 2
 		offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * math.random() * spread
 	end
-	local ground = TeleportService.groundAt(at + offset)
+	local ground = TeleportService.groundAt(at + offset, lift)
 	local position = ground + Vector3.new(0, TeleportConfig.StandHeight, 0)
 	local look = Vector3.new(toward.X, position.Y, toward.Z)
 	if (look - position).Magnitude < 0.01 then
@@ -176,7 +182,7 @@ function TeleportService.targetOf(player: Player, destination: Destination): (CF
 			return nil, "NotHere"
 		end
 		local front = base.CFrame * CFrame.new(0, 0, -(base.Size.Z / 2 + 3))
-		return standAt(front.Position, base.CFrame.Position), nil
+		return standAt(front.Position, base.CFrame.Position, nil, TeleportService.IndoorLift), nil
 	end
 	return nil, "NotHere"
 end

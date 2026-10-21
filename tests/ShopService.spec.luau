@@ -6,14 +6,20 @@
 -- coins and items always add up, and that the view's cards offer exactly
 -- what the server quotes (plus its tabs, layout, touch sizes, buttons that
 -- never overlap, texts that fit their boxes, slot and missing-machine
--- warnings). Save data, players and Net are small fakes; EconomyService
--- runs for real.
+-- warnings). Machines also sell at your own plot (build mode's SHOP
+-- button, owner 2026-10-21), everything else only at the counter, and the
+-- toast says how to place a machine from where it was bought; the view's
+-- base modes (notes, greyed-out upgrades). Save data, players and Net are
+-- small fakes; EconomyService and PlotService.isNear run for real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
@@ -23,6 +29,7 @@ return function(T, Loader)
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
 	local ShopService = Loader.requirePath("ServerScriptService.Server.Services.ShopService")
+	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
 
 	local USER = 501
@@ -80,6 +87,11 @@ return function(T, Loader)
 		end)
 		patch(Net, "fire", function(name, p, a, b)
 			table.insert(w.notes, { Name = name, Player = p, A = a, B = b })
+		end)
+		-- the player's own plot (nil: none yet); PlotService.isNear runs for real
+		w.plot = nil
+		patch(PlotService, "plotOf", function(p)
+			return if p == w.player then w.plot else nil
 		end)
 		shop.reset()
 		ShopService.onBought(function(p, bought)
@@ -180,8 +192,8 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(ShopService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "prompt")
 		T.eq(prompt.ActionText, "Tech Shop")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		T.eq(prompt.HoldDuration, 0)
 		T.falsy(prompt.RequiresLineOfSight, "no line of sight needed")
 		shop.hookCounter(w.counter)
@@ -262,7 +274,7 @@ return function(T, Loader)
 		local toast = notes(w, "Notify")
 		T.eq(#toast, 1, "one toast")
 		T.eq(toast[1].A.Kind, "Reward")
-		T.eq(toast[1].A.Text, "Bought a Cleaning Plant! Place it in Build mode.")
+		T.eq(toast[1].A.Text, "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
 		T.eq(#w.bought, 1, "onBought")
 		local bought = w.bought[1].Bought
 		T.eq(bought.Item, "AutoCleaner")
@@ -279,16 +291,16 @@ return function(T, Loader)
 		T.eq(five.Count, 5)
 		T.eq(w.data.Coins, 0, "paid 5x")
 		T.eq(w.data.MachineInventory.Conveyor, 5)
-		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Place them in Build mode.")
+		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
 		-- an Iron Box: "an", plural "Iron Boxes"
 		T.eq(ShopService.plural("Iron Box"), "Iron Boxes")
 		T.eq(ShopService.plural("Blast Furnace"), "Blast Furnaces")
 		w.data.Coins = MachineData.ById.IronBox.Price * 2
 		T.eq(buy(w, req("IronBox", 2)).Ok, true)
-		T.eq(notes(w, "Notify")[3].A.Text, "Bought 2 Iron Boxes! Place them in Build mode.")
+		T.eq(notes(w, "Notify")[3].A.Text, "Bought 2 Iron Boxes! Go to your BASE and open BUILD to place them.")
 		w.data.Coins = MachineData.ById.IronBox.Price
 		T.eq(buy(w, req("IronBox")).Ok, true)
-		T.eq(notes(w, "Notify")[4].A.Text, "Bought an Iron Box! Place it in Build mode.")
+		T.eq(notes(w, "Notify")[4].A.Text, "Bought an Iron Box! Go to your BASE and open BUILD to place it.")
 		T.eq(w.data.MachineInventory.IronBox, 3)
 	end)
 
@@ -351,6 +363,125 @@ return function(T, Loader)
 		T.eq(buy(w, nil).Reason, "BadItem", "no data, no payload")
 		T.eq(#w.bought, 0, "nothing bought")
 		T.eq(#notes(w, "Notify"), 0, "no toasts for refusals")
+	end)
+
+	---------------------------------------------------------------- at your base
+
+	-- Puts the player `away` studs (horizontally) from a plot's centre.
+	local function standAtPlot(w: any, plotId: number, away: number)
+		local position = WorldLayout.Plots[plotId].Center + Vector3.new(away, 3, 0)
+		w.player.root.Position = position
+		w.player.root.CFrame = CFrame.new(position)
+	end
+
+	withWorld("ShopService: a machine buy at your own plot works (build mode's SHOP button)", function(w)
+		w.plot = 1
+		standAtPlot(w, 1, GameConfig.BuildRange - 1)
+		T.eq(ShopService.counterNear(w.player, ShopService.Range), nil, "nowhere near the counter")
+		T.truthy(ShopService.nearOwnPlot(w.player), "near the own plot")
+		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Crusher")), "Base")
+		local crusher = MachineData.ById.Crusher
+		w.data.Coins = crusher.Price
+		local result = buy(w, req("Crusher"))
+		T.eq(result.Ok, true, "bought at the base")
+		T.eq(w.data.MachineInventory.Crusher, 1, "in the Build menu")
+		T.eq(w.data.Coins, 0, "paid")
+		T.eq(notes(w, "Notify")[1].A.Text, "Bought a Crusher! Open BUILD to place it.", "the base toast")
+		T.eq(#w.bought, 1, "onBought")
+		local belt = MachineData.ById.Conveyor
+		w.data.Coins = belt.Price * 5
+		T.eq(buy(w, req("Conveyor", 5)).Count, 5, "BUY 5 at the base")
+		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Open BUILD to place them.")
+		-- every other check still runs at the base
+		w.data.Coins = 1
+		refused(w, req("Crusher"), "NoCoins", "too poor at the base")
+		w.data.Coins = 1e9
+		refused(w, req("Conveyor", EconomyConfig.TechShop.MaxCount + 1), "BadCount", "too many at the base")
+		refused(w, req("StorageCrate"), "BadItem", "retired at the base")
+		w.data.MachineInventory.IronBox = EconomyConfig.TechShop.MaxOwned
+		refused(w, req("IronBox"), "MaxOwned", "999 at the base")
+		-- the counter's toast where both are near is never asked for: the base wins
+		T.eq(ShopService.boughtText(w.player, w.bought[1].Bought, "Base"), "Bought a Crusher! Open BUILD to place it.")
+	end)
+
+	withWorld("ShopService: far from both your plot and the counter a machine buy is refused", function(w)
+		w.data.Coins = 1e9
+		w.plot = 1
+		standAtPlot(w, 1, GameConfig.BuildRange + 2)
+		refused(w, req("Conveyor"), "TooFar", "just past the build range")
+		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Conveyor")), nil)
+		-- someone else's plot (out of your own plot's build range) is no base of yours
+		local far, farthest = 1, 0
+		for _, plot in WorldLayout.Plots do
+			local distance = (plot.Center - WorldLayout.Plots[1].Center).Magnitude
+			if distance > farthest then
+				far, farthest = plot.Id, distance
+			end
+		end
+		T.truthy(farthest > GameConfig.BuildRange, "a plot out of range")
+		standAtPlot(w, far, 0)
+		refused(w, req("Conveyor"), "TooFar", "on another player's plot")
+		-- no plot yet (joining)
+		w.plot = nil
+		standAtPlot(w, 1, 0)
+		refused(w, req("Conveyor"), "TooFar", "no plot of your own")
+		-- no character
+		w.plot = 1
+		w.player.Character = nil
+		refused(w, req("Conveyor"), "TooFar", "no character")
+		T.eq(#w.bought, 0, "nothing bought")
+		T.eq(#notes(w, "Notify"), 0, "no toasts for refusals")
+	end)
+
+	withWorld("ShopService: upgrades, Bellows, Slots and pen automation still need the counter", function(w)
+		w.data.Coins = 1e12
+		w.plot = 1
+		standAtPlot(w, 1, 0)
+		local others = {
+			{ "Upgrade:Crusher:Speed", 1 },
+			{ "Upgrade:AutoCleaner:Quality", 1 },
+			{ "Bellows", 1 },
+			{ "Slots", 1 },
+			{ "PenAutomation", 1 },
+		}
+		for _, other in others do
+			local entry = EconomyConfig.techItem(other[1])
+			T.truthy(entry and entry.Kind ~= "Machine", other[1] .. " is not a machine")
+			T.eq(ShopService.placeFor(w.player, entry), nil, other[1] .. ": not at the base")
+			refused(w, req(other[1], nil, other[2]), "TooFar", other[1] .. " at the base")
+		end
+		-- every machine item is a Machine, every other item is not
+		for _, entry in EconomyConfig.TechShop.Items do
+			T.eq(entry.Kind == "Machine", MachineData.ById[entry.Item] ~= nil, entry.Item .. ": machine items only")
+		end
+		-- at the counter they sell as before (with the lobby's toast)
+		w.standAt(2)
+		for _, other in others do
+			T.eq(buy(w, req(other[1], nil, other[2])).Ok, true, other[1] .. " at the counter")
+		end
+		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Conveyor")), "Counter")
+		T.eq(buy(w, req("Conveyor")).Ok, true)
+		local toasts = notes(w, "Notify")
+		T.eq(toasts[#toasts].A.Text, "Bought a Conveyor! Go to your BASE and open BUILD to place it.", "the lobby toast")
+	end)
+
+	T.test("ShopService: the buy toast says how to place a machine from where it was bought", function()
+		local one = { Item = "AutoCleaner", Kind = "Machine", Machine = "AutoCleaner", Count = 1, Price = 1 }
+		local five = { Item = "Conveyor", Kind = "Machine", Machine = "Conveyor", Count = 5, Price = 5 }
+		local box = { Item = "IronBox", Kind = "Machine", Machine = "IronBox", Count = 1, Price = 1 }
+		T.eq(ShopService.boughtText(nil, one, "Base"), "Bought a Cleaning Plant! Open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, five, "Base"), "Bought 5 Conveyors! Open BUILD to place them.")
+		T.eq(ShopService.boughtText(nil, box, "Base"), "Bought an Iron Box! Open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, one, "Counter"), "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, five, "Counter"), "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
+		T.eq(
+			ShopService.boughtText(nil, box, nil),
+			"Bought an Iron Box! Go to your BASE and open BUILD to place it.",
+			"the counter by default"
+		)
+		-- levelled items say the same anywhere
+		local bellows = { Item = "Bellows", Kind = "Bellows", Level = 2, Count = 1, Price = 1 }
+		T.eq(ShopService.boughtText(nil, bellows, "Base"), ShopService.boughtText(nil, bellows, "Counter"))
 	end)
 
 	---------------------------------------------------------------- levelled items
@@ -1107,6 +1238,178 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("TechShopView: a shop opened at your base sells machines only (the rest says where)", function()
+		local s = state({
+			MachineInventory = { Conveyor = 3 },
+			MachineUpgrades = { AutoCleaner = { Quality = 5 } },
+			Upgrades = { Bellows = 0, ExtraSlots = 0, PenLevel = 0, PenAutomation = 1 },
+		})
+		local counter = TechShopView.cards(s, 1e9)
+		T.eq(#TechShopView.cards(s, 1e9, "Counter"), #counter, "Counter is the default")
+		for _, where in { "Base", "Build" } do
+			local cards = TechShopView.cards(s, 1e9, where :: any)
+			T.eq(#cards, #counter, where .. ": every card")
+			for i, card in cards do
+				local before = counter[i]
+				T.eq(card.Id, before.Id)
+				if card.Tab == "Machines" then
+					-- the same offers as at the counter (the server sells them at your plot)
+					for j, offer in card.Buys do
+						T.eq(offer.CanBuy, before.Buys[j].CanBuy, `{where} {card.Id} buy {j}`)
+						T.eq(offer.Price, before.Buys[j].Price, `{where} {card.Id} price {j}`)
+					end
+					T.eq(card.Note, nil)
+				elseif card.Done then
+					-- MAX / OWNED stay as they are
+					T.eq(card.Buys[1].Text, before.Buys[1].Text, `{where} {card.Id} done`)
+					T.eq(card.Buys[1].Reason, before.Buys[1].Reason)
+				else
+					for _, offer in card.Buys do
+						T.falsy(offer.CanBuy, `{where} {card.Id}: greyed out`)
+						T.eq(offer.Reason, "Locked", `{where} {card.Id}: answers locally`)
+					end
+					T.eq(card.Note, TechShopView.StatusText.CounterOnly, `{where} {card.Id}: says where`)
+					T.eq(card.PriceText, before.PriceText, `{where} {card.Id}: the price still shows`)
+				end
+			end
+		end
+		T.truthy(cardById(TechShopView.cards(s, 1e9, "Base"), "Upgrade:AutoCleaner:Quality").Done, "a done card")
+		T.eq(TechShopView.toWhere("Base"), "Base")
+		T.eq(TechShopView.toWhere("Build"), "Build")
+		T.eq(TechShopView.toWhere("Nope"), "Counter")
+		T.eq(TechShopView.toWhere(nil), "Counter")
+	end)
+
+	T.test("TechShopView: notes say where a machine you buy goes and how to place it", function()
+		local refs = TechShopView.build(false)
+		T.eq(refs.Where, "Counter", "starts at the counter")
+		T.truthy(refs.Notes.Machines.Visible, "the MACHINES note shows at the counter")
+		T.falsy(refs.Notes.Upgrades.Visible or refs.Notes.Automation.Visible, "the counter sells everything")
+		T.truthy(string.find(refs.Notes.Machines.Text, "BUILD menu", 1, true), "the Build menu")
+		T.truthy(string.find(refs.Notes.Machines.Text, "BASE", 1, true), "go to your base")
+		for _, tab in TechShopView.Tabs do
+			local note = refs.Notes[tab]
+			T.truthy(note.Parent == refs.Lists[tab], tab .. ": in its list")
+			for _, row in TechShopView.rowsOf(refs, tab) do
+				T.truthy(note.LayoutOrder < row.Frame.LayoutOrder, tab .. ": above the rows")
+			end
+		end
+		T.truthy(refs.Notes.Upgrades.LayoutOrder < refs.Groups[1].LayoutOrder, "above the MACHINE UPGRADES header")
+		TechShopView.setWhere(refs, "Build")
+		T.eq(refs.Where, "Build")
+		T.truthy(refs.Notes.Upgrades.Visible and refs.Notes.Automation.Visible, "the other tabs say where they are sold")
+		T.truthy(string.find(refs.Notes.Machines.Text, "Close the shop", 1, true), "from build mode: close to place")
+		T.truthy(string.find(refs.Notes.Upgrades.Text, "UPGRADES stall", 1, true))
+		T.eq(refs.Subtitle.Text, TechShopView.WhereText.Build.Subtitle)
+		TechShopView.setWhere(refs, "Base")
+		T.truthy(string.find(refs.Notes.Machines.Text, "press B (BUILD)", 1, true), "away from build mode: press B")
+		-- the BUILD key of the device in use (B is back on a gamepad; touch has no keys)
+		TechShopView.setDevice(refs, "Gamepad")
+		T.truthy(string.find(refs.Notes.Machines.Text, "press D-pad Up (BUILD)", 1, true), "gamepad: D-pad Up")
+		T.falsy(string.find(refs.Notes.Machines.Text, "press B", 1, true), "gamepad: never B")
+		TechShopView.setDevice(refs, "Touch")
+		T.truthy(string.find(refs.Notes.Machines.Text, "tap BUILD", 1, true), "touch: tap BUILD")
+		TechShopView.setWhere(refs, "Counter")
+		T.truthy(string.find(refs.Notes.Machines.Text, "Go to your BASE and tap BUILD", 1, true), "the device stays on a new Where")
+		TechShopView.setDevice(refs, "Keyboard")
+		for _, texts in TechShopView.WhereText do
+			for _, text in texts do
+				T.falsy(string.find(text, "press B", 1, true), "no fixed key in: " .. text)
+			end
+		end
+		TechShopView.setWhere(refs, "Counter")
+		T.falsy(refs.Notes.Upgrades.Visible, "back at the counter")
+		T.eq(refs.Subtitle.Text, TechShopView.WhereText.Counter.Subtitle)
+		-- a shop at your plot closes before the server would refuse a BUY as "TooFar"
+		T.truthy(TechShopView.BaseCloseRange + 4 <= GameConfig.BuildRange, "the server is the lenient side at the base too")
+		-- ...and every shop with no counter closes when you walk away, however far out it opened
+		T.eq(TechShopView.baseCloseRange(10), TechShopView.BaseCloseRange, "opened at the base")
+		local far = GameConfig.BuildRange - 4 -- build mode opens up to BuildRange out
+		T.truthy(far > TechShopView.BaseCloseRange, "(past the base range)")
+		T.eq(TechShopView.baseCloseRange(far), far + TechShopView.BaseCloseSlack, "just past where it opened")
+		T.eq(TechShopView.baseCloseRange(GameConfig.BuildRange + 3), GameConfig.BuildRange, "never beyond BuildRange")
+		T.eq(TechShopView.baseCloseRange(math.huge), GameConfig.BuildRange, "no plot: closes at once")
+		-- every note and subtitle fits on every screen
+		for _, screen in SCREENS do
+			local laid = laidOut(screen)
+			for where, texts in TechShopView.WhereText do
+				for _, device in { "Keyboard", "Gamepad", "Touch" } do
+					TechShopView.setDevice(laid, device :: any)
+					TechShopView.setWhere(laid, TechShopView.toWhere(where))
+					for _, tab in TechShopView.Tabs do
+						local note = laid.Notes[tab]
+						if texts[tab] then
+							T.truthy(
+								TechShopView.fits(note.Text, laid.NoteBox.X, laid.NoteBox.Y, note.TextSize, true),
+								`{screen.Label} {where} {tab} {device} note: {note.Text}`
+							)
+							T.truthy(note.TextSize >= (if screen.Compact then 16 else 14), `{screen.Label} {where} {tab}: readable`)
+							T.truthy(laid.NoteBox.X > 0 and note.Size.Y.Offset > laid.NoteBox.Y, `{screen.Label}: laid out`)
+						end
+					end
+				end
+				if not screen.Compact then
+					local width = laid.Panel.Size.X.Offset - (16 * 2 + laid.Close.Parent.Size.X.Offset)
+					T.truthy(TechShopView.fits(texts.Subtitle, width, 22, 16, false), `{screen.Label} {where} subtitle`)
+				end
+			end
+		end
+	end)
+
+	T.test("TechShopView: the machine buy toasts fit the header on every screen", function()
+		local toasts = {}
+		for _, place in { "Base", "Counter" } do
+			for _, id in { "Conveyor", "AutoCleaner", "FusionReactor", "IronBox" } do
+				local machine = MachineData.ById[id]
+				if machine then
+					for _, count in { 1, 5 } do
+						local bought = { Item = id, Kind = "Machine", Machine = id, Count = count, Price = 1 }
+						table.insert(toasts, ShopService.boughtText(nil, bought, place))
+					end
+				end
+			end
+		end
+		T.truthy(#toasts >= 12, "toasts")
+		for _, screen in SCREENS do
+			local refs = laidOut(screen)
+			for _, text in toasts do
+				TechShopView.showReceipt(refs, text, Theme.Good)
+				local box = refs.ReceiptBox
+				T.truthy(box.X > 0, screen.Label .. ": laid out")
+				T.truthy(
+					TechShopView.fits(text, box.X, box.Y, refs.Receipt.TextSize, refs.Receipt.TextWrapped),
+					`{screen.Label}: {text} ({refs.Receipt.TextSize})`
+				)
+			end
+		end
+	end)
+
+	T.test("TechShopController: openMachines for build mode, and the way back to it", function()
+		-- (the controller needs a LocalPlayer, so it is read as text)
+		local fs = require("@lune/fs")
+		local source = fs.readFile("src/client/Controllers/TechShopController.luau")
+		T.truthy(source:find("function TechShopController.openMachines(fromBuild: boolean?)", 1, true), "openMachines(fromBuild?)")
+		T.truthy(source:find("function TechShopController.open(part: BasePart)", 1, true), "the counter's open(part) stays")
+		T.truthy(source:find('MenuPanels.call("PlacementController", "exit")', 1, true), "leaves build mode first")
+		T.truthy(source:find('MenuPanels.call("PlacementController", "enter")', 1, true), "and goes back after a close")
+		T.truthy(source:find('show(nil, if wasBuilding or fromBuild == true then "Build" else "Base", "Machines")', 1, true), "on MACHINES")
+		T.falsy(source:find("require(script.Parent.PlacementController)", 1, true), "looked up on use, never required")
+		T.truthy(source:find("TechShopView.cards(StateController.get(), cash, where)", 1, true), "the cards follow where it opened")
+		-- a shop with no counter always watches the walk away from your plot
+		T.truthy(
+			source:find("watch(part, if part == nil then TechShopView.baseCloseRange(plotDistance()) else nil)", 1, true),
+			"every counterless open gets a close range"
+		)
+		T.truthy(source:find("elseif baseRange and not nearOwnPlot(baseRange) then", 1, true), "and closes past it")
+		-- build mode's SHOP (PlacementController's Ux.openShop) opens it for real and hands it the way back
+		local build = fs.readFile("src/client/Controllers/PlacementController.luau")
+		T.truthy(build:find('MenuPanels.call("TechShopController", "openMachines", fromBuild)', 1, true), "SHOP calls openMachines")
+		T.falsy(build:find("shopToken", 1, true), "no second way back to build mode: the shop owns it")
+		-- MenuPanels lists it (every panel closes it when it opens; build mode closes it on enter)
+		local MenuPanels = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.MenuPanels")
+		T.truthy(table.find(MenuPanels.Names, "TechShopController"), "a MenuPanels panel")
+	end)
+
 	T.test("TechShopView: setCards fills rows; status lines and busy buttons", function()
 		local refs = TechShopView.build(false)
 		local s = state({ MachineUpgrades = { Crusher = { Speed = 5 } } })
@@ -1125,13 +1428,21 @@ return function(T, Loader)
 		five.Text = "BOUGHT!"
 		TechShopView.style(five, true, Theme.Good, Theme.GoodDark)
 		TechShopView.setCards(refs, TechShopView.cards(s, 0))
+		-- (the Pop look: the button's holder is its painted face)
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local function paintTop(button: any): any
+			return button.Parent:FindFirstChild("Paint").Color.Keypoints[1].Value
+		end
 		T.eq(five.Text, "BOUGHT!", "busy text kept")
-		T.eq(five.BackgroundColor3, Theme.Good, "busy color kept")
-		T.eq(five.TextColor3, Theme.Text, "busy text color kept")
+		T.eq(paintTop(five), PopTheme.Paints.Green.Top, "busy color kept")
+		T.eq(five.TextTransparency, 0, "busy text kept bright")
 		five:SetAttribute("Busy", false)
 		TechShopView.setCards(refs, TechShopView.cards(s, 0))
 		T.eq(five.Text, "BUY 5", "freed")
-		T.eq(five.BackgroundColor3, Theme.PanelLight, "greyed: can't pay")
+		T.eq(paintTop(five), PopTheme.Gray.Top, "greyed: can't pay")
+		TechShopView.setCards(refs, TechShopView.cards(s, 1e6))
+		T.eq(paintTop(five), PopTheme.Paints.Yellow.Top, "a gold coin BUY")
+		T.truthy(five.Parent:FindFirstChild("Coin").Visible, "with its coin")
 		TechShopView.setCards(refs, TechShopView.cards(s, 100))
 		-- the status line replaces the detail line
 		TechShopView.setStatus(refs, "Conveyor", "Not enough coins", nil)
@@ -1160,10 +1471,22 @@ return function(T, Loader)
 		T.truthy(refs.PadHint.Visible and not refs.Hint.Visible, "kept over a new layout")
 		TechShopView.layout(refs, true, 1000, 500)
 		T.falsy(refs.PadHint.Visible or refs.Hint.Visible, "no footer on phones")
-		-- every icon kind draws something
+		-- every icon kind draws something: a machine (or the train) its live
+		-- 3D picture (the build tray's), the rest a picture drawn from frames
 		for _, row in refs.RowList do
+			local picture = row.Icon:FindFirstChild("Picture")
 			local art = row.Icon:FindFirstChild("Art")
-			T.truthy(art and #art:GetChildren() >= 3, "icon " .. row.Id)
+			local drawn = art ~= nil and #art:GetChildren() >= 3
+			local live = picture ~= nil and picture:FindFirstChild("View") ~= nil and type(picture:GetAttribute("Icon")) == "string"
+			T.truthy(drawn or live, "icon " .. row.Id)
 		end
+		T.eq(refs.Rows.Crusher.Icon.Picture:GetAttribute("Icon"), "machine_Crusher", "a machine: its 3D picture")
+		T.falsy(refs.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "a closed shop builds no models")
+		-- open: the shown tab's cards get their models (built once)
+		refs.Gui.Enabled = true
+		TechShopView.setTab(refs, "Machines")
+		TechShopView.setCards(refs, TechShopView.cards(s, 100))
+		T.truthy(refs.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "the open tab's pictures")
+		T.falsy(refs.Rows["Upgrade:Crusher:Speed"].Icon.Picture.View:FindFirstChildOfClass("Model"), "not the hidden tabs'")
 	end)
 end

@@ -14,6 +14,12 @@
 	          what to find instead of its pages
 	X, B and Backspace close it. Opening an unread chapter marks it read
 	(the controller sends ArtifactAction "ReadChapter").
+
+	The Pop look (owner 2026-10-21: "new, modern, colourful, Roblox style";
+	the collection book's pieces, CollectionView): the bright band in the
+	book's colour, the red square X, the chapters as painted buttons (the
+	open one orange with a gold edge, the others blue, a locked one dark),
+	the parchment page with a black border and painted PREV / NEXT.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,9 +27,10 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UIConfig = require(Shared.Config.UIConfig)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local StoryConfig = require(Shared.Config.StoryConfig)
-local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
+local CollectionView = require(script.Parent.CollectionView)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local StoryView = {}
@@ -106,11 +113,17 @@ local METRICS: { [string]: Metrics } = {
 	},
 }
 
-local GOLD = Color3.fromRGB(255, 196, 64)
-local PARCHMENT = Color3.fromRGB(236, 218, 176)
-local PARCHMENT_EDGE = Color3.fromRGB(196, 160, 104)
+local PARCHMENT = Color3.fromRGB(240, 224, 186)
 local INK = Color3.fromRGB(62, 40, 26)
 local INK_DIM = Color3.fromRGB(120, 88, 60)
+
+StoryView.Paint = CollectionView.Paint -- the band (the book's colour)
+StoryView.PickColor = CollectionView.SelectColor -- the open chapter's edge
+StoryView.LockedPaint = {
+	Top = Color3.fromRGB(70, 74, 88),
+	Bottom = Color3.fromRGB(34, 36, 46),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
 
 local function metrics(compact: boolean): Metrics
 	return if compact then METRICS.Compact else METRICS.Normal
@@ -169,6 +182,7 @@ function StoryView.build(compact: boolean): Refs
 	local m = metrics(compact)
 	local gui = UIKit.screen("TerraForgeJournal", 20)
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true)
 	gui.Enabled = false
 	local dim = UIKit.new("Frame", {
 		Name = "Dim",
@@ -186,104 +200,105 @@ function StoryView.build(compact: boolean): Refs
 		Size = UDim2.fromOffset(m.Width, m.Height),
 		Active = true,
 	})
-	local title = UIKit.label(panel, "JOURNAL OF KALDRUM", m.Title, {
+	-- the Pop window: the book's colour on the band, the dark studded floor
+	CollectionView.chrome(panel, StoryView.Paint, m.Header)
+	local title = Pop.text(panel, "JOURNAL OF KALDRUM", m.Title, {
 		Name = "Title",
 		Position = UDim2.fromOffset(m.Pad + 4, 10),
 		Size = UDim2.new(0, 560, 0, m.Header - 20),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = GOLD,
-		TextWrapped = false,
+		ZIndex = 3,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
-		Name = "Close",
+	Pop.shadow(title)
+	local close = CollectionView.closeButton(panel, m.Close, {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 8),
-		Size = UDim2.fromOffset(m.Close, m.Close),
-		TextSize = 26,
 	})
 	local list = UIKit.new("ScrollingFrame", {
 		Name = "Chapters",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(200, 208, 226),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		CanvasSize = UDim2.new(),
+		ZIndex = 2,
 	}, panel)
 	UIKit.list(list, Enum.FillDirection.Vertical, 8)
-	UIKit.padding(list, 4)
+	UIKit.new("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingBottom = UDim.new(0, 4),
+	}, list)
+	-- the page: parchment with a black border and a light rim (ink on it, no edges)
 	local page = UIKit.new("Frame", {
 		Name = "Page",
 		BackgroundColor3 = PARCHMENT,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, panel)
 	UIKit.corner(page, 10)
-	UIKit.stroke(page, 4, PARCHMENT_EDGE)
-	local chapter = UIKit.label(page, "", m.Body, {
-		Name = "Chapter",
+	Pop.border(page, 4)
+	Pop.rim(page, Color3.fromRGB(255, 246, 222), 10, 4, 2)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(226, 216, 200)), Rotation = 90 }, page)
+	local function ink(name: string, size: number, color: Color3, props: { [string]: any }): TextLabel
+		local label = UIKit.new("TextLabel", {
+			Name = name,
+			BackgroundTransparency = 1,
+			FontFace = PopTheme.Font,
+			Text = "",
+			TextColor3 = color,
+			TextSize = size,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 4,
+		}, page)
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+		return label
+	end
+	local chapter = ink("Chapter", m.Body, INK_DIM, {
 		Position = UDim2.fromOffset(24, 14),
 		Size = UDim2.new(1, -48, 0, m.Body + 6),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = INK_DIM,
-		TextWrapped = false,
 	})
-	local pageTitle = UIKit.label(page, "", m.Text + 8, {
-		Name = "PageTitle",
+	local pageTitle = ink("PageTitle", m.Text + 8, INK, {
 		Position = UDim2.fromOffset(24, 18 + m.Body + 6),
 		Size = UDim2.new(1, -48, 0, m.Text + 14),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = INK,
-		TextWrapped = false,
+		FontFace = PopTheme.Heavy,
 	})
-	local text = UIKit.label(page, "", m.Text, {
-		Name = "Text",
+	local text = ink("Text", m.Text, INK, {
 		Position = UDim2.fromOffset(24, 26 + m.Body + m.Text + 20),
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = INK,
 		TextWrapped = true,
 	})
-	-- ink on parchment: no light outline around the letters
-	for _, label in { chapter, pageTitle, text } do
-		local stroke = label:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke:Destroy()
-		end
-	end
-	local number = UIKit.label(page, "", m.Body, {
-		Name = "Number",
+	local number = ink("Number", m.Body, INK_DIM, {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -18),
 		Size = UDim2.fromOffset(200, m.Body + 6),
-		TextColor3 = INK_DIM,
-		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Center,
 	})
-	local numberStroke = number:FindFirstChildOfClass("UIStroke")
-	if numberStroke then
-		numberStroke:Destroy()
-	end
-	local prev = UIKit.button(page, "< PREV", Theme.PanelLight, Theme.PanelDark, {
+	local prev = CollectionView.popButton(page, "< PREV", "Blue", {
 		Name = "Prev",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -12),
 		Size = UDim2.fromOffset(150, m.Button),
-		TextSize = 22,
+		TextSize = 24,
 	})
-	local nextButton = UIKit.button(page, "NEXT >", Theme.Accent, Theme.AccentDark, {
+	local nextButton = CollectionView.popButton(page, "NEXT >", "Orange", {
 		Name = "Next",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -12),
 		Size = UDim2.fromOffset(150, m.Button),
-		TextSize = 22,
+		TextSize = 24,
 	})
-	local hint = UIKit.label(panel, "", m.Hint, {
+	local hint = Pop.text(panel, "", m.Hint, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0, 1),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = CollectionView.SoftInk,
+		ZIndex = 3,
 	})
 	return {
 		Gui = gui,
@@ -313,6 +328,7 @@ function StoryView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local width = math.min(m.Width, maxWidth - 16)
 	local height = math.min(m.Height, maxHeight - 12)
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	CollectionView.layoutChrome(refs.Panel, m.Header)
 	local pad = m.Pad
 	local hintH = m.Hint + 8
 	local bodyH = height - m.Header - pad - hintH
@@ -342,31 +358,40 @@ function StoryView.setEntries(refs: Refs, entries: { Entry }, onPick: ((string) 
 	end
 	table.clear(refs.Buttons)
 	for i, entry in entries do
-		local color = if entry.Key == refs.Key then Theme.Accent elseif entry.Unlocked then Theme.PanelLight else Theme.PanelDark
-		local dark = if entry.Key == refs.Key then Theme.AccentDark else Theme.Outline
-		local button = UIKit.button(refs.List, "", color, dark, {
+		-- the open chapter orange, the others blue, a locked one dark
+		local picked = entry.Key == refs.Key
+		local paint = if picked then "Orange" elseif entry.Unlocked then "Blue" else StoryView.LockedPaint
+		local button = CollectionView.popButton(refs.List, "", paint, {
 			Name = entry.Key,
 			LayoutOrder = i,
 			Size = UDim2.new(1, -12, 0, m.Row),
 		})
-		local lock = if entry.Unlocked then "" else "🔒 "
-		UIKit.label(button, lock .. entry.Title, m.Body, {
+		local holder = button.Parent :: Frame
+		if picked then
+			local border = holder:FindFirstChild("Border") :: UIStroke?
+			if border then
+				border.Color = StoryView.PickColor
+				border.Thickness = 4
+			end
+		end
+		local lock = if entry.Unlocked then "" else "LOCKED: " -- (owner: no emoji, text only)
+		Pop.text(button, lock .. entry.Title, m.Body, {
 			Name = "Label",
 			Position = UDim2.fromOffset(12, 4),
 			Size = UDim2.new(1, -24, 1, -8),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = if entry.Unlocked or entry.Key == refs.Key then Theme.Text else Theme.TextDim,
+			TextColor3 = if entry.Unlocked or picked then PopTheme.Ink else CollectionView.SoftInk,
 			TextWrapped = true,
+			ZIndex = 6,
 		})
 		if entry.New then
-			local badge = UIKit.chip(button, "NEW", Theme.Bad, {
+			Pop.chip(button, "NEW", "Red", Vector2.new(52, 22), {
 				Name = "New",
 				AnchorPoint = Vector2.new(1, 0),
 				Position = UDim2.new(1, -4, 0, -8),
-				Size = UDim2.fromOffset(52, 22),
-				ZIndex = 4,
+				Rotation = 6,
+				ZIndex = 9,
 			})
-			badge.TextSize = 14
 		end
 		refs.Buttons[entry.Key] = button
 		if onPick then
@@ -376,7 +401,7 @@ function StoryView.setEntries(refs: Refs, entries: { Entry }, onPick: ((string) 
 			end)
 		end
 	end
-	refs.List.CanvasSize = UDim2.fromOffset(0, #entries * (m.Row + 8) + 8)
+	refs.List.CanvasSize = UDim2.fromOffset(0, #entries * (m.Row + 8) + 16)
 end
 
 -- Shows a page of an entry (clamped); a locked entry shows what unlocks it.
@@ -407,15 +432,14 @@ function StoryView.showPage(refs: Refs, entry: Entry, index: number)
 	end
 end
 
-
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = StoryView.build
+-- The journal wears the Pop look (attribute PopSkin: never the LightSkin
+-- recolouring). While the light UI is on it also hides Roblox's touch
+-- controls while it is open.
+local popBuild = StoryView.build
 StoryView.build = function(compact: boolean): Refs
-	local refs = darkBuild(compact)
+	local refs = popBuild(compact)
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 		TouchControls.follow(refs.Gui)
 	end
 	return refs

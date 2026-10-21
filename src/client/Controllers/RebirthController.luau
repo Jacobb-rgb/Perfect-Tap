@@ -13,20 +13,21 @@
 	  closes the window and plays the moment (a white flash, the banner
 	  "REBIRTH n!" with the stars it paid and falling stars, the Reveal
 	  sound); the server sends the character home after it.
-	- BLASTERS (the STAR blasters, StarBlasterData): the ⭐ button sends
-	  "Weapon" (buy with Forge Stars, it is equipped at once), EQUIP /
-	  EQUIPPED send "Equip" (EQUIPPED goes back to the forged blaster), a
-	  grey 🔒 REBIRTH n says when it opens; the R$ button prompts the
-	  weapon's game pass (MarketplaceService:PromptGamePassPurchase, only
-	  for a live id while the receipts gate is open, else "soon"; the
-	  server grants it). The guns in the cards are built the first time
-	  the page shows (RebirthView.fillPicture).
+	- BLASTERS (the STAR blasters, StarBlasterData): the star price button
+	  ("20 STARS") sends "Weapon" (buy with Forge Stars, it is equipped at
+	  once), EQUIP / EQUIPPED send "Equip" (EQUIPPED goes back to the forged
+	  blaster), a grey "LOCKED: REBIRTH n" says when it opens; the R$
+	  button prompts the weapon's game pass (MarketplaceService:
+	  PromptGamePassPurchase, only for a live id while the receipts gate
+	  is open, else "soon"; the server grants it). The guns in the cards
+	  are built the first time the page shows (RebirthView.fillPicture).
 	- The side menu's REBIRTH badge (onUnseenChanged: 1 while a rebirth is
 	  ready and the window wasn't opened since) and a one-time toast
 	  "Rebirth ready!" when the blaster reaches MinBlaster.
 	- Every player with the ForgeStars attribute (RebirthService) wears a
-	  small "⭐ n" board over the head (BillboardGui in this PlayerGui,
-	  adorned to the Head, up to StarDistance studs away).
+	  small gold "12 STARS" board over the head (BillboardGui in this
+	  PlayerGui, adorned to the Head, up to StarDistance studs away).
+	  Words only, no emoji (the owner's "text only"; NoEmoji.spec).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -200,7 +201,10 @@ local function onWeaponMain(id: string)
 	Sfx.play("UIClick")
 	if shown.State == "Buy" then
 		if info.Stars < star.Stars then
-			HudController.toast(`The {star.Name} costs ⭐ {star.Stars}. You have ⭐ {info.Stars}.`, "Deny")
+			HudController.toast(
+				`The {star.Name} costs {RebirthConfig.starsText(star.Stars)}. You have {RebirthConfig.starsText(info.Stars)}.`,
+				"Deny"
+			)
 		else
 			send({ Action = "Weapon", Id = id })
 		end
@@ -226,7 +230,7 @@ local function onWeaponRobux(id: string)
 			MarketplaceService:PromptGamePassPurchase(player, entry.Id)
 		end)
 	else
-		HudController.toast(`Robux sales open soon. The {star.Name} is ⭐ {star.Stars} now!`, "Info")
+		HudController.toast(`Robux sales open soon. The {star.Name} is {RebirthConfig.starsText(star.Stars)} now!`, "Info")
 	end
 end
 
@@ -480,7 +484,7 @@ local function showBoard(other: Player)
 	if not board then
 		local made = Instance.new("BillboardGui")
 		made.Name = "ForgeStars_" .. other.UserId
-		made.Size = UDim2.fromOffset(110, 30)
+		made.Size = UDim2.fromOffset(150, 30) -- "123 STARS" at 22
 		made.StudsOffset = Vector3.new(0, 3.6, 0)
 		made.AlwaysOnTop = false
 		made.MaxDistance = RebirthController.StarDistance
@@ -500,7 +504,7 @@ local function showBoard(other: Player)
 	shown.Adornee = head
 	local label = shown:FindFirstChild("Text") :: TextLabel?
 	if label then
-		label.Text = `⭐ {math.floor(stars)}`
+		label.Text = RebirthView.starsLabel(math.floor(stars))
 	end
 end
 

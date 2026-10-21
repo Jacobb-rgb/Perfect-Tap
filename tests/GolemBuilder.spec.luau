@@ -35,10 +35,19 @@ return function(T, Loader)
 	T.test("GolemBuilder: every golem kind builds within the part budget", function()
 		T.eq(GolemBuilder.MaxParts, 20, "the package budget: 20 parts")
 		T.le(GolemBuilder.MaxParts, GolemConfig.MaxParts, "within GolemConfig.MaxParts")
+		-- a limited edition golem's costume: its rarity's budget, rarer = richer
+		local last = GolemConfig.MaxParts
+		for _, rarity in { "Rare", "Epic", "Legendary", "Mythic" } do
+			local budget = GolemConfig.LimitedMaxParts[rarity]
+			T.truthy(budget and budget > last and budget <= 96, rarity .. " limited budget grows and stays phone-friendly")
+			last = budget
+		end
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
 			local n = GolemBuilder.partCount(model)
-			T.le(n, GolemBuilder.MaxParts, golem.Id .. " parts")
+			local budget = if golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity] else GolemBuilder.MaxParts
+			T.eq(GolemBuilder.budget(golem.Id), budget, golem.Id .. " budget")
+			T.le(n, budget, golem.Id .. " parts")
 			T.truthy(n >= 14, golem.Id .. " has its body, head, limbs and gear")
 			T.eq(model:GetAttribute("Golem"), golem.Id)
 			T.truthy(model.PrimaryPart and model.PrimaryPart.Name == "Body", golem.Id .. " PrimaryPart = Body")
@@ -130,7 +139,9 @@ return function(T, Loader)
 					T.truthy(part.Name == "Body" or part.Name == "Head", "only Body and Head cast shadows")
 				end
 			end
-			T.le(neon, 9, golem.Id .. " glowing parts")
+			-- (a limited costume may glow more: fire wings, lava, crowns; under half of it)
+			local glowCap = if golem.Edition then math.floor(GolemBuilder.budget(golem.Id) * 0.45) else 9
+			T.le(neon, glowCap, golem.Id .. " glowing parts")
 			T.truthy(neon >= 3, golem.Id .. " eyes and core glow")
 		end
 	end)
@@ -166,10 +177,10 @@ return function(T, Loader)
 	end)
 
 	T.test("GolemBuilder: golems read as rock: brow, rock fists, boulder, crystal and an ore vein", function()
-		local veins = 0
+		local noVein = 0
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
-			local covered = golem.Accessory == "KnightHelm" or golem.Accessory == "Visor"
+			local covered = GolemBuilder.Faces[golem.Accessory] ~= nil
 			T.eq(model:FindFirstChild("Brow") ~= nil, not covered, golem.Id .. " stone brow (unless the face is covered)")
 			T.falsy(model:FindFirstChild("Face"), golem.Id .. " no robot face plate")
 			for _, name in { "Boulder", "Crystal", "Fist1", "Fist2" } do
@@ -183,11 +194,12 @@ return function(T, Loader)
 				bodyMaterial ~= roblox.Enum.Material.SmoothPlastic and bodyMaterial ~= roblox.Enum.Material.Glass,
 				golem.Id .. " body is no plastic or glass"
 			)
-			if model:FindFirstChild("Vein") then
-				veins += 1
+			-- (a limited edition golem spends its budget on its gear first)
+			if not model:FindFirstChild("Vein") and not golem.Edition then
+				noVein += 1
 			end
 		end
-		T.truthy(veins >= #GolemConfig.List - 4, "nearly every golem has its ore vein (the budget allows)")
+		T.truthy(noVein <= 4, "nearly every capsule golem has its ore vein (the budget allows)")
 	end)
 
 	T.test("GolemBuilder: Legendary and Mythic golems float on a glowing aura", function()
@@ -226,6 +238,9 @@ return function(T, Loader)
 	T.test("GolemBuilder: the opening capsule has its halves and hidden cracks", function()
 		for _, capsule in CapsuleConfig.List do
 			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
+			if model:GetAttribute("Shard") or model:GetAttribute("Egg") then
+				continue -- a limited shard or a capsule's egg (their own test below)
+			end
 			T.eq(GolemBuilder.partCount(model), GolemBuilder.CapsuleParts, capsule.Id .. " parts")
 			local top = model:FindFirstChild("Top")
 			local bottom = model:FindFirstChild("Bottom")
@@ -256,5 +271,84 @@ return function(T, Loader)
 			T.near(highest - lowest, GolemBuilder.CapsuleHeight, 0.05, "tip to tip")
 			T.truthy(model:FindFirstChild("Window", true).CFrame.Position.Z < 0, "the window faces -Z")
 		end
+	end)
+
+	T.test("GolemBuilder: a limited edition's shard keeps the capsule's contract", function()
+		local shards = 0
+		for _, capsule in CapsuleConfig.List do
+			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
+			if capsule.Limited then
+				T.eq(model:GetAttribute("Shard"), capsule.Limited, capsule.Id .. " is its set's shard")
+			else
+				-- the regular capsules are eggs now (owner 2026-10-21)
+				T.eq(model:GetAttribute("Egg"), capsule.Id, capsule.Id .. " is an egg")
+			end
+			shards += 1
+			T.eq(model:GetAttribute("Capsule"), capsule.Id)
+			local n = GolemBuilder.partCount(model)
+			T.truthy(n > GolemBuilder.CapsuleParts and n <= GolemBuilder.ShardMaxParts, `{capsule.Id}: {n} parts`)
+			local top = model:FindFirstChild("Top")
+			local bottom = model:FindFirstChild("Bottom")
+			T.truthy(top and top:IsA("Model") and top.PrimaryPart and top.PrimaryPart.Name == "TopRoot", "Top half")
+			T.truthy(bottom and bottom:IsA("Model") and bottom.PrimaryPart and bottom.PrimaryPart.Name == "BottomRoot", "Bottom half")
+			T.eq(model.PrimaryPart.Name, "Root")
+			for _, root in { model.PrimaryPart, top.PrimaryPart, bottom.PrimaryPart } do
+				T.eq(root.Transparency, 1, root.Name .. " invisible")
+				T.near(root.CFrame.Position.Y, 3, 1e-3, root.Name .. " at the center")
+				T.near(root.CFrame.UpVector.Y, 1, 1e-6, root.Name .. " upright")
+			end
+			for i = 1, 3 do
+				local crack = bottom:FindFirstChild("Crack" .. i)
+				T.truthy(crack and crack:IsA("BasePart") and crack.Transparency == 1, "crack " .. i .. " hidden")
+			end
+			local band = bottom:FindFirstChild("Band")
+			T.truthy(band and band:IsA("BasePart") and band.Material == roblox.Enum.Material.Neon, "a Neon band to tint")
+			for _, part in parts(model) do
+				T.falsy(part.CanCollide)
+			end
+			-- every shard part sits in a half (they fly apart) or is a pivot
+			for _, part in parts(model) do
+				local inHalf = part:IsDescendantOf(top) or part:IsDescendantOf(bottom)
+				T.truthy(inHalf or part == model.PrimaryPart, part.Name .. " in a half")
+			end
+		end
+		T.eq(shards, #CapsuleConfig.List, "every capsule is an egg or a shard")
+	end)
+
+	T.test("GolemBuilder: the upcoming limited sets' golems build in budget and are not real kinds", function()
+		local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+		local rarities = { "Rare", "Rare", "Epic", "Epic", "Legendary", "Mythic" }
+		for _, id in LimitedUpcoming.Order do
+			local set = LimitedUpcoming.Sets[id]
+			T.truthy(set and #set.Golems == 6, id .. " has 6 golems")
+			for i, golem in set.Golems do
+				T.eq(golem.Rarity, rarities[i], golem.Id .. " rarity")
+				T.eq(golem.Edition, id, golem.Id .. " edition")
+				T.falsy(GolemConfig.ById[golem.Id], golem.Id .. " is not a real kind yet")
+				local model = GolemBuilder.build(golem.Id)
+				local n = GolemBuilder.partCount(model)
+				T.le(n, GolemConfig.LimitedMaxParts[golem.Rarity], golem.Id .. " parts")
+				T.eq(model:GetAttribute("Golem"), golem.Id)
+			end
+			local shard = GolemBuilder.shard(id, CFrame.new(0, 3, 0), set.Backdrop.Ground, set.Backdrop.Accent)
+			T.le(GolemBuilder.partCount(shard), GolemBuilder.ShardMaxParts, id .. " shard parts")
+		end
+	end)
+
+	T.test("GolemBuilder: limited followers carry no light, the full build does", function()
+		local full = GolemBuilder.build("DragonKing")
+		local follower = GolemBuilder.build("DragonKing", CFrame.new(), { Welded = true })
+		local function lights(m: any): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("PointLight") then
+					n += 1
+				end
+			end
+			return n
+		end
+		T.eq(lights(full), 1, "the Mythic's one light")
+		T.eq(lights(follower), 0, "none on a follower")
+		T.eq(GolemBuilder.partCount(follower), GolemBuilder.partCount(full), "the same costume")
 	end)
 end

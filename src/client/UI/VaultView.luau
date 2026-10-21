@@ -34,8 +34,10 @@ local RebirthConfig = require(Shared.Config.RebirthConfig)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
+local PopTheme = require(Shared.Config.PopTheme)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
+local Pop = require(script.Parent.Pop)
 local TechShopView = require(script.Parent.TechShopView)
 
 local VaultView = {}
@@ -693,7 +695,21 @@ local function buildTile(parent: Instance, index: number): Tile
 	}, face)
 	corner(check, 14)
 	stroke(check, 2.5)
-	text(check, "✓", 18, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 11 })
+	-- the tick, drawn from two white bars (no glyph: the owner's "text only", NoEmoji.spec):
+	-- { centre x, centre y, length, rotation } in the 28 x 28 badge
+	for i, arm in { { 10.5, 16.5, 8, 45 }, { 16.5, 14, 14, -50 } } do
+		local bar = UIKit.new("Frame", {
+			Name = "Tick" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = S.White,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(arm[1], arm[2]),
+			Size = UDim2.fromOffset(arm[3], 4),
+			Rotation = arm[4],
+			ZIndex = 11,
+		}, check)
+		corner(bar, 2)
+	end
 	-- the texts
 	local name = ink(face, "", 17, {
 		Name = "BlasterName",
@@ -974,9 +990,7 @@ function VaultView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.Coins.TextSize = if compact then 26 else 22
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(closeSize, closeSize + S.Lip)
-	closeHolder.Position = if light
-		then UDim2.new(1, -12, 0, 10)
-		else UDim2.new(1, -closeSize / 2 - 10, 0, closeSize / 2 + 8)
+	closeHolder.Position = if light then UDim2.new(1, -12, 0, 10) else UDim2.new(1, -closeSize / 2 - 10, 0, closeSize / 2 + 8)
 	refs.Info.TextSize = if compact then 22 else 18
 	refs.Info.Position = UDim2.fromOffset(g.Pad + 2, g.HeaderH)
 	refs.Info.Size = UDim2.fromOffset(g.PanelW - g.Pad * 2, g.InfoH)
@@ -1145,6 +1159,503 @@ function VaultView.touchTargets(refs: Refs): { GuiObject }
 		table.insert(list, tile.ButtonBody.Holder)
 	end
 	return list
+end
+
+---------------------------------------------------------------- the Pop look (UIConfig.LightUI)
+--[[
+	While the light UI is on (it ships on) the window wears the bright Pop
+	look of the Robux Shop (UI/Pop; owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"): an orange header band (the
+	window's colour) with shine stripes and studs, the 3D vault icon popping
+	out of it, the white title with its shadow and the red X in the band,
+	over a dark studded body. Each case is a bright painted card in its
+	ore's colour (PopPaints; the STAR BLASTERS card a rainbow) with a light
+	burst behind the case picture, a dark LV chip, the gold NEXT chip, the
+	green owned tick, and one button: the gold coin button with the price
+	on your next case (grey while you can't afford it), grey OWNED / LOCKED
+	(locked cards are shaded), FOUNDRY orange, REBIRTH purple. The next
+	case keeps the gold outline. The same instances, names and refs as
+	before (the controller and the specs drive both looks).
+]]
+
+VaultView.PopPaints = {
+	Copper = "Orange",
+	Cobalt = "Blue",
+	Emberite = "Red",
+	Gold = "Yellow",
+	Sapphire = "Teal",
+	Amethyst = "Purple",
+	Obsidian = "Night",
+	RoyalAurum = "Yellow",
+	Heartstone = "Pink",
+} :: { [string]: string }
+
+-- A case card's paint: its ore's (PopPaints), else the nearest by the case's glow colour.
+function VaultView.popPaint(oreId: string): string
+	local named = VaultView.PopPaints[oreId]
+	if named then
+		return named
+	end
+	if oreId == "" then
+		return "Night"
+	end
+	local _, _, glow = CaseBuilder.look(oreId)
+	local h, s = glow:ToHSV()
+	local deg = h * 360
+	if s < 0.25 then
+		return "Slate"
+	elseif deg < 18 or deg >= 340 then
+		return "Red"
+	elseif deg < 40 then
+		return "Orange"
+	elseif deg < 70 then
+		return "Yellow"
+	elseif deg < 160 then
+		return "Green"
+	elseif deg < 195 then
+		return "Teal"
+	elseif deg < 250 then
+		return "Blue"
+	elseif deg < 300 then
+		return "Purple"
+	end
+	return "Pink"
+end
+
+local GOLD_OUTLINE = rgb(255, 200, 40)
+local SOFT_RED = rgb(255, 150, 140)
+
+-- The black edge of a text (its Contextual UIStroke, made when missing).
+local function popEdge(label: GuiObject)
+	local t: any = label
+	local edge: UIStroke? = nil
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			edge = child
+		end
+	end
+	local made = edge or Pop.edge(label)
+	made.Color = PopTheme.Outline
+	made.Transparency = 0
+	made.Enabled = true
+	made.LineJoinMode = Enum.LineJoinMode.Round
+	made.Thickness = Pop.edgeFor(if t.TextScaled then 24 else t.TextSize)
+end
+
+-- White chunky words with a black edge.
+local function popText(label: GuiObject, font: Font?)
+	local t: any = label
+	t.FontFace = font or PopTheme.Font
+	t.TextColor3 = PopTheme.Ink
+	popEdge(label)
+end
+
+-- A bubble body as a Pop face: no lip, shadow or gloss strip; the paint, the black border, the light rim.
+local function popBody(b: Body, paint: string | Pop.Paint, corner: number, glossy: boolean)
+	b.Lip.Visible = false
+	local shadow = b.Holder:FindFirstChild("Shadow") :: GuiObject?
+	if shadow then
+		shadow.Visible = false
+	end
+	local gloss = b.Face:FindFirstChild("Gloss") :: GuiObject?
+	if gloss then
+		gloss.Visible = false
+	end
+	b.Gradient.Name = "Paint"
+	b.Stroke.Name = "Border"
+	b.Stroke.Enabled = true
+	b.Stroke.Color = PopTheme.Outline
+	b.Stroke.Thickness = PopTheme.Edge
+	local round = b.Face:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, corner)
+	end
+	Pop.face(b.Face, paint, corner, glossy)
+	b.Face:SetAttribute("Pop", true)
+end
+
+-- The gold coin and the price on a BUY button (nil: the button's own word shows).
+local function popPriceFace(tile: Tile, amount: string?, affordable: boolean)
+	local button = tile.Button
+	local face = button:FindFirstChild("PopFace") :: Frame?
+	local shows = amount ~= nil and tile.ButtonText.Text == "BUY"
+	tile.ButtonText.TextTransparency = if shows then 1 else 0
+	local edge = tile.ButtonText:FindFirstChildOfClass("UIStroke")
+	if edge then
+		edge.Transparency = if shows then 1 else 0
+	end
+	if not shows then
+		if face then
+			face.Visible = false
+		end
+		return
+	end
+	local text = amount :: string
+	local h = tile.ButtonBody.Holder.Size.Y.Offset - S.Lip
+	local w = tile.ButtonBody.Holder.Size.X.Offset
+	local key = `{text}|{w}|{h}`
+	if not face or face:GetAttribute("Key") ~= key then
+		if face then
+			face:Destroy()
+		end
+		local mark = math.floor(h * 0.52)
+		local chars = math.max(1, utf8.len(text) or #text)
+		local size = math.clamp(math.floor(math.min(h * 0.52, (w - 16 - mark - 5) / (chars * 0.6))), 12, 40)
+		mark = math.min(mark, size + 4)
+		local row = UIKit.new("Frame", {
+			Name = "PopFace",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 16,
+		}, button)
+		row:SetAttribute("Key", key)
+		UIKit.list(row, Enum.FillDirection.Horizontal, 4, {
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		Pop.coin(row, mark, { LayoutOrder = 1, ZIndex = 17 })
+		Pop.text(row, text, size, {
+			Name = "Amount",
+			LayoutOrder = 2,
+			Size = UDim2.fromOffset(Pop.textWidth(text, size), size + 6),
+			ZIndex = 18,
+		})
+		face = row
+	end
+	local made = face :: Frame
+	made.Visible = true
+	local label = made:FindFirstChild("Amount") :: TextLabel?
+	if label then
+		label.TextColor3 = if affordable then PopTheme.Ink else SOFT_RED
+	end
+end
+
+-- The light burst behind a card's case picture (at the icon slot's centre).
+local function placeBurst(tile: Tile, g: Grid?)
+	local burst = tile.Face:FindFirstChild("Burst") :: Frame?
+	if burst then
+		local slot = if g then g.Slots.Icon else rect(17, 34, 108, 66)
+		burst.Position = UDim2.fromOffset(slot.X + slot.W / 2, slot.Y + slot.H / 2)
+	end
+end
+
+local function popTile(tile: Tile)
+	local face = tile.Face
+	popBody(tile.Body, "Slate", 12, false)
+	face.ClipsDescendants = true
+	local rim = face:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 4
+	end
+	-- the light burst behind the case, the studs, three sparkles
+	local burst = UIKit.new("Frame", {
+		Name = "Burst",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(0, 0),
+		ZIndex = 2,
+	}, face)
+	local rays = Pop.fx(burst, "fx_rays", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 0.35,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(380, 380),
+		ZIndex = 2,
+	})
+	if not rays then
+		Pop.rays(burst, UDim2.fromScale(0.5, 0.5), 10, 190, 0.6, 2)
+	end
+	local glow = Pop.fx(burst, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = Color3.new(1, 1, 1),
+		ImageTransparency = 0.35,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(150, 150),
+		ZIndex = 2,
+	})
+	if not glow then
+		local disc = UIKit.new("Frame", {
+			Name = "Glow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.75,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(96, 96),
+			ZIndex = 2,
+		}, burst)
+		corner(disc, 999)
+	end
+	Pop.studs(face, 12, 0.5, 44, 3)
+	for i, spot in { { 0.12, 0.3, 16 }, { 0.88, 0.36, 14 }, { 0.5, 0.12, 12 } } do
+		Pop.sparkle(face, UDim2.fromScale(spot[1], spot[2]), spot[3], 4, 0.15 + i * 0.1)
+	end
+	-- a locked case is shaded; the chips and the texts in the Pop words
+	tile.Dim.BackgroundColor3 = PopTheme.Outline
+	tile.Dim.BackgroundTransparency = 0.5
+	local dimCorner = tile.Dim:FindFirstChildOfClass("UICorner")
+	if dimCorner then
+		dimCorner.CornerRadius = UDim.new(0, 12)
+	end
+	local pillPaint = tile.LvPill:FindFirstChildOfClass("UIGradient")
+	if pillPaint then
+		pillPaint:Destroy()
+	end
+	tile.LvPill.BackgroundColor3 = PopTheme.Well
+	for _, badge in { tile.LvPill, tile.Ribbon, tile.Check } do
+		local edge = badge:FindFirstChildOfClass("UIStroke")
+		if edge then
+			edge.Color = PopTheme.Outline
+		end
+	end
+	popText(tile.Lv)
+	local ribbonText = tile.Ribbon:FindFirstChild("Text")
+	if ribbonText then
+		popText(ribbonText :: GuiObject)
+	end
+	popText(tile.Name)
+	popText(tile.Damage)
+	popText(tile.Price)
+	local coinIcon = tile.PriceRow:FindFirstChild("Coin")
+	local coinEdge = if coinIcon then coinIcon:FindFirstChildOfClass("UIStroke") else nil
+	if coinEdge then
+		coinEdge.Color = PopTheme.Outline
+	end
+	-- the button: a Pop face (fillTile paints it)
+	popBody(tile.ButtonBody, "Yellow", 10, true)
+	Pop.studs(tile.ButtonBody.Face, 10, 0.45, 28, 12)
+	local buttonRim = tile.ButtonBody.Face:FindFirstChild("Rim") :: Frame?
+	if buttonRim then
+		buttonRim.ZIndex = 12
+	end
+	popText(tile.ButtonText, PopTheme.Heavy)
+	pcall(function()
+		-- (the controller writes "..." on the button while a buy is on its way: the word shows)
+		tile.ButtonText:GetPropertyChangedSignal("Text"):Connect(function()
+			if tile.ButtonText.Text ~= "BUY" then
+				popPriceFace(tile, nil, true)
+			end
+		end)
+	end)
+end
+
+-- Fills a card in the Pop look (after the bubble fillTile).
+local function popFill(tile: Tile, card: Card, g: Grid?)
+	local face = tile.Face
+	local soon = card.State == "Soon"
+	local paintKey = if soon then "Rainbow" else card.Ore
+	local paint = face:FindFirstChild("Paint") :: UIGradient?
+	if face:GetAttribute("PopOre") ~= paintKey then
+		face:SetAttribute("PopOre", paintKey)
+		Pop.repaint(face, if soon then "Night" else VaultView.popPaint(card.Ore), false)
+		if paint then
+			paint.Rotation = 90
+		end
+		if soon then
+			Pop.rainbow(face)
+		end
+	end
+	placeBurst(tile, g)
+	-- the case icon over the burst (fillTile draws it at ZIndex 5+)
+	tile.Body.Stroke.Color = if card.State == "Next" then GOLD_OUTLINE else PopTheme.Outline
+	tile.Body.Stroke.Thickness = if card.State == "Next" then 5 else PopTheme.Edge
+	tile.Price.TextColor3 = if card.Reason == "NoCoins" then SOFT_RED else PopTheme.Ink
+	-- the button: gold coin BUY with the price, grey OWNED / LOCKED, FOUNDRY, REBIRTH
+	local word = VaultView.buttonText(card)
+	local buttonPaint: string | Pop.Paint = if word == "BUY"
+		then (if card.CanBuy then "Yellow" else PopTheme.Gray)
+		elseif word == "FOUNDRY" then "Orange"
+		elseif word == "REBIRTH" then "Purple"
+		else PopTheme.Gray
+	tile.ButtonBody.Face.BackgroundColor3 = Color3.new(1, 1, 1)
+	Pop.repaint(tile.ButtonBody.Face, buttonPaint)
+	tile.ButtonText.TextColor3 = PopTheme.Ink
+	popEdge(tile.ButtonText)
+	local onButton = word == "BUY" and card.Price ~= nil
+	popPriceFace(tile, if onButton then Format.money(card.Price :: number) else nil, card.CanBuy)
+	-- the price sits on the BUY button; the locked cards keep the price line
+	if onButton then
+		tile.PriceRow.Visible = false
+	end
+end
+
+-- Places the Pop pieces after the layout: the X in the band, the pill left of it, the title's shadow.
+local function popLayout(refs: Refs)
+	local g = refs.Grid
+	if not g then
+		return
+	end
+	local compact = g.Compact
+	local closeSize = if compact then 72 else 54
+	local band = g.HeaderH - 14 -- the header face's height
+	local closeHolder = refs.Close.Parent :: Frame
+	closeHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeHolder.Position = UDim2.new(1, -(10 + closeSize / 2), 0, band / 2 + S.Lip / 2)
+	refs.CoinsPill.AnchorPoint = Vector2.new(1, 0.5)
+	refs.CoinsPill.Position = UDim2.new(1, -(closeSize + 24), 0.5, 0)
+	local pillCorner = refs.CoinsPill:FindFirstChildOfClass("UICorner")
+	if pillCorner then
+		pillCorner.CornerRadius = UDim.new(0, math.floor(refs.CoinsPill.Size.Y.Offset / 2))
+	end
+	popEdge(refs.Title)
+	local shade = refs.Title.Parent and refs.Title.Parent:FindFirstChild("TitleShadow")
+	if shade and shade:IsA("TextLabel") then
+		shade.Position = refs.Title.Position + UDim2.fromOffset(0, 4)
+		shade.Size = refs.Title.Size
+		shade.TextSize = refs.Title.TextSize
+	end
+	for _, label in { refs.Coins, refs.Info, refs.Hint, refs.Message } do
+		popEdge(label)
+	end
+	for _, tile in refs.Tiles do
+		placeBurst(tile, g)
+		for _, label in { tile.Lv, tile.Name, tile.Damage, tile.Price, tile.ButtonText } do
+			popEdge(label)
+		end
+		local card = tile.Card
+		if card then
+			popFill(tile, card, g)
+		end
+	end
+end
+
+local function popSkin(refs: Refs)
+	refs.Gui:SetAttribute("PopSkin", true)
+	-- the window: a black frame round a dark studded body
+	local body = refs.PanelBody
+	popBody(body, { Top = PopTheme.Body, Bottom = PopTheme.BodyBottom, Edge = PopTheme.Outline }, 12, false)
+	body.Stroke.Thickness = 4
+	local face = body.Face
+	local rim = face:FindFirstChild("Rim")
+	if rim then
+		rim:Destroy()
+	end
+	Pop.studs(face, 12, 0.5, 36, 1)
+	-- the header: the orange band, its shine stripes and studs (clipped in their own
+	-- frame: the 3D vault icon pops out of the band)
+	local header = refs.Header
+	header.ZIndex = 2
+	local headerFace = header:FindFirstChild("Face") :: Frame
+	for _, name in { "Fill", "Line", "Gloss" } do
+		local part = headerFace:FindFirstChild(name)
+		if part then
+			part:Destroy()
+		end
+	end
+	local headerLip = header:FindFirstChild("Lip") :: GuiObject?
+	if headerLip then
+		headerLip.Visible = false
+	end
+	local headerShadow = header:FindFirstChild("Shadow") :: GuiObject?
+	if headerShadow then
+		headerShadow.Visible = false
+	end
+	local headerPaint = headerFace:FindFirstChildOfClass("UIGradient")
+	if headerPaint then
+		headerPaint.Name = "Paint"
+	end
+	local headerBorder = headerFace:FindFirstChildOfClass("UIStroke")
+	if headerBorder then
+		headerBorder.Name = "Border"
+		headerBorder.Enabled = true
+		headerBorder.Color = PopTheme.Outline
+		headerBorder.Thickness = 3
+	end
+	local headerCorner = headerFace:FindFirstChildOfClass("UICorner")
+	if headerCorner then
+		headerCorner.CornerRadius = UDim.new(0, 10)
+	end
+	Pop.face(headerFace, "Orange", 10, false)
+	local headerRim = headerFace:FindFirstChild("Rim") :: Frame?
+	if headerRim then
+		headerRim.ZIndex = 3
+	end
+	local shine = UIKit.new("Frame", {
+		Name = "PopBand",
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+	}, headerFace)
+	corner(shine, 10)
+	Pop.studs(shine, 10, 0.35, 40, 2)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 2,
+	}, shine)
+	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 2,
+		}, shine)
+	end
+	popText(refs.Title)
+	Pop.shadow(refs.Title).ZIndex = 3
+	refs.Title.ZIndex = 5
+	-- your coins: a dark pill
+	refs.CoinsPill.BackgroundColor3 = PopTheme.Well
+	local pillEdge = refs.CoinsPill:FindFirstChildOfClass("UIStroke")
+	if pillEdge then
+		pillEdge.Color = PopTheme.Outline
+	end
+	popText(refs.Coins)
+	refs.Coins.TextColor3 = PopTheme.MoneyNumber
+	-- the red X (Pop.close's look), inside the band
+	local closeHolder = refs.Close.Parent :: Frame
+	local lip: any = closeHolder:FindFirstChild("Lip")
+	local closePaint: any = refs.Close:FindFirstChildOfClass("UIGradient")
+	local closeEdge: any = refs.Close:FindFirstChildOfClass("UIStroke")
+	popBody({ Holder = closeHolder, Face = refs.Close, Lip = lip, Gradient = closePaint, Stroke = closeEdge }, PopTheme.Close, 6, true)
+	local closeLabel = refs.Close:FindFirstChild("Label")
+	if closeLabel then
+		popText(closeLabel :: GuiObject, PopTheme.Heavy)
+	end
+	-- the line and the footer
+	popText(refs.Info)
+	popText(refs.Hint)
+	popText(refs.Message)
+	refs.Cards.ScrollBarImageColor3 = rgb(220, 224, 236)
+	for _, tile in refs.Tiles do
+		popTile(tile)
+	end
+end
+
+local plainFillTile = VaultView.fillTile
+VaultView.fillTile = function(tile: Tile, card: Card, g: Grid?)
+	plainFillTile(tile, card, g)
+	if tile.Face:GetAttribute("Pop") then
+		popFill(tile, card, g)
+	end
+end
+
+local plainLayout = VaultView.layout
+VaultView.layout = function(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	plainLayout(refs, compact, maxWidth, maxHeight)
+	if refs.Gui:GetAttribute("PopSkin") then
+		popLayout(refs)
+	end
+end
+
+local bubbleBuild = VaultView.build
+VaultView.build = function(): Refs
+	local refs = bubbleBuild()
+	if UIConfig.lightUI() then
+		popSkin(refs)
+	end
+	return refs
 end
 
 return VaultView
