@@ -107,8 +107,19 @@ MoveConfig.PendingSeconds = 8 -- a celebration of yours that came during a close
 MoveConfig.RecoilRepeat = 0.22 -- seconds between recoil kicks while the beam stays on
 MoveConfig.RecoilRepeatWeight = 0.55 -- the repeat kicks are smaller than the first one
 MoveConfig.ShrugGap = 2.5 -- seconds: at most one shrug per this (refusals can come in bursts)
--- GuiService.ReducedMotionEnabled (the player's Roblox "Reduce Motion" setting): these become calmer moves
-MoveConfig.ReducedMotion = { BigCelebrate = "Celebrate" } :: { [string]: string }
+-- Reduce Motion (the game's SETTINGS toggle SettingsConfig.ReduceMotion, or Roblox's own
+-- GuiService.ReducedMotionEnabled), for what THIS viewer sees: the celebrations become calmer
+-- moves (a small bounce, no crouch, no spin), the optional Extras are skipped; Carry, Throw,
+-- Recoil, Spray and Hammer stay (they are the game's feedback)
+MoveConfig.ReducedMotion = {
+	BigCelebrate = "CelebrateCalm",
+	Celebrate = "CelebrateCalm",
+	CashToss = "CashTossCalm",
+} :: { [string]: string }
+-- optional extras: skipped with Reduce Motion, and while a tool is in hand or the blaster
+-- fires (they take over the arm holding it: the beam starts at its muzzle)
+MoveConfig.Extras = { Wave = true, Shrug = true } :: { [string]: boolean }
+MoveConfig.FiringHold = 0.6 -- seconds after another player's last BlastHit their gun arm counts as firing
 
 -- Server side
 MoveConfig.ClientMoves = { Throw = true, Wave = true, Shrug = true } :: { [string]: boolean } -- the Net "Move" whitelist
@@ -563,9 +574,101 @@ MoveConfig.Moves = {
 			{ T = 0.9, Ease = "InOut", Pose = {} },
 		},
 	},
+	-- Reduce Motion: Celebrate and BigCelebrate become this (a small bounce, no crouch, no spin)
+	CelebrateCalm = {
+		Name = "CelebrateCalm",
+		Duration = 1.0,
+		Loop = false,
+		Slot = "Action",
+		BlendIn = 0.08,
+		BlendOut = 0.18,
+		Override = ARMS,
+		MinGap = 0.8,
+		Priority = 2,
+		Keys = {
+			{ T = 0, Pose = {} },
+			{
+				T = 0.2,
+				Ease = "Out",
+				Pose = with(arms({}, { 148, 0, 20 }, { 12, 0, 0 }), {
+					Waist = { 5, 0, 0 },
+					Neck = { 8, 0, 0 },
+					RightAnkle = { -8, 0, 0 },
+					LeftAnkle = { -8, 0, 0 },
+				}),
+				Offset = { 0, 0.22, 0 },
+			},
+			{ T = 0.38, Ease = "InOut", Pose = with(arms({}, { 138, 0, 22 }, { 14, 0, 0 }), { Waist = { 4, 0, 0 }, Neck = { 6, 0, 0 } }) },
+			{
+				T = 0.58,
+				Ease = "Out",
+				Pose = {
+					RightShoulder = { 22, 0, 24 },
+					RightElbow = { 118, 0, 0 },
+					LeftShoulder = { 6, 0, -10 },
+					LeftElbow = { 16, 0, 0 },
+					Waist = { -4, 6, 0 },
+					Neck = { -4, 4, 0 },
+				},
+			},
+			{
+				T = 0.8,
+				Ease = "Sine",
+				Pose = {
+					RightShoulder = { 26, 0, 24 },
+					RightElbow = { 112, 0, 0 },
+					LeftShoulder = { 6, 0, -10 },
+					LeftElbow = { 16, 0, 0 },
+					Waist = { -3, 5, 0 },
+					Neck = { -3, 3, 0 },
+				},
+			},
+			{ T = 1.0, Ease = "InOut", Pose = {} },
+		},
+	},
+	-- Reduce Motion: CashToss becomes this (the arms toss up, no crouch, no hop)
+	CashTossCalm = {
+		Name = "CashTossCalm",
+		Duration = 0.8,
+		Loop = false,
+		Slot = "Action",
+		BlendIn = 0.06,
+		BlendOut = 0.16,
+		Override = ARMS,
+		MinGap = 1,
+		Priority = 2,
+		Keys = {
+			{ T = 0, Pose = {} },
+			{ T = 0.16, Ease = "Out", Pose = with(arms({}, { 30, 0, -3 }, { 40, 0, 0 }, { 14, 0, 0 }), { Waist = { -6, 0, 0 } }) },
+			{
+				T = 0.34,
+				Ease = "Out",
+				Pose = with(arms({}, { 158, 0, 26 }, { 4, 0, 0 }, { -8, 0, 0 }), { Waist = { 6, 0, 0 }, Neck = { 12, 0, 0 } }),
+			},
+			{
+				T = 0.56,
+				Ease = "Sine",
+				Pose = with(arms({}, { 152, 0, 30 }, { 8, 0, 0 }, { 10, 0, 0 }), { Waist = { 5, 0, 0 }, Neck = { 10, 0, 0 } }),
+			},
+			{ T = 0.8, Ease = "InOut", Pose = {} },
+		},
+	},
 } :: { [string]: Move }
 
 -- the order of the preview showreel and the tests
-MoveConfig.List = { "Carry", "Throw", "Recoil", "Spray", "Hammer", "Celebrate", "BigCelebrate", "CashToss", "Wave", "Shrug" }
+MoveConfig.List = {
+	"Carry",
+	"Throw",
+	"Recoil",
+	"Spray",
+	"Hammer",
+	"Celebrate",
+	"BigCelebrate",
+	"CashToss",
+	"Wave",
+	"Shrug",
+	"CelebrateCalm",
+	"CashTossCalm",
+}
 
 return MoveConfig

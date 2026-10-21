@@ -757,7 +757,12 @@ What to test in Studio (2 players, R15 avatars; also one R6 avatar):
    a shrug, not more than every 2.5 s.
 6. On a hoverboard, seated, swimming or climbing: no moves. An R6 avatar: no moves, no errors.
 7. Phones: FPS with 8 players moving nearby (the micro-profiler: MoveController stays well under 0.5 ms).
-8. Roblox settings, Reduce Motion on: the spin jump becomes the small celebration.
+8. SETTINGS > Reduce motion on (or Roblox's own Reduce Motion): celebrations become the calm versions (a small
+   bounce, no crouch, no spin; the money toss without the hop); no waves or shrugs on anyone; carry, throw, recoil,
+   spray and hammer stay. A second player without the setting still sees your wave / shrug.
+9. Hold fire on a rock your blaster can't mine yet (Deny toasts every 3 s): no shrug, the gun and the beam stay on the
+   rock; the other player sees no shrug either. Equip a golem with the blaster in hand: no wave. A celebration while
+   the beam is on: the body celebrates, the gun arm stays on target.
 
 ## World animations (2026-10-21, branch anim/world)
 The owner wants "perfect animations in the game world" (his reels: a punch with a white impact flash, coloured cubes

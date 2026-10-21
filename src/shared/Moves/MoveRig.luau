@@ -16,7 +16,9 @@
 	values (Roblox CFrames are immutable).
 
 	Rig = { Names, Motors, Base, Written, Count }: one entry per joint found
-	(MoveConfig.Joints order). Layer = { Pose, Weight, Override }.
+	(MoveConfig.Joints order). Layer = { Pose, Weight, Override, Mask? }:
+	joints in Mask are left alone by that layer (the arms while the blaster
+	fires: MoveRules.maskArms).
 ]]
 
 local MoveConfig = require(script.Parent.Parent.Config.MoveConfig)
@@ -33,7 +35,17 @@ export type Layer = {
 	Pose: { [string]: CFrame },
 	Weight: number,
 	Override: { [string]: boolean },
+	Mask: { [string]: boolean }?,
 }
+
+-- does this layer move this joint now?
+local function moves(layer: Layer, name: string): boolean
+	if layer.Weight <= 0 or not layer.Pose[name] then
+		return false
+	end
+	local mask = layer.Mask
+	return not (mask and mask[name])
+end
 
 local MoveRig = {}
 
@@ -88,8 +100,7 @@ function MoveRig.step(rig: Rig, layers: { Layer }, count: number)
 		local name = names[i]
 		local touched = false
 		for l = 1, count do
-			local layer = layers[l]
-			if layer.Weight > 0 and layer.Pose[name] then
+			if moves(layers[l], name) then
 				touched = true
 				break
 			end
@@ -104,9 +115,8 @@ function MoveRig.step(rig: Rig, layers: { Layer }, count: number)
 				local result = base
 				for l = 1, count do
 					local layer = layers[l]
-					local pose = layer.Pose[name]
-					if pose and layer.Weight > 0 then
-						result = MoveMath.layer(result, pose, layer.Weight, layer.Override[name] == true)
+					if moves(layer, name) then
+						result = MoveMath.layer(result, layer.Pose[name], layer.Weight, layer.Override[name] == true)
 					end
 				end
 				bases[i] = base
