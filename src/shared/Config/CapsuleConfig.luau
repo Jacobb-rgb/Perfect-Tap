@@ -104,7 +104,7 @@ end
 CapsuleConfig.List = {
 	{
 		Id = "Stone",
-		Name = "Stone Capsule",
+		Name = "Stone Egg",
 		Currency = "Coins",
 		Price = 2500,
 		LuckyFrom = "Rare",
@@ -130,7 +130,7 @@ CapsuleConfig.List = {
 	},
 	{
 		Id = "Crystal",
-		Name = "Crystal Capsule",
+		Name = "Crystal Egg",
 		Currency = "Coins",
 		Price = 750000,
 		LuckyFrom = "Epic",
@@ -156,7 +156,7 @@ CapsuleConfig.List = {
 	},
 	{
 		Id = "Royal",
-		Name = "Royal Capsule",
+		Name = "Royal Egg",
 		Currency = "Robux",
 		Products = { [1] = "RoyalCapsule1", [3] = "RoyalCapsule3", [5] = "RoyalCapsule5", [10] = "RoyalCapsule10" }, -- (x5: the Store)
 		LuckyFrom = "Legendary",

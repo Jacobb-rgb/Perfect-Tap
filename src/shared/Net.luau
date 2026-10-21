@@ -190,6 +190,12 @@ Net.Events = {
 	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
 	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
 	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
+	QuestAction = { Rate = 2, Burst = 4 }, -- daily / weekly quests and the login streak (QuestService,
+	--   QuestConfig): ("Claim", { Kind = "Daily", Index = 1..QuestConfig.DailyCount, Day? } |
+	--   { Kind = "Weekly", Week? }) a finished quest's reward (Day / Week: the number the
+	--   client saw, another one is "Stale") | ("Streak") today's login streak day. Every
+	--   request read gets an ActionResult { Action = "Quest", Op, Ok, Reason?, Index? };
+	--   a reward also gets QuestReward ("InventoryFull": day 7's capsule waits for room)
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
@@ -279,6 +285,11 @@ Net.Events = {
 	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
 	--   shards: ArtifactAction "Restore", no rock) }
 	ArtifactFound = false,
+	-- a quest or streak reward paid: { Kind: "Daily" | "Weekly" | "Streak", Index?, Day? (streak
+	--   day 1..7), Coins?, Shards?, Boost?, Seconds? (boost seconds really added), Capsule?,
+	--   Golem? { Id, Kind } (the capsule's golem: its CapsuleResult opening follows), Full?
+	--   (the capsule was paid as Coins: no room / restricted) }
+	QuestReward = false,
 	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
 	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
 	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)

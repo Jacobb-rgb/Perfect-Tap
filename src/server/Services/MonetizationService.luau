@@ -94,7 +94,7 @@ MonetizationService.RetryDelay = 2 -- seconds before the 2nd attempt (then x2)
 MonetizationService.RecheckDelay = 60 -- seconds before a pass whose check kept failing is asked again
 MonetizationService.Rechecks = 5 -- such later rounds per load (then: the next load)
 -- the perks the offline payout depends on (PodiumService): passes giving them are checked first
-MonetizationService.OfflinePerks = { "OfflineExtension", "Podiums" }
+MonetizationService.OfflinePerks = { "OfflineExtension", "Podiums", "DoubleMoney" }
 
 local grants: { [string]: Grant } = {}
 local passHandlers: { [string]: PassHandler } = {}

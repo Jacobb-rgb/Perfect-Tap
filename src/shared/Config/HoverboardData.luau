@@ -5,7 +5,9 @@
 
 	- 3 boards for coins, each one faster than the one before.
 	- 2 boards for Robux (49 R$ each): faster than every coin board and with
-	  their own particle / trail effects (owner: "more benefits").
+	  big particle effects and a light trail (owner: "more benefits"); the coin
+	  boards get small thruster effects only, no trail (owner 2026-10-21:
+	  "better effects").
 	- Speed is the Humanoid WalkSpeed while riding (CarryService walks at
 	  BaseWalkSpeed = 18 without a board). One formula for everything,
 	  HoverboardData.walkSpeed (CarryService.updateWalkSpeed uses it): every
@@ -49,7 +51,7 @@ local MonetizationConfig = require(script.Parent.MonetizationConfig)
 local HoverboardData = {}
 
 export type Kind = "Coins" | "Robux"
-export type Effect = "None" | "Comet" | "Phoenix"
+export type Effect = "None" | "Sparks" | "Vents" | "Lava" | "Comet" | "Phoenix"
 
 export type Colors = {
 	Main: Color3, -- the deck / body
@@ -109,7 +111,7 @@ HoverboardData.List = {
 		Price = HoverboardData.priceFrom(3, 2.5), -- right after blaster 3 (floor 2)
 		Speed = 23,
 		IgnoresCarrySlow = false,
-		Effect = "None",
+		Effect = "Sparks",
 		Colors = {
 			Main = rgb(170, 112, 66), -- planks
 			Trim = rgb(206, 116, 60), -- copper bolts, caps, thruster pods
@@ -128,7 +130,7 @@ HoverboardData.List = {
 		Price = HoverboardData.priceFrom(5, 0.8), -- just before blaster 5 (floor 3)
 		Speed = 27,
 		IgnoresCarrySlow = false,
-		Effect = "None",
+		Effect = "Vents",
 		Colors = {
 			Main = rgb(118, 128, 156), -- riveted steel tub
 			Trim = rgb(206, 116, 60), -- copper rim
@@ -147,7 +149,7 @@ HoverboardData.List = {
 		Price = HoverboardData.priceFrom(7, 1), -- a goal past the first hour (balance sim)
 		Speed = 31,
 		IgnoresCarrySlow = false,
-		Effect = "None",
+		Effect = "Lava",
 		Colors = {
 			Main = rgb(44, 38, 52), -- obsidian
 			Trim = rgb(78, 64, 74), -- basalt under-layer
