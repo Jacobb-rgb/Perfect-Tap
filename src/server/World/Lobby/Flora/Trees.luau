@@ -18,6 +18,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
+local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 
 local C = Style.C
 
@@ -121,6 +122,9 @@ Trees.InnerZ = { -60, 40 }
 -- (round 3: no pink in the belts: UPGRADES' and the INN's pink neon own that colour)
 local INNER_KINDS = { Green = 40, Red = 22, Yellow = 16, Orange = 22 }
 Trees.BeltLanternEvery = 16
+-- (2026-10-20) the town-side row leaves a gap round every street lamp, so
+-- no crown hangs through its pole, arm or head
+Trees.LampGap = 6.5
 Trees.BeltLanternColor = C.LampAmber
 
 -- Belt keep-out boxes (world XZ) for the scatter: nothing else crowds the rows.
@@ -226,7 +230,8 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 				local p = Vector3.new(side * row.X, 0, z + rng:range(-0.8, 0.8))
 				local scale = rng:range(row.Scale[1], row.Scale[2])
 				local reach = 3.6 * scale
-				if beltClear(p, 0.5 * scale, if row.Lean then 0.6 else reach, sites) then
+				local lampGap = not row.Lean and StreetLampPlan.near(p, Trees.LampGap)
+				if not lampGap and beltClear(p, 0.5 * scale, if row.Lean then 0.6 else reach, sites) then
 					local kind = rng:weighted(if row.Inner then INNER_KINDS else BELT_KINDS)
 					if side < 0 and p.Z > 60 then
 						kind = if rng:chance(0.5) then "Yellow" else "Orange"
@@ -281,7 +286,8 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 			local foot = Vector3.new(side * 64.3, 0, z)
 			-- (round 2: the west street's lamp posts light the town stretch, Town.street)
 			local street = side < 0 and z > 10
-			if not street and beltClear(foot, 0.5, 0.5, sites) then
+			-- (2026-10-20: the street lamps light the plot roads instead)
+			if not street and not StreetLampPlan.Enabled and beltClear(foot, 0.5, 0.5, sites) then
 				beltLantern(m, foot, 4.6)
 			end
 			z += Trees.BeltLanternEvery
@@ -316,7 +322,10 @@ function Trees.gapCloser(parent: Instance, rng: Rng.Rng): Model
 			Style.tiny()
 		)
 	end
-	beltLantern(m, Trees.GapLamp, 4.6)
+	-- (the west spur's street lamps light the gap since 2026-10-20)
+	if not StreetLampPlan.Enabled then
+		beltLantern(m, Trees.GapLamp, 4.6)
+	end
 	return m
 end
 

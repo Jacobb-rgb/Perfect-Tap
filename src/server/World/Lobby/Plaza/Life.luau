@@ -27,6 +27,7 @@ local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
 local FloraKit = require(script.Parent.Parent.Flora.Kit)
+local StreetLampPlan = require(script.Parent.StreetLampPlan)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -116,6 +117,10 @@ local function usable(index: Meadow.Index, prompts: { Box }, p: Vector3, r: numb
 		if inBox(p, b, Life.PromptClear + r) then
 			return false
 		end
+	end
+	-- (the street lamps are built after the plaza life: keep their spots free)
+	if StreetLampPlan.near(p, r + 2.5) then
+		return false
 	end
 	return Common.offStrips(p, r + 0.5) and not apronHit(p, r) and Meadow.allowed(p, r) and Meadow.free(index, p, r, top)
 end
