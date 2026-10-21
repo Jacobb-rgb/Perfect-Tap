@@ -86,6 +86,7 @@ export type Rig = {
 	Firing: boolean,
 	Root: Vector3?, -- the local player's position (coins fly there)
 	Gravity: number,
+	Rocks: { Model }?, -- the tagged rocks (stand-in for the Rock tag)
 }
 
 -- the fields of GolemController's follower it reads
@@ -147,6 +148,9 @@ local petStates: { [any]: PetState } = setmetatable({}, { __mode = "k" }) :: any
 local equipTimes: { [Player]: { [string]: { number } } } = setmetatable({}, { __mode = "k" }) :: any
 local equipCounts: { [Player]: { [string]: number } } = setmetatable({}, { __mode = "k" }) :: any
 local homing = 0 -- coins alive that fly into the player
+-- the tagged rocks, kept by the Rock tag's added / removed signals (no GetTagged per hit)
+local rockSet: { [Model]: boolean } = {}
+local rockScans = 0 -- how often rockNear ran (tests: only after the cheap checks)
 local rayParams: RaycastParams? = nil
 local includeParams: RaycastParams? = nil
 
@@ -614,7 +618,7 @@ end
 --[[
 	The GolemController hook: the extra pose of one follower this frame, to
 	multiply onto its CFrame. `pet` is GolemController's follower record
-	(read: Kind, Phase, Seed, Floats), `owner` its player, `now` os.clock().
+	that reads Kind, Phase, Seed, Floats; `owner` its player, `now` os.clock().
 	CFrame.identity when there is nothing to add (far golems, Reduce motion).
 ]]
 function WorldMotionController.golemOffset(pet: GolemPet, owner: Player?, now: number, walking: boolean, near: boolean): CFrame
@@ -823,8 +827,42 @@ local function oreColour(rock: Model?, fallback: Color3): Color3
 	return result
 end
 
--- The white flash, its star and the ore cubes at `position` (`back` toward the shooter).
-local function hitAt(position: Vector3, back: Vector3?, colour: Color3, small: boolean)
+-- The cached rock nearest to `position` (within `range`).
+local function rockNear(position: Vector3, range: number): Model?
+	rockScans += 1
+	local best: Model? = nil
+	local bestDistance = range
+	for rock in rockSet do
+		local primary = rock.PrimaryPart
+		if primary then
+			local distance = (primary.CFrame.Position - position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = rock, distance
+			end
+		end
+	end
+	return best
+end
+
+local function addRock(rock: Instance)
+	if rock:IsA("Model") then
+		rockSet[rock] = true
+	end
+end
+
+local function removeRock(rock: Instance)
+	if rock:IsA("Model") then
+		rockSet[rock] = nil
+	end
+end
+
+--[[
+	The white flash, its star and the ore cubes at `position` (`back` toward
+	the shooter). The cheap checks (on screen, in range, the flash cap) come
+	first; only then the rock's colour: `rock` when known, else the nearest
+	cached rock when `search`, else `glow`.
+]]
+local function hitAt(position: Vector3, back: Vector3?, glow: Color3, rock: Model?, search: boolean, small: boolean)
 	if not visible(position, WorldMotionController.HitRange) then
 		return
 	end
@@ -832,6 +870,11 @@ local function hitAt(position: Vector3, back: Vector3?, colour: Color3, small: b
 	if flashes >= caps.Flashes then
 		return
 	end
+	local target = rock
+	if not target and search then
+		target = rockNear(position, 14)
+	end
+	local colour = oreColour(target, glow)
 	local right, up = cameraBasis()
 	local out = if back and back.Magnitude > 0.01 then back.Unit * 0.6 else Vector3.zero
 	spawnBits(Logic.hitPlan({
@@ -923,26 +966,7 @@ function WorldMotionController.onHealthDrop(rock: Model)
 	lastHit[rock] = t
 	local glow = tool and tool:GetAttribute("Glow")
 	local point = beamEnd(rock, from, center)
-	hitAt(point, from - point, oreColour(rock, if typeof(glow) == "Color3" then glow else DEFAULT_ORE), false)
-end
-
--- The tagged rock nearest to `position` (within `range`).
-local function rockNear(position: Vector3, range: number): Model?
-	if rig then
-		return nil
-	end
-	local best: Model? = nil
-	local bestDistance = range
-	for _, rock in CollectionService:GetTagged("Rock") do
-		local primary = if rock:IsA("Model") then rock.PrimaryPart else nil
-		if primary then
-			local distance = (primary.CFrame.Position - position).Magnitude
-			if distance < bestDistance then
-				best, bestDistance = rock :: Model, distance
-			end
-		end
-	end
-	return best
+	hitAt(point, from - point, if typeof(glow) == "Color3" then glow else DEFAULT_ORE, rock, false, false)
 end
 
 local function shooterPosition(shooter: any): Vector3?
@@ -973,7 +997,7 @@ function WorldMotionController.onFx(kind: any, a: any, b: any, _stage: any, d: a
 		lastHit[key] = t
 		local glow = if typeof(b) == "Color3" then b else DEFAULT_ORE
 		local from = shooterPosition(d)
-		hitAt(a, if from then from - a else nil, oreColour(rockNear(a, 14), glow), true)
+		hitAt(a, if from then from - a else nil, glow, nil, true, true)
 	elseif kind == "NodeCrack" or kind == "NodeShatter" then
 		noteDrop(a, if typeof(b) == "Color3" then b else nil)
 	end
@@ -1015,7 +1039,21 @@ end
 -- Tests and previews: a rig instead of the camera, the device and the clock (nil = the real ones).
 function WorldMotionController.useRig(value: Rig?)
 	rig = value
+	table.clear(rockSet)
 	if value then
+		-- idle pooled parts move into the rig's folder
+		for _, pool in pools do
+			for _, item in pool.Idle do
+				local part: BasePart = item
+				part.Parent = value.Folder
+			end
+		end
+		local rocks = value.Rocks
+		if rocks then
+			for _, rock in rocks do
+				addRock(rock)
+			end
+		end
 		refreshCaps()
 	else
 		-- back to the real device (read again on the next effect)
@@ -1030,13 +1068,13 @@ function WorldMotionController.step(dt: number)
 	step(dt)
 end
 
--- Live counts: (bits, pops, flashes, parts made by the pools).
-function WorldMotionController.stats(): (number, number, number, number)
+-- Live counts: (bits, pops, flashes, parts made by the pools, rock scans so far).
+function WorldMotionController.stats(): (number, number, number, number, number)
 	local made = 0
 	for _, pool in pools do
 		made += pool.Made
 	end
-	return #live, #pops, flashes, made
+	return #live, #pops, flashes, made, rockScans
 end
 
 local function track(owner: Player)
@@ -1055,6 +1093,20 @@ end
 
 function WorldMotionController.start()
 	refreshCaps()
+	-- the rocks (other players' hits take their crystal colour from the nearest one)
+	for _, rock in CollectionService:GetTagged("Rock") do
+		addRock(rock)
+	end
+	CollectionService:GetInstanceAddedSignal("Rock"):Connect(addRock)
+	CollectionService:GetInstanceRemovedSignal("Rock"):Connect(removeRock)
+	-- the SETTINGS Reduce motion toggle applies at once (not only on the next once-a-second read)
+	reduceMotion()
+	local settings = settingsModule
+	if settings and type(settings.onChanged) == "function" then
+		settings.onChanged(function()
+			reduceAt = -math.huge
+		end)
+	end
 	for _, p in Players:GetPlayers() do
 		track(p)
 	end

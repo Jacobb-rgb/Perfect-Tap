@@ -590,6 +590,94 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("WorldMotionController: other players' hits look up the rock only after the cheap checks (range, flash cap)", function()
+		local Players = Loader.game:GetService("Players")
+		local hadLocal = rawget(Players, "LocalPlayer")
+		rawset(Players, "LocalPlayer", { Name = "Me", UserId = 1 })
+		local ok, err = pcall(function()
+			local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.WorldMotionController")
+			local RockFxLogic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RockFxLogic")
+			local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+			-- a Deep Hollow rock (azure crystals) next to the hits
+			local rock = Instance.new("Model")
+			local stone = Instance.new("Part")
+			stone.Size = Vector3.new(4, 4, 4)
+			stone.CFrame = CFrame.new(0, 2, 0)
+			stone.Color = MineFloors.get(3).Palette.Mid
+			stone.Parent = rock
+			rock.PrimaryPart = stone
+			rock:SetAttribute("Floor", 3)
+			rock:SetAttribute("Kind", "Big")
+			local crystal = RockFxLogic.colors(3, "Big", stone.Color, Color3.new(1, 1, 1)).Crystal[1]
+			local folder = Instance.new("Folder")
+			local rig = {
+				Folder = folder,
+				Eye = Vector3.new(0, 6, 20),
+				Right = Vector3.new(1, 0, 0),
+				Up = Vector3.new(0, 1, 0),
+				Ground = 0,
+				Clock = 500,
+				Phone = false,
+				Reduce = false,
+				Firing = true,
+				Root = Vector3.new(2, 3, 8),
+				Gravity = 196.2,
+				Rocks = { rock },
+			}
+			Controller.useRig(rig)
+			local function scans(): number
+				return select(5, Controller.stats())
+			end
+			local function run(seconds: number)
+				for _ = 1, math.ceil(seconds * 30) do
+					rig.Clock += 1 / 30
+					Controller.step(1 / 30)
+				end
+			end
+			run(3) -- nothing left over from other tests
+			local before = scans()
+			Controller.onFx("BlastHit", Vector3.new(0, 2, 400), Color3.new(1, 1, 1), 1, { Name = "Far" })
+			T.eq(scans(), before, "a hit out of range never looks up the rock")
+			T.eq(select(3, Controller.stats()), 0, "and shows nothing")
+			Controller.onFx("BlastHit", Vector3.new(0, 2, 2), Color3.new(1, 1, 1), 1, { Name = "Near" })
+			T.eq(scans(), before + 1, "a hit in view looks it up once")
+			local tinted = 0
+			for _, part in folder:GetChildren() do
+				if part.Transparency < 1 and (part.Color == crystal or part.Color == crystal:Lerp(Color3.new(1, 1, 1), 0.3)) then
+					tinted += 1
+				end
+			end
+			T.truthy(tinted >= 1, "its cubes take the rock's crystal colour, not the beam's")
+			for i = 1, Logic.Caps.PC.Flashes do
+				Controller.onFx("BlastHit", Vector3.new(0.1 * i, 2, 2), Color3.new(1, 1, 1), 1, { Name = "Fill" .. i })
+			end
+			T.eq(select(3, Controller.stats()), Logic.Caps.PC.Flashes, "the flash cap is full")
+			local full = scans()
+			Controller.onFx("BlastHit", Vector3.new(0, 2, 2), Color3.new(1, 1, 1), 1, { Name = "Late" })
+			T.eq(scans(), full, "a hit over the flash cap never looks up the rock")
+			run(1)
+			-- your own hit knows its rock: no lookup
+			local own = scans()
+			Controller.onHealthDrop(rock)
+			T.eq(scans(), own, "your own hit uses its rock")
+			T.eq(select(3, Controller.stats()), 1, "and flashes")
+			run(2)
+			Controller.useRig(nil)
+		end)
+		rawset(Players, "LocalPlayer", hadLocal)
+		if not ok then
+			error(err, 0)
+		end
+		-- the SETTINGS Reduce motion toggle (SettingsConfig.ReduceMotion) is what the controller reads first
+		local SettingsConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SettingsConfig")
+		T.eq(SettingsConfig.Defaults.ReduceMotion, false, "the setting exists, off by default")
+		local fs = require("@lune/fs")
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/WorldMotionController.luau")
+		T.truthy(string.find(source, "settings.get() :: any).ReduceMotion", 1, true) ~= nil, "reads SettingsController.get().ReduceMotion")
+		local _, tagged = string.gsub(source, 'GetTagged%("Rock"%)', "")
+		T.eq(tagged, 1, "the rock list is read once at start, then kept by the tag signals")
+	end)
+
 	T.test("WorldMotionController: the GolemController hook is one call per follower and the controller is in the client ORDER", function()
 		local fs = require("@lune/fs")
 		local golem = fs.readFile(Loader.root .. "/src/client/Controllers/GolemController.luau")

@@ -291,7 +291,7 @@ end
 
 --[[
 	The extra pose of a follower golem on top of GolemController's own walk:
-	(lift studs, pitch, yaw, roll radians). `phase` is its hop phase (one hop
+	as lift studs, pitch, yaw, roll radians. `phase` is its hop phase (one hop
 	per pi), `celebrate` the seconds since its happy jump began (nil = none).
 	Far golems (not `near`) and Reduce motion get nothing but the jump.
 ]]
