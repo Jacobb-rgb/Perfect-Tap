@@ -877,7 +877,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}
 end
 
--- The side menu's IconNames (SideMenuView.Icons keys) -> 3D icon + colour role.
+-- The side menu's IconNames (SideMenuView.Entries) -> 3D icon + colour role.
 HudBubble.EntryLooks = {
 	Golems = { Icon = "golem_GildedPorter", Role = "Golems" },
 	Shop = { Icon = "clover", Role = "Boosts" }, -- the luck boosts (the Robux STORE is the green Shop pill)
@@ -887,7 +887,7 @@ HudBubble.EntryLooks = {
 	Settings = { Icon = "cog", Role = "Settings" },
 	Store = { Icon = "coins", Role = "Shop" },
 	Elevator = { Icon = "lift", Role = "Base" },
-	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: the emoji stands in)
+	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: empty until uploaded, the label shows)
 	Wheel = { Icon = "wheel", Role = "Wheel" },
 	Gear = { Icon = "helmet", Role = "Gear" },
 	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE

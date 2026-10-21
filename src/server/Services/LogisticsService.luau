@@ -24,7 +24,7 @@
 	  else one step on, wrapping around) saves the next one in C.
 	- Attributes: Queue, QueueMax, Working, Cycles, LastSide (-1 / 1, the
 	  side the last item left), Status; the Sorter also Threshold (its Rarity
-	  Order) and Detail ("Rare+ ▶ right", the billboard line). A blocked
+	  Order) and Detail ("Rare+ → right", the billboard line). A blocked
 	  side shows its reason at once; it clears when the queue empties or the
 	  next item leaves too (MachineService.outputFlowed), never in between.
 	  When the first side is blocked and the other takes the item, nothing
@@ -193,10 +193,10 @@ function LogisticsService.threshold(machine: PlacedMachine): number
 	return LogisticsService.DefaultThreshold
 end
 
--- The billboard line of a threshold: "Rare+ ▶ right".
+-- The billboard line of a threshold: "Rare+ → right".
 function LogisticsService.sorterText(order: number): string
 	local info = rarityAt(order) or Rarity.get("Rare")
-	return `{info.Name}+ ▶ right`
+	return `{info.Name}+ → right`
 end
 
 -- The threshold after one SorterCycle step (wraps around the rarities).

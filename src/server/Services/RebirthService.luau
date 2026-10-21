@@ -367,7 +367,11 @@ local function grantWeapon(player: Player, data: { [string]: any }, entry: Monet
 		-- the pass holds it from now on
 		data.Stars = RebirthConfig.starsOf(data) + star.Stars
 		passes[star.Id] = true
-		Net.fire("Notify", player, { Text = `You own the {star.Name} pass: your ⭐ {star.Stars} are back!`, Kind = "Reward" })
+		Net.fire(
+			"Notify",
+			player,
+			{ Text = `You own the {star.Name} pass: you get {RebirthConfig.starsText(star.Stars)} back!`, Kind = "Reward" }
+		)
 		return true
 	end
 	owned[star.Id] = true

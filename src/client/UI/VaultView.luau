@@ -693,7 +693,21 @@ local function buildTile(parent: Instance, index: number): Tile
 	}, face)
 	corner(check, 14)
 	stroke(check, 2.5)
-	text(check, "✓", 18, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 11 })
+	-- the tick, drawn from two white bars (no glyph: the owner's "text only", NoEmoji.spec):
+	-- { centre x, centre y, length, rotation } in the 28 x 28 badge
+	for i, arm in { { 10.5, 16.5, 8, 45 }, { 16.5, 14, 14, -50 } } do
+		local bar = UIKit.new("Frame", {
+			Name = "Tick" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = S.White,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(arm[1], arm[2]),
+			Size = UDim2.fromOffset(arm[3], 4),
+			Rotation = arm[4],
+			ZIndex = 11,
+		}, check)
+		corner(bar, 2)
+	end
 	-- the texts
 	local name = ink(face, "", 17, {
 		Name = "BlasterName",
