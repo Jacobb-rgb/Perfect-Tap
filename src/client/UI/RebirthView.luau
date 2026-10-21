@@ -417,7 +417,7 @@ end
 	look of the Robux Shop (UI/Pop; owner 2026-10-21: "new, modern,
 	colourful, clean items, Roblox style"): an indigo header band (the
 	window's colour) with shine stripes and studs over a dark studded body
-	(popFrame: MenuPanel's frame without the LightSkin, the same refs), the
+	(MenuPanel's Pop frame without the LightSkin, the same refs), the
 	tabs as Pop tabs, YOU LOSE / KEEP / GET as painted red / blue / green
 	cards, the star shop's and the blasters' cards bright and painted (the
 	live gun in a light burst), the green Robux buttons with the robux
@@ -603,154 +603,6 @@ local function syncRobux(button: TextButton)
 		Size = UDim2.fromOffset(Pop.textWidth(amount, size), size + 6),
 		ZIndex = 6,
 	})
-end
-
---[[
-	MenuPanel's frame (the same refs and layout) in the Pop look, without the
-	LightSkin (it would recolour the Pop faces): the panel a black frame
-	round a dark studded body, the indigo header band, the white title with
-	its shadow, the red X.
-]]
-local function popFrame(title: string, subtitle: string): MenuPanel.Refs
-	local gui = UIKit.screen("TerraForgeRebirth", 16)
-	gui.Enabled = false
-	gui:SetAttribute("TerraForge", true)
-	gui:SetAttribute("PopSkin", true)
-	local panel = UIKit.panel(gui, {
-		Name = "Panel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(600, 480),
-		Active = true,
-		-- a gamepad selection never wanders out to the HUD
-		SelectionGroup = true,
-		SelectionBehaviorUp = Enum.SelectionBehavior.Stop,
-		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
-		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
-		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
-	})
-	panel.BackgroundColor3 = Color3.new(1, 1, 1)
-	local bodyPaint = panel:FindFirstChildOfClass("UIGradient")
-	if bodyPaint then
-		bodyPaint.Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom)
-	end
-	local outline = panel:FindFirstChildOfClass("UIStroke")
-	if outline then
-		outline.Color = PopTheme.Outline
-		outline.Thickness = 4
-	end
-	local round = panel:FindFirstChildOfClass("UICorner")
-	if round then
-		round.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
-	end
-	Pop.studs(panel, PopTheme.WindowCorner, 0.5, 36, 1)
-	local band = UIKit.new("Frame", {
-		Name = "PopHeader",
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(4, 4),
-		Size = UDim2.new(1, -8, 0, 62),
-		ClipsDescendants = true,
-		ZIndex = 2,
-	}, panel)
-	Pop.face(band, RebirthView.PopPaint, 6, false)
-	local bandBorder = band:FindFirstChild("Border") :: UIStroke?
-	if bandBorder then
-		bandBorder.Thickness = 3
-	end
-	Pop.studs(band, 6, 0.35, 40, 2)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 2,
-	}, band)
-	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
-		UIKit.new("Frame", {
-			Name = "Stripe" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = PopTheme.Stripe,
-			BorderSizePixel = 0,
-			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
-			Rotation = 32,
-			Size = UDim2.new(0, s[2], 2.4, 0),
-			ZIndex = 2,
-		}, band)
-	end
-	local titleLabel = UIKit.label(panel, title, 34, {
-		Name = "Title",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		ZIndex = 4,
-	})
-	popText(titleLabel)
-	Pop.shadow(titleLabel).ZIndex = 3
-	local subtitleLabel = UIKit.label(panel, subtitle, 16, {
-		Name = "Subtitle",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ZIndex = 4,
-	})
-	popText(subtitleLabel)
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
-		Name = "Close",
-		AnchorPoint = Vector2.new(1, 0),
-		TextSize = 26,
-	})
-	MenuPanel.holderOf(close).ZIndex = 4
-	popButton(close, PopTheme.Close)
-	close.FontFace = PopTheme.Heavy
-	local glyph = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 2, 1, -2),
-		Size = UDim2.fromOffset(30, 30),
-		ZIndex = 5,
-		Visible = false,
-	}, MenuPanel.holderOf(close))
-	local body = UIKit.new("Frame", {
-		Name = "Body",
-		BackgroundTransparency = 1,
-		ZIndex = 4,
-	}, panel)
-	local hint = UIKit.label(panel, "", 15, {
-		Name = "Hint",
-		AnchorPoint = Vector2.new(0.5, 1),
-		TextWrapped = false,
-		ZIndex = 4,
-	})
-	popText(hint)
-	local padHint = UIKit.new("Frame", {
-		Name = "PadHint",
-		AnchorPoint = Vector2.new(0.5, 1),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 4,
-	}, panel)
-	UIKit.list(padHint, Enum.FillDirection.Horizontal, 6, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-	local refs: MenuPanel.Refs = {
-		Gui = gui,
-		Panel = panel,
-		Title = titleLabel,
-		Subtitle = subtitleLabel,
-		Close = close,
-		CloseGlyph = glyph,
-		Body = body,
-		Hint = hint,
-		PadHint = padHint,
-		Compact = false,
-		PadMode = false,
-	}
-	MenuPanel.layout(refs, false, 600, 480, math.huge, math.huge)
-	TouchControls.follow(gui)
-	return refs
 end
 
 local function isPop(refs: Refs): boolean
@@ -987,7 +839,8 @@ end
 
 function RebirthView.build(): Refs
 	local title, subtitle = "STAR FORGE", "Rebirth: start over with your factory and earn Forge Stars"
-	local frame = if UIConfig.lightUI() then popFrame(title, subtitle) else MenuPanel.build("TerraForgeRebirth", title, subtitle)
+	-- (the light UI: MenuPanel's Pop frame without the LightSkin, which would recolour the Pop faces)
+	local frame = MenuPanel.build("TerraForgeRebirth", title, subtitle, nil, UIConfig.lightUI())
 	local body = frame.Body
 	local tabs: { [string]: TextButton } = {}
 	tabs.Rebirth = chunky(body, "REBIRTH", RebirthView.Colors.Rebirth, RebirthView.Colors.RebirthDark, "TabRebirth")
