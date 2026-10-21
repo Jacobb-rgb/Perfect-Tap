@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 3, -- Data/Migrations brings older saves up to this
+	Version = 4, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent

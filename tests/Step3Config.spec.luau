@@ -821,7 +821,9 @@ return function(T, Loader)
 	end)
 
 	T.test("Step 3: new save fields", function()
-		T.eq(DataTemplate.Version, 3, "no version bump: reconcile fills the records")
+		-- step 3 bumped no version (reconcile fills the records in); 4 is the bigger
+		-- plots' grid move (Migrations), which an old save needs once
+		T.eq(DataTemplate.Version, 4, "no step 3 bump: reconcile fills the records")
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")
 		T.eq(type(DataTemplate.KeepList), "table")

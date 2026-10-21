@@ -1706,7 +1706,9 @@ return function(T, Loader)
 	end)
 
 	T.test("Step67: the new save records", function()
-		T.eq(DataTemplate.Version, 3, "still version 3")
+		-- steps 6-7 bumped no version (reconcile fills the records in); 4 is the
+		-- bigger plots' grid move (Migrations)
+		T.eq(DataTemplate.Version, 4, "no steps 6-7 bump: version 4 is the grid move")
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
 		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")
 		for _, lineId in GearConfig.LineIds do

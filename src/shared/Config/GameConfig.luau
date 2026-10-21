@@ -5,7 +5,7 @@
 export type DevKitEntry = { Id: string, X: number, Z: number, R: number }
 export type DevKit = { Layout: { DevKitEntry }, Inventory: { [string]: number } }
 
-local PLOT_CELLS = 12 -- the build grid's cells per side (kept even, see GRID_SHIFT)
+local PLOT_CELLS = 16 -- the build grid's cells per side (kept even, see GRID_SHIFT; 12 until save Version 4)
 local CELL_SIZE = 4 -- studs per grid cell
 
 -- A bigger grid than the 12-cell one (docs: build/reviews/bigger_plots_plan.md) grows by
