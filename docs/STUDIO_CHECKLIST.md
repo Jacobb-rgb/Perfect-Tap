@@ -126,7 +126,15 @@ command bar.
 4. On the server window: View → Script Performance (or the MicroProfiler, Ctrl+F6): no script stays red.
 5. Send the numbers to Claude: they go into docs/SERVER_PERF_AUDIT.md (today's numbers there are estimates).
 
-### L. Prompts on E, Grab on F, the stock Roblox prompt (owner 2026-10-20)
+### L. The wilds (nature on the green places)
+1. Walk the lawns at the island's edges and the green mountain terraces: groups of pebbles, mossy rocks, tall
+   grass, flowers, berry and blossom bushes, ferns, stumps, logs and mushrooms. You walk straight through them.
+2. Find the five secrets: a lost miner's camp (south-west lawn), a buried chest (west end of the strip by the
+   quarry), a fossil in the dirt (south-east lawn), a fairy ring (east mountain terrace by the sea) and a Kaldrum
+   rune stone (terrace above DEPTHS). They are decoration only (no reward yet).
+3. Phone: the lobby still runs smoothly (about 790 more small parts, no lights).
+
+### M. Prompts on E, Grab on F, the stock Roblox prompt (owner 2026-10-20)
 1. PC: every prompt (the shops, the Sell counter, the vault, the wheel chest, the codex, machines, the pen, the
    podiums, the elevator) shows Roblox's own grey prompt and opens with **E**. Controller: the same prompts on **Y**.
 2. The Mine Station: Load Train (E), Send Train (G) and Train (T) stand one under the other, never on top of each
