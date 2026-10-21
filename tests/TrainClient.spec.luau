@@ -7,7 +7,10 @@
 -- the Foundry, couplers, the waiting train under the station chute (parked
 -- before loading opens), trip payloads (Waiting, late unloads) and snapshots
 -- (also in the order the server really sends them), the HUD chip's state
--- text, the upgrade rows, the view's children, the prompt slots against
+-- text, the upgrade rows, presses ahead of the server (SEND "Leaving…" and
+-- no unlock from a stale snapshot, the TrainTrip filling the trip bar,
+-- clicked levels and a double click that buys two, the click budget), the
+-- view's children, the prompt slots against
 -- TrainService's real prompts and the phone layouts (every touch target
 -- >= 44 pt, names readable on narrow phones, the coins and the carry bar
 -- never cut by the panel).
@@ -23,6 +26,7 @@ return function(T, Loader)
 	local TrainBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.TrainBuilder")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
+	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local TrainController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.TrainController")
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 
@@ -195,9 +199,13 @@ return function(T, Loader)
 		near(p.Position, start + RAIL, 1e-6, "starts with its first wagon on QuarryStop")
 		T.near(p.Speed, 0, 1e-9, "starts from rest")
 		near(p.Facing, dir, 1e-6, "faces the west portal")
-		-- halfway through the quarry leg: a quarter of the way (ease in)
+		-- halfway through the quarry leg: it pulled away within DepartRamp and runs steady since,
+		-- so it is past halfway (pullAway: steady speed = length / (seconds - ramp / 3))
+		local ramp = math.min(TrainController.DepartRamp, s.Quarry / 2)
 		p = TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + s.Quarry / 2)
-		T.near((p.Position - (start + RAIL)).Magnitude, quarryLength * 0.25, 1e-4, "eased in")
+		local expected = quarryLength * (s.Quarry / 2 - ramp / 3) / (s.Quarry - ramp / 3)
+		T.near((p.Position - (start + RAIL)).Magnitude, expected, 1e-4, "pulled away, then steady")
+		T.near(p.Speed, quarryLength / (s.Quarry - ramp / 3), 1e-4, "at its steady speed")
 		-- underground: hidden
 		p = TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + (s.Quarry + s.Underground) / 2)
 		T.eq(p.Leg, "Underground")
@@ -278,6 +286,58 @@ return function(T, Loader)
 				end
 				last = p
 				t += dt
+			end
+		end
+	end)
+
+	T.test("TrainClient: a leaving train pulls away at once and still reaches the tunnel on time", function()
+		-- pullAway: from rest to a steady speed within the ramp, the whole length at the end
+		local seconds, length, ramp = 4.5, 70, TrainController.DepartRamp
+		local d0, v0 = TrainController.pullAway(0, seconds, length, ramp)
+		T.eq(d0, 0, "starts where it stood")
+		T.eq(v0, 0, "from rest")
+		local cruise = length / (seconds - ramp / 3)
+		local _, atRamp = TrainController.pullAway(ramp, seconds, length, ramp)
+		T.near(atRamp, cruise, 1e-9, "steady once the ramp is over")
+		local _, later = TrainController.pullAway(seconds * 0.8, seconds, length, ramp)
+		T.near(later, cruise, 1e-9, "and stays steady")
+		T.near(TrainController.pullAway(seconds, seconds, length, ramp), length, 1e-9, "the whole run at the end")
+		T.near(TrainController.pullAway(seconds + 3, seconds, length, ramp), length, 1e-9, "clamped after it")
+		T.eq(TrainController.pullAway(-1, seconds, length, ramp), 0, "clamped before it")
+		-- the speed is the slope of the distance (and never jumps at the end of the ramp)
+		for _, t in { 0.1, 0.3, ramp - 1e-3, ramp + 1e-3, 2, 4 } do
+			local a = TrainController.pullAway(t - 1e-5, seconds, length, ramp)
+			local b = TrainController.pullAway(t + 1e-5, seconds, length, ramp)
+			local _, speed = TrainController.pullAway(t, seconds, length, ramp)
+			T.near((b - a) / 2e-5, speed, 1e-3, `slope at {t}`)
+		end
+		-- a run shorter than two ramps ramps over half of it; no ramp is a steady run
+		local _, half = TrainController.pullAway(0.5, 1, 10, ramp)
+		T.near(half, 10 / (1 - 0.5 / 3), 1e-9, "a short run is steady after half of it")
+		T.near(TrainController.pullAway(0.25, 1, 10, 0), 2.5, 1e-9, "no ramp: steady from the start")
+		-- on every plot and every trip: clearly off within half a second (x^2 managed under 1.6
+		-- studs), at the tunnel when the quarry leg ends, the leg's end time kept
+		local durations = {}
+		for level = 0, TrainConfig.maxLevel(TrainConfig.Speed) do
+			table.insert(durations, TrainConfig.tripSeconds(level, false))
+			table.insert(durations, TrainConfig.tripSeconds(level, true))
+		end
+		table.insert(durations, TrainConfig.MinTripSeconds)
+		for _, plot in WorldLayout.Plots do
+			local start = TrainController.poseAt(plot, DEPART, DEPART + 30, DEPART).Position
+			for _, d in durations do
+				local s = TrainController.legSpans(d)
+				local label = `plot {plot.Id} {d} s`
+				local half = TrainController.poseAt(plot, DEPART, DEPART + d, DEPART + 0.5)
+				T.eq(half.Leg, "Quarry", label)
+				T.le(4.9, (half.Position - start).Magnitude, label .. ": ~5 studs in the first 0.5 s")
+				local second = TrainController.poseAt(plot, DEPART, DEPART + d, DEPART + 1)
+				T.le(12, (second.Position - start).Magnitude, label .. ": well off after 1 s")
+				local edge = TrainController.poseAt(plot, DEPART, DEPART + d, DEPART + s.Quarry - 1e-4)
+				local inside = TrainController.poseAt(plot, DEPART, DEPART + d, DEPART + s.Quarry + 1e-4)
+				T.eq(edge.Leg, "Quarry", label)
+				T.eq(inside.Leg, "Underground", label)
+				near(edge.Position, inside.Position, 0.02, label .. ": in the tunnel when the leg ends")
 			end
 		end
 	end)
@@ -1399,6 +1459,206 @@ return function(T, Loader)
 		local express = TrainView.read({ CapacityLevel = 0, SpeedLevel = 0, Express = true })
 		T.eq(TrainView.upgrade(express, "Capacity", 0).Detail, "Cargo 12 → 18")
 		T.eq(TrainView.upgrade(express, "Speed", 0).Detail, "Trip 15 s → 12.5 s")
+	end)
+
+	---------------------------------------------------------------- presses ahead of the server
+
+	T.test("TrainClient: SEND says Leaving… at once; a stale snapshot never unlocks it", function()
+		local now, clock = 5000, 100
+		-- the cargo at the station (the last trip long done)
+		local parked = TrainView.read({ Cargo = 6, Capacity = 8, AutoDepartIn = 18, DepartAt = now - 90, ArriveAt = now - 60 })
+		local before, none = TrainController.sendStatus(parked, nil, clock, now, nil)
+		T.eq(before.Phase, "Loading")
+		T.truthy(before.CanSend)
+		T.eq(none, nil)
+		local press = { At = clock, Server = now, Count = 6 }
+		-- right after the press: the snapshot still has the cargo at the station (it left the
+		-- server before the press got there), the chip already says Leaving…
+		local leaving, kept = TrainController.sendStatus(parked, press, clock + 0.1, now + 0.1, nil)
+		T.eq(kept, press, "the press still counts")
+		T.eq(leaving.Line, TrainController.LeavingLine)
+		T.eq(leaving.Phase, "Moving", "SEND again says it is on its way")
+		T.eq(leaving.Title, "TRAIN 6/8")
+		T.eq(leaving.Unit, "ore on the way")
+		T.eq(leaving.Progress, 0, "the trip bar at its start")
+		T.near(leaving.Fill, 0.75, 1e-9)
+		T.falsy(leaving.CanSend, "no second SEND")
+		-- that stale snapshot neither unlocks SEND nor ends Leaving…
+		T.falsy(TrainController.sendShown(parked, press), "stale: the cargo is still at the station")
+		T.falsy(TrainController.sendShown(parked, nil))
+		T.falsy(
+			TrainController.sendShown(TrainView.read({ Cargo = 2, Capacity = 8, DepartAt = now - 40, ArriveAt = now - 10 }), press),
+			"an old trip"
+		)
+		-- snapshots that show the send
+		local away = TrainView.read({ Cargo = 0, Capacity = 8, Moving = 6, DepartAt = now + 0.05, ArriveAt = now + 30.05 })
+		T.truthy(TrainController.sendShown(away, press), "on its way")
+		local after, gone = TrainController.sendStatus(away, press, clock + 0.2, now + 0.2, nil)
+		T.eq(gone, nil, "the press is over")
+		T.eq(after.Phase, "Moving")
+		T.eq(after.Line, "On its way 0:30")
+		T.truthy(TrainController.sendShown(TrainView.read({ Cargo = 0, Capacity = 8 }), press), "the cargo left")
+		T.truthy(TrainController.sendShown(TrainView.read({ Cargo = 3, Capacity = 8, Moving = 3, Waiting = true }), press), "waiting")
+		local departed = TrainView.read({ Cargo = 2, Capacity = 8, DepartAt = now + 0.1, ArriveAt = now + 30 })
+		T.truthy(TrainController.sendShown(departed, press), "departed at or after the press")
+		T.falsy(TrainController.sendShown(departed, nil), "(that one needs the press)")
+		-- no snapshot ever shows it (refused, dropped): back to the snapshot after SendPendingSeconds
+		local still = TrainController.sendStatus(parked, press, clock + TrainController.SendPendingSeconds - 0.01, now + 1.99, nil)
+		T.eq(still.Line, TrainController.LeavingLine, "still leaving")
+		local back, over = TrainController.sendStatus(parked, press, clock + TrainController.SendPendingSeconds, now + 2, nil)
+		T.eq(over, nil, "given up")
+		T.eq(back.Phase, "Loading", "the snapshot again")
+		T.truthy(back.CanSend)
+		-- a clock that went back (a junk press) is dropped too
+		T.eq(select(2, TrainController.sendStatus(parked, press, clock - 1, now, nil)), nil)
+	end)
+
+	T.test("TrainClient: your TrainTrip fills in the trip bar before the State push", function()
+		local now = 5000
+		local parked =
+			TrainView.read({ Cargo = 6, Capacity = 8, AutoDepartIn = 10, DepartAt = now - 90, ArriveAt = now - 60, CapacityLevel = 1 })
+		local trip = TrainController.parseTrip({
+			UserId = 1,
+			PlotId = 3,
+			DepartAt = now - 0.1,
+			ArriveAt = now + 29.9,
+			Count = 6,
+			Color = RED,
+			Load = {},
+		})
+		local filled = TrainController.tripSnapshot(parked, trip, now)
+		T.truthy(filled, "a new departure")
+		T.eq(filled.Moving, 6, "the ore on board")
+		T.eq(filled.Cargo, 0, "the station cargo left with it")
+		T.eq(filled.DepartAt, trip.DepartAt)
+		T.eq(filled.ArriveAt, trip.ArriveAt)
+		T.eq(filled.AutoDepartIn, nil)
+		T.eq(filled.CapacityLevel, 1, "the rest stays")
+		T.eq(parked.Cargo, 6, "a copy: the snapshot is not changed")
+		local chip = TrainView.status(filled, now, nil)
+		T.eq(chip.Phase, "Moving")
+		T.eq(chip.Title, "TRAIN 6/8")
+		T.near(chip.Progress, 0.1 / 30, 1e-9, "the trip bar runs from the departure")
+		T.truthy(TrainController.sendShown(filled, { At = 0, Server = now - 0.2, Count = 6 }), "it ends Leaving…")
+		-- nothing to fill in
+		T.eq(TrainController.tripSnapshot(filled, trip, now), nil, "the snapshot has it")
+		local waiting = table.clone(trip)
+		waiting.Waiting = true
+		T.eq(TrainController.tripSnapshot(parked, waiting, now), nil, "a Waiting announcement")
+		local old = TrainController.parseTrip({ UserId = 1, PlotId = 3, DepartAt = now - 90, ArriveAt = now - 60, Count = 6 })
+		T.eq(TrainController.tripSnapshot(parked, old, now), nil, "the trip the snapshot knows")
+		T.eq(TrainController.tripSnapshot(parked, trip, trip.ArriveAt), nil, "already arrived")
+		local standing = TrainView.read({ Cargo = 0, Capacity = 8, Moving = 6, DepartAt = now - 90, ArriveAt = now - 60, Waiting = true })
+		T.eq(TrainController.tripSnapshot(standing, trip, now), nil, "the ore is still on board (a late unload)")
+		-- the first trip of a session (no DepartAt yet)
+		T.truthy(TrainController.tripSnapshot(TrainView.read({ Cargo = 6, Capacity = 8 }), trip, now), "the first trip")
+	end)
+
+	T.test("TrainClient: BUY shows its level at once and a double click buys one level", function()
+		local train = TrainView.read({ Capacity = 8, CapacityLevel = 0, SpeedLevel = 0 })
+		local buys: any = { Capacity = {}, Speed = {} }
+		local p1 = TrainConfig.nextPrice(TrainConfig.Capacity, 0)
+		local p2 = TrainConfig.nextPrice(TrainConfig.Capacity, 1)
+		local coins = p1 + p2 + 5
+		local clock = 100
+		T.truthy(TrainController.buyOpen(buys, "Capacity", nil, clock), "the first click goes")
+		local info, level = TrainController.buyPlan(train, buys, "Capacity", coins)
+		T.eq(level, 1, "the card's level")
+		T.truthy(info.CanBuy)
+		table.insert(buys.Capacity, { Level = level, Price = info.Price, At = clock })
+		-- the panel at once: the next level, its price and the coins less the first price
+		local shown, spend = TrainController.pendingView(train, buys)
+		T.eq(shown.CapacityLevel, 1)
+		T.eq(spend, p1)
+		T.eq(shown.NextCapacityPrice, p2)
+		T.eq(shown.Capacity, TrainConfig.capacity(1, false))
+		T.eq(TrainView.upgrade(shown, "Capacity", coins - spend).LevelText, "LV 2/6")
+		T.eq(train.CapacityLevel, 0, "the snapshot itself is not changed")
+		T.eq(shown.SpeedLevel, 0, "speed on its own")
+		-- the second click 0.2 s later (a double click, a gamepad bounce): nothing more is bought
+		T.falsy(TrainController.buyOpen(buys, "Capacity", clock, clock + 0.2), "a double click buys one level (SECURITY_AUDIT #7)")
+		T.truthy(TrainController.buyOpen(buys, "Speed", nil, clock + 0.2), "speed counts on its own")
+		local speedInfo, speedLevel = TrainController.buyPlan(train, buys, "Speed", p1)
+		T.eq(speedLevel, 1)
+		T.falsy(speedInfo.CanBuy, "with the coins the capacity click left")
+		-- the snapshot shows the first buy: "BOUGHT!" over, the next click buys level 2
+		local after1 = TrainView.read({ Capacity = 12, CapacityLevel = 1, NextCapacityPrice = p2 })
+		TrainController.pruneBuys(buys, after1, clock + 0.3)
+		T.eq(#buys.Capacity, 0)
+		T.falsy(TrainController.buyOpen(buys, "Capacity", clock, clock + 0.3), "still BOUGHT!")
+		T.truthy(TrainController.buyOpen(buys, "Capacity", clock, clock + TrainController.BoughtSeconds + 0.01), "then a deliberate click")
+		local info2, level2 = TrainController.buyPlan(after1, buys, "Capacity", coins - p1)
+		T.eq(level2, 2, "the level after the first")
+		T.truthy(info2.CanBuy)
+		T.eq(info2.Price, p2)
+		table.insert(buys.Capacity, { Level = level2, Price = info2.Price, At = clock + 1 })
+		-- the second level waits for its own snapshot
+		TrainController.pruneBuys(buys, after1, clock + 1.1)
+		T.eq(#buys.Capacity, 1)
+		shown, spend = TrainController.pendingView(after1, buys)
+		T.eq(shown.CapacityLevel, 2)
+		T.eq(spend, p2)
+		-- after the second: nothing clicked ahead, the snapshot speaks
+		local after2 = TrainView.read({ CapacityLevel = 2 })
+		TrainController.pruneBuys(buys, after2, clock + 1.2)
+		T.eq(#buys.Capacity, 0)
+		shown, spend = TrainController.pendingView(after2, buys)
+		T.eq(shown, after2, "no copy without clicked levels")
+		T.eq(spend, 0)
+		-- no snapshot ever has it: gone after BuyPendingSeconds, with every level clicked after it
+		buys.Speed = { { Level = 1, Price = 3000, At = clock }, { Level = 2, Price = 6000, At = clock + 1.5 } }
+		TrainController.pruneBuys(buys, train, clock + TrainController.BuyPendingSeconds - 0.01)
+		T.eq(#buys.Speed, 2, "still shown")
+		TrainController.pruneBuys(buys, train, clock + TrainController.BuyPendingSeconds)
+		T.eq(#buys.Speed, 0, "the first ran out, the second counted on it")
+		-- refused (TrainResult): that level and the ones clicked after it go
+		buys.Capacity = { { Level = 1, Price = p1, At = clock }, { Level = 2, Price = p2, At = clock } }
+		TrainController.dropBuys(buys.Capacity, 2)
+		T.eq(#buys.Capacity, 1)
+		T.eq(buys.Capacity[1].Level, 1, "the level before it stays")
+		TrainController.dropBuys(buys.Capacity, 1)
+		T.eq(#buys.Capacity, 0)
+		-- the clicked top level: the card says MAX at once
+		local top = TrainConfig.maxLevel(TrainConfig.Capacity)
+		buys.Capacity = { { Level = top, Price = 1, At = clock } }
+		T.truthy(TrainController.buyPlan(TrainView.read({ CapacityLevel = top - 1 }), buys, "Capacity", 1e12).Maxed, "maxed")
+	end)
+
+	T.test("TrainClient: clicks over TrainAction's rate limit are caught here, never dropped by the server", function()
+		local limit = Net.Events.TrainAction
+		T.eq(TrainController.ClickRate, limit.Rate, "the server's rate")
+		T.lt(TrainController.ClickBurst, limit.Burst, "a little under the server's burst")
+		local budget = { Tokens = TrainController.ClickBurst, Last = 0 }
+		local passed = 0
+		for _ = 1, 10 do
+			if TrainController.takeClick(budget, 0) then
+				passed += 1
+			end
+		end
+		T.eq(passed, TrainController.ClickBurst, "a burst, then no more")
+		T.falsy(TrainController.takeClick(budget, 0.1), "too soon")
+		T.truthy(TrainController.takeClick(budget, 0.1 + 1 / limit.Rate), "one more a moment later")
+		-- whatever the pace (a mashing player), the server's bucket takes every click this one lets
+		-- through, even when they reach it a little bunched up
+		local client = { Tokens = TrainController.ClickBurst, Last = 0 }
+		local server = { Tokens = limit.Burst, Last = 0 }
+		local t, sent, dropped = 0, 0, 0
+		for i = 1, 400 do
+			t += ((i * 7919) % 13) / 40 -- 0 .. 0.3 s apart
+			if TrainController.takeClick(client, t) then
+				sent += 1
+				local arrive = t + ((i * 31) % 5) / 100 -- 0 .. 40 ms of jitter on the way
+				server.Tokens = math.min(limit.Burst, server.Tokens + math.max(0, arrive - server.Last) * limit.Rate)
+				server.Last = math.max(server.Last, arrive)
+				if server.Tokens >= 1 then
+					server.Tokens -= 1
+				else
+					dropped += 1
+				end
+			end
+		end
+		T.lt(100, sent, "most clicks go")
+		T.eq(dropped, 0, "the server drops none of them")
 	end)
 
 	T.test("TrainClient: TrainView builds with the right children", function()
