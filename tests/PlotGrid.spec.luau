@@ -7,11 +7,36 @@ return function(T, Loader)
 	local Vector3 = (require("@lune/roblox") :: any).Vector3
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 
 	-- the plan's numbers (build/reviews/bigger_plots_plan.md, option B)
 	local GOLDEN = {
-		[12] = { Half = 24, CenterX = 104, Pitch = 56, SouthZ = 112, CoastShift = 0, SouthShift = 0, Zs = { 84, 28, -28, -84 } },
-		[16] = { Half = 32, CenterX = 112, Pitch = 72, SouthZ = 176, CoastShift = 16, SouthShift = 64, Zs = { 140, 68, -4, -76 } },
+		[12] = {
+			Half = 24,
+			CenterX = 104,
+			Pitch = 56,
+			SouthZ = 112,
+			CoastShift = 0,
+			SouthShift = 0,
+			Zs = { 84, 28, -28, -84 },
+			RailX = 166,
+			SouthPortalZ = 126,
+			BuildRange = 70,
+			OutcropZ = 118,
+		},
+		[16] = {
+			Half = 32,
+			CenterX = 112,
+			Pitch = 72,
+			SouthZ = 176,
+			CoastShift = 16,
+			SouthShift = 64,
+			Zs = { 140, 68, -4, -76 },
+			RailX = 182,
+			SouthPortalZ = 182,
+			BuildRange = 78,
+			OutcropZ = 182,
+		},
 	}
 
 	T.test("plot grid: the derived numbers match the plan for this PlotCells", function()
@@ -44,5 +69,18 @@ return function(T, Loader)
 		-- the town core is untouched
 		T.eq(WorldLayout.Plaza.Center, Vector3.new(0, 0, 0))
 		T.eq(WorldLayout.Quarry.RampFrom, Vector3.new(0, 0, -112))
+		-- the trains, the build range, the surface zones and the south outcrops follow
+		T.eq(TrainConfig.CoastEast[1], Vector3.new(want.RailX, 0, want.SouthPortalZ), "coast line start")
+		T.eq(TrainConfig.CoastWest[1], Vector3.new(-want.RailX, 0, want.SouthPortalZ), "coast line start (west)")
+		T.eq(TrainConfig.SouthPortalZ, want.SouthPortalZ, "south portal")
+		T.eq(GameConfig.BuildRange, want.BuildRange, "build range")
+		for _, id in { "Emberfall", "Outcrops" } do
+			local zone = WorldLayout.ZoneById[id]
+			T.eq(zone.Min, Vector3.new(WorldLayout.Island.Min.X, -6, -122), id .. " zone min")
+			T.eq(zone.Max, Vector3.new(WorldLayout.Island.Max.X, 80, WorldLayout.Island.Max.Z), id .. " zone max")
+		end
+		local spots = WorldLayout.OutcropSpots
+		T.eq(spots[#spots - 1], Vector3.new(-82, 0, want.OutcropZ), "south outcrop (west)")
+		T.eq(spots[#spots], Vector3.new(82, 0, want.OutcropZ), "south outcrop (east)")
 	end)
 end

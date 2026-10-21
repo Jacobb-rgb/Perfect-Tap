@@ -170,12 +170,16 @@ WorldLayout.Caves = {
 	},
 }
 
+-- the surface zones cover the whole island south of the quarry (so they grow with the plots)
+local SURFACE_MIN = Vector3.new(WorldLayout.Island.Min.X, -6, -122)
+local SURFACE_MAX = Vector3.new(WorldLayout.Island.Max.X, 80, WorldLayout.Island.Max.Z)
+
 WorldLayout.Zones = {
 	{
 		Id = "Emberfall",
 		Name = "Emberfall",
-		Min = Vector3.new(-170, -6, -122),
-		Max = Vector3.new(170, 80, 150),
+		Min = SURFACE_MIN,
+		Max = SURFACE_MAX,
 		Lighting = "Surface",
 		FloorY = 0,
 		Ores = {},
@@ -188,8 +192,8 @@ WorldLayout.Zones = {
 		Id = "Outcrops",
 		Name = "Starter Outcrops",
 		-- nodes are placed at fixed spots, see WorldLayout.OutcropSpots
-		Min = Vector3.new(-170, -6, -122),
-		Max = Vector3.new(170, 80, 150),
+		Min = SURFACE_MIN,
+		Max = SURFACE_MAX,
 		Lighting = "Surface",
 		FloorY = 0,
 		Ores = { Coal = 50, Copper = 32, Tin = 18 },
@@ -365,7 +369,8 @@ for _, zone in WorldLayout.Zones do
 	WorldLayout.ZoneById[zone.Id] = zone
 end
 
--- Fixed node spots next to the plot roads so new players find ore fast.
+-- Fixed node spots next to the plot roads so new players find ore fast
+-- (the south pair sits in the south band and moves with it).
 WorldLayout.OutcropSpots = {
 	Vector3.new(-56, 0, 46),
 	Vector3.new(-50, 0, 58),
@@ -375,8 +380,8 @@ WorldLayout.OutcropSpots = {
 	Vector3.new(50, 0, 58),
 	Vector3.new(60, 0, -40),
 	Vector3.new(52, 0, -52),
-	Vector3.new(-82, 0, 118),
-	Vector3.new(82, 0, 118),
+	Vector3.new(-82, 0, 118 + WorldLayout.PlotGrid.SouthShift),
+	Vector3.new(82, 0, 118 + WorldLayout.PlotGrid.SouthShift),
 }
 
 -- Areas where nodes and big decorations must not be placed (paths, ramps, doors).

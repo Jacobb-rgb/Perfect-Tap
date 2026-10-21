@@ -5,14 +5,23 @@
 export type DevKitEntry = { Id: string, X: number, Z: number, R: number }
 export type DevKit = { Layout: { DevKitEntry }, Inventory: { [string]: number } }
 
+local PLOT_CELLS = 12 -- the build grid's cells per side (kept even, see GRID_SHIFT)
+local CELL_SIZE = 4 -- studs per grid cell
+
+-- A bigger grid than the 12-cell one (docs: build/reviews/bigger_plots_plan.md) grows by
+-- GRID_SHIFT cells on each side and by GRID_GROW cells toward the road, so layouts made for
+-- 12 cells keep their place against the back wall (0 and 0 at 12 cells).
+local GRID_SHIFT = (PLOT_CELLS - 12) / 2
+local GRID_GROW = PLOT_CELLS - 12
+
 -- Studio-only test layout (MachineService adds it once, together with the
 -- StarterKit, and only in Studio sessions whose saves live in memory).
 -- Set it to false to switch it off.
 local STUDIO_DEV_KIT: DevKit | false = {
 	Layout = {
-		{ Id = "Crusher", X = 4, Z = 9, R = 0 },
-		{ Id = "AutoCleaner", X = 0, Z = 10, R = 0 },
-		{ Id = "BlastFurnace", X = 7, Z = 8, R = 0 },
+		{ Id = "Crusher", X = 4 + GRID_SHIFT, Z = 9 + GRID_GROW, R = 0 },
+		{ Id = "AutoCleaner", X = 0 + GRID_SHIFT, Z = 10 + GRID_GROW, R = 0 },
+		{ Id = "BlastFurnace", X = 7 + GRID_SHIFT, Z = 8 + GRID_GROW, R = 0 },
 	},
 	Inventory = { Conveyor = 24, ClayFurnace = 1 },
 }
@@ -24,8 +33,8 @@ local GameConfig = {
 
 	-- Players / plots
 	MaxPlayers = 8,
-	PlotCells = 12, -- plot is PlotCells x PlotCells grid cells
-	CellSize = 4, -- studs per grid cell
+	PlotCells = PLOT_CELLS, -- plot is PlotCells x PlotCells grid cells
+	CellSize = CELL_SIZE, -- studs per grid cell
 
 	-- Physical items (performance)
 	MaxLooseItemsPerPlayer = 30, -- loose items per player on bases (machines / chutes stop below it) and, apart, away from bases (rocks stop giving ore)
@@ -60,7 +69,9 @@ local GameConfig = {
 
 	-- Range and anti-cheat
 	MachineUseRange = 14, -- studs from a machine to use its actions
-	BuildRange = 70, -- studs from your plot centre to build
+	-- studs from your plot centre to build: 70 at 12 cells (the far yard corner is ~60 away),
+	-- plus the yard's move out on a bigger grid (half the growth, 78 at 16 cells)
+	BuildRange = 70 + GRID_GROW * CELL_SIZE / 2,
 	AntiTeleportRange = 40, -- an item's owner must be this close for it to enter a machine
 	MaxItemSpeed = 75, -- studs/s an item can plausibly travel after a drop or throw
 	PlausibleSlack = 6, -- extra studs allowed on top of MaxItemSpeed
