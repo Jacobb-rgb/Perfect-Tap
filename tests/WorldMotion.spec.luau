@@ -13,6 +13,7 @@ return function(T, Loader)
 	local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+	local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
 
 	local TAU = math.pi * 2
 	local G = Logic.Golem
@@ -419,6 +420,8 @@ return function(T, Loader)
 	T.test("WorldMotionController: hooks run in Lune on a rig and every part is pooled and parked again", function()
 		local Players = Loader.game:GetService("Players")
 		local hadLocal = rawget(Players, "LocalPlayer")
+		local hadFx, hadGolems = AnimConfig.WorldFx, AnimConfig.GolemMotion
+		AnimConfig.WorldFx, AnimConfig.GolemMotion = true, true -- (built and tested while the owner has it off)
 		local me = { Name = "Me", UserId = 1 }
 		rawset(Players, "LocalPlayer", me)
 		local ok, err = pcall(function()
@@ -585,6 +588,7 @@ return function(T, Loader)
 			Controller.useRig(nil)
 		end)
 		rawset(Players, "LocalPlayer", hadLocal)
+		AnimConfig.WorldFx, AnimConfig.GolemMotion = hadFx, hadGolems
 		if not ok then
 			error(err, 0)
 		end
@@ -593,6 +597,8 @@ return function(T, Loader)
 	T.test("WorldMotionController: other players' hits look up the rock only after the cheap checks (range, flash cap)", function()
 		local Players = Loader.game:GetService("Players")
 		local hadLocal = rawget(Players, "LocalPlayer")
+		local hadFx, hadGolems = AnimConfig.WorldFx, AnimConfig.GolemMotion
+		AnimConfig.WorldFx, AnimConfig.GolemMotion = true, true -- (built and tested while the owner has it off)
 		rawset(Players, "LocalPlayer", { Name = "Me", UserId = 1 })
 		local ok, err = pcall(function()
 			local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.WorldMotionController")
@@ -665,6 +671,7 @@ return function(T, Loader)
 			Controller.useRig(nil)
 		end)
 		rawset(Players, "LocalPlayer", hadLocal)
+		AnimConfig.WorldFx, AnimConfig.GolemMotion = hadFx, hadGolems
 		if not ok then
 			error(err, 0)
 		end

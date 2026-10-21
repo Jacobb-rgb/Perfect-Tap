@@ -11,6 +11,7 @@ return function(T, Loader)
 	local Gait = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.GolemGait")
 	local Logic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.WorldMotionLogic")
 	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+	local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
 
 	local FOLLOWER = 0.85 -- GolemController.FollowerSize
 
@@ -261,6 +262,8 @@ return function(T, Loader)
 	T.test("GolemGait: the controller runs the limbs of near golems and puts the welds back when they go far", function()
 		local Players = Loader.game:GetService("Players")
 		local hadLocal = rawget(Players, "LocalPlayer")
+		local hadGolems = AnimConfig.GolemMotion
+		AnimConfig.GolemMotion = true
 		rawset(Players, "LocalPlayer", { Name = "Me", UserId = 1 })
 		local ok, err = pcall(function()
 			local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.WorldMotionController")
@@ -358,6 +361,7 @@ return function(T, Loader)
 			Controller.useRig(nil)
 		end)
 		rawset(Players, "LocalPlayer", hadLocal)
+		AnimConfig.GolemMotion = hadGolems
 		if not ok then
 			error(err, 0)
 		end

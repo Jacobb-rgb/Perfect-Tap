@@ -847,3 +847,18 @@ What to test in Studio (2 players, R15):
 5. GEM JUGGLE: three gems fly between the hands; they vanish when it stops; 8 jugglers at once stay smooth.
 6. Phone: the EMOTES tile and the cards are easy to tap; the menu fits a small phone.
 7. Carry / throw / recoil / celebrations: nothing happens (switched off), no errors in the output.
+
+## Golems live, world effects off (2026-10-21, branch anim/golems-live)
+The owner said yes to the golems running, not (yet) to the world effects. WorldMotionController reads
+Config/AnimConfig when used:
+- WorldFx = false (ships): init listens to no remote (Fx, Earned), start scans no Rock tag and watches no chunk, every
+  world hook returns at once, no pool is made, the frame loop is never asked for by them, no chunk is ever hidden.
+- GolemMotion = true (ships): the run / fly / idle / equip jump / hops of anim/golem-run. With false: golemOffset is
+  identity (GolemController's own motion exactly as before), no player tracked, running limbs back on their welds.
+- Tests: tests/AnimSwitches.spec.luau ("off" costs nothing: no listen, no Rock tag, no Players, no pool, no loop; the
+  hook takes GolemController's hop out exactly; Reduce motion with the switches; no tables per frame in the gait).
+What to test in Studio:
+1. Mine a rock until it drops an ore: the chunk flies out as before (no pop, no dust, never invisible); blasting has
+   BlasterFx's own sparks only (no white star); selling shows SellController's popup only (no notes or coins).
+2. Golems: run / fly / idle / equip jump as in the anim/golem-run checks above.
+3. Set AnimConfig.GolemMotion = false in Studio: golems hop like before, no limb moves.
