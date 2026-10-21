@@ -64,6 +64,7 @@ local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.Artif
 local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+local LevelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LevelConfig")
 
 -- The real rock mix (MineFloors): Small / Big / Crystal shares, seconds and ores per rock.
 local spawn = MineFloors.SpawnChance
@@ -119,6 +120,9 @@ local A = {
 	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
 	IncomeMult = 1, -- podium income and every sale
+	-- the player LEVEL (LevelConfig, owner 2026-10-21): XP from rocks, ores, cleans, sales,
+	-- play time and buys; level-up coins; +BonusPerLevel podium income (outside the IncomePct cap)
+	Levels = false,
 	DamageMult = 1, -- blaster damage
 	LuckMult = 1, -- the crystal-rock share (better ores)
 	CleanSpeedMult = 1, -- Auto Cleaner speed
@@ -570,8 +574,10 @@ local function podiumIncome(p: any): number
 	for _, v in p.Podium do
 		sum += v
 	end
-	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+	local level = if A.Levels then LevelConfig.bonusFor(p.Level or 1) else 0
+	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0) + level)
 end
+
 
 local function incomeRate(p: any): number
 	local cleaned, raw, floor = flow(p)
@@ -1116,6 +1122,29 @@ end
 
 -- `start`: a checkpoint (calibration) - the player, the clock, the random
 -- state and the series at the moment a run stopped; the run continues from it.
+-- The player LEVEL: XP for this step (the game's LevelConfig weights on the
+-- model's flows), level ups pay their coins.
+local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t: number)
+	if not A.Levels then
+		return
+	end
+	local w = LevelConfig.ById
+	local xp = A.Step
+		* (rocks * w.RocksBroken.Xp + (cleaned + raw) * w.OresMined.Xp + cleaned * w.OresCleaned.Xp + raw * w.ItemsSold.Xp + w.PlaySeconds.Xp)
+	xp += (p.BuysSeen and #p.Log - p.BuysSeen or 0) * w.Upgrades.Xp -- every buy: a machine, an upgrade, a level
+	p.BuysSeen = #p.Log
+	p.LevelRecord = p.LevelRecord or { Level = 1, Xp = 0, Seen = {}, Ready = true }
+	for _, level in LevelConfig.add(p.LevelRecord, xp) do
+		local coins = LevelConfig.coinsFor(level, podiumIncome(p))
+		p.Coins += coins
+		p.Earned += coins
+		if level % 10 == 0 then
+			mark(p, "Level " .. level, t)
+		end
+	end
+	p.Level = p.LevelRecord.Level
+end
+
 local function simulate(seed: number, start: any?): any
 	local rng = Rng.new(seed)
 	local p = newPlayer()
@@ -1171,6 +1200,7 @@ local function simulate(seed: number, start: any?): any
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
+		levelStep(p, rocks, cleaned, raw, t)
 		findAndSpendShards(p, rng, rocks, cleaned, floor, t)
 		t += A.Step
 
