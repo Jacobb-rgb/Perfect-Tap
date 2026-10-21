@@ -350,5 +350,49 @@
     ],
     "shadowExtent": 360,
     "maxLights": 32
+  },
+  "wilds_lampy_vychod_cesta": {
+    "scene": "world",
+    "position": [
+      62,
+      12,
+      -30
+    ],
+    "target": [
+      72,
+      1,
+      50
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 32
+  },
+  "wilds_lampy_zapad_cesta": {
+    "scene": "world",
+    "position": [
+      -62,
+      12,
+      -30
+    ],
+    "target": [
+      -72,
+      1,
+      50
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 32
   }
 }

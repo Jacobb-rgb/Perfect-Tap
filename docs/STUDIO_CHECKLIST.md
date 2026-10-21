@@ -132,4 +132,4 @@ command bar.
 2. Find the five secrets: a lost miner's camp (south-west lawn), a buried chest (west end of the strip by the
    quarry), a fossil in the dirt (south-east lawn), a fairy ring (east mountain terrace by the sea) and a Kaldrum
    rune stone (terrace above DEPTHS). They are decoration only (no reward yet).
-3. Phone: the lobby still runs smoothly (about 1,040 more small parts, no lights).
+3. Phone: the lobby still runs smoothly (about 790 more small parts, no lights).

@@ -49,6 +49,7 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Buildings = require(script.Parent.Buildings)
+local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 
 local C = Style.C
 local K = Buildings.Colors
@@ -540,17 +541,34 @@ end
 function Town.street(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("WestStreet", parent)
 	local x = Town.StreetX
-	for _, z in Town.StreetLampZ do
-		streetLamp(m, Vector3.new(x, 0, z))
+	-- (2026-10-20: the street lamps light the west plot road instead of the
+	-- double-headed posts, and the props keep off them)
+	if not StreetLampPlan.Enabled then
+		for _, z in Town.StreetLampZ do
+			streetLamp(m, Vector3.new(x, 0, z))
+		end
+	end
+	local function free(z: number, r: number): boolean
+		return not StreetLampPlan.near(Vector3.new(x, 0, z), r + 1.2)
 	end
 	-- an ore cart heaped with gold, barrels and crates, flower boxes
-	Buildings.cart(m, CFrame.new(x + 0.2, 0, 47.5), C.Gold)
-	Buildings.barrel(m, Vector3.new(x + 0.1, 0, 52.4), rng)
-	Buildings.barrel(m, Vector3.new(x + 0.3, 0, 54.0), rng, 1.6)
-	Buildings.crate(m, CFrame.new(x + 0.2, 0, 76.2), 1.6, rng)
-	Buildings.crate(m, CFrame.new(x + 0.4, 0, 77.9), 1.2, rng)
-	flowerBed(m, CFrame.new(x + 0.3, 0, 36.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerPink)
-	flowerBed(m, CFrame.new(x + 0.3, 0, 96.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerYellow)
+	if free(47.5, 2) then
+		Buildings.cart(m, CFrame.new(x + 0.2, 0, 47.5), C.Gold)
+	end
+	if free(53.2, 1.6) then
+		Buildings.barrel(m, Vector3.new(x + 0.1, 0, 52.4), rng)
+		Buildings.barrel(m, Vector3.new(x + 0.3, 0, 54.0), rng, 1.6)
+	end
+	if free(77, 1.6) then
+		Buildings.crate(m, CFrame.new(x + 0.2, 0, 76.2), 1.6, rng)
+		Buildings.crate(m, CFrame.new(x + 0.4, 0, 77.9), 1.2, rng)
+	end
+	if free(36.5, 1.5) then
+		flowerBed(m, CFrame.new(x + 0.3, 0, 36.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerPink)
+	end
+	if free(96.5, 1.5) then
+		flowerBed(m, CFrame.new(x + 0.3, 0, 96.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerYellow)
+	end
 end
 
 ---------------------------------------------------------------- build

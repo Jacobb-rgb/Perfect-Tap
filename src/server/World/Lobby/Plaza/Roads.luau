@@ -30,6 +30,7 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
+local StreetLampPlan = require(script.Parent.StreetLampPlan)
 
 local Roads = {}
 
@@ -204,6 +205,15 @@ end
 -- Walkways that leave the plaza rim head-on: a threshold ramp bridges the
 -- step from the plaza floor down to their panels.
 local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToFossil = true }
+-- Long walkways with longer floor panels (fewer parts).
+local LONG_SLABS = {
+	ForgePathEast = true,
+	ForgePathWest = true,
+	EastPlotRoad = true,
+	WestPlotRoad = true,
+	RimRoad = true,
+	ToNextArea = true,
+}
 
 local function paveAll(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("Roads", parent)
@@ -215,17 +225,18 @@ local function paveAll(parent: Instance, rng: Rng.Rng)
 		-- curb stones along the first ~20 studs of cobble strips that leave the plaza
 		local nearPlaza = onPlaza(s.From, 6)
 		for i, seg in segments(s) do
-			if s.Neon and i == 1 then
+			if s.Neon then
 				local walk = Common.walkway(m, seg.From, seg.To, s.Width, rng, {
 					Name = s.Id,
 					Lift = s.Lift,
 					Self = s.Id,
 					EdgeInset = if s.Id == "SouthRoad" then 0 else 0.5,
-					-- the long forge side paths get longer slabs (fewer parts)
-					RowScale = if s.Id == "ForgePathEast" or s.Id == "ForgePathWest" then 1.35 else nil,
-					Threshold = THRESHOLDS[s.Id] == true,
+					-- the long roads get longer slabs (fewer parts)
+					RowScale = if LONG_SLABS[s.Id] then 1.35 else nil,
+					-- (the south road's second piece starts past the bridge, far from the rim)
+					Threshold = THRESHOLDS[s.Id] == true and i == 1,
 				})
-				if s.Id == "SouthRoad" then
+				if s.Id == "SouthRoad" and i == 1 then
 					chevrons(walk, s)
 				end
 				continue
@@ -369,7 +380,10 @@ end
 
 function Roads.build(parent: Instance, rng: Rng.Rng)
 	paveAll(parent, rng)
-	roadLanterns(parent)
+	-- (2026-10-20: the street lamps along every road replace the road lanterns, StreetLamps.luau)
+	if not StreetLampPlan.Enabled then
+		roadLanterns(parent)
+	end
 	entranceLanterns(parent)
 	local planters = Style.model("EntryPlanters", parent)
 	for _, at in Roads.EntryPlanters do

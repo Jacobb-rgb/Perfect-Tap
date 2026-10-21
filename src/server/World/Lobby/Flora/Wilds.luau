@@ -380,8 +380,11 @@ Wilds.Radius = {
 } :: { [string]: number }
 -- How many pieces at most on the town's lawns and on the mountains' green
 -- tops, how many make a group, and how far apart the groups' centers stay.
-Wilds.MaxTown = 75
-Wilds.MaxMountain = 60
+Wilds.MaxTown = 54 -- (2026-10-21: the lobby area also holds the street lamps now)
+Wilds.MaxMountain = 45
+-- only the mountain tops seen from the town and the quarry (the far range behind
+-- the quarry is never looked at; the map's part budget)
+Wilds.MountainMinZ = -300
 Wilds.GroupSize = { Min = 3, Max = 5 }
 Wilds.GroupSpacing = 14
 Wilds.GroupReach = 5.5 -- the farthest a group's piece stands from its center
@@ -677,7 +680,7 @@ local function mountainCaps(map: Instance): { BasePart }
 			local c = d.Color
 			if d.Size.Y <= 1.2 and d.Size.X >= 8 and d.Size.Z >= 8 and c.G > c.R + 0.1 and c.G > c.B + 0.05 then
 				local p = d.CFrame.Position
-				if not inBox(p, Meadow.Area, 4) then
+				if not inBox(p, Meadow.Area, 4) and p.Z > Wilds.MountainMinZ then
 					table.insert(caps, d)
 				end
 			end
