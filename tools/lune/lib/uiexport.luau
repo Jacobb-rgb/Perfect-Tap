@@ -88,6 +88,10 @@ local function exportNode(instance): any?
 		end
 		node.tkeys = fade
 		node.rot = instance.Rotation
+		local offset = instance.Offset
+		if offset.X ~= 0 or offset.Y ~= 0 then
+			node.off = { offset.X, offset.Y } -- (UI/Motion's shine sweeps it)
+		end
 	elseif class == "UIListLayout" then
 		node.dir = instance.FillDirection.Name
 		node.pad = { instance.Padding.Scale, instance.Padding.Offset }

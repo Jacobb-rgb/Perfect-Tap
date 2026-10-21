@@ -750,3 +750,160 @@ What to test in Studio:
 5. ODDS (window and popup): the Crystal Capsule's golems and chances in two columns; B / BACK closes it.
 6. Phone emulator (568 x 320 and 844 x 390): every button is easy to tap, nothing overlaps; controller: the first
    thing to claim is selected, B closes.
+## Player moves: procedural R15 animations (2026-10-21, branch anim/player-moves)
+The owner wants "perfect and suitable animations" for the player's own movements (no avatar editor). No uploaded
+animation assets: `Moves/MoveMath` poses go onto `Motor6D.Transform` on top of the default Animate script.
+- Data: `Config/MoveConfig` (10 moves: Carry, Throw, Recoil, Spray, Hammer, Celebrate, BigCelebrate, CashToss,
+  Wave, Shrug; keys per R15 joint in degrees, eases, blends, Override joints, MinGap, Priority).
+- Pure code: `Moves/MoveMath` (evaluate / weight / layer, works for any rig: quest NPCs later),
+  `Moves/MoveRig` (motor map, layering that never piles up when the Animator skips a joint, release),
+  `Moves/MoveRules` (attribute format, whitelist, loops, blocks, celebrations).
+- Client: `MoveController`, one RunService.Stepped for every R15 character within 70 studs and on screen; skips R6,
+  seated / swimming / climbing / ragdolled / dead, hoverboard riders, and your own character in close-ups
+  (Scriptable camera or PlayerControls claimed): a celebration of yours waits until the close-up ends (8 s max).
+  Roblox "Reduce Motion" swaps BigCelebrate for Celebrate.
+- Server: `MoveService`, Net "Move" (Rate 3, Burst 5; whitelist Throw / Wave / Shrug, Guard.string, Throw only while
+  carrying), celebrations from the existing hooks (onCleaned + onDiscovered, onOpened, DataService.onChanged for the
+  blaster level / rebirths, onSold), the MoveLoop attribute (Spray while cleaning, Hammer while forging).
+- Hooks in other files: InteractController (one line before CarryThrow), the two ORDER lists, Net (one entry).
+- Preview: docs/screenshots/animations/pohyby_hrace.mp4 + .jpg (`lune run tools/lune/export_moves.luau`, then
+  `ANIM_PAGE=moves.html ANIM_OUT=pohyby_hrace.mp4 ANIM_BITRATE=3500000 node tools/preview/render_anim.mjs 30 1280 720`
+  and `node tools/preview/moves_sheet.mjs`).
+What to test in Studio (2 players, R15 avatars; also one R6 avatar):
+1. Pick up ore: both arms hug it, the legs keep walking. Throw (Q / RB / Throw button): wind-up overhead, the throw,
+   the follow-through; the other player sees it too. Throw the last chunk: the arms go back to the walk.
+2. Hold the blaster on a rock (mouse, touch FIRE, R2): the gun arm kicks when the beam starts, then small kicks; the
+   other player sees the kicks on you. Nothing jitters or drifts after you stop.
+3. Clean an ore: the other player sees your arm spraying; a new ore or Flawless: you celebrate after Collect (your
+   camera was in the close-up), the other sees it at once. A Legendary+: the spin jump.
+4. Forge at the Foundry: the other sees the hammer pounding; the new level: the spin jump after the close-up.
+5. Sell 5+ items at Tobin's: the money toss. Equip a golem: a wave. A refused action (e.g. too far from the stall):
+   a shrug, not more than every 2.5 s.
+6. On a hoverboard, seated, swimming or climbing: no moves. An R6 avatar: no moves, no errors.
+7. Phones: FPS with 8 players moving nearby (the micro-profiler: MoveController stays well under 0.5 ms).
+8. SETTINGS > Reduce motion on (or Roblox's own Reduce Motion): celebrations become the calm versions (a small
+   bounce, no crouch, no spin; the money toss without the hop); no waves or shrugs on anyone; carry, throw, recoil,
+   spray and hammer stay. A second player without the setting still sees your wave / shrug.
+9. Hold fire on a rock your blaster can't mine yet (Deny toasts every 3 s): no shrug, the gun and the beam stay on the
+   rock; the other player sees no shrug either. Equip a golem with the blaster in hand: no wave. A celebration while
+   the beam is on: the body celebrates, the gun arm stays on target.
+
+## World animations (2026-10-21, branch anim/world)
+The owner wants "perfect animations in the game world" (his reels: a punch with a white impact flash, coloured cubes
+and cash flying out). New `Controllers/WorldMotionController` (client ORDER after GolemController) with the pure math
+in `Effects/WorldMotionLogic` (the showreel runs the same code):
+- Golem followers: GolemController multiplies `WorldMotionController.golemOffset(pet, owner, now, walking, near)` onto
+  every follower (one line in its step + the require): rounder hops with a wiggle and a nod while walking; a sway and
+  now and then a little double hop in place, turning left and right ("waving"), while standing; the happy jump with
+  one spin when a golem was just equipped (its kind appeared in the owner's EquippedGolems and the model was built
+  within 3 s; golems built because you walk up to their owner don't jump). Premium golems keep their hover: they
+  rise and spin, never hop. Far golems (beyond FollowerLodDistance) get nothing but the jump.
+- Ore popping out of a rock: a Raw chunk that appears in Workspace.Items within 1.2 s and 16 studs of a NodeCrack /
+  NodeShatter Fx pops: dust cubes puff out, the real chunk is hidden on this client (LocalTransparencyModifier, put
+  back after) and a pooled look-alike follows it with an arc on top, one extra spin, a pop-in scale and a squash on
+  landing (more dust). Physics are never touched; picking the chunk up ends the pop at once.
+- Hit: a short white flash, a star of white spikes and cubes in the rock's crystal colour (the colour the rock shows,
+  never the secret ore). Your hits: each Health drop of the rock you face while firing (RockLabels.onHealthDrop);
+  other players' hits: their BlastHit Fx. BlasterFx keeps its sparks, chips, rings and sounds.
+- Sell: Earned { Source = "Sell" } (SellService, LogisticsService): green banknotes flutter out of the sell spot,
+  gold coins burst up and fly into you (within 45 studs); SellController keeps its +$ popup.
+- Perf: all parts pooled (anchored, no collide / query / touch), one RenderStepped connection only while something
+  moves, one BulkMoveTo a frame, no tables per frame; caps PC 64 bits / 6 pops / 3 flashes, phones 32 / 3 / 2;
+  effects beyond 80-110 studs or off screen are skipped; Reduce motion (SettingsConfig ReduceMotion when it exists,
+  else GuiService.ReducedMotionEnabled): half the bits, no look-alike, no spikes, no spins, golems only hop on equip.
+- Tests: tests/WorldMotion.spec.luau (curves, plans, caps, pool reuse, the controller's hooks on a rig).
+- Preview: `lune run tools/lune/export_world_motion.luau` + `node tools/preview/render_world_anim.mjs` ->
+  docs/screenshots/animations/svet_animace.mp4 / .jpg.
+What to test in Studio:
+1. Equip a golem (GOLEMS panel): it appears behind you and does a jump with a full turn; a Legendary rises and turns.
+   EQUIP BEST: every new one jumps once. Walk away and back (out of 120 studs): no jump when they are built again.
+2. Walk: the golems hop with a little left-right wiggle; stand still: they sway and sometimes hop in place.
+3. Blast a rock: every ~0.3 s a white flash with spikes and small cubes in the rock's crystal colour flies toward you.
+   A second player blasting the same rock: their hits flash on their side.
+4. Break a stage that drops an ore: the chunk pops up higher than before, spins once, squashes when it lands, dust
+   puffs at both ends; pick it up right away: it is never invisible. Check with two players (the other one sees it).
+5. Sell at Tobin's stall and at a sell box: notes flutter out, coins fly into you; spam SELL: never more than a few
+   dozen pieces, FPS steady on the phone emulator.
+6. Turn on Roblox's Reduce Motion (or the ReduceMotion setting when it lands): no spins, smaller bursts, no pop copy.
+
+## Golem followers run (2026-10-21, branch anim/golem-run)
+The owner: "the golems should really RUN after the characters". `Effects/GolemGait` (pure) + WorldMotionController:
+- Limbs: GolemBuilder's names first (Leg1/2, Arm1/2 + Fist1/2, Head), then name families that stay on the body (Core,
+  Vein, Boulder, Crystal*, Wing*, Tail*, Aura, Crack*), then geometry in golem units for any other gear (at or above
+  the neck -> head, out at the sides below the shoulders -> that arm, e.g. the Dragonscale Knight's shield, low and
+  off-centre -> that leg, else body). Pivots: hips, shoulders, neck. Wings stay on the body.
+- Golems within 50 studs of the camera and on screen, nearest first, while their limb parts fit 160 a frame (phones
+  60), have their limb welds switched off (anchored) and are moved every frame with the one BulkMoveTo; picked every
+  0.25 s; the others keep the whole-body hop. Leaving the range puts the limbs back on their welds at rest.
+- Gait: cadence and stride by speed and size (small golems quick little steps), legs and arms in opposition, a lifted
+  knee, lean and a bounce per step (walk / run / catch-up sprint), a bank and a head turn into turns, a lean back when
+  braking, idle breathing, looking around and a wave; Premium golems fly (arms back, legs trailing, a tilt into
+  turns, a bob); the equip jump stays (arms up). Reduce motion: half the swing, no sprint lean, no bank.
+- GolemController's hook line now also passes `speed`; with running limbs its own hop is taken out (GolemGait.
+  controllerHop mirrors its numbers; a spec checks them against its source).
+- Preview: docs/screenshots/animations/golemove_beh.mp4 / .jpg (`lune run tools/lune/export_world_motion.luau 30
+  golem_run`, `node tools/preview/render_world_anim.mjs 1280 720 6000000 - golem_run golemove_beh`).
+What to test in Studio:
+1. Equip 3 golems (a Common, an Epic with a crown, a Legendary or Mythic). Walk slowly: they walk with quick little
+   steps; walk normally: they run (arms pumping, leaning); jump down a ledge or ride ahead: they sprint to catch up.
+2. Stop: they brake (lean back), then breathe, look around, and now and then one waves.
+3. The Legendary / Mythic flies: arms back, legs trailing, it tilts into turns. The Dragon King's wings stay put.
+4. Walk 60 studs away from another player's golems: they switch to the plain hop; come back: running limbs again,
+   never a limb left floating. Watch FPS with 8 players and their golems on the phone emulator.
+5. Reduce motion on: smaller swings, no lean into sprints or turns.
+
+## Emotes live, player moves switched off (2026-10-21, branch anim/emotes-live)
+The owner said yes to the emotes; the player moves stay built but off (AnimConfig.PlayerMoves = false).
+- Switch: with PlayerMoves off MoveController makes no Stepped loop, no Fx / ActionResult / Notify listeners, no
+  Move / MoveLoop / CarryCount listeners and sends nothing; MoveService registers no Net "Move" and no hooks.
+- Emotes: the EMOTES menu (EmoteController + UI/EmoteView, Pop look, word cards): the N key (free: no other
+  KeyCode.N, not a Roblox key), the EMOTES tile in the left HUD menu (touch; the gamepad reaches it with
+  D-pad Left, then A; no new pad button). Net "Emote" (Rate 2, Burst 4; EmoteService: EmoteConfig whitelist,
+  Guard, a 1 s cooldown per emote, never while carrying / cleaning / on a board / seated / dead, the Blaster
+  Spin only with the blaster) sets the character attribute Emote = "<Name>:<seq>" ("" = stop). Every client
+  plays it within 70 studs and on screen; the one loop runs only while an emote plays near you.
+What to test in Studio (2 players, R15):
+1. Press N (or tap EMOTES; on a pad D-pad Left, pick EMOTES, A): the menu opens, B / X / Backspace close it,
+   another panel opening closes it. Pick ROBOT: you dance, the other player sees it. Pick ROBOT again: it stops.
+2. Walk, jump, sit or ride a hoverboard while dancing: the dance stops (the finishing pose, quickly) for both.
+3. Pick up ore: the menu says "Put the ore down first."; build mode / cleaning: no dance.
+4. BLASTER SPIN is grey ("Hold your blaster") until the blaster is in hand; then the gun twirls; firing stops it.
+5. GEM JUGGLE: three gems fly between the hands; they vanish when it stops; 8 jugglers at once stay smooth.
+6. Phone: the EMOTES tile and the cards are easy to tap; the menu fits a small phone.
+7. Carry / throw / recoil / celebrations: nothing happens (switched off), no errors in the output.
+
+## Golems live, world effects off (2026-10-21, branch anim/golems-live)
+The owner said yes to the golems running, not (yet) to the world effects. WorldMotionController reads
+Config/AnimConfig when used:
+- WorldFx = false (ships): init listens to no remote (Fx, Earned), start scans no Rock tag and watches no chunk, every
+  world hook returns at once, no pool is made, the frame loop is never asked for by them, no chunk is ever hidden.
+- GolemMotion = true (ships): the run / fly / idle / equip jump / hops of anim/golem-run. With false: golemOffset is
+  identity (GolemController's own motion exactly as before), no player tracked, running limbs back on their welds.
+- Tests: tests/AnimSwitches.spec.luau ("off" costs nothing: no listen, no Rock tag, no Players, no pool, no loop; the
+  hook takes GolemController's hop out exactly; Reduce motion with the switches; no tables per frame in the gait).
+What to test in Studio:
+1. Mine a rock until it drops an ore: the chunk flies out as before (no pop, no dust, never invisible); blasting has
+   BlasterFx's own sparks only (no white star); selling shows SellController's popup only (no notes or coins).
+2. Golems: run / fly / idle / equip jump as in the anim/golem-run checks above.
+3. Set AnimConfig.GolemMotion = false in Studio: golems hop like before, no limb moves.
+
+## anim/ship review fixes (2026-10-21, branch anim/ship; build/reviews/anim_ship_review_findings.md)
+- Emotes: picking any emote but the Blaster Spin puts a tool in hand away (Humanoid:UnequipTools, as cleaning and
+  build mode do), so it never stops on its first frame; your stop is sent whenever its start was sent (also before
+  the server's echo); a "" echo of your earlier stop that lands right after you picked the next emote
+  (MoveController.EchoGrace) leaves it alone; switching away from the Gem Juggle gives the gems back; a stopped emote
+  out of range is dropped (the slow check sleeps); the Blaster Spin twirls the blaster on the RightGrip weld's C0
+  (BlasterFx's kick keeps C1) on every client and puts it back; the server's cooldown is 0.85 s (the menu's 1.0 s);
+  N and the EMOTES tile do nothing in a close-up (cleaning, build mode, the Foundry, the vault).
+- Golems: GolemGait.classify moves gear with what it is welded to (touching, or a builder's weld): the Dragonscale
+  Knight's sword (blade, fire, guard, pommel) swings with its right fist, every Cape* piece follows the torso,
+  pauldrons turn with their arm, the Dragon King's sceptre and orb stay in its hand, the crowns stay on the heads.
+  The limb loop disconnects when the last running follower is destroyed.
+- SETTINGS: with the UI motion off the Reduce motion row says "Calmer golems: no hops or lean" (what it changes now).
+What to test in Studio:
+1. Mine with the blaster, keep it in hand, press N, pick ROBOT: the blaster goes to the backpack and the robot plays
+   (for the other player too). Pick BLASTER SPIN with the blaster: the gun twirls round the finger, then sits right.
+2. Pick an emote and walk off at once: the other player never sees it keep dancing.
+3. Equip the Dragonscale Knight and the Dragon King, run: the sword and the sceptre stay in the fist, the cape stays
+   on the back, the pauldrons ride the shoulders. Unequip all golems: no errors, nothing keeps running.
+4. Start cleaning / build mode / the Foundry and press N: no EMOTES menu.

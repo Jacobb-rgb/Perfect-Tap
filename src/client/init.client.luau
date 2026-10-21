@@ -36,6 +36,7 @@ local ORDER = {
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
+	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
@@ -52,6 +53,9 @@ local ORDER = {
 	"SideMenuController", -- the button column on the left (after the panels it opens)
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 	"LightWorldController", -- the light UI's world labels and prompts (only with UIConfig.LightUI on)
+	"MoveController", -- the player's procedural moves (carry, throw, recoil, celebrations) on every R15 character near you
+	"EmoteController", -- the EMOTES menu: the N key, the EMOTES tile (AnimConfig.Emotes)
+	"UIMotionController", -- UI/Motion everywhere: windows pop, buttons squash, shop cards breathe, cash flies in
 }
 
 local loaded = {}
