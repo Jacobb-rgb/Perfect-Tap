@@ -538,6 +538,14 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 			end
 		end
 	end
+	-- ...and the ones packed into the Build menu before the rebirth go too (no zero keys)
+	local inventory = data.MachineInventory
+	if type(inventory) == "table" then
+		for id in DropperConfig.ById do
+			inventory[id] = nil
+		end
+		inventory[DropperConfig.Laser.Id] = nil
+	end
 	-- the enchants stay slotted: the paid ones first, into the slots the new level opens
 	local enchants = data.Enchants
 	if type(enchants) == "table" and type(enchants.Slots) == "table" then

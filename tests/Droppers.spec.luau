@@ -117,7 +117,12 @@ return function(T, Loader)
 			{ Id = DropperConfig.Laser.Id, X = 6, Z = 1, R = 0 },
 			{ Id = "GoldDropper", X = 8, Z = 1, R = 0 },
 		}
+		data.MachineInventory = { Conveyor = 5, BasicDropper = 2, [DropperConfig.Laser.Id] = 1, DarkMatterDropper = 1 }
 		RebirthConfig.reset(data)
+		T.eq(data.MachineInventory.Conveyor, 5, "other machines stay in the Build menu")
+		T.eq(data.MachineInventory.BasicDropper, nil, "packed droppers go too")
+		T.eq(data.MachineInventory.DarkMatterDropper, nil)
+		T.eq(data.MachineInventory[DropperConfig.Laser.Id], nil, "packed lasers go too")
 		T.eq(#data.PlacedMachines, 1)
 		T.eq(data.PlacedMachines[1].Id, "Conveyor")
 		T.eq(DropperConfig.placedIncome(data.PlacedMachines), 0, "no dropper income left for the new run")
