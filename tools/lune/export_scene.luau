@@ -327,6 +327,8 @@ elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced b
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
 elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
 	require("./lib/nature_wilds_preview").kit(Loader, workspace)
+elseif sceneName == "more_islands" then -- proposal: more floating islands round the map (tools/lune/lib/more_islands_preview.luau)
+	require("./lib/more_islands_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
