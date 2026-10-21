@@ -1062,7 +1062,7 @@ local function stepPets(dt: number): boolean
 				pet.Root.CFrame = CFrame.new(pet.Pos.X, y + pet.RootHeight, pet.Pos.Z)
 					* CFrame.Angles(0, pet.Yaw, 0)
 					* CFrame.Angles(pitch, 0, roll)
-					* WorldMotionController.golemOffset(pet, owner, now, walking, near)
+					* WorldMotionController.golemOffset(pet, owner, now, walking, near, speed)
 			end
 		end
 	end

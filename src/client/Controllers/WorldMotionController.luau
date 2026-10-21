@@ -57,6 +57,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GolemConfig = require(Shared.Config.GolemConfig)
 local Net = require(Shared.Net)
 local Logic = require(script.Parent.Parent.Effects.WorldMotionLogic)
+local GolemGait = require(script.Parent.Parent.Effects.GolemGait)
 local RockFxLogic = require(script.Parent.Parent.Effects.RockFxLogic)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -72,6 +73,7 @@ WorldMotionController.HitRange = 80
 WorldMotionController.SellRange = 110
 WorldMotionController.OwnRange = 70 -- your beam's reach plus a margin
 WorldMotionController.MaxPopParts = 8 -- a look with more parts only gets the dust
+WorldMotionController.LimbSelect = 0.25 -- seconds between two picks of the golems whose limbs run
 
 -- a test or preview rig instead of the camera, the device and the clock
 export type Rig = {
@@ -90,7 +92,15 @@ export type Rig = {
 }
 
 -- the fields of GolemController's follower it reads
-export type GolemPet = { Kind: string, Phase: number, Seed: number, Floats: boolean }
+export type GolemPet = {
+	Kind: string,
+	Phase: number,
+	Seed: number,
+	Floats: boolean,
+	Yaw: number,
+	Model: Model,
+	Root: BasePart,
+}
 
 type Live = { Bit: Logic.Bit, Part: BasePart, Pool: Logic.Pool, Size: Vector3, Transparency: number }
 type Proxy = { Part: BasePart, Pool: Logic.Pool, Offset: CFrame, Size: Vector3 }
@@ -111,7 +121,20 @@ type Pop = {
 }
 type Drop = { At: number, Position: Vector3, Crust: Color3? }
 type Fresh = { At: number, Model: Model? }
-type PetState = { Celebrate: number? }
+type PetState = {
+	Celebrate: number?,
+	Model: Model?,
+	Root: BasePart?,
+	Floats: boolean,
+	Seed: number,
+	Gait: GolemGait.Gait?,
+	Pose: GolemGait.Pose?,
+	Rig: GolemGait.Rig?,
+	RigTried: boolean,
+	Animated: boolean, -- its limbs run (unwelded, moved every frame)
+	Since: number?, -- seconds into the equip jump this frame
+	Dist: number,
+}
 
 local PARK = CFrame.new(0, -5000, 0)
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -153,6 +176,11 @@ local rockSet: { [Model]: boolean } = {}
 local rockScans = 0 -- how often rockNear ran (tests: only after the cheap checks)
 local rayParams: RaycastParams? = nil
 local includeParams: RaycastParams? = nil
+-- golems whose limbs run (picked every LimbSelect seconds: near, on screen, within the part cap)
+local animated: { PetState } = {}
+local candidates: { PetState } = {}
+local nextSelect = -math.huge
+local limbParts = 0 -- limb parts moved per frame now
 
 for i = 1, RING do
 	drops[i] = { At = -math.huge, Position = Vector3.zero, Crust = nil }
@@ -381,7 +409,34 @@ end
 
 ---------------------------------------------------------------- the loop
 
+local stepLimbs: (state: PetState) -> ()
+
 local step: (dt: number) -> boolean
+
+---------------------------------------------------------------- golem limbs
+
+local function placeGroup(group: GolemGait.Group, frame: CFrame)
+	for i, part in group.Parts do
+		table.insert(moveParts, part)
+		table.insert(moveFrames, frame * group.Rest[i])
+	end
+end
+
+-- One frame of a running golem's limbs (its Body is where GolemController put it this frame).
+stepLimbs = function(state: PetState)
+	local rigged = state.Rig
+	local pose = state.Pose
+	if not rigged or not pose or not rigged.Body.Parent then
+		return
+	end
+	local body = rigged.Body.CFrame
+	placeGroup(rigged.LegL, GolemGait.jointFrame(body, rigged.LegL, pose.LegL, 0, 0, pose.LiftL))
+	placeGroup(rigged.LegR, GolemGait.jointFrame(body, rigged.LegR, pose.LegR, 0, 0, pose.LiftR))
+	-- (the left arm rolls out the other way)
+	placeGroup(rigged.ArmL, GolemGait.jointFrame(body, rigged.ArmL, pose.ArmL, 0, -pose.RollL, 0))
+	placeGroup(rigged.ArmR, GolemGait.jointFrame(body, rigged.ArmR, pose.ArmR, 0, pose.RollR, 0))
+	placeGroup(rigged.Head, GolemGait.jointFrame(body, rigged.Head, pose.HeadPitch, pose.HeadYaw, 0, 0))
+end
 
 local function ensureLoop()
 	if connection or rig then
@@ -533,6 +588,9 @@ step = function(_dt: number): boolean
 		end
 		p -= 1
 	end
+	for _, state in animated do
+		stepLimbs(state)
+	end
 	if #moveParts > 0 then
 		if rig then
 			for k, part in moveParts do
@@ -542,7 +600,7 @@ step = function(_dt: number): boolean
 			Workspace:BulkMoveTo(moveParts, moveFrames, Enum.BulkMoveMode.FireCFrameChanged)
 		end
 	end
-	if #live == 0 and #pops == 0 then
+	if #live == 0 and #pops == 0 and #animated == 0 then
 		local c = connection
 		if c then
 			c:Disconnect()
@@ -615,23 +673,163 @@ local function takeEquip(owner: Player, kind: string, at: number): number?
 	return nil
 end
 
+-- The limbs go back on their welds, at rest on the Body (a golem that stops running its limbs).
+local function releaseLimbs(state: PetState)
+	state.Animated = false
+	local rigged = state.Rig
+	if not rigged or not rigged.Body.Parent then
+		return
+	end
+	local body = rigged.Body.CFrame
+	for _, group in { rigged.LegL, rigged.LegR, rigged.ArmL, rigged.ArmR, rigged.Head } do
+		for i, part in group.Parts do
+			if part.Parent then
+				part.CFrame = body * group.Rest[i]
+				local weld = group.Welds[part]
+				if weld then
+					weld.Enabled = true
+				end
+				part.Anchored = false
+			end
+		end
+	end
+end
+
+-- The limbs come off their welds (anchored, moved every frame by stepLimbs).
+local function grabLimbs(state: PetState)
+	local rigged = state.Rig
+	if not rigged then
+		return
+	end
+	state.Animated = true
+	for _, group in { rigged.LegL, rigged.LegR, rigged.ArmL, rigged.ArmR, rigged.Head } do
+		for i, part in group.Parts do
+			part.Anchored = true
+			local weld = group.Welds[part]
+			if weld then
+				weld.Enabled = false
+			end
+		end
+	end
+end
+
+local function cameraEye(): (Vector3, Camera?)
+	local r = rig
+	if r then
+		return r.Eye, nil
+	end
+	local camera = Workspace.CurrentCamera
+	return if camera then camera.CFrame.Position else Vector3.zero, camera
+end
+
+local function byDistance(a: PetState, b: PetState): boolean
+	return a.Dist < b.Dist
+end
+
+--[[
+	Picks the golems whose limbs run: within GolemGait.LimbRange of the
+	camera and on screen, nearest first, while their parts fit the per-frame
+	cap (phones less). The others keep the cheap whole-body hop.
+]]
+local function selectGolems(now: number)
+	nextSelect = now + WorldMotionController.LimbSelect
+	table.clear(candidates)
+	local eye, camera = cameraEye()
+	for _, state in petStates do
+		local root = state.Root
+		local model = state.Model
+		if root and model and root.Parent and model.Parent then
+			local position = root.CFrame.Position
+			state.Dist = (position - eye).Magnitude
+			local onScreen = true
+			if camera then
+				local _, inView = camera:WorldToViewportPoint(position)
+				onScreen = inView
+			end
+			if GolemGait.lod(state.Dist, onScreen) then
+				table.insert(candidates, state)
+			elseif state.Animated then
+				releaseLimbs(state)
+			end
+		elseif state.Animated then
+			state.Animated = false -- gone: nothing to put back
+		end
+	end
+	table.sort(candidates, byDistance)
+	local phone = isPhone()
+	local used = 0
+	for _, state in candidates do
+		if not state.RigTried and state.Model then
+			state.RigTried = true
+			state.Rig = GolemGait.classify(state.Model :: Model)
+		end
+		local rigged = state.Rig
+		if rigged and GolemGait.fits(used, rigged.Count, phone) then
+			used += rigged.Count
+			if not state.Animated then
+				grabLimbs(state)
+			end
+		elseif state.Animated then
+			releaseLimbs(state)
+		end
+	end
+	limbParts = used
+	table.clear(animated)
+	for _, state in petStates do
+		if state.Animated then
+			table.insert(animated, state)
+		end
+	end
+	if #animated > 0 then
+		ensureLoop()
+	end
+end
+
 --[[
 	The GolemController hook: the extra pose of one follower this frame, to
 	multiply onto its CFrame. `pet` is GolemController's follower record
-	that reads Kind, Phase, Seed, Floats; `owner` its player, `now` os.clock().
-	CFrame.identity when there is nothing to add (far golems, Reduce motion).
+	that reads Kind, Phase, Seed, Floats, Yaw, Model, Root; `owner` its
+	player, `now` os.clock(), `speed` its speed this frame (studs / s).
+	Golems whose limbs run (near, on screen, within the part cap) swap
+	GolemController's whole-body hop for the gait's body pose (lean, bounce,
+	bank; flying for Premium golems) and their limbs move in the frame loop;
+	the others keep the hop with the sway / wiggle / idle hops. The equip
+	jump plays on both. CFrame.identity when there is nothing to add.
 ]]
-function WorldMotionController.golemOffset(pet: GolemPet, owner: Player?, now: number, walking: boolean, near: boolean): CFrame
+function WorldMotionController.golemOffset(
+	pet: GolemPet,
+	owner: Player?,
+	now: number,
+	walking: boolean,
+	near: boolean,
+	speed: number?
+): CFrame
 	local state = petStates[pet]
 	if not state then
 		local celebrate: number? = nil
 		if owner and takeEquip(owner, pet.Kind, now) then
 			celebrate = now
 		end
-		state = { Celebrate = celebrate }
+		state = {
+			Celebrate = celebrate,
+			Model = pet.Model,
+			Root = pet.Root,
+			Floats = pet.Floats,
+			Seed = pet.Seed,
+			Gait = nil,
+			Pose = nil,
+			Rig = nil,
+			RigTried = false,
+			Animated = false,
+			Since = nil,
+			Dist = math.huge,
+		}
 		petStates[pet] = state
 	end
 	local s = state :: PetState
+	if now >= nextSelect then
+		selectGolems(now)
+	end
 	local since: number? = nil
 	local started = s.Celebrate
 	if started then
@@ -641,14 +839,49 @@ function WorldMotionController.golemOffset(pet: GolemPet, owner: Player?, now: n
 			since = nil
 		end
 	end
+	s.Since = since
+	local reduce = reduceMotion()
+	local rigged = s.Rig
+	if s.Animated and rigged then
+		-- running limbs: GolemController's hop comes out, the gait's body pose goes in
+		local v = if speed and speed == speed then speed else 0
+		local gait = s.Gait
+		if not gait then
+			gait = GolemGait.newGait(now, pet.Yaw)
+			s.Gait = gait
+		end
+		local pose = s.Pose
+		if not pose then
+			pose = GolemGait.newPose()
+			s.Pose = pose
+		end
+		local g = gait :: GolemGait.Gait
+		local ps = pose :: GolemGait.Pose
+		GolemGait.step(g, now, v, pet.Yaw, rigged.Scale)
+		GolemGait.pose(ps, g, now, rigged.Scale, pet.Floats, pet.Seed, since, Logic.Golem.JumpTime, reduce)
+		local hop, hopPitch, hopRoll = GolemGait.controllerHop(pet.Phase, v, walking, near, pet.Floats)
+		-- the equip jump (lift and spin) rides on top
+		local jump, _, spin = Logic.golemPose(now, pet.Phase, pet.Seed, walking, false, pet.Floats, since, reduce)
+		local undo = CFrame.Angles(hopPitch, 0, hopRoll):Inverse() * CFrame.new(0, -hop, 0)
+		return undo * CFrame.new(0, ps.Lift + jump, 0) * CFrame.fromEulerAnglesYXZ(ps.Pitch, spin, ps.Roll)
+	end
 	if not near and since == nil then
 		return CFrame.identity
 	end
-	local lift, pitch, yaw, roll = Logic.golemPose(now, pet.Phase, pet.Seed, walking, near, pet.Floats, since, reduceMotion())
+	local lift, pitch, yaw, roll = Logic.golemPose(now, pet.Phase, pet.Seed, walking, near, pet.Floats, since, reduce)
 	if lift == 0 and pitch == 0 and yaw == 0 and roll == 0 then
 		return CFrame.identity
 	end
 	return CFrame.new(0, lift, 0) * CFrame.fromEulerAnglesYXZ(pitch, yaw, roll)
+end
+
+-- Golems now: (followers known, whose limbs run, limb parts moved per frame).
+function WorldMotionController.golemStats(): (number, number, number)
+	local known = 0
+	for _ in petStates do
+		known += 1
+	end
+	return known, #animated, limbParts
 end
 
 ---------------------------------------------------------------- ore pops

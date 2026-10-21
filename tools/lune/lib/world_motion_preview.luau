@@ -941,4 +941,19 @@ function Preview.build(Loader, opts)
 	return data
 end
 
+-- helpers the golem run reel shares (tools/lune/lib/golem_run_preview.luau)
+Preview.helpers = {
+	entry = entry,
+	partEntry = partEntry,
+	cfList = cfList,
+	character = character,
+	cameraAt = cameraAt,
+	visibleParts = visibleParts,
+	SHAPES = SHAPES,
+	FOLLOW = FOLLOW,
+	r3 = r3,
+	lerpAngle = lerpAngle,
+	smooth = smooth,
+}
+
 return Preview

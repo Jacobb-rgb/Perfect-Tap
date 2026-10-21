@@ -1,6 +1,6 @@
 // The world animations showreel (preview video only): golems hopping and
 // jumping on equip, the blaster hit flash, the ore popping out of a rock, the
-// sell cash burst. Loads build/preview/world_motion.json
+// sell cash burst. Loads build/preview/world_motion.json (or ?data=<name>: build/preview/<name>.json, e.g. golem_run)
 // (tools/lune/export_world_motion.luau): static scenes, rigid groups and, per
 // frame, the camera, the group matrices and every moving part, all computed
 // by the game's own code in Lune. Every frame is a pure function of its index
@@ -117,7 +117,8 @@ function skyDome(top, horizon, ground) {
 // ---------------------------------------------------------------- main
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
-  const data = await fetch("/scenes/world_motion.json").then((r) => r.json());
+  const dataName = (params.get("data") || "world_motion").replace(/[^a-z0-9_]/gi, "");
+  const data = await fetch(`/scenes/${dataName}.json`).then((r) => r.json());
   const fps = data.fps;
   const frames = data.frames;
 
@@ -169,7 +170,7 @@ async function main() {
     look.sun.shadow.bias = -0.0006;
     look.sun.shadow.normalBias = 0.03;
   }
-  const roots = data.scenes.map((s) => {
+  const roots = arr(data.scenes).map((s) => {
     const root = new THREE.Group();
     root.add(buildParts(arr(s.parts)));
     const look = looks[s.look] || looks.day;
@@ -193,7 +194,7 @@ async function main() {
   }
 
   // rigid groups (golems, rocks): local parts, a matrix per frame
-  const groups = data.groups.map((g) => {
+  const groups = arr(data.groups).map((g) => {
     const holder = new THREE.Group();
     holder.matrixAutoUpdate = false;
     holder.add(buildParts(arr(g.parts)));
@@ -316,9 +317,9 @@ async function main() {
     titleBox.style.opacity = String(show);
     titleBox.style.transform = `translateY(${(1 - clamp(since / 0.35)) * 1.2}vw)`;
     slow.style.opacity = f.label === "slow" ? String(clamp(since / 0.2)) : "0";
-    // a short dip to black between scenes
+    // a short dip to black between scenes (not inside one continuous shot: segments with cut = false)
     const cut = Math.min(since, until);
-    fade.style.opacity = String(clamp(1 - cut / 0.12) * 0.85);
+    fade.style.opacity = seg.cut === false ? "0" : String(clamp(1 - cut / 0.12) * 0.85);
     // +$ popups (SellController's look)
     popupLayer.innerHTML = "";
     for (const [text, line, x, y, z, alpha, scale] of arr(f.o)) {
@@ -340,6 +341,7 @@ async function main() {
   window.__duration = frames.length / fps;
   window.__frames = frames.length;
   window.__fps = fps;
+  window.__meta = { picks: data.picks, sheetTitle: data.sheetTitle };
   renderFrame(0);
   window.__ready = true;
 }

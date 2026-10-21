@@ -801,3 +801,29 @@ What to test in Studio:
 5. Sell at Tobin's stall and at a sell box: notes flutter out, coins fly into you; spam SELL: never more than a few
    dozen pieces, FPS steady on the phone emulator.
 6. Turn on Roblox's Reduce Motion (or the ReduceMotion setting when it lands): no spins, smaller bursts, no pop copy.
+
+## Golem followers run (2026-10-21, branch anim/golem-run)
+The owner: "the golems should really RUN after the characters". `Effects/GolemGait` (pure) + WorldMotionController:
+- Limbs: GolemBuilder's names first (Leg1/2, Arm1/2 + Fist1/2, Head), then name families that stay on the body (Core,
+  Vein, Boulder, Crystal*, Wing*, Tail*, Aura, Crack*), then geometry in golem units for any other gear (at or above
+  the neck -> head, out at the sides below the shoulders -> that arm, e.g. the Dragonscale Knight's shield, low and
+  off-centre -> that leg, else body). Pivots: hips, shoulders, neck. Wings stay on the body.
+- Golems within 50 studs of the camera and on screen, nearest first, while their limb parts fit 160 a frame (phones
+  60), have their limb welds switched off (anchored) and are moved every frame with the one BulkMoveTo; picked every
+  0.25 s; the others keep the whole-body hop. Leaving the range puts the limbs back on their welds at rest.
+- Gait: cadence and stride by speed and size (small golems quick little steps), legs and arms in opposition, a lifted
+  knee, lean and a bounce per step (walk / run / catch-up sprint), a bank and a head turn into turns, a lean back when
+  braking, idle breathing, looking around and a wave; Premium golems fly (arms back, legs trailing, a tilt into
+  turns, a bob); the equip jump stays (arms up). Reduce motion: half the swing, no sprint lean, no bank.
+- GolemController's hook line now also passes `speed`; with running limbs its own hop is taken out (GolemGait.
+  controllerHop mirrors its numbers; a spec checks them against its source).
+- Preview: docs/screenshots/animations/golemove_beh.mp4 / .jpg (`lune run tools/lune/export_world_motion.luau 30
+  golem_run`, `node tools/preview/render_world_anim.mjs 1280 720 6000000 - golem_run golemove_beh`).
+What to test in Studio:
+1. Equip 3 golems (a Common, an Epic with a crown, a Legendary or Mythic). Walk slowly: they walk with quick little
+   steps; walk normally: they run (arms pumping, leaning); jump down a ledge or ride ahead: they sprint to catch up.
+2. Stop: they brake (lean back), then breathe, look around, and now and then one waves.
+3. The Legendary / Mythic flies: arms back, legs trailing, it tilts into turns. The Dragon King's wings stay put.
+4. Walk 60 studs away from another player's golems: they switch to the plain hop; come back: running limbs again,
+   never a limb left floating. Watch FPS with 8 players and their golems on the phone emulator.
+5. Reduce motion on: smaller swings, no lean into sprints or turns.
