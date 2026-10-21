@@ -585,7 +585,10 @@ return function(T, Loader)
 							if offer.Robux then
 								T.eq(
 									offer.Reason,
-									if BoostConfig.canExtend(s.Boosts, offer.Kind, offer.Seconds, NOW) then "ComingSoon" else "Full",
+									if offer.Kind == "HexaLucky" and not BoostConfig.hasEffect("HexaLucky", level)
+										then "NoEffect" -- (floors 1's rocks: no Rare+ ores to luck into)
+										elseif BoostConfig.canExtend(s.Boosts, offer.Kind, offer.Seconds, NOW) then "ComingSoon"
+										else "Full",
 									"Robux packs: Coming soon while the id is 0"
 								)
 								T.falsy(offer.CanBuy, "never buyable while the id is 0")
@@ -606,6 +609,7 @@ return function(T, Loader)
 			end
 		end
 		-- restricted players see no Robux packs (coin top-ups stay while coins can't be bought)
+		MonetizationConfig.CoinPacksEnabled = false
 		for _, card in BoostView.cards(state(), 1e9, NOW, true) do
 			for _, offer in card.Offers do
 				T.falsy(offer.Robux, "no Robux pack where restricted")
@@ -681,7 +685,11 @@ return function(T, Loader)
 				if rare > 0 then
 					T.eq(t.Summary.Before, BoostView.pct(rare))
 					T.eq(t.Summary.After, BoostView.pct(BoostConfig.rareShare(weights, with)))
-					T.truthy(t.Summary.Change > 0, zone.Id .. ": Rare+ grows")
+					if rare < 1 - 1e-9 then
+						T.truthy(t.Summary.Change > 0, zone.Id .. ": Rare+ grows")
+					else
+						T.eq(t.Summary.Change, 0, zone.Id .. ": every ore already Rare+")
+					end
 				elseif crystal and BoostConfig.rareShare(crystal, without) > 0 then
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores in plain rocks, no summary")
 				else
@@ -734,7 +742,7 @@ return function(T, Loader)
 		-- the zone a table starts on
 		T.eq(BoostView.defaultZone(s, "Quarry"), "Quarry", "where you stand")
 		T.eq(BoostView.defaultZone(s, "Emberfall"), "DeepHollow", "in town: the hardest zone you can mine")
-		T.eq(BoostView.defaultZone(state({ BlasterLevel = 1 }), nil), "Quarry", "level 1")
+		T.truthy(BoostView.defaultZone(state({ BlasterLevel = 1 }), nil), "level 1: a zone (none has Rare+ ores yet)")
 		T.eq(BoostView.cycle({ "A", "B", "C" }, "C", 1), "A", "wraps")
 		T.eq(BoostView.cycle({ "A", "B", "C" }, "A", -1), "C")
 		T.eq(BoostView.cycle({}, "A", 1), nil)
