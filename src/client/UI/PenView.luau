@@ -23,10 +23,15 @@
 	box (bottom centre), and on phones it sits at the top, right of the
 	coins.
 	PenView.entries() turns the State snapshot into sorted rows (pure, tested).
-	With UIConfig.lightUI() on (the light UI, ships off) the same panel wears
-	the light "Bubble" look (skinLight / skinRow): a white panel with a blue
-	header band and the 3D backpack, the X on the corner, light rows, chunky
-	buttons in the light colours, dark text. Layout and behaviour are unchanged.
+	The look is the Robux Shop's Pop kit (owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"; Pop.luau, PopTheme): a black
+	frame, the blue header band (the pen's colour, LightSkin.BandRoles
+	"Backpack") with the title, the glossy capacity bar (Pop.bar), the
+	switch and the red X; bright SEND ALL DIRTY / SEND UNKEPT / STOP buttons;
+	one row per item painted in its ore's rarity colour with the item's live
+	3D picture (ItemBuilder.display in a ViewportFrame; Dirty Ore: a dirty
+	chunk under a "?") on a light burst, the grade chip, the income in green
+	money text and green TAKE, blue SEND, orange PODIUM buttons.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,12 +41,13 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
 local Rng = require(Shared.Util.Rng)
 local UIConfig = require(Shared.Config.UIConfig)
-local BubbleTheme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
-local Bubble = require(script.Parent.Bubble)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local PenView = {}
@@ -418,181 +424,256 @@ function PenView.pileSpots(plotCF: CFrame, plotId: number): { CFrame }
 	return list
 end
 
----------------------------------------------------------------- building
+---------------------------------------------------------------- the Pop look (the kit pieces this window needs)
 
-local function fillColor(fraction: number): Color3
-	if fraction >= 1 then
-		return Theme.Bad
-	elseif fraction >= 0.8 then
-		return Theme.Accent
+PenView.Paint = "Blue" -- the header band: the pen's colour (LightSkin.BandRoles TerraForgePen = "Backpack")
+-- the merged Dirty Ore row: a dirt brown (it never says which ores they are)
+PenView.DirtyPaint = {
+	Top = Color3.fromRGB(190, 162, 132),
+	Bottom = Color3.fromRGB(104, 82, 64),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
+
+local WHITE = Color3.new(1, 1, 1)
+local SOFT = Color3.fromRGB(214, 220, 232) -- quieter white text (status, hints)
+local ROW_CORNER = 10
+local BAR_H = 20 -- the capacity bar's height
+local HOLDER_KEYS = { Size = true, Position = true, AnchorPoint = true, LayoutOrder = true, Visible = true }
+local HOVER = Color3.fromRGB(236, 236, 236)
+local PRESS = Color3.fromRGB(200, 200, 200)
+
+-- A text's black edge (its Contextual UIStroke, made when missing).
+local function edgeOf(label: GuiObject): UIStroke
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			return child
+		end
 	end
-	return Theme.Good
+	return Pop.edge(label)
 end
 
----------------------------------------------------------------- the light look (UIConfig.LightUI)
-
-local LIGHT_GOOD = Color3.fromRGB(30, 160, 70) -- income text on the light rows
-
-local function isLight(refs: Refs): boolean
-	return refs.Gui:GetAttribute("Bubble") == true
+-- White chunky text with a black edge (a UIKit label or button), or `color`.
+local function ink(label: GuiObject, color: Color3?, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = color or PopTheme.Ink
+	local edge = edgeOf(label)
+	edge.Color = PopTheme.Outline
+	edge.Thickness = Pop.edgeFor(text.TextSize)
+	edge.Transparency = 0
+	edge.LineJoinMode = Enum.LineJoinMode.Round
 end
 
--- Dark text without an outline (on the white panel and rows).
-local function inkText(label: TextLabel, color: Color3?)
-	label.TextColor3 = color or BubbleTheme.Ink
-	local outline = label:FindFirstChildOfClass("UIStroke")
-	if outline then
-		outline.Enabled = false
-		outline.Transparency = 1
-	end
-end
-
--- A UIKit.button in a light colour: navy outline, white text with a navy edge.
-local function lightButton(button: TextButton, role: BubbleTheme.Role)
-	local holder = button.Parent :: Frame
-	holder.BackgroundColor3 = role.Lip
-	button.BackgroundColor3 = role.Base
-	button.TextColor3 = BubbleTheme.White
-	local parts: { GuiObject } = { holder, button }
-	for _, d in parts do
-		for _, child in d:GetChildren() do
-			if child:IsA("UIStroke") then
-				child.Color = BubbleTheme.Outline
-				if child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
-					child.Thickness = BubbleTheme.Stroke
-				end
+--[[
+	A Pop button that keeps UIKit.button's shape: the returned TextButton
+	(clear, its own word: controllers and views set its Text, TextSize and
+	TextTransparency) fills its holder, and the holder is the painted face
+	(Pop.face: the glossy paint, the black border, the light rim, studs).
+	(A UIGradient on the button itself would tint its word too.) Size /
+	Position / AnchorPoint / LayoutOrder / Visible go on the holder (layouts
+	move it), the rest on the button. paintButton recolours the face.
+]]
+local function popButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local name = if props and type(props.Name) == "string" then props.Name else text
+	local face = UIKit.new("Frame", {
+		Name = name .. "Holder",
+		Size = UDim2.fromOffset(160, 52),
+		ZIndex = 4,
+	}, parent)
+	Pop.face(face, paint)
+	Pop.studs(face, PopTheme.Corner, 0.45, 28, 4)
+	local button = UIKit.new("TextButton", {
+		Name = "Button",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		FontFace = PopTheme.Font,
+		TextColor3 = PopTheme.Ink,
+		TextSize = 22,
+		Selectable = true,
+		ZIndex = 5,
+	}, face)
+	Pop.edge(button, 2.5)
+	if props then
+		for key, value in props do
+			local target: any = if HOLDER_KEYS[key] then face else button
+			if key ~= "Name" then
+				target[key] = value
 			end
 		end
 	end
+	-- hover / press darken the face (AutoButtonColor would only darken the clear button)
+	pcall(function()
+		local b: any = button
+		b:GetPropertyChangedSignal("GuiState"):Connect(function()
+			local state = b.GuiState
+			face.BackgroundColor3 = if state == Enum.GuiState.Press then PRESS elseif state == Enum.GuiState.Hover then HOVER else WHITE
+		end)
+	end)
+	return button
 end
 
-local function skinRow(row: Row)
-	row.Frame.BackgroundColor3 = BubbleTheme.PanelTint
-	local outline = row.Frame:FindFirstChildOfClass("UIStroke")
-	if outline then
-		outline.Color = BubbleTheme.Outline
-		outline.Thickness = 3
+-- Recolours a popButton's face.
+local function paintButton(button: TextButton, paint: string | Pop.Paint)
+	local face = button.Parent
+	if face and face:IsA("GuiObject") then
+		Pop.repaint(face, paint)
 	end
-	local iconOutline = row.Icon:FindFirstChildOfClass("UIStroke")
-	if iconOutline then
-		iconOutline.Color = BubbleTheme.Outline
-	end
-	local mysteryOutline = row.Mystery:FindFirstChildOfClass("UIStroke")
-	if mysteryOutline then
-		mysteryOutline.Color = BubbleTheme.Outline
-	end
-	inkText(row.Name)
-	inkText(row.Count)
-	local gradeOutline = row.Grade:FindFirstChildOfClass("UIStroke")
-	if gradeOutline then
-		gradeOutline.Color = BubbleTheme.Outline
-	end
-	for _, child in row.Grade:GetChildren() do
-		if child:IsA("UIStroke") then
-			child.Color = BubbleTheme.Outline
-		end
-	end
-	lightButton(row.Take, BubbleTheme.Roles.Go)
-	lightButton(row.Send, BubbleTheme.Roles.Lobby)
-	lightButton(row.Podium, BubbleTheme.Roles.Vault)
 end
 
-local function skinLight(refs: Refs)
-	refs.Gui:SetAttribute("Bubble", true)
-	local panel = refs.Panel
-	panel.BackgroundColor3 = BubbleTheme.Panel
-	local panelGradient = panel:FindFirstChildOfClass("UIGradient")
-	if panelGradient then
-		panelGradient.Color = ColorSequence.new(BubbleTheme.Panel, BubbleTheme.Panel)
+--[[
+	The window's chrome on an old panel: the black frame, a dark studded
+	body and the bright header band (shine stripes, studs) `band` units
+	tall; both sit under everything else (ZIndex 0).
+]]
+local function chrome(panel: Frame, paint: string | Pop.Paint, band: number)
+	panel.BackgroundColor3 = PopTheme.Outline
+	local old = panel:FindFirstChildOfClass("UIGradient")
+	if old then
+		old:Destroy()
 	end
-	local panelCorner = panel:FindFirstChildOfClass("UICorner")
-	if panelCorner then
-		panelCorner.CornerRadius = UDim.new(0, 26)
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
 	end
-	local panelOutline = panel:FindFirstChildOfClass("UIStroke")
-	if panelOutline then
-		panelOutline.Color = BubbleTheme.Outline
-		panelOutline.Thickness = BubbleTheme.Stroke
+	local stroke = panel:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PopTheme.Outline
+		stroke.Thickness = 4
 	end
-	-- the blue header band behind the title, with the 3D backpack
-	local role = BubbleTheme.Roles.Backpack
-	local band = UIKit.new("Frame", {
-		Name = "Band",
-		BackgroundColor3 = Color3.new(1, 1, 1),
+	local body = UIKit.new("Frame", {
+		Name = "Body",
+		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 40),
-		ZIndex = 1,
+		Position = UDim2.fromOffset(4, band),
+		Size = UDim2.new(1, -8, 1, -(band + 4)),
+		ZIndex = 0,
 	}, panel)
-	Bubble.corner(band, 26)
-	UIKit.new("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, role.Top),
-			ColorSequenceKeypoint.new(0.5, role.Base),
-			ColorSequenceKeypoint.new(1, role.Base),
-		}),
-		Rotation = 90,
-	}, band)
-	UIKit.new("Frame", {
-		Name = "Fill",
-		BackgroundColor3 = role.Base,
+	UIKit.corner(body, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	Pop.studs(body, 4, 0.5, 36, 0)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.fromScale(1, 0.5),
-		ZIndex = 1,
-	}, band)
-	UIKit.new("Frame", {
-		Name = "Line",
-		BackgroundColor3 = BubbleTheme.Outline,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 0,
+	}, body)
+	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
+	local head = UIKit.new("Frame", {
+		Name = "Header",
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, 3),
-		ZIndex = 1,
-	}, band)
-	Bubble.icon(panel, "backpack", 74, {
-		Name = "HeaderIcon",
-		Position = UDim2.fromOffset(4, -18),
-		ZIndex = 4,
-	})
-	refs.Title.Position = UDim2.fromOffset(86, 2)
-	refs.Title.TextColor3 = BubbleTheme.White
-	refs.Title.ZIndex = 3
-	local titleOutline = refs.Title:FindFirstChildOfClass("UIStroke")
-	if titleOutline then
-		titleOutline.Color = BubbleTheme.Outline
-		titleOutline.Thickness = 3
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 0, band - 8),
+		ClipsDescendants = true,
+		ZIndex = 0,
+	}, panel)
+	Pop.face(head, paint, 4, false)
+	local headBorder = head:FindFirstChild("Border") :: UIStroke
+	headBorder.Thickness = 3
+	Pop.studs(head, 4, 0.35, 40, 0)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 0,
+	}, head)
+	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 0,
+		}, head)
 	end
-	inkText(refs.Header)
-	refs.Bar.BackgroundColor3 = BubbleTheme.PanelTint
-	local barOutline = refs.Bar:FindFirstChildOfClass("UIStroke")
-	if barOutline then
-		barOutline.Color = BubbleTheme.Outline
-		barOutline.Thickness = 2.5
+end
+
+-- The title's 3D drop shadow (Pop.shadow), kept on the title as layouts move it.
+local function syncShadow(title: TextLabel)
+	local parent = title.Parent
+	local found = if parent then parent:FindFirstChild(title.Name .. "Shadow") else nil
+	local shade: TextLabel = if found and found:IsA("TextLabel") then found else Pop.shadow(title)
+	shade.Position = title.Position + UDim2.fromOffset(0, 4)
+	shade.Size = title.Size
+	shade.AnchorPoint = title.AnchorPoint
+	shade.Text = title.Text
+	shade.TextSize = title.TextSize
+	shade.TextXAlignment = title.TextXAlignment
+	shade.Visible = title.Visible
+	shade.ZIndex = math.max(1, title.ZIndex - 1)
+end
+
+-- The ore description behind an entry (nil: the merged Dirty Ore row).
+local function descOf(entry: Entry): ItemData.Desc?
+	if entry.Keys ~= nil or entry.Key == PenView.DirtyKey then
+		return nil
 	end
-	-- the X on the panel's corner, like the other light windows
-	lightButton(refs.Close, BubbleTheme.Roles.Danger)
-	local closeHolder = refs.Close.Parent :: Frame
-	closeHolder.AnchorPoint = Vector2.new(0.5, 0.5)
-	closeHolder.Position = UDim2.new(1, -12, 0, 10)
-	closeHolder.ZIndex = 6
-	lightButton(refs.AutoSort, BubbleTheme.Roles.Go)
-	lightButton(refs.SendDirty, BubbleTheme.Roles.Lobby)
-	lightButton(refs.SendUnkept, BubbleTheme.Roles.Lobby)
-	lightButton(refs.StopSend, BubbleTheme.Roles.Danger)
-	inkText(refs.Status, BubbleTheme.InkSoft)
-	inkText(refs.Empty, BubbleTheme.InkSoft)
-	inkText(refs.Hint, BubbleTheme.InkSoft)
-	for _, child in refs.PadHint:GetChildren() do
-		if child:IsA("TextLabel") then
-			inkText(child, BubbleTheme.InkSoft)
-		end
+	return ItemData.parseKey(entry.Key)
+end
+
+-- The paint of a row: its ore's rarity (Pop.rarityPaint); Dirty Ore a dirt brown.
+function PenView.rowPaint(entry: Entry): Pop.Paint
+	local desc = descOf(entry)
+	if entry.Mystery or not desc then
+		return PenView.DirtyPaint
 	end
-	refs.List.ScrollBarImageColor3 = BubbleTheme.InkSoft
+	local ore = OreData.ById[desc.O]
+	return Pop.rarityPaint(if ore then ore.Rarity else nil)
+end
+
+--[[
+	The item a row shows: its picture name (the preview's icon) and the
+	description ItemBuilder.display draws. Dirty Ore: a dirty chunk that
+	never tells which ore it is.
+]]
+function PenView.pictureOf(entry: Entry): (string, ItemData.Desc)
+	local desc = descOf(entry)
+	if entry.Mystery or not desc then
+		return "ore_raw", { K = "Raw", O = "Copper" }
+	end
+	return `item_{desc.K}_{desc.O}`, desc
+end
+
+-- A row's live 3D picture (built once: a row's key never changes).
+local function fillPicture(icon: Frame, entry: Entry)
+	if icon:FindFirstChild("Picture") then
+		return
+	end
+	local name, desc = PenView.pictureOf(entry)
+	local ok, model = pcall(ItemBuilder.display, desc, CFrame.new(), name)
+	Pop.model(icon, name, 10, if ok then model else nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.52),
+		Size = UDim2.fromScale(1.12, 1.12),
+		ZIndex = 3,
+	}, Vector3.new(-0.5, 0.55, -1))
+end
+
+---------------------------------------------------------------- building
+
+-- The capacity bar's paint: green, orange from 80%, red when full.
+local function fillPaint(fraction: number): string
+	if fraction >= 1 then
+		return "Red"
+	elseif fraction >= 0.8 then
+		return "Orange"
+	end
+	return "Green"
 end
 
 function PenView.build(): Refs
 	local gui = UIKit.screen("TerraForgePen", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("Pop", true)
 
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
@@ -600,74 +681,85 @@ function PenView.build(): Refs
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(LAYOUTS.Normal.Width, 400),
 	})
+	chrome(panel, PenView.Paint, HEADER)
 	local title = UIKit.label(panel, "ORE PEN", 30, {
 		Name = "Title",
-		Position = UDim2.fromOffset(PAD, 8),
-		Size = UDim2.new(1, -(PAD * 2 + 90), 0, 36),
+		Position = UDim2.fromOffset(PAD, 4),
+		Size = UDim2.new(1, -(PAD * 2 + 90), 0, 42),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 		TextScaled = false,
+		ZIndex = 3,
 	})
+	ink(title)
 	local header = UIKit.label(panel, "0 / 0", 20, {
 		Name = "Header",
-		Position = UDim2.fromOffset(PAD, 46),
-		Size = UDim2.fromOffset(110, 24),
+		Position = UDim2.fromOffset(PAD, 48),
+		Size = UDim2.fromOffset(110, 26),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
+		ZIndex = 3,
 	})
+	ink(header)
+	-- the capacity bar (Pop.bar): a dark well, a glossy fill
 	local bar = UIKit.new("Frame", {
 		Name = "Bar",
-		Position = UDim2.fromOffset(PAD + 110, 52),
-		Size = UDim2.new(1, -(PAD * 2 + 110 + 90), 0, 14),
-		BackgroundColor3 = Theme.PanelDark,
+		Position = UDim2.fromOffset(PAD + 110, 61 - BAR_H / 2),
+		Size = UDim2.new(1, -(PAD * 2 + 110 + 90), 0, BAR_H),
+		BackgroundColor3 = PopTheme.Well,
 		BorderSizePixel = 0,
+		ZIndex = 3,
 	}, panel)
-	UIKit.corner(bar, 7)
-	UIKit.stroke(bar, 2)
+	UIKit.corner(bar, BAR_H // 2)
+	Pop.border(bar, 3)
 	local barFill = UIKit.new("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Theme.Good,
 		BorderSizePixel = 0,
+		ZIndex = 3,
 	}, bar)
-	UIKit.corner(barFill, 7)
+	Pop.face(barFill, "Green", BAR_H // 2, true, false)
+	local fillBorder = barFill:FindFirstChild("Border")
+	if fillBorder then
+		fillBorder:Destroy()
+	end
 
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
+	local close = popButton(panel, "X", PopTheme.Close, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -PAD, 0, 14),
+		Position = UDim2.new(1, -PAD, 0, 16),
 		Size = UDim2.fromOffset(LAYOUTS.Normal.Close, LAYOUTS.Normal.Close),
-		TextSize = 26,
+		TextSize = 32,
+		FontFace = PopTheme.Heavy,
 	})
 	-- the sorting billboard's switch, left of the X (setAutoSort shows it)
-	local autoSort = UIKit.button(panel, "AUTO-SORT ON", Theme.Good, Theme.GoodDark, {
+	local autoSort = popButton(panel, "AUTO-SORT ON", "Green", {
 		Name = "AutoSort",
 		AnchorPoint = Vector2.new(1, 0),
 		Visible = false,
 		TextSize = LAYOUTS.Normal.ToggleText,
 	})
 
-	-- the send toolbar (WP-Belts): three buttons and a status line in a row
+	-- the send toolbar (WP-Belts): three bright buttons and a status line in a row
 	local toolbar = UIKit.new("Frame", {
 		Name = "Toolbar",
 		Position = UDim2.fromOffset(PAD, HEADER),
 		Size = UDim2.new(1, -PAD * 2, 0, LAYOUTS.Normal.ToolH),
 		BackgroundTransparency = 1,
+		ZIndex = 2,
 	}, panel)
 	UIKit.list(toolbar, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Center })
-	local sendDirty = UIKit.button(toolbar, "SEND ALL DIRTY", PenView.SendColor, PenView.SendDark, {
+	local sendDirty = popButton(toolbar, "SEND ALL DIRTY", "Blue", {
 		Name = "SendDirty",
 		LayoutOrder = 1,
 		TextSize = 18,
 	})
-	local sendUnkept = UIKit.button(toolbar, "SEND UNKEPT", PenView.SendColor, PenView.SendDark, {
+	local sendUnkept = popButton(toolbar, "SEND UNKEPT", "Teal", {
 		Name = "SendUnkept",
 		LayoutOrder = 2,
 		TextSize = 18,
 	})
-	local stopSend = UIKit.button(toolbar, "STOP", Theme.Bad, Theme.BadDark, {
+	local stopSend = popButton(toolbar, "STOP", "Red", {
 		Name = "StopSend",
 		LayoutOrder = 3,
 		TextSize = 18,
@@ -676,8 +768,9 @@ function PenView.build(): Refs
 		Name = "Status",
 		LayoutOrder = 4,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
+		ZIndex = 3,
 	})
+	ink(status, SOFT)
 
 	local list = UIKit.new("ScrollingFrame", {
 		Name = "List",
@@ -686,11 +779,12 @@ function PenView.build(): Refs
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
+		ZIndex = 2,
 	}, panel)
 	UIKit.list(list, Enum.FillDirection.Vertical, GAP)
 	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, list)
@@ -700,16 +794,18 @@ function PenView.build(): Refs
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, (HEADER - FOOTER) / 2),
 		Size = UDim2.new(1, -PAD * 4, 0, 70),
-		TextColor3 = Theme.TextDim,
 		Visible = false,
+		ZIndex = 3,
 	})
+	ink(empty, SOFT)
 	local hint = UIKit.label(panel, "", 15, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, PAD, 1, -8),
 		Size = UDim2.new(1, -PAD * 2, 0, 20),
-		TextColor3 = Theme.TextDim,
+		ZIndex = 3,
 	})
+	ink(hint, SOFT)
 	-- gamepads: the platform's own button glyphs (Xbox or PlayStation), set by the controller
 	local padHint = UIKit.new("Frame", {
 		Name = "PadHint",
@@ -718,6 +814,7 @@ function PenView.build(): Refs
 		Size = UDim2.fromOffset(300, 24),
 		BackgroundTransparency = 1,
 		Visible = false,
+		ZIndex = 3,
 	}, panel)
 	UIKit.list(padHint, Enum.FillDirection.Horizontal, 6, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -729,17 +826,20 @@ function PenView.build(): Refs
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(24, 24),
 			BackgroundTransparency = 1,
+			ZIndex = 3,
 		}, padHint)
 	end
 	local function word(order: number, text: string): TextLabel
-		return UIKit.label(padHint, text, 16, {
+		local label = UIKit.label(padHint, text, 16, {
 			Name = "Word" .. order,
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(84, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
+			ZIndex = 3,
 		})
+		ink(label, SOFT)
+		return label
 	end
 	local padA = glyph(1)
 	local padAText = word(2, "choose")
@@ -773,8 +873,8 @@ function PenView.build(): Refs
 		Mode = "Pen",
 		Slot = nil,
 	}
+	-- (the light UI: an open window hides the touch thumbstick)
 	if UIConfig.lightUI() then
-		skinLight(refs)
 		TouchControls.follow(gui)
 	end
 	PenView.setCompact(refs, false)
@@ -787,24 +887,28 @@ local function layoutRow(refs: Refs, row: Row)
 	local l = layoutOf(refs)
 	local rowW = l.Width - PAD - SCROLLBAR - PAD
 	row.Frame.Size = UDim2.fromOffset(rowW, l.RowH)
-	local icon = l.RowH - 16
+	local icon = l.RowH - 12
 	row.Icon.Size = UDim2.fromOffset(icon, icon)
-	row.Icon.Position = UDim2.fromOffset(8, 8)
-	row.Mystery.TextSize = math.floor(icon * 0.6)
+	row.Icon.Position = UDim2.fromOffset(8, 6)
+	row.Mystery.TextSize = math.floor(icon * 0.62)
 	local textX = icon + 18
 	local buttons = l.TakeW + l.SendW + l.PodiumW + 32
 	local countW = 64
 	local textW = rowW - textX - buttons - countW
-	row.Name.Position = UDim2.fromOffset(textX, 6)
-	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.45))
-	row.Name.TextSize = l.Name
+	row.Name.Position = UDim2.fromOffset(textX, 4)
+	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.48))
+	row.Name.TextSize = l.Name + 2
 	local lineY = math.floor(l.RowH * 0.5) + 2
+	local chipH = if refs.Compact then 26 else 22
 	row.Grade.Position = UDim2.fromOffset(textX, lineY)
-	row.Income.Position = UDim2.fromOffset(textX + 96, lineY - 2)
-	row.Income.Size = UDim2.fromOffset(math.max(40, textW - 96), 26)
+	row.Grade.Size = UDim2.fromOffset(if refs.Compact then 100 else 88, chipH)
+	row.Grade.TextSize = if refs.Compact then 16 else 14
+	row.Income.Position = UDim2.fromOffset(textX + row.Grade.Size.X.Offset + 8, lineY - 2)
+	row.Income.Size = UDim2.fromOffset(math.max(40, textW - row.Grade.Size.X.Offset - 8), chipH + 4)
+	row.Income.TextSize = if refs.Compact then 20 else 18
 	row.Count.Position = UDim2.fromOffset(rowW - buttons - countW, 0)
 	row.Count.Size = UDim2.fromOffset(countW - 6, l.RowH)
-	local buttonY = math.floor((l.RowH - l.ButtonH) / 2) + 3
+	local buttonY = math.floor((l.RowH - l.ButtonH) / 2)
 	local take = row.Take.Parent :: Frame
 	take.Position = UDim2.fromOffset(rowW - l.PodiumW - l.SendW - l.TakeW - 24, buttonY)
 	take.Size = UDim2.fromOffset(l.TakeW, l.ButtonH)
@@ -814,53 +918,88 @@ local function layoutRow(refs: Refs, row: Row)
 	local podium = row.Podium.Parent :: Frame
 	podium.Position = UDim2.fromOffset(rowW - l.PodiumW - 8, buttonY)
 	podium.Size = UDim2.fromOffset(l.PodiumW, l.ButtonH)
+	for _, button in { row.Take, row.Send, row.Podium } do
+		button.TextSize = if refs.Compact then 22 else 20
+	end
 end
 
 local function newRow(refs: Refs, key: string): Row
 	local frame = UIKit.new("Frame", {
 		Name = "Row",
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true, -- (the light burst behind the picture)
 	}, refs.List)
 	frame:SetAttribute("Key", key)
-	UIKit.corner(frame, 12)
-	UIKit.stroke(frame, 2.5)
+	Pop.face(frame, PenView.DirtyPaint, ROW_CORNER, false)
+	Pop.studs(frame, ROW_CORNER, 0.5, 40, 1)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	-- the picture: a light burst and a soft glow behind the item's live 3D look
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, frame)
-	UIKit.corner(icon, 10)
-	UIKit.stroke(icon, 2.5)
-	UIKit.gradient(icon, Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 150))
+	Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 80, 0.45, 1)
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.7,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.86, 0.86),
+		ZIndex = 2,
+	}, icon)
+	UIKit.corner(glow, 999)
+	Pop.sparkle(icon, UDim2.fromScale(0.9, 0.14), 16, 4, 0.15)
+	Pop.sparkle(icon, UDim2.fromScale(0.08, 0.82), 12, 4, 0.35)
 	local mystery = UIKit.label(icon, "?", 28, {
 		Name = "Mystery",
 		Size = UDim2.fromScale(1, 1),
-		FontFace = Theme.TitleFont,
+		TextWrapped = false,
 		Visible = false,
+		ZIndex = 5,
 	})
-	local name = UIKit.label(frame, "", 20, {
+	ink(mystery, WHITE, PopTheme.Heavy)
+	local name = UIKit.label(frame, "", 22, {
 		Name = "ItemName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Center,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
 	})
-	local grade = UIKit.chip(frame, "", Theme.PanelDark, { Name = "Grade", Size = UDim2.fromOffset(88, 22) })
-	local income = UIKit.label(frame, "", 17, {
+	ink(name)
+	-- the grade chip: one bright colour (a gradient would tint its word), a black border
+	local grade = UIKit.chip(frame, "", Theme.PanelDark, { Name = "Grade", Size = UDim2.fromOffset(88, 22), ZIndex = 4 })
+	for _, child in grade:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child:Destroy()
+		end
+	end
+	Pop.border(grade, 2)
+	ink(grade)
+	local income = UIKit.label(frame, "", 18, {
 		Name = "Income",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Good,
 		TextWrapped = false,
+		ZIndex = 4,
 	})
-	local count = UIKit.label(frame, "x0", 24, {
+	ink(income, PopTheme.Money)
+	local count = UIKit.label(frame, "x0", 26, {
 		Name = "Count",
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextWrapped = false,
+		ZIndex = 4,
 	})
-	local take = UIKit.button(frame, "TAKE", Theme.Good, Theme.GoodDark, { Name = "Take", TextSize = 20 })
-	local send = UIKit.button(frame, "SEND", PenView.SendColor, PenView.SendDark, { Name = "Send", TextSize = 20 })
-	local podium = UIKit.button(frame, "PODIUM", Theme.Accent, Theme.AccentDark, { Name = "Podium", TextSize = 20 })
+	ink(count, WHITE, PopTheme.Heavy)
+	local take = popButton(frame, "TAKE", "Green", { Name = "Take", TextSize = 20 })
+	local send = popButton(frame, "SEND", "Blue", { Name = "Send", TextSize = 20 })
+	local podium = popButton(frame, "PODIUM", "Orange", { Name = "Podium", TextSize = 20 })
 	local row: Row = {
 		Key = key,
 		Frame = frame,
@@ -875,9 +1014,6 @@ local function newRow(refs: Refs, key: string): Row
 		Podium = podium,
 	}
 	refs.Rows[key] = row
-	if isLight(refs) then
-		skinRow(row)
-	end
 	layoutRow(refs, row)
 	return row
 end
@@ -906,25 +1042,23 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 			table.insert(created, row)
 		end
 		row.Frame.LayoutOrder = index
-		row.Icon.BackgroundColor3 = entry.Color
+		Pop.repaint(row.Frame, PenView.rowPaint(entry), false)
+		fillPicture(row.Icon, entry)
 		row.Mystery.Visible = entry.Mystery
 		row.Name.Text = entry.Name
 		local grade = entry.Grade and ItemData.GradeById[entry.Grade]
 		row.Grade.Visible = grade ~= nil
 		if grade then
 			row.Grade.Text = grade.Name
-			row.Grade.BackgroundColor3 = grade.Color
+			row.Grade.BackgroundColor3 = grade.Color:Lerp(Color3.new(0, 0, 0), 0.14)
 		end
-		row.Income.Position = UDim2.fromOffset(row.Grade.Position.X.Offset + (if grade then 96 else 0), row.Income.Position.Y.Offset)
+		local incomeX = row.Grade.Position.X.Offset + (if grade then row.Grade.Size.X.Offset + 8 else 0)
+		row.Income.Position = UDim2.fromOffset(incomeX, row.Income.Position.Y.Offset)
 		row.Income.Text = if entry.Income > 0
 			then Format.perSecond(entry.Income)
 			elseif entry.Mystery then "Clean it to see what it is"
 			else ""
-		if isLight(refs) then
-			row.Income.TextColor3 = if entry.Income > 0 then LIGHT_GOOD else BubbleTheme.InkSoft
-		else
-			row.Income.TextColor3 = if entry.Income > 0 then Theme.Good else Theme.TextDim
-		end
+		row.Income.TextColor3 = if entry.Income > 0 then PopTheme.Money else SOFT
 		row.Count.Text = "x" .. Format.big(entry.Count)
 		local takeHolder = row.Take.Parent :: Frame
 		local sendHolder = row.Send.Parent :: Frame
@@ -956,18 +1090,19 @@ function PenView.isOver(count: number, capacity: number): boolean
 end
 
 --[[
-	"37 / 40" and the fill bar (green, amber from 80%, red when full). Over
-	its capacity it stays red and, while nothing is being sent (setSending
-	runs first and showed the idle line), the status line says why new ore
-	can't go in (OverText).
+	"37 / 40" and the capacity bar (green, orange from 80%, red when full).
+	Over its capacity it stays red and, while nothing is being sent
+	(setSending runs first and showed the idle line), the status line says
+	why new ore can't go in (OverText).
 ]]
 function PenView.setHeader(refs: Refs, count: number, capacity: number)
 	refs.Header.Text = `{Format.commas(count)} / {Format.commas(capacity)}`
 	local fraction = if capacity > 0 then count / capacity else 1
 	refs.BarFill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
-	local color = fillColor(fraction)
-	refs.BarFill.BackgroundColor3 = color
-	refs.Header.TextColor3 = if fraction >= 0.8 then color elseif isLight(refs) then BubbleTheme.Ink else Theme.Text
+	refs.BarFill.Visible = fraction > 0.001
+	local paint = fillPaint(fraction)
+	Pop.repaint(refs.BarFill, paint, true)
+	refs.Header.TextColor3 = if fraction >= 0.8 then PopTheme.Paints[paint].Top else PopTheme.Ink
 	if PenView.isOver(count, capacity) and refs.Status.Text == PenView.SendIdleText then
 		refs.Status.Text = PenView.OverText
 		refs.Status.TextColor3 = Theme.Bad
@@ -991,21 +1126,18 @@ end
 	The send toolbar (normal mode only): what is being sent and why it waits
 	(PenView.sendText of the State's PenSend), STOP while something is
 	queued, SEND UNKEPT only with the sorting billboard (`canUnkept`), SEND
-	ALL DIRTY dimmed while the pen holds no dirty ore (`dirty` = how many).
+	ALL DIRTY greyed out while the pen holds no dirty ore (`dirty` = how many).
 ]]
 function PenView.setSending(refs: Refs, send: any, canUnkept: boolean, dirty: number)
 	local text, waiting, _, pen = PenView.sendText(send)
 	refs.Status.Text = text
-	refs.Status.TextColor3 = if waiting then Theme.Accent elseif isLight(refs) then BubbleTheme.InkSoft else Theme.TextDim
+	refs.Status.TextColor3 = if waiting then Theme.Accent else SOFT
 	-- STOP stops the pen's sends (the train's Direct Unload goes on)
 	local stop = refs.StopSend.Parent :: Frame
 	stop.Visible = pen > 0
 	local unkept = refs.SendUnkept.Parent :: Frame
 	unkept.Visible = canUnkept
-	local light = isLight(refs)
-	refs.SendDirty.BackgroundColor3 = if dirty > 0
-		then (if light then BubbleTheme.Roles.Lobby.Base else PenView.SendColor)
-		else (if light then BubbleTheme.Roles.Plain.Base else Theme.PanelLight)
+	paintButton(refs.SendDirty, if dirty > 0 then "Blue" else PopTheme.Gray)
 	refs.SendDirty.TextTransparency = if dirty > 0 then 0 else 0.4
 end
 
@@ -1019,19 +1151,12 @@ function PenView.setAutoSort(refs: Refs, visible: boolean, on: boolean)
 	local changed = holder.Visible ~= show
 	holder.Visible = show
 	refs.AutoSort.Text = if on then "AUTO-SORT ON" else "AUTO-SORT OFF"
-	if isLight(refs) then
-		local role = if on then BubbleTheme.Roles.Go else BubbleTheme.Roles.Settings
-		refs.AutoSort.BackgroundColor3 = role.Base
-		holder.BackgroundColor3 = role.Lip
-	else
-		refs.AutoSort.BackgroundColor3 = if on then Theme.Good else PenView.OffColor
-		holder.BackgroundColor3 = if on then Theme.GoodDark else PenView.OffDark
-	end
+	paintButton(refs.AutoSort, if on then "Green" else "Slate")
 	if changed then
 		-- the fill bar makes room for it
 		local l = layoutOf(refs)
 		local right = PAD + l.Close + (if show then 8 + l.ToggleW + 12 else 90 - l.Close)
-		refs.Bar.Size = UDim2.new(1, -(PAD + 110 + right), 0, 14)
+		refs.Bar.Size = UDim2.new(1, -(PAD + 110 + right), 0, BAR_H)
 	end
 end
 
@@ -1055,7 +1180,8 @@ local function placePanel(refs: Refs, width: number)
 	local room = refs.Room
 	if refs.Compact and room then
 		-- centre it in the room right of the coins, never off the right edge
-		local left = if isLight(refs) then PenView.HudLeftLight else PenView.HudLeft
+		-- (the light HUD's coins pill is wider)
+		local left = if UIConfig.lightUI() then PenView.HudLeftLight else PenView.HudLeft
 		local want = left + HUD_GAP + width / 2 - room.X / 2
 		local most = room.X / 2 - width / 2 - HUD_GAP
 		refs.Panel.AnchorPoint = Vector2.new(0.5, 0)
@@ -1075,15 +1201,19 @@ local function layoutPanel(refs: Refs)
 	local height = fixed + rows * l.RowH + (rows - 1) * GAP
 	refs.Panel.Size = UDim2.fromOffset(l.Width, height)
 	placePanel(refs, l.Width)
+	-- the X and the switch, centred in the header band
+	local top = math.floor((HEADER - l.Close) / 2)
+	local closeHolder = refs.Close.Parent :: Frame
+	closeHolder.Position = UDim2.new(1, -PAD, 0, top)
 	local toggle = refs.AutoSort.Parent :: Frame
-	toggle.Position = UDim2.new(1, -(PAD + l.Close + 8), 0, 14)
+	toggle.Position = UDim2.new(1, -(PAD + l.Close + 8), 0, top)
 	toggle.Size = UDim2.fromOffset(l.ToggleW, l.Close)
 	refs.AutoSort.TextSize = l.ToggleText
 	if refs.Mode ~= "Pen" then
 		toggle.Visible = false
 	end
 	local right = PAD + l.Close + (if toggle.Visible then 8 + l.ToggleW + 12 else 90 - l.Close)
-	refs.Bar.Size = UDim2.new(1, -(PAD + 110 + right), 0, 14)
+	refs.Bar.Size = UDim2.new(1, -(PAD + 110 + right), 0, BAR_H)
 	refs.Toolbar.Visible = tool > 0
 	refs.Toolbar.Size = UDim2.new(1, -PAD * 2, 0, l.ToolH)
 	refs.List.Position = UDim2.fromOffset(PAD, HEADER + tool)
@@ -1100,6 +1230,7 @@ local function layoutPanel(refs: Refs)
 	sizeButton(refs.StopSend, l.StopW)
 	refs.Status.Size = UDim2.fromOffset(math.max(80, l.Width - PAD * 2 - used), l.ToolButtonH)
 	refs.Status.TextSize = l.StatusText
+	syncShadow(refs.Title)
 end
 
 -- Normal pen view, or pick mode for one podium slot.
@@ -1125,10 +1256,11 @@ function PenView.setCompact(refs: Refs, compact: boolean, room: Vector2?)
 	refs.Compact = compact
 	refs.Room = room
 	local l = layoutOf(refs)
-	layoutPanel(refs)
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
+	refs.Close.TextSize = math.floor(l.Close * 0.62)
 	refs.Title.TextSize = if compact then 34 else 30
+	layoutPanel(refs)
 	for _, row in refs.Rows do
 		layoutRow(refs, row)
 	end

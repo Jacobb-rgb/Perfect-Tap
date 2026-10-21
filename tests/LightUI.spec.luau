@@ -181,37 +181,64 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("LightUI: the Ore Pen wears the light look and keeps its behaviour", function()
+	T.test("Pop: the Ore Pen wears the Pop look (switch on and off) and keeps its behaviour", function()
 		local PenView = ui("PenView")
-		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 		local entries = {
-			{ Key = "a", Kind = "Clean", Name = "Clean Silver", Grade = "Clean", Count = 3, Income = 12, Value = 1, Color = Color3.new(0.7, 0.7, 0.8), Mystery = false },
-			{ Key = "b", Kind = "Raw", Name = "Dirty Ore", Count = 2, Income = 0, Value = 0, Color = Color3.new(0.5, 0.5, 0.5), Mystery = true },
+			{
+				Key = "Clean|Silver|Clean|",
+				Kind = "Clean",
+				Name = "Clean Silver",
+				Grade = "Clean",
+				Count = 3,
+				Income = 12,
+				Value = 1,
+				Color = Color3.new(0.7, 0.7, 0.8),
+				Mystery = false,
+			},
+			{
+				Key = "Dirty",
+				Kind = "Raw",
+				Name = "Dirty Ore",
+				Count = 2,
+				Income = 0,
+				Value = 0,
+				Color = Color3.new(0.5, 0.5, 0.5),
+				Mystery = true,
+				Keys = { ["Raw|Copper||"] = 2 },
+			},
 		}
-		withLight(function()
-			for _, compact in { false, true } do
-				local refs = PenView.build()
-				PenView.setCompact(refs, compact)
-				T.truthy(refs.Gui:GetAttribute("Bubble"), "light pen")
-				T.truthy(refs.Panel:FindFirstChild("HeaderIcon"), "3D backpack in the header")
-				T.eq(refs.Panel.BackgroundColor3, BubbleTheme.Panel, "white panel")
-				local rows = PenView.setEntries(refs, entries, true)
-				T.eq(#rows, 2, "a row per entry")
-				T.eq(refs.Rows.a.Name.TextColor3, BubbleTheme.Ink, "dark item names")
-				T.truthy(refs.Rows.a.Income.TextColor3 ~= BubbleTheme.Panel, "income readable")
-				PenView.setHeader(refs, 3, 40)
-				T.eq(refs.Header.TextColor3, BubbleTheme.Ink, "count in dark text")
-				PenView.setSending(refs, nil, true, 0)
-				T.eq(refs.SendDirty.BackgroundColor3, BubbleTheme.Roles.Plain.Base, "no dirty ore: a plain button")
-				PenView.setAutoSort(refs, true, false)
-				T.eq(refs.AutoSort.Text, "AUTO-SORT OFF", "switch text")
-				local take = refs.Rows.a.Take.Parent :: any
-				T.truthy(not compact or take.Size.Y.Offset * 0.62 >= 44, "phone buttons >= 44 pt")
-			end
-		end)
-		local plain = PenView.build()
-		T.falsy(plain.Gui:GetAttribute("Bubble"), "switch off: today's pen")
-		T.falsy(plain.Panel:FindFirstChild("HeaderIcon"), "switch off: no light header")
+		local function check(compact: boolean)
+			local refs = PenView.build()
+			PenView.setCompact(refs, compact)
+			T.truthy(refs.Gui:GetAttribute("Pop"), "the Pop pen")
+			T.falsy(refs.Gui:GetAttribute("LightSkin"), "never re-skinned")
+			T.truthy(refs.Panel:FindFirstChild("Header") and refs.Panel:FindFirstChild("Body"), "the header band and the studded body")
+			T.eq(refs.Panel.BackgroundColor3, PopTheme.Outline, "the black frame")
+			local rows = PenView.setEntries(refs, entries, true)
+			T.eq(#rows, 2, "a row per entry")
+			local silver = refs.Rows["Clean|Silver|Clean|"]
+			T.eq(silver.Name.TextColor3, PopTheme.Ink, "white item names")
+			T.truthy(silver.Frame:FindFirstChild("Paint"), "a painted row")
+			T.eq(silver.Icon:FindFirstChild("Picture"):GetAttribute("Icon"), "item_Clean_Silver", "the item's 3D picture")
+			T.truthy(refs.Rows.Dirty.Mystery.Visible, "dirty ore: a question mark")
+			T.eq(refs.Rows.Dirty.Icon:FindFirstChild("Picture"):GetAttribute("Icon"), "ore_raw", "never which ore")
+			T.eq(silver.Income.TextColor3, PopTheme.Money, "income in money green")
+			PenView.setHeader(refs, 3, 40)
+			T.eq(refs.Header.TextColor3, PopTheme.Ink, "count in white")
+			PenView.setSending(refs, nil, true, 0)
+			T.near(refs.SendDirty.TextTransparency, 0.4, 1e-4, "no dirty ore: dimmed")
+			PenView.setAutoSort(refs, true, false)
+			T.eq(refs.AutoSort.Text, "AUTO-SORT OFF", "switch text")
+			local take = refs.Rows["Clean|Silver|Clean|"].Take.Parent :: any
+			T.truthy(not compact or take.Size.Y.Offset * 0.62 >= 44, "phone buttons >= 44 pt")
+		end
+		for _, compact in { false, true } do
+			check(compact)
+			withLight(function()
+				check(compact)
+			end)
+		end
 	end)
 
 	T.test("LightSkin: old windows get the dark card look, text stays readable", function()
@@ -256,13 +283,39 @@ return function(T, Loader)
 		T.eq(tab.BackgroundColor3, BubbleTheme.Roles.Settings.Base, "grey tab becomes the light grey role")
 	end)
 
+	T.test("Pop: the Sell, Tech Shop and Keep List windows wear the Pop look (switch on and off)", function()
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local function builds(): { [string]: any }
+			return {
+				Sell = ui("SellView").build(false),
+				TechShop = ui("TechShopView").build(false),
+				IronBox = ui("IronBoxView").build(),
+			}
+		end
+		local function check(label: string)
+			for name, refs in builds() do
+				T.truthy(refs.Gui:GetAttribute("Pop"), `{label}: Pop {name}`)
+				T.falsy(refs.Gui:GetAttribute("LightSkin"), `{label}: {name} never re-skinned`)
+				T.eq(refs.Panel.BackgroundColor3, PopTheme.Outline, `{label}: {name}'s black frame`)
+				T.truthy(refs.Panel:FindFirstChild("Header") and refs.Panel:FindFirstChild("Body"), `{label}: {name}'s band and body`)
+				T.eq(refs.Title.TextColor3, PopTheme.Ink, `{label}: {name}'s white title`)
+				T.truthy(refs.Panel:FindFirstChild("TitleShadow"), `{label}: {name}'s title shadow`)
+				local closeFace = refs.Close.Parent
+				T.truthy(closeFace:FindFirstChild("Paint"), `{label}: {name}'s painted X`)
+				T.eq(closeFace:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Close.Top, `{label}: {name}'s red X`)
+				T.eq(refs.Close.BackgroundTransparency, 1, `{label}: {name}'s X draws its word over the face`)
+			end
+		end
+		check("switch off")
+		withLight(function()
+			check("switch on")
+		end)
+	end)
+
 	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				Sell = ui("SellView").build(false).Gui,
-				TechShop = ui("TechShopView").build(false).Gui,
 				TrainChip = ui("TrainView").build(false).Chip, -- (the panel wears the Pop look)
-				IronBox = ui("IronBoxView").build().Gui,
 				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}

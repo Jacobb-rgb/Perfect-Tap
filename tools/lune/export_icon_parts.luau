@@ -133,6 +133,26 @@ for _, set in LimitedUpcoming.Sets do
 	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
 end
 
+-- asked for by name and not above: any item ("item_<Kind>_<Ore>", the Pop
+-- windows' live item pictures) or machine ("machine_<Id>", MachineBuilder)
+for _, name in process.args do
+	if not models[name] then
+		local kind, ore = string.match(name, "^item_(%a+)_(%w+)$")
+		local machine = string.match(name, "^machine_(%w+)$")
+		if kind and ore then
+			local ok, model = pcall(ItemBuilder.build, { Kind = kind, OreId = ore, Grade = "Clean" }, CF.new(), name)
+			if ok then
+				models[name] = model
+			end
+		elseif machine then
+			local ok, model = pcall(MachineBuilder.build, machine)
+			if ok then
+				models[name] = model
+			end
+		end
+	end
+end
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then

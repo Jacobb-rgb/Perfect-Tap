@@ -224,7 +224,9 @@ function styleElement(el, node, w, h) {
     const span = document.createElement("div");
     const font = fontFamily(node.font);
     span.style.position = "absolute";
-    span.style.inset = "0";
+    // (Roblox insets a text by its UIPadding)
+    const textPad = child(node, "UIPadding");
+    span.style.inset = textPad ? textPad.p.map((v) => `${v}px`).join(" ") : "0";
     span.style.display = "flex";
     span.style.alignItems = node.ty === "Top" ? "flex-start" : node.ty === "Bottom" ? "flex-end" : "center";
     span.style.justifyContent = node.tx === "Left" ? "flex-start" : node.tx === "Right" ? "flex-end" : "center";
