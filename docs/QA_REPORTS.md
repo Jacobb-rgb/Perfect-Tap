@@ -725,3 +725,36 @@ What to test in Studio:
    stick moves the ring, A or R2 sprays, B leaves (twice once some dirt is off).
 5. A dusty relic at the Cleaning Station: wash it, the relic rises, the card says RELIC CLEANED.
 6. Leave half way: the ore stays in the vise; F starts again with new dirt.
+
+## Player moves: procedural R15 animations (2026-10-21, branch anim/player-moves)
+The owner wants "perfect and suitable animations" for the player's own movements (no avatar editor). No uploaded
+animation assets: `Moves/MoveMath` poses go onto `Motor6D.Transform` on top of the default Animate script.
+- Data: `Config/MoveConfig` (10 moves: Carry, Throw, Recoil, Spray, Hammer, Celebrate, BigCelebrate, CashToss,
+  Wave, Shrug; keys per R15 joint in degrees, eases, blends, Override joints, MinGap, Priority).
+- Pure code: `Moves/MoveMath` (evaluate / weight / layer, works for any rig: quest NPCs later),
+  `Moves/MoveRig` (motor map, layering that never piles up when the Animator skips a joint, release),
+  `Moves/MoveRules` (attribute format, whitelist, loops, blocks, celebrations).
+- Client: `MoveController`, one RunService.Stepped for every R15 character within 70 studs and on screen; skips R6,
+  seated / swimming / climbing / ragdolled / dead, hoverboard riders, and your own character in close-ups
+  (Scriptable camera or PlayerControls claimed): a celebration of yours waits until the close-up ends (8 s max).
+  Roblox "Reduce Motion" swaps BigCelebrate for Celebrate.
+- Server: `MoveService`, Net "Move" (Rate 3, Burst 5; whitelist Throw / Wave / Shrug, Guard.string, Throw only while
+  carrying), celebrations from the existing hooks (onCleaned + onDiscovered, onOpened, DataService.onChanged for the
+  blaster level / rebirths, onSold), the MoveLoop attribute (Spray while cleaning, Hammer while forging).
+- Hooks in other files: InteractController (one line before CarryThrow), the two ORDER lists, Net (one entry).
+- Preview: docs/screenshots/animations/pohyby_hrace.mp4 + .jpg (`lune run tools/lune/export_moves.luau`, then
+  `ANIM_PAGE=moves.html ANIM_OUT=pohyby_hrace.mp4 ANIM_BITRATE=3500000 node tools/preview/render_anim.mjs 30 1280 720`
+  and `node tools/preview/moves_sheet.mjs`).
+What to test in Studio (2 players, R15 avatars; also one R6 avatar):
+1. Pick up ore: both arms hug it, the legs keep walking. Throw (Q / RB / Throw button): wind-up overhead, the throw,
+   the follow-through; the other player sees it too. Throw the last chunk: the arms go back to the walk.
+2. Hold the blaster on a rock (mouse, touch FIRE, R2): the gun arm kicks when the beam starts, then small kicks; the
+   other player sees the kicks on you. Nothing jitters or drifts after you stop.
+3. Clean an ore: the other player sees your arm spraying; a new ore or Flawless: you celebrate after Collect (your
+   camera was in the close-up), the other sees it at once. A Legendary+: the spin jump.
+4. Forge at the Foundry: the other sees the hammer pounding; the new level: the spin jump after the close-up.
+5. Sell 5+ items at Tobin's: the money toss. Equip a golem: a wave. A refused action (e.g. too far from the stall):
+   a shrug, not more than every 2.5 s.
+6. On a hoverboard, seated, swimming or climbing: no moves. An R6 avatar: no moves, no errors.
+7. Phones: FPS with 8 players moving nearby (the micro-profiler: MoveController stays well under 0.5 ms).
+8. Roblox settings, Reduce Motion on: the spin jump becomes the small celebration.

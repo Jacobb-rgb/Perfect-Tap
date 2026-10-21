@@ -29,6 +29,7 @@ Net.Events = {
 	CarryPickup = { Rate = 8, Burst = 10 },
 	CarryDrop = { Rate = 8, Burst = 10 },
 	CarryThrow = { Rate = 6, Burst = 8 },
+	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
 	-- cleaning minigame
 	CleanStart = { Rate = 2, Burst = 3 },
 	CleanSubmit = { Rate = 2, Burst = 3 },
