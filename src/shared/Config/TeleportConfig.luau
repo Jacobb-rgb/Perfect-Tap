@@ -16,18 +16,17 @@ export type Destination = "Base" | "Lobby" | "Vault" | "Elevator"
 
 export type Spot = {
 	Id: Destination,
-	Label: string,
-	Icon: string,
+	Label: string, -- the button's name (words only, no emoji)
 	Color: Color3,
 	Dark: Color3,
 	Bar: boolean, -- true = the top bar; false = no bar button (the elevator: ElevatorController's side button)
 }
 
 TeleportConfig.Spots = {
-	{ Id = "Base", Label = "BASE", Icon = "🏠", Color = rgb(255, 176, 64), Dark = rgb(196, 106, 26), Bar = true },
-	{ Id = "Lobby", Label = "LOBBY", Icon = "⛲", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186), Bar = true },
-	{ Id = "Vault", Label = "VAULT", Icon = "💎", Color = rgb(182, 118, 255), Dark = rgb(104, 56, 178), Bar = true },
-	{ Id = "Elevator", Label = "LIFT", Icon = "⛏", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50), Bar = false },
+	{ Id = "Base", Label = "BASE", Color = rgb(255, 176, 64), Dark = rgb(196, 106, 26), Bar = true },
+	{ Id = "Lobby", Label = "LOBBY", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186), Bar = true },
+	{ Id = "Vault", Label = "VAULT", Color = rgb(182, 118, 255), Dark = rgb(104, 56, 178), Bar = true },
+	{ Id = "Elevator", Label = "LIFT", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50), Bar = false },
 } :: { Spot }
 
 TeleportConfig.ById = {} :: { [string]: Spot }

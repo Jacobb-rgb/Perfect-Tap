@@ -328,7 +328,7 @@ end
 -- argument a press sends ("" takes the reward off again).
 function CollectionView.useButton(artifacts: any, collectionId: string): (string, string)
 	if CollectionView.inUse(artifacts, collectionId) then
-		return "IN USE ✓", ""
+		return "IN USE", ""
 	end
 	return "USE TITLE + SKIN", collectionId
 end
@@ -1182,7 +1182,7 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 			local complete = found >= count and count > 0
 			local progress = button:FindFirstChild("Progress") :: TextLabel?
 			if progress then
-				progress.Text = if complete then `{found} / {count}  ✓ complete` else `{found} / {count} found`
+				progress.Text = if complete then `{found} / {count} complete` else `{found} / {count} found`
 				progress.TextColor3 = if complete then Theme.Good else Theme.TextDim
 			end
 			local badge = button:FindFirstChild("New") :: TextLabel?

@@ -79,7 +79,6 @@ local EnchantConfig = require(script.Parent.EnchantConfig)
 export type Perk = {
 	Id: string,
 	Name: string,
-	Icon: string, -- an emoji for the cards
 	Text: string, -- what one level does
 	Costs: { number }, -- stars for level 1, 2, ...
 	Stats: { [string]: number }?, -- Bonuses stats per level (StatConfig names)
@@ -98,7 +97,6 @@ RebirthConfig.Perks = {
 	{
 		Id = "GoldenTouch",
 		Name = "Golden Touch",
-		Icon = "💰",
 		Text = "+10% podium and sell money (up to the bonus caps)",
 		Costs = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
 		Stats = { IncomePct = 0.1, SellPct = 0.1 },
@@ -106,14 +104,12 @@ RebirthConfig.Perks = {
 	{
 		Id = "HeadStart",
 		Name = "Head Start",
-		Icon = "🚀",
 		Text = "start each rebirth with a better blaster",
 		Costs = { 3, 6, 10 },
 	},
 	{
 		Id = "LuckyRocks",
 		Name = "Lucky Rocks",
-		Icon = "🍀",
 		Text = "+5% ore luck (up to the luck cap)",
 		Costs = { 2, 2, 2, 2, 2 },
 		Stats = { OreLuckPct = 0.05 },
@@ -121,7 +117,6 @@ RebirthConfig.Perks = {
 	{
 		Id = "DeepPockets",
 		Name = "Deep Pockets",
-		Icon = "🎒",
 		Text = "+1 item carried",
 		Costs = { 2, 3, 4 },
 		Stats = { CarryCapacity = 1 },
@@ -129,7 +124,6 @@ RebirthConfig.Perks = {
 	{
 		Id = "ExpressRails",
 		Name = "Express Rails",
-		Icon = "🚂",
 		Text = "train trips 10% shorter",
 		Costs = { 2, 2, 2 },
 		Stats = { TrainTimeCutPct = 0.1 },
@@ -137,14 +131,12 @@ RebirthConfig.Perks = {
 	{
 		Id = "PodiumKeeper",
 		Name = "Podium Keeper",
-		Icon = "🏛️",
 		Text = "your podium ores stay through rebirths",
 		Costs = { 6 },
 	},
 	{
 		Id = "PlotGlow",
 		Name = "Plot Glow",
-		Icon = "🌈",
 		Text = "a glowing ribbon round your plot, a new colour per level",
 		Costs = { 1, 1, 1, 1, 1 },
 	},
@@ -168,6 +160,12 @@ end
 
 -- the blaster level each Head Start level starts a rebirth with
 RebirthConfig.HeadStartLevels = { 2, 3, 4 }
+
+-- A star amount in words for the players ("1 star", "12 stars"): the owner's
+-- "text only", no emoji (NoEmoji.spec). Buttons use string.upper of it.
+function RebirthConfig.starsText(count: number): string
+	return if count == 1 then "1 star" else `{count} stars`
+end
 
 ---------------------------------------------------------------- stars
 

@@ -923,7 +923,7 @@ return function(T, Loader)
 		T.eq(refs.Use:GetAttribute("Equip"), "CrownOfKaldrum")
 		all.Equipped = "CrownOfKaldrum"
 		CollectionView.fill(refs, all)
-		T.eq(refs.Use.Text, "IN USE ✓")
+		T.eq(refs.Use.Text, "IN USE")
 		T.eq(refs.Use:GetAttribute("Equip"), "", "a press takes it off")
 		-- the last completed collection shows by itself (nothing picked)
 		all.Equipped = nil

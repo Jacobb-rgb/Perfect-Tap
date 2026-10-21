@@ -344,8 +344,8 @@ return function(T, Loader)
 		T.truthy(elevator and hover, "both entries")
 		T.truthy(elevator.Group == "Main" and elevator.Order == 3 and elevator.Label == "ELEVATOR", "ELEVATOR: Main 3")
 		T.truthy(hover.Group == "More" and hover.Order == 6 and hover.Label == "HOVER", "HOVER: More 6 (BOARDS is the leaderboards)")
-		T.eq(SideMenuView.Icons.Elevator, "🛗")
-		T.eq(SideMenuView.Icons.Hoverboards, "🛹")
+		T.eq(elevator.IconName, "Elevator")
+		T.eq(hover.IconName, "Hoverboards")
 		-- the controllers need a LocalPlayer, so their sources are read as text
 		local fs = require("@lune/fs")
 		local menu = fs.readFile("src/client/Controllers/SideMenuController.luau")
@@ -411,6 +411,7 @@ return function(T, Loader)
 	end)
 
 	T.test("side menu: entries are data (Group, Order, IconName) shown by Group then Order", function()
+		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 		local ids: { [string]: boolean } = {}
 		local places: { [string]: boolean } = {}
 		local mains: { string } = {}
@@ -422,13 +423,11 @@ return function(T, Loader)
 			local place = `{entry.Group}:{entry.Order}`
 			T.falsy(places[place], place .. " is one entry's")
 			places[place] = true
-			T.truthy(SideMenuView.Icons[entry.IconName], entry.Id .. " has an icon through SideMenuView.Icons")
-			T.eq(SideMenuView.icon(entry.IconName), SideMenuView.Icons[entry.IconName])
+			T.truthy(HudBubble.EntryLooks[entry.IconName], entry.Id .. " has a light-HUD icon through HudBubble.EntryLooks")
 			if entry.Group == "Main" then
 				table.insert(mains, entry.Id)
 			end
 		end
-		T.eq(SideMenuView.icon("NoSuchIcon"), "")
 		table.sort(mains)
 		T.eq(table.concat(mains, ","), "Elevator,Golems,Shop", "GOLEMS, ELEVATOR and SHOP are the main tiles")
 		local order = {}
@@ -440,7 +439,12 @@ return function(T, Loader)
 		T.eq(table.concat(refs.Order, ","), table.concat(order, ","), "the buttons follow the sorted entries")
 		T.eq(refs.Buttons.Golems:GetAttribute("MenuGroup"), "Main")
 		T.eq(refs.Buttons.Codex:GetAttribute("MenuGroup"), "More")
-		T.eq((refs.Buttons.Shop:FindFirstChild("Icon") :: any).Text, SideMenuView.Icons.Shop)
+		-- words only (no emoji icon): the name sits in the middle of the button
+		T.falsy(refs.Buttons.Shop:FindFirstChild("Icon"), "no emoji icon")
+		local label = refs.Buttons.Shop:FindFirstChild("Label") :: any
+		T.eq(label.Text, "SHOP")
+		T.truthy(label.AnchorPoint.X == 0.5 and label.AnchorPoint.Y == 0.5, "centred")
+		T.truthy(label.Position.X.Scale == 0.5 and label.Position.Y.Scale == 0.5, "in the middle")
 	end)
 
 	T.test("side menu: the view places every button, badges, SOON chips and hidden buttons", function()
