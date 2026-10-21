@@ -55,7 +55,7 @@
 	  belt, IntakeService sends it home after ForeignItemReturn).
 	- In the world every chute gets a colored floor plate on its cell and a
 	  small plaque high on the plot's back wall, facing the grid (per plot,
-	  built once in start(); PlotBuilder stays untouched). Every plaque's
+	  built once in start(); PlotBuilder builds the wall). Every plaque's
 	  bottom is at PlaqueBottom, on the wall's cap: over the rails of the
 	  belt on the chute and the items riding it. Its top stays under the
 	  ORE PEN sign and the gate posts' caps. PEN stands on the cap's ledge
@@ -121,6 +121,7 @@ local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
+local PlotBuilder = require(script.Parent.Parent.World.PlotBuilder)
 
 local ConveyorService = {}
 
@@ -762,13 +763,14 @@ local SIGN_TEXT = Color3.fromRGB(255, 244, 228)
 local SIGN_WARN = Color3.fromRGB(255, 120, 90)
 local DECOR = { CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false }
 
--- The plot's back wall (PlotBuilder padWalls, which this package must not
--- change; plot-local): its centre line, the cap slab on the brick band
--- (1.4 studs deep, its top at 2.25) with the bullnose (radius 0.5) along the
--- centre line, the yard gate's posts (1.8-stud shafts up to 3.7, 2.1-stud
--- caps at the opening's edges), the pillars half way from a gate post to the
--- corner and at the corners (2.05-stud caps from 3.0).
-local WALL_Z = GameConfig.PlotCells * CELL / 2 + 1 -- PlotBuilder.WallLine
+-- The plot's back wall (PlotBuilder padWalls; plot-local): its centre line,
+-- the cap slab on the brick band (1.4 studs deep, its top at 2.25) with the
+-- bullnose (radius 0.5) along the centre line, the yard gate's posts
+-- (1.8-stud shafts up to 3.7, 2.1-stud caps at the opening's edges), the
+-- pillars between a gate post and the corner (PlotBuilder.backPillars, one
+-- half way at 12 cells) and at the corners (2.05-stud caps from 3.0). The
+-- pillar line is the same |x| and z (a square grid).
+local WALL_Z = PlotBuilder.WallLine
 local PILLAR_LINE = WALL_Z + 0.1
 local CAP_TOP, CAP_FRONT = 2.25, WALL_Z - 0.7
 local POST_CAP, POST_W = 2.1, 1.8
@@ -838,8 +840,8 @@ function ConveyorService.plaqueSpot(name: string): (number, number, number)
 	local zone = BaseLayout.FoundryIntake.Zone
 	local zoneMin, zoneMax = zone.Center.X - zone.Size.X / 2, zone.Center.X + zone.Size.X / 2
 	if cell.X + half > zoneMin and cell.X - half < zoneMax then
-		local postX = math.abs(gate.CenterX + side * (gate.Width / 2 + POST_CAP / 2))
-		local pillarX = side * (postX + PILLAR_LINE) / 2
+		-- the wall pillar beside the hood: the first one out from the gate post
+		local pillarX = side * PlotBuilder.backPillars()[1]
 		local from = if side > 0
 			then math.max(zoneMax, pillarX + PILLAR_CAP / 2) + 0.1 + half
 			else math.min(zoneMin, pillarX - PILLAR_CAP / 2) - 0.1 - half

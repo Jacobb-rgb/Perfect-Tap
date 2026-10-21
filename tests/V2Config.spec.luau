@@ -191,4 +191,18 @@ return function(T, Loader)
 			T.lt(math.abs(rail.X), WorldLayout.Island.Max.X, "rail of plot " .. plot.Id)
 		end
 	end)
+
+	T.test("v2: the build range reaches every corner of the base yard from the plot centre", function()
+		-- (PlotService.isNear measures flat from the plot centre; a bigger grid moves the yard out)
+		for name, piece in BaseLayout.pieces() do
+			for _, sx in { -1, 1 } do
+				for _, sz in { -1, 1 } do
+					local x = piece.Center.X + sx * piece.Size.X / 2
+					local z = piece.Center.Z + sz * piece.Size.Z / 2
+					T.lt(math.sqrt(x * x + z * z), GameConfig.BuildRange, `{name} corner ({x}, {z})`)
+				end
+			end
+		end
+		T.eq(GameConfig.BuildRange, 70 + (GameConfig.PlotCells - 12) * GameConfig.CellSize / 2, "70 at 12 cells")
+	end)
 end

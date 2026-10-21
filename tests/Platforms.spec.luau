@@ -17,6 +17,7 @@ return function(T, Loader)
 	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 	local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local ConveyorLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.ConveyorLogic")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -164,7 +165,7 @@ return function(T, Loader)
 		T.truthy(Placement.occupancy(under)[Grid.key(4, 4)] == under[2], "the belt, not the legs")
 		T.truthy(Placement.decks(under)[Grid.key(4, 4)] == under[1], "decks() has the platform")
 		-- chutes: only flat belts (no platform, no lift on a chute cell)
-		local cx, cz = 3, CELLS - 1
+		local cx, cz = BaseLayout.chuteCell("Pen")
 		T.eq(code({}, "Platform", cx - 1, cz - 1, 0), "Chute", "platform over a chute")
 		T.eq(code({}, "Conveyor", cx, cz, 0), "ok", "belt on a chute")
 	end)
@@ -304,7 +305,7 @@ return function(T, Loader)
 				e("ClayFurnace", 8, 4),
 				e("Conveyor", 0, 0, 1),
 				e("ExpressConveyor", 1, 0, 1),
-				{ Id = "FutureMachine", X = 0, Z = 11, R = 0 },
+				{ Id = "FutureMachine", X = 0, Z = CELLS - 1, R = 0 },
 			},
 			MachineInventory = { Crusher = 2 },
 			Storage = {},
@@ -445,7 +446,8 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Platforms: a full plot of platforms (36) stays inside the budget", function()
+	T.test("Platforms: a full plot of platforms (one per 2x2 cells) stays inside the budget", function()
+		local spots = (CELLS // 2) * (CELLS // 2) -- 36 at 12 cells
 		local placed = {}
 		local refused = 0
 		for z = 0, CELLS - 2, 2 do
@@ -459,9 +461,9 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(#placed + refused, 36, "36 spots")
+		T.eq(#placed + refused, spots, `{spots} spots`)
 		T.eq(refused, 3, "the three chute cells")
-		-- the parts of 36 platform models together
+		-- the parts of every spot's platform model together
 		local root = Instance.new("Model")
 		local total, shadows = 0, 0
 		for z = 0, CELLS - 2, 2 do
@@ -477,10 +479,10 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.le(total, 36 * 17, "36 platforms: " .. total .. " parts")
+		T.le(total, spots * 17, `{spots} platforms: {total} parts`)
 		-- a plot's whole machine budget on a phone (22 machines x 70 parts) holds them easily
 		T.le(total, 22 * 70, "inside the plot machine budget")
-		T.le(shadows, 36 * 9, "only the big parts cast shadows")
+		T.le(shadows, spots * 9, "only the big parts cast shadows")
 	end)
 
 	---------------------------------------------------------------- runtime
@@ -779,5 +781,4 @@ return function(T, Loader)
 		T.truthy(step.done({ PlacedMachines = { { Id = "Platform", X = 2, Z = 2, R = 0 } } }, {}), "done")
 		T.falsy(step.done({}, {}), "no layout")
 	end)
-
 end

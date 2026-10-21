@@ -50,7 +50,7 @@
 	                   round cream posts, a slate lamp post with a glowing lamp,
 	                   and the `Track` placeholder (a short track piece with a
 	                   `BufferStop`) that the railway step replaces
-	Everything decorative stays outside the 48x48 build grid, so every cell
+	Everything decorative stays outside the build grid, so every cell
 	is free for machines. Machines are added at runtime into the plot's
 	"Machines" folder by MachineService. A plot with its yard is <= 300 parts
 	(13 of them in the Track placeholder the railway replaces) and one light
@@ -167,6 +167,7 @@ PlotBuilder.EntranceHalf = 10
 PlotBuilder.BackWallZ = BaseLayout.Yard.Center.Z + BaseLayout.Yard.Size.Z / 2 - 0.4
 local WALL_LINE = PlotBuilder.WallLine
 local PILLAR_LINE = WALL_LINE + 0.1
+local GATE_POST_CAP = 2.1 -- the entrance and gate posts' caps (their shafts are 1.8)
 
 -- part property sets
 local SOLID = SoftKit.SOLID -- players and items bump into it
@@ -331,15 +332,57 @@ local CHAMFER = PlotBuilder.YardChamfer
 local TURN = math.pi / 4 -- the turn between a side or back wall and its cut corner
 
 --[[
+	(bigger plots) Posts by length, so a bigger grid gets more of them in
+	the same rhythm (at 12 cells: the left side wall 12.55 apart along the
+	pad and 14 along the yard, one pillar half way on the pad/yard wall
+	either side of the gate):
+	  SidePostGap   the left side wall, at most this far apart
+	  BackPostGap   the pad/yard wall beyond its first pillar
+	  GatePillarGap the pad/yard wall's first pillar, this far out from the
+	                YardGate post: the FOUNDRY receiver's hood leans on the
+	                wall between them (BaseLayout.FoundryIntake), and the
+	                chutes keep their plot-local x at any grid size, so it
+	                stays put too
+]]
+PlotBuilder.SidePostGap = 14.5
+PlotBuilder.BackPostGap = 10
+PlotBuilder.GatePillarGap = 9.025
+
+-- The posts strictly between `a` and `b` (one coordinate along a wall), at
+-- most `maxGap` apart, evenly spread.
+local function postsBetween(a: number, b: number, maxGap: number): { number }
+	local n = math.ceil((b - a) / maxGap)
+	local list = {}
+	for i = 1, n - 1 do
+		table.insert(list, (a * (n - i) + b * i) / n)
+	end
+	return list
+end
+
+-- The pad/yard wall's pillars between the YardGate post and the corner post,
+-- plot-local |x| (the same on both sides, nearest the gate first). The
+-- first one stands beside the FOUNDRY receiver's hood (ConveyorService puts
+-- the FOUNDRY plaque past it).
+function PlotBuilder.backPillars(): { number }
+	local gate = BaseLayout.YardGate
+	local first = math.abs(gate.CenterX + gate.Width / 2 + GATE_POST_CAP / 2) + PlotBuilder.GatePillarGap
+	local list = { first }
+	for _, x in postsBetween(first, PILLAR_LINE, PlotBuilder.BackPostGap) do
+		table.insert(list, x)
+	end
+	return list
+end
+
+--[[
 	The pad's border and the long side walls: front walls with the road
 	entrance between two lamp posts, the side walls from the road corner
 	to the yard's back corner, the wall between pad and yard with the
 	YardGate. Returns the left entrance post's lamp ball (it carries the
 	plot's only light).
-	Posts stand every ~12.5 studs on the left side wall only (on purpose):
-	neighbouring plots share a 5.8-stud alley, so every alley has one
-	posted wall (this plot's left side) facing a plain one (the
-	neighbour's right side, with its corner posts).
+	Posts stand every ~12.5 studs (SidePostGap at most) on the left side
+	wall only (on purpose): neighbouring plots share a 5.8-stud alley, so
+	every alley has one posted wall (this plot's left side) facing a plain
+	one (the neighbour's right side, with its corner posts).
 ]]
 local function padWalls(plot: Model, cf: CFrame): Part?
 	local m = model("Walls", plot)
@@ -347,7 +390,7 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 	local L, Pl = WALL_LINE, PILLAR_LINE
 	local gate = BaseLayout.YardGate
 	-- the entrance and gate posts' caps (2.1) line up with the openings' edges
-	local postCap = 2.1
+	local postCap = GATE_POST_CAP
 	local sideEnd = PlotBuilder.BackWallZ - CHAMFER
 	local leftLamp: Part? = nil
 	for _, s in { -1, 1 } do
@@ -355,7 +398,12 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 		post(m, cf, k, Vector3.new(s * Pl, 0, -Pl))
 		post(m, cf, k, Vector3.new(s * Pl, 0, Pl))
 		if s < 0 then
-			for _, z in { -Pl / 2, 0, Pl / 2, (Pl + sideEnd) / 2 } do
+			-- along the pad, then along the yard up to its cut corner
+			local zs = postsBetween(-Pl, Pl, PlotBuilder.SidePostGap)
+			for _, z in postsBetween(Pl, sideEnd, PlotBuilder.SidePostGap) do
+				table.insert(zs, z)
+			end
+			for _, z in zs do
 				post(m, cf, k, Vector3.new(s * Pl, 0, z))
 			end
 		end
@@ -368,11 +416,13 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 			leftLamp = lamp
 		end
 		wall(m, cf, k, Vector3.new(s * Pl, 0, -L), Vector3.new(s * ex, 0, -L))
-		-- back: the YardGate post (a lamp), a post half way and the wall to the junction
+		-- back: the YardGate post (a lamp), the pillars (backPillars) and the
+		-- wall to the junction
 		local gx = gate.CenterX + s * (gate.Width / 2 + postCap / 2)
 		post(m, cf, k, Vector3.new(gx, 0, Pl), { D = 1.8, Top = 3.7, Lamp = true })
-		local midX = (math.abs(gx) + Pl) / 2
-		post(m, cf, k, Vector3.new(s * midX, 0, Pl))
+		for _, x in PlotBuilder.backPillars() do
+			post(m, cf, k, Vector3.new(s * x, 0, Pl))
+		end
 		wall(m, cf, k, Vector3.new(gx, 0, L), Vector3.new(s * Pl, 0, L))
 	end
 	return leftLamp
@@ -393,10 +443,11 @@ local function ground(yard: Model, cf: CFrame)
 	local lastPodium = BaseLayout.Podiums[#BaseLayout.Podiums]
 	local apronMinX = pen.Center.X - 3
 	local apronMaxX = lastPodium.Center.X + lastPodium.Size.X / 2 + 0.5
+	local yardFront = BaseLayout.YardZ0
 	local apron = Geo.block(
 		yard,
-		cf * CFrame.new((apronMinX + apronMaxX) / 2, 0.03, (25 + penFront - 0.2) / 2),
-		Vector3.new(apronMaxX - apronMinX, 0.06, penFront - 0.2 - 25),
+		cf * CFrame.new((apronMinX + apronMaxX) / 2, 0.03, (yardFront + penFront - 0.2) / 2),
+		Vector3.new(apronMaxX - apronMinX, 0.06, penFront - 0.2 - yardFront),
 		GRAVEL,
 		nil,
 		GHOST

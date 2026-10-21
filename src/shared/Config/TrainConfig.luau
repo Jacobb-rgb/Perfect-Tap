@@ -70,7 +70,9 @@ TrainConfig.Timeline = {
 ---------------------------------------------------------------- world
 
 local QUARRY_Y = WorldLayout.Quarry.Min.Y -- -12, the quarry floor
-local RAIL_X = 104 + BaseLayout.RailZ -- plots sit at x = +-104; the rail runs at plot-local z = RailZ
+local GRID = WorldLayout.PlotGrid
+-- plots sit at x = +-CenterX (104 at 12 cells); the rail runs at plot-local z = RailZ (166 at 12 cells)
+local RAIL_X = GRID.CenterX + BaseLayout.RailZ
 
 -- Mine Station on the quarry floor, east of the ramp bottom (the ramp is x -8..8, z -112..-140).
 TrainConfig.Station = {
@@ -88,10 +90,13 @@ TrainConfig.QuarryLine = {
 TrainConfig.QuarryStop = Vector3.new(26, QUARRY_Y, -156) -- where trains wait at the station
 
 -- Coastal lines behind the bases, from the south portal north to a buffer stop.
-TrainConfig.SouthPortalZ = 126
+-- The portal stays 42 studs south of the south-most plot (126 at 12 cells: the trains'
+-- coming out and passing are timed for it); the buffer stop never moves, so the
+-- north-most plot keeps its pen in reach.
+TrainConfig.SouthPortalZ = (GRID.SouthZ - GRID.Pitch / 2) + 42
 TrainConfig.BufferZ = -100
-TrainConfig.CoastWest = { Vector3.new(-RAIL_X, 0, 126), Vector3.new(-RAIL_X, 0, -100) }
-TrainConfig.CoastEast = { Vector3.new(RAIL_X, 0, 126), Vector3.new(RAIL_X, 0, -100) }
+TrainConfig.CoastWest = { Vector3.new(-RAIL_X, 0, TrainConfig.SouthPortalZ), Vector3.new(-RAIL_X, 0, TrainConfig.BufferZ) }
+TrainConfig.CoastEast = { Vector3.new(RAIL_X, 0, TrainConfig.SouthPortalZ), Vector3.new(RAIL_X, 0, TrainConfig.BufferZ) }
 
 -- Where the lines' visible parts end (Railway builds them there, the client
 -- hides the trains at the same planes and stops them short of the buffers).

@@ -584,9 +584,14 @@ table.sort(MachineData.Buildable, function(a: Machine, b: Machine): boolean
 end)
 
 -- New players get these placed for free (grid X, Z, rotation 0-3).
+-- (bigger plots) (4, 4) and (8, 4) on a 12-cell grid; a bigger grid moves
+-- them with it (as BaseLayout.GridShift): the same plot-local x and the same
+-- distance from the back wall (and its chutes).
+local KIT_SHIFT_X = (GameConfig.PlotCells - 12) / 2
+local KIT_SHIFT_Z = GameConfig.PlotCells - 12
 MachineData.StarterKit = {
-	{ Id = "CleaningStation", X = 4, Z = 4, R = 0 },
-	{ Id = "ClayFurnace", X = 8, Z = 4, R = 0 },
+	{ Id = "CleaningStation", X = 4 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
+	{ Id = "ClayFurnace", X = 8 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
 }
 
 MachineData.BaseMachineSlots = 10

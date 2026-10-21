@@ -18,7 +18,7 @@ return function(T, Loader)
 		T.eq(AmbienceConfig.Group, "TerraForgeAmbience", "the ambience SoundGroup's name")
 		local SettingsConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SettingsConfig")
 		T.eq(AmbienceConfig.ParentGroup, SettingsConfig.SfxGroup, "nested in the SETTINGS sound effects group")
-		T.truthy(AmbienceConfig.MaxEarshot <= 96, "heard only inside Workspace.StreamingMinRadius (96)")
+		T.truthy(AmbienceConfig.MaxEarshot <= 96, "heard well inside Workspace.StreamingMinRadius (112)")
 		T.truthy(AmbienceConfig.CleaningDuck > 0 and AmbienceConfig.CleaningDuck < 1, "the minigame turns it down")
 		local kinds = 0
 		for kind, layers in AmbienceConfig.Kinds do
