@@ -214,24 +214,71 @@ local function dragonBody(c: Ctx, spikeColor: Color3?, spikeMaterial: Enum.Mater
 			spikeMaterial or M.Slate
 		)
 	end
-	T.redress(c, "Core", c.At(0, 0.98, -0.445) * CFrame.Angles(0, 0, PI / 4), c.V(0.34, 0.34, 0.06), c.Glow, NEON)
+	T.redress(c, "Core", c.At(0, 1.14, -0.445) * CFrame.Angles(0, 0, PI / 4), c.V(0.32, 0.32, 0.06), c.Glow, NEON)
 	-- a slim scaly brow ridge instead of the heavy stone brow
-	T.redress(c, "Brow", c.At(0, 2.27, -0.64) * CFrame.Angles(-0.25, 0, 0), c.V(1.44, 0.14, 0.24), K.darker(c.Look.Trim, 0.1), M.Slate)
+	T.redress(c, "Brow", c.At(0, 2.3, -0.645) * CFrame.Angles(-0.2, 0, 0), c.V(1.3, 0.1, 0.18), K.darker(c.Look.Trim, 0.1), M.Slate)
+end
+
+--[[
+	The PREMIUM touches every Robux dragon gets (owner: "it's for Robux"):
+	big shiny eyes (slit pupils and a white sparkle each), a dragon's belly
+	scales under the core, claws on both fists and a little crest of spines
+	on the head. `face` = false for a closed helm (the eyes stay in its slit).
+]]
+type Premium = {
+	Face: boolean?,
+	Belly: Color3?,
+	Claws: Color3?,
+	Crest: Color3?,
+	CrestMaterial: Enum.Material?,
+}
+local function premium(c: Ctx, spec: Premium)
+	if spec.Face ~= false then
+		for i, x in { -0.29, 0.29 } do
+			T.redress(c, "Eye" .. i, c.At(x, 2.0, -0.68), c.V(0.32, 0.3, 0.06), c.Glow, NEON)
+		end
+		for i, x in { -0.29, 0.29 } do
+			if c.Room() < 2 then
+				break
+			end
+			K.part(c.Model, "Pupil" .. i, c.At(x, 1.99, -0.715), c.V(0.07, 0.24, 0.02), PUPIL)
+			K.part(c.Model, "Sparkle" .. i, c.At(x - 0.07, 2.07, -0.722), c.V(0.07, 0.07, 0.02), Color3.new(1, 1, 1), NEON)
+		end
+	end
+	if spec.Belly then
+		for i, k in { { 0.84, 0.66 }, { 0.66, 0.52 } } do
+			if c.Room() < 1 then
+				break
+			end
+			K.part(c.Model, "BellyScale" .. i, c.At(0, k[1], -0.44), c.V(k[2], 0.13, 0.04), spec.Belly, M.SmoothPlastic)
+		end
+	end
+	if spec.Claws then
+		for i, side in { -1, 1 } do
+			for j, dx in { -0.14, 0.14 } do
+				if c.Room() < 1 then
+					break
+				end
+				local cf = c.At(side * 0.86 + dx, 0.5, -0.28) * CFrame.Angles(0.5, 0, 0)
+				diamond(c.Model, `Claw{i}_{j}`, cf, 0.13 * c.S, 0.13 * c.S, 0.08 * c.S, spec.Claws, M.SmoothPlastic)
+			end
+		end
+	end
+	if spec.Crest then
+		for i, z in { -0.32, 0, 0.32 } do
+			if c.Room() < 1 then
+				break
+			end
+			local h = if i == 2 then 0.36 else 0.28
+			local cf = c.At(0, 2.72 + h * 0.2, z) * CFrame.Angles(0, PI / 2, 0)
+			diamond(c.Model, "HeadSpine" .. i, cf, h * c.S, h * c.S, 0.07 * c.S, spec.Crest, spec.CrestMaterial or M.SmoothPlastic)
+		end
+	end
 end
 
 -- no brow at all (a cute face): the brow shrinks into the head
 local function noBrow(c: Ctx)
 	T.redress(c, "Brow", c.At(0, 2.1, 0), c.V(0.1, 0.1, 0.1), c.Look.Body, M.Slate)
-end
-
--- dragon slit pupils in the glowing eyes (2 parts)
-local function pupils(c: Ctx, z: number?)
-	if c.Room() < 2 then
-		return
-	end
-	for i, x in { -0.28, 0.28 } do
-		K.part(c.Model, "Pupil" .. i, c.At(x, 2.02, z or -0.715), c.V(0.06, 0.18, 0.02), PUPIL)
-	end
 end
 
 -- a muzzle with glowing nostrils (and diamond fangs hanging under it)
@@ -484,14 +531,10 @@ local function cinderWhelp(c: Ctx): number
 		})
 	)
 	tail(c, 2, 0.24, c.Look.Trim, spade(c.Glow, 0.34))
-	pupils(c)
+	premium(c, { Belly = rgb(176, 130, 104), Claws = IVORY, Crest = c.Glow, CrestMaterial = NEON })
 	-- a little adventurer: flying goggles on the forehead, a red scarf
 	goggles(c, 2.42, rgb(196, 140, 60), rgb(255, 170, 60))
 	scarf(c, rgb(210, 40, 40), rgb(255, 214, 90))
-	if c.Room() >= 1 then
-		-- a warm belly plate
-		K.part(c.Model, "Belly", c.At(0, 0.86, -0.432), c.V(0.62, 0.5, 0.03), rgb(150, 110, 90), M.Slate)
-	end
 	return top
 end
 
@@ -549,6 +592,7 @@ local function emberHatchling(c: Ctx): number
 		K.part(c.Model, "Collar", c.At(0, 1.47, 0), c.V(1.28, 0.12, 0.96), rgb(200, 40, 50), M.Fabric)
 		K.part(c.Model, "Bell", c.At(0, 1.32, -0.5), c.V(0.24, 0.24, 0.24), GOLD, M.Foil, BALL)
 	end
+	premium(c, { Face = false, Claws = IVORY })
 	-- orange spots on the shell
 	for i, k in { { -0.36, 3.02, -0.5, 0.3 }, { 0.38, 3.2, -0.3, 0.24 }, { 0.05, 3.32, -0.38, 0.18 } } do
 		if c.Room() >= 1 then
@@ -650,8 +694,9 @@ local function scaleKnight(c: Ctx): number
 		)
 		top = math.max(top, 3.5)
 	end
-	-- gold gauntlets
+	-- gold gauntlets, dragon claws
 	bracers(c, GOLD, M.Foil, nil)
+	premium(c, { Face = false, Claws = IVORY })
 	-- the breastplate and belt
 	if c.Room() >= 1 then
 		K.part(c.Model, "Breastplate", c.At(0, 1.08, -0.435), c.V(0.92, 0.6, 0.04), metal, M.Metal)
@@ -737,7 +782,7 @@ local function flamewing(c: Ctx): number
 	for _, name in { "Fist1", "Fist2" } do
 		T.recolor(c, name, FLAME, NEON)
 	end
-	pupils(c)
+	premium(c, { Belly = rgb(255, 214, 160), Claws = IVORY })
 	-- a fire pilot: aviator goggles, a long scarf streaming in the wind, a flame belt
 	goggles(c, 2.44, GOLD, rgb(120, 220, 255))
 	scarf(c, rgb(255, 240, 220), rgb(255, 160, 40))
@@ -837,6 +882,7 @@ local function magmaWyvern(c: Ctx): number
 			M.Slate
 		)
 	end
+	premium(c, { Claws = IVORY, Crest = c.Glow, CrestMaterial = NEON })
 	spines(c, OBSIDIAN, M.Basalt, { { 2.6, 0.66, 0.4 }, { 1.3, 0.44, 0.36 } })
 	-- lava fists
 	for _, name in { "Fist1", "Fist2" } do
@@ -906,11 +952,6 @@ local function dragonKing(c: Ctx): number
 	if c.Room() >= 1 then
 		K.part(c.Model, "Collar", c.At(0, 1.5, 0.08), c.V(1.4, 0.24, 1.04), ERMINE, M.Fabric)
 	end
-	-- a gold chain with a dragon-eye pendant
-	if c.Room() >= 2 then
-		T.seg(c.Model, "Chain", T.P(c, -0.4, 1.42, -0.45), T.P(c, 0, 1.24, -0.47), 0.06 * c.S, 0.04 * c.S, GOLD, M.Foil)
-		T.seg(c.Model, "Chain2", T.P(c, 0.4, 1.42, -0.45), T.P(c, 0, 1.24, -0.47), 0.06 * c.S, 0.04 * c.S, GOLD, M.Foil)
-	end
 	-- gold armour: breastplate, belt, bracers
 	if c.Room() >= 1 then
 		K.part(c.Model, "Breastplate", c.At(0, 1.06, -0.435), c.V(0.96, 0.66, 0.04), GOLD, M.Foil)
@@ -927,7 +968,31 @@ local function dragonKing(c: Ctx): number
 		top = math.max(top, 2.85)
 	end
 	bracers(c, GOLD, M.Foil, rgb(220, 30, 60))
-	pupils(c)
+	-- a gold dragon mask over the snout: the King's royal face
+	if c.Room() >= 3 then
+		K.part(c.Model, "Snout", c.At(0, 1.74, -0.8), c.V(0.9, 0.42, 0.36), GOLD, M.Foil)
+		for i, x in { -0.18, 0.18 } do
+			K.part(c.Model, "Nostril" .. i, c.At(x, 1.86, -0.985), c.V(0.12, 0.07, 0.02), c.Glow, NEON)
+		end
+	end
+	premium(c, { Claws = GOLD })
+	-- three fire gems orbiting the King, and a ring of flames round his aura
+	for i = 1, 3 do
+		if c.Room() < 1 then
+			break
+		end
+		local a = ({ 0.15, PI - 0.15, PI / 2 })[i] -- the sides and behind (never over the face)
+		local cf = c.At(math.cos(a) * 1.55, 2.0 + 0.35 * math.sin(a * 2), math.sin(a) * 1.0 - 0.2) * CFrame.Angles(0, -a, 0)
+		diamond(c.Model, "OrbitGem" .. i, cf, 0.3 * c.S, 0.3 * c.S, 0.12 * c.S, if i == 2 then FLAME_HOT else rgb(255, 60, 90), NEON)
+	end
+	for i = 1, 6 do
+		if c.Room() < 1 then
+			break
+		end
+		local a = (i - 0.5) * 2 * PI / 6 -- (around the aura's rim)
+		local cf = c.At(math.cos(a) * 1.1, 0.0, math.sin(a) * 1.1) * CFrame.Angles(0, -a + PI / 2, 0)
+		diamond(c.Model, "RingFlame" .. i, cf, 0.34 * c.S, 0.34 * c.S, 0.06 * c.S, if i % 2 == 0 then FLAME_HOT else FLAME, NEON)
+	end
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, c.Glow, 5)
