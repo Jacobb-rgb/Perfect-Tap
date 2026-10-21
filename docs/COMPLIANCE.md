@@ -623,8 +623,9 @@ of them, but only after these steps:
 **Design rules for young players** (keep them in mind while the shop,
 tutorial and daily reward are being built): simple words, no chat needed, no
 pushy purchase prompts, no fake urgency (the monthly limited edition has a
-real, fixed end date and a calm "ends on" line, never a "last chance!"
-rush), and a short, friendly tutorial.
+real, fixed end date: the banner says "ENDS NOV 30" with a quiet "29d 21h
+left" under it, no ticking seconds, never a "last chance!" rush), and a
+short, friendly tutorial.
 
 ### 2.10 Data and privacy
 

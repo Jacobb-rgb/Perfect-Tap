@@ -189,13 +189,31 @@ local function buildPop(topBar: Frame): Refs
 	local size = HudBubble.topBarButton(layout)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
+	-- the gamepad glyph (D-pad down jumps into the bar): just left of the bar, so
+	-- the bar keeps its width; it follows the bar when HudController moves it
 	local hint = UIKit.new("ImageLabel", {
 		Name = "GamepadHint",
-		LayoutOrder = 0,
-		Size = UDim2.fromOffset(0, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(40, 40),
 		Visible = false,
-	}, topBar)
+		ZIndex = 3,
+	}, topBar.Parent or topBar)
+	local function placeHint()
+		local p = topBar.Position
+		hint.Position = UDim2.new(
+			p.X.Scale,
+			p.X.Offset - topBar.Size.X.Offset * topBar.AnchorPoint.X - 6,
+			p.Y.Scale,
+			p.Y.Offset + math.floor(topBar.Size.Y.Offset / 2)
+		)
+	end
+	placeHint()
+	pcall(function()
+		topBar:GetPropertyChangedSignal("Position"):Connect(placeHint)
+		topBar:GetPropertyChangedSignal("Size"):Connect(placeHint)
+	end)
 	local order: { TextButton } = {}
 	for i, spot in TeleportConfig.Spots do
 		if spot.Bar then

@@ -33,6 +33,38 @@ return function(T, Loader)
 		end
 	end
 
+	-- (review #10) the Pop bar stays inside Roblox's free top-row span, or drops under the row
+	T.test("LightUI: the top bar keeps clear of Roblox's top-row buttons", function()
+		local HudBubble = ui("HudBubble")
+		local V2 = Vector2.new
+		-- unknown row: centred in the row
+		local x, inRow = HudBubble.topBarX(nil, 0, 667, 416, 0.62)
+		T.eq(x, 0)
+		T.truthy(inRow)
+		-- a phone whose left buttons reach 240 px: the bar moves right, inside the free span
+		x, inRow = HudBubble.topBarX(V2(240, 620), 0, 667, 416, 0.62)
+		T.truthy(inRow, "fits in the row")
+		local left = 667 / 2 + x * 0.62 - 416 * 0.62 / 2
+		local right = left + 416 * 0.62
+		T.truthy(left >= 240 and right <= 620, `inside the free span ({left}..{right})`)
+		-- no room in the row: under it
+		x, inRow = HudBubble.topBarX(V2(300, 400), 0, 667, 416, 0.62)
+		T.falsy(inRow, "drops under the row")
+	end)
+
+	-- (review #8) the gamepad glyph for the bar is a real size, left of the bar
+	T.test("LightUI: the Pop bar's gamepad hint is visible size", function()
+		local HudBubble = ui("HudBubble")
+		local TeleportView = ui("TeleportView")
+		withLight(function()
+			local refs = HudBubble.buildGame(1.25)
+			local bar = TeleportView.build(refs.TopBar, 1.25)
+			T.truthy(bar.Hint.Size.X.Offset >= 34 and bar.Hint.Size.Y.Offset >= 34, "a real glyph size")
+			T.eq(bar.Hint.Parent, refs.TopBar.Parent, "beside the bar, not squeezed into it")
+			T.truthy(bar.Hint.Position.X.Offset < refs.TopBar.Position.X.Offset - refs.TopBar.Size.X.Offset / 2, "left of the bar")
+		end)
+	end)
+
 	T.test("LightUI: switched off, today's HUD", function()
 		T.eq(type(UIConfig.Default), "boolean", "the switch that ships")
 		T.falsy(UIConfig.LightUI, "the runner tests the dark paths unless a spec switches it on")

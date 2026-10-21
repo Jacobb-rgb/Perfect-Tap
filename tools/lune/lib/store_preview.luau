@@ -107,6 +107,14 @@ function Preview.build(Loader: any): { [string]: any }
 	local limited = store(scale, pcW, pcH)
 	StoreView.setEdition(limited, edition())
 	StoreView.setTimer(limited, 29 * 86400 + 21 * 3600 + 15 * 60)
+	do -- (the tiles as StoreController sets them: the capsule's odds now)
+		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+		local odds = {}
+		for _, line in CapsuleConfig.odds("Dragonforge", false) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(limited, odds, false)
+	end
 	exports.ui_store_pc_limited = UiExport.export({ hud(scale).Gui, limited.Gui })
 	local odds = store(scale, pcW, pcH, "Eggs")
 	local lines = { "Royal Capsule x5: 5 golems, each one of:" }

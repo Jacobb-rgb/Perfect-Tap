@@ -188,8 +188,15 @@ local function refreshBanner(view: StoreView.Refs)
 	elseif not banner then
 		bannerFrame = nil
 	end
-	if banner then
+	if banner and edition then
 		StoreView.setTimer(view, banner.Edition.EndsAt - serverNow())
+		-- the tiles show what a buy rolls now (Triple Lucky included), like the odds panel
+		local lucky = tripleLuckyNow()
+		local odds: { [string]: number } = {}
+		for _, line in CapsuleConfig.odds(edition.CapsuleId, lucky) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(view, odds, lucky)
 	end
 end
 
@@ -551,7 +558,7 @@ local function onClose(_: string, inputState: Enum.UserInputState): Enum.Context
 	return Enum.ContextActionResult.Sink
 end
 
--- The banner's countdown while the window is open (the edition ends: it goes).
+-- The banner's quiet time left while the window is open (the edition ends: it goes).
 local function tickBanner()
 	task.spawn(function()
 		while isOpen do
@@ -564,7 +571,7 @@ local function tickBanner()
 					StoreView.setTimer(view, left)
 				end
 			end
-			task.wait(1)
+			task.wait(5)
 		end
 	end)
 end

@@ -705,7 +705,8 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		Name = "Label",
 		AnchorPoint = if hasPicture then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5),
 		Position = if hasPicture then UDim2.new(0.5, 0, 1, -2) else UDim2.fromScale(0.5, 0.5),
-		Size = if hasPicture then UDim2.new(1, -6, 0, math.floor(s * 0.26)) else UDim2.new(1, -8, 0, math.floor(s * 0.34)),
+		-- (relative to the tile: the word grows when a layout makes the tile bigger)
+		Size = if hasPicture then UDim2.new(1, -6, 0.26, 0) else UDim2.new(1, -8, 0.34, 0),
 		TextScaled = true,
 		ZIndex = 4,
 	})

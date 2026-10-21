@@ -40,6 +40,8 @@ local Pop = require(script.Parent.Pop)
 
 local StoreView = {}
 
+local sizeBanner: (refs: any) -> () -- (below: the banner's buttons follow the layout)
+
 export type CardRefs = {
 	Spec: StoreConfig.CardSpec,
 	Button: TextButton,
@@ -76,8 +78,10 @@ export type Edition = {
 
 export type BannerRefs = {
 	Frame: Frame,
-	Timer: TextLabel,
+	Timer: TextLabel, -- the quiet "29d 21h left" under the end date
 	Buys: { [number]: TextButton }, -- count -> its green price button
+	Chances: { [string]: TextLabel }, -- golem id -> its tile's chance
+	Lucky: TextLabel, -- "WITH TRIPLE LUCKY" while the boost runs
 	Edition: Edition,
 }
 
@@ -98,6 +102,8 @@ export type Refs = {
 	DetailBack: TextButton,
 	Tops: { [string]: number }, -- section id -> its top in the scrolled list
 	Banner: BannerRefs?, -- the limited edition (FEATURED), nil when none runs
+	Fit: number, -- the last layout's fit scale
+	Compact: boolean, -- the last layout was for a phone / TV
 }
 
 StoreView.Header = 76
@@ -108,6 +114,9 @@ StoreView.HeadingHeight = 56
 StoreView.MaxHeight = 640
 StoreView.TabGap = 12
 StoreView.TabSize = 84
+StoreView.TabListGap = 10
+StoreView.MinTouch = 44 -- points: the smallest tap target (all-platforms rule)
+StoreView.PhoneScale = 0.62 -- HudController's UI scale on phones
 
 -- The window's size and fit scale for a w x h design-unit screen: the
 -- window keeps its width (the tabs sit beside it) and gets as tall as the
@@ -156,7 +165,21 @@ local function picture(parent: Instance, spec: StoreConfig.CardSpec, size: numbe
 	for key, value in props do
 		(icon :: any)[key] = value
 	end
+	-- (no model and no uploaded picture: nothing would show; the card lays out without it)
+	icon:SetAttribute("Empty", not IconAssets.shows(spec.Icon))
 	return icon
+end
+
+-- Will this card show a picture in the game (a live model, a STAR gun, an uploaded icon)?
+function StoreView.hasPicture(spec: StoreConfig.CardSpec): boolean
+	local name = spec.Model
+	if name and string.sub(name, 1, 5) == "star_" then
+		return true
+	end
+	if name and PictureModels.build(name) ~= nil then
+		return true
+	end
+	return IconAssets.shows(spec.Icon)
 end
 
 -- The OWNED tag that replaces a pass's price once it is bought (where the price was).
@@ -318,12 +341,13 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		end
 	else -- "Item": the picture left, the title and text right, the price bottom right
 		local size = math.floor(h - 56)
-		picture(button, spec, size, {
+		local pic = picture(button, spec, size, {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 8, 0.46, 0),
 			ZIndex = 5,
 		})
-		local left = size + 18
+		-- (no picture in the game: the words take the whole card, never a blank square)
+		local left = if pic:GetAttribute("Empty") == true then 14 else size + 18
 		refs.Title = Pop.text(button, title, 28, {
 			Name = "Title",
 			Position = UDim2.fromOffset(left, 10),
@@ -415,16 +439,26 @@ function StoreView.relayout(refs: Refs): number
 end
 
 StoreView.BannerHeight = 372
+StoreView.BannerButtonH = 54
 StoreView.BannerCounts = { 50, 10, 3, 1 } -- the buy buttons, left to right (the photo)
 
--- "29d 21h 15m" (days) or "21h 15m 57s" (the last day).
+-- The quiet time left under the end date: "29d 21h left" / "21h 15m left"
+-- (no ticking seconds: COMPLIANCE "a calm ends-on line, no rush").
 function StoreView.countdown(seconds: number): string
 	local s = math.max(0, math.floor(seconds))
 	local d, h, m = s // 86400, (s // 3600) % 24, (s // 60) % 60
 	if d > 0 then
-		return `{d}d {h}h {m}m`
+		return `{d}d {h}h left`
 	end
-	return `{h}h {m}m {s % 60}s`
+	return `{h}h {m}m left`
+end
+
+local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
+
+-- "ENDS NOV 30" (the edition's real end date, UTC).
+function StoreView.endsOn(endsAt: number): string
+	local t = os.date("!*t", math.floor(endsAt)) :: any
+	return `ENDS {MONTHS[t.month] or ""} {t.day}`
 end
 
 -- A dark mountain peak (a turned square whose lower half the ground hides).
@@ -582,29 +616,35 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 8,
 	})
-	Pop.text(frame, edition.Tagline .. "  Limited time!", 21, {
+	Pop.text(frame, edition.Tagline, 21, {
 		Name = "Tagline",
 		Position = UDim2.fromOffset(18, 84),
 		Size = UDim2.fromOffset(620, 26),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 8,
 	})
-	Pop.text(frame, "ENDS IN", 16, {
-		Name = "EndsIn",
+	Pop.text(frame, StoreView.endsOn(edition.EndsAt), 30, {
+		Name = "EndsOn",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 10),
-		Size = UDim2.fromOffset(240, 20),
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.new(1, -16, 0, 14),
+		Size = UDim2.fromOffset(300, 36),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 8,
 	})
-	local timer = Pop.text(frame, "", 32, {
+	local timer = Pop.text(frame, "", 18, {
 		Name = "Timer",
 		AnchorPoint = Vector2.new(1, 0),
-		FontFace = PopTheme.Heavy,
-		Position = UDim2.new(1, -16, 0, 30),
-		Size = UDim2.fromOffset(300, 38),
+		Position = UDim2.new(1, -16, 0, 50),
+		Size = UDim2.fromOffset(300, 22),
+		TextColor3 = Color3.fromRGB(230, 232, 240),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 8,
+	})
+	local lucky = Pop.tag(frame, "WITH TRIPLE LUCKY", "Green", Vector2.new(210, 28), {
+		Name = "Lucky",
+		Position = UDim2.fromOffset(18, 112),
+		Visible = false,
 	})
 	-- a tile per golem: its live model and its chance (the rarest bigger, in the middle)
 	local count = #edition.Golems
@@ -612,6 +652,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 	local gap = 10
 	local rowW = (count - 1) * (tile + gap) + math.floor(tile * 1.25)
 	local x = math.floor((w - rowW) / 2)
+	local chances: { [string]: TextLabel } = {}
 	local order: { number } = {}
 	-- (the photo: the rarest golem in the middle of the row)
 	for i = 1, count - 1 do
@@ -641,7 +682,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 			ZIndex = 6,
 		}, from)
 		local chance = edition.Odds[golem.Id] or 0
-		Pop.text(holder, StoreView.percent(chance), if big then 26 else 22, {
+		chances[golem.Id] = Pop.text(holder, StoreView.percent(chance), if big then 26 else 22, {
 			Name = "Chance",
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -4, 1, 0),
@@ -653,7 +694,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 	end
 	-- the buy buttons: 50 / 10 / 3 / 1, the count under each
 	local buys: { [number]: TextButton } = {}
-	local buttonW, buttonH = 196, 54
+	local buttonW, buttonH = 196, StoreView.BannerButtonH
 	local buyGap = math.floor((w - 4 * buttonW) / 5)
 	for i, n in StoreView.BannerCounts do
 		local key = edition.Products[n]
@@ -662,7 +703,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 			local bx = buyGap + (i - 1) * (buttonW + buyGap)
 			local button = Pop.price(frame, product.Robux, Vector2.new(buttonW, buttonH), {
 				Name = "Buy" .. n,
-				Position = UDim2.fromOffset(bx, h - buttonH - 34),
+				Position = UDim2.fromOffset(bx, h - buttonH - 30),
 				ZIndex = 8,
 			})
 			if n == StoreView.BannerCounts[1] then
@@ -670,14 +711,21 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 			end
 			Pop.text(frame, `{n} Golem{if n == 1 then "" else "s"}`, 20, {
 				Name = "Count" .. n,
-				Position = UDim2.fromOffset(bx, h - 32),
+				Position = UDim2.fromOffset(bx, h - 30),
 				Size = UDim2.fromOffset(buttonW, 26),
 				ZIndex = 8,
 			})
 			buys[n] = button
 		end
 	end
-	return { Frame = frame, Timer = timer, Buys = buys, Edition = edition }
+	return {
+		Frame = frame,
+		Timer = timer,
+		Buys = buys,
+		Chances = chances,
+		Lucky = lucky:FindFirstChild("Label") :: TextLabel,
+		Edition = edition,
+	}
 end
 
 -- "12.5%" / "0.5%" / "1%" (the banner's chances).
@@ -702,9 +750,24 @@ function StoreView.setEdition(refs: Refs, edition: Edition?): BannerRefs?
 	end
 	if edition then
 		refs.Banner = buildBanner(refs.Sections.Featured, edition)
+		sizeBanner(refs)
 	end
 	StoreView.relayout(refs)
 	return refs.Banner
+end
+
+-- The chances on the banner's tiles (the capsule's odds now: with Triple
+-- Lucky while it runs, so they match the odds panel and what a buy rolls).
+function StoreView.setBannerOdds(refs: Refs, odds: { [string]: number }, lucky: boolean)
+	local banner = refs.Banner
+	if not banner then
+		return
+	end
+	for id, label in banner.Chances do
+		label.Text = StoreView.percent(odds[id] or 0)
+	end
+	local tag = banner.Lucky.Parent :: GuiObject
+	tag.Visible = lucky
 end
 
 -- The banner's time left (seconds; 0 = ended).
@@ -794,13 +857,19 @@ function StoreView.build(): Refs
 
 	-- the section tabs right of the window
 	local tabs: { [string]: TextButton } = {}
-	local tabColumn = UIKit.new("Frame", {
+	-- (a scrolling column: on phones the tabs keep >= 44 pt and scroll if they don't all fit)
+	local tabColumn = UIKit.new("ScrollingFrame", {
 		Name = "Tabs",
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(size.X + StoreView.TabGap, StoreView.Header),
 		Size = UDim2.new(0, StoreView.TabSize, 1, -StoreView.Header),
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 0,
+		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
 	}, group)
-	UIKit.list(tabColumn, Enum.FillDirection.Vertical, 10)
+	UIKit.list(tabColumn, Enum.FillDirection.Vertical, StoreView.TabListGap)
 	for i, section in StoreConfig.Sections do
 		local face = Pop.tile(tabColumn, {
 			Name = section.Id,
@@ -925,6 +994,8 @@ function StoreView.build(): Refs
 		DetailBack = back,
 		Tops = {},
 		Banner = nil,
+		Fit = 1,
+		Compact = false,
 	}
 	StoreView.relayout(refs)
 	StoreView.layout(refs, 1280, 720)
@@ -937,6 +1008,27 @@ StoreView.Metrics = {
 	Normal = { Close = 62, Tab = 84, Lines = 18, Status = 20, Button = Vector2.new(200, 56), Detail = Vector2.new(600, 440) },
 	Compact = { Close = 76, Tab = 92, Lines = 24, Status = 24, Button = Vector2.new(240, 72), Detail = Vector2.new(780, 480) },
 }
+
+-- The limited banner's buy buttons: >= 44 pt on phones (the last layout's fit).
+sizeBanner = function(refs: Refs)
+	local banner = refs.Banner
+	if not banner then
+		return
+	end
+	local buttonH = StoreView.BannerButtonH
+	if refs.Compact then
+		buttonH = math.max(buttonH, StoreView.minTouch(refs.Fit))
+	end
+	for _, button in banner.Buys do
+		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)
+		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH - 30)
+	end
+end
+
+-- Design units a tap target needs to be 44 pt on a phone through the fit shrink.
+function StoreView.minTouch(fit: number): number
+	return math.ceil(StoreView.MinTouch / (StoreView.PhoneScale * math.max(fit, 0.3)))
+end
 
 -- Fits the window into a w x h design-unit screen (compact: the phone sizes).
 function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
@@ -957,8 +1049,9 @@ function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 	if closeLabel then
 		closeLabel.TextSize = math.floor(close * 0.66)
 	end
-	-- the tabs: as big as they can be in the window's height
-	local tabColumn = refs.Group:FindFirstChild("Tabs") :: Frame?
+	-- the tabs: as big as they can be in the window's height; on phones never under
+	-- 44 pt (they scroll instead), as wide as the column so the words stay readable
+	local tabColumn = refs.Group:FindFirstChild("Tabs") :: ScrollingFrame?
 	if tabColumn then
 		local count = 0
 		for _, tab in refs.Tabs do
@@ -966,15 +1059,23 @@ function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 				count += 1
 			end
 		end
+		local gap = StoreView.TabListGap
 		local room = size.Y - StoreView.Header - 8
-		local tab = math.min(m.Tab, math.floor((room - 10 * math.max(0, count - 1)) / math.max(count, 1)))
+		local tab = math.min(m.Tab, math.floor((room - gap * math.max(0, count - 1)) / math.max(count, 1)))
+		if compact then
+			tab = math.max(tab, StoreView.minTouch(fit))
+		end
 		tabColumn.Position = UDim2.fromOffset(size.X + StoreView.TabGap, StoreView.Header)
 		tabColumn.Size = UDim2.new(0, m.Tab, 1, -StoreView.Header)
+		tabColumn.CanvasSize = UDim2.fromOffset(0, count * tab + math.max(0, count - 1) * gap)
 		for _, face in refs.Tabs do
 			local frame = face.Parent :: Frame
-			frame.Size = UDim2.fromOffset(tab, tab)
+			frame.Size = UDim2.fromOffset(m.Tab, tab)
 		end
 	end
+	refs.Fit = fit
+	refs.Compact = compact == true
+	sizeBanner(refs)
 	refs.Detail.Size = UDim2.fromOffset(math.min(m.Detail.X * k, size.X - 40), math.min(m.Detail.Y * k, size.Y - StoreView.Header - 30))
 	refs.DetailLines.TextSize = math.floor(m.Lines * k)
 	refs.Status.TextSize = math.floor(m.Status * k)
