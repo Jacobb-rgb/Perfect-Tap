@@ -36,7 +36,30 @@ export type Plot = {
 	Facing: Vector3, -- the side of the plot that faces the road
 }
 
+local GameConfig = require(script.Parent.GameConfig)
+
 local WorldLayout = {}
+
+--[[
+	The plot grid's world footprint (bigger plots, docs: build/reviews/bigger_plots_plan.md):
+	everything on the plot columns, the outer coast and the south band derives from
+	this one block, so changing GameConfig.PlotCells resizes the plots without moving
+	the town core. At PlotCells 12 every value equals the old literal.
+]]
+do
+	local half = GameConfig.PlotCells * GameConfig.CellSize / 2 -- 24 at 12 cells, 32 at 16
+	WorldLayout.PlotGrid = {
+		Half = half, -- half the build grid (studs)
+		FrontX = 79, -- the pad's road-side edge, world |x| (never moves)
+		CenterX = 79 + half + 1, -- plot centre |x|: 104 at 12, 112 at 16
+		Pitch = 2 * half + 8, -- plot centre spacing along z: 56 at 12, 72 at 16
+		NorthZ = -112, -- the plot columns' north end (never moves)
+		SouthZ = -112 + 4 * (2 * half + 8), -- the columns' south end: 112 at 12, 176 at 16
+		Grow = half - 24, -- how far the yard moves in plot-local z (0 at 12)
+		CoastShift = 2 * (half - 24), -- what sits on the outer coast moves out by this (0 at 12)
+		SouthShift = 4 * (2 * half + 8) - 224, -- what sits in the south band moves south by this (0 at 12)
+	}
+end
 
 WorldLayout.Seed = 7341 -- change to regenerate decorations / node spots
 
@@ -53,7 +76,10 @@ WorldLayout.Landmarks = {
 }
 
 -- Island bounds (walkable area). Outside is cliff + sea.
-WorldLayout.Island = { Min = Vector3.new(-170, 0, -500), Max = Vector3.new(170, 0, 150) }
+WorldLayout.Island = {
+	Min = Vector3.new(-170 - WorldLayout.PlotGrid.CoastShift, 0, -500),
+	Max = Vector3.new(170 + WorldLayout.PlotGrid.CoastShift, 0, 150 + WorldLayout.PlotGrid.SouthShift),
+}
 
 export type Road = { From: Vector3, To: Vector3, Width: number }
 
@@ -64,8 +90,8 @@ WorldLayout.Roads = {
 	{ From = Vector3.new(0, 0, 36), To = Vector3.new(0, 0, 74), Width = 10 },
 	{ From = Vector3.new(36, 0, 0), To = Vector3.new(70, 0, 0), Width = 10 }, -- east spur
 	{ From = Vector3.new(-36, 0, 0), To = Vector3.new(-70, 0, 0), Width = 10 }, -- west spur
-	{ From = Vector3.new(70, 0, -112), To = Vector3.new(70, 0, 116), Width = 9 }, -- east plot road
-	{ From = Vector3.new(-70, 0, -112), To = Vector3.new(-70, 0, 116), Width = 9 }, -- west plot road
+	{ From = Vector3.new(70, 0, -112), To = Vector3.new(70, 0, WorldLayout.PlotGrid.SouthZ + 4), Width = 9 }, -- east plot road
+	{ From = Vector3.new(-70, 0, -112), To = Vector3.new(-70, 0, WorldLayout.PlotGrid.SouthZ + 4), Width = 9 }, -- west plot road
 	{ From = Vector3.new(-26, 0, -28), To = Vector3.new(-26, 0, -112), Width = 9 }, -- forge west path
 	{ From = Vector3.new(26, 0, -28), To = Vector3.new(26, 0, -112), Width = 9 }, -- forge east path
 	{ From = Vector3.new(-70, 0, -112), To = Vector3.new(70, 0, -112), Width = 10 }, -- quarry rim road
@@ -74,14 +100,15 @@ WorldLayout.Roads = {
 -- Player plots: 4 west (facing east) and 4 east (facing west).
 WorldLayout.Plots = {} :: { Plot }
 do
-	local zs = { 84, 28, -28, -84 }
+	-- south -> north: z = SouthZ - Pitch * (i - 0.5) (84 / 28 / -28 / -84 at 12 cells)
+	local grid = WorldLayout.PlotGrid
 	local id = 0
 	for _, side in { -1, 1 } do
-		for _, z in zs do
+		for i = 1, 4 do
 			id += 1
 			table.insert(WorldLayout.Plots, {
 				Id = id,
-				Center = Vector3.new(side * 104, 0.3, z),
+				Center = Vector3.new(side * grid.CenterX, 0.3, grid.SouthZ - grid.Pitch * (i - 0.5)),
 				Facing = Vector3.new(-side, 0, 0),
 			})
 		end
