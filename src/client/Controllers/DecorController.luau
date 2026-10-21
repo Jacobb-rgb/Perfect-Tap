@@ -184,16 +184,16 @@ function DecorController.release(instance: Instance)
 	end
 end
 
+local function addPulser(d: Instance)
+	-- only the first time: a part seen again must not take the dimmed color as the new base
+	if not pulsers[d :: BasePart] and d:IsA("BasePart") and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel") then
+		pulsers[d] = { base = d.Color, phase = math.random() * 6 }
+	end
+end
+
 local function scanPulsers(root: Instance)
 	for _, d in root:GetDescendants() do
-		-- only the first time: later scans must not take the dimmed color as the new base
-		if
-			not pulsers[d :: BasePart]
-			and d:IsA("BasePart")
-			and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel")
-		then
-			pulsers[d] = { base = d.Color, phase = math.random() * 6 }
-		end
+		addPulser(d)
 	end
 end
 
@@ -227,11 +227,19 @@ function DecorController.start()
 		spinners[instance] = nil
 	end)
 
-	-- StreamingEnabled: parts arrive over time, so rescan now and then.
+	-- StreamingEnabled: parts arrive over time. One full scan per Map, then only the parts
+	-- that stream in (a full GetDescendants every 5 s was a regular hitch on phones).
 	task.spawn(function()
+		local watched: Instance? = nil
+		local added: RBXScriptConnection? = nil
 		while true do
 			local map = Workspace:FindFirstChild("Map")
-			if map then
+			if map and map ~= watched then
+				if added then
+					added:Disconnect()
+				end
+				watched = map
+				added = map.DescendantAdded:Connect(addPulser)
 				scanPulsers(map)
 			end
 			for part in pulsers do

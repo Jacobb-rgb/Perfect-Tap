@@ -441,8 +441,18 @@ local function putIn(player: Player, plotId: number): string?
 		Net.fire("Fx", player, "PenIn", PenService.gateCFrame(plotId).Position + Vector3.new(0, 1, 0))
 		PenService.arrived(player, stored, "Pen")
 	end
-	if #CarryService.list(player) > 0 then
+	local held = CarryService.list(player)
+	if #held > 0 then
 		local left = PenService.refusal(data)
+		local onlyRelics = true
+		for _, record in held do
+			onlyRelics = onlyRelics and record.Kind == "Relic"
+		end
+		if not left and onlyRelics then
+			-- room left: only dusty relics stayed in the hands (never stored)
+			toast(player, ItemData.RelicRefused, "Info")
+			return nil
+		end
 		toast(player, PenService.refusalText(data, left))
 		return left
 	end
