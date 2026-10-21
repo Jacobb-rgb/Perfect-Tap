@@ -259,6 +259,10 @@ return function(T, Loader)
 			table.insert(plain, copy)
 		end
 		WorldLayout.Zones = plain
+		-- (the mine floors' rock weights too: BoostConfig.zoneWeights)
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local byZone = MineFloors.ByZone
+		MineFloors.ByZone = {}
 		w.data.Boosts.HexaLuckyUntil = 0
 		local ok2, err2 = pcall(function()
 			refused(w, "BuyCoins", "HexaLucky5", "NoEffect", "no Rare ores anywhere")
@@ -267,6 +271,7 @@ return function(T, Loader)
 			T.eq(result(w, "BuyCoins", "TripleLucky5").Reason, "NoCoins", "Triple Lucky always has an effect")
 		end)
 		WorldLayout.Zones = zones
+		MineFloors.ByZone = byZone
 		if not ok2 then
 			error(err2, 0)
 		end
@@ -639,11 +644,19 @@ return function(T, Loader)
 		local s = state({ Bonuses = { OreLuckPct = 0.3, OreLuckMult = 1, ArtifactPct = 0 } })
 		local without, with = BoostConfig.hexaLuck(0.3)
 		for _, zone in WorldLayout.Zones do
-			if next(zone.Ores) ~= nil then
+			local weights = BoostConfig.zoneWeights(zone)
+			local crystal = BoostConfig.crystalWeights(zone)
+			if next(weights) ~= nil then
 				local t = BoostView.hexaOdds(s, zone.Id)
-				local before = BoostConfig.oreOdds(zone.Ores, without)
-				local after = BoostConfig.oreOdds(zone.Ores, with)
-				T.eq(#t.Rows, #before, zone.Id .. ": every ore")
+				local before = BoostConfig.oreOdds(weights, without)
+				local after = BoostConfig.oreOdds(weights, with)
+				local crystalRows = if crystal then #BoostConfig.oreOdds(crystal, without) else 0
+				T.eq(#t.Rows, #before + crystalRows, zone.Id .. ": every ore (and every crystal rock ore)")
+				for i = #before + 1, #t.Rows do
+					T.truthy(t.Rows[i].Name:find("(crystal rock)", 1, true), zone.Id .. ": crystal rock rows last")
+				end
+				t = table.clone(t)
+				t.Rows = table.move(t.Rows, 1, #before, 1, {})
 				local byName = {}
 				local order = math.huge
 				for _, row in t.Rows do
@@ -664,11 +677,13 @@ return function(T, Loader)
 					T.eq(after[i].Ore, line.Ore)
 					T.eq(row.After, BoostView.pct(after[i].Chance), zone.Id .. " " .. line.Ore .. " after")
 				end
-				local rare = BoostConfig.rareShare(zone.Ores, without)
+				local rare = BoostConfig.rareShare(weights, without)
 				if rare > 0 then
 					T.eq(t.Summary.Before, BoostView.pct(rare))
-					T.eq(t.Summary.After, BoostView.pct(BoostConfig.rareShare(zone.Ores, with)))
+					T.eq(t.Summary.After, BoostView.pct(BoostConfig.rareShare(weights, with)))
 					T.truthy(t.Summary.Change > 0, zone.Id .. ": Rare+ grows")
+				elseif crystal and BoostConfig.rareShare(crystal, without) > 0 then
+					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores in plain rocks, no summary")
 				else
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores, no summary")
 					T.truthy(t.Note:find("changes nothing"), zone.Id .. ": says so")

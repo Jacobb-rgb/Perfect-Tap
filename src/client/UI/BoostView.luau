@@ -397,7 +397,10 @@ function BoostView.defaultZone(rawState: any, currentZone: string?): string?
 	local best: WorldLayout.Zone? = nil
 	local function score(zone: WorldLayout.Zone): number
 		local lucky = false
-		for oreId in zone.Ores do
+		for oreId in BoostConfig.zoneWeights(zone) do
+			lucky = lucky or BoostConfig.isLuckyOre(oreId)
+		end
+		for oreId in BoostConfig.crystalWeights(zone) or {} do
 			lucky = lucky or BoostConfig.isLuckyOre(oreId)
 		end
 		return (if lucky then 1000 else 0) + zone.MinBlaster * 10 + (if zone.VipOnly then 0 else 1)
@@ -627,22 +630,36 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local summary: OddsRow? = nil
 	local note = `Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with Hexa Lucky. Chance per ore in a rock you break.`
 	if zone then
-		local after: { [string]: number } = {}
-		for _, line in BoostConfig.oreOdds(zone.Ores, with) do
-			after[line.Ore] = line.Chance
+		-- one block of rows per table the server rolls from (BoostConfig.zoneWeights; a mine
+		-- floor's crystal rocks roll their own richer table, labelled as such)
+		local function block(weights: { [string]: number }, suffix: string): { OddsRow }
+			local after: { [string]: number } = {}
+			for _, line in BoostConfig.oreOdds(weights, with) do
+				after[line.Ore] = line.Chance
+			end
+			local list: { OddsRow } = {}
+			local orders: { number } = {}
+			for _, line in BoostConfig.oreOdds(weights, without) do
+				local ore = OreData.ById[line.Ore]
+				local info = Rarity.get(ore.Rarity)
+				table.insert(list, BoostView.row(ore.Name .. suffix, info.Color, line.Chance, after[line.Ore] or 0))
+				table.insert(orders, info.Order)
+			end
+			return BoostView.rarestFirst(list, orders)
 		end
-		local orders: { number } = {}
-		for _, line in BoostConfig.oreOdds(zone.Ores, without) do
-			local ore = OreData.ById[line.Ore]
-			local info = Rarity.get(ore.Rarity)
-			table.insert(rows, BoostView.row(ore.Name, info.Color, line.Chance, after[line.Ore] or 0))
-			table.insert(orders, info.Order)
+		local weights = BoostConfig.zoneWeights(zone)
+		local crystal = BoostConfig.crystalWeights(zone)
+		rows = block(weights, "")
+		if crystal then
+			for _, row in block(crystal, " (crystal rock)") do
+				table.insert(rows, row)
+			end
 		end
-		rows = BoostView.rarestFirst(rows, orders)
-		local before = BoostConfig.rareShare(zone.Ores, without)
+		local before = BoostConfig.rareShare(weights, without)
+		local crystalBefore = if crystal then BoostConfig.rareShare(crystal, without) else 0
 		if before > 0 then
-			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(zone.Ores, with))
-		else
+			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(weights, with))
+		elseif crystalBefore <= 0 then
 			note = "No Rare ores in this zone: Hexa Lucky changes nothing here."
 		end
 	end
@@ -2006,7 +2023,6 @@ function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
 	end
 	refs.Launcher.Visible = launcher and #chips == 0
 end
-
 
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
 -- While the light UI is on (ships off), the same window wears the light
