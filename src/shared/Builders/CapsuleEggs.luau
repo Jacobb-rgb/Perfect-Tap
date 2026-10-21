@@ -90,6 +90,8 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 	local K, T = kit, tools
 	local C = s.Center
 	local r = CapsuleEggs.Radius
+	-- (calm: the egg on its podium in the lobby glows only at its band, emblem and crown core)
+	local GLOW = if s.Calm then M.SmoothPlastic else NEON
 	local topCenter = 0.4 * r
 	local tipY = topCenter + 1.4 * r
 	local function at(x: number, y: number, z: number): CFrame
@@ -180,7 +182,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 			at(x, y, z) * CFrame.Angles(0, math.asin(math.clamp(x / math.max(rr, 0.01), -1, 1)), k[3]),
 			Vector3.new(0.08, 0.6, 0.04),
 			th.Glow,
-			NEON
+			GLOW
 		)
 	end
 	-- crystals breaking out of the shell
@@ -195,7 +197,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 			break
 		end
 		local cf = at(k[1], k[2], k[3]) * CFrame.Angles(k[7], 0, k[6]) * CFrame.Angles(0, PI / 4, 0)
-		K.part(s.Top, "Crystal" .. i, cf, Vector3.new(k[4], k[5], k[4]), if i == 2 then th.Hot else th.Crystal, NEON)
+		K.part(s.Top, "Crystal" .. i, cf, Vector3.new(k[4], k[5], k[4]), if i == 2 then th.Hot else th.Crystal, GLOW)
 	end
 	-- the emblem on the front: a frame, the glowing iris, its mark
 	if s.Room() >= 4 then
@@ -224,7 +226,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		for i, k in th.Crown do
 			local h = k[2] :: number
 			local cf = at(k[1] :: number, tipY - 0.1 + h * 0.35, 0) * CFrame.Angles(0, 0, k[4] :: number)
-			diamond(s.Top, "CrownPiece" .. i, cf, h, 0.14, k[3] :: Color3, NEON)
+			diamond(s.Top, "CrownPiece" .. i, cf, h, 0.14, k[3] :: Color3, GLOW)
 		end
 	end
 	if s.Room() >= 1 then
@@ -302,7 +304,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 				w * (1 + 0.15 * j),
 				0.08,
 				if j == 1 then th.Hot else th.Glow,
-				NEON
+				GLOW
 			)
 		end
 		if s.Room() >= 2 then
@@ -312,7 +314,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 				CFrame.new(onTop(az + 0.2, heights[#heights] - 0.1, 0.06)),
 				Vector3.new(0.3, 0.3, 0.3),
 				th.Glow,
-				NEON,
+				GLOW,
 				BALL
 			)
 		end
@@ -344,11 +346,11 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		end
 	end
 	if s.Room() >= 1 then
-		K.upright(s.Bottom, "Pool", at(0, -r + 0.02, -0.2), 0.06, 2.6, th.Glow, NEON)
+		K.upright(s.Bottom, "Pool", at(0, -r + 0.02, -0.2), 0.06, 2.6, th.Glow, GLOW)
 	end
 	local band = s.Bottom:FindFirstChild("Band")
 	if band and band:IsA("BasePart") then
-		T.embers(band, th.Embers, 6, 0.25)
+		T.embers(band, th.Embers, if s.Calm then 2 else 6, 0.25)
 	end
 end
 

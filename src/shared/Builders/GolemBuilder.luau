@@ -653,7 +653,7 @@ end
 ---------------------------------------------------------------- capsules
 
 -- The capsule for the opening animation (see the header).
-local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((GolemGearLimited.Shard) -> ())?): Model
+local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((GolemGearLimited.Shard) -> ())?, calm: boolean?): Model
 	local center = base or CFrame.new()
 	local tint = color or STONE
 	local model = Instance.new("Model")
@@ -679,6 +679,7 @@ local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((G
 			Center = center,
 			Color = tint,
 			Glow = glow or rgb(255, 170, 80),
+			Calm = calm,
 			Room = function(): number
 				return GolemBuilder.ShardMaxParts - GolemBuilder.partCount(model)
 			end,
@@ -693,7 +694,8 @@ local function eggFrame(base: CFrame?, color: Color3?, glow: Color3?, build: ((G
 	return model
 end
 
-function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
+-- opts.Calm: an egg standing in the world (the egg stall: fewer glowing parts)
+function GolemBuilder.capsule(capsuleId: string, base: CFrame?, opts: { Calm: boolean? }?): Model
 	local capsule = CapsuleConfig.ById[capsuleId]
 	if capsule and capsule.Limited and GolemGearLimited.shard(capsule.Limited, KIT) then
 		local model = GolemBuilder.shard(capsule.Limited, base, capsule.Color, capsule.Glow)
@@ -703,7 +705,7 @@ function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
 	-- the regular capsules are EGGS now (owner 2026-10-21: "an egg instead of capsules")
 	local egg = EGGS[capsuleId]
 	if capsule and egg then
-		local model = eggFrame(base, capsule.Color, capsule.Glow, egg)
+		local model = eggFrame(base, capsule.Color, capsule.Glow, egg, opts ~= nil and opts.Calm == true)
 		model:SetAttribute("Capsule", capsuleId)
 		model:SetAttribute("Egg", capsuleId)
 		return model

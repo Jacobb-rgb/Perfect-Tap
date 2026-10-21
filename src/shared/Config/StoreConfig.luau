@@ -124,13 +124,13 @@ StoreConfig.Cards = {
 	card({ Id = "TripleLucky15", Keys = { "TripleLucky15" }, Look = "Boost", Paint = "Yellow", Icon = "clover", Model = "clover", Section = "Luck", Row = 1, Title = "Triple Lucky", Big = "x3", Note = "Rarer golems, 15 min" }),
 	card({ Id = "HexaLucky15", Keys = { "HexaLucky15" }, Look = "Boost", Paint = "Blue", Icon = "rainbow", Model = "item_Diamond", Section = "Luck", Row = 1, Title = "Hexa Lucky", Big = "x2.5", Note = "Rarer ores, 15 min" }),
 	-- golem capsules ("eggs")
-	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
-	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
-	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
+	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
+	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
+	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Egg", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
 	card({
 		Id = "Royal10",
 		Keys = { "RoyalCapsule10" },
-		Title = "Royal Capsule",
+		Title = "Royal Egg",
 		Look = "Capsule",
 		Paint = "Pink",
 		Icon = "capsule_Royal",
