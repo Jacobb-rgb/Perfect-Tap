@@ -608,6 +608,8 @@ async function main() {
     const uiLayer = document.getElementById("ui");
     uiLayer.style.width = `${WIDTH}px`;
     uiLayer.style.height = `${HEIGHT}px`;
+    // the fonts first: text is measured (TextScaled, AutomaticSize) while laying out
+    await Promise.all(["Fredoka One", "Luckiest Guy", "Comic Neue Angular"].map((f) => document.fonts.load(`20px "${f}"`).catch(() => {})));
     renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
     if (shot.mobileControls) mobileControls(uiLayer, shot.mobileControls);
     // wait for the 3D icon pictures before the screenshot
