@@ -45,14 +45,14 @@ return function(T, Loader)
 	end
 
 	T.test("Migration: template is version 4", function()
-		T.eq(DataTemplate.Version, 4)
-		T.eq(Migrations.Latest, 4)
+		T.eq(DataTemplate.Version, 5)
+		T.eq(Migrations.Latest, 5)
 	end)
 
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 4)
+		T.eq(data.Version, 5)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -157,7 +157,7 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 4)
+		T.eq(data.Version, 5)
 		local newer = { Version = 7, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, 7, "a newer save's version is not lowered")
@@ -198,7 +198,7 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 4)
+		T.eq(data.Version, 5)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -294,7 +294,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 4)
+			T.eq(data.Version, 5)
 		end
 	end)
 
@@ -341,7 +341,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 4)
+		T.eq(data.Version, 5)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")
