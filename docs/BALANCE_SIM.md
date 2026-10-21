@@ -291,3 +291,29 @@ are worth about 10 × the floor before, so the level after it has to cost a lot 
 ## Who decides
 Blaster / step 6 prices and balance: "TERRA FORGE Roblox hra vývoj" (integrator). Floors, elevator and hoverboard
 prices: the mine-floors chat. This file only proposes; nothing here changes the game.
+
+## The 2x Money pass (2026-10-21)
+
+The pass doubles podium income (offline too) and every sale, outside the StatConfig caps
+(`EconomyService.addIncomeFactor` "MoneyPass", `Bonuses.sellMult`). The sim's `IncomeMult`
+assumption does exactly that ("podium income and every sale"), so a payer is:
+
+```bash
+echo '{"IncomeMult":2}' > build/balance_2x/x2.json
+lune run tools/lune/balance_sim.luau override=build/balance_2x/x2.json
+```
+
+Medians of 120 players each, same seed, main at 75ecbd5 (no Acts bonus, no Starter Pack):
+
+| Profile | Blaster 9 free | Blaster 9 with 2x | Blaster 10 free | Blaster 10 with 2x | Faster |
+|---|---|---|---|---|---|
+| Typical (0.5) | 5h 00m | 2h 33m | 8h 00m | 4h 04m | x1.97 |
+| Skilled (0.8) | 3h 30m | 1h 53m | 5h 26m | 2h 53m | x1.88 |
+| Casual (0.3) | 7h 11m | 3h 37m | past 10 h | 5h 54m | x1.99 (blaster 9) |
+
+Inside the owner's rule (a paying player ~2-3x faster, target 1.6-2.5x for this pass alone):
+the pass halves the coin grind but not the time spent on non-coin gates, so it lands just
+under x2. It buys no story step and no mega machine. The Starter Pack (one Rare +10 % income
+golem and 20 minutes of income once) is a one-time head start of minutes, not a multiplier.
+With the Acts income bonus (feature/acts, also outside the cap) the pass doubles that too:
+re-run this table on the Acts branch when it lands.

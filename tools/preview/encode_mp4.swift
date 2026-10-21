@@ -1,5 +1,5 @@
 // Encodes a folder of JPEG frames (frame_0000.jpg ...) into an H.264 MP4 with AVFoundation.
-//   swift tools/preview/encode_mp4.swift <framesDir> <out.mp4> <fps>
+//   swift tools/preview/encode_mp4.swift <framesDir> <out.mp4> <fps> [bitrate bits/s, default 16000000]
 import AVFoundation
 import AppKit
 
@@ -7,6 +7,7 @@ let args = CommandLine.arguments
 let dir = URL(fileURLWithPath: args[1])
 let out = URL(fileURLWithPath: args[2])
 let fps = Int32(args[3]) ?? 30
+let bitrate = args.count > 4 ? (Int(args[4]) ?? 16_000_000) : 16_000_000
 let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".jpg") }.sorted()
 guard let first = NSImage(contentsOf: dir.appendingPathComponent(files[0])),
       let firstCG = first.cgImage(forProposedRect: nil, context: nil, hints: nil) else { fatalError("no frames") }
@@ -17,7 +18,7 @@ let settings: [String: Any] = [
   AVVideoCodecKey: AVVideoCodecType.h264,
   AVVideoWidthKey: width,
   AVVideoHeightKey: height,
-  AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 16_000_000, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel],
+  AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel],
 ]
 let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
 let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [

@@ -43,6 +43,7 @@
 ]]
 
 local Types = require(script.Parent.Parent.LimitedGearTypes)
+local CapsuleEggs = require(script.Parent.Parent.CapsuleEggs)
 
 type Ctx = Types.Ctx
 type Kit = Types.Kit
@@ -65,7 +66,6 @@ local SNOW = rgb(250, 252, 255)
 local ICE_PALE = rgb(210, 240, 255)
 local ICE = rgb(150, 220, 255)
 local ICE_CYAN = rgb(90, 210, 255)
-local ICE_DEEP = rgb(50, 120, 220)
 local NAVY = rgb(26, 44, 112)
 local NAVY_DARK = rgb(14, 22, 60)
 local SPARKLE = rgb(255, 255, 255)
@@ -936,176 +936,10 @@ end
 
 ---------------------------------------------------------------- the shard
 
---[[
-	The FROST EGG shard (units: studs, the shard's center at s.Center, the
-	front -Z): a sphere below the waist and a tall ellipsoid above it (the
-	halves of the opening). Glossy ice, a snow cap on the tip, crystals
-	breaking out, the northern lights round the waist, a snowflake emblem,
-	an ice stand in a snowdrift.
-]]
+-- the set's SHARD: the premium egg in the set's theme (Builders/CapsuleEggs,
+-- owner 2026-10-21: "clean like the dragon egg, built from what it is for")
 function FrostTitans.shard(kit: Kit, tools: Tools, s: Shard)
-	K, T = kit, tools
-	local C = s.Center
-	local r = 1.25
-	local topCenter = 0.4 * r
-	local topHalf = 1.4 * r
-	local function at(x: number, y: number, z: number): CFrame
-		return C * CFrame.new(x, y, z)
-	end
-	-- the shell's radius at height y (sphere below 0, the ellipsoid above)
-	local function radius(y: number): number
-		if y < 0 then
-			return math.sqrt(math.max(r * r - y * y, 0))
-		end
-		local yy = (y - topCenter) / topHalf
-		return r * math.sqrt(math.max(1 - yy * yy, 0))
-	end
-	-- a frame on the shell at height y and angle a (0 = front, + = right):
-	-- its -Z (LookVector) points out of the shell
-	local function surf(y: number, a: number, lift: number): CFrame
-		local rr = radius(y)
-		local dx, dz = math.sin(a), -math.cos(a)
-		local p = at(dx * rr, y, dz * rr).Position
-		local ny = if y < 0 then y / r else (y - topCenter) / (topHalf * topHalf) * r
-		local n = C:VectorToWorldSpace(Vector3.new(dx * rr / r, ny, dz * rr / r)).Unit
-		return CFrame.lookAt(p + n * lift, p + n * (lift + 1))
-	end
-	local shellTop = rgb(132, 200, 255)
-	local shellLow = rgb(76, 140, 236)
-
-	-- Bottom: the round lower shell, the aurora band, the cracks
-	T.ellipsoid(s.Bottom, "Shell", at(0, 0, 0), Vector3.new(2 * r, 2 * r, 2 * r), shellLow, M.SmoothPlastic)
-	K.upright(s.Bottom, "Band", at(0, 0.02, 0), 0.2, 2 * r + 0.08, AURORA_GREEN, NEON)
-	K.upright(s.Bottom, "BandViolet", at(0, -0.17, 0), 0.12, 2 * radius(-0.17) + 0.08, AURORA_VIOLET, NEON)
-	for i, k in { { -0.5, -0.45, 0.5 }, { 0.55, -0.6, -0.6 }, { 0.05, -0.85, 0.3 } } do
-		K.part(s.Bottom, "Crack" .. i, surf(k[2], k[1], 0.02) * CFrame.Angles(0, 0, k[3]), Vector3.new(0.09, 0.6, 0.04), SPARKLE, NEON)
-	end
-	-- the ice stand in a snowdrift, ringed with little crystals
-	K.upright(s.Bottom, "Stand", at(0, -r - 0.12, 0), 0.3, 2.2, ICE_DEEP, M.Glass)
-	K.upright(s.Bottom, "StandRim", at(0, -r + 0.06, 0), 0.08, 2.3, SNOW, M.Snow)
-	T.ellipsoid(s.Bottom, "Snowdrift", at(0, -r + 0.06, 0), Vector3.new(1.9, 0.5, 1.9), SNOW, M.Snow)
-	for i = 1, 6 do
-		if s.Room() < 1 then
-			break
-		end
-		local a = (i - 0.5) * PI / 3
-		local dx, dz = math.sin(a), -math.cos(a)
-		local cf = at(dx * 1.08, -r - 0.02, dz * 1.08) * CFrame.Angles(dz * 0.35, 0, dx * -0.35)
-		crystal(s.Bottom, "StandCrystal" .. i, cf * CFrame.new(0, 0.24, 0), 0.22, if i % 2 == 0 then 0.62 else 0.46, ICE_CYAN, M.Glass)
-	end
-	-- frost spots on the lower shell
-	for i, k in { { -0.62, -0.5, 0.18 }, { 0.3, -0.42, 0.14 }, { 0.75, -0.75, 0.12 } } do
-		if s.Room() < 1 then
-			break
-		end
-		local cf = surf(k[2], k[1], 0.01) * CFrame.Angles(0, 0, PI / 4)
-		K.part(s.Bottom, "Spot" .. i, cf, Vector3.new(k[3] * 2, k[3] * 2, 0.04), SNOW, M.SmoothPlastic)
-	end
-
-	-- Top: the tall upper shell
-	T.ellipsoid(s.Top, "Shell", at(0, topCenter, 0), Vector3.new(2 * r, 2 * topHalf, 2 * r), shellTop, M.SmoothPlastic)
-	K.upright(s.Top, "BandCyan", at(0, 0.2, 0), 0.12, 2 * radius(0.2) + 0.08, AURORA_CYAN, NEON)
-	-- the snow cap on the tip, dripping
-	local tipY = topCenter + topHalf
-	T.ellipsoid(s.Top, "SnowCap", at(0, tipY - 0.3, 0), Vector3.new(1.72, 1.1, 1.72), SNOW, M.Snow)
-	for i, k in { { -0.75, 0.62 }, { 0.2, 0.76 }, { 0.95, 0.56 } } do
-		if s.Room() < 1 then
-			break
-		end
-		local y = tipY - 0.56
-		T.ellipsoid(s.Top, "Drip" .. i, surf(y, k[1], -0.02), Vector3.new(0.34, k[2], 0.3), SNOW, M.Snow)
-	end
-	-- pointed ice crystals breaking out of the shell (y, angle, base width,
-	-- length, glow?): thick triangles leaning up and out
-	local up = C.UpVector
-	for i, k in
-		{
-			{ 0.85, 1.3, 0.62, 1.15, 0 },
-			{ 0.55, -1.35, 0.56, 1.0, 0 },
-			{ 1.45, -0.8, 0.36, 0.62, 1 },
-			{ 0.2, 1.95, 0.42, 0.72, 1 },
-			{ 1.6, 0.85, 0.32, 0.5, 0 },
-			{ -0.45, -1.95, 0.42, 0.66, 0 },
-		}
-	do
-		local room = s.Room()
-		if room < 1 then
-			break
-		end
-		local parent = if k[1] < 0 then s.Bottom else s.Top
-		local f = surf(k[1], k[2], -0.08)
-		local dir = (f.LookVector * 0.7 + up * 0.7).Unit
-		local across = f.UpVector * (k[3] / 2)
-		local tip = f.Position + dir * k[4]
-		local color = if k[5] == 1 then AURORA_CYAN else ICE_PALE
-		local material = if k[5] == 1 then NEON else M.Glass
-		T.tri(parent, "Ice" .. i, f.Position - across, f.Position + across, tip, 0.2, color, material, math.min(room, 2))
-	end
-	-- the snowflake emblem on the front: a navy disc, three glowing bars
-	if s.Room() >= 5 then
-		local e = surf(0.85, 0, 0.02)
-		K.part(
-			s.Top,
-			"EmblemDisc",
-			e * CFrame.Angles(0, PI / 2, 0),
-			Vector3.new(0.08, 0.92, 0.92),
-			NAVY,
-			M.SmoothPlastic,
-			Enum.PartType.Cylinder
-		)
-		for i = 1, 3 do
-			K.part(
-				s.Top,
-				"EmblemBar" .. i,
-				e * CFrame.new(0, 0, -0.04) * CFrame.Angles(0, 0, (i - 1) * PI / 3),
-				Vector3.new(0.1, 0.74, 0.05),
-				SPARKLE,
-				NEON
-			)
-		end
-		diamond(s.Top, "EmblemGem", e * CFrame.new(0, 0, -0.07), 0.2, 0.2, 0.05, AURORA_CYAN, NEON)
-	end
-	-- the glossy shine on the upper shell (the egg games' highlight)
-	if s.Room() >= 1 then
-		local shine =
-			T.ellipsoid(s.Top, "Shine", surf(0.95, -0.62, 0.0) * CFrame.Angles(0, 0, -0.35), Vector3.new(0.26, 0.72, 0.05), SPARKLE)
-		shine.Transparency = 0.3
-	end
-	-- a glowing star of frost on the snow cap's tip
-	if s.Room() >= 2 then
-		local star = at(0, tipY + 0.62, 0)
-		diamond(s.Top, "Star", star, 0.5, 0.5, 0.08, SPARKLE, NEON)
-		diamond(s.Top, "StarSide", star * CFrame.Angles(0, PI / 2, 0), 0.5, 0.5, 0.08, AURORA_CYAN, NEON)
-	end
-	-- little ice wings swept up from the sides
-	for i, side in { -1, 1 } do
-		local room = s.Room()
-		if room < 1 then
-			break
-		end
-		T.tri(
-			s.Top,
-			"Wing" .. i,
-			at(side * (r - 0.08), 0.0, 0.25).Position,
-			at(side * (r - 0.02), 0.9, 0.25).Position,
-			at(side * (r + 1.0), 1.55, 0.45).Position,
-			0.1,
-			ICE_PALE,
-			M.Ice,
-			math.min(room, 2)
-		)
-	end
-	-- frost sparkles
-	for i, k in { { 1.25, -0.6, 0.16 }, { 0.45, 0.75, 0.13 }, { 1.7, 0.3, 0.12 } } do
-		if s.Room() < 1 then
-			break
-		end
-		diamond(s.Top, "Sparkle" .. i, surf(k[1], k[2], 0.01), k[3], k[3], 0.04, SPARKLE, NEON)
-	end
-	local band = s.Bottom:FindFirstChild("Band")
-	if band and band:IsA("BasePart") then
-		T.embers(band, rgb(200, 250, 255), 6, 0.22)
-	end
+	CapsuleEggs.premium(kit, tools, s, CapsuleEggs.Themes.FrostTitans)
 end
 
 return FrostTitans

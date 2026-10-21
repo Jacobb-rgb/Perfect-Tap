@@ -168,7 +168,7 @@ WheelConfig.Segments = {
 		Boost = "TripleLucky",
 		Seconds = 600,
 	},
-	{ Index = 3, Id = "StoneCapsule", Kind = "Capsule", Label = "Stone Capsule", Odds = 0.15, Color = rgb(150, 120, 8), Capsule = "Stone" },
+	{ Index = 3, Id = "StoneCapsule", Kind = "Capsule", Label = "Stone Egg", Odds = 0.15, Color = rgb(150, 120, 8), Capsule = "Stone" },
 	{ Index = 4, Id = "Shards", Kind = "Shards", Label = "25 Shards", Odds = 0.1, Color = rgb(14, 110, 46), Amount = 25 },
 	{ Index = 5, Id = "BigCoins", Kind = "Coins", Label = "Big Coins", Odds = 0.08, Color = rgb(8, 112, 122), Seconds = 600, Min = 2500 },
 	{
@@ -186,7 +186,7 @@ WheelConfig.Segments = {
 		Index = 8,
 		Id = "CrystalCapsule",
 		Kind = "Capsule",
-		Label = "Crystal Capsule",
+		Label = "Crystal Egg",
 		Odds = 0.05,
 		Color = rgb(140, 24, 90),
 		Capsule = "Crystal",

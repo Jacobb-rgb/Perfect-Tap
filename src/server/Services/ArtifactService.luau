@@ -81,6 +81,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local StatConfig = require(Shared.Config.StatConfig)
 local StoryConfig = require(Shared.Config.StoryConfig)
@@ -275,6 +276,18 @@ function ArtifactService.paintYard(yard: Instance, skinId: string?): number
 	return painted
 end
 
+ArtifactService.StarterTitle = "Pioneer"
+
+-- The Starter Pack's title and podium skin when the save bought it (nil otherwise).
+function ArtifactService.starterReward(data: { [string]: any }): { Title: string, PodiumSkin: string }?
+	local starter = data.StarterPack
+	local skin = MonetizationConfig.Products.StarterPack and MonetizationConfig.Products.StarterPack.PodiumSkin
+	if type(starter) == "table" and type(starter.BoughtAt) == "number" and starter.BoughtAt > 0 and skin then
+		return { Title = ArtifactService.StarterTitle, PodiumSkin = skin }
+	end
+	return nil
+end
+
 --[[
 	Shows the player's title and podium skin (see the header): the player
 	attributes Title / PodiumSkin and the colors of their plot's podiums.
@@ -284,7 +297,11 @@ function ArtifactService.applyRewards(player: Player): string?
 	local data = DataService.get(player)
 	local collectionId = if data then ArtifactConfig.equipped(data.Artifacts) else nil
 	local collection = if collectionId then ArtifactConfig.CollectionById[collectionId] else nil
-	local reward = if collection then collection.Reward else nil
+	local reward: { Title: string, PodiumSkin: string }? = if collection then collection.Reward else nil
+	if not reward and data then
+		-- no collection reward shows: the Starter Pack's title and skin (bought with Robux)
+		reward = ArtifactService.starterReward(data)
+	end
 	player:SetAttribute(ArtifactService.TitleAttribute, if reward then reward.Title else nil)
 	player:SetAttribute(ArtifactService.SkinAttribute, if reward then reward.PodiumSkin else nil)
 	local plotId = PlotService.plotOf(player)

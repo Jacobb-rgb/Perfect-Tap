@@ -1674,9 +1674,13 @@ return function(T, Loader)
 		T.eq(boots.Button.Text, "MAX")
 		T.eq(boots.Title.Text, "MINER'S BOOTS")
 		for _, pip in boots.Pips do
-			T.eq(pip.BackgroundColor3, Theme.Good, "every pip lit at the top")
+			T.eq(pip.BackgroundColor3, GearShopView.PipColors.Done, "every pip lit at the top")
 		end
-		T.eq(refs.Slots.Magnet.Pips[1].BackgroundColor3, Theme.PanelDark, "level 0: no pip lit")
+		T.eq(refs.Slots.Magnet.Pips[1].BackgroundColor3, GearShopView.PipColors.Off, "level 0: no pip lit")
+		T.eq(refs.Slots.HelmetLamp.Pips[1].BackgroundColor3, GearShopView.PipColors.Done)
+		T.eq(boots.Button.Parent:GetAttribute("PopButton"), true, "a painted Pop button")
+		T.eq(boots.Button:GetAttribute("Mark"), "", "MAX: no coin")
+		T.eq(refs.Slots.Backpack.Button:GetAttribute("Mark"), "coin", "BUY: the gold coin button")
 		-- the gamepad starts on the first card that can buy
 		T.truthy(GearShopView.firstButton(refs) == refs.Slots.Backpack.Button, "the backpack is affordable")
 		-- a busy button keeps its text

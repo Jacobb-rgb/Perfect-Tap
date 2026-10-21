@@ -46,7 +46,11 @@ local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local FoundryLogic = require(Shared.Machines.FoundryLogic)
 local Format = require(Shared.Util.Format)
+local PopTheme = require(Shared.Config.PopTheme)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local LightSkin = require(script.Parent.LightSkin)
 
 local FoundryView = {}
@@ -403,6 +407,191 @@ end
 function FoundryView.penText(n: number): string
 	local what = if n == 1 then "1 ingot for your next blaster waits" else `{Format.commas(n)} ingots for your next blaster wait`
 	return `{what} in your Ore Pen: take them out there and Put In here, or Send them on a belt into the FOUNDRY chute.`
+end
+
+---------------------------------------------------------------- the Pop pieces
+--[[
+	The panel's Pop look (popSkin, at the end of the file; the light UI)
+	dresses the same instances the dark build makes. A lip button's holder
+	becomes the painted Pop face (attribute Pop) and the button on it a
+	see-through TextButton with white chunky words; rows and cards get a
+	paint, the studs, a light rim and sparkles.
+]]
+
+local function isPop(refs: Refs): boolean
+	return refs.Gui:GetAttribute("PopSkin") == true
+end
+
+-- The black edge of a text (its Contextual UIStroke, made when missing).
+local function popEdge(label: GuiObject)
+	local text: any = label
+	local edge: UIStroke? = nil
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			edge = child
+		end
+	end
+	local stroke = edge or Pop.edge(label)
+	stroke.Color = PopTheme.Outline
+	stroke.Transparency = 0
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
+	stroke.Thickness = Pop.edgeFor(if text.TextScaled then 24 else text.TextSize)
+end
+
+-- White chunky words with a black edge on an old label or button.
+local function popText(label: GuiObject, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = PopTheme.Ink
+	popEdge(label)
+end
+
+-- A lip button (UIKit.button) as a Pop button: the holder painted, the button see-through on it.
+local function popButton(button: TextButton, paint: string | Pop.Paint)
+	local holder = button.Parent :: Frame
+	for _, child in holder:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		end
+	end
+	local corner = holder:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, 10)
+	end
+	Pop.face(holder, paint, 10)
+	local rim = holder:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 1
+	end
+	Pop.studs(holder, 10, 0.45, 28, 1)
+	holder:SetAttribute("Pop", true)
+	local gradient = button:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient:Destroy()
+	end
+	button.BackgroundTransparency = 1
+	button.Position = UDim2.new()
+	button.Size = UDim2.fromScale(1, 1)
+	button.ZIndex = 3
+	popText(button)
+end
+
+-- A small label (UIKit.chip) as a Pop chip: a flat colour, a black edge, white words.
+local function popChip(chip: TextLabel, color: Color3)
+	chip.BackgroundColor3 = color
+	chip.BackgroundTransparency = 0
+	for _, child in chip:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child.Color = PopTheme.Outline
+			child.Thickness = 2.5
+		end
+	end
+	popText(chip)
+end
+
+-- A painted card face on an old frame: the paint, a light burst ("Burst": place
+-- it at the picture), the studs, the light rim, sparkles. The frame's own
+-- children move above the decoration (ZIndex 5+).
+local function popCard(frame: GuiObject, paint: string | Pop.Paint, corner: number, rays: boolean): Frame
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		elseif child:IsA("GuiObject") then
+			child.ZIndex = math.max(child.ZIndex, 5)
+		end
+	end
+	local round = frame:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, corner)
+	end
+	Pop.face(frame, paint, corner, false)
+	frame.ClipsDescendants = true
+	local p = Pop.paint(paint)
+	local burst = UIKit.new("Frame", {
+		Name = "Burst",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.4),
+		Size = UDim2.fromOffset(0, 0),
+		ZIndex = 1,
+	}, frame)
+	if rays then
+		local made = Pop.fx(burst, "fx_rays", {
+			Name = "Rays",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			ImageTransparency = 0.35,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(520, 520),
+			ZIndex = 1,
+		})
+		if not made then
+			Pop.rays(burst, UDim2.fromScale(0.5, 0.5), 10, 260, 0.6, 1)
+		end
+	end
+	local glow = Pop.fx(burst, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = p.Top:Lerp(Color3.new(1, 1, 1), 0.6),
+		ImageTransparency = if rays then 0.3 else 0.5,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(if rays then 190 else 90, if rays then 190 else 90),
+		ZIndex = 1,
+	})
+	if not glow then
+		local disc = UIKit.new("Frame", {
+			Name = "Glow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(if rays then 120 else 60, if rays then 120 else 60),
+			ZIndex = 1,
+		}, burst)
+		UIKit.corner(disc, 999)
+	end
+	Pop.studs(frame, corner, 0.5, 44, 2)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	for i, spot in { { 0.1, 0.22, 18 }, { 0.9, 0.2, 16 }, { 0.62, 0.8, 12 } } do
+		Pop.sparkle(frame, UDim2.fromScale(spot[1], spot[2]), spot[3], 3, 0.15 + i * 0.1)
+	end
+	return burst
+end
+
+FoundryView.PopPaints = {
+	Header = "Orange", -- (LightSkin.BandRoles: TerraForgeFoundry = Vault)
+	Card = "Purple", -- the next blaster
+	Switch = "Blue", -- the TAKE switch's picked side
+	Arrows = "Blue",
+} :: { [string]: string }
+
+local INGOT_FROM = Vector3.new(-0.55, 0.75, -1) -- a bar a little from above
+local BLASTER_FROM = Vector3.new(-1, 0.3, 0.18) -- (PictureModels' "blaster": the side, barrel left)
+
+-- A live 3D ingot of `oreId` (ItemBuilder: 4 parts), nil when it can't be built.
+local function ingotModel(oreId: string): Model?
+	local ok, made = pcall(ItemBuilder.build, { Kind = "Ingot", OreId = oreId, Grade = "Pristine" }, CFrame.new(), "foundry_" .. oreId)
+	return if ok then made else nil
+end
+
+-- The blaster a forge would make (BlasterBuilder: a Tool's parts in a Model).
+local function blasterModel(level: number, oreId: string?): Model?
+	local ok, tool = pcall(BlasterBuilder.build, level, oreId)
+	if not ok then
+		return nil
+	end
+	local model = Instance.new("Model")
+	model.Name = "Blaster"
+	for _, child: Instance in (tool :: Instance):GetChildren() do
+		if child:IsA("BasePart") or child:IsA("Model") then
+			local part: Instance = child
+			part.Parent = model
+		end
+	end
+	return model
 end
 
 ---------------------------------------------------------------- the panel
@@ -1297,15 +1486,354 @@ function FoundryView.showCard(refs: ForgeRefs, level: number, ore: string?, prev
 	refs.Feedback.TextTransparency = 1
 end
 
+---------------------------------------------------------------- the Pop look (UIConfig.LightUI)
+--[[
+	While the light UI is on (it ships on), the panel wears the bright Pop
+	look of the Robux Shop (UI/Pop; owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"): an orange header band (the
+	window's colour) with shine stripes and studs over a dark studded body;
+	the ingot rows painted in their rarity's colour (Pop.rarityPaint) with
+	the live 3D ingot, the count and an orange TAKE (rows the next level
+	can't use are shaded); the bright NEXT BLASTER card with the live
+	blaster of the chosen look in a light burst, the recipe in a dark well
+	and a big gold FORGE (grey while it can't). The same instances, names and
+	refs as the dark build (the controller and the specs drive both). The
+	hammer moment keeps the light skin.
+]]
 
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+-- The rows: the picture where the old icon was, its light burst behind it.
+local function popRowLayout(refs: Refs, row: Row)
+	local l = layoutOf(refs)
+	local size = l.RowH - 6
+	local picture = row.Frame:FindFirstChild("Picture") :: ImageLabel?
+	if picture then
+		picture.Position = UDim2.fromOffset(4, 3)
+		picture.Size = UDim2.fromOffset(size, size)
+	end
+	local burst = row.Frame:FindFirstChild("Burst") :: Frame?
+	if burst then
+		burst.Position = UDim2.fromOffset(4 + size / 2, 3 + size / 2)
+	end
+	local labels: { GuiObject } = { row.Name, row.Chip, row.Detail, row.Count, row.Take }
+	for _, label in labels do
+		popEdge(label)
+	end
+end
+
+-- A new ingot row in the Pop look (painted by setRows).
+local function popRow(row: Row)
+	local frame = row.Frame
+	popCard(frame, "Slate", 12, false)
+	row.Icon.Visible = false
+	Pop.model(frame, "item_Ingot_" .. row.Ore, 50, ingotModel(row.Ore), { Name = "Picture", ZIndex = 5 }, INGOT_FROM)
+	-- a row the next level can't use is shaded (its words and TAKE ALL stay bright)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		ZIndex = 4,
+	}, frame)
+	UIKit.corner(shade, 12)
+	popText(row.Name)
+	popChip(row.Chip, PopTheme.Well)
+	popText(row.Detail)
+	popText(row.Count, PopTheme.Heavy)
+	popButton(row.Take, "Orange")
+end
+
+-- The NEXT BLASTER card and the header pieces for the layout (normal / compact).
+local function popLayout(refs: Refs)
+	local l = layoutOf(refs)
+	local band = refs.Panel:FindFirstChild("PopHeader") :: Frame?
+	if band then
+		band.Size = UDim2.new(1, -8, 0, HEADER - 8)
+	end
+	local closeHolder = refs.Close.Parent :: Frame
+	closeHolder.Position = UDim2.new(1, -PAD, 0, math.max(4, (HEADER - l.Close) // 2))
+	refs.Close.TextSize = math.floor(l.Close * 0.6)
+	popEdge(refs.Close)
+	-- the TAKE switch fits the header band; on phones its buttons reach a
+	-- finger's 72 units (44 pt) above and below their faces (the words stay centred)
+	for _, button in { refs.TakeOne, refs.TakeEvery } do
+		local faceH = (button.Parent :: Frame).Size.Y.Offset
+		local extra = if refs.Compact then math.max(0, 72 - faceH) else 0
+		button.Position = UDim2.fromOffset(0, -extra / 2)
+		button.Size = UDim2.new(1, 0, 1, extra)
+	end
+	-- the picture right of the name, the damage and the look picker
+	local pic = if refs.Compact then 130 else 116
+	local picture = refs.Card:FindFirstChild("Picture") :: ImageLabel?
+	if picture then
+		picture.Position = UDim2.new(1, -10, 0, 34)
+		picture.Size = UDim2.fromOffset(pic, pic)
+	end
+	local burst = refs.Card:FindFirstChild("Burst") :: Frame?
+	if burst then
+		burst.Position = UDim2.new(1, -10 - pic / 2, 0, 34 + pic / 2)
+	end
+	local cardW = l.Width - l.Left - PAD * 3
+	refs.BlasterName.Size = UDim2.new(1, -(28 + pic + 4), 0, 34)
+	refs.Damage.Size = UDim2.new(1, -(28 + pic + 4), 0, 22)
+	refs.LookRow.Size = UDim2.new(1, -(24 + pic + 4), 0, l.Arrow)
+	local lookRoom = cardW - (24 + pic + 4) - (l.Arrow * 2 + 56)
+	refs.LookName.TextSize = FoundryView.fitTextSize(refs.LookName.Text, lookRoom, 19)
+	-- the recipe (ingots, coins, what it uses) in a dark well
+	local well = refs.Card:FindFirstChild("PopWell") :: Frame?
+	if well then
+		well.Position = UDim2.fromOffset(8, 102 + l.Arrow)
+		well.Size = UDim2.new(1, -16, 0, 116)
+	end
+	refs.Forge.TextSize = if refs.Compact then 40 else 36
+	local labels: { GuiObject } =
+		{ refs.BlasterName, refs.Damage, refs.LookName, refs.Ingots, refs.Coins, refs.Uses, refs.Reason, refs.Forge }
+	for _, label in labels do
+		popEdge(label)
+	end
+	for _, row in refs.Rows do
+		popRowLayout(refs, row)
+	end
+end
+
+local function popSkin(refs: Refs)
+	refs.Gui:SetAttribute("PopSkin", true)
+	local panel = refs.Panel
+	-- the window: a black frame round a dark studded body, the bright header band
+	panel.BackgroundColor3 = Color3.new(1, 1, 1)
+	local body = panel:FindFirstChildOfClass("UIGradient")
+	if body then
+		body.Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom)
+	end
+	local outline = panel:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Color = PopTheme.Outline
+		outline.Thickness = 4
+	end
+	local round = panel:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	end
+	for _, child in panel:GetChildren() do
+		if child:IsA("GuiObject") then
+			child.ZIndex = 4
+		end
+	end
+	Pop.studs(panel, PopTheme.WindowCorner, 0.5, 36, 1)
+	local band = UIKit.new("Frame", {
+		Name = "PopHeader",
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 0, HEADER - 8),
+		ClipsDescendants = true,
+		ZIndex = 2,
+	}, panel)
+	Pop.face(band, FoundryView.PopPaints.Header, 6, false)
+	local bandBorder = band:FindFirstChild("Border") :: UIStroke?
+	if bandBorder then
+		bandBorder.Thickness = 3
+	end
+	Pop.studs(band, 6, 0.35, 40, 2)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 2,
+	}, band)
+	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 2,
+		}, band)
+	end
+	local title = panel:FindFirstChild("Title")
+	if title and title:IsA("TextLabel") then
+		popText(title)
+		title.TextSize = 36
+		popEdge(title)
+		Pop.shadow(title).ZIndex = 3
+	end
+	popButton(refs.Close, PopTheme.Close)
+	refs.Close.FontFace = PopTheme.Heavy
+	-- the TAKE [ONE | ALL] switch (setTakeMode paints the picked side)
+	local modeLabel = refs.TakeMode:FindFirstChild("Label")
+	if modeLabel and modeLabel:IsA("TextLabel") then
+		popText(modeLabel)
+	end
+	popButton(refs.TakeOne, FoundryView.PopPaints.Switch)
+	popButton(refs.TakeEvery, "Slate")
+	-- the ingot list
+	popText(refs.StockHeader)
+	refs.List.ScrollBarImageColor3 = Color3.fromRGB(220, 224, 236)
+	popEdge(refs.PenNote)
+	refs.PenNote.TextColor3 = Color3.fromRGB(150, 220, 255)
+	popText(refs.Empty)
+	-- the NEXT BLASTER card: bright, the live blaster in a light burst
+	local card = refs.Card
+	popCard(card, FoundryView.PopPaints.Card, 12, true)
+	local cardTitle = card:FindFirstChild("CardTitle")
+	if cardTitle and cardTitle:IsA("TextLabel") then
+		popText(cardTitle)
+	end
+	popChip(refs.Badge, Color3.fromRGB(255, 186, 30))
+	popEdge(refs.BlasterName)
+	popText(refs.Damage)
+	popButton(refs.LookPrev, FoundryView.PopPaints.Arrows)
+	popButton(refs.LookNext, FoundryView.PopPaints.Arrows)
+	local swatch = refs.LookSwatch:FindFirstChildOfClass("UIStroke")
+	if swatch then
+		swatch.Color = PopTheme.Outline
+		swatch.Thickness = 2.5
+	end
+	popText(refs.LookName)
+	local well = UIKit.new("Frame", {
+		Name = "PopWell",
+		BackgroundColor3 = PopTheme.Well,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+	}, card)
+	UIKit.corner(well, 10)
+	Pop.border(well, 3)
+	Pop.studs(well, 10, 0.6, 36, 4)
+	popEdge(refs.Ingots)
+	popEdge(refs.Coins)
+	popText(refs.Uses)
+	popButton(refs.Forge, "Yellow")
+	refs.Forge.FontFace = PopTheme.Heavy
+	popText(refs.Reason)
+	popText(refs.Soon, PopTheme.Heavy)
+	Pop.model(card, "blaster", 116, nil, { Name = "Picture", AnchorPoint = Vector2.new(1, 0), ZIndex = 5 }, BLASTER_FROM)
+	-- the footer
+	popText(refs.Hint)
+	for _, child in refs.PadHint:GetChildren() do
+		if child:IsA("TextLabel") then
+			popText(child)
+		end
+	end
+	popLayout(refs)
+	FoundryView.setTakeMode(refs, refs.TakeAllMode)
+end
+
+local plainSetRows = FoundryView.setRows
+FoundryView.setRows = function(refs: Refs, rows: { OreRow }, total: number): { Row }
+	local created = plainSetRows(refs, rows, total)
+	if not isPop(refs) then
+		return created
+	end
+	for _, row in created do
+		popRow(row)
+		popRowLayout(refs, row)
+	end
+	for index, info in rows do
+		local row = refs.Rows[info.Ore]
+		if row and index <= FoundryView.MaxRows then
+			-- painted in the ore's rarity; the dark build's greys would tint the paint
+			row.Frame.BackgroundColor3 = Color3.new(1, 1, 1)
+			if row.Frame:GetAttribute("PopRarity") ~= info.Rarity then
+				row.Frame:SetAttribute("PopRarity", info.Rarity)
+				Pop.repaint(row.Frame, Pop.rarityPaint(info.Rarity), false)
+			end
+			local shade = row.Frame:FindFirstChild("Shade") :: Frame?
+			if shade then
+				shade.Visible = not info.Usable
+			end
+			row.Name.TextColor3 = PopTheme.Ink
+			row.Chip.BackgroundColor3 = PopTheme.Well
+			row.Detail.TextColor3 = if info.Usable then PopTheme.Ink else Color3.fromRGB(255, 160, 150)
+			popEdge(row.Take)
+		end
+	end
+	return created
+end
+
+local plainSetForgeEnabled = FoundryView.setForgeEnabled
+FoundryView.setForgeEnabled = function(refs: Refs, enabled: boolean)
+	plainSetForgeEnabled(refs, enabled)
+	if isPop(refs) then
+		local holder = refs.Forge.Parent :: Frame
+		holder.BackgroundColor3 = Color3.new(1, 1, 1)
+		Pop.repaint(holder, if enabled then "Yellow" else PopTheme.Gray)
+		refs.Forge.TextColor3 = PopTheme.Ink
+	end
+end
+
+local plainSetTakeMode = FoundryView.setTakeMode
+FoundryView.setTakeMode = function(refs: Refs, all: boolean)
+	plainSetTakeMode(refs, all)
+	if isPop(refs) then
+		local function paint(button: TextButton, on: boolean)
+			local holder = button.Parent :: Frame
+			holder.BackgroundColor3 = Color3.new(1, 1, 1)
+			Pop.repaint(holder, if on then FoundryView.PopPaints.Switch else "Slate")
+			button.TextColor3 = PopTheme.Ink
+			button.TextTransparency = if on then 0 else 0.25
+		end
+		paint(refs.TakeOne, not all)
+		paint(refs.TakeEvery, all)
+	end
+end
+
+local plainSetCard = FoundryView.setCard
+FoundryView.setCard = function(refs: Refs, status: FoundryLogic.Status, state: any)
+	plainSetCard(refs, status, state)
+	if not isPop(refs) then
+		return
+	end
+	refs.Reason.TextColor3 = if status.Ready then Color3.fromRGB(190, 255, 150) else PopTheme.Ink
+	local picture = refs.Card:FindFirstChild("Picture") :: ImageLabel?
+	local soon = status.Recipe == nil
+	if picture then
+		-- the live blaster this forge would make (built again only when the level or the look changes)
+		picture.Visible = not soon
+		local view = picture:FindFirstChild("View")
+		local key = `{status.Level}|{status.Skin or ""}`
+		if not soon and view and view:IsA("ViewportFrame") and view:GetAttribute("Key") ~= key then
+			local model = blasterModel(status.Level, status.Skin)
+			if model then
+				Pop.show(view, model, BLASTER_FROM)
+				view:SetAttribute("Key", key)
+			end
+		end
+	end
+	local well = refs.Card:FindFirstChild("PopWell") :: Frame?
+	if well then
+		well.Visible = not soon
+	end
+	local l = layoutOf(refs)
+	local pic = if refs.Compact then 130 else 116
+	local lookRoom = l.Width - l.Left - PAD * 3 - (24 + pic + 4) - (l.Arrow * 2 + 56)
+	-- (narrow: the ore's name alone, bigger; the arrows and the swatch say it is the look)
+	local words = refs.LookName.Text
+	if FoundryView.fitTextSize(words, lookRoom, 19) < 16 and string.sub(words, 1, 6) == "Look: " then
+		refs.LookName.Text = string.sub(words, 7)
+	end
+	refs.LookName.TextSize = FoundryView.fitTextSize(refs.LookName.Text, lookRoom, 19)
+	popEdge(refs.LookName)
+end
+
+local plainSetCompact = FoundryView.setCompact
+FoundryView.setCompact = function(refs: Refs, compact: boolean)
+	plainSetCompact(refs, compact)
+	if isPop(refs) then
+		popLayout(refs)
+	end
+end
+
 local darkBuild = FoundryView.build
 FoundryView.build = function(): Refs
 	local refs = darkBuild()
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
+		popSkin(refs)
 	end
 	return refs
 end

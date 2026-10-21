@@ -373,10 +373,12 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		if not dim then
 			o.Dim.BackgroundTransparency = 1 -- the scene's dim plane stands in for it
 		end
-		-- the renderer has no gradient transparency: a lighter uniform ray
-		for _, ray in o.Rays:GetChildren() do
-			if ray:IsA("Frame") then
-				ray.BackgroundTransparency = 0.88
+		-- (the renderer draws the rays' gradient transparency as the game does;
+		-- the hero is a scene model under the overlay here, so the soft glow
+		-- discs that sit behind the game's hero viewport would cover it)
+		for _, glow in o.Rays:GetChildren() do
+			if glow:IsA("Frame") and string.sub(glow.Name, 1, 4) == "Glow" then
+				glow.Visible = false
 			end
 		end
 		return o

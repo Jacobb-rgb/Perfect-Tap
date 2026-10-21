@@ -94,6 +94,60 @@ IconAssets.Sheets = {
 	},
 } :: { Sheet }
 
+--[[
+	The Pop UI textures (owner 2026-10-21: "everything must glow: light edges,
+	cool backgrounds", the Roblox shop photos). Made by
+	tools/preview/make_ui_textures.py into NAHRAJ_DO_ROBLOXU/ikony_ui:
+	  ui_studs.png  a 128 px tile of raised studs (ScaleType Tile over any colour)
+	  ui_fx.png     rays, glow, sparkle and shine in one sheet
+	Paste the uploaded ids here. Until then the Pop kit draws its own
+	stand-ins from frames (rays, discs, drawn sparkles) and no studs.
+	The preview pictures are fx_rays / fx_glow / fx_sparkle / fx_shine / ui_studs.
+]]
+export type Texture = { File: string, Id: number, Offset: Vector2?, Size: Vector2? }
+
+IconAssets.Textures = {
+	ui_studs = { File = "ui_studs.png", Id = 0 },
+	fx_rays = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(0, 0), Size = Vector2.new(512, 512) },
+	fx_glow = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(512, 0), Size = Vector2.new(256, 256) },
+	fx_sparkle = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(768, 0), Size = Vector2.new(128, 128) },
+	fx_shine = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(512, 256), Size = Vector2.new(512, 128) },
+} :: { [string]: Texture }
+
+-- Sets every texture cut from one uploaded file to its id (ui_fx.png's four share one).
+function IconAssets.setTextureFile(file: string, id: number)
+	for _, texture in IconAssets.Textures do
+		if texture.File == file then
+			texture.Id = id
+		end
+	end
+end
+
+-- Shows texture `name` on an ImageLabel ("" until uploaded); true when it will show.
+function IconAssets.applyTexture(label: ImageLabel, name: string): boolean
+	local texture = IconAssets.Textures[name]
+	label:SetAttribute("Icon", name)
+	if not texture or texture.Id <= 0 then
+		label.Image = ""
+		return IconAssets.Previewing and texture ~= nil
+	end
+	label.Image = "rbxassetid://" .. tostring(texture.Id)
+	if texture.Offset and texture.Size then
+		label.ImageRectOffset = texture.Offset
+		label.ImageRectSize = texture.Size
+	end
+	return true
+end
+
+-- Will texture `name` show (uploaded, or in the previews)?
+function IconAssets.textureShows(name: string): boolean
+	local texture = IconAssets.Textures[name]
+	if not texture then
+		return false
+	end
+	return texture.Id > 0 or IconAssets.Previewing
+end
+
 -- Roblox's own images (no upload needed).
 IconAssets.BuiltIn = {
 	robux = "rbxasset://textures/ui/common/robux.png",

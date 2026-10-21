@@ -51,10 +51,11 @@ local Rarity = require(Shared.Config.Rarity)
 local StatConfig = require(Shared.Config.StatConfig)
 local StoryConfig = require(Shared.Config.StoryConfig)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local CollectionView = {}
@@ -202,8 +203,6 @@ CollectionView.RestoreHint = "The last missing artifact of a collection can be r
 CollectionView.SilhouetteColor = Color3.fromRGB(34, 28, 32)
 CollectionView.MissingName = "???"
 
-local RESTORE_COLOR = Color3.fromRGB(70, 160, 210) -- crystal shards
-local RESTORE_DARK = Color3.fromRGB(34, 96, 140)
 local RESTORE_TEXT = Color3.fromRGB(140, 210, 245)
 local GOLD = Color3.fromRGB(255, 196, 64)
 local STAND = Color3.fromRGB(58, 46, 40)
@@ -597,69 +596,359 @@ function CollectionView.glyph(box: Frame, artifactId: string, silhouette: boolea
 		end
 	end
 	if silhouette then
-		UIKit.label(box, "?", 30, {
+		Pop.text(box, "?", 30, {
 			Name = "Unknown",
 			Size = UDim2.fromScale(1, 1),
-			TextColor3 = Theme.TextDim,
+			FontFace = PopTheme.Heavy,
+			TextColor3 = Color3.fromRGB(214, 220, 236),
 			TextScaled = true,
 			ZIndex = box.ZIndex + 2,
 		})
 	end
 end
 
+---------------------------------------------------------------- the Pop pieces
+
+-- the book's colour (its band; LightSkin.BandRoles "Artifacts")
+CollectionView.Paint = "Yellow"
+-- a missing artifact's card: a dark slate (a silhouette and "?" on it)
+CollectionView.HiddenPaint = {
+	Top = Color3.fromRGB(70, 74, 88),
+	Bottom = Color3.fromRGB(34, 36, 46),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
+CollectionView.SelectColor = Color3.fromRGB(255, 222, 64) -- the picked card's gold outline
+CollectionView.SoftInk = Color3.fromRGB(206, 214, 232)
+CollectionView.OffPaint = PopTheme.Gray -- a button that can't be pressed now
+
+-- A paint from one colour (a collection's): lighter at the top, deeper at the bottom.
+-- (saturated like the shop's paints: a bright top, a deep bottom)
+function CollectionView.colorPaint(color: Color3): Pop.Paint
+	local h, s, v = color:ToHSV()
+	return {
+		Top = Color3.fromHSV(h, math.clamp(s * 0.9, 0, 1), 1),
+		Bottom = Color3.fromHSV(h, math.clamp(s * 1.15 + 0.1, 0, 1), math.clamp(v * 0.72, 0, 1)),
+		Edge = PopTheme.Outline,
+	}
+end
+
+-- A rarity's chip colour: its paint's deep end (white words read on it).
+function CollectionView.chipColor(rarity: string): Color3
+	return Pop.rarityPaint(rarity).Bottom:Lerp(Color3.new(0, 0, 0), 0.3)
+end
+
+-- A round chip label (UIKit.chip) in the Pop look: a solid colour, a black
+-- border, white words with a black edge.
+local function chip(parent: Instance, text: string, props: { [string]: any }): TextLabel
+	local label = UIKit.chip(parent, text, PopTheme.Paints.Slate.Bottom, props)
+	label.FontFace = PopTheme.Font
+	label.TextColor3 = PopTheme.Ink
+	local corner = label:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0.5, 0)
+	end
+	for _, stroke in label:GetChildren() do
+		if stroke:IsA("UIStroke") then
+			stroke.Color = PopTheme.Outline
+			stroke.Thickness = if stroke.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then 2.5 else 1.6
+		end
+	end
+	return label
+end
+
+--[[
+	A painted Pop button: the holder is the painted face (studs, the light
+	rim; layouts size the holder like UIKit.button's lip holder), the
+	TextButton over it is clear and shows its own Text (white, a black
+	edge), so a controller that sets .Text ("CLICK AGAIN TO PAY") shows it.
+	Props go to the holder (Size, Position, AnchorPoint, LayoutOrder,
+	Visible) or the button; the holder is named props.Name .. "Holder".
+]]
+local function popButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }): TextButton
+	local holder = UIKit.new("Frame", {
+		Name = (props.Name or text) .. "Holder",
+		Size = UDim2.fromOffset(160, 52),
+		ZIndex = 3,
+	}, parent)
+	Pop.face(holder, paint)
+	Pop.studs(holder, PopTheme.Corner, 0.45, 28, 3)
+	local button = UIKit.new("TextButton", {
+		Name = "Button",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		FontFace = PopTheme.Font,
+		Selectable = true,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		TextColor3 = PopTheme.Ink,
+		TextSize = 22,
+		ZIndex = 5,
+	}, holder)
+	Pop.edge(button, 2.2)
+	for key, value in props do
+		if key == "Size" or key == "Position" or key == "AnchorPoint" or key == "LayoutOrder" or key == "Visible" then
+			(holder :: any)[key] = value
+		elseif key ~= "Name" then
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+CollectionView.popButton = popButton
+
+-- Recolours a popButton (its holder's paint).
+local function repaintButton(button: TextButton, paint: string | Pop.Paint)
+	local holder = button.Parent
+	if holder and holder:IsA("GuiObject") then
+		Pop.repaint(holder, paint)
+	end
+end
+
+-- The red square X in a holder (the holder is what layouts and the touch tests size).
+local function closeButton(parent: Instance, size: number, props: { [string]: any }): TextButton
+	local holder = UIKit.new("Frame", {
+		Name = "CloseHolder",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 6,
+	}, parent)
+	for key, value in props do
+		(holder :: any)[key] = value
+	end
+	return Pop.close(holder, size, { Size = UDim2.fromScale(1, 1), ZIndex = 6 })
+end
+
+-- The light burst of a card: rays, glows and sparkles (marked "Fx"; hidden on a missing artifact).
+local function markFx(card: GuiObject)
+	for _, child in card:GetChildren() do
+		local name = child.Name
+		if child:IsA("GuiObject") and (name == "Rays" or string.sub(name, 1, 4) == "Glow" or string.sub(name, 1, 7) == "Sparkle") then
+			child:SetAttribute("Fx", true)
+		end
+	end
+end
+
+local function setFx(card: GuiObject, on: boolean)
+	for _, child in card:GetChildren() do
+		if child:IsA("GuiObject") and child:GetAttribute("Fx") then
+			child.Visible = on
+		end
+	end
+end
+
+-- Moves a card's light burst (rays and glows, not the sparkles) to `centre`.
+local function centreFx(card: GuiObject, centre: UDim2)
+	for _, child in card:GetChildren() do
+		if child:IsA("GuiObject") and child:GetAttribute("Fx") and string.sub(child.Name, 1, 7) ~= "Sparkle" then
+			child.Position = centre
+		end
+	end
+end
+
+--[[
+	Paints a Frame like Pop.card (a pane, not a button): the paint, light
+	rays and a soft glow around `centre`, the studs, the light rim and a few
+	sparkles. It clips its rays.
+]]
+local function paintFrame(frame: Frame, paint: string | Pop.Paint, centre: UDim2, long: number, short: number)
+	local p = Pop.paint(paint)
+	Pop.face(frame, p, PopTheme.Corner + 2, false)
+	frame.ClipsDescendants = true
+	local rays = Pop.fx(frame, "fx_rays", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 0.35,
+		Position = centre,
+		Size = UDim2.fromOffset(long * 2.2, long * 2.2),
+		ZIndex = 2,
+	})
+	if not rays then
+		Pop.rays(frame, centre, 10, long, 0.6, 2)
+	end
+	local glow = Pop.fx(frame, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = p.Top:Lerp(Color3.new(1, 1, 1), 0.6),
+		ImageTransparency = 0.3,
+		Position = centre,
+		Size = UDim2.fromOffset(math.floor(short * 1.1), math.floor(short * 1.1)),
+		ZIndex = 2,
+	})
+	if not glow then
+		for i, k in { 0.62, 0.42 } do
+			local disc = UIKit.new("Frame", {
+				Name = "Glow" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = if i == 1 then 0.8 else 0.7,
+				BorderSizePixel = 0,
+				Position = centre,
+				Size = UDim2.fromOffset(math.floor(short * k), math.floor(short * k)),
+				ZIndex = 2,
+			}, frame)
+			UIKit.corner(disc, 999)
+		end
+	end
+	Pop.studs(frame, PopTheme.Corner + 2, 0.5, 44, 3)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	for i, spot in { { 0.16, 0.08, 22 }, { 0.86, 0.14, 18 }, { 0.8, 0.3, 14 } } do
+		Pop.sparkle(frame, UDim2.fromScale(spot[1], spot[2]), spot[3], 3, 0.15 + i * 0.08)
+	end
+	markFx(frame)
+end
+
+--[[
+	A Pop window's chrome on a panel (black frame, the dark studded floor,
+	the bright header band in the book's colour); `header` = the band's
+	height (layoutChrome resizes it).
+]]
+local function chrome(panel: Frame, paint: string | Pop.Paint, header: number)
+	panel.BackgroundColor3 = PopTheme.Outline
+	panel.BackgroundTransparency = 0
+	panel.BorderSizePixel = 0
+	local old = panel:FindFirstChildOfClass("UIGradient")
+	if old then
+		old:Destroy()
+	end
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner + 2)
+	end
+	local stroke = panel:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PopTheme.Outline
+		stroke.Thickness = 4
+	end
+	local back = UIKit.new("Frame", {
+		Name = "Back",
+		BackgroundColor3 = PopTheme.Body,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, panel)
+	UIKit.corner(back, 6)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 198, 206)), Rotation = 90 }, back)
+	Pop.studs(back, 6, 0.55, 36, 0)
+	local band = UIKit.new("Frame", {
+		Name = "Band",
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(4, 4),
+		ZIndex = 0,
+	}, panel)
+	Pop.face(band, paint, 6, false)
+	local border = band:FindFirstChild("Border") :: UIStroke
+	border.Thickness = 3
+	Pop.studs(band, 6, 0.35, 40, 0)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 0,
+	}, band)
+	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.6, 0),
+			ZIndex = 0,
+		}, band)
+	end
+	CollectionView.layoutChrome(panel, header)
+end
+
+-- Sizes a chrome'd panel's band (`header` tall from the top) and floor (the rest).
+function CollectionView.layoutChrome(panel: Frame, header: number)
+	local band = panel:FindFirstChild("Band") :: Frame?
+	local back = panel:FindFirstChild("Back") :: Frame?
+	local h = math.max(20, header - 8)
+	if band then
+		band.Size = UDim2.new(1, -8, 0, h)
+	end
+	if back then
+		back.Position = UDim2.fromOffset(4, 4 + h)
+		back.Size = UDim2.new(1, -8, 1, -(8 + h))
+	end
+end
+
+-- (the journal, StoryView, is built from the same pieces)
+CollectionView.closeButton = closeButton
+CollectionView.chrome = chrome
+
+-- A title's drop shadow (Pop.shadow) follows its text, place and size.
+local function syncShadow(label: TextLabel)
+	local parent = label.Parent
+	local shadow = if parent then parent:FindFirstChild(label.Name .. "Shadow") :: TextLabel? else nil
+	if shadow then
+		shadow.Text = label.Text
+		shadow.TextSize = label.TextSize
+		shadow.AnchorPoint = label.AnchorPoint
+		shadow.Position = label.Position + UDim2.fromOffset(0, 3)
+		shadow.Size = label.Size
+		shadow.Visible = label.Visible
+		shadow.TextXAlignment = label.TextXAlignment
+	end
+end
+
 ---------------------------------------------------------------- the book
 
 local function tile(parent: Instance, index: number, m: Metrics): Tile
-	local button = UIKit.new("TextButton", {
+	local button = Pop.card(parent, CollectionView.HiddenPaint, {
 		Name = "Tile" .. index,
 		LayoutOrder = index,
-		AutoButtonColor = false,
-		Text = "",
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-		Selectable = true,
-	}, parent)
-	UIKit.corner(button, 12)
-	UIKit.stroke(button, 2, Theme.Outline)
+		Size = UDim2.fromOffset(130, 150),
+	}, UDim2.fromScale(0.5, 0.36))
+	markFx(button)
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 8),
 		Size = UDim2.fromScale(0.62, 0.5),
 		BackgroundTransparency = 1,
-		ZIndex = 2,
+		ZIndex = 4,
 	}, button)
-	local name = UIKit.label(button, "", m.TileName, {
+	local name = Pop.text(button, "", m.TileName, {
 		Name = "Name",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -30),
 		Size = UDim2.new(1, -10, 0, m.TileName * 2 + 4),
 		TextWrapped = true,
-		ZIndex = 3,
+		ZIndex = 7,
 	})
-	local chip = UIKit.chip(button, "", Theme.PanelLight, {
+	local rarity = chip(button, "", {
 		Name = "Rarity",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -6),
 		Size = UDim2.fromOffset(96, 22),
-		ZIndex = 3,
+		ZIndex = 7,
 	})
-	local count = UIKit.label(button, "", 15, {
+	local count = Pop.text(button, "", 17, {
 		Name = "Count",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -8, 0, 4),
-		Size = UDim2.fromOffset(44, 20),
+		Size = UDim2.fromOffset(44, 22),
+		FontFace = PopTheme.Heavy,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = GOLD,
-		ZIndex = 3,
+		TextColor3 = Color3.fromRGB(255, 232, 110),
+		ZIndex = 8,
 	})
-	return { Button = button, Icon = icon, Name = name, Chip = chip, Count = count, Id = "" }
+	return { Button = button, Icon = icon, Name = name, Chip = rarity, Count = count, Id = "" }
 end
 
 function CollectionView.build(compact: boolean): Refs
 	local m = metrics(compact)
 	local gui = UIKit.screen("TerraForgeArtifacts", 20)
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true)
 	gui.Enabled = false
 	local dim = UIKit.new("Frame", {
 		Name = "Dim",
@@ -677,86 +966,85 @@ function CollectionView.build(compact: boolean): Refs
 		Size = UDim2.fromOffset(m.Width, m.Height),
 		Active = true,
 	})
-	local title = UIKit.label(panel, "ARTIFACTS OF KALDRUM", m.Title, {
+	chrome(panel, CollectionView.Paint, m.Header)
+	local title = Pop.text(panel, "ARTIFACTS OF KALDRUM", m.Title, {
 		Name = "Title",
 		Position = UDim2.fromOffset(m.Pad + 4, 10),
 		Size = UDim2.new(0, 520, 0, m.Header - 20),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = GOLD,
-		TextWrapped = false,
+		ZIndex = 3,
 	})
-	local total = UIKit.label(panel, "", 20, {
-		Name = "Total",
+	Pop.shadow(title)
+	-- how many of all are found: a glossy gold bar left of JOURNAL
+	local totalBar = Pop.bar(panel, 0, "Green", Vector2.new(170, 36), "", {
+		Name = "TotalBar",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -(m.Close + 30), 0, 18),
-		Size = UDim2.fromOffset(150, 30),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		ZIndex = 4,
 	})
+	local total = totalBar:FindFirstChild("Label") :: TextLabel
 	-- the journal (the Prologue is always open), left of the X
-	local journal = UIKit.button(panel, "JOURNAL", Theme.PanelLight, Theme.PanelDark, {
+	local journal = popButton(panel, "JOURNAL", "Purple", {
 		Name = "Journal",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -(m.Close + 20), 0, if compact then 8 else 12),
 		Size = UDim2.fromOffset(if compact then 190 else 170, if compact then 72 else 46),
-		TextSize = if compact then 22 else 19,
+		TextSize = if compact then 24 else 21,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
-		Name = "Close",
+	local close = closeButton(panel, m.Close, {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 8),
-		Size = UDim2.fromOffset(m.Close, m.Close),
-		TextSize = 26,
 	})
-	-- tabs: one per collection
+	-- tabs: one per collection, painted in its colour (the picked one bright with a gold edge)
 	local tabs: { [string]: TextButton } = {}
 	local tabList: { TextButton } = {}
-	local tabColumn = UIKit.new("Frame", { Name = "Tabs", BackgroundTransparency = 1 }, panel)
+	local tabColumn = UIKit.new("Frame", { Name = "Tabs", BackgroundTransparency = 1, ZIndex = 2 }, panel)
 	UIKit.list(tabColumn, Enum.FillDirection.Vertical, 8)
 	for i, collection in ArtifactConfig.Collections do
-		local button = UIKit.button(tabColumn, "", Theme.PanelLight, Theme.PanelDark, {
+		local button = popButton(tabColumn, "", CollectionView.colorPaint(collection.Color), {
 			Name = collection.Id,
 			LayoutOrder = i,
 			Size = UDim2.new(1, 0, 0, m.TabHeight),
 		})
-		UIKit.new("Frame", {
-			Name = "Stripe",
-			Position = UDim2.fromOffset(8, 8),
-			Size = UDim2.new(0, 8, 1, -16),
-			BackgroundColor3 = collection.Color,
+		local holder = button.Parent :: Frame
+		-- the others wear a shade
+		local shade = UIKit.new("Frame", {
+			Name = "Shade",
+			BackgroundColor3 = PopTheme.Outline,
+			BackgroundTransparency = 0.6,
 			BorderSizePixel = 0,
-		}, button)
-		UIKit.label(button, collection.Name, m.Body, {
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 4,
+		}, holder)
+		UIKit.corner(shade, PopTheme.Corner)
+		Pop.text(button, collection.Name, m.Body + 1, {
 			Name = "Label",
-			Position = UDim2.fromOffset(24, 4),
-			Size = UDim2.new(1, -30, 0.6, 0),
+			Position = UDim2.fromOffset(12, 4),
+			Size = UDim2.new(1, -20, 0.56, -4),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextWrapped = true,
+			ZIndex = 6,
 		})
-		UIKit.label(button, "", m.Body - 1, {
+		Pop.bar(button, 0, "Yellow", Vector2.new(150, 20), "", {
 			Name = "Progress",
-			Position = UDim2.new(0, 24, 0.6, -2),
-			Size = UDim2.new(1, -30, 0.4, 0),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Theme.TextDim,
-			TextWrapped = false,
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 12, 1, -7),
+			Size = UDim2.new(1, -24, 0, 20),
+			ZIndex = 6,
 		})
-		local badge = UIKit.chip(button, "NEW", Theme.Bad, {
+		local badge = Pop.chip(button, "NEW", "Red", Vector2.new(52, 22), {
 			Name = "New",
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -6, 0, -8),
-			Size = UDim2.fromOffset(52, 22),
+			Position = UDim2.new(1, -4, 0, -8),
+			Rotation = 6,
 			Visible = false,
-			ZIndex = 4,
+			ZIndex = 9,
 		})
-		badge.TextSize = 14
+		badge:SetAttribute("Badge", true)
 		tabs[collection.Id] = button
 		table.insert(tabList, button)
 	end
 	-- the tiles
-	local grid = UIKit.new("Frame", { Name = "Grid", BackgroundTransparency = 1 }, panel)
+	local grid = UIKit.new("Frame", { Name = "Grid", BackgroundTransparency = 1, ZIndex = 2 }, panel)
 	UIKit.new("UIGridLayout", {
 		CellSize = UDim2.fromOffset(130, 150),
 		CellPadding = UDim2.fromOffset(10, 10),
@@ -771,79 +1059,75 @@ function CollectionView.build(compact: boolean): Refs
 	for i = 1, most do
 		table.insert(tiles, tile(grid, i, m))
 	end
-	-- the detail column
+	-- the detail column: a bright card in the picked artifact's rarity colour
 	local detail = UIKit.new("Frame", {
 		Name = "Detail",
-		BackgroundColor3 = Theme.PanelDark,
-		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, panel)
-	UIKit.corner(detail, 12)
+	paintFrame(detail, CollectionView.HiddenPaint, UDim2.new(0.5, 0, 0, 65), 290, 150)
 	local detailIcon = UIKit.new("Frame", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 10),
 		Size = UDim2.fromOffset(110, 110),
-		BackgroundColor3 = Theme.Panel,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, detail)
-	UIKit.corner(detailIcon, 14)
-	local detailName = UIKit.label(detail, "", m.Body + 3, {
+	local detailName = Pop.text(detail, "", m.Body + 3, {
 		Name = "Name",
 		Position = UDim2.fromOffset(10, 126),
 		Size = UDim2.new(1, -20, 0, (m.Body + 3) * 2 + 4),
 		TextWrapped = true,
+		ZIndex = 7,
 	})
-	local detailChip = UIKit.chip(detail, "", Theme.PanelLight, {
+	local detailChip = chip(detail, "", {
 		Name = "Rarity",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Size = UDim2.fromOffset(110, 24),
+		ZIndex = 7,
 	})
-	-- how many, the lore and where: one scrolling text (small phones scroll)
+	-- how many, the lore and where: one scrolling text (small phones scroll) in a dark well
+	Pop.well(detail, { Name = "BodyWell", ZIndex = 4 })
 	local detailBody = UIKit.new("ScrollingFrame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 6,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(200, 208, 226),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = true,
+		ZIndex = 6,
 	}, detail)
-	local detailCount = UIKit.label(detailBody, "", m.Body - 1, {
-		Name = "Count",
-		TextColor3 = GOLD,
-		TextWrapped = false,
-	})
-	local detailLore = UIKit.label(detailBody, "", m.Body - 1, {
-		Name = "Lore",
-		TextColor3 = Theme.Text,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	})
-	local detailWhere = UIKit.label(detailBody, "", m.Body - 3, {
-		Name = "Where",
-		TextColor3 = Theme.TextDim,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	})
-	local detailRestore = UIKit.label(detailBody, "", m.Body - 3, {
-		Name = "Restore",
-		TextColor3 = RESTORE_TEXT,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-		Visible = false,
-	})
+	local function line(name: string, size: number, color: Color3, wrapped: boolean): TextLabel
+		return Pop.text(detailBody, "", size, {
+			Name = name,
+			TextColor3 = color,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = wrapped,
+			ZIndex = 7,
+		})
+	end
+	local detailCount = line("Count", m.Body - 1, Color3.fromRGB(255, 232, 110), false)
+	detailCount.TextYAlignment = Enum.TextYAlignment.Center
+	local detailLore = line("Lore", m.Body - 1, PopTheme.Ink, true)
+	local detailWhere = line("Where", m.Body - 3, CollectionView.SoftInk, true)
+	local detailRestore = line("Restore", m.Body - 3, RESTORE_TEXT, true)
+	detailRestore.Visible = false
 	-- the footer: reward and chapter
-	local footer = UIKit.new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, panel)
-	local reward = UIKit.label(footer, "", m.Body - 1, {
+	local footer = UIKit.new("Frame", { Name = "Footer", BackgroundTransparency = 1, ZIndex = 2 }, panel)
+	local reward = Pop.text(footer, "", m.Body - 1, {
 		Name = "Reward",
 		Size = UDim2.new(0.5, 0, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
+		TextColor3 = CollectionView.SoftInk,
 		TextWrapped = true,
+		ZIndex = 3,
 	})
-	local use = UIKit.button(footer, "USE TITLE + SKIN", Theme.Info, Color3.fromRGB(38, 110, 186), {
+	local use = popButton(footer, "USE TITLE + SKIN", "Blue", {
 		Name = "Use",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Size = UDim2.fromOffset(210, m.Button),
@@ -852,7 +1136,7 @@ function CollectionView.build(compact: boolean): Refs
 		Visible = false,
 	})
 	-- the last missing artifact for crystal shards (the same slot as USE: never both)
-	local restore = UIKit.button(footer, "RESTORE", RESTORE_COLOR, RESTORE_DARK, {
+	local restore = popButton(footer, "RESTORE", "Teal", {
 		Name = "Restore",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Size = UDim2.fromOffset(210, m.Button),
@@ -860,7 +1144,7 @@ function CollectionView.build(compact: boolean): Refs
 		TextWrapped = true,
 		Visible = false,
 	})
-	local chapter = UIKit.button(footer, "READ CHAPTER", Theme.Accent, Theme.AccentDark, {
+	local chapter = popButton(footer, "READ CHAPTER", "Orange", {
 		Name = "Chapter",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 4),
@@ -868,12 +1152,12 @@ function CollectionView.build(compact: boolean): Refs
 		TextSize = if compact then 22 else 20,
 		TextWrapped = true,
 	})
-	local hint = UIKit.label(panel, "", m.Hint, {
+	local hint = Pop.text(panel, "", m.Hint, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0, 1),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = CollectionView.SoftInk,
+		ZIndex = 3,
 	})
 	return {
 		Gui = gui,
@@ -1021,10 +1305,14 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local width = math.min(m.Width, maxWidth - 16)
 	local height = math.min(m.Height, maxHeight - 12)
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	CollectionView.layoutChrome(refs.Panel, m.Header)
 	-- the header: the title, how many are found, JOURNAL and the X
 	local journalHolder = refs.Journal.Parent
 	local journalW = if journalHolder and journalHolder:IsA("Frame") then journalHolder.Size.X.Offset else 170
-	refs.Total.Position = UDim2.new(1, -(12 + m.Close + 8 + journalW + 12), 0, 18)
+	local totalBar = refs.Total.Parent
+	if totalBar and totalBar:IsA("GuiObject") then
+		totalBar.Position = UDim2.new(1, -(12 + m.Close + 8 + journalW + 12), 0, math.floor(m.Header / 2) - 18)
+	end
 	local pad = m.Pad
 	local hintH = m.Hint + 8
 	local top = m.Header
@@ -1042,6 +1330,11 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 		local holder = button.Parent
 		if holder and holder:IsA("Frame") then
 			holder.Size = UDim2.new(1, 0, 0, tabH)
+		end
+		-- the collection's name as big as fits above its progress bar
+		local label = button:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.TextSize = CollectionView.fitBox(label.Text, m.Body + 1, 12, m.TabWidth - 24, math.floor(tabH * 0.56) - 4)
 		end
 	end
 	-- the detail column on the right
@@ -1105,11 +1398,8 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local y: number
 	local detailNameH = (m.Body + 3) * 2 + 4
 	local textW = detailW - 12 - 8 - 10
-	local tallIcon = math.min(
-		110,
-		math.floor(detailH * 0.24),
-		detailH - (detailNameH + 56) - CollectionView.detailNeed(refs.Compact, false, textW)
-	)
+	local tallIcon =
+		math.min(110, math.floor(detailH * 0.24), detailH - (detailNameH + 56) - CollectionView.detailNeed(refs.Compact, false, textW))
 	refs.Short = detailH < CollectionView.ShortDetail or tallIcon < CollectionView.MinTallIcon
 	if refs.Short then
 		local icon = math.min(56, math.floor(detailH * 0.28))
@@ -1140,6 +1430,17 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	fitName(refs)
 	refs.DetailBody.Position = UDim2.fromOffset(8, y)
 	refs.DetailBody.Size = UDim2.new(1, -12, 0, math.max(30, detailH - y - 8))
+	-- the text's dark well, and the card's light burst behind the icon
+	local well = refs.Detail:FindFirstChild("BodyWell") :: Frame?
+	if well then
+		well.Position = UDim2.fromOffset(5, y - 4)
+		well.Size = UDim2.new(1, -10, 0, math.max(30, detailH - y - 8) + 8)
+	end
+	local headIcon = refs.DetailIcon.Size.X.Offset
+	centreFx(
+		refs.Detail,
+		if refs.Short then UDim2.fromOffset(8 + headIcon / 2, 8 + headIcon / 2) else UDim2.new(0.5, 0, 0, 10 + headIcon / 2)
+	)
 	refs.DetailBody:SetAttribute("TextWidth", textW)
 	placeBody(refs)
 	fitReward(refs)
@@ -1175,22 +1476,45 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 	local purse: Wallet = wallet or { BlasterLevel = 1, Shards = 0 }
 	local unique = ArtifactConfig.uniqueCount(artifacts)
 	refs.Total.Text = `{unique} / {#ArtifactConfig.List} found`
+	local totalBar = refs.Total.Parent
+	if totalBar and totalBar:IsA("GuiObject") then
+		Pop.setBar(totalBar, if #ArtifactConfig.List > 0 then unique / #ArtifactConfig.List else 0)
+	end
 	for _, collection in ArtifactConfig.Collections do
 		local button = refs.Tabs[collection.Id]
 		if button then
 			local found, count = CollectionView.progress(artifacts, collection.Id)
 			local complete = found >= count and count > 0
-			local progress = button:FindFirstChild("Progress") :: TextLabel?
+			local progress = button:FindFirstChild("Progress") :: Frame?
 			if progress then
-				progress.Text = if complete then `{found} / {count} complete` else `{found} / {count} found`
-				progress.TextColor3 = if complete then Theme.Good else Theme.TextDim
+				Pop.setBar(
+					progress,
+					if count > 0 then found / count else 0,
+					if complete then `{found} / {count} complete` else `{found} / {count} found`
+				)
+				local barFill = progress:FindFirstChild("Fill") :: Frame?
+				if barFill then
+					Pop.repaint(barFill, if complete then "Green" else "Yellow")
+				end
 			end
-			local badge = button:FindFirstChild("New") :: TextLabel?
+			local badge = button:FindFirstChild("New") :: GuiObject?
 			if badge then
 				badge.Visible = CollectionView.chapterNew(artifacts, collection.Id)
 			end
+			-- the picked collection bright with a gold edge, the others shaded
 			local selected = collection.Id == refs.Collection
-			button.BackgroundColor3 = if selected then collection.Color:Lerp(Theme.Panel, 0.45) else Theme.PanelLight
+			local holder = button.Parent
+			if holder and holder:IsA("GuiObject") then
+				local shade = holder:FindFirstChild("Shade") :: Frame?
+				if shade then
+					shade.Visible = not selected
+				end
+				local border = holder:FindFirstChild("Border") :: UIStroke?
+				if border then
+					border.Color = if selected then CollectionView.SelectColor else PopTheme.Outline
+					border.Thickness = if selected then 5 else PopTheme.Edge
+				end
+			end
 		end
 	end
 	local list: { Artifact } = ArtifactConfig.ByCollection[refs.Collection] or {}
@@ -1204,19 +1528,22 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 			local count = ArtifactConfig.countOf(artifacts, art.Id)
 			local found = count > 0
 			local rarity = Rarity.get(art.Rarity)
+			-- a found artifact's card in its rarity's paint, a missing one dark
+			Pop.repaint(t.Button, if found then Pop.rarityPaint(art.Rarity) else CollectionView.HiddenPaint, false)
+			setFx(t.Button, found)
 			CollectionView.glyph(t.Icon, art.Id, not found)
 			t.Name.Text = if found then art.Name else CollectionView.MissingName
 			t.Name.TextSize = CollectionView.fitSize(t.Name.Text, metrics(refs.Compact).TileName, cellWidth - 10)
-			t.Name.TextColor3 = if found then Theme.Text else Theme.TextDim
+			t.Name.TextColor3 = if found then PopTheme.Ink else CollectionView.SoftInk
 			t.Chip.Text = rarity.Name
-			t.Chip.BackgroundColor3 = if found then rarity.Color else rarity.DarkColor
+			t.Chip.BackgroundColor3 = if found then CollectionView.chipColor(art.Rarity) else PopTheme.Well
+			t.Chip.TextColor3 = if found then PopTheme.Ink else CollectionView.SoftInk
 			t.Count.Text = if count > 1 then `x{count}` else ""
 			local selected = refs.Selected == art.Id
-			t.Button.BackgroundColor3 = if selected then Theme.PanelLight elseif found then Theme.PanelDark else Color3.fromRGB(22, 15, 14)
-			local stroke = t.Button:FindFirstChildOfClass("UIStroke")
+			local stroke = t.Button:FindFirstChild("Border") :: UIStroke?
 			if stroke then
-				stroke.Color = if selected then GOLD else Theme.Outline
-				stroke.Thickness = if selected then 3 else 2
+				stroke.Color = if selected then CollectionView.SelectColor else PopTheme.Outline
+				stroke.Thickness = if selected then 5 else PopTheme.Edge
 			end
 		end
 	end
@@ -1230,10 +1557,12 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 		local count = ArtifactConfig.countOf(artifacts, art.Id)
 		local found = count > 0
 		local rarity = Rarity.get(art.Rarity)
+		Pop.repaint(refs.Detail, if found then Pop.rarityPaint(art.Rarity) else CollectionView.HiddenPaint, false)
+		setFx(refs.Detail, found)
 		CollectionView.glyph(refs.DetailIcon, art.Id, not found)
 		refs.DetailName.Text = if found then art.Name else CollectionView.MissingName
 		refs.DetailChip.Text = rarity.Name
-		refs.DetailChip.BackgroundColor3 = if found then rarity.Color else rarity.DarkColor
+		refs.DetailChip.BackgroundColor3 = if found then CollectionView.chipColor(art.Rarity) else PopTheme.Well
 		refs.DetailCount.Text = if found then `Found: {count}` else "Not found yet"
 		refs.DetailLore.Text = if found then art.Lore else CollectionView.NotFoundLore
 		refs.DetailWhere.Text = CollectionView.whereText(art.Id)
@@ -1253,29 +1582,21 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 	refs.Use.Text = useText
 	refs.Use:SetAttribute("Equip", if complete then useArg else nil)
 	local inUse = complete and useArg == ""
-	refs.Use.BackgroundColor3 = if inUse then Theme.Good else Theme.Info
-	if useHolder and useHolder:IsA("Frame") then
-		useHolder.BackgroundColor3 = if inUse then Theme.GoodDark else Color3.fromRGB(38, 110, 186)
-	end
+	repaintButton(refs.Use, if inUse then "Green" else "Blue")
 	-- RESTORE while exactly one is missing (greyed while it can't be paid / its mine is closed)
 	local restoreText, restoreArg, restoreWhy = CollectionView.restoreButton(artifacts, refs.Collection, purse)
 	local restoreHolder = refs.Restore.Parent
 	if restoreHolder and restoreHolder:IsA("Frame") then
 		restoreHolder.Visible = restoreText ~= nil and not complete
-		restoreHolder.BackgroundColor3 = if restoreArg then RESTORE_DARK else Color3.fromRGB(64, 56, 52)
 	end
 	refs.Restore.Text = restoreText or ""
 	refs.Restore:SetAttribute("Restore", restoreArg)
 	refs.Restore:SetAttribute("Reason", restoreWhy)
-	refs.Restore.BackgroundColor3 = if restoreArg then RESTORE_COLOR else Color3.fromRGB(110, 98, 92)
+	repaintButton(refs.Restore, if restoreArg then "Teal" else CollectionView.OffPaint)
 	local text, enabled = CollectionView.chapterButton(artifacts, refs.Collection)
 	refs.Chapter.Text = text
 	refs.Chapter:SetAttribute("Enabled", enabled)
-	refs.Chapter.BackgroundColor3 = if enabled then Theme.Accent else Color3.fromRGB(110, 98, 92)
-	local holder = refs.Chapter.Parent
-	if holder and holder:IsA("Frame") then
-		holder.BackgroundColor3 = if enabled then Theme.AccentDark else Color3.fromRGB(64, 56, 52)
-	end
+	repaintButton(refs.Chapter, if enabled then "Orange" else CollectionView.OffPaint)
 end
 
 ---------------------------------------------------------------- the reveal card
@@ -1283,79 +1604,92 @@ end
 function CollectionView.buildReveal(compact: boolean): RevealRefs
 	local gui = UIKit.screen("TerraForgeArtifactReveal", 25)
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true)
 	gui.Enabled = false
 	local width, height = if compact then 620 else 560, if compact then 520 else 470
-	local card = UIKit.panel(gui, {
+	local card = UIKit.new("Frame", {
 		Name = "Card",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(width, height),
 		Active = true,
-	})
-	local title = UIKit.label(card, "ARTIFACT FOUND!", if compact then 38 else 36, {
+		ZIndex = 1,
+	}, gui)
+	-- a bright card in the artifact's rarity colour (showReveal), the rays behind its icon
+	paintFrame(card, "Yellow", UDim2.new(0.5, 0, 0, 122), 520, 220)
+	local border = card:FindFirstChild("Border") :: UIStroke
+	border.Thickness = 4
+	local title = Pop.title(card, "ARTIFACT FOUND!", if compact then 40 else 38, "Gold", {
 		Name = "Title",
+		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(0, 12),
-		Size = UDim2.new(1, 0, 0, 44),
-		FontFace = Theme.TitleFont,
-		TextColor3 = GOLD,
+		Size = UDim2.new(1, 0, 0, 46),
+		ZIndex = 7,
 	})
+	Pop.shadow(title)
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 62),
 		Size = UDim2.fromOffset(120, 120),
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.35,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, card)
 	UIKit.corner(icon, 16)
-	UIKit.stroke(icon, 3, GOLD)
+	UIKit.stroke(icon, 3, CollectionView.SelectColor)
 	local body = if compact then 20 else 18
-	local name = UIKit.label(card, "", body + 8, {
+	local name = Pop.text(card, "", body + 8, {
 		Name = "Name",
 		Position = UDim2.fromOffset(16, 188),
 		Size = UDim2.new(1, -32, 0, body + 12),
-		TextWrapped = false,
+		ZIndex = 7,
 	})
-	local chip = UIKit.chip(card, "", Theme.PanelLight, {
+	local rarity = chip(card, "", {
 		Name = "Rarity",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 222),
 		Size = UDim2.fromOffset(120, 24),
+		TextSize = 15,
+		ZIndex = 7,
 	})
-	local progress = UIKit.label(card, "", body, {
+	local progress = Pop.text(card, "", body, {
 		Name = "Progress",
 		Position = UDim2.fromOffset(16, 252),
 		Size = UDim2.new(1, -32, 0, body + 6),
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = Color3.fromRGB(255, 248, 220),
+		ZIndex = 7,
 	})
-	local lore = UIKit.label(card, "", body - 1, {
+	local lore = Pop.text(card, "", body - 1, {
 		Name = "Lore",
 		Position = UDim2.fromOffset(28, 282),
 		Size = UDim2.new(1, -56, 0, (body - 1) * 2 + 8),
 		TextWrapped = true,
+		ZIndex = 7,
 	})
-	local extra = UIKit.label(card, "", body, {
+	local extra = Pop.text(card, "", body, {
 		Name = "Extra",
 		Position = UDim2.fromOffset(20, 282 + (body - 1) * 2 + 10),
 		Size = UDim2.new(1, -40, 0, body * 3 + 8),
-		TextColor3 = Theme.Good,
+		TextColor3 = PopTheme.Money,
 		TextWrapped = true,
+		ZIndex = 7,
 	})
 	local buttonH = if compact then 72 else 54
-	local book = UIKit.button(card, "OPEN BOOK", Theme.Info, Color3.fromRGB(38, 110, 186), {
+	local book = popButton(card, "OPEN BOOK", "Blue", {
 		Name = "Book",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(0.5, -8, 1, -14),
 		Size = UDim2.fromOffset(200, buttonH),
-		TextSize = 22,
+		TextSize = 24,
 	})
-	local ok = UIKit.button(card, "OK", Theme.Accent, Theme.AccentDark, {
+	local ok = popButton(card, "OK", "Green", {
 		Name = "Ok",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0.5, 8, 1, -14),
 		Size = UDim2.fromOffset(200, buttonH),
-		TextSize = 24,
+		TextSize = 26,
 	})
 	if compact then
 		-- phones and TVs: the icon left, the texts beside it, low enough for a 320 pt phone
@@ -1363,13 +1697,14 @@ function CollectionView.buildReveal(compact: boolean): RevealRefs
 		icon.AnchorPoint = Vector2.new(0, 0)
 		icon.Position = UDim2.fromOffset(28, 70)
 		icon.Size = UDim2.fromOffset(170, 170)
+		centreFx(card, UDim2.fromOffset(113, 155))
 		local x = 224
 		local left = Enum.TextXAlignment.Left
 		name.Position = UDim2.fromOffset(x, 62)
 		name.Size = UDim2.new(1, -x - 20, 0, body + 12)
 		name.TextXAlignment = left
-		chip.AnchorPoint = Vector2.new(0, 0)
-		chip.Position = UDim2.fromOffset(x, 102)
+		rarity.AnchorPoint = Vector2.new(0, 0)
+		rarity.Position = UDim2.fromOffset(x, 102)
 		progress.Position = UDim2.fromOffset(x + 136, 100)
 		progress.Size = UDim2.new(1, -x - 156, 0, body + 6)
 		progress.TextXAlignment = left
@@ -1386,7 +1721,7 @@ function CollectionView.buildReveal(compact: boolean): RevealRefs
 		Icon = icon,
 		Title = title,
 		Name = name,
-		Chip = chip,
+		Chip = rarity,
 		Progress = progress,
 		Lore = lore,
 		Extra = extra,
@@ -1451,6 +1786,8 @@ function CollectionView.showReveal(refs: RevealRefs, found: { [string]: any }, a
 	local rarity = Rarity.get(art.Rarity)
 	local title, progress, extra = CollectionView.revealText(found, artifacts)
 	refs.Title.Text = title
+	syncShadow(refs.Title)
+	Pop.repaint(refs.Card, Pop.rarityPaint(art.Rarity), false)
 	CollectionView.glyph(refs.Icon, id, false)
 	local stroke = refs.Icon:FindFirstChildOfClass("UIStroke")
 	if stroke then
@@ -1458,11 +1795,11 @@ function CollectionView.showReveal(refs: RevealRefs, found: { [string]: any }, a
 	end
 	refs.Name.Text = art.Name
 	refs.Chip.Text = rarity.Name
-	refs.Chip.BackgroundColor3 = rarity.Color
+	refs.Chip.BackgroundColor3 = CollectionView.chipColor(art.Rarity)
 	refs.Progress.Text = progress
 	refs.Lore.Text = art.Lore
 	refs.Extra.Text = extra
-	refs.Extra.TextColor3 = if found.Completed == true then GOLD else Theme.Good
+	refs.Extra.TextColor3 = if found.Completed == true then Color3.fromRGB(255, 232, 110) else PopTheme.Money
 	refs.Book.Text = if found.Completed == true then "READ CHAPTER" else "OPEN BOOK"
 	refs.Gui.Enabled = true
 end
@@ -1492,63 +1829,70 @@ end
 function CollectionView.buildBanner(compact: boolean): BannerRefs
 	local gui = UIKit.screen("TerraForgeArtifactBanner", 6)
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true)
 	gui.Enabled = false
 	local size = if compact then CollectionView.BannerSize.Compact else CollectionView.BannerSize.Normal
-	local card = UIKit.panel(gui, {
+	local card = UIKit.new("Frame", {
 		Name = "Card",
 		Position = UDim2.fromOffset(16, CollectionView.BannerTop),
 		Size = UDim2.fromOffset(size.X, size.Y),
 		Active = false,
-	})
+		ZIndex = 1,
+	}, gui)
 	local iconSize = size.Y - 24
+	-- a bright card in the find's rarity colour (showBanner), the rays behind its icon
+	paintFrame(card, "Yellow", UDim2.fromOffset(12 + iconSize / 2, 12 + iconSize / 2), 220, 120)
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
 		Position = UDim2.fromOffset(12, 12),
 		Size = UDim2.fromOffset(iconSize, iconSize),
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.35,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, card)
 	UIKit.corner(icon, 12)
-	UIKit.stroke(icon, 3, GOLD)
+	UIKit.stroke(icon, 3, CollectionView.SelectColor)
 	local x = 12 + iconSize + 12
 	local buttonW = if compact then 116 else 104
 	local buttonH = if compact then 72 else 50
 	local textW = size.X - x - buttonW - 24
-	local title = UIKit.label(card, "NEW ARTIFACT!", if compact then 24 else 22, {
+	local title = Pop.text(card, "NEW ARTIFACT!", if compact then 24 else 22, {
 		Name = "Title",
 		Position = UDim2.fromOffset(x, 8),
 		Size = UDim2.fromOffset(textW, 28),
+		FontFace = PopTheme.Heavy,
+		TextColor3 = Color3.fromRGB(255, 236, 120),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = GOLD,
-		TextWrapped = false,
+		ZIndex = 7,
 	})
-	local name = UIKit.label(card, "", if compact then 21 else 19, {
+	local name = Pop.text(card, "", if compact then 21 else 19, {
 		Name = "Name",
 		Position = UDim2.fromOffset(x, 36),
 		Size = UDim2.fromOffset(textW, 28),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
+		ZIndex = 7,
 	})
-	local chip = UIKit.chip(card, "", Theme.PanelLight, {
+	local rarity = chip(card, "", {
 		Name = "Rarity",
 		Position = UDim2.fromOffset(x, 68),
 		Size = UDim2.fromOffset(96, 22),
+		ZIndex = 7,
 	})
-	local progress = UIKit.label(card, "", if compact then 17 else 16, {
+	local progress = Pop.text(card, "", if compact then 17 else 16, {
 		Name = "Progress",
 		Position = UDim2.fromOffset(x + 104, 66),
 		Size = UDim2.fromOffset(textW - 104, 26),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
+		TextColor3 = Color3.fromRGB(255, 248, 220),
+		ZIndex = 7,
 	})
-	local book = UIKit.button(card, "BOOK", Theme.Info, Color3.fromRGB(38, 110, 186), {
+	local book = popButton(card, "BOOK", "Blue", {
 		Name = "Book",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 16),
 		Size = UDim2.fromOffset(buttonW, buttonH),
-		TextSize = if compact then 24 else 20,
+		TextSize = if compact then 26 else 22,
 		Selectable = false,
 	})
 	-- the key row under the texts
@@ -1557,6 +1901,7 @@ function CollectionView.buildBanner(compact: boolean): BannerRefs
 		Position = UDim2.fromOffset(x, size.Y - 32),
 		Size = UDim2.fromOffset(size.X - x - 12, 26),
 		BackgroundTransparency = 1,
+		ZIndex = 6,
 	}, card)
 	UIKit.list(keys, Enum.FillDirection.Horizontal, 6, { VerticalAlignment = Enum.VerticalAlignment.Center })
 	local function glyph(order: number, keyName: string): ImageLabel
@@ -1566,17 +1911,18 @@ function CollectionView.buildBanner(compact: boolean): BannerRefs
 			Size = UDim2.fromOffset(24, 24),
 			BackgroundTransparency = 1,
 			Visible = false,
+			ZIndex = 7,
 		}, keys)
 	end
 	local function keyText(order: number, keyName: string): TextLabel
-		return UIKit.label(keys, "", if compact then 16 else 15, {
+		return Pop.text(keys, "", if compact then 16 else 15, {
 			Name = keyName,
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(150, 24),
 			AutomaticSize = Enum.AutomaticSize.None,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Theme.TextDim,
-			TextWrapped = false,
+			TextColor3 = Color3.fromRGB(255, 248, 220),
+			ZIndex = 7,
 		})
 	end
 	local bookGlyph = glyph(1, "BookGlyph")
@@ -1589,7 +1935,7 @@ function CollectionView.buildBanner(compact: boolean): BannerRefs
 		Icon = icon,
 		Title = title,
 		Name = name,
-		Chip = chip,
+		Chip = rarity,
 		Progress = progress,
 		Book = book,
 		Keys = keys,
@@ -1605,10 +1951,13 @@ end
 -- height left, the texts start right of it.
 local function layoutBanner(refs: BannerRefs, withKeys: boolean)
 	local size = if refs.Compact then CollectionView.BannerSize.Compact else CollectionView.BannerSize.Normal
-	local height = if withKeys then size.Y else (if refs.Compact then CollectionView.BannerShort.Compact else CollectionView.BannerShort.Normal)
+	local height = if withKeys
+		then size.Y
+		else (if refs.Compact then CollectionView.BannerShort.Compact else CollectionView.BannerShort.Normal)
 	refs.Card.Size = UDim2.fromOffset(size.X, height)
 	local iconSize = height - 24
 	refs.Icon.Size = UDim2.fromOffset(iconSize, iconSize)
+	centreFx(refs.Card, UDim2.fromOffset(12 + iconSize / 2, 12 + iconSize / 2))
 	local x = 12 + iconSize + 12
 	local bookHolder = refs.Book.Parent
 	local buttonW = if bookHolder and bookHolder:IsA("Frame") then bookHolder.Size.X.Offset else 104
@@ -1652,6 +2001,7 @@ function CollectionView.showBanner(refs: BannerRefs, found: { [string]: any }, a
 		return
 	end
 	local rarity = Rarity.get(art.Rarity)
+	Pop.repaint(refs.Card, Pop.rarityPaint(art.Rarity), false)
 	CollectionView.glyph(refs.Icon, id, false)
 	local stroke = refs.Icon:FindFirstChildOfClass("UIStroke")
 	if stroke then
@@ -1661,7 +2011,7 @@ function CollectionView.showBanner(refs: BannerRefs, found: { [string]: any }, a
 	local nameWidth = refs.Name.Size.X.Offset
 	refs.Name.TextSize = CollectionView.fitBox(art.Name, if refs.Compact then 21 else 19, 14, nameWidth, 30)
 	refs.Chip.Text = rarity.Name
-	refs.Chip.BackgroundColor3 = rarity.Color
+	refs.Chip.BackgroundColor3 = CollectionView.chipColor(art.Rarity)
 	-- the find counts even before the State push with it arrives
 	local have, total = CollectionView.progress(artifacts, art.Collection, id)
 	refs.Progress.Text = `{have} / {total} found`
@@ -1746,34 +2096,15 @@ function CollectionView.titleBoard(text: string): BillboardGui
 	return board
 end
 
-
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = CollectionView.build
+-- The book, the found card and the banner wear the Pop look (attribute
+-- PopSkin: never the LightSkin recolouring). While the light UI is on the
+-- book also hides Roblox's touch controls while it is open.
+local popBuild = CollectionView.build
 CollectionView.build = function(compact: boolean): Refs
-	local refs = darkBuild(compact)
+	local refs = popBuild(compact)
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 		TouchControls.follow(refs.Gui)
-	end
-	return refs
-end
-
-local darkBuildReveal = CollectionView.buildReveal
-CollectionView.buildReveal = function(compact: boolean): RevealRefs
-	local refs = darkBuildReveal(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-	end
-	return refs
-end
-
-local darkBuildBanner = CollectionView.buildBanner
-CollectionView.buildBanner = function(compact: boolean): BannerRefs
-	local refs = darkBuildBanner(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 	end
 	return refs
 end

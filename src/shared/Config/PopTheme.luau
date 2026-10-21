@@ -37,14 +37,15 @@ local PopTheme = {
 
 	-- card and button faces
 	Paints = {
-		Green = paint(rgb(150, 242, 70), rgb(46, 182, 34), rgb(14, 14, 18)),
-		Blue = paint(rgb(110, 224, 255), rgb(22, 134, 238), rgb(14, 14, 18)),
-		Teal = paint(rgb(90, 240, 200), rgb(14, 170, 150), rgb(14, 14, 18)),
-		Purple = paint(rgb(236, 130, 255), rgb(124, 54, 232), rgb(14, 14, 18)),
-		Pink = paint(rgb(255, 150, 214), rgb(232, 60, 150), rgb(14, 14, 18)),
-		Yellow = paint(rgb(255, 244, 110), rgb(250, 176, 20), rgb(14, 14, 18)),
-		Orange = paint(rgb(255, 196, 90), rgb(244, 110, 24), rgb(14, 14, 18)),
-		Red = paint(rgb(255, 120, 110), rgb(212, 28, 44), rgb(14, 14, 18)),
+		-- (saturated like the Roblox shop photos: a light top, a deep bottom)
+		Green = paint(rgb(140, 238, 52), rgb(36, 168, 22), rgb(14, 14, 18)),
+		Blue = paint(rgb(70, 196, 255), rgb(12, 110, 232), rgb(14, 14, 18)),
+		Teal = paint(rgb(52, 226, 196), rgb(8, 150, 140), rgb(14, 14, 18)),
+		Purple = paint(rgb(218, 104, 255), rgb(116, 40, 224), rgb(14, 14, 18)),
+		Pink = paint(rgb(255, 118, 206), rgb(214, 36, 146), rgb(14, 14, 18)),
+		Yellow = paint(rgb(255, 230, 64), rgb(246, 158, 10), rgb(14, 14, 18)),
+		Orange = paint(rgb(255, 176, 56), rgb(236, 92, 12), rgb(14, 14, 18)),
+		Red = paint(rgb(255, 96, 92), rgb(200, 20, 40), rgb(14, 14, 18)),
 		Night = paint(rgb(170, 60, 200), rgb(46, 22, 102), rgb(14, 14, 18)), -- the limited banner
 		Slate = paint(rgb(96, 100, 116), rgb(56, 60, 72), rgb(14, 14, 18)),
 	} :: { [string]: Paint },

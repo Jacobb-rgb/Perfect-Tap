@@ -55,6 +55,7 @@ export type Section = {
 	Tab: string, -- the tab's word
 	TabIcon: string,
 	TabPaint: string,
+	TabModel: string?, -- the tab's live 3D picture (PictureModels), else TabIcon
 	RowHeight: number, -- design units
 	BigRow: number?, -- a taller first row (the feature card)
 }
@@ -64,12 +65,12 @@ local StoreConfig = {}
 StoreConfig.Title = "Shop"
 
 StoreConfig.Sections = {
-	{ Id = "Featured", Title = "FEATURED", Colors = "Gold", Tab = "Featured", TabIcon = "pass_crown", TabPaint = "Yellow", RowHeight = 300 },
-	{ Id = "Money", Title = "MONEY", Colors = "Green", Tab = "Money", TabIcon = "cash_stack", TabPaint = "Green", RowHeight = 236 },
-	{ Id = "Luck", Title = "LUCK", Colors = "Cyan", Tab = "Luck", TabIcon = "clover", TabPaint = "Teal", RowHeight = 250 },
-	{ Id = "Eggs", Title = "GOLEM CAPSULES", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
-	{ Id = "Blasters", Title = "BLASTERS", Colors = "Red", Tab = "Blasters", TabIcon = "blaster", TabPaint = "Red", RowHeight = 250 },
-	{ Id = "Passes", Title = "PASSES", Colors = "Gold", Tab = "Passes", TabIcon = "podium", TabPaint = "Orange", RowHeight = 196 },
+	{ Id = "Featured", Title = "FEATURED", Colors = "Gold", Tab = "Featured", TabIcon = "pass_crown", TabModel = "pass_crown", TabPaint = "Yellow", RowHeight = 300 },
+	{ Id = "Money", Title = "MONEY", Colors = "Green", Tab = "Money", TabIcon = "cash_stack", TabModel = "cash_stack", TabPaint = "Green", RowHeight = 236 },
+	{ Id = "Luck", Title = "LUCK", Colors = "Cyan", Tab = "Luck", TabIcon = "clover", TabModel = "luck_server", TabPaint = "Teal", RowHeight = 250 },
+	{ Id = "Eggs", Title = "GOLEM EGGS", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabModel = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
+	{ Id = "Blasters", Title = "BLASTERS", Colors = "Red", Tab = "Blasters", TabIcon = "blaster", TabModel = "blaster", TabPaint = "Red", RowHeight = 250 },
+	{ Id = "Passes", Title = "PASSES", Colors = "Gold", Tab = "Passes", TabIcon = "podium", TabModel = "podium", TabPaint = "Orange", RowHeight = 196 },
 } :: { Section }
 
 local function card(spec: CardSpec): CardSpec
@@ -91,10 +92,37 @@ StoreConfig.Cards = {
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
 		Lines = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
 	}),
-	-- money: three on top, two wide ones under them (like the photos)
+	-- the Starter Pack (one per player, in the first hour of play: StarterPackService;
+	-- StoreController hides it once bought or when the offer is over)
+	card({
+		Id = "StarterPack",
+		Keys = { "StarterPack" },
+		Look = "Bundle",
+		Paint = "Teal",
+		Icon = "golem_GildedPorter",
+		Model = "golem_GildedPorter",
+		Section = "Featured",
+		Row = 2,
+		Title = "STARTER PACK",
+		Lines = { "Rare golem Gilded Porter", "20 min of income in coins", "Pioneer podium skin + title" },
+	}),
+	-- money: three on top, the 2x Money pass and two wide ones under them (like the photos)
 	card({ Id = "CoinsSmall", Keys = { "CoinsSmall" }, Look = "Coins", Paint = "Green", Icon = "cash_bundle", Model = "cash_bundle", Section = "Money", Row = 1 }),
 	card({ Id = "CoinsMedium", Keys = { "CoinsMedium" }, Look = "Coins", Paint = "Green", Icon = "cash_pile", Model = "cash_pile", Section = "Money", Row = 1 }),
 	card({ Id = "CoinsLarge", Keys = { "CoinsLarge" }, Look = "Coins", Paint = "Green", Icon = "cash_stack", Model = "cash_stack", Section = "Money", Row = 1 }),
+	card({
+		Id = "DoubleMoney",
+		Keys = { "DoubleMoney" },
+		Look = "Boost",
+		Paint = "Yellow",
+		Icon = "cash_safe",
+		Model = "cash_safe",
+		Section = "Money",
+		Row = 2,
+		Title = "2x Money",
+		Big = "x2 MONEY",
+		Note = "Income + sales, forever",
+	}),
 	card({ Id = "CoinsHuge", Keys = { "CoinsHuge" }, Look = "Coins", Paint = "Green", Icon = "cash_sack", Model = "cash_sack", Section = "Money", Row = 2 }),
 	card({
 		Id = "CoinsMega",
@@ -124,13 +152,13 @@ StoreConfig.Cards = {
 	card({ Id = "TripleLucky15", Keys = { "TripleLucky15" }, Look = "Boost", Paint = "Yellow", Icon = "clover", Model = "clover", Section = "Luck", Row = 1, Title = "Triple Lucky", Big = "x3", Note = "Rarer golems, 15 min" }),
 	card({ Id = "HexaLucky15", Keys = { "HexaLucky15" }, Look = "Boost", Paint = "Blue", Icon = "rainbow", Model = "item_Diamond", Section = "Luck", Row = 1, Title = "Hexa Lucky", Big = "x2.5", Note = "Rarer ores, 15 min" }),
 	-- golem capsules ("eggs")
-	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
-	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
-	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
+	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
+	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
+	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Egg", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
 	card({
 		Id = "Royal10",
 		Keys = { "RoyalCapsule10" },
-		Title = "Royal Capsule",
+		Title = "Royal Egg",
 		Look = "Capsule",
 		Paint = "Pink",
 		Icon = "capsule_Royal",

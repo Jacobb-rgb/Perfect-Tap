@@ -164,6 +164,8 @@ ArtifactConfig.PodiumSkins = {
 	Railway = { Name = "Brass Rails", Base = rgb(70, 60, 56), Trim = rgb(200, 150, 70), Glow = rgb(255, 170, 80) },
 	Golemworks = { Name = "Golem Core", Base = rgb(90, 96, 110), Trim = rgb(150, 210, 230), Glow = rgb(120, 230, 255) },
 	Heartstone = { Name = "Heartstone Ember", Base = rgb(60, 24, 24), Trim = rgb(255, 90, 60), Glow = rgb(255, 120, 60) },
+	-- the Starter Pack's (Robux, MonetizationConfig "StarterPack"): shows while no collection reward is equipped
+	Pioneer = { Name = "Pioneer Copper", Base = rgb(46, 70, 66), Trim = rgb(232, 140, 70), Glow = rgb(90, 240, 200) },
 } :: { [string]: { Name: string, Base: Color3, Trim: Color3, Glow: Color3 } }
 
 ArtifactConfig.List = {

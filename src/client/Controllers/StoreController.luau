@@ -45,6 +45,7 @@ local RebirthView = require(script.Parent.Parent.UI.RebirthView)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local CardOdds = require(script.Parent.Parent.UI.CardOdds)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
@@ -243,6 +244,13 @@ local function refresh()
 			end
 		end
 		local product = MonetizationConfig.Products[key]
+		if product.Grant == "StarterPack" then
+			-- one per player: only while the offer is open (State.StarterPack, StarterPackService)
+			local offer = state().StarterPack
+			if type(offer) ~= "table" or offer.Open ~= true then
+				cardState = "Hidden"
+			end
+		end
 		if spec.Look == "Star" then
 			cardState = starCard(view, id, spec)
 			if cardState == "Buy" and pending[key] and now - pending[key] < PROMPT_MEMORY then
@@ -396,7 +404,7 @@ end
 local function onCard(id: string)
 	local view = refs
 	local card = if view then view.Cards[id] else nil
-	if not view or not card or not card.Button.Active then
+	if not isOpen or not view or not card or not card.Button.Active then
 		return
 	end
 	local product = MonetizationConfig.Products[card.Key]
@@ -420,7 +428,7 @@ end
 onLimited = function(count: number)
 	local view = refs
 	local edition = LimitedGolems.current(serverNow())
-	if not view or not edition or restricted() then
+	if not isOpen or not view or not edition or restricted() then
 		return
 	end
 	local key = edition.Products[count]
@@ -497,7 +505,9 @@ local function ensureView(): StoreView.Refs
 	for sectionId, tab in view.Tabs do
 		tab.Activated:Connect(function()
 			local target = Vector2.new(0, StoreView.sectionTop(view, sectionId))
-			TweenService:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target }):Play()
+			TweenService
+				:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target })
+				:Play()
 			Sfx.play("UIClick")
 		end)
 	end
@@ -508,7 +518,7 @@ local function ensureView(): StoreView.Refs
 	view.DetailBuy.Activated:Connect(function()
 		local key = detailKey
 		hideDetail()
-		if key then
+		if key and isOpen then
 			buy(key)
 		end
 	end)
@@ -539,7 +549,14 @@ function StoreController.close()
 			GuiService.SelectedObject = nil
 		end
 		StoreView.showDetail(view, nil)
-		view.Gui.Enabled = false
+		-- (UI/Motion: it shrinks away first, an open() before the end cancels that;
+		-- with UI motion off it just goes, as on main)
+		local gui = view.Gui
+		Motion.close(view.Group, function()
+			if not isOpen then
+				gui.Enabled = false
+			end
+		end, gui:FindFirstChild("Dim") :: GuiObject?)
 	end
 	PromptController.setSuppressed("Store", false)
 end
@@ -593,16 +610,18 @@ function StoreController.open()
 	local first = view.Cards[view.Order[1]]
 	GuiService.SelectedObject = if MenuPanels.usingGamepad() and first then first.Button else nil
 	Sfx.play("UIClick")
-	local pop = view.Window.Root:FindFirstChild("OpenPop") :: UIScale?
-	if not pop then
-		local made = Instance.new("UIScale")
-		made.Name = "OpenPop"
-		made.Parent = view.Window.Root
-		pop = made
+	if not Motion.enabled() then
+		-- (UI motion off, Config/AnimConfig: the window's own pop, as on main)
+		Motion.classicPop(view.Window.Root, "OpenPop", 0.85, 0.18)
+		return
 	end
-	local s = pop :: UIScale
-	s.Scale = 0.85
-	TweenService:Create(s, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	-- UI/Motion: the window and its tabs pop from the middle (the Group is centred),
+	-- the dim fades in, the tab column slides in from the right
+	Motion.pop(view.Group, view.Gui:FindFirstChild("Dim") :: GuiObject?)
+	local tabs = view.Group:FindFirstChild("Tabs") :: GuiObject?
+	if tabs then
+		Motion.slide(tabs, "Right", 36)
+	end
 end
 
 function StoreController.toggle()
@@ -635,7 +654,11 @@ function StoreController.init()
 		local view = refs
 		if cleared and view and isOpen then
 			local reasons = if kind == "Capsule" then CapsuleConfig.Reasons else BoostConfig.Reasons
-			local text = if type(result.Reason) == "string" and reasons and reasons[result.Reason] then reasons[result.Reason] else "Not now."
+			local text = if type(result.Reason) == "string"
+					and reasons
+					and reasons[result.Reason]
+				then reasons[result.Reason]
+				else "Not now."
 			StoreView.setStatus(view, text)
 			refresh()
 		end

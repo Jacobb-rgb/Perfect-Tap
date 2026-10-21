@@ -273,6 +273,11 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "quests" then -- the world + the QUESTS window / streak popup overlays (tools/lune/lib/quests_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/quests_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/store_preview").build(Loader) do
@@ -783,6 +788,12 @@ elseif sceneName == "ores" then
 				else zoneId .. " · stage " .. (col - 3)
 			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
 		end
+	end
+elseif string.match(sceneName, "^eggstall_") then -- the egg stall concepts (tools/lune/lib/egg_stall_preview.luau)
+	local EggStall = require("./lib/egg_stall_preview")
+	EggStall.build(Loader, workspace, string.sub(sceneName, #"eggstall_" + 1))
+	for name, guis in EggStall.ui(Loader) do
+		uiExports[name] = guis
 	end
 elseif string.match(sceneName, "^limitedbg_") then -- a limited edition's shop banner background (limited_golems_preview)
 	local LimitedPreview = require("./lib/limited_golems_preview")
