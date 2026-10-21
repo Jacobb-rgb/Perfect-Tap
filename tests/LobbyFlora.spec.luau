@@ -11,6 +11,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local Flora = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora")
@@ -426,9 +427,13 @@ return function(T, Loader)
 		T.truthy(#sites == 0 or (#sites >= 8 and #sites <= 14), `no town houses or 8-14 ({#sites})`)
 		local town = flora():FindFirstChild("Town")
 		T.truthy(town, "Flora has Town")
+		-- a base: the pad (+-28 at 12 cells), the yard from plot-local z 25 to 4 past the rail (66)
+		local baseHalf = WorldLayout.PlotGrid.Half + 4
+		local yardZ0 = WorldLayout.PlotGrid.Half + 1
+		local baseBack = BaseLayout.RailZ + 4
 		for i, site in sites do
 			T.truthy(site.Min.X < site.Max.X and site.Min.Y < site.Max.Y, site.Id .. " has a proper rectangle")
-			-- off the coastal rail line (world |x| 160..172) with room to spare
+			-- off the coastal rail line (world |x| 160..172 at 12 cells) with room to spare
 			T.truthy(site.Max.X < Town.RailMinX - 1 and site.Min.X > -Town.RailMinX + 1, site.Id .. " stays off the rail line")
 			-- every point of the site is free ground (roads, paths, plots, yards, outcrops, keep-outs, pieces)
 			for x = site.Min.X, site.Max.X + 1e-6, 1 do
@@ -437,7 +442,7 @@ return function(T, Loader)
 					T.truthy(LobbyLayout.isFree(q, 1), `{site.Id}: ({x}, {z}) is not free ground`)
 					for _, plot in WorldLayout.Plots do
 						local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(x, plot.Center.Y, z))
-						local inYard = math.abs(localPos.X) < 28 and localPos.Z >= 25 and localPos.Z <= 66
+						local inYard = math.abs(localPos.X) < baseHalf and localPos.Z >= yardZ0 and localPos.Z <= baseBack
 						T.falsy(inYard, `{site.Id}: ({x}, {z}) is in the yard of base {plot.Id}`)
 					end
 				end
