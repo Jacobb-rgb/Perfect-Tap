@@ -18,6 +18,11 @@ return function(T, Loader)
 	local CELLS = GameConfig.PlotCells
 	local CELL = GameConfig.CellSize
 	local HALF = CELLS * CELL / 2
+	-- the chute cells on the back row (they move with a bigger grid)
+	local BACK = CELLS - 1
+	local PX = BaseLayout.chuteCell("Pen")
+	local TX = BaseLayout.chuteCell("Train")
+	local FX = BaseLayout.chuteCell("Foundry")
 
 	local function entry(id: string, x: number, z: number, r: number?): any
 		return { Id = id, X = x, Z = z, R = r or 0 }
@@ -45,10 +50,11 @@ return function(T, Loader)
 			count += 1
 		end
 		T.eq(count, 3, "Chutes and ChuteNames agree")
-		-- the precise decisions
-		T.eq(BaseLayout.Chutes.Pen.X, 3)
-		T.eq(BaseLayout.Chutes.Train.X, 6)
-		T.eq(BaseLayout.Chutes.Foundry.X, 9)
+		-- the precise decisions: 3 / 6 / 9 on a 12-cell grid, moved with a bigger one
+		local shift = (CELLS - 12) / 2
+		T.eq(BaseLayout.Chutes.Pen.X, 3 + shift)
+		T.eq(BaseLayout.Chutes.Train.X, 6 + shift)
+		T.eq(BaseLayout.Chutes.Foundry.X, 9 + shift)
 		T.eq(BaseLayout.Chutes.Pen.Kind, "Source")
 		T.eq(BaseLayout.Chutes.Train.Kind, "Source")
 		T.eq(BaseLayout.Chutes.Foundry.Kind, "Sink")
@@ -106,6 +112,41 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Bigger plots: the base keeps its plot-local layout at any grid size", function()
+		T.eq((CELLS - 12) % 2, 0, "the grid grows the same on both sides")
+		T.eq(BaseLayout.GridShift, (CELLS - 12) / 2)
+		-- the chutes keep their plot-local x, in line with the pen gate, the yard gate and the receiver
+		T.near(BaseLayout.chuteLocal("Pen").X, -10, 1e-9, "PEN chute x")
+		T.near(BaseLayout.chuteLocal("Train").X, 2, 1e-9, "TRAIN chute x")
+		T.near(BaseLayout.chuteLocal("Foundry").X, 14, 1e-9, "FOUNDRY chute x")
+		T.le(math.abs(BaseLayout.chuteLocal("Pen").X - BaseLayout.Pen.PromptPoint.X), 3, "PEN chute by the pen gate")
+		local gate = BaseLayout.YardGate
+		T.lt(math.abs(BaseLayout.chuteLocal("Train").X - gate.CenterX) + CELL / 2, gate.Width / 2 + 1e-9, "TRAIN chute in the yard gate")
+		-- the yard starts at the pad's back wall line and is as wide as the pad
+		local yard = BaseLayout.Yard
+		T.eq(BaseLayout.YardZ0, HALF + 1)
+		T.near(yard.Center.Z - yard.Size.Z / 2, HALF + 1, 1e-9, "the yard's front edge")
+		T.near(yard.Size.X, 2 * (HALF + 1), 1e-9, "the yard is as wide as the pad")
+		for name, piece in BaseLayout.pieces() do
+			T.le(HALF + 1, piece.Center.Z - piece.Size.Z / 2, name .. " in the yard")
+			T.le(math.abs(piece.Center.X) + piece.Size.X / 2, HALF + 1, name .. " between the yard walls")
+		end
+		T.lt(BaseLayout.TrainStop.Center.Z + BaseLayout.TrainStop.Size.Z / 2, BaseLayout.RailZ - 2.95, "train stop off the rail")
+		-- the pen: closed by the left yard wall (PlotBuilder's pen), its right edge at x -1
+		local pen = BaseLayout.Pen.Area
+		T.lt(pen.Center.X - pen.Size.X / 2 + HALF + 1, 2.5, "the left yard wall closes the pen")
+		T.near(pen.Center.X + pen.Size.X / 2, -1, 1e-9, "the pen's right edge stays")
+		-- the starter kit keeps its plot-local x and its distance from the back wall
+		local kit = MachineData.StarterKit
+		T.eq(-HALF + kit[1].X * CELL, -8, "starter kit x")
+		T.eq(2 * HALF - kit[1].Z * CELL, 32, "starter kit from the back wall")
+		T.eq(kit[2].X - kit[1].X, 4, "the furnace beside the station")
+		-- the Foundry building stands 2 studs into its rect
+		local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
+		local front = BaseLayout.Foundry.Center.Z - BaseLayout.Foundry.Size.Z / 2
+		T.near(FoundryBuilder.AnvilLocal.Z - front, 2 + 3.0, 1e-9, "the Foundry's anvil follows the rect")
+	end)
+
 	T.test("Step 3: chute points are cell centres on top of the pad", function()
 		for _, name in BaseLayout.ChuteNames do
 			local x, z = BaseLayout.chuteCell(name)
@@ -158,30 +199,30 @@ return function(T, Loader)
 			end
 		end
 		-- next to a chute is fine, and the back row between chutes too
-		T.truthy(Placement.validate({}, "ClayFurnace", 4, 10, 0), "2x2 between the pen and train chutes")
-		T.truthy(Placement.validate({}, "IronBox", 7, 10, 0), "2x2 between the train and foundry chutes")
-		T.truthy(Placement.validate({}, "Crusher", 3, 9, 0), "right in front of a chute")
+		T.truthy(Placement.validate({}, "ClayFurnace", PX + 1, BACK - 1, 0), "2x2 between the pen and train chutes")
+		T.truthy(Placement.validate({}, "IronBox", TX + 1, BACK - 1, 0), "2x2 between the train and foundry chutes")
+		T.truthy(Placement.validate({}, "Crusher", PX, BACK - 2, 0), "right in front of a chute")
 		-- a move onto a chute is refused and changes nothing
 		local furnace = entry("ClayFurnace", 0, 0)
 		local data = { PlacedMachines = { furnace }, MachineInventory = {}, Storage = {} }
-		local ok, code = Placement.commitMove(data, furnace, 2, 10, 0)
+		local ok, code = Placement.commitMove(data, furnace, PX - 1, BACK - 1, 0)
 		T.falsy(ok)
 		T.eq(code, "Chute")
 		T.eq(furnace.X, 0, "unchanged")
 		-- a placement onto a chute keeps the machine in the inventory
 		local buy = { PlacedMachines = {}, MachineInventory = { IronBox = 1 }, Storage = {} }
-		local placed, reason = Placement.commitPlace(buy, "IronBox", 8, 10, 0, Placement.limits(0, false))
+		local placed, reason = Placement.commitPlace(buy, "IronBox", FX - 1, BACK - 1, 0, Placement.limits(0, false))
 		T.eq(placed, nil)
 		T.eq(reason, "Chute")
 		T.eq(buy.MachineInventory.IronBox, 1)
 	end)
 
 	T.test("Step 3: sanitize moves a machine off a chute, keeps belts there", function()
-		local blocker = entry("Crusher", 2, 10)
+		local blocker = entry("Crusher", PX - 1, BACK - 1)
 		blocker.In = { { K = "Clean", O = "Copper", G = "Rough" } }
 		blocker.Out = { { K = "Crushed", O = "Copper", G = "Rough" } }
-		local belt = entry("Conveyor", 6, 11, 2)
-		local sink = entry("Conveyor", 9, 11, BaseLayout.SinkRotation)
+		local belt = entry("Conveyor", TX, BACK, 2)
+		local sink = entry("Conveyor", FX, BACK, BaseLayout.SinkRotation)
 		local fine = entry("ClayFurnace", 4, 4)
 		local data = {
 			PlacedMachines = { blocker, belt, sink, fine },
@@ -208,8 +249,8 @@ return function(T, Loader)
 			PlacedMachines = {
 				entry("Crusher", 0, 0),
 				entry("ClayFurnace", 1, 1), -- overlaps the Crusher
-				entry("BlastFurnace", 10, 10), -- off the plot
-				entry("IronBox", 8, 10), -- on the FOUNDRY chute
+				entry("BlastFurnace", CELLS - 2, CELLS - 2), -- off the plot
+				entry("IronBox", FX - 1, BACK - 1), -- on the FOUNDRY chute
 				{ Id = "Crusher", X = 4, Z = 4, R = 7 }, -- broken rotation
 			},
 			MachineInventory = {},
@@ -258,7 +299,8 @@ return function(T, Loader)
 		end
 		T.eq(batch.MachineInventory.Crusher, cap)
 		-- sanitize moving a machine off a chute at the cap refunds it too
-		local onChute = { PlacedMachines = { entry("IronBox", 8, 10) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
+		local onChute =
+			{ PlacedMachines = { entry("IronBox", FX - 1, BACK - 1) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
 		Placement.sanitize(onChute)
 		T.eq(onChute.MachineInventory.IronBox, cap)
 		T.eq(onChute.Coins, MachineData.ById.IronBox.Price)

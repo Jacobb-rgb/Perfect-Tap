@@ -1,5 +1,5 @@
 -- Plot border: rails, posts, the banner pole and every other decoration
--- stay off the 48x48 build grid, so every cell is free for machines.
+-- stay off the build grid (48x48 at 12 cells), so every cell is free for machines.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")

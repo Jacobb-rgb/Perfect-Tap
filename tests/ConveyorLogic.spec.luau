@@ -3,6 +3,8 @@ return function(T, Loader)
 	local ConveyorLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.ConveyorLogic")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local LAST = GameConfig.PlotCells - 1
 
 	local function belt(x: number, z: number, r: number): any
 		return { Id = "Conveyor", X = x, Z = z, R = r }
@@ -116,7 +118,7 @@ return function(T, Loader)
 		-- a belt pointing into another belt is not a feeder
 		T.eq(#ConveyorLogic.feeders({ belt(1, 1, 1), belt(2, 1, 1) }), 0)
 		-- a belt off the plot edge feeds nothing
-		T.eq(#ConveyorLogic.feeders({ belt(0, 0, 3), belt(11, 11, 2) }), 0)
+		T.eq(#ConveyorLogic.feeders({ belt(0, 0, 3), belt(LAST, LAST, 2) }), 0)
 	end)
 
 	T.test("ConveyorLogic: headOn lists belts facing each other once", function()

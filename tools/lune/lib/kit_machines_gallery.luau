@@ -89,6 +89,8 @@ function Gallery.build(Loader: any, parent: any)
 	local CELL = GameConfig.CellSize
 	local half = GameConfig.PlotCells * CELL / 2
 	local NEON = roblox.Enum.Material.Neon
+	-- (bigger plots) the layout is on a 12-cell grid: keep it at the pads' centres
+	local gridShift = (GameConfig.PlotCells - 12) / 2
 
 	-- lawn and metal pads: dark plates, lighter tile seams, a glowing orange edge
 	Geo.block(root, CF.new(60, -1.06, 0), V3.new(480, 2, 260), C3.fromRGB(130, 186, 82))
@@ -143,7 +145,7 @@ function Gallery.build(Loader: any, parent: any)
 		local placed = {}
 		for _, entry in Gallery.Layout do
 			local model = if entry.Id == "Conveyor" then KitMachines.conveyor(capsFor(entry)) else KitMachines.build(entry.Id, level)
-			model:PivotTo(offset * Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
+			model:PivotTo(offset * Grid.localCFrame(entry.Id, entry.X + gridShift, entry.Z + gridShift, entry.R))
 			model.Parent = root
 			Old.paintGuis(Loader, root, model)
 			if entry.Id ~= "Conveyor" then
@@ -192,7 +194,7 @@ function Gallery.build(Loader: any, parent: any)
 	Old.smoke(Loader, root, placed.BlastFurnace:FindFirstChild("ChimneyTop", true), 1.4)
 	local beltTop = 0.8
 	local function cell(x: number, z: number): any
-		return Grid.localCFrame("Conveyor", x, z, 0)
+		return Grid.localCFrame("Conveyor", x + gridShift, z + gridShift, 0)
 	end
 	ore("Raw", "Iron", cell(11, 4) * CF.new(0.1, 1.5, 0.6) * CF.Angles(0, 1.1, 0), beltTop, 11)
 	ore("Clean", "Copper", cell(11, 0) * CF.new(-0.1, 1.5, -0.4) * CF.Angles(0, 0.7, 0), beltTop, 5)

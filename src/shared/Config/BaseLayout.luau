@@ -4,12 +4,18 @@
 	Plot frame (WorldLayout.plotCFrame): origin = the pad's top center,
 	LookVector = toward the road, so local -Z is the road side and local +Z
 	the sea side. +X is the right hand when you face the road.
-	The 12x12 machine grid covers x, z in -24..24. Behind it, on the sea
-	side, lies the yard (z 25..56): the Ore Pen, the podiums, the Foundry
-	and the train stop on the coastal railway (z ~62, world |x| ~165).
+	The machine grid (GameConfig.PlotCells square, 12x12 = 48 studs today)
+	covers x, z in -GRID_HALF..GRID_HALF (-24..24). Behind it, on the sea
+	side, lies the yard (z YARD_Z0..YARD_Z0 + 31, 25..56 today): the Ore
+	Pen, the podiums, the Foundry and the train stop on the coastal railway
+	(RailZ, 62 today, world |x| ~165).
 	Nothing here may overlap the machine grid (pieces()); only the three
 	chute cells (Chutes) are fixtures on the grid itself, and the Foundry's
 	receiver (FoundryIntake) reaches over the end of the FOUNDRY chute cell.
+	(bigger plots) Everything here derives from PlotCells: the yard keeps its
+	depth and moves out with the grid's back edge, and every piece keeps its
+	plot-local x, so the chutes, the pen gate, the yard gate and the
+	Foundry's receiver stay lined up at any (even) grid size.
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
@@ -27,43 +33,62 @@ export type Chute = {
 
 local BaseLayout = {}
 
+local CELL = GameConfig.CellSize
+local GRID_HALF = GameConfig.PlotCells * CELL / 2
+-- the grid grows by the same number of cells on each side
+assert(GameConfig.PlotCells % 2 == 0, "GameConfig.PlotCells must be even")
+-- The yard's front edge (plot-local z): the pad's back wall line, 25 at 12 cells.
+local YARD_Z0 = GRID_HALF + 1
+-- Cells a 12-cell layout moves across (+X) so it keeps its plot-local x on a
+-- bigger grid (0 at 12 cells); along z it moves PlotCells - 12 to keep its
+-- distance from the back wall.
+local GRID_SHIFT = (GameConfig.PlotCells - 12) / 2
+
+BaseLayout.YardZ0 = YARD_Z0
+BaseLayout.GridShift = GRID_SHIFT
+
 local function rect(cx: number, cz: number, sx: number, sy: number, sz: number): Rect
 	return { Center = Vector3.new(cx, 0, cz), Size = Vector3.new(sx, sy, sz) }
 end
 
--- The whole yard (ground pad, rails).
-BaseLayout.Yard = rect(0, 40.5, 50, 0, 31)
+-- The whole yard (ground pad, rails): as wide as the pad (PlotBuilder's long
+-- side walls run on along both its sides).
+BaseLayout.Yard = rect(0, YARD_Z0 + 15.5, 2 * (GRID_HALF + 1), 0, 31)
 
 -- Gap in the plot's back rail so players can walk from the grid into the yard.
 BaseLayout.YardGate = { CenterX = 0, Width = 12 }
 
--- Fenced pen; anything you drop or throw inside goes into data.Storage.
+-- Fenced pen; anything you drop or throw inside goes into data.Storage. Its
+-- right edge stays at x -1 (PenService's board, IronBoxService.boardPoint); a
+-- bigger grid widens it toward the left yard wall, which closes it
+-- (PlotBuilder's pen). The gate keeps x -12, next to the PEN chute (x -10).
 BaseLayout.Pen = {
-	Area = rect(-12, 37, 22, 3, 18), -- fence footprint (Size.Y = fence height)
-	Intake = rect(-12, 37, 21, 8, 17), -- items inside this box are taken in
-	PromptPoint = Vector3.new(-12, 3, 27.5), -- "Open Pen" / "Put In" prompts (at the gate)
+	Area = rect(-GRID_HALF / 2, YARD_Z0 + 12, GRID_HALF - 2, 3, 18), -- fence footprint (Size.Y = fence height)
+	Intake = rect(-GRID_HALF / 2, YARD_Z0 + 12, GRID_HALF - 3, 8, 17), -- items inside this box are taken in
+	PromptPoint = Vector3.new(-12, 3, YARD_Z0 + 2.5), -- "Open Pen" / "Put In" prompts (at the gate)
 	ShowMax = 24, -- loose-looking items the client shows inside the pen
 }
 
 -- Podium slots, left to right as seen from the grid. Slots 3 and 4 need the Podiums perk.
 BaseLayout.Podiums = {
-	rect(4, 31, 4, 9, 4),
-	rect(10, 31, 4, 9, 4),
-	rect(16, 31, 4, 9, 4),
-	rect(22, 31, 4, 9, 4),
+	rect(4, YARD_Z0 + 6, 4, 9, 4),
+	rect(10, YARD_Z0 + 6, 4, 9, 4),
+	rect(16, YARD_Z0 + 6, 4, 9, 4),
+	rect(22, YARD_Z0 + 6, 4, 9, 4),
 }
 BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 
 -- The Foundry (step 3): ingots in, stronger blasters out.
-BaseLayout.Foundry = rect(13, 46, 18, 16, 14)
+BaseLayout.Foundry = rect(13, YARD_Z0 + 21, 18, 16, 14)
 
--- Train stop on the coastal railway (step 2). Its rail-side edge (z 59) keeps
--- 3 studs from the rail centerline, out of the trains' wheels (+-2.95).
-BaseLayout.TrainStop = rect(0, 57, 34, 6, 4)
-BaseLayout.RailZ = 62 -- rail centerline, plot-local (runs along X)
+-- Train stop on the coastal railway (step 2). Its rail-side edge (z 59 at 12
+-- cells) keeps 3 studs from the rail centerline, out of the trains' wheels (+-2.95).
+BaseLayout.TrainStop = rect(0, YARD_Z0 + 32, 34, 6, 4)
+BaseLayout.RailZ = YARD_Z0 + 37 -- rail centerline, plot-local (runs along X)
 
--- Reserved for the artifact museum (step 7).
-BaseLayout.Museum = rect(-12, 51, 22, 10, 8)
+-- Reserved for the artifact museum (step 7): it keeps its place by the left
+-- yard wall (x -12 at 12 cells), so its look and part count never change.
+BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 
 -- Every fixed piece, for overlap tests.
 function BaseLayout.pieces(): { [string]: Rect }
@@ -123,12 +148,13 @@ end
 	away from the yard" while its belt faces SinkRotation.
 ]]
 local BACK_ROW = GameConfig.PlotCells - 1
-local CELL = GameConfig.CellSize
-local GRID_HALF = GameConfig.PlotCells * CELL / 2
 
+-- X: 3 / 6 / 9 at 12 cells (+ GRID_SHIFT on a bigger grid): plot-local x
+-- -10 / 2 / 14 at any size, in line with the pen gate, the YardGate and the
+-- Foundry's receiver.
 BaseLayout.Chutes = {
 	Pen = {
-		X = 3,
+		X = 3 + GRID_SHIFT,
 		Z = BACK_ROW,
 		Kind = "Source",
 		Label = "PEN",
@@ -136,7 +162,7 @@ BaseLayout.Chutes = {
 		Hint = "Items you send from your Ore Pen come out here.",
 	},
 	Train = {
-		X = 6,
+		X = 6 + GRID_SHIFT,
 		Z = BACK_ROW,
 		Kind = "Source",
 		Label = "TRAIN",
@@ -144,7 +170,7 @@ BaseLayout.Chutes = {
 		Hint = "With Direct Unload, your train puts its dirty ore here.",
 	},
 	Foundry = {
-		X = 9,
+		X = 9 + GRID_SHIFT,
 		Z = BACK_ROW,
 		Kind = "Sink",
 		Label = "FOUNDRY",
