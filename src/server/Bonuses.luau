@@ -28,6 +28,13 @@
 	  "Bonuses", that returns the capped IncomePct total of every provider
 	  (incomePct). So golems, enchants, collections and any later provider
 	  reach the podiums exactly once.
+	- The 2x Money pass (perk MonetizationConfig.MoneyPassPerk): a separate
+	  multiplier OUTSIDE the StatConfig caps (IncomePct 2, SellPct 3), so it
+	  always doubles: moneyMult(player) is added to EconomyService as the
+	  income factor "MoneyPass", and compute(..., player) puts it in the
+	  totals as MoneyMult, which sellMult multiplies in. A perk change goes
+	  through DataService.changed (MonetizationService.applyPass), which
+	  drops the cache.
 	- Cache: stats(player) is kept per player until the save changes
 	  (DataService.onChangedNow -> invalidate, inside changed() itself, so a
 	  read right after a change never gets the old totals), the next running
@@ -47,6 +54,7 @@ local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StatConfig = require(Shared.Config.StatConfig)
 local Perks = require(script.Parent.Perks)
@@ -63,6 +71,7 @@ type Cached = { Stats: Stats, At: number, ValidUntil: number }
 
 Bonuses.MaxCacheSeconds = 30
 Bonuses.IncomeKey = "Bonuses" -- the EconomyService.addIncomeBonus key
+Bonuses.MoneyKey = "MoneyPass" -- the EconomyService.addIncomeFactor key (2x Money)
 
 local providers: { Entry } = {}
 local warned: { [string]: boolean } = {}
@@ -185,7 +194,21 @@ function Bonuses.compute(data: { [string]: any }?, now: number, player: Player?)
 			table.insert(partials, partial)
 		end
 	end
-	return StatConfig.combine(partials)
+	local totals = StatConfig.combine(partials)
+	-- (outside the caps: the 2x Money pass doubles the capped totals)
+	totals.MoneyMult = Bonuses.moneyMult(player)
+	return totals
+end
+
+-- The 2x Money pass multiplier of a player: MonetizationConfig.MoneyPassMult
+-- with the pass's perk, else 1 (no player: 1).
+function Bonuses.moneyMult(player: Player?): number
+	if not player then
+		return 1
+	end
+	-- (pcall: a stand-in player without attributes counts as no pass)
+	local ok, has = pcall(Perks.has, player, MonetizationConfig.MoneyPassPerk)
+	return if ok and has then MonetizationConfig.MoneyPassMult else 1
 end
 
 -- The partial stats of one source for a player (nil when the source isn't
@@ -228,9 +251,11 @@ function Bonuses.incomePct(player: Player): number
 	return math.max(0, Bonuses.stats(player).IncomePct or 0)
 end
 
--- Adds incomePct to EconomyService once (keyed: calling it again replaces it).
+-- Adds incomePct and the 2x Money factor to EconomyService once (keyed:
+-- calling it again replaces them).
 function Bonuses.attachIncome()
 	EconomyService.addIncomeBonus(Bonuses.incomePct, Bonuses.IncomeKey)
+	EconomyService.addIncomeFactor(Bonuses.moneyMult, Bonuses.MoneyKey)
 end
 
 ---------------------------------------------------------------- getters (from totals)
@@ -270,9 +295,12 @@ function Bonuses.artifactChance(stats: Stats, zoneId: string): number
 	return math.clamp(ArtifactConfig.rockChance(zoneId) * (1 + math.max(0, stats.ArtifactPct or 0)), 0, 1)
 end
 
--- What Tobin pays is multiplied by this.
+-- What Tobin pays is multiplied by this (the capped SellPct, then the 2x
+-- Money pass on top).
 function Bonuses.sellMult(stats: Stats): number
-	return 1 + math.max(0, stats.SellPct or 0)
+	local money = stats.MoneyMult
+	local pass = if type(money) == "number" and money >= 1 and money <= MonetizationConfig.MoneyPassMult then money else 1
+	return (1 + math.max(0, stats.SellPct or 0)) * pass
 end
 
 -- Coins Tobin pays for items whose base price adds up to `base`: base x
@@ -371,6 +399,7 @@ function Bonuses.summary(player: Player): { [string]: any }
 		ArtifactPct = math.max(0, stats.ArtifactPct or 0), -- luck cards: BoostConfig.preview context
 		SellMult = Bonuses.sellMult(stats),
 		IncomePct = math.max(0, stats.IncomePct or 0),
+		MoneyMult = stats.MoneyMult or 1, -- the 2x Money pass (income and sales)
 		GolemBond = math.max(0, stats.GolemBondPct or 0),
 		WalkSpeed = Bonuses.walkSpeed(stats),
 		MagnetRadius = Bonuses.magnetRadius(stats),

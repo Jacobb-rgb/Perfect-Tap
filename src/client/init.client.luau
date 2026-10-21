@@ -48,6 +48,7 @@ local ORDER = {
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
 	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names
 	"StoreController", -- the Robux STORE window (side menu STORE, the HUD's Shop button)
+	"StarterPackController", -- the one-time Starter Pack popup (first hour of play)
 	"SideMenuController", -- the button column on the left (after the panels it opens)
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 	"LightWorldController", -- the light UI's world labels and prompts (only with UIConfig.LightUI on)

@@ -91,10 +91,37 @@ StoreConfig.Cards = {
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
 		Lines = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
 	}),
-	-- money: three on top, two wide ones under them (like the photos)
+	-- the Starter Pack (one per player, in the first hour of play: StarterPackService;
+	-- StoreController hides it once bought or when the offer is over)
+	card({
+		Id = "StarterPack",
+		Keys = { "StarterPack" },
+		Look = "Bundle",
+		Paint = "Teal",
+		Icon = "golem_GildedPorter",
+		Model = "golem_GildedPorter",
+		Section = "Featured",
+		Row = 2,
+		Title = "STARTER PACK",
+		Lines = { "Rare golem Gilded Porter", "20 min of income in coins", "Pioneer podium skin + title" },
+	}),
+	-- money: three on top, the 2x Money pass and two wide ones under them (like the photos)
 	card({ Id = "CoinsSmall", Keys = { "CoinsSmall" }, Look = "Coins", Paint = "Green", Icon = "cash_bundle", Model = "cash_bundle", Section = "Money", Row = 1 }),
 	card({ Id = "CoinsMedium", Keys = { "CoinsMedium" }, Look = "Coins", Paint = "Green", Icon = "cash_pile", Model = "cash_pile", Section = "Money", Row = 1 }),
 	card({ Id = "CoinsLarge", Keys = { "CoinsLarge" }, Look = "Coins", Paint = "Green", Icon = "cash_stack", Model = "cash_stack", Section = "Money", Row = 1 }),
+	card({
+		Id = "DoubleMoney",
+		Keys = { "DoubleMoney" },
+		Look = "Boost",
+		Paint = "Yellow",
+		Icon = "cash_safe",
+		Model = "cash_safe",
+		Section = "Money",
+		Row = 2,
+		Title = "2x Money",
+		Big = "x2 MONEY",
+		Note = "Income + sales, forever",
+	}),
 	card({ Id = "CoinsHuge", Keys = { "CoinsHuge" }, Look = "Coins", Paint = "Green", Icon = "cash_sack", Model = "cash_sack", Section = "Money", Row = 2 }),
 	card({
 		Id = "CoinsMega",
