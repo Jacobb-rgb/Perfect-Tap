@@ -68,6 +68,9 @@ local function exportNode(instance): any?
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
 			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
+			if instance.ScaleType.Name == "Tile" then
+				node.tile = instance.TileSize.X.Offset -- a repeating texture (the Pop studs)
+			end
 		end
 	elseif class == "UICorner" then
 		node.r = { instance.CornerRadius.Scale, instance.CornerRadius.Offset }

@@ -195,7 +195,12 @@ function styleElement(el, node, w, h) {
       }
     }
   }
-  if (node.icon) {
+  if (node.icon && node.tile) {
+    // a repeating texture (ScaleType Tile, TileSize in px)
+    const t = document.createElement("div");
+    t.style.cssText = `position:absolute;inset:0;background:url(/scenes/icons/${node.icon}.png) 0 0/${node.tile}px ${node.tile}px repeat;opacity:${1 - (node.it || 0)};border-radius:inherit;`;
+    el.appendChild(t);
+  } else if (node.icon) {
     // 3D UI icon (tools/preview/render_icons.mjs output), ScaleType Fit
     if (node.ic && node.ic !== "ffffff") {
       // ImageColor3 tints the picture (Roblox multiplies; a flat tint is close enough here)

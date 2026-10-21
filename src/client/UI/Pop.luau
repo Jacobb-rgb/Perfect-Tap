@@ -81,6 +81,138 @@ function Pop.border(frame: GuiObject, thickness: number?, color: Color3?): UIStr
 	}, frame)
 end
 
+--[[
+	The "glow" pieces (owner 2026-10-21: "everything must glow, light edges,
+	cool backgrounds", his Roblox shop photos):
+	  rim      a light line just inside a face's black border
+	  studs    the raised-stud texture over a face (IconAssets ui_studs; only
+	           once uploaded, nothing before)
+	  fx       a soft texture: rays, glow, sparkle, shine (IconAssets ui_fx);
+	           the kit draws frame stand-ins until it is uploaded
+	  shadow   a dark copy under a static title (the photos' 3D titles)
+]]
+function Pop.rim(frame: GuiObject, color: Color3, corner: number, inset: number?, z: number?): Frame
+	local old = frame:FindFirstChild("Rim")
+	if old then
+		old:Destroy()
+	end
+	local i = inset or 3
+	local rim = UIKit.new("Frame", {
+		Name = "Rim",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(i, i),
+		Size = UDim2.new(1, -2 * i, 1, -2 * i),
+		ZIndex = z or frame.ZIndex,
+	}, frame)
+	UIKit.corner(rim, math.max(2, corner - i))
+	UIKit.new("UIStroke", {
+		Name = "Light",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = color,
+		Thickness = 2.5,
+		Transparency = 0.05,
+	}, rim)
+	return rim
+end
+
+-- The stud texture over a face (tiles of `tile` units); nil until it is uploaded.
+function Pop.studs(frame: GuiObject, corner: number, transparency: number?, tile: number?, z: number?): ImageLabel?
+	if not IconAssets.textureShows("ui_studs") then
+		return nil
+	end
+	local studs = UIKit.new("ImageLabel", {
+		Name = "Studs",
+		BackgroundTransparency = 1,
+		ImageTransparency = transparency or 0,
+		ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(tile or 40, tile or 40),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = z or frame.ZIndex,
+	}, frame)
+	IconAssets.applyTexture(studs, "ui_studs")
+	UIKit.corner(studs, corner)
+	return studs
+end
+
+-- A soft texture picture (fx_rays / fx_glow / fx_sparkle / fx_shine), nil when it won't show.
+function Pop.fx(parent: Instance, name: string, props: Props?): ImageLabel?
+	if not IconAssets.textureShows(name) then
+		return nil
+	end
+	local image = UIKit.new("ImageLabel", {
+		Name = name,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ZIndex = 2,
+	}, parent)
+	IconAssets.applyTexture(image, name)
+	apply(image, props)
+	return image
+end
+
+-- A four-point sparkle (the fx_sparkle texture, or two thin turned frames before it is uploaded).
+function Pop.sparkle(parent: Instance, at: UDim2, size: number, z: number?, transparency: number?)
+	local t = transparency or 0.1
+	local made = Pop.fx(parent, "fx_sparkle", {
+		Name = "Sparkle",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = t,
+		Position = at,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z or 3,
+	})
+	if made then
+		return
+	end
+	for i, rot in { 0, 90 } do
+		local bar = UIKit.new("Frame", {
+			Name = "Sparkle" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = t,
+			BorderSizePixel = 0,
+			Position = at,
+			Rotation = rot + 45,
+			Size = UDim2.fromOffset(math.max(2, math.floor(size * 0.14)), math.floor(size * 0.7)),
+			ZIndex = z or 3,
+		}, parent)
+		UIKit.corner(bar, 999)
+	end
+end
+
+-- A dark copy just under a static title: the photos' chunky 3D titles.
+function Pop.shadow(label: TextLabel, offset: number?): TextLabel
+	local parent = label.Parent :: Instance
+	local shade = UIKit.new("TextLabel", {
+		Name = label.Name .. "Shadow",
+		AnchorPoint = label.AnchorPoint,
+		BackgroundTransparency = 1,
+		FontFace = label.FontFace,
+		Position = label.Position + UDim2.fromOffset(0, offset or 4),
+		Rotation = label.Rotation,
+		Size = label.Size,
+		Text = label.Text,
+		TextColor3 = PopTheme.Outline,
+		TextScaled = label.TextScaled,
+		TextSize = label.TextSize,
+		TextTransparency = 0.35,
+		TextWrapped = label.TextWrapped,
+		TextXAlignment = label.TextXAlignment,
+		TextYAlignment = label.TextYAlignment,
+		Visible = label.Visible,
+		ZIndex = math.max(1, label.ZIndex - 1),
+	}, parent)
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	UIKit.new("UIStroke", {
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = PopTheme.Outline,
+		Thickness = if edge then edge.Thickness else 3,
+		Transparency = 0.35,
+		LineJoinMode = Enum.LineJoinMode.Round,
+	}, shade)
+	return shade
+end
+
 -- White chunky text with a black edge.
 function Pop.text(parent: Instance, text: string, size: number, props: Props?): TextLabel
 	local label = UIKit.new("TextLabel", {
@@ -110,13 +242,16 @@ end
 
 -- "-- PASSES --": a section heading `width` wide.
 function Pop.heading(parent: Instance, text: string, colors: string, size: number, props: Props?): TextLabel
-	return Pop.title(parent, "-- " .. text .. " --", size, colors, {
+	local heading = Pop.title(parent, "-- " .. text .. " --", size, colors, {
 		Name = "Heading",
 		FontFace = PopTheme.Heavy,
 		Size = UDim2.new(1, 0, 0, size + 14),
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
-		:: TextLabel
+	apply(heading, props)
+	heading.ZIndex = math.max(heading.ZIndex, 5)
+	Pop.shadow(heading)
+	return heading
 end
 
 -- The two-tone gradient of a face: `paint` top -> bottom with a glossy step
@@ -139,7 +274,7 @@ end
 	gives the colour: it multiplies), rounded corners, the black border.
 	Returns the gradient (callers recolour it: Pop.repaint).
 ]]
-function Pop.face(frame: GuiObject, paint: string | Paint, corner: number?, glossy: boolean?): UIGradient
+function Pop.face(frame: GuiObject, paint: string | Paint, corner: number?, glossy: boolean?, rim: boolean?): UIGradient
 	local p = Pop.paint(paint)
 	frame.BackgroundColor3 = Color3.new(1, 1, 1)
 	frame.BackgroundTransparency = 0
@@ -156,14 +291,29 @@ function Pop.face(frame: GuiObject, paint: string | Paint, corner: number?, glos
 	end
 	local g = gradient :: UIGradient
 	g.Color = faceGradient(p, glossy)
+	-- the light edge just inside the black border
+	if rim ~= false then
+		Pop.rim(frame, Pop.rimColor(p), corner or PopTheme.Corner, 3, frame.ZIndex)
+	end
 	return g
+end
+
+-- A paint's light edge: its top colour lifted toward white.
+function Pop.rimColor(paint: Paint): Color3
+	return paint.Top:Lerp(Color3.new(1, 1, 1), 0.45)
 end
 
 -- Recolours a painted frame (a button that turns grey, a selected tab).
 function Pop.repaint(frame: GuiObject, paint: string | Paint, glossy: boolean?)
+	local p = Pop.paint(paint)
 	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
 	if gradient then
-		gradient.Color = faceGradient(Pop.paint(paint), glossy)
+		gradient.Color = faceGradient(p, glossy)
+	end
+	local rim = frame:FindFirstChild("Rim")
+	local light = if rim then rim:FindFirstChild("Light") else nil
+	if light and light:IsA("UIStroke") then
+		light.Color = Pop.rimColor(p)
 	end
 end
 
@@ -178,6 +328,7 @@ function Pop.button(parent: Instance, text: string, paint: string | Paint, size:
 		ZIndex = 4,
 	}, parent)
 	Pop.face(button, paint)
+	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
 	Pop.text(button, text, math.floor(math.min(size.Y * 0.56, 40)), {
 		Name = "Label",
 		Size = UDim2.new(1, -10, 1, 0),
@@ -209,6 +360,7 @@ function Pop.price(parent: Instance, robux: number?, size: Vector2, props: Props
 		ZIndex = 4,
 	}, parent)
 	Pop.face(button, PopTheme.Price)
+	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
 	local row = UIKit.new("Frame", {
 		Name = "Row",
 		BackgroundTransparency = 1,
@@ -319,6 +471,19 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 	}, root)
 	UIKit.corner(body, 4)
 	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	-- the body's studs (the photos' dark studded floor) and a shade under the header
+	Pop.studs(body, 4, 0.5, 36, 1)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 1,
+	}, body)
+	UIKit.new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new(0.45, 1),
+	}, shade)
 
 	local head = UIKit.new("Frame", {
 		Name = "Header",
@@ -331,6 +496,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 	Pop.face(head, paint or "Green", 4, false)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
+	Pop.studs(head, 4, 0.35, 40, 3)
 	-- the shine: a light top strip and wide diagonal stripes
 	UIKit.new("Frame", {
 		Name = "Shine",
@@ -362,6 +528,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
 	})
+	Pop.shadow(titleLabel)
 	local x = math.floor(h * 0.82)
 	local close = Pop.close(root, x, {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -384,7 +551,7 @@ function Pop.rays(parent: Instance, center: UDim2, count: number, length: number
 		Size = UDim2.fromOffset(length * 2, length * 2),
 		ZIndex = z or 2,
 	}, parent)
-	local fade = transparency or 0.72
+	local fade = transparency or 0.6
 	for i = 1, count do
 		local ray = UIKit.new("Frame", {
 			Name = "Ray" .. i,
@@ -425,21 +592,64 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 	}, parent)
 	Pop.face(button, paint, PopTheme.Corner, false)
 	apply(button, props)
+	local p = Pop.paint(paint)
 	local size = button.Size
-	local length = math.max(size.X.Offset, size.Y.Offset, 120)
-	Pop.rays(button, rayCenter or UDim2.fromScale(0.5, 0.4), 8, length, 0.74, 2)
-	-- a soft light disc behind the picture
-	local glow = UIKit.new("Frame", {
+	local short = math.min(size.X.Offset, size.Y.Offset)
+	local long = math.max(size.X.Offset, size.Y.Offset, 120)
+	local centre = rayCenter or UDim2.fromScale(0.5, 0.4)
+	-- the light burst behind the picture: the rays texture (or bars), a big soft glow
+	local rays = Pop.fx(button, "fx_rays", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 0.35,
+		Position = centre,
+		Size = UDim2.fromOffset(long * 2.2, long * 2.2),
+		ZIndex = 2,
+	})
+	if not rays then
+		Pop.rays(button, centre, 10, long, 0.6, 2)
+	end
+	local glow = Pop.fx(button, "fx_glow", {
 		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.82,
-		BorderSizePixel = 0,
-		Position = rayCenter or UDim2.fromScale(0.5, 0.4),
-		Size = UDim2.fromOffset(math.floor(math.min(size.X.Offset, size.Y.Offset) * 0.62), math.floor(math.min(size.X.Offset, size.Y.Offset) * 0.62)),
+		ImageColor3 = p.Top:Lerp(Color3.new(1, 1, 1), 0.6),
+		ImageTransparency = 0.3,
+		Position = centre,
+		Size = UDim2.fromOffset(math.floor(short * 1.1), math.floor(short * 1.1)),
 		ZIndex = 2,
-	}, button)
-	UIKit.corner(glow, 999)
+	})
+	if not glow then
+		for i, k in { 0.62, 0.42 } do
+			local disc = UIKit.new("Frame", {
+				Name = "Glow" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = if i == 1 then 0.8 else 0.7,
+				BorderSizePixel = 0,
+				Position = centre,
+				Size = UDim2.fromOffset(math.floor(short * k), math.floor(short * k)),
+				ZIndex = 2,
+			}, button)
+			UIKit.corner(disc, 999)
+		end
+	end
+	-- the studs over the paint, then the light edge on top of them
+	Pop.studs(button, PopTheme.Corner, 0.5, 44, 3)
+	local rim = button:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	-- a few sparkles around the picture (fixed spots per card size: the same every build)
+	local seed = (size.X.Offset * 31 + size.Y.Offset * 17) % 997 + 1
+	local function next01(): number
+		seed = (seed * 16807) % 2147483647
+		return seed / 2147483647
+	end
+	for _ = 1, 3 do
+		local sx = 0.12 + next01() * 0.76
+		local sy = 0.08 + next01() * 0.5
+		Pop.sparkle(button, UDim2.fromScale(sx, sy), math.floor(14 + next01() * 14), 3, 0.15 + next01() * 0.3)
+	end
 	return button
 end
 
@@ -619,6 +829,7 @@ function Pop.pill(parent: Instance, text: string, icon: string, paint: string | 
 		ZIndex = 3,
 	}, parent)
 	Pop.face(button, paint)
+	Pop.studs(button, PopTheme.Corner, 0.45, 28, 3)
 	local pic = math.floor(size.Y * 0.84)
 	local shows = IconAssets.shows(icon)
 	local image = UIKit.new("ImageLabel", {
@@ -678,6 +889,7 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		ZIndex = 2,
 	}, holder)
 	Pop.face(face, o.Paint, 10)
+	Pop.studs(face, 10, 0.45, 30, 2)
 	-- a lighter inner rim (the photo's tiles)
 	UIKit.new("Frame", {
 		Name = "Shine",
