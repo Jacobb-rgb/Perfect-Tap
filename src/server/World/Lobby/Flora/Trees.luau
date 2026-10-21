@@ -106,8 +106,9 @@ end
 	open.
 ]]
 -- (lobby fix round 3: the belts run the whole length of the plot roads, from
--- the quarry rim to the south shore: a continuous town edge in the hero view)
-Trees.BeltZ = { -104, 112 }
+-- the quarry rim to the south shore: a continuous town edge in the hero view;
+-- the south end is the plot columns' end, WorldLayout.PlotGrid.SouthZ, 112 at 12 cells)
+Trees.BeltZ = { -104, WorldLayout.PlotGrid.SouthZ }
 -- Lift: extra trunk height of the road-side rows (crowns over head height).
 -- Inner: the third, inner row (z -60..40 only, the hero's mid-depth
 -- flanks), staggered against the town-side row, mixed autumn, cherry and

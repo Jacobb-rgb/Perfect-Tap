@@ -10,6 +10,7 @@ return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
@@ -422,13 +423,18 @@ return function(T, Loader)
 
 	T.test("flora: town buildings stand on free ground inside their sites", function()
 		local sites = Town.Sites
+		-- a base's yard, plot-local: 4 studs past the pad's sides, from the yard's
+		-- start to 4 studs behind the rail (|x| 28, z 25..66 at 12 cells)
+		local yardHalfX = WorldLayout.PlotGrid.Half + 4
+		local yardZ0 = BaseLayout.Yard.Center.Z - BaseLayout.Yard.Size.Z / 2
+		local yardZ1 = BaseLayout.RailZ + 4
 		-- (2026-10-18: the owner had the town houses removed: none, or 8-14 if they come back)
 		T.truthy(#sites == 0 or (#sites >= 8 and #sites <= 14), `no town houses or 8-14 ({#sites})`)
 		local town = flora():FindFirstChild("Town")
 		T.truthy(town, "Flora has Town")
 		for i, site in sites do
 			T.truthy(site.Min.X < site.Max.X and site.Min.Y < site.Max.Y, site.Id .. " has a proper rectangle")
-			-- off the coastal rail line (world |x| 160..172) with room to spare
+			-- off the coastal rail line (world |x| Town.RailMinX..Island.Max.X + 2, 160..172 at 12 cells) with room to spare
 			T.truthy(site.Max.X < Town.RailMinX - 1 and site.Min.X > -Town.RailMinX + 1, site.Id .. " stays off the rail line")
 			-- every point of the site is free ground (roads, paths, plots, yards, outcrops, keep-outs, pieces)
 			for x = site.Min.X, site.Max.X + 1e-6, 1 do
@@ -437,7 +443,7 @@ return function(T, Loader)
 					T.truthy(LobbyLayout.isFree(q, 1), `{site.Id}: ({x}, {z}) is not free ground`)
 					for _, plot in WorldLayout.Plots do
 						local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(x, plot.Center.Y, z))
-						local inYard = math.abs(localPos.X) < 28 and localPos.Z >= 25 and localPos.Z <= 66
+						local inYard = math.abs(localPos.X) < yardHalfX and localPos.Z >= yardZ0 and localPos.Z <= yardZ1
 						T.falsy(inYard, `{site.Id}: ({x}, {z}) is in the yard of base {plot.Id}`)
 					end
 				end
