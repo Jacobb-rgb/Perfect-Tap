@@ -37,7 +37,11 @@ local TrainConfig = require(Shared.Config.TrainConfig)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
+local PictureModels = require(Shared.Builders.PictureModels)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local LightSkin = require(script.Parent.LightSkin)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
@@ -439,10 +443,195 @@ local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
 end
 
--- Colors a button: enabled in its own colors, or greyed out.
+---------------------------------------------------------------- the Pop pieces
+--[[
+	The panel's Pop look (popSkin, at the end of the file) dresses the same
+	instances the dark build makes: a lip button's holder becomes the painted
+	Pop face (attribute Pop, PopKind "Text" | "Coin" | "Robux") and the
+	button on it a see-through TextButton with white chunky words. A "Coin"
+	button shows the drawn gold coin and the row's price while it says BUY;
+	the "Robux" one (Express) the robux mark and the price while it says
+	SOON (syncFace). Everything else it says ("MAX", "BOUGHT!", "…", "ON")
+	shows as its own words.
+]]
+
+local TRAIN_FROM = Vector3.new(-1, 0.35, -0.55) -- (PictureModels' "train" camera: the side, a little from the front)
+
+-- The Pop paint for one of the old button colours.
+local function popPaintOf(color: Color3): string
+	if color == Theme.Good then
+		return "Green"
+	elseif color == Theme.Accent then
+		return "Orange"
+	elseif color == Theme.Bad then
+		return "Red"
+	elseif color == Theme.Info then
+		return "Blue"
+	end
+	return "Slate"
+end
+
+-- The black edge of a text (its Contextual UIStroke, made when missing).
+local function popEdge(label: GuiObject)
+	local text: any = label
+	local edge: UIStroke? = nil
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			edge = child
+		end
+	end
+	local stroke = edge or Pop.edge(label)
+	stroke.Color = PopTheme.Outline
+	stroke.Transparency = 0
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
+	stroke.Thickness = Pop.edgeFor(if text.TextScaled then 24 else text.TextSize)
+end
+
+-- White chunky words with a black edge on an old label or button.
+local function popText(label: GuiObject, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = PopTheme.Ink
+	popEdge(label)
+end
+
+-- The dark copy under a title (Pop.shadow) follows the title's place and words.
+local function syncShadow(label: TextLabel)
+	local parent = label.Parent
+	local shade = if parent then parent:FindFirstChild(label.Name .. "Shadow") else nil
+	if shade and shade:IsA("TextLabel") then
+		shade.AnchorPoint = label.AnchorPoint
+		shade.Position = label.Position + UDim2.fromOffset(0, 4)
+		shade.Size = label.Size
+		shade.Text = label.Text
+		shade.TextSize = label.TextSize
+		shade.Visible = label.Visible
+	end
+end
+
+-- A lip button (UIKit.button) as a Pop button: the holder painted, the button see-through on it.
+local function popButton(button: TextButton, paint: string | Pop.Paint, kind: string?)
+	local holder = holderOf(button)
+	for _, child in holder:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		end
+	end
+	local corner = holder:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, 10)
+	end
+	Pop.face(holder, paint, 10)
+	local rim = holder:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 1
+	end
+	Pop.studs(holder, 10, 0.45, 28, 1)
+	holder:SetAttribute("Pop", true)
+	holder:SetAttribute("PopKind", kind or "Text")
+	local gradient = button:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient:Destroy()
+	end
+	button.BackgroundTransparency = 1
+	button.Position = UDim2.new()
+	button.Size = UDim2.fromScale(1, 1)
+	button.ZIndex = 3
+	popText(button)
+end
+
+-- A Pop button's face: its own words, or the coin / robux mark with the price (see above).
+local function syncFace(button: TextButton)
+	local holder = holderOf(button)
+	local kind = holder:GetAttribute("PopKind")
+	if kind ~= "Coin" and kind ~= "Robux" then
+		return
+	end
+	local amount = ""
+	if kind == "Coin" and button.Text == "BUY" then
+		local row = holder.Parent
+		local price = if row then row:FindFirstChild("Price") else nil
+		amount = if price and price:IsA("TextLabel") then price.Text else ""
+	elseif kind == "Robux" and button.Text == "SOON" then
+		amount = tostring(TrainView.ExpressPrice)
+	end
+	local shows = amount ~= ""
+	button.TextTransparency = if shows then 1 else 0
+	for _, child in button:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Transparency = if shows then 1 else 0
+		end
+	end
+	local face = button:FindFirstChild("PopFace") :: Frame?
+	if not shows then
+		if face then
+			face.Visible = false
+		end
+		return
+	end
+	local w, h = holder.Size.X.Offset, holder.Size.Y.Offset
+	local key = `{amount}|{w}|{h}`
+	if face and face:GetAttribute("Key") == key then
+		face.Visible = true
+		return
+	end
+	if face then
+		face:Destroy()
+	end
+	local mark = math.floor(h * 0.5)
+	local chars = math.max(1, utf8.len(amount) or #amount)
+	local size = math.clamp(math.floor(math.min(h * 0.5, (w - 20 - mark - 6) / (chars * 0.6))), 12, 40)
+	mark = math.min(mark, size + 4)
+	local row = UIKit.new("Frame", {
+		Name = "PopFace",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 4,
+	}, button)
+	row:SetAttribute("Key", key)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 5, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	if kind == "Coin" then
+		Pop.coin(row, mark, { LayoutOrder = 1 })
+	else
+		local robux = UIKit.new("ImageLabel", {
+			Name = "Mark",
+			BackgroundTransparency = 1,
+			LayoutOrder = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(mark, mark),
+			ZIndex = 6,
+		}, row)
+		IconAssets.apply(robux, "robux")
+		robux:SetAttribute("Icon", "robux")
+	end
+	Pop.text(row, amount, size, {
+		Name = "Amount",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(Pop.textWidth(amount, size), size + 6),
+		ZIndex = 6,
+	})
+end
+
+-- Colors a button: enabled in its own colors, or greyed out. (The button's
+-- BackgroundColor3 says which in both looks; on a Pop button it is unseen.)
 local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
 	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-	holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
+	local holder = holderOf(button)
+	if holder:GetAttribute("Pop") then
+		local kind = holder:GetAttribute("PopKind")
+		local paint: string | Pop.Paint = if kind == "Robux"
+			then PopTheme.Price
+			elseif not enabled then PopTheme.Gray
+			elseif kind == "Coin" then "Yellow"
+			else popPaintOf(color)
+		Pop.repaint(holder, paint)
+		syncFace(button)
+		return
+	end
+	holder.BackgroundColor3 = if enabled then dark else Theme.PanelDark
 	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
 end
 TrainView.style = style
@@ -1015,10 +1204,15 @@ function TrainView.setStatus(refs: Refs, status: Status)
 	refs.Cargo.Text = `{status.Cargo} / {status.Capacity}`
 	refs.CargoUnit.Text = status.Unit
 	refs.CargoFill.Size = UDim2.fromScale(status.Fill, 1)
-	refs.CargoFill.BackgroundColor3 = if status.Phase == "Waiting"
-		then Theme.Bad
-		elseif status.Phase == "Full" then Theme.Good
-		else Theme.Accent
+	local fill = if status.Phase == "Waiting" then Theme.Bad elseif status.Phase == "Full" then Theme.Good else Theme.Accent
+	if refs.Gui:GetAttribute("PopSkin") then
+		-- the Pop look: a glossy painted fill (its white background takes the paint)
+		Pop.repaint(refs.CargoFill, popPaintOf(fill), true)
+		refs.CargoFill.Visible = status.Fill > 0.001
+		syncShadow(refs.Cargo)
+	else
+		refs.CargoFill.BackgroundColor3 = fill
+	end
 	refs.State.Text = status.Line
 	refs.State.TextColor3 = status.Color
 	style(refs.Send, status.CanSend, Theme.Good, Theme.GoodDark)
@@ -1051,6 +1245,11 @@ function TrainView.setUpgrades(refs: Refs, train: Snapshot, coins: number)
 		express.Buy.Text = "SOON"
 		style(express.Buy, false, Theme.Good, Theme.GoodDark)
 	end
+	if refs.Gui:GetAttribute("PopSkin") then
+		-- the Pop look: the Express card's chip says what its green Robux button can't
+		express.Level.Text = if train.Express then "OWNED" else "SOON"
+		express.Level.BackgroundColor3 = if train.Express then Color3.fromRGB(60, 190, 40) else Color3.fromRGB(246, 166, 20)
+	end
 end
 
 -- Your coins in the panel's header.
@@ -1064,19 +1263,360 @@ end
 function TrainView.setColor(refs: Refs, color: Color3)
 	TrainView.setIconColor(refs.ChipIcon, color)
 	TrainView.setIconColor(refs.CardIcon, color)
+	-- the Pop look: the card's live locomotive in your banner colour (only when it changes)
+	local picture = refs.Card:FindFirstChild("Picture")
+	local view = if picture then picture:FindFirstChild("View") else nil
+	if view and view:IsA("ViewportFrame") and view:GetAttribute("Color") ~= color then
+		local ok, model = pcall(TrainBuilder.locomotive, color)
+		if ok then
+			Pop.show(view, model :: Model, TRAIN_FROM)
+			view:SetAttribute("Color", color)
+		end
+	end
 end
 
+---------------------------------------------------------------- the Pop look (UIConfig.LightUI)
+--[[
+	While the light UI is on (it ships on), the panel wears the bright Pop
+	look of the Robux Shop (UI/Pop; owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"): a blue header band (the window's
+	colour) with shine stripes and studs over a dark studded body, the
+	bright cargo card with the live locomotive (PictureModels "train") in a
+	light burst, the bar / state / trip lines in a dark well, a big green
+	SEND TRAIN, painted CAPACITY and SPEED cards with gold coin BUY buttons
+	and the Express card with the green Robux button (Pop.price's look). The
+	same instances, names and refs as the dark build: the controller and
+	the specs drive both; only the HUD chip keeps the LightSkin.
+]]
 
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+TrainView.PopPaints = {
+	Header = "Blue", -- (LightSkin.BandRoles: TerraForgeTrainPanel = Lobby)
+	Cargo = "Yellow",
+	Capacity = "Purple",
+	Speed = "Teal",
+	Express = "Pink",
+} :: { [string]: string }
+
+-- A sparkle-and-rays card face on an old frame: the paint, a light burst
+-- (a "Burst" frame to place: popLayout), the studs, the light rim. The
+-- frame's own children move above the decoration.
+local function popCard(frame: Frame, paint: string, corner: number, rays: boolean): Frame
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIStroke") then
+			child:Destroy()
+		elseif child:IsA("GuiObject") then
+			child.ZIndex = math.max(child.ZIndex, 5)
+		end
+	end
+	local round = frame:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, corner)
+	end
+	Pop.face(frame, paint, corner, false)
+	frame.ClipsDescendants = true
+	local p = Pop.paint(paint)
+	local burst = UIKit.new("Frame", {
+		Name = "Burst",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.4),
+		Size = UDim2.fromOffset(0, 0),
+		ZIndex = 1,
+	}, frame)
+	if rays then
+		local made = Pop.fx(burst, "fx_rays", {
+			Name = "Rays",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			ImageTransparency = 0.35,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(560, 560),
+			ZIndex = 1,
+		})
+		if not made then
+			Pop.rays(burst, UDim2.fromScale(0.5, 0.5), 10, 280, 0.6, 1)
+		end
+	end
+	local glow = Pop.fx(burst, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = p.Top:Lerp(Color3.new(1, 1, 1), 0.6),
+		ImageTransparency = if rays then 0.3 else 0.55,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(170, 170),
+		ZIndex = 1,
+	})
+	if not glow then
+		local disc = UIKit.new("Frame", {
+			Name = "Glow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(110, 110),
+			ZIndex = 1,
+		}, burst)
+		UIKit.corner(disc, 999)
+	end
+	Pop.studs(frame, corner, 0.5, 44, 2)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	-- three sparkles (fixed spots: the same every build)
+	for i, spot in { { 0.12, 0.2, 22 }, { 0.86, 0.16, 18 }, { 0.7, 0.78, 14 } } do
+		Pop.sparkle(frame, UDim2.fromScale(spot[1], spot[2]), spot[3], 3, 0.15 + i * 0.1)
+	end
+	return burst
+end
+
+-- A level chip (UIKit.chip) as a Pop chip: a dark well, a black edge, white words.
+local function popChip(chip: TextLabel)
+	chip.BackgroundColor3 = PopTheme.Well
+	chip.BackgroundTransparency = 0
+	for _, child in chip:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child.Color = PopTheme.Outline
+			child.Thickness = 2.5
+		end
+	end
+	popText(chip)
+end
+
+-- The header band of the window's colour (Pop.window's look) behind the title.
+local function popBand(panel: Frame, paint: string): Frame
+	local band = UIKit.new("Frame", {
+		Name = "PopHeader",
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 0, 62),
+		ClipsDescendants = true,
+		ZIndex = 2,
+	}, panel)
+	Pop.face(band, paint, 6, false)
+	local border = band:FindFirstChild("Border") :: UIStroke?
+	if border then
+		border.Thickness = 3
+	end
+	Pop.studs(band, 6, 0.35, 40, 2)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 2,
+	}, band)
+	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 2,
+		}, band)
+	end
+	return band
+end
+
+local function popSkin(refs: Refs)
+	refs.Gui:SetAttribute("PopSkin", true)
+	local panel = refs.Panel
+	-- the window: a black frame round a dark studded body, the bright header band
+	panel.BackgroundColor3 = Color3.new(1, 1, 1)
+	local body = panel:FindFirstChildOfClass("UIGradient")
+	if body then
+		body.Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom)
+	end
+	local outline = panel:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Color = PopTheme.Outline
+		outline.Thickness = 4
+	end
+	local round = panel:FindFirstChildOfClass("UICorner")
+	if round then
+		round.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	end
+	for _, child in panel:GetChildren() do
+		if child:IsA("GuiObject") then
+			child.ZIndex = 4
+		end
+	end
+	Pop.studs(panel, PopTheme.WindowCorner, 0.5, 36, 1)
+	popBand(panel, TrainView.PopPaints.Header)
+	popText(refs.Title)
+	Pop.shadow(refs.Title).ZIndex = 3
+	popText(refs.Subtitle)
+	popText(refs.Hint)
+	-- your coins: a dark pill
+	refs.Balance.BackgroundColor3 = PopTheme.Well
+	for _, child in refs.Balance:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Color = PopTheme.Outline
+			child.Thickness = 3
+		end
+	end
+	popText(refs.BalanceAmount)
+	refs.BalanceAmount.TextColor3 = PopTheme.MoneyNumber
+	popButton(refs.Close, PopTheme.Close)
+	refs.Close.FontFace = PopTheme.Heavy
+
+	-- the cargo card: bright, the live locomotive in a light burst
+	popCard(refs.Card, TrainView.PopPaints.Cargo, 12, true)
+	local model, from = PictureModels.build("train")
+	local picture = Pop.model(refs.Card, "train", 120, model, { Name = "Picture", AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 5 }, from)
+	local view = picture:FindFirstChild("View")
+	if view then
+		view:SetAttribute("Color", Color3.fromRGB(226, 72, 60)) -- (PictureModels' red; setColor repaints it)
+	end
+	refs.CardIcon.Visible = false
+	popText(refs.CardLabel)
+	popText(refs.Cargo, PopTheme.Heavy)
+	Pop.shadow(refs.Cargo).ZIndex = 4
+	popText(refs.CargoUnit)
+	popText(refs.Trip)
+	popEdge(refs.State)
+	-- the bar, the state and the trip lines sit in a dark well (the state keeps its colour)
+	local well = UIKit.new("Frame", {
+		Name = "PopWell",
+		BackgroundColor3 = PopTheme.Well,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+	}, refs.Card)
+	UIKit.corner(well, 10)
+	Pop.border(well, 3)
+	Pop.studs(well, 10, 0.6, 36, 4)
+	-- the glossy cargo bar (Pop.bar's look)
+	local track = refs.CargoBar
+	track.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+	for _, child in track:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Color = PopTheme.Outline
+			child.Thickness = 3
+		elseif child:IsA("UICorner") then
+			child.CornerRadius = UDim.new(1, 0)
+		end
+	end
+	local fillCorner = refs.CargoFill:FindFirstChildOfClass("UICorner")
+	if fillCorner then
+		fillCorner.CornerRadius = UDim.new(1, 0)
+	end
+	Pop.face(refs.CargoFill, "Orange", 8, true, false)
+	local fillBorder = refs.CargoFill:FindFirstChild("Border")
+	if fillBorder then
+		fillBorder:Destroy()
+	end
+	popButton(refs.Send, "Green")
+	refs.Send.FontFace = PopTheme.Heavy
+
+	-- the upgrade cards: painted, a gold coin BUY; Express: the green Robux button
+	local rows: { [string]: Row } = { Capacity = refs.Rows.Capacity, Speed = refs.Rows.Speed, Express = refs.Express }
+	for kind, row in rows do
+		local burst = popCard(row.Frame, TrainView.PopPaints[kind], 12, false)
+		burst.Position = UDim2.fromScale(0.2, 0.5)
+		popText(row.Name)
+		popChip(row.Level)
+		popText(row.Detail)
+		row.Price.Visible = false -- (the price is on the button)
+		popButton(row.Buy, if kind == "Express" then PopTheme.Price else "Yellow", if kind == "Express" then "Robux" else "Coin")
+		pcall(function()
+			-- (the controller writes "…" / "BOUGHT!" on the button: its face follows)
+			row.Buy:GetPropertyChangedSignal("Text"):Connect(function()
+				syncFace(row.Buy)
+			end)
+		end)
+	end
+	-- the Express card's chip says SOON / OWNED (setUpgrades)
+	refs.Express.Level.Visible = true
+	refs.Express.Level.Text = "SOON"
+	refs.Express.Level.BackgroundColor3 = Color3.fromRGB(246, 166, 20)
+	style(refs.Express.Buy, false, Theme.Good, Theme.GoodDark)
+end
+
+-- Places the Pop pieces the dark layout doesn't know (after TrainView.layout).
+local function popLayout(refs: Refs)
+	local m = if refs.Compact then PANEL.Compact else PANEL.Normal
+	local band = refs.Panel:FindFirstChild("PopHeader") :: Frame?
+	if band then
+		band.Size = UDim2.new(1, -8, 0, m.Header - 10)
+	end
+	popEdge(refs.Title)
+	syncShadow(refs.Title)
+	refs.Close.TextSize = math.floor(m.Close * 0.6)
+	popEdge(refs.Close)
+	popEdge(refs.BalanceAmount)
+	local pill = refs.Balance:FindFirstChildOfClass("UICorner")
+	if pill then
+		pill.CornerRadius = UDim.new(0, math.floor(refs.Balance.Size.Y.Offset / 2))
+	end
+	-- the cargo card: the picture where the old icon was, bigger, in its light burst
+	local icon = refs.CardIcon
+	local iw, ih = icon.Size.X.Offset, icon.Size.Y.Offset
+	local size = math.floor(iw * 1.16)
+	local centre = UDim2.fromOffset(icon.Position.X.Offset + iw / 2 - 2, icon.Position.Y.Offset + ih / 2 + 4)
+	local picture = refs.Card:FindFirstChild("Picture") :: ImageLabel?
+	if picture then
+		picture.Position = centre
+		picture.Size = UDim2.fromOffset(size, size)
+	end
+	local burst = refs.Card:FindFirstChild("Burst") :: Frame?
+	if burst then
+		burst.Position = centre
+	end
+	local labels: { GuiObject } = { refs.CardLabel, refs.Cargo, refs.CargoUnit, refs.State, refs.Trip, refs.Send }
+	for _, label in labels do
+		popEdge(label)
+	end
+	syncShadow(refs.Cargo)
+	local well = refs.Card:FindFirstChild("PopWell") :: Frame?
+	if well then
+		local top = refs.CargoBar.Position.Y.Offset - 7
+		local sendTop = refs.Card.Size.Y.Offset - 14 - m.Button
+		well.Position = UDim2.fromOffset(8, top)
+		well.Size = UDim2.new(1, -16, 0, math.max(0, sendTop - 8 - top))
+	end
+	-- the cards: the price is on the button, so the level chip moves up to it and
+	-- the name and the detail get the room (a long name gets a little smaller)
+	local right = 12 + m.Buy + 12
+	local chipWidth = chipWidthOf(m)
+	for _, row in { refs.Rows.Capacity, refs.Rows.Speed, refs.Express } do
+		row.Level.Position = UDim2.new(1, -(right + 4), 0, row.Level.Position.Y.Offset)
+		-- (the rows frame is the panel's width less its Offset: design units)
+		local rowsWidth = (row.Frame.Parent :: Frame).Size.X.Offset + refs.Panel.Size.X.Offset
+		local nameRoom = rowsWidth - (14 + right + 4 + chipWidth + 8)
+		row.Name.Size = UDim2.new(1, -(14 + right + 4 + chipWidth + 8), 0, row.Name.Size.Y.Offset)
+		local chars = math.max(1, utf8.len(row.Name.Text) or #row.Name.Text)
+		row.Name.TextSize = math.max(14, math.min(row.Name.TextSize, math.floor(nameRoom / (chars * 0.62))))
+		row.Detail.Size = UDim2.new(1, -(14 + right), 0, row.Detail.Size.Y.Offset)
+		local texts: { GuiObject } = { row.Name, row.Level, row.Detail, row.Buy }
+		for _, label in texts do
+			popEdge(label)
+		end
+		syncFace(row.Buy)
+	end
+end
+
+local plainLayout = TrainView.layout
+TrainView.layout = function(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	plainLayout(refs, compact, maxWidth, maxHeight)
+	if refs.Gui:GetAttribute("PopSkin") then
+		popLayout(refs)
+	end
+end
+
 local darkBuild = TrainView.build
 TrainView.build = function(compact: boolean?): Refs
 	local refs = darkBuild(compact)
 	if UIConfig.lightUI() then
+		-- the HUD chip keeps the light skin; the panel wears the Pop look
 		LightSkin.apply(refs.Chip)
 		TouchControls.follow(refs.Gui)
-		LightSkin.apply(refs.Gui)
+		popSkin(refs)
+		TrainView.layout(refs, compact == true, math.huge, math.huge)
 	end
 	return refs
 end
