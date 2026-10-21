@@ -1,6 +1,7 @@
-// Contact sheet of the player-move showreel: 3 key frames per move in a grid with captions.
-//   node tools/preview/moves_sheet.mjs [out=build/preview/pohyby_hrace.jpg]
-// Needs build/preview/anim_moves.json (lune run tools/lune/export_moves.luau); renders moves.html?clean=1.
+// Contact sheet of a move showreel: 3 key frames per move in a grid with captions.
+//   node tools/preview/moves_sheet.mjs [out=build/preview/pohyby_hrace.jpg] [scene=anim_moves]
+// Needs build/preview/<scene>.json (lune run tools/lune/export_moves.luau, or export_emotes.luau
+// for scene anim_emotes: its segments carry their own picks); renders moves.html?clean=1.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -14,6 +15,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../..");
 const scenesDir = path.join(repo, "build/preview");
 const out = path.resolve(repo, process.argv[2] || "build/preview/pohyby_hrace.jpg");
+const sceneName = (process.argv[3] || "anim_moves").replace(/[^a-z_]/gi, "");
 
 // [segment-relative seconds, caption] per move (the segment starts come from the JSON)
 const PICKS = {
@@ -44,11 +46,12 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const port = server.address().port;
 
-const data = JSON.parse(fs.readFileSync(path.join(scenesDir, "anim_moves.json"), "utf8"));
+const data = JSON.parse(fs.readFileSync(path.join(scenesDir, `${sceneName}.json`), "utf8"));
+const emotes = sceneName === "anim_emotes";
 const CW = 560, CH = 340;
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: CW, height: CH } });
-await page.goto(`http://127.0.0.1:${port}/moves.html?w=${CW}&h=${CH}&clean=1`);
+await page.goto(`http://127.0.0.1:${port}/moves.html?w=${CW}&h=${CH}&clean=1&scene=${sceneName}`);
 await page.waitForFunction(() => window.__ready || window.__error, null, { timeout: 240000 });
 const err = await page.evaluate(() => window.__error);
 if (err) {
@@ -57,14 +60,14 @@ if (err) {
 }
 const rows = [];
 for (const seg of data.segments) {
-  const picks = PICKS[seg.move] || [];
+  const picks = seg.picks || PICKS[seg.move] || [];
   const cells = [];
   for (const [t, caption] of picks) {
     await page.evaluate((time) => window.renderFrame(time), seg.start + t);
     const shot = await page.screenshot({ type: "jpeg", quality: 88 });
     cells.push({ src: `data:image/jpeg;base64,${shot.toString("base64")}`, caption });
   }
-  rows.push({ title: TITLES[seg.move] || seg.move.toUpperCase(), subtitle: seg.subtitle, cells });
+  rows.push({ title: seg.title || TITLES[seg.move] || seg.move.toUpperCase(), subtitle: seg.subtitle, cells });
 }
 await page.close();
 
@@ -88,7 +91,11 @@ h2 { margin: 0 30px 18px; font-size: 18px; font-weight: normal; opacity: 0.8; }
 .cell img { width: ${cellW}px; height: ${cellH}px; border-radius: 10px; display: block; }
 .cell div { font-size: 14px; margin-top: 4px; text-align: center; }
 </style></head><body>
-<h1>TERRA FORGE: POHYBY HRACE</h1><h2>${data.segments.length} pohybů hráče · náhled z herního kódu (MoveMath na R15 postavičce) · video: pohyby_hrace.mp4</h2>
+${
+  emotes
+    ? `<h1>TERRA FORGE: EMOTY (NAVRH)</h1><h2>${data.segments.length} emotů k výběru · náhled z herního kódu (MoveMath na R15 postavičce) · video: emoty.mp4</h2>`
+    : `<h1>TERRA FORGE: POHYBY HRACE</h1><h2>${data.segments.length} pohybů hráče · náhled z herního kódu (MoveMath na R15 postavičce) · video: pohyby_hrace.mp4</h2>`
+}
 ${pairs
   .map(
     (pair) => `<div class="row">${pair

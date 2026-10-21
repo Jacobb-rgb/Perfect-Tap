@@ -64,8 +64,11 @@ function matrixOf(cf, out = new THREE.Matrix4()) {
 
 async function main() {
   await document.fonts.load('40px "Luckiest Guy"');
-  const data = await fetch("/scenes/anim_moves.json").then((r) => r.json());
+  // scene=anim_emotes: the emote concepts (tools/lune/export_emotes.luau); default the player moves
+  const sceneName = (params.get("scene") || "anim_moves").replace(/[^a-z_]/gi, "");
+  const data = await fetch(`/scenes/${sceneName}.json`).then((r) => r.json());
   const fps = data.fps;
+  if (data.brandNote) document.querySelector("#brand small").textContent = data.brandNote;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(W, H);
@@ -220,7 +223,7 @@ async function main() {
     camera.fov = seg.camera.fov;
     camera.updateProjectionMatrix();
     camera.lookAt(new THREE.Vector3(...seg.camera.target));
-    titleEl.textContent = seg.title;
+    titleEl.textContent = seg.number ? `${seg.title}  ${seg.number}` : seg.title;
     subEl.textContent = seg.subtitle;
     const pop = clamp(local / 0.35);
     const out = clamp((length - local) / 0.2);

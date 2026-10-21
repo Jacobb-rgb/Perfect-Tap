@@ -37,6 +37,25 @@
 	     arm across the chest; the left arm out is -; torso / head lean
 	     LEFT with +
 	mirror() turns a right-side pose into the left side (x, -y, -z).
+
+	The Root (the whole body) turns in YXZ order: y spins about the
+	vertical, after x tilts it (so a body lying down still spins flat on
+	the floor, a windmill or a headspin). Optional, for floor moves and
+	emotes (Config/EmoteConfig):
+	  RootPivot  { x, y, z } studs from the Root joint: the point the
+	             Root turns about (the top of the head for a headspin;
+	             default the joint itself, at the hips)
+	  LoopFrom   a loop's keys before this time play once (an intro), the
+	             loop repeats from the key at LoopFrom to Duration. A loop's
+	             last key may sit AT Duration (a spin ending at 360 = its
+	             first key), else the loop eases from it back to LoopFrom
+	  Outro      keys played once the loop is stopped, T from the stop
+	             (the first one eases from the pose at the stop, every
+	             angle taken the short way); the last one should be rest
+	  NeedsTool  the move needs a held tool (the Blaster Spin)
+	ToolJoints are extra pose names MoveRig never finds on a body (the
+	held tool's grip, RightGrip: a turn about the hand, for the preview
+	and a later grip-weld hook).
 ]]
 
 export type Euler = { number }
@@ -53,6 +72,10 @@ export type Move = {
 	MinGap: number,
 	Priority: number,
 	Keys: { Key },
+	RootPivot: Euler?,
+	LoopFrom: number?,
+	Outro: { Key }?,
+	NeedsTool: boolean?,
 }
 
 local MoveConfig = {}
@@ -82,6 +105,8 @@ MoveConfig.Joints = {
 	"RightKnee",
 	"RightAnkle",
 }
+-- pose names that are not R15 Motor6Ds (MoveMath evaluates them, MoveRig never finds them)
+MoveConfig.ToolJoints = { "RightGrip" }
 MoveConfig.JointPart = {
 	Root = "LowerTorso",
 	Waist = "UpperTorso",
