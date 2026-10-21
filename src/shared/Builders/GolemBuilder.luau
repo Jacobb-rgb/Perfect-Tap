@@ -71,7 +71,7 @@ GolemBuilder.MaxParts = 20
 GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
 -- a limited edition's SHARD (its set's egg, GolemGearLimited.shard) instead
 -- of the pill: only one is ever built at a time (the opening, a picture)
-GolemBuilder.ShardMaxParts = 44
+GolemBuilder.ShardMaxParts = 56
 GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
 GolemBuilder.Hover = 0.25 -- how high a Premium golem's feet float (unscaled)
 GolemBuilder.AuraSize = 2.3 -- the aura disc's diameter (unscaled)

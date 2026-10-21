@@ -39,7 +39,7 @@ return function(T, Loader)
 		local last = GolemConfig.MaxParts
 		for _, rarity in { "Rare", "Epic", "Legendary", "Mythic" } do
 			local budget = GolemConfig.LimitedMaxParts[rarity]
-			T.truthy(budget and budget > last and budget <= 64, rarity .. " limited budget grows and stays phone-friendly")
+			T.truthy(budget and budget > last and budget <= 72, rarity .. " limited budget grows and stays phone-friendly")
 			last = budget
 		end
 		for _, golem in GolemConfig.List do

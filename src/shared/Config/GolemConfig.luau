@@ -88,9 +88,9 @@ GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
 -- a LIMITED EDITION golem's budget by rarity (its set's costume: segmented
 -- horns and tails, boned wings, armour, crowns). They are rare (a Mythic is
 -- 1 % of one Robux capsule), so the worst case (8 players x 3 Mythic
--- followers x 64 = 1536 welded, non-colliding parts, hidden beyond
+-- followers x 72 = 1728 welded, non-colliding parts, hidden beyond
 -- FollowerHideDistance) stays far below a phone's budget.
-GolemConfig.LimitedMaxParts = { Rare = 40, Epic = 46, Legendary = 54, Mythic = 64 } :: { [string]: number }
+GolemConfig.LimitedMaxParts = { Rare = 48, Epic = 54, Legendary = 62, Mythic = 72 } :: { [string]: number }
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
