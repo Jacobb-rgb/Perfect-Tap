@@ -401,7 +401,7 @@ local function stepEntry(entry: Entry, now: number)
 				layer.Weight = 0
 			else
 				local weight = MoveMath.weight(move, t, stop) * slot.Scale
-				MoveMath.evaluate(move, t, weight, layer.Pose)
+				MoveMath.evaluate(move, t, weight, layer.Pose, stop)
 				layer.Weight = weight
 				any = true
 			end

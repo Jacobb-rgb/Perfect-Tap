@@ -6,6 +6,7 @@
 // Other pages (same window.renderFrame(t) / __duration contract), through the environment:
 //   ANIM_PAGE=moves.html ANIM_OUT=pohyby_hrace.mp4 ANIM_BITRATE=3500000 node tools/preview/render_anim.mjs 30 1280 720
 //   (the player-move showreel: lune run tools/lune/export_moves.luau first)
+//   ANIM_PAGE=moves.html ANIM_QUERY=scene=anim_emotes ANIM_OUT=emoty.mp4 ... (the emote concepts: export_emotes.luau)
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -24,6 +25,7 @@ const [fps = 30, width = 1920, height = 1080, maxFrames = 0, stills = "", prefix
 const pageName = process.env.ANIM_PAGE || "anim.html";
 const outName = process.env.ANIM_OUT || "crate_opening.mp4";
 const bitrate = process.env.ANIM_BITRATE || "";
+const query = process.env.ANIM_QUERY ? `&${process.env.ANIM_QUERY}` : ""; // e.g. scene=anim_emotes
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2" };
 const server = http.createServer((req, res) => {
@@ -42,7 +44,7 @@ const port = server.address().port;
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width, height } });
 page.on("console", (m) => m.type() === "error" && console.error("[page]", m.text()));
-await page.goto(`http://127.0.0.1:${port}/${pageName}?w=${width}&h=${height}`);
+await page.goto(`http://127.0.0.1:${port}/${pageName}?w=${width}&h=${height}${query}`);
 await page.waitForFunction(() => window.__ready || window.__error, null, { timeout: 240000 });
 const err = await page.evaluate(() => window.__error);
 if (err) {
