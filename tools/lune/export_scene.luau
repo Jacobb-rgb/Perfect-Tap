@@ -781,6 +781,9 @@ elseif sceneName == "ores" then
 			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
 		end
 	end
+elseif string.match(sceneName, "^limitedbg_") then -- a limited edition's shop banner background (limited_golems_preview)
+	local LimitedPreview = require("./lib/limited_golems_preview")
+	scene_surface, scene_extra = LimitedPreview.build(Loader, workspace, string.sub(sceneName, #"limitedbg_" + 1), true)
 elseif string.match(sceneName, "^limitedshard_") then -- a limited edition's SHARD showcase (limited_golems_preview)
 	local LimitedPreview = require("./lib/limited_golems_preview")
 	scene_surface, scene_extra = LimitedPreview.buildShard(Loader, workspace, string.sub(sceneName, #"limitedshard_" + 1))

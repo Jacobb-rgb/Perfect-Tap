@@ -69,8 +69,9 @@ export type Edition = {
 	Id: string,
 	Title: string,
 	Tagline: string,
-	Backdrop: { SkyTop: Color3, SkyHorizon: Color3, Ground: Color3, Accent: Color3, Title: { Color3 } },
+	Backdrop: { SkyTop: Color3, SkyHorizon: Color3, Ground: Color3, Accent: Color3, Title: { Color3 }, Image: number? },
 	Golems: { { Id: string, Name: string, Rarity: string } }, -- the set's order (the rarest last)
+	CapsuleId: string?, -- its capsule (the shard egg shown on the banner)
 	Odds: { [string]: number },
 	Products: { [number]: string }, -- count -> MonetizationConfig key
 	EndsAt: number,
@@ -595,6 +596,33 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		Color = ColorSequence.new(b.Ground:Lerp(b.Accent, 0.25), b.Ground:Lerp(Color3.new(0, 0, 0), 0.35)),
 		Rotation = 90,
 	}, floor)
+	-- the set's painted background over the drawn sky, once the owner has
+	-- uploaded it (Backdrop.Image; the previews draw build/preview/icons)
+	local image = b.Image
+	if (type(image) == "number" and image > 0) or IconAssets.Previewing then
+		local painted = UIKit.new("ImageLabel", {
+			Name = "Painted",
+			BackgroundTransparency = 1,
+			Image = if type(image) == "number" and image > 0 then "rbxassetid://" .. tostring(image) else "",
+			ScaleType = Enum.ScaleType.Crop,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 5,
+		}, frame)
+		painted:SetAttribute("Icon", "banner_" .. edition.Id)
+		UIKit.corner(painted, PopTheme.Corner)
+	end
+	-- the set's SHARD (its egg) left of the end date
+	if edition.CapsuleId then
+		local shardName = "capsule_" .. edition.CapsuleId
+		local shard, shardFrom = PictureModels.build(shardName)
+		Pop.model(frame, shardName, 124, shard, {
+			Name = "Shard",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			-- (between the title and the end date, over the tiles' row)
+			Position = UDim2.fromOffset(math.floor(w * 0.74), 72),
+			ZIndex = 6,
+		}, shardFrom)
+	end
 	-- "New!", the title and the tagline (top-left), the time left (top-right)
 	Pop.tag(frame, "New!", "Red", Vector2.new(96, 40), {
 		Position = UDim2.fromOffset(14, 14),

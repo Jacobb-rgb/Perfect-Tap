@@ -244,7 +244,7 @@ function Preview.golemFrames(CF: any): { { Index: number, Feet: any, Size: numbe
 end
 
 -- Builds scene "limited_<setId>"; returns the scene's Surface preset and camera.
-function Preview.build(Loader: any, workspace: any, setId: string): ({ [string]: any }, { [string]: any })
+function Preview.build(Loader: any, workspace: any, setId: string, backdropOnly: boolean?): ({ [string]: any }, { [string]: any })
 	local CF = Loader.CFrame
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
@@ -271,11 +271,21 @@ function Preview.build(Loader: any, workspace: any, setId: string): ({ [string]:
 	light(kit, Vector3.new(-22, 12, -14), rgb(255, 255, 255), 34, 1.0)
 	light(kit, Vector3.new(22, 12, -14), rgb(255, 255, 255), 34, 1.0)
 
-	for _, g in Preview.golemFrames(CF) do
+	-- (backdropOnly: the shop banner's painted background, banner_<Set>.png:
+	-- the shop draws its own golem tiles and the shard over it)
+	for _, g in if backdropOnly then {} else Preview.golemFrames(CF) do
 		GolemBuilder.build(golems[g.Index].Id, g.Feet, { Size = g.Size }).Parent = folder
 	end
 	-- the set's SHARD floating high on the picture's right (under the end
 	-- date, where the shop's banner shows it), turned to the camera
+	if backdropOnly then
+		return look.Preset,
+			{
+				camera = { Preview.Camera.Position.X, Preview.Camera.Position.Y, Preview.Camera.Position.Z },
+				target = { Preview.Camera.Target.X, Preview.Camera.Target.Y, Preview.Camera.Target.Z },
+				fov = Preview.Camera.Fov,
+			}
+	end
 	local spot = Preview.ShardSpot
 	local shardCf = CF.new(spot) * CF.Angles(0.12, 0.35, -0.08)
 	local shard = if data.CapsuleId
