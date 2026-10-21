@@ -432,6 +432,21 @@ choices marked *(ours)*):
     their income, the capsules' rarity odds, the ore prize's own odds);
     Details shows the same list and every capsule golem's chance. The
     jackpot card shows the Crystal Capsule's golem odds.
+  - **A full inventory or pen never swaps a paid prize silently.** With
+    a full golem inventory a bought spin is refused before it is used
+    (`WheelService.spin` answers "InventoryFull", the spin stays saved;
+    the same rule as 2.6a "No pressure"), a "Buy" answers "Full" and the
+    BUY step says "Your golem inventory is full: make room before using
+    a bought spin". A full Ore Pen is disclosed instead of refused: the
+    ore row (and, for the free spin with a full inventory, the capsule
+    rows) starts with "Ore Pen full: pays $X coins instead" / "Golem
+    inventory full: pays $X coins instead", the real fallback amounts
+    (`WheelView.fullNote`), on the BUY step and in Details, before any
+    spin or buy. The free daily spin pays those coins as before.
+  - **Paid golems.** A golem won with a bought spin is saved `Paid = true`
+    and `Locked` like every golem from a Robux purchase (trading can block
+    it, see `IsPaidItemTradingAllowed`); its opening is logged with Source
+    "PaidSpin".
   - **Same odds for paid and free spins.** A bought spin draws from the
     same server table as the free one (`WheelConfig.pick`,
     `WheelConfig.Segments`); there are no paid-only prizes.
@@ -735,7 +750,7 @@ short, friendly tutorial.
 - [ ] Paid random items (Royal and limited capsules, Robux luck packs, Starbreaker): exact odds shown before every buy, odds boosters show the new odds in numbers, hidden where `ArePaidRandomItemsRestricted` is true; questionnaire answered **Yes** once any of them is live.
 - [ ] The limited edition's `LimitedGolems.Current.EndsAt` is the real end the owner chose for this launch, and the banner says that date.
 - [ ] Coin packs are on (`CoinPacksEnabled = true`): every coin capsule / coin boost / coin odds-booster is treated as a paid random item (hidden where restricted, odds shown).
-- [ ] Spin & Win: the wheel's face shows every segment's exact %, the BUY step (before every spin purchase) lists all 8 segments with their % and what each pays, bought and free spins use the same odds, the BUY SPINS panel is hidden and "Buy" refused where `ArePaidRandomItemsRestricted` is true (or unknown), the free daily spin works for everyone; the questionnaire says **Yes** for paid random items once `WheelSpins1/5/10` are live.
+- [ ] Spin & Win: the wheel's face shows every segment's exact %, the BUY step (before every spin purchase) lists all 8 segments with their % and what each pays, bought and free spins use the same odds, the BUY SPINS panel is hidden and "Buy" refused where `ArePaidRandomItemsRestricted` is true (or unknown), the free daily spin works for everyone; with a full golem inventory a bought spin is refused (kept) and "Buy" says why, a full Ore Pen / inventory shows "pays $X coins instead" in the rows; golems from bought spins are Paid and Locked; the questionnaire says **Yes** for paid random items once `WheelSpins1/5/10` are live.
 - [ ] PolicyService wrapper in place (`src/server/Policy.luau`: `pcall`, strict defaults when the call fails, retried).
 
 ### Engagement rewards

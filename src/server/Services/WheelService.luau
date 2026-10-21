@@ -19,14 +19,17 @@
 	    2. with no yield from here on: check again; the FREE spin first (save
 	       NextSpinAt = now + CooldownSeconds), else ONE bought spin
 	       (Spins - 1; it ignores the cooldown and leaves NextSpinAt alone;
-	       refused with "Restricted" where paid random items are restricted:
-	       the bought spins stay in the save), then Stats.WheelSpins + 1, all
+	       refused with "Restricted" where paid random items are restricted,
+	       and with "InventoryFull" when the golem inventory has no room: a
+	       bought spin never swaps a capsule prize for coins; the bought
+	       spins stay in the save), then Stats.WheelSpins + 1, all
 	       BEFORE granting; pick the segment (a seeded Random), grant the
 	       prize, DataService.changed;
 	    3. WheelResult (Net) tells the client where the wheel stops (Paid,
 	       Spins = bought spins left).
 	  No spin to use (or no save): ActionResult { Action = "Wheel", Op =
-	  "Spin", Ok = false, Reason = "NotReady" | "Restricted" }. Junk actions
+	  "Spin", Ok = false, Reason = "NotReady" | "Restricted" |
+	  "InventoryFull" }. Junk actions
 	  are dropped. Two quick Spins can't both pass: the check and the write
 	  happen in one step. The spin used and the prize live in the same save,
 	  so a crash before the next autosave loses both together (never a prize
@@ -35,7 +38,8 @@
 	  product (WheelConfig.Packs -> MonetizationConfig WheelSpins1/5/10) is
 	  prompted through BoostService.promptPurchase (the policy first: a paid
 	  random item, "Restricted" where restricted; "Full" when the spins held
-	  would pass WheelConfig.MaxSpins; "ComingSoon" while the id is 0 or the
+	  would pass WheelConfig.MaxSpins or the golem inventory is full (a
+	  bought spin couldn't be used); "ComingSoon" while the id is 0 or the
 	  receipts gate is shut), answered with PurchasePrompt { Product, Status }.
 	  Nothing is granted here. Junk counts are dropped.
 	- The "WheelSpins" receipt handler (MonetizationService.register,
@@ -117,14 +121,16 @@ WheelService.RevealSeconds = 60
 --[[
 	The capsule package's free opening, when this place has it (its real
 	contract, Capsules package step 7):
-	  CapsuleService.grantFree(player, capsuleId, count?, quiet?)
+	  CapsuleService.grantFree(player, capsuleId, count?, quiet?, paid?)
 	      -> (Result?, reason?)
-	opens `count` (default 1) capsules of that kind for free with no yield
-	(no price, not paid; the player's Triple Lucky counts; Stats.
-	CapsulesOpened, DataService.changed and its own side effects) and returns
-	its CapsuleResult { Capsule, Count, Golems = { { Id, Kind } }, Lucky,
+	opens `count` (default 1) capsules of that kind with no price and no
+	yield (the player's Triple Lucky counts; Stats.CapsulesOpened,
+	DataService.changed and its own side effects) and returns its
+	CapsuleResult { Capsule, Count, Golems = { { Id, Kind } }, Lucky,
 	Free = true }, or nil + "InventoryFull" (no room) / "BadCapsule".
-	The wheel calls grantFree(player, capsuleId, 1, true):
+	`paid`: the prize of a BOUGHT spin: the golems are saved Paid = true
+	and Locked (a golem from a Robux purchase), analytics Source "PaidSpin".
+	The wheel calls grantFree(player, capsuleId, 1, true, result.Paid):
 	  - QuietFree = true on the service: `quiet` is honored, the service
 	    sends NO CapsuleResult; the wheel sends it on "Reveal" (after its
 	    own prize card), so the opening never spoils the turning disc.
@@ -136,10 +142,11 @@ WheelService.RevealSeconds = 60
 	  - any other reason, or an error: the coin share too, never a second
 	    roll here (a partly done grant must not add a second golem).
 	Only a place with no CapsuleService at all opens the capsule here
-	(CapsuleConfig.roll + GolemConfig.add).
+	(CapsuleConfig.roll + GolemConfig.add; a bought spin's golem Paid and
+	Locked the same way).
 ]]
 export type FreeCapsules = {
-	grantFree: (player: Player, capsuleId: string, count: number?, quiet: boolean?) -> (any, any),
+	grantFree: (player: Player, capsuleId: string, count: number?, quiet: boolean?, paid: boolean?) -> (any, any),
 	QuietFree: boolean?,
 }
 
@@ -270,12 +277,13 @@ local function firstGolem(result: any): { Id: number, Kind: string }?
 	return nil
 end
 
--- Opens the free capsule (see FreeCapsules above): through the capsule
+-- Opens the wheel's capsule (see FreeCapsules above): through the capsule
 -- package when this place has one (never a second roll here), else here.
-local function openFree(player: Player, data: { [string]: any }, capsuleId: string): Opened
+-- `paid`: a bought spin's prize (the golem is saved Paid and Locked).
+local function openFree(player: Player, data: { [string]: any }, capsuleId: string, paid: boolean): Opened
 	local service = freeCapsules()
 	if service then
-		local ok, result, reason = pcall(service.grantFree, player, capsuleId, 1, true)
+		local ok, result, reason = pcall(service.grantFree, player, capsuleId, 1, true, paid)
 		if not ok then
 			warn("[WheelService] CapsuleService.grantFree: " .. tostring(result))
 			return { Golem = nil, Lucky = false, Full = false, Reveal = false }
@@ -296,9 +304,12 @@ local function openFree(player: Player, data: { [string]: any }, capsuleId: stri
 	end
 	local lucky = Bonuses.tripleLucky(Bonuses.stats(player))
 	local golemKind = CapsuleConfig.roll(capsuleId, lucky, random())
-	local entry = if golemKind then GolemConfig.add(golems, golemKind) else nil
+	local entry = if golemKind then GolemConfig.add(golems, golemKind, false, paid) else nil
 	if not entry then
 		return { Golem = nil, Lucky = false, Full = false, Reveal = false }
+	end
+	if paid then
+		entry.Locked = true -- a golem from a Robux purchase (CapsuleService does the same)
 	end
 	bump(data, "CapsulesOpened")
 	return { Golem = { Id = entry.Id, Kind = entry.Kind }, Lucky = lucky, Full = false, Reveal = true }
@@ -328,7 +339,7 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 	elseif kind == "Capsule" then
 		local capsuleId = segment.Capsule or ""
 		result.Capsule = capsuleId
-		local opened = openFree(player, data, capsuleId)
+		local opened = openFree(player, data, capsuleId, result.Paid)
 		local golem = opened.Golem
 		if golem then
 			result.Golem = golem
@@ -402,6 +413,10 @@ function WheelService.spin(player: Player): (Result?, string?)
 		elseif restricted then
 			-- a paid random item: kept in the save, never spun where restricted
 			return nil, "Restricted"
+		elseif not noCapsules and GolemConfig.room(data.Golems) < 1 then
+			-- a bought spin never swaps a capsule prize for coins: refused before
+			-- it is used (the spin stays saved; the free spin still pays coins)
+			return nil, "InventoryFull"
 		end
 		-- a bought spin ignores the cooldown (NextSpinAt stays)
 		wheel.Spins = spins - 1
@@ -447,9 +462,18 @@ function WheelService.registerGrants()
 	MonetizationService.register("WheelSpins", grantSpins)
 end
 
+-- Is there no room in the golem inventory for a bought spin's capsule prize?
+-- (Capsules are on the wheel unless every capsule is restricted, and a
+-- restricted player can't buy or use bought spins anyway.)
+function WheelService.inventoryBlocks(data: { [string]: any }?): boolean
+	return data ~= nil and not CapsuleConfig.allRestricted(false) and GolemConfig.room(data.Golems) < 1
+end
+
 -- "Buy" { Count }: prompts the BUY SPINS row's product (the policy, "Full"
--- and the receipts gate first; PurchasePrompt answers). Returns the status
--- (nil: no such row, nothing answered).
+-- and the receipts gate first; PurchasePrompt answers). "Full": past
+-- WheelConfig.MaxSpins held, or a full golem inventory (a bought spin
+-- couldn't be used: WheelConfig.Reasons.InventoryFull; the client says
+-- which). Returns the status (nil: no such row, nothing answered).
 function WheelService.buy(player: Player, count: number): string?
 	local pack = WheelConfig.packFor(count)
 	if not pack then
@@ -457,7 +481,7 @@ function WheelService.buy(player: Player, count: number): string?
 	end
 	local data = DataService.get(player)
 	local held = if data then WheelConfig.heldSpins(data.Wheel) else 0
-	local full = held + pack.Count > WheelConfig.MaxSpins
+	local full = held + pack.Count > WheelConfig.MaxSpins or WheelService.inventoryBlocks(data)
 	return BoostService.promptPurchase(player, pack.Product, false, full)
 end
 
