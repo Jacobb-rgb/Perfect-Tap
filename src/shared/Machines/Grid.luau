@@ -121,7 +121,8 @@ end
 -- machines), 0.5 studs in front of the footprint, 1.8 studs up.
 function Grid.outputLocal(id: string): Vector3?
 	local info = machine(id)
-	if NO_FRONT_OUTPUT[id] then
+	-- (the droppers and the Money Laser earn coins; nothing comes out of them)
+	if NO_FRONT_OUTPUT[id] or info.Behaviour == "Dropper" or info.Behaviour == "Laser" then
 		return nil
 	end
 	local w, d = info.Size[1], info.Size[2]

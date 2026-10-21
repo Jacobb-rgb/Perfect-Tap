@@ -48,6 +48,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
@@ -177,7 +178,7 @@ local function incomeAllSlots(player: Player, data: { [string]: any }): number
 	return total
 end
 
--- Coins per second from all podiums.
+-- Coins per second from all podiums and the plot's droppers.
 function PodiumService.incomeOf(player: Player, data: { [string]: any }?): number
 	local d = data or DataService.get(player)
 	if not d then
@@ -188,6 +189,8 @@ function PodiumService.incomeOf(player: Player, data: { [string]: any }?): numbe
 	for slot = 1, MAX do
 		total += PodiumService.slotIncome(player, d, slot, multiplier)
 	end
+	-- the droppers on the plot (and their Money Lasers)
+	total += DropperConfig.placedIncome(d.PlacedMachines) * multiplier
 	return total
 end
 

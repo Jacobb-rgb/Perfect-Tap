@@ -66,11 +66,9 @@ function LaserBuilder.build(cf: CFrame, scale: number?): Model
 	)
 	for i, p in
 		{
-			Vector3.new(-2.2, 3.5, 0.4),
-			Vector3.new(2.3, 5.5, -0.2),
-			Vector3.new(-1.8, 8.2, -0.4),
-			Vector3.new(2.0, 10.5, 0.3),
-			Vector3.new(-2.5, 12.0, 0.1),
+			Vector3.new(-2.0, 3.5, 0.4),
+			Vector3.new(2.0, 6.5, -0.2),
+			Vector3.new(-1.8, 10.0, -0.4),
 		}
 	do
 		local turn = CFrame.Angles(0, 0.3 * (i % 2 * 2 - 1), 0.15 * (i - 3))

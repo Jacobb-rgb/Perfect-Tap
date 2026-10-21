@@ -117,7 +117,7 @@ for _, dropper in DropperConfig.List do
 end
 
 -- The MONEY LASER (owner 2026-10-21): the dropper's ores that pass it are
--- worth double. One per dropper (proposal).
+-- worth double: every laser on the plot doubles one dropper (the best first).
 export type Laser = { Id: string, Name: string, Price: number, Resale: number, Mult: number, Tagline: string }
 DropperConfig.Laser = {
 	Id = "MoneyLaser2X",
@@ -127,6 +127,34 @@ DropperConfig.Laser = {
 	Mult = 2,
 	Tagline = "Ores that pass it are worth double",
 } :: Laser
+
+-- Coins per second from the droppers in a list of placed machines
+-- (data.PlacedMachines: { Id = machineId, ... }). Every Money Laser doubles
+-- one dropper, the best ones first.
+function DropperConfig.placedIncome(placed: { any }?): number
+	if type(placed) ~= "table" then
+		return 0
+	end
+	local incomes: { number } = {}
+	local lasers = 0
+	for _, entry in placed do
+		local id = if type(entry) == "table" then entry.Id else nil
+		local dropper = if type(id) == "string" then DropperConfig.ById[id] else nil
+		if dropper then
+			table.insert(incomes, dropper.Income)
+		elseif id == DropperConfig.Laser.Id then
+			lasers += 1
+		end
+	end
+	table.sort(incomes, function(a, b)
+		return a > b
+	end)
+	local total = 0
+	for i, income in incomes do
+		total += if i <= lasers then income * DropperConfig.Laser.Mult else income
+	end
+	return total
+end
 
 -- Seconds the dropper needs to earn back its price.
 function DropperConfig.payback(dropper: Dropper): number
