@@ -211,8 +211,8 @@ local function buildTile(grid: Instance, item: { Id: string, Name: string, Price
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = 17 }, lockName)
 	text(
 		lock,
-		"🔒",
-		40,
+		"LOCKED",
+		22,
 		Color3.new(1, 1, 1),
 		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(60, 50), ZIndex = 8 }
 	)
