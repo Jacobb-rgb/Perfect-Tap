@@ -61,6 +61,15 @@
 	                 held in data.Wheel.Spins (WheelService). The prompt
 	                 answers "Full" past WheelConfig.MaxSpins held; a receipt
 	                 is never refused and always credits all of them
+	    "StarterPack" products: the Starter Pack (StarterPackService): its
+	                 Golem (paid, past the cap like a Royal capsule's), its
+	                 coins (coinPackAmount: CoinSeconds of income, at least
+	                 MinCoins) and its PodiumSkin + title, recorded in
+	                 data.StarterPack.BoughtAt. Once = true: prompted only
+	                 while not bought ("Owned" after) and in the offer window
+	                 (StarterPackService.offerOpen); a second receipt of the
+	                 same account (two prompts open at once) is still
+	                 granted in full, never dropped
 	  Every grant is recorded in data.Purchases[PurchaseId] = os.time() and
 	  data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() }.
 
@@ -139,6 +148,9 @@ export type Product = {
 	ServerBoost: string?, -- Grant "ServerBoost": the server-wide effect ("Luck")
 	WeaponId: string?, -- Grant "RebirthWeapon": the StarBlasterData id it gives
 	Spins: number?, -- Grant "WheelSpins": bought spins of the Spin & Win wheel (WheelService)
+	Golem: string?, -- Grant "StarterPack": the GolemConfig kind it gives (one, fixed: not random)
+	PodiumSkin: string?, -- Grant "StarterPack": the ArtifactConfig.PodiumSkins id it unlocks
+	Once: boolean?, -- a developer product sold once per account ("Owned" after; StarterPackService)
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -214,6 +226,16 @@ local LIST: { Product } = {
 		Perks = { "OfflineExtension" },
 	},
 	{
+		Key = "DoubleMoney",
+		Grant = "Perks",
+		Kind = "GamePass",
+		Id = 0,
+		Robux = 199,
+		Name = "2x Money",
+		Description = "Double coins forever: your podiums earn twice as much (offline too) and Tobin pays twice as much for everything you sell.",
+		Perks = { "DoubleMoney" },
+	},
+	{
 		Key = "TrainExpress",
 		Grant = "Perks",
 		Kind = "GamePass",
@@ -243,6 +265,25 @@ local LIST: { Product } = {
 		Description = "The fastest hoverboard: speed 38, no carry slowdown, golden wings and a flame trail.",
 		Grant = "Hoverboard",
 		BoardId = "RoyalPhoenix",
+	},
+	---------------------------------------------------------------- the Starter Pack
+	-- (one per account, offered in the first hour of play: StarterPackService.
+	-- Nothing random in it, so it is not a paid random item: no Triple Lucky,
+	-- no capsule. Its coins are "coins for Robux": offered only while
+	-- coinsBuyable(), like the coin packs.)
+	{
+		Key = "StarterPack",
+		Grant = "StarterPack",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "Starter Pack",
+		Description = 'Once per player: the Rare golem Gilded Porter (+10% podium income), 20 minutes of your podium income in coins (at least 15,000) and the Pioneer podium skin with the title "Pioneer".',
+		Golem = "GildedPorter",
+		CoinSeconds = 1200,
+		MinCoins = 15000,
+		PodiumSkin = "Pioneer",
+		Once = true,
 	},
 	---------------------------------------------------------------- golem capsules
 	{
@@ -607,6 +648,18 @@ MonetizationConfig.PromptMemorySeconds = 15 * 60
 -- prompted, live id or not, and the cards show "Coming soon".
 MonetizationConfig.ReceiptsAttribute = "ReceiptsReady"
 
+-- The 2x Money pass (perk "DoubleMoney"): podium income and sell value are
+-- multiplied by this AFTER every capped bonus (StatConfig IncomePct cap 2,
+-- SellPct cap 3), so the pass always doubles what the player earns
+-- (Bonuses.moneyMult: EconomyService.addIncomeFactor and Bonuses.sellMult).
+MonetizationConfig.MoneyPassPerk = "DoubleMoney"
+MonetizationConfig.MoneyPassMult = 2
+
+-- The Starter Pack offer (StarterPackService, StarterPackController): open
+-- for the first Seconds of play (data.Stats.PlaySeconds) while not bought;
+-- the small popup shows once per session after PopupAfter seconds of play.
+MonetizationConfig.StarterOffer = { Seconds = 3600, PopupAfter = 300 }
+
 MonetizationConfig.List = LIST
 MonetizationConfig.Products = {} :: { [string]: Product }
 for _, product in LIST do
@@ -688,7 +741,7 @@ end
 -- for a GamePass, PromptProductPurchase for a Product - and sends "Prompted").
 function MonetizationConfig.promptStatus(key: any, restricted: boolean, owned: boolean?, full: boolean?): string
 	local product = MonetizationConfig.get(key)
-	if not product or (product.CoinPack and not MonetizationConfig.coinsBuyable()) then
+	if not product or ((product.CoinPack or product.CoinSeconds) and not MonetizationConfig.coinsBuyable()) then
 		return "Unknown"
 	end
 	if product.PaidRandom and restricted then

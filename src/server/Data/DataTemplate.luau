@@ -111,6 +111,10 @@ local DataTemplate = {
 	-- the 7-day login streak: Day = the streak day last claimed (1..7, 0 = never),
 	-- Last = the UTC day number of that claim (a missed day starts at day 1 again)
 	Streak = { Day = 0, Last = 0 },
+	-- the Starter Pack (Robux, once per account: StarterPackService): BoughtAt = os.time() of
+	-- the first grant (0 = not bought), Count = receipts granted (a second one only when two
+	-- prompts were open at once)
+	StarterPack = { BoughtAt = 0, Count = 0 },
 	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
 	Artifacts = { Found = {}, Chapters = {} },
 

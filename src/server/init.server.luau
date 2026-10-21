@@ -68,6 +68,7 @@ local ORDER = {
 	"ServerBoostService", -- Server Luck: x2 ore luck for the whole server (the "ServerBoost" receipts)
 	"StoreService", -- the Robux STORE window: StoreAction -> purchase prompts (grants: MonetizationService)
 	"QuestService", -- daily / weekly quests + the 7-day login streak (after Capsule, Wheel, Podium, State)
+	"StarterPackService", -- the one-time Starter Pack: its receipt handler and the State offer
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray / Hammer loops
 	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
