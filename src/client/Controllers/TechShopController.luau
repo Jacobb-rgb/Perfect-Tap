@@ -2,9 +2,14 @@
 	TechShopController: the Tech shop at the UPGRADES stall (client side).
 
 	- Opens on OpenUI "Tech" { Counter } (the stall's "Tech Shop" prompt,
-	  added by ShopService). The cards come from the State snapshot
-	  (TechShopView.cards with your coins, counted up between snapshots like
-	  the HUD) and update live while it is open.
+	  added by ShopService), or with TechShopController.openMachines()
+	  anywhere, on the MACHINES tab with no counter (build mode's SHOP
+	  button calls it through MenuPanels.controller). The server still
+	  checks every BUY: machines sell at your own plot or the counter,
+	  everything else only at the counter (the view greys those BUYs out
+	  and its notes say so: TechShopView.Where). The cards come from the
+	  State snapshot (TechShopView.cards with your coins, counted up
+	  between snapshots like the HUD) and update live while it is open.
 	- BUY sends ShopBuy { Shop = "Tech", Item, Count?, Level? } (Level = the
 	  level the card shows being bought). The button shows "..." until the
 	  server's ShopResult arrives, then "BOUGHT!" for a moment, or the reason
@@ -23,8 +28,20 @@
 	  selected button on open and on every tab switch; the selection stays
 	  inside the panel (SelectionGroup).
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
-	  counter, the counter streaming out, respawning or another panel (Pen,
-	  Sell, Train...) opening. Other prompts are hidden while it is open.
+	  counter (or from your plot, for a shop opened there), the counter
+	  streaming out, respawning or another panel (Pen, Sell, Train...)
+	  opening. Other prompts are hidden while it is open.
+	- Build mode (PlacementController) takes the screen and the controls,
+	  so the shop never sits over it: openMachines() from build mode LEAVES
+	  build mode first (PlacementController.exit) and opens the shop as a
+	  normal panel; when the player closes it (X, B, Backspace) it enters
+	  build mode again (PlacementController.enter, deferred), where the
+	  new machine waits in the tray. Any other close (walking away,
+	  respawning, another panel) doesn't, so build mode never comes back
+	  uninvited (build mode's own B key enters it anyway: entering closes
+	  every panel). PlacementController is looked up on use
+	  (MenuPanels.controller), never required here: it may require this
+	  module's neighbours, and a missing one only skips the hand-off.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -38,8 +55,10 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -62,6 +81,9 @@ local TICK = 0.25
 -- less than the server's ShopService.Range: the shop closes before the server
 -- would refuse a BUY as "TooFar", with room for lag (TechShopView.CloseRange)
 local CLOSE_RANGE = TechShopView.CloseRange
+-- a shop opened at your plot closes past this (horizontal studs from its
+-- centre): under the server's GameConfig.BuildRange, with room for lag
+local BASE_CLOSE_RANGE = TechShopView.BaseCloseRange
 -- seconds a BUY waits for its ShopResult before its button is freed: a
 -- levelled item can be tried again safely (a repeat is refused as Stale), a
 -- machine BUY that went through slowly would buy again, so it waits longer
@@ -82,7 +104,9 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 
 local player = Players.LocalPlayer
 local refs: TechShopView.Refs? = nil
-local counter: BasePart? = nil
+local shown = false
+local counter: BasePart? = nil -- the counter it was opened at (nil: openMachines)
+local where: TechShopView.Where = "Counter"
 local tickConnection: RBXScriptConnection? = nil
 local pending: { [string]: Pending } = {}
 local statusTokens: { [string]: number } = {}
@@ -91,7 +115,7 @@ local openedAt = 0
 local others: { Panel }? = nil
 
 function TechShopController.isOpen(): boolean
-	return counter ~= nil
+	return shown
 end
 
 local function usingGamepad(): boolean
@@ -109,6 +133,31 @@ end
 
 local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
+end
+
+-- Is your character within `range` studs (horizontally) of your own plot's
+-- centre? The same test as the server's PlotService.isNear.
+local function nearOwnPlot(range: number): boolean
+	local id = player:GetAttribute("PlotId")
+	local plot = if type(id) == "number" then WorldLayout.Plots[id] else nil
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not plot or not root then
+		return false
+	end
+	local offset = root.Position - plot.Center
+	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= range
+end
+
+-- Build mode is open (PlacementController, looked up on use).
+local function building(): boolean
+	local build = MenuPanels.controller("PlacementController")
+	local isActive = if type(build) == "table" then build.isActive else nil
+	if type(isActive) ~= "function" then
+		return false
+	end
+	local ok, active = pcall(isActive)
+	return ok and active == true
 end
 
 -- The other panel controllers that exist (required on first use: they may load after this one).
@@ -142,7 +191,7 @@ end
 -- A message in the header for a few seconds.
 local function receipt(text: string, color: Color3)
 	local view = refs
-	if not view or not counter then
+	if not view or not shown then
 		return
 	end
 	TechShopView.showReceipt(view, text, color)
@@ -186,12 +235,12 @@ end
 
 local function refresh()
 	local view = refs
-	if not view or not counter then
+	if not view or not shown then
 		return
 	end
 	local cash = coins()
 	TechShopView.setCoins(view, cash)
-	TechShopView.setCards(view, TechShopView.cards(StateController.get(), cash))
+	TechShopView.setCards(view, TechShopView.cards(StateController.get(), cash, where))
 end
 
 local function selectDefault(view: TechShopView.Refs, force: boolean)
@@ -368,7 +417,7 @@ local function onResult(payload: any)
 	local row = rowFor(item, wait)
 	local button = if row and wait then row.Buttons[wait.Button] else nil
 	if payload.Ok == true then
-		if row and counter then
+		if row and shown then
 			pop(row.Frame)
 			if button then
 				setBusy(button, "BOUGHT!")
@@ -392,8 +441,11 @@ local function onResult(payload: any)
 	if button then
 		setBusy(button, nil)
 	end
-	local text = TechShopController.reasonText(payload.Reason, nil)
-	if row and counter then
+	-- machines sell at your base too: "TooFar" says both places
+	local entry = EconomyConfig.techItem(item)
+	local machine = entry ~= nil and entry.Kind == "Machine"
+	local text = if payload.Reason == "TooFar" and machine then STATUS.TooFarMachine else TechShopController.reasonText(payload.Reason, nil)
+	if row and shown then
 		status(row.Id, text, Theme.Bad)
 		Sfx.play("UIDeny")
 		refresh()
@@ -418,7 +470,7 @@ local function expirePending(force: boolean?)
 			if button then
 				setBusy(button, nil)
 			end
-			if row and not force and counter then
+			if row and not force and shown then
 				status(row.Id, if wait.Machine then STATUS.NoAnswerMachine else STATUS.NoAnswer, Theme.Bad)
 			end
 		end
@@ -444,11 +496,12 @@ local function switchTab(name: string, moveSelection: boolean)
 end
 
 function TechShopController.close()
-	if not counter then
+	if not shown then
 		return
 	end
 	-- unanswered buys free their buttons (a late answer still shows as a toast)
 	expirePending(true)
+	shown = false
 	counter = nil
 	if tickConnection then
 		tickConnection:Disconnect()
@@ -468,18 +521,32 @@ function TechShopController.close()
 	PromptController.setSuppressed("TechShop", false)
 end
 
-local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	if state ~= Enum.UserInputState.Begin or not counter then
-		return Enum.ContextActionResult.Pass
-	end
+-- The player closed it (X, B, Backspace): a shop opened from build mode
+-- goes back to build mode (deferred: never inside this input's handler).
+local function closeByPlayer()
+	local back = where == "Build"
 	TechShopController.close()
 	Sfx.play("UIClick")
+	if back and nearOwnPlot(GameConfig.BuildRange) then
+		task.defer(function()
+			if not shown and not building() then
+				MenuPanels.call("PlacementController", "enter")
+			end
+		end)
+	end
+end
+
+local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin or not shown then
+		return Enum.ContextActionResult.Pass
+	end
+	closeByPlayer()
 	return Enum.ContextActionResult.Sink
 end
 
 local function onTab(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
 	local view = refs
-	if state ~= Enum.UserInputState.Begin or not counter or not view then
+	if state ~= Enum.UserInputState.Begin or not shown or not view then
 		return Enum.ContextActionResult.Pass
 	end
 	local dir = if input.KeyCode == Enum.KeyCode.ButtonL1 then -1 else 1
@@ -494,10 +561,7 @@ local function ensureView(): TechShopView.Refs
 	end
 	local view = TechShopView.build(false)
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
-	view.Close.Activated:Connect(function()
-		TechShopController.close()
-		Sfx.play("UIClick")
-	end)
+	view.Close.Activated:Connect(closeByPlayer)
 	for _, tab in TechShopView.Tabs do
 		view.Tabs[tab].Activated:Connect(function()
 			switchTab(tab, false)
@@ -514,9 +578,10 @@ local function ensureView(): TechShopView.Refs
 	return view
 end
 
--- Every TICK: close when you walk away, the counter streams out or another
--- panel opens; count the coins up; give up on unanswered buys.
-local function watch(part: BasePart)
+-- Every TICK: close when you walk away (from the counter, or from your
+-- plot for a shop opened there), the counter streams out or another panel
+-- opens; count the coins up; give up on unanswered buys.
+local function watch(part: BasePart?, nearBase: boolean)
 	local elapsed = 0
 	local sinceRefresh = 0
 	tickConnection = RunService.Heartbeat:Connect(function(dt)
@@ -528,15 +593,20 @@ local function watch(part: BasePart)
 		elapsed = 0
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if not part:IsDescendantOf(Workspace) or not root then
+		if not root or (part and not part:IsDescendantOf(Workspace)) then
 			TechShopController.close()
 			return
 		end
-		local p = part.CFrame:PointToObjectSpace(root.Position)
-		local half = part.Size / 2
-		local outside =
-			Vector3.new(math.max(math.abs(p.X) - half.X, 0), math.max(math.abs(p.Y) - half.Y, 0), math.max(math.abs(p.Z) - half.Z, 0))
-		if outside.Magnitude > CLOSE_RANGE then
+		if part then
+			local p = part.CFrame:PointToObjectSpace(root.Position)
+			local half = part.Size / 2
+			local outside =
+				Vector3.new(math.max(math.abs(p.X) - half.X, 0), math.max(math.abs(p.Y) - half.Y, 0), math.max(math.abs(p.Z) - half.Z, 0))
+			if outside.Magnitude > CLOSE_RANGE then
+				TechShopController.close()
+				return
+			end
+		elseif nearBase and not nearOwnPlot(BASE_CLOSE_RANGE) then
 			TechShopController.close()
 			return
 		end
@@ -562,16 +632,9 @@ local function watch(part: BasePart)
 	end)
 end
 
-function TechShopController.open(part: BasePart)
-	if counter == part then
-		refresh()
-		return
-	end
-	local owner = PlayerControls.owner()
-	if owner ~= nil then
-		HudController.toast(if owner == "Build" then "Finish building first." else "Finish what you are doing first.", "Info")
-		return
-	end
+-- Opens the window at `part` (a counter) or with no counter (`place`
+-- "Base" / "Build"), on `tab` when given.
+local function show(part: BasePart?, place: TechShopView.Where, tab: TechShopView.Tab?)
 	TechShopController.close()
 	-- one panel at a time (they bind B / Backspace too)
 	for _, panel in otherPanels() do
@@ -580,15 +643,22 @@ function TechShopController.open(part: BasePart)
 		end
 	end
 	local view = ensureView()
+	shown = true
 	counter = part
+	where = place
 	openedAt = os.clock()
+	TechShopView.setWhere(view, place)
+	if tab then
+		TechShopView.setTab(view, tab)
+	end
 	fit(view)
 	updateGlyphs(view)
 	view.Gui.Enabled = true
 	PromptController.setSuppressed("TechShop", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ContextActionService:BindActionAtPriority(TAB_ACTION, onTab, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
-	watch(part)
+	-- a counterless shop opened at your plot closes when you walk away from it
+	watch(part, part == nil and nearOwnPlot(BASE_CLOSE_RANGE))
 	GuiService.SelectedObject = nil
 	refresh()
 	selectDefault(view, true)
@@ -606,6 +676,43 @@ function TechShopController.open(part: BasePart)
 	TweenService:Create(s, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
+-- Opens the shop at a counter (its "Tech Shop" prompt: OpenUI "Tech").
+function TechShopController.open(part: BasePart)
+	if shown and counter == part then
+		refresh()
+		return
+	end
+	local owner = PlayerControls.owner()
+	if owner ~= nil then
+		HudController.toast(if owner == "Build" then "Finish building first." else "Finish what you are doing first.", "Info")
+		return
+	end
+	show(part, "Counter", nil)
+end
+
+--[[
+	Opens the shop on its MACHINES tab with no counter (build mode's SHOP
+	button; it works anywhere, the server decides every BUY). From build
+	mode (or `fromBuild`: the caller left build mode itself) it leaves
+	build mode first and goes back to it when the player closes the shop
+	(see the header). Already open: shows the MACHINES tab.
+]]
+function TechShopController.openMachines(fromBuild: boolean?)
+	if shown then
+		switchTab("Machines", true)
+		return
+	end
+	local wasBuilding = building()
+	if wasBuilding then
+		MenuPanels.call("PlacementController", "exit")
+	end
+	if PlayerControls.owner() ~= nil then
+		HudController.toast("Finish what you are doing first.", "Info")
+		return
+	end
+	show(nil, if wasBuilding or fromBuild == true then "Build" else "Base", "Machines")
+end
+
 ---------------------------------------------------------------- lifecycle
 
 function TechShopController.init()
@@ -620,14 +727,14 @@ function TechShopController.init()
 	end)
 	Net.listen("ShopResult", onResult)
 	Net.listen("Notify", function(message)
-		if counter and type(message) == "table" and type(message.Text) == "string" then
+		if shown and type(message) == "table" and type(message.Text) == "string" then
 			local color = if type(message.Kind) == "string" then RECEIPT_COLORS[message.Kind] or Theme.Info else Theme.Info
 			local info = if type(message.Rarity) == "string" then Rarity.ById[message.Rarity] else nil
 			receipt(message.Text, if info then info.Color else color)
 		end
 	end)
 	StateController.onChanged(function()
-		if counter then
+		if shown then
 			refresh()
 		end
 	end)
@@ -636,7 +743,7 @@ function TechShopController.init()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs
-		if view and counter then
+		if view and shown then
 			updateGlyphs(view)
 			selectDefault(view, false)
 		end
@@ -645,7 +752,7 @@ function TechShopController.init()
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			local view = refs
-			if view and counter then
+			if view and shown then
 				fit(view)
 			end
 		end)
