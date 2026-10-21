@@ -22,6 +22,8 @@
 	             and the H key stay in the HUD)
 	  REBIRTH    RebirthController (STAR FORGE; badge: a rebirth is ready
 	             and the window wasn't opened since)
+	QUESTS     QuestController (daily / weekly quests + the login streak;
+	             badge: quests and the streak day waiting to be claimed)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
@@ -98,11 +100,12 @@ SideMenuController.Actions = {
 	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
 	Rebirth = { Controller = "RebirthController", Missing = "Rebirth is coming soon!", Soon = false, Hide = true },
+	Quests = { Controller = "QuestController", Missing = "Quests are coming soon!", Soon = false, Hide = true },
 } :: { [string]: Action }
 
 -- Buttons whose controller has onUnseenChanged(callback(count)): its count
 -- is the button's badge.
-SideMenuController.Badges = { "Codex", "Collection", "Rebirth" }
+SideMenuController.Badges = { "Codex", "Collection", "Rebirth", "Quests" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
@@ -112,6 +115,7 @@ SideMenuController.Panels = {
 	"LeaderboardController",
 	"ElevatorController",
 	"HoverboardController",
+	"QuestController",
 }
 -- the touch grid shuts by itself after this many seconds without a tap
 SideMenuController.AutoShut = 10

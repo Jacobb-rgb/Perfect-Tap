@@ -263,6 +263,7 @@ local function throw(_: string, state: Enum.UserInputState): Enum.ContextActionR
 					direction = (root.CFrame.LookVector + Vector3.new(0, 0.35, 0)).Unit
 				end
 			end
+			pcall(require(script.Parent.MoveController).playLocal, "Throw") -- the throw move (MoveController); never blocks the throw
 			Net.send("CarryThrow", direction, charge)
 		end
 	end

@@ -1012,6 +1012,36 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	elseif data.PaidCoins > data.Coins then
 		data.PaidCoins = data.Coins
 	end
+	-- daily / weekly quests and the 7-day login streak: the record shapes and the streak
+	-- numbers (QuestService rerolls broken quest lists on load, QuestLogic.refresh)
+	if type(data.Quests) ~= "table" then
+		data.Quests = { Day = 0, Daily = {}, Week = 0, Weekly = {} }
+	end
+	local streak = data.Streak
+	if
+		type(streak) ~= "table"
+		or not isFinite(streak.Last)
+		or not isFinite(streak.Day)
+		or streak.Day ~= math.floor(streak.Day)
+		or streak.Day < 0
+		or streak.Day > 7
+	then
+		data.Streak = { Day = 0, Last = 0 }
+	end
+	-- the Starter Pack record (StarterPackService): when it was bought, how many times
+	local starter = data.StarterPack
+	if type(starter) ~= "table" then
+		data.StarterPack = { BoughtAt = 0, Count = 0 }
+	else
+		if not isFinite(starter.BoughtAt) or starter.BoughtAt < 0 then
+			starter.BoughtAt = 0
+		end
+		if not isFinite(starter.Count) or starter.Count < 0 then
+			starter.Count = 0
+		else
+			starter.Count = math.floor(starter.Count)
+		end
+	end
 
 	-- trains: levels in range, clean cargo lists, sane trip times
 	local train = data.Train

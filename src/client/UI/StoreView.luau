@@ -212,6 +212,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		Selectable = false, -- (one gamepad stop per card: the card buys)
 		ZIndex = 6,
 	})
+	price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
 	local priceAmount = (price:FindFirstChild("Row") :: Frame):FindFirstChild("Amount") :: TextLabel
 	local shade = UIKit.new("Frame", {
 		Name = "Shade",
@@ -368,7 +369,12 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		})
 	end
 	if spec.Ribbon then
-		Pop.ribbon(button, spec.Ribbon, 136)
+		local ribbon = Pop.ribbon(button, spec.Ribbon, 136)
+		-- the same place, held by its middle: it breathes (UIMotionController) from its centre
+		local size = ribbon.Size
+		ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
+		ribbon.Position = UDim2.new(1, -8 - size.X.Offset / 2, 0, 12 + size.Y.Offset / 2)
+		ribbon:SetAttribute("Motion", "Breathe")
 	end
 	return refs
 end
@@ -729,13 +735,18 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		local product = if key then MonetizationConfig.Products[key] else nil
 		if product then
 			local bx = buyGap + (i - 1) * (buttonW + buyGap)
+			-- (held by the middle: the x50 breathes from its centre, sizeBanner keeps the bottom line)
 			local button = Pop.price(frame, product.Robux, Vector2.new(buttonW, buttonH), {
 				Name = "Buy" .. n,
-				Position = UDim2.fromOffset(bx, h - buttonH - 30),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(bx + buttonW / 2, h - buttonH / 2 - 30),
 				ZIndex = 8,
 			})
 			if n == StoreView.BannerCounts[1] then
 				Pop.repaint(button, "Red") -- (the photo: the biggest pack stands out)
+				button:SetAttribute("Motion", "Breathe")
+			else
+				button:SetAttribute("Motion", "Shine")
 			end
 			Pop.text(frame, `{n} Golem{if n == 1 then "" else "s"}`, 20, {
 				Name = "Count" .. n,
@@ -1004,6 +1015,7 @@ function StoreView.build(): Refs
 		Position = UDim2.new(0.72, 0, 1, -14),
 		ZIndex = 22,
 	})
+	buy:SetAttribute("Motion", "Shine")
 
 	local refs: Refs = {
 		Gui = gui,
@@ -1049,7 +1061,8 @@ sizeBanner = function(refs: Refs)
 	end
 	for _, button in banner.Buys do
 		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)
-		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH - 30)
+		-- (AnchorPoint 0.5, 0.5: the bottom edge stays 30 above the banner's bottom)
+		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH / 2 - 30)
 	end
 end
 

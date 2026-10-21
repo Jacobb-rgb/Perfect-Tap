@@ -108,6 +108,7 @@ local MachineInfo = require(Shared.Machines.MachineInfo)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local Net = require(Shared.Net)
 local BuildView = require(script.Parent.Parent.UI.BuildView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local GridOverlay = require(script.Parent.Parent.Effects.GridOverlay)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -2634,7 +2635,9 @@ function PlacementController.refreshButton()
 			TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = 1.12 }
 		)
-		tween:Play()
+		if not Motion.reduced() then -- (Reduce motion: the BUILD tile stays still)
+			tween:Play()
+		end
 		pulse = tween
 	elseif not wanted and pulse then
 		pulse:Cancel()
