@@ -540,7 +540,8 @@ function StoreController.close()
 			GuiService.SelectedObject = nil
 		end
 		StoreView.showDetail(view, nil)
-		-- (UI/Motion: it shrinks away first; an open() before the end cancels that)
+		-- (UI/Motion: it shrinks away first, an open() before the end cancels that;
+		-- with UI motion off it just goes, as on main)
 		local gui = view.Gui
 		Motion.close(view.Group, function()
 			if not isOpen then
@@ -600,6 +601,11 @@ function StoreController.open()
 	local first = view.Cards[view.Order[1]]
 	GuiService.SelectedObject = if MenuPanels.usingGamepad() and first then first.Button else nil
 	Sfx.play("UIClick")
+	if not Motion.enabled() then
+		-- (UI motion off, Config/AnimConfig: the window's own pop, as on main)
+		Motion.classicPop(view.Window.Root, "OpenPop", 0.85, 0.18)
+		return
+	end
 	-- UI/Motion: the window and its tabs pop from the middle (the Group is centred),
 	-- the dim fades in, the tab column slides in from the right
 	Motion.pop(view.Group, view.Gui:FindFirstChild("Dim") :: GuiObject?)

@@ -55,6 +55,7 @@ local Color3 = roblox.Color3
 
 local UI = "StarterPlayer.StarterPlayerScripts.Client.UI."
 local Motion = Loader.requirePath(UI .. "Motion")
+Motion.setEnabled(true) -- (the preview shows UI motion on, whatever Config/AnimConfig ships)
 local UIKit = Loader.requirePath(UI .. "UIKit")
 local HudBubble = Loader.requirePath(UI .. "HudBubble")
 local HudView = Loader.requirePath(UI .. "HudView")

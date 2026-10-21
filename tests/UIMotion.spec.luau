@@ -2,8 +2,9 @@
 -- the easing curves match TweenService's, the count-up steps and the shine's
 -- offset, press targets, Reduce motion jumping to the end without a single
 -- tween, the watcher's window / dim finders and button kinds, attaching the
--- press feel twice adding one UIScale, the shop's breathe / shine marks, and
--- the Reduce motion setting.
+-- press feel twice adding one UIScale, the shop's breathe / shine marks, the
+-- Reduce motion setting, and the switch (Config/AnimConfig.UIMotion): off,
+-- nothing is attached, connected or tweened, and the old pops stay.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
@@ -23,6 +24,10 @@ return function(T, Loader)
 
 	local SCREEN = Vector2.new(1280, 720)
 	local STYLES = { "Linear", "Sine", "Quad", "Cubic", "Quart", "Quint", "Exponential", "Circular", "Back", "Bounce", "Elastic" }
+
+	-- (the tests below are UI motion ON, as on anim/all; the switch's own tests
+	-- at the end turn it off; Config/AnimConfig decides in the game)
+	Motion.setEnabled(true)
 
 	---------------------------------------------------------------- pure
 
@@ -528,5 +533,147 @@ return function(T, Loader)
 		local kit = UIKit.button(holder, "SELL", Color3.new(0, 1, 0), Color3.new(0, 0.5, 0))
 		Watcher.attach(kit)
 		T.falsy((Motion.stateOf(kit) :: any).Pivot, "a holder-filling button is centred once, no anchor tween")
+	end)
+	---------------------------------------------------------------- the switch (Config/AnimConfig.UIMotion)
+
+	T.test("UIMotion off: nothing attached, connected or tweened, the store pops like main", function()
+		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+		Motion.setEnabled(nil)
+		T.eq(Motion.enabled(), AnimConfig.UIMotion == true, "the game follows AnimConfig")
+		Motion.setEnabled(false)
+		local made: { any } = {}
+		local fakeTween = {
+			Play = function() end,
+			Cancel = function() end,
+			Completed = { Once = function() end, Connect = function() end },
+		}
+		Motion.useTweens(function(instance: any, time: number, style: any, direction: any, goal: any): any
+			table.insert(made, { Name = instance.Name, Time = time, Style = style, Direction = direction, Goal = goal })
+			return fakeTween
+		end)
+		local ok, err = pcall(function()
+			-- the store and the settings panel, every button and mark the watcher would take
+			local playerGui = Instance.new("PlayerGui")
+			local store = StoreView.build()
+			store.Gui.Parent = playerGui
+			store.Gui.Enabled = true
+			local settings = SettingsView.build(false)
+			settings.Gui.Parent = playerGui
+			settings.Gui.Enabled = true
+			local kit = settings.Toggles.Shake.Button
+			local kitAnchor = kit.AnchorPoint
+			for _, gui in { store.Gui, settings.Gui } do
+				for _, d in gui:GetDescendants() do
+					if d:IsA("GuiButton") and Watcher.pressKind(d) then
+						Watcher.attach(d)
+						Motion.pressDown(d, nil)
+					end
+					local mark = d:GetAttribute("Motion")
+					if mark == "Breathe" then
+						Motion.breathe(d)
+					elseif mark == "Shine" then
+						Motion.shine(d, 0.5)
+					end
+				end
+			end
+			local dim = store.Gui:FindFirstChild("Dim")
+			Motion.pop(store.Group, dim)
+			Motion.slide(store.Group:FindFirstChild("Tabs"), "Right")
+			local closed = false
+			Motion.close(store.Group, function()
+				closed = true
+			end, dim)
+			T.truthy(closed, "close: at once, like main")
+			T.falsy(Motion.flyTo(nil, store.Window.Root, "cash"), "no cash flies")
+			Motion.bump(store.Window.Root)
+			local label = store.Status
+			Motion.countUp(label, 0, 5000, Format.money)
+			T.eq(label.Text, Format.money(5000), "the number just changes")
+			for _, d in store.Gui:GetDescendants() do
+				if d:GetAttribute("Motion") then
+					T.eq((Motion.loopOf(d)), nil, "no loop: " .. d.Name)
+				end
+			end
+			-- nothing of Motion's is on the screens
+			for _, gui in { store.Gui, settings.Gui } do
+				for _, d in gui:GetDescendants() do
+					local own = d.Name == "MotionScale" or d.Name == "MotionPop" or d.Name == "MotionShine" or d.Name == "MotionFly"
+					T.falsy(own, "nothing attached: " .. d:GetFullName())
+				end
+			end
+			T.eq(kit.AnchorPoint, kitAnchor, "a kit button keeps its anchor (not re-centred)")
+			T.eq(dim.BackgroundTransparency, 0.5, "the dim as built")
+			T.eq(#made, 0, "no tween made")
+			-- the store's own pop, as main has it: OpenPop on the window, 0.85 -> 1, Back out, 0.18 s
+			local pop = Motion.classicPop(store.Window.Root, "OpenPop", 0.85, 0.18)
+			T.eq(pop.Name, "OpenPop")
+			T.eq(pop.Parent and pop.Parent.Name, "Window")
+			T.near(pop.Scale, 0.85, 1e-6)
+			T.eq(#made, 1, "one tween: the pop")
+			T.eq(made[1].Name, "OpenPop")
+			T.near(made[1].Time, 0.18, 1e-9)
+			T.eq(made[1].Style, roblox.Enum.EasingStyle.Back)
+			T.eq(made[1].Direction, roblox.Enum.EasingDirection.Out)
+			T.eq(made[1].Goal.Scale, 1)
+			-- the toast and the offline popup keep theirs too (a "UIScale" 0.6 -> 1)
+			local toast = UIKit.new("Frame", { Name = "Toast" }, store.Gui)
+			local toastScale = Motion.classicPop(toast, "UIScale", 0.6, 0.25)
+			T.eq(toastScale.Name, "UIScale")
+			T.eq(made[2].Time, 0.25)
+		end)
+		Motion.useTweens(nil)
+		Motion.setEnabled(true)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("UIMotion off: the watcher connects nothing and runs no loop", function()
+		Motion.setEnabled(false)
+		local before = Watcher.connectionCount()
+		-- (off it returns at once: it never asks for the player, the settings or any service)
+		local ok, err = pcall(Watcher.start)
+		Motion.setEnabled(true)
+		if not ok then
+			error(err, 0)
+		end
+		T.eq(Watcher.connectionCount(), 0, "no PlayerGui watcher, no Enabled watcher, no input hook")
+		T.eq(before, 0)
+		T.falsy(Watcher.isRunning(), "no once-a-second loop")
+	end)
+
+	T.test("UIMotion off: the controllers keep main's pops; on, Motion's", function()
+		local fs = require("@lune/fs")
+		local function source(name: string): string
+			return fs.readFile(Loader.root .. "/src/client/" .. name .. ".luau")
+		end
+		local store = source("Controllers/StoreController")
+		T.truthy(
+			store:find(
+				'if not Motion.enabled() then\n\t\t-- (UI motion off, Config/AnimConfig: the window\'s own pop, as on main)\n\t\tMotion.classicPop(view.Window.Root, "OpenPop", 0.85, 0.18)',
+				1,
+				true
+			),
+			"the store"
+		)
+		local hud = source("Controllers/HudController")
+		T.truthy(
+			hud:find('if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
+			"the toast"
+		)
+		T.truthy(hud:find("Motion.classicPop(shown.Panel, nil, 0.6, 0.3)", 1, true), "the offline popup")
+		T.truthy(hud:find("if big and not Motion.enabled() then", 1, true), "the coin glide")
+		T.truthy(hud:find("shownCoins += diff * 0.35", 1, true), "main's glide step")
+		T.truthy(
+			source("Controllers/UIMotionController"):find("if not Motion.enabled() then\n\t\t-- UI motion off", 1, true),
+			"the watcher stops first"
+		)
+		-- and on, everything as on anim/all
+		Motion.setEnabled(true)
+		local holder = Instance.new("Frame")
+		local button = Pop.button(holder, "OK", "Green", Vector2.new(120, 44))
+		Watcher.attach(button)
+		T.truthy(button:FindFirstChild("MotionScale"), "on: the press feel is attached")
+		Motion.setEnabled(nil)
 	end)
 end
