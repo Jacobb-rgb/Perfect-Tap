@@ -7,12 +7,17 @@
 	- 'LoadPrompt' (Put In) on your own machines shows only while you carry
 	  something. The server never changes its Enabled, so this local choice sticks.
 	- setSuppressed(reason, on) hides every prompt during close-ups (build
-	  mode, the anvil); prompts come back when no reason is left.
-	Keys: F / gamepad Y for machine prompts; the Cleaning Station's "Take Ore
-	Back" uses G / gamepad B and is always shown (its own keys, so it never
-	fires together with another prompt). Taken elsewhere: E / X Grab, Q / RB
-	Throw; B is also Leave inside the cleaning minigame, while the station
-	prompts are disabled.
+	  mode, the anvil, the cleaning minigame and its result card); prompts
+	  come back when no reason is left.
+	Keys (PromptConfig, every prompt is made there in the stock Roblox look):
+	"Main" E / gamepad Y for shops, stalls and machine prompts; "Second" G /
+	gamepad B for the second prompt on a spot, like the Cleaning Station's
+	"Take Ore Back" (always shown, its own keys, so it never fires together
+	with "Clean Ore"); "Panel" T / L3 for the Train panel. Taken elsewhere:
+	F / X Grab, Q / RB Throw; B is also Leave inside the cleaning minigame,
+	while the prompts are suppressed. A modal that binds E itself (the
+	cleaning result card's Collect, the Foundry's) suppresses the prompts
+	first, so one E press never also fires a prompt behind it.
 ]]
 
 local CollectionService = game:GetService("CollectionService")

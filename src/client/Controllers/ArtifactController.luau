@@ -539,7 +539,7 @@ local function begin(kind: Screen): boolean
 	ArtifactController.close()
 	screen = kind
 	openedAt = os.clock()
-	-- like every panel: no world prompt (the Cleaning Station's F / Y) fires behind it
+	-- like every panel: no world prompt (the Cleaning Station's E / Y) fires behind it
 	PromptController.setSuppressed("Artifacts", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ContextActionService:BindActionAtPriority(

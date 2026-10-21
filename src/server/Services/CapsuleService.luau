@@ -19,9 +19,14 @@
 	                   rolled kind is a known golem and the room was checked).
 	                   Answer: CapsuleResult { Capsule, Count, Golems = { { Id,
 	                   Kind } } (opening order), Lucky }.
-	    Royal (Robux)  never granted here: answered with PurchasePrompt
+	    Royal / limited (Robux)
+	                   never granted here: answered with PurchasePrompt
 	                   { Product, Status } (MonetizationConfig.promptStatus;
-	                   "Full" when the inventory can't take Count more;
+	                   "Full" when the inventory hasn't room for
+	                   min(Count, CapsuleConfig.PromptRoom) more: a big pack
+	                   passes the cap up to MaxSaved and the rest waits in the
+	                   pending-golem credit; Count up to CapsuleConfig.MaxCount,
+	                   a limited capsule's x50;
 	                   "ComingSoon" too for a live product id until step 8
 	                   turns the one receipts gate on (src/server/Receipts.luau,
 	                   also CapsuleService.setReceiptsReady(true)) once its
@@ -39,6 +44,10 @@
 	                   the odds of that moment), so a prompt never stretches a
 	                   boost; forgotten at once when the prompt closes without
 	                   a purchase (PromptProductPurchaseFinished).
+	  A LIMITED EDITION capsule (CapsuleConfig Limited) is prompted only
+	  while its edition is on sale (LimitedGolems.onSale at the server's
+	  clock): after its EndsAt the request is refused "Ended" (no prompt).
+	  Its receipts are always granted (grantProduct never asks).
 	  Paid random items (CapsuleConfig.isPaidRandom: Royal always, coin
 	  capsules only while coins can be bought with Robux) are refused
 	  ("Restricted") where PolicyService ArePaidRandomItemsRestricted is true
@@ -69,7 +78,8 @@
 	  "Discovery").
 	- Hooks for other packages: grantFree (the wheel's capsule prize: no
 	  price, CapsuleResult with Free = true; quiet = true leaves sending it
-	  to the caller, QuietFree says this service honors that), registerGrants (the
+	  to the caller, QuietFree says this service honors that; paid = true for
+	  a bought spin's prize: Paid and Locked golems), registerGrants (the
 	  "Capsule" receipt handler: grantProduct, then the golems past MaxSaved wait
 	  in data.Golems.Pending, woken by wakePending on load / change), grantProduct (step 8 receipts:
 	  paid golems may pass the inventory cap up to GolemConfig.MaxSaved,
@@ -88,7 +98,9 @@ local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LimitedGolems = require(Shared.Config.LimitedGolems)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -102,7 +114,7 @@ local StateService = require(script.Parent.StateService)
 
 local CapsuleService = {}
 
-export type Source = "Coins" | "Robux" | "Free"
+export type Source = "Coins" | "Robux" | "Free" | "PaidSpin" -- (PaidSpin: a bought wheel spin's capsule)
 export type Woken = { Id: number, Kind: string }
 export type Result = {
 	Capsule: string,
@@ -333,10 +345,14 @@ end
 	CapsuleResult (Free = true) and sends it, unless `quiet`: then the
 	caller sends it when its own screen is ready (WheelService sends it on
 	the wheel's "Reveal", so the opening never spoils the turning disc).
+	`paid`: the prize of a wheel spin bought with Robux: the golems are
+	saved Paid = true and Locked like every golem from a Robux purchase
+	(within the inventory cap: the wheel refuses a bought spin when full),
+	and the opening's Source is "PaidSpin".
 ]]
 CapsuleService.QuietFree = true -- grantFree honors `quiet` (WheelService reads this)
 
-function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?, quiet: boolean?): (Result?, string?)
+function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?, quiet: boolean?, paid: boolean?): (Result?, string?)
 	local data = DataService.get(player)
 	local n = count or 1
 	if not data or not CapsuleConfig.ById[capsuleId] or type(n) ~= "number" or n < 1 or n > 10 or n ~= math.floor(n) then
@@ -350,13 +366,20 @@ function CapsuleService.grantFree(player: Player, capsuleId: string, count: numb
 	if #kinds ~= n then
 		return nil, "BadCapsule"
 	end
-	local woken = add(data, kinds)
+	local bought = paid == true
+	local woken = add(data, kinds, false, bought)
 	DataService.changed(player)
 	local result: Result = { Capsule = capsuleId, Count = n, Golems = woken, Lucky = lucky, Free = true }
 	if quiet ~= true then
 		Net.fire("CapsuleResult", player, result)
 	end
-	opened(player, { Capsule = capsuleId, Count = n, Kinds = kindsOf(woken), Lucky = lucky, Source = "Free" })
+	opened(player, {
+		Capsule = capsuleId,
+		Count = n,
+		Kinds = kindsOf(woken),
+		Lucky = lucky,
+		Source = if bought then "PaidSpin" else "Free",
+	})
 	return result, nil
 end
 
@@ -397,7 +420,7 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	if not data or not product or not product.Capsule or not CapsuleConfig.ById[product.Capsule] then
 		return nil, 0, {}
 	end
-	local count = math.clamp(math.floor(product.Count or 1), 1, 10)
+	local count = math.clamp(math.floor(product.Count or 1), 1, CapsuleConfig.MaxCount)
 	local remembered = CapsuleService.promptedLucky(player, productKey)
 	local lucky = remembered == true or CapsuleService.tripleLucky(player, data, clock())
 	local kinds = CapsuleService.roll(product.Capsule, count, lucky, newRandom(player))
@@ -440,7 +463,7 @@ local function grantCapsule(player: Player, data: { [string]: any }, entry: Mone
 	if not entry.Capsule or not CapsuleConfig.ById[entry.Capsule] or DataService.get(player) ~= data then
 		return false
 	end
-	local count = math.clamp(math.floor(entry.Count or 1), 1, 10)
+	local count = math.clamp(math.floor(entry.Count or 1), 1, CapsuleConfig.MaxCount)
 	local fits = math.max(0, GolemConfig.MaxSaved - GolemConfig.count(data.Golems))
 	local waiting = if type(data.Golems) == "table" and type(data.Golems.Pending) == "table" then #data.Golems.Pending else 0
 	if count - fits > GolemConfig.MaxPending - waiting then
@@ -501,7 +524,7 @@ function CapsuleService.wakePending(player: Player): number
 	if #woken > 0 then
 		DataService.changed(player)
 		Net.fire("Notify", player, {
-			Text = `{#woken} golem{if #woken == 1 then "" else "s"} from your Royal Capsules woke up!`,
+			Text = `{#woken} golem{if #woken == 1 then "" else "s"} you bought woke up: there was room in your inventory!`,
 			Kind = "Reward",
 		})
 	end
@@ -578,7 +601,7 @@ local function promptRobux(player: Player, capsuleId: string, count: number, res
 		return
 	end
 	local data = DataService.get(player)
-	local full = data ~= nil and GolemConfig.room(data.Golems) < count
+	local full = data ~= nil and GolemConfig.room(data.Golems) < math.min(count, CapsuleConfig.PromptRoom)
 	local status = MonetizationConfig.promptStatus(key, restricted, nil, full)
 	-- step 8's receipt handler isn't there yet: never take Robux for nothing
 	status = Receipts.gate(status)
@@ -625,14 +648,19 @@ local function onCapsuleAction(player: Player, action: any, arg: any)
 		refuse(player, "BadCapsule", nil)
 		return
 	end
-	local count = if args then Guard.integer(args.Count, 1, 10) else nil
-	-- (a Robux capsule may also come in the Store's own counts: Royal x5)
+	local count = if args then Guard.integer(args.Count, 1, CapsuleConfig.MaxCount) else nil
+	-- (a Robux capsule may also come in the Store's own counts: Royal x5, a limited capsule's x50)
 	if not count or not (CapsuleConfig.validCount(count) or CapsuleConfig.product(capsuleId, count) ~= nil) then
 		refuse(player, "BadCount", capsuleId)
 		return
 	end
 	if not DataService.get(player) then
 		refuse(player, "BadCapsule", capsuleId)
+		return
+	end
+	-- a limited edition's capsule after its end: no prompt (receipts are still granted)
+	if not LimitedGolems.onSale(capsuleId, clock()) then
+		refuse(player, "Ended", capsuleId)
 		return
 	end
 	-- the odds the client showed (junk = not sent)
@@ -699,16 +727,13 @@ local function hookStall(instance: Instance)
 	point.Name = CapsuleService.PointName
 	point.CFrame = offset
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = CapsuleService.PromptName
-	prompt.ActionText = "Capsules"
-	prompt.ObjectText = "Golem Capsules"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = CapsuleService.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = CapsuleService.PromptName,
+		ActionText = "Capsules",
+		ObjectText = "Golem Capsules",
+		Distance = CapsuleService.PromptDistance,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, stall)
 	end)

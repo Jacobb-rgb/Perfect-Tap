@@ -174,11 +174,14 @@ Net.Events = {
 	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |
 	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers; locked ones are
 	--   skipped) } (GolemConfig helpers)
-	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
-	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
+	WheelAction = { Rate = 1, Burst = 3 }, -- ("Spin"): the free daily spin when
+	--   WheelConfig.ready(data.Wheel.NextSpinAt, now), else one bought spin (data.Wheel.Spins,
+	--   not where paid random items are restricted); answer WheelResult (the player's wheel:
 	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
 	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
-	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise) |
+	--   ("Buy", { Count = 1 | 5 | 10 }): the BUY SPINS row's product (WheelConfig.Packs) is
+	--   prompted; answer PurchasePrompt { Product, Status } (never granted here)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
 	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
 	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
@@ -191,7 +194,7 @@ Net.Events = {
 	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
-	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean, FastSpin: boolean })
 	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
 	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
 	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these

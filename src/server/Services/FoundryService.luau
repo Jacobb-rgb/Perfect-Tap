@@ -37,7 +37,7 @@
 	  - The furnace's hopper (an IntakeService zone): your own ingots the next
 	    level can use go in while the stock has room; everything else bounces
 	    back out with a hint.
-	  - "Put In" prompt (F / gamepad Y, shown while you carry something): the
+	  - "Put In" prompt (E / gamepad Y, shown while you carry something): the
 	    carried ingots the next level can use.
 
 	FoundryAction (Net), all checked here:
@@ -81,6 +81,7 @@ local BlasterData = require(Shared.Config.BlasterData)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local FoundryLogic = require(Shared.Machines.FoundryLogic)
 local Grid = require(Shared.Machines.Grid)
@@ -832,20 +833,17 @@ local function makePrompt(
 	plotId: number,
 	name: string,
 	action: string,
-	key: Enum.KeyCode,
-	pad: Enum.KeyCode,
+	role: PromptConfig.Role,
 	order: number
 ): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = name
-	prompt.ActionText = action
-	prompt.ObjectText = "Foundry"
-	prompt.KeyboardKeyCode = key
-	prompt.GamepadKeyCode = pad
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, order * 72)
+	local prompt = PromptConfig.make({
+		Role = role,
+		Name = name,
+		ActionText = action,
+		ObjectText = "Foundry",
+		Distance = 10,
+		Slot = order,
+	})
 	prompt:SetAttribute("PlotId", plotId)
 	prompt:AddTag(FoundryService.PromptTag)
 	prompt.Parent = parent
@@ -891,11 +889,11 @@ local function setupPlot(plotId: number): boolean
 	end
 	local base = building.PrimaryPart :: BasePart
 	local anchor = base:FindFirstChild("Prompt") or base
-	local put = makePrompt(anchor, plotId, "FoundryPutIn", "Put In", Enum.KeyCode.F, Enum.KeyCode.ButtonY, 0)
+	local put = makePrompt(anchor, plotId, "FoundryPutIn", "Put In", "Main", 0)
 	put.Triggered:Connect(function(player: Player)
 		putIn(player, plotId)
 	end)
-	local open = makePrompt(anchor, plotId, "FoundryOpen", "Open Foundry", Enum.KeyCode.G, Enum.KeyCode.ButtonB, 1)
+	local open = makePrompt(anchor, plotId, "FoundryOpen", "Open Foundry", "Second", 1)
 	open.Triggered:Connect(function(player: Player)
 		openPanel(player, plotId)
 	end)

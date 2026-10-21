@@ -1,12 +1,12 @@
 --[[
 	SettingsService: saves the player's settings (SettingsConfig: music and
-	sound volume, camera shake, gamepad rumble) in data.Settings and sends
+	sound volume, camera shake, gamepad rumble, the wheel's Fast Spin) in data.Settings and sends
 	them back in the State snapshot (snapshot.Settings).
 
 	- On load the saved record is made whole and valid (SettingsConfig.sanitize:
 	  an old save without Settings, or a broken one, gets the defaults).
 	- SettingsSave (Net, rate limited) carries the whole record
-	  { Music, Sfx, Shake, Rumble }; the server keeps only what sanitize lets
+	  { Music, Sfx, Shake, Rumble, FastSpin }; the server keeps only what sanitize lets
 	  through and writes it when it differs from the saved one (then
 	  DataService.changed). Nothing else in the save can change here.
 	- The client applies its settings itself at once (SettingsController);

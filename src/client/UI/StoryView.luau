@@ -349,7 +349,7 @@ function StoryView.setEntries(refs: Refs, entries: { Entry }, onPick: ((string) 
 			LayoutOrder = i,
 			Size = UDim2.new(1, -12, 0, m.Row),
 		})
-		local lock = if entry.Unlocked then "" else "🔒 "
+		local lock = if entry.Unlocked then "" else "LOCKED: " -- (owner: no emoji, text only)
 		UIKit.label(button, lock .. entry.Title, m.Body, {
 			Name = "Label",
 			Position = UDim2.fromOffset(12, 4),

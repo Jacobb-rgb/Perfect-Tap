@@ -9,6 +9,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
@@ -171,7 +172,7 @@ return function(T, Loader)
 		T.truthy(point, "prompt point")
 		local prompt = point and point:FindFirstChild(VaultService.PromptName)
 		T.truthy(prompt, "prompt")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F, "F like the other counters (E grabs)")
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E like the other counters (F grabs)")
 		vault.hookCounter(w.counter)
 		local count = 0
 		for _, d in w.counter:GetDescendants() do

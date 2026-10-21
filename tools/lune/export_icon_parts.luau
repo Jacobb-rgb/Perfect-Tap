@@ -94,6 +94,23 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
+local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
+for name, make in CashBuilder.Pictures do
+	models[name] = make()
+end
+
+-- every golem and capsule (IconAssets' Golems sheet; the shop banner's cards)
+local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+for _, golem in GolemConfig.List do
+	models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+end
+for _, capsule in CapsuleConfig.List do
+	models["capsule_" .. capsule.Id] = GolemBuilder.capsule(capsule.Id)
+end
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then

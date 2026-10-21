@@ -1,5 +1,8 @@
 --[[
-	The game UI's "Bubble" kit tokens. 2026-10-18 the owner picked a light,
+	The game UI's "Bubble" kit tokens. 2026-10-20 night: the bright "Pop" look
+	of the Robux Shop for every window (owner after his Studio playtest: "upgrade
+	all the UI"): grey bodies, white text with black edges, black outlines,
+	bright headers per window. History: 2026-10-18 the owner picked a light,
 	playful look (white panels); 2026-10-20 he asked for every window in the
 	dark "Store card" style of his store photos (Config/CardTheme): dark slate
 	panels and cards, cream text, chunky coloured buttons and tiles with a dark
@@ -26,16 +29,16 @@ end
 local BubbleTheme = {
 	Font = Font.fromEnum(Enum.Font.FredokaOne),
 	TitleFont = Font.fromEnum(Enum.Font.LuckiestGuy),
-	CardFont = Font.fromEnum(Enum.Font.Cartoon), -- window titles, like the store photos (CardTheme.Font)
+	CardFont = Font.fromEnum(Enum.Font.FredokaOne), -- window titles: white with a thick black edge (the Pop look)
 
-	Outline = rgb(16, 18, 24), -- near black, like the store cards' edges
+	Outline = rgb(14, 14, 18), -- black edges (the Pop look)
 	Shadow = rgb(6, 7, 10),
 	ShadowTransparency = 0.72,
-	Panel = rgb(30, 33, 40), -- the dark card / window body
-	PanelTint = rgb(40, 44, 54), -- slot and row backgrounds inside panels (a shade lighter)
-	Ink = rgb(250, 248, 236), -- cream text on the dark panels
+	Panel = rgb(52, 55, 66), -- the window body: the Pop shop's grey (PopTheme.Body)
+	PanelTint = rgb(68, 72, 86), -- slot and row backgrounds inside panels (a shade lighter)
+	Ink = rgb(255, 255, 255), -- white text with a black edge
 	DarkInk = rgb(38, 48, 79), -- dark text on light faces (yellow buttons)
-	InkSoft = rgb(176, 184, 202),
+	InkSoft = rgb(210, 216, 230),
 	White = rgb(255, 255, 255),
 	Gold = rgb(255, 203, 46),
 	Good = rgb(62, 214, 98),

@@ -139,6 +139,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local SoundConfig = require(Shared.Config.SoundConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -2952,22 +2953,21 @@ end
 	The prompt rules (TrainConfig.PromptSlots / PromptSlotHeight / PromptTag,
 	the same numbers TrainService uses): on every Mine Station and Mine Lift
 	PromptPoint the server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0),
-	F / Y) and "TrainSendPrompt" (slot 1, (0, 72), G / B) are tagged
-	"TrainPrompt"; this client adds its own "TrainPanelPrompt" in slot 2
-	((0, 144), T / L3), untagged, so the three never overlap or share keys.
+	PromptConfig "Main": E / Y) and "TrainSendPrompt" (slot 1, (0, 72),
+	"Second": G / B) are tagged "TrainPrompt"; this client adds its own
+	"TrainPanelPrompt" in slot 2 ((0, 144), "Panel": T / L3), untagged, so
+	the three never overlap or share keys.
 ]]
 function TrainController.makePanelPrompt(objectText: string): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = TrainController.PanelPromptName
-	prompt.ActionText = "Train"
-	prompt.ObjectText = objectText
-	prompt.KeyboardKeyCode = Enum.KeyCode.T
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonL3
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = TrainController.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, TrainController.PromptSlot * TrainController.PromptSlotHeight)
-	return prompt
+	-- UIOffset = (0, PromptSlot * PromptConfig.SlotHeight) = (0, PromptSlot * PromptSlotHeight)
+	return PromptConfig.make({
+		Role = "Panel",
+		Name = TrainController.PanelPromptName,
+		ActionText = "Train",
+		ObjectText = objectText,
+		Distance = TrainController.PromptDistance,
+		Slot = TrainController.PromptSlot,
+	})
 end
 
 -- The "Train" panel prompt on a station's / lift's PromptPoint (slot 2, under the server's Load and Send).

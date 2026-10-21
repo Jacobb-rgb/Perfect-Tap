@@ -16,6 +16,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -191,8 +192,8 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(ShopService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "prompt")
 		T.eq(prompt.ActionText, "Tech Shop")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		T.eq(prompt.HoldDuration, 0)
 		T.falsy(prompt.RequiresLineOfSight, "no line of sight needed")
 		shop.hookCounter(w.counter)

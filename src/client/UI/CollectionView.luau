@@ -328,7 +328,7 @@ end
 -- argument a press sends ("" takes the reward off again).
 function CollectionView.useButton(artifacts: any, collectionId: string): (string, string)
 	if CollectionView.inUse(artifacts, collectionId) then
-		return "IN USE ✓", ""
+		return "IN USE", ""
 	end
 	return "USE TITLE + SKIN", collectionId
 end
@@ -696,7 +696,7 @@ function CollectionView.build(compact: boolean): Refs
 		TextWrapped = false,
 	})
 	-- the journal (the Prologue is always open), left of the X
-	local journal = UIKit.button(panel, "📜 JOURNAL", Theme.PanelLight, Theme.PanelDark, {
+	local journal = UIKit.button(panel, "JOURNAL", Theme.PanelLight, Theme.PanelDark, {
 		Name = "Journal",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -(m.Close + 20), 0, if compact then 8 else 12),
@@ -1182,7 +1182,7 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 			local complete = found >= count and count > 0
 			local progress = button:FindFirstChild("Progress") :: TextLabel?
 			if progress then
-				progress.Text = if complete then `{found} / {count}  ✓ complete` else `{found} / {count} found`
+				progress.Text = if complete then `{found} / {count} complete` else `{found} / {count} found`
 				progress.TextColor3 = if complete then Theme.Good else Theme.TextDim
 			end
 			local badge = button:FindFirstChild("New") :: TextLabel?
@@ -1679,7 +1679,7 @@ function CollectionView.menuButton(menu: Instance): MenuRefs
 		LayoutOrder = 30,
 		Size = UDim2.fromOffset(84, 64),
 	})
-	UIKit.label(button, "📖", 26, {
+	UIKit.label(button, "", 26, {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 4),

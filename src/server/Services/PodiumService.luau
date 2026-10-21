@@ -52,6 +52,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -630,15 +631,12 @@ local function setupPrompts(plotId: number)
 		if top then
 			local anchor = top:FindFirstChild("Prompt") or top
 			for _, info in PROMPTS do
-				local prompt = Instance.new("ProximityPrompt")
-				prompt.Name = info.Name
-				prompt.ActionText = info.Text
-				prompt.ObjectText = "Podium " .. slot
-				prompt.KeyboardKeyCode = Enum.KeyCode.F
-				prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-				prompt.HoldDuration = 0
-				prompt.MaxActivationDistance = 9
-				prompt.RequiresLineOfSight = false
+				local prompt = PromptConfig.make({
+					Name = info.Name,
+					ActionText = info.Text,
+					ObjectText = "Podium " .. slot,
+					Distance = 9,
+				})
 				prompt:SetAttribute("PlotId", plotId)
 				prompt:SetAttribute("Slot", slot)
 				prompt:SetAttribute("Action", info.Action)

@@ -27,8 +27,8 @@
 	owner's account. When the owner uploads the header icon, set
 	HeaderIconImage to its asset id and an ImageLabel is used instead. (The
 	side menu's ELEVATOR button is main's SideMenuView entry "Elevator": its
-	icon comes from SideMenuView.Icons, which the light-UI restyle swaps for
-	sprites; the owner's elevator_icon.webp belongs there.)
+	icon is the light HUD's "lift" sprite (HudBubble.EntryLooks); the owner's
+	elevator_icon.webp belongs there.)
 
 	Also here: the void rescue's fade (buildFade).
 

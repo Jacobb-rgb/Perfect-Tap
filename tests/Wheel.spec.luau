@@ -1,13 +1,24 @@
--- The daily wheel (step 7): WheelService (the free spin: cooldown saved
--- before the prize, every prize kind and its fallbacks, the paid-random
--- substitutes, junk input, the EmberChest prompt) and WheelView's pure
--- parts (exact odds rows, percent / countdown texts, the disc angles that
--- put a segment under the pointer, the pie bars, phone layouts, the chip).
+-- The Spin & Win wheel (step 7; bought spins and the Pop look, owner
+-- 2026-10-20): WheelService (the free spin: cooldown saved before the
+-- prize, every prize kind and its fallbacks, the paid-random substitutes,
+-- junk input, the EmberChest prompt; bought spins: the receipt banks them,
+-- the free spin goes first, bought ones ignore the cooldown and use the same
+-- table, restricted players can't buy or spin them, "Buy" only prompts)
+-- and WheelView (exact odds rows, percent / countdown texts, the disc angles
+-- that put a segment under the pointer, the pie bars, SPIN (n), Fast Spin,
+-- the buy step's odds, the jackpot tiles, every screen's layout and touch
+-- sizes, no emoji, the chip).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
+	local fs = require("@lune/fs") :: any
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+	local SettingsConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SettingsConfig")
+	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
+	local Receipts = Loader.requirePath("ServerScriptService.Server.Receipts")
+	local BoostService = Loader.requirePath("ServerScriptService.Server.Services.BoostService")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
@@ -24,6 +35,9 @@ return function(T, Loader)
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+	local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
 
 	local NOW = 1_800_000_000
 	local DAY = WheelConfig.CooldownSeconds
@@ -188,6 +202,10 @@ return function(T, Loader)
 	withWheel("Wheel: junk actions get no answer; no save answers NotReady", function(w)
 		local before = #w.replies
 		WheelService._test.action(w.player, "Buy")
+		WheelService._test.action(w.player, "Buy", { Count = 3 })
+		WheelService._test.action(w.player, "Buy", { Count = 0 / 0 })
+		WheelService._test.action(w.player, "Buy", { Count = "5" })
+		WheelService._test.action(w.player, "Buy", { Count = 5, A = 1, B = 2 })
 		WheelService._test.action(w.player, nil)
 		WheelService._test.action(w.player, { "Spin" })
 		T.eq(#w.replies, before, "dropped")
@@ -525,6 +543,358 @@ return function(T, Loader)
 		T.eq(w.data.Stats.WheelSpins, #WheelConfig.Segments)
 	end)
 
+	---------------------------------------------------------------- bought spins (Robux)
+
+	T.test("Wheel: the BUY SPINS rows are three paid random products (25 / 99 / 179)", function()
+		local prices = { [1] = 25, [5] = 99, [10] = 179 }
+		T.eq(#WheelConfig.Packs, 3)
+		for _, pack in WheelConfig.Packs do
+			local product = MonetizationConfig.get(pack.Product)
+			T.truthy(product, pack.Product)
+			T.eq(product.Kind, "Product", pack.Product .. ": bought again and again")
+			T.eq(product.Grant, "WheelSpins")
+			T.eq(product.Spins, pack.Count)
+			T.eq(product.Robux, prices[pack.Count], pack.Product .. " price")
+			T.truthy(product.PaidRandom, pack.Product .. ": a paid random item")
+			T.eq(product.Id, 0, "the owner pastes the id later")
+			T.eq(MonetizationConfig.promptStatus(pack.Product, true), "Restricted", "never sold where restricted")
+			T.eq(MonetizationConfig.promptStatus(pack.Product, false), "ComingSoon", "id 0: coming soon")
+			T.eq(WheelConfig.packFor(pack.Count), pack)
+		end
+		T.eq(WheelConfig.packFor(3), nil)
+		T.eq(WheelConfig.packFor("5"), nil)
+		-- the spins a save holds, and SPIN (n)
+		T.eq(WheelConfig.heldSpins({ Spins = 3 }), 3)
+		T.eq(WheelConfig.heldSpins({ Spins = 2.6 }), 2)
+		T.eq(WheelConfig.heldSpins({ Spins = -1 }), 0)
+		T.eq(WheelConfig.heldSpins({ Spins = 0 / 0 }), 0)
+		T.eq(WheelConfig.heldSpins(nil), 0)
+		T.eq(WheelConfig.spinsNow({ NextSpinAt = 0, Spins = 2 }, NOW, false), 3, "free + bought")
+		T.eq(WheelConfig.spinsNow({ NextSpinAt = 0, Spins = 2 }, NOW, true), 1, "restricted: the free one only")
+		T.eq(WheelConfig.spinsNow({ NextSpinAt = NOW + 60, Spins = 2 }, NOW, false), 2)
+		T.eq(WheelConfig.spinsNow({ NextSpinAt = NOW + 60, Spins = 0 }, NOW, false), 0)
+		T.truthy(WheelConfig.MaxSpins >= 100 and WheelConfig.MaxSavedSpins > WheelConfig.MaxSpins, "caps")
+		T.truthy(WheelConfig.Reasons.Restricted and WheelConfig.Reasons.NotReady, "reason texts")
+		local limit = Net.Events.WheelAction
+		T.truthy(limit.Rate > 0 and limit.Rate <= 4 and limit.Burst >= 2, "WheelAction (Spin / Reveal / Buy) is rate limited")
+		T.eq(DataTemplate.Wheel.Spins, 0, "a new save holds no bought spins")
+	end)
+
+	withWheel("Wheel: the receipt handler banks bought spins (nothing spins)", function(w)
+		local grant = WheelService._test.grantSpins
+		T.truthy(grant(w.player, w.data, MonetizationConfig.get("WheelSpins5")), "5 spins")
+		T.eq(w.data.Wheel.Spins, 5)
+		T.truthy(grant(w.player, w.data, MonetizationConfig.get("WheelSpins1")), "1 more")
+		T.eq(w.data.Wheel.Spins, 6)
+		local notify = w.replies[#w.replies]
+		T.eq(notify.Event, "Notify")
+		T.truthy(string.find(notify.A.Text, "you have 6", 1, true), "says how many")
+		-- junk entries and another save are refused (MonetizationService keeps the receipt pending)
+		T.falsy(grant(w.player, w.data, { Key = "X", Kind = "Product", Id = 0, Robux = 1, Name = "x", Description = "", Spins = 0 }))
+		T.falsy(grant(w.player, w.data, { Key = "X", Kind = "Product", Id = 0, Robux = 1, Name = "x", Description = "", Spins = 2.5 }))
+		T.falsy(grant(w.player, w.data, { Key = "X", Kind = "Product", Id = 0, Robux = 1, Name = "x", Description = "" }))
+		T.falsy(grant(w.player, deepCopy(w.data), MonetizationConfig.get("WheelSpins1")), "not the loaded save")
+		T.eq(w.data.Wheel.Spins, 6)
+		-- past MaxSpins all of them still count (a receipt is never cut)
+		w.data.Wheel.Spins = WheelConfig.MaxSpins
+		T.truthy(grant(w.player, w.data, MonetizationConfig.get("WheelSpins10")))
+		T.eq(w.data.Wheel.Spins, WheelConfig.MaxSpins + 10)
+		T.eq(w.data.Stats.WheelSpins, 0, "nothing was spun")
+		T.eq(w.data.Wheel.NextSpinAt, 0, "the free spin untouched")
+	end)
+
+	withWheel("Wheel: the free spin goes first, then bought spins (they ignore the cooldown)", function(w)
+		w.data.Wheel.Spins = 2
+		local first = w.spin(rollFor(4)).A
+		T.eq(first.Paid, false, "the free spin first")
+		T.eq(first.Spins, 2)
+		T.eq(w.data.Wheel.NextSpinAt, NOW + DAY)
+		T.eq(w.data.Wheel.Spins, 2, "no bought spin used")
+		local second = w.spin(rollFor(1))
+		T.eq(second.Event, "WheelResult", "a bought spin while the free one waits")
+		T.eq(second.A.Paid, true)
+		T.eq(second.A.Spins, 1)
+		T.eq(w.data.Wheel.Spins, 1)
+		T.eq(w.data.Wheel.NextSpinAt, NOW + DAY, "the cooldown stays as it was")
+		T.eq(second.A.NextSpinAt, NOW + DAY)
+		T.eq(w.spin(rollFor(1)).A.Spins, 0)
+		local none = w.spin(rollFor(1))
+		T.eq(none.Event, "ActionResult")
+		T.eq(none.A.Reason, "NotReady", "nothing left")
+		T.eq(w.data.Stats.WheelSpins, 3)
+		-- the next day the free one goes first again
+		w.data.Wheel.Spins = 1
+		w.now += DAY
+		local free = w.spin(rollFor(1)).A
+		T.eq(free.Paid, false)
+		T.eq(w.data.Wheel.Spins, 1)
+	end)
+
+	withWheel("Wheel: a bought spin draws from the same table as the free one", function(w)
+		w.data.Wheel.NextSpinAt = NOW + DAY
+		w.data.Wheel.Spins = #WheelConfig.Segments
+		for index = 1, #WheelConfig.Segments do
+			local result = w.spin(rollFor(index), 0.5).A
+			T.eq(result.Paid, true)
+			T.eq(result.Segment, index, "segment " .. index)
+			T.eq(result.Id, WheelConfig.pick(rollFor(index), false).Id, "WheelConfig.pick, the free spin's table")
+		end
+		T.eq(w.data.Wheel.Spins, 0)
+	end)
+
+	withWheel("Wheel: where paid random items are restricted the free spin works, bought spins wait", function(w)
+		w.restricted = true
+		w.data.Wheel.Spins = 3
+		local free = w.spin(rollFor(1))
+		T.eq(free.Event, "WheelResult", "the free daily spin works for everyone")
+		T.eq(free.A.Paid, false)
+		local refused = w.spin(rollFor(1))
+		T.eq(refused.Event, "ActionResult")
+		T.eq(refused.A.Reason, "Restricted", "bought spins are never spun where restricted")
+		T.eq(w.data.Wheel.Spins, 3, "kept in the save")
+		T.eq(w.data.Stats.WheelSpins, 1)
+		-- the policy allows them again (another region): they spin
+		w.restricted = false
+		T.eq(w.spin(rollFor(1)).A.Paid, true)
+		T.eq(w.data.Wheel.Spins, 2)
+		-- nothing to spin never asks PolicyService
+		w.data.Wheel.Spins = 0
+		local calls = w.policyCalls
+		w.spin(rollFor(1))
+		T.eq(w.policyCalls, calls, "no policy call without a spin to use")
+	end)
+
+	withWheel("Wheel: Buy only prompts the row's product; restricted players can't buy", function(w)
+		local prompted: { string } = {}
+		BoostService._test.setPrompter(function(_p: any, product: any)
+			table.insert(prompted, product.Key)
+		end)
+		Receipts._test.setPublisher(function() end)
+		local buy = function(count: any): any
+			local before = #w.replies
+			WheelService._test.action(w.player, "Buy", { Count = count })
+			return if #w.replies > before then w.replies[#w.replies] else nil
+		end
+		local ok, err = pcall(function()
+			w.restricted = true
+			local refused = buy(5)
+			T.eq(refused.Event, "PurchasePrompt")
+			T.eq(refused.A.Product, "WheelSpins5")
+			T.eq(refused.A.Status, "Restricted", "never sold where restricted")
+			T.eq(#prompted, 0, "no prompt")
+			w.restricted = false
+			T.eq(buy(1).A.Status, "ComingSoon", "id 0: never prompted")
+			MonetizationConfig.Products.WheelSpins10.Id = 4242
+			T.eq(buy(10).A.Status, "ComingSoon", "the receipts gate is shut")
+			Receipts.setReady(true)
+			local live = buy(10)
+			T.eq(live.A.Product, "WheelSpins10")
+			T.eq(live.A.Status, "Prompted")
+			T.eq(prompted[1], "WheelSpins10", "MarketplaceService's prompt")
+			w.data.Wheel.Spins = WheelConfig.MaxSpins - 5
+			T.eq(buy(10).A.Status, "Full", "past MaxSpins held: not offered")
+			T.eq(#prompted, 1)
+			T.eq(w.data.Wheel.Spins, WheelConfig.MaxSpins - 5, "a Buy never grants")
+			T.eq(w.data.Stats.WheelSpins, 0)
+		end)
+		MonetizationConfig.Products.WheelSpins10.Id = 0
+		Receipts._test.reset()
+		BoostService._test.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- (review 269fd39 #1) a bought spin never swaps a golem for coins; the rows say what a full pen pays
+	local function fillGolems(w: any)
+		for _ = 1, GolemConfig.InventoryCap do
+			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
+		end
+		T.eq(GolemConfig.room(w.data.Golems), 0, "the golem inventory is full")
+	end
+
+	local function fillPen(w: any)
+		for _ = 1, 5000 do
+			if PenService.refusal(w.data) then
+				break
+			end
+			table.insert(w.data.Storage, { K = "Raw", O = "Coal" })
+		end
+		T.truthy(PenService.refusal(w.data) ~= nil, "the Ore Pen is full")
+	end
+
+	-- The State the client would get for this save (the fields WheelView.info reads).
+	local function stateOf(w: any): any
+		return {
+			Golems = w.data.Golems,
+			BlasterLevel = w.data.BlasterLevel,
+			Stats = w.data.Stats,
+			Discovered = w.data.Discovered,
+			StorageCount = #w.data.Storage,
+			PenCapacity = PenService.capacityOf(w.data),
+			PenOver = PenService.isOver(w.data),
+			Bonuses = { SellMult = 1, TripleLucky = false },
+		}
+	end
+
+	withWheel("Wheel: a bought spin with a full golem inventory is refused and stays saved", function(w)
+		w.data.Wheel.NextSpinAt = NOW + DAY -- only bought spins
+		w.data.Wheel.Spins = 3
+		fillGolems(w)
+		local coins = w.data.Coins
+		local refused = w.spin(rollFor(3))
+		T.eq(refused.Event, "ActionResult")
+		T.eq(refused.A.Reason, "InventoryFull")
+		T.truthy(WheelConfig.Reasons.InventoryFull, "a reason text")
+		T.eq(w.data.Wheel.Spins, 3, "the bought spin stays saved")
+		T.eq(w.data.Stats.WheelSpins, 0, "nothing spun")
+		T.eq(w.data.Coins, coins, "no coins instead of the prize")
+		T.eq(w.data.Wheel.NextSpinAt, NOW + DAY)
+		-- room again: the bought spin goes, its golem is a paid one
+		table.remove(w.data.Golems.Owned)
+		local result = w.spin(rollFor(3), 0.0).A
+		T.eq(result.Paid, true)
+		T.eq(result.Capsule, "Stone")
+		T.truthy(result.Golem, "the golem, not coins")
+		T.eq(w.data.Wheel.Spins, 2)
+	end)
+
+	withWheel("Wheel: a free spin with a full golem inventory still pays coins (bought spins untouched)", function(w)
+		w.data.Wheel.Spins = 2
+		fillGolems(w)
+		local result = w.spin(rollFor(3)).A
+		T.eq(result.Paid, false, "the free spin")
+		T.eq(result.Kind, "Capsule")
+		T.falsy(result.Golem)
+		T.eq(result.Full, true)
+		local share = WheelConfig.capsuleFallbackCoins("Stone", BlasterData.priceLevel(w.data))
+		T.eq(result.Coins, share, "the coin share as before")
+		T.eq(w.data.Wheel.Spins, 2, "no bought spin used")
+		-- the row said so before the spin, with the same amount
+		local info = WheelView.info(stateOf(w), false)
+		T.eq(info.GolemRoom, 0)
+		T.eq(WheelView.capsuleFallback(info, "Stone"), share, "the row's amount is what the server pays")
+		T.truthy(
+			string.find(WheelView.detail(WheelConfig.ById.StoneCapsule, info), `pays {Format.money(share)} coins instead`, 1, true),
+			"the capsule row says it"
+		)
+	end)
+
+	withWheel("Wheel: a full Ore Pen is disclosed in the rows with the coins the server pays", function(w)
+		fillPen(w)
+		local info = WheelView.info(stateOf(w), false)
+		T.eq(info.PenFull, true, "the client sees the full pen")
+		local detail = WheelView.detail(WheelConfig.ById.OrePrize, info)
+		local note = `Ore Pen full: pays {Format.money(WheelView.oreFallback(info))} coins instead`
+		T.eq(detail:sub(1, #note), note, "the ore row starts with the note (a cut row never hides it)")
+		local result = w.spin(rollFor(7)).A
+		T.falsy(result.DirtyOre)
+		T.eq(result.Coins, WheelView.oreFallback(info), "the server pays what the row said")
+		-- a free pen, room for golems, or nothing known: no note
+		local clear = WheelView.info({ Golems = { Owned = {} }, StorageCount = 0, PenCapacity = 30 }, false)
+		T.eq(clear.PenFull, false)
+		T.eq(clear.GolemRoom, GolemConfig.InventoryCap)
+		for _, segment in WheelConfig.Segments do
+			T.falsy(string.find(WheelView.detail(segment, clear), "full: pays", 1, true), segment.Id .. ": no note")
+			T.falsy(
+				string.find(WheelView.detail(segment, WheelView.info(nil, false)), "full: pays", 1, true),
+				segment.Id .. ": unknown, no note"
+			)
+		end
+	end)
+
+	withWheel("Wheel: Buy answers Full when the golem inventory has no room", function(w)
+		fillGolems(w)
+		local before = #w.replies
+		WheelService._test.action(w.player, "Buy", { Count = 5 })
+		local reply = w.replies[#w.replies]
+		T.truthy(#w.replies > before)
+		T.eq(reply.Event, "PurchasePrompt")
+		T.eq(reply.A.Status, "Full", "a bought spin couldn't be used")
+		T.truthy(WheelService.inventoryBlocks(w.data))
+		table.remove(w.data.Golems.Owned)
+		T.falsy(WheelService.inventoryBlocks(w.data), "room again")
+		WheelService._test.action(w.player, "Buy", { Count = 5 })
+		T.eq(w.replies[#w.replies].A.Status, "ComingSoon", "id 0: offered again")
+		-- the client says which Full it is
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		T.truthy(source:find("then WheelConfig.Reasons.InventoryFull else WheelConfig.Reasons.MaxSpins", 1, true), "the Full text")
+	end)
+
+	-- (review 269fd39 #2) golems from bought spins are Robux golems
+	withWheel("Wheel: a bought spin's golem is saved Paid and Locked (the free spin's isn't)", function(w)
+		-- the wheel's own opening (no capsule package)
+		w.data.Wheel.Spins = 1
+		local free = w.spin(rollFor(3), 0.0).A
+		T.eq(free.Paid, false)
+		local freeGolem = GolemConfig.find(w.data.Golems, free.Golem.Id)
+		T.falsy(freeGolem.Paid, "a free spin's golem is not paid")
+		T.falsy(freeGolem.Locked)
+		local bought = w.spin(rollFor(3), 0.0).A
+		T.eq(bought.Paid, true)
+		local paidGolem = GolemConfig.find(w.data.Golems, bought.Golem.Id)
+		T.eq(paidGolem.Paid, true, "Paid")
+		T.eq(paidGolem.Locked, true, "Locked")
+		-- through the real capsule package: the same, and its opening says PaidSpin
+		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		WheelService._test.setCapsules(CapsuleService :: any)
+		local sources: { string } = {}
+		CapsuleService.onOpened(function(_p: any, info: any)
+			table.insert(sources, info.Source)
+		end)
+		local ok, err = pcall(function()
+			w.data.Wheel.Spins = 1
+			w.data.Wheel.NextSpinAt = NOW + DAY
+			local result = w.spin(rollFor(8)).A
+			T.eq(result.Paid, true)
+			local golem = GolemConfig.find(w.data.Golems, result.Golem.Id)
+			T.eq(golem.Paid, true, "Paid (CapsuleService)")
+			T.eq(golem.Locked, true, "Locked (CapsuleService)")
+			T.eq(sources[#sources], "PaidSpin", "analytics: from a paid spin")
+			w.now += DAY
+			local again = w.spin(rollFor(3)).A
+			T.eq(again.Paid, false)
+			T.falsy(GolemConfig.find(w.data.Golems, again.Golem.Id).Paid, "the free spin's golem")
+			T.eq(sources[#sources], "Free")
+		end)
+		CapsuleService._test.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("Wheel: Migrations keep bought spins whole and sane (idempotent)", function()
+		local cases: { { any } } = {
+			{ "none", 0 },
+			{ -3, 0 },
+			{ 0 / 0, 0 },
+			{ "x", 0 },
+			{ 2.7, 2 },
+			{ 12, 12 },
+			{ 1e12, WheelConfig.MaxSavedSpins },
+		}
+		for _, case in cases do
+			local data = deepCopy(DataTemplate)
+			data.Wheel.Spins = if case[1] == "none" then nil else case[1]
+			Migrations.run(data, NOW)
+			T.eq(data.Wheel.Spins, case[2], `Spins {tostring(case[1])}`)
+			local again = deepCopy(data)
+			local report = Migrations.run(again, NOW)
+			T.eq(again.Wheel.Spins, data.Wheel.Spins, "idempotent")
+			T.eq(report.Dropped, 0, "nothing more to repair")
+		end
+	end)
+
+	T.test("Wheel: Fast Spin is a saved setting (off by default)", function()
+		T.eq(SettingsConfig.Defaults.FastSpin, false)
+		T.eq(DataTemplate.Settings.FastSpin, false)
+		T.eq(SettingsConfig.sanitize(nil).FastSpin, false)
+		T.eq(SettingsConfig.sanitize({ FastSpin = true }).FastSpin, true)
+		T.eq(SettingsConfig.sanitize({ FastSpin = "yes" }).FastSpin, false, "junk: the default")
+		T.falsy(SettingsConfig.equal(SettingsConfig.sanitize({ FastSpin = true }), SettingsConfig.sanitize(nil)), "a change is sent")
+		T.eq(SettingsConfig.merge({ Music = 0.2 }, { FastSpin = true }).Music, 0.2, "the other settings stay")
+	end)
+
 	---------------------------------------------------------------- the EmberChest prompt
 
 	withWheel("Wheel: the EmberChest gets one Spin & Win prompt that opens the wheel screen", function(w)
@@ -736,52 +1106,142 @@ return function(T, Loader)
 		T.eq(#refs.Labels, count)
 	end)
 
-	T.test("WheelView: phone layouts fit, touch targets are 44 pt", function()
-		-- (uiScale, maxW, maxH) in design units: a 568 x 320 pt and a 667 x 375 pt phone, a PC, a TV
+	local function midInfo(): any
+		return {
+			NoCapsules = false,
+			Income = 640,
+			Ore = { BlasterLevel = 4, BestIncome = 900, Vip = false },
+			TripleLucky = false,
+		}
+	end
+
+	-- A gui's box in its parent's offsets (offset positions and sizes only).
+	local function box(gui: any): { X: number, Y: number, W: number, H: number }
+		local s = gui.Size
+		return {
+			X = gui.Position.X.Offset - gui.AnchorPoint.X * s.X.Offset,
+			Y = gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset,
+			W = s.X.Offset,
+			H = s.Y.Offset,
+		}
+	end
+	local function overlap(a: any, b: any): boolean
+		return a.X < b.X + b.W and b.X < a.X + a.W and a.Y < b.Y + b.H and b.Y < a.Y + a.H
+	end
+
+	T.test("WheelView: every screen fits, nothing overlaps, touch targets are 44 pt", function()
+		-- (uiScale, maxW, maxH) in design units: a 568 x 320 pt and a 667 x 375 pt phone, PCs, a TV
 		local screens = {
-			{ Compact = true, Scale = 0.62, W = 568 / 0.62, H = (320 - 58) / 0.62 },
-			{ Compact = true, Scale = 0.62, W = 667 / 0.62, H = (375 - 58) / 0.62 },
-			{ Compact = false, Scale = 1.25, W = 1920 / 1.25, H = (1080 - 36) / 1.25 },
-			{ Compact = true, Scale = 1.25, W = 1920 / 1.25, H = (1080 - 36) / 1.25 },
+			{ Name = "phone 568x320", Compact = true, Scale = 0.62, W = 568 / 0.62, H = (320 - 58) / 0.62 },
+			{ Name = "phone 667x375", Compact = true, Scale = 0.62, W = 667 / 0.62, H = (375 - 58) / 0.62 },
+			{ Name = "PC 1280x720", Compact = false, Scale = 1, W = 1280, H = 720 - 36 },
+			{ Name = "PC 1920x1080", Compact = false, Scale = 1.25, W = 1920 / 1.25, H = (1080 - 36) / 1.25 },
+			{ Name = "TV", Compact = true, Scale = 1.25, W = 1920 / 1.25, H = (1080 - 36) / 1.25 },
 		}
 		for _, screen in screens do
+			local name = screen.Name
 			local refs = WheelView.build(screen.Compact)
+			WheelView.setRows(refs, WheelView.rows(midInfo()))
 			WheelView.layout(refs, screen.W, screen.H)
 			local size = refs.Panel.Size
-			T.truthy(size.X.Offset <= screen.W and size.Y.Offset <= screen.H, "the panel fits")
+			T.truthy(size.X.Offset <= screen.W and size.Y.Offset <= screen.H, `{name}: everything fits`)
 			local wheel = refs.WheelBox.Size.X.Offset
-			T.truthy(wheel >= 200, "a readable wheel")
-			T.truthy(refs.WheelBox.Position.Y.Offset + wheel + 72 <= size.Y.Offset, "the button under the wheel fits")
-			if screen.Compact and screen.Scale <= 0.62 then
-				local button = (refs.Spin.Parent :: any).Size.Y.Offset
-				T.truthy(button * screen.Scale >= 44, "SPIN! is 44 pt")
-				T.truthy(refs.Close.Parent.Size.Y.Offset * screen.Scale >= 44, "X is 44 pt")
+			T.truthy(wheel >= 200, `{name}: a readable wheel ({wheel})`)
+			T.truthy(refs.WheelBox.Position.Y.Offset + wheel + 72 <= size.Y.Offset, `{name}: the SPIN banner under the wheel fits`)
+			-- the cards beside the wheel, inside the box, clear of the wheel and of each other
+			local wheelBox = box(refs.WheelBox)
+			local buy = box(refs.Buy)
+			T.truthy(refs.JackpotShown, `{name}: room for the jackpot card`)
+			local jackpot = box(refs.Jackpot)
+			for cardName, card in { Buy = buy, Jackpot = jackpot } do
+				T.truthy(card.X >= 0 and card.Y >= 0, `{name}: {cardName} inside (top left)`)
+				T.truthy(card.X + card.W <= size.X.Offset and card.Y + card.H <= size.Y.Offset, `{name}: {cardName} inside`)
+				T.falsy(overlap(card, wheelBox), `{name}: {cardName} clear of the wheel`)
 			end
+			T.falsy(overlap(buy, jackpot), `{name}: the cards apart`)
+			-- the BUY SPINS card holds its rows, Details and Fast Spin
+			local fast = box(refs.FastSpin)
+			local details = box(refs.Details)
+			T.truthy(fast.Y + fast.H <= buy.H and details.Y + details.H <= buy.H, `{name}: Details and Fast Spin in the card`)
+			for _, row in refs.BuyRows do
+				local r = box(row.Frame)
+				T.truthy(r.Y + r.H <= details.Y, `{name}: x{row.Count} above Details`)
+				T.truthy(row.Button.Size.X.Offset <= r.W, `{name}: x{row.Count}'s price in its row`)
+			end
+			-- the jackpot tiles fit their card
+			local grid = refs.JackpotTiles:FindFirstChildOfClass("UIGridLayout")
+			local count = 0
+			for _, child in refs.JackpotTiles:GetChildren() do
+				if child:IsA("Frame") then
+					count += 1
+				end
+			end
+			local columns = grid.FillDirectionMaxCells
+			local rowsN = math.ceil(count / columns)
+			local tile = grid.CellSize.Y.Offset
+			local gap = grid.CellPadding.Y.Offset
+			T.truthy(rowsN * tile + (rowsN - 1) * gap <= refs.JackpotTiles.Size.Y.Offset, `{name}: every golem tile in the card`)
+			T.truthy(
+				columns * grid.CellSize.X.Offset + (columns - 1) * grid.CellPadding.X.Offset <= refs.JackpotTiles.Size.X.Offset,
+				`{name}: tiles wide`
+			)
+			-- the X: at the wheel's top right, its red square off the painted faces, clear of the cards
+			local close = box(refs.Close)
+			local face = refs.Close:FindFirstChild("Face")
+			local extra = (close.W - face.Size.X.Offset) / 2
+			local cx, cy = wheelBox.X + wheel / 2, wheelBox.Y + wheel / 2
+			local left, bottom = close.X + extra, close.Y + extra + face.Size.Y.Offset
+			T.truthy(left > cx and bottom < cy, `{name}: the X at the top right`)
+			local dx, dy = left - cx, cy - bottom
+			T.truthy(math.sqrt(dx * dx + dy * dy) >= wheel / 2 * WheelView.DiscShare, `{name}: the X off the faces`)
+			T.falsy(overlap(close, jackpot), `{name}: the X clear of the jackpot card`)
+			T.truthy(close.Y >= -8, `{name}: the X on screen`)
+			if screen.Compact and screen.Scale <= 0.62 then
+				local s = screen.Scale
+				T.truthy((refs.Spin.Parent :: any).Size.Y.Offset * s >= 44 and refs.Spin.Size.Y.Offset * s >= 44, `{name}: SPIN is 44 pt`)
+				T.truthy(close.H * s >= 44 and close.W * s >= 44, `{name}: X is 44 pt`)
+				for count2, button in refs.BuyButtons do
+					T.truthy(button.Size.Y.Offset * s >= 44, `{name}: x{count2}'s price button is 44 pt`)
+				end
+				T.truthy(details.H * s >= 44, `{name}: Details is 44 pt`)
+				T.truthy(fast.H * s >= 44 and fast.W * s >= 44, `{name}: Fast Spin is 44 pt`)
+				T.truthy(refs.OddsBuy.Size.Y.Offset * s >= 44, `{name}: the buy step's price button is 44 pt`)
+				T.truthy(refs.OddsClose.Size.Y.Offset * s >= 44, `{name}: the odds window's X is 44 pt`)
+				T.truthy(refs.InfoClose.Size.Y.Offset * s >= 44, `{name}: the card's X is 44 pt`)
+				T.truthy(refs.ResultOk.Size.Y.Offset * s >= 44, `{name}: OK is 44 pt`)
+			end
+			-- the odds window: on screen, all 8 rows in view, no scrolling (phones: a 2 x 4 grid of 44 pt tiles)
+			local card = refs.OddsCard.Size
+			T.truthy(card.X.Offset <= screen.W and card.Y.Offset <= screen.H, `{name}: the odds window fits`)
 			local odds = refs.Odds
-			T.truthy(odds.Position.X.Offset + odds.Size.X.Offset <= size.X.Offset, "the odds fit")
-			-- all 8 rows in view, no scrolling (phones: a 2 x 4 grid of 44 pt tiles)
-			local info = {
-				NoCapsules = false,
-				Income = 640,
-				Ore = { BlasterLevel = 4, BestIncome = 900, Vip = false },
-				TripleLucky = false,
-			}
-			WheelView.setRows(refs, WheelView.rows(info))
-			T.truthy(odds.CanvasSize.Y.Offset <= odds.Size.Y.Offset, "every row in view")
-			T.falsy(refs.More.Visible, "nothing hidden below")
+			T.truthy(odds.CanvasSize.Y.Offset <= odds.Size.Y.Offset, `{name}: every row in view`)
+			T.falsy(refs.More.Visible, `{name}: nothing hidden below`)
 			if screen.Compact and screen.Scale <= 0.62 then
 				local cell = odds:FindFirstChildOfClass("UIGridLayout").CellSize
-				T.truthy(cell.Y.Offset * screen.Scale >= 44, "a row is 44 pt to tap")
-				T.truthy(refs.InfoClose.Parent.Size.Y.Offset * screen.Scale >= 44, "the card's X is 44 pt")
+				T.truthy(cell.Y.Offset * screen.Scale >= 44, `{name}: a row is 44 pt to tap`)
 			end
+			-- the prize card over the wheel's lower half, inside
+			local result = box(refs.Result)
+			T.truthy(result.Y >= 0 and result.Y + result.H <= size.Y.Offset, `{name}: the prize card fits`)
+			T.truthy(result.Y >= wheelBox.Y + wheel * 0.3, `{name}: the won segment stays in view under the pointer`)
+			T.truthy(refs.ResultOk.Size.Y.Offset + 60 <= result.H, `{name}: OK in the card`)
 			-- the biggest details card (a capsule's 14 golems) fits its card
+			WheelView.showOdds(refs)
 			WheelView.showInfo(refs, "StoneCapsule")
 			local lines = refs.InfoLines
 			T.truthy(
 				lines.Position.Y.Offset + 7 * lines:FindFirstChildOfClass("UIGridLayout").CellSize.Y.Offset <= refs.Info.Size.Y.Offset,
-				"the golem odds fit the card"
+				`{name}: the golem odds fit the card`
 			)
+			refs.Gui:Destroy()
 		end
+		-- a screen too narrow for both cards: the jackpot hides (Details lists it)
+		local narrow = WheelView.build(true)
+		WheelView.layout(narrow, 600, 600)
+		T.falsy(narrow.JackpotShown, "a narrow screen: no jackpot card")
+		T.falsy(narrow.Jackpot.Visible)
+		T.truthy(narrow.Panel.Size.X.Offset <= 600, "the rest fits")
+		T.truthy(narrow.WheelBox.Size.X.Offset >= 220, "the wheel keeps its size")
 		-- a list longer than its box says so
 		local short = WheelView.build(false)
 		WheelView.layout(short, 1280, 420)
@@ -795,6 +1255,202 @@ return function(T, Loader)
 			})
 		)
 		T.truthy(short.More.Visible, "more below")
+	end)
+
+	T.test("WheelView: SPIN (n), the free spin line and Fast Spin", function()
+		T.eq(WheelView.spinCount(true, 0), 1)
+		T.eq(WheelView.spinCount(true, 2), 3)
+		T.eq(WheelView.spinCount(false, 0), 0)
+		T.eq(WheelView.spinCount(false, 5), 5)
+		T.eq(WheelView.spinCount(false, 0 / 0), 0, "junk")
+		local refs = WheelView.build(false)
+		local label = refs.Spin:FindFirstChild("Label")
+		WheelView.setReady(refs, true, 0, false, 2)
+		T.eq(label.Text, "SPIN (3)", "the free one + 2 bought")
+		T.eq(refs.SpinCount, 3)
+		T.eq(refs.Status.Text, "FREE SPIN READY!")
+		T.truthy(refs.Spin:GetAttribute("Ready"))
+		WheelView.setReady(refs, false, 14 * 60 + 44, false, 0)
+		T.eq(label.Text, "SPIN (0)")
+		T.eq(refs.Status.Text, "FREE SPIN IN 00:14:44")
+		T.falsy(refs.Spin:GetAttribute("Ready"), "grey: nothing to spin")
+		WheelView.setReady(refs, false, 3600, false, 4)
+		T.eq(label.Text, "SPIN (4)", "bought spins while the free one waits")
+		T.truthy(refs.Spin:GetAttribute("Ready"))
+		T.eq(refs.Status.Text, "FREE SPIN IN 01:00:00")
+		WheelView.setReady(refs, false, 0, true)
+		T.eq(label.Text, "SPINNING...")
+		T.falsy(refs.Spin:GetAttribute("Ready"))
+		-- Fast Spin: ~1.2 s instead of 5 s, fewer turns, the same landing
+		T.eq(WheelView.spinSeconds(false), WheelConfig.SpinSeconds)
+		T.eq(WheelConfig.SpinSeconds, 5)
+		T.near(WheelView.spinSeconds(true), 1.2, 1e-9)
+		T.truthy(WheelView.spinTurns(true) >= 1 and WheelView.spinTurns(true) < WheelView.spinTurns(false))
+		local count = #WheelConfig.Segments
+		for index = 1, count do
+			local target = WheelView.spinTarget(123, index, count, WheelView.spinTurns(true), 0.3)
+			T.eq(WheelView.segmentAt(target, count), index, "a fast spin lands on " .. index)
+		end
+		T.falsy(refs.Fast)
+		WheelView.setFast(refs, true)
+		T.truthy(refs.Fast)
+		T.eq(refs.FastCheck:GetAttribute("On"), true, "the box is ticked")
+		T.eq(refs.FastSpin:GetAttribute("On"), true)
+		WheelView.setFast(refs, false)
+		T.eq(refs.FastCheck:GetAttribute("On"), false)
+		-- the controller: the screen disc and the lobby wheel use the same time and turns; the box is saved
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		T.truthy(source:find("local seconds = WheelView.spinSeconds(fast)", 1, true), "Fast Spin's time")
+		T.truthy(source:find("landLobby(segment.Index, jitter, seconds, turns)", 1, true), "the lobby wheel lands the same way")
+		T.truthy(source:find('SettingsController.set("FastSpin", fast)', 1, true), "saved with the settings")
+		T.truthy(
+			source:find("WheelView.setReady(view, isReady(), secondsLeft(), busy, usableSpins())", 1, true),
+			"SPIN (n) counts the bought spins"
+		)
+		refs.Gui:Destroy()
+	end)
+
+	T.test("WheelView: the buy step shows every segment's odds and pay before the price", function()
+		for _, compact in { true, false } do
+			local refs = WheelView.build(compact)
+			WheelView.setRows(refs, WheelView.rows(midInfo()))
+			if compact then
+				WheelView.layout(refs, 568 / 0.62, (320 - 58) / 0.62)
+			else
+				WheelView.layout(refs, 1280, 684)
+			end
+			T.falsy(refs.OddsCard.Visible, "closed at first")
+			WheelView.showBuy(refs, 5)
+			T.truthy(refs.OddsCard.Visible and refs.OddsDim.Visible, "the buy step is open")
+			T.eq(refs.BuyPack, 5)
+			T.truthy(refs.OddsBuy.Visible, "its price button")
+			T.eq(refs.OddsBuy:GetAttribute("Product"), "WheelSpins5")
+			local amount = refs.OddsBuy:FindFirstChild("Amount", true)
+			T.eq(amount.Text, "99", "the price")
+			T.truthy(string.find(refs.OddsTitle.Text, "5 SPINS", 1, true), "the pack in the title")
+			-- all 8 segments: the exact chance and what each pays this player, in view
+			local shown = 0
+			for _, segment in WheelConfig.segments(false) do
+				local row = refs.Rows[segment.Id]
+				T.truthy(row and row.Visible ~= false, segment.Id .. " listed")
+				T.eq(row:FindFirstChild("Chance").Text, WheelView.percent(segment.Odds), segment.Id .. " chance")
+				local detail = row:FindFirstChild("Detail")
+				local full = WheelView.detail(segment, midInfo())
+				T.truthy(#detail.Text >= 20, segment.Id .. ": what it pays")
+				T.eq(full:sub(1, 12), detail.Text:sub(1, 12), segment.Id .. ": this player's pay")
+				shown += 1
+			end
+			T.eq(shown, 8)
+			T.truthy(refs.Odds.CanvasSize.Y.Offset <= refs.Odds.Size.Y.Offset, "no scrolling to see them")
+			-- the coins at this player's income show on a PC row (and on a phone tile, two lines)
+			T.truthy(string.find(refs.Rows.Coins:FindFirstChild("Detail").Text, "76.8K", 1, true), "the coins row says $76.8K now")
+			-- Details is the same list without a price
+			WheelView.showOdds(refs)
+			T.falsy(refs.OddsBuy.Visible)
+			T.eq(refs.BuyPack, nil)
+			T.eq(refs.OddsTitle.Text, "ALL ODDS")
+			WheelView.hideOdds(refs)
+			T.falsy(refs.OddsCard.Visible)
+			refs.Gui:Destroy()
+		end
+		-- the controller sends "Buy" only from the buy step's own button (after the odds)
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		local _, sends = string.gsub(source, 'Net.send%("WheelAction", "Buy"', "")
+		T.eq(sends, 1, "one place sends Buy")
+		local confirmAt = source:find("confirmBuy = function()", 1, true)
+		local sendAt = source:find('Net.send("WheelAction", "Buy"', 1, true)
+		local openAt = source:find("openBuy = function(count: number)", 1, true)
+		T.truthy(confirmAt and sendAt and openAt and sendAt > confirmAt, "Buy is sent from confirmBuy")
+		T.truthy(source:find("WheelView.showBuy(view, count)", 1, true), "a price button opens the buy step")
+		T.truthy(source:find("view.OddsBuy.Activated:Connect(function()\n\t\tconfirmBuy()", 1, true), "the buy step's button buys")
+		T.truthy(source:find("if restricted() then", openAt, true), "restricted: no buy step")
+	end)
+
+	T.test("WheelView: restricted players see no BUY SPINS rows", function()
+		local refs = WheelView.build(true)
+		WheelView.layout(refs, 667 / 0.62, (375 - 58) / 0.62)
+		WheelView.setBuy(refs, false)
+		for _, row in refs.BuyRows do
+			T.truthy(row.Frame.Visible, "x" .. row.Count .. " offered")
+		end
+		T.falsy(refs.BuyNote.Visible)
+		WheelView.setBuy(refs, true)
+		for _, row in refs.BuyRows do
+			T.falsy(row.Frame.Visible, "x" .. row.Count .. " hidden")
+		end
+		T.truthy(refs.BuyNote.Visible, "a note says why")
+		-- the controller: unknown policy counts as restricted
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		T.truthy(source:find("return player:GetAttribute(RESTRICTED_ATTRIBUTE) ~= false", 1, true), "unknown = restricted")
+		T.truthy(source:find("WheelView.setBuy(view, restricted())", 1, true), "the rows follow the policy")
+		refs.Gui:Destroy()
+	end)
+
+	T.test("WheelView: the jackpot card shows the Crystal Capsule's golem odds", function()
+		local segment, lines = WheelView.jackpot(false)
+		T.eq(segment.Id, WheelConfig.JackpotId)
+		T.eq(segment.Capsule, "Crystal")
+		local odds = CapsuleConfig.odds("Crystal", false)
+		T.eq(#lines, #odds)
+		local refs = WheelView.build(false)
+		local tiles = {}
+		for _, child in refs.JackpotTiles:GetChildren() do
+			if child:IsA("Frame") then
+				tiles[child.LayoutOrder] = child
+			end
+		end
+		for i, line in odds do
+			local tile = tiles[i]
+			T.truthy(tile, "a tile for golem " .. i)
+			T.eq(tile:FindFirstChild("Chance").Text, WheelView.percent(line.Chance), line.Golem .. " chance")
+			T.eq(tile:FindFirstChild("Icon"):GetAttribute("Icon"), WheelView.golemIcon(line.Golem), line.Golem .. " picture")
+			-- no uploaded picture yet: the name instead (never an emoji)
+			T.truthy(tile:FindFirstChild("Name"), line.Golem .. ": its name stands in")
+		end
+		T.truthy(string.find(refs.JackpotFooter.Text, WheelView.percent(segment.Odds), 1, true), "its chance on the wheel")
+		T.eq(WheelView.golemIcon("PebbleGolem"), "golem_PebbleGolem")
+		T.eq(WheelView.golemIcon("RoseKnight"), "golem_RoseKnight", "the sheet lists the renamed golems by their new ids")
+		-- Triple Lucky changes the tiles
+		local _, lucky = WheelView.jackpot(true)
+		T.truthy(lucky[#lucky].Chance ~= lines[#lines].Chance, "the boosted odds")
+		refs.Gui:Destroy()
+	end)
+
+	T.test("WheelView: text only, no emoji anywhere (owner)", function()
+		local function isEmoji(cp: number): boolean
+			return cp >= 0x1F000
+				or (cp >= 0x2600 and cp <= 0x27BF)
+				or (cp >= 0x2B00 and cp <= 0x2BFF)
+				or cp == 0xFE0F
+				or (cp >= 0x2190 and cp <= 0x21FF)
+		end
+		local function scan(root: any, label: string)
+			for _, d in root:GetDescendants() do
+				if d:IsA("TextLabel") or d:IsA("TextButton") then
+					for _, cp in utf8.codes(d.Text) do
+						T.falsy(isEmoji(cp), `{label}: "{d.Text}" ({d.Name})`)
+					end
+				end
+			end
+		end
+		for _, compact in { false, true } do
+			local refs = WheelView.build(compact)
+			WheelView.setRows(refs, WheelView.rows(midInfo()))
+			WheelView.layout(refs, 1280, 684)
+			WheelView.showBuy(refs, 10)
+			WheelView.showInfo(refs, "CrystalCapsule")
+			WheelView.showResult(refs, "Big prize", "detail", WheelView.faceColor(1))
+			WheelView.setBuy(refs, true)
+			scan(refs.Gui, if compact then "phone wheel" else "PC wheel")
+			refs.Gui:Destroy()
+		end
+		for _, scale in { 0.62, 1.25 } do
+			local chip = WheelView.buildChip(scale)
+			scan(chip.Gui, "chip")
+			T.eq(chip.Button:FindFirstChild("Label").Text, "FREE SPIN!")
+			T.truthy(chip.Icon:IsA("Frame"), "the drawn wheel mark, not a picture or an emoji")
+			chip.Gui:Destroy()
+		end
 	end)
 
 	T.test("WheelView: the FREE SPIN! chip sits right of the teleport bar", function()
@@ -828,14 +1484,16 @@ return function(T, Loader)
 
 	T.test("WheelView: the chip follows the bar on every screen width (icon-only bar under 600 pt)", function()
 		local Vector2 = (require("@lune/roblox") :: any).Vector2
-		for _, screen in {
-			{ Name = "phone 568x320", Size = Vector2.new(568, 320) },
-			{ Name = "phone 667x375", Size = Vector2.new(667, 375) },
-			{ Name = "phone 844x390", Size = Vector2.new(844, 390) },
-			{ Name = "tablet 1024x768", Size = Vector2.new(1024, 768) },
-			{ Name = "PC 1280x720", Size = Vector2.new(1280, 720) },
-			{ Name = "PC 1920x1080", Size = Vector2.new(1920, 1080) },
-		} do
+		for _, screen in
+			{
+				{ Name = "phone 568x320", Size = Vector2.new(568, 320) },
+				{ Name = "phone 667x375", Size = Vector2.new(667, 375) },
+				{ Name = "phone 844x390", Size = Vector2.new(844, 390) },
+				{ Name = "tablet 1024x768", Size = Vector2.new(1024, 768) },
+				{ Name = "PC 1280x720", Size = Vector2.new(1280, 720) },
+				{ Name = "PC 1920x1080", Size = Vector2.new(1920, 1080) },
+			}
+		do
 			local scale = math.clamp(math.min(screen.Size.Y / 720, screen.Size.X / 1100), 0.62, 1.25)
 			local w = screen.Size.X / scale
 			-- the bar as TeleportController lays it out (screen width in pt)
@@ -864,7 +1522,10 @@ return function(T, Loader)
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/client/Controllers/WheelController.luau")
 		T.truthy(source:find("WheelView.buildChip(HudController.uiScale(), screenWidth())", 1, true), "built for the screen width")
-		T.truthy(source:find("WheelView.placeChip(c, HudController.uiScale(), screenWidth())", 1, true), "placed again on a new screen size")
+		T.truthy(
+			source:find("WheelView.placeChip(c, HudController.uiScale(), screenWidth())", 1, true),
+			"placed again on a new screen size"
+		)
 		T.truthy(source:find("WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)", 1, true), "reads the tutorial bubble")
 		T.truthy(source:find("tutorial.onTopRowChanged(updateChip)", 1, true), "steps aside the moment the bubble comes")
 	end)

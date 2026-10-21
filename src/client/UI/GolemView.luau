@@ -532,6 +532,82 @@ PORTRAIT_GEAR.Crown = function(p, _c)
 	diamond(p, "CrownGem", 0.5, 0.095, 0.045, rgb(255, 90, 120), 8)
 end
 
+---------------------------------------------------------------- the limited Dragonforge gear (GolemGearLimited)
+
+local IVORY = rgb(244, 230, 200)
+local SHELL = rgb(252, 240, 214)
+
+-- bat wings behind the body: a membrane and a glowing bone on each side
+local function dragonWings(p: Frame, reach: number, membrane: Color3, bone: Color3)
+	for i, side in { -1, 1 } do
+		local x = 0.5 + side * (0.24 + reach / 2)
+		local wing = rect(p, "Wing" .. i, x - reach / 2, 0.24, x + reach / 2, 0.58, membrane, 1, 0.12)
+		wing.Rotation = side * 24
+		local edge = rect(p, "WingBone" .. i, x - reach / 2, 0.22, x + reach / 2, 0.26, bone, 1, 0.5)
+		edge.Rotation = side * 24
+	end
+end
+
+-- ivory horns growing out of the head's sides and up
+local function dragonHorns(p: Frame, color: Color3)
+	for i, k in { { 0.08, -35 }, { 0.8, 35 } } do
+		rect(p, "HornBase" .. i, k[1], 0.14, k[1] + 0.12, 0.22, color, 3, 0.3).Rotation = k[2]
+		rect(p, "HornTip" .. i, k[1] + (if i == 1 then 0.0 else 0.06), 0.02, k[1] + (if i == 1 then 0.06 else 0.12), 0.16, color, 3, 0.4)
+	end
+end
+
+local function dragonTail(p: Frame, c: Face)
+	rect(p, "Tail", 0.74, 0.86, 0.96, 0.92, c.Trim, 1, 0.5).Rotation = -18
+	diamond(p, "TailTip", 0.96, 0.83, 0.09, c.Glow, 2)
+end
+
+local function dragonSnout(p: Frame, c: Face)
+	rect(p, "Snout", 0.36, 0.45, 0.64, 0.55, tint(c.Body, 0.08), 7, 0.3)
+end
+
+PORTRAIT_GEAR.DragonHorns = function(p, c)
+	dragonWings(p, 0.22, c.Trim:Lerp(c.Glow, 0.4), c.Glow)
+	dragonHorns(p, IVORY)
+	dragonSnout(p, c)
+	dragonTail(p, c)
+end
+
+PORTRAIT_GEAR.DragonEgg = function(p, c)
+	dragonWings(p, 0.15, c.Glow:Lerp(c.Trim, 0.35), c.Glow:Lerp(c.Trim, 0.35))
+	rect(p, "Shell", 0.18, -0.02, 0.82, 0.22, SHELL, 7, 0.5)
+	for i, x in { 0.32, 0.5, 0.68 } do
+		diamond(p, "ShellPoint" .. i, x, 0.22, 0.08, SHELL, 7)
+	end
+	rect(p, "Spot1", 0.3, 0.05, 0.38, 0.1, rgb(240, 120, 40), 8, 0.5)
+	rect(p, "Spot2", 0.6, 0.02, 0.66, 0.07, rgb(240, 120, 40), 8, 0.5)
+	dragonTail(p, c)
+end
+
+PORTRAIT_GEAR.DragonHelm = function(p, c)
+	rect(p, "Helm", 0.15, 0.1, 0.85, 0.62, c.Trim, 5, 0.14)
+	rect(p, "Slit", 0.27, 0.36, 0.73, 0.44, DARK, 6, 0.2)
+	rect(p, "Jaw", 0.25, 0.27, 0.75, 0.36, shade(c.Trim, 0.2), 7, 0.25)
+	rect(p, "Crest", 0.46, 0.0, 0.54, 0.14, c.Glow, 4, 0.3)
+	dragonHorns(p, GOLD)
+	rect(p, "Shield", 0.0, 0.6, 0.22, 0.84, shade(c.Trim, 0.1), 8, 0.3)
+	diamond(p, "ShieldEye", 0.11, 0.71, 0.08, c.Glow, 9)
+end
+
+PORTRAIT_GEAR.DragonWings = function(p, c)
+	dragonWings(p, 0.3, c.Trim:Lerp(c.Glow, 0.45), c.Glow)
+	dragonHorns(p, IVORY)
+	dragonSnout(p, c)
+end
+
+PORTRAIT_GEAR.DragonCrown = function(p, c)
+	dragonWings(p, 0.34, rgb(160, 28, 36), GOLD)
+	rect(p, "CrownBand", 0.28, 0.06, 0.72, 0.14, GOLD, 7, 0.2)
+	for i, k in { { 0.34, 0.1 }, { 0.5, 0.13 }, { 0.66, 0.1 } } do
+		diamond(p, "Flame" .. i, k[1], 0.06 - k[2] * 0.3, k[2], if i == 2 then rgb(255, 214, 70) else rgb(255, 120, 24), 6)
+	end
+	rect(p, "Gem", 0.47, 0.08, 0.53, 0.12, c.Glow, 8, 0.4)
+end
+
 --[[
 	A golem drawn from frames inside a square Frame of `size` design units
 	(UDim2 offset; the caller positions it). An unknown kind draws a grey
@@ -548,7 +624,7 @@ function GolemView.portrait(parent: Instance, kind: string, size: number): Frame
 		then { Body = golem.Body, Trim = golem.Trim, Glow = golem.Glow }
 		else { Body = UNKNOWN, Trim = shade(UNKNOWN, 0.35), Glow = rgb(230, 230, 230) }
 	local gear = if golem then golem.Accessory else "None"
-	local closed = gear == "KnightHelm"
+	local closed = gear == "KnightHelm" or gear == "DragonHelm"
 	local premium = golem ~= nil and GolemConfig.order(kind) >= Rarity.ById.Legendary.Order
 	-- the shadow under the feet (Legendary+: the glowing aura they float on)
 	local shadow = rect(p, "Shadow", 0.2, 0.9, 0.8, 0.98, DARK, 1, 0.5)

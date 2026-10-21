@@ -1,213 +1,259 @@
 {
- "store_pc": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_pc"
- },
- "store_pc_more": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_pc_more"
- },
- "store_pc_odds": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_pc_odds"
- },
- "store_phone": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_phone",
-  "uiInset": 58
- },
- "store_pc_stars": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_pc_stars"
- },
- "store_hud_pc": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_hud_pc"
- },
- "store_hud_phone": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_hud_phone",
-  "uiInset": 58
- },
- "store_phone_odds": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_phone_odds",
-  "uiInset": 58
- },
- "store_hud_phone_busy": {
-  "scene": "store",
-  "position": [
-   6,
-   9,
-   42
-  ],
-  "target": [
-   0,
-   6,
-   -12
-  ],
-  "fov": 60,
-  "preset": "Surface",
-  "sunDir": [
-   -0.965,
-   0.225,
-   0.136
-  ],
-  "shadowExtent": 120,
-  "maxLights": 24,
-  "ui": "ui_store_hud_phone_busy",
-  "uiInset": 58
- }
+  "store_pc": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc"
+  },
+  "store_pc_more": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_more"
+  },
+  "store_pc_odds": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_odds"
+  },
+  "store_phone": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_phone",
+    "uiInset": 58
+  },
+  "store_pc_stars": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_stars"
+  },
+  "store_hud_pc": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_hud_pc"
+  },
+  "store_hud_phone": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_hud_phone",
+    "uiInset": 58
+  },
+  "store_phone_odds": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_phone_odds",
+    "uiInset": 58
+  },
+  "store_hud_phone_busy": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_hud_phone_busy",
+    "uiInset": 58
+  },
+  "store_pc_passes": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_passes"
+  },
+  "store_pc_limited": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_limited"
+  }
 }

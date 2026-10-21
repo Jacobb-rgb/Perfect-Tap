@@ -1,8 +1,9 @@
 --[[
 	The light UI's ProximityPrompt look (pure builder; LightWorldController
-	shows it for prompts while UIConfig.lightUI() is on, the light UI ships off).
+	shows it for prompts only while UIConfig.CustomPrompts is on, and that
+	ships off: the game uses the stock Roblox prompt since 2026-10-20).
 
-	  [ (F) ]  OPEN SHOP          a white pill, navy outline, lip
+	  [ (E) ]  OPEN SHOP          a white pill, navy outline, lip
 	           Tobin's Ore Stall  the key in a gold circle (or the gamepad's
 	  ========                    glyph, or TAP on touch), the action and the
 	                              object; a green bar fills while you hold

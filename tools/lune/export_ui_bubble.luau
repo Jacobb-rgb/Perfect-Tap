@@ -16,6 +16,8 @@ local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
+-- previews draw every icon (IconAssets.shows: the uploaded look)
+Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 
 local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 local Bubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Bubble")

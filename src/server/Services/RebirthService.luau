@@ -25,7 +25,7 @@
 	The Plot Glow (World/PlotGlow) follows the save: built into the plot when
 	it is assigned and whenever the pick changes, gone when the plot is
 	freed. THE GREAT FORGE plaza's fire crystal gets a "Star Forge" prompt
-	(CrystalPrompt, F / gamepad Y) that opens the window (OpenUI "Rebirth").
+	(CrystalPrompt, E / gamepad Y) that opens the window (OpenUI "Rebirth").
 	  { Action = "Weapon", Id } buys a STAR blaster with Forge Stars
 	                           (StarBlasterData.quote / buy: "BadWeapon" |
 	                           "Owned" | "Locked" | "NoStars") and equips it.
@@ -60,6 +60,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local PromptConfig = require(Shared.Config.PromptConfig)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
@@ -167,16 +168,13 @@ function RebirthService.setupCrystal(parent: Instance, center: Vector3, floorY: 
 	anchor.CanTouch = false
 	anchor.CanQuery = false
 	anchor.CastShadow = false
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "Prompt"
-	prompt.ActionText = "Star Forge"
-	prompt.ObjectText = "Rebirth"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = RebirthService.CrystalRange
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = anchor
+	local prompt = PromptConfig.make({
+		Name = "Prompt",
+		ActionText = "Star Forge",
+		ObjectText = "Rebirth",
+		Distance = RebirthService.CrystalRange,
+		Parent = anchor,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		Net.fire("OpenUI", player, "Rebirth")
 	end)
@@ -369,7 +367,11 @@ local function grantWeapon(player: Player, data: { [string]: any }, entry: Monet
 		-- the pass holds it from now on
 		data.Stars = RebirthConfig.starsOf(data) + star.Stars
 		passes[star.Id] = true
-		Net.fire("Notify", player, { Text = `You own the {star.Name} pass: your ⭐ {star.Stars} are back!`, Kind = "Reward" })
+		Net.fire(
+			"Notify",
+			player,
+			{ Text = `You own the {star.Name} pass: you get {RebirthConfig.starsText(star.Stars)} back!`, Kind = "Reward" }
+		)
 		return true
 	end
 	owned[star.Id] = true

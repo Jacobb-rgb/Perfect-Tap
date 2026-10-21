@@ -33,6 +33,38 @@ return function(T, Loader)
 		end
 	end
 
+	-- (review #10) the Pop bar stays inside Roblox's free top-row span, or drops under the row
+	T.test("LightUI: the top bar keeps clear of Roblox's top-row buttons", function()
+		local HudBubble = ui("HudBubble")
+		local V2 = Vector2.new
+		-- unknown row: centred in the row
+		local x, inRow = HudBubble.topBarX(nil, 0, 667, 416, 0.62)
+		T.eq(x, 0)
+		T.truthy(inRow)
+		-- a phone whose left buttons reach 240 px: the bar moves right, inside the free span
+		x, inRow = HudBubble.topBarX(V2(240, 620), 0, 667, 416, 0.62)
+		T.truthy(inRow, "fits in the row")
+		local left = 667 / 2 + x * 0.62 - 416 * 0.62 / 2
+		local right = left + 416 * 0.62
+		T.truthy(left >= 240 and right <= 620, `inside the free span ({left}..{right})`)
+		-- no room in the row: under it
+		x, inRow = HudBubble.topBarX(V2(300, 400), 0, 667, 416, 0.62)
+		T.falsy(inRow, "drops under the row")
+	end)
+
+	-- (review #8) the gamepad glyph for the bar is a real size, left of the bar
+	T.test("LightUI: the Pop bar's gamepad hint is visible size", function()
+		local HudBubble = ui("HudBubble")
+		local TeleportView = ui("TeleportView")
+		withLight(function()
+			local refs = HudBubble.buildGame(1.25)
+			local bar = TeleportView.build(refs.TopBar, 1.25)
+			T.truthy(bar.Hint.Size.X.Offset >= 34 and bar.Hint.Size.Y.Offset >= 34, "a real glyph size")
+			T.eq(bar.Hint.Parent, refs.TopBar.Parent, "beside the bar, not squeezed into it")
+			T.truthy(bar.Hint.Position.X.Offset < refs.TopBar.Position.X.Offset - refs.TopBar.Size.X.Offset / 2, "left of the bar")
+		end)
+	end)
+
 	T.test("LightUI: switched off, today's HUD", function()
 		T.eq(type(UIConfig.Default), "boolean", "the switch that ships")
 		T.falsy(UIConfig.LightUI, "the runner tests the dark paths unless a spec switches it on")
@@ -401,9 +433,10 @@ return function(T, Loader)
 		local LightPrompt = ui("LightPrompt")
 		local LightSkin = ui("LightSkin")
 		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
-		local prompt = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "F")
+		-- (the pill is off: UIConfig.CustomPrompts; the stock Roblox prompt ships)
+		local prompt = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "E")
 		T.eq(prompt.Action.Text, "OPEN SHOP", "action in capitals")
-		T.eq(prompt.Key.Text, "F", "key letter")
+		T.eq(prompt.Key.Text, "E", "key letter")
 		T.truthy(prompt.Gui:FindFirstChild("Pill"), "the pill")
 		T.truthy(LightPrompt.Height * 0.62 >= 38, "big enough to tap at the phone scale")
 		LightPrompt.setKey(prompt, "TAP", nil)
@@ -423,6 +456,76 @@ return function(T, Loader)
 		local stroke = label:FindFirstChildOfClass("UIStroke")
 		T.truthy(stroke and stroke.Color == BubbleTheme.Outline and stroke.Thickness >= 4, "bold navy edge")
 		T.eq(label.TextStrokeTransparency, 1, "the thin built-in edge is off")
+	end)
+
+	T.test("LightUI: the stock Roblox prompt ships and the label skin leaves its UI alone", function()
+		local fs = require("@lune/fs")
+		local Players = Loader.game:GetService("Players")
+		T.eq(UIConfig.CustomPrompts, false, "the stock Roblox prompt, not our pill (owner 2026-10-20)")
+		-- a client module: it reads Players.LocalPlayer when it loads
+		local hadLocal = rawget(Players, "LocalPlayer")
+		rawset(Players, "LocalPlayer", { UserId = 1 })
+		local loaded, LightWorldController =
+			pcall(Loader.requirePath, "StarterPlayer.StarterPlayerScripts.Client.Controllers.LightWorldController")
+		rawset(Players, "LocalPlayer", hadLocal)
+		T.truthy(loaded, "LightWorldController loads: " .. tostring(LightWorldController))
+		T.falsy(LightWorldController.Skip.Prompt, "no generic 'Prompt' in Skip (ProximityPrompts use that name too)")
+		-- Roblox's core script: a ScreenGui "ProximityPrompts" in the PlayerGui with a
+		-- BillboardGui "Prompt" per shown prompt (a Frame, the key text, the action and
+		-- object texts) and a BillboardGui "Indicator". Its frame starts clear (it fades
+		-- in to 0.2), so the label skin would give every text a navy UIStroke.
+		local function stockShaped(name: string, parent: any): any
+			local gui = Instance.new("BillboardGui")
+			gui.Name = name
+			local frame = Instance.new("Frame")
+			frame.BackgroundTransparency = 1
+			frame.Parent = gui
+			for _, text in { "ButtonText", "ActionText", "ObjectText" } do
+				local label = Instance.new("TextLabel")
+				label.Name = text
+				label.BackgroundTransparency = 1
+				label.TextSize = 19
+				label.Text = text
+				label.Parent = frame
+			end
+			gui.Parent = parent
+			return gui
+		end
+		local function strokes(gui: any): number
+			local count = 0
+			for _, d in gui:GetDescendants() do
+				if d:IsA("UIStroke") then
+					count += 1
+				end
+			end
+			return count
+		end
+		local playerGui = Instance.new("Folder")
+		playerGui.Name = "PlayerGui"
+		local folder = Instance.new("ScreenGui")
+		folder.Name = LightWorldController.StockPromptFolder
+		folder.Parent = playerGui
+		T.eq(folder.Name, "ProximityPrompts", "the core script's ScreenGui")
+		for _, name in { "Prompt", "Indicator" } do
+			local gui = stockShaped(name, folder)
+			LightWorldController.skinLabel(gui)
+			T.eq(strokes(gui), 0, name .. ": no navy edges on Roblox's own prompt")
+			T.eq(gui:GetAttribute("LightSkin"), nil, name .. ": not skinned")
+		end
+		-- our own world labels still get the skin, even one named "Prompt"
+		local hud = Instance.new("ScreenGui")
+		hud.Name = "Hud"
+		hud.Parent = playerGui
+		for _, name in { "Prompt", "PodiumTag" } do
+			local gui = stockShaped(name, hud)
+			LightWorldController.skinLabel(gui)
+			T.truthy(strokes(gui) > 0, name .. " outside ProximityPrompts gets the light skin")
+		end
+		-- the pill (and its Custom style) only behind the switch
+		local source = fs.readFile("src/client/Controllers/LightWorldController.luau")
+		T.truthy(string.find(source, "if UIConfig.CustomPrompts then\n\t\tstartPrompts()", 1, true), "startPrompts behind CustomPrompts")
+		local _, calls = string.gsub(source, "startPrompts%(%)", "")
+		T.eq(calls, 2, "startPrompts: defined once, called once (behind the switch)")
 	end)
 
 	T.test("LightUI: side menu entries become light tiles and a MORE flyout", function()
@@ -476,7 +579,6 @@ return function(T, Loader)
 				Gear = ui("GearShopView").build(false).Gui,
 				Golem = ui("GolemView").build(false).Gui,
 				Story = ui("StoryView").build(false).Gui,
-				Wheel = ui("WheelView").build(false).Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -490,31 +592,51 @@ return function(T, Loader)
 		end)
 	end)
 
+	-- the Spin & Win screen wears the Pop look (owner 2026-10-20): never the LightSkin
+	-- recolouring, switch on or off (the chip neither)
+	T.test("LightUI: the Spin & Win wheel and its chip keep the Pop look", function()
+		local WheelView = ui("WheelView")
+		local function check(label: string)
+			for _, compact in { false, true } do
+				local gui = WheelView.build(compact).Gui
+				T.falsy(gui:GetAttribute("LightSkin"), `{label}: no LightSkin on the wheel`)
+				T.truthy(gui:GetAttribute("PopSkin"), `{label}: the Pop wheel`)
+				gui:Destroy()
+			end
+			local chip = WheelView.buildChip(1)
+			T.falsy(chip.Gui:GetAttribute("LightSkin"), `{label}: no LightSkin on the chip`)
+			chip.Gui:Destroy()
+		end
+		check("switch off")
+		withLight(function()
+			check("switch on")
+		end)
+	end)
+
 	T.test("LightUI: game HUD touch sizes on phones", function()
 		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
 		T.truthy(layout.Compact, "a phone gets the compact layout")
 		T.truthy(layout.Tile * 0.62 >= 44 and layout.Slot * 0.62 >= 44 and layout.TabHeight * 0.62 >= 44, ">= 44 pt")
 	end)
 
-	T.test("LightUI: emoji stand-ins until the icon sheets are uploaded, one elevator tile", function()
+	T.test("LightUI: no emoji stand-ins (owner: text only), one elevator tile", function()
 		local Bubble = ui("Bubble")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 		local HudBubble = ui("HudBubble")
 		local SideMenuView = ui("SideMenuView")
 		local holder = Instance.new("Frame")
+		T.eq(IconAssets.fallback, nil, "no emoji table")
 		for _, name in { "backpack", "golem_PebbleGolem", "machine_Crusher", "artifact_CrownCoin", "lift" } do
 			local icon = Bubble.icon(holder, name, 60)
-			local stand = icon:FindFirstChild("Fallback")
-			T.truthy(stand and stand:GetAttribute("IconFallback"), "a stand-in for " .. name)
-			T.eq(stand.Text, IconAssets.fallback(name), "its emoji")
+			T.eq(#icon:GetChildren(), 0, "nothing stands in for " .. name)
+			T.eq(icon.Image, "", "empty until uploaded: " .. name)
+			T.falsy(IconAssets.shows(name), "not shown yet: " .. name)
 		end
-		local robux = Bubble.icon(holder, "robux", 60)
-		T.falsy(robux:FindFirstChild("Fallback"), "Roblox's own robux picture needs none")
 		local sheet = IconAssets.Sheets[1]
 		local before = sheet.Id
 		sheet.Id = 123
 		local ok, err = pcall(function()
-			T.falsy(Bubble.icon(holder, "backpack", 60):FindFirstChild("Fallback"), "none once uploaded")
+			T.truthy(IconAssets.shows("backpack"), "shown once uploaded")
 		end)
 		sheet.Id = before
 		if not ok then

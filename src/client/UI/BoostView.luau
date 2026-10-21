@@ -58,6 +58,7 @@ local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LimitedGolems = require(Shared.Config.LimitedGolems)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
@@ -418,11 +419,14 @@ function BoostView.cycle(ids: { string }, current: string?, step: number): strin
 	return ids[(index - 1 + step) % #ids + 1]
 end
 
--- The capsules whose odds the Triple Lucky card shows (the ones the player may open).
-function BoostView.capsules(restricted: boolean): { string }
+-- The capsules whose odds the Triple Lucky card shows (the ones the player
+-- may open; a limited edition's only while it is on sale at `now`, unix
+-- seconds, default the clock: LimitedGolems.onSale).
+function BoostView.capsules(restricted: boolean, now: number?): { string }
 	local list = {}
+	local t = if type(now) == "number" then now else os.time()
 	for _, capsule in CapsuleConfig.List do
-		if not (restricted and CapsuleConfig.isPaidRandom(capsule.Id)) then
+		if not (restricted and CapsuleConfig.isPaidRandom(capsule.Id)) and LimitedGolems.onSale(capsule.Id, t) then
 			table.insert(list, capsule.Id)
 		end
 	end
