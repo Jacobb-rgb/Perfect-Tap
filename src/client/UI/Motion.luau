@@ -10,7 +10,9 @@
 	  slide(gui, from, distance?) in from "Left" | "Right" | "Up" | "Down"
 	                           (it moves the AnchorPoint, never the Position
 	                           a layout owns)
-	  press(button)            a squash to 0.92 on press, a bounce back
+	  press(button)            a squash to 0.92 on press, a bounce back (about
+	                           the button's middle; never so deep that the press
+	                           point leaves the button: pressDepth)
 	  hover(button)            a 1.04 grow under the mouse (PC only) and while
 	                           a gamepad selects it (select)
 	  breathe(gui)             a slow 1 <-> 1.03 pulse (BEST VALUE, FEATURED)
@@ -20,6 +22,8 @@
 	                           gui, a point in AbsolutePosition space, or nil:
 	                           the screen centre); at most one burst a second
 	  popIn(gui)               a bounce in for toasts and reward cards
+	  calm(root)               Reduce motion for the guis that animate
+	                           themselves: their "OpenPop" / "Pulse" UIScales rest
 
 	How it stays cheap and clean:
 	- Everything is a TweenService tween (no per-frame Lua, no per-frame
@@ -32,8 +36,15 @@
 	- One UIScale per thing. A button gets its own "MotionScale", unless it has
 	  a UIScale already: then that one is tweened from its value and given
 	  back. Windows and reward cards use "MotionPop". Roblox scales a UIScale
-	  about the AnchorPoint, so centred things pop from their middle; a scale
-	  changes the hit area only while its tween runs.
+	  about the AnchorPoint, so a button not held by its middle has its
+	  AnchorPoint moved along with the scale (pivotAnchor): it squashes about
+	  its centre, the Position a layout owns is never touched.
+	- A button's hit area is the button itself, so a squash shrinks it: the
+	  press is never deeper than keeps the press point inside (pressDepth),
+	  and a finger sliding toward an edge makes the squash give way at once.
+	- Nothing Motion keeps points back at a gui (weak keys, no ephemerons in
+	  Luau) and Destroying drops a gui's state: destroyed toasts and rebuilt
+	  buttons are let go.
 	- Reduce motion (the game's setting SettingsConfig.ReduceMotion, or
 	  Roblox's own GuiService.ReducedMotionEnabled): every call jumps to its
 	  end, nothing loops, no cash flies, buttons don't squash.
@@ -59,11 +70,15 @@ export type Pointer = "Mouse" | "Touch" | "Gamepad"
 Motion.Pop = { From = 0.85, Near = 0.95, Time = 0.22, DimTime = 0.18 }
 Motion.Close = { To = 0.9, Time = 0.12 }
 Motion.Slide = { Distance = 48, Time = 0.3 }
-Motion.Press = { DownTime = 0.07, UpTime = 0.26, HoverTime = 0.12, BigSize = 220 }
+-- (EdgeRoom: a press point stays this share of the half size inside the squashed edge)
+Motion.Press = { DownTime = 0.07, UpTime = 0.26, HoverTime = 0.12, BigSize = 220, EdgeRoom = 0.03 }
 Motion.Profiles = {
 	Normal = { Down = 0.92, Hover = 1.04 } :: Profile,
 	-- the shop's big cards: a gentler squash, the neighbours stay clear
 	Big = { Down = 0.97, Hover = 1.02 } :: Profile,
+	-- a button a UIListLayout / UIGridLayout places: where its scale holds
+	-- still is the layout's business, so no grow and a lighter squash
+	Listed = { Down = 0.95, Hover = 1 } :: Profile,
 }
 Motion.Breathe = { Peak = 1.03, Time = 1.2 }
 -- the streak crosses the button in Sweep seconds once every Period (one
@@ -74,6 +89,8 @@ Motion.Fly = { Bits = 7, Burst = 0.16, Travel = 0.42, Gap = 0.045, Every = 1, Sp
 Motion.PopIn = { From = 0.5, Time = 0.32 }
 Motion.Bump = { Peak = 1.15, Time = 0.09 }
 Motion.SweepEvery = 1 -- seconds between the loops' visibility checks
+-- the other controllers' own UIScales that Reduce motion stills (calm)
+local CALM = { OpenPop = true, Pulse = true } :: { [string]: boolean }
 
 ---------------------------------------------------------------- easing (pure)
 
@@ -359,9 +376,14 @@ function Motion.designSize(gui: GuiObject): Vector2
 	return Vector2.new(w, h)
 end
 
--- every thing Motion scales: its UIScale and what runs on it
+--[[
+	Every thing Motion scales: its UIScale and what runs on it. No field
+	points back at the gui: `scaled` is weak-keyed and Luau has no
+	ephemerons, so a back reference would keep every destroyed toast and
+	button alive for the whole session (the gui is passed along instead, and
+	Destroying drops the entry at once).
+]]
 type Scaled = {
-	Gui: GuiObject,
 	Scale: UIScale,
 	Base: number,
 	Own: boolean,
@@ -374,9 +396,17 @@ type Scaled = {
 	Pressed: boolean,
 	Hovered: boolean,
 	Selected: boolean,
+	Depth: number, -- this press's squash (Profile.Down, shallower near the edges)
 	Release: RBXScriptConnection?,
+	Follow: RBXScriptConnection?,
 	Breathing: boolean,
 	Loop: Tween?,
+	-- scaling about the middle: the resting AnchorPoint, moved with the scale
+	Anchor: Vector2,
+	Pivot: boolean,
+	InLayout: boolean, -- (a layout places it: the press checks every pivot it may use)
+	AnchorTween: Tween?,
+	AnchorLoop: Tween?,
 }
 
 -- weak keys: a destroyed gui drops out by itself
@@ -387,6 +417,12 @@ local function scaleOf(gui: GuiObject, name: string): Scaled
 	local s = scaled[gui]
 	if s and s.Scale.Parent == gui then
 		return s
+	end
+	if s == nil then
+		-- (the closure lives on the gui's own signal: Destroy clears both)
+		gui.Destroying:Once(function()
+			scaled[gui] = nil
+		end)
 	end
 	local existing = gui:FindFirstChildOfClass("UIScale")
 	local scale: UIScale
@@ -403,7 +439,6 @@ local function scaleOf(gui: GuiObject, name: string): Scaled
 		own = true
 	end
 	local fresh: Scaled = {
-		Gui = gui,
 		Scale = scale,
 		Base = if own then 1 else scale.Scale,
 		Own = own,
@@ -415,12 +450,28 @@ local function scaleOf(gui: GuiObject, name: string): Scaled
 		Pressed = false,
 		Hovered = false,
 		Selected = false,
+		Depth = Motion.Profiles.Normal.Down,
 		Release = nil,
+		Follow = nil,
 		Breathing = false,
 		Loop = nil,
+		Anchor = gui.AnchorPoint,
+		Pivot = false,
+		InLayout = false,
+		AnchorTween = nil,
+		AnchorLoop = nil,
 	}
 	scaled[gui] = fresh
 	return fresh
+end
+
+-- (tests) how many things Motion holds a scale state for.
+function Motion.stateCount(): number
+	local n = 0
+	for _ in scaled do
+		n += 1
+	end
+	return n
 end
 
 -- (tests) the scale state's UIScale, nil when Motion never touched `gui`.
@@ -431,17 +482,27 @@ end
 
 local function stopTween(s: Scaled)
 	local tween = s.Tween
+	local anchor = s.AnchorTween
 	s.Tween = nil
+	s.AnchorTween = nil
 	if tween then
 		tween:Cancel()
+	end
+	if anchor then
+		anchor:Cancel()
 	end
 end
 
 local function stopLoop(s: Scaled)
 	local loop = s.Loop
+	local anchor = s.AnchorLoop
 	s.Loop = nil
+	s.AnchorLoop = nil
 	if loop then
 		loop:Cancel()
+	end
+	if anchor then
+		anchor:Cancel()
 	end
 end
 
@@ -450,11 +511,56 @@ local function atRest(s: Scaled): boolean
 end
 
 -- A scale at rest takes its UIScale's value as its base again (an existing
--- UIScale that other code sets: Motion gives back what it found).
-local function rebase(s: Scaled)
-	if not s.Own and atRest(s) and s.Loop == nil then
-		s.Base = s.Scale.Scale
+-- UIScale that other code sets: Motion gives back what it found), and the
+-- gui's AnchorPoint as its resting one.
+local function rebase(gui: GuiObject, s: Scaled)
+	if atRest(s) and s.Loop == nil then
+		if not s.Own then
+			s.Base = s.Scale.Scale
+		end
+		if s.Pivot then
+			s.Anchor = gui.AnchorPoint
+		end
 	end
+end
+
+--[[
+	The AnchorPoint that keeps a gui's middle in place while it is drawn
+	`factor` times its resting size (Roblox scales a UIScale about the
+	AnchorPoint; moving the anchor with it pivots the scale on the centre
+	without touching the Position a layout owns).
+]]
+function Motion.pivotAnchor(anchor: Vector2, factor: number): Vector2
+	local f = math.max(factor, 1e-3)
+	return Vector2.new(0.5 - (0.5 - anchor.X) / f, 0.5 - (0.5 - anchor.Y) / f)
+end
+
+--[[
+	How deep a press may squash: `down` (the profile's), but never so deep
+	that the press point (`point`, the button's middle `centre` and resting
+	half size `half`, all in screen pixels) falls outside the squashed button:
+	a tap near an edge still ends on the button and activates it. 1: no squash.
+]]
+function Motion.pressDepth(point: Vector2, centre: Vector2, half: Vector2, down: number, pivot: Vector2?): number
+	if half.X <= 0 or half.Y <= 0 then
+		return down
+	end
+	-- (`pivot`: where the scale holds still, the middle unless said)
+	local q = pivot or centre
+	local function axis(p: number, fixed: number, lo: number, hi: number): number
+		local room = if p >= fixed then hi - fixed else fixed - lo
+		if room <= 0 then
+			return if p == fixed then 0 else math.huge
+		end
+		return math.abs(p - fixed) / room
+	end
+	local need =
+		math.max(axis(point.X, q.X, centre.X - half.X, centre.X + half.X), axis(point.Y, q.Y, centre.Y - half.Y, centre.Y + half.Y))
+	local keep = need + Motion.Press.EdgeRoom
+	if keep >= 1 then
+		return 1
+	end
+	return math.max(down, keep)
 end
 
 -- Plays `tween` as the thing's current one; `after` runs when it ends untouched.
@@ -488,7 +594,7 @@ type Loop = {
 local loops: { [GuiObject]: Loop } = {}
 local loopCount = 0
 
-local startBreathe: (s: Scaled) -> ()
+local startBreathe: (gui: GuiObject, s: Scaled) -> ()
 
 function Motion.hasLoops(): boolean
 	return loopCount > 0
@@ -500,7 +606,7 @@ local function startLoop(gui: GuiObject, loop: Loop)
 	if loop.Kind == "Breathe" then
 		local s = scaleOf(gui, "MotionScale")
 		if atRest(s) then
-			startBreathe(s)
+			startBreathe(gui, s)
 		end
 		return
 	end
@@ -539,6 +645,9 @@ local function stopLoopOf(gui: GuiObject, loop: Loop)
 			stopLoop(s)
 			if atRest(s) then
 				s.Scale.Scale = s.Base
+				if s.Pivot then
+					gui.AnchorPoint = s.Anchor
+				end
 			end
 		end
 		return
@@ -575,8 +684,11 @@ end
 function Motion.refreshLoops()
 	local calm = Motion.reduced()
 	for gui, loop in loops do
-		if gui.Parent == nil then
-			stopLoopOf(gui, loop)
+		local ok, parent = pcall(function(): Instance?
+			return gui.Parent -- (a destroyed gui: nil, or an error outside Roblox)
+		end)
+		if not ok or parent == nil then
+			pcall(stopLoopOf, gui, loop) -- (its tweens stop; a destroyed gui takes no writes)
 			loops[gui] = nil
 			loopCount -= 1
 		else
@@ -621,40 +733,77 @@ end
 
 ---------------------------------------------------------------- buttons
 
-startBreathe = function(s: Scaled)
-	local loop = loops[s.Gui]
+startBreathe = function(gui: GuiObject, s: Scaled)
+	local loop = loops[gui]
 	if not s.Breathing or not loop or not loop.Running or s.Loop ~= nil or Motion.reduced() then
 		return
 	end
 	s.Scale.Scale = s.Base
 	local b = Motion.Breathe
-	local tween = TweenService:Create(
-		s.Scale,
-		info("Breathe", b.Time, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Scale = s.Base * b.Peak }
-	)
+	local loopInfo = info("Breathe", b.Time, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+	local tween = TweenService:Create(s.Scale, loopInfo, { Scale = s.Base * b.Peak })
 	s.Loop = tween
 	tween:Play()
+	if s.Pivot then
+		-- (the anchor breathes with it: the pulse stays on the middle)
+		gui.AnchorPoint = s.Anchor
+		local anchor = TweenService:Create(gui, loopInfo, { AnchorPoint = Motion.pivotAnchor(s.Anchor, b.Peak) })
+		s.AnchorLoop = anchor
+		anchor:Play()
+	end
 end
 
--- Tweens a button toward where its state says (`kind`: how it moves there).
-local function retarget(s: Scaled, kind: "Down" | "Up" | "Hover")
+-- Where a button's scale goes now: squashed by this press's depth while
+-- pressed, grown under the mouse or the gamepad's selection, else its base.
+local function goalOf(s: Scaled): number
+	if s.Pressed then
+		return s.Base * s.Depth
+	elseif s.Hovered or s.Selected then
+		return s.Base * s.Profile.Hover
+	end
+	return s.Base
+end
+
+--[[
+	Moves a button toward where its state says (`kind`: how it moves there;
+	`snap`: at once, no tween). A button that isn't held by its middle has its
+	AnchorPoint moved along (pivotAnchor), so it squashes and grows about its
+	centre.
+]]
+local function retarget(gui: GuiObject, s: Scaled, kind: "Down" | "Up" | "Hover", snap: boolean?)
 	s.Token += 1
 	stopLoop(s)
 	stopTween(s)
 	if Motion.reduced() then
 		s.Scale.Scale = s.Base
+		if s.Pivot then
+			gui.AnchorPoint = s.Anchor
+		end
 		return
 	end
-	local goal = Motion.pressTarget(s.Base, s.Pressed, s.Hovered or s.Selected, s.Profile)
+	local goal = goalOf(s)
+	local anchorGoal = if s.Pivot then Motion.pivotAnchor(s.Anchor, goal / math.max(s.Base, 1e-3)) else nil
+	if snap then
+		s.Scale.Scale = goal
+		if anchorGoal then
+			gui.AnchorPoint = anchorGoal
+		end
+		return
+	end
 	local p = Motion.Press
 	local tweenInfo = if kind == "Down"
 		then info("Down", p.DownTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		elseif kind == "Up" then info("Up", p.UpTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		else info("Hover", p.HoverTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	if anchorGoal then
+		local anchor = TweenService:Create(gui, tweenInfo, { AnchorPoint = anchorGoal })
+		s.AnchorTween = anchor
+		anchor:Play()
+	end
 	run(s, TweenService:Create(s.Scale, tweenInfo, { Scale = goal }), function()
+		s.AnchorTween = nil
 		if atRest(s) and s.Breathing then
-			startBreathe(s)
+			startBreathe(gui, s)
 		end
 	end)
 end
@@ -662,10 +811,33 @@ end
 local function buttonState(button: GuiObject): Scaled
 	local s = scaleOf(button, "MotionScale")
 	if not s.Press and not s.Hover then
+		local parent = button.Parent
+		s.InLayout = parent ~= nil and parent:FindFirstChildWhichIsA("UIGridStyleLayout") ~= nil
 		local size = Motion.designSize(button)
-		s.Profile = if math.max(size.X, size.Y) >= Motion.Press.BigSize then Motion.Profiles.Big else Motion.Profiles.Normal
+		s.Profile = if s.InLayout
+			then Motion.Profiles.Listed
+			elseif math.max(size.X, size.Y) >= Motion.Press.BigSize then Motion.Profiles.Big
+			else Motion.Profiles.Normal
+		s.Depth = s.Profile.Down
+		if not s.Breathing then
+			s.Anchor = button.AnchorPoint
+			s.Pivot = not s.InLayout and not Motion.centred(s.Anchor)
+		end
 	end
 	return s
+end
+
+-- (stops following a press's input)
+local function unfollow(s: Scaled)
+	local release, follow = s.Release, s.Follow
+	s.Release = nil
+	s.Follow = nil
+	if release then
+		release:Disconnect()
+	end
+	if follow then
+		follow:Disconnect()
+	end
 end
 
 -- The squash on press and the bounce back (mouse and touch here; a
@@ -693,9 +865,9 @@ function Motion.hover(button: GuiButton): UIScale
 			if pointer ~= "Mouse" or s.Hovered then
 				return
 			end
-			rebase(s)
+			rebase(button, s)
 			s.Hovered = true
-			retarget(s, "Hover")
+			retarget(button, s, "Hover")
 		end)
 		button.MouseLeave:Connect(function()
 			if not s.Hovered and not s.Pressed then
@@ -705,34 +877,73 @@ function Motion.hover(button: GuiButton): UIScale
 			s.Hovered = false
 			local was = s.Pressed
 			s.Pressed = false
-			retarget(s, if was then "Up" else "Hover")
+			unfollow(s)
+			retarget(button, s, if was then "Up" else "Hover")
 		end)
 	end
 	return s.Scale
 end
 
--- A press begins (`input` followed to its end: then the bounce back).
+-- The press point and the button's middle and resting half size, in screen pixels.
+local function pressPlace(button: GuiObject, s: Scaled, input: InputObject): (Vector2, Vector2, Vector2)
+	local at = input.Position
+	local size = pixels(button)
+	local now = math.max(s.Scale.Scale / math.max(s.Base, 1e-3), 1e-3)
+	local ok, corner = pcall(function(): Vector2
+		return button.AbsolutePosition
+	end)
+	local origin = if ok then corner else Vector2.zero
+	return Vector2.new(at.X, at.Y), origin + size * 0.5, size * (0.5 / now)
+end
+
+-- How deep this press may squash (pressDepth). A button a layout places may
+-- hold still at its corner, its anchor or its middle: the depth suits all three.
+local function depthOf(button: GuiObject, s: Scaled, input: InputObject): number
+	local point, centre, half = pressPlace(button, s, input)
+	local down = s.Profile.Down
+	local depth = Motion.pressDepth(point, centre, half, down)
+	if s.InLayout then
+		local corner = centre - half
+		local anchor = corner + Vector2.new(half.X * 2 * s.Anchor.X, half.Y * 2 * s.Anchor.Y)
+		depth = math.max(depth, Motion.pressDepth(point, centre, half, down, corner), Motion.pressDepth(point, centre, half, down, anchor))
+	end
+	return depth
+end
+
+--[[
+	A press begins: the squash (no deeper than keeps `input`'s point on the
+	button: pressDepth), `input` followed to its end (then the bounce back);
+	a finger that slides toward an edge makes the squash give way at once, so
+	the hit area always holds it.
+]]
 function Motion.pressDown(button: GuiObject, input: InputObject?)
 	local s = scaled[button]
 	if not s or not s.Press then
 		return
 	end
-	local old = s.Release
-	s.Release = nil
-	if old then
-		old:Disconnect()
-	end
+	unfollow(s)
 	if not s.Pressed then
-		rebase(s)
+		rebase(button, s)
+		s.Depth = if input then depthOf(button, s, input) else s.Profile.Down
 		s.Pressed = true
-		retarget(s, "Down")
+		retarget(button, s, "Down")
 	end
 	if input then
-		local follow = input
-		s.Release = follow:GetPropertyChangedSignal("UserInputState"):Connect(function()
-			local state = follow.UserInputState
+		local held = input
+		s.Release = held:GetPropertyChangedSignal("UserInputState"):Connect(function()
+			local state = held.UserInputState
 			if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
 				Motion.pressUp(button)
+			end
+		end)
+		s.Follow = held:GetPropertyChangedSignal("Position"):Connect(function()
+			if not s.Pressed then
+				return
+			end
+			local need = depthOf(button, s, held)
+			if need > s.Depth + 1e-3 then
+				s.Depth = need
+				retarget(button, s, "Down", true)
 			end
 		end)
 	else
@@ -750,47 +961,43 @@ function Motion.pressUp(button: GuiObject)
 	if not s then
 		return
 	end
-	local old = s.Release
-	s.Release = nil
-	if old then
-		old:Disconnect()
-	end
+	unfollow(s)
 	if s.Pressed then
 		s.Pressed = false
-		retarget(s, "Up")
+		retarget(button, s, "Up")
 	end
 end
 
 -- The gamepad's selection grows a button like the mouse does.
 function Motion.select(button: GuiObject?, on: boolean)
 	local s = if button then scaled[button] else nil
-	if not s or not s.Hover or s.Selected == on then
+	if not button or not s or not s.Hover or s.Selected == on then
 		return
 	end
 	if on then
-		rebase(s)
+		rebase(button, s)
 	end
 	s.Selected = on
-	retarget(s, "Hover")
+	retarget(button, s, "Hover")
 end
 
 -- Every hover grow goes (the player switched to touch or a gamepad).
 function Motion.clearHover()
-	for _, s in scaled do
+	for gui, s in scaled do
 		if s.Hovered then
 			s.Hovered = false
-			retarget(s, "Hover")
+			retarget(gui, s, "Hover")
 		end
 	end
 end
 
 -- (tests) a button's state.
-function Motion.stateOf(gui: GuiObject): { Pressed: boolean, Hovered: boolean, Selected: boolean, Profile: Profile }?
+function Motion.stateOf(gui: GuiObject): { Pressed: boolean, Hovered: boolean, Selected: boolean, Profile: Profile, Pivot: boolean }?
 	local s = scaled[gui]
 	if not s then
 		return nil
 	end
-	return { Pressed = s.Pressed, Hovered = s.Hovered, Selected = s.Selected, Profile = s.Profile }
+	return { Pressed = s.Pressed, Hovered = s.Hovered, Selected = s.Selected, Profile = s.Profile, Pivot = s.Pivot }
 end
 
 ---------------------------------------------------------------- breathe / shine
@@ -891,7 +1098,7 @@ function Motion.pop(window: GuiObject, dim: GuiObject?)
 	local s = scaleOf(window, "MotionPop")
 	s.Token += 1
 	stopTween(s)
-	rebase(s)
+	rebase(window, s)
 	if dim then
 		local base = dimBase(dim)
 		if base < 0.98 and not Motion.reduced() then
@@ -913,7 +1120,7 @@ function Motion.close(window: GuiObject, done: (() -> ())?, dim: GuiObject?)
 	local s = scaleOf(window, "MotionPop")
 	s.Token += 1
 	stopTween(s)
-	rebase(s)
+	rebase(window, s)
 	local base = s.Base
 	local function finish()
 		if done then
@@ -980,7 +1187,7 @@ function Motion.popIn(gui: GuiObject): UIScale
 	local s = scaleOf(gui, "MotionPop")
 	s.Token += 1
 	stopTween(s)
-	rebase(s)
+	rebase(gui, s)
 	if Motion.reduced() or not Motion.shown(gui) then
 		s.Scale.Scale = s.Base
 		return s.Scale
@@ -1003,7 +1210,7 @@ function Motion.bump(gui: GuiObject)
 		return -- (still bumping)
 	end
 	s.Token += 1
-	rebase(s)
+	rebase(gui, s)
 	local b = Motion.Bump
 	run(
 		s,
@@ -1317,20 +1524,39 @@ end
 
 -- Everything inside `root` (a gui that just hid) jumps to its end: no tween
 -- keeps running for a gui nobody sees. Loops stop through refreshLoops.
+--[[
+	Reduce motion for the windows and chips that animate themselves (their
+	own "OpenPop" UIScale tween, the chips' endless "Pulse"): every such
+	UIScale under `root` rests at 1 now. A zero-time tween cancels the one
+	still playing (a plain write would be undone on its next step).
+	UIMotionController calls it when a gui opens while motion is reduced and
+	when the setting turns on. Returns how many it calmed.
+]]
+function Motion.calm(root: Instance): number
+	local n = 0
+	for _, d in root:GetDescendants() do
+		if d:IsA("UIScale") and CALM[d.Name] then
+			TweenService:Create(d, info("Calm", 0, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+			d.Scale = 1
+			n += 1
+		end
+	end
+	return n
+end
+
 function Motion.settle(root: Instance)
 	for gui, s in scaled do
 		if (s.Tween or s.Pressed or s.Hovered or s.Selected) and gui:IsDescendantOf(root) then
 			s.Token += 1
 			stopTween(s)
-			local release = s.Release
-			s.Release = nil
-			if release then
-				release:Disconnect()
-			end
+			unfollow(s)
 			s.Pressed = false
 			s.Hovered = false
 			s.Selected = false
 			s.Scale.Scale = s.Base
+			if s.Pivot and s.Loop == nil then
+				gui.AnchorPoint = s.Anchor
+			end
 		end
 	end
 	for label, c in counters do

@@ -149,6 +149,7 @@ local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 
@@ -2449,7 +2450,9 @@ local function setPulse(view: TrainView.Refs, on: boolean)
 			TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = 1.08 }
 		)
-		tween:Play()
+		if not Motion.reduced() then -- (Reduce motion: the chip stays still)
+			tween:Play()
+		end
 		pulse = tween
 	elseif not on and current then
 		current:Cancel()

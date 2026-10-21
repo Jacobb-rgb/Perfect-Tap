@@ -379,4 +379,154 @@ return function(T, Loader)
 		SettingsView.set(refs, SettingsConfig.sanitize(nil))
 		T.eq(refs.Toggles.ReduceMotion.Button.Text, "OFF")
 	end)
+
+	-- (review anim/all #3) the windows, chips and HUD bits that animate themselves still too
+	T.test("UIMotion: Reduce motion reaches the self-animated windows, pulses and the HUD", function()
+		local fs = require("@lune/fs")
+		local function source(name: string): string
+			return fs.readFile(Loader.root .. "/src/client/" .. name .. ".luau")
+		end
+		local watcher = source("Controllers/UIMotionController")
+		T.truthy(watcher:find("if Motion.reduced() then\n\t\t-- (a window that pops itself", 1, true), "every gui that opens is calmed")
+		T.truthy(watcher:find("Motion.calm(playerGui)", 1, true), "the whole PlayerGui when it turns on")
+		local hud = source("Controllers/HudController")
+		T.truthy(hud:find("not Motion.isCounting(refs.Coins) and not Motion.reduced()", 1, true), "the coin panel pop")
+		T.truthy(hud:find("if not Motion.reduced() then -- (Reduce motion: it just goes)", 1, true), "the toast exit")
+		T.truthy(hud:find("Motion.pop(shown.Panel, shown.Dim)", 1, true), "the offline popup")
+		T.falsy(hud:find("scale.Scale = 0.6", 1, true), "no own offline pop left")
+		for _, name in { "Controllers/WheelController", "Controllers/TrainController", "Controllers/PlacementController" } do
+			T.truthy(source(name):find("if not Motion.reduced() then -- (Reduce motion:", 1, true), name .. ": its endless pulse")
+		end
+		-- the names calm stills are exactly the ones those controllers use
+		for _, name in { "Controllers/WheelController", "Controllers/TrainController", "Controllers/PlacementController" } do
+			T.truthy(source(name):find('"Pulse"', 1, true), name .. " names its pulse Pulse")
+		end
+		T.truthy(source("UI/Motion"):find("local CALM = { OpenPop = true, Pulse = true }", 1, true))
+		-- calm on a tree without them touches nothing (no tween)
+		local gui = UIKit.screen("TerraForgeTest", 1)
+		UIKit.new("UIScale", { Name = "FitScale", Scale = 0.8 }, UIKit.new("Frame", { Name = "Fit" }, gui))
+		T.eq(Motion.calm(gui), 0, "a fit scale is left alone")
+	end)
+
+	---------------------------------------------------------------- no leaks (review anim/all #1)
+
+	T.test("UIMotion: a destroyed toast or button is let go (no leak)", function()
+		-- weak values: the probe never keeps them alive itself
+		local probe = setmetatable({}, { __mode = "v" }) :: any
+		local before = Motion.stateCount()
+		local function make(i: number)
+			local holder = Instance.new("Frame")
+			local toast = UIKit.new("Frame", { Name = "Toast", Size = UDim2.fromOffset(360, 44) }, holder)
+			Motion.popIn(toast)
+			local button = Pop.button(holder, "OK", "Green", Vector2.new(120, 44))
+			Watcher.attach(button)
+			local ribbon = UIKit.new("Frame", { Name = "Ribbon", Size = UDim2.fromOffset(136, 30) }, holder)
+			Motion.breathe(ribbon)
+			probe[i * 3 - 2] = toast
+			probe[i * 3 - 1] = button
+			probe[i * 3] = ribbon
+			holder:Destroy()
+		end
+		for i = 1, 60 do
+			make(i)
+		end
+		-- the control: what the old state did (a weak key whose value points back
+		-- at it) keeps every one alive, so the probe would see a leak
+		local control = setmetatable({}, { __mode = "k" }) :: any
+		local controlProbe = setmetatable({}, { __mode = "v" }) :: any
+		for i = 1, 20 do
+			local frame = Instance.new("Frame")
+			control[frame] = { Gui = frame }
+			controlProbe[i] = frame
+			frame:Destroy()
+		end
+		Motion.refreshLoops() -- (the loop table forgets removed guis)
+		for _ = 1, 4 do
+			collectgarbage("collect")
+		end
+		local alive = 0
+		for _ in probe do
+			alive += 1
+		end
+		local leaked = 0
+		for _ in controlProbe do
+			leaked += 1
+		end
+		T.eq(leaked, 20, "the control leaks (the probe can see a leak)")
+		T.eq(alive, 0, "every destroyed toast, button and ribbon was collected")
+		T.le(Motion.stateCount(), before, "no scale state left behind")
+	end)
+
+	---------------------------------------------------------------- the press keeps its tap (review anim/all #5)
+
+	-- The rect a GuiButton is drawn and hit in: `size` at Position `at`
+	-- (pixels), AnchorPoint `anchor`, drawn `factor` times its size.
+	local function hitRect(at: any, size: any, anchor: any, factor: number): (any, any)
+		local drawn = size * factor
+		return at - Vector2.new(anchor.X * drawn.X, anchor.Y * drawn.Y), drawn
+	end
+
+	T.test("UIMotion: a press squashes about the button's middle and never off the finger", function()
+		local size = Vector2.new(150, 56)
+		local at = Vector2.new(400, 300)
+		for _, anchor in { Vector2.new(0, 0), Vector2.new(1, 1), Vector2.new(0.5, 1), Vector2.new(1, 0.5), Vector2.new(0.5, 0.5) } do
+			local restCorner, restSize = hitRect(at, size, anchor, 1)
+			local centre = restCorner + restSize * 0.5
+			for _, factor in { 0.92, 0.97, 1.04 } do
+				-- the anchor moves with the scale: the middle stays put
+				local corner, drawn = hitRect(at, size, Motion.pivotAnchor(anchor, factor), factor)
+				local middle = corner + drawn * 0.5
+				T.near(middle.X, centre.X, 1e-6, `centre x, anchor {anchor}, {factor}`)
+				T.near(middle.Y, centre.Y, 1e-6, `centre y, anchor {anchor}, {factor}`)
+			end
+			T.eq(Motion.pivotAnchor(anchor, 1), anchor, "at rest the anchor is its own")
+			-- presses all over the button, edges and corners too: the squashed
+			-- hit rect still holds the press point, so the tap activates
+			local deepest = 1
+			for gx = 0, 10 do
+				for gy = 0, 10 do
+					local point = restCorner + Vector2.new(restSize.X * gx / 10, restSize.Y * gy / 10)
+					local depth = Motion.pressDepth(point, centre, restSize * 0.5, Motion.Profiles.Normal.Down)
+					T.truthy(depth >= Motion.Profiles.Normal.Down and depth <= 1, "a depth between the squash and none")
+					deepest = math.min(deepest, depth)
+					local corner, drawn = hitRect(at, size, Motion.pivotAnchor(anchor, depth), depth)
+					local inside = point.X >= corner.X - 1e-6
+						and point.X <= corner.X + drawn.X + 1e-6
+						and point.Y >= corner.Y - 1e-6
+						and point.Y <= corner.Y + drawn.Y + 1e-6
+					T.truthy(inside, `press at ({gx}, {gy}) /10 with anchor {anchor} stays on the button`)
+				end
+			end
+			T.eq(deepest, Motion.Profiles.Normal.Down, "the middle gets the whole squash")
+		end
+		-- a button a layout places may hold still at its corner: with that pivot
+		-- the squashed rect (pivot + (rect - pivot) * depth) holds the point too
+		do
+			local corner = Vector2.new(0, 0)
+			local centre = size * 0.5
+			for gx = 0, 10 do
+				for gy = 0, 10 do
+					local point = Vector2.new(size.X * gx / 10, size.Y * gy / 10)
+					local depth = Motion.pressDepth(point, centre, size * 0.5, Motion.Profiles.Listed.Down, corner)
+					local drawn = size * depth
+					T.truthy(point.X <= drawn.X + 1e-6 and point.Y <= drawn.Y + 1e-6, `corner pivot, press at ({gx}, {gy}) /10`)
+				end
+			end
+			T.eq(Motion.Profiles.Listed.Hover, 1, "a listed button doesn't grow (its pivot is the layout's)")
+		end
+		-- an edge press: a shallow squash; outside the button (a stray point): none
+		local half = size * 0.5
+		local centre = Vector2.new(0, 0)
+		T.truthy(Motion.pressDepth(Vector2.new(half.X * 0.99, 0), centre, half, 0.92) >= 0.99, "at the edge almost none")
+		T.eq(Motion.pressDepth(Vector2.new(half.X * 2, 0), centre, half, 0.92), 1, "off the button: no squash")
+		T.eq(Motion.pressDepth(Vector2.new(0, 0), centre, Vector2.zero, 0.92), 0.92, "not laid out yet: the usual squash")
+		-- a button that isn't held by its middle moves its anchor; a centred one doesn't need to
+		local holder = Instance.new("Frame")
+		local price = Pop.price(holder, 99, Vector2.new(200, 56), { AnchorPoint = Vector2.new(0.5, 1) })
+		Watcher.attach(price)
+		T.truthy((Motion.stateOf(price) :: any).Pivot, "a bottom-anchored price pivots on its middle")
+		local kit = UIKit.button(holder, "SELL", Color3.new(0, 1, 0), Color3.new(0, 0.5, 0))
+		Watcher.attach(kit)
+		T.falsy((Motion.stateOf(kit) :: any).Pivot, "a holder-filling button is centred once, no anchor tween")
+	end)
 end
