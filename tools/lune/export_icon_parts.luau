@@ -96,6 +96,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- every hoverboard (the hoverboards window's cards, the shop's board passes; in the game a live ViewportFrame)
+local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
+for _, board in HoverboardData.List do
+	models["board_" .. board.Id] = HoverboardBuilder.build(board.Id)
+end
+
 -- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
 local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
 for name, make in CashBuilder.Pictures do
