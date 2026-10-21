@@ -155,7 +155,10 @@ local HALF = CELLS * CELL / 2
 -- camera: a road-side overview of the plot
 local PITCH = math.rad(55)
 local FOV = 50
-local ZOOM_DEFAULT, ZOOM_MIN, ZOOM_MAX = 60, 40, 80
+-- (tuned on the 12-cell grid, 48 studs: a bigger grid starts and zooms out further
+-- by its size, 80 / 107 at 16 cells; the closest zoom stays; no extra local: this
+-- module is at Luau's 200 local registers)
+local ZOOM_DEFAULT, ZOOM_MIN, ZOOM_MAX = 60 * CELLS / 12, 40, 80 * CELLS / 12
 local PAN_START_Z = -3 -- a little toward the road, so the tray hides less of the plot
 local FLY_TIME = 0.6
 local RETURN_TIME = 0.4
