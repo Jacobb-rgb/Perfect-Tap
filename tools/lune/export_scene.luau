@@ -309,6 +309,8 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	end
 elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
+elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
+	require("./lib/nature_wilds_preview").kit(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

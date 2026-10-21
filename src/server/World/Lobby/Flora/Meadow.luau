@@ -117,11 +117,18 @@ local function isLawn(part: BasePart, box: Box): boolean
 	return box.Max.Y <= 0.65 and part.Size.Y <= 0.6 and c.G > c.R + 0.08 and c.G > c.B + 0.05
 end
 
--- Every visible part of `map` from the ground up (y -0.5..160), but the ground itself.
-function Meadow.index(map: Instance): Index
+-- Every visible part of `map` from the ground up (y -0.5..160), but the ground
+-- itself (and but `skip`'s parts: Flora/Wilds lets its pieces replace the lawn's).
+function Meadow.index(map: Instance, skip: Instance?): Index
 	local index: Index = { Cells = {}, Ground = nil }
+	local skipped: { [Instance]: boolean } = {}
+	if skip then
+		for _, d in skip:GetDescendants() do
+			skipped[d] = true
+		end
+	end
 	for _, d in map:GetDescendants() do
-		if d:IsA("BasePart") and d.Transparency < 0.95 then
+		if d:IsA("BasePart") and d.Transparency < 0.95 and not skipped[d] then
 			local box = bounds(d)
 			local parent = d.Parent
 			if d.Name == "Ground" and parent and parent.Name == "Land" then
@@ -189,10 +196,10 @@ local function inBox(p: Vector3, box: { Min: Vector3, Max: Vector3 }, margin: nu
 	return p.X > box.Min.X - margin and p.X < box.Max.X + margin and p.Z > box.Min.Z - margin and p.Z < box.Max.Z + margin
 end
 
--- Allowed for the meadow at all: in the town area, off the plots and their
--- yards, the keep-outs, the spawn and the vault approach.
-function Meadow.allowed(p: Vector3, r: number): boolean
-	if not inBox(p, Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
+-- Allowed for the meadow at all: in the town area (or `area`), off the plots
+-- and their yards, the keep-outs, the spawn and the vault approach.
+function Meadow.allowed(p: Vector3, r: number, area: Box?): boolean
+	if not inBox(p, area or Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
 		return false
 	end
 	if Vector3.new(p.X - WorldLayout.SpawnPoint.X, 0, p.Z - WorldLayout.SpawnPoint.Z).Magnitude < Meadow.SpawnClear + r then
