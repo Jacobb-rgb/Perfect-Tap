@@ -49,6 +49,13 @@
 	  Roblox's own GuiService.ReducedMotionEnabled): every call jumps to its
 	  end, nothing loops, no cash flies, buttons don't squash.
 
+	The switch (Config/AnimConfig.UIMotion, owner 2026-10-21: built, off
+	until he says yes): off, every call is a no-op or jumps to its end like
+	reduce motion, nothing is attached, no tween is made; classicPop is the
+	pop the windows and toasts had before Motion (what main does), for the
+	controllers to keep while it is off. setEnabled overrides it (tests,
+	previews).
+
 	The pure parts (the easing curves, count-up steps, the shine's offset,
 	press targets) have Lune tests (tests/UIMotion.spec.luau). No emoji.
 ]]
@@ -58,6 +65,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local PopTheme = require(Shared.Config.PopTheme)
+local AnimConfig = require(Shared.Config.AnimConfig)
 
 local Motion = {}
 
@@ -288,6 +296,33 @@ function Motion.reduced(): boolean
 	return settingReduced or systemReduced
 end
 
+-- the switch: nil follows Config/AnimConfig.UIMotion
+local enabledOverride: boolean? = nil
+local settleAll: () -> ()
+
+-- Is UI motion on (Config/AnimConfig.UIMotion, or setEnabled)?
+function Motion.enabled(): boolean
+	if enabledOverride ~= nil then
+		return enabledOverride
+	end
+	return AnimConfig.UIMotion == true
+end
+
+-- Turns UI motion on or off (nil: back to AnimConfig). Turning it off puts
+-- everything Motion did back at rest.
+function Motion.setEnabled(on: boolean?)
+	local was = Motion.enabled()
+	enabledOverride = on
+	if was and not Motion.enabled() then
+		settleAll()
+	end
+end
+
+-- No animation now: reduce motion, or UI motion switched off.
+local function quiet(): boolean
+	return settingReduced or systemReduced or not Motion.enabled()
+end
+
 -- The input the player uses now: hover grows only for the mouse.
 function Motion.setPointer(kind: Pointer)
 	if pointer == kind then
@@ -307,22 +342,48 @@ end
 
 local infos: { [string]: TweenInfo } = {}
 
--- A cached TweenInfo (TweenInfo isn't made per animation).
-local function info(
-	key: string,
+export type TweenMaker = (
+	instance: Instance,
 	time: number,
 	style: Enum.EasingStyle,
 	direction: Enum.EasingDirection,
+	goal: { [string]: any },
 	repeats: number?,
 	reverses: boolean?
-): TweenInfo
-	local made = infos[key]
-	if made then
-		return made
+) -> any
+local fakeTweens: TweenMaker? = nil
+
+-- (tests) every tween Motion makes goes to `maker` instead (nil: TweenService).
+function Motion.useTweens(maker: TweenMaker?)
+	fakeTweens = maker
+end
+
+--[[
+	The one place Motion makes a tween. `key` caches its TweenInfo (TweenInfo
+	isn't made per animation; nil: a one-off time).
+]]
+local function makeTween(
+	instance: Instance,
+	key: string?,
+	time: number,
+	style: Enum.EasingStyle,
+	direction: Enum.EasingDirection,
+	goal: { [string]: any },
+	repeats: number?,
+	reverses: boolean?
+): Tween
+	local fake = fakeTweens
+	if fake then
+		return fake(instance, time, style, direction, goal, repeats, reverses) :: Tween
 	end
-	local fresh = TweenInfo.new(time, style, direction, repeats or 0, reverses == true)
-	infos[key] = fresh
-	return fresh
+	local made = if key then infos[key] else nil
+	if not made then
+		made = TweenInfo.new(time, style, direction, repeats or 0, reverses == true)
+		if key then
+			infos[key] = made
+		end
+	end
+	return TweenService:Create(instance, made :: TweenInfo, goal)
 end
 
 -- Does `gui` show: every GuiObject up to its ScreenGui Visible, that gui
@@ -621,10 +682,15 @@ local function startLoop(gui: GuiObject, loop: Loop)
 		end
 		local s = Motion.Shine
 		gradient.Offset = Vector2.new(s.From, 0)
-		local tween = TweenService:Create(
+		local tween = makeTween(
 			gradient,
-			info("Shine", s.Period, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, false),
-			{ Offset = Vector2.new(Motion.shineEnd(), 0) }
+			"Shine",
+			s.Period,
+			Enum.EasingStyle.Linear,
+			Enum.EasingDirection.Out,
+			{ Offset = Vector2.new(Motion.shineEnd(), 0) },
+			-1,
+			false
 		)
 		loop.Tween = tween
 		tween:Play()
@@ -682,7 +748,7 @@ end
 
 -- Starts the loops that show and stops the others (and forgets removed ones).
 function Motion.refreshLoops()
-	local calm = Motion.reduced()
+	local calm = quiet()
 	for gui, loop in loops do
 		local ok, parent = pcall(function(): Instance?
 			return gui.Parent -- (a destroyed gui: nil, or an error outside Roblox)
@@ -717,7 +783,7 @@ local function addLoop(gui: GuiObject, loop: Loop)
 	end
 	loops[gui] = loop
 	loopCount += 1
-	if not Motion.reduced() and Motion.shown(gui) and Motion.inView(gui) then
+	if not quiet() and Motion.shown(gui) and Motion.inView(gui) then
 		startLoop(gui, loop)
 	end
 end
@@ -735,19 +801,28 @@ end
 
 startBreathe = function(gui: GuiObject, s: Scaled)
 	local loop = loops[gui]
-	if not s.Breathing or not loop or not loop.Running or s.Loop ~= nil or Motion.reduced() then
+	if not s.Breathing or not loop or not loop.Running or s.Loop ~= nil or quiet() then
 		return
 	end
 	s.Scale.Scale = s.Base
 	local b = Motion.Breathe
-	local loopInfo = info("Breathe", b.Time, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	local tween = TweenService:Create(s.Scale, loopInfo, { Scale = s.Base * b.Peak })
+	local tween =
+		makeTween(s.Scale, "Breathe", b.Time, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, { Scale = s.Base * b.Peak }, -1, true)
 	s.Loop = tween
 	tween:Play()
 	if s.Pivot then
 		-- (the anchor breathes with it: the pulse stays on the middle)
 		gui.AnchorPoint = s.Anchor
-		local anchor = TweenService:Create(gui, loopInfo, { AnchorPoint = Motion.pivotAnchor(s.Anchor, b.Peak) })
+		local anchor = makeTween(
+			gui,
+			"Breathe",
+			b.Time,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.InOut,
+			{ AnchorPoint = Motion.pivotAnchor(s.Anchor, b.Peak) },
+			-1,
+			true
+		)
 		s.AnchorLoop = anchor
 		anchor:Play()
 	end
@@ -774,7 +849,7 @@ local function retarget(gui: GuiObject, s: Scaled, kind: "Down" | "Up" | "Hover"
 	s.Token += 1
 	stopLoop(s)
 	stopTween(s)
-	if Motion.reduced() then
+	if quiet() then
 		s.Scale.Scale = s.Base
 		if s.Pivot then
 			gui.AnchorPoint = s.Anchor
@@ -791,16 +866,19 @@ local function retarget(gui: GuiObject, s: Scaled, kind: "Down" | "Up" | "Hover"
 		return
 	end
 	local p = Motion.Press
-	local tweenInfo = if kind == "Down"
-		then info("Down", p.DownTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		elseif kind == "Up" then info("Up", p.UpTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		else info("Hover", p.HoverTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local key, time, style = "Hover", p.HoverTime, Enum.EasingStyle.Quad
+	if kind == "Down" then
+		key, time = "Down", p.DownTime
+	elseif kind == "Up" then
+		key, time, style = "Up", p.UpTime, Enum.EasingStyle.Back
+	end
+	local out = Enum.EasingDirection.Out
 	if anchorGoal then
-		local anchor = TweenService:Create(gui, tweenInfo, { AnchorPoint = anchorGoal })
+		local anchor = makeTween(gui, key, time, style, out, { AnchorPoint = anchorGoal })
 		s.AnchorTween = anchor
 		anchor:Play()
 	end
-	run(s, TweenService:Create(s.Scale, tweenInfo, { Scale = goal }), function()
+	run(s, makeTween(s.Scale, key, time, style, out, { Scale = goal }), function()
 		s.AnchorTween = nil
 		if atRest(s) and s.Breathing then
 			startBreathe(gui, s)
@@ -842,7 +920,10 @@ end
 
 -- The squash on press and the bounce back (mouse and touch here; a
 -- gamepad's A through pressDown). Attaching twice changes nothing.
-function Motion.press(button: GuiButton): UIScale
+function Motion.press(button: GuiButton): UIScale?
+	if not Motion.enabled() then
+		return nil -- (UI motion off: nothing attached)
+	end
 	local s = buttonState(button)
 	if not s.Press then
 		s.Press = true
@@ -857,7 +938,10 @@ function Motion.press(button: GuiButton): UIScale
 end
 
 -- The grow under the mouse (PC only: never on touch or a gamepad).
-function Motion.hover(button: GuiButton): UIScale
+function Motion.hover(button: GuiButton): UIScale?
+	if not Motion.enabled() then
+		return nil
+	end
 	local s = buttonState(button)
 	if not s.Hover then
 		s.Hover = true
@@ -1005,6 +1089,9 @@ end
 -- A slow 1 <-> 1.03 pulse while it shows (a button keeps its press feel:
 -- the pulse pauses while it is pressed, hovered or selected).
 function Motion.breathe(gui: GuiObject)
+	if not Motion.enabled() then
+		return
+	end
 	local s = scaleOf(gui, "MotionScale")
 	s.Breathing = true
 	addLoop(gui, { Kind = "Breathe", Running = false, Phase = 0, Token = 0, Gradient = nil, Tween = nil, Screen = nil })
@@ -1014,7 +1101,7 @@ end
 -- seconds (`phase` seconds late: neighbours don't flash together). A
 -- white gradient band in a clipping frame inset from the rounded corners.
 function Motion.shine(button: GuiObject, phase: number?)
-	if loops[button] then
+	if loops[button] or not Motion.enabled() then
 		return
 	end
 	local s = Motion.Shine
@@ -1072,15 +1159,11 @@ local function fadeDim(dim: GuiObject, goal: number, time: number)
 	if old then
 		old:Cancel()
 	end
-	if Motion.reduced() then
+	if quiet() then
 		dim.BackgroundTransparency = goal
 		return
 	end
-	local tween = TweenService:Create(
-		dim,
-		info("Dim" .. time, time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = goal }
-	)
+	local tween = makeTween(dim, "Dim" .. time, time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { BackgroundTransparency = goal })
 	dimTweens[dim] = tween
 	tween:Play()
 end
@@ -1094,6 +1177,9 @@ end
 -- A window opens: scale 0.85 -> 1 (0.95 when it isn't centred: Roblox
 -- scales about the AnchorPoint), the dim backdrop fading in.
 function Motion.pop(window: GuiObject, dim: GuiObject?)
+	if not Motion.enabled() then
+		return
+	end
 	poppedAt[window] = os.clock()
 	local s = scaleOf(window, "MotionPop")
 	s.Token += 1
@@ -1101,22 +1187,31 @@ function Motion.pop(window: GuiObject, dim: GuiObject?)
 	rebase(window, s)
 	if dim then
 		local base = dimBase(dim)
-		if base < 0.98 and not Motion.reduced() then
+		if base < 0.98 and not quiet() then
 			dim.BackgroundTransparency = 1
 		end
 		fadeDim(dim, base, Motion.Pop.DimTime)
 	end
-	if Motion.reduced() then
+	if quiet() then
 		s.Scale.Scale = s.Base
 		return
 	end
 	local p = Motion.Pop
 	s.Scale.Scale = s.Base * (if Motion.centred(window.AnchorPoint) then p.From else p.Near)
-	run(s, TweenService:Create(s.Scale, info("Pop", p.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = s.Base }))
+	run(s, makeTween(s.Scale, "Pop", p.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out, { Scale = s.Base }))
 end
 
 -- A window closes: scale to 0.9 (and the dim fading), then `done` (else Visible = false).
 function Motion.close(window: GuiObject, done: (() -> ())?, dim: GuiObject?)
+	if not Motion.enabled() then
+		-- (UI motion off: it just goes, like before)
+		if done then
+			done()
+		else
+			window.Visible = false
+		end
+		return
+	end
 	local s = scaleOf(window, "MotionPop")
 	s.Token += 1
 	stopTween(s)
@@ -1133,7 +1228,7 @@ function Motion.close(window: GuiObject, done: (() -> ())?, dim: GuiObject?)
 			fadeDim(dim, dimBase(dim), 0)
 		end
 	end
-	if Motion.reduced() or not Motion.shown(window) then
+	if quiet() or not Motion.shown(window) then
 		finish()
 		return
 	end
@@ -1143,11 +1238,7 @@ function Motion.close(window: GuiObject, done: (() -> ())?, dim: GuiObject?)
 	end
 	run(
 		s,
-		TweenService:Create(
-			s.Scale,
-			info("Close", Motion.Close.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Scale = base * Motion.Close.To }
-		),
+		makeTween(s.Scale, "Close", Motion.Close.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.In, { Scale = base * Motion.Close.To }),
 		finish
 	)
 end
@@ -1158,6 +1249,9 @@ local slides: { [GuiObject]: Tween } = setmetatable({}, { __mode = "k" }) :: any
 
 -- Slides `gui` in from a side, `distance` design units (Motion.Slide.Distance).
 function Motion.slide(gui: GuiObject, from: Side, distance: number?)
+	if not Motion.enabled() then
+		return
+	end
 	local stored: Vector2? = anchors[gui]
 	local rest: Vector2
 	if stored then
@@ -1171,38 +1265,44 @@ function Motion.slide(gui: GuiObject, from: Side, distance: number?)
 	if old then
 		old:Cancel()
 	end
-	if Motion.reduced() or not Motion.shown(gui) then
+	if quiet() or not Motion.shown(gui) then
 		gui.AnchorPoint = rest
 		return
 	end
 	gui.AnchorPoint = Motion.slideAnchor(rest, from, distance or Motion.Slide.Distance, Motion.designSize(gui))
-	local tween =
-		TweenService:Create(gui, info("Slide", Motion.Slide.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { AnchorPoint = rest })
+	local tween = makeTween(gui, "Slide", Motion.Slide.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out, { AnchorPoint = rest })
 	slides[gui] = tween
 	tween:Play()
 end
 
 -- A toast or a reward card appears: a bounce in. Returns its UIScale.
 function Motion.popIn(gui: GuiObject): UIScale
+	if not Motion.enabled() then
+		-- (UI motion off: no bounce, no state; the gui's own scale, at rest)
+		local own = gui:FindFirstChildOfClass("UIScale")
+		if own then
+			return own
+		end
+		local fresh = Instance.new("UIScale")
+		fresh.Parent = gui
+		return fresh
+	end
 	local s = scaleOf(gui, "MotionPop")
 	s.Token += 1
 	stopTween(s)
 	rebase(gui, s)
-	if Motion.reduced() or not Motion.shown(gui) then
+	if quiet() or not Motion.shown(gui) then
 		s.Scale.Scale = s.Base
 		return s.Scale
 	end
 	s.Scale.Scale = s.Base * Motion.PopIn.From
-	run(
-		s,
-		TweenService:Create(s.Scale, info("PopIn", Motion.PopIn.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = s.Base })
-	)
+	run(s, makeTween(s.Scale, "PopIn", Motion.PopIn.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out, { Scale = s.Base }))
 	return s.Scale
 end
 
 -- A quick bump (the cash pile when the money lands).
 function Motion.bump(gui: GuiObject)
-	if Motion.reduced() or not Motion.shown(gui) then
+	if quiet() or not Motion.shown(gui) then
 		return
 	end
 	local s = scaleOf(gui, "MotionPop")
@@ -1212,14 +1312,7 @@ function Motion.bump(gui: GuiObject)
 	s.Token += 1
 	rebase(gui, s)
 	local b = Motion.Bump
-	run(
-		s,
-		TweenService:Create(
-			s.Scale,
-			info("Bump", b.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true),
-			{ Scale = s.Base * b.Peak }
-		)
-	)
+	run(s, makeTween(s.Scale, "Bump", b.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { Scale = s.Base * b.Peak }, 0, true))
 end
 
 ---------------------------------------------------------------- count-up
@@ -1253,7 +1346,7 @@ end
 -- already running goes on from where it is to the new `to`.
 function Motion.countUp(label: TextLabel, from: number, to: number, format: (number) -> string, time: number?)
 	local c = counters[label]
-	if Motion.reduced() or not Motion.shown(label) then
+	if quiet() or not Motion.shown(label) then
 		if c then
 			c.Format = format
 			c.To = to
@@ -1288,8 +1381,7 @@ function Motion.countUp(label: TextLabel, from: number, to: number, format: (num
 	counter.To = to
 	counter.Value.Value = start
 	local seconds = time or Motion.countTime(start, to)
-	local tween =
-		TweenService:Create(counter.Value, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Value = to })
+	local tween = makeTween(counter.Value, nil, seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { Value = to })
 	counter.Tween = tween
 	local token = counter.Token
 	tween.Completed:Once(function()
@@ -1445,7 +1537,7 @@ end
 -- space, or nil: the screen centre) and fly into `to`, which bumps when they
 -- land. At most one burst a second per target. False when nothing flew.
 function Motion.flyTo(from: (GuiObject | Vector2)?, to: GuiObject, icon: string?, count: number?): boolean
-	if Motion.reduced() or not Motion.shown(to) then
+	if quiet() or not Motion.shown(to) then
 		return false
 	end
 	local now = os.clock()
@@ -1477,8 +1569,6 @@ function Motion.flyTo(from: (GuiObject | Vector2)?, to: GuiObject, icon: string?
 	local goal = design(centreOf(to))
 	local f = Motion.Fly
 	local n = math.clamp(count or f.Bits, 1, 12)
-	local burstInfo = info("FlyBurst", f.Burst, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local travelInfo = info("FlyTravel", f.Travel, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	local landed = false
 	for i = 1, n do
 		local bit = takeBit(layer)
@@ -1494,12 +1584,19 @@ function Motion.flyTo(from: (GuiObject | Vector2)?, to: GuiObject, icon: string?
 			if not bit.Parent then
 				return
 			end
-			local burst = TweenService:Create(bit, burstInfo, { Position = burstTo, Rotation = bit.Rotation + (rand() - 0.5) * 60 })
+			local burst = makeTween(
+				bit,
+				"FlyBurst",
+				f.Burst,
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.Out,
+				{ Position = burstTo, Rotation = bit.Rotation + (rand() - 0.5) * 60 }
+			)
 			burst.Completed:Once(function()
 				if not bit.Parent then
 					return
 				end
-				local travel = TweenService:Create(bit, travelInfo, {
+				local travel = makeTween(bit, "FlyTravel", f.Travel, Enum.EasingStyle.Quad, Enum.EasingDirection.In, {
 					Position = goal,
 					Rotation = (rand() - 0.5) * 20,
 					Size = UDim2.fromOffset(full.X.Offset * 0.55, full.Y.Offset * 0.55),
@@ -1522,8 +1619,6 @@ end
 
 ---------------------------------------------------------------- hidden guis
 
--- Everything inside `root` (a gui that just hid) jumps to its end: no tween
--- keeps running for a gui nobody sees. Loops stop through refreshLoops.
 --[[
 	Reduce motion for the windows and chips that animate themselves (their
 	own "OpenPop" UIScale tween, the chips' endless "Pulse"): every such
@@ -1536,7 +1631,7 @@ function Motion.calm(root: Instance): number
 	local n = 0
 	for _, d in root:GetDescendants() do
 		if d:IsA("UIScale") and CALM[d.Name] then
-			TweenService:Create(d, info("Calm", 0, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+			makeTween(d, "Calm", 0, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, { Scale = 1 }):Play()
 			d.Scale = 1
 			n += 1
 		end
@@ -1544,9 +1639,39 @@ function Motion.calm(root: Instance): number
 	return n
 end
 
-function Motion.settle(root: Instance)
+--[[
+	The pop the windows and toasts had before Motion (what main does): the
+	`name`d UIScale (nil: the gui's first UIScale), made when missing, from
+	`from` to 1 with Back out in `time` seconds. The controllers keep it while
+	UI motion is off (the Store window, the toasts, the offline popup).
+	Reduce motion: it just shows. Returns the UIScale.
+]]
+function Motion.classicPop(gui: GuiObject, name: string?, from: number, time: number): UIScale
+	local found = if name then gui:FindFirstChild(name) else gui:FindFirstChildOfClass("UIScale")
+	local scale: UIScale
+	if found and found:IsA("UIScale") then
+		scale = found
+	else
+		scale = Instance.new("UIScale")
+		scale.Name = name or "UIScale"
+		scale.Parent = gui
+	end
+	if Motion.reduced() then
+		scale.Scale = 1
+		return scale
+	end
+	scale.Scale = from
+	makeTween(scale, nil, time, Enum.EasingStyle.Back, Enum.EasingDirection.Out, { Scale = 1 }):Play()
+	return scale
+end
+
+-- Everything inside `root` (nil: everywhere) at its end, its tweens stopped.
+local function settleIn(root: Instance?)
+	local function inside(gui: Instance): boolean
+		return root == nil or gui:IsDescendantOf(root)
+	end
 	for gui, s in scaled do
-		if (s.Tween or s.Pressed or s.Hovered or s.Selected) and gui:IsDescendantOf(root) then
+		if (s.Tween or s.Pressed or s.Hovered or s.Selected) and inside(gui) then
 			s.Token += 1
 			stopTween(s)
 			unfollow(s)
@@ -1560,13 +1685,13 @@ function Motion.settle(root: Instance)
 		end
 	end
 	for label, c in counters do
-		if c.Tween and label:IsDescendantOf(root) then
+		if c.Tween and inside(label) then
 			stopCount(label, c)
 		end
 	end
-	for gui, tween in slides do
-		if gui:IsDescendantOf(root) then
-			tween:Cancel()
+	for gui, slide in slides do
+		if inside(gui) then
+			slide:Cancel()
 			slides[gui] = nil
 			local rest = anchors[gui]
 			if rest then
@@ -1574,7 +1699,17 @@ function Motion.settle(root: Instance)
 			end
 		end
 	end
-	local layer = root:FindFirstChild("MotionFly")
+	for dim, fade in dimTweens do
+		if inside(dim) then
+			fade:Cancel()
+			dimTweens[dim] = nil
+			local base = dims[dim]
+			if base ~= nil then
+				dim.BackgroundTransparency = base
+			end
+		end
+	end
+	local layer = if root then root:FindFirstChild("MotionFly") else nil
 	if layer then
 		for _, bit in layer:GetChildren() do
 			if bit:IsA("Frame") then
@@ -1584,6 +1719,16 @@ function Motion.settle(root: Instance)
 		end
 	end
 	Motion.refreshLoops()
+end
+
+-- Everything inside `root` (a gui that just hid) jumps to its end: no tween
+-- keeps running for a gui nobody sees. Loops stop through refreshLoops.
+function Motion.settle(root: Instance)
+	settleIn(root)
+end
+
+settleAll = function()
+	settleIn(nil)
 end
 
 return Motion

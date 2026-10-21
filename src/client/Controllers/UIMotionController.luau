@@ -2,6 +2,12 @@
 	UIMotionController: puts UI/Motion on the game's UI by itself, so the
 	other controllers don't need edits.
 
+	The switch: Config/AnimConfig.UIMotion (owner 2026-10-21: built, off until
+	he says yes). Off, start() returns at once: no PlayerGui watcher, no
+	Enabled watchers, no input hooks, no loop, nothing attached (it costs
+	nothing; tests/UIMotion.spec.luau counts the connections). On, all of
+	the below.
+
 	- Windows: every PlayerGui ScreenGui with the attribute TerraForge is
 	  watched; when its Enabled turns true (checked a moment later, after the
 	  controller that opened it is done), its main window pops (findWindow:
@@ -205,7 +211,11 @@ function UIMotionController.centre(button: GuiObject): boolean
 end
 
 -- Press + hover on a button (idempotent: attaching twice adds one UIScale).
+-- UI motion off: nothing (the button stays exactly as built).
 function UIMotionController.attach(button: GuiButton)
+	if not Motion.enabled() then
+		return
+	end
 	UIMotionController.centre(button)
 	Motion.press(button)
 	Motion.hover(button)
@@ -219,13 +229,37 @@ local queue: { Instance } = {}
 local flushing = false
 local shines = 0
 local lastSelected: GuiObject? = nil
+-- every connection this controller makes (UI motion off: none, the tests check)
+local connections: { RBXScriptConnection } = {}
+local running = false
+
+local function hook(signal: RBXScriptSignal, callback: (...any) -> ()): RBXScriptConnection
+	local connection = signal:Connect(callback)
+	table.insert(connections, connection)
+	return connection
+end
+
+-- (tests) how many connections the controller holds, and whether its loop runs.
+function UIMotionController.connectionCount(): number
+	local n = 0
+	for _, connection in connections do
+		if connection.Connected then
+			n += 1
+		end
+	end
+	return n
+end
+
+function UIMotionController.isRunning(): boolean
+	return running
+end
 
 local function inWorld(gui: Instance): boolean
 	return gui:FindFirstAncestorWhichIsA("BillboardGui") ~= nil or gui:FindFirstAncestorWhichIsA("SurfaceGui") ~= nil
 end
 
 local function watchPopIn(gui: GuiObject)
-	gui:GetPropertyChangedSignal("Visible"):Connect(function()
+	hook(gui:GetPropertyChangedSignal("Visible"), function()
 		if gui.Visible then
 			Motion.popIn(gui)
 		end
@@ -317,7 +351,7 @@ local function watchGui(gui: Instance)
 	end
 	watched[gui] = true
 	local screen = gui :: ScreenGui
-	screen:GetPropertyChangedSignal("Enabled"):Connect(function()
+	hook(screen:GetPropertyChangedSignal("Enabled"), function()
 		if screen.Enabled then
 			-- (a moment later: the controller that opened it lays it out first)
 			task.defer(onOpened, screen)
@@ -342,6 +376,12 @@ local function pointerOf(kind: Enum.UserInputType): Motion.Pointer?
 end
 
 function UIMotionController.start()
+	if not Motion.enabled() then
+		-- UI motion off (Config/AnimConfig.UIMotion): it costs nothing, no
+		-- watcher, no input hook, no loop; the UI is the one main has
+		return
+	end
+	running = true
 	-- (required here: the pure finders above load in the Lune tests without a player)
 	local SettingsController = require(script.Parent.SettingsController)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -363,7 +403,7 @@ function UIMotionController.start()
 	end
 	systemReduced()
 	pcall(function()
-		GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(systemReduced)
+		hook(GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"), systemReduced)
 	end)
 	SettingsController.onChanged(function(current)
 		local was = Motion.reduced()
@@ -378,7 +418,7 @@ function UIMotionController.start()
 	elseif UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
 		Motion.setPointer("Touch")
 	end
-	UserInputService.LastInputTypeChanged:Connect(function(kind: Enum.UserInputType)
+	hook(UserInputService.LastInputTypeChanged, function(kind: Enum.UserInputType)
 		local now: Motion.Pointer? = pointerOf(kind)
 		if now then
 			Motion.setPointer(now)
@@ -386,7 +426,7 @@ function UIMotionController.start()
 	end)
 
 	-- the gamepad: its selection grows, its A squashes the selected button
-	GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+	hook(GuiService:GetPropertyChangedSignal("SelectedObject"), function()
 		local now = GuiService.SelectedObject
 		if now ~= lastSelected then
 			Motion.select(lastSelected, false)
@@ -394,7 +434,7 @@ function UIMotionController.start()
 			lastSelected = now
 		end
 	end)
-	UserInputService.InputBegan:Connect(function(input: InputObject)
+	hook(UserInputService.InputBegan, function(input: InputObject)
 		if input.KeyCode == Enum.KeyCode.ButtonA then
 			local selected = GuiService.SelectedObject
 			if selected then
@@ -407,8 +447,8 @@ function UIMotionController.start()
 	for _, child in playerGui:GetChildren() do
 		watchGui(child)
 	end
-	playerGui.ChildAdded:Connect(watchGui)
-	playerGui.DescendantAdded:Connect(enqueue)
+	hook(playerGui.ChildAdded, watchGui)
+	hook(playerGui.DescendantAdded, enqueue)
 	for _, d in playerGui:GetDescendants() do
 		enqueue(d)
 	end

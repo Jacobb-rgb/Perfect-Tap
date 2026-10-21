@@ -10,7 +10,8 @@
 	  podium payouts); the State snapshot's Coins / Income are the fallback
 	  while the attributes aren't there.
 	  Bigger jumps (a sale) pop the panel, roll the number up and send cash
-	  flying into the pile (UI/Motion.countUp / flyTo). holdCoins(seconds) keeps the
+	  flying into the pile (UI/Motion.countUp / flyTo; with UI motion off,
+	  Config/AnimConfig, the number glides up instead). holdCoins(seconds) keeps the
 	  counter still while another screen still has to reveal a reward (the
 	  daily wheel's disc turning); releaseCoins shows it.
 	- Earned { Amount, Source } shows a floating "+$X" under the coins;
@@ -98,7 +99,8 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	end
 	local frame = HudView.toast(refs.Toasts, text, color or TOAST_COLORS[kind or "Info"] or Theme.Info)
 	frame.LayoutOrder = math.floor(os.clock() * 100) % 1e6
-	local scale = Motion.popIn(frame) -- (UI/Motion: the bounce in; none with Reduce motion)
+	-- (UI/Motion's bounce in, none with Reduce motion; UI motion off: the pop main has)
+	local scale = if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)
 	if kind == "Deny" then
 		Sfx.play("UIDeny")
 	elseif kind == "Discovery" then
@@ -425,7 +427,11 @@ function HudController.showOffline(amount: number, seconds: number, hours: numbe
 	shown.Amount.Text = "+" .. Format.money(amount)
 	shown.Detail.Text = HudController.offlineDetail(seconds, hours)
 	shown.Gui.Enabled = true
-	Motion.pop(shown.Panel, shown.Dim) -- (UI/Motion: none with Reduce motion)
+	if Motion.enabled() then
+		Motion.pop(shown.Panel, shown.Dim) -- (UI/Motion: none with Reduce motion)
+	else
+		Motion.classicPop(shown.Panel, nil, 0.6, 0.3) -- (UI motion off: the pop main has)
+	end
 	Sfx.play("CoinBurst")
 	ContextActionService:BindActionAtPriority(OFFLINE_CLOSE, function(_, state)
 		if state == Enum.UserInputState.Begin then
@@ -534,17 +540,28 @@ function HudController.start()
 		local diff = target - shownCoins
 		if diff ~= 0 then
 			-- a jump bigger than a few seconds of income is a sale or a reward
-			if diff > math.max(1, income * 3) then
-				if not Motion.isCounting(refs.Coins) and not Motion.reduced() then
-					coinScale.Scale = 1.12
-					TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
-					Motion.flyTo(nil, cashPile or refs.CoinsPanel, "cash")
+			local big = diff > math.max(1, income * 3)
+			if big and not Motion.enabled() then
+				-- (UI motion off, Config/AnimConfig: the glide main has, the panel popping as it goes)
+				coinScale.Scale = 1.12
+				TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
+				shownCoins += diff * 0.35
+				if math.abs(target - shownCoins) < 0.01 then
+					shownCoins = target
 				end
-				Motion.countUp(refs.Coins, math.max(0, shownCoins), target, Format.money)
-				shownText = ""
+			else
+				if big then
+					if not Motion.isCounting(refs.Coins) and not Motion.reduced() then
+						coinScale.Scale = 1.12
+						TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
+						Motion.flyTo(nil, cashPile or refs.CoinsPanel, "cash")
+					end
+					Motion.countUp(refs.Coins, math.max(0, shownCoins), target, Format.money)
+					shownText = ""
+				end
+				-- (spending: no counting down)
+				shownCoins = target
 			end
-			-- (spending: no counting down)
-			shownCoins = target
 		end
 		if not Motion.isCounting(refs.Coins) then
 			local text = Format.money(math.max(0, shownCoins))
