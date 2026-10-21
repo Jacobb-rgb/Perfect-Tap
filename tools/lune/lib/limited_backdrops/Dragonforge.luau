@@ -242,6 +242,96 @@ return function(kit: any, H: any): any
 			block(kit, CF.new(p) * CF.Angles(0, 0, PI / 4), Vector3.new(1.1, 1.1, 0.3), lava, M.Neon)
 		end
 	end
+	---------------------------------------------------------------- v4: a volcano erupting RIGHT NOW
+
+	-- the second volcano (the picture's right), steep and dark, lit from its crater
+	local ex, ez = -128, 300
+	local EK = 1.5 -- the blast's size (it is far away)
+	local ey = 0
+	local etop = 0
+	for i = 1, 12 do
+		local d = (120 - i * 8.8) * 1.3
+		local h = (7.2 - i * 0.18) * 1.2
+		disc(kit, CF.new(ex, ey + h / 2, ez) * CF.Angles(0, i * 0.9, 0), h, d, if i % 2 == 0 then basaltDark else rgb(46, 30, 38), M.Basalt)
+		etop = d / 2
+		ey += h
+	end
+	local crater = Vector3.new(ex, ey, ez)
+	disc(kit, CF.new(crater + Vector3.new(0, 0.3, 0)), 0.6, 2 * etop - 2, lavaHot, M.Neon)
+	-- the blast: a column of fire from the crater, wide at the top
+	for i, k in { { 0, 10, 9, lavaHot }, { 0, 24, 13, lava }, { 0, 36, 17, lava }, { 0, 46, 12, lavaDeep } } do
+		local blob = ball(kit, crater + Vector3.new(k[1] + (i - 2) * 1.5, k[2] * 0.85, 0), k[3] * EK, k[4], M.Neon)
+		blob.Transparency = 0.15 + i * 0.12
+	end
+	block(kit, CF.new(crater + Vector3.new(0, 13, 0)), Vector3.new(7 * EK, 26, 7 * EK), lavaHot, M.Neon, 0.2)
+	-- the smoke column billowing over the fire
+	for i = 1, 12 do
+		local h = 30 + i * 3.6
+		local smoke = ball(
+			kit,
+			crater + Vector3.new((rng:range(-10, 10) + i * 1.6) * EK, h, rng:range(-4, 6)),
+			rng:range(12, 20) * EK,
+			if i % 2 == 0 then rgb(58, 34, 42) else rgb(76, 44, 50),
+			M.SmoothPlastic
+		)
+		smoke.Transparency = 0.15 + i * 0.03
+	end
+	-- lava bombs flying out on arcs, each with a glowing trail
+	for i = 1, 14 do
+		local a = (i / 14) * 2 * PI + rng:range(-0.2, 0.2)
+		local reach = rng:range(18, 46) * EK
+		local t = rng:range(0.35, 0.9)
+		local dx, dz = math.cos(a) * reach, math.sin(a) * reach * 0.5
+		local height = 34 * 4 * t * (1 - t) + 6
+		local pos = crater + Vector3.new(dx * t, height, dz * t)
+		local back = crater + Vector3.new(dx * (t - 0.12), 34 * 4 * (t - 0.12) * (1 - t + 0.12) + 6, dz * (t - 0.12))
+		ball(kit, pos, rng:range(2.2, 3.6) * EK, if i % 2 == 0 then lavaHot else lava, M.Neon)
+		local trail = block(kit, CF.lookAt((pos + back) / 2, back), Vector3.new(1.2 * EK, 1.2 * EK, (back - pos).Magnitude), lava, M.Neon)
+		trail.Transparency = 0.45
+	end
+	-- fresh lava rivers racing down its slopes
+	for f, k in { { -8, -30, 5 }, { 6, 24, 4.5 }, { 0, -4, 6 } } do
+		local a2 = Vector3.new(ex + k[1], ey, ez - etop + 1)
+		local b2 = Vector3.new(ex + k[2], 0, ez - 56)
+		local cf = CF.lookAt((a2 + b2) / 2, b2)
+		block(kit, cf * CF.new(0, 2.6, 0), Vector3.new(k[3], 1.2, (b2 - a2).Magnitude + 2), lava, M.Neon)
+		block(kit, cf * CF.new(0, 3.1, 0), Vector3.new(k[3] * 0.4, 1, (b2 - a2).Magnitude), lavaHot, M.Neon)
+		local _ = f
+	end
+	-- the blast's glow and a shock ring over the crater
+	local ring = disc(kit, CF.new(crater + Vector3.new(0, 8, 0)) * CF.Angles(0.25, 0, 0.1), 0.6, 60 * EK, lavaHot, M.Neon)
+	ring.Transparency = 0.7
+	light(kit, crater + Vector3.new(0, 20, -40), lavaHot, 120, 4)
+	light(kit, Vector3.new(ex * 0.5, 30, ez * 0.5), lava, 90, 2.5)
+	emitter(kit, crater + Vector3.new(0, 10, 0), 30, lavaHot, "rbxasset://textures/particles/sparkles_main.dds", "Embers")
+	emitter(kit, crater + Vector3.new(0, 30, 0), 30, rgb(70, 44, 50), "rbxasset://textures/particles/smoke_main.dds", "Smoke")
+
+	-- MORE ENERGY near the stage: lava bombs streaking overhead, fire jets
+	-- bursting from cracks, hot sparks swirling
+	for i = 1, 6 do
+		local pos = Vector3.new(rng:range(-60, 60), rng:range(26, 40), rng:range(30, 70))
+		local dir = Vector3.new(if pos.X > 0 then -1 else 1, -0.45, -0.2).Unit
+		ball(kit, pos, rng:range(1.4, 2.2), lavaHot, M.Neon)
+		local tail = pos - dir * 9
+		local streak = block(kit, CF.lookAt((pos + tail) / 2, tail), Vector3.new(0.9, 0.9, 9), lava, M.Neon)
+		streak.Transparency = 0.4
+	end
+	for _, k in { { 46, 18 }, { -48, 20 }, { 30, 30 }, { -30, 28 } } do
+		local base = Vector3.new(k[1], 0, k[2])
+		for j, h in { 9, 6, 4 } do
+			local flame = block(
+				kit,
+				CF.new(base + Vector3.new((j - 2) * 0.8, h / 2, 0)) * CF.Angles(0, 0, PI / 4 * 0.2 * (j - 2)),
+				Vector3.new(1.6 - j * 0.3, h, 1.2 - j * 0.2),
+				if j == 1 then lava else lavaHot,
+				M.Neon
+			)
+			flame.Transparency = 0.1 * j
+		end
+		strip(kit, base + Vector3.new(-4, 0, 0), base + Vector3.new(4, 0, 2), 0.8, 0.04, lavaHot, M.Neon)
+		light(kit, base + Vector3.new(0, 6, -3), lava, 24, 1.6)
+	end
+
 	-- a burning gem where the horns meet (over the King's crown)
 	block(kit, CF.new(0, 28.6, gz + 2) * CF.Angles(0, 0, PI / 4), Vector3.new(3.4, 3.4, 1.2), lavaHot, M.Neon)
 	light(kit, Vector3.new(0, 26, gz - 6), lava, 40, 2)

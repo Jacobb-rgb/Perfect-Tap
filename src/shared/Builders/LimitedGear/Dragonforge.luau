@@ -971,9 +971,10 @@ function Dragonforge.shard(kit: Kit, tools: Tools, s: Shard)
 	local function P(x: number, y: number, z: number): Vector3
 		return at(x, y, z).Position
 	end
-	local shell = rgb(196, 40, 30)
-	local shellLow = rgb(150, 24, 28)
-	local scale = rgb(112, 14, 24)
+	-- dark volcanic glass, so the lava glows against it
+	local shell = rgb(92, 22, 28)
+	local shellLow = rgb(56, 18, 26)
+	local scale = rgb(140, 30, 30)
 	local lava = s.Glow
 
 	-- Bottom: the round lower shell, the band of lava at the waist, the cracks
@@ -1082,6 +1083,70 @@ function Dragonforge.shard(kit: Kit, tools: Tools, s: Shard)
 			break
 		end
 		T.seg(s.Top, "EggHorn" .. i, P(side * 0.7, 1.5, 0.1), P(side * 1.0, 2.2, 0.35), 0.18, 0.18, IVORY, M.Slate)
+	end
+	-- LAVA FLOWING down the upper shell from the crown of flame: three
+	-- streams hugging the egg's curve, each ending in a glowing drip
+	local function onTop(az: number, y: number, out: number): Vector3
+		local yy = (y - topCenter) / (1.4 * r)
+		local rr = r * math.sqrt(math.max(1 - yy * yy, 0)) + out
+		return P(math.sin(az) * rr, y, -math.cos(az) * rr)
+	end
+	local streams = { { -0.55, 0.26 }, { 0.35, 0.22 }, { 1.25, 0.24 } }
+	for i, k in streams do
+		local az, w = k[1], k[2]
+		local heights = { 2.15, 1.75, 1.2, 0.55 }
+		for j = 1, #heights - 1 do
+			if s.Room() < 2 then
+				break
+			end
+			local a0 = onTop(az + (j - 1) * 0.06, heights[j], 0.02)
+			local a1 = onTop(az + j * 0.06, heights[j + 1], 0.02)
+			local dir = (a1 - a0).Unit
+			T.seg(
+				s.Top,
+				`LavaFlow{i}_{j}`,
+				a0 - dir * 0.08,
+				a1 + dir * 0.06,
+				w * (1 + 0.15 * j),
+				0.08,
+				if j == 1 then FLAME_HOT else lava,
+				NEON
+			)
+		end
+		if s.Room() >= 2 then
+			local drip = onTop(az + 0.2, heights[#heights] - 0.1, 0.06)
+			K.part(s.Top, "LavaDrip" .. i, CFrame.new(drip), Vector3.new(0.3, 0.3, 0.3), FLAME, NEON, BALL)
+		end
+	end
+	-- obsidian spikes breaking out of the shell
+	for i, k in { { -1.55, 0.9, 1.3 }, { 1.7, 1.15, 1.2 }, { 2.6, 0.45, 1.0 } } do
+		if s.Room() < 3 then
+			break
+		end
+		local az, y, len = k[1], k[2], k[3]
+		local base = onTop(az, y, -0.1)
+		local dir = (onTop(az, y, 1) - base).Unit + Vector3.new(0, 0.55, 0)
+		dir = dir.Unit
+		local mid = base + dir * (len * 0.55)
+		T.seg(s.Top, "Spike" .. i, base, mid, 0.44, 0.44, OBSIDIAN, M.Basalt)
+		T.seg(s.Top, "SpikeTip" .. i, mid, base + dir * len, 0.22, 0.22, rgb(60, 40, 52), M.Basalt)
+	end
+	-- volcanic rocks heaped round the claw, lava glowing between them
+	for i, k in { { -0.95, -1.0, -0.4, 0.6 }, { 0.9, -1.02, -0.5, 0.52 }, { -0.35, -1.1, -0.85, 0.44 }, { 0.5, -1.12, -0.8, 0.36 } } do
+		if s.Room() < 1 then
+			break
+		end
+		K.part(
+			s.Bottom,
+			"Rock" .. i,
+			at(k[1], k[2], k[3]) * CFrame.Angles(0.4 * i, 0.9 * i, 0.3),
+			Vector3.new(k[4], k[4] * 0.8, k[4] * 0.9),
+			rgb(44, 32, 40),
+			M.Basalt
+		)
+	end
+	if s.Room() >= 1 then
+		K.upright(s.Bottom, "LavaPool", at(0, -r + 0.02, -0.2), 0.06, 2.6, lava, NEON)
 	end
 	local core = s.Bottom:FindFirstChild("Band")
 	if core and core:IsA("BasePart") then
