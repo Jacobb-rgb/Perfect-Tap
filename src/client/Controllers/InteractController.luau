@@ -32,6 +32,7 @@ local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local StateController = require(script.Parent.StateController)
 
 local InteractController = {}
@@ -212,7 +213,7 @@ local function updateHint()
 	local base = (target:GetAttribute("Value") :: number?) or 0
 	local value = math.floor(base * StateController.sellMult() + 0.5)
 	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled
-		then "X"
+		then MenuPanels.padName(Enum.KeyCode.ButtonX) -- (Square on PlayStation, where Cross jumps)
 		elseif UserInputService.TouchEnabled then "Grab"
 		else "F"
 	hintAction.Text = if kind == "Relic"

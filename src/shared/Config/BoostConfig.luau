@@ -84,6 +84,7 @@ local BlasterData = require(script.Parent.BlasterData)
 local OreData = require(script.Parent.OreData)
 local Rarity = require(script.Parent.Rarity)
 local WorldLayout = require(script.Parent.WorldLayout)
+local MineFloors = require(script.Parent.MineFloors)
 local CapsuleConfig = require(script.Parent.CapsuleConfig)
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
 local StatConfig = require(script.Parent.StatConfig)
@@ -452,13 +453,28 @@ function BoostConfig.oreOdds(weights: { [string]: number }, luck: number): { Odd
 	return list
 end
 
+-- The weights a zone's rocks really roll from (MiningService): a mine floor's
+-- Ores for its Small and Big rocks (its zone's own Ores are not used there),
+-- else the zone's Ores.
+function BoostConfig.zoneWeights(zone: WorldLayout.Zone): { [string]: number }
+	local floor = MineFloors.ByZone[zone.Id]
+	return if floor then floor.Ores else zone.Ores
+end
+
+-- The weights a mine floor's Crystal, Golden, Geode and Giant rocks roll from
+-- (nil for a zone that isn't a mine floor).
+function BoostConfig.crystalWeights(zone: WorldLayout.Zone): { [string]: number }?
+	local floor = MineFloors.ByZone[zone.Id]
+	return if floor then floor.CrystalOres else nil
+end
+
 -- oreOdds for a zone (WorldLayout.Zones id); empty for an unknown zone.
 function BoostConfig.zoneOdds(zoneId: string, luck: number): { OddsLine }
 	local zone = WorldLayout.ZoneById[zoneId]
 	if not zone then
 		return {}
 	end
-	return BoostConfig.oreOdds(zone.Ores, luck)
+	return BoostConfig.oreOdds(BoostConfig.zoneWeights(zone), luck)
 end
 
 -- Picks an ore for a roll in [0, 1) straight from the weights with luck (nil
@@ -587,7 +603,7 @@ function BoostConfig.minableZones(blasterLevel: any, vip: boolean?): { WorldLayo
 	local level = if finite(blasterLevel) then blasterLevel else 1
 	local list = {}
 	for _, zone in WorldLayout.Zones do
-		if next(zone.Ores) ~= nil and zone.MinBlaster <= level and (vip or not zone.VipOnly) then
+		if next(BoostConfig.zoneWeights(zone)) ~= nil and zone.MinBlaster <= level and (vip or not zone.VipOnly) then
 			table.insert(list, zone)
 		end
 	end
@@ -600,8 +616,9 @@ end
 function BoostConfig.zoneEffects(blasterLevel: any, vip: boolean?, luckNow: number, luckWith: number): { ZoneEffect }
 	local list: { ZoneEffect } = {}
 	for _, zone in BoostConfig.minableZones(blasterLevel, vip) do
-		local before = BoostConfig.rarityShares(zone.Ores, luckNow)
-		local after = BoostConfig.rarityShares(zone.Ores, luckWith)
+		local weights = BoostConfig.zoneWeights(zone)
+		local before = BoostConfig.rarityShares(weights, luckNow)
+		local after = BoostConfig.rarityShares(weights, luckWith)
 		local rarities: { RarityLine } = {}
 		for _, info in Rarity.List do
 			if (BoostConfig.LuckPower[info.Id] or 0) > 0 and before[info.Id] then
@@ -610,8 +627,8 @@ function BoostConfig.zoneEffects(blasterLevel: any, vip: boolean?, luckNow: numb
 		end
 		table.insert(list, {
 			Zone = zone.Id,
-			Before = BoostConfig.rareShare(zone.Ores, luckNow),
-			After = BoostConfig.rareShare(zone.Ores, luckWith),
+			Before = BoostConfig.rareShare(weights, luckNow),
+			After = BoostConfig.rareShare(weights, luckWith),
 			Rarities = rarities,
 			NoEffect = #rarities == 0,
 		})
@@ -668,7 +685,12 @@ function BoostConfig.hasEffect(kindId: string, blasterLevel: any, vip: boolean?)
 		return true
 	end
 	for _, zone in BoostConfig.minableZones(blasterLevel, vip) do
-		for oreId in zone.Ores do
+		for oreId in BoostConfig.zoneWeights(zone) do
+			if BoostConfig.isLuckyOre(oreId) then
+				return true
+			end
+		end
+		for oreId in (BoostConfig.crystalWeights(zone) or {}) :: { [string]: number } do
 			if BoostConfig.isLuckyOre(oreId) then
 				return true
 			end

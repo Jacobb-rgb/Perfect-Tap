@@ -937,8 +937,20 @@ local function loadFromHands(player: Player, hook: Hook)
 	if loaded > 0 then
 		afterLoad(player, train, hook.Part.CFrame.Position)
 	end
-	if #CarryService.list(player) > 0 then
-		hint(player, if isAway(player, train) then awayText(player, train) else TrainService.FullText)
+	local held = CarryService.list(player)
+	if #held > 0 then
+		local onlyRelics = true
+		for _, record in held do
+			onlyRelics = onlyRelics and record.Kind == "Relic"
+		end
+		-- room left at the station: only dusty relics stayed in the hands (never shipped)
+		hint(
+			player,
+			if isAway(player, train)
+				then awayText(player, train)
+				elseif onlyRelics and cargoRoom(player, train) > 0 then ItemData.RelicRefused
+				else TrainService.FullText
+		)
 	end
 end
 

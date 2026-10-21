@@ -646,7 +646,10 @@ function ElevatorService.start()
 	hookTagged(ElevatorService.CatcherTag, hookCatcher, unhookCatcher)
 	while true do
 		task.wait(CATCH_CHECK)
-		checkCatchers()
+		-- (one bad round never ends floor 6's void rescue for the rest of the server)
+		xpcall(checkCatchers, function(err: any)
+			warn("[ElevatorService] void check failed: " .. tostring(err))
+		end)
 	end
 end
 

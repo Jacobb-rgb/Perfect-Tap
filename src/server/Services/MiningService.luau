@@ -115,6 +115,7 @@ type Rock = {
 	Stages: number, -- crack stages until the shatter (floor rocks: one per ore)
 	Damage: { [Player]: number }, -- per player (the Giant Crystal's reward)
 	Ores: { string }, -- server only, never sent to clients
+	Weights: { [string]: number }, -- the weights its ores were rolled from (ore luck upgrades within them)
 	Health: number,
 	MaxHealth: number,
 	Stage: number,
@@ -313,6 +314,7 @@ local function spawnFloorRock(marker: BasePart, zone: WorldLayout.Zone, floor: M
 		Stages = if kind == "Giant" then 3 else math.max(1, #ores),
 		Damage = {},
 		Ores = ores,
+		Weights = if rich then floor.CrystalOres else floor.Ores,
 		Health = health,
 		MaxHealth = health,
 		Stage = 0,
@@ -386,6 +388,7 @@ local function spawnRock(marker: BasePart): Rock?
 		Stages = 3,
 		Damage = {},
 		Ores = ores,
+		Weights = zone.Ores,
 		Health = health,
 		MaxHealth = health,
 		Stage = 0,
@@ -469,7 +472,7 @@ end
 -- Bonuses: ore luck may upgrade the rock's ore, Twin Drop may add a second chunk.
 local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
 	local stats = Bonuses.stats(player)
-	local oreId = Bonuses.rollOre(stats, rock.Zone.Ores, rolled, random)
+	local oreId = Bonuses.rollOre(stats, rock.Weights, rolled, random)
 	spawnChunk(player, rock, oreId, from)
 	local twin = Bonuses.twinDrop(stats)
 	if twin > 0 and random() < twin then
@@ -808,7 +811,11 @@ local function tickGiants(now: number)
 				giant.At = math.huge
 				if rock then
 					for _, player in playersIn(zone) do
-						Net.fire("Notify", player, { Text = "A Giant Crystal appeared in " .. floor.Name .. "! Blast it together.", Kind = "Info" })
+						Net.fire(
+							"Notify",
+							player,
+							{ Text = "A Giant Crystal appeared in " .. floor.Name .. "! Blast it together.", Kind = "Info" }
+						)
 					end
 				end
 			end
