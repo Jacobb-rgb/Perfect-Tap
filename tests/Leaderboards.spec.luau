@@ -206,6 +206,7 @@ return function(T, Loader)
 		-- junk never gets through
 		d.TotalEarned = 0 / 0
 		d.Stats = "broken"
+		d.Level = "broken"
 		w.income[p] = math.huge
 		local junk = LeaderboardService.values(p, d)
 		for _, board in LeaderboardConfig.Boards do
@@ -603,7 +604,7 @@ return function(T, Loader)
 		T.truthy(LeaderboardService.isHidden(77))
 		T.eq(LeaderboardService.hiddenWait(3), LeaderboardService.HiddenSeconds, "then the usual pace")
 		T.eq(LeaderboardService.flush(cheat, 1000 + LeaderboardService.WriteCheck), 0, "77 never")
-		T.eq(LeaderboardService.flush(fair, 1000 + LeaderboardService.WriteCheck), 2, "the deferred round goes out at once")
+		T.eq(LeaderboardService.flush(fair, 1000 + LeaderboardService.WriteCheck), 3, "the deferred round goes out at once (TotalEarned, Level, MoneyPerSec)")
 		for _, board in LeaderboardConfig.Boards do
 			T.eq(w.stores[board.Id].values["77"], nil, board.Id .. ": 77 stays removed")
 		end
@@ -633,7 +634,7 @@ return function(T, Loader)
 	withWorld("leaderboards: a player's scores are written at most every WriteSeconds", true, function(w)
 		local p = w.add(41, "Dee")
 		w.data[p].TotalEarned = 100
-		T.eq(LeaderboardService.flush(p, 1000), 2, "first round: TotalEarned and MoneyPerSec's first 0")
+		T.eq(LeaderboardService.flush(p, 1000), 3, "first round: TotalEarned, Level 1 and MoneyPerSec's first 0")
 		w.data[p].TotalEarned = 200
 		T.eq(LeaderboardService.flush(p, 1000 + LeaderboardService.WriteSeconds - 1), 0, "too soon")
 		T.eq(w.stores.TotalEarned.values["41"], LeaderboardConfig.encode("TotalEarned", 100))
@@ -1023,8 +1024,8 @@ return function(T, Loader)
 		-- the panel: tabs wrap around, each tab shows its own board
 		local panel = LeaderboardView.buildPanel(true)
 		T.eq(#panel.Canvases.TotalEarned.Rows, LeaderboardConfig.TopCount)
-		T.eq(LeaderboardView.nextTab("MoneyPerSec", -1), "HoursPlayed")
-		T.eq(LeaderboardView.nextTab("HoursPlayed", 1), "MoneyPerSec")
+		T.eq(LeaderboardView.nextTab("MoneyPerSec", -1), "Level")
+		T.eq(LeaderboardView.nextTab("Level", 1), "MoneyPerSec")
 		LeaderboardView.setTab(panel, "Artifacts")
 		T.eq(panel.Tab, "Artifacts")
 		T.truthy(panel.Canvases.Artifacts.Root.Parent.Visible)

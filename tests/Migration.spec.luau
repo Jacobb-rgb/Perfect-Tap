@@ -278,7 +278,7 @@ return function(T, Loader)
 			T.eq(data.PlacedMachines[1].Z, 0, `version {version}: Z stays`)
 			T.eq(data.PlacedMachines[2].X, 14, `version {version}: X stays`)
 			T.eq(data.PlacedMachines[2].Z, 14, `version {version}: Z stays`)
-			T.eq(data.Version, version, "a newer save's version is not lowered")
+			T.eq(data.Version, math.max(version, Migrations.Latest), "a newer save's version is not lowered")
 		end
 		-- a fresh save (DataTemplate, version 4: the StarterKit is placed on the new grid) stays
 		local fresh = ProfileStore.deepCopy(DataTemplate)

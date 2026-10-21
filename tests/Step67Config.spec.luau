@@ -1499,9 +1499,9 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- leaderboards
 
-	T.test("Step67: 4 leaderboards with versioned stores", function()
-		T.eq(#LeaderboardConfig.Boards, 4)
-		local titles = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED" }
+	T.test("Step67: 5 leaderboards with versioned stores", function()
+		T.eq(#LeaderboardConfig.Boards, 5)
+		local titles = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED", "LEVEL" }
 		local stores = {}
 		for i, board in LeaderboardConfig.Boards do
 			T.eq(board.Index, i)
