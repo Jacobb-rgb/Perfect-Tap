@@ -206,6 +206,8 @@ local function step(dt: number)
 	local m = moment
 	if m then
 		local t = now - m.Start
+		local uiScale = HudController.uiScale()
+		LevelView.fit(v, LevelView.fitFor(v.Gui.AbsoluteSize.Y / math.max(uiScale, 0.1)))
 		LevelView.poseMoment(v, t, m.Up, m.Reduced)
 		local burst = m.Burst
 		if burst then

@@ -6,7 +6,10 @@
 	HALL OF FAME (its fifth board, LEVEL, in the back, sample rows like
 	hall_preview), the camera behind them like Roblox's.
 
-	  lune run tools/lune/export_levelup.luau [fps=20]
+	  lune run tools/lune/export_levelup.luau [fps=20] [phone]
+	  ("phone": a 568 x 320 pt phone rendered at 2x, 1136 x 640, UI scale 0.62,
+	  files named levelup_phone*; render one with SHOTS_EXTRA=build/preview/levelup_phone_shots.json
+	  node tools/preview/render.mjs levelup_base levelup_phone_0017)
 	-> build/preview/levelup_base.json (the world, once)
 	   build/preview/levelup/fx_NNNN.json + ui_NNNN.json per frame
 	   build/preview/levelup_shots.json (one shot per frame, "extra" = the burst parts)
@@ -38,7 +41,12 @@ local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.
 local LevelBurst = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.LevelBurst")
 local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 
+local phone = process.args[2] == "phone"
 local W, H, INSET, SCALE, FOV = 1600, 900, 36, 1.25, 70
+if phone then
+	W, H, INSET, SCALE = 1136, 640, 72, 0.62 * 2
+end
+local tag = if phone then "levelup_phone" else "levelup"
 
 local game = roblox.Instance.new("DataModel")
 local workspace = game:GetService("Workspace")
@@ -96,7 +104,7 @@ local function presetToJson(preset)
 	return o
 end
 
-fs.writeDir(root .. "/build/preview/levelup")
+fs.writeDir(root .. "/build/preview/" .. tag)
 local scene = Export.collect(workspace)
 local presets = {}
 for name, preset in LightingConfig.Presets do
@@ -156,6 +164,7 @@ for i = 0, frames - 1 do
 	local t = i / fps
 	local view = LevelView.build()
 	view.Gui.Scale.Scale = SCALE
+	LevelView.fit(view, LevelView.fitFor((H - INSET) / SCALE))
 	-- the fill and the level shown
 	local shown, lvl, barNeed = 0.5, level, need
 	local list = table.clone(gains)
@@ -195,15 +204,18 @@ for i = 0, frames - 1 do
 		LevelView.hideMoment(view)
 	end
 	local name = string.format("%04d", i)
-	fs.writeFile(root .. "/build/preview/levelup/fx_" .. name .. ".json", serde.encode("json", Export.collect(burstModel)))
+	fs.writeFile(root .. "/build/preview/" .. tag .. "/fx_" .. name .. ".json", serde.encode("json", Export.collect(burstModel)))
 	fs.writeFile(
-		root .. "/build/preview/levelup/ui_" .. name .. ".json",
+		root .. "/build/preview/" .. tag .. "/ui_" .. name .. ".json",
 		serde.encode("json", UiExport.export({ hud.Gui, view.Gui, view.Orbs }))
 	)
-	shots["levelup_" .. name] = {
+	shots[tag .. "_" .. name] = {
 		scene = "levelup_base",
-		extra = "levelup/fx_" .. name,
-		ui = "levelup/ui_" .. name,
+		extra = tag .. "/fx_" .. name,
+		ui = tag .. "/ui_" .. name,
+		width = W,
+		height = H,
+		uiInset = INSET,
 		position = { camPos.X, camPos.Y, camPos.Z },
 		target = { camTarget.X, camTarget.Y, camTarget.Z },
 		fov = FOV,
@@ -211,5 +223,5 @@ for i = 0, frames - 1 do
 		shadowExtent = 120,
 	}
 end
-fs.writeFile(root .. "/build/preview/levelup_shots.json", serde.encode("json", shots))
+fs.writeFile(root .. "/build/preview/" .. tag .. "_shots.json", serde.encode("json", shots))
 print(`{frames} frames at {fps} fps ({total} s)`)

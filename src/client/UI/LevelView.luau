@@ -63,6 +63,7 @@ export type View = {
 	Subtitle: TextLabel,
 	SubtitleScale: UIScale,
 	Rows: { Row },
+	Fit: number, -- the moment's size share (fit(): short phone screens)
 }
 
 local function clamp01(x: number): number
@@ -311,6 +312,7 @@ function LevelView.build(): View
 		Moment = moment,
 		Flash = flash,
 		Rays = rays,
+		Fit = 1,
 		Title = title,
 		TitleScale = titleScale,
 		Subtitle = subtitle,
@@ -412,7 +414,7 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 			local spec = rows[i]
 			r.Holder.Visible = spec ~= nil and t >= spec.At and t < total - 0.4
 			r.Scale.Scale = 1
-			r.Holder.Position = UDim2.new(0.5, 0, 0, LevelView.RowTop + (i - 1) * LevelView.RowGap)
+			r.Holder.Position = UDim2.new(0.5, 0, 0, (LevelView.RowTop + (i - 1) * LevelView.RowGap) * view.Fit)
 			if spec and spec.Kind == "Coins" then
 				r.Amount.Text = "+" .. Format.money(math.floor(m.Coins))
 			elseif spec and spec.Kind == "Income" then
@@ -439,7 +441,8 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 	view.Title.Rotation = -10 * (1 - easeOutCubic(span(t, 0.05, 0.6))) + 2 * math.sin(t * 3) * span(t, 0.6, 1)
 	-- the rays: fade in, turn slowly
 	view.Rays.Rotation = t * 22
-	view.Rays.Size = UDim2.fromOffset(500 * pop * (1 - out), 500 * pop * (1 - out))
+	local raysSize = 500 * view.Fit * pop * (1 - out)
+	view.Rays.Size = UDim2.fromOffset(raysSize, raysSize)
 	-- the level under it
 	view.SubtitleScale.Scale = math.max(easeOutBack(span(t, 0.45, 0.8)) * (1 - out), 0)
 	-- the reward rows: slide in one after another, the numbers count up
@@ -452,8 +455,12 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 		r.Holder.Visible = true
 		local inK = easeOutBack(span(t, spec.At, spec.At + 0.35))
 		r.Scale.Scale = math.max(inK * (1 - out), 0)
-		r.Holder.Position =
-			UDim2.new(0.5, 80 * (1 - easeOutCubic(span(t, spec.At, spec.At + 0.35))), 0, LevelView.RowTop + (i - 1) * LevelView.RowGap)
+		r.Holder.Position = UDim2.new(
+			0.5,
+			80 * (1 - easeOutCubic(span(t, spec.At, spec.At + 0.35))),
+			0,
+			(LevelView.RowTop + (i - 1) * LevelView.RowGap) * view.Fit
+		)
 		local count = easeOutCubic(span(t, spec.At + 0.15, spec.At + 0.95))
 		if spec.Kind == "Coins" then
 			r.Amount.Text = "+" .. Format.money(math.floor(m.Coins * count))
@@ -467,6 +474,32 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 	end
 	-- the badge pumps as the new number lands
 	view.BadgeScale.Scale = 1 + 0.45 * math.sin(math.pi * span(t, 0, 0.45))
+end
+
+-- The moment's size share for a gui `designHeight` units tall (under the inset):
+-- the rewards end above the bar; 1 on a PC screen, ~0.7 on a 568 x 320 phone.
+function LevelView.fitFor(designHeight: number): number
+	local content = LevelView.RowTop + 2 * LevelView.RowGap + 48 -- three rows (a milestone)
+	local room = designHeight - LevelView.BarBottom - LevelView.BarHeight - 12 - LevelView.MomentTop
+	return math.clamp(room / content, 0.5, 1)
+end
+
+-- Lays the moment out at size share `k` (only when it changed).
+function LevelView.fit(view: View, k: number)
+	if math.abs(view.Fit - k) < 0.005 then
+		return
+	end
+	view.Fit = k
+	view.Title.Position = UDim2.fromOffset(300, 92 * k)
+	view.Title.Size = UDim2.fromOffset(600, 100 * k)
+	view.Title.TextSize = math.floor(84 * k)
+	view.Subtitle.Position = UDim2.fromOffset(300, 162 * k)
+	view.Subtitle.Size = UDim2.fromOffset(400, 44 * k)
+	view.Subtitle.TextSize = math.floor(34 * k)
+	view.Rays.Position = UDim2.fromOffset(300, 92 * k)
+	for _, r in view.Rows do
+		r.Holder.Size = UDim2.fromOffset(310 * k, 48 * k)
+	end
 end
 
 -- Hides the moment (and the flash) between level ups.

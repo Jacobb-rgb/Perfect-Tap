@@ -238,4 +238,14 @@ return function(T, Loader)
 			end
 		end
 	end)
+
+	T.test("Levels: on a 568 x 320 phone the rewards end above the XP bar", function()
+		local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
+		T.eq(LevelView.fitFor((900 - 36) / 1.25), 1, "a PC screen: full size")
+		local design = (320 - 36) / 0.62
+		local k = LevelView.fitFor(design)
+		T.truthy(k < 1, "smaller on the phone")
+		local rowsBottom = LevelView.MomentTop + (LevelView.RowTop + 2 * LevelView.RowGap + 48) * k
+		T.le(rowsBottom, design - LevelView.BarBottom - LevelView.BarHeight, "three rows end above the bar")
+	end)
 end
