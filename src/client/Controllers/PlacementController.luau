@@ -62,9 +62,9 @@
 	    it will be powered (MachineInfo.powerPreview: PowerLogic on our
 	    layout plus the ghost, the server's own rules)
 	  - SHOP (the build HUD, the empty tray, gamepad D-pad Left) opens the
-	    Tech shop's machines (TechShopController.openMachines when it
-	    exists): build mode closes for it and opens again when the shop
-	    closes at your base
+	    Tech shop's machines (TechShopController.openMachines): build mode
+	    closes for it, and closing the shop (X, B, Backspace) at your base
+	    opens it again (the shop's own hand-off: Ux.openShop)
 	  - the HUD's BUILD tile shows its key (B / the D-pad Up glyph) and how
 	    many machines wait to be placed, and pulses for a new one; BUILD
 	    away from your base takes you there (the BASE teleport) and then
@@ -250,9 +250,6 @@ for _, prefix in { "PowerReach", "PowerLink" } do
 end
 Ux.homeToken = 0
 Ux.HomeWait = 8 -- seconds the trip home may take before build mode gives up opening
-Ux.shopToken = 0
-Ux.ShopOpenWait = 2.5 -- seconds the shop may take to open (it may ask the server)
-Ux.ShopWait = 900 -- build mode opens again when the shop closes within this
 Ux.ShopText = "Buy machines at the Tech Shop (LOBBY, UPGRADES stall)"
 local selected: Model? = nil -- placed machine (Selected / Moving)
 local rotation = 0
@@ -2230,52 +2227,23 @@ end
 
 --[[
 	SHOP (the build HUD's button, the empty tray's, gamepad D-pad Left): the
-	Tech shop's machines (TechShopController.openMachines, when it exists;
-	else a hint where the shop is). The shop takes the screen, so build
-	mode closes for it and opens again when the shop closes while you are
-	still at your base (or right away when no shop opened).
+	Tech shop's machines (TechShopController.openMachines; a hint where the
+	shop is if that controller is missing). The shop takes the screen, so
+	build mode closes for it; `fromBuild` hands the way back to the shop:
+	when the player closes it (X, B, Backspace) still at their base, it
+	opens build mode again, where the new machine waits in the tray. Any
+	other close (walking away, respawning, another panel) leaves build mode
+	closed.
 ]]
 function Ux.openShop()
 	local shop = MenuPanels.controller("TechShopController")
-	local openMachines = if type(shop) == "table" then shop.openMachines else nil
-	if type(openMachines) ~= "function" then
+	if type(shop) ~= "table" or type(shop.openMachines) ~= "function" then
 		HudController.toast(Ux.ShopText, "Info")
 		return
 	end
-	local wasActive = active
+	local fromBuild = active
 	PlacementController.exit()
-	local ok, err = pcall(openMachines)
-	if not ok then
-		warn(`[PlacementController] openMachines failed: {err}`)
-	end
-	if not wasActive then
-		return
-	end
-	Ux.shopToken += 1
-	local token = Ux.shopToken
-	task.spawn(function()
-		local function waiting(): boolean
-			return token == Ux.shopToken and not active
-		end
-		-- the shop may ask the server first: wait for it to open, then to close
-		local opened = false
-		local openBy = os.clock() + Ux.ShopOpenWait
-		while waiting() and os.clock() < openBy do
-			if MenuPanels.isOpen("TechShopController") then
-				opened = true
-				break
-			end
-			task.wait(0.1)
-		end
-		local closeBy = os.clock() + Ux.ShopWait
-		while opened and waiting() and os.clock() < closeBy and MenuPanels.isOpen("TechShopController") do
-			task.wait(0.25)
-		end
-		local plot = myPlotId()
-		if waiting() and plot and isNearPlot(plot) and PlayerControls.owner() == nil and not CleaningController.isActive() then
-			PlacementController.enter()
-		end
-	end)
+	MenuPanels.call("TechShopController", "openMachines", fromBuild)
 end
 
 -- Opens build mode (B, D-pad Up, the BUILD button). Away from your plot it
@@ -2359,7 +2327,6 @@ function PlacementController.enter()
 	end
 	Ux.hover = nil
 	Ux.homeToken += 1 -- a trip home that is still waiting is done
-	Ux.shopToken += 1
 	local refs = view
 	if refs then
 		refs.Gui.Enabled = true
