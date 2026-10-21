@@ -72,6 +72,9 @@ GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
 -- a limited edition's SHARD (its set's egg, GolemGearLimited.shard) instead
 -- of the pill: only one is ever built at a time (the opening, a picture)
 GolemBuilder.ShardMaxParts = 56
+-- a limited golem's rounded corners (GolemBuilder.round on its body and head / helm)
+GolemBuilder.RoundRadius = 0.3 -- unscaled
+GolemBuilder.RoundParts = 10
 GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
 GolemBuilder.Hover = 0.25 -- how high a Premium golem's feet float (unscaled)
 GolemBuilder.AuraSize = 2.3 -- the aura disc's diameter (unscaled)
@@ -503,9 +506,10 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		lighter(look.Glow, 0.1),
 		crystalMaterial
 	)
-	-- the gear
+	-- the gear (a limited golem keeps RoundParts for its rounded head and body)
+	local reserve = (if premium then 1 else 0) + (if look.Edition ~= nil then GolemBuilder.RoundParts else 0)
 	local function room(): number
-		return budget - GolemBuilder.partCount(model) - (if premium then 1 else 0)
+		return budget - GolemBuilder.partCount(model) - reserve
 	end
 	local ctx: Ctx = {
 		Model = model,
@@ -519,6 +523,16 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	}
 	local add = ACCESSORIES[look.Accessory] or ACCESSORIES.None
 	local top = math.max(ctx.Top, add(ctx))
+	-- a limited golem's big blocks get rounded vertical edges (a clean, soft look)
+	if look.Edition ~= nil then
+		local helm = model:FindFirstChild("Helm")
+		for _, name in { "Body", if helm then "Helm" else "Head" } do
+			local p = model:FindFirstChild(name)
+			if p and p:IsA("Part") then
+				GolemBuilder.round(p, GolemBuilder.RoundRadius * s)
+			end
+		end
+	end
 	-- Premium: the aura disc under the floating feet (on the base)
 	if premium then
 		local aura =
@@ -559,6 +573,37 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		end
 	end
 	return model
+end
+
+--[[
+	Rounds a block's four vertical edges (Roblox has no bevels): the block
+	keeps its name, color and material but loses 2r of depth, a twin block
+	(Name .. "Fill") 2r narrower fills the full depth, and four upright
+	cylinders (Name .. "Edge1..4") of diameter 2r round the corners. The
+	outer bounds stay the same; 5 parts more (GolemBuilder.RoundParts).
+]]
+function GolemBuilder.round(p: Part, radius: number)
+	if p.Shape ~= Enum.PartType.Block or p:FindFirstChildOfClass("SpecialMesh") then
+		return
+	end
+	local size = p.Size
+	local r = math.min(radius, size.X * 0.25, size.Z * 0.25)
+	if r <= 0.01 then
+		return
+	end
+	local cf = p.CFrame
+	p.Size = Vector3.new(size.X, size.Y, size.Z - 2 * r)
+	local fill = part(p.Parent :: Instance, p.Name .. "Fill", cf, Vector3.new(size.X - 2 * r, size.Y, size.Z), p.Color, p.Material)
+	fill.Transparency = p.Transparency
+	local i = 0
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			i += 1
+			local corner = cf * CFrame.new(sx * (size.X / 2 - r), 0, sz * (size.Z / 2 - r))
+			local edge = upright(p.Parent :: Instance, p.Name .. "Edge" .. i, corner, size.Y, 2 * r, p.Color, p.Material)
+			edge.Transparency = p.Transparency
+		end
+	end
 end
 
 -- Is `kind` a Premium golem (Legendary or rarer: it hovers on an aura)?
