@@ -504,6 +504,7 @@ return function(T, Loader)
 	end)
 
 	withWorld("Capsules: where paid random items are restricted, Royal answers Restricted", function(w)
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		local name, answer = act(w, "Open", { Capsule = "Royal", Count = 1 })
 		T.eq(name, "PurchasePrompt")
 		T.eq(answer.Status, "Restricted")
@@ -825,6 +826,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Capsules view: Royal is hidden where restricted, 'Coming soon' while not live", function()
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		local s = state()
 		local open = CapsuleView.cards(s, 1e9, false, NOW)
 		local royal = cardOf(open, "Royal")
@@ -915,6 +917,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Capsules view: the shop panel fills, switches tabs and fits phones (44 pt buttons)", function()
+		MonetizationConfig.CoinPacksEnabled = false -- (set here: the default ships on; the run order must not matter)
 		for _, compact in { false, true } do
 			local refs = CapsuleView.build(compact)
 			local sizes = if compact then { { 1076, 547 }, { 916, 423 } } else { { 1280, 684 }, { 1100, 620 } }
