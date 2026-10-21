@@ -20,8 +20,9 @@
 	  in the save (Migrations), count toward InventoryCap, give nothing, can't
 	  be equipped, and are never deleted here (they may be paid ones).
 	- Budgets (mobile, 8 players x 3 followers): a golem model has at most
-	  MaxParts parts, no lights (the Glow is a Neon part; Mythics may add one
-	  small PointLight). Followers are BUILT AND ANIMATED ON EACH CLIENT from
+	  MaxParts parts (a limited edition golem: LimitedMaxParts by rarity), no
+	  lights (the Glow is a Neon part; Mythics may add one small PointLight,
+	  Legendary and Mythic limited golems one slow ember ParticleEmitter). Followers are BUILT AND ANIMATED ON EACH CLIENT from
 	  the player attribute EquippedAttribute ("PebbleGolem,EmberImp,..."): the
 	  server replicates no golem parts or CFrames. Clients hide followers
 	  further than FollowerHideDistance studs away and skip the idle bobbing
@@ -70,7 +71,7 @@ export type Golem = {
 	Bonus: { Type: BonusType, Value: number },
 	Lore: string,
 	-- a LIMITED EDITION golem: its set's id (Config/LimitedGolems); its model
-	-- may use GolemBuilder.LimitedMaxParts for the set's themed gear
+	-- may use GolemConfig.LimitedMaxParts[Rarity] for the set's costume
 	Edition: string?,
 }
 
@@ -84,6 +85,12 @@ GolemConfig.MaxSaved = 80 -- Migrations hard cap (see above)
 GolemConfig.MaxPending = 200 -- paid golems waiting past MaxSaved (Golems.Pending; more: the receipt waits)
 GolemConfig.MaxDelete = 60 -- ids per "Delete"
 GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
+-- a LIMITED EDITION golem's budget by rarity (its set's costume: segmented
+-- horns and tails, boned wings, armour, crowns). They are rare (a Mythic is
+-- 1 % of one Robux capsule), so the worst case (8 players x 3 Mythic
+-- followers x 96 = 2304; 10 of each go to its rounded corners welded, non-colliding parts, hidden beyond
+-- FollowerHideDistance) stays far below a phone's budget.
+GolemConfig.LimitedMaxParts = { Rare = 66, Epic = 72, Legendary = 80, Mythic = 96 } :: { [string]: number }
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this

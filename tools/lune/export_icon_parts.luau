@@ -31,26 +31,28 @@ models.ingot_gold = ItemBuilder.build({ Kind = "Ingot", OreId = "Gold", Grade = 
 
 -- Ore Pen items for the backpack window (in the game these show as live 3D
 -- ViewportFrames, so they need no uploads; the preview uses these pictures)
-for _, row in {
-	{ "Clean", "Ruby", "Pristine" },
-	{ "Clean", "Silver", "Flawless" },
-	{ "Ingot", "Gold", "Pristine" },
-	{ "Clean", "Diamond", "Clean" },
-	{ "Raw", "Copper" },
-	{ "Clean", "Copper", "Rough" },
-	{ "Clean", "Amethyst", "Clean" },
-	{ "Ingot", "Silver", "Clean" },
-	{ "Raw", "Stormcore" },
-	{ "Clean", "Jade", "Pristine" },
-	{ "Clean", "Stormcore", "Flawless" },
-	{ "Crushed", "Iron", "Clean" },
-	{ "Clean", "Quartz", "Clean" },
-	{ "Clean", "Heartstone", "Pristine" },
-	{ "Raw", "Silver" },
-	{ "Ingot", "Copper", "Clean" },
-	{ "Clean", "Emerald", "Clean" },
-	{ "Clean", "Coal", "Rough" },
-} do
+for _, row in
+	{
+		{ "Clean", "Ruby", "Pristine" },
+		{ "Clean", "Silver", "Flawless" },
+		{ "Ingot", "Gold", "Pristine" },
+		{ "Clean", "Diamond", "Clean" },
+		{ "Raw", "Copper" },
+		{ "Clean", "Copper", "Rough" },
+		{ "Clean", "Amethyst", "Clean" },
+		{ "Ingot", "Silver", "Clean" },
+		{ "Raw", "Stormcore" },
+		{ "Clean", "Jade", "Pristine" },
+		{ "Clean", "Stormcore", "Flawless" },
+		{ "Crushed", "Iron", "Clean" },
+		{ "Clean", "Quartz", "Clean" },
+		{ "Clean", "Heartstone", "Pristine" },
+		{ "Raw", "Silver" },
+		{ "Ingot", "Copper", "Clean" },
+		{ "Clean", "Emerald", "Clean" },
+		{ "Clean", "Coal", "Rough" },
+	}
+do
 	local name = "item_" .. row[1] .. "_" .. row[2]
 	local ok, model = pcall(ItemBuilder.build, { Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
 	if ok then
@@ -109,6 +111,14 @@ for _, golem in GolemConfig.List do
 end
 for _, capsule in CapsuleConfig.List do
 	models["capsule_" .. capsule.Id] = GolemBuilder.capsule(capsule.Id)
+end
+-- the upcoming limited editions' golems and every set's shard (previews)
+local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+for _, set in LimitedUpcoming.Sets do
+	for _, golem in set.Golems do
+		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+	end
+	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
 end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
