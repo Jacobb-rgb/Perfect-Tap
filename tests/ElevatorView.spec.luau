@@ -114,10 +114,20 @@ return function(T, Loader)
 		T.eq(table.concat(texts, ","), "GO,GO,YOU ARE HERE,GO,LOCKED,LOCKED,COMING SOON", "button texts")
 		T.eq(table.concat(styles, ","), "Go,Go,Here,Go,Locked,Locked,Soon", "button styles")
 		local icons = { "Arrow", "Arrow", "Pin", "Arrow", "Lock", "Lock", "Clock" }
+		local gold = roblox.Color3.fromRGB(255, 204, 64)
 		for i, card in refs.Cards do
 			T.eq(card.Button.Selectable, card.Entry.State == "Open", "selectable only when open: " .. card.Index)
 			T.truthy(card.Look.Icons[icons[i]].Visible, "button icon " .. icons[i])
-			T.eq(card.Stroke.Color, if card.Entry.State == "Here" then card.Stroke.Color else card.Entry.Color, "frame colour")
+			local here = card.Entry.State == "Here"
+			T.eq(card.Stroke.Color, if here then gold else roblox.Color3.fromRGB(14, 14, 18), "Pop black edge, gold on the current floor")
+			-- painted in the floor's colour (Pop.card: its light top is the colour lifted toward white)
+			local top = card.Face:FindFirstChild("Paint").Color.Keypoints[1].Value
+			local want = ElevatorView.paintFrom(card.Entry.Color).Top
+			T.near(top.R + top.G + top.B, want.R + want.G + want.B, 1e-3, "card in the floor's colour " .. i)
+			T.falsy(card.Face.Selectable, "the card itself is not a gamepad stop " .. i)
+			local closed = card.Entry.State == "Locked" or card.Entry.State == "Soon"
+			T.eq(card.Shade.Visible, closed, "the LOCKED shade " .. i)
+			T.eq(card.Pill.Visible, closed, "the requirement shows on a locked card " .. i)
 		end
 		T.truthy(refs.Cards[3].Glow.Visible, "the current floor glows")
 		T.falsy(refs.Cards[1].Glow.Visible, "the others don't")
@@ -127,6 +137,20 @@ return function(T, Loader)
 		T.truthy(midColor(refs.Cards[5].ChipGradient).R > 0.8, "unmet pill is red")
 		T.truthy(midColor(refs.Cards[1].ChipGradient).G > 0.6, "met pill is green")
 		T.eq(midColor(refs.Cards[7].ChipGradient), ElevatorView.SoonColor, "coming soon pill is grey")
+		-- the ore rarity chips: a chip per rarity on the floor, in the rarity's colour
+		T.eq(table.concat(ElevatorView.floorRarities(1), ","), "Common,Uncommon", "floor 1's rarities")
+		T.eq(#ElevatorView.floorRarities(99), 0, "no such floor: no chips")
+		for i, card in refs.Cards do
+			local shown = {}
+			for _, chip in card.RarityChips do
+				if chip.Visible then
+					table.insert(shown, (chip:FindFirstChild("Label") :: any).Text)
+				end
+			end
+			T.eq(table.concat(shown, ","), table.concat(card.Entry.Rarities, ","), "rarity chips " .. i)
+		end
+		T.eq(#refs.Cards[7].Entry.Rarities, 0, "coming soon: no ores yet")
+		T.eq(refs.Cards[6].Entry.Rarities[#refs.Cards[6].Entry.Rarities], "Mythic", "the core has Mythic ores")
 		T.eq(refs.Cards[1].ModeText.Text, "Walk or ride")
 		T.truthy(refs.Cards[1].ModeIcons.Walk.Visible, "walker")
 		T.eq(refs.Cards[4].ModeText.Text, "Elevator only")
@@ -135,7 +159,10 @@ return function(T, Loader)
 		T.truthy(refs.Cards[7].ModeIcons.Clock.Visible, "clock")
 		T.eq(refs.Cards[7].Number.Text, "?", "coming soon badge")
 		T.eq(refs.Cards[5].Name.Text, "Stormglass Rift", "the Rift's card")
-		T.truthy(refs.Cards[5].Canvas:FindFirstChild("Bolt") and refs.Cards[5].Canvas:FindFirstChild("Belly"), "the Rift's art: a storm cloud and a bolt")
+		T.truthy(
+			refs.Cards[5].Canvas:FindFirstChild("Bolt") and refs.Cards[5].Canvas:FindFirstChild("Belly"),
+			"the Rift's art: a storm cloud and a bolt"
+		)
 		T.eq(refs.Cards[4].Name.Text, MineFloors.get(4).Name, "floor name")
 		T.eq(ElevatorView.firstGo(refs), refs.Cards[1].Button, "first GO for the gamepad")
 		for _, card in refs.Cards do
@@ -235,7 +262,10 @@ return function(T, Loader)
 		T.eq(refs.Columns, 4, "PC: four cards a row (4 + 3)")
 		T.falsy(refs.FloorScroll.ScrollingEnabled, "PC: every card shows, nothing scrolls")
 		local first, last = refs.Cards[5].Frame.Position.X.Offset, refs.Cards[7].Frame.Position.X.Offset
-		T.truthy(first > refs.Cards[1].Frame.Position.X.Offset and last < refs.Cards[4].Frame.Position.X.Offset, "PC: the short last row sits in the middle")
+		T.truthy(
+			first > refs.Cards[1].Frame.Position.X.Offset and last < refs.Cards[4].Frame.Position.X.Offset,
+			"PC: the short last row sits in the middle"
+		)
 		T.truthy(refs.Footer.Visible, "footer pill on PC")
 	end)
 

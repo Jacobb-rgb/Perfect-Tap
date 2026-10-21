@@ -6,6 +6,7 @@ return function(T, Loader)
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 	local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 
 	local CELLS = GameConfig.PlotCells
 
@@ -91,10 +92,11 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(select(2, Placement.validate({}, "StorageCrate", 11, 0, 0)), "OutOfBounds", "2x2 at X=11")
-		T.eq(select(2, Placement.validate({}, "BlastFurnace", 0, 10, 0)), "OutOfBounds", "3x3 at Z=10")
-		T.truthy(Placement.validate({}, "BlastFurnace", 9, 0, 0), "3x3 in the far corner")
-		T.eq(select(2, Placement.validate({}, "BlastFurnace", 9, 9, 0)), "Chute", "3x3 over the Foundry chute")
+		T.eq(select(2, Placement.validate({}, "StorageCrate", CELLS - 1, 0, 0)), "OutOfBounds", "2x2 at the last X")
+		T.eq(select(2, Placement.validate({}, "BlastFurnace", 0, CELLS - 2, 0)), "OutOfBounds", "3x3 two rows from the back")
+		T.truthy(Placement.validate({}, "BlastFurnace", CELLS - 3, 0, 0), "3x3 in the far corner")
+		local fx = BaseLayout.chuteCell("Foundry")
+		T.eq(select(2, Placement.validate({}, "BlastFurnace", fx, CELLS - 3, 0)), "Chute", "3x3 over the Foundry chute")
 	end)
 
 	T.test("Placement: unknown machines and bad numbers are refused first", function()
@@ -206,9 +208,9 @@ return function(T, Loader)
 			end
 		end
 		-- a 3x2 turned at the far edge is pushed back on
-		local x, z = Placement.clampOrigin("CleaningStation", 11, 11, 1)
-		T.eq(x, 10)
-		T.eq(z, 9)
+		local x, z = Placement.clampOrigin("CleaningStation", CELLS - 1, CELLS - 1, 1)
+		T.eq(x, CELLS - 2)
+		T.eq(z, CELLS - 3)
 		-- in the open the cursor is the (lower) middle cell
 		x, z = Placement.clampOrigin("BlastFurnace", 5, 5, 0)
 		T.eq(x, 4)
@@ -315,7 +317,7 @@ return function(T, Loader)
 		second.Out = { { K = "Ingot", O = "Iron", G = "Clean" } }
 		local unknown = entry("FutureMachine", 4, 4)
 		unknown.In = { { K = "Raw", O = "Copper" } }
-		local offPlot = entry("Crusher", 11, 0)
+		local offPlot = entry("Crusher", CELLS - 1, 0)
 		local queued = entry("Crusher", 0, 8)
 		queued.In = {}
 		for i = 1, 6 do

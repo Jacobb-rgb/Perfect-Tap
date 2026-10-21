@@ -1,20 +1,30 @@
 --[[
 	The ORE CODEX (pure builder + pure helpers; CodexController fills it in).
 	Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (tag
-	OreCodex) or the side menu's CODEX button. One MenuPanel:
+	OreCodex) or the side menu's CODEX button. One MenuPanel in the Pop look
+	(owner 2026-10-21: "new, modern, colourful, clean items, Roblox style",
+	like the Robux Shop):
 
-	  header  ORE CODEX, the count chip "17 / 36 FOUND" with a progress fill
-	  grid    every ore (#OreData.List, 36; Common -> Mythic), one card
-	          each: a gem in the ore's colour with its glow, the name and a
-	          rarity strip; an ore you haven't discovered is a dark gem with
-	          "?" and "???". A "NEW" badge marks ores discovered since you
-	          last looked (the controller decides which).
-	  detail  the selected card: big gem, name, rarity chip, podium income
-	          (Rough and Flawless), sell value (cleaned Rough and Flawless,
-	          and dirty, before sell bonuses), the blaster level it needs
-	          (the lowest gate of the zones that hold it: levelOf), where it
-	          is found (the WorldLayout zones whose rocks hold it) and its
-	          lore. Undiscovered: "???" and how to find it.
+	  header  ORE CODEX on the teal band, the count bar "17 / 36 FOUND" (a
+	          glossy gold fill, Pop.bar)
+	  grid    every ore (#OreData.List, 36; Common -> Mythic), one bright
+	          card each painted in its rarity's colour (Pop.rarityPaint) with
+	          light rays and a glow behind the ore's live 3D picture (a
+	          ViewportFrame of the cleaned ore, ItemBuilder; built once the ore
+	          is discovered; the preview draws item_Clean_<Ore>), a soft halo
+	          in the ore's own glow colour, the name and the rarity chip. An
+	          ore you haven't discovered is a dark slate card with a big "?"
+	          and "???". A NEW chip marks ores discovered since you last looked
+	          (the controller decides which); the selected card gets a gold
+	          outline.
+	  detail  the selected ore on a bright card in its rarity's colour: the
+	          big 3D picture, name, rarity chip, and in a dark well under them
+	          the podium income (Rough and Flawless), sell value (cleaned
+	          Rough and Flawless, and dirty, before sell bonuses), the blaster
+	          level it needs (the lowest gate of the zones that hold it:
+	          levelOf), where it is found (the WorldLayout zones whose rocks
+	          hold it) and its lore. Undiscovered: a dark card, "???" and how
+	          to find it.
 
 	Click / tap a card (or move the gamepad selection onto it) to read it.
 	Designed for 720 design units of height; the compact layout (phones)
@@ -28,10 +38,12 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
-local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local Pop = require(script.Parent.Pop)
 local MenuPanel = require(script.Parent.MenuPanel)
 
 local CodexView = {}
@@ -46,12 +58,12 @@ export type Entry = {
 export type Card = {
 	OreId: string,
 	Button: TextButton,
-	Gem: Frame,
-	Mark: TextLabel,
+	Gem: Frame, -- the halo behind the picture (the ore's colour when found)
+	Mark: TextLabel, -- the big "?" of an undiscovered ore
 	Name: TextLabel,
-	Strip: Frame,
-	New: TextLabel,
-	Stroke: UIStroke,
+	Strip: Frame, -- the rarity chip
+	New: Frame, -- the NEW chip
+	Stroke: UIStroke, -- the card's outline (gold when selected)
 }
 
 export type Refs = {
@@ -96,32 +108,40 @@ CodexView.Metrics = {
 		Width = 960,
 		Height = 640,
 		CardW = 88,
-		CardH = 98,
+		CardH = 124,
 		Gap = 8,
 		DetailW = 300,
-		CardText = 14,
+		CardText = 15,
 		Text = 16,
 		Lore = 16,
-		Gem = 84,
+		Gem = 124,
 	},
 	-- phones: at uiScale 0.62 a 72-unit card is about 44 pt
 	Compact = {
 		Width = 1120,
 		Height = 640,
 		CardW = 80,
-		CardH = 88,
+		CardH = 100,
 		Gap = 8,
 		DetailW = 300,
-		CardText = 15,
+		CardText = 16,
 		Text = 18,
 		Lore = 17,
-		Gem = 72,
+		Gem = 84,
 	},
 } :: { [string]: Metrics }
 
 CodexView.GridInset = 12 -- the grid's left padding, its scroll bar and a little room
-CodexView.HiddenColor = Color3.fromRGB(58, 48, 44)
-CodexView.HiddenEdge = Color3.fromRGB(96, 84, 76)
+CodexView.ChipCard = 110 -- cards at least this tall show the rarity chip (phones: the detail shows it)
+CodexView.HiddenColor = Color3.fromRGB(58, 62, 74)
+CodexView.HiddenEdge = Color3.fromRGB(96, 102, 120)
+-- an undiscovered ore's card: darker than the Common slate
+CodexView.HiddenPaint = {
+	Top = Color3.fromRGB(70, 74, 88),
+	Bottom = Color3.fromRGB(34, 36, 46),
+	Edge = PopTheme.Outline,
+} :: Pop.Paint
+CodexView.SelectColor = Color3.fromRGB(255, 222, 64) -- the selected card's gold outline
 CodexView.HiddenName = "???"
 CodexView.FindHint = "Not discovered yet. Blast rocks, then clean the dirty ore to find out what it is."
 
@@ -289,129 +309,236 @@ local function metrics(compact: boolean): Metrics
 	return if compact then CodexView.Metrics.Compact else CodexView.Metrics.Normal
 end
 
--- A gem: a rounded square turned 45 degrees in the ore's colour, its glow
--- as the edge, a light glint. Returns the gem frame (inside a holder that
--- stays square to the screen, so the "?" on top isn't turned).
-local function gem(parent: Instance, size: number, name: string): (Frame, TextLabel)
-	local holder = UIKit.new("Frame", {
-		Name = name,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(size, size),
-	}, parent)
-	local body = UIKit.new("Frame", {
-		Name = "Gem",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.68, 0.68),
-		Rotation = 45,
-		BackgroundColor3 = CodexView.HiddenColor,
-		BorderSizePixel = 0,
-	}, holder)
-	UIKit.corner(body, math.max(4, math.floor(size * 0.1)))
-	UIKit.new("UIStroke", {
-		Name = "Glow",
-		Thickness = math.max(2, math.floor(size * 0.05)),
-		Color = CodexView.HiddenEdge,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-	}, body)
-	UIKit.gradient(body, Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 150))
-	local glint = UIKit.new("Frame", {
-		Name = "Glint",
-		Position = UDim2.fromScale(0.16, 0.16),
-		Size = UDim2.fromScale(0.3, 0.14),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.45,
-		BorderSizePixel = 0,
-	}, body)
-	UIKit.corner(glint, 4)
-	local mark = UIKit.label(holder, "?", math.floor(size * 0.42), {
-		Name = "Mark",
-		Size = UDim2.fromScale(1, 1),
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
-		ZIndex = 3,
-	})
-	return body, mark
+-- the camera's direction for an ore's picture (the shop's item_ pictures)
+local FROM = Vector3.new(-0.5, 0.5, -1)
+
+-- A deep version of a paint (chips on a card in that paint).
+local function deep(paint: Pop.Paint): Pop.Paint
+	local black = Color3.new(0, 0, 0)
+	return { Top = paint.Bottom:Lerp(black, 0.1), Bottom = paint.Bottom:Lerp(black, 0.5), Edge = PopTheme.Outline }
 end
 
--- Colours a gem for an ore (found) or the dark silhouette.
+-- A card's paint: its rarity's (found) or the dark slate (undiscovered).
+local function paintOf(ore: OreData.Ore?): Pop.Paint
+	return if ore then Pop.rarityPaint(ore.Rarity) else CodexView.HiddenPaint
+end
+
+-- A cleaned ore for a picture (nil when the builder fails).
+local function oreModel(oreId: string): Model?
+	local ok, made = pcall(ItemBuilder.build, { Kind = "Clean", OreId = oreId, Grade = "Clean" }, CFrame.new(), "codex_" .. oreId)
+	return if ok then made else nil
+end
+
+-- Puts the ore's model in a picture's ViewportFrame (once per ore; `force` swaps it).
+local function fillPicture(picture: ImageLabel, oreId: string, force: boolean?)
+	local view = picture:FindFirstChild("View") :: ViewportFrame?
+	if not view or (not force and view:GetAttribute("Ore") == oreId) then
+		return
+	end
+	local model = oreModel(oreId)
+	if model then
+		-- (a ViewportFrame draws no particles or lights: leave them out)
+		for _, d in model:GetDescendants() do
+			if d:IsA("ParticleEmitter") or d:IsA("Light") then
+				d:Destroy()
+			end
+		end
+		Pop.show(view, model, FROM)
+		view:SetAttribute("Ore", oreId)
+	end
+end
+
+-- The light burst of a card (rays, glows, sparkles): hidden on an undiscovered ore.
+local function fxOf(card: GuiObject): { GuiObject }
+	local list: { GuiObject } = {}
+	for _, child in card:GetChildren() do
+		if child:IsA("GuiObject") and child:GetAttribute("Fx") then
+			table.insert(list, child)
+		end
+	end
+	return list
+end
+
+local function markFx(card: GuiObject)
+	for _, child in card:GetChildren() do
+		local name = child.Name
+		if child:IsA("GuiObject") and (name == "Rays" or string.sub(name, 1, 4) == "Glow" or string.sub(name, 1, 7) == "Sparkle") then
+			child:SetAttribute("Fx", true)
+		end
+	end
+end
+
+local function setFx(card: GuiObject, on: boolean)
+	for _, child in fxOf(card) do
+		child.Visible = on
+	end
+end
+
+--[[
+	Paints a Frame like Pop.card (the detail pane is no button): the paint,
+	light rays and a soft glow around `centre`, the studs, the light rim and
+	a few sparkles. It clips its rays.
+]]
+local function paintFrame(frame: Frame, paint: Pop.Paint, centre: UDim2, long: number, short: number)
+	Pop.face(frame, paint, PopTheme.Corner + 2, false)
+	frame.ClipsDescendants = true
+	local rays = Pop.fx(frame, "fx_rays", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 0.35,
+		Position = centre,
+		Size = UDim2.fromOffset(long * 2.2, long * 2.2),
+		ZIndex = 2,
+	})
+	if not rays then
+		Pop.rays(frame, centre, 10, long, 0.6, 2)
+	end
+	local glow = Pop.fx(frame, "fx_glow", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = paint.Top:Lerp(Color3.new(1, 1, 1), 0.6),
+		ImageTransparency = 0.3,
+		Position = centre,
+		Size = UDim2.fromOffset(math.floor(short * 1.1), math.floor(short * 1.1)),
+		ZIndex = 2,
+	})
+	if not glow then
+		for i, k in { 0.62, 0.42 } do
+			local disc = UIKit.new("Frame", {
+				Name = "Glow" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = if i == 1 then 0.8 else 0.7,
+				BorderSizePixel = 0,
+				Position = centre,
+				Size = UDim2.fromOffset(math.floor(short * k), math.floor(short * k)),
+				ZIndex = 2,
+			}, frame)
+			UIKit.corner(disc, 999)
+		end
+	end
+	Pop.studs(frame, PopTheme.Corner + 2, 0.5, 44, 3)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	for i, spot in { { 0.18, 0.1, 22 }, { 0.84, 0.16, 18 }, { 0.78, 0.32, 14 } } do
+		Pop.sparkle(frame, UDim2.fromScale(spot[1], spot[2]), spot[3], 3, 0.15 + i * 0.08)
+	end
+	markFx(frame)
+end
+
+-- A label's drop shadow (Pop.shadow) follows its text, place and size.
+local function syncShadow(label: TextLabel)
+	local parent = label.Parent
+	local shadow = if parent then parent:FindFirstChild(label.Name .. "Shadow") :: TextLabel? else nil
+	if shadow then
+		shadow.Text = label.Text
+		shadow.TextSize = label.TextSize
+		shadow.Position = label.Position + UDim2.fromOffset(0, 3)
+		shadow.Size = label.Size
+		shadow.Visible = label.Visible
+		shadow.TextXAlignment = label.TextXAlignment
+		shadow.AnchorPoint = label.AnchorPoint
+	end
+end
+
+-- The halo behind a picture: a soft disc in the ore's colour with its glow
+-- as the edge (dark for an undiscovered ore, a big "?" on it).
+local function halo(parent: Instance, name: string, z: number): Frame
+	local disc = UIKit.new("Frame", {
+		Name = name,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = CodexView.HiddenColor,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		ZIndex = z,
+	}, parent)
+	UIKit.corner(disc, 999)
+	UIKit.new("UIStroke", {
+		Name = "Glow",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = CodexView.HiddenEdge,
+		Thickness = 3,
+		Transparency = 0.2,
+	}, disc)
+	return disc
+end
+
+-- Colours a halo for an ore (found) or the dark undiscovered one, and shows its "?".
 function CodexView.paintGem(body: Frame, mark: TextLabel, ore: OreData.Ore?)
 	local glow = body:FindFirstChild("Glow") :: UIStroke?
-	local glint = body:FindFirstChild("Glint") :: Frame?
 	if ore then
 		body.BackgroundColor3 = ore.Color
+		body.BackgroundTransparency = 0.55
 		if glow then
 			glow.Color = ore.Glow
-		end
-		if glint then
-			glint.Visible = true
+			glow.Transparency = 0.25
 		end
 		mark.Visible = false
 	else
 		body.BackgroundColor3 = CodexView.HiddenColor
+		body.BackgroundTransparency = 0.2
 		if glow then
 			glow.Color = CodexView.HiddenEdge
-		end
-		if glint then
-			glint.Visible = false
+			glow.Transparency = 0.1
 		end
 		mark.Visible = true
 	end
 end
 
 local function newCard(refs: Refs, ore: OreData.Ore, order: number, m: Metrics)
-	local button = UIKit.new("TextButton", {
+	local button = Pop.card(refs.Grid, CodexView.HiddenPaint, {
 		Name = "Card" .. ore.Id,
 		LayoutOrder = order,
-		AutoButtonColor = false,
-		Text = "",
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-	}, refs.Grid)
+		Size = UDim2.fromOffset(m.CardW, m.CardH),
+	}, UDim2.fromScale(0.5, 0.5))
 	button:SetAttribute("Ore", ore.Id)
-	UIKit.corner(button, 10)
-	local stroke = UIKit.stroke(button, 2)
-	local body, mark = gem(button, m.CardW * 0.62, "GemHolder")
-	local holder = body.Parent :: Frame
-	holder.Position = UDim2.new(0.5, 0, 0, 6 + m.CardW * 0.31)
-	local name = UIKit.label(button, CodexView.HiddenName, m.CardText, {
-		Name = "OreName",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		Size = UDim2.new(1, -6, 0, 20),
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
+	markFx(button)
+	local stroke = button:FindFirstChild("Border") :: UIStroke
+	local gem = halo(button, "Gem", 4)
+	Pop.model(button, "item_Clean_" .. ore.Id, 60, nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Visible = false,
+		ZIndex = 5,
 	})
-	local strip = UIKit.new("Frame", {
+	local mark = Pop.text(button, "?", 44, {
+		Name = "Mark",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		FontFace = PopTheme.Heavy,
+		TextColor3 = Color3.fromRGB(214, 220, 236),
+		ZIndex = 6,
+	})
+	local name = Pop.text(button, CodexView.HiddenName, m.CardText, {
+		Name = "OreName",
+		AnchorPoint = Vector2.new(0.5, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 7,
+	})
+	local strip = Pop.chip(button, string.upper(ore.Rarity), deep(Pop.rarityPaint(ore.Rarity)), Vector2.new(72, 18), {
 		Name = "Strip",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -3),
-		Size = UDim2.new(1, -16, 0, 4),
-		BackgroundColor3 = Theme.PanelLight,
-		BorderSizePixel = 0,
-	}, button)
-	UIKit.corner(strip, 2)
-	local new = UIKit.chip(button, "NEW", Theme.Good, {
+		Visible = false,
+		ZIndex = 7,
+	})
+	local new = Pop.chip(button, "NEW", "Green", Vector2.new(42, 20), {
 		Name = "NewBadge",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -3, 0, 3),
-		Size = UDim2.fromOffset(40, 18),
-		TextSize = 12,
+		Rotation = 8,
 		Visible = false,
-		ZIndex = 4,
+		ZIndex = 8,
 	})
 	local card: Card = {
 		OreId = ore.Id,
 		Button = button,
-		Gem = body,
+		Gem = gem,
 		Mark = mark,
 		Name = name,
 		Strip = strip,
 		New = new,
 		Stroke = stroke,
 	}
+	setFx(button, false)
 	refs.Cards[ore.Id] = card
 	table.insert(refs.CardList, card)
 end
@@ -419,45 +546,30 @@ end
 function CodexView.build(compact: boolean?): Refs
 	local isCompact = compact == true
 	local m = metrics(isCompact)
-	local frame = MenuPanel.build("TerraForgeCodex", "ORE CODEX", "Every ore of Terra. Discover them by cleaning dirty ore.", 16)
+	local frame = MenuPanel.build("TerraForgeCodex", "ORE CODEX", "Every ore of Terra. Discover them by cleaning dirty ore.", 16, true)
 	local panel = frame.Panel
 	local body = frame.Body
 
-	-- the count chip with a progress fill, left of the X button
-	local chip = UIKit.new("Frame", {
+	-- the count bar (a glossy gold fill), left of the X button
+	local chip = Pop.bar(panel, 0, "Yellow", Vector2.new(190, 40), `0 / {#OreData.List} FOUND`, {
 		Name = "CountChip",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
-	}, panel)
-	UIKit.corner(chip, 10)
-	UIKit.stroke(chip, 2)
-	local fill = UIKit.new("Frame", {
-		Name = "Fill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Theme.AccentDark,
-		BorderSizePixel = 0,
-	}, chip)
-	UIKit.corner(fill, 10)
-	local count = UIKit.label(chip, `0 / {#OreData.List} FOUND`, 20, {
-		Name = "Count",
-		Size = UDim2.fromScale(1, 1),
-		TextColor3 = Theme.Text,
-		TextWrapped = false,
-		ZIndex = 2,
+		ZIndex = 4,
 	})
+	local fill = chip:FindFirstChild("Fill") :: Frame
+	local count = chip:FindFirstChild("Label") :: TextLabel
 
 	local grid = UIKit.new("ScrollingFrame", {
 		Name = "Grid",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(200, 208, 226),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
+		ZIndex = 2,
 	}, body)
 	local gridLayout = UIKit.new("UIGridLayout", {
 		CellSize = UDim2.fromOffset(m.CardW, m.CardH),
@@ -467,39 +579,53 @@ function CodexView.build(compact: boolean?): Refs
 		HorizontalAlignment = Enum.HorizontalAlignment.Left,
 	}, grid)
 	UIKit.new("UIPadding", {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 6),
+		PaddingTop = UDim.new(0, 6),
+		PaddingLeft = UDim.new(0, 4),
+		PaddingBottom = UDim.new(0, 8),
 	}, grid)
 
-	-- the detail pane
+	-- the detail pane: a bright card in the selected ore's rarity colour
 	local detail = UIKit.new("Frame", {
 		Name = "Detail",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, body)
-	UIKit.corner(detail, 12)
-	UIKit.stroke(detail, 2)
-	local detailGem, detailMark = gem(detail, m.Gem, "BigGem")
-	local detailName = UIKit.label(detail, CodexView.HiddenName, 28, {
+	paintFrame(detail, CodexView.HiddenPaint, UDim2.new(0.5, 0, 0, 72), 300, 160)
+	local detailGem = halo(detail, "Halo", 4)
+	Pop.model(detail, "item_Clean_" .. OreData.List[1].Id, m.Gem, nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Visible = false,
+		ZIndex = 5,
+	})
+	local detailMark = Pop.text(detail, "?", 60, {
+		Name = "Mark",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		FontFace = PopTheme.Heavy,
+		TextColor3 = Color3.fromRGB(214, 220, 236),
+		ZIndex = 6,
+	})
+	local detailName = Pop.text(detail, CodexView.HiddenName, 28, {
 		Name = "OreName",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 7,
 	})
-	local detailRarity = UIKit.chip(detail, "Common", Theme.PanelLight, {
+	Pop.shadow(detailName, 3)
+	local rarityChip = Pop.chip(detail, "COMMON", deep(Pop.rarityPaint("Common")), Vector2.new(130, 28), {
 		Name = "Rarity",
-		Size = UDim2.fromOffset(110, 26),
-		TextSize = 16,
+		ZIndex = 7,
 	})
+	local detailRarity = rarityChip:FindFirstChild("Label") :: TextLabel
+	-- the facts in a dark well (readable on any paint)
+	local info = Pop.well(detail, { Name = "Info", ZIndex = 4 })
 	local function line(name: string, color: Color3): TextLabel
-		return UIKit.label(detail, "", m.Text, {
+		return Pop.text(info, "", m.Text, {
 			Name = name,
+			TextColor3 = color,
+			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
-			TextColor3 = color,
+			ZIndex = 6,
 		})
 	end
 	local refs: Refs = {
@@ -517,11 +643,11 @@ function CodexView.build(compact: boolean?): Refs
 		DetailMark = detailMark,
 		DetailName = detailName,
 		DetailRarity = detailRarity,
-		DetailIncome = line("Income", Theme.Coin),
-		DetailValue = line("Value", Theme.Text),
-		DetailTier = line("Tier", Theme.Info),
-		DetailWhere = line("Where", Theme.Text),
-		DetailLore = line("Lore", Theme.TextDim),
+		DetailIncome = line("Income", PopTheme.Money),
+		DetailValue = line("Value", Color3.fromRGB(255, 232, 120)),
+		DetailTier = line("Tier", Color3.fromRGB(140, 214, 255)),
+		DetailWhere = line("Where", PopTheme.Ink),
+		DetailLore = line("Lore", Color3.fromRGB(206, 214, 232)),
 		Selected = nil,
 		Compact = isCompact,
 	}
@@ -534,6 +660,46 @@ end
 
 ---------------------------------------------------------------- layout
 
+-- Places one card's inside for its cell (w x h design units); `chip` = room for the rarity chip.
+-- A card name's text size: the full size, smaller (down to 11) when the name is wider than the card.
+local function fitName(card: Card)
+	local grid = card.Button.Parent
+	local width = if grid then grid:GetAttribute("CardW") else nil
+	local max = if grid then grid:GetAttribute("CardText") else nil
+	if type(width) ~= "number" or type(max) ~= "number" then
+		return
+	end
+	local size = max
+	while size > 11 and Pop.textWidth(card.Name.Text, size) > width - 8 do
+		size -= 1
+	end
+	card.Name.TextSize = size
+end
+
+local function layoutCard(card: Card, w: number, h: number, textSize: number, chip: boolean)
+	local button = card.Button
+	card.Name.TextSize = textSize
+	card.Name.Position = UDim2.new(0.5, 0, 0, 4)
+	card.Name.Size = UDim2.new(1, -8, 0, textSize + 4)
+	local top = 4 + textSize + 4
+	local chipH = 18
+	local bottom = if chip then h - (chipH + 10) else h - 6
+	card.Strip.Position = UDim2.new(0.5, 0, 1, -6)
+	card.Strip.Size = UDim2.fromOffset(math.max(40, w - 14), chipH)
+	card.Strip:SetAttribute("Room", chip)
+	local size = math.max(24, math.floor(math.min(w - 14, bottom - top)))
+	local centre = UDim2.fromOffset(math.floor(w / 2), math.floor((top + bottom) / 2))
+	local picture = button:FindFirstChild("Picture") :: ImageLabel
+	picture.Position = centre
+	picture.Size = UDim2.fromOffset(size, size)
+	card.Gem.Position = centre
+	card.Gem.Size = UDim2.fromOffset(math.floor(size * 0.78), math.floor(size * 0.78))
+	card.Mark.Position = centre
+	card.Mark.Size = UDim2.fromOffset(size, size)
+	card.Mark.TextSize = math.floor(size * 0.62)
+	card.New.Position = UDim2.new(1, -3, 0, top + 2)
+end
+
 -- Fits the codex into the room it gets (design units).
 function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
@@ -542,12 +708,14 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local bodySize = MenuPanel.layout(frame, compact, m.Width, m.Height, maxWidth, maxHeight)
 	local mm = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
 
-	-- the count chip left of the X button
-	refs.CountChip.Size = UDim2.fromOffset(if compact then 200 else 190, if compact then 48 else 40)
-	refs.CountChip.Position = UDim2.new(1, -(MenuPanel.Pad + mm.Close + 12), 0, if compact then 20 else 14)
-	refs.Count.TextSize = if compact then 22 else 20
-	frame.Title.Size = UDim2.new(1, -(MenuPanel.Pad * 2 + mm.Close + 220), 0, 40)
-	frame.Subtitle.Size = UDim2.new(1, -(MenuPanel.Pad * 2 + mm.Close + 220), 0, 20)
+	-- the count bar left of the X button, in the band's middle
+	local barH = if compact then 48 else 40
+	refs.CountChip.Size = UDim2.fromOffset(if compact then 220 else 200, barH)
+	refs.CountChip.Position = UDim2.new(1, -(MenuPanel.Pad + mm.Close + 12), 0, math.floor((mm.Header - barH) / 2))
+	refs.Count.TextSize = if compact then 24 else 21
+	frame.Title.Size = UDim2.new(1, -(MenuPanel.Pad * 2 + mm.Close + 240), 0, frame.Title.Size.Y.Offset)
+	frame.Subtitle.Size = UDim2.new(1, -(MenuPanel.Pad * 2 + mm.Close + 240), 0, 20)
+	MenuPanel.syncTitle(frame)
 
 	-- the grid fills the body left of the detail pane
 	local detailW = math.min(m.DetailW, math.max(220, bodySize.X * 0.36))
@@ -561,59 +729,114 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local cardW = math.floor((usable - (columns - 1) * m.Gap) / columns)
 	refs.GridLayout.CellSize = UDim2.fromOffset(cardW, m.CardH)
 	refs.GridLayout.CellPadding = UDim2.fromOffset(m.Gap, m.Gap)
+	local chip = m.CardH >= CodexView.ChipCard
+	refs.Grid:SetAttribute("Chips", chip)
+	refs.Grid:SetAttribute("CardW", cardW)
+	refs.Grid:SetAttribute("CardText", m.CardText)
 	for _, card in refs.CardList do
-		card.Name.TextSize = m.CardText
+		layoutCard(card, cardW, m.CardH, m.CardText, chip)
+		fitName(card)
+		card.Strip.Visible = chip and card.Button:GetAttribute("Found") == true
 	end
 
-	-- the detail pane: gem + name + rarity on top, then the lines
+	-- the detail card: big picture, name and rarity (tall on big screens,
+	-- side by side on phones), the facts in the well under them
 	refs.Detail.Position = UDim2.new(1, 0, 0, 0)
 	refs.Detail.Size = UDim2.new(0, detailW, 1, -4)
-	local holder = refs.DetailGem.Parent :: Frame
-	holder.Size = UDim2.fromOffset(m.Gem, m.Gem)
-	holder.Position = UDim2.fromOffset(10 + m.Gem / 2, 8 + m.Gem / 2)
-	refs.DetailMark.TextSize = math.floor(m.Gem * 0.42)
-	local textX = 18 + m.Gem
-	refs.DetailName.Position = UDim2.fromOffset(textX, 14)
-	refs.DetailName.Size = UDim2.new(1, -(textX + 10), 0, 34)
-	refs.DetailName.TextSize = if compact then 26 else 28
-	refs.DetailRarity.Position = UDim2.fromOffset(textX, 52)
-	local inner = detailW - 28
-	local y = 16 + m.Gem
+	local detail = refs.Detail
+	local picture = detail:FindFirstChild("Picture") :: ImageLabel
+	local rarityChip = refs.DetailRarity.Parent :: Frame
+	local g = m.Gem
+	local centre: UDim2
+	local y: number
+	if compact then
+		centre = UDim2.fromOffset(12 + g / 2, 10 + g / 2)
+		local textX = 20 + g
+		refs.DetailName.AnchorPoint = Vector2.new(0, 0)
+		refs.DetailName.Position = UDim2.fromOffset(textX, 14)
+		refs.DetailName.Size = UDim2.new(1, -(textX + 10), 0, 34)
+		refs.DetailName.TextXAlignment = Enum.TextXAlignment.Left
+		refs.DetailName.TextSize = 26
+		rarityChip.AnchorPoint = Vector2.new(0, 0)
+		rarityChip.Position = UDim2.fromOffset(textX, 54)
+		y = 18 + g
+	else
+		centre = UDim2.new(0.5, 0, 0, 10 + g / 2)
+		refs.DetailName.AnchorPoint = Vector2.new(0.5, 0)
+		refs.DetailName.Position = UDim2.new(0.5, 0, 0, 14 + g)
+		refs.DetailName.Size = UDim2.new(1, -20, 0, 34)
+		refs.DetailName.TextXAlignment = Enum.TextXAlignment.Center
+		refs.DetailName.TextSize = 30
+		rarityChip.AnchorPoint = Vector2.new(0.5, 0)
+		rarityChip.Position = UDim2.new(0.5, 0, 0, 52 + g)
+		y = 90 + g
+	end
+	rarityChip.Size = UDim2.fromOffset(140, 28)
+	refs.DetailRarity.TextSize = 18
+	syncShadow(refs.DetailName)
+	picture.Position = centre
+	picture.Size = UDim2.fromOffset(g, g)
+	refs.DetailGem.Position = centre
+	refs.DetailGem.Size = UDim2.fromOffset(math.floor(g * 0.78), math.floor(g * 0.78))
+	refs.DetailMark.Position = centre
+	refs.DetailMark.Size = UDim2.fromOffset(g, g)
+	refs.DetailMark.TextSize = math.floor(g * 0.6)
+	for _, child in detail:GetChildren() do
+		if child:IsA("GuiObject") and child:GetAttribute("Fx") and not string.find(child.Name, "Sparkle", 1, true) then
+			child.Position = centre
+		end
+	end
+	-- the facts: a well from y to the bottom
+	local info = detail:FindFirstChild("Info") :: Frame
+	info.Position = UDim2.fromOffset(8, y)
+	info.Size = UDim2.new(1, -16, 1, -(y + 8))
+	local inner = detailW - 16 - 24
+	local ly = 10
 	local function place(label: TextLabel, lines: number, size: number)
 		label.TextSize = size
-		label.Position = UDim2.fromOffset(14, y)
+		label.Position = UDim2.fromOffset(12, ly)
 		label.Size = UDim2.fromOffset(inner, lines * (size + 4))
-		y += lines * (size + 4) + 4
+		ly += lines * (size + 4) + 4
 	end
 	place(refs.DetailIncome, 2, m.Text)
 	place(refs.DetailValue, 2, m.Text)
 	place(refs.DetailTier, 1, m.Text)
 	place(refs.DetailWhere, 2, m.Text)
-	y += 2
+	ly += 2
 	refs.DetailLore.TextSize = m.Lore
-	refs.DetailLore.Position = UDim2.fromOffset(14, y)
-	refs.DetailLore.Size = UDim2.new(0, inner, 1, -(y + 8))
+	refs.DetailLore.Position = UDim2.fromOffset(12, ly)
+	refs.DetailLore.Size = UDim2.new(0, inner, 1, -(ly + 8))
 end
 
 ---------------------------------------------------------------- filling in
 
 -- Shows the entries on the cards and the count.
 function CodexView.setEntries(refs: Refs, entries: { Entry })
+	local chips = refs.Grid:GetAttribute("Chips") ~= false
 	for _, entry in entries do
 		local card = refs.Cards[entry.Ore.Id]
 		if card then
-			local info = Rarity.ById[entry.Ore.Rarity]
-			CodexView.paintGem(card.Gem, card.Mark, if entry.Found then entry.Ore else nil)
-			card.Name.Text = if entry.Found then entry.Ore.Name else CodexView.HiddenName
-			card.Name.TextColor3 = if entry.Found then Theme.Text else Theme.TextDim
-			card.Strip.BackgroundColor3 = if entry.Found and info then info.Color else Theme.PanelLight
+			local found = entry.Found
+			local ore = if found then entry.Ore else nil
+			local button = card.Button
+			Pop.repaint(button, paintOf(ore), false)
+			setFx(button, found)
+			CodexView.paintGem(card.Gem, card.Mark, ore)
+			local picture = button:FindFirstChild("Picture") :: ImageLabel
+			picture.Visible = found
+			if found then
+				fillPicture(picture, entry.Ore.Id)
+			end
+			card.Name.Text = if found then entry.Ore.Name else CodexView.HiddenName
+			fitName(card)
+			card.Name.TextColor3 = if found then PopTheme.Ink else Color3.fromRGB(176, 184, 204)
+			card.Strip.Visible = found and chips
 			card.New.Visible = entry.New
-			card.Button:SetAttribute("Found", entry.Found)
+			button:SetAttribute("Found", found)
 		end
 	end
 	local found, total = CodexView.count(entries)
-	refs.Count.Text = CodexView.countText(found, total)
-	refs.CountFill.Size = UDim2.fromScale(if total > 0 then found / total else 0, 1)
+	Pop.setBar(refs.CountChip, if total > 0 then found / total else 0, CodexView.countText(found, total))
 end
 
 -- Shows one entry in the detail pane and marks its card.
@@ -621,21 +844,34 @@ function CodexView.select(refs: Refs, entry: Entry)
 	refs.Selected = entry.Ore.Id
 	for _, card in refs.CardList do
 		local on = card.OreId == entry.Ore.Id
-		card.Stroke.Color = if on then Theme.Accent else Theme.Outline
-		card.Stroke.Thickness = if on then 3 else 2
+		card.Stroke.Color = if on then CodexView.SelectColor else PopTheme.Outline
+		card.Stroke.Thickness = if on then 5 else PopTheme.Edge
 	end
 	local text = CodexView.detailText(entry)
-	CodexView.paintGem(refs.DetailGem, refs.DetailMark, if entry.Found then entry.Ore else nil)
+	local ore = if entry.Found then entry.Ore else nil
+	local detail = refs.Detail
+	Pop.repaint(detail, paintOf(ore), false)
+	setFx(detail, entry.Found)
+	CodexView.paintGem(refs.DetailGem, refs.DetailMark, ore)
+	local picture = detail:FindFirstChild("Picture") :: ImageLabel
+	picture.Visible = entry.Found
+	picture:SetAttribute("Icon", "item_Clean_" .. entry.Ore.Id)
+	if entry.Found then
+		fillPicture(picture, entry.Ore.Id, true)
+	end
 	refs.DetailName.Text = text.Name
-	refs.DetailName.TextColor3 = if entry.Found then Theme.Text else Theme.TextDim
+	refs.DetailName.TextColor3 = if entry.Found then PopTheme.Ink else Color3.fromRGB(176, 184, 204)
+	syncShadow(refs.DetailName)
 	local info = if text.Rarity then Rarity.ById[text.Rarity] else nil
+	local rarityChip = refs.DetailRarity.Parent :: Frame
 	refs.DetailRarity.Visible = info ~= nil
+	rarityChip.Visible = info ~= nil
 	if info then
 		refs.DetailRarity.Text = info.Name
-		refs.DetailRarity.BackgroundColor3 = info.DarkColor
+		Pop.repaint(rarityChip, deep(Pop.rarityPaint(info.Id)))
 	end
 	refs.DetailIncome.Text = text.Income
-	refs.DetailIncome.TextColor3 = if entry.Found then Theme.Coin else Theme.TextDim
+	refs.DetailIncome.TextColor3 = if entry.Found then PopTheme.Money else Color3.fromRGB(206, 214, 232)
 	refs.DetailValue.Text = text.Value
 	refs.DetailTier.Text = text.Tier
 	refs.DetailWhere.Text = text.Where

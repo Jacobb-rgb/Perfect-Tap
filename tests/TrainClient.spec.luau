@@ -31,8 +31,9 @@ return function(T, Loader)
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 
 	local RAIL = Vector3.new(0, TrainBuilder.RailTop, 0)
-	local WEST = WorldLayout.Plots[1] -- x -104, z 84
-	local EAST_FAR = WorldLayout.Plots[8] -- x 104, z -84
+	-- (positions at 12 cells; WorldLayout.PlotGrid moves them on a bigger grid)
+	local WEST = WorldLayout.Plots[1] -- the south-most west plot: x -104, z 84
+	local EAST_FAR = WorldLayout.Plots[8] -- the north-most east plot: x 104, z -84
 	local DEPART, TRIP = 1000, 30
 	local ARRIVE = DEPART + TRIP
 	local RED = Color3.fromRGB(220, 70, 50)
@@ -350,7 +351,7 @@ return function(T, Loader)
 		local out = TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + s.Coast - 0.01, 2)
 		T.truthy(TrainController.visible(out, out.Position, 7.2), "locomotive out")
 		T.truthy(TrainController.visible(out, out.Position - out.Facing * 25.15, 6), "last wagon out")
-		-- the near plot (z 84) sees its train come out halfway through the leg
+		-- the near plot (42 studs north of the portal) sees its train come out halfway through the leg
 		local mid = TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + (s.Underground + s.Coast) / 2)
 		T.truthy(TrainController.visible(mid, mid.Position, 7.2), "locomotive at the mouth")
 		-- end of the quarry leg: the whole train is behind the visible mouth
@@ -384,7 +385,7 @@ return function(T, Loader)
 	end
 
 	T.test("TrainClient: two plots on one coast line never show overlapping trains", function()
-		-- plot 1 (z 84) is the first stop north of the south portal: every other west train passes it
+		-- plot 1 (the south-most) is the first stop north of the south portal: every other west train passes it
 		local south, north = WorldLayout.Plots[1], WorldLayout.Plots[4]
 		for _, mineIsThrough in { false, true } do
 			local standing = TrainController.nominalBody(2)

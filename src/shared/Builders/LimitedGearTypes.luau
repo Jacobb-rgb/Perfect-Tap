@@ -52,6 +52,7 @@ export type Shard = {
 	Color: Color3,
 	Glow: Color3,
 	Room: () -> number,
+	Calm: boolean?, -- in the world (the egg stall): fewer glowing parts, the lobby's bloom stays clean
 }
 
 export type Tools = {

@@ -632,4 +632,30 @@ return function(T, Loader)
 		end
 		T.lt(100, checked, "decoration was checked")
 	end)
+
+	T.test("Yard: the whole yard stays inside StreamingMinRadius of the BASE spot", function()
+		-- a phone low on memory keeps only what lies inside Workspace.StreamingMinRadius
+		-- (LoadingConfig.StreamRadius): at the plot front (homeCFrame) no yard piece may pop out
+		local LoadingConfig = Loader.requirePath("ReplicatedFirst.LoadingConfig")
+		local rects = BaseLayout.pieces()
+		rects.Yard = BaseLayout.Yard
+		local farthest = 0
+		for _, plot in WorldLayout.Plots do
+			local cf = PlotService.plotCFrame(plot.Id)
+			local home = PlotService.homeCFrame(plot.Id).Position
+			for name, rect in rects do
+				-- every corner of its box, on the ground and at the top of its height budget
+				for i = 0, 7 do
+					local x = if i % 2 == 0 then -1 else 1
+					local z = if i % 4 < 2 then -1 else 1
+					local y = if i < 4 then 0 else rect.Size.Y
+					local point = rect.Center + Vector3.new(x * rect.Size.X / 2, y, z * rect.Size.Z / 2)
+					local d = (cf:PointToWorldSpace(point) - home).Magnitude
+					farthest = math.max(farthest, d)
+					T.le(d, LoadingConfig.StreamRadius, `plot {plot.Id}: {name} corner to the BASE spot`)
+				end
+			end
+		end
+		T.lt(GameConfig.PlotCells * GameConfig.CellSize, farthest, "measured out to the far yard corners")
+	end)
 end

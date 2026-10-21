@@ -214,6 +214,14 @@ local function quiet(model: any)
 	end
 end
 
+-- (bigger plots) The cells in this file are on a 12-cell grid; a bigger grid
+-- moves them with it (BaseLayout.GridShift across, PlotCells - 12 back), so
+-- the base stays on the PEN chute against the back wall. Returns the cell
+-- shift (x, z).
+local function shiftOf(GameConfig: any): (number, number)
+	return (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
+end
+
 -- PlacementController.cameraGoal: the road-side view of the plot, `zoom` studs
 -- out (40..80), panned to (panX, panZ) studs from its centre.
 local function buildCamera(plotCF: any, panX: number, panZ: number, zoom: number): any
@@ -237,13 +245,14 @@ local function placeBase(Loader: any, workspace: any, plotCF: any, extra: { any 
 			Gallery.paintGuis(Loader, workspace, plate.Parent)
 		end
 	end
+	local sx, sz = shiftOf(Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig"))
 	local rows = table.clone(Preview.Layout)
 	for _, row in extra or {} do
 		table.insert(rows, row)
 	end
 	local entries, models = {}, {}
 	for _, row in rows do
-		local id, x, z, r = row[1], row[2], row[3], row[4]
+		local id, x, z, r = row[1], row[2] + sx, row[3] + sz, row[4]
 		local ok, why = Placement.validate(entries, id, x, z, r, nil, nil, 0)
 		assert(ok, `{id} at {x},{z}: {why}`)
 		table.insert(entries, { Id = id, X = x, Z = z, R = r })
@@ -412,7 +421,8 @@ local function buildWorld(Loader: any, root: any, plotCF: any, entries: { any },
 		quiet(model)
 	end
 	-- the ghost (ghostFor + its Highlight), its footprint and output plates (updateVisuals)
-	local id, x, z, r = ghostRow[1], ghostRow[2], ghostRow[3], ghostRow[4]
+	local sx, sz = shiftOf(GameConfig)
+	local id, x, z, r = ghostRow[1], ghostRow[2] + sx, ghostRow[3] + sz, ghostRow[4]
 	local ok, why = Placement.validate(entries, id, x, z, r, nil, nil, 0)
 	assert(ok, `ghost {id}: {why}`)
 	local ghost = MachineBuilder.build(id)
@@ -542,7 +552,10 @@ local function buildScene(Loader: any, workspace: any, which: string): (any, { [
 	writePictures(Loader, ids)
 
 	-- the build camera, panned so the ghost clears the info card (the pole a little closer)
-	local cam = if which == "power" then buildCamera(plotCF, 9, -1, 46) else buildCamera(plotCF, 3, -4, 60)
+	-- (on a bigger grid the base sits sx cells further back from the plot centre)
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local back = shiftOf(GameConfig) * GameConfig.CellSize
+	local cam = if which == "power" then buildCamera(plotCF, 9, -1 + back, 46) else buildCamera(plotCF, 3, -4 + back, 60)
 	UIConfig.LightUI = true
 	local exports: { [string]: any } = {}
 	local screens = if which == "power" then { "pc" } else { "pc", "phone" }
@@ -619,14 +632,15 @@ local function yardScene(Loader: any, workspace: any, which: string): (any, { [s
 		{ 3, 6, { Kind = "Clean", OreId = "Gold", Grade = "Clean" }, 0.2 },
 		{ 3, 3, { Kind = "Crushed", OreId = "Gold", Grade = "Clean" }, 0 },
 	}
+	local sx, sz = shiftOf(GameConfig)
 	for i, it in items do
-		local cf = plotCF * Grid.localCFrame("Conveyor", it[1], it[2], 0) * CF.new(0, 1.05, it[4] * CELL)
+		local cf = plotCF * Grid.localCFrame("Conveyor", it[1] + sx, it[2] + sz, 0) * CF.new(0, 1.05, it[4] * CELL)
 		ItemBuilder.build(it[3], cf * CF.Angles(0, 0.7 * i, 0), i).Parent = root
 	end
 
 	-- you, in your yard between the machines (the signs measure from here)
-	local feet = plotCF:PointToWorldSpace(V3.new(-HALF + view.Feet[1] * CELL, 0.2, -HALF + view.Feet[2] * CELL))
-	local look = plotCF:PointToWorldSpace(V3.new(-HALF + view.Look[1] * CELL, 0.2, -HALF + view.Look[2] * CELL))
+	local feet = plotCF:PointToWorldSpace(V3.new(-HALF + (view.Feet[1] + sx) * CELL, 0.2, -HALF + (view.Feet[2] + sz) * CELL))
+	local look = plotCF:PointToWorldSpace(V3.new(-HALF + (view.Look[1] + sx) * CELL, 0.2, -HALF + (view.Look[2] + sz) * CELL))
 	Dummy.build(root, CF, CF.lookAt(feet, V3.new(look.X, feet.Y, look.Z)), "idle", nil)
 
 	-- the signs MachineFxController / PowerController would show
@@ -668,8 +682,8 @@ local function yardScene(Loader: any, workspace: any, which: string): (any, { [s
 
 	-- the camera: behind you, a little above
 	local c, t = view.Camera, view.Target
-	local camPos = plotCF:PointToWorldSpace(V3.new(-HALF + c[1] * CELL, c[2], -HALF + c[3] * CELL))
-	local camTarget = plotCF:PointToWorldSpace(V3.new(-HALF + t[1] * CELL, t[2], -HALF + t[3] * CELL))
+	local camPos = plotCF:PointToWorldSpace(V3.new(-HALF + (c[1] + sx) * CELL, c[2], -HALF + (c[3] + sz) * CELL))
+	local camTarget = plotCF:PointToWorldSpace(V3.new(-HALF + (t[1] + sx) * CELL, t[2], -HALF + (t[3] + sz) * CELL))
 	local cam = { position = camPos, target = camTarget, fov = view.Fov }
 
 	-- the HUD with BUILD: its keycap and the machines waiting to be placed

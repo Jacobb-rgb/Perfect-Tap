@@ -237,10 +237,10 @@ return function(T, Loader)
 
 	T.test("GolemBuilder: the opening capsule has its halves and hidden cracks", function()
 		for _, capsule in CapsuleConfig.List do
-			if capsule.Limited then
-				continue -- a limited edition's shard (its own test below)
-			end
 			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
+			if model:GetAttribute("Shard") or model:GetAttribute("Egg") then
+				continue -- a limited shard or a capsule's egg (their own test below)
+			end
 			T.eq(GolemBuilder.partCount(model), GolemBuilder.CapsuleParts, capsule.Id .. " parts")
 			local top = model:FindFirstChild("Top")
 			local bottom = model:FindFirstChild("Bottom")
@@ -276,12 +276,14 @@ return function(T, Loader)
 	T.test("GolemBuilder: a limited edition's shard keeps the capsule's contract", function()
 		local shards = 0
 		for _, capsule in CapsuleConfig.List do
-			if not capsule.Limited then
-				continue
-			end
 			local model = GolemBuilder.capsule(capsule.Id, CFrame.new(0, 3, 0))
+			if capsule.Limited then
+				T.eq(model:GetAttribute("Shard"), capsule.Limited, capsule.Id .. " is its set's shard")
+			else
+				-- the regular capsules are eggs now (owner 2026-10-21)
+				T.eq(model:GetAttribute("Egg"), capsule.Id, capsule.Id .. " is an egg")
+			end
 			shards += 1
-			T.eq(model:GetAttribute("Shard"), capsule.Limited, capsule.Id .. " is its set's shard")
 			T.eq(model:GetAttribute("Capsule"), capsule.Id)
 			local n = GolemBuilder.partCount(model)
 			T.truthy(n > GolemBuilder.CapsuleParts and n <= GolemBuilder.ShardMaxParts, `{capsule.Id}: {n} parts`)
@@ -310,7 +312,7 @@ return function(T, Loader)
 				T.truthy(inHalf or part == model.PrimaryPart, part.Name .. " in a half")
 			end
 		end
-		T.truthy(shards >= 1, "the Dragonforge capsule is a shard")
+		T.eq(shards, #CapsuleConfig.List, "every capsule is an egg or a shard")
 	end)
 
 	T.test("GolemBuilder: the upcoming limited sets' golems build in budget and are not real kinds", function()

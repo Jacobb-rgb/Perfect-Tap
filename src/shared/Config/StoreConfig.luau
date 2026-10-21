@@ -55,6 +55,7 @@ export type Section = {
 	Tab: string, -- the tab's word
 	TabIcon: string,
 	TabPaint: string,
+	TabModel: string?, -- the tab's live 3D picture (PictureModels), else TabIcon
 	RowHeight: number, -- design units
 	BigRow: number?, -- a taller first row (the feature card)
 }
@@ -64,12 +65,12 @@ local StoreConfig = {}
 StoreConfig.Title = "Shop"
 
 StoreConfig.Sections = {
-	{ Id = "Featured", Title = "FEATURED", Colors = "Gold", Tab = "Featured", TabIcon = "pass_crown", TabPaint = "Yellow", RowHeight = 300 },
-	{ Id = "Money", Title = "MONEY", Colors = "Green", Tab = "Money", TabIcon = "cash_stack", TabPaint = "Green", RowHeight = 236 },
-	{ Id = "Luck", Title = "LUCK", Colors = "Cyan", Tab = "Luck", TabIcon = "clover", TabPaint = "Teal", RowHeight = 250 },
-	{ Id = "Eggs", Title = "GOLEM CAPSULES", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
-	{ Id = "Blasters", Title = "BLASTERS", Colors = "Red", Tab = "Blasters", TabIcon = "blaster", TabPaint = "Red", RowHeight = 250 },
-	{ Id = "Passes", Title = "PASSES", Colors = "Gold", Tab = "Passes", TabIcon = "podium", TabPaint = "Orange", RowHeight = 196 },
+	{ Id = "Featured", Title = "FEATURED", Colors = "Gold", Tab = "Featured", TabIcon = "pass_crown", TabModel = "pass_crown", TabPaint = "Yellow", RowHeight = 300 },
+	{ Id = "Money", Title = "MONEY", Colors = "Green", Tab = "Money", TabIcon = "cash_stack", TabModel = "cash_stack", TabPaint = "Green", RowHeight = 236 },
+	{ Id = "Luck", Title = "LUCK", Colors = "Cyan", Tab = "Luck", TabIcon = "clover", TabModel = "luck_server", TabPaint = "Teal", RowHeight = 250 },
+	{ Id = "Eggs", Title = "GOLEM EGGS", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabModel = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
+	{ Id = "Blasters", Title = "BLASTERS", Colors = "Red", Tab = "Blasters", TabIcon = "blaster", TabModel = "blaster", TabPaint = "Red", RowHeight = 250 },
+	{ Id = "Passes", Title = "PASSES", Colors = "Gold", Tab = "Passes", TabIcon = "podium", TabModel = "podium", TabPaint = "Orange", RowHeight = 196 },
 } :: { Section }
 
 local function card(spec: CardSpec): CardSpec
@@ -151,13 +152,13 @@ StoreConfig.Cards = {
 	card({ Id = "TripleLucky15", Keys = { "TripleLucky15" }, Look = "Boost", Paint = "Yellow", Icon = "clover", Model = "clover", Section = "Luck", Row = 1, Title = "Triple Lucky", Big = "x3", Note = "Rarer golems, 15 min" }),
 	card({ Id = "HexaLucky15", Keys = { "HexaLucky15" }, Look = "Boost", Paint = "Blue", Icon = "rainbow", Model = "item_Diamond", Section = "Luck", Row = 1, Title = "Hexa Lucky", Big = "x2.5", Note = "Rarer ores, 15 min" }),
 	-- golem capsules ("eggs")
-	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
-	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
-	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Capsule", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
+	card({ Id = "Royal1", Keys = { "RoyalCapsule1" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x1" }),
+	card({ Id = "Royal3", Keys = { "RoyalCapsule3" }, Title = "Royal Egg", Look = "Capsule", Paint = "Purple", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x3" }),
+	card({ Id = "Royal5", Keys = { "RoyalCapsule5" }, Title = "Royal Egg", Look = "Capsule", Paint = "Pink", Icon = "capsule_Royal", Model = "capsule_Royal", Section = "Eggs", Row = 1, Big = "x5" }),
 	card({
 		Id = "Royal10",
 		Keys = { "RoyalCapsule10" },
-		Title = "Royal Capsule",
+		Title = "Royal Egg",
 		Look = "Capsule",
 		Paint = "Pink",
 		Icon = "capsule_Royal",

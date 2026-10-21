@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 3, -- Data/Migrations brings older saves up to this
+	Version = 4, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -104,6 +104,13 @@ local DataTemplate = {
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
 	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
 	Wheel = { NextSpinAt = 0, Spins = 0 },
+	-- daily / weekly quests (QuestService, QuestLogic): Day / Week = the UTC day / week number
+	-- the lists are for; Daily / Weekly = { { Id, Base (the Stat when given), Goal, Claimed } }
+	-- (QuestLogic.refresh rerolls a stale or broken list, so no migration is needed)
+	Quests = { Day = 0, Daily = {}, Week = 0, Weekly = {} },
+	-- the 7-day login streak: Day = the streak day last claimed (1..7, 0 = never),
+	-- Last = the UTC day number of that claim (a missed day starts at day 1 again)
+	Streak = { Day = 0, Last = 0 },
 	-- the Starter Pack (Robux, once per account: StarterPackService): BoughtAt = os.time() of
 	-- the first grant (0 = not bought), Count = receipts granted (a second one only when two
 	-- prompts were open at once)
@@ -139,7 +146,7 @@ local DataTemplate = {
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
 	-- the side menu's SETTINGS (SettingsConfig; SettingsService repairs it on load)
-	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true, FastSpin = false },
+	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true, FastSpin = false, ReduceMotion = false },
 	-- the ORE CODEX's NEW badges (CodexService): Seen = { [oreId] = true } the discovered ores
 	-- the player has looked at; Ready = false on a save made before this record (its
 	-- discovered ores then count as seen, once)

@@ -19,10 +19,14 @@ return function(T, Loader)
 	local Railway = Loader.requirePath("ServerScriptService.Server.World.Railway")
 	-- The town's strip limit and sites live with the lobby (being reworked
 	-- elsewhere): read them when the module is there, else fall back to the
-	-- brief's limit (town buildings stop at |x| 160); the geometric check
-	-- against every other package's parts below does not depend on it.
+	-- brief's limit (town buildings stop at |x| 160, out with the coast on bigger
+	-- plots); the geometric check against every other package's parts below does
+	-- not depend on it.
 	local okTown, Town = pcall(Loader.requirePath, "ServerScriptService.Server.World.Lobby.Flora.Town")
-	local townEdgeX: number = if okTown and type(Town) == "table" and Town.RailMinX then Town.RailMinX else 160
+	local townEdgeX: number = 160 + WorldLayout.PlotGrid.CoastShift
+	if okTown and type(Town) == "table" and Town.RailMinX then
+		townEdgeX = Town.RailMinX
+	end
 	local townSites: { any } = if okTown and type(Town) == "table" and Town.Sites then Town.Sites else {}
 
 	-- The wheels' envelope across a line (TrainBuilder: the locomotive's wheel
@@ -317,11 +321,15 @@ return function(T, Loader)
 			SouthEast = { At = TrainConfig.CoastEast[1], Look = Vector3.new(0, 0, -1) },
 		}
 		-- (today: the quarry mouths at x -+66 on z -156 facing into the quarry,
-		-- the south ones at (-+166, 0, 126) facing north)
+		-- the south ones on the plots' rail line (|x| 166 at 12 cells) 42 studs
+		-- south of the south-most plot (z 126 at 12 cells) facing north)
+		local grid = WorldLayout.PlotGrid
+		local railX = grid.CenterX + BaseLayout.RailZ
+		local portalZ = grid.SouthZ - grid.Pitch / 2 + 42
 		T.truthy(near(expected.West.At, Vector3.new(-66, -12, -156), 1e-3), "West mouth at (-66, -12, -156)")
 		T.truthy(near(expected.East.At, Vector3.new(66, -12, -156), 1e-3), "East mouth at (66, -12, -156)")
-		T.truthy(near(expected.SouthWest.At, Vector3.new(-166, 0, 126), 1e-3), "SouthWest mouth at (-166, 0, 126)")
-		T.truthy(near(expected.SouthEast.At, Vector3.new(166, 0, 126), 1e-3), "SouthEast mouth at (166, 0, 126)")
+		T.truthy(near(expected.SouthWest.At, Vector3.new(-railX, 0, portalZ), 1e-3), `SouthWest mouth at ({-railX}, 0, {portalZ})`)
+		T.truthy(near(expected.SouthEast.At, Vector3.new(railX, 0, portalZ), 1e-3), `SouthEast mouth at ({railX}, 0, {portalZ})`)
 		for name, e in expected do
 			local cf = mouths[name]
 			T.truthy(cf, "mouth " .. name)
@@ -475,7 +483,8 @@ return function(T, Loader)
 			-- the boardwalk strip and the rim's inner face
 			T.falsy(s.hi.X > 140 and s.lo.Z < -112 and s.hi.Z > -118, name .. " is on the NEXT AREA boardwalk strip")
 			if s.hi.Z > LobbyLayout.Area.Min.Z then
-				T.truthy(math.max(math.abs(s.lo.X), math.abs(s.hi.X)) <= 171.7, name .. " reaches into the island rim")
+				local rimX = WorldLayout.Island.Max.X + 1.7 -- the rim's inner face (171.7 at 12 cells)
+				T.truthy(math.max(math.abs(s.lo.X), math.abs(s.hi.X)) <= rimX, name .. " reaches into the island rim")
 				-- the town keeps west/east of its rail strip limit, the railway outside it
 				T.truthy(math.min(math.abs(s.lo.X), math.abs(s.hi.X)) >= townEdgeX, name .. " is in the town's ground")
 			end

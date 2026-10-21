@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local BubbleTheme = require(Shared.Config.BubbleTheme)
+local Pop = require(script.Parent.Pop)
 
 local LightSkin = {}
 
@@ -128,6 +129,27 @@ local POP_GLOSS = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, rgb(196, 196, 196)),
 })
 
+-- The Pop glow on an old chunky button (the Roblox shop photos): a light
+-- edge inside its border and the stud texture; follows its colour.
+local function glowButton(button: GuiObject)
+	local corner = button:FindFirstChildOfClass("UICorner")
+	local radius = if corner then corner.CornerRadius.Offset else 8
+	local light = button.BackgroundColor3:Lerp(Color3.new(1, 1, 1), 0.45)
+	local rim = button:FindFirstChild("Rim")
+	if rim then
+		local stroke = rim:FindFirstChild("Light")
+		if stroke and stroke:IsA("UIStroke") then
+			stroke.Color = light
+		end
+	else
+		Pop.rim(button, light, radius, 3, button.ZIndex)
+	end
+	-- (studs only under child labels: a button that draws its own Text would get them over its words)
+	if not button:FindFirstChild("Studs") and (button :: any).Text == "" then
+		Pop.studs(button, radius, 0.5, 28, button.ZIndex)
+	end
+end
+
 local function skinBackground(gui: GuiObject)
 	local mapped = BACKGROUNDS[key(gui.BackgroundColor3)]
 	if mapped then
@@ -138,6 +160,9 @@ local function skinBackground(gui: GuiObject)
 		local gradient = gui:FindFirstChildOfClass("UIGradient")
 		if gradient and gradient.Rotation == 90 and gradient.Color.Keypoints[1].Value == Color3.new(1, 1, 1) and #gradient.Color.Keypoints == 2 then
 			gradient.Color = POP_GLOSS
+		end
+		if gradient and gradient.Color == POP_GLOSS then
+			glowButton(gui)
 		end
 	end
 	if isLight(gui.BackgroundColor3) and gui.BackgroundTransparency < 0.5 then
@@ -336,6 +361,8 @@ local function addBand(title: TextLabel, roleName: string)
 		stripe.ZIndex = 0
 		stripe.Parent = band
 	end
+	-- the studs over the band (the photos' studded headers)
+	Pop.studs(band, if corner then corner.CornerRadius.Offset else 0, 0.35, 40, 0)
 	local line = Instance.new("Frame")
 	line.Name = "Line"
 	line.BackgroundColor3 = BubbleTheme.Outline

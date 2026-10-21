@@ -856,6 +856,55 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("SaveSafety v4: a v3 layout moves to the 16-cell grid once through a real load; old servers refuse it", function()
+		-- the template is reconciled in BEFORE Migrate: the move keys on the loaded Version, so it still runs
+		local function newServer(store: any, jobId: string): any
+			return ProfileStore.new({
+				Store = store,
+				JobId = jobId,
+				Template = DataTemplate,
+				Now = now,
+				Wait = fakeWait,
+				LatestVersion = DataService.latestVersion(),
+				Migrate = function(data)
+					Migrations.run(data)
+				end,
+			})
+		end
+		local store = robloxStore()
+		store:put("P", {
+			Data = {
+				Version = 3,
+				Coins = 5,
+				PlacedMachines = { { Id = "Conveyor", X = 3, Z = 11, R = 0 }, { Id = "Conveyor", X = 9, Z = 11, R = 2 } },
+			},
+			Saved = 1,
+		})
+		local a = newServer(store, "A")
+		local profile = a:load("P")
+		T.truthy(profile, "the version 3 save loads")
+		T.eq(profile.Data.Version, 4)
+		T.eq(profile.Data.PlacedMachines[1].X, 5, "onto the PEN chute")
+		T.eq(profile.Data.PlacedMachines[1].Z, 15)
+		T.eq(profile.Data.PlacedMachines[2].X, 11, "onto the FOUNDRY chute")
+		T.eq(profile.Data.PlacedMachines[2].Z, 15)
+		T.truthy(a:save(profile, true), "saved and released")
+		T.eq(store:get("P").Data.Version, 4)
+		-- the next load (any server of this build) does not move it again
+		local b = newServer(store, "B")
+		local again = b:load("P")
+		T.truthy(again)
+		T.eq(again.Data.PlacedMachines[1].X, 5, "moved once only")
+		T.eq(again.Data.PlacedMachines[1].Z, 15)
+		T.truthy(b:save(again, true))
+		-- an old 12-cell server (version 3) refuses it untouched: "please rejoin"
+		local before = store.values.P
+		local old, reason = server(store, "Old"):load("P")
+		T.eq(old, nil, "an old server never loads a version 4 save")
+		T.eq(reason, "newer")
+		T.eq(store.values.P, before, "untouched")
+	end)
+
 	T.test("SaveSafety: a load still waiting at shutdown stops at once and takes no lock", function()
 		local store = robloxStore()
 		store:put("Player_607", { Data = { Version = 3, Coins = 1 }, Lock = { JobId = "X", SessionId = "X#1", Time = now() }, Saved = 1 })

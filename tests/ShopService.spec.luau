@@ -1428,13 +1428,21 @@ return function(T, Loader)
 		five.Text = "BOUGHT!"
 		TechShopView.style(five, true, Theme.Good, Theme.GoodDark)
 		TechShopView.setCards(refs, TechShopView.cards(s, 0))
+		-- (the Pop look: the button's holder is its painted face)
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local function paintTop(button: any): any
+			return button.Parent:FindFirstChild("Paint").Color.Keypoints[1].Value
+		end
 		T.eq(five.Text, "BOUGHT!", "busy text kept")
-		T.eq(five.BackgroundColor3, Theme.Good, "busy color kept")
-		T.eq(five.TextColor3, Theme.Text, "busy text color kept")
+		T.eq(paintTop(five), PopTheme.Paints.Green.Top, "busy color kept")
+		T.eq(five.TextTransparency, 0, "busy text kept bright")
 		five:SetAttribute("Busy", false)
 		TechShopView.setCards(refs, TechShopView.cards(s, 0))
 		T.eq(five.Text, "BUY 5", "freed")
-		T.eq(five.BackgroundColor3, Theme.PanelLight, "greyed: can't pay")
+		T.eq(paintTop(five), PopTheme.Gray.Top, "greyed: can't pay")
+		TechShopView.setCards(refs, TechShopView.cards(s, 1e6))
+		T.eq(paintTop(five), PopTheme.Paints.Yellow.Top, "a gold coin BUY")
+		T.truthy(five.Parent:FindFirstChild("Coin").Visible, "with its coin")
 		TechShopView.setCards(refs, TechShopView.cards(s, 100))
 		-- the status line replaces the detail line
 		TechShopView.setStatus(refs, "Conveyor", "Not enough coins", nil)
@@ -1463,10 +1471,22 @@ return function(T, Loader)
 		T.truthy(refs.PadHint.Visible and not refs.Hint.Visible, "kept over a new layout")
 		TechShopView.layout(refs, true, 1000, 500)
 		T.falsy(refs.PadHint.Visible or refs.Hint.Visible, "no footer on phones")
-		-- every icon kind draws something
+		-- every icon kind draws something: a machine (or the train) its live
+		-- 3D picture (the build tray's), the rest a picture drawn from frames
 		for _, row in refs.RowList do
+			local picture = row.Icon:FindFirstChild("Picture")
 			local art = row.Icon:FindFirstChild("Art")
-			T.truthy(art and #art:GetChildren() >= 3, "icon " .. row.Id)
+			local drawn = art ~= nil and #art:GetChildren() >= 3
+			local live = picture ~= nil and picture:FindFirstChild("View") ~= nil and type(picture:GetAttribute("Icon")) == "string"
+			T.truthy(drawn or live, "icon " .. row.Id)
 		end
+		T.eq(refs.Rows.Crusher.Icon.Picture:GetAttribute("Icon"), "machine_Crusher", "a machine: its 3D picture")
+		T.falsy(refs.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "a closed shop builds no models")
+		-- open: the shown tab's cards get their models (built once)
+		refs.Gui.Enabled = true
+		TechShopView.setTab(refs, "Machines")
+		TechShopView.setCards(refs, TechShopView.cards(s, 100))
+		T.truthy(refs.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "the open tab's pictures")
+		T.falsy(refs.Rows["Upgrade:Crusher:Speed"].Icon.Picture.View:FindFirstChildOfClass("Model"), "not the hidden tabs'")
 	end)
 end

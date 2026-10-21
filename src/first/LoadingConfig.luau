@@ -72,8 +72,10 @@ LoadingConfig.GroundProbe = 60 -- studs the ground check looks down from the cha
 
 -- Copied from WorldLayout.SpawnPoint (the town spawn) and
 -- Workspace.StreamingMinRadius (default.project.json): the spec checks them.
+-- 112 (96 at 12x12 plots): a phone low on memory keeps the whole yard, out to
+-- its far corners by the rail (~107 studs), while standing at the plot front (PlotService.spec).
 LoadingConfig.SpawnPoint = Vector3.new(0, 0, 26)
-LoadingConfig.StreamRadius = 96
+LoadingConfig.StreamRadius = 112
 
 LoadingConfig.Weights = { Game = 0.25, Character = 0.15, Persistent = 0.15, Spawn = 0.3, Assets = 0.15 }
 

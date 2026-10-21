@@ -389,9 +389,11 @@ function Gallery.build(Loader: any, parent: any)
 	local placed = {}
 	local belts = {}
 	local counts = {}
+	-- (bigger plots) the layout is on a 12-cell grid: keep it at the pad's centre
+	local gridShift = (GameConfig.PlotCells - 12) / 2
 	for _, entry in Gallery.Layout do
 		local model = MachineBuilder.build(entry.Id)
-		model:PivotTo(Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
+		model:PivotTo(Grid.localCFrame(entry.Id, entry.X + gridShift, entry.Z + gridShift, entry.R))
 		model.Parent = root
 		placed[entry.Id] = model
 		local n = 0

@@ -48,6 +48,16 @@
 	from the State snapshot (it carries MachineInventory, MachineUpgrades,
 	Upgrades, Placed, Build, Perks with the same shapes as the save), so the
 	cards always show what the server will quote.
+
+	The look is the Robux Shop's Pop kit (owner 2026-10-21: "new, modern,
+	colourful, clean items, Roblox style"; Pop.luau, PopTheme): a black
+	frame, the yellow header band (LightSkin.BandRoles "Build") with the
+	title, your coins and the red X, bright tabs (the picked one painted,
+	the others slate), every card painted in its machine's category colour
+	with the machine's live 3D picture (the build tray's BuildView.picture,
+	built when its tab first shows in the open shop: fillPicture) on a light
+	burst, the size / level chip, the detail line on a dark strip, the price
+	in gold and gold coin BUY buttons (MAX / OWNED / BOUGHT!: a green tag).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -57,12 +67,16 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
+local PictureModels = require(Shared.Builders.PictureModels)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local TrainView = require(script.Parent.TrainView)
+local BuildView = require(script.Parent.BuildView)
 
 local TechShopView = {}
 
@@ -359,7 +373,8 @@ type Metrics = {
 	DescriptionMin: number,
 	DetailMin: number,
 	Close: number,
-	TabGap: number, -- room between the tab bar's end and the X button (compact: they share rows)
+	Band: number, -- the header band's height (the title, your coins and the X sit in it)
+	TabGap: number, -- room between the tab bar's end and the X button (0: the X sits in the band)
 	Note: number, -- the list notes' text size, and the smallest it may shrink to
 	NoteMin: number,
 }
@@ -373,7 +388,7 @@ local METRICS: { [string]: Metrics } = {
 	Normal = {
 		Width = 920,
 		Height = 600,
-		Header = 82,
+		Header = 98, -- the band, then the line under it (the subtitle or the last buy)
 		TabBar = 62,
 		TabHeight = 48,
 		Footer = 30,
@@ -392,6 +407,7 @@ local METRICS: { [string]: Metrics } = {
 		DescriptionMin = 13,
 		DetailMin = 14,
 		Close = 54,
+		Band = 66,
 		TabGap = 0,
 		Note = 17,
 		NoteMin = 14,
@@ -400,7 +416,7 @@ local METRICS: { [string]: Metrics } = {
 	Compact = {
 		Width = 1080,
 		Height = 580,
-		Header = 64,
+		Header = 84, -- the band (the last buy sits next to the title)
 		TabBar = 84,
 		TabHeight = 72,
 		Footer = 6,
@@ -418,8 +434,9 @@ local METRICS: { [string]: Metrics } = {
 		DescriptionMin = 15,
 		DetailMin = 16,
 		Close = 72,
-		-- the X (72 high) reaches below the header: the tab bar ends left of it
-		TabGap = 72 + 20,
+		Band = 84,
+		-- (the X sits in the band: the tab bar spans the panel)
+		TabGap = 0,
 		Note = 20,
 		NoteMin = 16,
 	},
@@ -1250,20 +1267,51 @@ local DRAW: { [string]: (Frame) -> () } = {
 }
 
 --[[
-	A square icon (`size` design units): a dark tile with a little picture
-	of `kind` (a machine id, "Bellows", "Slots", "Billboard", "Train"; an
-	unknown kind gets a plain gear tile). `badge` "Speed" | "Quality" adds a
-	small badge in the bottom right corner.
+	The kind's live 3D picture (the Pop look): a machine id is the build
+	tray's own picture (BuildView.picture: the placed model; an uploaded
+	machine icon when there is one), "Train" the shop's locomotive
+	(PictureModels); nil for the kinds drawn from frames (DRAW: Bellows,
+	Slots, Billboard).
+]]
+local function pictureName(kind: string): string?
+	if MachineData.ById[kind] then
+		return if BuildView.hasIcon(kind) then BuildView.iconFor(kind) else "machine_" .. kind
+	elseif kind == "Train" then
+		return "train"
+	end
+	return nil
+end
+
+--[[
+	A square icon (`size` design units): a light burst and a soft glow with
+	the picture of `kind` on them: a machine's (or the train's) live 3D
+	picture (pictureName; the model is built once the card first shows:
+	TechShopView.fillPicture), else a little picture drawn from frames
+	("Bellows", "Slots", "Billboard"; an unknown kind gets a plain tile).
+	`badge` "Speed" | "Quality" adds a small badge in the bottom right corner.
 ]]
 function TechShopView.icon(parent: Instance, size: number, kind: string, badge: string?): Frame
 	local tile = UIKit.new("Frame", {
 		Name = "Icon",
 		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, parent)
-	UIKit.corner(tile, 12)
-	UIKit.stroke(tile, 2.5)
+	Pop.rays(tile, UDim2.fromScale(0.5, 0.5), 10, math.floor(size * 0.95), 0.45, 1)
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.68,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.9, 0.9),
+		ZIndex = 2,
+	}, tile)
+	UIKit.corner(glow, 999)
+	Pop.sparkle(tile, UDim2.fromScale(0.88, 0.12), 18, 5, 0.15)
+	Pop.sparkle(tile, UDim2.fromScale(0.1, 0.84), 13, 5, 0.35)
 	TechShopView.setIcon(tile, kind, badge)
 	return tile
 end
@@ -1275,9 +1323,11 @@ function TechShopView.setIcon(tile: Frame, kind: string, badge: string?)
 	end
 	tile:SetAttribute("Kind", kind)
 	tile:SetAttribute("Badge", badge or "")
-	local old = tile:FindFirstChild("Art")
-	if old then
-		old:Destroy()
+	for _, name in { "Art", "Picture" } do
+		local old = tile:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
 	end
 	local art = UIKit.new("Frame", {
 		Name = "Art",
@@ -1285,20 +1335,328 @@ function TechShopView.setIcon(tile: Frame, kind: string, badge: string?)
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(0.8, 0.8),
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 	}, tile)
-	local draw = DRAW[kind]
-	if draw then
-		draw(art)
+	local picture = pictureName(kind)
+	if picture then
+		-- the live 3D picture (an empty view until fillPicture builds its model)
+		Pop.model(tile, picture, 10, nil, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1.08, 1.08),
+			ZIndex = 3,
+		})
+		if BuildView.hasIcon(kind) then
+			local image = tile:FindFirstChild("Picture") :: ImageLabel
+			image.ScaleType = Enum.ScaleType.Fit
+			IconAssets.apply(image, picture)
+		end
 	else
-		bit(art, "Plain", 0.2, 0.2, 0.8, 0.8, C.Housing, 0.2)
+		local draw = DRAW[kind]
+		if draw then
+			draw(art)
+		else
+			bit(art, "Plain", 0.2, 0.2, 0.8, 0.8, C.Housing, 0.2)
+		end
 	end
 	if badge == "Speed" then
-		local b = bit(art, "Badge", 0.62, 0.66, 1.06, 1.1, Theme.Accent, 0.5)
+		local b = bit(art, "Badge", 0.7, 0.72, 1.1, 1.12, PopTheme.Paints.Orange.Bottom, 0.5)
+		b.ZIndex = 6
 		glyph(b, ">>", 0.12, 0.18, 0.88, 0.82, Theme.Text)
 	elseif badge == "Quality" then
-		local b = bit(art, "Badge", 0.64, 0.68, 1.04, 1.08, C.Gem, 0.2)
+		local b = bit(art, "Badge", 0.74, 0.76, 1.08, 1.1, C.Gem, 0.2)
 		b.Rotation = 45
+		b.ZIndex = 6
 	end
+end
+
+--[[
+	Builds an icon tile's live 3D model (once: a tile that has one keeps it,
+	until setIcon gives it another kind). The shop calls it for the cards of
+	the shown tab while the window is open (TechShopView.setCards), so a
+	closed shop builds no models.
+]]
+function TechShopView.fillPicture(tile: Frame)
+	local image = tile:FindFirstChild("Picture")
+	local view = if image then image:FindFirstChild("View") else nil
+	if not view or not view:IsA("ViewportFrame") or view:FindFirstChildOfClass("Model") then
+		return
+	end
+	local kind = tile:GetAttribute("Kind")
+	if type(kind) ~= "string" or BuildView.hasIcon(kind) then
+		return
+	end
+	if MachineData.ById[kind] then
+		local ok, model, cf = pcall(BuildView.picture, kind)
+		if ok then
+			local camera = Instance.new("Camera")
+			camera.FieldOfView = 30
+			camera.CFrame = cf
+			camera.Parent = view
+			pcall(function()
+				view.CurrentCamera = camera
+			end)
+			model.Parent = view
+		end
+	elseif kind == "Train" then
+		local model, from = PictureModels.build("train")
+		if model then
+			Pop.show(view, model, from)
+		end
+	end
+end
+
+---------------------------------------------------------------- the Pop look (the kit pieces this window needs)
+
+TechShopView.Paint = "Yellow" -- the header band: the shop's colour (LightSkin.BandRoles TerraForgeTechShop = "Build")
+-- each tab's paint (the picked tab is painted, the others slate: Pop.selectTab)
+TechShopView.TabPaints = { Machines = "Orange", Upgrades = "Blue", Automation = "Purple" } :: { [string]: string }
+-- the cards' paints: a machine (and its upgrades) by category, the rest by item
+TechShopView.CategoryPaints = { Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal" } :: { [string]: string }
+TechShopView.ItemPaints = { Bellows = "Pink", Slots = "Purple", Billboard = "Purple", Train = "Pink" } :: { [string]: string }
+
+local WHITE = Color3.new(1, 1, 1)
+local SOFT = Color3.fromRGB(214, 220, 232) -- quieter white text (hints)
+local ROW_CORNER = 12
+local DETAIL_PAD = 8 -- the detail strip's text inset (left and right)
+local HOLDER_KEYS = { Size = true, Position = true, AnchorPoint = true, LayoutOrder = true, Visible = true }
+local HOVER = Color3.fromRGB(236, 236, 236)
+local PRESS = Color3.fromRGB(200, 200, 200)
+
+-- The paint of a row: its machine's category, else its item's (Bellows, Slots, the automation steps).
+function TechShopView.rowPaint(kind: string): string
+	local machine = MachineData.ById[kind]
+	if machine then
+		return TechShopView.CategoryPaints[machine.Category] or "Orange"
+	end
+	return TechShopView.ItemPaints[kind] or "Purple"
+end
+
+-- A text's black edge (its Contextual UIStroke, made when missing).
+local function edgeOf(label: GuiObject): UIStroke
+	for _, child in label:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			return child
+		end
+	end
+	return Pop.edge(label)
+end
+
+-- White chunky text with a black edge (a UIKit label or button), or `color`.
+local function ink(label: GuiObject, color: Color3?, font: Font?)
+	local text: any = label
+	text.FontFace = font or PopTheme.Font
+	text.TextColor3 = color or PopTheme.Ink
+	local edge = edgeOf(label)
+	edge.Color = PopTheme.Outline
+	edge.Thickness = Pop.edgeFor(text.TextSize)
+	edge.Transparency = 0
+	edge.LineJoinMode = Enum.LineJoinMode.Round
+end
+
+-- A text in a Pop title gradient (PopTheme.Titles; it colours the glyphs).
+local function titleGradient(label: GuiObject, colors: string)
+	local keys = PopTheme.Titles[colors] or PopTheme.Titles.White
+	local gradient = label:FindFirstChild("Titles") :: UIGradient?
+	if not gradient then
+		gradient = UIKit.new("UIGradient", { Name = "Titles", Rotation = 90 }, label)
+	end
+	local g = gradient :: UIGradient
+	g.Color = ColorSequence.new(keys[1], keys[#keys])
+end
+
+--[[
+	A Pop button that keeps UIKit.button's shape: the returned TextButton
+	(clear, its own word: controllers and views set its Text, TextSize and
+	TextTransparency) fills its holder, and the holder is the painted face
+	(Pop.face: the glossy paint, the black border, the light rim, studs).
+	(A UIGradient on the button itself would tint its word too.) Size /
+	Position / AnchorPoint / LayoutOrder / Visible go on the holder (layouts
+	move it), the rest on the button. paintButton recolours the face.
+]]
+local function popButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local name = if props and type(props.Name) == "string" then props.Name else text
+	local face = UIKit.new("Frame", {
+		Name = name .. "Holder",
+		Size = UDim2.fromOffset(160, 52),
+		ZIndex = 4,
+	}, parent)
+	Pop.face(face, paint)
+	Pop.studs(face, PopTheme.Corner, 0.45, 28, 4)
+	local button = UIKit.new("TextButton", {
+		Name = "Button",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		FontFace = PopTheme.Font,
+		TextColor3 = PopTheme.Ink,
+		TextSize = 22,
+		Selectable = true,
+		ZIndex = 6,
+	}, face)
+	Pop.edge(button, 2.5)
+	if props then
+		for key, value in props do
+			local target: any = if HOLDER_KEYS[key] then face else button
+			if key ~= "Name" then
+				target[key] = value
+			end
+		end
+	end
+	-- hover / press darken the face (AutoButtonColor would only darken the clear button)
+	pcall(function()
+		local b: any = button
+		b:GetPropertyChangedSignal("GuiState"):Connect(function()
+			local state = b.GuiState
+			face.BackgroundColor3 = if state == Enum.GuiState.Press then PRESS elseif state == Enum.GuiState.Hover then HOVER else WHITE
+		end)
+	end)
+	return button
+end
+
+-- Recolours a popButton's face.
+local function paintButton(button: TextButton, paint: string | Pop.Paint)
+	local face = button.Parent
+	if face and face:IsA("GuiObject") then
+		Pop.repaint(face, paint)
+	end
+end
+
+--[[
+	The gold coin BUY button (Pop.coinButton's look on a popButton): the
+	yellow face with a drawn coin left of the word ("BUY", "BUY 5"); the
+	word's room starts right of the coin (CoinPad). setCoin shows / hides
+	the coin (a done card's MAX / OWNED, a BOUGHT! flash: no coin).
+]]
+local function coinButton(parent: Instance, props: { [string]: any }): TextButton
+	local button = popButton(parent, "BUY", "Yellow", props)
+	local face = button.Parent :: Frame
+	Pop.coin(face, 24, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		ZIndex = 5,
+	})
+	UIKit.new("UIPadding", { Name = "CoinPad", PaddingLeft = UDim.new(0, 30), PaddingRight = UDim.new(0, 4) }, button)
+	return button
+end
+
+-- Shows or hides a coin button's coin (`size` units across).
+local function setCoin(button: TextButton, show: boolean, size: number?)
+	local face = button.Parent
+	local coin = if face then face:FindFirstChild("Coin") else nil
+	if coin and coin:IsA("GuiObject") then
+		coin.Visible = show
+		if size then
+			coin.Size = UDim2.fromOffset(size, size)
+			local mark = coin:FindFirstChild("Mark")
+			if mark and mark:IsA("TextLabel") then
+				mark.TextSize = math.floor(size * 0.62)
+			end
+		end
+	end
+	local pad = button:FindFirstChild("CoinPad") :: UIPadding?
+	if pad then
+		local room = if coin and coin:IsA("GuiObject") then coin.Size.X.Offset + 10 else 30
+		pad.PaddingLeft = UDim.new(0, if show then room else 4)
+	end
+end
+
+--[[
+	The window's chrome on an old panel: the black frame, a dark studded
+	body and the bright header band (shine stripes, studs); both sit under
+	everything else (ZIndex 0). setBand sizes them for a band `band` tall.
+]]
+local function chrome(panel: Frame, paint: string | Pop.Paint)
+	panel.BackgroundColor3 = PopTheme.Outline
+	local old = panel:FindFirstChildOfClass("UIGradient")
+	if old then
+		old:Destroy()
+	end
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, PopTheme.WindowCorner)
+	end
+	local stroke = panel:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PopTheme.Outline
+		stroke.Thickness = 4
+	end
+	local body = UIKit.new("Frame", {
+		Name = "Body",
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, panel)
+	UIKit.corner(body, 4)
+	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
+	Pop.studs(body, 4, 0.5, 36, 0)
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		ZIndex = 0,
+	}, body)
+	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
+	local head = UIKit.new("Frame", {
+		Name = "Header",
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4, 4),
+		ClipsDescendants = true,
+		ZIndex = 0,
+	}, panel)
+	Pop.face(head, paint, 4, false)
+	local headBorder = head:FindFirstChild("Border") :: UIStroke
+	headBorder.Thickness = 3
+	Pop.studs(head, 4, 0.35, 40, 0)
+	UIKit.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0.42, 0),
+		ZIndex = 0,
+	}, head)
+	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
+			Rotation = 32,
+			Size = UDim2.new(0, s[2], 2.4, 0),
+			ZIndex = 0,
+		}, head)
+	end
+end
+
+-- Sizes the header band (`band` units tall, the frame included) and the body under it.
+local function setBand(panel: Frame, band: number)
+	local head = panel:FindFirstChild("Header") :: Frame?
+	local body = panel:FindFirstChild("Body") :: Frame?
+	if head and body then
+		head.Size = UDim2.new(1, -8, 0, band - 8)
+		body.Position = UDim2.fromOffset(4, band)
+		body.Size = UDim2.new(1, -8, 1, -(band + 4))
+	end
+end
+
+-- The title's 3D drop shadow (Pop.shadow), kept on the title as layouts move it.
+local function syncShadow(title: TextLabel)
+	local parent = title.Parent
+	local found = if parent then parent:FindFirstChild(title.Name .. "Shadow") else nil
+	local shade: TextLabel = if found and found:IsA("TextLabel") then found else Pop.shadow(title)
+	shade.Position = title.Position + UDim2.fromOffset(0, 4)
+	shade.Size = title.Size
+	shade.AnchorPoint = title.AnchorPoint
+	shade.Text = title.Text
+	shade.TextSize = title.TextSize
+	shade.TextXAlignment = title.TextXAlignment
+	shade.Visible = title.Visible
+	shade.ZIndex = math.max(1, title.ZIndex - 1)
 end
 
 ---------------------------------------------------------------- building
@@ -1307,11 +1665,23 @@ local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
 end
 
--- Colors a button: enabled in its own colors, or greyed out.
-local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-	button.BackgroundColor3 = if enabled then color else Theme.PanelLight
-	holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
-	button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
+--[[
+	Colours a button: enabled in its own colours, or greyed out. (The Pop
+	look: the colour picks the face's paint: Theme.Accent a gold coin BUY,
+	Theme.Good green, Theme.Bad red, Theme.Info blue; greyed out: grey.)
+]]
+local function style(button: TextButton, enabled: boolean, color: Color3, _dark: Color3)
+	local buy = color == Theme.Accent
+	local paint: string | Pop.Paint = if not enabled
+		then PopTheme.Gray
+		elseif color == Theme.Good then "Green"
+		elseif color == Theme.Bad then "Red"
+		elseif color == Theme.Info then "Blue"
+		else "Yellow"
+	paintButton(button, paint)
+	setCoin(button, buy)
+	button.TextColor3 = PopTheme.Ink
+	button.TextTransparency = if enabled then 0 else 0.25
 end
 TechShopView.style = style
 
@@ -1335,60 +1705,83 @@ function TechShopView.rowSpecs(): { RowSpec }
 end
 
 local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
+	-- a painted Pop card (its machine's category colour) that clips its light burst
 	local frame = UIKit.new("Frame", {
 		Name = spec.Id,
 		LayoutOrder = spec.Order,
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, refs.Lists[spec.Tab])
-	UIKit.corner(frame, 12)
-	UIKit.stroke(frame, 2.5)
+	Pop.face(frame, TechShopView.rowPaint(spec.Icon), ROW_CORNER, false)
+	Pop.studs(frame, ROW_CORNER, 0.5, 44, 1)
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
 	local icon = TechShopView.icon(frame, m.Icon, spec.Icon, spec.Badge)
 	local title = UIKit.label(frame, "", m.Title, {
 		Name = "ItemName",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
 	})
-	local chip = UIKit.chip(frame, "", Theme.PanelDark, { Name = "Chip" })
+	ink(title)
+	-- the chip: one bright colour (a gradient would tint its word), a black border
+	local chip = UIKit.chip(frame, "", Theme.PanelDark, { Name = "Chip", ZIndex = 4 })
+	for _, child in chip:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child:Destroy()
+		end
+	end
+	Pop.border(chip, 2)
+	ink(chip)
 	local description = UIKit.label(frame, "", m.Description, {
 		Name = "Description",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Theme.TextDim,
 		-- a longer text never runs into the detail line
 		ClipsDescendants = true,
+		ZIndex = 4,
 	})
-	local detail = UIKit.label(frame, "", m.Detail, {
-		Name = "Detail",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	})
-	local status = UIKit.label(frame, "", m.Detail, {
-		Name = "Status",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Visible = false,
-	})
+	ink(description)
+	-- the detail and status lines: a dark strip, so every colour reads on every paint
+	local function strip(name: string, visible: boolean): TextLabel
+		local line = UIKit.label(frame, "", m.Detail, {
+			Name = name,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			BackgroundColor3 = PopTheme.Well,
+			BackgroundTransparency = 0.25,
+			Visible = visible,
+			ZIndex = 4,
+		})
+		UIKit.corner(line, 8)
+		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, DETAIL_PAD), PaddingRight = UDim.new(0, DETAIL_PAD) }, line)
+		ink(line)
+		return line
+	end
+	local detail = strip("Detail", true)
+	local status = strip("Status", false)
 	local price = UIKit.label(frame, "", 22, {
 		Name = "Price",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.Coin,
 		TextWrapped = false,
+		ZIndex = 4,
 	})
+	ink(price, WHITE, PopTheme.Heavy)
+	titleGradient(price, "Gold")
 	local priceSub = UIKit.label(frame, "", 14, {
 		Name = "PriceSub",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
+		ZIndex = 4,
 	})
+	ink(priceSub)
 	local buttons: { TextButton } = {}
 	for i = 1, math.max(1, spec.Buttons) do
-		table.insert(buttons, UIKit.button(frame, "BUY", Theme.Accent, Theme.AccentDark, { Name = "Buy" .. i }))
+		table.insert(buttons, coinButton(frame, { Name = "Buy" .. i }))
 	end
 	local row: Row = {
 		Id = spec.Id,
@@ -1427,38 +1820,43 @@ local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
 	return row
 end
 
--- The note at the top of a list (TechShopView.setWhere fills it).
+-- The note at the top of a list (TechShopView.setWhere fills it): a dark well with white words.
 local function listNote(list: ScrollingFrame): TextLabel
 	local note = UIKit.label(list, "", 17, {
 		Name = "Note",
 		LayoutOrder = -1,
-		BackgroundTransparency = 0,
-		BackgroundColor3 = Theme.PanelDark,
-		TextColor3 = Theme.Text,
+		BackgroundTransparency = 0.1,
+		BackgroundColor3 = PopTheme.Well,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Visible = false,
+		ZIndex = 3,
 	})
 	UIKit.corner(note, 10)
+	Pop.border(note, 2.5)
 	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, NOTE_PAD), PaddingRight = UDim.new(0, NOTE_PAD) }, note)
+	ink(note)
 	return note
 end
 
 local function groupHeader(list: ScrollingFrame, text: string, order: number): TextLabel
-	return UIKit.label(list, text, 20, {
+	local header = UIKit.label(list, text, 22, {
 		Name = "Group",
 		LayoutOrder = order,
-		Size = UDim2.new(1, -SCROLLBAR, 0, 30),
+		Size = UDim2.new(1, -SCROLLBAR, 0, 32),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
+		ZIndex = 3,
 	})
+	ink(header, WHITE, PopTheme.Heavy)
+	titleGradient(header, "Gold")
+	return header
 end
 
 function TechShopView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeTechShop", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("Pop", true)
 
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
@@ -1473,62 +1871,77 @@ function TechShopView.build(compact: boolean?): Refs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	})
+	chrome(panel, TechShopView.Paint)
 	local title = UIKit.label(panel, "TECH SHOP", 34, {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
+		ZIndex = 3,
 	})
+	ink(title)
 	local subtitle = UIKit.label(panel, "Machines and upgrades for your base. Machines you buy wait in your Build menu.", 16, {
 		Name = "Subtitle",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
+	ink(subtitle, SOFT)
 	local receipt = UIKit.label(panel, "", 17, {
 		Name = "Receipt",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Good,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Visible = false,
+		ZIndex = 3,
+		-- a dark pill behind it: any message colour reads on the band or the body
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.2,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
+	UIKit.corner(receipt, 8)
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, receipt)
+	ink(receipt, Theme.Good)
+	local close = popButton(panel, "X", PopTheme.Close, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
-		TextSize = 26,
+		TextSize = 32,
+		FontFace = PopTheme.Heavy,
 	})
-	-- your coins, next to the close button (the HUD's may be covered on phones)
+	-- your coins, next to the close button (the HUD's may be covered on phones): a dark well
 	local balance = UIKit.new("Frame", {
 		Name = "Balance",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
+		BackgroundColor3 = PopTheme.Well,
 		BorderSizePixel = 0,
+		ZIndex = 3,
 	}, panel)
 	UIKit.corner(balance, 10)
-	UIKit.stroke(balance, 2)
-	local coin = HudView.coinIcon(balance, 26)
-	coin.Position = UDim2.fromOffset(8, 7)
+	Pop.border(balance, 3)
+	Pop.coin(balance, 28, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		ZIndex = 4,
+	})
 	local balanceAmount = UIKit.label(balance, "$0", 24, {
 		Name = "Amount",
 		Position = UDim2.fromOffset(42, 0),
 		Size = UDim2.new(1, -50, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Coin,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
 	})
+	ink(balanceAmount, PopTheme.Money, PopTheme.Heavy)
 
-	-- tabs
+	-- tabs: bright Pop tabs (the picked one painted, the others slate)
 	local tabBar = UIKit.new("Frame", {
 		Name = "TabBar",
 		BackgroundTransparency = 1,
+		ZIndex = 2,
 	}, panel)
 	local tabs: { [string]: TextButton } = {}
 	for _, tab in TABS do
-		tabs[tab] = UIKit.button(tabBar, TechShopView.TabTitles[tab], Theme.Accent, Theme.AccentDark, {
+		tabs[tab] = popButton(tabBar, TechShopView.TabTitles[tab], TechShopView.TabPaints[tab], {
 			Name = "Tab" .. tab,
 			TextSize = 22,
 		})
@@ -1543,7 +1956,7 @@ function TechShopView.build(compact: boolean?): Refs
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Size = UDim2.fromOffset(34, 34),
 				Visible = false,
-				ZIndex = 4,
+				ZIndex = 7,
 			}, tabBar)
 		)
 	end
@@ -1556,12 +1969,13 @@ function TechShopView.build(compact: boolean?): Refs
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollBarThickness = 8,
-			ScrollBarImageColor3 = Theme.Accent,
+			ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 			ScrollingDirection = Enum.ScrollingDirection.Y,
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			CanvasSize = UDim2.new(),
 			Selectable = false,
 			Visible = tab == "Machines",
+			ZIndex = 2,
 		}, panel)
 		UIKit.list(list, Enum.FillDirection.Vertical, GAP)
 		UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, list)
@@ -1579,9 +1993,10 @@ function TechShopView.build(compact: boolean?): Refs
 	local hint = UIKit.label(panel, "", 15, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
+		ZIndex = 3,
 	})
+	ink(hint, SOFT)
 	-- gamepads: the platform's own button glyphs (Xbox or PlayStation), set by the controller
 	local padHint = UIKit.new("Frame", {
 		Name = "PadHint",
@@ -1589,6 +2004,7 @@ function TechShopView.build(compact: boolean?): Refs
 		Size = UDim2.fromOffset(460, 24),
 		BackgroundTransparency = 1,
 		Visible = false,
+		ZIndex = 3,
 	}, panel)
 	UIKit.list(padHint, Enum.FillDirection.Horizontal, 6, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -1605,19 +2021,21 @@ function TechShopView.build(compact: boolean?): Refs
 				LayoutOrder = order,
 				Size = UDim2.fromOffset(24, 24),
 				BackgroundTransparency = 1,
+				ZIndex = 3,
 			}, padHint)
 		)
 	end
 	local function padWord(text: string, width: number)
 		order += 1
-		UIKit.label(padHint, text, 15, {
+		local word = UIKit.label(padHint, text, 15, {
 			Name = "Word",
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(width, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
+			ZIndex = 3,
 		})
+		ink(word, SOFT)
 	end
 	padGlyph("L")
 	padGlyph("R")
@@ -1662,6 +2080,10 @@ function TechShopView.build(compact: boolean?): Refs
 	TechShopView.setTab(refs, "Machines")
 	TechShopView.setWhere(refs, "Counter")
 	TechShopView.layout(refs, refs.Compact, math.huge, math.huge)
+	-- (the light UI: an open window hides the touch thumbstick)
+	if UIConfig.lightUI() then
+		TouchControls.follow(gui)
+	end
 	return refs
 end
 
@@ -1711,11 +2133,11 @@ local function fitNotes(refs: Refs)
 end
 
 --[[
-	One row (`rowWidth` design units wide): icon | title + chip, description
-	(three lines), detail | price | buttons. Normal: the price sits left of
-	the buttons, both centred. Compact (phones): the buttons sit at the
-	bottom right with the price above them, so the text gets the price
-	column's room.
+	One row (`rowWidth` design units wide): picture | title + chip,
+	description (three lines), the detail strip | price | buttons. Normal:
+	the price sits left of the buttons, both centred. Compact (phones): the
+	buttons sit at the bottom right with the price above them, so the text
+	gets the price column's room.
 ]]
 local function placeRow(row: Row, m: Metrics, compact: boolean, rowWidth: number)
 	local h = m.Row
@@ -1725,14 +2147,17 @@ local function placeRow(row: Row, m: Metrics, compact: boolean, rowWidth: number
 	local n = #row.Buttons
 	local each = if n > 1 then m.PackWidth else m.BuyWidth
 	local buttons = buttonsWidth(row, m)
-	-- the face sits 5 units above its lip
-	local buttonTop = if compact then h - m.Button - 8 else (h - m.Button) / 2 + 2
+	local buttonTop = if compact then h - m.Button - 10 else (h - m.Button) / 2
+	local coin = math.floor(m.Button * 0.44)
 	for i, button in row.Buttons do
 		local holder = holderOf(button)
 		holder.AnchorPoint = Vector2.new(1, 0)
 		holder.Position = UDim2.new(1, -(10 + (n - i) * (each + GAP)), 0, buttonTop)
 		holder.Size = UDim2.fromOffset(each, m.Button)
 		button.TextSize = if compact then 22 else 20
+		local face = holderOf(button)
+		local mark = face:FindFirstChild("Coin")
+		setCoin(button, mark ~= nil and mark:IsA("GuiObject") and mark.Visible, coin)
 	end
 	local textRight: number
 	local priceWidth: number
@@ -1741,20 +2166,20 @@ local function placeRow(row: Row, m: Metrics, compact: boolean, rowWidth: number
 	if compact then
 		priceWidth = buttons
 		row.Price.Position = UDim2.new(1, -12, 0, 6)
-		row.Price.Size = UDim2.fromOffset(buttons, 28)
-		row.PriceSub.Position = UDim2.new(1, -12, 0, 34)
+		row.Price.Size = UDim2.fromOffset(buttons, 30)
+		row.PriceSub.Position = UDim2.new(1, -12, 0, 36)
 		row.PriceSub.Size = UDim2.fromOffset(buttons, 18)
 		textRight = 10 + buttons + 14
 	else
 		priceWidth = m.PriceWidth
 		local right = 10 + buttons + 10
-		row.Price.Position = UDim2.new(1, -right, 0, h / 2 - 22)
-		row.Price.Size = UDim2.fromOffset(m.PriceWidth, 26)
+		row.Price.Position = UDim2.new(1, -right, 0, h / 2 - 24)
+		row.Price.Size = UDim2.fromOffset(m.PriceWidth, 28)
 		row.PriceSub.Position = UDim2.new(1, -right, 0, h / 2 + 4)
 		row.PriceSub.Size = UDim2.fromOffset(m.PriceWidth, 18)
 		textRight = right + m.PriceWidth + 10
 	end
-	row.Price.TextSize = if compact then 24 else 22
+	row.Price.TextSize = if compact then 26 else 24
 	local left = m.Icon + 22
 	local chipWidth = m.ChipWidth
 	row.Chip.AnchorPoint = Vector2.new(1, 0)
@@ -1771,14 +2196,15 @@ local function placeRow(row: Row, m: Metrics, compact: boolean, rowWidth: number
 	-- up to the buttons
 	local detailInset = left + (if compact then textRight else 10 + buttons + 14)
 	for _, line in { row.Detail, row.Status } do
-		line.Position = UDim2.fromOffset(left, h - detailHeight - 8)
-		line.Size = UDim2.new(1, -detailInset, 0, detailHeight)
+		line.Position = UDim2.fromOffset(left - 6, h - detailHeight - 8)
+		line.Size = UDim2.new(1, -(detailInset - 6), 0, detailHeight)
 	end
 	row.Boxes = {
 		TitleWidth = rowWidth - titleInset,
 		DescriptionWidth = rowWidth - (left + textRight),
 		DescriptionHeight = descriptionHeight,
-		DetailWidth = rowWidth - detailInset,
+		-- (the strip's text inset off its width)
+		DetailWidth = rowWidth - (detailInset - 6) - DETAIL_PAD * 2,
 		DetailHeight = detailHeight,
 		PriceWidth = priceWidth,
 		Title = m.Title,
@@ -1795,7 +2221,9 @@ end
 --[[
 	Sizes everything for the normal or compact (phone) layout and fits the
 	panel into `maxWidth` x `maxHeight` design units (the screen divided by
-	the UI scale; math.huge = no limit).
+	the UI scale; math.huge = no limit). The header band holds the title,
+	your coins and the X; the line under it (the subtitle or the last buy)
+	sits on the body (phones: the last buy next to the title, in the band).
 ]]
 function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
@@ -1823,41 +2251,47 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		refs.Panel.Position = UDim2.fromScale(0.5, 0.5)
 	end
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	setBand(refs.Panel, m.Band)
 
+	-- the X and your coins, centred in the band
 	local close = holderOf(refs.Close)
 	close.Size = UDim2.fromOffset(m.Close, m.Close)
-	close.Position = UDim2.new(1, -PAD, 0, if compact then 6 else 14)
-	local balanceWidth = if compact then 190 else 176
-	refs.Balance.Size = UDim2.fromOffset(balanceWidth, 40)
-	refs.Balance.Position = UDim2.new(1, -(PAD + m.Close + 12), 0, if compact then 14 else 16)
-	local headRight = PAD + m.Close + 12 + balanceWidth + 12
-	refs.Title.TextSize = if compact then 30 else 34
-	refs.Title.Position = UDim2.fromOffset(PAD, if compact then 10 else 8)
-	refs.Title.Size = UDim2.new(1, -(PAD + headRight), 0, 40)
-	refs.Subtitle.Position = UDim2.fromOffset(PAD, 50)
-	refs.Subtitle.Size = UDim2.new(1, -(PAD * 2 + m.Close), 0, 22)
+	close.Position = UDim2.new(1, -12, 0, math.floor((m.Band - m.Close) / 2))
+	refs.Close.TextSize = math.floor(m.Close * 0.62)
+	local balanceWidth = if compact then 196 else 182
+	local balanceHeight = if compact then 48 else 42
+	refs.Balance.Size = UDim2.fromOffset(balanceWidth, balanceHeight)
+	refs.Balance.Position = UDim2.new(1, -(12 + m.Close + 12), 0, math.floor((m.Band - balanceHeight) / 2))
+	refs.BalanceAmount.TextSize = if compact then 28 else 26
+	local headRight = 12 + m.Close + 12 + balanceWidth + 12
+	refs.Title.TextSize = if compact then 32 else 36
+	refs.Title.Position = UDim2.fromOffset(PAD, 0)
+	refs.Title.Size = UDim2.new(1, -(PAD + headRight), 0, m.Band)
+	refs.Subtitle.Position = UDim2.fromOffset(PAD, m.Band + 4)
+	refs.Subtitle.Size = UDim2.new(1, -PAD * 2, 0, 24)
 	refs.Subtitle.Visible = not compact and not refs.Receipt.Visible
 	if compact then
-		-- next to the title (no room for a second header line)
+		-- next to the title, in the band (no room for a second header line)
 		local titleWidth = 250
-		refs.Title.Size = UDim2.fromOffset(titleWidth, 40)
-		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth, 4)
-		refs.Receipt.Size = UDim2.new(1, -(PAD + titleWidth + headRight), 0, 56)
+		refs.Title.Size = UDim2.fromOffset(titleWidth, m.Band)
+		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth, 10)
+		refs.Receipt.Size = UDim2.new(1, -(PAD + titleWidth + headRight), 0, m.Band - 20)
 		refs.Receipt.TextWrapped = true
 		refs.Receipt.TextTruncate = Enum.TextTruncate.None
 		refs.Receipt.TextSize = 18
-		refs.ReceiptBox = Vector2.new(width - (PAD + titleWidth + headRight), 56)
+		refs.ReceiptBox = Vector2.new(width - (PAD + titleWidth + headRight) - 16, m.Band - 20)
 	else
-		refs.Receipt.Position = UDim2.fromOffset(PAD, 50)
-		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + m.Close), 0, 24)
+		refs.Receipt.Position = UDim2.fromOffset(PAD, m.Band + 3)
+		refs.Receipt.Size = UDim2.new(1, -PAD * 2, 0, 26)
 		refs.Receipt.TextWrapped = false
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
-		refs.ReceiptBox = Vector2.new(width - (PAD * 2 + m.Close), 24)
+		refs.ReceiptBox = Vector2.new(width - PAD * 2 - 16, 24)
 	end
+	syncShadow(refs.Title)
 
 	-- tabs: three equal buttons, room for the LB / RB glyphs at the ends;
-	-- compact: the bar ends left of the X button (it reaches down beside it)
+	-- compact: the bar ends left of the X button (TabGap)
 	refs.TabBar.Position = UDim2.fromOffset(PAD, m.Header)
 	refs.TabBar.Size = UDim2.new(1, -(PAD * 2 + m.TabGap), 0, m.TabBar)
 	-- each tab: share * W - fixed; tab i starts at inset + (i - 1) * (its width + GAP)
@@ -1869,10 +2303,10 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		local holder = holderOf(refs.Tabs[tab])
 		holder.Position = UDim2.new(share * (i - 1), inset + (i - 1) * (GAP - fixed), 0, 6)
 		holder.Size = UDim2.new(share, -fixed, 0, m.TabHeight)
-		refs.Tabs[tab].TextSize = if compact then 24 else 22
+		refs.Tabs[tab].TextSize = if compact then 26 else 24
 	end
-	refs.TabGlyphs[1].Position = UDim2.new(0, 12, 0, 6 + m.TabHeight / 2 - 3)
-	refs.TabGlyphs[2].Position = UDim2.new(1, -12, 0, 6 + m.TabHeight / 2 - 3)
+	refs.TabGlyphs[1].Position = UDim2.new(0, 12, 0, 6 + m.TabHeight / 2)
+	refs.TabGlyphs[2].Position = UDim2.new(1, -12, 0, 6 + m.TabHeight / 2)
 
 	local listTop = m.Header + m.TabBar
 	for _, list in refs.Lists do
@@ -1900,16 +2334,15 @@ end
 
 ---------------------------------------------------------------- filling in
 
--- Shows one tab's list and marks its tab button.
+-- Shows one tab's list and paints its tab button (the others slate).
 function TechShopView.setTab(refs: Refs, tab: string)
 	refs.Tab = tab
 	for _, name in TABS do
 		local on = name == tab
 		refs.Lists[name].Visible = on
 		local button = refs.Tabs[name]
-		button.BackgroundColor3 = if on then Theme.Accent else Theme.PanelLight
-		holderOf(button).BackgroundColor3 = if on then Theme.AccentDark else Theme.PanelDark
-		button.TextColor3 = if on then Theme.Text else Theme.TextDim
+		paintButton(button, if on then TechShopView.TabPaints[name] else "Slate")
+		button.TextTransparency = if on then 0 else 0.25
 	end
 end
 
@@ -1946,19 +2379,33 @@ function TechShopView.setDevice(refs: Refs, device: Device)
 	TechShopView.setWhere(refs, refs.Where)
 end
 
+-- A card colour (Theme) as a colour that reads on the dark strip.
+local function bright(color: Color3): Color3
+	if color == Theme.Bad then
+		return PopTheme.Titles.Red[1]
+	elseif color == Theme.Good or color == Theme.GoodDark then
+		return PopTheme.Money
+	elseif color == Theme.Accent or color == Theme.Coin then
+		return PopTheme.Titles.Gold[1]
+	elseif color == Theme.TextDim then
+		return SOFT
+	end
+	return PopTheme.Ink
+end
+
 local function fillRow(row: Row, card: Card)
 	row.Card = card
 	row.Frame.LayoutOrder = card.Order
 	row.Title.Text = string.upper(card.Title)
 	row.Chip.Text = card.Chip
-	row.Chip.BackgroundColor3 = card.ChipColor
+	row.Chip.BackgroundColor3 = if card.ChipColor == Theme.PanelDark then PopTheme.Paints.Slate.Bottom else card.ChipColor
 	row.Description.Text = card.Description
 	row.Detail.Text = card.Detail
-	row.Detail.TextColor3 = card.DetailColor
+	row.Detail.TextColor3 = bright(card.DetailColor)
 	row.Price.Text = card.PriceText
-	row.Price.TextColor3 = card.PriceColor
+	titleGradient(row.Price, if card.PriceColor == Theme.Bad then "Red" else "Gold")
 	row.PriceSub.Text = card.PriceSub
-	row.PriceSub.TextColor3 = card.PriceSubColor
+	row.PriceSub.TextColor3 = if card.PriceSubColor == Theme.Bad then PopTheme.Titles.Red[1] else PopTheme.Ink
 	TechShopView.setIcon(row.Icon, card.Icon, card.Badge)
 	for i, button in row.Buttons do
 		local buy = card.Buys[i]
@@ -1968,8 +2415,8 @@ local function fillRow(row: Row, card: Card)
 		if buy and button:GetAttribute("Busy") ~= true then
 			button.Text = buy.Text
 			if card.Done then
-				style(button, false, Theme.Good, Theme.GoodDark)
-				button.TextColor3 = Theme.Good
+				-- MAX / OWNED: a green tag
+				style(button, true, Theme.Good, Theme.GoodDark)
 			else
 				style(button, buy.CanBuy, Theme.Accent, Theme.AccentDark)
 			end
@@ -1978,12 +2425,17 @@ local function fillRow(row: Row, card: Card)
 	fitRow(row)
 end
 
--- Fills every row from TechShopView.cards (rows with no card keep their last content).
+-- Fills every row from TechShopView.cards (rows with no card keep their
+-- last content); while the window is open the shown tab's cards get their
+-- live 3D pictures (TechShopView.fillPicture, built once).
 function TechShopView.setCards(refs: Refs, cards: { Card })
 	for _, card in cards do
 		local row = refs.Rows[card.Id]
 		if row then
 			fillRow(row, card)
+			if refs.Gui.Enabled and row.Tab == refs.Tab then
+				TechShopView.fillPicture(row.Icon)
+			end
 		end
 	end
 end
@@ -2001,7 +2453,10 @@ function TechShopView.setStatus(refs: Refs, rowId: string, text: string?, color:
 	row.Status.Visible = text ~= nil
 	row.Detail.Visible = text == nil
 	row.Status.Text = text or ""
-	row.Status.TextColor3 = color or Theme.Text
+	row.Status.TextColor3 = if color then bright(color) else PopTheme.Ink
+	if color == Theme.Info then
+		row.Status.TextColor3 = PopTheme.Titles.Cyan[1]
+	end
 	local b = row.Boxes
 	if b.DetailWidth > 0 then
 		TechShopView.fitText(row.Status, b.DetailWidth, b.DetailHeight, b.Detail, b.DetailMin)
@@ -2026,7 +2481,7 @@ function TechShopView.setHint(refs: Refs, text: string, glyphs: { string }?)
 	refs.PadHint.Visible = not refs.Compact and refs.PadMode
 end
 
--- Shows a message in the header (instead of the subtitle).
+-- Shows a message (instead of the subtitle).
 function TechShopView.showReceipt(refs: Refs, text: string, color: Color3)
 	refs.Receipt.Text = text
 	refs.Receipt.TextColor3 = color
@@ -2085,19 +2540,6 @@ function TechShopView.touchTargets(refs: Refs): { GuiObject }
 		end
 	end
 	return list
-end
-
----------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin: white panels, navy outlines, dark text, light buttons).
-local darkBuild = TechShopView.build
-TechShopView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
-	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
-		TouchControls.follow(refs.Gui)
-	end
-	return refs
 end
 
 return TechShopView

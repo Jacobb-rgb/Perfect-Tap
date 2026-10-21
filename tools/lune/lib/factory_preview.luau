@@ -82,6 +82,14 @@ function Factory.build(Loader: any, parent: any, level: number?)
 	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
 	local Old = require("./machines_gallery")
 	local CELL = GameConfig.CellSize
+	-- (bigger plots) the cells here are on a 12-cell grid: a bigger one moves
+	-- them with it (BaseLayout.GridShift across, PlotCells - 12 back), where a
+	-- migrated save's machines sit
+	local SX, SZ = (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
+	local machines = {}
+	for i, entry in Factory.Machines do
+		machines[i] = { Id = entry.Id, X = entry.X + SX, Z = entry.Z + SZ, R = entry.R }
+	end
 
 	local plot = { Id = 1, Center = V3.new(0, 0.3, 0), Facing = V3.new(0, 0, -1) }
 	local plotCF = CF.lookAt(plot.Center, plot.Center + plot.Facing)
@@ -95,7 +103,7 @@ function Factory.build(Loader: any, parent: any, level: number?)
 	Old.paintGuis(Loader, root, plotModel)
 
 	local models = {}
-	for i, entry in Factory.Machines do
+	for i, entry in machines do
 		local info = MachineData.ById[entry.Id]
 		local look = if info.Upgrades and level then level else 0
 		local model = MachineBuilder.build(entry.Id, look)
@@ -111,7 +119,7 @@ function Factory.build(Loader: any, parent: any, level: number?)
 	-- the moving parts caught mid-move, posed the way MachineFxController moves
 	-- them: the Robot Arm half way round with a Gold ingot ball in its hand,
 	-- the Splitter's flipper turned toward the side its last item left by
-	for i, entry in Factory.Machines do
+	for i, entry in machines do
 		local model = models[i]
 		local base = model.PrimaryPart
 		if entry.Id == "RobotArm" then
@@ -143,7 +151,7 @@ function Factory.build(Loader: any, parent: any, level: number?)
 		end
 	end
 	for i, it in Factory.Items do
-		local cf = plotCF * Grid.localCFrame("Conveyor", it.X, it.Z, 0) * CF.new(0, 1.05, it.T * CELL)
+		local cf = plotCF * Grid.localCFrame("Conveyor", it.X + SX, it.Z + SZ, 0) * CF.new(0, 1.05, it.T * CELL)
 		local model = if it.D.K == "Clean"
 			then ItemBuilder.display(it.D, cf * CF.Angles(0, 0.6 * i, 0), i)
 			else ItemBuilder.build({ Kind = it.D.K, OreId = it.D.O, Grade = it.D.G }, cf * CF.Angles(0, 0.4 * i, 0), i)
@@ -155,7 +163,7 @@ function Factory.build(Loader: any, parent: any, level: number?)
 	-- linked poles, one from the nearest insulator down to the top of each
 	-- machine / generator a pole feeds; Beams in game, parts here)
 	local PowerLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.PowerLogic")
-	local result = PowerLogic.compute(Factory.Machines, {})
+	local result = PowerLogic.compute(machines, {})
 	local function insulator(pole: any, toward: any): any
 		local l, r = cablePoint(pole, "CableL"), cablePoint(pole, "CableR")
 		return if (l - toward).Magnitude <= (r - toward).Magnitude then l else r
@@ -190,7 +198,7 @@ function Factory.build(Loader: any, parent: any, level: number?)
 	for _, net in result.Networks do
 		print(string.format("  network %s: supply %d, demand %d, speed %.2f", net.Id, net.Supply, net.Demand, net.Speed))
 	end
-	print(string.format("Factory: %d machines, %d pole links, %d feeds", #Factory.Machines, links, feeds))
+	print(string.format("Factory: %d machines, %d pole links, %d feeds", #machines, links, feeds))
 	return root
 end
 

@@ -1868,6 +1868,7 @@ function WheelView.build(compact: boolean): Refs
 		ZIndex = 30,
 	}, panel)
 	Pop.face(result, "Night", 14, false)
+	result:SetAttribute("Motion", "PopIn") -- (UIMotionController: it bounces in each time it shows)
 	local resultBorder = result:FindFirstChild("Border") :: UIStroke
 	resultBorder.Thickness = 4
 	local resultRays = rays(result, 8, 30)

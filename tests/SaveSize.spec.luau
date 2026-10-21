@@ -35,14 +35,18 @@ return function(T, Loader)
 		for _ = 1, GameConfig.MaxStoredItems do
 			table.insert(d.Storage, item())
 		end
-		local cells = GameConfig.PlotCells * GameConfig.PlotCells
+		local side = GameConfig.PlotCells
+		local cells = side * side
 		for i = 1, cells do
 			local queueIn, queueOut = {}, {}
 			for _ = 1, 4 do
 				table.insert(queueIn, item())
 				table.insert(queueOut, item())
 			end
-			table.insert(d.PlacedMachines, { Id = "CrystalExtractor", X = i % 12, Z = i // 12, R = 3, In = queueIn, Out = queueOut, C = "Legendary" })
+			table.insert(
+				d.PlacedMachines,
+				{ Id = "CrystalExtractor", X = i % side, Z = i // side, R = 3, In = queueIn, Out = queueOut, C = "Legendary" }
+			)
 		end
 		for id in MachineData.ById do
 			d.MachineInventory[id] = MachineData.MaxInventory
@@ -74,7 +78,11 @@ return function(T, Loader)
 	T.test("SaveSize: a save at every cap stays far under the DataStore limit", function()
 		local data = maxedSave()
 		T.truthy(ProfileStore.storable(data), "the maxed save is storable")
-		local record = { Data = data, Lock = { JobId = string.rep("0", 36), SessionId = string.rep("0", 36) .. "#999#1760000000", Time = 1760000000 }, Saved = 1760000000 }
+		local record = {
+			Data = data,
+			Lock = { JobId = string.rep("0", 36), SessionId = string.rep("0", 36) .. "#999#1760000000", Time = 1760000000 },
+			Saved = 1760000000,
+		}
 		local bytes = #serde.encode("json", record)
 		print(`  [SaveSize] maxed save: {math.floor(bytes / 1024)} KB of {math.floor(T.Limit / 1024)} KB allowed (Roblox: 4096 KB)`)
 		T.le(bytes, T.Limit, "maxed save bytes")

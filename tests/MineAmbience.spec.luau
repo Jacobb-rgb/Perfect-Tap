@@ -113,7 +113,7 @@ return function(T, Loader)
 		T.eq(MineAmbience.Tag, "AmbienceSpot", "AmbienceConfig.Tag")
 		T.eq(MineAmbience.Attribute, "Ambience", "AmbienceConfig.Attribute")
 		T.eq(MineAmbience.MaxEarshot, 90, "AmbienceConfig.MaxEarshot")
-		T.truthy(MineAmbience.MaxEarshot < 96, "heard only inside Workspace.StreamingMinRadius (96)")
+		T.truthy(MineAmbience.MaxEarshot < 96, "heard well inside Workspace.StreamingMinRadius (112)")
 		local seen = 0
 		for kind, layers in MineAmbience.Kinds do
 			seen += 1

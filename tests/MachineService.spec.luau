@@ -11,6 +11,7 @@ return function(T, Loader)
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 	local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
@@ -289,7 +290,7 @@ return function(T, Loader)
 			{ Id = "ClayFurnace", X = 0, Z = 0, R = 0, In = { desc("Clean") } },
 			{ Id = "Crusher", X = 1, Z = 1, R = 0, Out = { desc("Crushed") } }, -- overlaps the furnace
 			{ Id = "FutureMachine", X = 6, Z = 6, R = 0 },
-			{ Id = "Anvil", X = 11, Z = 0, R = 0 }, -- sticks out of the plot
+			{ Id = "Anvil", X = GameConfig.PlotCells - 1, Z = 0, R = 0 }, -- sticks out of the plot
 		}
 		w.data[w.player] = data
 		local since = os.clock()
@@ -317,10 +318,12 @@ return function(T, Loader)
 
 	withWorld("MachineService: machines on the new chutes get their own toast", function(w)
 		local data = newData()
+		local px, pz = BaseLayout.chuteCell("Pen")
+		local tx, tz = BaseLayout.chuteCell("Train")
 		data.PlacedMachines = {
-			{ Id = "Crusher", X = 2, Z = 10, R = 0 }, -- covers the PEN chute (3, 11)
-			{ Id = "Conveyor", X = 6, Z = 11, R = 0 }, -- belts may stand on a chute
-			{ Id = "ClayFurnace", X = 11, Z = 0, R = 0 }, -- sticks out of the plot
+			{ Id = "Crusher", X = px - 1, Z = pz - 1, R = 0 }, -- covers the PEN chute
+			{ Id = "Conveyor", X = tx, Z = tz, R = 0 }, -- belts may stand on a chute
+			{ Id = "ClayFurnace", X = GameConfig.PlotCells - 1, Z = 0, R = 0 }, -- sticks out of the plot
 		}
 		w.data[w.player] = data
 		local since = os.clock()
@@ -380,7 +383,7 @@ return function(T, Loader)
 		T.eq(overlap, "Overlap", "overlap")
 		local _, none = MachineService.place(w.player, "Anvil", 6, 6, 0)
 		T.eq(none, "NoneOwned", "not owned")
-		local _, outside = MachineService.place(w.player, "ClayFurnace", 11, 0, 0)
+		local _, outside = MachineService.place(w.player, "ClayFurnace", GameConfig.PlotCells - 1, 0, 0)
 		T.eq(outside, "OutOfBounds", "out of bounds")
 		T.eq(data.MachineInventory.ClayFurnace, 1, "failed places change nothing")
 		T.eq(#data.PlacedMachines, 1, "still one placed")
@@ -398,7 +401,7 @@ return function(T, Loader)
 		covers(m)
 		sameCFrame(m.Model:GetPivot(), PlotService.footprintCFrame(PLOT, "ClayFurnace", 6, 6, 1), "moved pivot")
 		T.eq(count(log, "moved"), 1, "moved hook")
-		local _, blocked = MachineService.move(m, 11, 11, 0)
+		local _, blocked = MachineService.move(m, GameConfig.PlotCells - 1, GameConfig.PlotCells - 1, 0)
 		T.eq(blocked, "OutOfBounds", "bad move")
 		T.eq(entry.X, 6, "a failed move changes nothing")
 

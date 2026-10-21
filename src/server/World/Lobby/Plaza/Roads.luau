@@ -27,6 +27,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local LobbyLayout = require(Shared.Config.LobbyLayout)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
@@ -57,8 +58,9 @@ local LANTERN_ROADS = {
 -- has lamp boxes on its end posts and lamp fences at x +-5.3..13 there.
 Roads.SouthRoadDarkZ = { 36, 66 }
 -- Post lanterns that carry a light: the one nearest to this point on each road.
+-- (the MINE lane sits in the south band: it moves south with the plot columns)
 local LIT_POSTS = {
-	MineLane = Vector3.new(-64, 0, 121),
+	MineLane = Vector3.new(-64, 0, 121 + WorldLayout.PlotGrid.SouthShift),
 	EastSpur = Vector3.new(44, 0, 0),
 	WestSpur = Vector3.new(-44, 0, 0),
 }
