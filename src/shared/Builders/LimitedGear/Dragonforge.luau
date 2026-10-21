@@ -294,6 +294,166 @@ local function spines(c: Ctx, color: Color3, material: Enum.Material, list: { { 
 	end
 end
 
+--[[
+	A cape hanging from the shoulders and blowing back: the main panel, two
+	flared side wedges (so it shows past the body from the front), a hem,
+	and clasps with straps over the shoulders on the chest (they read from
+	the front). Parts in priority order while the budget allows.
+]]
+type CapeSpec = {
+	Color: Color3,
+	Trim: Color3,
+	TrimMaterial: Enum.Material?,
+	Width: number?, -- at the shoulders (unscaled; default 1.3)
+	Bottom: number?, -- the hem's height (default 0.14)
+	Flare: number?, -- how far each side flares at the hem (default 0.32)
+	Back: number?, -- how far the hem blows back (default 0.3)
+	Clasp: Color3?, -- the clasps' color (nil: no clasps)
+	ClaspMaterial: Enum.Material?,
+	Material: Enum.Material?,
+	Mantle: boolean?, -- a shoulder mantle over the arms (reads from the front)
+	Collar: number?, -- a stand-up collar behind the head this tall (reads from the front)
+}
+local function cape(c: Ctx, spec: CapeSpec)
+	local w = spec.Width or 1.3
+	local yt, yb = 1.42, spec.Bottom or 0.14
+	local zt = 0.47
+	local zb = zt + (spec.Back or 0.3)
+	local flare = spec.Flare or 0.32
+	local material = spec.Material or M.Fabric
+	if c.Room() < 1 then
+		return
+	end
+	local tilt = math.atan((zb - zt) / (yt - yb))
+	local mid = c.At(0, (yt + yb) / 2, (zt + zb) / 2) * CFrame.Angles(tilt, 0, 0)
+	local length = math.sqrt((yt - yb) ^ 2 + (zb - zt) ^ 2)
+	K.part(c.Model, "Cape", mid, c.V(w, length, 0.06), spec.Color, material)
+	for i, side in { -1, 1 } do
+		if c.Room() < 1 then
+			break
+		end
+		T.tri(
+			c.Model,
+			"CapeFlare" .. i,
+			T.P(c, side * (w / 2 - 0.02), yt - 0.05, zt + 0.01),
+			T.P(c, side * (w / 2 - 0.02), yb, zb),
+			T.P(c, side * (w / 2 + flare), yb, zb + 0.04),
+			0.06 * c.S,
+			K.darker(spec.Color, 0.12),
+			material,
+			1
+		)
+	end
+	if c.Room() >= 1 then
+		K.part(
+			c.Model,
+			"CapeHem",
+			c.At(0, yb + 0.05, zb + 0.01) * CFrame.Angles(tilt, 0, 0),
+			c.V(w + 2 * flare, 0.12, 0.09),
+			spec.Trim,
+			spec.TrimMaterial or M.Foil
+		)
+	end
+	if spec.Collar then
+		-- two halves standing up behind the head and fanning out (a vampire
+		-- king's collar): taller and wider than the head, so it frames it
+		local h = spec.Collar
+		for i, side in { -1, 1 } do
+			if c.Room() < 1 then
+				break
+			end
+			local cf = c.At(side * 0.62, 1.46 + h / 2, 0.66) * CFrame.Angles(-0.25, side * 0.35, -side * 0.32)
+			K.part(c.Model, "CapeCollar" .. i, cf, c.V(0.9, h, 0.07), spec.Color, material)
+			if c.Room() >= 1 then
+				-- a trim along the outer edge
+				local rim = cf * CFrame.new(side * 0.43 * c.S, 0, -0.03 * c.S)
+				K.part(c.Model, "CapeCollarRim" .. i, rim, c.V(0.1, h + 0.04, 0.05), spec.Trim, spec.TrimMaterial or M.Foil)
+			end
+		end
+	end
+	if spec.Mantle and c.Room() >= 1 then
+		K.part(c.Model, "CapeMantle", c.At(0, 1.4, 0.06), c.V(2.02, 0.18, 1.04), spec.Color, material)
+	end
+	if spec.Clasp then
+		for i, side in { -1, 1 } do
+			if c.Room() < 2 then
+				break
+			end
+			-- the strap over the shoulder, the clasp on the chest
+			T.seg(
+				c.Model,
+				"CapeStrap" .. i,
+				T.P(c, side * 0.42, 1.4, -0.44),
+				T.P(c, side * 0.5, 1.5, 0.46),
+				0.14 * c.S,
+				0.05 * c.S,
+				spec.Trim,
+				spec.TrimMaterial or M.Foil
+			)
+			diamond(
+				c.Model,
+				"CapeClasp" .. i,
+				c.At(side * 0.42, 1.34, -0.455),
+				0.2 * c.S,
+				0.2 * c.S,
+				0.06 * c.S,
+				spec.Clasp,
+				spec.ClaspMaterial or NEON
+			)
+		end
+	end
+end
+
+-- flying goggles pushed up on the forehead: a strap round the head, two round lenses
+local function goggles(c: Ctx, y: number, frame: Color3, lens: Color3)
+	if c.Room() < 3 then
+		return
+	end
+	K.part(c.Model, "GoggleStrap", c.At(0, y, 0.02), c.V(1.56, 0.14, 1.36), rgb(70, 44, 30), M.Fabric)
+	for i, x in { -0.3, 0.3 } do
+		K.facing(c.Model, "Goggle" .. i, c.At(x, y + 0.02, -0.7), 0.12 * c.S, 0.42 * c.S, frame, M.Metal)
+		if c.Room() >= 1 then
+			K.facing(c.Model, "Lens" .. i, c.At(x, y + 0.02, -0.77), 0.03 * c.S, 0.3 * c.S, lens, NEON)
+		end
+	end
+end
+
+-- a scarf knotted round the neck, its two ends streaming back and out
+local function scarf(c: Ctx, color: Color3, stripe: Color3)
+	if c.Room() < 1 then
+		return
+	end
+	K.part(c.Model, "Scarf", c.At(0, 1.36, 0), c.V(1.3, 0.2, 0.92), color, M.Fabric)
+	for i, k in { { 0.3, 1.38, 0.5, 0.75, 1.0, 1.05 }, { -0.1, 1.34, 0.5, -0.45, 0.9, 1.2 } } do
+		if c.Room() < 1 then
+			break
+		end
+		T.seg(
+			c.Model,
+			"ScarfEnd" .. i,
+			T.P(c, k[1], k[2], k[3]),
+			T.P(c, k[4], k[5], k[6]),
+			0.24 * c.S,
+			0.05 * c.S,
+			if i == 1 then color else stripe,
+			M.Fabric
+		)
+	end
+end
+
+-- gauntlets / bracers on both forearms
+local function bracers(c: Ctx, color: Color3, material: Enum.Material, gem: Color3?)
+	for i, side in { -1, 1 } do
+		if c.Room() < 1 then
+			return
+		end
+		K.part(c.Model, "Bracer" .. i, c.At(side * 0.82, 0.98, 0) * CFrame.Angles(0, 0, side * 0.1), c.V(0.44, 0.16, 0.54), color, material)
+		if gem and c.Room() >= 1 then
+			diamond(c.Model, "BracerGem" .. i, c.At(side * 0.84, 0.98, -0.28), 0.12 * c.S, 0.12 * c.S, 0.04 * c.S, gem, NEON)
+		end
+	end
+end
+
 ---------------------------------------------------------------- the costumes
 
 local function cinderWhelp(c: Ctx): number
@@ -325,6 +485,9 @@ local function cinderWhelp(c: Ctx): number
 	)
 	tail(c, 2, 0.24, c.Look.Trim, spade(c.Glow, 0.34))
 	pupils(c)
+	-- a little adventurer: flying goggles on the forehead, a red scarf
+	goggles(c, 2.42, rgb(196, 140, 60), rgb(255, 170, 60))
+	scarf(c, rgb(210, 40, 40), rgb(255, 214, 90))
 	if c.Room() >= 1 then
 		-- a warm belly plate
 		K.part(c.Model, "Belly", c.At(0, 0.86, -0.432), c.V(0.62, 0.5, 0.03), rgb(150, 110, 90), M.Slate)
@@ -372,6 +535,20 @@ local function emberHatchling(c: Ctx): number
 		Panels = { { "R", "W", "T2", membrane, M.SmoothPlastic } },
 	})
 	tail(c, 2, 0.22, c.Look.Trim, spade(c.Glow, 0.28))
+	-- a tiny hero's cape and a gold bell on a collar
+	cape(c, {
+		Color = rgb(255, 196, 60),
+		Trim = rgb(255, 120, 30),
+		TrimMaterial = M.SmoothPlastic,
+		Width = 1.2,
+		Flare = 0.45,
+		Back = 0.36,
+		Bottom = 0.3,
+	})
+	if c.Room() >= 2 then
+		K.part(c.Model, "Collar", c.At(0, 1.47, 0), c.V(1.28, 0.12, 0.96), rgb(200, 40, 50), M.Fabric)
+		K.part(c.Model, "Bell", c.At(0, 1.32, -0.5), c.V(0.24, 0.24, 0.24), GOLD, M.Foil, BALL)
+	end
 	-- orange spots on the shell
 	for i, k in { { -0.36, 3.02, -0.5, 0.3 }, { 0.38, 3.2, -0.3, 0.24 }, { 0.05, 3.32, -0.38, 0.18 } } do
 		if c.Room() >= 1 then
@@ -443,10 +620,38 @@ local function scaleKnight(c: Ctx): number
 		local eye = shield * CFrame.new(0, -0.06 * c.S, -0.075 * c.S)
 		K.part(c.Model, "ShieldEye", eye, c.V(0.12, 0.3, 0.03), c.Glow, NEON)
 	end
-	-- the cape and its gold collar
+	-- a knight's red cape on gold clasps
+	cape(c, { Color = CAPE, Trim = GOLD, Clasp = c.Glow, Width = 1.3, Flare = 0.5, Back = 0.34, Mantle = true })
+	-- a tabard with the dragon's eye over the breastplate
 	if c.Room() >= 1 then
-		K.part(c.Model, "Cape", c.At(0, 0.98, 0.5) * CFrame.Angles(0.12, 0, 0), c.V(1.16, 1.0, 0.06), CAPE, M.Fabric)
+		K.part(c.Model, "Tabard", c.At(0, 0.74, -0.44), c.V(0.62, 0.5, 0.03), CAPE, M.Fabric)
 	end
+	-- a plume of flame on the helm's crown
+	if c.Room() >= 2 then
+		diamond(
+			c.Model,
+			"Plume",
+			c.At(0, 3.18, 0.32) * CFrame.Angles(0, PI / 2, 0) * CFrame.Angles(0, 0, -0.5),
+			0.5 * c.S,
+			0.5 * c.S,
+			0.1 * c.S,
+			FLAME,
+			NEON
+		)
+		diamond(
+			c.Model,
+			"PlumeCore",
+			c.At(0, 3.12, 0.2) * CFrame.Angles(0, PI / 2, 0) * CFrame.Angles(0, 0, -0.4),
+			0.3 * c.S,
+			0.3 * c.S,
+			0.08 * c.S,
+			FLAME_HOT,
+			NEON
+		)
+		top = math.max(top, 3.5)
+	end
+	-- gold gauntlets
+	bracers(c, GOLD, M.Foil, nil)
 	-- the breastplate and belt
 	if c.Room() >= 1 then
 		K.part(c.Model, "Breastplate", c.At(0, 1.08, -0.435), c.V(0.92, 0.6, 0.04), metal, M.Metal)
@@ -533,6 +738,14 @@ local function flamewing(c: Ctx): number
 		T.recolor(c, name, FLAME, NEON)
 	end
 	pupils(c)
+	-- a fire pilot: aviator goggles, a long scarf streaming in the wind, a flame belt
+	goggles(c, 2.44, GOLD, rgb(120, 220, 255))
+	scarf(c, rgb(255, 240, 220), rgb(255, 160, 40))
+	if c.Room() >= 2 then
+		K.part(c.Model, "Belt", c.At(0, 0.62, 0), c.V(1.24, 0.12, 0.89), rgb(70, 30, 26), M.Fabric)
+		diamond(c.Model, "Buckle", c.At(0, 0.62, -0.46), 0.22 * c.S, 0.22 * c.S, 0.05 * c.S, FLAME_HOT, NEON)
+	end
+	bracers(c, rgb(70, 30, 26), M.Fabric, nil)
 	return top
 end
 
@@ -591,6 +804,38 @@ local function magmaWyvern(c: Ctx): number
 			break
 		end
 		K.part(c.Model, "Lava" .. i, c.At(k[1], k[2], k[3]) * CFrame.Angles(0, 0, k[4]), c.V(0.06, k[5], 0.03), c.Glow, NEON)
+	end
+	-- a tattered smoke-black cape with a lava hem, obsidian war armour
+	cape(
+		c,
+		{ Color = rgb(40, 26, 34), Trim = c.Glow, TrimMaterial = NEON, Width = 1.3, Flare = 0.55, Back = 0.4, Bottom = 0.1, Collar = 1.2 }
+	)
+	if c.Room() >= 2 then
+		K.part(c.Model, "Breastplate", c.At(0, 1.08, -0.44), c.V(0.96, 0.62, 0.05), rgb(46, 36, 46), M.Metal)
+		diamond(c.Model, "Rune", c.At(0, 1.08, -0.475), 0.3 * c.S, 0.3 * c.S, 0.03 * c.S, c.Glow, NEON)
+	end
+	for i, side in { -1, 1 } do
+		if c.Room() < 2 then
+			break
+		end
+		K.part(
+			c.Model,
+			"Pauldron" .. i,
+			c.At(side * 0.8, 1.48, 0) * CFrame.Angles(0, 0, side * -0.35),
+			c.V(0.6, 0.2, 0.66),
+			rgb(46, 36, 46),
+			M.Metal
+		)
+		T.seg(
+			c.Model,
+			"PauldronSpike" .. i,
+			T.P(c, side * 0.86, 1.56, 0),
+			T.P(c, side * 1.2, 2.0, 0.05),
+			0.14 * c.S,
+			0.14 * c.S,
+			IVORY,
+			M.Slate
+		)
 	end
 	spines(c, OBSIDIAN, M.Basalt, { { 2.6, 0.66, 0.4 }, { 1.3, 0.44, 0.36 } })
 	-- lava fists
@@ -656,10 +901,15 @@ local function dragonKing(c: Ctx): number
 			{ M.Foil, M.Slate }
 		)
 	)
-	-- the royal cape with its ermine collar
+	-- the royal cape: crimson, flared to the ground, a gold hem, gem clasps, an ermine collar
+	cape(c, { Color = CAPE, Trim = GOLD, Clasp = c.Glow, Width = 1.36, Flare = 0.6, Back = 0.42, Bottom = 0.06, Collar = 1.4 })
+	if c.Room() >= 1 then
+		K.part(c.Model, "Collar", c.At(0, 1.5, 0.08), c.V(1.4, 0.24, 1.04), ERMINE, M.Fabric)
+	end
+	-- a gold chain with a dragon-eye pendant
 	if c.Room() >= 2 then
-		K.part(c.Model, "Cape", c.At(0, 0.9, 0.52) * CFrame.Angles(0.14, 0, 0), c.V(1.3, 1.22, 0.06), CAPE, M.Fabric)
-		K.part(c.Model, "Collar", c.At(0, 1.48, 0.08), c.V(1.36, 0.22, 1.0), ERMINE, M.Fabric)
+		T.seg(c.Model, "Chain", T.P(c, -0.4, 1.42, -0.45), T.P(c, 0, 1.24, -0.47), 0.06 * c.S, 0.04 * c.S, GOLD, M.Foil)
+		T.seg(c.Model, "Chain2", T.P(c, 0.4, 1.42, -0.45), T.P(c, 0, 1.24, -0.47), 0.06 * c.S, 0.04 * c.S, GOLD, M.Foil)
 	end
 	-- gold armour: breastplate, belt, bracers
 	if c.Room() >= 1 then
@@ -676,18 +926,7 @@ local function dragonKing(c: Ctx): number
 		K.part(c.Model, "Orb", c.At(1.08, 2.66, -0.42), c.V(0.38, 0.38, 0.38), FLAME_HOT, NEON, BALL)
 		top = math.max(top, 2.85)
 	end
-	for i, side in { -1, 1 } do
-		if c.Room() >= 1 then
-			K.part(
-				c.Model,
-				"Bracer" .. i,
-				c.At(side * 0.82, 0.98, 0) * CFrame.Angles(0, 0, side * 0.1),
-				c.V(0.42, 0.14, 0.52),
-				GOLD,
-				M.Foil
-			)
-		end
-	end
+	bracers(c, GOLD, M.Foil, rgb(220, 30, 60))
 	pupils(c)
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then

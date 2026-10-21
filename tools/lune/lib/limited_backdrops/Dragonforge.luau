@@ -8,6 +8,8 @@ local roblox = require("@lune/roblox") :: any
 
 local Vector3 = roblox.Vector3
 local Color3 = roblox.Color3
+local Instance = roblox.Instance
+local Enum = roblox.Enum
 local rgb = Color3.fromRGB
 local M = roblox.Enum.Material
 local PI = math.pi
@@ -204,10 +206,137 @@ return function(kit: any, H: any): any
 	for _, p in { Vector3.new(-26, 1, 16), Vector3.new(28, 1, 16), Vector3.new(0, 1, 34), Vector3.new(-46, 1, 6), Vector3.new(46, 1, 6) } do
 		emitter(kit, p, 14, lavaHot, "rbxasset://textures/particles/sparkles_main.dds", "Embers")
 	end
+	---------------------------------------------------------------- v3: the dragon's lair
+
+	-- a seg: a box from a to b (world points)
+	local function seg(a: any, b: any, w: number, color: any, material: any): any
+		local mid = (a + b) / 2
+		local length = (b - a).Magnitude
+		local dir = (b - a).Unit
+		local up = if math.abs(dir.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
+		return block(kit, CF.lookAt(mid, b, up), Vector3.new(w, w, length + w * 0.4), color, material)
+	end
+	local gold, goldDark = rgb(255, 196, 56), rgb(200, 132, 30)
+	local ivory, ivoryDark = rgb(240, 226, 196), rgb(186, 160, 124)
+	local crimson = rgb(150, 18, 34)
+
+	-- THE DRAGON SKULL GATE far behind the King: two giant curved horns rise
+	-- from the ground and arch inward, a huge obsidian skull between them
+	-- with burning eyes, lava pouring from its jaws into the river
+	local gz = 40
+	for _, side in { -1, 1 } do
+		local pts = {
+			Vector3.new(side * 26, -1, gz),
+			Vector3.new(side * 29, 9, gz + 2),
+			Vector3.new(side * 27, 18, gz + 3),
+			Vector3.new(side * 21, 25, gz + 3),
+			Vector3.new(side * 13, 28, gz + 2),
+		}
+		local widths = { 5.2, 4.4, 3.6, 2.8 }
+		for i = 1, #pts - 1 do
+			seg(pts[i], pts[i + 1], widths[i], if i <= 2 then rgb(150, 124, 100) else ivoryDark, M.Slate)
+		end
+		-- glowing runes up the horn
+		for i = 1, 3 do
+			local p = pts[i]:Lerp(pts[i + 1], 0.5) + Vector3.new(0, 0, -widths[i] * 0.55)
+			block(kit, CF.new(p) * CF.Angles(0, 0, PI / 4), Vector3.new(1.1, 1.1, 0.3), lava, M.Neon)
+		end
+	end
+	-- a burning gem where the horns meet (over the King's crown)
+	block(kit, CF.new(0, 28.6, gz + 2) * CF.Angles(0, 0, PI / 4), Vector3.new(3.4, 3.4, 1.2), lavaHot, M.Neon)
+	light(kit, Vector3.new(0, 26, gz - 6), lava, 40, 2)
+
+	-- FIRE BRAZIERS flanking the stage: basalt pillars, gold bowls, flames
+	for _, k in { { 15, 12, 9 }, { -16, 12, 9 }, { 38, 14, 7 }, { -40, 14, 7 } } do
+		local x, z, h = k[1], k[2], k[3]
+		disc(kit, CF.new(x, h / 2, z), h, 2.2, basaltDark, M.Basalt)
+		disc(kit, CF.new(x, 0.4, z), 0.8, 3.2, basalt, M.Basalt)
+		disc(kit, CF.new(x, h + 0.35, z), 0.7, 3.4, gold, M.Foil)
+		disc(kit, CF.new(x, h + 0.75, z), 0.2, 3.0, lavaDeep, M.Neon)
+		for f, fk in { { 0, 3.2, lava }, { -0.7, 2.2, lavaHot }, { 0.7, 2.4, lavaHot } } do
+			local size = fk[2] :: number
+			block(
+				kit,
+				CF.new(x + (fk[1] :: number), h + 0.9 + size * 0.45, z) * CF.Angles(0, 0.3 * f, PI / 4),
+				Vector3.new(size * 0.7, size * 0.7, 0.4),
+				fk[3],
+				M.Neon
+			)
+		end
+		light(kit, Vector3.new(x, h + 3, z - 2), lava, 26, 2.2)
+		emitter(kit, Vector3.new(x, h + 2, z), 2, lavaHot, "rbxasset://textures/particles/sparkles_main.dds", "Embers")
+	end
+
+	-- HANGING DRAGON BANNERS between the braziers: crimson cloth on gold poles, a gold dragon eye
+	for _, k in { { 26, 16 }, { -28, 16 } } do
+		local x, z = k[1], k[2]
+		disc(kit, CF.new(x, 7.5, z), 15, 0.6, goldDark, M.Foil)
+		block(kit, CF.new(x, 14.8, z) * CF.Angles(0, 0, PI / 2), Vector3.new(0.5, 6.4, 0.5), gold, M.Foil)
+		block(kit, CF.new(x, 10.6, z - 0.3), Vector3.new(5.6, 8, 0.2), crimson, M.Fabric)
+		kit.Geo.triangle(
+			kit.Folder,
+			Vector3.new(x - 2.8, 6.6, z - 0.3),
+			Vector3.new(x + 2.8, 6.6, z - 0.3),
+			Vector3.new(x, 4.6, z - 0.3),
+			0.2,
+			crimson
+		)
+		block(kit, CF.new(x, 11.2, z - 0.45) * CF.Angles(0, 0, PI / 4), Vector3.new(2.2, 2.2, 0.12), gold, M.Foil)
+		block(kit, CF.new(x, 11.2, z - 0.55), Vector3.new(0.5, 1.9, 0.1), rgb(30, 10, 10), M.SmoothPlastic)
+		block(kit, CF.new(x, 14.3, z - 0.42), Vector3.new(5.8, 0.4, 0.14), gold, M.Foil)
+	end
+
+	-- THE DRAGON'S HOARD around the King's pedestal: gold heaps, coins, gems, a chest
+	local function heap(x: number, z: number, r: number)
+		local p = kit.Geo.make("Part", {
+			CFrame = CF.new(x, 0.6 + r * 0.12, z),
+			Size = Vector3.new(r * 2, r * 0.9, r * 1.6),
+			Color = gold,
+			Material = M.Foil,
+		}, kit.Folder)
+		p.CanCollide = false
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = p
+		for _ = 1, 5 do
+			local a = rng:range(0, 2 * PI)
+			local d = rng:range(0.2, 0.9) * r
+			disc(
+				kit,
+				CF.new(x + math.cos(a) * d, 0.9 + r * 0.25 * rng:range(0.4, 1), z + math.sin(a) * d * 0.8)
+					* CF.Angles(rng:range(-0.6, 0.6), 0, rng:range(-0.6, 0.6)),
+				0.12,
+				0.9,
+				goldDark,
+				M.Foil
+			)
+		end
+		for g = 1, 2 do
+			local a = rng:range(0, 2 * PI)
+			block(
+				kit,
+				CF.new(x + math.cos(a) * r * 0.5, 0.9 + r * 0.42, z + math.sin(a) * r * 0.4) * CF.Angles(0, a, PI / 4),
+				Vector3.new(0.7, 0.7, 0.7),
+				if g == 1 then rgb(230, 30, 70) else rgb(60, 200, 255),
+				M.Neon
+			)
+		end
+	end
+	heap(7.5, 2, 3)
+	heap(-8, 2.5, 3.2)
+	heap(4, 6.5, 2.2)
+	heap(-4.5, 7, 2.4)
+	-- a treasure chest spilling gold, behind the heaps on the right of the picture
+	local chest = CF.new(-10.5, 1.7, 7) * CF.Angles(0, 0.35, 0)
+	block(kit, chest, Vector3.new(3.4, 1.8, 2.2), rgb(120, 60, 30), M.Wood)
+	block(kit, chest * CF.new(0, 1.2, 0.9) * CF.Angles(-0.9, 0, 0), Vector3.new(3.4, 0.4, 2.2), rgb(140, 70, 34), M.Wood)
+	block(kit, chest * CF.new(0, 0.95, 0), Vector3.new(3.2, 0.2, 2.0), gold, M.Foil)
+	block(kit, chest * CF.new(0, 0, -1.12), Vector3.new(3.5, 0.3, 0.1), gold, M.Foil)
+
 	return {
 		Preset = {
 			Lighting = {
-				Brightness = 2.4,
+				Brightness = 2.1,
 				Ambient = Color3.new(0.34, 0.2, 0.2),
 				OutdoorAmbient = Color3.new(0.56, 0.36, 0.34),
 				ExposureCompensation = 0.15,
@@ -223,7 +352,7 @@ return function(kit: any, H: any): any
 				Haze = 1.4,
 			},
 			ColorCorrection = { Brightness = 0.0, Contrast = 0.2, Saturation = 0.26, TintColor = Color3.new(1, 0.96, 0.95) },
-			Bloom = { Intensity = 0.85, Size = 30, Threshold = 0.92 },
+			Bloom = { Intensity = 0.6, Size = 26, Threshold = 0.95 },
 			SunRays = { Intensity = 0, Spread = 0.6 },
 			Sky = {
 				Top = rgb(22, 6, 32),

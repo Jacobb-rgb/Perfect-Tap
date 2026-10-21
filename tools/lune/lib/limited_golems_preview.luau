@@ -41,6 +41,7 @@ Preview.Width = 1600
 Preview.Height = 900
 Preview.Camera = { Position = Vector3.new(-1.5, 8.8, -46), Target = Vector3.new(-1.5, 10.2, 0), Fov = 40 }
 Preview.StageTop = 1
+Preview.ShardSpot = Vector3.new(-22, 15.5, -8) -- the floating shard (world -X = the picture's right)
 Preview.PedestalTop = 2.8
 -- where the set's golems stand: { index in the set, x, z, size }; the Mythic on its pedestal
 -- (the camera looks along +Z: world -X is the picture's right)
@@ -273,6 +274,15 @@ function Preview.build(Loader: any, workspace: any, setId: string): ({ [string]:
 	for _, g in Preview.golemFrames(CF) do
 		GolemBuilder.build(golems[g.Index].Id, g.Feet, { Size = g.Size }).Parent = folder
 	end
+	-- the set's SHARD floating high on the picture's right (under the end
+	-- date, where the shop's banner shows it), turned to the camera
+	local spot = Preview.ShardSpot
+	local shardCf = CF.new(spot) * CF.Angles(0.12, 0.35, -0.08)
+	local shard = if data.CapsuleId
+		then GolemBuilder.capsule(data.CapsuleId, shardCf)
+		else GolemBuilder.shard(setId, shardCf, data.Backdrop.Ground, data.Backdrop.Accent)
+	shard.Parent = folder
+	light(kit, spot + Vector3.new(2, 1, -5), data.Backdrop.Accent, 14, 1.4)
 	return look.Preset,
 		{
 			camera = { Preview.Camera.Position.X, Preview.Camera.Position.Y, Preview.Camera.Position.Z },
