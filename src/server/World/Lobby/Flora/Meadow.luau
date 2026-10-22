@@ -763,14 +763,15 @@ type Flat = { At: Vector3, R: number, Top: number }
 
 -- The lift for a flat piece w wide and h tall at `p` (recorded in `flats`).
 local function flatLift(flats: { Flat }, p: Vector3, w: number, h: number): number
-	-- (a w x w square at any turn stays inside this circle)
+	-- (a w x w square at any turn stays inside the square of this half-size round p: two
+	-- pieces clash when those squares overlap, as their world boxes may)
 	local r = w * 0.71
 	local lifts = Meadow.FlatLifts
 	local chosen = lifts[#lifts]
 	for _, lift in lifts do
 		local clash = false
 		for _, f in flats do
-			if math.abs(f.Top - (h + lift)) < 0.01 and Vector3.new(p.X - f.At.X, 0, p.Z - f.At.Z).Magnitude < r + f.R then
+			if math.abs(f.Top - (h + lift)) < 0.01 and math.abs(p.X - f.At.X) < r + f.R and math.abs(p.Z - f.At.Z) < r + f.R then
 				clash = true
 				break
 			end

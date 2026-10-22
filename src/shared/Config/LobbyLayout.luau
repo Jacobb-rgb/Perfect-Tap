@@ -113,6 +113,11 @@ LobbyLayout.Budget = {
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
 	-- (steps 6-7): ~15,510 parts (tests/PhoneBudget.spec.luau, map v26)
 	PhoneParts = 18000,
+	-- phones (integrator 2026-10-22, the SKY HAVEN review): everything within Workspace.
+	-- StreamingTargetRadius (384) of the spawn or the plaza, Lod models included, + the Persistent
+	-- models beyond it + the 8 yard museums (tests/PhoneBudget.spec.luau): map v49 with the sky
+	-- islands and SKY HAVEN measures ~24,550 at the plaza (21,421 + 2,785 + 352), ~24,300 at the spawn
+	StreamParts = 25000,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,

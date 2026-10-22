@@ -294,10 +294,15 @@ return function(T, Loader)
 		end
 	end)
 
+	-- SKY HAVEN (Lobby/Sky/SkyHaven): the way up through the south wall's gate (WorldLayout.SouthGate)
+	local SkyHaven = Loader.requirePath("ServerScriptService.Server.World.Lobby.Sky.SkyHaven")
+	local JUMP = 7.5 -- StarterPlayer.CharacterJumpHeight (default.project.json)
+	local stones = SkyHaven.stonePositions()
+
 	T.test("SKY HAVEN can be reached: the south wall's gate and the plank bridge lead clear to the first stone", function()
 		local gate = WorldLayout.SouthGate
 		local coast = WorldLayout.Island.Max.Z
-		local stoneZ = coast + 36 - 16 - 2.5 -- the first stone's near edge (SkyHaven: the spire 36 out, the stones 16 round it)
+		local stoneZ = stones[1].Z - SkyHaven.StepSize / 2 -- the first stone's near edge
 		-- nothing collidable stands in the walk from the lawn through the gate to the stone
 		local lo = Vector3.new(gate.X - gate.Width / 2 + 0.3, 2.0, coast - 4)
 		local hi = Vector3.new(gate.X + gate.Width / 2 - 0.3, 7, stoneZ)
@@ -307,8 +312,12 @@ return function(T, Loader)
 				T.falsy(overlaps(min, max, lo, hi), `{part:GetFullName()} blocks the way to SKY HAVEN`)
 			end
 		end
-		-- and a solid bridge carries you from the gate over the rim and the sea to the stone
+		-- a ramp from the lawn (y 0) at the coast, then a solid bridge over the rim and the sea to the stone
 		local haven = map:FindFirstChild("SkyHaven", true)
+		local ramp = haven:FindFirstChild("Ramp")
+		T.truthy(ramp and ramp.CanCollide, "a ramp plank at the gate's mouth")
+		local rampMin, rampMax = bounds(ramp)
+		T.truthy(rampMin.Z <= coast + 0.5 and rampMin.Y <= 0, "the ramp starts on the lawn at the coast")
 		local carried = false
 		for _, part in parts(haven) do
 			local min, max = bounds(part)
@@ -317,19 +326,129 @@ return function(T, Loader)
 					part.CanCollide
 					and min.X <= gate.X - 1
 					and max.X >= gate.X + 1
-					and min.Z <= coast + 4
+					and min.Z <= rampMax.Z
 					and max.Z >= stoneZ
 					and max.Y >= 1.8
 				)
 		end
-		T.truthy(carried, "a plank bridge from the gate to the first stone")
+		T.truthy(carried, "a plank bridge from the ramp to the first stone")
+	end)
+
+	T.test("SKY HAVEN's parkour: every stone a plain jump up from the last, the last one at the island's edge", function()
+		T.truthy(#stones >= 10, "a real climb")
+		T.near(stones[1].X, WorldLayout.SouthGate.X, 0.01, "the first stone out from the gate")
+		local function across(a: any, b: any): number
+			return Vector3.new(b.X - a.X, 0, b.Z - a.Z).Magnitude
+		end
+		for i = 2, #stones do
+			local rise = stones[i].Y - stones[i - 1].Y
+			T.truthy(rise > 0 and rise <= JUMP - 2, `stone {i} rises {rise} (a jump clears {JUMP})`)
+			local gap = across(stones[i - 1], stones[i]) - SkyHaven.StepSize
+			T.truthy(gap > 0.5 and gap <= 4, `stone {i}: a {gap}-stud gap`)
+		end
+		-- from the last stone onto the island's front edge
+		local last = stones[#stones]
+		local center = SkyHaven.Center
+		local edge = center.Z - SkyHaven.Size.Y / 2
+		T.truthy(math.abs(last.X - center.X) <= SkyHaven.Size.X / 2 - 4, "the last stone lies in front of the island")
+		local gap = edge - (last.Z + SkyHaven.StepSize / 2)
+		T.truthy(gap >= 0 and gap <= 4, `the last gap to the island is {gap} studs`)
+		local rise = center.Y - last.Y
+		T.truthy(rise >= 0 and rise <= JUMP - 2, `the island is {rise} studs up from the last stone`)
+	end)
+
+	T.test("SKY HAVEN's parkour never lets you out of the island's walls: nothing outside them in jump reach", function()
+		local gate = WorldLayout.SouthGate
+		local island = WorldLayout.Island
+		local coast = island.Max.Z
+		local haven = map:FindFirstChild("SkyHaven", true)
+		local walls = {}
+		for _, wall in map.Land.Bounds:GetChildren() do
+			local min, max = bounds(wall)
+			table.insert(walls, { min, max })
+		end
+		-- the segment a -> b crosses a box (slab test)
+		local function crosses(a: any, b: any, min: any, max: any): boolean
+			local t0, t1 = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local d = b[axis] - a[axis]
+				if math.abs(d) < 1e-9 then
+					if a[axis] < min[axis] or a[axis] > max[axis] then
+						return false
+					end
+				else
+					local u, v = (min[axis] - a[axis]) / d, (max[axis] - a[axis]) / d
+					t0, t1 = math.max(t0, math.min(u, v)), math.min(t1, math.max(u, v))
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		-- where you can stand: the bridge's deck and stones 1-3 (corners and middles)
+		local starts = {}
+		local z = coast + 3.5
+		while z <= stones[1].Z do
+			for _, dx in { -1.5, 0, 1.5 } do
+				table.insert(starts, Vector3.new(gate.X + dx, 1.9, z))
+			end
+			z += 1.5
+		end
+		local half = SkyHaven.StepSize / 2 - 0.2
+		for i = 1, 3 do
+			local p = stones[i]
+			for _, dx in { -half, 0, half } do
+				for _, dz in { -half, 0, half } do
+					table.insert(starts, p + Vector3.new(dx, 0, dz))
+				end
+			end
+		end
+		-- the collidable surfaces nearby that are not SKY HAVEN's or the walls themselves
+		local near = {}
+		for _, part in parts(map) do
+			if part.CanCollide and not part:IsDescendantOf(haven) and part.Parent ~= map.Land.Bounds then
+				local min, max = bounds(part)
+				if max.X > gate.X - 30 and min.X < gate.X + 30 and max.Z > coast - 5 and min.Z < stones[3].Z + 15 and max.Y > -90 then
+					table.insert(near, { part, min, max })
+				end
+			end
+		end
+		local function inside(q: any): boolean
+			local corridor = math.abs(q.X - gate.X) < gate.Width / 2 and q.Z < coast + gate.Depth
+			return corridor or (q.X >= island.Min.X and q.X <= island.Max.X and q.Z <= coast + 2)
+		end
+		for _, s in starts do
+			for _, item in near do
+				local part, min, max = item[1], item[2], item[3]
+				if max.Y <= s.Y + JUMP and max.X >= s.X - 10 and min.X <= s.X + 10 and max.Z >= s.Z - 10 and min.Z <= s.Z + 10 then
+					local x = math.max(min.X, s.X - 10)
+					while x <= math.min(max.X, s.X + 10) do
+						local zz = math.max(min.Z, s.Z - 10)
+						while zz <= math.min(max.Z, s.Z + 10) do
+							local q = Vector3.new(x, max.Y, zz)
+							if not inside(q) and Vector3.new(q.X - s.X, 0, q.Z - s.Z).Magnitude <= 10 then
+								local blocked = false
+								for _, w in walls do
+									blocked = blocked or crosses(s + Vector3.new(0, 2.5, 0), q + Vector3.new(0, 2.5, 0), w[1], w[2])
+								end
+								T.truthy(blocked, `{part:GetFullName()} at {q} is in jump reach from {s}, outside the walls`)
+							end
+							zz += 1.5
+						end
+						x += 1.5
+					end
+				end
+			end
+		end
 	end)
 
 	T.test("the south coast runs straight, no sea bay behind the vault (owner 2026-10-22)", function()
 		local island = WorldLayout.Island
 		T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea")
-		-- north, west, east and the south wall in two pieces round SKY HAVEN's gate, its two short side walls
-		T.eq(#map.Land.Bounds:GetChildren(), 7, "the island's invisible walls")
+		-- north, west, east, the south wall in two pieces round SKY HAVEN's gate, the gate's two side
+		-- walls and the outer wall's two pieces along the rim's sea edge
+		T.eq(#map.Land.Bounds:GetChildren(), 9, "the island's invisible walls")
 		-- the ground covers the lawn behind the vault (x -52..52, the plot
 		-- roads' inner verges) from the 12-cell coast (z 150) out to the south coast
 		local covered = false

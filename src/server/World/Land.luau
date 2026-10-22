@@ -488,6 +488,24 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		nil,
 		wallProps
 	)
+	-- the outer wall along the rim's sea edge, either side of the corridor: the rim strip
+	-- between it and the south wall stays sealed
+	boxPart(
+		bounds,
+		Vector3.new(island.Min.X - 14, -60, island.Max.Z + gate.OuterZ),
+		Vector3.new(gateW - 2, 200, island.Max.Z + gate.Depth),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(gateE + 2, -60, island.Max.Z + gate.OuterZ),
+		Vector3.new(island.Max.X + 14, 200, island.Max.Z + gate.Depth),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
 	boxPart(
 		bounds,
 		Vector3.new(island.Min.X - 4, -60, island.Min.Z - 20),

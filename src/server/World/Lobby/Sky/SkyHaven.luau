@@ -48,7 +48,8 @@ SkyHaven.Size = Vector2.new(64, 60)
 SkyHaven.SpireRadius = 9
 SkyHaven.StepRadius = 16 -- the stones' path round the spire
 SkyHaven.StepRise = 3.4 -- studs up per stone (a plain jump clears ~7)
-SkyHaven.StepCount = math.ceil((SkyHaven.Center.Y - 2) / SkyHaven.StepRise)
+SkyHaven.StepFrom = 2 -- the first stone's top, by the bridge
+SkyHaven.StepCount = math.ceil((SkyHaven.Center.Y - SkyHaven.StepFrom) / SkyHaven.StepRise)
 -- one and a half turns round the spire (~7.5 studs apart, gaps ~2.5): the last stone lands
 -- in front of the island's front edge, where the lit path starts
 SkyHaven.StepAngle = 3 * math.pi / (SkyHaven.StepCount - 1)
@@ -59,6 +60,8 @@ SkyHaven.PodiumReach = 9 * math.sqrt(2) -- the podium's star points (two turned 
 SkyHaven.EggScale = 3.2 -- the SKY EGG against the opening's egg (the town's stall eggs are 1.45)
 SkyHaven.EggSpin = 0.35 -- radians per second (client, DecorController)
 SkyHaven.BeamTop = 64 -- the light beam's top over the podium
+SkyHaven.SpireBase = -24 -- the spire's foot under the sea (its top surface at -21, Sea)
+SkyHaven.PathLift = 0.15 -- the paths' extra height over the island's top (its light-grass cap tops at +0.35)
 
 local PEARL = Color3.fromRGB(244, 248, 255)
 local SKY_STONE = Color3.fromRGB(196, 210, 236)
@@ -72,15 +75,27 @@ local NAVY = Color3.fromRGB(24, 32, 74)
 local NAVY_DARK = Color3.fromRGB(14, 18, 46)
 local WALK = Color3.fromRGB(40, 48, 82) -- the lit path's dark walkway (like the lobby's neon walkways)
 
--- The stepping stones round the spire, from just above the sea to the island's edge.
-local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
-	local stones: { Vector3 } = {}
+-- The stepping stones' top centers, first (just above the sea, at the bridge) to last (at the
+-- island's front edge); each stone is StepSize square, turned to face the spire.
+function SkyHaven.stonePositions(): { Vector3 }
+	local out: { Vector3 } = {}
 	local spire = SkyHaven.Spire
-	local topY = SkyHaven.Center.Y
 	for i = 0, SkyHaven.StepCount - 1 do
 		local a = SkyHaven.Start + i * SkyHaven.StepAngle
-		local y = 2 + i * SkyHaven.StepRise
-		local p = Vector3.new(spire.X + math.cos(a) * SkyHaven.StepRadius, y, spire.Z + math.sin(a) * SkyHaven.StepRadius)
+		local y = SkyHaven.StepFrom + i * SkyHaven.StepRise
+		table.insert(out, Vector3.new(spire.X + math.cos(a) * SkyHaven.StepRadius, y, spire.Z + math.sin(a) * SkyHaven.StepRadius))
+	end
+	return out
+end
+
+-- The stepping stones round the spire, from just above the sea to the island's edge (the
+-- spire itself goes into `decor`, the Lod part).
+local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
+	local stones = SkyHaven.stonePositions()
+	local spire = SkyHaven.Spire
+	local topY = SkyHaven.Center.Y
+	for i, p in stones do
+		local a = SkyHaven.Start + (i - 1) * SkyHaven.StepAngle
 		local s = SkyHaven.StepSize
 		local stone = CFrame.new(p) * CFrame.Angles(0, -a, 0)
 		Style.block(m, stone * CFrame.new(0, -0.6, 0), Vector3.new(s, 1.2, s), Style.vary(C.Stone, rng, 0.06), nil, Style.solid())
@@ -95,22 +110,22 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 		Style.block(m, stone * CFrame.new(0, -1.6, 0), Vector3.new(s * 0.6, 1, s * 0.6), C.StoneDark, nil, Style.tiny())
 		-- a glowing edge on the stone's outer side shows the way; a lantern every fifth stone
 		Style.block(m, stone * CFrame.new(s / 2 - 0.1, -0.2, 0), Vector3.new(0.2, 0.25, s - 0.4), SKY_BLUE, NEON, Style.tiny())
-		if i % 5 == 4 then
+		if i % 5 == 0 then
 			Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 1.2, 0), Vector3.new(0.35, 2.4, 0.35), C.WoodDark, nil, Style.tiny())
 			Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 2.7, 0), Vector3.new(0.75, 0.75, 0.75), C.LampAmber, NEON, Style.tiny())
 		end
-		table.insert(stones, p)
 	end
-	-- the spire: stacked rock drums narrowing to the top, crystals in its flanks
-	local h = topY - 12
+	-- the spire: stacked rock drums narrowing to the top, rising out of the sea, crystals in its flanks
+	local base = SkyHaven.SpireBase
+	local h = topY - 18 - base
 	local drums = 6
 	for k = 0, drums - 1 do
 		local t = k / drums
 		local r = SkyHaven.SpireRadius * (1 - t * 0.45)
 		local dh = h / drums
-		local c = CFrame.new(spire.X, -6 + dh * (k + 0.5), spire.Z) * CFrame.Angles(0, k * 0.4, 0)
+		local c = CFrame.new(spire.X, base + dh * (k + 0.5), spire.Z) * CFrame.Angles(0, k * 0.4, 0)
 		Style.block(
-			m,
+			decor,
 			c,
 			Vector3.new(r * 2, dh + 0.4, r * 2),
 			Style.vary(if k % 2 == 0 then C.StoneDark else C.Stone, rng, 0.05),
@@ -118,7 +133,7 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 			Style.decor()
 		)
 		Style.block(
-			m,
+			decor,
 			c * CFrame.Angles(0, math.pi / 4, 0),
 			Vector3.new(r * 1.7, dh, r * 1.7),
 			Style.vary(C.StoneDeep, rng, 0.05),
@@ -126,14 +141,26 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 			Style.tiny()
 		)
 		if k % 2 == 1 then
-			Style.crystalCluster(m, c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9), 3.5, SKY_BLUE, rng, { Count = 2 })
+			Style.crystalCluster(
+				decor,
+				c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9),
+				3.5,
+				SKY_BLUE,
+				rng,
+				{ Count = 2 }
+			)
 		end
 	end
 	-- a plank bridge from the gate in the island's south wall (WorldLayout.SouthGate) over the
-	-- rim (its grass top ~1.8) to the first stone
+	-- rim (its grass top ~1.8) to the first stone, and a ramp plank up to it from the lawn (y 0)
 	local first = stones[1]
-	local shore = Vector3.new(first.X, 0, SkyHaven.CoastZ + 3)
+	local shore = Vector3.new(first.X, 0, SkyHaven.CoastZ + 3.5)
 	local len = first.Z - shore.Z
+	local foot = Vector3.new(first.X, -0.15, SkyHaven.CoastZ + 0.3)
+	local head = Vector3.new(first.X, 1.7, shore.Z + 0.2)
+	local ramp =
+		Style.block(m, CFrame.lookAt((foot + head) / 2, head), Vector3.new(3.4, 0.4, (head - foot).Magnitude), C.Plank, nil, Style.solid())
+	ramp.Name = "Ramp"
 	local mid = (shore + first) / 2
 	Style.block(
 		m,
@@ -211,8 +238,9 @@ local function spinner(m: Model, pivot: Part, spin: number, bob: number?)
 	m:AddTag("Spin")
 end
 
--- The SKY EGG on its podium (see the header). `base` = the podium's bottom center, front = -Z.
-local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
+-- The SKY EGG on its podium (see the header). `base` = the podium's bottom center, front = -Z;
+-- the columns, the clouds and the beam go into `decor` (the Lod part).
+local function eggPodium(m: Model, decor: Model, base: CFrame, rng: Rng.Rng)
 	-- the podium: three stepped tiers (two turned squares each), pearl over sky stone, a gold lip under every step
 	for i, r in { 9, 7.2, 5.6 } do
 		local y = (i - 0.5) * 1.1
@@ -287,7 +315,7 @@ local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
 	-- a beam of light from the crown into the sky (seen from the town: something is up there)
 	local beamY0 = (1.25 + 0.15) * k + 2.4 * k
 	local beam = Style.block(
-		m,
+		decor,
 		top * CFrame.new(0, (beamY0 + SkyHaven.BeamTop) / 2, 0) * CFrame.Angles(0, 0, PI / 2),
 		Vector3.new(SkyHaven.BeamTop - beamY0, 1.1, 1.1),
 		Color3.fromRGB(150, 215, 255),
@@ -303,13 +331,19 @@ local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
 		local a = (c + 0.5) * PI / 2
 		local p = (base * CFrame.new(math.sin(a) * 14.6, 0, -math.cos(a) * 14.6)).Position
 		local at = CFrame.lookAt(p, Vector3.new(base.Position.X, p.Y, base.Position.Z))
-		Style.block(m, at * CFrame.new(0, 0.5, 0), Vector3.new(2.3, 1, 2.3), GOLD, FOIL, Style.decor())
-		local shaft =
-			Style.block(m, at * CFrame.new(0, 4.6, 0) * CFrame.Angles(0, 0, PI / 2), Vector3.new(7.2, 1.5, 1.5), PEARL, nil, Style.decor())
+		Style.block(decor, at * CFrame.new(0, 0.5, 0), Vector3.new(2.3, 1, 2.3), GOLD, FOIL, Style.decor())
+		local shaft = Style.block(
+			decor,
+			at * CFrame.new(0, 4.6, 0) * CFrame.Angles(0, 0, PI / 2),
+			Vector3.new(7.2, 1.5, 1.5),
+			PEARL,
+			nil,
+			Style.decor()
+		)
 		shaft.Shape = Enum.PartType.Cylinder
-		Kit.glow(m, at * CFrame.new(0, 4.6, -0.74), Vector3.new(0.24, 5.6, 0.08), SKY_GLOW)
-		Style.block(m, at * CFrame.new(0, 8.5, 0), Vector3.new(2.3, 0.6, 2.3), GOLD, FOIL, Style.tiny())
-		Style.crystal(m, at * CFrame.new(0, 9.7, 0) * CFrame.Angles(0, c * 0.4, 0), 2.0, 0.8, SKY_DEEP, nil, 0.12)
+		Kit.glow(decor, at * CFrame.new(0, 4.6, -0.74), Vector3.new(0.24, 5.6, 0.08), SKY_GLOW)
+		Style.block(decor, at * CFrame.new(0, 8.5, 0), Vector3.new(2.3, 0.6, 2.3), GOLD, FOIL, Style.tiny())
+		Style.crystal(decor, at * CFrame.new(0, 9.7, 0) * CFrame.Angles(0, c * 0.4, 0), 2.0, 0.8, SKY_DEEP, nil, 0.12)
 	end
 
 	-- clouds round the podium's sides and back (the front stays open for the path)
@@ -318,8 +352,8 @@ local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
 		local r = 12.4 + rng:range(-0.6, 0.6)
 		local p = (base * CFrame.new(math.sin(a) * r, 0.5, -math.cos(a) * r)).Position
 		local size = rng:range(2.8, 3.8)
-		ball(m, p, size, Color3.new(1, 1, 1))
-		ball(m, p + Vector3.new(rng:range(-1.4, 1.4), 0.7, rng:range(-1.4, 1.4)), size * 0.7, PEARL)
+		ball(decor, p, size, Color3.new(1, 1, 1))
+		ball(decor, p + Vector3.new(rng:range(-1.4, 1.4), 0.7, rng:range(-1.4, 1.4)), size * 0.7, PEARL)
 	end
 end
 
@@ -328,14 +362,15 @@ local function litPath(m: Model, frame: CFrame, from: number, to: number, rng: R
 	local path = Style.model("SkyPath", m)
 	local len = to - from
 	local mid = (from + to) / 2
-	Style.block(path, frame * CFrame.new(0, 0.12, mid), Vector3.new(6, 0.24, len), WALK, nil, Style.solid())
+	local lift = SkyHaven.PathLift
+	Style.block(path, frame * CFrame.new(0, 0.12 + lift, mid), Vector3.new(6, 0.24, len), WALK, nil, Style.solid())
 	for _, sx in { -1, 1 } do
-		Style.block(path, frame * CFrame.new(sx * 2.85, 0.28, mid), Vector3.new(0.3, 0.08, len), SKY_GLOW, NEON, Style.tiny())
+		Style.block(path, frame * CFrame.new(sx * 2.85, 0.28 + lift, mid), Vector3.new(0.3, 0.08, len), SKY_GLOW, NEON, Style.tiny())
 	end
 	local tiles = math.floor(len / 2.6)
 	for i = 0, tiles - 1 do
 		local z = from + (i + 0.5) * len / tiles
-		Style.block(path, frame * CFrame.new(0, 0.27, z), Vector3.new(4.2, 0.06, 1.7), PEARL, nil, Style.tiny())
+		Style.block(path, frame * CFrame.new(0, 0.27 + lift, z), Vector3.new(4.2, 0.06, 1.7), PEARL, nil, Style.tiny())
 	end
 	-- crystals at the landing
 	for _, sx in { -1, 1 } do
@@ -411,22 +446,32 @@ end
 
 function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 	local m = Style.model("SkyHaven", parent)
+	-- what you can't walk on (the rock underside, the spire, cottages, trees, columns, clouds, the
+	-- waterfall): a Lod sub-model, so phones farther than the streaming radius get a proxy of it
+	local decor = Style.model("SkyHavenDecor", m)
+	Style.streaming(decor, "Lod")
 	local center = SkyHaven.Center
 	local frame = CFrame.lookAt(center, Vector3.new(center.X, center.Y, 0)) -- front (-Z local) toward the town
 	local w, d = SkyHaven.Size.X, SkyHaven.Size.Y
 	local rock = Kit.floatingIsland(m, frame, rng, { Width = w, Depth = d, Hang = 52, Tiers = 6 })
-	for _, p in rock:GetChildren() do
-		if p:IsA("BasePart") and p.CFrame.Position.Y > center.Y - 2.6 then
-			p.CanCollide = true
-			p.CanQuery = true
+	local under: { Instance } = {}
+	for _, child in rock:GetChildren() do
+		if child:IsA("BasePart") and child.CFrame.Position.Y > center.Y - 2.6 then
+			child.CanCollide = true
+			child.CanQuery = true
+		else
+			table.insert(under, child)
 		end
 	end
-	parkour(m, rng)
+	for _, child in under do
+		child.Parent = decor
+	end
+	parkour(m, decor, rng)
 	-- the lit path from the parkour's landing (the front edge) to the podium, a plain path past it to the village
 	litPath(m, frame, -d / 2, SkyHaven.Podium - SkyHaven.PodiumReach + 0.4, rng)
 	local path = Style.model("Paths", m)
-	Style.block(path, frame * CFrame.new(0, 0.12, 15.5), Vector3.new(34, 0.24, 4), C.Cobble, nil, Style.solid())
-	eggPodium(m, frame * CFrame.new(0, 0, SkyHaven.Podium), rng)
+	Style.block(path, frame * CFrame.new(0, 0.12 + SkyHaven.PathLift, 15.5), Vector3.new(34, 0.24, 4), C.Cobble, nil, Style.solid())
+	eggPodium(m, decor, frame * CFrame.new(0, 0, SkyHaven.Podium), rng)
 	-- the village: three cottages at the back, doors toward the egg
 	for i, spot in
 		{
@@ -436,18 +481,18 @@ function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 		}
 	do
 		local base = frame * CFrame.new(spot.X, 0, spot.Z) * CFrame.Angles(0, if i == 1 then -0.35 elseif i == 3 then 0.35 else 0, 0)
-		cottage(m, base, rng, spot.Roof)
+		cottage(decor, base, rng, spot.Roof)
 	end
 	-- trees: jungle giants at the corners, blossom and green trees between
 	for _, t in { { X = -26, Z = 4 }, { X = 26, Z = 5 } } do
-		Meadow.jungleTree(m, (frame * CFrame.new(t.X, 0, t.Z)).Position, 15, 5.5, rng, nil)
+		Meadow.jungleTree(decor, (frame * CFrame.new(t.X, 0, t.Z)).Position, 15, 5.5, rng, nil)
 	end
-	Style.tree(m, frame * CFrame.new(-19, 0, -17), "Pink", rng, 1.15)
-	Style.tree(m, frame * CFrame.new(20, 0, -19), "Pink", rng, 1.05)
-	Style.tree(m, frame * CFrame.new(-28, 0, 24), "Green", rng, 1)
-	-- a waterfall off the east edge
-	Kit.box(m, frame, Vector3.new(w / 2 - 8, 0.15, 0), Vector3.new(14, 0.3, 3), C.Water, nil, Kit.far({ Transparency = 0.15 }))
-	Kit.skyFall(m, frame * CFrame.new(w / 2 + 0.5, -0.4, 0) * CFrame.Angles(0, -math.pi / 2, 0), 48, 5, rng)
+	Style.tree(decor, frame * CFrame.new(-19, 0, -17), "Pink", rng, 1.15)
+	Style.tree(decor, frame * CFrame.new(20, 0, -19), "Pink", rng, 1.05)
+	Style.tree(decor, frame * CFrame.new(-28, 0, 24), "Green", rng, 1)
+	-- a waterfall off the east edge, its pool over the grass cap
+	Kit.box(decor, frame, Vector3.new(w / 2 - 8, 0.3, 0), Vector3.new(14, 0.3, 3), C.Water, nil, Kit.far({ Transparency = 0.15 }))
+	Kit.skyFall(decor, frame * CFrame.new(w / 2 + 0.5, -0.4, 0) * CFrame.Angles(0, -math.pi / 2, 0), 48, 5, rng)
 	return m
 end
 
