@@ -160,6 +160,9 @@ for _, name in process.args do
 	end
 end
 
+-- themed eggs that are no capsule yet (the SKY EGG on Sky Haven)
+models.egg_Sky = GolemBuilder.themedEgg("Sky")
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then

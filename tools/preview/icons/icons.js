@@ -1117,7 +1117,7 @@ async function main() {
   }
   const partSpec =
     PART_ICONS[iconName] ||
-    (/^(golem|capsule|shard)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
+    (/^(golem|capsule|shard|egg)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
     (/^item_/.test(iconName) ? { file: iconName, yaw: -24, pitch: 24 } : null) ||
     (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null) ||
     (/^dropper_/.test(iconName) ? { file: iconName, yaw: -32, pitch: 12 } : null) ||
