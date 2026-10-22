@@ -3,10 +3,19 @@
 	from the ground. A rock spire rises out of the sea off the south-east
 	corner; stepping stones wind round it (a parkour climb, each stone a short
 	jump higher than the last) up to the island. On the island: a village of
-	cottages, trees, lanterns, a waterfall and, on a podium in the middle, the
-	SKY EGG: a secret coin egg with three golems better than the Crystal
-	capsule's but still below the Robux ones (the capsule and the golems are
-	gameplay work for later; this builds the place).
+	cottages, trees, a waterfall and, on a podium in the middle, the SKY EGG:
+	a secret coin egg with three golems better than the Crystal capsule's but
+	still below the Robux ones (the capsule and the golems are gameplay work
+	for later; this builds the place). The egg (owner 2026-10-22: "cooler
+	still than the eggs below") is the town's premium egg recipe in its own
+	Sky theme (CapsuleEggs.Themes.Sky: pearl over sky blue, gold claw, wings,
+	a halo) at more than twice the stall eggs' size, turning slowly, two
+	glowing orbit rings with riding crystals round it, a beam of light into
+	the sky, four pearl columns with floating crystals and clouds round the
+	podium. A lit path (owner: "a cool lit path to the egg") runs from the
+	last stone to the podium: a dark walkway with neon edges and pearl tiles
+	under three pearl-and-gold sky gates with hanging lanterns (the first one
+	carries the SKY EGG board) and floating lights bobbing beside it.
 
 	Walkable: the island's top, the stones, the podium's steps and the
 	village paths collide; the rock underneath, leaves and glow don't.
@@ -17,12 +26,16 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
+local Tech = require(script.Parent.Parent.Districts.Tech)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
+local FOIL = Enum.Material.Foil
+local PI = math.pi
 
 local SkyHaven = {}
 
@@ -30,26 +43,41 @@ local SkyHaven = {}
 -- 36 studs out from it, the island floats beyond the spire
 SkyHaven.CoastZ = WorldLayout.Island.Max.Z
 SkyHaven.Spire = Vector3.new(150, 0, SkyHaven.CoastZ + 36) -- the rock spire in the sea
-SkyHaven.Center = SkyHaven.Spire + Vector3.new(0, 72, 46) -- the island's ground point
-SkyHaven.Size = Vector2.new(64, 52)
+SkyHaven.Center = SkyHaven.Spire + Vector3.new(0, 72, 50) -- the island's ground point
+SkyHaven.Size = Vector2.new(64, 60)
 SkyHaven.SpireRadius = 9
 SkyHaven.StepRadius = 16 -- the stones' path round the spire
 SkyHaven.StepRise = 3.4 -- studs up per stone (a plain jump clears ~7)
-SkyHaven.StepAngle = 0.5 -- radians between stones (~8 studs apart, gaps ~3)
+SkyHaven.StepCount = math.ceil((SkyHaven.Center.Y - 2) / SkyHaven.StepRise)
+-- one and a half turns round the spire (~7.5 studs apart, gaps ~2.5): the last stone lands
+-- in front of the island's front edge, where the lit path starts
+SkyHaven.StepAngle = 3 * math.pi / (SkyHaven.StepCount - 1)
 SkyHaven.StepSize = 5
 SkyHaven.Start = -math.pi / 2 -- the first stone faces the town (north, -Z)
+SkyHaven.Podium = 0 -- the egg podium's local z on the island (front = -Z)
+SkyHaven.PodiumReach = 9 * math.sqrt(2) -- the podium's star points (two turned squares)
+SkyHaven.EggScale = 3.2 -- the SKY EGG against the opening's egg (the town's stall eggs are 1.45)
+SkyHaven.EggSpin = 0.35 -- radians per second (client, DecorController)
+SkyHaven.BeamTop = 64 -- the light beam's top over the podium
 
-local SKY_WHITE = Color3.fromRGB(240, 246, 255)
+local PEARL = Color3.fromRGB(244, 248, 255)
+local SKY_STONE = Color3.fromRGB(196, 210, 236)
 local SKY_BLUE = Color3.fromRGB(110, 190, 255)
+local SKY_GLOW = Color3.fromRGB(90, 200, 255)
+local SKY_DEEP = Color3.fromRGB(50, 150, 255) -- neon sky blue that stays blue under bloom
 local GOLD = Color3.fromRGB(255, 205, 70)
+local GOLD_GLOW = Color3.fromRGB(240, 160, 20) -- neon gold that stays gold under bloom
+local GOLD_TEXT = Color3.fromRGB(255, 184, 24)
+local NAVY = Color3.fromRGB(24, 32, 74)
+local NAVY_DARK = Color3.fromRGB(14, 18, 46)
+local WALK = Color3.fromRGB(40, 48, 82) -- the lit path's dark walkway (like the lobby's neon walkways)
 
 -- The stepping stones round the spire, from just above the sea to the island's edge.
 local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 	local stones: { Vector3 } = {}
 	local spire = SkyHaven.Spire
 	local topY = SkyHaven.Center.Y
-	local count = math.ceil((topY - 2) / SkyHaven.StepRise)
-	for i = 0, count - 1 do
+	for i = 0, SkyHaven.StepCount - 1 do
 		local a = SkyHaven.Start + i * SkyHaven.StepAngle
 		local y = 2 + i * SkyHaven.StepRise
 		local p = Vector3.new(spire.X + math.cos(a) * SkyHaven.StepRadius, y, spire.Z + math.sin(a) * SkyHaven.StepRadius)
@@ -118,8 +146,11 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 	for _, sx in { -1, 1 } do
 		Style.block(m, CFrame.new(Vector3.new(mid.X + sx * 1.6, 1.8, mid.Z)), Vector3.new(0.25, 0.25, len), C.Wood, nil, Style.tiny())
 	end
-	-- the sign at the start
-	Style.sign(m, CFrame.new(shore + Vector3.new(-3.5, 4.2, 0)) * CFrame.Angles(0, math.pi, 0), "SKY HAVEN", 7, 1.6, { Kind = "Wood" })
+	-- the sign at the start, facing the town (a board's front is its LookVector)
+	Style.sign(m, CFrame.new(shore + Vector3.new(-3.5, 4.2, 0)), "SKY HAVEN", 7, 1.6, { Kind = "Wood" })
+	for _, sx in { -1, 1 } do
+		Style.block(m, CFrame.new(shore + Vector3.new(-3.5 + sx * 3, 1.7, 0.45)), Vector3.new(0.4, 4.2, 0.4), C.WoodDark, nil, Style.tiny())
+	end
 	return stones
 end
 
@@ -151,21 +182,49 @@ local function cottage(m: Model, base: CFrame, rng: Rng.Rng, roof: Color3)
 	Style.block(m, base * CFrame.new(w / 2 - 1.5, 0.8 + h + 3, 1.5), Vector3.new(1.1, 2.6, 1.1), C.StoneDark, nil, Style.tiny())
 end
 
--- The SKY EGG on its podium: a voxel egg (stacked layers, two squares each), cloud white with sky
--- blue and gold bands, glowing cracks, a halo ring and floating crystals.
+-- A ring of neon segments (`n` beams, `width` thick) in the XZ plane of `frame`.
+local function ring(parent: Instance, frame: CFrame, radius: number, n: number, width: number, color: Color3)
+	for i = 1, n do
+		local a0, a1 = (i - 1) / n * 2 * PI, i / n * 2 * PI
+		local p0 = (frame * CFrame.new(math.cos(a0) * radius, 0, math.sin(a0) * radius)).Position
+		local p1 = (frame * CFrame.new(math.cos(a1) * radius, 0, math.sin(a1) * radius)).Position
+		local dir = (p1 - p0).Unit
+		Kit.beam(parent, p0 - dir * width / 2, p1 + dir * width / 2, width, color).Material = NEON
+	end
+end
+
+-- A ball (a round cloud puff, a floating light).
+local function ball(parent: Instance, position: Vector3, size: number, color: Color3, material: Enum.Material?): Part
+	local p = Style.block(parent, CFrame.new(position), Vector3.new(size, size, size), color, material, Style.tiny())
+	p.Shape = Enum.PartType.Ball
+	return p
+end
+
+-- A model the client turns about its pivot (DecorController: the "Spin" tag).
+local function spinner(m: Model, pivot: Part, spin: number, bob: number?)
+	m.PrimaryPart = pivot
+	m:SetAttribute("SpinSpeed", spin)
+	m:SetAttribute("BobHeight", bob or 0)
+	Style.streaming(m, "Atomic")
+	m:AddTag("Spin")
+end
+
+-- The SKY EGG on its podium (see the header). `base` = the podium's bottom center, front = -Z.
 local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
-	-- the podium: three stepped octagon-ish tiers and a neon ring
+	-- the podium: three stepped tiers (two turned squares each), pearl over sky stone, a gold lip under every step
 	for i, r in { 9, 7.2, 5.6 } do
 		local y = (i - 0.5) * 1.1
-		for _, turn in { 0, math.pi / 4 } do
+		for _, turn in { 0, PI / 4 } do
+			local at = base * CFrame.new(0, y, 0) * CFrame.Angles(0, turn, 0)
 			Style.block(
 				m,
-				base * CFrame.new(0, y, 0) * CFrame.Angles(0, turn, 0),
+				at,
 				Vector3.new(r * 2, 1.1, r * 2),
-				Style.vary(if i == 3 then C.StoneLight else C.Stone, rng, 0.03),
+				Style.vary(if i == 3 then PEARL else SKY_STONE, rng, 0.03),
 				nil,
 				Style.solid()
 			)
+			Style.block(m, at * CFrame.new(0, 0.4, 0), Vector3.new(r * 2 + 0.3, 0.2, r * 2 + 0.3), GOLD, FOIL, Style.tiny())
 		end
 	end
 	local top = base * CFrame.new(0, 3.3, 0)
@@ -177,71 +236,175 @@ local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
 	for k = 0, 3 do
 		Style.block(
 			m,
-			top * CFrame.Angles(0, k * math.pi / 2, 0) * CFrame.new(0, 0.08, 4.6),
+			top * CFrame.Angles(0, k * PI / 2, 0) * CFrame.new(0, 0.08, 4.6),
 			Vector3.new(9.4, 0.16, 0.3),
 			SKY_BLUE,
 			NEON,
 			Style.tiny()
 		)
 	end
-	-- the egg: profile radius by height (egg shape: wider low, narrower high)
-	local H = 9
-	local layers = 9
-	for k = 0, layers - 1 do
-		local t = (k + 0.5) / layers
-		local r = 3.6 * math.sqrt(math.max(0, 1 - (2 * t - 1) ^ 2)) * (1.08 - 0.22 * t)
-		local y = 0.2 + H * t
-		local band = if k == 3 then GOLD elseif k == 5 then SKY_BLUE else SKY_WHITE
-		for _, turn in { 0, math.pi / 4 } do
+
+	-- the egg: the town's premium egg in the Sky theme, scaled about its center, turning slowly
+	local k = SkyHaven.EggScale
+	local center = top * CFrame.new(0, (1.25 + 0.15) * k, 0)
+	local egg = GolemBuilder.themedEgg("Sky", center, { Calm = true })
+	for _, d in egg:GetDescendants() do
+		if d:IsA("BasePart") then
+			local rel = center:ToObjectSpace(d.CFrame)
+			d.CFrame = center * CFrame.new(rel.Position * k) * rel.Rotation
+			d.Size *= k
+		end
+	end
+	egg.Name = "SkyEgg"
+	egg.Parent = m
+	spinner(egg, egg.PrimaryPart :: Part, SkyHaven.EggSpin)
+	local glow = Style.block(m, center, Vector3.new(0.4, 0.4, 0.4), SKY_GLOW, nil, Style.tiny({ Transparency = 1 }))
+	glow.Name = "SkyEggLight"
+	Style.light(glow, SKY_GLOW, 18, 0.9)
+	-- sparkles drifting off the shell
+	local sparkles = Style.block(m, center, Vector3.new(8, 10, 8), SKY_GLOW, nil, Style.tiny({ Transparency = 1 }))
+	sparkles.Name = "SkyEggSparkles"
+	Style.emitter(sparkles, "Sparkle", Color3.fromRGB(200, 240, 255), 8)
+
+	-- two tilted orbit rings round the egg (gold and sky blue), three crystals riding the gold one
+	local orbit = Style.model("SkyOrbit", m)
+	local hub = Style.block(orbit, center, Vector3.new(0.2, 0.2, 0.2), GOLD, nil, Style.tiny({ Transparency = 1 }))
+	hub.Name = "OrbitHub"
+	for r, o in { { 10.2, 0.3, 0 }, { 9.2, -0.36, 1.1 } } do
+		local frame = center * CFrame.new(0, 1.6, 0) * CFrame.Angles(0, o[3], 0) * CFrame.Angles(o[2], 0, 0)
+		ring(orbit, frame, o[1], 14, 0.2, if r == 1 then GOLD_GLOW else SKY_DEEP)
+		if r == 1 then
+			for c = 0, 2 do
+				local a = c * 2 * PI / 3 + 0.5
+				Style.crystal(orbit, frame * CFrame.new(math.cos(a) * o[1], -0.9, math.sin(a) * o[1]), 1.8, 0.7, SKY_DEEP, nil, 0.12)
+			end
+		end
+	end
+	spinner(orbit, hub, -0.45)
+
+	-- a beam of light from the crown into the sky (seen from the town: something is up there)
+	local beamY0 = (1.25 + 0.15) * k + 2.4 * k
+	local beam = Style.block(
+		m,
+		top * CFrame.new(0, (beamY0 + SkyHaven.BeamTop) / 2, 0) * CFrame.Angles(0, 0, PI / 2),
+		Vector3.new(SkyHaven.BeamTop - beamY0, 1.1, 1.1),
+		Color3.fromRGB(150, 215, 255),
+		NEON,
+		Style.tiny({ Transparency = 0.65 })
+	)
+	beam.Shape = Enum.PartType.Cylinder
+	beam.Name = "SkyBeam"
+
+	-- four pearl columns on the diagonals: a gold foot and capital, a glowing stripe toward the egg,
+	-- a crystal floating over each
+	for c = 0, 3 do
+		local a = (c + 0.5) * PI / 2
+		local p = (base * CFrame.new(math.sin(a) * 14.6, 0, -math.cos(a) * 14.6)).Position
+		local at = CFrame.lookAt(p, Vector3.new(base.Position.X, p.Y, base.Position.Z))
+		Style.block(m, at * CFrame.new(0, 0.5, 0), Vector3.new(2.3, 1, 2.3), GOLD, FOIL, Style.decor())
+		local shaft =
+			Style.block(m, at * CFrame.new(0, 4.6, 0) * CFrame.Angles(0, 0, PI / 2), Vector3.new(7.2, 1.5, 1.5), PEARL, nil, Style.decor())
+		shaft.Shape = Enum.PartType.Cylinder
+		Kit.glow(m, at * CFrame.new(0, 4.6, -0.74), Vector3.new(0.24, 5.6, 0.08), SKY_GLOW)
+		Style.block(m, at * CFrame.new(0, 8.5, 0), Vector3.new(2.3, 0.6, 2.3), GOLD, FOIL, Style.tiny())
+		Style.crystal(m, at * CFrame.new(0, 9.7, 0) * CFrame.Angles(0, c * 0.4, 0), 2.0, 0.8, SKY_DEEP, nil, 0.12)
+	end
+
+	-- clouds round the podium's sides and back (the front stays open for the path)
+	for c = 1, 8 do
+		local a = PI * (0.38 + 1.24 * (c - 1) / 7)
+		local r = 12.4 + rng:range(-0.6, 0.6)
+		local p = (base * CFrame.new(math.sin(a) * r, 0.5, -math.cos(a) * r)).Position
+		local size = rng:range(2.8, 3.8)
+		ball(m, p, size, Color3.new(1, 1, 1))
+		ball(m, p + Vector3.new(rng:range(-1.4, 1.4), 0.7, rng:range(-1.4, 1.4)), size * 0.7, PEARL)
+	end
+end
+
+-- The lit path (see the header) from local z `from` (the island's front edge) to `to` (the podium).
+local function litPath(m: Model, frame: CFrame, from: number, to: number, rng: Rng.Rng)
+	local path = Style.model("SkyPath", m)
+	local len = to - from
+	local mid = (from + to) / 2
+	Style.block(path, frame * CFrame.new(0, 0.12, mid), Vector3.new(6, 0.24, len), WALK, nil, Style.solid())
+	for _, sx in { -1, 1 } do
+		Style.block(path, frame * CFrame.new(sx * 2.85, 0.28, mid), Vector3.new(0.3, 0.08, len), SKY_GLOW, NEON, Style.tiny())
+	end
+	local tiles = math.floor(len / 2.6)
+	for i = 0, tiles - 1 do
+		local z = from + (i + 0.5) * len / tiles
+		Style.block(path, frame * CFrame.new(0, 0.27, z), Vector3.new(4.2, 0.06, 1.7), PEARL, nil, Style.tiny())
+	end
+	-- crystals at the landing
+	for _, sx in { -1, 1 } do
+		Style.crystalCluster(path, frame * CFrame.new(sx * 4.9, 0, from + 1.6), 2.2, SKY_BLUE, rng, { Count = 3 })
+	end
+	-- three sky gates
+	local gates = { from + 3.4, mid, to - 2.4 }
+	for g, z in gates do
+		local at = frame * CFrame.new(0, 0, z)
+		local h = 5.5 + 2 * g -- rising toward the egg: the egg stays framed in them from the landing
+		for _, sx in { -1, 1 } do
+			Style.block(path, at * CFrame.new(sx * 3.8, 0.4, 0), Vector3.new(1.5, 0.8, 1.5), GOLD, FOIL, Style.decor())
+			Style.block(path, at * CFrame.new(sx * 3.8, h / 2, 0), Vector3.new(0.9, h, 0.9), PEARL, nil, Style.decor())
+			Kit.glow(path, at * CFrame.new(sx * 3.8, h * 0.52, -0.47), Vector3.new(0.22, h * 0.6, 0.06), SKY_GLOW)
+		end
+		Style.block(path, at * CFrame.new(0, h + 0.3, 0), Vector3.new(8.9, 0.6, 0.9), GOLD, FOIL, Style.tiny())
+		Kit.glow(path, at * CFrame.new(0, h - 0.04, 0), Vector3.new(6.9, 0.12, 0.3), SKY_GLOW)
+		-- the top beam with its ends swept up
+		Style.block(path, at * CFrame.new(0, h + 0.9, 0), Vector3.new(9.4, 0.55, 1.2), PEARL, nil, Style.tiny())
+		for _, sx in { -1, 1 } do
 			Style.block(
-				m,
-				top * CFrame.new(0, y, 0) * CFrame.Angles(0, turn, 0),
-				Vector3.new(r * 2, H / layers + 0.05, r * 2),
-				band,
+				path,
+				at * CFrame.new(sx * 5.1, h + 1.15, 0) * CFrame.Angles(0, 0, sx * 0.32),
+				Vector3.new(1.6, 0.5, 1.2),
+				PEARL,
 				nil,
-				Style.decor()
+				Style.tiny()
+			)
+		end
+		-- two lanterns hanging from the beam's ends outside the posts (the opening stays clear)
+		for j, sx in { -1, 1 } do
+			Style.block(path, at * CFrame.new(sx * 4.95, h + 0.2, 0), Vector3.new(0.1, 0.9, 0.1), GOLD, FOIL, Style.tiny())
+			local lamp = Kit.glow(path, at * CFrame.new(sx * 4.95, h - 0.65, 0), Vector3.new(0.65, 0.85, 0.65), C.LampAmber)
+			if g == 2 and j == 1 then
+				Style.light(lamp, C.LampAmber, 18, 1.2)
+			end
+		end
+		if g == 1 then
+			-- the SKY EGG board on the first gate, over the landing: gold letters on navy, gold lips, a cyan frame
+			local signAt = at * CFrame.new(0, h + 2.6, 0)
+			Style.block(path, signAt * CFrame.new(0, 0, 0.45), Vector3.new(7.6, 2.3, 0.8), NAVY_DARK, nil, Style.tiny())
+			for _, sy in { -1, 1 } do
+				Style.block(path, signAt * CFrame.new(0, sy * 1.2, 0.45), Vector3.new(7.8, 0.16, 0.9), GOLD, FOIL, Style.tiny())
+			end
+			Tech.sign(path, signAt, "SKY EGG", 6.4, 1.9, {
+				Casing = false,
+				Board = NAVY,
+				TextColor = GOLD_TEXT,
+				Frame = SKY_GLOW,
+				Studs = false,
+			})
+		end
+	end
+	-- floating lights bobbing beside the path, gold and sky blue
+	local lights = Style.model("FloatingLights", path)
+	local pivot =
+		Style.block(lights, frame * CFrame.new(0, 3.4, mid), Vector3.new(0.2, 0.2, 0.2), GOLD, nil, Style.tiny({ Transparency = 1 }))
+	pivot.Name = "LightsPivot"
+	for i = 1, #gates - 1 do
+		local z = (gates[i] + gates[i + 1]) / 2
+		for j, sx in { -1, 1 } do
+			ball(
+				lights,
+				(frame * CFrame.new(sx * 4.6, 3.2 + 0.5 * j, z)).Position,
+				0.75,
+				if (i + j) % 2 == 0 then GOLD_GLOW else SKY_GLOW,
+				NEON
 			)
 		end
 	end
-	-- glowing cracks and gold spots on the shell
-	for i = 1, 6 do
-		local a = i * math.pi / 3 + rng:range(-0.2, 0.2)
-		local y = rng:range(2, 7)
-		local t = y / H
-		local r = 3.6 * math.sqrt(math.max(0, 1 - (2 * t - 1) ^ 2)) * (1.08 - 0.22 * t)
-		Style.block(
-			m,
-			top * CFrame.new(math.cos(a) * (r + 0.05), y, math.sin(a) * (r + 0.05)) * CFrame.Angles(0, -a, rng:range(-0.7, 0.7)),
-			Vector3.new(0.12, 1.4, 0.5),
-			Color3.fromRGB(130, 240, 255),
-			NEON,
-			Style.tiny()
-		)
-	end
-	-- the halo and floating crystals round it
-	for k = 0, 11 do
-		local a = k * math.pi / 6
-		Style.block(
-			m,
-			top * CFrame.new(math.cos(a) * 6, 10.5, math.sin(a) * 6) * CFrame.Angles(0, -a, 0),
-			Vector3.new(0.22, 0.22, 3.1),
-			GOLD,
-			NEON,
-			Style.tiny()
-		)
-	end
-	for k = 1, 4 do
-		local a = k * math.pi / 2 + 0.4
-		Style.crystal(
-			m,
-			top * CFrame.new(math.cos(a) * 7.5, rng:range(4, 7), math.sin(a) * 7.5) * CFrame.Angles(0.3, a, 0.2),
-			2.6,
-			0.9,
-			SKY_BLUE
-		)
-	end
-	-- the board in front
-	Style.sign(m, base * CFrame.new(0, 1.4, -10.4) * CFrame.Angles(0, math.pi, 0), "SKY EGG", 6, 1.5, { Kind = "Wood" })
+	spinner(lights, pivot, 0, 0.45)
 end
 
 function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
@@ -257,17 +420,17 @@ function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 		end
 	end
 	parkour(m, rng)
-	-- a path from the parkour's arrival (front edge) to the podium, then on to the village
+	-- the lit path from the parkour's landing (the front edge) to the podium, a plain path past it to the village
+	litPath(m, frame, -d / 2, SkyHaven.Podium - SkyHaven.PodiumReach + 0.4, rng)
 	local path = Style.model("Paths", m)
-	Style.block(path, frame * CFrame.new(0, 0.12, -d / 2 + 8), Vector3.new(4, 0.24, 16), C.Cobble, nil, Style.solid())
-	Style.block(path, frame * CFrame.new(0, 0.12, 11), Vector3.new(30, 0.24, 4), C.Cobble, nil, Style.solid())
-	eggPodium(m, frame * CFrame.new(0, 0, -2), rng)
+	Style.block(path, frame * CFrame.new(0, 0.12, 15.5), Vector3.new(34, 0.24, 4), C.Cobble, nil, Style.solid())
+	eggPodium(m, frame * CFrame.new(0, 0, SkyHaven.Podium), rng)
 	-- the village: three cottages at the back, doors toward the egg
 	for i, spot in
 		{
-			{ X = -20, Z = 16, Roof = C.RoofTerracotta },
-			{ X = 0, Z = 19, Roof = Color3.fromRGB(80, 130, 200) },
-			{ X = 20, Z = 16, Roof = C.RoofTerracotta },
+			{ X = -21, Z = 21, Roof = C.RoofTerracotta },
+			{ X = 0, Z = 23.5, Roof = Color3.fromRGB(80, 130, 200) },
+			{ X = 21, Z = 21, Roof = C.RoofTerracotta },
 		}
 	do
 		local base = frame * CFrame.new(spot.X, 0, spot.Z) * CFrame.Angles(0, if i == 1 then -0.35 elseif i == 3 then 0.35 else 0, 0)
@@ -277,17 +440,9 @@ function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 	for _, t in { { X = -26, Z = 4 }, { X = 26, Z = 5 } } do
 		Meadow.jungleTree(m, (frame * CFrame.new(t.X, 0, t.Z)).Position, 15, 5.5, rng, nil)
 	end
-	Style.tree(m, frame * CFrame.new(-14, 0, -12), "Pink", rng, 1.15)
-	Style.tree(m, frame * CFrame.new(16, 0, -14), "Pink", rng, 1.05)
-	Style.tree(m, frame * CFrame.new(-28, 0, 20), "Green", rng, 1)
-	-- lanterns along the front path
-	for _, z in { -20, -13 } do
-		for _, sx in { -1, 1 } do
-			local at = frame * CFrame.new(sx * 3.4, 0, z)
-			Style.block(m, at * CFrame.new(0, 1.4, 0), Vector3.new(0.4, 2.8, 0.4), C.WoodDark, nil, Style.tiny())
-			Style.block(m, at * CFrame.new(0, 3.1, 0), Vector3.new(0.8, 0.9, 0.8), C.LampAmber, NEON, Style.tiny())
-		end
-	end
+	Style.tree(m, frame * CFrame.new(-19, 0, -17), "Pink", rng, 1.15)
+	Style.tree(m, frame * CFrame.new(20, 0, -19), "Pink", rng, 1.05)
+	Style.tree(m, frame * CFrame.new(-28, 0, 24), "Green", rng, 1)
 	-- a waterfall off the east edge
 	Kit.box(m, frame, Vector3.new(w / 2 - 8, 0.15, 0), Vector3.new(14, 0.3, 3), C.Water, nil, Kit.far({ Transparency = 0.15 }))
 	Kit.skyFall(m, frame * CFrame.new(w / 2 + 0.5, -0.4, 0) * CFrame.Angles(0, -math.pi / 2, 0), 48, 5, rng)

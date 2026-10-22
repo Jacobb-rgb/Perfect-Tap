@@ -115,7 +115,7 @@ LobbyLayout.Budget = {
 	-- Everything else inside the lobby area today (ground, plots, ore
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
-		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
+		Sky = { Parts = 1950, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
