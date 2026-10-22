@@ -81,6 +81,11 @@ WorldLayout.Island = {
 	Max = Vector3.new(170 + WorldLayout.PlotGrid.CoastShift, 0, 150 + WorldLayout.PlotGrid.SouthShift),
 }
 
+-- The gate in the island's invisible south wall (Land) where the plank bridge leaves for SKY
+-- HAVEN's parkour (Lobby/Sky/SkyHaven: its spire stands in the sea at this X): Width studs
+-- open, two short side walls Depth studs out over the rim keep it a corridor onto the bridge.
+WorldLayout.SouthGate = { X = 150, Width = 6, Depth = 14 }
+
 export type Road = { From: Vector3, To: Vector3, Width: number }
 
 -- Roads (flat dirt strips)

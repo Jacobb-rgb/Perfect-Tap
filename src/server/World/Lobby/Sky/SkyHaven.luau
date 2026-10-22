@@ -42,7 +42,7 @@ local SkyHaven = {}
 -- the south coast (WorldLayout.Island follows the plot size): the spire stands in the sea
 -- 36 studs out from it, the island floats beyond the spire
 SkyHaven.CoastZ = WorldLayout.Island.Max.Z
-SkyHaven.Spire = Vector3.new(150, 0, SkyHaven.CoastZ + 36) -- the rock spire in the sea
+SkyHaven.Spire = Vector3.new(WorldLayout.SouthGate.X, 0, SkyHaven.CoastZ + 36) -- the rock spire in the sea, out from the wall's gate
 SkyHaven.Center = SkyHaven.Spire + Vector3.new(0, 72, 50) -- the island's ground point
 SkyHaven.Size = Vector2.new(64, 60)
 SkyHaven.SpireRadius = 9
@@ -129,27 +129,29 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 			Style.crystalCluster(m, c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9), 3.5, SKY_BLUE, rng, { Count = 2 })
 		end
 	end
-	-- a plank bridge from the lobby's rim to the first stone
+	-- a plank bridge from the gate in the island's south wall (WorldLayout.SouthGate) over the
+	-- rim (its grass top ~1.8) to the first stone
 	local first = stones[1]
-	local shore = Vector3.new(first.X, 0.6, SkyHaven.CoastZ + 10)
-	local dir = Vector3.new(0, 0, first.Z - shore.Z)
-	local len = dir.Magnitude
+	local shore = Vector3.new(first.X, 0, SkyHaven.CoastZ + 3)
+	local len = first.Z - shore.Z
 	local mid = (shore + first) / 2
 	Style.block(
 		m,
-		CFrame.lookAt(Vector3.new(mid.X, 1.1, mid.Z), Vector3.new(first.X, 1.1, first.Z)),
+		CFrame.lookAt(Vector3.new(mid.X, 1.7, mid.Z), Vector3.new(first.X, 1.7, first.Z)),
 		Vector3.new(3.4, 0.4, len),
 		C.Plank,
 		nil,
 		Style.solid()
 	)
 	for _, sx in { -1, 1 } do
-		Style.block(m, CFrame.new(Vector3.new(mid.X + sx * 1.6, 1.8, mid.Z)), Vector3.new(0.25, 0.25, len), C.Wood, nil, Style.tiny())
+		Style.block(m, CFrame.new(Vector3.new(mid.X + sx * 1.6, 2.4, mid.Z)), Vector3.new(0.25, 0.25, len), C.Wood, nil, Style.tiny())
 	end
-	-- the sign at the start, facing the town (a board's front is its LookVector)
-	Style.sign(m, CFrame.new(shore + Vector3.new(-3.5, 4.2, 0)), "SKY HAVEN", 7, 1.6, { Kind = "Wood" })
+	-- the sign on the rim just out past the wall, beside the gate (out of the lobby area), facing
+	-- the town (a board's front is its LookVector)
+	local signAt = Vector3.new(first.X - 6.6, 0, SkyHaven.CoastZ + 5)
+	Style.sign(m, CFrame.new(signAt + Vector3.new(0, 4.4, 0)), "SKY HAVEN", 6, 1.5, { Kind = "Wood" })
 	for _, sx in { -1, 1 } do
-		Style.block(m, CFrame.new(shore + Vector3.new(-3.5 + sx * 3, 1.7, 0.45)), Vector3.new(0.4, 4.2, 0.4), C.WoodDark, nil, Style.tiny())
+		Style.block(m, CFrame.new(signAt + Vector3.new(sx * 2.6, 1.3, 0.45)), Vector3.new(0.4, 4.6, 0.4), C.WoodDark, nil, Style.tiny())
 	end
 	return stones
 end

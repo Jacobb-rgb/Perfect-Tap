@@ -294,10 +294,42 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("SKY HAVEN can be reached: the south wall's gate and the plank bridge lead clear to the first stone", function()
+		local gate = WorldLayout.SouthGate
+		local coast = WorldLayout.Island.Max.Z
+		local stoneZ = coast + 36 - 16 - 2.5 -- the first stone's near edge (SkyHaven: the spire 36 out, the stones 16 round it)
+		-- nothing collidable stands in the walk from the lawn through the gate to the stone
+		local lo = Vector3.new(gate.X - gate.Width / 2 + 0.3, 2.0, coast - 4)
+		local hi = Vector3.new(gate.X + gate.Width / 2 - 0.3, 7, stoneZ)
+		for _, part in parts(map) do
+			if part.CanCollide then
+				local min, max = bounds(part)
+				T.falsy(overlaps(min, max, lo, hi), `{part:GetFullName()} blocks the way to SKY HAVEN`)
+			end
+		end
+		-- and a solid bridge carries you from the gate over the rim and the sea to the stone
+		local haven = map:FindFirstChild("SkyHaven", true)
+		local carried = false
+		for _, part in parts(haven) do
+			local min, max = bounds(part)
+			carried = carried
+				or (
+					part.CanCollide
+					and min.X <= gate.X - 1
+					and max.X >= gate.X + 1
+					and min.Z <= coast + 4
+					and max.Z >= stoneZ
+					and max.Y >= 1.8
+				)
+		end
+		T.truthy(carried, "a plank bridge from the gate to the first stone")
+	end)
+
 	T.test("the south coast runs straight, no sea bay behind the vault (owner 2026-10-22)", function()
 		local island = WorldLayout.Island
 		T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea")
-		T.eq(#map.Land.Bounds:GetChildren(), 4, "the island's 4 invisible walls")
+		-- north, west, east and the south wall in two pieces round SKY HAVEN's gate, its two short side walls
+		T.eq(#map.Land.Bounds:GetChildren(), 7, "the island's invisible walls")
 		-- the ground covers the lawn behind the vault (x -52..52, the plot
 		-- roads' inner verges) from the 12-cell coast (z 150) out to the south coast
 		local covered = false
@@ -309,13 +341,20 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(covered, "the ground covers x -52..52 from z 150 to the south coast")
-		-- the south wall spans the island's whole width
-		local wall = false
-		for _, part in map.Land.Bounds:GetChildren() do
-			local min, max = bounds(part)
-			wall = wall or (min.X <= island.Min.X and max.X >= island.Max.X and min.Z >= island.Max.Z and min.Z < island.Max.Z + 6)
+		-- the south wall spans the island's whole width but for SKY HAVEN's gate (WorldLayout.SouthGate):
+		-- probe the coast every 2 studs just outside the island's edge
+		local gate = WorldLayout.SouthGate
+		local x = island.Min.X
+		while x <= island.Max.X do
+			local walled = false
+			for _, part in map.Land.Bounds:GetChildren() do
+				local min, max = bounds(part)
+				walled = walled or (min.X <= x and max.X >= x and min.Z >= island.Max.Z and min.Z < island.Max.Z + 6)
+			end
+			local open = math.abs(x - gate.X) < gate.Width / 2
+			T.eq(walled, not open, `south coast at x {x} walled (only the SKY HAVEN gate is open)`)
+			x += 2
 		end
-		T.truthy(wall, "one invisible wall along the whole south coast")
 		-- the south rim: one straight line of columns along the whole coast at its
 		-- inner face (Land: the island's edge + 3), nothing of it inland; only the
 		-- stream's waterfall keeps it low (Land.RimNotch)
