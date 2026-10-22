@@ -198,7 +198,7 @@ local METRICS: { [string]: Metrics } = {
 		Close = 72,
 		Cell = Vector2.new(140, 164),
 		Detail = 330,
-		Slot = 210,
+		Slot = 224, -- (an 11-letter word of a name, DRAGONSCALE, is 8 pt on a 568x320 phone)
 		Title = 34,
 		Text = 20,
 		Small = 17,
@@ -1144,18 +1144,96 @@ local function fitWord(label: TextLabel | TextButton, size: number, width: numbe
 	Pop.fit(l, s)
 end
 
--- A sentence in the round font at `size` (no shrink-to-fit; fitText sizes it).
+-- A sentence in the round font at `size` (no shrink-to-fit; fitText sizes it). Round
+-- for good (Pop.round): a short status or hint filled in later stays round.
 local function round(label: TextLabel, size: number)
-	label.FontFace = PopTheme.Font
-	label.TextScaled = false
-	label.TextSize = size
-	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
-	if fit then
-		fit:Destroy()
+	local cut = label.TextTruncate -- (Pop.round clears it; a sentence here is still cut, never spilled)
+	Pop.round(label, size)
+	label.TextTruncate = cut
+end
+
+--[[
+	Long names (review 2026-10-22: "HEARTSTONE COLOSSUS" shrank to 5 pt on
+	phones): a card's or a slot's name is pixel letters on two lines when
+	one line would be smaller than GolemView.NameMin, the size chosen so
+	the longer half fits its line. Design units; on phones the UI scale is
+	0.62, so 13 units are 8 pt.
+]]
+GolemView.NameMin = 10 -- PC
+GolemView.NameMinCompact = 13 -- phones and TVs
+GolemView.NameTwo = 2 -- two lines are at most this much bigger than NameMin (the picture keeps its room)
+GolemView.NameLine = 1.1 -- a pixel line's height in em (Press Start 2P is 1 em: room to spare)
+
+local function letters(text: string): number
+	return utf8.len(text) or #text
+end
+
+-- The letters of the longer line when `text` is split at its best space (all of it: no space).
+local function halfLetters(text: string): number
+	local words = string.split(text, " ")
+	local best = letters(text)
+	for i = 1, #words - 1 do
+		local a = letters(table.concat(words, " ", 1, i))
+		local b = letters(table.concat(words, " ", i + 1))
+		best = math.min(best, math.max(a, b))
 	end
+	return best
+end
+
+--[[
+	The pixel TextSize (at most `max`) at which `text` fills `width` design
+	units on `lines` lines (1 or 2; two lines stay under `floor` + NameTwo).
+]]
+function GolemView.nameSize(text: string, max: number, width: number, lines: number, floor: number): number
+	local widest = if lines > 1 then halfLetters(text) else letters(text)
+	local top = if lines > 1 then math.min(max, floor + GolemView.NameTwo) else max
+	return math.max(1, math.min(top, math.floor(width / math.max(1, widest))))
+end
+
+--[[
+	(size, lines) for a name in `width` design units: one line when it is at
+	least `floor` there (or it has no space), else two lines when that is bigger.
+]]
+function GolemView.nameFit(text: string, max: number, width: number, floor: number): (number, number)
+	local one = GolemView.nameSize(text, max, width, 1, floor)
+	if one >= floor or not string.find(text, " ", 1, true) then
+		return one, 1
+	end
+	local two = GolemView.nameSize(text, max, width, 2, floor)
+	if two > one then
+		return two, 2
+	end
+	return one, 1
+end
+
+-- The box height `lines` pixel lines of `size` need.
+function GolemView.nameHeight(size: number, lines: number): number
+	return math.ceil(lines * size * GolemView.NameLine) + 2
+end
+
+--[[
+	Shows a pixel name at `size` on `lines` lines: TextScaled under a
+	constraint that never lets it grow past `size` (Roblox only shrinks it
+	if the font runs wider than the estimate), cut with "..." as a last resort.
+]]
+local function setName(label: TextLabel, size: number, lines: number)
+	label.FontFace = PopTheme.Pixel
+	label.TextWrapped = lines > 1
+	label.TextScaled = true
+	label.TextSize = size
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label:SetAttribute("NameLines", lines)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	l.MinTextSize = 1
+	l.MaxTextSize = size
+	l.MinTextSize = math.min(size, PopTheme.PixelMin)
 	local edge = label:FindFirstChild("Edge") :: UIStroke?
 	if edge then
-		edge.LineJoinMode = Enum.LineJoinMode.Round
+		edge.LineJoinMode = Enum.LineJoinMode.Miter
 	end
 end
 
@@ -1258,6 +1336,24 @@ end
 local CARD_TITLE = 26
 local CARD_LINE = 22
 
+local function nameMin(m: Metrics): number
+	return if m == METRICS.Compact then GolemView.NameMinCompact else GolemView.NameMin
+end
+
+-- The biggest a grid card's name gets (Pop.fit's size for it) and a slot's.
+local function cardNameMax(m: Metrics): number
+	return math.floor((m.Small + 5) * PopTheme.PixelScale + 0.5)
+end
+
+local function slotNameMax(m: Metrics): number
+	return math.floor((m.Small + 3) * PopTheme.PixelScale + 0.5)
+end
+
+-- (size, lines) of a grid card's name in a cell `cellW` wide (the name box is 10 narrower; 2 to spare).
+local function cardName(text: string, cellW: number, m: Metrics): (number, number)
+	return GolemView.nameFit(text, cardNameMax(m), cellW - 12, nameMin(m))
+end
+
 ---------------------------------------------------------------- building
 
 local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
@@ -1273,8 +1369,13 @@ local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
 		ZIndex = 2,
 	}, refs.Grid)
 	local lip = Pop.lipUnits(h)
-	local size = math.min(w - 18, h - CARD_TITLE - CARD_LINE - lip - 2)
-	local picTop = CARD_TITLE
+	-- (a long name takes two lines: the picture moves down under it)
+	local nameText = string.upper(card.Name)
+	local cellW = math.max(w, refs.GridLayout.CellSize.X.Offset)
+	local nameSize, nameLines = cardName(nameText, cellW, m)
+	local nameH = if nameLines > 1 then GolemView.nameHeight(nameSize, nameLines) else CARD_TITLE - 6
+	local picTop = math.max(CARD_TITLE, 5 + nameH + 1)
+	local size = math.min(w - 18, h - picTop - CARD_LINE - lip - 2)
 	reelFace(
 		button,
 		GolemView.rarityPaint(if card.Known then card.Rarity else nil),
@@ -1294,12 +1395,13 @@ local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
 	}, button)
 	local picture = GolemView.picture(portrait, card.Kind, size, { ZIndex = 4 })
 	Pop.fxTag(picture, "Lean")
-	local name = GolemView.text(button, string.upper(card.Name), m.Small + 5, {
+	local name = GolemView.text(button, nameText, m.Small + 5, {
 		Name = "GolemName",
 		Position = UDim2.fromOffset(5, 5),
-		Size = UDim2.new(1, -10, 0, CARD_TITLE - 6),
+		Size = UDim2.new(1, -10, 0, nameH),
 		ZIndex = 6,
 	})
+	setName(name, nameSize, nameLines)
 	local bonus = GolemView.text(button, GolemView.shortBonus(card.Bonus), m.Small + 2, {
 		Name = "Bonus",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -1311,7 +1413,7 @@ local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
 	-- tilted tags beside the picture (the reels' price tags)
 	local equipped = reelTag(button, "E", Pop.paint("Green").Bottom, Vector2.new(30, 26), {
 		Name = "EquippedBadge",
-		Position = UDim2.fromOffset(6, CARD_TITLE + 2),
+		Position = UDim2.fromOffset(6, picTop + 2),
 		Rotation = -10,
 		ZIndex = 7,
 	})
@@ -1319,14 +1421,14 @@ local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
 	local lock = reelTag(button, "LOCKED", Pop.paint("Blue").Bottom, Vector2.new(70, 22), {
 		Name = "LockBadge",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -5, 0, CARD_TITLE + 4),
+		Position = UDim2.new(1, -5, 0, picTop + 4),
 		Rotation = 10,
 		ZIndex = 7,
 	})
 	local check = reelTag(button, "", GolemView.ChipDark, Vector2.new(32, 32), {
 		Name = "Check",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -6, 0, CARD_TITLE + 2),
+		Position = UDim2.new(1, -6, 0, picTop + 2),
 		Visible = false,
 		ZIndex = 8,
 	})
@@ -1395,11 +1497,12 @@ local function slot(parent: Instance, index: number, m: Metrics): SlotRefs
 		ZIndex = 4,
 	}, frame)
 	local lip = Pop.lipUnits(h)
-	local textX = pic + 8
+	-- (the name and bonus column runs close to the edge: a long name gets its letters' room)
+	local textX = pic + 4
 	local name = GolemView.text(frame, "EMPTY", m.Small + 3, {
 		Name = "GolemName",
 		Position = UDim2.fromOffset(textX, 8),
-		Size = UDim2.new(1, -(textX + 8), 0, math.floor((h - lip) / 2) - 6),
+		Size = UDim2.new(1, -(textX + 4), 0, math.floor((h - lip) / 2) - 6),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = rgb(214, 218, 228),
 		ZIndex = 6,
@@ -1407,7 +1510,7 @@ local function slot(parent: Instance, index: number, m: Metrics): SlotRefs
 	local bonus = GolemView.text(frame, "", m.Small + 1, {
 		Name = "Bonus",
 		Position = UDim2.fromOffset(textX, math.floor((h - lip) / 2) + 2),
-		Size = UDim2.new(1, -(textX + 8), 0, math.floor((h - lip) / 2) - 6),
+		Size = UDim2.new(1, -(textX + 4), 0, math.floor((h - lip) / 2) - 6),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = GolemView.BonusColor,
 		ZIndex = 6,
@@ -1802,6 +1905,12 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local columns = math.max(1, math.floor((usable + cellPad) / (m.Cell.X + cellPad)))
 	local cellW = math.max(m.Cell.X, math.floor((usable - (columns - 1) * cellPad) / columns))
 	refs.GridLayout.CellSize = UDim2.fromOffset(cellW, m.Cell.Y)
+	-- (the names follow the cells' width; a card keeps the lines it was built with)
+	for _, c in refs.Cards do
+		local lines = c.Name:GetAttribute("NameLines")
+		local n = if type(lines) == "number" then lines else 1
+		setName(c.Name, GolemView.nameSize(c.Name.Text, cardNameMax(m), cellW - 12, n, nameMin(m)), n)
+	end
 	place(refs.Empty, PAD + 20, bodyY + 20, gridW - 40, bodyH - 40)
 	place(refs.Detail, detailX, bodyY - 4, m.Detail, bodyH + 8)
 	place(refs.DeleteBar, detailX, bodyY - 4, m.Detail, bodyH + 8)
@@ -1966,6 +2075,29 @@ function GolemView.fitButtons(refs: Refs)
 	end
 end
 
+-- A slot's name on one line, or two (a long name) with the bonus line under them.
+local function placeSlotName(s: SlotRefs, m: Metrics)
+	local h = s.Frame.Size.Y.Offset
+	local inner = h - Pop.lipUnits(h)
+	local x = s.Name.Position.X.Offset
+	local width = s.Frame.Size.X.Offset - x - 4
+	local size, lines = GolemView.nameFit(s.Name.Text, slotNameMax(m), width - 2, nameMin(m))
+	local half = math.floor(inner / 2)
+	if lines > 1 then
+		local nameH = GolemView.nameHeight(size, lines)
+		s.Name.Position = UDim2.fromOffset(x, 3)
+		s.Name.Size = UDim2.new(1, -(x + 4), 0, nameH)
+		s.Bonus.Position = UDim2.fromOffset(x, 3 + nameH)
+		s.Bonus.Size = UDim2.new(1, -(x + 4), 0, math.max(14, inner - 2 - (3 + nameH)))
+	else
+		s.Name.Position = UDim2.fromOffset(x, 8)
+		s.Name.Size = UDim2.new(1, -(x + 4), 0, half - 6)
+		s.Bonus.Position = UDim2.fromOffset(x, half + 2)
+		s.Bonus.Size = UDim2.new(1, -(x + 4), 0, half - 6)
+	end
+	setName(s.Name, size, lines)
+end
+
 -- The equipped strip: a bright rarity card per golem, its live picture, name and bonus.
 function GolemView.setEquipped(refs: Refs, equipped: { Card }, totals: string)
 	local m = metrics(refs.Compact)
@@ -1992,7 +2124,7 @@ function GolemView.setEquipped(refs: Refs, equipped: { Card }, totals: string)
 		end
 		s.Stroke.Color = PopTheme.Outline
 		s.Stroke.Thickness = PopTheme.Edge
-		Pop.fit(s.Name, m.Small + 3)
+		placeSlotName(s, m)
 		Pop.fit(s.Bonus, m.Small + 1)
 	end
 	refs.Totals.Text = totals

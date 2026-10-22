@@ -491,21 +491,50 @@ local function pixel(label: GuiObject, size: number, width: number?)
 	local l: any = label
 	l.FontFace = PopTheme.Pixel
 	l.TextWrapped = false
+	l:SetAttribute("Round", nil) -- (a word again: see roundText)
 	Pop.fit(l, if width then wordSize(l.Text, size, width) else size)
 	local edge = edgeOf(label)
 	edge.LineJoinMode = Enum.LineJoinMode.Miter
 end
 
--- A sentence in the round font at `size` (no shrink-to-fit).
+-- A sentence in the round font at `size` (no shrink-to-fit), round for good (Pop.round)
+-- until pixel() makes it a word again; still cut with "..." rather than spilled.
 local function roundText(label: TextLabel, size: number)
-	label.FontFace = PopTheme.Font
-	label.TextScaled = false
-	label.TextSize = size
-	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
-	if fit then
-		fit:Destroy()
-	end
+	local cut = label.TextTruncate
+	Pop.round(label, size)
+	label.TextTruncate = cut
 	edgeOf(label).LineJoinMode = Enum.LineJoinMode.Round
+end
+
+--[[
+	The grade chip's pixel letters (design units): the chip is as wide as
+	its word needs (review 2026-10-22: "PRISTINE" shrank to 6 pt on a
+	568x320 phone), so 13 units are 8 pt at the phones' 0.62 UI scale.
+]]
+PenView.GradeSize = { Normal = 11, Compact = 13 }
+
+-- How wide the grade chip is for `word` (at least a 4-letter word's room).
+function PenView.gradeWidth(word: string, compact: boolean): number
+	local size = if compact then PenView.GradeSize.Compact else PenView.GradeSize.Normal
+	return math.max(4, utf8.len(word) or #word) * size + 10
+end
+
+-- The row's second line: the grade chip (its word's width) and the income right of it.
+local function placeLine(refs: Refs, row: Row)
+	local l = layoutOf(refs)
+	local textX = row.Name.Position.X.Offset
+	local textW = row.Name.Size.X.Offset
+	local lineY = math.floor(l.RowH * 0.5) + 2
+	local chipH = if refs.Compact then 26 else 22
+	local word = row.Grade.Text
+	local gradeW = PenView.gradeWidth(word, refs.Compact)
+	row.Grade.Position = UDim2.fromOffset(textX, lineY)
+	row.Grade.Size = UDim2.fromOffset(gradeW, chipH)
+	local size = if refs.Compact then PenView.GradeSize.Compact else PenView.GradeSize.Normal
+	pixel(row.Grade, size / PopTheme.PixelScale)
+	local incomeX = textX + (if row.Grade.Visible and word ~= "" then gradeW + 8 else 0)
+	row.Income.Position = UDim2.fromOffset(incomeX, lineY - 2)
+	row.Income.Size = UDim2.fromOffset(math.max(40, textX + textW - incomeX), chipH + 4)
 end
 
 --[[
@@ -943,13 +972,7 @@ local function layoutRow(refs: Refs, row: Row)
 	row.Name.Position = UDim2.fromOffset(textX, 6)
 	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.42))
 	pixel(row.Name, l.Name + 6, textW)
-	local lineY = math.floor(l.RowH * 0.5) + 2
-	local chipH = if refs.Compact then 26 else 22
-	row.Grade.Position = UDim2.fromOffset(textX, lineY)
-	row.Grade.Size = UDim2.fromOffset(if refs.Compact then 100 else 88, chipH)
-	pixel(row.Grade, if refs.Compact then 20 else 18, row.Grade.Size.X.Offset)
-	row.Income.Position = UDim2.fromOffset(textX + row.Grade.Size.X.Offset + 8, lineY - 2)
-	row.Income.Size = UDim2.fromOffset(math.max(40, textW - row.Grade.Size.X.Offset - 8), chipH + 4)
+	placeLine(refs, row)
 	if Pop.isPixel(row.Income.FontFace) then
 		pixel(row.Income, if refs.Compact then 26 else 24)
 	else
@@ -1102,11 +1125,9 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 		row.Grade.Visible = grade ~= nil
 		if grade then
 			row.Grade.Text = string.upper(grade.Name)
-			pixel(row.Grade, if refs.Compact then 20 else 18, row.Grade.Size.X.Offset)
 			row.Grade.BackgroundColor3 = grade.Color:Lerp(Color3.new(0, 0, 0), 0.14)
 		end
-		local incomeX = row.Grade.Position.X.Offset + (if grade then row.Grade.Size.X.Offset + 8 else 0)
-		row.Income.Position = UDim2.fromOffset(incomeX, row.Income.Position.Y.Offset)
+		placeLine(refs, row)
 		row.Income.Text = if entry.Income > 0
 			then Format.perSecond(entry.Income)
 			elseif entry.Mystery then "Clean it to see what it is"

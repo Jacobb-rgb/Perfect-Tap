@@ -32,6 +32,10 @@ function Preview.build(Loader: any): { [string]: any }
 
 	local function golems(uiScale: number, compact: boolean, w: number, h: number, deleting: boolean): any
 		local state = CapsulePreview.state(false)
+		-- the longest names too (two pixel lines on the cards and in the slot)
+		state.Golems.Owned[3].Kind = "HeartstoneColossus"
+		state.Golems.Owned[6].Kind = "CelestialSovereign"
+		state.Golems.Owned[7].Kind = "ScaleKnight"
 		local refs = GolemView.build(compact)
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
