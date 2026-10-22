@@ -1,7 +1,10 @@
 --[[
 	Flora/Meadow: nothing of the meadow (ponds, trees, fences, lawn) grows
 	where an ore rock grows at runtime (the node spawns), it stays pure
-	decoration (non-collide, no shadows, no lights), and its ponds are there.
+	decoration (non-collide, no shadows, no lights), its ponds are there, and
+	the lawn behind the Blaster Vault (where the bigger plots first left a sea
+	bay; owner 2026-10-22: "fill the gap") is decorated like the lawns either
+	side.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -48,6 +51,65 @@ return function(T, Loader)
 			T.truthy((Vector3.new(a.X, 0, a.Z) - Meadow.LanePond.Center).Magnitude >= 32, `pond {i} keeps off the stream's pond`)
 			for j = i + 1, #centers do
 				T.truthy((a - centers[j]).Magnitude >= 32, `ponds {i} and {j} are spread out`)
+			end
+		end
+	end)
+
+	T.test("meadow: the lawn behind the vault is decorated like the lawns either side", function()
+		local Meadow = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Meadow")
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local south = Meadow.SouthLawn
+		if not south then
+			-- 12 cells: the south coast is z 150, no lawn behind the vault
+			T.eq(WorldLayout.PlotGrid.SouthShift, 0, "a lawn behind the vault once the south band moves")
+			T.falsy(meadow:FindFirstChild("SouthLawn"), "nothing planted")
+			return
+		end
+		-- the box between the plot roads' inner verges, from the 12-cell coast to the south coast
+		T.eq(south.Min.X, -52, "the lawn's west edge")
+		T.eq(south.Max.X, 52, "the lawn's east edge")
+		T.eq(south.Min.Z, 150, "the lawn starts at the 12-cell south coast")
+		T.truthy(south.Max.Z >= WorldLayout.Island.Max.Z - 2, "the lawn reaches the south coast")
+		local function inside(p): boolean
+			return p.X > south.Min.X and p.X < south.Max.X and p.Z > south.Min.Z and p.Z < WorldLayout.Island.Max.Z
+		end
+		local flora = map.Emberfall.Lobby.Flora
+		local parts, trees, ponds = 0, 0, 0
+		for _, d in flora:GetDescendants() do
+			if d:IsA("BasePart") and inside(d.CFrame.Position) then
+				parts += 1
+			elseif d:IsA("Model") then
+				-- (a tree stands on its trunk, a pond holds water)
+				local trunk = if d.Name == "Tree" then d:FindFirstChild("Trunk") else nil
+				local water = if d.Name == "Pond" then d:FindFirstChild("Water") else nil
+				if trunk and inside(trunk.CFrame.Position) then
+					trees += 1
+				elseif water and inside(water.CFrame.Position) then
+					ponds += 1
+				end
+			end
+		end
+		T.truthy(parts >= 150, `flora parts on the lawn behind the vault ({parts})`)
+		T.truthy(trees >= 6, `trees there ({trees})`)
+		T.truthy(ponds >= 1, `a pond there ({ponds})`)
+		-- its look is planned: the town's lawn and the wilds keep out of it
+		local wilds = flora.Wilds
+		for _, model in { meadow.Lawn, wilds.Pieces, wilds.Secrets } do
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					T.falsy(inside(d.CFrame.Position), `{d:GetFullName()} on the planned lawn at {d.CFrame.Position}`)
+				end
+			end
+		end
+		-- and it keeps off the Blaster Vault, its approach and the plot roads
+		local vault = LobbyLayout.ById.BlasterVault
+		for _, d in meadow.SouthLawn:GetDescendants() do
+			if d:IsA("BasePart") then
+				local p = d.CFrame.Position
+				local reach = math.max(d.Size.X, d.Size.Z) / 2
+				T.truthy(LobbyLayout.distanceTo(vault, p) > reach, `{d:GetFullName()} keeps off the Vault`)
+				T.truthy(math.abs(p.X) + reach < 70 - 4.5, `{d:GetFullName()} keeps off the plot roads`)
 			end
 		end
 	end)

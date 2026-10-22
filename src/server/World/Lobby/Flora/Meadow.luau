@@ -13,6 +13,9 @@
 	            bushes and small rocks; a glowing lantern on every fence end
 	  Life      koi circling in every pond, butterflies over a few flower
 	            beds (tag Spin, client-side, ~60 moving parts in all)
+	  South     the lawn behind the Blaster Vault, where the bigger plots
+	            first left a sea bay (owner 2026-10-22): a koi pond, voxel
+	            trees and its share of the lawn's pieces (Meadow.SouthLawn)
 
 	It runs last (WorldBuilder, after the lobby, the plots and the railway) and
 	only uses ground nothing else stands on: every built part near the ground
@@ -57,8 +60,27 @@ Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 15
 Meadow.SpawnClear = 12
 -- the bridge garden under and behind THE GREAT FORGE's roof (Plaza/BridgeGarden, owner 2026-10-20)
 Meadow.BridgeGarden = { Min = Vector3.new(-22, 0, -114), Max = Vector3.new(22, 0, -38) }
+--[[
+	The lawn behind the Blaster Vault (owner 2026-10-22: "don't leave that gap
+	in the middle, put island there too"): the bigger plots first left a sea
+	bay there, between the plot roads from the 12-cell south coast (z 150) to
+	the south coast; now it is island like the lawns either side. Its look is
+	planned (southLawn below): a koi pond in the middle, voxel trees at its
+	sides (autumn toward the MINE in the west, pink and green toward the
+	hamlet in the east, like the woods either side), flower beds, grass
+	tufts, patches, bushes and stones. The town's passes (and the wilds) keep
+	out of it, and its lawn pieces count toward Meadow.Max, so the town's
+	capped lawn only thins a little (phones). x +-52 meets the town's lawn
+	beside the plot roads (the MINE yard's rails reach x -59). nil at 12
+	cells, where the south coast is z 150.
+]]
+Meadow.SouthLawn = if WorldLayout.PlotGrid.SouthShift > 0
+	then { Min = Vector3.new(-52, 0, 150), Max = Vector3.new(52, 0, Meadow.Area.Max.Z) }
+	else nil
 -- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
-Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
+-- (2026-10-22: the lawn behind the Vault takes its share of these, Meadow.SouthLawnMax, and
+-- 28 tufts went for its pond and trees: phones)
+Meadow.Max = { Tufts = 72, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
 Meadow.FencedStrips = {
@@ -137,10 +159,8 @@ function Meadow.index(map: Instance, skip: Instance?): Index
 			local box = bounds(d)
 			local parent = d.Parent
 			if d.Name == "Ground" and parent and parent.Name == "Land" then
-				-- the town ground: one slab, or (bigger plots) the slab and the two
-				-- strips beside the sea bay behind the Vault, as one box (allowed()
-				-- keeps out of the bay); the strips beside the quarry, north of the
-				-- town (z -122), are not the town's
+				-- the town ground (the strips beside the quarry, north of the
+				-- town (z -122), are not the town's)
 				if box.Max.Z > TOWN_NORTH_Z + 1 then
 					local g = index.Ground
 					index.Ground = if g
@@ -214,14 +234,16 @@ local function inBox(p: Vector3, box: { Min: Vector3, Max: Vector3 }, margin: nu
 end
 
 -- Allowed for the meadow at all: in the town area (or `area`), off the plots
--- and their yards, the keep-outs, the spawn, the vault approach and the sea
--- bay behind the Vault.
+-- and their yards, the keep-outs, the spawn, the vault approach and the
+-- planned lawn behind the Vault (but for its own pass, `area` = Meadow.SouthLawn).
 function Meadow.allowed(p: Vector3, r: number, area: Box?): boolean
 	if not inBox(p, area or Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
 		return false
 	end
-	if LobbyLayout.inBay(p, r) then
-		return false -- the sea bay behind the Vault (bigger plots)
+	-- (the lawn behind the Vault out to the coast: the wilds' secrets may use the ground's edge)
+	local south = Meadow.SouthLawn
+	if south and area ~= south and p.X > south.Min.X - r and p.X < south.Max.X + r and p.Z > south.Min.Z - r then
+		return false
 	end
 	if Vector3.new(p.X - WorldLayout.SpawnPoint.X, 0, p.Z - WorldLayout.SpawnPoint.Z).Magnitude < Meadow.SpawnClear + r then
 		return false
@@ -295,7 +317,8 @@ Meadow.MinPonds = 3 -- tests/Meadow.spec.luau (owner: "more ponds")
 Meadow.SmallPond = Vector2.new(7.5, 6.5)
 Meadow.MaxLobbyTrees = 22
 -- (bigger plots) no lobby jungle trees south of the 12-cell island's south coast:
--- the new lawns beside the sea bay keep their ponds and meadow (phones)
+-- the south band's new lawns keep their ponds and meadow (phones; the lawn
+-- behind the Vault plants its own trees, Meadow.SouthLawn)
 Meadow.LobbyTreesMaxZ = WorldLayout.Island.Max.Z - WorldLayout.PlotGrid.SouthShift
 Meadow.MaxMountainTrees = 40
 -- The pond the hamlet lane (LobbyLayout HamletLane / ToMap) now leads to,
@@ -762,18 +785,38 @@ local function patchNoise(x: number, z: number, seed: number): number
 	return (math.sin(x * 0.09 + seed) * math.cos(z * 0.11 - seed * 0.7) + math.sin((x + z) * 0.05 + seed * 1.3)) * 0.25 + 0.5
 end
 
-local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
+type LawnCounts = { Tufts: number, Flowers: number, Patches: number, Bushes: number, Rocks: number }
+type Near = { At: Vector3, R: number }
+
+-- Is `p` within R of one of `near`'s points?
+local function close(p: Vector3, near: { Near }): boolean
+	for _, q in near do
+		if Vector3.new(p.X - q.At.X, 0, p.Z - q.At.Z).Magnitude < q.R then
+			return true
+		end
+	end
+	return false
+end
+
+-- The lawn pieces over `area` (the town: Meadow.Area; the lawn behind the
+-- Vault: Meadow.SouthLawn, only `near` its pond and trees) up to `caps`;
+-- `count` holds what is already placed (it counts on). Returns the model and
+-- the flower beds' spots.
+local function lawn(parent: Instance, index: Index, rng: Rng.Rng, area: Box, caps: LawnCounts, count: LawnCounts, near: { Near }?)
 	local m = Style.model("Lawn", parent)
 	local seed = rng:range(0, 10)
+	local function allowed(p: Vector3, r: number): boolean
+		return Meadow.allowed(p, r, area)
+	end
 	-- every free spot first, then shuffled: the caps thin the whole town
 	-- evenly instead of filling the west side first
 	local spots: { Vector3 } = {}
-	local x = Meadow.Area.Min.X + 2
-	while x < Meadow.Area.Max.X - 2 do
-		local z = Meadow.Area.Min.Z + 2
-		while z < Meadow.Area.Max.Z - 2 do
+	local x = area.Min.X + 2
+	while x < area.Max.X - 2 do
+		local z = area.Min.Z + 2
+		while z < area.Max.Z - 2 do
 			local p = Vector3.new(x + rng:range(-1.4, 1.4), 0, z + rng:range(-1.4, 1.4))
-			if Meadow.allowed(p, 1.6) and Meadow.free(index, p, 1.6, 2.5) then
+			if allowed(p, 1.6) and (not near or close(p, near)) and Meadow.free(index, p, 1.6, 2.5) then
 				table.insert(spots, p)
 			end
 			z += 3.5
@@ -784,17 +827,16 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		local j = rng:int(1, i)
 		spots[i], spots[j] = spots[j], spots[i]
 	end
-	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
 	local beds: { Vector3 } = {}
 	for _, p in spots do
 		local n = patchNoise(p.X, p.Z, seed)
 		local roll = rng:next()
 		-- bushes and small rocks (the concept's busy ground), a few of each first
-		if roll > 0.9 and count.Bushes < Meadow.Max.Bushes and Meadow.allowed(p, 2.4) and Meadow.free(index, p, 2, 3) then
+		if roll > 0.9 and count.Bushes < caps.Bushes and allowed(p, 2.4) and Meadow.free(index, p, 2, 3) then
 			Style.bush(m, p, Style.vary(if rng:chance(0.7) then C.LeafGreen else C.LeafGreenDark, rng, 0.05), rng, rng:range(1.8, 2.6))
 			count.Bushes += 1
 			continue
-		elseif roll > 0.84 and count.Rocks < Meadow.Max.Rocks and Meadow.allowed(p, 1.8) then
+		elseif roll > 0.84 and count.Rocks < caps.Rocks and allowed(p, 1.8) then
 			local s = rng:range(1, 1.8)
 			local cf = CFrame.new(p + Vector3.new(0, s * 0.35, 0)) * CFrame.Angles(0, rng:range(0, math.pi), rng:range(-0.2, 0.2))
 			Style.block(m, cf, Vector3.new(s * 1.3, s * 0.8, s), Style.vary(C.Stone, rng, 0.06), nil, Style.tiny())
@@ -810,15 +852,15 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 			continue
 		end
 		-- (each kind checks its own reach against the sites and aprons)
-		if n > 0.58 and roll < 0.7 and count.Flowers < Meadow.Max.Flowers and Meadow.allowed(p, 2.4) then
+		if n > 0.58 and roll < 0.7 and count.Flowers < caps.Flowers and allowed(p, 2.4) then
 			flowerBed(m, p, FLOWERS[math.floor(n * 97 + p.X * 0.013) % #FLOWERS + 1], rng)
 			table.insert(beds, p)
 			count.Flowers += 1
-		elseif roll < 0.25 and count.Patches < Meadow.Max.Patches and Meadow.allowed(p, 3.6) and Meadow.free(index, p, 2.8, 1) then
+		elseif roll < 0.25 and count.Patches < caps.Patches and allowed(p, 3.6) and Meadow.free(index, p, 2.8, 1) then
 			local shade = if rng:chance(0.5) then C.GrassLight else C.GrassDark
 			patch(m, p, rng:range(3, 5.5), 0.12, Style.vary(shade, rng, 0.04), rng)
 			count.Patches += 1
-		elseif roll < 0.75 and count.Tufts < Meadow.Max.Tufts then
+		elseif roll < 0.75 and count.Tufts < caps.Tufts then
 			tuft(m, p, rng)
 			count.Tufts += 1
 		end
@@ -826,15 +868,15 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 	return m, beds
 end
 
--- Butterflies fluttering in small circles over a few flower beds, spread
--- over the town: 2-3 each, two wings per butterfly.
+-- Butterflies fluttering in small circles over a few flower beds (at most
+-- `most`), spread over the town: 2-3 each, two wings per butterfly.
 Meadow.ButterflyBeds = 6
 local WINGS = { C.FlowerYellow, C.FlowerWhite, C.LeafPinkLight, C.CrystalCyan }
-local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
+local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng, most: number)
 	local m = Style.model("Butterflies", parent)
 	local chosen: { Vector3 } = {}
 	for _, p in beds do
-		if #chosen >= Meadow.ButterflyBeds then
+		if #chosen >= most then
 			break
 		end
 		local far = true
@@ -863,6 +905,84 @@ local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
 	return m
 end
 
+---------------------------------------------------------------- the lawn behind the Vault
+
+-- (Meadow.SouthLawn) Its pond in the middle, on the south road's line, and
+-- its trees: Flora's lean voxel trees like the woods either side, autumn
+-- toward the MINE in the west, pink and green toward the hamlet in the
+-- east, south of the Vault's own jungle crowns (z ~171). Each one moves a
+-- little where its spot is taken.
+Meadow.SouthPond = { Center = Vector3.new(0, 0, 189), Size = Vector2.new(20, 13) }
+Meadow.SouthTrees = {
+	{ At = Vector3.new(-43, 0, 181), Kind = "Yellow", Scale = 1.1 },
+	{ At = Vector3.new(-29, 0, 199), Kind = "Orange", Scale = 1.0 },
+	{ At = Vector3.new(-44, 0, 203), Kind = "Orange", Scale = 1.15 },
+	{ At = Vector3.new(43, 0, 182), Kind = "Pink", Scale = 1.1 },
+	{ At = Vector3.new(30, 0, 198), Kind = "Green", Scale = 1.0 },
+	{ At = Vector3.new(45, 0, 204), Kind = "Pink", Scale = 1.15 },
+	-- and a smaller pair between the Vault's back and the pond
+	{ At = Vector3.new(-14, 0, 176), Kind = "Green", Scale = 0.9 },
+	{ At = Vector3.new(14, 0, 177), Kind = "Red", Scale = 0.9 },
+} :: { { At: Vector3, Kind: string, Scale: number } }
+-- its share of the lawn's caps (Meadow.Max: the town's lawn gets the rest),
+-- round its pond and its trees (Meadow.SouthNear studs past their edges)
+Meadow.SouthLawnMax = { Tufts = 14, Flowers = 12, Patches = 8, Bushes = 6, Rocks = 4 }
+Meadow.SouthNear = 8
+
+-- A spot at `at` or a little off it (rings of 8, 2 studs apart) where a
+-- piece of radius r and height top fits in the lawn behind the Vault (`south`).
+local function southSpot(index: Index, south: Box, at: Vector3, r: number, top: number): Vector3?
+	for ring = 0, 3 do
+		for k = 0, if ring == 0 then 0 else 7 do
+			local a = k * math.pi / 4
+			local p = at + Vector3.new(math.cos(a), 0, math.sin(a)) * (ring * 2)
+			if Meadow.allowed(p, r, south) and not nearRail(p, r) and Meadow.free(index, p, r, top) then
+				return p
+			end
+		end
+	end
+	return nil
+end
+
+-- Builds the lawn behind the Vault (nothing at 12 cells); returns what its
+-- lawn pieces took of the caps.
+local function southLawn(parent: Instance, index: Index, rng: Rng.Rng): LawnCounts
+	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
+	local south = Meadow.SouthLawn
+	if not south then
+		return count
+	end
+	local m = Style.model("SouthLawn", parent)
+	local near: { Near } = {}
+	local spec = Meadow.SouthPond
+	local r = math.max(spec.Size.X, spec.Size.Y) / 2 + 1.5
+	local at = southSpot(index, south, spec.Center, r, 4)
+	if at then
+		track(index, pond(m, at, spec.Size.X, spec.Size.Y, rng))
+		table.insert(near, { At = at, R = r + Meadow.SouthNear })
+	end
+	for _, t in Meadow.SouthTrees do
+		local reach = Kit.treeReach(t.Scale) + 0.6
+		local p = southSpot(index, south, t.At, reach, Kit.treeHeight(t.Scale) + 2)
+		if p then
+			local tree = Kit.leanTree(m, CFrame.new(p), t.Kind, rng, t.Scale)
+			track(index, tree)
+			table.insert(near, { At = p, R = reach + Meadow.SouthNear })
+			-- a bush at its feet, toward the lawn's middle
+			local foot = p + Vector3.new(-math.sign(p.X) * (reach + 1.2), 0, rng:range(-2, 2))
+			if count.Bushes < Meadow.SouthLawnMax.Bushes and Meadow.allowed(foot, 2.2, south) and Meadow.free(index, foot, 2, 3) then
+				local shade = Kit.shades(t.Kind)[3]
+				Style.bush(m, foot, Style.vary(if rng:chance(0.5) then C.LeafGreenDark else shade, rng, 0.05), rng, rng:range(1.8, 2.4))
+				count.Bushes += 1
+			end
+		end
+	end
+	local _, beds = lawn(m, index, rng, south, Meadow.SouthLawnMax, count, near)
+	-- and butterflies over one of its flower beds
+	butterflies(m, beds, rng, 1)
+	return count
+end
+
 -- Builds the meadow into `map`'s Emberfall.Lobby.Flora (or the map if the
 -- lobby is missing).
 function Meadow.build(map: Instance, rng: Rng.Rng): Model
@@ -874,8 +994,12 @@ function Meadow.build(map: Instance, rng: Rng.Rng): Model
 	ponds(m, index, Rng.new(`Meadow/Ponds/{rng:nextU32()}`))
 	fences(m, index, Rng.new(`Meadow/Fences/{rng:nextU32()}`))
 	jungle(m, map, index, Rng.new(`Meadow/Jungle/{rng:nextU32()}`))
-	local _, beds = lawn(m, index, Rng.new(`Meadow/Lawn/{rng:nextU32()}`))
-	butterflies(m, beds, Rng.new(`Meadow/Butterflies/{rng:nextU32()}`))
+	local lawnRng = Rng.new(`Meadow/Lawn/{rng:nextU32()}`)
+	local butterflyRng = Rng.new(`Meadow/Butterflies/{rng:nextU32()}`)
+	-- the lawn behind the Vault first: its pieces count toward the town's caps
+	local count = southLawn(m, index, Rng.new(`Meadow/SouthLawn/{rng:nextU32()}`))
+	local _, beds = lawn(m, index, lawnRng, Meadow.Area, Meadow.Max, count)
+	butterflies(m, beds, butterflyRng, Meadow.ButterflyBeds)
 	decorate(m)
 	return m
 end

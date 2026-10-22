@@ -91,6 +91,8 @@ LobbyLayout.Budget = {
 	-- near the town).
 	-- (bigger plots 2026-10-21, 16x16 grid: the map 31,773 + nodes 294 + museums 352 = 32,419 measured,
 	-- + 200 for the podium and pen ores, + ~250 headroom; 32,200 at 12 cells)
+	-- (2026-10-22, map v48: the sea bay behind the Vault filled with island (owner), its lawn
+	-- planted: the map 31,895 + nodes 294 + museums 352 = 32,541 measured, ~110 headroom)
 	MapParts = 32850, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
@@ -100,8 +102,9 @@ LobbyLayout.Budget = {
 	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
 	-- budget; spend it on purpose, not by accident.
 	-- (bigger plots 2026-10-21: 14,226 measured with the museums, + ~250 headroom; 13,700 at 12 cells. The
-	-- bigger lobby area now counts the Vault's south trees and the bay's cliffs (~160), + the street
-	-- lamps along the longer plot roads (~110), + the meadow on the lawns beside the sea bay (~300))
+	-- bigger lobby area now counts the Vault's south trees (~110), + the street lamps along the longer
+	-- plot roads (~110), + the meadow on the new south lawns (~300); 2026-10-22: the sea bay behind
+	-- the Vault is island again, its cliffs gone, its lawn planted: 14,301 measured with the museums)
 	LobbyParts = 14500, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
 	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
@@ -119,7 +122,7 @@ LobbyLayout.Budget = {
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
-		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new lawns beside the sea bay behind the Vault, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area)
+		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces, 28 tufts fewer; 3,956 measured, 3,047 of them in the lobby area)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -154,21 +157,10 @@ local function coast(x: number): number
 	return x + math.sign(x) * GRID.CoastShift
 end
 
---[[
-	The sea bay behind the Blaster Vault (bigger plots; owner 2026-10-21: the
-	sea stays south of the Vault, no new lawn there). It lies between the
-	plot roads, from the 12-cell island's south coast (z 150) to the island's
-	south coast, open to the sea on its south side. Its three edges are
-	coasts like the island's own: Land builds the rim cliffs, the sea and the
-	invisible walls there, and nothing else stands in it (isFree). x +-52
-	leaves 13 studs of shore beside the plot roads (the MINE yard's rails
-	reach x -59). nil at 12 cells, where the south coast runs straight.
-]]
-local southBay: { Min: Vector3, Max: Vector3 }? = nil
-if GRID.SouthShift > 0 then
-	southBay = { Min = v(-52, 0, 150), Max = v(52, 0, WorldLayout.Island.Max.Z) }
-end
-LobbyLayout.SouthBay = southBay
+-- (bigger plots: the sea bay that was left behind the Blaster Vault is island
+-- again, owner 2026-10-22: "fill the gap"; the south coast runs straight
+-- at every grid size, Land, and the lawn behind the Vault is decorated like
+-- the lawns either side, Flora)
 
 local PLAZA = v(0, 0, 0)
 local SHOP = v(-46, 0, -22)
@@ -801,16 +793,6 @@ function LobbyLayout.inArea(position: Vector3): boolean
 	return WorldLayout.isInBox(position, LobbyLayout.Area.Min, LobbyLayout.Area.Max)
 end
 
--- Is a ground point within `margin` of the sea bay behind the Vault (never
--- while there is no bay)? Y is ignored.
-function LobbyLayout.inBay(p: Vector3, margin: number): boolean
-	local bay = LobbyLayout.SouthBay
-	if not bay then
-		return false
-	end
-	return p.X > bay.Min.X - margin and p.X < bay.Max.X + margin and p.Z > bay.Min.Z - margin
-end
-
 -- A piece standing on the lobby ground (not in the sky, not outside the island).
 function LobbyLayout.isGroundPiece(piece: Piece): boolean
 	return piece.Center.Y < 10 and piece.Center.Y > -5 and LobbyLayout.inArea(piece.Center)
@@ -870,9 +852,6 @@ function LobbyLayout.isFree(p: Vector3, radius: number): boolean
 	end
 	local island = WorldLayout.Island
 	if p.X < island.Min.X + radius or p.X > island.Max.X - radius or p.Z > island.Max.Z - radius then
-		return false
-	end
-	if LobbyLayout.inBay(p, radius) then
 		return false
 	end
 	if p.Z < -122 + radius then
