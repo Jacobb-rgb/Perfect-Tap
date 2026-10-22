@@ -42,6 +42,9 @@ local CLOUD_SHADE = rgb(214, 230, 248)
 local SKY = rgb(110, 196, 255)
 local SKY_DEEP = rgb(60, 130, 220)
 local STORM = rgb(58, 66, 92)
+local BLACK = rgb(40, 44, 60) -- (owner: black like the Storm Warden)
+local BLACK_DEEP = rgb(26, 28, 40)
+local STORM_CLOUD = rgb(160, 172, 205)
 local STORM_DARK = rgb(34, 38, 56)
 local BOLT = rgb(255, 230, 90)
 
@@ -156,7 +159,7 @@ end
 
 local function skySprite(c: Ctx): number
 	-- a wind knight: a white helm with a sky-blue visor, wing crests, cloud pauldrons
-	knightHelm(c, CLOUD, SKY_DEEP, SKY, M.SmoothPlastic)
+	knightHelm(c, BLACK, BLACK_DEEP, SKY, M.Metal)
 	for i, side in { -1, 1 } do
 		if c.Room() < 2 then
 			break
@@ -172,10 +175,10 @@ local function skySprite(c: Ctx): number
 		)
 		T.ellipsoid(c.Model, `Crest{i}_2`, c.At(side * 1.05, 2.8, 0.2) * CFrame.Angles(0, 0, side * 1.25), c.V(0.6, 0.2, 0.08), SKY, NEON)
 	end
-	T.redress(c, "Boulder", c.At(-0.82, 1.5, 0.02), c.V(0.6, 0.3, 0.66), SKY_DEEP, M.SmoothPlastic)
-	T.redress(c, "Crystal", c.At(0.82, 1.5, 0.02), c.V(0.6, 0.3, 0.66), SKY_DEEP, M.SmoothPlastic)
+	T.redress(c, "Boulder", c.At(-0.82, 1.5, 0.02), c.V(0.6, 0.3, 0.66), BLACK_DEEP, M.Metal)
+	T.redress(c, "Crystal", c.At(0.82, 1.5, 0.02), c.V(0.6, 0.3, 0.66), BLACK_DEEP, M.Metal)
 	for _, side in { -1, 1 } do
-		cloud(c, `Pauldron{side > 0 and 2 or 1}_`, Vector3.new(side * 0.9, 1.82, 0.0), 0.95, 3, CLOUD)
+		cloud(c, `Pauldron{side > 0 and 2 or 1}_`, Vector3.new(side * 0.9, 1.82, 0.0), 0.95, 3, STORM_CLOUD)
 	end
 	-- wind runes running in the armour, a sky core
 	for i, k in { { -0.25, 1.15, 0.5 }, { 0.15, 0.95, -0.5 }, { -0.1, 0.75, 0.5 } } do
@@ -187,19 +190,19 @@ local function skySprite(c: Ctx): number
 	T.redress(c, "Core", c.At(0, 1.2, -0.45) * CFrame.Angles(0, 0, PI / 4), c.V(0.28, 0.28, 0.05), SKY, NEON)
 	-- a wind lance with a star head
 	if c.Room() >= 3 then
-		T.seg(c.Model, "Lance", T.P(c, 1.0, 0.0, -0.25), T.P(c, 1.0, 2.6, -0.25), 0.1 * c.S, 0.1 * c.S, CLOUD, M.SmoothPlastic)
+		T.seg(c.Model, "Lance", T.P(c, 1.0, 0.0, -0.25), T.P(c, 1.0, 2.6, -0.25), 0.1 * c.S, 0.1 * c.S, BLACK_DEEP, M.Metal)
 		local star = c.At(1.0, 2.8, -0.25)
 		diamond(c.Model, "LanceStar1", star, 0.42 * c.S, 0.08 * c.S, rgb(255, 240, 140), NEON)
 		K.part(c.Model, "LanceStar2", star, c.V(0.42, 0.42, 0.08), rgb(255, 240, 140), NEON)
 	end
 	-- small feathered wings, a sky cape, a little halo
 	for _, side in { -1, 1 } do
-		wing(c, side, 3, 1.2, 1.25, CLOUD, SKY, 1)
+		wing(c, side, 3, 1.2, 1.25, BLACK, SKY, 1)
 	end
-	cape(c, SKY_DEEP, CLOUD, 0.45)
+	cape(c, rgb(36, 56, 100), SKY, 0.45)
 	halo(c, "Halo", 3.25, 0.45, 8, 0.07, GOLD)
 	for _, name in { "Fist1", "Fist2" } do
-		T.recolor(c, name, CLOUD, M.SmoothPlastic)
+		T.recolor(c, name, BLACK_DEEP, M.Metal)
 	end
 	return 3.4
 end
@@ -272,7 +275,7 @@ end
 
 local function aetherKing(c: Ctx): number
 	-- the sky king: a pearl helm with a sky visor under a gold crown and halo
-	knightHelm(c, CLOUD, GOLD, SKY, M.SmoothPlastic)
+	knightHelm(c, BLACK, GOLD, SKY, M.Metal)
 	T.redress(c, "Boulder", c.At(-0.82, 1.5, 0.02), c.V(0.66, 0.3, 0.72), GOLD, M.Foil)
 	T.redress(c, "Crystal", c.At(0.82, 1.5, 0.02), c.V(0.66, 0.3, 0.72), GOLD, M.Foil)
 	-- golden wing crests on the helm
@@ -292,10 +295,10 @@ local function aetherKing(c: Ctx): number
 	end
 	-- great angel wings in two layers
 	for _, side in { -1, 1 } do
-		wing(c, side, 4, 2.0, 1.15, CLOUD, GOLD, 1)
+		wing(c, side, 4, 2.0, 1.15, BLACK, GOLD, 1)
 	end
 	for _, side in { -1, 1 } do
-		wing(c, side, 3, 1.5, 1.05, CLOUD_SHADE, SKY, 2)
+		wing(c, side, 3, 1.5, 1.05, BLACK_DEEP, SKY, 2)
 	end
 	-- the sky-gem crown on the helm and a golden halo over it
 	K.upright(c.Model, "CrownBand", c.At(0, 2.86, 0), 0.3 * c.S, 1.3 * c.S, GOLD, M.Foil)
