@@ -9,6 +9,16 @@
 
 	Designed for 720 design units of screen height like UITheme (HudController
 	scales every TerraForge gui).
+
+	The pixel look (owner 2026-10-22, eight Roblox UI reels: "make the shop,
+	inventory and icons exactly like this, this is the right Roblox style";
+	pictures in docs/art/ui_pixel_refs): a chunky pixel font for every short
+	word (titles, buttons, prices, tiles), a thick black outline, a smooth
+	light-to-deep gradient with a darker lip along the bottom (depth), a light
+	gradient edge inside the outline, a diagonal lattice pattern over the
+	paint, sunburst rays behind pictures, and motion (UI/PixelFx: rays spin,
+	a gleam sweeps across buttons, icons lean, hover grows and press squishes).
+	Long wrapped text keeps the round font so it stays readable.
 ]]
 
 local rgb = Color3.fromRGB
@@ -19,9 +29,14 @@ local function paint(top: Color3, bottom: Color3, edge: Color3): Paint
 	return { Top = top, Bottom = bottom, Edge = edge }
 end
 
+local PIXEL = Font.new("rbxasset://fonts/families/PressStart2P.json")
+
 local PopTheme = {
-	Font = Font.fromEnum(Enum.Font.FredokaOne), -- every word
-	Heavy = Font.fromEnum(Enum.Font.LuckiestGuy), -- the money and big headings
+	Font = Font.fromEnum(Enum.Font.FredokaOne), -- long wrapped text (descriptions, hints)
+	Pixel = PIXEL, -- every short word: titles, buttons, prices, tiles, labels
+	Heavy = PIXEL, -- the money and big headings
+	PixelScale = 0.74, -- the pixel font is wide (1 em a letter): its size next to the round font
+	PixelAdvance = 1.0, -- a pixel letter's width in em
 
 	Ink = rgb(255, 255, 255),
 	Outline = rgb(14, 14, 18), -- borders and text edges
@@ -66,9 +81,12 @@ local PopTheme = {
 	Money = rgb(122, 244, 60), -- the green amounts
 	MoneyNumber = rgb(130, 255, 70),
 
-	Corner = 6, -- buttons and cards
-	WindowCorner = 8,
-	Edge = 3, -- border thickness
+	Corner = 8, -- buttons and cards (the reels: radius 10 on a 100 square)
+	WindowCorner = 10,
+	Edge = 3.5, -- border thickness
+	Lip = 0.13, -- the darker band along a face's bottom (a share of its height, 3..9 units)
+	Lattice = 0.82, -- the diagonal lattice lines over a paint (transparency)
+	LatticeGap = 26, -- design units between two lattice lines
 	Stripe = 0.8, -- the header's shine stripes (transparency)
 
 	BaseHeight = 720,

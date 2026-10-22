@@ -285,6 +285,10 @@ elseif sceneName == "quests" then -- the world + the QUESTS window / streak popu
 	for name, guis in require("./lib/quests_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "store_quick" then -- only the STORE overlays over an empty sky (fast UI iteration)
+	for name, guis in require("./lib/store_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/store_preview").build(Loader) do

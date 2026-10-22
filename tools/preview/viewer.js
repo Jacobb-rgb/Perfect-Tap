@@ -118,6 +118,7 @@ function softSprite(color, hard = 0.0) {
 function fontFor(family) {
   if (!family) return "Fredoka One";
   if (family.includes("Luckiest")) return "Luckiest Guy";
+  if (family.includes("PressStart2P")) return "Press Start 2P";
   return "Fredoka One";
 }
 
@@ -327,6 +328,7 @@ function mobileControls(layer, px) {
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
+  await document.fonts.load('40px "Press Start 2P"');
   const shots = await fetch(`/shots.json`).then((r) => r.json());
   const shot = shots[shotName];
   if (!shot) throw new Error("unknown shot " + shotName);
@@ -614,7 +616,7 @@ async function main() {
     uiLayer.style.width = `${WIDTH}px`;
     uiLayer.style.height = `${HEIGHT}px`;
     // the fonts first: text is measured (TextScaled, AutomaticSize) while laying out
-    await Promise.all(["Fredoka One", "Luckiest Guy", "Comic Neue Angular"].map((f) => document.fonts.load(`20px "${f}"`).catch(() => {})));
+    await Promise.all(["Fredoka One", "Luckiest Guy", "Comic Neue Angular", "Press Start 2P"].map((f) => document.fonts.load(`20px "${f}"`).catch(() => {})));
     renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
     if (shot.mobileControls) mobileControls(uiLayer, shot.mobileControls);
     // wait for the 3D icon pictures before the screenshot

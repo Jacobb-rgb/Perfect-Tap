@@ -9,6 +9,9 @@
 	  PlayerMoves   carry, throw, recoil, spray, hammer, celebrations, cash   off
 	  UIMotion      windows pop, button squash, shine, money fly-in           off
 	  WorldFx       ore pops out of rocks, hit flash + debris, sell burst     off
+	  PixelFx       the pixel reels (owner 2026-10-22): rays turn behind      ON
+	                pictures, a gleam sweeps across buttons, pictures lean
+	                on hover (Controllers/PixelFxController)
 ]]
 
 local AnimConfig = {
@@ -17,6 +20,7 @@ local AnimConfig = {
 	PlayerMoves = false,
 	UIMotion = false,
 	WorldFx = false,
+	PixelFx = true,
 }
 
 return AnimConfig

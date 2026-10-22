@@ -24,6 +24,19 @@
 	            at the bottom
 
 	No emoji anywhere (owner: "bez emoji, jenom text").
+
+	The pixel look (owner 2026-10-22, PopTheme):
+	  short words use the pixel font and shrink to fit their box (Pop.fit);
+	  every face gets a darker lip along its bottom and a light gradient edge
+	  inside its outline;
+	  lattice   the diagonal lattice pattern over a paint;
+	  gleam     a light band that UI/PixelFx sweeps across a face now and then.
+	Motion marks for Controllers/PixelFxController (Pop.fxTag: attribute
+	PixelFx):
+	  Spin   rays turn;
+	  Gleam  a light band sweeps across;
+	  Lean   an icon tilts while its button is hovered;
+	  Press  hover grows, press squishes.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -70,6 +83,16 @@ function Pop.edge(label: GuiObject, thickness: number?): UIStroke
 	}, label)
 end
 
+-- Whether a font is the pixel font.
+function Pop.isPixel(font: Font): boolean
+	return font.Family == PopTheme.Pixel.Family
+end
+
+-- Marks an instance for Controllers/PixelFxController: attribute PixelFx = Spin / Gleam / Lean / Press.
+function Pop.fxTag(instance: Instance, kind: string)
+	instance:SetAttribute("PixelFx", kind)
+end
+
 -- A black border around a frame.
 function Pop.border(frame: GuiObject, thickness: number?, color: Color3?): UIStroke
 	return UIKit.new("UIStroke", {
@@ -105,18 +128,38 @@ function Pop.rim(frame: GuiObject, color: Color3, corner: number, inset: number?
 		ZIndex = z or frame.ZIndex,
 	}, frame)
 	UIKit.corner(rim, math.max(2, corner - i))
-	UIKit.new("UIStroke", {
+	local light = UIKit.new("UIStroke", {
 		Name = "Light",
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Color = color,
 		Thickness = 2.5,
-		Transparency = 0.05,
+		Transparency = 0,
 	}, rim)
+	-- (the reels' inner edge: bright along the top, fading out toward the lip)
+	UIKit.new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.45, 0.25),
+			NumberSequenceKeypoint.new(1, 0.85),
+		}),
+	}, light)
 	return rim
 end
 
--- The stud texture over a face (tiles of `tile` units); nil until it is uploaded.
-function Pop.studs(frame: GuiObject, corner: number, transparency: number?, tile: number?, z: number?): ImageLabel?
+--[[
+	The pattern over a face. Since the pixel reels (2026-10-22) that is the
+	diagonal lattice (Pop.lattice: frames, no upload needed); a faint one
+	over dark bodies and wells (`transparency` 0.5 and more). `corner` and
+	`tile` belonged to the old stud picture and are kept for the callers.
+]]
+function Pop.studs(frame: GuiObject, corner: number, transparency: number?, tile: number?, z: number?): GuiObject?
+	local faint = (transparency or 0) >= 0.5
+	return Pop.lattice(frame, z, if faint then 0.94 else PopTheme.Lattice, if faint then 34 else nil)
+end
+
+-- The old raised-stud picture over a face (IconAssets ui_studs); nil until it is uploaded.
+function Pop.studImage(frame: GuiObject, corner: number, transparency: number?, tile: number?, z: number?): ImageLabel?
 	if not IconAssets.textureShows("ui_studs") then
 		return nil
 	end
@@ -180,6 +223,95 @@ function Pop.sparkle(parent: Instance, at: UDim2, size: number, z: number?, tran
 	end
 end
 
+--[[
+	The reels' diagonal lattice over a paint: thin light lines both ways.
+	Drawn by a clipping frame "Lattice" (inset `inset` units inside the
+	outline) holding, per direction, frames turned 45 degrees whose gradient
+	paints six lines each (a UIGradient holds 20 keys). The clip also holds
+	the face's gleam (Pop.gleam). Returns the clip.
+]]
+function Pop.lattice(frame: GuiObject, z: number?, transparency: number?, gap: number?): Frame
+	local old = frame:FindFirstChild("Lattice")
+	if old then
+		old:Destroy()
+	end
+	local inset = 3
+	local clip = UIKit.new("Frame", {
+		Name = "Lattice",
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(inset, inset),
+		Size = UDim2.new(1, -2 * inset, 1, -2 * inset),
+		ZIndex = z or frame.ZIndex,
+	}, frame)
+	-- (a scale-sized face: assume a big one so the lines always reach its corners)
+	local w = if frame.Size.X.Scale == 0 and frame.Size.X.Offset > 0 then frame.Size.X.Offset else 420
+	local h = if frame.Size.Y.Scale == 0 and frame.Size.Y.Offset > 0 then frame.Size.Y.Offset else 420
+	local step = gap or PopTheme.LatticeGap
+	local seg = step * 6
+	local reach = (w + h) * 0.7072 -- the face seen along a 45 degree axis
+	local count = math.ceil(reach / seg) + 1
+	local t = transparency or PopTheme.Lattice
+	local half = math.min(0.03, 1.6 / seg)
+	local keys = { NumberSequenceKeypoint.new(0, 1) }
+	for i = 1, 6 do
+		local c = (i - 0.5) / 6
+		table.insert(keys, NumberSequenceKeypoint.new(c - half, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(c, t))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half, 1))
+	end
+	table.insert(keys, NumberSequenceKeypoint.new(1, 1))
+	local lines = NumberSequence.new(keys)
+	for _, rotation in { 45, -45 } do
+		local ux, uy = math.cos(math.rad(rotation)), math.sin(math.rad(rotation))
+		for j = 1, count do
+			local along = (j - (count + 1) / 2) * seg
+			local band = UIKit.new("Frame", {
+				Name = "Lines",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BorderSizePixel = 0,
+				Position = UDim2.new(0.5, math.floor(ux * along + 0.5), 0.5, math.floor(uy * along + 0.5)),
+				Rotation = rotation,
+				Size = UDim2.fromOffset(seg, math.ceil(reach) + 8),
+				ZIndex = z or frame.ZIndex,
+			}, clip)
+			UIKit.new("UIGradient", { Transparency = lines }, band)
+		end
+	end
+	return clip
+end
+
+--[[
+	A gleam: a light band turned 20 degrees, parked left of the face inside
+	its Lattice clip (PixelFx "Gleam": PixelFxController sweeps it across now and
+	then). Returns the band.
+]]
+function Pop.gleam(frame: GuiObject, z: number?): Frame
+	local clip = (frame:FindFirstChild("Lattice") :: Frame?) or Pop.lattice(frame, z, 1)
+	local band = UIKit.new("Frame", {
+		Name = "Gleam",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.new(-0.3, 0, 0.5, 0),
+		Rotation = 20,
+		Size = UDim2.new(0, 40, 3, 0),
+		ZIndex = z or clip.ZIndex,
+	}, clip)
+	UIKit.new("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.35, 0.55),
+			NumberSequenceKeypoint.new(0.5, 0.3),
+			NumberSequenceKeypoint.new(0.65, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, band)
+	Pop.fxTag(band, "Gleam")
+	return band
+end
+
 -- A dark copy just under a static title: the photos' chunky 3D titles.
 function Pop.shadow(label: TextLabel, offset: number?): TextLabel
 	local parent = label.Parent :: Instance
@@ -210,16 +342,25 @@ function Pop.shadow(label: TextLabel, offset: number?): TextLabel
 		Transparency = 0.35,
 		LineJoinMode = Enum.LineJoinMode.Round,
 	}, shade)
+	-- (a pixel title shrinks to fit: the shadow shrinks the same way)
+	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if fit then
+		fit:Clone().Parent = shade
+	end
 	return shade
 end
 
--- White chunky text with a black edge.
+--[[
+	White chunky text with a black edge: the pixel font for a short word, the
+	round font for wrapped text (or the FontFace `props` names).
+]]
 function Pop.text(parent: Instance, text: string, size: number, props: Props?): TextLabel
+	local wrapped = props ~= nil and props.TextWrapped == true
 	local label = UIKit.new("TextLabel", {
 		Name = "Text",
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, size + 6),
-		FontFace = PopTheme.Font,
+		FontFace = if wrapped then PopTheme.Font else PopTheme.Pixel,
 		Text = text,
 		TextSize = size,
 		TextColor3 = PopTheme.Ink,
@@ -228,7 +369,33 @@ function Pop.text(parent: Instance, text: string, size: number, props: Props?): 
 	}, parent)
 	Pop.edge(label, Pop.edgeFor(size))
 	apply(label, props)
+	Pop.fit(label, size)
 	return label
+end
+
+--[[
+	The pixel font is wide (a letter is 1 em): a pixel word is drawn at
+	PopTheme.PixelScale of `size` and shrinks to fit its box instead of
+	spilling out of it. Wrapped and automatically sized labels are left alone.
+]]
+function Pop.fit(label: TextLabel, size: number)
+	if not Pop.isPixel(label.FontFace) or label.TextWrapped or label.AutomaticSize ~= Enum.AutomaticSize.None then
+		return
+	end
+	local max = math.max(8, math.floor(size * PopTheme.PixelScale + 0.5))
+	label.TextSize = max
+	label.TextScaled = true
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	l.MaxTextSize = max
+	l.MinTextSize = math.min(max, 7)
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.LineJoinMode = Enum.LineJoinMode.Miter
+	end
 end
 
 -- A heading in a PopTheme.Titles gradient (top -> bottom) with a black edge.
@@ -242,7 +409,8 @@ end
 
 -- "-- PASSES --": a section heading `width` wide.
 function Pop.heading(parent: Instance, text: string, colors: string, size: number, props: Props?): TextLabel
-	local heading = Pop.title(parent, "-- " .. text .. " --", size, colors, {
+	-- (the reels: a pixel word over the list, "GAMEPASSES")
+	local heading = Pop.title(parent, text, size, colors, {
 		Name = "Heading",
 		FontFace = PopTheme.Heavy,
 		Size = UDim2.new(1, 0, 0, size + 14),
@@ -256,17 +424,34 @@ end
 
 -- The two-tone gradient of a face: `paint` top -> bottom with a glossy step
 -- at the middle (the photos' buttons).
-local function faceGradient(paint: Paint, glossy: boolean?): ColorSequence
-	if glossy == false then
+local function faceGradient(paint: Paint, lip: number?): ColorSequence
+	-- (the reels: a smooth light-to-deep paint, then a darker lip along the bottom)
+	local l = lip or 0
+	if l <= 0 then
 		return ColorSequence.new(paint.Top, paint.Bottom)
 	end
-	local mid = paint.Top:Lerp(paint.Bottom, 0.42)
+	local deep = paint.Bottom:Lerp(Color3.new(0, 0, 0), 0.3)
+	local cut = 1 - l
 	return ColorSequence.new({
 		ColorSequenceKeypoint.new(0, paint.Top),
-		ColorSequenceKeypoint.new(0.48, mid),
-		ColorSequenceKeypoint.new(0.52, mid:Lerp(paint.Bottom, 0.35)),
-		ColorSequenceKeypoint.new(1, paint.Bottom),
+		ColorSequenceKeypoint.new(cut - 0.001, paint.Bottom),
+		ColorSequenceKeypoint.new(cut, deep),
+		ColorSequenceKeypoint.new(1, deep),
 	})
+end
+
+-- The lip's height in design units for a face `h` units tall.
+function Pop.lipUnits(h: number): number
+	return math.clamp(math.floor(h * PopTheme.Lip + 0.5), 3, 9)
+end
+
+-- The lip's share of a face's height (3..9 design units; a scale-sized face gets 0.1).
+function Pop.lipFor(frame: GuiObject): number
+	local h = frame.Size.Y.Offset
+	if frame.Size.Y.Scale ~= 0 or h <= 0 then
+		return 0.1
+	end
+	return math.clamp(math.floor(h * PopTheme.Lip + 0.5), 3, 9) / h
 end
 
 --[[
@@ -290,7 +475,10 @@ function Pop.face(frame: GuiObject, paint: string | Paint, corner: number?, glos
 		gradient = UIKit.new("UIGradient", { Name = "Paint", Rotation = 90 }, frame)
 	end
 	local g = gradient :: UIGradient
-	g.Color = faceGradient(p, glossy)
+	-- (glossy false: a flat band, no lip - headers, bars)
+	local lip = if glossy == false then 0 else Pop.lipFor(frame)
+	frame:SetAttribute("Lip", lip)
+	g.Color = faceGradient(p, lip)
 	-- the light edge just inside the black border
 	if rim ~= false then
 		Pop.rim(frame, Pop.rimColor(p), corner or PopTheme.Corner, 3, frame.ZIndex)
@@ -300,7 +488,7 @@ end
 
 -- A paint's light edge: its top colour lifted toward white.
 function Pop.rimColor(paint: Paint): Color3
-	return paint.Top:Lerp(Color3.new(1, 1, 1), 0.45)
+	return paint.Top:Lerp(Color3.new(1, 1, 1), 0.6)
 end
 
 -- Recolours a painted frame (a button that turns grey, a selected tab).
@@ -308,7 +496,8 @@ function Pop.repaint(frame: GuiObject, paint: string | Paint, glossy: boolean?)
 	local p = Pop.paint(paint)
 	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
 	if gradient then
-		gradient.Color = faceGradient(p, glossy)
+		local lip = frame:GetAttribute("Lip")
+		gradient.Color = faceGradient(p, if glossy == false then 0 elseif type(lip) == "number" then lip else 0)
 	end
 	local rim = frame:FindFirstChild("Rim")
 	local light = if rim then rim:FindFirstChild("Light") else nil
@@ -329,20 +518,24 @@ function Pop.button(parent: Instance, text: string, paint: string | Paint, size:
 	}, parent)
 	Pop.face(button, paint)
 	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
+	if size.X >= 120 then
+		Pop.gleam(button, 4)
+	end
 	Pop.text(button, text, math.floor(math.min(size.Y * 0.56, 40)), {
 		Name = "Label",
-		Size = UDim2.new(1, -10, 1, 0),
+		Size = UDim2.new(1, -10, 1, -Pop.lipUnits(size.Y)),
 		Position = UDim2.fromOffset(5, 0),
 		TextScaled = false,
 		ZIndex = 5,
 	})
+	Pop.fxTag(button, "Press")
 	apply(button, props)
 	return button
 end
 
--- About how wide a word is in the chunky font (design units).
+-- About how wide a word is in the pixel font at Pop.text's `size` (design units).
 function Pop.textWidth(text: string, size: number): number
-	return math.ceil(utf8.len(text) or #text) * size * 0.6 + 4
+	return math.ceil(utf8.len(text) or #text) * size * PopTheme.PixelScale * PopTheme.PixelAdvance + 6
 end
 
 --[[
@@ -361,10 +554,12 @@ function Pop.price(parent: Instance, robux: number?, size: Vector2, props: Props
 	}, parent)
 	Pop.face(button, PopTheme.Price)
 	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
+	Pop.gleam(button, 4)
+	Pop.fxTag(button, "Press")
 	local row = UIKit.new("Frame", {
 		Name = "Row",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 0, 1, -Pop.lipUnits(size.Y)),
 		ZIndex = 5,
 	}, button)
 	UIKit.list(row, Enum.FillDirection.Horizontal, 4, {
@@ -496,30 +691,11 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 	Pop.face(head, paint or "Green", 4, false)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
+	-- (the pixel reels: the lattice over the band, a gleam now and then; no stripes)
+	head.Size = UDim2.fromOffset(size.X - 8, h - 8)
 	Pop.studs(head, 4, 0.35, 40, 3)
-	-- the shine: a light top strip and wide diagonal stripes
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 2,
-	}, head)
-	local stripes = { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } }
-	for i, s in stripes do
-		UIKit.new("Frame", {
-			Name = "Stripe" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = PopTheme.Stripe,
-			BorderSizePixel = 0,
-			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
-			Rotation = 32,
-			Size = UDim2.new(0, s[2], 0, h * 2.4),
-			ZIndex = 2,
-		}, head)
-	end
+	Pop.gleam(head, 3)
+	head.Size = UDim2.new(1, -8, 0, h - 8)
 	local titleLabel = Pop.text(head, title, math.floor(h * 0.6), {
 		Name = "Title",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -563,6 +739,7 @@ function Pop.rays(parent: Instance, center: UDim2, count: number, length: number
 			Size = UDim2.fromOffset(length * 2, math.max(6, math.floor(length * 0.16))),
 			ZIndex = z or 2,
 		}, holder)
+
 		UIKit.new("UIGradient", {
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1),
@@ -573,6 +750,7 @@ function Pop.rays(parent: Instance, center: UDim2, count: number, length: number
 			}),
 		}, ray)
 	end
+	Pop.fxTag(holder, "Spin")
 	return holder
 end
 
@@ -590,8 +768,8 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 		Selectable = true,
 		ZIndex = 2,
 	}, parent)
-	Pop.face(button, paint, PopTheme.Corner, false)
 	apply(button, props)
+	Pop.face(button, paint, PopTheme.Corner)
 	local p = Pop.paint(paint)
 	local size = button.Size
 	local short = math.min(size.X.Offset, size.Y.Offset)
@@ -606,7 +784,9 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 		Size = UDim2.fromOffset(long * 2.2, long * 2.2),
 		ZIndex = 2,
 	})
-	if not rays then
+	if rays then
+		Pop.fxTag(rays, "Spin")
+	else
 		Pop.rays(button, centre, 10, long, 0.6, 2)
 	end
 	local glow = Pop.fx(button, "fx_glow", {
@@ -639,17 +819,7 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 	if rim then
 		rim.ZIndex = 3
 	end
-	-- a few sparkles around the picture (fixed spots per card size: the same every build)
-	local seed = (size.X.Offset * 31 + size.Y.Offset * 17) % 997 + 1
-	local function next01(): number
-		seed = (seed * 16807) % 2147483647
-		return seed / 2147483647
-	end
-	for _ = 1, 3 do
-		local sx = 0.12 + next01() * 0.76
-		local sy = 0.08 + next01() * 0.5
-		Pop.sparkle(button, UDim2.fromScale(sx, sy), math.floor(14 + next01() * 14), 3, 0.15 + next01() * 0.3)
-	end
+	-- (the pixel reels: no sparkles, the rays turn instead)
 	return button
 end
 
@@ -772,16 +942,18 @@ local function bounds(model: Instance): (Vector3, number)
 		if part:IsA("BasePart") then
 			local cf = part.CFrame
 			local half = part.Size * 0.5
-			for _, corner in {
-				Vector3.new(half.X, half.Y, half.Z),
-				Vector3.new(-half.X, half.Y, half.Z),
-				Vector3.new(half.X, -half.Y, half.Z),
-				Vector3.new(half.X, half.Y, -half.Z),
-				Vector3.new(-half.X, -half.Y, half.Z),
-				Vector3.new(-half.X, half.Y, -half.Z),
-				Vector3.new(half.X, -half.Y, -half.Z),
-				Vector3.new(-half.X, -half.Y, -half.Z),
-			} do
+			for _, corner in
+				{
+					Vector3.new(half.X, half.Y, half.Z),
+					Vector3.new(-half.X, half.Y, half.Z),
+					Vector3.new(half.X, -half.Y, half.Z),
+					Vector3.new(half.X, half.Y, -half.Z),
+					Vector3.new(-half.X, -half.Y, half.Z),
+					Vector3.new(-half.X, half.Y, -half.Z),
+					Vector3.new(half.X, -half.Y, -half.Z),
+					Vector3.new(-half.X, -half.Y, -half.Z),
+				}
+			do
 				local at = cf * corner
 				lo = Vector3.new(math.min(lo.X, at.X), math.min(lo.Y, at.Y), math.min(lo.Z, at.Z))
 				hi = Vector3.new(math.max(hi.X, at.X), math.max(hi.Y, at.Y), math.max(hi.Z, at.Z))
@@ -830,13 +1002,16 @@ function Pop.pill(parent: Instance, text: string, icon: string, paint: string | 
 	}, parent)
 	Pop.face(button, paint)
 	Pop.studs(button, PopTheme.Corner, 0.45, 28, 3)
-	local pic = math.floor(size.Y * 0.84)
+	Pop.gleam(button, 3)
+	Pop.fxTag(button, "Press")
+	-- (the pixel reels' wide buttons: a big picture over the left end, leaning on hover)
+	local pic = math.floor(size.Y * 1.12)
 	local shows = IconAssets.shows(icon)
 	local image = UIKit.new("ImageLabel", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 6, 0.5, 0),
+		Position = UDim2.new(0, -math.floor(pic * 0.12), 0.46, 0),
 		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromOffset(pic, pic),
 		Visible = shows,
@@ -844,7 +1019,8 @@ function Pop.pill(parent: Instance, text: string, icon: string, paint: string | 
 	}, button)
 	IconAssets.apply(image, icon)
 	image:SetAttribute("Icon", icon)
-	local left = if shows then pic + 10 else 8
+	Pop.fxTag(image, "Lean")
+	local left = if shows then math.floor(pic * 0.9) else 8
 	Pop.text(button, text, math.floor(size.Y * 0.56), {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -888,37 +1064,41 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		Selectable = true,
 		ZIndex = 2,
 	}, holder)
-	Pop.face(face, o.Paint, 10)
-	Pop.studs(face, 10, 0.45, 30, 2)
-	-- a lighter inner rim (the photo's tiles)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.8,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(5, 4),
-		Size = UDim2.new(1, -10, 0.4, 0),
-		ZIndex = 2,
-	}, face)
+	-- (the pixel reels' square buttons: radius 10 of 100, the lattice, a
+	-- sunburst turning behind the picture, the picture leaning on hover)
+	face.Size = UDim2.fromOffset(s, s)
+	Pop.face(face, o.Paint, math.floor(s * 0.12))
+	face.Size = UDim2.fromScale(1, 1)
+	local clip = Pop.studs(face, 10, 0.45, 30, 2) :: Frame
+	local paint = Pop.paint(o.Paint)
+	local rays = Pop.rays(clip, UDim2.fromScale(0.5, 0.42), 8, math.floor(s * 0.75), 0.55, 2)
+	for _, ray in rays:GetChildren() do
+		if ray:IsA("Frame") then
+			ray.BackgroundColor3 = paint.Top:Lerp(Color3.new(1, 1, 1), 0.75)
+		end
+	end
 	local icon = UIKit.new("ImageLabel", {
 		Name = "Icon",
-		AnchorPoint = Vector2.new(0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, math.floor(s * 0.04)),
+		Position = UDim2.new(0.5, 0, 0.44, 0),
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromOffset(math.floor(s * 0.74), math.floor(s * 0.74)),
+		Size = UDim2.fromScale(0.8, 0.8),
 		ZIndex = 3,
 	}, face)
 	IconAssets.apply(icon, o.Icon)
 	icon:SetAttribute("Icon", o.Icon)
+	Pop.fxTag(icon, "Lean")
+	Pop.fxTag(face, "Press")
 	local hasPicture = IconAssets.shows(o.Icon)
 	icon.Visible = hasPicture
+	-- (the word sits on the tile's bottom edge, half out: the pictures stay big)
 	Pop.text(face, o.Label, math.floor(s * (if hasPicture then 0.2 else 0.26)), {
 		Name = "Label",
-		AnchorPoint = if hasPicture then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5),
-		Position = if hasPicture then UDim2.new(0.5, 0, 1, -2) else UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = if hasPicture then Vector2.new(0.5, 0.5) else Vector2.new(0.5, 0.5),
+		Position = if hasPicture then UDim2.new(0.5, 0, 0.9, 0) else UDim2.fromScale(0.5, 0.5),
 		-- (relative to the tile: the word grows when a layout makes the tile bigger)
-		Size = if hasPicture then UDim2.new(1, -6, 0.26, 0) else UDim2.new(1, -8, 0.34, 0),
+		Size = if hasPicture then UDim2.new(1.04, 0, 0.22, 0) else UDim2.new(1, -8, 0.34, 0),
 		TextScaled = true,
 		ZIndex = 4,
 	})
