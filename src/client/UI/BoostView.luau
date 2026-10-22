@@ -74,7 +74,6 @@ local PictureModels = require(Shared.Builders.PictureModels)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
-local LightSkin = require(script.Parent.LightSkin)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local TechShopView = require(script.Parent.TechShopView)
@@ -2680,6 +2679,7 @@ end
 -- the chip's parts (design units): the icon square and the text ("TRIPLE 3:42")
 local CHIP_DOT = 32
 local CHIP_TEXT = 20
+local CHIP_PIXEL = 17 -- the pixel chips' words (Pop.text size: 12.6-unit letters, like the tiles' words)
 
 --[[
 	Builds a chip's pill (once) at the top of its touch area (which grows
@@ -2737,8 +2737,12 @@ function BoostView.setChipText(button: TextButton, tag: string, text: string)
 	local label = pill:FindFirstChild("Text") :: TextLabel
 	local x = 4 + CHIP_DOT + 8
 	label.Text = if tag == "" then text else `{tag} {text}`
-	local width = math.ceil(TechShopView.textWidth(label.Text, CHIP_TEXT)) + 2
-	label.Position = UDim2.fromOffset(x, 0)
+	local pixel = pill:GetAttribute("Pixel") == true
+	local width = if pixel
+		then math.ceil(Pop.textWidth(label.Text, CHIP_PIXEL))
+		else math.ceil(TechShopView.textWidth(label.Text, CHIP_TEXT)) + 2
+	-- (the pixel pill: the word centred on the face above its lip)
+	label.Position = UDim2.fromOffset(x, if pixel then -2 else 0)
 	label.Size = UDim2.fromOffset(width, BoostView.ChipHeight)
 	pill.Size = UDim2.fromOffset(x + width + 10, BoostView.ChipHeight)
 	button.Size = UDim2.fromOffset(x + width + 10, BoostView.ChipHit)
@@ -2766,7 +2770,11 @@ end
 -- longest timer text, the gaps and the gamepad glyph (SideMenuView keeps
 -- its column clear of it; SideMenu.spec checks the rects).
 function BoostView.chipsWidth(): number
+	local pixel = UIConfig.lightUI()
 	local function pill(text: string): number
+		if pixel then
+			return 4 + CHIP_DOT + 8 + math.ceil(Pop.textWidth(text, CHIP_PIXEL)) + 10
+		end
 		return 4 + CHIP_DOT + 8 + math.ceil(TechShopView.textWidth(text, CHIP_TEXT)) + 2 + 10
 	end
 	local width = 0
@@ -2877,7 +2885,7 @@ end
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
 -- The window wears the Pop look switch on or off (never LightSkin's
 -- recolouring); with the light UI on it also hides Roblox's touch controls
--- while open. The HUD chips keep LightSkin.
+-- while open. The HUD chips wear the pixel reels' look (below).
 local popBuild = BoostView.build
 BoostView.build = function(compact: boolean?): Refs
 	local refs = popBuild(compact)
@@ -2887,11 +2895,94 @@ BoostView.build = function(compact: boolean?): Refs
 	return refs
 end
 
+--[[
+	The HUD chips in the pixel reels' look (owner 2026-10-22): each pill a
+	small reel button (a painted face with the thick black outline, the lip,
+	the lattice), the boost's picture in a painted square at its left end,
+	the tag and the timer in white pixel letters with a black edge. The same
+	instances and names as the dark build (Pill, Dot, Art, Text, Mult): the
+	controller and the specs drive both.
+]]
+BoostView.ChipPaints = {
+	TripleLucky = { Face = "Green", Dot = "Yellow" },
+	HexaLucky = { Face = "Purple", Dot = "Blue" },
+	Launcher = { Face = "Teal", Dot = "Green" },
+} :: { [string]: { Face: string, Dot: string } }
+
+local function pixelPill(button: TextButton, look: { Face: string, Dot: string })
+	local pill = button:FindFirstChild("Pill") :: Frame?
+	if not pill then
+		return
+	end
+	for _, child in pill:GetChildren() do
+		if child:IsA("UIStroke") or child:IsA("UICorner") then
+			child:Destroy()
+		end
+	end
+	pill:SetAttribute("Pixel", true)
+	Pop.face(pill, look.Face, 12)
+	Pop.studs(pill, 12, 0.45, 28, pill.ZIndex)
+	local lip = Pop.lipUnits(BoostView.ChipHeight)
+	local dot = pill:FindFirstChild("Dot") :: Frame?
+	if dot then
+		for _, child in dot:GetChildren() do
+			if child:IsA("UIStroke") or child:IsA("UICorner") then
+				child:Destroy()
+			end
+		end
+		dot.Position = UDim2.new(0, 4, 0.5, -math.floor(lip / 2))
+		Pop.face(dot, look.Dot, 8, true, false)
+		local border = dot:FindFirstChild("Border") :: UIStroke?
+		if border then
+			border.Thickness = 2.5
+		end
+		Pop.studs(dot, 8, 0.45, 20, dot.ZIndex)
+		dot.ZIndex = 3
+		local art = dot:FindFirstChild("Art")
+		if art and art:IsA("GuiObject") then
+			art.ZIndex = 4
+			for _, d in art:GetDescendants() do
+				if d:IsA("GuiObject") then
+					d.ZIndex = math.max(d.ZIndex, 4)
+				end
+			end
+		end
+		local mult = dot:FindFirstChild("Mult") :: TextLabel?
+		if mult then
+			mult.FontFace = PopTheme.Pixel
+			mult.TextColor3 = PopTheme.Ink
+			mult.ZIndex = 5
+			Pop.edge(mult, 2)
+			Pop.fit(mult, 24)
+		end
+	end
+	local label = pill:FindFirstChild("Text") :: TextLabel?
+	if label then
+		label.FontFace = PopTheme.Pixel
+		label.TextColor3 = PopTheme.Ink
+		label.ZIndex = 4
+		for _, child in label:GetChildren() do
+			if child:IsA("UIStroke") then
+				child:Destroy()
+			end
+		end
+		Pop.edge(label, 2)
+		Pop.fit(label, CHIP_PIXEL)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+	end
+end
+
 local darkBuildChips = BoostView.buildChips
 BoostView.buildChips = function(): ChipRefs
 	local refs = darkBuildChips()
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
+		refs.Gui:SetAttribute("PopSkin", true)
+		for kindId, button in refs.Chips do
+			pixelPill(button, BoostView.ChipPaints[kindId] or BoostView.ChipPaints.Launcher)
+			BoostView.setChipText(button, BoostView.ChipTags[kindId] or "", "0:00")
+		end
+		pixelPill(refs.Launcher, BoostView.ChipPaints.Launcher)
+		BoostView.setChipText(refs.Launcher, "", "BOOSTS")
 	end
 	return refs
 end

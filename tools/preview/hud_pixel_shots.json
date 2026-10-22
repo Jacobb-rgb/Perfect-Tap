@@ -1,0 +1,5 @@
+{
+  "hud_pixel_pc": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_pc" },
+  "hud_pixel_phone": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_phone", "uiInset": 58 },
+  "hud_pixel_narrow": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_narrow", "uiInset": 58 }
+}

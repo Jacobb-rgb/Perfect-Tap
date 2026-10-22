@@ -315,7 +315,6 @@ return function(T, Loader)
 	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				TrainChip = ui("TrainView").build(false).Chip, -- (the panel wears the Pop look)
 				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}
@@ -372,7 +371,8 @@ return function(T, Loader)
 			local train = TrainView.build(true)
 			T.truthy(train.Gui:GetAttribute("PopSkin"), "Pop train panel")
 			T.falsy(train.Gui:GetAttribute("LightSkin"), "no LightSkin on the train panel")
-			T.truthy(train.Chip:GetAttribute("LightSkin"), "the HUD chip keeps the light skin")
+			T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the HUD chip")
+			T.truthy(train.Chip:GetAttribute("PopSkin"), "the HUD chip in the pixel look")
 			T.truthy(train.Card:FindFirstChild("Picture"), "the live locomotive")
 			for _, screen in { { 667, 375 }, { 568, 320 } } do
 				TrainView.layout(train, true, screen[1] / PHONE, (screen[2] - 58) / PHONE)
@@ -758,7 +758,6 @@ return function(T, Loader)
 	T.test("LightUI: the steps 6-7 windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				BoostChips = ui("BoostView").buildChips().Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -768,6 +767,44 @@ return function(T, Loader)
 		withLight(function()
 			for name, gui in builds() do
 				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
+			end
+		end)
+	end)
+
+	-- the HUD chips (TRAIN, the boost timers, FREE SPIN) in the pixel reels' look
+	-- (owner 2026-10-22): never LightSkin's recolouring, the same parts, SEND still greys
+	T.test("LightUI: the TRAIN and boost chips wear the pixel look with the switch on", function()
+		local TrainView = ui("TrainView")
+		local BoostView = ui("BoostView")
+		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		T.falsy(TrainView.build(false).Chip:GetAttribute("PopSkin"), "switch off: today's train chip")
+		T.falsy(BoostView.buildChips().Gui:GetAttribute("PopSkin"), "switch off: today's boost chips")
+		withLight(function()
+			for _, compact in { false, true } do
+				local train = TrainView.build(compact)
+				T.truthy(train.Chip:GetAttribute("PopSkin"), "the pixel train chip")
+				T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the train chip")
+				T.truthy(train.ChipFrame:FindFirstChild("Paint") and train.ChipFrame:FindFirstChild("Lattice"), "a painted face")
+				T.truthy(train.ChipFrame:FindFirstChild("IconSquare"), "the locomotive in a painted square")
+				local send = train.ChipSend.Parent :: any
+				T.truthy(send:GetAttribute("Pop"), "SEND is a painted button")
+				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 0, Capacity = 8 }), 0, nil))
+				T.eq(train.ChipSend.BackgroundColor3, Theme.PanelLight, "empty: SEND greyed (the state colour)")
+				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Gray.Top, "a grey face")
+				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 8, Capacity = 8 }), 0, nil))
+				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Paints.Green.Top, "full: a green face")
+				T.eq(train.ChipFrame.Size.Y.Offset, BoostView.TrainChipHeight[if compact then "Compact" else "Normal"], "the chip's height")
+			end
+			local chips = BoostView.buildChips()
+			T.truthy(chips.Gui:GetAttribute("PopSkin"), "the pixel boost chips")
+			T.falsy(chips.Gui:GetAttribute("LightSkin"), "no LightSkin on the boost chips")
+			for _, button in { chips.Chips.TripleLucky, chips.Chips.HexaLucky, chips.Launcher } do
+				local pill = button:FindFirstChild("Pill") :: any
+				T.truthy(pill:FindFirstChild("Paint") and pill:FindFirstChild("Lattice"), button.Name .. ": a painted face")
+				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Paint"), button.Name .. ": the picture's painted square")
+				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel words")
+				T.eq(button.Size.Y.Offset, BoostView.ChipHit, button.Name .. ": the touch area")
 			end
 		end)
 	end)
