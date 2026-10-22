@@ -244,14 +244,28 @@ function Pop.lattice(frame: GuiObject, z: number?, transparency: number?, gap: n
 		Size = UDim2.new(1, -2 * inset, 1, -2 * inset),
 		ZIndex = z or frame.ZIndex,
 	}, frame)
-	-- (a scale-sized face: assume a big one so the lines always reach its corners)
-	local w = if frame.Size.X.Scale == 0 and frame.Size.X.Offset > 0 then frame.Size.X.Offset else 420
-	local h = if frame.Size.Y.Scale == 0 and frame.Size.Y.Offset > 0 then frame.Size.Y.Offset else 420
 	local step = gap or PopTheme.LatticeGap
-	local seg = step * 6
-	local reach = (w + h) * 0.7072 -- the face seen along a 45 degree axis
-	local count = math.ceil(reach / seg) + 1
 	local t = transparency or PopTheme.Lattice
+	-- the uploaded tile: one picture, any size
+	if IconAssets.textureShows("ui_lattice") then
+		local tile = UIKit.new("ImageLabel", {
+			Name = "Lines",
+			BackgroundTransparency = 1,
+			ImageTransparency = t,
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.fromOffset(step * 2, step * 2),
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = z or frame.ZIndex,
+		}, clip)
+		IconAssets.applyTexture(tile, "ui_lattice")
+		return clip
+	end
+	-- frames until then: always LatticeBands bands a way of one fixed size, so the parts
+	-- never depend on the face's size (a window laid out again for a phone keeps them;
+	-- they cover faces up to about 900 units of width + height, a faint gap beyond)
+	local count = PopTheme.LatticeBands
+	local seg = step * 6
+	local reach = 1400
 	local half = math.min(0.03, 1.6 / seg)
 	local keys = { NumberSequenceKeypoint.new(0, 1) }
 	for i = 1, 6 do
@@ -550,7 +564,7 @@ function Pop.button(parent: Instance, text: string, paint: string | Paint, size:
 	end
 	Pop.text(button, text, math.floor(math.min(size.Y * 0.56, 40)), {
 		Name = "Label",
-		Size = UDim2.new(1, -10, 1, -Pop.lipUnits(size.Y)),
+		Size = UDim2.new(1, -10, 0.9, 0), -- (above the lip; a scale: a layout may resize the button)
 		Position = UDim2.fromOffset(5, 0),
 		TextScaled = false,
 		ZIndex = 5,
@@ -586,7 +600,7 @@ function Pop.price(parent: Instance, robux: number?, size: Vector2, props: Props
 	local row = UIKit.new("Frame", {
 		Name = "Row",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, -Pop.lipUnits(size.Y)),
+		Size = UDim2.new(1, 0, 0.9, 0), -- (above the lip; a scale: a layout may resize the button)
 		ZIndex = 5,
 	}, button)
 	UIKit.list(row, Enum.FillDirection.Horizontal, 4, {

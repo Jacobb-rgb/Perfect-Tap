@@ -341,7 +341,10 @@ return function(T, Loader)
 		local refs = StoreView.build()
 		local ribbons = 0
 		for _, card in refs.Cards do
-			T.eq(card.Price:GetAttribute("Motion"), "Shine", card.Spec.Id .. " price shines")
+			-- (an Item card's price is the pixel reels' tilted tag: no face, no shine)
+			if card.Spec.Look ~= "Item" then
+				T.eq(card.Price:GetAttribute("Motion"), "Shine", card.Spec.Id .. " price shines")
+			end
 			local ribbon = card.Button:FindFirstChild("Ribbon")
 			if ribbon then
 				ribbons += 1

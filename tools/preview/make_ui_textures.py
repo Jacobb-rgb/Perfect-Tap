@@ -7,6 +7,8 @@ edges, cool backgrounds" like the Roblox shop photos). Pure PIL, no inputs.
   ui_studs.png     128 x 128 tile: raised square studs (white highlight top /
                    left, dark shadow bottom / right, faint fill): laid over any
                    colour with ScaleType.Tile (cards, headers, buttons, bodies)
+  ui_lattice.png   128 x 128 tile: thin white diagonal lines both ways (the
+                   pixel reels' lattice, owner 2026-10-22), two a way per tile
   ui_fx.png        1024 x 1024 sheet: rays (0,0 512), glow (512,0 256),
                    sparkle (768,0 128), shine (512,256 512x128)
 Upload both (NAHRAJ_DO_ROBLOXU/ikony_ui) and paste the ids into
@@ -103,6 +105,18 @@ def sparkle(size=128):
     base.alpha_composite(im)
     return base
 
+def lattice():
+    # two lines each way per tile, through the corners and the middle: seamless when tiled
+    n = 128 * SS
+    im = Image.new("RGBA", (n, n), (255, 255, 255, 0))
+    d = ImageDraw.Draw(im)
+    w = 3 * SS
+    for k in range(-2, 3):
+        o = k * n // 2
+        d.line([(o, 0), (o + n, n)], fill=(255, 255, 255, 255), width=w)
+        d.line([(o, n), (o + n, 0)], fill=(255, 255, 255, 255), width=w)
+    return im.resize((128, 128), Image.LANCZOS)
+
 def shine(w=512, h=128):
     im = Image.new("RGBA", (w, h), (255, 255, 255, 0))
     p = im.load()
@@ -115,6 +129,7 @@ def shine(w=512, h=128):
     return im
 
 studs().save(os.path.join(out, "ui_studs.png"))
+lattice().save(os.path.join(out, "ui_lattice.png"))
 sheet = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
 sheet.alpha_composite(rays(), (0, 0))
 sheet.alpha_composite(glow(), (512, 0))

@@ -88,6 +88,7 @@ local PopTheme = {
 	Lip = 0.13, -- the darker band along a face's bottom (a share of its height, 3..9 units)
 	Lattice = 0.82, -- the diagonal lattice lines over a paint (transparency)
 	LatticeGap = 26, -- design units between two lattice lines
+	LatticeBands = 4, -- frames a way (six lines each)
 	Stripe = 0.8, -- the header's shine stripes (transparency)
 
 	BaseHeight = 720,
