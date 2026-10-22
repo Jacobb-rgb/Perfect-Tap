@@ -37,6 +37,7 @@ local PopTheme = {
 	Heavy = PIXEL, -- the money and big headings
 	PixelScale = 0.74, -- the pixel font is wide (1 em a letter): its size next to the round font
 	PixelAdvance = 1.0, -- a pixel letter's width in em
+	PixelMin = 10, -- the smallest a pixel word shrinks to (design units); below it ends in "..."
 	PixelMax = 26, -- a longer text is a sentence: it keeps the round font (subtitles, hints)
 
 	Ink = rgb(255, 255, 255),

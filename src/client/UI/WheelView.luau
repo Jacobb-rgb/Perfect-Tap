@@ -2185,13 +2185,13 @@ end
 function WheelView.placeHint(refs: Refs)
 	local m = metrics(refs.Compact)
 	local width = refs.OddsCard.Size.X.Offset
-	local titleW = Pop.textWidth(refs.OddsTitle.Text, refs.OddsTitle.TextSize) + 30
+	local titleW = Pop.measure(refs.OddsTitle) + 30
 	local closeW = math.floor(m.Band * 0.82) + 20
 	local right = closeW + (if refs.OddsBuy.Visible then refs.OddsBuy.Size.X.Offset + 12 else 4)
 	local room = width - 8 - titleW - right
 	refs.Hint.Position = UDim2.new(1, -right, 0.5, 0)
 	refs.Hint.Size = UDim2.fromOffset(math.max(0, room), m.Hint + 6)
-	refs.Hint.Visible = room >= Pop.textWidth(refs.Hint.Text, refs.Hint.TextSize) * 0.85
+	refs.Hint.Visible = room >= Pop.measure(refs.Hint) * 0.85
 end
 
 ---------------------------------------------------------------- the HUD chip

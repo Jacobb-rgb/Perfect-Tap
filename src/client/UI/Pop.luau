@@ -397,8 +397,46 @@ function Pop.text(parent: Instance, text: string, size: number, props: Props?): 
 	return label
 end
 
+--[[
+	Sets a Pop.text label's size limits (round-font sizes: a pixel label gets them
+	times PopTheme.PixelScale, never under PixelMin). Reuses the label's one
+	UITextSizeConstraint (Pop.fit's), never a second one.
+]]
+function Pop.limit(label: TextLabel, max: number, min: number?)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	local k = if Pop.isPixel(label.FontFace) then PopTheme.PixelScale else 1
+	local top = math.max(PopTheme.PixelMin, math.floor(max * k + 0.5))
+	l.MaxTextSize = top
+	l.MinTextSize = math.min(top, math.max(if k < 1 then PopTheme.PixelMin else 1, math.floor((min or 1) * k + 0.5)))
+end
+
+-- Makes a Pop.text label round for good (a status line, a hint): no scaling, Pop.sentence leaves it alone.
+function Pop.round(label: TextLabel, size: number?)
+	label:SetAttribute("Round", true)
+	label.FontFace = PopTheme.Font
+	label.TextScaled = false
+	label.TextTruncate = Enum.TextTruncate.None
+	local word = label:GetAttribute("WordSize")
+	label.TextSize = size or (if type(word) == "number" then word else label.TextSize)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if limit then
+		limit:Destroy()
+	end
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.LineJoinMode = Enum.LineJoinMode.Round
+	end
+end
+
 -- A pixel label whose text grew into a sentence turns round (and back for a short word).
 function Pop.sentence(label: TextLabel, size: number)
+	if label:GetAttribute("Round") == true then
+		return -- (a view made it round on purpose: Pop.round)
+	end
 	local long = (utf8.len(label.Text) or #label.Text) > PopTheme.PixelMax
 	local pixel = Pop.isPixel(label.FontFace)
 	if long and pixel then
@@ -424,15 +462,18 @@ function Pop.fit(label: TextLabel, size: number)
 		return
 	end
 	local max = math.max(8, math.floor(size * PopTheme.PixelScale + 0.5))
+	label:SetAttribute("WordSize", size) -- (the size Pop.text was given: Pop.setPrice measures with it)
 	label.TextSize = max
 	label.TextScaled = true
+	-- (never smaller than PopTheme.PixelMin: a word that still doesn't fit ends in "...")
+	label.TextTruncate = Enum.TextTruncate.AtEnd
 	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
 	if not limit then
 		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
 	end
 	local l = limit :: UITextSizeConstraint
 	l.MaxTextSize = max
-	l.MinTextSize = math.min(max, 7)
+	l.MinTextSize = math.min(max, PopTheme.PixelMin)
 	local edge = label:FindFirstChild("Edge") :: UIStroke?
 	if edge then
 		edge.LineJoinMode = Enum.LineJoinMode.Miter
@@ -644,8 +685,23 @@ function Pop.setPrice(button: GuiObject, robux: number?, text: string?)
 	end
 	if amount then
 		amount.Text = words
-		amount.Size = UDim2.fromOffset(Pop.textWidth(words, amount.TextSize), amount.Size.Y.Offset)
+		-- (measured with the size the label was built with: TextSize is already the fitted one)
+		amount.Size = UDim2.fromOffset(Pop.textWidth(words, Pop.wordSize(amount)), amount.Size.Y.Offset)
 	end
+end
+
+-- How wide a label's text is in design units, in the label's own font (pixel or round).
+function Pop.measure(label: TextLabel): number
+	if Pop.isPixel(label.FontFace) then
+		return Pop.textWidth(label.Text, Pop.wordSize(label))
+	end
+	return math.ceil(utf8.len(label.Text) or #label.Text) * label.TextSize * 0.55 + 6
+end
+
+-- The size a Pop.text label was built with (its attribute WordSize; else its TextSize).
+function Pop.wordSize(label: TextLabel): number
+	local word = label:GetAttribute("WordSize")
+	return if type(word) == "number" then word else label.TextSize
 end
 
 -- The red square X. Returns the button.
@@ -1243,7 +1299,7 @@ function Pop.setCoinButton(button: GuiObject, text: string, affordable: boolean)
 	local amount = if row then row:FindFirstChild("Amount") :: TextLabel? else nil
 	if amount then
 		amount.Text = text
-		amount.Size = UDim2.fromOffset(Pop.textWidth(text, amount.TextSize), amount.Size.Y.Offset)
+		amount.Size = UDim2.fromOffset(Pop.textWidth(text, Pop.wordSize(amount)), amount.Size.Y.Offset)
 	end
 	Pop.repaint(button, if affordable then "Yellow" else PopTheme.Gray)
 end

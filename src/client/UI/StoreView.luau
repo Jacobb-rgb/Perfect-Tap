@@ -202,19 +202,23 @@ end
 	so Pop.setPrice works on it.
 ]]
 StoreView.TagTilt = 24
-local function priceTag(parent: Instance, robux: number?, name: string, at: UDim2, width: number): TextButton
-	local tag = UIKit.new("TextButton", {
-		Name = name,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		AutoButtonColor = false,
-		BackgroundTransparency = 1,
-		Position = at,
-		Rotation = StoreView.TagTilt,
-		Selectable = false, -- (one gamepad stop per card: the card buys)
-		Size = UDim2.fromOffset(width, 40),
-		Text = "",
-		ZIndex = 7,
-	}, parent)
+local function priceTag(parent: Instance, robux: number?, name: string, at: UDim2, width: number, button: boolean): GuiObject
+	-- (the left tag is the card's Price button, StoreController wires it; the right one is
+	-- only a picture: a Frame, so a tap on it reaches the card underneath)
+	local tag: GuiObject = if button
+		then UIKit.new("TextButton", {
+			AutoButtonColor = false,
+			Selectable = false, -- (one gamepad stop per card: the card buys)
+			Text = "",
+		}, parent)
+		else UIKit.new("Frame", {}, parent)
+	tag.Name = name
+	tag.AnchorPoint = Vector2.new(0.5, 0.5)
+	tag.BackgroundTransparency = 1
+	tag.Position = at
+	tag.Rotation = StoreView.TagTilt
+	tag.Size = UDim2.fromOffset(width, 40)
+	tag.ZIndex = 7
 	local row = UIKit.new("Frame", {
 		Name = "Row",
 		BackgroundTransparency = 1,
@@ -266,7 +270,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 	-- (Item: the reels' square card, its price on two tilted tags beside the picture)
 	local tagW = math.floor(math.min(w * 0.3, 130))
 	local price = if item
-		then priceTag(button, product.Robux, "Price", UDim2.new(0, math.floor(tagW * 0.5) + 6, 0.36, 0), tagW)
+		then priceTag(button, product.Robux, "Price", UDim2.new(0, math.floor(tagW * 0.5) + 6, 0.36, 0), tagW, true) :: TextButton
 		else Pop.price(button, product.Robux, Vector2.new(priceW, priceH), {
 			AnchorPoint = if spec.Look == "Bundle" then Vector2.new(1, 1) else Vector2.new(0.5, 1),
 			Position = if spec.Look == "Bundle" then UDim2.new(1, -12, 1, -12) else UDim2.new(0.5, 0, 1, -10),
@@ -274,7 +278,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 			ZIndex = 6,
 		})
 	if item then
-		priceTag(button, product.Robux, "PriceMirror", UDim2.new(1, -(math.floor(tagW * 0.5) + 6), 0.36, 0), tagW)
+		priceTag(button, product.Robux, "PriceMirror", UDim2.new(1, -(math.floor(tagW * 0.5) + 6), 0.36, 0), tagW, false)
 	else
 		price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
 	end
@@ -324,6 +328,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		for i, line in lines do
 			Pop.text(button, "+ " .. line, 22, {
 				Name = "Line" .. i,
+				FontFace = PopTheme.Font, -- (one font for the whole list: the round one, readable)
 				Position = UDim2.fromOffset(34, 72 + i * 32),
 				Size = UDim2.new(0.5, 0, 0, 30),
 				TextColor3 = Color3.fromRGB(255, 248, 200),
@@ -398,6 +403,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		})
 		local note = Pop.text(button, spec.Note or "", 17, {
 			Name = "Note",
+			FontFace = PopTheme.Font, -- (a short sentence: the round font, readable on phones)
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -(below - 2)),
 			Size = UDim2.new(1, -12, 0, 24),
@@ -482,6 +488,15 @@ function StoreView.relayout(refs: Refs): number
 				local h = rowHeight(section, r)
 				local unit = (StoreView.CardsWidth - (#shown - 1) * gap) / spans
 				local x = 0
+				-- (the pixel reels' square pass cards: never wider than three a row; a short row is centred)
+				local squares = true
+				for _, card in shown do
+					squares = squares and card.Spec.Look == "Item"
+				end
+				if squares then
+					unit = math.min(unit, (StoreView.CardsWidth - 2 * gap) / 3)
+					x = math.floor((StoreView.CardsWidth - (unit * spans + (#shown - 1) * gap)) / 2)
+				end
 				for _, card in shown do
 					local w = math.floor(unit * (card.Spec.Span or 1))
 					card.Button.Position = UDim2.fromOffset(x, inner)
@@ -983,13 +998,12 @@ function StoreView.build(): Refs
 	Pop.rainbow(window.Header)
 	local cartSize = math.floor(StoreView.Header * 1.25)
 	local cartModel = PictureModels.build("cart")
-	local cart = Pop.model(window.Root, "cart", cartSize, cartModel, {
+	Pop.model(window.Root, "cart", cartSize, cartModel, {
 		Name = "Cart",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, -10, 0, math.floor(StoreView.Header / 2)),
 		ZIndex = 6,
 	}, Vector3.new(-0.7, 0.45, -1))
-	Pop.fxTag(cart, "Lean")
 	window.Title.Position = UDim2.new(0, cartSize - 6, 0.5, 0)
 	window.Title.Size = UDim2.new(0, 420, 1, -6)
 	local titleShadow = window.Header:FindFirstChild("TitleShadow")

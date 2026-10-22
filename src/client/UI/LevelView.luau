@@ -109,7 +109,7 @@ local function row(parent: Instance, name: string, paint: string, order: number)
 		ZIndex = 7,
 	})
 	label.Position = UDim2.new(0, 16, 0.5, 0)
-	UIKit.new("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 12 }, label)
+	Pop.limit(label, 22, 12)
 	local amount = Pop.text(holder, "", 30, {
 		Name = "Amount",
 		FontFace = PopTheme.Heavy,
@@ -120,7 +120,7 @@ local function row(parent: Instance, name: string, paint: string, order: number)
 		TextScaled = true, -- "MAX 50%" and "+$1.35M" fit
 		ZIndex = 7,
 	})
-	UIKit.new("UITextSizeConstraint", { MaxTextSize = 30, MinTextSize = 14 }, amount)
+	Pop.limit(amount, 30, 14)
 	return { Holder = holder, Label = label, Amount = amount, Scale = scale }
 end
 
@@ -227,6 +227,7 @@ function LevelView.build(): View
 		Visible = false,
 	}, gui)
 	local rays = Pop.rays(moment, UDim2.fromOffset(300, 92), 9, 250, 0.6, 2)
+	rays:SetAttribute("PixelFx", nil) -- (LevelController turns these itself: one writer)
 	for _, ray in rays:GetChildren() do
 		if ray:IsA("Frame") then
 			ray.BackgroundColor3 = Color3.fromRGB(255, 220, 120)

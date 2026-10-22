@@ -11,7 +11,9 @@
 
 	The switch: Config/AnimConfig.PixelFx. Off, start() returns at once.
 	Reduce motion (Roblox's own setting or the SETTINGS toggle): nothing spins
-	or sweeps; Lean stays (it answers the player's pointer).
+	or sweeps, and a lean snaps instead of tweening.
+	A rays group another script turns itself (LevelView's LEVEL UP) clears its
+	PixelFx attribute right after Pop.rays: it is never picked up here.
 
 	Cheap: marks are picked up from PlayerGui.DescendantAdded in one deferred
 	batch (the kit sets the attribute right after parenting); one loop at 30
@@ -40,6 +42,7 @@ PixelFxController.StepRate = 1 / 30
 type Gleam = { Band: GuiObject, Gui: LayerCollector?, Next: number }
 
 local spins: { [GuiObject]: LayerCollector? } = {}
+local seen: { [GuiObject]: { At: number, Shown: boolean } } = {} -- (a spin's last visibility check)
 local gleams: { Gleam } = {}
 local leaning: { [GuiObject]: boolean } = {}
 local pressed: { [GuiObject]: boolean } = {}
@@ -97,6 +100,42 @@ local function tween(thing: Instance, seconds: number, goal: { [string]: any })
 	TweenService:Create(thing, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal):Play()
 end
 
+-- Whether two screen rectangles overlap (pure: tests).
+function PixelFxController.overlaps(aPos: Vector2, aSize: Vector2, bPos: Vector2, bSize: Vector2): boolean
+	return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
+end
+
+-- Is a spin on screen: every parent Visible and its card inside the scrolling list's view?
+local function shown(spin: GuiObject): boolean
+	local card = spin.Parent
+	local at: Instance? = spin
+	while at and not at:IsA("LayerCollector") do
+		if at:IsA("GuiObject") then
+			if not at.Visible then
+				return false
+			end
+			if at:IsA("ScrollingFrame") and card and card:IsA("GuiObject") then
+				if not PixelFxController.overlaps(card.AbsolutePosition, card.AbsoluteSize, at.AbsolutePosition, at.AbsoluteSize) then
+					return false
+				end
+			end
+		end
+		at = at.Parent
+	end
+	return true
+end
+
+-- The same, re-checked at most 4 times a second per spin.
+local function shownNow(spin: GuiObject, now: number): boolean
+	local last = seen[spin]
+	if last and now - last.At < 0.25 then
+		return last.Shown
+	end
+	local ok = shown(spin)
+	seen[spin] = { At = now, Shown = ok }
+	return ok
+end
+
 local function lean(icon: GuiObject)
 	if leaning[icon] then
 		return
@@ -108,13 +147,24 @@ local function lean(icon: GuiObject)
 	leaning[icon] = true
 	local rest = icon.Rotation
 	local function tilt(onIt: boolean)
-		tween(icon, 0.16, { Rotation = if onIt then rest + PixelFxController.LeanAngle else rest })
+		local goal = if onIt then rest + PixelFxController.LeanAngle else rest
+		if reduced() then
+			icon.Rotation = goal -- (reduce motion: it snaps)
+		else
+			tween(icon, 0.16, { Rotation = goal })
+		end
 	end
 	button.MouseEnter:Connect(function()
 		tilt(true)
 	end)
 	button.MouseLeave:Connect(function()
 		tilt(false)
+	end)
+	-- (touch: a tap fires MouseEnter but not always MouseLeave; the finger lifting untilts)
+	button.InputEnded:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			tilt(false)
+		end
 	end)
 	button.SelectionGained:Connect(function()
 		tilt(true)
@@ -184,7 +234,8 @@ local function step(now: number)
 	for spin, gui in spins do
 		if spin.Parent == nil then
 			spins[spin] = nil
-		elseif not still and on(gui) then
+			seen[spin] = nil
+		elseif not still and on(gui) and shownNow(spin, now) then
 			spin.Rotation = PixelFxController.spinAt(now)
 		end
 	end

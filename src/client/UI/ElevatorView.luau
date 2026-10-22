@@ -1482,7 +1482,7 @@ local function newTile(strip: Frame, index: number, color: Color3, text: string,
 		TextScaled = true,
 		ZIndex = 3,
 	})
-	UIKit.new("UITextSizeConstraint", { MaxTextSize = 40 }, number)
+	Pop.limit(number, 40)
 	UIKit.new("UIPadding", {
 		PaddingTop = UDim.new(0.16, 0),
 		PaddingBottom = UDim.new(0.12, 0),

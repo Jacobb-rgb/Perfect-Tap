@@ -365,7 +365,7 @@ StoreConfig.Cards = {
 		Section = "Passes",
 		Row = 1,
 		Title = "Express",
-		Tag = "2x TRAIN",
+		Tag = "FAST TRAIN",
 	}),
 	card({
 		Id = "Comet",
