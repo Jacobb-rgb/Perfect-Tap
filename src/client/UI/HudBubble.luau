@@ -824,11 +824,11 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}, gui)
 	-- (above the slots, measured from the bottom: HudController sizes the panel
 	-- for today's HUD, HudView.CarryPanelHeight)
-	local carryLabel = Bubble.text(carryPanel, "CARRYING 0/1", 18, {
+	local carryLabel = Pop.text(carryPanel, "CARRYING 0/1", 20, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -(layout.Slot + Theme.Lip) - 6),
-		Size = UDim2.fromOffset(260, 22),
+		Size = UDim2.fromOffset(300, 22),
 	})
 	local slots = UIKit.new("Frame", {
 		Name = "Slots",
@@ -838,7 +838,11 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Size = UDim2.new(1, 0, 0, layout.Slot + Theme.Lip),
 	}, carryPanel)
 	slots:SetAttribute("SlotSize", layout.Slot)
-	UIKit.list(slots, Enum.FillDirection.Horizontal, layout.SlotGap, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	slots:SetAttribute("MaxRow", HudBubble.carryRowMax(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth()))
+	UIKit.list(slots, Enum.FillDirection.Horizontal, layout.SlotGap, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+	})
 
 	-- throw power bar
 	local throwBar = UIKit.new("Frame", {
@@ -1090,35 +1094,190 @@ function HudBubble.selectionImage(): Frame
 	return frame
 end
 
--- One hotbar slot: a carried ore in its rarity colour, "?" for dirty ore,
--- empty when nothing is carried.
+--[[
+	The hotbar's squares in the pixel reels' look (owner 2026-10-22): a dark
+	rounded well (a black outline, a shadow along its top inside, a light rim
+	lit from below, a faint lattice) holding the item's picture: a cleaned ore
+	is a chunky gem in its rarity colour with a black outline and a glint, a
+	dirty ore a grey rock with a pixel "?" (no rarity hint), "+N" a pixel word.
+	Everything inside is sized in scale: the squares shrink to fit the row
+	(fitSlots) when a big backpack shows many.
+]]
+HudBubble.SlotTop = Color3.fromRGB(20, 21, 27) -- the well's shadowed top inside
+HudBubble.SlotBottom = Color3.fromRGB(54, 58, 72)
+HudBubble.SlotRim = Color3.fromRGB(150, 160, 188)
+HudBubble.RockColor = Color3.fromRGB(150, 136, 122) -- dirty ore (no rarity colour until cleaned)
+HudBubble.CarryClear = 300 -- the money's reach from the screen's left edge (design units)
+
+-- The widest the hotbar's row gets (design units) on a screen `screenWidth`
+-- pt wide at `uiScale`: centred, clear of the money on both sides. Pure (specs).
+function HudBubble.carryRowMax(uiScale: number, screenWidth: number?): number
+	local width = if screenWidth and screenWidth > 0 then screenWidth / math.max(uiScale, 0.01) else 1280
+	return math.max(160, math.floor(width - 2 * HudBubble.CarryClear))
+end
+
+-- Fits the hotbar's squares into the row's MaxRow: they shrink (never grow past SlotSize).
+function HudBubble.fitSlots(row: Instance)
+	local size = (row:GetAttribute("SlotSize") :: number?) or 70
+	local max = row:GetAttribute("MaxRow") :: number?
+	local list = row:FindFirstChildOfClass("UIListLayout")
+	local gap = if list then list.Padding.Offset else 10
+	local squares: { Frame } = {}
+	for _, child in row:GetChildren() do
+		if child:IsA("Frame") then
+			table.insert(squares, child)
+		end
+	end
+	local n = #squares
+	local s = size
+	if max and n > 0 then
+		s = math.max(24, math.min(size, math.floor((max - (n - 1) * gap) / n)))
+	end
+	for _, square in squares do
+		square.Size = UDim2.fromOffset(s, s)
+	end
+end
+
+-- A chunky gem (the cleaned ore's picture) in `color`, `share` of its parent.
+local function gem(parent: Instance, color: Color3, share: number): Frame
+	local body = UIKit.new("Frame", {
+		Name = "Ore",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Rotation = 45,
+		Size = UDim2.fromScale(share, share),
+		ZIndex = 5,
+	}, parent)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0.2, 0) }, body)
+	Pop.border(body, 3)
+	-- (turned 45 degrees: the gradient runs from the top corner down to the bottom one)
+	UIKit.new("UIGradient", {
+		Name = "Paint",
+		Rotation = 45,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1, 1, 1), 0.55)),
+			ColorSequenceKeypoint.new(0.5, color),
+			ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0, 0, 0), 0.35)),
+		}),
+	}, body)
+	-- the top facet: a lighter square in the upper corner
+	local facet = UIKit.new("Frame", {
+		Name = "Facet",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.14, 0.14),
+		Size = UDim2.fromScale(0.42, 0.42),
+		ZIndex = 6,
+	}, body)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0.25, 0) }, facet)
+	return body
+end
+
+-- A grey rock (dirty ore's picture) `share` of its parent.
+local function rock(parent: Instance, share: number): Frame
+	local body = UIKit.new("Frame", {
+		Name = "Rock",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.54),
+		Rotation = 10,
+		Size = UDim2.fromScale(share, share * 0.86),
+		ZIndex = 5,
+	}, parent)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0.3, 0) }, body)
+	Pop.border(body, 3)
+	local c = HudBubble.RockColor
+	UIKit.new("UIGradient", {
+		Name = "Paint",
+		Rotation = 90,
+		Color = ColorSequence.new(c:Lerp(Color3.new(1, 1, 1), 0.3), c:Lerp(Color3.new(0, 0, 0), 0.4)),
+	}, body)
+	return body
+end
+
+-- One hotbar slot: a carried ore's picture in its rarity colour, a rock with
+-- "?" for dirty ore, an empty well when nothing is carried.
 function HudBubble.slot(parent: Instance, filled: Color3?, order: number, mystery: boolean?): Frame
 	local size = (parent:GetAttribute("SlotSize") :: number?) or 70
-	local holder, face = Bubble.body(parent, Bubble.role("Plain"), Vector2.new(size, size), { Name = "Slot" .. order, Corner = 16 })
-	holder.LayoutOrder = order
+	local holder = UIKit.new("Frame", {
+		Name = "Slot" .. order,
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Size = UDim2.fromOffset(size, size),
+	}, parent)
+	local face = UIKit.new("Frame", {
+		Name = "Face",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ClipsDescendants = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+	}, holder)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0.2, 0) }, face)
+	Pop.border(face)
+	UIKit.new("UIGradient", {
+		Name = "Paint",
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, HudBubble.SlotTop),
+			ColorSequenceKeypoint.new(0.3, HudBubble.SlotTop:Lerp(HudBubble.SlotBottom, 0.55)),
+			ColorSequenceKeypoint.new(1, HudBubble.SlotBottom),
+		}),
+	}, face)
+	-- the light rim inside the outline, lit from below (an inset, not a button)
+	local rim = UIKit.new("Frame", {
+		Name = "Rim",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.new(1, -6, 1, -6),
+		ZIndex = 3,
+	}, face)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0.17, 0) }, rim)
+	local light = UIKit.new("UIStroke", {
+		Name = "Light",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = HudBubble.SlotRim,
+		Thickness = 2,
+	}, rim)
+	UIKit.new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.85),
+			NumberSequenceKeypoint.new(0.5, 0.45),
+			NumberSequenceKeypoint.new(1, 0),
+		}),
+	}, light)
+	Pop.studs(face, 12, 0.6, nil, 3)
 	if mystery then
-		Bubble.ink(face, "?", math.floor(size * 0.6), {
+		rock(face, 0.56)
+		Pop.text(face, "?", math.floor(size * 0.5), {
 			Name = "Mystery",
-			FontFace = Theme.TitleFont,
-			Size = UDim2.fromScale(1, 1),
-			TextColor3 = Theme.InkSoft,
-			ZIndex = 4,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.52),
+			Size = UDim2.fromScale(0.6, 0.6),
+			ZIndex = 7,
 		})
 	elseif filled then
-		local gem = UIKit.new("Frame", {
-			Name = "Ore",
+		-- the rarity's soft glow behind the gem
+		local glow = UIKit.new("Frame", {
+			Name = "Glow",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = filled,
+			BackgroundTransparency = 0.72,
 			BorderSizePixel = 0,
 			Position = UDim2.fromScale(0.5, 0.5),
-			Rotation = 45,
-			Size = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.8, 0.8),
 			ZIndex = 4,
 		}, face)
-		Bubble.corner(gem, 8)
-		Bubble.stroke(gem, 3)
-		Bubble.gradient(gem, Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190))
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, glow)
+		gem(face, filled, 0.5)
+		Pop.sparkle(face, UDim2.fromScale(0.72, 0.26), math.floor(size * 0.24), 7, 0.05)
 	end
+	HudBubble.fitSlots(parent)
 	return holder
 end
 
@@ -1127,11 +1286,12 @@ function HudBubble.moreSlot(parent: Instance, more: number, order: number): Fram
 	local holder = HudBubble.slot(parent, nil, order, false)
 	local face = holder:FindFirstChild("Face") :: GuiObject
 	local size = (parent:GetAttribute("SlotSize") :: number?) or 70
-	Bubble.ink(face, `+{more}`, if more >= 100 then math.floor(size * 0.3) else math.floor(size * 0.4), {
+	Pop.text(face, `+{more}`, if more >= 100 then math.floor(size * 0.3) else math.floor(size * 0.4), {
 		Name = "More",
-		FontFace = Theme.TitleFont,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 4,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.86, 0.6),
+		ZIndex = 7,
 	})
 	return holder
 end

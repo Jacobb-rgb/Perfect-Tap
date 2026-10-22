@@ -289,6 +289,10 @@ elseif sceneName == "store_quick" then -- only the STORE overlays over an empty 
 	for name, guis in require("./lib/store_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "hud_quick" then -- only the HUD overlays over an empty sky (tools/lune/lib/hud_pixel_preview.luau)
+	for name, guis in require("./lib/hud_pixel_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/store_preview").build(Loader) do
