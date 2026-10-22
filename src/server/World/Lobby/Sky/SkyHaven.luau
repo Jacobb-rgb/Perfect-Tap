@@ -2,7 +2,10 @@
 	SKY HAVEN (owner 2026-10-21): one bigger floating island you can climb to
 	from the ground. A rock spire rises out of the sea off the south-east
 	corner; stepping stones wind round it (a parkour climb, each stone a short
-	jump higher than the last) up to the island. On the island: a village of
+	jump higher than the last) up to the island. (Owner 2026-10-22: "make the
+	steps more massive, little levitating islands, and improve the mountain,
+	add moss": every stone is a little floating islet, the spire has moss on
+	its ledges, vines, mossy outcrops, bushes and a crystal crown.) On the island: a village of
 	cottages, trees, a waterfall and, on a podium in the middle, the SKY EGG:
 	a secret coin egg with three golems better than the Crystal capsule's but
 	still below the Robux ones (the capsule and the golems are gameplay work
@@ -53,7 +56,7 @@ SkyHaven.StepCount = math.ceil((SkyHaven.Center.Y - SkyHaven.StepFrom) / SkyHave
 -- one and a half turns round the spire (~7.5 studs apart, gaps ~2.5): the last stone lands
 -- in front of the island's front edge, where the lit path starts
 SkyHaven.StepAngle = 3 * math.pi / (SkyHaven.StepCount - 1)
-SkyHaven.StepSize = 5
+SkyHaven.StepSize = 5.5 -- the islets' grass tops
 SkyHaven.Start = -math.pi / 2 -- the first stone faces the town (north, -Z)
 SkyHaven.Podium = 0 -- the egg podium's local z on the island (front = -Z)
 SkyHaven.PodiumReach = 9 * math.sqrt(2) -- the podium's star points (two turned squares)
@@ -74,6 +77,8 @@ local GOLD_TEXT = Color3.fromRGB(255, 184, 24)
 local NAVY = Color3.fromRGB(24, 32, 74)
 local NAVY_DARK = Color3.fromRGB(14, 18, 46)
 local WALK = Color3.fromRGB(40, 48, 82) -- the lit path's dark walkway (like the lobby's neon walkways)
+local MOSS = Color3.fromRGB(78, 140, 58) -- moss on the spire's ledges and under the islets
+local FLOWERS = { Color3.fromRGB(255, 120, 170), Color3.fromRGB(255, 214, 90), Color3.fromRGB(150, 200, 255) }
 
 -- The stepping stones' top centers, first (just above the sea, at the bridge) to last (at the
 -- island's front edge); each stone is StepSize square, turned to face the spire.
@@ -88,6 +93,95 @@ function SkyHaven.stonePositions(): { Vector3 }
 	return out
 end
 
+-- A stepping stone as a little floating islet (owner 2026-10-22: "make the steps more massive:
+-- little levitating islands"). `stone` = the top's center, turned to face the spire. The grass
+-- top is the only solid part (in `m`); under it (in `decor`, never in the way of a jump): a dirt
+-- band turned 45 degrees, two stone tiers narrowing to a hanging tip and a moss drip. On top: a
+-- lighter grass cap, a glowing edge on the outer side (the way up) and one small touch by turns
+-- (a tuft, flowers, a crystal, a mossy rock); a lantern every fifth islet.
+local function islet(m: Model, decor: Model, stone: CFrame, i: number, rng: Rng.Rng)
+	local s = SkyHaven.StepSize
+	Style.block(m, stone * CFrame.new(0, -0.45, 0), Vector3.new(s, 0.9, s), Style.vary(C.Grass, rng, 0.05), nil, Style.solid())
+	Style.block(
+		m,
+		stone * CFrame.new(0, 0.05, 0),
+		Vector3.new(s - 0.6, 0.12, s - 0.6),
+		Style.vary(C.GrassLight, rng, 0.05),
+		nil,
+		Style.tiny()
+	)
+	local under = Style.tiny()
+	Style.block(
+		decor,
+		stone * CFrame.new(0, -1.35, 0) * CFrame.Angles(0, PI / 4, 0),
+		Vector3.new(s * 0.92, 1.0, s * 0.92),
+		Style.vary(C.Dirt, rng, 0.06),
+		nil,
+		under
+	)
+	Style.block(
+		decor,
+		stone * CFrame.new(0, -2.65, 0) * CFrame.Angles(0, 0.35, 0),
+		Vector3.new(s * 0.74, 1.7, s * 0.74),
+		Style.vary(C.StoneDark, rng, 0.05),
+		nil,
+		under
+	)
+	Style.block(
+		decor,
+		stone * CFrame.new(0.2, -4.2, 0) * CFrame.Angles(0, 0.9, 0),
+		Vector3.new(s * 0.46, 1.6, s * 0.46),
+		Style.vary(C.StoneDeep, rng, 0.05),
+		nil,
+		under
+	)
+	Style.block(decor, stone * CFrame.new(0.3, -5.45, 0), Vector3.new(s * 0.2, 1.1, s * 0.2), C.StoneDeep, nil, under)
+	-- moss dripping off the dirt band on the outer side
+	Style.block(decor, stone * CFrame.new(s * 0.36, -1.9, s * 0.1), Vector3.new(0.3, 1.4, s * 0.4), Style.vary(MOSS, rng, 0.06), nil, under)
+	-- a glowing edge on the outer side shows the way
+	Style.block(m, stone * CFrame.new(s / 2 - 0.1, -0.2, 0), Vector3.new(0.2, 0.25, s - 0.4), SKY_BLUE, NEON, Style.tiny())
+	-- one small touch on top, toward the back corner (never on the landing spot's middle)
+	local spot = stone * CFrame.new(-s * 0.3, 0.1, s * 0.3)
+	local touch = i % 4
+	if i % 5 == 0 then
+		Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 1.2, 0), Vector3.new(0.35, 2.4, 0.35), C.WoodDark, nil, Style.tiny())
+		Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 2.7, 0), Vector3.new(0.75, 0.75, 0.75), C.LampAmber, NEON, Style.tiny())
+	elseif touch == 0 then
+		for _, lean in { -0.35, 0.3 } do
+			local bh = rng:range(1.1, 1.7)
+			Style.block(
+				decor,
+				spot * CFrame.Angles(0, 0, lean) * CFrame.new(0, bh / 2, 0),
+				Vector3.new(0.28, bh, 0.5),
+				Style.vary(C.LeafGreenLight, rng, 0.06),
+				nil,
+				Style.tiny()
+			)
+		end
+	elseif touch == 1 then
+		for f, dx in { -0.4, 0.45 } do
+			local fh = rng:range(0.7, 1.0)
+			local at = spot * CFrame.new(dx, 0, f * 0.3)
+			Style.block(decor, at * CFrame.new(0, fh / 2, 0), Vector3.new(0.14, fh, 0.14), C.LeafGreen, nil, Style.tiny())
+			Style.block(decor, at * CFrame.new(0, fh, 0), Vector3.new(0.45, 0.3, 0.45), FLOWERS[(i + f) % #FLOWERS + 1], nil, Style.tiny())
+		end
+	elseif touch == 2 then
+		Style.crystal(decor, spot * CFrame.Angles(0.2, 0.5, -0.15), 1.5, 0.55, SKY_DEEP, nil, 0.12)
+	else
+		local rs = rng:range(0.9, 1.2)
+		local rock = spot * CFrame.new(0, rs * 0.3, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0)
+		Style.block(decor, rock, Vector3.new(rs * 1.2, rs * 0.7, rs), Style.vary(C.Stone, rng, 0.06), nil, Style.tiny())
+		Style.block(
+			decor,
+			rock * CFrame.new(0, rs * 0.38, 0),
+			Vector3.new(rs * 1.1, 0.16, rs * 0.9),
+			Style.vary(MOSS, rng, 0.06),
+			nil,
+			Style.tiny()
+		)
+	end
+end
+
 -- The stepping stones round the spire, from just above the sea to the island's edge (the
 -- spire itself goes into `decor`, the Lod part).
 local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
@@ -96,26 +190,10 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 	local topY = SkyHaven.Center.Y
 	for i, p in stones do
 		local a = SkyHaven.Start + (i - 1) * SkyHaven.StepAngle
-		local s = SkyHaven.StepSize
-		local stone = CFrame.new(p) * CFrame.Angles(0, -a, 0)
-		Style.block(m, stone * CFrame.new(0, -0.6, 0), Vector3.new(s, 1.2, s), Style.vary(C.Stone, rng, 0.06), nil, Style.solid())
-		Style.block(
-			m,
-			stone * CFrame.new(0, 0.05, 0),
-			Vector3.new(s - 0.6, 0.12, s - 0.6),
-			Style.vary(C.GrassLight, rng, 0.05),
-			nil,
-			Style.tiny()
-		)
-		Style.block(m, stone * CFrame.new(0, -1.6, 0), Vector3.new(s * 0.6, 1, s * 0.6), C.StoneDark, nil, Style.tiny())
-		-- a glowing edge on the stone's outer side shows the way; a lantern every fifth stone
-		Style.block(m, stone * CFrame.new(s / 2 - 0.1, -0.2, 0), Vector3.new(0.2, 0.25, s - 0.4), SKY_BLUE, NEON, Style.tiny())
-		if i % 5 == 0 then
-			Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 1.2, 0), Vector3.new(0.35, 2.4, 0.35), C.WoodDark, nil, Style.tiny())
-			Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 2.7, 0), Vector3.new(0.75, 0.75, 0.75), C.LampAmber, NEON, Style.tiny())
-		end
+		islet(m, decor, CFrame.new(p) * CFrame.Angles(0, -a, 0), i, rng)
 	end
-	-- the spire: stacked rock drums narrowing to the top, rising out of the sea, crystals in its flanks
+	-- the spire: stacked rock drums narrowing to the top, rising out of the sea, crystals in its
+	-- flanks; moss on every ledge and down the sides in vines, mossy rock outcrops, a crystal crown
 	local base = SkyHaven.SpireBase
 	local h = topY - 18 - base
 	local drums = 6
@@ -140,16 +218,87 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 			nil,
 			Style.tiny()
 		)
+		-- (the sea hides the lowest drum's top: no moss down there)
+		if k > 0 then
+			-- a moss carpet on the drum's top ledge, its rim over the edge
+			Style.block(
+				decor,
+				c * CFrame.new(0, dh / 2 + 0.05, 0),
+				Vector3.new(r * 2 + 0.3, 0.5, r * 2 + 0.3),
+				Style.vary(MOSS, rng, 0.06),
+				nil,
+				Style.tiny()
+			)
+			-- vines hanging from it down the four faces
+			for v = 0, 2 do
+				local face = (v + k) % 4
+				local along = rng:range(-r * 0.7, r * 0.7)
+				local long = dh * rng:range(0.35, 0.7)
+				local onFace = c * CFrame.Angles(0, face * math.pi / 2, 0) * CFrame.new(along, dh / 2 - long / 2, -r - 0.12)
+				Style.block(
+					decor,
+					onFace,
+					Vector3.new(rng:range(0.5, 0.9), long, 0.25),
+					Style.vary(C.LeafGreen, rng, 0.08),
+					nil,
+					Style.tiny()
+				)
+			end
+		end
+		-- two mossy rock outcrops sticking out of the flanks
+		for o = 1, 2 do
+			local around = k * 1.3 + o * math.pi + rng:range(-0.4, 0.4)
+			local size = r * rng:range(0.45, 0.6)
+			local out = c
+				* CFrame.Angles(0, around, 0)
+				* CFrame.new(0, rng:range(-dh * 0.25, dh * 0.2), -r - size * 0.15)
+				* CFrame.Angles(rng:range(-0.25, 0.25), rng:range(0, 1.5), 0)
+			Style.block(decor, out, Vector3.new(size, size * 0.7, size), Style.vary(C.Stone, rng, 0.06), nil, Style.tiny())
+			Style.block(
+				decor,
+				out * CFrame.new(0, size * 0.35 + 0.1, 0),
+				Vector3.new(size * 1.05, 0.3, size * 1.05),
+				Style.vary(MOSS, rng, 0.06),
+				nil,
+				Style.tiny()
+			)
+		end
 		if k % 2 == 1 then
 			Style.crystalCluster(
 				decor,
 				c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9),
 				3.5,
-				SKY_BLUE,
+				SKY_DEEP,
 				rng,
-				{ Count = 2 }
+				{ Count = 2, TipLerp = 0.12 }
 			)
 		end
+	end
+	-- the crown: a crystal cluster in the moss on the spire's top
+	local crown = CFrame.new(spire.X, base + h + 0.2, spire.Z) * CFrame.Angles(0, 0.7, 0)
+	Style.crystalCluster(decor, crown, 4.2, SKY_DEEP, rng, { Count = 4, TipLerp = 0.12 })
+	-- little bushes growing on the ledges
+	for b, k in { 1, 3, 4 } do
+		local r = SkyHaven.SpireRadius * (1 - k / drums * 0.45)
+		local around = b * 2.1 + 0.6
+		local at = CFrame.new(spire.X, base + h / drums * (k + 1) + 0.3, spire.Z) * CFrame.Angles(0, around, 0) * CFrame.new(0, 0, -r + 0.6)
+		local size = rng:range(1.6, 2.2)
+		Style.block(
+			decor,
+			at * CFrame.new(0, size * 0.4, 0),
+			Vector3.new(size, size * 0.8, size),
+			Style.vary(C.LeafGreen, rng, 0.06),
+			nil,
+			Style.tiny()
+		)
+		Style.block(
+			decor,
+			at * CFrame.new(size * 0.25, size * 0.75, -0.2) * CFrame.Angles(0, 0.6, 0),
+			Vector3.new(size * 0.6, size * 0.5, size * 0.6),
+			Style.vary(C.LeafGreenLight, rng, 0.06),
+			nil,
+			Style.tiny()
+		)
 	end
 	-- a plank bridge from the gate in the island's south wall (WorldLayout.SouthGate) over the
 	-- rim (its grass top ~1.8) to the first stone, and a ramp plank up to it from the lawn (y 0)
