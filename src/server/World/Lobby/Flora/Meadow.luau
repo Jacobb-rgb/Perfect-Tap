@@ -69,8 +69,9 @@ Meadow.BridgeGarden = { Min = Vector3.new(-22, 0, -114), Max = Vector3.new(22, 0
 	sides (autumn toward the MINE in the west, pink and green toward the
 	hamlet in the east, like the woods either side), flower beds, grass
 	tufts, patches, bushes and stones. The town's passes (and the wilds) keep
-	out of it, and its lawn pieces count toward Meadow.Max, so the town's
-	capped lawn only thins a little (phones). x +-52 meets the town's lawn
+	out of it, and its lawn pieces count toward Meadow.Max (phones: no budget
+	raise), so the town's capped lawn thins by about a quarter (see
+	Meadow.Max). x +-52 meets the town's lawn
 	beside the plot roads (the MINE yard's rails reach x -59). nil at 12
 	cells, where the south coast is z 150.
 ]]
@@ -79,7 +80,10 @@ Meadow.SouthLawn = if WorldLayout.PlotGrid.SouthShift > 0
 	else nil
 -- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
 -- (2026-10-22: the lawn behind the Vault takes its share of these, Meadow.SouthLawnMax, and
--- 28 tufts went for its pond and trees: phones)
+-- 28 tufts went for its pond and trees: phones. The town's lawn, measured after the wilds
+-- clear their spots, went from ~750 parts to ~550: tufts 100 -> 58, flower beds 47 -> 34,
+-- patches 60 -> 52, bushes 36 -> 30, rocks 24 -> 20. Giving it back costs ~200 parts of
+-- Flora's lobby budget and the map's, which have ~50 and ~110 left: the owner's call.)
 Meadow.Max = { Tufts = 72, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
@@ -746,9 +750,44 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 	return m
 end
 
--- A flat patch (octagonal: a square and its twin turned 45 degrees).
-local function patch(parent: Instance, p: Vector3, w: number, h: number, color: Color3, rng: Rng.Rng, octagon: boolean?)
-	local cf = CFrame.new(p + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, rng:range(0, math.pi / 2), 0)
+--[[
+	The lawn's flat pieces (the grass patches and the flower beds' mounds)
+	stand a little off the ground: their tops would share a plane with Land's
+	tint patches (tops at y 0.12) and with each other where two overlap, and
+	two coplanar faces of different shades flicker as the camera moves
+	(z-fighting). Each one takes the lowest of Meadow.FlatLifts that no
+	overlapping flat piece of the same lawn has taken.
+]]
+Meadow.FlatLifts = { 0.03, 0.06, 0.09, 0.12 }
+type Flat = { At: Vector3, R: number, Top: number }
+
+-- The lift for a flat piece w wide and h tall at `p` (recorded in `flats`).
+local function flatLift(flats: { Flat }, p: Vector3, w: number, h: number): number
+	-- (a w x w square at any turn stays inside this circle)
+	local r = w * 0.71
+	local lifts = Meadow.FlatLifts
+	local chosen = lifts[#lifts]
+	for _, lift in lifts do
+		local clash = false
+		for _, f in flats do
+			if math.abs(f.Top - (h + lift)) < 0.01 and Vector3.new(p.X - f.At.X, 0, p.Z - f.At.Z).Magnitude < r + f.R then
+				clash = true
+				break
+			end
+		end
+		if not clash then
+			chosen = lift
+			break
+		end
+	end
+	table.insert(flats, { At = p, R = r, Top = h + chosen })
+	return chosen
+end
+
+-- A flat patch (octagonal: a square and its twin turned 45 degrees), `lift`
+-- studs off the ground.
+local function patch(parent: Instance, p: Vector3, w: number, h: number, color: Color3, rng: Rng.Rng, octagon: boolean?, lift: number?)
+	local cf = CFrame.new(p + Vector3.new(0, h / 2 + (lift or 0), 0)) * CFrame.Angles(0, rng:range(0, math.pi / 2), 0)
 	Style.block(parent, cf, Vector3.new(w, h, w * rng:range(0.75, 1)), color, nil, Style.tiny())
 	if octagon then
 		Style.block(parent, cf * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.85, h * 0.98, w * 0.7), color, nil, Style.tiny())
@@ -768,8 +807,10 @@ local function tuft(parent: Instance, p: Vector3, rng: Rng.Rng)
 end
 
 -- A flower bed: a leafy mound and 4-6 flowers (a plus-shaped head on top).
-local function flowerBed(parent: Instance, p: Vector3, color: Color3, rng: Rng.Rng)
-	patch(parent, p, rng:range(2.4, 3.2), 0.45, Style.vary(C.LeafGreenDark, rng, 0.05), rng)
+local function flowerBed(parent: Instance, p: Vector3, color: Color3, rng: Rng.Rng, flats: { Flat })
+	local w = rng:range(2.4, 3.2)
+	local mound = Style.vary(C.LeafGreenDark, rng, 0.05)
+	patch(parent, p, w, 0.45, mound, rng, nil, flatLift(flats, p, w, 0.45))
 	for _ = 1, 3 do
 		local q = p + Vector3.new(rng:range(-1.1, 1.1), rng:range(0.75, 1.15), rng:range(-1.1, 1.1))
 		local s = rng:range(0.75, 1.0)
@@ -828,6 +869,7 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng, area: Box, cap
 		spots[i], spots[j] = spots[j], spots[i]
 	end
 	local beds: { Vector3 } = {}
+	local flats: { Flat } = {}
 	for _, p in spots do
 		local n = patchNoise(p.X, p.Z, seed)
 		local roll = rng:next()
@@ -853,12 +895,14 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng, area: Box, cap
 		end
 		-- (each kind checks its own reach against the sites and aprons)
 		if n > 0.58 and roll < 0.7 and count.Flowers < caps.Flowers and allowed(p, 2.4) then
-			flowerBed(m, p, FLOWERS[math.floor(n * 97 + p.X * 0.013) % #FLOWERS + 1], rng)
+			flowerBed(m, p, FLOWERS[math.floor(n * 97 + p.X * 0.013) % #FLOWERS + 1], rng, flats)
 			table.insert(beds, p)
 			count.Flowers += 1
 		elseif roll < 0.25 and count.Patches < caps.Patches and allowed(p, 3.6) and Meadow.free(index, p, 2.8, 1) then
 			local shade = if rng:chance(0.5) then C.GrassLight else C.GrassDark
-			patch(m, p, rng:range(3, 5.5), 0.12, Style.vary(shade, rng, 0.04), rng)
+			local w = rng:range(3, 5.5)
+			local color = Style.vary(shade, rng, 0.04)
+			patch(m, p, w, 0.12, color, rng, nil, flatLift(flats, p, w, 0.12))
 			count.Patches += 1
 		elseif roll < 0.75 and count.Tufts < caps.Tufts then
 			tuft(m, p, rng)
@@ -925,7 +969,9 @@ Meadow.SouthTrees = {
 	{ At = Vector3.new(14, 0, 177), Kind = "Red", Scale = 0.9 },
 } :: { { At: Vector3, Kind: string, Scale: number } }
 -- its share of the lawn's caps (Meadow.Max: the town's lawn gets the rest),
--- round its pond and its trees (Meadow.SouthNear studs past their edges)
+-- round its pond and its trees (Meadow.SouthNear studs past their edges);
+-- per free lawn spot (~280 there, ~710 in the town) it is no denser than the
+-- town's lawn, so a smaller share would only thin it below the town's look
 Meadow.SouthLawnMax = { Tufts = 14, Flowers = 12, Patches = 8, Bushes = 6, Rocks = 4 }
 Meadow.SouthNear = 8
 

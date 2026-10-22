@@ -55,6 +55,50 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("meadow: the lawn's flat pieces never share a plane with what they overlap (no z-fighting)", function()
+		-- a part's flat footprint, its top and whether it lies level
+		local function footprint(part)
+			local cf, size = part.CFrame, part.Size
+			local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+			local hx = (math.abs(r.X) * size.X + math.abs(u.X) * size.Y + math.abs(l.X) * size.Z) / 2
+			local hy = (math.abs(r.Y) * size.X + math.abs(u.Y) * size.Y + math.abs(l.Y) * size.Z) / 2
+			local hz = (math.abs(r.Z) * size.X + math.abs(u.Z) * size.Y + math.abs(l.Z) * size.Z) / 2
+			return cf.Position, hx, cf.Position.Y + hy, hz, math.abs(u.Y) > 0.999
+		end
+		-- every level top near the ground (Land's tint patches, the wilds' slabs, the lawn itself)
+		local low = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") then
+				local c, hx, top, hz, level = footprint(d)
+				if level and top > -0.1 and top < 1 and hx < 60 and hz < 60 then
+					table.insert(low, { Part = d, C = c, HX = hx, HZ = hz, Top = top })
+				end
+			end
+		end
+		local lawns = { meadow.Lawn }
+		local south = meadow:FindFirstChild("SouthLawn")
+		if south then
+			table.insert(lawns, south.Lawn)
+		end
+		local flats = 0
+		for _, lawn in lawns do
+			for _, part in lawn:GetChildren() do
+				-- the grass patches (0.12 tall) and the flower beds' mounds (0.45)
+				if part:IsA("BasePart") and (math.abs(part.Size.Y - 0.12) < 1e-3 or math.abs(part.Size.Y - 0.45) < 1e-3) then
+					flats += 1
+					local c, hx, top, hz = footprint(part)
+					for _, o in low do
+						if o.Part ~= part and math.abs(o.Top - top) < 0.005 then
+							local overlap = math.abs(o.C.X - c.X) < hx + o.HX and math.abs(o.C.Z - c.Z) < hz + o.HZ
+							T.falsy(overlap, `{part:GetFullName()} at {c} shares its top ({top}) with {o.Part:GetFullName()}`)
+						end
+					end
+				end
+			end
+		end
+		T.truthy(flats >= 60, `the lawn's flat pieces are there ({flats})`)
+	end)
+
 	T.test("meadow: the lawn behind the vault is decorated like the lawns either side", function()
 		local Meadow = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Meadow")
 		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
