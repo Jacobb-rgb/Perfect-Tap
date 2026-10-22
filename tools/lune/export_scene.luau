@@ -45,6 +45,10 @@ local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLay
 local LightingConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LightingConfig")
 local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
 local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+-- UI_QUICK=1: the UI overlays over an empty sky, no map (fast UI iteration)
+if process.env.UI_QUICK == "1" then
+	WorldBuilder.build = function() end :: any
+end
 
 local game = roblox.Instance.new("DataModel")
 local workspace = game:GetService("Workspace")

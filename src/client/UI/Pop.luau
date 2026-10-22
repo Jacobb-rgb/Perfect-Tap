@@ -352,15 +352,16 @@ end
 
 --[[
 	White chunky text with a black edge: the pixel font for a short word, the
-	round font for wrapped text (or the FontFace `props` names).
+	round font for a sentence (wrapped or long; or the FontFace `props` names).
 ]]
 function Pop.text(parent: Instance, text: string, size: number, props: Props?): TextLabel
-	local wrapped = props ~= nil and props.TextWrapped == true
+	-- (a sentence - wrapped, or longer than PopTheme.PixelMax letters - stays round: readable)
+	local sentence = (props ~= nil and props.TextWrapped == true) or (utf8.len(text) or #text) > PopTheme.PixelMax
 	local label = UIKit.new("TextLabel", {
 		Name = "Text",
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, size + 6),
-		FontFace = if wrapped then PopTheme.Font else PopTheme.Pixel,
+		FontFace = if sentence then PopTheme.Font else PopTheme.Pixel,
 		Text = text,
 		TextSize = size,
 		TextColor3 = PopTheme.Ink,
@@ -370,7 +371,33 @@ function Pop.text(parent: Instance, text: string, size: number, props: Props?): 
 	Pop.edge(label, Pop.edgeFor(size))
 	apply(label, props)
 	Pop.fit(label, size)
+	if not sentence and (props == nil or props.FontFace == nil) then
+		-- (a word filled in later that turns out to be a sentence goes round too; the game
+		-- only: the Lune previews have no signals)
+		pcall(function()
+			label:GetPropertyChangedSignal("Text"):Connect(function()
+				Pop.sentence(label, size)
+			end)
+		end)
+	end
 	return label
+end
+
+-- A pixel label whose text grew into a sentence turns round (and back for a short word).
+function Pop.sentence(label: TextLabel, size: number)
+	local long = (utf8.len(label.Text) or #label.Text) > PopTheme.PixelMax
+	local pixel = Pop.isPixel(label.FontFace)
+	if long and pixel then
+		label.FontFace = PopTheme.Font
+		label.TextSize = size
+		local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+		if limit then
+			limit.MaxTextSize = size
+		end
+	elseif not long and not pixel then
+		label.FontFace = PopTheme.Pixel
+		Pop.fit(label, size)
+	end
 end
 
 --[[

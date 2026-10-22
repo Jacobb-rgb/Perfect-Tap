@@ -1056,6 +1056,7 @@ function StoreView.build(): Refs
 
 	local status = Pop.text(window.Body, "", 20, {
 		Name = "Status",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		AnchorPoint = Vector2.new(0.5, 1),
 		BackgroundColor3 = PopTheme.Outline,
 		BackgroundTransparency = 0.25,

@@ -210,6 +210,7 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	Pop.shadow(titleLabel)
 	local subtitleLabel = Pop.text(panel, subtitle, 15, {
 		Name = "Subtitle",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = rgb(255, 252, 236),
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -244,6 +245,7 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	}, panel)
 	local hint = Pop.text(panel, "", 15, {
 		Name = "Hint",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		AnchorPoint = Vector2.new(0.5, 1),
 		TextColor3 = MenuPanel.SoftInk,
 		ZIndex = 2,
