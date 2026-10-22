@@ -278,14 +278,13 @@ return function(T, Loader)
 			end
 		end
 		-- the east and west rim stays outside the island's edge + 1 next to the
-		-- yards (|x| 171 at 12 cells); the bay behind the vault has its own rim
+		-- yards (|x| 171 at 12 cells)
 		local island = WorldLayout.Island
 		local rimX = island.Max.X + 1
 		local boardwalkX = 166 + WorldLayout.PlotGrid.CoastShift
 		for _, part in parts(map.Land.Cliffs) do
 			local min, max = bounds(part)
-			local inBay = LobbyLayout.inBay((min + max) / 2, 0)
-			if max.Y > 0 and min.Z < island.Max.Z and not inBay then
+			if max.Y > 0 and min.Z < island.Max.Z then
 				T.truthy(min.X > rimX or max.X < -rimX, `{part:GetFullName()} rim block inside |x| {rimX}`)
 			end
 			-- the NEXT AREA boardwalk crosses the east rim at deck height ~5
@@ -295,34 +294,51 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("the bay behind the vault stays sea (bigger plots)", function()
-		local bay = LobbyLayout.SouthBay
-		if not bay then
-			-- 12 cells: the south coast runs straight
-			T.eq(WorldLayout.PlotGrid.SouthShift, 0, "a bay only once the south band moves")
-			T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea at 12 cells")
-			return
-		end
-		T.truthy(map.Land.Bay:FindFirstChild("Sea"), "the bay has its sea")
-		-- between the plot roads, open to the south sea
-		for _, road in WorldLayout.Roads do
-			if road.Width == 9 and math.abs(road.From.X) == 70 then
-				T.truthy(math.abs(road.From.X) - road.Width / 2 > bay.Max.X + 6, "the bay stays off the plot roads")
-			end
-		end
-		T.eq(bay.Max.Z, WorldLayout.Island.Max.Z, "the bay reaches the south coast")
-		-- no ground over it, no free ground in it, walls on its three coasts
+	T.test("the south coast runs straight, no sea bay behind the vault (owner 2026-10-22)", function()
+		local island = WorldLayout.Island
+		T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea")
+		T.eq(#map.Land.Bounds:GetChildren(), 4, "the island's 4 invisible walls")
+		-- the ground covers the lawn behind the vault (x -52..52, the plot
+		-- roads' inner verges) from the 12-cell coast (z 150) out to the south coast
+		local covered = false
 		for _, part in map.Land:GetChildren() do
 			if part.Name == "Ground" then
 				local min, max = bounds(part)
-				local covers = min.X < bay.Max.X - 6 and max.X > bay.Min.X + 6 and max.Z > bay.Min.Z + 6
-				T.falsy(covers, `{part:GetFullName()} covers the bay at {part.CFrame.Position}`)
+				local whole = min.X <= -52 and max.X >= 52 and min.Z <= 150 and max.Z >= island.Max.Z
+				covered = covered or (whole and math.abs(max.Y) < 0.01)
 			end
 		end
-		local centre = (bay.Min + bay.Max) / 2
-		T.falsy(LobbyLayout.isFree(centre, 1), "the bay is not free ground")
-		T.falsy(LobbyLayout.isFree(Vector3.new(bay.Min.X - 0.5, 0, centre.Z), 1), "nor its west shore")
-		T.eq(#map.Land.Bounds:GetChildren(), 7, "the island's 4 invisible walls + the bay's 3")
+		T.truthy(covered, "the ground covers x -52..52 from z 150 to the south coast")
+		-- the south wall spans the island's whole width
+		local wall = false
+		for _, part in map.Land.Bounds:GetChildren() do
+			local min, max = bounds(part)
+			wall = wall or (min.X <= island.Min.X and max.X >= island.Max.X and min.Z >= island.Max.Z and min.Z < island.Max.Z + 6)
+		end
+		T.truthy(wall, "one invisible wall along the whole south coast")
+		-- the south rim: one straight line of columns along the whole coast at its
+		-- inner face (Land: the island's edge + 3), nothing of it inland; only the
+		-- stream's waterfall keeps it low (Land.RimNotch)
+		local rimZ = island.Max.Z + 3
+		local caps = {}
+		for _, part in parts(map.Land.Cliffs) do
+			local min, max = bounds(part)
+			if max.X > island.Min.X and min.X < island.Max.X and max.Z > island.Max.Z - 20 then
+				T.truthy(min.Z >= rimZ - 0.35, `{part:GetFullName()} rim block inland at {part.CFrame.Position}`)
+				if min.Z < rimZ and max.Y > -0.25 then
+					table.insert(caps, { min.X, max.X })
+				end
+			end
+		end
+		local x = island.Min.X
+		while x <= island.Max.X do
+			local on = false
+			for _, c in caps do
+				on = on or (c[1] <= x and x <= c[2])
+			end
+			T.truthy(on, `the south rim runs on at x {x}`)
+			x += 2
+		end
 	end)
 
 	T.test("the backdrop build is deterministic", function()

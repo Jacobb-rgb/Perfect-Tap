@@ -306,24 +306,13 @@ Land.RimNotch = { X0 = 96, X1 = 106 }
 
 local function buildRim(parent: Instance, rng: Rng.Rng)
 	local island = WorldLayout.Island
-	local bay = LobbyLayout.SouthBay
 	local shades = { C.StoneDark, C.StoneDark, C.Stone, C.StoneDeep }
-	local edges: { RimEdge } = {}
-	if bay then
-		-- the south rim breaks for the sea bay behind the Vault (bigger plots)
-		table.insert(edges, { along = "x", inner = RIM_INNER_Z, out = 1, from = island.Min.X - 14, to = bay.Min.X + 2 })
-		table.insert(edges, { along = "x", inner = RIM_INNER_Z, out = 1, from = bay.Max.X - 2, to = island.Max.X + 14 })
-	else
-		table.insert(edges, { along = "x", inner = RIM_INNER_Z, out = 1, from = island.Min.X - 14, to = island.Max.X + 14 }) -- south
-	end
-	table.insert(edges, { along = "z", inner = -RIM_INNER_X, out = -1, from = -240, to = RIM_INNER_Z }) -- west
-	table.insert(edges, { along = "z", inner = RIM_INNER_X, out = 1, from = -240, to = RIM_INNER_Z }) -- east
-	if bay then
-		-- the bay's coasts: north (like the 12-cell south coast), west and east
-		table.insert(edges, { along = "x", inner = bay.Min.Z + 3, out = 1, from = bay.Min.X + 2, to = bay.Max.X - 2 })
-		table.insert(edges, { along = "z", inner = bay.Min.X + 2, out = 1, from = bay.Min.Z + 3, to = RIM_INNER_Z + 14 })
-		table.insert(edges, { along = "z", inner = bay.Max.X - 2, out = -1, from = bay.Min.Z + 3, to = RIM_INNER_Z + 14 })
-	end
+	-- (one straight south coast at every grid size: owner 2026-10-22, no sea bay behind the Vault)
+	local edges: { RimEdge } = {
+		{ along = "x", inner = RIM_INNER_Z, out = 1, from = island.Min.X - 14, to = island.Max.X + 14 }, -- south
+		{ along = "z", inner = -RIM_INNER_X, out = -1, from = -240, to = RIM_INNER_Z }, -- west
+		{ along = "z", inner = RIM_INNER_X, out = 1, from = -240, to = RIM_INNER_Z }, -- east
+	}
 	local tiny = { CanCollide = false, CanQuery = false, CastShadow = false }
 	-- s = along the edge, c = across (outward from the inner face), y = height
 	local function block(
@@ -413,18 +402,8 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	---------------------------------------------------------------- ground
 	local townMin = Vector3.new(island.Min.X - 6, -18, -122)
 	local townMax = Vector3.new(island.Max.X + 6, 0, island.Max.Z + 6)
-	local bay = LobbyLayout.SouthBay
-	if bay then
-		-- (bigger plots) the ground leaves the sea bay behind the Vault open; like
-		-- at the island's coasts, it reaches 6 studs past the walkable edge
-		local bayZ = bay.Min.Z + 6
-		boxPart(land, townMin, Vector3.new(townMax.X, 0, bayZ), C.Grass).Name = "Ground"
-		boxPart(land, Vector3.new(townMin.X, -18, bayZ), Vector3.new(bay.Min.X + 6, 0, townMax.Z), C.Grass).Name = "Ground"
-		boxPart(land, Vector3.new(bay.Max.X - 6, -18, bayZ), townMax, C.Grass).Name = "Ground"
-	else
-		local ground = boxPart(land, townMin, townMax, C.Grass, nil, { Name = "Ground" })
-		ground.Name = "Ground"
-	end
+	local ground = boxPart(land, townMin, townMax, C.Grass, nil, { Name = "Ground" })
+	ground.Name = "Ground"
 	-- strips of ground beside the quarry up to the mountains
 	boxPart(land, Vector3.new(townMin.X, -18, -240), Vector3.new(-72, 0, -122), C.Grass).Name = "Ground"
 	boxPart(land, Vector3.new(72, -18, -150), Vector3.new(townMax.X, 0, -122), C.Grass).Name = "Ground"
@@ -439,7 +418,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		local color = if rng:chance(0.5) then C.GrassLight else C.GrassDark
 		local tint = Geo.vary(color, rng, 0.03)
 		local spot, reach = Vector3.new(x, 0, z), math.max(s.X, s.Z) * 0.7
-		if not PlotBuilder.isInYard(spot, reach) and not LobbyLayout.inBay(spot, reach) then
+		if not PlotBuilder.isInYard(spot, reach) then
 			Geo.block(land, CFrame.new(math.floor(x), 0.02, math.floor(z)), s, tint, nil, decor({ CastShadow = false, CanCollide = false }))
 		end
 	end
@@ -468,18 +447,6 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			decor({ Reflectance = 0.2, CanCollide = false, CastShadow = false })
 		)
 		sea.Name = "Sea"
-	end
-	if bay then
-		-- the bay behind the Vault, in its own folder (Land.Sea frames the island)
-		local baySea = boxPart(
-			folder("Bay", land),
-			Vector3.new(bay.Min.X + 6, seaY - 1, bay.Min.Z + 6),
-			Vector3.new(bay.Max.X - 6, seaY + 1, iMax.Z),
-			C.Sea,
-			Enum.Material.SmoothPlastic,
-			decor({ Reflectance = 0.2, CanCollide = false, CastShadow = false })
-		)
-		baySea.Name = "Sea"
 	end
 	buildRim(folder("Cliffs", land), Rng.new(WorldLayout.Seed * 5 + 3))
 	-- invisible walls around the island
@@ -517,15 +484,6 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		nil,
 		wallProps
 	)
-	if bay then
-		-- round the sea bay behind the Vault: its north, west and east coasts
-		local north = Vector3.new(bay.Max.X - 2, 200, bay.Min.Z + 4)
-		boxPart(bounds, Vector3.new(bay.Min.X + 2, -60, bay.Min.Z + 2), north, Palette.Cliff, nil, wallProps)
-		local west = Vector3.new(bay.Min.X + 4, 200, island.Max.Z + 4)
-		boxPart(bounds, Vector3.new(bay.Min.X + 2, -60, bay.Min.Z + 2), west, Palette.Cliff, nil, wallProps)
-		local east = Vector3.new(bay.Max.X - 2, 200, island.Max.Z + 4)
-		boxPart(bounds, Vector3.new(bay.Max.X - 4, -60, bay.Min.Z + 2), east, Palette.Cliff, nil, wallProps)
-	end
 	for _, child in bounds:GetChildren() do
 		child.Name = "Boundary"
 	end

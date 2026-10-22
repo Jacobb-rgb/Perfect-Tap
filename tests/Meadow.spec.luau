@@ -1,7 +1,10 @@
 --[[
 	Flora/Meadow: nothing of the meadow (ponds, trees, fences, lawn) grows
 	where an ore rock grows at runtime (the node spawns), it stays pure
-	decoration (non-collide, no shadows, no lights), and its ponds are there.
+	decoration (non-collide, no shadows, no lights), its ponds are there, and
+	the lawn behind the Blaster Vault (where the bigger plots first left a sea
+	bay; owner 2026-10-22: "fill the gap") is decorated like the lawns either
+	side.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -48,6 +51,109 @@ return function(T, Loader)
 			T.truthy((Vector3.new(a.X, 0, a.Z) - Meadow.LanePond.Center).Magnitude >= 32, `pond {i} keeps off the stream's pond`)
 			for j = i + 1, #centers do
 				T.truthy((a - centers[j]).Magnitude >= 32, `ponds {i} and {j} are spread out`)
+			end
+		end
+	end)
+
+	T.test("meadow: the lawn's flat pieces never share a plane with what they overlap (no z-fighting)", function()
+		-- a part's flat footprint, its top and whether it lies level
+		local function footprint(part)
+			local cf, size = part.CFrame, part.Size
+			local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+			local hx = (math.abs(r.X) * size.X + math.abs(u.X) * size.Y + math.abs(l.X) * size.Z) / 2
+			local hy = (math.abs(r.Y) * size.X + math.abs(u.Y) * size.Y + math.abs(l.Y) * size.Z) / 2
+			local hz = (math.abs(r.Z) * size.X + math.abs(u.Z) * size.Y + math.abs(l.Z) * size.Z) / 2
+			return cf.Position, hx, cf.Position.Y + hy, hz, math.abs(u.Y) > 0.999
+		end
+		-- every level top near the ground (Land's tint patches, the wilds' slabs, the lawn itself)
+		local low = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") then
+				local c, hx, top, hz, level = footprint(d)
+				if level and top > -0.1 and top < 1 and hx < 60 and hz < 60 then
+					table.insert(low, { Part = d, C = c, HX = hx, HZ = hz, Top = top })
+				end
+			end
+		end
+		local lawns = { meadow.Lawn }
+		local south = meadow:FindFirstChild("SouthLawn")
+		if south then
+			table.insert(lawns, south.Lawn)
+		end
+		local flats = 0
+		for _, lawn in lawns do
+			for _, part in lawn:GetChildren() do
+				-- the grass patches (0.12 tall) and the flower beds' mounds (0.45)
+				if part:IsA("BasePart") and (math.abs(part.Size.Y - 0.12) < 1e-3 or math.abs(part.Size.Y - 0.45) < 1e-3) then
+					flats += 1
+					local c, hx, top, hz = footprint(part)
+					for _, o in low do
+						if o.Part ~= part and math.abs(o.Top - top) < 0.005 then
+							local overlap = math.abs(o.C.X - c.X) < hx + o.HX and math.abs(o.C.Z - c.Z) < hz + o.HZ
+							T.falsy(overlap, `{part:GetFullName()} at {c} shares its top ({top}) with {o.Part:GetFullName()}`)
+						end
+					end
+				end
+			end
+		end
+		T.truthy(flats >= 60, `the lawn's flat pieces are there ({flats})`)
+	end)
+
+	T.test("meadow: the lawn behind the vault is decorated like the lawns either side", function()
+		local Meadow = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Meadow")
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local south = Meadow.SouthLawn
+		if not south then
+			-- 12 cells: the south coast is z 150, no lawn behind the vault
+			T.eq(WorldLayout.PlotGrid.SouthShift, 0, "a lawn behind the vault once the south band moves")
+			T.falsy(meadow:FindFirstChild("SouthLawn"), "nothing planted")
+			return
+		end
+		-- the box between the plot roads' inner verges, from the 12-cell coast to the south coast
+		T.eq(south.Min.X, -52, "the lawn's west edge")
+		T.eq(south.Max.X, 52, "the lawn's east edge")
+		T.eq(south.Min.Z, 150, "the lawn starts at the 12-cell south coast")
+		T.truthy(south.Max.Z >= WorldLayout.Island.Max.Z - 2, "the lawn reaches the south coast")
+		local function inside(p): boolean
+			return p.X > south.Min.X and p.X < south.Max.X and p.Z > south.Min.Z and p.Z < WorldLayout.Island.Max.Z
+		end
+		local flora = map.Emberfall.Lobby.Flora
+		local parts, trees, ponds = 0, 0, 0
+		for _, d in flora:GetDescendants() do
+			if d:IsA("BasePart") and inside(d.CFrame.Position) then
+				parts += 1
+			elseif d:IsA("Model") then
+				-- (a tree stands on its trunk, a pond holds water)
+				local trunk = if d.Name == "Tree" then d:FindFirstChild("Trunk") else nil
+				local water = if d.Name == "Pond" then d:FindFirstChild("Water") else nil
+				if trunk and inside(trunk.CFrame.Position) then
+					trees += 1
+				elseif water and inside(water.CFrame.Position) then
+					ponds += 1
+				end
+			end
+		end
+		T.truthy(parts >= 150, `flora parts on the lawn behind the vault ({parts})`)
+		T.truthy(trees >= 6, `trees there ({trees})`)
+		T.truthy(ponds >= 1, `a pond there ({ponds})`)
+		-- its look is planned: the town's lawn and the wilds keep out of it
+		local wilds = flora.Wilds
+		for _, model in { meadow.Lawn, wilds.Pieces, wilds.Secrets } do
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					T.falsy(inside(d.CFrame.Position), `{d:GetFullName()} on the planned lawn at {d.CFrame.Position}`)
+				end
+			end
+		end
+		-- and it keeps off the Blaster Vault, its approach and the plot roads
+		local vault = LobbyLayout.ById.BlasterVault
+		for _, d in meadow.SouthLawn:GetDescendants() do
+			if d:IsA("BasePart") then
+				local p = d.CFrame.Position
+				local reach = math.max(d.Size.X, d.Size.Z) / 2
+				T.truthy(LobbyLayout.distanceTo(vault, p) > reach, `{d:GetFullName()} keeps off the Vault`)
+				T.truthy(math.abs(p.X) + reach < 70 - 4.5, `{d:GetFullName()} keeps off the plot roads`)
 			end
 		end
 	end)

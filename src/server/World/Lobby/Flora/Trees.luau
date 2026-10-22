@@ -110,8 +110,9 @@ end
 -- the south end is the plot columns' end, WorldLayout.PlotGrid.SouthZ, 112 at 12 cells)
 Trees.BeltZ = { -104, WorldLayout.PlotGrid.SouthZ }
 -- (bigger plots) the town-side row and its hedges end where the 12-cell plot
--- columns ended (z 112 at any size): past it, along the shore of the sea bay
--- behind the Vault, only the road-side row runs on (phones: ~60 parts fewer)
+-- columns ended (z 112 at any size): past it, beside the Vault's jungle trees
+-- and the lawn behind the Vault (Meadow.SouthLawn, its own trees), only the
+-- road-side row runs on (phones: ~60 parts fewer)
 Trees.TownRowEndZ = WorldLayout.PlotGrid.SouthZ - WorldLayout.PlotGrid.SouthShift
 -- Lift: extra trunk height of the road-side rows (crowns over head height).
 -- Inner: the third, inner row (z -60..40 only, the hero's mid-depth
