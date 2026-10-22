@@ -452,10 +452,56 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	-- invisible walls around the island
 	local bounds = folder("Bounds", land)
 	local wallProps = decor({ Transparency = 1, CanCollide = true, CastShadow = false })
+	-- the south wall leaves WorldLayout.SouthGate open: a walled corridor over the rim onto the
+	-- plank bridge out to SKY HAVEN's parkour (falling off it into the sea respawns you)
+	local gate = WorldLayout.SouthGate
+	local gateW, gateE = gate.X - gate.Width / 2, gate.X + gate.Width / 2
 	boxPart(
 		bounds,
 		Vector3.new(island.Min.X - 10, -60, island.Max.Z + 2),
+		Vector3.new(gateW, 200, island.Max.Z + 4),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(gateE, -60, island.Max.Z + 2),
 		Vector3.new(island.Max.X + 10, 200, island.Max.Z + 4),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(gateW - 2, -60, island.Max.Z + 2),
+		Vector3.new(gateW, 200, island.Max.Z + gate.Depth),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(gateE, -60, island.Max.Z + 2),
+		Vector3.new(gateE + 2, 200, island.Max.Z + gate.Depth),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	-- the outer wall along the rim's sea edge, either side of the corridor: the rim strip
+	-- between it and the south wall stays sealed
+	boxPart(
+		bounds,
+		Vector3.new(island.Min.X - 14, -60, island.Max.Z + gate.OuterZ),
+		Vector3.new(gateW - 2, 200, island.Max.Z + gate.Depth),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(gateE + 2, -60, island.Max.Z + gate.OuterZ),
+		Vector3.new(island.Max.X + 14, 200, island.Max.Z + gate.Depth),
 		Palette.Cliff,
 		nil,
 		wallProps

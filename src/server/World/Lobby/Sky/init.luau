@@ -36,8 +36,10 @@ local Airship = require(script.Airship)
 local Balloon = require(script.Balloon)
 local Clouds = require(script.Clouds)
 local Islands = require(script.Islands)
+local MoreIslands = require(script.MoreIslands)
 local Planets = require(script.Planets)
 local Sea = require(script.Sea)
+local SkyHaven = require(script.SkyHaven)
 
 type Builder = (parent: Instance, piece: LobbyLayout.Piece, rng: Rng.Rng) -> Model
 
@@ -72,6 +74,9 @@ function Sky.build(parent: Model, rng: Rng.Rng)
 	-- reshuffle the streams of the pieces above
 	Planets.build(parent, Rng.new(`Sky/Planets/{rng:int(1, 2147483646)}`))
 	Airship.build(parent, Rng.new(`Sky/Airship/{rng:int(1, 2147483646)}`))
+	-- (owner 2026-10-21) more floating islands round the map, and SKY HAVEN with its parkour spire
+	MoreIslands.build(parent, Rng.new(`Sky/MoreIslands/{rng:int(1, 2147483646)}`))
+	SkyHaven.build(parent, Rng.new(`Sky/SkyHaven/{rng:int(1, 2147483646)}`))
 end
 
 return Sky

@@ -444,6 +444,39 @@ Themes.Royal = {
 	end,
 }
 
+-- SKY (the SKY EGG on SKY HAVEN, owner 2026-10-22: "cooler still than the
+-- eggs below"): pearl over sky blue, gold claw and scales, cloud rocks,
+-- angel wings with sky-blue tips and a golden halo
+Themes.Sky = {
+	Shell = rgb(246, 250, 255),
+	ShellLow = rgb(70, 150, 255),
+	Scale = rgb(255, 214, 90),
+	ScaleMaterial = M.Foil,
+	Glow = rgb(110, 220, 255),
+	Hot = rgb(240, 252, 255),
+	Claw = rgb(255, 196, 56),
+	ClawMaterial = M.Foil,
+	ClawTip = rgb(250, 252, 255),
+	ClawTipMaterial = M.SmoothPlastic,
+	Rock = rgb(255, 255, 255),
+	RockMaterial = M.SmoothPlastic,
+	RockShape = "Ball",
+	Crystal = rgb(140, 220, 255),
+	Frame = rgb(255, 196, 56),
+	FrameMaterial = M.Foil,
+	Iris = rgb(60, 140, 255),
+	Mark = WHITE,
+	MarkShape = "Star",
+	Crown = { { -0.42, 0.62, rgb(255, 210, 80), -0.45 }, { 0.42, 0.62, rgb(255, 210, 80), 0.45 }, { 0, 1.05, rgb(170, 235, 255), 0 } },
+	CrownCore = WHITE,
+	Embers = rgb(200, 240, 255),
+	Extras = function(_s: Shard, h: Helpers)
+		h.feathers(-1, rgb(250, 252, 255), rgb(120, 200, 255), M.SmoothPlastic, 1.0)
+		h.feathers(1, rgb(250, 252, 255), rgb(120, 200, 255), M.SmoothPlastic, 1.0)
+		h.orbit("Halo", h.TipY + 0.95, 0.62, 0.12, 8, 0.15, rgb(255, 220, 90))
+	end,
+}
+
 -- GALAXY: deep space, a ring of stars, little planets
 Themes.Galaxy = {
 	Shell = rgb(30, 22, 80),

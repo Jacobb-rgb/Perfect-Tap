@@ -432,7 +432,8 @@ local KIT = {
 	lighter = lighter,
 }
 -- the regular capsules' eggs (Builders/CapsuleEggs; capsule id -> builder)
-local EGGS = CapsuleEggs.eggs(KIT, GolemGearLimited.tools(KIT))
+local EGG_TOOLS = GolemGearLimited.tools(KIT)
+local EGGS = CapsuleEggs.eggs(KIT, EGG_TOOLS)
 for name, add in GolemGearLimited.accessories(KIT) do
 	ACCESSORIES[name] = add :: any
 end
@@ -756,6 +757,18 @@ function GolemBuilder.capsule(capsuleId: string, base: CFrame?, opts: { Calm: bo
 	bottom.PrimaryPart = pivot(bottom, "BottomRoot")
 	model.PrimaryPart = root
 	model:SetAttribute("Capsule", capsuleId)
+	return model
+end
+
+-- An egg in a CapsuleEggs theme that is no capsule yet (the SKY EGG on SKY
+-- HAVEN: its capsule comes with the golems), in the capsule's frame.
+function GolemBuilder.themedEgg(themeId: string, base: CFrame?, opts: { Calm: boolean? }?): Model
+	local theme = CapsuleEggs.Themes[themeId]
+	assert(theme, `no egg theme {themeId}`)
+	local model = eggFrame(base, theme.ShellLow, theme.Glow, function(s: GolemGearLimited.Shard)
+		CapsuleEggs.premium(KIT, EGG_TOOLS, s, theme)
+	end, opts ~= nil and opts.Calm == true)
+	model:SetAttribute("Egg", themeId)
 	return model
 end
 

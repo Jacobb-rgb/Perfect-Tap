@@ -93,7 +93,9 @@ LobbyLayout.Budget = {
 	-- + 200 for the podium and pen ores, + ~250 headroom; 32,200 at 12 cells)
 	-- (2026-10-22, map v48: the sea bay behind the Vault filled with island (owner), its lawn
 	-- planted: the map 31,895 + nodes 294 + museums 352 = 32,541 measured, ~110 headroom)
-	MapParts = 32850, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots
+	-- (2026-10-22, map v49: + the six more floating islands and SKY HAVEN with its SKY EGG and
+	-- lit path, ~1,050 outside the lobby area: ~33,590 measured)
+	MapParts = 33900, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -111,6 +113,11 @@ LobbyLayout.Budget = {
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
 	-- (steps 6-7): ~15,510 parts (tests/PhoneBudget.spec.luau, map v26)
 	PhoneParts = 18000,
+	-- phones (integrator 2026-10-22, the SKY HAVEN review): everything within Workspace.
+	-- StreamingTargetRadius (384) of the spawn or the plaza, Lod models included, + the Persistent
+	-- models beyond it + the 8 yard museums (tests/PhoneBudget.spec.luau): map v49 with the sky
+	-- islands and SKY HAVEN measures ~24,550 at the plaza (21,421 + 2,785 + 352), ~24,300 at the spawn
+	StreamParts = 25000,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -118,7 +125,7 @@ LobbyLayout.Budget = {
 	-- Everything else inside the lobby area today (ground, plots, ore
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
-		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
+		Sky = { Parts = 1950, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)

@@ -233,10 +233,21 @@ return function(T, Loader)
 		for _, id in { "CloudBanks", "SunGlitter" } do
 			T.eq(root[id].ModelStreamingMode, roblox.Enum.ModelStreamingMode.Persistent, id .. " is always streamed")
 		end
+		-- SKY HAVEN's egg, its orbit rings and the lit path's floating lights turn (or bob) on the client
+		local haven = { SkyEgg = true, SkyOrbit = true, FloatingLights = true }
+		for id in haven do
+			local m = root.SkyHaven:FindFirstChild(id, true)
+			T.truthy(m and table.find(m:GetTags(), "Spin"), id .. " is tagged Spin")
+			T.truthy(m.PrimaryPart and m.PrimaryPart:IsDescendantOf(m), id .. " has a PrimaryPart")
+			T.eq(m.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, id .. " streams as one piece")
+		end
 		-- nothing else spins
 		for _, d in root:GetDescendants() do
 			if d:IsA("Model") and table.find(d:GetTags(), "Spin") then
-				T.truthy(expected[d.Name], d:GetFullName() .. " is an expected spinner")
+				T.truthy(
+					expected[d.Name] or (haven[d.Name] and d:IsDescendantOf(root.SkyHaven)),
+					d:GetFullName() .. " is an expected spinner"
+				)
 			end
 		end
 	end)

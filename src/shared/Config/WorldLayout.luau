@@ -81,6 +81,13 @@ WorldLayout.Island = {
 	Max = Vector3.new(170 + WorldLayout.PlotGrid.CoastShift, 0, 150 + WorldLayout.PlotGrid.SouthShift),
 }
 
+-- The gate in the island's invisible south wall (Land) where the plank bridge leaves for SKY
+-- HAVEN's parkour (Lobby/Sky/SkyHaven: its spire stands in the sea at this X): Width studs
+-- open, two side walls Depth studs out keep it a corridor onto the bridge. They meet an outer
+-- wall along the rim's sea edge (OuterZ..Depth past the coast, the rim ends ~15.3 out), so a jump
+-- off the bridge or the first stones never lands on the rim outside the island's walls.
+WorldLayout.SouthGate = { X = 150, Width = 6, Depth = 17, OuterZ = 15.5, Approach = 12 }
+
 export type Road = { From: Vector3, To: Vector3, Width: number }
 
 -- Roads (flat dirt strips)
@@ -362,6 +369,21 @@ WorldLayout.Zones = {
 		RockHealth = 700,
 		Priority = 7,
 	},
+	-- SKY HAVEN (Lobby/Sky/SkyHaven): the corridor past the south wall's gate, the plank bridge,
+	-- the parkour spire and the island over the sea; no rocks, the town's lighting and music
+	{
+		Id = "SkyHaven",
+		Name = "Sky Haven",
+		Min = Vector3.new(WorldLayout.SouthGate.X - 40, -6, WorldLayout.Island.Max.Z),
+		Max = Vector3.new(WorldLayout.SouthGate.X + 40, 120, WorldLayout.Island.Max.Z + 130),
+		Lighting = "Surface",
+		FloorY = 0,
+		Ores = {},
+		NodeCount = 0,
+		MinBlaster = 1,
+		RockHealth = 10,
+		Priority = 0,
+	},
 } :: { Zone }
 
 WorldLayout.ZoneById = {} :: { [string]: Zone }
@@ -397,6 +419,11 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(18, -230, -763), Max = Vector3.new(34, -205, -747) }, -- SunkenPalace lift (MineFloors.LiftSpots[4])
 	{ Min = Vector3.new(20, -310, -761), Max = Vector3.new(36, -285, -745) }, -- StormglassRift lift (MineFloors.LiftSpots[5])
 	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[6])
+	-- the walk up to SKY HAVEN's gate in the south wall (SouthGate): no secrets, trees or flowers in the way
+	{
+		Min = Vector3.new(WorldLayout.SouthGate.X - 6, -50, WorldLayout.Island.Max.Z - WorldLayout.SouthGate.Approach),
+		Max = Vector3.new(WorldLayout.SouthGate.X + 6, 10, WorldLayout.Island.Max.Z + WorldLayout.SouthGate.Depth),
+	},
 }
 
 function WorldLayout.isInBox(position: Vector3, min: Vector3, max: Vector3): boolean
