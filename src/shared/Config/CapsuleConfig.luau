@@ -177,6 +177,23 @@ CapsuleConfig.List = {
 		},
 	},
 	{
+		-- the SKY EGG on the Sky Haven island (islands chat + owner 2026-10-22):
+		-- three golems only, better than Crystal, still below the Robux eggs
+		Id = "Sky",
+		Name = "Sky Egg",
+		Currency = "Coins",
+		Price = 3000000,
+		LuckyFrom = "Legendary",
+		Color = rgb(44, 48, 66),
+		Glow = rgb(110, 210, 255),
+		Description = "A storm knight's egg from Sky Haven. Only three golems sleep inside.",
+		Odds = {
+			SkySprite = 0.84,
+			StormSentinel = 0.14,
+			AetherKing = 0.02,
+		},
+	},
+	{
 		Id = "Dragonforge",
 		Name = "Dragonforge Shard",
 		Currency = "Robux",

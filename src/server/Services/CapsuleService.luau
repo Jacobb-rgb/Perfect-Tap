@@ -136,6 +136,12 @@ CapsuleService.EndSlack = 1.5 -- seconds before the boost's end a request that s
 CapsuleService.PurchaseGrace = 120 -- seconds a Royal prompt shown with Triple Lucky keeps it past the boost's end
 CapsuleService.AnnounceFrom = "Legendary" -- golems this rare are announced to the server
 CapsuleService.PromptDistance = 12
+-- an egg standing on its own podium out in the world (the SKY EGG on Sky
+-- Haven): a part tagged PodiumTag with attribute Capsule = its capsule id
+-- gets an "Open" prompt (the panel on that egg's tab) and an OddsBoard
+-- beside it (the client fills it with that egg's odds)
+CapsuleService.PodiumTag = "EggPodium"
+CapsuleService.BoardSize = Vector3.new(3.2, 4.4, 0.25)
 -- ReplicatedStorage attribute: true once step 8 handles receipts (Receipts, the
 -- one gate for every Robux product; CapsuleView reads it)
 CapsuleService.ReceiptsAttribute = Receipts.Attribute
@@ -739,6 +745,58 @@ local function hookStall(instance: Instance)
 	end)
 end
 
+-- An egg's own podium (PodiumTag): the prompt over its front edge and an
+-- odds board on a post beside the egg (front = the part's -Z).
+local function hookPodium(instance: Instance)
+	if hooked[instance] or not instance:IsA("BasePart") then
+		return
+	end
+	local part = instance :: BasePart
+	local capsuleId = part:GetAttribute("Capsule")
+	local capsule = if type(capsuleId) == "string" then CapsuleConfig.ById[capsuleId] else nil
+	if not capsule then
+		return
+	end
+	hooked[instance] = true
+	local point = Instance.new("Attachment")
+	point.Name = CapsuleService.PointName
+	point.CFrame = CFrame.new(0, 3, -part.Size.Z / 2 - 0.5)
+	point.Parent = part
+	local prompt = PromptConfig.make({
+		Name = CapsuleService.PromptName,
+		ActionText = "Open",
+		ObjectText = capsule.Name,
+		Distance = CapsuleService.PromptDistance,
+		Parent = point,
+	})
+	prompt.Triggered:Connect(function(player: Player)
+		if DataService.get(player) then
+			Net.fire("OpenUI", player, "Capsules", { Capsule = capsule.Id })
+		end
+	end)
+	-- the odds before buying, on a board at the podium (filled by the client)
+	local size = CapsuleService.BoardSize
+	local board = Instance.new("Part")
+	board.Name = "OddsBoard"
+	board.Anchored = true
+	board.CanCollide = false
+	board.CanQuery = false
+	board.CanTouch = false
+	board.CastShadow = false
+	board.Material = Enum.Material.SmoothPlastic
+	board.Color = Color3.fromRGB(26, 28, 40)
+	board.Size = size
+	board.CFrame = part.CFrame * CFrame.new(-part.Size.X / 2 - 1.2, size.Y / 2 + 0.4, -part.Size.Z / 2 + 0.6) * CFrame.Angles(0, 0.35, 0)
+	board:SetAttribute("Capsule", capsule.Id)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Odds"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.Parent = board
+	board.Parent = part.Parent or part
+end
+
 local function unhookStall(instance: Instance)
 	hooked[instance] = nil
 end
@@ -749,6 +807,7 @@ end
 CapsuleService._test = {
 	action = onCapsuleAction,
 	hookStall = hookStall,
+	hookPodium = hookPodium,
 	promptPoint = promptPoint,
 	open = openView,
 	setClock = function(fn: () -> number)
@@ -823,6 +882,10 @@ function CapsuleService.start()
 	end
 	CollectionService:GetInstanceAddedSignal(CapsuleService.Tag):Connect(hookStall)
 	CollectionService:GetInstanceRemovedSignal(CapsuleService.Tag):Connect(unhookStall)
+	for _, instance in CollectionService:GetTagged(CapsuleService.PodiumTag) do
+		hookPodium(instance)
+	end
+	CollectionService:GetInstanceAddedSignal(CapsuleService.PodiumTag):Connect(hookPodium)
 end
 
 return CapsuleService

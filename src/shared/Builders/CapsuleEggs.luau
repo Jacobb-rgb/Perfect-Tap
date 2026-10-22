@@ -455,7 +455,7 @@ Themes.Royal = {
 -- SKY (the SKY EGG on SKY HAVEN, owner 2026-10-22: "cooler still than the
 -- eggs below"): pearl over sky blue, gold claw and scales, cloud rocks,
 -- SKY (the SKY EGG on Sky Haven): a STORM KNIGHT's egg like its golems
--- (owner: "black like the Storm Warden, mega cool"): black armour plates,
+-- (owner: "black like the Storm Sentinel, mega cool"): black armour plates,
 -- sky-blue light running in its seams, a crown of lightning, black and gold
 -- wings, a golden halo, storm clouds round its foot and lightning bolts
 -- striking beside it
@@ -613,7 +613,7 @@ Themes.FrostTitans = {
 -- premium egg in its theme
 function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 	local E: { [string]: (Shard) -> () } = {}
-	for _, id in { "Stone", "Crystal", "Royal" } do
+	for _, id in { "Stone", "Crystal", "Royal", "Sky" } do
 		local theme = CapsuleEggs.Themes[id]
 		E[id] = function(s: Shard)
 			CapsuleEggs.premium(kit, tools, s, theme)

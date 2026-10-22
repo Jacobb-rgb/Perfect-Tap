@@ -5,7 +5,7 @@
 	  SkyPuff       Sky Sprite (Epic): a cloud for hair, big shiny eyes, a
 	                little gold halo, small feathered wings, a cloud tail, a
 	                star wand
-	  StormArmor    Storm Warden (Legendary): storm-grey armour, a horned
+	  StormArmor    Storm Sentinel (Legendary): storm-grey armour, a horned
 	                storm helm with a glowing visor, thundercloud pauldrons,
 	                a lightning spear, lightning running in its armour, a
 	                storm cape, embers
@@ -42,7 +42,7 @@ local CLOUD_SHADE = rgb(214, 230, 248)
 local SKY = rgb(110, 196, 255)
 local SKY_DEEP = rgb(60, 130, 220)
 local STORM = rgb(58, 66, 92)
-local BLACK = rgb(40, 44, 60) -- (owner: black like the Storm Warden)
+local BLACK = rgb(40, 44, 60) -- (owner: black like the Storm Sentinel)
 local BLACK_DEEP = rgb(26, 28, 40)
 local STORM_CLOUD = rgb(160, 172, 205)
 local STORM_DARK = rgb(34, 38, 56)
@@ -147,7 +147,7 @@ local function cape(c: Ctx, color: Color3, hem: Color3, flare: number)
 end
 
 -- the knight's look every Sky golem shares (owner: "make them like the
--- Storm Warden, it is mega cool"): a closed helm, a glowing visor slit and a
+-- Storm Sentinel, it is mega cool"): a closed helm, a glowing visor slit and a
 -- brow ridge over it
 local function knightHelm(c: Ctx, helm: Color3, brow: Color3, visor: Color3, material: Enum.Material)
 	K.part(c.Model, "Helm", c.At(0, 2.1, 0.02), c.V(1.62, 1.36, 1.42), helm, material)
@@ -354,7 +354,7 @@ local function aetherKing(c: Ctx): number
 	for _, name in { "Fist1", "Fist2" } do
 		T.recolor(c, name, GOLD, M.Foil)
 	end
-	cloud(c, "Floor", Vector3.new(0, 0.05, 0.05), 1.5, 5, CLOUD)
+	cloud(c, "Floor", Vector3.new(0, 0.32, 0.05), 1.5, 5, CLOUD) -- (the clouds' feet on the base)
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, GOLD, 5)

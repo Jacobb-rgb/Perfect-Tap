@@ -665,6 +665,63 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the stall
 
+	withWorld("Capsules: the SKY EGG is a coin egg of three golems, better than Crystal, below the Robux eggs", function(_w)
+		local sky = CapsuleConfig.ById.Sky
+		T.truthy(sky and sky.Currency == "Coins" and sky.Limited == nil, "a coin egg")
+		T.truthy(table.find(CapsuleConfig.Stall, sky), "it has its tab and its board")
+		local sum, n = 0, 0
+		for id, chance in sky.Odds do
+			T.eq(GolemConfig.ById[id].Edition, "Sky", id .. " is a Sky golem")
+			sum += chance
+			n += 1
+		end
+		T.eq(n, 3, "three golems")
+		T.near(sum, 1, 1e-9, "odds sum to 1")
+		local function expected(id: string): number
+			local e = 0
+			for golem, chance in CapsuleConfig.ById[id].Odds do
+				e += chance * GolemConfig.ById[golem].Bonus.Value
+			end
+			return e
+		end
+		T.truthy(expected("Sky") > expected("Crystal"), "better than the Crystal egg")
+		T.truthy(expected("Sky") < expected("Royal"), "still below the Royal egg")
+		T.truthy(sky.Price and sky.Price > CapsuleConfig.ById.Crystal.Price, "costs more than Crystal")
+	end)
+
+	withWorld("Capsules: an egg's own podium (EggPodium) gets an Open prompt and an odds board", function(_w)
+		local model = Instance.new("Model")
+		local hook = Instance.new("Part")
+		hook.Name = "SkyEggPodium"
+		hook.Size = Vector3.new(7, 1, 7)
+		hook.CFrame = CFrame.new(100, 10, 50)
+		hook:SetAttribute("Capsule", "Sky")
+		hook.Parent = model
+		caps.hookPodium(hook)
+		caps.hookPodium(hook)
+		local point = hook:FindFirstChild(CapsuleService.PointName)
+		local prompt = point and point:FindFirstChild(CapsuleService.PromptName)
+		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "the prompt")
+		T.eq(prompt.ActionText, "Open")
+		T.eq(prompt.ObjectText, "Sky Egg")
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E, like every prompt")
+		local boards = 0
+		for _, child in model:GetChildren() do
+			if child.Name == "OddsBoard" then
+				boards += 1
+				T.eq(child:GetAttribute("Capsule"), "Sky", "the board shows the Sky egg")
+				T.truthy(child:FindFirstChildWhichIsA("SurfaceGui"), "its SurfaceGui")
+				T.falsy(child.CanCollide)
+			end
+		end
+		T.eq(boards, 1, "one board, hooked once")
+		-- a podium without a known egg gets nothing
+		local stray = Instance.new("Part")
+		stray:SetAttribute("Capsule", "NoSuchEgg")
+		caps.hookPodium(stray)
+		T.falsy(stray:FindFirstChild(CapsuleService.PointName), "no prompt for an unknown egg")
+	end)
+
 	withWorld("Capsules: the CapsuleStall gets one Capsules prompt in front of its capsule", function(w)
 		local stall = Instance.new("Model")
 		local base = Instance.new("Part")
