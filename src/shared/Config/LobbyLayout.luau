@@ -183,10 +183,10 @@ local SHOP_RIGHT = Vector3.new(-SHOP_FACING.Z, 0, SHOP_FACING.X)
 local WHEEL = v(-47.5, 0, -72.5)
 -- (round 3: CAPSULES moved south-east into the spawn view, between the west
 -- spur and the lily pond, turned half to the plaza, half to the spawn)
--- (owner 2026-10-22: the egg temple, wider and bigger: 22 x 16, its back
+-- (owner 2026-10-22: the egg temple, wider and bigger: 25 x 18, its back
 -- toward the west plot road, its front to the plaza; between the west spur
 -- and the lily pond)
-local CAPSULES = v(-44.5, 0, 19.2)
+local CAPSULES = v(-44.5, 0, 20.3)
 -- the Blaster Vault closes the south road (its steps at z ~79.6)
 local VAULT = v(0, 0, 112.4)
 -- the MINE (Backdrop: hill + yard): designed at MINE_DESIGN facing east,
@@ -323,8 +323,10 @@ LobbyLayout.Pieces = {
 		-- and from the hero camera (round 3: wholly inside the spawn view, its
 		-- front corners outside the plaza curb, r 36)
 		Center = CAPSULES,
-		Size = v(22, 26, 16), -- (the giant egg's light beam on the roof reaches 26)
-		Facing = (toward(CAPSULES, PLAZA) + toward(CAPSULES, WorldLayout.SpawnPoint)).Unit,
+		Size = v(25, 26, 18), -- (the giant egg's light beam on the roof reaches 26; 25 wide: the eggs ~7.6 studs apart, owner 2026-10-22; the west spur's lamps keep their spots)
+		-- (28 wide: square to the lawn between the west spur and the lily pond,
+		-- facing east, between the plaza and the spawn)
+		Facing = v(1, 0, 0),
 		Note = "The EGGS temple left of the spawn (owner 2026-10-21/22): an open gold rotunda with the three eggs on podiums, a curved navy back wall, crystal shards, a giant crowned egg on the roof, EGGS sign, odds board. Tag CapsuleStall (Model with PrimaryPart CapsuleMachine).",
 	},
 	{
