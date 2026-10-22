@@ -43,6 +43,7 @@ local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
+local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
@@ -129,7 +130,7 @@ end
 
 -- The top bar row's free part in screen pixels (min x, max x), or nil when
 -- Roblox doesn't say (GuiService.TopbarInset).
-local function topBarFree(): (Vector2?)
+local function topBarFree(): Vector2?
 	local ok, rect = pcall(function()
 		return (GuiService :: any).TopbarInset
 	end)
@@ -160,6 +161,14 @@ local function updateScale()
 		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
 		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
+	-- phones: the boost chips stop short of the Shop pill on their row (BoostView.setChips)
+	if refs then
+		local width = refs.Gui.AbsoluteSize.X
+		if width <= 0 then
+			width = camera.ViewportSize.X
+		end
+		BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, width / scale)
+	end
 end
 
 local function rarityColorOfItem(model: Instance): Color3
@@ -175,23 +184,20 @@ local function refreshCarry()
 			table.insert(carried, item)
 		end
 	end
-	for _, child in refs.CarrySlots:GetChildren() do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
 	-- at most HudView.MaxCarrySlots squares (the last one says "+N"): a big
-	-- backpack never covers the phone's thumbstick and jump button
+	-- backpack never covers the phone's thumbstick and jump button. The
+	-- squares are made once and updated in place (HudView.carrySlot).
 	local squares, shown, more, width = HudView.carryLayout(capacity, #carried)
 	for i = 1, squares do
 		if more > 0 and i == squares then
-			HudView.moreSlot(refs.CarrySlots, more, i)
+			HudView.carrySlot(refs.CarrySlots, i, nil, false, more)
 		else
 			local item = if i <= shown then carried[i] else nil
 			local dirty = item ~= nil and item:GetAttribute("Kind") == "Raw"
-			HudView.slot(refs.CarrySlots, if item and not dirty then rarityColorOfItem(item) else nil, i, dirty)
+			HudView.carrySlot(refs.CarrySlots, i, if item and not dirty then rarityColorOfItem(item) else nil, dirty, 0)
 		end
 	end
+	HudView.trimSlots(refs.CarrySlots, squares)
 	refs.CarryLabel.Text = `CARRYING {#carried}/{capacity}`
 	refs.CarryPanel.Size = UDim2.fromOffset(width, HudView.CarryPanelHeight)
 end
@@ -513,6 +519,8 @@ function HudController.start()
 	player:WaitForChild("PlayerGui").ChildAdded:Connect(function()
 		task.defer(updateScale)
 	end)
+	-- (the HUD's size lands a frame after the viewport's: the chips' limit follows it)
+	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
 	-- the item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
 	local function carryChanged()

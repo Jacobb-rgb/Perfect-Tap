@@ -2680,6 +2680,7 @@ end
 local CHIP_DOT = 32
 local CHIP_TEXT = 20
 local CHIP_PIXEL = 17 -- the pixel chips' words (Pop.text size: 12.6-unit letters, like the tiles' words)
+local CHIP_PIXEL_SMALL = 14 -- (a phone row that still doesn't fit without the tags: 10.4-unit letters)
 
 --[[
 	Builds a chip's pill (once) at the top of its touch area (which grows
@@ -2729,7 +2730,8 @@ end
 
 -- Fills a chip: "TRIPLE 3:42" (`tag` "" = the timer / word alone); the
 -- pill is as wide as its text (TechShopView.textWidth, a generous guess).
-function BoostView.setChipText(button: TextButton, tag: string, text: string)
+-- `small` (the pixel chips only): smaller letters (CHIP_PIXEL_SMALL).
+function BoostView.setChipText(button: TextButton, tag: string, text: string, small: boolean?)
 	local pill = button:FindFirstChild("Pill") :: Frame?
 	if not pill then
 		return
@@ -2738,8 +2740,12 @@ function BoostView.setChipText(button: TextButton, tag: string, text: string)
 	local x = 4 + CHIP_DOT + 8
 	label.Text = if tag == "" then text else `{tag} {text}`
 	local pixel = pill:GetAttribute("Pixel") == true
+	local letters = if small then CHIP_PIXEL_SMALL else CHIP_PIXEL
+	if pixel and label:GetAttribute("WordSize") ~= letters then
+		Pop.fit(label, letters)
+	end
 	local width = if pixel
-		then math.ceil(Pop.textWidth(label.Text, CHIP_PIXEL))
+		then math.ceil(Pop.textWidth(label.Text, letters))
 		else math.ceil(TechShopView.textWidth(label.Text, CHIP_TEXT)) + 2
 	-- (the pixel pill: the word centred on the face above its lip)
 	label.Position = UDim2.fromOffset(x, if pixel then -2 else 0)
@@ -2862,24 +2868,66 @@ function BoostView.buildChips(): ChipRefs
 	return { Gui = gui, Row = row, Chips = chips, Launcher = launcher, Glyph = glyph }
 end
 
--- Shows the running boosts' chips (BoostView.chips); the launcher when
--- none runs and `launcher` is on.
-function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
-	local shown: { [string]: boolean } = {}
-	for _, chip in chips do
-		local button = refs.Chips[chip.Kind]
-		if button then
-			shown[chip.Kind] = true
-			BoostView.setChipText(button, chip.Tag, chip.Text)
-			button.Visible = true
+--[[
+	The farthest right the chips' row may reach (design units in the chips'
+	gui), nil = no limit. HudController sets it from the light HUD
+	(HudBubble.chipsRight): on phones the green Shop pill rides on the right
+	end of this row, and a chip over it would open Boosts instead of the Shop.
+]]
+BoostView.HudChipsRight = nil :: number?
+
+-- The right edge of the chips' row's visible chips (design units): the row's
+-- left plus every shown chip and the gaps between (the gamepad glyph, shown
+-- with a gamepad only, is not a touch target and isn't counted).
+function BoostView.rowRight(refs: ChipRefs): number
+	local list = refs.Row:FindFirstChildOfClass("UIListLayout")
+	local gap = if list then list.Padding.Offset else 8
+	local right = refs.Row.Position.X.Offset
+	local count = 0
+	for _, child in refs.Row:GetChildren() do
+		if child:IsA("TextButton") and child.Visible then
+			right += child.Size.X.Offset
+			count += 1
 		end
 	end
+	return right + math.max(0, count - 1) * gap
+end
+
+-- Shows the running boosts' chips (BoostView.chips); the launcher when
+-- none runs and `launcher` is on. A row that would pass HudChipsRight (a
+-- phone's Shop pill) drops the tags (the picture and the colour still tell
+-- the boosts apart), then takes smaller letters; the row's attribute "Fit"
+-- says which ("Tags", "Short", "Small").
+function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
+	local shown: { [string]: boolean } = {}
+	local function fill(short: boolean, small: boolean)
+		for _, chip in chips do
+			local button = refs.Chips[chip.Kind]
+			if button then
+				shown[chip.Kind] = true
+				BoostView.setChipText(button, if short then "" else chip.Tag, chip.Text, small)
+				button.Visible = true
+			end
+		end
+	end
+	fill(false, false)
 	for kindId, button in refs.Chips do
 		if not shown[kindId] then
 			button.Visible = false
 		end
 	end
 	refs.Launcher.Visible = launcher and #chips == 0
+	local fit = "Tags"
+	local limit = BoostView.HudChipsRight
+	if limit and #chips > 0 and BoostView.rowRight(refs) > limit then
+		fit = "Short"
+		fill(true, false)
+		if BoostView.rowRight(refs) > limit then
+			fit = "Small"
+			fill(true, true)
+		end
+	end
+	refs.Row:SetAttribute("Fit", fit)
 end
 
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)

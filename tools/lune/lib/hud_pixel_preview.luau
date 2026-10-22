@@ -30,6 +30,8 @@ function Preview.build(Loader: any): { [string]: any }
 	local function hud(renderScale: number, uiScale: number, screen: Vector2): { any }
 		local compact = uiScale <= 0.75
 		local refs = HudBubble.buildGame(uiScale, screen.X)
+		-- (as HudController does: on phones the boost chips stop before the Shop pill)
+		BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, screen.X / uiScale)
 		TeleportView.build(refs.TopBar, uiScale, screen.X)
 		refs.Gui.Scale.Scale = renderScale
 		refs.Coins.Text = Format.money(4.82e6)
