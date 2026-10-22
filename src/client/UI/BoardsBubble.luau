@@ -27,6 +27,7 @@ BoardsBubble.Tabs = {
 	{ Id = "TotalEarned", Label = "EARNED", Icon = "coins", Role = "Boards" },
 	{ Id = "Artifacts", Label = "ARTIFACTS", Icon = "artifact", Role = "Boards" },
 	{ Id = "HoursPlayed", Label = "HOURS", Icon = "medal", Role = "Boards" },
+	{ Id = "Level", Label = "LEVEL", Icon = "medal", Role = "Boards" },
 }
 
 local MEDALS = {

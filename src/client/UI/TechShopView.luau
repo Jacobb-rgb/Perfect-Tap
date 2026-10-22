@@ -349,6 +349,7 @@ TechShopView.CategoryColors = {
 	Logistics = rgb(90, 160, 230),
 	Selling = rgb(240, 196, 60),
 	Power = rgb(120, 220, 120),
+	Droppers = rgb(190, 110, 255),
 } :: { [string]: Color3 }
 
 type Metrics = {
@@ -1412,7 +1413,8 @@ TechShopView.Paint = "Yellow" -- the header band: the shop's colour (LightSkin.B
 -- each tab's paint (the picked tab is painted, the others slate: Pop.selectTab)
 TechShopView.TabPaints = { Machines = "Orange", Upgrades = "Blue", Automation = "Purple" } :: { [string]: string }
 -- the cards' paints: a machine (and its upgrades) by category, the rest by item
-TechShopView.CategoryPaints = { Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal" } :: { [string]: string }
+TechShopView.CategoryPaints =
+	{ Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal", Droppers = "Purple" } :: { [string]: string }
 TechShopView.ItemPaints = { Bellows = "Pink", Slots = "Purple", Billboard = "Purple", Train = "Pink" } :: { [string]: string }
 
 local WHITE = Color3.new(1, 1, 1)

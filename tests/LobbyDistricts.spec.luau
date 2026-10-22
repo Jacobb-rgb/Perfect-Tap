@@ -319,20 +319,20 @@ return function(T, Loader)
 		T.truthy(DecorController.sphereInView(Vector3.new(1700, 450, 50), 20, view, 70), "a big model whose edge is in view")
 	end)
 
-	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
+	T.test("districts: five leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")
-		T.eq(#boards, 4, "four Leaderboard parts")
+		T.eq(#boards, 5, "five Leaderboard parts (LEVEL: owner 2026-10-21)")
 		-- (round 2: the hall turned toward the koi pond lane and the hero camera;
 		-- its boards face the point 30 studs in front of it, the arc's center)
 		local hall = LobbyLayout.get("HallOfFame")
 		local spawn = hall.Center + hall.Facing.Unit * 30
-		for i = 1, 4 do
+		for i = 1, 5 do
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			T.truthy(board and board:IsA("BasePart"), "Board" .. i .. " is a part")
 			T.truthy(hasTag(board, "Leaderboard"), "Board" .. i .. " tagged Leaderboard")
 			T.eq(board:GetAttribute("Board"), i, "Board" .. i .. " attribute")
-			T.truthy(board.Size.X >= 4 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
+			T.truthy(board.Size.X >= 3.7 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
 			local at = board.CFrame.Position
 			local toSpawn = Vector3.new(spawn.X - at.X, 0, spawn.Z - at.Z).Unit
 			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the arc's center")
@@ -343,7 +343,13 @@ return function(T, Loader)
 	-- models are checked over their whole sweep), or nil.
 	local function outside(root, piece): string?
 		local frame = LobbyLayout.frame(piece)
-		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
+		-- (the egg stall's giant egg and light beam rise over the 16-stud
+		-- layout height, owner 2026-10-21: its own cap is Capsules.Top; the
+		-- footprint stays the layout's, LobbyLayout is unchanged)
+		local height = if piece.Id == "CapsuleStall"
+			then Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Capsules").Top
+			else piece.Size.Y
+		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, height + TOLERANCE
 		for _, d in root:GetDescendants() do
 			if d:IsA("BasePart") then
 				local points = corners(d)
@@ -719,7 +725,7 @@ return function(T, Loader)
 			Shop = "SHOP",
 			Upgrades = "UPGRADES",
 			SpinWheel = "SPIN & WIN",
-			CapsuleStall = "CAPSULES",
+			CapsuleStall = "EGGS",
 			ShopFront = "SELL",
 			EnchantShop = "ENCHANT",
 			HallOfFame = "HALL OF FAME",

@@ -20,6 +20,8 @@
 
 local GameConfig = require(script.Parent.GameConfig)
 local OreData = require(script.Parent.OreData)
+local DropperConfig = require(script.Parent.DropperConfig)
+local Format = require(script.Parent.Parent.Util.Format)
 local Rarity = require(script.Parent.Rarity)
 
 -- Machine upgrade prices, level 1 first (index = the level you buy).
@@ -31,7 +33,7 @@ export type Machine = {
 	Description: string,
 	Size: { number }, -- { cellsX, cellsZ }
 	Price: number,
-	Category: string, -- "Processing" | "Storage" | "Logistics" | "Selling"
+	Category: string, -- "Processing" | "Storage" | "Logistics" | "Selling" | "Power" | "Droppers"
 	Order: number,
 	Accepts: { [string]: boolean }?, -- item kinds the intake accepts
 	Time: number?, -- seconds per item (before speed upgrades)
@@ -51,6 +53,7 @@ export type Machine = {
 	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
 	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
+	-- | "Dropper" | "Laser" (earn coins per second, DropperConfig)
 	NoIntake: boolean?, -- no hopper / intake (generators, poles, the robot arm)
 	SideOutputs: boolean?, -- results leave the left / right side (OutputL / OutputR), not the front
 	Inputs: number?, -- items one job takes (Alloy Furnace: 2 ingots of different ores)
@@ -532,6 +535,34 @@ MachineData.List = {
 		Slope = "Down",
 	},
 } :: { Machine }
+
+-- The droppers and the Money Laser (Config/DropperConfig, owner 2026-10-21):
+-- 2 x 2 machines with no intake; they earn coins per second on the plot
+-- (PodiumService.incomeOf -> DropperConfig.placedIncome).
+for i, dropper in DropperConfig.List do
+	table.insert(MachineData.List, {
+		Id = dropper.Id,
+		Name = dropper.Name,
+		Description = `{dropper.Tagline}. Earns {Format.perSecond(dropper.Income)} on your plot.`,
+		Size = { 2, 2 },
+		Price = dropper.Price,
+		Category = "Droppers",
+		Order = 100 + i,
+		Behaviour = "Dropper",
+		NoIntake = true,
+	})
+end
+table.insert(MachineData.List, {
+	Id = DropperConfig.Laser.Id,
+	Name = DropperConfig.Laser.Name,
+	Description = "Doubles the coins of one dropper on your plot (the best one first).",
+	Size = { 2, 2 },
+	Price = DropperConfig.Laser.Price,
+	Category = "Droppers",
+	Order = 100 + #DropperConfig.List + 1,
+	Behaviour = "Laser",
+	NoIntake = true,
+})
 
 MachineData.ById = {} :: { [string]: Machine }
 -- Machines design v2 removed (the Ore Pen replaced the Storage Crate, Tobin's

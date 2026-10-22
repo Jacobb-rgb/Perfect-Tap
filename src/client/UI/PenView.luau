@@ -189,9 +189,13 @@ local KIND_ORDER = { Clean = 1, Ingot = 2, Gear = 3, Crushed = 4, Raw = 5 }
 -- Key of the one merged Dirty Ore row (not a storage key).
 PenView.DirtyKey = "Dirty"
 
--- The podium income multiplier from the State's Bonuses (1 + IncomePct,
--- the same bonus the podium tags and the HUD count); junk counts as none.
-function PenView.incomeMult(bonuses: any): number
+-- The podium income multiplier: the State's IncomeMult (PodiumService: every
+-- bonus, the player level and the 2x Money pass too), else from its Bonuses
+-- (1 + IncomePct, the same bonus the podium tags count); junk counts as none.
+function PenView.incomeMult(bonuses: any, incomeMult: any?): number
+	if type(incomeMult) == "number" and incomeMult == incomeMult and incomeMult >= 0 and incomeMult < math.huge then
+		return incomeMult
+	end
 	local pct = if type(bonuses) == "table" then bonuses.IncomePct else nil
 	if type(pct) ~= "number" or pct ~= pct or pct < 0 or pct == math.huge then
 		return 1

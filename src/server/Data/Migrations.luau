@@ -177,6 +177,7 @@ local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LevelConfig = require(Shared.Config.LevelConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
@@ -186,7 +187,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 4
+Migrations.Latest = 5 -- 5: the player LEVEL record (repaired below on every load)
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -1053,6 +1054,9 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	then
 		data.Streak = { Day = 0, Last = 0 }
 	end
+	-- the player LEVEL record (LevelConfig): a whole level 1..MaxLevel, XP 0..need, known
+	-- counters only in Seen (fractions stay: play time pays 1/30 XP a second)
+	LevelConfig.sanitize(data)
 	-- the Starter Pack record (StarterPackService): when it was bought, how many times
 	local starter = data.StarterPack
 	if type(starter) ~= "table" then

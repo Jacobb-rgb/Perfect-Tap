@@ -252,7 +252,7 @@ local function refresh(state: { [string]: any }?)
 		return
 	end
 	-- "+$X/s" with the income bonus, like the podium tags and the HUD
-	local entries = PenView.entries(state and state.Storage, view.Mode, PenView.incomeMult(state and state.Bonuses))
+	local entries = PenView.entries(state and state.Storage, view.Mode, PenView.incomeMult(state and state.Bonuses, state and state.IncomeMult))
 	table.clear(shownEntries)
 	for _, entry in entries do
 		shownEntries[entry.Key] = entry

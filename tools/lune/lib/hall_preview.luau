@@ -2,7 +2,7 @@
 	The giant HALL OF FAME with its champions (scene "hall" for
 	tools/lune/export_scene.luau: the world, shots in tools/preview/hall_shots.json).
 	Lune can't fetch Roblox avatars, so blocky stand-in miners (Kit.npc) stand
-	on the four Champion pedestals where ChampionService puts the #1 players'
+	on the five Champion pedestals where ChampionService puts the #1 players'
 	avatars in the game; the boards show sample rows like LeaderboardView.
 ]]
 
@@ -18,6 +18,7 @@ function Preview.build(Loader: any, map: any)
 		{ Shirt = rgb(60, 140, 240), Pants = rgb(30, 34, 50), Goggles = rgb(120, 220, 255) },
 		{ Shirt = rgb(150, 80, 230), Pants = rgb(50, 40, 70), Wave = true },
 		{ Shirt = rgb(70, 200, 90), Pants = rgb(60, 50, 40), Apron = rgb(140, 90, 50) },
+		{ Shirt = rgb(255, 90, 170), Pants = rgb(40, 30, 60), Hat = rgb(120, 230, 255) },
 	}
 	-- sample rows on the boards (in the game LeaderboardView draws them; the
 	-- scene exporter shows one text per part face, so each row is a thin plate)
@@ -26,6 +27,7 @@ function Preview.build(Loader: any, map: any)
 		{ "EmberQueen  $41Qi", "Forgekeeper_Ola  $12Qi", "GolemWhisperer  $3.1Qi", "SparkyStone  $904Qa", "QuarryQuinn  $210Qa" },
 		{ "RelicRaider  24", "EmberQueen  23", "CrystalKid  21", "Pickaxe_Pat  19", "SparkyStone  17" },
 		{ "Pickaxe_Pat  412 h", "RockyMiner77  388 h", "EmberQueen  351 h", "QuarryQuinn  297 h", "GolemWhisperer  240 h" },
+		{ "EmberQueen  LV 87", "Pickaxe_Pat  LV 81", "RockyMiner77  LV 74", "CrystalKid  LV 66", "SparkyStone  LV 59" },
 	}
 	local medals = { rgb(255, 210, 60), rgb(220, 226, 236), rgb(230, 150, 90), rgb(200, 214, 255), rgb(200, 214, 255) }
 	for _, d in map:GetDescendants() do

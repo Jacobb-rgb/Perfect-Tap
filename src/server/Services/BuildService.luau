@@ -123,11 +123,20 @@ end
 
 ---------------------------------------------------------------- lifting
 
--- Highest point of a model in world Y (rotated parts included).
+-- Highest point of a model's solid parts in world Y (rotated parts included;
+-- glow, beams and other non-colliding decor don't count: a Money Laser's beam
+-- must not lift a player up to its top). A model with no solid part: all parts.
 local function modelTop(model: Model): number
 	local top = -math.huge
+	local solid = false
 	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
+		if d:IsA("BasePart") and d.CanCollide then
+			solid = true
+			break
+		end
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and (d.CanCollide or not solid) then
 			local cf, size = d.CFrame, d.Size
 			local _, _, _, _, _, _, r10, r11, r12 = cf:GetComponents()
 			local halfHeight = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2

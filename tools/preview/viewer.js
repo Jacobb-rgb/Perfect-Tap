@@ -333,6 +333,11 @@ async function main() {
   const scene = await fetch(`/scenes/${shot.scene || sceneName}.json`).then((r) => r.json());
   // empty Lua tables are exported as {} instead of []
   for (const key of ["parts", "lights", "emitters", "texts"]) if (!Array.isArray(scene[key])) scene[key] = [];
+  // shot.extra: a small scene whose parts are added (animated effects posed per video frame)
+  if (shot.extra) {
+    const extra = await fetch(`/scenes/${shot.extra}.json`).then((r) => r.json());
+    if (Array.isArray(extra.parts)) scene.parts.push(...extra.parts);
+  }
   // presets with empty groups (e.g. Workbench) inherit from Surface
   const base = scene.presets.Surface;
   const own = scene.presets[shot.preset || "Surface"] || base;
@@ -616,6 +621,39 @@ async function main() {
     await Promise.all([...uiLayer.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
   }
+  // video frames (tools/preview/render_levelup.mjs): the world stays, only the small
+  // "extra" part set (an effect posed per frame) and the UI overlay change
+  let extraGroup = null;
+  window.__frame = async (extraName, uiName) => {
+    if (extraGroup) world.remove(extraGroup);
+    extraGroup = new THREE.Group();
+    const extra = await fetch(`/scenes/${extraName}.json`).then((r) => r.json());
+    const fm = new THREE.Matrix4();
+    for (const p of Array.isArray(extra.parts) ? extra.parts : []) {
+      const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance] = p;
+      if (Math.min(sx, sy, sz) < 1e-4) continue;
+      const kind = materialKind(mat, reflectance);
+      const mesh = new THREE.InstancedMesh(geometries[shape], materialFor(kind, Math.round(transparency * 10) / 10), 1);
+      const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = cf;
+      fm.set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
+      mesh.setMatrixAt(0, fm.clone().multiply(new THREE.Matrix4().makeScale(sx, sy, sz)));
+      mesh.setColorAt(0, srgb(color, kind === "neon" ? (isCaveShot ? 1.5 : 2.2) : 1));
+      mesh.castShadow = false;
+      mesh.receiveShadow = kind !== "neon";
+      extraGroup.add(mesh);
+    }
+    world.add(extraGroup);
+    composer.render();
+    const uiLayer = document.getElementById("ui");
+    uiLayer.innerHTML = "";
+    if (uiName) {
+      const guis = await fetch(`/scenes/${uiName}.json`).then((r) => r.json());
+      renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
+      await Promise.all([...uiLayer.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
+      await document.fonts.ready;
+    }
+    return true;
+  };
   window.__shot = shot;
   window.__done = true;
 }

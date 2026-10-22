@@ -1,11 +1,13 @@
 --[[
-	The 4 leaderboards in the Hall of Fame (step 7). Each lobby board is a
-	BasePart named Board1..Board4 (tag Leaderboard, attribute Board = 1..4).
+	The 5 leaderboards in the Hall of Fame (step 7; LEVEL owner 2026-10-21).
+	Each lobby board is a BasePart named Board1..Board5 (tag Leaderboard,
+	attribute Board = 1..5).
 
 	  Board 1  MONEY / SEC    podium income per second (PodiumService.incomeOf)
 	  Board 2  TOTAL EARNED   data.TotalEarned
 	  Board 3  ARTIFACTS      data.Stats.ArtifactsFound (every find)
 	  Board 4  HOURS PLAYED   data.Stats.PlaySeconds
+	  Board 5  LEVEL          data.Level.Level (LevelService; never reset)
 
 	- One OrderedDataStore per board (Store, versioned: bump the _vN suffix to
 	  start a board fresh). LeaderboardService writes each player's values at
@@ -17,7 +19,7 @@
 	  (GetSortedAsync descending). Studio never writes (it only reads).
 	- Hidden: UserIds that never show on a board and are never written
 	  (cheaters, banned users); LeaderboardService.removeUser(userId) deletes
-	  a user's entries from all four stores (the command bar; RTBF too) and
+	  a user's entries from all five stores (the command bar; RTBF too) and
 	  hides them at runtime on every server (no deploy needed).
 	- Where they show: the lobby boards (Hall, 5.4 x 5 studs, five rank rows)
 	  show the top BoardRows (5) so the rows stay readable on phones from the
@@ -43,7 +45,7 @@ local Format = require(script.Parent.Parent.Util.Format)
 
 export type Encoding = "Log" | "Int"
 export type Board = {
-	Index: number, -- 1..4 (the lobby part's Board attribute)
+	Index: number, -- 1..5 (the lobby part's Board attribute)
 	Id: string,
 	Title: string,
 	Store: string, -- OrderedDataStore name
@@ -99,6 +101,15 @@ LeaderboardConfig.Boards = {
 		Encoding = "Int",
 		Scale = 60, -- stored in whole minutes; the value is seconds
 		Source = "Stats.PlaySeconds",
+	},
+	{
+		Index = 5,
+		Id = "Level",
+		Title = "LEVEL",
+		Store = "TF_LB_Level_v1",
+		Encoding = "Int",
+		Scale = 1,
+		Source = "Level.Level",
 	},
 } :: { Board }
 
@@ -183,6 +194,8 @@ function LeaderboardConfig.format(boardId: string, value: number): string
 			return Format.big(math.floor(hours)) .. " h"
 		end
 		return string.format("%.1f h", hours)
+	elseif boardId == "Level" then
+		return "LV " .. Format.commas(math.floor(value))
 	end
 	return if value < 1e4 then Format.commas(value) else Format.big(value)
 end

@@ -2,7 +2,7 @@
 	The leaderboards on screen (pure builder + pure helpers;
 	LeaderboardController fills them in). Two places:
 
-	  board  a SurfaceGui on each lobby board (Board1..Board4, tag
+	  board  a SurfaceGui on each lobby board (Board1..Board5, tag
 	         Leaderboard), Adornee = the board, parented to PlayerGui: the
 	         title (the hall's own title strip covers it; it shows when a
 	         board has none), the top LeaderboardConfig.BoardRows rows (rank
@@ -93,6 +93,7 @@ LeaderboardView.Short = {
 	TotalEarned = "EARNED",
 	Artifacts = "ARTIFACTS",
 	HoursPlayed = "HOURS",
+	Level = "LEVEL",
 } :: { [string]: string }
 
 ---------------------------------------------------------------- pure helpers
@@ -598,21 +599,36 @@ function LeaderboardView.buildPanel(compact: boolean?): Panel
 	return panel
 end
 
+LeaderboardView.TabPad = 14 -- room left and right of a tab's word
+
+-- The text size that fits a tab's word into `tabW` (at most `max`).
+function LeaderboardView.tabTextSize(boardId: string, tabW: number, max: number): number
+	local board = LeaderboardConfig.ById[boardId]
+	local word = LeaderboardView.Short[boardId] or (board and board.Title) or boardId
+	return LeaderboardView.fitSize(word, tabW - LeaderboardView.TabPad, max, LeaderboardView.MinText)
+end
+
+-- A tab's width for a panel body `bodyX` wide.
+function LeaderboardView.tabWidth(bodyX: number): number
+	local count = #LeaderboardConfig.Boards
+	return (bodyX - 22 * 2 - 8 * (count - 1)) / count
+end
+
 function LeaderboardView.layoutPanel(panel: Panel, compact: boolean, maxWidth: number, maxHeight: number)
 	panel.Compact = compact
 	local m = if compact then LeaderboardView.PanelMetrics.Compact else LeaderboardView.PanelMetrics.Normal
 	local body = MenuPanel.layout(panel.Frame, compact, m.Width, m.Height, maxWidth, maxHeight)
 	panel.TabBar.Position = UDim2.fromOffset(0, 0)
 	panel.TabBar.Size = UDim2.new(1, 0, 0, m.TabBar)
-	local count = #LeaderboardConfig.Boards
 	local inset = 22 -- room for the LB / RB glyphs at the ends
 	local gap = 8
-	local tabW = (body.X - inset * 2 - gap * (count - 1)) / count
+	local tabW = LeaderboardView.tabWidth(body.X)
 	for _, board in LeaderboardConfig.Boards do
 		local holder = MenuPanel.holderOf(panel.Tabs[board.Id])
 		holder.Position = UDim2.fromOffset(inset + (board.Index - 1) * (tabW + gap), 6)
 		holder.Size = UDim2.fromOffset(tabW, m.TabHeight)
-		panel.Tabs[board.Id].TextSize = m.TabText
+		-- five tabs (LEVEL): each word shrinks to fit its tab (ARTIFACTS, MONEY/S)
+		panel.Tabs[board.Id].TextSize = LeaderboardView.tabTextSize(board.Id, tabW, m.TabText)
 		tabWord(panel.Tabs[board.Id]).TextSize = m.TabText + 4
 	end
 	panel.TabGlyphs[1].Position = UDim2.new(0, 10, 0, 6 + m.TabHeight / 2)

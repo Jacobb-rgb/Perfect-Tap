@@ -10,7 +10,7 @@
 	  SpinWheel      SPIN & WIN wheel (Wheel: Spin) + EmberChest        Wheel
 	  CapsuleStall   golem capsule stall (tag CapsuleStall)             Capsules
 	  EnchantShop    rune table (EnchantCounter), floating crystals     Enchant
-	  HallOfFame     Board1..Board4 (tag Leaderboard, attribute Board)  Hall
+	  HallOfFame     Board1..Board5 (tag Leaderboard, attribute Board)  Hall
 	  GuildBoard     Forgekeepers' notice board (tag GuildBoard)        here
 	  FossilDig      dig site with a dinosaur skeleton (tag FossilDig)  Dig
 	  RockScanner    Ore Codex terminal (tag OreCodex)                  Scanner

@@ -119,9 +119,15 @@ end
 -- pivot), or nil for machines without a front output. It sits in the
 -- middle column (the right one of the two middle columns on 2-wide
 -- machines), 0.5 studs in front of the footprint, 1.8 studs up.
+-- Machines with nothing coming out of the front (outputLocal and outputCell agree):
+-- NO_FRONT_OUTPUT, and the droppers and the Money Laser (they earn coins).
+local function noFront(id: string, info: MachineData.Machine): boolean
+	return NO_FRONT_OUTPUT[id] == true or info.Behaviour == "Dropper" or info.Behaviour == "Laser"
+end
+
 function Grid.outputLocal(id: string): Vector3?
 	local info = machine(id)
-	if NO_FRONT_OUTPUT[id] then
+	if noFront(id, info) then
 		return nil
 	end
 	local w, d = info.Size[1], info.Size[2]
@@ -158,7 +164,7 @@ end
 -- It may be off the plot: the raw cell numbers are returned anyway.
 function Grid.outputCell(id: string, x: number, z: number, r: number): (number?, number?)
 	local info = machine(id)
-	if NO_FRONT_OUTPUT[id] then
+	if noFront(id, info) then
 		return nil, nil
 	end
 	local w, d = info.Size[1], info.Size[2]

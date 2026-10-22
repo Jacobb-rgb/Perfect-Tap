@@ -1,7 +1,7 @@
 --[[
 	ChampionService: the #1 player of each lobby leaderboard stands on the
 	giant HALL OF FAME (owner 2026-10-20: "the best player's skin always hops
-	on top"). The hall has four pedestals, BaseParts Champion1..Champion4
+	on top"). The hall has five pedestals, BaseParts Champion1..Champion5
 	(tag LeaderChampion, attribute Board = the board's place in
 	LeaderboardConfig.Boards; World/Lobby/Districts/Hall.luau).
 

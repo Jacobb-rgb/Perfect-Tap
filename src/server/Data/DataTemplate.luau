@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 4, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid)
+	Version = 5, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -143,6 +143,10 @@ local DataTemplate = {
 		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
 		BlasterCredit = 0, -- Robux of off-band blaster receipts not yet spent on start lifts (VaultService.spendCredit)
 	},
+	-- the player LEVEL (LevelConfig, LevelService): never reset by a rebirth. Xp = towards
+	-- the next level, Seen = { [counter id] = the value at the last look }, Ready = false on a
+	-- save from before levels (its first look backfills the XP silently)
+	Level = { Level = 1, Xp = 0, Seen = {}, Ready = false },
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
 	-- the side menu's SETTINGS (SettingsConfig; SettingsService repairs it on load)

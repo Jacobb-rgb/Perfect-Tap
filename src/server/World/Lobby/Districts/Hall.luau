@@ -1,7 +1,8 @@
 --[[
-	HALL OF FAME: four leaderboards, design v2: Money per second, Total
-	earned, Artifacts found, Hours played. Each board is a BasePart named
-	Board1..Board4 (tag Leaderboard, attribute Board = 1..4) whose big Front
+	HALL OF FAME: five leaderboards, design v2: Money per second, Total
+	earned, Artifacts found, Hours played, Level (owner 2026-10-21). Each
+	board is a BasePart named Board1..Board5 (tag Leaderboard, attribute
+	Board = 1..5) whose big Front
 	face looks out of the hall's front; the leaderboard service puts a
 	SurfaceGui on it at runtime. Until then each board shows a placeholder
 	table: a Model "Placeholder" parented to the board holding one SurfaceGui
@@ -10,13 +11,13 @@
 	real rows.
 
 	The giant hall (owner 2026-10-20: "massive, and the best player's skin
-	always hops on top", from his leaderboard plaza photo): the four boards
+	always hops on top", from his leaderboard plaza photo): the five boards
 	stand side by side, tall, in a gunmetal wall on a plinth with the orange
 	band; slim pillars between them carry glowing diamond gems in each
-	board's colour (gold, cyan, purple, green); a big HALL OF FAME sign box
-	runs over the boards and on top of it four round pedestals, one over
-	each board: BaseParts Champion1..Champion4 (tag LeaderChampion,
-	attribute Board = 1..4) where ChampionService stands the board's #1
+	board's colour (gold, cyan, purple, green, pink); a big HALL OF FAME sign
+	box runs over the boards and on top of it five round pedestals, one over
+	each board: BaseParts Champion1..Champion5 (tag LeaderChampion,
+	attribute Board = 1..5) where ChampionService stands the board's #1
 	player's avatar (the client makes it hop).
 	Local frame: Size.X wide, Size.Y tall, Size.Z deep, front = -Z (toward
 	the plaza), seen from the front local +X is on the viewer's left
@@ -36,11 +37,12 @@ local Hall = {}
 local C = Kit.C
 local rgb = Color3.fromRGB
 
-local TITLES = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED" }
+local TITLES = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED", "LEVEL" }
+Hall.Count = #TITLES
 Hall.BoardColor = rgb(26, 40, 90) -- navy boards (round 3)
 -- each board's colour: its frame line, the gems beside it and its pedestal ring
-Hall.Colors = { rgb(255, 176, 30), rgb(40, 200, 255), rgb(170, 90, 255), rgb(70, 220, 90) }
-local BOARD_W, BOARD_H = 4.8, 7.2
+Hall.Colors = { rgb(255, 176, 30), rgb(40, 200, 255), rgb(170, 90, 255), rgb(70, 220, 90), rgb(255, 80, 170) }
+local BOARD_W, BOARD_H = 3.78, 7.2 -- (4.8 with four boards; the fifth, LEVEL, made them narrower in the same hall)
 local PILLAR = 0.45 -- the pillars between the boards
 local PLINTH = 1.2 -- plinth top
 local TITLE_H = 1.0 -- the title strip over the top of each board
@@ -69,7 +71,7 @@ end
 
 -- Board i's centre x in the hall's local frame (Board1 on the viewer's left).
 function Hall.boardX(i: number): number
-	return (1.5 - (i - 1)) * (BOARD_W + PILLAR)
+	return ((Hall.Count - 1) / 2 - (i - 1)) * (BOARD_W + PILLAR)
 end
 
 function Hall.build(parent: Instance, rng: Rng.Rng)
@@ -98,8 +100,8 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 	Kit.bit(m, at(0, (PLINTH + wallTop) / 2, 1.26), Vector3.new(W - 0.6, wallTop - PLINTH - 0.6, 0.12), C.Wood)
 
 	-- the pillars: one at each end and between the boards, two glowing diamond gems each
-	for p = 0, 4 do
-		local x = (2 - p) * (BOARD_W + PILLAR)
+	for p = 0, Hall.Count do
+		local x = (Hall.Count / 2 - p) * (BOARD_W + PILLAR)
 		local yaw = math.asin(math.clamp(x / ARC_R, -1, 1))
 		local frame = at(x, 0, 0) * CFrame.Angles(0, yaw, 0)
 		Style.block(
@@ -111,8 +113,8 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 			Style.decor()
 		)
 		-- the gems take the colours of the boards beside the pillar
-		local left = Hall.Colors[math.clamp(p, 1, 4)]
-		local right = Hall.Colors[math.clamp(p + 1, 1, 4)]
+		local left = Hall.Colors[math.clamp(p, 1, Hall.Count)]
+		local right = Hall.Colors[math.clamp(p + 1, 1, Hall.Count)]
 		for g, color in { left, right } do
 			local gem = Kit.bit(
 				m,
@@ -129,7 +131,7 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 	for _, title in TITLES do
 		widest = math.max(widest, textWidth(title))
 	end
-	for i = 1, 4 do
+	for i = 1, Hall.Count do
 		local x = Hall.boardX(i)
 		local yaw = math.asin(x / ARC_R)
 		local frame = at(x, 0, 0) * CFrame.Angles(0, yaw, 0)
@@ -139,8 +141,14 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		Tech.glow(m, frame * CFrame.new(0, boardY + BOARD_H / 2 + 0.12, 0.2), Vector3.new(BOARD_W + 0.2, 0.18, 0.12), color)
 		Tech.glow(m, frame * CFrame.new(0, boardY - BOARD_H / 2 - 0.12, 0.2), Vector3.new(BOARD_W + 0.2, 0.18, 0.12), color)
 		-- the board (flat Front face out of the hall's front)
-		local board =
-			Style.block(m, frame * CFrame.new(0, boardY, 0.15), Vector3.new(BOARD_W, BOARD_H, 0.4), Hall.BoardColor, Kit.NEON, Style.solid())
+		local board = Style.block(
+			m,
+			frame * CFrame.new(0, boardY, 0.15),
+			Vector3.new(BOARD_W, BOARD_H, 0.4),
+			Hall.BoardColor,
+			Kit.NEON,
+			Style.solid()
+		)
 		board.CastShadow = false
 		board.Name = "Board" .. i
 		board:SetAttribute("Board", i)
@@ -189,7 +197,7 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 
 	-- the champions' pedestals on the sign box, one over each board
 	local signTop = signY + Hall.SignHeight / 2 + 0.25
-	for i = 1, 4 do
+	for i = 1, Hall.Count do
 		local x = Hall.boardX(i)
 		local yaw = math.asin(x / ARC_R)
 		local base = at(x, signTop + Hall.PedestalHeight / 2, 0.4) * CFrame.Angles(0, yaw, 0)
@@ -201,7 +209,8 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		pedestal:SetAttribute("Board", i)
 		Kit.tag(pedestal, "LeaderChampion")
 		-- a glowing ring round its top edge in the board's colour
-		local ring = Kit.bit(m, base * CFrame.new(0, Hall.PedestalHeight / 2 - 0.04, 0), Vector3.new(0.1, 2.75, 2.75), Hall.Colors[i], Kit.NEON)
+		local ring =
+			Kit.bit(m, base * CFrame.new(0, Hall.PedestalHeight / 2 - 0.04, 0), Vector3.new(0.1, 2.75, 2.75), Hall.Colors[i], Kit.NEON)
 		ring.Shape = Enum.PartType.Cylinder
 		ring.CFrame = base * CFrame.new(0, Hall.PedestalHeight / 2 - 0.04, 0) * CFrame.Angles(0, 0, math.rad(90))
 		ring.Name = "ChampionRing"

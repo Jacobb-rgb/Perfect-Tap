@@ -121,7 +121,7 @@ return function(T, Loader)
 		T.eq(ItemData.income(nil), 0)
 		T.eq(ItemData.displayName("Raw", "Heartstone"), "Dirty Ore", "rarity stays hidden")
 		T.eq(ItemData.displayName("Clean", "Diamond", "Pristine"), "Pristine Diamond")
-		T.eq(ItemData.value("Clean", "Coal", "Rough"), 30, "Tobin pays 30 s of income")
+		T.eq(ItemData.value("Clean", "Coal", "Rough"), OreData.get("Coal").Income * 30, "Tobin pays 30 s of income")
 	end)
 
 	T.test("v2: offline earnings and pen capacity", function()

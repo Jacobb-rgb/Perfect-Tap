@@ -300,6 +300,11 @@ Net.Events = {
 	--   LeaderboardConfig.TopCount, Value decoded), Ready: boolean (read at least once) } },
 	--   Own = { [boardId] = { Value: your live value, Rank: number? (only inside Rows) } } }
 	Leaderboards = false,
+	-- the player LEVEL (LevelService): XP came in { Gain, Level, Xp, Need } (the orbs fly into
+	--   the bar); a level up { Level, Coins, Bonus: income share at that level, Increase: the share this level added (0 at the cap), Milestone: every
+	--   10th, Next: XP to the level after } (the juicy moment: burst, LEVEL UP!, the rewards)
+	XpGain = false,
+	LevelUp = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"
