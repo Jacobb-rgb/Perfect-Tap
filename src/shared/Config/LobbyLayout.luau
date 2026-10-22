@@ -183,7 +183,10 @@ local SHOP_RIGHT = Vector3.new(-SHOP_FACING.Z, 0, SHOP_FACING.X)
 local WHEEL = v(-47.5, 0, -72.5)
 -- (round 3: CAPSULES moved south-east into the spawn view, between the west
 -- spur and the lily pond, turned half to the plaza, half to the spawn)
-local CAPSULES = v(-41.9, 0, 12.4)
+-- (owner 2026-10-22: the egg temple, wider and bigger: 22 x 16, its back
+-- toward the west plot road, its front to the plaza; between the west spur
+-- and the lily pond)
+local CAPSULES = v(-44.5, 0, 19.2)
 -- the Blaster Vault closes the south road (its steps at z ~79.6)
 local VAULT = v(0, 0, 112.4)
 -- the MINE (Backdrop: hill + yard): designed at MINE_DESIGN facing east,
@@ -320,9 +323,9 @@ LobbyLayout.Pieces = {
 		-- and from the hero camera (round 3: wholly inside the spawn view, its
 		-- front corners outside the plaza curb, r 36)
 		Center = CAPSULES,
-		Size = v(14, 16, 12),
+		Size = v(22, 26, 16), -- (the giant egg's light beam on the roof reaches 26)
 		Facing = (toward(CAPSULES, PLAZA) + toward(CAPSULES, WorldLayout.SpawnPoint)).Unit,
-		Note = "Design v2: golem capsule stall left of the spawn: a round stall with a big glass capsule machine, little golem figures on shelves, CAPSULES sign, odds board. Tag CapsuleStall (Model with PrimaryPart).",
+		Note = "The EGGS temple left of the spawn (owner 2026-10-21/22): an open gold rotunda with the three eggs on podiums, a curved navy back wall, crystal shards, a giant crowned egg on the roof, EGGS sign, odds board. Tag CapsuleStall (Model with PrimaryPart CapsuleMachine).",
 	},
 	{
 		Id = "EnchantShop",
