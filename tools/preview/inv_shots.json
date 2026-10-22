@@ -1,0 +1,124 @@
+{
+ "inv_golems": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_golems"
+ },
+ "inv_golems_delete": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_golems_delete"
+ },
+ "inv_golems_phone": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_golems_phone",
+  "uiInset": 58
+ },
+ "inv_pen": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_pen"
+ },
+ "inv_pen_phone": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_pen_phone",
+  "uiInset": 58
+ },
+ "inv_book": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_book"
+ },
+ "inv_book_phone": {
+  "scene": "inv_quick",
+  "position": [
+   0,
+   20,
+   -30
+  ],
+  "target": [
+   0,
+   30,
+   0
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "shadowExtent": 50,
+  "ui": "ui_inv_book_phone",
+  "uiInset": 58
+ }
+}
