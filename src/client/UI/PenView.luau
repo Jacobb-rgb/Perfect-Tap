@@ -469,6 +469,46 @@ local function ink(label: GuiObject, color: Color3?, font: Font?)
 end
 
 --[[
+	The pixel reels (owner 2026-10-22, docs/art/ui_pixel_refs: "the
+	inventory exactly like this"): short words (the title, the count, the
+	item names, chips, every button) in the pixel font, shrunk to fit their
+	box (Pop.fit) with a margin; sentences (the status, the hint, the empty
+	text) stay round. Rows are chunky painted bars with a darker lip, the
+	lattice and a turning sunburst behind the item's picture.
+]]
+
+-- The biggest Pop.text size (at most `size`) at which `text` leaves a margin inside `width`.
+local function wordSize(text: string, size: number, width: number): number
+	local s = size
+	while s > 10 and Pop.textWidth(text, s) > width - 14 do
+		s -= 1
+	end
+	return s
+end
+
+-- A short word in the pixel font, shrunk to fit (at most `size`, a margin inside `width`).
+local function pixel(label: GuiObject, size: number, width: number?)
+	local l: any = label
+	l.FontFace = PopTheme.Pixel
+	l.TextWrapped = false
+	Pop.fit(l, if width then wordSize(l.Text, size, width) else size)
+	local edge = edgeOf(label)
+	edge.LineJoinMode = Enum.LineJoinMode.Miter
+end
+
+-- A sentence in the round font at `size` (no shrink-to-fit).
+local function roundText(label: TextLabel, size: number)
+	label.FontFace = PopTheme.Font
+	label.TextScaled = false
+	label.TextSize = size
+	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if fit then
+		fit:Destroy()
+	end
+	edgeOf(label).LineJoinMode = Enum.LineJoinMode.Round
+end
+
+--[[
 	A Pop button that keeps UIKit.button's shape: the returned TextButton
 	(clear, its own word: controllers and views set its Text, TextSize and
 	TextTransparency) fills its holder, and the holder is the painted face
@@ -486,6 +526,8 @@ local function popButton(parent: Instance, text: string, paint: string | Pop.Pai
 	}, parent)
 	Pop.face(face, paint)
 	Pop.studs(face, PopTheme.Corner, 0.45, 28, 4)
+	Pop.gleam(face, 4)
+	Pop.fxTag(face, "Press")
 	local button = UIKit.new("TextButton", {
 		Name = "Button",
 		AutoButtonColor = false,
@@ -507,6 +549,13 @@ local function popButton(parent: Instance, text: string, paint: string | Pop.Pai
 			end
 		end
 	end
+	-- (the word: pixel, off the lip)
+	UIKit.new("UIPadding", {
+		PaddingLeft = UDim.new(0, 6),
+		PaddingRight = UDim.new(0, 6),
+		PaddingBottom = UDim.new(0, 5),
+	}, button)
+	pixel(button, button.TextSize)
 	-- hover / press darken the face (AutoButtonColor would only darken the clear button)
 	pcall(function()
 		local b: any = button
@@ -576,28 +625,9 @@ local function chrome(panel: Frame, paint: string | Pop.Paint, band: number)
 	Pop.face(head, paint, 4, false)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
+	-- (the pixel reels: the lattice over the band and a gleam now and then, no shine stripes)
 	Pop.studs(head, 4, 0.35, 40, 0)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 0,
-	}, head)
-	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
-		UIKit.new("Frame", {
-			Name = "Stripe" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = WHITE,
-			BackgroundTransparency = PopTheme.Stripe,
-			BorderSizePixel = 0,
-			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
-			Rotation = 32,
-			Size = UDim2.new(0, s[2], 2.4, 0),
-			ZIndex = 0,
-		}, head)
-	end
+	Pop.gleam(head, 0)
 end
 
 -- The title's 3D drop shadow (Pop.shadow), kept on the title as layouts move it.
@@ -610,6 +640,15 @@ local function syncShadow(title: TextLabel)
 	shade.AnchorPoint = title.AnchorPoint
 	shade.Text = title.Text
 	shade.TextSize = title.TextSize
+	shade.TextScaled = title.TextScaled
+	local fit = title:FindFirstChildOfClass("UITextSizeConstraint")
+	local shadeFit = shade:FindFirstChildOfClass("UITextSizeConstraint")
+	if fit and shadeFit then
+		shadeFit.MaxTextSize = fit.MaxTextSize
+		shadeFit.MinTextSize = fit.MinTextSize
+	elseif fit then
+		fit:Clone().Parent = shade
+	end
 	shade.TextXAlignment = title.TextXAlignment
 	shade.Visible = title.Visible
 	shade.ZIndex = math.max(1, title.ZIndex - 1)
@@ -696,6 +735,7 @@ function PenView.build(): Refs
 		ZIndex = 3,
 	})
 	ink(title)
+	pixel(title, 34)
 	local header = UIKit.label(panel, "0 / 0", 20, {
 		Name = "Header",
 		Position = UDim2.fromOffset(PAD, 48),
@@ -705,6 +745,7 @@ function PenView.build(): Refs
 		ZIndex = 3,
 	})
 	ink(header)
+	pixel(header, 24, 98)
 	-- the capacity bar (Pop.bar): a dark well, a glossy fill
 	local bar = UIKit.new("Frame", {
 		Name = "Bar",
@@ -899,17 +940,21 @@ local function layoutRow(refs: Refs, row: Row)
 	local buttons = l.TakeW + l.SendW + l.PodiumW + 32
 	local countW = 64
 	local textW = rowW - textX - buttons - countW
-	row.Name.Position = UDim2.fromOffset(textX, 4)
-	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.48))
-	row.Name.TextSize = l.Name + 2
+	row.Name.Position = UDim2.fromOffset(textX, 6)
+	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.42))
+	pixel(row.Name, l.Name + 6, textW)
 	local lineY = math.floor(l.RowH * 0.5) + 2
 	local chipH = if refs.Compact then 26 else 22
 	row.Grade.Position = UDim2.fromOffset(textX, lineY)
 	row.Grade.Size = UDim2.fromOffset(if refs.Compact then 100 else 88, chipH)
-	row.Grade.TextSize = if refs.Compact then 16 else 14
+	pixel(row.Grade, if refs.Compact then 20 else 18, row.Grade.Size.X.Offset)
 	row.Income.Position = UDim2.fromOffset(textX + row.Grade.Size.X.Offset + 8, lineY - 2)
 	row.Income.Size = UDim2.fromOffset(math.max(40, textW - row.Grade.Size.X.Offset - 8), chipH + 4)
-	row.Income.TextSize = if refs.Compact then 20 else 18
+	if Pop.isPixel(row.Income.FontFace) then
+		pixel(row.Income, if refs.Compact then 26 else 24)
+	else
+		row.Income.TextSize = if refs.Compact then 18 else 16
+	end
 	row.Count.Position = UDim2.fromOffset(rowW - buttons - countW, 0)
 	row.Count.Size = UDim2.fromOffset(countW - 6, l.RowH)
 	local buttonY = math.floor((l.RowH - l.ButtonH) / 2)
@@ -922,8 +967,10 @@ local function layoutRow(refs: Refs, row: Row)
 	local podium = row.Podium.Parent :: Frame
 	podium.Position = UDim2.fromOffset(rowW - l.PodiumW - 8, buttonY)
 	podium.Size = UDim2.fromOffset(l.PodiumW, l.ButtonH)
+	-- (every row button's word at one size: the longest, "PODIUM", sets it)
+	local word = wordSize("PODIUM", if refs.Compact then 28 else 26, l.PodiumW)
 	for _, button in { row.Take, row.Send, row.Podium } do
-		button.TextSize = if refs.Compact then 22 else 20
+		pixel(button, word)
 	end
 end
 
@@ -934,8 +981,8 @@ local function newRow(refs: Refs, key: string): Row
 		ClipsDescendants = true, -- (the light burst behind the picture)
 	}, refs.List)
 	frame:SetAttribute("Key", key)
-	Pop.face(frame, PenView.DirtyPaint, ROW_CORNER, false)
-	Pop.studs(frame, ROW_CORNER, 0.5, 40, 1)
+	Pop.face(frame, PenView.DirtyPaint, ROW_CORNER)
+	Pop.studs(frame, ROW_CORNER, 0.45, 40, 1)
 	local rim = frame:FindFirstChild("Rim") :: Frame?
 	if rim then
 		rim.ZIndex = 3
@@ -947,7 +994,7 @@ local function newRow(refs: Refs, key: string): Row
 		BorderSizePixel = 0,
 		ZIndex = 2,
 	}, frame)
-	Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 80, 0.45, 1)
+	Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 80, 0.5, 1)
 	local glow = UIKit.new("Frame", {
 		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -959,8 +1006,6 @@ local function newRow(refs: Refs, key: string): Row
 		ZIndex = 2,
 	}, icon)
 	UIKit.corner(glow, 999)
-	Pop.sparkle(icon, UDim2.fromScale(0.9, 0.14), 16, 4, 0.15)
-	Pop.sparkle(icon, UDim2.fromScale(0.08, 0.82), 12, 4, 0.35)
 	local mystery = UIKit.label(icon, "?", 28, {
 		Name = "Mystery",
 		Size = UDim2.fromScale(1, 1),
@@ -969,6 +1014,7 @@ local function newRow(refs: Refs, key: string): Row
 		ZIndex = 5,
 	})
 	ink(mystery, WHITE, PopTheme.Heavy)
+	pixel(mystery, 44)
 	local name = UIKit.label(frame, "", 22, {
 		Name = "ItemName",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -993,7 +1039,7 @@ local function newRow(refs: Refs, key: string): Row
 		TextWrapped = false,
 		ZIndex = 4,
 	})
-	ink(income, PopTheme.Money)
+	ink(income, PopTheme.Money, PopTheme.Pixel)
 	local count = UIKit.label(frame, "x0", 26, {
 		Name = "Count",
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -1001,6 +1047,7 @@ local function newRow(refs: Refs, key: string): Row
 		ZIndex = 4,
 	})
 	ink(count, WHITE, PopTheme.Heavy)
+	pixel(count, 34)
 	local take = popButton(frame, "TAKE", "Green", { Name = "Take", TextSize = 20 })
 	local send = popButton(frame, "SEND", "Blue", { Name = "Send", TextSize = 20 })
 	local podium = popButton(frame, "PODIUM", "Orange", { Name = "Podium", TextSize = 20 })
@@ -1046,14 +1093,16 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 			table.insert(created, row)
 		end
 		row.Frame.LayoutOrder = index
-		Pop.repaint(row.Frame, PenView.rowPaint(entry), false)
+		Pop.repaint(row.Frame, PenView.rowPaint(entry))
 		fillPicture(row.Icon, entry)
 		row.Mystery.Visible = entry.Mystery
-		row.Name.Text = entry.Name
+		row.Name.Text = string.upper(entry.Name)
+		pixel(row.Name, (layoutOf(refs).Name + 6), row.Name.Size.X.Offset)
 		local grade = entry.Grade and ItemData.GradeById[entry.Grade]
 		row.Grade.Visible = grade ~= nil
 		if grade then
-			row.Grade.Text = grade.Name
+			row.Grade.Text = string.upper(grade.Name)
+			pixel(row.Grade, if refs.Compact then 20 else 18, row.Grade.Size.X.Offset)
 			row.Grade.BackgroundColor3 = grade.Color:Lerp(Color3.new(0, 0, 0), 0.14)
 		end
 		local incomeX = row.Grade.Position.X.Offset + (if grade then row.Grade.Size.X.Offset + 8 else 0)
@@ -1063,6 +1112,12 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 			elseif entry.Mystery then "Clean it to see what it is"
 			else ""
 		row.Income.TextColor3 = if entry.Income > 0 then PopTheme.Money else SOFT
+		-- (an amount is a pixel word; "Clean it to see what it is" a round sentence)
+		if entry.Income > 0 then
+			pixel(row.Income, if refs.Compact then 26 else 24)
+		else
+			roundText(row.Income, if refs.Compact then 18 else 16)
+		end
 		row.Count.Text = "x" .. Format.big(entry.Count)
 		local takeHolder = row.Take.Parent :: Frame
 		local sendHolder = row.Send.Parent :: Frame
@@ -1101,6 +1156,7 @@ end
 ]]
 function PenView.setHeader(refs: Refs, count: number, capacity: number)
 	refs.Header.Text = `{Format.commas(count)} / {Format.commas(capacity)}`
+	pixel(refs.Header, 24, 98)
 	local fraction = if capacity > 0 then count / capacity else 1
 	refs.BarFill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
 	refs.BarFill.Visible = fraction > 0.001
@@ -1212,7 +1268,7 @@ local function layoutPanel(refs: Refs)
 	local toggle = refs.AutoSort.Parent :: Frame
 	toggle.Position = UDim2.new(1, -(PAD + l.Close + 8), 0, top)
 	toggle.Size = UDim2.fromOffset(l.ToggleW, l.Close)
-	refs.AutoSort.TextSize = l.ToggleText
+	pixel(refs.AutoSort, l.ToggleText + 6, l.ToggleW)
 	if refs.Mode ~= "Pen" then
 		toggle.Visible = false
 	end
@@ -1226,7 +1282,7 @@ local function layoutPanel(refs: Refs)
 	local function sizeButton(button: TextButton, width: number)
 		local holder = button.Parent :: Frame
 		holder.Size = UDim2.fromOffset(width, l.ToolButtonH)
-		button.TextSize = l.ToolText
+		pixel(button, l.ToolText + 6, width)
 		used += width + 8
 	end
 	sizeButton(refs.SendDirty, l.DirtyW)
@@ -1262,8 +1318,8 @@ function PenView.setCompact(refs: Refs, compact: boolean, room: Vector2?)
 	local l = layoutOf(refs)
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
-	refs.Close.TextSize = math.floor(l.Close * 0.62)
-	refs.Title.TextSize = if compact then 34 else 30
+	pixel(refs.Close, math.floor(l.Close * 0.62) / PopTheme.PixelScale)
+	pixel(refs.Title, if compact then 36 else 34)
 	layoutPanel(refs)
 	for _, row in refs.Rows do
 		layoutRow(refs, row)
