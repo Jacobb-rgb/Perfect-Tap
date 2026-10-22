@@ -48,4 +48,14 @@ for _, id in LimitedUpcoming.Order do
 	end
 end
 
+-- the SKY EGG's proposed golems (preview looks only, SkyEgg.luau): by id, no set
+local sky = script:FindFirstChild("SkyEgg")
+if sky and sky:IsA("ModuleScript") then
+	for _, golem in (require :: any)(sky) :: { GolemConfig.Golem } do
+		if GolemConfig.ById[golem.Id] == nil then
+			LimitedUpcoming.ById[golem.Id] = golem
+		end
+	end
+end
+
 return LimitedUpcoming

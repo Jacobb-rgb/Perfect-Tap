@@ -133,10 +133,10 @@ for _, capsule in CapsuleConfig.List do
 end
 -- the upcoming limited editions' golems and every set's shard (previews)
 local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+for id in LimitedUpcoming.ById do
+	models["golem_" .. id] = GolemBuilder.build(id)
+end
 for _, set in LimitedUpcoming.Sets do
-	for _, golem in set.Golems do
-		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
-	end
 	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
 end
 
