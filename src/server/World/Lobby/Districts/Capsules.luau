@@ -65,16 +65,18 @@ local SLATE = Enum.Material.Slate
 local PI = math.pi
 
 local CZ = 0.6 -- the rotunda's center (local z)
-local FLOOR = 1.0 -- the dais top
+local FLOOR = 1.2 -- the dais top (a plinth and the dais on it)
+local PLINTH_D = 15.0 -- the wider plinth under the dais
 local DAIS_D = 14.0
 local PILLAR_R = 6.3 -- the pillar ring's radius
 -- the pillars' angles from the front (-Z) toward +X: open at the front
-local PILLAR_ANGLES = { 75, 108, 140, 168, -168, -140, -108, -75 }
+local PILLAR_ANGLES = { 75, 97, 118, 138, -138, -118, -97, -75 }
 local DRUM_Y0, DRUM_H = 10.5, 3.4 -- the drum's underside and height
 local DRUM_D = 13.6
 local DRUM_TOP = DRUM_Y0 + DRUM_H
 -- the curved back wall: a half ellipse round the rotunda's center
-local WALL_RX, WALL_RZ = 10.4, 7.0
+local WALL_RX, WALL_RZ = 9.95, 6.4
+local WALL_T = 1.8 -- the walls' thickness (owner 2026-10-22: THICK walls)
 local WALL_H = 10.4 -- (up to the drum: a closed temple back)
 local WALL_FROM, WALL_TO, WALL_SEGS = 72, 288, 12
 Capsules.EggScale = 1.45 -- the eggs on the podiums against the opening's egg
@@ -152,9 +154,10 @@ end
 -- A glowing crystal shard standing at `base` (its foot), h tall, w thick,
 -- leaning by `lean` radians: a square prism turned 45 deg (1 part), with a
 -- diamond tip for the big ones (2 parts).
-local function shard(parent: Instance, base: CFrame, h: number, w: number, color: Color3, lean: number, tip: boolean?)
+local function shard(parent: Instance, base: CFrame, h: number, w: number, color: Color3, lean: number, tip: boolean?): Part
 	local at = base * CFrame.Angles(lean, 0, lean * 0.6) * CFrame.Angles(0, PI / 4, 0)
-	Style.block(parent, at * CFrame.new(0, h / 2, 0), Vector3.new(w, h, w), color, NEON, Style.tiny()).Name = "Shard"
+	local body = Style.block(parent, at * CFrame.new(0, h / 2, 0), Vector3.new(w, h, w), color, NEON, Style.tiny())
+	body.Name = "Shard"
 	if tip then
 		Style.block(
 			parent,
@@ -165,6 +168,20 @@ local function shard(parent: Instance, base: CFrame, h: number, w: number, color
 			Style.tiny()
 		).Name =
 			"ShardTip"
+	end
+	return body
+end
+
+-- A cluster of shards at `base` (its foot, front = LookVector): a big
+-- tipped one in the middle and two leaning ones, scaled by k; slow
+-- sparkles on the big one when `sparkle` (4 parts).
+local function cluster(parent: Instance, base: CFrame, k: number, colors: { Color3 }, sparkle: boolean?)
+	local big = shard(parent, base, 4.2 * k, 0.95 * k, colors[1], 0.06, true)
+	shard(parent, base * CFrame.new(0.75 * k, 0, 0.2 * k), 2.6 * k, 0.6 * k, colors[2], -0.4)
+	shard(parent, base * CFrame.new(-0.7 * k, 0, -0.15 * k), 2.1 * k, 0.55 * k, colors[3], 0.42)
+	if sparkle then
+		local e = Style.emitter(big, "Sparkle", colors[1]:Lerp(Color3.new(1, 1, 1), 0.4), 2)
+		e.LightEmission = 1
 	end
 end
 
@@ -200,15 +217,18 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	---------------------------------------------------------------- stairs and dais
-	-- a wide two-step staircase at the front (walkable), gold neon edges
-	local front = CZ - DAIS_D / 2
-	Style.block(m, at(0, 0.2, front - 0.9), Vector3.new(11, 0.4, 0.9), NAVY_DARK, SLATE, Style.solid())
-	Style.block(m, at(0, 0.5, front - 0.2), Vector3.new(9, 1.0, 1.0), NAVY_DARK, SLATE, Style.solid())
-	Kit.glow(m, at(0, 0.41, front - 1.33), Vector3.new(11, 0.06, 0.08), GOLD_GLOW)
-	Kit.glow(m, at(0, 1.01, front - 0.68), Vector3.new(9, 0.06, 0.08), CYAN)
-	Tech.disc(m, pos(0, FLOOR / 2, CZ), FLOOR, DAIS_D, Style.vary(DAIS, rng, 0.02), SLATE, Style.solid()).Name = "Dais"
-	Tech.disc(m, pos(0, FLOOR - 0.1, CZ), 0.16, DAIS_D + 0.16, GOLD_GLOW, NEON).Name = "DaisRim"
-	Tech.disc(m, pos(0, 0.3, CZ), 0.12, DAIS_D + 0.14, CYAN, NEON).Name = "DaisRim"
+	-- a wide staircase at the front (walkable): three rises of 0.4, gold and cyan neon edges
+	local front = CZ - PLINTH_D / 2
+	Style.block(m, at(0, 0.2, front - 0.45), Vector3.new(11.6, 0.4, 0.9), NAVY_DARK, SLATE, Style.solid())
+	Style.block(m, at(0, 0.6, front + 0.1), Vector3.new(9.6, 0.4, 1.0), NAVY_DARK, SLATE, Style.solid())
+	Kit.glow(m, at(0, 0.41, front - 0.88), Vector3.new(11.6, 0.06, 0.08), GOLD_GLOW)
+	Kit.glow(m, at(0, 0.81, front - 0.38), Vector3.new(9.6, 0.06, 0.08), CYAN)
+	-- the plinth (walkable) with a gold trim, a band of cyan light, then the dais with a gold rim
+	Tech.disc(m, pos(0, 0.4, CZ), 0.8, PLINTH_D, NAVY_DARK, SLATE, Style.solid()).Name = "Plinth"
+	Tech.disc(m, pos(0, 0.83, CZ), 0.06, PLINTH_D + 0.12, GOLD, FOIL)
+	Tech.disc(m, pos(0, 0.93, CZ), 0.14, DAIS_D + 0.24, CYAN, NEON).Name = "DaisRim"
+	Tech.disc(m, pos(0, (0.8 + FLOOR) / 2, CZ), FLOOR - 0.8, DAIS_D, Style.vary(DAIS, rng, 0.02), SLATE, Style.solid()).Name = "Dais"
+	Tech.disc(m, pos(0, FLOOR - 0.06, CZ), 0.12, DAIS_D + 0.14, GOLD_GLOW, NEON).Name = "DaisRim"
 	-- the glowing floor: a gold ring near the edge, a cyan ring in the middle and gold rays between
 	Tech.disc(m, pos(0, FLOOR + 0.02, CZ), 0.04, DAIS_D - 1.4, GOLD_GLOW, NEON)
 	Tech.disc(m, pos(0, FLOOR + 0.04, CZ), 0.04, DAIS_D - 1.9, DAIS, SLATE)
@@ -219,6 +239,13 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		local x0, z0 = onRing(2.3, a)
 		local x1, z1 = onRing(5.7, a)
 		Kit.beam(m, pos(x0, FLOOR + 0.07, z0), pos(x1, FLOOR + 0.07, z1), 0.18, 0.04, GOLD_GLOW).Material = NEON
+	end
+	-- a ring of glowing runes between the rays
+	for i = 1, 6 do
+		local a = i / 6 * 360
+		local x, z = onRing(4.6, a)
+		local rune = CFrame.lookAt(pos(x, FLOOR + 0.07, z), pos(0, FLOOR + 0.07, CZ))
+		Kit.glow(m, rune * CFrame.Angles(0, PI / 4, 0), Vector3.new(0.55, 0.04, 0.55), CYAN).Name = "Rune"
 	end
 
 	---------------------------------------------------------------- podiums and eggs
@@ -276,62 +303,75 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	---------------------------------------------------------------- the temple wall
-	-- a curved half ring of navy panels behind the rotunda: gold caps, cyan
-	-- strips at every other seam, emblems and two banners; the front is open
+	-- a THICK curved half ring of navy stone behind the rotunda: a gold cap
+	-- moulding, pilasters with gold caps at every other seam, glowing cyan
+	-- windows, gold egg and crown emblems and two banners; the front is open
 	local step = (WALL_TO - WALL_FROM) / WALL_SEGS
+	local inner = -WALL_T / 2 -- the wall's inner face (local z of a wall frame)
 	for i = 1, WALL_SEGS do
 		local a0, a1 = WALL_FROM + (i - 1) * step, WALL_FROM + i * step
 		local x0, z0 = onWall(a0)
 		local x1, z1 = onWall(a1)
 		local wa, wb = at(x0, WALL_H / 2, z0).Position, at(x1, WALL_H / 2, z1).Position
-		local len = (wb - wa).Magnitude + 0.12
+		local len = (wb - wa).Magnitude + 0.5
 		local dir = (wb - wa).Unit
 		local wallCf = CFrame.fromMatrix((wa + wb) / 2, dir, Vector3.yAxis)
 		if wallCf.LookVector:Dot(pos(0, WALL_H / 2, CZ) - wallCf.Position) < 0 then
 			wallCf = CFrame.fromMatrix((wa + wb) / 2, -dir, Vector3.yAxis)
 		end
 		-- wallCf: x along the wall, front (LookVector) toward the rotunda
-		Style.block(m, wallCf, Vector3.new(len, WALL_H, 0.5), Style.vary(NAVY, rng, 0.03), nil, Style.decor()).Name = "TempleWall"
-		Kit.bit(m, wallCf * CFrame.new(0, WALL_H / 2 + 0.12, 0), Vector3.new(len + 0.1, 0.24, 0.7), GOLD, FOIL)
+		Style.block(m, wallCf, Vector3.new(len, WALL_H, WALL_T), Style.vary(NAVY, rng, 0.03), SLATE, Style.decor()).Name = "TempleWall"
+		Kit.bit(m, wallCf * CFrame.new(0, WALL_H / 2 + 0.22, 0), Vector3.new(len + 0.1, 0.45, WALL_T + 0.5), GOLD, FOIL)
 		if i % 2 == 0 and i < WALL_SEGS then
-			Kit.glow(m, wallCf * CFrame.new(len / 2, -0.4, -0.3), Vector3.new(0.18, WALL_H - 2.6, 0.08), CYAN)
+			-- a pilaster on the seam with a gold cap
+			local px = len / 2 - 0.25
+			Style.block(m, wallCf * CFrame.new(px, -0.3, inner - 0.3), Vector3.new(1.0, WALL_H - 0.6, 0.6), NAVY_DARK, SLATE, Style.decor())
+			Kit.bit(m, wallCf * CFrame.new(px, WALL_H / 2 - 0.55, inner - 0.35), Vector3.new(1.25, 0.35, 0.8), GOLD, FOIL)
 		end
-		-- emblems: gold eggs on the side panels, a crown and a big egg in the back
+		-- emblems: gold eggs on the side panels, banners, crowns in the back, cyan windows between
 		if i == 2 or i == WALL_SEGS - 1 then
-			eggEmblem(m, wallCf * CFrame.new(0, 1.2, -0.28), 1.6)
+			eggEmblem(m, wallCf * CFrame.new(0, 1.2, inner - 0.05), 1.7)
 		elseif i == 4 or i == WALL_SEGS - 3 then
 			-- a banner on the wall: a gold bar, the navy cloth, a glowing egg
-			Kit.bit(m, wallCf * CFrame.new(0, 2.9, -0.4), Vector3.new(2.0, 0.18, 0.18), GOLD, FOIL)
-			Style.block(m, wallCf * CFrame.new(0, 0.9, -0.33), Vector3.new(1.7, 4.0, 0.06), NAVY_DARK, nil, Style.tiny()).Name = "Banner"
-			eggEmblem(m, wallCf * CFrame.new(0, 1.3, -0.38), 1.1)
+			Kit.bit(m, wallCf * CFrame.new(0, 2.9, inner - 0.15), Vector3.new(2.0, 0.18, 0.18), GOLD, FOIL)
+			Style.block(m, wallCf * CFrame.new(0, 0.9, inner - 0.08), Vector3.new(1.7, 4.0, 0.06), NAVY_DARK, nil, Style.tiny()).Name =
+				"Banner"
+			eggEmblem(m, wallCf * CFrame.new(0, 1.3, inner - 0.13), 1.1)
 		elseif i == WALL_SEGS / 2 or i == WALL_SEGS / 2 + 1 then
-			miniCrown(m, wallCf * CFrame.new(if i == WALL_SEGS / 2 then -len / 2 else len / 2, 2.6, -0.3), 1.8, GOLD, CROWN)
+			miniCrown(m, wallCf * CFrame.new(0, 2.6, inner - 0.05), 1.8, GOLD, CROWN)
+		else
+			-- a tall glowing cyan window set into the wall
+			Kit.glow(m, wallCf * CFrame.new(0, 0.4, inner + 0.02), Vector3.new(0.9, 4.4, 0.08), CYAN).Name = "WallWindow"
 		end
 	end
 
 	---------------------------------------------------------------- shards
-	-- clusters at the wall feet (inside), at the dais' front corners, floating round the giant egg
-	local ci = 0
-	for _, a in { 92, 150, -150, -92 } do
-		local x, z = onWall(a, 0.86)
-		for k = 1, 3 do
-			ci += 1
-			local dx = (k - 2) * 0.55
-			shard(
-				m,
-				facingIn(x, FLOOR - 0.2, z) * CFrame.new(dx, 0, 0),
-				if k == 2 then 4.2 else 2.4,
-				if k == 2 then 0.85 else 0.55,
-				SHARD_COLORS[(ci - 1) % 3 + 1],
-				(k - 2) * 0.3
-			)
-		end
-	end
+	-- big clusters at the wall ends, in front of the wall feet and on gold-trimmed plinths at the plinth's front corners
+	local C1 = { SHARD_CYAN, SHARD_VIOLET, SHARD_GOLD }
+	local C2 = { SHARD_VIOLET, SHARD_GOLD, SHARD_CYAN }
+	local C3 = { SHARD_GOLD, SHARD_CYAN, SHARD_VIOLET }
 	for _, sx in { -1, 1 } do
-		local x, z = sx * 7.4, front - 0.3
-		shard(m, at(x, 0, z), 3.8, 0.9, if sx > 0 then SHARD_VIOLET else SHARD_CYAN, 0.1 * sx, true)
-		shard(m, at(x + sx * 0.8, 0, z + 0.5), 2.2, 0.6, SHARD_GOLD, 0.35 * sx)
-		shard(m, at(x - sx * 0.7, 0, z - 0.4), 1.8, 0.55, if sx > 0 then SHARD_CYAN else SHARD_VIOLET, -0.3 * sx)
+		-- the wall ends
+		local x, z = onWall(sx * 75)
+		cluster(m, facingIn(x - sx * 0.2, 0, z - 1.6), 1.1, if sx > 0 then C2 else C1, true)
+		-- the wall feet, inside
+		for j, a in { 103, 152 } do
+			local wx, wz = onWall(sx * a)
+			local feet = facingIn(wx, FLOOR - 0.15, wz) * CFrame.new(0, 0, -(WALL_T / 2 + 0.9))
+			cluster(m, feet, 0.85, if j == 1 then C3 else (if sx > 0 then C1 else C2))
+		end
+		-- the front corners: a navy plinth with a gold top and a big cluster on it
+		local cx, cz = sx * 7.9, CZ - 5.6
+		Style.block(m, at(cx, 0.35, cz), Vector3.new(1.8, 0.7, 1.8), NAVY_DARK, SLATE, Style.decor())
+		Kit.bit(m, at(cx, 0.72, cz), Vector3.new(1.95, 0.08, 1.95), GOLD, FOIL)
+		cluster(m, at(cx, 0.7, cz) * CFrame.Angles(0, sx * 0.4, 0), 0.9, if sx > 0 then C1 else C2, true)
+	end
+	-- gentle light shafts falling behind the side eggs
+	for _, sx in { -1, 1 } do
+		local a, b = pos(sx * 4.6, DRUM_Y0 - 0.3, CZ + 3.4), pos(sx * 3.4, FLOOR + 0.2, CZ + 1.2)
+		local shaft = Kit.beam(m, a, b, 1.6, 0.06, rgb(255, 214, 120), Style.tiny({ Transparency = 0.72 }))
+		shaft.Material = NEON
+		shaft.Name = "LightShaft"
 	end
 
 	---------------------------------------------------------------- the dome and the giant egg
@@ -347,7 +387,10 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	Tech.disc(m, pos(0, DRUM_TOP + 2.3, CZ), 0.2, 5.0, GOLD_GLOW, NEON)
 	local eggAt = at(0, ey, CZ)
 	local ew, eh = 5.2, 6.6
-	ellipsoid(m, eggAt, Vector3.new(ew, eh, ew), SHELL, Enum.Material.SmoothPlastic).Name = "GiantEgg"
+	local giant = ellipsoid(m, eggAt, Vector3.new(ew, eh, ew), SHELL, Enum.Material.SmoothPlastic)
+	giant.Name = "GiantEgg"
+	local glitter = Style.emitter(giant, "Sparkle", rgb(255, 226, 140), 4)
+	glitter.LightEmission = 1
 	-- a crack down the egg's front surface
 	local crack = { { -1.1, 2.2 }, { -0.2, 1.2 }, { -0.8, 0.1 }, { 0.3, -1.1 } }
 	local function surf(q: { number }): Vector3
@@ -393,9 +436,9 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 			Kit.beam(orbit, p0, p1, 0.24, 0.24, if r == 1 then GOLD_GLOW else rgb(255, 200, 70)).Material = NEON
 		end
 	end
-	for i = 1, 4 do
-		local a = i / 4 * 2 * PI + 0.4
-		local p = eggAt * CFrame.new(math.cos(a) * 4.9, (i % 2 - 0.5) * 2.2, math.sin(a) * 4.9)
+	for i = 1, 6 do
+		local a = i / 6 * 2 * PI + 0.4
+		local p = eggAt * CFrame.new(math.cos(a) * 5.0, (i % 2 - 0.5) * 2.6, math.sin(a) * 5.0)
 		Style.block(orbit, p * CFrame.Angles(0.5, a, PI / 4), Vector3.new(0.7, 1.4, 0.7), SHARD_COLORS[(i - 1) % 3 + 1], NEON, Style.tiny()).Name =
 			"FloatShard"
 	end
