@@ -11,9 +11,9 @@
 	    in a blue neon outline) under a big gold crown
 	  - gate towers either side and taller corner towers, each with a glowing
 	    orange lantern cube on top; two more towers rising behind the roof
-	  - navy banners with a white crown and purple neon edges, and two big
-	    glowing screens: BETTER DROPS / UPGRADES (purple) and MORE REWARDS /
-	    FASTER PROGRESS (blue)
+	  - navy banners with a white crown and purple neon edges, and little
+	    colourful voxel rocks either side like the Candy mountains (the owner
+	    took them in place of two big screens)
 	  - lantern pillars, planters with bushes and a SHOP kiosk in front
 	  - dark walls with blue neon top tubes, the orange band round the side
 	    and back walls, a parapet with crenels on the roof
@@ -45,15 +45,12 @@ local Droppers = {}
 
 local C = Style.C
 local rgb = Color3.fromRGB
-local NEON = Enum.Material.Neon
 
 Droppers.CounterTag = "DropperCounter"
 
 local NAVY = rgb(18, 22, 54)
 local BANNER = rgb(44, 40, 120)
 local PURPLE = rgb(150, 70, 255)
-local SCREEN_PURPLE = rgb(46, 18, 96)
-local SCREEN_BLUE = rgb(14, 40, 110)
 local GOLD = rgb(255, 196, 64)
 
 function Droppers.build(parent: Instance, _rng: Rng.Rng)
@@ -233,51 +230,29 @@ function Droppers.build(parent: Instance, _rng: Rng.Rng)
 			)
 		end
 	end
-	-- the big glowing screens (seen from the front, +X is the viewer's right: purple on the left, blue on the right)
-	local screenX = W / 2 - 3.6
-	for k, card in
-		{
-			{ X = -screenX, Color = SCREEN_PURPLE, Edge = PURPLE, Words = { "BETTER DROPS", "UPGRADES" } },
-			{ X = screenX, Color = SCREEN_BLUE, Edge = Tech.Tube, Words = { "MORE REWARDS", "FASTER PROGRESS" } },
-		}
-	do
-		local sw, sh = 3.6, 6.6
-		local c = fr(card.X, plinth + 1.1 + sh / 2, z0 + 0.75)
-		block(c * CFrame.new(0, 0, 0.18), Vector3.new(sw + 0.6, sh + 0.6, 0.4), Tech.MetalDeep)
-		block(c * CFrame.new(0, 0, -0.04), Vector3.new(sw, sh, 0.08), card.Color, NEON, true)
-		for _, edge in { 1, -1 } do
-			glow(c * CFrame.new(0, edge * (sh / 2 + 0.1), -0.1), Vector3.new(sw + 0.3, 0.2, 0.1), card.Edge)
-			glow(c * CFrame.new(edge * (sw / 2 + 0.1), 0, -0.1), Vector3.new(0.2, sh + 0.3, 0.1), card.Edge)
-		end
-		if k == 1 then
-			-- a little gold dropper (a 7) dropping a glowing gem onto a glowing ring
-			block(c * CFrame.new(0.55, 1.15, -0.12), Vector3.new(0.5, 1.9, 0.06), C.Gold, nil, true)
-			block(c * CFrame.new(0, 2.0, -0.12), Vector3.new(1.6, 0.45, 0.06), C.Gold, nil, true)
-			block(
-				c * CFrame.new(-0.55, 1.0, -0.13) * CFrame.Angles(0, 0, math.pi / 4),
-				Vector3.new(0.4, 0.4, 0.06),
-				C.CrystalPink,
-				NEON,
-				true
-			)
-			block(c * CFrame.new(-0.2, 0.25, -0.12), Vector3.new(2.4, 0.12, 0.06), card.Edge, NEON, true)
-		else
-			-- two up chevrons and a gold coin
-			for _, y in { 1.1, 1.85 } do
-				for _, sx in { -1, 1 } do
-					block(
-						c * CFrame.new(sx * 0.32, y, -0.12) * CFrame.Angles(0, 0, -sx * math.rad(40)),
-						Vector3.new(0.9, 0.2, 0.06),
-						rgb(200, 225, 255),
-						nil,
-						true
-					)
-				end
+	-- little colourful voxel rocks either side, like the Candy mountains
+	-- (owner 2026-10-23: in place of the two screens): stepped square columns
+	-- in the range's colours, the taller ones with a light tinted top
+	local ROCKS = {
+		{ X = -(W / 2 - 3.6), Colors = { rgb(206, 92, 168), rgb(166, 128, 240), rgb(238, 118, 176), rgb(214, 140, 232) } },
+		{ X = W / 2 - 3.6, Colors = { rgb(234, 124, 36), rgb(226, 84, 126), rgb(246, 186, 52), rgb(240, 132, 56) } },
+	}
+	local COLUMNS = {
+		{ X = 0, Z = 0, W = 2.2, H = 5.4 },
+		{ X = -1.7, Z = 0.5, W = 1.7, H = 3.8 },
+		{ X = 1.6, Z = 0.3, W = 1.8, H = 4.4 },
+		{ X = 0.7, Z = 1.6, W = 1.3, H = 2.2 },
+		{ X = -0.9, Z = 1.7, W = 1.1, H = 1.4 },
+	}
+	for _, rock in ROCKS do
+		for k, col in COLUMNS do
+			local color = rock.Colors[(k - 1) % #rock.Colors + 1]
+			local x, z = rock.X + col.X, z0 + 1.5 + col.Z
+			block(at(x, col.H / 2, z), Vector3.new(col.W, col.H, col.W), color)
+			if k <= 3 then
+				block(at(x, col.H + 0.12, z), Vector3.new(col.W + 0.1, 0.24, col.W + 0.1), color:Lerp(Color3.new(1, 1, 1), 0.55), nil, true)
 			end
-			block(c * CFrame.new(0, 0.3, -0.12) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.6, 0.6, 0.06), C.Gold, NEON, true)
 		end
-		Tech.label(m, c * CFrame.new(0, -1.35, -0.14), card.Words[1], sw - 0.2, 0.85, Color3.new(1, 1, 1), 0.06)
-		Tech.label(m, c * CFrame.new(0, -2.35, -0.14), card.Words[2], sw - 0.2, 0.7, rgb(190, 210, 255), 0.06)
 	end
 
 	---------------------------------------------------------------- in front: lanterns, planters, the kiosk
