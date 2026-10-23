@@ -160,4 +160,26 @@ return function(T, Loader)
 			T.eq(cx == nil, Grid.outputLocal(machine.Id) == nil, machine.Id)
 		end
 	end)
+
+	T.test("droppers: at most 5 droppers and 5 Money Lasers on a plot (owner 2026-10-23)", function()
+		local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+		local limits = { Machines = 99, Conveyors = 99 }
+		local entries = {}
+		for i = 1, DropperConfig.MaxPlaced do
+			table.insert(entries, { Id = "BasicDropper", X = (i - 1) * 2, Z = 0, R = 0 })
+		end
+		local ok, code = Placement.validate(entries, "GoldDropper", 0, 6, 0, limits)
+		T.falsy(ok, "a sixth dropper")
+		T.eq(code, "DropperLimit")
+		T.truthy(Placement.Reasons.DropperLimit, "the player sees why")
+		ok = Placement.validate(entries, DropperConfig.Laser.Id, 0, 6, 0, limits)
+		T.truthy(ok, "lasers have their own cap")
+		for i = 1, DropperConfig.MaxLasers do
+			table.insert(entries, { Id = DropperConfig.Laser.Id, X = (i - 1) * 2, Z = 3, R = 0 })
+		end
+		ok, code = Placement.validate(entries, DropperConfig.Laser.Id, 0, 6, 0, limits)
+		T.eq(code, "LaserLimit")
+		-- moving one of the five is fine
+		T.truthy(Placement.validate(entries, "BasicDropper", 0, 9, 0, nil, entries[1]), "a move is not a sixth")
+	end)
 end

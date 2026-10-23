@@ -2,7 +2,7 @@
 	Droppers (owner 2026-10-21; first called "hoppers"): the most expensive
 	things in Terra Forge. A dropper stands on your plot and drops ores of
 	ONE price range (only Epic ores, only Legendary ores, ...) from its arm;
-	the ores earn `Income` coins per second. Bought at the DROPPER WORKS shop
+	the ores earn `Income` coins per second. Bought at the DROPPERS shop
 	for `Price`, sold back for `Resale`. The looks follow the owner's picture
 	docs/art/droppers_concept.webp (DropperBuilder).
 
@@ -25,6 +25,11 @@ export type Dropper = {
 }
 
 local DropperConfig = {}
+
+-- At most this many droppers stand on one plot (owner 2026-10-23: "max 5"), and as
+-- many Money Lasers (a laser doubles one dropper: more lasers than droppers do nothing).
+DropperConfig.MaxPlaced = 5
+DropperConfig.MaxLasers = 5
 
 local LIST: { any } = {
 	{
