@@ -17,8 +17,12 @@
 	  DarkMatterDropper  starry black blocks with violet cracks, a spiral on the
 	                     column, a swirl ring and black orbs around it
 
-	build(id, cf) -> Model (anchored; origin = the middle of its stage's bottom;
+	build(id, cf, lite?) -> Model (anchored; origin = the middle of its stage's bottom;
 	front = +Z; the arm reaches toward -X and drops onto the pad there).
+	`lite` (the DROPPERS shop's showroom, phones): plain blocks in place of
+	the framed pedestal, column and arm blocks, two crystal clusters in
+	place of four, one ore on the pad, and every ore a glowing gem block in
+	its colour in place of the ore model.
 ]]
 
 local Shared = script.Parent.Parent
@@ -27,6 +31,7 @@ local BlockKit = require(script.Parent.BlockKit)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 local DropperConfig = require(Shared.Config.DropperConfig)
 local Format = require(Shared.Util.Format)
+local OreData = require(Shared.Config.OreData)
 
 local DropperBuilder = {}
 
@@ -142,7 +147,7 @@ local SPIRAL = {
 	".#....",
 }
 
-function DropperBuilder.build(id: string, cf: CFrame): Model
+function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 	local dropper = DropperConfig.ById[id]
 	local st = DropperBuilder.Styles[id]
 	assert(dropper and st, "Unknown dropper " .. tostring(id))
@@ -155,6 +160,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		return BlockKit.cube(model, c, size, face or st.Face, rim or st.Rim, mode)
 	end
 	local K = DropperBuilder.Scale
+	local SIDE = if lite then "flat" else "side" -- (lite: one block per framed cube)
 	type Drop = { Id: string, At: CFrame, Seed: number }
 	local ores: { Drop } = {}
 	local function dropOre(oreId: string, x: number, y: number, z: number, turn: CFrame, seed: number)
@@ -182,18 +188,18 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 
 	---------------------------------------------------------------- the stepped pedestal and its glowing step
 	local p1y = stageH + 0.8
-	cube(at(bx, p1y, -0.2), Vector3.new(5.0, 1.6, 4.6), nil, nil, "side")
+	cube(at(bx, p1y, -0.2), Vector3.new(5.0, 1.6, 4.6), nil, nil, SIDE)
 	local p2y = stageH + 1.6 + 0.6
-	cube(at(bx + 0.3, p2y, -0.4), Vector3.new(3.8, 1.2, 3.6), nil, nil, "side")
+	cube(at(bx + 0.3, p2y, -0.4), Vector3.new(3.8, 1.2, 3.6), nil, nil, SIDE)
 	cube(at(bx - 0.4, stageH + 0.4, 2.55), Vector3.new(2.6, 0.8, 0.9), nil, nil, "flat")
 	Geo.block(model, at(bx - 0.4, stageH + 0.42, 3.02), Vector3.new(2.2, 0.22, 0.05), glowOf(st, 2), NEON, decor())
 	Geo.block(model, at(bx, stageH + 1.6, 2.12), Vector3.new(4.6, 0.12, 0.06), glowOf(st, 3), NEON, decor())
 
 	---------------------------------------------------------------- the leaning column and the ladder of slot blocks
 	local lowerY = p2y + 0.6 + 1.5
-	cube(at(bx + 0.1, lowerY, -0.4) * CFrame.Angles(0, 0, 0.06), Vector3.new(2.3, 3.0, 2.5), nil, nil, "side")
+	cube(at(bx + 0.1, lowerY, -0.4) * CFrame.Angles(0, 0, 0.06), Vector3.new(2.3, 3.0, 2.5), nil, nil, SIDE)
 	local upperY = lowerY + 2.9
-	cube(at(bx - 0.15, upperY, -0.4) * CFrame.Angles(0, 0, 0.13), Vector3.new(2.1, 2.9, 2.3), nil, nil, "side")
+	cube(at(bx - 0.15, upperY, -0.4) * CFrame.Angles(0, 0, 0.13), Vector3.new(2.1, 2.9, 2.3), nil, nil, SIDE)
 	for i = 1, 4 do
 		local ly = p2y + 0.2 + i * 1.25
 		local lx = bx + 1.55 - (i - 1) * 0.12
@@ -205,7 +211,7 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 	local armY = upperY + 1.45 + 0.9
 	local armRight, armLeft = bx + 1.6, sx - 1.0
 	local armLen = armRight - armLeft
-	cube(at((armRight + armLeft) / 2, armY, -0.4), Vector3.new(armLen, 1.8, 2.6), nil, nil, "side")
+	cube(at((armRight + armLeft) / 2, armY, -0.4), Vector3.new(armLen, 1.8, 2.6), nil, nil, SIDE)
 	Geo.block(
 		model,
 		at((armRight + armLeft) / 2 - 0.4, armY - 0.92, 0.82),
@@ -259,15 +265,20 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 		Geo.block(model, at(sx - 0.1, padY, 0.2 + side * 1.66), Vector3.new(2.82, 0.72, 0.1), glow, NEON, decor())
 	end
 	for i, p in { Vector3.new(-0.6, 0, 0.1), Vector3.new(0.4, 0, 1.0), Vector3.new(0, 0.25, 0.4) } do
+		if lite and i > 1 then
+			break
+		end
 		local oreId = dropper.Ores[(i + 1) % #dropper.Ores + 1]
 		dropOre(oreId, sx + p.X, padY + 0.6 + p.Y, -0.4 + p.Z, CFrame.Angles(0.3, i * 1.7, 0.2), 40 + i)
 	end
 
 	---------------------------------------------------------------- crystals around the pedestal and the pad
 	cluster(model, at(bx + 2.6, stageH, 2.0), st, 1, 4)
-	cluster(model, at(bx - 2.3, stageH, 1.9), st, 3, 3)
-	cluster(model, at(bx + 2.4, stageH, -2.4), st, 5, 2)
 	cluster(model, at(sx - 1.4, stageH, 2.2), st, 2, 3)
+	if not lite then
+		cluster(model, at(bx - 2.3, stageH, 1.9), st, 3, 3)
+		cluster(model, at(bx + 2.4, stageH, -2.4), st, 5, 2)
+	end
 
 	---------------------------------------------------------------- what each one is made of
 	local kind = st.Kind
@@ -376,7 +387,12 @@ function DropperBuilder.build(id: string, cf: CFrame): Model
 	end
 	BlockKit.scale(model, cf, K)
 	for _, o in ores do
-		ore(model, o.Id, dropper.Grade, o.At, o.Seed)
+		if lite then
+			local color = if OreData.exists(o.Id) then OreData.get(o.Id).Glow else glow
+			Geo.block(model, o.At, Vector3.new(0.75, 0.75, 0.75), color, NEON, decor())
+		else
+			ore(model, o.Id, dropper.Grade, o.At, o.Seed)
+		end
 	end
 	return model
 end

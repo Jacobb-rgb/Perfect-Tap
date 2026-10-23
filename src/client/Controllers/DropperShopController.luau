@@ -1,14 +1,14 @@
 --[[
 	DropperShopController: the DROPPERS shop's showroom on this screen.
 
-	The server builds the shop's solid shell only (Districts/Droppers.luau);
-	every half second the houses tagged DropperShopBuilder.Tag that are
-	within ShowDistance of the camera get their showroom built here
-	(DropperShopBuilder.show: the real droppers, the DARK MATTER DROPPER on
-	its podium, the Dropper Master, the floor, the walls, the chandeliers),
-	and past HideDistance it goes again (phones: those parts only exist near
-	the shop). A house that streams out and back in is a new instance and
-	gets a new showroom.
+	The server builds the shop's solid shell only (Districts/Droppers.luau).
+	Every half second, for each house tagged DropperShopBuilder.Tag:
+	  - within ShowDistance of the camera its showroom is in the scene
+	    (DropperShopBuilder.build, once; then only parented to the house)
+	  - past HideDistance it leaves the scene but is kept (unparented)
+	  - past DropDistance (the mine floors, the far plots) it is thrown away
+	A house that streams out and back in is a new instance: the old one's
+	showroom goes, the new one gets its own.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -20,7 +20,16 @@ local DropperShopBuilder = require(Shared.Builders.DropperShopBuilder)
 
 local DropperShopController = {}
 
-local shown: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+-- house -> its showroom (built once; parented to the house while near)
+local built: { [Instance]: Model } = {}
+
+local function drop(house: Instance)
+	local model = built[house]
+	if model then
+		model:Destroy()
+		built[house] = nil
+	end
+end
 
 local function update()
 	local camera = Workspace.CurrentCamera
@@ -28,16 +37,28 @@ local function update()
 		return
 	end
 	local from = camera.CFrame.Position
+	for house in built do
+		if not house:IsDescendantOf(Workspace) then
+			drop(house)
+		end
+	end
 	for _, house in CollectionService:GetTagged(DropperShopBuilder.Tag) do
 		local frame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
 		if typeof(frame) == "CFrame" and house:IsDescendantOf(Workspace) then
 			local distance = (frame.Position - from).Magnitude
-			if distance <= DropperShopBuilder.ShowDistance and not shown[house] then
-				DropperShopBuilder.show(house, frame)
-				shown[house] = true
-			elseif distance > DropperShopBuilder.HideDistance and shown[house] then
-				DropperShopBuilder.clear(house)
-				shown[house] = nil
+			local model = built[house]
+			if distance <= DropperShopBuilder.ShowDistance then
+				if not model then
+					model = DropperShopBuilder.build(frame)
+					built[house] = model
+				end
+				if model.Parent ~= house then
+					model.Parent = house
+				end
+			elseif model and distance > DropperShopBuilder.DropDistance then
+				drop(house)
+			elseif model and distance > DropperShopBuilder.HideDistance and model.Parent ~= nil then
+				model.Parent = nil
 			end
 		end
 	end

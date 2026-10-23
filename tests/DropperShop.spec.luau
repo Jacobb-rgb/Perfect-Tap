@@ -66,4 +66,54 @@ return function(T, Loader)
 		DropperShopBuilder.clear(house)
 		T.falsy(house:FindFirstChild(DropperShopBuilder.DetailName), "cleared")
 	end)
+
+	--[[
+		The phone budget at the shop (integrator 2026-10-23): every part within
+		Workspace.StreamingTargetRadius of the shop's door, every Persistent
+		model's parts beyond it and the yard museums (as PhoneBudget.spec counts
+		round the spawn and the plaza), plus the showroom this client builds
+		there, stay under LobbyLayout.Budget.StreamParts.
+	]]
+	T.test("dropper shop: what a phone holds at the shop's door (streamed + the showroom) stays under StreamParts", function()
+		local fs = require("@lune/fs")
+		local serde = require("@lune/serde")
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
+		local project = serde.decode("json", fs.readFile("default.project.json"))
+		local radius = project.tree.Workspace["$properties"].StreamingTargetRadius
+		local frame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
+		local door = (frame * roblox.CFrame.new(0, 0, DropperShopBuilder.Room.Front)).Position
+		local function persistent(model: any): boolean
+			local ok, mode = pcall(function()
+				return model.ModelStreamingMode.Name
+			end)
+			return ok and mode == "Persistent"
+		end
+		local near, always = 0, 0
+		local function walk(instance: any, persists: boolean)
+			for _, child in instance:GetChildren() do
+				if child:IsA("BasePart") then
+					if (child.CFrame.Position - door).Magnitude <= radius then
+						near += 1
+					elseif persists then
+						always += 1
+					end
+				end
+				walk(child, persists or (child:IsA("Model") and persistent(child)))
+			end
+		end
+		walk(map, false)
+		local museums = 0
+		for _, plot in WorldLayout.Plots do
+			museums += #parts(MuseumBuilder.build(WorldLayout.plotCFrame(plot)))
+		end
+		local showroom = #parts(DropperShopBuilder.build(frame))
+		local total = near + always + museums + showroom
+		T.le(
+			total,
+			LobbyLayout.Budget.StreamParts,
+			`door: {near} within {radius} + {always} always-streamed + {museums} museum + {showroom} showroom = {total}`
+		)
+	end)
 end
