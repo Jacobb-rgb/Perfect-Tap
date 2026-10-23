@@ -5,7 +5,7 @@
 	                   the seven droppers, the Money Laser and SELL in a
 	                   row on a stone platform, the mine entrance, block cliffs,
 	                   trees and a lookout behind, sunset
-	  scene "dropper_shop"  the DROPPER WORKS house (Preview.buildShop), a cosy
+	  scene "dropper_shop"  the DROPPERS house (Preview.buildShop), a cosy
 	                   Sandbox-Tycoon-style brick + plank house in forge colours:
 	                   stepped slate roof, shop windows with droppers inside,
 	                   flower boxes, lanterns, a forge chimney, the like board and
@@ -253,7 +253,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 	local rng = Rng.new(2026)
 
 	local shop = Instance.new("Model")
-	shop.Name = "DropperWorks"
+	shop.Name = "DroppersHouse"
 	shop.Parent = workspace
 	-- the block palette (Sandbox Tycoon's brick + plank + stone house, in forge colours)
 	local BRICK, BRICK_DARK, MORTAR = rgb(178, 82, 58), rgb(138, 58, 42), rgb(214, 190, 168)
@@ -415,12 +415,12 @@ function Preview.buildShop(Loader: any, workspace: any)
 	cube(CF.new(0, foundation + 8.45, z0 + porch / 2 + 0.4), V3.new(W + 0.4, 0.5, porch + 1.2), SLATE, SLATE_RIM)
 	cube(CF.new(0, foundation + 8.1, z0 + porch + 0.6), V3.new(W + 0.4, 0.3, 0.3), PLANK, PLANK_RIM, "flat")
 
-	-- the DROPPER WORKS board on the porch roof, the small board under it
+	-- the DROPPERS board on the porch roof, the small board under it
 	BlockKit.text(
 		shop,
 		CF.new(0, foundation + 10.1, z0 + 3.9),
 		V3.new(16, 2.4, 0.3),
-		"DROPPER WORKS",
+		"DROPPERS",
 		rgb(255, 238, 190),
 		rgb(86, 54, 30),
 		GLOW,
@@ -481,24 +481,22 @@ function Preview.buildShop(Loader: any, workspace: any)
 		"...#...",
 	}, 0.4, { ["#"] = rgb(255, 80, 130) }, 0.4)
 
-	-- a showcase line in the yard: Basic Dropper -> 2X laser -> SELL
-	local lineZ = 6
-	local hx = -40
-	DropperBuilder.build("BasicDropper", CF.new(hx, 0.1, lineZ)).Parent = shop
-	local lx = hx + DropperBuilder.Width * DropperBuilder.Scale / 2 + LaserBuilder.Length / 2
-	LaserBuilder.build(CF.new(lx, 0.1, lineZ)).Parent = shop
-	local sx = lx + LaserBuilder.Length / 2 + 2.6
-	BlockKit.cube(shop, CF.new(sx, 1.7, lineZ), V3.new(5.2, 3.2, 4.4), rgb(54, 120, 220), rgb(28, 64, 150))
-	BlockKit.cube(shop, CF.new(sx, 3.55, lineZ), V3.new(5.6, 0.5, 4.8), rgb(238, 242, 250), rgb(176, 186, 206))
-	BlockKit.text(
-		shop,
-		CF.new(sx, 1.7, lineZ + 2.26),
-		V3.new(3.6, 0.9, 0.08),
-		"SELL",
-		rgb(255, 250, 236),
-		rgb(20, 24, 36),
-		rgb(90, 255, 110)
-	)
+	-- the seven droppers on show in front of the house (machine size, facing the path),
+	-- a Money Laser beside the Dark Matter one
+	local show = {
+		{ "BasicDropper", -31, 13 },
+		{ "BlueDropper", -21, 13 },
+		{ "RedDropper", -11, 13 },
+		{ "PurpleDropper", 11, 13 },
+		{ "GoldDropper", 21, 13 },
+		{ "RainbowDropper", 31, 13 },
+		{ "DarkMatterDropper", -28, 0 },
+	}
+	for _, spot in show do
+		local id, x, z = spot[1] :: string, spot[2] :: number, spot[3] :: number
+		DropperBuilder.build(id, CF.new(x, 0.1, z) * CF.Angles(0, if x < 0 then 0.35 else -0.35, 0)).Parent = shop
+	end
+	LaserBuilder.build(CF.new(29, 0.1, 0) * CF.Angles(0, -0.35, 0), 0.85).Parent = shop
 
 	-- lamp posts along the plaza (block lanterns)
 	for _, x in { -32, -14, 14, 32 } do
@@ -512,7 +510,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 		cube(CF.new(t[1], 6.2, t[2]), V3.new(5, 3.4, 5), rgb(76, 160, 62), rgb(50, 116, 44))
 		cube(CF.new(t[1], 8.4, t[2]), V3.new(3, 1.6, 3), rgb(76, 160, 62), rgb(50, 116, 44))
 	end
-	print("Dropper Works house built")
+	print("DROPPERS house built")
 	return shop
 end
 

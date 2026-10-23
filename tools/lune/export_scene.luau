@@ -169,7 +169,7 @@ elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common 
 	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
 	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
-elseif sceneName == "dropper_shop" then -- the DROPPER WORKS shop house (tools/lune/lib/dropper_preview.luau)
+elseif sceneName == "dropper_shop" then -- the DROPPERS shop house (tools/lune/lib/dropper_preview.luau)
 	require("./lib/dropper_preview").buildShop(Loader, workspace)
 elseif sceneName == "droppers" then -- the seven droppers, Money Laser and SELL by the mine (tools/lune/lib/dropper_preview.luau)
 	require("./lib/dropper_preview").build(Loader, workspace)
