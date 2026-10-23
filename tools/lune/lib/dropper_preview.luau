@@ -579,4 +579,46 @@ function Preview.buildShop(Loader: any, workspace: any)
 	return shop
 end
 
+-- Candidate lobby spots for the DROPPERS house, marked on the world for an aerial
+-- picture (scene "lobby_spots"): a glowing outline of the house's footprint and a
+-- big number lying on the ground at each spot.
+Preview.Spots3 = {
+	{ X = 60, Z = -45, Name = "1" }, -- by the Tech shop (UPGRADES)
+	{ X = -62, Z = 70, Name = "2" }, -- the south-west park
+	{ X = 62, Z = 72, Name = "3" }, -- the south-east corner by the Rock Scanner
+}
+function Preview.markSpots(Loader: any, workspace: any)
+	local roblox = Loader.roblox
+	local V3 = roblox.Vector3
+	local CF = Loader.CFrame
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local NEON = roblox.Enum.Material.Neon
+	local gold = roblox.Color3.fromRGB(255, 220, 60)
+	local m = roblox.Instance.new("Model")
+	m.Name = "DroppersSpots"
+	m.Parent = workspace
+	local w, d = 34, 24 -- the house with its porch and a little yard
+	for _, spot in Preview.Spots3 do
+		local y = 6
+		for _, side in { -1, 1 } do
+			Geo.block(m, CF.new(spot.X, y, spot.Z + side * d / 2), V3.new(w, 1, 1.2), gold, NEON)
+			Geo.block(m, CF.new(spot.X + side * w / 2, y, spot.Z), V3.new(1.2, 1, d), gold, NEON)
+		end
+		-- a tall post with a big number board tilted up toward the sky camera
+		Geo.block(m, CF.new(spot.X, 12, spot.Z), V3.new(1, 24, 1), gold, NEON)
+		local boardCf = CF.new(spot.X, 26, spot.Z) * CF.Angles(-0.9, 0, 0)
+		Geo.block(m, boardCf * CF.new(0, 0, -0.3), V3.new(15, 15, 0.4), gold, NEON)
+		local plate = Geo.block(m, boardCf, V3.new(14, 14, 0.6), roblox.Color3.fromRGB(30, 24, 20))
+		local gui = roblox.Instance.new("SurfaceGui")
+		gui.Face = roblox.Enum.NormalId.Back
+		gui.Parent = plate
+		local t = roblox.Instance.new("TextLabel")
+		t.Text = spot.Name
+		t.TextColor3 = gold
+		t.FontFace = roblox.Font.fromEnum(roblox.Enum.Font.LuckiestGuy)
+		t.Parent = gui
+	end
+	return m
+end
+
 return Preview
