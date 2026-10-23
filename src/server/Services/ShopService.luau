@@ -88,6 +88,8 @@ export type Place = "Counter" | "Base"
 -- the lenient side and lag never refuses a BUY from an open shop
 ShopService.Range = 30
 ShopService.Tag = "UpgradeCounter"
+-- the DROPPERS house's porch counter (lobby Districts/Droppers): the same Tech shop, its own prompt words
+ShopService.DropperTag = "DropperCounter"
 ShopService.PromptName = "TechShopPrompt"
 ShopService.PointName = "TechShopPromptPoint"
 
@@ -364,10 +366,11 @@ local function hookCounter(counter: Instance)
 	point.Name = ShopService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 0.6, -part.Size.Z / 2)
 	point.Parent = part
+	local droppers = part:HasTag(ShopService.DropperTag)
 	local prompt = PromptConfig.make({
 		Name = ShopService.PromptName,
-		ActionText = "Tech Shop",
-		ObjectText = "Machines & Upgrades",
+		ActionText = if droppers then "Droppers" else "Tech Shop",
+		ObjectText = if droppers then "Droppers & Money Lasers" else "Machines & Upgrades",
 		Distance = PROMPT_DISTANCE,
 		Parent = point,
 	})
@@ -419,6 +422,11 @@ function ShopService.start()
 	end
 	CollectionService:GetInstanceAddedSignal(ShopService.Tag):Connect(hookCounter)
 	CollectionService:GetInstanceRemovedSignal(ShopService.Tag):Connect(unhookCounter)
+	for _, instance in CollectionService:GetTagged(ShopService.DropperTag) do
+		hookCounter(instance)
+	end
+	CollectionService:GetInstanceAddedSignal(ShopService.DropperTag):Connect(hookCounter)
+	CollectionService:GetInstanceRemovedSignal(ShopService.DropperTag):Connect(unhookCounter)
 end
 
 return ShopService

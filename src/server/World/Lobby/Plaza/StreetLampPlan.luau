@@ -55,6 +55,8 @@ StreetLampPlan.Roads = {
 	EastSpur = { Size = "Medium", Side = "Both", First = 12, Every = 12 },
 	WestSpur = { Size = "Medium", Side = "Both", First = 12, Every = 12 },
 	ToScanner = { Size = "Small", Side = "Both", First = 9, Every = 14 },
+	-- (none on the short ToDroppers walkway: the DROPPERS apron's two lamps
+	-- light it, see spots(); owner 2026-10-23: a clean corner at the plaza)
 	MineLane = { Size = "Small", Side = "Outer", First = 4, Every = 20 },
 	-- (none on ToMine, under the rails in the MINE yard, nor on the hamlet
 	-- lanes: the yard's and the garden's lanterns light them)
@@ -97,7 +99,13 @@ local function clear(p: Vector3, placed: { Spot }): boolean
 	end
 	-- the Plaza's own pieces (THE GREAT FORGE, the spawn pad, the crystal)
 	for _, piece in LobbyLayout.Pieces do
-		if piece.Package == "Plaza" and LobbyLayout.isGroundPiece(piece) and LobbyLayout.distanceTo(piece, p) < r + 1 then
+		-- (the DROPPERS apron is flat: its lamps stand round its edge)
+		if
+			piece.Package == "Plaza"
+			and piece.Id ~= "DroppersApron"
+			and LobbyLayout.isGroundPiece(piece)
+			and LobbyLayout.distanceTo(piece, p) < r + 1
+		then
 			return false
 		end
 	end
@@ -120,6 +128,33 @@ function StreetLampPlan.spots(): { Spot }
 	if not StreetLampPlan.Enabled then
 		cache = placed
 		return placed
+	end
+	-- the DROPPERS apron (owner 2026-10-23): a lamp on each side of its round
+	-- edge, facing the apron (the first one lit); before the roads
+	local apron = LobbyLayout.DroppersApron
+	local front = LobbyLayout.get("DroppersHouse").Facing.Unit
+	local across = Vector3.new(front.Z, 0, -front.X)
+	local reach = apron.Radius + StreetLampPlan.Offset + 0.4
+	for i, sd in { 1, -1 } do
+		local found: { Place } = {}
+		for _, deg in { 50, 40, 60, 30, 70 } do
+			local out = across * sd * math.sin(math.rad(deg)) + front * math.cos(math.rad(deg))
+			local p = apron.Center + out * reach
+			if clear(p, placed) then
+				table.insert(found, { Position = p, Facing = -out })
+			end
+		end
+		if #found > 0 then
+			local first = table.remove(found, 1) :: Place
+			table.insert(placed, {
+				Road = "DroppersApron",
+				Position = first.Position,
+				Facing = first.Facing,
+				Size = "Small",
+				Lit = i == 1,
+				Alternates = found,
+			})
+		end
 	end
 	for _, s in Common.strips() do
 		local plan = StreetLampPlan.Roads[s.Id]

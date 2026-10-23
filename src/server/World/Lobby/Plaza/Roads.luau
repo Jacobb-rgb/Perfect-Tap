@@ -206,7 +206,7 @@ end
 
 -- Walkways that leave the plaza rim head-on: a threshold ramp bridges the
 -- step from the plaza floor down to their panels.
-local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToFossil = true }
+local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToDroppers = true }
 -- Long walkways with longer floor panels (fewer parts).
 local LONG_SLABS = {
 	ForgePathEast = true,
@@ -380,8 +380,109 @@ local function entryPlanter(parent: Instance, at: Vector3, rng: Rng.Rng)
 	)
 end
 
+--[[
+	The DROPPERS apron (owner 2026-10-23: "a half circle in front of the
+	house, of the path's material"): a half-round walkway in front of the
+	porch, its straight edge along the porch front, its round edge meeting
+	the ToDroppers walkway. The walkway's look: a dark slate base, two rings
+	of polished slate panels, a dark metal border with an orange neon strip
+	round the arc.
+]]
+local function droppersApron(parent: Instance, rng: Rng.Rng)
+	local apron = LobbyLayout.DroppersApron
+	local m = Style.model("DroppersApron", parent)
+	local front = LobbyLayout.get("DroppersHouse").Facing.Unit
+	local K = Common.Colors
+	local top = Common.WalkwayTop
+	local r, back = apron.Radius, apron.Back
+	-- a ground frame on the straight edge's middle, local -Z = toward the round edge
+	local look = CFrame.lookAt(apron.Center, apron.Center + front)
+	local function ray(angle: number, dist: number, y: number): CFrame
+		-- angle 0 = straight out from the porch, -90..90 degrees
+		return look * CFrame.Angles(0, angle, 0) * CFrame.new(0, y, -dist)
+	end
+	local function base(c: CFrame, size: Vector3)
+		Style.block(m, c, size, K.SlateDark, nil, Style.tiny({ CanQuery = true })).Name = "ApronBase"
+	end
+	local function panel(c: CFrame, size: Vector3, color: Color3)
+		local tile = Style.block(m, c, size, color, nil, Style.tiny())
+		tile.Reflectance = Common.TileReflectance
+		tile.Name = "WalkPanel"
+	end
+	local function edge(c: CFrame, len: number)
+		-- (local X along the edge)
+		Style.block(m, c * CFrame.new(0, top.Border - 0.05, 0), Vector3.new(len + 0.1, 0.1, 0.65), K.MetalDark, nil, Style.tiny())
+		local glow = Style.block(
+			m,
+			c * CFrame.new(0, top.Neon - 0.03, 0),
+			Vector3.new(len - 0.1, 0.06, 0.2),
+			K.NeonOrange,
+			Enum.Material.Neon,
+			Style.tiny()
+		)
+		glow.Name = "EdgeGlow"
+	end
+	-- the dark slate base (the seams between the panels): 8 sectors as wide
+	-- as the round edge (they overlap toward the middle, one color) and the
+	-- straight strip back to the house wall, so the apron is a clean U
+	local count = 8
+	local step = math.pi / count
+	for i = 0, count - 1 do
+		local angle = -math.pi / 2 + (i + 0.5) * step
+		base(ray(angle, r / 2, top.Slab - 0.15), Vector3.new(2 * r * math.tan(step / 2), 0.3, r))
+	end
+	base(look * CFrame.new(0, top.Slab - 0.15, back / 2), Vector3.new(2 * r, 0.3, back))
+	-- a round band of curved panels along the edge, then the walkways' grid inside it
+	local band0, band1 = r - 2.6, r - 0.8
+	local bands = 10
+	local bandStep = math.pi / bands
+	for i = 0, bands - 1 do
+		local angle = -math.pi / 2 + (i + 0.5) * bandStep
+		panel(
+			ray(angle, (band0 + band1) / 2, top.Panel - 0.03),
+			Vector3.new(2 * band0 * math.tan(bandStep / 2) - 0.2, 0.06, band1 - band0 - 0.2),
+			Common.courseSlate(1, i, rng)
+		)
+	end
+	local pitch, seam = 2.8, 0.2
+	local inside = band0 - 0.15
+	local porch = apron.PorchHalf
+	for row = -3, 4 do
+		for col = -5, 5 do
+			local x, z = col * pitch, (row + 0.5) * pitch
+			local fx = math.abs(x) + pitch / 2
+			local ok
+			if z > 0 then
+				local fz = z + pitch / 2
+				ok = fx * fx + fz * fz <= inside * inside
+			else
+				-- the straight strip either side of the porch, back to the wall
+				ok = z - pitch / 2 >= -back + 0.1 and fx <= r - 0.8 and math.abs(x) - pitch / 2 >= porch
+			end
+			if ok then
+				panel(
+					look * CFrame.new(x, top.Panel - 0.03, -z),
+					Vector3.new(pitch - seam, 0.06, pitch - seam),
+					Common.courseSlate(row, col, rng)
+				)
+			end
+		end
+	end
+	-- the edge: a dark metal border with its orange neon strip round the arc
+	-- and straight on along both sides to the wall
+	for i = 0, count - 1 do
+		local angle = -math.pi / 2 + (i + 0.5) * step
+		local at = r - 0.45
+		edge(ray(angle, at, 0), 2 * at * math.tan(step / 2))
+	end
+	for _, sd in { -1, 1 } do
+		edge(look * CFrame.new(sd * (r - 0.45), 0, back / 2) * CFrame.Angles(0, math.pi / 2, 0), back)
+	end
+end
+
 function Roads.build(parent: Instance, rng: Rng.Rng)
 	paveAll(parent, rng)
+	droppersApron(parent, rng)
 	-- (2026-10-20: the street lamps along every road replace the road lanterns, StreetLamps.luau)
 	if not StreetLampPlan.Enabled then
 		roadLanterns(parent)

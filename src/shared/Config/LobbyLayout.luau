@@ -157,6 +157,21 @@ end
 -- plot roads' south end) move south with the plot columns, pieces on the
 -- outer coast move out with it. Both shifts are 0 at 12 cells.
 local GRID = WorldLayout.PlotGrid
+
+-- The DROPPERS house (owner 2026-10-23) and the half-round walkway apron in
+-- front of its porch (owner: "the path all the way to the house, a half
+-- circle in front of it"): the apron's straight edge runs along the porch
+-- front, its round edge meets the ToDroppers walkway from the plaza.
+local DROPPERS_CENTER = Vector3.new(43, 0, 29)
+local DROPPERS_FACING = Vector3.new(-0.5, 0, 0.87).Unit
+LobbyLayout.DroppersApron = {
+	Center = DROPPERS_CENTER + DROPPERS_FACING * 7.6, -- the middle of the straight edge
+	Radius = 11,
+	Back = 4.6, -- from the straight edge back to the house wall (the apron is a U)
+	PorchHalf = 5.4, -- half the porch's width (no panels under its planks)
+}
+local DROPPERS_PATH_FROM = Vector3.new(17.5, 0, 32.5)
+local DROPPERS_PATH_DIR = (LobbyLayout.DroppersApron.Center - DROPPERS_PATH_FROM).Unit
 local function south(p: Vector3): Vector3
 	return p + Vector3.new(0, 0, GRID.SouthShift)
 end
@@ -303,10 +318,30 @@ LobbyLayout.Pieces = {
 		-- turned toward the hero camera and the spawn (its gate faces south-west)
 		-- (round 3: a big open dig pulled toward the plaza, between the plaza
 		-- rim and the outcrops at (56, 46) and (50, 58))
-		Center = v(43, 0, 29),
+		-- (owner 2026-10-23: moved by the Tech shop, north-east of the plaza, turned to it;
+		-- the DROPPERS house took its old place)
+		Center = v(49, 0, -60),
 		Size = v(26, 14, 30),
-		Facing = v(-0.5, 0, 0.87).Unit,
+		Facing = v(-1, 0, 0),
 		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign: the artifacts + Kingdom of Kaldrum story corner. Tag FossilDig on the model.",
+	},
+	{
+		Id = "DroppersHouse",
+		Package = "Districts",
+		-- the DROPPERS shop (owner 2026-10-23) where the FOSSIL DIG stood, facing the same way
+		Center = DROPPERS_CENTER,
+		Size = v(26, 22, 24),
+		Facing = DROPPERS_FACING,
+		Note = "Town-style house (stone ground floor, timber upper floor, terracotta roof, DROPPERS sign); its porch counter carries the DropperCounter tag (ShopService: opens the Tech shop).",
+	},
+	{
+		Id = "DroppersApron",
+		Package = "Plaza",
+		Center = LobbyLayout.DroppersApron.Center + DROPPERS_FACING * (LobbyLayout.DroppersApron.Radius / 2),
+		Size = v(LobbyLayout.DroppersApron.Radius * 2 + 1, 1, LobbyLayout.DroppersApron.Radius),
+		Facing = DROPPERS_FACING,
+		Walkable = true,
+		Note = "Half-round neon walkway apron in front of the DROPPERS porch (Plaza/Roads), street lamps at its two ends.",
 	},
 	{
 		Id = "RockScanner",
@@ -409,11 +444,13 @@ LobbyLayout.Pieces = {
 	{
 		Id = "PinkGrove",
 		Package = "Flora",
-		Center = v(41, 0, -66),
+		-- (owner 2026-10-23: the FOSSIL DIG took its place behind UPGRADES; the grove moved
+		-- to the south-west park by the ponds)
+		Center = v(-54, 0, 74),
 		Size = v(22, 30, 22),
 		Radius = 10,
 		Facing = v(0, 0, 1),
-		Note = "Two big pink voxel cherry trees towering behind UPGRADES (hero trees).",
+		Note = "Two big pink voxel cherry trees in the south-west park (hero trees).",
 	},
 	{
 		Id = "RedTree",
@@ -754,8 +791,14 @@ LobbyLayout.Paths = {
 	{ Id = "ToUpgrades", From = v(28, 0, -13), To = v(40, 0, -19), Width = 12, Kind = "Cobble" },
 	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
-	-- from the plaza rim round the dig's west corner to its gate (its south-west front)
-	{ Id = "ToFossil", From = v(17.5, 0, 32.5), To = v(30.5, 0, 45.5), Width = 5, Kind = "Cobble" },
+	-- from the plaza rim to the round edge of the DROPPERS apron (owner 2026-10-23)
+	{
+		Id = "ToDroppers",
+		From = DROPPERS_PATH_FROM,
+		To = LobbyLayout.DroppersApron.Center - DROPPERS_PATH_DIR * (LobbyLayout.DroppersApron.Radius + 2.5),
+		Width = 5,
+		Kind = "Cobble",
+	},
 	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
 	-- south road north of the vault's steps)
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
