@@ -167,10 +167,10 @@ function RebirthView.lists(perks: any, lifted: number?): { [string]: { string } 
 			"Machine speed",
 			"Train and backpack levels",
 			enchantRow,
-			if keepsPodiums then "Ore, droppers (podiums stay)" else "All your ore, droppers",
+			if keepsPodiums then "Ore (podiums stay)" else "All your ore",
 		},
 		Keep = {
-			"Your whole factory",
+			"Your factory, droppers",
 			"Golems and enchants",
 			"Artifacts and codex",
 			"Boards, gear, star blasters",
