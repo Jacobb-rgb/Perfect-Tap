@@ -5,7 +5,8 @@
 	jump higher than the last) up to the island. (Owner 2026-10-22: "make the
 	steps more massive, little levitating islands, and improve the mountain,
 	add moss": every stone is a little floating islet, the spire has moss on
-	its ledges, vines, mossy outcrops, bushes and a crystal crown.) On the island: a village of
+	its ledges, vines, mossy outcrops, bushes and a crystal crown; and vines
+	with glowing buds hang from under the island.) On the island: a village of
 	cottages, trees, a waterfall and, on a podium in the middle, the SKY EGG:
 	a secret coin egg with three golems better than the Crystal capsule's but
 	still below the Robux ones (the capsule and the golems are gameplay work
@@ -593,6 +594,63 @@ local function litPath(m: Model, frame: CFrame, from: number, to: number, rng: R
 	spinner(lights, pivot, 0, 0.45)
 end
 
+-- Vines hanging from under the island (owner 2026-10-23: "a few vines hanging down from under
+-- the big island, so it looks mega cool"): from the dirt band's rim and the first two stone
+-- tiers' ledges (Kit.floatingIsland: the band ~0.97 of the island, the tiers ~0.85 and ~0.70),
+-- each a zigzag of three strands with two leaves and a glowing bud at its tip. 6 parts each.
+SkyHaven.Vines = 18
+local BUDS = { Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 205, 70) }
+local function hangingVines(decor: Model, frame: CFrame, rng: Rng.Rng)
+	local w, d = SkyHaven.Size.X, SkyHaven.Size.Y
+	-- { the ledge's height, its half-size share of the island, how many vines, their length }
+	local ledges = { { -4.6, 0.455, 8, 18 }, { -11.4, 0.4, 6, 24 }, { -18.2, 0.33, 4, 28 } }
+	local n = 0
+	for l, ledge in ledges do
+		local y, share, count, long = ledge[1], ledge[2], ledge[3], ledge[4]
+		for v = 1, count do
+			n += 1
+			if n > SkyHaven.Vines then
+				return
+			end
+			-- round the ledge's rim, spread evenly with a little jitter
+			local a = (v - 1 + rng:range(-0.25, 0.25)) / count * 2 * PI + l * 0.6
+			local dx, dz = math.sin(a), -math.cos(a)
+			local scale = 1 / math.max(math.abs(dx), math.abs(dz))
+			local at = Vector3.new(dx * scale * w * share, y, dz * scale * d * share)
+			local length = long * rng:range(0.75, 1.25)
+			local points = { at }
+			for j = 1, 3 do
+				local side = if j % 2 == 0 then 1 else -1
+				table.insert(points, at + Vector3.new(side * rng:range(0.5, 1.3), -length * j / 3, side * rng:range(-0.9, 0.9)))
+			end
+			for j = 1, 3 do
+				local a0 = (frame * CFrame.new(points[j])).Position
+				local a1 = (frame * CFrame.new(points[j + 1])).Position
+				local dir = (a1 - a0).Unit
+				Kit.beam(
+					decor,
+					a0 - dir * 0.2,
+					a1 + dir * 0.2,
+					1.05 - j * 0.15,
+					Style.vary(if j == 2 then C.LeafGreen else C.LeafGreenDark, rng, 0.06)
+				)
+			end
+			for leaf = 1, 2 do
+				local q = (frame * CFrame.new(points[leaf + 1] + Vector3.new(0, length * 0.12, 0))).Position
+				Style.block(
+					decor,
+					CFrame.new(q) * CFrame.Angles(0, rng:range(0, PI), 0.5) * CFrame.new(0.8, 0, 0),
+					Vector3.new(1.6, 0.14, 0.95),
+					Style.vary(C.LeafGreenLight, rng, 0.06),
+					nil,
+					Style.tiny()
+				)
+			end
+			ball(decor, (frame * CFrame.new(points[4] - Vector3.new(0, 0.4, 0))).Position, 1.0, BUDS[n % #BUDS + 1], NEON)
+		end
+	end
+end
+
 function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 	local m = Style.model("SkyHaven", parent)
 	-- what you can't walk on (the rock underside, the spire, cottages, trees, columns, clouds, the
@@ -616,6 +674,7 @@ function SkyHaven.build(parent: Instance, rng: Rng.Rng): Model
 		child.Parent = decor
 	end
 	parkour(m, decor, rng)
+	hangingVines(decor, frame, rng)
 	-- the lit path from the parkour's landing (the front edge) to the podium, a plain path past it to the village
 	litPath(m, frame, -d / 2, SkyHaven.Podium - SkyHaven.PodiumReach + 0.4, rng)
 	local path = Style.model("Paths", m)
