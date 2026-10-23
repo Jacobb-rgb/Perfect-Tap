@@ -995,6 +995,37 @@ local function tileWords(label: TextLabel, max: number, roundMax: number, w: num
 	end
 end
 
+--[[
+	The tile name box's height for names `w` units wide: two lines of
+	TileName, taller (at most three round lines at the floor) while some
+	artifact's name would still shrink under the floor (review 2026-10-22:
+	"CHRONICLE OF THE SHATTERING" was 7 pt on a 568x320 phone).
+]]
+function CollectionView.nameHeight(compact: boolean, w: number): number
+	local m = metrics(compact)
+	local floor = if compact then CollectionView.NameMinCompact else CollectionView.NameMin
+	local base = math.floor((m.TileName + 4) * PopTheme.PixelScale + 0.5)
+	local h = m.TileName * 2 + 4
+	local top = math.ceil(3 * floor * ROUND_LINE) + 1
+	while h < top do
+		local short = false
+		for _, art in ArtifactConfig.List do
+			local text = string.upper(art.Name)
+			local pixelSize = CollectionView.wrapSize(text, base, w, h, PIXEL_EM, PIXEL_LINE, true)
+			local roundSize = CollectionView.wrapSize(text, m.TileName, w, h, ROUND_EM, ROUND_LINE, true)
+			if math.max(pixelSize, roundSize) < floor then
+				short = true
+				break
+			end
+		end
+		if not short then
+			break
+		end
+		h += 1
+	end
+	return h
+end
+
 local function tile(parent: Instance, index: number, m: Metrics): Tile
 	local button = Pop.card(parent, CollectionView.HiddenPaint, {
 		Name = "Tile" .. index,
@@ -1461,7 +1492,7 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local cellH = math.floor((bodyH - gap * (rows - 1)) / rows)
 	-- square icons in every tile (the glyphs are drawn in a square box); short
 	-- tiles (small phones) drop the rarity chip (the detail column shows it)
-	local nameH = m.TileName * 2 + 4
+	local nameH = CollectionView.nameHeight(refs.Compact, cellW - 14)
 	local withChip = cellH >= nameH + 22 + 90
 	local iconSize = math.floor(math.min(cellW * 0.66, cellH - nameH - (if withChip then 40 else 16)))
 	for _, t in refs.Tiles do
@@ -1471,6 +1502,8 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 		chipHolder.Visible = withChip
 		-- (the reels: the name on top, the picture on its sunburst under it)
 		t.Name.Position = UDim2.new(0.5, 0, 0, 6)
+		t.Name.Size = UDim2.new(1, -12, 0, nameH)
+		t.Count.Position = UDim2.new(1, -6, 0, nameH + 10)
 		t.Icon.Position = UDim2.new(0.5, 0, 0, nameH + 8)
 		centreFx(t.Button, UDim2.new(0.5, 0, 0, nameH + 8 + icon / 2))
 	end
