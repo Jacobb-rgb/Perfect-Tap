@@ -292,20 +292,20 @@ function Preview.buildShop(Loader: any, workspace: any)
 	end
 
 	-- ground floor: voxel stone walls with stones and mortar lines (the town's stoneWall)
-	Style.stoneWall(shop, fr(0, plinth, z0), V3.new(W, ground, 1), rng, { Cap = false, Density = 0.55 })
+	Style.stoneWall(shop, fr(0, plinth, z0), V3.new(W, ground, 1), rng, { Cap = false, Density = 0.85, CourseEvery = 1.5 })
 	Style.stoneWall(
 		shop,
 		CF.new(-W / 2 + 0.5, plinth, zc) * CF.Angles(0, math.pi / 2, 0),
 		V3.new(D, ground, 1),
 		rng,
-		{ Cap = false, Density = 0.4 }
+		{ Cap = false, Density = 0.7, CourseEvery = 1.5 }
 	)
 	Style.stoneWall(
 		shop,
 		CF.new(W / 2 - 0.5, plinth, zc) * CF.Angles(0, -math.pi / 2, 0),
 		V3.new(D, ground, 1),
 		rng,
-		{ Cap = false, Density = 0.4 }
+		{ Cap = false, Density = 0.7, CourseEvery = 1.5 }
 	)
 	block(CF.new(0, plinth + ground / 2, z0 - D + 0.5), V3.new(W, ground, 1), C.Stone)
 	-- corner quoins: big light stones stacked at the corners
@@ -351,7 +351,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 		Color = C.RoofTerracotta,
 		Dark = C.RoofTerracottaDark,
 		Trim = C.RoofTrim,
-		Rows = 4,
+		Rows = 6,
 	})
 	-- gable ends: plank triangles (stepped boards) under the roof at both sides
 	for _, sx in { -1, 1 } do
@@ -370,7 +370,7 @@ function Preview.buildShop(Loader: any, workspace: any)
 		Color = C.RoofTerracotta,
 		Dark = C.RoofTerracottaDark,
 		Trim = C.RoofTrim,
-		Rows = 3,
+		Rows = 4,
 	})
 	for k = 0, 4 do
 		local h = 5.5 * (1 - k / 5)
@@ -417,6 +417,88 @@ function Preview.buildShop(Loader: any, workspace: any)
 			block(CF.new(wx + sx * 1.75, floor1 + upper / 2, z0 + 0.55), V3.new(1.1, 2.6, 0.2), C.Wood, nil, true)
 			block(CF.new(wx + sx * 1.75, floor1 + upper / 2, z0 + 0.68), V3.new(1.1, 0.2, 0.06), C.WoodDark, nil, true)
 		end
+	end
+
+	---------------------------------------------------------------- texture details
+	-- moss and grass tufts along the foot of the stone walls
+	for i = 0, 15 do
+		local x = -W / 2 + 0.8 + i * (W - 1.6) / 15
+		if math.abs(x) > 6.5 then
+			block(
+				CF.new(x, plinth + 0.18, z0 + 0.58),
+				V3.new(rng:range(0.8, 1.6), rng:range(0.25, 0.5), 0.2),
+				Style.vary(C.LeafGreenDark, rng, 0.08),
+				nil,
+				true
+			)
+		end
+	end
+	-- old bricks showing through the plaster (a few patches between the beams)
+	for _, patch in { { -12.3, 1.4 }, { 7.3, 3.4 }, { 12.4, 2.0 }, { -6.9, 3.5 } } do
+		local px, py = patch[1], floor1 + patch[2]
+		for r = 0, 1 do
+			for c = 0, 1 do
+				block(
+					CF.new(px + c * 0.9 + (r % 2) * 0.45, py + r * 0.45, z0 + 0.06),
+					V3.new(0.8, 0.38, 0.12),
+					Style.vary(rgb(176, 92, 66), rng, 0.06),
+					nil,
+					true
+				)
+			end
+		end
+	end
+	-- loose tiles of another shade on the roof slopes
+	local slope = math.atan2(7, (D + 2.4) / 2)
+	for _ = 1, 18 do
+		local t = rng:range(0.15, 0.85)
+		local x = rng:range(-W / 2, W / 2)
+		if math.abs(x) > 7 then
+			local y = eave + 7 * (1 - t) + 0.16
+			local z = zc + (D + 2.4) / 2 * t
+			block(
+				CF.new(x, y, z) * CF.Angles(slope, 0, 0),
+				V3.new(rng:pick({ 1.2, 1.6, 2 }), 0.12, 0.9),
+				Style.vary(if rng:chance(0.5) then C.RoofTerracottaDark else C.Roof, rng, 0.06),
+				nil,
+				true
+			)
+		end
+	end
+	-- plank lines and nail heads on the front gable boards, plank lines on the doors
+	for k = 0, 4 do
+		local y = eave - 0.5 + k * 1.1 + 1.08
+		local h = 5.5 * (1 - k / 5)
+		local w = math.max(0.6, (gw - 1) * h / 5.5)
+		block(CF.new(0, y, z0 + 6.37), V3.new(w, 0.07, 0.04), C.WoodDark, nil, true)
+		for _, nx in { -w / 2 + 0.3, w / 2 - 0.3 } do
+			if w > 1.5 then
+				block(CF.new(nx, y - 0.55, z0 + 6.38), V3.new(0.12, 0.12, 0.04), C.Iron, nil, true)
+			end
+		end
+	end
+	for i = -3, 3 do
+		if i ~= 0 then
+			block(CF.new(i * 0.66, plinth + 2.4, z0 + 0.71), V3.new(0.06, 4.6, 0.04), C.WoodDark, nil, true)
+		end
+	end
+	-- ivy climbing the left corner
+	for k = 0, 8 do
+		local y = plinth + 0.6 + k * 1.15
+		block(
+			CF.new(-W / 2 + 0.5 + math.sin(k * 1.7) * 0.5, y, z0 + 0.66),
+			V3.new(rng:range(0.9, 1.5), 1.0, 0.25),
+			Style.vary(C.LeafGreen, rng, 0.1),
+			nil,
+			true
+		)
+		if k % 3 == 1 then
+			block(CF.new(-W / 2 + 1.0 + math.sin(k) * 0.4, y + 0.2, z0 + 0.8), V3.new(0.3, 0.3, 0.2), C.FlowerPink, nil, true)
+		end
+	end
+	-- a wooden plank band under the eaves with little beam ends
+	for i = 0, 11 do
+		block(CF.new(-W / 2 + 1.2 + i * (W - 2.4) / 11, eave - 0.25, z0 + 0.65), V3.new(0.45, 0.45, 0.5), C.Wood, nil, true)
 	end
 
 	-- the forge chimney: a voxel stone pillar with an ember glow and smoke
