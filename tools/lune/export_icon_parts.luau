@@ -133,10 +133,10 @@ for _, capsule in CapsuleConfig.List do
 end
 -- the upcoming limited editions' golems and every set's shard (previews)
 local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+for id in LimitedUpcoming.ById do
+	models["golem_" .. id] = GolemBuilder.build(id)
+end
 for _, set in LimitedUpcoming.Sets do
-	for _, golem in set.Golems do
-		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
-	end
 	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
 end
 
@@ -159,6 +159,9 @@ for _, name in process.args do
 		end
 	end
 end
+
+-- the SKY EGG as it stands on its podium (also capsule_Sky)
+models.egg_Sky = GolemBuilder.themedEgg("Sky")
 
 -- the 24 artifacts (the Artifacts window / upload sheet 5)
 local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")

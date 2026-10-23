@@ -45,12 +45,15 @@ end
 
 --[[
 	Clear aprons: the ground in front of a stall's front face, `Depth` studs
-	deep and as wide as its footprint, where Flora puts nothing (no bush in
-	the CAPSULES entrance, no tree crowding the ENCHANT door).
+	deep and as wide as its footprint (or `Width`, centered), where Flora
+	puts nothing (no bush in the EGGS temple's entrance, no tree crowding the
+	ENCHANT door).
 ]]
-export type Apron = { Id: string, Depth: number }
+export type Apron = { Id: string, Depth: number, Width: number? }
 Kit.Aprons = {
-	{ Id = "CapsuleStall", Depth = 4 },
+	-- (the 25-wide EGGS temple: its staircase and lantern posts span 24; the
+	-- lily pond's rim reaches the front's south corner)
+	{ Id = "CapsuleStall", Depth = 4, Width = 22 },
 	{ Id = "EnchantShop", Depth = 4 },
 } :: { Apron }
 
@@ -62,7 +65,7 @@ function Kit.apronPiece(apron: Apron): LobbyLayout.Piece
 		Id = apron.Id .. "Apron",
 		Package = "Flora",
 		Center = piece.Center + look * ((piece.Size.Z + apron.Depth) / 2),
-		Size = Vector3.new(piece.Size.X, 0, apron.Depth),
+		Size = Vector3.new(apron.Width or piece.Size.X, 0, apron.Depth),
 		Facing = look,
 		Note = "clear apron",
 	}

@@ -538,6 +538,26 @@ local function placeLine(refs: Refs, row: Row)
 end
 
 --[[
+	The row's income amount (review 2026-10-22: "+$1.23K/s" beside a
+	PRISTINE chip was about 7 pt on a 568x320 phone): pixel letters while
+	they are at least PenView.GradeSize (8 pt on phones), else the round
+	font when it is bigger (Pop.fitOrRound).
+]]
+local function incomeWords(refs: Refs, row: Row)
+	local label = row.Income
+	local floor = if refs.Compact then PenView.GradeSize.Compact else PenView.GradeSize.Normal
+	local round = Pop.fitOrRound(
+		label,
+		if refs.Compact then 26 else 24,
+		if refs.Compact then 18 else 16,
+		floor,
+		label.Size.X.Offset,
+		label.Size.Y.Offset
+	)
+	edgeOf(label).LineJoinMode = if round then Enum.LineJoinMode.Round else Enum.LineJoinMode.Miter
+end
+
+--[[
 	A Pop button that keeps UIKit.button's shape: the returned TextButton
 	(clear, its own word: controllers and views set its Text, TextSize and
 	TextTransparency) fills its holder, and the holder is the painted face
@@ -973,9 +993,9 @@ local function layoutRow(refs: Refs, row: Row)
 	row.Name.Size = UDim2.fromOffset(textW, math.floor(l.RowH * 0.42))
 	pixel(row.Name, l.Name + 6, textW)
 	placeLine(refs, row)
-	if Pop.isPixel(row.Income.FontFace) then
-		pixel(row.Income, if refs.Compact then 26 else 24)
-	else
+	if row.Income:GetAttribute("Amount") == true then
+		incomeWords(refs, row)
+	elseif not Pop.isPixel(row.Income.FontFace) then
 		row.Income.TextSize = if refs.Compact then 18 else 16
 	end
 	row.Count.Position = UDim2.fromOffset(rowW - buttons - countW, 0)
@@ -1134,8 +1154,9 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 			else ""
 		row.Income.TextColor3 = if entry.Income > 0 then PopTheme.Money else SOFT
 		-- (an amount is a pixel word; "Clean it to see what it is" a round sentence)
+		row.Income:SetAttribute("Amount", if entry.Income > 0 then true else nil)
 		if entry.Income > 0 then
-			pixel(row.Income, if refs.Compact then 26 else 24)
+			incomeWords(refs, row)
 		else
 			roundText(row.Income, if refs.Compact then 18 else 16)
 		end

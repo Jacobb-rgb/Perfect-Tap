@@ -82,6 +82,8 @@ export type Helpers = {
 	orbit: (name: string, y: number, radius: number, tilt: number, n: number, width: number, color: Color3) -> (),
 	feathers: (side: number, color: Color3, tip: Color3, material: Enum.Material, y: number) -> (),
 	ball: (name: string, cf: CFrame, size: number, color: Color3, material: Enum.Material?) -> Part,
+	seg: (name: string, a: Vector3, b: Vector3, w: number, color: Color3, material: Enum.Material?) -> Part,
+	puff: (name: string, cf: CFrame, size: Vector3, color: Color3) -> Part,
 	TipY: number,
 	R: number,
 }
@@ -230,7 +232,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		end
 	end
 	if s.Room() >= 1 then
-		diamond(s.Top, "CrownCore", at(0, tipY + 0.2, -0.1), 0.5, 0.1, th.CrownCore, NEON)
+		diamond(s.Top, "CrownCore", at(0, tipY + 0.2, -0.1), 0.5, 0.1, th.CrownCore, GLOW)
 	end
 	if th.Horn then
 		for i, side in { -1, 1 } do
@@ -280,6 +282,12 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 			end,
 			ball = function(name: string, cf: CFrame, size: number, color: Color3, material: Enum.Material?): Part
 				return K.part(s.Top, name, cf, Vector3.new(size, size, size), color, material, BALL)
+			end,
+			seg = function(name: string, a: Vector3, b: Vector3, w: number, color: Color3, material: Enum.Material?): Part
+				return T.seg(s.Top, name, a, b, w, w, color, material)
+			end,
+			puff = function(name: string, cf: CFrame, size: Vector3, color: Color3): Part
+				return T.ellipsoid(s.Top, name, cf, size, color, M.SmoothPlastic)
 			end,
 			TipY = tipY,
 			R = r,
@@ -349,8 +357,8 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		K.upright(s.Bottom, "Pool", at(0, -r + 0.02, -0.2), 0.06, 2.6, th.Glow, GLOW)
 	end
 	local band = s.Bottom:FindFirstChild("Band")
-	if band and band:IsA("BasePart") then
-		T.embers(band, th.Embers, if s.Calm then 2 else 6, 0.25)
+	if band and band:IsA("BasePart") and not s.Calm then
+		T.embers(band, th.Embers, 6, 0.25)
 	end
 end
 
@@ -446,34 +454,65 @@ Themes.Royal = {
 
 -- SKY (the SKY EGG on SKY HAVEN, owner 2026-10-22: "cooler still than the
 -- eggs below"): pearl over sky blue, gold claw and scales, cloud rocks,
--- angel wings with sky-blue tips and a golden halo
+-- SKY (the SKY EGG on Sky Haven): a STORM KNIGHT's egg like its golems
+-- (owner: "black like the Storm Sentinel, mega cool"): black armour plates,
+-- sky-blue light running in its seams, a crown of lightning, black and gold
+-- wings, a golden halo, storm clouds round its foot and lightning bolts
+-- striking beside it
 Themes.Sky = {
-	Shell = rgb(246, 250, 255),
-	ShellLow = rgb(70, 150, 255),
-	Scale = rgb(255, 214, 90),
+	Shell = rgb(44, 48, 66),
+	ShellLow = rgb(26, 28, 40),
+	Scale = rgb(255, 210, 80),
 	ScaleMaterial = M.Foil,
-	Glow = rgb(110, 220, 255),
-	Hot = rgb(240, 252, 255),
+	Glow = rgb(110, 210, 255),
+	Hot = rgb(230, 250, 255),
 	Claw = rgb(255, 196, 56),
 	ClawMaterial = M.Foil,
-	ClawTip = rgb(250, 252, 255),
-	ClawTipMaterial = M.SmoothPlastic,
-	Rock = rgb(255, 255, 255),
+	ClawTip = rgb(110, 210, 255),
+	ClawTipMaterial = NEON,
+	Rock = rgb(150, 162, 196),
 	RockMaterial = M.SmoothPlastic,
 	RockShape = "Ball",
-	Crystal = rgb(140, 220, 255),
+	Crystal = rgb(110, 210, 255),
+	Spike = rgb(30, 32, 46),
+	SpikeTip = rgb(255, 228, 90),
+	SpikeMaterial = M.Metal,
 	Frame = rgb(255, 196, 56),
 	FrameMaterial = M.Foil,
-	Iris = rgb(60, 140, 255),
-	Mark = WHITE,
+	Iris = rgb(20, 24, 36),
+	Mark = rgb(110, 210, 255),
 	MarkShape = "Star",
-	Crown = { { -0.42, 0.62, rgb(255, 210, 80), -0.45 }, { 0.42, 0.62, rgb(255, 210, 80), 0.45 }, { 0, 1.05, rgb(170, 235, 255), 0 } },
+	Crown = { { -0.42, 0.7, rgb(255, 228, 90), -0.5 }, { 0.42, 0.7, rgb(255, 228, 90), 0.5 }, { 0, 1.15, rgb(110, 210, 255), 0 } },
 	CrownCore = WHITE,
-	Embers = rgb(200, 240, 255),
-	Extras = function(_s: Shard, h: Helpers)
-		h.feathers(-1, rgb(250, 252, 255), rgb(120, 200, 255), M.SmoothPlastic, 1.0)
-		h.feathers(1, rgb(250, 252, 255), rgb(120, 200, 255), M.SmoothPlastic, 1.0)
-		h.orbit("Halo", h.TipY + 0.95, 0.62, 0.12, 8, 0.15, rgb(255, 220, 90))
+	Embers = rgb(255, 230, 120),
+	Extras = function(s: Shard, h: Helpers)
+		-- black and gold wings, a golden halo over the lightning crown
+		h.feathers(-1, rgb(40, 44, 60), rgb(255, 210, 80), M.Metal, 1.0)
+		h.feathers(1, rgb(40, 44, 60), rgb(255, 210, 80), M.Metal, 1.0)
+		h.orbit("Halo", h.TipY + 1.05, 0.62, 0.12, 8, 0.15, rgb(255, 220, 90))
+		-- two lightning bolts striking down beside the egg
+		for i, side in { -1, 1 } do
+			local zig = {
+				h.P(side * 1.9, 3.0, -0.2),
+				h.P(side * 1.55, 2.2, -0.3),
+				h.P(side * 1.95, 1.6, -0.3),
+				h.P(side * 1.6, 0.7, -0.35),
+			}
+			for j = 1, #zig - 1 do
+				if s.Room() < 1 then
+					break
+				end
+				h.seg(`Bolt{i}_{j}`, zig[j], zig[j + 1], 0.13, rgb(255, 232, 100), NEON)
+			end
+		end
+		-- a ring of storm clouds round the egg's waist
+		for i = 1, 4 do
+			if s.Room() < 1 then
+				break
+			end
+			local a = (i - 0.5) / 4 * 2 * math.pi + 0.4
+			h.puff("StormCloud" .. i, h.at(math.cos(a) * 1.45, 0.05, math.sin(a) * 1.1), Vector3.new(1.0, 0.55, 0.8), rgb(170, 182, 214))
+		end
 	end,
 }
 
@@ -574,7 +613,7 @@ Themes.FrostTitans = {
 -- premium egg in its theme
 function CapsuleEggs.eggs(kit: Kit, tools: Tools): { [string]: (Shard) -> () }
 	local E: { [string]: (Shard) -> () } = {}
-	for _, id in { "Stone", "Crystal", "Royal" } do
+	for _, id in { "Stone", "Crystal", "Royal", "Sky" } do
 		local theme = CapsuleEggs.Themes[id]
 		E[id] = function(s: Shard)
 			CapsuleEggs.premium(kit, tools, s, theme)

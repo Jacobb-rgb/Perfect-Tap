@@ -1354,6 +1354,12 @@ local function cardName(text: string, cellW: number, m: Metrics): (number, numbe
 	return GolemView.nameFit(text, cardNameMax(m), cellW - 12, nameMin(m))
 end
 
+-- A grid card's bonus line in a cell `cellW` wide (the line is 10 narrower): a Golem Bond
+-- bonus such as "+12.5% INCOME" is 13 letters, round when pixel letters would be too small.
+local function cardBonus(label: TextLabel, cellW: number, m: Metrics)
+	Pop.fitOrRound(label, m.Small + 2, m.Small + 2, nameMin(m), cellW - 10, CARD_LINE - 4)
+end
+
 ---------------------------------------------------------------- building
 
 local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
@@ -1910,6 +1916,7 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 		local lines = c.Name:GetAttribute("NameLines")
 		local n = if type(lines) == "number" then lines else 1
 		setName(c.Name, GolemView.nameSize(c.Name.Text, cardNameMax(m), cellW - 12, n, nameMin(m)), n)
+		cardBonus(c.Bonus, cellW, m)
 	end
 	place(refs.Empty, PAD + 20, bodyY + 20, gridW - 40, bodyH - 40)
 	place(refs.Detail, detailX, bodyY - 4, m.Detail, bodyH + 8)
@@ -2125,7 +2132,9 @@ function GolemView.setEquipped(refs: Refs, equipped: { Card }, totals: string)
 		s.Stroke.Color = PopTheme.Outline
 		s.Stroke.Thickness = PopTheme.Edge
 		placeSlotName(s, m)
-		Pop.fit(s.Bonus, m.Small + 1)
+		-- (a Golem Bond bonus such as "+13.8% MINING" is 13 letters: round when pixel would be too small)
+		local bonusW = s.Frame.Size.X.Offset - s.Bonus.Position.X.Offset - 4
+		Pop.fitOrRound(s.Bonus, m.Small + 1, m.Small + 1, nameMin(m), bonusW, s.Bonus.Size.Y.Offset)
 	end
 	refs.Totals.Text = totals
 	local size = refs.Totals.Size
@@ -2156,6 +2165,7 @@ function GolemView.setCards(refs: Refs, cards: { Card }, selected: number?, pick
 		cr.Name.Text = string.upper(card.Name)
 		cr.Bonus.Text = GolemView.shortBonus(card.Bonus)
 		cr.Bonus.Visible = card.Bonus ~= ""
+		cardBonus(cr.Bonus, math.max(m.Cell.X, refs.GridLayout.CellSize.X.Offset), m)
 		cr.Equipped.Visible = card.Equipped
 		local deleting = picked ~= nil
 		cr.Lock.Visible = card.Locked

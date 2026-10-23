@@ -59,7 +59,7 @@ export type Tools = Types.Tools
 export type SetModule = Types.SetModule
 
 -- The sets with costumes (each module: Builders/LimitedGear/<Id>.luau).
-GolemGearLimited.SetIds = { "Dragonforge", "Galaxy", "MechaNeon", "FrostTitans" }
+GolemGearLimited.SetIds = { "Dragonforge", "Galaxy", "MechaNeon", "FrostTitans", "Sky" }
 
 local SETS: { [string]: SetModule } = {}
 for _, id in GolemGearLimited.SetIds do

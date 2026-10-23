@@ -490,6 +490,17 @@ Three capsules wake random golems (`CapsuleConfig`): **Stone** and
 placeholder ids). The code (`CapsuleService`, `CapsuleController`,
 `CapsuleView`) follows these rules:
 
+- **The SKY EGG** (`CapsuleConfig` "Sky", 2026-10-22): a coin egg of three
+  golems (Sky Sprite 84 %, Storm Sentinel 14 %, Aether King 2 %), sold only
+  at its podium at the top of the SKY HAVEN parkour (`Podium = true`: the
+  server refuses an open unless the player stands within PromptDistance +
+  PodiumSlack of the `EggPodium`-tagged podium, "Climb to SKY HAVEN to open
+  it"; the panel shows its tab only when opened there). Coins can be bought
+  with Robux, so it is a **paid random item** like every coin capsule:
+  PolicyService-gated (hidden and refused where restricted) and its exact
+  odds are shown before every open, in the panel and on the podium's own
+  odds board (`CapsuleService.hookPodium` builds it; the client fills it).
+
 - **Exact odds before every open.** The capsule screen lists every golem
   of the selected capsule with its own chance in percent
   (`CapsuleConfig.odds`, three significant digits, never rounded to 0),

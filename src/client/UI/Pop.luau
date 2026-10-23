@@ -480,6 +480,29 @@ function Pop.fit(label: TextLabel, size: number)
 	end
 end
 
+--[[
+	A one-line word that must stay readable in its `w` x `h` box (review
+	2026-10-22: a golem bonus "+13.8% MINING", a pen income "+$1.23K/s"
+	were about 7 pt on a 568x320 phone): pixel letters (Pop.fit at `size`)
+	while they fit at `floor` design units or more, else the round font
+	(it is narrower) when it is bigger, at most `roundMax`. A pixel letter
+	is 1 em wide, a round capital about 0.6 em. Returns true when round.
+]]
+function Pop.fitOrRound(label: TextLabel, size: number, roundMax: number, floor: number, w: number, h: number): boolean
+	local n = math.max(1, utf8.len(label.Text) or #label.Text)
+	local pixelSize = math.min(math.max(8, math.floor(size * PopTheme.PixelScale + 0.5)), math.floor(w / n), math.floor(h / 1.1))
+	local roundSize = math.min(roundMax, math.floor(w / (n * 0.6)), math.floor(h / 1.2))
+	if pixelSize >= floor or roundSize <= pixelSize then
+		label:SetAttribute("Round", nil)
+		label.FontFace = PopTheme.Pixel
+		Pop.fit(label, size)
+		return false
+	end
+	Pop.round(label, roundSize)
+	label.TextTruncate = Enum.TextTruncate.AtEnd -- (cut rather than spilled)
+	return true
+end
+
 -- A heading in a PopTheme.Titles gradient (top -> bottom) with a black edge.
 function Pop.title(parent: Instance, text: string, size: number, colors: string | { Color3 }, props: Props?): TextLabel
 	local keys = if type(colors) == "table" then colors else (PopTheme.Titles[colors] or PopTheme.Titles.White)

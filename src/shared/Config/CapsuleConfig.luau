@@ -65,6 +65,8 @@ export type Capsule = {
 	Description: string,
 	Limited: string?, -- a LIMITED EDITION's capsule: the LimitedGolems set id (shop-only, see the header)
 	Shell: Color3?, -- the top shell's color (default: Color lightened)
+	Podium: boolean?, -- opens only beside its own podium (CapsuleService.nearPodium; the SKY EGG on Sky Haven)
+	AnnounceFrom: string?, -- golems this rare are announced to the server (default CapsuleService.AnnounceFrom)
 }
 
 export type OddsLine = { Golem: string, Chance: number }
@@ -95,6 +97,7 @@ CapsuleConfig.Reasons = {
 	Restricted = "Capsules aren't available where you play",
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
 	Ended = "This limited edition has ended", -- a limited capsule after its edition (LimitedGolems)
+	Podium = "Climb to SKY HAVEN to open it", -- a podium-only egg opened away from its podium
 } :: { [string]: string }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -174,6 +177,26 @@ CapsuleConfig.List = {
 			MoonstoneOracle = 0.04,
 			CelestialSovereign = 0.012,
 			HeartstoneColossus = 0.008,
+		},
+	},
+	{
+		-- the SKY EGG on the Sky Haven island (islands chat + owner 2026-10-22):
+		-- three golems only, better than Crystal, still below the Robux eggs
+		Id = "Sky",
+		Name = "Sky Egg",
+		Currency = "Coins",
+		Price = 3000000,
+		LuckyFrom = "Legendary",
+		-- (the parkour's prize: opened only at the top of SKY HAVEN; false = anywhere)
+		Podium = true,
+		AnnounceFrom = "Mythic", -- (a x10 would toast a Legendary 82 % of the time)
+		Color = rgb(44, 48, 66),
+		Glow = rgb(110, 210, 255),
+		Description = "A storm knight's egg from Sky Haven. Only three golems sleep inside.",
+		Odds = {
+			SkySprite = 0.84,
+			StormSentinel = 0.14,
+			AetherKing = 0.02,
 		},
 	},
 	{
