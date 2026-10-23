@@ -500,7 +500,7 @@ return function(T, Loader)
 			end
 		end
 		-- (ToShop and ToUpgrades end right at the plaza rim under the stall fronts: no edge in view)
-		for _, id in { "SouthRoad", "EastSpur", "WestSpur", "ForgePathEast", "ForgePathWest", "ToWheel", "ToDroppers" } do
+		for _, id in { "SouthRoad", "EastSpur", "WestSpur", "ForgePathEast", "ForgePathWest", "ToWheel" } do
 			T.truthy(glowing[id], id .. " has orange neon edge strips")
 		end
 		-- glowing chevrons on the south walkway between the plaza and the bridge
@@ -990,13 +990,10 @@ return function(T, Loader)
 			T.truthy(glow.CFrame.Position.Y > 5.5, "above head height")
 			local headAt = Vector3.new(glow.CFrame.Position.X, 0, glow.CFrame.Position.Z)
 			if road == "DroppersApron" then
-				-- (the two lamps round the DROPPERS apron hang over its round edge)
+				-- (the two lamps either side of the DROPPERS apron lean over toward it)
 				local apron = LobbyLayout.DroppersApron
-				T.lt(
-					(headAt - Vector3.new(apron.Center.X, 0, apron.Center.Z)).Magnitude,
-					apron.Radius,
-					`{lamp:GetFullName()} hangs over the apron`
-				)
+				local center = Vector3.new(apron.Center.X, 0, apron.Center.Z)
+				T.lt((headAt - center).Magnitude, (p - center).Magnitude, `{lamp:GetFullName()} leans over toward the apron`)
 			else
 				local strip = Common.strip(road)
 				T.lt(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, headAt), 0.01, `{lamp:GetFullName()} hangs over {road}`)

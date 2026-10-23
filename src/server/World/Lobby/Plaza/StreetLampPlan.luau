@@ -55,8 +55,7 @@ StreetLampPlan.Roads = {
 	EastSpur = { Size = "Medium", Side = "Both", First = 12, Every = 12 },
 	WestSpur = { Size = "Medium", Side = "Both", First = 12, Every = 12 },
 	ToScanner = { Size = "Small", Side = "Both", First = 9, Every = 14 },
-	-- (none on the short ToDroppers walkway: the DROPPERS apron's two lamps
-	-- light it, see spots(); owner 2026-10-23: a clean corner at the plaza)
+	-- (the DROPPERS apron has a lamp at each side, see spots())
 	MineLane = { Size = "Small", Side = "Outer", First = 4, Every = 20 },
 	-- (none on ToMine, under the rails in the MINE yard, nor on the hamlet
 	-- lanes: the yard's and the garden's lanterns light them)
@@ -129,19 +128,20 @@ function StreetLampPlan.spots(): { Spot }
 		cache = placed
 		return placed
 	end
-	-- the DROPPERS apron (owner 2026-10-23): a lamp on each side of its round
-	-- edge, facing the apron (the first one lit); before the roads
+	-- the DROPPERS apron (owner 2026-10-23): a lamp either side of it on the
+	-- plaza's edge (the shop faces the crystal, its apron reaches the rim),
+	-- facing the apron (the first one lit); before the roads
 	local apron = LobbyLayout.DroppersApron
-	local front = LobbyLayout.get("DroppersHouse").Facing.Unit
-	local across = Vector3.new(front.Z, 0, -front.X)
-	local reach = apron.Radius + StreetLampPlan.Offset + 0.4
+	local polar = math.atan2(apron.Center.Z, apron.Center.X)
+	local rim = Common.PlazaRadius + 3.5
 	for i, sd in { 1, -1 } do
 		local found: { Place } = {}
-		for _, deg in { 50, 40, 60, 30, 70 } do
-			local out = across * sd * math.sin(math.rad(deg)) + front * math.cos(math.rad(deg))
-			local p = apron.Center + out * reach
+		for _, deg in { 18, 20, 16, 22, 14, 24 } do
+			local a = polar + sd * math.rad(deg)
+			local p = Vector3.new(math.cos(a) * rim, 0, math.sin(a) * rim)
 			if clear(p, placed) then
-				table.insert(found, { Position = p, Facing = -out })
+				local to = Vector3.new(apron.Center.X - p.X, 0, apron.Center.Z - p.Z).Unit
+				table.insert(found, { Position = p, Facing = to })
 			end
 		end
 		if #found > 0 then

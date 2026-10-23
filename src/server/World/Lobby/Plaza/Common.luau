@@ -105,7 +105,6 @@ Common.NeonStrips = {
 	ToShop = true,
 	ToUpgrades = true,
 	ToWheel = true,
-	ToDroppers = true,
 	EastPlotRoad = true,
 	WestPlotRoad = true,
 	RimRoad = true,

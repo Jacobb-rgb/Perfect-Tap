@@ -206,7 +206,7 @@ end
 
 -- Walkways that leave the plaza rim head-on: a threshold ramp bridges the
 -- step from the plaza floor down to their panels.
-local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToDroppers = true }
+local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true }
 -- Long walkways with longer floor panels (fewer parts).
 local LONG_SLABS = {
 	ForgePathEast = true,
@@ -383,10 +383,11 @@ end
 --[[
 	The DROPPERS apron (owner 2026-10-23: "a half circle in front of the
 	house, of the path's material"): a half-round walkway in front of the
-	porch, its straight edge along the porch front, its round edge meeting
-	the ToDroppers walkway. The walkway's look: a dark slate base, two rings
-	of polished slate panels, a dark metal border with an orange neon strip
-	round the arc.
+	porch, its straight edge along the porch front, its round edge out to
+	the plaza rim (the shop faces the plaza's crystal). The walkway's look: a
+	dark slate base, a round band of curved slate panels with the walkways'
+	grid inside it, a dark metal border with an orange neon strip round the
+	arc and along both sides back to the wall.
 ]]
 local function droppersApron(parent: Instance, rng: Rng.Rng)
 	local apron = LobbyLayout.DroppersApron

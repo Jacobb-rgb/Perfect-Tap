@@ -136,10 +136,23 @@ local function addMuseums(map: any)
 	end
 end
 
+-- The DROPPERS shop's showroom, as every client builds it near the camera
+-- (DropperShopBuilder; the server's map has the shell only).
+local function addDropperShop(map: any)
+	local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+	for _, d in map:GetDescendants() do
+		local frame = d:GetAttribute(DropperShopBuilder.FrameAttribute)
+		if frame then
+			DropperShopBuilder.show(d, frame)
+		end
+	end
+end
+
 if sceneName == "world" or string.match(sceneName, "^world_") then
 	-- "world_<name>": the same world into build/preview/world_<name>.json (parallel workers)
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
+	addDropperShop(map)
 	addNodes(workspace, map)
 elseif sceneName == "hall" then -- the world + stand-in champions on the giant HALL OF FAME (tools/lune/lib/hall_preview.luau)
 	local map = WorldBuilder.build(workspace)

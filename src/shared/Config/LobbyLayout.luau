@@ -161,19 +161,23 @@ end
 local GRID = WorldLayout.PlotGrid
 
 -- The DROPPERS house (owner 2026-10-23) and the half-round walkway apron in
--- front of its porch (owner: "the path all the way to the house, a half
--- circle in front of it"): the apron's straight edge runs along the porch
--- front, its round edge meets the ToDroppers walkway from the plaza.
-local DROPPERS_CENTER = Vector3.new(43, 0, 29)
-local DROPPERS_FACING = Vector3.new(-0.5, 0, 0.87).Unit
+-- front of its porch (owner: "a half circle in front of it"; later "turn the
+-- shop so its entrance faces the crystal in the middle, and make it wider"):
+-- the house stands north-east of the plaza between the plaza rim, the east
+-- spur, the east plot road and the ore outcrops at (56, 46) and (50, 58),
+-- its front to the plaza's fire crystal; the apron's straight edge runs
+-- along the porch front and its round edge reaches the plaza rim.
+local DROPPERS_DIR = Vector3.new(math.cos(math.rad(34)), 0, math.sin(math.rad(34)))
+local DROPPERS_CENTER = DROPPERS_DIR * 53.5
+local DROPPERS_FACING = -DROPPERS_DIR
+LobbyLayout.DroppersFront = 4.5 -- the front wall's local z (DropperShopBuilder.Room.Front)
+local DROPPERS_APRON = DROPPERS_CENTER + DROPPERS_FACING * (LobbyLayout.DroppersFront + 4.7)
 LobbyLayout.DroppersApron = {
-	Center = DROPPERS_CENTER + DROPPERS_FACING * 7.6, -- the middle of the straight edge
-	Radius = 11,
+	Center = DROPPERS_APRON, -- the middle of the straight edge
+	Radius = DROPPERS_APRON.Magnitude - 36.1, -- (to the plaza rim)
 	Back = 4.2, -- from the straight edge back to the house wall (the apron is a U)
 	PorchHalf = 5.4, -- half the porch's width (no panels under its planks)
 }
-local DROPPERS_PATH_FROM = Vector3.new(17.5, 0, 32.5)
-local DROPPERS_PATH_DIR = (LobbyLayout.DroppersApron.Center - DROPPERS_PATH_FROM).Unit
 local function south(p: Vector3): Vector3
 	return p + Vector3.new(0, 0, GRID.SouthShift)
 end
@@ -330,10 +334,10 @@ LobbyLayout.Pieces = {
 	{
 		Id = "DroppersHouse",
 		Package = "Districts",
-		-- the DROPPERS shop (owner 2026-10-23) where the FOSSIL DIG stood, facing the same way
+		-- the DROPPERS shop (owner 2026-10-23) where the FOSSIL DIG stood, its front to the crystal
 		Center = DROPPERS_CENTER,
-		-- (the FOSSIL DIG's old 26 x 30 footprint: the walk-in shop is 17 deep + the porch)
-		Size = v(26, 24, 30),
+		-- (the walk-in shop 30 wide and 15 deep + the porch)
+		Size = v(32, 27, 23),
 		Facing = DROPPERS_FACING,
 		Note = "Town-style house (stone ground floor, timber upper floor, terracotta roof, DROPPERS sign); its porch counter carries the DropperCounter tag (ShopService: opens the Tech shop).",
 	},
@@ -794,14 +798,6 @@ LobbyLayout.Paths = {
 	{ Id = "ToUpgrades", From = v(28, 0, -13), To = v(40, 0, -19), Width = 12, Kind = "Cobble" },
 	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
-	-- from the plaza rim to the round edge of the DROPPERS apron (owner 2026-10-23)
-	{
-		Id = "ToDroppers",
-		From = DROPPERS_PATH_FROM,
-		To = LobbyLayout.DroppersApron.Center - DROPPERS_PATH_DIR * (LobbyLayout.DroppersApron.Radius + 2.5),
-		Width = 5,
-		Kind = "Cobble",
-	},
 	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
 	-- south road north of the vault's steps)
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
