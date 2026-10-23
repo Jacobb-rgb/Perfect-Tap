@@ -9,10 +9,15 @@
 	  - the front: light gunmetal window walls either side of a wide door
 	    frame, big glass windows onto the showroom (orange frames), chunky
 	    corner pillars with blue neon strips and orange bands
-	  - a massive header across the front with the glowing DROPPERS sign box,
-	    a little gold dropper on top
-	  - dark side and back walls with the orange band, a flat roof with blue
-	    neon edge tubes in dark channels and two roof containers
+	  - the glowing DROPPERS sign box over the entrance
+	  - dark side and back walls with the orange band
+	  - (owner: "not a plain box") a round barrel roof of ribbed gunmetal
+	    slats with a blue neon arc along its front edge, a gable plate under
+	    the arc carrying the crystal logo (a glowing diamond frame with three
+	    crystals in it), giant boulders round the house with glowing
+	    crystals growing on them, vines down the roof edge, the pillars and
+	    the boulders, warm uplights at the boulders' feet, and two big trees
+	    at the back corners
 	Inside, the server builds the solid shell only: the plinths of the six
 	displays, the hero podium and the counter (the DropperCounter tag:
 	ShopService's "Droppers" prompt opens the Tech shop, where the droppers
@@ -39,12 +44,27 @@ local Tech = require(script.Parent.Tech)
 local Droppers = {}
 
 local C = Style.C
-local rgb = Color3.fromRGB
 local NEON = Enum.Material.Neon
 
 Droppers.CounterTag = "DropperCounter"
 
-function Droppers.build(parent: Instance, _rng: Rng.Rng)
+-- The round roof's rise; the grounds round the house (house frame, x / z,
+-- studs): the boulders (size = rough width) and the trees behind (kept off
+-- the east spur, the east plot road and the ore outcrops behind the house).
+local ROOF_RISE = 6.5
+local BOULDERS = {
+	{ X = 18.6, Z = 2.6, Size = 6.8, Piece = "Left" },
+	{ X = -18.2, Z = 1.8, Size = 5.6, Piece = "Right" },
+	{ X = 20.2, Z = -5, Size = 7.4, Piece = "Left" },
+	{ X = -18.6, Z = -5.6, Size = 5, Piece = "Right" },
+	{ X = 16.8, Z = -16.2, Size = 4.4, Piece = "Left" },
+}
+local TREES = {
+	{ X = 12.5, Z = -19, Scale = 1.15, Kind = "Green", Piece = "Back" },
+	{ X = 20.5, Z = -13.2, Scale = 1.2, Kind = "Pink", Piece = "Left" },
+}
+
+function Droppers.build(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("DroppersHouse")
 	local m = Style.model(piece.Id, parent)
 	local TURN = CFrame.Angles(0, math.pi, 0)
@@ -104,37 +124,112 @@ function Droppers.build(parent: Instance, _rng: Rng.Rng)
 	block(at(0, plinth + wallH / 2, z0 - D + 0.5), Vector3.new(W - 2, wallH, 1), Tech.MetalDark)
 	block(at(0, plinth + wallH * 0.62, z0 - D - 0.02), Vector3.new(W - 2, 0.9, 0.1), Tech.Band, nil, true)
 
-	-- the flat roof with blue neon edge tubes in dark channels, two roof containers
+	-- the roof slab, a blue neon edge tube along the back
 	block(at(0, top + 0.3, zc), Vector3.new(W + 0.6, 0.6, D + 0.6), Tech.MetalDeep)
-	for _, sx in { -1, 1 } do
-		Tech.channel(m, at(sx * (W / 2 + 0.36), top + 0.3, zc) * CFrame.Angles(0, -sx * math.pi / 2, 0), D + 0.4, Tech.EDGE)
-	end
 	Tech.channel(m, at(0, top + 0.3, z0 - D - 0.06), W + 0.4, Tech.EDGE)
-	for k, x in { -7, 8.5 } do
-		Tech.container(m, at(x, top + 0.6, zc - 2.5 + k), 2.4, 2, if k == 1 then Tech.Metal else Tech.MetalLight)
-	end
 
-	-- the header across the front with the glowing DROPPERS sign box
-	local headerH = ROOM.Header
-	Tech.wall(m, fr(0, top - 0.6, z0 + 0.45), W + 0.4, headerH, 1.9, {
-		Color = Tech.MetalDark,
-		Band = false,
-		Foot = false,
-		TopNeon = Tech.Tube,
-	})
-	Tech.sign(m, fr(0, top - 0.6 + headerH / 2, z0 + 1.45), "DROPPERS", 15, headerH - 0.9, {
+	-- the round barrel roof: ribbed slats on an arc across the house, a blue
+	-- neon arc along the front edge
+	local spring = top + 0.6
+	local chord, rise = W + 0.6, ROOF_RISE
+	local radius = (chord * chord / 4 + rise * rise) / (2 * rise)
+	local half = math.asin(chord / 2 / radius)
+	local slats = 10
+	local step = 2 * half / slats
+	local slatW = 2 * radius * math.sin(step / 2) + 0.12
+	local roofD = D + 0.6
+	local frontZ = zc + roofD / 2
+	for k = 0, slats - 1 do
+		local a = -half + (k + 0.5) * step
+		local c = at(radius * math.sin(a), spring + radius * math.cos(a) - (radius - rise), zc) * CFrame.Angles(0, 0, -a)
+		block(c, Vector3.new(slatW, 0.5, roofD), if k % 2 == 0 then Tech.Metal else Tech.MetalDark)
+		Tech.glow(m, c * CFrame.new(0, 0.1, roofD / 2 + 0.02), Vector3.new(slatW - 0.05, 0.22, 0.12), Tech.Tube)
+	end
+	-- the gable plate under the arc's front (three steps) and the crystal logo on it
+	for k, f in { 0.92, 0.66, 0.36 } do
+		local h = rise * 0.34
+		block(at(0, spring + (k - 0.5) * h, z0 + 0.15), Vector3.new(chord * f, h, 0.5), Tech.MetalDark)
+	end
+	local logo = fr(0, spring + rise * 0.55, z0 + 0.5)
+	block(logo * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(2.8, 2.8, 0.3), Tech.MetalDeep)
+	-- (a diamond: four neon bars round the plate, each across its edge's midpoint)
+	for k = 0, 3 do
+		local a = k * math.pi / 2 + math.pi / 4
+		Tech.glow(
+			m,
+			logo * CFrame.new(math.cos(a) * 1.45, math.sin(a) * 1.45, -0.2) * CFrame.Angles(0, 0, a + math.pi / 2),
+			Vector3.new(3.0, 0.22, 0.1),
+			Tech.Tube
+		)
+	end
+	for _, cdef in
+		{
+			{ X = 0, H = 2.4, Wd = 0.62, Color = C.CrystalPurple, Tilt = 0 },
+			{ X = -0.55, H = 1.6, Wd = 0.5, Color = C.CrystalBlue, Tilt = 0.35 },
+			{ X = 0.55, H = 1.6, Wd = 0.5, Color = C.CrystalPink, Tilt = -0.35 },
+		}
+	do
+		Style.crystal(m, logo * CFrame.new(cdef.X, -1.25, -0.35) * CFrame.Angles(0, 0, cdef.Tilt), cdef.H, cdef.Wd, cdef.Color, nil, 0.15)
+	end
+	-- the sign box over the entrance
+	Tech.sign(m, fr(0, plinth + wallH - 1.55, z0 + 0.75), "DROPPERS", 14, 2.4, {
 		Casing = false,
 		Studs = false,
 	})
 
-	-- the little gold dropper on the header (a 7: base, column, arm, glowing spout)
-	local hy = top - 0.6 + headerH
-	local GOLD, GOLD_DARK = rgb(246, 194, 62), rgb(186, 126, 28)
-	block(at(0, hy + 0.2, z0 + 0.6), Vector3.new(2.6, 0.4, 1.2), GOLD_DARK)
-	block(at(0.5, hy + 1.3, z0 + 0.6), Vector3.new(0.8, 1.8, 0.8), GOLD)
-	block(at(-0.15, hy + 2.4, z0 + 0.6), Vector3.new(2.1, 0.6, 0.8), GOLD)
-	block(at(-0.95, hy + 1.95, z0 + 0.6), Vector3.new(0.45, 0.22, 0.45), rgb(255, 214, 80), NEON, true)
-	block(at(-0.95, hy + 1.1, z0 + 0.6), Vector3.new(0.4, 0.4, 0.4), C.CrystalPurple, NEON, true)
+	-- vines down the roof's front edge and the corner pillars
+	local function vine(x: number, y: number, z: number, length: number, seed: number)
+		local segs = 3
+		local seg = length / segs
+		for i = 0, segs - 1 do
+			local sway = math.sin(seed + i * 1.7) * 0.25
+			block(at(x + sway, y - seg * (i + 0.5), z), Vector3.new(0.22, seg + 0.1, 0.22), C.LeafGreenDark, nil, true)
+		end
+		block(at(x - 0.25, y - length * 0.35, z + 0.12), Vector3.new(0.7, 0.45, 0.25), C.LeafGreen, nil, true)
+		block(at(x + 0.3, y - length * 0.75, z + 0.12), Vector3.new(0.6, 0.4, 0.25), C.LeafGreenLight, nil, true)
+	end
+	local function arcY(x: number): number
+		return spring + math.sqrt(radius * radius - x * x) - (radius - rise)
+	end
+	for k, x in { -11.5, -4.5, 6, 12.5 } do
+		vine(x, arcY(x) - 0.1, frontZ + 0.2, 2.6 + (k % 2) * 1.4, k * 2.3)
+	end
+	for _, sx in { -1, 1 } do
+		vine(sx * (W / 2 - 0.4), top + 1.1, z0 + 1.15, 5.5, sx * 3.1)
+	end
+
+	-- the grounds (their own pieces: DroppersGroundsLeft / Back / Right, kept
+	-- off the east plot road's lamps): giant boulders round the house with
+	-- glowing crystals on three and warm uplights at their feet turned to
+	-- the house, two big trees behind it
+	local grounds: { [string]: Model } = {}
+	for _, side in { "Left", "Back", "Right" } do
+		grounds[side] = Style.model("DroppersGrounds" .. side, parent)
+	end
+	local CRYSTALS = { C.CrystalPurple, C.CrystalBlue, C.CrystalPink }
+	for k, b in BOULDERS do
+		local g = grounds[b.Piece]
+		local p = at(b.X, 0, b.Z).Position
+		Style.boulder(g, p, b.Size, rng, { Color = C.Stone })
+		if k <= 3 then
+			local c = at(b.X + (if b.X > 0 then -0.6 else 0.6), b.Size * 0.85, b.Z + 0.6)
+			Style.crystal(
+				g,
+				c * CFrame.Angles(0.25, 0, if b.X > 0 then 0.3 else -0.3),
+				b.Size * 0.55,
+				b.Size * 0.16,
+				CRYSTALS[k],
+				nil,
+				0.15
+			)
+		end
+		local toward = (at(0, 0, zc).Position - p) * Vector3.new(1, 0, 1)
+		local foot = p + toward.Unit * (b.Size * 0.7) + Vector3.new(0, 0.25, 0)
+		Style.block(g, CFrame.lookAt(foot, at(0, wallH, zc).Position), Vector3.new(0.7, 0.35, 0.2), Tech.Lens, NEON, Style.tiny())
+	end
+	for _, t in TREES do
+		Style.tree(grounds[t.Piece], at(t.X, 0, t.Z), t.Kind, rng, t.Scale)
+	end
 
 	-- inside: the solid shell of the showroom (DropperShopBuilder builds the rest
 	-- on the clients): the displays' plinths, the hero podium, the counter
