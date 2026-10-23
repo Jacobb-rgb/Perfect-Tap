@@ -95,9 +95,9 @@ LobbyLayout.Budget = {
 	-- planted: the map 31,895 + nodes 294 + museums 352 = 32,541 measured, ~110 headroom)
 	-- (2026-10-22, map v49: + the six more floating islands and SKY HAVEN with its SKY EGG and
 	-- lit path, ~1,050 outside the lobby area: ~33,590 measured)
-	-- (2026-10-22, map v50: SKY HAVEN's stones are little islets, its spire mossy, ~200: 33,791 measured;
-	-- 2026-10-23: + the vines under the island, 108: ~33,900)
-	MapParts = 34250, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
+	-- (2026-10-23, map v52 on main v51 (33,688 measured): SKY HAVEN's stones as little islets, its spire
+	-- mossy, 12 vines under the island, trimmed to +136: 33,824 measured)
+	MapParts = 34050, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -127,7 +127,7 @@ LobbyLayout.Budget = {
 	-- Everything else inside the lobby area today (ground, plots, ore
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
-		Sky = { Parts = 2250, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area; then its parkour stones as little islets and the mossy spire, ~200: 2,105; the vines under the island, 108)
+		Sky = { Parts = 2100, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area; then its parkour stones as little islets, the mossy spire and the vines under the island, +136: 2,041)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)

@@ -122,23 +122,20 @@ local function islet(m: Model, decor: Model, stone: CFrame, i: number, rng: Rng.
 	)
 	Style.block(
 		decor,
-		stone * CFrame.new(0, -2.65, 0) * CFrame.Angles(0, 0.35, 0),
-		Vector3.new(s * 0.74, 1.7, s * 0.74),
+		stone * CFrame.new(0, -2.95, 0) * CFrame.Angles(0, 0.35, 0),
+		Vector3.new(s * 0.7, 2.3, s * 0.7),
 		Style.vary(C.StoneDark, rng, 0.05),
 		nil,
 		under
 	)
 	Style.block(
 		decor,
-		stone * CFrame.new(0.2, -4.2, 0) * CFrame.Angles(0, 0.9, 0),
-		Vector3.new(s * 0.46, 1.6, s * 0.46),
-		Style.vary(C.StoneDeep, rng, 0.05),
+		stone * CFrame.new(0.25, -4.95, 0) * CFrame.Angles(0, 0.9, 0),
+		Vector3.new(s * 0.32, 1.9, s * 0.32),
+		C.StoneDeep,
 		nil,
 		under
 	)
-	Style.block(decor, stone * CFrame.new(0.3, -5.45, 0), Vector3.new(s * 0.2, 1.1, s * 0.2), C.StoneDeep, nil, under)
-	-- moss dripping off the dirt band on the outer side
-	Style.block(decor, stone * CFrame.new(s * 0.36, -1.9, s * 0.1), Vector3.new(0.3, 1.4, s * 0.4), Style.vary(MOSS, rng, 0.06), nil, under)
 	-- a glowing edge on the outer side shows the way
 	Style.block(m, stone * CFrame.new(s / 2 - 0.1, -0.2, 0), Vector3.new(0.2, 0.25, s - 0.4), SKY_BLUE, NEON, Style.tiny())
 	-- one small touch on top, toward the back corner (never on the landing spot's middle)
@@ -148,34 +145,39 @@ local function islet(m: Model, decor: Model, stone: CFrame, i: number, rng: Rng.
 		Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 1.2, 0), Vector3.new(0.35, 2.4, 0.35), C.WoodDark, nil, Style.tiny())
 		Style.block(m, stone * CFrame.new(-s / 2 + 0.6, 2.7, 0), Vector3.new(0.75, 0.75, 0.75), C.LampAmber, NEON, Style.tiny())
 	elseif touch == 0 then
-		for _, lean in { -0.35, 0.3 } do
-			local bh = rng:range(1.1, 1.7)
-			Style.block(
-				decor,
-				spot * CFrame.Angles(0, 0, lean) * CFrame.new(0, bh / 2, 0),
-				Vector3.new(0.28, bh, 0.5),
-				Style.vary(C.LeafGreenLight, rng, 0.06),
-				nil,
-				Style.tiny()
-			)
-		end
-	elseif touch == 1 then
-		for f, dx in { -0.4, 0.45 } do
-			local fh = rng:range(0.7, 1.0)
-			local at = spot * CFrame.new(dx, 0, f * 0.3)
-			Style.block(decor, at * CFrame.new(0, fh / 2, 0), Vector3.new(0.14, fh, 0.14), C.LeafGreen, nil, Style.tiny())
-			Style.block(decor, at * CFrame.new(0, fh, 0), Vector3.new(0.45, 0.3, 0.45), FLOWERS[(i + f) % #FLOWERS + 1], nil, Style.tiny())
-		end
-	elseif touch == 2 then
-		Style.crystal(decor, spot * CFrame.Angles(0.2, 0.5, -0.15), 1.5, 0.55, SKY_DEEP, nil, 0.12)
-	else
-		local rs = rng:range(0.9, 1.2)
-		local rock = spot * CFrame.new(0, rs * 0.3, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0)
-		Style.block(decor, rock, Vector3.new(rs * 1.2, rs * 0.7, rs), Style.vary(C.Stone, rng, 0.06), nil, Style.tiny())
+		local bh = rng:range(1.2, 1.7)
 		Style.block(
 			decor,
-			rock * CFrame.new(0, rs * 0.38, 0),
-			Vector3.new(rs * 1.1, 0.16, rs * 0.9),
+			spot * CFrame.Angles(0, 0.6, -0.3) * CFrame.new(0, bh / 2, 0),
+			Vector3.new(0.3, bh, 0.6),
+			Style.vary(C.LeafGreenLight, rng, 0.06),
+			nil,
+			Style.tiny()
+		)
+	elseif touch == 1 then
+		Style.block(
+			decor,
+			spot * CFrame.new(0, 0.25, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0),
+			Vector3.new(0.9, 0.5, 0.9),
+			FLOWERS[i % #FLOWERS + 1],
+			nil,
+			Style.tiny()
+		)
+	elseif touch == 2 then
+		Style.block(
+			decor,
+			spot * CFrame.new(0, 0.6, 0) * CFrame.Angles(0.2, 0.8, 0.25),
+			Vector3.new(0.5, 1.3, 0.5),
+			SKY_DEEP,
+			NEON,
+			Style.tiny()
+		)
+	else
+		local rs = rng:range(0.9, 1.2)
+		Style.block(
+			decor,
+			spot * CFrame.new(0, rs * 0.3, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0),
+			Vector3.new(rs * 1.2, rs * 0.7, rs),
 			Style.vary(MOSS, rng, 0.06),
 			nil,
 			Style.tiny()
@@ -194,7 +196,7 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 		islet(m, decor, CFrame.new(p) * CFrame.Angles(0, -a, 0), i, rng)
 	end
 	-- the spire: stacked rock drums narrowing to the top, rising out of the sea, crystals in its
-	-- flanks; moss on every ledge and down the sides in vines, mossy rock outcrops, a crystal crown
+	-- flanks; moss on every ledge and down the sides in vines, mossy rock outcrops, crystals on top
 	local base = SkyHaven.SpireBase
 	local h = topY - 18 - base
 	local drums = 6
@@ -230,9 +232,9 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 				nil,
 				Style.tiny()
 			)
-			-- vines hanging from it down the four faces
-			for v = 0, 2 do
-				local face = (v + k) % 4
+			-- vines hanging from it down two faces
+			for v = 0, 1 do
+				local face = (2 * v + k) % 4
 				local along = rng:range(-r * 0.7, r * 0.7)
 				local long = dh * rng:range(0.35, 0.7)
 				local onFace = c * CFrame.Angles(0, face * math.pi / 2, 0) * CFrame.new(along, dh / 2 - long / 2, -r - 0.12)
@@ -246,8 +248,8 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 				)
 			end
 		end
-		-- two mossy rock outcrops sticking out of the flanks
-		for o = 1, 2 do
+		-- a mossy rock outcrop sticking out of the flank
+		for o = 1, 1 do
 			local around = k * 1.3 + o * math.pi + rng:range(-0.4, 0.4)
 			local size = r * rng:range(0.45, 0.6)
 			local out = c
@@ -265,19 +267,13 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 			)
 		end
 		if k % 2 == 1 then
-			Style.crystalCluster(
-				decor,
-				c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9),
-				3.5,
-				SKY_DEEP,
-				rng,
-				{ Count = 2, TipLerp = 0.12 }
-			)
+			Style.crystal(decor, c * CFrame.new(r * 0.8, -dh * 0.2, 0) * CFrame.Angles(0, 0, -0.9), 3.5, 1.3, SKY_DEEP, nil, 0.12)
 		end
 	end
-	-- the crown: a crystal cluster in the moss on the spire's top
+	-- the crown: two crystals in the moss on the spire's top
 	local crown = CFrame.new(spire.X, base + h + 0.2, spire.Z) * CFrame.Angles(0, 0.7, 0)
-	Style.crystalCluster(decor, crown, 4.2, SKY_DEEP, rng, { Count = 4, TipLerp = 0.12 })
+	Style.crystal(decor, crown * CFrame.new(-0.6, 0, 0) * CFrame.Angles(0, 0, 0.12), 4.2, 1.5, SKY_DEEP, nil, 0.12)
+	Style.crystal(decor, crown * CFrame.new(1.2, 0, 0.4) * CFrame.Angles(0.2, 0, -0.4), 2.6, 1.0, SKY_DEEP, nil, 0.12)
 	-- little bushes growing on the ledges
 	for b, k in { 1, 3, 4 } do
 		local r = SkyHaven.SpireRadius * (1 - k / drums * 0.45)
@@ -289,14 +285,6 @@ local function parkour(m: Model, decor: Model, rng: Rng.Rng): { Vector3 }
 			at * CFrame.new(0, size * 0.4, 0),
 			Vector3.new(size, size * 0.8, size),
 			Style.vary(C.LeafGreen, rng, 0.06),
-			nil,
-			Style.tiny()
-		)
-		Style.block(
-			decor,
-			at * CFrame.new(size * 0.25, size * 0.75, -0.2) * CFrame.Angles(0, 0.6, 0),
-			Vector3.new(size * 0.6, size * 0.5, size * 0.6),
-			Style.vary(C.LeafGreenLight, rng, 0.06),
 			nil,
 			Style.tiny()
 		)
@@ -598,13 +586,13 @@ end
 -- Vines hanging from under the island (owner 2026-10-23: "a few vines hanging down from under
 -- the big island, so it looks mega cool"): from the dirt band's rim and the first two stone
 -- tiers' ledges (Kit.floatingIsland: the band ~0.97 of the island, the tiers ~0.85 and ~0.70),
--- each a zigzag of three strands with two leaves and a glowing bud at its tip. 6 parts each.
-SkyHaven.Vines = 18
+-- each a zigzag of three strands with a leaf and a glowing bud at its tip. 5 parts each.
+SkyHaven.Vines = 12
 local BUDS = { Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 205, 70) }
 local function hangingVines(decor: Model, frame: CFrame, rng: Rng.Rng)
 	local w, d = SkyHaven.Size.X, SkyHaven.Size.Y
 	-- { the ledge's height, its half-size share of the island, how many vines, their length }
-	local ledges = { { -4.6, 0.455, 8, 18 }, { -11.4, 0.4, 6, 24 }, { -18.2, 0.33, 4, 28 } }
+	local ledges = { { -4.6, 0.455, 6, 18 }, { -11.4, 0.4, 4, 24 }, { -18.2, 0.33, 2, 28 } }
 	local n = 0
 	for l, ledge in ledges do
 		local y, share, count, long = ledge[1], ledge[2], ledge[3], ledge[4]
@@ -636,7 +624,7 @@ local function hangingVines(decor: Model, frame: CFrame, rng: Rng.Rng)
 					Style.vary(if j == 2 then C.LeafGreen else C.LeafGreenDark, rng, 0.06)
 				)
 			end
-			for leaf = 1, 2 do
+			for leaf = 1, 1 do
 				local q = (frame * CFrame.new(points[leaf + 1] + Vector3.new(0, length * 0.12, 0))).Position
 				Style.block(
 					decor,
