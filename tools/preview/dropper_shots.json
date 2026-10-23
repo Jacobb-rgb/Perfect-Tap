@@ -120,46 +120,46 @@
   "preset": "Surface",
   "sunDir": [
    -0.45,
-   0.75,
-   0.5
+   0.6,
+   0.6
   ],
   "exposure": 1.1,
   "shadowExtent": 100,
-  "maxLights": 14,
+  "maxLights": 16,
   "position": [
    0,
-   17,
-   58
+   13,
+   44
   ],
   "target": [
    0,
-   6,
-   -2
+   8,
+   -6
   ],
-  "fov": 60
+  "fov": 58
  },
  "dropshop_side": {
   "scene": "dropper_shop",
   "preset": "Surface",
   "sunDir": [
    -0.45,
-   0.75,
-   0.5
+   0.6,
+   0.6
   ],
   "exposure": 1.1,
   "shadowExtent": 100,
-  "maxLights": 14,
+  "maxLights": 16,
   "position": [
-   -44,
-   20,
-   46
+   -40,
+   18,
+   38
   ],
   "target": [
    -6,
-   6,
-   -2
+   7,
+   -4
   ],
-  "fov": 52
+  "fov": 55
  },
  "laser_close": {
   "scene": "droppers",
@@ -390,22 +390,45 @@
   "preset": "Surface",
   "sunDir": [
    -0.45,
-   0.75,
-   0.5
+   0.6,
+   0.6
   ],
   "exposure": 1.1,
   "shadowExtent": 100,
-  "maxLights": 14,
+  "maxLights": 16,
   "position": [
-   -14,
-   8,
-   30
+   0,
+   20,
+   60
   ],
   "target": [
-   -22,
-   4.5,
-   10
+   0,
+   4,
+   8
   ],
-  "fov": 58
+  "fov": 62
+ },
+ "dropshop_close": {
+  "scene": "dropper_shop",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   0.6
+  ],
+  "exposure": 1.1,
+  "shadowExtent": 100,
+  "maxLights": 16,
+  "position": [
+   6,
+   7,
+   16
+  ],
+  "target": [
+   0,
+   7,
+   -6
+  ],
+  "fov": 62
  }
 }
