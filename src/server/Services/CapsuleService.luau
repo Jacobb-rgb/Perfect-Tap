@@ -255,9 +255,32 @@ local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?
 	return woken, #kinds - #woken, left
 end
 
--- Tells the other players about a Legendary+ golem. Returns the text (nil: nothing to tell).
-local function announce(player: Player, kinds: { string }): string?
-	local from = Rarity.ById[CapsuleService.AnnounceFrom].Order
+-- Is the player's character beside a podium of this egg (PodiumTag, attribute
+-- Capsule)? Within PromptDistance + PodiumSlack of the podium part.
+CapsuleService.PodiumSlack = 6
+function CapsuleService.nearPodium(player: Player, capsuleId: string): boolean
+	local character = player.Character
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	if not root or not root:IsA("BasePart") then
+		return false
+	end
+	local reach = CapsuleService.PromptDistance + CapsuleService.PodiumSlack
+	for _, podium in CollectionService:GetTagged(CapsuleService.PodiumTag) do
+		if podium:IsA("BasePart") and podium:GetAttribute("Capsule") == capsuleId then
+			if (podium.Position - root.Position).Magnitude <= reach then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Tells the other players about a Legendary+ golem (a capsule's own
+-- AnnounceFrom may raise the bar). Returns the text (nil: nothing to tell).
+local function announce(player: Player, kinds: { string }, capsuleId: string?): string?
+	local capsule = if capsuleId then CapsuleConfig.ById[capsuleId] else nil
+	local fromId = if capsule and capsule.AnnounceFrom then capsule.AnnounceFrom else CapsuleService.AnnounceFrom
+	local from = Rarity.ById[fromId].Order
 	local best: string? = nil
 	for _, kind in kinds do
 		if GolemConfig.order(kind) >= from and (best == nil or GolemConfig.score(kind) > GolemConfig.score(best)) then
@@ -281,7 +304,7 @@ local function opened(player: Player, info: Opened)
 	for _, callback in callbacks do
 		task.spawn(callback, player, info)
 	end
-	local ok, err = pcall(announce, player, info.Kinds)
+	local ok, err = pcall(announce, player, info.Kinds, info.Capsule)
 	if not ok then
 		warn("[CapsuleService] announce failed: " .. tostring(err))
 	end
@@ -681,6 +704,11 @@ local function onCapsuleAction(player: Player, action: any, arg: any)
 		refuse(player, "Restricted", capsuleId)
 		return
 	end
+	-- a podium-only egg (the SKY EGG) opens only beside its own podium
+	if capsule.Podium and not CapsuleService.nearPodium(player, capsuleId) then
+		refuse(player, "Podium", capsuleId)
+		return
+	end
 	local ok, reason, result = CapsuleService.openCoins(player, capsuleId, count, shown)
 	if not ok or not result then
 		refuse(player, reason or "BadCapsule", capsuleId)
@@ -786,13 +814,27 @@ local function hookPodium(instance: Instance)
 	board.Material = Enum.Material.SmoothPlastic
 	board.Color = Color3.fromRGB(26, 28, 40)
 	board.Size = size
-	board.CFrame = part.CFrame * CFrame.new(-part.Size.X / 2 - 1.2, size.Y / 2 + 0.4, -part.Size.Z / 2 + 0.6) * CFrame.Angles(0, 0.35, 0)
+	-- (clear of the egg's cloud sweep: ~6.3 studs from the egg's axis, on a short post)
+	local boardAt = part.CFrame * CFrame.new(-6.3, size.Y / 2 + 1.0, -part.Size.Z / 2 + 0.6) * CFrame.Angles(0, -0.35, 0)
+	board.CFrame = boardAt
+	local post = Instance.new("Part")
+	post.Name = "OddsBoardPost"
+	post.Anchored = true
+	post.CanCollide = false
+	post.CanQuery = false
+	post.CanTouch = false
+	post.CastShadow = false
+	post.Material = Enum.Material.Foil
+	post.Color = Color3.fromRGB(255, 196, 56)
+	post.Size = Vector3.new(0.3, 1.2, 0.3)
+	post.CFrame = boardAt * CFrame.new(0, -size.Y / 2 - 0.55, 0)
+	post.Parent = part.Parent or part
 	board:SetAttribute("Capsule", capsule.Id)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Odds"
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 50
+	gui.PixelsPerStud = 120
 	gui.Parent = board
 	board.Parent = part.Parent or part
 end

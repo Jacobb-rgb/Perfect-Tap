@@ -689,6 +689,15 @@ return function(T, Loader)
 		T.truthy(sky.Price and sky.Price > CapsuleConfig.ById.Crystal.Price, "costs more than Crystal")
 	end)
 
+	withWorld("Capsules: the SKY EGG opens only at its podium (Podium): away from it the server refuses", function(w)
+		T.truthy(CapsuleConfig.ById.Sky.Podium, "podium-only by default")
+		T.eq(CapsuleConfig.ById.Sky.AnnounceFrom, "Mythic", "a Sky x10 doesn't flood the server with toasts")
+		w.data.Coins = 1e12
+		-- (the fake player has no character: it is nowhere near the podium)
+		refused(w, { Capsule = "Sky", Count = 1 }, "Podium", "away from SKY HAVEN")
+		T.falsy(CapsuleService.nearPodium(w.player, "Sky"), "not near")
+	end)
+
 	withWorld("Capsules: an egg's own podium (EggPodium) gets an Open prompt and an odds board", function(_w)
 		local model = Instance.new("Model")
 		local hook = Instance.new("Part")

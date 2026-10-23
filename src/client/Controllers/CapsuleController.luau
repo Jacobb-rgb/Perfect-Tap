@@ -257,8 +257,19 @@ local function receiptsReady(): boolean
 end
 
 -- Every card as the player sees it now.
+-- the podium-only egg the panel was opened at (OpenUI payload.Capsule), or nil:
+-- a podium-only egg (CapsuleConfig Podium) shows its tab only then
+local atPodium: string? = nil
+
 local function currentCards(coins: number): { CapsuleView.Card }
-	return CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt, receiptsReady())
+	local list = CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt, receiptsReady())
+	for _, card in list do
+		local capsule = CapsuleConfig.ById[card.Id]
+		if capsule and capsule.Podium and atPodium ~= card.Id then
+			card.Visible = false
+		end
+	end
+	return list
 end
 
 -- The Triple Lucky odds the cards show now.
@@ -363,6 +374,7 @@ function CapsuleController.close()
 		return
 	end
 	shown = false
+	atPodium = nil
 	if tickConnection then
 		tickConnection:Disconnect()
 		tickConnection = nil
@@ -1191,6 +1203,9 @@ function CapsuleController.init()
 			local capsuleId = if type(payload) == "table" then payload.Capsule else nil
 			if type(capsuleId) == "string" and CapsuleConfig.ById[capsuleId] then
 				ensureView().Tab = capsuleId
+				atPodium = capsuleId
+			else
+				atPodium = nil
 			end
 			CapsuleController.open()
 		end
