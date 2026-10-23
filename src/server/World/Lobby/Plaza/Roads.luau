@@ -31,6 +31,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
+local Geo = require(Shared.Builders.Geo)
 local StreetLampPlan = require(script.Parent.StreetLampPlan)
 
 local Roads = {}
@@ -468,6 +469,14 @@ local function droppersApron(parent: Instance, rng: Rng.Rng)
 				)
 			end
 		end
+	end
+	-- two glowing rings on the ground in front of the gateway (a neon disc
+	-- under a dark one, twice: owner's concept picture)
+	local ringAt = look * CFrame.new(0, 0, -math.min(4.6, r * 0.55))
+	for k, ring in { { 3.6, 3.15 }, { 1.9, 1.45 } } do
+		local y = top.Panel + 0.01 + (k - 1) * 0.04
+		Geo.cylinder(m, (ringAt * CFrame.new(0, y, 0)).Position, 0.03, ring[1] * 2, K.NeonBlueDeep, Enum.Material.Neon, Style.tiny())
+		Geo.cylinder(m, (ringAt * CFrame.new(0, y + 0.02, 0)).Position, 0.03, ring[2] * 2, K.SlateDark, nil, Style.tiny())
 	end
 	-- the edge: a dark metal border with its orange neon strip round the arc
 	-- and straight on along both sides to the wall

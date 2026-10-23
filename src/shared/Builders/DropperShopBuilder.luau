@@ -58,8 +58,8 @@ DropperShopBuilder.DropDistance = 180 -- ...thrown away (the mine floors, the fa
 
 -- The house (studs, in the house frame): W wide, D deep, the front wall at
 -- z = Front (LobbyLayout.DroppersFront), a Plinth high floor, the shop
--- Ground high to its ceiling, the walls Wall high, a Header high sign box
--- on the front; the big front windows at x = +-WindowX.
+-- Ground high to its ceiling, the walls Wall high, the gateway DoorW wide
+-- and DoorH high.
 DropperShopBuilder.Room = {
 	W = 30,
 	D = 15,
@@ -67,13 +67,8 @@ DropperShopBuilder.Room = {
 	Plinth = 1,
 	Ground = 9,
 	Wall = 11.5,
-	Header = 3.6,
-	DoorW = 6,
+	DoorW = 7,
 	DoorH = 7.5,
-	WindowX = 9,
-	WindowY = 3.95, -- above the floor
-	WindowW = 7,
-	WindowH = 5.1,
 }
 
 --[[

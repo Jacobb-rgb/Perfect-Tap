@@ -171,10 +171,6 @@ local DROPPERS_DIR = Vector3.new(math.cos(math.rad(34)), 0, math.sin(math.rad(34
 local DROPPERS_CENTER = DROPPERS_DIR * 53.5
 local DROPPERS_FACING = -DROPPERS_DIR
 LobbyLayout.DroppersFront = 4.5 -- the front wall's local z (DropperShopBuilder.Room.Front)
--- a point in the house frame (its local x and z; +z = the front)
-local function droppersAt(x: number, z: number): Vector3
-	return DROPPERS_CENTER + DROPPERS_FACING * z + Vector3.new(DROPPERS_FACING.Z, 0, -DROPPERS_FACING.X) * x
-end
 local DROPPERS_APRON = DROPPERS_CENTER + DROPPERS_FACING * (LobbyLayout.DroppersFront + 4.7)
 LobbyLayout.DroppersApron = {
 	Center = DROPPERS_APRON, -- the middle of the straight edge
@@ -344,39 +340,6 @@ LobbyLayout.Pieces = {
 		Size = v(32, 27, 23),
 		Facing = DROPPERS_FACING,
 		Note = "Town-style house (stone ground floor, timber upper floor, terracotta roof, DROPPERS sign); its porch counter carries the DropperCounter tag (ShopService: opens the Tech shop).",
-	},
-	{
-		Id = "DroppersGroundsLeft",
-		Package = "Districts",
-		-- (owner 2026-10-23: giant boulders, crystals and big trees round the shop; a
-		-- reservation: the scatter keeps off, it may overlap the house)
-		Center = droppersAt(21.65, -6.6),
-		Size = v(17, 22, 28),
-		Facing = DROPPERS_FACING,
-		Reserve = true,
-		Note = "The left of the DROPPERS shop: two giant boulders with glowing crystals, a third behind, a big pink tree at the back corner (Districts/Droppers).",
-	},
-	{
-		Id = "DroppersGroundsBack",
-		Package = "Districts",
-		-- (owner 2026-10-23: giant boulders, crystals and big trees round the shop; a
-		-- reservation: the scatter keeps off, it may overlap the house)
-		Center = droppersAt(13.6, -18.9),
-		Size = v(18, 22, 16),
-		Facing = DROPPERS_FACING,
-		Reserve = true,
-		Note = "Behind the DROPPERS shop: a big green tree (kept off the east plot road's lamps and the ore outcrops) (Districts/Droppers).",
-	},
-	{
-		Id = "DroppersGroundsRight",
-		Package = "Districts",
-		-- (owner 2026-10-23: giant boulders, crystals and big trees round the shop; a
-		-- reservation: the scatter keeps off, it may overlap the house)
-		Center = droppersAt(-18.0, -1.6),
-		Size = v(9, 22, 18),
-		Facing = DROPPERS_FACING,
-		Reserve = true,
-		Note = "The right of the DROPPERS shop: two giant boulders, one with a glowing crystal (Districts/Droppers).",
 	},
 	{
 		Id = "DroppersApron",
