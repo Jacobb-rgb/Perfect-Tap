@@ -758,7 +758,7 @@ end
 	(z-fighting). Each one takes the lowest of Meadow.FlatLifts that no
 	overlapping flat piece of the same lawn has taken.
 ]]
-Meadow.FlatLifts = { 0.03, 0.06, 0.09, 0.12 }
+Meadow.FlatLifts = { 0.03, 0.06, 0.09, 0.12, 0.15 } -- (2026-10-23: five patches overlapped on a south lawn)
 type Flat = { At: Vector3, R: number, Top: number }
 
 -- The lift for a flat piece w wide and h tall at `p` (recorded in `flats`).
