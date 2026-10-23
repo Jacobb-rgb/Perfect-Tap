@@ -230,9 +230,10 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	Tech.disc(m, pos(0, 0.83, CZ), 0.06, PLINTH_D + 0.12, GOLD, FOIL)
 	Tech.disc(m, pos(0, 0.93, CZ), 0.14, DAIS_D + 0.24, CYAN, NEON).Name = "DaisRim"
 	Tech.disc(m, pos(0, (0.8 + FLOOR) / 2, CZ), FLOOR - 0.8, DAIS_D, Style.vary(DAIS, rng, 0.02), SLATE, Style.solid()).Name = "Dais"
-	Tech.disc(m, pos(0, FLOOR - 0.06, CZ), 0.12, DAIS_D + 0.14, GOLD_GLOW, NEON).Name = "DaisRim"
+	Tech.disc(m, pos(0, FLOOR - 0.06, CZ), 0.12, DAIS_D + 0.14, GOLD, FOIL).Name = "DaisRim"
 	-- the glowing floor: a gold ring near the edge, a cyan ring in the middle and gold rays between
-	Tech.disc(m, pos(0, FLOOR + 0.02, CZ), 0.04, DAIS_D - 1.4, GOLD_GLOW, NEON)
+	-- (owner 2026-10-23: "too bright, I can hardly see the eggs": the floor's gold is gold, not light)
+	Tech.disc(m, pos(0, FLOOR + 0.02, CZ), 0.04, DAIS_D - 1.4, GOLD, FOIL)
 	Tech.disc(m, pos(0, FLOOR + 0.04, CZ), 0.04, DAIS_D - 1.9, DAIS, SLATE)
 	Tech.disc(m, pos(0, FLOOR + 0.06, CZ), 0.04, 4.2, CYAN, NEON)
 	Tech.disc(m, pos(0, FLOOR + 0.08, CZ), 0.04, 3.8, DAIS, SLATE)
@@ -240,7 +241,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		local a = (i - 0.5) / 6 * 360
 		local x0, z0 = onRing(2.6, a)
 		local x1, z1 = onRing(7.4, a)
-		Kit.beam(m, pos(x0, FLOOR + 0.07, z0), pos(x1, FLOOR + 0.07, z1), 0.18, 0.04, GOLD_GLOW).Material = NEON
+		Kit.beam(m, pos(x0, FLOOR + 0.07, z0), pos(x1, FLOOR + 0.07, z1), 0.18, 0.04, GOLD).Material = FOIL
 	end
 
 	---------------------------------------------------------------- podiums and eggs
@@ -260,7 +261,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	end
 	-- a soft golden light column behind the Royal egg
 	local column =
-		Tech.disc(m, pos(0, (FLOOR + DRUM_Y0) / 2, CZ + 4.8), DRUM_Y0 - FLOOR, 2.4, GOLD_GLOW, NEON, Style.tiny({ Transparency = 0.6 }))
+		Tech.disc(m, pos(0, (FLOOR + DRUM_Y0) / 2, CZ + 4.8), DRUM_Y0 - FLOOR, 2.4, GOLD_GLOW, NEON, Style.tiny({ Transparency = 0.88 }))
 	column.Name = "LightColumn" -- (no PointLight: the lobby's light budget is full; the neon carries it)
 
 	---------------------------------------------------------------- pillars and the drum
@@ -375,7 +376,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	local ew, eh = 5.2, 6.6
 	local giant = ellipsoid(m, eggAt, Vector3.new(ew, eh, ew), SHELL, Enum.Material.SmoothPlastic)
 	giant.Name = "GiantEgg"
-	local glitter = Style.emitter(giant, "Sparkle", rgb(255, 226, 140), 4)
+	local glitter = Style.emitter(giant, "Sparkle", rgb(255, 226, 140), 2)
 	glitter.LightEmission = 1
 	-- a crack down the egg's front surface
 	local crack = { { -1.1, 2.2 }, { -0.2, 1.2 }, { -0.8, 0.1 }, { 0.3, -1.1 } }
@@ -396,7 +397,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		0.8,
 		rgb(255, 226, 140),
 		NEON,
-		Style.tiny({ Transparency = 0.45 })
+		Style.tiny({ Transparency = 0.7 })
 	).Name =
 		"LightBeam"
 	-- four gold cannon spokes round the egg's foot, gold balls at their tips

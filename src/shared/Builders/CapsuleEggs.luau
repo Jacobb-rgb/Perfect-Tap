@@ -232,7 +232,7 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		end
 	end
 	if s.Room() >= 1 then
-		diamond(s.Top, "CrownCore", at(0, tipY + 0.2, -0.1), 0.5, 0.1, th.CrownCore, NEON)
+		diamond(s.Top, "CrownCore", at(0, tipY + 0.2, -0.1), 0.5, 0.1, th.CrownCore, GLOW)
 	end
 	if th.Horn then
 		for i, side in { -1, 1 } do
@@ -357,8 +357,8 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 		K.upright(s.Bottom, "Pool", at(0, -r + 0.02, -0.2), 0.06, 2.6, th.Glow, GLOW)
 	end
 	local band = s.Bottom:FindFirstChild("Band")
-	if band and band:IsA("BasePart") then
-		T.embers(band, th.Embers, if s.Calm then 2 else 6, 0.25)
+	if band and band:IsA("BasePart") and not s.Calm then
+		T.embers(band, th.Embers, 6, 0.25)
 	end
 end
 
