@@ -23,6 +23,7 @@ function fontFamily(family) {
   if (!family) return "Fredoka One";
   if (family.includes("Luckiest")) return "Luckiest Guy";
   if (family.includes("ComicNeue")) return "Comic Neue Angular"; // Enum.Font.Cartoon
+  if (family.includes("PressStart2P")) return "Press Start 2P"; // the pixel font (owner 2026-10-22 reels)
   return "Fredoka One";
 }
 

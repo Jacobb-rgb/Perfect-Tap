@@ -45,6 +45,10 @@ local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLay
 local LightingConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LightingConfig")
 local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
 local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+-- UI_QUICK=1: the UI overlays over an empty sky, no map (fast UI iteration)
+if process.env.UI_QUICK == "1" then
+	WorldBuilder.build = function() end :: any
+end
 
 local game = roblox.Instance.new("DataModel")
 local workspace = game:GetService("Workspace")
@@ -165,7 +169,7 @@ elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common 
 	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
 	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
-elseif sceneName == "dropper_shop" then -- the DROPPER WORKS shop house (tools/lune/lib/dropper_preview.luau)
+elseif sceneName == "dropper_shop" then -- the DROPPERS shop house (tools/lune/lib/dropper_preview.luau)
 	require("./lib/dropper_preview").buildShop(Loader, workspace)
 elseif sceneName == "droppers" then -- the seven droppers, Money Laser and SELL by the mine (tools/lune/lib/dropper_preview.luau)
 	require("./lib/dropper_preview").build(Loader, workspace)
@@ -283,6 +287,18 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 elseif sceneName == "quests" then -- the world + the QUESTS window / streak popup overlays (tools/lune/lib/quests_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/quests_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "store_quick" then -- only the STORE overlays over an empty sky (fast UI iteration)
+	for name, guis in require("./lib/store_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "hud_quick" then -- only the HUD overlays over an empty sky (tools/lune/lib/hud_pixel_preview.luau)
+	for name, guis in require("./lib/hud_pixel_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "inv_quick" then -- only the inventory windows over an empty sky (tools/lune/lib/inv_preview.luau)
+	for name, guis in require("./lib/inv_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)

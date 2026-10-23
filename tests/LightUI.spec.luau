@@ -18,8 +18,20 @@ return function(T, Loader)
 	local BuildView = ui("BuildView")
 
 	local FIELDS = {
-		"Gui", "Coins", "CoinsPanel", "Income", "Floaters", "Zone", "Toasts",
-		"CarryPanel", "CarrySlots", "CarryLabel", "ThrowBar", "ThrowFill", "Menu", "TopBar",
+		"Gui",
+		"Coins",
+		"CoinsPanel",
+		"Income",
+		"Floaters",
+		"Zone",
+		"Toasts",
+		"CarryPanel",
+		"CarrySlots",
+		"CarryLabel",
+		"ThrowBar",
+		"ThrowFill",
+		"Menu",
+		"TopBar",
 	}
 
 	-- runs fn with the flag on, always switching it back
@@ -315,7 +327,6 @@ return function(T, Loader)
 	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				TrainChip = ui("TrainView").build(false).Chip, -- (the panel wears the Pop look)
 				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}
@@ -372,7 +383,8 @@ return function(T, Loader)
 			local train = TrainView.build(true)
 			T.truthy(train.Gui:GetAttribute("PopSkin"), "Pop train panel")
 			T.falsy(train.Gui:GetAttribute("LightSkin"), "no LightSkin on the train panel")
-			T.truthy(train.Chip:GetAttribute("LightSkin"), "the HUD chip keeps the light skin")
+			T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the HUD chip")
+			T.truthy(train.Chip:GetAttribute("PopSkin"), "the HUD chip in the pixel look")
 			T.truthy(train.Card:FindFirstChild("Picture"), "the live locomotive")
 			for _, screen in { { 667, 375 }, { 568, 320 } } do
 				TrainView.layout(train, true, screen[1] / PHONE, (screen[2] - 58) / PHONE)
@@ -496,14 +508,16 @@ return function(T, Loader)
 		local HudBubble = ui("HudBubble")
 		local TrainView = ui("TrainView")
 		withLight(function()
-			for _, screen in {
-				{ 1280, 720, 58 },
-				{ 1920, 1080, 58 },
-				{ 1920, 1010, 58 },
-				{ 1440, 900, 58 },
-				{ 667, 375, 58 },
-				{ 568, 320, 58 },
-			} do
+			for _, screen in
+				{
+					{ 1280, 720, 58 },
+					{ 1920, 1080, 58 },
+					{ 1920, 1010, 58 },
+					{ 1440, 900, 58 },
+					{ 667, 375, 58 },
+					{ 568, 320, 58 },
+				}
+			do
 				local viewport = Vector2.new(screen[1], screen[2])
 				local scale = HudBubble.scaleFor(viewport)
 				local refs = HudBubble.buildGame(scale, screen[1]) -- (the screen width in points)
@@ -522,11 +536,20 @@ return function(T, Loader)
 					local barRight = width / 2 + refs.TopBar.Size.X.Offset / 2
 					T.truthy(pillLeft > barRight, `pill right of the tabs at {screen[1]} x {screen[2]}`)
 					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
-					T.truthy(width - 18 - luck.Size.X.Offset > barRight, `the Server Luck line right of the tabs at {screen[1]} x {screen[2]}`)
-					local BoostView = ui("BoostView")
-					local chipsRight = TrainView.ChipLeft + TrainView.chipSize(true).X + 12 + BoostView.chipsWidth()
-					T.truthy(pillLeft > chipsRight or chipTop > HudBubble.MenuTop + pill.Size.Y.Offset, `pill clear of the chips at {screen[1]} x {screen[2]}`)
+					T.truthy(
+						width - 18 - luck.Size.X.Offset > barRight,
+						`the Server Luck line right of the tabs at {screen[1]} x {screen[2]}`
+					)
+					-- the pill rides on the chips' row: the chips stop short of it (the next test lays them out)
+					T.eq(pill.Position.Y.Offset, chipTop, `pill on the chips' row at {screen[1]} x {screen[2]}`)
+					T.eq(
+						HudBubble.chipsRight(refs.Gui, width),
+						pillLeft - HudBubble.ChipGap,
+						`the chips' limit at {screen[1]} x {screen[2]}`
+					)
+					T.truthy(pill.Size.Y.Offset * scale >= 44, `the Shop pill >= 44 pt tall at {screen[1]} x {screen[2]}`)
 				else
+					T.eq(HudBubble.chipsRight(refs.Gui, screen[1] / scale), nil, `PC: no chips' limit at {screen[1]} x {screen[2]}`)
 					local pillTop = height * pill.Position.Y.Scale + pill.Position.Y.Offset - pill.Size.Y.Offset
 					T.truthy(pillTop > chipBottom, `pill under the TRAIN chip at {screen[1]} x {screen[2]}`)
 				end
@@ -542,6 +565,125 @@ return function(T, Loader)
 				T.truthy(menuRight < tabsLeft, `the tiles left of the tabs at {screen[1]} x {screen[2]}`)
 			end
 		end)
+	end)
+
+	-- (review: the wider pixel chips once covered the phone Shop pill; taps there opened Boosts)
+	T.test("LightUI: the phone boost chips keep off the Shop pill, even with hour-long timers", function()
+		local HudBubble = ui("HudBubble")
+		local TrainView = ui("TrainView")
+		local BoostView = ui("BoostView")
+		local NOW = 1.7e9
+		local function overlap(aPos: any, aSize: any, bPos: any, bSize: any): boolean
+			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
+		end
+		local beforeTop, beforeRight = TrainView.HudChipTop, BoostView.HudChipsRight
+		local ok, err = pcall(withLight, function()
+			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
+				local screen = Vector2.new(size[1], size[2])
+				local scale = HudBubble.scaleFor(screen)
+				local refs = HudBubble.buildGame(scale, size[1])
+				local width, height = size[1] / scale, size[2] / scale
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+				local pillSize = Vector2.new(pill.Size.X.Offset, pill.Size.Y.Offset)
+				local pillPos = Vector2.new(
+					width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pillSize.X,
+					pill.Position.Y.Offset - pill.AnchorPoint.Y * pillSize.Y
+				)
+				-- the TRAIN chip and the boost chips where TrainController / BoostController put them
+				TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")
+				local train = TrainView.build(true)
+				TrainView.layout(train, true, width, height)
+				local chips = BoostView.buildChips()
+				BoostView.placeChips(chips, BoostView.chipsTop(train.ChipFrame, true), BoostView.chipsLeft(train.ChipFrame))
+				BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, width)
+				T.truthy(BoostView.HudChipsRight, `the chips get a limit at {size[1]} x {size[2]}`)
+				local gap = (chips.Row:FindFirstChildOfClass("UIListLayout") :: any).Padding.Offset
+				-- typical timers, the 2 h stack cap, a day of late Robux time
+				for _, left in { { 222, 3900 }, { 7199, 7199 }, { 86399, 86399 } } do
+					local state = { Boosts = { TripleLuckyUntil = NOW + left[1], HexaLuckyUntil = NOW + left[2] } }
+					BoostView.setChips(chips, BoostView.chips(state, NOW), false)
+					local fit = chips.Row:GetAttribute("Fit")
+					local at = `{size[1]} x {size[2]}, {left[1]} s / {left[2]} s, fit {fit}`
+					local x, y = chips.Row.Position.X.Offset, chips.Row.Position.Y.Offset
+					for _, kindId in BoostView.Tabs do
+						local button = chips.Chips[kindId]
+						T.truthy(button.Visible, `{kindId} chip shows at {at}`)
+						local s = Vector2.new(button.Size.X.Offset, button.Size.Y.Offset)
+						T.falsy(overlap(Vector2.new(x, y), s, pillPos, pillSize), `{kindId} chip on the Shop pill at {at}`)
+						T.truthy(s.X * scale >= 44 and s.Y * scale >= 44, `{kindId} chip >= 44 pt at {at}`)
+						x += s.X + gap
+					end
+					T.truthy(BoostView.rowRight(chips) <= pillPos.X - HudBubble.ChipGap, `the row stops short of the pill at {at}`)
+					if size[1] >= 667 and left[1] == 222 then
+						T.eq(fit, "Tags", `room for the tags at {at}`)
+					elseif size[1] == 568 then
+						T.truthy(fit ~= "Tags", `the small phone drops the tags at {at}`)
+					end
+				end
+				T.truthy(pillSize.Y * scale >= 44 and pillSize.X * scale >= 44, `the Shop pill >= 44 pt at {size[1]} x {size[2]}`)
+			end
+		end)
+		TrainView.HudChipTop, BoostView.HudChipsRight = beforeTop, beforeRight
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- (review: every carry change once destroyed and rebuilt the whole hotbar)
+	T.test("LightUI: the hotbar's slots are updated in place", function()
+		local red, blue = Color3.fromRGB(255, 60, 60), Color3.fromRGB(60, 120, 255)
+		local function count(root: any): number
+			return #root:GetDescendants()
+		end
+		for _, light in { true, false } do
+			local before = UIConfig.LightUI
+			UIConfig.LightUI = light
+			local ok, err = pcall(function()
+				local refs = HudView.build() :: any
+				local row = refs.CarrySlots
+				local function lookA()
+					HudView.carrySlot(row, 1, red, false, 0)
+					HudView.carrySlot(row, 2, nil, true, 0)
+					HudView.carrySlot(row, 3, nil, false, 7)
+				end
+				local function lookB()
+					HudView.carrySlot(row, 1, nil, true, 0)
+					HudView.carrySlot(row, 2, blue, false, 0)
+					HudView.carrySlot(row, 3, nil, false, 120)
+				end
+				lookA()
+				local first = row:FindFirstChild("Slot1")
+				lookB()
+				local warm = count(row)
+				lookA()
+				lookB()
+				T.eq(count(row), warm, `no new instances once every look was shown (light {light})`)
+				T.eq(row:FindFirstChild("Slot1"), first, `the same slot frame (light {light})`)
+				T.truthy((row:FindFirstChild("Slot1"):FindFirstChild("Mystery", true) :: any).Visible, `dirty ore shows ? (light {light})`)
+				T.eq((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Text, "+120", `+N updated (light {light})`)
+				if light then
+					local slot1 = row:FindFirstChild("Slot1") :: any
+					T.falsy(slot1:FindFirstChild("Ore", true).Visible, "the gem hides under the rock")
+					local slot2 = row:FindFirstChild("Slot2") :: any
+					T.truthy(slot2:FindFirstChild("Ore", true).Visible, "the gem shows")
+					T.falsy(slot2:FindFirstChild("Mystery", true).Visible, "no ? on a clean ore")
+					T.truthy(slot2:FindFirstChild("Glow", true).BackgroundColor3 == blue, "recoloured glow")
+				else
+					T.truthy((row:FindFirstChild("Slot2") :: any).BackgroundColor3 == blue, "recoloured square")
+				end
+				lookA()
+				T.falsy((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Visible == false, "+N back")
+				HudView.carrySlot(row, 3, nil, false, 0)
+				T.falsy((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Visible, "+N hides on an empty well")
+				HudView.trimSlots(row, 2)
+				T.eq(row:FindFirstChild("Slot3"), nil, "a smaller backpack drops the extra slot")
+				T.truthy(row:FindFirstChild("Slot2"), "and keeps the rest")
+			end)
+			UIConfig.LightUI = before
+			if not ok then
+				error(err, 0)
+			end
+		end
 	end)
 
 	-- (review: the phone pill once sat on the touch tutorial bubble and the FREE SPIN chip)
@@ -758,7 +900,6 @@ return function(T, Loader)
 	T.test("LightUI: the steps 6-7 windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				BoostChips = ui("BoostView").buildChips().Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -768,6 +909,44 @@ return function(T, Loader)
 		withLight(function()
 			for name, gui in builds() do
 				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
+			end
+		end)
+	end)
+
+	-- the HUD chips (TRAIN, the boost timers, FREE SPIN) in the pixel reels' look
+	-- (owner 2026-10-22): never LightSkin's recolouring, the same parts, SEND still greys
+	T.test("LightUI: the TRAIN and boost chips wear the pixel look with the switch on", function()
+		local TrainView = ui("TrainView")
+		local BoostView = ui("BoostView")
+		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		T.falsy(TrainView.build(false).Chip:GetAttribute("PopSkin"), "switch off: today's train chip")
+		T.falsy(BoostView.buildChips().Gui:GetAttribute("PopSkin"), "switch off: today's boost chips")
+		withLight(function()
+			for _, compact in { false, true } do
+				local train = TrainView.build(compact)
+				T.truthy(train.Chip:GetAttribute("PopSkin"), "the pixel train chip")
+				T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the train chip")
+				T.truthy(train.ChipFrame:FindFirstChild("Paint") and train.ChipFrame:FindFirstChild("Lattice"), "a painted face")
+				T.truthy(train.ChipFrame:FindFirstChild("IconSquare"), "the locomotive in a painted square")
+				local send = train.ChipSend.Parent :: any
+				T.truthy(send:GetAttribute("Pop"), "SEND is a painted button")
+				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 0, Capacity = 8 }), 0, nil))
+				T.eq(train.ChipSend.BackgroundColor3, Theme.PanelLight, "empty: SEND greyed (the state colour)")
+				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Gray.Top, "a grey face")
+				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 8, Capacity = 8 }), 0, nil))
+				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Paints.Green.Top, "full: a green face")
+				T.eq(train.ChipFrame.Size.Y.Offset, BoostView.TrainChipHeight[if compact then "Compact" else "Normal"], "the chip's height")
+			end
+			local chips = BoostView.buildChips()
+			T.truthy(chips.Gui:GetAttribute("PopSkin"), "the pixel boost chips")
+			T.falsy(chips.Gui:GetAttribute("LightSkin"), "no LightSkin on the boost chips")
+			for _, button in { chips.Chips.TripleLucky, chips.Chips.HexaLucky, chips.Launcher } do
+				local pill = button:FindFirstChild("Pill") :: any
+				T.truthy(pill:FindFirstChild("Paint") and pill:FindFirstChild("Lattice"), button.Name .. ": a painted face")
+				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Paint"), button.Name .. ": the picture's painted square")
+				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel words")
+				T.eq(button.Size.Y.Offset, BoostView.ChipHit, button.Name .. ": the touch area")
 			end
 		end)
 	end)

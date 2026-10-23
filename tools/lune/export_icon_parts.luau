@@ -160,8 +160,18 @@ for _, name in process.args do
 	end
 end
 
--- themed eggs that are no capsule yet (the SKY EGG on Sky Haven)
+-- the SKY EGG as it stands on its podium (also capsule_Sky)
 models.egg_Sky = GolemBuilder.themedEgg("Sky")
+
+-- the 24 artifacts (the Artifacts window / upload sheet 5)
+local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+local ArtifactBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ArtifactBuilder")
+for _, artifact in ArtifactConfig.List do
+	local model = ArtifactBuilder.build(artifact.Id, CF.new(), 1, true)
+	if model then
+		models["artifact_" .. artifact.Id] = model
+	end
+end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args

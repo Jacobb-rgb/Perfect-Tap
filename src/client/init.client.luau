@@ -58,6 +58,7 @@ local ORDER = {
 	"MoveController", -- the player's procedural moves (carry, throw, recoil, celebrations) on every R15 character near you
 	"EmoteController", -- the EMOTES menu: the N key, the EMOTES tile (AnimConfig.Emotes)
 	"UIMotionController", -- UI/Motion everywhere: windows pop, buttons squash, shop cards breathe, cash flies in
+	"PixelFxController", -- the pixel reels' motion: rays turn, gleams sweep, pictures lean
 }
 
 local loaded = {}

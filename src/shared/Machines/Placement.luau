@@ -44,6 +44,7 @@ local BaseLayout = require(script.Parent.Parent.Config.BaseLayout)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local ItemData = require(script.Parent.Parent.Config.ItemData)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
+local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local Grid = require(script.Parent.Grid)
 
 local Placement = {}
@@ -61,6 +62,8 @@ Placement.Reasons = {
 	Overlap = "Something is already there",
 	NoMachineSlots = "All machine slots are used",
 	NoConveyorSlots = "All belt slots are used",
+	DropperLimit = `Your plot holds {DropperConfig.MaxPlaced} droppers at most`,
+	LaserLimit = `Your plot holds {DropperConfig.MaxLasers} Money Lasers at most`,
 	NoneOwned = "You don't have one to place",
 	Busy = "Finish using it first",
 	PenFull = "Make room in your Ore Pen for what's inside it first",
@@ -420,6 +423,21 @@ function Placement.validate(
 			end
 		elseif not info.SlotFree and machines >= limits.Machines then
 			return false, "NoMachineSlots"
+		end
+	end
+	-- the droppers and Money Lasers have their own cap per plot (DropperConfig)
+	if not ignore and (info.Behaviour == "Dropper" or info.Behaviour == "Laser") then
+		local same = 0
+		for _, entry in entries do
+			local other = if type(entry) == "table" then MachineData.ById[entry.Id] else nil
+			if other and other.Behaviour == info.Behaviour then
+				same += 1
+			end
+		end
+		if info.Behaviour == "Dropper" and same >= DropperConfig.MaxPlaced then
+			return false, "DropperLimit"
+		elseif info.Behaviour == "Laser" and same >= DropperConfig.MaxLasers then
+			return false, "LaserLimit"
 		end
 	end
 	return true, nil

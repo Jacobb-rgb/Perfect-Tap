@@ -270,6 +270,66 @@ function HudView.slot(parent: Instance, filled: Color3?, order: number, mystery:
 	return slot
 end
 
+--[[
+	Carry slot `order` ("Slot<order>") showing `filled` (a rarity colour),
+	`mystery` (dirty ore: "?") or "+N" (`more` > 0), updated in place: the
+	slot already in the row is recoloured and its "?" / "+N" shown or hidden,
+	a missing one is made once (HudController.refreshCarry runs on every
+	carry change).
+]]
+function HudView.carrySlot(parent: Instance, order: number, filled: Color3?, mystery: boolean?, more: number?): Frame
+	if UIConfig.lightUI() then
+		return HudBubble.carrySlot(parent, order, filled, mystery, more)
+	end
+	local found = parent:FindFirstChild("Slot" .. order)
+	local slot = if found and found:IsA("Frame") then found else HudView.slot(parent, nil, order)
+	local showMore = more ~= nil and more > 0
+	local dirty = mystery == true and not showMore
+	local color = if showMore then Theme.PanelLight elseif dirty then HudView.DirtyColor else filled
+	slot.BackgroundColor3 = color or Theme.PanelDark
+	local gradient = slot:FindFirstChildOfClass("UIGradient")
+	if color and not gradient then
+		gradient = UIKit.gradient(slot, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170))
+	end
+	if gradient then
+		gradient.Enabled = color ~= nil
+	end
+	local question = slot:FindFirstChild("Mystery") :: TextLabel?
+	if dirty and not question then
+		question = UIKit.label(slot, "?", 22, { Name = "Mystery", Size = UDim2.fromScale(1, 1) })
+	end
+	if question then
+		question.Visible = dirty
+	end
+	local label = slot:FindFirstChild("More") :: TextLabel?
+	if showMore then
+		local count = more :: number
+		if not label then
+			label = UIKit.label(slot, "", 18, { Name = "More", Size = UDim2.fromScale(1, 1) })
+		end
+		local shown = label :: TextLabel
+		shown.Text = `+{count}`
+		shown.TextSize = if count >= 100 then 14 else 18
+	end
+	if label then
+		label.Visible = showMore
+	end
+	return slot
+end
+
+-- Removes the carry slots past `count` (a smaller backpack).
+function HudView.trimSlots(parent: Instance, count: number)
+	if UIConfig.lightUI() then
+		HudBubble.trimSlots(parent, count)
+		return
+	end
+	for _, child in parent:GetChildren() do
+		if child:IsA("Frame") and child.LayoutOrder > count then
+			child:Destroy()
+		end
+	end
+end
+
 -- A floating "+$1.2K" (the controller moves and fades it).
 function HudView.floater(parent: Instance, text: string): TextLabel
 	if UIConfig.lightUI() then

@@ -181,7 +181,7 @@ local METRICS: { [string]: Metrics } = {
 		Button = 50,
 		Close = 54,
 		Cell = Vector2.new(128, 152),
-		Detail = 280,
+		Detail = 300,
 		Slot = 196,
 		Title = 32,
 		Text = 18,
@@ -198,7 +198,7 @@ local METRICS: { [string]: Metrics } = {
 		Close = 72,
 		Cell = Vector2.new(140, 164),
 		Detail = 330,
-		Slot = 210,
+		Slot = 224, -- (an 11-letter word of a name, DRAGONSCALE, is 8 pt on a 568x320 phone)
 		Title = 34,
 		Text = 20,
 		Small = 17,
@@ -1092,62 +1092,362 @@ function GolemView.text(parent: Instance, text: string, size: number, props: { [
 	return label
 end
 
+---------------------------------------------------------------- the pixel reels
+--[[
+	The pixel look (owner 2026-10-22, the Roblox UI reels in
+	docs/art/ui_pixel_refs: "make the inventory exactly like this"): every
+	golem is a square reel card in its rarity's paint (the black outline, a
+	darker lip, the light edge, the lattice) with a turning sunburst behind
+	its big picture, its name in pixel letters on top and a short pixel
+	bonus line at the bottom ("+16% MINING"); the picked card wears a thick
+	gold outline and a white ring. Short words (titles, buttons, tags) are
+	pixel and shrink to fit; sentences (lore, hints, totals) stay round.
+	Only this window's pieces: the shared ones above (CapsuleView uses them)
+	keep their look.
+]]
+
+GolemView.RayFade = 0.55 -- the sunburst's transparency
+GolemView.PickColor = Color3.new(1, 1, 1) -- the picked card's inner ring
+-- the short words of the card's bonus line (GolemConfig.BonusTypes labels)
+GolemView.ShortBonus = {
+	Income = "INCOME",
+	["Mining speed"] = "MINING",
+	["Ore luck"] = "LUCK",
+	["Sell value"] = "SELL",
+	["Walk speed"] = "SPEED",
+} :: { [string]: string }
+
+-- "+16% Mining speed" -> "+16% MINING" (the reels' short bottom line).
+function GolemView.shortBonus(bonus: string): string
+	local value, label = string.match(bonus, "^(%S+)%s+(.+)$")
+	if not value or not label then
+		return string.upper(bonus)
+	end
+	return `{value} {GolemView.ShortBonus[label] or string.upper(label)}`
+end
+
+-- A short word in the pixel font, shrunk to fit its box (Pop.fit).
+local function pixel(label: TextLabel | TextButton, size: number)
+	local l: any = label
+	l.FontFace = PopTheme.Pixel
+	l.TextWrapped = false
+	Pop.fit(l, size)
+end
+
+-- A pixel word sized to leave a margin inside `width` (and at most `size`).
+local function fitWord(label: TextLabel | TextButton, size: number, width: number)
+	local l: any = label
+	local s = size
+	while s > 10 and Pop.textWidth(l.Text, s) > width - 12 do
+		s -= 1
+	end
+	Pop.fit(l, s)
+end
+
+-- A sentence in the round font at `size` (no shrink-to-fit; fitText sizes it). Round
+-- for good (Pop.round): a short status or hint filled in later stays round.
+local function round(label: TextLabel, size: number)
+	local cut = label.TextTruncate -- (Pop.round clears it; a sentence here is still cut, never spilled)
+	Pop.round(label, size)
+	label.TextTruncate = cut
+end
+
+--[[
+	Long names (review 2026-10-22: "HEARTSTONE COLOSSUS" shrank to 5 pt on
+	phones): a card's or a slot's name is pixel letters on two lines when
+	one line would be smaller than GolemView.NameMin, the size chosen so
+	the longer half fits its line. Design units; on phones the UI scale is
+	0.62, so 13 units are 8 pt.
+]]
+GolemView.NameMin = 10 -- PC
+GolemView.NameMinCompact = 13 -- phones and TVs
+GolemView.NameTwo = 2 -- two lines are at most this much bigger than NameMin (the picture keeps its room)
+GolemView.NameLine = 1.1 -- a pixel line's height in em (Press Start 2P is 1 em: room to spare)
+
+local function letters(text: string): number
+	return utf8.len(text) or #text
+end
+
+-- The letters of the longer line when `text` is split at its best space (all of it: no space).
+local function halfLetters(text: string): number
+	local words = string.split(text, " ")
+	local best = letters(text)
+	for i = 1, #words - 1 do
+		local a = letters(table.concat(words, " ", 1, i))
+		local b = letters(table.concat(words, " ", i + 1))
+		best = math.min(best, math.max(a, b))
+	end
+	return best
+end
+
+--[[
+	The pixel TextSize (at most `max`) at which `text` fills `width` design
+	units on `lines` lines (1 or 2; two lines stay under `floor` + NameTwo).
+]]
+function GolemView.nameSize(text: string, max: number, width: number, lines: number, floor: number): number
+	local widest = if lines > 1 then halfLetters(text) else letters(text)
+	local top = if lines > 1 then math.min(max, floor + GolemView.NameTwo) else max
+	return math.max(1, math.min(top, math.floor(width / math.max(1, widest))))
+end
+
+--[[
+	(size, lines) for a name in `width` design units: one line when it is at
+	least `floor` there (or it has no space), else two lines when that is bigger.
+]]
+function GolemView.nameFit(text: string, max: number, width: number, floor: number): (number, number)
+	local one = GolemView.nameSize(text, max, width, 1, floor)
+	if one >= floor or not string.find(text, " ", 1, true) then
+		return one, 1
+	end
+	local two = GolemView.nameSize(text, max, width, 2, floor)
+	if two > one then
+		return two, 2
+	end
+	return one, 1
+end
+
+-- The box height `lines` pixel lines of `size` need.
+function GolemView.nameHeight(size: number, lines: number): number
+	return math.ceil(lines * size * GolemView.NameLine) + 2
+end
+
+--[[
+	Shows a pixel name at `size` on `lines` lines: TextScaled under a
+	constraint that never lets it grow past `size` (Roblox only shrinks it
+	if the font runs wider than the estimate), cut with "..." as a last resort.
+]]
+local function setName(label: TextLabel, size: number, lines: number)
+	label.FontFace = PopTheme.Pixel
+	label.TextWrapped = lines > 1
+	label.TextScaled = true
+	label.TextSize = size
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label:SetAttribute("NameLines", lines)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	l.MinTextSize = 1
+	l.MaxTextSize = size
+	l.MinTextSize = math.min(size, PopTheme.PixelMin)
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.LineJoinMode = Enum.LineJoinMode.Miter
+	end
+end
+
+-- Keeps a pixel word off a button's lip and its sides.
+local function padWord(object: GuiObject, side: number, lip: number)
+	local pad = object:FindFirstChildOfClass("UIPadding") or UIKit.new("UIPadding", {}, object)
+	local p = pad :: UIPadding
+	p.PaddingLeft = UDim.new(0, side)
+	p.PaddingRight = UDim.new(0, side)
+	p.PaddingTop = UDim.new(0, 2)
+	p.PaddingBottom = UDim.new(0, lip)
+end
+
+-- A Pop button (GolemView.popButton) with a pixel word.
+local function reelButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local button = GolemView.popButton(parent, text, paint, props)
+	button:SetAttribute("WordSize", button.TextSize)
+	pixel(button, button.TextSize)
+	padWord(button, 6, 6)
+	local holder = holderOf(button)
+	Pop.gleam(holder, 2)
+	Pop.fxTag(holder, "Press")
+	return button
+end
+
+-- A small tag with a pixel word (EQUIPPED, LOCKED, the rarity, the count).
+local function reelTag(parent: Instance, text: string, color: Color3, size: Vector2, props: { [string]: any }?): TextLabel
+	local chip = GolemView.solidChip(parent, text, color, size, props)
+	pixel(chip, math.floor(size.Y * 0.8))
+	padWord(chip, 5, 2)
+	return chip
+end
+
+--[[
+	Paints `frame` as a reel card: the paint with its lip and light edge, the
+	lattice, and the sunburst (Pop.rays, turning) with a soft glow behind
+	`centre` (inside the lattice's clip). The frame's Size must be set first
+	(the lip and the lattice follow it).
+]]
+local function reelFace(frame: GuiObject, paint: string | Pop.Paint, corner: number, centre: UDim2, reach: number)
+	Pop.face(frame, paint, corner)
+	local clip = Pop.studs(frame, corner, 0.45, 30, 2) :: Frame
+	Pop.rays(clip, centre, 8, reach, GolemView.RayFade, 2)
+	local short = math.min(frame.Size.X.Offset, frame.Size.Y.Offset, 220)
+	for i, k in { 0.7, 0.46 } do
+		local disc = UIKit.new("Frame", {
+			Name = "Glow" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = if i == 1 then 0.82 else 0.72,
+			BorderSizePixel = 0,
+			Position = centre,
+			Size = UDim2.fromOffset(math.floor(short * k), math.floor(short * k)),
+			ZIndex = 2,
+		}, clip)
+		UIKit.corner(disc, 999)
+	end
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+end
+
+-- Moves a reel card's sunburst and glow to `centre` (its picture moved).
+local function aimReel(frame: Instance, centre: UDim2)
+	local clip = frame:FindFirstChild("Lattice")
+	if not clip then
+		return
+	end
+	-- (the clip sits 3 units inside the card)
+	local at = centre - UDim2.fromOffset(3, 3)
+	for _, name in { "Rays", "Glow1", "Glow2" } do
+		local piece = clip:FindFirstChild(name)
+		if piece and piece:IsA("GuiObject") then
+			piece.Position = at
+		end
+	end
+end
+
+-- Repaints a reel card (keeping its lip).
+local function repaintReel(frame: GuiObject, paint: string | Pop.Paint)
+	Pop.repaint(frame, paint)
+end
+
+-- The window's header band in the reels' look: the lattice and a gleam (no shine stripes).
+local function reelBand(panel: Frame)
+	local band = panel:FindFirstChild("Band")
+	if not band or not band:IsA("Frame") then
+		return
+	end
+	for _, child in band:GetChildren() do
+		if child.Name == "Shine" or string.sub(child.Name, 1, 6) == "Stripe" then
+			child:Destroy()
+		end
+	end
+	Pop.gleam(band, 3)
+end
+
+-- The grid card's rows: the pixel name on top, the bonus line at the bottom.
+local CARD_TITLE = 26
+local CARD_LINE = 22
+
+local function nameMin(m: Metrics): number
+	return if m == METRICS.Compact then GolemView.NameMinCompact else GolemView.NameMin
+end
+
+-- The biggest a grid card's name gets (Pop.fit's size for it) and a slot's.
+local function cardNameMax(m: Metrics): number
+	return math.floor((m.Small + 5) * PopTheme.PixelScale + 0.5)
+end
+
+local function slotNameMax(m: Metrics): number
+	return math.floor((m.Small + 3) * PopTheme.PixelScale + 0.5)
+end
+
+-- (size, lines) of a grid card's name in a cell `cellW` wide (the name box is 10 narrower; 2 to spare).
+local function cardName(text: string, cellW: number, m: Metrics): (number, number)
+	return GolemView.nameFit(text, cardNameMax(m), cellW - 12, nameMin(m))
+end
+
 ---------------------------------------------------------------- building
 
 local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
-	local button = Pop.card(refs.Grid, GolemView.rarityPaint(if card.Known then card.Rarity else nil), {
+	local w, h = m.Cell.X, m.Cell.Y
+	local button = UIKit.new("TextButton", {
 		Name = "Golem" .. card.Id,
+		AutoButtonColor = false,
+		ClipsDescendants = true,
 		LayoutOrder = card.Order,
-		Size = UDim2.fromOffset(m.Cell.X, m.Cell.Y),
-	}, UDim2.fromScale(0.5, 0.34))
+		Selectable = true,
+		Size = UDim2.fromOffset(w, h),
+		Text = "",
+		ZIndex = 2,
+	}, refs.Grid)
+	local lip = Pop.lipUnits(h)
+	-- (a long name takes two lines: the picture moves down under it)
+	local nameText = string.upper(card.Name)
+	local cellW = math.max(w, refs.GridLayout.CellSize.X.Offset)
+	local nameSize, nameLines = cardName(nameText, cellW, m)
+	local nameH = if nameLines > 1 then GolemView.nameHeight(nameSize, nameLines) else CARD_TITLE - 6
+	local picTop = math.max(CARD_TITLE, 5 + nameH + 1)
+	local size = math.min(w - 18, h - picTop - CARD_LINE - lip - 2)
+	reelFace(
+		button,
+		GolemView.rarityPaint(if card.Known then card.Rarity else nil),
+		GolemView.CardCorner,
+		UDim2.new(0.5, 0, 0, picTop + size / 2),
+		math.floor(math.max(w, h) * 0.8)
+	)
+	Pop.fxTag(button, "Press")
 	local stroke = button:FindFirstChild("Border") :: UIStroke
-	local size = math.min(m.Cell.X - 22, m.Cell.Y - 50)
 	local portrait = UIKit.new("Frame", {
 		Name = "Portrait",
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, 4),
+		Position = UDim2.new(0.5, 0, 0, picTop),
 		Size = UDim2.fromOffset(size, size),
 		ZIndex = 4,
 	}, button)
-	GolemView.picture(portrait, card.Kind, size, { ZIndex = 4 })
-	local name = GolemView.text(button, card.Name, m.Small + 1, {
+	local picture = GolemView.picture(portrait, card.Kind, size, { ZIndex = 4 })
+	Pop.fxTag(picture, "Lean")
+	local name = GolemView.text(button, nameText, m.Small + 5, {
 		Name = "GolemName",
-		Position = UDim2.new(0, 4, 1, -50),
-		Size = UDim2.new(1, -8, 0, 22),
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(5, 5),
+		Size = UDim2.new(1, -10, 0, nameH),
 		ZIndex = 6,
 	})
-	local bonus = GolemView.solidChip(button, card.Bonus, GolemView.ChipDark, Vector2.new(m.Cell.X - 12, 22), {
+	setName(name, nameSize, nameLines)
+	local bonus = GolemView.text(button, GolemView.shortBonus(card.Bonus), m.Small + 2, {
 		Name = "Bonus",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.new(1, -12, 0, 22),
+		Position = UDim2.new(0.5, 0, 1, -(lip + 2)),
+		Size = UDim2.new(1, -10, 0, CARD_LINE - 4),
 		TextColor3 = GolemView.BonusColor,
-		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 6,
 	})
-	local equipped = GolemView.solidChip(button, "E", Pop.paint("Green").Bottom, Vector2.new(28, 26), {
+	-- tilted tags beside the picture (the reels' price tags)
+	local equipped = reelTag(button, "E", Pop.paint("Green").Bottom, Vector2.new(30, 26), {
 		Name = "EquippedBadge",
-		Position = UDim2.fromOffset(6, 6),
+		Position = UDim2.fromOffset(6, picTop + 2),
+		Rotation = -10,
 		ZIndex = 7,
 	})
 	-- a state, not a button: "LOCKED"
-	local lock = GolemView.solidChip(button, "LOCKED", Pop.paint("Blue").Bottom, Vector2.new(66, 22), {
+	local lock = reelTag(button, "LOCKED", Pop.paint("Blue").Bottom, Vector2.new(70, 22), {
 		Name = "LockBadge",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -6, 0, 6),
+		Position = UDim2.new(1, -5, 0, picTop + 4),
+		Rotation = 10,
 		ZIndex = 7,
 	})
-	local check = GolemView.solidChip(button, "", GolemView.ChipDark, Vector2.new(32, 32), {
+	local check = reelTag(button, "", GolemView.ChipDark, Vector2.new(32, 32), {
 		Name = "Check",
 		AnchorPoint = Vector2.new(1, 0),
-		FontFace = PopTheme.Heavy,
-		Position = UDim2.new(1, -6, 0, 6),
-		TextSize = 22,
+		Position = UDim2.new(1, -6, 0, picTop + 2),
 		Visible = false,
 		ZIndex = 8,
 	})
+	-- the picked card: a white ring inside the gold outline
+	local ring = UIKit.new("Frame", {
+		Name = "Pick",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 1, -8),
+		Visible = false,
+		ZIndex = 7,
+	}, button)
+	UIKit.corner(ring, GolemView.CardCorner - 4)
+	UIKit.new("UIStroke", {
+		Name = "Ring",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = GolemView.PickColor,
+		Thickness = 3,
+	}, ring)
 	-- delete mode: a golem that can't be deleted (locked, unknown) is shaded
 	local shade = UIKit.new("Frame", {
 		Name = "Shade",
@@ -1178,11 +1478,16 @@ end
 local function slot(parent: Instance, index: number, m: Metrics): SlotRefs
 	local h = m.Strip - 30
 	local pic = m.Strip - 34
-	local frame = GolemView.glowCard(parent, GolemView.EmptyPaint, Vector2.new(m.Slot, h), {
+	-- a wide reel card: the picture on its sunburst at the left, the pixel name and bonus right of it
+	local frame = UIKit.new("Frame", {
 		Name = "Slot" .. index,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		LayoutOrder = index,
+		Size = UDim2.fromOffset(m.Slot, h),
 		ZIndex = 4,
-	}, UDim2.fromOffset(4 + pic / 2, h / 2))
+	}, parent)
+	reelFace(frame, GolemView.EmptyPaint, GolemView.CardCorner, UDim2.fromOffset(4 + pic / 2, h / 2), math.floor(h * 1.1))
 	local stroke = frame:FindFirstChild("Border") :: UIStroke
 	local holder = UIKit.new("Frame", {
 		Name = "Holder",
@@ -1191,32 +1496,22 @@ local function slot(parent: Instance, index: number, m: Metrics): SlotRefs
 		BackgroundTransparency = 1,
 		ZIndex = 4,
 	}, frame)
-	-- the name and bonus on a dark glass box right of the picture
-	local box = UIKit.new("Frame", {
-		Name = "Info",
-		BackgroundColor3 = PopTheme.Outline,
-		BackgroundTransparency = 0.45,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(pic + 8, 6),
-		Size = UDim2.new(1, -(pic + 14), 1, -12),
-		ZIndex = 4,
-	}, frame)
-	UIKit.corner(box, 8)
-	local name = GolemView.text(frame, "Empty slot", m.Small, {
+	local lip = Pop.lipUnits(h)
+	-- (the name and bonus column runs close to the edge: a long name gets its letters' room)
+	local textX = pic + 4
+	local name = GolemView.text(frame, "EMPTY", m.Small + 3, {
 		Name = "GolemName",
-		Position = UDim2.fromOffset(pic + 14, 9),
-		Size = UDim2.new(1, -(pic + 22), 0, 22),
+		Position = UDim2.fromOffset(textX, 8),
+		Size = UDim2.new(1, -(textX + 4), 0, math.floor((h - lip) / 2) - 6),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = rgb(214, 218, 228),
 		ZIndex = 6,
 	})
-	local bonus = GolemView.text(frame, "", m.Small - 1, {
+	local bonus = GolemView.text(frame, "", m.Small + 1, {
 		Name = "Bonus",
-		Position = UDim2.fromOffset(pic + 14, 32),
-		Size = UDim2.new(1, -(pic + 22), 0, h - 40),
+		Position = UDim2.fromOffset(textX, math.floor((h - lip) / 2) + 2),
+		Size = UDim2.new(1, -(textX + 4), 0, math.floor((h - lip) / 2) - 6),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
 		TextColor3 = GolemView.BonusColor,
 		ZIndex = 6,
 	})
@@ -1244,21 +1539,22 @@ function GolemView.build(compact: boolean?): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, gui)
 	local title = GolemView.chrome(panel, "MY GOLEMS", GolemView.WindowPaint)
-	local count = GolemView.solidChip(panel, "0 / 60", GolemView.ChipDark, Vector2.new(96, 30), {
+	reelBand(panel)
+	local count = reelTag(panel, "0 / 60", GolemView.ChipDark, Vector2.new(96, 30), {
 		Name = "Count",
 		ZIndex = 6,
 	})
-	local capsules = GolemView.popButton(panel, "EGGS", "Yellow", {
+	local capsules = reelButton(panel, "EGGS", "Yellow", {
 		Name = "Capsules",
 		AnchorPoint = Vector2.new(1, 0),
 		TextSize = 20,
 	})
-	local deleteMode = GolemView.popButton(panel, "DELETE...", "Red", {
+	local deleteMode = reelButton(panel, "DELETE...", "Red", {
 		Name = "DeleteMode",
 		AnchorPoint = Vector2.new(1, 0),
 		TextSize = 19,
 	})
-	local close = GolemView.popButton(panel, "X", PopTheme.Close, {
+	local close = reelButton(panel, "X", PopTheme.Close, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
 		FontFace = PopTheme.Heavy,
@@ -1294,7 +1590,8 @@ function GolemView.build(compact: boolean?): Refs
 		-- never runs out of its box (fitText shrinks it first)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
-	local equipBest = GolemView.popButton(strip, "EQUIP BEST", "Green", {
+	round(totals, m.Small)
+	local equipBest = reelButton(strip, "EQUIP BEST", "Green", {
 		Name = "EquipBest",
 		TextSize = 20,
 	})
@@ -1328,12 +1625,17 @@ function GolemView.build(compact: boolean?): Refs
 		TextWrapped = true,
 		Visible = false,
 	})
+	round(empty, m.Text)
 
 	-- the detail: a big painted card of the picked golem
-	local detail = GolemView.glowCard(panel, GolemView.EmptyPaint, Vector2.new(m.Detail, 420), {
+	local detail = UIKit.new("Frame", {
 		Name = "Detail",
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Size = UDim2.fromOffset(m.Detail, 420),
 		ZIndex = 3,
-	}, UDim2.new(0.5, 0, 0, 80))
+	}, panel)
+	reelFace(detail, GolemView.EmptyPaint, GolemView.CardCorner, UDim2.new(0.5, 0, 0, 120), math.floor(m.Detail * 0.9))
 	local detailHolder = UIKit.new("Frame", {
 		Name = "PortraitHolder",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1350,18 +1652,17 @@ function GolemView.build(compact: boolean?): Refs
 		Visible = false,
 		ZIndex = 4,
 	}, detail)
-	local detailName = GolemView.text(detail, "", m.Text + 6, {
+	local detailName = GolemView.text(detail, "", m.Text + 10, {
 		Name = "GolemName",
 		ZIndex = 6,
 	})
-	local detailRarity = GolemView.solidChip(detail, "", GolemView.ChipDark, Vector2.new(150, 26), {
+	local detailRarity = reelTag(detail, "", GolemView.ChipDark, Vector2.new(150, 26), {
 		Name = "Rarity",
 		AnchorPoint = Vector2.new(0.5, 0),
 	})
-	local detailBonus = GolemView.solidChip(detail, "", GolemView.ChipDark, Vector2.new(200, 28), {
+	local detailBonus = reelTag(detail, "", GolemView.ChipDark, Vector2.new(200, 28), {
 		Name = "Bonus",
 		TextColor3 = GolemView.BonusColor,
-		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	local detailLore = GolemView.text(detail, "", m.Small - 1, {
 		Name = "Lore",
@@ -1371,6 +1672,7 @@ function GolemView.build(compact: boolean?): Refs
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = rgb(236, 238, 244),
 	})
+	round(detailLore, m.Small - 1)
 	UIKit.corner(detailLore, 8)
 	UIKit.new("UIPadding", {
 		PaddingTop = UDim.new(0, 5),
@@ -1378,9 +1680,9 @@ function GolemView.build(compact: boolean?): Refs
 		PaddingLeft = UDim.new(0, 8),
 		PaddingRight = UDim.new(0, 8),
 	}, detailLore)
-	local equip = GolemView.popButton(detail, "EQUIP", "Green", { Name = "Equip", TextSize = 20, ZIndex = 6 })
-	local lock = GolemView.popButton(detail, "LOCK", "Blue", { Name = "Lock", TextSize = 18, ZIndex = 6 })
-	local delete = GolemView.popButton(detail, "DELETE", "Red", { Name = "Delete", TextSize = 18, ZIndex = 6 })
+	local equip = reelButton(detail, "EQUIP", "Green", { Name = "Equip", TextSize = 20, ZIndex = 6 })
+	local lock = reelButton(detail, "LOCK", "Blue", { Name = "Lock", TextSize = 18, ZIndex = 6 })
+	local delete = reelButton(detail, "DELETE", "Red", { Name = "Delete", TextSize = 18, ZIndex = 6 })
 
 	-- delete mode: a deep red bar replaces the detail card
 	local deleteBar = UIKit.new("Frame", {
@@ -1389,16 +1691,17 @@ function GolemView.build(compact: boolean?): Refs
 		Visible = false,
 		ZIndex = 3,
 	}, panel)
-	Pop.face(deleteBar, GolemView.DeletePaint, GolemView.CardCorner, false)
+	Pop.face(deleteBar, GolemView.DeletePaint, GolemView.CardCorner)
 	Pop.studs(deleteBar, GolemView.CardCorner, 0.55, 44, 2)
 	local deleteText = GolemView.text(deleteBar, "", m.Text, {
 		Name = "Text",
 		TextWrapped = true,
 	})
-	local pickCommon = GolemView.popButton(deleteBar, "+ ALL COMMON", "Slate", { Name = "PickCommon", TextSize = 17 })
-	local pickUncommon = GolemView.popButton(deleteBar, "+ ALL UNCOMMON", "Green", { Name = "PickUncommon", TextSize = 17 })
-	local deleteConfirm = GolemView.popButton(deleteBar, "DELETE 0", "Red", { Name = "DeleteConfirm", TextSize = 20 })
-	local deleteCancel = GolemView.popButton(deleteBar, "CANCEL", PopTheme.Gray, { Name = "DeleteCancel", TextSize = 20 })
+	round(deleteText, m.Text)
+	local pickCommon = reelButton(deleteBar, "+ ALL COMMON", "Slate", { Name = "PickCommon", TextSize = 17 })
+	local pickUncommon = reelButton(deleteBar, "+ ALL UNCOMMON", "Green", { Name = "PickUncommon", TextSize = 17 })
+	local deleteConfirm = reelButton(deleteBar, "DELETE 0", "Red", { Name = "DeleteConfirm", TextSize = 20 })
+	local deleteCancel = reelButton(deleteBar, "CANCEL", PopTheme.Gray, { Name = "DeleteCancel", TextSize = 20 })
 
 	-- the confirm box (over everything): a small red Pop window
 	local confirm = UIKit.new("Frame", {
@@ -1420,18 +1723,20 @@ function GolemView.build(compact: boolean?): Refs
 		ZIndex = 21,
 	}, confirm)
 	GolemView.chrome(box, "DELETE GOLEMS?", "Red")
+	reelBand(box)
 	local confirmText = GolemView.text(box, "", m.Text + 2, {
 		Name = "Text",
 		TextWrapped = true,
 		ZIndex = 5,
 	})
-	local confirmYes = GolemView.popButton(box, "DELETE", "Red", {
+	round(confirmText, m.Text + 2)
+	local confirmYes = reelButton(box, "DELETE", "Red", {
 		Name = "Yes",
 		AnchorPoint = Vector2.new(1, 1),
 		TextSize = 22,
 		ZIndex = 6,
 	})
-	local confirmNo = GolemView.popButton(box, "KEEP", "Green", {
+	local confirmNo = reelButton(box, "KEEP", "Green", {
 		Name = "No",
 		AnchorPoint = Vector2.new(0, 1),
 		TextSize = 22,
@@ -1449,6 +1754,9 @@ function GolemView.build(compact: boolean?): Refs
 		AnchorPoint = Vector2.new(0.5, 1),
 		TextColor3 = rgb(200, 205, 218),
 	})
+	-- (sentences: the round font)
+	round(status, m.Small)
+	round(hint, m.Small)
 
 	local refs: Refs = {
 		Gui = gui,
@@ -1597,6 +1905,12 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local columns = math.max(1, math.floor((usable + cellPad) / (m.Cell.X + cellPad)))
 	local cellW = math.max(m.Cell.X, math.floor((usable - (columns - 1) * cellPad) / columns))
 	refs.GridLayout.CellSize = UDim2.fromOffset(cellW, m.Cell.Y)
+	-- (the names follow the cells' width; a card keeps the lines it was built with)
+	for _, c in refs.Cards do
+		local lines = c.Name:GetAttribute("NameLines")
+		local n = if type(lines) == "number" then lines else 1
+		setName(c.Name, GolemView.nameSize(c.Name.Text, cardNameMax(m), cellW - 12, n, nameMin(m)), n)
+	end
 	place(refs.Empty, PAD + 20, bodyY + 20, gridW - 40, bodyH - 40)
 	place(refs.Detail, detailX, bodyY - 4, m.Detail, bodyH + 8)
 	place(refs.DeleteBar, detailX, bodyY - 4, m.Detail, bodyH + 8)
@@ -1612,14 +1926,15 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 		portrait = 0 -- short screens: the grid's pictures are enough
 	end
 	local loreH = spare - portrait - (if portrait > 0 then 6 else 0)
-	refs.DetailHolder.Position = UDim2.new(0.5, 0, 0, 10)
+	-- (the reels: the pixel name on top, the picture on its sunburst under it)
+	place(refs.DetailName, 12, 10, inner, 30)
+	local picY = 46
+	refs.DetailHolder.Position = UDim2.new(0.5, 0, 0, picY)
 	refs.DetailHolder.Size = UDim2.fromOffset(portrait, portrait)
-	refs.Viewport.Position = UDim2.new(0.5, 0, 0, 2)
+	refs.Viewport.Position = UDim2.new(0.5, 0, 0, picY - 8)
 	refs.Viewport.Size = UDim2.fromOffset(if portrait > 0 then portrait + 30 else 0, if portrait > 0 then portrait + 16 else 0)
-	GolemView.aimBurst(refs.Detail, UDim2.new(0.5, 0, 0, if portrait > 0 then 10 + portrait / 2 else 30))
-	local y = 10 + (if portrait > 0 then portrait + 6 else 0)
-	place(refs.DetailName, 12, y, inner, 30)
-	y += 36
+	aimReel(refs.Detail, UDim2.new(0.5, 0, 0, if portrait > 0 then picY + portrait / 2 else 30))
+	local y = picY + (if portrait > 0 then portrait + 6 else 0)
 	refs.DetailRarity.Position = UDim2.new(0.5, 0, 0, y)
 	GolemView.sizeChip(refs.DetailRarity, 150, 26)
 	refs.DetailRarity.TextSize = 17
@@ -1630,8 +1945,9 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.DetailLore.Visible = loreH >= 34
 	place(refs.DetailLore, 12, y, inner, math.max(0, loreH - 6))
 	local buttonsY = bodyH + 8 - buttonH - 12
-	local equipW = math.floor((inner - GAP) * 0.42)
-	local sideW = math.floor((inner - equipW - 2 * GAP) / 2)
+	-- (three equal buttons: the pixel words get the same room)
+	local sideW = math.floor((inner - 2 * GAP) / 3)
+	local equipW = inner - 2 * GAP - 2 * sideW
 	placeButton(refs.Equip, 12, buttonsY, equipW, buttonH)
 	placeButton(refs.Lock, 12 + equipW + GAP, buttonsY, sideW, buttonH)
 	placeButton(refs.Delete, 12 + equipW + 2 * GAP + sideW, buttonsY, sideW, buttonH)
@@ -1669,6 +1985,7 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.Status.Position = UDim2.new(0.5, 0, 1, if compact then -10 else -4)
 	refs.Status.Size = UDim2.new(1, -40, 0, 22)
 	refs.Compact = compact
+	GolemView.fitButtons(refs)
 end
 
 ---------------------------------------------------------------- filling in
@@ -1698,8 +2015,8 @@ function GolemView.setDetail(refs: Refs, card: Card?)
 		end
 	end
 	if not card then
-		GolemView.repaintCard(refs.Detail, GolemView.EmptyPaint)
-		refs.DetailName.Text = "Pick a golem"
+		repaintReel(refs.Detail, GolemView.EmptyPaint)
+		refs.DetailName.Text = "PICK A GOLEM"
 		refs.DetailName.TextColor3 = rgb(214, 218, 228)
 		refs.DetailRarity.Visible = false
 		refs.DetailBonus.Visible = false
@@ -1710,18 +2027,16 @@ function GolemView.setDetail(refs: Refs, card: Card?)
 		end
 		return
 	end
-	GolemView.repaintCard(refs.Detail, GolemView.rarityPaint(if card.Known then card.Rarity else nil))
-	refs.DetailName.Text = card.Name
+	repaintReel(refs.Detail, GolemView.rarityPaint(if card.Known then card.Rarity else nil))
+	refs.DetailName.Text = string.upper(card.Name)
 	refs.DetailName.TextColor3 = PopTheme.Ink
-	TechShopView.fitText(refs.DetailName, refs.DetailName.Size.X.Offset, 30, if refs.Compact then 30 else 28, 16)
-	GolemView.fitEdge(refs.DetailName)
+	Pop.fit(refs.DetailName, if refs.Compact then 34 else 32)
 	refs.DetailRarity.Visible = true
 	refs.DetailRarity.Text = string.upper(card.Rarity)
 	refs.DetailRarity.BackgroundColor3 = GolemView.rarityChip(if card.Known then card.Rarity else nil)
 	refs.DetailBonus.Visible = true
-	refs.DetailBonus.Text = if card.Known then card.Bonus else "No bonus in this version"
-	TechShopView.fitText(refs.DetailBonus, refs.DetailBonus.Size.X.Offset - 16, 28, if refs.Compact then 19 else 18, 11)
-	GolemView.fitEdge(refs.DetailBonus)
+	refs.DetailBonus.Text = if card.Known then string.upper(card.Bonus) else "NO BONUS YET"
+	fitWord(refs.DetailBonus, if refs.Compact then 24 else 22, refs.DetailBonus.Size.X.Offset)
 	refs.DetailLore.Text = card.Lore
 	TechShopView.fitText(
 		refs.DetailLore,
@@ -1745,12 +2060,42 @@ end
 
 -- Fits the texts of the detail and delete buttons into their buttons.
 function GolemView.fitButtons(refs: Refs)
-	local big = if refs.Compact then 22 else 20
+	-- (pixel words shrink to fit their button with a margin: fitWord)
+	local big = if refs.Compact then 28 else 26
 	for _, b in { refs.Equip, refs.Lock, refs.Delete, refs.PickCommon, refs.PickUncommon, refs.DeleteConfirm, refs.DeleteCancel } do
-		local holder = holderOf(b)
-		TechShopView.fitText(b :: any, holder.Size.X.Offset - 12, holder.Size.Y.Offset - 6, if b == refs.Equip then big else big - 2, 11)
-		GolemView.fitEdge(b)
+		fitWord(b, if b == refs.Equip then big else big - 2, holderOf(b).Size.X.Offset)
+		local edge = b:FindFirstChild("Edge") :: UIStroke?
+		if edge then
+			edge.Thickness = 2.5
+		end
 	end
+	for _, b in { refs.Capsules, refs.DeleteMode, refs.EquipBest, refs.ConfirmYes, refs.ConfirmNo } do
+		local word = b:GetAttribute("WordSize")
+		fitWord(b, (if type(word) == "number" then word else 20) + 6, holderOf(b).Size.X.Offset)
+	end
+end
+
+-- A slot's name on one line, or two (a long name) with the bonus line under them.
+local function placeSlotName(s: SlotRefs, m: Metrics)
+	local h = s.Frame.Size.Y.Offset
+	local inner = h - Pop.lipUnits(h)
+	local x = s.Name.Position.X.Offset
+	local width = s.Frame.Size.X.Offset - x - 4
+	local size, lines = GolemView.nameFit(s.Name.Text, slotNameMax(m), width - 2, nameMin(m))
+	local half = math.floor(inner / 2)
+	if lines > 1 then
+		local nameH = GolemView.nameHeight(size, lines)
+		s.Name.Position = UDim2.fromOffset(x, 3)
+		s.Name.Size = UDim2.new(1, -(x + 4), 0, nameH)
+		s.Bonus.Position = UDim2.fromOffset(x, 3 + nameH)
+		s.Bonus.Size = UDim2.new(1, -(x + 4), 0, math.max(14, inner - 2 - (3 + nameH)))
+	else
+		s.Name.Position = UDim2.fromOffset(x, 8)
+		s.Name.Size = UDim2.new(1, -(x + 4), 0, half - 6)
+		s.Bonus.Position = UDim2.fromOffset(x, half + 2)
+		s.Bonus.Size = UDim2.new(1, -(x + 4), 0, half - 6)
+	end
+	setName(s.Name, size, lines)
 end
 
 -- The equipped strip: a bright rarity card per golem, its live picture, name and bonus.
@@ -1767,20 +2112,20 @@ function GolemView.setEquipped(refs: Refs, equipped: { Card }, totals: string)
 			end
 		end
 		if card then
-			GolemView.repaintCard(s.Frame, GolemView.rarityPaint(card.Rarity))
-			s.Name.Text = card.Name
+			repaintReel(s.Frame, GolemView.rarityPaint(card.Rarity))
+			s.Name.Text = string.upper(card.Name)
 			s.Name.TextColor3 = PopTheme.Ink
-			s.Bonus.Text = card.Bonus
+			s.Bonus.Text = GolemView.shortBonus(card.Bonus)
 		else
-			GolemView.repaintCard(s.Frame, GolemView.EmptyPaint)
-			s.Name.Text = "Empty slot"
+			repaintReel(s.Frame, GolemView.EmptyPaint)
+			s.Name.Text = "EMPTY"
 			s.Name.TextColor3 = rgb(214, 218, 228)
 			s.Bonus.Text = ""
 		end
 		s.Stroke.Color = PopTheme.Outline
-		s.Stroke.Thickness = 3
-		TechShopView.fitText(s.Name, m.Slot - (m.Strip - 20), 22, if refs.Compact then 18 else 16, 11)
-		GolemView.fitEdge(s.Name)
+		s.Stroke.Thickness = PopTheme.Edge
+		placeSlotName(s, m)
+		Pop.fit(s.Bonus, m.Small + 1)
 	end
 	refs.Totals.Text = totals
 	local size = refs.Totals.Size
@@ -1808,13 +2153,9 @@ function GolemView.setCards(refs: Refs, cards: { Card }, selected: number?, pick
 		local cr: CardRefs = c or newCard(refs, card, m)
 		cr.Button.LayoutOrder = card.Order
 		cr.Button.Size = UDim2.fromOffset(m.Cell.X, m.Cell.Y)
-		cr.Name.Text = card.Name
-		TechShopView.fitText(cr.Name, m.Cell.X - 10, 22, m.Small + 1, 10)
-		GolemView.fitEdge(cr.Name)
-		cr.Bonus.Text = card.Bonus
+		cr.Name.Text = string.upper(card.Name)
+		cr.Bonus.Text = GolemView.shortBonus(card.Bonus)
 		cr.Bonus.Visible = card.Bonus ~= ""
-		TechShopView.fitText(cr.Bonus, m.Cell.X - 24, 20, m.Small - 2, 9)
-		GolemView.fitEdge(cr.Bonus)
 		cr.Equipped.Visible = card.Equipped
 		local deleting = picked ~= nil
 		cr.Lock.Visible = card.Locked
@@ -1825,8 +2166,12 @@ function GolemView.setCards(refs: Refs, cards: { Card }, selected: number?, pick
 		cr.Check.Text = if isPicked then "X" else ""
 		cr.Check.BackgroundColor3 = if isPicked then Pop.paint("Red").Bottom else GolemView.ChipDark
 		local chosen = card.Id == selected
-		cr.Stroke.Thickness = if chosen or isPicked then 5 else 3
+		cr.Stroke.Thickness = if chosen or isPicked then 6 else PopTheme.Edge
 		cr.Stroke.Color = if isPicked then Pop.paint("Red").Top elseif chosen then GolemView.SelectColor else PopTheme.Outline
+		local ring = cr.Button:FindFirstChild("Pick")
+		if ring and ring:IsA("GuiObject") then
+			ring.Visible = chosen and not deleting
+		end
 	end
 	for id, c in refs.Cards do
 		if not seen[id] then

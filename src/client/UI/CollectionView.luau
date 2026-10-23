@@ -901,6 +901,100 @@ end
 
 ---------------------------------------------------------------- the book
 
+--[[
+	The pixel reels (owner 2026-10-22, docs/art/ui_pixel_refs: "the
+	inventory exactly like this"): every tile is a square reel card, its
+	name in pixel letters on top (two lines at most, shrunk to fit), the
+	relic big in the middle on its sunburst, the rarity as a short pixel
+	line at the bottom and the count as a tilted tag beside the picture.
+]]
+local function pixelWords(label: TextLabel, size: number)
+	label.FontFace = PopTheme.Pixel
+	label.TextScaled = true
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint") or UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	local l = limit :: UITextSizeConstraint
+	l.MaxTextSize = math.max(8, math.floor(size * PopTheme.PixelScale + 0.5))
+	l.MinTextSize = 7
+	local edge = label:FindFirstChild("Edge") or label:FindFirstChildOfClass("UIStroke")
+	if edge and edge:IsA("UIStroke") then
+		edge.LineJoinMode = Enum.LineJoinMode.Miter
+	end
+end
+
+--[[
+	Long names (review 2026-10-22: "HEARTSTONE FRAGMENT" shrank to 5.6 pt
+	on a 568x320 phone): a tile's name and rarity stay pixel letters while
+	they are at least NameMin there, else they take the round font when it
+	is bigger (it is narrower). Design units; the phones' UI scale is 0.62,
+	so 13 units are 8 pt.
+]]
+CollectionView.NameMin = 10 -- PC
+CollectionView.NameMinCompact = 13 -- phones and TVs
+local PIXEL_EM, PIXEL_LINE = 1, 1.1 -- a pixel letter's width and a line's height (em; room to spare)
+local ROUND_EM, ROUND_LINE = 0.6, 1.2 -- the round font's (a generous capital)
+
+-- Lines `text` takes wrapped at `perLine` letters (math.huge: a word is longer than a line).
+local function wrapLines(text: string, perLine: number): number
+	local lines, line = 1, 0
+	for _, word in string.split(text, " ") do
+		local n = utf8.len(word) or #word
+		if n > perLine then
+			return math.huge
+		end
+		local need = if line == 0 then n else line + 1 + n
+		if need > perLine then
+			lines += 1
+			line = n
+		else
+			line = need
+		end
+	end
+	return lines
+end
+
+--[[
+	The biggest whole size (at most `max`) at which `text` fits `w` x `h`
+	design units in a font whose letter is `em` wide and line `line` tall
+	(wrapped at spaces when `wrap`, else on one line); 1 when nothing fits.
+]]
+function CollectionView.wrapSize(text: string, max: number, w: number, h: number, em: number, line: number, wrap: boolean): number
+	local n = utf8.len(text) or #text
+	for s = math.floor(max), 2, -1 do
+		local perLine = math.floor(w / (s * em))
+		local lines = if wrap then wrapLines(text, perLine) else (if n <= perLine then 1 else math.huge)
+		if lines * s * line <= h then
+			return s
+		end
+	end
+	return 1
+end
+
+-- A tile's word(s) in a `w` x `h` box: pixel (at most `max`) or round (at most `roundMax`), see above.
+local function tileWords(label: TextLabel, max: number, roundMax: number, w: number, h: number, floor: number, wrap: boolean)
+	local text = label.Text
+	local pixelSize = CollectionView.wrapSize(text, max, w, h, PIXEL_EM, PIXEL_LINE, wrap)
+	local roundSize = CollectionView.wrapSize(text, roundMax, w, h, ROUND_EM, ROUND_LINE, wrap)
+	local round = pixelSize < floor and roundSize > pixelSize
+	local size = if round then roundSize else pixelSize
+	label.FontFace = if round then PopTheme.Font else PopTheme.Pixel
+	label.TextWrapped = wrap
+	label.TextScaled = true
+	label:SetAttribute("Round", if round then true else nil)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	l.MinTextSize = 1
+	l.MaxTextSize = size
+	l.MinTextSize = math.min(size, 7)
+	for _, edge in label:GetChildren() do
+		if edge:IsA("UIStroke") and edge.ApplyStrokeMode == Enum.ApplyStrokeMode.Contextual then
+			edge.LineJoinMode = if round then Enum.LineJoinMode.Round else Enum.LineJoinMode.Miter
+		end
+	end
+end
+
 local function tile(parent: Instance, index: number, m: Metrics): Tile
 	local button = Pop.card(parent, CollectionView.HiddenPaint, {
 		Name = "Tile" .. index,
@@ -916,31 +1010,37 @@ local function tile(parent: Instance, index: number, m: Metrics): Tile
 		BackgroundTransparency = 1,
 		ZIndex = 4,
 	}, button)
+	-- (the reels: the pixel name on top, the rarity line at the bottom)
 	local name = Pop.text(button, "", m.TileName, {
 		Name = "Name",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -30),
-		Size = UDim2.new(1, -10, 0, m.TileName * 2 + 4),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.new(1, -12, 0, m.TileName * 2 + 4),
 		TextWrapped = true,
 		ZIndex = 7,
 	})
+	pixelWords(name, m.TileName + 4)
 	local rarity = chip(button, "", {
 		Name = "Rarity",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.fromOffset(96, 22),
+		Position = UDim2.new(0.5, 0, 1, -9),
+		Size = UDim2.new(1, -16, 0, 22),
 		ZIndex = 7,
 	})
-	local count = Pop.text(button, "", 17, {
+	pixelWords(rarity, 18)
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, rarity)
+	local count = Pop.text(button, "", 22, {
 		Name = "Count",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -8, 0, 4),
+		Position = UDim2.new(1, -6, 0, m.TileName * 2 + 14),
+		Rotation = 10,
 		Size = UDim2.fromOffset(44, 22),
 		FontFace = PopTheme.Heavy,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = Color3.fromRGB(255, 232, 110),
 		ZIndex = 8,
 	})
+	Pop.fxTag(button, "Press")
 	return { Button = button, Icon = icon, Name = name, Chip = rarity, Count = count, Id = "" }
 end
 
@@ -1159,6 +1259,14 @@ function CollectionView.build(compact: boolean): Refs
 		TextColor3 = CollectionView.SoftInk,
 		ZIndex = 3,
 	})
+	-- (a sentence: the round font, shrunk to fit like before; round for good: a
+	-- short hint filled in later stays round, Pop.sentence leaves it alone)
+	hint.FontFace = PopTheme.Font
+	hint:SetAttribute("Round", true)
+	local hintFit = hint:FindFirstChildOfClass("UITextSizeConstraint")
+	if hintFit then
+		hintFit.MaxTextSize = m.Hint
+	end
 	return {
 		Gui = gui,
 		Dim = dim,
@@ -1357,10 +1465,14 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local withChip = cellH >= nameH + 22 + 90
 	local iconSize = math.floor(math.min(cellW * 0.66, cellH - nameH - (if withChip then 40 else 16)))
 	for _, t in refs.Tiles do
-		t.Icon.Size = UDim2.fromOffset(math.max(24, iconSize), math.max(24, iconSize))
+		local icon = math.max(24, iconSize)
+		t.Icon.Size = UDim2.fromOffset(icon, icon)
 		local chipHolder = t.Chip
 		chipHolder.Visible = withChip
-		t.Name.Position = UDim2.new(0.5, 0, 1, if withChip then -30 else -6)
+		-- (the reels: the name on top, the picture on its sunburst under it)
+		t.Name.Position = UDim2.new(0.5, 0, 0, 6)
+		t.Icon.Position = UDim2.new(0.5, 0, 0, nameH + 8)
+		centreFx(t.Button, UDim2.new(0.5, 0, 0, nameH + 8 + icon / 2))
 	end
 	refs.Grid.Position = UDim2.fromOffset(gridX, top)
 	refs.Grid.Size = UDim2.fromOffset(gridW, bodyH)
@@ -1529,13 +1641,22 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 			local found = count > 0
 			local rarity = Rarity.get(art.Rarity)
 			-- a found artifact's card in its rarity's paint, a missing one dark
-			Pop.repaint(t.Button, if found then Pop.rarityPaint(art.Rarity) else CollectionView.HiddenPaint, false)
+			Pop.repaint(t.Button, if found then Pop.rarityPaint(art.Rarity) else CollectionView.HiddenPaint)
 			setFx(t.Button, found)
 			CollectionView.glyph(t.Icon, art.Id, not found)
-			t.Name.Text = if found then art.Name else CollectionView.MissingName
-			t.Name.TextSize = CollectionView.fitSize(t.Name.Text, metrics(refs.Compact).TileName, cellWidth - 10)
+			t.Name.Text = string.upper(if found then art.Name else CollectionView.MissingName)
+			-- (a pixel letter is 1 em wide: the longest word fits the tile's width; a
+			-- name too long for that takes the round font)
+			local tileName = metrics(refs.Compact).TileName
+			local floor = if refs.Compact then CollectionView.NameMinCompact else CollectionView.NameMin
+			local base = math.floor((tileName + 4) * PopTheme.PixelScale + 0.5)
+			t.Name.TextSize = CollectionView.fitSize(t.Name.Text, tileName, cellWidth - 10)
+			tileWords(t.Name, base, tileName, cellWidth - 14, t.Name.Size.Y.Offset, floor, true)
 			t.Name.TextColor3 = if found then PopTheme.Ink else CollectionView.SoftInk
-			t.Chip.Text = rarity.Name
+			t.Chip.Text = string.upper(rarity.Name)
+			-- (the chip: 16 narrower than the tile, 6 padding a side, 2 to spare)
+			local chipH = t.Chip.Size.Y.Offset
+			tileWords(t.Chip, math.floor(18 * PopTheme.PixelScale + 0.5), 16, cellWidth - 30, chipH, floor, false)
 			t.Chip.BackgroundColor3 = if found then CollectionView.chipColor(art.Rarity) else PopTheme.Well
 			t.Chip.TextColor3 = if found then PopTheme.Ink else CollectionView.SoftInk
 			t.Count.Text = if count > 1 then `x{count}` else ""
@@ -1543,7 +1664,7 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 			local stroke = t.Button:FindFirstChild("Border") :: UIStroke?
 			if stroke then
 				stroke.Color = if selected then CollectionView.SelectColor else PopTheme.Outline
-				stroke.Thickness = if selected then 5 else PopTheme.Edge
+				stroke.Thickness = if selected then 6 else PopTheme.Edge
 			end
 		end
 	end

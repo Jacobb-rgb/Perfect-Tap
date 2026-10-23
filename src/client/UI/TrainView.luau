@@ -42,7 +42,6 @@ local PopTheme = require(Shared.Config.PopTheme)
 local IconAssets = require(Shared.Config.IconAssets)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
-local LightSkin = require(script.Parent.LightSkin)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
@@ -1286,7 +1285,7 @@ end
 	SEND TRAIN, painted CAPACITY and SPEED cards with gold coin BUY buttons
 	and the Express card with the green Robux button (Pop.price's look). The
 	same instances, names and refs as the dark build: the controller and
-	the specs drive both; only the HUD chip keeps the LightSkin.
+	the specs drive both (the HUD chip: pixelChip, below).
 ]]
 
 TrainView.PopPaints = {
@@ -1600,11 +1599,135 @@ local function popLayout(refs: Refs)
 	end
 end
 
+--[[
+	The HUD chip in the pixel reels' look (owner 2026-10-22): a small reel
+	button (a slate painted face with the thick black outline, the lip and
+	the lattice), the locomotive in a blue painted square at its left end,
+	TRAIN 5/8 in white pixel letters with a black edge, the line under it,
+	the trip / cargo bar in a dark well with a glossy fill, the green SEND as
+	a painted reel button (TrainView.style repaints it: grey when it can't
+	go). The same instances and names as the dark build: the controller and
+	the specs drive both.
+]]
+TrainView.ChipPaints = { Face = "Slate", Icon = "Blue", Send = "Green" } :: { [string]: string }
+
+local function stripLook(frame: Instance)
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border or child:IsA("UIGradient") then
+			child:Destroy()
+		end
+	end
+end
+
+local function pixelChip(refs: Refs)
+	refs.Chip:SetAttribute("PopSkin", true)
+	local frame = refs.ChipFrame
+	stripLook(frame)
+	-- (the bigger phone size first: the lattice reaches every corner of both sizes)
+	frame.Size = UDim2.fromOffset(CHIP.Compact.Width, CHIP.Compact.Height)
+	Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	Pop.studs(frame, 12, 0.45, 28, 1)
+	local square = UIKit.new("Frame", { Name = "IconSquare", ZIndex = 1 }, frame)
+	square.Size = UDim2.fromOffset(60, 60)
+	Pop.face(square, TrainView.ChipPaints.Icon, 10, true, false)
+	local squareBorder = square:FindFirstChild("Border") :: UIStroke?
+	if squareBorder then
+		squareBorder.Thickness = 2.5
+	end
+	Pop.studs(square, 10, 0.45, 20, 1)
+	refs.ChipIcon.ZIndex = 2
+	for _, d in refs.ChipIcon:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex = math.max(d.ZIndex, 2)
+		end
+	end
+	popText(refs.ChipTitle, PopTheme.Pixel)
+	popEdge(refs.ChipLine)
+	-- the bar: a dark well and a glossy fill (setStatus colours it)
+	refs.ChipBar.BackgroundColor3 = PopTheme.Well
+	for _, child in refs.ChipBar:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Color = PopTheme.Outline
+			child.Thickness = 2
+		end
+	end
+	UIKit.new("UIGradient", {
+		Name = "Gloss",
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(235, 235, 235)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 170, 170)),
+		}),
+	}, refs.ChipFill)
+	-- SEND: a painted reel button (style() repaints it from the state)
+	popButton(refs.ChipSend, TrainView.ChipPaints.Send)
+	refs.ChipSend.FontFace = PopTheme.Pixel
+	Pop.fxTag(holderOf(refs.ChipSend), "Press")
+	-- the "T" key cap: a dark well with a pixel letter
+	local key = refs.ChipKey
+	key.BackgroundColor3 = PopTheme.Well
+	key.FontFace = PopTheme.Pixel
+	key.TextColor3 = PopTheme.Ink
+	for _, child in key:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			child.Color = PopTheme.Outline
+		end
+	end
+	popEdge(key)
+end
+
+-- Places the pixel chip's parts for its size (after placeChip): everything
+-- centred on the face above the lip, the locomotive in its square.
+local function pixelChipLayout(refs: Refs)
+	local m = if refs.Compact then CHIP.Compact else CHIP.Normal
+	local frame = refs.ChipFrame
+	Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	local lip = Pop.lipUnits(m.Height)
+	local area = m.Height - lip
+	-- the square and the locomotive in it
+	local s = area - 12
+	local square = frame:FindFirstChild("IconSquare") :: Frame?
+	if square then
+		square.Position = UDim2.fromOffset(7, math.floor((area - s) / 2))
+		square.Size = UDim2.fromOffset(s, s)
+	end
+	local iw = s - 8
+	local ih = iw / ICON_ASPECT
+	refs.ChipIcon.Size = UDim2.fromOffset(iw, ih)
+	refs.ChipIcon.Position = UDim2.fromOffset(11, math.floor((area - ih) / 2))
+	-- title, line and bar as one block in the middle
+	local titleH = math.floor(m.Title * PopTheme.PixelScale + 0.5) + 4
+	local lineH = m.Line + 2
+	local barH = if refs.Compact then 9 else 7
+	local y0 = math.floor((area - (titleH + lineH + 3 + barH)) / 2)
+	local textLeft = refs.ChipTitle.Position.X.Offset
+	refs.ChipTitle.Position = UDim2.fromOffset(textLeft, y0)
+	refs.ChipTitle.Size = UDim2.fromOffset(refs.ChipTitle.Size.X.Offset, titleH)
+	Pop.fit(refs.ChipTitle, m.Title)
+	refs.ChipTitle.TextXAlignment = Enum.TextXAlignment.Left
+	refs.ChipLine.Position = UDim2.fromOffset(textLeft, y0 + titleH)
+	refs.ChipLine.Size = UDim2.fromOffset(refs.ChipLine.Size.X.Offset, lineH)
+	refs.ChipBar.Position = UDim2.fromOffset(textLeft, y0 + titleH + lineH + 3)
+	refs.ChipBar.Size = UDim2.fromOffset(refs.ChipBar.Size.X.Offset, barH)
+	refs.ChipKey.Position = UDim2.fromOffset(refs.ChipKey.Position.X.Offset, y0)
+	refs.ChipGlyph.Position = UDim2.fromOffset(refs.ChipGlyph.Position.X.Offset, y0 - 1)
+	-- SEND centred on the face above the lip
+	local send = holderOf(refs.ChipSend)
+	send.Position = UDim2.new(1, -10, 0, math.max(0, math.floor((area - m.SendHeight) / 2)))
+	Pop.face(send, TrainView.ChipPaints.Send, 10)
+	TrainView.style(refs.ChipSend, refs.ChipSend.BackgroundColor3 ~= Theme.PanelLight, Theme.Good, Theme.GoodDark)
+	Pop.fit(refs.ChipSend :: any, m.SendText)
+end
+
 local plainLayout = TrainView.layout
 TrainView.layout = function(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	plainLayout(refs, compact, maxWidth, maxHeight)
 	if refs.Gui:GetAttribute("PopSkin") then
 		popLayout(refs)
+	end
+	if refs.Chip:GetAttribute("PopSkin") then
+		pixelChipLayout(refs)
 	end
 end
 
@@ -1612,8 +1735,8 @@ local darkBuild = TrainView.build
 TrainView.build = function(compact: boolean?): Refs
 	local refs = darkBuild(compact)
 	if UIConfig.lightUI() then
-		-- the HUD chip keeps the light skin; the panel wears the Pop look
-		LightSkin.apply(refs.Chip)
+		-- the HUD chip wears the pixel reels' look, the panel the Pop look
+		pixelChip(refs)
 		TouchControls.follow(refs.Gui)
 		popSkin(refs)
 		TrainView.layout(refs, compact == true, math.huge, math.huge)

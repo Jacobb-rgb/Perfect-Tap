@@ -71,7 +71,14 @@ function PictureModels.clover(leaves: number, color: Color3): Model
 		Geo.ball(m, dir * 0.95 - side * 0.32, 1.1, color, nil, decor())
 	end
 	Geo.ball(m, Vector3.new(0, 0, -0.05), 0.55, color:Lerp(Color3.new(1, 1, 1), 0.3), nil, decor())
-	Geo.block(m, CFrame.new(0.35, -1.55, 0) * CFrame.Angles(0, 0, math.rad(-14)), Vector3.new(0.22, 1.9, 0.22), color:Lerp(Color3.new(0, 0, 0), 0.3), nil, decor())
+	Geo.block(
+		m,
+		CFrame.new(0.35, -1.55, 0) * CFrame.Angles(0, 0, math.rad(-14)),
+		Vector3.new(0.22, 1.9, 0.22),
+		color:Lerp(Color3.new(0, 0, 0), 0.3),
+		nil,
+		decor()
+	)
 	return m
 end
 
@@ -90,6 +97,53 @@ function PictureModels.podium(): Model
 end
 
 -- The model for picture `name` and the camera direction (nil: no such model).
+-- A red shopping cart (the Shop's header, the pixel reels' basket): a slatted basket, a frame, a handle, wheels.
+function PictureModels.cart(): Model
+	local m = model("Cart")
+	local red = rgb(236, 48, 74)
+	local deep = rgb(170, 24, 52)
+	local steel = rgb(232, 236, 244)
+	local dark = rgb(40, 42, 54)
+	-- the basket: a floor, two sides, the front and back, slats across the long sides
+	Geo.block(m, CFrame.new(0, 1.2, 0), Vector3.new(3.2, 0.2, 2), deep, nil, decor())
+	for _, z in { -1, 1 } do
+		Geo.block(m, CFrame.new(0, 2.05, z) * CFrame.Angles(math.rad(-8 * z), 0, 0), Vector3.new(3.4, 1.6, 0.16), red, nil, decor())
+		for i = -3, 3 do
+			Geo.block(
+				m,
+				CFrame.new(i * 0.45, 2.05, z * 1.06) * CFrame.Angles(math.rad(-8 * z), 0, 0),
+				Vector3.new(0.12, 1.5, 0.06),
+				deep,
+				nil,
+				decor()
+			)
+		end
+		Geo.block(m, CFrame.new(0, 2.88, z * 1.12), Vector3.new(3.6, 0.18, 0.2), steel, Enum.Material.Metal, decor())
+	end
+	for _, x in { -1.65, 1.65 } do
+		Geo.block(
+			m,
+			CFrame.new(x, 2.05, 0) * CFrame.Angles(0, 0, math.rad(if x < 0 then 10 else -10)),
+			Vector3.new(0.16, 1.6, 2.2),
+			red,
+			nil,
+			decor()
+		)
+	end
+	-- the frame under it, the handle at the back, four wheels
+	Geo.block(m, CFrame.new(0, 0.75, 0), Vector3.new(3, 0.14, 1.8), steel, Enum.Material.Metal, decor())
+	for _, z in { -0.8, 0.8 } do
+		Geo.block(m, CFrame.new(2.1, 2.6, z), Vector3.new(0.14, 1.2, 0.14), steel, Enum.Material.Metal, decor())
+	end
+	Geo.block(m, CFrame.new(2.1, 3.25, 0), Vector3.new(0.3, 0.3, 2), dark, nil, decor())
+	for _, x in { -1.2, 1.2 } do
+		for _, z in { -0.75, 0.75 } do
+			Geo.ball(m, Vector3.new(x, 0.35, z), 0.62, dark, nil, decor())
+		end
+	end
+	return m
+end
+
 function PictureModels.build(name: string): (Model?, Vector3)
 	if string.sub(name, 1, 5) == "cash_" then
 		return CashBuilder.picture(name), FRONT
@@ -127,6 +181,8 @@ function PictureModels.build(name: string): (Model?, Vector3)
 		return PictureModels.clover(3, rgb(120, 236, 110)), Vector3.new(0, 0.1, -1)
 	elseif name == "podium" then
 		return PictureModels.podium(), Vector3.new(-0.4, 0.55, -1)
+	elseif name == "cart" then
+		return PictureModels.cart(), Vector3.new(-0.7, 0.45, -1)
 	end
 	return nil, FRONT
 end

@@ -2185,13 +2185,13 @@ end
 function WheelView.placeHint(refs: Refs)
 	local m = metrics(refs.Compact)
 	local width = refs.OddsCard.Size.X.Offset
-	local titleW = Pop.textWidth(refs.OddsTitle.Text, refs.OddsTitle.TextSize) + 30
+	local titleW = Pop.measure(refs.OddsTitle) + 30
 	local closeW = math.floor(m.Band * 0.82) + 20
 	local right = closeW + (if refs.OddsBuy.Visible then refs.OddsBuy.Size.X.Offset + 12 else 4)
 	local room = width - 8 - titleW - right
 	refs.Hint.Position = UDim2.new(1, -right, 0.5, 0)
 	refs.Hint.Size = UDim2.fromOffset(math.max(0, room), m.Hint + 6)
-	refs.Hint.Visible = room >= Pop.textWidth(refs.Hint.Text, refs.Hint.TextSize) * 0.85
+	refs.Hint.Visible = room >= Pop.measure(refs.Hint) * 0.85
 end
 
 ---------------------------------------------------------------- the HUD chip
@@ -2243,32 +2243,54 @@ function WheelView.buildChip(uiScale: number, screenWidth: number?): ChipRefs
 		Selectable = true,
 		ZIndex = 2,
 	}, holder)
+	-- (the pixel reels' small button: the painted face with its lip and lattice,
+	-- a gleam now and then, the round wheel in a painted square at the left end,
+	-- FREE SPIN! in pixel letters on two lines so they stay big)
 	Pop.face(button, "Orange", 12)
-	local border = button:FindFirstChild("Border") :: UIStroke
-	border.Thickness = 3
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.72,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(6, 4),
-		Size = UDim2.new(1, -12, 0.32, 0),
-		ZIndex = 2,
+	Pop.studs(button, 12, 0.45, 28, 2)
+	Pop.gleam(button, 2)
+	Pop.fxTag(button, "Press")
+	local lip = Pop.lipUnits(size.Y)
+	local square = size.Y - lip - 10
+	local well = UIKit.new("Frame", {
+		Name = "IconSquare",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 6, 0.5, -math.floor(lip / 2)),
+		Size = UDim2.fromOffset(square, square),
+		ZIndex = 3,
 	}, button)
-	local markSize = if compact then 44 else 36
+	Pop.face(well, "Purple", math.floor(square * 0.22), true, false)
+	local wellBorder = well:FindFirstChild("Border") :: UIStroke?
+	if wellBorder then
+		wellBorder.Thickness = 2.5
+	end
+	Pop.studs(well, 8, 0.45, 20, 3)
+	local markSize = square - 6
 	local icon = WheelView.mark(button, markSize, {
 		Name = "Icon",
-		Position = UDim2.new(0, 8, 0.5, 0),
+		Position = UDim2.new(0, 9, 0.5, -math.floor(lip / 2)),
 	})
-	Pop.text(button, "FREE SPIN!", if compact then 25 else 22, {
+	local left = 6 + square + 6
+	local label = Pop.text(button, "FREE SPIN!", if compact then 25 else 22, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, markSize + 14, 0.5, 0),
-		Size = UDim2.new(1, -(markSize + 18), 0, 32),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, left, 0.5, -math.floor(lip / 2)),
+		Size = UDim2.new(1, -(left + 6), 1, -(lip + 8)),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		FontFace = PopTheme.Heavy,
 		ZIndex = 5,
 	})
+	-- (two lines: wrapped and scaled, at most this big)
+	label.TextWrapped = true
+	label.TextScaled = true
+	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if fit then
+		fit.MaxTextSize = if compact then 22 else 17
+	end
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = 2
+	end
 	return { Gui = gui, Button = button, Icon = icon }
 end
 

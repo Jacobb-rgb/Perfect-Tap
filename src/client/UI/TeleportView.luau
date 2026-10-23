@@ -161,6 +161,34 @@ end
 -- The bar's colours (owner's BASE / MINE / SPAWN photo: blue, teal, purple).
 TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [string]: string }
 
+-- The words' glyph height on the bar (design units) per layout: the pixel
+-- font is wide, so the word fits its button with room around it.
+TeleportView.PixelGlyph = { Normal = 20, Compact = 22, Narrow = 15 } :: { [string]: number }
+
+--[[
+	A bar button's word in the pixel reels' look (owner 2026-10-22): white
+	pixel letters with a black edge and a dark drop shadow, in a box as tall as
+	the letters, centred on the face above its lip (the word never reaches
+	the face's top edge, also not on phones), shrinking to fit the width.
+]]
+function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	if not label then
+		return
+	end
+	local glyph = TeleportView.PixelGlyph[kind] or TeleportView.PixelGlyph.Normal
+	local lip = Pop.lipUnits(size.Y)
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.new(0.5, 0, 0.5, -math.floor(lip / 2))
+	label.Size = UDim2.new(1, -16, 0, glyph + 6)
+	Pop.fit(label, math.floor(glyph / PopTheme.PixelScale + 0.5))
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = if glyph >= 20 then 2.5 else 2
+	end
+	Pop.shadow(label, 3)
+end
+
 --[[
 	The Pop bar (owner 2026-10-20): a dark rounded strip at the very top with
 	a bright button per spot, a light rim inside each, the word in white with
@@ -207,23 +235,7 @@ local function buildPop(topBar: Frame): Refs
 				LayoutOrder = i,
 			})
 			button:SetAttribute("Teleport", spot.Id)
-			local label = button:FindFirstChild("Label") :: TextLabel
-			label.TextSize = if narrow then 24 elseif compact then 28 else 26
-			-- the light rim inside the black border (the photo's glow)
-			local rim = UIKit.new("Frame", {
-				Name = "Rim",
-				BackgroundTransparency = 1,
-				Position = UDim2.fromOffset(3, 3),
-				Size = UDim2.new(1, -6, 1, -6),
-				ZIndex = 5,
-			}, button)
-			UIKit.corner(rim, 4)
-			UIKit.new("UIStroke", {
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				Color = paint.Top:Lerp(Color3.new(1, 1, 1), 0.55),
-				Thickness = 2,
-				Transparency = 0.15,
-			}, rim)
+			TeleportView.pixelLabel(button, size, if narrow then "Narrow" elseif compact then "Compact" else "Normal")
 			local cover = Pop.text(button, "", 26, {
 				Name = "Cooldown",
 				BackgroundColor3 = PopTheme.Outline,

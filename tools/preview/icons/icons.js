@@ -1,8 +1,9 @@
-// Terra Forge 3D UI icons (light "Bubble" UI style, like popular simulators).
-// Each icon is a small glossy three.js model rendered on a transparent
-// background, cropped, and given a thick dark outline. The PNGs are uploaded
-// to Roblox as images (they are pictures, not in-game models).
-//   page: /icons/icons.html?icon=<name>&size=512
+// Terra Forge 3D UI icons. Each icon is a small three.js model rendered on a
+// transparent background, cropped, and given a thick dark outline. The PNGs are
+// uploaded to Roblox as images (they are pictures, not in-game models).
+// Default style "pixel" (the owner's reels, docs/plans/UI_PIXEL_BRIEF.md): thick
+// near-black outline, bold toon colour, dark lines between parts, faint stud grid.
+//   page: /icons/icons.html?icon=<name>&size=512[&style=bubble]  (bubble = the older glossy look)
 // Icons named "parts:<file>" load a part model exported by
 // tools/lune/export_icon_parts.luau (blaster, ore chunks), so they match the game.
 import * as THREE from "three";
@@ -34,7 +35,12 @@ const params = new URLSearchParams(location.search);
 const iconName = params.get("icon") || "coin";
 const SIZE = Number(params.get("size") || 512);
 const RENDER = 1024;
-const OUTLINE = "#1b1d33";
+// style=pixel (default): the owner's reel look (docs/plans/UI_PIXEL_BRIEF.md): thick near-black outline,
+// bold toon colour, dark lines between parts and a faint stud grid on the surfaces.
+// style=bubble: the older glossy "Bubble" look (thinner navy outline, soft 3D shading).
+const STYLE = params.get("style") === "bubble" ? "bubble" : "pixel";
+const PIXEL = STYLE === "pixel";
+const OUTLINE = PIXEL ? "#0e0e12" : "#1b1d33";
 
 // ---------------------------------------------------------------- helpers
 const D = THREE.MathUtils.degToRad;
@@ -1019,7 +1025,158 @@ const PART_ICONS = {
 window.ICON_NAMES = [...Object.keys(ICONS), ...Object.keys(PART_ICONS), ...Object.keys(RUNES)];
 
 // ---------------------------------------------------------------- render
-function outlined(src, size) {
+// Pixel style tuning (fractions of the icon size unless noted)
+const PX = {
+  stroke: 0.056, // outer outline
+  inner: 0.0085, // lines between differently coloured parts
+  hole: 0.008, // outline into see-through holes (cart wires): thinner, so the holes stay open
+  stud: 1 / 13, // stud grid cell
+  sat: 1.38, // saturation boost
+  contrast: 1.12,
+  bands: 4, // toon light bands
+  toon: 0.55, // how much of the banded light is mixed in
+};
+
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+// Bold toon colour: more saturation and contrast, light pulled towards a few flat bands.
+function toonGrade(ctx, size) {
+  const img = ctx.getImageData(0, 0, size, size);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    let r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    // saturation around the grey of the same light
+    r = l + (r - l) * PX.sat;
+    g = l + (g - l) * PX.sat;
+    b = l + (b - l) * PX.sat;
+    // banded light: scale the colour so its light lands on (or near) a band
+    const t = l * PX.bands;
+    const f = t - Math.floor(t);
+    const smooth = f < 0.35 ? 0 : f > 0.65 ? 1 : (f - 0.35) / 0.3;
+    const banded = (Math.floor(t) + smooth * smooth * (3 - 2 * smooth)) / PX.bands;
+    // dark paint (blasters, iron) keeps its own light: no banding or contrast down there
+    const keep = l < 0.12 ? 0 : l > 0.36 ? 1 : (l - 0.12) / 0.24;
+    const target = l + (banded - l) * PX.toon * keep;
+    const k = l > 0.004 ? target / l : 1;
+    const c = 1 + (PX.contrast - 1) * keep;
+    r = clamp01((r * k - 0.5) * c + 0.5);
+    g = clamp01((g * k - 0.5) * c + 0.5);
+    b = clamp01((b * k - 0.5) * c + 0.5);
+    d[i] = r * 255;
+    d[i + 1] = g * 255;
+    d[i + 2] = b * 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+// Faint blocky studs over the paint (only on drawn pixels): a rounded square per cell,
+// light top-left edge, dark bottom-right edge, like the reels' studded icons.
+function studs(ctx, size) {
+  const cell = size * PX.stud;
+  const n = Math.ceil(size / cell) + 1;
+  const off = (size - (n - 1) * cell) / 2 - cell / 2;
+  const inset = cell * 0.13, w = cell - 2 * inset, r = cell * 0.2, lw = Math.max(1, cell * 0.075);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const x = off + i * cell + inset, y = off + j * cell + inset;
+      // groove between studs
+      ctx.fillStyle = "rgba(0,0,0,0.07)";
+      ctx.fillRect(off + i * cell, off + j * cell, cell, cell);
+      roundRect(ctx, x, y, w, w, r);
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.fill();
+      // dark bottom-right edge
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = "rgba(0,0,0,0.16)";
+      ctx.beginPath();
+      ctx.moveTo(x + w - r * 0.3, y + r);
+      ctx.lineTo(x + w - r * 0.3, y + w - r * 0.3);
+      ctx.lineTo(x + r, y + w - r * 0.3);
+      ctx.stroke();
+      // light top-left edge
+      ctx.strokeStyle = "rgba(255,255,255,0.34)";
+      ctx.beginPath();
+      ctx.moveTo(x + r * 0.3, y + w - r);
+      ctx.lineTo(x + r * 0.3, y + r * 0.3);
+      ctx.lineTo(x + w - r, y + r * 0.3);
+      ctx.stroke();
+    }
+  ctx.restore();
+}
+
+// Transparent pixels not reachable from the border (holes in the shape), as a mask canvas, or null.
+function holeMask(ctx, size) {
+  const a = ctx.getImageData(0, 0, size, size).data;
+  const seen = new Uint8Array(size * size);
+  const stack = [];
+  const push = (p) => {
+    if (!seen[p] && a[p * 4 + 3] < 96) {
+      seen[p] = 1;
+      stack.push(p);
+    }
+  };
+  for (let i = 0; i < size; i++) {
+    push(i);
+    push((size - 1) * size + i);
+    push(i * size);
+    push(i * size + size - 1);
+  }
+  while (stack.length) {
+    const p = stack.pop();
+    const x = p % size, y = (p / size) | 0;
+    if (x > 0) push(p - 1);
+    if (x < size - 1) push(p + 1);
+    if (y > 0) push(p - size);
+    if (y < size - 1) push(p + size);
+  }
+  const m = new ImageData(size, size);
+  let any = false;
+  for (let p = 0; p < size * size; p++)
+    if (!seen[p] && a[p * 4 + 3] < 96) {
+      m.data[p * 4 + 3] = 255;
+      any = true;
+    }
+  if (!any) return null;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  c.getContext("2d").putImageData(m, 0, 0);
+  return c;
+}
+
+// Draws `mask` (opaque where there is something) as a solid OUTLINE shape grown by r px.
+function grow(target, mask, r, size, steps = 48) {
+  const sil = document.createElement("canvas");
+  sil.width = sil.height = size;
+  const sc = sil.getContext("2d");
+  sc.drawImage(mask, 0, 0);
+  sc.globalCompositeOperation = "source-in";
+  sc.fillStyle = OUTLINE;
+  sc.fillRect(0, 0, size, size);
+  const rings = r < 1.5 ? [r] : [1, 0.82, 0.64, 0.46, 0.28].map((f) => r * f);
+  for (const rr of rings)
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      target.drawImage(sil, Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+  target.drawImage(sil, 0, 0);
+}
+
+// src: the render; edges (pixel style): a mask of the lines between parts, same size as src.
+function outlined(src, size, edges = null) {
   // crop to the drawn pixels
   const w = src.width, h = src.height;
   const ctx = src.getContext("2d");
@@ -1034,7 +1191,7 @@ function outlined(src, size) {
         if (y > y1) y1 = y;
       }
   const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-  const stroke = Math.round(size * 0.034);
+  const stroke = Math.round(size * (PIXEL ? PX.stroke : 0.034));
   const room = size - 2 * (stroke + Math.round(size * 0.02));
   const k = room / Math.max(bw, bh);
   const dw = bw * k, dh = bh * k;
@@ -1042,9 +1199,43 @@ function outlined(src, size) {
 
   const icon = document.createElement("canvas");
   icon.width = icon.height = size;
-  const ic = icon.getContext("2d");
+  const ic = icon.getContext("2d", { willReadFrequently: true });
   ic.imageSmoothingQuality = "high";
   ic.drawImage(src, x0, y0, bw, bh, dx, dy, dw, dh);
+
+  if (PIXEL) {
+    toonGrade(ic, size);
+    studs(ic, size);
+    if (edges) {
+      const em = document.createElement("canvas");
+      em.width = em.height = size;
+      const ec = em.getContext("2d");
+      ec.imageSmoothingQuality = "high";
+      ec.drawImage(edges, x0, y0, bw, bh, dx, dy, dw, dh);
+      const lines = document.createElement("canvas");
+      lines.width = lines.height = size;
+      grow(lines.getContext("2d"), em, size * PX.inner, size, 24);
+      ic.save();
+      ic.globalCompositeOperation = "source-atop";
+      ic.drawImage(lines, 0, 0);
+      ic.restore();
+    }
+    // the thick outline goes only around the outer shape; holes inside it get a thin one
+    const holes = holeMask(ic, size);
+    const out = document.createElement("canvas");
+    out.width = out.height = size;
+    const oc = out.getContext("2d");
+    grow(oc, icon, stroke, size, 64);
+    if (holes) {
+      oc.save();
+      oc.globalCompositeOperation = "destination-out";
+      oc.drawImage(holes, 0, 0);
+      oc.restore();
+      grow(oc, icon, Math.max(1, size * PX.hole), size, 24);
+    }
+    oc.drawImage(icon, 0, 0);
+    return out;
+  }
 
   const sil = document.createElement("canvas");
   sil.width = sil.height = size;
@@ -1065,6 +1256,112 @@ function outlined(src, size) {
   }
   oc.drawImage(icon, 0, 0);
   return out;
+}
+
+// Pixel style: the lines between parts. Three flat passes (mesh id, unlit material colour, depth);
+// a pixel is a line where the mesh changes and either the material colour clearly differs
+// (red/blue magnet, jewel in gold) or the surface behind is much further away (overlapping coins).
+function partEdges(renderer, scene, camera, center, radius) {
+  const meshes = [];
+  scene.traverse((o) => o.isMesh && meshes.push(o));
+  const pass = (makeMat) => {
+    const saved = meshes.map((o, i) => {
+      const m = o.material;
+      o.material = makeMat(o, i + 1);
+      return m;
+    });
+    renderer.render(scene, camera);
+    const c = document.createElement("canvas");
+    c.width = c.height = RENDER;
+    const cx = c.getContext("2d");
+    cx.drawImage(renderer.domElement, 0, 0);
+    meshes.forEach((o, i) => {
+      o.material.dispose();
+      o.material = saved[i];
+    });
+    return cx.getImageData(0, 0, RENDER, RENDER).data;
+  };
+  const env = scene.environment;
+  scene.environment = null;
+  const basic = (color, o) => new THREE.MeshBasicMaterial({ color, toneMapped: false, side: o.material.side });
+  const ids = pass((o, id) => basic(new THREE.Color(((id * 2654435761) >>> 8) & 0xffffff), o));
+  const base = pass((o) => basic(o.material.color ? o.material.color.clone() : new THREE.Color(0xffffff), o));
+  // linear depth over the model (0 = front, 1 = back) in 16 bits, read from a render target (no colour conversion)
+  const dist = camera.position.distanceTo(center);
+  const zNear = dist - radius * 1.1, zFar = dist + radius * 1.1;
+  const rt = new THREE.WebGLRenderTarget(RENDER, RENDER, { samples: 0 });
+  const depthMat = new THREE.ShaderMaterial({
+    uniforms: { zNear: { value: zNear }, zFar: { value: zFar } },
+    vertexShader: "varying float vz; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vz = -mv.z; gl_Position = projectionMatrix * mv; }",
+    fragmentShader:
+      "uniform float zNear; uniform float zFar; varying float vz; void main() { float t = clamp((vz - zNear) / (zFar - zNear), 0.0, 1.0) * 255.0; gl_FragColor = vec4(floor(t) / 255.0, fract(t), 0.0, 1.0); }",
+    side: THREE.DoubleSide,
+  });
+  const saved = meshes.map((o) => o.material);
+  meshes.forEach((o) => (o.material = depthMat));
+  renderer.setRenderTarget(rt);
+  renderer.setClearColor(0xffffff, 1);
+  renderer.clear();
+  renderer.render(scene, camera);
+  const raw = new Uint8Array(RENDER * RENDER * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, RENDER, RENDER, raw);
+  renderer.setRenderTarget(null);
+  renderer.setClearColor(0x000000, 0);
+  meshes.forEach((o, i) => (o.material = saved[i]));
+  depthMat.dispose();
+  rt.dispose();
+  const depth = new Float32Array(RENDER * RENDER);
+  for (let y = 0; y < RENDER; y++)
+    for (let x = 0; x < RENDER; x++) {
+      const k = ((RENDER - 1 - y) * RENDER + x) * 4;
+      depth[y * RENDER + x] = (raw[k] + raw[k + 1] / 255) / 255;
+    }
+  scene.environment = env;
+
+  const mask = document.createElement("canvas");
+  mask.width = mask.height = RENDER;
+  const mc = mask.getContext("2d");
+  const out = mc.createImageData(RENDER, RENDER);
+  const o = out.data;
+  const S = 2; // compare 2 px apart, past the anti-aliased seam
+  const d3 = (t, a, b) => Math.abs(t[a] - t[b]) + Math.abs(t[a + 1] - t[b + 1]) + Math.abs(t[a + 2] - t[b + 2]);
+  for (let y = 2 * S; y < RENDER - 2 * S; y++)
+    for (let x = 2 * S; x < RENDER - 2 * S; x++) {
+      const p = y * RENDER + x, i = p * 4;
+      if (ids[i + 3] < 250) continue;
+      for (const step of [S, RENDER * S, -S, -RENDER * S]) {
+        const q = p + step, j = q * 4;
+        if (ids[j + 3] < 250) continue;
+        // material colour changes (only between different meshes)
+        let line = d3(ids, i, j) >= 24 && d3(base, i, j) > 90;
+        // or a depth step: the neighbour is much further away, and it is a step, not a steep slope
+        if (!line) {
+          const jump = depth[q] - depth[p];
+          const before = Math.abs(depth[p] - depth[p - step]);
+          line = jump > 0.009 && jump > 4 * before;
+        }
+        if (line) {
+          o[i] = o[i + 1] = o[i + 2] = 0;
+          o[i + 3] = 255;
+          break;
+        }
+      }
+    }
+  // drop specks: keep a line pixel only if its 9 x 9 neighbourhood holds a real stroke
+  const N = RENDER + 1, sum = new Uint32Array(N * N);
+  for (let y = 0; y < RENDER; y++)
+    for (let x = 0; x < RENDER; x++)
+      sum[(y + 1) * N + x + 1] = (o[(y * RENDER + x) * 4 + 3] ? 1 : 0) + sum[y * N + x + 1] + sum[(y + 1) * N + x] - sum[y * N + x];
+  const R = 4;
+  for (let y = 0; y < RENDER; y++)
+    for (let x = 0; x < RENDER; x++) {
+      const i = (y * RENDER + x) * 4;
+      if (!o[i + 3]) continue;
+      const ya = Math.max(0, y - R), yb = Math.min(RENDER, y + R + 1), xa = Math.max(0, x - R), xb = Math.min(RENDER, x + R + 1);
+      if (sum[yb * N + xb] - sum[ya * N + xb] - sum[yb * N + xa] + sum[ya * N + xa] < 9) o[i + 3] = 0;
+    }
+  mc.putImageData(out, 0, 0);
+  return mask;
 }
 
 async function main() {
@@ -1146,7 +1443,7 @@ async function main() {
   const src = document.createElement("canvas");
   src.width = src.height = RENDER;
   src.getContext("2d").drawImage(renderer.domElement, 0, 0);
-  const out = outlined(src, SIZE);
+  const out = outlined(src, SIZE, PIXEL ? partEdges(renderer, scene, camera, center, radius) : null);
   window.__png = out.toDataURL("image/png");
   out.style.background = "#7a8db0";
   document.body.appendChild(out);
