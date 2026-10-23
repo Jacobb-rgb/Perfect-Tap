@@ -146,28 +146,11 @@ local function band(panel: Frame, paint: Pop.Paint): Frame
 	Pop.face(head, paint, 6, false)
 	local border = head:FindFirstChild("Border") :: UIStroke
 	border.Thickness = 3
+	-- (the pixel reels: the lattice over the band and a gleam now and then, no stripes;
+	-- the band is sized by the layout later: the lattice assumes a wide one)
+	head.Size = UDim2.fromOffset(1100, 80)
 	Pop.studs(head, 6, 0.35, 40, 0)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 0,
-	}, head)
-	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
-		UIKit.new("Frame", {
-			Name = "Stripe" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = PopTheme.Stripe,
-			BorderSizePixel = 0,
-			Position = UDim2.new(s[1], (i - 1) * 40, 0.5, 0),
-			Rotation = 32,
-			Size = UDim2.new(0, s[2], 2.6, 0),
-			ZIndex = 0,
-		}, head)
-	end
+	Pop.gleam(head, 0)
 	return head
 end
 
@@ -227,6 +210,7 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	Pop.shadow(titleLabel)
 	local subtitleLabel = Pop.text(panel, subtitle, 15, {
 		Name = "Subtitle",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = rgb(255, 252, 236),
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -261,6 +245,7 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	}, panel)
 	local hint = Pop.text(panel, "", 15, {
 		Name = "Hint",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		AnchorPoint = Vector2.new(0.5, 1),
 		TextColor3 = MenuPanel.SoftInk,
 		ZIndex = 2,

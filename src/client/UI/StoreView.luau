@@ -195,6 +195,65 @@ local function ownedTag(parent: Instance, height: number, right: boolean): Frame
 	return tag
 end
 
+--[[
+	The pixel reels' tilted price tag ("119R" beside the picture): no face,
+	the robux mark and the amount in green pixel letters, turned 24 degrees.
+	A TextButton named `name` with "Row" > "Mark" + "Amount" like Pop.price,
+	so Pop.setPrice works on it.
+]]
+StoreView.TagTilt = 24
+local function priceTag(parent: Instance, robux: number?, name: string, at: UDim2, width: number, button: boolean): GuiObject
+	-- (the left tag is the card's Price button, StoreController wires it; the right one is
+	-- only a picture: a Frame, so a tap on it reaches the card underneath)
+	local tag: GuiObject = if button
+		then UIKit.new("TextButton", {
+			AutoButtonColor = false,
+			Selectable = false, -- (one gamepad stop per card: the card buys)
+			Text = "",
+		}, parent)
+		else UIKit.new("Frame", {}, parent)
+	tag.Name = name
+	tag.AnchorPoint = Vector2.new(0.5, 0.5)
+	tag.BackgroundTransparency = 1
+	tag.Position = at
+	tag.Rotation = StoreView.TagTilt
+	tag.Size = UDim2.fromOffset(width, 40)
+	tag.ZIndex = 7
+	local row = UIKit.new("Frame", {
+		Name = "Row",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 7,
+	}, tag)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 2, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local mark = UIKit.new("ImageLabel", {
+		Name = "Mark",
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(28, 28),
+		ZIndex = 8,
+	}, row)
+	IconAssets.apply(mark, "robux")
+	mark:SetAttribute("Icon", "robux")
+	local words = if robux then tostring(robux) else ""
+	Pop.text(row, words, 30, {
+		Name = "Amount",
+		LayoutOrder = 1,
+		Size = UDim2.fromOffset(Pop.textWidth(words, 30), 30),
+		ZIndex = 8,
+	})
+	return tag
+end
+
+-- An Item card's bottom line: its pixel tag, else its short text, else the product's.
+function StoreView.itemLine(spec: StoreConfig.CardSpec, description: string): string
+	return spec.Tag or spec.Short or description
+end
+
 local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number, h: number): CardRefs
 	local product = productOf(spec)
 	local paint = paintOf(spec)
@@ -206,14 +265,23 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		Pop.rainbow(button)
 	end
 	local priceH = if spec.Look == "Bundle" then 62 else 50
-	local priceW = if spec.Look == "Bundle" then 300 elseif spec.Look == "Item" then math.floor(w * 0.5) else w - 24
-	local price = Pop.price(button, product.Robux, Vector2.new(priceW, priceH), {
-		AnchorPoint = if spec.Look == "Bundle" or spec.Look == "Item" then Vector2.new(1, 1) else Vector2.new(0.5, 1),
-		Position = if spec.Look == "Bundle" or spec.Look == "Item" then UDim2.new(1, -12, 1, -12) else UDim2.new(0.5, 0, 1, -10),
-		Selectable = false, -- (one gamepad stop per card: the card buys)
-		ZIndex = 6,
-	})
-	price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
+	local priceW = if spec.Look == "Bundle" then 300 else w - 24
+	local item = spec.Look == "Item"
+	-- (Item: the reels' square card, its price on two tilted tags beside the picture)
+	local tagW = math.floor(math.min(w * 0.3, 130))
+	local price = if item
+		then priceTag(button, product.Robux, "Price", UDim2.new(0, math.floor(tagW * 0.5) + 6, 0.36, 0), tagW, true) :: TextButton
+		else Pop.price(button, product.Robux, Vector2.new(priceW, priceH), {
+			AnchorPoint = if spec.Look == "Bundle" then Vector2.new(1, 1) else Vector2.new(0.5, 1),
+			Position = if spec.Look == "Bundle" then UDim2.new(1, -12, 1, -12) else UDim2.new(0.5, 0, 1, -10),
+			Selectable = false, -- (one gamepad stop per card: the card buys)
+			ZIndex = 6,
+		})
+	if item then
+		priceTag(button, product.Robux, "PriceMirror", UDim2.new(1, -(math.floor(tagW * 0.5) + 6), 0.36, 0), tagW, false)
+	else
+		price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
+	end
 	local priceAmount = (price:FindFirstChild("Row") :: Frame):FindFirstChild("Amount") :: TextLabel
 	local shade = UIKit.new("Frame", {
 		Name = "Shade",
@@ -233,13 +301,13 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		Description = nil,
 		Price = price,
 		PriceAmount = priceAmount,
-		Owned = ownedTag(button, priceH - 6, spec.Look == "Bundle" or spec.Look == "Item"),
+		Owned = ownedTag(button, if item then 40 else priceH - 6, spec.Look == "Bundle"),
 		Shade = shade,
 		Key = spec.Keys[1],
 		State = "Buy",
 	}
 	local title = spec.Title or product.Name
-	local below = priceH + 14 -- the price's room at the bottom
+	local below = if item then 0 else priceH + 14 -- the price's room at the bottom
 	if spec.Look == "Bundle" then
 		refs.Title = Pop.title(button, title, 46, "Gold", {
 			AnchorPoint = Vector2.new(0, 0),
@@ -260,6 +328,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		for i, line in lines do
 			Pop.text(button, "+ " .. line, 22, {
 				Name = "Line" .. i,
+				FontFace = PopTheme.Font, -- (one font for the whole list: the round one, readable)
 				Position = UDim2.fromOffset(34, 72 + i * 32),
 				Size = UDim2.new(0.5, 0, 0, 30),
 				TextColor3 = Color3.fromRGB(255, 248, 200),
@@ -334,6 +403,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		})
 		local note = Pop.text(button, spec.Note or "", 17, {
 			Name = "Note",
+			FontFace = PopTheme.Font, -- (a short sentence: the round font, readable on phones)
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -(below - 2)),
 			Size = UDim2.new(1, -12, 0, 24),
@@ -343,32 +413,29 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 		if spec.Look == "Star" then
 			refs.Description = note
 		end
-	else -- "Item": the picture left, the title and text right, the price bottom right
-		local size = math.floor(h - 56)
-		local pic = picture(button, spec, size, {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 8, 0.46, 0),
+	else -- "Item" (the pixel reels' square card): the pixel title on top, the
+		-- picture in the middle between the two price tags, a short pixel line at the bottom
+		refs.Title = Pop.text(button, string.upper(title), 34, {
+			Name = "Title",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.new(1, -20, 0, 36),
+			ZIndex = 7,
+		})
+		local size = math.floor(math.min(w * 0.56, h - 100))
+		picture(button, spec, size, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 2),
 			ZIndex = 5,
 		})
-		-- (no picture in the game: the words take the whole card, never a blank square)
-		local left = if pic:GetAttribute("Empty") == true then 14 else size + 18
-		refs.Title = Pop.text(button, title, 28, {
-			Name = "Title",
-			Position = UDim2.fromOffset(left, 10),
-			Size = UDim2.new(1, -(left + 10), 0, 34),
-			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			ZIndex = 7,
-		})
-		refs.Description = Pop.text(button, spec.Short or product.Description, 17, {
+		refs.Description = Pop.text(button, StoreView.itemLine(spec, product.Description), 22, {
 			Name = "Description",
-			Position = UDim2.fromOffset(left, 48),
-			Size = UDim2.new(1, -(left + 10), 1, -(48 + below)),
-			TextWrapped = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -16),
+			Size = UDim2.new(1, -20, 0, 28),
 			ZIndex = 7,
 		})
+		refs.Owned.Position = UDim2.new(0.5, 0, 1, -12) -- (over the bottom line: setCard hides that line)
 	end
 	if spec.Ribbon then
 		local ribbon = Pop.ribbon(button, spec.Ribbon, 136)
@@ -421,6 +488,15 @@ function StoreView.relayout(refs: Refs): number
 				local h = rowHeight(section, r)
 				local unit = (StoreView.CardsWidth - (#shown - 1) * gap) / spans
 				local x = 0
+				-- (the pixel reels' square pass cards: never wider than three a row; a short row is centred)
+				local squares = true
+				for _, card in shown do
+					squares = squares and card.Spec.Look == "Item"
+				end
+				if squares then
+					unit = math.min(unit, (StoreView.CardsWidth - 2 * gap) / 3)
+					x = math.floor((StoreView.CardsWidth - (unit * spans + (#shown - 1) * gap)) / 2)
+				end
 				for _, card in shown do
 					local w = math.floor(unit * (card.Spec.Span or 1))
 					card.Button.Position = UDim2.fromOffset(x, inner)
@@ -915,9 +991,26 @@ function StoreView.build(): Refs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, holder)
-	local window = Pop.window(group, StoreConfig.Title, size, StoreView.Header, "Green")
+	local window = Pop.window(group, string.upper(StoreConfig.Title), size, StoreView.Header, "Green")
 	window.Root.AnchorPoint = Vector2.new(0, 0)
 	window.Root.Position = UDim2.fromOffset(0, 0)
+	-- (the pixel reels' shop: a rainbow band, the cart picture over its left end, a big pixel SHOP)
+	Pop.rainbow(window.Header)
+	local cartSize = math.floor(StoreView.Header * 1.25)
+	local cartModel = PictureModels.build("cart")
+	Pop.model(window.Root, "cart", cartSize, cartModel, {
+		Name = "Cart",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, -10, 0, math.floor(StoreView.Header / 2)),
+		ZIndex = 6,
+	}, Vector3.new(-0.7, 0.45, -1))
+	window.Title.Position = UDim2.new(0, cartSize - 6, 0.5, 0)
+	window.Title.Size = UDim2.new(0, 420, 1, -6)
+	local titleShadow = window.Header:FindFirstChild("TitleShadow")
+	if titleShadow and titleShadow:IsA("GuiObject") then
+		titleShadow.Position = window.Title.Position + UDim2.fromOffset(0, 4)
+		titleShadow.Size = window.Title.Size
+	end
 
 	local scroller = UIKit.new("ScrollingFrame", {
 		Name = "Cards",
@@ -977,6 +1070,7 @@ function StoreView.build(): Refs
 
 	local status = Pop.text(window.Body, "", 20, {
 		Name = "Status",
+		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
 		AnchorPoint = Vector2.new(0.5, 1),
 		BackgroundColor3 = PopTheme.Outline,
 		BackgroundTransparency = 0.25,
@@ -1195,10 +1289,16 @@ function StoreView.setCard(refs: Refs, id: string, key: string, state: string)
 	card.State = state
 	Pop.setPrice(card.Price, product.Robux)
 	if card.Description and card.Spec.Look == "Item" then
-		card.Description.Text = card.Spec.Short or product.Description
+		card.Description.Text = StoreView.itemLine(card.Spec, product.Description)
+		card.Description.Visible = state ~= "Owned"
 	end
 	card.Button.Visible = state ~= "Hidden"
 	card.Price.Visible = state == "Buy" or state == "Pending"
+	local mirror = card.Button:FindFirstChild("PriceMirror")
+	if mirror and mirror:IsA("GuiObject") then
+		Pop.setPrice(mirror, product.Robux)
+		mirror.Visible = card.Price.Visible
+	end
 	card.Owned.Visible = state == "Owned"
 	card.Button.Active = state == "Buy"
 	card.Shade.Visible = state == "Pending" or state == "Locked"

@@ -1,5 +1,5 @@
 --[[
-	The DROPPER WORKS shop window (concept, owner 2026-10-21: like Sandbox
+	The DROPPERS shop window (concept, owner 2026-10-21: like Sandbox
 	Tycoon's build menu, in Terra Forge's fonts): a white panel with blue tab
 	buttons on top (DROPPERS / LASERS) and the red X, a pink title strip, a grid
 	of square tiles (name on top, the item's picture, the green price at the

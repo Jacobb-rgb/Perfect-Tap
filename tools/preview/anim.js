@@ -264,6 +264,7 @@ class StreakLayer {
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
+  await document.fonts.load('40px "Press Start 2P"');
   const data = await fetch("/scenes/anim_crate.json").then((r) => r.json());
   const meta = data.meta;
   const glow = hexColor(meta.glow);

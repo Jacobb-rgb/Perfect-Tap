@@ -125,6 +125,9 @@ GolemConfig.Accessories = {
 	DragonHelm = true, -- Dragonforge: a horned dragon-head helm and a dragon shield
 	DragonWings = true, -- Dragonforge: big fiery wings, horns, a snout (Legendary: lava hands, a tail)
 	DragonCrown = true, -- Dragonforge: a crown of flames and huge gold-boned wings (the Dragon King)
+	SkyPuff = true, -- Sky egg: a black wind knight's helm with a sky-blue visor, wing crests, a star lance
+	StormArmor = true, -- Sky egg: storm armour, lightning horns and a lightning spear
+	AetherWings = true, -- Sky egg: black and gold armour, a crown and halo, angel wings
 } :: { [string]: boolean }
 
 -- GolemAction / ActionResult reason codes -> text for the player
@@ -450,6 +453,51 @@ GolemConfig.List = {
 		Bonus = { Type = "Income", Value = 0.45 },
 		Lore = "Crowned in the heart of the volcano. Every dragon in the sky bows to it.",
 		Edition = "Dragonforge",
+	}),
+	---------------------------------------------------------------- the SKY EGG (Sky Haven)
+	-- (a coin egg on the Sky Haven island, owner 2026-10-22: "dej do hry";
+	-- costumes Builders/LimitedGear/Sky, Edition "Sky" = their costume set)
+	limited({
+		Id = "SkySprite",
+		Name = "Sky Sprite",
+		Rarity = "Epic",
+		Body = rgb(40, 44, 60),
+		Trim = rgb(26, 28, 40),
+		Glow = rgb(110, 210, 255),
+		Material = Enum.Material.SmoothPlastic,
+		Accessory = "SkyPuff",
+		Scale = 1.15,
+		Bonus = { Type = "Luck", Value = 0.11 },
+		Lore = "A knight of the wind over Sky Haven. It naps on the clouds.",
+		Edition = "Sky",
+	}),
+	limited({
+		Id = "StormSentinel",
+		Name = "Storm Sentinel",
+		Rarity = "Legendary",
+		Body = rgb(70, 84, 118),
+		Trim = rgb(40, 48, 74),
+		Glow = rgb(255, 226, 80),
+		Material = Enum.Material.Slate,
+		Accessory = "StormArmor",
+		Scale = 1.22,
+		Bonus = { Type = "MiningSpeed", Value = 0.26 },
+		Lore = "Guards the island's edge. Every step it takes is a thunderclap.",
+		Edition = "Sky",
+	}),
+	limited({
+		Id = "AetherKing",
+		Name = "Aether King",
+		Rarity = "Mythic",
+		Body = rgb(40, 44, 60),
+		Trim = rgb(255, 196, 56),
+		Glow = rgb(120, 220, 255),
+		Material = Enum.Material.SmoothPlastic,
+		Accessory = "AetherWings",
+		Scale = 1.3,
+		Bonus = { Type = "Income", Value = 0.42 },
+		Lore = "Rules the sky over Sky Haven. The clouds part where it walks.",
+		Edition = "Sky",
 	}),
 } :: { Golem }
 

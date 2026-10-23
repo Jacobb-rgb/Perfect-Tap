@@ -1255,12 +1255,13 @@ end
 
 type ButtonStyle = {
 	Paint: Pop.Paint,
-	Mid: Color3, -- the face's colour at its glossy step (Pop.face)
+	Mid: Color3, -- the face gradient's second key (Pop.face: the deep end before the lip)
 	Icon: string?,
 }
 
 local function buttonStyle(paint: Pop.Paint, icon: string?): ButtonStyle
-	return { Paint = paint, Mid = paint.Top:Lerp(paint.Bottom, 0.42), Icon = icon }
+	-- (Mid: the face gradient's second key; the pixel kit's face runs Top -> Bottom, then the lip)
+	return { Paint = paint, Mid = paint.Bottom, Icon = icon }
 end
 
 local BUTTON_STYLES: { [string]: ButtonStyle } = {
@@ -1481,7 +1482,7 @@ local function newTile(strip: Frame, index: number, color: Color3, text: string,
 		TextScaled = true,
 		ZIndex = 3,
 	})
-	UIKit.new("UITextSizeConstraint", { MaxTextSize = 40 }, number)
+	Pop.limit(number, 40)
 	UIKit.new("UIPadding", {
 		PaddingTop = UDim.new(0.16, 0),
 		PaddingBottom = UDim.new(0.12, 0),

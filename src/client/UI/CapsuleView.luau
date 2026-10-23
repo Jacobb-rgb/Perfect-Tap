@@ -540,6 +540,7 @@ CapsuleView.Paints = {
 	Stone = "Orange",
 	Crystal = "Purple",
 	Royal = "Blue",
+	Sky = "Teal",
 } :: { [string]: string }
 
 function CapsuleView.paintOf(capsuleId: string): string

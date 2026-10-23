@@ -419,8 +419,8 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- golems + capsules
 
-	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones", function()
-		T.eq(#GolemConfig.List, 24)
+	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones, 3 of the Sky egg", function()
+		T.eq(#GolemConfig.List, 27)
 		local editions = {}
 		for _, golem in GolemConfig.List do
 			if golem.Edition then
@@ -428,7 +428,8 @@ return function(T, Loader)
 			end
 		end
 		T.eq(editions.Dragonforge, 6, "the Dragonforge set")
-		T.eq(#GolemConfig.List - 6, 18, "the capsule golems")
+		T.eq(editions.Sky, 3, "the Sky egg's golems")
+		T.eq(#GolemConfig.List - 9, 18, "the capsule golems")
 		local names, rarities = {}, {}
 		for _, golem in GolemConfig.List do
 			T.falsy(names[golem.Name], "unique name " .. golem.Name)
@@ -655,8 +656,9 @@ return function(T, Loader)
 	end)
 
 	T.test("Step67: capsules: exact odds sum to 1, Triple Lucky triples the rarest and keeps the sum", function()
-		T.eq(#CapsuleConfig.List, 4)
-		T.eq(#CapsuleConfig.Stall, 3, "the limited capsule is shop-only")
+		T.eq(#CapsuleConfig.List, 5)
+		T.eq(#CapsuleConfig.Stall, 4, "the limited capsule is shop-only (the Sky egg has its tab)")
+		T.eq(CapsuleConfig.ById.Sky.Currency, "Coins")
 		T.eq(CapsuleConfig.ById.Dragonforge.Currency, "Robux")
 		T.eq(CapsuleConfig.ById.Dragonforge.Limited, "Dragonforge")
 		T.eq(CapsuleConfig.ById.Stone.Currency, "Coins")
