@@ -23,16 +23,15 @@
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
 	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
 	  the podiums (unless Podium Keeper), the Foundry's ingots, the train's
-	  cargo, the machines' queues, the placed droppers and Money Lasers (owner
-	  decision pending: keep or lose droppers; lost for now, so their income
-	  can't carry the new run) (RebirthService also takes your loose and
+	  cargo, the machines' queues (RebirthService also takes your loose and
 	  carried items out of the world). Dusty relics are artifacts, never
 	  ore: the ones in those lists wait in the pen (RebirthService hands them
 	  to the relic keeper, which adds them to the collection). The enchants
 	  stay slotted, the paid ones (Enchants.Passes) moved first into the
 	  slots the new blaster level opens.
-	- Keeps: the placed factory (every machine and belt where it stands), the
-	  machines in your inventory, machine slots, the pen size and automation,
+	- Keeps: the placed factory (every machine and belt where it stands, the
+	  droppers and Money Lasers too: owner 2026-10-23, "droppers stay after a
+	  rebirth"), the machines in your inventory, machine slots, the pen size and automation,
 	  the other gear lines, golems, enchants, artifacts, the codex,
 	  hoverboards, shards, every Robux item, the unspent Robux-bought coins
 	  (PaidCoins, below), stats and the leaderboard totals.
@@ -75,7 +74,6 @@
 	Pure: rules and save math only (server and client both read it).
 ]]
 
-local DropperConfig = require(script.Parent.DropperConfig)
 local BlasterData = require(script.Parent.BlasterData)
 local EnchantConfig = require(script.Parent.EnchantConfig)
 
@@ -526,25 +524,6 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 				entry.Out = nil
 			end
 		end
-		-- the droppers and Money Lasers come down, like the podiums' ore (owner
-		-- decision pending: keep or lose droppers); not back to the Build menu,
-		-- placing them again would keep their income
-		local list = data.PlacedMachines
-		for i = #list, 1, -1 do
-			local entry = list[i]
-			local id = if type(entry) == "table" then entry.Id else nil
-			if type(id) == "string" and (DropperConfig.ById[id] or id == DropperConfig.Laser.Id) then
-				table.remove(list, i)
-			end
-		end
-	end
-	-- ...and the ones packed into the Build menu before the rebirth go too (no zero keys)
-	local inventory = data.MachineInventory
-	if type(inventory) == "table" then
-		for id in DropperConfig.ById do
-			inventory[id] = nil
-		end
-		inventory[DropperConfig.Laser.Id] = nil
 	end
 	-- the enchants stay slotted: the paid ones first, into the slots the new level opens
 	local enchants = data.Enchants
