@@ -115,11 +115,11 @@ return function(T, Loader)
 	local GOLEMS =
 		{ "HeartstoneColossus", "CelestialSovereign", "ScaleKnight", "MoonstoneOracle", "GildedPorter", "PebbleGolem", "EmberImp" }
 
-	local function golemState(equipped: { number }): any
+	local function golemState(equipped: { number }, bond: number?): any
 		local s: any = {
 			Coins = 0,
 			Golems = { Owned = {}, Equipped = equipped, NextId = 1 },
-			Bonuses = { GolemBond = 0 },
+			Bonuses = { GolemBond = bond or 0 },
 		}
 		for _, id in GOLEMS do
 			GolemConfig.add(s.Golems, id)
@@ -146,7 +146,9 @@ return function(T, Loader)
 		for _, slot in refs.Slots do
 			local frameW, frameH = slot.Frame.Size.X.Offset, slot.Frame.Size.Y.Offset
 			readable(slot.Name, frameW, screen, 2, "slot")
-			readable(slot.Bonus, frameW, screen, 1, "slot bonus", 7)
+			if slot.Bonus.Text ~= "" then
+				readable(slot.Bonus, frameW, screen, 1, "slot bonus")
+			end
 			local nameBottom = slot.Name.Position.Y.Offset + slot.Name.Size.Y.Offset
 			T.le(nameBottom, slot.Bonus.Position.Y.Offset, `{screen.Name} slot "{slot.Name.Text}": the bonus under the name`)
 			local bonusBottom = slot.Bonus.Position.Y.Offset + slot.Bonus.Size.Y.Offset
@@ -176,6 +178,18 @@ return function(T, Loader)
 			local s2 = golemState({ 3, 4 })
 			GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
 			checkGolems(refs, screen)
+			-- Golem Bond: 13-letter bonus lines ("+13.8% MINING") in the slots and on the cards
+			for _, bond in { 0.25, 0.5 } do
+				local s3 = golemState({ 1, 4, 5 }, bond)
+				local bonded = GolemView.cards(s3)
+				GolemView.setCards(refs, bonded, bonded[1].Id, nil)
+				GolemView.setEquipped(refs, GolemView.equipped(s3), GolemView.totals(s3))
+				checkGolems(refs, screen)
+				for _, c in refs.Cards do
+					readable(c.Bonus, refs.GridLayout.CellSize.X.Offset, screen, 1, "card bonus")
+				end
+			end
+			GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
 			T.eq(refs.Slots[3].Name.Text, "EMPTY")
 			T.eq(refs.Slots[3].Name:GetAttribute("NameLines"), 1)
 		end
@@ -206,10 +220,22 @@ return function(T, Loader)
 			["Clean|Copper|Rough|"] = 2,
 			["Raw|Copper||"] = 1,
 		}
-		for _, screen in SCREENS do
+		-- (income multipliers for the longest amounts: "+$1.23K/s", "+$12.3Qa/s")
+		for _, case in
+			{
+				{ SCREENS[1], 1 },
+				{ SCREENS[2], 1 },
+				{ SCREENS[3], 1 },
+				{ SCREENS[4], 1 },
+				{ SCREENS[4], 41 },
+				{ SCREENS[4], 4.1e16 },
+				{ SCREENS[1], 4.1e16 },
+			}
+		do
+			local screen, mult = case[1], case[2]
 			local refs = PenView.build()
 			PenView.setCompact(refs, screen.Compact, roblox.Vector2.new(screen.W, screen.H))
-			PenView.setEntries(refs, PenView.entries(summary, "Pen"), true)
+			PenView.setEntries(refs, PenView.entries(summary, "Pen", mult), true)
 			local graded = 0
 			for _, row in refs.Rows do
 				local rowW = row.Frame.Size.X.Offset
@@ -220,7 +246,7 @@ return function(T, Loader)
 					local gradeRight = row.Grade.Position.X.Offset + row.Grade.Size.X.Offset
 					T.le(gradeRight, row.Income.Position.X.Offset, `{screen.Name} {row.Grade.Text}: the income right of the chip`)
 				end
-				if row.Income.Text ~= "" and Pop.isPixel(row.Income.FontFace) then
+				if string.sub(row.Income.Text, 1, 1) == "+" then -- (an amount; the mystery line is a round sentence)
 					readable(row.Income, rowW, screen, 1, "income")
 				end
 				local textEnd = row.Name.Position.X.Offset + row.Name.Size.X.Offset
@@ -245,10 +271,15 @@ return function(T, Loader)
 				CollectionView.fill(book, record)
 				for _, t in book.Tiles do
 					if t.Button.Visible then
-						-- (up to 19 letters - HEARTSTONE FRAGMENT - at the floor; the two
-						-- longest names, 23 and 27 letters, a little under it on the smallest phone)
+						-- (every name at the floor: two lines, three for the two longest names
+						-- (23 and 27 letters) or in a box made taller for three lines on the
+						-- smallest phones, CollectionView.nameHeight)
+						local nameH = t.Name.Size.Y.Offset
+						local tall = nameH > (if screen.Compact then 18 else 16) * 2 + 4
 						local long = letters(t.Name.Text) > 19
-						readable(t.Name, cellW, screen, if long then 3 else 2, "tile", if long then 7 else nil)
+						readable(t.Name, cellW, screen, if long or tall then 3 else 2, "tile")
+						T.le(6 + nameH, t.Icon.Position.Y.Offset, `{screen.Name} "{t.Name.Text}": the name above the picture`)
+						T.truthy(t.Icon.Size.X.Offset >= 40, `{screen.Name}: the picture keeps its room`)
 						if t.Chip.Visible then
 							readable(t.Chip, cellW, screen, 1, "tile chip")
 						end
