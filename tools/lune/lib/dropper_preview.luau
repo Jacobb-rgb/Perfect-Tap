@@ -461,11 +461,15 @@ function Preview.buildShop(Loader: any, workspace: any)
 		block(CF.new(px, plinth + 0.5, z0 + 5.0), V3.new(1.0, 1.0, 1.0), C.Copper)
 		Style.flowers(shop, V3.new(px, plinth + 1.1, z0 + 5.0), C.FlowerRed, rng, 3, 0.6)
 	end
-	-- two little droppers on show on the porch planks, facing the steps
-	for _, spot in { { "GoldDropper", -3.2, -0.5 }, { "RainbowDropper", 3.2, 0.5 } } do
-		local at = CF.new(spot[2] :: number, plinth + 0.2, z0 + 3.3) * CF.Angles(0, spot[3] :: number, 0)
-		local mini = DropperBuilder.build(spot[1] :: string, at)
-		Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit").scale(mini, at, 0.42)
+	-- a little Gold Dropper on a wooden shelf on the plank gable, above the sign
+	block(CF.new(0, eave + 0.15, z0 + 6.85), V3.new(3.6, 0.35, 1.3), C.WoodDark)
+	for _, bx in { -1.2, 1.2 } do
+		block(CF.new(bx, eave - 0.35, z0 + 6.55), V3.new(0.35, 0.7, 0.7), C.Wood, nil, true)
+	end
+	do
+		local at = CF.new(0, eave + 0.3, z0 + 6.85)
+		local mini = DropperBuilder.build("GoldDropper", at)
+		Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit").scale(mini, at, 0.32)
 		mini.Parent = shop
 	end
 	Style.tree(shop, CF.new(-26, 0, -10), "Pink", rng, 1.2)
