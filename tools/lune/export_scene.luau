@@ -837,6 +837,24 @@ else
 	error("Unknown scene: " .. sceneName)
 end
 
+-- STUD_STYLE=Classic|Custom: the studded style on everything (Shared/StudStyle, as
+-- every client restyles the map), e.g. STUD_STYLE=Custom ... export_scene.luau world_studs_custom
+local studLook = process.env.STUD_STYLE
+if studLook == "Classic" or studLook == "Custom" then
+	local StudStyle = Loader.requirePath("ReplicatedStorage.Shared.StudStyle")
+	Loader.requirePath("ReplicatedStorage.Shared.Config.StudStyleConfig").Previewing = true
+	for _, d in workspace:GetDescendants() do
+		-- Lune cannot read an unset MaterialVariant (an alias of MaterialVariantSerialized)
+		if d:IsA("BasePart") and not pcall(function()
+			return d.MaterialVariant
+		end) then
+			d.MaterialVariant = ""
+		end
+	end
+	StudStyle.ensureVariants(game:GetService("MaterialService"))
+	print(string.format("Stud style %s: %d parts", studLook, StudStyle.applyTree(workspace, studLook)))
+end
+
 local scene = Export.collect(workspace)
 local presets = {}
 for name, preset in LightingConfig.Presets do

@@ -45,6 +45,35 @@ local function lightInfluence(gui: any): number
 	return if ok and type(value) == "number" then round(value) else 1
 end
 
+-- The studded style (Shared/StudStyle) on a part: { 1 = Roblox's own studs (Plastic
+-- surfaces) or 2 = the custom stud material, the faces with studs as bits
+-- (Front 1, Back 2, Top 4, Bottom 8, Left 16, Right 32) }, or nil.
+local STUD_FACE_BITS = { Front = 1, Back = 2, Top = 4, Bottom = 8, Left = 16, Right = 32 }
+local function studInfo(d: any): { number }?
+	local record = d:GetAttribute("StudStyle")
+	if type(record) ~= "string" then
+		return nil
+	end
+	if string.sub(record, 1, 2) == "V;" then
+		return { 2, 63 }
+	end
+	if d.Material ~= roblox.Enum.Material.Plastic then
+		return nil
+	end
+	local mask = 0
+	-- a cylinder shows surfaces on its two flat ends only
+	local cylinder = d.ClassName == "Part" and d.Shape == roblox.Enum.PartType.Cylinder
+	for face, bit in STUD_FACE_BITS do
+		if cylinder and face ~= "Left" and face ~= "Right" then
+			continue
+		end
+		if d[face .. "Surface"] == roblox.Enum.SurfaceType.Studs then
+			mask += bit
+		end
+	end
+	return if mask > 0 then { 1, mask } else nil
+end
+
 function Export.collect(root: any, scene: any?)
 	scene = scene or { parts = {}, lights = {}, emitters = {}, texts = {} }
 	for _, d in root:GetDescendants() do
@@ -81,6 +110,10 @@ function Export.collect(root: any, scene: any?)
 					-- CastShadow (1 / 0): the viewer draws a shadow only where Roblox would
 					if d.CastShadow then 1 else 0,
 				}
+				local studs = studInfo(d)
+				if studs then
+					entry[11] = studs
+				end
 				table.insert(scene.parts, entry)
 				local partIndex = #scene.parts - 1
 				for _, child in d:GetChildren() do
