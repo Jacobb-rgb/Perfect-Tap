@@ -2,24 +2,29 @@
 	The backpacks (owner 2026-10-24: "batohy od nejhoršího po nejlepší", after
 	the blue rune backpack in his reference picture). Ten packs, worst to
 	best; each one holds more ore (start 5, top 1000, owner 2026-10-24) and
-	looks richer: a burlap sack, then canvas, leather, iron, brass, crystal,
-	the rune pack from the picture, the ember forge pack and the star pack.
+	looks richer. Owner on the first proposal: the starter sack out, every
+	pack needs far more detail and effects ("mega efektové a stylové").
 
-	Every pack after the sack shares one anatomy (BackpackBuilder): a body, a
-	flap over the top with a clasp or gem, a front pocket with two straps and
-	buckles, side pockets, a bedroll on top and a leather bottom. Higher packs
-	add trim, rivets, glowing runes, crystals and finally a halo and wings.
+	Every pack shares one anatomy (BackpackBuilder): a body with a lighter
+	bulging front and round edges, a flap folded over the top (stitched edge,
+	a contrasting inset panel, a round tongue with the emblem), a front
+	pocket with a round bottom, straps with prong buckles, side pockets, a
+	bedroll with spiral ends and padded straps over the shoulders. Each pack
+	adds its own pieces (a mini pickaxe, a lantern, a spyglass, crystals,
+	runes, ember chimneys, wings) and from the Miner's Pack up its effects
+	(BackpackFx: glints, rising runes, fire and smoke, stars, a light).
 
-	Colors: Body (the bag), Panel (darker inset panels / seams), Flap, Trim
-	(edge strips, from the Iron-Bound Pack up), Leather (straps, bottom),
-	Buckle (buckles, rivets), Roll (the bedroll), Gem (the clasp gem's body),
-	Glow (Neon: runes, the gem's light; ItemBuilder.glowColor keeps it from
-	blooming white).
+	Colors: Body (the bag), Panel (the flap's inset / plates / galaxy),
+	Flap, Trim (edge posts and strips on trimmed packs), Leather (straps,
+	bottom), Buckle (buckles, rivets, metal bits), Roll (the bedroll), Gem
+	(the emblem crystal's core), Glow (Neon: runes, glows, the light;
+	ItemBuilder.glowColor keeps it from blooming white), Stitch (seams).
 
 	PROPOSAL (art/backpacks): capacities and coin prices are a first guess
 	on the 6-floor curve (BALANCE_SIM.md: blaster 4 ~710K at 27 min, blaster
 	6 ~73M at 1h20, blaster 8 ~2.2B at 3h16, blaster 10 ~290B at 8 h); the
 	balance sim tunes them once the backpack inventory is in the game.
+	Coins only (owner 2026-10-24: no Robux backpacks).
 ]]
 
 export type Colors = {
@@ -32,12 +37,13 @@ export type Colors = {
 	Roll: Color3,
 	Gem: Color3,
 	Glow: Color3,
+	Stitch: Color3,
 }
 
 export type Backpack = {
 	Id: string,
 	Name: string,
-	Order: number, -- 1 = the starter sack
+	Order: number, -- 1 = the starter pack
 	Rarity: string, -- Rarity.ById key (card and name colour)
 	Capacity: number, -- ore chunks it holds
 	Price: number, -- coins (0 = everyone starts with it)
@@ -50,49 +56,51 @@ local rgb = Color3.fromRGB
 
 local BackpackData = {}
 
-BackpackData.StarterId = "BurlapSack"
+BackpackData.StarterId = "RookiePack"
 
 BackpackData.List = {
 	{
-		Id = "BurlapSack",
-		Name = "Burlap Sack",
+		Id = "RookiePack",
+		Name = "Rookie Pack",
 		Order = 1,
 		Rarity = "Common",
 		Capacity = 5,
 		Price = 0,
-		Description = "An old ore sack tied with rope. Better than nothing.",
-		Size = Vector3.new(1.35, 1.3, 0.85),
+		Description = "A cute canvas school bag with a star charm and a mini pickaxe.",
+		Size = Vector3.new(1.4, 1.6, 0.74),
 		Colors = {
-			Body = rgb(196, 160, 112),
-			Panel = rgb(156, 122, 80),
-			Flap = rgb(176, 140, 94),
-			Trim = rgb(156, 122, 80),
-			Leather = rgb(120, 84, 52),
-			Buckle = rgb(120, 84, 52),
-			Roll = rgb(176, 140, 94),
-			Gem = rgb(176, 140, 94),
-			Glow = rgb(176, 140, 94),
+			Body = rgb(232, 210, 160),
+			Panel = rgb(176, 146, 98),
+			Flap = rgb(156, 98, 56),
+			Trim = rgb(156, 98, 56),
+			Leather = rgb(112, 70, 40),
+			Buckle = rgb(172, 176, 184),
+			Roll = rgb(176, 146, 98),
+			Gem = rgb(240, 150, 60),
+			Glow = rgb(240, 150, 60),
+			Stitch = rgb(250, 236, 204),
 		},
 	},
 	{
-		Id = "CanvasPack",
-		Name = "Canvas Pack",
+		Id = "TrailPack",
+		Name = "Trail Pack",
 		Order = 2,
 		Rarity = "Common",
 		Capacity = 15,
 		Price = 250,
-		Description = "A sturdy canvas pack with a leather flap and a tin mug.",
-		Size = Vector3.new(1.45, 1.6, 0.8),
+		Description = "Khaki canvas, a green bedroll, a tin mug and a leaf charm.",
+		Size = Vector3.new(1.5, 1.66, 0.82),
 		Colors = {
-			Body = rgb(214, 196, 150),
-			Panel = rgb(176, 156, 110),
-			Flap = rgb(146, 96, 58),
-			Trim = rgb(146, 96, 58),
-			Leather = rgb(120, 76, 44),
-			Buckle = rgb(150, 154, 160),
-			Roll = rgb(176, 156, 110),
-			Gem = rgb(150, 154, 160),
-			Glow = rgb(150, 154, 160),
+			Body = rgb(184, 172, 116),
+			Panel = rgb(148, 136, 88),
+			Flap = rgb(132, 84, 50),
+			Trim = rgb(132, 84, 50),
+			Leather = rgb(104, 64, 36),
+			Buckle = rgb(176, 180, 188),
+			Roll = rgb(96, 150, 74),
+			Gem = rgb(96, 150, 74),
+			Glow = rgb(96, 150, 74),
+			Stitch = rgb(244, 232, 196),
 		},
 	},
 	{
@@ -102,18 +110,19 @@ BackpackData.List = {
 		Rarity = "Uncommon",
 		Capacity = 30,
 		Price = 5000,
-		Description = "Brown leather, brass buckles and a bedroll for long digs.",
-		Size = Vector3.new(1.55, 1.75, 0.85),
+		Description = "Brown leather, brass buckles, a brass shield and a canteen.",
+		Size = Vector3.new(1.6, 1.78, 0.86),
 		Colors = {
-			Body = rgb(156, 98, 56),
-			Panel = rgb(118, 70, 38),
-			Flap = rgb(118, 70, 38),
-			Trim = rgb(96, 58, 32),
-			Leather = rgb(92, 56, 32),
-			Buckle = rgb(226, 178, 78),
+			Body = rgb(160, 100, 56),
+			Panel = rgb(110, 64, 34),
+			Flap = rgb(124, 74, 40),
+			Trim = rgb(226, 178, 78),
+			Leather = rgb(88, 52, 30),
+			Buckle = rgb(230, 182, 80),
 			Roll = rgb(98, 140, 72),
-			Gem = rgb(226, 178, 78),
-			Glow = rgb(226, 178, 78),
+			Gem = rgb(230, 182, 80),
+			Glow = rgb(255, 200, 90),
+			Stitch = rgb(244, 214, 160),
 		},
 	},
 	{
@@ -123,18 +132,19 @@ BackpackData.List = {
 		Rarity = "Uncommon",
 		Capacity = 60,
 		Price = 120000,
-		Description = "A miner's pack with copper rivets, a rope and a lantern.",
-		Size = Vector3.new(1.65, 1.85, 0.9),
+		Description = "A miner's pack with a lantern, a pickaxe, a rope and ore spilling out.",
+		Size = Vector3.new(1.7, 1.88, 0.9),
 		Colors = {
-			Body = rgb(110, 104, 70),
-			Panel = rgb(84, 78, 50),
-			Flap = rgb(104, 66, 40),
-			Trim = rgb(196, 112, 62),
+			Body = rgb(112, 108, 70),
+			Panel = rgb(82, 78, 50),
+			Flap = rgb(108, 68, 40),
+			Trim = rgb(198, 114, 62),
 			Leather = rgb(84, 52, 30),
-			Buckle = rgb(208, 120, 66),
-			Roll = rgb(126, 128, 134),
-			Gem = rgb(208, 120, 66),
+			Buckle = rgb(210, 122, 66),
+			Roll = rgb(128, 130, 138),
+			Gem = rgb(210, 122, 66),
 			Glow = rgb(255, 170, 60),
+			Stitch = rgb(232, 220, 170),
 		},
 	},
 	{
@@ -144,18 +154,19 @@ BackpackData.List = {
 		Rarity = "Rare",
 		Capacity = 100,
 		Price = 2500000,
-		Description = "Iron corners, rivets and a blue gem clasp. Built to last.",
-		Size = Vector3.new(1.75, 1.95, 0.95),
+		Description = "Steel plates and bands, a chained blue gem and blue crystals.",
+		Size = Vector3.new(1.78, 1.96, 0.95),
 		Colors = {
-			Body = rgb(70, 82, 102),
-			Panel = rgb(52, 60, 76),
-			Flap = rgb(58, 68, 86),
-			Trim = rgb(150, 158, 170),
+			Body = rgb(72, 84, 106),
+			Panel = rgb(138, 146, 160),
+			Flap = rgb(58, 68, 88),
+			Trim = rgb(150, 158, 172),
 			Leather = rgb(82, 54, 36),
-			Buckle = rgb(176, 184, 196),
-			Roll = rgb(96, 128, 168),
-			Gem = rgb(40, 110, 210),
+			Buckle = rgb(186, 194, 206),
+			Roll = rgb(96, 128, 170),
+			Gem = rgb(40, 120, 230),
 			Glow = rgb(61, 165, 255),
+			Stitch = rgb(200, 214, 232),
 		},
 	},
 	{
@@ -165,18 +176,19 @@ BackpackData.List = {
 		Rarity = "Rare",
 		Capacity = 175,
 		Price = 60000000,
-		Description = "Brass trim, a map tube and a compass that points to ore.",
-		Size = Vector3.new(1.8, 2.0, 0.95),
+		Description = "Brass trim, a glowing compass, a map tube, a spyglass and a plume.",
+		Size = Vector3.new(1.82, 2.0, 0.96),
 		Colors = {
-			Body = rgb(62, 112, 84),
-			Panel = rgb(44, 84, 62),
-			Flap = rgb(50, 94, 70),
-			Trim = rgb(226, 178, 78),
-			Leather = rgb(110, 68, 38),
-			Buckle = rgb(236, 190, 84),
-			Roll = rgb(186, 62, 52),
+			Body = rgb(56, 110, 82),
+			Panel = rgb(38, 78, 58),
+			Flap = rgb(46, 92, 68),
+			Trim = rgb(228, 180, 80),
+			Leather = rgb(112, 68, 38),
+			Buckle = rgb(238, 192, 86),
+			Roll = rgb(190, 60, 50),
 			Gem = rgb(236, 190, 84),
-			Glow = rgb(80, 220, 170),
+			Glow = rgb(60, 230, 180),
+			Stitch = rgb(232, 224, 180),
 		},
 	},
 	{
@@ -186,18 +198,19 @@ BackpackData.List = {
 		Rarity = "Epic",
 		Capacity = 275,
 		Price = 900000000,
-		Description = "Silver trim and a glowing amethyst cluster on the flap.",
-		Size = Vector3.new(1.85, 2.05, 1.0),
+		Description = "Silver filigree and amethyst crystals growing from the flap and the top.",
+		Size = Vector3.new(1.88, 2.06, 1.0),
 		Colors = {
-			Body = rgb(98, 58, 150),
-			Panel = rgb(70, 38, 112),
-			Flap = rgb(84, 48, 132),
-			Trim = rgb(214, 218, 230),
-			Leather = rgb(70, 46, 54),
-			Buckle = rgb(226, 230, 240),
-			Roll = rgb(176, 150, 214),
-			Gem = rgb(170, 90, 255),
-			Glow = rgb(190, 100, 255),
+			Body = rgb(98, 56, 152),
+			Panel = rgb(170, 140, 220),
+			Flap = rgb(80, 44, 130),
+			Trim = rgb(216, 220, 232),
+			Leather = rgb(66, 42, 56),
+			Buckle = rgb(228, 232, 242),
+			Roll = rgb(178, 152, 216),
+			Gem = rgb(96, 64, 255),
+			Glow = rgb(170, 100, 255),
+			Stitch = rgb(226, 214, 250),
 		},
 	},
 	{
@@ -207,18 +220,19 @@ BackpackData.List = {
 		Rarity = "Epic",
 		Capacity = 400,
 		Price = 12000000000,
-		Description = "Royal blue with gold trim, glowing runes and a star crystal.",
-		Size = Vector3.new(1.95, 2.1, 1.0),
+		Description = "Royal blue and gold, glowing runes and a star crystal in a rune ring.",
+		Size = Vector3.new(1.95, 2.12, 1.0),
 		Colors = {
-			Body = rgb(40, 74, 168),
-			Panel = rgb(26, 46, 112),
+			Body = rgb(40, 76, 172),
+			Panel = rgb(22, 38, 98),
 			Flap = rgb(34, 62, 150),
-			Trim = rgb(236, 186, 84),
-			Leather = rgb(126, 74, 40),
-			Buckle = rgb(240, 192, 88),
+			Trim = rgb(238, 188, 84),
+			Leather = rgb(128, 74, 40),
+			Buckle = rgb(242, 194, 90),
 			Roll = rgb(58, 104, 210),
-			Gem = rgb(200, 236, 255),
-			Glow = rgb(90, 200, 255),
+			Gem = rgb(170, 236, 255),
+			Glow = rgb(80, 200, 255),
+			Stitch = rgb(150, 200, 255),
 		},
 	},
 	{
@@ -228,18 +242,19 @@ BackpackData.List = {
 		Rarity = "Legendary",
 		Capacity = 600,
 		Price = 120000000000,
-		Description = "Obsidian plates with lava seams, gold and two ember chimneys.",
+		Description = "Obsidian plates with lava seams, gold horns and two burning chimneys.",
 		Size = Vector3.new(2.0, 2.2, 1.05),
 		Colors = {
-			Body = rgb(40, 34, 40),
-			Panel = rgb(24, 20, 26),
-			Flap = rgb(32, 26, 32),
-			Trim = rgb(236, 176, 64),
-			Leather = rgb(96, 36, 26),
-			Buckle = rgb(244, 186, 70),
-			Roll = rgb(150, 36, 30),
-			Gem = rgb(255, 120, 40),
+			Body = rgb(44, 36, 42),
+			Panel = rgb(26, 22, 28),
+			Flap = rgb(34, 28, 34),
+			Trim = rgb(238, 178, 64),
+			Leather = rgb(98, 36, 26),
+			Buckle = rgb(246, 188, 72),
+			Roll = rgb(152, 36, 30),
+			Gem = rgb(255, 120, 30),
 			Glow = rgb(255, 110, 20),
+			Stitch = rgb(255, 150, 60),
 		},
 	},
 	{
@@ -249,18 +264,19 @@ BackpackData.List = {
 		Rarity = "Mythic",
 		Capacity = 1000,
 		Price = 600000000000,
-		Description = "Pearl and gold with a star crystal, star shards and wings.",
+		Description = "Pearl and gold, a galaxy flap, a star crystal, orbiting stars and wings.",
 		Size = Vector3.new(2.05, 2.25, 1.05),
 		Colors = {
-			Body = rgb(236, 232, 244),
-			Panel = rgb(70, 40, 140),
+			Body = rgb(238, 234, 246),
+			Panel = rgb(62, 32, 132),
 			Flap = rgb(92, 56, 176),
-			Trim = rgb(240, 196, 84),
-			Leather = rgb(176, 136, 76),
-			Buckle = rgb(246, 204, 96),
-			Roll = rgb(232, 226, 246),
+			Trim = rgb(242, 198, 86),
+			Leather = rgb(178, 138, 78),
+			Buckle = rgb(248, 206, 98),
+			Roll = rgb(234, 228, 248),
 			Gem = rgb(120, 220, 255),
-			Glow = rgb(150, 110, 255),
+			Glow = rgb(160, 110, 255),
+			Stitch = rgb(255, 226, 150),
 		},
 	},
 } :: { Backpack }
@@ -270,6 +286,17 @@ BackpackData.Ids = {} :: { string } -- worst to best
 for _, pack in BackpackData.List do
 	BackpackData.ById[pack.Id] = pack
 	table.insert(BackpackData.Ids, pack.Id)
+end
+
+--[[
+	Ore chunks a pack holds: the one place the inventory reads capacity from
+	(the "Návrhy strojů" BackpackService, data.Backpacks.Equipped; its Robux
+	"double carrying" perk multiplies on its side). An unknown or missing id
+	counts as the free starter pack. Ids are saved: keep them stable.
+]]
+function BackpackData.capacity(id: any): number
+	local pack = if type(id) == "string" then BackpackData.ById[id] else nil
+	return (pack or BackpackData.ById[BackpackData.StarterId]).Capacity
 end
 
 return BackpackData

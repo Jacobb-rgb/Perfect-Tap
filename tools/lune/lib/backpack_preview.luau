@@ -25,6 +25,7 @@ local function setup(Loader: any)
 		Enum = roblox.Enum,
 		Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo"),
 		Builder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackBuilder"),
+		Fx = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackFx"),
 		Data = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData"),
 		Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity"),
 		Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format"),
@@ -75,13 +76,95 @@ local function plate(k: any, block: any, cf: any, size: any, lines: { { any } })
 	end
 end
 
--- Puts a built pack so its bag stands centered on (x, floorY, z), facing +Z.
+-- How far each effect kind drifts up from its box, how long one particle
+-- lives (rate x life = how many are out at once) and its size.
+local RISE = { Sparkle = 0.7, Rune = 1.1, Ember = 1.6, Fire = 0.35, Star = 0.2, Glint = 0 }
+local LIFE = { Sparkle = 1.2, Rune = 1.5, Ember = 1.6, Star = 1.1, Glint = 0.5 }
+local SIZE = { Sparkle = 0.11, Rune = 0.09, Ember = 0.07, Star = 0.2, Glint = 0.26 }
+
+--[[
+	BackpackFx's effects on a placed pack, frozen in one moment the way the
+	renderer can draw them: as many particles as are out at once (rate x
+	lifetime) as small Neon bits spread over the volume they fill (rising
+	kinds stretched upward; glints and stars as four-point twinkles), fire as
+	a "GunFlame" box (tools/lune/lib/export.luau), smoke as three grey puffs.
+	The light stays (the renderer draws PointLights).
+]]
+local function withFx(k: any, model: any)
+	local emitters = k.Fx.apply(model)
+	local rng = k.Rng.new(#model.Name * 7919 + math.floor(model:GetPivot().Position.X * 13))
+	local function bit(name: string, cf: any, size: any, color: any, transparency: number?)
+		return k.Geo.make("Part", {
+			Name = name,
+			CFrame = cf,
+			Size = size,
+			Color = color,
+			Material = k.Enum.Material.Neon,
+			Transparency = transparency or 0,
+			Anchored = true,
+			CanCollide = false,
+			CastShadow = false,
+		}, model)
+	end
+	for _, e in emitters do
+		local box = e.Parent
+		local kind = string.sub(e.Name, #"Backpack" + 1)
+		local color = e.Color.Keypoints[1].Value
+		local size = box.Size
+		if kind == "Smoke" then
+			for i = 1, 3 do
+				local d = 0.24 + i * 0.16
+				local puff = bit(
+					"SmokePuff",
+					box.CFrame * k.CFrame.new(0.06 * i, 0.2 + i * 0.3, -0.04 * i),
+					k.Vector3.new(d, d, d),
+					color:Lerp(k.Color3.new(1, 1, 1), 0.15 * i),
+					0.3 + i * 0.15
+				)
+				puff.Material = k.Enum.Material.SmoothPlastic
+				puff.Shape = k.Enum.PartType.Ball
+			end
+		elseif kind == "Fire" then
+			local standIn = bit(
+				"FxStandIn",
+				box.CFrame * k.CFrame.new(0, RISE.Fire / 2, 0),
+				k.Vector3.new(size.X, size.Y + RISE.Fire, size.Z),
+				color,
+				1
+			)
+			local flame = k.roblox.Instance.new("ParticleEmitter")
+			flame.Name = "GunFlame"
+			flame.Color = k.roblox.ColorSequence.new(color)
+			flame.Parent = standIn
+		else
+			local rise = RISE[kind] or 0
+			local count = math.max(1, math.floor(e.Rate * (LIFE[kind] or 1) + 0.5))
+			for i = 1, count do
+				local t = (i - 0.5) / count -- how far along its life (rising kinds: higher)
+				local offset =
+					k.Vector3.new(rng:range(-0.5, 0.5) * size.X, rng:range(-0.5, 0.5) * size.Y + rise * t, rng:range(-0.5, 0.5) * size.Z)
+				local cf = box.CFrame * k.CFrame.new(offset.X, offset.Y, offset.Z)
+				local s = (SIZE[kind] or 0.1) * (if kind == "Star" or kind == "Glint" then rng:range(0.6, 1.1) else 1 - 0.5 * t)
+				if kind == "Star" or kind == "Glint" then
+					bit("Twinkle", cf, k.Vector3.new(s, s * 0.16, 0.02), color)
+					bit("Twinkle", cf, k.Vector3.new(s * 0.16, s, 0.02), color)
+				else
+					bit("Mote", cf * k.CFrame.Angles(0, 0, math.pi / 4), k.Vector3.new(s, s, s * 0.5), color, 0.15 * t)
+				end
+			end
+		end
+		e:Destroy()
+	end
+end
+
+-- Puts a built pack (with its effects) so its bag stands centered on (x, floorY, z), facing +Z.
 local function placePack(k: any, parent: any, packId: string, x: number, floorY: number, z: number): any
-	local model = k.Builder.build(packId)
+	local model = k.Builder.build(packId, true)
 	local pack = k.Data.ById[packId]
 	local bottom = model:GetAttribute("BottomY")
 	model:PivotTo(k.CFrame.new(x, floorY - bottom, z - k.Builder.Gap - pack.Size.Z / 2))
 	model.Parent = parent
+	withFx(k, model)
 	return model
 end
 
@@ -221,6 +304,7 @@ function Preview.buildWorn(Loader: any, workspace: any)
 		local model = k.Builder.build(pack.Id)
 		model:PivotTo(root * CF.new(0, 3.2, 0.5))
 		model.Parent = stage
+		withFx(k, model)
 	end
 end
 
