@@ -163,6 +163,36 @@ local function trainChip(): GuiObject?
 	return if frame and frame:IsA("GuiObject") then frame else nil
 end
 
+-- The light HUD's boost corner (bottom right, BoostView.cornerSpot): clear of the touch
+-- jump button and the phone's Shop pill, over the mouse tutorial card while it shows.
+local function cornerSpot(): (number, number)
+	local camera = Workspace.CurrentCamera
+	local viewport = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	local scale = HudController.uiScale()
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+	local tutorial = if playerGui then playerGui:FindFirstChild("TerraForgeTutorial") else nil
+	local bubble = if tutorial then tutorial:FindFirstChild("Bubble") else nil
+	local tutorialTop: number? = nil
+	if
+		tutorial
+		and tutorial:IsA("ScreenGui")
+		and tutorial.Enabled
+		and bubble
+		and bubble:IsA("GuiObject")
+		and bubble.Visible
+		and bubble.AnchorPoint.Y == 1
+	then
+		tutorialTop = (viewport.Y - bubble.AbsolutePosition.Y) / math.max(scale, 0.01)
+	end
+	local hud = HudController.refs()
+	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
+	local pillBottom: number? = nil
+	if pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
+		pillBottom = pill.Position.Y.Offset + pill.Size.Y.Offset
+	end
+	return BoostView.cornerSpot(viewport, scale, isTouch(), tutorialTop, pillBottom)
+end
+
 local function coins(): number
 	return HudController.predictedCoins(os.clock())
 end
@@ -271,8 +301,12 @@ local function refreshChips()
 		return
 	end
 	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())
-	local train = trainChip()
-	BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
+	if chips.Row:GetAttribute("Corner") == true then
+		BoostView.placeCorner(chips, cornerSpot())
+	else
+		local train = trainChip()
+		BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
+	end
 	BoostView.setChips(chips, BoostView.chips(StateController.get(), serverNow()), launcherOn)
 end
 

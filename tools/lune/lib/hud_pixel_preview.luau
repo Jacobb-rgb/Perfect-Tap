@@ -78,7 +78,17 @@ function Preview.build(Loader: any): { [string]: any }
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
 		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
-		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
+		if boost.Row:GetAttribute("Corner") then
+			-- the boost corner as BoostController puts it (the owner's photo: Triple Lucky running)
+			local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+			local pillBottom = if pill
+					and pill.AnchorPoint.Y == 0
+					and pill.Position.Y.Scale == 0
+				then pill.Position.Y.Offset + pill.Size.Y.Offset
+				else nil
+			BoostView.placeCorner(boost, BoostView.cornerSpot(screen, uiScale, compact, nil, pillBottom))
+		end
+		local state = { Boosts = { TripleLuckyUntil = NOW + 584 } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = true
 		table.insert(list, boost.Gui)
