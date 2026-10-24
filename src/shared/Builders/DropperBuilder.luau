@@ -245,7 +245,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 		Geo.block(model, at(lx, ly, 0.68 + (i % 2) * 0.12), Vector3.new(0.62, 0.28, 0.05), glowOf(st, i + 1), NEON, decor())
 	end
 
-	---------------------------------------------------------------- the arm, its top step, the glowing top edge
+	---------------------------------------------------------------- the arm and its glowing edges (its top: the rounded top below)
 	local armY = upperY + 1.45 + 0.9
 	local armRight, armLeft = bx + 1.6, sx - 1.0
 	local armLen = armRight - armLeft
@@ -258,7 +258,6 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 		NEON,
 		decor()
 	)
-	cube(at(bx + 0.4, armY + 1.25, -0.4), Vector3.new(2.6, 0.7, 2.3), nil, nil, "flat")
 	Geo.block(model, at((armRight + armLeft) / 2, armY + 0.92, 0.82), Vector3.new(armLen - 0.2, 0.12, 0.1), glow, NEON, decor())
 	-- the name on the arm's front
 	BlockKit.text(
@@ -490,7 +489,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 	elseif kind == "heaven" then
 		-- a golden halo over the arm, white wings on the column, clouds at the foot, sparkles
 		local GOLD = rgb(255, 214, 90)
-		local hy = armY + 2.0
+		local hy = armY + 2.8 -- (over the arm's rounded top)
 		local hx = (armRight + armLeft) / 2 + 0.6
 		local bars = if lite then 4 else 8
 		for k = 0, bars - 1 do
@@ -607,15 +606,17 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 	end
 	---------------------------------------------------------------- the rounded top of the arm
 	-- (owner 2026-10-24: the long see-through glow on the arm's top looked
-	-- speckled over the studs; "round the top, with its end") a solid
-	-- glowing rounded ridge along the arm's top back to the top step, its
-	-- end over the drop a rounded dome: a cylinder and a ball sunk into the
-	-- arm so only their tops show
+	-- speckled over the studs; "round the top, with its end, right to the
+	-- edges", "the dark block stays at the end") a solid glowing half-round
+	-- roof as wide as the arm, from the dark top block over the column to a
+	-- half-dome over the drop (a cylinder and a ball whose middles lie on the
+	-- arm's top); the top block as tall as the roof, closing its end
 	do
-		local z0, d, rise = -0.4, 2.3, 0.5
-		local cy = armTop + rise - d / 2
+		local z0, d = -0.4, 2.6
 		local endX = armLeft + d / 2
-		local backX = math.max(endX + 0.6, bx - 0.9)
+		local blockW = 2.6
+		local backX = bx + 0.4 - blockW / 2
+		cube(at(bx + 0.4, armTop + 0.7, z0), Vector3.new(blockW, 1.4, d + 0.02), nil, nil, "flat")
 		local color = glowOf(st, 2)
 		local function round(shape: Enum.PartType, at0cf: CFrame, size: Vector3)
 			Geo.make("Part", {
@@ -631,8 +632,8 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 				CastShadow = false,
 			}, model)
 		end
-		round(Enum.PartType.Cylinder, at((endX + backX) / 2, cy, z0), Vector3.new(backX - endX, d, d))
-		round(Enum.PartType.Ball, at(endX, cy, z0), Vector3.new(d, d, d))
+		round(Enum.PartType.Cylinder, at((endX + backX) / 2, armTop, z0), Vector3.new(backX - endX + 0.02, d, d))
+		round(Enum.PartType.Ball, at(endX, armTop, z0), Vector3.new(d, d, d))
 	end
 
 	BlockKit.scale(model, cf, K)
