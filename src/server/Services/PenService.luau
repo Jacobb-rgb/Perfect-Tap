@@ -73,9 +73,9 @@
 	  "OFF", what is kept and the lane's state. WP-Belts owns the board and
 	  arrived(); the Iron Box view (WP-CleanerBox) only edits KeepMode /
 	  KeepList.
-	  arrived() is ONLY for those sources: sinks and machines (the Foundry,
-	  the Iron Box) store with PenService.store (it refuses at the pen's
-	  capacity: then their item waits, see ConveyorService's sink hook), or
+	  arrived() is ONLY for those sources: machines (the Iron Box) store
+	  with PenService.store (it refuses at the pen's capacity: then their
+	  item waits), or
 	  the billboard would send their items out again in a loop.
 	- Direct Unload (PenAutomation >= EconomyConfig.PenAutomation.DirectUnload,
 	  TrainService): with a belt feeding from the TRAIN chute, the arrived

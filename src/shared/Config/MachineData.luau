@@ -786,8 +786,7 @@ end
 	  Raw      dirty ore is never kept: it always passes on (the box can't see
 	           through the dirt, so nobody peeks at rare dirty ore)
 	  Crushed  never kept: always passes on (on to a furnace)
-	  Ingot    never kept: always passes on (on to the Foundry, which needs the
-	           rare ones for blaster levels 6-10)
+	  Ingot    never kept: always passes on (to the Alloy Furnace or a Sell Box)
 	  Clean    kept or sent on by the player's setting (below)
 	  other    (old Gear) always counts as kept (it stays in the pen)
 	One setting per player:

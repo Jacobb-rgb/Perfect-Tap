@@ -7,10 +7,11 @@
 	sorting board), with fake save data for the owner:
 	  PEN chute    belt -> belt -> Cleaning Plant -> belt -> belt -> Iron Box
 	               -> belts -> Clay Furnace -> belts along the edge and up
-	               the right side -> FOUNDRY chute (a sink belt into the wall)
+	               the right side -> the back wall (the FOUNDRY chute's old
+	               sink went with the Foundry, owner 2026-10-24)
 	  TRAIN chute  belt -> belts that join the PEN line from the side (a T)
 	  dirty ore on the PEN / TRAIN belts, clean ore after the plant, ingots
-	  on the way to the FOUNDRY chute; Pen Automation 1 (the sorting board)
+	  on the way to the wall; Pen Automation 1 (the sorting board)
 	Also writes build/preview/belts_build.json: the same plus build mode's
 	grid and chute plates (GridOverlay), and the UI overlays:
 	  ui_belts_pen        HUD + the Ore Pen panel with the send toolbar (PC)
@@ -60,7 +61,7 @@ BeltsPreview.Layout = {
 	{ Id = "Conveyor", X = 9, Z = 8, R = 2 },
 	{ Id = "Conveyor", X = 9, Z = 9, R = 2 },
 	{ Id = "Conveyor", X = 9, Z = 10, R = 2 },
-	{ Id = "Conveyor", X = 9, Z = 11, R = 2 }, -- FOUNDRY chute (sink)
+	{ Id = "Conveyor", X = 9, Z = 11, R = 2 }, -- (the old FOUNDRY chute's cell)
 	{ Id = "Conveyor", X = 6, Z = 11, R = 0 }, -- TRAIN chute
 	{ Id = "Conveyor", X = 6, Z = 10, R = 3 },
 	{ Id = "Conveyor", X = 5, Z = 10, R = 3 },
@@ -173,7 +174,11 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 		local m = byCell[cell]
 		local belt = m.Model:FindFirstChild("Belt")
 		local top = belt.CFrame.Position.Y + belt.Size.Y / 2
-		local item = ItemBuilder.build({ Kind = kind, OreId = oreId, Grade = grade }, m.Model:GetPivot() * CF.new(0, 2, z) * CF.Angles(0, seed, 0), seed)
+		local item = ItemBuilder.build(
+			{ Kind = kind, OreId = oreId, Grade = grade },
+			m.Model:GetPivot() * CF.new(0, 2, z) * CF.Angles(0, seed, 0),
+			seed
+		)
 		local low = math.huge
 		for _, d in item:GetDescendants() do
 			if d:IsA("BasePart") then

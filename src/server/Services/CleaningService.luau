@@ -453,7 +453,7 @@ local stationBehaviour: MachineService.Behaviour = {
 		stations[machine] = true
 		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
 		-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
-		-- "Clean Ore". G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics
+		-- "Clean Ore". G / B are shared: the Pen, Train Send, Iron Box and Logistics
 		-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
 		-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
 		-- station) a G press in reach of one of those too fires both.

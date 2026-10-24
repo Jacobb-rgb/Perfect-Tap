@@ -159,7 +159,7 @@ local MACHINES = {
 	"PlasmaFurnace",
 	"AlloyFurnace",
 }
-local FIRST_INGOT = "Your first ingot! Ingots go into the Foundry (soon) to forge stronger blasters, or sell them to Tobin."
+local FIRST_INGOT = "Your first ingot! Sell ingots to Tobin, or melt two different ones into an alloy in the Alloy Furnace."
 local SHARD_TOAST = "+1 Crystal Shard!"
 -- data.ShardRolls never holds more than this (a sanity cap far above any pen)
 ProcessingService.MaxShardRolls = 100000

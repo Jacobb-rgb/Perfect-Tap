@@ -238,8 +238,14 @@ return function(T, Loader)
 		T.truthy(rock.X >= q.Min.X and rock.X <= q.Max.X and rock.Z >= q.Min.Z and rock.Z <= q.Max.Z, "the rock point is in the quarry")
 		T.eq(TutorialConfig.layoutPoint("Pen", nil), nil, "no plot, no pen point")
 		T.eq(TutorialConfig.layoutPoint("Sell", 1), nil, "the lobby stall has no layout point")
+		-- the Blaster step points at the Vault (owner 2026-10-24: no Foundry), with or without a plot
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local vault = TutorialConfig.layoutPoint("Vault", nil)
+		T.truthy(vault and (vault - LobbyLayout.get("BlasterVault").Center).Magnitude < 5, "the Vault's layout point")
+		T.eq(TutorialConfig.Tags.Vault, "VaultCounter", "the guide looks for the Vault's counter")
+		T.eq(TutorialConfig.Tags.Foundry, nil)
 		for _, plot in WorldLayout.Plots do
-			for _, target in { "Pen", "Podium", "Foundry", "Cleaning" } do
+			for _, target in { "Pen", "Podium", "Cleaning" } do
 				local at = TutorialConfig.layoutPoint(target, plot.Id)
 				T.truthy(at, `plot {plot.Id} {target}`)
 				T.le((at - plot.Center).Magnitude, 70, `plot {plot.Id} {target} is on that plot`)

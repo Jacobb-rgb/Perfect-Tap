@@ -1,6 +1,13 @@
 # Balance simulation (2026-10-18)
 
-**Newest numbers: "Re-run with steps 6–7 modelled" below.** The sections after it are the first runs (without steps 6–7).
+**Newest (2026-10-24, owner playtest): no Foundry, blasters from the Blaster Vault only.** The sim buys the next
+level at the Vault for its coin scale (BlasterData.coins, the old Foundry prices: hoverboards, the lift, boosts,
+quests and the rebirth stars follow it unchanged) x `Vault.PriceMultiplier`. `lune run tools/lune/balance_sim.luau
+calibrate-vault` searches the multiplier for a Typical player at blaster 10 at 8 h: **1.15** (was 4 while the Foundry
+was the cheaper way; with 3 free podiums). Rebirth runs: a level costs at least `RunShare` (0.5) x the first run's gap
+(`RunSeconds`) of the income the factory kept (droppers, Podium Keeper; Stats.RunIncome) - rebirths are not modelled.
+
+**Older numbers: "Re-run with steps 6–7 modelled" below.** The sections after it are the first runs (without steps 6–7).
 
 A model of a typical player from the first minute to 10 hours, after the 36-ore roster from the owner's picture.
 Script: `tools/lune/balance_sim.luau` (`lune run tools/lune/balance_sim.luau` for today's prices,

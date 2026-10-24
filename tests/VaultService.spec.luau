@@ -132,7 +132,13 @@ return function(T, Loader)
 		for level = 2, BlasterData.MaxLevel do
 			local price = BlasterData.vaultPrice(level)
 			T.truthy(price, "level " .. level .. " has a price")
-			T.eq(price, BlasterData.get(level).Recipe.Coins * BlasterData.Vault.PriceMultiplier, "level " .. level .. " price")
+			local raw = BlasterData.coins(level) * BlasterData.Vault.PriceMultiplier
+			T.truthy(math.abs(price - raw) <= raw * 0.05, "level " .. level .. " price: Coins x PriceMultiplier")
+			T.eq(price, math.floor(price), "level " .. level .. ": a whole number")
+			local digits = 10 ^ math.max(0, math.floor(math.log10(price)) - 1)
+			T.eq(price % digits, 0, "level " .. level .. ": 2 significant digits")
+			T.eq(BlasterData.vaultPrice(level, 0), price, "no floor on the first run")
+			T.eq(BlasterData.vaultPrice(level, 0 / 0), price, "a NaN floor is no floor")
 			T.truthy(price > last, "prices grow with the level")
 			last = price
 		end
@@ -306,11 +312,11 @@ return function(T, Loader)
 		end)
 	end)
 
-	withWorld("VaultService: the top level waits for the Foundry while a run has forged no rebirth level", function(w)
+	withWorld("VaultService: the STORE leaves the top level to the coin Vault while a run has no coin level", function(w)
 		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
 		withBands(function(bands: any)
 			local D = bands[4]
-			-- a lifted run: Robux levels start it at LV 9, nothing forged yet
+			-- a lifted run: Robux levels start it at LV 9, nothing bought with coins yet
 			w.data.Rebirths = 3
 			w.data.Stats.BlastersPaid = 8
 			w.data.Stats.RunPaid = true
@@ -321,19 +327,50 @@ return function(T, Loader)
 			T.eq(VaultService.paidStatus(w.data, D), "Full", "the STORE doesn't sell LV 10")
 			T.truthy(vault.grantPaid(w.player, w.data, D), "a stale receipt is still taken")
 			T.eq(w.data.BlasterLevel, 9, "banked, not the top level")
+			T.eq(select(2, RebirthConfig.canRebirth(w.data)), "NotForged", "no coin level yet")
+			-- the coin Vault sells it, and the coin level earns the rebirth (owner 2026-10-24: no Foundry)
 			local r = buy(w, { Level = 10 })
-			T.eq(r.Reason, "ForgeFirst", "the coin Vault waits too")
-			T.eq(w.data.BlasterLevel, 9)
-			-- forging LV 10 at the Foundry earns the rebirth
-			w.data.BlasterLevel = 10
-			w.data.Stats.RunForged = 10
+			T.truthy(r.Ok, "the coin Vault sells the top level")
+			T.eq(w.data.BlasterLevel, 10)
+			T.eq(w.data.Stats.RunForged, 10, "a coin level counts for the rebirth")
 			T.truthy(RebirthConfig.canRebirth(w.data))
-			-- with a rebirth level forged, the top level is for sale
+			-- with a rebirth level bought with coins, the STORE sells the top level too
 			w.data.BlasterLevel = 9
 			w.data.Stats.RunForged = 7
 			T.falsy(RebirthConfig.topBlocked(w.data))
 			T.eq(VaultService.paidStatus(w.data, D), "Prompt")
 		end)
+	end)
+
+	withWorld("VaultService: a rebirth run's prices have a floor of the income its factory kept", function(w)
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		w.data.Rebirths = 1
+		w.data.BlasterLevel = 1
+		w.data.Stats.RunIncome = 1e6
+		T.eq(RebirthConfig.runIncomeOf(w.data), 1e6)
+		local vault = BlasterData.Vault
+		local floor2 = 1e6 * vault.RunSeconds[2] * vault.RunShare
+		local price2 = BlasterData.vaultPrice(2, 1e6) :: number
+		T.truthy(price2 >= floor2 and price2 < floor2 * 1.1, "LV 2 costs the floor, rounded up to 2 digits")
+		T.truthy(price2 > (BlasterData.vaultPrice(2) :: number), "the floor beats the plain price")
+		-- the floor never makes a price lower
+		local top = BlasterData.MaxLevel
+		T.eq(BlasterData.vaultPrice(top, 1), BlasterData.vaultPrice(top), "a tiny floor changes nothing")
+		-- buy() charges the floor, refusal() agrees
+		w.data.Coins = price2 - 1
+		T.eq(VaultService.refusal(2, 1, w.data.Coins, 1e6), "NoCoins")
+		local r = buy(w, { Level = 2 })
+		T.eq(r.Reason, "NoCoins", "the plain price isn't enough")
+		w.data.Coins = price2
+		r = buy(w, { Level = 2 })
+		T.truthy(r.Ok, "bought at the floor price")
+		T.eq(w.data.Coins, 0, "paid the floor")
+		T.eq(w.data.Stats.RunForged, 2, "the run counts the coin level")
+		-- junk income reads as none
+		w.data.Stats.RunIncome = 0 / 0
+		T.eq(RebirthConfig.runIncomeOf(w.data), 0)
+		w.data.Stats.RunIncome = "lots"
+		T.eq(RebirthConfig.runIncomeOf(w.data), 0)
 	end)
 
 	withWorld("VaultService: a Robux level on the first run keeps the levels the grace counted", function(w)

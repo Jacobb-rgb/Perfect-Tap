@@ -65,9 +65,7 @@
 	- KeepMode is a short mode name (else the default; an unknown one reads
 	  as the default); KeepList keeps short ore ids mapped to a boolean (true
 	  keep, false send on; MachineData.keepsOre).
-	- Foundry.Stock: well-formed ingots (kind Ingot, no recipe, any ore and
-	  grade), at most GameConfig.MaxFoundryStock; other well-formed items
-	  and the overflow go to the pen, junk is dropped.
+	- (Foundry.Stock: the Foundry's ingots, until Version 8.)
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
 	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
 	  server may sell more levels).
@@ -184,6 +182,15 @@
 	repair below); slot 3 is free now and the Podiums perk unlocks 4 and 5.
 	The bump keeps an older server (4 slots, slot 3 behind the perk) from
 	loading a 5-slot save.
+
+	Version 8 (owner 2026-10-24: no Foundry, blasters come from the Vault
+	only): a save loaded with a Version below 8, once: the Foundry's ingot
+	stock (data.Foundry.Stock) goes into the Ore Pen (every well-formed
+	item, junk dropped) and data.Foundry goes. The bump keeps an older
+	server (which forges and rebuilds data.Foundry) from loading the save.
+	Stats.RunForged now counts the levels bought with coins in the run
+	(VaultService), and Stats.RunIncome (a number >= 0, the coins / s kept
+	at the last rebirth) floors the run's Vault prices.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -205,7 +212,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 7 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free)
+Migrations.Latest = 8 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -347,12 +354,6 @@ local function renameOres(data: { [string]: any })
 			end
 		end
 	end
-end
-
--- A well-formed ingot the Foundry can hold: an ingot without a recipe (an ore
--- or grade this server doesn't know too: a newer build's ingots stay).
-local function foundryIngot(item: any): boolean
-	return wellFormed(item) and item.K == "Ingot" and item.R == nil
 end
 
 -- The keys of a table (so entries can be removed while walking them).
@@ -727,6 +728,10 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
 	end
 
+	-- the coins / s kept at the last rebirth (a floor under the run's Vault prices)
+	local runIncome = stats.RunIncome
+	stats.RunIncome = if isFinite(runIncome) and runIncome > 0 then math.min(runIncome, 1e27) else 0
+
 	if stats.RunPaid ~= nil and type(stats.RunPaid) ~= "boolean" then
 		stats.RunPaid = false
 		report.Dropped += 1
@@ -835,6 +840,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local gridShift = not (isFinite(loadedVersion) and loadedVersion >= 4)
 	-- a save from before the one Furnace: the v6 steps run once (Version 6)
 	local v6Step = not (isFinite(loadedVersion) and loadedVersion >= 6)
+	-- a save from before the Foundry went: its ingots go to the pen once (Version 8)
+	local v8Step = not (isFinite(loadedVersion) and loadedVersion >= 8)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -1265,34 +1272,20 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 	end
 
-	-- step 3: the Foundry's ingot stock (other items and the overflow go to the pen)
-	local foundry = data.Foundry
-	if type(foundry) ~= "table" then
-		if foundry ~= nil then
-			report.Dropped += 1
-		end
-		foundry = {}
-		data.Foundry = foundry
-	end
-	local stock = foundry.Stock
-	local stockKept = {}
-	if type(stock) == "table" then
-		for _, item in values(stock) do
-			if not wellFormed(item) then
-				report.Dropped += 1
-			elseif foundryIngot(item) and #stockKept < GameConfig.MaxFoundryStock then
-				table.insert(stockKept, item)
-			else
-				table.insert(storage, item)
-				report.Moved += 1
+	-- v8 (once): the Foundry went (owner 2026-10-24): its ingots go to the pen
+	if v8Step and data.Foundry ~= nil then
+		local stock = if type(data.Foundry) == "table" then data.Foundry.Stock else nil
+		if type(stock) == "table" then
+			for _, item in values(stock) do
+				if wellFormed(item) then
+					table.insert(storage, item)
+					report.Moved += 1
+				else
+					report.Dropped += 1
+				end
 			end
 		end
-		refill(stock, stockKept)
-	else
-		if stock ~= nil then
-			report.Dropped += 1
-		end
-		foundry.Stock = stockKept
+		data.Foundry = nil
 	end
 
 	-- step 3: pen automation level (sorting billboard, Direct Unload)

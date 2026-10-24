@@ -22,7 +22,8 @@ return function(T, Loader)
 	local BACK = CELLS - 1
 	local PX = BaseLayout.chuteCell("Pen")
 	local TX = BaseLayout.chuteCell("Train")
-	local FX = BaseLayout.chuteCell("Foundry")
+	-- the old FOUNDRY chute's cell (an ordinary cell since the Foundry went, owner 2026-10-24)
+	local FX = 9 + (CELLS - 12) / 2
 
 	local function entry(id: string, x: number, z: number, r: number?): any
 		return { Id = id, X = x, Z = z, R = r or 0 }
@@ -30,8 +31,8 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- chutes
 
-	T.test("Step 3: three distinct chute cells on the back row", function()
-		T.eq(#BaseLayout.ChuteNames, 3)
+	T.test("Step 3: two distinct chute cells on the back row (the FOUNDRY one went with the Foundry)", function()
+		T.eq(#BaseLayout.ChuteNames, 2)
 		local seen = {}
 		for _, name in BaseLayout.ChuteNames do
 			local chute = BaseLayout.Chutes[name]
@@ -49,18 +50,18 @@ return function(T, Loader)
 		for _ in BaseLayout.Chutes do
 			count += 1
 		end
-		T.eq(count, 3, "Chutes and ChuteNames agree")
-		-- the precise decisions: 3 / 6 / 9 on a 12-cell grid, moved with a bigger one
+		T.eq(count, 2, "Chutes and ChuteNames agree")
+		-- the precise decisions: 3 / 6 on a 12-cell grid, moved with a bigger one
 		local shift = (CELLS - 12) / 2
 		T.eq(BaseLayout.Chutes.Pen.X, 3 + shift)
 		T.eq(BaseLayout.Chutes.Train.X, 6 + shift)
-		T.eq(BaseLayout.Chutes.Foundry.X, 9 + shift)
+		T.eq(BaseLayout.Chutes.Foundry, nil, "no FOUNDRY chute")
+		T.eq(BaseLayout.chuteAt(FX, BACK), nil, "its old cell is an ordinary cell")
 		T.eq(BaseLayout.Chutes.Pen.Kind, "Source")
 		T.eq(BaseLayout.Chutes.Train.Kind, "Source")
-		T.eq(BaseLayout.Chutes.Foundry.Kind, "Sink")
 		local dx, dz = Grid.dir(BaseLayout.SinkRotation)
 		T.eq(dx, 0)
-		T.eq(dz, 1, "a sink belt faces +Z, toward the yard")
+		T.eq(dz, 1, "SinkRotation faces +Z, toward the yard")
 		-- a Source never spawns onto a belt that runs off the grid into the yard
 		for r = 0, 3 do
 			T.eq(BaseLayout.sourceFeeds(r), r ~= BaseLayout.SinkRotation, "sourceFeeds r" .. r)
@@ -86,39 +87,12 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Step 3: the Foundry's receiver sits at the FOUNDRY chute", function()
-		local intake = BaseLayout.FoundryIntake
-		local cell = BaseLayout.chuteLocal("Foundry")
-		local zone, mouth = intake.Zone, intake.Mouth
-		local function inside(p: any, r: any): boolean
-			return math.abs(p.X - r.Center.X) <= r.Size.X / 2 and math.abs(p.Z - r.Center.Z) <= r.Size.Z / 2
-		end
-		T.truthy(inside(mouth, zone), "mouth inside the zone")
-		T.near(mouth.X, cell.X, 1e-6, "mouth over the chute's belt")
-		T.truthy(mouth.Z > HALF - CELL / 2 and mouth.Z < HALF, "mouth at the cell's back edge")
-		T.truthy(mouth.Y > 0.5 and mouth.Y < zone.Size.Y, "mouth at belt height")
-		-- the zone covers only the chute's column (no other cell) and the wall behind it
-		T.truthy(zone.Center.X - zone.Size.X / 2 >= cell.X - CELL / 2, "zone within the chute column (left)")
-		T.truthy(zone.Center.X + zone.Size.X / 2 <= cell.X + CELL / 2, "zone within the chute column (right)")
-		T.truthy(zone.Center.Z - zone.Size.Z / 2 >= HALF - CELL / 2, "zone reaches into the last half of the cell at most")
-		T.truthy(zone.Center.Z + zone.Size.Z / 2 <= HALF + 2, "zone stays at the wall")
-		-- clear of the yard gate and of every yard piece
-		local gate = BaseLayout.YardGate
-		T.truthy(zone.Center.X - zone.Size.X / 2 >= gate.CenterX + gate.Width / 2, "off the yard gate")
-		for name, piece in BaseLayout.pieces() do
-			local overlapX = math.abs(zone.Center.X - piece.Center.X) < (zone.Size.X + piece.Size.X) / 2
-			local overlapZ = math.abs(zone.Center.Z - piece.Center.Z) < (zone.Size.Z + piece.Size.Z) / 2
-			T.falsy(overlapX and overlapZ, "receiver overlaps " .. name)
-		end
-	end)
-
 	T.test("Bigger plots: the base keeps its plot-local layout at any grid size", function()
 		T.eq((CELLS - 12) % 2, 0, "the grid grows the same on both sides")
 		T.eq(BaseLayout.GridShift, (CELLS - 12) / 2)
-		-- the chutes keep their plot-local x, in line with the pen gate, the yard gate and the receiver
+		-- the chutes keep their plot-local x, in line with the pen gate and the yard gate
 		T.near(BaseLayout.chuteLocal("Pen").X, -10, 1e-9, "PEN chute x")
 		T.near(BaseLayout.chuteLocal("Train").X, 2, 1e-9, "TRAIN chute x")
-		T.near(BaseLayout.chuteLocal("Foundry").X, 14, 1e-9, "FOUNDRY chute x")
 		T.le(math.abs(BaseLayout.chuteLocal("Pen").X - BaseLayout.Pen.PromptPoint.X), 3, "PEN chute by the pen gate")
 		local gate = BaseLayout.YardGate
 		T.lt(math.abs(BaseLayout.chuteLocal("Train").X - gate.CenterX) + CELL / 2, gate.Width / 2 + 1e-9, "TRAIN chute in the yard gate")
@@ -141,10 +115,8 @@ return function(T, Loader)
 		T.eq(-HALF + kit[1].X * CELL, -8, "starter kit x")
 		T.eq(2 * HALF - kit[1].Z * CELL, 32, "starter kit from the back wall")
 		T.eq(kit[2].X - kit[1].X, 4, "the furnace beside the station")
-		-- the Foundry building stands 2 studs into its rect
-		local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
-		local front = BaseLayout.Foundry.Center.Z - BaseLayout.Foundry.Size.Z / 2
-		T.near(FoundryBuilder.AnvilLocal.Z - front, 2 + 3.0, 1e-9, "the Foundry's anvil follows the rect")
+		T.eq(BaseLayout.Foundry, nil, "no Foundry in the yard (owner 2026-10-24)")
+		T.eq(BaseLayout.FoundryIntake, nil)
 	end)
 
 	T.test("Step 3: chute points are cell centres on top of the pad", function()
@@ -166,9 +138,8 @@ return function(T, Loader)
 				T.truthy((world.Position - want).Magnitude < 1e-4, `{name} world point on plot {plot.Id}`)
 			end
 		end
-		-- the pen chute sits on the pen's side of the grid, the foundry chute on the foundry's
+		-- the pen chute sits on the pen's side of the grid
 		T.lt(BaseLayout.chuteLocal("Pen").X, 0, "pen chute on the pen side")
-		T.lt(0, BaseLayout.chuteLocal("Foundry").X, "foundry chute on the foundry side")
 	end)
 
 	T.test("Step 3: Placement keeps everything but belts off the chute cells", function()
@@ -200,7 +171,8 @@ return function(T, Loader)
 		end
 		-- next to a chute is fine, and the back row between chutes too
 		T.truthy(Placement.validate({}, "ClayFurnace", PX + 1, BACK - 1, 0), "2x2 between the pen and train chutes")
-		T.truthy(Placement.validate({}, "IronBox", TX + 1, BACK - 1, 0), "2x2 between the train and foundry chutes")
+		T.truthy(Placement.validate({}, "IronBox", TX + 1, BACK - 1, 0), "2x2 right of the train chute")
+		T.truthy(Placement.validate({}, "IronBox", FX - 1, BACK - 1, 0), "2x2 on the old FOUNDRY cell")
 		T.truthy(Placement.validate({}, "Crusher", PX, BACK - 2, 0), "right in front of a chute")
 		-- a move onto a chute is refused and changes nothing
 		local furnace = entry("ClayFurnace", 0, 0)
@@ -211,7 +183,7 @@ return function(T, Loader)
 		T.eq(furnace.X, 0, "unchanged")
 		-- a placement onto a chute keeps the machine in the inventory
 		local buy = { PlacedMachines = {}, MachineInventory = { IronBox = 1 }, Storage = {} }
-		local placed, reason = Placement.commitPlace(buy, "IronBox", FX - 1, BACK - 1, 0, Placement.limits(0, false))
+		local placed, reason = Placement.commitPlace(buy, "IronBox", TX - 1, BACK - 1, 0, Placement.limits(0, false))
 		T.eq(placed, nil)
 		T.eq(reason, "Chute")
 		T.eq(buy.MachineInventory.IronBox, 1)
@@ -250,7 +222,7 @@ return function(T, Loader)
 				entry("Crusher", 0, 0),
 				entry("ClayFurnace", 1, 1), -- overlaps the Crusher
 				entry("BlastFurnace", CELLS - 2, CELLS - 2), -- off the plot
-				entry("IronBox", FX - 1, BACK - 1), -- on the FOUNDRY chute
+				entry("IronBox", TX - 1, BACK - 1), -- on the TRAIN chute
 				{ Id = "Crusher", X = 4, Z = 4, R = 7 }, -- broken rotation
 			},
 			MachineInventory = {},
@@ -300,7 +272,7 @@ return function(T, Loader)
 		T.eq(batch.MachineInventory.Crusher, cap)
 		-- sanitize moving a machine off a chute at the cap refunds it too
 		local onChute =
-			{ PlacedMachines = { entry("IronBox", FX - 1, BACK - 1) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
+			{ PlacedMachines = { entry("IronBox", TX - 1, BACK - 1) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
 		Placement.sanitize(onChute)
 		T.eq(onChute.MachineInventory.IronBox, cap)
 		T.eq(onChute.Coins, MachineData.ById.IronBox.Price)
@@ -534,7 +506,7 @@ return function(T, Loader)
 				T.falsy(MachineData.keeps(mode, { [ore] = true }, item("Raw", ore)), `{mode}: dirty {ore} passes`)
 			end
 		end
-		-- crushed ore and ingots always pass on too (on to a furnace, on to the Foundry)
+		-- crushed ore and ingots always pass on too (on to a furnace, on to the Alloy Furnace or a Sell Box)
 		local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 		for _, mode in Keep.Modes do
 			for _, ore in OreData.List do
@@ -806,7 +778,6 @@ return function(T, Loader)
 		local limits = {
 			PenAction = { 8, 12 },
 			IronBoxAction = { 4, 12 },
-			FoundryAction = { 4, 8 },
 			ShopBuy = { 3, 5 },
 		}
 		for name, limit in limits do
@@ -815,31 +786,27 @@ return function(T, Loader)
 			T.eq(declared.Rate, limit[1], name .. " rate")
 			T.eq(declared.Burst, limit[2], name .. " burst")
 		end
-		T.eq(Net.Events.FoundryBegin, false, "server -> client")
-		T.eq(Net.Events.FoundryResult, false, "server -> client")
+		T.eq(Net.Events.FoundryAction, nil, "no Foundry remotes (owner 2026-10-24)")
+		T.eq(Net.Events.FoundryBegin, nil)
+		T.eq(Net.Events.FoundryResult, nil)
 		T.eq(Net.Events.ShopResult, false, "every ShopBuy gets an answer (server -> client)")
 	end)
 
 	T.test("Step 3: new save fields", function()
 		-- step 3 bumped no version (reconcile fills the records in); 4 is the bigger
 		-- plots' grid move (Migrations), which an old save needs once
-		T.eq(DataTemplate.Version, 7, "no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums)")
+		T.eq(
+			DataTemplate.Version,
+			8,
+			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry)"
+		)
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")
 		T.eq(type(DataTemplate.KeepList), "table")
 		T.eq(next(DataTemplate.KeepList), nil, "nothing on the list at first")
 		T.eq(DataTemplate.KeepMode, "RarePlus", "keep Rare and better by default")
-		T.eq(type(DataTemplate.Foundry), "table")
-		T.eq(type(DataTemplate.Foundry.Stock), "table")
-		T.eq(#DataTemplate.Foundry.Stock, 0)
+		T.eq(DataTemplate.Foundry, nil, "no Foundry record (v8)")
 		T.eq(DataTemplate.Upgrades.PenAutomation, 0)
 		T.eq(DataTemplate.Stats.BlastersForged, 0)
-		T.truthy(GameConfig.MaxFoundryStock >= 20 and GameConfig.MaxFoundryStock <= GameConfig.MaxStoredItems, "foundry stock cap")
-		-- the stock can always hold a full recipe of the top blaster
-		local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
-		for level = 2, BlasterData.MaxLevel do
-			local recipe = BlasterData.get(level).Recipe
-			T.le(recipe.Ingots, GameConfig.MaxFoundryStock, "recipe " .. level .. " fits the stock")
-		end
 	end)
 end

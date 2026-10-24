@@ -38,6 +38,15 @@ lean review.
   RebirthView text follows.
 - Tutorial: the "A stronger blaster" step points at the Vault; quests / badges that say "forge" change.
 - Old saves: the Foundry's ingot stock goes to the pen (or is sold), spec it.
+- **Built** (feat/no-foundry, on top of podiums-3): FoundryService / FoundryBuilder / FoundryLogic / FoundryController /
+  FoundryView, the FOUNDRY chute (ConveyorService's sink machinery), the yard placeholder, the Hammer move and the
+  Net remotes are gone; map v55; save Version 8 (data.Foundry.Stock -> the pen once, data.Foundry goes).
+  Blasters: `Recipe` -> `Coins` (the level's coin scale; everything that followed the Foundry prices keeps it), the
+  Vault price = Coins x 1.15 (`balance_sim calibrate-vault`, Typical LV 10 at ~8 h). Rebirth: a coin level raises
+  Stats.RunForged (it counts for the stars); the coin Vault never says "ForgeFirst" any more, the STORE still leaves
+  LV 10 to the coins (topBlocked). New: the droppers and Podium Keeper keep their income through a rebirth, so a rebirth
+  run's Vault prices have a floor: RunShare 0.5 x RunSeconds[level] of Stats.RunIncome (RebirthService writes it right
+  after the reset). Tutorial step "A stronger blaster" points at the Vault; ingots: "sell or alloy".
 
 ## 4 + 5. The backpack
 Data: `data.Backpack` = counts by item key ("K|O|G|R" like the pen) and `data.BackpackLevel`; capacity per level

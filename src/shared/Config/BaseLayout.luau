@@ -7,21 +7,21 @@
 	The machine grid (GameConfig.PlotCells square, 12x12 = 48 studs today)
 	covers x, z in -GRID_HALF..GRID_HALF (-24..24). Behind it, on the sea
 	side, lies the yard (z YARD_Z0..YARD_Z0 + 31, 25..56 today): the Ore
-	Pen, the podiums, the Foundry and the train stop on the coastal railway
-	(RailZ, 62 today, world |x| ~165).
-	Nothing here may overlap the machine grid (pieces()); only the three
-	chute cells (Chutes) are fixtures on the grid itself, and the Foundry's
-	receiver (FoundryIntake) reaches over the end of the FOUNDRY chute cell.
+	Pen, the podiums and the train stop on the coastal railway (RailZ, 62
+	today, world |x| ~165). (The Foundry stood behind the podiums until the
+	owner's 2026-10-24 playtest: blasters come from the Vault only.)
+	Nothing here may overlap the machine grid (pieces()); only the two
+	chute cells (Chutes) are fixtures on the grid itself.
 	(bigger plots) Everything here derives from PlotCells: the yard keeps its
 	depth and moves out with the grid's back edge, and every piece keeps its
-	plot-local x, so the chutes, the pen gate, the yard gate and the
-	Foundry's receiver stay lined up at any (even) grid size.
+	plot-local x, so the chutes, the pen gate and the yard gate stay lined
+	up at any (even) grid size.
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
 
 export type Rect = { Center: Vector3, Size: Vector3 } -- Size.Y = height budget
-export type ChuteKind = "Source" | "Sink"
+export type ChuteKind = "Source" -- (the FOUNDRY chute was a "Sink"; it went with the Foundry)
 export type Chute = {
 	X: number,
 	Z: number,
@@ -80,9 +80,6 @@ BaseLayout.Podiums = {
 }
 BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 
--- The Foundry (step 3): ingots in, stronger blasters out.
-BaseLayout.Foundry = rect(13, YARD_Z0 + 21, 18, 16, 14)
-
 -- Train stop on the coastal railway (step 2). Its rail-side edge (z 59 at 12
 -- cells) keeps 3 studs from the rail centerline, out of the trains' wheels (+-2.95).
 BaseLayout.TrainStop = rect(0, YARD_Z0 + 32, 34, 6, 4)
@@ -96,7 +93,6 @@ BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 function BaseLayout.pieces(): { [string]: Rect }
 	local list: { [string]: Rect } = {
 		Pen = BaseLayout.Pen.Area,
-		Foundry = BaseLayout.Foundry,
 		TrainStop = BaseLayout.TrainStop,
 		Museum = BaseLayout.Museum,
 	}
@@ -114,7 +110,7 @@ end
 ---------------------------------------------------------------- chutes
 
 --[[
-	Chute cells (step 3, docs/plans/STEP3_PLAN.md): three fixed cells on the
+	Chute cells (step 3, docs/plans/STEP3_PLAN.md): two fixed cells on the
 	back row of the machine grid (gz = PlotCells - 1, next to the yard; cell
 	numbers as in Machines/Grid). Only belts may stand on them: Placement
 	refuses every other machine there (reason "Chute") and moves one off
@@ -122,19 +118,8 @@ end
 	  Pen      Source  items sent from the Ore Pen (PenAction "Send") come out here
 	  Train    Source  Direct Unload (Upgrades.PenAutomation 2): the train puts its
 	                   dirty ore here instead of into the pen
-	  Foundry  Sink    delivers into the Foundry (GameConfig, Foundry): ingots the
-	                   next blaster level can use go into data.Foundry.Stock, every
-	                   other item into the Ore Pen
-	Sinks take only the plot owner's items. Another player's item is refused
-	as at a machine ("Foreign": pushed off, back to its owner after
-	GameConfig.ForeignItemReturn); it never lands in this player's pen or
-	Foundry. A Sink takes:
-	  - an item reaching the end of a belt on its cell whose front faces +Z
-	    (SinkRotation, off the grid edge toward the yard);
-	  - with NO belt on the cell, an item lying or rolling onto the cell (a
-	    cheap box scan of the cell each GameConfig.IntakeTick, e.g. a furnace
-	    whose output lands there). A belt on the cell facing any other way
-	    just carries items across; nothing is taken from it.
+	(The FOUNDRY chute, a Sink into the Foundry, went with the Foundry
+	(owner 2026-10-24); a belt on its old cell is an ordinary belt.)
 	A Source only spawns an item onto a belt standing on its cell whose front
 	is NOT SinkRotation (sourceFeeds: a belt running off the grid edge would
 	drop the item loose in the yard), and only while that belt has room (the
@@ -151,9 +136,8 @@ end
 ]]
 local BACK_ROW = GameConfig.PlotCells - 1
 
--- X: 3 / 6 / 9 at 12 cells (+ GRID_SHIFT on a bigger grid): plot-local x
--- -10 / 2 / 14 at any size, in line with the pen gate, the YardGate and the
--- Foundry's receiver.
+-- X: 3 / 6 at 12 cells (+ GRID_SHIFT on a bigger grid): plot-local x
+-- -10 / 2 at any size, in line with the pen gate and the YardGate.
 BaseLayout.Chutes = {
 	Pen = {
 		X = 3 + GRID_SHIFT,
@@ -171,20 +155,13 @@ BaseLayout.Chutes = {
 		Color = Color3.fromRGB(96, 200, 110),
 		Hint = "With Direct Unload, your train puts its dirty ore here.",
 	},
-	Foundry = {
-		X = 9 + GRID_SHIFT,
-		Z = BACK_ROW,
-		Kind = "Sink",
-		Label = "FOUNDRY",
-		Color = Color3.fromRGB(255, 120, 40),
-		Hint = "Run a belt off this edge (or drop ingots here) to feed your Foundry.",
-	},
 } :: { [string]: Chute }
 
 -- The chute names in a fixed order (loops, UI).
-BaseLayout.ChuteNames = { "Pen", "Train", "Foundry" }
+BaseLayout.ChuteNames = { "Pen", "Train" }
 
--- Grid rotation of a belt that delivers into a Sink chute: Grid.dir(2) = (0, 1), +Z.
+-- Grid rotation of a belt that runs off the grid's back edge toward the yard: Grid.dir(2) = (0, 1), +Z
+-- (the old FOUNDRY Sink's direction; a Source refuses a belt turned so, sourceFeeds).
 BaseLayout.SinkRotation = 2
 
 -- May a Source chute spawn onto a belt turned `r` on its cell? Not when the
@@ -228,21 +205,5 @@ end
 function BaseLayout.chuteWorld(plotCF: CFrame, name: string): CFrame
 	return plotCF * CFrame.new(BaseLayout.chuteLocal(name))
 end
-
---[[
-	The Foundry's visible receiver at the FOUNDRY chute (FoundryService
-	builds it per plot; PlotBuilder stays untouched): a hood over the end of
-	the sink belt, leaning on the plot's back wall, with a pipe that goes
-	down into the ground (the Foundry shows it coming back up). An ingot the
-	chute takes flies into Mouth (a short client tween) instead of vanishing
-	at the wall. Zone is the room the hood may use: the last stud of the
-	chute cell (the belt still runs under it) up to the wall, kept left of
-	the wall pillar at x ~15-17 (no other piece overlaps it).
-]]
-local foundryCell = BaseLayout.chuteLocal("Foundry")
-BaseLayout.FoundryIntake = {
-	Mouth = Vector3.new(foundryCell.X, 1.2, GRID_HALF - 0.4),
-	Zone = rect(foundryCell.X - 0.4, GRID_HALF, 2.8, 3.5, 1.8),
-}
 
 return BaseLayout

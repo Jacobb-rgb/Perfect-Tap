@@ -1,6 +1,6 @@
 -- DropperService under Lune with the REAL ItemService.spawnDesc and MachineService (review 2026-10-24):
 -- a dropper's tick pushes a real loose Drop onto a belt or an empty cell, through a Money Laser too;
--- the Foundry and Tobin never take a Drop; a laser holding Drops packs up with a full pen.
+-- Tobin never takes a Drop; a laser holding Drops packs up with a full pen.
 -- Save data, plots, Net and the loose-item count are small fakes per test.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -206,18 +206,8 @@ return function(T, Loader)
 		T.eq(record.State, "Consumed", "the old loose Drop is gone")
 	end)
 
-	withWorld("dropper service: the Foundry chute and hopper never keep a Drop; Tobin never buys one", function(w)
-		local FoundryService = Loader.requirePath("ServerScriptService.Server.Services.FoundryService")
+	withWorld("dropper service: Tobin never buys a Drop", function(w)
 		local SellService = Loader.requirePath("ServerScriptService.Server.Services.SellService")
-		local before = #w.data.Storage
-		local one = ItemService.spawnDesc({ K = "Drop", O = "BasicDropper" }, USER, CFrame.new(0, 5, 0), nil, true)
-		local took = FoundryService.sink(PLOT, one)
-		T.truthy(took, "the chute takes it off the belt")
-		T.eq(one.State, "Consumed", "and it goes")
-		local two = ItemService.spawnDesc({ K = "Drop", O = "BasicDropper" }, USER, CFrame.new(0, 5, 0), nil, true)
-		FoundryService._test.hopper(PLOT, two)
-		T.eq(two.State, "Consumed", "the hopper too")
-		T.eq(#w.data.Storage, before, "nothing in the pen")
 		local three = ItemService.spawnDesc({ K = "Drop", O = "BasicDropper" }, USER, CFrame.new(0, 5, 0), nil, true)
 		T.eq(SellService.sellRecord(three), 0, "Tobin's SellBin pays nothing for a Drop")
 		T.eq(SellService.priceOf({ K = "Drop", O = "BasicDropper" }), 0)

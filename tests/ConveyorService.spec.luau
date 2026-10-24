@@ -163,11 +163,6 @@ return function(T, Loader)
 		conv.onBelt(m, record, m.Model:GetPivot():PointToObjectSpace(record.Body.CFrame.Position), now)
 	end
 
-	local function chuteItem(name: string, desc: any?, owner: number?): any
-		local at = BaseLayout.chuteLocal(name) + Vector3.new(0, 1, 0)
-		return ItemService.spawnDesc(desc or INGOT, owner or USER, PlotService.plotCFrame(PLOT) * CFrame.new(at), nil, true)
-	end
-
 	---------------------------------------------------------------- belts
 
 	withWorld("ConveyorService: belts move items toward their front, players walk through", function(w)
@@ -383,7 +378,6 @@ return function(T, Loader)
 	withWorld("ConveyorService: a Source chute needs a belt that doesn't face the yard, with room", function(w)
 		ConveyorService.SourceGap = 0
 		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "NoBelt", "no belt")
-		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Foundry", USER)), "NoBelt", "a Sink is never a source")
 		local px, pz = BaseLayout.chuteCell("Pen")
 		local m = belt(w, px, pz, BaseLayout.SinkRotation)
 		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "Yard", "runs off the grid")
@@ -551,9 +545,6 @@ return function(T, Loader)
 		ConveyorService.SourceGap = 0
 		local m = belt(w, 5, 5, 1)
 		local ahead = belt(w, 6, 5, 1)
-		ConveyorService.setSink("Foundry", function()
-			return false
-		end)
 		local px, pz = BaseLayout.chuteCell("Pen")
 		belt(w, px, pz, 0)
 		local slow: { any } = {}
@@ -577,10 +568,9 @@ return function(T, Loader)
 			T.eq(walks, 1, "every slow item of one pass shares one index")
 			feed(m, slow[1], 20.2)
 			T.eq(walks, 2, "a new pass builds it again")
-			conv.scanSinks(21)
 			T.truthy(ConveyorService.sourceReady(PLOT, "Pen", USER), "a ready chute")
 			T.truthy(ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER), "spawned")
-			T.eq(walks, 2, "the sink scan and the Sources never walk every item")
+			T.eq(walks, 2, "the Sources never walk every item")
 		end)
 		rawset(ItemService, "looseList", looseList)
 		if not ok then
@@ -611,149 +601,21 @@ return function(T, Loader)
 		T.eq(#w.ejects, 1, "nothing ahead: cleared")
 	end)
 
-	---------------------------------------------------------------- sinks
+	---------------------------------------------------------------- the old FOUNDRY chute
 
-	withWorld("ConveyorService: a belt into the FOUNDRY chute hands the owner's items to the sink", function(w)
-		local fx, fz = BaseLayout.chuteCell("Foundry")
+	withWorld("ConveyorService: no sink any more: a belt off the back edge just runs into the wall", function(w)
+		-- the FOUNDRY chute went with the Foundry (owner 2026-10-24): its old cell is an
+		-- ordinary cell and its belt an ordinary belt (no setSink, no sink scan)
+		T.eq(ConveyorService.setSink, nil, "no sink hook")
+		T.eq(conv.scanSinks, nil, "no sink scan")
+		local fx, fz = 9 + (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 1
+		T.eq(BaseLayout.chuteAt(fx, fz), nil, "the old FOUNDRY cell")
 		local m = belt(w, fx, fz, BaseLayout.SinkRotation)
-		local atEnd = Vector3.new(0, 1.4, -CELL / 2 + 0.5)
-		-- no handler yet: the item waits at the end (never nudged off)
-		local waiting = onBeltItem(m, atEnd, INGOT)
-		local now = 10
-		for _ = 1, 10 do
-			now += 2
-			feed(m, waiting, now)
-		end
-		T.eq(waiting.State, "Loose", "waits at the edge")
-		T.eq(#w.ejects, 0, "not pushed off")
-		local calls = {}
-		local answer = true
-		ConveyorService.setSink("Foundry", function(player, record)
-			table.insert(calls, { Player = player, Record = record })
-			if answer then
-				ItemService.absorb(record)
-				return true
-			end
-			return false
-		end)
-		feed(m, waiting, now)
-		T.eq(#calls, 1, "offered")
-		T.truthy(calls[1].Player == w.player, "with the owner")
-		T.eq(waiting.State, "Consumed", "taken in")
-		-- not at the end yet: just a belt
-		local early = onBeltItem(m, Vector3.new(0, 1.4, 1.2), INGOT)
-		feed(m, early, now)
-		T.eq(#calls, 1, "only at the end")
-		-- the sink can say no: the item waits there, again and again
-		answer = false
-		local refused = onBeltItem(m, atEnd, INGOT)
-		for _ = 1, 8 do
-			now += 2
-			feed(m, refused, now)
-		end
-		T.eq(refused.State, "Loose", "still there")
-		T.eq(#calls, 9, "offered every scan")
-		T.eq(#w.ejects, 0, "never pushed off")
-		-- another player's item: refused as Foreign, the sink never sees it
-		answer = true
-		local foreign = onBeltItem(m, atEnd, INGOT, STRANGER)
-		feed(m, foreign, now)
-		T.eq(#calls, 9, "not offered")
-		T.eq(#w.reacts, 1, "pushed off like at a machine")
-		T.eq(w.reacts[1].Reason, "Foreign", "Foreign")
-		T.eq(w.reacts[1].Via, "Belt", "via Belt")
-		-- a sink that breaks leaves the item where it is
-		ConveyorService.setSink("Foundry", nil)
-		ConveyorService.setSink("Foundry", function()
-			error("broken sink")
-		end)
-		local survivor = onBeltItem(m, atEnd, INGOT)
-		feed(m, survivor, now)
-		T.eq(survivor.State, "Loose", "an error takes nothing")
-		-- a handler that says it took an item but leaves it in the world: the
-		-- item is taken out right there, so it is never offered (and stored) again
-		ConveyorService.setSink("Foundry", nil)
-		local stored: { any } = {}
-		ConveyorService.setSink("Foundry", function(_, record)
-			table.insert(stored, ItemService.descOf(record)) -- forgot ItemService.absorb
-			return true
-		end)
-		local sloppy = onBeltItem(m, atEnd, INGOT)
-		feed(m, sloppy, now)
-		T.eq(#stored, 1, "stored")
-		T.eq(sloppy.State, "Consumed", "out of the world: no copy left behind")
-		for _ = 1, 10 do
-			-- (IntakeService only scans loose items; even a stale call takes nothing)
-			now += 0.2
-			conv.onBelt(m, sloppy, atEnd, now)
-		end
-		T.eq(#stored, 1, "never offered (and stored) again")
-		T.eq(#w.ejects, 0, "not pushed anywhere")
-		-- a belt on the sink cell that faces elsewhere just carries items
-		ConveyorService.setSink("Foundry", nil)
-		local seen = 0
-		ConveyorService.setSink("Foundry", function()
-			seen += 1
-			return false
-		end)
-		T.truthy(MachineService.move(m, fx, fz, 1), "turned along the back row")
-		feed(m, onBeltItem(m, atEnd, INGOT), now)
-		T.eq(seen, 0, "not a sink belt now")
-		-- only sinks take a handler
-		T.falsy(
-			pcall(ConveyorService.setSink, "Pen", function()
-				return true
-			end),
-			"the PEN chute is a source"
-		)
+		local item = onBeltItem(m, Vector3.new(0, 1.4, -1.6))
+		feed(m, item, 10)
+		T.eq(item.State, "Loose", "the item stays in the world at the end of the belt")
+		T.eq(#w.data.Storage, 0, "nothing goes into the pen")
 	end)
-
-	withWorld("ConveyorService: with no belt on the FOUNDRY chute, items lying on its cell go in", function(w)
-		local calls = {}
-		ConveyorService.setSink("Foundry", function(player, record)
-			table.insert(calls, { Player = player, Record = record })
-			ItemService.absorb(record)
-			return true
-		end)
-		local mine = chuteItem("Foundry")
-		local theirs = chuteItem("Foundry", nil, STRANGER)
-		local elsewhere = chuteItem("Pen")
-		conv.scanSinks(1)
-		T.eq(#calls, 1, "one item taken")
-		T.truthy(calls[1].Record == mine and calls[1].Player == w.player, "the owner's, with the owner")
-		T.eq(theirs.State, "Loose", "another player's item stays (IntakeService sends it home)")
-		T.eq(elsewhere.State, "Loose", "other cells are not the chute")
-		-- ore flying over the cell is not on it (the plot reaches 24 studs up)
-		local high = ItemService.spawnDesc(
-			INGOT,
-			USER,
-			PlotService.plotCFrame(PLOT) * CFrame.new(BaseLayout.chuteLocal("Foundry") + Vector3.new(0, ConveyorService.SinkScanUp + 2, 0)),
-			nil,
-			true
-		)
-		conv.scanSinks(1.5)
-		T.eq(#calls, 1, "not taken in mid-air")
-		T.eq(high.State, "Loose", "it flies on")
-		high.Model:PivotTo(PlotService.plotCFrame(PLOT) * CFrame.new(BaseLayout.chuteLocal("Foundry") + Vector3.new(0, 0.8, 0)))
-		conv.scanSinks(1.6)
-		T.eq(#calls, 2, "once it lands on the cell it goes in")
-		-- with a belt on the cell the belt decides (it is no sink while it faces elsewhere)
-		local fx, fz = BaseLayout.chuteCell("Foundry")
-		belt(w, fx, fz, 0)
-		local onBeltCell = chuteItem("Foundry")
-		conv.scanSinks(2)
-		T.eq(#calls, 2, "belt on the cell: no scan")
-		T.eq(onBeltCell.State, "Loose", "left to the belt")
-		-- a free plot takes nothing
-		w.free = true
-		MachineService._test.reset()
-		local lone = chuteItem("Foundry")
-		conv.scanSinks(3)
-		T.eq(#calls, 2, "no owner, no sink")
-		T.eq(lone.State, "Loose", "still there")
-	end)
-
-	---------------------------------------------------------------- chutes in the world
 
 	withWorld("ConveyorService: every chute gets a plate on its cell and a plaque up on the back wall", function(w)
 		conv.buildMarkers(PLOT)
@@ -823,19 +685,7 @@ return function(T, Loader)
 		local markers = conv.markers(PLOT)
 		T.eq(markers.Pen.Line.Text, ConveyorService.SignLines.Pen, "PEN: no arrow")
 		T.eq(markers.Train.Line.Text, ConveyorService.SignLines.Train .. " >", "TRAIN: arrow toward its cell")
-		T.truthy(markers.Foundry.Line.Text:find("BELT IN", 1, true), "FOUNDRY: belt in")
-		-- nothing pokes into the room kept for the Foundry's receiver hood
-		local zone = BaseLayout.FoundryIntake.Zone
-		for _, d in folder:FindFirstChild("Foundry"):GetDescendants() do
-			if d:IsA("BasePart") and d.Name ~= "Plate" then
-				local p = plotCF:PointToObjectSpace(d.CFrame.Position)
-				local half = d.Size / 2
-				local apart = math.abs(p.X - zone.Center.X) >= half.X + zone.Size.X / 2
-					or math.abs(p.Z - zone.Center.Z) >= half.Z + zone.Size.Z / 2
-					or p.Y - half.Y >= zone.Size.Y
-				T.truthy(apart, "Foundry plaque " .. d.Name .. " clear of the receiver zone")
-			end
-		end
+		T.eq(folder:FindFirstChild("Foundry"), nil, "no FOUNDRY plaque (owner 2026-10-24)")
 		-- built once per plot
 		conv.buildMarkers(PLOT)
 		local count = 0
@@ -859,10 +709,5 @@ return function(T, Loader)
 		belt(w, tx, tz, BaseLayout.SinkRotation)
 		conv.onLayout(w.player, PLOT)
 		T.eq(markers.Train.Line.Text, ConveyorService.YardSign .. " >", "the TRAIN plaque warns too, still pointing")
-		-- the FOUNDRY sink belt faces the yard on purpose: no warning there
-		local fx, fz = BaseLayout.chuteCell("Foundry")
-		belt(w, fx, fz, BaseLayout.SinkRotation)
-		conv.onLayout(w.player, PLOT)
-		T.falsy(markers.Foundry.Line.Text:find(ConveyorService.YardSign, 1, true), "sink belt is fine")
 	end)
 end

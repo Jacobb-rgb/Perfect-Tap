@@ -32,7 +32,6 @@ MenuPanels.Names = {
 	"SellController",
 	"TrainController",
 	"IronBoxController",
-	"FoundryController",
 	"TechShopController",
 	"VaultController",
 	"BoostController",

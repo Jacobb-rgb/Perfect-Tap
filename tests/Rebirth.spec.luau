@@ -1,7 +1,7 @@
 --[[
 	Rebirth "STAR FORGE" (RebirthConfig, RebirthService) under Lune.
 	The rules pin relationships, not numbers (the machines chat recalibrates
-	the blaster prices): the stars follow the Foundry coin curve, the Star
+	the blaster prices): the stars follow the blaster coin scale, the Star
 	Shop is a goal of many rebirths whose cheapest perk the first rebirth
 	pays for, Head Start never skips the run, no perk outgrows its stat cap.
 	The reset resets exactly the header's list and keeps everything else.
@@ -80,7 +80,6 @@ return function(T, Loader)
 		data.StarterKitGiven = true
 		data.Storage = { { K = "Clean", O = "Gold", G = "Pristine" }, { K = "Raw", O = "Coal" }, { K = "Relic", O = "AncientGear" } }
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "", "" }
-		data.Foundry.Stock = { { K = "Ingot", O = "Gold", G = "Clean" } }
 		data.Train = {
 			CapacityLevel = 3,
 			SpeedLevel = 4,
@@ -122,7 +121,7 @@ return function(T, Loader)
 		-- derived from the prices: scaling every price keeps the curve
 		local real = RebirthConfig.starsCurve()
 		local function priceOf(level: number): number
-			return BlasterData.ByLevel[level].Recipe.Coins
+			return BlasterData.coins(level)
 		end
 		local scaled = RebirthConfig.starsCurve(function(level)
 			return priceOf(level) * 10
@@ -234,7 +233,8 @@ return function(T, Loader)
 		for _, item in data.Storage do
 			T.eq(item.K, "Relic", "only relics")
 		end
-		T.eq(#data.Foundry.Stock, 0, "the Foundry's ingots")
+		T.eq(data.Foundry, nil, "no Foundry record (v8)")
+		T.eq(data.Stats.RunIncome, 0, "the reset clears the run's price floor (RebirthService writes the kept income)")
 		for i = 1, 5 do
 			T.eq(data.Podiums[i], "", "podium " .. i)
 		end
@@ -285,7 +285,7 @@ return function(T, Loader)
 		T.eq(data.Stats.RunForged, 0)
 		-- a rebirth right away is locked (blaster 1)
 		T.eq(select(2, RebirthConfig.canRebirth(data)), "Locked")
-		-- the next one adds up (a level forged at the Foundry this run), and the save stays clean through Migrations
+		-- the next one adds up (a level bought with coins this run), and the save stays clean through Migrations
 		data.BlasterLevel = TOP
 		data.Stats.RunForged = TOP
 		local more = RebirthConfig.reset(data)
@@ -328,12 +328,12 @@ return function(T, Loader)
 		T.truthy(deepEqual(prices(data), before), "the same coin prices right after the rebirth (BlasterData.priceLevel)")
 		-- run 2: Vault cases up to MinBlaster (coins only, the kept podiums pay for them)
 		data.BlasterLevel = MIN
-		T.eq(RebirthConfig.reachedOf(data), 0, "nothing forged this run")
+		T.eq(RebirthConfig.reachedOf(data), 0, "nothing bought with coins this run")
 		local ok, reason = RebirthConfig.canRebirth(data)
 		T.falsy(ok)
-		T.eq(reason, "NotForged", "Vault levels don't count after the first rebirth")
+		T.eq(reason, "NotForged", "levels that came another way (a lifted start) don't count after the first rebirth")
 		T.eq(RebirthConfig.starsFor(RebirthConfig.reachedOf(data)), 0)
-		-- forged at the Foundry: it counts (never above the level held)
+		-- bought with coins at the Vault: it counts (never above the level held)
 		data.Stats.RunForged = MIN
 		T.truthy(RebirthConfig.canRebirth(data))
 		data.Stats.RunForged = TOP
@@ -407,7 +407,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Rebirth: Robux blaster levels never pay stars and come back at every rebirth", function()
-		-- a first run with a level bought with Robux counts only Foundry-forged levels
+		-- a first run with a level bought with Robux counts only the levels bought with coins
 		local data = midRun()
 		data.Stats.RunPaid = true
 		T.eq(RebirthConfig.reachedOf(data), 0, "the first-run grace is gone once a level was bought")
@@ -467,13 +467,13 @@ return function(T, Loader)
 		data.Stats.RunForged = 3
 		T.truthy(RebirthConfig.canRebirth(data), "not locked out for good")
 		local stars, count = RebirthConfig.reset(data)
-		T.eq(stars, 0, "no stars: nothing was forged")
+		T.eq(stars, 0, "no stars: no coin level")
 		T.eq(count, 3)
-		-- below the top, an unforged run still has to forge
+		-- below the top, a run without a coin level still has to buy one
 		data.BlasterLevel = TOP - 1
 		data.Stats.RunForged = 0
 		T.eq(select(2, RebirthConfig.canRebirth(data)), "NotForged")
-		T.truthy(RebirthConfig.topBlocked(data), "and the top level waits for the Foundry")
+		T.truthy(RebirthConfig.topBlocked(data), "and the STORE leaves the top level to the coin Vault")
 		T.falsy(RebirthConfig.topBlockedFor(TOP - 2, 0), "only the step to the top waits")
 	end)
 
@@ -629,6 +629,26 @@ return function(T, Loader)
 		T.eq(snap.Ready, false)
 		T.eq(snap.StarsNow, 0)
 		T.eq(snap.MinBlaster, MIN)
+	end)
+
+	withWorld("RebirthService: the run's Vault prices have a floor of the income the factory kept", function(w)
+		-- (owner 2026-10-24, no Foundry: the droppers stay through a rebirth, so the low
+		-- levels would cost seconds of their income and the stars would farm)
+		local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
+		local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
+		local dropper = DropperConfig.List[1]
+		table.insert(w.data.PlacedMachines, { Id = dropper.Id, X = 12, Z = 12, R = 0 })
+		RebirthService._test.action(w.player, { Action = "Rebirth" })
+		T.truthy(w.results[#w.results].Ok, "rebirthed")
+		local kept = DropperConfig.placedIncome(w.data.PlacedMachines) * EconomyService.incomeMultiplier(w.player)
+			+ PodiumService.incomeOf(w.player, w.data)
+		T.truthy(kept >= dropper.Income, "the dropper's income counts")
+		T.near(w.data.Stats.RunIncome, kept, kept * 1e-9, "Stats.RunIncome = the income the factory kept")
+		T.near(RebirthConfig.runIncomeOf(w.data), kept, kept * 1e-9)
+		T.near(RebirthService.snapshot(w.data).RunIncome, kept, kept * 1e-9, "the client sees the floor (VaultView)")
+		-- the Vault charges at least that much income for LV 2 now
+		local floor = kept * BlasterData.Vault.RunSeconds[2] * BlasterData.Vault.RunShare
+		T.truthy((BlasterData.vaultPrice(2, RebirthConfig.runIncomeOf(w.data)) :: number) >= floor, "LV 2 costs the floor")
 	end)
 
 	withWorld("RebirthService: a rebirth inside a rebirth is Busy; a failure leaves the rebirth free again", function(w)

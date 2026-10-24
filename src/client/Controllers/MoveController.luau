@@ -20,7 +20,7 @@
 
 	Moves (PlayerMoves)
 	  Carry      your / their CarryCount player attribute > 0 (CarryService)
-	  Spray, Hammer  the character attribute MoveLoop (MoveService)
+	  Spray          the character attribute MoveLoop (MoveService)
 	  Throw      the throw input (InteractController calls playLocal("Throw"))
 	  Recoil     your blaster firing (MiningController.isFiring), the others'
 	             BlastHit effects (the Fx event)
@@ -34,7 +34,7 @@
 	  (Net "Emote"); the server sets the character attribute Emote =
 	  "<Name>:<seq>" ("" = stopped) and every client plays it on that
 	  character. Not while carrying ore, in a close-up (cleaning, build mode,
-	  the Foundry...), on a hoverboard, seated or dead; the Blaster Spin only
+	  the vault...), on a hoverboard, seated or dead; the Blaster Spin only
 	  with the blaster in hand (EmoteRules). A playing emote stops with its
 	  outro (the finishing pose; quicker while moving) when the character
 	  moves or jumps, picks a tool up (the Blaster Spin: puts the blaster
@@ -244,7 +244,7 @@ local function start(entry: Entry, name: string, scale: number?): boolean
 	return true
 end
 
--- Starts / stops the entry's loop (Carry, Spray, Hammer) to match its attributes.
+-- Starts / stops the entry's loop (Carry, Spray) to match its attributes.
 local function updateLoop(entry: Entry)
 	if not playerMoves then
 		return
@@ -1012,7 +1012,7 @@ function MoveController.stopEmote()
 end
 
 -- Is your character in a close-up now (a Scriptable camera or PlayerControls claimed: cleaning,
--- build mode, the Foundry, the vault...)? The EMOTES menu doesn't open there.
+-- build mode, the vault...)? The EMOTES menu doesn't open there.
 function MoveController.inCloseUp(): boolean
 	return started and closeUp(MoveController.Env.Workspace.CurrentCamera)
 end

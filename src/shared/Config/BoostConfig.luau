@@ -51,8 +51,9 @@
 	  TripleLucky5  2 Crystal capsules at the player's blaster level (Triple
 	                Lucky pays off on Crystal and Royal capsules, so it is
 	                priced against them: 2 h of it costs 48 Crystal capsules)
-	  HexaLucky5    20 % of the player's next blaster forge (the level-10
-	                forge at the top), at least 2,500 coins: it grows with
+	  HexaLucky5    2 % of the player's next blaster level's coin scale
+	                (BlasterData.coins; the level-10 one at the top), at
+	                least 2,500 coins: it grows with
 	                the mines the player can reach
 	Coins only TOP UP a boost: a coin offer is sold only while less than
 	CoinBuyBelow (10 min) of that boost is left ("CoinLimit"), so coins keep
@@ -105,8 +106,8 @@ export type Offer = {
 	Boost: string, -- Kind id
 	Seconds: number,
 	-- coin offers (see coinPrice): Count capsules of PriceCapsule at the
-	-- player's blaster level, or ForgeShare of the next blaster forge (at
-	-- least MinPrice)
+	-- player's blaster level, or ForgeShare of the next blaster level's coin
+	-- scale (BlasterData.coins; at least MinPrice)
 	PriceCapsule: string?,
 	PriceCount: number?,
 	ForgeShare: number?,
@@ -290,8 +291,8 @@ end
 
 -- Coins a coin offer costs at this blaster level (nil for other offers):
 -- PriceCount capsules of PriceCapsule (CapsuleConfig.price at that level),
--- or ForgeShare of the next blaster forge's coins (the top level's own
--- forge at the top), at least MinPrice.
+-- or ForgeShare of the next blaster level's coin scale (BlasterData.coins;
+-- the top level's own at the top), at least MinPrice.
 function BoostConfig.coinPrice(offerId: any, blasterLevel: any): number?
 	local offer = if type(offerId) == "string" then BoostConfig.OfferById[offerId] else nil
 	if not offer or offer.Product ~= nil then
@@ -303,10 +304,8 @@ function BoostConfig.coinPrice(offerId: any, blasterLevel: any): number?
 		return math.max(offer.MinPrice or 0, each * (offer.PriceCount or 1))
 	end
 	local level = BlasterData.get(blasterLevel).Level
-	local upcoming = BlasterData.get(math.min(level + 1, BlasterData.MaxLevel))
-	local recipe = upcoming.Recipe
-	local forge = if recipe then recipe.Coins else 0
-	return math.max(offer.MinPrice or 0, math.floor(forge * (offer.ForgeShare or 0) + 0.5))
+	local next = BlasterData.coins(math.min(level + 1, BlasterData.MaxLevel))
+	return math.max(offer.MinPrice or 0, math.floor(next * (offer.ForgeShare or 0) + 0.5))
 end
 
 -- The server's check of a BoostAction "BuyCoins": the price for this

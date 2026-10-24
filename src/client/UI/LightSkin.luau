@@ -4,7 +4,7 @@
 	(owner 2026-10-20, Config/BubbleTheme + Config/CardTheme), without
 	touching the window's code or layout. Used while UIConfig.lightUI() is
 	on by the older windows (SellView, TechShopView, TrainView, IronBoxView,
-	FoundryView, CleaningView, the steps 6-7 windows, MenuPanel windows).
+	CleaningView, the steps 6-7 windows, MenuPanel windows).
 
 	  backgrounds  the brown panels become dark slate; the button colours
 	               become the kit's button colours (green, red, orange, blue);
@@ -158,7 +158,12 @@ local function skinBackground(gui: GuiObject)
 	if gui:IsA("TextButton") and gui.BackgroundTransparency < 0.5 then
 		-- an old chunky button (UIKit.button: a white -> grey gradient): the Pop gloss
 		local gradient = gui:FindFirstChildOfClass("UIGradient")
-		if gradient and gradient.Rotation == 90 and gradient.Color.Keypoints[1].Value == Color3.new(1, 1, 1) and #gradient.Color.Keypoints == 2 then
+		if
+			gradient
+			and gradient.Rotation == 90
+			and gradient.Color.Keypoints[1].Value == Color3.new(1, 1, 1)
+			and #gradient.Color.Keypoints == 2
+		then
 			gradient.Color = POP_GLOSS
 		end
 		if gradient and gradient.Color == POP_GLOSS then
@@ -276,7 +281,6 @@ LightSkin.BandRoles = {
 	TerraForgeTrain = "Lobby",
 	TerraForgeTrainPanel = "Lobby",
 	TerraForgeIronBox = "Settings",
-	TerraForgeFoundry = "Vault",
 	TerraForgePen = "Backpack",
 } :: { [string]: string }
 

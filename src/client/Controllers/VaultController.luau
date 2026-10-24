@@ -176,7 +176,7 @@ local function refresh()
 	VaultView.setCurrent(view, myLevel(), myOre())
 	local state = StateController.get()
 	local rebirth = if state and type(state.Rebirth) == "table" then state.Rebirth else nil
-	VaultView.setCards(view, VaultView.cards(myLevel(), cash, if rebirth then tonumber(rebirth.Reached) else nil))
+	VaultView.setCards(view, VaultView.cards(myLevel(), cash, if rebirth then tonumber(rebirth.RunIncome) else nil))
 	local wait = pending
 	if wait then
 		local tile = VaultView.tileFor(view, wait.Level)

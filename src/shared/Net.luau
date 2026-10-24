@@ -72,7 +72,7 @@ Net.Events = {
 	--   Every request read gets a TrainResult; a sent train or a bought level pushes State at once
 	--   (StateService.pushNow). TrainController keeps its own copy of this limit (a click over it
 	--   gets a sound there instead of being dropped here without a word).
-	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
+	-- automation (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
 	--   KeepMode, KeepList; dirty ore, crushed ore and ingots always pass on):
@@ -84,24 +84,6 @@ Net.Events = {
 	--                                                          follows the Rare+ rule again
 	--   The client redraws from the next State snapshot, so a dropped event never
 	--   leaves it out of step with the save.
-	FoundryAction = { Rate = 4, Burst = 8 }, -- (action, arg?):
-	--   "Open"                                    open your Foundry's panel (server answers OpenUI "Foundry")
-	--   "Forge"  { Ore: oreId? }                  start forging the next blaster level from data.Foundry.Stock;
-	--                                             Ore = the skin, an ore among the usable stock ingots
-	--                                             (default: the ore of the most valuable one). It uses
-	--                                             one ingot of the skin ore plus the lowest-value other
-	--                                             usable ingots (GameConfig, Foundry), never the best
-	--   "Strike" { SessionId, Times: { number } } the hammer taps, seconds since FoundryBegin, oldest first
-	--   "Cancel" { SessionId }
-	--   "Take"   { Key, Count }                   stock ingots of one type ("Ingot|O|G|", whole Count
-	--                                             1..GameConfig.MaxFoundryStock) back into the Ore Pen, as
-	--                                             many as fit (checked and moved with no yield; refused
-	--                                             while a forge session runs)
-	--   Nothing is taken when forging starts: on the Strike that finishes the
-	--   session the server checks the ingots and coins again and takes both in
-	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
-	--   then); in that same step the stock ingots the new next level can't use
-	--   move to the pen (as many as fit). Cancel, Timeout and BadStrikes cost nothing.
 	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop:
 	--   ({ Action = "Buy" }) buys it once for MineFloors.Elevator.Price coins (data.Upgrades.Elevator);
 	--   ({ Action = "Go", Floor }) rides to that floor's stop: owned, whole Floor 1..#MineFloors.List,
@@ -228,16 +210,6 @@ Net.Events = {
 	--   "Coins" (Upgrade), Kind?, Level?: the level the request named }; the client drops what it
 	--   showed ahead of the server for a refused one (TrainController)
 	TrainResult = false,
-	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
-	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number to be used,
-	--   Coins: the price, taken only on success (see FoundryAction) }
-	FoundryBegin = false,
-	-- { Id: SessionId ("" when "Forge" is refused before a session starts), Ok,
-	--   Reason?: "NotEnough" (ingots or coins missing, at Forge or at the final Strike) | "MaxLevel" |
-	--   "Busy" (a session already runs) | "TooFar" (not at your Foundry) | "BadOre" (the skin isn't
-	--   a known ore among the usable ingots) | "Cancelled" | "Timeout" | "BadStrikes",
-	--   Level?: new BlasterLevel, Ore?: new BlasterOre, Name?: BlasterData.displayName }
-	FoundryResult = false,
 	-- the answer to every ShopBuy the server reads: { Item, Ok, Reason?: an
 	--   EconomyConfig.TechShop.Reasons code ("BadItem" | "BadCount" | "MaxOwned" | "Max" |
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,

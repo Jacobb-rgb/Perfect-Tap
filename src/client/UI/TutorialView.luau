@@ -90,12 +90,12 @@ TutorialView.SkipWidth = 84
 TutorialView.AckWidth = 112
 
 -- The panels the steps send the player to (the Ore Pen for Clean, Tobin's
--- counter and the Tech shop for Grow, the Foundry for Blaster): the bubble
+-- counter and the Tech shop for Grow, the Blaster Vault for Blaster): the bubble
 -- stays up beside them. Any other open panel (MenuPanels.Names: the side
 -- menu's CODEX, GOLEMS, ARTIFACTS, BOOSTS, SETTINGS, HALL OF FAME, the
 -- wheel, the shops...) has the screen: the bubble and the guide hide and
 -- R3 is free (TutorialController).
-TutorialView.StepPanels = { "PenController", "SellController", "TechShopController", "FoundryController" }
+TutorialView.StepPanels = { "PenController", "SellController", "TechShopController", "VaultController" }
 
 -- Does one of these open panels hide the bubble?
 function TutorialView.panelHides(open: { string }): boolean

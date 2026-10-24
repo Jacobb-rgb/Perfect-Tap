@@ -271,11 +271,6 @@ elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list over
 	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Foundry buildings and the chute line (+ the hammer moment and the reveal) and their UI (tools/lune/lib/foundry_preview.luau)
-	WorldBuilder.build(workspace)
-	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
-		uiExports[name] = guis
-	end
 elseif sceneName == "relic_flow" then -- dusty relic -> hand / Restoration Table cleaning -> museum (tools/lune/lib/relic_flow_preview.luau)
 	require("./lib/relic_flow_preview").build(Loader, workspace)
 elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
@@ -931,38 +926,13 @@ end
 
 ---------------------------------------------------------------- scene "yard_ingame" (plot style A)
 -- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
--- with every plot's Foundry building and FOUNDRY chute receiver as FoundryService
--- builds them at server start (their SurfaceGui frames painted for the renderer,
--- plot 5's chimney smoking) -> build/preview/yard_ingame.json. Shots:
+-- as the server shows it (the Foundry that FoundryService built here went with
+-- the Foundry, owner 2026-10-24) -> build/preview/yard_ingame.json. Shots:
 -- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
 -- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
 if sceneName == "world" and process.args[2] == "yard_ingame" then
 	local YardPreview = require("./lib/yard_preview")
 	YardPreview.build(Loader, workspace)
-	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
-	local Gallery = require("./lib/machines_gallery")
-	local plots = workspace:FindFirstChild("Map"):FindFirstChild("Plots")
-	for _, plot in WorldLayout.Plots do
-		local model = plots:FindFirstChild("Plot_" .. plot.Id)
-		local yard = model and model:FindFirstChild("Yard")
-		local old = yard and yard:FindFirstChild("Foundry")
-		if old then
-			local plotCF = WorldLayout.plotCFrame(plot)
-			old:Destroy()
-			local building = FoundryBuilder.build(plotCF, 3)
-			building.Parent = yard
-			local receiver = FoundryBuilder.receiver(plotCF)
-			receiver.Parent = model
-			Gallery.paintGuis(Loader, workspace, building)
-			Gallery.paintGuis(Loader, workspace, receiver)
-			if plot.Id == YardPreview.Plot then
-				local top = building:FindFirstChild("ChimneyTop", true)
-				if top then
-					Gallery.smoke(Loader, workspace, top, 0.8)
-				end
-			end
-		end
-	end
 	local ingameScene = Export.collect(workspace)
 	ingameScene.presets = scene.presets
 	fs.writeFile(root .. "/build/preview/yard_ingame.json", serde.encode("json", ingameScene))

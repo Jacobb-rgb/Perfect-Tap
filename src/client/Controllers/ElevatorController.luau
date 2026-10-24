@@ -318,7 +318,7 @@ local function onCard(card: ElevatorView.Card)
 			send({ Action = "Go", Floor = entry.Index })
 		end
 	elseif entry.State == "Locked" then
-		showMessage(`{entry.Name} needs Blaster {entry.MinBlaster}+. Forge a better blaster at your Foundry.`, "Deny")
+		showMessage(`{entry.Name} needs Blaster {entry.MinBlaster}+. Buy a better blaster at the Blaster Vault.`, "Deny")
 		Sfx.play("UIDeny")
 	elseif entry.State == "Here" then
 		showMessage("You are on this floor.", "Info")

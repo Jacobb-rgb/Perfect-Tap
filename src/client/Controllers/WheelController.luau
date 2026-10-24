@@ -8,7 +8,7 @@
 	  build mode and the teleport bar, and a gamepad reaches the chip with
 	  the UI selection or spins at the chest). The chip shows only while
 	  the free spin is ready AND the HUD itself shows: never over the
-	  cleaning minigame, the Foundry moment or build mode (HUD hidden,
+	  cleaning minigame, the crate opening or build mode (HUD hidden,
 	  CleaningController.isActive, PlayerControls.owner), and the screen
 	  doesn't open then either. On touch screens the tutorial bubble has
 	  the chip's spot (right of the teleport bar): the chip waits while it
@@ -124,7 +124,6 @@ WheelController.OtherPanels = {
 	"SellController",
 	"TrainController",
 	"IronBoxController",
-	"FoundryController",
 	"TechShopController",
 	"VaultController",
 	"GearShopController",
@@ -221,8 +220,8 @@ local function otherPanels(): { Panel }
 	return list
 end
 
--- Something else has the screen: the cleaning minigame, build mode / the
--- anvil (PlayerControls), or the HUD is hidden (the Foundry moment, build
+-- Something else has the screen: the cleaning minigame, build mode
+-- (PlayerControls), or the HUD is hidden (the crate opening, build
 -- mode's top bar).
 local function screenBusy(): boolean
 	if CleaningController.isActive() or PlayerControls.owner() ~= nil then
@@ -1091,7 +1090,7 @@ function WheelController.init()
 			updateHint(view)
 		end
 	end)
-	-- the chip follows the HUD (hidden by the minigame, the Foundry moment, build mode)
+	-- the chip follows the HUD (hidden by the minigame, the crate opening, build mode)
 	local hud = HudController.refs()
 	if hud then
 		hud.Gui:GetPropertyChangedSignal("Enabled"):Connect(updateChip)

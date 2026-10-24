@@ -27,7 +27,6 @@ local ORDER = {
 	"PodiumController",
 	"SellController",
 	"TrainController",
-	"FoundryController",
 	"TechShopController",
 	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening

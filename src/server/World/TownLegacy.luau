@@ -502,7 +502,7 @@ local function isFree(p: Vector3, occupied: { Spot }, radius: number): boolean
 			return false
 		end
 	end
-	-- the base yards behind the plots (pen, podiums, foundry, train stop)
+	-- the base yards behind the plots (pen, podiums, train stop)
 	if PlotBuilder.isInYard(p, radius + 1) then
 		return false
 	end

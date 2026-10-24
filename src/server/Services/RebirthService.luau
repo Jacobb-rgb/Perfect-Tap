@@ -6,12 +6,15 @@
 	                           MinBlaster, "Busy" while one runs), then in one
 	                           go, with no yield: PlotService.reload takes the
 	                           plot down (the machines unload, the vise ore,
-	                           the pen's intents, the Foundry session), every
+	                           the pen's intents), every
 	                           item the player owns leaves the world (loose,
 	                           carried, on belts), RebirthConfig.reset rewrites
 	                           the save (coins, blaster, upgrades, train,
 	                           backpack, every ore; the factory stays) and pays
-	                           the stars, and the plot comes back up from the
+	                           the stars, Stats.RunIncome = the coins / s the
+	                           factory kept (runIncome: the podiums and the
+	                           droppers; the floor under the run's Vault
+	                           prices), and the plot comes back up from the
 	                           save (the machines spawn with empty queues).
 	                           Then the train starts over (TrainService.
 	                           resetRun), the podiums redraw, DataService.
@@ -29,7 +32,7 @@
 	  { Action = "Weapon", Id } buys a STAR blaster with Forge Stars
 	                           (StarBlasterData.quote / buy: "BadWeapon" |
 	                           "Owned" | "Locked" | "NoStars") and equips it.
-	  { Action = "Equip", Id } the star blaster to fight with ("" = your
+	  { Action = "Equip", Id } the star blaster to fight with ("" = your own
 	                           forged blaster; "Locked" for one you don't
 	                           own or that hasn't opened yet).
 	Every request read gets a RebirthResult { Action, Ok, Reason?, Perk?,
@@ -65,6 +68,7 @@ local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local BlasterData = require(Shared.Config.BlasterData)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
@@ -72,6 +76,7 @@ local StateService = require(script.Parent.StateService)
 local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local PodiumService = require(script.Parent.PodiumService)
+local EconomyService = require(script.Parent.EconomyService)
 local TrainService = require(script.Parent.TrainService)
 local PlotGlow = require(script.Parent.Parent.World.PlotGlow)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
@@ -186,6 +191,16 @@ local function answer(player: Player, result: { [string]: any })
 	Net.fire("RebirthResult", player, result)
 end
 
+-- The coins / s a reset save's factory still makes: the podiums it kept (Podium Keeper)
+-- and every placed dropper at full flow, through the income multiplier (a Drop sold in
+-- a Sell Box pays through it). Stats.RunIncome: the floor under the run's Vault prices.
+local function runIncome(player: Player, data: { [string]: any }): number
+	local podiums = PodiumService.incomeOf(player, data)
+	local droppers = DropperConfig.placedIncome(data.PlacedMachines) * EconomyService.incomeMultiplier(player)
+	local total = podiums + droppers
+	return if total == total and total > 0 then math.min(total, 1e27) else 0
+end
+
 -- The rebirth on the save and in the world (after canRebirth), in one step:
 -- the plot comes down, the waiting welcome-back payout is settled (so it can't
 -- land in the new run), the player's items leave the world, the save resets,
@@ -207,6 +222,7 @@ local function doRebirth(player: Player, data: { [string]: any }): (number, numb
 			end
 		end
 		stars, count = RebirthConfig.reset(data)
+		data.Stats.RunIncome = runIncome(player, data)
 		-- the relics the reset kept in the pen (from queues, the train, the pen) go to the keeper
 		local storage = data.Storage
 		for i = #storage, 1, -1 do
@@ -460,6 +476,7 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		Glow = RebirthConfig.glowOf(data),
 		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
 		Reached = RebirthConfig.reachedOf(data),
+		RunIncome = RebirthConfig.runIncomeOf(data), -- the run's Vault price floor (BlasterData.vaultPrice)
 		Start = RebirthConfig.startFor(data),
 		MinBlaster = RebirthConfig.MinBlaster,
 		Weapons = weapons,

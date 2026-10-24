@@ -37,7 +37,6 @@ local ORDER = {
 	"PenService",
 	"PodiumService",
 	"TrainService",
-	"FoundryService",
 	"CleaningService",
 	"ProcessingService",
 	"IronBoxService",
@@ -73,7 +72,7 @@ local ORDER = {
 	"QuestService", -- daily / weekly quests + the 7-day login streak (after Capsule, Wheel, Podium, State)
 	"StarterPackService", -- the one-time Starter Pack: its receipt handler and the State offer
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
-	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray / Hammer loops
+	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray loop
 	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
 }
 
