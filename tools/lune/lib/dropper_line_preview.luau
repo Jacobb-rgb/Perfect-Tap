@@ -53,7 +53,7 @@ function Preview.build(Loader: any, workspace: any)
 		for k = 1, drops do
 			local bx = (2 + (k - 1) * 1.2 + 0.5) * cell
 			local marked = laser and bx > (4 + 1) * cell
-			local item = ItemBuilder.buildLight({
+			local item = ItemBuilder.build({
 				Kind = "Drop",
 				OreId = dropperId,
 				Recipe = if marked then DropperConfig.LaserMark else nil,

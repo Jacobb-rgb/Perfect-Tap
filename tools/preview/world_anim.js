@@ -97,6 +97,66 @@ function buildParts(parts) {
   return group;
 }
 
+// ---------------------------------------------------------------- SurfaceGui decals
+// world_motion_preview.surfaceDecals: a face frame (x = the gui's right, y =
+// its up, z = out), its size, the light influence and the painted items
+// (rects, round dots, text) in face fractions, drawn on a canvas.
+function fontFamily(family) {
+  if (family.includes("Luckiest")) return "Luckiest Guy";
+  return "Fredoka One";
+}
+function buildDecals(decals) {
+  const group = new THREE.Group();
+  for (const [cf, w, h, lightInfluence, items] of decals) {
+    const ppu = Math.min(96, 1024 / Math.max(w, h));
+    const cw = Math.max(8, Math.round(w * ppu));
+    const ch = Math.max(8, Math.round(h * ppu));
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    for (const [kind, x, y, iw, ih, color, text, font] of items) {
+      const px = x * cw, py = y * ch, pw = iw * cw, ph = ih * ch;
+      ctx.fillStyle = "#" + color;
+      if (kind === "r") {
+        ctx.fillRect(px, py, pw, ph);
+      } else if (kind === "o") {
+        ctx.beginPath();
+        ctx.roundRect(px, py, pw, ph, Math.min(pw, ph) / 2);
+        ctx.fill();
+      } else if (kind === "t") {
+        const fam = fontFamily(font);
+        let size = ph * 0.9;
+        ctx.font = `${size}px "${fam}"`;
+        while (size > 4 && ctx.measureText(text).width > pw * 0.95) {
+          size -= 1;
+          ctx.font = `${size}px "${fam}"`;
+        }
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, px + pw / 2, py + ph / 2 + size * 0.06);
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const li = clamp(lightInfluence);
+    const material =
+      li <= 0.01
+        ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(0.8, 0.8, 0.8) })
+        : new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, metalness: 0.04 });
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -2;
+    material.depthWrite = false;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(matrixOf(cf, 1, 1, 1));
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
+}
+
 // ---------------------------------------------------------------- the sky
 function skyDome(top, horizon, ground) {
   return new THREE.Mesh(
@@ -117,6 +177,7 @@ function skyDome(top, horizon, ground) {
 // ---------------------------------------------------------------- main
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
+  await document.fonts.load('40px "Luckiest Guy"');
   const dataName = (params.get("data") || "world_motion").replace(/[^a-z0-9_]/gi, "");
   const data = await fetch(`/scenes/${dataName}.json`).then((r) => r.json());
   const fps = data.fps;
@@ -173,6 +234,7 @@ async function main() {
   const roots = arr(data.scenes).map((s) => {
     const root = new THREE.Group();
     root.add(buildParts(arr(s.parts)));
+    root.add(buildDecals(arr(s.decals)));
     const look = looks[s.look] || looks.day;
     root.userData.look = look;
     for (const [x, y, z, color, range, brightness] of arr(s.lights)) {

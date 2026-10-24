@@ -113,6 +113,81 @@ local function lightsOf(root, out)
 	end
 end
 
+-- The SurfaceGuis on the parts under `root` (KitMachines' painted frames, round
+-- dots, hazard stripes, text labels) as flat decals for world_anim.js: { face
+-- frame (x = the gui's right, y = its up, z = out of the face), width,
+-- height, light influence, items { kind ("r" rect, "o" round, "t" text), x, y,
+-- w, h (0..1 of the face, y down), colour, text, font } }.
+local function faceFrame(face: string, s): (any, number, number)
+	local CF = roblox.CFrame
+	if face == "Front" then
+		return CF.new(0, 0, -s.Z / 2) * CF.Angles(0, math.pi, 0), s.X, s.Y
+	elseif face == "Back" then
+		return CF.new(0, 0, s.Z / 2), s.X, s.Y
+	elseif face == "Right" then
+		return CF.new(s.X / 2, 0, 0) * CF.Angles(0, math.pi / 2, 0), s.Z, s.Y
+	elseif face == "Left" then
+		return CF.new(-s.X / 2, 0, 0) * CF.Angles(0, -math.pi / 2, 0), s.Z, s.Y
+	elseif face == "Top" then
+		return CF.new(0, s.Y / 2, 0) * CF.Angles(-math.pi / 2, 0, 0), s.X, s.Z
+	end
+	return CF.new(0, -s.Y / 2, 0) * CF.Angles(math.pi / 2, 0, 0), s.X, s.Z
+end
+
+local function surfaceDecals(root): { any }
+	local out = {}
+	for _, gui in root:GetDescendants() do
+		local part = gui.Parent
+		if gui:IsA("SurfaceGui") and part and part:IsA("BasePart") and part.Transparency < 0.99 then
+			local frame, w, h = faceFrame(gui.Face.Name, part.Size)
+			local items = {}
+			local function add(kind: string, r, color, text: string?, font: string?)
+				table.insert(items, { kind, r3(r[1]), r3(r[2]), r3(r[3]), r3(r[4]), hex(color), text or "", font or "" })
+			end
+			-- each gui object's rect in face fractions (scale only, like the builders);
+			-- (Lune hands out a new reference per access: walk down, never key by instance)
+			local function walk(holder, pr)
+				for _, o in holder:GetChildren() do
+					if not (o:IsA("GuiObject") and o.Visible) then
+						continue
+					end
+					local r = {
+						pr[1] + o.Position.X.Scale * pr[3],
+						pr[2] + o.Position.Y.Scale * pr[4],
+						o.Size.X.Scale * pr[3],
+						o.Size.Y.Scale * pr[4],
+					}
+					local gradient = o:FindFirstChildWhichIsA("UIGradient")
+					if gradient and o.BackgroundTransparency < 1 then
+						-- hard stripes: two keypoints per stripe, side by side
+						local keys = gradient.Color.Keypoints
+						for k = 1, #keys, 2 do
+							local a = keys[k].Time
+							local b = if keys[k + 2] then keys[k + 2].Time else 1
+							add("r", { r[1] + a * r[3], r[2], (b - a) * r[3], r[4] }, keys[k].Value)
+						end
+					elseif o.BackgroundTransparency < 1 then
+						add(if o:FindFirstChildWhichIsA("UICorner") then "o" else "r", r, o.BackgroundColor3)
+					end
+					if o:IsA("TextLabel") and o.Text ~= "" then
+						add("t", r, o.TextColor3, o.Text, o.FontFace.Family)
+					end
+					walk(o, r)
+				end
+			end
+			walk(gui, { 0, 0, 1, 1 })
+			if #items > 0 then
+				local ok, influence = pcall(function()
+					return gui.LightInfluence
+				end)
+				local cf = part.CFrame * frame * roblox.CFrame.new(0, 0, 0.012)
+				table.insert(out, { cfList(cf), r3(w), r3(h), if ok then r3(influence) else 1, items })
+			end
+		end
+	end
+	return out
+end
+
 ---------------------------------------------------------------- small helpers
 
 local function smooth(x: number): number
@@ -949,6 +1024,7 @@ Preview.helpers = {
 	character = character,
 	cameraAt = cameraAt,
 	visibleParts = visibleParts,
+	surfaceDecals = surfaceDecals,
 	SHAPES = SHAPES,
 	FOLLOW = FOLLOW,
 	r3 = r3,
