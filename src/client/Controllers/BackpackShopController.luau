@@ -68,6 +68,8 @@ local refs: BackpackShopView.Refs? = nil
 local counter: BasePart? = nil
 local tickConnection: RBXScriptConnection? = nil
 local lockedUntil = 0
+-- the last request: does it end with that pack on your back (EQUIP, or a BUY bigger than the equipped pack)
+local pending: { Id: string, Wears: boolean }? = nil
 local messageToken = 0
 local openedAt = 0
 local progress: NumberValue? = nil
@@ -176,6 +178,9 @@ local function send(op: string, id: string)
 		return
 	end
 	lockedUntil = os.clock() + SEND_LOCK
+	local _, equipped = snapshot()
+	-- the order rule: a buy is equipped when it is bigger than the equipped pack
+	pending = { Id = id, Wears = op == "Equip" or BackpackData.capacity(id) > BackpackData.capacity(equipped) }
 	Net.send(ACTION, op, { Id = id })
 	Sfx.play("UIClick")
 end
@@ -212,9 +217,15 @@ local function onResult(result: any)
 	elseif result.Ok == true and counter then
 		local pack = BackpackData.ById[result.Id]
 		if pack then
-			showMessage(`{pack.Name}: {Format.commas(pack.Capacity)} ore on your back!`, "Reward")
+			local request = pending
+			if request and request.Id == pack.Id and not request.Wears then
+				showMessage(`The {pack.Name} is yours! EQUIP it to wear it.`, "Reward")
+			else
+				showMessage(`{pack.Name}: {Format.commas(pack.Capacity)} ore on your back!`, "Reward")
+			end
 		end
 	end
+	pending = nil
 	refresh()
 end
 

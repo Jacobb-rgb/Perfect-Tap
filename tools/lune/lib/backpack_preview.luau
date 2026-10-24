@@ -414,7 +414,8 @@ function Preview.buildUi(Loader: any): { [string]: any }
 	end
 
 	return {
-		ui_backpack_shop = UiExport.export(window(pc, false, 1600 / pc, 900 / pc)),
+		-- (the renderer puts a ScreenGui under the 36 px top bar, tools/preview/ui.js TOPBAR_INSET)
+		ui_backpack_shop = UiExport.export(window(pc, false, 1600 / pc, (900 - 36) / pc)),
 		ui_backpack_shop_phone = UiExport.export(window(phone, true, 667 / 0.62, (375 - 36) / 0.62)),
 	}
 end

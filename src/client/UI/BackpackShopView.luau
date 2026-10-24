@@ -169,7 +169,7 @@ local METRICS: { [string]: Metrics } = {
 		Close = 62,
 		Footer = 36,
 		MinCard = 186,
-		MinHeight = 250,
+		MinHeight = 230, -- two rows fit 1280 x 720 and 1366 x 768 under the top bar
 	},
 	-- phones: at uiScale 0.62 a 64-unit button is about 40 pt
 	Compact = {
@@ -610,7 +610,9 @@ end
 
 function BackpackShopView.setHint(refs: Refs, kind: HintKind, text: string)
 	refs.Hint.Text = text
-	refs.Hint.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(text, refs.Hint.TextSize)) + 6, 26)
+	-- its font first (a long hint is a round sentence, as the game's Text signal makes it), then its width
+	Pop.sentence(refs.Hint, Pop.wordSize(refs.Hint))
+	refs.Hint.Size = UDim2.fromOffset(math.ceil(Pop.measure(refs.Hint)) + 6, 26)
 	refs.HintGlyph.Visible = kind == "Gamepad" and refs.HintGlyph.Image ~= ""
 	local width = refs.Hint.Size.X.Offset + (if refs.HintGlyph.Visible then 34 else 0) + 40
 	refs.Footer.Size = UDim2.fromOffset(width, refs.Footer.Size.Y.Offset)
@@ -737,6 +739,8 @@ end
 --[[
 	Sizes everything for the normal or compact (phone) layout and fits the
 	panel into `maxWidth` x `maxHeight` design units (math.huge = no limit).
+	On a PC the footer pill hangs half below the panel, so the panel sits a
+	little above the middle with room for it underneath.
 ]]
 function BackpackShopView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
@@ -747,10 +751,11 @@ function BackpackShopView.layout(refs: Refs, compact: boolean, maxWidth: number,
 	local columns = BackpackShopView.columns(width, compact)
 	refs.Columns = columns
 	local rows = math.ceil(#refs.Cards / columns)
-	local height = math.max(380, math.min(m.Height, maxHeight - 16))
+	local hang = if compact then 0 else math.ceil(math.max(m.Footer, 30) / 2)
+	local height = math.max(380, math.min(m.Height, maxHeight - 16 - hang))
 	refs.Root.Size = UDim2.fromOffset(width, height)
 	refs.Root.AnchorPoint = if compact then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5)
-	refs.Root.Position = if compact then UDim2.new(0.5, 0, 1, -10) else UDim2.fromScale(0.5, 0.5)
+	refs.Root.Position = if compact then UDim2.new(0.5, 0, 1, -10) else UDim2.new(0.5, 0, 0.5, -math.floor(hang / 2))
 	ElevatorView.fitWindow(refs.Chrome, refs.Icon, m.Band, m.Title, m.Icon, m.Close)
 	refs.Subtitle.Position = UDim2.fromOffset(m.Pad, m.Band + 2)
 	refs.Subtitle.Size = UDim2.new(1, -m.Pad * 2, 0, m.Header - m.Band - 4)

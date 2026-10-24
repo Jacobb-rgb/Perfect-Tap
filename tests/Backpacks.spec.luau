@@ -211,6 +211,19 @@ return function(T, Loader)
 		T.eq(refs.Columns, 5, "five a row")
 		T.falsy(refs.Scrolls, "two rows fit a PC")
 		insidePanel(refs, "PC")
+		-- laptops under Roblox's 58 px top bar (HudController.uiScale): two rows, the footer pill on screen
+		for _, screen in { { 1280, 720 }, { 1366, 768 }, { 1600, 900 }, { 1920, 1080 } } do
+			local w, h = screen[1], screen[2]
+			local scale = math.clamp(math.min(h / 720, w / 1100), 0.62, 1.25)
+			local maxHeight = (h - 58) / scale
+			ShopView.layout(refs, false, w / scale, maxHeight)
+			local label = `{w} x {h}`
+			T.falsy(refs.Scrolls, label .. ": two rows without scrolling")
+			local root = refs.Root
+			local bottom = maxHeight / 2 + root.Position.Y.Offset + root.Size.Y.Offset / 2
+			T.le(bottom + refs.Footer.Size.Y.Offset / 2, maxHeight - 4, label .. ": the footer pill stays on screen")
+			T.truthy(maxHeight / 2 + root.Position.Y.Offset - root.Size.Y.Offset / 2 >= 4, label .. ": the top stays on screen")
+		end
 		ShopView.layout(refs, true, 667 / 0.62, (375 - 36) / 0.62)
 		T.truthy(refs.Compact and refs.Scrolls, "a phone: compact, the cards scroll")
 		T.truthy(refs.Cards[1].Look.Holder.Size.Y.Offset >= 64, "phone buttons are big")
