@@ -4,11 +4,17 @@
 	Pure math: a pose is how far the golem hops, turns, leans and raises its
 	arms at a moment; Builders/GolemKeeper turns a pose into part CFrames.
 
-	  pose(emote?, t, clock) -> Pose   `emote` playing for `t` seconds (nil:
-	                                   only the idle), `clock` = any running
-	                                   time (the idle's breathing and sway)
+	  pose(emote?, t, clock, calm?) -> Pose   `emote` playing for `t` seconds
+	                                   (nil: only the idle), `clock` = any
+	                                   running time (the idle's breathing and
+	                                   sway); `calm` (Reduce Motion): no jump
 	  Duration[emote]                  how long each one plays
 	  OnTheirOwn                       the ones a golem does now and then by itself
+	  own(reduced)                     those, or under Reduce Motion only Calm:
+	                                   Bow and Wave, never Spin, Hop or Dance
+	  Big[emote]                       the whole-body moves (Hop, Spin, Dance): a
+	                                   hello or thanks waits until one is over
+	  mix(a, b, w)                     a blend from pose a to pose b (w 0..1)
 
 	Pose: Lift (a share of the golem's height), Yaw / Pitch / Roll (radians,
 	the whole golem from its feet; Pitch < 0 leans forward), Right / Left
@@ -40,6 +46,15 @@ GolemEmotes.Duration = {
 
 -- the moves a golem does now and then by itself (Wave greets, Cheer thanks)
 GolemEmotes.OnTheirOwn = { "Hop", "Spin", "Dance", "Bow", "Wave" } :: { Emote }
+-- under Reduce Motion: no spin, hop or dance
+GolemEmotes.Calm = { "Bow", "Wave" } :: { Emote }
+-- the whole-body moves: cutting one short would snap the golem round
+GolemEmotes.Big = { Hop = true, Spin = true, Dance = true } :: { [string]: boolean }
+
+-- The moves a golem may do by itself (`reduced`: Reduce Motion is on).
+function GolemEmotes.own(reduced: boolean): { Emote }
+	return if reduced then GolemEmotes.Calm else GolemEmotes.OnTheirOwn
+end
 
 local function smooth(x: number): number
 	local c = math.clamp(x, 0, 1)
@@ -115,20 +130,35 @@ function GolemEmotes.move(emote: string, t: number): Pose
 	return p
 end
 
--- The whole pose: the idle plus `emote` (if any) at `t`.
-function GolemEmotes.pose(emote: string?, t: number, clock: number): Pose
+-- The whole pose: the idle plus `emote` (if any) at `t`; `calm` (Reduce
+-- Motion): the emote leaves the golem on the floor (a cheer without its jump).
+function GolemEmotes.pose(emote: string?, t: number, clock: number, calm: boolean?): Pose
 	local idle = GolemEmotes.idle(clock)
 	if not emote then
 		return idle
 	end
 	local m = GolemEmotes.move(emote, t)
 	return {
-		Lift = idle.Lift + m.Lift,
+		Lift = idle.Lift + (if calm then 0 else m.Lift),
 		Yaw = idle.Yaw + m.Yaw,
 		Pitch = idle.Pitch + m.Pitch,
 		Roll = idle.Roll + m.Roll,
 		Right = idle.Right + m.Right,
 		Left = idle.Left + m.Left,
+	}
+end
+
+-- From pose `a` to pose `b`: `w` = 0 is a, 1 is b (an emote that cuts in
+-- blends over a moment instead of snapping).
+function GolemEmotes.mix(a: Pose, b: Pose, w: number): Pose
+	local k = math.clamp(w, 0, 1)
+	return {
+		Lift = a.Lift + (b.Lift - a.Lift) * k,
+		Yaw = a.Yaw + (b.Yaw - a.Yaw) * k,
+		Pitch = a.Pitch + (b.Pitch - a.Pitch) * k,
+		Roll = a.Roll + (b.Roll - a.Roll) * k,
+		Right = a.Right + (b.Right - a.Right) * k,
+		Left = a.Left + (b.Left - a.Left) * k,
 	}
 end
 

@@ -5,7 +5,10 @@
 -- and its frames (the rest pose is the build, a wave raises the right fist and holds a
 -- sword up over the head, upright, a hop leaves the aura on the floor); the lobby marks exactly one
 -- spot per shop, behind its counter facing the customers, with the golem's head clear of
--- the counter, and the old blocky keepers are gone.
+-- the counter, and the old blocky keepers are gone. The controller's thanks (only for a sale at the
+-- Sell golem's counter or bin, or a bought item at that shop; once per sale), Reduce Motion (no
+-- Spin / Hop / Dance, a cheer without its jump, a smaller burst) and the queue behind a big move;
+-- a keeper has no light of its own.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
@@ -136,6 +139,12 @@ return function(T, Loader)
 			local kind, size = ShopkeeperConfig.golem(shop)
 			local rig = GolemKeeper.build(kind, feet, size)
 			T.truthy(hasTag(rig.Model, GolemKeeper.SkipTag), `{shop}: tagged NoStuds (no Roblox studs)`)
+			for _, d in rig.Model:GetDescendants() do
+				T.falsy(d:IsA("PointLight"), `{shop}: no light of its own ({d:GetFullName()}): FaceLight is the only one`)
+				if d:IsA("ParticleEmitter") then
+					T.le(d.Rate, GolemKeeper.EmberRate, `{shop}: {d.Name} stays calm`)
+				end
+			end
 			T.truthy(rig.Height >= 5.5 and rig.Height <= 8.5, `{shop}: a big golem ({rig.Height} studs)`)
 			T.eq(#rig.Parts, #rig.Offsets, "an offset per part")
 			local frames = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), 0)
@@ -228,7 +237,10 @@ return function(T, Loader)
 			local gz = math.max(math.abs(q.Z) - holder.Size.Z / 2, 0)
 			local gap = math.sqrt(gx * gx + gz * gz)
 			T.truthy(gap < 4.5, `{shop}: at the counter ({gap} studs from it)`)
-			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of it`)
+			-- (ENCHANT's stands beside its rune table, level with it, clear of the hut's
+			-- facade: the table on its front left)
+			local ahead = if shop == "Enchant" then 0.15 else 0.3
+			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > ahead, `{shop}: the counter is in front of it`)
 			T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: its feet below the counter top (the counter hides its step)`)
 			local kind, size = ShopkeeperConfig.golem(shop)
 			local rig = GolemKeeper.build(kind, feet, size)
@@ -236,6 +248,333 @@ return function(T, Loader)
 			local head = rig.Parts[i.Head]
 			T.falsy(poking(head, holder), `{shop}: the golem's head clear of the counter`)
 			T.truthy(head.CFrame.Position.Y > holder.CFrame.Position.Y, `{shop}: its head over the counter top`)
+		end
+	end)
+
+	-- How deep two boxes (CFrame, Size) overlap: 0 when apart (separating axes).
+	local function overlap(ca: any, sa: any, cb: any, sb: any): number
+		local A = { ca.RightVector, ca.UpVector, -ca.LookVector }
+		local B = { cb.RightVector, cb.UpVector, -cb.LookVector }
+		local ea = { sa.X / 2, sa.Y / 2, sa.Z / 2 }
+		local eb = { sb.X / 2, sb.Y / 2, sb.Z / 2 }
+		local t = cb.Position - ca.Position
+		local axes = { A[1], A[2], A[3], B[1], B[2], B[3] }
+		for i = 1, 3 do
+			for j = 1, 3 do
+				local c = A[i]:Cross(B[j])
+				if c.Magnitude > 1e-4 then
+					table.insert(axes, c.Unit)
+				end
+			end
+		end
+		local depth = math.huge
+		for _, L in axes do
+			local ra, rb = 0, 0
+			for i = 1, 3 do
+				ra += ea[i] * math.abs(A[i]:Dot(L))
+				rb += eb[i] * math.abs(B[i]:Dot(L))
+			end
+			local d = ra + rb - math.abs(t:Dot(L))
+			if d <= 0 then
+				return 0
+			end
+			depth = math.min(depth, d)
+		end
+		return depth
+	end
+
+	-- The shop's own model (the stall or hut its counter is part of).
+	local function shopModel(counter: any): any
+		local a = counter
+		while a.Parent and a.Parent.Name ~= "Districts" and a.Parent.Name ~= "Vault" do
+			a = a.Parent
+		end
+		return a
+	end
+
+	-- Golem parts (posed by `frames`) inside map parts near `feet` (floors and walkways
+	-- under its feet aside): { "MapPart/GolemPart" }; `keep(mapPart)` picks the map parts.
+	local function clips(rig: any, frames: any, feet: any, keep: (any) -> boolean): { string }
+		local out = {}
+		for _, mp in map():GetDescendants() do
+			if
+				mp:IsA("BasePart")
+				and mp.Transparency < 1
+				and (mp.CFrame.Position - feet.Position).Magnitude < 16 + mp.Size.Magnitude / 2
+				and keep(mp)
+			then
+				local h = mp.Size / 2
+				local top = -math.huge
+				for _, x in { -1, 1 } do
+					for _, y in { -1, 1 } do
+						for _, z in { -1, 1 } do
+							top = math.max(top, (mp.CFrame * Vector3.new(h.X * x, h.Y * y, h.Z * z)).Y)
+						end
+					end
+				end
+				if top > feet.Position.Y + 0.45 then
+					for i, part in rig.Parts do
+						if overlap(frames[i], part.Size, mp.CFrame, mp.Size) > 0.06 then
+							table.insert(out, mp:GetFullName() .. "/" .. part.Name)
+						end
+					end
+				end
+			end
+		end
+		return out
+	end
+
+	T.test("Shopkeepers: no golem inside the map round its shop, the Sell one off the lantern, Enchant's head off its hut", function()
+		for _, shop in SHOPS do
+			local feet, counter = nil, nil
+			for _, d in map():GetDescendants() do
+				if hasTag(d, ShopkeeperConfig.Tag) and d:GetAttribute("Shop") == shop then
+					feet, counter = d.Parent.CFrame * d.CFrame, d.Parent
+				end
+			end
+			local own = shopModel(counter)
+			local kind, size = ShopkeeperConfig.golem(shop)
+			local rig = GolemKeeper.build(kind, feet, size)
+			local rest = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), 0)
+			local outside = clips(rig, rest, feet, function(mp)
+				return not mp:IsDescendantOf(own)
+			end)
+			T.eq(#outside, 0, `{shop}: inside a map part outside its shop at rest: {table.concat(outside, ", ")}`)
+			if shop == "Sell" then
+				-- (the entrance lantern beside the stall, also when the golem turns toward a player)
+				for _, yaw in { ShopkeeperConfig.LookYaw, -ShopkeeperConfig.LookYaw } do
+					local turned = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), yaw)
+					local lantern = clips(rig, turned, feet, function(mp)
+						return string.find(mp:GetFullName(), "EntranceLanterns", 1, true) ~= nil
+					end)
+					T.eq(#lantern, 0, `Sell turned {yaw}: inside the plaza lantern: {table.concat(lantern, ", ")}`)
+				end
+			elseif shop == "Enchant" then
+				-- (its head, helm, halo, crown and wings: out of the facade, the door frame and the pillars)
+				local top = {}
+				for _, hit in
+					clips(rig, rest, feet, function()
+						return true
+					end)
+				do
+					local name = string.match(hit, "/([^/]+)$") or ""
+					for _, prefix in { "Head", "Helm", "Halo", "Crown", "Feather", "Wing" } do
+						if string.sub(name, 1, #prefix) == prefix then
+							table.insert(top, hit)
+						end
+					end
+				end
+				T.eq(#top, 0, `Enchant: head or wings inside the hut: {table.concat(top, ", ")}`)
+			end
+		end
+	end)
+
+	-- the spot `shop` marks on the map: its golem's feet and the counter it hangs on
+	local function spotOf(shop: string): (any, any)
+		for _, d in map():GetDescendants() do
+			if hasTag(d, ShopkeeperConfig.Tag) and d:GetAttribute("Shop") == shop then
+				return d.Parent.CFrame * d.CFrame, d.Parent
+			end
+		end
+		error("no spot for " .. shop)
+	end
+
+	-- A stand-in golem for the controller (no parts: its burst counts, no bubble without a head).
+	local function standIn(shop: string, feet: any, bursts: { number }): any
+		return {
+			Shop = shop,
+			Feet = feet,
+			ThankedAt = -math.huge,
+			Emote = nil,
+			EmoteAt = 0,
+			NextEmote = 0,
+			Queued = nil,
+			Pose = nil,
+			BlendFrom = nil,
+			BlendAt = 0,
+			Lines = 1,
+			Head = nil,
+			Burst = {
+				Emit = function(_, n: number)
+					table.insert(bursts, n)
+				end,
+			},
+		}
+	end
+
+	-- Runs `body(Controller, keepers)` with stand-ins for the Sell and Gear golems on their map
+	-- spots and the local player's character at `standAt` (nil: none), putting everything back.
+	local function withKeepers(standAt: any, body: (any, any) -> ())
+		local Players = Loader.game:GetService("Players")
+		local hadLocal = rawget(Players, "LocalPlayer")
+		local character = nil
+		if standAt then
+			character = Instance.new("Model")
+			local root = Instance.new("Part")
+			root.Name = "HumanoidRootPart"
+			root.CFrame = CFrame.new(standAt)
+			root.Parent = character
+		end
+		rawset(Players, "LocalPlayer", { Name = "Me", UserId = 1, Character = character })
+		local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.ShopkeeperController")
+		local keys = {}
+		local ok, err = pcall(function()
+			local sellFeet = spotOf("Sell")
+			local gearFeet = spotOf("Gear")
+			local list = {
+				Sell = { Bursts = {} },
+				Gear = { Bursts = {} },
+			}
+			list.Sell.Keeper = standIn("Sell", sellFeet, list.Sell.Bursts)
+			list.Gear.Keeper = standIn("Gear", gearFeet, list.Gear.Bursts)
+			for _, entry in list do
+				local key = {}
+				table.insert(keys, key)
+				Controller.keepers[key] = entry.Keeper
+			end
+			body(Controller, list)
+		end)
+		for _, key in keys do
+			Controller.keepers[key] = nil
+		end
+		rawset(Players, "LocalPlayer", hadLocal)
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	T.test("Shopkeepers: the Sell golem thanks for a sale at its counter or bin, once; never for a Sell Box far away", function()
+		-- where SellService puts the popups: over the counter's prompt point, on top of the SellBin
+		local _, counter = spotOf("Sell")
+		local atCounter = (counter.CFrame * CFrame.new(0, counter.Size.Y / 2 + 0.6, -counter.Size.Z / 2)).Position + Vector3.new(0, 1, 0)
+		local intake = nil
+		for _, d in map():GetDescendants() do
+			if hasTag(d, "SellBin") then
+				intake = d:FindFirstChild("Intake")
+			end
+		end
+		T.truthy(intake, "the SellBin's intake")
+		local atBin = intake.CFrame.Position + Vector3.new(0, intake.Size.Y / 2, 0)
+		withKeepers(nil, function(Controller, k)
+			local sell, gear = k.Sell, k.Gear
+			-- a Sell Box on a plot sells every 2 s: its popups carry the box's position, far away
+			local plotBox = sell.Keeper.Feet.Position + Vector3.new(90, 0, 40)
+			Controller.onEarned({ Amount = 40, Source = "Sell", Position = plotBox, Count = 3 }, 10)
+			Controller.onEarned({ Amount = 40, Source = "Sell", Count = 3 }, 12) -- (no Position: nowhere)
+			Controller.onEarned({ Amount = 40, Source = "Offline", Position = atCounter }, 14)
+			T.eq(#sell.Bursts, 0, "a Sell Box far away, a popup with no place or another source: no thanks")
+			T.eq(sell.Keeper.Emote, nil, "and no cheer")
+			-- a sale at the counter: one cheer, one burst, one line (the same sale's echo is no second one)
+			Controller.onEarned({ Amount = 120, Source = "Sell", Position = atCounter, Count = 4 }, 20)
+			Controller.onEarned({ Amount = 120, Source = "Sell", Position = atCounter, Count = 4 }, 20.2)
+			T.eq(#sell.Bursts, 1, "a counter sale thanks once")
+			T.eq(sell.Bursts[1], ShopkeeperConfig.BurstCount, "with the full burst")
+			T.eq(sell.Keeper.Emote, "Cheer", "the Sell golem cheers")
+			T.eq(sell.Keeper.Lines, 2, "one thanks line")
+			T.eq(#gear.Bursts, 0, "the SHOP's golem is not the one sold to")
+			-- the next sale (past the cooldown), then one into the SellBin
+			Controller.onEarned(
+				{ Amount = 30, Source = "Sell", Position = atCounter, Count = 1 },
+				20 + ShopkeeperConfig.ThanksCooldown + 0.1
+			)
+			T.eq(#sell.Bursts, 2, "the next sale thanks again")
+			Controller.onEarned({ Amount = 30, Source = "Sell", Position = atBin, Count = 1 }, 30)
+			T.eq(#sell.Bursts, 3, "a SellBin sale thanks too")
+			T.truthy((sell.Keeper.Feet.Position - atBin).Magnitude <= ShopkeeperConfig.ThanksDistance, "the bin is the Sell golem's")
+		end)
+	end)
+
+	T.test("Shopkeepers: a buy thanks only at that shop's golem, only for a bought item", function()
+		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Gear", Op = "Buy", Ok = true })[1], "Gear")
+		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Enchant", Op = "Buy", Ok = true })[1], "Enchant")
+		T.eq(ShopkeeperConfig.buyShops("VaultResult", { Level = 3, Ok = true })[1], "Vault")
+		local tech = ShopkeeperConfig.buyShops("ShopResult", { Item = "Crusher", Ok = true })
+		T.truthy(table.find(tech, "Tech") and table.find(tech, "Droppers"), "UPGRADES and DROPPERS both open the Tech shop")
+		T.eq(ShopkeeperConfig.buyShops("ShopResult", { Item = "Crusher", Ok = false, Reason = "NoCoins" }), nil, "a refusal")
+		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Enchant", Op = "Slot", Ok = true }), nil, "a rune slotted: no buy")
+		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Boost", Op = "Buy", Ok = true }), nil, "a boost: no shop counter")
+		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Wheel", Op = "Spin", Ok = true }), nil, "a wheel spin")
+		T.eq(ShopkeeperConfig.buyShops("Notify", { Kind = "Reward", Ok = true }), nil, "a Reward toast is no buy")
+		-- the player at the SHOP counter: a gear buy makes its golem cheer, nothing else does
+		local gearFeet = spotOf("Gear")
+		local standAt = (gearFeet * CFrame.new(0, 3, -6)).Position
+		withKeepers(standAt, function(Controller, k)
+			Controller.onBought("ActionResult", { Action = "Gear", Op = "Buy", Ok = false, Reason = "NoCoins" }, 40)
+			Controller.onBought("ShopResult", { Item = "Crusher", Ok = true }, 41)
+			Controller.onBought("ActionResult", { Action = "Boost", Op = "Buy", Ok = true }, 42)
+			T.eq(#k.Gear.Bursts + #k.Sell.Bursts, 0, "a refusal, another shop's buy, a boost: no thanks")
+			Controller.onBought("ActionResult", { Action = "Gear", Op = "Buy", Ok = true, Id = "Boots", Level = 2 }, 50)
+			T.eq(#k.Gear.Bursts, 1, "a gear buy at the SHOP: its golem thanks")
+			T.eq(k.Gear.Keeper.Emote, "Cheer")
+			T.eq(#k.Sell.Bursts, 0, "the Sell golem does not")
+		end)
+		-- away from the counter (a Robux lift bought anywhere): no golem near
+		withKeepers((gearFeet * CFrame.new(0, 3, -60)).Position, function(Controller, k)
+			Controller.onBought("ActionResult", { Action = "Gear", Op = "Buy", Ok = true }, 60)
+			T.eq(#k.Gear.Bursts, 0, "too far from the SHOP's golem")
+		end)
+	end)
+
+	T.test("Shopkeepers: Reduce Motion: no Spin, Hop or Dance, a cheer without its jump, a smaller burst", function()
+		local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
+		local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.ShopkeeperController")
+		local big = { Spin = true, Hop = true, Dance = true }
+		local ok, err = pcall(function()
+			Motion.setReduced(true)
+			local seen = {}
+			for _ = 1, 400 do
+				local move = Controller.pickMove()
+				T.falsy(big[move], `Reduce Motion picked {move}`)
+				seen[move] = true
+			end
+			T.truthy(seen.Bow and seen.Wave, "it still bows and waves")
+			-- the cheer keeps its arms up but stays on the floor (the idle's breath only)
+			for _, t in { 0.2, 0.4, 0.8, 1.2 } do
+				local calm = GolemEmotes.pose("Cheer", t, 2.5, true)
+				T.near(calm.Lift, GolemEmotes.idle(2.5).Lift, 1e-9, `no jump at {t} s`)
+			end
+			T.truthy(GolemEmotes.pose("Cheer", 0.8, 2.5, true).Right > 2.5, "both arms still go up")
+			T.truthy(GolemEmotes.pose("Cheer", 0.4, 2.5).Lift > GolemEmotes.idle(2.5).Lift + 0.05, "(without it: a jump)")
+			withKeepers(nil, function(_, k)
+				local feet = k.Sell.Keeper.Feet
+				Controller.onEarned({ Amount = 5, Source = "Sell", Position = feet.Position, Count = 1 }, 70)
+				T.eq(k.Sell.Bursts[1], ShopkeeperConfig.BurstCalm, "a smaller burst")
+				T.truthy(ShopkeeperConfig.BurstCalm < ShopkeeperConfig.BurstCount)
+			end)
+		end)
+		Motion.setReduced(false)
+		if not ok then
+			error(err, 0)
+		end
+		local seen = {}
+		for _ = 1, 400 do
+			seen[Controller.pickMove()] = true
+		end
+		T.truthy(seen.Spin and seen.Hop and seen.Dance, "with it off every move comes back")
+	end)
+
+	T.test("Shopkeepers: a thanks during a Spin waits for it; one during a Wave blends in", function()
+		local wave = GolemEmotes.pose("Wave", 1.0, 0)
+		local mid = GolemEmotes.mix(wave, GolemEmotes.neutral(), 0.5)
+		T.near(mid.Right, wave.Right / 2, 1e-9, "mix: half way")
+		T.near(GolemEmotes.mix(wave, GolemEmotes.neutral(), 2).Right, 0, 1e-9, "mix: clamped")
+		withKeepers(nil, function(Controller, k)
+			local sell = k.Sell.Keeper
+			local at = sell.Feet.Position
+			sell.Emote, sell.EmoteAt = "Spin", 79.6
+			Controller.onEarned({ Amount = 5, Source = "Sell", Position = at, Count = 1 }, 80)
+			T.eq(sell.Emote, "Spin", "the spin goes on (no snap back to the front)")
+			T.eq(sell.Queued, "Cheer", "the cheer waits for it")
+			T.eq(#k.Sell.Bursts, 1, "the burst and the line come at once")
+			-- a Wave running: the cheer cuts in, blending from the pose shown
+			sell.Queued, sell.Emote, sell.EmoteAt, sell.Pose = nil, "Wave", 89, wave
+			Controller.onEarned({ Amount = 5, Source = "Sell", Position = at, Count = 1 }, 90)
+			T.eq(sell.Emote, "Cheer", "the cheer starts")
+			T.eq(sell.BlendFrom, wave, "from the wave's pose")
+			T.eq(sell.BlendAt, 90)
+		end)
+		for emote in GolemEmotes.Big do
+			T.falsy(table.find(GolemEmotes.Calm, emote), emote .. " is no calm move")
 		end
 	end)
 

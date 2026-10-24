@@ -19,6 +19,11 @@
 	frames(rig, feet, pose, yaw) gives every part's CFrame for a
 	Moves/GolemEmotes pose (the client moves them with one BulkMoveTo; the
 	previews set them). Pure: Instance creation and math only.
+
+	Lights: a keeper keeps none of its own (a Mythic's gear light goes, as on
+	a follower): ShopkeeperController's one soft FaceLight on the nearest
+	golem is the only light (phones: the light budget). Its gear's ember
+	emitters stay, but slow (at most EmberRate a second).
 ]]
 
 local GolemBuilder = require(script.Parent.GolemBuilder)
@@ -27,6 +32,7 @@ local GolemEmotes = require(script.Parent.Parent.Moves.GolemEmotes)
 local GolemKeeper = {}
 
 GolemKeeper.SkipTag = "NoStuds" -- StudStyleConfig.SkipTag
+GolemKeeper.EmberRate = 3 -- particles a second, at most, from a keeper's gear embers
 
 export type Group = "Body" | "Right" | "Left" | "RightHeld" | "LeftHeld" | "Ground"
 
@@ -89,7 +95,11 @@ function GolemKeeper.build(kind: string, feet: CFrame, size: number): Rig
 	local groups: { Group } = {}
 	local arms: { [string]: { Offset: CFrame, Size: Vector3 } } = {}
 	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
+		if d:IsA("PointLight") then
+			d:Destroy()
+		elseif d:IsA("ParticleEmitter") then
+			d.Rate = math.min(d.Rate, GolemKeeper.EmberRate)
+		elseif d:IsA("BasePart") then
 			local offset = feet:ToObjectSpace(d.CFrame)
 			table.insert(parts, d)
 			table.insert(offsets, offset)

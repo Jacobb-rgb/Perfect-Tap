@@ -42,10 +42,16 @@ ShopkeeperConfig.LookSpeed = 4 -- how fast it turns (per second)
 
 ShopkeeperConfig.GreetDistance = 14 -- studs: a wave and a hello when the player walks up
 ShopkeeperConfig.GreetCooldown = 25 -- seconds before the same golem greets again
-ShopkeeperConfig.ThanksDistance = 24 -- studs: a buy or a sale this close makes the golem cheer
+-- studs: a sale this close to the golem's feet (the Earned popup's Position:
+-- its counter or its SellBin) or a buy at its shop with the player this
+-- close makes it cheer (a Sell Box's sales on the plots are far away)
+ShopkeeperConfig.ThanksDistance = 24
+ShopkeeperConfig.ThanksCooldown = 0.5 -- seconds: one sale or buy, one thanks
 ShopkeeperConfig.EmoteEvery = { 6, 12 } -- seconds between the moves it does by itself
+ShopkeeperConfig.BlendSeconds = 0.2 -- an emote that cuts into another blends over this
 ShopkeeperConfig.BubbleSeconds = 3.2
 ShopkeeperConfig.BurstCount = 22 -- gold sparkles when it says thanks
+ShopkeeperConfig.BurstCalm = 8 -- and under Reduce Motion
 ShopkeeperConfig.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
 
 export type Shop = {
@@ -98,6 +104,53 @@ function ShopkeeperConfig.line(shop: string, kind: "Hello" | "Thanks", n: number
 	local s = ShopkeeperConfig.Shops[shop]
 	local lines = if s then s[kind] else THANKS
 	return lines[(n - 1) % #lines + 1]
+end
+
+-- The golems that thank for a sale (an Earned of Source "Sell").
+ShopkeeperConfig.SellShops = { "Sell" } :: { string }
+
+--[[
+	Which shops' golems thank for a purchase answer (the remote `event` with
+	`payload`), nil for anything else: only a bought item, never a refusal or
+	another reward. The UPGRADES and DROPPERS counters both open the Tech
+	shop: ShopResult. SHOP's gear and ENCHANT's runes answer with an
+	ActionResult of Action "Gear" / "Enchant", Op "Buy"; the Vault with a
+	VaultResult. The BACKPACKS shop adds its answer here when it lands.
+]]
+function ShopkeeperConfig.buyShops(event: string, payload: any): { string }?
+	if type(payload) ~= "table" or payload.Ok ~= true then
+		return nil
+	end
+	if event == "ShopResult" then
+		return { "Tech", "Droppers" }
+	elseif event == "VaultResult" then
+		return { "Vault" }
+	elseif event == "ActionResult" and payload.Op == "Buy" then
+		if payload.Action == "Gear" then
+			return { "Gear" }
+		elseif payload.Action == "Enchant" then
+			return { "Enchant" }
+		end
+	end
+	return nil
+end
+
+-- How far the golem of `shop` on `feet` is from a sale or buy at `at`, when
+-- it may thank for it at `now` (one of `shops`, within ThanksDistance, its
+-- last thanks at `thankedAt` ThanksCooldown ago); nil: not this golem.
+function ShopkeeperConfig.thanksDistance(
+	shop: string,
+	feet: CFrame,
+	thankedAt: number,
+	shops: { string },
+	at: Vector3,
+	now: number
+): number?
+	if not table.find(shops, shop) or now - thankedAt < ShopkeeperConfig.ThanksCooldown then
+		return nil
+	end
+	local distance = (feet.Position - at).Magnitude
+	return if distance <= ShopkeeperConfig.ThanksDistance then distance else nil
 end
 
 -- Should the golem at `distance` studs be there? (`shown` = it is now:

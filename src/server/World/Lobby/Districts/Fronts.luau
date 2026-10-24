@@ -189,8 +189,10 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 
 	-- the shopkeeper golem (ShopkeeperController) between the cart and the bin,
 	-- facing the plaza (the sign's direction; customers stand at the counter
-	-- on the plaza side), where Tobin the Miner stood
-	ShopkeeperConfig.mark(counter, at(0.9, 0, -0.4), "Sell")
+	-- on the plaza side), behind the counter's scale end: 1.9 studs toward the
+	-- lane from where Tobin the Miner stood, so its right wing keeps out of the
+	-- plaza's entrance lantern (at rest and turned toward a player)
+	ShopkeeperConfig.mark(counter, at(-1.0, 0, -0.4), "Sell")
 
 	-- a flat metal floor plate under the stall with a warm front edge (no collision)
 	Kit.bit(m, at(0, 0.04, -0.3), Vector3.new(6.4, 0.08, 7.6), Tech.MetalDark)

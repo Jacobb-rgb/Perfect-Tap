@@ -191,10 +191,12 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Kit.tag(float, "Spin")
 
 	-- the shopkeeper golem (ShopkeeperController) beside the rune table on the
-	-- viewer's left, in front of the window wall, turned a little to the table's
-	-- front: behind the table the door's lintel and the floating crystals hide
-	-- it (owner: "not very visible, a bit bigger")
-	ShopkeeperConfig.mark(counter, at(3.4, FLOOR, -2.5) * CFrame.Angles(0, 0.3, 0), "Enchant")
+	-- viewer's left, turned a little to the table's front: behind the table the
+	-- door's lintel and the floating crystals hide it (owner: "not very
+	-- visible, a bit bigger"); far enough out from the window wall that its
+	-- head, wings and cape keep out of the facade, the door frame and the
+	-- corner pillar
+	ShopkeeperConfig.mark(counter, at(3.9, FLOOR, -3.9) * CFrame.Angles(0, 0.3, 0), "Enchant")
 
 	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster
 	-- and a violet container beside the module
