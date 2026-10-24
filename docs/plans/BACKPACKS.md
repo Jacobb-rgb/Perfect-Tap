@@ -47,7 +47,7 @@ a shop, a shopkeeper at the counter, more lights and effects; the ROCK SCANNER g
 Codex opens from the side menu's CODEX button; `CodexController` still adds its prompt to any
 model tagged `OreCodex`, there is none now).
 
-`LobbyLayout` piece `BackpackStall`: center (46, 0, 74), 16 x 16 x 12, facing west (-X) to the
+`LobbyLayout` piece `BackpackStall`: center (46, 0, 73), 18 x 16 x 12 (owner: "a bit wider"), facing west (-X) to the
 end of the `ToScanner` path, between the DROPPERS house, the vault's east statue, the red trees
 and the ore outcrop at (50, 58). `Districts/Backpacks` builds the shell (79 parts, one light):
 the porch with two plinths, the gold-framed gateway with teal neon, the BACKPACKS board, corner
@@ -57,7 +57,7 @@ and the shopkeeper's step. The clients build the rest (not map parts):
 
 - the ten packs on the plates with the attribute `BackpackId` (every pack once: the porch
   Runebound and Emberforge, the racks Rookie/Trail/Leather and Miner's/Iron-Bound/Explorer's,
-  the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.2, `DisplaySpin` 0.5 rad/s,
+  the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.8 on a two-tier podium, `DisplaySpin` 0.5 rad/s,
   its light on a PC). Each plate's `DisplayRange`: roof 45, porch 38, inside 30 studs. The
   inside plates carry `DisplayLite`: phones show those packs without their small details
   (`BackpackBuilder.lite`, ~40% of the parts) until the camera or the player is in the shop.
@@ -71,7 +71,8 @@ and the shopkeeper's step. The clients build the rest (not map parts):
   Shared.Config.ShopkeeperConfig), and in tests/Shopkeepers.spec.luau "Backpacks" in SHOPS and
   `Backpacks = "BackpackCounter"` in COUNTERS (the feet stand on the step, facing the gateway).
 
-Budgets (main 958ddb46 -> this branch, the budget tests' own counting): map 33,450 -> 33,459,
+Budgets (main 958ddb46 -> this branch at 16 wide, the budget tests' own counting; at 18 wide the
+map is 33,445 and every budget test still passes: re-measured at landing): map 33,450 -> 33,459,
 lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round the spawn
 24,811 -> 24,820, the plaza 25,063 -> 25,072, the DROPPERS door 25,206 -> 25,215 (StreamParts
 25,240). The shop's client packs and decor are out of range at all three spots

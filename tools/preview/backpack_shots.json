@@ -467,16 +467,16 @@
     "preset": "Surface",
     "maxLights": 24,
     "position": [
-      23.5,
-      8.5,
-      63.5
+      22.5,
+      9.5,
+      61.5
     ],
     "target": [
       46,
-      9,
-      74.5
+      10,
+      73.5
     ],
-    "fov": 58,
+    "fov": 60,
     "shadowExtent": 120
   },
   "bp_stall_close": {
@@ -543,6 +543,23 @@
       46,
       6.5,
       71
+    ],
+    "fov": 55,
+    "shadowExtent": 120
+  },
+  "bp_roof_spin": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      27,
+      13,
+      63
+    ],
+    "target": [
+      46,
+      13.5,
+      73
     ],
     "fov": 55,
     "shadowExtent": 120

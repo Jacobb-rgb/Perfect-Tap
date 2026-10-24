@@ -384,8 +384,10 @@ LobbyLayout.Pieces = {
 		-- opens from the side menu), the shop stands at the end of the ToScanner path,
 		-- its gateway to the path, between the DROPPERS house, the vault's east statue,
 		-- the red trees and the outcrop at (50, 58))
-		Center = v(46, 0, 74),
-		Size = v(16, 16, 12),
+		-- (owner: "a bit wider": 18 wide, its south side 1.3 studs off the statue's
+		-- base corner, its north side 6 off the outcrop at (50, 58))
+		Center = v(46, 0, 73),
+		Size = v(18, 16, 12),
 		Facing = v(-1, 0, 0),
 		Note = "BACKPACKS: a small walk-in shop (porch with two plinths, gold-framed gateway, BACKPACKS board, corner pillars with lantern cubes, a roof podium for the giant turning Starforge pack, side racks, the counter and the shopkeeper's step). Tag BackpackCounter (BasePart: the counter top, Attachments BackpackPromptPoint and KeeperFeet); the plates carry the attribute BackpackId (no tag): the clients build the ten display packs and the small decor (Builders/BackpackShopDecor), they are not map parts.",
 	},

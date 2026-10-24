@@ -35,7 +35,7 @@ BackpackShopDecor.LightName = "ShopLanternLight"
 BackpackShopDecor.Layout = {
 	Floor = 0.8, -- the floor's top
 	Wall = 10, -- the walls' height over the floor
-	Width = 15.6, -- outside, along local X
+	Width = 17.6, -- outside, along local X (owner: "a bit wider", 15.6 -> 17.6)
 	Wall0 = 0.8, -- the walls' thickness
 	FrontZ = -2.6, -- the front wall's middle
 	BackZ = 5.4, -- the back wall's middle
@@ -45,7 +45,7 @@ BackpackShopDecor.Layout = {
 	CounterZ = 2.0, -- the counter's middle
 	KeeperZ = 3.9, -- where the shopkeeper's feet stand (on a step 1 stud up)
 	Racks = { -1.0, 1.4, 3.8 }, -- the side wall racks' pack spots (local z)
-	BannerX = 5.25,
+	BannerX = 6.1,
 }
 
 local rgb = Color3.fromRGB

@@ -323,6 +323,7 @@ end
 	it) with its effects; a shopper with a pack stands on the path.
 ]]
 function Preview.buildStall(Loader: any, workspace: any)
+	local process = require("@lune/process")
 	local k = setup(Loader)
 	local CF, V3 = k.CFrame, k.Vector3
 	local Dummy = require("./dummy")
@@ -353,7 +354,7 @@ function Preview.buildStall(Loader: any, workspace: any)
 			local pack = k.Data.ById[id]
 			if pack then
 				local scale = d:GetAttribute("DisplayScale") or 1
-				local angle = if d:GetAttribute("DisplaySpin") then math.rad(-28) else 0
+				local angle = if d:GetAttribute("DisplaySpin") then math.rad(tonumber(process.env.BP_ROOF_ANGLE) or -28) else 0
 				local model = k.Builder.build(id, true)
 				local bottom = model:GetAttribute("BottomY")
 				model:PivotTo(CF.new())

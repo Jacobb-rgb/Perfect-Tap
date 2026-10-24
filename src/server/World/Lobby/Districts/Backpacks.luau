@@ -29,7 +29,7 @@
 	lanterns, crates, the crest, the rug, the counter's coins) are built by
 	the clients too (Builders/BackpackShopDecor, from the model's ShopFrame
 	attribute). Local frame: BackpackShopDecor.Layout (front = -Z toward
-	the path); every part stays inside the 16 x 16 x 12 footprint
+	the path); every part stays inside the 18 x 16 x 12 footprint
 	(tests/LobbyDistricts.spec.luau).
 ]]
 
@@ -58,7 +58,7 @@ Backpacks.Displays = {
 	Shelf = "AmethystPack",
 	Roof = "StarforgePack",
 }
-Backpacks.RoofScale = 2.2 -- the roof emblem's size against a normal pack
+Backpacks.RoofScale = 2.8 -- the roof emblem's size against a normal pack (owner: a big turning pack on the roof)
 Backpacks.RoofSpin = 0.5 -- radians per second
 -- how near the camera must be for the clients to build each display pack
 -- (the inside ones also carry DisplayLite: integrator 2026-10-24, the phones' part budget)
@@ -113,7 +113,7 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	glow(at(0, 0.42, porch - 0.92), Vector3.new(L.Gate - 0.4, 0.08, 0.06), TEAL)
 	-- the porch plinths: a round foot, a teal ring, the square plate (the marker)
 	for _, spec in { { Side = -1, Pack = Backpacks.Displays.PorchLeft }, { Side = 1, Pack = Backpacks.Displays.PorchRight } } do
-		local base = at(spec.Side * 5.4, P, -4.1)
+		local base = at(spec.Side * 6.3, P, -4.1)
 		Tech.disc(m, (base * CFrame.new(0, 0.55, 0)).Position, 1.1, 1.8, Tech.Metal, nil, Style.solid())
 		Tech.disc(m, (base * CFrame.new(0, 1.15, 0)).Position, 0.1, 1.9, TEAL, Kit.NEON, Style.tiny())
 		plate(base * CFrame.new(0, 1.27, 0), 1.5, spec.Pack, "DisplayPlinth", Backpacks.Ranges.Porch)
@@ -163,7 +163,7 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	-- the parapet over the front with teal tube and crenels
 	block(at(0, top + 1.2, zFront - 0.1), Vector3.new(L.Width - 2.4, 1.2, 0.8), Tech.Metal)
 	glow(at(0, top + 1.62, zFront - 0.52), Vector3.new(L.Width - 2.6, Tech.TUBE, 0.12), TEAL)
-	for _, x in { -5.2, -3.2, 3.2, 5.2 } do
+	for _, x in { -6.6, -4.6, 4.6, 6.6 } do
 		block(at(x, top + 2.25, zFront - 0.1), Vector3.new(1.2, 0.9, 0.8), Tech.Metal)
 	end
 	-- the corner pillars with warm lantern cubes
@@ -178,11 +178,13 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 		glow(at(x, ly + 0.8, zFront - 0.82), Vector3.new(1.0, 1.0, 0.06), Tech.Warm)
 		block(at(x, ly + 1.75, zFront), Vector3.new(1.8, 0.3, 1.8), Tech.MetalLight, nil, true)
 	end
-	-- the roof podium with a teal ring: the giant turning Starforge pack stands on its plate
+	-- the roof podium, two round tiers with teal rings: the giant turning Starforge pack stands on its plate
 	local podium = at(0, top + 0.6, zMid - 1.6)
-	Tech.disc(m, (podium * CFrame.new(0, 0.4, 0)).Position, 0.8, 3.4, Tech.Metal, nil, Style.solid())
-	Tech.disc(m, (podium * CFrame.new(0, 0.5, 0)).Position, 0.12, 3.6, TEAL, Kit.NEON, Style.tiny())
-	local roof = plate(podium * CFrame.new(0, 0.87, 0), 2.2, Backpacks.Displays.Roof, "DisplayRoof", Backpacks.Ranges.Roof)
+	Tech.disc(m, (podium * CFrame.new(0, 0.4, 0)).Position, 0.8, 4.0, Tech.Metal, nil, Style.solid())
+	Tech.disc(m, (podium * CFrame.new(0, 0.5, 0)).Position, 0.12, 4.2, TEAL, Kit.NEON, Style.tiny())
+	Tech.disc(m, (podium * CFrame.new(0, 1.2, 0)).Position, 0.8, 3.0, Tech.MetalDark, nil, Style.solid())
+	Tech.disc(m, (podium * CFrame.new(0, 1.3, 0)).Position, 0.12, 3.2, TEAL, Kit.NEON, Style.tiny())
+	local roof = plate(podium * CFrame.new(0, 1.67, 0), 2.4, Backpacks.Displays.Roof, "DisplayRoof", Backpacks.Ranges.Roof)
 	roof:SetAttribute("DisplayScale", Backpacks.RoofScale)
 	roof:SetAttribute("DisplaySpin", Backpacks.RoofSpin)
 

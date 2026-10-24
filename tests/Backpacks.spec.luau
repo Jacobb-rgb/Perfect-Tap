@@ -443,7 +443,7 @@ return function(T, Loader)
 
 	T.test("BACKPACKS shop decor: built by the clients, inside the footprint, lights and dust off", function()
 		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
-		local frame = CFrame.new(46, 0, 74) * CFrame.Angles(0, math.pi / 2, 0)
+		local frame = CFrame.new(46, 0, 73) * CFrame.Angles(0, math.pi / 2, 0)
 		local model = Decor.build(frame)
 		local parts, lights, emitters = 0, 0, 0
 		for _, d in model:GetDescendants() do
@@ -452,7 +452,7 @@ return function(T, Loader)
 				T.falsy(d.CanCollide or d.CanQuery or d.CanTouch, d.Name .. " is decor (no collisions, no queries)")
 				T.truthy(d.Anchored, d.Name .. " anchored")
 				local p = frame:PointToObjectSpace(d.CFrame.Position)
-				T.truthy(math.abs(p.X) <= 8 and p.Y >= 0 and p.Y <= 16 and math.abs(p.Z) <= 6, d.Name .. " inside the shop's footprint")
+				T.truthy(math.abs(p.X) <= 9 and p.Y >= 0 and p.Y <= 16 and math.abs(p.Z) <= 6, d.Name .. " inside the shop's footprint")
 			elseif d:IsA("PointLight") then
 				lights += 1
 				T.falsy(d.Enabled, "the lanterns' lights start off")
