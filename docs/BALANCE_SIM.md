@@ -188,7 +188,7 @@ re-calibration after the choice (`lune run tools/lune/balance_sim.luau calibrate
   follow the mine chat's plan for the new roster: floor N = the Nth rarity; 10 % crystal rocks roll from the floor's
   best 3 ores (70 %) or the next rarity's cheapest 3 (30 %). Weights inside a table fall with value (1 / rank^0.8).
 - Player loop per 5 s step: mine → carry to the floor's train (12 s walk per load) → train to the pen → clean by
-  hand (18 s per ore + the trip back) until the first Auto Cleaner (8 s per ore, Quality 0 odds) → best 2 cleaned ores
+  hand (18 s per ore + the trip back) until the first Auto Cleaner (8 s per ore, Quality 0 odds) → best 3 cleaned ores
   on the 3 free podiums (2 before 2026-10-24) → the rest sold, through the Crusher (×2) and furnaces (ingots ×1.25) when owned.
 - Buying (greedy): the next blaster as soon as ingots + coins are there (Foundry) or the Vault is affordable; the
   elevator once floor 4 is in reach; hoverboards ($5K / $80K / $1.5M, walking × 0.8 / 0.65 / 0.5) when they cost at
@@ -199,7 +199,7 @@ re-calibration after the choice (`lune run tools/lune/balance_sim.luau calibrate
 - Not modelled: steps 6–7 are merged but not modelled yet: gear except the Backpack (everyone walks at Boots 0's
   16 studs/s; old saves' 18 is Boots I now), golems, boosts, enchants, capsules, the daily wheel and artifacts (the
   `IncomeMult` / `DamageMult` / `LuckMult` / `CleanSpeedMult` overrides stand in for their bonuses). Also not:
-  rebirths, machine Speed / Quality upgrades, podiums 3–4 (Robux), offline earnings, the Grotto, Golden / Geode
+  rebirths, machine Speed / Quality upgrades, podiums 4–5 (Robux), offline earnings, the Grotto, Golden / Geode
   rocks and the Giant Crystal.
 
 ## Today's prices

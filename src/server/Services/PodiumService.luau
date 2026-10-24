@@ -35,7 +35,7 @@
 	  (OpenUI "Offline" { Amount, Seconds, Hours }). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
-	- StateService gets Income (per second), PodiumSlots (2 or 4) and
+	- StateService gets Income (per second), PodiumSlots (3 or 5) and
 	  PodiumIncome (per slot).
 	- Step 8: the "CoinPack" receipt handler (registerGrants): coin packs
 	  pay MonetizationConfig.coinPackAmount at the income now, only while
@@ -310,40 +310,14 @@ local function buildDisplay(plotId: number, slot: number, desc: Desc): (Model?, 
 	return model, makeTag(top, desc, point.Position.Y)
 end
 
--- PlotBuilder leaves the holo-ring off the locked slots (the map's part budget: the
--- padlock floats there). A slot the perk opens gets a copy of podium 1's ring (in the
--- yard's skin colours, ArtifactService repaints the copies with the rest); a slot that
--- locks again loses it.
-local function setRing(podium: Model, first: Model?, on: boolean)
-	local has = podium:FindFirstChild("HoloRing") ~= nil
-	local base = podium:FindFirstChild("Base")
-	local firstBase = first and first:FindFirstChild("Base")
-	if on and not has and first and base and firstBase and base:IsA("BasePart") and firstBase:IsA("BasePart") then
-		local delta = base.CFrame * firstBase.CFrame:Inverse()
-		for _, bar in first:GetChildren() do
-			if bar:IsA("BasePart") and bar.Name == "HoloRing" then
-				local copy = bar:Clone()
-				copy.CFrame = delta * bar.CFrame
-				copy.Parent = podium
-			end
-		end
-	elseif not on and has then
-		for _, bar in podium:GetChildren() do
-			if bar.Name == "HoloRing" then
-				bar:Destroy()
-			end
-		end
-	end
-end
-
 -- Locked slots: lock + price plate visible and a dull rim until the owner has the perk.
+-- (The paid slots never get a holo-ring, not even open: the map's phone budget; the lit
+-- gold rim shows an open slot. PlotBuilder.)
 local function refreshLocks(plotId: number, owner: Player?)
-	local first = podiumModel(plotId, 1)
 	for slot = FREE + 1, MAX do
 		local podium = podiumModel(plotId, slot)
 		if podium then
 			local unlocked = owner ~= nil and PodiumService.isUnlocked(owner, slot)
-			setRing(podium, first, unlocked)
 			local lock = podium:FindFirstChild("Lock")
 			if lock then
 				for _, d in lock:GetDescendants() do
@@ -600,7 +574,7 @@ local function isNear(player: Player, plotId: number, slot: number): boolean
 	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= PodiumService.Range + RANGE_SLACK
 end
 
--- PodiumAction (slot 1..4, "Remove" | "Place", { Key }?)
+-- PodiumAction (slot 1..5, "Remove" | "Place", { Key }?)
 local function onAction(player: Player, slotArg: any, actionArg: any, argArg: any)
 	local slot = Guard.integer(slotArg, 1, MAX)
 	local action = Guard.string(actionArg, 16)
