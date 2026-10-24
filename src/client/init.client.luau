@@ -51,6 +51,7 @@ local ORDER = {
 	"LevelController", -- the player LEVEL: the XP bar, orbs, the juicy level-up moment
 	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"ReduceMotionController", -- Reduce motion (SETTINGS + Roblox's own) -> UI/Motion.reduced(), with UI motion on or off
 	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names
 	"StoreController", -- the Robux STORE window (side menu STORE, the HUD's Shop button)
 	"QuestController", -- daily / weekly quests, the login streak popup (before the side menu that opens it)
