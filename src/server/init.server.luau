@@ -22,6 +22,7 @@ game:GetService("Players").PlayerRemoving:Connect(Net.forget)
 local ORDER = {
 	"DataService",
 	"WorldService",
+	"StudStyleService", -- the studded style switch (Workspace attributes) + the custom stud materials
 	"StateService",
 	"ItemService",
 	"ToolService",

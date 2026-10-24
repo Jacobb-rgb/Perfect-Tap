@@ -1,0 +1,353 @@
+{
+ "st_overview_before": {
+  "scene": "world",
+  "preset": "Surface",
+  "position": [
+   40,
+   34,
+   92
+  ],
+  "target": [
+   -6,
+   2,
+   4
+  ],
+  "fov": 60,
+  "shadowExtent": 160
+ },
+ "st_overview_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Surface",
+  "position": [
+   40,
+   34,
+   92
+  ],
+  "target": [
+   -6,
+   2,
+   4
+  ],
+  "fov": 60,
+  "shadowExtent": 160
+ },
+ "st_overview_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Surface",
+  "position": [
+   40,
+   34,
+   92
+  ],
+  "target": [
+   -6,
+   2,
+   4
+  ],
+  "fov": 60,
+  "shadowExtent": 160
+ },
+ "st_plaza_before": {
+  "scene": "world",
+  "preset": "Surface",
+  "position": [
+   -26,
+   9,
+   34
+  ],
+  "target": [
+   10,
+   4,
+   -8
+  ],
+  "fov": 70,
+  "shadowExtent": 90
+ },
+ "st_plaza_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Surface",
+  "position": [
+   -26,
+   9,
+   34
+  ],
+  "target": [
+   10,
+   4,
+   -8
+  ],
+  "fov": 70,
+  "shadowExtent": 90
+ },
+ "st_plaza_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Surface",
+  "position": [
+   -26,
+   9,
+   34
+  ],
+  "target": [
+   10,
+   4,
+   -8
+  ],
+  "fov": 70,
+  "shadowExtent": 90
+ },
+ "st_fence_before": {
+  "scene": "world",
+  "preset": "Surface",
+  "position": [
+   13.5,
+   4.2,
+   71
+  ],
+  "target": [
+   12,
+   1.6,
+   63.6
+  ],
+  "fov": 55,
+  "shadowExtent": 40
+ },
+ "st_fence_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Surface",
+  "position": [
+   13.5,
+   4.2,
+   71
+  ],
+  "target": [
+   12,
+   1.6,
+   63.6
+  ],
+  "fov": 55,
+  "shadowExtent": 40
+ },
+ "st_fence_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Surface",
+  "position": [
+   13.5,
+   4.2,
+   71
+  ],
+  "target": [
+   12,
+   1.6,
+   63.6
+  ],
+  "fov": 55,
+  "shadowExtent": 40
+ },
+ "st_base_before": {
+  "scene": "world",
+  "preset": "Surface",
+  "position": [
+   126,
+   13,
+   50
+  ],
+  "target": [
+   158,
+   2,
+   82
+  ],
+  "fov": 60,
+  "shadowExtent": 90
+ },
+ "st_base_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Surface",
+  "position": [
+   126,
+   13,
+   50
+  ],
+  "target": [
+   158,
+   2,
+   82
+  ],
+  "fov": 60,
+  "shadowExtent": 90
+ },
+ "st_base_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Surface",
+  "position": [
+   126,
+   13,
+   50
+  ],
+  "target": [
+   158,
+   2,
+   82
+  ],
+  "fov": 60,
+  "shadowExtent": 90
+ },
+ "st_forge_before": {
+  "scene": "world",
+  "preset": "Surface",
+  "position": [
+   22,
+   14,
+   -4
+  ],
+  "target": [
+   0,
+   9,
+   -48
+  ],
+  "fov": 65,
+  "shadowExtent": 90
+ },
+ "st_forge_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Surface",
+  "position": [
+   22,
+   14,
+   -4
+  ],
+  "target": [
+   0,
+   9,
+   -48
+  ],
+  "fov": 65,
+  "shadowExtent": 90
+ },
+ "st_forge_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Surface",
+  "position": [
+   22,
+   14,
+   -4
+  ],
+  "target": [
+   0,
+   9,
+   -48
+  ],
+  "fov": 65,
+  "shadowExtent": 90
+ },
+ "st_mine_before": {
+  "scene": "world",
+  "preset": "Quarry",
+  "position": [
+   -3,
+   -5.5,
+   -174
+  ],
+  "target": [
+   1,
+   -6,
+   -235
+  ],
+  "fov": 62,
+  "shadowExtent": 90
+ },
+ "st_mine_classic": {
+  "scene": "world_studs_classic",
+  "preset": "Quarry",
+  "position": [
+   -3,
+   -5.5,
+   -174
+  ],
+  "target": [
+   1,
+   -6,
+   -235
+  ],
+  "fov": 62,
+  "shadowExtent": 90
+ },
+ "st_mine_custom": {
+  "scene": "world_studs_custom",
+  "preset": "Quarry",
+  "position": [
+   -3,
+   -5.5,
+   -174
+  ],
+  "target": [
+   1,
+   -6,
+   -235
+  ],
+  "fov": 62,
+  "shadowExtent": 90
+ },
+ "st_machines_before": {
+  "scene": "factory",
+  "preset": "Surface",
+  "position": [
+   -6,
+   20,
+   -38
+  ],
+  "target": [
+   0,
+   2,
+   -8
+  ],
+  "fov": 50,
+  "shadowExtent": 90,
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ]
+ },
+ "st_machines_classic": {
+  "scene": "factory_studs_classic",
+  "preset": "Surface",
+  "position": [
+   -6,
+   20,
+   -38
+  ],
+  "target": [
+   0,
+   2,
+   -8
+  ],
+  "fov": 50,
+  "shadowExtent": 90,
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ]
+ },
+ "st_machines_custom": {
+  "scene": "factory_studs_custom",
+  "preset": "Surface",
+  "position": [
+   -6,
+   20,
+   -38
+  ],
+  "target": [
+   0,
+   2,
+   -8
+  ],
+  "fov": 50,
+  "shadowExtent": 90,
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ]
+ }
+}

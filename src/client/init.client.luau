@@ -11,6 +11,7 @@ local ORDER = {
 	"StateController",
 	"LightingController",
 	"DecorController",
+	"StudStyleController", -- the studded style: Roblox studs on the parts that stream in (StudStyleConfig)
 	"HudController",
 	"FxController",
 	"MiningController",

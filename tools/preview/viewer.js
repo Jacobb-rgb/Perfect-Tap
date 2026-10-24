@@ -91,6 +91,109 @@ function materialFor(kind, transparency) {
   return m;
 }
 
+// ---- the studded style (src/shared/StudStyle.luau) ----
+// A part's stud info (scene part [10]): [1 = Roblox's own studs on the faces in the
+// mask (Plastic surfaces), 2 = the custom stud material on every face, faceMask]
+// (Front 1, Back 2, Top 4, Bottom 8, Left 16, Right 32). Both tile one stud per
+// stud from the face's corner; the pictures hold 2 x 2 studs.
+// Classic multiplies Roblox's own grey tile (128 = no change) into the colour;
+// Custom multiplies studs_color.png in and bends the light with studs_normal.png.
+const studMaps = {};
+async function loadStudMaps(renderer) {
+  const loader = new THREE.TextureLoader();
+  const load = async (name, colorSpace) => {
+    try {
+      const t = await loader.loadAsync(`/scenes/studs/${name}`);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.colorSpace = colorSpace;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return t;
+    } catch {
+      return null;
+    }
+  };
+  studMaps.color = await load("studs_color.png", THREE.SRGBColorSpace);
+  studMaps.normal = await load("studs_normal.png", THREE.NoColorSpace);
+  studMaps.native = (await load("native_studs.png", THREE.NoColorSpace)) || null;
+}
+
+function studMaterial(base, mode) {
+  const native = mode === 1 && studMaps.native;
+  base.onBeforeCompile = (shader) => {
+    shader.uniforms.studColor = { value: native ? studMaps.native : studMaps.color };
+    shader.uniforms.studNormal = { value: studMaps.normal };
+    shader.uniforms.studNative = { value: native ? 1 : 0 };
+    shader.uniforms.studBump = { value: mode === 2 ? 1 : 0 };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        attribute vec3 aSize;
+        attribute float aStudMask;
+        varying vec2 vStudUv;
+        varying float vStudOn;
+        varying vec3 vStudT;
+        varying vec3 vStudB;`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          vec3 an = abs(objectNormal);
+          vec3 T; vec3 B; float bit;
+          if (an.x >= an.y && an.x >= an.z) {
+            T = vec3(0.0, 0.0, -sign(objectNormal.x)); B = vec3(0.0, 1.0, 0.0);
+            bit = objectNormal.x > 0.0 ? 32.0 : 16.0;
+          } else if (an.y >= an.z) {
+            T = vec3(1.0, 0.0, 0.0); B = vec3(0.0, 0.0, -sign(objectNormal.y));
+            bit = objectNormal.y > 0.0 ? 4.0 : 8.0;
+          } else {
+            T = vec3(sign(objectNormal.z), 0.0, 0.0); B = vec3(0.0, 1.0, 0.0);
+            bit = objectNormal.z > 0.0 ? 2.0 : 1.0;
+          }
+          vec3 p = (position + 0.5) * aSize;
+          vStudUv = vec2(dot(p, T), dot(p, B)) * 0.5;
+          vStudOn = mod(floor(aStudMask / bit), 2.0);
+          mat3 im = mat3(instanceMatrix);
+          vStudT = normalize(normalMatrix * (im * T));
+          vStudB = normalize(normalMatrix * (im * B));
+        }`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform sampler2D studColor;
+        uniform sampler2D studNormal;
+        uniform float studNative;
+        uniform float studBump;
+        varying vec2 vStudUv;
+        varying float vStudOn;
+        varying vec3 vStudT;
+        varying vec3 vStudB;`,
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        if (vStudOn > 0.5) {
+          vec3 s = texture2D(studColor, vStudUv).rgb;
+          diffuseColor.rgb *= studNative > 0.5 ? s * 2.0 : s;
+        }`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+        if (vStudOn > 0.5 && studBump > 0.5) {
+          vec3 mapN = texture2D(studNormal, vStudUv).xyz * 2.0 - 1.0;
+          mat3 tbn = mat3(normalize(vStudT), normalize(vStudB), normal);
+          normal = normalize(tbn * mapN);
+        }`,
+      );
+  };
+  base.customProgramCacheKey = () => `studs${mode}${native ? "n" : ""}`;
+  return base;
+}
+
 function materialKind(name, reflectance) {
   if (name === "Neon") return "neon";
   if (name === "Metal" || name === "Foil" || name === "DiamondPlate" || name === "CorrodedMetal") return "metal";
@@ -371,23 +474,39 @@ async function main() {
 
   // ---- parts, instanced by (shape, material kind, transparency, CastShadow) ----
   const groups = new Map();
+  if (scene.parts.some((p) => Array.isArray(p[10]))) await loadStudMaps(renderer);
   scene.parts.forEach((p, index) => {
-    const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance, castShadow] = p;
+    const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance, castShadow, studs] = p;
     if (Math.min(sx, sy, sz) < 1e-4) return; // flat parts give NaN normals (one NaN pixel blacks out the bloom)
     const kind = materialKind(mat, reflectance);
     const tKey = Math.round(transparency * 10) / 10;
     // a part with CastShadow off casts none here either (older scene files: every part casts)
     const shadow = castShadow !== 0;
-    const key = `${shape}|${kind}|${tKey}|${shadow ? 1 : 0}`;
-    if (!groups.has(key)) groups.set(key, { shape, kind, transparency: tKey, castShadow: shadow, items: [] });
-    groups.get(key).items.push({ sx, sy, sz, cf, color, index });
+    const studMode = Array.isArray(studs) ? studs[0] : 0;
+    const key = `${shape}|${kind}|${tKey}|${shadow ? 1 : 0}|${studMode}`;
+    if (!groups.has(key)) groups.set(key, { shape, kind, transparency: tKey, castShadow: shadow, studMode, items: [] });
+    groups.get(key).items.push({ sx, sy, sz, cf, color, index, studMask: studMode ? studs[1] : 0 });
   });
   const partMatrices = [];
   const m4 = new THREE.Matrix4();
   const scaleM = new THREE.Matrix4();
   for (const g of groups.values()) {
-    const material = materialFor(g.kind, g.transparency);
-    const mesh = new THREE.InstancedMesh(geometries[g.shape], material, g.items.length);
+    let material = materialFor(g.kind, g.transparency);
+    let geometry = geometries[g.shape];
+    if (g.studMode) {
+      // per-instance part size and stud faces for the stud shader
+      material = studMaterial(material, g.studMode);
+      geometry = geometry.clone();
+      const sizes = new Float32Array(g.items.length * 3);
+      const masks = new Float32Array(g.items.length);
+      g.items.forEach((it, i) => {
+        sizes.set([it.sx, it.sy, it.sz], i * 3);
+        masks[i] = it.studMask;
+      });
+      geometry.setAttribute("aSize", new THREE.InstancedBufferAttribute(sizes, 3));
+      geometry.setAttribute("aStudMask", new THREE.InstancedBufferAttribute(masks, 1));
+    }
+    const mesh = new THREE.InstancedMesh(geometry, material, g.items.length);
     g.items.forEach((it, i) => {
       const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = it.cf;
       m4.set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
