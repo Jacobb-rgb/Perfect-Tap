@@ -35,7 +35,7 @@ DropperConfig.MaxLasers = 5
 local LIST: { any } = {
 	{
 		Id = "BasicDropper",
-		Name = "Jungle Dropper",
+		Name = "Toxic Dropper",
 		Price = 5e9,
 		Resale = 3e9,
 		Income = 1.5e6,

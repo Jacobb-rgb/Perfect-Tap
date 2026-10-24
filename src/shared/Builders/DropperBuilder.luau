@@ -7,10 +7,13 @@
 	that drops the dropper's ores in a beam of light onto a glowing pad.
 	Crystals grow around the pedestal; each dropper is made of its own stuff:
 
-	  BasicDropper       JUNGLE: dirt blocks with grass caps, vines, flowers, green glow
-	  BlueDropper        FROST: ice-blue blocks with snow caps and icicles, cyan glow
-	  RedDropper         LAVA: black stone with lava cracks and a lava drip, red glow
-	  PurpleDropper      CRYSTAL: purple stone, big crystals on the arm and the steps
+	  BasicDropper       TOXIC: dark steel with glowing green slime caps, slime
+	                     drips, bubbles, a toxic barrel and hazard stripes
+	  BlueDropper        FROST: ice-blue blocks with snow caps, icicles, snow heaps
+	                     and floating snowflakes, cyan glow
+	  RedDropper         LAVA: black stone with lava cracks, lava flowing down the
+	                     column into a pool, orange glowing spots, red glow
+	  PurpleDropper      CRYSTAL: purple stone, crystals sticking out everywhere
 	  GoldDropper        HEAVEN: white marble with gold rims, a golden halo, white
 	                     wings on the column, clouds at the foot, sparkles
 	  RainbowDropper     black stone, every slot another colour, rainbow crystals,
@@ -58,14 +61,14 @@ local function style(face: Color3, rim: Color3, glow: { Color3 }, crystal: { Col
 end
 
 DropperBuilder.Styles = {
-	BasicDropper = style(rgb(150, 104, 62), rgb(102, 68, 38), { rgb(90, 255, 110) }, { rgb(60, 220, 80) }, "grass"),
+	BasicDropper = style(rgb(78, 88, 80), rgb(40, 46, 42), { rgb(120, 255, 60) }, { rgb(110, 240, 60), rgb(200, 255, 80) }, "toxic"),
 	BlueDropper = style(rgb(150, 205, 245), rgb(70, 120, 190), { rgb(120, 230, 255) }, { rgb(170, 235, 255), rgb(225, 248, 255) }, "ice"),
 	RedDropper = style(rgb(78, 60, 58), rgb(38, 26, 26), { rgb(255, 70, 30) }, { rgb(255, 60, 50) }, "lava"),
 	PurpleDropper = style(
 		rgb(104, 64, 160),
 		rgb(62, 36, 104),
 		{ rgb(205, 90, 255), rgb(255, 110, 220) },
-		{ rgb(190, 110, 255), rgb(255, 120, 220), rgb(120, 170, 255) },
+		{ rgb(140, 50, 255), rgb(225, 50, 180), rgb(60, 110, 255) }, -- (deep: the neon keeps the hue)
 		"crystal"
 	),
 	GoldDropper = style(
@@ -296,49 +299,102 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 
 	---------------------------------------------------------------- what each one is made of
 	local kind = st.Kind
-	if kind == "grass" then
-		local GRASS, GRASS_RIM = rgb(96, 186, 66), rgb(62, 132, 44)
-		cube(at(bx, stageH + 1.6 + 0.12, -0.2), Vector3.new(5.02, 0.3, 4.62), GRASS, GRASS_RIM, "side")
-		cube(at(bx + 0.3, p2y + 0.62, -0.4), Vector3.new(3.82, 0.3, 3.62), GRASS, GRASS_RIM, "side")
-		cube(at((armRight + armLeft) / 2, armY + 0.98, -0.4), Vector3.new(armLen + 0.02, 0.3, 2.62), GRASS, GRASS_RIM, "side")
-		-- vines down the column and the arm, flowers at the foot
-		for i, v in
-			{
-				Vector3.new(bx - 1.0, lowerY + 0.5, 0.9),
-				Vector3.new(bx + 0.5, upperY, 0.82),
-				Vector3.new(armLeft + 1.4, armY - 0.6, 0.92),
-				Vector3.new(armRight - 0.9, armY - 0.8, 0.92),
-			}
-		do
-			Geo.block(model, at(v.X, v.Y, v.Z), Vector3.new(0.22, 1.4 + (i % 2) * 0.6, 0.06), GRASS, PLASTIC, decor())
+	-- (glowing bits round the blocks: a helper for the spots, flakes and crystals below)
+	local function spot(x: number, y: number, z: number, size: Vector3, color: Color3, turn: CFrame?)
+		Geo.block(model, at(x, y, z) * (turn or CFrame.new()), size, color, NEON, decor())
+	end
+	if kind == "toxic" then
+		-- toxic slime on the steps and the arm, slime drips, bubbles, a toxic barrel, hazard stripes
+		local SLIME, SLIME_RIM = rgb(130, 255, 70), rgb(70, 170, 40)
+		cube(at(bx, stageH + 1.6 + 0.12, -0.2), Vector3.new(5.02, 0.3, 4.62), SLIME, SLIME_RIM, "side")
+		cube(at((armRight + armLeft) / 2, armY + 0.98, -0.4), Vector3.new(armLen + 0.02, 0.3, 2.62), SLIME, SLIME_RIM, "side")
+		local drips = if lite then 2 else 4
+		for i = 1, drips do
+			local v = ({
+				Vector3.new(bx - 1.0, lowerY + 0.3, 0.86),
+				Vector3.new(armLeft + 1.6, armY - 0.75, 0.92),
+				Vector3.new(bx + 0.5, upperY - 0.2, 0.8),
+				Vector3.new(armRight - 1.0, armY - 0.9, 0.92),
+			})[i]
+			spot(v.X, v.Y, v.Z, Vector3.new(0.3, 1.2 + (i % 2) * 0.7, 0.06), SLIME)
 		end
-		for i = 1, 6 do
-			local fx = bx - 2.4 + i * 0.9
-			Geo.block(
-				model,
-				at(fx, stageH + 0.15, 2.9 + (i % 2) * 0.3),
-				Vector3.new(0.3, 0.3, 0.3),
-				if i % 3 == 0 then rgb(255, 230, 80) else rgb(255, 255, 245),
-				PLASTIC,
-				decor()
-			)
+		if not lite then
+			-- the barrel: a drum with a glowing band and a glowing lid
+			local barrel = at(bx + 3.1, stageH + 0.9, 2.0)
+			Geo.cylinder(model, barrel.Position, 1.8, 1.3, rgb(220, 190, 40), PLASTIC, decor())
+			Geo.cylinder(model, (barrel * CFrame.new(0, 0.2, 0)).Position, 0.3, 1.36, rgb(30, 30, 30), PLASTIC, decor())
+			Geo.cylinder(model, (barrel * CFrame.new(0, 0.92, 0)).Position, 0.06, 1.1, SLIME, NEON, decor())
+			for k = 1, 3 do
+				Geo.ball(
+					model,
+					at(sx - 0.8 + k * 0.5, stageH + 0.6 + k * 0.35, 1.4 - k * 0.3).Position,
+					0.25 + k * 0.08,
+					SLIME,
+					NEON,
+					decor()
+				)
+			end
+			-- hazard stripes on the stage's front
+			for k = 0, 3 do
+				Geo.block(
+					model,
+					at(bx - 1.6 + k * 0.7, stageH + 0.02, 3.2) * CFrame.Angles(0, math.rad(35), 0),
+					Vector3.new(0.25, 0.03, 0.9),
+					rgb(255, 210, 40),
+					PLASTIC,
+					decor()
+				)
+			end
 		end
 	elseif kind == "lava" then
 		local LAVA = rgb(255, 90, 20)
+		local SPOT = rgb(255, 150, 30)
 		crack(model, at(bx - 0.6, p1y, 2.11), 1.4, LAVA, 1)
-		crack(model, at(bx + 1.2, p1y, 2.11), 1.4, LAVA, 2)
-		crack(model, at(bx - 0.2, lowerY, 0.86), 2.6, LAVA, 3)
 		crack(model, at(bx + 0.1, upperY, 0.76), 2.4, LAVA, 4)
-		-- a lava drip down the pedestal into a little pool
-		Geo.block(model, at(bx - 1.9, stageH + 1.1, 2.12), Vector3.new(0.35, 1.2, 0.06), LAVA, NEON, decor())
-		Geo.block(model, at(bx - 1.9, stageH + 0.03, 2.9), Vector3.new(1.4, 0.05, 1.0), LAVA, NEON, decor())
+		if not lite then
+			crack(model, at(bx + 1.2, p1y, 2.11), 1.4, LAVA, 2)
+			crack(model, at(bx - 0.2, lowerY, 0.86), 2.6, LAVA, 3)
+		end
+		-- lava flowing from the arm down the column and the steps into a pool
+		local flow = {
+			{ X = bx - 0.85, Y = upperY, Z = 0.85, H = 2.6 },
+			{ X = bx - 0.95, Y = lowerY - 0.2, Z = 0.95, H = 2.8 },
+			{ X = bx - 1.9, Y = stageH + 1.1, Z = 2.12, H = 1.2 },
+		}
+		for k, f in flow do
+			if not lite or k ~= 2 then
+				spot(f.X, f.Y, f.Z, Vector3.new(0.38, f.H, 0.07), LAVA)
+			end
+		end
+		spot(bx - 1.9, stageH + 0.03, 2.9, Vector3.new(1.8, 0.05, 1.2), LAVA)
+		-- orange glowing spots on the blocks
+		local spots = if lite then 3 else 8
+		for i = 1, spots do
+			local face = ({
+				Vector3.new(bx + 0.7, p1y + 0.3, 2.12),
+				Vector3.new(bx + 1.6, p2y, 1.43),
+				Vector3.new(bx + 0.6, lowerY + 0.9, 0.87),
+				Vector3.new(bx - 0.4, upperY + 0.8, 0.77),
+				Vector3.new(armLeft + 0.9, armY + 0.2, 0.92),
+				Vector3.new(armRight - 0.6, armY - 0.3, 0.92),
+				Vector3.new(bx - 1.4, p1y - 0.3, 2.12),
+				Vector3.new(bx + 0.9, upperY - 0.9, 0.77),
+			})[i]
+			local sz = 0.22 + (i % 3) * 0.1
+			spot(face.X, face.Y, face.Z, Vector3.new(sz, sz, 0.05), SPOT)
+		end
 	elseif kind == "ice" then
-		-- snow caps on the steps and the arm, icicles under the arm
+		-- snow caps on the steps and the arm, icicles under the arm, snow heaps, snowflakes
 		local SNOW, SNOW_RIM = rgb(250, 252, 255), rgb(190, 220, 245)
 		cube(at(bx, stageH + 1.6 + 0.12, -0.2), Vector3.new(5.02, 0.3, 4.62), SNOW, SNOW_RIM, "side")
 		cube(at((armRight + armLeft) / 2, armY + 0.98, -0.4), Vector3.new(armLen + 0.02, 0.3, 2.62), SNOW, SNOW_RIM, "side")
 		if not lite then
 			cube(at(bx + 0.3, p2y + 0.62, -0.4), Vector3.new(3.82, 0.3, 3.62), SNOW, SNOW_RIM, "side")
+			-- snow heaps on the stage
+			for _, h in { Vector3.new(bx + 3.2, 0, 2.3), Vector3.new(sx - 1.7, 0, 2.5), Vector3.new(bx + 3.4, 0, -2.6) } do
+				Geo.block(model, at(h.X, stageH + 0.25, h.Z), Vector3.new(1.5, 0.5, 1.1), SNOW, PLASTIC, decor())
+				Geo.block(model, at(h.X + 0.2, stageH + 0.6, h.Z), Vector3.new(0.9, 0.4, 0.7), SNOW, PLASTIC, decor())
+			end
 		end
 		local icicles = if lite then 2 else 4
 		for i = 1, icicles do
@@ -353,18 +409,53 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 				decor({ Transparency = 0.2 })
 			)
 		end
-	elseif kind == "crystal" then
-		-- big crystals on the arm and the steps
-		for k, c in
-			{
-				{ X = bx + 0.3, Y = armY + 0.9, Z = -0.4, S = 1.5, T = 0.25 },
-				{ X = armLeft + 1.4, Y = armY + 0.9, Z = -0.6, S = 1.1, T = -0.3 },
-				{ X = bx - 1.9, Y = p2y + 0.6, Z = 0.6, S = 1.2, T = 0.4 },
-			}
-		do
-			if not lite or k == 1 then
-				crystal(model, at(c.X, c.Y + 0.6 * c.S, c.Z) * CFrame.Angles(0, k, c.T), c.S, crystalOf(st, k), true)
+		-- snowflakes floating round it: three crossed glowing bars each
+		local flakes = if lite then 1 else 5
+		for i = 1, flakes do
+			local a = i * 1.9
+			local c = Vector3.new(bx - 0.5 + math.cos(a) * 3.4, stageH + 3 + (i % 3) * 1.8, math.sin(a) * 2.6)
+			for k = 0, 2 do
+				spot(c.X, c.Y, c.Z, Vector3.new(0.9, 0.12, 0.06), rgb(235, 250, 255), CFrame.Angles(0, a, k * math.pi / 3))
 			end
+		end
+	elseif kind == "crystal" then
+		-- big pointed crystals sticking out everywhere (a glowing prism with a
+		-- pointed tip, growing along its frame's up from `base`, leaning out)
+		local function spike(base: CFrame, len: number, w: number, color: Color3)
+			local bodyH = len * 0.75
+			Geo.block(model, base * CFrame.new(0, bodyH / 2, 0), Vector3.new(w, bodyH, w), color, NEON, decor())
+			local tipH = len - bodyH
+			local tip = base * CFrame.new(0, bodyH + tipH / 2, 0)
+			local light = color:Lerp(Color3.new(1, 1, 1), 0.2)
+			Geo.wedge(model, tip * CFrame.new(0, 0, -w / 4), Vector3.new(w, tipH, w / 2), light, NEON, decor())
+			Geo.wedge(
+				model,
+				tip * CFrame.new(0, 0, w / 4) * CFrame.Angles(0, math.pi, 0),
+				Vector3.new(w, tipH, w / 2),
+				color,
+				NEON,
+				decor()
+			)
+		end
+		-- (x, y, z: where it grows from; out: the lean (radians) about z / x; len, w)
+		local spikes = {
+			{ bx + 0.6, armY + 0.9, -0.4, -0.35, 0.2, 2.6, 0.75 },
+			{ armLeft + 1.2, armY + 0.9, -0.5, 0.45, -0.1, 2.0, 0.6 },
+			{ bx + 1.4, armY + 0.6, -1.2, -0.9, -0.5, 1.6, 0.5 },
+			{ bx + 1.3, lowerY + 0.5, -0.4, -1.25, 0.1, 1.9, 0.6 },
+			{ bx - 1.1, upperY + 0.4, -0.6, 1.2, -0.2, 1.7, 0.55 },
+			{ bx + 0.3, lowerY - 0.3, 0.9, 0.2, 1.25, 1.6, 0.5 },
+			{ bx - 0.4, upperY + 0.9, 0.7, -0.3, 1.1, 1.4, 0.45 },
+			{ bx + 2.3, p1y + 0.8, -1.2, -0.7, -0.4, 2.0, 0.6 },
+			{ bx - 2.3, p1y + 0.8, 1.2, 0.7, 0.4, 1.8, 0.55 },
+			{ sx + 1.4, stageH, -2.5, 0.3, -0.5, 1.8, 0.55 },
+			{ bx + 3.3, stageH, 2.4, -0.4, 0.4, 1.6, 0.5 },
+			{ armLeft + 0.2, armY + 0.2, 0.7, 0.8, 0.9, 1.4, 0.45 },
+		}
+		local count = if lite then 5 else #spikes
+		for k = 1, count do
+			local c = spikes[k]
+			spike(at(c[1], c[2], c[3]) * CFrame.Angles(c[5], 0, c[4]), c[6] * 1.3, c[7] * 1.15, crystalOf(st, k))
 		end
 	elseif kind == "heaven" then
 		-- a golden halo over the arm, white wings on the column, clouds at the foot, sparkles
