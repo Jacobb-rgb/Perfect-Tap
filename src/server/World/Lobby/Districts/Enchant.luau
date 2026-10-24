@@ -190,8 +190,9 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Style.streaming(float, "Atomic")
 	Kit.tag(float, "Spin")
 
-	-- the shopkeeper behind the table (the owner's miner, ShopkeeperController)
-	ShopkeeperConfig.mark(counter, at(0, FLOOR, -1.6), "Enchant")
+	-- the shopkeeper golem behind the table (ShopkeeperController), its big head
+	-- clear of it, floating on its clouds high enough to look over the crystals
+	ShopkeeperConfig.mark(counter, at(0, FLOOR + 1.6, -0.4), "Enchant")
 
 	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster
 	-- and a violet container beside the module

@@ -1,95 +1,83 @@
 --[[
-	The shopkeepers (owner 2026-10-24): one and the same miner behind every
-	shop counter, built exactly like the owner's 3D model
-	(docs/art/shopkeeper/roblox_miner_shopkeeper.glb -> Builders/ShopkeeperModel,
-	Builders/ShopkeeperBuilder): smooth parts, no studs. None at the EGGS
-	temple (owner).
+	The shopkeepers (owner 2026-10-24): a big golem behind every shop counter,
+	each shop a different cool golem (GolemBuilder's own golems, just bigger:
+	Builders/GolemKeeper), with emotes (Moves/GolemEmotes): it waves when you
+	walk up, cheers after a buy, and now and then hops, spins, dances or
+	bows by itself. None at the EGGS temple (owner).
 
 	  World builders mark each keeper's spot with an Attachment on the shop's
 	  counter (ShopkeeperConfig.mark: tag ShopkeeperSpot, attribute Shop, the
-	  attachment's frame = the keeper's feet on the floor, LookVector = toward
+	  attachment's frame = the golem's feet on the floor, LookVector = toward
 	  the customers). An Attachment is no part: the map's part budgets don't
 	  change, and the spot streams in and out with its counter.
-	  ShopkeeperController (client) builds a keeper on a spot only while the
-	  player is within ShowDistance (and takes him away past HideDistance), so
-	  a phone draws one or two of them at a time; it plays Roblox's R6 idle,
-	  turns the head toward the player, waves and talks when the player comes
-	  close and cheers after a buy or a sale nearby.
+	  ShopkeeperController (client) builds a golem on a spot only while the
+	  player is within ShowDistance (and takes it away past HideDistance), so
+	  a phone draws one or two of them at a time, and moves only the ones
+	  within AnimateDistance.
 ]]
 
 local ShopkeeperConfig = {}
 
 ShopkeeperConfig.Tag = "ShopkeeperSpot"
 
-ShopkeeperConfig.DefaultScale = 1.15 -- the model is 5.53 studs: a little bigger than a player
-
-ShopkeeperConfig.ShowDistance = 90 -- studs from the player: build him
-ShopkeeperConfig.HideDistance = 110 -- and take him away again past this
+ShopkeeperConfig.ShowDistance = 90 -- studs from the player: build the golem
+ShopkeeperConfig.HideDistance = 110 -- and take it away again past this
 ShopkeeperConfig.CheckEvery = 0.4 -- seconds between the distance checks
+ShopkeeperConfig.AnimateDistance = 60 -- studs: golems farther away stand still
 
--- Real lights (the helmet lamp's SpotLight, the light on his chest) only on
--- the nearest keeper inside LightDistance: the game's light budget (phones;
--- the others glow with neon and the lamp's beam only).
+-- A soft light in front of the nearest golem inside LightDistance (the
+-- shops' insides are dark; one light only: the game's light budget, phones).
 ShopkeeperConfig.LightDistance = 40
-
--- Life (style pass, owner 2026-10-24 "a bit nicer, with effects")
-ShopkeeperConfig.LifeDistance = 45 -- studs: blinking and the lantern's flicker only this close
-ShopkeeperConfig.BlinkEvery = { 2.4, 5.5 } -- seconds between blinks (random in this range)
-ShopkeeperConfig.BlinkSeconds = 0.13
-ShopkeeperConfig.BurstCount = 22 -- gold sparkles when he says thanks
-
-ShopkeeperConfig.LookDistance = 28 -- studs: the head follows the player inside this
-ShopkeeperConfig.LookYaw = math.rad(65) -- the head turns at most this far left or right
-ShopkeeperConfig.LookPitch = math.rad(20) -- and this far up or down
-ShopkeeperConfig.LookSpeed = 6 -- how fast the head catches up (per second)
-
-ShopkeeperConfig.GreetDistance = 14 -- studs: a wave and a hello when the player walks up
-ShopkeeperConfig.GreetCooldown = 25 -- seconds before the same keeper greets again
-ShopkeeperConfig.ThanksDistance = 24 -- studs: a buy or a sale this close makes the keeper cheer
-ShopkeeperConfig.BubbleSeconds = 3.2
-
--- Roblox's own R6 animations (made by Roblox: they play in every experience;
--- the keeper's rig has the R6 joint names and frames).
-ShopkeeperConfig.Animations = {
-	Idle = "rbxassetid://180435571",
-	Wave = "rbxassetid://128777973",
-	Cheer = "rbxassetid://129423030",
+ShopkeeperConfig.FaceLight = {
+	Ahead = 3.4, -- studs in front of the golem
+	Up = 0.45, -- share of its height
+	Range = 9,
+	Brightness = 0.5,
+	Color = Color3.fromRGB(255, 236, 214),
 }
 
+ShopkeeperConfig.LookDistance = 28 -- studs: the golem turns toward the player inside this
+ShopkeeperConfig.LookYaw = math.rad(35) -- at most this far left or right
+ShopkeeperConfig.LookSpeed = 4 -- how fast it turns (per second)
+
+ShopkeeperConfig.GreetDistance = 14 -- studs: a wave and a hello when the player walks up
+ShopkeeperConfig.GreetCooldown = 25 -- seconds before the same golem greets again
+ShopkeeperConfig.ThanksDistance = 24 -- studs: a buy or a sale this close makes the golem cheer
+ShopkeeperConfig.EmoteEvery = { 6, 12 } -- seconds between the moves it does by itself
+ShopkeeperConfig.BubbleSeconds = 3.2
+ShopkeeperConfig.BurstCount = 22 -- gold sparkles when it says thanks
+ShopkeeperConfig.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
+
 export type Shop = {
-	Badge: string, -- the word on his apron badge
-	Hello: { string }, -- what he says when the player walks up
+	Golem: string, -- a GolemConfig kind
+	Size: number, -- GolemBuilder's Size (on top of the golem's own Scale)
+	Hello: { string }, -- what it says when the player walks up
 	Thanks: { string }, -- after a buy or a sale
-	Scale: number?, -- his scale here (default DefaultScale)
 }
 
 local THANKS = { "Thanks!", "Great choice!", "Come back soon!" }
 
+-- (sizes: 6 to 7.5 studs tall, clear of each counter; the spots stand the
+-- golems on steps the counters hide, so their big heads show over the goods)
 ShopkeeperConfig.Shops = {
-	-- (SHOP and UPGRADES: a little smaller, so the door's lintel doesn't hide his head)
-	Gear = { Badge = "SHOP", Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS, Scale = 1.1 },
-	Tech = { Badge = "TECH", Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS, Scale = 1.1 },
+	Gear = { Golem = "ScaleKnight", Size = 1.6, Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS },
+	Tech = { Golem = "StormSentinel", Size = 1.35, Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS },
 	Sell = {
-		Badge = "SELL",
+		Golem = "Flamewing",
+		Size = 1.5,
 		Hello = { "Got ore? I'll buy it!", "Bring me your ore!" },
 		Thanks = { "Pleasure doing business!", "Thanks, miner!" },
 	},
-	Enchant = { Badge = "MAGIC", Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
-	Vault = { Badge = "VAULT", Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS, Scale = 1.25 },
-	Droppers = { Badge = "DROPS", Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
-	Backpacks = { Badge = "PACKS", Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
+	Enchant = { Golem = "AetherKing", Size = 1.4, Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
+	Vault = { Golem = "DragonKing", Size = 1.45, Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS },
+	Droppers = { Golem = "MagmaWyvern", Size = 1.3, Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
+	Backpacks = { Golem = "SkySprite", Size = 1.5, Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
 } :: { [string]: Shop }
 
--- The word on the keeper's apron badge at a shop.
-function ShopkeeperConfig.badge(shop: string): string
-	local s = ShopkeeperConfig.Shops[shop]
-	return if s then s.Badge else "SHOP"
-end
-
--- The keeper's scale at a shop.
-function ShopkeeperConfig.scale(shop: string): number
-	local s = ShopkeeperConfig.Shops[shop]
-	return if s and s.Scale then s.Scale else ShopkeeperConfig.DefaultScale
+-- The golem kind and size at a shop (a plain Gear golem for an unknown one).
+function ShopkeeperConfig.golem(shop: string): (string, number)
+	local s = ShopkeeperConfig.Shops[shop] or ShopkeeperConfig.Shops.Gear
+	return s.Golem, s.Size
 end
 
 -- Line `n` (1-based, wraps) of a shop's hello or thanks list.
@@ -99,8 +87,8 @@ function ShopkeeperConfig.line(shop: string, kind: "Hello" | "Thanks", n: number
 	return lines[(n - 1) % #lines + 1]
 end
 
--- Should the keeper at `distance` studs be there? (`shown` = he is now:
--- between ShowDistance and HideDistance he stays as he is.)
+-- Should the golem at `distance` studs be there? (`shown` = it is now:
+-- between ShowDistance and HideDistance it stays as it is.)
 function ShopkeeperConfig.wanted(distance: number, shown: boolean): boolean
 	if shown then
 		return distance <= ShopkeeperConfig.HideDistance
@@ -108,8 +96,8 @@ function ShopkeeperConfig.wanted(distance: number, shown: boolean): boolean
 	return distance <= ShopkeeperConfig.ShowDistance
 end
 
--- Marks a keeper spot on `counter`: `feet` = his feet on the floor, facing
--- the customers (LookVector). `shop` = a key of ShopkeeperConfig.Shops.
+-- Marks a keeper spot on `counter`: `feet` = the golem's feet on the floor,
+-- facing the customers (LookVector). `shop` = a key of ShopkeeperConfig.Shops.
 function ShopkeeperConfig.mark(counter: BasePart, feet: CFrame, shop: string): Attachment
 	local spot = Instance.new("Attachment")
 	spot.Name = "ShopkeeperSpot"
@@ -120,19 +108,16 @@ function ShopkeeperConfig.mark(counter: BasePart, feet: CFrame, shop: string): A
 	return spot
 end
 
--- The head's turn toward `target` from a head at `head` (yaw, pitch in the
--- keeper's own frame `body`, clamped; 0, 0 when the target is behind him).
-function ShopkeeperConfig.lookAngles(body: CFrame, head: Vector3, target: Vector3): (number, number)
-	local rel = body:VectorToObjectSpace(target - head)
-	local flat = math.sqrt(rel.X * rel.X + rel.Z * rel.Z)
-	if flat < 0.05 or rel.Z > 0 then
-		return 0, 0 -- right on top of him or behind him: look ahead
+-- How far the golem turns toward `target` (radians, clamped; 0 when the
+-- target is behind it): `body` = its feet frame, facing -Z.
+function ShopkeeperConfig.lookYaw(body: CFrame, target: Vector3): number
+	local rel = body:PointToObjectSpace(target)
+	if rel.Z > 0 or (rel.X * rel.X + rel.Z * rel.Z) < 0.01 then
+		return 0
 	end
-	-- Roblox faces -Z: a target on his right (+X) turns the head right (negative yaw)
+	-- Roblox faces -Z: a target on its right (+X) turns it right (negative yaw)
 	local yaw = math.atan2(-rel.X, -rel.Z)
-	local pitch = math.atan2(rel.Y, flat)
-	local maxYaw, maxPitch = ShopkeeperConfig.LookYaw, ShopkeeperConfig.LookPitch
-	return math.clamp(yaw, -maxYaw, maxYaw), math.clamp(pitch, -maxPitch, maxPitch)
+	return math.clamp(yaw, -ShopkeeperConfig.LookYaw, ShopkeeperConfig.LookYaw)
 end
 
 return ShopkeeperConfig

@@ -196,7 +196,7 @@ end
 ---------------------------------------------------------------- the counter and the keeper
 
 -- The counter (its top is the shop hook, tag VaultCounter), a screen, a blaster on show and the
--- shopkeeper's spot behind it (the owner's miner, ShopkeeperController), facing the door (+Z).
+-- shopkeeper golem's spot behind it (ShopkeeperController), facing the door (+Z).
 function Interior.counter(m: Model, origin: CFrame): BasePart
 	Kit.block(m, origin * CF(0, 2, 5), V3(16, 4, 4), C.Tiles[2], Kit.SLATE, Kit.solid())
 	for i = 0, 3 do
@@ -212,7 +212,7 @@ function Interior.counter(m: Model, origin: CFrame): BasePart
 	Kit.bit(m, sc * CF(0, 1.9, 0) * CFrame.Angles(-0.15, 0, 0), V3(3.4, 2.1, 0.3), Color3.fromRGB(30, 31, 38))
 	Kit.glow(m, sc * CF(0, 1.9, 0) * CFrame.Angles(-0.15, 0, 0) * CF(0, 0, 0.16), V3(3.0, 1.75, 0.04), Color3.fromRGB(255, 170, 80))
 	Kit.blaster(m, origin * CF(3, 4.6, 5.3) * CFrame.Angles(0, -1.3, 0), 4.8, Kit.GalaxyBlaster, true)
-	ShopkeeperConfig.mark(top, origin * CF(0, 0, 0.5) * CFrame.Angles(0, math.pi, 0), "Vault")
+	ShopkeeperConfig.mark(top, origin * CF(0, 1.25, 1.0) * CFrame.Angles(0, math.pi, 0), "Vault") -- (on a step the counter hides)
 	return top
 end
 

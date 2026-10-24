@@ -1,17 +1,20 @@
--- The shopkeepers (owner 2026-10-24: one and the same miner, exactly his 3D model, behind
--- every shop counter, none at the EGGS temple) under Lune: ShopkeeperConfig's lines,
--- scales, show / hide distances and head-turn math; ShopkeeperBuilder builds every piece
--- of the model (smooth, no studs, the lost mirrored pieces back) on an R6-style rig whose
--- joints hold the pieces in place at rest; the lobby marks exactly one keeper spot per
--- shop, each behind its counter facing the customers, and the old blocky keepers are gone.
+-- The shopkeeper golems (owner 2026-10-24: a big golem behind every shop counter, a
+-- different one per shop, with emotes; none at the EGGS temple) under Lune:
+-- ShopkeeperConfig's golems, lines, show / hide distances and turn math; GolemEmotes'
+-- poses; GolemKeeper's rig (which parts swing with which arm, what stays on the floor)
+-- and its frames (the rest pose is the build, a wave raises the right fist and holds a
+-- sword up over the head, upright, a hop leaves the aura on the floor); the lobby marks exactly one
+-- spot per shop, behind its counter facing the customers, with the golem's head clear of
+-- the counter, and the old blocky keepers are gone.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
 	local Vector3 = roblox.Vector3
 	local CFrame = roblox.CFrame
 	local ShopkeeperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ShopkeeperConfig")
-	local ShopkeeperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ShopkeeperBuilder")
-	local ShopkeeperModel = Loader.requirePath("ReplicatedStorage.Shared.Builders.ShopkeeperModel")
+	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+	local GolemEmotes = Loader.requirePath("ReplicatedStorage.Shared.Moves.GolemEmotes")
+	local GolemKeeper = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemKeeper")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 
 	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault" }
@@ -23,41 +26,34 @@ return function(T, Loader)
 		Enchant = "EnchantCounter",
 		Vault = "VaultCounter",
 	}
-	local RIG = {
-		HumanoidRootPart = true,
-		Torso = true,
-		Head = true,
-		["Left Arm"] = true,
-		["Right Arm"] = true,
-		["Left Leg"] = true,
-		["Right Leg"] = true,
-	}
 
 	local function hasTag(inst: any, tag: string): boolean
 		return table.find(inst:GetTags(), tag) ~= nil
 	end
 
-	T.test("Shopkeepers: every shop has hello and thanks lines that fit the bubble", function()
+	T.test("Shopkeepers: a different golem at every shop, lines that fit the bubble", function()
+		local seen = {}
 		for _, shop in { "Gear", "Tech", "Sell", "Enchant", "Vault", "Droppers", "Backpacks" } do
 			local s = ShopkeeperConfig.Shops[shop]
 			T.truthy(s, shop)
+			T.truthy(GolemConfig.ById[s.Golem], `{shop}: {s.Golem} is a golem of the game`)
+			T.eq(seen[s.Golem], nil, `{shop}: {s.Golem} serves only one shop`)
+			seen[s.Golem] = shop
+			T.truthy(s.Size >= 1 and s.Size <= 2, `{shop} size {s.Size}`)
 			for _, kind in { "Hello", "Thanks" } do
 				T.truthy(#s[kind] >= 1, `{shop} {kind}`)
 				for _, line in s[kind] do
 					T.le(#line, 30, `{shop}: "{line}" fits the bubble`)
 				end
 			end
-			local scale = ShopkeeperConfig.scale(shop)
-			T.truthy(scale >= 1 and scale <= 1.6, `{shop} scale {scale}`)
-			local badge = ShopkeeperConfig.badge(shop)
-			T.truthy(#badge >= 3 and #badge <= 6, `{shop} badge "{badge}" fits his apron`)
 		end
 		T.eq(ShopkeeperConfig.Shops.Eggs, nil, "no keeper at the EGGS temple (owner)")
+		local kind, size = ShopkeeperConfig.golem("Nowhere")
+		T.eq(kind, ShopkeeperConfig.Shops.Gear.Golem, "an unknown shop gets the Gear golem")
+		T.eq(size, ShopkeeperConfig.Shops.Gear.Size, "and its size")
 		local hello = ShopkeeperConfig.Shops.Gear.Hello
-		T.eq(ShopkeeperConfig.line("Gear", "Hello", 1), hello[1], "first line")
-		T.eq(ShopkeeperConfig.line("Gear", "Hello", #hello + 1), hello[1], "wraps round")
+		T.eq(ShopkeeperConfig.line("Gear", "Hello", #hello + 1), hello[1], "lines wrap round")
 		T.eq(ShopkeeperConfig.line("Nowhere", "Thanks", 1), "Thanks!", "an unknown shop says thanks")
-		T.eq(ShopkeeperConfig.scale("Nowhere"), ShopkeeperConfig.DefaultScale, "default scale")
 	end)
 
 	T.test("Shopkeepers: built near the player, gone far away, steady in between", function()
@@ -67,180 +63,112 @@ return function(T, Loader)
 		T.falsy(ShopkeeperConfig.wanted(show + 1, false), "not yet in the gap")
 		T.truthy(ShopkeeperConfig.wanted(show + 1, true), "stays in the gap")
 		T.falsy(ShopkeeperConfig.wanted(hide + 1, true), "far: gone")
+		T.truthy(ShopkeeperConfig.AnimateDistance <= show, "only built golems move")
 	end)
 
-	T.test("Shopkeepers: the head turns toward the player, clamped, never backwards", function()
-		local body = CFrame.new(0, 3, 0) -- faces -Z
-		local head = Vector3.new(0, 5, 0)
-		local yaw, pitch = ShopkeeperConfig.lookAngles(body, head, Vector3.new(0, 5, -10))
-		T.near(yaw, 0, 1e-6, "straight ahead")
-		T.near(pitch, 0, 1e-6, "level")
-		yaw = ShopkeeperConfig.lookAngles(body, head, Vector3.new(3, 5, -10))
-		T.truthy(yaw < 0, "a player on his right turns the head right (negative yaw)")
-		local turned = body * CFrame.Angles(0, yaw, 0)
-		local dir = (Vector3.new(3, 5, -10) - head).Unit
-		T.near(turned.LookVector:Dot(dir), 1, 1e-6, "the turned head looks at him")
-		yaw = ShopkeeperConfig.lookAngles(body, head, Vector3.new(-30, 5, -1))
-		T.near(yaw, ShopkeeperConfig.LookYaw, 1e-6, "far left: clamped")
-		yaw, pitch = ShopkeeperConfig.lookAngles(body, head, Vector3.new(2, 5, 6))
-		T.eq(yaw, 0, "behind him: looks ahead")
-		T.eq(pitch, 0, "behind him: level")
-		_, pitch = ShopkeeperConfig.lookAngles(body, head, Vector3.new(0, 30, -2))
-		T.near(pitch, ShopkeeperConfig.LookPitch, 1e-6, "far up: clamped")
-		_, pitch = ShopkeeperConfig.lookAngles(body, head, Vector3.new(0, 4, -6))
-		T.truthy(pitch < 0, "a shorter player: looks down")
+	T.test("Shopkeepers: the golem turns toward the player, clamped, never backwards", function()
+		local body = CFrame.new(0, 0, 0) -- faces -Z
+		T.near(ShopkeeperConfig.lookYaw(body, Vector3.new(0, 3, -10)), 0, 1e-6, "straight ahead")
+		local yaw = ShopkeeperConfig.lookYaw(body, Vector3.new(3, 3, -10))
+		T.truthy(yaw < 0, "a player on its right turns it right (negative yaw)")
+		T.near((CFrame.Angles(0, yaw, 0)).LookVector:Dot(Vector3.new(3, 0, -10).Unit), 1, 1e-6, "it faces him")
+		T.near(ShopkeeperConfig.lookYaw(body, Vector3.new(-30, 3, -1)), ShopkeeperConfig.LookYaw, 1e-6, "far left: clamped")
+		T.eq(ShopkeeperConfig.lookYaw(body, Vector3.new(2, 3, 6)), 0, "behind it: looks ahead")
 	end)
 
-	local function pieces(model: any): { [string]: any }
+	T.test("Shopkeepers: the emotes", function()
+		for _, emote in GolemEmotes.OnTheirOwn do
+			T.truthy(GolemEmotes.Duration[emote], emote .. " has a length")
+		end
+		for emote, d in GolemEmotes.Duration do
+			local after = GolemEmotes.move(emote, d + 0.01)
+			T.eq(after.Lift + after.Yaw + after.Pitch + after.Roll + after.Right + after.Left, 0, emote .. " ends at rest")
+			local start = GolemEmotes.move(emote, 0)
+			T.near(start.Lift, 0, 1e-6, emote .. " starts on the floor")
+		end
+		local idle = GolemEmotes.pose(nil, 0, 1.7)
+		T.truthy(math.abs(idle.Lift) < 0.01 and idle.Right < 0.2, "the idle barely moves")
+		T.truthy(GolemEmotes.move("Wave", 1.0).Right > 2, "a wave: the right arm over the head")
+		T.near(GolemEmotes.move("Wave", 1.0).Left, 0, 1e-6, "the left arm stays down")
+		local cheer = GolemEmotes.move("Cheer", 0.8)
+		T.truthy(cheer.Right > 2.5 and cheer.Left > 2.5, "a cheer: both arms up")
+		T.near(GolemEmotes.move("Hop", 0.35).Lift, 0.12, 1e-6, "a hop's top")
+		T.near(GolemEmotes.move("Spin", GolemEmotes.Duration.Spin).Yaw, 2 * math.pi, 1e-6, "a spin turns all the way round")
+		T.truthy(GolemEmotes.move("Bow", 0.8).Pitch < -0.3, "a bow leans forward")
+	end)
+
+	T.test("Shopkeepers: which parts swing with which arm, what stays on the floor", function()
+		local cases = {
+			{ "Arm2", 1, "Right" },
+			{ "Fist1", -1, "Left" },
+			{ "Claw2_1", 1, "Right" },
+			{ "BracerGem1", -1, "Left" },
+			{ "Bracer2", 1, "Right" },
+			{ "Blade", 1, "RightHeld" },
+			{ "Staff", 1, "RightHeld" },
+			{ "Shield", -1, "LeftHeld" },
+			{ "Aura", 0, "Ground" },
+			{ "Floor3", -0.7, "Ground" },
+			{ "RingFlame1", 1.2, "Ground" },
+			{ "Head", 0, "Body" },
+			{ "Wing1_1A", -2, "Body" },
+			{ "Armor", 0.5, "Body" },
+		}
+		for _, c in cases do
+			T.eq(GolemKeeper.group(c[1], c[2]), c[3], c[1])
+		end
+	end)
+
+	local function byName(rig: any): { [string]: number }
 		local out = {}
-		for _, d in model:GetDescendants() do
-			if d:IsA("BasePart") and not RIG[d.Name] then
-				out[d.Name] = d
-			end
+		for i, part in rig.Parts do
+			out[part.Name] = i
 		end
 		return out
 	end
 
-	T.test("Shopkeepers: every piece of the owner's model, smooth, no studs", function()
-		T.eq(#ShopkeeperModel.Pieces, 76, "all 75 meshes of the file (the 11 its scene lost too) and the hip block")
-		local model = ShopkeeperBuilder.build(CFrame.new(), 1)
-		T.truthy(hasTag(model, ShopkeeperBuilder.SkipTag), "tagged NoStuds: no Roblox studs on him")
-		local Material = roblox.Enum.Material
-		local smooth = { SmoothPlastic = true, Metal = true, Leather = true, Fabric = true }
-		local count, neon = 0, 0
-		for _, part in pieces(model) do
-			count += 1
-			if part.Material == Material.Neon then
-				neon += 1
-			else
-				T.truthy(smooth[part.Material.Name], part.Name .. " a smooth material (no studs)")
+	T.test("Shopkeepers: every shop golem's rig holds the build at rest, no studs", function()
+		local feet = CFrame.new(5, 2, -3) * CFrame.Angles(0, 0.6, 0)
+		for _, shop in SHOPS do
+			local kind, size = ShopkeeperConfig.golem(shop)
+			local rig = GolemKeeper.build(kind, feet, size)
+			T.truthy(hasTag(rig.Model, GolemKeeper.SkipTag), `{shop}: tagged NoStuds (no Roblox studs)`)
+			T.truthy(rig.Height >= 5.5 and rig.Height <= 8.5, `{shop}: a big golem ({rig.Height} studs)`)
+			T.eq(#rig.Parts, #rig.Offsets, "an offset per part")
+			local frames = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), 0)
+			for i, part in rig.Parts do
+				T.near((frames[i].Position - part.CFrame.Position).Magnitude, 0, 1e-4, `{shop}: {part.Name} at rest`)
+				T.truthy(part.Anchored and not part.CanCollide and not part.CanQuery, `{shop}: {part.Name} still and harmless`)
 			end
-			T.falsy(part.CanCollide, part.Name .. " no collision")
-			T.falsy(part.CanQuery, part.Name .. " no queries (prompts and clicks pass)")
-			T.falsy(part.CanTouch, part.Name .. " no touch")
-			T.falsy(part.Anchored, part.Name .. " moves with the rig")
-		end
-		T.eq(count, 76 + #ShopkeeperBuilder.Extra, "the model's 76 pieces and the style pass's")
-		T.eq(neon, 4 + 5 + 3, "the file's 4 glows, the orange trims and pickaxe tip, the 3 crystals")
-		-- the style pass's materials
-		local p0 = pieces(model)
-		T.eq(p0.L_shoulder.Material, Material.Metal, "metal shoulder pads")
-		T.eq(p0.apron.Material, Material.Leather, "a leather apron")
-		T.eq(p0.L_thigh.Material, Material.Fabric, "fabric trousers")
-		T.truthy(p0.helmet_top.Reflectance > 0, "a glossy helmet")
-		-- the hip block closes the file's gap between the thighs and the torso
-		local hips, torso, thigh = pieces(model).hips, pieces(model).torso, pieces(model).L_thigh
-		T.truthy(hips.CFrame.Position.Y - hips.Size.Y / 2 <= thigh.CFrame.Position.Y + thigh.Size.Y / 2, "hips reach the thighs")
-		T.truthy(hips.CFrame.Position.Y + hips.Size.Y / 2 >= torso.CFrame.Position.Y - torso.Size.Y / 2, "hips reach the torso")
-		-- the mirrored pieces the file's scene had lost are back on both sides
-		local p = pieces(model)
-		for _, pair in { { "eye", "eye_1" }, { "ear", "ear_1" }, { "eyebrow", "eyebrow_1" }, { "belt_pouch", "belt_pouch_1" } } do
-			local a, b = p[pair[1]], p[pair[2]]
-			T.truthy(a and b, `{pair[1]} and {pair[2]}`)
-			T.near(a.CFrame.Position.X, -b.CFrame.Position.X, 1e-3, `{pair[1]} mirrors {pair[2]}`)
 		end
 	end)
 
-	T.test("Shopkeepers: the shop's name on his badge, in place of the file's letter bars", function()
-		local plain = pieces(ShopkeeperBuilder.build(CFrame.new(), 1))
-		T.truthy(plain.sign_letter_stem, "no badge: the file's letter bars")
-		local model = ShopkeeperBuilder.build(CFrame.new(), 1, { Badge = "SELL" })
-		local p = pieces(model)
-		T.eq(p.sign_letter_stem, nil, "the letter bars give way")
-		local gui = p.SHOP_sign:FindFirstChild("Badge")
-		T.truthy(gui and gui:IsA("SurfaceGui"), "a badge on the apron sign")
-		T.eq(gui.Face, roblox.Enum.NormalId.Front, "on its front (he faces -Z)")
-		T.eq(gui:FindFirstChild("Text").Text, "SELL", "the shop's name")
-	end)
-
-	T.test("Shopkeepers: the effects, lights off unless asked (the light budget)", function()
-		local function find(model: any, class: string, name: string): any
-			for _, d in model:GetDescendants() do
-				if d:IsA(class) and d.Name == name then
-					return d
-				end
-			end
-			return nil
-		end
-		local model = ShopkeeperBuilder.build(CFrame.new(), 1.2)
-		local beam = find(model, "Beam", "HelmetBeam")
-		T.truthy(beam and beam.Attachment0 and beam.Attachment1, "the lamp's beam between two attachments")
-		local lamp = beam.Attachment0.Parent
-		local ahead = (lamp.CFrame * beam.Attachment1.CFrame).Position - (lamp.CFrame * beam.Attachment0.CFrame).Position
-		T.truthy(ahead.Z < -5, "the beam shines the way he faces (-Z)")
-		T.truthy(ahead.Y < 0, "and down onto the counter")
-		local spot, face = find(model, "SpotLight", "HelmetSpot"), find(model, "PointLight", "FaceLight")
-		T.truthy(spot and face, "the lamp's SpotLight and the chest light")
-		T.falsy(spot.Enabled, "lamp light off by default")
-		T.falsy(face.Enabled, "chest light off by default")
-		T.eq(find(model, "ParticleEmitter", "CoinBurst").Rate, 0, "the gold burst only when emitted")
-		T.truthy(find(model, "ParticleEmitter", "Sparkles").Rate > 0, "sparkles rise from the crystals")
-		T.truthy(find(model, "Highlight", "Outline"), "a warm outline")
-		local lit = ShopkeeperBuilder.build(CFrame.new(), 1, { Lights = true })
-		T.truthy(find(lit, "SpotLight", "HelmetSpot").Enabled and find(lit, "PointLight", "FaceLight").Enabled, "Lights: on")
-		local bare = ShopkeeperBuilder.build(CFrame.new(), 1, { Effects = false })
-		for _, d in bare:GetDescendants() do
-			T.falsy(d:IsA("Light") or d:IsA("Beam") or d:IsA("ParticleEmitter") or d:IsA("Highlight"), d.Name .. ": no effects")
-		end
-	end)
-
-	T.test("Shopkeepers: feet on the spot, the model's height, facing the spot's way", function()
-		local feet = CFrame.lookAt(Vector3.new(10, 2, 5), Vector3.new(20, 2, 5)) -- faces +X
-		local scale = 1.2
-		local model = ShopkeeperBuilder.build(feet, scale)
-		local p = pieces(model)
-		local low, high = math.huge, -math.huge
-		for _, part in p do
-			if part.Shape == roblox.Enum.PartType.Block then
-				local y, h = part.CFrame.Position.Y, part.Size.Y / 2 -- (blocks stay upright)
-				low = math.min(low, y - h)
-				high = math.max(high, y + h)
-			end
-		end
-		T.near(low, 2, 1e-3, "the soles on the floor")
-		T.near(high - low, ShopkeeperModel.Height * scale, 1e-2, "as tall as the model at his scale")
-		local ahead = p.eye.CFrame.Position - p.head.CFrame.Position
-		T.truthy(ahead:Dot(feet.LookVector) > 0.3, "his eyes look the spot's way")
-		T.truthy((p.pickaxe_handle.CFrame.Position - p.torso.CFrame.Position):Dot(feet.LookVector) < 0, "the pickaxe on his back")
-	end)
-
-	T.test("Shopkeepers: an R6 rig whose joints hold every piece in place at rest", function()
-		local feet = CFrame.new(3, 1, -4) * CFrame.Angles(0, 0.7, 0)
-		local model = ShopkeeperBuilder.build(feet, 1.1)
-		T.eq(model.PrimaryPart and model.PrimaryPart.Name, "HumanoidRootPart", "the root")
-		T.truthy(model.PrimaryPart.Anchored, "the root holds him")
-		for name in RIG do
-			T.truthy(model:FindFirstChild(name), name)
-		end
-		local joints = {
-			RootJoint = { "HumanoidRootPart", "Torso" },
-			Neck = { "Torso", "Head" },
-			["Left Shoulder"] = { "Torso", "Left Arm" },
-			["Right Shoulder"] = { "Torso", "Right Arm" },
-			["Left Hip"] = { "Torso", "Left Leg" },
-			["Right Hip"] = { "Torso", "Right Leg" },
-		}
-		local found = 0
-		for _, d in model:GetDescendants() do
-			if d:IsA("Motor6D") then
-				local want = joints[d.Name]
-				T.truthy(want, d.Name .. " is an R6 joint")
-				T.eq(d.Part0.Name, want[1], d.Name .. " Part0")
-				T.eq(d.Part1.Name, want[2], d.Name .. " Part1")
-				local rest = d.Part0.CFrame * d.C0 * d.C1:Inverse()
-				T.near((rest.Position - d.Part1.CFrame.Position).Magnitude, 0, 1e-4, d.Name .. " holds its part in place")
-				T.near(rest.LookVector:Dot(d.Part1.CFrame.LookVector), 1, 1e-4, d.Name .. " no twist at rest")
-				found += 1
-			end
-		end
-		T.eq(found, 6, "six joints")
-		-- every piece welded to the rig part it sits in
-		for _, part in pieces(model) do
-			local weld = part:FindFirstChildOfClass("WeldConstraint")
-			T.truthy(weld and weld.Part1 == part and weld.Part0 == part.Parent, part.Name .. " welded to " .. part.Parent.Name)
-		end
-		local controller = model:FindFirstChildOfClass("AnimationController")
-		T.truthy(controller and controller:FindFirstChildOfClass("Animator"), "an Animator for Roblox's R6 animations")
+	T.test("Shopkeepers: a wave raises the right fist, a held sword stays upright, a hop leaves the aura", function()
+		local feet = CFrame.new()
+		local kind, size = ShopkeeperConfig.golem("Gear") -- the knight: a sword in his right hand, a shield in his left
+		local rig = GolemKeeper.build(kind, feet, size)
+		local i = byName(rig)
+		local wave = GolemKeeper.frames(rig, feet, GolemEmotes.pose("Wave", 1.0, 0), 0)
+		local rest = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), 0)
+		-- (stubby golem arms under a big head: the fist comes up beside the head)
+		T.truthy(wave[i.Fist2].Position.Y > rig.ShoulderR.Position.Y, "the right fist goes over the shoulder")
+		T.truthy(wave[i.Fist2].Position.Y > rest[i.Fist2].Position.Y + 0.15 * rig.Height, "well up")
+		T.truthy(wave[i.Blade].Position.Y > rest[i.Head].Position.Y, "the sword goes over the head")
+		T.near((wave[i.Fist1].Position - rest[i.Fist1].Position).Magnitude, 0, 0.15, "the left fist stays down")
+		T.truthy(wave[i.Blade].Position.Y > rest[i.Blade].Position.Y + 1, "the sword goes up with the hand")
+		T.near(wave[i.Blade].UpVector:Dot(rest[i.Blade].UpVector), 1, 1e-3, "and stays upright")
+		-- a hop: the body up, the aura on the floor (the Tech golem hovers on one)
+		local tKind, tSize = ShopkeeperConfig.golem("Tech")
+		local hover = GolemKeeper.build(tKind, feet, tSize)
+		local h = byName(hover)
+		T.truthy(h.Aura, "the Tech golem has an aura")
+		local hop = GolemKeeper.frames(hover, feet, GolemEmotes.move("Hop", 0.35), 0)
+		local still = GolemKeeper.frames(hover, feet, GolemEmotes.neutral(), 0)
+		T.near(hop[h.Body].Position.Y - still[h.Body].Position.Y, 0.12 * hover.Height, 1e-3, "the body hops")
+		T.near((hop[h.Aura].Position - still[h.Aura].Position).Magnitude, 0, 1e-6, "the aura stays on the floor")
+		-- turned toward the player: the whole golem turns about its feet
+		local turned = GolemKeeper.frames(rig, feet, GolemEmotes.neutral(), 0.4)
+		T.near(turned[i.Head].Position.Y, rest[i.Head].Position.Y, 1e-4, "a turn keeps its height")
 	end)
 
 	local cachedMap = nil
@@ -252,7 +180,24 @@ return function(T, Loader)
 		return cachedMap
 	end
 
-	T.test("Shopkeepers: one keeper spot per shop, behind its counter, facing the customers", function()
+	-- Is any corner of `part` inside `box` (a part)?
+	local function poking(part: any, box: any): boolean
+		local half = part.Size / 2
+		for _, x in { -1, 1 } do
+			for _, y in { -1, 1 } do
+				for _, z in { -1, 1 } do
+					local p = box.CFrame:PointToObjectSpace(part.CFrame * Vector3.new(half.X * x, half.Y * y, half.Z * z))
+					local b = box.Size / 2
+					if math.abs(p.X) < b.X and math.abs(p.Y) < b.Y and math.abs(p.Z) < b.Z then
+						return true
+					end
+				end
+			end
+		end
+		return false
+	end
+
+	T.test("Shopkeepers: one spot per shop, behind its counter, the golem's head clear of it", function()
 		local spots = {}
 		for _, d in map():GetDescendants() do
 			if hasTag(d, ShopkeeperConfig.Tag) then
@@ -268,26 +213,21 @@ return function(T, Loader)
 			local spot = spots[shop]
 			T.truthy(spot, `{shop} has a keeper spot`)
 			local holder = spot.Parent
-			T.truthy(holder:IsA("BasePart"), `{shop}: on a part (it streams with it)`)
-			T.truthy(hasTag(holder, COUNTERS[shop]), `{shop}: on the {COUNTERS[shop]}`)
+			T.truthy(holder:IsA("BasePart") and hasTag(holder, COUNTERS[shop]), `{shop}: on the {COUNTERS[shop]}`)
 			local feet = holder.CFrame * spot.CFrame
 			local look = feet.LookVector
 			T.near(look.Y, 0, 1e-4, `{shop}: stands upright`)
 			local toCounter = holder.CFrame.Position - feet.Position
 			local flat = Vector3.new(toCounter.X, 0, toCounter.Z)
-			T.truthy(flat.Magnitude < 4.5, `{shop}: right behind the counter ({flat.Magnitude})`)
-			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of him`)
-			T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: his feet below the counter top`)
-		end
-		local eggs = nil
-		for _, d in map():GetDescendants() do
-			if d:IsA("Model") and hasTag(d, "CapsuleStall") then
-				eggs = d
-			end
-		end
-		T.truthy(eggs, "the EGGS temple")
-		for _, d in eggs:GetDescendants() do
-			T.falsy(hasTag(d, ShopkeeperConfig.Tag), "no keeper spot in the EGGS temple")
+			T.truthy(flat.Magnitude < 6, `{shop}: right behind the counter ({flat.Magnitude})`)
+			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of it`)
+			T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: its feet below the counter top (the counter hides its step)`)
+			local kind, size = ShopkeeperConfig.golem(shop)
+			local rig = GolemKeeper.build(kind, feet, size)
+			local i = byName(rig)
+			local head = rig.Parts[i.Head]
+			T.falsy(poking(head, holder), `{shop}: the golem's head clear of the counter`)
+			T.truthy(head.CFrame.Position.Y > holder.CFrame.Position.Y, `{shop}: its head over the counter top`)
 		end
 	end)
 

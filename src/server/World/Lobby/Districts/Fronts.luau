@@ -67,7 +67,7 @@ end
 	it (tag SellCounter) and a small brass scale; the big two-faced SELL
 	sign box (6 x 2.4, a gold neon frame, round 2) high on a gunmetal arch
 	over the stall's front, facing the plaza; the shopkeeper's spot
-	(ShopkeeperConfig.mark: the owner's miner, client-side) behind the
+	(ShopkeeperConfig.mark: a big golem, client-side) behind the
 	counter, between the cart and the bin, facing the plaza like the sign
 	(customers stand on the plaza side). Everything but the sign arch (model SellSign) stays
 	under 5 studs, so the SHOP's windows show over it.
@@ -187,9 +187,9 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 		StudColor = Tech.GoldGlow,
 	})
 
-	-- the shopkeeper (the owner's miner, ShopkeeperController) behind his cart
-	-- beside the bin, facing the plaza (the sign's direction; customers stand
-	-- at the counter on the plaza side), where Tobin the Miner stood
+	-- the shopkeeper golem (ShopkeeperController) between the cart and the bin,
+	-- facing the plaza (the sign's direction; customers stand at the counter
+	-- on the plaza side), where Tobin the Miner stood
 	ShopkeeperConfig.mark(counter, at(0.9, 0, -0.4), "Sell")
 
 	-- a flat metal floor plate under the stall with a warm front edge (no collision)
