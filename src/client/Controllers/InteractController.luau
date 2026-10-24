@@ -137,6 +137,10 @@ local function isPickable(model: Model, root: BasePart, checkLine: boolean?): bo
 	if model:GetAttribute("Owner") ~= player.UserId or model:GetAttribute("State") ~= "Loose" then
 		return false
 	end
+	-- a dropper's Drop rides the belts only (the server refuses it too)
+	if model:GetAttribute("Kind") == "Drop" then
+		return false
+	end
 	local primary = model.PrimaryPart
 	local range = player:GetAttribute("PickupRange")
 	local reach = if type(range) == "number" and range > 0 then range else GameConfig.PickupRange

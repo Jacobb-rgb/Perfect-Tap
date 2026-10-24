@@ -193,12 +193,7 @@ local function updateWalkSpeed(player: Player)
 		if not ok then
 			board = nil
 		end
-		local speed = HoverboardData.walkSpeed(
-			board,
-			count,
-			Bonuses.walkSpeed(stats),
-			stats.WalkSpeedPct
-		)
+		local speed = HoverboardData.walkSpeed(board, count, Bonuses.walkSpeed(stats), stats.WalkSpeedPct)
 		if humanoid.WalkSpeed ~= speed then
 			humanoid.WalkSpeed = speed
 		end
@@ -320,6 +315,10 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 		return false
 	end
 	if record.Owner ~= player.UserId or record.State ~= "Loose" then
+		return false
+	end
+	-- a dropper's Drop rides the belts only (DropperConfig): never in your hands
+	if record.Kind == "Drop" then
 		return false
 	end
 	if not CarryService.hasReach(player, root, record) then

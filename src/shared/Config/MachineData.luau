@@ -53,7 +53,7 @@ export type Machine = {
 	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
 	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
-	-- | "Dropper" | "Laser" (earn coins per second, DropperConfig)
+	-- | "Dropper" | "Laser" (Drops on the belts, DropperConfig / DropperService)
 	NoIntake: boolean?, -- no hopper / intake (generators, poles, the robot arm)
 	SideOutputs: boolean?, -- results leave the left / right side (OutputL / OutputR), not the front
 	Inputs: number?, -- items one job takes (Alloy Furnace: 2 ingots of different ores)
@@ -277,7 +277,7 @@ MachineData.List = {
 		Price = 3000,
 		Category = "Logistics",
 		Order = 12,
-		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true },
+		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true, Drop = true },
 		Behaviour = "Splitter",
 		SideOutputs = true,
 		LoadText = "Split",
@@ -361,7 +361,7 @@ MachineData.List = {
 		Price = 40000,
 		Category = "Selling",
 		Order = 17,
-		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true },
+		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true, Drop = true },
 		Behaviour = "SellBox",
 		LoadText = "Sell",
 		WrongHint = "The Sell Box can't sell that.",
@@ -536,14 +536,19 @@ MachineData.List = {
 	},
 } :: { Machine }
 
--- The droppers and the Money Laser (Config/DropperConfig, owner 2026-10-21):
--- 2 x 2 machines with no intake; they earn coins per second on the plot
--- (PodiumService.incomeOf -> DropperConfig.placedIncome).
+-- The droppers and the Money Laser (Config/DropperConfig, owner 2026-10-21;
+-- real ore on the belts 2026-10-24): a dropper is a 2 x 2 machine with no
+-- intake that pushes a Drop out of its front every DropperConfig.DropEvery
+-- seconds (DropperService); the Money Laser a 1 x 1 gate fed by belts that
+-- doubles every Drop passing through and sends it on out of its front; a
+-- Sell Box sells the Drops.
 for i, dropper in DropperConfig.List do
 	table.insert(MachineData.List, {
 		Id = dropper.Id,
 		Name = dropper.Name,
-		Description = `{dropper.Tagline}. Earns {Format.perSecond(dropper.Income)} on your plot.`,
+		Description = `{dropper.Tagline}: one worth {Format.money(DropperConfig.dropValue(dropper.Id))} every {DropperConfig.DropEvery} s onto the belt in front. Belt it into a Sell Box ({Format.perSecond(
+			dropper.Income
+		)}).`,
 		Size = { 2, 2 },
 		Price = dropper.Price,
 		Category = "Droppers",
@@ -555,13 +560,15 @@ end
 table.insert(MachineData.List, {
 	Id = DropperConfig.Laser.Id,
 	Name = DropperConfig.Laser.Name,
-	Description = "Doubles the coins of one dropper on your plot (the best one first).",
-	Size = { 2, 2 },
+	Description = "A tiny gate for your belt: every dropper ore that rides through it is worth double (once).",
+	Size = { 1, 1 },
 	Price = DropperConfig.Laser.Price,
 	Category = "Droppers",
 	Order = 100 + #DropperConfig.List + 1,
 	Behaviour = "Laser",
-	NoIntake = true,
+	Accepts = { Drop = true },
+	ConveyorFaces = "NoFront",
+	WrongHint = "The Money Laser only doubles ore from a dropper.",
 })
 
 MachineData.ById = {} :: { [string]: Machine }

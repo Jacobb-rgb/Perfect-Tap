@@ -85,14 +85,17 @@ return function(T, Loader)
 				local column = (out.X + w * CELL / 2) / CELL - 0.5
 				T.near(column, math.floor(column + 0.5), 1e-4, machine.Id .. " on a cell centre")
 				T.truthy(math.abs(out.X) < w * CELL / 2, machine.Id .. " inside the width")
-				-- outside its own intake box
+				-- outside its own intake box (the droppers have none: NoIntake)
 				local intake = attachment(model, "Intake")
-				local size = intake:GetAttribute("IntakeSize")
-				local localOut = intake.CFrame:PointToObjectSpace(out)
-				local inside = math.abs(localOut.X) <= size.X / 2
-					and math.abs(localOut.Y) <= size.Y / 2
-					and math.abs(localOut.Z) <= size.Z / 2
-				T.falsy(inside, machine.Id .. " Output inside its own Intake")
+				T.truthy(intake or machine.NoIntake, machine.Id .. " Intake")
+				if intake then
+					local size = intake:GetAttribute("IntakeSize")
+					local localOut = intake.CFrame:PointToObjectSpace(out)
+					local inside = math.abs(localOut.X) <= size.X / 2
+						and math.abs(localOut.Y) <= size.Y / 2
+						and math.abs(localOut.Z) <= size.Z / 2
+					T.falsy(inside, machine.Id .. " Output inside its own Intake")
+				end
 			elseif machine.Id == "CleaningStation" then
 				T.truthy(attachment(model, "Output"), "station keeps its tray Output")
 			else

@@ -37,6 +37,9 @@
 	  sleep in Roblox physics.
 	- Items that fall out of the world are put back next to their owner.
 	- Leaving players: loose and carried items go into the Ore Pen.
+	- A dropper's Drop (DropperConfig) is never stored (storeDesc: "Lost",
+	  so leaving, rescues and returns from other plots just remove it) and
+	  never pulled by the magnet (CarryService never picks it up either).
 	- The Ore Pen (data.Storage) holds penCapacity items. Only RESCUE moves
 	  (storeDesc: leaving, an item lost by the engine, Placement repair, an
 	  item returned from someone else's plot) may overfill it, up to the
@@ -127,6 +130,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
@@ -859,6 +863,10 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 	end
 	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
 		warn("[ItemService] storeDesc got a bad item for " .. player.Name)
+		return "Lost"
+	end
+	-- a dropper's Drop is never kept (DropperConfig): it just goes
+	if DropperConfig.isDrop(desc) then
 		return "Lost"
 	end
 	-- a dusty relic never waits in the pen: the keeper cleans it on the way
@@ -1597,6 +1605,10 @@ end
 function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number, boolean)
 	local m = ItemService.Magnet
 	if record.State ~= "Loose" or record.HandDropped or record.MagnetDone or not (radius > 0) or not record.Model.Parent then
+		return false, 0, false
+	end
+	-- a dropper's Drop is never carried (DropperConfig)
+	if record.Kind == DropperConfig.DropKind then
 		return false, 0, false
 	end
 	if now - record.ReleasedAt < m.Delay then

@@ -37,6 +37,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
@@ -106,6 +107,10 @@ end
 function SellService.priceOf(desc: Desc): number
 	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
 		return 0
+	end
+	-- a Drop (DropperConfig): its own price, never a storage key
+	if DropperConfig.isDrop(desc) then
+		return if DropperConfig.validDrop(desc) then ItemData.value(desc.K, desc.O, desc.G, desc.R) else 0
 	end
 	local key = ItemData.storageKey(desc)
 	if not ItemData.parseKey(key) then

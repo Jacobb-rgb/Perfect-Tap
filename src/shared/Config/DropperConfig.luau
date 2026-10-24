@@ -1,14 +1,20 @@
 --[[
 	Droppers (owner 2026-10-21; first called "hoppers"): the most expensive
 	things in Terra Forge. A dropper stands on your plot and drops ores of
-	ONE price range (only Epic ores, only Legendary ores, ...) from its arm;
-	the ores earn `Income` coins per second. Bought at the DROPPERS shop
-	for `Price`, sold back for `Resale`. The looks follow the owner's picture
-	docs/art/droppers_concept.webp (DropperBuilder).
+	ONE price range (only Epic ores, only Legendary ores, ...) from its arm.
+	Bought at the DROPPERS shop for `Price`, sold back for `Resale`. The looks
+	follow the owner's picture docs/art/droppers_concept.webp (DropperBuilder).
 
-	Concept stage: the numbers are the proposal the owner accepted in chat
-	(payback about 1 to 5 hours of the dropper running); `Ores` / `Grade` are
-	what it drops.
+	Real ore on the belts (owner 2026-10-24: "the ore rides through the laser,
+	its price goes up, then into the Sell"): every DropEvery seconds a dropper
+	pushes one DROP out of its front onto the belt there (DropperService). A
+	Drop is an item of its own kind (ItemData kind "Drop", O = the dropper's
+	id): it looks like one of the dropper's ores, rides belts, Splitters and
+	Money Lasers, and only a Sell Box sells it, for dropValue: the dropper's
+	`Income` x DropEvery (so a dropper whose every Drop sells earns `Income`
+	coins per second), times Laser.Mult once it passed a Money Laser
+	(R = LaserMark). It is never carried, stored, saved or put anywhere else.
+	`Ores` / `Grade` are only its looks.
 ]]
 
 export type Dropper = {
@@ -122,8 +128,10 @@ for _, dropper in DropperConfig.List do
 	DropperConfig.ById[dropper.Id] = dropper
 end
 
--- The MONEY LASER (owner 2026-10-21): the dropper's ores that pass it are
--- worth double: every laser on the plot doubles one dropper (the best first).
+-- The MONEY LASER (owner 2026-10-21; 2026-10-24: "tiny, smaller than the
+-- machines and the Sell Box, it sits between the belts and the ore just rides
+-- through it"): a 1 x 1 gate on the belt line; every Drop that passes it is
+-- worth Mult times as much (once: a second laser lets it pass as it is).
 export type Laser = { Id: string, Name: string, Price: number, Resale: number, Mult: number, Tagline: string }
 DropperConfig.Laser = {
 	Id = "MoneyLaser2X",
@@ -134,9 +142,10 @@ DropperConfig.Laser = {
 	Tagline = "Ores that pass it are worth double",
 } :: Laser
 
--- Coins per second from the droppers in a list of placed machines
--- (data.PlacedMachines: { Id = machineId, ... }). Every Money Laser doubles
--- one dropper, the best ones first.
+-- The most coins per second the droppers in a list of placed machines
+-- (data.PlacedMachines: { Id = machineId, ... }) can earn: every Drop sold,
+-- every Money Laser on the line of one dropper, the best ones first (the
+-- shop's numbers and tools/lune/balance_sim; the coins come from the sales).
 function DropperConfig.placedIncome(placed: { any }?): number
 	if type(placed) ~= "table" then
 		return 0
@@ -160,6 +169,59 @@ function DropperConfig.placedIncome(placed: { any }?): number
 		total += if i <= lasers then income * DropperConfig.Laser.Mult else income
 	end
 	return total
+end
+
+-- One Drop: an item a dropper pushes onto the belt (see the header).
+DropperConfig.DropKind = "Drop" -- ItemData kind
+DropperConfig.LaserMark = "X2" -- a Drop's R once a Money Laser doubled it
+DropperConfig.DropEvery = 3 -- seconds between two Drops of one dropper
+-- Live Drops (server perf, docs/SERVER_PERF_AUDIT.md): a dropper waits while
+-- its owner has MaxLiveDrops of them in the world (loose or in a machine),
+-- or the server MaxLiveDropsServer; a loose Drop older than DropLife (it
+-- fell off the belt, its belt ends nowhere) disappears.
+DropperConfig.MaxLiveDrops = 15 -- (half of GameConfig.MaxLooseItemsPerPlayer: the ore factory keeps its room)
+DropperConfig.MaxLiveDropsServer = 120
+DropperConfig.DropLife = 45
+
+-- Is `desc` (an item Desc: K, O, G, R) a Drop?
+function DropperConfig.isDrop(desc: any): boolean
+	return type(desc) == "table" and desc.K == DropperConfig.DropKind
+end
+
+-- A well-formed Drop: a known dropper, no grade, no mark or the laser's mark.
+function DropperConfig.validDrop(desc: any): boolean
+	return DropperConfig.isDrop(desc)
+		and type(desc.O) == "string"
+		and DropperConfig.ById[desc.O] ~= nil
+		and desc.G == nil
+		and (desc.R == nil or desc.R == DropperConfig.LaserMark)
+end
+
+-- Coins one Drop of dropper `id` sells for (0 for an unknown dropper);
+-- `lasered`: it passed a Money Laser.
+function DropperConfig.dropValue(id: string, lasered: boolean?): number
+	local dropper = DropperConfig.ById[id]
+	if not dropper then
+		return 0
+	end
+	local value = dropper.Income * DropperConfig.DropEvery
+	return if lasered then value * DropperConfig.Laser.Mult else value
+end
+
+-- Removes every Drop from a list of item Descs in place (a save never keeps
+-- one: machine queues, the pen); returns how many went.
+function DropperConfig.stripDrops(list: any): number
+	if type(list) ~= "table" then
+		return 0
+	end
+	local removed = 0
+	for i = #list, 1, -1 do
+		if DropperConfig.isDrop(list[i]) then
+			table.remove(list, i)
+			removed += 1
+		end
+	end
+	return removed
 end
 
 -- Seconds the dropper needs to earn back its price.

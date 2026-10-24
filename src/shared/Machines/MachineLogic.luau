@@ -38,6 +38,7 @@
 ]]
 
 local ArtifactConfig = require(script.Parent.Parent.Config.ArtifactConfig)
+local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local ItemData = require(script.Parent.Parent.Config.ItemData)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
@@ -76,6 +77,10 @@ function MachineLogic.isValidDesc(desc: any): boolean
 	local kind, oreId, gradeId, recipeId = desc.K, desc.O, desc.G, desc.R
 	if type(kind) ~= "string" or not ItemData.Kinds[kind] then
 		return false
+	end
+	-- a Drop carries its dropper's id and at most the Money Laser's mark (DropperConfig)
+	if kind == DropperConfig.DropKind then
+		return DropperConfig.validDrop(desc)
 	end
 	-- a dusty relic carries its artifact id, never a grade or recipe
 	if kind == "Relic" then

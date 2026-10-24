@@ -43,6 +43,7 @@ local ORDER = {
 	"IronBoxService",
 	"SellService",
 	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
+	"DropperService", -- the droppers push Drops onto the belts, the Money Laser doubles them (after LogisticsService)
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
 	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)

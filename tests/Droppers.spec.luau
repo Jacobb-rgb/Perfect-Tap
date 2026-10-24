@@ -23,7 +23,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("droppers: income on the plot, every Money Laser doubles one dropper (the best first)", function()
+	T.test("droppers: the most a plot earns per second, every Money Laser on one dropper's line (the best first)", function()
 		local basic, gold = DropperConfig.ById.BasicDropper, DropperConfig.ById.GoldDropper
 		T.eq(DropperConfig.placedIncome(nil), 0)
 		T.eq(DropperConfig.placedIncome({ { Id = "Conveyor" } }), 0)
@@ -39,18 +39,25 @@ return function(T, Loader)
 			"spare lasers do nothing"
 		)
 		T.eq(DropperConfig.placedIncome({ "junk", { Id = 5 } }), 0)
+		-- (a dropper whose every Drop sells earns its Income per second)
+		T.eq(DropperConfig.dropValue("BasicDropper") / DropperConfig.DropEvery, basic.Income)
 	end)
 
-	T.test("droppers: 2 x 2 machines in the Tech shop with a model, no intake", function()
+	T.test("droppers: 2 x 2 machines with no intake, the Money Laser a 1 x 1 belt gate; all with a front Output", function()
+		local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 		for _, id in { "BasicDropper", "DarkMatterDropper", DropperConfig.Laser.Id } do
 			local info = MachineData.ById[id]
 			T.truthy(info, id .. " is a machine")
-			T.eq(info.Size[1], 2)
-			T.eq(info.Size[2], 2)
-			T.truthy(info.NoIntake)
+			local laser = id == DropperConfig.Laser.Id
+			T.eq(info.Size[1], if laser then 1 else 2)
+			T.eq(info.Size[2], if laser then 1 else 2)
+			T.eq(info.NoIntake == true, not laser, id .. ": only the laser takes items")
 			T.truthy(EconomyConfig.TechShop.ById[id], id .. " in the Tech shop")
 			local model = MachineBuilder.build(id)
 			T.truthy(model.PrimaryPart, id .. " base")
+			local out = model.PrimaryPart:FindFirstChild("Output")
+			T.truthy(out and out:IsA("Attachment"), id .. " pushes its Drops out of an Output")
+			T.truthy((out.CFrame.Position - Grid.outputLocal(id)).Magnitude < 1e-3, id .. " Output at Grid.outputLocal")
 			local count = 0
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") then
@@ -59,9 +66,28 @@ return function(T, Loader)
 			end
 			T.truthy(count <= 140, id .. " part budget (" .. count .. ")")
 		end
+		T.eq(MachineData.ById[DropperConfig.Laser.Id].ConveyorFaces, "NoFront", "belts feed the laser from the back and the sides")
 	end)
 
-	T.test("droppers: the State snapshot's income is incomeOf (podiums + droppers), so the HUD chip matches", function()
+	T.test("droppers: the Money Laser is tiny: lower and smaller than the Sell Box (owner 2026-10-24)", function()
+		local function extent(model: any): (number, number)
+			local top, wide = 0, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 1 then
+					top = math.max(top, d.CFrame.Position.Y + d.Size.Y / 2)
+					wide = math.max(wide, math.abs(d.CFrame.Position.X) + d.Size.X / 2, math.abs(d.CFrame.Position.Z) + d.Size.Z / 2)
+				end
+			end
+			return top, wide
+		end
+		local laserTop, laserWide = extent(MachineBuilder.build(DropperConfig.Laser.Id))
+		local boxTop, boxWide = extent(MachineBuilder.build("SellBox"))
+		T.truthy(laserTop < boxTop, `the laser ({laserTop}) is lower than the Sell Box ({boxTop})`)
+		T.truthy(laserWide < boxWide, `and narrower ({laserWide} < {boxWide})`)
+		T.truthy(laserTop <= 4, `about belt-gate high ({laserTop})`)
+	end)
+
+	T.test("droppers: no passive coins any more: the State snapshot's income is the podiums' (incomeOf)", function()
 		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 		local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -89,8 +115,10 @@ return function(T, Loader)
 			local snapshot: any = {}
 			PodiumService._test.provide(player, data, snapshot)
 			local expected = PodiumService.incomeOf(player, data)
-			T.truthy(expected >= DropperConfig.ById.BasicDropper.Income * 2, "the laser doubles the Basic Dropper")
 			T.eq(snapshot.Income, expected)
+			local without = table.clone(data)
+			without.PlacedMachines = {}
+			T.eq(expected, PodiumService.incomeOf(player, without), "the droppers earn through Sell Box sales only")
 		end)
 		rawset(DataService, "get", oldGet)
 		assert(ok, err)

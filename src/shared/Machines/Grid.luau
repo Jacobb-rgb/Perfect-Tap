@@ -120,9 +120,9 @@ end
 -- middle column (the right one of the two middle columns on 2-wide
 -- machines), 0.5 studs in front of the footprint, 1.8 studs up.
 -- Machines with nothing coming out of the front (outputLocal and outputCell agree):
--- NO_FRONT_OUTPUT, and the droppers and the Money Laser (they earn coins).
-local function noFront(id: string, info: MachineData.Machine): boolean
-	return NO_FRONT_OUTPUT[id] == true or info.Behaviour == "Dropper" or info.Behaviour == "Laser"
+-- NO_FRONT_OUTPUT. (The droppers and the Money Laser push their Drops out of the front.)
+local function noFront(id: string, _info: MachineData.Machine): boolean
+	return NO_FRONT_OUTPUT[id] == true
 end
 
 function Grid.outputLocal(id: string): Vector3?
