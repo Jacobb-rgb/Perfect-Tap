@@ -39,26 +39,48 @@ Prices are a proposal on the 6-floor curve; the inventory's balance sim confirms
 `BackpackBuilder.MaxParts` = 200 (tests). Phones: other players' packs only within 120 studs,
 particles within 50 at half rate, none with Reduce motion; only your own pack's light shines.
 
-## The stall
+## The shop (in place of the ROCK SCANNER)
 
-`LobbyLayout` piece `BackpackStall`: the lawn north of the SHOP, between it and the wheel's
-stairs (center (-40, 0, -44), 10 x 11 x 8, facing the plaza): the only spot near the plaza free
-at radius 7. 27 map parts (Districts 2,253 -> 2,280). The three display packs are NOT map parts:
-the shelf and the plinth plates carry the attribute `BackpackId` (no tag: Plaza Life keeps its
-miners off tagged parts) and the clients, finding them through the counter's model, build them
-within 70 studs. Measured against main ecf24f90: map 33,178 -> 33,064, lobby area
-14,045 -> 13,994 (LobbyParts 14,500), phones' stream round the spawn 24,539 -> 24,425 and the
-plaza 24,791 -> 24,677 (StreamParts 25,000). The stall adds 27; the rest re-rolls: the wilds
-draw their spots from the free lawn, so they all move (Mountains 326 -> 273, Pieces 409 -> 354,
-the five secrets unchanged), the meadow -24 (fences, lawn) and Plaza Life -9 (a lantern and a
-prop on that lawn). No lights. The plaza ore cart at (-35, -35) stands in front of the stall.
-Map version 58 (`WorldBuilder.Version`, numbered past the pending podiums, no-Foundry and shopkeepers;
-no-Foundry 55: renumber when merging main if the order changes).
+Owner 2026-10-24, after the first stall (a 27-part kiosk north of the SHOP): "in place of the
+scanner, in front of the Vault", and four things more: more details and decorations, bigger like
+a shop, a shopkeeper at the counter, more lights and effects; the ROCK SCANNER goes (the Ore
+Codex opens from the side menu's CODEX button; `CodexController` still adds its prompt to any
+model tagged `OreCodex`, there is none now).
+
+`LobbyLayout` piece `BackpackStall`: center (46, 0, 74), 16 x 16 x 12, facing west (-X) to the
+end of the `ToScanner` path, between the DROPPERS house, the vault's east statue, the red trees
+and the ore outcrop at (50, 58). `Districts/Backpacks` builds the shell (79 parts, one light):
+the porch with two plinths, the gold-framed gateway with teal neon, the BACKPACKS board, corner
+pillars with lantern cubes, parapet and crenels, the roof podium, the side racks, the back-left
+shelf, the counter (tag `BackpackCounter`, Attachments `BackpackPromptPoint` and `KeeperFeet`)
+and the shopkeeper's step. The clients build the rest (not map parts):
+
+- the ten packs on the plates with the attribute `BackpackId` (every pack once: the porch
+  Runebound and Emberforge, the racks Rookie/Trail/Leather and Miner's/Iron-Bound/Explorer's,
+  the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.2, `DisplaySpin` 0.5 rad/s,
+  its light on a PC). Each plate's `DisplayRange`: roof 45, porch 38, inside 30 studs.
+- `Builders/BackpackShopDecor` (~100 parts, within 30 studs): rune banners, sign lamps, side
+  wall crests, hanging lanterns (lights on a PC), the rune crest behind the shopkeeper, rug,
+  crates, bedroll shelf, barrel, rope, rack brackets, maps, coins, ledger, bell, planters and
+  the gold dust in the gateway (off with Reduce motion).
+- the shopkeeper: feat/shopkeepers (`ShopkeeperConfig.Shops.Backpacks` = SkySprite, Size 1.5)
+  needs one line when both have landed: `ShopkeeperConfig.mark(counter,
+  counter.KeeperFeet.WorldCFrame, "Backpacks")` (the feet stand on the step, facing the gateway).
+
+Budgets (main 958ddb46 -> this branch, the budget tests' own counting): map 33,450 -> 33,459,
+lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round the spawn
+24,811 -> 24,820, the plaza 25,063 -> 25,072, the DROPPERS door 25,206 -> 25,215 (StreamParts
+25,240). The shop's client packs and decor are out of range at all three spots
+(tests/Backpacks.spec.luau). At the shop's own gateway a phone holds 23,842 streamed + 1,460 of
+this shop (packs 1,370, decor ~90) + the DROPPERS showroom 526 (its 70-stud range) = ~25,830.
+Map version 58 (`WorldBuilder.Version`, numbered past the pending podiums, no-Foundry and
+shopkeepers: renumber at landing).
 
 ## What to test in Studio
 
-1. Walk to the BACKPACKS stall: the three display packs appear on the shelf and the plinths
-   (sparkles, fire on the Emberforge, stars on the Starforge); walk 100 studs away: they go.
+1. Walk to the BACKPACKS shop at the end of the path east of the Vault's steps: the giant
+   Starforge pack turns on the roof (from ~45 studs), the porch packs appear (~38), then the
+   racks, the banners, lanterns and crest (~30); walk away: they go. Reduce motion: it stops.
 2. Press E at the counter: the shop opens (two rows of five cards, the 3D packs turn the right
    way); walk away: it closes. B / Backspace / X close it too. Phones: the cards scroll.
 3. Buy the Trail Pack with 250+ coins: the card turns EQUIPPED, the pack appears on your back

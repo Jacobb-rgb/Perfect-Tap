@@ -60,6 +60,10 @@ Backpacks.Displays = {
 }
 Backpacks.RoofScale = 2.2 -- the roof emblem's size against a normal pack
 Backpacks.RoofSpin = 0.5 -- radians per second
+-- how near the camera must be for the clients to build each display pack
+-- (studs; the phones' part budget: the spawn and the DROPPERS door, ~41 studs
+-- from the porch, stay clear of them): the roof emblem, the porch, inside
+Backpacks.Ranges = { Roof = 45, Porch = 38, Inside = 30 }
 
 local rgb = Color3.fromRGB
 local TEAL = rgb(16, 176, 168) -- deep enough to stay teal under bloom
@@ -86,10 +90,11 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	local function glow(c: CFrame, size: Vector3, color: Color3): Part
 		return Tech.glow(m, c, size, color)
 	end
-	local function plate(c: CFrame, size: number, packId: string, name: string): Part
+	local function plate(c: CFrame, size: number, packId: string, name: string, range: number): Part
 		local p = Style.block(m, c, Vector3.new(size, 0.14, size), Tech.MetalLight, nil, Style.decor())
 		p.Name = name
 		display(p, packId)
+		p:SetAttribute("DisplayRange", range)
 		return p
 	end
 
@@ -106,7 +111,7 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 		local base = at(spec.Side * 5.4, P, -4.1)
 		Tech.disc(m, (base * CFrame.new(0, 0.55, 0)).Position, 1.1, 1.8, Tech.Metal, nil, Style.solid())
 		Tech.disc(m, (base * CFrame.new(0, 1.15, 0)).Position, 0.1, 1.9, TEAL, Kit.NEON, Style.tiny())
-		plate(base * CFrame.new(0, 1.27, 0), 1.5, spec.Pack, "DisplayPlinth")
+		plate(base * CFrame.new(0, 1.27, 0), 1.5, spec.Pack, "DisplayPlinth", Backpacks.Ranges.Porch)
 	end
 
 	---------------------------------------------------------------- the walls
@@ -172,7 +177,7 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	local podium = at(0, top + 0.6, zMid - 1.6)
 	Tech.disc(m, (podium * CFrame.new(0, 0.4, 0)).Position, 0.8, 3.4, Tech.Metal, nil, Style.solid())
 	Tech.disc(m, (podium * CFrame.new(0, 0.5, 0)).Position, 0.12, 3.6, TEAL, Kit.NEON, Style.tiny())
-	local roof = plate(podium * CFrame.new(0, 0.87, 0), 2.2, Backpacks.Displays.Roof, "DisplayRoof")
+	local roof = plate(podium * CFrame.new(0, 0.87, 0), 2.2, Backpacks.Displays.Roof, "DisplayRoof", Backpacks.Ranges.Roof)
 	roof:SetAttribute("DisplayScale", Backpacks.RoofScale)
 	roof:SetAttribute("DisplaySpin", Backpacks.RoofSpin)
 
@@ -201,13 +206,19 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 		block(at(sx * (inner - 0.55), rackY, zMid + 0.2), Vector3.new(1.1, 0.2, sideD - L.Wall0 - 0.4), Tech.MetalLight, nil, true)
 		for k, z in L.Racks do
 			-- (the plate's front = toward the middle of the shop)
-			plate(at(sx * (inner - 0.6), rackY + 0.17, z) * CFrame.Angles(0, sx * math.pi / 2, 0), 1.2, spec.Packs[k], "DisplayRack")
+			plate(
+				at(sx * (inner - 0.6), rackY + 0.17, z) * CFrame.Angles(0, sx * math.pi / 2, 0),
+				1.2,
+				spec.Packs[k],
+				"DisplayRack",
+				Backpacks.Ranges.Inside
+			)
 		end
 	end
 	-- the back-left shelf (the back-right one with the bedrolls is the clients' decor)
 	local zIn = zBack - L.Wall0 / 2
 	block(at(-4.6, P + 3.5, zIn - 0.45), Vector3.new(2.4, 0.2, 0.9), Tech.MetalLight, nil, true)
-	plate(at(-4.6, P + 3.67, zIn - 0.5), 1.2, Backpacks.Displays.Shelf, "DisplayShelf")
+	plate(at(-4.6, P + 3.67, zIn - 0.5), 1.2, Backpacks.Displays.Shelf, "DisplayShelf", Backpacks.Ranges.Inside)
 	-- the counter: a light metal body with a teal stripe, the warm top (the hook)
 	local cz = L.CounterZ
 	block(at(0, P + 1.35, cz), Vector3.new(7.0, 2.7, 1.4), Tech.MetalLight)

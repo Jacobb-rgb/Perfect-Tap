@@ -313,6 +313,36 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("BACKPACKS shop: its client-built packs and decor stay out of the phones' budget spots", function()
+		-- (PhoneBudget.spec counts round the spawn and the plaza, DropperShop.spec at the
+		-- DROPPERS door: none of them may hold this shop's client parts as well)
+		local Backpacks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Backpacks")
+		local Droppers = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Droppers")
+		local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local parent = roblox.Instance.new("Model")
+		Backpacks.build(parent, Rng.new(7))
+		local house = Droppers.build(parent, Rng.new(7))
+		local door = (house:GetAttribute(DropperShopBuilder.FrameAttribute) * CFrame.new(0, 0, DropperShopBuilder.Room.Front)).Position
+		local spots = { Spawn = WorldLayout.SpawnPoint, Plaza = WorldLayout.Plaza.Center, DroppersDoor = door }
+		local stall = parent:FindFirstChild("BackpackStall")
+		for name, spot in spots do
+			for _, d in stall:GetChildren() do
+				if d:GetAttribute("BackpackId") then
+					local range = d:GetAttribute("DisplayRange")
+					T.eq(type(range), "number", d.Name .. " has its build range")
+					T.truthy(
+						(d.CFrame.Position - spot).Magnitude > range,
+						`{d.Name} {d:GetAttribute("BackpackId")} is not built at the {name}`
+					)
+				end
+			end
+			local frame = stall:GetAttribute(Decor.FrameAttribute)
+			T.truthy((frame.Position - spot).Magnitude > Decor.ShowRange, `the decor is not built at the {name}`)
+		end
+	end)
+
 	T.test("BACKPACKS shop decor: built by the clients, inside the footprint, lights and dust off", function()
 		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
 		local frame = CFrame.new(46, 0, 74) * CFrame.Angles(0, math.pi / 2, 0)

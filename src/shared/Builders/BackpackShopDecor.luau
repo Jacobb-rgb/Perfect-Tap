@@ -29,6 +29,7 @@ local BackpackShopDecor = {}
 
 BackpackShopDecor.FrameAttribute = "ShopFrame" -- on the stall model: the shop's frame (CFrame)
 BackpackShopDecor.MaxParts = 120
+BackpackShopDecor.ShowRange = 30 -- studs from the camera to the shop: the clients build the decor (the DROPPERS door stays clear)
 BackpackShopDecor.LightName = "ShopLanternLight"
 
 BackpackShopDecor.Layout = {
