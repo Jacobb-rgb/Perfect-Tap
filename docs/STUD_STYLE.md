@@ -62,8 +62,13 @@ Nothing new is created except the MaterialVariants (Custom), all in `MaterialSer
   -- back:
   print(S.restoreTree(workspace)) S.removeVariants(game.MaterialService)
   ```
-- Test place: `HRA_K_TESTOVANI/TerraForge_STUDS_TEST_2026-10-24.rbxl` has the Workspace attributes on
-  (Classic): press Play.
+- Test places: `lune run tools/lune/make_stud_test_place.luau build/TerraForge.rbxl <out.rbxl> Classic|Custom`
+  switches the Workspace attributes on and adds the Studio-only script `TEST_Vystupky`
+  (`tools/studs/TEST_Vystupky.luau`): paste the uploaded picture ids into its attributes `ColorMap`, `NormalMap`,
+  `RoughnessMap` and the server makes the stud materials; clients take them from `MaterialService.TFStudStyle`
+  (`StudStyle.customReady`), so the ids are needed on the server only.
+  2026-10-24: `HRA_K_TESTOVANI/TerraForge_VYSTUPKY_A_klasicke_2026-10-24.rbxl` and `..._B_vlastni_...rbxl`,
+  owner steps in `NAHRAJ_DO_ROBLOXU/vystupky/NAVOD.md`.
 
 ## Custom look: uploading the pictures
 

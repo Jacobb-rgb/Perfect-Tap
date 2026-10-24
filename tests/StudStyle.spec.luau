@@ -234,6 +234,30 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("stud style: a client takes the custom studs once the server made them", function()
+		local _, map = newWorld()
+		withPreview(false, function()
+			if StudStyleConfig.customReady() then
+				return -- the pictures are in the config already
+			end
+			-- the MaterialService StudStyle sees (the loader's virtual game)
+			local service = Loader.game:GetService("MaterialService")
+			local part = newPart(map)
+			T.falsy(StudStyle.applyPart(part, "Custom"), "nothing before the server's stud materials")
+			local folder = Loader._newNode(StudStyle.FolderName, "Folder", service)
+			local ok, err = pcall(function()
+				T.truthy(StudStyle.customReady(), "ready from MaterialService")
+				T.truthy(StudStyle.applyPart(part, "Custom"), "styled once they are there")
+			end)
+			rawget(service, "Children")[StudStyle.FolderName] = nil
+			local list = rawget(service, "ChildList")
+			table.remove(list, table.find(list, folder) :: number)
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
 	T.test("stud style: one custom stud material per material, made once", function()
 		local game = Instance.new("DataModel")
 		local service = game:GetService("MaterialService")

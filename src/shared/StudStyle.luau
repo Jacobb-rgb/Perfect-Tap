@@ -27,6 +27,7 @@
 	  S.restoreTree(workspace) S.removeVariants(game.MaterialService) -- before saving
 ]]
 
+local MaterialService = game:GetService("MaterialService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -188,6 +189,16 @@ function StudStyle.look(value: any): StudStyleConfig.Look
 	return if value == "Custom" then "Custom" else "Classic"
 end
 
+--[[
+	Can parts take the custom stud material? Yes when this side's config has
+	the pictures (StudStyleConfig.customReady), or when the server already made
+	the stud materials (StudStyleService: clients learn it from MaterialService,
+	so ids set on the server alone, like a Studio test script's, are enough).
+]]
+function StudStyle.customReady(): boolean
+	return StudStyleConfig.customReady() or MaterialService:FindFirstChild(StudStyle.FolderName) ~= nil
+end
+
 -- Does this part's material take Roblox's own studs in the Classic look?
 local function classicMaterial(material: string): boolean
 	return material == "Plastic" or StudStyleConfig.Classic.Convert[material] == true
@@ -244,7 +255,7 @@ function StudStyle.applyPart(part: BasePart, look: StudStyleConfig.Look?): boole
 		applyClassic(part)
 		return true
 	end
-	if StudStyleConfig.customReady() then
+	if StudStyle.customReady() then
 		applyVariant(part)
 		return true
 	end

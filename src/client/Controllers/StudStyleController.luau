@@ -8,8 +8,11 @@
 	Follows the Workspace attributes StudStyleService sets: "StudStyle"
 	(on / off) and "StudStyleLook" ("Classic" / "Custom"). Switched off or to
 	another look, every restyled part goes back exactly as it was first.
+	When the server's custom stud materials arrive (MaterialService.TFStudStyle),
+	the map is gone over again for the parts that were waiting for them.
 ]]
 
+local MaterialService = game:GetService("MaterialService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -45,10 +48,27 @@ local function sync()
 	end
 end
 
+-- The custom stud materials came: watch again from the start (parts that have
+-- studs already are skipped, the ones that waited for the materials get them).
+local function rewatch()
+	local running = stop
+	if running then
+		running()
+		stop = nil
+		activeLook = nil
+	end
+	sync()
+end
+
 function StudStyleController.start()
 	sync()
 	Workspace:GetAttributeChangedSignal("StudStyle"):Connect(sync)
 	Workspace:GetAttributeChangedSignal("StudStyleLook"):Connect(sync)
+	MaterialService.ChildAdded:Connect(function(child: Instance)
+		if child.Name == StudStyle.FolderName then
+			rewatch()
+		end
+	end)
 end
 
 return StudStyleController
