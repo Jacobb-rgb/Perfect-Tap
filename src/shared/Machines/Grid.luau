@@ -15,6 +15,7 @@
 ]]
 
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
+local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
 
 local Grid = {}
@@ -118,7 +119,8 @@ end
 -- Model-local position of the Output attachment (relative to the model
 -- pivot), or nil for machines without a front output. It sits in the
 -- middle column (the right one of the two middle columns on 2-wide
--- machines), 0.5 studs in front of the footprint, 1.8 studs up.
+-- machines), 0.5 studs in front of the footprint, 1.8 studs up; a
+-- dropper's under its nozzle, over the middle of that front cell.
 -- Machines with nothing coming out of the front (outputLocal and outputCell agree):
 -- NO_FRONT_OUTPUT. (The droppers and the Money Laser push their Drops out of the front.)
 local function noFront(id: string, _info: MachineData.Machine): boolean
@@ -132,6 +134,11 @@ function Grid.outputLocal(id: string): Vector3?
 	end
 	local w, d = info.Size[1], info.Size[2]
 	local column = math.floor(w / 2)
+	if info.Behaviour == "Dropper" then
+		-- a dropper's nozzle hangs over the middle of the cell in front (the
+		-- belt there): its Drop appears under it and falls onto the belt
+		return Vector3.new(-w * CELL / 2 + (column + 0.5) * CELL, DropperConfig.SpoutHeight, -(d * CELL / 2) - CELL / 2)
+	end
 	return Vector3.new(-w * CELL / 2 + (column + 0.5) * CELL, 1.8, -(d * CELL / 2) - 0.5)
 end
 

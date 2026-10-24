@@ -1090,7 +1090,10 @@ function MachineService.emit(machine: PlacedMachine, desc: Desc, quiet: boolean?
 	end
 	local pivot = machine.Model:GetPivot()
 	local cf = MachineService.point(machine, "Output") or pivot
-	local velocity = pivot.LookVector * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0)
+	-- (a dropper's Drop falls straight down from its nozzle onto the belt under it)
+	local velocity = if machine.Info.Behaviour == "Dropper"
+		then Vector3.new(0, -2, 0)
+		else pivot.LookVector * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0)
 	return popLoose(desc, owner, cf, velocity)
 end
 

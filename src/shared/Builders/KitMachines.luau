@@ -1303,9 +1303,15 @@ local RAIL_X = 1.75
 local function beltPaint(belt: BasePart, length: number, markers: boolean)
 	local items: { Paint } = {}
 	local n = math.max(2, math.floor(length / 0.8 + 0.5))
-	for i = 1, n - 1 do
-		table.insert(items, { x = 0, y = i / n - 0.008, w = 1, h = 0.016, color = rgb(56, 60, 76) })
+	-- (owner 2026-10-24: "too basic") rubber plates: a light seam between two
+	-- plates, a dark ridge across each, a groove down the middle
+	for i = 0, n - 1 do
+		if i > 0 then
+			table.insert(items, { x = 0, y = i / n - 0.012, w = 1, h = 0.024, color = rgb(78, 84, 106) })
+		end
+		table.insert(items, { x = 0.08, y = (i + 0.5) / n - 0.007, w = 0.84, h = 0.014, color = rgb(20, 22, 30) })
 	end
+	table.insert(items, { x = 0.494, y = 0, w = 0.012, h = 1, color = rgb(52, 56, 72) })
 	if markers then
 		local count = math.max(1, math.floor(length / 2.4))
 		for i = 0, count - 1 do
@@ -1415,7 +1421,6 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 			if side < 0 then "RailL" else "RailR",
 			{ CanTouch = false, CastShadow = false }
 		)
-		block(model, CFrame.new(side * RAIL_X, 0.1, 0), Vector3.new(0.7, 0.2, 1.0), "Trim", TINY, "Foot")
 	end
 	local belt = block(model, CFrame.new(0, BELT_TOP - 0.25, 0), Vector3.new(BELT_W, 0.5, 4), "Rubber", {
 		CanTouch = true,
@@ -1424,13 +1429,27 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 	}, "Belt")
 	belt:AddTag("ConveyorBelt")
 	beltPaint(belt, 4, false)
+	-- (owner 2026-10-24: "the belts are too basic", phone lag accepted) a chrome
+	-- roller at the front end (one per seam in a line), glowing lines along the
+	-- belt's edges, a chrome clamp round each rail top, hazard stripes along
+	-- the rails' feet (painted: no parts), the feet gone under them (all
+	-- decor: no collisions, the rails still open)
+	cyl(model, Vector3.new(0, BELT_TOP - 0.22, -1.85), XA, BELT_W + 0.15, 0.5, "Metal", TINY, "Roller")
+	for _, side in { -1, 1 } do
+		block(model, CFrame.new(side * (BELT_W / 2 - 0.1), BELT_TOP + 0.012, 0), Vector3.new(0.09, 0.025, 3.7), "Neon", TINY, "EdgeGlow")
+		cyl(model, Vector3.new(side * RAIL_X, 0.9, 0), ZA, 0.3, 0.64, "Metal", TINY, "Clamp")
+		local railPart = model:FindFirstChild(if side < 0 then "RailL" else "RailR") :: BasePart
+		paint(railPart, if side > 0 then Enum.NormalId.Right else Enum.NormalId.Left, {
+			{ x = 0, y = 0.66, w = 1, h = 0.14, color = P.Trim, stripes = 16 },
+		}, "RailHazard")
+	end
 	local w, h = 0.9, 0.6
 	for _, side in { -1, 1 } do
 		wedge(
 			model,
 			CFrame.new(side * w / 4, BELT_TOP + 0.02, 0) * CFrame.Angles(0, 0, -side * math.pi / 2),
 			Vector3.new(0.04, w / 2, h),
-			"Trim",
+			"Neon",
 			TINY,
 			"Arrow"
 		)
@@ -1441,7 +1460,7 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 			if part:IsA("BasePart") and part.Name == "RailCap" then
 				part.Color = P.Cyan:Lerp(BLACK, 0.15)
 				part:SetAttribute("Kit", "Accent")
-			elseif part:IsA("BasePart") and part.Name == "RailGlow" then
+			elseif part:IsA("BasePart") and (part.Name == "RailGlow" or part.Name == "EdgeGlow" or part.Name == "Arrow") then
 				style(part, "Cyan", TINY)
 			end
 		end
@@ -2234,7 +2253,11 @@ local function sellBox(): Ctx
 	cyl(m, cc + Vector3.new(0, 0, 0.02), ZA, 0.3, 2.5, "Gold", TINY, "Coin")
 	cyl(m, cc + Vector3.new(0, 0, -0.14), ZA, 0.06, 2.0, "Trim", TINY)
 	star(m, cc + Vector3.new(0, 0, -0.2), 0.8, "Hot")
-	local rim = bowl(m, Vector3.new(hx, lidTop, hz + 0.2), 2.4, 0.4)
+	local rim = bowl(m, Vector3.new(hx, lidTop, hz + 0.2), 2.4, 0.4, "Hot")
+	-- gold coins heaped in the glowing bowl
+	for i, c in { { -0.35, 0.1, 0.4 }, { 0.3, -0.25, -0.3 }, { 0.05, 0.35, 0.15 } } do
+		cyl(m, Vector3.new(hx + c[1], rim + 0.06 + i * 0.05, hz + 0.2 + c[2]), Vector3.new(c[3], 1, 0.2).Unit, 0.12, 0.62, "Gold", TINY)
+	end
 	for _, part in m:GetDescendants() do
 		if part:IsA("BasePart") and part:GetAttribute("Kit") == "Trim" and part.CFrame.Position.Y > lidTop + 0.4 then
 			part.Color = P.Gold
@@ -2250,6 +2273,95 @@ local function sellBox(): Ctx
 	-- a little coin stack by the front
 	for i = 0, 2 do
 		cyl(m, Vector3.new(-1.9 + i * 0.12, bodyY + 0.1 + i * 0.16, front - 0.7), UP, 0.14, 0.75, "Gold", TINY)
+	end
+	-- (owner 2026-10-24: "more detail") a glowing SELL screen in a slate bezel
+	-- over the coin, a gold band and a glowing band round the body, amber
+	-- beacons on posts at the two front corners of the lid, gold feet
+	local screenC = Vector3.new(hx, bodyY + h - 0.75, front - 0.06)
+	block(m, CFrame.new(screenC + Vector3.new(0, 0, 0.05)), Vector3.new(3.0, 0.95, 0.12), "Frame", TINY, "ScreenBezel")
+	local screen = block(m, CFrame.new(screenC + Vector3.new(0, 0, -0.03)), Vector3.new(2.6, 0.7, 0.05), "Screen", TINY, "SellScreen")
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SellText"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.MaxDistance = 120
+	gui.Parent = screen
+	local text = Instance.new("TextLabel")
+	text.Name = "Text"
+	text.BackgroundTransparency = 1
+	text.Size = UDim2.fromScale(1, 1)
+	text.Text = "$ SELL $"
+	text.TextScaled = true
+	text.Font = Enum.Font.LuckiestGuy
+	text.TextColor3 = P.Gold
+	text.Parent = gui
+	-- the intake curtain on the sides and the back (belts feed it there):
+	-- rubber flaps under a gold rail, the hot glow leaking out under them
+	local flatX, flatZ = d - 2 * r, w - 2 * r
+	local curtainH = 1.3
+	local function curtain(center: Vector3, size: Vector3, face: Enum.NormalId, long: number)
+		local flaps = block(m, CFrame.new(center), size, "Rubber", TINY, "Curtain")
+		local slits: { Paint } = {}
+		local n = math.floor(long / 0.32)
+		for i = 1, n - 1 do
+			table.insert(slits, { x = i / n - 0.006, y = 0.04, w = 0.012, h = 0.96, color = rgb(78, 84, 106) })
+		end
+		paint(flaps, face, slits, "Flaps")
+		local up = Vector3.new(0, curtainH / 2 + 0.07, 0)
+		block(m, CFrame.new(center + up), size + Vector3.new(0.05, 0.14 - size.Y, 0.05), "Gold", TINY, "CurtainRail")
+		block(m, CFrame.new(center - up + Vector3.new(0, 0.01, 0)), size + Vector3.new(0.02, 0.08 - size.Y, 0.02), "Hot", TINY)
+	end
+	local cy = bodyY + 0.1 + curtainH / 2
+	for _, s in { -1, 1 } do
+		curtain(
+			Vector3.new(hx + s * (w / 2 + 0.03), cy, hz),
+			Vector3.new(0.06, curtainH, flatX - 0.1),
+			if s > 0 then Enum.NormalId.Right else Enum.NormalId.Left,
+			flatX
+		)
+	end
+	curtain(Vector3.new(hx, cy, hz + d / 2 + 0.03), Vector3.new(flatZ - 0.1, curtainH, 0.06), Enum.NormalId.Back, flatZ)
+	block(m, CFrame.new(Vector3.new(hx, bodyY + 0.35, front - 0.03)), Vector3.new(flatZ, 0.14, 0.06), "Hot", TINY)
+	-- a gold "$" coin on each side over the curtain
+	for _, face in { Enum.NormalId.Left, Enum.NormalId.Right } do
+		local faceH = h - r
+		local dia, cyFace = 1.0, 1.85
+		local emblem = paint(body, face, {
+			{
+				x = 0.5 - dia / flatX / 2,
+				y = 1 - cyFace / faceH - dia / faceH / 2,
+				w = dia / flatX,
+				h = dia / faceH,
+				color = P.Gold,
+				round = true,
+			},
+			{
+				x = 0.5 - dia * 0.78 / flatX / 2,
+				y = 1 - cyFace / faceH - dia * 0.78 / faceH / 2,
+				w = dia * 0.78 / flatX,
+				h = dia * 0.78 / faceH,
+				color = P.Trim,
+				round = true,
+			},
+		}, "CoinEmblem")
+		local dollar = Instance.new("TextLabel")
+		dollar.BackgroundTransparency = 1
+		dollar.Position = UDim2.fromScale(0.5 - dia / flatX / 2, 1 - cyFace / faceH - dia / faceH / 2)
+		dollar.Size = UDim2.fromScale(dia / flatX, dia / faceH)
+		dollar.Text = "$"
+		dollar.TextScaled = true
+		dollar.Font = Enum.Font.LuckiestGuy
+		dollar.TextColor3 = P.Gold
+		dollar.Parent = emblem
+	end
+	glowStrips(m, Vector3.new(hx, bodyY + h - r - 0.1, hz), w - 0.04, d - 0.04, r, 0.12, "Gold")
+	for _, sx in { -1, 1 } do
+		local post = Vector3.new(hx + sx * (w / 2 - 0.5), lidTop, front + 0.5)
+		cyl(m, post + Vector3.new(0, 0.45, 0), UP, 0.9, 0.22, "Frame", TINY)
+		ball(m, post + Vector3.new(0, 1.05, 0), 0.42, "Hot", TINY, "Beacon")
+		cyl(m, post + Vector3.new(0, 0.84, 0), UP, 0.08, 0.5, "Gold", TINY)
 	end
 
 	boxSockets(ctx, hx, hz, w, d, top, 1.0)

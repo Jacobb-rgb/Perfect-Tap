@@ -2108,8 +2108,10 @@ function MachineBuilder.build(id: string, level: number?): Model
 		-- (LaserBuilder.gate, 1 x 1) on a plain invisible base the size of their
 		-- footprint (built facing +Z, turned to face the machines' front, -Z);
 		-- both push their Drops out of the front (the Output attachment)
-		local turn = CFrame.Angles(0, math.pi, 0)
-		model = if id == DropperConfig.Laser.Id then LaserBuilder.gate(turn) else DropperBuilder.build(id, turn)
+		local laser = id == DropperConfig.Laser.Id
+		-- (a dropper's arm, along its -X, points to the front: its nozzle over the cell in front)
+		local turn = CFrame.Angles(0, if laser then math.pi else -math.pi / 2, 0)
+		model = if laser then LaserBuilder.gate(turn) else DropperBuilder.build(id, turn, false, true)
 		model.Name = id
 		model:SetAttribute("MachineId", id)
 		local cell = GameConfig.CellSize
@@ -2128,7 +2130,7 @@ function MachineBuilder.build(id: string, level: number?): Model
 				height = math.max(height, cf.Position.Y + ey)
 			end
 		end
-		if reach > half - 0.1 then
+		if laser and reach > half - 0.1 then
 			local fit = (half - 0.1) / reach
 			BlockKit.scale(model, CFrame.new(), fit)
 			height *= fit

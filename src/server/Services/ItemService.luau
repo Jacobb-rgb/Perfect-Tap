@@ -980,7 +980,8 @@ local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, vel
 	local id = nextId
 	-- machines and chutes (serverOwned) make belt items: the light look,
 	-- in a parked model of the same owner nearby when there is one
-	local light = serverOwned
+	-- (a dropper's Drop always wears the full ore look: owner 2026-10-24, "it must look like our ores")
+	local light = serverOwned and info.Kind ~= DropperConfig.DropKind
 	local reuse = if light then unpark(owner, cf.Position) else nil
 	local model: Model, body: BasePart
 	if reuse then

@@ -178,6 +178,10 @@ DropperConfig.DropEvery = 3 -- seconds between two Drops of one dropper
 DropperConfig.MaxLiveDrops = 15 -- (half of GameConfig.MaxLooseItemsPerPlayer: the ore factory keeps its room)
 DropperConfig.MaxLiveDropsServer = 120
 DropperConfig.DropLife = 45
+-- Studs over the plot floor where a dropper's Drop appears: right under its
+-- nozzle, which hangs over the middle of the cell in front of it (the belt
+-- there: DropperBuilder's onBelt arm, Grid.outputLocal); it falls onto the belt.
+DropperConfig.SpoutHeight = 6.4
 
 -- Is `desc` (an item Desc: K, O, G, R) a Drop?
 function DropperConfig.isDrop(desc: any): boolean

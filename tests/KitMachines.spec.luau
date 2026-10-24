@@ -158,7 +158,8 @@ return function(T, Loader)
 			end
 		end
 		T.eq(arrows, 2, "two arrow wedges")
-		T.truthy(#parts(belt) <= 12, "belt parts: " .. #parts(belt))
+		-- (15: the owner's detailed belts 2026-10-24, phone lag accepted; was 12)
+		T.truthy(#parts(belt) <= 15, "belt parts: " .. #parts(belt))
 		T.truthy(attachment(belt, "Prompt"), "belt Prompt")
 		local capped = KitMachines.conveyor({ start = { arrow = "right" }, finish = {} })
 		T.truthy(capped:FindFirstChild("Beacon", true), "start cap beacon")

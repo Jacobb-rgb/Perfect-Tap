@@ -1,5 +1,6 @@
 -- Droppers and the Money Laser (owner 2026-10-21): config, income, machines, models.
 return function(T, Loader)
+	local Enum = (require("@lune/roblox") :: any).Enum
 	local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
@@ -68,6 +69,20 @@ return function(T, Loader)
 			T.truthy(count <= 140, id .. " part budget (" .. count .. ")")
 		end
 		T.eq(MachineData.ById[DropperConfig.Laser.Id].ConveyorFaces, "NoFront", "belts feed the laser from the back and the sides")
+		-- the dropper's nozzle is right over its Output (the belt cell in front), the Drop falls from there
+		local model = MachineBuilder.build("GoldDropper")
+		local out = Grid.outputLocal("GoldDropper") :: any
+		local best = math.huge
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.Material == Enum.Material.Neon and d.Size.Y < 0.2 then
+				local p = d.CFrame.Position
+				local flat = math.sqrt((p.X - out.X) ^ 2 + (p.Z - out.Z) ^ 2)
+				if p.Y > out.Y and p.Y < out.Y + 1.2 then
+					best = math.min(best, flat)
+				end
+			end
+		end
+		T.truthy(best < 0.3, `the glowing nozzle is right over the Output ({best})`)
 	end)
 
 	T.test("droppers: the Money Laser is tiny: lower and smaller than the Sell Box (owner 2026-10-24)", function()

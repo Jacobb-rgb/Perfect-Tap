@@ -22,8 +22,9 @@
 	                     column, a swirl ring and black orbs around it
 	(owner 2026-10-24: back to the blocks, themes "like a Heaven Dropper")
 
-	build(id, cf, lite?) -> Model (anchored; origin = the middle of its stage's bottom;
-	front = +Z; the arm reaches toward -X and drops onto the pad there).
+	build(id, cf, lite?, onBelt?) -> Model (anchored; origin = the middle of its
+	stage's bottom; front = +Z; the arm reaches toward -X and drops onto the pad
+	there; onBelt: the plot's machine, the arm over the belt cell beside it).
 	`lite` (the DROPPERS shop's showroom, phones): plain blocks in place of
 	the framed pedestal, column and arm blocks, two crystal clusters in
 	place of four, one ore on the pad, and every ore a glowing gem block in
@@ -124,6 +125,16 @@ local function cluster(parent: Instance, cf: CFrame, st: Style, seed: number, n:
 	end
 end
 
+-- On a plot (build's `onBelt`, owner 2026-10-24: "the spout points over the
+-- belt and the ore falls right onto it"): the body stands to one side of the
+-- stage (BeltShift along z) and the arm reaches out over the belt cell in
+-- front, its nozzle at BeltSpoutX right over that cell's middle, with a thin
+-- light beam down to BeltTop; no pad. MachineBuilder turns it so the arm
+-- points to the machine's front (Grid.outputLocal: the nozzle, DropperConfig.SpoutHeight).
+DropperBuilder.BeltShift = -1.95
+DropperBuilder.BeltSpoutX = -7.06
+DropperBuilder.BeltTop = 1.0 -- studs: a belt's top (the beam's foot)
+
 -- the geometry is built at 1 and then scaled up by Scale (the ores keep their real size)
 DropperBuilder.Scale = 0.85 -- a 2 x 2 cell machine like the others (9.4 x 7 -> 8 x 6 studs, ~9 tall)
 DropperBuilder.Cells = { 2, 2 }
@@ -164,13 +175,19 @@ local SPIRAL = {
 	".#....",
 }
 
-function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
+function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: boolean?): Model
 	local dropper = DropperConfig.ById[id]
 	local st = DropperBuilder.Styles[id]
 	assert(dropper and st, "Unknown dropper " .. tostring(id))
 	local model = Instance.new("Model")
 	model.Name = id
+	-- (onBelt: the machine on a plot, see the header: the body moves to one
+	-- side of the stage, the arm reaches out over the belt cell in front)
+	local DZ = if onBelt then DropperBuilder.BeltShift else 0
 	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z + DZ)
+	end
+	local function at0(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
 	end
 	local function cube(c: CFrame, size: Vector3, face: Color3?, rim: Color3?, mode: string?): Part
@@ -181,20 +198,24 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 	type Drop = { Id: string, At: CFrame, Seed: number }
 	local ores: { Drop } = {}
 	local function dropOre(oreId: string, x: number, y: number, z: number, turn: CFrame, seed: number)
-		table.insert(ores, { Id = oreId, At = cf * CFrame.new(x * K, y * K, z * K) * turn, Seed = seed })
+		table.insert(ores, { Id = oreId, At = cf * CFrame.new(x * K, y * K, (z + DZ) * K) * turn, Seed = seed })
 	end
 	local glow = glowOf(st, 1)
-	local W, D = DropperBuilder.Width, DropperBuilder.Depth
+	local W = DropperBuilder.Width
+	local D = if onBelt then DropperBuilder.Width else DropperBuilder.Depth
 	local DARK, DARK_RIM = rgb(26, 24, 38), rgb(14, 12, 22)
-	local bx, sx = 1.0, -2.7 -- the pedestal's middle, the spout's x
+	-- the pedestal's middle, the spout's x (onBelt: over the belt cell in front),
+	-- px: where the pad and the decor by it stand
+	local px = -2.7
+	local bx, sx = 1.0, if onBelt then DropperBuilder.BeltSpoutX else px
 	local stageH = 0.5
 
 	---------------------------------------------------------------- the stage, its glowing front edge and the price
-	cube(at(0, stageH / 2, 0), Vector3.new(W, stageH, D), DARK, DARK_RIM, "flat")
-	Geo.block(model, at(0, stageH + 0.01, D / 2 - 0.2), Vector3.new(W - 0.2, 0.04, 0.16), glow, NEON, decor())
+	cube(at0(0, stageH / 2, 0), Vector3.new(W, stageH, D), DARK, DARK_RIM, "flat")
+	Geo.block(model, at0(0, stageH + 0.01, D / 2 - 0.2), Vector3.new(W - 0.2, 0.04, 0.16), glow, NEON, decor())
 	BlockKit.text(
 		model,
-		at(0, stageH / 2, D / 2 + 0.05),
+		at0(0, stageH / 2, D / 2 + 0.05),
 		Vector3.new(4.2, 0.46, 0.06),
 		Format.money(dropper.Price),
 		rgb(255, 230, 120),
@@ -271,30 +292,44 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 	light.Parent = lamp
 	local padY = stageH + 0.35
 	local beamTop = spoutY - 0.5
-	Geo.block(model, at(sx, beamTop - 0.5, -0.4), Vector3.new(1.1, 1.0, 1.1), glow, NEON, decor({ Transparency = 0.75 }))
-	for i = 1, 2 do
-		local oreId = dropper.Ores[(i - 1) % #dropper.Ores + 1]
-		dropOre(oreId, sx + (i - 1.5) * 0.2, beamTop - 0.6 - i * 1.9, -0.4 + (i % 2) * 0.15, CFrame.Angles(i, i * 2, 0.4), 30 + i)
-	end
-	cube(at(sx - 0.1, padY, 0.2), Vector3.new(2.8, 0.7, 3.4), DARK, DARK_RIM, "flat")
-	for _, side in { -1, 1 } do
-		Geo.block(model, at(sx - 0.1 + side * 1.36, padY, 0.2), Vector3.new(0.1, 0.72, 3.42), glow, NEON, decor())
-		Geo.block(model, at(sx - 0.1, padY, 0.2 + side * 1.66), Vector3.new(2.82, 0.72, 0.1), glow, NEON, decor())
-	end
-	for i, p in { Vector3.new(-0.6, 0, 0.1), Vector3.new(0.4, 0, 1.0), Vector3.new(0, 0.25, 0.4) } do
-		if lite and i > 1 then
-			break
+	if onBelt then
+		-- a thin light beam from the nozzle down to the belt
+		local bottom = DropperBuilder.BeltTop / K
+		local beam = Geo.block(
+			model,
+			at(sx, (beamTop + bottom) / 2, -0.4),
+			Vector3.new(0.7, beamTop - bottom, 0.7),
+			glow,
+			NEON,
+			decor({ Transparency = 0.82 })
+		)
+		beam.Name = "Beam"
+	else
+		Geo.block(model, at(sx, beamTop - 0.5, -0.4), Vector3.new(1.1, 1.0, 1.1), glow, NEON, decor({ Transparency = 0.75 }))
+		for i = 1, 2 do
+			local oreId = dropper.Ores[(i - 1) % #dropper.Ores + 1]
+			dropOre(oreId, sx + (i - 1.5) * 0.2, beamTop - 0.6 - i * 1.9, -0.4 + (i % 2) * 0.15, CFrame.Angles(i, i * 2, 0.4), 30 + i)
 		end
-		local oreId = dropper.Ores[(i + 1) % #dropper.Ores + 1]
-		dropOre(oreId, sx + p.X, padY + 0.6 + p.Y, -0.4 + p.Z, CFrame.Angles(0.3, i * 1.7, 0.2), 40 + i)
+		cube(at(sx - 0.1, padY, 0.2), Vector3.new(2.8, 0.7, 3.4), DARK, DARK_RIM, "flat")
+		for _, side in { -1, 1 } do
+			Geo.block(model, at(sx - 0.1 + side * 1.36, padY, 0.2), Vector3.new(0.1, 0.72, 3.42), glow, NEON, decor())
+			Geo.block(model, at(sx - 0.1, padY, 0.2 + side * 1.66), Vector3.new(2.82, 0.72, 0.1), glow, NEON, decor())
+		end
+		for i, p in { Vector3.new(-0.6, 0, 0.1), Vector3.new(0.4, 0, 1.0), Vector3.new(0, 0.25, 0.4) } do
+			if lite and i > 1 then
+				break
+			end
+			local oreId = dropper.Ores[(i + 1) % #dropper.Ores + 1]
+			dropOre(oreId, sx + p.X, padY + 0.6 + p.Y, -0.4 + p.Z, CFrame.Angles(0.3, i * 1.7, 0.2), 40 + i)
+		end
 	end
 
 	---------------------------------------------------------------- crystals around the pedestal and the pad
 	cluster(model, at(bx + 2.6, stageH, 2.0), st, 1, 4)
-	cluster(model, at(sx - 1.4, stageH, 2.2), st, 2, 3)
+	cluster(model, at(if onBelt then px - 0.7 else sx - 1.4, stageH, 2.2), st, 2, 3)
 	if not lite then
 		cluster(model, at(bx - 2.3, stageH, 1.9), st, 3, 3)
-		cluster(model, at(bx + 2.4, stageH, -2.4), st, 5, 2)
+		cluster(model, at(bx + 2.4, stageH, if onBelt then -1.5 else -2.4), st, 5, 2)
 	end
 
 	---------------------------------------------------------------- what each one is made of
@@ -327,7 +362,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			for k = 1, 3 do
 				Geo.ball(
 					model,
-					at(sx - 0.8 + k * 0.5, stageH + 0.6 + k * 0.35, 1.4 - k * 0.3).Position,
+					at(px - 0.8 + k * 0.5, stageH + 0.6 + k * 0.35, 1.4 - k * 0.3).Position,
 					0.25 + k * 0.08,
 					SLIME,
 					NEON,
@@ -391,7 +426,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 		if not lite then
 			cube(at(bx + 0.3, p2y + 0.62, -0.4), Vector3.new(3.82, 0.3, 3.62), SNOW, SNOW_RIM, "side")
 			-- snow heaps on the stage
-			for _, h in { Vector3.new(bx + 3.2, 0, 2.3), Vector3.new(sx - 1.7, 0, 2.5), Vector3.new(bx + 3.4, 0, -2.6) } do
+			for _, h in { Vector3.new(bx + 2.6, 0, 2.3), Vector3.new(px - 1.0, 0, 2.5), Vector3.new(bx + 2.6, 0, -1.6) } do
 				Geo.block(model, at(h.X, stageH + 0.25, h.Z), Vector3.new(1.5, 0.5, 1.1), SNOW, PLASTIC, decor())
 				Geo.block(model, at(h.X + 0.2, stageH + 0.6, h.Z), Vector3.new(0.9, 0.4, 0.7), SNOW, PLASTIC, decor())
 			end
@@ -446,10 +481,10 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			{ bx - 1.1, upperY + 0.4, -0.6, 1.2, -0.2, 1.7, 0.55 },
 			{ bx + 0.3, lowerY - 0.3, 0.9, 0.2, 1.25, 1.6, 0.5 },
 			{ bx - 0.4, upperY + 0.9, 0.7, -0.3, 1.1, 1.4, 0.45 },
-			{ bx + 2.3, p1y + 0.8, -1.2, -0.7, -0.4, 2.0, 0.6 },
+			{ bx + 1.8, p1y + 0.8, -1.0, -0.5, -0.3, 2.0, 0.6 },
 			{ bx - 2.3, p1y + 0.8, 1.2, 0.7, 0.4, 1.8, 0.55 },
-			{ sx + 1.4, stageH, -2.5, 0.3, -0.5, 1.8, 0.55 },
-			{ bx + 3.3, stageH, 2.4, -0.4, 0.4, 1.6, 0.5 },
+			{ px + 1.4, stageH, -1.6, 0.3, -0.3, 1.8, 0.55 },
+			{ bx + 2.3, stageH, 2.0, -0.3, 0.3, 1.6, 0.5 },
 			{ armLeft + 0.2, armY + 0.2, 0.7, 0.8, 0.9, 1.4, 0.45 },
 		}
 		local count = if lite then 5 else #spikes
@@ -481,7 +516,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			for f = 1, feathers do
 				Geo.block(
 					model,
-					at(bx + 0.1 + side * (1.3 + f * 0.55), upperY + 0.6 - f * 0.45, -0.6) * CFrame.Angles(0, 0, side * math.rad(25)),
+					at(bx + 0.1 + side * (1.3 + f * 0.45), upperY + 0.6 - f * 0.45, -0.6) * CFrame.Angles(0, 0, side * math.rad(25)),
 					Vector3.new(0.9 + f * 0.25, 0.42, 0.3),
 					Color3.new(1, 1, 1),
 					PLASTIC,
@@ -490,7 +525,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			end
 		end
 		if not lite then
-			for _, c in { Vector3.new(bx - 2.6, 0, 2.4), Vector3.new(bx + 3.2, 0, 1.0), Vector3.new(sx - 1.6, 0, -2.0) } do
+			for _, c in { Vector3.new(bx - 2.6, 0, 2.4), Vector3.new(bx + 2.5, 0, 1.0), Vector3.new(px - 1.0, 0, -2.0) } do
 				Geo.block(model, at(c.X, stageH + 0.35, c.Z), Vector3.new(1.4, 0.7, 1.0), rgb(250, 250, 255), PLASTIC, decor())
 				Geo.block(model, at(c.X + 0.5, stageH + 0.75, c.Z - 0.1), Vector3.new(0.9, 0.6, 0.8), rgb(235, 240, 255), PLASTIC, decor())
 			end
@@ -527,7 +562,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 				local a = k / 5 * math.pi
 				Geo.block(
 					model,
-					at(math.cos(a) * r, stageH + 1 + math.sin(a) * r, -3.6),
+					at(math.cos(a) * r, stageH + 1 + math.sin(a) * r, if onBelt then -2.4 else -3.6),
 					Vector3.new(0.62, 0.62, 0.3),
 					RAINBOW[band],
 					PLASTIC,
@@ -556,7 +591,8 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			if k % 3 == 0 then
 				Geo.block(
 					model,
-					at(bx + math.cos(a) * 3.6, stageH + 1.2 + math.sin(a * 2) * 0.25, -0.2 + math.sin(a) * 3.0) * CFrame.Angles(0, -a, 0),
+					at(bx + math.cos(a) * 3.6, stageH + 1.2 + math.sin(a * 2) * 0.25, -0.2 + math.sin(a) * (if onBelt then 2.2 else 3.0))
+						* CFrame.Angles(0, -a, 0),
 					Vector3.new(0.12, 0.08, 1.1),
 					glow,
 					NEON,
@@ -568,7 +604,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?): Model
 			{
 				Vector3.new(bx + 2.9, 5.0, 1.0),
 				Vector3.new(bx - 2.4, 6.2, 0.8),
-				Vector3.new(sx - 1.2, 7.0, -1.8),
+				Vector3.new(px - 1.2, 7.0, -1.8),
 			}
 		do
 			Geo.ball(model, (at(p.X, p.Y, p.Z)).Position, 0.6 + (i % 3) * 0.25, rgb(18, 10, 30), PLASTIC, decor())

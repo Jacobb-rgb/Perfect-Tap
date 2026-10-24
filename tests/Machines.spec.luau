@@ -79,8 +79,13 @@ return function(T, Loader)
 				local out = pos(model, "Output")
 				T.truthy(near(out, expected), `{machine.Id} Output at Grid.outputLocal ({out} vs {expected})`)
 				local w, d = machine.Size[1], machine.Size[2]
-				-- 0.5 studs in front of the footprint
-				T.near(out.Z, -(d * CELL / 2) - 0.5, 1e-4, machine.Id .. " 0.5 studs out front")
+				if machine.Behaviour == "Dropper" then
+					-- a dropper's nozzle hangs over the middle of the cell in front (the belt)
+					T.near(out.Z, -(d * CELL / 2) - CELL / 2, 1e-4, machine.Id .. " over the front cell")
+				else
+					-- 0.5 studs in front of the footprint
+					T.near(out.Z, -(d * CELL / 2) - 0.5, 1e-4, machine.Id .. " 0.5 studs out front")
+				end
 				-- on a cell centre column
 				local column = (out.X + w * CELL / 2) / CELL - 0.5
 				T.near(column, math.floor(column + 0.5), 1e-4, machine.Id .. " on a cell centre")
@@ -152,7 +157,7 @@ return function(T, Loader)
 	T.test("Machines: the conveyor keeps the parts the game uses and stays light", function()
 		local model = MachineBuilder.build("Conveyor")
 		local list = parts(model)
-		T.le(#list, 12, "conveyor parts")
+		T.le(#list, 15, "conveyor parts") -- (the owner's detailed belts 2026-10-24; was 12)
 		local belt = model:FindFirstChild("Belt")
 		T.truthy(belt, "Belt")
 		T.truthy(belt:HasTag("ConveyorBelt"), "Belt tagged ConveyorBelt")
@@ -334,6 +339,11 @@ return function(T, Loader)
 				local p = part.CFrame.Position
 				local chute = part.Name == "Chute" or part.Name == "ChuteLip" or part.Name == "Molten"
 				local front = if chute then hd + 0.8 else hd + 0.12
+				-- a dropper's arm (and its light beam) reaches out over the belt cell in front, above the belt
+				local _, ey = extents(part)
+				if machine.Behaviour == "Dropper" and (p.Y - ey > 2 or part.Name == "Beam") then
+					front = hd + CELL + 0.12
+				end
 				-- side outputs (Splitter, Sorter): their chutes reach into the side cells
 				local side = if chute and machine.SideOutputs then hw + 0.8 else hw + 0.12
 				T.truthy(
