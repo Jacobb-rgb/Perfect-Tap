@@ -190,9 +190,11 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Style.streaming(float, "Atomic")
 	Kit.tag(float, "Spin")
 
-	-- the shopkeeper golem behind the table (ShopkeeperController), its big head
-	-- clear of it, floating on its clouds high enough to look over the crystals
-	ShopkeeperConfig.mark(counter, at(0, FLOOR + 1.6, -0.4), "Enchant")
+	-- the shopkeeper golem (ShopkeeperController) beside the rune table on the
+	-- viewer's left, in front of the window wall, turned a little to the table's
+	-- front: behind the table the door's lintel and the floating crystals hide
+	-- it (owner: "not very visible, a bit bigger")
+	ShopkeeperConfig.mark(counter, at(3.4, FLOOR, -2.5) * CFrame.Angles(0, 0.3, 0), "Enchant")
 
 	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster
 	-- and a violet container beside the module

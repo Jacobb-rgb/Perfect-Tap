@@ -64,7 +64,7 @@ ShopkeeperConfig.Shops = {
 	Tech = { Golem = "StormSentinel", Size = 1.35, Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS },
 	Sell = {
 		Golem = "Flamewing",
-		Size = 1.5,
+		Size = 1.9, -- (owner: "not very visible, a bit bigger")
 		Hello = { "Got ore? I'll buy it!", "Bring me your ore!" },
 		Thanks = { "Pleasure doing business!", "Thanks, miner!" },
 	},
