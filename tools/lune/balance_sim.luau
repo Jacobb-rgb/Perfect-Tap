@@ -138,6 +138,12 @@ local A = {
 	-- Laser (at most one per dropper) when it costs at most DropperMinutes of the current total income
 	Droppers = false,
 	DropperMinutes = 30,
+	-- real ore on the belts (2026-10-24): the droppers earn when their Drops sell in a Sell Box.
+	-- DropBeltSeconds: a Drop's ride from the dropper to the Sell Box (live Drops = droppers /
+	-- DropEvery x this, capped at DropperConfig.MaxLiveDrops: a long line slows the droppers);
+	-- DropLoss: the share that falls off a belt or waits too long (DropLife). 0 / 0 = the old passive income.
+	DropBeltSeconds = 8,
+	DropLoss = 0.03,
 }
 
 -- Scenarios run one after the other (each overrides some assumptions).
@@ -555,9 +561,7 @@ end
 -- Coins per second from selling (expected), given the cleaned flow.
 local function saleRate(p: any, cleaned: number, raw: number, floor: any): number
 	local value = meanValue(floor, luckOf(p))
-	local grade = if p.Cleaners > 0
-		then meanGradeMult(MachineData.gradeOdds(p.Upgrades.CleanerQuality))
-		else meanGradeMult(A.HandGrades)
+	local grade = if p.Cleaners > 0 then meanGradeMult(MachineData.gradeOdds(p.Upgrades.CleanerQuality)) else meanGradeMult(A.HandGrades)
 	local f = furnaceRate(p)
 	local perClean: number
 	if p.Crusher then
@@ -582,7 +586,6 @@ local function podiumIncome(p: any): number
 	local level = if A.Levels then LevelConfig.bonusFor(p.Level or 1) else 0
 	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0) + level)
 end
-
 
 local function incomeRate(p: any): number
 	local cleaned, raw, floor = flow(p)
@@ -778,11 +781,13 @@ local function candidates(p: any): { any }
 	end
 	-- the Tech shop's type upgrades (option MachineUpgrades)
 	if A.MachineUpgrades then
-		for _, up in {
-			{ Key = "CleanerSpeed", Machine = "AutoCleaner", Kind = "Speed", Needs = p.Cleaners > 0 },
-			{ Key = "CleanerQuality", Machine = "AutoCleaner", Kind = "Quality", Needs = p.Cleaners > 0 },
-			{ Key = "CrusherSpeed", Machine = "Crusher", Kind = "Speed", Needs = p.Crusher },
-		} do
+		for _, up in
+			{
+				{ Key = "CleanerSpeed", Machine = "AutoCleaner", Kind = "Speed", Needs = p.Cleaners > 0 },
+				{ Key = "CleanerQuality", Machine = "AutoCleaner", Kind = "Quality", Needs = p.Cleaners > 0 },
+				{ Key = "CrusherSpeed", Machine = "Crusher", Kind = "Speed", Needs = p.Crusher },
+			}
+		do
 			local prices = MachineData.upgradePrices(up.Machine, up.Kind)
 			local mult = (A.UpgradePriceMult and A.UpgradePriceMult[up.Kind]) or 1
 			local level = p.Upgrades[up.Key] + 1
@@ -1135,7 +1140,13 @@ local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t:
 	end
 	local w = LevelConfig.ById
 	local xp = A.Step
-		* (rocks * w.RocksBroken.Xp + (cleaned + raw) * w.OresMined.Xp + cleaned * w.OresCleaned.Xp + raw * w.ItemsSold.Xp + w.PlaySeconds.Xp)
+		* (
+			rocks * w.RocksBroken.Xp
+			+ (cleaned + raw) * w.OresMined.Xp
+			+ cleaned * w.OresCleaned.Xp
+			+ raw * w.ItemsSold.Xp
+			+ w.PlaySeconds.Xp
+		)
 	xp += (p.BuysSeen and #p.Log - p.BuysSeen or 0) * w.Upgrades.Xp -- every buy: a machine, an upgrade, a level
 	p.BuysSeen = #p.Log
 	p.LevelRecord = p.LevelRecord or { Level = 1, Xp = 0, Seen = {}, Ready = true }
@@ -1204,8 +1215,12 @@ local function simulate(seed: number, start: any?): any
 		end
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
 		if A.Droppers and p.Placed then
-			-- the game's rule: the droppers earn through the same income multiplier as the podiums
-			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+			-- the game's rule: a Drop sold in a Sell Box pays through the same income multiplier as the
+			-- podiums; the owner's live-Drop cap and the losses on the belts slow it down
+			local droppers = (p.DropperNext or 1) - 1
+			local inFlight = droppers / DropperConfig.DropEvery * A.DropBeltSeconds
+			local flow = if inFlight > 0 then math.min(1, DropperConfig.MaxLiveDrops / inFlight) else 1
+			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0)) * flow * (1 - A.DropLoss)
 		end
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
@@ -1297,8 +1312,7 @@ local function simulate(seed: number, start: any?): any
 			-- back faster than the saving takes (it brings the blaster closer:
 			-- (R + P) / (I + g) < R / I exactly when P / g < R / I)
 			local saving = math.max(0, reserve - p.Coins) / math.max(income, 1e-9)
-			local affordable = best
-				and (p.Coins - reserve >= best.Price or (reserve > 0 and p.Coins >= best.Price and bestScore < saving))
+			local affordable = best and (p.Coins - reserve >= best.Price or (reserve > 0 and p.Coins >= best.Price and bestScore < saving))
 			if best and affordable then
 				buy(p, best.Name, best.Price, t)
 				best.Apply(p, rng)
