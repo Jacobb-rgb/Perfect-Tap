@@ -15,7 +15,13 @@
 	  LookDistance (the neck joint, clamped); walking up inside GreetDistance
 	  makes him wave and say hello (once per GreetCooldown); a buy (a Notify
 	  of Kind "Reward") or a sale (Earned from "Sell") inside ThanksDistance
-	  makes the nearest keeper cheer and say thanks.
+	  makes the nearest keeper cheer, say thanks and throw a gold burst.
+	- Style pass (owner 2026-10-24 "a bit nicer, with effects"): his apron
+	  badge says the shop (ShopkeeperConfig.badge); inside LifeDistance he
+	  blinks and his lantern flickers; only the nearest keeper inside
+	  LightDistance has his real lights on (the helmet SpotLight, the chest
+	  light: the game's light budget), the others glow with neon and the
+	  lamp's beam (ShopkeeperBuilder.effects).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -49,6 +55,15 @@ type Keeper = {
 	GreetedAt: number,
 	Lines: number,
 	Bubble: BillboardGui?,
+	Lights: { Light },
+	Lit: boolean,
+	Eyes: { { Part: BasePart, Size: Vector3 } },
+	NextBlink: number,
+	BlinkUntil: number,
+	Lantern: BasePart?,
+	LanternColor: Color3,
+	Burst: ParticleEmitter?,
+	Seed: number,
 }
 
 local spots: { [Attachment]: boolean } = {}
@@ -96,24 +111,28 @@ local function addKeeper(spot: Attachment)
 	local shop = spot:GetAttribute("Shop")
 	local shopId = if type(shop) == "string" then shop else ""
 	local scale = ShopkeeperConfig.scale(shopId)
-	local model = ShopkeeperBuilder.build(spot.WorldCFrame, scale)
+	local model = ShopkeeperBuilder.build(spot.WorldCFrame, scale, { Badge = ShopkeeperConfig.badge(shopId) })
 	model.Name = "Shopkeeper_" .. shopId
 	local root = model.PrimaryPart :: BasePart
 	local torso = model:FindFirstChild("Torso")
 	local head = model:FindFirstChild("Head")
 	local neck = if torso then torso:FindFirstChild("Neck") else nil
-
-	-- the soft light in front of his chest
-	local lamp = Instance.new("Attachment")
-	lamp.Name = "FaceLight"
-	lamp.Parent = root
-	lamp.WorldCFrame = spot.WorldCFrame * CFrame.new(ShopkeeperConfig.FaceLight.Offset * scale)
-	local light = Instance.new("PointLight")
-	light.Range = ShopkeeperConfig.FaceLight.Range
-	light.Brightness = ShopkeeperConfig.FaceLight.Brightness
-	light.Color = ShopkeeperConfig.FaceLight.Color
-	light.Shadows = false
-	light.Parent = lamp
+	-- what the life and the light budget touch
+	local lights: { Light } = {}
+	local eyes: { { Part: BasePart, Size: Vector3 } } = {}
+	local lantern: BasePart? = nil
+	local burst: ParticleEmitter? = nil
+	for _, d in model:GetDescendants() do
+		if d:IsA("Light") then
+			table.insert(lights, d)
+		elseif d:IsA("ParticleEmitter") and d.Name == "CoinBurst" then
+			burst = d
+		elseif d:IsA("BasePart") and string.find(d.Name, "^eye") ~= nil and string.find(d.Name, "^eyebrow") == nil then
+			table.insert(eyes, { Part = d, Size = d.Size })
+		elseif d:IsA("BasePart") and d.Name == "lantern_glass" then
+			lantern = d
+		end
+	end
 	model.Parent = container()
 
 	local controller = model:FindFirstChildOfClass("AnimationController")
@@ -141,6 +160,15 @@ local function addKeeper(spot: Attachment)
 		GreetedAt = -math.huge,
 		Lines = math.random(1, 4),
 		Bubble = nil,
+		Lights = lights,
+		Lit = false,
+		Eyes = eyes,
+		NextBlink = os.clock() + math.random() * 3,
+		BlinkUntil = 0,
+		Lantern = lantern,
+		LanternColor = if lantern then lantern.Color else Color3.new(1, 1, 1),
+		Burst = burst,
+		Seed = math.random() * 100,
 	}
 end
 
@@ -254,6 +282,9 @@ local function thank()
 		if best.Cheer then
 			best.Cheer:Play(0.15)
 		end
+		if best.Burst then
+			best.Burst:Emit(ShopkeeperConfig.BurstCount)
+		end
 		say(best, ShopkeeperConfig.line(best.Shop, "Thanks", best.Lines))
 		best.Lines += 1
 	end
@@ -261,10 +292,37 @@ end
 
 ---------------------------------------------------------------- every frame
 
+-- The eyes shut for a blink, or open again.
+local function setBlink(k: Keeper, shut: boolean)
+	for _, eye in k.Eyes do
+		eye.Part.Size = if shut then Vector3.new(eye.Size.X, eye.Size.Y * 0.15, eye.Size.Z) else eye.Size
+	end
+end
+
 local function step(dt: number)
 	local me = playerRoot()
 	local now = os.clock()
 	local catchUp = 1 - math.exp(-ShopkeeperConfig.LookSpeed * dt)
+	-- the light budget: real lights only on the nearest keeper inside LightDistance
+	local nearest: Keeper? = nil
+	local nearestDistance = ShopkeeperConfig.LightDistance
+	if me then
+		for _, k in keepers do
+			local d = (k.Root.Position - me.Position).Magnitude
+			if d < nearestDistance then
+				nearest, nearestDistance = k, d
+			end
+		end
+	end
+	for _, k in keepers do
+		local lit = k == nearest
+		if lit ~= k.Lit then
+			k.Lit = lit
+			for _, light in k.Lights do
+				light.Enabled = lit
+			end
+		end
+	end
 	for _, k in keepers do
 		local yaw, pitch = 0, 0
 		local distance = math.huge
@@ -281,6 +339,24 @@ local function step(dt: number)
 			greet(k, now)
 		end
 		k.Near = near
+		-- blinking and the lantern's flicker, only close by (a blink always ends)
+		if k.BlinkUntil > 0 and now >= k.BlinkUntil then
+			k.BlinkUntil = 0
+			setBlink(k, false)
+		end
+		if distance < ShopkeeperConfig.LifeDistance then
+			if k.BlinkUntil == 0 and now >= k.NextBlink then
+				k.BlinkUntil = now + ShopkeeperConfig.BlinkSeconds
+				local range = ShopkeeperConfig.BlinkEvery
+				k.NextBlink = now + range[1] + math.random() * (range[2] - range[1])
+				setBlink(k, true)
+			end
+			local lantern = k.Lantern
+			if lantern then
+				local flicker = (math.noise(now * 7, k.Seed) + 1) / 2 -- 0..1
+				lantern.Color = k.LanternColor:Lerp(Color3.fromRGB(150, 70, 10), flicker * 0.45)
+			end
+		end
 		-- the head eases toward the player (or back to straight ahead)
 		local neck = k.Neck
 		if neck and (math.abs(yaw - k.Yaw) > 1e-3 or math.abs(pitch - k.Pitch) > 1e-3) then

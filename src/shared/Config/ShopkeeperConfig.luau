@@ -27,13 +27,16 @@ ShopkeeperConfig.ShowDistance = 90 -- studs from the player: build him
 ShopkeeperConfig.HideDistance = 110 -- and take him away again past this
 ShopkeeperConfig.CheckEvery = 0.4 -- seconds between the distance checks
 
--- A soft light in front of his chest: the shops' insides are dark.
-ShopkeeperConfig.FaceLight = {
-	Offset = Vector3.new(0, 3.6, -2.4), -- from his feet, in his own frame at scale 1 (-Z = in front)
-	Range = 8,
-	Brightness = 1,
-	Color = Color3.fromRGB(255, 236, 214),
-}
+-- Real lights (the helmet lamp's SpotLight, the light on his chest) only on
+-- the nearest keeper inside LightDistance: the game's light budget (phones;
+-- the others glow with neon and the lamp's beam only).
+ShopkeeperConfig.LightDistance = 40
+
+-- Life (style pass, owner 2026-10-24 "a bit nicer, with effects")
+ShopkeeperConfig.LifeDistance = 45 -- studs: blinking and the lantern's flicker only this close
+ShopkeeperConfig.BlinkEvery = { 2.4, 5.5 } -- seconds between blinks (random in this range)
+ShopkeeperConfig.BlinkSeconds = 0.13
+ShopkeeperConfig.BurstCount = 22 -- gold sparkles when he says thanks
 
 ShopkeeperConfig.LookDistance = 28 -- studs: the head follows the player inside this
 ShopkeeperConfig.LookYaw = math.rad(65) -- the head turns at most this far left or right
@@ -54,6 +57,7 @@ ShopkeeperConfig.Animations = {
 }
 
 export type Shop = {
+	Badge: string, -- the word on his apron badge
 	Hello: { string }, -- what he says when the player walks up
 	Thanks: { string }, -- after a buy or a sale
 	Scale: number?, -- his scale here (default DefaultScale)
@@ -63,14 +67,24 @@ local THANKS = { "Thanks!", "Great choice!", "Come back soon!" }
 
 ShopkeeperConfig.Shops = {
 	-- (SHOP and UPGRADES: a little smaller, so the door's lintel doesn't hide his head)
-	Gear = { Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS, Scale = 1.1 },
-	Tech = { Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS, Scale = 1.1 },
-	Sell = { Hello = { "Got ore? I'll buy it!", "Bring me your ore!" }, Thanks = { "Pleasure doing business!", "Thanks, miner!" } },
-	Enchant = { Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
-	Vault = { Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS, Scale = 1.25 },
-	Droppers = { Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
-	Backpacks = { Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
+	Gear = { Badge = "SHOP", Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS, Scale = 1.1 },
+	Tech = { Badge = "TECH", Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS, Scale = 1.1 },
+	Sell = {
+		Badge = "SELL",
+		Hello = { "Got ore? I'll buy it!", "Bring me your ore!" },
+		Thanks = { "Pleasure doing business!", "Thanks, miner!" },
+	},
+	Enchant = { Badge = "MAGIC", Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
+	Vault = { Badge = "VAULT", Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS, Scale = 1.25 },
+	Droppers = { Badge = "DROPS", Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
+	Backpacks = { Badge = "PACKS", Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
 } :: { [string]: Shop }
+
+-- The word on the keeper's apron badge at a shop.
+function ShopkeeperConfig.badge(shop: string): string
+	local s = ShopkeeperConfig.Shops[shop]
+	return if s then s.Badge else "SHOP"
+end
 
 -- The keeper's scale at a shop.
 function ShopkeeperConfig.scale(shop: string): number

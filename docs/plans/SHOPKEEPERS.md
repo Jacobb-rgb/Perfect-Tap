@@ -13,6 +13,14 @@ EGGS temple**. Branch `feat/shopkeepers` (from main `ecf24f90`).
 | Keepers | `src/client/Controllers/ShopkeeperController.luau` | builds a keeper on a spot while the player is within 90 studs, removes him past 110 (phones draw 1-2 at a time, ~83 parts each); Roblox R6 idle, the head follows the player (neck joint, ±65° / ±20°), wave + hello bubble when the player walks up (25 s cooldown), cheer + thanks after a buy (Notify `Reward`) or a sale (Earned `Sell`) nearby; a soft light in front of his chest |
 | Numbers, lines | `src/shared/Config/ShopkeeperConfig.luau` | scales, distances, R6 animation ids, hello / thanks lines per shop |
 
+**Style pass** (owner 2026-10-24: "a bit nicer, with effects"; `ShopkeeperBuilder`, opts `Badge` / `Effects` / `Lights`):
+metal shoulder pads, plates and tools, a leather apron, straps, boots and pack, fabric trousers and shirt, a glossy
+helmet, neon orange trims and pickaxe tip, three glowing ore crystals in his pack, a shine in each eye, the shop's
+name on his apron badge (SHOP, TECH, SELL, MAGIC, VAULT; `ShopkeeperConfig.badge`); a soft light cone from the helmet
+lamp (Beam), sparkles rising from the crystals, a gold burst when he says thanks, a warm outline (Highlight), blinking
+and a flickering lantern within 45 studs. Real lights (the lamp's SpotLight, the chest light) only on the **nearest**
+keeper within 40 studs: the game's light budget for phones (`GearConfig.LampBudget` does the same for players).
+
 **Two fixes to the file** (both in `tools/art/shopkeeper_glb.py`): its scene lost 11 mirrored pieces to duplicate
 names (one eye, ear, eyebrow, apron strap, pouch and flap, backpack tube, harness strap and three SHOP letters: the
 meshes are in the file, no node shows them), so the script reads every mesh; and its torso floats 0.42 studs over the
@@ -47,7 +55,8 @@ keeper_solo_three_quarter keeper_solo_back`. The previews show his rest pose (no
 1. Press Play. The miner stands behind the SHOP, UPGRADES, SELL, ENCHANT and Vault counters, smooth, without studs;
    none at the EGGS temple.
 2. Each one breathes (R6 idle) and turns his head toward you when you are near; walk up: he waves and a bubble says
-   hello; buy something / sell ore: he cheers and says thanks. (The animations are Roblox's R6 ones on his own rig:
+   hello; buy something / sell ore: he cheers, says thanks and throws gold sparkles. He blinks, his lantern flickers,
+   the helmet lamp throws a soft cone of light onto the counter and a warm outline goes round him. (The animations are Roblox's R6 ones on his own rig:
    check that arms and head move naturally.)
 3. Prompts (E) at every counter still work (the keepers block no clicks or prompts); nothing collides with him.
 4. Phone emulator: no stutter at the plaza; the bubbles are readable.

@@ -49,6 +49,8 @@ return function(T, Loader)
 			end
 			local scale = ShopkeeperConfig.scale(shop)
 			T.truthy(scale >= 1 and scale <= 1.6, `{shop} scale {scale}`)
+			local badge = ShopkeeperConfig.badge(shop)
+			T.truthy(#badge >= 3 and #badge <= 6, `{shop} badge "{badge}" fits his apron`)
 		end
 		T.eq(ShopkeeperConfig.Shops.Eggs, nil, "no keeper at the EGGS temple (owner)")
 		local hello = ShopkeeperConfig.Shops.Gear.Hello
@@ -103,21 +105,29 @@ return function(T, Loader)
 		T.eq(#ShopkeeperModel.Pieces, 76, "all 75 meshes of the file (the 11 its scene lost too) and the hip block")
 		local model = ShopkeeperBuilder.build(CFrame.new(), 1)
 		T.truthy(hasTag(model, ShopkeeperBuilder.SkipTag), "tagged NoStuds: no Roblox studs on him")
+		local Material = roblox.Enum.Material
+		local smooth = { SmoothPlastic = true, Metal = true, Leather = true, Fabric = true }
 		local count, neon = 0, 0
 		for _, part in pieces(model) do
 			count += 1
-			if part.Material == roblox.Enum.Material.Neon then
+			if part.Material == Material.Neon then
 				neon += 1
 			else
-				T.eq(part.Material, roblox.Enum.Material.SmoothPlastic, part.Name .. " smooth")
+				T.truthy(smooth[part.Material.Name], part.Name .. " a smooth material (no studs)")
 			end
 			T.falsy(part.CanCollide, part.Name .. " no collision")
 			T.falsy(part.CanQuery, part.Name .. " no queries (prompts and clicks pass)")
 			T.falsy(part.CanTouch, part.Name .. " no touch")
 			T.falsy(part.Anchored, part.Name .. " moves with the rig")
 		end
-		T.eq(count, 76, "76 pieces built")
-		T.eq(neon, 4, "the head lamp, side lamp, chest light and lantern glow")
+		T.eq(count, 76 + #ShopkeeperBuilder.Extra, "the model's 76 pieces and the style pass's")
+		T.eq(neon, 4 + 5 + 3, "the file's 4 glows, the orange trims and pickaxe tip, the 3 crystals")
+		-- the style pass's materials
+		local p0 = pieces(model)
+		T.eq(p0.L_shoulder.Material, Material.Metal, "metal shoulder pads")
+		T.eq(p0.apron.Material, Material.Leather, "a leather apron")
+		T.eq(p0.L_thigh.Material, Material.Fabric, "fabric trousers")
+		T.truthy(p0.helmet_top.Reflectance > 0, "a glossy helmet")
 		-- the hip block closes the file's gap between the thighs and the torso
 		local hips, torso, thigh = pieces(model).hips, pieces(model).torso, pieces(model).L_thigh
 		T.truthy(hips.CFrame.Position.Y - hips.Size.Y / 2 <= thigh.CFrame.Position.Y + thigh.Size.Y / 2, "hips reach the thighs")
@@ -128,6 +138,49 @@ return function(T, Loader)
 			local a, b = p[pair[1]], p[pair[2]]
 			T.truthy(a and b, `{pair[1]} and {pair[2]}`)
 			T.near(a.CFrame.Position.X, -b.CFrame.Position.X, 1e-3, `{pair[1]} mirrors {pair[2]}`)
+		end
+	end)
+
+	T.test("Shopkeepers: the shop's name on his badge, in place of the file's letter bars", function()
+		local plain = pieces(ShopkeeperBuilder.build(CFrame.new(), 1))
+		T.truthy(plain.sign_letter_stem, "no badge: the file's letter bars")
+		local model = ShopkeeperBuilder.build(CFrame.new(), 1, { Badge = "SELL" })
+		local p = pieces(model)
+		T.eq(p.sign_letter_stem, nil, "the letter bars give way")
+		local gui = p.SHOP_sign:FindFirstChild("Badge")
+		T.truthy(gui and gui:IsA("SurfaceGui"), "a badge on the apron sign")
+		T.eq(gui.Face, roblox.Enum.NormalId.Front, "on its front (he faces -Z)")
+		T.eq(gui:FindFirstChild("Text").Text, "SELL", "the shop's name")
+	end)
+
+	T.test("Shopkeepers: the effects, lights off unless asked (the light budget)", function()
+		local function find(model: any, class: string, name: string): any
+			for _, d in model:GetDescendants() do
+				if d:IsA(class) and d.Name == name then
+					return d
+				end
+			end
+			return nil
+		end
+		local model = ShopkeeperBuilder.build(CFrame.new(), 1.2)
+		local beam = find(model, "Beam", "HelmetBeam")
+		T.truthy(beam and beam.Attachment0 and beam.Attachment1, "the lamp's beam between two attachments")
+		local lamp = beam.Attachment0.Parent
+		local ahead = (lamp.CFrame * beam.Attachment1.CFrame).Position - (lamp.CFrame * beam.Attachment0.CFrame).Position
+		T.truthy(ahead.Z < -5, "the beam shines the way he faces (-Z)")
+		T.truthy(ahead.Y < 0, "and down onto the counter")
+		local spot, face = find(model, "SpotLight", "HelmetSpot"), find(model, "PointLight", "FaceLight")
+		T.truthy(spot and face, "the lamp's SpotLight and the chest light")
+		T.falsy(spot.Enabled, "lamp light off by default")
+		T.falsy(face.Enabled, "chest light off by default")
+		T.eq(find(model, "ParticleEmitter", "CoinBurst").Rate, 0, "the gold burst only when emitted")
+		T.truthy(find(model, "ParticleEmitter", "Sparkles").Rate > 0, "sparkles rise from the crystals")
+		T.truthy(find(model, "Highlight", "Outline"), "a warm outline")
+		local lit = ShopkeeperBuilder.build(CFrame.new(), 1, { Lights = true })
+		T.truthy(find(lit, "SpotLight", "HelmetSpot").Enabled and find(lit, "PointLight", "FaceLight").Enabled, "Lights: on")
+		local bare = ShopkeeperBuilder.build(CFrame.new(), 1, { Effects = false })
+		for _, d in bare:GetDescendants() do
+			T.falsy(d:IsA("Light") or d:IsA("Beam") or d:IsA("ParticleEmitter") or d:IsA("Highlight"), d.Name .. ": no effects")
 		end
 	end)
 
