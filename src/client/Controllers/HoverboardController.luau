@@ -50,7 +50,10 @@
 	  kickflip; a landing squashes and splashes. R6 riders keep the old pose.
 	- Lightning (HoverboardFx.flicker, every HoverboardBolts.FlickerEvery):
 	  arcs crackle out of every board near you, more with speed and while
-	  surging (hop on, top speed, landing).
+	  surging (hop on, top speed, landing). The strike from the sky holds one
+	  shape (re-shaped once half way), it does not strobe. Reduce Motion (the
+	  SETTINGS toggle or Roblox's own) calms it down: no strike, no surges,
+	  at most one arc, re-shaped every CalmFlickerEvery (about 3 a second).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -79,6 +82,7 @@ local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
 local CleaningController = require(script.Parent.CleaningController)
+local SettingsController = require(script.Parent.SettingsController)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 
 local HoverboardController = {}
@@ -93,6 +97,7 @@ HoverboardController.PoseRange = 70 -- studs: riders farther away keep their pla
 HoverboardController.SurgeTime = 0.7 -- seconds the lightning surges after a hop on / top speed / landing
 HoverboardController.StrikeTime = 0.3 -- seconds the strike from the sky lasts
 HoverboardController.JumpSpeed = 5 -- studs/s up: the rider jumped (the kickflip starts)
+HoverboardController.CalmFlickerEvery = 0.3 -- Reduce Motion: seconds between lightning re-shapes
 HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
@@ -152,6 +157,8 @@ local riders: { [Player]: Rider } = {}
 local pools: { [string]: { Model } } = {}
 local folder: Folder? = nil
 local watched: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local settingsReduced = false -- the SETTINGS Reduce Motion toggle
+local systemReduced = false -- Roblox's own Reduce Motion
 local ALL_JOINTS: { [string]: boolean } = {}
 for _, name in BoardPose.Joints do
 	ALL_JOINTS[name] = true
@@ -635,19 +642,22 @@ local function animate(dt: number)
 				state.Air = rider.Air
 				state.Land = math.clamp(1 - (now - rider.LandAt) / BoardPose.LandTime, 0, 1)
 
-				-- lightning
+				-- lightning (calm with Reduce Motion: no strike, no surge, one arc, slow)
 				local set = rider.Fx
 				if set and now >= rider.BoltAt then
-					rider.BoltAt = now + HoverboardBolts.FlickerEvery
-					local surge = if now < rider.SurgeUntil then 0.6 else 0
-					HoverboardFx.flicker(set, math.random, speed01, surge)
-					if now < rider.StrikeUntil then
-						rider.Striking = true
+					local calm = settingsReduced or systemReduced
+					rider.BoltAt = now + (if calm then HoverboardController.CalmFlickerEvery else HoverboardBolts.FlickerEvery)
+					local surge = if now < rider.SurgeUntil and not calm then 0.6 else 0
+					HoverboardFx.flicker(set, math.random, if calm then 0 else speed01, surge, if calm then 1 else nil)
+					local striking = now < rider.StrikeUntil and not calm
+					-- the strike holds its shape: drawn when it starts and once more half way, never strobing
+					local half = rider.StrikeUntil - HoverboardController.StrikeTime / 2
+					if striking and (not rider.Striking or (now >= half and now - HoverboardBolts.FlickerEvery < half)) then
 						HoverboardFx.strike(set, math.random, 1)
-					elseif rider.Striking then
-						rider.Striking = false
+					elseif not striking and rider.Striking then
 						HoverboardFx.strike(set, math.random, 0)
 					end
+					rider.Striking = striking
 				end
 			end
 		end
@@ -1054,6 +1064,19 @@ function HoverboardController.start()
 		watchPlayer(p)
 	end
 	Players.PlayerRemoving:Connect(removeRider)
+	local function readSystem()
+		local ok, on = pcall(function(): boolean
+			return GuiService.ReducedMotionEnabled
+		end)
+		systemReduced = ok and on == true
+	end
+	readSystem()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(readSystem)
+	end)
+	SettingsController.onChanged(function(current: any)
+		settingsReduced = current.ReduceMotion == true
+	end)
 	RunService.RenderStepped:Connect(animate)
 	RunService.Stepped:Connect(function()
 		local ok, err: any = pcall(poseStep)

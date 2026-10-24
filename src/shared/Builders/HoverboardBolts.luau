@@ -241,9 +241,9 @@ end
 	Duty + 0.35 x speed + surge (speed and surge 0..1) and gets a new shape:
 	70 % from an edge down to the ground outward (Reach studs, longer while
 	surging), 30 % crawling over the deck to another edge. Returns how many
-	arcs show.
+	arcs show (at most `maxArcs`: Reduce Motion shows one).
 ]]
-function HoverboardBolts.flicker(set: BoltSet, rand: () -> number, speed: number, surge: number): number
+function HoverboardBolts.flicker(set: BoltSet, rand: () -> number, speed: number, surge: number, maxArcs: number?): number
 	local starts = set.Starts
 	if not set.Root or #starts == 0 then
 		HoverboardBolts.hide(set)
@@ -251,8 +251,9 @@ function HoverboardBolts.flicker(set: BoltSet, rand: () -> number, speed: number
 	end
 	local chance = math.clamp(set.Duty + 0.35 * math.clamp(speed, 0, 1) + math.clamp(surge, 0, 1), 0, 0.95)
 	local shown = 0
+	local limit = maxArcs or #set.Arcs
 	for _, b in set.Arcs do
-		if rand() >= chance then
+		if shown >= limit or rand() >= chance then
 			show(b, false)
 			continue
 		end

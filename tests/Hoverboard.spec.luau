@@ -356,6 +356,7 @@ return function(T, Loader)
 				local reach = Vector3.new(last.X - first.X, 0, last.Z - first.Z).Magnitude
 				T.le(reach, spec.Reach * 1.4 + 1e-6, board.Id .. " arc reach")
 			end
+			T.le(HoverboardFx.flicker(set, constant(0.5), 1, 1, 1), 1, board.Id .. " Reduce Motion: at most one arc")
 			-- the strike from the sky
 			HoverboardFx.strike(set, constant(0.5), 1)
 			local strike = bolts.Strike

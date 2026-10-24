@@ -598,12 +598,12 @@ end
 -- One lightning flicker (every HoverboardBolts.FlickerEvery seconds while riding):
 -- `speed` 0..1 = speed / top speed, `surge` 0..1 = the hop on, top speed or a landing.
 -- Returns how many arcs show.
-function HoverboardFx.flicker(set: FxSet, rand: () -> number, speed: number, surge: number): number
+function HoverboardFx.flicker(set: FxSet, rand: () -> number, speed: number, surge: number, maxArcs: number?): number
 	local bolts = set.Bolts
 	if not bolts or not set.Model then
 		return 0
 	end
-	return HoverboardBolts.flicker(bolts, rand, speed, surge)
+	return HoverboardBolts.flicker(bolts, rand, speed, surge, maxArcs)
 end
 
 -- The strike from the sky (the hop on): alpha > 0 shows it with a new shape, 0 hides it.
