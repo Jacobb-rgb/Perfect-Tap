@@ -223,6 +223,10 @@ elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) an
 	for name, guis in require("./lib/elevator_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "backpacks" then -- the ten backpacks worst to best on rising pedestals (tools/lune/lib/backpack_preview.luau)
+	require("./lib/backpack_preview").build(Loader, workspace)
+elseif sceneName == "backpacks_worn" then -- miners on a meadow path wearing the ten packs, seen from behind
+	require("./lib/backpack_preview").buildWorn(Loader, workspace)
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
 elseif sceneName == "hoverboard_fx" or sceneName == "hoverboard_fx_boost" or sceneName == "hoverboard_fx_start" then -- all five boards with their ride effects / bursts
