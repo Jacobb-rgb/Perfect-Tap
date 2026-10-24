@@ -217,7 +217,7 @@ return function(T, Loader)
 			)
 			T.truthy(root.TrailLeft.CFrame.Position.Z > 2, board.Id .. " trail at the tail")
 			T.truthy(root.Nose.CFrame.Position.Z < -2, board.Id .. " nose at the front")
-			T.near(model:GetAttribute("DeckHeight"), HoverboardBuilder.DeckHeight, 1e-3, board.Id .. " DeckHeight attribute")
+			T.near(model:GetAttribute("DeckHeight"), HoverboardBuilder.DeckHeight, 1e-6, board.Id .. " DeckHeight attribute")
 			-- the deck top: the highest point of the parts the feet stand on is the deck height,
 			-- the lowest point of the board is the hover pad at HoverGap
 			local low, deckTop = math.huge, -math.huge
@@ -317,6 +317,40 @@ return function(T, Loader)
 		T.eq(HoverboardFx.acquire("NoSuchBoard"), nil, "unknown boards acquire nothing")
 	end)
 
+	T.test("hoverboard lightning: a lit arc holds its shape, then rests (no strobing)", function()
+		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
+		T.truthy(HoverboardBolts.FlickerEvery >= 0.15, "ticks at most ~6 a second")
+		T.truthy(HoverboardBolts.OnTicks >= 2 and HoverboardBolts.OffTicks >= 1, "holds and rests")
+		T.truthy(HoverboardBolts.CoreTransparency >= 0.3 and HoverboardBolts.GlowTransparency >= 0.6, "soft beams")
+		local function constant(v: number): () -> number
+			return function(): number
+				return v
+			end
+		end
+		local set = HoverboardFx.create("RoyalPhoenix")
+		HoverboardFx.mount(set, HoverboardBuilder.build("RoyalPhoenix"))
+		local arcs = set.Bolts.Arcs
+		T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), #arcs, "all light in a surge")
+		local shape = arcs[1].Points[3].CFrame.Position
+		-- worst case for flashing: every roll says yes. Count the on/off changes of one arc over 10 s
+		local changes, lit = 0, arcs[1].Visible
+		local ticks = math.floor(10 / HoverboardBolts.FlickerEvery)
+		for i = 1, ticks do
+			HoverboardFx.flicker(set, constant(0.5), 1, 1)
+			if i < HoverboardBolts.OnTicks then
+				T.truthy(arcs[1].Visible, "still lit")
+				T.near((arcs[1].Points[3].CFrame.Position - shape).Magnitude, 0, 1e-6, "a lit arc keeps its shape")
+			end
+			if arcs[1].Visible ~= lit then
+				changes += 1
+				lit = arcs[1].Visible
+			end
+		end
+		local flashes = changes / 2 / 10
+		T.le(flashes, 2, `one arc flashes at most twice a second ({flashes}/s)`)
+		HoverboardFx.release(set)
+	end)
+
 	T.test("hoverboard lightning: arcs per board, lite, flicker, strike, hide", function()
 		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
 		local function constant(v: number): () -> number
@@ -356,13 +390,23 @@ return function(T, Loader)
 				local reach = Vector3.new(last.X - first.X, 0, last.Z - first.Z).Magnitude
 				T.le(reach, spec.Reach * 1.4 + 1e-6, board.Id .. " arc reach")
 			end
-			T.le(HoverboardFx.flicker(set, constant(0.5), 1, 1, 1), 1, board.Id .. " Reduce Motion: at most one arc")
+			T.le(HoverboardFx.flicker(set, constant(0.5), 1, 1, 1), 1, board.Id .. " maxArcs 1: at most one arc")
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1, 0), 0, board.Id .. " Reduce Motion (maxArcs 0): no arcs")
+			T.eq(HoverboardBolts.visible(bolts), 0, board.Id .. " Reduce Motion hides every arc")
 			-- the strike from the sky
 			HoverboardFx.strike(set, constant(0.5), 1)
 			local strike = bolts.Strike
 			T.truthy(strike.Cores[1].Enabled, "the strike shows")
-			T.near(strike.Points[1].CFrame.Position.Y, HoverboardBolts.StrikeHeight, 1e-3, "from the sky")
-			T.near(strike.Points[#strike.Points].CFrame.Position.Y, HoverboardBuilder.DeckHeight, 1e-3, "onto the deck")
+			T.near(strike.Points[1].CFrame.Position.Y, HoverboardBolts.StrikeHeight, 1e-6, "from the sky")
+			T.near(strike.Points[#strike.Points].CFrame.Position.Y, HoverboardBuilder.DeckHeight, 1e-6, "onto the deck")
+			-- shaped once, then only fading (no re-shapes, no strobing)
+			local middle = strike.Points[4].CFrame.Position
+			T.near(strike.Cores[1].Transparency.Keypoints[1].Value, HoverboardBolts.CoreTransparency, 1e-3, "full strike core")
+			HoverboardFx.strike(set, constant(0.9), 0.5)
+			T.near((strike.Points[4].CFrame.Position - middle).Magnitude, 0, 1e-6, "the strike keeps its shape while fading")
+			local half = 1 - (1 - HoverboardBolts.CoreTransparency) * 0.5
+			T.near(strike.Cores[1].Transparency.Keypoints[1].Value, half, 1e-3, "half faded")
+			T.truthy(strike.Glows[1].Transparency.Keypoints[1].Value >= HoverboardBolts.GlowTransparency, "the glow stays soft")
 			HoverboardFx.strike(set, constant(0.5), 0)
 			T.falsy(strike.Cores[1].Enabled, "the strike hides")
 			-- switching off hides everything; releasing unmounts the bolts too

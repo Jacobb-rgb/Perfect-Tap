@@ -11,10 +11,13 @@
 
 	  Arcs    bolts that crackle out of the board's edges (wing tips, nose,
 	          tail, thrusters) down to the ground around it, or crawl across
-	          the deck from one edge to another. Each flicker every arc shows
-	          with the chance Duty + speed and surges (the hop on, the top
-	          speed burst, a landing), else it hides
-	  Strike  one big bolt from the sky onto the board, for the hop on
+	          the deck from one edge to another. A dark arc lights with the
+	          chance Duty + speed and surges (the hop on, the top speed burst,
+	          a landing) and then HOLDS its shape for OnTicks flickers, goes
+	          dark and stays dark for at least OffTicks: no strobing (each arc
+	          changes at most about twice a second, review 2026-10-25)
+	  Strike  one big bolt from the sky onto the board, for the hop on: shaped
+	          once, then faded out (strike alpha)
 
 	Per board effect (HoverboardData.Effect), colour = the board's Glow:
 	  Sparks  Timber Drifter      1 arc, rare
@@ -30,9 +33,13 @@ local HoverboardBolts = {}
 HoverboardBolts.Segments = 5 -- per arc
 HoverboardBolts.StrikeSegments = 8
 HoverboardBolts.StrikeHeight = 28 -- studs above the board the strike comes from
-HoverboardBolts.FlickerEvery = 0.06 -- seconds between re-shapes (HoverboardController)
+HoverboardBolts.FlickerEvery = 0.18 -- seconds between flicker ticks (HoverboardController)
+HoverboardBolts.OnTicks = 3 -- a lit arc holds its shape for 3..4 ticks
+HoverboardBolts.OffTicks = 2 -- then stays dark for at least 2 ticks
 HoverboardBolts.CoreWidth = 0.09
 HoverboardBolts.GlowWidth = 0.34
+HoverboardBolts.CoreTransparency = 0.3
+HoverboardBolts.GlowTransparency = 0.65
 -- where arcs may start: Root attachments of every board (HoverboardBuilder contract)
 HoverboardBolts.StartMounts = { "TipLeft", "TipRight", "Nose", "TrailLeft", "TrailRight", "Exhaust1" }
 
@@ -50,6 +57,8 @@ export type Bolt = {
 	Cores: { Beam },
 	Glows: { Beam },
 	Visible: boolean,
+	Ticks: number, -- > 0: lit ticks left; < 0: dark ticks left before it may light again
+	Alpha: number, -- the strike's fade (1 = full)
 }
 export type BoltSet = {
 	Arcs: { Bolt },
@@ -93,12 +102,12 @@ local function bolt(segments: number, color: Color3, coreWidth: number, glowWidt
 	for i = 1, segments do
 		-- thinner toward the far end
 		local taper = 1 - 0.45 * (i - 1) / math.max(1, segments - 1)
-		table.insert(cores, beam(points[i], points[i + 1], core, coreWidth * taper, 0))
+		table.insert(cores, beam(points[i], points[i + 1], core, coreWidth * taper, HoverboardBolts.CoreTransparency))
 		if glowWidth then
-			table.insert(glows, beam(points[i], points[i + 1], color, glowWidth * taper, 0.45))
+			table.insert(glows, beam(points[i], points[i + 1], color, glowWidth * taper, HoverboardBolts.GlowTransparency))
 		end
 	end
-	return { Points = points, Cores = cores, Glows = glows, Visible = false }
+	return { Points = points, Cores = cores, Glows = glows, Visible = false, Ticks = 0, Alpha = 1 }
 end
 
 -- A new (unmounted, hidden) bolt set for a board effect, or nil for effects without lightning.
@@ -162,6 +171,7 @@ function HoverboardBolts.hide(set: BoltSet)
 	for _, b in set.Arcs do
 		b.Visible = true
 		show(b, false)
+		b.Ticks = 0
 	end
 	set.Strike.Visible = true
 	show(set.Strike, false)
@@ -237,24 +247,38 @@ function HoverboardBolts.shape(b: Bolt, a: Vector3, z: Vector3, rand: () -> numb
 end
 
 --[[
-	One flicker of the arcs: each one shows with the chance
-	Duty + 0.35 x speed + surge (speed and surge 0..1) and gets a new shape:
-	70 % from an edge down to the ground outward (Reach studs, longer while
-	surging), 30 % crawling over the deck to another edge. Returns how many
-	arcs show (at most `maxArcs`: Reduce Motion shows one).
+	One flicker tick of the arcs. A lit arc keeps its shape until its ticks
+	run out, then goes dark for OffTicks; a dark arc that may light lights
+	with the chance Duty + 0.35 x speed + surge (speed and surge 0..1) with a
+	new shape: 70 % from an edge down to the ground outward (Reach studs,
+	longer while surging), 30 % crawling over the deck to another edge.
+	At most `maxArcs` show (0 = none: Reduce Motion). Returns how many show.
 ]]
 function HoverboardBolts.flicker(set: BoltSet, rand: () -> number, speed: number, surge: number, maxArcs: number?): number
 	local starts = set.Starts
-	if not set.Root or #starts == 0 then
+	local limit = maxArcs or #set.Arcs
+	if not set.Root or #starts == 0 or limit <= 0 then
 		HoverboardBolts.hide(set)
 		return 0
 	end
 	local chance = math.clamp(set.Duty + 0.35 * math.clamp(speed, 0, 1) + math.clamp(surge, 0, 1), 0, 0.95)
 	local shown = 0
-	local limit = maxArcs or #set.Arcs
 	for _, b in set.Arcs do
+		if b.Visible then
+			b.Ticks -= 1
+			if b.Ticks > 0 and shown < limit then
+				shown += 1 -- holds its shape
+			else
+				show(b, false)
+				b.Ticks = -HoverboardBolts.OffTicks
+			end
+			continue
+		end
+		if b.Ticks < 0 then
+			b.Ticks += 1 -- resting after it went dark
+			continue
+		end
 		if shown >= limit or rand() >= chance then
-			show(b, false)
 			continue
 		end
 		local i = math.clamp(math.floor(rand() * #starts) + 1, 1, #starts)
@@ -278,21 +302,41 @@ function HoverboardBolts.flicker(set: BoltSet, rand: () -> number, speed: number
 			HoverboardBolts.shape(b, a, z, rand, 0.22)
 		end
 		show(b, true)
+		b.Ticks = HoverboardBolts.OnTicks + (if rand() < 0.5 then 1 else 0)
 		shown += 1
 	end
 	return shown
 end
 
--- The strike from the sky onto the deck: alpha > 0 shows it with a new shape, 0 hides it.
+--[[
+	The strike from the sky onto the deck. alpha 1..0 over its life: the
+	first call shapes it (once) and shows it, later calls only fade it
+	(Transparency toward 1); alpha <= 0 hides it.
+]]
 function HoverboardBolts.strike(set: BoltSet, rand: () -> number, alpha: number, deck: number)
 	local b = set.Strike
 	if alpha <= 0 or not set.Root then
 		show(b, false)
 		return
 	end
-	local top = Vector3.new((rand() * 2 - 1) * 3, HoverboardBolts.StrikeHeight, (rand() * 2 - 1) * 3)
-	HoverboardBolts.shape(b, top, Vector3.new(0, deck, 0), rand, 0.12)
-	show(b, true)
+	if not b.Visible then
+		local top = Vector3.new((rand() * 2 - 1) * 3, HoverboardBolts.StrikeHeight, (rand() * 2 - 1) * 3)
+		HoverboardBolts.shape(b, top, Vector3.new(0, deck, 0), rand, 0.12)
+		b.Alpha = -1 -- forces the transparency below
+		show(b, true)
+	end
+	local a = math.clamp(alpha, 0, 1)
+	if math.abs(a - b.Alpha) >= 0.04 then
+		b.Alpha = a
+		local core = NumberSequence.new(1 - (1 - HoverboardBolts.CoreTransparency) * a)
+		local glow = NumberSequence.new(1 - (1 - HoverboardBolts.GlowTransparency) * a)
+		for _, beamPart in b.Cores do
+			beamPart.Transparency = core
+		end
+		for _, beamPart in b.Glows do
+			beamPart.Transparency = glow
+		end
+	end
 end
 
 -- Arcs showing right now (tests).

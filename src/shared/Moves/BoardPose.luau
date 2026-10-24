@@ -23,6 +23,11 @@
 	  Mount  hop-on progress (1 = done, riding)
 	  Air    airborne amount (0 = on the board, 1 = fully tucked)
 	  Land   landing squash (1 = just landed, decays to 0)
+	  Leg    optional: the rider's leg length / the block rig's (legScale), so
+	         taller avatars crouch onto the deck too (default 1)
+	  Tool   optional: a tool (the blaster) is in hand: the chest turns back to
+	         face forward so the hold aims where you look (the arms are
+	         masked by the controller, the Animator's hold shows)
 
 	Joint frames as in Config/MoveConfig: x pitch (limbs forward +, knees bend
 	-, torso leans BACK +), y yaw (turns LEFT +), z roll (toward the right +;
@@ -42,6 +47,8 @@ export type State = {
 	Mount: number,
 	Air: number,
 	Land: number,
+	Leg: number?,
+	Tool: boolean?,
 }
 export type Pose = { [string]: CFrame }
 
@@ -104,7 +111,7 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	crouch += 22 * squash + 14 * prep
 	crouch = lerp(crouch, 58, air)
 	crouch = lerp(crouch, 50, jump)
-	local drop = MoveConfig.crouchDrop(crouch)
+	local drop = MoveConfig.crouchDrop(crouch) * math.clamp(state.Leg or 1, 0.5, 2)
 	-- the hop on: up and over; in a jump the feet come up off the deck so the board can flip
 	-- (the whole body, visual only: crouch drop + lift = how high the feet are)
 	local lift = 1.5 * jump + 0.75 * air
@@ -117,8 +124,10 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	local roll = 16 * turn -- the same way the board rolls into the turn
 	pose.Root = CFrame.new(0, lift - drop, 0) * angles(lean, 0, roll) * angles(0, stance, 0)
 	-- the chest turns a little back toward where you go, the head all the way
-	pose.Waist = angles(-4 - 8 * speed + 3 * sway, -0.22 * stance, 3 * sway2 * calm)
-	pose.Neck = angles(4 + 10 * speed, -0.62 * stance + 8 * turn, 0)
+	-- (with a tool the chest turns all the way back: the blaster aims ahead)
+	local tool = state.Tool == true
+	pose.Waist = angles(-4 - 8 * speed + 3 * sway, if tool then -stance else -0.22 * stance, 3 * sway2 * calm)
+	pose.Neck = angles(4 + 10 * speed, (if tool then 0 else -0.62 * stance) + 8 * turn, 0)
 
 	-- legs apart along the deck, knees bent (the formula of MoveConfig crouch: thigh a, knee -2a, ankle a)
 	local spread = BoardPose.Spread * (0.4 + 0.6 * stanceTurn) * (1 - 0.5 * air)
@@ -172,6 +181,48 @@ BoardPose.FlipTime = 0.45
 BoardPose.FlipPivot = 1.1 -- studs above the board's Root (the ground): it rolls about its own middle
 function BoardPose.flip(s: number): number
 	return smooth(s / BoardPose.FlipTime) * math.pi * 2
+end
+
+--[[
+	The kickflip's clock, one step per frame: `flipAt` = when the running flip
+	started (nil = none), `launched` = the rider jumped this frame (a real
+	jump, not a fall off a ledge). A flip starts only on a launch and always
+	runs to its end (also after landing), so the roll never snaps.
+	Returns the new flipAt and the board's roll (radians).
+]]
+function BoardPose.stepFlip(flipAt: number?, now: number, launched: boolean): (number?, number)
+	local at = flipAt
+	if at and now - at >= BoardPose.FlipTime then
+		at = nil
+	end
+	if not at and launched then
+		at = now
+	end
+	if at then
+		return at, BoardPose.flip(now - at)
+	end
+	return nil, 0
+end
+
+-- The block rig's thigh + shin (hip to knee to ankle, from the Motor6D pivots).
+BoardPose.BlockLeg = 1.75
+
+--[[
+	The rider's leg length / the block rig's, from the hip, knee and ankle
+	Motor6Ds (anything with C0 / C1): thigh = the knee's C0 to the hip's C1
+	(both in the upper leg), shin = the ankle's C0 to the knee's C1 (both in
+	the lower leg). 1 for the block rig, more for tall (Rthro) legs.
+]]
+function BoardPose.legScale(hip: any, knee: any, ankle: any): number
+	local ok, length = pcall(function(): number
+		local thigh = (knee.C0.Position - hip.C1.Position).Magnitude
+		local shin = (ankle.C0.Position - knee.C1.Position).Magnitude
+		return thigh + shin
+	end)
+	if not ok or type(length) ~= "number" or length ~= length or length <= 0 then
+		return 1
+	end
+	return math.clamp(length / BoardPose.BlockLeg, 0.5, 2)
 end
 
 -- The kickflip as a turn of the board's frame (about its middle, not the ground under it).

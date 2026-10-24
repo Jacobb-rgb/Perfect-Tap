@@ -116,6 +116,126 @@ return function(T, Loader)
 		T.near(BoardPose.flip(BoardPose.FlipTime), math.pi * 2, 1e-6, "and ends flat after one roll")
 	end)
 
+	T.test("board pose: the kickflip starts only on a jump and never snaps", function()
+		local MAX_STEP = math.rad(30)
+		local function wrapped(a: number): number
+			return (a + math.pi) % (2 * math.pi) - math.pi
+		end
+		-- a jump at 60 fps that lands after 0.1 s (a short hop); a second launch mid-flip is ignored
+		local flipAt: number? = nil
+		local last = 0
+		local started = false
+		for f = 0, 60 do
+			local now = f / 60
+			local roll
+			flipAt, roll = BoardPose.stepFlip(flipAt, now, f == 0 or f == 10)
+			if f == 0 then
+				started = flipAt ~= nil
+			end
+			T.le(math.abs(wrapped(roll - last)), MAX_STEP, `roll step at frame {f}`)
+			last = roll
+		end
+		T.truthy(started, "a jump starts the flip")
+		T.eq(flipAt, nil, "the flip has ended")
+		T.near(wrapped(last), 0, 1e-6, "flat again")
+		-- a fall off a ledge (no launch): no flip at all
+		local at: number? = nil
+		for f = 0, 30 do
+			local roll
+			at, roll = BoardPose.stepFlip(at, f / 60, false)
+			T.eq(roll, 0, "no flip on a fall")
+		end
+	end)
+
+	T.test("board pose: leg scale from the joints, tall legs still stand on the deck", function()
+		local joints: { [string]: any } = {}
+		for _, j in R15.Joints do
+			joints[j.Name] = j
+		end
+		T.near(BoardPose.legScale(joints.LeftHip, joints.LeftKnee, joints.LeftAnkle), 1, 0.01, "block rig = 1")
+		T.eq(BoardPose.legScale({}, {}, {}), 1, "broken joints = 1")
+		-- the block rig with legs 1.3 x as long (Rthro-like), solved by hand
+		local k = 1.3
+		local LEG = { LeftHip = "C1", LeftKnee = "both", LeftAnkle = "C0", RightHip = "C1", RightKnee = "both", RightAnkle = "C0" }
+		local scaled = {}
+		for _, j in R15.Joints do
+			local copy = { Name = j.Name, Part0 = j.Part0, Part1 = j.Part1, C0 = j.C0, C1 = j.C1 }
+			local which = LEG[j.Name]
+			if which == "C0" or which == "both" then
+				copy.C0 = CFrame.new(j.C0.Position * k)
+			end
+			if which == "C1" or which == "both" then
+				copy.C1 = CFrame.new(j.C1.Position * k)
+			end
+			table.insert(scaled, copy)
+			joints[j.Name] = copy
+		end
+		local leg = BoardPose.legScale(joints.LeftHip, joints.LeftKnee, joints.LeftAnkle)
+		T.near(leg, k, 0.01, "tall legs measured")
+		local rootY = R15.RootHeight + (k - 1) * BoardPose.BlockLeg
+		local lowest, highest = math.huge, -math.huge
+		for _, speed in { 0, 1 } do
+			for _, land in { 0, 1 } do
+				local pose = BoardPose.evaluate({ T = 0.4, Speed = speed, Turn = 0, Mount = 1, Air = 0, Land = land, Leg = leg }, {})
+				local parts: { [string]: any } = { HumanoidRootPart = CFrame.new(0, rootY, 0) }
+				for _, j in scaled do
+					parts[j.Part1] = parts[j.Part0] * j.C0 * (pose[j.Name] or CFrame.identity) * j.C1:Inverse()
+				end
+				local l, r = feet(parts)
+				lowest = math.min(lowest, l, r)
+				highest = math.max(highest, l, r)
+			end
+		end
+		T.truthy(lowest > -0.35 and highest < 0.45, `tall legs crouch onto the deck ({lowest} .. {highest})`)
+	end)
+
+	T.test("board pose: with a tool in hand the chest faces forward", function()
+		local parts = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0, Tool = true })
+		local look = parts.UpperTorso.LookVector
+		local yaw = math.deg(math.atan2(-look.X, -look.Z))
+		T.le(math.abs(yaw), 12, `the chest (and the blaster hold) aims ahead ({yaw} degrees)`)
+		local free = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0 })
+		local freeLook = free.UpperTorso.LookVector
+		T.truthy(math.abs(math.deg(math.atan2(-freeLook.X, -freeLook.Z))) > 30, "without a tool the chest stays side-on")
+	end)
+
+	T.test("board pose: MoveRig override on every joint, the Animator's pose back on release", function()
+		local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
+		local MoveRig = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveRig")
+		local base = CFrame.Angles(0.2, 0, 0)
+		local motors: { [string]: any } = {}
+		for _, name in MoveConfig.Joints do
+			motors[name] = { Transform = base, Parent = true, Name = name }
+		end
+		local rig = MoveRig.fromMotors(motors)
+		local all = {}
+		for _, name in BoardPose.Joints do
+			all[name] = true
+		end
+		local layers = { { Pose = {}, Weight = 1, Override = all } }
+		BoardPose.evaluate({ T = 0, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0 }, layers[1].Pose)
+		for _ = 1, 3 do
+			for _, motor in motors do
+				motor.Transform = base -- the Animator writes its pose every frame
+			end
+			MoveRig.step(rig, layers, 1)
+		end
+		for name, motor in motors do
+			T.near((motor.Transform.Position - layers[1].Pose[name].Position).Magnitude, 0, 1e-6, name .. " is the board pose")
+			T.near(motor.Transform.LookVector:Dot(layers[1].Pose[name].LookVector), 1, 1e-6, name .. " turned as posed")
+		end
+		MoveRig.release(rig)
+		for name, motor in motors do
+			T.near(motor.Transform.LookVector:Dot(base.LookVector), 1, 1e-6, name .. " back to the Animator's pose")
+		end
+		T.falsy(MoveRig.holding(rig), "nothing of ours left")
+		-- an arm masked (a tool in hand): the Animator keeps it
+		layers[1].Mask = { RightShoulder = true }
+		motors.RightShoulder.Transform = base
+		MoveRig.step(rig, layers, 1)
+		T.near(motors.RightShoulder.Transform.LookVector:Dot(base.LookVector), 1, 1e-6, "a masked arm keeps the hold")
+	end)
+
 	T.test("board pose: the controller drives it in one Stepped pass over MoveRig", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/client/Controllers/HoverboardController.luau")
