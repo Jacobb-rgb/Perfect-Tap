@@ -144,31 +144,25 @@ DropperConfig.Laser = {
 
 -- The most coins per second the droppers in a list of placed machines
 -- (data.PlacedMachines: { Id = machineId, ... }) can earn: every Drop sold,
--- every Money Laser on the line of one dropper, the best ones first (the
--- shop's numbers and tools/lune/balance_sim; the coins come from the sales).
+-- and with any Money Laser on the plot every dropper doubled (their belts
+-- can merge before one laser; more lasers add nothing then). For the shop's
+-- numbers and tools/lune/balance_sim: the coins come from the sales.
 function DropperConfig.placedIncome(placed: { any }?): number
 	if type(placed) ~= "table" then
 		return 0
 	end
-	local incomes: { number } = {}
-	local lasers = 0
+	local total = 0
+	local laser = false
 	for _, entry in placed do
 		local id = if type(entry) == "table" then entry.Id else nil
 		local dropper = if type(id) == "string" then DropperConfig.ById[id] else nil
 		if dropper then
-			table.insert(incomes, dropper.Income)
+			total += dropper.Income
 		elseif id == DropperConfig.Laser.Id then
-			lasers += 1
+			laser = true
 		end
 	end
-	table.sort(incomes, function(a, b)
-		return a > b
-	end)
-	local total = 0
-	for i, income in incomes do
-		total += if i <= lasers then income * DropperConfig.Laser.Mult else income
-	end
-	return total
+	return if laser then total * DropperConfig.Laser.Mult else total
 end
 
 -- One Drop: an item a dropper pushes onto the belt (see the header).
@@ -176,9 +170,11 @@ DropperConfig.DropKind = "Drop" -- ItemData kind
 DropperConfig.LaserMark = "X2" -- a Drop's R once a Money Laser doubled it
 DropperConfig.DropEvery = 3 -- seconds between two Drops of one dropper
 -- Live Drops (server perf, docs/SERVER_PERF_AUDIT.md): a dropper waits while
--- its owner has MaxLiveDrops of them in the world (loose or in a machine),
--- or the server MaxLiveDropsServer; a loose Drop older than DropLife (it
--- fell off the belt, its belt ends nowhere) disappears.
+-- its owner has MaxLiveDrops of them in the world (loose or waiting in a
+-- laser / splitter queue), or the server MaxLiveDropsServer; a LOOSE Drop
+-- older than DropLife disappears (it fell off the belt, its belt ends
+-- nowhere, or its ride is longer than DropLife: about 79 cells of plain belt;
+-- a laser hands it on as a new item, which starts its own DropLife).
 DropperConfig.MaxLiveDrops = 15 -- (half of GameConfig.MaxLooseItemsPerPlayer: the ore factory keeps its room)
 DropperConfig.MaxLiveDropsServer = 120
 DropperConfig.DropLife = 45

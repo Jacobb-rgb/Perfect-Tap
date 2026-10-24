@@ -49,6 +49,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local DropperConfig = require(Shared.Config.DropperConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
@@ -870,8 +871,17 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 	end
 	-- the contents must fit the Ore Pen (packing a machine up is no way past
 	-- the pen's paid capacity; nothing is lost: the player makes room first)
-	local inQueue, outQueue = machine.Entry.In, machine.Entry.Out
-	local contents = (if inQueue then #inQueue else 0) + (if outQueue then #outQueue else 0)
+	-- (a dropper's Drop never goes to the pen: DropperConfig, storeDesc "Lost")
+	local contents = 0
+	for _, queue in { machine.Entry.In, machine.Entry.Out } do
+		if queue then
+			for _, desc in queue do
+				if not DropperConfig.isDrop(desc) then
+					contents += 1
+				end
+			end
+		end
+	end
 	if contents > 0 and #data.Storage + contents > ItemService.penCapacity(data) then
 		return false, "PenFull"
 	end

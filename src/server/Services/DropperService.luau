@@ -13,8 +13,9 @@
 	- It also waits (Status "TooManyItems") while its owner has
 	  DropperConfig.MaxLiveDrops Drops in the world (loose, or waiting in a
 	  laser / splitter), or the server MaxLiveDropsServer: canDrop.
-	- Its value is never on the item: SellService.priceOf / ItemData.value
-	  read it from the dropper's id (and the laser's mark) on the server.
+	- Its value is never on the item: SellService.boxPriceOf / ItemData.value
+	  read it from the dropper's id (and the laser's mark) on the server;
+	  Tobin never buys one (SellService.priceOf is 0 for a Drop).
 
 	Money Laser (Behaviour "Laser", 1 x 1, fed by belts from every side but
 	its front)
@@ -28,9 +29,10 @@
 
 	Live Drops (a pass every SweepEvery seconds, a walk over the records of
 	the owners that have droppers or Drops, never over every item)
-	- Counts each owner's Drops (anything not Consumed) for canDrop, and
-	  removes loose Drops older than DropperConfig.DropLife (one fell off a
-	  belt, a belt ends nowhere, it waits at a sink that never takes it).
+	- Counts each owner's Drops in the world (loose, or waiting in a laser /
+	  splitter queue; anything not Consumed) for canDrop, and removes the
+	  LOOSE ones older than DropperConfig.DropLife (one fell off a belt, a
+	  belt ends nowhere, or a ride longer than DropLife: ~79 cells of belt).
 	- A Drop never stays: storeDesc refuses it ("Lost": leaving, rescues, a
 	  return from someone else's plot just remove it; a Drop on another
 	  player's plot pays nobody, their Sell Box refuses it as 'Foreign'),
@@ -206,6 +208,16 @@ function DropperService.stripSave(data: { [string]: any }): number
 	end
 	return removed
 end
+
+-- Internals for the Lune tests only (tests/DropperService.spec.luau).
+DropperService._test = {
+	-- forget the live counts and the watched owners
+	reset = function()
+		table.clear(live)
+		table.clear(watched)
+		liveTotal = 0
+	end,
+}
 
 ---------------------------------------------------------------- lifecycle
 

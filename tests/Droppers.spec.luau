@@ -23,7 +23,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("droppers: the most a plot earns per second, every Money Laser on one dropper's line (the best first)", function()
+	T.test("droppers: the most a plot earns per second: with any Money Laser every dropper doubled (merged belts)", function()
 		local basic, gold = DropperConfig.ById.BasicDropper, DropperConfig.ById.GoldDropper
 		T.eq(DropperConfig.placedIncome(nil), 0)
 		T.eq(DropperConfig.placedIncome({ { Id = "Conveyor" } }), 0)
@@ -31,7 +31,8 @@ return function(T, Loader)
 		local laser = DropperConfig.Laser.Id
 		T.eq(
 			DropperConfig.placedIncome({ { Id = "BasicDropper" }, { Id = "GoldDropper" }, { Id = laser } }),
-			basic.Income + gold.Income * 2
+			(basic.Income + gold.Income) * 2,
+			"one laser on the merged line doubles both"
 		)
 		T.eq(
 			DropperConfig.placedIncome({ { Id = "BasicDropper" }, { Id = laser }, { Id = laser }, { Id = laser } }),

@@ -961,8 +961,17 @@ local function wearParked(entry: Parked, info: ItemBuilder.ItemInfo, cf: CFrame,
 end
 
 local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean): ItemRecord?
-	-- a dusty relic carries an artifact id where ore carries its ore
-	local known = if info.Kind == "Relic" then ArtifactConfig.ById[info.OreId] ~= nil else OreData.exists(info.OreId)
+	-- a dusty relic carries an artifact id where ore carries its ore, a
+	-- dropper's Drop its dropper's id (DropperConfig)
+	local known = if info.Kind == "Relic"
+		then ArtifactConfig.ById[info.OreId] ~= nil
+		elseif info.Kind == DropperConfig.DropKind then DropperConfig.validDrop({
+			K = info.Kind,
+			O = info.OreId,
+			G = info.Grade,
+			R = info.Recipe,
+		})
+		else OreData.exists(info.OreId)
 	if not known or not ItemData.Kinds[info.Kind] then
 		warn("[ItemService] bad item info", info.Kind, info.OreId)
 		return nil

@@ -135,7 +135,8 @@ local A = {
 	LevelScale = nil :: { number }?, -- capsule price multiplier per blaster level instead of CapsuleConfig's
 	CrystalMode = "Mixed", -- a label only (the floors come from MineFloors / FloorTables; kept for old override files)
 	-- the droppers (DropperConfig, 2026-10-21): buy the next dropper (one of each, in order) or a Money
-	-- Laser (at most one per dropper) when it costs at most DropperMinutes of the current total income
+	-- Laser (one: the droppers' belts merge before it, 2026-10-24) when it costs at most DropperMinutes
+	-- of the current total income
 	Droppers = false,
 	DropperMinutes = 30,
 	-- real ore on the belts (2026-10-24): the droppers earn when their Drops sell in a Sell Box.
@@ -1261,7 +1262,8 @@ local function simulate(seed: number, start: any?): any
 			if nextDropper then
 				pick = { Id = nextDropper.Id, Price = nextDropper.Price, Name = nextDropper.Name }
 			end
-			if p.Lasers < owned and (pick == nil or laser.Price < pick.Price) then
+			-- (one laser on the merged line doubles every dropper: more add nothing)
+			if p.Lasers < math.min(owned, 1) and (pick == nil or laser.Price < pick.Price) then
 				pick = { Id = laser.Id, Price = laser.Price, Name = laser.Name }
 			end
 			if pick and pick.Price <= income * A.DropperMinutes * 60 and p.Coins >= pick.Price then

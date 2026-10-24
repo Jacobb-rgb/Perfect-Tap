@@ -629,7 +629,7 @@ local function sellCanAccept(machine: PlacedMachine, desc: Desc, ownerUserId: nu
 	if not ok then
 		return false, reason :: Reason?
 	end
-	if SellService.priceOf(desc) <= 0 then
+	if SellService.boxPriceOf(desc) <= 0 then
 		return false, "Wrong"
 	end
 	if not DataService.get(machine.Owner) then
@@ -641,7 +641,7 @@ end
 local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: number, _via: Via)
 	local player = machine.Owner
 	local data = DataService.get(player)
-	local base = SellService.priceOf(desc)
+	local base = SellService.boxPriceOf(desc)
 	if not data or base <= 0 then
 		-- canAccept said yes a moment ago; MachineService puts the item back out
 		error("the Sell Box can't sell this right now")

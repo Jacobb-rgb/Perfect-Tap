@@ -15,14 +15,20 @@ return function(T, Loader)
 			T.eq(DropperConfig.dropValue(dropper.Id), value, dropper.Id)
 			T.eq(ItemData.value("Drop", dropper.Id, nil, nil), value)
 			T.eq(ItemData.value("Drop", dropper.Id, nil, DropperConfig.LaserMark), value * DropperConfig.Laser.Mult)
-			T.eq(SellService.priceOf(drop(dropper.Id)), value, "the Sell Box price")
-			T.eq(SellService.priceOf(drop(dropper.Id, true)), value * DropperConfig.Laser.Mult)
+			T.eq(SellService.boxPriceOf(drop(dropper.Id)), value, "the Sell Box price")
+			T.eq(SellService.boxPriceOf(drop(dropper.Id, true)), value * DropperConfig.Laser.Mult)
+			T.eq(SellService.priceOf(drop(dropper.Id)), 0, "Tobin never buys a Drop (counter, SellBin, sell all)")
 			T.falsy(ItemData.parseKey(ItemData.storageKey(drop(dropper.Id))), "no pen / summary key")
 			T.eq(ItemData.income(drop(dropper.Id)), 0, "nothing on a podium")
 		end
-		T.eq(SellService.priceOf({ K = "Drop", O = "Diamond" }), 0, "an ore id is no dropper")
-		T.eq(SellService.priceOf({ K = "Drop", O = "BasicDropper", R = "X9" }), 0, "a forged mark sells for nothing")
-		T.eq(SellService.priceOf({ K = "Drop", O = "BasicDropper", G = "Flawless" }), 0, "no grades on a Drop")
+		T.eq(SellService.boxPriceOf({ K = "Drop", O = "Diamond" }), 0, "an ore id is no dropper")
+		T.eq(SellService.boxPriceOf({ K = "Drop", O = "BasicDropper", R = "X9" }), 0, "a forged mark sells for nothing")
+		T.eq(SellService.boxPriceOf({ K = "Drop", O = "BasicDropper", G = "Flawless" }), 0, "no grades on a Drop")
+		T.eq(
+			SellService.boxPriceOf({ K = "Clean", O = "Diamond", G = "Rough" }),
+			SellService.priceOf({ K = "Clean", O = "Diamond", G = "Rough" }),
+			"ore: Tobin's price"
+		)
 	end)
 
 	T.test("drops: a valid Drop is a known dropper with no grade and at most the laser's mark", function()
