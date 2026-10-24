@@ -61,6 +61,7 @@ Backpacks.Displays = {
 Backpacks.RoofScale = 2.2 -- the roof emblem's size against a normal pack
 Backpacks.RoofSpin = 0.5 -- radians per second
 -- how near the camera must be for the clients to build each display pack
+-- (the inside ones also carry DisplayLite: integrator 2026-10-24, the phones' part budget)
 -- (studs; the phones' part budget: the spawn and the DROPPERS door, ~41 studs
 -- from the porch, stay clear of them): the roof emblem, the porch, inside
 Backpacks.Ranges = { Roof = 45, Porch = 38, Inside = 30 }
@@ -95,6 +96,10 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 		p.Name = name
 		display(p, packId)
 		p:SetAttribute("DisplayRange", range)
+		if range == Backpacks.Ranges.Inside then
+			-- (phones show the inside packs without their small details until the camera is in the shop)
+			p:SetAttribute("DisplayLite", true)
+		end
 		return p
 	end
 

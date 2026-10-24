@@ -343,6 +343,104 @@ return function(T, Loader)
 		end
 	end)
 
+	--[[
+		The phone budget at the shop's gateway (integrator 2026-10-24): every
+		part within Workspace.StreamingTargetRadius of the porch's front edge,
+		every Persistent model's parts beyond it and the yard museums (as
+		PhoneBudget.spec counts), plus what this client builds there: the
+		shop's display packs within their DisplayRange (the inside ones lite:
+		the camera is outside the shop), its decor and the DROPPERS showroom
+		(within DropperShopBuilder.ShowDistance), stay under StreamParts.
+	]]
+	T.test(
+		"BACKPACKS shop: what a phone holds at its gateway (streamed + its packs and decor + the DROPPERS showroom) stays under StreamParts",
+		function()
+			local fs = require("@lune/fs")
+			local serde = require("@lune/serde")
+			local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+			local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+			local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+			local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
+			local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+			local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
+			local project = serde.decode("json", fs.readFile("default.project.json"))
+			local radius = project.tree.Workspace["$properties"].StreamingTargetRadius
+			local map = WorldBuilder.build(roblox.Instance.new("DataModel"):GetService("Workspace"))
+			local shop = map:FindFirstChild("BackpackStall", true)
+			local frame = shop:GetAttribute(Decor.FrameAttribute)
+			local gate = (frame * CFrame.new(0, 0, Decor.Layout.PorchZ)).Position
+			local function persistent(model: any): boolean
+				local ok, mode = pcall(function()
+					return model.ModelStreamingMode.Name
+				end)
+				return ok and mode == "Persistent"
+			end
+			local near, always = 0, 0
+			local function walk(instance: any, persists: boolean)
+				for _, child in instance:GetChildren() do
+					if child:IsA("BasePart") then
+						if (child.CFrame.Position - gate).Magnitude <= radius then
+							near += 1
+						elseif persists then
+							always += 1
+						end
+					end
+					walk(child, persists or (child:IsA("Model") and persistent(child)))
+				end
+			end
+			walk(map, false)
+			local museums = 0
+			for _, plot in WorldLayout.Plots do
+				museums += #partsOf(MuseumBuilder.build(WorldLayout.plotCFrame(plot)))
+			end
+			local packs = 0
+			for _, d in shop:GetChildren() do
+				local id = d:GetAttribute("BackpackId")
+				if id and (d.CFrame.Position - gate).Magnitude <= d:GetAttribute("DisplayRange") then
+					local model = BackpackBuilder.build(id, true)
+					packs += if d:GetAttribute("DisplayLite") then BackpackBuilder.lite(model) else #partsOf(model)
+				end
+			end
+			local decor = if (frame.Position - gate).Magnitude <= Decor.ShowRange then #partsOf(Decor.build(frame)) else 0
+			local house = map:FindFirstChild("DroppersHouse", true)
+			local houseFrame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
+			local showroom = if (houseFrame.Position - gate).Magnitude <= DropperShopBuilder.ShowDistance
+				then #partsOf(DropperShopBuilder.build(houseFrame))
+				else 0
+			local total = near + always + museums + packs + decor + showroom
+			T.le(
+				total,
+				LobbyLayout.Budget.StreamParts,
+				`gateway: {near} within {radius} + {always} always-streamed + {museums} museum + {packs} packs + {decor} decor + {showroom} DROPPERS showroom = {total}`
+			)
+		end
+	)
+
+	T.test("BACKPACKS packs: the lite look drops the small details, keeps the Root and the effect boxes", function()
+		for _, pack in BackpackData.List do
+			local full = #partsOf(BackpackBuilder.build(pack.Id, true))
+			local model = BackpackBuilder.build(pack.Id, true)
+			local left = BackpackBuilder.lite(model)
+			T.eq(left, #partsOf(model), pack.Id .. " counts what is left")
+			T.truthy(left < full and left >= full * 0.25, pack.Id .. " lite keeps the big shapes")
+			T.truthy(model.PrimaryPart and model.PrimaryPart.Parent == model, pack.Id .. " keeps its Root")
+			T.truthy(model:GetAttribute("Lite"), pack.Id .. " is marked lite")
+			local boxes = 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") and d:GetAttribute("FxBox") then
+					boxes += 1
+				end
+			end
+			local before = 0
+			for _, d in BackpackBuilder.build(pack.Id, true):GetDescendants() do
+				if d:IsA("BasePart") and d:GetAttribute("FxBox") then
+					before += 1
+				end
+			end
+			T.eq(boxes, before, pack.Id .. " keeps its effect boxes")
+		end
+	end)
+
 	T.test("BACKPACKS shop decor: built by the clients, inside the footprint, lights and dust off", function()
 		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
 		local frame = CFrame.new(46, 0, 74) * CFrame.Angles(0, math.pi / 2, 0)

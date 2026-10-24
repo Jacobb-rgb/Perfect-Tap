@@ -28,9 +28,11 @@
 	  with the attribute DisplayScale shows a bigger pack (its own model, not
 	  pooled) and one with DisplaySpin turns it slowly (radians per second,
 	  its welded Root moved every frame while it is within FxRange; it stands
-	  still with Reduce motion); that one's light shines on a PC. (The
-	  markers carry no tag: Plaza Life keeps its miners off tagged parts as
-	  prompt spots.)
+	  still with Reduce motion); that one's light shines on a PC. Phones show
+	  a DisplayLite marker's pack without its small details
+	  (BackpackBuilder.lite) unless the camera or the player is in the shop.
+	  (The markers carry no tag: Plaza Life keeps its miners off tagged
+	  parts as prompt spots.)
 	- The shop's small things (Builders/BackpackShopDecor: banners, lanterns,
 	  crates, the crest, the rug...): built from the shop model's ShopFrame
 	  attribute within BackpackShopDecor.ShowRange; the lanterns' lights
@@ -79,6 +81,8 @@ type Display = {
 	Scale: number, -- DisplayScale (1 = a normal pack)
 	Spin: number, -- DisplaySpin (radians per second, 0 = still)
 	Range: number, -- DisplayRange (studs: built this near)
+	Lite: boolean, -- DisplayLite: phones show it without its small details unless the player is in the shop
+	Frame: CFrame?, -- the shop's frame (BackpackShopDecor.FrameAttribute) for the inside check
 	Angle: number,
 	Turning: boolean, -- near enough to turn (lodStep)
 }
@@ -177,8 +181,8 @@ end
 
 ---------------------------------------------------------------- the pool
 
-local function acquire(packId: string, rigged: boolean): Model
-	local key = packId .. (if rigged then "" else "|display")
+local function acquire(packId: string, rigged: boolean, lite: boolean?): Model
+	local key = packId .. (if rigged then "" else "|display") .. (if lite then "|lite" else "")
 	local pool = pools[key]
 	if pool and #pool > 0 then
 		return table.remove(pool) :: Model
@@ -186,6 +190,9 @@ local function acquire(packId: string, rigged: boolean): Model
 	local model = BackpackBuilder.build(packId, not rigged)
 	if rigged then
 		BackpackBuilder.rig(model)
+	end
+	if lite then
+		BackpackBuilder.lite(model)
 	end
 	model:SetAttribute("PoolKey", key)
 	return model
@@ -355,7 +362,7 @@ local function displayRoot(display: Display, model: Model, angle: number): CFram
 		* CFrame.new(0, 0, -(BackpackBuilder.Gap + pack.Size.Z / 2) * scale)
 end
 
-local function showDisplay(display: Display)
+local function showDisplay(display: Display, lite: boolean)
 	if display.Model then
 		return
 	end
@@ -363,7 +370,7 @@ local function showDisplay(display: Display)
 		return
 	end
 	local own = display.Scale ~= 1 or display.Spin ~= 0
-	local model = if own then BackpackBuilder.build(display.PackId, true) else acquire(display.PackId, false)
+	local model = if own then BackpackBuilder.build(display.PackId, true) else acquire(display.PackId, false, lite)
 	if display.Scale ~= 1 then
 		model:ScaleTo(display.Scale)
 	end
@@ -415,6 +422,8 @@ local function addMarker(marker: Instance)
 	local scale = marker:GetAttribute("DisplayScale")
 	local spin = marker:GetAttribute("DisplaySpin")
 	local range = marker:GetAttribute("DisplayRange")
+	local stall = marker.Parent
+	local frame = if stall then stall:GetAttribute(BackpackShopDecor.FrameAttribute) else nil
 	displays[marker] = {
 		Marker = marker,
 		PackId = id,
@@ -422,6 +431,8 @@ local function addMarker(marker: Instance)
 		Scale = if type(scale) == "number" and scale > 0 then scale else 1,
 		Spin = if type(spin) == "number" then spin else 0,
 		Range = if type(range) == "number" and range > 0 then range else BackpackWearController.DisplayRange,
+		Lite = marker:GetAttribute("DisplayLite") == true,
+		Frame = if typeof(frame) == "CFrame" then frame else nil,
 		Angle = 0,
 		Turning = false,
 	}
@@ -484,6 +495,27 @@ local function decorFx(shop: Shop, near: boolean, lite: boolean)
 	end
 end
 
+-- Is `p` inside the shop (between its walls, under its roof)?
+local function inShop(frame: CFrame, p: Vector3): boolean
+	local L = BackpackShopDecor.Layout
+	local q = frame:PointToObjectSpace(p)
+	return math.abs(q.X) <= L.Width / 2 and q.Z >= L.FrontZ - L.Wall0 / 2 and q.Z <= L.BackZ + L.Wall0 / 2 and q.Y <= L.Floor + L.Wall + 1
+end
+
+-- Phones show a DisplayLite pack without its small details unless the camera or the player is in the shop.
+local function wantsLite(display: Display, focus: Vector3, lite: boolean): boolean
+	local frame = display.Frame
+	if not (display.Lite and lite and frame) then
+		return false
+	end
+	if inShop(frame, focus) then
+		return false
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return not (root and root:IsA("BasePart") and inShop(frame, root.Position))
+end
+
 ---------------------------------------------------------------- the range check
 
 local function lodStep()
@@ -539,8 +571,13 @@ local function lodStep()
 			continue
 		end
 		local distance = (marker.Position - focus).Magnitude
+		local wantLite = wantsLite(display, focus, lite)
+		local shown = display.Model
+		if shown and (shown:GetAttribute("Lite") == true) ~= wantLite then
+			hideDisplay(display) -- (the other look: built again below)
+		end
 		if distance <= display.Range then
-			showDisplay(display)
+			showDisplay(display, wantLite)
 		elseif distance > display.Range + BackpackWearController.DisplayHysteresis then
 			hideDisplay(display)
 		end

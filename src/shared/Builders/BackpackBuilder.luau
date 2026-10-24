@@ -1345,6 +1345,44 @@ end
 	welds it to Root with a WeldConstraint (Root stays the one part to weld
 	to the character's UpperTorso). Call before parenting it to the character.
 ]]
+--[[
+	The lite look of a built pack (phones looking into the BACKPACKS shop from
+	outside: BackpackWearController): drops the small details (parts under
+	LiteKeep.Max on every side and thinner than LiteKeep.Min: rivets, studs,
+	stitches, tiny buckles), keeps Root and the FxBox parts. Returns how many
+	parts are left.
+]]
+BackpackBuilder.LiteKeep = { Max = 0.5, Min = 0.25 }
+
+function BackpackBuilder.lite(model: Model): number
+	local keep = BackpackBuilder.LiteKeep
+	-- (first the list, then the cuts: a cut part takes what hangs inside it along)
+	local cuts: { BasePart } = {}
+	for _, p in model:GetDescendants() do
+		if p:IsA("BasePart") and p ~= model.PrimaryPart and p:GetAttribute("FxBox") == nil then
+			local s = p.Size
+			if
+				math.max(s.X, s.Y, s.Z) < keep.Max
+				and math.min(s.X, s.Y, s.Z) < keep.Min
+				and not p:FindFirstChildWhichIsA("BasePart", true)
+			then
+				table.insert(cuts, p)
+			end
+		end
+	end
+	for _, p in cuts do
+		p:Destroy()
+	end
+	local left = 0
+	for _, p in model:GetDescendants() do
+		if p:IsA("BasePart") then
+			left += 1
+		end
+	end
+	model:SetAttribute("Lite", true)
+	return left
+end
+
 function BackpackBuilder.rig(model: Model)
 	local root = model.PrimaryPart
 	assert(root, "backpack without Root")
