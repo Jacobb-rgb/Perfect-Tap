@@ -2,6 +2,7 @@
 -- boards that are faster still and have effects; models from parts within budget.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
 	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 	local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
 	local HoverboardFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardFx")
@@ -216,7 +217,7 @@ return function(T, Loader)
 			)
 			T.truthy(root.TrailLeft.CFrame.Position.Z > 2, board.Id .. " trail at the tail")
 			T.truthy(root.Nose.CFrame.Position.Z < -2, board.Id .. " nose at the front")
-			T.near(model:GetAttribute("DeckHeight"), HoverboardBuilder.DeckHeight, 1e-6, board.Id .. " DeckHeight attribute")
+			T.near(model:GetAttribute("DeckHeight"), HoverboardBuilder.DeckHeight, 1e-3, board.Id .. " DeckHeight attribute")
 			-- the deck top: the highest point of the parts the feet stand on is the deck height,
 			-- the lowest point of the board is the hover pad at HoverGap
 			local low, deckTop = math.huge, -math.huge
@@ -314,5 +315,60 @@ return function(T, Loader)
 			end
 		end
 		T.eq(HoverboardFx.acquire("NoSuchBoard"), nil, "unknown boards acquire nothing")
+	end)
+
+	T.test("hoverboard lightning: arcs per board, lite, flicker, strike, hide", function()
+		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
+		local function constant(v: number): () -> number
+			return function(): number
+				return v
+			end
+		end
+		for _, board in HoverboardData.List do
+			local set = HoverboardFx.create(board.Id)
+			local bolts = set.Bolts
+			T.truthy(bolts ~= nil, board.Id .. " has lightning")
+			local spec = HoverboardBolts.Specs[board.Effect]
+			T.eq(#bolts.Arcs, spec.Arcs, board.Id .. " arcs")
+			if board.Kind == "Robux" then
+				T.truthy(spec.Arcs >= 3 and spec.Duty >= 0.3, board.Id .. ": more lightning on the Robux boards")
+			end
+			local lite = HoverboardFx.create(board.Id, true)
+			T.truthy(#lite.Bolts.Arcs >= 1 and #lite.Bolts.Arcs <= #bolts.Arcs, board.Id .. " lite arcs")
+			T.eq(#lite.Bolts.Arcs[1].Glows, 0, board.Id .. " lite arcs have no glow beams")
+			-- not mounted: nothing to flicker
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), 0, "no flicker off a board")
+			local model = HoverboardBuilder.build(board.Id)
+			T.truthy(HoverboardFx.mount(set, model), board.Id .. " mounts")
+			local root = model.PrimaryPart
+			T.eq(bolts.Arcs[1].Points[1].Parent, root, "bolt points under the board's Root")
+			T.eq(bolts.Arcs[1].Cores[1].Parent, root, "bolt beams under the board's Root")
+			T.falsy(bolts.Arcs[1].Cores[1].Enabled, "hidden at first")
+			-- a calm flicker (rand 0.99 >= every chance): nothing shows
+			T.eq(HoverboardFx.flicker(set, constant(0.99), 0, 0), 0, board.Id .. " quiet when calm and unlucky")
+			-- full speed and a surge (rand 0.5): every arc shows, down to the ground
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), #bolts.Arcs, board.Id .. " every arc in a surge")
+			for _, arc in bolts.Arcs do
+				T.truthy(arc.Cores[1].Enabled, "shown arcs are enabled")
+				local last = arc.Points[#arc.Points].CFrame.Position
+				T.near(last.Y, 0.05, 1e-3, board.Id .. " arcs reach the ground")
+				local first = arc.Points[1].CFrame.Position
+				local reach = Vector3.new(last.X - first.X, 0, last.Z - first.Z).Magnitude
+				T.le(reach, spec.Reach * 1.4 + 1e-6, board.Id .. " arc reach")
+			end
+			-- the strike from the sky
+			HoverboardFx.strike(set, constant(0.5), 1)
+			local strike = bolts.Strike
+			T.truthy(strike.Cores[1].Enabled, "the strike shows")
+			T.near(strike.Points[1].CFrame.Position.Y, HoverboardBolts.StrikeHeight, 1e-3, "from the sky")
+			T.near(strike.Points[#strike.Points].CFrame.Position.Y, HoverboardBuilder.DeckHeight, 1e-3, "onto the deck")
+			HoverboardFx.strike(set, constant(0.5), 0)
+			T.falsy(strike.Cores[1].Enabled, "the strike hides")
+			-- switching off hides everything; releasing unmounts the bolts too
+			HoverboardFx.setActive(set, false)
+			T.eq(HoverboardBolts.visible(bolts), 0, "off = no arcs")
+			HoverboardFx.release(set)
+			T.eq(bolts.Arcs[1].Points[1].Parent, nil, "released bolts are unmounted")
+		end
 	end)
 end

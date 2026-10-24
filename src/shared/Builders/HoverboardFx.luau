@@ -22,6 +22,10 @@
 	dust / spark / star / fire splash under the board), "Boost" when you reach
 	top speed (sparks from the thrusters; a sonic star cone on the Comet, a
 	fire flare on the Phoenix).
+	Lightning (HoverboardBolts, owner 2026-10-24): every board crackles with
+	arcs in its glow colour (more and longer on the Robux boards, more with
+	speed and while surging) and a strike from the sky hits it when you hop
+	on: HoverboardFx.flicker / strike, called by HoverboardController.
 	`lite` (low-end phones, many riders in view) halves every rate and burst,
 	shortens the trail and drops the volume emitters (dust, embers, feathers).
 
@@ -41,6 +45,7 @@
 	build it.
 ]]
 
+local HoverboardBolts = require(script.Parent.HoverboardBolts)
 local HoverboardData = require(script.Parent.Parent.Config.HoverboardData)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 
@@ -62,6 +67,7 @@ export type FxSet = {
 	Emitters: { ParticleEmitter }, -- continuous (Rate follows the speed)
 	Bursts: { ParticleEmitter }, -- one-shot (attribute "Burst" = Start / Boost, "Count")
 	Trails: { Trail },
+	Bolts: HoverboardBolts.BoltSet?, -- the lightning
 	Model: Model?,
 }
 
@@ -486,6 +492,7 @@ function HoverboardFx.create(boardId: string, lite: boolean?): FxSet?
 		Emitters = {},
 		Bursts = {},
 		Trails = {},
+		Bolts = HoverboardBolts.create(board.Effect, glow(board.Colors.Glow), lite),
 		Model = nil,
 	}
 	local build: (FxSet, HoverboardData.Colors) -> () = if board.Effect == "Sparks"
@@ -540,6 +547,10 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 		t.Attachment1 = find(t:GetAttribute("Mount1"))
 		t.Parent = root
 	end
+	local bolts = set.Bolts
+	if bolts then
+		HoverboardBolts.mount(bolts, root)
+	end
 	set.Model = model
 	return true
 end
@@ -560,6 +571,10 @@ function HoverboardFx.unmount(set: FxSet)
 			t.Attachment1 = nil
 		end)
 	end
+	local bolts = set.Bolts
+	if bolts then
+		HoverboardBolts.unmount(bolts)
+	end
 	set.Model = nil
 end
 
@@ -573,6 +588,29 @@ function HoverboardFx.setActive(set: FxSet, active: boolean, intensity: number?)
 	end
 	for _, t in set.Trails do
 		t.Enabled = active and k > 0.15
+	end
+	local bolts = set.Bolts
+	if bolts and not active then
+		HoverboardBolts.hide(bolts)
+	end
+end
+
+-- One lightning flicker (every HoverboardBolts.FlickerEvery seconds while riding):
+-- `speed` 0..1 = speed / top speed, `surge` 0..1 = the hop on, top speed or a landing.
+-- Returns how many arcs show.
+function HoverboardFx.flicker(set: FxSet, rand: () -> number, speed: number, surge: number): number
+	local bolts = set.Bolts
+	if not bolts or not set.Model then
+		return 0
+	end
+	return HoverboardBolts.flicker(bolts, rand, speed, surge)
+end
+
+-- The strike from the sky (the hop on): alpha > 0 shows it with a new shape, 0 hides it.
+function HoverboardFx.strike(set: FxSet, rand: () -> number, alpha: number)
+	local bolts = set.Bolts
+	if bolts and set.Model then
+		HoverboardBolts.strike(bolts, rand, alpha, 1.5)
 	end
 end
 
@@ -639,6 +677,10 @@ function HoverboardFx.release(set: FxSet)
 	end
 	for _, t in set.Trails do
 		t:Destroy()
+	end
+	local bolts = set.Bolts
+	if bolts then
+		HoverboardBolts.destroy(bolts)
 	end
 end
 
