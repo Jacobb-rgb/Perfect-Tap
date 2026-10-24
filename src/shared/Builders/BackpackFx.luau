@@ -96,7 +96,7 @@ BackpackFx.Specs = {
 			{ Box = "Gem", Kind = "Sparkle", Color = packGlow("ExplorersPack"), Rate = 4 },
 			{ Box = "Gem", Kind = "Glint", Color = WHITE, Rate = 1 },
 		},
-		Light = { Box = "Light", Color = rgb(90, 240, 200), Range = 6, Brightness = 0.4 },
+		Light = { Box = "Light", Color = rgb(90, 240, 200), Range = 6, Brightness = 0.25 },
 	},
 	AmethystPack = {
 		Effects = {
