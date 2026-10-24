@@ -170,6 +170,18 @@ function GridOverlay.tag(name: string, text: string, color: Color3)
 	end
 end
 
+-- Takes a plate's floating text tag away (the plate stays).
+function GridOverlay.untag(name: string)
+	local label = tags[name]
+	if label then
+		local gui = label.Parent
+		tags[name] = nil
+		if gui then
+			gui:Destroy()
+		end
+	end
+end
+
 -- Hides one named plate (it stays pooled).
 function GridOverlay.hidePlate(name: string)
 	local plate = plates[name]

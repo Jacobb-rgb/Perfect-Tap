@@ -142,9 +142,10 @@ local function soon(): { [string]: boolean }
 end
 
 -- Is the HUD on screen (the cleaning close-up and other takeovers turn it off)?
+-- The HUD is on and not in build mode (PlacementController's Building attribute).
 local function hudShown(): boolean
 	local hud = HudController.refs()
-	return hud == nil or hud.Gui.Enabled
+	return hud == nil or (hud.Gui.Enabled and hud.Gui:GetAttribute("Building") ~= true)
 end
 
 -- The HUD's layout for the train chip (as TrainController picks it).
@@ -850,6 +851,7 @@ function BoostController.start()
 			end
 			refreshChips()
 		end)
+		hud.Gui:GetAttributeChangedSignal("Building"):Connect(refreshChips)
 	end
 	-- the chips' timers count down between snapshots
 	while true do
