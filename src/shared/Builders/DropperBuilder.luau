@@ -326,7 +326,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 
 	---------------------------------------------------------------- what each one is made of
 	local kind = st.Kind
-	local armTop = armY + 0.9 -- (a slime or snow cap raises it)
+	local armTop = armY + 0.9 -- (a slime or snow cap raises it: the rounded top sits on it)
 	-- (glowing bits round the blocks: a helper for the spots, flakes and crystals below)
 	local function spot(x: number, y: number, z: number, size: Vector3, color: Color3, turn: CFrame?)
 		Geo.block(model, at(x, y, z) * (turn or CFrame.new()), size, color, NEON, decor())
@@ -605,36 +605,34 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 			Geo.ball(model, (at(p.X, p.Y, p.Z)).Position, 0.6 + (i % 3) * 0.25, rgb(18, 10, 30), PLASTIC, decor())
 		end
 	end
-	---------------------------------------------------------------- the arrow on the arm
+	---------------------------------------------------------------- the rounded top of the arm
 	-- (owner 2026-10-24: the long see-through glow on the arm's top looked
-	-- speckled over the studs) a solid glowing arrow lying on the arm's top:
-	-- a triangle at the drop end pointing at it, a bar back to the top step,
-	-- a round tail
+	-- speckled over the studs; "round the top, with its end") a solid
+	-- glowing rounded ridge along the arm's top back to the top step, its
+	-- end over the drop a rounded dome: a cylinder and a ball sunk into the
+	-- arm so only their tops show
 	do
-		local z0, thick = -0.4, 0.1
-		local y = armTop + thick / 2
-		local tipX, headLen, hw, shaftW = armLeft + 0.35, 1.5, 0.95, 0.8
-		local baseX = tipX + headLen
-		local backX = math.max(baseX + 0.6, bx - 1.2)
+		local z0, d, rise = -0.4, 2.3, 0.5
+		local cy = armTop + rise - d / 2
+		local endX = armLeft + d / 2
+		local backX = math.max(endX + 0.6, bx - 0.9)
 		local color = glowOf(st, 2)
-		for _, side in { -1, 1 } do
-			-- one half of the head: the right angle at the base's middle, the slope to the tip
-			local frame = CFrame.fromMatrix(Vector3.zero, Vector3.new(0, side, 0), Vector3.new(0, 0, side), Vector3.new(1, 0, 0))
-			Geo.wedge(model, at(baseX - headLen / 2, y, z0 + side * hw / 2) * frame, Vector3.new(thick, hw, headLen), color, NEON, decor())
+		local function round(shape: Enum.PartType, at0cf: CFrame, size: Vector3)
+			Geo.make("Part", {
+				Shape = shape,
+				CFrame = at0cf,
+				Size = size,
+				Color = color,
+				Material = NEON,
+				Anchored = true,
+				CanCollide = false,
+				CanTouch = false,
+				CanQuery = false,
+				CastShadow = false,
+			}, model)
 		end
-		Geo.block(model, at((baseX + backX) / 2, y, z0), Vector3.new(backX - baseX + 0.02, thick, shaftW), color, NEON, decor())
-		Geo.make("Part", {
-			Shape = Enum.PartType.Cylinder,
-			CFrame = at(backX, y, z0) * CFrame.Angles(0, 0, math.pi / 2),
-			Size = Vector3.new(thick, shaftW, shaftW),
-			Color = color,
-			Material = NEON,
-			Anchored = true,
-			CanCollide = false,
-			CanTouch = false,
-			CanQuery = false,
-			CastShadow = false,
-		}, model)
+		round(Enum.PartType.Cylinder, at((endX + backX) / 2, cy, z0), Vector3.new(backX - endX, d, d))
+		round(Enum.PartType.Ball, at(endX, cy, z0), Vector3.new(d, d, d))
 	end
 
 	BlockKit.scale(model, cf, K)
