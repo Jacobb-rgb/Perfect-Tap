@@ -332,6 +332,16 @@ LobbyLayout.Pieces = {
 		Note = "The EGGS temple left of the spawn (owner 2026-10-21/22): an open gold rotunda with the three eggs on podiums, a curved navy back wall, crystal shards, a giant crowned egg on the roof, EGGS sign, odds board. Tag CapsuleStall (Model with PrimaryPart CapsuleMachine).",
 	},
 	{
+		Id = "BackpackStall",
+		Package = "Districts",
+		-- (owner 2026-10-24: a new BACKPACKS stall; art/backpacks: the lawn north of the SHOP,
+		-- between it and the wheel's stairs, the only spot near the plaza with room)
+		Center = v(-40, 0, -44),
+		Size = v(10, 11, 8),
+		Facing = toward(v(-40, 0, -44), PLAZA),
+		Note = "BACKPACKS: the backpack shop's lean kiosk (deck, back wall, posts, canopy, neon sign, counter, two plinths). Tag BackpackCounter (BasePart: the counter top, Attachment BackpackPromptPoint); the shelf and the plinth plates carry the attribute BackpackId (no tag): the clients build those display packs, they are not map parts.",
+	},
+	{
 		Id = "EnchantShop",
 		Package = "Districts",
 		Center = v(50, 0, -84),

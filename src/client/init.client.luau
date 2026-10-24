@@ -34,6 +34,8 @@ local ORDER = {
 	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board
 	"GearShopController", -- the Gear shop at the SHOP stall
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
+	"BackpackShopController", -- the backpack shop at the BACKPACKS stall (OpenUI "Backpacks")
+	"BackpackWearController", -- every player's backpack on their back, the stall's display packs
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)

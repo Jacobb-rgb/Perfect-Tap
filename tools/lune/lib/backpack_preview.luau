@@ -7,6 +7,14 @@
 	  scene "backpacks_worn"  stand-in miners on a meadow path seen from
 	                          behind (the player's own camera), each wearing a
 	                          pack, like the owner's reference shots
+	  scene "backpack_stall"  the world with the BACKPACKS stall (Districts/
+	                          Backpacks) and its three display packs as the
+	                          clients build them (BackpackWearController), two
+	                          shoppers wearing packs at the counter
+	  scene "backpack_shop"   the showroom + the shop window overlays
+	                          (Preview.buildUi) and the packs' 3D pictures for
+	                          them (Preview.exportIcons: build/preview/icon_parts,
+	                          then node tools/preview/render_icons.mjs backpack_...)
 	Shots: tools/preview/backpack_shots.json.
 ]]
 
@@ -306,6 +314,109 @@ function Preview.buildWorn(Loader: any, workspace: any)
 		model.Parent = stage
 		withFx(k, model)
 	end
+end
+
+--[[
+	Scene "backpack_stall": after WorldBuilder.build, every display marker of
+	the stall (attribute BackpackId) gets its display pack the way BackpackWearController
+	places it (outer face to the marker's front, the bag centred, standing on
+	it) with its effects; two shoppers with packs stand at the counter.
+]]
+function Preview.buildStall(Loader: any, workspace: any)
+	local k = setup(Loader)
+	local CF, V3 = k.CFrame, k.Vector3
+	local Dummy = require("./dummy")
+	local stage = k.roblox.Instance.new("Model")
+	stage.Name = "BackpackStallPreview"
+	stage.Parent = workspace
+	local counter: any = nil
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("BasePart") and d:GetAttribute("BackpackId") ~= nil and d.Parent and d.Parent.Name == "BackpackStall" then
+			local id = d:GetAttribute("BackpackId")
+			local pack = k.Data.ById[id]
+			if pack then
+				local model = k.Builder.build(id, true)
+				local bottom = model:GetAttribute("BottomY")
+				model:PivotTo(d.CFrame * CF.Angles(0, math.pi, 0) * CF.new(0, d.Size.Y / 2 - bottom, -(k.Builder.Gap + pack.Size.Z / 2)))
+				model.Parent = stage
+				withFx(k, model)
+			end
+		elseif d:IsA("BasePart") and d:HasTag("BackpackCounter") then
+			counter = d
+		end
+	end
+	if counter then
+		-- two shoppers in front of the counter, facing it (their packs toward the plaza)
+		local rgb = k.Color3.fromRGB
+		for _, spec in { { -6.6, "MinersPack", rgb(70, 120, 186) }, { 6.8, "AmethystPack", rgb(186, 98, 48) } } do
+			-- beside the stall, turned half toward it (their packs to the camera on the plaza)
+			local front = counter.CFrame * CF.new(spec[1], 0, -4.2)
+			local feet = V3.new(front.Position.X, 0.5, front.Position.Z)
+			local toStall = (counter.CFrame.Position - front.Position) * V3.new(1, 0, 1)
+			local root = CF.lookAt(feet, feet + toStall.Unit)
+			Dummy.build(stage, CF, root, "idle", { shirt = spec[3], pants = rgb(52, 52, 64) })
+			local model = k.Builder.build(spec[2])
+			model:PivotTo(root * CF.new(0, 3.2, 0.5))
+			model.Parent = stage
+			withFx(k, model)
+		end
+	end
+end
+
+--[[
+	The packs' 3D pictures for the shop window's preview (in the game they are
+	live ViewportFrames: PictureModels "backpack_<Id>"): the display build of
+	every pack to build/preview/icon_parts/backpack_<Id>.json for
+	tools/preview/render_icons.mjs (icons.js: backpack_*).
+]]
+function Preview.exportIcons(Loader: any)
+	local k = setup(Loader)
+	local fs = require("@lune/fs")
+	local serde = require("@lune/serde")
+	local Export = require("./export")
+	local dir = Loader.root .. "/build/preview/icon_parts"
+	fs.writeDir(dir)
+	for _, pack in k.Data.List do
+		local model = k.Builder.build(pack.Id, true)
+		fs.writeFile(`{dir}/backpack_{pack.Id}.json`, serde.encode("json", Export.collect(model)))
+	end
+end
+
+--[[
+	The shop window over the showroom:
+	  ui_backpack_shop        PC: the shop (owns the first three packs, wears
+	                          the Leather Rucksack, 140K coins)
+	  ui_backpack_shop_phone  an iPhone SE-sized landscape screen (667 x 375 pt)
+	                          at the 0.62 phone scale: the compact window, its
+	                          cards scroll
+]]
+function Preview.buildUi(Loader: any): { [string]: any }
+	local k = setup(Loader)
+	local UiExport = require("./uiexport")
+	local Client = "StarterPlayer.StarterPlayerScripts.Client.UI."
+	local ShopView = Loader.requirePath(Client .. "BackpackShopView")
+	local pc = 1.25 -- 900 px tall render / 720 design height
+	local phone = 0.62 * 900 / 375
+
+	local function window(scale: number, compact: boolean, maxWidth: number, maxHeight: number): { any }
+		local refs = ShopView.build(compact)
+		refs.Gui.Scale.Scale = scale
+		refs.Gui.Enabled = true
+		local owned = { RookiePack = true, TrailPack = true, LeatherRucksack = true }
+		ShopView.setCards(refs, owned, "LeatherRucksack", 140000)
+		ShopView.setStatus(refs, ShopView.statusText("LeatherRucksack", 12, 30))
+		ShopView.layout(refs, compact, maxWidth, maxHeight)
+		ShopView.pose(refs, ShopView.OpenTime)
+		if not compact then
+			ShopView.setHint(refs, "Mouse", "Click a card · Backspace: close")
+		end
+		return { refs.Gui }
+	end
+
+	return {
+		ui_backpack_shop = UiExport.export(window(pc, false, 1600 / pc, 900 / pc)),
+		ui_backpack_shop_phone = UiExport.export(window(phone, true, 667 / 0.62, (375 - 36) / 0.62)),
+	}
 end
 
 return Preview

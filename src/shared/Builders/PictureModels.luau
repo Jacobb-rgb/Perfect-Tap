@@ -9,6 +9,7 @@
 	  golem_<Kind>      GolemBuilder.build
 	  train             TrainBuilder.locomotive (the shop's Express Train pass)
 	  board_<BoardId>   HoverboardBuilder.build
+	  backpack_<Id>     BackpackBuilder.build for display (no shoulder straps), seen from behind
 	  item_<Ore>        ItemBuilder.build: a pristine clean ore (luck, night, enchant cards)
 	  blaster           BlasterBuilder.build (the Next Blaster card)
 	  pass_crown        a gold crown with gems (the Forgemaster's Pass)
@@ -23,6 +24,7 @@ local CashBuilder = require(script.Parent.CashBuilder)
 local GolemBuilder = require(script.Parent.GolemBuilder)
 local TrainBuilder = require(script.Parent.TrainBuilder)
 local HoverboardBuilder = require(script.Parent.HoverboardBuilder)
+local BackpackBuilder = require(script.Parent.BackpackBuilder)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 local BlasterBuilder = require(script.Parent.BlasterBuilder)
 local Geo = require(script.Parent.Geo)
@@ -159,6 +161,10 @@ function PictureModels.build(name: string): (Model?, Vector3)
 	elseif string.sub(name, 1, 6) == "board_" then
 		local ok, made = pcall(HoverboardBuilder.build, string.sub(name, 7))
 		return if ok then made else nil, Vector3.new(-1, 0.75, -0.7)
+	elseif string.sub(name, 1, 9) == "backpack_" then
+		local ok, made = pcall(BackpackBuilder.build, string.sub(name, 10), true)
+		-- (the packs face +Z: the side the wearer's camera sees)
+		return if ok then made else nil, Vector3.new(0.5, 0.35, 1)
 	elseif string.sub(name, 1, 5) == "item_" then
 		local ok, made = pcall(ItemBuilder.build, { Kind = "Clean", OreId = string.sub(name, 6), Grade = "Pristine" }, CFrame.new(), name)
 		return if ok then made else nil, Vector3.new(-0.5, 0.5, -1)
