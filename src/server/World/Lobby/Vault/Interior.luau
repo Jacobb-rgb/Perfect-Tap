@@ -3,7 +3,7 @@
 	red runner, three stone steps with the ten weapon cases leaning forward on
 	lit displays, a lava channel, the giant round vault door in the back wall,
 	tie beams with candle chandeliers, the counter (tag VaultCounter, the shop
-	hook) with the Blastsmith shopkeeper, and the wall decorations (a treasure
+	hook) with the shopkeeper's spot behind it, and the wall decorations (a treasure
 	map, an ore collection, a blaster blueprint, a volcano painting, a blaster
 	rack, torches, banners, barrels).
 
@@ -11,6 +11,10 @@
 	is x -28..28, z -22..24.
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Kit = require(script.Parent.Kit)
 
 local Interior = {}
@@ -191,74 +195,8 @@ end
 
 ---------------------------------------------------------------- the counter and the keeper
 
---[[
-	The Blastsmith (shopkeeper): a big blocky mechanic, arms crossed, goggles
-	with glowing lenses, a cap, a beard, a tech pack with a glowing core and a
-	blaster on his back. feet = his feet, facing +Z; s = size (1 ~ 5.3 studs).
-]]
-local function blastsmith(m: Model, feet: CFrame, s: number)
-	local SKIN = Color3.fromRGB(236, 190, 150)
-	local PANTS = Color3.fromRGB(46, 50, 64)
-	local SHIRT = Color3.fromRGB(36, 38, 48)
-	local VEST = Color3.fromRGB(126, 54, 36)
-	local HAIR = Color3.fromRGB(96, 58, 34)
-	local LENS = Color3.fromRGB(255, 176, 70)
-	local DARK = Color3.fromRGB(30, 31, 38)
-	local function box(
-		x: number,
-		y: number,
-		z: number,
-		sx: number,
-		sy: number,
-		sz: number,
-		color: Color3,
-		rot: CFrame?,
-		material: Enum.Material?
-	): Part
-		local p = Kit.bit(m, feet * CF(x * s, y * s, z * s) * (rot or CFrame.identity), V3(sx * s, sy * s, sz * s), color, material)
-		return p
-	end
-	for _, sx in { -1, 1 } do
-		box(sx * 0.52, 0.3, 0.12, 1.05, 0.6, 1.3, DARK)
-		box(sx * 0.52, 1.45, 0, 0.95, 1.6, 0.95, PANTS)
-	end
-	box(0, 2.35, 0, 2.12, 0.34, 1.12, Color3.fromRGB(72, 46, 32))
-	box(0, 2.35, 0.57, 0.5, 0.3, 0.08, LENS, nil, Kit.NEON)
-	box(0, 3.45, 0, 2.1, 1.65, 1.08, VEST)
-	box(0, 3.45, 0.55, 0.16, 1.5, 0.04, C.Fire, nil, Kit.NEON)
-	for _, sx in { -1, 1 } do
-		box(sx * 1.45, 4.2, 0, 1.0, 0.6, 1.2, C.Steel)
-		box(sx * 1.45, 3.45, 0, 0.92, 1.2, 0.92, SHIRT)
-	end
-	box(0, 2.95, 0.72, 2.6, 0.78, 0.82, SHIRT, CFrame.Angles(0, 0, 0.08))
-	box(0, 3.25, 0.86, 2.5, 0.72, 0.74, PANTS, CFrame.Angles(0, 0, -0.08))
-	for _, sx in { -1, 1 } do
-		box(sx * 1.3, 3.1 + sx * 0.15, 0.92, 0.72, 0.82, 0.86, DARK)
-	end
-	box(0, 4.55, 0, 0.72, 0.3, 0.72, SKIN)
-	box(0, 5.3, 0, 1.36, 1.36, 1.36, SKIN)
-	box(0, 4.85, 0.64, 1.18, 0.6, 0.2, HAIR)
-	box(0, 5.42, 0, 1.42, 0.3, 1.42, DARK)
-	for _, sx in { -1, 1 } do
-		box(sx * 0.32, 5.42, 0.72, 0.46, 0.3, 0.06, LENS, nil, Kit.NEON)
-	end
-	box(0, 6.1, -0.03, 1.42, 0.42, 1.42, VEST)
-	box(0, 5.98, -0.95, 1.0, 0.1, 0.55, VEST)
-	box(0.82, 6.1, 0, 0.06, 1.1, 0.06, C.Steel)
-	box(0.82, 6.68, 0, 0.16, 0.16, 0.16, LENS, nil, Kit.NEON)
-	-- the tech pack, its core, a blaster across the back
-	box(0, 3.55, -0.92, 1.7, 1.9, 0.8, C.Steel)
-	Kit.cyl(m, feet * CF(0, 3.65 * s, -1.34 * s) * CFrame.Angles(0, math.pi / 2, 0), 0.12 * s, 0.9 * s, LENS, Kit.NEON)
-	Kit.blaster(
-		m,
-		feet * CF(0.2 * s, 4.1 * s, -1.6 * s) * CFrame.Angles(0, 0, -0.75) * CFrame.Angles(0, math.pi / 2, 0),
-		4.2 * s,
-		Kit.LavaBlaster,
-		false
-	)
-end
-
--- The counter (its top is the shop hook, tag VaultCounter), a screen, a blaster on show, the keeper.
+-- The counter (its top is the shop hook, tag VaultCounter), a screen, a blaster on show and the
+-- shopkeeper's spot behind it (the owner's avatar, ShopkeeperController), facing the door (+Z).
 function Interior.counter(m: Model, origin: CFrame): BasePart
 	Kit.block(m, origin * CF(0, 2, 5), V3(16, 4, 4), C.Tiles[2], Kit.SLATE, Kit.solid())
 	for i = 0, 3 do
@@ -274,7 +212,7 @@ function Interior.counter(m: Model, origin: CFrame): BasePart
 	Kit.bit(m, sc * CF(0, 1.9, 0) * CFrame.Angles(-0.15, 0, 0), V3(3.4, 2.1, 0.3), Color3.fromRGB(30, 31, 38))
 	Kit.glow(m, sc * CF(0, 1.9, 0) * CFrame.Angles(-0.15, 0, 0) * CF(0, 0, 0.16), V3(3.0, 1.75, 0.04), Color3.fromRGB(255, 170, 80))
 	Kit.blaster(m, origin * CF(3, 4.6, 5.3) * CFrame.Angles(0, -1.3, 0), 4.8, Kit.GalaxyBlaster, true)
-	blastsmith(m, origin * CF(0, 0, 0.5), 1.25)
+	ShopkeeperConfig.mark(top, origin * CF(0, 0, 0.5) * CFrame.Angles(0, math.pi, 0), "Vault")
 	return top
 end
 

@@ -1,0 +1,178 @@
+{
+  "keeper_vault": {
+    "scene": "shopkeepers",
+    "position": [
+      2.5,
+      6.8,
+      104.6
+    ],
+    "target": [
+      0.0,
+      4.9,
+      117.6
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_enchant": {
+    "scene": "shopkeepers",
+    "position": [
+      40.86,
+      5.5,
+      -76.38
+    ],
+    "target": [
+      49.0,
+      4.1,
+      -82.7
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_eggs": {
+    "scene": "shopkeepers",
+    "position": [
+      -27.2,
+      7.7,
+      20.3
+    ],
+    "target": [
+      -46.2,
+      4.2,
+      23.9
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_sell": {
+    "scene": "shopkeepers",
+    "position": [
+      -30.56,
+      4.5,
+      -3.56
+    ],
+    "target": [
+      -37.6,
+      3.6,
+      -9.7
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_tech": {
+    "scene": "shopkeepers",
+    "position": [
+      36.41,
+      8.2,
+      -17.46
+    ],
+    "target": [
+      47.54,
+      5.2,
+      -24.33
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_gear": {
+    "scene": "shopkeepers",
+    "position": [
+      -36.41,
+      8.2,
+      -17.46
+    ],
+    "target": [
+      -47.54,
+      5.2,
+      -24.33
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_gear_low": {
+    "scene": "shopkeepers",
+    "position": [
+      -40.02,
+      5.6,
+      -19.18
+    ],
+    "target": [
+      -47.54,
+      5.2,
+      -24.33
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "keeper_tech_low": {
+    "scene": "shopkeepers",
+    "position": [
+      40.02,
+      5.6,
+      -19.18
+    ],
+    "target": [
+      47.54,
+      5.2,
+      -24.33
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  }
+}

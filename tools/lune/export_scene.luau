@@ -145,6 +145,10 @@ elseif sceneName == "hall" then -- the world + stand-in champions on the giant H
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	require("./lib/hall_preview").build(Loader, map)
+elseif sceneName == "shopkeepers" then -- the world + stand-ins on the shopkeeper spots (tools/lune/lib/shopkeeper_preview.luau)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	require("./lib/shopkeeper_preview").build(Loader, map)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)

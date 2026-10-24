@@ -505,6 +505,9 @@ function Kit.scale(root: Instance, origin: CFrame, s: number)
 			d.CFrame = origin * CFrame.new(rel.Position * s) * rel.Rotation
 		elseif d:IsA("PointLight") then
 			d.Range = d.Range * s
+		elseif d:IsA("Attachment") then
+			-- (its parent part scales about `origin`: the offset inside it scales too)
+			d.CFrame = CFrame.new(d.CFrame.Position * s) * d.CFrame.Rotation
 		end
 	end
 end

@@ -55,6 +55,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Tech = require(script.Parent.Tech)
@@ -810,17 +811,9 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 		Kit.glow(m, ps * CFrame.new(0, -1.15, 0), Vector3.new(0.8, 0.8, 0.04), GLYPH_BLUE)
 	end
 
-	-- the outfitter behind the counter
-	-- (round 3: teal and navy, tan skin, dark hair: he reads under the warm light)
-	Kit.npc(m, h.Interior * CFrame.new(-1.4, 0, 0), {
-		Name = "Outfitter",
-		Shirt = rgb(40, 140, 150),
-		Pants = rgb(44, 58, 96),
-		Apron = rgb(230, 226, 214),
-		Hair = rgb(40, 28, 22),
-		Skin = rgb(234, 186, 148),
-		Boots = rgb(24, 24, 28),
-	})
+	-- the shopkeeper right behind the counter (the owner's avatar, ShopkeeperController;
+	-- close to it, so the door's lintel doesn't hide his head from the plaza)
+	ShopkeeperConfig.mark(h.Counter, h.Interior * CFrame.new(-1.4, 0, -0.4), "Gear")
 end
 
 ---------------------------------------------------------------- machines (UPGRADES)
@@ -958,16 +951,8 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 		Kit.glow(m, ps * CFrame.new(0, -1.0, 0), Vector3.new(0.8, 0.9, 0.04), GEAR_PURPLE)
 	end
 
-	-- Forgemaster Ulda behind the counter
-	Kit.npc(m, h.Interior * CFrame.new(1.4, 0, 0), {
-		Name = "Forgemaster Ulda",
-		Tag = "Forgemaster Ulda",
-		Shirt = C.RoofDark,
-		Pants = C.StoneDeep,
-		Apron = C.WoodDark,
-		Goggles = C.Brass,
-		Hair = C.LeafOrangeDark,
-	})
+	-- the shopkeeper right behind the counter (the owner's avatar, ShopkeeperController)
+	ShopkeeperConfig.mark(h.Counter, h.Interior * CFrame.new(1.4, 0, -0.4), "Tech")
 end
 
 function Stalls.build(parent: Instance, rng: Rng.Rng)

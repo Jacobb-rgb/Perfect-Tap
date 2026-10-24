@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Tech = require(script.Parent.Tech)
@@ -189,14 +190,8 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Style.streaming(float, "Atomic")
 	Kit.tag(float, "Spin")
 
-	-- the enchanter behind the table
-	Kit.npc(m, at(0, FLOOR, -1.6), {
-		Name = "Enchanter",
-		Shirt = C.AwningPurple,
-		Robe = C.AwningPurple,
-		Hair = C.SkyTop,
-		Beard = C.FlowerWhite,
-	})
+	-- the shopkeeper behind the table (the owner's avatar, ShopkeeperController)
+	ShopkeeperConfig.mark(counter, at(0, FLOOR, -1.6), "Enchant")
 
 	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster
 	-- and a violet container beside the module
