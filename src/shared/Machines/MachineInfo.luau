@@ -42,6 +42,7 @@ export type Info = {
 	PowerText: string?, -- "Needs 10 power: a pole within 3 cells, else 60% speed"
 	OutputText: string?, -- "Results come out the FRONT (amber square)"
 	Description: string,
+	Tier: number, -- the tier described (0 = as listed; the Furnace's Brick / Blast / Plasma: 1..3)
 }
 
 export type Entry = PowerLogic.Entry
@@ -214,6 +215,7 @@ function MachineInfo.describe(id: any, tier: number?): Info?
 		PowerText = powerTextOf(machine),
 		OutputText = outputTextOf(machine),
 		Description = machine.Description,
+		Tier = machine.Tier or 0,
 	}
 end
 

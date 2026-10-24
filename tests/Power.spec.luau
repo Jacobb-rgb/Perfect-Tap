@@ -568,12 +568,12 @@ return function(T, Loader)
 		local data: any = deepCopy(DataTemplate)
 		data.StarterKitGiven = true
 		data.MachineInventory = {}
-		-- the Furnace at its Brick tier uses 10 power (MachineData.info)
-		data.MachineUpgrades = { SolarPanel = { Speed = 1 }, ClayFurnace = { Tier = 1 } }
+		-- the Furnace at its Blast tier uses 20 power (MachineData.info)
+		data.MachineUpgrades = { SolarPanel = { Speed = 3 }, ClayFurnace = { Tier = 2 } }
 		data.PlacedMachines = {
 			{ Id = "PowerPole", X = 5, Z = 5, R = 0 },
-			{ Id = "SolarPanel", X = 2, Z = 5, R = 0 }, -- 18.75
-			{ Id = "ClayFurnace", X = 6, Z = 6, R = 0 }, -- 10 at the Brick tier
+			{ Id = "SolarPanel", X = 2, Z = 5, R = 0 }, -- 26.25
+			{ Id = "ClayFurnace", X = 6, Z = 6, R = 0 }, -- 20 at the Blast tier
 			{ Id = "RobotArm", X = 9, Z = 9, R = 0 }, -- 4, out of reach (4 cells)
 		}
 		local modifiers = {}
@@ -618,14 +618,16 @@ return function(T, Loader)
 				return furnace ~= nil and furnace.Model:GetAttribute("PowerSpeed") ~= nil
 			end)
 			local furnace, crusher = byId.ClayFurnace, byId.RobotArm
-			T.eq(furnace.Info.Name, "Brick Furnace", "the tier's info")
-			T.eq(furnace.Model:GetAttribute("Look"), "BrickFurnace", "the tier's look")
-			T.eq(furnace.Model:GetAttribute("PowerSpeed"), 1, "18.75 for 10")
+			T.eq(furnace.Info.Name, "Blast Furnace", "the tier's info")
+			T.eq(furnace.Model:GetAttribute("Look"), "BlastFurnace", "the tier's look")
+			T.eq(furnace.Model:GetAttribute("MachineId"), "ClayFurnace", "still the Furnace (build mode, billboards)")
+			T.eq(furnace.Model:GetAttribute("Tier"), 2, "its tier for the clients")
+			T.eq(furnace.Model:GetAttribute("PowerSpeed"), 1, "26.25 for 20")
 			T.eq(furnace.Model:GetAttribute("Powered"), true)
 			T.eq(crusher.Model:GetAttribute("PowerSpeed"), UNPOWERED, "out of reach")
-			T.eq(byId.SolarPanel.Model:GetAttribute("PowerOut"), 18.75, "Speed 1 panel")
+			T.eq(byId.SolarPanel.Model:GetAttribute("PowerOut"), 26.25, "Speed 3 panel")
 			T.eq(byId.PowerPole.Model:GetAttribute("Feeds"), "2,5;6,6")
-			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 10)
+			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 20)
 			-- MachineService.speedFactor runs the modifier (captured here so it doesn't outlive the test)
 			T.eq(#modifiers, 1)
 			T.eq(modifiers[1](crusher), UNPOWERED)
@@ -634,8 +636,8 @@ return function(T, Loader)
 			waitUntil(function()
 				return crusher.Model:GetAttribute("PowerSpeed") == 1
 			end)
-			T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1, "now sharing 18.75 for 14")
-			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 14)
+			T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1, "now sharing 26.25 for 24")
+			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 24)
 			T.eq(modifiers[1](crusher), 1)
 			-- the panel goes back into the Build menu: 0 for 18
 			T.truthy(MachineService.pickup(byId.SolarPanel), "picked up")

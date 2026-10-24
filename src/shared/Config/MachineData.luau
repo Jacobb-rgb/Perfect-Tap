@@ -166,7 +166,8 @@ MachineData.List = {
 		-- Tier prices: what the Brick / Blast / Plasma Furnaces cost (every furnace of the player turns)
 		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5), Tier = { 6000, 30000, 5000000 } },
 		Tiers = {
-			{ Id = "Brick", Name = "Brick Furnace", Look = "BrickFurnace", Time = 4, Power = 10 },
+			-- no power at Brick (review 10-24: unpowered it would be slower than clay); power from Blast up
+			{ Id = "Brick", Name = "Brick Furnace", Look = "BrickFurnace", Time = 4 },
 			{ Id = "Blast", Name = "Blast Furnace", Look = "BlastFurnace", Time = 2.5, Power = 20 },
 			{ Id = "Plasma", Name = "Plasma Furnace", Look = "PlasmaFurnace", Time = 2.5, Power = 60, Batch = 2 },
 		},

@@ -2101,6 +2101,7 @@ local BUILDERS: { [string]: () -> Model } = {
 local function tierLook(id: string, look: string, level: number?): Model
 	local model = KitMachines.build(look, level)
 	model.Name = id
+	model:SetAttribute("MachineId", id) -- the machine it is (build mode, billboards, power read this)
 	model:SetAttribute("Look", look)
 	local info, lookInfo = MachineData.ById[id], MachineData.ById[look]
 	local fit = math.min(info.Size[1] / lookInfo.Size[1], info.Size[2] / lookInfo.Size[2])

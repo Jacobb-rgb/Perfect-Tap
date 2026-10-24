@@ -71,6 +71,11 @@ local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMac
 for _, entry in KitMachines.Catalog do
 	models["machine_" .. entry.Id] = KitMachines.buildAny(entry.Id)
 end
+-- the Furnace's tier looks (the Tech shop's Furnace Upgrade card and the tray card show them)
+local MachineDataConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+for _, step in MachineDataConfig.ById.ClayFurnace.Tiers do
+	models["machine_" .. step.Look] = KitMachines.buildAny(step.Look)
+end
 
 -- every ore, cleaned (the Ore Codex; in the game a live ViewportFrame)
 local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")

@@ -380,7 +380,12 @@ end
 function MachineBillboard.statusText(model: Instance, status: string): string
 	if status == "Waiting" then
 		local id = model:GetAttribute("MachineId")
-		return MachineBillboard.needsText(if type(id) == "string" then MachineData.ById[id] else nil)
+		local tier = model:GetAttribute("Tier")
+		local info: MachineData.Machine? = nil
+		if type(id) == "string" and MachineData.ById[id] then
+			info = MachineData.info(id, if type(tier) == "number" then tier else 0)
+		end
+		return MachineBillboard.needsText(info)
 	elseif status == "NoPower" then
 		local speed = numberAttr(model, "PowerSpeed")
 		return if speed then `No power: {round(math.clamp(speed, 0, 1) * 100)}%` else STATUS_TEXT.NoPower

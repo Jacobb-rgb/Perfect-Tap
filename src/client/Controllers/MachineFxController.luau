@@ -1512,7 +1512,8 @@ local function register(instance: Instance)
 	if type(id) ~= "string" then
 		return
 	end
-	local info = MachineData.ById[id]
+	local tier = model:GetAttribute("Tier")
+	local info = if MachineData.ById[id] then MachineData.info(id, if type(tier) == "number" then tier else 0) else nil
 	if info and info.IsConveyor then
 		return -- belts (also the Express belt) have no effects
 	end

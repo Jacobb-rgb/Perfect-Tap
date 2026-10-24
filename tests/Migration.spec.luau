@@ -59,8 +59,9 @@ return function(T, Loader)
 		T.eq(furnace.X, 2 + 2, "X floored, then moved onto the 16-cell grid")
 		T.eq(furnace.Z, 3 + 4)
 		T.eq(furnace.R, 3, "R -1 becomes 3")
-		T.eq(#furnace.In, 1, "bad queue item dropped")
-		T.eq(furnace.In[1].O, "Copper")
+		-- the bad queue item is dropped; the clean Copper goes to the pen (v6: the Furnace takes crushed ore only)
+		T.eq(furnace.In, nil, "nothing the Furnace can smelt stays in its queue")
+		T.eq(data.Storage[#data.Storage].O, "Copper", "the clean ore waits in the pen")
 		T.eq(furnace.Out, nil)
 		T.eq(data.MachineInventory.Crusher, 1, "the Crusher went back to the inventory")
 		T.eq(data.MachineInventory.Anvil, nil, "the retired Anvil left the inventory")
@@ -199,8 +200,7 @@ return function(T, Loader)
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
 		T.eq(data.Version, 6)
-		T.eq(report.Moved + report.Dropped, 1, "a move, not a repair (and the v6 Crusher, below)")
-		T.eq(data.MachineInventory.Crusher, 1, "a save without a Crusher gets one (the Furnace takes crushed ore)")
+		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
 		local onChute = {}
@@ -327,39 +327,66 @@ return function(T, Loader)
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.Version = 5
 		data.Coins = 0
+		data.StarterKitGiven = true
 		data.Storage = {}
 		data.MachineInventory = { BrickFurnace = 2 }
 		data.PlacedMachines = {
-			{ Id = "ClayFurnace", X = 2, Z = 4, R = 0 },
+			{
+				Id = "ClayFurnace",
+				X = 2,
+				Z = 4,
+				R = 0,
+				In = { { K = "Clean", O = "Copper", G = "Rough" }, { K = "Crushed", O = "Tin", G = "Rough" } },
+			},
 			{ Id = "BrickFurnace", X = 5, Z = 4, R = 0, In = { { K = "Crushed", O = "Iron", G = "Clean" } } },
 			{ Id = "BlastFurnace", X = 8, Z = 4, R = 0, Out = { { K = "Ingot", O = "Gold", G = "Pristine" } } },
 			{ Id = "PlasmaFurnace", X = 12, Z = 4, R = 0 },
 		}
-		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, ClayFurnace = { Speed = 1 } }
+		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
 		T.eq(data.Version, 6)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
-		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
+		local furnace = data.PlacedMachines[1]
+		T.eq(furnace.Id, "ClayFurnace")
+		T.eq(#furnace.In, 1, "the Furnace keeps only crushed ore in its queue")
+		T.eq(furnace.In[1].K, "Crushed")
 		local prices = MachineData.ById
 		local refund = prices.BrickFurnace.Price * 3 + prices.BlastFurnace.Price + prices.PlasmaFurnace.Price
-		T.eq(data.Coins, refund, "every old furnace, placed or waiting, is paid back")
+		local blastSpeed = MachineData.upgradePrices("BlastFurnace", "Speed") :: { number }
+		local plasmaSpeed = MachineData.upgradePrices("PlasmaFurnace", "Speed") :: { number }
+		local speedPaid = blastSpeed[1] + blastSpeed[2]
+		for i = 1, #plasmaSpeed do
+			speedPaid += plasmaSpeed[i] -- a level above the top counts as the top
+		end
+		T.eq(data.Coins, refund + speedPaid, "every old furnace and its Speed levels are paid back")
 		T.eq(data.MachineInventory.BrickFurnace, nil)
 		local kinds = {}
 		for _, item in data.Storage do
 			kinds[item.K] = true
 		end
 		T.truthy(kinds.Crushed and kinds.Ingot, "their queues wait in the pen")
+		T.truthy(kinds.Clean, "the clean ore from the Furnace's queue waits in the pen too")
 		T.eq(data.MachineUpgrades.BlastFurnace, nil, "a retired machine's upgrades go")
 		T.eq(data.MachineUpgrades.ClayFurnace.Speed, 1, "the Furnace keeps its own")
 		T.eq(data.MachineInventory.Crusher, 1, "no Crusher anywhere: one in the Build menu")
 		-- once only: a later load (Version 6) never gives another, even after it was sold
 		data.MachineInventory.Crusher = nil
+		local coins = data.Coins
 		Migrations.run(data)
 		T.eq(data.MachineInventory.Crusher, nil, "Version 6: no second Crusher")
+		T.eq(data.Coins, coins, "and no second refund")
+		-- a save whose starter kit wasn't given yet gets the kit's Crusher with the kit, not a gift
+		local fresh = ProfileStore.deepCopy(DataTemplate)
+		fresh.Version = 5
+		fresh.StarterKitGiven = false
+		fresh.MachineInventory = {}
+		Migrations.run(fresh)
+		T.eq(fresh.MachineInventory.Crusher, nil, "no gift before the starter kit")
 		-- a save with a Crusher (placed or waiting) gets none
 		for _, where in { "placed", "waiting" } do
 			local old = ProfileStore.deepCopy(DataTemplate)
 			old.Version = 5
+			old.StarterKitGiven = true
 			old.MachineInventory = {}
 			old.PlacedMachines = {}
 			if where == "placed" then

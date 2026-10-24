@@ -749,6 +749,8 @@ end
 
 local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any }, coins: number, order: number): Card
 	local machine = MachineData.ById[entry.Machine :: string]
+	-- a machine with tiers (the Furnace) is bought at the player's tier: its name, power and picture
+	local shown = MachineData.info(machine.Id, MachineData.tierOf(state.MachineUpgrades, machine.Id))
 	local owned = EconomyConfig.inventoryCount(state, machine.Id)
 	local placed = TechShopView.placedCount(state, machine.Id)
 	local counts: { number } = if machine.IsConveyor then { 1, TechShopView.ConveyorPack } else { 1 }
@@ -781,8 +783,8 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		Item = entry.Item,
 		Tab = "Machines",
 		Order = order,
-		Title = machine.Name,
-		Description = machine.Description .. powerNote(machine),
+		Title = shown.Name,
+		Description = machine.Description .. powerNote(shown),
 		Detail = if full then EconomyConfig.TechShop.Reasons.MaxOwned else detail,
 		DetailColor = if full or slotsFull then Theme.Bad elseif owned > 0 or placed > 0 then Theme.Text else Theme.TextDim,
 		Chip = `{machine.Size[1]}x{machine.Size[2]}`,
@@ -793,7 +795,7 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		PriceSubColor = if packTotal and coins < packTotal then Theme.Bad else Theme.TextDim,
 		Done = false,
 		Buys = buys,
-		Icon = machine.Id,
+		Icon = shown.Look or machine.Id,
 		Badge = nil,
 		Note = nil,
 	}
@@ -840,6 +842,8 @@ local function levelDetail(entry: EconomyConfig.TechItem, state: { [string]: any
 			return text
 		end
 		local bellows = bellowsLevel(state)
+		-- a machine with tiers (the Furnace) at the player's tier
+		machine = MachineData.info(machine.Id, MachineData.tierOf(state.MachineUpgrades, machine.Id))
 		local now = TechShopView.seconds(MachineData.processTime(machine, bellows, level))
 		if done then
 			return `Per item: {now} (top level)`

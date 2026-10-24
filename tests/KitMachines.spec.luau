@@ -178,6 +178,7 @@ return function(T, Loader)
 				local model = MachineBuilder.build("ClayFurnace", level, tier)
 				local tag = `{step.Id} L{level}`
 				T.eq(model.Name, "ClayFurnace", tag .. " keeps the machine's name")
+				T.eq(model:GetAttribute("MachineId"), "ClayFurnace", tag .. " is the Furnace for build mode and billboards")
 				T.eq(model:GetAttribute("Look"), step.Look, tag .. " looks like its tier")
 				for _, name in { "Prompt", "Output", "Intake", "Status" } do
 					local mine, theirs = attachment(model, name), attachment(own, name)
