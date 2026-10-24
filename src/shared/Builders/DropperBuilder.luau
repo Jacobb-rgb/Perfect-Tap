@@ -260,14 +260,6 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 	)
 	cube(at(bx + 0.4, armY + 1.25, -0.4), Vector3.new(2.6, 0.7, 2.3), nil, nil, "flat")
 	Geo.block(model, at((armRight + armLeft) / 2, armY + 0.92, 0.82), Vector3.new(armLen - 0.2, 0.12, 0.1), glow, NEON, decor())
-	Geo.block(
-		model,
-		at((armRight + armLeft) / 2, armY + 0.92, -0.4),
-		Vector3.new(armLen - 0.4, 0.06, 2.3),
-		glowOf(st, 2),
-		NEON,
-		decor({ Transparency = 0.5 })
-	)
 	-- the name on the arm's front
 	BlockKit.text(
 		model,
@@ -334,6 +326,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 
 	---------------------------------------------------------------- what each one is made of
 	local kind = st.Kind
+	local armTop = armY + 0.9 -- (a slime or snow cap raises it)
 	-- (glowing bits round the blocks: a helper for the spots, flakes and crystals below)
 	local function spot(x: number, y: number, z: number, size: Vector3, color: Color3, turn: CFrame?)
 		Geo.block(model, at(x, y, z) * (turn or CFrame.new()), size, color, NEON, decor())
@@ -343,6 +336,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 		local SLIME, SLIME_RIM = rgb(130, 255, 70), rgb(70, 170, 40)
 		cube(at(bx, stageH + 1.6 + 0.12, -0.2), Vector3.new(5.02, 0.3, 4.62), SLIME, SLIME_RIM, "side")
 		cube(at((armRight + armLeft) / 2, armY + 0.98, -0.4), Vector3.new(armLen + 0.02, 0.3, 2.62), SLIME, SLIME_RIM, "side")
+		armTop = armY + 1.13
 		local drips = if lite then 2 else 4
 		for i = 1, drips do
 			local v = ({
@@ -423,6 +417,7 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 		local SNOW, SNOW_RIM = rgb(250, 252, 255), rgb(190, 220, 245)
 		cube(at(bx, stageH + 1.6 + 0.12, -0.2), Vector3.new(5.02, 0.3, 4.62), SNOW, SNOW_RIM, "side")
 		cube(at((armRight + armLeft) / 2, armY + 0.98, -0.4), Vector3.new(armLen + 0.02, 0.3, 2.62), SNOW, SNOW_RIM, "side")
+		armTop = armY + 1.13
 		if not lite then
 			cube(at(bx + 0.3, p2y + 0.62, -0.4), Vector3.new(3.82, 0.3, 3.62), SNOW, SNOW_RIM, "side")
 			-- snow heaps on the stage
@@ -610,6 +605,38 @@ function DropperBuilder.build(id: string, cf: CFrame, lite: boolean?, onBelt: bo
 			Geo.ball(model, (at(p.X, p.Y, p.Z)).Position, 0.6 + (i % 3) * 0.25, rgb(18, 10, 30), PLASTIC, decor())
 		end
 	end
+	---------------------------------------------------------------- the arrow on the arm
+	-- (owner 2026-10-24: the long see-through glow on the arm's top looked
+	-- speckled over the studs) a solid glowing arrow lying on the arm's top:
+	-- a triangle at the drop end pointing at it, a bar back to the top step,
+	-- a round tail
+	do
+		local z0, thick = -0.4, 0.1
+		local y = armTop + thick / 2
+		local tipX, headLen, hw, shaftW = armLeft + 0.35, 1.5, 0.95, 0.8
+		local baseX = tipX + headLen
+		local backX = math.max(baseX + 0.6, bx - 1.2)
+		local color = glowOf(st, 2)
+		for _, side in { -1, 1 } do
+			-- one half of the head: the right angle at the base's middle, the slope to the tip
+			local frame = CFrame.fromMatrix(Vector3.zero, Vector3.new(0, side, 0), Vector3.new(0, 0, side), Vector3.new(1, 0, 0))
+			Geo.wedge(model, at(baseX - headLen / 2, y, z0 + side * hw / 2) * frame, Vector3.new(thick, hw, headLen), color, NEON, decor())
+		end
+		Geo.block(model, at((baseX + backX) / 2, y, z0), Vector3.new(backX - baseX + 0.02, thick, shaftW), color, NEON, decor())
+		Geo.make("Part", {
+			Shape = Enum.PartType.Cylinder,
+			CFrame = at(backX, y, z0) * CFrame.Angles(0, 0, math.pi / 2),
+			Size = Vector3.new(thick, shaftW, shaftW),
+			Color = color,
+			Material = NEON,
+			Anchored = true,
+			CanCollide = false,
+			CanTouch = false,
+			CanQuery = false,
+			CastShadow = false,
+		}, model)
+	end
+
 	BlockKit.scale(model, cf, K)
 	for _, o in ores do
 		if lite then

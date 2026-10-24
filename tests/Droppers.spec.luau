@@ -225,4 +225,33 @@ return function(T, Loader)
 		-- moving one of the five is fine
 		T.truthy(Placement.validate(entries, "BasicDropper", 0, 9, 0, nil, entries[1]), "a move is not a sixth")
 	end)
+	T.test("droppers: the studded style (owner's A, 2026-10-24) gives every dropper's blocks studs", function()
+		local StudStyle = Loader.requirePath("ReplicatedStorage.Shared.StudStyle")
+		for _, dropper in DropperConfig.List do
+			local model = MachineBuilder.build(dropper.Id)
+			local studded, blocks = 0, 0
+			StudStyle.clearCache()
+			for _, part in model:GetDescendants() do
+				if part:IsA("BasePart") then
+					-- (Lune cannot read an unset MaterialVariant)
+					part.MaterialVariant = ""
+					local size = part.Size
+					-- (big opaque blocks: not the glows, the glass, the balls or the invisible HitBox)
+					local ball = part.ClassName == "Part" and part.Shape == Enum.PartType.Ball
+					local solid = part.Material ~= Enum.Material.Neon
+						and part.Material ~= Enum.Material.Glass
+						and part.Transparency == 0
+						and not ball
+					if solid and math.min(size.X, size.Y, size.Z) >= 0.9 then
+						blocks += 1
+						if StudStyle.skipReason(part) == nil then
+							studded += 1
+						end
+					end
+				end
+			end
+			T.truthy(blocks >= 8, dropper.Id .. " has blocks")
+			T.eq(studded, blocks, dropper.Id .. ": every big solid block gets studs (nothing tagged NoStuds or skipped)")
+		end
+	end)
 end
