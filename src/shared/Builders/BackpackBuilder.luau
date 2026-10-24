@@ -98,6 +98,9 @@ type Layout = {
 	pocketW: number,
 	pocketH: number,
 	pf: number, -- the front pocket's outer face (Z)
+	pocketFlapY: number, -- the pocket flap's middle (when the pack has one)
+	pocketFlapH: number,
+	pocketButton: Vector3, -- the stud at the pocket flap's bottom
 	pouches: { CFrame }, -- [1] left, [2] right side pouch: its middle, +Z facing out
 	pouchH: number,
 	pouchTop: number,
@@ -122,6 +125,7 @@ type Anatomy = {
 	Inner: boolean?, -- a panel inside the flap (Panel colour) with a rim-coloured line
 	InnerMaterial: Enum.Material?, -- Neon: the glowing lava / galaxy panels
 	Pocket: boolean?, -- the rimmed front pocket
+	PocketFlap: boolean?, -- a flap over the pocket's top with a stud
 	SidePouches: boolean?,
 	Roll: boolean?, -- the bedroll on top
 }
@@ -208,6 +212,19 @@ end
 
 local function ball(c: Ctx, name: string, position: Vector3, diameter: number, color: Color3, material: Enum.Material?): BasePart
 	return part(c, name, "Ball", CFrame.new(position), Vector3.new(diameter, diameter, diameter), color, material)
+end
+
+-- A disc on a face: `cf` is its middle, its +Z the outward normal (side pouches, shields).
+local function faceDisc(
+	c: Ctx,
+	name: string,
+	cf: CFrame,
+	diameter: number,
+	thick: number,
+	color: Color3,
+	material: Enum.Material?
+): BasePart
+	return part(c, name, "Cylinder", cf * ALONG_Z, Vector3.new(thick, diameter, diameter), color, material)
 end
 
 -- A flat diamond facing +Z (gems, settings).
@@ -447,6 +464,9 @@ local function layout(size: Vector3): Layout
 	local flapMid = (flapTop + flapBottom) / 2
 	local ff = zf + 0.1
 	local pocketH = h * 0.27
+	local pocketY = bottom + 0.2 + pocketH / 2
+	local pocketFlapH = pocketH * 0.36
+	local pocketFlapY = pocketY + pocketH / 2 - pocketFlapH / 2 + 0.03
 	local pouchH = h * 0.45
 	local rollD = math.min(0.64, d * 0.62)
 	local pouches = {}
@@ -471,10 +491,13 @@ local function layout(size: Vector3): Layout
 		innerH = flapTop - flapBottom - 0.46,
 		emblem = Vector3.new(0, flapMid - 0.06, ff + 0.02),
 		baseH = h * 0.23,
-		pocketY = bottom + 0.2 + pocketH / 2,
+		pocketY = pocketY,
 		pocketW = w * 0.5,
 		pocketH = pocketH,
 		pf = zf + 0.23,
+		pocketFlapY = pocketFlapY,
+		pocketFlapH = pocketFlapH,
+		pocketButton = Vector3.new(0, pocketFlapY - pocketFlapH / 2 + 0.06, zf + 0.29),
 		pouches = pouches,
 		pouchH = pouchH,
 		pouchTop = bottom + 0.22 + pouchH,
@@ -536,6 +559,11 @@ local function anatomy(c: Ctx, a: Anatomy)
 	if a.Pocket then
 		local pr = f.pocketH * 0.3
 		framed(c, "Pocket", at(0, f.pocketY, f.zf + 0.1), f.pocketW, f.pocketH, 0.26, pr, pr, col.Body, col.Trim, t)
+		if a.PocketFlap then
+			local flapH = f.pocketFlapH
+			slab(c, "PocketFlap", at(0, f.pocketFlapY, f.pf + 0.025), f.pocketW + 0.06, flapH, 0.06, 0.05, flapH * 0.45, col.Flap)
+			ball(c, "PocketStud", f.pocketButton, 0.09, col.Buckle)
+		end
 	end
 	if a.SidePouches then
 		for _, pouch in f.pouches do
@@ -549,14 +577,17 @@ local function anatomy(c: Ctx, a: Anatomy)
 	shoulderStraps(c)
 end
 
--- The standard set: everything but a glowing inner panel.
+-- The standard set (no pocket flap: the richer packs set gems in the pocket).
 local FULL: Anatomy = { Inner = true, Pocket = true, SidePouches = true, Roll = true }
+-- The standard set with a flap over the front pocket.
+local FLAPPED: Anatomy = { Inner = true, Pocket = true, PocketFlap = true, SidePouches = true, Roll = true }
 
 ---------------------------------------------------------------- the packs
 
 -- 1: a cute school bag: an arched body, an orange arched panel with a gem
--- patch, a rimmed zip pocket, a top handle with a gold star charm, a water
--- bottle and a mini wooden pickaxe in the side pouches.
+-- patch and two pins, a rimmed zip pocket with a crystal keyring, a top handle
+-- with a gold star charm and a luggage tag, a water bottle and a mini wooden
+-- pickaxe in the side pouches.
 local function rookiePack(c: Ctx)
 	local col = c.colors
 	local w, h, d = c.size.X, c.size.Y, c.size.Z
@@ -591,6 +622,21 @@ local function rookiePack(c: Ctx)
 	bar(c, "CharmCord", Vector3.new(0.18, handleY, zc + 0.2), charmAt + Vector3.new(0, 0.1, 0), 0.03, 0.03, col.Leather)
 	diamond(c, "Charm", charmAt, 0.16, 0.05, col.Buckle)
 	block(c, "Charm", CFrame.new(charmAt), Vector3.new(0.16, 0.16, 0.04), col.Buckle)
+	-- two round pins beside the patch, a teal crystal keyring on the zip pull
+	badge(c, "Pin", Vector3.new(-0.36, patchAt.Y - 0.06, zf + 0.085), 0.17, 0.03, rgb(120, 196, 96))
+	diamond(c, "PinIcon", Vector3.new(-0.36, patchAt.Y - 0.06, zf + 0.1), 0.07, 0.02, WHITE)
+	badge(c, "Pin", Vector3.new(0.36, patchAt.Y + 0.02, zf + 0.085), 0.15, 0.03, rgb(240, 120, 170))
+	block(c, "PinIcon", at(0.36, patchAt.Y + 0.02, zf + 0.1), Vector3.new(0.08, 0.025, 0.02), WHITE)
+	block(c, "PinIcon", at(0.36, patchAt.Y + 0.02, zf + 0.1), Vector3.new(0.025, 0.08, 0.02), WHITE)
+	block(c, "KeyringLink", at(pocketW * 0.28, pocketY - 0.06, zf + 0.265), Vector3.new(0.03, 0.06, 0.02), col.Buckle)
+	diamond(c, "Keyring", Vector3.new(pocketW * 0.28, pocketY - 0.13, zf + 0.27), 0.09, 0.04, glow(rgb(70, 220, 200)), NEON)
+	-- a luggage tag on a string from the handle
+	local tagAt = Vector3.new(-0.36, top - 0.3, zf + 0.12)
+	bar(c, "TagString", Vector3.new(-0.18, handleY, zc + 0.2), tagAt + Vector3.new(0, 0.08, 0), 0.025, 0.025, col.Leather)
+	local tag = CFrame.new(tagAt) * CFrame.Angles(0, 0, 0.12)
+	block(c, "Tag", tag, Vector3.new(0.2, 0.15, 0.025), WHITE)
+	block(c, "TagBand", tag * CFrame.new(0, 0.05, 0.01), Vector3.new(0.2, 0.04, 0.02), rgb(220, 70, 60))
+	block(c, "TagLine", tag * CFrame.new(0, -0.02, 0.01), Vector3.new(0.13, 0.02, 0.02), rgb(150, 150, 160))
 	-- side pouches: a water bottle on the left, the mini pickaxe on the right
 	for _, s in { -1, 1 } do
 		puff(c, "SidePouch", at(s * (w / 2 + 0.05), bottom + 0.42, zc), Vector3.new(0.34, 0.56, d * 0.8), col.Body:Lerp(BLACK, 0.06))
@@ -614,11 +660,13 @@ local function rookiePack(c: Ctx)
 end
 
 -- 2: khaki canvas in dark piping: a mountain patch on the flap, a toggle and a
--- leaf charm under it, a green bedroll, a tin mug on the right.
+-- leaf charm under it, a flapped pocket, a green bedroll with a pennant, a tin
+-- mug and a tent patch on the right, a hatchet on the left, a flashlight on
+-- the right strap.
 local function trailPack(c: Ctx)
 	local f = c.f
 	local col = c.colors
-	anatomy(c, { Pocket = true, SidePouches = true, Roll = true })
+	anatomy(c, { Pocket = true, PocketFlap = true, SidePouches = true, Roll = true })
 	local e = f.emblem
 	badge(c, "PatchRim", e - Vector3.new(0, 0, 0.01), 0.58, 0.04, col.Trim)
 	badge(c, "Patch", e, 0.5, 0.04, rgb(240, 230, 200))
@@ -637,8 +685,6 @@ local function trailPack(c: Ctx)
 		Vector3.new(0.02, 0.22, 0.02),
 		rgb(70, 120, 46)
 	)
-	-- a wooden button on the pocket
-	ball(c, "Button", Vector3.new(0, f.pocketY + 0.04, f.pf + 0.02), 0.12, rgb(150, 100, 60))
 	-- the tin mug on the right, above the side pouch
 	local mx = f.w / 2 + 0.22
 	local my = f.pouchTop + 0.26
@@ -646,14 +692,40 @@ local function trailPack(c: Ctx)
 	post(c, "MugRim", Vector3.new(mx, my + 0.16, f.zc), 0.04, 0.32, rgb(126, 132, 140))
 	block(c, "MugHandle", at(mx + 0.18, my, f.zc), Vector3.new(0.06, 0.18, 0.05), rgb(126, 132, 140))
 	block(c, "MugHook", at(f.w / 2 + 0.08, my + 0.12, f.zc), Vector3.new(0.12, 0.05, 0.05), col.Leather)
+	-- a hatchet strapped on the left, its head out to the side
+	local hx = -(f.w / 2 + 0.25)
+	local h0, h1 = f.pouchTop - 0.25, f.pouchTop + 0.5
+	post(c, "HatchetHandle", Vector3.new(hx, (h0 + h1) / 2, f.zc + 0.05), h1 - h0, 0.08, rgb(150, 100, 60))
+	block(c, "HatchetHead", at(hx - 0.12, h1 - 0.08, f.zc + 0.05), Vector3.new(0.26, 0.2, 0.06), rgb(150, 156, 166))
+	block(c, "HatchetEdge", at(hx - 0.26, h1 - 0.08, f.zc + 0.05), Vector3.new(0.05, 0.26, 0.065), rgb(214, 220, 228))
+	block(c, "HatchetLoop", at(hx + 0.02, f.pouchTop + 0.08, f.zc + 0.05), Vector3.new(0.12, 0.08, 0.14), col.Leather)
+	-- a red pennant on a thin pole behind the left bedroll strap
+	local poleX = -f.w * 0.28 - 0.08
+	local poleBottom, poleTop = f.rollY - 0.1, f.rollY + 0.95
+	post(c, "Pole", Vector3.new(poleX, (poleBottom + poleTop) / 2, f.zc - 0.18), poleTop - poleBottom, 0.04, rgb(150, 100, 60))
+	block(c, "Pennant", at(poleX - 0.17, poleTop - 0.12, f.zc - 0.18), Vector3.new(0.3, 0.18, 0.02), rgb(220, 70, 50))
+	block(c, "PennantStripe", at(poleX - 0.17, poleTop - 0.12, f.zc - 0.165), Vector3.new(0.3, 0.05, 0.02), rgb(250, 210, 80))
+	ball(c, "PoleTip", Vector3.new(poleX, poleTop + 0.03, f.zc - 0.18), 0.07, col.Buckle)
+	-- a flashlight clipped under the right buckle
+	local light = Vector3.new(f.w * 0.34, f.flapBottom - 0.52, f.zf + 0.09)
+	block(c, "FlashlightClip", at(light.X, light.Y + 0.19, f.zf + 0.06), Vector3.new(0.05, 0.12, 0.03), col.Buckle)
+	post(c, "Flashlight", light, 0.3, 0.11, rgb(236, 140, 50))
+	post(c, "FlashlightHead", light - Vector3.new(0, 0.17, 0), 0.07, 0.14, rgb(60, 62, 70))
+	post(c, "FlashlightLens", light - Vector3.new(0, 0.21, 0), 0.02, 0.1, glow(rgb(255, 236, 160)), NEON)
+	-- a tent patch on the right pouch
+	local patch = f.pouches[2] * CFrame.new(0, 0.02, 0.125)
+	faceDisc(c, "PouchPatch", patch, 0.3, 0.03, col.Trim)
+	faceDisc(c, "PouchPatch", patch * CFrame.new(0, 0, 0.012), 0.24, 0.03, rgb(240, 230, 200))
+	block(c, "Tent", patch * CFrame.new(0, -0.02, 0.03) * DIAMOND, Vector3.new(0.12, 0.12, 0.02), rgb(220, 120, 50))
 end
 
--- 3: leather in brass rims: a brass shield on the flap, brass rivets on the
--- inner panel's corners, a canteen on the left.
+-- 3: leather in brass rims: a brass shield on the flap, brass rivets, a
+-- flapped pocket, a canteen on the left, a sheathed knife and a journal on
+-- the right, a pocket watch hanging from the left buckle.
 local function leatherRucksack(c: Ctx)
 	local f = c.f
 	local col = c.colors
-	anatomy(c, FULL)
+	anatomy(c, FLAPPED)
 	local e = f.emblem
 	slab(c, "Shield", CFrame.new(e + Vector3.new(0, 0.07, 0.01)), 0.44, 0.3, 0.05, 0.07, 0, col.Trim)
 	diamond(c, "Shield", e + Vector3.new(0, -0.07, 0.01), 0.311, 0.05, col.Trim)
@@ -679,11 +751,44 @@ local function leatherRucksack(c: Ctx)
 	rod(c, "CanteenRim", Vector3.new(cx, cy, f.zc), 0.22, 0.2, rgb(56, 80, 60))
 	post(c, "CanteenNeck", Vector3.new(cx, cy + 0.28, f.zc), 0.1, 0.12, col.Trim)
 	post(c, "CanteenCap", Vector3.new(cx, cy + 0.34, f.zc), 0.06, 0.16, col.Trim)
+	-- brass rivets along the flap's bottom edge
+	for _, x in { -0.3, 0.3 } do
+		ball(c, "Rivet", Vector3.new(x * f.w / 1.62, f.flapBottom + 0.07, f.ff + 0.01), 0.07, col.Buckle)
+	end
+	-- a sheathed knife on the right pouch, a journal sticking out of it
+	local kx = f.w / 2 + 0.25
+	local ky = f.pouchTop - 0.32
+	block(c, "Sheath", at(kx, ky, f.zc + 0.08), Vector3.new(0.08, 0.46, 0.13), col.Panel)
+	block(c, "SheathTip", at(kx, ky - 0.24, f.zc + 0.08) * CFrame.Angles(math.pi / 4, 0, 0), Vector3.new(0.08, 0.09, 0.09), col.Panel)
+	block(c, "SheathStrap", at(kx - 0.01, ky + 0.1, f.zc + 0.08), Vector3.new(0.1, 0.06, 0.16), col.Leather)
+	block(c, "KnifeGuard", at(kx, ky + 0.25, f.zc + 0.08), Vector3.new(0.09, 0.04, 0.24), col.Trim)
+	post(c, "KnifeGrip", Vector3.new(kx, ky + 0.34, f.zc + 0.08), 0.16, 0.07, rgb(60, 36, 24))
+	ball(c, "KnifePommel", Vector3.new(kx, ky + 0.44, f.zc + 0.08), 0.09, col.Trim)
+	block(c, "Journal", at(f.w / 2 + 0.08, f.pouchTop + 0.03, f.zc - 0.06), Vector3.new(0.09, 0.32, 0.26), rgb(130, 50, 40))
+	block(c, "JournalPages", at(f.w / 2 + 0.08, f.pouchTop + 0.19, f.zc - 0.06), Vector3.new(0.07, 0.02, 0.24), rgb(246, 236, 210))
+	-- a pocket watch on a short chain from the left buckle
+	local bx, by = -f.w * 0.34, f.flapBottom - 0.24
+	for i = 1, 3 do
+		local turn = if i % 2 == 0 then CFrame.Angles(0, math.pi / 2, 0) else CFrame.identity
+		block(c, "WatchChain", at(bx, by - 0.14 - (i - 1) * 0.07, f.zf + 0.07) * turn, Vector3.new(0.05, 0.08, 0.02), col.Trim)
+	end
+	local watch = Vector3.new(bx - 0.03, by - 0.44, f.zf + 0.08)
+	post(c, "WatchStem", watch + Vector3.new(0, 0.13, 0), 0.05, 0.05, col.Trim)
+	badge(c, "Watch", watch, 0.22, 0.05, col.Trim)
+	badge(c, "WatchFace", watch + Vector3.new(0, 0, 0.02), 0.17, 0.04, rgb(250, 244, 226))
+	block(
+		c,
+		"WatchHand",
+		CFrame.new(watch + Vector3.new(0.01, 0.02, 0.045)) * CFrame.Angles(0, 0, -0.6),
+		Vector3.new(0.015, 0.07, 0.01),
+		rgb(40, 34, 30)
+	)
 end
 
 -- 4: olive canvas in copper rims: crossed pickaxes on a copper badge, a
--- lantern on the right, a rope coil on the left, a pickaxe across the top,
--- ore spilling out of the front pocket.
+-- lantern and dynamite on the right, a rope coil on the left, a pickaxe
+-- across the top, a miner's helmet on the bedroll, ore spilling out of the
+-- front pocket, a gold nugget pouch on the left strap.
 local function minersPack(c: Ctx)
 	local f = c.f
 	local col = c.colors
@@ -741,14 +846,60 @@ local function minersPack(c: Ctx)
 	)
 	block(c, "Ore", at(0.24, oreY, oreZ) * CFrame.Angles(0.6, 0.2, -0.4), Vector3.new(0.2, 0.18, 0.2), rgb(240, 192, 64))
 	fxBox(c, "Ore", at(0.02, oreY + 0.05, oreZ), Vector3.new(0.6, 0.3, 0.3))
+	-- a yellow miner's helmet with a head lamp on the bedroll's right end
+	local helmet = at(f.w / 2 - 0.24, f.rollY + f.rollD / 2 + 0.1, f.zc + 0.04) * CFrame.Angles(0, 0, -0.18)
+	local yellow = rgb(250, 200, 50)
+	puff(c, "Helmet", helmet * CFrame.new(0, 0.06, 0), Vector3.new(0.5, 0.42, 0.52), yellow)
+	part(c, "HelmetBrim", "Cylinder", helmet * CFrame.new(0, -0.08, 0) * ALONG_Y, Vector3.new(0.05, 0.62, 0.62), yellow:Lerp(BLACK, 0.12))
+	part(c, "HelmetLamp", "Cylinder", helmet * CFrame.new(0, 0.06, 0.25) * ALONG_Z, Vector3.new(0.08, 0.15, 0.15), rgb(58, 60, 72))
+	part(
+		c,
+		"HelmetLens",
+		"Cylinder",
+		helmet * CFrame.new(0, 0.06, 0.29) * ALONG_Z,
+		Vector3.new(0.03, 0.11, 0.11),
+		glow(rgb(255, 236, 160)),
+		NEON
+	)
+	-- three sticks of dynamite in the right pouch, under the lantern
+	local dx = f.w / 2 + 0.1
+	for i, dz in { -0.2, -0.08, 0.04 } do
+		local stickTop = f.pouchTop + 0.1 + (i % 2) * 0.05
+		post(c, "Dynamite", Vector3.new(dx, stickTop - 0.2, f.zc + dz), 0.4, 0.1, rgb(204, 52, 44))
+		bar(
+			c,
+			"Fuse",
+			Vector3.new(dx, stickTop, f.zc + dz),
+			Vector3.new(dx + 0.03, stickTop + 0.1, f.zc + dz + 0.03),
+			0.02,
+			0.02,
+			rgb(60, 50, 40)
+		)
+	end
+	block(c, "DynamiteBand", at(dx, f.pouchTop - 0.02, f.zc - 0.08), Vector3.new(0.12, 0.08, 0.36), rgb(232, 214, 170))
+	-- a little drawstring pouch with a gold nugget on the left strap
+	local np = Vector3.new(-f.w * 0.34 - 0.04, f.flapBottom - 0.56, f.zf + 0.12)
+	bar(
+		c,
+		"NuggetCord",
+		np + Vector3.new(0, 0.14, 0),
+		Vector3.new(-f.w * 0.34, f.flapBottom - 0.34, f.zf + 0.06),
+		0.025,
+		0.025,
+		col.Leather
+	)
+	puff(c, "NuggetPouch", CFrame.new(np), Vector3.new(0.26, 0.28, 0.2), rgb(196, 160, 104))
+	post(c, "NuggetTie", np + Vector3.new(0, 0.12, 0), 0.04, 0.14, col.Leather)
+	ball(c, "Nugget", np + Vector3.new(0.03, 0.17, 0.02), 0.09, rgb(250, 200, 60))
 end
 
 -- 5: slate leather in steel rims: a riveted steel plate, a chained blue gem
--- in a steel diamond, blue crystals in the side pouches.
+-- in a steel diamond, steel studs on the flap, a padlocked pocket, a steel
+-- buckler on the right, blue crystals in the side pouches.
 local function ironboundPack(c: Ctx)
 	local f = c.f
 	local col = c.colors
-	anatomy(c, FULL)
+	anatomy(c, FLAPPED)
 	for _, sx in { -1, 1 } do
 		for _, sy in { -1, 1 } do
 			ball(
@@ -775,14 +926,34 @@ local function ironboundPack(c: Ctx)
 		crystal(c, CFrame.new(top + Vector3.new(0, 0, -0.08)) * CFrame.Angles(0, 0, -s * 0.25), 0.42, 0.13, gem, tip)
 		crystal(c, CFrame.new(top + Vector3.new(0, 0, 0.1)) * CFrame.Angles(0.2, 0, -s * 0.5), 0.3, 0.1, gem, tip)
 	end
+	-- steel studs along the flap's bottom edge
+	for _, x in { -0.42, -0.18, 0.18, 0.42 } do
+		ball(c, "Stud", Vector3.new(x * f.w, f.flapBottom + 0.07, f.ff + 0.01), 0.075, col.Buckle)
+	end
+	-- a padlock hanging from the pocket flap's stud
+	local lock = f.pocketButton + Vector3.new(0, -0.2, 0.02)
+	for _, s in { -1, 1 } do
+		post(c, "Shackle", lock + Vector3.new(s * 0.055, 0.12, 0), 0.1, 0.03, col.Trim)
+	end
+	rod(c, "Shackle", lock + Vector3.new(0, 0.17, 0), 0.14, 0.03, col.Trim)
+	block(c, "Padlock", CFrame.new(lock), Vector3.new(0.2, 0.16, 0.07), col.Buckle)
+	diamond(c, "Keyhole", lock + Vector3.new(0, 0, 0.04), 0.05, 0.02, glow(col.Glow), NEON)
+	-- a round steel buckler with a blue boss on the right pouch
+	local shield = f.pouches[2] * CFrame.new(0, 0.05, 0.13)
+	faceDisc(c, "Buckler", shield, 0.52, 0.05, col.Trim)
+	faceDisc(c, "BucklerFace", shield * CFrame.new(0, 0, 0.02), 0.44, 0.05, col.Flap)
+	faceDisc(c, "BucklerBoss", shield * CFrame.new(0, 0, 0.04), 0.16, 0.06, col.Trim)
+	block(c, "BucklerGem", shield * CFrame.new(0, 0, 0.075) * DIAMOND, Vector3.new(0.08, 0.08, 0.03), glow(col.Gem), NEON)
 end
 
--- 6: forest green in brass rims: a big compass with a glowing needle, a map
--- tube on the left, a spyglass on the right, a red plume, a red bedroll.
+-- 6: forest green in brass rims: a big compass with a glowing needle, a
+-- medal on the panel, a flapped pocket, a map tube on the left, a spyglass on
+-- the right, a red bedroll with a plume and a rolled map, a magnifying glass
+-- on the left strap.
 local function explorersPack(c: Ctx)
 	local f = c.f
 	local col = c.colors
-	anatomy(c, FULL)
+	anatomy(c, FLAPPED)
 	local e = f.emblem
 	badge(c, "Compass", e, 0.68, 0.06, col.Trim)
 	badge(c, "CompassRing", e + Vector3.new(0, 0, 0.012), 0.58, 0.06, col.Trim:Lerp(BLACK, 0.3))
@@ -823,15 +994,42 @@ local function explorersPack(c: Ctx)
 	local plume = at(f.w * 0.28, f.rollY + 0.1, f.zc - 0.12) * CFrame.Angles(0, 0, -0.45)
 	block(c, "Plume", plume * CFrame.new(0, 0.38, 0), Vector3.new(0.16, 0.8, 0.05), rgb(212, 58, 46))
 	block(c, "PlumeTip", plume * CFrame.new(0, 0.74, 0.01), Vector3.new(0.12, 0.2, 0.05), rgb(250, 240, 220))
+	-- a rolled map with a red ribbon under the left bedroll strap
+	local scroll = Vector3.new(-f.w * 0.28 + 0.05, f.rollY + 0.02, f.zc + f.rollD / 2 + 0.05)
+	rod(c, "Scroll", scroll, 0.62, 0.13, rgb(236, 220, 180))
+	rod(c, "ScrollRibbon", scroll + Vector3.new(0.14, 0, 0), 0.05, 0.14, rgb(200, 50, 50))
+	-- a magnifying glass hanging under the left buckle
+	local mg = Vector3.new(-f.w * 0.34 - 0.02, f.flapBottom - 0.62, f.zf + 0.08)
+	bar(c, "MagnifierHandle", mg + Vector3.new(0, 0.12, 0), mg + Vector3.new(0, 0.34, 0), 0.05, 0.05, rgb(120, 76, 44))
+	badge(c, "MagnifierRing", mg, 0.26, 0.04, col.Trim)
+	badge(c, "MagnifierGlass", mg + Vector3.new(0, 0, 0.005), 0.2, 0.045, rgb(190, 230, 250))
+	-- a medal on a red and blue ribbon, top right of the panel
+	local medal = (f.inner * CFrame.new(f.innerW / 2 - 0.2, f.innerH / 2 - 0.13, 0.02)).Position
+	block(
+		c,
+		"MedalRibbon",
+		CFrame.new(medal + Vector3.new(-0.03, 0.06, 0)) * CFrame.Angles(0, 0, 0.3),
+		Vector3.new(0.05, 0.14, 0.02),
+		rgb(200, 50, 50)
+	)
+	block(
+		c,
+		"MedalRibbon",
+		CFrame.new(medal + Vector3.new(0.03, 0.06, 0)) * CFrame.Angles(0, 0, -0.3),
+		Vector3.new(0.05, 0.14, 0.02),
+		rgb(40, 90, 180)
+	)
+	badge(c, "Medal", medal + Vector3.new(0, -0.04, 0.01), 0.13, 0.03, col.Trim)
 end
 
 -- 7: purple in silver rims: a lavender panel with silver filigree and violet
--- runes, an amethyst cluster in a silver ring, crystals out of the top and
--- the side pouches.
+-- runes, an amethyst cluster in a silver ring, crystal pendants under the flap,
+-- a flapped pocket with crystal studs, crystals out of the top and the side
+-- pouches, a silver moon and stars on the pouches.
 local function amethystPack(c: Ctx)
 	local f = c.f
 	local col = c.colors
-	anatomy(c, FULL)
+	anatomy(c, FLAPPED)
 	local gem = col.Gem -- shaded violet bodies (Foil: a glassy shine), glowing lavender tips
 	local light = glow(rgb(170, 140, 255))
 	local runeColor = glow(col.Glow)
@@ -862,6 +1060,26 @@ local function amethystPack(c: Ctx)
 		local top = (f.pouches[i] * CFrame.new(0, f.pouchH / 2 - 0.04, 0)).Position
 		crystal(c, CFrame.new(top + Vector3.new(0, 0, -0.06)) * CFrame.Angles(0, 0, -s * 0.3), 0.48, 0.14, gem, light, FOIL)
 		crystal(c, CFrame.new(top + Vector3.new(0, 0, 0.12)) * CFrame.Angles(0.25, 0, -s * 0.55), 0.32, 0.11, gem, light, FOIL)
+	end
+	-- three crystal pendants hanging from the flap's bottom edge
+	for i, x in { -0.2, 0, 0.2 } do
+		local len = if i == 2 then 0.16 else 0.1
+		local hook = Vector3.new(x * f.w, f.flapBottom - 0.02, f.ff + 0.01)
+		bar(c, "PendantChain", hook, hook - Vector3.new(0, len, 0), 0.025, 0.02, col.Trim)
+		ball(c, "PendantCap", hook - Vector3.new(0, len, 0), 0.05, col.Trim)
+		diamond(c, "Pendant", hook - Vector3.new(0, len + 0.07, 0), 0.1, 0.04, runeColor, NEON)
+	end
+	-- crystal studs at the pocket flap's ends
+	for _, s in { -1, 1 } do
+		diamond(c, "PocketCrystal", Vector3.new(s * (f.pocketW / 2 - 0.06), f.pocketFlapY, f.pf + 0.065), 0.08, 0.03, runeColor, NEON)
+	end
+	-- a silver crescent moon with a star on the left pouch, three stars on the right one
+	local moon = f.pouches[1] * CFrame.new(0, 0.02, 0.13)
+	faceDisc(c, "Moon", moon, 0.3, 0.03, col.Trim)
+	faceDisc(c, "MoonCut", moon * CFrame.new(0.08, 0.05, 0.012), 0.26, 0.03, col.Body)
+	block(c, "MoonStar", moon * CFrame.new(-0.12, 0.2, 0.02) * DIAMOND, Vector3.new(0.07, 0.07, 0.02), runeColor, NEON)
+	for _, p in { { -0.1, 0.18 }, { 0.08, 0.05 }, { -0.04, -0.12 } } do
+		block(c, "PouchStar", f.pouches[2] * CFrame.new(p[1], p[2], 0.125) * DIAMOND, Vector3.new(0.07, 0.07, 0.02), runeColor, NEON)
 	end
 end
 
