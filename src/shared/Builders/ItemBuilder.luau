@@ -25,6 +25,7 @@
 local Geo = require(script.Parent.Geo)
 local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
+local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 local OreShapesLow = require(script.Parent.OreShapesLow)
 local OreShapesHigh = require(script.Parent.OreShapesHigh)
@@ -1466,7 +1467,20 @@ local function relic(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	art:Destroy()
 end
 
+-- A dropper's Drop (DropperConfig): it looks like one of its dropper's ores
+-- at the dropper's grade (the seed picks which; both looks draw it the same way).
+local function dropInfo(info: ItemInfo, rng: Rng.Rng): ItemInfo
+	local dropper = DropperConfig.ById[info.OreId]
+	local ores = if dropper then dropper.Ores else { OreData.List[1].Id }
+	return { Kind = "Clean", OreId = ores[rng:nextU32() % #ores + 1], Grade = if dropper then dropper.Grade else nil }
+end
+
+local function dropOre(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	cleanOre(model, cf, dropInfo(info, rng), rng)
+end
+
 local BUILDERS = {
+	Drop = dropOre,
 	Raw = rawChunk,
 	Clean = cleanOre,
 	Crushed = crushed,
@@ -1682,7 +1696,12 @@ local function relicLight(model: Model, cf: CFrame, _info: ItemInfo, rng: Rng.Rn
 	})
 end
 
+local function dropLight(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	cleanLight(model, cf, dropInfo(info, rng), rng)
+end
+
 local LIGHT_BUILDERS = {
+	Drop = dropLight,
 	Raw = rawLight,
 	Clean = cleanLight,
 	Crushed = crushedLight,

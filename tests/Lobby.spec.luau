@@ -294,13 +294,15 @@ return function(T, Loader)
 		-- hooks the Districts package adds
 		local districts = map.Emberfall:FindFirstChild("Lobby") and map.Emberfall.Lobby:FindFirstChild("Districts")
 		if districts then
-			for _, tag in { "UpgradeCounter", "OreCodex", "FossilDig" } do
+			for _, tag in { "UpgradeCounter", "BackpackCounter", "FossilDig" } do
 				T.truthy(tagged[tag], "tag " .. tag)
 			end
 			local chest = (tagged.EmberChest or {})[1]
 			local wheel = chest and chest:FindFirstAncestor("SpinWheel")
 			T.truthy(wheel, "EmberChest sits on the SpinWheel model")
-			for _, tag in { "SellBin", "SellCounter", "ShopCounter", "UpgradeCounter", "EmberChest", "GuildBoard", "OreCodex", "FossilDig" } do
+			for _, tag in
+				{ "SellBin", "SellCounter", "ShopCounter", "UpgradeCounter", "EmberChest", "GuildBoard", "BackpackCounter", "FossilDig" }
+			do
 				for _, inst in tagged[tag] or {} do
 					T.truthy(inst:IsDescendantOf(districts), tag .. " is built by the Districts package")
 				end

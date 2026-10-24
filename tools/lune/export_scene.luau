@@ -136,10 +136,23 @@ local function addMuseums(map: any)
 	end
 end
 
+-- The DROPPERS shop's showroom, as every client builds it near the camera
+-- (DropperShopBuilder; the server's map has the shell only).
+local function addDropperShop(map: any)
+	local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+	for _, d in map:GetDescendants() do
+		local frame = d:GetAttribute(DropperShopBuilder.FrameAttribute)
+		if frame then
+			DropperShopBuilder.show(d, frame)
+		end
+	end
+end
+
 if sceneName == "world" or string.match(sceneName, "^world_") then
 	-- "world_<name>": the same world into build/preview/world_<name>.json (parallel workers)
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
+	addDropperShop(map)
 	addNodes(workspace, map)
 elseif sceneName == "hall" then -- the world + stand-in champions on the giant HALL OF FAME (tools/lune/lib/hall_preview.luau)
 	local map = WorldBuilder.build(workspace)
@@ -171,6 +184,11 @@ elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common 
 	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
 	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
+elseif sceneName == "lobby_spots" then -- the world + the DROPPERS house's candidate spots, numbered (tools/lune/lib/dropper_preview.luau)
+	WorldBuilder.build(workspace)
+	require("./lib/dropper_preview").markSpots(Loader, workspace)
+elseif sceneName == "dropper_line" then -- droppers -> belts -> the Money Laser gate -> a Sell Box (tools/lune/lib/dropper_line_preview.luau)
+	require("./lib/dropper_line_preview").build(Loader, workspace)
 elseif sceneName == "dropper_shop" then -- the DROPPERS shop house (tools/lune/lib/dropper_preview.luau)
 	require("./lib/dropper_preview").buildShop(Loader, workspace)
 elseif sceneName == "droppers" then -- the seven droppers, Money Laser and SELL by the mine (tools/lune/lib/dropper_preview.luau)

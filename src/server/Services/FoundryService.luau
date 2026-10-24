@@ -334,6 +334,11 @@ function FoundryService.sink(plotId: number, record: ItemRecord): (boolean, stri
 	if record.State ~= "Loose" then
 		return false, "Wrong"
 	end
+	-- a dropper's Drop never goes to the stock or the pen (DropperConfig): it just goes
+	if record.Kind == "Drop" then
+		ItemService.destroy(record)
+		return true, nil
+	end
 	local owner = PlotService.ownerOf(plotId)
 	if not owner or owner.UserId ~= record.Owner then
 		return false, "Foreign"
@@ -419,6 +424,11 @@ end
 -- An item came to rest in (or flew into) the furnace's hopper.
 local function onHopper(plotId: number, record: ItemRecord)
 	if record.State ~= "Loose" then
+		return
+	end
+	-- a dropper's Drop never goes to the stock or the pen (DropperConfig): it just goes
+	if record.Kind == "Drop" then
+		ItemService.destroy(record)
 		return
 	end
 	local owner = PlotService.ownerOf(plotId)

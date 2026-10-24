@@ -3,6 +3,8 @@
 -- effects (BackpackFx), the shop window (BackpackShopView) and the BACKPACKS stall.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
+	local CFrame = roblox.CFrame
 	local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
 	local BackpackBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackBuilder")
 	local BackpackFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackFx")
@@ -242,30 +244,98 @@ return function(T, Loader)
 		T.truthy(refs.Cards[#refs.Cards].Frame.Visible, "open pose shows every card")
 	end)
 
-	T.test("BACKPACKS stall: the counter hook, the prompt point and three display markers", function()
+	T.test("BACKPACKS shop: the counter hook, the keeper's feet and every pack on display once", function()
 		local Backpacks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Backpacks")
+		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
 		local parent = roblox.Instance.new("Model")
 		Backpacks.build(parent, Rng.new(7))
 		local stall = parent:FindFirstChild("BackpackStall")
-		T.truthy(stall ~= nil, "the stall model")
-		local counters, markers, parts = 0, 0, 0
+		T.truthy(stall ~= nil, "the shop model")
+		local frame = stall:GetAttribute(Decor.FrameAttribute)
+		T.eq(typeof(frame), "CFrame", "the shop frame for the clients' decor")
+		local counters, parts = 0, 0
+		local shown: { [string]: number } = {}
+		local boxes = {}
 		for _, d in stall:GetDescendants() do
 			if d:IsA("BasePart") then
 				parts += 1
 				if d:HasTag("BackpackCounter") then
 					counters += 1
 					T.truthy(d:FindFirstChild("BackpackPromptPoint") ~= nil, "the prompt point on the counter")
+					local feet = d:FindFirstChild(Backpacks.KeeperFeet)
+					T.truthy(feet ~= nil and feet:IsA("Attachment"), "the shopkeeper's feet on the counter")
+					local local_ = frame:ToObjectSpace(d.CFrame * feet.CFrame)
+					T.near(local_.Position.Y, Decor.Layout.Floor + 1.0, 0.01, "the feet stand on the step")
+					T.truthy(local_.Position.Z > Decor.Layout.CounterZ + 1, "behind the counter")
+					T.near(local_.LookVector.Z, -1, 0.01, "facing the customers (the gateway)")
 				end
-				if d:GetAttribute("BackpackId") ~= nil then
-					markers += 1
-					T.truthy(BackpackData.ById[d:GetAttribute("BackpackId")] ~= nil, "a display marker names a pack")
+				local id = d:GetAttribute("BackpackId")
+				if id ~= nil then
+					local pack = BackpackData.ById[id]
+					T.truthy(pack ~= nil, "a display marker names a pack")
+					shown[id] = (shown[id] or 0) + 1
 					T.eq(#d:GetTags(), 0, "display markers carry no tag (Plaza Life keeps miners off tagged parts)")
-					T.eq(d.Parent, stall, "the markers sit in the stall model (the clients find them through the counter)")
+					T.eq(d.Parent, stall, "the markers sit in the shop model (the clients find them through the counter)")
+					-- the pack's box where the clients stand it (centred on the plate, on its top)
+					local scale = d:GetAttribute("DisplayScale") or 1
+					local size = pack.Size * scale
+					local c = frame:ToObjectSpace(d.CFrame * CFrame.new(0, d.Size.Y / 2 + size.Y / 2, 0))
+					local function abs(v: any): any
+						return Vector3.new(math.abs(v.X), math.abs(v.Y), math.abs(v.Z))
+					end
+					local half = abs(c.RightVector * size.X / 2) + abs(c.UpVector * size.Y / 2) + abs(c.LookVector * size.Z / 2)
+					table.insert(boxes, { Id = id, Min = c.Position - half, Max = c.Position + half, Spin = d:GetAttribute("DisplaySpin") })
 				end
 			end
 		end
 		T.eq(counters, 1, "one counter")
-		T.eq(markers, 3, "three display markers (the packs are built by the clients)")
-		T.le(parts, 30, "a lean stall")
+		for _, pack in BackpackData.List do
+			T.eq(shown[pack.Id], 1, pack.Id .. " is on display once")
+		end
+		T.le(parts, 110, "the shell stays lean (the packs and the decor are the clients')")
+		-- the packs keep clear of each other and of the walls (a turning one sweeps a circle)
+		local L = Decor.Layout
+		for i, a in boxes do
+			if not a.Spin then
+				local inside = a.Min.X >= -L.Width / 2 + L.Wall0 - 0.05 and a.Max.X <= L.Width / 2 - L.Wall0 + 0.05
+				T.truthy(inside or a.Min.Z < L.FrontZ, a.Id .. " stands inside the walls")
+			end
+			for j = i + 1, #boxes do
+				local b = boxes[j]
+				local apart = a.Max.X <= b.Min.X
+					or b.Max.X <= a.Min.X
+					or a.Max.Y <= b.Min.Y
+					or b.Max.Y <= a.Min.Y
+					or a.Max.Z <= b.Min.Z
+					or b.Max.Z <= a.Min.Z
+				T.truthy(apart, a.Id .. " and " .. b.Id .. " don't overlap")
+			end
+		end
+	end)
+
+	T.test("BACKPACKS shop decor: built by the clients, inside the footprint, lights and dust off", function()
+		local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
+		local frame = CFrame.new(46, 0, 74) * CFrame.Angles(0, math.pi / 2, 0)
+		local model = Decor.build(frame)
+		local parts, lights, emitters = 0, 0, 0
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				parts += 1
+				T.falsy(d.CanCollide or d.CanQuery or d.CanTouch, d.Name .. " is decor (no collisions, no queries)")
+				T.truthy(d.Anchored, d.Name .. " anchored")
+				local p = frame:PointToObjectSpace(d.CFrame.Position)
+				T.truthy(math.abs(p.X) <= 8 and p.Y >= 0 and p.Y <= 16 and math.abs(p.Z) <= 6, d.Name .. " inside the shop's footprint")
+			elseif d:IsA("PointLight") then
+				lights += 1
+				T.falsy(d.Enabled, "the lanterns' lights start off")
+			elseif d:IsA("ParticleEmitter") then
+				emitters += 1
+				T.falsy(d.Enabled, "the gate dust starts off")
+			end
+		end
+		T.truthy(parts > 40, "plenty of small things")
+		T.le(parts, Decor.MaxParts, "within the decor budget")
+		T.eq(lights, 2, "two lantern lights")
+		T.eq(emitters, 1, "one dust emitter")
 	end)
 end

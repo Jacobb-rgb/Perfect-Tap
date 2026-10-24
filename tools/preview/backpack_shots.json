@@ -1,516 +1,550 @@
 {
- "bp_lineup": {
-  "scene": "backpacks",
-  "position": [
-   0,
-   7.5,
-   27
-  ],
-  "target": [
-   0,
-   2.4,
-   0
-  ],
-  "fov": 58,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 40,
-  "maxLights": 8
- },
- "bp_close_a": {
-  "scene": "backpacks",
-  "position": [
-   -8.5,
-   4.6,
-   12.5
-  ],
-  "target": [
-   -8.5,
-   1.9,
-   0
-  ],
-  "fov": 50,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 30,
-  "maxLights": 8
- },
- "bp_close_b": {
-  "scene": "backpacks",
-  "position": [
-   8.5,
-   5.4,
-   12.5
-  ],
-  "target": [
-   8.5,
-   2.8,
-   0
-  ],
-  "fov": 50,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 30,
-  "maxLights": 8
- },
- "bp_rune": {
-  "scene": "backpacks",
-  "position": [
-   9.6,
-   4.9,
-   6.2
-  ],
-  "target": [
-   8.5,
-   3.2,
-   0
-  ],
-  "fov": 45,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_worn_a": {
-  "scene": "backpacks_worn",
-  "position": [
-   0,
-   7,
-   14
-  ],
-  "target": [
-   0,
-   3.2,
-   0
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "sunDir": [
-   -0.3,
-   0.8,
-   0.5
-  ],
-  "exposure": 1.3,
-  "shadowExtent": 40,
-  "maxLights": 8
- },
- "bp_worn_b": {
-  "scene": "backpacks_worn",
-  "position": [
-   0,
-   7,
-   0
-  ],
-  "target": [
-   0,
-   3.2,
-   -14
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "sunDir": [
-   -0.3,
-   0.8,
-   0.5
-  ],
-  "exposure": 1.3,
-  "shadowExtent": 40,
-  "maxLights": 8
- },
- "bp_worn_rune": {
-  "scene": "backpacks_worn",
-  "position": [
-   1.2,
-   5.6,
-   -8.6
-  ],
-  "target": [
-   0,
-   3.5,
-   -14
-  ],
-  "fov": 50,
-  "preset": "Surface",
-  "sunDir": [
-   -0.3,
-   0.8,
-   0.5
-  ],
-  "exposure": 1.3,
-  "shadowExtent": 30,
-  "maxLights": 8
- },
- "bp_worn_star": {
-  "scene": "backpacks_worn",
-  "position": [
-   9.6,
-   5.8,
-   -8.4
-  ],
-  "target": [
-   8.4,
-   3.6,
-   -14
-  ],
-  "fov": 50,
-  "preset": "Surface",
-  "sunDir": [
-   -0.3,
-   0.8,
-   0.5
-  ],
-  "exposure": 1.3,
-  "shadowExtent": 30,
-  "maxLights": 8
- },
- "bp_pack_1": {
-  "scene": "backpacks",
-  "position": [
-   -13.7,
-   3.2,
-   5.6
-  ],
-  "target": [
-   -15.299999999999999,
-   1.75,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_2": {
-  "scene": "backpacks",
-  "position": [
-   -10.3,
-   3.4000000000000004,
-   5.6
-  ],
-  "target": [
-   -11.9,
-   1.95,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_3": {
-  "scene": "backpacks",
-  "position": [
-   -6.9,
-   3.6,
-   5.6
-  ],
-  "target": [
-   -8.5,
-   2.15,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_4": {
-  "scene": "backpacks",
-  "position": [
-   -3.4999999999999996,
-   3.8000000000000003,
-   5.6
-  ],
-  "target": [
-   -5.1,
-   2.35,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_5": {
-  "scene": "backpacks",
-  "position": [
-   -0.09999999999999987,
-   4.0,
-   5.6
-  ],
-  "target": [
-   -1.7,
-   2.55,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_6": {
-  "scene": "backpacks",
-  "position": [
-   3.3,
-   4.2,
-   5.6
-  ],
-  "target": [
-   1.7,
-   2.75,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_7": {
-  "scene": "backpacks",
-  "position": [
-   6.699999999999999,
-   4.4,
-   5.6
-  ],
-  "target": [
-   5.1,
-   2.95,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_8": {
-  "scene": "backpacks",
-  "position": [
-   10.1,
-   4.6,
-   5.6
-  ],
-  "target": [
-   8.5,
-   3.15,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_9": {
-  "scene": "backpacks",
-  "position": [
-   13.5,
-   4.800000000000001,
-   5.6
-  ],
-  "target": [
-   11.9,
-   3.35,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_pack_10": {
-  "scene": "backpacks",
-  "position": [
-   16.9,
-   5.0,
-   5.6
-  ],
-  "target": [
-   15.299999999999999,
-   3.55,
-   0
-  ],
-  "fov": 42,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 20,
-  "maxLights": 8
- },
- "bp_ui_shop": {
-  "scene": "backpack_shop",
-  "position": [
-   0,
-   7.5,
-   27
-  ],
-  "target": [
-   0,
-   2.4,
-   0
-  ],
-  "fov": 58,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 40,
-  "maxLights": 8,
-  "ui": "ui_backpack_shop"
- },
- "bp_ui_shop_phone": {
-  "scene": "backpack_shop",
-  "position": [
-   0,
-   7.5,
-   27
-  ],
-  "target": [
-   0,
-   2.4,
-   0
-  ],
-  "fov": 58,
-  "preset": "Surface",
-  "sunDir": [
-   0.25,
-   0.75,
-   0.62
-  ],
-  "exposure": 1.35,
-  "shadowExtent": 40,
-  "maxLights": 8,
-  "ui": "ui_backpack_shop_phone",
-  "uiInset": 86
- },
- "bp_stall": {
-  "scene": "backpack_stall",
-  "position": [
-   -31.76,
-   6.5,
-   -31.22
-  ],
-  "target": [
-   -40.0,
-   4.2,
-   -44.0
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "shadowExtent": 120,
-  "maxLights": 24
- },
- "bp_stall_close": {
-  "scene": "backpack_stall",
-  "position": [
-   -33.54,
-   5.0,
-   -38.38
-  ],
-  "target": [
-   -40.34,
-   3.4,
-   -44.37
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "shadowExtent": 80,
-  "maxLights": 24
- },
- "bp_stall_far": {
-  "scene": "backpack_stall",
-  "position": [
-   -8,
-   14,
-   -12
-  ],
-  "target": [
-   -40,
-   4,
-   -44
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "shadowExtent": 160,
-  "maxLights": 24
- }
+  "bp_lineup": {
+    "scene": "backpacks",
+    "position": [
+      0,
+      7.5,
+      27
+    ],
+    "target": [
+      0,
+      2.4,
+      0
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 40,
+    "maxLights": 8
+  },
+  "bp_close_a": {
+    "scene": "backpacks",
+    "position": [
+      -8.5,
+      4.6,
+      12.5
+    ],
+    "target": [
+      -8.5,
+      1.9,
+      0
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 30,
+    "maxLights": 8
+  },
+  "bp_close_b": {
+    "scene": "backpacks",
+    "position": [
+      8.5,
+      5.4,
+      12.5
+    ],
+    "target": [
+      8.5,
+      2.8,
+      0
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 30,
+    "maxLights": 8
+  },
+  "bp_rune": {
+    "scene": "backpacks",
+    "position": [
+      9.6,
+      4.9,
+      6.2
+    ],
+    "target": [
+      8.5,
+      3.2,
+      0
+    ],
+    "fov": 45,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_worn_a": {
+    "scene": "backpacks_worn",
+    "position": [
+      0,
+      7,
+      14
+    ],
+    "target": [
+      0,
+      3.2,
+      0
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.3,
+      0.8,
+      0.5
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8
+  },
+  "bp_worn_b": {
+    "scene": "backpacks_worn",
+    "position": [
+      0,
+      7,
+      0
+    ],
+    "target": [
+      0,
+      3.2,
+      -14
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [
+      -0.3,
+      0.8,
+      0.5
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8
+  },
+  "bp_worn_rune": {
+    "scene": "backpacks_worn",
+    "position": [
+      1.2,
+      5.6,
+      -8.6
+    ],
+    "target": [
+      0,
+      3.5,
+      -14
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.3,
+      0.8,
+      0.5
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 30,
+    "maxLights": 8
+  },
+  "bp_worn_star": {
+    "scene": "backpacks_worn",
+    "position": [
+      9.6,
+      5.8,
+      -8.4
+    ],
+    "target": [
+      8.4,
+      3.6,
+      -14
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.3,
+      0.8,
+      0.5
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 30,
+    "maxLights": 8
+  },
+  "bp_pack_1": {
+    "scene": "backpacks",
+    "position": [
+      -13.7,
+      3.2,
+      5.6
+    ],
+    "target": [
+      -15.299999999999999,
+      1.75,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_2": {
+    "scene": "backpacks",
+    "position": [
+      -10.3,
+      3.4000000000000004,
+      5.6
+    ],
+    "target": [
+      -11.9,
+      1.95,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_3": {
+    "scene": "backpacks",
+    "position": [
+      -6.9,
+      3.6,
+      5.6
+    ],
+    "target": [
+      -8.5,
+      2.15,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_4": {
+    "scene": "backpacks",
+    "position": [
+      -3.4999999999999996,
+      3.8000000000000003,
+      5.6
+    ],
+    "target": [
+      -5.1,
+      2.35,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_5": {
+    "scene": "backpacks",
+    "position": [
+      -0.09999999999999987,
+      4.0,
+      5.6
+    ],
+    "target": [
+      -1.7,
+      2.55,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_6": {
+    "scene": "backpacks",
+    "position": [
+      3.3,
+      4.2,
+      5.6
+    ],
+    "target": [
+      1.7,
+      2.75,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_7": {
+    "scene": "backpacks",
+    "position": [
+      6.699999999999999,
+      4.4,
+      5.6
+    ],
+    "target": [
+      5.1,
+      2.95,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_8": {
+    "scene": "backpacks",
+    "position": [
+      10.1,
+      4.6,
+      5.6
+    ],
+    "target": [
+      8.5,
+      3.15,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_9": {
+    "scene": "backpacks",
+    "position": [
+      13.5,
+      4.800000000000001,
+      5.6
+    ],
+    "target": [
+      11.9,
+      3.35,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_pack_10": {
+    "scene": "backpacks",
+    "position": [
+      16.9,
+      5.0,
+      5.6
+    ],
+    "target": [
+      15.299999999999999,
+      3.55,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 20,
+    "maxLights": 8
+  },
+  "bp_ui_shop": {
+    "scene": "backpack_shop",
+    "position": [
+      0,
+      7.5,
+      27
+    ],
+    "target": [
+      0,
+      2.4,
+      0
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "ui": "ui_backpack_shop"
+  },
+  "bp_ui_shop_phone": {
+    "scene": "backpack_shop",
+    "position": [
+      0,
+      7.5,
+      27
+    ],
+    "target": [
+      0,
+      2.4,
+      0
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "sunDir": [
+      0.25,
+      0.75,
+      0.62
+    ],
+    "exposure": 1.35,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "ui": "ui_backpack_shop_phone",
+    "uiInset": 86
+  },
+  "bp_stall": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      23.5,
+      8.5,
+      63.5
+    ],
+    "target": [
+      46,
+      9,
+      74.5
+    ],
+    "fov": 58,
+    "shadowExtent": 120
+  },
+  "bp_stall_close": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      35.5,
+      5.2,
+      75.5
+    ],
+    "target": [
+      49.5,
+      5.0,
+      74
+    ],
+    "fov": 55,
+    "shadowExtent": 80
+  },
+  "bp_stall_far": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      6,
+      24,
+      40
+    ],
+    "target": [
+      45,
+      6,
+      74
+    ],
+    "fov": 55,
+    "shadowExtent": 160
+  },
+  "bp_stall_inside": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      44.4,
+      5.0,
+      75.6
+    ],
+    "target": [
+      50.6,
+      5.4,
+      73.8
+    ],
+    "fov": 64,
+    "shadowExtent": 60
+  },
+  "bp_stall_side": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      29,
+      9.5,
+      50
+    ],
+    "target": [
+      46,
+      6.5,
+      71
+    ],
+    "fov": 55,
+    "shadowExtent": 120
+  }
 }

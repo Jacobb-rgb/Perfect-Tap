@@ -38,7 +38,7 @@ Life.MaxMiners = 9
 Life.PromptClear = 3 -- studs from a counter / tagged stall part
 Life.RingClear = 39 -- the plaza ring's walking area
 -- Stalls that get lanterns and props (the Hall of Fame boards and the wheel stay bare)
-Life.Stalls = { "Shop", "Upgrades", "CapsuleStall", "EnchantShop", "RockScanner", "FossilDig" }
+Life.Stalls = { "Shop", "Upgrades", "CapsuleStall", "EnchantShop", "BackpackStall", "FossilDig" }
 -- Kept clear: the Great Forge's porch and stairs, the vault and its approach.
 Life.Clear = {
 	{ Min = Vector3.new(-26, 0, -48), Max = Vector3.new(26, 0, -30) },

@@ -244,6 +244,10 @@ function PenService.store(player: Player, desc: Desc): (boolean, string?)
 	if not data then
 		return false, "NoData"
 	end
+	-- a dropper's Drop is never stored (DropperConfig)
+	if type(desc) == "table" and desc.K == "Drop" then
+		return false, "Wrong"
+	end
 	local why = PenService.refusal(data)
 	if why then
 		return false, why
@@ -376,6 +380,11 @@ local function onIntake(plotId: number, record: ItemRecord)
 	if record.Kind == "Relic" then
 		bounceOut(plotId, record)
 		toast(owner, ItemData.RelicRefused, "Info")
+		return
+	end
+	-- a dropper's Drop is never stored (DropperConfig): it just goes
+	if record.Kind == "Drop" then
+		ItemService.destroy(record)
 		return
 	end
 	local why = PenService.refusal(data)

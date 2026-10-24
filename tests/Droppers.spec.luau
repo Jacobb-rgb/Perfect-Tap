@@ -1,5 +1,6 @@
 -- Droppers and the Money Laser (owner 2026-10-21): config, income, machines, models.
 return function(T, Loader)
+	local Enum = (require("@lune/roblox") :: any).Enum
 	local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
@@ -23,7 +24,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("droppers: income on the plot, every Money Laser doubles one dropper (the best first)", function()
+	T.test("droppers: the most a plot earns per second: with any Money Laser every dropper doubled (merged belts)", function()
 		local basic, gold = DropperConfig.ById.BasicDropper, DropperConfig.ById.GoldDropper
 		T.eq(DropperConfig.placedIncome(nil), 0)
 		T.eq(DropperConfig.placedIncome({ { Id = "Conveyor" } }), 0)
@@ -31,7 +32,8 @@ return function(T, Loader)
 		local laser = DropperConfig.Laser.Id
 		T.eq(
 			DropperConfig.placedIncome({ { Id = "BasicDropper" }, { Id = "GoldDropper" }, { Id = laser } }),
-			basic.Income + gold.Income * 2
+			(basic.Income + gold.Income) * 2,
+			"one laser on the merged line doubles both"
 		)
 		T.eq(
 			DropperConfig.placedIncome({ { Id = "BasicDropper" }, { Id = laser }, { Id = laser }, { Id = laser } }),
@@ -39,18 +41,25 @@ return function(T, Loader)
 			"spare lasers do nothing"
 		)
 		T.eq(DropperConfig.placedIncome({ "junk", { Id = 5 } }), 0)
+		-- (a dropper whose every Drop sells earns its Income per second)
+		T.eq(DropperConfig.dropValue("BasicDropper") / DropperConfig.DropEvery, basic.Income)
 	end)
 
-	T.test("droppers: 2 x 2 machines in the Tech shop with a model, no intake", function()
+	T.test("droppers: 2 x 2 machines with no intake, the Money Laser a 1 x 1 belt gate; all with a front Output", function()
+		local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 		for _, id in { "BasicDropper", "DarkMatterDropper", DropperConfig.Laser.Id } do
 			local info = MachineData.ById[id]
 			T.truthy(info, id .. " is a machine")
-			T.eq(info.Size[1], 2)
-			T.eq(info.Size[2], 2)
-			T.truthy(info.NoIntake)
+			local laser = id == DropperConfig.Laser.Id
+			T.eq(info.Size[1], if laser then 1 else 2)
+			T.eq(info.Size[2], if laser then 1 else 2)
+			T.eq(info.NoIntake == true, not laser, id .. ": only the laser takes items")
 			T.truthy(EconomyConfig.TechShop.ById[id], id .. " in the Tech shop")
 			local model = MachineBuilder.build(id)
 			T.truthy(model.PrimaryPart, id .. " base")
+			local out = model.PrimaryPart:FindFirstChild("Output")
+			T.truthy(out and out:IsA("Attachment"), id .. " pushes its Drops out of an Output")
+			T.truthy((out.CFrame.Position - Grid.outputLocal(id)).Magnitude < 1e-3, id .. " Output at Grid.outputLocal")
 			local count = 0
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") then
@@ -59,9 +68,42 @@ return function(T, Loader)
 			end
 			T.truthy(count <= 140, id .. " part budget (" .. count .. ")")
 		end
+		T.eq(MachineData.ById[DropperConfig.Laser.Id].ConveyorFaces, "NoFront", "belts feed the laser from the back and the sides")
+		-- the dropper's nozzle is right over its Output (the belt cell in front), the Drop falls from there
+		local model = MachineBuilder.build("GoldDropper")
+		local out = Grid.outputLocal("GoldDropper") :: any
+		local best = math.huge
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.Material == Enum.Material.Neon and d.Size.Y < 0.2 then
+				local p = d.CFrame.Position
+				local flat = math.sqrt((p.X - out.X) ^ 2 + (p.Z - out.Z) ^ 2)
+				if p.Y > out.Y and p.Y < out.Y + 1.2 then
+					best = math.min(best, flat)
+				end
+			end
+		end
+		T.truthy(best < 0.3, `the glowing nozzle is right over the Output ({best})`)
 	end)
 
-	T.test("droppers: the State snapshot's income is incomeOf (podiums + droppers), so the HUD chip matches", function()
+	T.test("droppers: the Money Laser is tiny: lower and smaller than the Sell Box (owner 2026-10-24)", function()
+		local function extent(model: any): (number, number)
+			local top, wide = 0, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 1 then
+					top = math.max(top, d.CFrame.Position.Y + d.Size.Y / 2)
+					wide = math.max(wide, math.abs(d.CFrame.Position.X) + d.Size.X / 2, math.abs(d.CFrame.Position.Z) + d.Size.Z / 2)
+				end
+			end
+			return top, wide
+		end
+		local laserTop, laserWide = extent(MachineBuilder.build(DropperConfig.Laser.Id))
+		local boxTop, boxWide = extent(MachineBuilder.build("SellBox"))
+		T.truthy(laserTop < boxTop, `the laser ({laserTop}) is lower than the Sell Box ({boxTop})`)
+		T.truthy(laserWide < boxWide, `and narrower ({laserWide} < {boxWide})`)
+		T.truthy(laserTop <= 4, `about belt-gate high ({laserTop})`)
+	end)
+
+	T.test("droppers: no passive coins any more: the State snapshot's income is the podiums' (incomeOf)", function()
 		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 		local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -89,8 +131,10 @@ return function(T, Loader)
 			local snapshot: any = {}
 			PodiumService._test.provide(player, data, snapshot)
 			local expected = PodiumService.incomeOf(player, data)
-			T.truthy(expected >= DropperConfig.ById.BasicDropper.Income * 2, "the laser doubles the Basic Dropper")
 			T.eq(snapshot.Income, expected)
+			local without = table.clone(data)
+			without.PlacedMachines = {}
+			T.eq(expected, PodiumService.incomeOf(player, without), "the droppers earn through Sell Box sales only")
 		end)
 		rawset(DataService, "get", oldGet)
 		assert(ok, err)
@@ -180,5 +224,34 @@ return function(T, Loader)
 		T.eq(code, "LaserLimit")
 		-- moving one of the five is fine
 		T.truthy(Placement.validate(entries, "BasicDropper", 0, 9, 0, nil, entries[1]), "a move is not a sixth")
+	end)
+	T.test("droppers: the studded style (owner's A, 2026-10-24) gives every dropper's blocks studs", function()
+		local StudStyle = Loader.requirePath("ReplicatedStorage.Shared.StudStyle")
+		for _, dropper in DropperConfig.List do
+			local model = MachineBuilder.build(dropper.Id)
+			local studded, blocks = 0, 0
+			StudStyle.clearCache()
+			for _, part in model:GetDescendants() do
+				if part:IsA("BasePart") then
+					-- (Lune cannot read an unset MaterialVariant)
+					part.MaterialVariant = ""
+					local size = part.Size
+					-- (big opaque blocks: not the glows, the glass, the balls or the invisible HitBox)
+					local ball = part.ClassName == "Part" and part.Shape == Enum.PartType.Ball
+					local solid = part.Material ~= Enum.Material.Neon
+						and part.Material ~= Enum.Material.Glass
+						and part.Transparency == 0
+						and not ball
+					if solid and math.min(size.X, size.Y, size.Z) >= 0.9 then
+						blocks += 1
+						if StudStyle.skipReason(part) == nil then
+							studded += 1
+						end
+					end
+				end
+			end
+			T.truthy(blocks >= 8, dropper.Id .. " has blocks")
+			T.eq(studded, blocks, dropper.Id .. ": every big solid block gets studs (nothing tagged NoStuds or skipped)")
+		end
 	end)
 end

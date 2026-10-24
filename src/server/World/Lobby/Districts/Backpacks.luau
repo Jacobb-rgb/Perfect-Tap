@@ -1,28 +1,42 @@
 --[[
-	BACKPACKS: the backpack shop's stall (owner 2026-10-24: "Nový stánek v
-	lobby", coins only) on the lawn north of the SHOP, beside the gear shop
-	that sold the old Ore Backpack. A lean kiosk in the concept v2 metal and
-	neon language, its neon teal like the shop window's header band:
-	  - a gunmetal deck with a teal front edge over the orange band
-	  - a back wall with a teal line and, in its middle, a raised display shelf
-	  - two front posts with teal slots, a canopy with a teal front edge
-	  - the BACKPACKS neon sign box on the canopy
-	  - the counter in front: its warm top is the BasePart tagged
-	    BackpackCounter, with an Attachment BackpackPromptPoint on the
-	    customer side (BackpackService puts the "Backpacks" prompt there)
-	  - two round plinths either side of the counter, a square plate on each
-	The three display packs are NOT map parts: the shelf and the plinth plates
-	carry the attribute BackpackId (the best three packs; no tag: Plaza Life
-	keeps its miners off tagged parts as prompt spots) and every client finds
-	them through the counter and builds those packs standing on them while it
-	is near (BackpackWearController), so the stall costs the map ~27 parts.
-	Local frame: 10 wide, 11 tall, 8 deep, front = -Z (toward the plaza);
-	every part stays inside it (tests/LobbyDistricts.spec.luau).
+	BACKPACKS: the backpack shop (owner 2026-10-24: "Nový stánek v lobby",
+	coins only; then "in place of the ROCK SCANNER in front of the Vault,
+	more details, bigger like a shop, a shopkeeper at the counter, more
+	lights and effects"). A small walk-in shop at the end of the ToScanner
+	path, its gateway to the path, in the Districts' dark metal and neon
+	look with the backpacks' colours (teal neon, gold, royal blue):
+	  - a floor with a teal front edge and a lit step, a porch with two round
+	    plinths for the Runebound and the Emberforge packs
+	  - dark front walls either side of a gold-framed gateway (a teal neon
+	    frame, a second one set back in the opening), the BACKPACKS board
+	    over it with teal tubes
+	  - side and back walls with the orange band, a roof with a parapet,
+	    crenels and teal tubes; two corner pillars with warm lantern cubes
+	  - on the roof a podium with a neon ring: the giant Starforge pack that
+	    turns slowly on it is the shop's emblem
+	  - inside: racks on both side walls (three packs each), a shelf in the
+	    back-left corner (the Amethyst pack), the counter (its warm top is
+	    the BasePart tagged BackpackCounter with the Attachment
+	    BackpackPromptPoint on the customer side: BackpackService puts the
+	    "Backpacks" prompt there) and the shopkeeper's step behind it (the
+	    Attachment KeeperFeet on the counter: where a golem's feet stand,
+	    facing the customers; ShopkeeperConfig.mark), one warm light
+	The ten packs are NOT map parts: the plates they stand on carry the
+	attribute BackpackId (no tag: Plaza Life keeps its miners off tagged
+	parts) and every client finds them through the counter's model and
+	builds the packs while it is near (BackpackWearController; the roof's
+	plate adds DisplayScale and DisplaySpin). The small things (banners,
+	lanterns, crates, the crest, the rug, the counter's coins) are built by
+	the clients too (Builders/BackpackShopDecor, from the model's ShopFrame
+	attribute). Local frame: BackpackShopDecor.Layout (front = -Z toward
+	the path); every part stays inside the 16 x 16 x 12 footprint
+	(tests/LobbyDistricts.spec.luau).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local BackpackShopDecor = require(Shared.Builders.BackpackShopDecor)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
@@ -32,19 +46,26 @@ local Backpacks = {}
 
 Backpacks.CounterTag = "BackpackCounter"
 Backpacks.PromptPoint = "BackpackPromptPoint"
-Backpacks.DisplayAttribute = "BackpackId" -- (BackpackWearController: the stall's display markers)
--- what stands where: the shelf in the middle of the back wall, the plinths left and right
+Backpacks.KeeperFeet = "KeeperFeet" -- Attachment on the counter: the shopkeeper's feet, facing the customers
+Backpacks.DisplayAttribute = "BackpackId" -- (BackpackWearController: the shop's display markers)
+-- what stands where (every pack once): the porch plinths, the side racks
+-- (front to back), the back-left shelf and the roof
 Backpacks.Displays = {
-	Shelf = "StarforgePack",
-	Left = "RuneboundPack",
-	Right = "EmberforgePack",
+	PorchLeft = "RuneboundPack",
+	PorchRight = "EmberforgePack",
+	RackLeft = { "RookiePack", "TrailPack", "LeatherRucksack" },
+	RackRight = { "MinersPack", "IronboundPack", "ExplorersPack" },
+	Shelf = "AmethystPack",
+	Roof = "StarforgePack",
 }
+Backpacks.RoofScale = 2.2 -- the roof emblem's size against a normal pack
+Backpacks.RoofSpin = 0.5 -- radians per second
 
 local rgb = Color3.fromRGB
 local TEAL = rgb(16, 176, 168) -- deep enough to stay teal under bloom
+local GOLD = rgb(255, 196, 64)
+local NAVY = rgb(18, 22, 54)
 local WOOD = rgb(176, 120, 72)
-
-local FLOOR = 0.5
 
 local function display(part: BasePart, packId: string)
 	part:SetAttribute(Backpacks.DisplayAttribute, packId)
@@ -53,56 +74,163 @@ end
 function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("BackpackStall")
 	local m = Style.model(piece.Id, parent)
+	local L = BackpackShopDecor.Layout
+	local P, H = L.Floor, L.Wall
+	local hw = L.Width / 2
 	local function at(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
 	end
-
-	-- the deck: a teal front edge over the orange band
-	Style.block(m, at(0, FLOOR / 2, 0), Vector3.new(9.8, FLOOR, 7.8), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
-	Tech.glow(m, at(0, FLOOR - 0.12, -3.86), Vector3.new(9.4, 0.16, 0.12), TEAL)
-	Kit.bit(m, at(0, 0.12, -3.87), Vector3.new(9.8, 0.2, 0.1), Tech.Band)
-
-	-- the back wall with a teal line and the raised display shelf
-	Style.block(m, at(0, FLOOR + 3.4, 3.5), Vector3.new(9.8, 6.8, 0.6), Tech.Metal, nil, Style.solid())
-	Tech.glow(m, at(0, 6.9, 3.18), Vector3.new(9.4, 0.16, 0.1), TEAL)
-	local shelf = Style.block(m, at(0, 3.6, 2.8), Vector3.new(3.2, 0.4, 1.6), Tech.MetalLight, nil, Style.decor())
-	shelf.Name = "DisplayShelf"
-	display(shelf, Backpacks.Displays.Shelf)
-	Tech.glow(m, at(0, 3.6, 1.98), Vector3.new(3.2, 0.12, 0.1), TEAL)
-
-	-- two front posts with teal slots, the canopy with a teal front edge
-	for _, s in { -1, 1 } do
-		Style.block(m, at(s * 4.5, FLOOR + 3.9, -3.35), Vector3.new(0.8, 7.8, 0.8), Tech.Metal, nil, Style.solid())
-		Tech.glow(m, at(s * 4.5, 4.5, -3.77), Vector3.new(0.18, 5.0, 0.06), TEAL)
+	local function block(c: CFrame, size: Vector3, color: Color3, material: Enum.Material?, tiny: boolean?): Part
+		return Style.block(m, c, size, color, material, if tiny then Style.tiny() else Style.solid())
 	end
-	Style.block(m, at(0, 8.55, 0), Vector3.new(9.8, 0.5, 7.8), Tech.MetalDark, nil, Style.decor())
-	Tech.glow(m, at(0, 8.55, -3.85), Vector3.new(9.8, 0.2, 0.12), TEAL)
+	local function glow(c: CFrame, size: Vector3, color: Color3): Part
+		return Tech.glow(m, c, size, color)
+	end
+	local function plate(c: CFrame, size: number, packId: string, name: string): Part
+		local p = Style.block(m, c, Vector3.new(size, 0.14, size), Tech.MetalLight, nil, Style.decor())
+		p.Name = name
+		display(p, packId)
+		return p
+	end
 
-	-- the BACKPACKS sign box on the canopy (its neon frame stays inside the footprint's front)
-	Kit.neonSign(m, at(0, 9.9, -3.45), "BACKPACKS", 8.6, 2.0, Tech.Board, TEAL, { Depth = 0.5 })
+	---------------------------------------------------------------- the floor and the porch
+	local zFront, zBack = L.FrontZ, L.BackZ
+	local porch = L.PorchZ
+	local floorD = (zBack + L.Wall0 / 2 + 0.1) - porch
+	block(at(0, P / 2, porch + floorD / 2), Vector3.new(L.Width, P, floorD), Style.vary(Tech.MetalDark, rng, 0.03))
+	glow(at(0, P - 0.2, porch - 0.04), Vector3.new(L.Width - 0.4, 0.16, 0.12), TEAL)
+	block(at(0, 0.27, porch - 0.45), Vector3.new(L.Gate, 0.54, 0.9), Tech.Metal)
+	glow(at(0, 0.42, porch - 0.92), Vector3.new(L.Gate - 0.4, 0.08, 0.06), TEAL)
+	-- the porch plinths: a round foot, a teal ring, the square plate (the marker)
+	for _, spec in { { Side = -1, Pack = Backpacks.Displays.PorchLeft }, { Side = 1, Pack = Backpacks.Displays.PorchRight } } do
+		local base = at(spec.Side * 5.4, P, -4.1)
+		Tech.disc(m, (base * CFrame.new(0, 0.55, 0)).Position, 1.1, 1.8, Tech.Metal, nil, Style.solid())
+		Tech.disc(m, (base * CFrame.new(0, 1.15, 0)).Position, 0.1, 1.9, TEAL, Kit.NEON, Style.tiny())
+		plate(base * CFrame.new(0, 1.27, 0), 1.5, spec.Pack, "DisplayPlinth")
+	end
 
-	-- the counter: a light gunmetal body with a teal stripe, the warm top (the hook)
-	Style.block(m, at(0, FLOOR + 1.4, -2.2), Vector3.new(6.0, 2.8, 1.4), Tech.MetalLight, nil, Style.solid())
-	Tech.glow(m, at(0, 1.9, -2.92), Vector3.new(5.6, 0.16, 0.08), TEAL)
-	local counter = Style.block(m, at(0, FLOOR + 2.95, -2.2), Vector3.new(6.4, 0.3, 1.7), WOOD, nil, Style.solid())
+	---------------------------------------------------------------- the walls
+	local segW = (L.Width - L.Gate) / 2
+	for _, sx in { -1, 1 } do
+		Tech.wall(m, at(sx * (L.Gate + segW) / 2, P, zFront), segW, H, L.Wall0, {
+			Color = Tech.MetalDark,
+			Band = false,
+			Foot = false,
+			TopNeon = TEAL,
+		})
+	end
+	-- the gateway: a gold frame with teal neon, a second teal frame set back in the opening
+	local ow, oh = L.Opening.X, L.Opening.Y
+	Tech.doorFrame(m, at(0, P, zFront), L.Gate, H, L.Wall0 + 0.4, {
+		Color = Tech.MetalDark,
+		OpeningWidth = ow,
+		OpeningHeight = oh,
+		Frame = GOLD,
+		Neon = TEAL,
+	})
+	for _, sx in { -1, 1 } do
+		glow(at(sx * (ow / 2 - 0.2), P + oh / 2, zFront + 0.75), Vector3.new(0.22, oh - 0.2, 0.22), TEAL)
+	end
+	glow(at(0, P + oh - 0.2, zFront + 0.75), Vector3.new(ow - 0.3, 0.22, 0.22), TEAL)
+	-- the side and back walls, the orange band round them outside
+	local sideD = zBack - zFront
+	local zMid = (zBack + zFront) / 2
+	for _, sx in { -1, 1 } do
+		block(at(sx * (hw - L.Wall0 / 2), P + H / 2, zMid), Vector3.new(L.Wall0, H, sideD), Tech.MetalDark)
+		Kit.bit(m, at(sx * (hw + 0.03), P + H * 0.62, zMid), Vector3.new(0.06, 0.9, sideD), Tech.Band)
+	end
+	block(at(0, P + H / 2, zBack), Vector3.new(L.Width, H, L.Wall0), Tech.MetalDark)
+	Kit.bit(m, at(0, P + H * 0.62, zBack + L.Wall0 / 2 + 0.03), Vector3.new(L.Width, 0.9, 0.06), Tech.Band)
+
+	---------------------------------------------------------------- the roof
+	local top = P + H
+	local roofD = zBack - zFront + L.Wall0 + 0.2
+	block(at(0, top + 0.3, zMid), Vector3.new(L.Width, 0.6, roofD), Tech.MetalDeep)
+	glow(at(0, top + 0.3, zMid + roofD / 2 - 0.02), Vector3.new(L.Width - 0.4, Tech.TUBE, 0.1), TEAL)
+	for _, sx in { -1, 1 } do
+		glow(at(sx * (hw - 0.02), top + 0.3, zMid), Vector3.new(0.1, Tech.TUBE, roofD - 0.4), TEAL)
+	end
+	-- the parapet over the front with teal tube and crenels
+	block(at(0, top + 1.2, zFront - 0.1), Vector3.new(L.Width - 2.4, 1.2, 0.8), Tech.Metal)
+	glow(at(0, top + 1.62, zFront - 0.52), Vector3.new(L.Width - 2.6, Tech.TUBE, 0.12), TEAL)
+	for _, x in { -5.2, -3.2, 3.2, 5.2 } do
+		block(at(x, top + 2.25, zFront - 0.1), Vector3.new(1.2, 0.9, 0.8), Tech.Metal)
+	end
+	-- the corner pillars with warm lantern cubes
+	for _, sx in { -1, 1 } do
+		local x, ph = sx * (hw - 0.9), H + 2.6
+		block(at(x, P + ph / 2, zFront), Vector3.new(1.2, ph, 1.2), Tech.Metal)
+		for _, ex in { -1, 1 } do
+			glow(at(x + ex * 0.6, P + 2 + (ph - 3) / 2, zFront - 0.6), Vector3.new(Tech.TUBE, ph - 3, Tech.TUBE), TEAL)
+		end
+		local ly = P + ph + 0.05
+		block(at(x, ly + 0.8, zFront), Vector3.new(1.6, 1.6, 1.6), Tech.MetalDark)
+		glow(at(x, ly + 0.8, zFront - 0.82), Vector3.new(1.0, 1.0, 0.06), Tech.Warm)
+		block(at(x, ly + 1.75, zFront), Vector3.new(1.8, 0.3, 1.8), Tech.MetalLight, nil, true)
+	end
+	-- the roof podium with a teal ring: the giant turning Starforge pack stands on its plate
+	local podium = at(0, top + 0.6, zMid - 1.6)
+	Tech.disc(m, (podium * CFrame.new(0, 0.4, 0)).Position, 0.8, 3.4, Tech.Metal, nil, Style.solid())
+	Tech.disc(m, (podium * CFrame.new(0, 0.5, 0)).Position, 0.12, 3.6, TEAL, Kit.NEON, Style.tiny())
+	local roof = plate(podium * CFrame.new(0, 0.87, 0), 2.2, Backpacks.Displays.Roof, "DisplayRoof")
+	roof:SetAttribute("DisplayScale", Backpacks.RoofScale)
+	roof:SetAttribute("DisplaySpin", Backpacks.RoofSpin)
+
+	---------------------------------------------------------------- the sign
+	local signY = P + oh + 1.6
+	block(at(0, signY, zFront - 0.9), Vector3.new(L.Gate - 0.4, 2.6, 0.4), NAVY, nil, true)
+	for _, sy in { -1, 1 } do
+		glow(at(0, signY + sy * 1.25, zFront - 1.12), Vector3.new(L.Gate - 0.4, Tech.TUBE, 0.14), TEAL)
+	end
+	Style.sign(m, at(0, signY + 0.05, zFront - 1.14), "BACKPACKS", L.Gate - 0.8, 2.0, {
+		Kind = "Glow",
+		Frame = false,
+		BoardColor = NAVY,
+		Depth = 0.08,
+		TextColor = Color3.new(1, 1, 1),
+		StrokeColor = TEAL,
+		StrokeTransparency = 0.2,
+	})
+
+	---------------------------------------------------------------- inside
+	-- the side racks: a shelf on each wall, a plate per pack facing into the shop
+	local rackY = P + 2.9
+	local inner = hw - L.Wall0
+	for _, spec in { { Side = -1, Packs = Backpacks.Displays.RackLeft }, { Side = 1, Packs = Backpacks.Displays.RackRight } } do
+		local sx = spec.Side
+		block(at(sx * (inner - 0.55), rackY, zMid + 0.2), Vector3.new(1.1, 0.2, sideD - L.Wall0 - 0.4), Tech.MetalLight, nil, true)
+		for k, z in L.Racks do
+			-- (the plate's front = toward the middle of the shop)
+			plate(at(sx * (inner - 0.6), rackY + 0.17, z) * CFrame.Angles(0, sx * math.pi / 2, 0), 1.2, spec.Packs[k], "DisplayRack")
+		end
+	end
+	-- the back-left shelf (the back-right one with the bedrolls is the clients' decor)
+	local zIn = zBack - L.Wall0 / 2
+	block(at(-4.6, P + 3.5, zIn - 0.45), Vector3.new(2.4, 0.2, 0.9), Tech.MetalLight, nil, true)
+	plate(at(-4.6, P + 3.67, zIn - 0.5), 1.2, Backpacks.Displays.Shelf, "DisplayShelf")
+	-- the counter: a light metal body with a teal stripe, the warm top (the hook)
+	local cz = L.CounterZ
+	block(at(0, P + 1.35, cz), Vector3.new(7.0, 2.7, 1.4), Tech.MetalLight)
+	glow(at(0, P + 1.9, cz - 0.72), Vector3.new(6.6, 0.16, 0.08), TEAL)
+	local counter = block(at(0, P + 2.85, cz), Vector3.new(7.4, 0.3, 1.7), WOOD)
 	counter.Name = Backpacks.CounterTag
 	Kit.tag(counter, Backpacks.CounterTag)
 	local point = Instance.new("Attachment")
 	point.Name = Backpacks.PromptPoint
 	point.CFrame = CFrame.new(0, 0.15, -0.85) -- the customer side of the top
 	point.Parent = counter
+	-- the shopkeeper's step behind the counter and its feet on it, facing the customers
+	block(at(0, P + 0.5, L.KeeperZ - 0.05), Vector3.new(7.0, 1.0, 2.2), Tech.MetalDeep)
+	local feet = Instance.new("Attachment")
+	feet.Name = Backpacks.KeeperFeet
+	feet.CFrame = counter.CFrame:ToObjectSpace(at(0, P + 1.0, L.KeeperZ))
+	feet:SetAttribute("Shop", "Backpacks")
+	feet.Parent = counter
+	-- one warm light from the counter
+	Style.light(counter, rgb(255, 214, 170), 16, 0.8)
 
-	-- two round plinths either side of the counter, their tops hold display packs
-	for _, spec in { { Side = -1, Pack = Backpacks.Displays.Left }, { Side = 1, Pack = Backpacks.Displays.Right } } do
-		local s, packId = spec.Side, spec.Pack
-		local base = at(s * 3.6, 0, -2.6)
-		Kit.disc(m, (base * CFrame.new(0, FLOOR + 0.6, 0)).Position, 1.2, 1.9, Tech.Metal, nil, Style.solid())
-		Kit.disc(m, (base * CFrame.new(0, FLOOR + 1.12, 0)).Position, 0.1, 2.0, TEAL, Kit.NEON, Style.tiny())
-		-- a square plate on the round plinth: the marker (a block: its front is the stall's)
-		local top = Style.block(m, base * CFrame.new(0, FLOOR + 1.27, 0), Vector3.new(1.6, 0.14, 1.6), Tech.MetalLight, nil, Style.decor())
-		top.Name = "DisplayPlinth"
-		display(top, packId)
-	end
+	-- the clients' decor
+	m:SetAttribute(BackpackShopDecor.FrameAttribute, cf)
 	m.PrimaryPart = counter
 end
 

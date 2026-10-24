@@ -27,7 +27,8 @@
 	  In/Out items need a string K and O; well-formed items of a kind or
 	  ore this server doesn't know move to Storage (kept: the machines would
 	  drop queue items they can't read).
-	- Storage: entries that aren't tables are dropped.
+	- Storage: entries that aren't tables are dropped, and so is a dropper's
+	  Drop (DropperConfig: never kept; in machine queues too).
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
 	Platforms (same Version 3): an entry's level L is a whole number >= 1 or
@@ -805,6 +806,9 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	for _, item in values(queue) do
 		if not wellFormed(item) then
 			report.Dropped += 1
+		elseif item.K == "Drop" then
+			-- a dropper's Drop is never kept (DropperConfig): an autosave may have caught one in a queue
+			report.Dropped += 1
 		elseif ItemData.Kinds[item.K] and (OreData.ById[item.O] or (item.K == "Relic" and ArtifactConfig.ById[item.O])) then
 			-- (a dusty relic in a Restoration Table or Cleaning Station queue stays there)
 			table.insert(kept, item)
@@ -869,7 +873,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	else
 		local kept = {}
 		for _, item in values(storage) do
-			if type(item) == "table" then
+			-- (a dropper's Drop is never kept: DropperConfig)
+			if type(item) == "table" and item.K ~= "Drop" then
 				table.insert(kept, item)
 			else
 				report.Dropped += 1

@@ -2145,14 +2145,19 @@ function MachineBuilder.build(id: string, level: number?, tier: number?): Model
 	end
 	local model: Model
 	if DropperConfig.ById[id] or id == DropperConfig.Laser.Id then
-		-- the droppers and the Money Laser (DropperBuilder / LaserBuilder) on a
-		-- plain invisible base the size of their 2 x 2 footprint
-		-- (built facing +Z, turned to face the machines' front, -Z)
-		local turn = CFrame.Angles(0, math.pi, 0)
-		model = if id == DropperConfig.Laser.Id then LaserBuilder.build(turn) else DropperBuilder.build(id, turn)
+		-- the droppers (DropperBuilder, 2 x 2) and the Money Laser's little gate
+		-- (LaserBuilder.gate, 1 x 1) on a plain invisible base the size of their
+		-- footprint (built facing +Z, turned to face the machines' front, -Z);
+		-- both push their Drops out of the front (the Output attachment)
+		local laser = id == DropperConfig.Laser.Id
+		-- (a dropper's arm, along its -X, points to the front: its nozzle over the cell in front)
+		local turn = CFrame.Angles(0, if laser then math.pi else -math.pi / 2, 0)
+		model = if laser then LaserBuilder.gate(turn) else DropperBuilder.build(id, turn, false, true)
 		model.Name = id
 		model:SetAttribute("MachineId", id)
 		local cell = GameConfig.CellSize
+		local info = MachineData.ById[id]
+		local half = info.Size[1] * cell / 2
 		-- shrink it to stay inside its footprint (crystals, orbs and the rainbow reach out)
 		local reach, height = 0, 0
 		for _, d in model:GetDescendants() do
@@ -2166,15 +2171,15 @@ function MachineBuilder.build(id: string, level: number?, tier: number?): Model
 				height = math.max(height, cf.Position.Y + ey)
 			end
 		end
-		if reach > cell - 0.1 then
-			local fit = (cell - 0.1) / reach
+		if laser and reach > half - 0.1 then
+			local fit = (half - 0.1) / reach
 			BlockKit.scale(model, CFrame.new(), fit)
 			height *= fit
 		end
 		-- one invisible box the build mode's taps hit (the decor doesn't take queries)
 		local hit = Instance.new("Part")
 		hit.Name = "HitBox"
-		hit.Size = Vector3.new(2 * cell - 0.4, math.max(height - 0.2, 1), 2 * cell - 0.4)
+		hit.Size = Vector3.new(2 * half - 0.4, math.max(height - 0.2, 1), 2 * half - 0.4)
 		hit.CFrame = CFrame.new(0, 0.2 + hit.Size.Y / 2, 0)
 		hit.Transparency = 1
 		hit.Anchored = true
@@ -2185,7 +2190,7 @@ function MachineBuilder.build(id: string, level: number?, tier: number?): Model
 		hit.Parent = model
 		local floor = Instance.new("Part")
 		floor.Name = "Base"
-		floor.Size = Vector3.new(2 * cell - 0.3, 0.2, 2 * cell - 0.3)
+		floor.Size = Vector3.new(2 * half - 0.3, 0.2, 2 * half - 0.3)
 		floor.CFrame = CFrame.new(0, 0.1, 0)
 		floor.Transparency = 1
 		floor.CanCollide = false
@@ -2193,7 +2198,16 @@ function MachineBuilder.build(id: string, level: number?, tier: number?): Model
 		floor.CanQuery = true
 		floor.Parent = model
 		model.PrimaryPart = floor
-		attach(floor, "Prompt", CFrame.new(0, 2.0, -3.4))
+		attach(floor, "Prompt", CFrame.new(0, 2.0, -(half - 0.6)))
+		local out = Grid.outputLocal(id)
+		if out then
+			attach(floor, "Output", CFrame.new(out))
+		end
+		if not info.NoIntake then
+			-- the laser's hopper box: over its gate, behind the Output (belts feed it anyway)
+			local intake = attach(floor, "Intake", CFrame.new(0, 1.4, 0.4))
+			intake:SetAttribute("IntakeSize", Vector3.new(2 * half - 1.2, 2.4, 2 * half - 1.6))
+		end
 	elseif id == "Conveyor" or id == "ExpressConveyor" then
 		model = KitMachines.conveyor(nil, id == "ExpressConveyor")
 	elseif id == "Platform" then

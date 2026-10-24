@@ -27,7 +27,10 @@ local fps = tonumber(process.args[1]) or 30
 local reel = process.args[2] or "world_motion"
 local t0 = os.clock()
 local data
-if reel == "golem_run" then
+if reel == "dropper_belts" then
+	-- droppers -> belt -> the Money Laser -> the Sell Box (tools/lune/lib/dropper_belt_reel.luau)
+	data = require("./lib/dropper_belt_reel").build(Loader, { fps = fps })
+elseif reel == "golem_run" then
 	-- FOCUS=1..3: the camera close on one golem (checking its gait)
 	data = require("./lib/golem_run_preview").build(Loader, { fps = fps, focus = tonumber(process.env.FOCUS or "") })
 else

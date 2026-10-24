@@ -97,7 +97,7 @@ LobbyLayout.Budget = {
 	-- lit path, ~1,050 outside the lobby area: ~33,590 measured)
 	-- (2026-10-23, map v52 on main v51 (33,688 measured): SKY HAVEN's stones as little islets, its spire
 	-- mossy, 12 vines under the island, trimmed to +136: 33,824 measured)
-	MapParts = 34050, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
+	MapParts = 34100, -- (+50 owner 2026-10-23: the DROPPERS shop's boulders, round roof, crystal logo, vines and trees; 33,873 + 200 measured; asked via the integrator)  23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -130,7 +130,7 @@ LobbyLayout.Budget = {
 		Sky = { Parts = 2100, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area; then its parkour stones as little islets, the mossy spire and the vines under the island, +136: 2,041)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
-		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
+		Districts = { Parts = 2500, LobbyParts = 2500, Lights = 11, LobbyLights = 11 }, -- (2026-10-23: + the DROPPERS shop's grounds and round roof, 2,469 measured) + v2 stalls, concept v2 look (~2,080 parts after perf pass 1) + the walk-in DROPPERS shop (owner 2026-10-23, ~2,425; the map total stays inside MapParts / LobbyParts)
 		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
@@ -159,6 +159,25 @@ end
 -- plot roads' south end) move south with the plot columns, pieces on the
 -- outer coast move out with it. Both shifts are 0 at 12 cells.
 local GRID = WorldLayout.PlotGrid
+
+-- The DROPPERS house (owner 2026-10-23) and the half-round walkway apron in
+-- front of its porch (owner: "a half circle in front of it"; later "turn the
+-- shop so its entrance faces the crystal in the middle, and make it wider"):
+-- the house stands north-east of the plaza between the plaza rim, the east
+-- spur, the east plot road and the ore outcrops at (56, 46) and (50, 58),
+-- its front to the plaza's fire crystal; the apron's straight edge runs
+-- along the porch front and its round edge reaches the plaza rim.
+local DROPPERS_DIR = Vector3.new(math.cos(math.rad(34)), 0, math.sin(math.rad(34)))
+local DROPPERS_CENTER = DROPPERS_DIR * 53.5
+local DROPPERS_FACING = -DROPPERS_DIR
+LobbyLayout.DroppersFront = 4.5 -- the front wall's local z (DropperShopBuilder.Room.Front)
+local DROPPERS_APRON = DROPPERS_CENTER + DROPPERS_FACING * (LobbyLayout.DroppersFront + 4.7)
+LobbyLayout.DroppersApron = {
+	Center = DROPPERS_APRON, -- the middle of the straight edge
+	Radius = DROPPERS_APRON.Magnitude - 36.1, -- (to the plaza rim)
+	Back = 4.2, -- from the straight edge back to the house wall (the apron is a U)
+	PorchHalf = 5.4, -- half the porch's width (no panels under its planks)
+}
 local function south(p: Vector3): Vector3
 	return p + Vector3.new(0, 0, GRID.SouthShift)
 end
@@ -305,18 +324,31 @@ LobbyLayout.Pieces = {
 		-- turned toward the hero camera and the spawn (its gate faces south-west)
 		-- (round 3: a big open dig pulled toward the plaza, between the plaza
 		-- rim and the outcrops at (56, 46) and (50, 58))
-		Center = v(43, 0, 29),
+		-- (owner 2026-10-23: moved by the Tech shop, north-east of the plaza, turned to it;
+		-- the DROPPERS house took its old place)
+		Center = v(49, 0, -60),
 		Size = v(26, 14, 30),
-		Facing = v(-0.5, 0, 0.87).Unit,
+		Facing = v(-1, 0, 0),
 		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign: the artifacts + Kingdom of Kaldrum story corner. Tag FossilDig on the model.",
 	},
 	{
-		Id = "RockScanner",
+		Id = "DroppersHouse",
 		Package = "Districts",
-		Center = v(43, 0, 69),
-		Size = v(12, 11, 10),
-		Facing = v(-0.6, 0, 0.8).Unit,
-		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 36 ores. Tag OreCodex on the terminal.",
+		-- the DROPPERS shop (owner 2026-10-23) where the FOSSIL DIG stood, its front to the crystal
+		Center = DROPPERS_CENTER,
+		-- (the walk-in shop 30 wide and 15 deep + the porch)
+		Size = v(32, 27, 23),
+		Facing = DROPPERS_FACING,
+		Note = "Town-style house (stone ground floor, timber upper floor, terracotta roof, DROPPERS sign); its porch counter carries the DropperCounter tag (ShopService: opens the Tech shop).",
+	},
+	{
+		Id = "DroppersApron",
+		Package = "Plaza",
+		Center = LobbyLayout.DroppersApron.Center + DROPPERS_FACING * (LobbyLayout.DroppersApron.Radius / 2),
+		Size = v(LobbyLayout.DroppersApron.Radius * 2 + 1, 1, LobbyLayout.DroppersApron.Radius),
+		Facing = DROPPERS_FACING,
+		Walkable = true,
+		Note = "Half-round neon walkway apron in front of the DROPPERS porch (Plaza/Roads), street lamps at its two ends.",
 	},
 	{
 		Id = "CapsuleStall",
@@ -334,12 +366,15 @@ LobbyLayout.Pieces = {
 	{
 		Id = "BackpackStall",
 		Package = "Districts",
-		-- (owner 2026-10-24: a new BACKPACKS stall; art/backpacks: the lawn north of the SHOP,
-		-- between it and the wheel's stairs, the only spot near the plaza with room)
-		Center = v(-40, 0, -44),
-		Size = v(10, 11, 8),
-		Facing = toward(v(-40, 0, -44), PLAZA),
-		Note = "BACKPACKS: the backpack shop's lean kiosk (deck, back wall, posts, canopy, neon sign, counter, two plinths). Tag BackpackCounter (BasePart: the counter top, Attachment BackpackPromptPoint); the shelf and the plinth plates carry the attribute BackpackId (no tag): the clients build those display packs, they are not map parts.",
+		-- (owner 2026-10-24: a new BACKPACKS stall; then "in place of the ROCK SCANNER, in
+		-- front of the Vault", bigger like a shop: the ROCK SCANNER went (the Ore Codex
+		-- opens from the side menu), the shop stands at the end of the ToScanner path,
+		-- its gateway to the path, between the DROPPERS house, the vault's east statue,
+		-- the red trees and the outcrop at (50, 58))
+		Center = v(46, 0, 74),
+		Size = v(16, 16, 12),
+		Facing = v(-1, 0, 0),
+		Note = "BACKPACKS: a small walk-in shop (porch with two plinths, gold-framed gateway, BACKPACKS board, corner pillars with lantern cubes, a roof podium for the giant turning Starforge pack, side racks, the counter and the shopkeeper's step). Tag BackpackCounter (BasePart: the counter top, Attachments BackpackPromptPoint and KeeperFeet); the plates carry the attribute BackpackId (no tag): the clients build the ten display packs and the small decor (Builders/BackpackShopDecor), they are not map parts.",
 	},
 	{
 		Id = "EnchantShop",
@@ -421,11 +456,13 @@ LobbyLayout.Pieces = {
 	{
 		Id = "PinkGrove",
 		Package = "Flora",
-		Center = v(41, 0, -66),
+		-- (owner 2026-10-23: the FOSSIL DIG took its place behind UPGRADES; the grove moved
+		-- to the south-west park by the ponds)
+		Center = v(-54, 0, 74),
 		Size = v(22, 30, 22),
 		Radius = 10,
 		Facing = v(0, 0, 1),
-		Note = "Two big pink voxel cherry trees towering behind UPGRADES (hero trees).",
+		Note = "Two big pink voxel cherry trees in the south-west park (hero trees).",
 	},
 	{
 		Id = "RedTree",
@@ -766,10 +803,9 @@ LobbyLayout.Paths = {
 	{ Id = "ToUpgrades", From = v(28, 0, -13), To = v(40, 0, -19), Width = 12, Kind = "Cobble" },
 	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
-	-- from the plaza rim round the dig's west corner to its gate (its south-west front)
-	{ Id = "ToFossil", From = v(17.5, 0, 32.5), To = v(30.5, 0, 45.5), Width = 5, Kind = "Cobble" },
 	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
-	-- south road north of the vault's steps)
+	-- south road north of the vault's steps; since 2026-10-24 it leads to the
+	-- BACKPACKS shop's gateway, the ROCK SCANNER went)
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
 	-- the MINE in the south-west corner: a dirt lane from the west plot road's
 	-- end to the yard, a dirt track under the rails to the portal

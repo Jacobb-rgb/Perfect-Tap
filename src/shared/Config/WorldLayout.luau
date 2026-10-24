@@ -401,7 +401,7 @@ WorldLayout.OutcropSpots = {
 	Vector3.new(56, 0, 46),
 	Vector3.new(50, 0, 58),
 	Vector3.new(60, 0, -40),
-	Vector3.new(52, 0, -52),
+	Vector3.new(96, 0, -40), -- (was (52, 0, -52): moved for the FOSSIL DIG, owner 2026-10-23)
 	Vector3.new(-82, 0, 118 + WorldLayout.PlotGrid.SouthShift),
 	Vector3.new(82, 0, 118 + WorldLayout.PlotGrid.SouthShift),
 }

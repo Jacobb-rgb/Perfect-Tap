@@ -320,40 +320,104 @@ end
 	Scene "backpack_stall": after WorldBuilder.build, every display marker of
 	the stall (attribute BackpackId) gets its display pack the way BackpackWearController
 	places it (outer face to the marker's front, the bag centred, standing on
-	it) with its effects; two shoppers with packs stand at the counter.
+	it) with its effects; a shopper with a pack stands on the path.
 ]]
 function Preview.buildStall(Loader: any, workspace: any)
 	local k = setup(Loader)
 	local CF, V3 = k.CFrame, k.Vector3
 	local Dummy = require("./dummy")
+	local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
+	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 	local stage = k.roblox.Instance.new("Model")
 	stage.Name = "BackpackStallPreview"
 	stage.Parent = workspace
+	-- (Lune has no Model:ScaleTo) every part and attachment `s` times as far from the pivot and as big
+	local function scaleModel(model: any, s: number)
+		local pivot = model:GetPivot()
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				local rel = pivot:ToObjectSpace(d.CFrame)
+				d.Size = d.Size * s
+				d.CFrame = pivot * (rel - rel.Position + rel.Position * s)
+			elseif d:IsA("Attachment") then
+				d.CFrame = d.CFrame - d.CFrame.Position + d.CFrame.Position * s
+			end
+		end
+	end
 	local counter: any = nil
+	local shop: any = nil
 	for _, d in workspace:GetDescendants() do
 		if d:IsA("BasePart") and d:GetAttribute("BackpackId") ~= nil and d.Parent and d.Parent.Name == "BackpackStall" then
+			-- as BackpackWearController.displayRoot: centred on the plate, standing on it
 			local id = d:GetAttribute("BackpackId")
 			local pack = k.Data.ById[id]
 			if pack then
+				local scale = d:GetAttribute("DisplayScale") or 1
+				local angle = if d:GetAttribute("DisplaySpin") then math.rad(-28) else 0
 				local model = k.Builder.build(id, true)
 				local bottom = model:GetAttribute("BottomY")
-				model:PivotTo(d.CFrame * CF.Angles(0, math.pi, 0) * CF.new(0, d.Size.Y / 2 - bottom, -(k.Builder.Gap + pack.Size.Z / 2)))
-				model.Parent = stage
+				model:PivotTo(CF.new())
 				withFx(k, model)
+				scaleModel(model, scale)
+				model:PivotTo(
+					d.CFrame
+						* CF.new(0, d.Size.Y / 2 - bottom * scale, 0)
+						* CF.Angles(0, math.pi + angle, 0)
+						* CF.new(0, 0, -(k.Builder.Gap + pack.Size.Z / 2) * scale)
+				)
+				model.Parent = stage
 			end
 		elseif d:IsA("BasePart") and d:HasTag("BackpackCounter") then
 			counter = d
+			shop = d.Parent
 		end
 	end
+	if shop and shop:GetAttribute(Decor.FrameAttribute) then
+		-- the clients' decor, its lanterns lit and the gate dust drifting (the preview's stand-ins)
+		local decor = Decor.build(shop:GetAttribute(Decor.FrameAttribute))
+		for _, d in decor:GetDescendants() do
+			if d:IsA("PointLight") then
+				d.Enabled = true
+			elseif d:IsA("ParticleEmitter") then
+				local box = d.Parent
+				local rng = k.Rng.new(17)
+				for i = 1, 7 do
+					local p = box.CFrame
+						* CF.new(
+							rng:range(-box.Size.X / 2, box.Size.X / 2),
+							rng:range(-box.Size.Y / 2, box.Size.Y / 2),
+							rng:range(-0.6, 0.6)
+						)
+					k.Geo.make("Part", {
+						Name = "GateDustBit",
+						CFrame = p * CF.Angles(0, 0, math.pi / 4),
+						Size = V3.new(0.1, 0.1, 0.04) * (0.7 + (i % 3) * 0.3),
+						Color = k.Color3.fromRGB(255, 220, 120),
+						Material = k.Enum.Material.Neon,
+						Anchored = true,
+						CanCollide = false,
+						CastShadow = false,
+					}, decor)
+				end
+			end
+		end
+		decor.Parent = stage
+	end
 	if counter then
-		-- two shoppers in front of the counter, facing it (their packs toward the plaza)
+		-- the shopkeeper (feat/shopkeepers builds it in the game: ShopkeeperConfig "Backpacks", SkySprite at 1.5)
+		local feet = counter:FindFirstChild("KeeperFeet")
+		if feet then
+			local ok, golem = pcall(GolemBuilder.build, "SkySprite", counter.CFrame * feet.CFrame, { Size = 1.5 })
+			if ok and golem then
+				golem.Parent = stage
+			end
+		end
+		-- a shopper on the path looking at the Emberforge plinth
 		local rgb = k.Color3.fromRGB
-		for _, spec in { { -6.6, "MinersPack", rgb(70, 120, 186) }, { 6.8, "AmethystPack", rgb(186, 98, 48) } } do
-			-- beside the stall, turned half toward it (their packs to the camera on the plaza)
-			local front = counter.CFrame * CF.new(spec[1], 0, -4.2)
-			local feet = V3.new(front.Position.X, 0.5, front.Position.Z)
-			local toStall = (counter.CFrame.Position - front.Position) * V3.new(1, 0, 1)
-			local root = CF.lookAt(feet, feet + toStall.Unit)
+		for _, spec in { { V3.new(9.2, 0, -7.0), "MinersPack", rgb(186, 98, 48), 0.75 } } do
+			local frame = shop:GetAttribute(Decor.FrameAttribute)
+			local spot = frame * CF.new(spec[1].X, spec[1].Y, spec[1].Z)
+			local root = spot * CF.Angles(0, math.pi + spec[4], 0)
 			Dummy.build(stage, CF, root, "idle", { shirt = spec[3], pants = rgb(52, 52, 64) })
 			local model = k.Builder.build(spec[2])
 			model:PivotTo(root * CF.new(0, 3.2, 0.5))

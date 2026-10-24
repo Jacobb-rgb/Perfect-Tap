@@ -48,7 +48,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
-local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
@@ -176,11 +175,11 @@ local function incomeAllSlots(player: Player, data: { [string]: any }): number
 			total += ItemData.income(desc) * multiplier
 		end
 	end
-	-- the droppers earn on top of every podium
-	return total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
+	-- (the droppers earn when their Drops sell in a Sell Box: no offline coins)
+	return total
 end
 
--- Coins per second from all podiums and the plot's droppers.
+-- Coins per second from all podiums (the droppers earn from Sell Box sales, DropperService).
 function PodiumService.incomeOf(player: Player, data: { [string]: any }?): number
 	local d = data or DataService.get(player)
 	if not d then
@@ -191,8 +190,6 @@ function PodiumService.incomeOf(player: Player, data: { [string]: any }?): numbe
 	for slot = 1, MAX do
 		total += PodiumService.slotIncome(player, d, slot, multiplier)
 	end
-	-- the droppers on the plot (and their Money Lasers)
-	total += DropperConfig.placedIncome(d.PlacedMachines) * multiplier
 	return total
 end
 
@@ -911,7 +908,7 @@ end
 ---------------------------------------------------------------- lifecycle
 
 -- Internals for the Lune tests only (tests/PodiumService.spec.luau).
--- The State snapshot's income: podiums + droppers (= incomeOf), per podium, the slots.
+-- The State snapshot's income: the podiums (= incomeOf), per podium, the slots.
 local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
 	local multiplier = EconomyService.incomeMultiplier(player)
 	local perSlot = {}
@@ -922,7 +919,7 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		total += income
 	end
 	-- (the same total as incomeOf: the HUD chip, predicted coins, the wheel and store cards)
-	snapshot.Income = total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
+	snapshot.Income = total
 	snapshot.PodiumIncome = perSlot
 	snapshot.PodiumSlots = PodiumService.slotsFor(player)
 	-- the whole podium multiplier (IncomePct, the player level, the 2x Money pass...): the Ore

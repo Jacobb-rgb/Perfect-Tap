@@ -37,6 +37,9 @@
 	  sleep in Roblox physics.
 	- Items that fall out of the world are put back next to their owner.
 	- Leaving players: loose and carried items go into the Ore Pen.
+	- A dropper's Drop (DropperConfig) is never stored (storeDesc: "Lost",
+	  so leaving, rescues and returns from other plots just remove it) and
+	  never pulled by the magnet (CarryService never picks it up either).
 	- The Ore Pen (data.Storage) holds penCapacity items. Only RESCUE moves
 	  (storeDesc: leaving, an item lost by the engine, Placement repair, an
 	  item returned from someone else's plot) may overfill it, up to the
@@ -127,6 +130,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
@@ -861,6 +865,10 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 		warn("[ItemService] storeDesc got a bad item for " .. player.Name)
 		return "Lost"
 	end
+	-- a dropper's Drop is never kept (DropperConfig): it just goes
+	if DropperConfig.isDrop(desc) then
+		return "Lost"
+	end
 	-- a dusty relic never waits in the pen: the keeper cleans it on the way
 	-- (nothing is lost); without a keeper it waits there as data
 	if desc.K == "Relic" then
@@ -953,8 +961,17 @@ local function wearParked(entry: Parked, info: ItemBuilder.ItemInfo, cf: CFrame,
 end
 
 local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean): ItemRecord?
-	-- a dusty relic carries an artifact id where ore carries its ore
-	local known = if info.Kind == "Relic" then ArtifactConfig.ById[info.OreId] ~= nil else OreData.exists(info.OreId)
+	-- a dusty relic carries an artifact id where ore carries its ore, a
+	-- dropper's Drop its dropper's id (DropperConfig)
+	local known = if info.Kind == "Relic"
+		then ArtifactConfig.ById[info.OreId] ~= nil
+		elseif info.Kind == DropperConfig.DropKind then DropperConfig.validDrop({
+			K = info.Kind,
+			O = info.OreId,
+			G = info.Grade,
+			R = info.Recipe,
+		})
+		else OreData.exists(info.OreId)
 	if not known or not ItemData.Kinds[info.Kind] then
 		warn("[ItemService] bad item info", info.Kind, info.OreId)
 		return nil
@@ -963,7 +980,8 @@ local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, vel
 	local id = nextId
 	-- machines and chutes (serverOwned) make belt items: the light look,
 	-- in a parked model of the same owner nearby when there is one
-	local light = serverOwned
+	-- (a dropper's Drop always wears the full ore look: owner 2026-10-24, "it must look like our ores")
+	local light = serverOwned and info.Kind ~= DropperConfig.DropKind
 	local reuse = if light then unpark(owner, cf.Position) else nil
 	local model: Model, body: BasePart
 	if reuse then
@@ -1597,6 +1615,10 @@ end
 function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number, boolean)
 	local m = ItemService.Magnet
 	if record.State ~= "Loose" or record.HandDropped or record.MagnetDone or not (radius > 0) or not record.Model.Parent then
+		return false, 0, false
+	end
+	-- a dropper's Drop is never carried (DropperConfig)
+	if record.Kind == DropperConfig.DropKind then
 		return false, 0, false
 	end
 	if now - record.ReleasedAt < m.Delay then

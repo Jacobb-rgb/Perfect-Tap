@@ -193,9 +193,11 @@ return function(T, Loader)
 		local guild = one("GuildBoard")
 		T.truthy(guild:IsA("Model") and guild.PrimaryPart and guild.PrimaryPart.Name == "Board", "GuildBoard model, PrimaryPart Board")
 
-		local codex = one("OreCodex")
-		T.truthy(codex:IsA("Model") and codex.PrimaryPart, "OreCodex terminal model with a PrimaryPart")
-		inside(codex, "RockScanner")
+		-- (the ROCK SCANNER went 2026-10-24, owner: the BACKPACKS shop took its place)
+		T.eq(#tagged(map, "OreCodex"), 0, "no Ore Codex terminal (the side menu opens the codex)")
+		local backpacks = one("BackpackCounter")
+		T.truthy(backpacks:IsA("BasePart"), "BackpackCounter is a part")
+		inside(backpacks, "BackpackStall")
 
 		local dig = one("FossilDig")
 		T.truthy(dig:IsA("Model") and dig.PrimaryPart, "FossilDig model with a PrimaryPart")
@@ -723,7 +725,7 @@ return function(T, Loader)
 			ShopFront = "SELL",
 			EnchantShop = "ENCHANT",
 			HallOfFame = "HALL OF FAME",
-			RockScanner = "ROCK SCANNER",
+			BackpackStall = "BACKPACKS",
 			FossilDig = "FOSSIL DIG",
 			GuildBoard = "FORGEKEEPERS' GUILD",
 		}

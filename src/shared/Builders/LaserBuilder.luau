@@ -34,8 +34,14 @@ local DOLLAR = {
 	"..#..",
 }
 
-local function decor(): { [string]: any }
-	return { CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
+local function decor(extra: { [string]: any }?): { [string]: any }
+	local props: { [string]: any } = { CanTouch = false, CanQuery = false, CastShadow = false, CanCollide = false }
+	if extra then
+		for k, v in extra do
+			props[k] = v
+		end
+	end
+	return props
 end
 
 function LaserBuilder.build(cf: CFrame, scale: number?): Model
@@ -77,6 +83,47 @@ function LaserBuilder.build(cf: CFrame, scale: number?): Model
 	if scale and scale ~= 1 then
 		BlockKit.scale(model, cf, scale)
 	end
+	return model
+end
+
+--[[
+	The Money Laser on the plot (owner 2026-10-24: "tiny, smaller than the
+	machines and the Sell Box; it sits between the belts and the ore just
+	rides through it"): a small green gate over one belt cell. A dark base
+	plate with green neon rails, two green posts with dark caps, a lintel
+	with the glowing "2X" on its front, and the laser itself: a thin bright
+	sheet between the posts in a soft green glow, with an emitter under the
+	lintel. Built at `cf` = the middle of the cell's floor, the ore runs
+	along Z (front = +Z). About 14 parts, 3.2 studs high.
+]]
+function LaserBuilder.gate(cf: CFrame): Model
+	local model = Instance.new("Model")
+	model.Name = DropperConfig.Laser.Id
+	local green, dark = LaserBuilder.Color, rgb(18, 40, 28)
+	local post = rgb(40, 150, 70)
+	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z)
+	end
+	-- the base plate and its neon rails along the belt
+	Geo.block(model, at(0, 0.12, 0), Vector3.new(3.6, 0.24, 3.4), dark, nil, decor())
+	for _, sx in { -1, 1 } do
+		Geo.block(model, at(sx * 1.55, 0.26, 0), Vector3.new(0.14, 0.06, 3.2), green, NEON, decor())
+	end
+	-- the posts, their caps and glowing slots
+	local h = 2.7
+	for _, sx in { -1, 1 } do
+		Geo.block(model, at(sx * 1.5, 0.24 + h / 2, 0), Vector3.new(0.5, h, 0.7), post, nil, decor())
+		Geo.block(model, at(sx * 1.5, 0.24 + h + 0.12, 0), Vector3.new(0.66, 0.24, 0.86), dark, nil, decor())
+		Geo.block(model, at(sx * 1.5, 0.24 + h * 0.5, 0.36), Vector3.new(0.18, h * 0.6, 0.04), rgb(200, 255, 210), NEON, decor())
+	end
+	-- the lintel with the "2X" on its front
+	local top = 0.24 + h + 0.24
+	Geo.block(model, at(0, top + 0.3, 0), Vector3.new(3.6, 0.6, 0.8), post, nil, decor())
+	BlockKit.text(model, at(0, top + 0.3, 0.42), Vector3.new(1.4, 0.5, 0.06), "2X", rgb(160, 255, 170), dark, nil, Enum.Font.LuckiestGuy)
+	-- the emitter under the lintel and the laser sheet between the posts
+	Geo.block(model, at(0, top - 0.12, 0), Vector3.new(2.2, 0.24, 0.4), dark, nil, decor())
+	Geo.block(model, at(0, 0.24 + h / 2, 0), Vector3.new(2.5, h - 0.2, 0.06), rgb(200, 255, 210), NEON, decor({ Transparency = 0.35 }))
+	Geo.block(model, at(0, 0.24 + h / 2, 0), Vector3.new(2.5, h - 0.2, 0.4), green, NEON, decor({ Transparency = 0.75 }))
 	return model
 end
 

@@ -17,21 +17,31 @@
 	  and not at all with Reduce motion (the SETTINGS toggle or Roblox's own).
 	  The pack's light shines for your own pack only (one small light, no
 	  shadows, like the head lamps' budget).
-	- The BACKPACKS stall's display packs: in the model of every part tagged
-	  CounterTag (the stall's counter), the parts with the attribute
-	  DisplayAttribute (the shelf and the plinth plates: the pack id) show that
-	  pack standing on them, its outer face toward the marker's front (-Z),
-	  built here (the display look: no shoulder straps) within DisplayRange
-	  and dropped beyond DisplayRange + DisplayHysteresis, so the stall costs
-	  the map no parts for them. Their particles follow FxRange, their lights
-	  stay off. (The markers carry no tag: Plaza Life keeps its miners off
-	  tagged parts as prompt spots.)
+	- The BACKPACKS shop's display packs: in the model of every part tagged
+	  CounterTag (the shop's counter), the parts with the attribute
+	  DisplayAttribute (the plates: the pack id) show that pack standing on
+	  them, its outer face toward the marker's front (-Z), built here (the
+	  display look: no shoulder straps) within DisplayRange and dropped beyond
+	  DisplayRange + DisplayHysteresis, so the shop costs the map no parts for
+	  them. Their particles follow FxRange, their lights stay off. A marker
+	  with the attribute DisplayScale shows a bigger pack (its own model, not
+	  pooled) and one with DisplaySpin turns it slowly (radians per second,
+	  its welded Root moved every frame while it is within FxRange; it stands
+	  still with Reduce motion); that one's light shines on a PC. (The
+	  markers carry no tag: Plaza Life keeps its miners off tagged parts as
+	  prompt spots.)
+	- The shop's small things (Builders/BackpackShopDecor: banners, lanterns,
+	  crates, the crest, the rug...): built from the shop model's ShopFrame
+	  attribute in the same range as the display packs; the lanterns' lights
+	  shine on a PC within FxRange, the gate dust drifts within FxRange (half
+	  rate on phones, none with Reduce motion).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -39,6 +49,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BackpackData = require(Shared.Config.BackpackData)
 local BackpackBuilder = require(Shared.Builders.BackpackBuilder)
 local BackpackFx = require(Shared.Builders.BackpackFx)
+local BackpackShopDecor = require(Shared.Builders.BackpackShopDecor)
 
 local BackpackWearController = {}
 
@@ -64,11 +75,23 @@ type Display = {
 	Marker: BasePart,
 	PackId: string,
 	Model: Model?,
+	Scale: number, -- DisplayScale (1 = a normal pack)
+	Spin: number, -- DisplaySpin (radians per second, 0 = still)
+	Angle: number,
+	Turning: boolean, -- near enough to turn (lodStep)
+}
+
+type Shop = {
+	Frame: CFrame,
+	Model: Model?,
+	FxKey: string?,
 }
 
 local player = Players.LocalPlayer
 local wearers: { [Player]: Wearer } = {}
 local displays: { [BasePart]: Display } = {}
+local shops: { [Model]: Shop } = {}
+local spinConnection: RBXScriptConnection? = nil
 local pools: { [string]: { Model } } = {}
 local folder: Folder? = nil
 local watched: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
@@ -305,29 +328,78 @@ end
 local function hideDisplay(display: Display)
 	local model = display.Model
 	display.Model = nil
+	display.Turning = false
 	if model then
-		release(model)
+		if display.Scale ~= 1 or display.Spin ~= 0 then
+			model:Destroy() -- (its own model: never pooled)
+		else
+			release(model)
+		end
 	end
+end
+
+-- Where a display pack's Root goes: turned to face the marker's front (plus
+-- `angle` round the marker's up axis), its bag centred on the marker,
+-- standing on its top.
+local function displayRoot(display: Display, model: Model, angle: number): CFrame
+	local pack = BackpackData.ById[display.PackId]
+	local marker = display.Marker
+	local scale = display.Scale
+	local bottom = model:GetAttribute("BottomY")
+	local lift = (if type(bottom) == "number" then -bottom else pack.Size.Y) * scale
+	return marker.CFrame
+		* CFrame.new(0, marker.Size.Y / 2 + lift, 0)
+		* CFrame.Angles(0, math.pi + angle, 0)
+		* CFrame.new(0, 0, -(BackpackBuilder.Gap + pack.Size.Z / 2) * scale)
 end
 
 local function showDisplay(display: Display)
 	if display.Model then
 		return
 	end
-	local pack = BackpackData.ById[display.PackId]
-	if not pack then
+	if not BackpackData.ById[display.PackId] then
 		return
 	end
-	local model = acquire(display.PackId, false)
-	local bottom = model:GetAttribute("BottomY")
-	local lift = if type(bottom) == "number" then -bottom else pack.Size.Y
-	local marker = display.Marker
-	-- turned to face the marker's front, its bag centred on the marker, standing on its top
-	model:PivotTo(
-		marker.CFrame * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, marker.Size.Y / 2 + lift, -(BackpackBuilder.Gap + pack.Size.Z / 2))
-	)
+	local own = display.Scale ~= 1 or display.Spin ~= 0
+	local model = if own then BackpackBuilder.build(display.PackId, true) else acquire(display.PackId, false)
+	if display.Scale ~= 1 then
+		model:ScaleTo(display.Scale)
+	end
+	if display.Spin ~= 0 then
+		-- welded to its Root: turning the anchored Root turns the whole pack
+		BackpackBuilder.rig(model)
+		local root = model.PrimaryPart
+		if root then
+			root.Anchored = true
+		end
+	end
+	model:PivotTo(displayRoot(display, model, display.Angle))
 	model.Parent = ensureFolder()
 	display.Model = model
+end
+
+-- Every frame: the turning display packs (only while one is near).
+local function spinStep(dt: number)
+	local any = false
+	for _, display in displays do
+		local model = display.Model
+		local root = model and model.PrimaryPart
+		if display.Turning and model and root then
+			any = true
+			display.Angle = (display.Angle + display.Spin * dt) % (math.pi * 2)
+			root.CFrame = displayRoot(display, model, display.Angle)
+		end
+	end
+	if not any and spinConnection then
+		spinConnection:Disconnect()
+		spinConnection = nil
+	end
+end
+
+local function startSpin()
+	if not spinConnection then
+		spinConnection = RunService.RenderStepped:Connect(spinStep)
+	end
 end
 
 local function addMarker(marker: Instance)
@@ -338,10 +410,21 @@ local function addMarker(marker: Instance)
 	if type(id) ~= "string" or not BackpackData.ById[id] then
 		return
 	end
-	displays[marker] = { Marker = marker, PackId = id, Model = nil }
+	local scale = marker:GetAttribute("DisplayScale")
+	local spin = marker:GetAttribute("DisplaySpin")
+	displays[marker] = {
+		Marker = marker,
+		PackId = id,
+		Model = nil,
+		Scale = if type(scale) == "number" and scale > 0 then scale else 1,
+		Spin = if type(spin) == "number" then spin else 0,
+		Angle = 0,
+		Turning = false,
+	}
 end
 
--- The markers in the models of the stall counters that are streamed in (they may stream in after the counter).
+-- The markers in the models of the shop counters that are streamed in (they
+-- may stream in after the counter), and the shops' frames for their decor.
 local function scanMarkers()
 	for _, counter in CollectionService:GetTagged(BackpackWearController.CounterTag) do
 		local stall = counter.Parent
@@ -351,6 +434,48 @@ local function scanMarkers()
 					addMarker(child)
 				end
 			end
+			local frame = stall:GetAttribute(BackpackShopDecor.FrameAttribute)
+			if stall:IsA("Model") and typeof(frame) == "CFrame" and not shops[stall] then
+				shops[stall] = { Frame = frame, Model = nil, FxKey = nil }
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------- the shop's decor
+
+local function hideDecor(shop: Shop)
+	local model = shop.Model
+	shop.Model = nil
+	shop.FxKey = nil
+	if model then
+		model:Destroy()
+	end
+end
+
+-- The lanterns' lights (a PC near the shop) and the gate dust (near, not with Reduce motion).
+local function decorFx(shop: Shop, near: boolean, lite: boolean)
+	local model = shop.Model
+	if not model then
+		return
+	end
+	local calm = reduceMotion()
+	local key = `{near}|{lite}|{calm}`
+	if shop.FxKey == key then
+		return
+	end
+	shop.FxKey = key
+	for _, d in model:GetDescendants() do
+		if d:IsA("PointLight") and d.Name == BackpackShopDecor.LightName then
+			d.Enabled = near and not lite
+		elseif d:IsA("ParticleEmitter") then
+			local base = d:GetAttribute("BaseRate")
+			if type(base) ~= "number" then
+				base = d.Rate
+				d:SetAttribute("BaseRate", base)
+			end
+			d.Rate = if lite then (base :: number) * 0.5 else base :: number
+			d.Enabled = near and not calm
 		end
 	end
 end
@@ -421,12 +546,41 @@ local function lodStep()
 			if near then
 				ensureFx(model)
 			end
-			setFx(model, near, true, false)
+			-- (the big turning emblem's light shines on a PC)
+			local emblem = display.Spin ~= 0 or display.Scale ~= 1
+			setFx(model, near, lite or not emblem, near and emblem and not lite)
+			display.Turning = near and display.Spin ~= 0 and not reduceMotion()
+			if display.Turning then
+				startSpin()
+			end
 		end
 	end
 	-- streamed-out markers are forgotten (their stall streams back in with new parts)
 	for _, marker in gone do
 		displays[marker] = nil
+	end
+	-- the shops' decor
+	local left: { Model } = {}
+	for stall, shop in shops do
+		if not stall:IsDescendantOf(Workspace) then
+			hideDecor(shop)
+			table.insert(left, stall)
+			continue
+		end
+		local distance = (shop.Frame.Position - focus).Magnitude
+		if distance <= BackpackWearController.DisplayRange then
+			if not shop.Model then
+				local model = BackpackShopDecor.build(shop.Frame)
+				model.Parent = ensureFolder()
+				shop.Model = model
+			end
+		elseif distance > BackpackWearController.DisplayRange + BackpackWearController.DisplayHysteresis then
+			hideDecor(shop)
+		end
+		decorFx(shop, distance <= BackpackWearController.FxRange, lite)
+	end
+	for _, stall in left do
+		shops[stall] = nil
 	end
 end
 
