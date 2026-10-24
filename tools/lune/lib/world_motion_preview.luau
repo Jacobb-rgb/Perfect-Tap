@@ -82,8 +82,30 @@ local function entry(shape: number, size, cf, color, material: string, transpare
 	return { shape, r3(size.X), r3(size.Y), r3(size.Z), cfList(cf), hex(color), material, r3(transparency), 0, if shadow then 1 else 0 }
 end
 
+-- The studded style (Shared/StudStyle) on a part, as Export encodes it: { 1 =
+-- Roblox's own studs (Plastic), the faces with studs as bits (Front 1, Back 2,
+-- Top 4, Bottom 8, Left 16, Right 32) }, or nil.
+local STUD_FACE_BITS = { Front = 1, Back = 2, Top = 4, Bottom = 8, Left = 16, Right = 32 }
+local function studInfo(part): { number }?
+	if type(part:GetAttribute("StudStyle")) ~= "string" or part.Material ~= Enum.Material.Plastic then
+		return nil
+	end
+	local mask = 0
+	-- a cylinder shows surfaces on its two flat ends only
+	local cylinder = part.ClassName == "Part" and part.Shape == Enum.PartType.Cylinder
+	for face, bit in STUD_FACE_BITS do
+		if cylinder and face ~= "Left" and face ~= "Right" then
+			continue
+		end
+		if part[face .. "Surface"] == Enum.SurfaceType.Studs then
+			mask += bit
+		end
+	end
+	return if mask > 0 then { 1, mask } else nil
+end
+
 local function partEntry(part, cf: any?, size: any?, transparency: number?)
-	return entry(
+	local e = entry(
 		shapeOf(part),
 		size or part.Size,
 		cf or part.CFrame,
@@ -92,6 +114,8 @@ local function partEntry(part, cf: any?, size: any?, transparency: number?)
 		transparency or part.Transparency,
 		part.CastShadow
 	)
+	e[11] = studInfo(part)
+	return e
 end
 
 local function visibleParts(root): { any }

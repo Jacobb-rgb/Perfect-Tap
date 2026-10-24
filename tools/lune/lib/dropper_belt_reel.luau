@@ -98,6 +98,18 @@ function Reel.build(Loader, opts)
 	-- (its front, the coin and the SELL screen, toward the camera: the belt feeds its side)
 	put("sell", "SellBox", sellX, z0 - 1, rZ)
 
+	-- the studded style every client gives the plot and its machines (owner 2026-10-24: "A")
+	local StudStyle = Loader.requirePath("ReplicatedStorage.Shared.StudStyle")
+	for _, d in root:GetDescendants() do
+		-- Lune cannot read an unset MaterialVariant (an alias of MaterialVariantSerialized)
+		if d:IsA("BasePart") and not pcall(function()
+			return d.MaterialVariant
+		end) then
+			d.MaterialVariant = ""
+		end
+	end
+	StudStyle.applyTree(root, "Classic")
+
 	local parts = {}
 	for _, d in H.visibleParts(root) do
 		table.insert(parts, H.partEntry(d))
