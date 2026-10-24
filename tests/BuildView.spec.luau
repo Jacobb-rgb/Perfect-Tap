@@ -54,6 +54,26 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("BuildView: the Furnace's card shows the player's tier (name and power chip, light and dark)", function()
+		for _, on in { false, true } do
+			withLight(on, function()
+				local refs = BuildView.build()
+				local card = refs.Cards.ClayFurnace
+				T.truthy(card.PowerChip, `light {on}: the Furnace's card has a power chip`)
+				BuildView.setTiers(refs, nil)
+				T.falsy(card.PowerChip.Visible, `light {on}: the clay tier needs no power`)
+				T.eq(card.Name.Text, "Furnace")
+				BuildView.setTiers(refs, { ClayFurnace = { Tier = 1 } })
+				T.truthy(card.PowerChip.Visible, `light {on}: the Brick tier needs power`)
+				T.eq(card.Power.Text, "PWR 10")
+				T.eq(card.Name.Text, "Brick Furnace")
+				BuildView.setTiers(refs, { ClayFurnace = { Tier = 3 } })
+				T.eq(card.Power.Text, "PWR 60", "Plasma")
+				T.eq(refs.Cards.Crusher.PowerChip, nil, `light {on}: machines without tiers keep their chip rule`)
+			end)
+		end
+	end)
+
 	T.test("BuildView: setInventory shows owned machines with counts and the selection", function()
 		local refs = BuildView.build()
 		local picked = nil

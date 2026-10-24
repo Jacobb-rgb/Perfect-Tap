@@ -60,6 +60,8 @@ export type Card = {
 	Bound: boolean,
 	Picture: ViewportFrame?, -- the live 3D machine (filled once when the card first shows)
 	Power: TextLabel?, -- the power chip's text (nil: no part in power)
+	PowerChip: GuiObject?, -- the chip itself (shown / hidden by setTiers for a machine with tiers)
+	Name: TextLabel?, -- the machine's name (a machine with tiers shows the player's tier)
 }
 
 -- One chip of the controls row: keycaps (or gamepad buttons) and what they do.
@@ -444,24 +446,28 @@ local function card(parent: Instance, machine: MachineData.Machine): Card
 		BorderSizePixel = 0,
 	}, button)
 	UIKit.corner(band, 12)
+	-- a machine with tiers (the Furnace) gets its chip always: setTiers shows it from the Brick tier up
+	local tiered = machine.Tiers ~= nil
 	local chipText = MachineInfo.powerChip(machine.Id)
+	local withChip = chipText ~= nil or tiered
 	UIKit.label(band, string.upper(machine.Category), 12, {
 		Name = "Category",
-		Position = UDim2.fromOffset(if chipText then 8 else 0, 0),
-		Size = if chipText then UDim2.new(1, -60, 1, 0) else UDim2.fromScale(1, 1),
-		TextXAlignment = if chipText then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(if withChip then 8 else 0, 0),
+		Size = if withChip then UDim2.new(1, -60, 1, 0) else UDim2.fromScale(1, 1),
+		TextXAlignment = if withChip then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
 	})
 	local power: TextLabel? = nil
-	if chipText then
-		power = UIKit.chip(band, chipText, if machine.Power then Theme.Accent else Theme.Good, {
+	if withChip then
+		power = UIKit.chip(band, chipText or "", if machine.Power or tiered then Theme.Accent else Theme.Good, {
 			Name = "PowerChip",
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -3, 0.5, 0),
 			Size = UDim2.fromOffset(50, 18),
 			TextSize = 13,
+			Visible = chipText ~= nil,
 		})
 	end
-	UIKit.label(button, machine.Name, 17, {
+	local name = UIKit.label(button, machine.Name, 17, {
 		Name = "MachineName",
 		Position = UDim2.fromOffset(6, 24),
 		Size = UDim2.new(1, -12, 0, 46),
@@ -482,7 +488,7 @@ local function card(parent: Instance, machine: MachineData.Machine): Card
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = Theme.Accent,
 	})
-	return { Button = button, Count = count, Stroke = stroke, Bound = false, Picture = nil, Power = power }
+	return { Button = button, Count = count, Stroke = stroke, Bound = false, Picture = nil, Power = power, PowerChip = power, Name = name }
 end
 
 --[[
@@ -679,7 +685,7 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 			ZIndex = 3,
 		})
 	end
-	Bubble.text(face, machine.Name, 15, {
+	local name = Bubble.text(face, machine.Name, 15, {
 		Name = "MachineName",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
@@ -693,17 +699,22 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 		Position = UDim2.new(0.5, 0, 1, 0),
 	})
 	local power: TextLabel? = nil
+	local chipFrame: GuiObject? = nil
 	local chipText = MachineInfo.powerChip(machine.Id)
-	if chipText then
-		local powerChip = Bubble.chip(face, chipText, Vector2.new(48, 20), 13, if machine.Power then "Build" else "Go", {
-			Name = "PowerChip",
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, 6, 0, 2),
-			ZIndex = 6,
-		})
+	-- a machine with tiers (the Furnace) gets its chip always: setTiers shows it from the Brick tier up
+	if chipText or machine.Tiers then
+		local powerChip =
+			Bubble.chip(face, chipText or "", Vector2.new(48, 20), 13, if machine.Power or machine.Tiers then "Build" else "Go", {
+				Name = "PowerChip",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, 6, 0, 2),
+				ZIndex = 6,
+				Visible = chipText ~= nil,
+			})
 		local text = powerChip:FindFirstChild("Text") :: TextLabel
 		text.ZIndex = 7
 		power = text
+		chipFrame = powerChip
 	end
 	local stroke = face:FindFirstChildOfClass("UIStroke") :: UIStroke
 	return {
@@ -713,6 +724,8 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 		Bound = false,
 		Picture = picture,
 		Power = power,
+		PowerChip = chipFrame,
+		Name = name,
 	}
 end
 
@@ -1105,6 +1118,25 @@ function BuildView.setInventory(
 	end
 	refs.Gui:SetAttribute("TrayEmpty", not any)
 	showEmpty(refs)
+end
+
+-- A machine with tiers (the Furnace) shows the player's tier on its card: the tier's name
+-- and power chip (`machineUpgrades` = the State snapshot's MachineUpgrades).
+function BuildView.setTiers(refs: Refs, machineUpgrades: any)
+	for id, entry in refs.Cards do
+		local machine = MachineData.ById[id]
+		if machine and machine.Tiers then
+			local tier = MachineData.tierOf(machineUpgrades, id)
+			local chipText = MachineInfo.powerChip(id, tier)
+			if entry.Power and entry.PowerChip then
+				entry.Power.Text = chipText or ""
+				entry.PowerChip.Visible = chipText ~= nil
+			end
+			if entry.Name then
+				entry.Name.Text = MachineData.info(id, tier).Name
+			end
+		end
+	end
 end
 
 function BuildView.setCounts(refs: Refs, machinesUsed: number, machineSlots: number, conveyorsUsed: number, conveyorSlots: number)
