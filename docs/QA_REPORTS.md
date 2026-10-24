@@ -912,7 +912,7 @@ What to test in Studio:
 The owner kept two furnaces: the Alloy Furnace and ONE Furnace for everything, which changes as it is upgraded, and
 the Crusher comes first (the Furnace takes crushed ore only).
 - Data: the Furnace keeps the id `ClayFurnace` (every save has one), its name is "Furnace", it Accepts crushed ore
-  only. `Tiers` (Brick 4 s / 10 power, Blast 2.5 s / 20, Plasma 2.5 s x2 / 60) and the Tech shop's new upgrade kind
+  only. `Tiers` (Brick 4 s / no power, Blast 2.5 s / 20, Plasma 2.5 s x2 / 60; review: Brick unpowered would be slower than clay) and the Tech shop's new upgrade kind
   `Tier` (Upgrades.Tier = the old machines' prices 6,000 / 30,000 / 5,000,000) turn every furnace of the player at
   once; `MachineData.info(id, tier)` is the machine as it works at a tier (MachineService sets machine.Info from it;
   ProcessingService / MachineLogic.batch / PowerLogic / PowerService / MachineInfo read it). The Brick / Blast /
@@ -932,7 +932,7 @@ What to test in Studio:
    Crusher: two piles fall into the Furnace and come out as two ingots.
 2. Drop clean ore straight into the Furnace: refused with "Put clean ore through your Crusher first!".
 3. Tech shop > UPGRADES: "Furnace Upgrade" shows the next furnace and its time. Buy Brick: every furnace turns into
-   a Brick Furnace at once (needs power: a pole and a solar panel); Blast; Plasma smelts two at once.
+   a Brick Furnace at once; Blast needs power (a pole and a solar panel); Plasma smelts two at once.
 4. An old save with a Blast Furnace: it is gone, its price is back in coins, its items wait in the pen, and a
    Crusher waits in the Build menu.
 5. Rebirth: the furnaces are clay again.
