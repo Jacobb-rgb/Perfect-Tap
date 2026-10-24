@@ -29,17 +29,17 @@
 	                   slate ramp there rolls ore back in), an invisible
 	                   `Intake` part (BaseLayout.Pen.Intake) with a `Prompt`
 	                   attachment at Pen.PromptPoint
-	  Yard.Podium1..4  showpiece pedestals: a round slate `Base` (the
+	  Yard.Podium1..5  showpiece pedestals: a round slate `Base` (the
 	                   PrimaryPart) with a glowing ring, a cream drum (`Column`)
 	                   with an orange band, the glowing `Rim` under the slate
 	                   `Top`, a level holo-ring of opaque soft cyan bars around
-	                   the floating ore and an invisible `Hover` box for the
-	                   mouse; the `Top` part holds the `OrePoint` at
-	                   BaseLayout.PodiumOreHeight and the `Prompt` attachment;
-	                   slots 4 and 5 have a `Lock` model where the ore floats
-	                   and a "100 R$" `PricePlate` (PodiumService hides them for
-	                   players with the Podiums perk and lights the rim; the
-	                   plate's neon frame lives in the lock)
+	                   the floating ore (the free slots only) and an invisible
+	                   `Hover` box for the mouse; the `Top` part holds the
+	                   `OrePoint` at BaseLayout.PodiumOreHeight and the `Prompt`
+	                   attachment; slots 4 and 5 have a `Lock` model where the
+	                   ore floats and a "100 R$" `PricePlate` (PodiumService
+	                   hides them for players with the Podiums perk and lights
+	                   the rim; the plate's neon frame lives in the lock)
 	  Yard.TrainStop   a light metal platform with a glowing strip and a
 	                   striped safety edge, the slate TRAIN STOP sign on two
 	                   round cream posts, a slate lamp post with a glowing lamp,
@@ -587,9 +587,9 @@ end
 	invisible `Hover` box around the ore catches the mouse for
 	PodiumController (the ore itself is not queryable). Locked slots: the
 	`Lock` where the ore floats and the "100 R$" `PricePlate` on the base,
-	and no holo-ring (the map's phone budget: PodiumService copies podium 1's
-	ring onto a slot the Podiums perk opens). 13 parts (15 locked). The Top is
-	in the slightly lighter Pipe slate:
+	and no holo-ring, not even once the Podiums perk opens them (the map's
+	phone budget: the lit gold rim shows an open slot). 13 parts (15 on the
+	paid slots). The Top is in the slightly lighter Pipe slate:
 	ArtifactService tells the skin roles of Base, Column and Top apart by
 	their own colours.
 ]]
@@ -615,7 +615,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	local top = SoftKit.cylUp(m, base * CFrame.new(0, topY, 0), topH, topW, "Pipe", SOLID, "Top")
 	attachment(top, "OrePoint", top.CFrame:ToObjectSpace(base * CFrame.new(0, BaseLayout.PodiumOreHeight, 0)))
 	attachment(top, "Prompt", top.CFrame:ToObjectSpace(base * CFrame.new(0, 2.6, -rect.Size.Z / 2 - 0.3)))
-	-- the holo-ring around the floating ore (a locked slot shows the padlock there)
+	-- the holo-ring around the floating ore (a paid slot shows the padlock there, and its gold rim once open)
 	if not locked then
 		local bars, barSize = PlotBuilder.holoRingBars(base)
 		for _, barCF in bars do

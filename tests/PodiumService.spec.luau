@@ -628,16 +628,10 @@ return function(T, Loader)
 		T.falsy(lockShown(4) or lockShown(5), "unlocked")
 		T.eq(yard.Podium4.Rim.Material, roblox.Enum.Material.Neon, "rim glows")
 		T.falsy(yard.Podium4.PricePlate:FindFirstChildWhichIsA("SurfaceGui").Enabled, "price hidden")
-		local first = ring(1)
-		for _, slot in { 4, 5 } do
-			local copy = ring(slot)
-			T.eq(#copy, #first, `slot {slot} gets podium 1's ring`)
-			for i, offset in first do
-				T.near((copy[i] - offset).Magnitude, 0, 1e-4, `slot {slot} bar {i} sits like podium 1's`)
-			end
-		end
-		PodiumService.refreshPlot(PLOT)
-		T.eq(#ring(4), #first, "refreshing again copies nothing more")
+		-- the paid slots stay without a holo-ring even open (the map's phone budget counts
+		-- every plot's owner with the perk): the lit gold rim shows they're open
+		T.eq(#ring(1), PlotBuilder.HoloRing.Sides, "a free slot keeps its ring")
+		T.eq(#ring(4) + #ring(5), 0, "an open paid slot has no ring either")
 		-- an ore left on a slot that lost the perk shows "Locked"
 		w.data.Podiums[4] = GOLD
 		PodiumService.refreshPlot(PLOT)
@@ -645,7 +639,7 @@ return function(T, Loader)
 		PodiumService.refreshPlot(PLOT)
 		T.eq(podium.shown(PLOT, 4).Tag.Amount.Text, "Locked", "locked tag")
 		T.truthy(lockShown(4), "locked again")
-		T.eq(#ring(4), 0, "the copied ring goes with the perk")
+		T.eq(#ring(4), 0, "still no ring")
 		-- the plot's owner leaves: empty podiums
 		w.online[w.player] = nil
 		PodiumService.refreshPlot(PLOT)
