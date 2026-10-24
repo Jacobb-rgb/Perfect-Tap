@@ -1,17 +1,16 @@
 --[[
-	The studded style: classic Roblox studs on the whole map (owner 2026-10-24,
-	branch art/stud-style, pictures first). Shared/StudStyle.luau does the work,
+	The studded style: classic Roblox studs on the whole map (owner 2026-10-24:
+	proposal A "Classic" goes into the game). Shared/StudStyle.luau does the work,
 	StudStyleController runs it on every client, StudStyleService makes the
 	custom stud materials on the server. Docs: docs/STUD_STYLE.md.
 
 	Two looks (the owner picks one):
-	- "Classic": Roblox's own square studs (SurfaceType.Studs on every face, Inlet
-	  underneath). Roblox draws surfaces only on the Plastic material, so a
-	  SmoothPlastic part turns Plastic for the look and keeps SmoothPlastic's
-	  physics (CustomPhysicalProperties). Works with no uploads. Parts of other
-	  materials (slate, metal, wood, ...) get the custom studs once the stud
-	  pictures are uploaded, until then they stay as they are.
-	- "Custom": our own stud pictures (docs/art/studs, NAHRAJ_DO_ROBLOXU/studs)
+	- "Classic" (in the game): Roblox's own square studs (SurfaceType.Studs on
+	  every face, Inlet underneath). Roblox draws surfaces only on the Plastic
+	  material, so every stud material (SmoothPlastic, slate, wood, marble, ...)
+	  turns Plastic for the look and keeps its own physics
+	  (CustomPhysicalProperties). Works with no uploads.
+	- "Custom": our own stud pictures (docs/art/studs, NAHRAJ_DO_ROBLOXU/vystupky)
 	  as MaterialVariants: every part keeps its Material, its colour and its
 	  physics; only the surface gets studs. Needs the three uploaded ids below.
 
@@ -25,10 +24,10 @@ local StudStyleConfig = {}
 
 export type Look = string -- "Classic" or "Custom" (Shared/StudStyle.look: anything else is Classic)
 
--- Master switch (off on main until the owner picks a look). At run time the
--- Workspace attribute "StudStyle" (true / false, set by StudStyleService from
--- this) switches it on every client: workspace:SetAttribute("StudStyle", false).
-StudStyleConfig.Enabled = false
+-- Master switch (owner 2026-10-24: on, proposal A). At run time the Workspace
+-- attribute "StudStyle" (true / false, set by StudStyleService from this)
+-- switches it on every client: workspace:SetAttribute("StudStyle", false).
+StudStyleConfig.Enabled = true
 StudStyleConfig.Look = "Classic" :: Look -- "Classic" | "Custom"
 
 -- The stud pictures (rbxassetid numbers; 0 = not uploaded yet). One picture
@@ -79,10 +78,15 @@ StudStyleConfig.Materials = {
 	CorrodedMetal = false,
 } :: { [string]: boolean }
 
--- Classic look: the materials that turn Plastic (with their own physics kept)
--- and the surface on each face.
+-- Classic look: the materials that turn Plastic (each with its own physics
+-- kept): every stud material, so the whole map has Roblox's studs as in the
+-- owner's picture A, with no uploads. And the surface on each face.
+local convert: { [string]: boolean } = {}
+for name, on in StudStyleConfig.Materials do
+	convert[name] = on
+end
 StudStyleConfig.Classic = {
-	Convert = { SmoothPlastic = true } :: { [string]: boolean },
+	Convert = convert,
 	Faces = {
 		Top = "Studs",
 		Bottom = "Inlet",

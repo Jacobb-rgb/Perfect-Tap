@@ -4,9 +4,10 @@
 
 	How a part gets studs (StudStyleConfig.Look):
 	- Classic: Roblox's own square studs. SurfaceType.Studs on every face (Inlet
-	  under it); a SmoothPlastic part turns Plastic (surfaces only show on
-	  Plastic) and gets SmoothPlastic's PhysicalProperties, so it slides and
-	  weighs the same. Parts of other materials take the custom studs below.
+	  under it); a part of a Classic.Convert material (every stud material)
+	  turns Plastic (surfaces only show on Plastic) and gets its own material's
+	  PhysicalProperties, so it slides and weighs the same. A material left out
+	  of Classic.Convert takes the custom studs below.
 	- Custom: BasePart.MaterialVariant = "TFStuds", our stud MaterialVariant for
 	  the part's own base material (StudStyle.ensureVariants, one per material in
 	  MaterialService.TFStudStyle). Material, Color and physics stay.

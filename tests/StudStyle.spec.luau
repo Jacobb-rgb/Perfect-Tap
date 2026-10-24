@@ -92,6 +92,9 @@ return function(T, Loader)
 		end
 		T.truthy(StudStyleConfig.BatchSize >= 100, "big batches per frame")
 		T.falsy(StudStyleConfig.Shapes.Ball, "balls stay smooth")
+		for name, on in StudStyleConfig.Materials do
+			T.eq(StudStyleConfig.Classic.Convert[name] == true, on, name .. ": Classic studs every stud material")
+		end
 	end)
 
 	T.test("stud style: suitable parts and the ones that keep their look", function()
@@ -206,16 +209,26 @@ return function(T, Loader)
 		T.eq(flash.Material, Enum.Material.Neon, "a later material change is not undone")
 	end)
 
-	T.test("stud style: Custom keeps the material; other materials wait for the pictures", function()
+	T.test("stud style: Classic studs slate too, with slate's physics; Custom keeps the material", function()
 		local _, map = newWorld()
+		local slate = newPart(map, { Material = Enum.Material.Slate })
+		T.truthy(StudStyle.applyPart(slate, "Classic"), "slate in the Classic look")
+		T.eq(slate.Material, Enum.Material.Plastic, "Roblox's studs need Plastic")
+		T.eq(slate.TopSurface, Enum.SurfaceType.Studs, "studs on the paving")
+		local slatePhysics = roblox.PhysicalProperties.new(Enum.Material.Slate)
+		T.near(slate.CustomPhysicalProperties.Friction, slatePhysics.Friction, 1e-6, "slate's friction")
+		T.near(slate.CustomPhysicalProperties.Density, slatePhysics.Density, 1e-6, "slate's weight")
+		T.truthy(StudStyle.restorePart(slate), "restored")
+		T.eq(slate.Material, Enum.Material.Slate, "slate again")
+		T.eq(slate.CustomPhysicalProperties, nil, "physics back")
+
 		withPreview(false, function()
 			if StudStyleConfig.customReady() then
 				return -- the pictures are uploaded: covered below
 			end
-			local slate = newPart(map, { Material = Enum.Material.Slate })
-			T.falsy(StudStyle.applyPart(slate, "Classic"), "slate waits for the custom studs")
-			T.falsy(StudStyle.applyPart(newPart(map), "Custom"), "no custom studs without pictures")
-			T.eq(slate.Material, Enum.Material.Slate, "slate untouched")
+			local part = newPart(map)
+			T.falsy(StudStyle.applyPart(part, "Custom"), "no custom studs without pictures")
+			T.eq(part.MaterialVariant, "", "untouched")
 		end)
 		withPreview(true, function()
 			local part = newPart(map)
@@ -227,10 +240,9 @@ return function(T, Loader)
 			T.truthy(StudStyle.restorePart(part), "restored")
 			T.eq(part.MaterialVariant, "", "no material variant again")
 
-			local slate = newPart(map, { Material = Enum.Material.Slate })
-			T.truthy(StudStyle.applyPart(slate, "Classic"), "slate in the Classic look")
-			T.eq(slate.Material, Enum.Material.Slate, "slate stays slate")
-			T.eq(slate.MaterialVariant, StudStyle.VariantName, "with the custom studs")
+			local wood = newPart(map, { Material = Enum.Material.Wood })
+			T.truthy(StudStyle.applyPart(wood, "Custom"), "wood in the Custom look")
+			T.eq(wood.Material, Enum.Material.Wood, "wood stays wood")
 		end)
 	end)
 

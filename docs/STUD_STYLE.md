@@ -2,17 +2,17 @@
 
 Owner request 2026-10-24: every ground, road, floor, wall, fence board and post, building, stall and machine
 gets the classic Roblox studded look, colours unchanged, no part per stud, safe to switch off.
-Branch `art/stud-style`, pictures first: **off on main** (`StudStyleConfig.Enabled = false`) until the owner
-picks a look.
+Owner picked **proposal A, Classic**, for the game (2026-10-24): `StudStyleConfig.Enabled = true`,
+`Look = "Classic"`. Proposal B stays available (`Look = "Custom"` + the 3 uploads).
 
 ## The two looks (`StudStyleConfig.Look`)
 
 | | Classic | Custom |
 |---|---|---|
 | Studs | Roblox's own square studs (`SurfaceType.Studs`, `Inlet` underneath) | our studs, the same shape (`docs/art/studs/*.png`) |
-| How | every face's surface set; SmoothPlastic parts turn **Plastic** because Roblox only draws surfaces on Plastic; they get SmoothPlastic's `PhysicalProperties` so they slide and weigh the same | `BasePart.MaterialVariant = "TFStuds"`: one `MaterialVariant` per base material in `MaterialService.TFStudStyle` (colour map tinted by the part's colour + normal map + roughness map) |
-| Material | SmoothPlastic → Plastic (the look only) | unchanged |
-| Uploads | none for plastic parts; slate, wood, marble, fabric … use the Custom studs once uploaded | the 3 pictures |
+| How | every face's surface set; parts of every stud material (SmoothPlastic, slate, wood, marble, fabric …) turn **Plastic** because Roblox only draws surfaces on Plastic; each gets its own material's `PhysicalProperties` so it slides and weighs the same | `BasePart.MaterialVariant = "TFStuds"`: one `MaterialVariant` per base material in `MaterialService.TFStudStyle` (colour map tinted by the part's colour + normal map + roughness map) |
+| Material | → Plastic (the look only; `Classic.Convert` = every stud material) | unchanged |
+| Uploads | none | the 3 pictures |
 | Lighting | studs are baked shading | studs catch the sun (normal map) |
 
 Both: 1 stud per stud everywhere (`StudsPerTile = 2`, the pictures hold 2 x 2 studs), counted from each face's
@@ -31,7 +31,7 @@ in an Accessory or Tool, under the Camera, in `Workspace.Nodes / Items / Debris`
 a name matching Cloud / Water / Sea$ / Boundary / Ghost / Preview / GolemFollowers / Hoverboards / WorldMotion
 (golem pets, riders' boards, effects), or tagged / attributed `NoStuds`.
 
-On today's map (v52, 33,178 parts): 20,792 parts get studs, 19,163 of them plastic (Classic needs no upload).
+On today's map (v52, 33,178 parts): 20,792 parts get studs (Classic needs no upload).
 
 ## Code
 
