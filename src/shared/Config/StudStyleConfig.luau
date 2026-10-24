@@ -107,15 +107,55 @@ StudStyleConfig.MinLength = 1 -- studs: the part's longest size (pebbles, buds a
 -- Workspace children that are never touched (ore rocks, carried ore, debris)
 StudStyleConfig.SkipRoots = { Nodes = true, Items = true, Debris = true } :: { [string]: boolean }
 -- A part (or a model / folder above it) whose name matches one of these Lua
--- patterns stays smooth ("Sea$": Sea, OuterSea, not BenchSeat or GoldSeam):
--- clouds, water, the island's invisible walls, build ghosts, the golem pets
--- (GolemFollowers), the riders' boards (ClientHoverboards), short-lived effects (WorldMotion).
-StudStyleConfig.SkipNames = { "Cloud", "Water", "Sea$", "Boundary", "Ghost", "Preview", "GolemFollowers", "Hoverboards", "WorldMotion" }
+-- patterns stays smooth ("Sea$": Sea, OuterSea, not BenchSeat or GoldSeam).
+-- Only the map's ground, roads, floors, walls, fences, buildings, stalls and
+-- machines get studs (owner 2026-10-24), not what lies or moves on them.
+StudStyleConfig.SkipNames = {
+	-- sky, water, the island's invisible walls, build ghosts
+	"Cloud",
+	"Water",
+	"Sea$",
+	"Boundary",
+	"Ghost",
+	"Preview",
+	-- golem pets, the riders' boards, short-lived effects, the golem hatching pop
+	"GolemFollowers",
+	"Hoverboards",
+	"WorldMotion",
+	"^OpenPop$",
+	-- crystals (the mines' clusters, the shards on islands, stalls and the forge),
+	-- not the plaza's FireCrystalRing, its CrystalFloor or the CrystalIsle's ground
+	"^Crystals?%d*$",
+	"^CrystalCluster",
+	"^CrystalGroup",
+	"^CrystalFacet",
+	"EggCrystal",
+	"IconCrystal",
+	-- ores and relics on show (podiums, the Iron Box glass, museums, the relic pop)
+	"^Display",
+	"^Artifact$",
+	-- the client's trains, the cleaning minigame, the crate opening
+	"ClientTrains",
+	"CleaningClient",
+	"CrateOpening",
+}
 -- A part (or anything above it) with this tag or attribute (true) stays smooth.
 StudStyleConfig.SkipTag = "NoStuds"
+-- Single parts another script changes at run time (studs decided once would
+-- differ per client), matched by their own name and their model's name (Lua
+-- patterns): the podium rims (PodiumService.refreshLocks flips Plot_N.Yard.Podium<slot>.Rim
+-- to Neon and back) and the belts' side rails (ConveyorService.setRail opens a
+-- belt's RailL / RailR: Transparency 1 and back).
+StudStyleConfig.SkipParts = {
+	{ Name = "^Rim$", Parent = "^Podium%d+$" },
+	{ Name = "^Rail[LR]$", Parent = "" },
+} :: { { Name: string, Parent: string } }
 
--- Clients restyle new parts in batches (streaming brings thousands at once).
-StudStyleConfig.BatchSize = 1500 -- parts per frame
+-- Clients restyle new parts a little each frame (streaming brings thousands at
+-- once): until BudgetMs of the frame is used, looking at the clock every
+-- MinPerFrame parts (so at least that many per frame, it always goes on).
+StudStyleConfig.BudgetMs = 2
+StudStyleConfig.MinPerFrame = 50
 
 -- The custom stud materials can be made (ids uploaded, or a preview).
 function StudStyleConfig.customReady(): boolean

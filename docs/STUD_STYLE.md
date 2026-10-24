@@ -25,13 +25,25 @@ Suitable: `Part`, `WedgePart`, `CornerWedgePart`, block / wedge / cylinder shape
 `>= 0.35` and longest `>= 1` stud (fence boards 0.35 x 0.45 qualify, pebbles and trim do not).
 
 Never: Neon, Glass, ForceField, Foil, Water, Air (Metal off by default), balls, MeshParts, unions, trusses, parts
-with a sign (SurfaceGui with words or pictures; plain-frame GUIs like the plot plates' tile seams are fine), a
-Decal / Texture / SurfaceAppearance, a custom MaterialVariant of their own, anything on a character (Humanoid),
-in an Accessory or Tool, under the Camera, in `Workspace.Nodes / Items / Debris` (ore rocks, carried ore), under
-a name matching Cloud / Water / Sea$ / Boundary / Ghost / Preview / GolemFollowers / Hoverboards / WorldMotion
-(golem pets, riders' boards, effects), or tagged / attributed `NoStuds`.
+with a mesh (SpecialMesh / BlockMesh: Roblox draws no surfaces on them), parts with a sign (a SurfaceGui with
+words or pictures, or an empty one that a script fills later like the SKY EGG odds board; plain-frame GUIs like the
+plot plates' tile seams are fine), a Decal / Texture / SurfaceAppearance, a custom MaterialVariant of their own,
+anything on a character (Humanoid), in an Accessory or Tool, under the Camera, in `Workspace.Nodes / Items /
+Debris` (ore rocks, carried ore), or tagged / attributed `NoStuds`.
 
-On today's map (v52, 33,178 parts): 20,792 parts get studs (Classic needs no upload).
+Names (`StudStyleConfig.SkipNames`, Lua patterns on the part and everything above it): clouds, water, the sea, the
+island's boundary walls, ghosts / previews, golem followers, hoverboards, WorldMotion effects, the golem
+`OpenPop`; the crystals (`^Crystals?%d*$`, `^CrystalCluster`, `^CrystalGroup`, `^CrystalFacet`, `EggCrystal`,
+`IconCrystal`; the plaza's FireCrystalRing, its CrystalFloor and the CrystalIsle's ground keep their studs); ores
+and relics on show (`^Display`, `^Artifact$`); the client's trains, the cleaning minigame and the crate opening.
+Only the map (ground, roads, floors, walls, fences, buildings, stalls, machines) gets studs, not what lies or
+moves on it (review 2026-10-24; crystals and trains can be switched back on by taking their patterns out).
+
+Parts another script changes later (`StudStyleConfig.SkipParts`, own name + model name): the podium rims
+(`Rim` in `Podium<slot>`, PodiumService flips them Neon) and the belts' side rails (`RailL` / `RailR`,
+ConveyorService opens them: Transparency 1), so every client sees the same mix.
+
+On today's map (v52, 33,178 parts): 20,543 parts get studs (Classic needs no upload).
 
 ## Code
 
@@ -88,8 +100,9 @@ and for the Custom look a Script in ServerScriptService:
 ## Performance
 
 - 0 new parts, 0 Textures / Decals; Custom adds ~26 MaterialVariants sharing 3 pictures (512 px).
-- A client restyles `BatchSize` (1,500) parts per frame: a full stream-in of ~21,000 parts is spread over ~14
-  frames. The number is a first guess: check it in Studio's MicroProfiler on a phone profile.
+- A client restyles new parts for about `BudgetMs` (2 ms) of each frame, checking the clock every
+  `MinPerFrame` (50) parts, so a full stream-in is spread over as many frames as it needs and always goes on.
+  Check it in Studio's MicroProfiler on a phone profile.
 - Classic sets 7 properties per part and one attribute (on the client only, never replicated).
 
 ## Limits / to check in Studio
@@ -101,4 +114,5 @@ and for the Custom look a Script in ServerScriptService:
   when their edges sit on whole studs.
 - Cylinders: Classic studs only on the flat ends (Roblox draws surfaces there); Custom wraps round them.
 - A script that later sets a styled part's Material (a glow flash) wins: that part loses its Classic studs until
-  it streams in again. Custom studs survive it.
+  it streams in again. Custom studs survive it. The parts the game itself flips (podium rims, belt rails) are
+  in `SkipParts`.

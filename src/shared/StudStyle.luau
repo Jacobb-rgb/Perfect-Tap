@@ -99,11 +99,16 @@ local function ancestorVerdict(instance: Instance): string
 	return verdict
 end
 
--- A sign: a SurfaceGui with words or a picture on the part (a SurfaceGui of
--- plain frames, like the plot plates' tile seams, keeps its studs under it).
+-- A sign: a SurfaceGui with words or a picture on the part, or an empty one (a
+-- board filled in later); a SurfaceGui of plain frames, like the plot plates'
+-- tile seams, keeps its studs under it.
 local function showsPicture(part: BasePart): boolean
 	for _, child in part:GetChildren() do
 		if child:IsA("SurfaceGui") then
+			-- empty: a board a script fills in later (the SKY EGG odds board)
+			if #child:GetChildren() == 0 then
+				return true
+			end
 			for _, d in child:GetDescendants() do
 				if
 					d:IsA("TextLabel")
@@ -131,11 +136,11 @@ end
 	Suitable: a Part / WedgePart / CornerWedgePart (no meshes, unions, trusses)
 	of a block, wedge or cylinder shape, of a stud material, opaque, not a
 	mirror, big enough (middle size >= MinSide, longest >= MinLength), with no
-	sign (a SurfaceGui with words or pictures), decal, texture or surface
-	appearance on it and no custom material of
+	sign (a SurfaceGui with words or pictures, or an empty one), decal,
+	texture, surface appearance or mesh on it and no custom material of
 	its own, and not on a character, a worn accessory or tool, the camera, in a
-	skipped root (Nodes, Items, Debris), under a skipped name (clouds, water)
-	or tagged NoStuds.
+	skipped root (Nodes, Items, Debris), under a skipped name (clouds, water),
+	one of the SkipParts (the podium rims) or tagged NoStuds.
 ]]
 function StudStyle.skipReason(part: BasePart): string?
 	if not StudStyleConfig.Classes[part.ClassName] then
@@ -168,6 +173,10 @@ function StudStyle.skipReason(part: BasePart): string?
 	if part:FindFirstChildWhichIsA("Decal") or part:FindFirstChildWhichIsA("SurfaceAppearance") or showsPicture(part) then
 		return "picture"
 	end
+	-- a SpecialMesh / BlockMesh reshapes the part and Roblox draws no surfaces on it
+	if part:FindFirstChildWhichIsA("DataModelMesh") then
+		return "mesh"
+	end
 	if flagged(part) then
 		return "tagged"
 	end
@@ -176,6 +185,13 @@ function StudStyle.skipReason(part: BasePart): string?
 		return name
 	end
 	local parent = part.Parent
+	if parent then
+		for _, rule in StudStyleConfig.SkipParts do
+			if string.find(part.Name, rule.Name) and string.find(parent.Name, rule.Parent) then
+				return "part " .. part.Name
+			end
+		end
+	end
 	if parent and not parent:IsA("Workspace") and parent ~= game then
 		local verdict = ancestorVerdict(parent)
 		if verdict ~= "" then
@@ -340,21 +356,29 @@ end
 
 --[[
 	Restyles `root`'s parts now and every part added under it later (streamed
-	in, built, placed), BatchSize parts per frame so a big stream-in never
-	stalls a frame. Returns a function that stops watching (it does not take
+	in, built, placed), about StudStyleConfig.BudgetMs of each frame (at
+	least MinPerFrame parts) so a big stream-in never stalls a frame. Returns a function that stops watching (it does not take
 	the studs off: restoreTree does).
 ]]
+-- The signal watch listens to for new parts (the specs hand in their own).
+function StudStyle.added(root: Instance): RBXScriptSignal
+	return root.DescendantAdded
+end
+
 function StudStyle.watch(root: Instance, look: StudStyleConfig.Look?): () -> ()
 	local pending: { BasePart } = {}
 	local scheduled = false
 	local alive = true
 
 	local function flush()
+		StudStyle.clearCache()
+		-- one budget across the batches: parts queued meanwhile wait for the next frame too
+		local frameStart = os.clock()
+		local done = 0
 		while alive and #pending > 0 do
 			local batch = pending
 			pending = {}
-			StudStyle.clearCache()
-			for i, part in batch do
+			for _, part in batch do
 				if not alive then
 					break
 				end
@@ -362,9 +386,11 @@ function StudStyle.watch(root: Instance, look: StudStyleConfig.Look?): () -> ()
 				if part.Parent and part:IsDescendantOf(root) then
 					StudStyle.applyPart(part, look)
 				end
-				if i % StudStyleConfig.BatchSize == 0 then
+				done += 1
+				if done % StudStyleConfig.MinPerFrame == 0 and os.clock() - frameStart >= StudStyleConfig.BudgetMs / 1000 then
 					task.wait()
 					StudStyle.clearCache()
+					frameStart = os.clock()
 				end
 			end
 		end
@@ -382,7 +408,7 @@ function StudStyle.watch(root: Instance, look: StudStyleConfig.Look?): () -> ()
 	end
 
 	eachPart(root, queue)
-	local connection = root.DescendantAdded:Connect(function(d: Instance)
+	local connection = StudStyle.added(root):Connect(function(d: Instance)
 		if d:IsA("BasePart") then
 			queue(d)
 		end

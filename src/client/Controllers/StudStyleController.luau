@@ -3,7 +3,7 @@
 	StudStyleConfig, docs/STUD_STYLE.md). Only visuals, no network cost: the
 	server's map is never changed, this client restyles the parts that stream
 	to it (and every part added later: machines, plots, rebuilt pieces),
-	StudStyleConfig.BatchSize per frame.
+	about StudStyleConfig.BudgetMs of each frame.
 
 	Follows the Workspace attributes StudStyleService sets: "StudStyle"
 	(on / off) and "StudStyleLook" ("Classic" / "Custom"). Switched off or to

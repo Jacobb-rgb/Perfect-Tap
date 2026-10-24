@@ -90,7 +90,8 @@ return function(T, Loader)
 				face .. " surface"
 			)
 		end
-		T.truthy(StudStyleConfig.BatchSize >= 100, "big batches per frame")
+		T.truthy(StudStyleConfig.BudgetMs > 0 and StudStyleConfig.BudgetMs <= 4, "a small slice of each frame")
+		T.truthy(StudStyleConfig.MinPerFrame >= 10, "always goes on")
 		T.falsy(StudStyleConfig.Shapes.Ball, "balls stay smooth")
 		for name, on in StudStyleConfig.Materials do
 			T.eq(StudStyleConfig.Classic.Convert[name] == true, on, name .. ": Classic studs every stud material")
@@ -133,6 +134,15 @@ return function(T, Loader)
 		local decal = newPart(model)
 		Instance.new("Decal").Parent = decal
 		T.eq(StudStyle.skipReason(decal), "picture", "a decal")
+		local board = newPart(model)
+		Instance.new("SurfaceGui").Parent = board
+		T.eq(StudStyle.skipReason(board), "picture", "an empty SurfaceGui: a board filled in later (SKY EGG odds)")
+		local egg = newPart(model)
+		Instance.new("SpecialMesh").Parent = egg
+		T.eq(StudStyle.skipReason(egg), "mesh", "a sphere-meshed egg")
+		T.eq(StudStyle.skipReason(newPart(model, { Name = "RailL" })), "part RailL", "a belt's side rail")
+		T.eq(StudStyle.skipReason(newPart(model, { Name = "RailR" })), "part RailR", "the other rail")
+		T.eq(StudStyle.skipReason(newPart(model, { Name = "Rail" })), nil, "a plain rail (the railway)")
 
 		StudStyle.clearCache()
 		local character = Instance.new("Model")
@@ -159,6 +169,38 @@ return function(T, Loader)
 		plain:AddTag("NoStuds")
 		plain.Parent = map
 		T.eq(StudStyle.skipReason(newPart(plain)), "tagged", "tagged NoStuds")
+		local podium = Instance.new("Model")
+		podium.Name = "Podium3"
+		podium.Parent = map
+		T.eq(StudStyle.skipReason(newPart(podium, { Name = "Rim" })), "part Rim", "a podium's rim")
+		T.eq(StudStyle.skipReason(newPart(podium, { Name = "Column" })), nil, "the podium's column")
+		T.eq(StudStyle.skipReason(newPart(model, { Name = "Rim" })), nil, "a rim elsewhere")
+		for name, want in
+			{
+				CrystalCluster = false,
+				Crystals = false,
+				Crystal3 = false,
+				CrystalFacet = false,
+				EggCrystal = false,
+				Display_Clean_Copper = false,
+				Display = false,
+				Artifact = false,
+				ClientTrains = false,
+				CleaningClient = false,
+				CrateOpening = false,
+				FireCrystalRing = true,
+				CrystalFloor = true,
+				CrystalIsle = true,
+				ArtifactMuseum = true,
+			}
+		do
+			local holder = Instance.new("Model")
+			holder.Name = name
+			holder.Parent = map
+			StudStyle.clearCache()
+			local reason = StudStyle.skipReason(newPart(holder))
+			T.eq(reason == nil, want, `{name}: {if want then "gets studs" else "stays smooth"} ({reason})`)
+		end
 		StudStyle.clearCache()
 	end)
 
@@ -317,6 +359,61 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("stud style: watch styles now and later, skips removed parts, stops", function()
+		local task = require("@lune/task")
+		local _, map = newWorld()
+		local parts = {}
+		for i = 1, 240 do
+			parts[i] = newPart(map, { CFrame = CFrame.new(i * 5, 0, 0) })
+		end
+		local gone = newPart(map)
+		-- the specs' own "DescendantAdded" (Lune's instances have no real signals)
+		local fire: ((any) -> ())? = nil
+		local added = StudStyle.added
+		StudStyle.added = function(): any
+			return {
+				Connect = function(_, fn)
+					fire = fn
+					return {
+						Disconnect = function()
+							fire = nil
+						end,
+					}
+				end,
+			}
+		end
+		local budget = StudStyleConfig.BudgetMs
+		StudStyleConfig.BudgetMs = 0 -- yield after every MinPerFrame parts
+		local ok, err = pcall(function()
+			local stop = StudStyle.watch(map, "Classic")
+			T.eq(parts[1]:GetAttribute("StudStyle"), nil, "deferred: a builder may still set the look")
+			-- streamed out / removed before its turn (Lune errors on reading a destroyed
+			-- part's Parent; Roblox gives nil, so unparenting stands in for Destroy)
+			gone.Parent = nil
+			for _ = 1, 20 do
+				task.wait()
+			end
+			for i, part in parts do
+				T.truthy(part:GetAttribute("StudStyle"), `part {i} styled in slices`)
+			end
+			T.eq(gone:GetAttribute("StudStyle"), nil, "a removed part is skipped")
+			local late = newPart(map)
+			assert(fire, "connected")(late)
+			for _ = 1, 3 do
+				task.wait()
+			end
+			T.truthy(late:GetAttribute("StudStyle"), "a part added later gets studs")
+			stop()
+			T.eq(fire, nil, "stop disconnects")
+			T.eq(StudStyle.restoreTree(map), #parts + 1, "restore takes them all back")
+		end)
+		StudStyle.added = added
+		StudStyleConfig.BudgetMs = budget
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("stud style: the whole map, nothing new, all back", function()
 		local game = Instance.new("DataModel")
 		local workspace = game:GetService("Workspace")
@@ -327,11 +424,34 @@ return function(T, Loader)
 		for _, d in map:GetDescendants() do
 			count += 1
 			if d:IsA("BasePart") then
-				snapshot[d] = { d.Material, d.TopSurface, d.FrontSurface, d.CFrame, d.Size, d.Color, d.CanCollide }
+				snapshot[d] = {
+					d.Material,
+					{ d.TopSurface, d.BottomSurface, d.FrontSurface, d.BackSurface, d.LeftSurface, d.RightSurface },
+					d.CustomPhysicalProperties,
+					d.CFrame,
+					d.Size,
+					d.Color,
+					d.CanCollide,
+				}
 			end
 		end
 		withPreview(true, function()
 			local styled = StudStyle.applyTree(workspace, "Classic")
+			-- the podium rims PodiumService flips to Neon and back keep their look
+			local rims = 0
+			for _, plot in map.Plots:GetChildren() do
+				local yard = plot:FindFirstChild("Yard")
+				for slot = 1, 8 do
+					local podium = yard and yard:FindFirstChild("Podium" .. slot)
+					local rim = podium and podium:FindFirstChild("Rim")
+					if rim then
+						rims += 1
+						T.eq(rim:GetAttribute("StudStyle"), nil, `{plot.Name} podium {slot} rim untouched`)
+						T.eq(rim.TopSurface, Enum.SurfaceType.Smooth, "no surfaces on the rim")
+					end
+				end
+			end
+			T.truthy(rims >= 8 * 2, `every plot's podium rims found ({rims})`)
 			T.truthy(styled > 15000, `most of the map has studs ({styled})`)
 			T.eq(#map:GetDescendants(), count, "no new instances")
 			for part, was in snapshot do
@@ -342,13 +462,21 @@ return function(T, Loader)
 				T.eq(part.Size, was[5], "Size")
 				T.eq(part.Color, was[6], "Color")
 				T.eq(part.CanCollide, was[7], "CanCollide")
+				if part:GetAttribute("StudStyle") and was[3] == nil then
+					local own = roblox.PhysicalProperties.new(was[1])
+					T.near(part.CustomPhysicalProperties.Friction, own.Friction, 1e-6, "its own friction pinned")
+				end
 			end
 			T.eq(StudStyle.applyTree(workspace, "Classic"), 0, "a second run changes nothing")
 			T.eq(StudStyle.restoreTree(workspace), styled, "every styled part restored")
 			for part, was in snapshot do
 				T.eq(part.Material, was[1], "material back")
-				T.eq(part.TopSurface, was[2], "top back")
-				T.eq(part.FrontSurface, was[3], "front back")
+				local faces =
+					{ part.TopSurface, part.BottomSurface, part.FrontSurface, part.BackSurface, part.LeftSurface, part.RightSurface }
+				for i, surface in faces do
+					T.eq(surface, was[2][i], `surface {i} back`)
+				end
+				T.eq(part.CustomPhysicalProperties, was[3], "physics back")
 				T.eq(part:GetAttribute("StudStyle"), nil, "record gone")
 			end
 		end)
