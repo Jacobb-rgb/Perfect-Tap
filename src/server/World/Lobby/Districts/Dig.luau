@@ -8,7 +8,7 @@
 	skeleton (a long skull with a jaw, eye sockets and teeth), a small find,
 	tools, a sieve, a wheelbarrow, a City Kit parasol over the finds, a
 	bone-scanning terminal, the glowing FOSSIL DIG sign box with a bone
-	icon at the entrance (which faces the plaza and the ToFossil path) and
+	icon at the entrance (which faces west, to the road) and
 	the tall FOSSIL DIG back board (round 2): a wide wooden board on two
 	timber posts over the back fence, 11 studs tall, facing the front (the
 	hero camera and the spawn see it over the pit), with the Kingdom of

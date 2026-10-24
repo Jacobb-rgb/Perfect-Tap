@@ -141,9 +141,16 @@ local A = {
 	LevelScale = nil :: { number }?, -- capsule price multiplier per blaster level instead of CapsuleConfig's
 	CrystalMode = "Mixed", -- a label only (the floors come from MineFloors / FloorTables; kept for old override files)
 	-- the droppers (DropperConfig, 2026-10-21): buy the next dropper (one of each, in order) or a Money
-	-- Laser (at most one per dropper) when it costs at most DropperMinutes of the current total income
+	-- Laser (one: the droppers' belts merge before it, 2026-10-24) when it costs at most DropperMinutes
+	-- of the current total income
 	Droppers = false,
 	DropperMinutes = 30,
+	-- real ore on the belts (2026-10-24): the droppers earn when their Drops sell in a Sell Box.
+	-- DropBeltSeconds: a Drop's ride from the dropper to the Sell Box (live Drops = droppers /
+	-- DropEvery x this, capped at DropperConfig.MaxLiveDrops: a long line slows the droppers);
+	-- DropLoss: the share that falls off a belt or waits too long (DropLife). 0 / 0 = the old passive income.
+	DropBeltSeconds = 8,
+	DropLoss = 0.03,
 }
 
 -- Scenarios run one after the other (each overrides some assumptions).
@@ -1259,8 +1266,12 @@ local function simulate(seed: number, start: any?): any
 		end
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
 		if A.Droppers and p.Placed then
-			-- the game's rule: the droppers earn through the same income multiplier as the podiums
-			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+			-- the game's rule: a Drop sold in a Sell Box pays through the same income multiplier as the
+			-- podiums; the owner's live-Drop cap and the losses on the belts slow it down
+			local droppers = (p.DropperNext or 1) - 1
+			local inFlight = droppers / DropperConfig.DropEvery * A.DropBeltSeconds
+			local flow = if inFlight > 0 then math.min(1, DropperConfig.MaxLiveDrops / inFlight) else 1
+			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0)) * flow * (1 - A.DropLoss)
 		end
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
@@ -1301,7 +1312,8 @@ local function simulate(seed: number, start: any?): any
 			if nextDropper then
 				pick = { Id = nextDropper.Id, Price = nextDropper.Price, Name = nextDropper.Name }
 			end
-			if p.Lasers < owned and (pick == nil or laser.Price < pick.Price) then
+			-- (one laser on the merged line doubles every dropper: more add nothing)
+			if p.Lasers < math.min(owned, 1) and (pick == nil or laser.Price < pick.Price) then
 				pick = { Id = laser.Id, Price = laser.Price, Name = laser.Name }
 			end
 			if pick and pick.Price <= income * A.DropperMinutes * 60 and p.Coins >= pick.Price then

@@ -97,7 +97,10 @@ LobbyLayout.Budget = {
 	-- lit path, ~1,050 outside the lobby area: ~33,590 measured)
 	-- (2026-10-23, map v52 on main v51 (33,688 measured): SKY HAVEN's stones as little islets, its spire
 	-- mossy, 12 vines under the island, trimmed to +136: 33,824 measured)
-	MapParts = 34050, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
+	-- (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, the
+	-- lawn behind the Vault's pieces on top of it, Meadow.Max: +231 parts; the map 33,450 + nodes 294
+	-- + museums 352 = 34,096 measured, + 200 for the podium and pen ores = 34,296, + ~30: 34,100 -> 34,330)
+	MapParts = 34330, -- (+50 owner 2026-10-23: the DROPPERS shop's boulders, round roof, crystal logo, vines and trees; 33,873 + 200 measured; asked via the integrator)  23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -109,7 +112,9 @@ LobbyLayout.Budget = {
 	-- bigger lobby area now counts the Vault's south trees (~110), + the street lamps along the longer
 	-- plot roads (~110), + the meadow on the new south lawns (~300); 2026-10-22: the sea bay behind
 	-- the Vault is island again, its cliffs gone, its lawn planted: 14,301 measured with the museums)
-	LobbyParts = 14500, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
+	-- (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, Meadow.Max,
+	-- +217 in the lobby area: 14,347 + museums 352 = 14,699 measured, + ~30: 14,500 -> 14,730)
+	LobbyParts = 14730, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
 	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
@@ -119,7 +124,12 @@ LobbyLayout.Budget = {
 	-- StreamingTargetRadius (384) of the spawn or the plaza, Lod models included, + the Persistent
 	-- models beyond it + the 8 yard museums (tests/PhoneBudget.spec.luau): map v49 with the sky
 	-- islands and SKY HAVEN measures ~24,550 at the plaza (21,421 + 2,785 + 352), ~24,300 at the spawn
-	StreamParts = 25000,
+	-- (owner 2026-10-24: "limit je jedno, hlavni je aby vse bylo nejlepsi", phones and PC alike: the
+	-- town's lawn back to its full density, Meadow.Max, ~+230 near each spot; map v57 measures 24,811 at
+	-- the spawn (21,680 + 2,779 + 352), 25,063 at the plaza (21,926 + 2,785 + 352) and 25,206 at the
+	-- DROPPERS shop's door (21,578 + 2,750 + 352 + the 526-part showroom, tests/DropperShop.spec.luau),
+	-- + ~30: 25,000 -> 25,240)
+	StreamParts = 25240,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -130,8 +140,8 @@ LobbyLayout.Budget = {
 		Sky = { Parts = 2100, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area; then its parkour stones as little islets, the mossy spire and the vines under the island, +136: 2,041)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3300, LobbyParts = 3300, Lights = 30, LobbyLights = 30 }, -- (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
-		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
-		Flora = { Parts = 4150, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area)
+		Districts = { Parts = 2500, LobbyParts = 2500, Lights = 11, LobbyLights = 11 }, -- (2026-10-23: + the DROPPERS shop's grounds and round roof, 2,469 measured) + v2 stalls, concept v2 look (~2,080 parts after perf pass 1) + the walk-in DROPPERS shop (owner 2026-10-23, ~2,425; the map total stays inside MapParts / LobbyParts)
+		Flora = { Parts = 4150, LobbyParts = 3205, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area) (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, tufts 58 -> 100, flower beds 34 -> 48, patches 52 -> 60, bushes 30 -> 36, rocks 20 -> 24, the lawn behind the Vault keeping its own share on top, Meadow.Max / Meadow.SouthLawnMax: 4,046 measured, 3,173 of them in the lobby area, + ~30: LobbyParts 3,100 -> 3,205; Parts unchanged)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -159,6 +169,25 @@ end
 -- plot roads' south end) move south with the plot columns, pieces on the
 -- outer coast move out with it. Both shifts are 0 at 12 cells.
 local GRID = WorldLayout.PlotGrid
+
+-- The DROPPERS house (owner 2026-10-23) and the half-round walkway apron in
+-- front of its porch (owner: "a half circle in front of it"; later "turn the
+-- shop so its entrance faces the crystal in the middle, and make it wider"):
+-- the house stands north-east of the plaza between the plaza rim, the east
+-- spur, the east plot road and the ore outcrops at (56, 46) and (50, 58),
+-- its front to the plaza's fire crystal; the apron's straight edge runs
+-- along the porch front and its round edge reaches the plaza rim.
+local DROPPERS_DIR = Vector3.new(math.cos(math.rad(34)), 0, math.sin(math.rad(34)))
+local DROPPERS_CENTER = DROPPERS_DIR * 53.5
+local DROPPERS_FACING = -DROPPERS_DIR
+LobbyLayout.DroppersFront = 4.5 -- the front wall's local z (DropperShopBuilder.Room.Front)
+local DROPPERS_APRON = DROPPERS_CENTER + DROPPERS_FACING * (LobbyLayout.DroppersFront + 4.7)
+LobbyLayout.DroppersApron = {
+	Center = DROPPERS_APRON, -- the middle of the straight edge
+	Radius = DROPPERS_APRON.Magnitude - 36.1, -- (to the plaza rim)
+	Back = 4.2, -- from the straight edge back to the house wall (the apron is a U)
+	PorchHalf = 5.4, -- half the porch's width (no panels under its planks)
+}
 local function south(p: Vector3): Vector3
 	return p + Vector3.new(0, 0, GRID.SouthShift)
 end
@@ -305,10 +334,31 @@ LobbyLayout.Pieces = {
 		-- turned toward the hero camera and the spawn (its gate faces south-west)
 		-- (round 3: a big open dig pulled toward the plaza, between the plaza
 		-- rim and the outcrops at (56, 46) and (50, 58))
-		Center = v(43, 0, 29),
+		-- (owner 2026-10-23: moved by the Tech shop, north-east of the plaza, turned to it;
+		-- the DROPPERS house took its old place)
+		Center = v(49, 0, -60),
 		Size = v(26, 14, 30),
-		Facing = v(-0.5, 0, 0.87).Unit,
+		Facing = v(-1, 0, 0),
 		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign: the artifacts + Kingdom of Kaldrum story corner. Tag FossilDig on the model.",
+	},
+	{
+		Id = "DroppersHouse",
+		Package = "Districts",
+		-- the DROPPERS shop (owner 2026-10-23) where the FOSSIL DIG stood, its front to the crystal
+		Center = DROPPERS_CENTER,
+		-- (the walk-in shop 30 wide and 15 deep + the porch)
+		Size = v(32, 27, 23),
+		Facing = DROPPERS_FACING,
+		Note = "Town-style house (stone ground floor, timber upper floor, terracotta roof, DROPPERS sign); its porch counter carries the DropperCounter tag (ShopService: opens the Tech shop).",
+	},
+	{
+		Id = "DroppersApron",
+		Package = "Plaza",
+		Center = LobbyLayout.DroppersApron.Center + DROPPERS_FACING * (LobbyLayout.DroppersApron.Radius / 2),
+		Size = v(LobbyLayout.DroppersApron.Radius * 2 + 1, 1, LobbyLayout.DroppersApron.Radius),
+		Facing = DROPPERS_FACING,
+		Walkable = true,
+		Note = "Half-round neon walkway apron in front of the DROPPERS porch (Plaza/Roads), street lamps at its two ends.",
 	},
 	{
 		Id = "RockScanner",
@@ -411,11 +461,13 @@ LobbyLayout.Pieces = {
 	{
 		Id = "PinkGrove",
 		Package = "Flora",
-		Center = v(41, 0, -66),
+		-- (owner 2026-10-23: the FOSSIL DIG took its place behind UPGRADES; the grove moved
+		-- to the south-west park by the ponds)
+		Center = v(-54, 0, 74),
 		Size = v(22, 30, 22),
 		Radius = 10,
 		Facing = v(0, 0, 1),
-		Note = "Two big pink voxel cherry trees towering behind UPGRADES (hero trees).",
+		Note = "Two big pink voxel cherry trees in the south-west park (hero trees).",
 	},
 	{
 		Id = "RedTree",
@@ -756,8 +808,6 @@ LobbyLayout.Paths = {
 	{ Id = "ToUpgrades", From = v(28, 0, -13), To = v(40, 0, -19), Width = 12, Kind = "Cobble" },
 	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
-	-- from the plaza rim round the dig's west corner to its gate (its south-west front)
-	{ Id = "ToFossil", From = v(17.5, 0, 32.5), To = v(30.5, 0, 45.5), Width = 5, Kind = "Cobble" },
 	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
 	-- south road north of the vault's steps)
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },

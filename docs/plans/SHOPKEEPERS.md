@@ -12,8 +12,8 @@ of the stall, e.g. waving"**. None at the EGGS temple. Branch `feat/shopkeepers`
 | SELL | Flamewing `Flamewing` | 1.9 | small wings, goggles: fits the narrow stall (owner: bigger) |
 | ENCHANT | Aether King `AetherKing` | 1.4 | halo, wings, a staff and orb, floats on clouds: magic. Stands **beside** the rune table (viewer's left, turned to the table's front): behind it the hut's door lintel and the floating crystals hid it (owner: "not very visible") |
 | BLASTER VAULT | Dragon King `DragonKing` | 1.45 | the Mythic king for the best shop |
-| DROPPERS (when it lands) | Magma Wyvern `MagmaWyvern` | 1.3 | |
-| BACKPACKS (when it lands) | Sky Sprite `SkySprite` | 1.5 | |
+| DROPPERS | Ember Hatchling `EmberHatchling` | 1.5 | a fire hatchling in its shell: narrow enough for the spot by the counter's left end (behind the counter the DARK MATTER DROPPER's podium leaves no room); it replaces the blocky Dropper Master of the showroom |
+| BACKPACKS (when it lands) | Sky Sprite `SkySprite` | 1.5 | the backpack chat's shop (art/backpacks) has a `KeeperFeet` attachment on its counter: one `ShopkeeperConfig.mark(counter, counter.KeeperFeet.WorldCFrame, "Backpacks")` line when it lands |
 
 ## How it works
 | Piece | File | What |
@@ -29,9 +29,9 @@ Texts still say "Tobin paid ..." (SellService): a rename is the owner's call. Th
 glb rebuilt in parts) is in the branch history (d44bf008, f99fd5bc).
 
 ## For the branches that land later
-- **DROPPERS** (`art/hoppers`) and **BACKPACKS** (`art/backpacks`): add one line in their counter builder,
-  `ShopkeeperConfig.mark(counter, <feet behind the counter, facing the customers>, "Droppers" | "Backpacks")`.
-  Their golems and lines are already in `ShopkeeperConfig.Shops`; add the shop to `tests/Shopkeepers.spec.luau`'s list.
+- **BACKPACKS** (`art/backpacks`): add `ShopkeeperConfig.mark(counter, counter.KeeperFeet.WorldCFrame, "Backpacks")`
+  in `Backpacks.build` after the counter; its golem and lines are already in `ShopkeeperConfig.Shops`; add
+  `"Backpacks"` / `BackpackCounter` to `tests/Shopkeepers.spec.luau`'s SHOPS and COUNTERS.
 - Map version: 57 here so it can't clash with 53-56; renumber when merging.
 
 ## Preview

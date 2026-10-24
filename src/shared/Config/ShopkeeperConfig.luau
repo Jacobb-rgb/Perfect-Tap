@@ -51,6 +51,7 @@ ShopkeeperConfig.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
 export type Shop = {
 	Golem: string, -- a GolemConfig kind
 	Size: number, -- GolemBuilder's Size (on top of the golem's own Scale)
+	Lit: boolean?, -- false: no soft light (a bright shop inside)
 	Hello: { string }, -- what it says when the player walks up
 	Thanks: { string }, -- after a buy or a sale
 }
@@ -70,9 +71,21 @@ ShopkeeperConfig.Shops = {
 	},
 	Enchant = { Golem = "AetherKing", Size = 1.4, Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
 	Vault = { Golem = "DragonKing", Size = 1.45, Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS },
-	Droppers = { Golem = "MagmaWyvern", Size = 1.3, Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
+	Droppers = {
+		Golem = "EmberHatchling",
+		Size = 1.5,
+		Lit = false,
+		Hello = { "Droppers! Ore all day!", "Need a dropper?" },
+		Thanks = THANKS,
+	},
 	Backpacks = { Golem = "SkySprite", Size = 1.5, Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
 } :: { [string]: Shop }
+
+-- Does the golem at `shop` get the soft light (when it is the nearest)?
+function ShopkeeperConfig.lit(shop: string): boolean
+	local s = ShopkeeperConfig.Shops[shop]
+	return not (s and s.Lit == false)
+end
 
 -- The golem kind and size at a shop (a plain Gear golem for an unknown one).
 function ShopkeeperConfig.golem(shop: string): (string, number)

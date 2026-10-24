@@ -46,6 +46,7 @@ local ORDER = {
 	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
+	"DropperShopController", -- the DROPPERS shop's showroom, built near the camera (DropperShopBuilder)
 	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
 	"LevelController", -- the player LEVEL: the XP bar, orbs, the juicy level-up moment
 	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)

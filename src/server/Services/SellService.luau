@@ -37,6 +37,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
@@ -107,11 +108,25 @@ function SellService.priceOf(desc: Desc): number
 	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
 		return 0
 	end
+	-- a dropper's Drop is not Tobin's: only a Sell Box sells it (boxPriceOf)
+	if DropperConfig.isDrop(desc) then
+		return 0
+	end
 	local key = ItemData.storageKey(desc)
 	if not ItemData.parseKey(key) then
 		return 0
 	end
 	return ItemData.value(desc.K, desc.O, desc.G, desc.R)
+end
+
+-- Coins a Sell Box pays for one item before bonuses: Tobin's price, and a
+-- dropper's Drop (DropperConfig.dropValue: the dropper's id and the laser's
+-- mark, read on the server; 0 for a forged one), which Tobin never buys.
+function SellService.boxPriceOf(desc: Desc): number
+	if DropperConfig.isDrop(desc) then
+		return if DropperConfig.validDrop(desc) then ItemData.value(desc.K, desc.O, desc.G, desc.R) else 0
+	end
+	return SellService.priceOf(desc)
 end
 
 local function isDirty(desc: Desc): boolean

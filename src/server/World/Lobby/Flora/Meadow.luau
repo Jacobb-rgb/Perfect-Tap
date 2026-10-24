@@ -69,22 +69,25 @@ Meadow.BridgeGarden = { Min = Vector3.new(-22, 0, -114), Max = Vector3.new(22, 0
 	sides (autumn toward the MINE in the west, pink and green toward the
 	hamlet in the east, like the woods either side), flower beds, grass
 	tufts, patches, bushes and stones. The town's passes (and the wilds) keep
-	out of it, and its lawn pieces count toward Meadow.Max (phones: no budget
-	raise), so the town's capped lawn thins by about a quarter (see
-	Meadow.Max). x +-52 meets the town's lawn
-	beside the plot roads (the MINE yard's rails reach x -59). nil at 12
-	cells, where the south coast is z 150.
+	out of it, and its lawn pieces have their own caps (Meadow.SouthLawnMax)
+	on top of the town's (Meadow.Max: owner 2026-10-24, quality over the
+	part limits, so the town's lawn is back to its full density). x +-52
+	meets the town's lawn beside the plot roads (the MINE yard's rails reach
+	x -59). nil at 12 cells, where the south coast is z 150.
 ]]
 Meadow.SouthLawn = if WorldLayout.PlotGrid.SouthShift > 0
 	then { Min = Vector3.new(-52, 0, 150), Max = Vector3.new(52, 0, Meadow.Area.Max.Z) }
 	else nil
 -- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
--- (2026-10-22: the lawn behind the Vault takes its share of these, Meadow.SouthLawnMax, and
--- 28 tufts went for its pond and trees: phones. The town's lawn, measured after the wilds
--- clear their spots, went from ~750 parts to ~550: tufts 100 -> 58, flower beds 47 -> 34,
--- patches 60 -> 52, bushes 36 -> 30, rocks 24 -> 20. Giving it back costs ~200 parts of
--- Flora's lobby budget and the map's, which have ~50 and ~110 left: the owner's call.)
-Meadow.Max = { Tufts = 72, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
+-- The town's lawn caps (Meadow.Area; the lawn behind the Vault has its own, Meadow.SouthLawnMax).
+-- (2026-10-22: the lawn behind the Vault took its share of these and 28 tufts went for its pond
+-- and trees (phones): the town's lawn, measured after the wilds clear their spots, went from
+-- ~750 parts to ~550: tufts 100 -> 58, flower beds 47 -> 34, patches 60 -> 52, bushes 36 -> 30,
+-- rocks 24 -> 20.)
+-- (owner 2026-10-24: "limit je jedno, hlavni je aby vse bylo nejlepsi", quality over the part
+-- limits, phones and PC alike: the town's lawn is back to its pre-bay-fill caps and the lawn behind
+-- the Vault keeps its own share on top; the budgets it needed went up by the measured parts.)
+Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
 Meadow.FencedStrips = {
@@ -758,7 +761,7 @@ end
 	(z-fighting). Each one takes the lowest of Meadow.FlatLifts that no
 	overlapping flat piece of the same lawn has taken.
 ]]
-Meadow.FlatLifts = { 0.03, 0.06, 0.09, 0.12 }
+Meadow.FlatLifts = { 0.03, 0.06, 0.09, 0.12, 0.15 } -- (2026-10-23: five patches overlapped on a south lawn)
 type Flat = { At: Vector3, R: number, Top: number }
 
 -- The lift for a flat piece w wide and h tall at `p` (recorded in `flats`).
@@ -969,8 +972,9 @@ Meadow.SouthTrees = {
 	{ At = Vector3.new(-14, 0, 176), Kind = "Green", Scale = 0.9 },
 	{ At = Vector3.new(14, 0, 177), Kind = "Red", Scale = 0.9 },
 } :: { { At: Vector3, Kind: string, Scale: number } }
--- its share of the lawn's caps (Meadow.Max: the town's lawn gets the rest),
--- round its pond and its trees (Meadow.SouthNear studs past their edges);
+-- its own lawn caps, on top of the town's (Meadow.Max; owner 2026-10-24: they
+-- no longer come out of the town's lawn), round its pond and its trees
+-- (Meadow.SouthNear studs past their edges);
 -- per free lawn spot (~280 there, ~710 in the town) it is no denser than the
 -- town's lawn, so a smaller share would only thin it below the town's look
 Meadow.SouthLawnMax = { Tufts = 14, Flowers = 12, Patches = 8, Bushes = 6, Rocks = 4 }
@@ -991,8 +995,8 @@ local function southSpot(index: Index, south: Box, at: Vector3, r: number, top: 
 	return nil
 end
 
--- Builds the lawn behind the Vault (nothing at 12 cells); returns what its
--- lawn pieces took of the caps.
+-- Builds the lawn behind the Vault (nothing at 12 cells); returns how many
+-- lawn pieces it placed (of Meadow.SouthLawnMax).
 local function southLawn(parent: Instance, index: Index, rng: Rng.Rng): LawnCounts
 	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
 	local south = Meadow.SouthLawn
@@ -1043,9 +1047,11 @@ function Meadow.build(map: Instance, rng: Rng.Rng): Model
 	jungle(m, map, index, Rng.new(`Meadow/Jungle/{rng:nextU32()}`))
 	local lawnRng = Rng.new(`Meadow/Lawn/{rng:nextU32()}`)
 	local butterflyRng = Rng.new(`Meadow/Butterflies/{rng:nextU32()}`)
-	-- the lawn behind the Vault first: its pieces count toward the town's caps
-	local count = southLawn(m, index, Rng.new(`Meadow/SouthLawn/{rng:nextU32()}`))
-	local _, beds = lawn(m, index, lawnRng, Meadow.Area, Meadow.Max, count)
+	-- the lawn behind the Vault first (its pond and trees take their ground), with its own
+	-- caps: the town's lawn counts from zero up to Meadow.Max (owner 2026-10-24)
+	southLawn(m, index, Rng.new(`Meadow/SouthLawn/{rng:nextU32()}`))
+	local town = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
+	local _, beds = lawn(m, index, lawnRng, Meadow.Area, Meadow.Max, town)
 	butterflies(m, beds, butterflyRng, Meadow.ButterflyBeds)
 	decorate(m)
 	return m

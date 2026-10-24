@@ -13,6 +13,7 @@
 	  HallOfFame     Board1..Board5 (tag Leaderboard, attribute Board)  Hall
 	  GuildBoard     Forgekeepers' notice board (tag GuildBoard)        here
 	  FossilDig      dig site with a dinosaur skeleton (tag FossilDig)  Dig
+	  DroppersHouse  the DROPPERS shop house (tag DropperCounter)      Droppers
 	  RockScanner    Ore Codex terminal (tag OreCodex)                  Scanner
 
 	Every piece is a Model named after its LobbyLayout piece id, built
@@ -34,6 +35,7 @@ local Capsules = require(script.Capsules)
 local Enchant = require(script.Enchant)
 local Hall = require(script.Hall)
 local Dig = require(script.Dig)
+local Droppers = require(script.Droppers)
 local Scanner = require(script.Scanner)
 
 local Districts = {}
@@ -111,6 +113,7 @@ function Districts.build(parent: Model, rng: Rng.Rng)
 	Hall.build(parent, rng)
 	guildBoard(parent, rng)
 	Dig.build(parent, rng)
+	Droppers.build(parent, rng)
 	Scanner.build(parent, rng)
 end
 

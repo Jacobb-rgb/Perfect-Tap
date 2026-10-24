@@ -55,6 +55,16 @@ function Preview.build(Loader: any, map: any, emote: string?)
 			table.insert(spots, d)
 		end
 	end
+	-- the DROPPERS shop's showroom (its clients build it near the camera)
+	local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+	for _, d in map:GetDescendants() do
+		if d:IsA("Model") and table.find(d:GetTags(), DropperShopBuilder.Tag) then
+			local frame = d:GetAttribute(DropperShopBuilder.FrameAttribute)
+			if frame then
+				DropperShopBuilder.show(d, frame)
+			end
+		end
+	end
 	-- (collected first: the golems go into the same models)
 	for _, d in spots do
 		local feet = d.Parent.CFrame * d.CFrame
@@ -64,7 +74,9 @@ function Preview.build(Loader: any, map: any, emote: string?)
 		local kind, size = ShopkeeperConfig.golem(shop)
 		local rig = golem(Loader, kind, feet, size, emote)
 		rig.Model.Parent = d.Parent.Parent
-		faceLight(Loader, d.Parent.Parent, feet, rig.Height)
+		if ShopkeeperConfig.lit(shop) then
+			faceLight(Loader, d.Parent.Parent, feet, rig.Height)
+		end
 	end
 end
 

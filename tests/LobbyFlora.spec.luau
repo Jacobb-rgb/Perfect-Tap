@@ -175,8 +175,10 @@ return function(T, Loader)
 		T.lt(scatter:GetAttribute("Flowers"), 51, "at most 50 flower patches")
 		T.lt(scatter:GetAttribute("Boulders"), 16, "at most 15 boulders")
 		-- (round 3: the bigger dig, wheel and stalls and the continuous belts take ground: 24+;
-		-- the Blaster Vault: its statues and six jungle trees took the south meadow: 18+)
-		T.truthy(scatter:GetAttribute("Trees") >= 18, "the scatter plants its trees")
+		-- the Blaster Vault: its statues and six jungle trees took the south meadow: 18+;
+		-- 2026-10-23 (owner): the pink grove moved into the south-west park and the dig and the
+		-- DROPPERS house took the east lawns: 16+)
+		T.truthy(scatter:GetAttribute("Trees") >= 16, "the scatter plants its trees")
 		T.lt(#parts(scatter), 751, "scatter parts")
 	end)
 

@@ -57,18 +57,96 @@ function matrixOf(cf, sx, sy, sz, out = new THREE.Matrix4()) {
   out.set(r00 * sx, r01 * sy, r02 * sz, x, r10 * sx, r11 * sy, r12 * sz, y, r20 * sx, r21 * sy, r22 * sz, z, 0, 0, 0, 1);
   return out;
 }
-// Instanced buckets for a static part list (by shape, look and transparency).
+// ---------------------------------------------------------------- the studded style
+// A part's stud info (part [10], world_motion_preview.studInfo): [1, faceMask]
+// (Front 1, Back 2, Top 4, Bottom 8, Left 16, Right 32): Roblox's own studs,
+// one per stud from the face's corner, as viewer.js draws them (the grey
+// native tile, 128 = no change, multiplied into the colour).
+const studMaps = {};
+async function loadStudMaps(renderer) {
+  const loader = new THREE.TextureLoader();
+  for (const [key, name] of [["native", "native_studs.png"], ["color", "studs_color.png"]]) {
+    try {
+      const t = await loader.loadAsync(`/scenes/studs/${name}`);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.colorSpace = key === "native" ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      studMaps[key] = t;
+    } catch {
+      studMaps[key] = null;
+    }
+  }
+}
+function studMaterial(base) {
+  const native = !!studMaps.native;
+  base.onBeforeCompile = (shader) => {
+    shader.uniforms.studColor = { value: native ? studMaps.native : studMaps.color };
+    shader.uniforms.studNative = { value: native ? 1 : 0 };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        attribute vec3 aSize;
+        attribute float aStudMask;
+        varying vec2 vStudUv;
+        varying float vStudOn;`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          vec3 an = abs(objectNormal);
+          vec3 T; vec3 B; float bit;
+          if (an.x >= an.y && an.x >= an.z) {
+            T = vec3(0.0, 0.0, -sign(objectNormal.x)); B = vec3(0.0, 1.0, 0.0);
+            bit = objectNormal.x > 0.0 ? 32.0 : 16.0;
+          } else if (an.y >= an.z) {
+            T = vec3(1.0, 0.0, 0.0); B = vec3(0.0, 0.0, -sign(objectNormal.y));
+            bit = objectNormal.y > 0.0 ? 4.0 : 8.0;
+          } else {
+            T = vec3(sign(objectNormal.z), 0.0, 0.0); B = vec3(0.0, 1.0, 0.0);
+            bit = objectNormal.z > 0.0 ? 2.0 : 1.0;
+          }
+          vec3 p = (position + 0.5) * aSize;
+          vStudUv = vec2(dot(p, T), dot(p, B)) * 0.5;
+          vStudOn = mod(floor(aStudMask / bit), 2.0);
+        }`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform sampler2D studColor;
+        uniform float studNative;
+        varying vec2 vStudUv;
+        varying float vStudOn;`,
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        if (vStudOn > 0.5) {
+          vec3 s = texture2D(studColor, vStudUv).rgb;
+          diffuseColor.rgb *= studNative > 0.5 ? s * 2.0 : s;
+        }`,
+      );
+  };
+  base.customProgramCacheKey = () => `studs${native ? "n" : ""}`;
+  return base;
+}
+
+// Instanced buckets for a static part list (by shape, look, transparency and studs).
 function buildParts(parts) {
   const group = new THREE.Group();
   const buckets = new Map();
   for (const p of parts) {
-    const [shape, sx, sy, sz, cf, color, mat, transparency, , shadow] = p;
+    const [shape, sx, sy, sz, cf, color, mat, transparency, , shadow, studs] = p;
     if (transparency > 0.98 || Math.min(sx, sy, sz) < 1e-4) continue;
     const kind = kindOf(mat);
     const tKey = Math.round(transparency * 10) / 10;
-    const key = `${shape}|${kind}|${tKey}|${shadow ? 1 : 0}`;
-    if (!buckets.has(key)) buckets.set(key, { shape, kind, t: tKey, shadow, items: [] });
-    buckets.get(key).items.push({ sx, sy, sz, cf, color });
+    const studded = Array.isArray(studs) && (studMaps.native || studMaps.color) ? 1 : 0;
+    const key = `${shape}|${kind}|${tKey}|${shadow ? 1 : 0}|${studded}`;
+    if (!buckets.has(key)) buckets.set(key, { shape, kind, t: tKey, shadow, studded, items: [] });
+    buckets.get(key).items.push({ sx, sy, sz, cf, color, studMask: studded ? studs[1] : 0 });
   }
   const m4 = new THREE.Matrix4();
   for (const b of buckets.values()) {
@@ -82,7 +160,21 @@ function buildParts(parts) {
       material.opacity = Math.max(0.05, 1 - b.t);
       material.depthWrite = false;
     }
-    const mesh = new THREE.InstancedMesh(geometries[b.shape], material, b.items.length);
+    let geometry = geometries[b.shape];
+    if (b.studded) {
+      // per-instance part size and stud faces for the stud shader
+      material = studMaterial(material);
+      geometry = geometry.clone();
+      const sizes = new Float32Array(b.items.length * 3);
+      const masks = new Float32Array(b.items.length);
+      b.items.forEach((it, i) => {
+        sizes.set([it.sx, it.sy, it.sz], i * 3);
+        masks[i] = it.studMask;
+      });
+      geometry.setAttribute("aSize", new THREE.InstancedBufferAttribute(sizes, 3));
+      geometry.setAttribute("aStudMask", new THREE.InstancedBufferAttribute(masks, 1));
+    }
+    const mesh = new THREE.InstancedMesh(geometry, material, b.items.length);
     b.items.forEach((it, i) => {
       mesh.setMatrixAt(i, matrixOf(it.cf, it.sx, it.sy, it.sz, m4));
       mesh.setColorAt(i, srgb(it.color, b.kind === "neon" ? NEON_BOOST : 1));
@@ -92,6 +184,66 @@ function buildParts(parts) {
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.frustumCulled = false;
+    group.add(mesh);
+  }
+  return group;
+}
+
+// ---------------------------------------------------------------- SurfaceGui decals
+// world_motion_preview.surfaceDecals: a face frame (x = the gui's right, y =
+// its up, z = out), its size, the light influence and the painted items
+// (rects, round dots, text) in face fractions, drawn on a canvas.
+function fontFamily(family) {
+  if (family.includes("Luckiest")) return "Luckiest Guy";
+  return "Fredoka One";
+}
+function buildDecals(decals) {
+  const group = new THREE.Group();
+  for (const [cf, w, h, lightInfluence, items] of decals) {
+    const ppu = Math.min(96, 1024 / Math.max(w, h));
+    const cw = Math.max(8, Math.round(w * ppu));
+    const ch = Math.max(8, Math.round(h * ppu));
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    for (const [kind, x, y, iw, ih, color, text, font] of items) {
+      const px = x * cw, py = y * ch, pw = iw * cw, ph = ih * ch;
+      ctx.fillStyle = "#" + color;
+      if (kind === "r") {
+        ctx.fillRect(px, py, pw, ph);
+      } else if (kind === "o") {
+        ctx.beginPath();
+        ctx.roundRect(px, py, pw, ph, Math.min(pw, ph) / 2);
+        ctx.fill();
+      } else if (kind === "t") {
+        const fam = fontFamily(font);
+        let size = ph * 0.9;
+        ctx.font = `${size}px "${fam}"`;
+        while (size > 4 && ctx.measureText(text).width > pw * 0.95) {
+          size -= 1;
+          ctx.font = `${size}px "${fam}"`;
+        }
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, px + pw / 2, py + ph / 2 + size * 0.06);
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const li = clamp(lightInfluence);
+    const material =
+      li <= 0.01
+        ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(0.8, 0.8, 0.8) })
+        : new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, metalness: 0.04 });
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -2;
+    material.depthWrite = false;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(matrixOf(cf, 1, 1, 1));
+    mesh.receiveShadow = true;
     group.add(mesh);
   }
   return group;
@@ -117,6 +269,7 @@ function skyDome(top, horizon, ground) {
 // ---------------------------------------------------------------- main
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
+  await document.fonts.load('40px "Luckiest Guy"');
   const dataName = (params.get("data") || "world_motion").replace(/[^a-z0-9_]/gi, "");
   const data = await fetch(`/scenes/${dataName}.json`).then((r) => r.json());
   const fps = data.fps;
@@ -133,6 +286,7 @@ async function main() {
   stage.style.width = W + "px";
   stage.style.height = H + "px";
   stage.prepend(renderer.domElement);
+  if (arr(data.scenes).some((sc) => arr(sc.parts).some((p) => Array.isArray(p[10])))) await loadStudMaps(renderer);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 2000);
@@ -173,6 +327,7 @@ async function main() {
   const roots = arr(data.scenes).map((s) => {
     const root = new THREE.Group();
     root.add(buildParts(arr(s.parts)));
+    root.add(buildDecals(arr(s.decals)));
     const look = looks[s.look] || looks.day;
     root.userData.look = look;
     for (const [x, y, z, color, range, brightness] of arr(s.lights)) {

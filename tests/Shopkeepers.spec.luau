@@ -17,7 +17,7 @@ return function(T, Loader)
 	local GolemKeeper = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemKeeper")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 
-	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault" }
+	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault", "Droppers" }
 	-- the counter tag each shop's spot hangs on
 	local COUNTERS = {
 		Gear = "ShopCounter",
@@ -25,6 +25,7 @@ return function(T, Loader)
 		Sell = "SellCounter",
 		Enchant = "EnchantCounter",
 		Vault = "VaultCounter",
+		Droppers = "DropperCounter",
 	}
 
 	local function hasTag(inst: any, tag: string): boolean
@@ -48,6 +49,8 @@ return function(T, Loader)
 			end
 		end
 		T.eq(ShopkeeperConfig.Shops.Eggs, nil, "no keeper at the EGGS temple (owner)")
+		T.truthy(ShopkeeperConfig.lit("Vault"), "a dark shop's golem gets the soft light")
+		T.falsy(ShopkeeperConfig.lit("Droppers"), "the bright DROPPERS shop's does not")
 		local kind, size = ShopkeeperConfig.golem("Nowhere")
 		T.eq(kind, ShopkeeperConfig.Shops.Gear.Golem, "an unknown shop gets the Gear golem")
 		T.eq(size, ShopkeeperConfig.Shops.Gear.Size, "and its size")
@@ -219,7 +222,12 @@ return function(T, Loader)
 			T.near(look.Y, 0, 1e-4, `{shop}: stands upright`)
 			local toCounter = holder.CFrame.Position - feet.Position
 			local flat = Vector3.new(toCounter.X, 0, toCounter.Z)
-			T.truthy(flat.Magnitude < 6, `{shop}: right behind the counter ({flat.Magnitude})`)
+			-- (the gap from its feet to the counter's box: right behind it, or by its end)
+			local q = holder.CFrame:PointToObjectSpace(feet.Position)
+			local gx = math.max(math.abs(q.X) - holder.Size.X / 2, 0)
+			local gz = math.max(math.abs(q.Z) - holder.Size.Z / 2, 0)
+			local gap = math.sqrt(gx * gx + gz * gz)
+			T.truthy(gap < 4.5, `{shop}: at the counter ({gap} studs from it)`)
 			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of it`)
 			T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: its feet below the counter top (the counter hides its step)`)
 			local kind, size = ShopkeeperConfig.golem(shop)

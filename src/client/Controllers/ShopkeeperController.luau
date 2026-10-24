@@ -19,7 +19,8 @@
 	  cheer, say thanks and throw a gold burst; now and then (EmoteEvery) it
 	  hops, spins, dances, bows or waves by itself.
 	- Light budget: only the nearest golem inside LightDistance has its soft
-	  light on (the shops are dark; phones).
+	  light on (the shops are dark; phones), unless its shop is bright inside
+	  (ShopkeeperConfig.lit).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -316,7 +317,7 @@ local function step(dt: number)
 		Workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 	for _, k in keepers do
-		local lit = k == nearest
+		local lit = k == nearest and ShopkeeperConfig.lit(k.Shop)
 		if lit ~= k.Lit then
 			k.Lit = lit
 			k.Light.Enabled = lit

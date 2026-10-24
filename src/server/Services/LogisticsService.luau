@@ -629,7 +629,7 @@ local function sellCanAccept(machine: PlacedMachine, desc: Desc, ownerUserId: nu
 	if not ok then
 		return false, reason :: Reason?
 	end
-	if SellService.priceOf(desc) <= 0 then
+	if SellService.boxPriceOf(desc) <= 0 then
 		return false, "Wrong"
 	end
 	if not DataService.get(machine.Owner) then
@@ -641,20 +641,32 @@ end
 local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: number, _via: Via)
 	local player = machine.Owner
 	local data = DataService.get(player)
-	local base = SellService.priceOf(desc)
+	local base = SellService.boxPriceOf(desc)
 	if not data or base <= 0 then
 		-- canAccept said yes a moment ago; MachineService puts the item back out
 		error("the Sell Box can't sell this right now")
 	end
+	-- a dropper's Drop (DropperConfig) earns like the droppers did: times the
+	-- income multiplier (the 2x Money pass, levels, rebirth stars), a coin
+	-- popup but no toast, no Stats / onSold (a stream of Drops is not "items
+	-- sold": quests, badges and the big-sale move stay about your ore)
+	local drop = desc.K == "Drop"
 	-- the same bonus as Tobin's counter and the SellBin (Midas, SellValue
 	-- golems, collection rewards); onSold listeners still get the base price
-	local price = Bonuses.sellAmount(Bonuses.stats(player), base)
+	local price = if drop
+		then math.floor(base * EconomyService.incomeMultiplier(player) + 0.5)
+		else Bonuses.sellAmount(Bonuses.stats(player), base)
 	local sold: Desc = { K = desc.K, O = desc.O, G = desc.G, R = desc.R }
 	-- everything that could fail comes first: an error here sends the item
 	-- back out (MachineService.deliver) with nothing paid
 	MachineService.setAttr(machine, "Cycles", bump(machine))
 	local now = os.clock()
 	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
+	if drop then
+		EconomyService.award(player, price, LogisticsService.SellSource, true)
+		DataService.changed(player)
+		return
+	end
 	addSale(machine, "SaleToast", LogisticsService.SellToast, sold, price, now)
 	local stats = (data :: { [string]: any }).Stats
 	if type(stats) == "table" then

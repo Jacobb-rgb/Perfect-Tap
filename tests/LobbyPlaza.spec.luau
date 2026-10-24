@@ -500,7 +500,7 @@ return function(T, Loader)
 			end
 		end
 		-- (ToShop and ToUpgrades end right at the plaza rim under the stall fronts: no edge in view)
-		for _, id in { "SouthRoad", "EastSpur", "WestSpur", "ForgePathEast", "ForgePathWest", "ToWheel", "ToFossil" } do
+		for _, id in { "SouthRoad", "EastSpur", "WestSpur", "ForgePathEast", "ForgePathWest", "ToWheel" } do
 			T.truthy(glowing[id], id .. " has orange neon edge strips")
 		end
 		-- glowing chevrons on the south walkway between the plaza and the bridge
@@ -988,9 +988,16 @@ return function(T, Loader)
 			local spec = StreetLampPlan.Sizes[lamp:GetAttribute("Size")]
 			T.truthy(glow.CFrame.Position.Y > spec.Height - 0.5, "the head sits at the top of the arm")
 			T.truthy(glow.CFrame.Position.Y > 5.5, "above head height")
-			local strip = Common.strip(road)
 			local headAt = Vector3.new(glow.CFrame.Position.X, 0, glow.CFrame.Position.Z)
-			T.lt(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, headAt), 0.01, `{lamp:GetFullName()} hangs over {road}`)
+			if road == "DroppersApron" then
+				-- (the two lamps either side of the DROPPERS apron lean over toward it)
+				local apron = LobbyLayout.DroppersApron
+				local center = Vector3.new(apron.Center.X, 0, apron.Center.Z)
+				T.lt((headAt - center).Magnitude, (p - center).Magnitude, `{lamp:GetFullName()} leans over toward the apron`)
+			else
+				local strip = Common.strip(road)
+				T.lt(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, headAt), 0.01, `{lamp:GetFullName()} hangs over {road}`)
+			end
 			local slot = lamp:FindFirstChild("PoleSlot")
 			T.truthy(slot and slot.Material == NEON, "an orange neon slot up the pole")
 			local light = glow:FindFirstChildWhichIsA("PointLight")

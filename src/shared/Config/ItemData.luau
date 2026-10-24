@@ -10,9 +10,14 @@
 	Restoration Table) puts the artifact into the collection. It is never
 	sold, stored in the pen or put on a podium (value and income 0, and
 	parseKey refuses it, so no summary lists it).
+	A Drop (K = "Drop", O = a dropper id, R = DropperConfig.LaserMark once a
+	Money Laser doubled it) is what a dropper pushes onto its belt
+	(DropperConfig): only a Sell Box sells it, for DropperConfig.dropValue;
+	never stored, carried, saved or put on a podium (parseKey refuses it too).
 ]]
 
 local OreData = require(script.Parent.OreData)
+local DropperConfig = require(script.Parent.DropperConfig)
 
 local ItemData = {}
 
@@ -27,6 +32,7 @@ ItemData.Kinds = {
 	-- valuable ore, worth more than both ingots (2 x 1.25)
 	Alloy = { Id = "Alloy", Name = "Alloy", ValueMult = 3.2 },
 	Relic = { Id = "Relic", Name = "Dusty Relic", ValueMult = 0 }, -- O = an ArtifactConfig id (see the header)
+	Drop = { Id = "Drop", Name = "Drop", ValueMult = 0 }, -- O = a dropper id (see the header)
 }
 
 ItemData.RelicName = "Dusty Relic"
@@ -78,6 +84,9 @@ end
 
 -- Sell value of one item. `recipeId` only matters for Gear.
 function ItemData.value(kind: string, oreId: string, gradeId: string?, recipeId: string?): number
+	if kind == DropperConfig.DropKind then
+		return DropperConfig.dropValue(oreId, recipeId == DropperConfig.LaserMark)
+	end
 	local ore = OreData.ById[oreId]
 	local kindInfo = ItemData.Kinds[kind]
 	if not ore or not kindInfo then
@@ -165,6 +174,10 @@ function ItemData.displayName(kind: string, oreId: string, gradeId: string?, rec
 		return ItemData.DirtyName
 	elseif kind == "Relic" then
 		return ItemData.RelicName
+	elseif kind == DropperConfig.DropKind then
+		local dropper = DropperConfig.ById[oreId]
+		local name = if dropper then (string.gsub(dropper.Name, " Dropper$", "")) .. " Drop" else "Drop"
+		return if recipeId == DropperConfig.LaserMark then name .. " 2X" else name
 	elseif kind == "Clean" then
 		return (gradeId or "Rough") .. " " .. oreName
 	elseif kind == "Crushed" then
