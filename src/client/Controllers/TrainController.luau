@@ -3095,13 +3095,15 @@ function TrainController.start()
 	local hud = HudController.refs()
 	if hud then
 		local function mirror()
-			hudShown = hud.Gui.Enabled
+			-- (and not in build mode: PlacementController sets the HUD's Building attribute)
+			hudShown = hud.Gui.Enabled and hud.Gui:GetAttribute("Building") ~= true
 			applyChip()
 			if not hudShown then
 				TrainController.close()
 			end
 		end
 		hud.Gui:GetPropertyChangedSignal("Enabled"):Connect(mirror)
+		hud.Gui:GetAttributeChangedSignal("Building"):Connect(mirror)
 		mirror()
 	end
 	fit()

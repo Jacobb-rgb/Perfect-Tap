@@ -1073,7 +1073,13 @@ local function updateChutes(entries: { Entry })
 			and beltInfo ~= nil
 			and beltInfo.IsConveyor == true
 			and not BaseLayout.sourceFeeds(belt.R)
-		GridOverlay.tag(plateName, if yard then `{chute.Label}: TURN THE BELT` else chute.Label, if yard then BAD_COLOR else chute.Color)
+		-- no words over the chutes (owner 2026-10-24: the PEN / TRAIN / FOUNDRY labels ran into
+		-- each other); only a belt facing the yard on a source says what is wrong
+		if yard then
+			GridOverlay.tag(plateName, `{chute.Label}: TURN THE BELT`, BAD_COLOR)
+		else
+			GridOverlay.untag(plateName)
+		end
 	end
 end
 
@@ -2263,6 +2269,9 @@ local function hideHud(on: boolean)
 	if not hud then
 		return
 	end
+	-- the train chip and the boost chips hide too (owner 2026-10-24: no TRAIN words in build
+	-- mode): TrainController and BoostController read the HUD's Building attribute
+	hud.Gui:SetAttribute("Building", if on then true else nil)
 	if on then
 		for _, gui in { hud.CarryPanel :: GuiObject, hud.Menu :: GuiObject, hud.TopBar :: GuiObject } do
 			savedHud[gui] = gui.Visible
