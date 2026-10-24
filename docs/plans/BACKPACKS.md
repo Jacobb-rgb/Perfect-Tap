@@ -52,7 +52,7 @@ plaza 24,791 -> 24,677 (StreamParts 25,000). The stall adds 27; the rest re-roll
 draw their spots from the free lawn, so they all move (Mountains 326 -> 273, Pieces 409 -> 354,
 the five secrets unchanged), the meadow -24 (fences, lawn) and Plaza Life -9 (a lantern and a
 prop on that lawn). No lights. The plaza ore cart at (-35, -35) stands in front of the stall.
-Map version 56 (`WorldBuilder.Version`, numbered after the pending hoppers 53, podiums 54 and
+Map version 58 (`WorldBuilder.Version`, numbered past the pending podiums, no-Foundry and shopkeepers;
 no-Foundry 55: renumber when merging main if the order changes).
 
 ## What to test in Studio
