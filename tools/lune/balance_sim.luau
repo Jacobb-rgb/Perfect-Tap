@@ -103,6 +103,11 @@ local A = {
 	PolePrice = 500,
 	MaxCleaners = 4,
 	MaxFurnaces = 3,
+	-- one Furnace (owner 2026-10-24): every furnace of the player is at the same tier (the Tech
+	-- shop's Furnace Upgrade: Brick, Blast, Plasma), it smelts crushed piles only and the Crusher
+	-- comes with the starter kit. false = the old roster (Clay + a Brick, a Blast, a Plasma Furnace,
+	-- clean ore smelts too, the Crusher is bought).
+	OneFurnace = true,
 	Efficiency = 1, -- share of the player's own actions done well (mining, carrying, hand cleaning); machines run full
 	BlasterCoins = nil :: { [number]: number }?, -- Foundry coin price per level instead of BlasterData's (Vault = 4x)
 	ElevatorPrice = nil :: number?, -- nil = MineFloors' rule: 2/3 of the blaster 7 forge (the sim's price)
@@ -117,6 +122,7 @@ local A = {
 	TrainCapacityExtra = nil :: { { Value: number, Price: number } }?, -- train capacity levels after the config's last
 	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
 	MachineUpgrades = true, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher): in the game since option 3
+	TierPriceMult = nil :: { number }?, -- one Furnace: a multiplier per tier on the Furnace Upgrade prices
 	UpgradePriceMult = nil :: { [string]: number }?, -- "Speed" / "Quality" -> multiplier on the upgrade prices
 	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
@@ -390,10 +396,11 @@ local function newPlayer(): any
 		Hover = 0,
 		Elevator = false,
 		Cleaners = 0,
-		Crusher = false,
+		Crusher = A.OneFurnace == true, -- the starter kit's Crusher (one Furnace)
 		Extractor = false,
 		Upgrades = { CleanerSpeed = 0, CleanerQuality = 0, CrusherSpeed = 0 }, -- Tech shop levels (MachineUpgrades)
 		Furnaces = { "ClayFurnace" }, -- the starter kit
+		FurnaceTier = 0, -- one Furnace: the tier every furnace is at
 		PowerOut = 0,
 		PowerDemand = 0,
 		Poles = 0,
@@ -488,6 +495,11 @@ end
 local function furnaceRate(p: any): number
 	local rate = 0
 	local speed = powerSpeed(p)
+	if A.OneFurnace then
+		local info = MachineData.info("ClayFurnace", p.FurnaceTier)
+		local each = (info.Batch or 1) / (info.Time :: number)
+		return #p.Furnaces * each * (if (info.Power or 0) > 0 then speed else 1)
+	end
 	for _, id in p.Furnaces do
 		for _, f in FURNACES do
 			if f.Id == id then
@@ -555,9 +567,7 @@ end
 -- Coins per second from selling (expected), given the cleaned flow.
 local function saleRate(p: any, cleaned: number, raw: number, floor: any): number
 	local value = meanValue(floor, luckOf(p))
-	local grade = if p.Cleaners > 0
-		then meanGradeMult(MachineData.gradeOdds(p.Upgrades.CleanerQuality))
-		else meanGradeMult(A.HandGrades)
+	local grade = if p.Cleaners > 0 then meanGradeMult(MachineData.gradeOdds(p.Upgrades.CleanerQuality)) else meanGradeMult(A.HandGrades)
 	local f = furnaceRate(p)
 	local perClean: number
 	if p.Crusher then
@@ -582,7 +592,6 @@ local function podiumIncome(p: any): number
 	local level = if A.Levels then LevelConfig.bonusFor(p.Level or 1) else 0
 	return sum * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0) + level)
 end
-
 
 local function incomeRate(p: any): number
 	local cleaned, raw, floor = flow(p)
@@ -778,11 +787,13 @@ local function candidates(p: any): { any }
 	end
 	-- the Tech shop's type upgrades (option MachineUpgrades)
 	if A.MachineUpgrades then
-		for _, up in {
-			{ Key = "CleanerSpeed", Machine = "AutoCleaner", Kind = "Speed", Needs = p.Cleaners > 0 },
-			{ Key = "CleanerQuality", Machine = "AutoCleaner", Kind = "Quality", Needs = p.Cleaners > 0 },
-			{ Key = "CrusherSpeed", Machine = "Crusher", Kind = "Speed", Needs = p.Crusher },
-		} do
+		for _, up in
+			{
+				{ Key = "CleanerSpeed", Machine = "AutoCleaner", Kind = "Speed", Needs = p.Cleaners > 0 },
+				{ Key = "CleanerQuality", Machine = "AutoCleaner", Kind = "Quality", Needs = p.Cleaners > 0 },
+				{ Key = "CrusherSpeed", Machine = "Crusher", Kind = "Speed", Needs = p.Crusher },
+			}
+		do
 			local prices = MachineData.upgradePrices(up.Machine, up.Kind)
 			local mult = (A.UpgradePriceMult and A.UpgradePriceMult[up.Kind]) or 1
 			local level = p.Upgrades[up.Key] + 1
@@ -815,7 +826,45 @@ local function candidates(p: any): { any }
 			end,
 		})
 	end
-	if #p.Furnaces < A.MaxFurnaces + 1 then
+	if A.OneFurnace then
+		-- the Furnace Upgrade turns every furnace (more power for each), or one more furnace
+		local tiers = MachineData.ById.ClayFurnace.Upgrades.Tier :: { number }
+		local now = MachineData.info("ClayFurnace", p.FurnaceTier)
+		if p.FurnaceTier < #tiers then
+			local nextTier = MachineData.info("ClayFurnace", p.FurnaceTier + 1)
+			local more = #p.Furnaces * ((nextTier.Power or 0) - (now.Power or 0))
+			local extra, out = powerCost(p, more)
+			local price = tiers[p.FurnaceTier + 1] * ((A.TierPriceMult and A.TierPriceMult[p.FurnaceTier + 1]) or 1)
+			table.insert(list, {
+				Name = "Furnace " .. nextTier.Name .. (if extra > 0 then " + power" else ""),
+				Price = price + extra,
+				Cat = "Upgrades",
+				Apply = function(q)
+					q.FurnaceTier += 1
+					q.PowerDemand += more
+					q.PowerOut += out
+					if out > 0 then
+						q.Poles = math.max(q.Poles, 2)
+					end
+				end,
+			})
+		end
+		if #p.Furnaces < A.MaxFurnaces + 1 then
+			local extra, out = powerCost(p, now.Power or 0)
+			table.insert(list, {
+				Name = "Furnace #" .. (#p.Furnaces + 1) .. (if extra > 0 then " + power" else ""),
+				Price = machinePrice("ClayFurnace") + extra,
+				Apply = function(q)
+					table.insert(q.Furnaces, "ClayFurnace")
+					q.PowerDemand += now.Power or 0
+					q.PowerOut += out
+					if out > 0 then
+						q.Poles = math.max(q.Poles, 2)
+					end
+				end,
+			})
+		end
+	elseif #p.Furnaces < A.MaxFurnaces + 1 then
 		for _, f in FURNACES do
 			if f.Id ~= "ClayFurnace" and not table.find(p.Furnaces, f.Id) then
 				local extra, out = powerCost(p, f.Power)
@@ -1135,7 +1184,13 @@ local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t:
 	end
 	local w = LevelConfig.ById
 	local xp = A.Step
-		* (rocks * w.RocksBroken.Xp + (cleaned + raw) * w.OresMined.Xp + cleaned * w.OresCleaned.Xp + raw * w.ItemsSold.Xp + w.PlaySeconds.Xp)
+		* (
+			rocks * w.RocksBroken.Xp
+			+ (cleaned + raw) * w.OresMined.Xp
+			+ cleaned * w.OresCleaned.Xp
+			+ raw * w.ItemsSold.Xp
+			+ w.PlaySeconds.Xp
+		)
 	xp += (p.BuysSeen and #p.Log - p.BuysSeen or 0) * w.Upgrades.Xp -- every buy: a machine, an upgrade, a level
 	p.BuysSeen = #p.Log
 	p.LevelRecord = p.LevelRecord or { Level = 1, Xp = 0, Seen = {}, Ready = true }
@@ -1297,8 +1352,7 @@ local function simulate(seed: number, start: any?): any
 			-- back faster than the saving takes (it brings the blaster closer:
 			-- (R + P) / (I + g) < R / I exactly when P / g < R / I)
 			local saving = math.max(0, reserve - p.Coins) / math.max(income, 1e-9)
-			local affordable = best
-				and (p.Coins - reserve >= best.Price or (reserve > 0 and p.Coins >= best.Price and bestScore < saving))
+			local affordable = best and (p.Coins - reserve >= best.Price or (reserve > 0 and p.Coins >= best.Price and bestScore < saving))
 			if best and affordable then
 				buy(p, best.Name, best.Price, t)
 				best.Apply(p, rng)

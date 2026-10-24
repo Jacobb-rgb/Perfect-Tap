@@ -58,9 +58,21 @@ type State = {
 local states: { [Player]: State } = {}
 local pending: { [Player]: boolean } = {}
 
--- Does this machine type take part in power (poles, generators, machines with Power)?
+-- Does this machine type take part in power (poles, generators, machines with Power,
+-- at any of its tiers: the Furnace from Brick up)?
 local function isPowerType(info: MachineData.Machine): boolean
-	return PowerLogic.kindOf(info) ~= "Other"
+	if PowerLogic.kindOf(info) ~= "Other" then
+		return true
+	end
+	local tiers = info.Tiers
+	if tiers then
+		for tier = 1, #tiers do
+			if PowerLogic.kindOf(MachineData.info(info.Id, tier)) ~= "Other" then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 local function cellsOf(indexes: { number }, list: { PlacedMachine }): string
@@ -90,7 +102,8 @@ local function recompute(player: Player)
 		entries[i] = { Id = machine.Id, X = machine.X, Z = machine.Z, R = machine.R }
 	end
 	local data = DataService.get(player)
-	local result = PowerLogic.compute(entries, PowerLogic.speedLevels(data and data.MachineUpgrades))
+	local upgrades = data and data.MachineUpgrades
+	local result = PowerLogic.compute(entries, PowerLogic.speedLevels(upgrades), upgrades)
 	local state: State = { Results = {}, Attrs = {} }
 	for i, machine in list do
 		local res = result.Machines[i]
@@ -167,7 +180,8 @@ end
 local function onBought(player: Player, bought: ShopService.Bought)
 	local id = bought.Machine
 	local info = if id then MachineData.ById[id] else nil
-	if bought.Kind == "Upgrade" and info and PowerLogic.kindOf(info) == "Generator" then
+	if bought.Kind == "Upgrade" and info and (PowerLogic.kindOf(info) == "Generator" or bought.Upgrade == "Tier") then
+		-- a generator makes more, a new tier uses more (the Furnace)
 		schedule(player)
 	end
 end

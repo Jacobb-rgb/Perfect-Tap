@@ -822,6 +822,22 @@ local function levelDetail(entry: EconomyConfig.TechItem, state: { [string]: any
 				table.insert(parts, 1, `Rough {percent(now.Rough)} → {percent(nextOdds.Rough)}`)
 			end
 			return table.concat(parts, SEP)
+		elseif entry.Upgrade == "Tier" then
+			-- the Furnace's tiers: what it turns into next, and how fast that is
+			local id = entry.Machine :: string
+			local speed = EconomyConfig.upgradeLevel(state, id, "Speed")
+			local bellows = bellowsLevel(state)
+			local current = MachineData.info(id, level)
+			local nowText = `{current.Name}: {TechShopView.seconds(MachineData.processTime(current, bellows, speed))}`
+			if done then
+				return `{nowText} (top tier)`
+			end
+			local nextTier = MachineData.info(id, level + 1)
+			local text = `{nowText} → {nextTier.Name}: {TechShopView.seconds(MachineData.processTime(nextTier, bellows, speed))}`
+			if (nextTier.Batch or 1) > 1 then
+				text ..= ` ({nextTier.Batch} at once)`
+			end
+			return text
 		end
 		local bellows = bellowsLevel(state)
 		local now = TechShopView.seconds(MachineData.processTime(machine, bellows, level))
@@ -850,6 +866,8 @@ local function levelDescription(entry: EconomyConfig.TechItem): string
 		local machine = MachineData.ById[entry.Machine :: string]
 		if entry.Upgrade == "Quality" then
 			return `Every {machine.Name} cleans better: more Pristine and Flawless ore, which earns more on your podiums.`
+		elseif entry.Upgrade == "Tier" then
+			return `Every {machine.Name} you have turns into the next furnace: Brick, Blast, then Plasma. Faster, but it needs power.`
 		end
 		return `Every {machine.Name} you place works faster: each level takes {percent(MachineData.SpeedPerLevel)} off the time per item.`
 	elseif entry.Kind == "Bellows" then
@@ -860,11 +878,22 @@ end
 
 local function levelTitle(entry: EconomyConfig.TechItem): string
 	if entry.Kind == "Upgrade" then
+		if entry.Upgrade == "Tier" then
+			return `{MachineData.ById[entry.Machine :: string].Name} Upgrade`
+		end
 		return `{MachineData.ById[entry.Machine :: string].Name} {entry.Upgrade}`
 	elseif entry.Kind == "Bellows" then
 		return "Bellows"
 	end
 	return "Machine Slots"
+end
+
+-- The Furnace's tier card shows the furnace it turns into next (the top tier when done).
+local function tierIcon(entry: EconomyConfig.TechItem, level: number, max: number): string?
+	if entry.Kind ~= "Upgrade" or entry.Upgrade ~= "Tier" then
+		return nil
+	end
+	return MachineData.info(entry.Machine :: string, math.min(level + 1, max)).Look
 end
 
 local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }, coins: number, order: number): Card
@@ -895,8 +924,8 @@ local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }
 		PriceSubColor = Theme.TextDim,
 		Done = done,
 		Buys = buys,
-		Icon = if entry.Kind == "Upgrade" then entry.Machine :: string else entry.Kind,
-		Badge = if entry.Kind == "Upgrade" then entry.Upgrade else nil,
+		Icon = tierIcon(entry, level, max) or (if entry.Kind == "Upgrade" then entry.Machine :: string else entry.Kind),
+		Badge = if entry.Kind == "Upgrade" and entry.Upgrade ~= "Tier" then entry.Upgrade else nil,
 		Note = nil,
 	}
 end

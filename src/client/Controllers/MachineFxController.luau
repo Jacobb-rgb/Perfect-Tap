@@ -434,7 +434,9 @@ end
 -- Finds the parts each machine type animates (names from MachineBuilder).
 local function capture(fx: Fx)
 	local model, base = fx.Model, fx.Base
-	local id = fx.Id
+	-- a machine at a tier looks like another model (the Furnace as Plasma: MachineBuilder's Look)
+	local look = model:GetAttribute("Look")
+	local id = if type(look) == "string" then look else fx.Id
 	if FURNACES[id] then
 		-- the door glow may be built from several "Glow" parts (an arch's
 		-- block and round top): the one holding the light leads

@@ -37,13 +37,19 @@ return function(T, Loader)
 		T.eq(crusher.OutputText, MachineInfo.FrontText, "results out of the front")
 
 		local furnace = MachineInfo.describe("ClayFurnace")
-		T.eq(furnace.Flow, "Clean ore, Crushed ore -> Ingot · 6 s", "kinds in processing order")
+		T.eq(furnace.Name, "Furnace")
+		T.eq(furnace.Flow, "Crushed ore -> Ingot · 6 s", "the Furnace takes crushed ore only")
 
-		local blast = MachineInfo.describe("BlastFurnace")
-		T.eq(blast.Flow, "Clean ore, Crushed ore -> Ingot · 2.5 s", "half seconds")
+		-- the player's tier of the Furnace (MachineData.tierOf)
+		local blast = MachineInfo.describe("ClayFurnace", 2)
+		T.eq(blast.Name, "Blast Furnace", "the tier's name")
+		T.eq(blast.Flow, "Crushed ore -> Ingot · 2.5 s", "half seconds")
+		T.eq(blast.PowerNeed, 20, "the tier's power")
 
-		local plasma = MachineInfo.describe("PlasmaFurnace")
+		local plasma = MachineInfo.describe("ClayFurnace", 3)
 		T.truthy(has(plasma.Flow, "(2 at once)"), "Batch")
+		T.eq(MachineInfo.powerChip("ClayFurnace"), nil, "the clay tier needs no power")
+		T.eq(MachineInfo.powerChip("ClayFurnace", 1), "PWR 10", "the brick tier does")
 
 		local alloy = MachineInfo.describe("AlloyFurnace")
 		T.eq(alloy.Takes, "2 Ingots", "Inputs")
@@ -129,6 +135,15 @@ return function(T, Loader)
 			{ SolarPanel = { Speed = 4 } }
 		)
 		T.near(upgraded.Speed, MachineData.powerSpeed(30, 60), 1e-9, "upgraded solar")
+
+		-- the Furnace at the player's tier (data.MachineUpgrades): Plasma uses 60
+		local tiered = MachineInfo.powerPreview(
+			{ pole, solar },
+			{ Id = "ClayFurnace", X = 5, Z = 5, R = 0 },
+			{ ClayFurnace = { Tier = 3 } }
+		)
+		T.eq(tiered.State, "Slow", "a Plasma tier Furnace: 15 power for 60")
+		T.eq(MachineInfo.powerPreview({ pole, solar }, { Id = "ClayFurnace", X = 5, Z = 5, R = 0 }).State, "None", "the clay tier")
 
 		local far = MachineInfo.powerPreview({ pole, solar }, { Id = "BrickFurnace", X = 9, Z = 9, R = 0 })
 		T.eq(far.State, "NoPole", "4 cells away is out of reach")

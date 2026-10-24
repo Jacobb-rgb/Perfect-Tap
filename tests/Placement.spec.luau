@@ -183,15 +183,31 @@ return function(T, Loader)
 			T.truthy(MachineData.ById[id], "dev kit inventory id " .. id)
 			T.truthy(count >= 1 and count == math.floor(count), "dev kit count " .. id)
 		end
-		-- every output pops out onto a free cell on the plot
+		-- every output pops out onto a free cell on the plot, or straight into a machine that
+		-- takes it (the starter Crusher feeds the Furnace: it takes crushed ore only)
 		local occupied = Placement.occupancy(entries)
 		for _, e in entries do
 			local ox, oz = Grid.outputCell(e.Id, e.X, e.Z, e.R)
 			if ox then
 				T.truthy(ox >= 0 and oz >= 0 and ox < CELLS and oz < CELLS, e.Id .. " output on the plot")
-				T.eq(occupied[Grid.key(ox, oz)], nil, e.Id .. " output cell is free")
+				local into = occupied[Grid.key(ox, oz)]
+				if into then
+					local output = MachineData.ById[e.Id].Output :: string
+					local accepts = MachineData.ById[into.Id].Accepts
+					T.truthy(accepts and accepts[output], `{e.Id} feeds {into.Id}, which takes {output}`)
+				end
 			end
 		end
+		local crusher, furnace
+		for _, e in entries do
+			if e.Id == "Crusher" and not crusher then
+				crusher = e
+			elseif e.Id == "ClayFurnace" and not furnace then
+				furnace = e
+			end
+		end
+		local cx, cz = Grid.outputCell("Crusher", crusher.X, crusher.Z, crusher.R)
+		T.eq(occupied[Grid.key(cx :: number, cz :: number)], furnace, "the starter Crusher drops its piles into the Furnace")
 		local data = { PlacedMachines = entries, MachineInventory = {}, Storage = {} }
 		T.eq(#Placement.sanitize(data), 0, "nothing displaced")
 	end)

@@ -13,6 +13,11 @@
 	(saved in data.MachineUpgrades[machineId] = { Speed = level, Quality = level }):
 	  Speed    every level takes SpeedPerLevel off the job time (speedMult)
 	  Quality  Cleaning Plant only: the grade odds of QualityLevels[level + 1]
+	  Tier     the Furnace only (owner 2026-10-24: one furnace for everything,
+	           it changes as it is upgraded): level 1..3 turns every furnace
+	           of the player into the next of Tiers (Brick, Blast, Plasma:
+	           its time, power, batch and look); MachineData.info(id, tier)
+	           is the machine as it works at a tier
 	The Auto Cleaner is shown as "Cleaning Plant" (its Id stays "AutoCleaner").
 	The Iron Box and the pen's sorting billboard sort clean ore by
 	data.KeepMode and data.KeepList (MachineData.Keep, MachineData.keeps).
@@ -25,7 +30,17 @@ local Format = require(script.Parent.Parent.Util.Format)
 local Rarity = require(script.Parent.Rarity)
 
 -- Machine upgrade prices, level 1 first (index = the level you buy).
-export type UpgradePrices = { Speed: { number }?, Quality: { number }? }
+export type UpgradePrices = { Speed: { number }?, Quality: { number }?, Tier: { number }? }
+
+-- A tier of a machine (the Furnace's Brick / Blast / Plasma): what changes from the machine as listed.
+export type Tier = {
+	Id: string, -- "Brick" | "Blast" | "Plasma"
+	Name: string, -- shown name at this tier
+	Look: string, -- the KitMachines model it looks like (its own retired machine)
+	Time: number,
+	Power: number?,
+	Batch: number?,
+}
 
 export type Machine = {
 	Id: string,
@@ -68,11 +83,16 @@ export type Machine = {
 	-- ground and a deck: "Up" (Belt Lift: its front end is up at the deck) or "Down"
 	-- (Slide: its back end is up at the deck)
 	Slope: ("Up" | "Down")?,
+	Tiers: { Tier }?, -- the Tier upgrade's steps (level 1 = Tiers[1]), the Furnace only
+	Tier: number?, -- set on MachineData.info's tier copies: the tier they are (1..#Tiers)
+	Look: string?, -- set on tier copies: the KitMachines model they look like
 }
 
 local MachineData = {}
 
 local FURNACE_HINT = "Furnaces melt CLEAN or CRUSHED ore. Clean dirty ore at your Cleaning Station first!"
+-- The Furnace takes crushed ore only (owner 2026-10-24: the Crusher comes first).
+local CRUSH_HINT = "The Furnace melts CRUSHED ore. Put clean ore through your Crusher first!"
 
 -- Base upgrade price curves (exponential: players must not get everything at
 -- once). Each machine scales them (cheap machines cheaper, big ones dearer).
@@ -128,21 +148,28 @@ MachineData.List = {
 		ConveyorFaces = "All",
 	},
 	{
+		-- the one furnace for everything (its Id stays "ClayFurnace": every save has one)
 		Id = "ClayFurnace",
-		Name = "Clay Furnace",
-		Description = "Smelts clean or crushed ore into ingots.",
+		Name = "Furnace",
+		Description = "Smelts crushed ore into ingots. Upgrade it: Brick, Blast, then Plasma (two at once).",
 		Size = { 2, 2 },
 		Price = 500,
 		Category = "Processing",
 		Order = 3,
-		Accepts = { Clean = true, Crushed = true },
+		Accepts = { Crushed = true },
 		Time = 6,
 		Output = "Ingot",
 		OutputCount = 1,
 		LoadText = "Smelt Ore",
-		WrongHint = FURNACE_HINT,
+		WrongHint = CRUSH_HINT,
 		ConveyorFaces = "NoFront",
-		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5) },
+		-- Tier prices: what the Brick / Blast / Plasma Furnaces cost (every furnace of the player turns)
+		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5), Tier = { 6000, 30000, 5000000 } },
+		Tiers = {
+			{ Id = "Brick", Name = "Brick Furnace", Look = "BrickFurnace", Time = 4, Power = 10 },
+			{ Id = "Blast", Name = "Blast Furnace", Look = "BlastFurnace", Time = 2.5, Power = 20 },
+			{ Id = "Plasma", Name = "Plasma Furnace", Look = "PlasmaFurnace", Time = 2.5, Power = 60, Batch = 2 },
+		},
 	},
 	{
 		Id = "Crusher",
@@ -233,7 +260,7 @@ MachineData.List = {
 		Size = { 3, 3 },
 		Price = 30000,
 		Category = "Processing",
-		Order = 7,
+		Order = 92, -- retired: after everything sold
 		Accepts = { Clean = true, Crushed = true },
 		Time = 2.5,
 		Output = "Ingot",
@@ -241,6 +268,7 @@ MachineData.List = {
 		LoadText = "Smelt Ore",
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
+		Retired = true, -- the Furnace's tiers now (owner 2026-10-24); its look stays in KitMachines
 		Upgrades = { Speed = scaled(SPEED_CURVE, 4) },
 		Power = 20,
 	},
@@ -309,7 +337,7 @@ MachineData.List = {
 		Size = { 2, 2 },
 		Price = 6000,
 		Category = "Processing",
-		Order = 14,
+		Order = 91, -- retired: after everything sold
 		Accepts = { Clean = true, Crushed = true },
 		Time = 4,
 		Output = "Ingot",
@@ -318,6 +346,7 @@ MachineData.List = {
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
 		Power = 10,
+		Retired = true, -- the Furnace's tiers now (owner 2026-10-24); its look stays in KitMachines
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1.5) },
 	},
 	{
@@ -413,7 +442,7 @@ MachineData.List = {
 		Size = { 2, 2 },
 		Price = 5000000,
 		Category = "Processing",
-		Order = 20,
+		Order = 93, -- retired: after everything sold
 		Accepts = { Clean = true, Crushed = true },
 		Time = 2.5,
 		Batch = 2,
@@ -423,6 +452,7 @@ MachineData.List = {
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
 		Power = 60,
+		Retired = true, -- the Furnace's tiers now (owner 2026-10-24); its look stays in KitMachines
 		Upgrades = { Speed = scaled(SPEED_CURVE, 30) },
 	},
 	{
@@ -592,6 +622,9 @@ local KIT_SHIFT_Z = GameConfig.PlotCells - 12
 MachineData.StarterKit = {
 	{ Id = "CleaningStation", X = 4 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
 	{ Id = "ClayFurnace", X = 8 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
+	-- the Furnace takes crushed ore only (owner 2026-10-24): the Crusher stands behind it
+	-- (toward the back wall) and drops its piles straight into it
+	{ Id = "Crusher", X = 8 + KIT_SHIFT_X, Z = 6 + KIT_SHIFT_Z, R = 0 },
 }
 
 MachineData.BaseMachineSlots = 10
@@ -640,7 +673,7 @@ end
 
 ---------------------------------------------------------------- upgrades
 
-MachineData.UpgradeKinds = { "Speed", "Quality" }
+MachineData.UpgradeKinds = { "Speed", "Quality", "Tier" }
 -- The base curves the machines scale (level 1 first).
 MachineData.UpgradeCurves = { Speed = SPEED_CURVE, Quality = QUALITY_CURVE }
 -- Each Speed level takes this share of the base job time off (level 5: 60%).
@@ -663,6 +696,8 @@ function MachineData.upgradePrices(machineId: string, kind: string): { number }?
 		return upgrades.Speed
 	elseif kind == "Quality" then
 		return upgrades.Quality
+	elseif kind == "Tier" then
+		return upgrades.Tier
 	end
 	return nil
 end
@@ -682,6 +717,55 @@ end
 -- returned table is shared config: read it, never change it.
 function MachineData.gradeOdds(level: any): { [string]: number }
 	return QUALITY_LEVELS[wholeLevel(level, #QUALITY_LEVELS - 1) + 1]
+end
+
+---------------------------------------------------------------- tiers
+
+-- The tier a save's machine type works at (0 = as listed, up to #Tiers; broken values count as 0).
+function MachineData.tierOf(machineUpgrades: any, machineId: string): number
+	local machine = MachineData.ById[machineId]
+	local tiers = machine and machine.Tiers
+	if not tiers then
+		return 0
+	end
+	local record = if type(machineUpgrades) == "table" then machineUpgrades[machineId] else nil
+	return wholeLevel(if type(record) == "table" then record.Tier else 0, #tiers)
+end
+
+local tierCopies: { [string]: { [number]: Machine } } = {}
+
+--[[
+	The machine as it works at `tier` (0 / nil / no tiers: the listed entry
+	itself). A tier copy is the listed entry with the tier's Name, Time,
+	Power and Batch, plus Tier and Look; made once and shared (read it,
+	never change it).
+]]
+function MachineData.info(machineId: string, tier: any?): Machine
+	local machine = MachineData.ById[machineId]
+	local tiers = machine and machine.Tiers
+	local level = if tiers then wholeLevel(tier, #tiers) else 0
+	if not tiers or level == 0 then
+		return machine
+	end
+	local copies = tierCopies[machineId]
+	if not copies then
+		copies = {}
+		tierCopies[machineId] = copies
+	end
+	local found = copies[level]
+	if found then
+		return found
+	end
+	local step = tiers[level]
+	local copy: Machine = table.clone(machine)
+	copy.Name = step.Name
+	copy.Time = step.Time
+	copy.Power = step.Power
+	copy.Batch = step.Batch
+	copy.Tier = level
+	copy.Look = step.Look
+	copies[level] = copy
+	return copy
 end
 
 ---------------------------------------------------------------- keeping
@@ -767,9 +851,9 @@ end
 	  UnpoweredSpeed                      when it is on no network with power,
 	  UnpoweredSpeed + (1 - Unpowered) * min(1, supply / demand)  otherwise.
 	A generator makes PowerOut, PowerPerLevel more per Speed level.
-	The starter tier (Clay Furnace, Crusher, Auto Cleaner, Iron Box,
+	The starter tier (the Furnace, Crusher, Auto Cleaner, Iron Box,
 	Splitter) needs no power, so a new player is never slowed; power
-	matters from the Brick Furnace up (Claude's proposal, 2026-10-17).
+	matters from the Furnace's Brick tier up (Claude's proposal, 2026-10-17).
 ]]
 MachineData.PowerRules = {
 	UnpoweredSpeed = 0.6,

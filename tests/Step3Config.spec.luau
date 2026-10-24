@@ -621,7 +621,7 @@ return function(T, Loader)
 		T.lt(price("ClayFurnace"), price("Crusher"))
 		T.lt(price("Crusher"), price("IronBox"))
 		T.lt(price("IronBox"), price("AutoCleaner"))
-		T.lt(price("AutoCleaner"), price("BlastFurnace"))
+		T.lt(price("AutoCleaner"), (MachineData.ById.ClayFurnace.Upgrades :: any).Tier[2], "the Blast tier of the Furnace")
 		for id in MachineData.Retired do
 			T.lt(80, MachineData.ById[id].Order, id .. " sorts after everything sold")
 		end
@@ -823,7 +823,7 @@ return function(T, Loader)
 	T.test("Step 3: new save fields", function()
 		-- step 3 bumped no version (reconcile fills the records in); 4 is the bigger
 		-- plots' grid move (Migrations), which an old save needs once
-		T.eq(DataTemplate.Version, 5, "no step 3 bump: reconcile fills the records (4: the grid move, 5: levels)")
+		T.eq(DataTemplate.Version, 6, "no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace)")
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")
 		T.eq(type(DataTemplate.KeepList), "table")

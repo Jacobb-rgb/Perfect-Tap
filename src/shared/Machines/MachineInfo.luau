@@ -177,12 +177,14 @@ local function outputTextOf(machine: MachineData.Machine): string?
 	return nil
 end
 
--- Everything the info card says about a machine type (nil for an unknown id).
-function MachineInfo.describe(id: any): Info?
-	local machine = if type(id) == "string" then MachineData.ById[id] else nil
-	if not machine then
+-- Everything the info card says about a machine type (nil for an unknown id), at the
+-- player's `tier` of it (the Furnace: MachineData.tierOf(state.MachineUpgrades, id)).
+function MachineInfo.describe(id: any, tier: number?): Info?
+	local listed = if type(id) == "string" then MachineData.ById[id] else nil
+	if not listed then
 		return nil
 	end
+	local machine = MachineData.info(listed.Id, tier)
 	local takes, gives = takesOf(machine), givesOf(machine)
 	local seconds = if machine.Time and machine.Time > 0 then machine.Time else nil
 	local flow: string? = nil
@@ -216,9 +218,10 @@ function MachineInfo.describe(id: any): Info?
 end
 
 -- The tray card's power chip in words (no emoji, owner 2026-10-21): "PWR 10"
--- (needs), "+40 PWR" (makes), "PWR" (a pole), nil (no part in power).
-function MachineInfo.powerChip(id: any): string?
-	local machine = if type(id) == "string" then MachineData.ById[id] else nil
+-- (needs), "+40 PWR" (makes), "PWR" (a pole), nil (no part in power); at the player's
+-- `tier` of a machine with tiers (the Furnace).
+function MachineInfo.powerChip(id: any, tier: number?): string?
+	local machine = if type(id) == "string" and MachineData.ById[id] then MachineData.info(id, tier) else nil
 	local kind = PowerLogic.kindOf(machine)
 	if not machine or kind == "Other" then
 		return nil
@@ -270,7 +273,8 @@ end
 	Speed level). Same rules as PowerService (PowerLogic.compute).
 ]]
 function MachineInfo.powerPreview(entries: { Entry }, ghost: Entry, machineUpgrades: any?): Preview
-	local machine = MachineData.ById[ghost.Id]
+	-- a machine with tiers (the Furnace) uses the power of the player's tier
+	local machine = if MachineData.ById[ghost.Id] then MachineData.info(ghost.Id, MachineData.tierOf(machineUpgrades, ghost.Id)) else nil
 	local kind: PowerLogic.Kind = PowerLogic.kindOf(machine)
 	local preview: Preview = { Kind = kind, State = "None", Speed = 1, Text = nil, Good = true, Pole = nil, Links = {}, Feeds = {} }
 	if kind == "Other" then
@@ -279,7 +283,7 @@ function MachineInfo.powerPreview(entries: { Entry }, ghost: Entry, machineUpgra
 	local list: { Entry } = table.clone(entries)
 	table.insert(list, ghost)
 	local me = #list
-	local result = PowerLogic.compute(list, PowerLogic.speedLevels(machineUpgrades))
+	local result = PowerLogic.compute(list, PowerLogic.speedLevels(machineUpgrades), machineUpgrades)
 	local rules = MachineData.PowerRules
 	local mine = result.Machines[me]
 	if not mine then

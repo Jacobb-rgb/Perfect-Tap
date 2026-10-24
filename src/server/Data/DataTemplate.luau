@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 5, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL)
+	Version = 6, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent

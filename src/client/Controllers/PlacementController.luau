@@ -1111,7 +1111,10 @@ function Ux.showInfo(refs: BuildView.Refs)
 			end
 		end
 	end
-	BuildView.setInfo(refs, MachineInfo.describe(id), note)
+	-- a machine with tiers (the Furnace) is described at the player's tier
+	local state = StateController.get()
+	local tier = if id then MachineData.tierOf(state and state.MachineUpgrades, id) else 0
+	BuildView.setInfo(refs, MachineInfo.describe(id, tier), note)
 end
 
 -- Build mode's own UI at a point (viewport pixels, like GetMouseLocation):

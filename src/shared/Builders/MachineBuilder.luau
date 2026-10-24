@@ -2092,13 +2092,53 @@ local BUILDERS: { [string]: () -> Model } = {
 }
 
 --[[
+	A machine at a tier (the Furnace as Brick / Blast / Plasma): the look of
+	the tier's own KitMachines model, shrunk into the machine's footprint
+	when it is bigger (the Blast Furnace is 3 x 3), with the machine's own
+	attachments (Intake, Output, Prompt, Status...) so it works exactly like
+	the machine. Attribute Look = the model it looks like (MachineFx).
+]]
+local function tierLook(id: string, look: string, level: number?): Model
+	local model = KitMachines.build(look, level)
+	model.Name = id
+	model:SetAttribute("Look", look)
+	local info, lookInfo = MachineData.ById[id], MachineData.ById[look]
+	local fit = math.min(info.Size[1] / lookInfo.Size[1], info.Size[2] / lookInfo.Size[2])
+	if fit < 1 then
+		BlockKit.scale(model, CFrame.new(), fit)
+	end
+	local base = model.PrimaryPart :: BasePart
+	local own = KitMachines.build(id, level)
+	local ownBase = own.PrimaryPart :: BasePart
+	for _, child in base:GetChildren() do
+		if child:IsA("Attachment") then
+			child:Destroy()
+		end
+	end
+	for _, child in ownBase:GetChildren() do
+		if child:IsA("Attachment") then
+			local copy = child:Clone()
+			copy.CFrame = base.CFrame:ToObjectSpace(ownBase.CFrame * child.CFrame)
+			copy.Parent = base
+		end
+	end
+	own:Destroy()
+	return model
+end
+
+--[[
 	Builds a machine model at the local origin (place it with :PivotTo()).
 	The machines in the roster look (KitMachines: the owner's chosen "Soft"
 	style, 2026-10-17) come from KitMachines, `level` = their upgrade look
-	(0 plain ... KitMachines.MaxLevel crystal); the retired machines (Storage
-	Crate, Anvil, Sell Chute) keep their old builders below.
+	(0 plain ... KitMachines.MaxLevel crystal), `tier` = the player's tier of
+	a machine with tiers (the Furnace: MachineData.info); the retired
+	machines (Storage Crate, Anvil, Sell Chute) keep their old builders below.
 ]]
-function MachineBuilder.build(id: string, level: number?): Model
+function MachineBuilder.build(id: string, level: number?, tier: number?): Model
+	local look = if MachineData.ById[id] then MachineData.info(id, tier).Look else nil
+	if look and look ~= id and KitMachines.has(look) and KitMachines.has(id) then
+		return tierLook(id, look, level)
+	end
 	if KitMachines.has(id) then
 		return KitMachines.build(id, level)
 	end

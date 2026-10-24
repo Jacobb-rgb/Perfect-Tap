@@ -169,8 +169,44 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("KitMachines: the Furnace at every tier keeps its own footprint and attachments", function()
+		local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+		local own = MachineBuilder.build("ClayFurnace", 0)
+		local hw, hd = CELL, CELL -- the Furnace is 2 x 2
+		for tier, step in MachineData.ById.ClayFurnace.Tiers do
+			for _, level in { 0, KitMachines.MaxLevel } do
+				local model = MachineBuilder.build("ClayFurnace", level, tier)
+				local tag = `{step.Id} L{level}`
+				T.eq(model.Name, "ClayFurnace", tag .. " keeps the machine's name")
+				T.eq(model:GetAttribute("Look"), step.Look, tag .. " looks like its tier")
+				for _, name in { "Prompt", "Output", "Intake", "Status" } do
+					local mine, theirs = attachment(model, name), attachment(own, name)
+					T.truthy(mine, tag .. " " .. name)
+					if mine and theirs and name ~= "Status" then
+						local mineAt = (mine.Parent.CFrame * mine.CFrame).Position
+						local theirsAt = (theirs.Parent.CFrame * theirs.CFrame).Position
+						local d = (mineAt - theirsAt).Magnitude
+						T.truthy(d < 1e-3, `{tag} {name} where the Furnace has it ({d})`)
+					end
+				end
+				T.truthy(find(model, "Glow"), tag .. " a glowing door (MachineFx)")
+				-- the plain look in the footprint (crystals may reach out, as on every machine)
+				for _, part in if level == 0 then parts(model) else {} do
+					if part.Name ~= "Chute" and part.Name ~= "ChuteLip" and part.Name ~= "Molten" then
+						local cf, sz = part.CFrame, part.Size
+						local r = { cf:GetComponents() }
+						local ex = math.abs(r[4]) * sz.X / 2 + math.abs(r[5]) * sz.Y / 2 + math.abs(r[6]) * sz.Z / 2
+						local ez = math.abs(r[10]) * sz.X / 2 + math.abs(r[11]) * sz.Y / 2 + math.abs(r[12]) * sz.Z / 2
+						local p = cf.Position
+						T.truthy(math.abs(p.X) + ex <= hw + 0.4 and math.abs(p.Z) + ez <= hd + 0.4, tag .. " " .. part.Name .. " in 2 x 2")
+					end
+				end
+			end
+		end
+	end)
+
 	T.test("KitMachines: every roster machine builds, stays in its footprint and within budget", function()
-		T.eq(#KitMachines.Catalog, 24, "the roster has 24 machines")
+		T.eq(#KitMachines.Catalog, 21, "the roster has 21 machines (one Furnace: Brick / Blast / Plasma are its tiers)")
 		local skip = { Chute = true, ChuteLip = true, Molten = true, Blade = true, Cable = true }
 		for _, entry in KitMachines.Catalog do
 			local id = entry.Id

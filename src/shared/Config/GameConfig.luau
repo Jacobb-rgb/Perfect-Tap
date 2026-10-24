@@ -21,7 +21,7 @@ local STUDIO_DEV_KIT: DevKit | false = {
 	Layout = {
 		{ Id = "Crusher", X = 4 + GRID_SHIFT, Z = 9 + GRID_GROW, R = 0 },
 		{ Id = "AutoCleaner", X = 0 + GRID_SHIFT, Z = 10 + GRID_GROW, R = 0 },
-		{ Id = "BlastFurnace", X = 7 + GRID_SHIFT, Z = 8 + GRID_GROW, R = 0 },
+		{ Id = "ClayFurnace", X = 10 + GRID_SHIFT, Z = 8 + GRID_GROW, R = 0 }, -- clear of the starter Crusher
 	},
 	Inventory = { Conveyor = 24, ClayFurnace = 1 },
 }

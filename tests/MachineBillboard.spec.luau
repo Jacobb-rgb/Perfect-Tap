@@ -410,8 +410,7 @@ return function(T, Loader)
 	T.test("MachineBillboard: a waiting machine says what it needs (one line)", function()
 		local expected = {
 			AutoCleaner = "Needs dirty ore",
-			ClayFurnace = "Needs clean or crushed ore",
-			BlastFurnace = "Needs clean or crushed ore",
+			ClayFurnace = "Needs crushed ore",
 			Crusher = "Needs clean ore",
 			Polisher = "Needs clean ore",
 			CrystalExtractor = "Needs crushed ore",

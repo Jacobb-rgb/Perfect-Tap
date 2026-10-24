@@ -136,7 +136,7 @@ function TutorialConfig.machinesBought(data: Data, starterCount: number): boolea
 	return false
 end
 
-TutorialConfig.StarterMachines = 2 -- MachineData.StarterKit: Cleaning Station + Clay Furnace
+TutorialConfig.StarterMachines = 3 -- MachineData.StarterKit: Cleaning Station + Furnace + Crusher
 
 -- Woke a golem (a capsule opened, or one is owned).
 function TutorialConfig.golems(data: Data): boolean
@@ -256,7 +256,7 @@ TutorialConfig.Steps = {
 	{
 		Id = "Blaster",
 		Title = "A stronger blaster",
-		Text = "Smelt ore into ingots in your furnace, then forge a better blaster at your Foundry.",
+		Text = "Crush ore, smelt the piles into ingots, then forge a better blaster at your Foundry.",
 		Target = "Foundry",
 		done = function(data: Data, _signals: Signals): boolean
 			return M.blaster(data)

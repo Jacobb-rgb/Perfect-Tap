@@ -98,15 +98,14 @@ The *Strong Back* pass doubles it.
 |---|---|---|---|
 | Storage Crate | 2×2 | 150 | crates share one store: 60 per crate, 300 max; take items out again |
 | Cleaning Station | 3×2 | 250 | the hand-cleaning minigame |
-| Clay Furnace | 2×2 | 300 | clean/crushed ore → ingot, 6 s. Queue: 4 items |
+| Furnace | 2×2 | 500 | crushed ore → ingot, 6 s. Queue: 4 items. The one furnace (owner 2026-10-24): the Tech shop's Furnace Upgrade turns every furnace into Brick (4 s, 10 power), Blast (2.5 s, 20 power) and Plasma (2.5 s, 2 at once, 60 power) |
 | Crusher | 2×2 | 450 | clean ore → 2 crushed piles, 3 s. Queue: 4 items |
 | Anvil | 2×2 | 600 | holds 4 ingots of one ore; 3/4/5/6 hammer taps make a Dagger / Tool Head / Helm / Greatsword |
 | Auto Cleaner | 2×2 | 2,500 | raw → clean, 8 s: 60% Rough / 40% Clean. Queue: 4 items |
 | Sell Chute | 1×1 | 1,200 | sells anything dropped in; pays the item's owner |
-| Blast Furnace | 3×3 | 6,000 | like the Clay Furnace, 2.5 s. Queue: 4 items |
 | Conveyor | 1×1 | 25 | moves items 7 studs/s, 4 rotations; players walk through |
 
-New players start with a Storage Crate, Cleaning Station and Clay Furnace.
+New players start with a Cleaning Station, a Furnace and a Crusher behind it (the Furnace takes crushed ore only).
 Drop or throw items into the hopper on top, or run a belt into any side
 except the output front (crates and Sell Chutes take all sides). Results go
 out of the front cell (the right front cell on 2-wide machines), straight

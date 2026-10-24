@@ -520,6 +520,10 @@ return function(T, Loader)
 		PowerService.init()
 		for _, info in MachineData.List do
 			local kind = PowerLogic.kindOf(info)
+			-- the Furnace uses power from its Brick tier up (MachineData.info)
+			if kind == "Other" and info.Tiers then
+				kind = PowerLogic.kindOf(MachineData.info(info.Id, #info.Tiers))
+			end
 			if info.Retired or kind == "Other" then
 				T.eq(registered[info.Id], nil, info.Id .. " not registered")
 			else
@@ -564,11 +568,12 @@ return function(T, Loader)
 		local data: any = deepCopy(DataTemplate)
 		data.StarterKitGiven = true
 		data.MachineInventory = {}
-		data.MachineUpgrades = { SolarPanel = { Speed = 1 } }
+		-- the Furnace at its Brick tier uses 10 power (MachineData.info)
+		data.MachineUpgrades = { SolarPanel = { Speed = 1 }, ClayFurnace = { Tier = 1 } }
 		data.PlacedMachines = {
 			{ Id = "PowerPole", X = 5, Z = 5, R = 0 },
 			{ Id = "SolarPanel", X = 2, Z = 5, R = 0 }, -- 18.75
-			{ Id = "BrickFurnace", X = 6, Z = 6, R = 0 }, -- 10
+			{ Id = "ClayFurnace", X = 6, Z = 6, R = 0 }, -- 10 at the Brick tier
 			{ Id = "RobotArm", X = 9, Z = 9, R = 0 }, -- 4, out of reach (4 cells)
 		}
 		local modifiers = {}
@@ -609,10 +614,12 @@ return function(T, Loader)
 				for _, machine in MachineService.ofPlot(3) do
 					byId[machine.Id] = machine
 				end
-				local furnace = byId.BrickFurnace
+				local furnace = byId.ClayFurnace
 				return furnace ~= nil and furnace.Model:GetAttribute("PowerSpeed") ~= nil
 			end)
-			local furnace, crusher = byId.BrickFurnace, byId.RobotArm
+			local furnace, crusher = byId.ClayFurnace, byId.RobotArm
+			T.eq(furnace.Info.Name, "Brick Furnace", "the tier's info")
+			T.eq(furnace.Model:GetAttribute("Look"), "BrickFurnace", "the tier's look")
 			T.eq(furnace.Model:GetAttribute("PowerSpeed"), 1, "18.75 for 10")
 			T.eq(furnace.Model:GetAttribute("Powered"), true)
 			T.eq(crusher.Model:GetAttribute("PowerSpeed"), UNPOWERED, "out of reach")
@@ -639,10 +646,10 @@ return function(T, Loader)
 			T.eq(crusher.Model:GetAttribute("Powered"), false)
 			T.eq(modifiers[1](crusher), UNPOWERED)
 			-- a model rebuilt for an upgrade look keeps its attributes
-			MachineService.refreshType(player, "BrickFurnace")
+			MachineService.refreshType(player, "ClayFurnace")
 			local rebuilt
 			for _, machine in MachineService.ofPlot(3) do
-				if machine.Id == "BrickFurnace" then
+				if machine.Id == "ClayFurnace" then
 					rebuilt = machine
 				end
 			end

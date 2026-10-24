@@ -47,16 +47,18 @@ return function(T, Loader)
 	T.test("MachineLogic: accept rules per machine", function()
 		local raw = { K = "Raw", O = "Copper" }
 		local crushed = { K = "Crushed", O = "Copper", G = "Rough" }
-		for _, id in { "ClayFurnace", "BlastFurnace" } do
+		-- the one Furnace takes crushed ore only (owner 2026-10-24: the Crusher comes first)
+		do
+			local id = "ClayFurnace"
 			local furnace = entry(id)
 			T.eq(select(2, MachineLogic.accepts(id, raw, furnace, true)), "Wrong", id .. " raw")
-			T.truthy(MachineLogic.accepts(id, clean("Copper"), furnace, true), id .. " clean")
+			T.eq(select(2, MachineLogic.accepts(id, clean("Copper"), furnace, true)), "Wrong", id .. " clean: crush it first")
 			T.truthy(MachineLogic.accepts(id, crushed, furnace, true), id .. " crushed")
 			T.eq(select(2, MachineLogic.accepts(id, ingot("Copper"), furnace, true)), "Wrong", id .. " ingot")
 			for _ = 1, MAX_IN do
-				MachineLogic.push(furnace, clean("Copper"))
+				MachineLogic.push(furnace, crushed)
 			end
-			T.eq(select(2, MachineLogic.accepts(id, clean("Copper"), furnace, true)), "Full", id .. " 5th item")
+			T.eq(select(2, MachineLogic.accepts(id, crushed, furnace, true)), "Full", id .. " 5th item")
 		end
 		T.truthy(MachineLogic.accepts("Crusher", clean("Iron"), entry("Crusher"), true))
 		T.eq(select(2, MachineLogic.accepts("Crusher", crushed, entry("Crusher"), true)), "Wrong", "crusher crushed")
@@ -405,6 +407,11 @@ return function(T, Loader)
 		T.eq(#MachineLogic.batch("PlasmaFurnace", nil, 0), 0, "no queue")
 		T.eq(#MachineLogic.batch("PlasmaFurnace", {}, 0), 0, "empty queue")
 		T.eq(#MachineLogic.batch("BrickFurnace", q, 0), 1, "no Batch: one at a time")
+		-- the Furnace at its Plasma tier (MachineData.info) smelts two crushed piles at once
+		local piles = { crushed("Iron"), crushed("Gold"), crushed("Copper") }
+		T.eq(#MachineLogic.batch(MachineData.info("ClayFurnace", 3), piles, 0), 2, "the Plasma tier: two at once")
+		T.eq(#MachineLogic.batch(MachineData.info("ClayFurnace", 2), piles, 0), 1, "the Blast tier: one")
+		T.eq(#MachineLogic.batch("ClayFurnace", piles, 0), 1, "the clay tier: one")
 		T.eq(#MachineLogic.batch("Nope", q, 0), 0, "unknown machine")
 		-- consume takes the very tables out of In, wherever they are
 		local e = entry("AlloyFurnace")

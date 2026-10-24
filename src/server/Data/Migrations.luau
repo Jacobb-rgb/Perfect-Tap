@@ -166,6 +166,13 @@
 	- The trigger is the loaded Version, never a template field: ProfileStore
 	  reconciles the template in BEFORE this runs, so a new field would
 	  already read "done". Saves with Version 4 or more are never moved.
+
+	Version 6 (one Furnace, owner 2026-10-24): the Brick, Blast and Plasma
+	Furnaces are the Furnace's tiers now (MachineData Retired: refunded and
+	taken off the plot like the other retired machines, above), and the
+	Furnace takes crushed ore only. A save loaded with a Version below 6
+	gets a Crusher in its Build menu once, if it has none placed or waiting
+	there (the trigger is the loaded Version, as for Version 4).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -187,7 +194,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 5 -- 5: the player LEVEL record (repaired below on every load)
+Migrations.Latest = 6 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -812,6 +819,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local loadedVersion = data.Version
 	-- a save from before the 16-cell grid moves its layout once (Version 4)
 	local gridShift = not (isFinite(loadedVersion) and loadedVersion >= 4)
+	-- a save from before the one Furnace gets a Crusher once (Version 6)
+	local crusherGift = not (isFinite(loadedVersion) and loadedVersion >= 6)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -957,6 +966,21 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		if count then
 			data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + MachineData.ById[id].Price * count
 			inventory[id] = nil
+			report.Moved += 1
+		end
+	end
+
+	-- v6: the Furnace takes crushed ore only: a Crusher once, unless the save has one
+	if crusherGift then
+		local has = isFinite(inventory.Crusher) and inventory.Crusher >= 1
+		for _, entry in placed do
+			if entry.Id == "Crusher" then
+				has = true
+				break
+			end
+		end
+		if not has then
+			inventory.Crusher = 1
 			report.Moved += 1
 		end
 	end

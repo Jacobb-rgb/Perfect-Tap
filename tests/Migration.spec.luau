@@ -44,15 +44,15 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 4", function()
-		T.eq(DataTemplate.Version, 5)
-		T.eq(Migrations.Latest, 5)
+	T.test("Migration: template is version 6", function()
+		T.eq(DataTemplate.Version, 6)
+		T.eq(Migrations.Latest, 6)
 	end)
 
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 5)
+		T.eq(data.Version, 6)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -95,7 +95,7 @@ return function(T, Loader)
 		data.Version = 1
 		data.Storage = { { K = "Raw", O = "Copper" }, 42, "x", { K = "Ingot", O = "Iron", G = "Clean" } }
 		data.PlacedMachines = {
-			{ Id = "BlastFurnace", X = 1, Z = 1, R = 0, In = "nope", Out = {} },
+			{ Id = "FusionReactor", X = 1, Z = 1, R = 0, In = "nope", Out = {} },
 			{
 				Id = "Crusher",
 				X = 4,
@@ -123,8 +123,8 @@ return function(T, Loader)
 		T.truthy(rescued.Unobtainium, "a newer build's ore waits in the pen (the machine would drop it)")
 		T.truthy(rescued.Silver, "contents of a dropped unknown machine are kept")
 		T.truthy(rescued.Gold, "contents of a machine sent to the inventory are kept")
-		local blast = data.PlacedMachines[1]
-		T.eq(blast.Id, "BlastFurnace")
+		local blast = data.PlacedMachines[1] -- a 3x3 machine
+		T.eq(blast.Id, "FusionReactor")
 		T.eq(blast.In, nil, "non-table In becomes nil")
 		T.eq(blast.Out, nil, "empty Out becomes nil")
 		local crusher = data.PlacedMachines[2]
@@ -157,7 +157,7 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 5)
+		T.eq(data.Version, 6)
 		local newer = { Version = 7, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, 7, "a newer save's version is not lowered")
@@ -198,8 +198,9 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 5)
-		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair")
+		T.eq(data.Version, 6)
+		T.eq(report.Moved + report.Dropped, 1, "a move, not a repair (and the v6 Crusher, below)")
+		T.eq(data.MachineInventory.Crusher, 1, "a save without a Crusher gets one (the Furnace takes crushed ore)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
 		local onChute = {}
@@ -238,7 +239,7 @@ return function(T, Loader)
 		T.eq(report.Moved + report.Dropped, 0)
 	end)
 
-	T.test("Migration v4: a v3 factory (chute belts, a deck belt, a 3x3 furnace) loads with nothing displaced", function()
+	T.test("Migration v4: a v3 factory (chute belts, a deck belt, a 3x3 machine) loads with nothing displaced", function()
 		local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
 		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 		local data = ProfileStore.deepCopy(DataTemplate)
@@ -251,7 +252,7 @@ return function(T, Loader)
 			{ Id = "Conveyor", X = 9, Z = 11, R = BaseLayout.SinkRotation }, -- into the FOUNDRY
 			{ Id = "Platform", X = 0, Z = 0, R = 0 },
 			{ Id = "Conveyor", X = 0, Z = 0, R = 1, L = 1 }, -- on the deck
-			{ Id = "BlastFurnace", X = 5, Z = 5, R = 0 },
+			{ Id = "FusionReactor", X = 5, Z = 5, R = 0 },
 		}
 		Migrations.run(data)
 		local displaced = Placement.sanitize(data)
@@ -294,7 +295,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 5)
+			T.eq(data.Version, 6)
 		end
 	end)
 
@@ -306,7 +307,7 @@ return function(T, Loader)
 		data.PlacedMachines = {
 			{ Id = "Crusher", X = 0 / 0, Z = 1, R = 0, In = { { K = "Raw", O = "Gold" } } },
 			{ Id = "ClayFurnace", X = math.huge, Z = 3, R = 0 },
-			{ Id = "BlastFurnace", X = 4, Z = "far", R = 0 },
+			{ Id = "FusionReactor", X = 4, Z = "far", R = 0 },
 			{ Id = "Conveyor", X = 2.7, Z = 3.2, R = 6 },
 		}
 		local report = Migrations.run(data)
@@ -317,9 +318,58 @@ return function(T, Loader)
 		T.eq(belt.R, 2)
 		T.eq(data.MachineInventory.Crusher, 1, "the Crusher went back to the inventory")
 		T.eq(data.MachineInventory.ClayFurnace, 1)
-		T.eq(data.MachineInventory.BlastFurnace, 1)
+		T.eq(data.MachineInventory.FusionReactor, 1)
 		T.eq(data.Storage[#data.Storage].O, "Gold", "its queue went to the pen")
 		T.eq(report.Moved, 4, "3 machines and 1 item")
+	end)
+
+	T.test("Migration v6: one Furnace: old furnaces refunded with their queues, a Crusher once", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 5
+		data.Coins = 0
+		data.Storage = {}
+		data.MachineInventory = { BrickFurnace = 2 }
+		data.PlacedMachines = {
+			{ Id = "ClayFurnace", X = 2, Z = 4, R = 0 },
+			{ Id = "BrickFurnace", X = 5, Z = 4, R = 0, In = { { K = "Crushed", O = "Iron", G = "Clean" } } },
+			{ Id = "BlastFurnace", X = 8, Z = 4, R = 0, Out = { { K = "Ingot", O = "Gold", G = "Pristine" } } },
+			{ Id = "PlasmaFurnace", X = 12, Z = 4, R = 0 },
+		}
+		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, ClayFurnace = { Speed = 1 } }
+		Migrations.run(data)
+		T.eq(data.Version, 6)
+		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
+		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
+		local prices = MachineData.ById
+		local refund = prices.BrickFurnace.Price * 3 + prices.BlastFurnace.Price + prices.PlasmaFurnace.Price
+		T.eq(data.Coins, refund, "every old furnace, placed or waiting, is paid back")
+		T.eq(data.MachineInventory.BrickFurnace, nil)
+		local kinds = {}
+		for _, item in data.Storage do
+			kinds[item.K] = true
+		end
+		T.truthy(kinds.Crushed and kinds.Ingot, "their queues wait in the pen")
+		T.eq(data.MachineUpgrades.BlastFurnace, nil, "a retired machine's upgrades go")
+		T.eq(data.MachineUpgrades.ClayFurnace.Speed, 1, "the Furnace keeps its own")
+		T.eq(data.MachineInventory.Crusher, 1, "no Crusher anywhere: one in the Build menu")
+		-- once only: a later load (Version 6) never gives another, even after it was sold
+		data.MachineInventory.Crusher = nil
+		Migrations.run(data)
+		T.eq(data.MachineInventory.Crusher, nil, "Version 6: no second Crusher")
+		-- a save with a Crusher (placed or waiting) gets none
+		for _, where in { "placed", "waiting" } do
+			local old = ProfileStore.deepCopy(DataTemplate)
+			old.Version = 5
+			old.MachineInventory = {}
+			old.PlacedMachines = {}
+			if where == "placed" then
+				table.insert(old.PlacedMachines, { Id = "Crusher", X = 4, Z = 4, R = 0 })
+			else
+				old.MachineInventory.Crusher = 2
+			end
+			Migrations.run(old)
+			T.eq(old.MachineInventory.Crusher, if where == "placed" then nil else 2, where)
+		end
 	end)
 
 	T.test("Migration v3: retired machines, pickaxes, podiums and money", function()
@@ -341,7 +391,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 5)
+		T.eq(data.Version, 6)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")

@@ -44,7 +44,7 @@ skip modules that don't exist yet with a warning.
 - Strict Luau types everywhere (luau-lsp strict mode must say "no problems found").
 - **Never start a Luau line with `(`** (ambiguous syntax error). Use a local variable.
 - Every data change → `DataService.changed(player)`. New save fields go in Data/DataTemplate.luau; old saves are
-  reconciled, structural changes go through Data/Migrations.luau (save Version = 5 since the player levels; the gate in DataService refuses saves from a newer build, see docs/SAVE_AUDIT.md).
+  reconciled, structural changes go through Data/Migrations.luau (save Version = 6 since the one Furnace; the gate in DataService refuses saves from a newer build, see docs/SAVE_AUDIT.md).
 - Mobile first: StreamingEnabled is on, keep part counts low, pooled particles, no per-frame server loops over parts.
 - Roblox rules: TextService filtering for player text (forge name, 1-minute rate limit), no rewards for likes/favorites,
   ProcessReceipt grants only on the server that holds the session lock and saves first, show odds for any random reward.
