@@ -221,6 +221,15 @@ return function(T, Loader)
 		T.truthy(StudStyle.restorePart(slate), "restored")
 		T.eq(slate.Material, Enum.Material.Slate, "slate again")
 		T.eq(slate.CustomPhysicalProperties, nil, "physics back")
+		-- a material whose physics cannot be read (Lune has no Plaster table) stays untouched
+		local plaster = newPart(map, { Material = Enum.Material.Plaster })
+		if StudStyle.applyPart(plaster, "Classic") then
+			T.truthy(plaster.CustomPhysicalProperties ~= nil, "plaster's physics pinned")
+		else
+			T.eq(plaster.Material, Enum.Material.Plaster, "plaster untouched")
+			T.eq(plaster.TopSurface, Enum.SurfaceType.Smooth, "no surfaces")
+			T.eq(plaster:GetAttribute("StudStyle"), nil, "no record")
+		end
 
 		withPreview(false, function()
 			if StudStyleConfig.customReady() then

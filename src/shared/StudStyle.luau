@@ -205,21 +205,29 @@ local function classicMaterial(material: string): boolean
 	return material == "Plastic" or StudStyleConfig.Classic.Convert[material] == true
 end
 
-local function applyClassic(part: BasePart)
+-- Returns false (and changes nothing) when the material's own physics cannot be
+-- read, so a part never slides or weighs differently.
+local function applyClassic(part: BasePart): boolean
 	local material = part.Material
+	local pinned: PhysicalProperties? = nil
+	local own: PhysicalProperties? = part.CustomPhysicalProperties
+	if material ~= Enum.Material.Plastic and own == nil then
+		-- the material's own physics, so the part slides and weighs as before
+		local ok, physics = pcall(PhysicalProperties.new, material)
+		if not ok then
+			return false
+		end
+		pinned = physics
+	end
 	local faces = table.create(#FACES)
 	local source: any = part
 	for i, face in FACES do
 		faces[i] = (source[face .. "Surface"] :: EnumItem).Name
 	end
-	local physics = false
+	if pinned then
+		part.CustomPhysicalProperties = pinned
+	end
 	if material ~= Enum.Material.Plastic then
-		local own: PhysicalProperties? = part.CustomPhysicalProperties
-		if own == nil then
-			-- the material's own physics, so the part slides and weighs as before
-			part.CustomPhysicalProperties = PhysicalProperties.new(material)
-			physics = true
-		end
 		part.Material = Enum.Material.Plastic
 	end
 	local target: any = part
@@ -229,7 +237,8 @@ local function applyClassic(part: BasePart)
 			target[face .. "Surface"] = surface
 		end
 	end
-	part:SetAttribute(StudStyle.Attribute, `C;{material.Name};{table.concat(faces, ",")};{if physics then "1" else "0"}`)
+	part:SetAttribute(StudStyle.Attribute, `C;{material.Name};{table.concat(faces, ",")};{if pinned then "1" else "0"}`)
+	return true
 end
 
 local function applyVariant(part: BasePart)
@@ -253,8 +262,7 @@ function StudStyle.applyPart(part: BasePart, look: StudStyleConfig.Look?): boole
 	end
 	local wanted = look or StudStyle.look(StudStyleConfig.Look)
 	if wanted == "Classic" and classicMaterial(part.Material.Name) then
-		applyClassic(part)
-		return true
+		return applyClassic(part)
 	end
 	if StudStyle.customReady() then
 		applyVariant(part)
