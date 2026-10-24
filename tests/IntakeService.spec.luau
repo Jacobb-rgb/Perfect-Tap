@@ -409,25 +409,25 @@ return function(T, Loader)
 				State = "Carried",
 			}
 		end
-		w.carried = { carried("Clean"), carried("Raw"), carried("Clean") }
+		w.carried = { carried("Crushed"), carried("Raw"), carried("Crushed") }
 		intake.load(w.player, w.furnace)
-		T.eq(#w.inserts, 2, "both clean ores")
+		T.eq(#w.inserts, 2, "both crushed piles (the Furnace takes crushed ore only)")
 		T.eq(w.inserts[1].Via, "Hand", "via Hand")
 		T.eq(#w.carried, 1, "raw ore stays in your hands")
 		T.eq(w.carried[1].Kind, "Raw", "raw")
 		local notes = #w.notes
 		intake.load(w.player, w.furnace)
 		T.eq(w.notes[notes + 1].A.Text, MachineData.ById.ClayFurnace.WrongHint, "why nothing went in")
-		w.carried = { carried("Clean") }
+		w.carried = { carried("Crushed") }
 		w.full = true
 		intake.load(w.player, w.furnace)
-		T.eq(w.notes[#w.notes].A.Text, "Your Clay Furnace is full.", "full")
+		T.eq(w.notes[#w.notes].A.Text, "Your Furnace is full.", "full")
 		T.eq(#w.carried, 1, "kept")
 		intake.load(w.stranger, w.furnace)
 		T.eq(w.notes[#w.notes].A.Text, "That's not your machine.", "not yours")
 		w.carried = {}
 		intake.load(w.player, w.furnace)
-		T.eq(w.notes[#w.notes].A.Text, "Carry items here to put them in the Clay Furnace.", "empty hands")
+		T.eq(w.notes[#w.notes].A.Text, "Carry items here to put them in the Furnace.", "empty hands")
 	end)
 	---------------------------------------------------------------- town zone index (perf pass 1)
 

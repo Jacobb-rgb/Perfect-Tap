@@ -192,19 +192,22 @@ return function(T, Loader)
 		local ok, reason = MachineService.insertDesc(furnace, item("Raw"), USER, "Drop")
 		T.falsy(ok, "raw ore refused by a furnace")
 		T.eq(reason, "Wrong", "raw reason")
-		ok, reason = MachineService.insertDesc(furnace, item("Clean", "Copper", "Clean"), STRANGER, "Drop")
+		ok, reason = MachineService.insertDesc(furnace, item("Crushed", "Copper", "Clean"), STRANGER, "Drop")
 		T.eq(reason, "Foreign", "someone else's ore")
+		ok, reason = MachineService.insertDesc(furnace, item("Clean", "Copper", "Clean"), USER, "Drop")
+		T.falsy(ok, "clean ore refused: the Furnace takes crushed ore only")
+		T.eq(reason, "Wrong", "crush it first")
 		T.truthy(MachineService.insertDesc(cleaner, item("Raw"), USER, "Belt"), "raw into the Auto Cleaner")
 		local before = w.changed
 		for i = 1, MAX_IN do
 			T.truthy(
-				MachineService.insertDesc(furnace, item(if i % 2 == 0 then "Crushed" else "Clean", "Iron", "Rough"), USER, "Hand"),
+				MachineService.insertDesc(furnace, item("Crushed", if i % 2 == 0 then "Iron" else "Gold", "Rough"), USER, "Hand"),
 				"item " .. i
 			)
 			T.eq(attr(furnace, "Queue"), i, "Queue " .. i)
 		end
 		T.eq(w.changed, before + MAX_IN, "every insert marks the save changed")
-		ok, reason = MachineService.insertDesc(furnace, item("Clean"), USER, "Drop")
+		ok, reason = MachineService.insertDesc(furnace, item("Crushed"), USER, "Drop")
 		T.falsy(ok, "5th item")
 		T.eq(reason, "Full", "it waits")
 		T.eq(#furnace.Entry.In, MAX_IN, "queue capped")
@@ -216,7 +219,7 @@ return function(T, Loader)
 		ProcessingService.onProcessed(function(p, id, input, outputs)
 			table.insert(seen, { p, id, input, outputs })
 		end)
-		MachineService.insertDesc(m, item("Clean", "Copper", "Clean"), USER, "Hand")
+		MachineService.insertDesc(m, item("Crushed", "Copper", "Clean"), USER, "Hand")
 		MachineService.insertDesc(m, item("Crushed", "Iron", "Pristine"), USER, "Hand")
 		tick(m, 100)
 		T.eq(attr(m, "Working"), true, "working")
@@ -259,18 +262,18 @@ return function(T, Loader)
 
 		-- Bellows is read when each job starts
 		w.data.Upgrades.Bellows = 5
-		MachineService.insertDesc(m, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(m, item("Crushed"), USER, "Hand")
 		tick(m, 200)
 		T.near(attr(m, "WorkTime"), 3, 1e-9, "Bellows 5 halves the time")
 		w.data.Upgrades.Bellows = 0 / 0
 		tick(m, 203)
-		MachineService.insertDesc(m, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(m, item("Crushed"), USER, "Hand")
 		tick(m, 204)
 		T.eq(attr(m, "WorkTime"), 6, "a broken Bellows value counts as 0")
 		-- no upgrade makes a job faster than MinProcessTime
 		w.patch(MachineData.ById.ClayFurnace, "Time", 0.1)
 		tick(m, 210)
-		MachineService.insertDesc(m, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(m, item("Crushed"), USER, "Hand")
 		tick(m, 211)
 		T.eq(attr(m, "WorkTime"), GameConfig.MinProcessTime, "MinProcessTime")
 	end)
@@ -409,7 +412,7 @@ return function(T, Loader)
 		local furnace = place(w, "ClayFurnace", 0, 0)
 		local crusher = place(w, "Crusher", 4, 0)
 		w.data.MachineUpgrades = { ClayFurnace = { Speed = 2 } }
-		MachineService.insertDesc(furnace, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(furnace, item("Crushed"), USER, "Hand")
 		MachineService.insertDesc(crusher, item("Clean"), USER, "Hand")
 		tick(furnace, 1)
 		tick(crusher, 1)
@@ -432,7 +435,7 @@ return function(T, Loader)
 
 	withWorld("ProcessingService: damaged saves don't jam a machine", function(w)
 		local m = place(w, "ClayFurnace", 0, 0)
-		m.Entry.In = { { K = "Bogus", O = "Copper" }, item("Raw", "Iron"), item("Clean", "Iron", "Rough") }
+		m.Entry.In = { { K = "Bogus", O = "Copper" }, item("Raw", "Iron"), item("Crushed", "Iron", "Rough") }
 		tick(m, 0)
 		T.eq(#m.Entry.In, 2, "junk dropped")
 		T.eq(attr(m, "Queue"), 2, "Queue")
@@ -447,9 +450,9 @@ return function(T, Loader)
 		T.eq(m.Entry.Out[2].K, "Ingot", "the real ore smelts")
 		T.eq(attr(m, "Cycles"), 1, "Cycles")
 		-- the queue changing under a running job restarts it on the new In[1]
-		MachineService.insertDesc(m, item("Clean", "Silver"), USER, "Hand")
+		MachineService.insertDesc(m, item("Crushed", "Silver"), USER, "Hand")
 		tick(m, 20)
-		m.Entry.In = { item("Clean", "Gold") }
+		m.Entry.In = { item("Crushed", "Gold") }
 		tick(m, 21)
 		T.eq(attr(m, "WorkOre"), "Gold", "restarted")
 		T.eq(m.State.Job.EndsAt, 27, "from scratch")
@@ -881,6 +884,52 @@ return function(T, Loader)
 		T.eq(attr(m, "Status"), "", "nothing waits")
 	end)
 
+	withWorld("ProcessingService: the Furnace Upgrade turns every furnace into its tier (time, batch, look)", function(w)
+		local hooked: any = nil
+		w.patch(ShopService, "onBought", function(callback)
+			hooked = callback
+		end)
+		ProcessingService.start()
+		local a = place(w, "ClayFurnace", 0, 0)
+		place(w, "ClayFurnace", 4, 0)
+		MachineService.insertDesc(a, item("Crushed", "Iron", "Rough"), USER, "Hand")
+		MachineService.insertDesc(a, item("Crushed", "Gold", "Rough"), USER, "Hand")
+		T.eq(a.Model:GetAttribute("Look"), nil, "the clay look at first")
+		-- the Plasma tier bought (ShopService wrote the level, then told its listeners)
+		w.data.MachineUpgrades = { ClayFurnace = { Tier = 3 } }
+		hooked(
+			w.player,
+			{
+				Item = "Upgrade:ClayFurnace:Tier",
+				Kind = "Upgrade",
+				Machine = "ClayFurnace",
+				Upgrade = "Tier",
+				Level = 3,
+				Count = 1,
+				Price = 1,
+			}
+		)
+		T.truthy(a.Removed, "the old model went")
+		local furnaces = {}
+		for _, m in MachineService.ofPlot(PLOT) do
+			if m.Id == "ClayFurnace" then
+				table.insert(furnaces, m)
+			end
+		end
+		T.eq(#furnaces, 2, "both furnaces stand")
+		for _, m in furnaces do
+			T.eq(m.Model:GetAttribute("Look"), "PlasmaFurnace", "every furnace looks like the tier")
+			T.eq(m.Info.Name, "Plasma Furnace", "and works like it")
+		end
+		local new = MachineService.atCell(PLOT, 0, 0) :: any
+		T.eq(count(new.Entry.In), 2, "the queue stays")
+		tick(new, 1)
+		T.near(attr(new, "WorkTime"), 2.5, 1e-9, "the Plasma tier's time")
+		T.eq(#new.State.Job.Inputs, 2, "two piles at once")
+		tick(new, 4)
+		T.eq(count(new.Entry.Out), 2, "two ingots")
+	end)
+
 	withWorld("ProcessingService: a Speed buy rebuilds that machine type with its new look, queues kept", function(w)
 		local hooked: any = nil
 		w.patch(ShopService, "onBought", function(callback)
@@ -890,7 +939,7 @@ return function(T, Loader)
 		T.truthy(hooked == processing.onBought, "start() listens to Tech shop buys")
 		local furnace = place(w, "ClayFurnace", 0, 0)
 		local crusher = place(w, "Crusher", 4, 0)
-		MachineService.insertDesc(furnace, item("Clean", "Iron", "Clean"), USER, "Hand")
+		MachineService.insertDesc(furnace, item("Crushed", "Iron", "Clean"), USER, "Hand")
 		MachineService.insertDesc(furnace, item("Crushed", "Gold", "Rough"), USER, "Hand")
 		furnace.Entry.Out = { item("Ingot", "Copper", "Rough") }
 		tick(furnace, 10)

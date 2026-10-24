@@ -745,14 +745,18 @@ local function newHighlight(name: string, color: Color3, fill: number): Highligh
 	return highlight
 end
 
--- A see-through copy of a machine (built once per machine type).
+-- A see-through copy of a machine (built once per machine type; a machine with tiers, the
+-- Furnace, once per tier: it shows the player's tier).
 local function ghostFor(id: string): Model
-	local cached = ghosts[id]
+	local state = StateController.get()
+	local tier = MachineData.tierOf(state and state.MachineUpgrades, id)
+	local key = if tier > 0 then `{id}:{tier}` else id
+	local cached = ghosts[key]
 	if cached then
 		return cached
 	end
 	-- (required here, not at the top: this module is at Luau's 200 local registers)
-	local model = require(Shared.Builders.MachineBuilder).build(id)
+	local model = require(Shared.Builders.MachineBuilder).build(id, nil, tier)
 	model.Name = "Ghost_" .. id
 	model:SetAttribute("MachineId", nil)
 	model:SetAttribute("Ghost", true)
@@ -774,7 +778,7 @@ local function ghostFor(id: string): Model
 			d.Enabled = false
 		end
 	end
-	ghosts[id] = model
+	ghosts[key] = model
 	return model
 end
 
@@ -1039,6 +1043,9 @@ local function refreshUI()
 	end, Ux.onHover)
 	local machines, conveyors = Placement.counts(entries)
 	BuildView.setCounts(refs, machines, if limits then limits.Machines else 0, conveyors, if limits then limits.Conveyors else 0)
+	-- the Furnace's card at the player's tier (its name and power chip)
+	local state = StateController.get()
+	BuildView.setTiers(refs, state and state.MachineUpgrades)
 	Deck.Cells = Placement.decks(entries)
 	BuildView.setMode(refs, mode, kind == "Touch", next(Deck.Cells) ~= nil)
 	BuildView.setLayer(refs, Deck.Ground)
@@ -1111,7 +1118,10 @@ function Ux.showInfo(refs: BuildView.Refs)
 			end
 		end
 	end
-	BuildView.setInfo(refs, MachineInfo.describe(id), note)
+	-- a machine with tiers (the Furnace) is described at the player's tier
+	local state = StateController.get()
+	local tier = if id then MachineData.tierOf(state and state.MachineUpgrades, id) else 0
+	BuildView.setInfo(refs, MachineInfo.describe(id, tier), note)
 end
 
 -- Build mode's own UI at a point (viewport pixels, like GetMouseLocation):

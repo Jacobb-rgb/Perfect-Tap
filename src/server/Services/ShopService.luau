@@ -192,6 +192,10 @@ function ShopService.boughtText(player: Player?, bought: Bought, place: Place?):
 		local name = machineName(bought.Machine)
 		if bought.Upgrade == "Quality" then
 			return `{name} Quality level {level}: better grades on every {name}!`
+		elseif bought.Upgrade == "Tier" and bought.Machine then
+			-- the Furnace's tiers: every furnace of the player turns into the new one
+			local tier = MachineData.info(bought.Machine, level)
+			return `Every {name} is a {tier.Name} now: it smelts faster!`
 		end
 		return `{name} Speed level {level}: every {name} works faster!`
 	elseif bought.Kind == "Bellows" then

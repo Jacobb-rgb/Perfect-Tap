@@ -410,8 +410,7 @@ return function(T, Loader)
 	T.test("MachineBillboard: a waiting machine says what it needs (one line)", function()
 		local expected = {
 			AutoCleaner = "Needs dirty ore",
-			ClayFurnace = "Needs clean or crushed ore",
-			BlastFurnace = "Needs clean or crushed ore",
+			ClayFurnace = "Needs crushed ore",
 			Crusher = "Needs clean ore",
 			Polisher = "Needs clean ore",
 			CrystalExtractor = "Needs crushed ore",
@@ -424,6 +423,11 @@ return function(T, Loader)
 		end
 		T.eq(MachineBillboard.needsText(nil), "Waiting", "unknown machine")
 		T.eq(MachineBillboard.needsText(MachineData.ById.PowerPole), "Waiting", "takes nothing")
+		-- the Furnace at a tier (its model carries MachineId ClayFurnace and Tier) still says what the Furnace takes
+		local tiered = roblox.Instance.new("Model")
+		tiered:SetAttribute("MachineId", "ClayFurnace")
+		tiered:SetAttribute("Tier", 2)
+		T.eq(MachineBillboard.statusText(tiered, "Waiting"), "Needs crushed ore", "a Blast tier Furnace")
 		-- every machine that can wait: its words fit next to the lamp
 		local size = MachineBillboard.StatusTextSize
 		for _, info in MachineData.List do

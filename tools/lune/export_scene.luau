@@ -167,6 +167,8 @@ elseif sceneName == "lobby_blockout" then
 	require("./lib/lobby_blockout").build(Loader, workspace)
 elseif sceneName == "machines" then
 	require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
+elseif sceneName == "furnace_tiers" then -- the one Furnace at its four tiers (tools/lune/lib/furnace_tiers.luau)
+	require("./lib/furnace_tiers").build(Loader, workspace)
 elseif sceneName == "kit_showroom" then -- every roster machine in rows (tools/lune/lib/kit_showroom.luau)
 	require("./lib/kit_showroom").build(Loader, workspace)
 elseif sceneName == "kit_showroom_max" then -- the same at the max upgrade level (crystal)

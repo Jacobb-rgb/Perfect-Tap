@@ -586,12 +586,15 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 		warn(`[MachineService] plot {plotId} has no Machines folder`)
 		return nil
 	end
-	-- the upgrade look follows the machine type's Speed level (KitMachines crystals)
+	-- the upgrade look follows the machine type's Speed level (KitMachines crystals); a
+	-- machine with tiers (the Furnace) works and looks like the player's tier of it
 	local data = DataService.get(player)
 	local upgrades = data and data.MachineUpgrades
 	local own = if type(upgrades) == "table" then upgrades[entry.Id] else nil
 	local level = MachineData.lookLevel(if type(own) == "table" then own.Speed else 0)
-	local model = MachineBuilder.build(entry.Id, level)
+	local tier = MachineData.tierOf(upgrades, entry.Id)
+	info = MachineData.info(entry.Id, tier)
+	local model = MachineBuilder.build(entry.Id, level, tier)
 	local deck = Placement.levelOf(entry)
 	model:PivotTo(PlotService.footprintCFrame(plotId, entry.Id, entry.X, entry.Z, entry.R, deck))
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
@@ -600,6 +603,8 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 	model:SetAttribute("GridZ", entry.Z)
 	model:SetAttribute("Rotation", entry.R)
 	model:SetAttribute("GridL", deck)
+	-- a machine with tiers (the Furnace): the tier it works at (clients: MachineData.info)
+	model:SetAttribute("Tier", if tier > 0 then tier else nil)
 	model:SetAttribute("OutCount", if entry.Out then #entry.Out else 0)
 	model:SetAttribute("Status", "")
 	model:AddTag("Machine")

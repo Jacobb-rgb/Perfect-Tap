@@ -2656,10 +2656,8 @@ KitMachines.Catalog = {
 	{ Id = "IronBox", Name = "Iron Box", Group = "Cleaning", Upgrades = true },
 	{ Id = "Sorter", Name = "Sorter", Group = "Cleaning", Upgrades = true },
 	{ Id = "Polisher", Name = "Polisher", Group = "Cleaning", Upgrades = true },
-	{ Id = "ClayFurnace", Name = "Clay Furnace", Group = "Furnaces", Upgrades = true },
-	{ Id = "BrickFurnace", Name = "Brick Furnace", Group = "Furnaces", Upgrades = true },
-	{ Id = "BlastFurnace", Name = "Blast Furnace", Group = "Furnaces", Upgrades = true },
-	{ Id = "PlasmaFurnace", Name = "Plasma Furnace", Group = "Furnaces", Upgrades = true },
+	-- the one Furnace (owner 2026-10-24); its Brick / Blast / Plasma tiers keep their builders below
+	{ Id = "ClayFurnace", Name = "Furnace", Group = "Furnaces", Upgrades = true },
 	{ Id = "AlloyFurnace", Name = "Alloy Furnace", Group = "Furnaces", Upgrades = true },
 	{ Id = "Crusher", Name = "Crusher", Group = "Special", Upgrades = true },
 	{ Id = "CrystalExtractor", Name = "Crystal Extractor", Group = "Special", Upgrades = true },

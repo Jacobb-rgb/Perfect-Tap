@@ -103,6 +103,11 @@ local A = {
 	PolePrice = 500,
 	MaxCleaners = 4,
 	MaxFurnaces = 3,
+	-- one Furnace (owner 2026-10-24): every furnace of the player is at the same tier (the Tech
+	-- shop's Furnace Upgrade: Brick, Blast, Plasma), it smelts crushed piles only and the Crusher
+	-- comes with the starter kit. false = the old roster (Clay + a Brick, a Blast, a Plasma Furnace,
+	-- clean ore smelts too, the Crusher is bought).
+	OneFurnace = true,
 	Efficiency = 1, -- share of the player's own actions done well (mining, carrying, hand cleaning); machines run full
 	BlasterCoins = nil :: { [number]: number }?, -- Foundry coin price per level instead of BlasterData's (Vault = 4x)
 	ElevatorPrice = nil :: number?, -- nil = MineFloors' rule: 2/3 of the blaster 7 forge (the sim's price)
@@ -117,6 +122,7 @@ local A = {
 	TrainCapacityExtra = nil :: { { Value: number, Price: number } }?, -- train capacity levels after the config's last
 	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
 	MachineUpgrades = true, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher): in the game since option 3
+	TierPriceMult = nil :: { number }?, -- one Furnace: a multiplier per tier on the Furnace Upgrade prices
 	UpgradePriceMult = nil :: { [string]: number }?, -- "Speed" / "Quality" -> multiplier on the upgrade prices
 	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
@@ -397,10 +403,11 @@ local function newPlayer(): any
 		Hover = 0,
 		Elevator = false,
 		Cleaners = 0,
-		Crusher = false,
+		Crusher = A.OneFurnace == true, -- the starter kit's Crusher (one Furnace)
 		Extractor = false,
 		Upgrades = { CleanerSpeed = 0, CleanerQuality = 0, CrusherSpeed = 0 }, -- Tech shop levels (MachineUpgrades)
 		Furnaces = { "ClayFurnace" }, -- the starter kit
+		FurnaceTier = 0, -- one Furnace: the tier every furnace is at
 		PowerOut = 0,
 		PowerDemand = 0,
 		Poles = 0,
@@ -495,6 +502,11 @@ end
 local function furnaceRate(p: any): number
 	local rate = 0
 	local speed = powerSpeed(p)
+	if A.OneFurnace then
+		local info = MachineData.info("ClayFurnace", p.FurnaceTier)
+		local each = (info.Batch or 1) / (info.Time :: number)
+		return #p.Furnaces * each * (if (info.Power or 0) > 0 then speed else 1)
+	end
 	for _, id in p.Furnaces do
 		for _, f in FURNACES do
 			if f.Id == id then
@@ -821,7 +833,45 @@ local function candidates(p: any): { any }
 			end,
 		})
 	end
-	if #p.Furnaces < A.MaxFurnaces + 1 then
+	if A.OneFurnace then
+		-- the Furnace Upgrade turns every furnace (more power for each), or one more furnace
+		local tiers = MachineData.ById.ClayFurnace.Upgrades.Tier :: { number }
+		local now = MachineData.info("ClayFurnace", p.FurnaceTier)
+		if p.FurnaceTier < #tiers then
+			local nextTier = MachineData.info("ClayFurnace", p.FurnaceTier + 1)
+			local more = #p.Furnaces * ((nextTier.Power or 0) - (now.Power or 0))
+			local extra, out = powerCost(p, more)
+			local price = tiers[p.FurnaceTier + 1] * ((A.TierPriceMult and A.TierPriceMult[p.FurnaceTier + 1]) or 1)
+			table.insert(list, {
+				Name = "Furnace " .. nextTier.Name .. (if extra > 0 then " + power" else ""),
+				Price = price + extra,
+				Cat = "Upgrades",
+				Apply = function(q)
+					q.FurnaceTier += 1
+					q.PowerDemand += more
+					q.PowerOut += out
+					if out > 0 then
+						q.Poles = math.max(q.Poles, 2)
+					end
+				end,
+			})
+		end
+		if #p.Furnaces < A.MaxFurnaces + 1 then
+			local extra, out = powerCost(p, now.Power or 0)
+			table.insert(list, {
+				Name = "Furnace #" .. (#p.Furnaces + 1) .. (if extra > 0 then " + power" else ""),
+				Price = machinePrice("ClayFurnace") + extra,
+				Apply = function(q)
+					table.insert(q.Furnaces, "ClayFurnace")
+					q.PowerDemand += now.Power or 0
+					q.PowerOut += out
+					if out > 0 then
+						q.Poles = math.max(q.Poles, 2)
+					end
+				end,
+			})
+		end
+	elseif #p.Furnaces < A.MaxFurnaces + 1 then
 		for _, f in FURNACES do
 			if f.Id ~= "ClayFurnace" and not table.find(p.Furnaces, f.Id) then
 				local extra, out = powerCost(p, f.Power)

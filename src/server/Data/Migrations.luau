@@ -167,6 +167,17 @@
 	- The trigger is the loaded Version, never a template field: ProfileStore
 	  reconciles the template in BEFORE this runs, so a new field would
 	  already read "done". Saves with Version 4 or more are never moved.
+
+	Version 6 (one Furnace, owner 2026-10-24): the Brick, Blast and Plasma
+	Furnaces are the Furnace's tiers now (MachineData Retired: refunded and
+	taken off the plot like the other retired machines, above), and the
+	Furnace takes crushed ore only. A save loaded with a Version below 6
+	(the trigger is the loaded Version, as for Version 4), once:
+	- gets back the coins of the Speed levels it bought for those three
+	  furnaces (the upgrade records go with the retired machines);
+	- moves what isn't crushed ore out of its Furnaces' queues to the pen;
+	- gets a Crusher in its Build menu if its starter kit was given and it
+	  has none placed or waiting there.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -188,7 +199,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 5 -- 5: the player LEVEL record (repaired below on every load)
+Migrations.Latest = 6 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -816,6 +827,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local loadedVersion = data.Version
 	-- a save from before the 16-cell grid moves its layout once (Version 4)
 	local gridShift = not (isFinite(loadedVersion) and loadedVersion >= 4)
+	-- a save from before the one Furnace: the v6 steps run once (Version 6)
+	local v6Step = not (isFinite(loadedVersion) and loadedVersion >= 6)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -962,6 +975,60 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		if count then
 			data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + MachineData.ById[id].Price * count
 			inventory[id] = nil
+			report.Moved += 1
+		end
+	end
+
+	-- v6 (once): the coins of the retired furnaces' Speed levels come back (the
+	-- cleanup below drops those records with the machines)
+	local upgradeRecords = data.MachineUpgrades
+	if v6Step and type(upgradeRecords) == "table" then
+		local tiers = MachineData.ById.ClayFurnace.Tiers :: { MachineData.Tier }
+		for _, step in tiers do
+			local record = upgradeRecords[step.Look]
+			local level = if type(record) == "table" then record.Speed else nil
+			local prices = MachineData.upgradePrices(step.Look, "Speed")
+			if isFinite(level) and prices then
+				local paid = 0
+				for i = 1, math.clamp(math.floor(level), 0, #prices) do
+					paid += prices[i]
+				end
+				if paid > 0 then
+					data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + paid
+					report.Moved += 1
+				end
+			end
+		end
+	end
+	-- v6 (once): the Furnace takes crushed ore only: what else waits in its queue goes to the pen
+	if v6Step then
+		for _, entry in placed do
+			if entry.Id == "ClayFurnace" and type(entry.In) == "table" then
+				local smeltable = {}
+				for _, item in entry.In do
+					if type(item) == "table" and item.K == "Crushed" then
+						table.insert(smeltable, item)
+					else
+						table.insert(storage, item)
+						report.Moved += 1
+					end
+				end
+				entry.In = if #smeltable > 0 then smeltable else nil
+			end
+		end
+	end
+	-- v6 (once): the Furnace takes crushed ore only: a Crusher, unless the save has one (a
+	-- save whose starter kit wasn't given yet gets the kit's Crusher with it)
+	if v6Step and data.StarterKitGiven == true then
+		local has = isFinite(inventory.Crusher) and inventory.Crusher >= 1
+		for _, entry in placed do
+			if entry.Id == "Crusher" then
+				has = true
+				break
+			end
+		end
+		if not has then
+			inventory.Crusher = 1
 			report.Moved += 1
 		end
 	end

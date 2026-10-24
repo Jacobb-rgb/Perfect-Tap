@@ -1,0 +1,44 @@
+{
+ "furnace_tiers": {
+  "scene": "furnace_tiers",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "shadowExtent": 80,
+  "position": [
+   0,
+   14,
+   -31
+  ],
+  "target": [
+   0,
+   2.5,
+   2
+  ],
+  "fov": 54
+ },
+ "furnace_tiers_crusher": {
+  "scene": "furnace_tiers",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "shadowExtent": 80,
+  "position": [
+   33,
+   11,
+   3
+  ],
+  "target": [
+   18,
+   2.5,
+   4
+  ],
+  "fov": 52
+ }
+}

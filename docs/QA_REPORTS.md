@@ -907,3 +907,32 @@ What to test in Studio:
 3. Equip the Dragonscale Knight and the Dragon King, run: the sword and the sceptre stay in the fist, the cape stays
    on the back, the pauldrons ride the shoulders. Unequip all golems: no errors, nothing keeps running.
 4. Start cleaning / build mode / the Foundry and press N: no EMOTES menu.
+
+## One Furnace (owner 2026-10-24, machines chat)
+The owner kept two furnaces: the Alloy Furnace and ONE Furnace for everything, which changes as it is upgraded, and
+the Crusher comes first (the Furnace takes crushed ore only).
+- Data: the Furnace keeps the id `ClayFurnace` (every save has one), its name is "Furnace", it Accepts crushed ore
+  only. `Tiers` (Brick 4 s / no power, Blast 2.5 s / 20, Plasma 2.5 s x2 / 60; review: Brick unpowered would be slower than clay) and the Tech shop's new upgrade kind
+  `Tier` (Upgrades.Tier = the old machines' prices 6,000 / 30,000 / 5,000,000) turn every furnace of the player at
+  once; `MachineData.info(id, tier)` is the machine as it works at a tier (MachineService sets machine.Info from it;
+  ProcessingService / MachineLogic.batch / PowerLogic / PowerService / MachineInfo read it). The Brick / Blast /
+  Plasma Furnaces are Retired (refunded and taken off plots by the v3 retired step); their KitMachines models are
+  the tiers' looks (MachineBuilder.tierLook: the Blast look shrunk into 2 x 2, the Furnace's own attachments,
+  attribute Look for MachineFx). A Tier buy rebuilds the player's furnaces (ProcessingService.onBought ->
+  refreshType); a rebirth resets it with the other machine upgrades (owner: back to clay; Lose row says so).
+- Starter kit: Cleaning Station, Furnace, and a Crusher behind the Furnace that drops its piles straight into it.
+  Save Version 6: a save loaded with a Version below 6 gets a Crusher once if it has none (Migrations).
+- Balance (tools/lune/balance_sim.luau, OneFurnace = true): typical blaster 8 / 9 / 10 at 3h11 / 4h55 / 7h53
+  (old roster 3h13 / 4h57 / 7h56): the same curve.
+- Tests: Migration v6 (refunds, queues to the pen, the Crusher once), KitMachines (every tier keeps the footprint
+  and attachments), ProcessingService (a Tier buy turns every furnace: look, time, two at once), Power (the tiered
+  Furnace on a network), MachineInfo (tier text and power), ShopService / TechShopView (the Furnace Upgrade card).
+What to test in Studio:
+1. A new player: the Cleaning Station, the Furnace and the Crusher behind it. Clean an ore, drop it into the
+   Crusher: two piles fall into the Furnace and come out as two ingots.
+2. Drop clean ore straight into the Furnace: refused with "Put clean ore through your Crusher first!".
+3. Tech shop > UPGRADES: "Furnace Upgrade" shows the next furnace and its time. Buy Brick: every furnace turns into
+   a Brick Furnace at once; Blast needs power (a pole and a solar panel); Plasma smelts two at once.
+4. An old save with a Blast Furnace: it is gone, its price is back in coins, its items wait in the pen, and a
+   Crusher waits in the Build menu.
+5. Rebirth: the furnaces are clay again.

@@ -317,9 +317,10 @@ end
 	(MaxOutBuffer - outCount; In[1] always goes), and only items the
 	machine accepts join In[1]. Empty without a queue. (Alloy: alloyPair.)
 ]]
-function MachineLogic.batch(id: string, queue: { Desc }?, outCount: number): { Desc }
+function MachineLogic.batch(machine: string | MachineData.Machine, queue: { Desc }?, outCount: number): { Desc }
 	local list: { Desc } = {}
-	local info = MachineData.ById[id]
+	-- a machine id, or the machine as it works (MachineData.info: the Furnace's tier batches)
+	local info = if type(machine) == "string" then MachineData.ById[machine] else machine
 	if not info or not queue or #queue == 0 then
 		return list
 	end

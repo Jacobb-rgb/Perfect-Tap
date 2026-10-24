@@ -90,9 +90,14 @@ local flushQueued = false
 
 ---------------------------------------------------------------- helpers
 
+-- The machine as it works (a machine with tiers, the Furnace: at the model's Tier).
 local function infoOf(model: Model): MachineData.Machine?
 	local id = model:GetAttribute("MachineId")
-	return if type(id) == "string" then MachineData.ById[id] else nil
+	if type(id) ~= "string" or not MachineData.ById[id] then
+		return nil
+	end
+	local tier = model:GetAttribute("Tier")
+	return MachineData.info(id, if type(tier) == "number" then tier else 0)
 end
 
 local function isPole(model: Model): boolean

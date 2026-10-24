@@ -206,8 +206,10 @@ end
 	({ Id, X, Z, R }, e.g. data.PlacedMachines); entries with an unknown Id
 	or broken numbers get no result. `speedLevels` maps a machine id to its
 	type's Speed level (PowerLogic.speedLevels(data.MachineUpgrades)).
+	`machineUpgrades` (data.MachineUpgrades) gives a machine with tiers (the
+	Furnace) the power of the player's tier (MachineData.info).
 ]]
-function PowerLogic.compute(entries: { Entry }, speedLevels: { [string]: number }?): Result
+function PowerLogic.compute(entries: { Entry }, speedLevels: { [string]: number }?, machineUpgrades: any?): Result
 	local rules = MachineData.PowerRules
 	local levels = speedLevels or {}
 	local result: Result = { Machines = {}, Poles = {}, Networks = {}, ByNetwork = {} }
@@ -215,7 +217,8 @@ function PowerLogic.compute(entries: { Entry }, speedLevels: { [string]: number 
 	local poles: { Item } = {}
 	local users: { Item } = {} -- generators and machines
 	for index, entry in entries do
-		local info = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
+		local listed = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
+		local info = if listed then MachineData.info(listed.Id, MachineData.tierOf(machineUpgrades, listed.Id)) else nil
 		if not info or not (isInt(entry.X) and isInt(entry.Z) and isInt(entry.R)) then
 			continue
 		end

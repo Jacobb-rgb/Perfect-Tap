@@ -60,6 +60,10 @@ export type Card = {
 	Bound: boolean,
 	Picture: ViewportFrame?, -- the live 3D machine (filled once when the card first shows)
 	Power: TextLabel?, -- the power chip's text (nil: no part in power)
+	PowerChip: GuiObject?, -- the chip itself (shown / hidden by setTiers for a machine with tiers)
+	Name: TextLabel?, -- the machine's name (a machine with tiers shows the player's tier)
+	Icon: ImageLabel?, -- the uploaded icon (light cards with one, instead of the live picture)
+	Tier: number?, -- the tier the card shows (setTiers)
 }
 
 -- One chip of the controls row: keycaps (or gamepad buttons) and what they do.
@@ -332,8 +336,8 @@ end
 	frames it from the front right, a little from above (the front, -Z, is
 	where the results come out).
 ]]
-function BuildView.picture(id: string): (Model, CFrame)
-	local model = MachineBuilder.build(id)
+function BuildView.picture(id: string, tier: number?): (Model, CFrame)
+	local model = MachineBuilder.build(id, nil, tier)
 	model.Name = "Picture"
 	model:SetAttribute("MachineId", nil)
 	for _, tag in model:GetTags() do
@@ -406,13 +410,14 @@ local function showPicture(view: ViewportFrame, model: Model, cf: CFrame)
 	model.Parent = view
 end
 
--- Builds a tray card's picture (once: a card that has one keeps it).
+-- Builds a tray card's picture (once: a card that has one keeps it; setTiers rebuilds a
+-- tiered machine's picture when its tier changes).
 function BuildView.fillPicture(entry: Card, id: string)
 	local view = entry.Picture
 	if not view or view:FindFirstChild("Picture") or not MachineData.ById[id] then
 		return
 	end
-	local model, cf = BuildView.picture(id)
+	local model, cf = BuildView.picture(id, entry.Tier)
 	showPicture(view, model, cf)
 end
 
@@ -444,24 +449,28 @@ local function card(parent: Instance, machine: MachineData.Machine): Card
 		BorderSizePixel = 0,
 	}, button)
 	UIKit.corner(band, 12)
+	-- a machine with tiers (the Furnace) gets its chip always: setTiers shows it from the Brick tier up
+	local tiered = machine.Tiers ~= nil
 	local chipText = MachineInfo.powerChip(machine.Id)
+	local withChip = chipText ~= nil or tiered
 	UIKit.label(band, string.upper(machine.Category), 12, {
 		Name = "Category",
-		Position = UDim2.fromOffset(if chipText then 8 else 0, 0),
-		Size = if chipText then UDim2.new(1, -60, 1, 0) else UDim2.fromScale(1, 1),
-		TextXAlignment = if chipText then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(if withChip then 8 else 0, 0),
+		Size = if withChip then UDim2.new(1, -60, 1, 0) else UDim2.fromScale(1, 1),
+		TextXAlignment = if withChip then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
 	})
 	local power: TextLabel? = nil
-	if chipText then
-		power = UIKit.chip(band, chipText, if machine.Power then Theme.Accent else Theme.Good, {
+	if withChip then
+		power = UIKit.chip(band, chipText or "", if machine.Power or tiered then Theme.Accent else Theme.Good, {
 			Name = "PowerChip",
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -3, 0.5, 0),
 			Size = UDim2.fromOffset(50, 18),
 			TextSize = 13,
+			Visible = chipText ~= nil,
 		})
 	end
-	UIKit.label(button, machine.Name, 17, {
+	local name = UIKit.label(button, machine.Name, 17, {
 		Name = "MachineName",
 		Position = UDim2.fromOffset(6, 24),
 		Size = UDim2.new(1, -12, 0, 46),
@@ -482,7 +491,7 @@ local function card(parent: Instance, machine: MachineData.Machine): Card
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = Theme.Accent,
 	})
-	return { Button = button, Count = count, Stroke = stroke, Bound = false, Picture = nil, Power = power }
+	return { Button = button, Count = count, Stroke = stroke, Bound = false, Picture = nil, Power = power, PowerChip = power, Name = name }
 end
 
 --[[
@@ -665,8 +674,9 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 		ZIndex = 4,
 	})
 	local picture: ViewportFrame? = nil
+	local icon: ImageLabel? = nil
 	if BuildView.hasIcon(machine.Id) then
-		Bubble.icon(face, BuildView.iconFor(machine.Id), 46, {
+		icon = Bubble.icon(face, BuildView.iconFor(machine.Id), 46, {
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 18),
 		})
@@ -679,7 +689,7 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 			ZIndex = 3,
 		})
 	end
-	Bubble.text(face, machine.Name, 15, {
+	local name = Bubble.text(face, machine.Name, 15, {
 		Name = "MachineName",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
@@ -693,17 +703,22 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 		Position = UDim2.new(0.5, 0, 1, 0),
 	})
 	local power: TextLabel? = nil
+	local chipFrame: GuiObject? = nil
 	local chipText = MachineInfo.powerChip(machine.Id)
-	if chipText then
-		local powerChip = Bubble.chip(face, chipText, Vector2.new(48, 20), 13, if machine.Power then "Build" else "Go", {
-			Name = "PowerChip",
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, 6, 0, 2),
-			ZIndex = 6,
-		})
+	-- a machine with tiers (the Furnace) gets its chip always: setTiers shows it from the Brick tier up
+	if chipText or machine.Tiers then
+		local powerChip =
+			Bubble.chip(face, chipText or "", Vector2.new(48, 20), 13, if machine.Power or machine.Tiers then "Build" else "Go", {
+				Name = "PowerChip",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, 6, 0, 2),
+				ZIndex = 6,
+				Visible = chipText ~= nil,
+			})
 		local text = powerChip:FindFirstChild("Text") :: TextLabel
 		text.ZIndex = 7
 		power = text
+		chipFrame = powerChip
 	end
 	local stroke = face:FindFirstChildOfClass("UIStroke") :: UIStroke
 	return {
@@ -713,6 +728,9 @@ local function lightCard(parent: Instance, machine: MachineData.Machine): Card
 		Bound = false,
 		Picture = picture,
 		Power = power,
+		PowerChip = chipFrame,
+		Name = name,
+		Icon = icon,
 	}
 end
 
@@ -1107,6 +1125,42 @@ function BuildView.setInventory(
 	showEmpty(refs)
 end
 
+-- A machine with tiers (the Furnace) shows the player's tier on its card: the tier's name
+-- and power chip (`machineUpgrades` = the State snapshot's MachineUpgrades).
+function BuildView.setTiers(refs: Refs, machineUpgrades: any)
+	for id, entry in refs.Cards do
+		local machine = MachineData.ById[id]
+		if machine and machine.Tiers then
+			local tier = MachineData.tierOf(machineUpgrades, id)
+			local chipText = MachineInfo.powerChip(id, tier)
+			if entry.Power and entry.PowerChip then
+				entry.Power.Text = chipText or ""
+				entry.PowerChip.Visible = chipText ~= nil
+			end
+			local shown = MachineData.info(id, tier)
+			if entry.Name then
+				entry.Name.Text = shown.Name
+			end
+			if (entry.Tier or 0) ~= tier then
+				entry.Tier = tier
+				-- the picture of the tier's look: the live one again, or the look's own icon
+				local view = entry.Picture
+				local old = view and view:FindFirstChild("Picture")
+				if old then
+					old:Destroy()
+					if entry.Button.Visible then
+						BuildView.fillPicture(entry, id)
+					end
+				end
+				if entry.Icon then
+					local look = shown.Look or id
+					IconAssets.apply(entry.Icon, BuildView.iconFor(if BuildView.hasIcon(look) then look else id))
+				end
+			end
+		end
+	end
+end
+
 function BuildView.setCounts(refs: Refs, machinesUsed: number, machineSlots: number, conveyorsUsed: number, conveyorSlots: number)
 	refs.Chip.Text = `MACHINES {machinesUsed}/{machineSlots} - BELTS {conveyorsUsed}/{conveyorSlots}`
 	local full = machinesUsed >= machineSlots or conveyorsUsed >= conveyorSlots
@@ -1278,10 +1332,12 @@ function BuildView.setInfo(refs: Refs, info: MachineInfo.Info?, note: string?)
 				child.Parent = nil
 			end
 		end
-		local model, cf = card.Models[info.Id], card.Cameras[info.Id]
+		-- (a machine with tiers: one picture per tier)
+		local key = if info.Tier > 0 then `{info.Id}:{info.Tier}` else info.Id
+		local model, cf = card.Models[key], card.Cameras[key]
 		if not model or not cf then
-			local built, fit = BuildView.picture(info.Id)
-			card.Models[info.Id], card.Cameras[info.Id] = built, fit
+			local built, fit = BuildView.picture(info.Id, info.Tier)
+			card.Models[key], card.Cameras[key] = built, fit
 			model, cf = built, fit
 		end
 		showPicture(card.View, model, cf)

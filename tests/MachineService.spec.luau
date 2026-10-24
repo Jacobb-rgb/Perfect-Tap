@@ -242,7 +242,7 @@ return function(T, Loader)
 			sameCFrame(m.Model:GetPivot(), PlotService.footprintCFrame(PLOT, m.Id, m.X, m.Z, m.R), m.Id)
 			covers(m)
 		end
-		T.eq(MachineService.atCell(PLOT, 11, 11), nil, "empty cell")
+		T.eq(MachineService.atCell(PLOT, 14, 14), nil, "empty cell")
 		T.eq(MachineService.atCell(PLOT, -1, 4), nil, "off the plot")
 		T.eq(#MachineService.ofPlot(PLOT + 1), 0, "other plot")
 		T.eq(next(data.MachineInventory), nil, "no dev kit outside Studio")
@@ -340,7 +340,7 @@ return function(T, Loader)
 				texts[note.Payload.Text] = true
 			end
 		end
-		T.truthy(texts["Clay Furnace didn't fit and is waiting in your Build menu."], "the usual toast")
+		T.truthy(texts["Furnace didn't fit and is waiting in your Build menu."], "the usual toast")
 		T.truthy(
 			texts["A chute now sits where your Crusher stood (only belts can go on it). It is waiting in your Build menu."],
 			"the chute toast"
@@ -429,7 +429,7 @@ return function(T, Loader)
 		T.eq(removed[3], "Pickup", "reason")
 		local note = w.notes[#w.notes]
 		T.eq(note.Name, "Notify", "toast")
-		T.eq(note.Payload.Text, "2 items from your Clay Furnace went to your Ore Pen.", "toast text")
+		T.eq(note.Payload.Text, "2 items from your Furnace went to your Ore Pen.", "toast text")
 		local _, again = MachineService.pickup(m)
 		T.eq(again, "Invalid", "can't pick up twice")
 

@@ -586,9 +586,15 @@ return function(T, Loader)
 		w.data.MachineUpgrades = nil
 		T.eq(buy(w, req("Upgrade:ClayFurnace:Speed", nil, 1)).Ok, true, "no MachineUpgrades table")
 		T.eq(w.data.MachineUpgrades.ClayFurnace.Speed, 1)
-		w.data.MachineUpgrades.BlastFurnace = 5
-		T.eq(buy(w, req("Upgrade:BlastFurnace:Speed", nil, 1)).Ok, true, "a number instead of a record")
-		T.eq(w.data.MachineUpgrades.BlastFurnace.Speed, 1)
+		w.data.MachineUpgrades.AutoCleaner = 5
+		T.eq(buy(w, req("Upgrade:AutoCleaner:Speed", nil, 1)).Ok, true, "a number instead of a record")
+		T.eq(w.data.MachineUpgrades.AutoCleaner.Speed, 1)
+		-- the Furnace Upgrade: its tier, level by level (the old furnaces aren't sold any more)
+		T.eq(buy(w, req("Upgrade:ClayFurnace:Tier", nil, 1)).Ok, true, "the Brick tier")
+		T.eq(w.data.MachineUpgrades.ClayFurnace.Tier, 1)
+		T.eq(w.data.MachineUpgrades.ClayFurnace.Speed, 1, "its Speed level stays")
+		refused(w, req("Upgrade:ClayFurnace:Tier", nil, 3), "Stale", "one tier at a time")
+		refused(w, req("BlastFurnace", 1), "BadItem", "the Blast Furnace isn't sold: it is a tier")
 		w.data.MachineUpgrades.IronBox = { Speed = 2.7 }
 		T.eq(buy(w, req("Upgrade:IronBox:Speed", nil, 3)).Ok, true, "a broken level counts as its whole part")
 		T.eq(w.data.MachineUpgrades.IronBox.Speed, 3)
@@ -847,7 +853,7 @@ return function(T, Loader)
 		T.eq(text, "Build menu: 1  •  Placed: 0  •  Slots 8/10")
 		T.eq(color, Theme.Text)
 		-- what waits in the Build menu fills the last slots
-		text, color = detail(build, { Crusher = 1, IronBox = 1 }, "BlastFurnace")
+		text, color = detail(build, { Crusher = 1, IronBox = 1 }, "AutoCleaner")
 		T.eq(text, "You don't have one yet  •  Slots 8/10 (+2 waiting)")
 		T.eq(color, Theme.Bad, "full: red")
 		text = detail({ MachinesUsed = 10, MachineSlots = 10, ConveyorsUsed = 0, ConveyorSlots = 40 }, {}, "Crusher")
@@ -916,14 +922,26 @@ return function(T, Loader)
 		T.eq(q0.Detail, "No Cleaning Plant yet  •  Rough 60% → 50%  •  Pristine 0% → 5%")
 		T.eq(q0.DetailColor, Theme.Bad)
 		T.truthy(q0.Buys[1].CanBuy, "a warning only")
-		local blast = cardById(TechShopView.cards(state(), 1e12), "Upgrade:BlastFurnace:Speed")
-		T.truthy(string.find(blast.Detail, "No Blast Furnace yet  •  Per item: ", 1, true) == 1, blast.Detail)
-		local placedBlast = state({ Placed = { { Id = "BlastFurnace" } } })
+		local polisher = cardById(TechShopView.cards(state(), 1e12), "Upgrade:Polisher:Speed")
+		T.truthy(string.find(polisher.Detail, "No Polisher yet  •  Per item: ", 1, true) == 1, polisher.Detail)
+		local placedPolisher = state({ Placed = { { Id = "Polisher" } } })
 		T.eq(
-			string.find(cardById(TechShopView.cards(placedBlast, 0), "Upgrade:BlastFurnace:Speed").Detail, "No ", 1, true),
+			string.find(cardById(TechShopView.cards(placedPolisher, 0), "Upgrade:Polisher:Speed").Detail, "No ", 1, true),
 			nil,
 			"placed counts"
 		)
+		-- the Furnace Upgrade card: the next tier and its time, the tier's picture
+		local furnace = state({ Placed = { { Id = "ClayFurnace" } } })
+		local tier = cardById(TechShopView.cards(furnace, 1e12), "Upgrade:ClayFurnace:Tier")
+		T.eq(tier.Title, "Furnace Upgrade")
+		T.eq(tier.Detail, "Furnace: 6 s → Brick Furnace: 4 s")
+		T.eq(tier.Icon, "BrickFurnace", "shows the furnace it turns into")
+		local top = cardById(
+			TechShopView.cards(state({ Placed = { { Id = "ClayFurnace" } }, MachineUpgrades = { ClayFurnace = { Tier = 2 } } }), 1e12),
+			"Upgrade:ClayFurnace:Tier"
+		)
+		T.eq(top.Detail, "Blast Furnace: 2.5 s → Plasma Furnace: 2.5 s (2 at once)")
+		T.eq(top.Icon, "PlasmaFurnace")
 		T.eq(string.find(cardById(TechShopView.cards(state(), 0), "Bellows").Detail, "No ", 1, true), nil, "Bellows: for all machines")
 		local bellows = cardById(cards, "Bellows")
 		T.eq(bellows.Detail, "Job time 90% → 80%")

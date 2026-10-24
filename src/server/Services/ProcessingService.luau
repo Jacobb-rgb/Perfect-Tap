@@ -337,6 +337,10 @@ local function onBought(player: Player, bought: Bought)
 			end
 		end
 		return
+	elseif bought.Upgrade == "Tier" then
+		-- a new tier: every furnace of the player works and looks like it now
+		MachineService.refreshType(player, machineId)
+		return
 	elseif bought.Upgrade ~= "Speed" then
 		return
 	end
@@ -383,7 +387,7 @@ local function jobInputs(machine: PlacedMachine, queue: { Desc }): ({ Desc }?, b
 		end
 		return { queue[i], queue[j] }, false
 	end
-	return MachineLogic.batch(machine.Id, queue, count(machine.Entry.Out)), false
+	return MachineLogic.batch(machine.Info, queue, count(machine.Entry.Out)), false
 end
 
 -- Starts a job (the Job attribute follows at the end of the tick, showJob).
