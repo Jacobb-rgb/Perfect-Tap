@@ -196,7 +196,7 @@ end
 ---------------------------------------------------------------- the counter and the keeper
 
 -- The counter (its top is the shop hook, tag VaultCounter), a screen, a blaster on show and the
--- shopkeeper's spot behind it (the owner's avatar, ShopkeeperController), facing the door (+Z).
+-- shopkeeper's spot behind it (the owner's miner, ShopkeeperController), facing the door (+Z).
 function Interior.counter(m: Model, origin: CFrame): BasePart
 	Kit.block(m, origin * CF(0, 2, 5), V3(16, 4, 4), C.Tiles[2], Kit.SLATE, Kit.solid())
 	for i = 0, 3 do

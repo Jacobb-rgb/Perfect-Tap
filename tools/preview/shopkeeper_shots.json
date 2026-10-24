@@ -43,28 +43,6 @@
     "shadowExtent": 80,
     "maxLights": 24
   },
-  "keeper_eggs": {
-    "scene": "shopkeepers",
-    "position": [
-      -27.2,
-      7.7,
-      20.3
-    ],
-    "target": [
-      -46.2,
-      4.2,
-      23.9
-    ],
-    "fov": 55,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 80,
-    "maxLights": 24
-  },
   "keeper_sell": {
     "scene": "shopkeepers",
     "position": [
@@ -174,5 +152,71 @@
     ],
     "shadowExtent": 80,
     "maxLights": 24
+  },
+  "keeper_solo_front": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 30,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      0,
+      3.6,
+      -9.5
+    ],
+    "target": [
+      0,
+      2.85,
+      0
+    ],
+    "fov": 40
+  },
+  "keeper_solo_three_quarter": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 30,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      -6.5,
+      4.2,
+      -7
+    ],
+    "target": [
+      0,
+      2.85,
+      0
+    ],
+    "fov": 40
+  },
+  "keeper_solo_back": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 30,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      5.5,
+      4.0,
+      7.5
+    ],
+    "target": [
+      0,
+      2.85,
+      0
+    ],
+    "fov": 40
   }
 }

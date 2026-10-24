@@ -1,20 +1,23 @@
 # Shopkeepers (owner 2026-10-24)
 
-Owner: "cool characters behind the counters of all shops" → then "just one guy for every shop, made from **my skin**,
-all of them identical". Branch `feat/shopkeepers` (from main `ecf24f90`).
+Owner: "cool characters behind the counters of all shops" → "one guy for every shop, all identical" → (final)
+**his 3D model** `roblox_miner_shopkeeper.glb` ("upload exactly this, not blocky, no lego studs"), **none at the
+EGGS temple**. Branch `feat/shopkeepers` (from main `ecf24f90`).
 
 ## How it works
 | Piece | File | What |
 |---|---|---|
+| The model | `docs/art/shopkeeper/roblox_miner_shopkeeper.glb` → `tools/art/shopkeeper_glb.py` → `src/shared/Builders/ShopkeeperModel.luau` | the owner's file as data: every box a Block, every cylinder a Cylinder, the lamp lens a disc, his colours; 1 unit = 1 stud, 5.53 studs tall |
+| Builder | `src/shared/Builders/ShopkeeperBuilder.luau` | the pieces as SmoothPlastic parts (4 glows Neon), the model tagged `NoStuds` (no Roblox studs), on an R6-style rig (invisible HumanoidRootPart, Torso, Head, arms, legs; Motor6Ds with the R6 names and frames at his own neck, shoulders and hips; pieces welded), AnimationController + Animator |
 | Spots | `ShopkeeperConfig.mark(counter, feet, shop)` in the lobby builders | an **Attachment** on the counter (tag `ShopkeeperSpot`, attribute `Shop`), frame = his feet, LookVector = the customers. No parts: no budget change; it streams with its counter |
-| Template | `src/server/Services/ShopkeeperService.luau` | `Players:CreateHumanoidModelFromUserId(owner)` once at start (pcall, 4 tries, 8 s doubling) → `ReplicatedStorage.ShopkeeperTemplate`: scripts stripped, root anchored, the rest loose for the joints, no collision / touch / queries / shadows, name and health bar hidden, state machine off |
-| Keepers | `src/client/Controllers/ShopkeeperController.luau` | clones the template onto every spot that streams in (client-only: nothing more streams to phones), scale per shop, feet on the spot; Roblox idle, the head follows the player (neck joint, ±65° / ±20°), wave + hello bubble when the player walks up (25 s cooldown), cheer + thanks after a buy (Notify `Reward`) or a sale (Earned `Sell`) nearby; a soft light in front of his chest (the shops are dark, the owner's skin is black) |
-| Numbers, lines | `src/shared/Config/ShopkeeperConfig.luau` | `UserId`, scales, distances, Roblox animation ids (R15 + R6), hello / thanks lines per shop |
+| Keepers | `src/client/Controllers/ShopkeeperController.luau` | builds a keeper on a spot while the player is within 90 studs, removes him past 110 (phones draw 1-2 at a time, ~83 parts each); Roblox R6 idle, the head follows the player (neck joint, ±65° / ±20°), wave + hello bubble when the player walks up (25 s cooldown), cheer + thanks after a buy (Notify `Reward`) or a sale (Earned `Sell`) nearby; a soft light in front of his chest |
+| Numbers, lines | `src/shared/Config/ShopkeeperConfig.luau` | scales, distances, R6 animation ids, hello / thanks lines per shop |
 
-**Whose avatar:** `ShopkeeperConfig.UserId` when set, else the game's creator when a **user** owns the game
-(`game.CreatorType == User`), else in Studio the first player who joins (the one pressing Play). If the game is
-published under a **group**, `UserId` must be filled in (the owner's Roblox UserId). The keepers follow his current
-avatar: a new skin shows on the next server start.
+**Two fixes to the file** (both in `tools/art/shopkeeper_glb.py`): its scene lost 11 mirrored pieces to duplicate
+names (one eye, ear, eyebrow, apron strap, pouch and flap, backpack tube, harness strap and three SHOP letters: the
+meshes are in the file, no node shows them), so the script reads every mesh; and its torso floats 0.42 studs over the
+thighs, so a hip block in the trousers' colour closes the gap. Everything else is exactly the file. Change the model →
+run the script again.
 
 ## Spots (map v57 on this branch)
 | Shop | Counter | Spot | Scale |
@@ -24,7 +27,6 @@ avatar: a new skin shows on the next server start.
 | SELL | `SellCounter` | where Tobin stood | 1.15 |
 | ENCHANT | `EnchantCounter` | where the Enchanter stood | 1.15 |
 | BLASTER VAULT | `VaultCounter` | where the Blastsmith stood (Vault `Kit.scale` now scales attachments too) | 1.25 |
-| EGGS | the ROYAL podium | on the dais in the gap between the ROYAL and the Stone egg, behind the front eggs | 1.15 |
 
 The five blocky keepers (Outfitter, Forgemaster Ulda, Tobin, the Enchanter, the Blastsmith) are gone from the map.
 Texts still say "Tobin paid ..." (SellService): a rename is the owner's call.
@@ -36,16 +38,16 @@ Texts still say "Tobin paid ..." (SellService): a rename is the owner's call.
 - Map version: 57 here so it can't clash with 53-56; renumber when merging.
 
 ## Preview
-`lune run tools/lune/export_scene.luau shopkeepers` (stand-ins dressed dark like the owner's skin, scaled like the
-keepers) then `SHOTS_EXTRA=tools/preview/shopkeeper_shots.json node tools/preview/render.mjs shopkeepers keeper_gear
-keeper_tech keeper_sell keeper_enchant keeper_vault keeper_eggs`. Lune can't load Roblox avatars: the real look is a
-Studio check.
+`lune run tools/lune/export_scene.luau shopkeepers` (the world, the miner on every spot) or `shopkeeper_solo` (the
+miner alone), then `SHOTS_EXTRA=tools/preview/shopkeeper_shots.json node tools/preview/render.mjs shopkeepers
+keeper_gear_low keeper_tech_low keeper_sell keeper_enchant keeper_vault` / `shopkeeper_solo keeper_solo_front
+keeper_solo_three_quarter keeper_solo_back`. The previews show his rest pose (no animations).
 
 ## What to test in Studio
-1. Press Play (the place unpublished: your own avatar is used). Within a few seconds your avatar stands behind the
-   SHOP, UPGRADES, SELL, ENCHANT and Vault counters and between the eggs.
-2. Each one breathes (idle) and turns his head toward you when you are near; walk up: he waves and a bubble says
-   hello; buy something / sell ore: he cheers and says thanks.
+1. Press Play. The miner stands behind the SHOP, UPGRADES, SELL, ENCHANT and Vault counters, smooth, without studs;
+   none at the EGGS temple.
+2. Each one breathes (R6 idle) and turns his head toward you when you are near; walk up: he waves and a bubble says
+   hello; buy something / sell ore: he cheers and says thanks. (The animations are Roblox's R6 ones on his own rig:
+   check that arms and head move naturally.)
 3. Prompts (E) at every counter still work (the keepers block no clicks or prompts); nothing collides with him.
 4. Phone emulator: no stutter at the plaza; the bubbles are readable.
-5. Output: no `[ShopkeeperService]` warning. If the avatar fails to load, the shops still work without keepers.

@@ -190,7 +190,7 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Style.streaming(float, "Atomic")
 	Kit.tag(float, "Spin")
 
-	-- the shopkeeper behind the table (the owner's avatar, ShopkeeperController)
+	-- the shopkeeper behind the table (the owner's miner, ShopkeeperController)
 	ShopkeeperConfig.mark(counter, at(0, FLOOR, -1.6), "Enchant")
 
 	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster

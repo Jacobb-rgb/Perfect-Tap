@@ -1,20 +1,21 @@
--- The shopkeepers (owner 2026-10-24: his own avatar behind every shop counter) under
--- Lune: ShopkeeperConfig's lines, scales, owner pick and head-turn math; the
--- ShopkeeperService template (dressed as a harmless rig, retried, never for UserId 0;
--- avatars are fakes); the lobby marks exactly one keeper spot per shop, each behind its
--- counter facing the customers, and the old blocky keepers are gone.
+-- The shopkeepers (owner 2026-10-24: one and the same miner, exactly his 3D model, behind
+-- every shop counter, none at the EGGS temple) under Lune: ShopkeeperConfig's lines,
+-- scales, show / hide distances and head-turn math; ShopkeeperBuilder builds every piece
+-- of the model (smooth, no studs, the lost mirrored pieces back) on an R6-style rig whose
+-- joints hold the pieces in place at rest; the lobby marks exactly one keeper spot per
+-- shop, each behind its counter facing the customers, and the old blocky keepers are gone.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
 	local Vector3 = roblox.Vector3
 	local CFrame = roblox.CFrame
 	local ShopkeeperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ShopkeeperConfig")
-	local ShopkeeperService = Loader.requirePath("ServerScriptService.Server.Services.ShopkeeperService")
+	local ShopkeeperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ShopkeeperBuilder")
+	local ShopkeeperModel = Loader.requirePath("ReplicatedStorage.Shared.Builders.ShopkeeperModel")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
-	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 
-	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault", "Eggs" }
-	-- the counter tag each shop's spot hangs on (the EGGS temple has no counter: its podium)
+	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault" }
+	-- the counter tag each shop's spot hangs on
 	local COUNTERS = {
 		Gear = "ShopCounter",
 		Tech = "UpgradeCounter",
@@ -22,9 +23,22 @@ return function(T, Loader)
 		Enchant = "EnchantCounter",
 		Vault = "VaultCounter",
 	}
+	local RIG = {
+		HumanoidRootPart = true,
+		Torso = true,
+		Head = true,
+		["Left Arm"] = true,
+		["Right Arm"] = true,
+		["Left Leg"] = true,
+		["Right Leg"] = true,
+	}
+
+	local function hasTag(inst: any, tag: string): boolean
+		return table.find(inst:GetTags(), tag) ~= nil
+	end
 
 	T.test("Shopkeepers: every shop has hello and thanks lines that fit the bubble", function()
-		for _, shop in { "Gear", "Tech", "Sell", "Enchant", "Vault", "Eggs", "Droppers", "Backpacks" } do
+		for _, shop in { "Gear", "Tech", "Sell", "Enchant", "Vault", "Droppers", "Backpacks" } do
 			local s = ShopkeeperConfig.Shops[shop]
 			T.truthy(s, shop)
 			for _, kind in { "Hello", "Thanks" } do
@@ -36,6 +50,7 @@ return function(T, Loader)
 			local scale = ShopkeeperConfig.scale(shop)
 			T.truthy(scale >= 1 and scale <= 1.6, `{shop} scale {scale}`)
 		end
+		T.eq(ShopkeeperConfig.Shops.Eggs, nil, "no keeper at the EGGS temple (owner)")
 		local hello = ShopkeeperConfig.Shops.Gear.Hello
 		T.eq(ShopkeeperConfig.line("Gear", "Hello", 1), hello[1], "first line")
 		T.eq(ShopkeeperConfig.line("Gear", "Hello", #hello + 1), hello[1], "wraps round")
@@ -43,11 +58,13 @@ return function(T, Loader)
 		T.eq(ShopkeeperConfig.scale("Nowhere"), ShopkeeperConfig.DefaultScale, "default scale")
 	end)
 
-	T.test("Shopkeepers: the configured UserId wins, then a user creator, else nobody yet", function()
-		T.eq(ShopkeeperConfig.ownerId(42, true, 7), 42, "configured")
-		T.eq(ShopkeeperConfig.ownerId(0, true, 7), 7, "the user who owns the game")
-		T.eq(ShopkeeperConfig.ownerId(0, false, 7), 0, "a group game: not the group id")
-		T.eq(ShopkeeperConfig.ownerId(0, true, 0), 0, "an unpublished place")
+	T.test("Shopkeepers: built near the player, gone far away, steady in between", function()
+		local show, hide = ShopkeeperConfig.ShowDistance, ShopkeeperConfig.HideDistance
+		T.truthy(hide > show, "a gap between showing and hiding")
+		T.truthy(ShopkeeperConfig.wanted(show - 1, false), "near: built")
+		T.falsy(ShopkeeperConfig.wanted(show + 1, false), "not yet in the gap")
+		T.truthy(ShopkeeperConfig.wanted(show + 1, true), "stays in the gap")
+		T.falsy(ShopkeeperConfig.wanted(hide + 1, true), "far: gone")
 	end)
 
 	T.test("Shopkeepers: the head turns toward the player, clamped, never backwards", function()
@@ -72,92 +89,105 @@ return function(T, Loader)
 		T.truthy(pitch < 0, "a shorter player: looks down")
 	end)
 
-	local function fakeAvatar(): any
-		local model = Instance.new("Model")
-		model.Name = "Player"
-		local root = Instance.new("Part")
-		root.Name = "HumanoidRootPart"
-		root.Anchored = false
-		root.Parent = model
-		local head = Instance.new("Part")
-		head.Name = "Head"
-		head.Anchored = true
-		head.CanCollide = true
-		head.Parent = model
-		local hat = Instance.new("Accessory")
-		local handle = Instance.new("Part")
-		handle.Name = "Handle"
-		handle.CanQuery = true
-		handle.Parent = hat
-		hat.Parent = model
-		local humanoid = Instance.new("Humanoid")
-		humanoid.RigType = roblox.Enum.HumanoidRigType.R15
-		humanoid.Parent = model
-		local animate = Instance.new("LocalScript")
-		animate.Name = "Animate"
-		animate.Parent = model
-		return model
+	local function pieces(model: any): { [string]: any }
+		local out = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and not RIG[d.Name] then
+				out[d.Name] = d
+			end
+		end
+		return out
 	end
 
-	T.test("Shopkeepers: the template is a harmless rig the client can animate", function()
-		local model = fakeAvatar()
-		ShopkeeperService.dress(model, 99)
-		T.eq(model.Name, ShopkeeperConfig.TemplateName, "name")
-		T.eq(model:GetAttribute("UserId"), 99, "whose avatar")
-		T.eq(model.PrimaryPart, model.HumanoidRootPart, "pivot = the root")
-		T.truthy(model.HumanoidRootPart.Anchored, "the root holds him in place")
-		T.falsy(model.Head.Anchored, "the body parts move with the animations")
-		for _, d in model:GetDescendants() do
-			if d:IsA("BasePart") then
-				T.falsy(d.CanCollide, d.Name .. " no collision")
-				T.falsy(d.CanTouch, d.Name .. " no touch")
-				T.falsy(d.CanQuery, d.Name .. " no queries (prompts and clicks pass)")
-				T.falsy(d.CastShadow, d.Name .. " no shadow")
+	T.test("Shopkeepers: every piece of the owner's model, smooth, no studs", function()
+		T.eq(#ShopkeeperModel.Pieces, 76, "all 75 meshes of the file (the 11 its scene lost too) and the hip block")
+		local model = ShopkeeperBuilder.build(CFrame.new(), 1)
+		T.truthy(hasTag(model, ShopkeeperBuilder.SkipTag), "tagged NoStuds: no Roblox studs on him")
+		local count, neon = 0, 0
+		for _, part in pieces(model) do
+			count += 1
+			if part.Material == roblox.Enum.Material.Neon then
+				neon += 1
+			else
+				T.eq(part.Material, roblox.Enum.Material.SmoothPlastic, part.Name .. " smooth")
 			end
+			T.falsy(part.CanCollide, part.Name .. " no collision")
+			T.falsy(part.CanQuery, part.Name .. " no queries (prompts and clicks pass)")
+			T.falsy(part.CanTouch, part.Name .. " no touch")
+			T.falsy(part.Anchored, part.Name .. " moves with the rig")
 		end
-		T.eq(model:FindFirstChild("Animate"), nil, "scripts stripped")
-		local humanoid = model:FindFirstChildOfClass("Humanoid")
-		T.eq(humanoid.DisplayDistanceType, roblox.Enum.HumanoidDisplayDistanceType.None, "no name over his head")
-		T.eq(model:GetAttribute("Rig"), "R15", "rig type for the animations")
-		local classic = fakeAvatar()
-		classic:FindFirstChildOfClass("Humanoid").RigType = roblox.Enum.HumanoidRigType.R6
-		ShopkeeperService.dress(classic, 1)
-		T.eq(classic:GetAttribute("Rig"), "R6", "a classic R6 avatar")
+		T.eq(count, 76, "76 pieces built")
+		T.eq(neon, 4, "the head lamp, side lamp, chest light and lantern glow")
+		-- the hip block closes the file's gap between the thighs and the torso
+		local hips, torso, thigh = pieces(model).hips, pieces(model).torso, pieces(model).L_thigh
+		T.truthy(hips.CFrame.Position.Y - hips.Size.Y / 2 <= thigh.CFrame.Position.Y + thigh.Size.Y / 2, "hips reach the thighs")
+		T.truthy(hips.CFrame.Position.Y + hips.Size.Y / 2 >= torso.CFrame.Position.Y - torso.Size.Y / 2, "hips reach the torso")
+		-- the mirrored pieces the file's scene had lost are back on both sides
+		local p = pieces(model)
+		for _, pair in { { "eye", "eye_1" }, { "ear", "ear_1" }, { "eyebrow", "eyebrow_1" }, { "belt_pouch", "belt_pouch_1" } } do
+			local a, b = p[pair[1]], p[pair[2]]
+			T.truthy(a and b, `{pair[1]} and {pair[2]}`)
+			T.near(a.CFrame.Position.X, -b.CFrame.Position.X, 1e-3, `{pair[1]} mirrors {pair[2]}`)
+		end
 	end)
 
-	T.test("Shopkeepers: the template is retried with a doubling wait, never for UserId 0", function()
-		local home = Instance.new("Folder")
-		local calls, waits = 0, {}
-		ShopkeeperService._setMaker(function(userId: number)
-			calls += 1
-			return if calls >= 3 then fakeAvatar() else nil
-		end, function(seconds: number)
-			table.insert(waits, seconds)
-		end)
-		T.falsy(ShopkeeperService.build(0, home), "nobody")
-		T.eq(calls, 0, "no download for UserId 0")
-		T.truthy(ShopkeeperService.build(5, home), "third try")
-		T.eq(calls, 3, "three downloads")
-		T.eq(#waits, 2, "two waits")
-		T.eq(waits[2], waits[1] * 2, "doubled")
-		local template = home:FindFirstChild(ShopkeeperConfig.TemplateName)
-		T.truthy(template, "the template is home")
-		T.eq(template:GetAttribute("UserId"), 5, "his avatar")
-		-- a rebuild replaces it
-		calls = 10
-		T.truthy(ShopkeeperService.build(6, home), "again")
-		local count = 0
-		for _, child in home:GetChildren() do
-			if child.Name == ShopkeeperConfig.TemplateName then
-				count += 1
+	T.test("Shopkeepers: feet on the spot, the model's height, facing the spot's way", function()
+		local feet = CFrame.lookAt(Vector3.new(10, 2, 5), Vector3.new(20, 2, 5)) -- faces +X
+		local scale = 1.2
+		local model = ShopkeeperBuilder.build(feet, scale)
+		local p = pieces(model)
+		local low, high = math.huge, -math.huge
+		for _, part in p do
+			if part.Shape == roblox.Enum.PartType.Block then
+				local y, h = part.CFrame.Position.Y, part.Size.Y / 2 -- (blocks stay upright)
+				low = math.min(low, y - h)
+				high = math.max(high, y + h)
 			end
 		end
-		T.eq(count, 1, "one template")
-		-- all tries fail: no template, false
-		local empty = Instance.new("Folder")
-		calls = -100
-		T.falsy(ShopkeeperService.build(7, empty), "no avatar")
-		T.eq(empty:FindFirstChild(ShopkeeperConfig.TemplateName), nil, "nothing left behind")
+		T.near(low, 2, 1e-3, "the soles on the floor")
+		T.near(high - low, ShopkeeperModel.Height * scale, 1e-2, "as tall as the model at his scale")
+		local ahead = p.eye.CFrame.Position - p.head.CFrame.Position
+		T.truthy(ahead:Dot(feet.LookVector) > 0.3, "his eyes look the spot's way")
+		T.truthy((p.pickaxe_handle.CFrame.Position - p.torso.CFrame.Position):Dot(feet.LookVector) < 0, "the pickaxe on his back")
+	end)
+
+	T.test("Shopkeepers: an R6 rig whose joints hold every piece in place at rest", function()
+		local feet = CFrame.new(3, 1, -4) * CFrame.Angles(0, 0.7, 0)
+		local model = ShopkeeperBuilder.build(feet, 1.1)
+		T.eq(model.PrimaryPart and model.PrimaryPart.Name, "HumanoidRootPart", "the root")
+		T.truthy(model.PrimaryPart.Anchored, "the root holds him")
+		for name in RIG do
+			T.truthy(model:FindFirstChild(name), name)
+		end
+		local joints = {
+			RootJoint = { "HumanoidRootPart", "Torso" },
+			Neck = { "Torso", "Head" },
+			["Left Shoulder"] = { "Torso", "Left Arm" },
+			["Right Shoulder"] = { "Torso", "Right Arm" },
+			["Left Hip"] = { "Torso", "Left Leg" },
+			["Right Hip"] = { "Torso", "Right Leg" },
+		}
+		local found = 0
+		for _, d in model:GetDescendants() do
+			if d:IsA("Motor6D") then
+				local want = joints[d.Name]
+				T.truthy(want, d.Name .. " is an R6 joint")
+				T.eq(d.Part0.Name, want[1], d.Name .. " Part0")
+				T.eq(d.Part1.Name, want[2], d.Name .. " Part1")
+				local rest = d.Part0.CFrame * d.C0 * d.C1:Inverse()
+				T.near((rest.Position - d.Part1.CFrame.Position).Magnitude, 0, 1e-4, d.Name .. " holds its part in place")
+				T.near(rest.LookVector:Dot(d.Part1.CFrame.LookVector), 1, 1e-4, d.Name .. " no twist at rest")
+				found += 1
+			end
+		end
+		T.eq(found, 6, "six joints")
+		-- every piece welded to the rig part it sits in
+		for _, part in pieces(model) do
+			local weld = part:FindFirstChildOfClass("WeldConstraint")
+			T.truthy(weld and weld.Part1 == part and weld.Part0 == part.Parent, part.Name .. " welded to " .. part.Parent.Name)
+		end
+		local controller = model:FindFirstChildOfClass("AnimationController")
+		T.truthy(controller and controller:FindFirstChildOfClass("Animator"), "an Animator for Roblox's R6 animations")
 	end)
 
 	local cachedMap = nil
@@ -169,10 +199,6 @@ return function(T, Loader)
 		return cachedMap
 	end
 
-	local function hasTag(inst: any, tag: string): boolean
-		return table.find(inst:GetTags(), tag) ~= nil
-	end
-
 	T.test("Shopkeepers: one keeper spot per shop, behind its counter, facing the customers", function()
 		local spots = {}
 		for _, d in map():GetDescendants() do
@@ -180,37 +206,35 @@ return function(T, Loader)
 				T.truthy(d:IsA("Attachment"), d:GetFullName() .. " is an Attachment (no part)")
 				local shop = d:GetAttribute("Shop")
 				T.eq(spots[shop], nil, `one spot for {shop}`)
+				T.truthy(ShopkeeperConfig.Shops[shop], `{shop} is a known shop`)
 				spots[shop] = d
 			end
 		end
+		T.eq(spots.Eggs, nil, "none at the EGGS temple (owner)")
 		for _, shop in SHOPS do
 			local spot = spots[shop]
 			T.truthy(spot, `{shop} has a keeper spot`)
-			T.truthy(ShopkeeperConfig.Shops[shop], `{shop} is a known shop`)
 			local holder = spot.Parent
 			T.truthy(holder:IsA("BasePart"), `{shop}: on a part (it streams with it)`)
+			T.truthy(hasTag(holder, COUNTERS[shop]), `{shop}: on the {COUNTERS[shop]}`)
 			local feet = holder.CFrame * spot.CFrame
 			local look = feet.LookVector
 			T.near(look.Y, 0, 1e-4, `{shop}: stands upright`)
-			local tag = COUNTERS[shop]
-			if tag then
-				T.truthy(hasTag(holder, tag), `{shop}: on the {tag}`)
-				local toCounter = holder.CFrame.Position - feet.Position
-				local flat = Vector3.new(toCounter.X, 0, toCounter.Z)
-				T.truthy(flat.Magnitude < 4.5, `{shop}: right behind the counter ({flat.Magnitude})`)
-				T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of him`)
-				T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: his feet below the counter top`)
-			else
-				-- the EGGS temple: on its dais beside the ROYAL podium, facing the stall's front
-				T.eq(holder.Name, "CapsuleMachine", "on the ROYAL podium")
-				local facing = LobbyLayout.get("CapsuleStall").Facing
-				T.truthy(look:Dot(Vector3.new(facing.X, 0, facing.Z).Unit) > 0.99, "faces the stall's front")
-				local size = holder.Size
-				local podiumH = math.min(size.X, size.Y, size.Z)
-				T.near(feet.Position.Y, holder.CFrame.Position.Y - podiumH / 2, 0.05, "feet on the dais (the podium's foot)")
-				local side = feet.Position - holder.CFrame.Position
-				T.truthy(Vector3.new(side.X, 0, side.Z).Magnitude > 2.4, "beside the podium, not inside it")
+			local toCounter = holder.CFrame.Position - feet.Position
+			local flat = Vector3.new(toCounter.X, 0, toCounter.Z)
+			T.truthy(flat.Magnitude < 4.5, `{shop}: right behind the counter ({flat.Magnitude})`)
+			T.truthy(flat.Magnitude > 0.5 and flat.Unit:Dot(look) > 0.3, `{shop}: the counter is in front of him`)
+			T.truthy(feet.Position.Y < holder.CFrame.Position.Y, `{shop}: his feet below the counter top`)
+		end
+		local eggs = nil
+		for _, d in map():GetDescendants() do
+			if d:IsA("Model") and hasTag(d, "CapsuleStall") then
+				eggs = d
 			end
+		end
+		T.truthy(eggs, "the EGGS temple")
+		for _, d in eggs:GetDescendants() do
+			T.falsy(hasTag(d, ShopkeeperConfig.Tag), "no keeper spot in the EGGS temple")
 		end
 	end)
 

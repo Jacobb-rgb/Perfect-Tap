@@ -52,7 +52,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
 local Rarity = require(Shared.Config.Rarity)
-local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
@@ -259,12 +258,6 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		-- a gold crown plate on the podium's front (facing the stall's front)
 		miniCrown(m, at(pd.X, FLOOR + pd.H / 2 - 0.08, pd.Z - PODIUM_D / 2 - 0.02), 0.8, GOLD, { 0 })
 		egg(m, pd.Id, at(pd.X, top, pd.Z), 0.3 * (i - 2))
-	end
-	-- the shopkeeper (the owner's avatar, ShopkeeperController) on the dais
-	-- in the gap between the ROYAL and the Stone egg, behind the front eggs'
-	-- line (the eggs are his counter), facing the stall's front
-	if base then
-		ShopkeeperConfig.mark(base, at(3.6, FLOOR, CZ + 3.0), "Eggs")
 	end
 	-- a soft golden light column behind the Royal egg
 	local column =

@@ -811,7 +811,7 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 		Kit.glow(m, ps * CFrame.new(0, -1.15, 0), Vector3.new(0.8, 0.8, 0.04), GLYPH_BLUE)
 	end
 
-	-- the shopkeeper right behind the counter (the owner's avatar, ShopkeeperController;
+	-- the shopkeeper right behind the counter (the owner's miner, ShopkeeperController;
 	-- close to it, so the door's lintel doesn't hide his head from the plaza)
 	ShopkeeperConfig.mark(h.Counter, h.Interior * CFrame.new(-1.4, 0, -0.4), "Gear")
 end
@@ -951,7 +951,7 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 		Kit.glow(m, ps * CFrame.new(0, -1.0, 0), Vector3.new(0.8, 0.9, 0.04), GEAR_PURPLE)
 	end
 
-	-- the shopkeeper right behind the counter (the owner's avatar, ShopkeeperController)
+	-- the shopkeeper right behind the counter (the owner's miner, ShopkeeperController)
 	ShopkeeperConfig.mark(h.Counter, h.Interior * CFrame.new(1.4, 0, -0.4), "Tech")
 end
 

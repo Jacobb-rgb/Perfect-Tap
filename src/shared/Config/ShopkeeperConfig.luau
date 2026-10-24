@@ -1,45 +1,37 @@
 --[[
-	The shopkeepers (owner 2026-10-24: "one guy for every shop, made from my
-	skin, all of them identical"): the owner's own Roblox avatar stands behind
-	every shop counter.
+	The shopkeepers (owner 2026-10-24): one and the same miner behind every
+	shop counter, built exactly like the owner's 3D model
+	(docs/art/shopkeeper/roblox_miner_shopkeeper.glb -> Builders/ShopkeeperModel,
+	Builders/ShopkeeperBuilder): smooth parts, no studs. None at the EGGS
+	temple (owner).
 
 	  World builders mark each keeper's spot with an Attachment on the shop's
 	  counter (ShopkeeperConfig.mark: tag ShopkeeperSpot, attribute Shop, the
 	  attachment's frame = the keeper's feet on the floor, LookVector = toward
 	  the customers). An Attachment is no part: the map's part budgets don't
 	  change, and the spot streams in and out with its counter.
-	  ShopkeeperService (server) builds ONE avatar model from the owner's
-	  UserId at start into ReplicatedStorage (TemplateName).
-	  ShopkeeperController (client) clones it onto every spot that streams in
-	  (client-side only: nothing more streams to the phones), plays the idle,
+	  ShopkeeperController (client) builds a keeper on a spot only while the
+	  player is within ShowDistance (and takes him away past HideDistance), so
+	  a phone draws one or two of them at a time; it plays Roblox's R6 idle,
 	  turns the head toward the player, waves and talks when the player comes
-	  close and says thanks after a buy or a sale nearby.
-
-	Whose avatar: UserId when set (> 0), else the game's creator when a user
-	owns it (game.CreatorType User), else in Studio the first player (the one
-	pressing Play). No one found = no keepers (the shops still work).
+	  close and cheers after a buy or a sale nearby.
 ]]
 
 local ShopkeeperConfig = {}
 
 ShopkeeperConfig.Tag = "ShopkeeperSpot"
-ShopkeeperConfig.TemplateName = "ShopkeeperTemplate"
 
--- The owner's Roblox UserId (0 = the game's creator, see above).
-ShopkeeperConfig.UserId = 0
+ShopkeeperConfig.DefaultScale = 1.15 -- the model is 5.53 studs: a little bigger than a player
 
--- how often / how long the server retries a failed avatar download
-ShopkeeperConfig.Retries = 4
-ShopkeeperConfig.RetryDelay = 8 -- seconds, doubled after every failure
+ShopkeeperConfig.ShowDistance = 90 -- studs from the player: build him
+ShopkeeperConfig.HideDistance = 110 -- and take him away again past this
+ShopkeeperConfig.CheckEvery = 0.4 -- seconds between the distance checks
 
-ShopkeeperConfig.DefaultScale = 1.15 -- a little bigger than a player: he reads over the counters
-
--- A soft light in front of his chest (client-side, only on the keepers that
--- streamed in): the shops' insides are dark and the owner's skin is black.
+-- A soft light in front of his chest: the shops' insides are dark.
 ShopkeeperConfig.FaceLight = {
-	Offset = Vector3.new(0, 1.2, -2.6), -- from his root, in his own frame (-Z = in front)
+	Offset = Vector3.new(0, 3.6, -2.4), -- from his feet, in his own frame at scale 1 (-Z = in front)
 	Range = 8,
-	Brightness = 1.3,
+	Brightness = 1,
 	Color = Color3.fromRGB(255, 236, 214),
 }
 
@@ -53,35 +45,29 @@ ShopkeeperConfig.GreetCooldown = 25 -- seconds before the same keeper greets aga
 ShopkeeperConfig.ThanksDistance = 24 -- studs: a buy or a sale this close makes the keeper cheer
 ShopkeeperConfig.BubbleSeconds = 3.2
 
--- Roblox's own animations (made by Roblox: they play in every experience).
+-- Roblox's own R6 animations (made by Roblox: they play in every experience;
+-- the keeper's rig has the R6 joint names and frames).
 ShopkeeperConfig.Animations = {
-	R15 = {
-		Idle = "rbxassetid://507766666",
-		Wave = "rbxassetid://507770239",
-		Cheer = "rbxassetid://507770677",
-	},
-	R6 = {
-		Idle = "rbxassetid://180435571",
-		Wave = "rbxassetid://128777973",
-		Cheer = "rbxassetid://129423030",
-	},
+	Idle = "rbxassetid://180435571",
+	Wave = "rbxassetid://128777973",
+	Cheer = "rbxassetid://129423030",
 }
 
 export type Shop = {
 	Hello: { string }, -- what he says when the player walks up
 	Thanks: { string }, -- after a buy or a sale
-	Scale: number?, -- the avatar's scale here (default DefaultScale)
+	Scale: number?, -- his scale here (default DefaultScale)
 }
 
 local THANKS = { "Thanks!", "Great choice!", "Come back soon!" }
 
 ShopkeeperConfig.Shops = {
-	Gear = { Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS, Scale = 1.1 }, -- (the door's lintel)
+	-- (SHOP and UPGRADES: a little smaller, so the door's lintel doesn't hide his head)
+	Gear = { Hello = { "Gear up, miner!", "Boots, lamps, magnets!" }, Thanks = THANKS, Scale = 1.1 },
 	Tech = { Hello = { "Machines and upgrades!", "Build a bigger factory!" }, Thanks = THANKS, Scale = 1.1 },
 	Sell = { Hello = { "Got ore? I'll buy it!", "Bring me your ore!" }, Thanks = { "Pleasure doing business!", "Thanks, miner!" } },
 	Enchant = { Hello = { "Want some magic?", "Runes for your blaster!" }, Thanks = THANKS },
 	Vault = { Hello = { "The best blasters are here!", "Welcome to the Vault!" }, Thanks = THANKS, Scale = 1.25 },
-	Eggs = { Hello = { "Hatch a golem!", "Which egg today?" }, Thanks = { "Good luck!", "Enjoy your golem!" } },
 	Droppers = { Hello = { "Droppers! Ore all day!", "Need a dropper?" }, Thanks = THANKS },
 	Backpacks = { Hello = { "Need a bigger backpack?", "Carry more ore!" }, Thanks = THANKS },
 } :: { [string]: Shop }
@@ -99,15 +85,13 @@ function ShopkeeperConfig.line(shop: string, kind: "Hello" | "Thanks", n: number
 	return lines[(n - 1) % #lines + 1]
 end
 
--- Whose avatar the keepers wear (0 = not known yet: in Studio the first
--- player then, ShopkeeperService): see the header.
-function ShopkeeperConfig.ownerId(configured: number, creatorIsUser: boolean, creatorId: number): number
-	if configured > 0 then
-		return configured
-	elseif creatorIsUser and creatorId > 0 then
-		return creatorId
+-- Should the keeper at `distance` studs be there? (`shown` = he is now:
+-- between ShowDistance and HideDistance he stays as he is.)
+function ShopkeeperConfig.wanted(distance: number, shown: boolean): boolean
+	if shown then
+		return distance <= ShopkeeperConfig.HideDistance
 	end
-	return 0
+	return distance <= ShopkeeperConfig.ShowDistance
 end
 
 -- Marks a keeper spot on `counter`: `feet` = his feet on the floor, facing

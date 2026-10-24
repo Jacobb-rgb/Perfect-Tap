@@ -1,17 +1,17 @@
 --[[
-	ShopkeeperController: the owner's avatar behind every shop counter (owner
-	2026-10-24: one guy for every shop, from his skin; Config/ShopkeeperConfig).
+	ShopkeeperController: the owner's miner behind every shop counter (owner
+	2026-10-24: one and the same keeper for every shop, exactly his 3D model;
+	Config/ShopkeeperConfig, Builders/ShopkeeperBuilder).
 
-	- ShopkeeperService puts ONE avatar model in ReplicatedStorage
-	  (TemplateName). Every keeper spot (an Attachment tagged ShopkeeperSpot
-	  on a counter, attribute Shop) that streams in gets a local clone of it;
-	  a spot that streams out takes its keeper along. A new template (the
-	  server built it again) replaces every keeper. The clones live only on
-	  this client: nothing more streams to the phones.
-	- Placement: the clone scaled to ShopkeeperConfig.scale(shop), its feet
-	  (the lowest body part, not the accessories) on the spot, facing the
-	  spot's LookVector.
-	- Life: Roblox's idle loops; the head turns toward the player inside
+	- Every keeper spot (an Attachment tagged ShopkeeperSpot on a counter,
+	  attribute Shop) that streams in is remembered; a spot that streams out
+	  takes its keeper along.
+	- Every CheckEvery seconds: a spot within ShowDistance of the player gets
+	  his keeper built (ShopkeeperBuilder at ShopkeeperConfig.scale(shop),
+	  feet on the spot, facing its LookVector); past HideDistance the keeper
+	  goes again. Only this client has them: nothing more streams to phones,
+	  and a phone draws only the one or two keepers near the player.
+	- Life: Roblox's R6 idle loops; the head turns toward the player inside
 	  LookDistance (the neck joint, clamped); walking up inside GreetDistance
 	  makes him wave and say hello (once per GreetCooldown); a buy (a Notify
 	  of Kind "Reward") or a sale (Earned from "Sell") inside ThanksDistance
@@ -28,6 +28,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BubbleTheme = require(Shared.Config.BubbleTheme)
 local Net = require(Shared.Net)
+local ShopkeeperBuilder = require(Shared.Builders.ShopkeeperBuilder)
 local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 
 local ShopkeeperController = {}
@@ -50,9 +51,9 @@ type Keeper = {
 	Bubble: BillboardGui?,
 }
 
+local spots: { [Attachment]: boolean } = {}
 local keepers: { [Attachment]: Keeper } = {}
 local folder: Folder? = nil
-local template: Model? = nil
 
 local function container(): Folder
 	if folder and folder.Parent then
@@ -79,18 +80,6 @@ local function animation(animator: Animator, id: string, looped: boolean, priori
 	return track
 end
 
--- The keeper's feet height under his root: the lowest body part's bottom
--- (accessories, hair or wings, don't count).
-local function feetOffset(model: Model, root: BasePart): number
-	local bottom = math.huge
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") and d ~= root and not d:FindFirstAncestorWhichIsA("Accoutrement") then
-			bottom = math.min(bottom, d.Position.Y - d.Size.Y / 2)
-		end
-	end
-	return if bottom < math.huge then root.Position.Y - bottom else 3
-end
-
 local function removeKeeper(spot: Attachment)
 	local k = keepers[spot]
 	if k then
@@ -101,51 +90,36 @@ end
 
 local function addKeeper(spot: Attachment)
 	removeKeeper(spot)
-	local source = template
-	if not source or not spot:IsDescendantOf(Workspace) then
+	if not spot:IsDescendantOf(Workspace) then
 		return
 	end
 	local shop = spot:GetAttribute("Shop")
 	local shopId = if type(shop) == "string" then shop else ""
-	local model = source:Clone()
-	local root = model:FindFirstChild("HumanoidRootPart")
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if not root or not root:IsA("BasePart") or not humanoid then
-		model:Destroy()
-		return
-	end
+	local scale = ShopkeeperConfig.scale(shopId)
+	local model = ShopkeeperBuilder.build(spot.WorldCFrame, scale)
 	model.Name = "Shopkeeper_" .. shopId
-	model.PrimaryPart = root
-	pcall(function()
-		model:ScaleTo(ShopkeeperConfig.scale(shopId))
-	end)
-	-- feet on the spot, facing the customers (the root goes there, whatever the pivot)
-	model:PivotTo(CFrame.new())
-	local lift = feetOffset(model, root)
-	local rootToPivot = root.CFrame:ToObjectSpace(model:GetPivot())
-	model:PivotTo(spot.WorldCFrame * CFrame.new(0, lift, 0) * rootToPivot)
-
-	local r6 = humanoid.RigType == Enum.HumanoidRigType.R6
+	local root = model.PrimaryPart :: BasePart
+	local torso = model:FindFirstChild("Torso")
 	local head = model:FindFirstChild("Head")
-	local torso = if r6 then model:FindFirstChild("Torso") else head
 	local neck = if torso then torso:FindFirstChild("Neck") else nil
+
 	-- the soft light in front of his chest
 	local lamp = Instance.new("Attachment")
 	lamp.Name = "FaceLight"
-	lamp.Position = ShopkeeperConfig.FaceLight.Offset * model:GetScale()
+	lamp.Parent = root
+	lamp.WorldCFrame = spot.WorldCFrame * CFrame.new(ShopkeeperConfig.FaceLight.Offset * scale)
 	local light = Instance.new("PointLight")
 	light.Range = ShopkeeperConfig.FaceLight.Range
 	light.Brightness = ShopkeeperConfig.FaceLight.Brightness
 	light.Color = ShopkeeperConfig.FaceLight.Color
 	light.Shadows = false
 	light.Parent = lamp
-	lamp.Parent = root
-	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
-	animator.Parent = humanoid
 	model.Parent = container()
 
-	local ids = if r6 then ShopkeeperConfig.Animations.R6 else ShopkeeperConfig.Animations.R15
-	local idle = animation(animator, ids.Idle, true, Enum.AnimationPriority.Idle)
+	local controller = model:FindFirstChildOfClass("AnimationController")
+	local animator = if controller then controller:FindFirstChildOfClass("Animator") else nil
+	local ids = ShopkeeperConfig.Animations
+	local idle = if animator then animation(animator, ids.Idle, true, Enum.AnimationPriority.Idle) else nil
 	if idle then
 		-- every keeper a little out of step with the others
 		idle:Play(0.2)
@@ -161,8 +135,8 @@ local function addKeeper(spot: Attachment)
 		NeckC0 = if neck and neck:IsA("Motor6D") then neck.C0 else CFrame.identity,
 		Yaw = 0,
 		Pitch = 0,
-		Wave = animation(animator, ids.Wave, false, Enum.AnimationPriority.Action),
-		Cheer = animation(animator, ids.Cheer, false, Enum.AnimationPriority.Action),
+		Wave = if animator then animation(animator, ids.Wave, false, Enum.AnimationPriority.Action) else nil,
+		Cheer = if animator then animation(animator, ids.Cheer, false, Enum.AnimationPriority.Action) else nil,
 		Near = false,
 		GreetedAt = -math.huge,
 		Lines = math.random(1, 4),
@@ -170,10 +144,23 @@ local function addKeeper(spot: Attachment)
 	}
 end
 
-local function rebuildAll()
-	for _, spot in CollectionService:GetTagged(ShopkeeperConfig.Tag) do
-		if spot:IsA("Attachment") then
+local function playerRoot(): BasePart?
+	local character = Players.LocalPlayer.Character
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	return if root and root:IsA("BasePart") then root else nil
+end
+
+-- Builds the keepers near the player, takes the far ones away.
+local function refresh()
+	local me = playerRoot()
+	local from = if me then me.Position else Workspace.CurrentCamera.Focus.Position
+	for spot in spots do
+		local shown = keepers[spot] ~= nil
+		local wanted = spot:IsDescendantOf(Workspace) and ShopkeeperConfig.wanted((spot.WorldPosition - from).Magnitude, shown)
+		if wanted and not shown then
 			addKeeper(spot)
+		elseif shown and not wanted then
+			removeKeeper(spot)
 		end
 	end
 end
@@ -249,12 +236,6 @@ local function greet(k: Keeper, now: number)
 	k.Lines += 1
 end
 
-local function playerRoot(): BasePart?
-	local character = Players.LocalPlayer.Character
-	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
-	return if root and root:IsA("BasePart") then root else nil
-end
-
 -- A buy or a sale: the nearest keeper inside ThanksDistance cheers.
 local function thank()
 	local me = playerRoot()
@@ -305,7 +286,7 @@ local function step(dt: number)
 		if neck and (math.abs(yaw - k.Yaw) > 1e-3 or math.abs(pitch - k.Pitch) > 1e-3) then
 			k.Yaw += (yaw - k.Yaw) * catchUp
 			k.Pitch += (pitch - k.Pitch) * catchUp
-			-- turned about the torso's up axis at the neck (the same for R6 and R15)
+			-- turned about the torso's up axis at the neck
 			local base = k.NeckC0
 			neck.C0 = CFrame.new(base.Position) * CFrame.Angles(0, k.Yaw, 0) * CFrame.Angles(k.Pitch, 0, 0) * base.Rotation
 		end
@@ -314,26 +295,19 @@ end
 
 ---------------------------------------------------------------- lifecycle
 
-local function useTemplate(child: Instance)
-	if child.Name == ShopkeeperConfig.TemplateName and child:IsA("Model") then
-		template = child
-		rebuildAll()
-	end
-end
-
 function ShopkeeperController.start()
-	ReplicatedStorage.ChildAdded:Connect(useTemplate)
-	local existing = ReplicatedStorage:FindFirstChild(ShopkeeperConfig.TemplateName)
-	if existing then
-		useTemplate(existing)
-	end
-	CollectionService:GetInstanceAddedSignal(ShopkeeperConfig.Tag):Connect(function(spot: Instance)
+	local function added(spot: Instance)
 		if spot:IsA("Attachment") then
-			addKeeper(spot)
+			spots[spot] = true
 		end
-	end)
+	end
+	for _, spot in CollectionService:GetTagged(ShopkeeperConfig.Tag) do
+		added(spot)
+	end
+	CollectionService:GetInstanceAddedSignal(ShopkeeperConfig.Tag):Connect(added)
 	CollectionService:GetInstanceRemovedSignal(ShopkeeperConfig.Tag):Connect(function(spot: Instance)
 		if spot:IsA("Attachment") then
+			spots[spot] = nil
 			removeKeeper(spot)
 		end
 	end)
@@ -345,6 +319,14 @@ function ShopkeeperController.start()
 	Net.listen("Earned", function(payload: any)
 		if type(payload) == "table" and payload.Source == "Sell" then
 			thank()
+		end
+	end)
+	task.spawn(function()
+		while true do
+			xpcall(refresh, function(err: any)
+				warn("[ShopkeeperController] " .. tostring(err))
+			end)
+			task.wait(ShopkeeperConfig.CheckEvery)
 		end
 	end)
 	RunService.Heartbeat:Connect(step)

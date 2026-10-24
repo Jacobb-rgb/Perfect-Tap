@@ -36,7 +36,7 @@ local ORDER = {
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
-	"ShopkeeperController", -- the owner's avatar behind every shop counter: idle, looks, waves, talks
+	"ShopkeeperController", -- the owner's miner behind every shop counter: idle, looks, waves, talks
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
