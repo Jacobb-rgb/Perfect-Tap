@@ -178,6 +178,12 @@
 	- moves what isn't crushed ore out of its Furnaces' queues to the pen;
 	- gets a Crusher in its Build menu if its starter kit was given and it
 	  has none placed or waiting there.
+
+	Version 7 (owner 2026-10-24: three free podiums and two for Robux): the
+	podium list has 5 slots (a 4-slot list gets an empty 5th, always: the
+	repair below); slot 3 is free now and the Podiums perk unlocks 4 and 5.
+	The bump keeps an older server (4 slots, slot 3 behind the perk) from
+	loading a 5-slot save.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -199,7 +205,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 6 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once
+Migrations.Latest = 7 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free)
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -207,7 +213,7 @@ local MAX_INVENTORY = MachineData.MaxInventory
 -- Highest saved level of any upgrade line (readers clamp to what is sold;
 -- TrainService uses the same GameConfig number).
 local MAX_LEVEL_KEPT = GameConfig.MaxLevelKept
-local PODIUM_SLOTS = 4
+local PODIUM_SLOTS = 5 -- EconomyConfig.Podiums.Max (Version 7: 3 free + 2 for Robux; 4 before)
 -- Version 4: the 12 -> 16 grid move of a placed machine's cell. Frozen numbers of
 -- THIS step, never derived from GameConfig.PlotCells: a later resize would then
 -- mis-move the version 3 saves (a later resize adds its own step).
@@ -1050,10 +1056,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		data.BlasterOre = ""
 	end
 
-	-- v3: at least 4 podium strings, each a cleaned ore or "". A key this server
-	-- can't read (a newer build's ore or grade) stays as it is: PodiumService
-	-- shows that slot empty, and the newer server reads it again. Slots past
-	-- the 4th (a newer build's) stay as they are when "" or key-shaped.
+	-- v3 / v7: at least 5 podium strings (4 before Version 7), each a cleaned ore or "".
+	-- A key this server can't read (a newer build's ore or grade) stays as it is:
+	-- PodiumService shows that slot empty, and the newer server reads it again. Slots
+	-- past the 5th (a newer build's) stay as they are when "" or key-shaped.
 	local podiums = data.Podiums
 	local slots = {}
 	local lastPodium = PODIUM_SLOTS

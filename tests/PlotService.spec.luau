@@ -470,7 +470,8 @@ return function(T, Loader)
 					T.near(d.CFrame.Position.Y - plotY, PlotBuilder.HoloRing.Y, 1e-3, "ring height")
 				end
 			end
-			T.eq(bars, PlotBuilder.HoloRing.Sides, "a closed holo-ring")
+			-- (a locked slot shows its padlock there; PodiumService copies the ring onto it with the perk)
+			T.eq(bars, if locked then 0 else PlotBuilder.HoloRing.Sides, "a closed holo-ring")
 			local hover = podium:FindFirstChild("Hover")
 			T.truthy(hover and hover:IsA("BasePart"), "hover box")
 			T.eq(hover.Transparency, 1, "hover box is invisible")

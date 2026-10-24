@@ -102,7 +102,7 @@ local perkConnections: { [Player]: RBXScriptConnection } = {}
 -- players whose offline payout waits for their pass checks
 local waitingPasses: { [Player]: boolean } = {}
 -- an offline payout made while a pass check for an offline perk kept failing
--- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
+-- (the absence, what was paid, the income without / with podiums 4-5, the perks it counted)
 type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean, Money: boolean }
 local topUps: { [Player]: TopUp } = {}
 -- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
@@ -310,12 +310,40 @@ local function buildDisplay(plotId: number, slot: number, desc: Desc): (Model?, 
 	return model, makeTag(top, desc, point.Position.Y)
 end
 
+-- PlotBuilder leaves the holo-ring off the locked slots (the map's part budget: the
+-- padlock floats there). A slot the perk opens gets a copy of podium 1's ring (in the
+-- yard's skin colours, ArtifactService repaints the copies with the rest); a slot that
+-- locks again loses it.
+local function setRing(podium: Model, first: Model?, on: boolean)
+	local has = podium:FindFirstChild("HoloRing") ~= nil
+	local base = podium:FindFirstChild("Base")
+	local firstBase = first and first:FindFirstChild("Base")
+	if on and not has and first and base and firstBase and base:IsA("BasePart") and firstBase:IsA("BasePart") then
+		local delta = base.CFrame * firstBase.CFrame:Inverse()
+		for _, bar in first:GetChildren() do
+			if bar:IsA("BasePart") and bar.Name == "HoloRing" then
+				local copy = bar:Clone()
+				copy.CFrame = delta * bar.CFrame
+				copy.Parent = podium
+			end
+		end
+	elseif not on and has then
+		for _, bar in podium:GetChildren() do
+			if bar.Name == "HoloRing" then
+				bar:Destroy()
+			end
+		end
+	end
+end
+
 -- Locked slots: lock + price plate visible and a dull rim until the owner has the perk.
 local function refreshLocks(plotId: number, owner: Player?)
+	local first = podiumModel(plotId, 1)
 	for slot = FREE + 1, MAX do
 		local podium = podiumModel(plotId, slot)
 		if podium then
 			local unlocked = owner ~= nil and PodiumService.isUnlocked(owner, slot)
+			setRing(podium, first, unlocked)
 			local lock = podium:FindFirstChild("Lock")
 			if lock then
 				for _, d in lock:GetDescendants() do
@@ -400,7 +428,7 @@ local function begin(player: Player, slot: number): ({ string }?, Reason?)
 end
 
 local function lockedToast(player: Player)
-	toast(player, "Podiums 3 and 4 come with the Podium Pass (100 R$). Coming soon!", "Info")
+	toast(player, "Podiums 4 and 5 come with the Podium Pass (100 R$). Coming soon!", "Info")
 end
 
 -- Places one ore with this storage key from the pen onto a slot.
@@ -760,7 +788,7 @@ end
 	The rest of an offline payout made while a check of a pass giving an
 	offline perk kept failing, once a later check says the player owned that
 	pass when they joined (never for a pass bought in this session): the
-	absence counted again with Night Shift's hours and podiums 3-4, minus
+	absence counted again with Night Shift's hours and podiums 4-5, minus
 	what was paid. Returns the amount.
 ]]
 local function topUpOffline(player: Player): number

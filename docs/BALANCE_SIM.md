@@ -189,7 +189,7 @@ re-calibration after the choice (`lune run tools/lune/balance_sim.luau calibrate
   best 3 ores (70 %) or the next rarity's cheapest 3 (30 %). Weights inside a table fall with value (1 / rank^0.8).
 - Player loop per 5 s step: mine → carry to the floor's train (12 s walk per load) → train to the pen → clean by
   hand (18 s per ore + the trip back) until the first Auto Cleaner (8 s per ore, Quality 0 odds) → best 2 cleaned ores
-  on the 2 free podiums → the rest sold, through the Crusher (×2) and furnaces (ingots ×1.25) when owned.
+  on the 3 free podiums (2 before 2026-10-24) → the rest sold, through the Crusher (×2) and furnaces (ingots ×1.25) when owned.
 - Buying (greedy): the next blaster as soon as ingots + coins are there (Foundry) or the Vault is affordable; the
   elevator once floor 4 is in reach; hoverboards ($5K / $80K / $1.5M, walking × 0.8 / 0.65 / 0.5) when they cost at
   most a quarter of the coins; otherwise the machine / upgrade with the best payback under 20 min (carry levels, train

@@ -665,8 +665,10 @@ end
 	floating above it inside a level holo-ring of opaque soft cyan bars. An
 	invisible `Hover` box around the ore catches the mouse for
 	PodiumController (the ore itself is not queryable). Locked slots: the
-	`Lock` where the ore floats and the "100 R$" `PricePlate` on the base.
-	13 parts (21 locked). The Top is in the slightly lighter Pipe slate:
+	`Lock` where the ore floats and the "100 R$" `PricePlate` on the base,
+	and no holo-ring (the map's phone budget: PodiumService copies podium 1's
+	ring onto a slot the Podiums perk opens). 13 parts (15 locked). The Top is
+	in the slightly lighter Pipe slate:
 	ArtifactService tells the skin roles of Base, Column and Top apart by
 	their own colours.
 ]]
@@ -692,11 +694,13 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	local top = SoftKit.cylUp(m, base * CFrame.new(0, topY, 0), topH, topW, "Pipe", SOLID, "Top")
 	attachment(top, "OrePoint", top.CFrame:ToObjectSpace(base * CFrame.new(0, BaseLayout.PodiumOreHeight, 0)))
 	attachment(top, "Prompt", top.CFrame:ToObjectSpace(base * CFrame.new(0, 2.6, -rect.Size.Z / 2 - 0.3)))
-	-- the holo-ring around the floating ore
-	local bars, barSize = PlotBuilder.holoRingBars(base)
-	for _, barCF in bars do
-		local bar = SoftKit.glow(SoftKit.part(m, barCF, barSize, HOLO, TINY, "HoloRing"))
-		bar.Transparency = PlotBuilder.HoloRing.Transparency
+	-- the holo-ring around the floating ore (a locked slot shows the padlock there)
+	if not locked then
+		local bars, barSize = PlotBuilder.holoRingBars(base)
+		for _, barCF in bars do
+			local bar = SoftKit.glow(SoftKit.part(m, barCF, barSize, HOLO, TINY, "HoloRing"))
+			bar.Transparency = PlotBuilder.HoloRing.Transparency
+		end
 	end
 	-- invisible hover box around the ore: the mouse over the ore finds the podium
 	local hoverH = 3

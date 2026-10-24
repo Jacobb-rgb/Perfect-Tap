@@ -79,7 +79,7 @@ return function(T, Loader)
 		}
 		data.StarterKitGiven = true
 		data.Storage = { { K = "Clean", O = "Gold", G = "Pristine" }, { K = "Raw", O = "Coal" }, { K = "Relic", O = "AncientGear" } }
-		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "" }
+		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "", "" }
 		data.Foundry.Stock = { { K = "Ingot", O = "Gold", G = "Clean" } }
 		data.Train = {
 			CapacityLevel = 3,
@@ -235,7 +235,7 @@ return function(T, Loader)
 			T.eq(item.K, "Relic", "only relics")
 		end
 		T.eq(#data.Foundry.Stock, 0, "the Foundry's ingots")
-		for i = 1, 4 do
+		for i = 1, 5 do
 			T.eq(data.Podiums[i], "", "podium " .. i)
 		end
 		T.eq(data.PlacedMachines[1].In, nil, "queues")

@@ -44,15 +44,33 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 6", function()
-		T.eq(DataTemplate.Version, 6)
-		T.eq(Migrations.Latest, 6)
+	T.test("Migration: template is version 7", function()
+		T.eq(DataTemplate.Version, 7)
+		T.eq(Migrations.Latest, 7)
+		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
+	end)
+
+	T.test("Migration v7: a v6 save's four podiums grow to five, ores stay where they stood", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 6
+		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "Clean|Tin|Clean|" }
+		Migrations.run(data)
+		T.eq(data.Version, 7)
+		T.eq(#data.Podiums, 5, "the 5th slot added")
+		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
+		T.eq(data.Podiums[2], "")
+		T.eq(data.Podiums[3], "Clean|Copper|Rough|", "the old paid podium 3 is a free one now")
+		T.eq(data.Podiums[4], "Clean|Tin|Clean|")
+		T.eq(data.Podiums[5], "", "the new podium starts empty")
+		local copy = ProfileStore.deepCopy(data)
+		Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
 	end)
 
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 6)
+		T.eq(data.Version, 7)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -158,10 +176,10 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 6)
-		local newer = { Version = 7, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
+		T.eq(data.Version, 7)
+		local newer = { Version = 8, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
-		T.eq(newer.Version, 7, "a newer save's version is not lowered")
+		T.eq(newer.Version, 8, "a newer save's version is not lowered")
 	end)
 
 	---------------------------------------------------------------- version 4: the 16-cell grid
@@ -199,7 +217,7 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 6)
+		T.eq(data.Version, 7)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -295,7 +313,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 6)
+			T.eq(data.Version, 7)
 		end
 	end)
 
@@ -344,7 +362,7 @@ return function(T, Loader)
 		}
 		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
-		T.eq(data.Version, 6)
+		T.eq(data.Version, 7)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -418,7 +436,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 6)
+		T.eq(data.Version, 7)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")
@@ -431,12 +449,12 @@ return function(T, Loader)
 		T.eq(data.OwnedPickaxes, nil)
 		T.eq(data.BlasterLevel, 1)
 		T.eq(data.BlasterOre, "Unobtainium", "a blaster ore this server doesn't know is kept (a newer build's)")
-		T.eq(#data.Podiums, 5, "the 4 podium slots and a newer build's 5th")
+		T.eq(#data.Podiums, 5, "the five podium slots")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
 		T.eq(data.Podiums[3], "")
 		T.eq(data.Podiums[4], "")
-		T.eq(data.Podiums[5], "Clean|Nope|Rough|", "a four-part 5th slot stays as it is (docs/SAVE_AUDIT.md #1(b))")
+		T.eq(data.Podiums[5], "Clean|Nope|Rough|", "an ore this server does not know stays as it is (docs/SAVE_AUDIT.md #1(b))")
 		T.eq(data.TotalEarned, 0)
 		T.eq(data.LastSeen, 0)
 		T.truthy(report.Moved > 0 and report.Dropped > 0)
