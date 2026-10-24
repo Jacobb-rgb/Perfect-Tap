@@ -31,10 +31,11 @@ local DropperConfig = {}
 DropperConfig.MaxPlaced = 5
 DropperConfig.MaxLasers = 5
 
+-- (owner 2026-10-24: themed names, "like a Heaven Dropper"; the Ids stay: saves keep them)
 local LIST: { any } = {
 	{
 		Id = "BasicDropper",
-		Name = "Basic Dropper",
+		Name = "Jungle Dropper",
 		Price = 5e9,
 		Resale = 3e9,
 		Income = 1.5e6,
@@ -45,7 +46,7 @@ local LIST: { any } = {
 	},
 	{
 		Id = "BlueDropper",
-		Name = "Blue Dropper",
+		Name = "Frost Dropper",
 		Price = 35e9,
 		Resale = 28e9,
 		Income = 8e6,
@@ -56,7 +57,7 @@ local LIST: { any } = {
 	},
 	{
 		Id = "RedDropper",
-		Name = "Red Dropper",
+		Name = "Lava Dropper",
 		Price = 100e9,
 		Resale = 75e9,
 		Income = 20e6,
@@ -67,7 +68,7 @@ local LIST: { any } = {
 	},
 	{
 		Id = "PurpleDropper",
-		Name = "Purple Dropper",
+		Name = "Crystal Dropper",
 		Price = 250e9,
 		Resale = 190e9,
 		Income = 40e6,
@@ -78,7 +79,7 @@ local LIST: { any } = {
 	},
 	{
 		Id = "GoldDropper",
-		Name = "Gold Dropper",
+		Name = "Heaven Dropper",
 		Price = 1e12,
 		Resale = 750e9,
 		Income = 120e6,
