@@ -35,15 +35,15 @@ for _, info in Rarity.List do
 	local amount, cells = 0, 0
 	local players = {
 		{
-			"sweep v2/thick",
+			"sweep v2",
 			function(p, seed)
-				return Players.sweep(p, { Speed = 1.9 / info.DirtThickness, Seed = seed })
+				return Players.sweep(p, { Speed = 2, Seed = seed })
 			end,
 		},
 		{
-			"sweep v1.2/thick",
+			"sweep v1.2",
 			function(p, seed)
-				return Players.sweep(p, { Speed = 1.2 / info.DirtThickness, Seed = seed })
+				return Players.sweep(p, { Speed = 1.2, Seed = seed })
 			end,
 		},
 		{
@@ -55,19 +55,19 @@ for _, info in Rarity.List do
 		{
 			"sweep wide 1.4R",
 			function(p, seed)
-				return Players.sweep(p, { Speed = 1.9 / info.DirtThickness, Spacing = 1.4, Seed = seed })
+				return Players.sweep(p, { Speed = 2, Spacing = 1.4, Seed = seed })
 			end,
 		},
 		{
 			"sweep touch",
 			function(p, seed)
-				return Players.sweep(p, { Speed = 1.9 / info.DirtThickness, Input = "Touch", Seed = seed })
+				return Players.sweep(p, { Speed = 2, Input = "Touch", Seed = seed })
 			end,
 		},
 		{
 			"linger 0.5 crystals",
 			function(p, seed)
-				return Players.sweep(p, { Speed = 1.9 / info.DirtThickness, Linger = 0.5, Seed = seed })
+				return Players.sweep(p, { Speed = 2, Linger = 0.5, Seed = seed })
 			end,
 		},
 		{

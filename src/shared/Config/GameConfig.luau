@@ -116,7 +116,7 @@ local GameConfig = {
 
 	-- Cleaning minigame (server sanity limits)
 	CleaningTimeout = 300, -- seconds before an open session is cancelled
-	CleaningMinSeconds = 3, -- no human can finish faster than this
+	CleaningMinSeconds = 2, -- no human can finish faster than this (the fastest honest spray run takes ~2.5 s)
 
 	-- Remotes
 	DefaultRateLimit = { Rate = 8, Burst = 16 }, -- events per second per player
