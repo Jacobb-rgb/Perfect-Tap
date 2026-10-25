@@ -145,7 +145,7 @@ StoreConfig.Cards = {
 		Row = 1,
 		Title = "FORGEMASTER'S PASS",
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
-		Lines = { "Podiums 4 and 5", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
+		Lines = { "Podiums 4 and 5", "12 h offline earnings", "Double backpack space", "The Glimmer Grotto", "Extra machine slots" },
 	}),
 	-- the Starter Pack (one per player, in the first hour of play: StarterPackService;
 	-- StoreController hides it once bought or when the offer is over)

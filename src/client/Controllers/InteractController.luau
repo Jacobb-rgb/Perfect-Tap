@@ -1,15 +1,17 @@
 --[[
-	InteractController: pick up / drop / throw physical items.
+	InteractController: put your own loose items into the backpack (owner
+	2026-10-24: everything goes into the backpack; nothing is carried, dropped
+	or thrown any more, and the server also picks up what lies near you).
 
-	  Grab / Drop : F        | gamepad X  | touch button "Grab"
-	  Throw       : hold Q   | gamepad RB | touch button "Throw" (hold to charge)
+	  Pick up : F | gamepad X | touch button "Grab"  -> Net CarryPickup (item)
 	  (every prompt, shops and machines, is on E / gamepad Y; the second one
 	  on a spot, like the Cleaning Station's "Take Ore Back", on G / gamepad
 	  B: PromptConfig. E stays free for them, owner 2026-10-20)
 
 	The nearest item you own (or the one under the mouse) is highlighted with
-	its rarity color and a small hint shows its name and value. The server
-	validates every request.
+	its rarity color and a small hint shows its name and value. A full
+	backpack (CarryCount >= CarryCapacity) offers nothing to pick up. The
+	server validates every request.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -30,8 +32,7 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
-local Sfx = require(script.Parent.Parent.Effects.Sfx)
-local HudController = require(script.Parent.HudController)
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local StateController = require(script.Parent.StateController)
 
@@ -43,12 +44,7 @@ local highlight: Highlight
 local hint: BillboardGui
 local hintName: TextLabel
 local hintAction: TextLabel
-local charging = false
-local chargeStart = 0
 local enabled = true
-local throwBound = false
-
-local CHARGE_TIME = 0.9
 
 local function clearHint()
 	local gui: any = hint
@@ -65,24 +61,16 @@ function InteractController.setEnabled(value: boolean)
 	end
 end
 
--- Removes the grab/throw buttons completely (cleaning close-up, build mode).
+-- Removes the grab button completely (cleaning close-up, build mode).
 function InteractController.suspend()
 	InteractController.setEnabled(false)
 	ContextActionService:UnbindAction("TerraForgeGrab")
-	if throwBound then
-		throwBound = false
-		ContextActionService:UnbindAction("TerraForgeThrow")
-	end
 end
 
 local bindGrab: () -> () = function() end
 function InteractController.resume()
 	InteractController.setEnabled(true)
 	bindGrab()
-end
-
-local function carryCount(): number
-	return (player:GetAttribute("CarryCount") :: number?) or 0
 end
 
 local function itemFromPart(part: Instance?): Model?
@@ -94,11 +82,6 @@ local function itemFromPart(part: Instance?): Model?
 		node = node.Parent
 	end
 	return nil
-end
-
-local function handsFull(): boolean
-	local capacity = (player:GetAttribute("CarryCapacity") :: number?) or 1
-	return carryCount() >= capacity
 end
 
 -- Beyond the bare-handed reach the server only lets you grab an item with a
@@ -227,66 +210,11 @@ local function updateHint()
 end
 
 local function grab(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	if state ~= Enum.UserInputState.Begin then
+	if state ~= Enum.UserInputState.Begin or not enabled or not target then
 		return Enum.ContextActionResult.Pass
 	end
-	if not enabled then
-		return Enum.ContextActionResult.Pass
-	end
-	if target then
-		Net.send("CarryPickup", target)
-	elseif carryCount() > 0 then
-		Net.send("CarryDrop")
-		Sfx.play("Drop")
-	else
-		return Enum.ContextActionResult.Pass
-	end
+	Net.send("CarryPickup", target)
 	return Enum.ContextActionResult.Sink
-end
-
-local function throw(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	if not enabled or carryCount() == 0 then
-		return Enum.ContextActionResult.Pass
-	end
-	local refs = HudController.refs()
-	if state == Enum.UserInputState.Begin then
-		charging = true
-		chargeStart = os.clock()
-		refs.ThrowBar.Visible = true
-	elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
-		if charging then
-			charging = false
-			refs.ThrowBar.Visible = false
-			local charge = math.clamp((os.clock() - chargeStart) / CHARGE_TIME, 0, 1)
-			local camera = Workspace.CurrentCamera
-			local direction = camera.CFrame.LookVector
-			if UserInputService.TouchEnabled then
-				local character = player.Character
-				local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if root then
-					direction = (root.CFrame.LookVector + Vector3.new(0, 0.35, 0)).Unit
-				end
-			end
-			pcall(require(script.Parent.MoveController).playLocal, "Throw") -- the throw move (MoveController); never blocks the throw
-			Net.send("CarryThrow", direction, charge)
-		end
-	end
-	return Enum.ContextActionResult.Sink
-end
-
-local function updateBindings()
-	local shouldBind = carryCount() > 0
-	if shouldBind and not throwBound then
-		throwBound = true
-		ContextActionService:BindAction("TerraForgeThrow", throw, true, Enum.KeyCode.Q, Enum.KeyCode.ButtonR1)
-		ContextActionService:SetTitle("TerraForgeThrow", "Throw")
-		ContextActionService:SetPosition("TerraForgeThrow", UDim2.new(1, -95, 1, -215))
-	elseif not shouldBind and throwBound then
-		throwBound = false
-		charging = false
-		HudController.refs().ThrowBar.Visible = false
-		ContextActionService:UnbindAction("TerraForgeThrow")
-	end
 end
 
 function InteractController.init()
@@ -321,21 +249,11 @@ function InteractController.start()
 		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
 		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
 		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
-		updateBindings()
 	end
 	bindGrab()
-	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
-		if enabled then
-			updateBindings()
-		end
-	end)
 
 	local accumulator = 0
 	RunService.RenderStepped:Connect(function(dt)
-		if charging then
-			local charge = math.clamp((os.clock() - chargeStart) / CHARGE_TIME, 0, 1)
-			HudController.refs().ThrowFill.Size = UDim2.fromScale(charge, 1)
-		end
 		accumulator += dt
 		if accumulator < 0.1 then
 			return
@@ -346,8 +264,8 @@ function InteractController.start()
 		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		-- with full hands there is no pickup target, so E/Grab drops instead
-		local newTarget = if root and not handsFull() then chooseTarget(root) else nil
+		-- a full backpack takes nothing: no pickup target (F / Grab pass)
+		local newTarget = if root and not BackpackState.isFull() then chooseTarget(root) else nil
 		if newTarget ~= target then
 			target = newTarget
 		end

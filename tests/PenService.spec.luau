@@ -59,6 +59,9 @@ return function(T, Loader)
 		p.GetAttribute = function(self, key)
 			return self.attributes[key]
 		end
+		p.SetAttribute = function(self, key, value)
+			self.attributes[key] = value
+		end
 		p.root = { Position = Vector3.new(0, 3, 0), CFrame = CFrame.new(0, 3, 0) }
 		p.Character = {
 			FindFirstChildOfClass = function(_, class: string)
@@ -76,7 +79,7 @@ return function(T, Loader)
 	end
 
 	local function setup(): any
-		local w: any = { notes = {}, changed = 0, carried = {}, pickups = {}, zones = {}, hands = 3 }
+		local w: any = { notes = {}, changed = 0, zones = {}, hands = 3 }
 		w.plotModel = PlotBuilder.buildPlot(roblox.Instance.new("Folder"), WorldLayout.Plots[PLOT], Rng.new(PLOT))
 		w.player = fakePlayer(USER, "Owner")
 		w.other = fakePlayer(OTHER, "Neighbour")
@@ -122,31 +125,16 @@ return function(T, Loader)
 		patch(IntakeService, "addZone", function(name, part, handler)
 			table.insert(w.zones, { Name = name, Part = part, Handler = handler })
 		end)
+		-- the real backpack (data.BackpackItems), its size set by the test
 		patch(CarryService, "capacity", function()
 			return w.hands
 		end)
-		patch(CarryService, "list", function()
-			return w.carried
-		end)
-		patch(CarryService, "takeTop", function(_, predicate)
-			for i = #w.carried, 1, -1 do
-				local record = w.carried[i]
-				if not predicate or predicate(record) then
-					table.remove(w.carried, i)
-					return record
-				end
-			end
-			return nil
-		end)
-		patch(CarryService, "pickup", function(p, record)
-			if #w.carried >= w.hands then
-				return false
-			end
-			record.State = "Carried"
-			table.insert(w.carried, record)
-			table.insert(w.pickups, record)
-			return true
-		end)
+		w.carry = function(desc: any, n: number)
+			CarryService.add(w.player, desc, n, true)
+		end
+		w.carried = function(): number
+			return CarryService.count(w.player)
+		end
 		ItemService._test.reset()
 		MachineService._test.reset()
 		ConveyorService._test.reset()
@@ -338,14 +326,10 @@ return function(T, Loader)
 		local toasts = count(w, "Notify")
 		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
 		T.eq(count(w, "Notify"), toasts, "throttled")
-		-- Put In: refused, the hands keep everything
-		for i = 1, 2 do
-			local carried = ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, CFrame.new(i, 5, 0), nil, true)
-			carried.State = "Carried"
-			table.insert(w.carried, carried)
-		end
+		-- Put In: refused, the backpack keeps everything
+		w.carry({ K = "Raw", O = "Copper" }, 2)
 		T.eq(pen.putIn(w.player, PLOT), "PenOver", "Put In refused")
-		T.eq(#w.carried, 2, "nothing taken from the hands")
+		T.eq(w.carried(), 2, "nothing taken from the backpack")
 		T.eq(#w.data.Storage, capacity + 4, "nothing stored")
 		T.eq(lastNote(w, "Notify").A.Text, PenService.overText(w.data), "told why")
 		-- the State shows it (PenView turns red)
@@ -376,18 +360,14 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- prompts
 
-	withWorld("PenService: Put In stores what you carry while there is room", function(w)
+	withWorld("PenService: Put In stores your backpack's ore while there is room", function(w)
 		pen.putIn(w.player, PLOT)
-		T.truthy(lastNote(w, "Notify").A.Text:find("Carry ore", 1, true), "empty hands hint")
-		for i = 1, 3 do
-			local record = ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, CFrame.new(i, 5, 0), nil, true)
-			record.State = "Carried"
-			table.insert(w.carried, record)
-		end
+		T.truthy(lastNote(w, "Notify").A.Text:find("backpack is empty", 1, true), "empty backpack hint")
+		w.carry({ K = "Raw", O = "Copper" }, 3)
 		fill(w, GOLD, PenService.capacity(w.player) - 2)
 		pen.putIn(w.player, PLOT)
 		T.eq(#w.data.Storage, PenService.capacity(w.player), "filled up")
-		T.eq(#w.carried, 1, "one left in your hands")
+		T.eq(w.carried(), 1, "one left in your backpack")
 		T.truthy(lastNote(w, "Notify").A.Text:find("full", 1, true), "full toast")
 		-- someone else's pen
 		local before = #w.data.Storage
@@ -407,23 +387,28 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- PenAction
 
-	withWorld("PenService: Take spawns at most StorageTakeMax items into your hands", function(w)
+	withWorld("PenService: Take moves at most StorageTakeMax items into your backpack", function(w)
 		fill(w, GOLD, 8)
+		local looseBefore = ItemService.looseCount(USER)
 		pen.action(w.player, "Take", { Key = GOLD, Count = 2 })
 		T.eq(inPen(w, GOLD), 6, "two out")
-		T.eq(#w.pickups, 2, "into the hands")
-		T.eq(w.pickups[1].Grade, "Pristine", "the right item")
-		local spot = w.pickups[1].ReleasePos
-		T.lt((spot - w.gate.Position).Magnitude, 4, "at the pen gate")
+		local stacks = CarryService.stacks(w.player)
+		T.eq(#stacks, 1, "into the backpack")
+		T.eq(stacks[1].Key, GOLD, "the right item")
+		T.eq(stacks[1].Count, 2)
+		T.eq(ItemService.looseCount(USER), looseBefore, "nothing lies at the gate")
 		-- over the limit, zero, fractions, NaN and strings do nothing
 		for _, bad in { GameConfig.StorageTakeMax + 1, 0, -1, 1.5, 0 / 0, math.huge, "2" } do
 			pen.action(w.player, "Take", { Key = GOLD, Count = bad })
 		end
 		T.eq(inPen(w, GOLD), 6, "bad counts ignored")
-		-- the full limit at once: hands take 1 more, the rest lies at the gate
+		-- the full limit at once: the backpack takes what fits, the rest stays in the pen
 		pen.action(w.player, "Take", { Key = GOLD, Count = GameConfig.StorageTakeMax })
-		T.eq(inPen(w, GOLD), 6 - GameConfig.StorageTakeMax, "StorageTakeMax out")
-		T.eq(#w.carried, w.hands, "hands full")
+		T.eq(inPen(w, GOLD), 5, "one fitted")
+		T.eq(w.carried(), w.hands, "backpack full")
+		w.hands = 100
+		pen.action(w.player, "Take", { Key = GOLD, Count = GameConfig.StorageTakeMax })
+		T.eq(inPen(w, GOLD), 5 - GameConfig.StorageTakeMax, "StorageTakeMax out")
 		-- asking for more than there is takes what is there
 		pen.action(w.player, "Take", { Key = GOLD, Count = GameConfig.StorageTakeMax })
 		T.eq(inPen(w, GOLD), 0, "pen empty")
@@ -431,9 +416,8 @@ return function(T, Loader)
 		T.eq(inPen(w, GOLD), 0, "nothing to take")
 	end)
 
-	withWorld("PenService: Take never goes past the hard ceiling of loose items (items lying in the mine count)", function(w)
+	withWorld("PenService: Take goes into the backpack even at the hard ceiling of loose items", function(w)
 		fill(w, GOLD, 4)
-		w.hands = 0
 		-- this test's items lie away from bases (the harness counts them as base items)
 		local onBase = rawget(ItemService, "onBase")
 		rawset(ItemService, "onBase", function()
@@ -446,7 +430,8 @@ return function(T, Loader)
 			T.eq(ItemService.looseCount(USER, "Base"), 0, "none at the base")
 			T.eq(ItemService.totalRoom(USER), 0, "at the hard ceiling")
 			pen.action(w.player, "Take", { Key = GOLD, Count = 1 })
-			T.eq(inPen(w, GOLD), 4, "nothing taken onto the ground")
+			T.eq(inPen(w, GOLD), 3, "taken: nothing spawns on the ground")
+			T.eq(w.carried(), 1, "in the backpack")
 		end)
 		rawset(ItemService, "onBase", onBase)
 		if not ok then
@@ -454,15 +439,12 @@ return function(T, Loader)
 		end
 	end)
 
-	withWorld("PenService: Take refuses with full hands and too many loose items, far away or without a plot", function(w)
+	withWorld("PenService: Take refuses with a full backpack, far away or without a plot", function(w)
 		fill(w, GOLD, 4)
 		w.hands = 0
-		for i = 1, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom do
-			ItemService.spawnDesc({ K = "Raw", O = "Coal" }, USER, CFrame.new(i * 3, 5, 400), nil, true)
-		end
 		pen.action(w.player, "Take", { Key = GOLD, Count = 1 })
 		T.eq(inPen(w, GOLD), 4, "nothing taken")
-		T.truthy(lastNote(w, "Notify").A.Text:find("hands are full", 1, true), "hands full toast")
+		T.truthy(lastNote(w, "Notify").A.Text:find("backpack is full", 1, true), "backpack full toast")
 		w.hands = 3
 		w.player.stand(w.gate.Position + Vector3.new(PenService.Range + 10, 0, 0))
 		pen.action(w.player, "Take", { Key = GOLD, Count = 1 })
@@ -521,7 +503,7 @@ return function(T, Loader)
 		end
 		T.eq(inPen(w, GOLD), 3, "pen untouched")
 		T.eq(calls, 0, "no podium call")
-		T.eq(#w.pickups, 0, "nothing spawned")
+		T.eq(w.carried(), 0, "nothing taken")
 	end)
 
 	---------------------------------------------------------------- send queue (step 3, WP-Belts)
@@ -780,11 +762,9 @@ return function(T, Loader)
 		T.eq(queue.Pen.Intents[1].Key, COPPER_CLEAN, "by key")
 		T.eq(queue.Pen.Intents[1].Left, 1, "just that one")
 		-- Put In counts as arriving too
-		local carried = ItemService.spawnDesc({ K = "Raw", O = "Coal" }, USER, CFrame.new(0, 5, 0), nil, true)
-		carried.State = "Carried"
-		table.insert(w.carried, carried)
+		w.carry({ K = "Raw", O = "Coal" }, 1)
 		pen.putIn(w.player, PLOT)
-		T.eq(#queue.Pen.Intents, 2, "dirty ore from your hands queued")
+		T.eq(#queue.Pen.Intents, 2, "dirty ore from your backpack queued")
 		PenService.tickSend(1)
 		T.eq(#looseOn(m), 1, "out it goes")
 		-- a list player: their own choices count

@@ -9,12 +9,13 @@
 	with a cooldown per emote (EmoteRules.ServerCooldown: a little shorter
 	than the client's Cooldown, so network jitter never refuses an emote the
 	client already shows). It never starts while
-	you carry ore, clean at a station, ride a hoverboard, sit or are dead,
+	you clean at a station, ride a hoverboard, sit or are dead (ore in the
+	backpack is fine),
 	and the Blaster Spin only with the blaster in hand. The server alone
 	sets the character attribute EmoteRules.Attribute = "<Name>:<seq>"
 	("" = stopped); every client plays it (MoveController) and stops it
 	there when that character moves. Every Poll seconds the players with an
-	emote on are checked again: carrying, cleaning, a board, a seat or the
+	emote on are checked again: cleaning, a board, a seat or the
 	blaster put away clear it. Emotes are looks only: no gameplay, no
 	physics, no save.
 ]]
@@ -61,10 +62,9 @@ function EmoteService.blocked(player: Player): string?
 	local root = Guard.rootPart(player)
 	local character = player.Character
 	local humanoid = humanoidOf(player)
-	local carrying = tonumber(player:GetAttribute(MoveConfig.CarryAttribute)) or 0
+	-- (ore in the backpack never blocks a dance: nothing is held in the hands, owner 2026-10-24)
 	return EmoteRules.blocked({
 		Dead = root == nil,
-		Carrying = carrying > 0,
 		Cleaning = isCleaning(player),
 		Riding = character ~= nil and character:GetAttribute(HoverboardData.Attribute) ~= nil,
 		Seated = humanoid ~= nil and humanoid.Sit,

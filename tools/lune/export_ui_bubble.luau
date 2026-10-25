@@ -614,10 +614,7 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	BuildView.menuButton(refs.Menu)
 	refs.Coins.Text = "$48.2K"
 	refs.Income.Text = "+$186/s"
-	HudView.slot(refs.CarrySlots, Color3.fromRGB(61, 165, 255), 1, false)
-	HudView.slot(refs.CarrySlots, nil, 2, true)
-	HudView.slot(refs.CarrySlots, nil, 3, false)
-	refs.CarryLabel.Text = "CARRYING 2/3"
+	HudBubble.setBackpack(refs.Backpack, 2, 5)
 	HudView.toast(refs.Toasts, "New ore discovered: Sapphire!", Color3.fromRGB(61, 165, 255))
 	write("ui_bubble_game_" .. spec[1], refs.Gui)
 end
@@ -702,10 +699,7 @@ for _, d in DEVICES do
 	BuildView.menuButton(hud.Menu)
 	hud.Coins.Text = "$48.2K"
 	hud.Income.Text = "+$64/s"
-	for i = 1, 3 do
-		HudView.slot(hud.CarrySlots, nil, i)
-	end
-	hud.CarryLabel.Text = "CARRYING 0/3"
+	HudBubble.setBackpack(hud.Backpack, 0, 5)
 	write("ui_dev_hud_" .. name, hud.Gui)
 	local compact = TechShopView.compactFor(touch, tenFoot, uiScale, h)
 	local view = TechShopView.build(compact)

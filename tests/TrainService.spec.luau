@@ -94,6 +94,9 @@ return function(T, Loader)
 		p.GetAttribute = function(self, key)
 			return self.attributes[key]
 		end
+		p.SetAttribute = function(self, key, value)
+			self.attributes[key] = value
+		end
 		p.root = { Position = Vector3.new(0, 3, 0), CFrame = CFrame.new(0, 3, 0) }
 		p.Character = {
 			FindFirstChildOfClass = function(_, class: string)
@@ -178,7 +181,6 @@ return function(T, Loader)
 		w.otherData = deepCopy(DataTemplate)
 		w.online = { [w.player] = true, [w.other] = true }
 		w.plots = { [w.player] = PLOT, [w.other] = OTHER_PLOT }
-		w.carried = { [w.player] = {}, [w.other] = {} }
 		local saved = {}
 		local function patch(t: any, key: string, value: any)
 			table.insert(saved, { t, key, rawget(t, key) })
@@ -237,20 +239,6 @@ return function(T, Loader)
 		end)
 		patch(IntakeService, "addZone", function(name, part, handler)
 			table.insert(w.zones, { Name = name, Part = part, Handler = handler })
-		end)
-		patch(CarryService, "list", function(p)
-			return w.carried[p] or {}
-		end)
-		patch(CarryService, "takeTop", function(p, predicate)
-			local list = w.carried[p] or {}
-			for i = #list, 1, -1 do
-				local record = list[i]
-				if not predicate or predicate(record) then
-					table.remove(list, i)
-					return record
-				end
-			end
-			return nil
 		end)
 		ItemService._test.reset()
 		EconomyService._test.reset()
@@ -318,11 +306,13 @@ return function(T, Loader)
 		end
 	end
 
-	local function carry(w: any, p: any, desc: any): any
-		local record = ItemService.spawnDesc(desc, p.UserId, CFrame.new(p.root.Position), nil, true)
-		record.State = "Carried"
-		table.insert(w.carried[p], record)
-		return record
+	-- one item into a player's backpack (the real one: data.BackpackItems)
+	local function carry(_w: any, p: any, desc: any)
+		CarryService.add(p, desc, 1, true)
+	end
+
+	local function carried(p: any): number
+		return CarryService.count(p)
 	end
 
 	local function toasts(w: any, p: any, text: string): number
@@ -434,10 +424,10 @@ return function(T, Loader)
 		end
 	end
 
-	-- Items of a user in every place: the world (loose or carried), Cargo, TripCargo, the pen.
+	-- Items of a user in every place: the world, the backpack, Cargo, TripCargo, the pen.
 	local function census(w: any, userId: number, data: any): number
 		local inWorld = #ItemService.ownedBy(userId)
-		return inWorld + #data.Train.Cargo + #data.Train.TripCargo + #data.Storage
+		return inWorld + CarryService.countOf(data) + #data.Train.Cargo + #data.Train.TripCargo + #data.Storage
 	end
 
 	---------------------------------------------------------------- hooks
@@ -624,8 +614,9 @@ return function(T, Loader)
 		drop(w.TrainDeepHollow, USER, DIRTY_GOLD)
 		T.eq(#w.data.Train.Cargo, 3, "lifts load into the cargo too")
 		T.eq(#trips(w), 0, "nobody's train has left")
-		-- items in someone's hands are left alone
-		local held = carry(w, w.player, COAL)
+		-- an item that isn't lying loose (held at a station's vise...) is left alone
+		local held = ItemService.spawnDesc(COAL, USER, CFrame.new(0, 5, 0), nil, true)
+		held.State = "Carried"
 		w.station.Handler(held)
 		T.eq(held.State, "Carried", "carried item untouched")
 		T.eq(#w.data.Train.Cargo, 3, "not loaded")
@@ -1205,23 +1196,23 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- Load Train
 
-	withWorld("TrainService: Load Train loads what you carry while there is room", function(w)
+	withWorld("TrainService: Load Train loads your backpack's ore while there is room", function(w)
 		local hook = train.setupHook(w.station.Part)
 		train.load(w.player, hook)
-		T.truthy(lastToast(w, w.player).Text:find("Carry ore", 1, true), "empty hands hint")
+		T.truthy(lastToast(w, w.player).Text:find("backpack is empty", 1, true), "empty backpack hint")
 		for _ = 1, 5 do
 			carry(w, w.player, COAL)
 		end
 		train.load(w.player, hook)
 		T.eq(#w.data.Train.Cargo, 5, "loaded")
-		T.eq(#w.carried[w.player], 0, "hands empty")
+		T.eq(carried(w.player), 0, "backpack empty")
 		T.eq(w.near[#w.near].A, "TrainLoad", "load effect")
 		for _ = 1, 6 do
 			carry(w, w.player, IRON)
 		end
 		train.load(w.player, hook)
 		T.eq(#w.data.Train.TripCargo, CAP, "filled up and left")
-		T.eq(#w.carried[w.player], 6 - (CAP - 5), "the rest stays in your hands")
+		T.eq(carried(w.player), 6 - (CAP - 5), "the rest stays in your backpack")
 		T.eq(lastToast(w, w.player).Text, TrainService.AwayText, "told the train left")
 		train.load(w.player, hook)
 		T.eq(#w.data.Train.Cargo, 0, "nothing loads while it is away")
@@ -1232,14 +1223,12 @@ return function(T, Loader)
 		train.load(w.player, hook)
 		T.eq(#w.data.Train.Cargo, 0, "too far")
 		w.player.stand(TrainConfig.Station.PromptPoint)
-		-- an item of someone else in your stack (never happens) is not loaded
-		local foreign = ItemService.spawnDesc(COAL, OTHER, CFrame.new(0, 5, 0), nil, true)
-		foreign.State = "Carried"
-		table.insert(w.carried[w.player], 1, foreign)
+		-- a dusty relic never rides the train (it is cleaned, never stored)
+		w.data.BackpackItems["Relic|CrownCoin||"] = 1
 		train.load(w.player, hook)
-		T.eq(#w.data.Train.Cargo, 3, "only your own items")
-		T.eq(#w.carried[w.player], 1, "one left in your hands")
-		T.eq(w.carried[w.player][1], foreign, "the foreign one stays")
+		T.eq(#w.data.Train.Cargo, 3, "the ore loaded")
+		T.eq(carried(w.player), 1, "one left in your backpack")
+		T.eq(w.data.BackpackItems["Relic|CrownCoin||"], 1, "the relic stays")
 		-- a stranger without data or plot does nothing
 		local stranger = fakePlayer(STRANGER, "Stranger")
 		stranger.stand(TrainConfig.Station.PromptPoint)
@@ -1280,7 +1269,7 @@ return function(T, Loader)
 		end
 		T.eq(said, 1, "one 'on its way' for all of it")
 		T.eq(#w.data.Train.Cargo, 0, "nothing loaded")
-		T.eq(#w.carried[w.player], 30, "still in your hands")
+		T.eq(carried(w.player), 30, "still in your backpack")
 	end)
 
 	withWorld("TrainService: without a plot the train never leaves by itself", function(w)
@@ -1571,10 +1560,10 @@ return function(T, Loader)
 	end)
 
 	withWorld("TrainService: a newer build's levels above this build's top stay in the save (read as the top)", function(w)
-		w.data.Train.CapacityLevel = 8
+		w.data.Train.CapacityLevel = 12
 		w.data.Train.SpeedLevel = 7
 		train.loaded(w.player, w.data)
-		T.eq(w.data.Train.CapacityLevel, 8, "capacity level 8 kept (docs/SAVE_AUDIT.md #1(b))")
+		T.eq(w.data.Train.CapacityLevel, 12, "capacity level 12 kept (docs/SAVE_AUDIT.md #1(b))")
 		T.eq(w.data.Train.SpeedLevel, 7, "speed level 7 kept")
 		local s = snapshot(w, w.player)
 		T.eq(s.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "the top level's cargo")
@@ -1582,11 +1571,11 @@ return function(T, Loader)
 		T.eq(s.NextCapacityPrice, nil, "nothing more to buy")
 		T.eq(s.NextSpeedPrice, nil, "nothing more to buy")
 		w.data.Coins = 1e12
-		local ok, why = TrainService.upgrade(w.player, "Capacity", 9) -- the card's next level (Security #7)
+		local ok, why = TrainService.upgrade(w.player, "Capacity", 13) -- the card's next level (Security #7)
 		T.falsy(ok, "no upgrade")
 		T.eq(why, "Max", "answered Max")
 		T.eq(w.data.Coins, 1e12, "nothing paid")
-		T.eq(w.data.Train.CapacityLevel, 8, "still 8")
+		T.eq(w.data.Train.CapacityLevel, 12, "still 12")
 		w.data.Train.SpeedLevel = 1e9
 		snapshot(w, w.player)
 		T.eq(w.data.Train.SpeedLevel, GameConfig.MaxLevelKept, "junk is still capped")
@@ -1682,7 +1671,7 @@ return function(T, Loader)
 				made += 1
 				label ..= " drop"
 			elseif roll < 0.5 then
-				for _ = 1, math.min(rng:int(1, 4), 8 - #w.carried[w.player]) do
+				for _ = 1, math.min(rng:int(1, 4), 8 - carried(w.player)) do
 					carry(w, w.player, rng:pick(descs))
 					made += 1
 				end

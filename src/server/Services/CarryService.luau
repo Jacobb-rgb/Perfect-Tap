@@ -78,6 +78,13 @@ CarryService.FullToastGap = 8 -- seconds between two "backpack full" toasts
 CarryService.FullText = "Your backpack is full! Bigger backpacks are sold at the BACKPACKS shop."
 
 local fullToastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+local pickupCallbacks: { (Player, Desc) -> () } = {}
+
+-- Called after every pickup (the player, what went in): LeaderboardService counts it as
+-- server-checked activity (its ActivitySources).
+function CarryService.onPickup(callback: (Player, Desc) -> ())
+	table.insert(pickupCallbacks, callback)
+end
 
 ---------------------------------------------------------------- capacity and contents
 
@@ -141,7 +148,7 @@ function CarryService.stacks(player: Player): { Stack }
 	end
 	for key, n in data.BackpackItems do
 		local count = whole(n)
-		local desc = if type(key) == "string" and count > 0 then ItemData.parseKey(key) else nil
+		local desc = if type(key) == "string" and count > 0 then ItemData.parseStoredKey(key) else nil
 		if desc then
 			table.insert(list, { Key = key, Desc = desc, Count = count })
 		end
@@ -193,6 +200,7 @@ function CarryService.take(player: Player, predicate: ((Desc) -> boolean)?, max:
 		end
 	end
 	if #taken > 0 then
+		player:SetAttribute("CarryCount", CarryService.countOf(data))
 		DataService.changed(player)
 	end
 	return taken
@@ -216,6 +224,7 @@ function CarryService.add(player: Player, desc: Desc, count: number?, force: boo
 	local items = itemsOf(data)
 	local key = ItemData.storageKey(desc)
 	items[key] = whole(items[key]) + n
+	player:SetAttribute("CarryCount", CarryService.countOf(data))
 	DataService.changed(player)
 	return n
 end
@@ -336,6 +345,9 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord, qui
 	CarryService.add(player, desc, 1, true)
 	-- dirty ore keeps its secret: no ore color for raw chunks (design v2)
 	Net.fire("Fx", player, "Pickup", at, if kind == "Raw" then nil else oreId)
+	for _, callback in pickupCallbacks do
+		task.spawn(callback, player, desc)
+	end
 	return true
 end
 

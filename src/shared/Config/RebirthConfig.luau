@@ -69,7 +69,7 @@
 	  GoldenTouch   +10 % podium income and sell value per level (Bonuses)
 	  HeadStart     start each rebirth with blaster LV 2 / 3 / 4
 	  LuckyRocks    +5 % ore luck per level (Bonuses)
-	  DeepPockets   +1 item carried per level (Bonuses)
+	  DeepPockets   +10 % backpack space per level (Bonuses: CarryPct)
 	  ExpressRails  train trips 10 % shorter per level (Bonuses: TrainTimeCutPct)
 	  PodiumKeeper  the podium ores stay through rebirths
 	  PlotGlow      a glowing ribbon round your plot: each level unlocks a
@@ -123,9 +123,10 @@ RebirthConfig.Perks = {
 	{
 		Id = "DeepPockets",
 		Name = "Deep Pockets",
-		Text = "+1 item carried",
+		Text = "+10% backpack space",
 		Costs = { 2, 3, 4 },
-		Stats = { CarryCapacity = 1 },
+		-- (+1 item while ore was carried in the hands; the packs hold 5..1000 now: a share)
+		Stats = { CarryPct = 0.1 },
 	},
 	{
 		Id = "ExpressRails",
@@ -480,7 +481,7 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	-- the backpack keeps counts by storage key: its relics wait in the pen too
 	if type(data.BackpackItems) == "table" then
 		for key, n in data.BackpackItems do
-			local item = if type(key) == "string" then ItemData.parseKey(key) else nil
+			local item = if type(key) == "string" then ItemData.parseStoredKey(key) else nil
 			if item and item.K == "Relic" and type(n) == "number" and n == n and n >= 1 then
 				for _ = 1, math.min(math.floor(n), 1000) do
 					table.insert(relics, { K = "Relic", O = item.O, G = item.G, R = item.R })

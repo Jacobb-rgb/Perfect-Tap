@@ -10,7 +10,7 @@
 	Switches (Config/AnimConfig, owner 2026-10-21):
 	  PlayerMoves  the moves below. Off (today): nothing of them runs: no
 	               Stepped loop for them, no Fx / ActionResult / Notify
-	               listeners, no Move / MoveLoop / CarryCount listeners, no
+	               listeners, no Move / MoveLoop listeners, no
 	               sends (playLocal returns at once), no tag scans
 	  Emotes       the 12 emotes (the EMOTES menu: EmoteController). The
 	               Stepped loop runs only while an emote plays on a
@@ -19,9 +19,10 @@
 	               emote plays out of range only)
 
 	Moves (PlayerMoves)
-	  Carry      your / their CarryCount player attribute > 0 (CarryService)
+	  Carry      never since the backpack (owner 2026-10-24: nothing is carried
+	             in the hands; CarryCount counts the backpack): no loop plays it
 	  Spray          the character attribute MoveLoop (MoveService)
-	  Throw      the throw input (InteractController calls playLocal("Throw"))
+	  Throw      never since the backpack (nothing is thrown; not a client move any more)
 	  Recoil     your blaster firing (MiningController.isFiring), the others'
 	             BlastHit effects (the Fx event)
 	  Wave       you equipped a golem (ActionResult Golem Equip / EquipBest)
@@ -33,12 +34,12 @@
 	  playEmote(name) starts one on your character at once and asks the server
 	  (Net "Emote"); the server sets the character attribute Emote =
 	  "<Name>:<seq>" ("" = stopped) and every client plays it on that
-	  character. Not while carrying ore, in a close-up (cleaning, build mode,
+	  character. Not in a close-up (cleaning, build mode,
 	  the vault...), on a hoverboard, seated or dead; the Blaster Spin only
 	  with the blaster in hand (EmoteRules). A playing emote stops with its
 	  outro (the finishing pose; quicker while moving) when the character
 	  moves or jumps, picks a tool up (the Blaster Spin: puts the blaster
-	  away), fires, starts carrying, or (yours) a menu panel opens, or you
+	  away), fires, or (yours) a menu panel opens, or you
 	  pick it again; a seat, a board or death stop it at once. Picking any
 	  emote but the Blaster Spin puts a tool in your hand away first (as
 	  cleaning and build mode do). Yours tells the server (Net "Emote" "")
@@ -244,13 +245,13 @@ local function start(entry: Entry, name: string, scale: number?): boolean
 	return true
 end
 
--- Starts / stops the entry's loop (Carry, Spray) to match its attributes.
+-- Starts / stops the entry's loop (Spray) to match its attributes.
 local function updateLoop(entry: Entry)
 	if not playerMoves then
 		return
 	end
-	local carry = entry.Player:GetAttribute(MoveConfig.CarryAttribute)
-	local want = MoveRules.loopFor(carry, entry.Character:GetAttribute(MoveConfig.LoopAttribute))
+	-- (no carry count: nothing is carried in the hands since the backpack, so no Carry loop)
+	local want = MoveRules.loopFor(nil, entry.Character:GetAttribute(MoveConfig.LoopAttribute))
 	if want == entry.LoopName then
 		return
 	end
@@ -620,14 +621,6 @@ local function hookPlayer(player: Player)
 			wake()
 		end
 	end)
-	if playerMoves then
-		player:GetAttributeChangedSignal(MoveConfig.CarryAttribute):Connect(function()
-			local entry = entryOf(player)
-			if entry then
-				updateLoop(entry)
-			end
-		end)
-	end
 end
 
 ---------------------------------------------------------------- checks (every CheckInterval)
@@ -666,7 +659,7 @@ end
 -- Why your / their playing emote stops now (nil = it plays on). `full`: the slower checks too.
 local function emoteStop(entry: Entry, name: string, now: number): string?
 	local humanoid = entry.Humanoid
-	local carrying = tonumber(entry.Player:GetAttribute(MoveConfig.CarryAttribute)) or 0
+	-- (no Carrying: the backpack's ore is never in the hands)
 	return EmoteRules.stopReason(name, {
 		Speed = if humanoid then humanoid.MoveDirection.Magnitude else 0,
 		State = entry.StateName,
@@ -676,7 +669,6 @@ local function emoteStop(entry: Entry, name: string, now: number): string?
 		Blaster = holdsBlaster(entry),
 		Firing = firingOf(entry, now),
 		Panel = entry.Local and panelOpen(),
-		Carrying = carrying > 0,
 	})
 end
 
@@ -741,7 +733,7 @@ check = function(now: number)
 				start(entry, pending)
 			end
 		end
-		-- the emote's slower stop rules (tools, carrying, a panel, a board...)
+		-- the emote's slower stop rules (tools, a panel, a board...)
 		local name = emoteName(entry)
 		if name then
 			local reason = emoteStop(entry, name, now)
@@ -928,10 +920,9 @@ end
 local function emoteBlocked(entry: Entry): string?
 	refreshParts(entry)
 	local humanoid = entry.Humanoid
-	local carrying = tonumber(entry.Player:GetAttribute(MoveConfig.CarryAttribute)) or 0
+	-- (no Carrying: the backpack's ore is never in the hands)
 	return EmoteRules.blocked({
 		Dead = humanoid == nil or humanoid.Health <= 0,
-		Carrying = carrying > 0,
 		Building = closeUp(MoveController.Env.Workspace.CurrentCamera),
 		Riding = entry.Character:GetAttribute(HoverboardData.Attribute) ~= nil,
 		Seated = humanoid ~= nil and humanoid.Sit,

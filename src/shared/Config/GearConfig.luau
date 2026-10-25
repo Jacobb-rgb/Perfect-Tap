@@ -11,9 +11,10 @@
 	  shop now, BackpackData / BackpackService; Migrations turned its level
 	  into a pack, Version 9.)
 	  Gloves      pickup range (studs)               11 -> 13, 15, 17, 20, 24
-	              and throw power (x)               1.0 -> 1.08 ... 1.4
+	              (the auto-pickup's reach; ThrowMult stays a stat, but
+	              nothing is thrown since the backpacks came)
 	  Magnet      radius (studs) in which your own    0 -> 14, 18, 24, 30, 38
-	              mined ore flies into your hands while they have room
+	              mined ore flies into your backpack while it has room
 	              (not on or near bases, not what you dropped:
 	              ItemService.Magnet). Every level reaches beyond the
 	              grab reach without Gloves (11 + 2 slack), and level N
@@ -62,8 +63,7 @@ export type GearLine = {
 	Strong Back...), as the server computes it (GearService.preview): the
 	Gear shop's cards show these instead of the bare gear table. Main value:
 	walk speed (Boots), lamp range (HelmetLamp), pickup
-	range (Gloves), magnet radius (Magnet); Extra: lamp brightness, throw
-	power. Next / ExtraNext are nil at the top level. A card uses the
+	range (Gloves), magnet radius (Magnet); Extra: lamp brightness. Next / ExtraNext are nil at the top level. A card uses the
 	numbers only while its level is `Level`.
 ]]
 export type LinePreview = {
@@ -129,7 +129,7 @@ GearConfig.Lines = {
 	{
 		Id = "Gloves",
 		Name = "Grip Gloves",
-		Description = "Grab ore from further away and throw it harder.",
+		Description = "Your backpack picks up ore from further away.",
 		Primary = "PickupRange",
 		Stats = {
 			PickupRange = { 11, 13, 15, 17, 20, 24 },
@@ -142,8 +142,8 @@ GearConfig.Lines = {
 	{
 		Id = "Magnet",
 		Name = "Ore Magnet",
-		-- (ItemService: into your hands while they have room; off bases, never what you dropped or threw)
-		Description = "Mined ore flies into your hands if there's room. Not on bases.",
+		-- (ItemService: into your backpack while it has room; off bases)
+		Description = "Mined ore flies into your backpack if there's room. Not on bases.",
 		Primary = "MagnetRadius",
 		Stats = { MagnetRadius = { 0, 14, 18, 24, 30, 38 } },
 		Prices = { 1500, 9000, 55000, 330000, 2000000 },

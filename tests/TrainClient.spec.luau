@@ -12,8 +12,8 @@
 -- clicked levels and a double click that buys two, the click budget), the
 -- view's children, the prompt slots against
 -- TrainService's real prompts and the phone layouts (every touch target
--- >= 44 pt, names readable on narrow phones, the coins and the carry bar
--- never cut by the panel).
+-- >= 44 pt, names readable on narrow phones, the coins and the backpack
+-- button never cut by the panel).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -1438,8 +1438,8 @@ return function(T, Loader)
 	T.test("TrainClient: upgrade rows show the next level and its price", function()
 		local train = TrainView.read({ Cargo = 0, Capacity = 8, CapacityLevel = 0, SpeedLevel = 0 })
 		local capacity = TrainView.upgrade(train, "Capacity", 2000)
-		T.eq(capacity.Detail, "Cargo 8 → 12")
-		T.eq(capacity.LevelText, "LV 1/6")
+		T.eq(capacity.Detail, "Cargo 8 → 15")
+		T.eq(capacity.LevelText, "LV 1/10")
 		T.eq(capacity.PriceText, "$2K")
 		T.truthy(capacity.CanBuy, "affordable")
 		T.falsy(TrainView.upgrade(train, "Capacity", 1999).CanBuy, "too expensive")
@@ -1450,15 +1450,15 @@ return function(T, Loader)
 		local priced = TrainView.read({ CapacityLevel = 1, NextCapacityPrice = 12345 })
 		T.eq(TrainView.upgrade(priced, "Capacity", 0).Price, 12345)
 		-- maxed
-		local top = TrainView.read({ CapacityLevel = 5, SpeedLevel = 5 })
+		local top = TrainView.read({ CapacityLevel = 9, SpeedLevel = 5 })
 		local maxed = TrainView.upgrade(top, "Capacity", 1e12)
 		T.truthy(maxed.Maxed)
 		T.eq(maxed.PriceText, "MAX")
 		T.falsy(maxed.CanBuy)
-		T.eq(maxed.Detail, "Cargo 50 (max)")
+		T.eq(maxed.Detail, "Cargo 1000 (max)")
 		-- Express: +50 % cargo and half the trip
 		local express = TrainView.read({ CapacityLevel = 0, SpeedLevel = 0, Express = true })
-		T.eq(TrainView.upgrade(express, "Capacity", 0).Detail, "Cargo 12 → 18")
+		T.eq(TrainView.upgrade(express, "Capacity", 0).Detail, "Cargo 12 → 22")
 		T.eq(TrainView.upgrade(express, "Speed", 0).Detail, "Trip 15 s → 12.5 s")
 	end)
 
@@ -1573,7 +1573,7 @@ return function(T, Loader)
 		T.eq(spend, p1)
 		T.eq(shown.NextCapacityPrice, p2)
 		T.eq(shown.Capacity, TrainConfig.capacity(1, false))
-		T.eq(TrainView.upgrade(shown, "Capacity", coins - spend).LevelText, "LV 2/6")
+		T.eq(TrainView.upgrade(shown, "Capacity", coins - spend).LevelText, "LV 2/10")
 		T.eq(train.CapacityLevel, 0, "the snapshot itself is not changed")
 		T.eq(shown.SpeedLevel, 0, "speed on its own")
 		-- the second click 0.2 s later (a double click, a gamepad bounce): nothing more is bought
@@ -1709,7 +1709,7 @@ return function(T, Loader)
 		T.eq(refs.ChipSend.BackgroundColor3, Theme.Good, "SEND lights up")
 		T.eq(refs.ChipFill.Size.X.Scale, 1)
 		TrainView.setUpgrades(refs, train, 100)
-		T.eq(refs.Rows.Capacity.Detail.Text, "Cargo 12 → 18")
+		T.eq(refs.Rows.Capacity.Detail.Text, "Cargo 15 → 30")
 		T.eq(refs.Rows.Capacity.Buy.BackgroundColor3, Theme.PanelLight, "can't afford: greyed")
 		T.eq(refs.Rows.Speed.Price.Text, "$3K")
 		TrainView.setStatus(refs, TrainView.status(TrainView.read({ Cargo = 0, Capacity = 8 }), 0, nil))
@@ -1809,8 +1809,12 @@ return function(T, Loader)
 		T.falsy(refs.CoversCoins, "the PC panel stays clear of the HUD coins")
 	end)
 
-	T.test("TrainClient: the phone panel never cuts the coins or the carry bar", function()
+	T.test("TrainClient: the phone panel never cuts the coins or the backpack button", function()
 		local scale = TrainView.PhoneScale
+		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+		-- the HUD's backpack button (bottom, right of the blaster's hotbar slot; the phone size)
+		local pack = HudBubble.BackpackSizePhone
+		local packRight = HudBubble.backpackX(scale) + pack.X
 		for _, screen in { { 667, 375 }, { 812, 375 }, { 844, 390 }, { 800, 360 }, { 568, 320 } } do
 			local label = `{screen[1]}x{screen[2]}`
 			local refs, width, height = phone(screen[1], screen[2])
@@ -1819,10 +1823,10 @@ return function(T, Loader)
 			local bottom = height + panel.Position.Y.Offset
 			local top = bottom - panel.Size.Y.Offset
 			T.le(0, top, label .. " inside the screen")
-			-- HudView's carry bar (bottom center, 16 up, 74 tall, at most ~430 wide) lies under the panel
-			T.le(height - 16, bottom, label .. " covers the carry bar's bottom")
-			T.le(top, height - 16 - 74, label .. " ...and its top")
-			T.le(430, panel.Size.X.Offset, label .. " ...and its width")
+			-- the backpack button lies under the panel
+			T.le(height - HudBubble.BackpackBottom, bottom, label .. " covers the backpack button's bottom")
+			T.le(top, height - HudBubble.BackpackBottom - pack.Y, label .. " ...and its top")
+			T.le(2 * packRight, panel.Size.X.Offset, label .. " ...and its right end")
 			-- the HUD coins (16..90): either fully clear, or the panel says it covers them (they hide)
 			if refs.CoversCoins then
 				T.lt(top, 90, label .. " covers the coins")
@@ -1973,32 +1977,31 @@ return function(T, Loader)
 		T.eq(panel.ObjectText, "Mine Station")
 		T.eq(panel.MaxActivationDistance, TrainController.PromptDistance)
 		T.eq(panel.MaxActivationDistance, load.MaxActivationDistance, "the same range as the server's")
-		-- Load: only while you carry something (it toggles with CarryCount)
+		-- Load: only while the backpack holds something the train takes (TrainController.canLoad:
+		-- anything but a dusty relic; tests/BackpackClient.spec checks the rule)
 		T.truthy(load.Enabled, "the server leaves it on")
-		T.truthy(TrainController.applyLoadPrompt(load, 0), "a Load prompt")
-		T.falsy(load.Enabled, "empty hands")
-		TrainController.applyLoadPrompt(load, 2)
-		T.truthy(load.Enabled, "carrying")
-		TrainController.applyLoadPrompt(load, 0)
-		T.falsy(load.Enabled, "thrown in")
-		TrainController.applyLoadPrompt(load, 1)
-		T.truthy(load.Enabled, "picked up again")
+		T.truthy(TrainController.applyLoadPrompt(load, false), "a Load prompt")
+		T.falsy(load.Enabled, "an empty backpack")
+		TrainController.applyLoadPrompt(load, true)
+		T.truthy(load.Enabled, "ore in the backpack")
+		TrainController.applyLoadPrompt(load, false)
+		T.falsy(load.Enabled, "loaded")
 		TrainController.applyLoadPrompt(load, nil)
-		T.falsy(load.Enabled, "no CarryCount yet")
+		T.falsy(load.Enabled, "nothing known yet")
 		TrainController.applyLoadPrompt(load, "3")
-		T.falsy(load.Enabled, "junk is empty hands")
-		-- everything else is left alone, whatever you carry
-		for _, count in { 0, 3 } do
+		T.falsy(load.Enabled, "junk is nothing to load")
+		-- everything else is left alone, whatever the backpack holds
+		for _, loadable in { false, true } do
 			for _, other in { send, panel } do
-				T.falsy(TrainController.applyLoadPrompt(other, count), other.Name .. " is not a Load prompt")
+				T.falsy(TrainController.applyLoadPrompt(other, loadable), other.Name .. " is not a Load prompt")
 				T.truthy(other.Enabled, other.Name .. " still shows")
 			end
 		end
 		local machine = Instance.new("ProximityPrompt")
 		machine.Name = "LoadPrompt"
 		machine:SetAttribute("Action", "Load")
-		T.falsy(TrainController.applyLoadPrompt(machine, 0), "an untagged prompt (PromptController's)")
+		T.falsy(TrainController.applyLoadPrompt(machine, false), "an untagged prompt (PromptController's)")
 		T.truthy(machine.Enabled)
-		T.falsy(TrainController.applyLoadPrompt(Instance.new("Part"), 0), "not a prompt")
+		T.falsy(TrainController.applyLoadPrompt(Instance.new("Part"), false), "not a prompt")
 	end)
 end

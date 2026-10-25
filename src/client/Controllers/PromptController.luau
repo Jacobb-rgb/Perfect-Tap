@@ -4,8 +4,10 @@
 	keys.
 
 	- Prompts on other players' machines are hidden.
-	- 'LoadPrompt' (Put In) on your own machines shows only while you carry
-	  something. The server never changes its Enabled, so this local choice sticks.
+	- 'LoadPrompt' (Put In) on your own machines shows only while your
+	  backpack holds something (Util/BackpackState: the CarryCount attribute,
+	  refreshed on its changes and every State push). The server never
+	  changes its Enabled, so this local choice sticks.
 	- setSuppressed(reason, on) hides every prompt during close-ups (build
 	  mode, the anvil, the cleaning minigame and its result card); prompts
 	  come back when no reason is left.
@@ -14,7 +16,7 @@
 	gamepad B for the second prompt on a spot, like the Cleaning Station's
 	"Take Ore Back" (always shown, its own keys, so it never fires together
 	with "Clean Ore"); "Panel" T / L3 for the Train panel. Taken elsewhere:
-	F / X Grab, Q / RB Throw; B is also Leave inside the cleaning minigame,
+	F / X Grab, Q / R1 the backpack window; B is also Leave inside the cleaning minigame,
 	while the prompts are suppressed. A modal that binds E itself (the
 	cleaning result card's Collect) suppresses the prompts
 	first, so one E press never also fires a prompt behind it.
@@ -23,6 +25,8 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 
 local PromptController = {}
 
@@ -43,12 +47,9 @@ local function machineOwner(prompt: ProximityPrompt): number?
 	return nil
 end
 
-local function carryCount(): number
-	return (player:GetAttribute("CarryCount") :: number?) or 0
-end
-
+-- Put In: your own machine, and the backpack holds something.
 local function applyLoad(prompt: ProximityPrompt)
-	prompt.Enabled = machineOwner(prompt) == player.UserId and carryCount() > 0
+	prompt.Enabled = machineOwner(prompt) == player.UserId and BackpackState.count() > 0
 end
 
 local function refreshAll()
@@ -115,11 +116,8 @@ function PromptController.start()
 		watchMachine(model)
 	end
 
-	-- an item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
-	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
-		refreshAll()
-		task.delay(0.25, refreshAll)
-	end)
+	-- the backpack changed (CarryCount, or a State push)
+	BackpackState.onChanged(refreshAll)
 end
 
 return PromptController

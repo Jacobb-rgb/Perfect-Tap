@@ -3,8 +3,9 @@
 
 	- Opens on OpenUI "Sell" { Hands, Counter } (the stall's "Sell Ore"
 	  prompt). The pen comes from the State snapshot (Storage summary), the
-	  hands from the payload and then from State.Hands; both refresh on every
-	  State update.
+	  backpack (the protocol still calls it "Hands"; the view says IN YOUR
+	  BACKPACK) from the payload and then from State.Hands; both refresh on
+	  every State update.
 	- Buttons send SellAction ("Sell" { Key, Count, From } or "SellAll"
 	  { Filter, From? }); the server checks everything. Selling more than
 	  SellView.ConfirmCount items or anything Epic+ asks first (never by

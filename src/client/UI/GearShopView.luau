@@ -4,8 +4,9 @@
 
 	  header   GEAR SHOP, a line about the shop (or the last message: HUD
 	           toasts hide behind the panel), your coins, the X button
-	  cards    the five GearConfig lines side by side (Boots, Helmet Lamp,
-	           Backpack, Gloves, Magnet), each a painted Pop card in its own
+	  cards    the four GearConfig lines side by side (Boots, Helmet Lamp,
+	           Gloves, Magnet: the backpacks have their own BACKPACKS shop
+	           since 2026-10-24), each a painted Pop card in its own
 	           colour (GearShopView.Paints; the window is a Pop window,
 	           BoostView.popWindow):
 	             a showcase: the item's picture (IconAssets boots, helmet...;
@@ -13,7 +14,7 @@
 	             rays, and the level chip ("LV 2/5", "MAX"); the name; five
 	             glossy level pips; what it does; the effect well: what you
 	             have now -> what the next level gives (big white), its unit,
-	             a second stat (lamp brightness, throw power); the price
+	             a second stat (lamp brightness); the price
 	             (Format.money, gold, white when you can't afford it); the
 	             gold coin BUY button (grey when you can't afford it; MAX and
 	             BOUGHT! green)
@@ -31,8 +32,8 @@
 	level pips and its second stat line, so the showcase keeps its size;
 	on a tall one the description gets the lines its text needs (top
 	aligned, right under the pips) and the showcase the rest (rows).
-	Texts fit their boxes (TechShopView.fitText shrinks a long one). Five
-	cards that don't fit side by side scroll sideways.
+	Texts fit their boxes (TechShopView.fitText shrinks a long one). Cards
+	that don't fit side by side scroll sideways.
 	Prices and levels come from GearConfig (nextPrice / quote rules) and the
 	State snapshot (Gear: the save's levels), so a card always offers what
 	the server will quote. The effect numbers are the server's preview
@@ -186,7 +187,6 @@ GearShopView.WindowPaint = "Blue" -- the Gear colour (BubbleTheme.Roles.Gear)
 GearShopView.Paints = {
 	Boots = "Teal",
 	HelmetLamp = "Purple",
-	Backpack = "Blue",
 	Gloves = "Pink",
 	Magnet = "Green",
 } :: { [string]: string }
@@ -211,10 +211,7 @@ local C = {
 	BootsDark = rgb(150, 22, 22),
 	Sole = rgb(52, 40, 36),
 	Lace = rgb(255, 236, 214),
-	Pack = rgb(36, 178, 72),
-	PackDark = rgb(22, 120, 46),
 	Strap = rgb(110, 70, 40),
-	Buckle = rgb(255, 206, 72),
 	Glove = rgb(214, 120, 50),
 	GloveDark = rgb(150, 76, 28),
 	Cuff = rgb(96, 58, 40),
@@ -255,9 +252,10 @@ local PAD = 16
 -- the compact layout's footer while a gamepad plays (the glyph row fits in it)
 local PAD_FOOTER = 34
 
+-- (Width: four cards at MaxCard side by side, the gaps and the padding)
 local METRICS: { [string]: Metrics } = {
 	Normal = {
-		Width = 1010,
+		Width = 910,
 		Height = 560,
 		Header = 82,
 		Footer = 30,
@@ -281,7 +279,7 @@ local METRICS: { [string]: Metrics } = {
 	},
 	-- phones and TVs: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
-		Width = 1100,
+		Width = 960,
 		Height = 600,
 		-- the X (72 high, from 6) reaches below the title row: the cards start under it
 		Header = 80,
@@ -325,11 +323,6 @@ local function safeState(state: any): { [string]: any }
 	return if type(state) == "table" then state else {}
 end
 
-local function strongBack(state: { [string]: any }): boolean
-	local perks = state.Perks
-	return type(perks) == "table" and perks.StrongBack == true
-end
-
 -- A gear value as the cards say it: whole numbers plain, others with up to two decimals.
 function GearShopView.number(value: number): string
 	if value == math.floor(value) then
@@ -347,8 +340,9 @@ local function fromTo(now: string, nextValue: string?): string
 	return `{now} → {nextValue}`
 end
 
--- the second stat of a line (the card's Extra row)
-local EXTRA_STAT: { [string]: string } = { HelmetLamp = "LampBrightness", Gloves = "ThrowMult" }
+-- the second stat of a line (the card's Extra row; nothing is thrown since the backpack, so
+-- the Gloves' throw power isn't shown)
+local EXTRA_STAT: { [string]: string } = { HelmetLamp = "LampBrightness" }
 
 -- A line's preview when it is for `level` and its numbers are sane (else nil:
 -- the card falls back to the gear table).
@@ -369,18 +363,16 @@ end
 	stat ("" when the line has none). Level 0 of the lamp and the magnet
 	reads "Off". `values` (GearService.preview for this line, from the
 	server) makes every number the real total with every bonus counted (the
-	Magnetism enchant, golems, Swift, Strong Back); without it, or when it
-	is for another level, the numbers are the gear table's (the backpack
-	still counts Strong Back, x2, like Bonuses.carryCapacity).
+	Magnetism enchant, golems, Swift); without it, or when it is for
+	another level, the numbers are the gear table's.
 ]]
-function GearShopView.effect(lineId: string, level: number, hasStrongBack: boolean?, values: any?): (string, string, string)
+function GearShopView.effect(lineId: string, level: number, values: any?): (string, string, string)
 	local line = GearConfig.ById[lineId]
 	if not line then
 		return "", "", ""
 	end
 	local current = GearConfig.clampLevel(level)
 	local nextLevel: number? = if current < GearConfig.MaxLevel then current + 1 else nil
-	local x2 = hasStrongBack == true
 	local live = livePreview(values, current)
 	local function value(at: number, extra: boolean): number
 		if live then
@@ -393,8 +385,6 @@ function GearShopView.effect(lineId: string, level: number, hasStrongBack: boole
 		end
 		if extra then
 			return GearConfig.value(lineId, at, EXTRA_STAT[lineId])
-		elseif lineId == "Backpack" then
-			return GearConfig.carryCapacity({ Backpack = at }, x2)
 		end
 		return GearConfig.value(lineId, at)
 	end
@@ -405,18 +395,14 @@ function GearShopView.effect(lineId: string, level: number, hasStrongBack: boole
 		end
 		return GearShopView.number(math.floor(v * 100 + 0.5) / 100)
 	end
-	local function pair(extra: boolean, prefix: string?): string
-		local now = (prefix or "") .. show(current, extra)
-		local after = if nextLevel then (prefix or "") .. show(nextLevel, extra) else nil
+	local function pair(extra: boolean): string
+		local now = show(current, extra)
+		local after = if nextLevel then show(nextLevel, extra) else nil
 		return fromTo(now, after)
 	end
-	if lineId == "Backpack" then
-		return pair(false), if x2 then "items (Strong Back)" else "items you can carry", ""
-	elseif lineId == "HelmetLamp" then
+	if lineId == "HelmetLamp" then
 		local extra = if current == 0 and nextLevel then `Brightness {show(nextLevel, true)}` else `Brightness {pair(true)}`
 		return pair(false), line.Unit, extra
-	elseif lineId == "Gloves" then
-		return pair(false), line.Unit, `Throw {pair(true, "x")}`
 	end
 	return pair(false), line.Unit, ""
 end
@@ -439,14 +425,13 @@ end
 function GearShopView.cards(rawState: any, coins: number, preview: any?): { Card }
 	local state = safeState(rawState)
 	local cash = num(coins)
-	local x2 = strongBack(state)
 	local values: { [string]: any } = if type(preview) == "table" then preview else {}
 	local list: { Card } = {}
 	for order, line in GearConfig.Lines do
 		local level = GearConfig.level(state.Gear, line.Id)
 		local price = GearConfig.nextPrice(line.Id, level)
 		local done = price == nil
-		local effect, unit, extra = GearShopView.effect(line.Id, level, x2, values[line.Id])
+		local effect, unit, extra = GearShopView.effect(line.Id, level, values[line.Id])
 		local buy: Buy
 		if price == nil then
 			buy = { Text = "MAX", Level = nil, Price = nil, Reason = "Max", CanBuy = false }
@@ -565,17 +550,6 @@ local DRAW: { [string]: (Frame) -> () } = {
 		bit(a, "Mount", 0.62, 0.32, 0.8, 0.52, C.LampRim, 0.3)
 		bit(a, "Lamp", 0.68, 0.34, 0.84, 0.5, C.Lamp, 0.5)
 		shine(a, 0.2, 0.3, 0.34, 0.36)
-	end,
-	-- a green backpack: body, flap, pocket, straps and a gold buckle
-	Backpack = function(a: Frame)
-		bit(a, "StrapL", 0.24, 0.1, 0.32, 0.4, C.Strap, 0.4)
-		bit(a, "StrapR", 0.68, 0.1, 0.76, 0.4, C.Strap, 0.4)
-		bit(a, "Handle", 0.38, 0.06, 0.62, 0.16, C.Strap, 0.5)
-		bit(a, "Body", 0.18, 0.16, 0.82, 0.88, C.Pack, 0.24)
-		bit(a, "Flap", 0.18, 0.16, 0.82, 0.42, C.PackDark, 0.3)
-		bit(a, "Pocket", 0.3, 0.54, 0.7, 0.82, C.PackDark, 0.2)
-		bit(a, "Buckle", 0.44, 0.36, 0.56, 0.48, C.Buckle, 0.2)
-		shine(a, 0.24, 0.48, 0.28, 0.8)
 	end,
 	-- a copper work glove: palm, four fingers, thumb, a leather cuff
 	Gloves = function(a: Frame)

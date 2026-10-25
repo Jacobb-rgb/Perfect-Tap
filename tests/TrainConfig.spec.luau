@@ -23,7 +23,7 @@ return function(T, Loader)
 
 	T.test("Train: capacity, trip time and next price helpers", function()
 		T.eq(TrainConfig.capacity(0, false), 8)
-		T.eq(TrainConfig.capacity(99, false), 50, "clamped high")
+		T.eq(TrainConfig.capacity(99, false), 1000, "clamped high (the train grows with the backpacks)")
 		T.eq(TrainConfig.capacity(0 / 0, false), 8, "NaN")
 		T.eq(TrainConfig.capacity(0, true), 12, "Express +50 %")
 		T.eq(TrainConfig.tripSeconds(0, false), 30)

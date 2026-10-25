@@ -697,10 +697,7 @@ local function yardScene(Loader: any, workspace: any, which: string): (any, { [s
 	local teleport = TeleportView.build(hud.TopBar, 1, screen.W)
 	TeleportView.relayout(teleport, hud.TopBar, 1, screen.W)
 	hud.Coins.Text = Format.money(48250)
-	hud.CarryLabel.Text = "CARRYING 0/3"
-	HudBubble.slot(hud.CarrySlots, nil, 1)
-	HudBubble.slot(hud.CarrySlots, nil, 2)
-	HudBubble.slot(hud.CarrySlots, nil, 3)
+	HudBubble.setBackpack(hud.Backpack, 0, 5)
 	UIConfig.LightUI = UIConfig.Default
 	local exports = {
 		[`ui_mux_{which}_pc`] = UiExport.export({ overlay(CF, cam, signs, screen.W, screen.H), hud.Gui }),

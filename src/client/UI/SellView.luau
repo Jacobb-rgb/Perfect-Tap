@@ -3,7 +3,8 @@
 
 	  header    TOBIN'S ORE STALL, a short line about prices (or the last
 	            sale: HUD toasts are hidden behind the panel), X button
-	  list      "IN YOUR PEN" and "IN YOUR HANDS": one row per storage key
+	  list      "IN YOUR ORE PEN" and "IN YOUR BACKPACK" (the protocol's
+	            "Hands" section: the backpack since 2026-10-24): one row per storage key
 	            (all Dirty Ore of a section merged into one row, grey "?"
 	            icon, price "?"): ore-colour icon, name, grade chip, count,
 	            Tobin's price each, "Sell 1" and "Sell all"
@@ -184,10 +185,11 @@ local METRICS: { [string]: Metrics } = {
 }
 
 local SECTION_ORDER: { [Section]: number } = { Pen = 0, Hands = 2000 }
-local SECTION_TITLE: { [Section]: string } = { Pen = "IN YOUR ORE PEN", Hands = "IN YOUR HANDS" }
+-- ("Hands" is the protocol's name for the backpack: OpenUI "Sell" { Hands }, SellAction From)
+local SECTION_TITLE: { [Section]: string } = { Pen = "IN YOUR ORE PEN", Hands = "IN YOUR BACKPACK" }
 local SECTION_EMPTY: { [Section]: string } = {
 	Pen = "Your Ore Pen is empty.",
-	Hands = "You're not carrying anything. Carry ore here or throw it into the SELL bin.",
+	Hands = "Your backpack is empty. Mine some ore: it goes straight into your backpack.",
 }
 
 local function metrics(compact: boolean): Metrics

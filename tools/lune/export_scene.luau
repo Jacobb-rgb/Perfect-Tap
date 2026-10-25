@@ -324,6 +324,10 @@ elseif sceneName == "hud_quick" then -- only the HUD overlays over an empty sky 
 	for name, guis in require("./lib/hud_pixel_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "backpack_quick" then -- only the backpack window + its HUD button over an empty sky (tools/lune/lib/backpack_preview.luau)
+	for name, guis in require("./lib/backpack_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "inv_quick" then -- only the inventory windows over an empty sky (tools/lune/lib/inv_preview.luau)
 	for name, guis in require("./lib/inv_preview").build(Loader) do
 		uiExports[name] = guis
@@ -458,10 +462,7 @@ elseif sceneName == "gameplay" then
 	refs.Coins.Text = "1,240"
 	refs.Zone.Text = "Greystone Quarry"
 	refs.Zone.TextTransparency = 0
-	refs.CarryLabel.Text = "CARRYING 2/3"
-	HudView.slot(refs.CarrySlots, Rarity.get("Uncommon").Color, 1)
-	HudView.slot(refs.CarrySlots, Rarity.get("Common").Color, 2)
-	HudView.slot(refs.CarrySlots, nil, 3)
+	HudView.setBackpack(refs, 2, 5)
 	HudView.toast(refs.Toasts, "New ore discovered: Silver!", Rarity.get("Uncommon").Color)
 	uiExports.hud_mining = UiExport.export({ refs.Gui })
 elseif sceneName == "cleaning" then

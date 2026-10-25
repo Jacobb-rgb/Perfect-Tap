@@ -27,6 +27,7 @@
 	  ThrowMult        x throw power
 	  CarryCapacity    items your backpack holds: the equipped pack's capacity
 	                   plus bonuses (the StrongBack perk doubles the total)
+	  CarryPct         + share of backpack space (Deep Pockets: 0.1 per level)
 	  LampRange        head lamp range (studs, 0 = no lamp)
 	  LampBrightness   head lamp brightness
 	  TrainTimeCutPct  share cut off every train trip (Express Rails, the
@@ -86,6 +87,7 @@ StatConfig.List = {
 	{ Id = "ThrowMult", Kind = "Mult", Label = "throw power", Format = "Times", Max = 3 },
 	-- (the backpack: the equipped pack's 5..1000 plus Deep Pockets / golems; owner 2026-10-24)
 	{ Id = "CarryCapacity", Kind = "Add", Label = "backpack capacity", Format = "Number", Max = 1100 },
+	{ Id = "CarryPct", Kind = "Add", Label = "backpack space", Format = "Percent", Max = 1 },
 	{ Id = "LampRange", Kind = "Add", Label = "lamp range", Format = "Studs", Max = 120 },
 	{ Id = "LampBrightness", Kind = "Add", Label = "lamp brightness", Format = "Number", Max = 10 },
 	{ Id = "TrainTimeCutPct", Kind = "Add", Label = "shorter train trips", Format = "Percent", Max = 0.5 },

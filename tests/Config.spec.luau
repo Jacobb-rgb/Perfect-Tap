@@ -2,7 +2,6 @@
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
-	local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
@@ -20,9 +19,6 @@ return function(T, Loader)
 			T.lt(0, ore.Value, ore.Id .. " value")
 			T.lt(0, ore.Hardness, ore.Id .. " hardness")
 		end
-		T.eq(ToolData.Pickaxes, nil, "no pickaxes any more")
-		T.eq(ToolData.carryCapacity(1, false), 1, "carry levels stay")
-		T.eq(ToolData.carryCapacity(99, true), ToolData.CarryLevels[#ToolData.CarryLevels].Capacity * 2)
 	end)
 
 	do

@@ -140,11 +140,14 @@ local function rarityOrder(oreId: string): number
 	return if info then info.Order else 0
 end
 
--- Storage key -> count of the items in the player's backpack (the keys this build reads).
+-- Storage key -> count of the items in the player's backpack Tobin buys (the
+-- keys this build reads; dusty relics go to the guild, never to him).
 function SellService.handsSummary(player: Player): { [string]: number }
 	local summary: { [string]: number } = {}
 	for _, stack in CarryService.stacks(player) do
-		summary[stack.Key] = stack.Count
+		if SellService.priceOf(stack.Desc) > 0 then
+			summary[stack.Key] = stack.Count
+		end
 	end
 	return summary
 end

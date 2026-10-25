@@ -5,8 +5,8 @@
 	docs/BALANCE_SIM.md explains the model and the results.
 
 	It reads the real config (OreData, BlasterData, ItemData, MachineData,
-	EconomyConfig, ToolData (the Gear shop's Backpack levels and prices since
-	steps 6-7), TrainConfig, MachineData power rules) and reads the mine
+	EconomyConfig, BackpackData (the backpacks: capacity and coin price per
+	pack, owner 2026-10-24; a walk to the train carries a backpack's worth), TrainConfig, MachineData power rules) and reads the mine
 	floors straight from MineFloors.List (Ores / CrystalOres weights,
 	MinBlaster gates, ViaElevator), the rock mix (SpawnChance, Seconds,
 	OreCount: the floor's weakest blaster breaks a rock in ~4.5 s, ~3.3 ores
@@ -56,7 +56,7 @@ local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterD
 local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
-local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
+local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
 local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
@@ -403,7 +403,7 @@ local function newPlayer(): any
 		Earned = 0,
 		Blaster = 1,
 		BlasterOre = "",
-		Carry = 1,
+		Pack = 1, -- the worn backpack: index in BackpackData.List
 		TrainCap = 0, -- levels
 		TrainSpeed = 0,
 		Hover = 0,
@@ -420,7 +420,7 @@ local function newPlayer(): any
 		Podium = {} :: { number },
 		Pending = 0, -- fractional ores carried between steps
 		-- steps 6-7 (the save's shapes, so the real config helpers read them)
-		Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 },
+		Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 0 },
 		Enchants = { Owned = {}, Slots = { "", "", "", "" } },
 		Golems = { Owned = {}, Equipped = {}, NextId = 1 },
 		Artifacts = { Found = {}, Chapters = {} },
@@ -543,7 +543,7 @@ local function flow(p: any): (number, number, any, number)
 	local breakTime = floor.HP / dps * (2 / 3 + 1 / 3 / (1 + (stats.OverchargePct or 0)))
 	local rockTime = breakTime + A.RockWalk * walkMult(p)
 	local perRock = A.OresPerRock * (1 + (stats.TwinDropChance or 0))
-	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / ToolData.carryCapacity(p.Carry, false)) / A.Efficiency
+	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / BackpackData.List[p.Pack].Capacity) / A.Efficiency
 	local cap = trainCapacity(p.TrainCap)
 	local trainRate = cap / (trainTrip(p.TrainSpeed) + TrainConfig.ReturnSeconds + A.TrainLoad)
 	if p.Cleaners == 0 then
@@ -756,15 +756,13 @@ end
 -- Purchase candidates: { Name, Price, Apply(p, rng), Gain? (expected, else measured on a copy) }.
 local function candidates(p: any): { any }
 	local list = {}
-	local carry = ToolData.CarryLevels[p.Carry + 1]
-	if carry then
+	local pack = BackpackData.List[p.Pack + 1]
+	if pack then
 		table.insert(list, {
-			Name = "Carry " .. carry.Name,
-			Price = carry.Price,
+			Name = pack.Name .. " (" .. pack.Capacity .. ")",
+			Price = pack.Price,
 			Apply = function(q)
-				q.Carry += 1
-				q.Gear.Backpack = q.Carry - 1
-				q.GearStats = nil
+				q.Pack += 1
 			end,
 		})
 	end

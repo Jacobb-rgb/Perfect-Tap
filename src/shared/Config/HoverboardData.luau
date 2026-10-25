@@ -7,7 +7,8 @@
 	- 1 board for Robux (49 R$): the Terra Forge Custom, a deck painted with
 	  doodles of the game (owner 2026-10-25: "the only Robux board is a custom
 	  Terra Forge one, like Pet Simulator's"), faster than every coin board,
-	  no carry slowdown, a rainbow trail and big effects. The Neon Comet is
+	  a rainbow trail and big effects (nothing slows a rider down any more:
+	  the backpack has no carry slowdown, 2026-10-24). The Neon Comet is
 	  gone (owner 2026-10-25) and the Royal Phoenix is the 4th coin board
 	  ("cheaper": 3x the Emberglass Glider); its old pass entry now sells the
 	  Terra Forge Custom (no pass id was ever made, nobody bought either).
