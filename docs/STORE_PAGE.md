@@ -25,7 +25,7 @@ from the description.
 | Podiums that earn coins every second | V2 | [ ] TODO |
 | Your own ore train and the Ore Pen | V2 | [ ] TODO |
 | Machines, belts and power on your own plot (the factory) | d, V2 | [ ] TODO |
-| Smelt ingots, forge blasters up to level 10, the Blaster Vault | V2 | [ ] TODO |
+| Blasters up to level 10 from the Blaster Vault (no Foundry since 2026-10-24) | V2 | [ ] TODO |
 | Badges (only once their ids are in BadgeConfig, `NAHRAJ_DO_ROBLOXU/odznaky`) | f | [ ] TODO |
 | Passes are optional, every ore can be mined without them | f | [ ] TODO |
 | "PC, phone, tablet and console": the **Console** device box is ticked and the game was tested on a controller. If not, remove "console" / "i konzoli" from both descriptions | f | [ ] TODO |
@@ -110,13 +110,13 @@ field ships, move the "What's new" line there.
 snippets and on mobile before "read more", so it names the game, the genre and the unique feature:
 
 ```text
-TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and forge new blasters in your own factory!
+TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and build your own ore factory!
 ```
 
 **Full description (paste as is, updated 2026-10-18 for the blaster / 36-ore build):**
 
 ```text
-TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and forge new blasters in your own factory!
+TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and build your own ore factory!
 
 The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers in Emberfall and help reforge it.
 
@@ -125,7 +125,8 @@ The Heartstone, the heart of Terra, has shattered into glowing ore. Join the For
 • Clean each ore by hand: blast the dirt off with your spray wand. Can you get Flawless?
 • Show your best ores on podiums: they earn coins every second
 • Ride your own ore train, fill the Ore Pen, build machines, belts and power
-• Buy bigger backpacks, and the next blaster in the Blaster Vault, up to level 10
+• Earn coins and buy better blasters, up to level 10, in the Blaster Vault
+• Walk near your ore and it jumps into your backpack: bigger backpacks hold up to 1000
 • 36 ores to discover
 • No combat. Every ore can be mined without a game pass
 

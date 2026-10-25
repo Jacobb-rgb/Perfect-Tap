@@ -603,6 +603,43 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the old FOUNDRY chute
 
+	withWorld("ConveyorService: an old belt into the FOUNDRY cell: its owner hears it once a session", function(w)
+		-- (review 2026-10-25: its items would pile up loose at the wall until the cap stops the factory)
+		local cell = ConveyorService.OldFoundryCell
+		T.eq(cell.X, 9 + (GameConfig.PlotCells - 12) / 2)
+		T.eq(cell.Z, GameConfig.PlotCells - 1)
+		local task = require("@lune/task")
+		local delay = ConveyorService.NoticeDelay
+		ConveyorService.NoticeDelay = 0
+		local ok, err = pcall(function()
+			local function notices(): number
+				local n = 0
+				for _, note in w.notes do
+					if note.Name == "Notify" and note.A.Text == ConveyorService.OldFoundryText then
+						n += 1
+					end
+				end
+				return n
+			end
+			-- turned some other way: nothing to say
+			local m = belt(w, cell.X, cell.Z, 1)
+			conv.onLayout(w.player, PLOT)
+			task.wait(0.05)
+			T.eq(notices(), 0, "a belt along the wall is fine")
+			MachineService.move(m, cell.X, cell.Z, BaseLayout.SinkRotation)
+			conv.onLayout(w.player, PLOT)
+			task.wait(0.05)
+			T.eq(notices(), 1, "a belt into the wall: told once")
+			conv.onLayout(w.player, PLOT)
+			task.wait(0.05)
+			T.eq(notices(), 1, "once a session")
+		end)
+		ConveyorService.NoticeDelay = delay
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("ConveyorService: no sink any more: a belt off the back edge just runs into the wall", function(w)
 		-- the FOUNDRY chute went with the Foundry (owner 2026-10-24): its old cell is an
 		-- ordinary cell and its belt an ordinary belt (no setSink, no sink scan)

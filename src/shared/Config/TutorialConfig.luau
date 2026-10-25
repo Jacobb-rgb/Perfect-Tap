@@ -122,10 +122,26 @@ function TutorialConfig.podium(data: Data): boolean
 	return false
 end
 
--- Machines beyond the starter kit (placed or still in the inventory).
-function TutorialConfig.machinesBought(data: Data, starterCount: number): boolean
-	if count(data.PlacedMachines) > starterCount then
-		return true
+-- What the starter kit places (MachineData.StarterKit: the Furnace and the Crusher) and the
+-- Cleaning Station it placed on the grid before 2026-10-24 (the yard has its own now).
+TutorialConfig.StarterIds = { ClayFurnace = 1, Crusher = 1, CleaningStation = 1 } :: { [string]: number }
+
+-- Machines beyond the starter kit (placed or still in the inventory): one placed
+-- machine of each StarterIds id is the kit's (counted by id, not by number, so an
+-- old save with the kit's Cleaning Station on the grid isn't a purchase either).
+function TutorialConfig.machinesBought(data: Data): boolean
+	local free = table.clone(TutorialConfig.StarterIds)
+	if type(data.PlacedMachines) == "table" then
+		for _, entry in data.PlacedMachines do
+			local id = if type(entry) == "table" then entry.Id else nil
+			if type(id) == "string" then
+				if (free[id] or 0) > 0 then
+					free[id] -= 1
+				else
+					return true
+				end
+			end
+		end
 	end
 	if type(data.MachineInventory) == "table" then
 		for _, n in data.MachineInventory do
@@ -136,8 +152,6 @@ function TutorialConfig.machinesBought(data: Data, starterCount: number): boolea
 	end
 	return false
 end
-
-TutorialConfig.StarterMachines = 2 -- MachineData.StarterKit: Furnace + Crusher (the Cleaning Station is the yard's)
 
 -- Woke a golem (a capsule opened, or one is owned).
 function TutorialConfig.golems(data: Data): boolean
@@ -153,7 +167,7 @@ end
 
 -- Sold something, or bought a machine.
 function TutorialConfig.grown(data: Data): boolean
-	return stat(data, "ItemsSold") > 0 or TutorialConfig.machinesBought(data, TutorialConfig.StarterMachines)
+	return stat(data, "ItemsSold") > 0 or TutorialConfig.machinesBought(data)
 end
 
 function TutorialConfig.blaster(data: Data): boolean

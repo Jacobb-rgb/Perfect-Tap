@@ -41,6 +41,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Parent.Plaza.Common)
 local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
+local RoadFence = require(script.Parent.Parent.Plaza.RoadFence)
 local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
 local Railway = require(script.Parent.Parent.Parent.Railway)
@@ -100,11 +101,22 @@ Meadow.FencedStrips = {
 	WestSpur = true,
 	ToScanner = true,
 	MineLane = true,
+	-- (2026-10-25: the lane to the next area too, with the road fences)
+	ToNextArea = RoadFence.Enabled,
 }
-Meadow.FenceRun = 20 -- longest fence piece; a 3-stud gap follows each
+-- longest fence piece; a gap to walk through follows each
+Meadow.FenceRun = if RoadFence.Enabled then 24 else 20
+Meadow.FenceGap = 3
 Meadow.FenceHeight = 2.4
 -- fence line past the road edge (2026-10-20: behind the street lamps' feet, so the runs pass them)
 Meadow.FenceOffset = if StreetLampPlan.Enabled then 2.8 else 2
+-- (2026-10-25) the plot roads' town side: the street lamps and the tree belt with its
+-- hedges stand by the road, so the fence runs in one straight line behind the belt
+-- (Flora/Trees' old belt fence line, |x| 60.3): extra offset past FenceOffset
+Meadow.FenceBackOffsets = if RoadFence.Enabled then { EastPlotRoad = 2.4, WestPlotRoad = 2.4 } else {}
+-- (2026-10-25) the road fences may also stand past the meadow's north edge (the lane
+-- to the next area runs along the mountain foot at z -121)
+Meadow.FenceArea = { Min = Vector3.new(Meadow.Area.Min.X, 0, -125), Max = Meadow.Area.Max }
 
 local FLOWERS = { C.FlowerYellow, C.FlowerWhite, C.FlowerPurple, C.LeafPink, C.LeafPinkLight }
 
@@ -699,53 +711,75 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 		if not Meadow.FencedStrips[s.Id] then
 			continue
 		end
+		local from = Vector3.new(s.From.X, 0, s.From.Z)
 		local delta = Vector3.new(s.To.X - s.From.X, 0, s.To.Z - s.From.Z)
 		local length = delta.Magnitude
 		local dir = delta / length
 		local right = Vector3.new(-dir.Z, 0, dir.X)
+		-- (past the road's edge border and the street lamps' feet; then behind a tree belt)
+		local back = Meadow.FenceBackOffsets[s.Id]
+		local offsets = { s.Width / 2 + Meadow.FenceOffset + (back or 0) }
 		for _, side in { -1, 1 } do
-			-- (past the road's edge border and the street lamps' feet)
-			local offset = s.Width / 2 + Meadow.FenceOffset
+			-- the fence line at t: the first offset that is free there (0 = none)
+			local function lineAt(t: number): number
+				for i, offset in offsets do
+					local p = from + dir * t + right * side * offset
+					local lawn = p + right * side * 1.6
+					-- (the road fences stand in front of whatever is behind them: a
+					-- cliff, a stall, the belt's inner trees; the timber ones kept a lawn
+					-- behind them)
+					local ok = Meadow.allowed(p, 1, if RoadFence.Enabled then Meadow.FenceArea else nil)
+						and Vector3.new(p.X, 0, p.Z).Magnitude > Common.PlazaRadius + 6
+						and Common.offStrips(p, 1)
+						and Meadow.free(index, p, 0.7, 3.2)
+						and (RoadFence.Enabled or Meadow.free(index, lawn, 0.9, 3))
+					if ok then
+						return i
+					end
+				end
+				return 0
+			end
 			local runs: { { number } } = {}
 			local start: number? = nil
+			local line = 0
 			local t = 0
 			while t <= length + 0.01 do
-				local p = Vector3.new(s.From.X, 0, s.From.Z) + dir * t + right * side * offset
-				local lawn = p + right * side * 1.6
-				local ok = Meadow.allowed(p, 1)
-					and Vector3.new(p.X, 0, p.Z).Magnitude > Common.PlazaRadius + 6
-					and Common.offStrips(p, 1)
-					and Meadow.free(index, p, 0.7, 3.2)
-					and Meadow.free(index, lawn, 0.9, 3)
-				if ok and not start then
-					start = t
-				elseif not ok and start then
-					table.insert(runs, { start, t - 1 })
+				local here = lineAt(t)
+				if start and here ~= line then
+					table.insert(runs, { start, t - 1, line })
 					start = nil
+				end
+				if here > 0 and not start then
+					start, line = t, here
 				end
 				t += 1
 			end
 			if start then
-				table.insert(runs, { start, length })
+				table.insert(runs, { start, length, line })
 			end
 			for _, run in runs do
 				local a = run[1]
+				local offset = offsets[run[3]]
 				while run[2] - a >= 5 do
 					local b = math.min(run[2], a + Meadow.FenceRun)
-					local pa = Vector3.new(s.From.X, 0, s.From.Z) + dir * a + right * side * offset
-					local pb = Vector3.new(s.From.X, 0, s.From.Z) + dir * b + right * side * offset
-					for _, q in { pa, (pa + pb) / 2, pb } do
-						fenceLantern(m, q)
+					local pa = from + dir * a + right * side * offset
+					local pb = from + dir * b + right * side * offset
+					if RoadFence.Enabled then
+						track(index, RoadFence.run(m, pa, pb))
+					else
+						for _, q in { pa, (pa + pb) / 2, pb } do
+							fenceLantern(m, q)
+						end
+						local fence = Style.fence(m, pa, pb, {
+							Height = Meadow.FenceHeight,
+							PostEvery = 4,
+							Rails = 2,
+							PostColor = C.WoodDark,
+							RailColor = Style.vary(C.Wood, rng, 0.04),
+						})
+						track(index, fence)
 					end
-					local fence = Style.fence(m, pa, pb, {
-						Height = Meadow.FenceHeight,
-						PostEvery = 4,
-						Rails = 2,
-						PostColor = C.WoodDark,
-						RailColor = Style.vary(C.Wood, rng, 0.04),
-					})
-					track(index, fence)
-					a = b + 3
+					a = b + Meadow.FenceGap
 				end
 			end
 		end

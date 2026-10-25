@@ -195,8 +195,12 @@ re-calibration after the choice (`lune run tools/lune/balance_sim.luau calibrate
   follow the mine chat's plan for the new roster: floor N = the Nth rarity; 10 % crystal rocks roll from the floor's
   best 3 ores (70 %) or the next rarity's cheapest 3 (30 %). Weights inside a table fall with value (1 / rank^0.8).
 - Player loop per 5 s step: mine → carry to the floor's train (12 s walk per load) → train to the pen → clean by
-  hand (18 s per ore + the trip back) until the first Auto Cleaner (8 s per ore, Quality 0 odds) → best 3 cleaned ores
-  on the 3 free podiums (2 before 2026-10-24) → the rest sold, through the Crusher (×2) and furnaces (ingots ×1.25) when owned.
+  hand (12 s per ore + the trip back, grades Rough 5 % / Clean 20 % / Pristine 30 % / Flawless 45 %; before the strong
+  spray of 2026-10-25: 18 s and 10 / 40 / 35 / 15 %. The shorter time moved Typical's blaster 10 from 7h45 to 7h42
+  with 2 free podiums; the better grades then moved it from 7h07 to 7h04 with today's podiums, blaster 3 8m00 -> 7m05, the first
+  machine 10m00 -> 9m00, blaster 4 19m10 -> 17m55; Flawless hand cleans also give their level XP) until the first Auto
+  Cleaner (8 s per ore, Quality 0 odds) → best 3 cleaned ores on the 3 free podiums (2 before 2026-10-24) → the rest sold, through the
+  Crusher (×2) and furnaces (ingots ×1.25) when owned.
 - Buying (greedy): the next blaster as soon as ingots + coins are there (Foundry) or the Vault is affordable; the
   elevator once floor 4 is in reach; hoverboards ($5K / $80K / $1.5M, walking × 0.8 / 0.65 / 0.5) when they cost at
   most a quarter of the coins; otherwise the machine / upgrade with the best payback under 20 min (carry levels, train

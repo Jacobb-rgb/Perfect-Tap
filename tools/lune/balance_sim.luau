@@ -93,11 +93,13 @@ local A = {
 	CrystalShare = spawn.Crystal or 0.1, -- Crystal rocks roll from the floor's CrystalOres
 	RockWalk = 2.5, -- seconds from one rock to the next
 	DropWalk = 12, -- seconds to carry a load to the floor's Mine Station (train) and back
-	HandClean = 18, -- seconds per ore in the cleaning minigame
+	HandClean = 12, -- seconds per ore in the cleaning minigame (18 before the strong spray of 2026-10-25)
 	CleanTrip = 30, -- seconds back from the base to the mine after a cleaning session (8 with the elevator)
 	CleanBatch = 20, -- ores cleaned per session at the base
 	TrainLoad = 5, -- seconds the train waits / loads at the station
-	HandGrades = { Rough = 0.1, Clean = 0.4, Pristine = 0.35, Flawless = 0.15 }, -- a typical player
+	-- a typical player since the strong spray of 2026-10-25 (Flawless is the norm; before:
+	-- Rough .1 / Clean .4 / Pristine .35 / Flawless .15)
+	HandGrades = { Rough = 0.05, Clean = 0.2, Pristine = 0.3, Flawless = 0.45 },
 	Podiums = EconomyConfig.Podiums.Free, -- free podiums (owner 2026-10-24: 3; 4 and 5 are a Robux perk)
 	-- the coin hoverboards: the blaster level each price follows (HoverboardData.priceFrom), in board order
 	HoverboardLevels = { 3, 5, 7 },
@@ -1197,6 +1199,7 @@ local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t:
 			rocks * w.RocksBroken.Xp
 			+ (cleaned + raw) * w.OresMined.Xp
 			+ cleaned * w.OresCleaned.Xp
+			+ (if p.Cleaners == 0 then cleaned * A.HandGrades.Flawless * w.FlawlessCleans.Xp else 0) -- hand cleans only
 			+ raw * w.ItemsSold.Xp
 			+ w.PlaySeconds.Xp
 		)

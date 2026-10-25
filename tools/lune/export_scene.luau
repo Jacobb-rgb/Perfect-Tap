@@ -573,6 +573,7 @@ elseif sceneName == "cleaning" then
 		local wandCf, tip = SprayParts.wandFrame(workCf, hit, true)
 		SprayParts.placeWand(wand, wandCf)
 		SprayParts.placeJet(SprayParts.jet(fx), tip, hit)
+		SprayParts.placeSpot(SprayParts.spot(fx), workCf, hit, tracker.radius * OreShellBuilder.Scale)
 		-- a few droplets around the hit (the splash emitter, frozen)
 		local rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new(5)
 		for _ = 1, 9 do

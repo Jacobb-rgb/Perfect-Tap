@@ -4,7 +4,7 @@
 	dummy (lib/dummy_r15) plays every MoveConfig move, frame by frame, with
 	the game's own MoveMath + MoveRig layering on top of a stand-in for the
 	default Animate script (idle breathing, the walk, the tool hold).
-	Props are the game's real ones: raw ore chunks in CarryService's stack
+	Props are the game's real ones: raw ore chunks in the old carry stack (lib/dummy)
 	slots (the top one flies off on the throw) and the blaster in the hand.
 
 	  lune run tools/lune/export_moves.luau [fps=30] [only=MoveName]
@@ -21,6 +21,7 @@ local serde = require("@lune/serde")
 local Loader = require("./lib/loader")
 local Export = require("./lib/export")
 local R15 = require("./lib/dummy_r15")
+local Dummy = require("./lib/dummy")
 
 local root = process.cwd
 Loader.init(root)
@@ -31,7 +32,6 @@ local MoveMath = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveMath")
 local MoveRig = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveRig")
 local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
-local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
 
 local fps = tonumber(process.args[1]) or 30
 local only = process.args[2]
@@ -110,7 +110,7 @@ type Segment = {
 	Base: string,
 	Length: number,
 	Plays: { Play },
-	Ore: number?, -- chunks carried (CarryService stack slots)
+	Ore: number?, -- chunks carried (the old carry stack slots, lib/dummy)
 	ThrowAt: number?, -- the top chunk leaves the hands at this local time
 	Blaster: boolean?,
 	Prop: string?, -- "Station" (the Cleaning Station in front)
@@ -477,7 +477,7 @@ for _, segment in SEGMENTS do
 		for i = 1, MAX_ORE do
 			local cf: any = nil
 			if i <= carrying then
-				local slotCF = ROOT_CF * CarryService.stackOffset(i)
+				local slotCF = ROOT_CF * Dummy.stackOffset(CFrame, i)
 				if i == carrying and thrown then
 					-- the top chunk flies off (the server throws it: speed, + 8 up)
 					local dt = t - (segment.ThrowAt :: number)

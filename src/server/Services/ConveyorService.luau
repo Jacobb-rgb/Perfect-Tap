@@ -63,7 +63,11 @@
 	  Build mode draws its own plates (PlacementController / GridOverlay).
 	- A belt that runs off the grid's back edge (SinkRotation) just stops
 	  its items at the plot's back wall (the FOUNDRY sink that took them
-	  went with the Foundry, owner 2026-10-24).
+	  went with the Foundry, owner 2026-10-24). A save from before still
+	  has its belt into the old FOUNDRY cell (OldFoundryCell): its items
+	  would pile up loose at the wall until the loose-item cap stops the
+	  factory, so the owner hears it once a session when the plot's layout
+	  loads (OldFoundryText).
 
 ]]
 
@@ -799,9 +803,36 @@ local function setupCollisionGroup()
 	end
 end
 
-local function onLayout(_: Player, plotId: number)
+-- The old FOUNDRY chute's cell (an ordinary cell since the Foundry went) and what its
+-- belt's owner hears once a session (the header).
+ConveyorService.OldFoundryCell = { X = 9 + (CELLS - 12) / 2, Z = CELLS - 1 }
+ConveyorService.OldFoundryText =
+	"Your belt at the back wall ran into the Foundry, which is gone: its items now stop at the wall. Turn that belt or pick it up."
+ConveyorService.NoticeDelay = 4 -- seconds after the layout loads (the HUD may still be starting)
+local foundryNoticed: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+-- A belt into the old FOUNDRY cell on this plot: its owner hears it once a session.
+local function noticeOldFoundryBelt(player: Player, plotId: number)
+	if foundryNoticed[player] then
+		return
+	end
+	local cell = ConveyorService.OldFoundryCell
+	local machine = MachineService.atCell(plotId, cell.X, cell.Z)
+	if not machine or not machine.Info.IsConveyor or machine.R ~= BaseLayout.SinkRotation or machine.L ~= 0 then
+		return
+	end
+	foundryNoticed[player] = true
+	task.delay(ConveyorService.NoticeDelay, function()
+		if player.Parent then
+			Net.fire("Notify", player, { Text = ConveyorService.OldFoundryText, Kind = "Info" })
+		end
+	end)
+end
+
+local function onLayout(player: Player, plotId: number)
 	updateRails(MachineService.ofPlot(plotId))
 	updateMarkers(plotId)
+	noticeOldFoundryBelt(player, plotId)
 end
 
 -- Internals for the Lune tests only (tests/ConveyorService.spec.luau).
@@ -820,6 +851,7 @@ ConveyorService._test = {
 		moved = applyBelt,
 	},
 	reset = function()
+		table.clear(foundryNoticed)
 		table.clear(lastSpawn)
 		table.clear(markers)
 		table.clear(jams)
