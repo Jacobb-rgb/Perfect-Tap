@@ -1,6 +1,6 @@
 --[[
 	Lobby package Plaza (src/server/World/Lobby/Plaza, LOBBY_PLAN 6.3): the
-	fire crystal's Spin hook, a clear and walkable spawn, a walkable plaza
+	golden dragon statue with its TERRA FORGE sign, a clear and walkable spawn, a walkable plaza
 	without holes, the Great Forge inside its footprint with the ridge low
 	enough for the DEPTHS sign, flat roads, lanterns off the roads and the
 	other pieces, and the package budgets.
@@ -93,36 +93,117 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("plaza: the fire crystal spins (Spin tag, attributes, Atomic, PrimaryPart)", function()
+	T.test("plaza: the golden dragon holds the TERRA FORGE sign over the plaza centre", function()
 		local plaza = world().plaza
-		local spinners = {}
+		local GoldenStatue = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GoldenStatue")
+		local piece = LobbyLayout.get("FireCrystal")
+		-- (the fire crystal's Spin model is gone: nothing spins in the plaza)
 		for _, d in plaza:GetDescendants() do
-			if table.find(d:GetTags(), "Spin") then
-				table.insert(spinners, d)
+			T.falsy(table.find(d:GetTags(), "Spin"), d:GetFullName() .. " spins")
+		end
+		T.eq(plaza:FindFirstChild("FireCrystal"), nil, "no fire crystal")
+		local statue = plaza:FindFirstChild("GoldenStatue")
+		T.truthy(statue and statue:IsA("Model"), "the GoldenStatue model")
+		T.truthy(table.find(statue:GetTags(), "NoStuds"), "polished gold: no classic studs")
+		local dragon = statue:FindFirstChild("GoldenDragon")
+		T.truthy(dragon and dragon:IsA("Model"), "the Flamewing cast in gold")
+		T.eq(dragon:GetAttribute("Golem"), nil, "a statue, not a pet (no golem attributes)")
+		-- gold metal, the Flamewing's fire on the wings (owner's pick B)
+		local gold, fire, glows = 0, 0, 0
+		for _, part in parts(dragon) do
+			if part.Material == roblox.Enum.Material.Metal then
+				T.truthy(part.Color.R > 0.85 and part.Color.G > 0.5 and part.Color.B < 0.7, part.Name .. " is gold")
+				gold += 1
+			elseif
+				string.sub(part.Name, 1, 4) == "Wing"
+				or string.match(part.Name, "^Flame%d")
+				or string.match(part.Name, "^TailFlame")
+			then
+				fire += 1
+			elseif part.Material == roblox.Enum.Material.Neon then
+				glows += 1
 			end
 		end
-		T.eq(#spinners, 1, "one spinning model in the plaza")
-		local crystal = spinners[1]
-		T.truthy(crystal:IsA("Model") and crystal.Name == "FireCrystal", "the Spin model is FireCrystal")
-		local body = crystal.PrimaryPart
-		T.truthy(body and body:IsDescendantOf(crystal), "PrimaryPart inside the model")
-		T.near(body.CFrame.UpVector.Y, 1, 1e-3, "spin axis is vertical")
-		local center = LobbyLayout.get("FireCrystal").Center
-		T.lt((Vector3.new(body.CFrame.Position.X, 0, body.CFrame.Position.Z) - center).Magnitude, 0.05, "spin axis at the plaza center")
-		for _, name in { "SpinSpeed", "BobHeight", "BobSpeed" } do
-			T.eq(type(crystal:GetAttribute(name)), "number", name)
+		T.truthy(GoldenStatue.Fire, "the burning wings are on")
+		T.truthy(gold >= 40, `the body is gold ({gold})`)
+		T.truthy(fire >= 8, `the wings, mohawk and tail burn ({fire})`)
+		T.truthy(glows >= 6, `eyes, core, nostrils and lenses glow ({glows})`)
+		local flames = 0
+		for _, d in dragon:GetDescendants() do
+			if d:IsA("ParticleEmitter") and d.Name == "FireParticles" then
+				flames += 1
+			end
 		end
-		T.truthy(crystal:GetAttribute("SpinSpeed") > 0, "it turns")
-		T.eq(crystal.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, "streams atomically")
-		T.truthy(body:FindFirstChildWhichIsA("PointLight"), "the crystal carries the plaza light")
-		for _, part in parts(crystal) do
-			local _, hi = bounds(part)
-			T.lt(hi.Y + crystal:GetAttribute("BobHeight"), 24.01, part.Name .. " inside the crystal's height budget")
-			T.falsy(part.CanCollide, part.Name .. " (spinning) does not collide")
+		T.eq(flames, 2, "real flames on both wings")
+		-- the arms are raised (the fists over the shoulders), the sign above the head
+		local headTop, signBottom = 0, math.huge
+		for _, part in parts(dragon) do
+			local name = part.Name
+			if name == "Head" or name == "HeadFill" or string.match(name, "^Horn") or string.match(name, "^Flame%d") then
+				local _, hi = bounds(part)
+				headTop = math.max(headTop, hi.Y)
+			end
 		end
+		for i = 1, 2 do
+			local fist, arm = dragon:FindFirstChild("Fist" .. i), dragon:FindFirstChild("Arm" .. i)
+			T.truthy(fist.CFrame.Position.Y > arm.CFrame.Position.Y, "fist " .. i .. " raised over its arm")
+		end
+		local words: { [string]: { string } } = {}
+		for _, part in parts(statue) do
+			if part.Name == "SignWord" then
+				local lo = bounds(part)
+				signBottom = math.min(signBottom, lo.Y)
+				local front = part:FindFirstChild("FrontText")
+				local back = part:FindFirstChild("BackText")
+				T.truthy(front and back, "the sign reads from both sides")
+				T.eq(front.LightInfluence, 0, "self-lit letters")
+				-- seen from the spawn (+Z) the left plate is at world -X
+				local x = part.CFrame.Position.X
+				words[if x < 0 then "left" else "right"] = { front.Text.Text, back.Text.Text }
+			end
+		end
+		T.truthy(signBottom > headTop, "the sign is held over the horns and the mohawk")
+		T.eq(words.left[1], "TERRA", "TERRA on the left from the spawn")
+		T.eq(words.right[1], "FORGE", "FORGE on the right from the spawn")
+		T.eq(words.right[2], "TERRA", "from behind TERRA is on the left again (the right plate's back)")
+		T.eq(words.left[2], "FORGE", "and FORGE on the right")
+		-- two poles from the fists to the sign's frame
+		local frameBottom = math.huge
+		for _, part in parts(statue) do
+			if part.Name == "SignFrame" then
+				local lo = bounds(part)
+				frameBottom = math.min(frameBottom, lo.Y)
+			end
+		end
+		local poles = 0
+		for _, part in parts(statue) do
+			if part.Name == "SignPole" then
+				poles += 1
+				local lo, hi = bounds(part)
+				T.truthy(hi.Y >= frameBottom - 0.05 and lo.Y < headTop, "a pole runs from a fist up to the sign's frame")
+				T.falsy(part.CanCollide, "the overhead sign hardware never collides")
+			end
+		end
+		T.eq(poles, 2, "two gold poles")
+		-- inside the piece's height budget; at walking height nothing outside the ring
+		local lights = 0
+		for _, part in parts(statue) do
+			local lo, hi = bounds(part)
+			T.lt(hi.Y, piece.Size.Y + 0.01, part.Name .. " inside the statue's height budget")
+			local p = part.CFrame.Position
+			local r = (Vector3.new(p.X, 0, p.Z) - piece.Center).Magnitude
+			if lo.Y < 12 then
+				T.lt(r, piece.Radius + 1.3, part.Name .. " at walking height stays inside the ring")
+			end
+			T.lt(r, 22, part.Name .. " over the plaza")
+			if part:FindFirstChildWhichIsA("PointLight") then
+				lights += 1
+			end
+		end
+		T.eq(lights, 2, "two lights: the sign's medallion and the wash on the dragon")
 	end)
 
-	T.test("plaza: crystal ring and spawn inlay stay inside their circles", function()
+	T.test("plaza: the statue's ring and the spawn inlay stay inside their circles", function()
 		local plaza = world().plaza
 		local crystal = LobbyLayout.get("FireCrystal")
 		for _, part in parts(plaza.FireCrystalRing) do
@@ -452,41 +533,36 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(lipGlows >= 8, "blue neon segments round the base tier")
-		-- the crystal rises from a round glowing molten bowl (cylinders, no star plates)
-		for _, name in { "BowlWall", "BowlGlow", "MoltenPool" } do
-			local part = ring:FindFirstChild(name)
-			T.truthy(part and part.Shape == roblox.Enum.PartType.Cylinder, name .. " is round")
+		-- the statue's pedestal inside the ring: a round dark floor with an
+		-- orange glow ring, a dark octagonal step and drum with gold trim, gold
+		-- pilasters on the drum's 8 corners, the crossed hammers front and back
+		local floor = ring:FindFirstChild("StatueFloor")
+		T.truthy(floor and floor.Shape == roblox.Enum.PartType.Cylinder, "a round floor in the ring")
+		T.truthy(ring.StatueGlow.Material == NEON and isOrange(ring.StatueGlow.Color), "a glowing orange ring round the step")
+		local pilasters, drums, emblems = 0, 0, 0
+		for _, part in parts(ring) do
+			if part.Name == "StatuePilaster" then
+				pilasters += 1
+			elseif part.Name == "StatueDrum" then
+				drums += 1
+				T.truthy(part.CanCollide, "the drum is solid")
+				T.lt(luma(part.Color), 0.42, "the drum is dark machine metal")
+			elseif part.Name == "StatueEmblem" then
+				emblems += 1
+			end
 		end
-		T.truthy(ring.BowlGlow.Material == NEON and isOrange(ring.BowlGlow.Color), "a glowing orange ring in the bowl")
-		-- the crystal (Spin, light) still rises out of it
-		local crystal = world().plaza:FindFirstChild("FireCrystal")
+		T.eq(pilasters, 8, "gold pilasters on the drum's corners")
+		T.eq(drums, 4, "an octagonal drum (four slabs)")
+		T.eq(emblems, 2, "the crossed hammers front and back")
+		-- the ring itself stays low (the statue is the focal point)
 		local ringTop = 0
 		for _, part in parts(ring) do
-			local _, hi = bounds(part)
-			ringTop = math.max(ringTop, hi.Y)
+			if string.sub(part.Name, 1, 4) == "Ring" or part.Name == "LipGlow" or part.Name == "StatusLight" then
+				local _, hi = bounds(part)
+				ringTop = math.max(ringTop, hi.Y)
+			end
 		end
-		local crystalTop = 0
-		for _, part in parts(crystal) do
-			local _, hi = bounds(part)
-			crystalTop = math.max(crystalTop, hi.Y)
-		end
-		T.lt(ringTop, 2.4, "a low ring (the crystal is the focal point)")
-		T.truthy(crystalTop > ringTop + 5.5, "the crystal towers over its housing")
-		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 10.6, "the crystal stays under the eye line (the forge door shows over it)")
-		-- but THE GREAT FORGE board stays in view over it from the spawn camera (eye y 9, z 46)
-		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
-		local forge = LobbyLayout.get("GreatForge")
-		local tip = crystalTop + crystal:GetAttribute("BobHeight")
-		local forgeFrontZ = forge.Center.Z + forge.Size.Z / 2 - 11 -- the nave front (local z -9) is ~11 behind the piece front
-		local sightY = 9 + (tip - 9) * (46 - forgeFrontZ) / 46
-		T.lt(sightY, GreatForge.SignY - GreatForge.SignHeight / 2, "the board shows above the crystal from the spawn")
-		-- a wide crown of shards (about a third of the ring), not a narrow spike
-		local lo, hi = math.huge, -math.huge
-		for _, part in parts(crystal) do
-			local a, b = bounds(part)
-			lo, hi = math.min(lo, a.X), math.max(hi, b.X)
-		end
-		T.truthy(hi - lo >= 6.5, "a wide crystal crown")
+		T.lt(ringTop, 2.4, "a low ring")
 	end)
 
 	T.test("plaza v2: neon walkways with orange edge strips and a chevron to the forge", function()

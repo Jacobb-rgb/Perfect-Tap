@@ -29,8 +29,9 @@
 	                           "Locked" for a colour the perk hasn't unlocked).
 	The Plot Glow (World/PlotGlow) follows the save: built into the plot when
 	it is assigned and whenever the pick changes, gone when the plot is
-	freed. THE GREAT FORGE plaza's fire crystal gets a "Star Forge" prompt
-	(CrystalPrompt, E / gamepad Y) that opens the window (OpenUI "Rebirth").
+	freed. The plaza's golden dragon statue (where the fire crystal stood)
+	gets a "Star Forge" prompt (CrystalPrompt, E / gamepad Y) at its
+	pedestal's front that opens the window (OpenUI "Rebirth").
 	  { Action = "Weapon", Id } buys a STAR blaster with Forge Stars
 	                           (StarBlasterData.quote / buy: "BadWeapon" |
 	                           "Owned" | "Locked" | "NoStars") and equips it.
@@ -87,7 +88,13 @@ local RebirthService = {}
 
 RebirthService.StarsAttribute = "ForgeStars"
 RebirthService.CrystalPrompt = "StarForgePrompt"
-RebirthService.CrystalRange = 16 -- studs from the crystal's axis (the ring is 10.2 out, the walk-in base 12.4)
+-- (2026-10-25: the golden dragon statue stands where the fire crystal was:
+-- the prompt moved from the axis, inside its pedestal now, to the pedestal's
+-- front facing the spawn, Plaza/GoldenStatue's drum apothem 5.0 + 0.6)
+RebirthService.CrystalFront = 5.6
+-- studs from the prompt (the ring is 10.2 out, the walk-in base 12.4: the
+-- whole ring reaches it, behind the statue too, the spawn pad 20 away doesn't)
+RebirthService.CrystalRange = 18
 RebirthService.MomentSeconds = 3.2 -- the client's flash + banner, then the character goes home
 
 local MAX_PAYLOAD = 4
@@ -158,15 +165,16 @@ end
 ---------------------------------------------------------------- the crystal prompt
 
 --[[
-	The "Star Forge" prompt at THE GREAT FORGE plaza's fire crystal: an
-	invisible anchored part on the crystal's axis at chest height (the
-	crystal itself spins on the clients), under `parent`. Returns the prompt.
+	The "Star Forge" prompt at the plaza's golden dragon statue (where the
+	fire crystal stood): an invisible anchored part at chest height in front
+	of the pedestal (CrystalFront toward +Z, the statue's front), under
+	`parent`. Returns the prompt.
 ]]
 function RebirthService.setupCrystal(parent: Instance, center: Vector3, floorY: number): ProximityPrompt
 	local anchor = Instance.new("Part")
 	anchor.Name = RebirthService.CrystalPrompt
 	anchor.Size = Vector3.new(1, 1, 1)
-	anchor.CFrame = CFrame.new(center.X, floorY + 3, center.Z)
+	anchor.CFrame = CFrame.new(center.X, floorY + 3, center.Z + RebirthService.CrystalFront)
 	anchor.Transparency = 1
 	anchor.Anchored = true
 	anchor.CanCollide = false
@@ -509,7 +517,7 @@ function RebirthService.init()
 end
 
 function RebirthService.start()
-	-- the "Star Forge" prompt at the plaza's fire crystal (the lobby is built by now)
+	-- the "Star Forge" prompt at the plaza's golden dragon statue (the lobby is built by now)
 	local map = Workspace:FindFirstChild("Map")
 	local ring = map and map:FindFirstChild("FireCrystalRing", true)
 	local ok, piece = pcall(LobbyLayout.get, "FireCrystal")
