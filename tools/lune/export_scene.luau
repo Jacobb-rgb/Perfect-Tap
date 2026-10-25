@@ -944,13 +944,25 @@ end
 
 ---------------------------------------------------------------- scene "yard_ingame" (plot style A)
 -- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
--- as the server shows it (the Foundry that FoundryService built here went with
--- the Foundry, owner 2026-10-24) -> build/preview/yard_ingame.json. Shots:
--- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
--- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
+-- as the server shows it for owned plots: every yard's own Cleaning Station where
+-- the Foundry stood (CleaningService, owner 2026-10-25) -> build/preview/yard_ingame.json.
+-- Shots: tools/preview/plot_style_a_shots.json (the in-game pictures of the plot
+-- pieces in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
 if sceneName == "world" and process.args[2] == "yard_ingame" then
 	local YardPreview = require("./lib/yard_preview")
 	YardPreview.build(Loader, workspace)
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+	local spot = BaseLayout.CleaningStation
+	for _, plot in WorldLayout.Plots do
+		local station = MachineBuilder.build("CleaningStation", 0, 0)
+		station:PivotTo(
+			WorldLayout.plotCFrame(plot)
+				* Loader.CFrame.new(spot.Center.X, 0, spot.Center.Z)
+				* Loader.CFrame.Angles(0, -spot.R * math.pi / 2, 0)
+		)
+		station.Parent = workspace
+	end
 	local ingameScene = Export.collect(workspace)
 	ingameScene.presets = scene.presets
 	fs.writeFile(root .. "/build/preview/yard_ingame.json", serde.encode("json", ingameScene))
