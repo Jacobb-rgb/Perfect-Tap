@@ -78,6 +78,7 @@ local GOLD_LIGHT = rgb(255, 226, 128)
 local GOLD_PALE = rgb(255, 238, 172)
 local AMBER = rgb(255, 128, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
 local LENS = rgb(60, 170, 255)
+local FIRE_GLOW = rgb(255, 104, 18) -- the burning wings' neon (deep: stays orange under bloom)
 -- the sign
 local BOARD = rgb(40, 30, 58) -- the loading screen's dark plum
 local SILVER = rgb(232, 234, 244)
@@ -333,7 +334,13 @@ local function dragon(parent: Instance, feet: CFrame): Model
 			if glow then
 				d.Color = glow
 				d.Material = NEON
-			elseif not (KEEP[kind] or (GoldenStatue.Fire and FIRE[kind])) then
+			elseif GoldenStatue.Fire and FIRE[kind] then
+				-- (the pet's white-hot and yellow neon, statue-sized, bloomed into a
+				-- white glare over the plaza: its glowing fire turns deep orange)
+				if d.Material == NEON then
+					d.Color = FIRE_GLOW
+				end
+			elseif not KEEP[kind] then
 				d.Color = toneOf(d.Name)
 				d.Material = METAL
 			end
