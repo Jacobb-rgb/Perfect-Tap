@@ -24,9 +24,10 @@
 	  Robux: startFor, in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator, the machine
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
-	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
-	  the podiums (unless Podium Keeper), the train's cargo, the machines' queues (RebirthService also takes your loose and
-	  carried items out of the world). Dusty relics are artifacts, never
+	  capacity and speed, and every ore you own: the Ore Pen, the backpack's
+	  contents, the podiums (unless Podium Keeper), the train's cargo, the
+	  machines' queues (RebirthService also takes your loose items out of
+	  the world). Dusty relics are artifacts, never
 	  ore: the ones in those lists wait in the pen (RebirthService hands them
 	  to the relic keeper, which adds them to the collection). The enchants
 	  stay slotted, the paid ones (Enchants.Passes) moved first into the
@@ -34,7 +35,8 @@
 	- Keeps: the placed factory (every machine and belt where it stands, the
 	  droppers and Money Lasers too: owner 2026-10-23, "droppers stay after a
 	  rebirth"), the machines in your inventory, machine slots, the pen size and automation,
-	  the other gear lines, golems, enchants, artifacts, the codex,
+	  the gear lines, the backpacks you own and wear (owner 2026-10-25: "batohy
+	  zůstanou"), golems, enchants, artifacts, the codex,
 	  hoverboards, shards, every Robux item, the unspent Robux-bought coins
 	  (PaidCoins, below), stats and the leaderboard totals.
 	- Robux blaster levels come back (owner 2026-10-20, "don't lose what you
@@ -78,6 +80,7 @@
 
 local BlasterData = require(script.Parent.BlasterData)
 local EnchantConfig = require(script.Parent.EnchantConfig)
+local ItemData = require(script.Parent.ItemData)
 
 export type Perk = {
 	Id: string,
@@ -474,6 +477,17 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 		end
 	end
 	keepRelics(data.Storage)
+	-- the backpack keeps counts by storage key: its relics wait in the pen too
+	if type(data.BackpackItems) == "table" then
+		for key, n in data.BackpackItems do
+			local item = if type(key) == "string" then ItemData.parseKey(key) else nil
+			if item and item.K == "Relic" and type(n) == "number" and n == n and n >= 1 then
+				for _ = 1, math.min(math.floor(n), 1000) do
+					table.insert(relics, { K = "Relic", O = item.O, G = item.G, R = item.R })
+				end
+			end
+		end
+	end
 	if type(data.Train) == "table" then
 		keepRelics(data.Train.Cargo)
 		keepRelics(data.Train.TripCargo)
@@ -518,9 +532,9 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	train.TripCargo = {}
 	train.TripDepartAt = 0
 	train.TripArriveAt = 0
-	record(data, "Gear").Backpack = 0
-	-- every ore you own (the factory itself stays where it stands)
+	-- every ore you own (the factory itself stays where it stands; the packs stay too)
 	data.Storage = relics
+	data.BackpackItems = {}
 	if RebirthConfig.levelOf(perks, "PodiumKeeper") < 1 and type(data.Podiums) == "table" then
 		for i, key in data.Podiums do
 			if type(key) == "string" then

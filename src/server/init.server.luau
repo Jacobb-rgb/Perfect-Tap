@@ -28,7 +28,8 @@ local ORDER = {
 	"ToolService",
 	"MovementService", -- the movement check: samples characters, trustedPosition for range checks (logging only)
 	"MiningService",
-	"CarryService",
+	"CarryService", -- the backpack's contents and the auto-pickup (owner 2026-10-24)
+	"BackpackService", -- the packs you own / wear and the BACKPACKS shop counter
 	"PlotService",
 	"MachineService",
 	"IntakeService",

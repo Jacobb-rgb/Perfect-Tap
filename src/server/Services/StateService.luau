@@ -44,8 +44,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BackpackData = require(Shared.Config.BackpackData)
 local BlasterData = require(Shared.Config.BlasterData)
-local GearConfig = require(Shared.Config.GearConfig)
 local ItemData = require(Shared.Config.ItemData)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -325,6 +325,43 @@ local function storageSummary(storage: { ItemData.Desc }): { [string]: number }
 	return summary
 end
 
+--[[
+	State.Backpacks: { Equipped = the worn pack, Owned = { ids } (BackpackData
+	order, then a newer build's), Count = items inside, Capacity, Items = the
+	backpack's contents ({ [storage key] = count }) }. (Built here from the save:
+	BackpackService.summary says the same; StateService requires no service above it.)
+]]
+local function backpacksOf(player: Player, data: { [string]: any }): { [string]: any }
+	local packs = data.Backpacks
+	local set = if type(packs) == "table" and type(packs.Owned) == "table" then packs.Owned else {}
+	local owned: { string } = {}
+	for _, id in BackpackData.Ids do
+		if id == BackpackData.StarterId or set[id] == true then
+			table.insert(owned, id)
+		end
+	end
+	for id, on in set do
+		if on == true and type(id) == "string" and not BackpackData.ById[id] then
+			table.insert(owned, id)
+		end
+	end
+	local items = if type(data.BackpackItems) == "table" then data.BackpackItems else {}
+	local count = 0
+	for _, n in items do
+		if type(n) == "number" and n == n and n > 0 then
+			count += math.floor(n)
+		end
+	end
+	local equipped = if type(packs) == "table" and type(packs.Equipped) == "string" then packs.Equipped else BackpackData.StarterId
+	return {
+		Equipped = equipped,
+		Owned = owned,
+		Count = count,
+		Capacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
+		Items = items,
+	}
+end
+
 function StateService.snapshot(player: Player): { [string]: any }?
 	local data = DataService.get(player)
 	if not data then
@@ -336,10 +373,10 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		BlasterLevel = BlasterData.get(data.BlasterLevel).Level,
 		BlasterOre = data.BlasterOre,
 		Podiums = data.Podiums,
-		-- deprecated mirror of the Backpack level (old CarryLevel = Backpack + 1)
-		CarryLevel = GearConfig.level(data.Gear, "Backpack") + 1,
-		-- the same number CarryService uses (Bonuses: Backpack, later providers, StrongBack)
+		-- the same number CarryService uses (Bonuses: the worn pack, later providers, StrongBack)
 		CarryCapacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
+		-- the backpack (owner 2026-10-24; BackpackService / CarryService, the shop window reads it)
+		Backpacks = backpacksOf(player, data),
 		Upgrades = data.Upgrades,
 		MachineInventory = data.MachineInventory,
 		PlacedCount = #data.PlacedMachines,

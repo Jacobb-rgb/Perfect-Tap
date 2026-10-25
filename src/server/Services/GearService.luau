@@ -156,15 +156,12 @@ function GearService.boughtText(lineId: string, level: number, strongBack: boole
 		return `{name}: walk speed {main(GearConfig.value("Boots", level))}!`
 	elseif lineId == "HelmetLamp" then
 		return `{name}: your lamp lights {main(GearConfig.value("HelmetLamp", level))} studs in dark caves!`
-	elseif lineId == "Backpack" then
-		local gear = { Backpack = level }
-		return `{name}: you can carry {main(GearConfig.carryCapacity(gear, strongBack == true))} items!`
 	elseif lineId == "Gloves" then
 		local reach = main(GearConfig.value("Gloves", level))
 		local throw = extra(GearConfig.value("Gloves", level, "ThrowMult"))
 		return `{name}: grab from {reach} studs, throw x{throw}!`
 	elseif lineId == "Magnet" then
-		return `{name}: mined ore flies into your hands from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
+		return `{name}: mined ore flies into your backpack from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
 	end
 	return `{name} bought!`
 end
@@ -178,8 +175,6 @@ local function lineValues(lineId: string, stats: Bonuses.Stats, player: Player):
 	elseif lineId == "HelmetLamp" then
 		local range, brightness = Bonuses.lamp(stats)
 		return range, brightness
-	elseif lineId == "Backpack" then
-		return Bonuses.carryCapacity(stats, player), nil
 	elseif lineId == "Gloves" then
 		return Bonuses.pickupRange(stats), Bonuses.throwMult(stats)
 	elseif lineId == "Magnet" then

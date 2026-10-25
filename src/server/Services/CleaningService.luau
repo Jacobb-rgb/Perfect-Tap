@@ -2,18 +2,24 @@
 	CleaningService: the Cleaning Station (signature minigame), server side.
 
 	Flow:
-	1. Raw ore gets onto the station: the owner uses the station prompt while
-	   carrying raw ore, or drops/throws a raw chunk into the vise.
+	1. Raw ore gets onto the station: the owner uses the station prompt and
+	   the vise takes a dirty ore (or a dusty relic) out of their backpack
+	   (CarryService; owner 2026-10-24: everything goes into the backpack),
+	   or a loose raw chunk of theirs lands in the vise (the vise scan).
 	2. The server starts a session with a random seed and tells the client
 	   (CleanBegin). The client builds the same dirt (CleaningPatterns) from
 	   the seed and the player sprays it off.
 	3. The client sends its recorded spray (CleanSubmit). The server replays
 	   it with the shared SprayScoring code (it never trusts a client grade),
 	   sanity-checks the timing, lets CleaningGuard cap a scripted Flawless,
-	   and turns the raw chunk into a clean ore of that grade on the
-	   station's output tray (a dusty relic goes into the collection).
+	   and turns the raw chunk into a clean ore of that grade, straight into
+	   the backpack (owner 2026-10-24: not back onto the station); with no
+	   room there it goes into the Ore Pen (ItemService.storeDesc), and only
+	   when that fails too onto the station's output tray (a dusty relic
+	   goes into the collection).
 	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
-	gives it back.
+	puts it back into the backpack (past its capacity if need be: it was
+	yours a moment ago).
 	The station has no canAccept, so IntakeService leaves it alone: its own
 	vise scan below mounts dropped raw ore. Moving the station carries the
 	vise ore along; packing it up (or leaving) stashes it.
@@ -213,15 +219,24 @@ local function onPrompt(player: Player, machine: MachineService.PlacedMachine)
 		return
 	end
 	if not stationItem(machine) then
-		-- only a chunk really in the hands (CarryService.takeTop skips others too: #11)
-		local record = CarryService.takeTop(player, function(r)
-			return cleanable(r) and r.State == "Carried"
-		end)
-		if not record then
-			Net.fire("Notify", player, { Text = "Bring a raw ore chunk or a dusty relic to clean it.", Kind = "Info" })
+		-- a dirty ore or a dusty relic out of the backpack (no yield until it is in the vise)
+		local orePoint = MachineService.point(machine, "OrePoint")
+		local desc = if orePoint
+			then CarryService.take(player, function(d: ItemService.Desc): boolean
+				return d.K == "Raw" or d.K == "Relic"
+			end, 1)[1]
+			else nil
+		if not desc or not orePoint then
+			Net.fire("Notify", player, { Text = "Bring dirty ore or a dusty relic in your backpack to clean it.", Kind = "Info" })
 			return
 		end
-		if not mount(machine, record) then
+		local record = ItemService.spawnDesc(desc, player.UserId, orePoint, nil, true)
+		if not record or not mount(machine, record) then
+			-- never lost: back into the backpack
+			if record then
+				ItemService.destroy(record)
+			end
+			CarryService.add(player, desc, 1, true)
 			return
 		end
 	end
@@ -237,9 +252,8 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 		return
 	end
 	machine.State.Item = nil
-	local output = MachineService.point(machine, "Output") or record.Model:GetPivot()
-	ItemService.release(record, output)
-	CarryService.pickup(player, record)
+	-- back into the backpack (past its capacity if need be: never lost)
+	CarryService.add(player, ItemService.absorb(record), 1, true)
 	updatePrompts(machine)
 end
 
@@ -335,11 +349,21 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		return
 	end
 
-	-- success: raw chunk becomes clean ore on the output tray
+	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen,
+	-- else the output tray)
 	machine.State.Item = nil
 	ItemService.destroy(record)
-	local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
-	local clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
+	local cleanDesc: ItemService.Desc = { K = "Clean", O = session.OreId, G = result.Grade }
+	local clean: ItemService.ItemRecord? = nil
+	local into = "Backpack"
+	if CarryService.add(player, cleanDesc) == 0 then
+		local stored = ItemService.storeDesc(player, cleanDesc, "Your backpack is full")
+		into = if stored == "Stored" then "Pen" elseif stored == "Sold" then "Sold" else "Tray"
+		if stored == "Lost" then
+			local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
+			clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
+		end
+	end
 	updatePrompts(machine)
 
 	local data = DataService.get(player)
@@ -365,6 +389,7 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,
+		Into = into, -- "Backpack" | "Pen" | "Sold" (the pen at the DataStore cap) | "Tray": where the clean ore went
 		New = isNew,
 	})
 	for _, callback in cleanedCallbacks do

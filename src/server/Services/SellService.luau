@@ -4,8 +4,9 @@
 
 	- SellCounter (tag, a BasePart): a "Sell Ore" prompt opens the Sell view
 	  (OpenUI "Sell" { Hands, Counter }). The view lists the Ore Pen
-	  (data.Storage, from the State snapshot) and what you carry (Hands,
-	  added to every State snapshot by this service).
+	  (data.Storage, from the State snapshot) and your backpack ("Hands":
+	  the protocol kept its name; CarryService's data.BackpackItems, added to
+	  every State snapshot by this service).
 	- SellAction (Net, rate limited), only within SELL_RANGE of a counter:
 	    ("Sell", { Key, Count, From = "Pen" | "Hands" })
 	    ("SellAll", { Filter = "Dirty" | "AllButBest", From = "Pen" | "Hands" | nil })
@@ -16,7 +17,7 @@
 	  dropped in are sold (an IntakeService zone). The item's OWNER is paid,
 	  never whoever threw it, so dumping someone else's ore gains nothing.
 	- Podium ore (data.Podiums) is never sold here: only data.Storage and
-	  carried items are ever touched.
+	  the backpack are ever touched.
 
 	Price = ItemData.value (Raw = Dirty Ore pays the raw price; its name is
 	revealed in the toast after the sale), times the player's sell bonus
@@ -62,7 +63,7 @@ export type From = "Pen" | "Hands"
 export type SoldCallback = (Player, Desc, number) -> ...any
 
 -- one item picked for a sale (from the pen or the hands)
-type Pick = { From: From, Desc: Desc, Entry: Desc?, Record: ItemRecord? }
+type Pick = { From: From, Desc: Desc, Entry: Desc?, Key: string? }
 
 -- studs from a SellCounter's surface the server accepts (the prompt itself reaches less)
 SellService.Range = 20
@@ -139,14 +140,11 @@ local function rarityOrder(oreId: string): number
 	return if info then info.Order else 0
 end
 
--- Storage key -> count of the items a player carries (their own only).
+-- Storage key -> count of the items in the player's backpack (the keys this build reads).
 function SellService.handsSummary(player: Player): { [string]: number }
 	local summary: { [string]: number } = {}
-	for _, record in CarryService.list(player) do
-		if record.Owner == player.UserId and record.State ~= "Consumed" then
-			local key = ItemData.storageKey(ItemService.descOf(record))
-			summary[key] = (summary[key] or 0) + 1
-		end
+	for _, stack in CarryService.stacks(player) do
+		summary[stack.Key] = stack.Count
 	end
 	return summary
 end
@@ -324,35 +322,39 @@ local function takePicks(player: Player, data: { [string]: any }, picks: { Pick 
 			end
 		end
 	end
+	-- backpack items by key (the backpack keeps counts)
+	local fromBackpack: { [string]: number } = {}
 	for _, pick in picks do
-		local wanted = pick.Record
-		if pick.From == "Hands" and wanted then
-			local record = CarryService.takeTop(player, function(candidate: ItemRecord): boolean
-				return candidate == wanted
-			end)
-			if record and record.State ~= "Consumed" then
-				local desc = ItemService.absorb(record)
-				local price = SellService.priceOf(desc)
-				if price > 0 then
-					table.insert(taken, desc)
-					total += price
-				end
+		local key = pick.Key
+		if pick.From == "Hands" and key then
+			fromBackpack[key] = (fromBackpack[key] or 0) + 1
+		end
+	end
+	for key, n in fromBackpack do
+		for _, desc in
+			CarryService.take(player, function(d: Desc): boolean
+				return ItemData.storageKey(d) == key
+			end, n)
+		do
+			local price = SellService.priceOf(desc)
+			if price > 0 then
+				table.insert(taken, desc)
+				total += price
 			end
 		end
 	end
 	return taken, total
 end
 
--- Everything the player could sell right now: carried items (top of the
--- stack first), then pen entries. Junk entries are never picked.
+-- Everything the player could sell right now: the backpack's items (one pick
+-- per item, stack by stack), then pen entries. Junk entries are never picked.
 local function candidates(player: Player, data: { [string]: any }): { Pick }
 	local list: { Pick } = {}
-	local carried = CarryService.list(player)
-	for i = #carried, 1, -1 do
-		local record = carried[i]
-		local desc = ItemService.descOf(record)
-		if record.Owner == player.UserId and record.State ~= "Consumed" and SellService.priceOf(desc) > 0 then
-			table.insert(list, { From = "Hands", Desc = desc, Record = record })
+	for _, stack in CarryService.stacks(player) do
+		if SellService.priceOf(stack.Desc) > 0 then
+			for _ = 1, stack.Count do
+				table.insert(list, { From = "Hands", Desc = stack.Desc, Key = stack.Key })
+			end
 		end
 	end
 	if type(data.Storage) == "table" then
@@ -421,7 +423,7 @@ local function sellKey(player: Player, data: { [string]: any }, counter: BasePar
 		end
 	end
 	if #picks == 0 then
-		deny(player, if from == "Pen" then "That's not in your Ore Pen anymore." else "You're not carrying that anymore.")
+		deny(player, if from == "Pen" then "That's not in your Ore Pen anymore." else "That's not in your backpack anymore.")
 		return
 	end
 	local taken, total = takePicks(player, data, picks)

@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 8, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry)
+	Version = 9, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -61,6 +61,12 @@ local DataTemplate = {
 	-- the Ore Pen on the base: every stored item, one list
 	-- { { K = kind, O = oreId, G = grade?, R = recipe? } }
 	Storage = {},
+	-- the backpack (owner 2026-10-24, CarryService): what you picked up, by storage key
+	-- (ItemData.storageKey "K|O|G|R") -> whole count; at most the equipped pack's capacity
+	BackpackItems = {},
+	-- the packs (BackpackService, BackpackData ids): the one you wear and the ones you own;
+	-- they stay through a rebirth (owner 2026-10-25), their ore doesn't
+	Backpacks = { Equipped = "RookiePack", Owned = { RookiePack = true } },
 	-- the pen's sorting billboard (Upgrades.PenAutomation >= 1) sends unkept
 	-- arrivals out of the PEN chute while this is on (PenAction "AutoSort";
 	-- readers treat anything but false as on)
@@ -85,7 +91,7 @@ local DataTemplate = {
 	-- steps 6-7 (rules in Shared/Config: GearConfig, EnchantConfig, BoostConfig,
 	-- GolemConfig, WheelConfig, ArtifactConfig); Migrations keeps them sane
 	-- gear levels 0..GearConfig.MaxLevel, bought at the Gear shop
-	Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 },
+	Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 0 }, -- (the Ore Backpack line became data.Backpacks: Version 9)
 	-- blaster enchants: Owned = { [enchantId] = tier }, Slots = exactly
 	-- EnchantConfig.MaxSlots strings (an owned enchant id or "" = empty)
 	Enchants = { Owned = {}, Slots = { "", "", "", "" } },

@@ -515,28 +515,28 @@ function PodiumService.placeFromHands(player: Player, slot: number): (boolean, R
 		toast(player, "That podium already has an ore. Remove it first.")
 		return false, "Taken"
 	end
-	local best: ItemRecord? = nil
+	-- the backpack's best cleaned ore (the highest podium income)
+	local bestKey: string? = nil
 	local bestIncome = -1
-	for _, record in CarryService.list(player) do
-		if record.State == "Carried" and EconomyConfig.Podiums.Kinds[record.Kind] then
-			local income = ItemData.income(ItemService.descOf(record))
+	for _, stack in CarryService.stacks(player) do
+		if EconomyConfig.Podiums.Kinds[stack.Desc.K] then
+			local income = ItemData.income(stack.Desc)
 			if income > bestIncome then
-				best, bestIncome = record, income
+				bestKey, bestIncome = stack.Key, income
 			end
 		end
 	end
-	local chosen = best
+	local chosen = bestKey
 	if not chosen then
 		return false, "NothingCarried"
 	end
-	local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
-		return r == chosen
-	end)
-	if not record then
+	-- no yield between taking it out of the backpack and putting it on the podium
+	local desc = CarryService.take(player, function(d: ItemData.Desc): boolean
+		return ItemData.storageKey(d) == chosen
+	end, 1)[1]
+	if not desc then
 		return false, "NothingCarried"
 	end
-	-- no yield between taking it off the stack and putting it on the podium
-	local desc = ItemService.absorb(record)
 	list[slot] = ItemData.storageKey(desc)
 	DataService.changed(player)
 	local plotId = PlotService.plotOf(player)

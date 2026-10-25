@@ -1,5 +1,5 @@
 --[[
-	Gear (steps 6-7): five gear lines bought with coins at the Gear shop
+	Gear (steps 6-7): four gear lines bought with coins at the Gear shop
 	(the SHOP stall in town, hook ShopCounter). Each line has levels 0..5
 	(0 = what everyone starts with) and an effect value per level; prices
 	grow about x6 per level (the owner wants exponential costs).
@@ -7,9 +7,9 @@
 	  Boots       walk speed (studs/s)              16 -> 18, 20, 22, 24, 26
 	  HelmetLamp  head lamp range (studs) for dark   0 -> 18, 26, 34, 44, 56
 	              caves, plus its brightness          0 -> 1.2 ... 2.6
-	  Backpack    carry capacity (items in hands)     1 -> 2, 3, 5, 8, 12
-	              (replaces ToolData's carry levels: the old CarryLevel N is
-	              Backpack level N - 1, Migrations folds it in)
+	  (The Ore Backpack line left on 2026-10-24: the backpacks are their own
+	  shop now, BackpackData / BackpackService; Migrations turned its level
+	  into a pack, Version 9.)
 	  Gloves      pickup range (studs)               11 -> 13, 15, 17, 20, 24
 	              and throw power (x)               1.0 -> 1.08 ... 1.4
 	  Magnet      radius (studs) in which your own    0 -> 14, 18, 24, 30, 38
@@ -25,9 +25,9 @@
 	(Boots I, 500 coins, gives the 18 everyone walked at before; saves from
 	before the Gear shop get Boots I for free: Migrations). CarryService
 	is the ONLY writer of Humanoid.WalkSpeed: Bonuses.walkSpeed (Boots, Swift,
-	WalkSpeed golems) minus the carry slowdown, CarrySlowPerItem per carried
-	item but at most CarrySlowMax, never below MinWalkSpeed - so a big
-	backpack never cancels the boots. Anything that changes walk speed calls
+	WalkSpeed golems); the backpack never slows you down (nothing is carried
+	in the hands any more, owner 2026-10-24; CarrySlowPerItem / CarrySlowMax
+	stay for HoverboardData.walkSpeed's count of 0). Anything that changes walk speed calls
 	CarryService.refreshWalkSpeed(player) (a data change does it too).
 
 	Head lamp budget (mobile, dark caves, 8 players): LampBudget. Only the
@@ -37,7 +37,7 @@
 	built on each client from State.Bonuses (own) and the player attribute
 	LampAttribute (others: the lamp level, set by the gear package).
 
-	Saved as data.Gear = { Boots, HelmetLamp, Backpack, Gloves, Magnet }
+	Saved as data.Gear = { Boots, HelmetLamp, Gloves, Magnet }
 	(whole levels 0..MaxLevel; Migrations keeps higher levels and other
 	lines a newer server may sell, every reader here clamps to MaxLevel). GearAction ("Buy", { Line, Level }) buys
 	exactly the next level: Level must be the one the card shows (quote,
@@ -61,7 +61,7 @@ export type GearLine = {
 	with EVERY bonus counted (Magnetism enchant, WalkSpeed golems, Swift,
 	Strong Back...), as the server computes it (GearService.preview): the
 	Gear shop's cards show these instead of the bare gear table. Main value:
-	walk speed (Boots), lamp range (HelmetLamp), items (Backpack), pickup
+	walk speed (Boots), lamp range (HelmetLamp), pickup
 	range (Gloves), magnet radius (Magnet); Extra: lamp brightness, throw
 	power. Next / ExtraNext are nil at the top level. A card uses the
 	numbers only while its level is `Level`.
@@ -125,16 +125,6 @@ GearConfig.Lines = {
 		Prices = { 400, 2400, 15000, 90000, 540000 },
 		Unit = "studs of light",
 		Icon = "Helmet",
-	},
-	{
-		Id = "Backpack",
-		Name = "Ore Backpack",
-		Description = "Carry more ore chunks at once.",
-		Primary = "CarryCapacity",
-		Stats = { CarryCapacity = { 1, 2, 3, 5, 8, 12 } },
-		Prices = { 800, 5000, 30000, 180000, 1100000 },
-		Unit = "items",
-		Icon = "Backpack",
 	},
 	{
 		Id = "Gloves",
@@ -222,7 +212,7 @@ function GearConfig.quote(gear: any, lineId: any, level: any): (number?, string?
 end
 
 -- What a data.Gear record gives (Bonuses stats, see src/server/Bonuses.luau).
--- Absolute values: WalkSpeed, PickupRange, CarryCapacity, MagnetRadius,
+-- Absolute values: WalkSpeed, PickupRange, MagnetRadius,
 -- LampRange and LampBrightness include the level-0 base; ThrowMult is a
 -- multiplier. A missing record counts as all levels 0.
 function GearConfig.stats(gear: any): { [string]: number }
@@ -234,12 +224,6 @@ function GearConfig.stats(gear: any): { [string]: number }
 		end
 	end
 	return out
-end
-
--- Items you can carry with this gear (the StrongBack perk doubles it).
-function GearConfig.carryCapacity(gear: any, hasStrongBack: boolean): number
-	local base = GearConfig.value("Backpack", GearConfig.level(gear, "Backpack"))
-	return base * (if hasStrongBack then 2 else 1)
 end
 
 return GearConfig

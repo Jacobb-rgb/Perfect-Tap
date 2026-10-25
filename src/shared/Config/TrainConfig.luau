@@ -1,8 +1,8 @@
 --[[
 	Per-player ore trains (design v2, docs/plans/STEP2_PLAN.md).
 
-	You throw ore into the Mine Station hopper (quarry floor) or a Mine Lift
-	(Ember Caves, Deep Hollow); it becomes your train's cargo. The train
+	You load the ore from your backpack at the Mine Station (one press, "Load
+	Train"; owner 2026-10-24) or a Mine Lift; it becomes your train's cargo. The train
 	leaves when it is full, when you press Send, or AutoDepartSeconds after
 	the last load. It rolls out of the station into a tunnel in the quarry
 	wall, comes out of a tunnel on the south coast, runs north along the
@@ -20,14 +20,20 @@ export type Level = { Value: number, Price: number }
 
 local TrainConfig = {}
 
--- Cargo slots per capacity level (index 1 = level 0, the starting train).
+-- Cargo slots per capacity level (index 1 = level 0, the starting train). The train grows
+-- with the backpacks (owner 2026-10-24: "zvětši kapacitu vlaku"; packs 5..1000, BackpackData):
+-- each level carries about a pack's worth more (balance_sim).
 TrainConfig.Capacity = {
 	{ Value = 8, Price = 0 },
-	{ Value = 12, Price = 2000 },
-	{ Value = 18, Price = 15000 },
-	{ Value = 26, Price = 120000 },
-	{ Value = 36, Price = 900000 },
-	{ Value = 50, Price = 6e6 },
+	{ Value = 15, Price = 2000 },
+	{ Value = 30, Price = 15000 },
+	{ Value = 60, Price = 120000 },
+	{ Value = 100, Price = 900000 },
+	{ Value = 175, Price = 6e6 },
+	{ Value = 275, Price = 60e6 },
+	{ Value = 400, Price = 900e6 },
+	{ Value = 600, Price = 12e9 },
+	{ Value = 1000, Price = 150e9 },
 } :: { Level }
 
 -- Trip seconds (station -> your stop) per speed level (index 1 = level 0).
@@ -47,7 +53,7 @@ TrainConfig.AutoDepartSeconds = 25 -- after the last load, a train with cargo le
 TrainConfig.MinTripSeconds = 5 -- no upgrade makes a trip shorter than this
 TrainConfig.ReturnSeconds = 6 -- the empty train rolls back before it can load again (the station shows "returning")
 TrainConfig.DeliveryRetry = 3 -- seconds between tries when the pen is full
-TrainConfig.MaxCargoSaved = 80 -- hard cap per save (Cargo + TripCargo), DataStore safety
+TrainConfig.MaxCargoSaved = 1600 -- hard cap per save (Cargo + TripCargo), DataStore safety (the top train with Express: 1500)
 TrainConfig.MaxTripSpan = 600 -- clients refuse a TrainTrip with ArriveAt - DepartAt above this (the server never sends one)
 
 -- The prompts on every Mine Station / Mine Lift PromptPoint (shared contract,
