@@ -4,8 +4,10 @@
 	Flamewing golem of the Dragonforge set): the real Flamewing (GolemBuilder)
 	built statue-sized and cast in gold, its stubby arms raised in a cheer,
 	each fist gripping a gold pole that lifts the big TERRA FORGE sign over
-	its horns and flame mohawk. Only the eyes, the core, the nostrils and the
-	goggle lenses still glow.
+	its horns and flame mohawk. Its wings, the mohawk and the tail flame keep
+	burning in the Flamewing's fire colors with real flames and embers on
+	them (owner's pick B, 2026-10-25: "the golden dragon with burning
+	wings"); the eyes, the core, the nostrils and the goggle lenses glow.
 
 	It stands on an octagonal pedestal inside the plaza's mechanical ring
 	(FireCrystal keeps the ring: the wide base tier and the armor tier): a
@@ -22,8 +24,12 @@
 	colors), a thick gold frame, an orange glow line inside it, warm bulbs
 	round it, readable from both sides.
 
-	build(ring, parent, center, floorY, rng): the pedestal into `ring` (the
-	FireCrystalRing model), the dragon and the sign into `parent`.
+	build(ring, parent, center, floorY): the pedestal into `ring` (the
+	FireCrystalRing model), the dragon and the sign into the Model
+	"GoldenStatue" under `parent` (tagged NoStuds: polished gold and fire,
+	no classic studs). About 330 parts, 2 PointLights, 4 emitters. The
+	statue faces +Z (the spawn); the Star Forge prompt stands at the
+	pedestal's front (RebirthService.CrystalFront).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,7 +38,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemConfig = require(Shared.Config.GolemConfig)
-local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
@@ -49,8 +54,8 @@ GoldenStatue.Golem = "Flamewing"
 GoldenStatue.Size = 6.5 -- x the golem's own Scale (1.15): the horns about 25 studs over its feet
 GoldenStatue.Sign = "Wide" -- "Wide" | "Logo"
 -- true: the Flamewing's fire stays fire (its wings, flame mohawk and tail
--- flame burn in their own colors on the gold body)
-GoldenStatue.Fire = false
+-- flame burn in their own colors on the gold body; owner's pick B)
+GoldenStatue.Fire = true
 GoldenStatue.ArmRaise = math.rad(145) -- how far the arms swing up from hanging (35 degrees off upright)
 -- the wings spread bigger than the pet's (about their shoulder root), so
 -- their tips still show past the raised fists from the front
@@ -362,7 +367,7 @@ end
 -- other way round from behind: the left plate shows the right word there).
 type Word = { Text: string, Color: Color3 }
 local function wordPlate(parent: Instance, cf: CFrame, w: number, h: number, depth: number, front: Word, back: Word): Part
-	local plate = Style.block(parent, cf, Vector3.new(w, h, depth), BOARD, SMOOTH, Style.decor())
+	local plate = Style.block(parent, cf, Vector3.new(w, h, depth), BOARD, SMOOTH, Style.ghost())
 	plate.Name = "SignWord"
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
 		local word = if face == Enum.NormalId.Front then front else back
@@ -396,7 +401,7 @@ end
 -- The gold frame round a w x h board centered on `cf` (+Z front), its
 -- orange glow line inside and a row of bulbs on both faces.
 local function frame(m: Model, cf: CFrame, w: number, h: number, depth: number, t: number)
-	local gold = Style.decor()
+	local gold = Style.ghost()
 	local fd = depth + 0.5
 	Style.block(m, cf * CFrame.new(0, h / 2 + t / 2, 0), Vector3.new(w + 2 * t, t, fd), GOLD, METAL, gold).Name = "SignFrame"
 	Style.block(m, cf * CFrame.new(0, -h / 2 - t / 2, 0), Vector3.new(w + 2 * t, t, fd), GOLD, METAL, gold).Name = "SignFrame"
@@ -428,7 +433,7 @@ end
 
 -- The round crossed-hammers medallion (the logo's emblem) centered on `cf`.
 local function medallion(m: Model, cf: CFrame, d: number, depth: number)
-	disc(m, cf, depth, d, GOLD, METAL, Style.decor()).Name = "SignMedallion"
+	disc(m, cf, depth, d, GOLD, METAL, Style.ghost()).Name = "SignMedallion"
 	disc(m, cf, depth + 0.1, d - 0.9, OUTLINE, SMOOTH, Style.tiny()).Name = "SignMedallionRing"
 	disc(m, cf, depth + 0.2, d - 1.5, K.RingOrange, NEON, Style.tiny()).Name = "SignMedallionFace"
 	for _, sz in { -1, 1 } do
@@ -450,7 +455,7 @@ end
 -- A gold banner rod standing at a sign's end (ball finials top and bottom).
 local function endRod(m: Model, cf: CFrame, h: number)
 	local up = cf * CFrame.Angles(0, 0, math.pi / 2)
-	rod(m, up, h, 1.5, GOLD, METAL, Style.decor()).Name = "SignRod"
+	rod(m, up, h, 1.5, GOLD, METAL, Style.ghost()).Name = "SignRod"
 	for _, sy in { -1, 1 } do
 		Geo.ball(m, (cf * CFrame.new(0, sy * (h / 2 + 0.55), 0)).Position, 1.9, GOLD_LIGHT, METAL, Style.tiny()).Name = "SignFinial"
 		rod(m, up * CFrame.new(sy * (h / 2 - 0.4), 0, 0), 0.35, 1.9, GOLD_DEEP, METAL, Style.tiny()).Name = "SignRodRing"
@@ -458,7 +463,8 @@ local function endRod(m: Model, cf: CFrame, h: number)
 end
 
 -- The sign over the dragon: `bottom` = the sign's lowest point (its frame's
--- underside), x/z its center. Returns the board's frame (+Z front) and its
+-- underside), x/z its center. Nothing up there collides (Style.ghost: 30
+-- studs over the plaza no one reaches it, and the walkable plaza stays free). Returns the board's frame (+Z front) and its
 -- outer half width.
 local FLIP = CFrame.Angles(0, math.pi, 0) -- a part's Front face (its -Z) to the world's +Z
 local TERRA: Word = { Text = "TERRA", Color = SILVER }
@@ -500,10 +506,10 @@ end
 
 ---------------------------------------------------------------- build
 
-function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floorY: number, rng: Rng.Rng)
-	local _ = rng
+function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floorY: number)
 	local feetY = pedestal(ring, center, floorY)
 	local m = Style.model("GoldenStatue", parent)
+	m:AddTag("NoStuds")
 	local golem = dragon(m, CFrame.new(center.X, feetY, center.Z))
 	-- the poles stand in the raised fists and carry the sign over the head
 	local top = feetY
@@ -534,7 +540,7 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 			0.95,
 			GOLD_LIGHT,
 			METAL,
-			Style.decor()
+			Style.ghost()
 		)
 		pole.Name = "SignPole"
 		Geo.ball(m, from, 1.4, GOLD, METAL, Style.tiny()).Name = "SignPoleEnd"
@@ -554,6 +560,20 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 	local body = golem:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		Style.emitter(body, "Sparkle", GOLD_LIGHT, 3)
+	end
+	if GoldenStatue.Fire then
+		-- the burning wings: flames licking up off each wing's hot inner panel,
+		-- embers rising from the flame mohawk
+		for i = 1, 2 do
+			local panel = golem:FindFirstChild(`Wing{i}_2B`)
+			if panel and panel:IsA("BasePart") then
+				Style.emitter(panel, "Fire", C.Fire, 9)
+			end
+		end
+		local mohawk = golem:FindFirstChild("Flame2")
+		if mohawk and mohawk:IsA("BasePart") then
+			Style.emitter(mohawk, "Embers", C.Fire, 5)
+		end
 	end
 end
 

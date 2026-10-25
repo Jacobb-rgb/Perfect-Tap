@@ -765,6 +765,8 @@ return function(T, Loader)
 		local anchor = ring:FindFirstChild(RebirthService.CrystalPrompt)
 		T.truthy(anchor and anchor.Transparency == 1 and anchor.Anchored and not anchor.CanCollide, "an invisible anchor")
 		T.near(anchor.CFrame.Position.Y, 3.43, 1e-3, "chest height over the plaza tiles")
+		T.near(anchor.CFrame.Position.Z, RebirthService.CrystalFront, 1e-3, "in front of the statue's pedestal (toward the spawn)")
+		T.truthy(RebirthService.CrystalFront > 5.0, "outside the pedestal's drum")
 	end)
 
 	withWorld("RebirthService: the Star Shop and junk input", function(w)
