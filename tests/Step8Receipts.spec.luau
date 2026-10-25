@@ -855,12 +855,12 @@ return function(T, Loader)
 		podium.setClock(function()
 			return NOW
 		end)
-		w.data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Gold|Pristine|", "" }
+		w.data.Podiums = { "Clean|Gold|Pristine|", "", "", "Clean|Gold|Pristine|", "" }
 		r.income = PodiumService.incomeOf(w.player, w.data)
 		w.player.attrs.Perk_Podiums = true
 		r.incomeAll = PodiumService.incomeOf(w.player, w.data)
 		w.player.attrs.Perk_Podiums = nil
-		T.truthy(r.income > 0 and r.incomeAll > r.income, "podium 3 counts only with the Podiums perk")
+		T.truthy(r.income > 0 and r.incomeAll > r.income, "podium 4 counts only with the Podiums perk")
 		r.coins = w.data.Coins
 		w.data.LastSeen = NOW - 20 * 3600
 		podium.loaded(w.player, w.data)
@@ -904,10 +904,10 @@ return function(T, Loader)
 			local r = lateNightShift(w, true)
 			local base = r.income * o.Rate * o.BaseHours * 3600
 			local full = r.incomeAll * o.Rate * o.ExtendedHours * 3600
-			T.near(r.base, base, base * 1e-9, "the base: 5 h, podiums 1-2")
+			T.near(r.base, base, base * 1e-9, "the base: 5 h, podiums 1-3")
 			T.eq(w.player.attrs.Perk_OfflineExtension, true, "the re-check granted Night Shift")
 			T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), true, "owned at join")
-			T.near(r.total, full, full * 1e-9, "the absence counted with 12 h and podiums 3-4")
+			T.near(r.total, full, full * 1e-9, "the absence counted with 12 h and podiums 4-5")
 			T.falsy(podium.hasTopUp(w.player), "done")
 			T.near(w.data.Stats.PodiumEarned, full, full * 1e-9, "counted as podium money")
 			local toasts = 0
@@ -946,7 +946,7 @@ return function(T, Loader)
 			T.eq(w.player.attrs.Perk_Podiums, true, "the Podiums pass the re-check found")
 			local o = EconomyConfig.Offline
 			local expected = r.incomeAll * o.Rate * o.BaseHours * 3600
-			T.near(r.total, expected, expected * 1e-9, "podiums 3-4 count, the bought Night Shift doesn't")
+			T.near(r.total, expected, expected * 1e-9, "podiums 4-5 count, the bought Night Shift doesn't")
 			T.falsy(podium.hasTopUp(w.player), "settled")
 		end)
 		podium.reset()

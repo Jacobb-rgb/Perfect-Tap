@@ -205,10 +205,10 @@ local shopData = {
 		Icon = "medal",
 		Price = "560",
 		Tag = "BEST VALUE",
-		Perks = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
+		Perks = { "Podiums 4 and 5", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
 	},
 	Offers = {
-		{ Id = "Podiums", Name = "Two More Podiums", Description = "Unlocks podiums 3 and 4 on your base.", Icon = "podium", Price = "100" },
+		{ Id = "Podiums", Name = "Two More Podiums", Description = "Unlocks podiums 4 and 5 on your base.", Icon = "podium", Price = "100" },
 		{ Id = "OfflineExtension", Name = "Night Shift", Description = "Your podiums keep earning while you are away for up to 12 hours instead of 5.", Icon = "moon", Price = "99", Owned = true },
 		{ Id = "TrainExpress", Name = "Express Train", Description = "Your ore train runs twice as fast and carries half as much again.", Icon = "train", Price = "199" },
 	},

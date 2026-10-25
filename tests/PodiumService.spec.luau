@@ -206,15 +206,18 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- slots
 
-	withWorld("PodiumService: 2 podiums for everyone, 4 with the Podiums perk", function(w)
+	withWorld("PodiumService: 3 podiums for everyone, 5 with the Podiums perk", function(w)
+		T.eq(EconomyConfig.Podiums.Free, 3, "three free (owner 2026-10-24)")
+		T.eq(EconomyConfig.Podiums.Max, 5, "two for Robux")
+		T.eq(#BaseLayout.Podiums, EconomyConfig.Podiums.Max, "a pad per slot")
 		T.eq(PodiumService.slotsFor(w.player), EconomyConfig.Podiums.Free, "free slots")
-		T.truthy(PodiumService.isUnlocked(w.player, 2), "slot 2")
-		T.falsy(PodiumService.isUnlocked(w.player, 3), "slot 3 locked")
+		T.truthy(PodiumService.isUnlocked(w.player, 3), "slot 3")
+		T.falsy(PodiumService.isUnlocked(w.player, 4), "slot 4 locked")
 		T.falsy(PodiumService.isUnlocked(w.player, 0), "slot 0")
 		w.player.attributes.Perk_Podiums = true
 		T.eq(PodiumService.slotsFor(w.player), EconomyConfig.Podiums.Max, "perk slots")
-		T.truthy(PodiumService.isUnlocked(w.player, 4), "slot 4")
-		T.falsy(PodiumService.isUnlocked(w.player, 5), "slot 5")
+		T.truthy(PodiumService.isUnlocked(w.player, 5), "slot 5")
+		T.falsy(PodiumService.isUnlocked(w.player, 6), "slot 6")
 	end)
 
 	---------------------------------------------------------------- place / remove
@@ -252,15 +255,15 @@ return function(T, Loader)
 		fill(w, DIRTY, 1)
 		fill(w, INGOT, 1)
 		local cases = {
-			{ 3, GOLD, "Locked" },
 			{ 4, GOLD, "Locked" },
+			{ 5, GOLD, "Locked" },
 			{ 1, DIRTY, "NotClean" },
 			{ 1, INGOT, "NotClean" },
 			{ 1, "Clean|Gold|Shiny|", "NotClean" },
 			{ 1, "", "NotClean" },
 			{ 1, COPPER, "NotInPen" },
 			{ 0, GOLD, "BadSlot" },
-			{ 5, GOLD, "BadSlot" },
+			{ 6, GOLD, "BadSlot" },
 			{ 1.5, GOLD, "BadSlot" },
 			{ 0 / 0, GOLD, "BadSlot" },
 		}
@@ -276,9 +279,9 @@ return function(T, Loader)
 		T.falsy(ok, "taken")
 		T.eq(why, "Taken", "taken reason")
 		T.eq(inPen(w, GOLD), 1, "the second gold stays in the pen")
-		-- the perk opens slots 3 and 4
+		-- the perk opens slots 4 and 5
 		w.player.attributes.Perk_Podiums = true
-		T.truthy(PodiumService.place(w.player, 3, GOLD), "slot 3 with the perk")
+		T.truthy(PodiumService.place(w.player, 4, GOLD), "slot 4 with the perk")
 		w.online[w.player] = nil
 		local _, noData = PodiumService.place(w.player, 2, GOLD)
 		T.eq(noData, "NoData", "no data")
@@ -421,7 +424,7 @@ return function(T, Loader)
 		T.eq(#w.carried, 3, "the rest stays carried")
 		T.truthy(PodiumService.placeFromHands(w.player, 2), "second")
 		T.eq(w.data.Podiums[2], "Clean|Copper|Clean|", "next best")
-		local ok, why = PodiumService.placeFromHands(w.player, 3)
+		local ok, why = PodiumService.placeFromHands(w.player, 4)
 		T.falsy(ok, "locked")
 		T.eq(why, "Locked", "locked reason")
 		T.eq(copper.State, "Carried", "still in hand")
@@ -441,7 +444,7 @@ return function(T, Loader)
 		T.eq(lastNote(w, "OpenUI"), nil, "no picker for strangers")
 		podium.prompt(w.player, PLOT, 1, "Place")
 		T.eq(lastNote(w, "OpenUI").B.Slot, 1, "picker for slot 1")
-		podium.prompt(w.player, PLOT, 3, "Place")
+		podium.prompt(w.player, PLOT, 4, "Place")
 		T.truthy(lastNote(w, "Notify").A.Text:find("100 R$", 1, true), "locked slot names the price")
 		local junk: { any } = {
 			{ 0, "Place", { Key = GOLD } },
@@ -473,9 +476,9 @@ return function(T, Loader)
 	---------------------------------------------------------------- income
 
 	withWorld("PodiumService: every tick pays the podium income quietly, once per player", function(w)
-		w.data.Podiums = { GOLD, COPPER, GOLD, "" }
-		local perSecond = income(GOLD) + income(COPPER)
-		T.near(PodiumService.incomeOf(w.player, w.data), perSecond, 1e-9, "slot 3 is locked: not counted")
+		w.data.Podiums = { GOLD, COPPER, COPPER, GOLD, "" }
+		local perSecond = income(GOLD) + 2 * income(COPPER)
+		T.near(PodiumService.incomeOf(w.player, w.data), perSecond, 1e-9, "slot 4 is locked: not counted")
 		w.data.LastSeen = 0
 		PodiumService.tick()
 		local paid = perSecond * EconomyConfig.IncomeTick
@@ -486,7 +489,7 @@ return function(T, Loader)
 		T.eq(w.changed[w.player], 1, "one push per tick")
 		T.eq(w.changed[w.other], nil, "no podium income: no push")
 		T.eq(w.otherData.LastSeen, NOW, "LastSeen for everyone loaded")
-		-- the perk opens slot 3, a bonus multiplies everything
+		-- the perk opens slot 4, a bonus multiplies everything
 		w.player.attributes.Perk_Podiums = true
 		EconomyService.addIncomeBonus(function()
 			return 0.5
@@ -506,10 +509,10 @@ return function(T, Loader)
 		for slot = 1, EconomyConfig.Podiums.Max do
 			per[slot] = PodiumService.slotIncome(w.player, w.data, slot)
 		end
-		T.near(per[3], income(GOLD) * 1.5, 1e-9, "slot 3 income")
-		T.eq(per[4], 0, "empty slot")
+		T.near(per[4], income(GOLD) * 1.5, 1e-9, "slot 4 income")
+		T.eq(per[5], 0, "empty slot")
 		-- junk podium entries earn nothing
-		w.data.Podiums = { "Raw|Gold||", 42, "Clean|Nope||", INGOT }
+		w.data.Podiums = { "Raw|Gold||", 42, "Clean|Nope||", INGOT, "" }
 		T.eq(PodiumService.incomeOf(w.player), 0, "junk earns nothing")
 		w.online[w.player] = nil
 		local coins = w.data.Coins
@@ -592,6 +595,9 @@ return function(T, Loader)
 		local yard = w.plotModel.Yard
 		local function lockShown(slot: number): boolean
 			local lock = yard["Podium" .. slot]:FindFirstChild("Lock")
+			if not lock then
+				return false
+			end
 			for _, d in lock:GetDescendants() do
 				if d:IsA("BasePart") and d.Transparency < 1 then
 					return true
@@ -599,23 +605,44 @@ return function(T, Loader)
 			end
 			return false
 		end
+		-- the holo-ring bars of a slot, as offsets from its Base
+		local function ring(slot: number): { any }
+			local m = yard["Podium" .. slot]
+			local list = {}
+			for _, d in m:GetChildren() do
+				if d:IsA("BasePart") and d.Name == "HoloRing" then
+					table.insert(list, (m.Base.CFrame:Inverse() * d.CFrame).Position)
+				end
+			end
+			table.sort(list, function(a, b)
+				return a.X + 10 * a.Z < b.X + 10 * b.Z
+			end)
+			return list
+		end
 		PodiumService.refreshPlot(PLOT)
-		T.truthy(lockShown(3) and lockShown(4), "locked")
+		T.falsy(lockShown(3), "slot 3 is free")
+		T.truthy(lockShown(4) and lockShown(5), "locked")
+		T.eq(#ring(4) + #ring(5), 0, "a locked slot has no holo-ring (the padlock floats there)")
 		w.player.attributes.Perk_Podiums = true
 		PodiumService.refreshPlot(PLOT)
-		T.falsy(lockShown(3) or lockShown(4), "unlocked")
-		T.eq(yard.Podium3.Rim.Material, roblox.Enum.Material.Neon, "rim glows")
-		T.falsy(yard.Podium3.PricePlate:FindFirstChildWhichIsA("SurfaceGui").Enabled, "price hidden")
+		T.falsy(lockShown(4) or lockShown(5), "unlocked")
+		T.eq(yard.Podium4.Rim.Material, roblox.Enum.Material.Neon, "rim glows")
+		T.falsy(yard.Podium4.PricePlate:FindFirstChildWhichIsA("SurfaceGui").Enabled, "price hidden")
+		-- the paid slots stay without a holo-ring even open (the map's phone budget counts
+		-- every plot's owner with the perk): the lit gold rim shows they're open
+		T.eq(#ring(1), PlotBuilder.HoloRing.Sides, "a free slot keeps its ring")
+		T.eq(#ring(4) + #ring(5), 0, "an open paid slot has no ring either")
 		-- an ore left on a slot that lost the perk shows "Locked"
-		w.data.Podiums[3] = GOLD
+		w.data.Podiums[4] = GOLD
 		PodiumService.refreshPlot(PLOT)
 		w.player.attributes.Perk_Podiums = nil
 		PodiumService.refreshPlot(PLOT)
-		T.eq(podium.shown(PLOT, 3).Tag.Amount.Text, "Locked", "locked tag")
-		T.truthy(lockShown(3), "locked again")
+		T.eq(podium.shown(PLOT, 4).Tag.Amount.Text, "Locked", "locked tag")
+		T.truthy(lockShown(4), "locked again")
+		T.eq(#ring(4), 0, "still no ring")
 		-- the plot's owner leaves: empty podiums
 		w.online[w.player] = nil
 		PodiumService.refreshPlot(PLOT)
-		T.eq(podium.shown(PLOT, 3).Model, nil, "no owner, no ore")
+		T.eq(podium.shown(PLOT, 4).Model, nil, "no owner, no ore")
 	end)
 end

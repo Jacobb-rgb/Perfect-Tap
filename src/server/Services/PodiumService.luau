@@ -35,7 +35,7 @@
 	  (OpenUI "Offline" { Amount, Seconds, Hours }). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
-	- StateService gets Income (per second), PodiumSlots (2 or 4) and
+	- StateService gets Income (per second), PodiumSlots (3 or 5) and
 	  PodiumIncome (per slot).
 	- Step 8: the "CoinPack" receipt handler (registerGrants): coin packs
 	  pay MonetizationConfig.coinPackAmount at the income now, only while
@@ -102,7 +102,7 @@ local perkConnections: { [Player]: RBXScriptConnection } = {}
 -- players whose offline payout waits for their pass checks
 local waitingPasses: { [Player]: boolean } = {}
 -- an offline payout made while a pass check for an offline perk kept failing
--- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
+-- (the absence, what was paid, the income without / with podiums 4-5, the perks it counted)
 type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean, Money: boolean }
 local topUps: { [Player]: TopUp } = {}
 -- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
@@ -311,6 +311,8 @@ local function buildDisplay(plotId: number, slot: number, desc: Desc): (Model?, 
 end
 
 -- Locked slots: lock + price plate visible and a dull rim until the owner has the perk.
+-- (The paid slots never get a holo-ring, not even open: the map's phone budget; the lit
+-- gold rim shows an open slot. PlotBuilder.)
 local function refreshLocks(plotId: number, owner: Player?)
 	for slot = FREE + 1, MAX do
 		local podium = podiumModel(plotId, slot)
@@ -400,7 +402,7 @@ local function begin(player: Player, slot: number): ({ string }?, Reason?)
 end
 
 local function lockedToast(player: Player)
-	toast(player, "Podiums 3 and 4 come with the Podium Pass (100 R$). Coming soon!", "Info")
+	toast(player, "Podiums 4 and 5 come with the Podium Pass (100 R$). Coming soon!", "Info")
 end
 
 -- Places one ore with this storage key from the pen onto a slot.
@@ -572,7 +574,7 @@ local function isNear(player: Player, plotId: number, slot: number): boolean
 	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= PodiumService.Range + RANGE_SLACK
 end
 
--- PodiumAction (slot 1..4, "Remove" | "Place", { Key }?)
+-- PodiumAction (slot 1..5, "Remove" | "Place", { Key }?)
 local function onAction(player: Player, slotArg: any, actionArg: any, argArg: any)
 	local slot = Guard.integer(slotArg, 1, MAX)
 	local action = Guard.string(actionArg, 16)
@@ -760,7 +762,7 @@ end
 	The rest of an offline payout made while a check of a pass giving an
 	offline perk kept failing, once a later check says the player owned that
 	pass when they joined (never for a pass bought in this session): the
-	absence counted again with Night Shift's hours and podiums 3-4, minus
+	absence counted again with Night Shift's hours and podiums 4-5, minus
 	what was paid. Returns the amount.
 ]]
 local function topUpOffline(player: Player): number

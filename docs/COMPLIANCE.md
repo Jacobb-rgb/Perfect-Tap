@@ -264,8 +264,8 @@ What Terra Forge sells (design v2; the source of truth is
 
 | Product | Type | Key in code | What it does | Paid random? |
 |---|---|---|---|---|
-| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 3-4, 12 h offline earnings, 2× carrying (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
-| Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 3 and 4 | No |
+| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, 12 h offline earnings, 2× carrying (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
+| Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 4 and 5 (3 are free, owner 2026-10-24) | No |
 | Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |

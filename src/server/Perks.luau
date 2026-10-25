@@ -3,7 +3,7 @@
 	but only the server can set them). MonetizationService sets them when a
 	player owns or buys a pass.
 	Perk ids: "StrongBack" (2x carry), "ForgeVip" (Glimmer Grotto), "Workshop" (extra slots),
-	"Podiums" (podiums 3 and 4), "OfflineExtension" (offline earnings for 12 h instead of 5),
+	"Podiums" (podiums 4 and 5), "OfflineExtension" (offline earnings for 12 h instead of 5),
 	"TrainExpress" (step 2), "DoubleMoney" (the 2x Money pass: podium income and sell value x2,
 	Bonuses.moneyMult). The big pass grants Podiums + OfflineExtension + more.
 ]]

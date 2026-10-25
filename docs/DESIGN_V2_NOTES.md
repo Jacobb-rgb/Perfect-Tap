@@ -53,7 +53,7 @@ See the chat/answers section below.
    **150–200 Robux** (one-time purchase).
 6. **Podium:** one ore piece per podium; better-cleaned ore earns more. ✔
 7. **Podiums:** 2 for free. Podiums 3 and 4: **100 Robux**, or included in a bigger **game pass (~560 Robux)** that
-   has more benefits.
+   has more benefits. (Owner 2026-10-24: **3 free + 2 for Robux**, podiums 4 and 5 with the same pass.)
 8. **Offline earnings:** owner undecided, asked for proposals (see "Proposals for 8" below).
 9. **Pen:** ore you don't display stays in the pen. Later, **automation (only with an upgrade):** on a billboard you
    mark ore types to always keep in the pen; unmarked types are sent onto a conveyor (to machines).

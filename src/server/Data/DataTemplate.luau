@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 6, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace)
+	Version = 7, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -72,7 +72,7 @@ local DataTemplate = {
 	-- readers treat anything but false as on)
 	AutoSort = true,
 	-- what stands on each podium: an ItemData.storageKey ("Clean|Gold|Pristine|") or ""
-	Podiums = { "", "", "", "" },
+	Podiums = { "", "", "", "", "" }, -- EconomyConfig.Podiums.Max slots
 	-- os.time() of the last moment the podiums were paying (offline earnings)
 	LastSeen = 0,
 
