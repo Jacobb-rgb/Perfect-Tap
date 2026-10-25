@@ -92,7 +92,9 @@ h2 { margin: 0 30px 18px; font-size: 18px; font-weight: normal; opacity: 0.8; }
 .cell div { font-size: 14px; margin-top: 4px; text-align: center; }
 </style></head><body>
 ${
-  emotes
+  data.sheetTitle
+    ? `<h1>${data.sheetTitle}</h1><h2>${data.sheetSubtitle || ""}</h2>`
+    : emotes
     ? `<h1>TERRA FORGE: EMOTY (NAVRH)</h1><h2>${data.segments.length} emotů k výběru · náhled z herního kódu (MoveMath na R15 postavičce) · video: emoty.mp4</h2>`
     : `<h1>TERRA FORGE: POHYBY HRACE</h1><h2>${data.segments.length} pohybů hráče · náhled z herního kódu (MoveMath na R15 postavičce) · video: pohyby_hrace.mp4</h2>`
 }

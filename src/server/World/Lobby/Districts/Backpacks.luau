@@ -37,6 +37,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local BackpackShopDecor = require(Shared.Builders.BackpackShopDecor)
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
@@ -241,11 +242,14 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	point.Parent = counter
 	-- the shopkeeper's step behind the counter and its feet on it, facing the customers
 	block(at(0, P + 0.5, L.KeeperZ - 0.05), Vector3.new(7.0, 1.0, 2.2), Tech.MetalDeep)
+	local feetAt = at(0, P + 1.0, L.KeeperZ)
 	local feet = Instance.new("Attachment")
 	feet.Name = Backpacks.KeeperFeet
-	feet.CFrame = counter.CFrame:ToObjectSpace(at(0, P + 1.0, L.KeeperZ))
+	feet.CFrame = counter.CFrame:ToObjectSpace(feetAt)
 	feet:SetAttribute("Shop", "Backpacks")
 	feet.Parent = counter
+	-- the shopkeeper golem (ShopkeeperConfig.Shops.Backpacks; the clients build it)
+	ShopkeeperConfig.mark(counter, feetAt, "Backpacks")
 	-- one warm light from the counter
 	Style.light(counter, rgb(255, 214, 170), 16, 0.8)
 

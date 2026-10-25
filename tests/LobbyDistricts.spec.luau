@@ -6,7 +6,8 @@
 	the SPIN & WIN frame grows with a bigger footprint and its armored
 	housings make it about 1.5 times as wide as the disc, the SHOP and
 	UPGRADES modules get lit display bays and showcases for their width (20
-	or 28), Tobin's Sell stall stays low in front of the SHOP, the walk lanes
+	or 28), Tobin's Sell stall stays low in front of the SHOP (its keeper spot
+	clear of the cart), the walk lanes
 	to the shop counters stay open, the build is deterministic and the
 	package stays inside its budget.
 ]]
@@ -209,7 +210,10 @@ return function(T, Loader)
 		T.truthy(enchant:IsA("BasePart"), "EnchantCounter is a part")
 		inside(enchant, "EnchantShop")
 
-		T.truthy(pkg.ShopFront:FindFirstChild("Tobin"), "Tobin the Miner stands at the Sell stall")
+		-- the shopkeeper's spot (the owner's avatar, client-side) on the Sell counter
+		local sellCounter = one("SellCounter")
+		local spot = sellCounter:FindFirstChild("ShopkeeperSpot")
+		T.truthy(spot and spot:IsA("Attachment") and spot:GetAttribute("Shop") == "Sell", "a keeper spot at the Sell stall")
 	end)
 
 	T.test("districts: the SPIN & WIN wheel turns around its axle", function()
@@ -589,18 +593,13 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("districts: Tobin's Sell stall stays low and off the SHOP's door lane, Tobin clear of his cart", function()
+	T.test("districts: Tobin's Sell stall stays low and off the SHOP's door lane, its keeper clear of the cart", function()
 		local _, pkg = districts()
 		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
 		for _, d in pkg.ShopFront:GetDescendants() do
 			-- (round 2: the big SELL sign stands high on its own arch, model SellSign)
 			local sign = pkg.ShopFront:FindFirstChild("SellSign")
-			if
-				d:IsA("BasePart")
-				and not d:IsDescendantOf(pkg.ShopFront.Tobin)
-				and not (sign and d:IsDescendantOf(sign))
-				and d.Transparency < 1
-			then
+			if d:IsA("BasePart") and not (sign and d:IsDescendantOf(sign)) and d.Transparency < 1 then
 				local top = -math.huge
 				for _, p in corners(d) do
 					top = math.max(top, frame:PointToObjectSpace(p).Y)
@@ -618,25 +617,19 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- Tobin stands a stud clear of his cart
+		-- the keeper's feet stand clear of the cart (his body is about 1.2 deep)
 		local cart = nil
 		for _, d in pkg.ShopFront:GetDescendants() do
 			if d:IsA("BasePart") and d.Name == "SellCounter" then
 				cart = d
 			end
 		end
-		local gap = math.huge
-		for _, d in pkg.ShopFront.Tobin:GetDescendants() do
-			if d:IsA("BasePart") then
-				for _, p in corners(d) do
-					local q = cart.CFrame:PointToObjectSpace(p)
-					local dx = math.max(math.abs(q.X) - cart.Size.X / 2, 0)
-					local dz = math.max(math.abs(q.Z) - cart.Size.Z / 2, 0)
-					gap = math.min(gap, math.sqrt(dx * dx + dz * dz))
-				end
-			end
-		end
-		T.truthy(gap >= 0.9, `Tobin stands {gap} studs from his counter`)
+		local spot = cart:FindFirstChild("ShopkeeperSpot")
+		local q = cart.CFrame:PointToObjectSpace((cart.CFrame * spot.CFrame).Position)
+		local dx = math.max(math.abs(q.X) - cart.Size.X / 2, 0)
+		local dz = math.max(math.abs(q.Z) - cart.Size.Z / 2, 0)
+		local gap = math.sqrt(dx * dx + dz * dz)
+		T.truthy(gap >= 1.4, `the keeper's feet stand {gap} studs from his counter`)
 	end)
 
 	T.test("districts: a lane at least 4 studs wide runs clear from the plaza to the SHOP and UPGRADES counters", function()

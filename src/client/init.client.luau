@@ -38,6 +38,7 @@ local ORDER = {
 	"BackpackWearController", -- every player's backpack on their back, the stall's display packs
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
+	"ShopkeeperController", -- a big golem behind every shop counter: idle, emotes, waves, talks
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
@@ -52,6 +53,7 @@ local ORDER = {
 	"LevelController", -- the player LEVEL: the XP bar, orbs, the juicy level-up moment
 	"CodexController", -- the ORE CODEX (side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"ReduceMotionController", -- Reduce motion (SETTINGS + Roblox's own) -> UI/Motion.reduced(), with UI motion on or off
 	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names
 	"StoreController", -- the Robux STORE window (side menu STORE, the HUD's Shop button)
 	"QuestController", -- daily / weekly quests, the login streak popup (before the side menu that opens it)

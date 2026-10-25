@@ -1,0 +1,266 @@
+{
+  "golems_a": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 60,
+    "maxLights": 8,
+    "scene": "shopkeeper_golems",
+    "position": [
+      0,
+      6,
+      -30
+    ],
+    "target": [
+      0,
+      3.2,
+      0
+    ],
+    "fov": 60
+  },
+  "golems_row": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 60,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      0,
+      5.5,
+      -22
+    ],
+    "target": [
+      0,
+      3.4,
+      0
+    ],
+    "fov": 62
+  },
+  "golem_close_vault": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 60,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      20,
+      5,
+      -10
+    ],
+    "target": [
+      20,
+      3.6,
+      0
+    ],
+    "fov": 55
+  },
+  "golem_close_gear": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 60,
+    "maxLights": 8,
+    "scene": "shopkeeper_solo",
+    "position": [
+      -20,
+      4.5,
+      -9
+    ],
+    "target": [
+      -20,
+      3.2,
+      0
+    ],
+    "fov": 55
+  },
+  "keeper_gear": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      -37.67,
+      7.1,
+      -18.0
+    ],
+    "target": [
+      -49.4,
+      4.6,
+      -23.6
+    ],
+    "fov": 55
+  },
+  "keeper_tech": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      37.67,
+      7.1,
+      -18.0
+    ],
+    "target": [
+      49.4,
+      4.6,
+      -23.6
+    ],
+    "fov": 55
+  },
+  "keeper_sell": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      -26.87,
+      5.5,
+      -6.66
+    ],
+    "target": [
+      -36.8,
+      3.6,
+      -11.4
+    ],
+    "fov": 58
+  },
+  "keeper_enchant": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      41.09,
+      6.0,
+      -73.46
+    ],
+    "target": [
+      48.5,
+      4.3,
+      -82.9
+    ],
+    "fov": 58
+  },
+  "keeper_vault": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      0.0,
+      7.3,
+      103.2
+    ],
+    "target": [
+      0.0,
+      5.7,
+      117.2
+    ],
+    "fov": 58
+  },
+  "keeper_enchant_high": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      40.47,
+      9.5,
+      -72.67
+    ],
+    "target": [
+      48.5,
+      6.0,
+      -82.9
+    ],
+    "fov": 58
+  },
+  "keeper_droppers": {
+    "scene": "shopkeepers",
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "position": [
+      44.3,
+      5.2,
+      24.94
+    ],
+    "target": [
+      50.6,
+      4.2,
+      26.5
+    ],
+    "fov": 72
+  },
+  "golems_b": {
+    "preset": "Surface",
+    "sunDir": [
+      -0.6,
+      0.6,
+      -0.5
+    ],
+    "shadowExtent": 60,
+    "maxLights": 8,
+    "scene": "shopkeeper_golems",
+    "position": [
+      0,
+      5,
+      -16
+    ],
+    "target": [
+      0,
+      3,
+      0
+    ],
+    "fov": 55
+  }
+}
