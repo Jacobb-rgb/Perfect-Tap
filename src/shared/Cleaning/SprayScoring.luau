@@ -14,7 +14,7 @@
 	The spray: between two samples of a stroke the nozzle moves in a straight
 	line and sprays for the time between them (at most MaxStep: a frame hitch
 	never sprays longer). Every cell within Radius loses dirt at
-	(1 - (distance / Radius)^2) seconds per second. Spray time with no dirty
+	Power * (1 - (distance / Radius)^2) seconds per second. Spray time with no dirty
 	cell in reach is wasted water. A crystal heats up while the nozzle points
 	right at it (CrystalRadius) and cools off elsewhere; at CrystalHeat it
 	cracks.
@@ -36,7 +36,10 @@ local CleaningPatterns = require(script.Parent.CleaningPatterns)
 
 local SprayScoring = {}
 
-SprayScoring.Radius = 0.24 -- face units the spray reaches around the nozzle point
+-- A wide, strong jet (owner 2026-10-25: "thicker, a bit bigger, clean in 5-7 s"): a good
+-- sweep takes ~5 s on a Common clump and ~8 s on a Mythic one (was ~9 s and ~15 s).
+SprayScoring.Radius = 0.4 -- face units the spray reaches around the nozzle point
+SprayScoring.Power = 2.2 -- seconds of dirt (CleaningPatterns.CellDirt) the jet washes off per second point-blank
 -- Spray radius multiplier per input: a finger hides what it sprays and a stick is slower to aim.
 SprayScoring.InputLeniency = { Mouse = 1.0, Touch = 1.25, Gamepad = 1.15 }
 SprayScoring.SampleStep = 0.05 -- the client records a sample at most this often while spraying
@@ -58,13 +61,13 @@ SprayScoring.CrystalRadius = 0.1 -- face units: the nozzle point this close heat
 SprayScoring.CrystalHeat = 0.35 -- seconds point-blank before a crystal cracks (a slow pass over it is fine)
 SprayScoring.CrystalCool = 1.5 -- heat lost per second away from it
 -- Par = (Base + PerAmount * the clump's dirt) / the input's leniency (a wider spray is quicker,
--- so it helps the aim, not the score). Lune: a steady sweep at 1.9 face units per second
--- (slower on thicker dirt) takes about 1.2 x par.
-SprayScoring.Par = { Base = 1.5, PerAmount = 0.3 }
+-- so it helps the aim, not the score). Lune: a steady sweep at 2 face units per second takes
+-- about 1.2 x par; the strong jet washes even Mythic dirt in one pass, so par hardly grows.
+SprayScoring.Par = { Base = 3.5, PerAmount = 0.02 }
 SprayScoring.SlowFull = 5 -- times par: the whole slow penalty
 SprayScoring.WasteFree = 0.25 -- this much wasted spray costs nothing (edges, getting into place)
 SprayScoring.WasteFull = 0.75 -- the full waste penalty from here
-SprayScoring.Weights = { Slow = 0.4, Waste = 0.2, Crack = 0.12, MaxCrack = 0.36 }
+SprayScoring.Weights = { Slow = 0.4, Waste = 0.3, Crack = 0.12, MaxCrack = 0.36 }
 -- Samples later than this can't come from a live session (the server ends sessions at CleaningTimeout).
 SprayScoring.MaxSampleTime = GameConfig.CleaningTimeout + 10
 
@@ -184,7 +187,7 @@ local function spray(self: Tracker, u: number, v: number, dt: number, t: number,
 				local d2 = du * du + dv * dv
 				if d2 < r * r then
 					useful = true
-					self.dirt[index] -= dt * (1 - d2 / (r * r))
+					self.dirt[index] -= dt * SprayScoring.Power * (1 - d2 / (r * r))
 					if self.dirt[index] <= 0 then
 						self.cleaned[index] = true
 						self.cleanedCount += 1

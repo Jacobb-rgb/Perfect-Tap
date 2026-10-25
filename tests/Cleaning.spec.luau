@@ -19,11 +19,10 @@ return function(T, Loader)
 		byRarity[ore.Rarity] = byRarity[ore.Rarity] or ore.Id
 	end
 
-	-- a good player: steady rows at par pace (slower on thicker dirt), from the end of the intro
+	-- a good player: steady rows at par pace, from the end of the intro
 	local function goodSweep(pattern, opts)
 		local o = opts or {}
-		local thick = Rarity.get(pattern.Rarity).DirtThickness
-		o.Speed = o.Speed or 1.9 / thick
+		o.Speed = o.Speed or 2
 		o.Start = o.Start or P.Intro
 		return Players.sweep(pattern, o)
 	end
@@ -97,7 +96,8 @@ return function(T, Loader)
 				T.eq(r.Cracks, 0, info.Id .. ": a quick pass never cracks a crystal")
 				-- the client's live tracker and the server's replay agree exactly
 				T.eq(tracker:parts().Score, r.Score, info.Id .. ": client == server")
-				T.truthy(r.Time > 5 and r.Time < 20, `{info.Id}: a clean takes {r.Time}s`)
+				-- owner 2026-10-25: a clean takes about 5-7 s (a little longer on the thickest dirt)
+				T.truthy(r.Time > 3 and r.Time < 9, `{info.Id}: a clean takes {r.Time}s`)
 			end
 		end
 	end)
@@ -105,7 +105,7 @@ return function(T, Loader)
 	T.test("spray scoring: slow careful washing is Pristine, scribbling Clean or lower, never a fail", function()
 		for _, info in Rarity.List do
 			local p = Patterns.generate(byRarity[info.Id], 31337)
-			local slow = Scoring.score(p, goodSweep(p, { Speed = 1.2 / info.DirtThickness }))
+			local slow = Scoring.score(p, goodSweep(p, { Speed = 1.2 }))
 			T.truthy(slow.Valid, info.Id)
 			T.eq(slow.Grade, "Pristine", `{info.Id}: slow sweep {slow.Score}`)
 			local scribble = Scoring.score(p, (Players.scribble(p, { Speed = 3, Start = P.Intro, Seed = 3 })))
@@ -116,7 +116,7 @@ return function(T, Loader)
 		end
 		-- several minutes of slow washing are still graded
 		local p = Patterns.generate("Coal", 5)
-		local crawl = Scoring.score(p, goodSweep(p, { Speed = 0.2 }))
+		local crawl = Scoring.score(p, goodSweep(p, { Speed = 0.1 }))
 		T.truthy(crawl.Valid, tostring(crawl.Reason))
 		T.truthy(crawl.Time > 40, "it really took long")
 		T.truthy(crawl.Grade == "Clean" or crawl.Grade == "Rough", crawl.Grade)
@@ -389,6 +389,27 @@ return function(T, Loader)
 			Scoring.MinGaps.FirstSpray < P.Intro and Scoring.MinGaps.ToSubmit < P.Finish,
 			"frame slack, never stricter than the client"
 		)
+	end)
+
+	T.test("spray timeline: the fastest honest run never trips the server's too-fast gate", function()
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		-- quick wide sweeps on the thinnest dirt with the widest spray (a finger), many paces
+		local fastest = math.huge
+		for _, input in { "Mouse", "Touch" } do
+			for speed = 4, 9 do
+				for _, spacing in { 1.0, 1.2, 1.4, 1.6 } do
+					for seed = 1, 3 do
+						local p = Patterns.generate("Coal", seed * 977)
+						local sub, tracker =
+							Players.sweep(p, { Speed = speed, Spacing = spacing, Input = input, Seed = seed, Start = P.Intro })
+						if tracker:complete() then
+							fastest = math.min(fastest, latest(sub) + P.Finish)
+						end
+					end
+				end
+			end
+		end
+		T.truthy(fastest > GameConfig.CleaningMinSeconds + 0.25, `fastest honest submit at {fastest}s`)
 	end)
 
 	T.test("FLAWLESS guard: computed timestamps keep Pristine, real frame times keep Flawless", function()
