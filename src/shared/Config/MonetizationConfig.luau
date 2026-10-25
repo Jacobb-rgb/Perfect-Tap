@@ -201,7 +201,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 560,
 		Name = "Forgemaster's Pass",
-		Description = "Podiums 3 and 4, offline earnings for 12 hours, double carrying, the Glimmer Grotto and extra machine slots. "
+		Description = "Podiums 4 and 5, offline earnings for 12 hours, double carrying, the Glimmer Grotto and extra machine slots. "
 			.. MonetizationConfig.grottoOddsText(),
 		Perks = { "Podiums", "OfflineExtension", "StrongBack", "ForgeVip", "Workshop" },
 	},
@@ -212,7 +212,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 100,
 		Name = "Two More Podiums",
-		Description = "Unlocks podiums 3 and 4 on your base.",
+		Description = "Unlocks podiums 4 and 5 on your base.",
 		Perks = { "Podiums" },
 	},
 	{

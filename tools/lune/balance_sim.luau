@@ -66,6 +66,7 @@ local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloor
 local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 local LevelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LevelConfig")
+local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 
 -- The real rock mix (MineFloors): Small / Big / Crystal shares, seconds and ores per rock.
 local spawn = MineFloors.SpawnChance
@@ -93,7 +94,7 @@ local A = {
 	CleanBatch = 20, -- ores cleaned per session at the base
 	TrainLoad = 5, -- seconds the train waits / loads at the station
 	HandGrades = { Rough = 0.1, Clean = 0.4, Pristine = 0.35, Flawless = 0.15 }, -- a typical player
-	Podiums = 2, -- free podiums (3 and 4 are a Robux perk)
+	Podiums = EconomyConfig.Podiums.Free, -- free podiums (owner 2026-10-24: 3; 4 and 5 are a Robux perk)
 	-- the coin hoverboards: the blaster level each price follows (HoverboardData.priceFrom), in board order
 	HoverboardLevels = { 3, 5, 7 },
 	-- the floors: MineFloors.List, or a proposal (a list of { MinBlaster, ViaElevator, Ores = { [oreId] = weight },

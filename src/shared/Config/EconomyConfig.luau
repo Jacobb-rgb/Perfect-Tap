@@ -18,8 +18,8 @@ EconomyConfig.IncomeTick = 1 -- seconds between podium payouts
 EconomyConfig.StatePushSeconds = 10
 
 EconomyConfig.Podiums = {
-	Free = 2, -- every base
-	Max = 4, -- podiums 3 and 4 come with the Podiums perk (Robux)
+	Free = 3, -- every base (owner 2026-10-24: three free, two for Robux)
+	Max = 5, -- podiums 4 and 5 come with the Podiums perk (Robux)
 	Kinds = { Clean = true }, -- only cleaned ore can go on a podium
 }
 

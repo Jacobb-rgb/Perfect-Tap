@@ -127,7 +127,7 @@ return function(T, Loader)
 					bars += 1
 				end
 			end
-			T.eq(bars, PlotBuilder.HoloRing.Sides, "the holo-ring bars")
+			T.eq(bars, if locked then 0 else PlotBuilder.HoloRing.Sides, "the holo-ring bars (none on a locked slot)")
 			T.eq(podium:FindFirstChild("Lock") ~= nil, locked, "Lock on the locked slots")
 			if locked then
 				T.truthy(podium.Lock:FindFirstChild("LockedLight"), "the lock's red light")
@@ -157,15 +157,19 @@ return function(T, Loader)
 	T.test("Style A: ArtifactService paints the podium skins on the soft podiums and takes them off", function()
 		local model = buildPlot(WorldLayout.Plots[2])
 		local yard = model.Yard
-		local podium = yard.Podium3
+		-- a free podium (the holo-ring) and a locked one (the padlock, no ring)
+		local podium = yard["Podium" .. EconomyConfig.Podiums.Free]
+		local lockedPodium = yard["Podium" .. EconomyConfig.Podiums.Free + 1]
 		-- (a list: Lune hands out a new wrapper per lookup, so instances make poor table keys)
 		local own: { { Part: any, Color: any } } = {}
 		local rimColor, lockColors = podium.Rim.Color, {}
-		for _, d in podium:GetDescendants() do
-			if d:IsA("BasePart") then
-				table.insert(own, { Part = d, Color = d.Color })
-				if d:FindFirstAncestor("Lock") then
-					table.insert(lockColors, { Part = d, Color = d.Color })
+		for _, root in { podium, lockedPodium } do
+			for _, d in root:GetDescendants() do
+				if d:IsA("BasePart") then
+					table.insert(own, { Part = d, Color = d.Color })
+					if d:FindFirstAncestor("Lock") then
+						table.insert(lockColors, { Part = d, Color = d.Color })
+					end
 				end
 			end
 		end

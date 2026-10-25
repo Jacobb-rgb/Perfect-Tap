@@ -69,12 +69,14 @@ BaseLayout.Pen = {
 	ShowMax = 24, -- loose-looking items the client shows inside the pen
 }
 
--- Podium slots, left to right as seen from the grid. Slots 3 and 4 need the Podiums perk.
+-- Podium slots, left to right as seen from the grid. Slots 1-3 are free, 4 and 5 need the
+-- Podiums perk (owner 2026-10-24: three free, two for Robux).
 BaseLayout.Podiums = {
 	rect(4, YARD_Z0 + 6, 4, 9, 4),
 	rect(10, YARD_Z0 + 6, 4, 9, 4),
 	rect(16, YARD_Z0 + 6, 4, 9, 4),
 	rect(22, YARD_Z0 + 6, 4, 9, 4),
+	rect(28, YARD_Z0 + 6, 4, 9, 4),
 }
 BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 
