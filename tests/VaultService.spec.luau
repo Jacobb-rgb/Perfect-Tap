@@ -373,6 +373,31 @@ return function(T, Loader)
 		T.eq(RebirthConfig.runIncomeOf(w.data), 0)
 	end)
 
+	withWorld("VaultService: a level paid with Robux-bought coins pays no stars (like a Robux level)", function(w)
+		-- (review 2026-10-25, until the owner decides: a coin pack must not buy star-paying levels)
+		w.data.Rebirths = 1
+		w.data.BlasterLevel = 1
+		w.data.Stats.RunIncome = 0
+		local price = BlasterData.vaultPrice(2) :: number
+		w.data.Coins = price
+		w.data.PaidCoins = price -- every coin came from a coin pack
+		local r = buy(w, { Level = 2 })
+		T.truthy(r.Ok, "bought")
+		T.eq(w.data.BlasterLevel, 2)
+		T.eq(w.data.Stats.RunForged, 0, "no star level")
+		T.eq(w.data.Stats.RunPaid, true, "marked like a Robux level")
+		T.eq(w.data.Stats.BlastersBought, 1, "a Vault buy all the same")
+		T.eq(w.data.Stats.BlastersPaid or 0, 0, "no rebirth start lift (that's for Robux levels)")
+		-- earned coins (the coin pack's ones stay, spent last): a star level
+		local next = BlasterData.vaultPrice(3) :: number
+		w.data.Coins = next + 10
+		w.data.PaidCoins = 10
+		r = buy(w, { Level = 3 })
+		T.truthy(r.Ok, "bought")
+		T.eq(w.data.PaidCoins, 10, "the bought coins were not touched")
+		T.eq(w.data.Stats.RunForged, 3, "earned coins buy a star level")
+	end)
+
 	withWorld("VaultService: a Robux level on the first run keeps the levels the grace counted", function(w)
 		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
 		withBands(function(bands: any)

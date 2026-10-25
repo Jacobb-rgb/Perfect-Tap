@@ -651,6 +651,38 @@ return function(T, Loader)
 		T.truthy((BlasterData.vaultPrice(2, RebirthConfig.runIncomeOf(w.data)) :: number) >= floor, "LV 2 costs the floor")
 	end)
 
+	withWorld("RebirthService: packing the droppers before a rebirth doesn't lower the floor for long", function(w)
+		-- (review 2026-10-25: the floor was a snapshot; it is the run's high-water mark now)
+		local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
+		local dropper = DropperConfig.List[#DropperConfig.List]
+		-- packed into the Build menu before the rebirth: nothing placed earns
+		w.data.MachineInventory[dropper.Id] = 2
+		RebirthService._test.action(w.player, { Action = "Rebirth" })
+		T.truthy(w.results[#w.results].Ok, "rebirthed")
+		local low = RebirthConfig.runIncomeOf(w.data)
+		T.lt(low, dropper.Income, "the snapshot at the rebirth saw no dropper")
+		-- placed again right after: the next income tick (or a Vault buy) raises the floor
+		table.insert(w.data.PlacedMachines, { Id = dropper.Id, X = 12, Z = 12, R = 0 })
+		table.insert(w.data.PlacedMachines, { Id = dropper.Id, X = 12, Z = 10, R = 0 })
+		T.truthy(PodiumService.raiseRunIncome(w.player, w.data), "raised")
+		local high = RebirthConfig.runIncomeOf(w.data)
+		T.near(high, PodiumService.keptIncome(w.player, w.data), high * 1e-9, "the factory's income now")
+		T.truthy(high >= 2 * dropper.Income, "both droppers count")
+		local floor = high * BlasterData.Vault.RunSeconds[2] * BlasterData.Vault.RunShare
+		T.truthy((BlasterData.vaultPrice(2, high) :: number) >= floor, "LV 2 costs the floor again")
+		-- packed again: the floor stays (a high-water mark, never lower)
+		table.clear(w.data.PlacedMachines)
+		T.falsy(PodiumService.raiseRunIncome(w.player, w.data), "nothing to raise")
+		T.eq(RebirthConfig.runIncomeOf(w.data), high, "the floor never drops in a run")
+		-- the first run has no floor
+		local first = ProfileStore.deepCopy(w.data)
+		first.Rebirths = 0
+		first.Stats.RunIncome = 0
+		table.insert(first.PlacedMachines, { Id = dropper.Id, X = 12, Z = 12, R = 0 })
+		T.falsy(PodiumService.raiseRunIncome(w.player, first), "no floor before the first rebirth")
+		T.eq(first.Stats.RunIncome, 0)
+	end)
+
 	withWorld("RebirthService: a rebirth inside a rebirth is Busy; a failure leaves the rebirth free again", function(w)
 		local inner: any = nil
 		rawset(PlotService, "reload", function(_, between)

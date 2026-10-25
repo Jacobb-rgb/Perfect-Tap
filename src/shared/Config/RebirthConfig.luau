@@ -16,7 +16,12 @@
 	  income stays through a rebirth (droppers, Podium Keeper), so a rebirth
 	  run's Vault prices have a floor: a level costs at least some minutes
 	  of the income kept at the rebirth (Stats.RunIncome, BlasterData.
-	  vaultPrice), or the stars would be a few seconds of idle income each.
+	  vaultPrice; the run's high-water mark, PodiumService.raiseRunIncome:
+	  packing the droppers before a rebirth doesn't lower it for long), or
+	  the stars would be a few seconds of idle income each. Coins bought
+	  with Robux (data.PaidCoins) buy no star levels either (owner
+	  2026-10-25: a Vault level they paid for leaves RunForged as it was,
+	  like a Robux level: VaultService "PaidCoins").
 	  Rebirth is never forced, never sold for Robux, and nothing in it is
 	  random.
 	- Resets (reset(), one step on the save): the earned coins, the blaster (level 1, or

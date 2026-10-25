@@ -114,7 +114,10 @@ return function(T, Loader)
 			T.eq(TutorialConfig.get(index), step, "get " .. index)
 		end
 		T.eq(TutorialConfig.get(TOTAL + 1), nil, "nothing past the end")
-		T.eq(TutorialConfig.StarterMachines, #MachineData.StarterKit, "the starter kit size")
+		for _, entry in MachineData.StarterKit do
+			T.eq(TutorialConfig.StarterIds[entry.Id], 1, entry.Id .. " is a starter machine")
+		end
+		T.eq(TutorialConfig.StarterIds.CleaningStation, 1, "the old kit's station too")
 		T.eq(TutorialConfig.counter(3), "3 / " .. TOTAL, "the counter")
 		T.eq(TutorialConfig.counter(TOTAL + 1), TOTAL .. " / " .. TOTAL, "the counter stops at the end")
 	end)
@@ -214,12 +217,18 @@ return function(T, Loader)
 		broken.Stats = { OresMined = 0 / 0, OresCleaned = "3" }
 		T.eq(TutorialConfig.advance(1, broken, {}), 1, "NaN and string stats count as 0")
 		local data = fresh()
-		T.falsy(TutorialConfig.machinesBought(data, TutorialConfig.StarterMachines), "the starter kit is not a purchase")
+		T.falsy(TutorialConfig.machinesBought(data), "the starter kit is not a purchase")
+		-- an old save: the kit's Cleaning Station still on the grid (review 2026-10-25)
+		table.insert(data.PlacedMachines, { Id = "CleaningStation", X = 6, Z = 8, R = 0 })
+		T.falsy(TutorialConfig.machinesBought(data), "the old kit's station is not a purchase")
 		data.MachineInventory.Crusher = 1
-		T.truthy(TutorialConfig.machinesBought(data, TutorialConfig.StarterMachines), "a machine in the inventory")
+		T.truthy(TutorialConfig.machinesBought(data), "a machine in the inventory")
 		data.MachineInventory.Crusher = 0
 		table.insert(data.PlacedMachines, { Id = "Crusher", X = 1, Z = 1, R = 0 })
-		T.truthy(TutorialConfig.machinesBought(data, TutorialConfig.StarterMachines), "a third placed machine")
+		T.truthy(TutorialConfig.machinesBought(data), "a second Crusher is a purchase")
+		local belt = fresh()
+		table.insert(belt.PlacedMachines, { Id = "Conveyor", X = 1, Z = 1, R = 0 })
+		T.truthy(TutorialConfig.machinesBought(belt), "a belt is a purchase")
 		local podium = fresh()
 		podium.Stats.PodiumEarned = 3
 		T.truthy(TutorialConfig.podium(podium), "a podium that earned before counts (taken off since)")

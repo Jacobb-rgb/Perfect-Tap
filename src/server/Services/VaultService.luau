@@ -55,6 +55,7 @@ local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local MonetizationService = require(script.Parent.MonetizationService)
+local PodiumService = require(script.Parent.PodiumService)
 
 local VaultService = {}
 
@@ -128,6 +129,10 @@ function VaultService.refusal(level: number, current: number, coins: number, run
 	return nil
 end
 
+local function whole(v: any): number
+	return if type(v) == "number" and v == v and v > 0 and v < math.huge then math.floor(v) else 0
+end
+
 --[[
 	Buys `level` for the player (no range check: onBuy does it). Returns
 	ok, reason. Quote, spend and write in one step with no yield, so a double
@@ -139,21 +144,22 @@ function VaultService.buy(player: Player, level: number): (boolean, string?)
 		return false, "NoData"
 	end
 	local current = levelOf(data)
+	-- the floor is the factory's best income this run, up to this very moment
+	PodiumService.raiseRunIncome(player, data)
 	local runIncome = RebirthConfig.runIncomeOf(data)
 	local reason = VaultService.refusal(level, current, EconomyService.balance(player), runIncome)
 	if reason then
 		return false, reason
 	end
 	local price = BlasterData.vaultPrice(level, runIncome) :: number
+	local paidBefore = whole(data.PaidCoins)
 	if not EconomyService.spend(player, price, "Vault") then
 		return false, "NoCoins"
 	end
-	VaultService.grantNext(player, data, "Coins")
+	-- coins bought with Robux (spent last) paid part of it: like a Robux level, it pays no
+	-- stars (the review of 2026-10-25; the owner decides later whether they should)
+	VaultService.grantNext(player, data, if whole(data.PaidCoins) < paidBefore then "PaidCoins" else "Coins")
 	return true, nil
-end
-
-local function whole(v: any): number
-	return if type(v) == "number" and v == v and v > 0 and v < math.huge then math.floor(v) else 0
 end
 
 --[[
@@ -161,7 +167,9 @@ end
 	level's case look. "Coins" (the Vault) counts Stats.BlastersBought and
 	raises Stats.RunForged (the rebirth run counts it); "Robux" counts
 	Stats.BlastersPaid and marks the rebirth run as paid (Stats.RunPaid:
-	RebirthConfig.reachedOf). Returns the new level, or nil at the top level.
+	RebirthConfig.reachedOf); "PaidCoins" (the Vault, partly paid with coins
+	bought with Robux, data.PaidCoins) counts Stats.BlastersBought but pays no
+	stars, like a Robux level. Returns the new level, or nil at the top level.
 ]]
 function VaultService.grantNext(player: Player, data: { [string]: any }, source: string): number?
 	local current = levelOf(data)
@@ -176,13 +184,17 @@ function VaultService.grantNext(player: Player, data: { [string]: any }, source:
 		stats = {}
 		data.Stats = stats
 	end
-	if source == "Robux" then
+	if source == "Robux" or source == "PaidCoins" then
 		-- the first run's grace counted the blaster as it was: keep those levels
 		-- (only the bought ones pay nothing)
 		if RebirthConfig.countOf(data) == 0 and stats.RunPaid ~= true then
 			stats.RunForged = math.max(whole(stats.RunForged), current)
 		end
-		stats.BlastersPaid = whole(stats.BlastersPaid) + 1
+		if source == "Robux" then
+			stats.BlastersPaid = whole(stats.BlastersPaid) + 1
+		else
+			stats.BlastersBought = whole(stats.BlastersBought) + 1
+		end
 		stats.RunPaid = true
 	else
 		stats.BlastersBought = whole(stats.BlastersBought) + 1
