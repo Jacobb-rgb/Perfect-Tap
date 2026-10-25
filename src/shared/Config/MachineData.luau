@@ -622,13 +622,14 @@ table.sort(MachineData.Buildable, function(a: Machine, b: Machine): boolean
 end)
 
 -- New players get these placed for free (grid X, Z, rotation 0-3).
--- (bigger plots) (4, 4) and (8, 4) on a 12-cell grid; a bigger grid moves
--- them with it (as BaseLayout.GridShift): the same plot-local x and the same
--- distance from the back wall (and its chutes).
+-- (bigger plots) (8, 4) on a 12-cell grid; a bigger grid moves them with it
+-- (as BaseLayout.GridShift): the same plot-local x and the same distance from
+-- the back wall (and its chutes). The Cleaning Station that stood at (4, 4)
+-- left the kit (owner 2026-10-24): every plot's yard has its own now
+-- (BaseLayout.CleaningStation, CleaningService); old saves keep theirs.
 local KIT_SHIFT_X = (GameConfig.PlotCells - 12) / 2
 local KIT_SHIFT_Z = GameConfig.PlotCells - 12
 MachineData.StarterKit = {
-	{ Id = "CleaningStation", X = 4 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
 	{ Id = "ClayFurnace", X = 8 + KIT_SHIFT_X, Z = 4 + KIT_SHIFT_Z, R = 0 },
 	-- the Furnace takes crushed ore only (owner 2026-10-24): the Crusher stands behind it
 	-- (toward the back wall) and drops its piles straight into it

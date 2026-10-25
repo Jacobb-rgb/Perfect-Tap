@@ -21,6 +21,17 @@
 	a set kept by the station's spawned / removed hooks, never every placed
 	machine. Its OverlapParams filter is set again only when the Items
 	folder changes, and a pass with no empty station does no work.
+
+	The yard station (owner 2026-10-24: the cleaner you use yourself stands
+	where the Foundry was; new players get no station on the grid any more):
+	every owned plot has one at BaseLayout.CleaningStation, built here when
+	PlotService gives the plot its owner and gone when the plot is freed
+	(its vise ore is stashed like a packed-up station's). It is the same
+	station (prompts, vise, sessions, the clean ore at its Output) but no
+	placed machine: no save entry, no grid cell, not in MachineService's
+	index; its model carries the "Machine" tag, Owner and Fixed = true
+	(build mode leaves it alone). Stations bought in the Tech shop still
+	stand on the grid as before.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -29,7 +40,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
+local MachineData = require(Shared.Config.MachineData)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
@@ -41,9 +54,11 @@ local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
 local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
+local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local MachineService = require(script.Parent.MachineService)
+local PlotService = require(script.Parent.PlotService)
 
 local CleaningService = {}
 
@@ -448,38 +463,44 @@ local function intakeLoop()
 	end
 end
 
+local function stationSpawned(machine: MachineService.PlacedMachine)
+	stations[machine] = true
+	local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
+	-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
+	-- "Clean Ore". G / B are shared: the Pen, Train Send, Iron Box and Logistics
+	-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
+	-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
+	-- station) a G press in reach of one of those too fires both.
+	local take = makePrompt(machine, "TakePrompt", "Take Ore Back", "Second", 0.4, 1, Enum.ProximityPromptExclusivity.AlwaysShow, false)
+	machine.State.MainPrompt = main
+	machine.State.TakePrompt = take
+	main.Triggered:Connect(function(player)
+		onPrompt(player, machine)
+	end)
+	take.Triggered:Connect(function(player)
+		onTake(player, machine)
+	end)
+	updatePrompts(machine)
+end
+
+-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+local function stationRemoved(machine: MachineService.PlacedMachine)
+	stations[machine] = nil
+	local session = machine.State.Session :: Session?
+	if session then
+		endSession(session)
+	end
+	local record = stationItem(machine)
+	if record then
+		machine.State.Item = nil
+		ItemService.stash(record, nil)
+	end
+end
+
 local stationBehaviour: MachineService.Behaviour = {
-	spawned = function(machine)
-		stations[machine] = true
-		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
-		-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
-		-- "Clean Ore". G / B are shared: the Pen, Train Send, Iron Box and Logistics
-		-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
-		-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
-		-- station) a G press in reach of one of those too fires both.
-		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", "Second", 0.4, 1, Enum.ProximityPromptExclusivity.AlwaysShow, false)
-		machine.State.MainPrompt = main
-		machine.State.TakePrompt = take
-		main.Triggered:Connect(function(player)
-			onPrompt(player, machine)
-		end)
-		take.Triggered:Connect(function(player)
-			onTake(player, machine)
-		end)
-		updatePrompts(machine)
-	end,
-	-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+	spawned = stationSpawned,
 	removed = function(machine, _reason)
-		stations[machine] = nil
-		local session = machine.State.Session :: Session?
-		if session then
-			endSession(session)
-		end
-		local record = stationItem(machine)
-		if record then
-			machine.State.Item = nil
-			ItemService.stash(record, nil)
-		end
+		stationRemoved(machine)
 	end,
 	-- moved in build mode: the ore in the vise moves with the station
 	moved = function(machine)
@@ -490,8 +511,80 @@ local stationBehaviour: MachineService.Behaviour = {
 	end,
 }
 
+---------------------------------------------------------------- the yard station
+
+-- plot id -> the yard station standing there (owned plots only)
+local yardStations: { [number]: MachineService.PlacedMachine } = {}
+
+-- World CFrame of a plot's yard station (the machine model's pivot, like a placed one's).
+function CleaningService.yardCFrame(plotId: number): CFrame
+	local spot = BaseLayout.CleaningStation
+	return PlotService.plotCFrame(plotId) * CFrame.new(spot.Center.X, 0, spot.Center.Z) * CFrame.Angles(0, -spot.R * math.pi / 2, 0)
+end
+
+local function removeYardStation(plotId: number)
+	local machine = yardStations[plotId]
+	if not machine then
+		return
+	end
+	yardStations[plotId] = nil
+	-- the vise ore is stashed, a session ends (as for a packed-up station)
+	stationRemoved(machine)
+	machine.Removed = true
+	machine.Model:Destroy()
+end
+
+local function buildYardStation(player: Player, plotId: number)
+	removeYardStation(plotId)
+	local plot = PlotService.model(plotId)
+	if not plot or not player.Parent or PlotService.plotOf(player) ~= plotId then
+		return
+	end
+	local model = MachineBuilder.build("CleaningStation", 0, 0)
+	model.Name = "YardStation"
+	model:PivotTo(CleaningService.yardCFrame(plotId))
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model:SetAttribute("Owner", player.UserId)
+	model:SetAttribute("Fixed", true)
+	model:SetAttribute("Status", "")
+	model:AddTag("Machine")
+	model.Parent = plot
+	local machine: MachineService.PlacedMachine = {
+		Model = model,
+		Id = "CleaningStation",
+		Owner = player,
+		PlotId = plotId,
+		X = -1,
+		Z = -1,
+		R = BaseLayout.CleaningStation.R,
+		L = 0,
+		State = {},
+		Entry = { Id = "CleaningStation", X = -1, Z = -1, R = BaseLayout.CleaningStation.R },
+		Info = MachineData.ById.CleaningStation,
+		Removed = false,
+	}
+	yardStations[plotId] = machine
+	stationSpawned(machine)
+end
+
 function CleaningService.init()
 	MachineService.register("CleaningStation", stationBehaviour)
+	PlotService.onAssigned(function(player: Player, plotId: number)
+		local ok, err = pcall(function()
+			buildYardStation(player, plotId)
+		end)
+		if not ok then
+			warn(`[CleaningService] yard station on plot {plotId}: {err}`)
+		end
+	end)
+	PlotService.onReleased(function(_player: Player, plotId: number)
+		local ok, err = pcall(function()
+			removeYardStation(plotId)
+		end)
+		if not ok then
+			warn(`[CleaningService] yard station off plot {plotId}: {err}`)
+		end
+	end)
 	Net.on("CleanSubmit", onSubmit)
 	Net.on("CleanCancel", onCancel)
 	Players.PlayerRemoving:Connect(function(player)
@@ -557,6 +650,11 @@ CleaningService._test = {
 	end,
 	newScan = newScan,
 	intakePass = intakePass,
+	yardStation = function(plotId: number): MachineService.PlacedMachine?
+		return yardStations[plotId]
+	end,
+	buildYard = buildYardStation,
+	removeYard = removeYardStation,
 	stations = function(): { MachineService.PlacedMachine }
 		local list = {}
 		for machine in stations do
@@ -568,6 +666,7 @@ CleaningService._test = {
 	end,
 	reset = function()
 		table.clear(stations)
+		table.clear(yardStations)
 	end,
 }
 

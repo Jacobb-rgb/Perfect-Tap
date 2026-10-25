@@ -48,6 +48,17 @@ lean review.
   run's Vault prices have a floor: RunShare 0.5 x RunSeconds[level] of Stats.RunIncome (RebirthService writes it right
   after the reset). Tutorial step "A stronger blaster" points at the Vault; ingots: "sell or alloy".
 
+## 3b. The yard Cleaning Station (owner 2026-10-25)
+The owner, in Czech: "jo jenom tu faunery dej uplne pric a misto toho tak tam dej ten cistic rudy kterej pouzivas
+individualne sam ne stroje" ("yes, just remove the Foundry completely and put there instead the ore cleaner you use
+yourself, not machines"). Picked with AskUserQuestion: "Jen na dvoře" (only in the yard).
+- Every owned plot gets a Cleaning Station at BaseLayout.CleaningStation (where the Foundry stood, facing the podiums),
+  built by CleaningService when PlotService assigns the plot and gone when it is freed (vise ore stashed). Runtime only:
+  no save entry, no grid cell, not in MachineService's index; tag "Machine", Owner, Fixed = true (build mode skips it).
+- The starter kit drops its grid station (new players: Furnace + Crusher on the grid, the station in the yard); old
+  saves keep their grid station; the Tech shop still sells more. TutorialConfig.StarterMachines 2, the Cleaning
+  target's layout point is the yard station.
+
 ## 4 + 5. The backpack
 Data: `data.Backpack` = counts by item key ("K|O|G|R" like the pen) and `data.BackpackLevel`; capacity per level
 5 -> 1000 (Strong Back pass: x2). Every mined chunk, cleaned ore, crushed pile, ingot, relic is a backpack item.

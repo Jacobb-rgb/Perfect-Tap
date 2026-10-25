@@ -7,9 +7,10 @@
 	The machine grid (GameConfig.PlotCells square, 12x12 = 48 studs today)
 	covers x, z in -GRID_HALF..GRID_HALF (-24..24). Behind it, on the sea
 	side, lies the yard (z YARD_Z0..YARD_Z0 + 31, 25..56 today): the Ore
-	Pen, the podiums and the train stop on the coastal railway (RailZ, 62
-	today, world |x| ~165). (The Foundry stood behind the podiums until the
-	owner's 2026-10-24 playtest: blasters come from the Vault only.)
+	Pen, the podiums, the yard's own Cleaning Station and the train stop on
+	the coastal railway (RailZ, 62 today, world |x| ~165). (The Foundry
+	stood where the station is until the owner's 2026-10-24 playtest:
+	blasters come from the Vault only.)
 	Nothing here may overlap the machine grid (pieces()); only the two
 	chute cells (Chutes) are fixtures on the grid itself.
 	(bigger plots) Everything here derives from PlotCells: the yard keeps its
@@ -80,6 +81,17 @@ BaseLayout.Podiums = {
 }
 BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 
+-- The yard's own Cleaning Station (owner 2026-10-24: "put the cleaner you use yourself where
+-- the Foundry was"): CleaningService builds the station there for the plot's owner (no grid
+-- cell, no save entry). Center = the footprint's centre on the ground (the machine model's
+-- pivot), R = its rotation like a placed machine's (0: the front, with the prompt and the
+-- camera, faces the podiums and the grid); Area = its footprint (3 x 2 cells) for overlap tests.
+BaseLayout.CleaningStation = {
+	Center = Vector3.new(13, 0, YARD_Z0 + 19),
+	R = 0,
+	Area = rect(13, YARD_Z0 + 19, 12, 10, 8),
+}
+
 -- Train stop on the coastal railway (step 2). Its rail-side edge (z 59 at 12
 -- cells) keeps 3 studs from the rail centerline, out of the trains' wheels (+-2.95).
 BaseLayout.TrainStop = rect(0, YARD_Z0 + 32, 34, 6, 4)
@@ -93,6 +105,7 @@ BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 function BaseLayout.pieces(): { [string]: Rect }
 	local list: { [string]: Rect } = {
 		Pen = BaseLayout.Pen.Area,
+		CleaningStation = BaseLayout.CleaningStation.Area,
 		TrainStop = BaseLayout.TrainStop,
 		Museum = BaseLayout.Museum,
 	}

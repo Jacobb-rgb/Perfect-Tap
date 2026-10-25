@@ -460,11 +460,17 @@ elseif sceneName == "cleaning" then
 	local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
 	local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
 	WorldBuilder.build(workspace)
-	-- plot 1 with the starter kit, like a new player
+	-- plot 1 with the starter kit and a Cleaning Station where the kit's stood (the shots in
+	-- tools/preview/shots.json frame that spot; the yard has its own station since 2026-10-24)
 	local plot = WorldLayout.Plots[1]
 	local plotCf = WorldLayout.plotCFrame(plot)
 	local stationCf
+	local kitShiftX, kitShiftZ = (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
+	local layout = { { Id = "CleaningStation", X = 4 + kitShiftX, Z = 4 + kitShiftZ, R = 0 } }
 	for _, entry in MachineData.StarterKit do
+		table.insert(layout, entry)
+	end
+	for _, entry in layout do
 		local machine = MachineData.ById[entry.Id]
 		local w, d = MachineData.footprint(machine, entry.R)
 		local half = GameConfig.PlotCells * GameConfig.CellSize / 2

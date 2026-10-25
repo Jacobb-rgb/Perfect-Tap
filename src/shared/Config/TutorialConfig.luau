@@ -137,7 +137,7 @@ function TutorialConfig.machinesBought(data: Data, starterCount: number): boolea
 	return false
 end
 
-TutorialConfig.StarterMachines = 3 -- MachineData.StarterKit: Cleaning Station + Furnace + Crusher
+TutorialConfig.StarterMachines = 2 -- MachineData.StarterKit: Furnace + Crusher (the Cleaning Station is the yard's)
 
 -- Woke a golem (a capsule opened, or one is owned).
 function TutorialConfig.golems(data: Data): boolean
@@ -425,7 +425,8 @@ function TutorialConfig.layoutPoint(target: Target, plotId: number?): Vector3?
 	elseif target == "Podium" then
 		return BaseLayout.toWorld(frame, BaseLayout.Podiums[1].Center + Vector3.new(0, 3, 0)).Position
 	elseif target == "Cleaning" then
-		return frame.Position + Vector3.new(0, 3, 0)
+		-- the yard's own station (BaseLayout.CleaningStation); a bought one on the grid may be nearer
+		return BaseLayout.toWorld(frame, BaseLayout.CleaningStation.Center + Vector3.new(0, 3, 0)).Position
 	end
 	return nil
 end

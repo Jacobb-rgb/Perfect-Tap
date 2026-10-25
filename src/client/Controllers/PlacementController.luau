@@ -469,11 +469,12 @@ local function pendingPickup(model: Model): boolean
 	return false
 end
 
--- Your placed machine models (the server tags them "Machine").
+-- Your placed machine models (the server tags them "Machine"; the yard's Cleaning Station,
+-- attribute Fixed, is no placed machine: build mode leaves it alone).
 local function myMachines(includePacking: boolean?): { Model }
 	local list: { Model } = {}
 	for _, instance in CollectionService:GetTagged("Machine") do
-		if instance:IsA("Model") and instance:GetAttribute("Owner") == player.UserId then
+		if instance:IsA("Model") and instance:GetAttribute("Owner") == player.UserId and instance:GetAttribute("Fixed") ~= true then
 			if includePacking or not pendingPickup(instance) then
 				table.insert(list, instance)
 			end

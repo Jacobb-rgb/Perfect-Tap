@@ -110,11 +110,14 @@ return function(T, Loader)
 		local pen = BaseLayout.Pen.Area
 		T.lt(pen.Center.X - pen.Size.X / 2 + HALF + 1, 2.5, "the left yard wall closes the pen")
 		T.near(pen.Center.X + pen.Size.X / 2, -1, 1e-9, "the pen's right edge stays")
-		-- the starter kit keeps its plot-local x and its distance from the back wall
+		-- the starter kit keeps its plot-local x and its distance from the back wall (the
+		-- Furnace first; the Cleaning Station that stood 4 cells left of it is the yard's now)
 		local kit = MachineData.StarterKit
-		T.eq(-HALF + kit[1].X * CELL, -8, "starter kit x")
+		T.eq(kit[1].Id, "ClayFurnace")
+		T.eq(-HALF + kit[1].X * CELL, 8, "starter kit x")
 		T.eq(2 * HALF - kit[1].Z * CELL, 32, "starter kit from the back wall")
-		T.eq(kit[2].X - kit[1].X, 4, "the furnace beside the station")
+		T.eq(kit[2].Id, "Crusher")
+		T.eq(kit[2].X, kit[1].X, "the Crusher right behind the Furnace")
 		T.eq(BaseLayout.Foundry, nil, "no Foundry in the yard (owner 2026-10-24)")
 		T.eq(BaseLayout.FoundryIntake, nil)
 	end)
