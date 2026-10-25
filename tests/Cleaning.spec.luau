@@ -458,6 +458,22 @@ return function(T, Loader)
 				t += 0.05
 			end
 			T.truthy(Guard.check(short).Synthetic, "short strokes don't hide computed timestamps")
+			-- the same bot cut into 2-sample strokes, each starting where the last one ended
+			-- (intervals d, 0, d, 0 across the stream): it still sprays every step and scores
+			-- Flawless, so the gaps between strokes must not hide the computed timestamps
+			local p = Patterns.generate("Gold", 104729)
+			local bot = goodSweep(p, { Even = true, Seed = 1 })
+			local chopped = { Strokes = {}, Input = "Mouse" }
+			for _, stroke in bot.Strokes do
+				for i = 1, #stroke - 3, 3 do
+					table.insert(chopped.Strokes, table.move(stroke, i, i + 5, 1, {}))
+				end
+			end
+			local choppedResult = Scoring.score(p, chopped)
+			T.truthy(choppedResult.Valid, tostring(choppedResult.Reason))
+			T.eq(choppedResult.Grade, "Flawless", "the chopped bot still washes like the bot")
+			T.truthy(Guard.check(chopped).Synthetic, "2-sample strokes don't hide computed timestamps")
+			T.eq(Guard.gradeFor(choppedResult.Grade, Guard.check(chopped)), Guard.Config.CapGrade)
 			-- a nozzle moving at an exactly even speed (positions computed from frame times): noted
 			local even = { Strokes = { {} }, Input = "Mouse" }
 			local tt = 1

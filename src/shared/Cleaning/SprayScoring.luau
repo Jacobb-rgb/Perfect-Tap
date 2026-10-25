@@ -37,7 +37,7 @@ local CleaningPatterns = require(script.Parent.CleaningPatterns)
 local SprayScoring = {}
 
 -- A wide, strong jet (owner 2026-10-25: "thicker, a bit bigger, clean in 5-7 s"): a good
--- sweep takes ~5 s on a Common clump and ~8 s on a Mythic one (was ~9 s and ~15 s).
+-- sweep takes ~5 s on every rarity (was ~9 s on a Common clump and ~15 s on a Mythic one).
 SprayScoring.Radius = 0.4 -- face units the spray reaches around the nozzle point
 SprayScoring.Power = 2.2 -- seconds of dirt (CleaningPatterns.CellDirt) the jet washes off per second point-blank
 -- Spray radius multiplier per input: a finger hides what it sprays and a stick is slower to aim.
@@ -53,8 +53,8 @@ SprayScoring.MaxReach = 3 -- face units: samples farther out are broken input
 SprayScoring.MaxSamples = 4000 -- 200 s of spraying at 20 samples per second
 SprayScoring.MaxStrokes = 1500 -- quick dabs (one-sample taps are dropped by the client)
 -- Replay work budget: sprays per sample so far (+ slack). An honest run needs about 1-2 per
--- sample (one more per ~2.4 face units per second of nozzle speed: frantic scribbling at 9 needs
--- about 4.5, so 6 leaves room up to ~13); a forged zig-zag across the clump needs ~20.
+-- sample (one more per ~4 face units per second of nozzle speed at Radius 0.4: frantic scribbling
+-- at 9 needs about 3, so 6 leaves room up to ~20); a forged zig-zag across the clump needs 10-24.
 SprayScoring.SubstepsPerSample = 6
 SprayScoring.SubstepSlack = 200
 SprayScoring.CrystalRadius = 0.1 -- face units: the nozzle point this close heats a crystal

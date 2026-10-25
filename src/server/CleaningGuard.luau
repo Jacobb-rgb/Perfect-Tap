@@ -7,9 +7,13 @@
 	  every sample with os.clock() on its own frames, so two intervals in a
 	  row are never equal to the microsecond, let alone RunLength in a row
 	  (or EqualShare of them all). A script that computes its timestamps
-	  (t += step) does exactly that. Such a run keeps its grade up to
-	  Pristine: FLAWLESS needs real hands. Nothing else changes (no
-	  rejection), so even a false positive costs a little.
+	  (t += step) does exactly that. Only the intervals inside a stroke
+	  count, in order across the strokes: the gaps between strokes never
+	  break a run (a script cutting its run into 2-sample strokes that
+	  start where the last one ended still shows d, d, d, ...; review
+	  2026-10-25). Such a run keeps its grade up to Pristine: FLAWLESS
+	  needs real hands. Nothing else changes (no rejection), so even a
+	  false positive costs a little.
 	- SOFT signal (logged only while SoftEnforce is false): a perfectly even
 	  nozzle speed over all the strokes, from a mouse or touch (a gamepad
 	  stick can move the cursor evenly, so it never counts). One warn line
@@ -43,21 +47,18 @@ local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
 end
 
--- The longest run of consecutive near-equal intervals in a list of timestamps,
+-- The longest run of consecutive near-equal intervals in a list of intervals,
 -- and how many intervals equal the one before.
-local function longestEqualRun(times: { number }): (number, number)
+local function longestEqualRun(intervals: { number }): (number, number)
 	local best, run, equal = 0, 0, 0
-	local previous: number? = nil
-	for i = 2, #times do
-		local dt = times[i] - times[i - 1]
-		if previous and dt > 0 and math.abs(dt - previous) < CleaningGuard.Config.EqualStep then
+	for i = 2, #intervals do
+		if math.abs(intervals[i] - intervals[i - 1]) < CleaningGuard.Config.EqualStep then
 			run += 1
 			equal += 1
 			best = math.max(best, run)
 		else
 			run = 0
 		end
-		previous = dt
 	end
 	return best, equal
 end
@@ -126,16 +127,23 @@ function CleaningGuard.check(submission: any): Verdict
 		return verdict
 	end
 	local cfg = CleaningGuard.Config
-	-- every stroke's timestamps in order, as one stream (the gaps between strokes break runs)
-	local times: { number } = {}
+	-- the sample intervals inside every stroke, in order, as one stream (not the gaps between strokes)
+	local intervals: { number } = {}
+	local samples = 0
 	for _, stroke in submission.Strokes do
 		local stamps = column(stroke, 3, 3)
 		if stamps then
-			table.move(stamps, 1, #stamps, #times + 1, times)
+			samples += #stamps
+			for i = 2, #stamps do
+				local dt = stamps[i] - stamps[i - 1]
+				if dt > 0 then
+					table.insert(intervals, dt)
+				end
+			end
 		end
 	end
-	local run, equal = longestEqualRun(times)
-	if run >= cfg.RunLength or (#times > cfg.MinSamples and equal >= (#times - 1) * cfg.EqualShare) then
+	local run, equal = longestEqualRun(intervals)
+	if run >= cfg.RunLength or (samples > cfg.MinSamples and equal >= (#intervals - 1) * cfg.EqualShare) then
 		verdict.Synthetic = true
 	end
 	-- soft signal: never for a gamepad (its stick moves the cursor evenly)
