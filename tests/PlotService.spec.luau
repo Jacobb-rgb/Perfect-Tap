@@ -115,14 +115,24 @@ return function(T, Loader)
 		return WorldLayout.plotCFrame(plot):PointToObjectSpace(world.Position)
 	end
 
-	T.test("Yard: every plot has the pen, 4 podiums, foundry and train stop, named for the services", function()
+	T.test("Yard: every plot has the pen, 5 podiums and train stop (no Foundry), named for the services", function()
 		for _, plot in WorldLayout.Plots do
 			local model = buildPlot(plot)
 			local yard = model:FindFirstChild("Yard")
 			T.truthy(yard, "Yard")
-			for _, name in { "Ground", "Fence", "Pen", "Foundry", "TrainStop" } do
+			for _, name in { "Ground", "Fence", "Pen", "TrainStop" } do
 				T.truthy(yard:FindFirstChild(name), `plot {plot.Id} {name}`)
 			end
+			T.eq(yard:FindFirstChild("Foundry"), nil, `plot {plot.Id}: no Foundry (owner 2026-10-24)`)
+			-- the yard station's slate pad (owner 2026-10-25: the pen's floor, not grass) under its footprint
+			local pad = yard:FindFirstChild("StationFloor")
+			T.truthy(pad and pad:IsA("BasePart"), `plot {plot.Id}: the station's pad`)
+			T.eq(pad.Color, yard.Pen.Floor.Color, "the Ore Pen's floor colour")
+			local area = BaseLayout.CleaningStation.Area
+			local p = WorldLayout.plotCFrame(plot):PointToObjectSpace(pad.CFrame.Position)
+			T.le(math.abs(p.X - area.Center.X) + area.Size.X / 2, pad.Size.X / 2 + 1e-4, "covers the footprint (x)")
+			T.le(math.abs(p.Z - area.Center.Z) + area.Size.Z / 2, pad.Size.Z / 2 + 1e-4, "covers the footprint (z)")
+			T.falsy(pad.CanCollide, "the lawn stays the ground")
 			local intake = yard.Pen:FindFirstChild("Intake")
 			T.truthy(intake and intake:IsA("BasePart"), "Pen.Intake part")
 			T.eq(intake.Transparency, 1, "intake invisible")

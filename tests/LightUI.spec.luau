@@ -327,7 +327,6 @@ return function(T, Loader)
 	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}
 		end
@@ -341,13 +340,12 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- the train panel, the Foundry, the Blaster Vault and the Star Forge wear the Pop
-	-- look (owner 2026-10-21): never the LightSkin recolouring; the same refs, every
-	-- touch target still >= 44 pt on phones, the BUY states as before
-	T.test("LightUI: the Pop windows (train, foundry, vault, star forge) keep their behaviour", function()
+	-- the train panel, the Blaster Vault and the Star Forge wear the Pop look (owner
+	-- 2026-10-21): never the LightSkin recolouring; the same refs, every touch target
+	-- still >= 44 pt on phones, the BUY states as before
+	T.test("LightUI: the Pop windows (train, vault, star forge) keep their behaviour", function()
 		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
 		local TrainView = ui("TrainView")
-		local FoundryView = ui("FoundryView")
 		local VaultView = ui("VaultView")
 		local RebirthView = ui("RebirthView")
 		local MenuPanel = ui("MenuPanel")
@@ -371,7 +369,6 @@ return function(T, Loader)
 		for name, gui in
 			{
 				Train = TrainView.build(false).Gui,
-				Foundry = FoundryView.build().Gui,
 				Vault = VaultView.build().Gui,
 				Rebirth = RebirthView.build().Gui,
 			}
@@ -410,28 +407,6 @@ return function(T, Loader)
 			local robux = train.Express.Buy:FindFirstChild("PopFace") :: any
 			T.truthy(robux and robux.Visible, "the green Robux button")
 			T.eq(robux:FindFirstChild("Amount").Text, tostring(TrainView.ExpressPrice))
-
-			-- the Foundry (the hammer moment keeps the light skin)
-			local foundry = FoundryView.build()
-			T.truthy(foundry.Gui:GetAttribute("PopSkin"), "Pop Foundry")
-			T.falsy(foundry.Gui:GetAttribute("LightSkin"), "no LightSkin on the Foundry")
-			FoundryView.setCompact(foundry, true)
-			local state = { FoundryStock = { ["Ingot|Gold|Clean|"] = 2, ["Ingot|Coal||"] = 4 }, BlasterLevel = 3, Coins = 1e9 }
-			FoundryView.setRows(foundry, FoundryView.oreRows(state.FoundryStock, 3), 6)
-			FoundryView.setCard(foundry, FoundryView.status(state, nil), state)
-			T.truthy(foundry.Rows.Gold.Frame:FindFirstChild("Picture"), "a live ingot per row")
-			T.eq(foundry.Rows.Gold.Take.Text, "TAKE")
-			T.eq(foundry.Rows.Coal.Take.Text, "TAKE ALL")
-			local coalShade = foundry.Rows.Coal.Frame:FindFirstChild("Shade") :: any
-			T.truthy(coalShade and coalShade.Visible, "a row the next level can't use is shaded")
-			T.truthy(foundry.Card:FindFirstChild("Picture"), "the next blaster's picture")
-			for _, button in { foundry.Close, foundry.Forge, foundry.Rows.Gold.Take, foundry.LookPrev } do
-				bigEnough("foundry", button.Parent)
-			end
-			-- (the TAKE switch's faces fit the header band: their buttons reach past them)
-			for _, button in { foundry.TakeOne, foundry.TakeEvery } do
-				bigEnough("foundry switch", button)
-			end
 
 			-- the Blaster Vault
 			local vault = VaultView.build()

@@ -29,7 +29,7 @@
 	                   slate ramp there rolls ore back in), an invisible
 	                   `Intake` part (BaseLayout.Pen.Intake) with a `Prompt`
 	                   attachment at Pen.PromptPoint
-	  Yard.Podium1..4  showpiece pedestals: a round slate `Base` (the
+	  Yard.Podium1..5  showpiece pedestals: a round slate `Base` (the
 	                   PrimaryPart) with a glowing ring, a cream drum (`Column`)
 	                   with an orange band, the glowing `Rim` under the slate
 	                   `Top`, a level holo-ring of opaque soft cyan bars around
@@ -40,11 +40,6 @@
 	                   ore floats and a "100 R$" `PricePlate` (PodiumService
 	                   hides them for players with the Podiums perk and lights
 	                   the rim; the plate's neon frame lives in the lock)
-	  Yard.Foundry     Factory Kit placeholder ("FOUNDRY - coming soon"):
-	                   machine-fortified housing with a rib and copper eaves, a
-	                   deep furnace portal (ember core, molten surround, grate),
-	                   a hollow hopper-square, a chimney (FoundryService puts
-	                   the FoundryBuilder building in its place at server start)
 	  Yard.TrainStop   a light metal platform with a glowing strip and a
 	                   striped safety edge, the slate TRAIN STOP sign on two
 	                   round cream posts, a slate lamp post with a glowing lamp,
@@ -118,12 +113,9 @@ local ROBUX_GREEN = rgb(110, 255, 140)
 local P = SoftKit.Palette
 local PEN_FLOOR = rgb(104, 112, 142) -- the pen's tray: a softer slate than the machines' Floor
 local LOCKED_RED = rgb(190, 16, 16) -- deep: a bright red neon tone-maps to salmon
--- Factory / Space Station metals (docs/ART_DIRECTION.md section 9): the
--- foundry placeholder and the Track placeholder (both replaced at runtime)
-local HOUSING = rgb(66, 72, 92) -- the foundry's gunmetal housing (concept v2 dark metal)
-local HOUSING_LIGHT = rgb(90, 98, 122)
-local HOUSING_DARK = rgb(58, 60, 72)
-local SHELL = rgb(44, 48, 64) -- gunmetal Space Station panels (foundry frame)
+-- Factory / Space Station metal (docs/ART_DIRECTION.md section 9): the Track
+-- placeholder's buffer stop (replaced at runtime)
+local HOUSING = rgb(66, 72, 92) -- gunmetal (concept v2 dark metal)
 -- the podium's holo-ring: style A's soft cyan (the Fusion Reactor's). Perf
 -- pass 1: the bars are opaque, so holoTone mixes a glow color 0.4 of the way
 -- to HOLO_BEHIND (the grey-blue the old 0.4 see-through bars let through over
@@ -138,10 +130,6 @@ local HOLO_GLOW = rgb(90, 200, 255)
 local HOLO = holoTone(HOLO_GLOW) -- about rgb(94, 166, 206)
 local RAIL_STEEL = rgb(196, 200, 214)
 local SLEEPER = rgb(196, 112, 62)
-local FURNACE = rgb(196, 50, 12) -- the furnace mouth's surround: dark molten orange (C.Ember, the core, tone-maps to yellow)
-
--- the foundry's front wall stands this far behind the front of its BaseLayout rect
-local FOUNDRY_INSET = 3.5
 
 PlotBuilder.RimGold = RIM_GOLD
 PlotBuilder.RimLocked = RIM_LOCKED
@@ -196,44 +184,6 @@ local function attachment(parent: BasePart, name: string, localCF: CFrame): Atta
 	a.CFrame = localCF
 	a.Parent = parent
 	return a
-end
-
--- An upright cylinder whose axis is the frame's up vector.
-local function cylinder(
-	parent: Instance,
-	cf: CFrame,
-	height: number,
-	diameter: number,
-	color: Color3,
-	material: Enum.Material?,
-	props: Geo.PartProps
-): Part
-	local part = Geo.block(parent, cf * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(height, diameter, diameter), color, material, props)
-	part.Shape = Enum.PartType.Cylinder
-	return part
-end
-
--- A board with text on a SurfaceGui facing the board's LookVector.
-local function board(parent: Instance, cf: CFrame, size: Vector3, color: Color3, text: string, textColor: Color3): Part
-	local part = Geo.block(parent, cf, size, color, nil, GHOST)
-	part.Name = "Sign"
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0.3
-	gui.Parent = part
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromScale(0.04, 0.08)
-	label.Size = UDim2.fromScale(0.92, 0.84)
-	label.Text = text
-	label.TextScaled = true
-	label.TextColor3 = textColor
-	label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
-	label.Parent = gui
-	return part
 end
 
 ---------------------------------------------------------------- soft walls (style A)
@@ -339,10 +289,8 @@ local TURN = math.pi / 4 -- the turn between a side or back wall and its cut cor
 	  SidePostGap   the left side wall, at most this far apart
 	  BackPostGap   the pad/yard wall beyond its first pillar
 	  GatePillarGap the pad/yard wall's first pillar, this far out from the
-	                YardGate post: the FOUNDRY receiver's hood leans on the
-	                wall between them (BaseLayout.FoundryIntake), and the
-	                chutes keep their plot-local x at any grid size, so it
-	                stays put too
+	                YardGate post (it once left room for the FOUNDRY
+	                receiver's hood; it stays put at any grid size)
 ]]
 PlotBuilder.SidePostGap = 14.5
 PlotBuilder.BackPostGap = 10
@@ -360,9 +308,7 @@ local function postsBetween(a: number, b: number, maxGap: number): { number }
 end
 
 -- The pad/yard wall's pillars between the YardGate post and the corner post,
--- plot-local |x| (the same on both sides, nearest the gate first). The
--- first one stands beside the FOUNDRY receiver's hood (ConveyorService puts
--- the FOUNDRY plaque past it).
+-- plot-local |x| (the same on both sides, nearest the gate first).
 function PlotBuilder.backPillars(): { number }
 	local gate = BaseLayout.YardGate
 	local first = math.abs(gate.CenterX + gate.Width / 2 + GATE_POST_CAP / 2) + PlotBuilder.GatePillarGap
@@ -436,8 +382,8 @@ local function ground(yard: Model, cf: CFrame)
 	local pad =
 		Geo.block(yard, cf * CFrame.new(c.X, -0.6, c.Z), Vector3.new(rect.Size.X, 1.2, rect.Size.Z), LAWN, nil, { CanTouch = false })
 	pad.Name = "Ground"
-	-- gravel paths: along the front (pen gate .. podiums), the middle lane to
-	-- the train stop, and the apron in front of the foundry
+	-- gravel paths: along the front (pen gate .. podiums) and the middle lane
+	-- to the train stop
 	local pen = BaseLayout.Pen.Area
 	local penFront = pen.Center.Z - pen.Size.Z / 2
 	local lastPodium = BaseLayout.Podiums[#BaseLayout.Podiums]
@@ -464,31 +410,6 @@ local function ground(yard: Model, cf: CFrame)
 		GHOST
 	)
 	lane.Name = "Path"
-	local foundry = BaseLayout.Foundry
-	local slabFront = foundry.Center.Z - foundry.Size.Z / 2 + FOUNDRY_INSET - 1.5
-	local foundryApron = Geo.block(
-		yard,
-		cf * CFrame.new((1.9 + foundry.Center.X + 2.5) / 2, 0.03, slabFront - 2.6),
-		Vector3.new(foundry.Center.X + 2.5 - 1.9, 0.06, 5.2),
-		GRAVEL,
-		nil,
-		GHOST
-	)
-	foundryApron.Name = "Path"
-	-- (round 3) a gravel walk along the podium row to the foundry's apron
-	local podiumBack = lastPodium.Center.Z + lastPodium.Size.Z / 2
-	local walkZ0, walkZ1 = podiumBack + 0.2, slabFront - 5.2
-	if walkZ1 - walkZ0 > 0.6 then
-		local walk = Geo.block(
-			yard,
-			cf * CFrame.new((1.9 + apronMaxX) / 2, 0.03, (walkZ0 + walkZ1) / 2),
-			Vector3.new(apronMaxX - 1.9, 0.06, walkZ1 - walkZ0),
-			GRAVEL,
-			nil,
-			GHOST
-		)
-		walk.Name = "Path"
-	end
 end
 
 -- The yard's back border (its long side walls belong to the pad's Walls):
@@ -733,131 +654,31 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 end
 
 --[[
-	Foundry placeholder in the Factory Kit look (machine-fortified): an iron
-	housing on a thick hazard-striped base, copper eaves and a pale rib that
-	wraps over the roof and down both sides; a deep portal frame around the
-	furnace mouth (a molten-orange surround set back 0.8 behind the frame
-	front, a smaller bright ember inside it, two dark grate bars in front;
-	ForgeGlow pulses on the client) with the COMING SOON plank hung across
-	the lintel above it; a hopper-square on the roof (dark inset inside the
-	copper rim, so its top reads hollow) and a round chimney with a copper
-	flange and an ember glowing in its mouth.
+	The pad of the yard's own Cleaning Station (owner 2026-10-25: "the same ground as
+	under the ores, not grass"): the Ore Pen's slate tray with its painted tile seams
+	under the station's footprint (BaseLayout.CleaningStation, built there at runtime
+	by CleaningService for the plot's owner), a stud round it and the spot in front
+	where you stand to clean (the station's front faces -Z at R 0). One part, no
+	collision (the lawn stays the ground).
 ]]
-local function foundry(yard: Model, cf: CFrame)
-	local rect = BaseLayout.Foundry
-	local m = model("Foundry", yard)
-	local c = rect.Center
-	local front = c.Z - rect.Size.Z / 2 + FOUNDRY_INSET -- front wall face (a gravel apron lies before it)
-	local depth = 9
-	local width = 14
-	local base = cf * CFrame.new(c.X, 0, front + depth / 2)
-	Geo.block(m, base * CFrame.new(0, 0.2, -0.5), Vector3.new(width + 2, 0.8, depth + 2), C.StoneDark, nil, SOLID)
-	Geo.block(m, base * CFrame.new(0, 0.95, 0), Vector3.new(width + 0.3, 0.7, depth + 0.3), C.Hazard, nil, FENCE)
-	local bodyBottom, bodyTop = 1.3, 7.3
-	local walls = Geo.block(
-		m,
-		base * CFrame.new(0, (bodyBottom + bodyTop) / 2, 0),
-		Vector3.new(width, bodyTop - bodyBottom, depth),
-		HOUSING,
-		nil,
-		SOLID
-	)
-	walls.Name = "Walls"
-	-- copper eaves around the top of the walls (the warm accent from the hero camera)
-	Geo.block(m, base * CFrame.new(0, bodyTop - 0.3, 0), Vector3.new(width + 0.4, 0.6, depth + 0.4), C.Copper, nil, FENCE)
-	-- the pale roof slab, inset from the copper eaves
-	local roofH = 0.9
-	local roofTop = bodyTop + roofH
-	Geo.block(m, base * CFrame.new(0, bodyTop + roofH / 2, 0), Vector3.new(width - 0.6, roofH, depth - 0.6), SHELL, nil, SOLID)
-	-- machine-fortified rib: over the roof and down both sides, in the middle
-	local ribTop = roofTop + 0.4
-	Geo.block(
-		m,
-		base * CFrame.new(0, (bodyBottom + ribTop) / 2, 0.5),
-		Vector3.new(width + 0.8, ribTop - bodyBottom, 1.4),
-		HOUSING_LIGHT,
-		nil,
-		FENCE
-	)
-	-- the furnace mouth: a deep portal frame (1 stud proud of the wall), a dark
-	-- recess, the molten surround and the ember inside it, a grate in front
-	local face = base * CFrame.new(0, 0, -depth / 2)
-	local mouthW, mouthTop, frameTop, frameD = 5.2, 4.9, 6.4, 1.0
-	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			face * CFrame.new(side * (mouthW / 2 + 0.45), (bodyBottom + frameTop) / 2, -frameD / 2),
-			Vector3.new(0.9, frameTop - bodyBottom, frameD),
-			SHELL,
-			nil,
-			FENCE
-		)
+PlotBuilder.StationPad = { Margin = 1, Front = 4 }
+local function stationPad(yard: Model, cf: CFrame)
+	local area = BaseLayout.CleaningStation.Area
+	local pad = PlotBuilder.StationPad
+	local sizeX = area.Size.X + 2 * pad.Margin
+	local sizeZ = area.Size.Z + 2 * pad.Margin + pad.Front
+	local centerZ = area.Center.Z - pad.Front / 2
+	local floor =
+		SoftKit.part(yard, cf * CFrame.new(area.Center.X, 0.1, centerZ), Vector3.new(sizeX, 0.2, sizeZ), PEN_FLOOR, TINY, "StationFloor")
+	local seams: { SoftKit.Paint } = {}
+	local cols, rows = 4, 4
+	for i = 1, cols - 1 do
+		table.insert(seams, { x = i / cols - 0.003, y = 0, w = 0.006, h = 1, color = P.Frame })
 	end
-	Geo.block(
-		m,
-		face * CFrame.new(0, (mouthTop + frameTop) / 2, -frameD / 2),
-		Vector3.new(mouthW + 1.8, frameTop - mouthTop, frameD),
-		SHELL,
-		nil,
-		FENCE
-	)
-	Geo.block(
-		m,
-		face * CFrame.new(0, (bodyBottom + mouthTop) / 2, -0.05),
-		Vector3.new(mouthW, mouthTop - bodyBottom, 0.1),
-		HOUSING_DARK,
-		nil,
-		GHOST
-	)
-	local glowW, glowH = 3.8, 2.4
-	local glowBottom = bodyBottom + 0.1
-	local glow = Geo.block(m, face * CFrame.new(0, glowBottom + glowH / 2, -0.15), Vector3.new(glowW, glowH, 0.1), FURNACE, NEON, GHOST)
-	glow.Name = "ForgeGlow"
-	local ember = Geo.block(m, face * CFrame.new(0, glowBottom + 0.85, -0.25), Vector3.new(2.6, 1.4, 0.1), C.Ember, NEON, GHOST)
-	ember.Name = "ForgeGlow"
-	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			face * CFrame.new(side * 0.7, glowBottom + glowH / 2, -0.45),
-			Vector3.new(0.18, glowH + 0.2, 0.18),
-			HOUSING_DARK,
-			nil,
-			THIN
-		)
+	for j = 1, rows - 1 do
+		table.insert(seams, { x = 0, y = j / rows - 0.003, w = 1, h = 0.006, color = P.Frame })
 	end
-	-- the sign over the frame, and the plank hung across the lintel above the mouth: not open yet
-	board(m, face * CFrame.new(0, 7.25, -frameD - 0.15), Vector3.new(8.4, 1.6, 0.2), HOUSING_DARK, "FOUNDRY", C.Fire)
-	local plank = board(
-		m,
-		face * CFrame.new(0, (mouthTop + frameTop) / 2, -frameD - 0.12) * CFrame.Angles(0, 0, 0.05),
-		Vector3.new(6.2, 1.15, 0.2),
-		C.StoneDeep,
-		"COMING SOON",
-		Palette.Gold
-	)
-	plank.Name = "ComingSoon"
-	-- hopper-square on the roof (front left): a funnel standing on its tip, the
-	-- copper rim around a dark inset (so the top reads hollow)
-	local hopper = base * CFrame.new(-width / 2 + 3, roofTop, -2.1)
-	for _, side in { -1, 1 } do
-		-- upside-down wedges, their tall sides meeting in the middle
-		Geo.wedge(
-			m,
-			hopper * CFrame.new(0, 0.7, side * 0.85) * CFrame.Angles(0, if side > 0 then math.pi else 0, math.pi),
-			Vector3.new(3.2, 1.4, 1.7),
-			HOUSING_LIGHT,
-			nil,
-			FENCE
-		)
-	end
-	Geo.block(m, hopper * CFrame.new(0, 1.7, 0), Vector3.new(3.5, 0.6, 3.5), C.Copper, nil, FENCE)
-	Geo.block(m, hopper * CFrame.new(0, 2.01, 0), Vector3.new(2.7, 0.04, 2.7), HOUSING_DARK, nil, GHOST)
-	-- round chimney (back right) with a copper flange and an ember top
-	local stack = base * CFrame.new(width / 2 - 2.6, 0, depth / 2 - 1.9)
-	cylinder(m, stack * CFrame.new(0, 10.9, 0), 7.2, 2.4, HOUSING_LIGHT, nil, SOLID)
-	cylinder(m, stack * CFrame.new(0, 9.4, 0), 0.5, 2.9, C.Copper, nil, TRIM)
-	local top = cylinder(m, stack * CFrame.new(0, 14.52, 0), 0.06, 1.9, C.Ember, NEON, GHOST)
-	top.Name = "ForgeGlow"
+	SoftKit.paint(floor, Enum.NormalId.Top, seams)
 end
 
 --[[
@@ -972,7 +793,7 @@ function PlotBuilder.buildYard(parent: Instance, cf: CFrame): Model
 	for index, rect in BaseLayout.Podiums do
 		podium(yard, cf, index, rect)
 	end
-	foundry(yard, cf)
+	stationPad(yard, cf)
 	trainStop(yard, cf)
 	return yard
 end

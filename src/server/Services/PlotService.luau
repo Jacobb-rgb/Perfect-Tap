@@ -159,7 +159,7 @@ end
 --[[
 	Takes the plot's things down, runs `between` and puts them back up, on
 	the same plot (a rebirth: RebirthService). The released callbacks run
-	first (the machines unload, the pen's intents, the Foundry, the boards),
+	first (the machines unload, the pen's intents, the boards),
 	then `between` (the save may change), then the assigned callbacks (the
 	machines spawn from the save). The plot stays this player's the whole
 	time, so nobody can take it in between.

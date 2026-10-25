@@ -77,7 +77,8 @@ end
 SprayParts.JetCore = 0.16 -- studs across: the bright middle of the jet
 SprayParts.JetGlow = 0.34 -- studs across: the soft water around it
 
--- The jet: a bright core with a soft glow around it (the glow is the core's child).
+-- The jet: a bright core with a soft glow around it (the glow is the core's child). Not Glass:
+-- at high graphics quality Roblox hides transparent parts behind Glass, and the core is one.
 function SprayParts.jet(parent: Instance): Part
 	local p = props()
 	p.Name = "Jet"
@@ -86,7 +87,7 @@ function SprayParts.jet(parent: Instance): Part
 	local g = props()
 	g.Name = "JetGlow"
 	g.Transparency = 1
-	Geo.cylinder(core, SprayParts.Hidden.Position, 1, SprayParts.JetGlow, Color3.fromRGB(170, 225, 255), Enum.Material.Glass, g)
+	Geo.cylinder(core, SprayParts.Hidden.Position, 1, SprayParts.JetGlow, Color3.fromRGB(170, 225, 255), Enum.Material.SmoothPlastic, g)
 	return core
 end
 

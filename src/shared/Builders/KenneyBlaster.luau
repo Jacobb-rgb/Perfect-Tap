@@ -305,7 +305,7 @@ end
 
 --[[
 	A level's whole outline as one block of color (the full width): black
-	rack silhouettes (the Foundry's next level). 8-23
+	rack silhouettes (BlasterBuilder.silhouette). 8-23
 	parts. Same frame as the gun (the hand at the origin).
 ]]
 function KenneyBlaster.silhouette(level: number, color: Color3, part: PartFn)

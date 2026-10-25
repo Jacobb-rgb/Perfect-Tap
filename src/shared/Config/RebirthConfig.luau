@@ -3,27 +3,34 @@
 	docs/plans/REBIRTH_PROPOSAL.md): an optional restart that keeps your
 	factory and pays Forge Stars, spent in the Star Shop on lasting perks.
 
-	- Needs your blaster at MinBlaster or higher, FORGED at the Foundry in
-	  this run (reachedOf: Stats.RunForged, which FoundryService raises and
-	  the reset clears; the first run counts the blaster level as it is,
-	  unless a level was bought with Robux in it: Stats.RunPaid, set by
+	- Needs your blaster at MinBlaster or higher, BOUGHT WITH COINS at the
+	  Vault in this run (owner 2026-10-24: no Foundry any more; reachedOf:
+	  Stats.RunForged, which VaultService.grantNext "Coins" raises and the
+	  reset clears; the first run counts the blaster level as it is, unless
+	  a level was bought with Robux in it: Stats.RunPaid, set by
 	  VaultService.grantNext "Robux" (which first keeps the levels the grace
 	  counted so far in RunForged) and by a start the Robux levels lift).
-	  The top level is left to the Foundry while nothing was forged
-	  (topBlocked: the Vault says "ForgeFirst", the STORE "Full"), and a save
-	  that still got there unforged may rebirth for starsFor(reachedOf) (0).
-	  Vault cases are bought with coins only, and Podium Keeper keeps the
-	  income: counting them would make the stars a few minutes of idle
-	  income each. Rebirth is never forced, never sold for Robux, and
-	  nothing in it is random.
+	  The STORE never sells the top level while no rebirth level was bought
+	  with coins (topBlocked: "Full"), and a save that still got there
+	  without one may rebirth for starsFor(reachedOf) (0). The factory's
+	  income stays through a rebirth (droppers, Podium Keeper), so a rebirth
+	  run's Vault prices have a floor: a level costs at least some minutes
+	  of the income kept at the rebirth (Stats.RunIncome, BlasterData.
+	  vaultPrice; the run's high-water mark, PodiumService.raiseRunIncome:
+	  packing the droppers before a rebirth doesn't lower it for long), or
+	  the stars would be a few seconds of idle income each. Coins bought
+	  with Robux (data.PaidCoins) buy no star levels either (owner
+	  2026-10-25: a Vault level they paid for leaves RunForged as it was,
+	  like a Robux level: VaultService "PaidCoins").
+	  Rebirth is never forced, never sold for Robux, and nothing in it is
+	  random.
 	- Resets (reset(), one step on the save): the earned coins, the blaster (level 1, or
 	  Head Start's level, lifted one level per blaster level ever bought with
 	  Robux: startFor, in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator, the machine
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
 	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
-	  the podiums (unless Podium Keeper), the Foundry's ingots, the train's
-	  cargo, the machines' queues (RebirthService also takes your loose and
+	  the podiums (unless Podium Keeper), the train's cargo, the machines' queues (RebirthService also takes your loose and
 	  carried items out of the world). Dusty relics are artifacts, never
 	  ore: the ones in those lists wait in the pen (RebirthService hands them
 	  to the relic keeper, which adds them to the collection). The enchants
@@ -38,8 +45,8 @@
 	- Robux blaster levels come back (owner 2026-10-20, "don't lose what you
 	  paid for"): every level bought with Robux (Stats.BlastersPaid,
 	  VaultService) lifts the fresh blaster of EVERY later rebirth one level
-	  (startFor), up to MaxLevel - 1: one level is always left to forge at
-	  the Foundry, or the next rebirth could never be earned. They never pay
+	  (startFor), up to MaxLevel - 1: one level is always left to buy with
+	  coins, or the next rebirth could never be earned. They never pay
 	  stars (Stats.RunPaid).
 	- Pays: starsFor(reachedOf), Rebirths + 1. Stats.BestBlaster keeps the
 	  highest level ever reached: coin prices that grow with the blaster
@@ -54,7 +61,7 @@
 
 	Stars follow the blaster prices (the machines chat recalibrates them):
 	MinStars at MinBlaster, MaxStars at the top level, and in between by how
-	much of the way there the level's total Foundry coins are, on a log scale
+	much of the way there the level's total coin scale is (BlasterData.coins), on a log scale
 	(starsCurve). A level that costs relatively more of the run gives more
 	stars; no coin number is written here. tests/Rebirth.spec.luau pins the
 	relationships, not the numbers.
@@ -174,15 +181,14 @@ local function finite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
 end
 
--- The Foundry coins of every level up to `level` (level 1 is free).
+-- The coin scale (BlasterData.coins) of every level up to `level` (level 1 is free).
 function RebirthConfig.coinsTo(level: number, coinsOf: ((number) -> number)?): number
 	local total = 0
 	for lv = 2, level do
 		if coinsOf then
 			total += coinsOf(lv)
 		else
-			local blaster = BlasterData.ByLevel[lv]
-			total += if blaster and blaster.Recipe then blaster.Recipe.Coins else 0
+			total += BlasterData.coins(lv)
 		end
 	end
 	return total
@@ -190,7 +196,7 @@ end
 
 --[[
 	The stars of each level MinBlaster..top for a price list (`coinsOf(level)`
-	= that level's Foundry coins; nil = BlasterData): MinStars at MinBlaster,
+	= that level's coin scale; nil = BlasterData.coins): MinStars at MinBlaster,
 	MaxStars at the top, the levels between by log(total coins to the level /
 	total to MinBlaster) over the same for the top, rounded, never fewer than
 	the level below. Returns { [level] = stars }.
@@ -363,7 +369,7 @@ function RebirthConfig.paidOf(data: any): number
 end
 
 -- The blaster level a rebirth starts this save with: Head Start's, plus one
--- per Robux level, up to MaxLevel - 1 (a level is left to forge).
+-- per Robux level, up to MaxLevel - 1 (a level is left to buy with coins).
 function RebirthConfig.startFor(data: any): number
 	local base = RebirthConfig.startLevel(if type(data) == "table" then data.StarPerks else nil)
 	return math.max(base, math.min(base + RebirthConfig.paidOf(data), BlasterData.MaxLevel - 1))
@@ -377,9 +383,9 @@ function RebirthConfig.countOf(data: any): number
 	return if finite(v) and v > 0 then math.floor(v) else 0
 end
 
--- The blaster level this run counts for the stars: the highest one forged at
--- the Foundry in it (Stats.RunForged, at most the level now); the first run
--- (no rebirth yet) counts the blaster level as it is.
+-- The blaster level this run counts for the stars: the highest one bought with
+-- coins in it (Stats.RunForged, at most the level now); the first run (no
+-- rebirth yet) counts the blaster level as it is.
 function RebirthConfig.reachedOf(data: any): number
 	if type(data) ~= "table" then
 		return 0
@@ -395,7 +401,8 @@ function RebirthConfig.reachedOf(data: any): number
 end
 
 -- Can this save rebirth now? (false + "NoData" | "Locked" (the blaster is
--- below MinBlaster) | "NotForged" (it is, but this run forged no such level))
+-- below MinBlaster) | "NotForged" (it is, but this run bought no such level
+-- with coins: the Robux ones don't count))
 function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if type(data) ~= "table" then
 		return false, "NoData"
@@ -404,19 +411,27 @@ function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if level < RebirthConfig.MinBlaster then
 		return false, "Locked"
 	end
-	-- (at the top level nothing is left to forge: a save that got there unforged (Vault
-	-- cases before topBlocked existed) may rebirth for starsFor(reachedOf), 0 stars)
+	-- (at the top level nothing is left to buy: a save that got there without a coin
+	-- level (Vault cases before topBlocked existed) may rebirth for starsFor(reachedOf), 0 stars)
 	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster and level < BlasterData.MaxLevel then
 		return false, "NotForged"
 	end
 	return true, nil
 end
 
--- Would buying the next blaster level (Vault coins, Robux) make the top level with no
--- rebirth level forged this run? Then nothing would be left to forge and the run could
--- never rebirth with stars: the Vault and the STORE leave that level to the Foundry.
+-- Would buying the next blaster level with Robux make the top level with no rebirth
+-- level bought with coins this run? Then nothing would be left to buy and the run could
+-- never rebirth with stars: the STORE leaves that level to the Vault's coins.
 function RebirthConfig.topBlockedFor(level: number, reached: number): boolean
 	return level + 1 == BlasterData.MaxLevel and reached < RebirthConfig.MinBlaster
+end
+
+-- The coins / s the factory kept at this run's rebirth (Stats.RunIncome, 0 on the first
+-- run): the floor under the run's Vault prices (BlasterData.vaultPrice).
+function RebirthConfig.runIncomeOf(data: any): number
+	local stats = if type(data) == "table" then data.Stats else nil
+	local v = if type(stats) == "table" then stats.RunIncome else nil
+	return if finite(v) and v > 0 then v else 0
 end
 
 function RebirthConfig.topBlocked(data: any): boolean
@@ -450,6 +465,8 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	stats.BestBlaster = math.max(if finite(stats.BestBlaster) then math.floor(stats.BestBlaster) else 0, level)
 	stats.RunForged = 0
 	stats.RunPaid = false
+	-- (RebirthService writes the income the factory kept, once the plot is back: runIncomeOf)
+	stats.RunIncome = 0
 	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper)
 	local relics = {}
 	local function keepRelics(list: any)
@@ -509,7 +526,6 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	record(data, "Gear").Backpack = 0
 	-- every ore you own (the factory itself stays where it stands)
 	data.Storage = relics
-	record(data, "Foundry").Stock = {}
 	if RebirthConfig.levelOf(perks, "PodiumKeeper") < 1 and type(data.Podiums) == "table" then
 		for i, key in data.Podiums do
 			if type(key) == "string" then

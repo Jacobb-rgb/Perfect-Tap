@@ -48,7 +48,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
@@ -656,12 +658,51 @@ end
 
 ---------------------------------------------------------------- income
 
+--[[
+	The coins / s a player's factory makes by itself: the podiums plus every placed
+	dropper at full flow, through the income multiplier (a Drop sold in a Sell Box
+	pays through it; DropperConfig.placedIncome counts the Money Laser).
+]]
+function PodiumService.keptIncome(player: Player, data: { [string]: any }): number
+	local podiums = PodiumService.incomeOf(player, data)
+	local droppers = DropperConfig.placedIncome(data.PlacedMachines) * EconomyService.incomeMultiplier(player)
+	local total = podiums + droppers
+	return if total == total and total > 0 then math.min(total, 1e27) else 0
+end
+
+--[[
+	A rebirth run's Vault price floor (Stats.RunIncome, BlasterData.vaultPrice) is the
+	HIGHEST income the factory made by itself during the run, not a snapshot: a player
+	who packs the droppers or takes the golems off before a rebirth and puts them back
+	afterwards raises it again (the review of 2026-10-25). RebirthService starts it at
+	the rebirth, every income tick and every Vault buy raise it (never lower). The
+	first run (no rebirth yet) has no floor. Returns true when it rose.
+]]
+function PodiumService.raiseRunIncome(player: Player, data: { [string]: any }): boolean
+	if RebirthConfig.countOf(data) <= 0 then
+		return false
+	end
+	local stats = data.Stats
+	if type(stats) ~= "table" then
+		return false
+	end
+	local kept = PodiumService.keptIncome(player, data)
+	if kept > RebirthConfig.runIncomeOf(data) then
+		stats.RunIncome = kept
+		return true
+	end
+	return false
+end
+
 local function payOne(player: Player, now: number)
 	local data = DataService.get(player)
 	if not data then
 		return
 	end
 	data.LastSeen = now
+	if PodiumService.raiseRunIncome(player, data) then
+		DataService.changed(player)
+	end
 	local amount = PodiumService.incomeOf(player, data) * EconomyConfig.IncomeTick
 	if amount >= 0.001 and amount <= EconomyConfig.MaxAward then
 		EconomyService.award(player, amount, "Podium", true)

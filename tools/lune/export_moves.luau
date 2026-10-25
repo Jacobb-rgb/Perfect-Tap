@@ -113,7 +113,7 @@ type Segment = {
 	Ore: number?, -- chunks carried (CarryService stack slots)
 	ThrowAt: number?, -- the top chunk leaves the hands at this local time
 	Blaster: boolean?,
-	Prop: string?, -- "Station" (the Cleaning Station in front) | "Anvil" (the Foundry anvil)
+	Prop: string?, -- "Station" (the Cleaning Station in front)
 	Beam: { number }?, -- { from, to } local seconds the beam is on (the Recoil segment)
 	Shot: Shot,
 	MoveName: string,
@@ -171,16 +171,6 @@ local SEGMENTS: { Segment } = {
 		Plays = { { Move = "Spray", At = 0.2, Stop = 2.2 } },
 		Prop = "Station",
 		Shot = THREEQ,
-	},
-	{
-		MoveName = "Hammer",
-		Title = "HAMMER",
-		Subtitle = "Kování blasteru ve Foundry (vidí to ostatní hráči)",
-		Base = "Idle",
-		Length = 3.0,
-		Plays = { { Move = "Hammer", At = 0.2, Stop = 2.6 } },
-		Prop = "Anvil",
-		Shot = SIDE,
 	},
 	{
 		MoveName = "Celebrate",
@@ -310,7 +300,7 @@ local muzzleLocal = if muzzle then CFrame.new(muzzle.Position) else CFrame.new(0
 -- the laser beam stub (a neon block the renderer stretches along -Z of its frame)
 addGroup("Beam", { { 0, 0.22, 0.22, 1, cf12(CFrame.new(0, 0, -0.5)), "ff9a4a", "Neon", 0 } })
 
--- world props in front of the dummy (simple stand-ins for the Cleaning Station and the anvil)
+-- world props in front of the dummy (a simple stand-in for the Cleaning Station)
 local function block(size: any, cf: any, color: string, material: string?): any
 	return { 0, round(size.X), round(size.Y), round(size.Z), cf12(cf), color, material or "SmoothPlastic", 0 }
 end
@@ -324,13 +314,6 @@ addGroup("Station", {
 local stationOre = ItemBuilder.build({ Kind = "Raw", OreId = "Iron" }, CFrame.identity, "station")
 local stationBody = stationOre.PrimaryPart or stationOre:FindFirstChildWhichIsA("BasePart", true)
 addGroup("StationOre", modelParts(stationOre, stationBody.CFrame))
-addGroup("Anvil", {
-	block(Vector3.new(1.5, 0.8, 1.2), CFrame.new(0, 0.4, 0), "3b3f47", "Metal"),
-	block(Vector3.new(0.8, 0.8, 0.7), CFrame.new(0, 1.2, 0), "4a4f58", "Metal"),
-	block(Vector3.new(2.3, 0.7, 1.0), CFrame.new(0, 1.95, 0), "5a606b", "Metal"),
-	block(Vector3.new(0.7, 0.4, 0.6), CFrame.new(1.45, 2.05, 0), "5a606b", "Metal"),
-	block(Vector3.new(0.9, 0.18, 0.5), CFrame.new(-0.2, 2.36, 0), "ff8a2a", "Neon"),
-})
 -- the rock the Recoil segment's beam hits (the game's own rock builder, mine floor 1)
 local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
 local ROCK_CF = CFrame.new(0, 0, -16)
@@ -345,7 +328,6 @@ else
 end
 local BEAM_TARGET = Vector3.new(0, 2.4, -14.6)
 local STATION_CF = CFrame.new(0, 0, -3.1)
-local ANVIL_CF = CFrame.new(0, 0, -2.3)
 
 -- R15 RightGripAttachment: the Handle = hand * grip (Tool.Grip = identity)
 local GRIP = CFrame.new(0, -0.15, 0) * CFrame.Angles(rad(-90), 0, 0)
@@ -523,7 +505,6 @@ for _, segment in SEGMENTS do
 		row[groupIndex.Blaster] = if segment.Blaster then cf12(handleCF) else 0
 		row[groupIndex.Station] = if segment.Prop == "Station" then cf12(STATION_CF) else 0
 		row[groupIndex.StationOre] = if segment.Prop == "Station" then cf12(STATION_CF * CFrame.new(0, 2.95, 0)) else 0
-		row[groupIndex.Anvil] = if segment.Prop == "Anvil" then cf12(ANVIL_CF) else 0
 		local beamOn = segment.Beam ~= nil and t >= segment.Beam[1] and t < segment.Beam[2]
 		if beamOn then
 			-- like the game: the beam runs from the muzzle to the hit point on the rock

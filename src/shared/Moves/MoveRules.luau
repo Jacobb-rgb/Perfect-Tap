@@ -10,7 +10,7 @@
 	  replaces(running, finished, incoming)  Priority: a shrug or a wave
 	                        never cuts a throw or a celebration short
 	  loopFor(carry, loop)  the loop a character plays (the server's MoveLoop
-	                        first: Spray, Hammer; else Carry while carrying)
+	                        first: Spray; else Carry while carrying)
 	  blocked(...)          no moves while seated, swimming, climbing,
 	                        ragdolled, dead, on a hoverboard or (your own
 	                        character) in a close-up camera

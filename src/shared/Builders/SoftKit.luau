@@ -2,7 +2,7 @@
 	Style A "Soft" for the world pieces built in code (owner 2026-10-20: the
 	plot pieces in the machines' style, from the preview on art/plot-style-a):
 	the plot walls and posts, the Ore Pen, the podiums and the train stop
-	(PlotBuilder) and the Foundry building (FoundryBuilder). The same palette
+	(PlotBuilder). The same palette
 	and roles as the machines (KitMachines.Palette, KitMachines.style: cream
 	Body, slate Frame / Pipe, orange Trim, glowing Neon / Glow / Hot / Molten,
 	Dark mouths, Glass), soft round shapes, signs in LuckiestGuy orange on

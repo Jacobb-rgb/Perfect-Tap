@@ -301,10 +301,6 @@ return function(T, Loader)
 				"SellComboWindow",
 				"SellOthersRadius",
 				"StorageTakeMax",
-				"AnvilTimeout",
-				"AnvilWalkAway",
-				"AnvilMinStrikeGap",
-				"AnvilMinSecondsPerHit",
 			}
 		do
 			T.eq(type(GameConfig[key]), "number", "GameConfig." .. key)

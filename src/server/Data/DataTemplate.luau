@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 7, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums)
+	Version = 8, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -48,12 +48,6 @@ local DataTemplate = {
 	KeepMode = "RarePlus",
 	-- the player's choices for "List" mode: { [oreId] = true (keep) | false (send on) }
 	KeepList = {},
-	-- the Foundry on the base: ingots waiting to be forged into blasters,
-	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock;
-	-- FoundryAction "Take" moves them back to the pen)
-	Foundry = {
-		Stock = {},
-	},
 
 	-- machines: bought but not placed { [machineId] = count 1..MachineData.MaxInventory (999) } (no zero keys)
 	MachineInventory = {},
@@ -138,7 +132,8 @@ local DataTemplate = {
 		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
 		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
 		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
-		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
+		RunForged = 0, -- the highest blaster level bought with coins this rebirth run (the Foundry's forged levels before 2026-10-24)
+		RunIncome = 0, -- coins / s the factory kept at the last rebirth: a floor under this run's Vault prices (BlasterData.vaultPrice)
 		RunPaid = false, -- a blaster level was bought with Robux this run (RebirthConfig.reachedOf)
 		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
 		BlasterCredit = 0, -- Robux of off-band blaster receipts not yet spent on start lifts (VaultService.spendCredit)

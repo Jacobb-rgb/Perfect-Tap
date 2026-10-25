@@ -791,10 +791,10 @@ return function(T, Loader)
 			local twoHours = BoostConfig.MaxStackSeconds / 300 * price
 			T.truthy(twoHours >= 24 * crystal, "2 h of coin Triple Lucky costs at least 24 Crystal capsules")
 		end
-		-- Hexa Lucky: 2 % of the next blaster forge (the top forge at the top), at least 2,500
+		-- Hexa Lucky: 2 % of the next blaster level's coin scale (the top one at the top), at least 2,500
 		-- (balance pass 1: 20 % was never bought in the sim, docs/BALANCE_SIM.md)
 		local function forge(level: number): number
-			return BlasterData.ByLevel[level].Recipe.Coins
+			return BlasterData.coins(level)
 		end
 		T.eq(BoostConfig.coinPrice("HexaLucky5", 1), 2500, "the minimum")
 		T.eq(BoostConfig.coinPrice("HexaLucky5", 3), math.max(2500, math.floor(forge(4) * 0.02 + 0.5)), "2 % of the level-4 forge")
@@ -1724,7 +1724,11 @@ return function(T, Loader)
 	T.test("Step67: the new save records", function()
 		-- steps 6-7 bumped no version (reconcile fills the records in); 4 is the
 		-- bigger plots' grid move (Migrations)
-		T.eq(DataTemplate.Version, 7, "no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums")
+		T.eq(
+			DataTemplate.Version,
+			8,
+			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry"
+		)
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
 		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")
 		for _, lineId in GearConfig.LineIds do

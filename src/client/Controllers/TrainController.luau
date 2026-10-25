@@ -32,7 +32,7 @@
 	  PourThreshold to the end of the hold the rocks slide over the lip and
 	  sink (the empty hopper keeps only its dark bed as a floor), dust and
 	  ore chunks (two-block rocks) arc into the pen (high enough to clear the
-	  Foundry), and the empty train rolls back south into the tunnel, at
+	  museum), and the empty train rolls back south into the tunnel, at
 	  most ReturnSpeed on average (returnSeconds: the far stops take longer
 	  than TrainConfig.ReturnSeconds, which only gates the loading). Another
 	  player's train that isn't Waiting and whose Fx never comes leaves after
@@ -880,9 +880,10 @@ function TrainController.arc(from: Vector3, to: Vector3, height: number, t: numb
 	return from:Lerp(to, f) + Vector3.new(0, 4 * height * f * (1 - f), 0)
 end
 
--- An arc height of at least `height` that carries a chunk from `from` to `to` over the plot's Foundry.
+-- An arc height of at least `height` that carries a chunk from `from` to `to` over the plot's
+-- artifact museum (BaseLayout.Museum, between the rail and the pen; the Foundry stood there too).
 function TrainController.arcHeight(plot: WorldLayout.Plot, from: Vector3, to: Vector3, height: number): number
-	local rect = BaseLayout.Foundry
+	local rect = BaseLayout.Museum
 	local cf = WorldLayout.plotCFrame(plot)
 	local top = cf.Position.Y + rect.Size.Y + 1.5
 	local need = height

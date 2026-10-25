@@ -102,7 +102,6 @@ ArtifactController.OtherPanels = {
 	"SellController",
 	"TrainController",
 	"IronBoxController",
-	"FoundryController",
 	"TechShopController",
 	"VaultController",
 	"GearShopController",

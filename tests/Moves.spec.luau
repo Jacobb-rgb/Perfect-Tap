@@ -48,9 +48,10 @@ return function(T, Loader)
 			listed[name] = true
 			T.truthy(MoveConfig.Moves[name], name .. " exists")
 		end
-		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Hammer", "Celebrate", "BigCelebrate", "CashToss" } do
+		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Celebrate", "BigCelebrate", "CashToss" } do
 			T.truthy(listed[name], name .. " is one of the moves (owner's list)")
 		end
+		T.eq(MoveConfig.Moves.Hammer, nil, "the Foundry's Hammer went with the Foundry (owner 2026-10-24)")
 		for name, move in MoveConfig.Moves do
 			T.truthy(listed[name], name .. " is in MoveConfig.List")
 			T.eq(move.Name, name, name .. " name")
@@ -456,7 +457,7 @@ return function(T, Loader)
 		T.eq(MoveRules.loopFor(2, nil), "Carry", "carrying")
 		T.eq(MoveRules.loopFor(0, nil), nil, "empty hands")
 		T.eq(MoveRules.loopFor(2, "Spray"), "Spray", "the server's loop first")
-		T.eq(MoveRules.loopFor(0, "Hammer"), "Hammer", "forging")
+		T.eq(MoveRules.loopFor(0, "Hammer"), nil, "no Hammer loop (no Foundry)")
 		T.eq(MoveRules.loopFor(1, "Throw"), "Carry", "a one-shot name is no loop")
 		T.eq(MoveRules.loopFor(0 / 0, "Nope"), nil, "NaN carry, unknown loop")
 		T.eq(MoveRules.loopFor("3", nil), nil, "a string count is no count")
@@ -757,7 +758,7 @@ return function(T, Loader)
 			T.eq(MoveRules.substitute(name, false), name, name .. ": played without Reduce Motion")
 		end
 		T.truthy(MoveConfig.Extras.Wave and MoveConfig.Extras.Shrug, "Wave and Shrug are the extras")
-		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Hammer" } do
+		for _, name in { "Carry", "Throw", "Recoil", "Spray" } do
 			T.eq(MoveRules.substitute(name, true), name, name .. " stays (gameplay feedback)")
 			T.falsy(MoveConfig.Extras[name], name .. " is no extra")
 		end

@@ -450,8 +450,8 @@ return function(T, Loader)
 		return WorldLayout.plotCFrame(WorldLayout.Plots[plotId]):PointToWorldSpace(Vector3.new(x, y, z))
 	end
 
-	-- Every plot gets a zone on its pad and one in its yard (like the pens and
-	-- the foundry hoppers), the town a SellBin, a turned box, two overlapping
+	-- Every plot gets a zone on its pad and one in its yard (like the pens),
+	-- the town a SellBin, a turned box, two overlapping
 	-- boxes and one across a plot's edge.
 	local function townZones(taken: { string }): { any }
 		local zones = {}

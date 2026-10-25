@@ -44,9 +44,9 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 7", function()
-		T.eq(DataTemplate.Version, 7)
-		T.eq(Migrations.Latest, 7)
+	T.test("Migration: template is version 8", function()
+		T.eq(DataTemplate.Version, 8)
+		T.eq(Migrations.Latest, 8)
 		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
 	end)
 
@@ -55,7 +55,7 @@ return function(T, Loader)
 		data.Version = 6
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "Clean|Tin|Clean|" }
 		Migrations.run(data)
-		T.eq(data.Version, 7)
+		T.eq(data.Version, 8)
 		T.eq(#data.Podiums, 5, "the 5th slot added")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
@@ -67,10 +67,44 @@ return function(T, Loader)
 		T.truthy(deepEqual(copy, data), "idempotent")
 	end)
 
+	T.test("Migration v8: no Foundry: its ingots go to the pen once; Stats.RunIncome is a number >= 0", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 7
+		data.Storage = { { K = "Raw", O = "Coal" } }
+		data.Foundry = { Stock = { { K = "Ingot", O = "Gold", G = "Pristine" }, 42, { K = "Ingot", O = "Iron" } } }
+		data.Stats.RunIncome = 0 / 0
+		local report = Migrations.run(data)
+		T.eq(data.Version, 8)
+		T.eq(data.Foundry, nil, "the Foundry record goes")
+		T.eq(#data.Storage, 3, "both ingots in the pen")
+		T.eq(data.Storage[2].O, "Gold")
+		T.eq(data.Storage[2].G, "Pristine", "grade kept")
+		T.eq(data.Storage[3].O, "Iron")
+		T.truthy(report.Moved >= 2 and report.Dropped >= 1, "moved the ingots, dropped the junk")
+		T.eq(data.Stats.RunIncome, 0, "NaN income becomes 0")
+		local copy = ProfileStore.deepCopy(data)
+		report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		T.eq(report.Moved + report.Dropped, 0)
+		-- a fresh template save has no Foundry and a RunIncome of 0
+		T.eq(DataTemplate.Foundry, nil)
+		T.eq(DataTemplate.Stats.RunIncome, 0)
+		for _, v in { -5, math.huge, "x" } do
+			local s = ProfileStore.deepCopy(DataTemplate)
+			s.Stats.RunIncome = v
+			Migrations.run(s)
+			T.eq(s.Stats.RunIncome, 0, `RunIncome {tostring(v)} -> 0`)
+		end
+		local s = ProfileStore.deepCopy(DataTemplate)
+		s.Stats.RunIncome = 1234.5
+		Migrations.run(s)
+		T.eq(s.Stats.RunIncome, 1234.5, "a real income stays")
+	end)
+
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 7)
+		T.eq(data.Version, 8)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -176,10 +210,10 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 7)
-		local newer = { Version = 8, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
+		T.eq(data.Version, 8)
+		local newer = { Version = 9, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
-		T.eq(newer.Version, 8, "a newer save's version is not lowered")
+		T.eq(newer.Version, 9, "a newer save's version is not lowered")
 	end)
 
 	---------------------------------------------------------------- version 4: the 16-cell grid
@@ -205,11 +239,11 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration v4: a 12-cell layout moves to 2..13 / 4..15, its chute belts onto chutes 5 / 8 / 11 on row 15", function()
+	T.test("Migration v4: a 12-cell layout moves to 2..13 / 4..15, its chute belts onto chutes 5 / 8 on row 15", function()
 		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 		T.eq(GameConfig.PlotCells, 16)
-		for name, x in { Pen = 5, Train = 8, Foundry = 11 } do
+		for name, x in { Pen = 5, Train = 8 } do
 			local cx, cz = BaseLayout.chuteCell(name)
 			T.eq(cx, x, name .. " chute X")
 			T.eq(cz, 15, name .. " chute on the back row")
@@ -217,7 +251,7 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 7)
+		T.eq(data.Version, 8)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -235,9 +269,15 @@ return function(T, Loader)
 			end
 			if old.Z == OLD_CELLS - 1 then
 				for name, x in OLD_CHUTES do
-					if old.X == x then
+					if old.X == x and name ~= "Foundry" then
 						T.eq(chute, name, `the belt on the old {name} chute is on the {name} chute`)
 					end
+				end
+				if old.X == OLD_CHUTES.Foundry then
+					-- (the FOUNDRY chute went with the Foundry, owner 2026-10-24: its belt is an ordinary belt)
+					T.eq(chute, nil, "the old FOUNDRY cell is no chute any more")
+					T.eq(entry.X, 11, "the old FOUNDRY belt still moved onto x 11")
+					T.eq(entry.R, BaseLayout.SinkRotation, "and still runs off the edge")
 				end
 			end
 		end
@@ -248,7 +288,6 @@ return function(T, Loader)
 			count += 1
 		end
 		T.eq(count, OLD_CELLS * OLD_CELLS, "no two machines on one cell")
-		T.eq(onChute.Foundry.R, BaseLayout.SinkRotation, "the FOUNDRY belt still delivers off the edge")
 		T.truthy(onChute.Pen and onChute.Train, "the PEN and TRAIN chutes keep their belts")
 		-- a second run (every later load) changes nothing
 		local copy = ProfileStore.deepCopy(data)
@@ -278,7 +317,8 @@ return function(T, Loader)
 		T.eq(#data.PlacedMachines, 8)
 		T.eq(BaseLayout.chuteAt(data.PlacedMachines[1].X, data.PlacedMachines[1].Z), "Pen")
 		T.eq(BaseLayout.chuteAt(data.PlacedMachines[3].X, data.PlacedMachines[3].Z), "Train")
-		T.eq(BaseLayout.chuteAt(data.PlacedMachines[5].X, data.PlacedMachines[5].Z), "Foundry")
+		T.eq(data.PlacedMachines[5].X, 11, "the old FOUNDRY belt moved like every other")
+		T.eq(data.PlacedMachines[5].Z, 15)
 		local deck = data.PlacedMachines[7]
 		T.eq(deck.X, 2, "the deck belt moved with its platform")
 		T.eq(deck.Z, 4)
@@ -313,7 +353,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 7)
+			T.eq(data.Version, 8)
 		end
 	end)
 
@@ -362,7 +402,7 @@ return function(T, Loader)
 		}
 		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
-		T.eq(data.Version, 7)
+		T.eq(data.Version, 8)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -436,7 +476,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 7)
+		T.eq(data.Version, 8)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")
@@ -493,6 +533,7 @@ return function(T, Loader)
 			},
 		}
 		data.Train.Cargo = { { K = "Raw", O = "Magmacore" } }
+		data.Version = 7 -- (a save with a Foundry: its ingots go to the pen, renamed first)
 		data.Foundry = { Stock = { { K = "Ingot", O = "Solarite" } } }
 		data.Discovered = { Ruby = true, Coal = true, Bronze = true, Skyglass = true }
 		data.KeepList = { Voidstone = true, Bloodstone = false, GalaxyStone = true }
@@ -505,7 +546,8 @@ return function(T, Loader)
 		T.eq(machine.In[1].O, "DragonEgg", "machine queue")
 		T.eq(machine.Out[1].O, "Jade", "machine output")
 		T.eq(data.Train.Cargo[1].O, "VolcanicCore", "train cargo")
-		T.eq(data.Foundry.Stock[1].O, "Sunstone", "Foundry stock")
+		T.eq(data.Foundry, nil, "no Foundry")
+		T.eq(data.Storage[#data.Storage].O, "Sunstone", "the Foundry's ingot, renamed, in the pen")
 		T.eq(data.Discovered.Ruby, nil)
 		T.eq(data.Discovered.Bronze, true)
 		T.eq(data.Discovered.StormGem, true, "Skyglass -> Storm Gem")
@@ -653,9 +695,9 @@ return function(T, Loader)
 		T.eq(report.Moved + report.Dropped, 0)
 	end)
 
-	T.test("Migration step 3: machine upgrades, keep list, foundry stock, pen automation", function()
-		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	T.test("Migration step 3 / v8: machine upgrades, keep list, the Foundry's stock into the pen, pen automation", function()
 		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 7 -- a save from before the Foundry went
 		data.Storage = { { K = "Raw", O = "Coal" } }
 		data.MachineUpgrades = {
 			AutoCleaner = { Speed = 2.9, Quality = 99, Luck = 3.5, [2] = 1 },
@@ -671,16 +713,16 @@ return function(T, Loader)
 		data.KeepList = { Gold = true, Silver = "yes", Unobtainium = true, Diamond = false, [3] = true, Heartstone = true }
 		data.KeepMode = "Everything"
 		local stock = {}
-		for _ = 1, GameConfig.MaxFoundryStock + 3 do
+		for _ = 1, 63 do
 			table.insert(stock, { K = "Ingot", O = "Iron", G = "Clean" })
 		end
-		table.insert(stock, 1, { K = "Clean", O = "Gold", G = "Rough" }) -- not an ingot: to the pen
+		table.insert(stock, 1, { K = "Clean", O = "Gold", G = "Rough" }) -- not an ingot: to the pen too
 		table.insert(stock, 2, "junk")
-		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- an ore this server doesn't know: stays
-		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- a grade it doesn't know: stays
-		table.insert(stock, 5, { K = "Ingot", O = "Gold", R = "Dagger" }) -- a recipe on an ingot: to the pen
+		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- an ore this server doesn't know: kept
+		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- a grade it doesn't know: kept
+		table.insert(stock, 5, { K = "Ingot", O = "Gold", R = "Dagger" })
 		table.insert(stock, 6, { K = "Ingot", O = "Sapphire" })
-		data.Foundry = { Stock = stock, Extra = "kept" }
+		data.Foundry = { Stock = stock, Extra = "gone with it" }
 		data.Upgrades.PenAutomation = 7.5
 		local report = Migrations.run(data)
 
@@ -715,20 +757,13 @@ return function(T, Loader)
 			"...and read as the default"
 		)
 
-		local kept = data.Foundry.Stock
-		T.truthy(kept == stock, "same Stock table")
-		T.eq(#kept, GameConfig.MaxFoundryStock, "capped")
-		T.eq(kept[1].O, "Unobtainium", "a newer build's ingot stays in the stock")
-		T.eq(kept[2].G, "Shiny", "so does an unknown grade")
-		T.eq(kept[3].O, "Sapphire", "no grade is fine")
-		for _, item in kept do
-			T.eq(item.K, "Ingot")
-		end
-		T.eq(data.Foundry.Extra, "kept", "other Foundry fields are left alone")
-		-- pen: coal + 2 non-ingots (the clean gold, the recipe ingot) + 6 overflow ingots
-		T.eq(#data.Storage, 1 + 2 + 6, "pen got the rest")
+		-- v8: no Foundry (owner 2026-10-24): every well-formed item of its stock is in the pen
+		T.eq(data.Foundry, nil, "the Foundry record goes")
+		T.eq(#data.Storage, 1 + 5 + 63, "pen: coal + the 5 odd items + 63 iron ingots (only the junk dropped)")
 		T.eq(data.Storage[2].K, "Clean", "the clean gold, in stock order")
-		T.eq(data.Storage[#data.Storage].O, "Iron", "overflow ingots")
+		T.eq(data.Storage[3].O, "Unobtainium", "a newer build's ingot is kept")
+		T.eq(data.Storage[4].G, "Shiny", "so is an unknown grade")
+		T.eq(data.Storage[#data.Storage].O, "Iron", "the iron ingots")
 
 		T.eq(data.Upgrades.PenAutomation, 7, "floored, kept for a newer server (readers clamp)")
 		T.eq(select(1, EconomyConfig.techLevel(EconomyConfig.techItem("PenAutomation"), data)), 2, "read as the top level")
@@ -744,6 +779,7 @@ return function(T, Loader)
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.MachineUpgrades = "x"
 		data.KeepList = 5
+		data.Version = 7
 		data.Foundry = "forge"
 		data.Upgrades = "none"
 		data.KeepMode = 3
@@ -751,9 +787,7 @@ return function(T, Loader)
 		T.eq(type(data.MachineUpgrades), "table")
 		T.eq(next(data.MachineUpgrades), nil)
 		T.eq(type(data.KeepList), "table")
-		T.eq(type(data.Foundry), "table")
-		T.eq(type(data.Foundry.Stock), "table")
-		T.eq(#data.Foundry.Stock, 0)
+		T.eq(data.Foundry, nil, "a broken Foundry record goes too (v8)")
 		T.eq(type(data.Upgrades), "table")
 		T.eq(data.Upgrades.PenAutomation, 0)
 		T.eq(data.Upgrades.Bellows, 0, "the other upgrade fields come back at 0")
@@ -768,10 +802,11 @@ return function(T, Loader)
 			T.eq(chosen.Upgrades.PenAutomation, 99, "clamped to 99")
 		end
 		local stockless = ProfileStore.deepCopy(DataTemplate)
+		stockless.Version = 7
 		stockless.Foundry = { Stock = "x" }
 		stockless.Upgrades.PenAutomation = 0 / 0
 		Migrations.run(stockless)
-		T.eq(type(stockless.Foundry.Stock), "table")
+		T.eq(stockless.Foundry, nil, "no Foundry")
 		T.eq(stockless.Upgrades.PenAutomation, 0, "NaN")
 		-- an old step 2 save gets the new records from reconcile, and they survive the migration
 		local old = ProfileStore.deepCopy(DataTemplate)
@@ -803,7 +838,8 @@ return function(T, Loader)
 		data.KeepList = { Zzzium = true, Gold = false }
 		data.Discovered = { Zzzium = true, Gold = true }
 		data.Storage = { { K = "Gem", O = "Zzzium" }, { K = "Clean", O = "Gold", G = "Mythical" } }
-		data.Foundry.Stock = { { K = "Ingot", O = "Zzzium", G = "Shiny" }, { K = "Ingot", O = "Gold" } }
+		-- a record this build doesn't know (an older build's Foundry, or a newer build's field): left alone
+		data.Foundry = { Stock = { { K = "Ingot", O = "Zzzium", G = "Shiny" }, { K = "Ingot", O = "Gold" } } }
 		data.Train.CapacityLevel = 8
 		data.Train.SpeedLevel = 9
 		data.Train.Cargo = { { K = "Raw", O = "Coal" } }

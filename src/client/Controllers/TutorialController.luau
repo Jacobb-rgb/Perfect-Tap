@@ -17,7 +17,7 @@
 	    ArriveRadius; the arrow stays
 	  - everything hides while the cleaning minigame runs
 	    (CleaningController.isActive), something holds the controls
-	    (PlayerControls: build mode, the Foundry, the crate opening) or a
+	    (PlayerControls: build mode, the crate opening) or a
 	    panel other than the steps' own is open (TutorialView.panelHides:
 	    the side menu's CODEX, GOLEMS, ARTIFACTS, BOOSTS, SETTINGS, HALL OF
 	    FAME, the wheel, ...); R3 is unbound meanwhile, so it can't arm SKIP
@@ -486,11 +486,9 @@ local function resolve(target: Target, from: Vector3): Vector3?
 	elseif target == "Sell" then
 		local counter = nearestTagged(TutorialConfig.Tags.Sell, from, always)
 		return if counter then pointOf(counter) else nil
-	elseif target == "Foundry" then
-		local prompt = nearestTagged(TutorialConfig.Tags.Foundry, from, function(p: Instance): boolean
-			return p:GetAttribute("PlotId") == plotId
-		end)
-		local at = if prompt then pointOf(prompt) else nil
+	elseif target == "Vault" then
+		local counter = nearestTagged(TutorialConfig.Tags.Vault, from, always)
+		local at = if counter then pointOf(counter) else nil
 		return at or TutorialConfig.layoutPoint(target, plotId)
 	elseif target == "Capsules" or target == "Wheel" then
 		-- lobby stalls (steps 6-7 hints): nothing to fall back to while they haven't streamed in

@@ -464,48 +464,4 @@ function MachineLogic.forge(entry: Entry, recipeId: string): (Desc?, number)
 	return { K = "Gear", O = oreId, G = lowest or "Rough", R = recipe.Id }, recipe.Ingots
 end
 
--- Checks the hammer strike times a client sends (seconds since the session
--- began). Needs exactly `hits` finite times, each in 0..elapsed+1, strictly
--- increasing, at least AnvilMinStrikeGap apart, the last one at least
--- hits * AnvilMinSecondsPerHit. Returns (false, why) otherwise.
-function MachineLogic.validateStrikes(strikes: any, hits: number, elapsed: number): (boolean, string?)
-	if type(strikes) ~= "table" then
-		return false, "not a list"
-	end
-	if not isFinite(hits) or hits < 1 or hits ~= math.floor(hits) or not isFinite(elapsed) then
-		return false, "bad session"
-	end
-	local count = 0
-	for _ in strikes do
-		count += 1
-		if count > hits then
-			return false, "wrong count"
-		end
-	end
-	if count ~= hits then
-		return false, "wrong count"
-	end
-	local last = -math.huge
-	for i = 1, hits do
-		local t = strikes[i]
-		if not isFinite(t) then
-			return false, "bad time"
-		end
-		if t < 0 or t > elapsed + 1 then
-			return false, "time out of range"
-		end
-		if t <= last then
-			return false, "not increasing"
-		end
-		if i > 1 and t - last < GameConfig.AnvilMinStrikeGap then
-			return false, "too fast"
-		end
-		last = t
-	end
-	if last < hits * GameConfig.AnvilMinSecondsPerHit then
-		return false, "too quick overall"
-	end
-	return true, nil
-end
-
 return MachineLogic

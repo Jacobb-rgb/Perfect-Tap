@@ -57,13 +57,13 @@ return function(T, Loader)
 		T.falsy(buyable)
 		T.falsy(select(3, RebirthView.cardText({}, 0, "HeadStart")), "no stars: can't buy")
 		T.eq(select(2, RebirthView.cardText({}, 99, "HeadStart", 9)), "MAX", "Robux levels already start at LV 9")
-		-- a lifted / paid run past MinBlaster: forge the next level (never "LV 6" at LV 9)
+		-- a lifted / paid run past MinBlaster: buy the next level with coins (never "LV 6" at LV 9)
 		local lifted = info(9, {}, 0)
 		lifted.Ready = false
-		T.truthy(string.find(RebirthView.needText(lifted), "Forge blaster LV 10", 1, true))
+		T.truthy(string.find(RebirthView.needText(lifted), "Buy blaster LV 10", 1, true))
 		local stuck = info(10, {}, 0)
 		stuck.StarsNow = 0
-		T.truthy(string.find(RebirthView.needText(stuck), "no stars", 1, true), "the top with nothing forged")
+		T.truthy(string.find(RebirthView.needText(stuck), "no stars", 1, true), "the top with no coin level")
 		-- the REBIRTH! button
 		local refs = RebirthView.build()
 		RebirthView.setInfo(refs, info(3, {}, 0))

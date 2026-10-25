@@ -25,7 +25,8 @@ Open questions are at the bottom; once answered, fold everything into GAME_DESIG
 5. **Start:** you get one rusty, basic blaster. You get ore, put it on the podium, earn money.
 6. With money you buy machines: furnaces, conveyors, smelters, crushers, cleaners. Then you throw everything into a
    **foundry** ("slévárna"), which creates a **stronger blaster**. How strong depends on the value of the ore
-   (details to be agreed later).
+   (details to be agreed later). (Owner 2026-10-24: **no Foundry**: "you earn money, come to the Vault and buy a
+   better blaster"; blasters get better with enchants in the shop. Ingots are sold or alloyed.)
 7. The Mini Dungeon kit is only there to show how the various decorations should look.
 8. UI text stays in English (e.g. "Remove").
 

@@ -7,7 +7,7 @@
 
 	A move:
 	  Duration  seconds (a loop repeats every Duration)
-	  Loop      true = repeats until stopped (Carry, Spray, Hammer)
+	  Loop      true = repeats until stopped (Carry, Spray)
 	  Slot      "Loop" | "Action" | "Kick": one move per slot on a character;
 	            Action plays over the Loop (a Throw while carrying), Kick
 	            (Recoil) is a small additive jolt over both
@@ -82,7 +82,7 @@ local MoveConfig = {}
 
 -- character attribute "<Name>:<seq>" (the server sets it, every client plays it)
 MoveConfig.Attribute = "Move"
--- character attribute: the loop the server says this character plays ("Spray", "Hammer"), nil = none
+-- character attribute: the loop the server says this character plays ("Spray"), nil = none
 MoveConfig.LoopAttribute = "MoveLoop"
 -- the player attribute CarryService keeps (Carry loop while > 0)
 MoveConfig.CarryAttribute = "CarryCount"
@@ -135,7 +135,7 @@ MoveConfig.ShrugGap = 2.5 -- seconds: at most one shrug per this (refusals can c
 -- Reduce Motion (the game's SETTINGS toggle SettingsConfig.ReduceMotion, or Roblox's own
 -- GuiService.ReducedMotionEnabled), for what THIS viewer sees: the celebrations become calmer
 -- moves (a small bounce, no crouch, no spin), the optional Extras are skipped; Carry, Throw,
--- Recoil, Spray and Hammer stay (they are the game's feedback)
+-- Recoil and Spray stay (they are the game's feedback)
 MoveConfig.ReducedMotion = {
 	BigCelebrate = "CelebrateCalm",
 	Celebrate = "CelebrateCalm",
@@ -149,7 +149,7 @@ MoveConfig.FiringHold = 0.6 -- seconds after another player's last BlastHit thei
 -- Server side
 MoveConfig.ClientMoves = { Throw = true, Wave = true, Shrug = true } :: { [string]: boolean } -- the Net "Move" whitelist
 MoveConfig.MaxNameLength = 24
-MoveConfig.LoopPoll = 0.4 -- seconds between the server's loop checks (cleaning -> Spray, forging -> Hammer)
+MoveConfig.LoopPoll = 0.4 -- seconds between the server's loop checks (cleaning -> Spray)
 MoveConfig.BigSell = { Items = 5, Window = 0.4 } -- a sale of at least Items within Window seconds at Tobin's -> CashToss
 MoveConfig.SellRange = 30 -- studs from a SellCounter that count as "at Tobin's"
 MoveConfig.BigFrom = "Legendary" -- this rarity and up: BigCelebrate (ores cleaned, golems woken)
@@ -317,37 +317,6 @@ MoveConfig.Moves = {
 				T = 0.25,
 				Ease = "Sine",
 				Pose = { RightShoulder = { 66, 12, -6 }, RightElbow = { 18, 0, 0 }, RightWrist = { -4, 0, 0 }, Waist = { 0, 4, 0 } },
-			},
-		},
-	},
-	-- the Foundry's hammer moment (others see it: your own camera is in the close-up)
-	Hammer = {
-		Name = "Hammer",
-		Duration = 0.9,
-		Loop = true,
-		Slot = "Loop",
-		BlendIn = 0.2,
-		BlendOut = 0.25,
-		Override = ARMS,
-		MinGap = 0,
-		Priority = 0,
-		Keys = {
-			{ T = 0, Pose = with(arms({}, { 165, 0, -14 }, { 30, 0, 0 }), { Waist = { 10, 0, 0 }, Neck = { 4, 0, 0 } }) },
-			{
-				T = 0.26,
-				Ease = "In",
-				Pose = with(arms({}, { 58, 0, -9 }, { 4, 0, 0 }), { Waist = { -18, 0, 0 }, Neck = { -10, 0, 0 } }),
-				Offset = { 0, -0.12, 0 },
-			},
-			{
-				T = 0.36,
-				Ease = "Out",
-				Pose = with(arms({}, { 72, 0, -10 }, { 10, 0, 0 }), { Waist = { -14, 0, 0 }, Neck = { -8, 0, 0 } }),
-			},
-			{
-				T = 0.7,
-				Ease = "InOut",
-				Pose = with(arms({}, { 165, 0, -14 }, { 30, 0, 0 }), { Waist = { 10, 0, 0 }, Neck = { 4, 0, 0 } }),
 			},
 		},
 	},
@@ -686,7 +655,6 @@ MoveConfig.List = {
 	"Throw",
 	"Recoil",
 	"Spray",
-	"Hammer",
 	"Celebrate",
 	"BigCelebrate",
 	"CashToss",

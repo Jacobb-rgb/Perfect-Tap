@@ -95,12 +95,10 @@ HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHei
 
 local rgb = Color3.fromRGB
 
--- Coin prices follow the blaster prices (BlasterData Recipe.Coins), so a blaster re-balance
--- moves the boards with it: `factor` x the coin price of blaster `level`, rounded to 2 digits.
+-- Coin prices follow the blaster prices (BlasterData.coins), so a blaster re-balance
+-- moves the boards with it: `factor` x the coin scale of blaster `level`, rounded to 2 digits.
 function HoverboardData.priceFrom(level: number, factor: number): number
-	local blaster = BlasterData.ByLevel[level]
-	local coins = if blaster and blaster.Recipe then blaster.Recipe.Coins else 0
-	local raw = coins * factor
+	local raw = BlasterData.coins(level) * factor
 	if raw <= 0 then
 		return 0
 	end

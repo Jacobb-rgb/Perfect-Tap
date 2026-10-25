@@ -24,6 +24,7 @@
 ]]
 
 local BaseLayout = require(script.Parent.BaseLayout)
+local LobbyLayout = require(script.Parent.LobbyLayout)
 local TrainConfig = require(script.Parent.TrainConfig)
 local WorldLayout = require(script.Parent.WorldLayout)
 
@@ -39,7 +40,7 @@ export type Signals = {
 
 export type Input = string -- "Mouse" | "Touch" | "Gamepad"
 
--- "Station" | "Rock" | "Hopper" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Foundry" | "Capsules" | "Wheel"
+-- "Station" | "Rock" | "Hopper" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Vault" | "Capsules" | "Wheel"
 export type Target = string
 
 export type Step = {
@@ -121,10 +122,26 @@ function TutorialConfig.podium(data: Data): boolean
 	return false
 end
 
--- Machines beyond the starter kit (placed or still in the inventory).
-function TutorialConfig.machinesBought(data: Data, starterCount: number): boolean
-	if count(data.PlacedMachines) > starterCount then
-		return true
+-- What the starter kit places (MachineData.StarterKit: the Furnace and the Crusher) and the
+-- Cleaning Station it placed on the grid before 2026-10-24 (the yard has its own now).
+TutorialConfig.StarterIds = { ClayFurnace = 1, Crusher = 1, CleaningStation = 1 } :: { [string]: number }
+
+-- Machines beyond the starter kit (placed or still in the inventory): one placed
+-- machine of each StarterIds id is the kit's (counted by id, not by number, so an
+-- old save with the kit's Cleaning Station on the grid isn't a purchase either).
+function TutorialConfig.machinesBought(data: Data): boolean
+	local free = table.clone(TutorialConfig.StarterIds)
+	if type(data.PlacedMachines) == "table" then
+		for _, entry in data.PlacedMachines do
+			local id = if type(entry) == "table" then entry.Id else nil
+			if type(id) == "string" then
+				if (free[id] or 0) > 0 then
+					free[id] -= 1
+				else
+					return true
+				end
+			end
+		end
 	end
 	if type(data.MachineInventory) == "table" then
 		for _, n in data.MachineInventory do
@@ -135,8 +152,6 @@ function TutorialConfig.machinesBought(data: Data, starterCount: number): boolea
 	end
 	return false
 end
-
-TutorialConfig.StarterMachines = 3 -- MachineData.StarterKit: Cleaning Station + Furnace + Crusher
 
 -- Woke a golem (a capsule opened, or one is owned).
 function TutorialConfig.golems(data: Data): boolean
@@ -152,7 +167,7 @@ end
 
 -- Sold something, or bought a machine.
 function TutorialConfig.grown(data: Data): boolean
-	return stat(data, "ItemsSold") > 0 or TutorialConfig.machinesBought(data, TutorialConfig.StarterMachines)
+	return stat(data, "ItemsSold") > 0 or TutorialConfig.machinesBought(data)
 end
 
 function TutorialConfig.blaster(data: Data): boolean
@@ -256,8 +271,8 @@ TutorialConfig.Steps = {
 	{
 		Id = "Blaster",
 		Title = "A stronger blaster",
-		Text = "Crush ore, smelt the piles into ingots, then forge a better blaster at your Foundry.",
-		Target = "Foundry",
+		Text = "Earn coins, then buy a better blaster at the Blaster Vault.",
+		Target = "Vault",
 		done = function(data: Data, _signals: Signals): boolean
 			return M.blaster(data)
 		end,
@@ -362,7 +377,7 @@ TutorialConfig.TargetNames = {
 	Cleaning = "Cleaning Station",
 	Podium = "Podium",
 	Sell = "Tobin's stall",
-	Foundry = "Foundry",
+	Vault = "Blaster Vault",
 	Capsules = "Capsule stall",
 	Wheel = "SPIN & WIN",
 } :: { [string]: string }
@@ -387,7 +402,7 @@ TutorialConfig.Tags = {
 	Hopper = "TrainHopper", -- the station's (and the lifts') invisible Intake
 	Cleaning = "Machine", -- attribute MachineId "CleaningStation", Owner = your UserId
 	Sell = "SellCounter", -- Tobin's counter in the lobby
-	Foundry = "FoundryPrompt", -- attribute PlotId = yours
+	Vault = "VaultCounter", -- the Blaster Vault's counter in the lobby (VaultService.Tag)
 	Capsules = "CapsuleStall", -- CapsuleService.Tag (a Model in the lobby)
 	Wheel = "EmberChest", -- WheelConfig.Tag (the chest at the top of the SPIN & WIN stairs)
 } :: { [string]: string }
@@ -412,6 +427,8 @@ function TutorialConfig.layoutPoint(target: Target, plotId: number?): Vector3?
 	elseif target == "Rock" then
 		local q = WorldLayout.Quarry
 		return Vector3.new((q.Min.X + q.Max.X) / 2, q.Min.Y + 2, (q.Min.Z + q.Max.Z) / 2)
+	elseif target == "Vault" then
+		return LobbyLayout.get("BlasterVault").Center + Vector3.new(0, 3, 0)
 	end
 	local frame = plotFrame(plotId)
 	if not frame then
@@ -421,10 +438,9 @@ function TutorialConfig.layoutPoint(target: Target, plotId: number?): Vector3?
 		return BaseLayout.toWorld(frame, BaseLayout.Pen.PromptPoint).Position
 	elseif target == "Podium" then
 		return BaseLayout.toWorld(frame, BaseLayout.Podiums[1].Center + Vector3.new(0, 3, 0)).Position
-	elseif target == "Foundry" then
-		return BaseLayout.toWorld(frame, BaseLayout.Foundry.Center + Vector3.new(0, 3, 0)).Position
 	elseif target == "Cleaning" then
-		return frame.Position + Vector3.new(0, 3, 0)
+		-- the yard's own station (BaseLayout.CleaningStation); a bought one on the grid may be nearer
+		return BaseLayout.toWorld(frame, BaseLayout.CleaningStation.Center + Vector3.new(0, 3, 0)).Position
 	end
 	return nil
 end

@@ -4,8 +4,8 @@
 	2026-10-20).
 
 	- Labels: every BillboardGui in the world and in the PlayerGui (podium
-	  income tags, machine signs, sell pop-ups, item hints, the foundry's pen
-	  tag, the podium Remove button...) gets LightSkin.world: navy outlines and
+	  income tags, machine signs, sell pop-ups, item hints, the podium
+	  Remove button...) gets LightSkin.world: navy outlines and
 	  text edges, dark panels white. Labels other sessions own are left alone
 	  (LightWorldController.Skip: the mine floors' rock name + HP labels),
 	  and so is Roblox's own prompt UI (the "Prompt" BillboardGuis its core

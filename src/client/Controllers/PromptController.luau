@@ -16,7 +16,7 @@
 	with "Clean Ore"); "Panel" T / L3 for the Train panel. Taken elsewhere:
 	F / X Grab, Q / RB Throw; B is also Leave inside the cleaning minigame,
 	while the prompts are suppressed. A modal that binds E itself (the
-	cleaning result card's Collect, the Foundry's) suppresses the prompts
+	cleaning result card's Collect) suppresses the prompts
 	first, so one E press never also fires a prompt behind it.
 ]]
 

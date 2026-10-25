@@ -84,7 +84,7 @@ for _, ore in OreData.List do
 	if not models[name] then
 		models[name] = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id, Grade = "Clean" }, CF.new(), name)
 	end
-	-- every ore's ingot (the Foundry's rows; in the game a live ViewportFrame)
+	-- every ore's ingot (in the game a live ViewportFrame)
 	local ingot = "item_Ingot_" .. ore.Id
 	if not models[ingot] then
 		models[ingot] = ItemBuilder.build({ Kind = "Ingot", OreId = ore.Id, Grade = "Pristine" }, CF.new(), ingot)

@@ -6,8 +6,7 @@
 
 	  Move      "<Name>:<seq>"  a one-shot move to play now (seq makes the same
 	            move twice a change: MoveRules.encode)
-	  MoveLoop  "Spray" while the player cleans at a station, "Hammer" while
-	            they forge at their Foundry, nil otherwise (checked every
+	  MoveLoop  "Spray" while the player cleans at a station, nil otherwise (checked every
 	            MoveConfig.LoopPoll seconds; Carry needs nothing: every
 	            client reads the CarryCount player attribute)
 
@@ -18,8 +17,8 @@
 	                             (Discovery.onDiscovered just before) or a
 	                             Flawless grade -> Celebrate
 	  CapsuleService.onOpened    a Legendary / Mythic golem -> BigCelebrate
-	  DataService.onChanged      a higher BlasterLevel (forged at the Foundry
-	                             or bought at the Vault) or one more rebirth
+	  DataService.onChanged      a higher BlasterLevel (bought at the Vault
+	                             or with Robux) or one more rebirth
 	                             -> BigCelebrate (MoveRules.forProgress)
 	  SellService.onSold         MoveConfig.BigSell.Items or more sold within
 	                             BigSell.Window while at Tobin's -> CashToss
@@ -52,8 +51,6 @@ local DataService = require(script.Parent.DataService)
 local CleaningService = require(script.Parent.CleaningService)
 local CapsuleService = require(script.Parent.CapsuleService)
 local SellService = require(script.Parent.SellService)
-local FoundryService = require(script.Parent.FoundryService)
-local PlotService = require(script.Parent.PlotService)
 
 local MoveService = {}
 
@@ -228,11 +225,6 @@ end
 local function loopOf(player: Player): string?
 	if CleaningService.isCleaning(player) then
 		return "Spray"
-	end
-	local plotId = PlotService.plotOf(player)
-	local building = if plotId then FoundryService.building(plotId) else nil
-	if building and building:GetAttribute("Forging") == true then
-		return "Hammer"
 	end
 	return nil
 end

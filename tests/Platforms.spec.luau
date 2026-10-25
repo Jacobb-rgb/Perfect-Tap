@@ -462,7 +462,7 @@ return function(T, Loader)
 			end
 		end
 		T.eq(#placed + refused, spots, `{spots} spots`)
-		T.eq(refused, 3, "the three chute cells")
+		T.eq(refused, #BaseLayout.ChuteNames, "the chute cells (2: the FOUNDRY one went with the Foundry)")
 		-- the parts of every spot's platform model together
 		local root = Instance.new("Model")
 		local total, shadows = 0, 0

@@ -52,9 +52,6 @@ return function(T, Loader)
 			d.MachineInventory[id] = MachineData.MaxInventory
 			d.MachineUpgrades[id] = { Speed = 99, Quality = 99 }
 		end
-		for _ = 1, GameConfig.MaxFoundryStock do
-			table.insert(d.Foundry.Stock, { K = "Ingot", O = ore, G = "Pristine" })
-		end
 		for _ = 1, TrainConfig.MaxCargoSaved do
 			table.insert(d.Train.Cargo, item())
 		end

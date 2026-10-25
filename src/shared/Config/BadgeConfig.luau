@@ -109,7 +109,7 @@ BadgeConfig.List = {
 		Key = "FirstBlaster",
 		Id = 0,
 		Name = "Blastsmith",
-		Description = "Forge your first new blaster.",
+		Description = "Get your first new blaster.",
 		Check = function(data)
 			return stat(data, "BlastersForged") >= 1 or number(data, "BlasterLevel") >= 2
 		end,

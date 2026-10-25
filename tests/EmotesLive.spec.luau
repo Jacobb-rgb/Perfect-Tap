@@ -823,7 +823,7 @@ return function(T, Loader)
 		T.eq(slot.Layer.Weight, 0)
 		root.Position = Vector3.new(6, 3, 0)
 
-		-- 5. a close-up (cleaning, build mode, the Foundry, the vault): no EMOTES menu there
+		-- 5. a close-up (cleaning, build mode, the vault): no EMOTES menu there
 		T.falsy(MoveController.inCloseUp(), "no close-up now")
 		w.camera.CameraType = Enum.CameraType.Scriptable
 		T.truthy(MoveController.inCloseUp(), "a Scriptable camera is a close-up")

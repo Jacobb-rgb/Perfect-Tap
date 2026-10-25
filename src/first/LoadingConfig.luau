@@ -51,7 +51,7 @@ LoadingConfig.Tips = {
 	"Clean your ore by hand to raise its grade. Flawless sells best!",
 	"Put your best ores on podiums. They earn coins every second.",
 	"Throw ore into the hopper at the Mine Station. Your train takes it home.",
-	"Forge a better blaster at your Foundry to break tougher rocks.",
+	"A better blaster breaks tougher rocks. Earn coins and visit the Blaster Vault.",
 	"Machines, belts and power turn your ore into ingots while you mine.",
 	"Buy the next blaster level in the Blaster Vault.",
 	"Press BASE, LOBBY or VAULT at the top to travel fast.",

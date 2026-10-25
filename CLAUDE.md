@@ -1,7 +1,8 @@
 # TERRA FORGE – project memory for Claude
 
 Read this first, then **docs/HANDOFF.md** (exact status, branches, next steps) and **docs/DESIGN_V2_NOTES.md**
-(the owner's new design direction: trains, ore pen, podiums with income per second, laser blasters, foundry), then
+(the owner's new design direction: trains, ore pen, podiums with income per second, laser blasters; the foundry went
+on 2026-10-24: blasters come from the Blaster Vault only), then
 **docs/plans/V2_PLAN.md** (what stays, what changes, the order of work).
 
 ## What this is
@@ -44,7 +45,7 @@ skip modules that don't exist yet with a warning.
 - Strict Luau types everywhere (luau-lsp strict mode must say "no problems found").
 - **Never start a Luau line with `(`** (ambiguous syntax error). Use a local variable.
 - Every data change → `DataService.changed(player)`. New save fields go in Data/DataTemplate.luau; old saves are
-  reconciled, structural changes go through Data/Migrations.luau (save Version = 7 since the five podiums; the gate in DataService refuses saves from a newer build, see docs/SAVE_AUDIT.md).
+  reconciled, structural changes go through Data/Migrations.luau (save Version = 8 since the Foundry went; the gate in DataService refuses saves from a newer build, see docs/SAVE_AUDIT.md).
 - Mobile first: StreamingEnabled is on, keep part counts low, pooled particles, no per-frame server loops over parts.
 - Roblox rules: TextService filtering for player text (forge name, 1-minute rate limit), no rewards for likes/favorites,
   ProcessReceipt grants only on the server that holds the session lock and saves first, show odds for any random reward.

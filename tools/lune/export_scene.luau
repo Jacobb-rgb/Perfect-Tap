@@ -283,11 +283,6 @@ elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list over
 	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Foundry buildings and the chute line (+ the hammer moment and the reveal) and their UI (tools/lune/lib/foundry_preview.luau)
-	WorldBuilder.build(workspace)
-	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
-		uiExports[name] = guis
-	end
 elseif sceneName == "relic_flow" then -- dusty relic -> hand / Restoration Table cleaning -> museum (tools/lune/lib/relic_flow_preview.luau)
 	require("./lib/relic_flow_preview").build(Loader, workspace)
 elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
@@ -477,11 +472,17 @@ elseif sceneName == "cleaning" then
 	local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
 	local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
 	WorldBuilder.build(workspace)
-	-- plot 1 with the starter kit, like a new player
+	-- plot 1 with the starter kit and a Cleaning Station where the kit's stood (the shots in
+	-- tools/preview/shots.json frame that spot; the yard has its own station since 2026-10-24)
 	local plot = WorldLayout.Plots[1]
 	local plotCf = WorldLayout.plotCFrame(plot)
 	local stationCf
+	local kitShiftX, kitShiftZ = (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
+	local layout = { { Id = "CleaningStation", X = 4 + kitShiftX, Z = 4 + kitShiftZ, R = 0 } }
 	for _, entry in MachineData.StarterKit do
+		table.insert(layout, entry)
+	end
+	for _, entry in layout do
 		local machine = MachineData.ById[entry.Id]
 		local w, d = MachineData.footprint(machine, entry.R)
 		local half = GameConfig.PlotCells * GameConfig.CellSize / 2
@@ -944,37 +945,24 @@ end
 
 ---------------------------------------------------------------- scene "yard_ingame" (plot style A)
 -- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
--- with every plot's Foundry building and FOUNDRY chute receiver as FoundryService
--- builds them at server start (their SurfaceGui frames painted for the renderer,
--- plot 5's chimney smoking) -> build/preview/yard_ingame.json. Shots:
--- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
--- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
+-- as the server shows it for owned plots: every yard's own Cleaning Station where
+-- the Foundry stood (CleaningService, owner 2026-10-25) -> build/preview/yard_ingame.json.
+-- Shots: tools/preview/plot_style_a_shots.json (the in-game pictures of the plot
+-- pieces in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
 if sceneName == "world" and process.args[2] == "yard_ingame" then
 	local YardPreview = require("./lib/yard_preview")
 	YardPreview.build(Loader, workspace)
-	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
-	local Gallery = require("./lib/machines_gallery")
-	local plots = workspace:FindFirstChild("Map"):FindFirstChild("Plots")
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+	local spot = BaseLayout.CleaningStation
 	for _, plot in WorldLayout.Plots do
-		local model = plots:FindFirstChild("Plot_" .. plot.Id)
-		local yard = model and model:FindFirstChild("Yard")
-		local old = yard and yard:FindFirstChild("Foundry")
-		if old then
-			local plotCF = WorldLayout.plotCFrame(plot)
-			old:Destroy()
-			local building = FoundryBuilder.build(plotCF, 3)
-			building.Parent = yard
-			local receiver = FoundryBuilder.receiver(plotCF)
-			receiver.Parent = model
-			Gallery.paintGuis(Loader, workspace, building)
-			Gallery.paintGuis(Loader, workspace, receiver)
-			if plot.Id == YardPreview.Plot then
-				local top = building:FindFirstChild("ChimneyTop", true)
-				if top then
-					Gallery.smoke(Loader, workspace, top, 0.8)
-				end
-			end
-		end
+		local station = MachineBuilder.build("CleaningStation", 0, 0)
+		station:PivotTo(
+			WorldLayout.plotCFrame(plot)
+				* Loader.CFrame.new(spot.Center.X, 0, spot.Center.Z)
+				* Loader.CFrame.Angles(0, -spot.R * math.pi / 2, 0)
+		)
+		station.Parent = workspace
 	end
 	local ingameScene = Export.collect(workspace)
 	ingameScene.presets = scene.presets

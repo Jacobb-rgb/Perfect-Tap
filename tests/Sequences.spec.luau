@@ -3,7 +3,7 @@
 	them; Roblox throws, and a builder that throws leaves a model missing):
 	at most 20 keypoints, the first at time 0, the last at exactly 1, times
 	never going back. This walks every model the builders make (machines in
-	both styles at every level, plots, the Foundry, items, artifacts, golems,
+	both styles at every level, plots, items, artifacts, golems,
 	rocks, blasters, hoverboard effects) and the whole baked place, and
 	checks every gradient, particle emitter, beam and trail. A literal
 	Sequence.new({ ... }) in the source is checked as well.
@@ -117,20 +117,14 @@ return function(T, Loader)
 		T.lt(20, checked, "the machines carry gradients (the stripes)")
 	end)
 
-	T.test("Sequences: plots, the Foundry and its receiver", function()
+	T.test("Sequences: plots", function()
 		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 		local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
-		local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
 		local folder = Instance.new("Folder")
 		local plot = WorldLayout.Plots[1]
 		PlotBuilder.buildPlot(folder, plot, Rng.new(1))
 		expectClean("plot", folder)
-		local cf = WorldLayout.plotCFrame(plot)
-		for level = 2, 10 do
-			expectClean("Foundry L" .. level, FoundryBuilder.build(cf, level))
-		end
-		expectClean("Foundry receiver", FoundryBuilder.receiver(cf))
 	end)
 
 	T.test("Sequences: items, artifacts, golems, rocks, blasters, hoverboard effects", function()

@@ -2296,7 +2296,7 @@ end
 
 -- Should the FREE SPIN! chip show: the spin is ready, the wheel screen is
 -- closed, no spin is in flight, nothing else has the screen (the cleaning
--- minigame, build mode, the Foundry moment: the HUD is hidden) and the
+-- minigame, build mode, the crate opening: the HUD is hidden) and the
 -- tutorial bubble isn't in the chip's spot (`tutorialInTopRow`: on touch
 -- screens the bubble sits right of the teleport bar too; it comes first)?
 function WheelView.chipVisible(ready: boolean, isOpen: boolean, spinning: boolean, busyScreen: boolean, tutorialInTopRow: boolean?): boolean

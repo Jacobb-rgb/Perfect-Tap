@@ -1,7 +1,7 @@
 --[[
 	StateService: sends each player a small snapshot of their own data for
 	the HUD and menus (coins, blaster, carry, machines, pen, podiums, codex,
-	machine upgrades, keep settings, Foundry stock...).
+	machine upgrades, keep settings...).
 	Other services add fields with StateService.addProvider().
 
 	Network diet (perf pass 1, SERVER_PERF_AUDIT #1):
@@ -18,8 +18,8 @@
 	  belt) goes out only after a layout edit, Discovered only after a find.
 	  A section that disappeared is listed in snapshot.Removed; the first
 	  push after a join is whole and says snapshot.Full = true.
-	- A changed flat section (string keys, plain values: the Storage and
-	  Foundry summaries, Stats, Train, Build...) whose keys mostly stayed the
+	- A changed flat section (string keys, plain values: the Storage,
+	  Stats, Train, Build...) whose keys mostly stayed the
 	  same goes as a patch instead: snapshot.Patch[section] = { Set = {key =
 	  value}, Clear = {keys} }. One ore into the pen sends one count, not the
 	  whole pen.
@@ -330,8 +330,6 @@ function StateService.snapshot(player: Player): { [string]: any }?
 	if not data then
 		return nil
 	end
-	local foundry = data.Foundry
-	local foundryStock: { ItemData.Desc } = if type(foundry) == "table" and type(foundry.Stock) == "table" then foundry.Stock else {}
 	local snapshot: { [string]: any } = {
 		Coins = data.Coins,
 		TotalEarned = data.TotalEarned,
@@ -347,12 +345,10 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		PlacedCount = #data.PlacedMachines,
 		StorageCount = #data.Storage,
 		Storage = storageSummary(data.Storage),
-		-- step 3: Tech shop levels, the Iron Box / billboard keep settings, the Foundry's ingots
+		-- step 3: Tech shop levels, the Iron Box / billboard keep settings
 		MachineUpgrades = data.MachineUpgrades,
 		KeepMode = data.KeepMode,
 		KeepList = data.KeepList,
-		FoundryStock = storageSummary(foundryStock),
-		FoundryCount = #foundryStock,
 		-- steps 6-7: the saved records as they are (times are os.time() seconds:
 		-- compare with workspace:GetServerTimeNow()), crystal shards, and the
 		-- player's bonus numbers (Bonuses.summary)

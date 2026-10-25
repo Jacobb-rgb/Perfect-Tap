@@ -4,7 +4,7 @@
 -- Pen, the hold at a full pen and the unload, the way back at a sane speed,
 -- tunnels hiding the cars, one track per line (no train runs through
 -- another), the wagons tipping toward the pen, emptying and the ore clearing
--- the Foundry, couplers, the waiting train under the station chute (parked
+-- the museum, couplers, the waiting train under the station chute (parked
 -- before loading opens), trip payloads (Waiting, late unloads) and snapshots
 -- (also in the order the server really sends them), the HUD chip's state
 -- text, the upgrade rows, presses ahead of the server (SEND "Leaving…" and
@@ -585,7 +585,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- the west plots' wagons no longer unload beside the Foundry (the reviewer's plot 1)
+		-- the west plots' wagons unload at the pen (the reviewer's plot 1)
 		local first = TrainController.stopAt(WEST, 1) - Vector3.new(0, 0, -FIRST_WAGON)
 		local pen = TrainController.penCenter(WEST)
 		T.le(math.abs(first.Z - pen.Z), BaseLayout.Pen.Area.Size.X / 2, "plot 1: first wagon at the pen")
@@ -682,8 +682,8 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("TrainClient: the ore flies into the pen and over the Foundry", function()
-		local foundry = BaseLayout.Foundry
+	T.test("TrainClient: the ore flies into the pen and over the museum", function()
+		local foundry = BaseLayout.Museum
 		for _, plot in WorldLayout.Plots do
 			local cf = WorldLayout.plotCFrame(plot)
 			local top = cf.Position.Y + foundry.Size.Y
@@ -703,7 +703,7 @@ return function(T, Loader)
 							local at = TrainController.arc(mouth, to, height, i / 100)
 							local f = cf:PointToObjectSpace(at) - foundry.Center
 							if math.abs(f.X) <= foundry.Size.X / 2 and math.abs(f.Z) <= foundry.Size.Z / 2 then
-								T.lt(top, at.Y, `plot {plot.Id} wagon at {offset}: the chunk clears the Foundry`)
+								T.lt(top, at.Y, `plot {plot.Id} wagon at {offset}: the chunk clears the museum`)
 							end
 						end
 					end
