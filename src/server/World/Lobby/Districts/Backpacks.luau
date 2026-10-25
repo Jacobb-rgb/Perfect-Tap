@@ -59,6 +59,18 @@ Backpacks.Displays = {
 	Shelf = "AmethystPack",
 	Roof = "StarforgePack",
 }
+-- the golem by the porch (LobbyLayout piece BackpackGolem) and the pack on its back
+Backpacks.Golem = {
+	Pack = "RuneboundPack",
+	Size = 2.3,
+	Range = 33, -- (the DROPPERS door, ~36 studs away, stays clear of it)
+	Look = {
+		Body = Color3.fromRGB(176, 182, 196),
+		Accent = Color3.fromRGB(92, 96, 116),
+		Eyes = Color3.fromRGB(16, 176, 168),
+		Gem = Color3.fromRGB(16, 176, 168),
+	},
+}
 Backpacks.RoofScale = 2.8 -- the roof emblem's size against a normal pack (owner: a big turning pack on the roof)
 Backpacks.RoofSpin = 0 -- radians per second (owner 2026-10-25: it stands still)
 -- how near the camera must be for the clients to build each display pack
@@ -256,6 +268,30 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	-- the clients' decor
 	m:SetAttribute(BackpackShopDecor.FrameAttribute, cf)
 	m.PrimaryPart = counter
+
+	-- the golem by the porch with a pack on its back (an invisible plate behind it:
+	-- the clients stand the pack on it, its outer face away from the golem)
+	local golemPiece, golemCf = Kit.piece("BackpackGolem")
+	local g = Style.model(golemPiece.Id, parent)
+	local spec = Backpacks.Golem
+	local s = spec.Size
+	local golem = Kit.golem(g, golemCf, s, spec.Look)
+	golem.Parent = g
+	local back = Style.block(
+		g,
+		golemCf * CFrame.new(0, 0.58 * s - 0.07, 0.425 * s + 0.54) * CFrame.Angles(0, math.pi, 0),
+		Vector3.new(1.4, 0.14, 1.0),
+		Tech.MetalLight,
+		nil,
+		Style.ghost()
+	)
+	back.Name = "GolemPack"
+	back.Transparency = 1
+	display(back, spec.Pack)
+	back:SetAttribute("DisplayRange", spec.Range)
+	back:SetAttribute("DisplayLite", true)
+	g:SetAttribute(BackpackShopDecor.FrameAttribute, cf) -- (the inside check of the lite look)
+	g.PrimaryPart = golem.PrimaryPart
 end
 
 return Backpacks

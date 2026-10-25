@@ -327,8 +327,12 @@ return function(T, Loader)
 		local door = (house:GetAttribute(DropperShopBuilder.FrameAttribute) * CFrame.new(0, 0, DropperShopBuilder.Room.Front)).Position
 		local spots = { Spawn = WorldLayout.SpawnPoint, Plaza = WorldLayout.Plaza.Center, DroppersDoor = door }
 		local stall = parent:FindFirstChild("BackpackStall")
+		local markers = table.clone(stall:GetChildren())
+		for _, d in parent:FindFirstChild("BackpackGolem"):GetChildren() do
+			table.insert(markers, d)
+		end
 		for name, spot in spots do
-			for _, d in stall:GetChildren() do
+			for _, d in markers do
 				if d:GetAttribute("BackpackId") then
 					local range = d:GetAttribute("DisplayRange")
 					T.eq(type(range), "number", d.Name .. " has its build range")
@@ -394,7 +398,11 @@ return function(T, Loader)
 				museums += #partsOf(MuseumBuilder.build(WorldLayout.plotCFrame(plot)))
 			end
 			local packs = 0
-			for _, d in shop:GetChildren() do
+			local markers = table.clone(shop:GetChildren())
+			for _, d in map:FindFirstChild("BackpackGolem", true):GetChildren() do
+				table.insert(markers, d)
+			end
+			for _, d in markers do
 				local id = d:GetAttribute("BackpackId")
 				if id and (d.CFrame.Position - gate).Magnitude <= d:GetAttribute("DisplayRange") then
 					local model = BackpackBuilder.build(id, true)
@@ -439,6 +447,26 @@ return function(T, Loader)
 			end
 			T.eq(boxes, before, pack.Id .. " keeps its effect boxes")
 		end
+	end)
+
+	T.test("BACKPACKS golem: by the porch with the Runebound pack's plate on its back", function()
+		local Backpacks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Backpacks")
+		local parent = roblox.Instance.new("Model")
+		Backpacks.build(parent, Rng.new(7))
+		local g = parent:FindFirstChild("BackpackGolem")
+		T.truthy(g ~= nil and g.PrimaryPart ~= nil, "the golem model")
+		local plate = g:FindFirstChild("GolemPack")
+		T.truthy(plate ~= nil, "the pack's plate")
+		T.eq(plate:GetAttribute("BackpackId"), Backpacks.Golem.Pack, "its pack")
+		T.eq(plate.Transparency, 1, "the plate is invisible")
+		T.falsy(plate.CanCollide, "no collision")
+		T.truthy(plate:GetAttribute("DisplayLite"), "phones see the lite pack")
+		T.eq(#plate:GetTags(), 0, "no tag (Plaza Life)")
+		-- the pack's outer face away from the golem (the plate faces its back)
+		local body = g.PrimaryPart
+		local away = (plate.CFrame.Position - body.CFrame.Position) * Vector3.new(1, 0, 1)
+		T.truthy(plate.CFrame.LookVector:Dot(away.Unit) > 0.9, "the plate faces out of the golem's back")
+		T.le(#partsOf(g), 20, "a lean golem")
 	end)
 
 	T.test("BACKPACKS shop decor: built by the clients, inside the footprint, lights and dust off", function()

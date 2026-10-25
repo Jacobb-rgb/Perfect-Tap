@@ -563,5 +563,39 @@
     ],
     "fov": 55,
     "shadowExtent": 120
+  },
+  "bp_golem_pack": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      28,
+      6.5,
+      60
+    ],
+    "target": [
+      39,
+      4.5,
+      69.5
+    ],
+    "fov": 60,
+    "shadowExtent": 80
+  },
+  "bp_golem_miner": {
+    "scene": "backpack_stall",
+    "preset": "Surface",
+    "maxLights": 24,
+    "position": [
+      24.2,
+      5,
+      41.5
+    ],
+    "target": [
+      26.6,
+      2.6,
+      49.6
+    ],
+    "fov": 55,
+    "shadowExtent": 60
   }
 }

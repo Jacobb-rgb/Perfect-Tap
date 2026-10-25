@@ -377,6 +377,16 @@ LobbyLayout.Pieces = {
 		Note = "The EGGS temple left of the spawn (owner 2026-10-21/22): an open gold rotunda with the three eggs on podiums, a curved navy back wall, crystal shards, a giant crowned egg on the roof, EGGS sign, odds board. Tag CapsuleStall (Model with PrimaryPart CapsuleMachine).",
 	},
 	{
+		-- (owner 2026-10-25: "a golem with a backpack" by the shop, in place of the
+		-- shopper in the preview pictures)
+		Id = "BackpackGolem",
+		Package = "Districts",
+		Center = v(36, 0, 66.5),
+		Size = v(5, 9, 5),
+		Facing = v(0.82, 0, 0.58).Unit,
+		Note = "A golem by the BACKPACKS shop's porch looking at the shop, the Runebound pack on its back (the clients build the pack on its invisible plate: attribute BackpackId).",
+	},
+	{
 		Id = "BackpackStall",
 		Package = "Districts",
 		-- (owner 2026-10-24: a new BACKPACKS stall; then "in place of the ROCK SCANNER, in

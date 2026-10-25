@@ -79,6 +79,12 @@ green, each with a flower ring (Flora/Trees.backpackTrees, ~60 parts; Flora Lobb
 meadow now keeps 12 studs off the railway tunnel mouths, a re-rolled lawn tuft touched the
 south-east portal).
 
+Golems (owner 2026-10-25): a golem stands by the porch with the Runebound pack on its back (piece
+`BackpackGolem` (36, 0, 66.5), lean Districts Kit.golem, size 2.3, the pack on an invisible plate
+`GolemPack`: DisplayRange 33, DisplayLite), and Plaza Life's 9 miner spots are mining golems
+(`Life.miner` builds a golem with a hard hat: pickaxe on the shoulder, swinging at an ore rock,
+or holding up a glowing chunk; same part count as the old miners).
+
 Budgets (main 958ddb46 -> this branch at 16 wide, the budget tests' own counting; at 18 wide the
 map is 33,445 and every budget test still passes: re-measured at landing): map 33,450 -> 33,459,
 lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round the spawn

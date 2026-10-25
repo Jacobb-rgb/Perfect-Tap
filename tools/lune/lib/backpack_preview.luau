@@ -326,7 +326,6 @@ function Preview.buildStall(Loader: any, workspace: any)
 	local process = require("@lune/process")
 	local k = setup(Loader)
 	local CF, V3 = k.CFrame, k.Vector3
-	local Dummy = require("./dummy")
 	local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
 	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 	local stage = k.roblox.Instance.new("Model")
@@ -348,7 +347,12 @@ function Preview.buildStall(Loader: any, workspace: any)
 	local counter: any = nil
 	local shop: any = nil
 	for _, d in workspace:GetDescendants() do
-		if d:IsA("BasePart") and d:GetAttribute("BackpackId") ~= nil and d.Parent and d.Parent.Name == "BackpackStall" then
+		if
+			d:IsA("BasePart")
+			and d:GetAttribute("BackpackId") ~= nil
+			and d.Parent
+			and (d.Parent.Name == "BackpackStall" or d.Parent.Name == "BackpackGolem")
+		then
 			-- as BackpackWearController.displayRoot: centred on the plate, standing on it
 			local id = d:GetAttribute("BackpackId")
 			local pack = k.Data.ById[id]
@@ -413,18 +417,7 @@ function Preview.buildStall(Loader: any, workspace: any)
 				golem.Parent = stage
 			end
 		end
-		-- a shopper on the path looking at the Emberforge plinth
-		local rgb = k.Color3.fromRGB
-		for _, spec in { { V3.new(9.2, 0, -7.0), "MinersPack", rgb(186, 98, 48), 0.75 } } do
-			local frame = shop:GetAttribute(Decor.FrameAttribute)
-			local spot = frame * CF.new(spec[1].X, spec[1].Y, spec[1].Z)
-			local root = spot * CF.Angles(0, math.pi + spec[4], 0)
-			Dummy.build(stage, CF, root, "idle", { shirt = spec[3], pants = rgb(52, 52, 64) })
-			local model = k.Builder.build(spec[2])
-			model:PivotTo(root * CF.new(0, 3.2, 0.5))
-			model.Parent = stage
-			withFx(k, model)
-		end
+		-- (the golem by the porch wears its pack: the game builds that one on its plate)
 	end
 end
 

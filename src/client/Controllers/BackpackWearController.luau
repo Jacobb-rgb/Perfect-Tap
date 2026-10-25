@@ -59,6 +59,7 @@ local BackpackWearController = {}
 BackpackWearController.Attribute = "Backpack" -- player attribute: the equipped pack id
 BackpackWearController.CounterTag = "BackpackCounter" -- the stall's counter (Lobby/Districts/Backpacks)
 BackpackWearController.DisplayAttribute = "BackpackId" -- on the stall's display markers
+BackpackWearController.GolemName = "BackpackGolem" -- the golem by the shop's porch (a sibling of the shop model)
 BackpackWearController.ShowRange = 120 -- studs: farther packs aren't built
 BackpackWearController.FxRange = 50 -- studs: farther packs get no particles
 BackpackWearController.DisplayRange = 70
@@ -444,9 +445,13 @@ local function scanMarkers()
 	for _, counter in CollectionService:GetTagged(BackpackWearController.CounterTag) do
 		local stall = counter.Parent
 		if stall and counter:IsA("BasePart") then
-			for _, child in stall:GetChildren() do
-				if not displays[child :: any] and child:GetAttribute(BackpackWearController.DisplayAttribute) ~= nil then
-					addMarker(child)
+			-- (and the golem by the porch: its pack's plate)
+			local golem = if stall.Parent then stall.Parent:FindFirstChild(BackpackWearController.GolemName) else nil
+			for _, model in { stall, golem } do
+				for _, child in (model :: Instance):GetChildren() do
+					if not displays[child :: any] and child:GetAttribute(BackpackWearController.DisplayAttribute) ~= nil then
+						addMarker(child)
+					end
 				end
 			end
 			local frame = stall:GetAttribute(BackpackShopDecor.FrameAttribute)
