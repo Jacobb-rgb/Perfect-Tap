@@ -28,6 +28,7 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
+local GoldenStatue = require(script.Parent.GoldenStatue)
 
 local C = Style.C
 local K = Common.Colors
@@ -36,6 +37,9 @@ local SMOOTH = Enum.Material.SmoothPlastic
 local rgb = Color3.fromRGB
 
 local FireCrystal = {}
+
+-- (owner 2026-10-25: the golden dragon with the TERRA FORGE sign instead of the crystal; preview)
+FireCrystal.Statue = true
 
 FireCrystal.SpinSpeed = 0.25
 FireCrystal.BobHeight = 0.25
@@ -374,6 +378,10 @@ function FireCrystal.build(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("FireCrystalRing", parent)
 	baseTier(m, center, y0)
 	armorRing(m, center, y0, rng)
+	if FireCrystal.Statue then
+		GoldenStatue.build(m, parent, center, y0 + BASE_H, rng)
+		return
+	end
 	local top = moltenBowl(m, center, y0)
 	crystalCluster(parent, CFrame.new(center + Vector3.new(0, top, 0)), rng)
 end
