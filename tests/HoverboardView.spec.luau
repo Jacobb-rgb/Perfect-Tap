@@ -22,38 +22,39 @@ return function(T, Loader)
 		T.eq(HoverboardView.cardState(B.TimberDrifter, owned, "", 0), "Equip", "owned")
 		T.eq(HoverboardView.cardState(B.TimberDrifter, owned, "TimberDrifter", 0), "Equipped", "equipped")
 		-- Robux boards: COMING SOON until the owner writes the game pass id
-		local pass = MonetizationConfig.Entries.HoverboardComet
+		local pass = MonetizationConfig.Entries.HoverboardCustom
 		local old = pass.Id
 		pass.Id = 0
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 1e12), "Soon", "no pass id")
+		T.eq(HoverboardView.cardState(B.TerraForgeCustom, none, "", 1e12), "Soon", "no pass id")
 		pass.Id = 777
 		local realReady = HoverboardView.receiptsReady
 		rawset(HoverboardView, "receiptsReady", function()
 			return false
 		end)
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Soon", "a real pass id, but the receipts gate is closed")
+		T.eq(HoverboardView.cardState(B.TerraForgeCustom, none, "", 0), "Soon", "a real pass id, but the receipts gate is closed")
 		rawset(HoverboardView, "receiptsReady", function()
 			return true
 		end)
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Robux", "a real pass id, receipts open")
-		T.eq(HoverboardView.cardState(B.NeonComet, { NeonComet = true }, "", 0), "Equip", "owned Robux board")
+		T.eq(HoverboardView.cardState(B.TerraForgeCustom, none, "", 0), "Robux", "a real pass id, receipts open")
+		T.eq(HoverboardView.cardState(B.TerraForgeCustom, { TerraForgeCustom = true }, "", 0), "Equip", "owned Robux board")
 		rawset(HoverboardView, "receiptsReady", realReady)
 		pass.Id = old
 	end)
 
 	T.test("HoverboardView: texts", function()
 		T.eq(HoverboardView.priceText(B.TimberDrifter), Format.money(B.TimberDrifter.Price :: number), "coin price")
-		T.eq(HoverboardView.priceText(B.RoyalPhoenix), "49 R$", "Robux price")
+		T.eq(HoverboardView.priceText(B.TerraForgeCustom), "49 R$", "Robux price")
+		T.eq(HoverboardView.priceText(B.RoyalPhoenix), Format.money(B.RoyalPhoenix.Price :: number), "the Royal Phoenix costs coins now")
 		T.eq(HoverboardView.speedText(B.CartCruiser), "SPEED 27", "speed")
 		T.eq(HoverboardView.bonusText(B.TimberDrifter), `+{HoverboardData.speedBonus(B.TimberDrifter)}%`, "bonus")
 		T.eq(HoverboardView.buttonText("Buy", B.TimberDrifter), "BUY")
 		T.eq(HoverboardView.buttonText("BuyLocked", B.TimberDrifter), "BUY")
 		T.eq(HoverboardView.buttonText("Equip", B.TimberDrifter), "EQUIP")
 		T.eq(HoverboardView.buttonText("Equipped", B.TimberDrifter), "EQUIPPED")
-		T.eq(HoverboardView.buttonText("Robux", B.NeonComet), "49")
-		T.eq(HoverboardView.buttonText("Soon", B.NeonComet), "COMING SOON")
-		local set = HoverboardView.ownedSet({ "TimberDrifter", "Nope", 5, "NeonComet" })
-		T.truthy(set.TimberDrifter and set.NeonComet, "known ids")
+		T.eq(HoverboardView.buttonText("Robux", B.TerraForgeCustom), "49")
+		T.eq(HoverboardView.buttonText("Soon", B.TerraForgeCustom), "COMING SOON")
+		local set = HoverboardView.ownedSet({ "TimberDrifter", "Nope", 5, "TerraForgeCustom" })
+		T.truthy(set.TimberDrifter and set.TerraForgeCustom, "known ids")
 		T.eq(set.Nope, nil, "unknown ids dropped")
 		T.eq(next(HoverboardView.ownedSet("junk")), nil, "junk = nothing")
 	end)
@@ -174,10 +175,10 @@ return function(T, Loader)
 		T.falsy(byId.EmberglassGlider.Owned.Visible, "not owned: no chip")
 		T.eq(byId.TimberDrifter.Look.Style, "Equip", "EQUIP")
 		T.truthy(byId.CartCruiser.Look.Icons.Check.Visible, "EQUIPPED has a check")
-		local mark = byId.NeonComet.Look.Row:FindFirstChild("Mark")
-		T.eq(mark.Visible, byId.NeonComet.State == "Robux", "the robux mark only on the Robux price (Pop.price)")
+		local mark = byId.TerraForgeCustom.Look.Row:FindFirstChild("Mark")
+		T.eq(mark.Visible, byId.TerraForgeCustom.State == "Robux", "the robux mark only on the Robux price (Pop.price)")
 		-- a Robux board's price is only on its green button: its price line shows one more perk
-		for _, id in { "NeonComet", "RoyalPhoenix" } do
+		for _, id in { "TerraForgeCustom" } do
 			T.falsy(byId[id].PriceRow.Visible, id .. ": no second price")
 			T.truthy(byId[id].Extra.Visible, id .. ": its perk instead")
 			T.truthy(byId[id].Extra.Text ~= "" and not string.find(byId[id].Extra.Text, "R$", 1, true), id .. ": a perk, not a price")
@@ -187,7 +188,11 @@ return function(T, Loader)
 		T.truthy(byId.EmberglassGlider.Look.Icons.Lock.Visible, "lock icon")
 		T.truthy(byId.EmberglassGlider.PriceRow.Visible, "price shown")
 		T.eq(byId.EmberglassGlider.Price.Text, Format.money(B.EmberglassGlider.Price :: number), "price text")
-		T.eq(byId.NeonComet.Look.Label.Text, if HoverboardData.canPrompt(B.NeonComet) then "49" else "COMING SOON", "Robux card")
+		T.eq(
+			byId.TerraForgeCustom.Look.Label.Text,
+			if HoverboardData.canPrompt(B.TerraForgeCustom) then "49" else "COMING SOON",
+			"Robux card"
+		)
 		T.eq(HoverboardView.firstButton(refs), byId.TimberDrifter.Button, "a gamepad lands on the first useful card")
 	end)
 

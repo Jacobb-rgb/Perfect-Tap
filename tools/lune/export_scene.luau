@@ -158,6 +158,18 @@ elseif sceneName == "hall" then -- the world + stand-in champions on the giant H
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	require("./lib/hall_preview").build(Loader, map)
+elseif sceneName == "shopkeepers" then -- the world + the shopkeeper golems on their spots, arg 2 = an emote at its peak (tools/lune/lib/shopkeeper_preview.luau)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	require("./lib/shopkeeper_preview").build(Loader, map, process.args[2])
+elseif sceneName == "shopkeeper_solo" then -- the shop golems in a row on a floor, arg 2 = an emote at its peak
+	require("./lib/shopkeeper_preview").buildSolo(Loader, workspace, process.args[2])
+elseif sceneName == "shopkeeper_golems" then -- candidate golems for the shops, in a row (args: kinds)
+	local kinds = {}
+	for i = 2, #process.args do
+		table.insert(kinds, process.args[i])
+	end
+	require("./lib/shopkeeper_preview").buildGolemLineup(Loader, workspace, kinds)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)

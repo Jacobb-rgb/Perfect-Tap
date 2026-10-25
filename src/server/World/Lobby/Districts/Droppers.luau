@@ -37,6 +37,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
 local DropperShopBuilder = require(Shared.Builders.DropperShopBuilder)
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Tech = require(script.Parent.Tech)
@@ -286,6 +287,11 @@ function Droppers.build(parent: Instance, _rng: Rng.Rng)
 	counter.Name = "DropperCounter"
 	Kit.tag(counter, Droppers.CounterTag)
 	block(at(cc.X, cc.Y + cs.Y + spec.Top / 2, cc.Z), Vector3.new(cs.X + 0.4, spec.Top, cs.Z + 0.4), Tech.MetalLight, nil, true)
+	-- the shopkeeper golem (ShopkeeperController) by the counter's left end,
+	-- between the DARK MATTER DROPPER's podium and the side displays, turned a
+	-- little to the shop's middle (behind the counter the hero leaves no room)
+	local inner = DropperShopBuilder.Inner
+	ShopkeeperConfig.mark(counter, fr(-6.3, cc.Y, inner.Back + 6.2) * CFrame.Angles(0, 0.35, 0), "Droppers")
 
 	-- the clients' showroom
 	Kit.tag(m, DropperShopBuilder.Tag)

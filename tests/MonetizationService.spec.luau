@@ -18,6 +18,7 @@ return function(T, Loader)
 	local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
 	local MonetizationService = Loader.requirePath("ServerScriptService.Server.Services.MonetizationService")
 	local HoverboardService = Loader.requirePath("ServerScriptService.Server.Services.HoverboardService")
+	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 
 	local GRANTED = Enum.ProductPurchaseDecision.PurchaseGranted
 	local NOT_YET = Enum.ProductPurchaseDecision.NotProcessedYet
@@ -70,8 +71,22 @@ return function(T, Loader)
 		for key, entry in MonetizationConfig.Entries do
 			w.oldIds[key] = entry.Id
 		end
-		MonetizationConfig.Entries.HoverboardComet.Id = COMET
-		MonetizationConfig.Entries.HoverboardPhoenix.Id = PHOENIX
+		MonetizationConfig.Entries.HoverboardCustom.Id = COMET
+		-- the game sells one Robux board (owner 2026-10-25); a second, faster test-only board and
+		-- its pass keep the two-pass cases (which one is equipped, revoking both, a retry)
+		MonetizationConfig.Entries.HoverboardTestFast = {
+			Key = "HoverboardTestFast",
+			Kind = "GamePass",
+			Id = PHOENIX,
+			Robux = 49,
+			Name = "Test fast board",
+			Grant = "Hoverboard",
+			BoardId = "TestFastBoard",
+		}
+		HoverboardData.ById.TestFastBoard = table.clone(HoverboardData.ById.TerraForgeCustom)
+		HoverboardData.ById.TestFastBoard.Id = "TestFastBoard"
+		HoverboardData.ById.TestFastBoard.PassKey = "HoverboardTestFast"
+		HoverboardData.ById.TestFastBoard.Speed = 45
 		MonetizationConfig.Entries.TestCoinPouch =
 			{ Key = "TestCoinPouch", Kind = "Product", Id = PRODUCT, Robux = 25, Name = "Test pouch", Grant = "TestPouch" }
 		m.reset()
@@ -127,6 +142,8 @@ return function(T, Loader)
 			m.grants.Hoverboard = w.oldHoverboardGrant
 			m.passHandlers.Hoverboard = w.oldPass
 			MonetizationConfig.Entries.TestCoinPouch = nil
+			MonetizationConfig.Entries.HoverboardTestFast = nil
+			HoverboardData.ById.TestFastBoard = nil
 			for key, id in w.oldIds do
 				MonetizationConfig.Entries[key].Id = id
 			end
@@ -156,19 +173,19 @@ return function(T, Loader)
 		w.owned[COMET] = true
 		w.owned[PHOENIX] = false
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "owned")
-		T.eq(w.boards().Passes.NeonComet, true, "marked as pass-given")
-		T.eq(w.boards().Equipped, "NeonComet", "equipped")
-		T.eq(w.boards().Owned.RoyalPhoenix, nil, "the other pass isn't owned")
-		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache: owned")
-		T.falsy(MonetizationService.owns(w.player, "HoverboardPhoenix"), "session cache: not owned")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "owned")
+		T.eq(w.boards().Passes.TerraForgeCustom, true, "marked as pass-given")
+		T.eq(w.boards().Equipped, "TerraForgeCustom", "equipped")
+		T.eq(w.boards().Owned.TestFastBoard, nil, "the other pass isn't owned")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardCustom"), "session cache: owned")
+		T.falsy(MonetizationService.owns(w.player, "HoverboardTestFast"), "session cache: not owned")
 		T.eq(w.unlockedNotes(), 1, "'unlocked' said once")
 		local changes = w.changed
 		m.checkAll(w.player)
 		m.checkAll(w.player)
 		T.eq(w.unlockedNotes(), 1, "no repeat on later loads")
 		T.eq(w.changed, changes, "nothing changed on later loads")
-		T.eq(w.boards().Owned.NeonComet, true, "still owned")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "still owned")
 	end)
 
 	withWorld("passes: not owned after a pass grant -> revoked, unequipped, off the board; coin boards survive", function(w)
@@ -176,38 +193,38 @@ return function(T, Loader)
 		w.owned[COMET] = true
 		w.owned[PHOENIX] = true
 		m.checkAll(w.player)
-		T.eq(w.boards().Equipped, "RoyalPhoenix", "the fastest pass board equipped")
+		T.eq(w.boards().Equipped, "TestFastBoard", "the fastest pass board equipped")
 		-- ride the Phoenix, then Roblox says both passes are gone (refunded)
-		HoverboardService._test.riding(w.player, "RoyalPhoenix")
+		HoverboardService._test.riding(w.player, "TestFastBoard")
 		w.owned[COMET] = false
 		w.owned[PHOENIX] = false
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, nil, "Comet revoked")
-		T.eq(w.boards().Owned.RoyalPhoenix, nil, "Phoenix revoked")
-		T.eq(w.boards().Passes.RoyalPhoenix, nil, "pass marks cleared")
+		T.eq(w.boards().Owned.TerraForgeCustom, nil, "Comet revoked")
+		T.eq(w.boards().Owned.TestFastBoard, nil, "Phoenix revoked")
+		T.eq(w.boards().Passes.TestFastBoard, nil, "pass marks cleared")
 		T.eq(w.boards().Equipped, "", "unequipped")
 		T.falsy(HoverboardService.isRiding(w.player), "got off the revoked board")
 		T.eq(w.boards().Owned.TimberDrifter, true, "the coin board survives a revoke")
-		T.falsy(MonetizationService.owns(w.player, "HoverboardPhoenix"), "session cache: not owned")
+		T.falsy(MonetizationService.owns(w.player, "HoverboardTestFast"), "session cache: not owned")
 	end)
 
 	withWorld("passes: a revoke never takes a board the pass didn't give", function(w)
 		-- an older grant without the pass mark (and a coin board) stay put
-		w.data.Hoverboards.Owned.NeonComet = true
+		w.data.Hoverboards.Owned.TerraForgeCustom = true
 		w.data.Hoverboards.Owned.CartCruiser = true
-		w.data.Hoverboards.Equipped = "NeonComet"
+		w.data.Hoverboards.Equipped = "TerraForgeCustom"
 		w.owned[COMET] = false
 		w.owned[PHOENIX] = false
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "no pass mark: not taken")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "no pass mark: not taken")
 		T.eq(w.boards().Owned.CartCruiser, true, "coin board untouched")
-		T.eq(w.boards().Equipped, "NeonComet", "still equipped")
+		T.eq(w.boards().Equipped, "TerraForgeCustom", "still equipped")
 	end)
 
 	withWorld("passes: a check that keeps failing changes nothing; a retry that succeeds counts", function(w)
-		w.data.Hoverboards.Owned.NeonComet = true
-		w.data.Hoverboards.Passes.NeonComet = true
-		w.data.Hoverboards.Equipped = "NeonComet"
+		w.data.Hoverboards.Owned.TerraForgeCustom = true
+		w.data.Hoverboards.Passes.TerraForgeCustom = true
+		w.data.Hoverboards.Equipped = "TerraForgeCustom"
 		-- Comet: every try errors; Phoenix: errors twice, then says owned
 		local phoenixTries = 0
 		w.owned[COMET] = function()
@@ -221,12 +238,12 @@ return function(T, Loader)
 			return true
 		end
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "a failed check never revokes")
-		T.eq(w.boards().Passes.NeonComet, true, "the pass mark stays")
-		T.falsy(MonetizationService.owns(w.player, "HoverboardComet"), "unknown, not owned, in the cache")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "a failed check never revokes")
+		T.eq(w.boards().Passes.TerraForgeCustom, true, "the pass mark stays")
+		T.falsy(MonetizationService.owns(w.player, "HoverboardCustom"), "unknown, not owned, in the cache")
 		T.eq(phoenixTries, 3, "the third try answered")
-		T.eq(w.boards().Owned.RoyalPhoenix, true, "granted after the retry")
-		T.eq(w.boards().Equipped, "RoyalPhoenix", "the faster board is equipped")
+		T.eq(w.boards().Owned.TestFastBoard, true, "granted after the retry")
+		T.eq(w.boards().Equipped, "TestFastBoard", "the faster board is equipped")
 		T.eq(
 			w.calls,
 			MonetizationService.CheckTries * (1 + MonetizationService.Rechecks) + 3,
@@ -246,30 +263,30 @@ return function(T, Loader)
 			return false
 		end
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "still owned")
-		T.eq(w.boards().Passes.NeonComet, true, "the pass mark stays")
-		T.eq(w.boards().Equipped, "NeonComet", "still equipped")
-		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache: owned")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "still owned")
+		T.eq(w.boards().Passes.TerraForgeCustom, true, "the pass mark stays")
+		T.eq(w.boards().Equipped, "TerraForgeCustom", "still equipped")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardCustom"), "session cache: owned")
 		-- a later round in this session (a cached answer) never takes it either
 		w.owned[COMET] = false
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "kept for the session")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "kept for the session")
 		-- the next session: a refund is seen
 		m.forget(w.player)
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, nil, "refunded: revoked on the next load")
+		T.eq(w.boards().Owned.TerraForgeCustom, nil, "refunded: revoked on the next load")
 	end)
 
 	withWorld("passes: a pass bought while the save was still loading is granted by the load's check", function(w)
 		w.loaded = false
 		m.purchaseFinished(w.player, COMET, true)
-		T.eq(w.data.Hoverboards.Owned.NeonComet, nil, "no save yet: nothing to grant into")
-		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache: owned")
+		T.eq(w.data.Hoverboards.Owned.TerraForgeCustom, nil, "no save yet: nothing to grant into")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardCustom"), "session cache: owned")
 		w.loaded = true
 		w.owned[COMET] = true
 		w.owned[PHOENIX] = false
 		m.checkAll(w.player)
-		T.eq(w.boards().Owned.NeonComet, true, "granted once the save loaded")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "granted once the save loaded")
 	end)
 
 	withWorld("passes: a player who leaves stops the checks quietly; no save = no change", function(w)
@@ -280,40 +297,40 @@ return function(T, Loader)
 		w.owned[PHOENIX] = true
 		m.checkAll(w.player)
 		T.eq(w.calls, 1, "no more tries once the player left")
-		T.eq(w.boards().Owned.RoyalPhoenix, nil, "nothing granted after leaving")
+		T.eq(w.boards().Owned.TestFastBoard, nil, "nothing granted after leaving")
 		w.player.Parent = true
 		w.loaded = false
 		m.checkAll(w.player)
-		T.eq(w.data.Hoverboards.Owned.RoyalPhoenix, nil, "no loaded save: nothing written")
+		T.eq(w.data.Hoverboards.Owned.TestFastBoard, nil, "no loaded save: nothing written")
 	end)
 
 	withWorld("passes: purchase finished grants only a live pass that was bought", function(w)
 		m.purchaseFinished(w.player, COMET, false)
-		T.eq(w.boards().Owned.NeonComet, nil, "not purchased: nothing")
+		T.eq(w.boards().Owned.TerraForgeCustom, nil, "not purchased: nothing")
 		m.purchaseFinished(w.player, 777777, true)
 		T.eq(next(w.boards().Owned), nil, "an unknown pass id: nothing")
 		m.purchaseFinished(w.player, PRODUCT, true)
 		T.eq(next(w.boards().Owned), nil, "a developer product id is no pass")
-		local old = MonetizationConfig.Entries.HoverboardPhoenix.Id
-		MonetizationConfig.Entries.HoverboardPhoenix.Id = 0
+		local old = MonetizationConfig.Entries.HoverboardTestFast.Id
+		MonetizationConfig.Entries.HoverboardTestFast.Id = 0
 		m.purchaseFinished(w.player, 0, true)
-		T.eq(w.boards().Owned.RoyalPhoenix, nil, "id 0 never matches")
-		MonetizationConfig.Entries.HoverboardPhoenix.Id = old
+		T.eq(w.boards().Owned.TestFastBoard, nil, "id 0 never matches")
+		MonetizationConfig.Entries.HoverboardTestFast.Id = old
 		m.purchaseFinished(w.player, COMET, true)
-		T.eq(w.boards().Owned.NeonComet, true, "bought: granted")
-		T.eq(w.boards().Equipped, "NeonComet", "equipped")
-		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache")
+		T.eq(w.boards().Owned.TerraForgeCustom, true, "bought: granted")
+		T.eq(w.boards().Equipped, "TerraForgeCustom", "equipped")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardCustom"), "session cache")
 		T.truthy(w.changed > 0, "DataService.changed")
 		m.purchaseFinished(w.player, COMET, true)
 		T.eq(w.unlockedNotes(), 1, "a second signal changes nothing")
 	end)
 
 	withWorld("passes: id 0 passes are never checked, and boards never go through ProcessReceipt", function(w)
-		MonetizationConfig.Entries.HoverboardComet.Id = 0
+		MonetizationConfig.Entries.HoverboardCustom.Id = 0
 		w.owned[PHOENIX] = true
 		m.checkAll(w.player)
 		T.eq(w.calls, 1, "only the live pass is checked")
-		T.eq(w.boards().Owned.NeonComet, nil, "id 0: nothing")
+		T.eq(w.boards().Owned.TerraForgeCustom, nil, "id 0: nothing")
 		T.eq(MonetizationService.decide(w.receipt("b1", PHOENIX)), NOT_YET, "a pass id as a receipt")
 		T.eq(w.boardReceipts, nil, "no board grant through ProcessReceipt")
 		T.eq(w.data.Purchases.b1, nil, "nothing recorded")

@@ -22,8 +22,12 @@
 	    panel under a ceiling spot
 	  - the DARK MATTER DROPPER, the best one, big on its podium behind the
 	    counter in a glowing ring on the back wall, between glowing orbs
-	  - the counter: a neon edge, the DROPPERS plate, a till, coins and a
-	    small Money Laser gate, the Dropper Master (the shopkeeper) behind it
+	  - a royal red carpet with gold borders from the door to the counter
+	  - the counter: a neon edge, the DROPPERS plate, a big till (a gold "$"
+	    drawer, keypad, receipt roll, a "$$$" customer display), a service
+	    bell, coin stacks and a gold bar, a gem under a glass dome, a plant,
+	    an OPEN sign and a small Money Laser gate (the shopkeeper is a big
+	    golem beside the counter: ShopkeeperController)
 	  - a heap of ore crystals and a terminal in the back corners
 	Three local PointLights (two ceiling panels, the hero); every part is
 	anchored, non-colliding and casts no shadow (the server's plinths and
@@ -147,13 +151,12 @@ local C = {
 	Panel = rgb(120, 150, 215),
 	Gold = rgb(255, 196, 64),
 	Screen = rgb(30, 92, 214),
-	Skin = rgb(236, 186, 140),
-	Overalls = rgb(52, 96, 176),
-	Shirt = rgb(232, 112, 40),
-	Hat = rgb(255, 204, 40),
-	Hair = rgb(120, 76, 44),
 	Laser = rgb(0, 255, 105),
 	LaserBody = rgb(40, 150, 70),
+	Carpet = rgb(150, 24, 44),
+	Leaf = rgb(70, 190, 90),
+	Paper = rgb(245, 245, 240),
+	Till = rgb(110, 255, 140),
 }
 
 local DECOR = { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
@@ -217,8 +220,14 @@ function DropperShopBuilder.build(frame: CFrame): Model
 		glow(at(sx * 2.4, floorY + 0.08, IN_FRONT - guide / 2), Vector3.new(0.14, 0.04, guide), C.Neon)
 	end
 	local aisle = IN_X - 4.2
-	for _, z in { IN_FRONT - guide * 0.3, counterFront + 0.6 } do
-		glow(at(0, floorY + 0.08, z), Vector3.new(aisle * 2 - 0.4, 0.04, 0.14), C.Neon)
+	glow(at(0, floorY + 0.08, counterFront + 0.6), Vector3.new(aisle * 2 - 0.4, 0.04, 0.14), C.Neon)
+	-- (owner 2026-10-24: "a carpet on the floor") a royal red runner from the
+	-- door to the counter between the guide lines, gold borders along it
+	local runner = IN_FRONT - (counterFront + 0.8)
+	local runnerZ = IN_FRONT - runner / 2
+	part(at(0, floorY + 0.07, runnerZ), Vector3.new(3.9, 0.04, runner), C.Carpet, Enum.Material.Fabric)
+	for _, sx in { -1, 1 } do
+		part(at(sx * 1.7, floorY + 0.1, runnerZ), Vector3.new(0.16, 0.03, runner - 0.2), C.Gold)
 	end
 	-- dark metal wall panels on the side and back walls (the front's windows
 	-- stay clear), a blue neon band round them
@@ -300,7 +309,8 @@ function DropperShopBuilder.build(frame: CFrame): Model
 		glow(arc, Vector3.new(len, 0.32, 0.1), heroColor)
 	end
 	local heroCf = at(0, top, hz)
-	local heroModel = DropperBuilder.build(hero.Id, heroCf)
+	-- (the lite build like the side droppers: the counter's till and props fit the phone budget)
+	local heroModel = DropperBuilder.build(hero.Id, heroCf, true)
 	BlockKit.scale(heroModel, heroCf, hero.Scale / DropperBuilder.Scale)
 	heroModel.Parent = m
 	local heroLight = Geo.block(m, at(0, top + 4.5, hz + 3), Vector3.new(0.2, 0.2, 0.2), heroColor, NEON, table.clone(DECOR))
@@ -331,13 +341,64 @@ function DropperShopBuilder.build(frame: CFrame): Model
 		C.Neon
 	)
 	plate.Name = "CounterPlate"
-	-- a till with a glowing screen, coins
-	part(at(-2.3, ctop + 0.45, cc.Z), Vector3.new(1.4, 0.9, 1.0), C.MetalDark)
-	glow(at(-2.3, ctop + 0.95, cc.Z + 0.52) * CFrame.Angles(math.rad(-20), 0, 0), Vector3.new(0.9, 0.38, 0.05), C.Screen)
-	for k, p in { Vector3.new(0.5, 0, 0.3), Vector3.new(0.95, 0, 0.0) } do
-		local h = 0.3 + k * 0.15
+	-- (owner 2026-10-24: "the till bigger, accessories, mega cool") the till: a
+	-- dark base with a gold "$" cash drawer and a glowing strip, a body, a
+	-- keypad, a receipt roll, a customer display on a post ("$$$")
+	local rx, rz = -2.3, cc.Z
+	part(at(rx, ctop + 0.22, rz), Vector3.new(1.8, 0.44, 1.2), C.MetalDark)
+	BlockKit.text(m, at(rx, ctop + 0.22, rz + 0.62), Vector3.new(1.5, 0.3, 0.06), "$", C.MetalDeep, C.Gold, nil, Enum.Font.LuckiestGuy)
+	glow(at(rx, ctop + 0.03, rz + 0.62), Vector3.new(1.7, 0.06, 0.05), C.Band)
+	part(at(rx - 0.1, ctop + 0.68, rz - 0.2), Vector3.new(1.5, 0.5, 0.75), C.Metal)
+	part(at(rx + 0.35, ctop + 0.47, rz + 0.36), Vector3.new(0.75, 0.06, 0.4), C.MetalDeep)
+	Geo.make("Part", {
+		Shape = Enum.PartType.Cylinder,
+		CFrame = at(rx + 0.85, ctop + 0.6, rz - 0.15),
+		Size = Vector3.new(0.3, 0.34, 0.34),
+		Color = C.Paper,
+		Material = Enum.Material.SmoothPlastic,
+	}, m)
+	part(at(rx + 0.85, ctop + 0.46, rz + 0.12), Vector3.new(0.26, 0.02, 0.5), C.Paper)
+	part(at(rx - 0.1, ctop + 1.15, rz - 0.2), Vector3.new(0.12, 0.5, 0.12), C.MetalLight)
+	BlockKit.text(
+		m,
+		at(rx - 0.1, ctop + 1.6, rz - 0.2),
+		Vector3.new(1.2, 0.5, 0.14),
+		"$$$",
+		C.Till,
+		C.MetalDeep,
+		nil,
+		Enum.Font.LuckiestGuy
+	)
+	-- a gold service bell
+	Geo.cylinder(m, at(-0.8, ctop + 0.04, cc.Z + 0.35).Position, 0.08, 0.55, C.MetalDeep, nil, table.clone(DECOR))
+	Geo.ball(m, at(-0.8, ctop + 0.2, cc.Z + 0.35).Position, 0.42, C.Gold, nil, table.clone(DECOR))
+	Geo.ball(m, at(-0.8, ctop + 0.45, cc.Z + 0.35).Position, 0.1, C.MetalLight, nil, table.clone(DECOR))
+	-- coin stacks and a gold bar
+	for k, p in { Vector3.new(0.5, 0, 0.3), Vector3.new(0.95, 0, 0.0), Vector3.new(0.15, 0, -0.25) } do
+		local h = 0.3 + (k % 3) * 0.15
 		Geo.cylinder(m, at(p.X, ctop + h / 2, cc.Z + p.Z).Position, h, 0.42, C.Gold, nil, table.clone(DECOR))
 	end
+	part(at(0.6, ctop + 0.1, cc.Z - 0.4) * CFrame.Angles(0, 0.3, 0), Vector3.new(0.6, 0.2, 0.28), C.Gold)
+	-- a glowing gem under a glass dome on a round stand
+	Geo.cylinder(m, at(1.6, ctop + 0.08, cc.Z).Position, 0.16, 0.7, C.MetalDark, nil, table.clone(DECOR))
+	glow(at(1.6, ctop + 0.42, cc.Z) * CFrame.Angles(0, math.pi / 4, math.pi / 4), Vector3.new(0.3, 0.3, 0.3), heroColor)
+	local dome = Geo.ball(m, at(1.6, ctop + 0.4, cc.Z).Position, 0.66, rgb(220, 240, 255), Enum.Material.Glass, table.clone(DECOR))
+	dome.Transparency = 0.6
+	-- a little plant at the left end, an OPEN sign at the right end
+	Geo.cylinder(m, at(-4.0, ctop + 0.22, cc.Z - 0.2).Position, 0.44, 0.5, C.Band, nil, table.clone(DECOR))
+	for _, a in { -0.5, 0.6 } do
+		part(at(-4.0, ctop + 0.75, cc.Z - 0.2) * CFrame.Angles(0, a * 2, a), Vector3.new(0.18, 0.75, 0.42), C.Leaf)
+	end
+	BlockKit.text(
+		m,
+		at(4.05, ctop + 0.4, cc.Z + 0.25),
+		Vector3.new(0.85, 0.42, 0.08),
+		"OPEN",
+		rgb(255, 120, 210),
+		C.MetalDeep,
+		nil,
+		Enum.Font.LuckiestGuy
+	)
 	-- a small Money Laser gate on the counter: two green posts, a lintel, the beam
 	local lx = 2.8
 	for _, dx in { -0.45, 0.45 } do
@@ -347,27 +408,6 @@ function DropperShopBuilder.build(frame: CFrame): Model
 	local beam = glow(at(lx, ctop + 0.6, cc.Z), Vector3.new(0.62, 1.1, 0.06), C.Laser)
 	beam.Name = DropperConfig.Laser.Id
 	beam.Transparency = 0.3
-
-	---------------------------------------------------------------- the Dropper Master
-	-- (beside the middle, behind the till: the DARK MATTER DROPPER stays in view)
-	local kx, kz = -2.3, cc.Z - cs.Z / 2 - 0.6
-	local function body(x: number, y: number, size: Vector3, color: Color3): Part
-		return part(at(kx + x, floorY + y, kz), size, color)
-	end
-	for _, sx in { -1, 1 } do
-		body(sx * 0.32, 0.8, Vector3.new(0.55, 1.6, 0.6), C.Overalls)
-		body(sx * 1.08, 2.85, Vector3.new(0.5, 1.6, 0.55), C.Shirt)
-	end
-	body(0, 2.6, Vector3.new(1.65, 1.8, 0.9), C.Shirt)
-	body(0, 2.35, Vector3.new(1.4, 1.3, 0.95), C.Overalls)
-	body(0, 4.05, Vector3.new(1.15, 1.1, 1.1), C.Skin)
-	body(0, 4.75, Vector3.new(1.3, 0.4, 1.3), C.Hat)
-	body(0, 4.58, Vector3.new(1.5, 0.1, 1.55), C.Hat)
-	for _, sx in { -1, 1 } do
-		glow(at(kx + sx * 0.27, floorY + 4.8, kz + 0.66), Vector3.new(0.34, 0.3, 0.08), rgb(90, 220, 255))
-		part(at(kx + sx * 0.25, floorY + 4.15, kz + 0.56), Vector3.new(0.16, 0.18, 0.05), rgb(30, 24, 30))
-	end
-	body(0, 3.82, Vector3.new(0.75, 0.2, 1.16), C.Hair)
 
 	---------------------------------------------------------------- the back corners
 	-- a heap of ore crystals (left), a terminal with a glowing screen (right)

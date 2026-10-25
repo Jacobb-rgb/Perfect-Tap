@@ -32,6 +32,7 @@ local NEON = Enum.Material.Neon
 
 Preview.COMET_AT = V3.new(140, 0, 0)
 Preview.PHOENIX_AT = V3.new(220, 0, 0)
+Preview.CUSTOM_RIDE_AT = V3.new(0, 0, 220)
 Preview.LINEUP_AT = V3.new(0, 0, 120)
 Preview.RIDE_VIEWER = V3.new(1.5, 7.5, 10.5) -- the ride shots' camera (trail ribbons face it)
 Preview.HERO_VIEWER = V3.new(0, 7.5, 31.5) -- the hero shot's camera
@@ -39,6 +40,7 @@ Preview.HERO_VIEWER = V3.new(0, 7.5, 31.5) -- the hero shot's camera
 local CF: any
 local Builder: any
 local Fx: any
+local Pose: any
 local Data: any
 local Format: any
 
@@ -47,6 +49,7 @@ local function init(Loader: any)
 	Builder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
 	Fx = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardFx")
 	Data = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+	Pose = Loader.requirePath("ReplicatedStorage.Shared.Moves.BoardPose")
 	Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 end
 
@@ -374,24 +377,24 @@ local function showroom(parent: any)
 		boardAt(root, board.Id, cf)
 	end
 	-- the COINS sign over the coin side (wood), the ROBUX arch over the Robux side (glow)
-	local woodSign = CF.new(-7.7, 6.4, -10)
-	part(root, woodSign, V3.new(9, 2, 0.4), C3.fromRGB(120, 76, 44), Enum.Material.Wood)
-	for _, x in { -11.5, -3.9 } do
+	local woodSign = CF.new(-4.6, 6.4, -10)
+	part(root, woodSign, V3.new(11, 2, 0.4), C3.fromRGB(120, 76, 44), Enum.Material.Wood)
+	for _, x in { -9.5, 0.3 } do
 		part(root, CF.new(x, 3.2, -10.2), V3.new(0.5, 6.4, 0.5), C3.fromRGB(92, 58, 34), Enum.Material.Wood)
 	end
 	text(root, woodSign * CF.new(0, 0, 0.23), 8, 1.6, "COINS", COIN, Enum.Font.LuckiestGuy, true)
 	local archZ = -9.6
-	for _, x in { 1.6, 16.4 } do
+	for _, x in { 8.4, 16.8 } do
 		part(root, CF.new(x, 3.6, archZ), V3.new(0.9, 7.2, 0.9), GOLD, Enum.Material.Metal)
 		part(root, CF.new(x, 3.6, archZ), V3.new(0.5, 7.4, 1.0), C3.fromRGB(176, 80, 255), NEON)
 	end
-	local robuxSign = CF.new(9, 7.0, archZ)
-	part(root, robuxSign, V3.new(15.2, 2.6, 0.5), C3.fromRGB(40, 22, 70))
-	part(root, robuxSign * CF.new(0, 0, -0.1), V3.new(16, 3.2, 0.4), GOLD, Enum.Material.Metal)
-	part(root, robuxSign * CF.new(0, 1.42, 0.1), V3.new(15.4, 0.14, 0.2), C3.fromRGB(176, 80, 255), NEON)
-	part(root, robuxSign * CF.new(0, -1.42, 0.1), V3.new(15.4, 0.14, 0.2), C3.fromRGB(176, 80, 255), NEON)
-	text(root, robuxSign * CF.new(0, 0.1, 0.28), 11, 1.9, "ROBUX", ROBUX_GREEN, Enum.Font.LuckiestGuy, true)
-	lamp(root, V3.new(9, 6.5, -7), C3.fromRGB(196, 120, 255), 18, 1.4)
+	local robuxSign = CF.new(12.6, 7.0, archZ)
+	part(root, robuxSign, V3.new(8.4, 2.6, 0.5), C3.fromRGB(40, 22, 70))
+	part(root, robuxSign * CF.new(0, 0, -0.1), V3.new(9.2, 3.2, 0.4), GOLD, Enum.Material.Metal)
+	part(root, robuxSign * CF.new(0, 1.42, 0.1), V3.new(8.6, 0.14, 0.2), C3.fromRGB(255, 110, 200), NEON)
+	part(root, robuxSign * CF.new(0, -1.42, 0.1), V3.new(8.6, 0.14, 0.2), C3.fromRGB(70, 186, 255), NEON)
+	text(root, robuxSign * CF.new(0, 0.1, 0.28), 7, 1.9, "ROBUX", ROBUX_GREEN, Enum.Font.LuckiestGuy, true)
+	lamp(root, V3.new(12.6, 6.5, -7), C3.fromRGB(255, 160, 230), 18, 1.4)
 	lamp(root, V3.new(-7.7, 6, -7), C3.fromRGB(255, 196, 120), 16, 0.9)
 end
 
@@ -404,7 +407,7 @@ local function closeUp(parent: any, boardId: string, at: any, viewer: any)
 	root.Parent = parent
 	-- a dark studio: a round floor with glow rings and a ring of tall panels, so the glow pops
 	local glowColor = Data.get(boardId).Colors.Glow
-	local dark = if boardId == "RoyalPhoenix" then C3.fromRGB(58, 44, 86) else C3.fromRGB(40, 50, 92)
+	local dark = if boardId == "RoyalPhoenix" then C3.fromRGB(58, 44, 86) else C3.fromRGB(44, 40, 72)
 	disc(root, CF.new(at.X, -0.25, at.Z), 44, 0.5, dark)
 	for k, r in { 7, 12.5 } do
 		disc(root, CF.new(at.X, 0.02 + k * 0.01, at.Z), r * 2, 0.04, glowColor, NEON, 0.55)
@@ -460,14 +463,6 @@ local function lineup(parent: any)
 	end
 end
 
-function Preview.build(Loader: any, workspace: any)
-	init(Loader)
-	showroom(workspace)
-	closeUp(workspace, "NeonComet", Preview.COMET_AT, Preview.COMET_AT + V3.new(-6, 6, 7))
-	closeUp(workspace, "RoyalPhoenix", Preview.PHOENIX_AT, Preview.PHOENIX_AT + V3.new(-6, 6, 7))
-	lineup(workspace)
-end
-
 ---------------------------------------------------------------- rider
 
 local SKIN = C3.fromRGB(236, 190, 150)
@@ -510,10 +505,32 @@ local function rider(parent: any, feet: any, colors: any)
 end
 
 -- A board with a rider at `cf` (the board's Root frame).
+-- The board lies across under the rider (BoardPose.Across); the rider faces along `cf`.
 local function ridingBoard(parent: any, boardId: string, cf: any, colors: any): any
-	local model = boardAt(parent, boardId, cf)
-	rider(parent, worldOf(model, "Feet"), colors)
+	local model = boardAt(parent, boardId, cf * Pose.Across)
+	rider(parent, CF.new(worldOf(model, "Feet").Position) * cf.Rotation, colors)
 	return model
+end
+
+function Preview.build(Loader: any, workspace: any)
+	init(Loader)
+	showroom(workspace)
+	closeUp(workspace, "TerraForgeCustom", Preview.COMET_AT, Preview.COMET_AT + V3.new(-6, 6, 7))
+	closeUp(workspace, "RoyalPhoenix", Preview.PHOENIX_AT, Preview.PHOENIX_AT + V3.new(-6, 6, 7))
+	lineup(workspace)
+	-- a rider on the Terra Forge Custom on plain tiles (shots hover_custom_*): the board lies across
+	local at = Preview.CUSTOM_RIDE_AT
+	local floor = roblox.Instance.new("Model")
+	floor.Name = "CustomRide"
+	floor.Parent = workspace
+	part(floor, CF.new(at.X, -0.5, at.Z), V3.new(80, 1, 80), C3.fromRGB(96, 168, 70))
+	disc(floor, CF.new(at.X, 0.05, at.Z), 22, 0.2, C3.fromRGB(160, 150, 156))
+	ridingBoard(floor, "TerraForgeCustom", CF.new(at.X, 0.45, at.Z) * CF.Angles(0, 0.35, 0), {
+		shirt = C3.fromRGB(40, 170, 220),
+		pants = C3.fromRGB(36, 40, 70),
+		hair = C3.fromRGB(40, 30, 30),
+	})
+	lamp(floor, at + V3.new(0, 0.6, 0), C3.fromRGB(255, 110, 200), 9, 1.0)
 end
 
 -- hero = false: everyone rides away from the camera toward the Ember Caves tunnel
@@ -539,7 +556,7 @@ function Preview.buildRide(Loader: any, workspace: any, hero: boolean?)
 			-- racing to the left across the open sand between the gate and the railway:
 			-- the Robux boards lead, the player on the Timber Drifter catches up
 			{ "RoyalPhoenix", V3.new(-8.6, 0.6, 15.2), math.pi / 2 + 0.24, 0.1, VIOLET_FRIEND },
-			{ "NeonComet", V3.new(0, 0.5, 16.2), math.pi / 2 + 0.26, 0.12, CYAN_FRIEND },
+			{ "TerraForgeCustom", V3.new(0, 0.5, 16.2), math.pi / 2 + 0.26, 0.12, CYAN_FRIEND },
 			{ "TimberDrifter", V3.new(8.6, 0.35, 15.2), math.pi / 2 + 0.24, 0.08, PLAYER },
 		}
 		else {
@@ -547,7 +564,7 @@ function Preview.buildRide(Loader: any, workspace: any, hero: boolean?)
 			{ "TimberDrifter", V3.new(0.6, 0.35, -2.5), -0.06, 0.06, PLAYER },
 			-- friends on the Robux boards ahead on the left and right
 			{ "RoyalPhoenix", V3.new(-4.6, 0.6, -8), 0.1, -0.14, VIOLET_FRIEND },
-			{ "NeonComet", V3.new(4.2, 0.5, -11.5), -0.08, 0.12, CYAN_FRIEND },
+			{ "TerraForgeCustom", V3.new(4.2, 0.5, -11.5), -0.08, 0.12, CYAN_FRIEND },
 		}
 	local viewer = if hero then Preview.HERO_VIEWER else Preview.RIDE_VIEWER
 	for _, spec in riders do
@@ -555,7 +572,7 @@ function Preview.buildRide(Loader: any, workspace: any, hero: boolean?)
 		local cf = CF.new(pos.X, pos.Y, pos.Z) * CF.Angles(0, yaw, 0) * CF.Angles(0, 0, bank)
 		local model = ridingBoard(folder, boardId, cf, colors)
 		local back = cf.LookVector * -1
-		local tail = (worldOf(model, "TrailLeft").Position + worldOf(model, "TrailRight").Position) / 2
+		local tail = cf.Position + cf.LookVector * -1.4 + V3.new(0, 1.2, 0) -- the back edge of the board across
 		effectStandIns(folder, model, boardId, function(d: number): any
 			return tail + back * d
 		end, viewer, 11)
@@ -601,7 +618,7 @@ function Preview.buildFx(Loader: any, workspace: any, moment: string?)
 		local model =
 			ridingBoard(folder, board.Id, cf, { shirt = shirts[i], pants = C3.fromRGB(50, 46, 66), hair = C3.fromRGB(70, 46, 30) })
 		local back = cf.LookVector * -1
-		local tail = (worldOf(model, "TrailLeft").Position + worldOf(model, "TrailRight").Position) / 2
+		local tail = cf.Position + cf.LookVector * -1.4 + V3.new(0, 1.2, 0) -- the back edge of the board across
 		local function path(d: number): any
 			return tail + back * d
 		end

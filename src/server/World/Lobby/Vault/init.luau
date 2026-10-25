@@ -7,7 +7,7 @@
 	                   podium, stone walls, glass front, sign, roof, gables,
 	                   hologram (Spin), the ten cases inside, the vault door,
 	                   the counter (tag VaultCounter = the shop hook), the
-	                   Blastsmith, wall decorations, a LightingZone (Preset
+	                   shopkeeper spot, wall decorations, a LightingZone (Preset
 	                   VaultInterior) over the inside; the interior's
 	                   raycastable parts carry the BeamIgnore tag (they
 	                   never block the mining beam's line of sight)

@@ -1,7 +1,8 @@
--- Hoverboards (owner, mine floors point 3): 3 coin boards that get faster, 2 Robux
+-- Hoverboards (owner, mine floors point 3; roster 2026-10-25): 4 coin boards that get faster, 1 Robux
 -- boards that are faster still and have effects; models from parts within budget.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
 	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 	local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
 	local HoverboardFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardFx")
@@ -17,7 +18,7 @@ return function(T, Loader)
 		return list
 	end
 
-	T.test("hoverboards: 3 coin boards then 2 Robux boards, speeds rise", function()
+	T.test("hoverboards: 4 coin boards then the one Robux board, speeds rise", function()
 		T.eq(#HoverboardData.List, 5, "board count")
 		local coins, robux = 0, 0
 		local lastSpeed = HoverboardData.BaseWalkSpeed
@@ -52,8 +53,12 @@ return function(T, Loader)
 				T.eq(board.Price, nil, board.Id .. " is not sold for coins")
 			end
 		end
-		T.eq(coins, 3, "coin boards")
-		T.eq(robux, 2, "Robux boards")
+		T.eq(coins, 4, "coin boards")
+		T.eq(robux, 1, "Robux boards")
+		T.eq(HoverboardData.get("NeonComet"), nil, "the Neon Comet is gone (owner 2026-10-25)")
+		T.eq(HoverboardData.ById.RoyalPhoenix.Kind, "Coins", "the Royal Phoenix costs coins")
+		T.eq(HoverboardData.ById.RoyalPhoenix.Price, HoverboardData.priceFrom(7, 3), "3x the Emberglass Glider")
+		T.eq(HoverboardData.ById.TerraForgeCustom.Kind, "Robux", "the Terra Forge Custom is the Robux board")
 	end)
 
 	T.test("hoverboards: the Robux boards are the fastest", function()
@@ -178,17 +183,40 @@ return function(T, Loader)
 		T.truthy(not pcall(HoverboardBuilder.build, "Nope"), "an unknown board errors")
 	end)
 
-	T.test("hoverboard builder: Robux boards are the most detailed", function()
-		local coinMax, robuxMin = 0, math.huge
-		for _, board in HoverboardData.List do
-			local n = #partsOf(HoverboardBuilder.build(board.Id))
-			if board.Kind == "Coins" then
-				coinMax = math.max(coinMax, n)
-			else
-				robuxMin = math.min(robuxMin, n)
+	T.test("hoverboard builder: the Terra Forge Custom is painted all over with doodles", function()
+		local names: { [string]: number } = {}
+		for _, p in partsOf(HoverboardBuilder.build("TerraForgeCustom")) do
+			names[p.Name] = (names[p.Name] or 0) + 1
+		end
+		T.truthy((names.PaintBlob or 0) >= 6, "paint blobs over the deck")
+		for _, doodle in { "GolemFace", "Bolt", "Gem", "Star", "Orb", "PickHead" } do
+			T.truthy((names[doodle] or 0) >= 1, doodle .. " doodle")
+		end
+		T.truthy((names.DoodleLine or 0) >= 6, "black marker outlines")
+		T.truthy((names.Outline or 0) >= 1, "the deck's marker edge")
+		-- once the owner uploads the painted deck art, one Decal on the deck replaces the part doodles
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		local art = IconAssets.Textures.board_custom_deck
+		local old = art.Id
+		art.Id = 4242
+		local model = HoverboardBuilder.build("TerraForgeCustom")
+		art.Id = old
+		local canvas = model:FindFirstChild("DeckArt")
+		T.truthy(canvas ~= nil and canvas.Transparency == 1, "a see-through canvas on the deck")
+		local decal = canvas:FindFirstChildOfClass("Decal")
+		T.eq(decal.Texture, "rbxassetid://4242", "the uploaded art")
+		T.eq(decal.Face, roblox.Enum.NormalId.Front, "on its Front face")
+		local front = canvas.CFrame * roblox.Vector3.new(0, 0, -canvas.Size.Z / 2)
+		T.near(front.Y, HoverboardBuilder.DeckHeight - 0.066, 1e-3, "the picture lies on the deck top")
+		T.near(canvas.CFrame.LookVector.Y, 1, 1e-6, "its Front face (LookVector) looks up")
+		T.near(canvas.CFrame.RightVector.Z, 1, 1e-6, "the image's right edge (-X) is the nose (-Z)")
+		local parts = 0
+		for _, p in partsOf(model) do
+			if p.Name == "PaintBlob" or p.Name == "DoodleLine" then
+				parts += 1
 			end
 		end
-		T.lt(coinMax, robuxMin, "the Robux boards have more detail than any coin board")
+		T.eq(parts, 0, "no part doodles under the art")
 	end)
 
 	T.test("hoverboard builder: attachments, deck height, hover gap", function()
@@ -250,18 +278,18 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("hoverboard fx: every board, trails for Robux only, mobile budget, bursts, mount and pool", function()
+	T.test("hoverboard fx: every board, trails on the big two, mobile budget, bursts, mount and pool", function()
 		for _, board in HoverboardData.List do
 			local set = HoverboardFx.create(board.Id)
 			if board.Effect == "None" then
 				T.eq(set, nil, board.Id .. " has no effects")
 			else
 				T.truthy(set ~= nil, board.Id .. " effect set")
-				if board.Kind == "Robux" then
+				if board.Kind == "Robux" or board.Effect == "Phoenix" then
 					T.truthy(#set.Trails >= 1, board.Id .. " has a trail")
 					T.le(HoverboardFx.rate(set), 40, board.Id .. " particles per second")
 				else
-					T.eq(#set.Trails, 0, board.Id .. ": the trail stays a Robux perk")
+					T.eq(#set.Trails, 0, board.Id .. ": the first coin boards have no trail")
 					T.le(HoverboardFx.rate(set), 14, board.Id .. " small effects (particles per second)")
 				end
 				for _, kind in { "Start", "Boost" } do
@@ -288,8 +316,12 @@ return function(T, Loader)
 					T.eq(e.Rate, 0, e.Name .. " bursts never stream")
 				end
 				for _, t in set.Trails do
-					T.eq(t.Attachment0.Name, "TrailLeft", t.Name .. " attachment 0")
-					T.eq(t.Attachment1.Name, "TrailRight", t.Name .. " attachment 1")
+					T.eq(t.Attachment0.Name, HoverboardFx.TrailMounts[1], t.Name .. " attachment 0")
+					T.eq(t.Attachment1.Name, HoverboardFx.TrailMounts[2], t.Name .. " attachment 1")
+					-- the board lies across under the rider: the trail runs along its back (+X) edge
+					local a, b = t.Attachment0.CFrame.Position, t.Attachment1.CFrame.Position
+					T.truthy(a.X > 0.5 and b.X > 0.5, t.Name .. " on the back edge")
+					T.truthy(math.abs(a.Z - b.Z) > 2, t.Name .. " along the board's length")
 				end
 				HoverboardFx.setActive(set, true, 0.5)
 				T.truthy(set.Emitters[1].Enabled, "enabled while riding")
@@ -314,5 +346,105 @@ return function(T, Loader)
 			end
 		end
 		T.eq(HoverboardFx.acquire("NoSuchBoard"), nil, "unknown boards acquire nothing")
+	end)
+
+	T.test("hoverboard lightning: a lit arc holds its shape, then rests (no strobing)", function()
+		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
+		T.truthy(HoverboardBolts.FlickerEvery >= 0.15, "ticks at most ~6 a second")
+		T.truthy(HoverboardBolts.OnTicks >= 2 and HoverboardBolts.OffTicks >= 1, "holds and rests")
+		T.truthy(HoverboardBolts.CoreTransparency >= 0.3 and HoverboardBolts.GlowTransparency >= 0.6, "soft beams")
+		local function constant(v: number): () -> number
+			return function(): number
+				return v
+			end
+		end
+		local set = HoverboardFx.create("RoyalPhoenix")
+		HoverboardFx.mount(set, HoverboardBuilder.build("RoyalPhoenix"))
+		local arcs = set.Bolts.Arcs
+		T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), #arcs, "all light in a surge")
+		local shape = arcs[1].Points[3].CFrame.Position
+		-- worst case for flashing: every roll says yes. Count the on/off changes of one arc over 10 s
+		local changes, lit = 0, arcs[1].Visible
+		local ticks = math.floor(10 / HoverboardBolts.FlickerEvery)
+		for i = 1, ticks do
+			HoverboardFx.flicker(set, constant(0.5), 1, 1)
+			if i < HoverboardBolts.OnTicks then
+				T.truthy(arcs[1].Visible, "still lit")
+				T.near((arcs[1].Points[3].CFrame.Position - shape).Magnitude, 0, 1e-6, "a lit arc keeps its shape")
+			end
+			if arcs[1].Visible ~= lit then
+				changes += 1
+				lit = arcs[1].Visible
+			end
+		end
+		local flashes = changes / 2 / 10
+		T.le(flashes, 2, `one arc flashes at most twice a second ({flashes}/s)`)
+		HoverboardFx.release(set)
+	end)
+
+	T.test("hoverboard lightning: arcs per board, lite, flicker, strike, hide", function()
+		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
+		local function constant(v: number): () -> number
+			return function(): number
+				return v
+			end
+		end
+		for _, board in HoverboardData.List do
+			local set = HoverboardFx.create(board.Id)
+			local bolts = set.Bolts
+			T.truthy(bolts ~= nil, board.Id .. " has lightning")
+			local spec = HoverboardBolts.Specs[board.Effect]
+			T.eq(#bolts.Arcs, spec.Arcs, board.Id .. " arcs")
+			if board.Kind == "Robux" then
+				T.truthy(spec.Arcs >= 3 and spec.Duty >= 0.3, board.Id .. ": more lightning on the Robux boards")
+			end
+			local lite = HoverboardFx.create(board.Id, true)
+			T.truthy(#lite.Bolts.Arcs >= 1 and #lite.Bolts.Arcs <= #bolts.Arcs, board.Id .. " lite arcs")
+			T.eq(#lite.Bolts.Arcs[1].Glows, 0, board.Id .. " lite arcs have no glow beams")
+			-- not mounted: nothing to flicker
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), 0, "no flicker off a board")
+			local model = HoverboardBuilder.build(board.Id)
+			T.truthy(HoverboardFx.mount(set, model), board.Id .. " mounts")
+			local root = model.PrimaryPart
+			T.eq(bolts.Arcs[1].Points[1].Parent, root, "bolt points under the board's Root")
+			T.eq(bolts.Arcs[1].Cores[1].Parent, root, "bolt beams under the board's Root")
+			T.falsy(bolts.Arcs[1].Cores[1].Enabled, "hidden at first")
+			-- a calm flicker (rand 0.99 >= every chance): nothing shows
+			T.eq(HoverboardFx.flicker(set, constant(0.99), 0, 0), 0, board.Id .. " quiet when calm and unlucky")
+			-- full speed and a surge (rand 0.5): every arc shows, down to the ground
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1), #bolts.Arcs, board.Id .. " every arc in a surge")
+			for _, arc in bolts.Arcs do
+				T.truthy(arc.Cores[1].Enabled, "shown arcs are enabled")
+				local last = arc.Points[#arc.Points].CFrame.Position
+				T.near(last.Y, 0.05, 1e-3, board.Id .. " arcs reach the ground")
+				local first = arc.Points[1].CFrame.Position
+				local reach = Vector3.new(last.X - first.X, 0, last.Z - first.Z).Magnitude
+				T.le(reach, spec.Reach * 1.4 + 1e-6, board.Id .. " arc reach")
+			end
+			T.le(HoverboardFx.flicker(set, constant(0.5), 1, 1, 1), 1, board.Id .. " maxArcs 1: at most one arc")
+			T.eq(HoverboardFx.flicker(set, constant(0.5), 1, 1, 0), 0, board.Id .. " Reduce Motion (maxArcs 0): no arcs")
+			T.eq(HoverboardBolts.visible(bolts), 0, board.Id .. " Reduce Motion hides every arc")
+			-- the strike from the sky
+			HoverboardFx.strike(set, constant(0.5), 1)
+			local strike = bolts.Strike
+			T.truthy(strike.Cores[1].Enabled, "the strike shows")
+			T.near(strike.Points[1].CFrame.Position.Y, HoverboardBolts.StrikeHeight, 1e-6, "from the sky")
+			T.near(strike.Points[#strike.Points].CFrame.Position.Y, HoverboardBuilder.DeckHeight, 1e-6, "onto the deck")
+			-- shaped once, then only fading (no re-shapes, no strobing)
+			local middle = strike.Points[4].CFrame.Position
+			T.near(strike.Cores[1].Transparency.Keypoints[1].Value, HoverboardBolts.CoreTransparency, 1e-3, "full strike core")
+			HoverboardFx.strike(set, constant(0.9), 0.5)
+			T.near((strike.Points[4].CFrame.Position - middle).Magnitude, 0, 1e-6, "the strike keeps its shape while fading")
+			local half = 1 - (1 - HoverboardBolts.CoreTransparency) * 0.5
+			T.near(strike.Cores[1].Transparency.Keypoints[1].Value, half, 1e-3, "half faded")
+			T.truthy(strike.Glows[1].Transparency.Keypoints[1].Value >= HoverboardBolts.GlowTransparency, "the glow stays soft")
+			HoverboardFx.strike(set, constant(0.5), 0)
+			T.falsy(strike.Cores[1].Enabled, "the strike hides")
+			-- switching off hides everything; releasing unmounts the bolts too
+			HoverboardFx.setActive(set, false)
+			T.eq(HoverboardBolts.visible(bolts), 0, "off = no arcs")
+			HoverboardFx.release(set)
+			T.eq(bolts.Arcs[1].Points[1].Parent, nil, "released bolts are unmounted")
+		end
 	end)
 end
