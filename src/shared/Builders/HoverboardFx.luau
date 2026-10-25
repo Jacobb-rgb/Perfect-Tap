@@ -3,25 +3,29 @@
 	(HoverboardController). Built once per board and reused: no instances are
 	created while riding, only Enabled / Rate change and bursts :Emit().
 
-	Coin boards: small thruster effects, no trail (the trail stays a Robux perk).
+	The first three coin boards: small thruster effects, no trail.
 	  Sparks   Timber Drifter: amber thruster puffs, a little dust under the
 	           planks                                               8 particles/s
 	  Vents    Cart Cruiser: blue flame jets from the twin exhausts, a warm
 	           headlamp glint, grey dust                           12 particles/s
 	  Lava     Emberglass Glider: a lava jet, lava drips falling from the
 	           belly and embers rising around the rider            12 particles/s
-	Robux boards: a light trail and big effects.
-	  Comet    a cyan -> magenta light trail from the tail, cyan / white
-	           star sparks from the thrusters, magenta glints on the fin tips,
-	           a shimmer around the comet orb and star dust under it  36 particles/s
+	The Royal Phoenix (coins 4) and the Terra Forge Custom (Robux): a light
+	trail and big effects.
 	  Phoenix  a gold -> flame -> violet trail, gold flames from the two
 	           thrusters, wings of fire on the wing tips, rising embers and
 	           falling gold feathers                               37 particles/s
+	  Custom   a rainbow trail, rainbow confetti from the thrusters, paint
+	           sparkles off the deck ends, white doodle stars falling from the
+	           pad and multicolour lightning                       36 particles/s
 	  None     no effect set
 	Bursts (one :Emit each, HoverboardFx.burst): "Start" when you hop on (a
 	dust / spark / star / fire splash under the board), "Boost" when you reach
-	top speed (sparks from the thrusters; a sonic star cone on the Comet, a
-	fire flare on the Phoenix).
+	top speed (sparks from the thrusters; a fire flare on the Phoenix, a
+	rainbow confetti blast on the Custom).
+	The board lies ACROSS under the rider (BoardPose.Across): exhaust
+	emitters blow out of the board's +X side (backward for the rider) and the
+	trail runs from the back edge (FxTrailA / FxTrailB, made on mount).
 	Lightning (HoverboardBolts, owner 2026-10-24): every board crackles with
 	arcs in its glow colour (more and longer on the Robux boards, more with
 	speed and while surging) and a strike from the sky hits it when you hop
@@ -37,8 +41,8 @@
 	  end
 	  HoverboardFx.release(set)  -- disables, unmounts, keeps it for the next rider
 	Emitters sit on the board's Attachments (HoverboardBuilder contract; the
-	emitter's attribute "Mount" names it), trails between TrailLeft and
-	TrailRight. Every emitter / trail starts disabled; burst emitters stay
+	emitter's attribute "Mount" names it), trails between FxTrailA and
+	FxTrailB. Every emitter / trail starts disabled; burst emitters stay
 	disabled and only ever :Emit().
 
 	Pure: only Instance creation (no services), so Lune tests and previews can
@@ -55,6 +59,7 @@ HoverboardFx.PoolSize = 4 -- spare effect sets kept per board id
 HoverboardFx.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
 HoverboardFx.Fire = "rbxasset://textures/particles/fire_main.dds"
 HoverboardFx.Smoke = "rbxasset://textures/particles/smoke_main.dds"
+HoverboardFx.TrailMounts = { "FxTrailA", "FxTrailB" } -- along the board's back edge (made on mount)
 HoverboardFx.BoostAt = 0.92 -- speed / board speed: the Boost burst fires when you reach this
 HoverboardFx.BoostReset = 0.6 -- ... and can fire again after slowing below this
 
@@ -141,6 +146,10 @@ local function emitter(set: FxSet, spec: EmitterSpec)
 	e.Rotation = NumberRange.new(0, 360)
 	e.RotSpeed = NumberRange.new(-90, 90)
 	e:SetAttribute("Mount", spec.Mount)
+	if string.sub(spec.Mount, 1, 7) == "Exhaust" then
+		-- the board lies across under the rider: blow out of its +X side (backward for the rider)
+		e.EmissionDirection = Enum.NormalId.Right
+	end
 	if spec.Burst then
 		e.Rate = 0
 		e:SetAttribute("Burst", spec.Burst)
@@ -168,8 +177,8 @@ local function trail(set: FxSet, name: string, color: ColorSequence, lifetime: n
 	t.LightEmission = 1
 	t.LightInfluence = 0
 	t.FaceCamera = true -- reads from every camera angle (side views, other players)
-	t:SetAttribute("Mount0", "TrailLeft")
-	t:SetAttribute("Mount1", "TrailRight")
+	t:SetAttribute("Mount0", HoverboardFx.TrailMounts[1])
+	t:SetAttribute("Mount1", HoverboardFx.TrailMounts[2])
 	table.insert(set.Trails, t)
 end
 
@@ -325,81 +334,83 @@ local function lava(set: FxSet, c: HoverboardData.Colors)
 	boostSparks(set, "Lava", 1, colors(ember:Lerp(WHITE, 0.3), hot), 10)
 end
 
-local function comet(set: FxSet, c: HoverboardData.Colors)
-	local cyan, magenta = glow(c.Glow), glow(c.Glow2)
-	local star = c.Trim
-	trail(set, "CometTrail", colors(cyan, cyan:Lerp(magenta, 0.5), magenta), 0.55)
-	emitter(set, {
-		Name = "CometStars",
-		Mount = "Exhaust1",
-		Rate = 16,
-		Color = colors(star, cyan, magenta),
-		Size = seq(0.5, 0.32, 0),
-		Lifetime = NumberRange.new(0.4, 0.8),
-		Speed = NumberRange.new(3, 6),
-		Spread = 18,
-		Drag = 2,
-	})
+-- the marker colours of the Terra Forge Custom's doodles (HoverboardBuilder)
+local RAINBOW = {
+	Color3.fromRGB(255, 92, 92),
+	Color3.fromRGB(255, 190, 60),
+	Color3.fromRGB(250, 240, 80),
+	Color3.fromRGB(96, 226, 90),
+	Color3.fromRGB(70, 186, 255),
+	Color3.fromRGB(196, 110, 255),
+}
+HoverboardFx.Rainbow = RAINBOW
+
+local function custom(set: FxSet, c: HoverboardData.Colors)
+	local pink, sky = glow(c.Glow), glow(c.Glow2)
+	local rainbow = colors(RAINBOW[1], RAINBOW[2], RAINBOW[3], RAINBOW[4], RAINBOW[5], RAINBOW[6])
+	trail(set, "RainbowTrail", rainbow, 0.6)
+	for i = 1, 2 do
+		emitter(set, {
+			Name = "Confetti" .. i,
+			Mount = "Exhaust" .. i,
+			Rate = 9,
+			Color = rainbow,
+			Size = seq(0.42, 0.3, 0),
+			Lifetime = NumberRange.new(0.4, 0.8),
+			Speed = NumberRange.new(3, 6),
+			Spread = 22,
+			Drag = 2,
+		})
+	end
 	for _, side in { "Left", "Right" } do
 		emitter(set, {
-			Name = "CometGlint" .. side,
+			Name = "PaintSparkle" .. side,
 			Mount = "Tip" .. side,
-			Rate = 5,
-			Color = colors(magenta:Lerp(WHITE, 0.3), magenta),
-			Size = seq(0, 0.35, 0),
+			Rate = 4,
+			Color = colors(pink:Lerp(WHITE, 0.3), sky),
+			Size = seq(0, 0.36, 0),
 			Lifetime = NumberRange.new(0.3, 0.6),
 			Speed = NumberRange.new(0.5, 1.5),
 			Spread = 180,
 		})
 	end
 	emitter(set, {
-		Name = "CometShimmer",
-		Mount = "Nose",
-		Rate = 4,
-		Color = colors(star, cyan),
-		Size = seq(0, 0.35, 0),
-		Lifetime = NumberRange.new(0.5, 0.9),
-		Speed = NumberRange.new(0.3, 1),
-		Spread = 180,
-		Volume = true,
-	})
-	emitter(set, {
-		Name = "CometDust",
+		Name = "DoodleStars",
 		Mount = "Pad",
 		Rate = 6,
-		Color = colors(WHITE, cyan, magenta),
-		Size = seq(0, 0.3, 0),
+		Color = colors(WHITE, RAINBOW[3], RAINBOW[5]),
+		Size = seq(0, 0.32, 0),
 		Lifetime = NumberRange.new(0.6, 1.0),
 		Speed = NumberRange.new(1, 2.5),
 		Spread = 60,
 		Drag = 1.5,
 	})
-	splash(set, "CometNova", colors(WHITE, cyan, magenta), 18)
-	-- the sonic boom at top speed: a cone of stars out of the tail and a white flash on the orb
 	emitter(set, {
-		Name = "CometBoom",
+		Name = "Shimmer",
+		Mount = "Aura",
+		Rate = 4,
+		Color = rainbow,
+		Size = seq(0, 0.3, 0),
+		Lifetime = NumberRange.new(0.6, 1.0),
+		Speed = NumberRange.new(0.3, 1),
+		Spread = 180,
+		Volume = true,
+	})
+	splash(set, "RainbowSplash", rainbow, 20)
+	-- the blast at top speed: rainbow confetti out of the back and a white flash on the deck
+	emitter(set, {
+		Name = "ConfettiBlast",
 		Mount = "Exhaust1",
 		Burst = "Boost",
-		Count = 24,
-		Color = colors(WHITE, cyan, magenta),
+		Count = 22,
+		Color = rainbow,
 		Size = seq(0.55, 0.4, 0),
-		Lifetime = NumberRange.new(0.35, 0.6),
-		Speed = NumberRange.new(10, 16),
+		Lifetime = NumberRange.new(0.4, 0.7),
+		Speed = NumberRange.new(9, 14),
 		Spread = 55,
 		Drag = 4,
 	})
-	emitter(set, {
-		Name = "CometFlash",
-		Mount = "Nose",
-		Burst = "Boost",
-		Count = 1,
-		Color = colors(WHITE, cyan),
-		Size = seq(0.5, 3.5, 4),
-		Transparency = seq(0, 0.5, 1),
-		Lifetime = NumberRange.new(0.25, 0.25),
-		Speed = NumberRange.new(0, 0),
-		Spread = 0,
-	})
+	boostSparks(set, "Custom", 2, colors(WHITE, sky), 4)
 end
 
 local function phoenix(set: FxSet, c: HoverboardData.Colors)
@@ -492,14 +503,14 @@ function HoverboardFx.create(boardId: string, lite: boolean?): FxSet?
 		Emitters = {},
 		Bursts = {},
 		Trails = {},
-		Bolts = HoverboardBolts.create(board.Effect, glow(board.Colors.Glow), lite),
+		Bolts = HoverboardBolts.create(board.Effect, glow(board.Colors.Glow), lite, if board.Effect == "Custom" then RAINBOW else nil),
 		Model = nil,
 	}
 	local build: (FxSet, HoverboardData.Colors) -> () = if board.Effect == "Sparks"
 		then sparks
 		elseif board.Effect == "Vents" then vents
 		elseif board.Effect == "Lava" then lava
-		elseif board.Effect == "Comet" then comet
+		elseif board.Effect == "Custom" then custom
 		else phoenix
 	build(set, board.Colors)
 	return set
@@ -524,6 +535,19 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 	local function find(name: any): Attachment?
 		local a = if type(name) == "string" then root:FindFirstChild(name) else nil
 		return if a and a:IsA("Attachment") then a else nil
+	end
+	-- the trail along the board's back edge (it lies across under the rider): from the old
+	-- tail trail's height, the tail and the nose, made once per board model
+	local left, nose = find("TrailLeft"), find("Nose")
+	if #set.Trails > 0 and left and nose and not find(HoverboardFx.TrailMounts[1]) then
+		local at = left.CFrame.Position
+		local back = math.abs(at.X) + 0.3
+		for i, z in { nose.CFrame.Position.Z * 0.55, at.Z * 0.55 } do
+			local a = Instance.new("Attachment")
+			a.Name = HoverboardFx.TrailMounts[i]
+			a.CFrame = CFrame.new(back, at.Y, z)
+			a.Parent = root
+		end
 	end
 	for _, list in { set.Emitters, set.Bursts } do
 		for _, e in list do

@@ -420,7 +420,7 @@ return function(T, Loader)
 		local p = joined(w, 9002)
 		local boardLimit = (18 + 35) * cfg.SpeedFactor * DT + cfg.Slack
 		-- riding a board whose speed the hoverboard service knows
-		p.attrs[cfg.HoverboardAttribute] = "NeonComet"
+		p.attrs[cfg.HoverboardAttribute] = "TerraForgeCustom"
 		MovementService._test.setBoardSpeed(function(player)
 			return if player == p then 35 else 0
 		end)

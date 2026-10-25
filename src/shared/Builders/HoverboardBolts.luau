@@ -23,8 +23,8 @@
 	  Sparks  Timber Drifter      1 arc, rare
 	  Vents   Cart Cruiser        2 arcs
 	  Lava    Emberglass Glider   2 arcs
-	  Comet   Neon Comet          3 arcs, often, longer
 	  Phoenix Royal Phoenix       3 arcs, often, longer
+	  Custom  Terra Forge Custom  3 arcs, often, longer, each in a rainbow colour
 	Lite (phones, crowds): half the arcs (at least 1), no glow beams on arcs.
 ]]
 
@@ -48,8 +48,8 @@ HoverboardBolts.Specs = {
 	Sparks = { Arcs = 1, Duty = 0.1, Reach = 1.8 },
 	Vents = { Arcs = 2, Duty = 0.14, Reach = 2.0 },
 	Lava = { Arcs = 2, Duty = 0.18, Reach = 2.2 },
-	Comet = { Arcs = 3, Duty = 0.32, Reach = 2.7 },
 	Phoenix = { Arcs = 3, Duty = 0.32, Reach = 2.7 },
+	Custom = { Arcs = 3, Duty = 0.32, Reach = 2.7 },
 } :: { [string]: Spec }
 
 export type Bolt = {
@@ -111,18 +111,19 @@ local function bolt(segments: number, color: Color3, coreWidth: number, glowWidt
 end
 
 -- A new (unmounted, hidden) bolt set for a board effect, or nil for effects without lightning.
-function HoverboardBolts.create(effect: string, color: Color3, lite: boolean?): BoltSet?
+-- `palette`: one colour per arc, in turn (the Custom's rainbow); else every arc is `color`.
+function HoverboardBolts.create(effect: string, color: Color3, lite: boolean?, palette: { Color3 }?): BoltSet?
 	local spec = HoverboardBolts.Specs[effect]
 	if not spec then
 		return nil
 	end
 	local count = if lite then math.max(1, math.floor(spec.Arcs / 2)) else spec.Arcs
 	local arcs: { Bolt } = {}
-	for _ = 1, count do
-		table.insert(
-			arcs,
-			bolt(HoverboardBolts.Segments, color, HoverboardBolts.CoreWidth, if lite then nil else HoverboardBolts.GlowWidth)
-		)
+	for i = 1, count do
+		-- spread over the palette (3 arcs on 6 colours: red, yellow, blue)
+		local step = if palette then math.max(1, math.floor(#palette / count)) else 1
+		local tint = if palette and #palette > 0 then palette[((i - 1) * step) % #palette + 1] else color
+		table.insert(arcs, bolt(HoverboardBolts.Segments, tint, HoverboardBolts.CoreWidth, if lite then nil else HoverboardBolts.GlowWidth))
 	end
 	return {
 		Arcs = arcs,

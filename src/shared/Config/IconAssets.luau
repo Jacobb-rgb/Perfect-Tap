@@ -222,6 +222,9 @@ IconAssets.Textures = {
 	fx_glow = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(512, 0), Size = Vector2.new(256, 256) },
 	fx_sparkle = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(768, 0), Size = Vector2.new(128, 128) },
 	fx_shine = { File = "ui_fx.png", Id = 0, Offset = Vector2.new(512, 256), Size = Vector2.new(512, 128) },
+	-- the Terra Forge Custom hoverboard's painted deck (tools/preview/make_board_doodle.py, one
+	-- Decal in NAHRAJ_DO_ROBLOXU/hoverboard): until uploaded the board's doodles are flat parts
+	board_custom_deck = { File = "hoverboard_custom_deck.png", Id = 0 },
 } :: { [string]: Texture }
 
 -- Sets every texture cut from one uploaded file to its id (ui_fx.png's four share one).

@@ -39,17 +39,20 @@
 	  Action priority and the walk / run tracks are silenced (weight 0, so the
 	  Animate script's state machine stays happy; weight back on dismount).
 	  No Animate script or no idle animation = no pose, nothing breaks.
-	- The surfer pose (owner 2026-10-24: "no cool animation, it looks like
-	  I'm bugged onto a flying thing"): on every R15 rider within PoseRange
+	- The riding pose (owner 2026-10-24: "no cool animation, it looks like
+	  I'm bugged onto a flying thing"; 2026-10-25: "not facing forward along
+	  it, like Pet Simulator 99"): the board lies ACROSS under the rider
+	  (BoardPose.Across in the weld, its nose to the right) and on every R15
+	  rider within PoseRange
 	  (yours always; the others only on screen, PoseHysteresis studs of slack
 	  so the range edge doesn't pop) Moves/BoardPose replaces the whole body
 	  pose through Moves/MoveRig in one RunService.Stepped (after the
-	  Animator): side-on stance, knees bent, arms out, swaying, crouching and
-	  leaning with speed and into turns, the crouch scaled by the rider's
-	  real leg length. With a tool in hand (the blaster: mining while riding)
-	  the arm joints are masked (the Animator's hold shows) and the chest
-	  turns back to face forward. Hopping on blends from the Animator's pose
-	  into the hop (crouch, jump into the stance, squash) while the board
+	  Animator): facing forward, feet wide apart along the deck, knees bent,
+	  arms out, swaying, crouching and leaning with speed, rolling into turns
+	  with the board, the crouch scaled by the rider's real leg length. With
+	  a tool in hand (the blaster: mining while riding) the arm joints are
+	  masked (the Animator's hold shows). Hopping on blends from the
+	  Animator's pose into the hop (crouch, jump, squash) while the board
 	  flies in from below with a spin and lightning strikes it from the sky
 	  (at most once per StrikeCooldown per player); a REAL jump (yours: the
 	  Humanoid's Jumping state; the others': LaunchSpeed up) starts a
@@ -392,12 +395,12 @@ local function show(rider: Rider): boolean
 	end
 	-- put the board under the rider before it enters the world (a pooled or freshly
 	-- built model sits wherever it was made; owner's playtest 2026-10-20: board unseen)
-	model:PivotTo(root.CFrame * offset)
+	model:PivotTo(root.CFrame * offset * BoardPose.Across)
 	local weld = Instance.new("Weld")
 	weld.Name = "HoverboardWeld"
 	weld.Part0 = root
 	weld.Part1 = boardRoot
-	weld.C0 = offset
+	weld.C0 = offset * BoardPose.Across
 	weld.Parent = boardRoot
 	model.Parent = ensureFolder()
 	rider.Model = model
@@ -681,7 +684,7 @@ local function animate(dt: number)
 				rider.Yaw = yaw
 				local rate = if dt > 0 then turn / dt else 0
 				local k = math.min(1, dt * 6)
-				rider.Roll += (math.clamp(rate * 0.07, -0.22, 0.22) - rider.Roll) * k
+				rider.Roll += (math.clamp(rate * 0.07, -BoardPose.MaxRoll, BoardPose.MaxRoll) - rider.Roll) * k
 				rider.Pitch += (speed01 * 0.07 - rider.Pitch) * math.min(1, dt * 4)
 				local bob = math.sin(now * BOB_SPEED + rider.Phase) * BOB_HEIGHT * (1 - 0.5 * speed01)
 				local mount = math.clamp((now - rider.MountAt) / BoardPose.MountTime, 0, 1)
@@ -717,13 +720,17 @@ local function animate(dt: number)
 						spin = 0
 					end
 				end
-				weld.C0 = offset * CFrame.new(0, bob + rise, 0) * CFrame.Angles(rider.Pitch, spin, rider.Roll) * BoardPose.flipFrame(flip)
+				weld.C0 = offset
+					* CFrame.new(0, bob + rise, 0)
+					* CFrame.Angles(rider.Pitch, spin, rider.Roll)
+					* BoardPose.Across
+					* BoardPose.flipFrame(flip)
 
 				-- the pose state for the Stepped pass
 				local state = rider.State
 				state.T = now + rider.Phase
 				state.Speed = speed01
-				state.Turn = rider.Roll / 0.22
+				state.Turn = rider.Roll / BoardPose.MaxRoll
 				state.Mount = mount
 				state.Air = rider.Air
 				state.Land = math.clamp(1 - (now - rider.LandAt) / BoardPose.LandTime, 0, 1)
@@ -749,7 +756,7 @@ local function animate(dt: number)
 	end
 end
 
--- After the Animator (RunService.Stepped): the surfer pose on every R15 rider near you.
+-- After the Animator (RunService.Stepped): the riding pose on every R15 rider near you.
 local function poseStep()
 	local now = os.clock()
 	local camera = Workspace.CurrentCamera

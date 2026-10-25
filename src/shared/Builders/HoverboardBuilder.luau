@@ -1,5 +1,5 @@
 --[[
-	Builds the 5 hoverboards (HoverboardData) from parts only (no meshes), in
+	Builds the hoverboards (HoverboardData) from parts only (no meshes), in
 	the chunky Kenney toy style and the game palette. Every board reads by its
 	silhouette at phone size:
 
@@ -17,19 +17,23 @@
 	                    forward on the nose and back on the tail (faceted
 	                    hero shards in the middle), two spikes per side leaning
 	                    out like fins, a lava hover pad and a lava nozzle      55
-	  NeonComet         an indigo arrow deck on a cyan seam with a glowing comet
-	  (Robux 1)         orb in a glass shell, a tilted magenta ring and a collar
-	                    at the nose, magenta chevrons and speed dashes, raked
-	                    tail fins with neon edges and tips, swept side fins,
-	                    star twinkles, a big cyan thruster + two small ones     63
 	  RoyalPhoenix      a violet deck on gold and violet glow seams, a bird of
-	  (Robux 2)         fire at the nose (a slim three-piece neck curving up, a
+	  (coins 4)         fire at the nose (a slim three-piece neck curving up, a
 	                    sleek head with a long pointed beak, glowing eyes, three
 	                    flame crest feathers sweeping back, a crown gem), wings
 	                    of four layered feather blades per side sweeping back
 	                    and up (graduated, gold / violet with flame tips), three
 	                    long tail blades, a gold diamond on the grip            68
-	Budgets (tests/Hoverboard.spec.luau): coin boards <= 60 parts, Robux <= 80.
+	  TerraForgeCustom  (owner 2026-10-25: "a custom Terra Forge board like Pet
+	  (Robux)           Simulator's" doodle deck) a white skateboard deck with a
+	                    black marker outline, painted all over: bright paint
+	                    blobs all over (nine colours) with doodles on them (a
+	                    golem face with ears, a lightning bolt, a gem, a star,
+	                    an orb, a pickaxe, a heart), marker scribbles and white
+	                    dots, a hot pink glow seam, two sky-blue hover pads,
+	                    two little thrusters                                    ~76
+	Budgets (tests/Hoverboard.spec.luau): coin boards <= 70 parts (the Royal
+	Phoenix is a coin board since 2026-10-25), Robux <= 80.
 
 	Contract (every board): a Model named after the board id, PrimaryPart "Root"
 	(an invisible part) at the GROUND under the board's center, front = -Z, +Y up.
@@ -58,13 +62,14 @@
 ]]
 
 local HoverboardData = require(script.Parent.Parent.Config.HoverboardData)
+local IconAssets = require(script.Parent.Parent.Config.IconAssets)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 
 local HoverboardBuilder = {}
 
 HoverboardBuilder.DeckHeight = 1.5 -- deck top above Root (the feet)
 HoverboardBuilder.HoverGap = 0.6 -- ground to the bottom of the hover pad
-HoverboardBuilder.MaxParts = { Coins = 60, Robux = 80 } :: { [string]: number }
+HoverboardBuilder.MaxParts = { Coins = 70, Robux = 80 } :: { [string]: number }
 HoverboardBuilder.Attachments = {
 	"Feet",
 	"Pad",
@@ -88,7 +93,6 @@ local BRASS = rgb(226, 178, 78)
 local NEON = Enum.Material.Neon
 local METAL = Enum.Material.Metal
 local WOOD = Enum.Material.Wood
-local GLASS = Enum.Material.Glass
 local PLATE = Enum.Material.DiamondPlate
 
 local ALONG_Y = CFrame.Angles(0, 0, math.pi / 2) -- Roblox cylinders run along X
@@ -253,38 +257,6 @@ local function pill(
 	disc(c, name, cf * CFrame.new(0, 0, straight / 2), width, thick, color, material, opts)
 end
 
--- An arrow deck: a pointed nose (two wedges) from zNose to zJoint, a slab to
--- zTail and a round tail disc. 4 parts.
-local function arrow(
-	c: Ctx,
-	name: string,
-	y: number,
-	thick: number,
-	width: number,
-	zNose: number,
-	zJoint: number,
-	zTail: number,
-	color: Color3,
-	material: Enum.Material?,
-	opts: Opts?
-)
-	block(c, name, CFrame.new(0, y, (zJoint + zTail) / 2), Vector3.new(width, thick, zTail - zJoint), color, material, opts)
-	disc(c, name, CFrame.new(0, y, zTail), width, thick, color, material, opts)
-	for _, s in { -1, 1 } do
-		rightWedge(
-			c,
-			name,
-			Vector3.new(0, y, zJoint),
-			Vector3.new(s * width / 2, 0, 0),
-			Vector3.new(0, 0, zNose - zJoint),
-			thick,
-			color,
-			material,
-			opts
-		)
-	end
-end
-
 -- A faceted crystal shard standing on `base` (+Y = growth): a diamond-section
 -- body (with a darker octagon facet block when `facet` is given) and a two-tone
 -- glowing ridge tip. 3-4 parts.
@@ -308,13 +280,6 @@ local function shard(c: Ctx, base: CFrame, height: number, width: number, body: 
 		tipB,
 		NEON
 	)
-end
-
--- A little light star: two crossed neon bars. 2 parts.
-local function twinkle(c: Ctx, position: Vector3, size: number, color: Color3, turn: number)
-	local cf = CFrame.new(position) * CFrame.Angles(0, turn, 0)
-	block(c, "Twinkle", cf, Vector3.new(size, 0.03, size * 0.16), color, NEON)
-	block(c, "Twinkle", cf * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(size * 0.7, 0.03, size * 0.16), color, NEON)
 end
 
 local function attach(c: Ctx, name: string, cf: CFrame)
@@ -542,77 +507,7 @@ local function emberglassGlider(c: Ctx)
 	)
 end
 
----------------------------------------------------------------- Robux boards
-
--- Robux 1: a navy arrow deck with a comet orb, fins and neon edges.
-local function neonComet(c: Ctx)
-	local col = c.colors
-	local cyan, magenta = glow(col.Glow), glow(col.Glow2)
-	local navy = col.Main
-	local zNose, zJoint, zTail = -3.2, -1.4, 2.0
-	arrow(c, "Deck", TOP - 0.15, 0.22, 2.5, zNose, zJoint, zTail, navy, nil, { Shadow = true })
-	arrow(c, "NeonSeam", TOP - 0.3, 0.08, 2.64, zNose - 0.16, zJoint, zTail, cyan, NEON)
-	arrow(c, "Hull", TOP - 0.48, 0.28, 2.3, zNose + 0.3, zJoint + 0.1, zTail - 0.1, navy:Lerp(BLACK, 0.3), nil, { Shadow = true })
-	-- the grip with a cyan centre stripe, magenta chevrons on the nose
-	block(c, "Grip", CFrame.new(0, TOP - 0.02, 0.35), Vector3.new(1.9, 0.04, 3.0), navy:Lerp(BLACK, 0.45))
-	block(c, "Stripe", CFrame.new(0, TOP + 0.005, 0.35), Vector3.new(0.14, 0.03, 2.8), cyan, NEON)
-	for _, z in { -1.45, -1.95, -2.45 } do
-		for _, s in { -1, 1 } do
-			bar(c, "Chevron", Vector3.new(s * 0.45, TOP - 0.03, z + 0.36), Vector3.new(0, TOP - 0.03, z), 0.13, 0.03, magenta, NEON)
-		end
-	end
-	-- star twinkles on the deck sides
-	for i, p in { { -1.08, -0.45 }, { 1.08, 0.2 }, { -1.08, 1.35 }, { 1.08, 1.75 } } do
-		twinkle(c, Vector3.new(p[1], TOP - 0.03, p[2]), 0.3, glow(col.Glow:Lerp(col.Trim, 0.4)), i * 0.5)
-	end
-	-- the comet orb: a glowing core in a glass shell, a magenta ring around it
-	local orb = Vector3.new(0, TOP - 0.18, zNose - 0.2)
-	ball(c, "CometCore", orb, 0.78, cyan, NEON)
-	ball(c, "CometShell", orb, 1.12, col.Trim, GLASS, { Transparency = 0.45 })
-	disc(c, "CometRing", CFrame.new(orb) * CFrame.Angles(0.25, 0, 0), 1.5, 0.05, magenta, NEON)
-	tube(c, "OrbCollar", CFrame.new(0, orb.Y, zNose + 0.05), 0.5, 0.6, navy:Lerp(WHITE, 0.15))
-	tube(c, "OrbCollarGlow", CFrame.new(0, orb.Y, zNose - 0.2), 0.08, 0.7, cyan, NEON)
-	-- magenta speed dashes along the deck sides
-	for _, s in { -1, 1 } do
-		for k, z in { -0.7, 0.25, 1.2 } do
-			block(c, "SpeedDash", CFrame.new(s * 1.255, TOP - 0.13, z), Vector3.new(0.04, 0.07, 0.62 - 0.12 * (k - 1)), magenta, NEON)
-		end
-	end
-	-- raked tail fins (canted out) with cyan leading edges
-	for _, s in { -1, 1 } do
-		local corner = Vector3.new(s * 0.9, TOP, 2.9)
-		local legA = Vector3.new(s * math.sin(0.22), math.cos(0.22), 0) * 1.15
-		local legB = Vector3.new(0, 0, -1.5)
-		rightWedge(c, "TailFin", corner, legA, legB, 0.14, navy:Lerp(WHITE, 0.12))
-		bar(c, "FinEdge", corner + legA, corner + legB, 0.1, 0.1, cyan, NEON, Vector3.new(s, 0, 0))
-		ball(c, "FinTip", corner + legA, 0.24, magenta, NEON)
-	end
-	-- swept magenta side fins with neon edges
-	local tips: { Vector3 } = {}
-	for _, s in { -1, 1 } do
-		local corner = Vector3.new(s * 1.2, TOP - 0.2, 1.9)
-		local legA = Vector3.new(s * 0.94, 0.13, 0)
-		local legB = Vector3.new(0, 0, -1.7)
-		rightWedge(c, "SideFin", corner, legA, legB, 0.1, col.Accent:Lerp(BLACK, 0.2))
-		bar(c, "SideFinEdge", corner + legA, corner + legB, 0.08, 0.12, magenta, NEON)
-		table.insert(tips, corner + legA)
-	end
-	-- the big cyan thruster and two small magenta ones
-	local thrusterY = TOP - 0.3
-	tube(c, "Thruster", CFrame.new(0, thrusterY, 3.3), 0.5, 1.0, navy:Lerp(BLACK, 0.2))
-	tube(c, "ThrusterRing", CFrame.new(0, thrusterY, 3.45), 0.12, 1.14, magenta, NEON)
-	tube(c, "ThrusterGlow", CFrame.new(0, thrusterY, 3.57), 0.06, 0.66, cyan, NEON)
-	exhaust(c, Vector3.new(0, thrusterY, 3.62))
-	for _, s in { -1, 1 } do
-		tube(c, "SideThruster", CFrame.new(s * 0.75, 1.02, 2.9), 0.6, 0.46, navy:Lerp(BLACK, 0.2))
-		tube(c, "SideThrusterGlow", CFrame.new(s * 0.75, 1.02, 3.22), 0.05, 0.3, magenta, NEON)
-		exhaust(c, Vector3.new(s * 0.75, 1.02, 3.26))
-	end
-	-- the cyan hover pad
-	pill(c, "PadHousing", CFrame.new(0, GAP + 0.2, 0.2), 1.5, 3.6, 0.16, navy:Lerp(BLACK, 0.5))
-	pill(c, "PadGlow", CFrame.new(0, GAP + 0.06, 0.2), 1.24, 3.3, 0.12, cyan, NEON)
-	commonAttachments(c, 3.0, 1.0, TOP - 0.3, tips[1], tips[2], orb)
-end
+---------------------------------------------------------------- the Royal Phoenix (coins 4)
 
 -- A feather blade from `root` along `dir`: a slim body and a glowing pointed tip
 -- (one straight edge, like a real feather); `face` = the blade's flat-side normal. 2 parts.
@@ -738,12 +633,175 @@ local function royalPhoenix(c: Ctx)
 	commonAttachments(c, 3.0, 1.0, TOP - 0.3, tips[1], tips[2], (headCf * CFrame.new(0, 0.2, -0.1)).Position)
 end
 
+---------------------------------------------------------------- the Robux board
+
+local DOODLE = {
+	Green = rgb(96, 214, 80),
+	Yellow = rgb(255, 214, 40),
+	Blue = rgb(70, 160, 255),
+	Orange = rgb(255, 150, 40),
+	Purple = rgb(176, 90, 255),
+	Pink = rgb(255, 110, 200),
+	Stone = rgb(170, 180, 205),
+	Brown = rgb(170, 110, 60),
+	Red = rgb(255, 80, 90),
+	Teal = rgb(40, 210, 190),
+	Lime = rgb(200, 240, 70),
+}
+
+-- Terra Forge Custom: a doodle-painted skateboard deck (owner's Pet Simulator reference).
+-- Layers on the deck top (thin flat parts, a little apart so nothing flickers):
+-- paint blobs, then each doodle's black marker outline, then its fill, then details.
+-- The camera looks along -X across the deck (the board lies across under the rider),
+-- so doodles have their "up" toward -X.
+local paintDoodles: (Ctx, number, number, number, number) -> ()
+local underside: (Ctx) -> ()
+
+local function terraForgeCustom(c: Ctx)
+	local col = c.colors
+	local ink = col.Trim
+	local pink = glow(col.Glow)
+	-- the paint layers stack up to the deck top (the feet stand on DeckHeight), each blob a
+	-- little higher than the one before and every doodle layer 0.008 above the last, so
+	-- overlapping paint never flickers
+	local BLOB, LINE, FILL, DETAIL = TOP - 0.064, TOP - 0.022, TOP - 0.014, TOP - 0.006
+	-- the deck: white, with a black marker edge showing all round
+	pill(c, "Deck", CFrame.new(0, TOP - 0.19, 0), 2.6, 6.4, 0.24, col.Main, nil, { Shadow = true })
+	pill(c, "Outline", CFrame.new(0, TOP - 0.235, 0), 2.84, 6.64, 0.2, ink)
+	pill(c, "GlowSeam", CFrame.new(0, TOP - 0.37, 0), 2.7, 6.5, 0.08, pink, NEON)
+	-- the painted deck art (tools/preview/make_board_doodle.py: wobbly marker blobs and doodles,
+	-- uploaded by the owner as one Decal: IconAssets.Textures.board_custom_deck); until its id
+	-- is in, the doodles below are built from flat parts
+	local art = IconAssets.Textures.board_custom_deck
+	if art and (art.Id > 0 or IconAssets.Previewing) then
+		-- a see-through board whose Front face lies on the deck (image right = the nose,
+		-- image up = the far side seen from behind the rider)
+		local canvas = block(
+			c,
+			"DeckArt",
+			CFrame.new(0, TOP - 0.091, 0) * CFrame.Angles(0, -math.pi / 2, 0) * CFrame.Angles(math.pi / 2, 0, 0),
+			Vector3.new(6.4, 2.6, 0.05),
+			col.Main,
+			nil,
+			{ Transparency = 1 }
+		)
+		local decal = Instance.new("Decal")
+		decal.Name = "DeckArt"
+		decal.Face = Enum.NormalId.Front
+		decal.Texture = if art.Id > 0 then "rbxassetid://" .. tostring(art.Id) else ""
+		decal:SetAttribute("PreviewImage", "/scenes/textures/" .. art.File)
+		decal.Parent = canvas
+	else
+		paintDoodles(c, BLOB, LINE, FILL, DETAIL)
+	end
+	underside(c)
+end
+
+-- The deck's doodles from flat parts (until the painted art is uploaded).
+function paintDoodles(c: Ctx, BLOB: number, LINE: number, FILL: number, DETAIL: number)
+	local ink = c.colors.Trim
+	-- paint blobs covering the whole deck (inside its rounded outline)
+	local blobs: { { x: number, z: number, d: number, color: Color3 } } = {
+		{ x = -0.3, z = -2.55, d = 1.1, color = DOODLE.Green },
+		{ x = 0.5, z = -2.0, d = 1.3, color = DOODLE.Red },
+		{ x = -0.48, z = -1.35, d = 1.55, color = DOODLE.Yellow },
+		{ x = 0.5, z = -0.6, d = 1.55, color = DOODLE.Blue },
+		{ x = -0.5, z = 0.15, d = 1.55, color = DOODLE.Orange },
+		{ x = 0.5, z = 0.95, d = 1.55, color = DOODLE.Purple },
+		{ x = -0.5, z = 1.65, d = 1.5, color = DOODLE.Pink },
+		{ x = 0.48, z = 2.15, d = 1.25, color = DOODLE.Teal },
+		{ x = -0.25, z = 2.6, d = 1.0, color = DOODLE.Lime },
+	}
+	for i, b in blobs do
+		disc(c, "PaintBlob", CFrame.new(b.x, BLOB + (i - 1) * 0.004, b.z), b.d, 0.003, b.color)
+	end
+	-- a golem face on the yellow blob (eyes toward -X: upright from behind the rider), with ears
+	block(c, "DoodleLine", CFrame.new(-0.45, LINE, -1.35), Vector3.new(0.98, 0.004, 1.04), ink)
+	block(c, "GolemFace", CFrame.new(-0.45, FILL, -1.35), Vector3.new(0.84, 0.004, 0.9), DOODLE.Stone)
+	for _, z in { -1.88, -0.82 } do
+		block(c, "GolemEar", CFrame.new(-0.62, LINE, z), Vector3.new(0.3, 0.004, 0.22), ink)
+	end
+	for _, z in { -1.55, -1.15 } do
+		block(c, "GolemEye", CFrame.new(-0.62, DETAIL, z), Vector3.new(0.2, 0.004, 0.16), ink)
+		disc(c, "GolemEyeShine", CFrame.new(-0.66, DETAIL + 0.008, z - 0.03), 0.07, 0.004, WHITE)
+	end
+	block(c, "GolemMouth", CFrame.new(-0.2, DETAIL, -1.35), Vector3.new(0.09, 0.004, 0.42), ink)
+	-- a lightning bolt on the red blob
+	local bolt = { Vector3.new(0.2, 0, -2.4), Vector3.new(0.55, 0, -2.12), Vector3.new(0.42, 0, -1.95), Vector3.new(0.82, 0, -1.62) }
+	for i = 1, 3 do
+		local a, b = bolt[i], bolt[i + 1]
+		bar(c, "DoodleLine", Vector3.new(a.X, LINE, a.Z), Vector3.new(b.X, LINE, b.Z), 0.26, 0.004, ink)
+		bar(c, "Bolt", Vector3.new(a.X, FILL, a.Z), Vector3.new(b.X, FILL, b.Z), 0.14, 0.004, DOODLE.Yellow)
+	end
+	-- a gem on the blue blob: a diamond with a facet line and a white shine
+	local gem = CFrame.new(0.5, 0, -0.6) * CFrame.Angles(0, math.pi / 4, 0)
+	block(c, "DoodleLine", CFrame.new(0, LINE, 0) * gem, Vector3.new(0.82, 0.004, 0.82), ink)
+	block(c, "Gem", CFrame.new(0, FILL, 0) * gem, Vector3.new(0.66, 0.004, 0.66), rgb(150, 230, 255))
+	bar(c, "GemFacet", Vector3.new(0.5, DETAIL, -1.05), Vector3.new(0.5, DETAIL, -0.15), 0.05, 0.004, ink)
+	block(c, "GemShine", CFrame.new(0.36, DETAIL, -0.62), Vector3.new(0.12, 0.004, 0.24), WHITE)
+	-- a star on the orange blob: two crossed bars
+	for _, turn in { math.pi / 4, -math.pi / 4 } do
+		local star = CFrame.new(-0.5, 0, 0.15) * CFrame.Angles(0, turn, 0)
+		block(c, "DoodleLine", CFrame.new(0, LINE, 0) * star, Vector3.new(1.0, 0.004, 0.3), ink)
+		block(c, "Star", CFrame.new(0, FILL, 0) * star, Vector3.new(0.86, 0.004, 0.17), DOODLE.Yellow)
+	end
+	-- an orb on the purple blob
+	disc(c, "DoodleLine", CFrame.new(0.5, LINE, 0.95), 0.96, 0.004, ink)
+	disc(c, "Orb", CFrame.new(0.5, FILL, 0.95), 0.8, 0.004, rgb(220, 170, 255))
+	disc(c, "OrbShine", CFrame.new(0.38, DETAIL, 0.85), 0.28, 0.004, WHITE)
+	-- a pickaxe on the pink blob
+	bar(c, "DoodleLine", Vector3.new(-0.75, LINE, 2.05), Vector3.new(-0.25, LINE, 1.3), 0.24, 0.004, ink)
+	bar(c, "PickHandle", Vector3.new(-0.73, FILL, 2.02), Vector3.new(-0.27, FILL, 1.33), 0.11, 0.004, DOODLE.Brown)
+	bar(c, "DoodleLine", Vector3.new(-0.55, LINE, 1.12), Vector3.new(0.02, LINE, 1.5), 0.26, 0.004, ink)
+	bar(c, "PickHead", Vector3.new(-0.53, FILL, 1.14), Vector3.new(0.0, FILL, 1.48), 0.13, 0.004, DOODLE.Stone)
+	-- a heart on the teal blob: two round lobes and a point
+	disc(c, "DoodleLine", CFrame.new(0.38, LINE, 1.98), 0.52, 0.004, ink)
+	disc(c, "DoodleLine", CFrame.new(0.38, LINE, 2.32), 0.52, 0.004, ink)
+	block(c, "DoodleLine", CFrame.new(0.6, LINE, 2.15) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.52, 0.004, 0.52), ink)
+	for _, z in { 1.98, 2.32 } do
+		disc(c, "Heart", CFrame.new(0.38, FILL, z), 0.38, 0.004, DOODLE.Red)
+	end
+	block(c, "Heart", CFrame.new(0.56, FILL, 2.15) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.4, 0.004, 0.4), DOODLE.Red)
+	-- marker scribbles and white dots between the doodles
+	for _, sq in { { -0.95, -2.2, -0.75, -1.95 }, { 0.95, -1.2, 0.75, -0.95 }, { -0.95, 0.75, -0.7, 1.0 }, { 0.95, 1.6, 0.75, 1.85 } } do
+		bar(c, "Scribble", Vector3.new(sq[1], DETAIL, sq[2]), Vector3.new(sq[3], DETAIL, sq[4]), 0.06, 0.004, ink)
+	end
+	for _, d in { { 0.7, -2.55 }, { -0.85, -0.55 }, { 0.9, 0.15 }, { 0.1, 0.55 }, { -0.1, 2.75 }, { 0.05, -1.75 } } do
+		disc(c, "Dot", CFrame.new(d[1], DETAIL, d[2]), 0.16, 0.004, WHITE)
+	end
+end
+
+-- Under the Terra Forge Custom: two sky-blue hover pads, two little thrusters at the tail.
+function underside(c: Ctx)
+	local col = c.colors
+	local ink = col.Trim
+	local pink, sky = glow(col.Glow), glow(col.Glow2)
+	for _, z in { -1.6, 1.6 } do
+		disc(c, "PadHousing", CFrame.new(0, GAP + 0.2, z), 1.5, 0.16, ink:Lerp(WHITE, 0.15))
+		disc(c, "PadGlow", CFrame.new(0, GAP + 0.06, z), 1.2, 0.12, sky, NEON)
+	end
+	for _, s in { -1, 1 } do
+		tube(c, "Thruster", CFrame.new(s * 0.6, TOP - 0.45, 2.85), 0.5, 0.42, col.Main)
+		tube(c, "ThrusterGlow", CFrame.new(s * 0.6, TOP - 0.45, 3.12), 0.05, 0.3, if s < 0 then pink else sky, NEON)
+		exhaust(c, Vector3.new(s * 0.6, TOP - 0.45, 3.16))
+	end
+	commonAttachments(
+		c,
+		3.25,
+		0.9,
+		TOP - 0.3,
+		Vector3.new(-1.3, TOP + 0.05, 0),
+		Vector3.new(1.3, TOP + 0.05, 0),
+		Vector3.new(0, TOP + 0.1, -3.1)
+	)
+end
+
 local BUILDERS: { [string]: (Ctx) -> () } = {
 	TimberDrifter = timberDrifter,
 	CartCruiser = cartCruiser,
 	EmberglassGlider = emberglassGlider,
-	NeonComet = neonComet,
 	RoyalPhoenix = royalPhoenix,
+	TerraForgeCustom = terraForgeCustom,
 }
 
 ---------------------------------------------------------------- API

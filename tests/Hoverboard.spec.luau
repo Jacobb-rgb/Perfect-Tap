@@ -1,4 +1,4 @@
--- Hoverboards (owner, mine floors point 3): 3 coin boards that get faster, 2 Robux
+-- Hoverboards (owner, mine floors point 3; roster 2026-10-25): 4 coin boards that get faster, 1 Robux
 -- boards that are faster still and have effects; models from parts within budget.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -18,7 +18,7 @@ return function(T, Loader)
 		return list
 	end
 
-	T.test("hoverboards: 3 coin boards then 2 Robux boards, speeds rise", function()
+	T.test("hoverboards: 4 coin boards then the one Robux board, speeds rise", function()
 		T.eq(#HoverboardData.List, 5, "board count")
 		local coins, robux = 0, 0
 		local lastSpeed = HoverboardData.BaseWalkSpeed
@@ -53,8 +53,12 @@ return function(T, Loader)
 				T.eq(board.Price, nil, board.Id .. " is not sold for coins")
 			end
 		end
-		T.eq(coins, 3, "coin boards")
-		T.eq(robux, 2, "Robux boards")
+		T.eq(coins, 4, "coin boards")
+		T.eq(robux, 1, "Robux boards")
+		T.eq(HoverboardData.get("NeonComet"), nil, "the Neon Comet is gone (owner 2026-10-25)")
+		T.eq(HoverboardData.ById.RoyalPhoenix.Kind, "Coins", "the Royal Phoenix costs coins")
+		T.eq(HoverboardData.ById.RoyalPhoenix.Price, HoverboardData.priceFrom(7, 3), "3x the Emberglass Glider")
+		T.eq(HoverboardData.ById.TerraForgeCustom.Kind, "Robux", "the Terra Forge Custom is the Robux board")
 	end)
 
 	T.test("hoverboards: the Robux boards are the fastest", function()
@@ -179,17 +183,40 @@ return function(T, Loader)
 		T.truthy(not pcall(HoverboardBuilder.build, "Nope"), "an unknown board errors")
 	end)
 
-	T.test("hoverboard builder: Robux boards are the most detailed", function()
-		local coinMax, robuxMin = 0, math.huge
-		for _, board in HoverboardData.List do
-			local n = #partsOf(HoverboardBuilder.build(board.Id))
-			if board.Kind == "Coins" then
-				coinMax = math.max(coinMax, n)
-			else
-				robuxMin = math.min(robuxMin, n)
+	T.test("hoverboard builder: the Terra Forge Custom is painted all over with doodles", function()
+		local names: { [string]: number } = {}
+		for _, p in partsOf(HoverboardBuilder.build("TerraForgeCustom")) do
+			names[p.Name] = (names[p.Name] or 0) + 1
+		end
+		T.truthy((names.PaintBlob or 0) >= 6, "paint blobs over the deck")
+		for _, doodle in { "GolemFace", "Bolt", "Gem", "Star", "Orb", "PickHead" } do
+			T.truthy((names[doodle] or 0) >= 1, doodle .. " doodle")
+		end
+		T.truthy((names.DoodleLine or 0) >= 6, "black marker outlines")
+		T.truthy((names.Outline or 0) >= 1, "the deck's marker edge")
+		-- once the owner uploads the painted deck art, one Decal on the deck replaces the part doodles
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		local art = IconAssets.Textures.board_custom_deck
+		local old = art.Id
+		art.Id = 4242
+		local model = HoverboardBuilder.build("TerraForgeCustom")
+		art.Id = old
+		local canvas = model:FindFirstChild("DeckArt")
+		T.truthy(canvas ~= nil and canvas.Transparency == 1, "a see-through canvas on the deck")
+		local decal = canvas:FindFirstChildOfClass("Decal")
+		T.eq(decal.Texture, "rbxassetid://4242", "the uploaded art")
+		T.eq(decal.Face, roblox.Enum.NormalId.Front, "on its Front face")
+		local front = canvas.CFrame * roblox.Vector3.new(0, 0, -canvas.Size.Z / 2)
+		T.near(front.Y, HoverboardBuilder.DeckHeight - 0.066, 1e-3, "the picture lies on the deck top")
+		T.near(canvas.CFrame.LookVector.Y, 1, 1e-6, "its Front face (LookVector) looks up")
+		T.near(canvas.CFrame.RightVector.Z, 1, 1e-6, "the image's right edge (-X) is the nose (-Z)")
+		local parts = 0
+		for _, p in partsOf(model) do
+			if p.Name == "PaintBlob" or p.Name == "DoodleLine" then
+				parts += 1
 			end
 		end
-		T.lt(coinMax, robuxMin, "the Robux boards have more detail than any coin board")
+		T.eq(parts, 0, "no part doodles under the art")
 	end)
 
 	T.test("hoverboard builder: attachments, deck height, hover gap", function()
@@ -251,18 +278,18 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("hoverboard fx: every board, trails for Robux only, mobile budget, bursts, mount and pool", function()
+	T.test("hoverboard fx: every board, trails on the big two, mobile budget, bursts, mount and pool", function()
 		for _, board in HoverboardData.List do
 			local set = HoverboardFx.create(board.Id)
 			if board.Effect == "None" then
 				T.eq(set, nil, board.Id .. " has no effects")
 			else
 				T.truthy(set ~= nil, board.Id .. " effect set")
-				if board.Kind == "Robux" then
+				if board.Kind == "Robux" or board.Effect == "Phoenix" then
 					T.truthy(#set.Trails >= 1, board.Id .. " has a trail")
 					T.le(HoverboardFx.rate(set), 40, board.Id .. " particles per second")
 				else
-					T.eq(#set.Trails, 0, board.Id .. ": the trail stays a Robux perk")
+					T.eq(#set.Trails, 0, board.Id .. ": the first coin boards have no trail")
 					T.le(HoverboardFx.rate(set), 14, board.Id .. " small effects (particles per second)")
 				end
 				for _, kind in { "Start", "Boost" } do
@@ -289,8 +316,12 @@ return function(T, Loader)
 					T.eq(e.Rate, 0, e.Name .. " bursts never stream")
 				end
 				for _, t in set.Trails do
-					T.eq(t.Attachment0.Name, "TrailLeft", t.Name .. " attachment 0")
-					T.eq(t.Attachment1.Name, "TrailRight", t.Name .. " attachment 1")
+					T.eq(t.Attachment0.Name, HoverboardFx.TrailMounts[1], t.Name .. " attachment 0")
+					T.eq(t.Attachment1.Name, HoverboardFx.TrailMounts[2], t.Name .. " attachment 1")
+					-- the board lies across under the rider: the trail runs along its back (+X) edge
+					local a, b = t.Attachment0.CFrame.Position, t.Attachment1.CFrame.Position
+					T.truthy(a.X > 0.5 and b.X > 0.5, t.Name .. " on the back edge")
+					T.truthy(math.abs(a.Z - b.Z) > 2, t.Name .. " along the board's length")
 				end
 				HoverboardFx.setActive(set, true, 0.5)
 				T.truthy(set.Emitters[1].Enabled, "enabled while riding")
