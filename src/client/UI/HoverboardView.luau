@@ -11,8 +11,8 @@
 	           a dark studded body; under the band the pitch ("Ride anywhere,
 	           faster." or the last server message); a dark footer pill with
 	           the control hint (not on phones)
-	  cards    one per board (HoverboardData order: 3 coin boards, then the 2
-	           Robux boards with a gold "ROBUX" ribbon): a bright painted Pop
+	  cards    one per board (HoverboardData order: 4 coin boards, then the
+	           Robux board with a gold "ROBUX" ribbon): a bright painted Pop
 	           card (CardPaints) with light rays and a glow behind the board's
 	           live 3D model (PictureModels "board_<Id>": HoverboardBuilder in a
 	           ViewportFrame; drawn from Frames only if the model can't be

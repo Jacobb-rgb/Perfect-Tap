@@ -630,7 +630,15 @@ async function main() {
 
   // ---- decals (pictures on a part's Front face; image right = the part's -X) ----
   for (const [cx, cy, cz, rx, ry, rz, ux, uy, uz, url] of scene.decals || []) {
-    const tex = await new THREE.TextureLoader().loadAsync(url);
+    // a missing picture (build/preview/textures is made by hand, e.g. make_board_doodle.py)
+    // skips this decal instead of failing the whole shot, like the stud maps
+    let tex;
+    try {
+      tex = await new THREE.TextureLoader().loadAsync(url);
+    } catch {
+      console.warn(`decal skipped, no picture at ${url}`);
+      continue;
+    }
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
     const c = new THREE.Vector3(cx, cy, cz);

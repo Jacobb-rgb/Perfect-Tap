@@ -27,7 +27,7 @@ MovementConfig.SampleInterval = 0.3 -- seconds between two samples of every char
 MovementConfig.Slack = 6 -- studs on top of maxSpeed * dt (lag, physics pushes)
 MovementConfig.SpeedFactor = 1.15 -- maxSpeed = (Humanoid.WalkSpeed + hoverboard speed) * SpeedFactor
 MovementConfig.MaxWalkSpeed = 50 -- an unreadable WalkSpeed counts as this (Bonuses.walkSpeed tops out at 50)
-MovementConfig.MaxHoverboardSpeed = 38 -- an unknown board counts as this (the fastest board, Royal Phoenix)
+MovementConfig.MaxHoverboardSpeed = 38 -- an unknown board counts as this (the fastest board, the Terra Forge Custom)
 MovementConfig.HoverboardAttribute = "Hoverboard" -- character attribute while riding (HoverboardData.Attribute)
 MovementConfig.UpSlack = 4 -- studs of upward move on top of the Humanoid's jump height
 MovementConfig.ClimbPerStud = 1 -- upward studs allowed per stud of possible walking (stairs and ramps up to 45 degrees)
