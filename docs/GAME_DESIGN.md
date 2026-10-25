@@ -48,9 +48,11 @@ Places:
 
 The dirt is a 14×14 grid of cells over the clump (CleaningPatterns); the spray washes every cell within its reach
 (SprayScoring). The jet is wide and strong (owner 2026-10-25: "clean in 5-7 s"): a steady sweep washes even thick
-Mythic dirt in one pass, so a good clean takes about 5 s on every rarity (a slow careful one ~7 s, scribbling ~8-10 s);
-rarer clumps are harder through their crystals. Spraying a glowing crystal point-blank for a third of a second cracks
-it. A steady sweep at par pace is Flawless, a slow careful one Pristine, scribbling with the spray always on Clean
+Mythic dirt in one pass, so a good clean takes about 5 s on every rarity (a slow careful one ~7 s, scribbling ~8-10 s).
+Spraying a glowing crystal point-blank for a third of a second cracks it; a moving pass never stays that long, so the
+crystals only cost a player who parks the jet on them (rarer clumps no longer take longer: thicker dirt or touchier
+crystals would bring that back if the owner wants it). A steady sweep at par pace is Flawless, a slow careful one
+Pristine, scribbling with the spray always on mostly Clean (anything from Rough to a lucky Flawless)
 (tools/lune/spray_calibrate.luau).
 
 ## Ores
