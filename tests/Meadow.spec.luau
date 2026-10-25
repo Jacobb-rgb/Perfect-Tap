@@ -21,11 +21,20 @@ return function(T, Loader)
 		for _, d in meadow:GetDescendants() do
 			if d:IsA("BasePart") then
 				T.falsy(d.CanCollide or d.CastShadow or d.CanTouch, d:GetFullName() .. " is pure decoration")
-				local p = d.CFrame.Position
-				local h = math.max(d.Size.X, d.Size.Z) / 2
 				for _, s in spawns do
 					if s.Zone == "Outcrops" then
-						local dist = (Vector3.new(p.X, 0, p.Z) - Vector3.new(s.Position.X, 0, s.Position.Z)).Magnitude - h
+						-- the ground distance from the rock to the part: its center less its
+						-- half width (round ponds), or to its box in its own frame when that
+						-- is farther (a long fence rail, measured along its length)
+						local p = d.CFrame.Position
+						local rock = Vector3.new(s.Position.X, p.Y, s.Position.Z)
+						local round = (Vector3.new(p.X, 0, p.Z) - Vector3.new(rock.X, 0, rock.Z)).Magnitude
+							- math.max(d.Size.X, d.Size.Z) / 2
+						local q = d.CFrame:PointToObjectSpace(rock)
+						local dx = math.max(math.abs(q.X) - d.Size.X / 2, 0)
+						local dy = math.max(math.abs(q.Y) - d.Size.Y / 2, 0)
+						local dz = math.max(math.abs(q.Z) - d.Size.Z / 2, 0)
+						local dist = math.max(round, math.sqrt(dx * dx + dy * dy + dz * dz))
 						T.truthy(dist > 3, `{d:GetFullName()} stays off the ore rock at {s.Position}`)
 					end
 				end
@@ -155,6 +164,68 @@ return function(T, Loader)
 				T.truthy(LobbyLayout.distanceTo(vault, p) > reach, `{d:GetFullName()} keeps off the Vault`)
 				T.truthy(math.abs(p.X) + reach < 70 - 4.5, `{d:GetFullName()} keeps off the plot roads`)
 			end
+		end
+	end)
+
+	T.test("meadow: the road fences in the street lamps' style run along the roads (owner 2026-10-25)", function()
+		local RoadFence = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.RoadFence")
+		local Common = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Common")
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local fences = meadow:FindFirstChild("Fences")
+		T.truthy(fences, "the meadow lays the road fences")
+		if not RoadFence.Enabled then
+			return
+		end
+		local lamps = map.Emberfall.Lobby.Plaza:FindFirstChild("StreetLamps")
+		local feet = {}
+		for _, lamp in (if lamps then lamps:GetChildren() else {}) do
+			local foot = lamp:FindFirstChild("Foot")
+			table.insert(feet, Vector3.new(foot.CFrame.Position.X, 0, foot.CFrame.Position.Z))
+		end
+		local total = 0
+		local perStrip: { [string]: number } = {}
+		for _, run in fences:GetChildren() do
+			T.eq(run.Name, "RoadFence", "only the metal road fences (no timber ones, no fence lanterns)")
+			local glow = run:FindFirstChild("RailGlow")
+			T.truthy(glow and glow.Material == roblox.Enum.Material.Neon, "an orange neon strip along the top rail")
+			T.truthy(glow.Color.R > 0.9 and glow.Color.G < 0.5, "deep orange, like the lamps' slots")
+			local caps = 0
+			for _, part in run:GetChildren() do
+				if part.Name == "PostCap" then
+					caps += 1
+				elseif part.Name == "Post" then
+					local p = Vector3.new(part.CFrame.Position.X, 0, part.CFrame.Position.Z)
+					for _, strip in Common.strips() do
+						T.truthy(
+							LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, p) > 0.6,
+							`fence post at {p} stands off {strip.Id}`
+						)
+					end
+					for _, foot in feet do
+						T.truthy((foot - p).Magnitude > 1.4, `fence post at {p} clear of the street lamp at {foot}`)
+					end
+				end
+			end
+			T.eq(caps, 2, "a glowing cap on both end posts")
+			local length = glow.Size.Z + 0.3
+			total += length
+			-- the strip the run follows: the nearest one to its middle
+			local mid = Vector3.new(glow.CFrame.Position.X, 0, glow.CFrame.Position.Z)
+			local best, bestId = math.huge, ""
+			for _, strip in Common.strips() do
+				local d = LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, mid)
+				if d < best then
+					best, bestId = d, strip.Id
+				end
+			end
+			perStrip[bestId] = (perStrip[bestId] or 0) + length
+		end
+		T.truthy(total >= 450, `road fences along the roads ({math.floor(total)} studs)`)
+		for _, id in { "EastPlotRoad", "WestPlotRoad" } do
+			T.truthy((perStrip[id] or 0) >= 120, `{id}'s town side is fenced ({math.floor(perStrip[id] or 0)} studs)`)
+		end
+		for _, id in { "RimRoad", "ForgePathEast", "ToNextArea" } do
+			T.truthy((perStrip[id] or 0) >= 15, `{id} is fenced ({math.floor(perStrip[id] or 0)} studs)`)
 		end
 	end)
 end
