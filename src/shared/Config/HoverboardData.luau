@@ -28,16 +28,16 @@
 	Coin prices sit between the other one-time goals, so a board is always the
 	next nice thing to save for. They follow the blaster recipe prices
 	(priceFrom; today's numbers, the balance sim in docs/BALANCE_SIM.md):
-	  blaster 3   2,000     floor 2 opens
-	  BOARD 1     5,000     (Timber Drifter) 2.5x blaster 3: the first floor-1/2 treat
-	  blaster 4   15,000
-	  BOARD 2     80,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
-	  blaster 5   100,000   floor 3 opens
-	  blaster 6   700,000
-	  elevator    3,300,000 (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
-	  BOARD 3     5,000,000 (Emberglass Glider) = blaster 7: a goal past the first hour
-	  blaster 7   5,000,000 floor 4 opens
-	  BOARD 4     3 x BOARD 3 (Royal Phoenix): a long goal after it
+	  blaster 3   17,000       floor 2 opens
+	  BOARD 1     43,000       (Timber Drifter) 2.5x blaster 3: the first floor-1/2 treat
+	  blaster 4   710,000
+	  BOARD 2     1,700,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
+	  blaster 5   2,100,000    floor 3 opens
+	  blaster 6   73,000,000
+	  elevator    87,000,000   (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
+	  BOARD 3     130,000,000  (Emberglass Glider) = blaster 7: a goal past the first hour
+	  blaster 7   130,000,000  floor 4 opens
+	  BOARD 4     390,000,000  (Royal Phoenix) 3 x BOARD 3: a long goal after it
 	The Robux board is faster than all of them from the first minute.
 
 	Robux boards are game passes (bought once, owned forever; a refund takes
