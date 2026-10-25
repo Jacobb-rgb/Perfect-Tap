@@ -467,14 +467,14 @@
     "preset": "Surface",
     "maxLights": 24,
     "position": [
-      22.5,
-      9.5,
-      61.5
+      23,
+      8,
+      78
     ],
     "target": [
       46,
-      10,
-      73.5
+      9,
+      72.5
     ],
     "fov": 60,
     "shadowExtent": 120
@@ -535,13 +535,13 @@
     "preset": "Surface",
     "maxLights": 24,
     "position": [
-      29,
-      9.5,
+      22,
+      15,
       50
     ],
     "target": [
       46,
-      6.5,
+      7,
       71
     ],
     "fov": 55,

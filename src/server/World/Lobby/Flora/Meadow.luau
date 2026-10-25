@@ -353,8 +353,12 @@ local function zoned(p: Vector3, margin: number, zones: { { Min: Vector3, Max: V
 	return false
 end
 
--- The visible railway lines as flat segments (cached).
+-- The visible railway lines as flat segments and the tunnel mouths (cached).
 local railSegments: { { Vector3 } }? = nil
+local railMouths: { Vector3 } = {}
+-- (the portals' slopes and walls reach this far round a mouth: 2026-10-25, a
+-- lawn tuft that the re-rolled meadow put by the south-east portal)
+local MOUTH_CLEAR = 12
 local function nearRail(p: Vector3, r: number): boolean
 	if not railSegments then
 		local list: { { Vector3 } } = {}
@@ -369,6 +373,19 @@ local function nearRail(p: Vector3, r: number): boolean
 			end
 		end
 		railSegments = list
+		local found, mouths = pcall(function()
+			return Railway.portalMouths()
+		end)
+		if found then
+			for _, mouth in mouths do
+				table.insert(railMouths, Vector3.new(mouth.Position.X, 0, mouth.Position.Z))
+			end
+		end
+	end
+	for _, mouth in railMouths do
+		if (Vector3.new(p.X, 0, p.Z) - mouth).Magnitude < r + MOUTH_CLEAR then
+			return true
+		end
 	end
 	for _, seg in railSegments :: { { Vector3 } } do
 		local a = Vector3.new(seg[1].X, 0, seg[1].Z)

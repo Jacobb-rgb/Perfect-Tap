@@ -57,7 +57,8 @@ and the shopkeeper's step. The clients build the rest (not map parts):
 
 - the ten packs on the plates with the attribute `BackpackId` (every pack once: the porch
   Runebound and Emberforge, the racks Rookie/Trail/Leather and Miner's/Iron-Bound/Explorer's,
-  the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.8 on a two-tier podium, `DisplaySpin` 0.5 rad/s,
+  the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.8 on a two-tier podium,
+  standing still (owner 2026-10-25; the controller can still turn a plate with `DisplaySpin`),
   its light on a PC). Each plate's `DisplayRange`: roof 45, porch 38, inside 30 studs. The
   inside plates carry `DisplayLite`: phones show those packs without their small details
   (`BackpackBuilder.lite`, ~40% of the parts) until the camera or the player is in the shop.
@@ -70,6 +71,13 @@ and the shopkeeper's step. The clients build the rest (not map parts):
   `ShopkeeperConfig.mark(counter, counter.KeeperFeet.WorldCFrame, "Backpacks")` (require
   Shared.Config.ShopkeeperConfig), and in tests/Shopkeepers.spec.luau "Backpacks" in SHOPS and
   `Backpacks = "BackpackCounter"` in COUNTERS (the feet stand on the step, facing the gateway).
+
+Trees (owner 2026-10-25: "more trees round it"): three hero voxel trees on Flora pieces
+`BackpackTreeNW` (35, 56) green (scale 1.0), `BackpackTreeNE` (61, 61) orange and `BackpackTreeW` (26, 65)
+green, each with a flower ring (Flora/Trees.backpackTrees, ~60 parts; Flora LobbyParts 3,205 ->
+3,245, LobbyParts 14,730 -> 14,770 and MapParts 34,330 -> 34,370 by the measured amount + ~30; the
+meadow now keeps 12 studs off the railway tunnel mouths, a re-rolled lawn tuft touched the
+south-east portal).
 
 Budgets (main 958ddb46 -> this branch at 16 wide, the budget tests' own counting; at 18 wide the
 map is 33,445 and every budget test still passes: re-measured at landing): map 33,450 -> 33,459,

@@ -12,8 +12,8 @@
 	    over it with teal tubes
 	  - side and back walls with the orange band, a roof with a parapet,
 	    crenels and teal tubes; two corner pillars with warm lantern cubes
-	  - on the roof a podium with a neon ring: the giant Starforge pack that
-	    turns slowly on it is the shop's emblem
+	  - on the roof a podium with neon rings: the giant Starforge pack on it is
+	    the shop's emblem (it turned slowly until the owner said no, 2026-10-25)
 	  - inside: racks on both side walls (three packs each), a shelf in the
 	    back-left corner (the Amethyst pack), the counter (its warm top is
 	    the BasePart tagged BackpackCounter with the Attachment
@@ -59,7 +59,7 @@ Backpacks.Displays = {
 	Roof = "StarforgePack",
 }
 Backpacks.RoofScale = 2.8 -- the roof emblem's size against a normal pack (owner: a big turning pack on the roof)
-Backpacks.RoofSpin = 0.5 -- radians per second
+Backpacks.RoofSpin = 0 -- radians per second (owner 2026-10-25: it stands still)
 -- how near the camera must be for the clients to build each display pack
 -- (the inside ones also carry DisplayLite: integrator 2026-10-24, the phones' part budget)
 -- (studs; the phones' part budget: the spawn and the DROPPERS door, ~41 studs
@@ -186,7 +186,9 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	Tech.disc(m, (podium * CFrame.new(0, 1.3, 0)).Position, 0.12, 3.2, TEAL, Kit.NEON, Style.tiny())
 	local roof = plate(podium * CFrame.new(0, 1.67, 0), 2.4, Backpacks.Displays.Roof, "DisplayRoof", Backpacks.Ranges.Roof)
 	roof:SetAttribute("DisplayScale", Backpacks.RoofScale)
-	roof:SetAttribute("DisplaySpin", Backpacks.RoofSpin)
+	if Backpacks.RoofSpin ~= 0 then
+		roof:SetAttribute("DisplaySpin", Backpacks.RoofSpin)
+	end
 
 	---------------------------------------------------------------- the sign
 	local signY = P + oh + 1.6
