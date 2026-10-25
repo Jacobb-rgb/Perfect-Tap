@@ -628,6 +628,37 @@ async function main() {
     world.fog = new THREE.FogExp2(fogColor.clone().multiplyScalar(0.5), (atm.Density ?? 0.4) * 0.012);
   }
 
+  // ---- decals (pictures on a part's Front face; image right = the part's -X) ----
+  for (const [cx, cy, cz, rx, ry, rz, ux, uy, uz, url] of scene.decals || []) {
+    // a missing picture (build/preview/textures is made by hand, e.g. make_board_doodle.py)
+    // skips this decal instead of failing the whole shot, like the stud maps
+    let tex;
+    try {
+      tex = await new THREE.TextureLoader().loadAsync(url);
+    } catch {
+      console.warn(`decal skipped, no picture at ${url}`);
+      continue;
+    }
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const c = new THREE.Vector3(cx, cy, cz);
+    const r = new THREE.Vector3(rx, ry, rz);
+    const u = new THREE.Vector3(ux, uy, uz);
+    const corners = [c.clone().sub(r).sub(u), c.clone().add(r).sub(u), c.clone().add(r).add(u), c.clone().sub(r).add(u)];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((v) => [v.x, v.y, v.z]), 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    g.computeVertexNormals();
+    const m = new THREE.MeshStandardMaterial({
+      map: tex, transparent: true, alphaTest: 0.04, roughness: 0.85, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
+    const mesh = new THREE.Mesh(g, m);
+    mesh.receiveShadow = true;
+    world.add(mesh);
+  }
+
   // ---- particles ----
   const sprite = softSprite();
   for (const [x, y, z, kind, color, size, ext] of scene.emitters) {

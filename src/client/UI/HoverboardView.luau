@@ -11,8 +11,8 @@
 	           a dark studded body; under the band the pitch ("Ride anywhere,
 	           faster." or the last server message); a dark footer pill with
 	           the control hint (not on phones)
-	  cards    one per board (HoverboardData order: 3 coin boards, then the 2
-	           Robux boards with a gold "ROBUX" ribbon): a bright painted Pop
+	  cards    one per board (HoverboardData order: 4 coin boards, then the
+	           Robux board with a gold "ROBUX" ribbon): a bright painted Pop
 	           card (CardPaints) with light rays and a glow behind the board's
 	           live 3D model (PictureModels "board_<Id>": HoverboardBuilder in a
 	           ViewportFrame; drawn from Frames only if the model can't be
@@ -147,8 +147,8 @@ HoverboardView.CardPaints = {
 	TimberDrifter = "Orange",
 	CartCruiser = "Blue",
 	EmberglassGlider = "Red",
-	NeonComet = "Teal",
 	RoyalPhoenix = "Purple",
+	TerraForgeCustom = "Pink",
 } :: { [string]: string }
 
 type Metrics = {
@@ -453,27 +453,19 @@ local ART: { [string]: (Frame, HoverboardData.Colors) -> () } = {
 			crystal(c, spec[1], 48, 9, spec[2], spec[3], col.Accent:Lerp(BLACK, 0.06 * i))
 		end
 	end,
-	NeonComet = function(c: Frame, col: HoverboardData.Colors)
-		hoverGlow(c, col.Glow, 104, 110)
-		local trail = block(c, "Trail", 160, 50, 40, 10, WHITE, 0, 5)
-		UIKit.new("UIGradient", {
-			Color = ColorSequence.new(col.Glow, col.Glow2),
-			Transparency = NumberSequence.new(0.1, 1),
-			Rotation = 0,
-		}, trail)
-		block(c, "Fin", 134, 26, 20, 26, col.Glow2:Lerp(BLACK, 0.15), 28, 3)
-		local body = block(c, "Body", 58, 44, 104, 16, WHITE, 0, 4)
-		gradient3(body, col.Main:Lerp(WHITE, 0.25), col.Main, col.Main:Lerp(BLACK, 0.35))
-		ring(body, 2, INK, 0.2)
-		local nose = centred(c, "Nose", 58, 52, 16, 16, col.Main, 45)
-		ring(nose, 2, INK, 0.2)
-		block(c, "Stripe", 62, 52, 96, 3, col.Glow)
-		block(c, "Thruster", 160, 46, 8, 12, col.Main:Lerp(BLACK, 0.4), 0, 2)
-		local halo = centred(c, "Ring", 36, 52, 40, 9, col.Glow2, -12, true)
-		halo.BackgroundTransparency = 0.25
-		local orb = centred(c, "Orb", 36, 52, 26, 26, col.Glow, 0, true)
-		ring(orb, 2, col.Trim, 0.3)
-		centred(c, "OrbCore", 34, 49, 11, 11, col.Trim, 0, true)
+	TerraForgeCustom = function(c: Frame, col: HoverboardData.Colors)
+		hoverGlow(c, col.Glow, 100, 120)
+		block(c, "Rim", 34, 58, 132, 6, col.Glow2, 0, 3)
+		local body, top = deck(c, 30, 44, 140, 14, col.Main, 7)
+		ring(body, 3, col.Trim, 0)
+		top.BackgroundColor3 = col.Main
+		-- doodle stickers in bright marker colours along the deck
+		local doodles: { Color3 } =
+			{ rgb(96, 214, 80), rgb(255, 150, 40), rgb(70, 160, 255), rgb(196, 90, 255), col.Accent, rgb(255, 80, 90) }
+		for i, color in doodles do
+			local dot = centred(c, "Doodle", 26 + i * 22, 50 + (i % 2) * 2, 15, 11, color, (i * 23) % 40 - 20, true)
+			ring(dot, 2, col.Trim, 0)
+		end
 	end,
 	RoyalPhoenix = function(c: Frame, col: HoverboardData.Colors)
 		hoverGlow(c, col.Glow, 104, 120)

@@ -89,7 +89,7 @@ The owner runs several Claude chats at once. Each works in its own worktree / br
    - 2 lobby ambience slots (frog croak, plaza murmur) → `AmbienceConfig` (`zvuky/`, docs/handoff/ZVUKY_LOBBY.md)
    - badges → `BadgeConfig` (`odznaky/`, docs/handoff/ODZNAKY_NAVOD.md)
    - 5 UI icon sheets → `IconAssets.Sheets[*].Id` (src/shared/Config/IconAssets.luau; `ikony_ui/`)
-   - game passes (incl. the 2 Robux hoverboards) and Robux products → `MonetizationConfig` (`robux_produkty/`);
+   - game passes (incl. the Robux hoverboard (HoverboardCustom)) and Robux products → `MonetizationConfig` (`robux_produkty/`);
      keep coin packs at 0 while `CoinPacksEnabled` is false; passes On Sale only after that build is live
    - logo, icon, thumbnails, store text → Creator Dashboard (`obchod/`, docs/STORE_PAGE.md); paste
      `MonetizationConfig.grottoOddsText()` into the Forgemaster's Pass description

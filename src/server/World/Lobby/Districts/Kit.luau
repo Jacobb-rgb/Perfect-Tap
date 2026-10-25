@@ -242,7 +242,10 @@ end
 
 --[[
 	Blocky townsperson (Kenney Mini Characters proportions: chunky head and
-	body, short limbs). ~14-20 parts, decor only. opts:
+	body, short limbs). ~14-20 parts, decor only. No lobby builder calls it
+	since the shopkeeper golems (Config/ShopkeeperConfig) took the counters;
+	kept for the HALL OF FAME preview's stand-in champions in
+	tools/lune/lib/hall_preview.luau. opts:
 	  Name (model name), Tag (name tag text, optional)
 	  Shirt, Pants, Boots, Skin
 	  Beard (Color3), Hair (Color3)

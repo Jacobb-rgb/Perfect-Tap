@@ -20,6 +20,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
+local ShopkeeperConfig = require(Shared.Config.ShopkeeperConfig)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Tech = require(script.Parent.Tech)
@@ -65,7 +66,8 @@ end
 	Tobin's ore cart on a short stub of rails with the counter laid across
 	it (tag SellCounter) and a small brass scale; the big two-faced SELL
 	sign box (6 x 2.4, a gold neon frame, round 2) high on a gunmetal arch
-	over the stall's front, facing the plaza; Tobin the Miner behind his
+	over the stall's front, facing the plaza; the shopkeeper's spot
+	(ShopkeeperConfig.mark: a big golem, client-side) behind the
 	counter, between the cart and the bin, facing the plaza like the sign
 	(customers stand on the plaza side). Everything but the sign arch (model SellSign) stays
 	under 5 studs, so the SHOP's windows show over it.
@@ -185,24 +187,12 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 		StudColor = Tech.GoldGlow,
 	})
 
-	-- Tobin the Miner behind his cart beside the bin, facing the plaza (the
-	-- sign's direction; customers stand at the counter on the plaza side):
-	-- (round 3: colours that stay apart under the warm stall light) a clean
-	-- yellow hard hat with a small amber head lamp, a dark auburn beard, a
-	-- denim-teal shirt, navy overalls, tan skin and black boots
-	Kit.npc(m, at(0.9, 0, -0.4), {
-		Name = "Tobin",
-		Tag = "Tobin the Miner",
-		Shirt = Color3.fromRGB(52, 92, 140),
-		Overalls = Color3.fromRGB(44, 58, 96),
-		Boots = Color3.fromRGB(22, 22, 26),
-		Skin = Color3.fromRGB(234, 186, 148),
-		Beard = Color3.fromRGB(140, 64, 28),
-		Helmet = Color3.fromRGB(255, 214, 40),
-		HelmetLamp = true,
-		HeadScale = 0.85,
-		Lens = Color3.fromRGB(255, 150, 50),
-	})
+	-- the shopkeeper golem (ShopkeeperController) between the cart and the bin,
+	-- facing the plaza (the sign's direction; customers stand at the counter
+	-- on the plaza side), behind the counter's scale end: 1.9 studs toward the
+	-- lane from where Tobin the Miner stood, so its right wing keeps out of the
+	-- plaza's entrance lantern (at rest and turned toward a player)
+	ShopkeeperConfig.mark(counter, at(-1.0, 0, -0.4), "Sell")
 
 	-- a flat metal floor plate under the stall with a warm front edge (no collision)
 	Kit.bit(m, at(0, 0.04, -0.3), Vector3.new(6.4, 0.08, 7.6), Tech.MetalDark)

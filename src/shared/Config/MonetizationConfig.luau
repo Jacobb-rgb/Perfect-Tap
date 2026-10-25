@@ -245,26 +245,18 @@ local LIST: { Product } = {
 		Description = "Your ore train runs twice as fast and carries half as much again.",
 		Perks = { "TrainExpress" },
 	},
-	-- the two Robux hoverboards (HoverboardData, art/mine-floors): owned forever, so passes
+	-- the Robux hoverboard (HoverboardData): owned forever, so a pass. Owner 2026-10-25: the Neon
+	-- Comet left and the Royal Phoenix became a coin board; the one Robux board is the Terra
+	-- Forge Custom (no hoverboard pass id was ever made, so nobody owned the old two)
 	{
-		Key = "HoverboardComet",
+		Key = "HoverboardCustom",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 49,
-		Name = "Neon Comet Hoverboard",
-		Description = "The Neon Comet hoverboard: speed 35, no carry slowdown, a trail of stars.",
+		Name = "Terra Forge Custom Hoverboard",
+		Description = "The fastest hoverboard, painted with Terra Forge doodles: speed 38, no carry slowdown, a rainbow trail.",
 		Grant = "Hoverboard",
-		BoardId = "NeonComet",
-	},
-	{
-		Key = "HoverboardPhoenix",
-		Kind = "GamePass",
-		Id = 0,
-		Robux = 49,
-		Name = "Royal Phoenix Hoverboard",
-		Description = "The fastest hoverboard: speed 38, no carry slowdown, golden wings and a flame trail.",
-		Grant = "Hoverboard",
-		BoardId = "RoyalPhoenix",
+		BoardId = "TerraForgeCustom",
 	},
 	---------------------------------------------------------------- the Starter Pack
 	-- (one per account, offered in the first hour of play: StarterPackService.

@@ -39,6 +39,33 @@
 	  Action priority and the walk / run tracks are silenced (weight 0, so the
 	  Animate script's state machine stays happy; weight back on dismount).
 	  No Animate script or no idle animation = no pose, nothing breaks.
+	- The riding pose (owner 2026-10-24: "no cool animation, it looks like
+	  I'm bugged onto a flying thing"; 2026-10-25: "not facing forward along
+	  it, like Pet Simulator 99"): the board lies ACROSS under the rider
+	  (BoardPose.Across in the weld, its nose to the right) and on every R15
+	  rider within PoseRange
+	  (yours always; the others only on screen, PoseHysteresis studs of slack
+	  so the range edge doesn't pop) Moves/BoardPose replaces the whole body
+	  pose through Moves/MoveRig in one RunService.Stepped (after the
+	  Animator): facing forward, feet wide apart along the deck, knees bent,
+	  arms out, swaying, crouching and leaning with speed, rolling into turns
+	  with the board, the crouch scaled by the rider's real leg length. With
+	  a tool in hand (the blaster: mining while riding) the arm joints are
+	  masked (the Animator's hold shows). Hopping on blends from the
+	  Animator's pose into the hop (crouch, jump, squash) while the board
+	  flies in from below with a spin and lightning strikes it from the sky
+	  (at most once per StrikeCooldown per player); a REAL jump (yours: the
+	  Humanoid's Jumping state; the others': LaunchSpeed up) starts a
+	  kickflip that always runs to its end (BoardPose.stepFlip, never
+	  snapping); a fall off a ledge only tucks the knees (the others' air
+	  from a short ray down on the LOD tick); a landing squashes and
+	  splashes. R6 riders keep the old pose (no rig, retried on the LOD tick).
+	- Lightning (HoverboardFx.flicker, every HoverboardBolts.FlickerEvery,
+	  boards on screen): arcs crackle out of every board near you, more with
+	  speed and while surging (hop on, top speed, landing); a lit arc holds
+	  its shape, no strobing. The strike is shaped once and fades out.
+	  Reduce Motion (the SETTINGS toggle or Roblox's own): no lightning, no
+	  strike, no spin on the hop on and no kickflip.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -56,6 +83,9 @@ local HoverboardData = require(Shared.Config.HoverboardData)
 local Theme = require(Shared.Config.UITheme)
 local HoverboardBuilder = require(Shared.Builders.HoverboardBuilder)
 local HoverboardFx = require(Shared.Builders.HoverboardFx)
+local HoverboardBolts = require(Shared.Builders.HoverboardBolts)
+local BoardPose = require(Shared.Moves.BoardPose)
+local MoveRig = require(Shared.Moves.MoveRig)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local HoverboardView = require(script.Parent.Parent.UI.HoverboardView)
@@ -64,6 +94,7 @@ local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
 local CleaningController = require(script.Parent.CleaningController)
+local SettingsController = require(script.Parent.SettingsController)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 
 local HoverboardController = {}
@@ -74,6 +105,13 @@ HoverboardController.LodInterval = 0.3
 HoverboardController.PoolPerBoard = 3
 HoverboardController.LiteRiders = 4 -- more riders with effects than this: lite effects
 HoverboardController.StartBurstWindow = 1.5 -- seconds after hopping on: the Start burst still fires
+HoverboardController.PoseRange = 70 -- studs: riders farther away keep their plain pose
+HoverboardController.SurgeTime = 0.7 -- seconds the lightning surges after a hop on / top speed / landing
+HoverboardController.StrikeTime = 0.3 -- seconds the strike from the sky lasts (fading)
+HoverboardController.StrikeCooldown = 3 -- seconds: at most one strike per player
+HoverboardController.LaunchSpeed = 25 -- studs/s up: another rider really jumped (a jump launches ~50)
+HoverboardController.PoseHysteresis = 5 -- studs past PoseRange before a posed rider is let go
+HoverboardController.PhonePoseRange = 45 -- PoseRange on phones
 HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
@@ -106,6 +144,24 @@ type Rider = {
 	Pitch: number,
 	Roll: number,
 	Yaw: number?,
+	-- the pose and the moves (BoardPose)
+	MountAt: number, -- os.clock() of the hop on (the hop and the board flying in)
+	Air: number, -- 0..1 smoothed airborne amount
+	AirAt: number?, -- os.clock() the current jump started (the kickflip)
+	LandAt: number, -- os.clock() of the last landing
+	SurgeUntil: number, -- lightning surges until then
+	StrikeUntil: number, -- the strike from the sky shows until then
+	Striking: boolean,
+	FlipAt: number?, -- the running kickflip started then
+	OnScreen: boolean, -- the board is on screen (others: no pose / lightning off screen)
+	Posed: boolean, -- the pose is on the rig (PoseRange hysteresis)
+	RigRetryAt: number, -- no R15 rig yet (R6, still streaming): look again then
+	Tool: boolean, -- a tool in hand (LOD tick): arms masked, chest forward
+	Grounded: boolean, -- the others: ground right under them (LOD tick ray)
+	BoltAt: number, -- next lightning flicker
+	Rig: MoveRig.Rig?,
+	State: BoardPose.State,
+	Layers: { MoveRig.Layer },
 }
 
 local player = Players.LocalPlayer
@@ -121,6 +177,23 @@ local riders: { [Player]: Rider } = {}
 local pools: { [string]: { Model } } = {}
 local folder: Folder? = nil
 local watched: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local strikeAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any -- last strike per player
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+local ARM_MASK: { [string]: boolean } = {
+	LeftShoulder = true,
+	LeftElbow = true,
+	LeftWrist = true,
+	RightShoulder = true,
+	RightElbow = true,
+	RightWrist = true,
+}
+local settingsReduced = false -- the SETTINGS Reduce Motion toggle
+local systemReduced = false -- Roblox's own Reduce Motion
+local ALL_JOINTS: { [string]: boolean } = {}
+for _, name in BoardPose.Joints do
+	ALL_JOINTS[name] = true
+end
 local poseTrack: AnimationTrack? = nil
 local poseConnection: RBXScriptConnection? = nil
 local silenced: { AnimationTrack } = {}
@@ -322,12 +395,12 @@ local function show(rider: Rider): boolean
 	end
 	-- put the board under the rider before it enters the world (a pooled or freshly
 	-- built model sits wherever it was made; owner's playtest 2026-10-20: board unseen)
-	model:PivotTo(root.CFrame * offset)
+	model:PivotTo(root.CFrame * offset * BoardPose.Across)
 	local weld = Instance.new("Weld")
 	weld.Name = "HoverboardWeld"
 	weld.Part0 = root
 	weld.Part1 = boardRoot
-	weld.C0 = offset
+	weld.C0 = offset * BoardPose.Across
 	weld.Parent = boardRoot
 	model.Parent = ensureFolder()
 	rider.Model = model
@@ -361,6 +434,15 @@ local function showFx(rider: Rider)
 		-- rode out of range comes back; once for riders already riding when you join)
 		if not rider.Started and os.clock() - rider.Since <= HoverboardController.StartBurstWindow then
 			HoverboardFx.burst(set, "Start")
+			-- lightning strikes the board as it flies in (not with Reduce Motion, at most once per StrikeCooldown)
+			local now = os.clock()
+			local last = strikeAt[rider.Player]
+			if not (settingsReduced or systemReduced) and (not last or now - last >= HoverboardController.StrikeCooldown) then
+				strikeAt[rider.Player] = now
+				rider.StrikeUntil = now + HoverboardController.StrikeTime
+			end
+			rider.SurgeUntil = now + HoverboardController.SurgeTime + 0.3
+			rider.BoltAt = now
 		end
 		rider.Started = true
 	else
@@ -368,9 +450,17 @@ local function showFx(rider: Rider)
 	end
 end
 
+local function releaseRig(rider: Rider)
+	local rig = rider.Rig
+	if rig and MoveRig.alive(rig) then
+		MoveRig.release(rig)
+	end
+end
+
 local function removeRider(p: Player)
 	local rider = riders[p]
 	if rider then
+		releaseRig(rider)
 		hide(rider)
 		riders[p] = nil
 	end
@@ -406,10 +496,28 @@ local function refreshRider(p: Player)
 			Pitch = 0,
 			Roll = 0,
 			Yaw = nil,
+			MountAt = os.clock(),
+			Air = 0,
+			AirAt = nil,
+			LandAt = -math.huge,
+			SurgeUntil = 0,
+			StrikeUntil = 0,
+			Striking = false,
+			FlipAt = nil,
+			OnScreen = true,
+			Posed = false,
+			RigRetryAt = 0,
+			Tool = false,
+			Grounded = true,
+			BoltAt = 0,
+			Rig = nil,
+			State = { T = 0, Speed = 0, Turn = 0, Mount = 0, Air = 0, Land = 0 },
+			Layers = { { Pose = {}, Weight = 0, Override = ALL_JOINTS } },
 		}
 		riders[p] = rider
 		if p == player then
 			show(rider)
+			showFx(rider)
 			startPose(character)
 		end
 	end
@@ -440,6 +548,14 @@ local function watchPlayer(p: Player)
 	if p.Character then
 		watchCharacter(p, p.Character)
 	end
+end
+
+-- Ground right under a rider? (a short ray: HipHeight + half the HRP + a margin)
+local function groundBelow(rider: Rider, root: BasePart): boolean
+	local humanoid = rider.Character:FindFirstChildOfClass("Humanoid")
+	local reach = (if humanoid then humanoid.HipHeight else 2) + root.Size.Y / 2 + 1.5
+	rayParams.FilterDescendantsInstances = { rider.Character, ensureFolder() }
+	return Workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), rayParams) ~= nil
 end
 
 -- Every LodInterval: boards in / out of range, streamed-out characters, effects on / off.
@@ -474,6 +590,10 @@ local function lodStep()
 		end
 		local isLocal = p == player
 		local distance = (root.Position - focus).Magnitude
+		rider.Tool = rider.Character:FindFirstChildOfClass("Tool") ~= nil
+		if not isLocal and distance <= HoverboardController.PoseRange + HoverboardController.PoseHysteresis then
+			rider.Grounded = groundBelow(rider, root) -- the others' Air pose (falls off ledges)
+		end
 		if isLocal or distance <= HoverboardController.ShowRange then
 			show(rider)
 		else
@@ -490,6 +610,7 @@ local function lodStep()
 				if not rider.Fast and k >= HoverboardFx.BoostAt then
 					rider.Fast = true
 					HoverboardFx.burst(set, "Boost")
+					rider.SurgeUntil = os.clock() + HoverboardController.SurgeTime
 				elseif rider.Fast and k < HoverboardFx.BoostReset then
 					rider.Fast = false
 				end
@@ -500,15 +621,60 @@ local function lodStep()
 	end
 end
 
--- Every frame: bob, lean and roll of the boards on screen.
+-- Is the rider in the air? Yours from the Humanoid's state, the others' from the vertical speed.
+local function airborne(rider: Rider, root: BasePart, vy: number, wasAir: boolean): (boolean, boolean)
+	-- (in the air, launched this frame): yours from the Humanoid's state; the others' from a
+	-- real launch speed and the LOD tick's ray down (slopes and steps don't count)
+	if rider.Player == player then
+		local humanoid = rider.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			local state = humanoid:GetState()
+			local jumping = state == Enum.HumanoidStateType.Jumping
+			return jumping or state == Enum.HumanoidStateType.Freefall, jumping and not wasAir
+		end
+	end
+	if vy > HoverboardController.LaunchSpeed then
+		return true, not wasAir
+	end
+	if wasAir then
+		-- in a jump or a fall: rising = still up; falling = a fresh ray every frame until it lands
+		return vy > 0 or not groundBelow(rider, root), false
+	end
+	return not rider.Grounded, false
+end
+
+-- The leg length of a rig vs the block rig's (BoardPose.legScale), 1 when the joints are missing.
+local function legScaleOf(rig: MoveRig.Rig): number
+	local found: { [string]: Motor6D } = {}
+	for i = 1, rig.Count do
+		found[rig.Names[i]] = rig.Motors[i]
+	end
+	local hip, knee, ankle = found.LeftHip, found.LeftKnee, found.LeftAnkle
+	if not hip or not knee or not ankle then
+		return 1
+	end
+	return BoardPose.legScale(hip, knee, ankle)
+end
+
+-- Every frame: bob, lean and roll of the boards on screen, the hop on, the kickflip,
+-- jumps and landings, and the lightning.
 local function animate(dt: number)
 	local now = os.clock()
-	for _, rider in riders do
+	local camera = Workspace.CurrentCamera
+	local calm = settingsReduced or systemReduced
+	for p, rider in riders do
 		local weld = rider.Weld
 		local root = weld and weld.Part0
 		if weld and root then
 			local offset = boardOffset(rider.Character)
 			if offset then
+				local isLocal = p == player
+				if isLocal or not camera then
+					rider.OnScreen = true
+				else
+					local _, visible = camera:WorldToViewportPoint(root.Position)
+					rider.OnScreen = visible
+				end
 				local velocity = root.AssemblyLinearVelocity
 				local speed01 = math.clamp(Vector3.new(velocity.X, 0, velocity.Z).Magnitude / rider.Speed, 0, 1)
 				local look = root.CFrame.LookVector
@@ -518,12 +684,125 @@ local function animate(dt: number)
 				rider.Yaw = yaw
 				local rate = if dt > 0 then turn / dt else 0
 				local k = math.min(1, dt * 6)
-				rider.Roll += (math.clamp(rate * 0.07, -0.22, 0.22) - rider.Roll) * k
+				rider.Roll += (math.clamp(rate * 0.07, -BoardPose.MaxRoll, BoardPose.MaxRoll) - rider.Roll) * k
 				rider.Pitch += (speed01 * 0.07 - rider.Pitch) * math.min(1, dt * 4)
 				local bob = math.sin(now * BOB_SPEED + rider.Phase) * BOB_HEIGHT * (1 - 0.5 * speed01)
-				weld.C0 = offset * CFrame.new(0, bob, 0) * CFrame.Angles(rider.Pitch, 0, rider.Roll)
+				local mount = math.clamp((now - rider.MountAt) / BoardPose.MountTime, 0, 1)
+
+				-- jumps (not during the hop on: its HipHeight raise isn't a jump): a squash +
+				-- splash + surge on landing; the kickflip only on a real jump, run to its end
+				local inAir, launched = false, false
+				if mount >= 1 then
+					inAir, launched = airborne(rider, root :: BasePart, velocity.Y, rider.AirAt ~= nil)
+				end
+				if inAir and not rider.AirAt then
+					rider.AirAt = now
+				elseif not inAir and rider.AirAt then
+					if now - rider.AirAt > 0.25 then
+						rider.LandAt = now
+						rider.SurgeUntil = now + HoverboardController.SurgeTime * 0.7
+						local set = rider.Fx
+						if set then
+							HoverboardFx.burst(set, "Start")
+						end
+					end
+					rider.AirAt = nil
+				end
+				rider.Air += ((if inAir then 1 else 0) - rider.Air) * math.min(1, dt * (if inAir then 10 else 16))
+				local flipAt, flip = BoardPose.stepFlip(rider.FlipAt, now, launched and not calm)
+				rider.FlipAt = flipAt
+
+				-- the hop on: the board rises from below with a spin (no spin with Reduce Motion)
+				local rise, spin = 0, 0
+				if mount < 1 then
+					rise, spin = BoardPose.boardMount(mount)
+					if calm then
+						spin = 0
+					end
+				end
+				weld.C0 = offset
+					* CFrame.new(0, bob + rise, 0)
+					* CFrame.Angles(rider.Pitch, spin, rider.Roll)
+					* BoardPose.Across
+					* BoardPose.flipFrame(flip)
+
+				-- the pose state for the Stepped pass
+				local state = rider.State
+				state.T = now + rider.Phase
+				state.Speed = speed01
+				state.Turn = rider.Roll / BoardPose.MaxRoll
+				state.Mount = mount
+				state.Air = rider.Air
+				state.Land = math.clamp(1 - (now - rider.LandAt) / BoardPose.LandTime, 0, 1)
+
+				-- lightning: the strike fades every frame; the arcs tick (boards on screen only)
+				local set = rider.Fx
+				if set then
+					if now < rider.StrikeUntil and not calm then
+						rider.Striking = true
+						HoverboardFx.strike(set, math.random, (rider.StrikeUntil - now) / HoverboardController.StrikeTime)
+					elseif rider.Striking then
+						rider.Striking = false
+						HoverboardFx.strike(set, math.random, 0)
+					end
+					if now >= rider.BoltAt and rider.OnScreen then
+						rider.BoltAt = now + HoverboardBolts.FlickerEvery
+						local surge = if now < rider.SurgeUntil then 0.6 else 0
+						HoverboardFx.flicker(set, math.random, speed01, surge, if calm then 0 else nil)
+					end
+				end
 			end
 		end
+	end
+end
+
+-- After the Animator (RunService.Stepped): the riding pose on every R15 rider near you.
+local function poseStep()
+	local now = os.clock()
+	local camera = Workspace.CurrentCamera
+	local focus = if camera then camera.CFrame.Position else Vector3.zero
+	local range = if isPhone() then HoverboardController.PhonePoseRange else HoverboardController.PoseRange
+	for p, rider in riders do
+		local isLocal = p == player
+		local root = rider.Character:FindFirstChild("HumanoidRootPart")
+		local near = false
+		if rider.Model and root and root:IsA("BasePart") and (isLocal or rider.OnScreen) then
+			local distance = (root.Position - focus).Magnitude
+			near = isLocal or distance <= range or (rider.Posed and distance <= range + HoverboardController.PoseHysteresis)
+		end
+		if not near then
+			if rider.Posed then
+				rider.Posed = false
+				releaseRig(rider)
+			end
+			continue
+		end
+		local rig: MoveRig.Rig? = rider.Rig
+		if not rig or not MoveRig.alive(rig) then
+			rider.Rig = nil
+			if now < rider.RigRetryAt then
+				continue
+			end
+			local found = MoveRig.find(rider.Character)
+			if not found then
+				rider.RigRetryAt = now + HoverboardController.LodInterval -- R6 or still streaming in
+				continue
+			end
+			rider.Rig = found
+			rider.State.Leg = legScaleOf(found)
+			rig = found
+		end
+		if not rig then
+			continue
+		end
+		local layer = rider.Layers[1]
+		rider.State.Tool = rider.Tool
+		layer.Mask = if rider.Tool then ARM_MASK else nil
+		BoardPose.evaluate(rider.State, layer.Pose)
+		-- from the Animator's pose at the start of the hop on to the board pose (MoveMath.layer override)
+		layer.Weight = math.max(1e-3, BoardPose.weight(rider.State.Mount))
+		MoveRig.step(rig, rider.Layers, 1)
+		rider.Posed = true
 	end
 end
 
@@ -899,7 +1178,26 @@ function HoverboardController.start()
 		watchPlayer(p)
 	end
 	Players.PlayerRemoving:Connect(removeRider)
+	local function readSystem()
+		local ok, on = pcall(function(): boolean
+			return GuiService.ReducedMotionEnabled
+		end)
+		systemReduced = ok and on == true
+	end
+	readSystem()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(readSystem)
+	end)
+	SettingsController.onChanged(function(current: any)
+		settingsReduced = current.ReduceMotion == true
+	end)
 	RunService.RenderStepped:Connect(animate)
+	RunService.Stepped:Connect(function()
+		local ok, err: any = pcall(poseStep)
+		if not ok then
+			warn("[HoverboardController] pose: " .. tostring(err))
+		end
+	end)
 	task.spawn(function()
 		while true do
 			task.wait(HoverboardController.LodInterval)

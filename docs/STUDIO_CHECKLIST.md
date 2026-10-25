@@ -76,7 +76,7 @@ command bar.
 2. Buy the elevator at its station next to the Mine Station and ride it to the Sunken Palace, the Stormglass Rift
    (blaster 8) and the Heartstone Core (blaster 9). The LIFT icon takes you to the lowest elevator stop.
 3. Listen in each floor: drips, rumbles, crystal hums, the elevator's arrival ding.
-4. HOVER in the side menu: buy a coin hoverboard, ride it (H, controller L2, or tap). The 2 Robux boards say
+4. HOVER in the side menu: buy a coin hoverboard, ride it (H, controller L2, or tap). The Robux board (Terra Forge Custom) says
    Coming soon. Phone: no frame drop on the Rift and in the Core.
 
 ### F. Dusty relics and the Restoration Table
