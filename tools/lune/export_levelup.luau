@@ -2,7 +2,12 @@
 	Video frames of the player LEVEL UP (owner 2026-10-21), posed with the
 	game's own code: LevelView (the bar, the orbs, the glow, LEVEL UP!, the
 	reward rows) and Effects/LevelBurst (the world burst), the way
-	LevelController plays them. A miner stands on the plaza in front of the
+	LevelController plays them. With the 2026-10-27 reel (Config/JuiceConfig
+	.LevelUp): the level-up fill races then creeps (LevelView.fillCurve), the
+	full bar flashes white-hot (poseFull), WHOOSH! pops by the bar
+	(poseWhoosh), the rows tick in, rays and floor ripples in the burst.
+	Also writes build/preview/<tag>_board.json (the storyboard's moments,
+	tools/preview/render_reel.mjs). A miner stands on the plaza in front of the
 	HALL OF FAME (its fifth board, LEVEL, in the back, sample rows like
 	hall_preview), the camera behind them like Roblox's.
 
@@ -66,7 +71,8 @@ local out = board3.CFrame.LookVector * V3.new(1, 0, 1)
 out = out.Unit
 local hallBase = board3.CFrame.Position - V3.new(0, board3.CFrame.Position.Y, 0)
 local groundY = board3.CFrame.Position.Y - (1.2 + 0.3 + 7.2 / 2) -- the hall stands on the plaza (Hall: PLINTH, board centre)
-local feet = V3.new(hallBase.X, groundY, hallBase.Z) + out * 15
+-- (the plaza's round dais the miner stands on tops out 0.83 studs over the hall's ground)
+local feet = V3.new(hallBase.X, groundY + 0.83, hallBase.Z) + out * 15
 local props = roblox.Instance.new("Folder")
 props.Name = "Props"
 props.Parent = workspace
@@ -132,19 +138,22 @@ hud.Coins.Text = "$12.4K"
 hud.Zone.Text = ""
 hud.Toasts:ClearAllChildren()
 
--- the timeline (seconds): three XP gains fill the bar, the glow builds, LEVEL UP!, a gain after
+-- the timeline (seconds): a small XP gain, then the big one: the level-up fill races and creeps to
+-- full (WHOOSH!), the full bar flashes, LEVEL UP!, a gain after
 local level = 11
 local need = LevelConfig.need(level)
-local up = { Level = level + 1, Coins = 1350, Bonus = LevelConfig.bonusFor(level + 1), Milestone = false }
-local gains = {
-	{ At = 0.3, From = 0.5, To = 0.7, Orbs = 4 },
-	{ At = 1.1, From = 0.7, To = 0.88, Orbs = 5 },
-	{ At = 1.9, From = 0.88, To = 1.0, Orbs = 6 },
-}
-local momentAt = 2.85
-local after = { At = momentAt + 4.0, From = 0, To = 0.14, Orbs = 3 }
-local total = after.At + 1.6
+local up = { Level = level + 1, Coins = 1350, Bonus = LevelConfig.bonusFor(level + 1), Increase = 0.01, Milestone = false }
 local ORB = 0.6
+local gains = {
+	{ At = 0.3, From = 0.2, To = 0.35, Orbs = 4 },
+}
+local upGain = { At = 1.3, Orbs = 6 } -- the level-up gain: its fill starts when the first orb lands
+local fillAt = upGain.At + ORB * 0.85
+local fillFrom = 0.35
+local fullAt = fillAt + LevelView.fillSeconds(fillFrom)
+local momentAt = fullAt + LevelView.FullHold
+local after = { At = momentAt + LevelView.MomentSeconds + 0.2, From = 0, To = 0.14, Orbs = 3 }
+local total = after.At + 1.4
 
 local function smooth(x: number): number
 	x = math.clamp(x, 0, 1)
@@ -165,24 +174,35 @@ for i = 0, frames - 1 do
 	local view = LevelView.build()
 	view.Gui.Scale.Scale = SCALE
 	LevelView.fit(view, LevelView.fitFor((H - INSET) / SCALE))
-	-- the fill and the level shown
-	local shown, lvl, barNeed = 0.5, level, need
-	local list = table.clone(gains)
-	table.insert(list, after)
-	for _, g in list do
+	-- the fill and the level shown (LevelController: a level-up fill runs fillCurve, then holds full)
+	local shown, lvl, barNeed = gains[1].From, level, need
+	for _, g in gains do
 		if t >= g.At + ORB * 0.85 then
 			shown = g.From + (g.To - g.From) * smooth((t - g.At - ORB * 0.85) / 0.5)
 		end
 	end
+	if t >= fillAt and t < momentAt then
+		shown = LevelView.fillCurve(fillFrom, (t - fillAt) / (fullAt - fillAt))
+	end
 	if t >= momentAt then
 		lvl, barNeed = level + 1, LevelConfig.need(level + 1)
-		if t < after.At + ORB * 0.85 then
-			shown = 0
+		shown = 0
+		if t >= after.At + ORB * 0.85 then
+			shown = after.From + (after.To - after.From) * smooth((t - after.At - ORB * 0.85) / 0.5)
 		end
 	end
 	LevelView.setBar(view, lvl, shown, shown * barNeed, barNeed)
 	LevelView.poseGlow(view, shown, t)
+	local hot = if t >= fullAt and t < momentAt
+		then math.clamp((t - fullAt) / 0.08, 0, 1)
+		elseif t >= momentAt then 1 - math.clamp((t - momentAt) / 0.3, 0, 1)
+		else 0
+	LevelView.poseFull(view, hot)
+	LevelView.poseWhoosh(view, t - fillAt)
 	-- the orbs in flight
+	local list = table.clone(gains)
+	table.insert(list, { At = upGain.At, From = 0, To = 0, Orbs = upGain.Orbs })
+	table.insert(list, after)
 	local n = 0
 	for gi, g in list do
 		for k = 1, g.Orbs do
@@ -224,4 +244,23 @@ for i = 0, frames - 1 do
 	}
 end
 fs.writeFile(root .. "/build/preview/" .. tag .. "_shots.json", serde.encode("json", shots))
+-- the storyboard (tools/preview/render_reel.mjs): the reel's five steps in our game, Czech captions for the owner
+local function frameAt(seconds: number): number
+	return math.clamp(math.floor(seconds * fps + 0.5), 0, frames - 1)
+end
+local board = {
+	title = "LEVEL UP podle videa (27. 10.)",
+	fps = fps,
+	cells = {
+		{ frame = frameAt(fillAt + 0.25), caption = "1 Pruh se řítí ... WHOOSH! + stoupající zvuk" },
+		{ frame = frameAt(fullAt - 0.12), caption = "1 ... a těsně před koncem zpomalí" },
+		{ frame = frameAt(fullAt + 0.12), caption = "1 Plný pruh bíle zazáří" },
+		{ frame = frameAt(momentAt + 0.06), caption = "2 Bílý záblesk + paprsky z postavy" },
+		{ frame = frameAt(momentAt + 0.75), caption = "3 Sloup světla, kruhy se vlní po zemi" },
+		{ frame = frameAt(momentAt + 1.0), caption = "4 Teplá zvonkohra + velké LEVEL UP!" },
+		{ frame = frameAt(momentAt + LevelView.rowAt(1) + 0.45), caption = "5 Odměny naskakují tik po tiku" },
+		{ frame = frameAt(momentAt + LevelView.rowAt(2) + 0.5), caption = "5 ... další řádek, čísla cvakají" },
+	},
+}
+fs.writeFile(root .. "/build/preview/" .. tag .. "_board.json", serde.encode("json", board))
 print(`{frames} frames at {fps} fps ({total} s)`)

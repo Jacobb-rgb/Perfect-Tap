@@ -10,6 +10,7 @@
 	                          out, bounce and fade, dust puff, flash, a ground ring,
 	                          sound, camera shake (stronger for the shooter, Giant
 	                          Crystals bigger)
+	  RockFx.chips(...)       a few chips knocked off by one hit (MineJuiceController)
 
 	Phones: debris parts are pooled (anchored, no collisions, no shadows), at
 	most RockFxLogic.Cap = 30 alive and each gone within 1.5 s; at most 3 ground
@@ -510,6 +511,27 @@ function RockFx.shatter(position: Vector3, crust: Color3, glow: Color3, floor: n
 	else
 		RockFx.shakeNear(position, if giant then 0.45 else 0.28)
 	end
+end
+
+--[[
+	The chips of one hit (MineJuiceController, Config/JuiceConfig Chips): a
+	few small chips in the crust colour fly out of the face at `position`
+	along `out` (the face normal), from the same pool and under the same cap.
+	`rock` (the one hit) is left out of the ground ray.
+]]
+function RockFx.chips(position: Vector3, crust: Color3, out: Vector3?, count: number?, rock: Instance?)
+	if #live >= RockFxLogic.Cap then
+		return
+	end
+	spawn(RockFxLogic.chipPlan({
+		Position = position,
+		Crust = crust,
+		Out = out,
+		Count = count,
+		Ground = groundBelow(position, 10, position.Y - 2, rock),
+		Alive = #live,
+		Seed = os.clock() * 1000,
+	}))
 end
 
 -- Debris pieces alive now (tests / debug overlay).

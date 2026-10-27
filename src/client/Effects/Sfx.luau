@@ -2,6 +2,7 @@
 	Pooled sounds with random pitch (client only).
 	Sfx.play("BlastHit")              -- 2D (UI / own actions)
 	Sfx.play("NodeShatter", position) -- 3D at a world position
+	Sfx.voice("LevelWhoosh")          -- a sound of its own the caller plays and bends
 ]]
 
 local SoundService = game:GetService("SoundService")
@@ -95,6 +96,36 @@ function Sfx.play(name: string, position: Vector3?, pitchScale: number?)
 		sound.TimePosition = 0
 		sound:Play()
 	end
+end
+
+--[[
+	A sound of its own for `name` (made once, in the Sfx sound group, set up
+	from SoundConfig): for a caller that changes it while it plays, like
+	LevelController's whoosh whose pitch climbs with the XP bar. nil for an
+	unknown name.
+]]
+local voices: { [string]: Sound } = {}
+function Sfx.voice(name: string): Sound?
+	local def = SoundConfig[name]
+	if not def then
+		return nil
+	end
+	ensure()
+	local sound = voices[name]
+	if not sound or not sound.Parent then
+		local group = SoundService:FindFirstChild("TerraForgeSfx")
+		local s = Instance.new("Sound")
+		s.Name = "Voice_" .. name
+		if group and group:IsA("SoundGroup") then
+			s.SoundGroup = group
+		end
+		s.Parent = group or SoundService
+		voices[name] = s
+		sound = s
+	end
+	local s = sound :: Sound
+	configure(s, def)
+	return s
 end
 
 -- Looping sound on/off (e.g. scraping while dragging).

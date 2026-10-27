@@ -11,6 +11,18 @@
 	The bar hides with the HUD (the cleaning close-up turns it off).
 	Reduce motion (Motion.reduced): no orbs (the fill jumps), a steady glow,
 	no flash, rays or burst; LEVEL UP! and the rewards fade in at full size.
+
+	The owner's level-up reel of 2026-10-27 (Config/JuiceConfig.LevelUp, each
+	behind its switch): SlowFill = a level-up fill runs LevelView.fillCurve
+	(races, then creeps to full) and the full bar flashes white-hot for
+	LevelView.FullHold before the moment; Whoosh = a rising whoosh while it
+	fills (Sfx.voice "LevelWhoosh", its pitch climbs with the fill) and the
+	WHOOSH! word by the bar; Chime = a warm chime (LevelChime) with the bell
+	at LEVEL UP!; Ripples = the burst's rays out of the character and the
+	rings rippling across the floor (LevelBurst extras); Ticks = a click
+	(LevelTick, a little higher each time) for every reward tick
+	(LevelView.ticks). With Reduce motion the fill still jumps: no whoosh
+	word, no white-hot swell.
 ]]
 
 local Players = game:GetService("Players")
@@ -19,6 +31,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local JuiceConfig = require(Shared.Config.JuiceConfig)
 local LevelConfig = require(Shared.Config.LevelConfig)
 local Net = require(Shared.Net)
 local LevelView = require(script.Parent.Parent.UI.LevelView)
@@ -51,8 +64,16 @@ local nextOrb = 1
 
 type Up = { Level: number, Coins: number, Bonus: number, Increase: number?, Milestone: boolean }
 local ups: { [number]: Up } = {} -- level -> the server's reward info
-local moment: { Up: Up, Start: number, Burst: LevelBurst.Burst?, Reduced: boolean }? = nil
+local moment: { Up: Up, Start: number, Burst: LevelBurst.Burst?, Reduced: boolean, Ticks: number }? = nil
 local waiting: { Up } = {}
+
+-- the slow level-up fill (JuiceConfig.LevelUp.SlowFill)
+local fillFrom: number? = nil -- a level-up fill runs from this fraction
+local fillStart = 0
+local fullAt: number? = nil -- the bar is full: the moment starts LevelView.FullHold later
+local cooledAt = -math.huge -- when the full bar emptied (its flash fades)
+local whooshStart: number? = nil
+local whooshSound: Sound? = nil
 
 local function frac(xp: number, need: number): number
 	return if need > 0 then math.clamp(xp / need, 0, 1) else 0
@@ -115,19 +136,43 @@ local function startMoment(up: Up)
 		local feet = root.CFrame * CFrame.new(0, -3, 0)
 		local flat = CFrame.new(feet.Position) * CFrame.Angles(0, select(2, root.CFrame:ToEulerAnglesYXZ()), 0)
 		if not pooled then
-			pooled = LevelBurst.build(Workspace, flat, up.Milestone)
+			pooled = LevelBurst.build(Workspace, flat, up.Milestone, JuiceConfig.LevelUp.Ripples)
 		end
 		burst = pooled
 		if burst then
 			LevelBurst.setOrigin(burst, flat, up.Milestone)
 		end
 	end
-	moment = { Up = up, Start = os.clock(), Burst = burst, Reduced = reduced }
+	moment = { Up = up, Start = os.clock(), Burst = burst, Reduced = reduced, Ticks = 0 }
+	local whoosh = whooshSound
+	if whoosh then
+		whoosh:Stop()
+	end
 	Sfx.play("ElevatorDing")
-	Sfx.play("CaseBurst")
+	if JuiceConfig.LevelUp.Chime then
+		-- the 2026-10-27 reel: a warm chime instead of the glass burst
+		Sfx.play("LevelChime")
+	else
+		Sfx.play("CaseBurst")
+	end
 	task.delay(0.9, function()
 		Sfx.play("CoinBurst")
 	end)
+end
+
+-- A level-up fill starts: the rising whoosh and WHOOSH! (JuiceConfig.LevelUp.Whoosh).
+local function startWhoosh(now: number, reduced: boolean)
+	if not JuiceConfig.LevelUp.Whoosh then
+		return
+	end
+	whooshStart = if reduced then nil else now
+	local sound = Sfx.voice("LevelWhoosh")
+	whooshSound = sound
+	if sound then
+		sound.PlaybackSpeed = 0.8
+		sound.TimePosition = 0
+		sound:Play()
+	end
 end
 
 local function onLevelReached(level: number)
@@ -177,6 +222,7 @@ local function step(dt: number)
 		-- a big jump: only the last few levels fill and play
 		shownLevel = target.Level - LevelConfig.MaxShownLevels
 		shown = 0
+		fillFrom, fullAt = nil, nil
 		for level in ups do
 			if level <= shownLevel then
 				ups[level] = nil
@@ -185,9 +231,40 @@ local function step(dt: number)
 	end
 	local reduced = Motion.reduced()
 	if now >= holdUntil then
-		if shownLevel < target.Level then
+		if shownLevel < target.Level and JuiceConfig.LevelUp.SlowFill and not reduced then
+			-- the 2026-10-27 reel: race, slow down right before full, hold the full bar white-hot
+			local full = fullAt
+			if full then
+				shown = 1
+				if now - full >= LevelView.FullHold then
+					fullAt, fillFrom = nil, nil
+					cooledAt = now
+					shownLevel += 1
+					shown = 0
+					onLevelReached(shownLevel)
+				end
+			else
+				if fillFrom == nil then
+					fillFrom = shown
+					fillStart = now
+					startWhoosh(now, reduced)
+				end
+				local from: number = fillFrom or shown
+				local u = (now - fillStart) / LevelView.fillSeconds(from)
+				shown = LevelView.fillCurve(from, u)
+				local whoosh = whooshSound
+				if whoosh and whoosh.IsPlaying then
+					whoosh.PlaybackSpeed = 0.8 + 0.55 * math.clamp(u, 0, 1)
+				end
+				if u >= 1 then
+					shown = 1
+					fullAt = now
+				end
+			end
+		elseif shownLevel < target.Level then
 			shown = if reduced then 1 else math.min(1, shown + dt * (0.4 + LevelController.FillRate * (1.02 - shown)))
 			if shown >= 1 then
+				fillFrom, fullAt = nil, nil
 				shownLevel += 1
 				shown = 0
 				onLevelReached(shownLevel)
@@ -201,6 +278,13 @@ local function step(dt: number)
 	local barXp = if shownLevel < target.Level then shown * barNeed else target.Xp
 	LevelView.setBar(v, shownLevel, shown, barXp, barNeed)
 	LevelView.poseGlow(v, shown, now, reduced)
+	local full = fullAt
+	local hot = if full then math.clamp((now - full) / 0.08, 0, 1) else 1 - math.clamp((now - cooledAt) / 0.3, 0, 1)
+	LevelView.poseFull(v, hot, reduced)
+	local whooshAt = whooshStart
+	if whooshAt and LevelView.poseWhoosh(v, now - whooshAt, reduced) then
+		whooshStart = nil
+	end
 
 	-- the moment
 	local m = moment
@@ -209,6 +293,14 @@ local function step(dt: number)
 		local uiScale = HudController.uiScale()
 		LevelView.fit(v, LevelView.fitFor(v.Gui.AbsoluteSize.Y / math.max(uiScale, 0.1)))
 		LevelView.poseMoment(v, t, m.Up, m.Reduced)
+		if JuiceConfig.LevelUp.Ticks then
+			-- a click for every reward tick, a little higher each time
+			local ticks = LevelView.ticks(t, m.Up, m.Reduced)
+			if ticks > m.Ticks then
+				m.Ticks = ticks
+				Sfx.play("LevelTick", nil, 1 + 0.04 * math.min(ticks, 10))
+			end
+		end
 		local burst = m.Burst
 		if burst then
 			LevelBurst.pose(burst, t)
