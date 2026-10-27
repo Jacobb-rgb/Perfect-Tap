@@ -112,7 +112,8 @@ return function(T, Loader)
 		local gold, fire, glows = 0, 0, 0
 		for _, part in parts(dragon) do
 			if part.Material == roblox.Enum.Material.Metal then
-				T.truthy(part.Color.R > 0.85 and part.Color.G > 0.5 and part.Color.B < 0.7, part.Name .. " is gold")
+				local c = part.Color
+				T.truthy(c.R > 0.68 and c.G > 0.4 and c.B < 0.5 and c.R > c.G and c.G > c.B, part.Name .. " is gold")
 				gold += 1
 			elseif
 				string.sub(part.Name, 1, 4) == "Wing"
@@ -135,6 +136,24 @@ return function(T, Loader)
 			end
 		end
 		T.eq(flames, 2, "real flames on both wings")
+		-- (owner's Studio test 2026-10-25, "the dragon is terribly overexposed":
+		-- no big glowing panels, a deep gold, gentle flames)
+		for _, part in parts(dragon) do
+			if part.Material == roblox.Enum.Material.Neon then
+				-- (a thin strip like a wing bone is fine: its middle dimension is small)
+				local d = { part.Size.X, part.Size.Y, part.Size.Z }
+				table.sort(d)
+				T.truthy(d[2] < 2.5 or d[2] * d[3] < 12, part.Name .. " is a small glow or a thin strip, not a glaring neon panel")
+			elseif part.Material == roblox.Enum.Material.Metal then
+				T.lt(math.max(part.Color.R, part.Color.G, part.Color.B), 0.94, part.Name .. " is a deep gold (no white-hot metal)")
+			end
+		end
+		for _, d in dragon:GetDescendants() do
+			if d:IsA("ParticleEmitter") and d.Name == "FireParticles" then
+				T.lt(d.LightEmission, 0.5, "gentle flames (no white glow)")
+			end
+			T.falsy(d:IsA("ParticleEmitter") and d.Name == "SparkleParticles", "no sparkles on the gold")
+		end
 		-- the arms are raised (the fists over the shoulders), the sign above the head
 		local headTop, signBottom = 0, math.huge
 		for _, part in parts(dragon) do
@@ -200,7 +219,8 @@ return function(T, Loader)
 				lights += 1
 			end
 		end
-		T.eq(lights, 2, "two lights: the sign's medallion and the wash on the dragon")
+		-- (owner's Studio test: lights on the polished gold glared; the sunset and the neon carry it)
+		T.eq(lights, 0, "no lights on the statue")
 	end)
 
 	T.test("plaza: the statue's ring and the spawn inlay stay inside their circles", function()
