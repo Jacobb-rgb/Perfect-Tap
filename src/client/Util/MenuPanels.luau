@@ -50,6 +50,7 @@ MenuPanels.Names = {
 	"RebirthController",
 	"QuestController",
 	"EmoteController", -- the EMOTES menu
+	"BackpackController", -- the backpack inventory (the HUD's backpack button)
 }
 
 local cache: { [string]: any } = {}

@@ -8,7 +8,7 @@
 	  encode / decode          the character attribute "Emote" = "<Name>:<seq>"
 	                           ("" or nil = no emote)
 	  blocked(state)           why an emote can't START now (nil = it can):
-	                           carrying ore, cleaning, building / a close-up,
+	                           cleaning, building / a close-up,
 	                           on a hoverboard, seated, dead
 	  toolOk(name, blaster)    the Blaster Spin needs the blaster in hand
 	  moving(speed, state)     the character moves / jumps: a playing emote stops
@@ -79,7 +79,6 @@ function EmoteRules.canPlay(lastAt: number?, now: number, gap: number): boolean
 end
 
 export type StartState = {
-	Carrying: boolean?,
 	Cleaning: boolean?,
 	Building: boolean?, -- build mode or another close-up holding the character (client)
 	Riding: boolean?,
@@ -91,8 +90,6 @@ export type StartState = {
 function EmoteRules.blocked(s: StartState): string?
 	if s.Dead then
 		return "Dead"
-	elseif s.Carrying then
-		return "Carrying"
 	elseif s.Cleaning then
 		return "Cleaning"
 	elseif s.Building then
@@ -131,7 +128,6 @@ export type PlayState = {
 	Blaster: boolean?, -- the blaster in hand
 	Firing: boolean?,
 	Panel: boolean?, -- a menu panel opened (your own character)
-	Carrying: boolean?,
 }
 
 -- Why a playing emote stops now (nil = it plays on).
@@ -144,9 +140,6 @@ function EmoteRules.stopReason(name: string, s: PlayState): string?
 	end
 	if s.Riding then
 		return "Riding"
-	end
-	if s.Carrying then
-		return "Carrying"
 	end
 	if EmoteRules.needsTool(name) then
 		if not s.Blaster then

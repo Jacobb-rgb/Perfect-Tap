@@ -66,15 +66,15 @@ return function(T, Loader)
 
 	withNet("Net: every remote without a handler gets a do-nothing listener that counts drops", function(remotes)
 		local calls = 0
-		Net.on("CarryDrop", function()
+		Net.on("CarryPickup", function()
 			calls += 1
 		end) -- registered before setupServer: never gets a sink
 		Net.setupServer()
 		for name in Net.Events do
 			T.truthy(remotes[name], "remote " .. name)
 		end
-		T.falsy(Net._test.hasSink("CarryDrop"), "a handled remote has no sink")
-		T.eq(remotes.CarryDrop.connected(), 1, "only its handler")
+		T.falsy(Net._test.hasSink("CarryPickup"), "a handled remote has no sink")
+		T.eq(remotes.CarryPickup.connected(), 1, "only its handler")
 		for _, name in { "CleanStart", "AnvilSubmit", "GroupClaim", "SetForgeName", "Notify", "State", "BuildResult" } do
 			T.truthy(Net._test.hasSink(name), name .. " has a sink")
 			T.eq(remotes[name].connected(), 1, name .. ": one listener")
@@ -96,7 +96,7 @@ return function(T, Loader)
 		remotes.MineBlast.fire(p, nil)
 		T.eq(mined, 1, "the handler runs")
 		T.eq(Net.unhandledCount(), 100, "not counted as unhandled")
-		remotes.CarryDrop.fire(p)
+		remotes.CarryPickup.fire(p)
 		T.eq(calls, 1, "the early handler runs too")
 	end)
 

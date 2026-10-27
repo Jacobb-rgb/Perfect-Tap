@@ -121,11 +121,12 @@ TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand
 The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers in Emberfall and help reforge it.
 
 ⛏️ HOW IT WORKS
-• Blast ore rocks with your laser blaster and carry the chunks home
+• Blast ore rocks with your laser blaster: the chunks jump into your backpack
 • Clean each ore by hand: blast the dirt off with your spray wand. Can you get Flawless?
 • Show your best ores on podiums: they earn coins every second
 • Ride your own ore train, fill the Ore Pen, build machines, belts and power
 • Earn coins and buy better blasters, up to level 10, in the Blaster Vault
+• Walk near your ore and it jumps into your backpack: bigger backpacks hold up to 1000
 • 36 ores to discover
 • No combat. Every ore can be mined without a game pass
 
@@ -147,8 +148,7 @@ on-screen hints.
 | Action | PC | Mobile | Console |
 |---|---|---|---|
 | Mine | Left click, aim with the mouse | Tap | R2 |
-| Grab / drop a chunk | F | "Grab" button | X |
-| Throw (hold to charge, release) | Q | "Throw" button | R1 |
+| Pick up ore (into the backpack) | Walk near it | Walk near it | Walk near it |
 | Use the Cleaning Station (and every other prompt: shops, machines, pen, podiums) | E | Tap the prompt | Y |
 | Take the raw ore back out of the station (and every second prompt: Open Pen, Send Train) | G | Tap "Take Ore Back" | B |
 | Cleaning: spray the dirt off | Hold left mouse button and drag | Hold your finger on the dirt and drag | Left stick moves the ring, hold A (or R2) |

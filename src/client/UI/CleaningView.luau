@@ -42,6 +42,7 @@ export type Refs = {
 	CardValue: TextLabel,
 	CardStars: TextLabel,
 	CardDetail: TextLabel,
+	CardInto: TextLabel, -- where the clean ore went (CleanResult.Into: intoText)
 	CardStreak: TextLabel,
 	Collect: TextButton,
 	Flash: Frame,
@@ -224,7 +225,7 @@ function CleaningView.build(options: Options?): Refs
 		Name = "Card",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.72),
-		Size = UDim2.fromOffset(420, 236),
+		Size = UDim2.fromOffset(420, 262),
 		Visible = false,
 		ZIndex = 30,
 	})
@@ -258,6 +259,13 @@ function CleaningView.build(options: Options?): Refs
 		Size = UDim2.new(1, 0, 0, 20),
 		TextColor3 = Theme.TextDim,
 	})
+	-- where the clean ore went: the backpack, else the pen, else the tray (CleaningService)
+	local cardInto = UIKit.label(card, "", if touch then 18 else 16, {
+		Name = "Into",
+		Position = UDim2.fromOffset(0, 172),
+		Size = UDim2.new(1, 0, 0, 22),
+		TextColor3 = Theme.Good,
+	})
 	-- a little streak chip in the card's top corner (cleans in a row, cosmetic only)
 	local cardStreak = UIKit.chip(card, "", Theme.Accent, {
 		Name = "Streak",
@@ -276,7 +284,7 @@ function CleaningView.build(options: Options?): Refs
 	})
 
 	if touch then
-		card.Size = UDim2.fromOffset(440, 254)
+		card.Size = UDim2.fromOffset(440, 284)
 	end
 
 	return {
@@ -302,6 +310,7 @@ function CleaningView.build(options: Options?): Refs
 		CardValue = cardValue,
 		CardStars = cardStars,
 		CardDetail = cardDetail,
+		CardInto = cardInto,
 		CardStreak = cardStreak,
 		Collect = collect,
 		Flash = flash,
@@ -346,6 +355,25 @@ function CleaningView.setCompact(refs: Refs, compact: boolean, leaveHeight: numb
 		banner.Size = UDim2.fromOffset(470, 108)
 		refs.Instruction.Size = UDim2.new(1, -24, 0, 30)
 	end
+end
+
+-- Where the clean ore went (CleanResult.Into, CleaningService: owner 2026-10-24, cleaned
+-- ore goes straight into the backpack), as the result card says it ("" for anything else).
+CleaningView.IntoText = {
+	Backpack = "In your backpack",
+	Pen = "Backpack full: moved to your Ore Pen",
+	Sold = "Backpack and Ore Pen full: sold to Tobin",
+	Tray = "Backpack full: waiting on the station's tray",
+} :: { [string]: string }
+
+function CleaningView.intoText(into: any): string
+	return if type(into) == "string" then CleaningView.IntoText[into] or "" else ""
+end
+
+-- The card's "where it went" line; a full backpack is the warning colour.
+function CleaningView.setInto(refs: Refs, into: any)
+	refs.CardInto.Text = CleaningView.intoText(into)
+	refs.CardInto.TextColor3 = if into == "Backpack" then Theme.Good else Theme.Accent
 end
 
 -- Header while the ore rises out of the clump (all the dirt is off).

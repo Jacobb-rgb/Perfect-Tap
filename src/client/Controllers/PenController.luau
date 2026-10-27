@@ -5,8 +5,8 @@
 	  prompt) or OpenUI "Pen" { Slot } (a podium's "Place Ore": pick mode).
 	  Rows come from the State snapshot (Storage summary, Podiums,
 	  PodiumSlots, PenCapacity) and update live.
-	    TAKE    PenAction "Take" { Key, Count = 1 }: the ore comes out at the
-	            pen gate, into your hands
+	    TAKE    PenAction "Take" { Key, Count = 1 }: the ore goes into your
+	            backpack (while it has room)
 	    SEND    PenAction "Send" { Key, Count = 1 } (like TAKE, one per
 	            press; the merged Dirty Ore row: { Filter = "Dirty", Count
 	            = 1 }): the server sends it onto your belts at the PEN
@@ -29,7 +29,8 @@
 	  the first button; other prompts are hidden while it is open. Phones
 	  (uiScale <= 0.75) get the compact layout.
 	- Prompts: "Open Pen" shows only on your own pen, "Put In" only while
-	  you carry something (the server checks again).
+	  your backpack holds something the pen stores (anything but a dusty
+	  relic: canPutIn, Util/BackpackState; the server checks again).
 	- Pile: up to BaseLayout.Pen.ShowMax display copies of what is in your
 	  pen lie inside it (client-only parts, no collision). Only the
 	  difference is rebuilt when the pen changes, so items don't jump around.
@@ -52,6 +53,7 @@ local ItemData = require(Shared.Config.ItemData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Net = require(Shared.Net)
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PenView = require(script.Parent.Parent.UI.PenView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -98,11 +100,12 @@ local function isTouch(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
-local function carryCount(): number
-	return (player:GetAttribute("CarryCount") :: number?) or 0
-end
-
 ---------------------------------------------------------------- prompts
+
+-- Does the backpack hold anything "Put In" stores? (everything but dusty relics: they are cleaned, never stored)
+function PenController.canPutIn(backpack: BackpackState.Backpack): boolean
+	return BackpackState.has(BackpackState.notRelic, backpack)
+end
 
 local function applyPrompt(prompt: Instance)
 	if not prompt:IsA("ProximityPrompt") then
@@ -110,7 +113,7 @@ local function applyPrompt(prompt: Instance)
 	end
 	local mine = prompt:GetAttribute("PlotId") == myPlotId()
 	if prompt.Name == "PenPutIn" then
-		prompt.Enabled = mine and carryCount() > 0
+		prompt.Enabled = mine and PenController.canPutIn(BackpackState.get())
 	else
 		prompt.Enabled = mine
 	end
@@ -296,9 +299,14 @@ local function updateHint(view: PenView.Refs)
 	elseif view.Mode == "Pick" then
 		PenView.setHint(view, "Pick the ore this podium shows off", nil, nil)
 	elseif isTouch() then
-		PenView.setHint(view, "TAKE: carry it  -  SEND: onto your belts (twice: all)  -  PODIUM: money every second", nil, nil)
+		PenView.setHint(view, "TAKE: into your backpack  -  SEND: onto your belts (twice: all)  -  PODIUM: money every second", nil, nil)
 	else
-		PenView.setHint(view, "TAKE: to your hands  -  SEND: to your belts (twice: all)  -  PODIUM: money/s  -  Backspace: close", nil, nil)
+		PenView.setHint(
+			view,
+			"TAKE: to your backpack  -  SEND: to your belts (twice: all)  -  PODIUM: money/s  -  Backspace: close",
+			nil,
+			nil
+		)
 	end
 end
 
@@ -603,7 +611,8 @@ end
 function PenController.start()
 	CollectionService:GetInstanceAddedSignal("PenPrompt"):Connect(applyPrompt)
 	refreshPrompts()
-	player:GetAttributeChangedSignal("CarryCount"):Connect(refreshPrompts)
+	-- "Put In" follows the backpack (CarryCount, or a State push with its items)
+	BackpackState.onChanged(refreshPrompts)
 	player:GetAttributeChangedSignal("PlotId"):Connect(function()
 		refreshPrompts()
 		updatePile(StateController.get())

@@ -24,11 +24,9 @@ export type Limit = { Rate: number, Burst: number }
 
 -- name = rate limit for client->server traffic (nil = server->client only)
 Net.Events = {
-	-- mining / carrying
+	-- mining / the backpack (CarryService: no drops or throws since the backpack, owner 2026-10-24)
 	MineBlast = { Rate = 10, Burst = 14 }, -- (rock: Model?) aim the held beam at a rock; nil = stop firing
-	CarryPickup = { Rate = 8, Burst = 10 },
-	CarryDrop = { Rate = 8, Burst = 10 },
-	CarryThrow = { Rate = 6, Burst = 8 },
+	CarryPickup = { Rate = 8, Burst = 10 }, -- (item: Model) put your own loose item into the backpack (the auto-pickup does it too)
 	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
 	Emote = { Rate = 2, Burst = 4 }, -- (name: an EmoteConfig.List name, or "" to stop) the EMOTES menu; EmoteService sets the character attribute
 	-- cleaning minigame
@@ -100,6 +98,10 @@ Net.Events = {
 	--   writes the level / inventory in one step with no yield, so a double tap buys one
 	--   level. Every request (except one the rate limit drops) gets a ShopResult answer.
 	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
+	-- the BACKPACKS shop (BackpackService; the window is the style chat's BackpackShopView):
+	--   ("Buy", { Id }) any pack you can afford, within the counter's reach (a bigger one is
+	--   worn at once); ("Equip", { Id }) a pack you own. Every request read gets a BackpackResult.
+	BackpackAction = { Rate = 3, Burst = 5 },
 	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
 	--   request read gets a VaultResult (see VaultService)
 	-- hoverboards (HoverboardService), anywhere: { Action = "Buy", Board } a coin board (EconomyService);
@@ -227,6 +229,8 @@ Net.Events = {
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
+	-- the answer to a BackpackAction: { Id, Ok, Reason?: "TooFar" | "NoCoins" | "Owned" | "NotOwned" | "BadId" | "Locked" }
+	BackpackResult = false,
 	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
 	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
 	HoverboardResult = false,

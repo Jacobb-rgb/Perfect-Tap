@@ -162,10 +162,7 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 		refs.Income.Text = Format.perSecond(income)
 		refs.Income.TextColor3 = Loader.roblox.Color3.fromRGB(110, 214, 92)
 		HudView.floater(refs.Floaters, "+" .. Format.money(income * 30))
-		refs.CarryLabel.Text = "CARRYING 2/3"
-		HudView.slot(refs.CarrySlots, nil, 1, true)
-		HudView.slot(refs.CarrySlots, Rarity.get("Rare").Color, 2)
-		HudView.slot(refs.CarrySlots, nil, 3)
+		HudView.setBackpack(refs, 2, 5)
 		return refs
 	end
 

@@ -251,11 +251,12 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("CleaningService: only a chunk really in the hands goes into the vise (security #11)", function()
+	T.test("CleaningService: only dirty ore or a relic from the backpack goes into the vise (security #11)", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/server/Services/CleaningService.luau")
-		T.truthy(source:find('return cleanable(r) and r.State == "Carried"', 1, true), "takeTop asks for a carried chunk or relic")
-		T.truthy(source:find("if not mount(machine, record) then", 1, true), "a refused mount starts no session")
+		T.truthy(source:find('return d.K == "Raw" or d.K == "Relic"', 1, true), "the backpack hands out a dirty chunk or a relic only")
+		T.truthy(source:find("if not record or not mount(machine, record) then", 1, true), "a refused mount starts no session")
+		T.truthy(source:find("CarryService.add(player, desc, 1, true)", 1, true), "and puts it back into the backpack")
 		T.truthy(source:find("if mount(machine, record) then", 1, true), "nor does the auto-start from the intake")
 		local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 		local consumed: any = { State = "Consumed", Model = Instance.new("Model") }

@@ -49,7 +49,13 @@ return function(T, Loader)
 				rawset(t, key, value)
 			end
 			local w: any = { replies = {}, rolls = {} }
-			w.player = { UserId = USER, Name = "Relic", Parent = true }
+			w.player = { UserId = USER, Name = "Relic", Parent = true, attrs = {} }
+			w.player.GetAttribute = function(_, key)
+				return w.player.attrs[key]
+			end
+			w.player.SetAttribute = function(_, key, value)
+				w.player.attrs[key] = value
+			end
 			w.data = deepCopy(DataTemplate)
 			patch(DataService, "get", function(p)
 				return if p == w.player then w.data else nil
@@ -177,6 +183,55 @@ return function(T, Loader)
 		T.falsy(ArtifactService.restorer.take(machine, { K = "Clean", O = "Coal", G = "Rough" }), "nothing else")
 	end)
 
+	withWorld("Cleaning Station: Take Ore Back fills the backpack up to its size, then the Ore Pen", function(w)
+		local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
+		local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+		local cleaning = CleaningService._test
+		local model = Instance.new("Model")
+		local base = Instance.new("Part")
+		base.Parent = model
+		model.PrimaryPart = base
+		model.Parent = Instance.new("Folder")
+		local machine: any = { Id = "CleaningStation", Owner = w.player, Model = model, State = {}, Entry = {} }
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		local ok, err = pcall(function()
+			patch(MachineService, "point", function()
+				return base.CFrame
+			end)
+			local function vise(): any
+				local chunk = ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, CFrame.new(0, 3, 0), nil, true)
+				chunk.Model.Parent = Instance.new("Folder")
+				T.truthy(cleaning.mount(machine, chunk), "into the vise")
+				return chunk
+			end
+			-- room: back into the backpack
+			local first = vise()
+			cleaning.take(w.player, machine)
+			T.eq(first.State, "Consumed", "out of the vise")
+			T.eq(CarryService.count(w.player), 1, "in the backpack")
+			-- a full backpack: never past its size, into the Ore Pen instead
+			local capacity = CarryService.capacity(w.player)
+			w.data.BackpackItems = { ["Raw|Coal||"] = capacity }
+			local before = #w.data.Storage
+			local second = vise()
+			cleaning.take(w.player, machine)
+			T.eq(second.State, "Consumed", "out of the vise")
+			T.eq(CarryService.count(w.player), capacity, "the backpack stays at its size")
+			T.eq(#w.data.Storage, before + 1, "into the pen")
+			T.eq(w.data.Storage[#w.data.Storage].O, "Copper", "the same ore")
+		end)
+		for i = #saved, 1, -1 do
+			rawset(saved[i][1], saved[i][2], saved[i][3])
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Relics: cleaned by hand at the Cleaning Station, the artifact goes into the collection", function(w)
 		local SprayScoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.SprayScoring")
 		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
@@ -269,14 +324,14 @@ return function(T, Loader)
 		T.truthy(entry and entry.In and entry.In[1] and entry.In[1].O == RELIC, "still in the queue")
 	end)
 
-	T.test("Relics: the pen, the train and hand loading never take a relic", function()
+	T.test("Relics: the pen, the train and backpack loading never take a relic", function()
 		local pen = fs.readFile("src/server/Services/PenService.luau")
 		local train = fs.readFile("src/server/Services/TrainService.luau")
 		local sell = fs.readFile("src/server/Services/SellService.luau")
 		T.truthy(pen:find('if record.Kind == "Relic" then', 1, true), "the pen's intake bounces it")
-		T.truthy(pen:find('return r.Kind ~= "Relic"', 1, true), "Put In leaves it in the hands")
+		T.truthy(pen:find('return desc.K ~= "Relic"', 1, true), "Put In leaves it in the backpack")
 		T.truthy(train:find("refuse(hook, record, owner, ItemData.RelicRefused)", 1, true), "the hopper refuses it")
-		T.truthy(train:find('r.Kind ~= "Relic"', 1, true), "Load Train leaves it in the hands")
+		T.truthy(train:find('desc.K ~= "Relic"', 1, true), "Load Train leaves it in the backpack")
 		T.truthy(sell:find('record.Kind == "Relic" and record.State == "Loose"', 1, true), "Tobin passes it to the guild")
 	end)
 end

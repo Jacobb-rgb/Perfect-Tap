@@ -38,9 +38,17 @@ EconomyConfig.Pen = {
 }
 
 EconomyConfig.Sell = {
-	MaxPerRequest = 50, -- items one Sell request can sell
+	MaxPerRequest = 50, -- items of the Ore Pen one Sell request can sell
+	-- items of the backpack one request can sell: a whole full backpack in one press (the
+	-- biggest pack x Strong Back x Deep Pockets III = 1000 x 2 x 1.3; the backpack keeps counts)
+	MaxBackpackPerRequest = 3000,
 	ComboWindow = 0.8, -- sales closer together than this count as one combo (popups)
 }
+
+-- Items one Sell request may sell from a section ("Hands" = the backpack, else the pen).
+function EconomyConfig.sellCap(from: any): number
+	return if from == "Hands" then EconomyConfig.Sell.MaxBackpackPerRequest else EconomyConfig.Sell.MaxPerRequest
+end
 
 -- Pen automation (Tech shop, data.Upgrades.PenAutomation): level 1 = the sorting
 -- billboard at the pen (marks the ore types to keep, data.KeepList), level 2 =

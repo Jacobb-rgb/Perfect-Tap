@@ -45,7 +45,13 @@ return function(T, Loader)
 	end
 
 	local function fakePlayer(userId: number, name: string): any
-		local p: any = { UserId = userId, Name = name, Parent = true }
+		local p: any = { UserId = userId, Name = name, Parent = true, attrs = {} }
+		p.GetAttribute = function(_, key: string)
+			return p.attrs[key]
+		end
+		p.SetAttribute = function(_, key: string, value: any)
+			p.attrs[key] = value
+		end
 		p.root = { Position = Vector3.new(0, 0, 0), CFrame = CFrame.new(0, 0, 0) }
 		p.humanoid = { Health = 100 }
 		p.Character = {
@@ -60,7 +66,7 @@ return function(T, Loader)
 	end
 
 	local function setup(): any
-		local w: any = { notes = {}, changed = 0, pushes = 0, carried = {}, absorbed = {}, stashed = {}, ids = 0 }
+		local w: any = { notes = {}, changed = 0, pushes = 0, absorbed = {}, stashed = {}, ids = 0 }
 		w.player = fakePlayer(USER, "Seller")
 		w.stranger = fakePlayer(STRANGER, "Stranger")
 		w.data = deepCopy(DataTemplate)
@@ -93,22 +99,6 @@ return function(T, Loader)
 				return w.player
 			elseif id == STRANGER and w.strangerOnline then
 				return w.stranger
-			end
-			return nil
-		end)
-		patch(CarryService, "list", function(p)
-			return if p == w.player then w.carried else {}
-		end)
-		patch(CarryService, "takeTop", function(p, predicate)
-			if p ~= w.player then
-				return nil
-			end
-			for i = #w.carried, 1, -1 do
-				local record = w.carried[i]
-				if not predicate or predicate(record) then
-					table.remove(w.carried, i)
-					return record
-				end
 			end
 			return nil
 		end)
@@ -169,21 +159,19 @@ return function(T, Loader)
 		end
 	end
 
-	local function carry(w: any, kind: string, oreId: string, grade: string?, owner: number?): any
-		w.ids += 1
-		local record = {
-			Id = "carried-" .. w.ids,
-			Kind = kind,
-			OreId = oreId,
-			Grade = grade,
-			Recipe = nil,
-			Owner = owner or USER,
-			State = "Carried",
-			Body = { CFrame = CFrame.new(0, 3, 0), Position = Vector3.new(0, 3, 0) },
-			Model = {},
-		}
-		table.insert(w.carried, record)
-		return record
+	-- one item into the player's backpack (the real one: data.BackpackItems); its storage key
+	local function carry(w: any, kind: string, oreId: string, grade: string?): string
+		local desc = { K = kind, O = oreId, G = grade }
+		CarryService.add(w.player, desc, 1, true)
+		return ItemData.storageKey(desc)
+	end
+
+	-- how many of a key the backpack holds (every key with none)
+	local function inPack(w: any, key: string?): number
+		if key then
+			return w.data.BackpackItems[key] or 0
+		end
+		return CarryService.countOf(w.data)
 	end
 
 	local function loose(w: any, kind: string, oreId: string, grade: string?, owner: number): any
@@ -318,17 +306,16 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- hands
 
-	withWorld("SellService: sells what you carry", function(w)
+	withWorld("SellService: sells what your backpack holds", function(w)
 		pen(w, { { "Clean", "Silver", "Rough" } })
 		local coal = carry(w, "Raw", "Coal")
-		local silverA = carry(w, "Clean", "Silver", "Rough")
-		local silverB = carry(w, "Clean", "Silver", "Rough")
+		local silver = carry(w, "Clean", "Silver", "Rough")
+		carry(w, "Clean", "Silver", "Rough")
 		act(w, "Sell", { Key = "Clean|Silver|Rough|", Count = 2, From = "Hands" })
-		T.eq(#w.absorbed, 2, "two items left the world")
-		T.eq(silverA.State, "Consumed", "silver A sold")
-		T.eq(silverB.State, "Consumed", "silver B sold")
-		T.eq(coal.State, "Carried", "coal still carried")
-		T.eq(#w.carried, 1, "one left in the hands")
+		T.eq(inPack(w, silver), 0, "both silvers sold")
+		T.eq(inPack(w, coal), 1, "coal still in the backpack")
+		T.eq(inPack(w), 1, "one left in the backpack")
+		T.eq(#w.absorbed, 0, "no item in the world was touched")
 		T.eq(count(w.data.Storage, "Clean|Silver|Rough|"), 1, "the pen's silver is untouched")
 		T.eq(w.data.Coins, price("Clean", "Silver", "Rough") * 2, "coins")
 		T.eq(w.data.Stats.ItemsSold, 2, "stats")
@@ -340,23 +327,23 @@ return function(T, Loader)
 		local denied = notes(w, "Notify", w.player)
 		T.eq(denied[1].A.Kind, "Deny", "told why")
 		T.truthy(w.pushes > 0, "view refreshed")
-		-- someone else's item in your stack (never happens, but never sell it)
-		carry(w, "Clean", "Gold", "Rough", STRANGER)
-		act(w, "Sell", { Key = "Clean|Gold|Rough|", Count = 1, From = "Hands" })
-		T.eq(#w.carried, 2, "foreign item kept")
-		T.eq(w.data.Coins, price("Clean", "Silver", "Rough") * 2, "nothing paid")
+		-- more than the backpack holds: what it holds
+		carry(w, "Clean", "Gold", "Rough")
+		act(w, "Sell", { Key = "Clean|Gold|Rough|", Count = 3, From = "Hands" })
+		T.eq(inPack(w, "Clean|Gold|Rough|"), 0, "the one gold sold")
+		T.eq(w.data.Coins, price("Clean", "Silver", "Rough") * 2 + price("Clean", "Gold", "Rough"), "paid for one")
 	end)
 
-	withWorld("SellService: the hands summary for the Sell view", function(w)
+	withWorld("SellService: the backpack summary for the Sell view", function(w)
 		carry(w, "Clean", "Silver", "Rough")
 		carry(w, "Raw", "Coal")
 		carry(w, "Clean", "Silver", "Rough")
-		carry(w, "Clean", "Gold", "Rough", STRANGER)
+		w.data.BackpackItems["Relic|CrownCoin||"] = 1 -- relics are never Tobin's
 		local summary = SellService.handsSummary(w.player)
 		T.eq(summary["Clean|Silver|Rough|"], 2, "silver")
 		T.eq(summary["Raw|Coal||"], 1, "coal")
-		T.eq(summary["Clean|Gold|Rough|"], nil, "not your item")
-		T.eq(next(SellService.handsSummary(w.stranger)), nil, "empty hands")
+		T.eq(summary["Relic|CrownCoin||"], nil, "no relic")
+		T.eq(next(SellService.handsSummary(w.stranger)), nil, "an empty backpack")
 	end)
 
 	---------------------------------------------------------------- podiums
@@ -425,7 +412,7 @@ return function(T, Loader)
 			act(w, case[1], case[2])
 			T.eq(w.data.Coins, 0, `case {i}: no coins`)
 			T.eq(#w.data.Storage, 4, `case {i}: pen untouched`)
-			T.eq(#w.carried, 1, `case {i}: hands untouched`)
+			T.eq(inPack(w), 1, `case {i}: backpack untouched`)
 		end
 		T.eq(#notes(w, "Earned"), 0, "no popups")
 		T.eq(w.data.Stats.ItemsSold, 0, "no stats")
@@ -474,7 +461,7 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- Sell all
 
-	withWorld("SellService: Sell all Dirty Ore (pen and hands)", function(w)
+	withWorld("SellService: Sell all Dirty Ore (pen and backpack)", function(w)
 		pen(w, { { "Raw", "Gold", nil, 2 }, { "Raw", "Coal" }, { "Clean", "Copper", "Rough" } })
 		carry(w, "Raw", "Silver")
 		carry(w, "Clean", "Tin", "Rough")
@@ -488,8 +475,8 @@ return function(T, Loader)
 		T.eq(w.data.Coins, expected, "raw prices")
 		T.eq(w.data.Stats.ItemsSold, plan.Count, "same count as the view's plan")
 		T.eq(#w.data.Storage, 1, "copper kept")
-		T.eq(#w.carried, 1, "tin kept")
-		T.eq(w.carried[1].OreId, "Tin", "tin")
+		T.eq(inPack(w), 1, "tin kept")
+		T.eq(inPack(w, "Clean|Tin|Rough|"), 1, "tin")
 		local toast = notes(w, "Notify", w.player)
 		T.eq(
 			toast[1].A.Text,
@@ -507,9 +494,9 @@ return function(T, Loader)
 		local raw = carry(w, "Raw", "Silver")
 		act(w, "SellAll", { Filter = "Dirty", From = "Pen" })
 		T.eq(#w.data.Storage, 0, "pen sold")
-		T.eq(raw.State, "Carried", "hands kept")
+		T.eq(inPack(w, raw), 1, "backpack kept")
 		act(w, "SellAll", { Filter = "Dirty", From = "Hands" })
-		T.eq(raw.State, "Consumed", "hands sold")
+		T.eq(inPack(w, raw), 0, "backpack sold")
 		T.eq(w.data.Coins, price("Raw", "Gold") + price("Raw", "Silver"), "coins")
 	end)
 
@@ -542,8 +529,8 @@ return function(T, Loader)
 		T.eq(count(w.data.Storage, "Clean|Silver|Clean|"), 2, "silver kept")
 		T.eq(count(w.data.Storage, "Raw|Diamond||"), 1, "dirty ore kept")
 		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 0, "coal sold")
-		T.eq(amethyst.State, "Carried", "amethyst kept")
-		T.eq(crushed.State, "Consumed", "crushed tin sold")
+		T.eq(inPack(w, amethyst), 1, "amethyst kept")
+		T.eq(inPack(w, crushed), 0, "crushed tin sold")
 		-- now only the best four (and dirty ore) are left: nothing to sell
 		w.notes = {}
 		act(w, "SellAll", { Filter = "AllButBest" })
@@ -562,6 +549,25 @@ return function(T, Loader)
 		local plan = SellView.plan({ ["Raw|Coal||"] = MAX + 10 }, {}, "Dirty", nil)
 		T.eq(plan.Count, MAX, "view: capped")
 		T.eq(plan.Eligible, MAX + 10, "view: eligible")
+	end)
+
+	withWorld("SellService: a whole full backpack sells in one press (the pen 50 at a time)", function(w)
+		local BIG = 1200
+		CarryService.add(w.player, { K = "Raw", O = "Coal" }, BIG, true)
+		pen(w, { { "Raw", "Coal", nil, MAX + 5 } })
+		local plan = SellView.plan({ ["Raw|Coal||"] = MAX + 5 }, { ["Raw|Coal||"] = BIG }, "Dirty", nil)
+		T.eq(plan.Count, BIG + MAX, "the view: the whole backpack and 50 of the pen")
+		act(w, "SellAll", { Filter = "Dirty" })
+		T.eq(inPack(w), 0, "the backpack is empty")
+		T.eq(#w.data.Storage, 5, "the pen sold 50, five wait")
+		T.eq(w.data.Stats.ItemsSold, plan.Count, "same count as the view's plan")
+		T.eq(w.data.Coins, price("Raw", "Coal") * (BIG + MAX), "paid for every one")
+		-- one key from the backpack: up to the backpack's cap
+		CarryService.add(w.player, { K = "Raw", O = "Coal" }, 300, true)
+		act(w, "Sell", { Key = "Raw|Coal||", Count = 300, From = "Hands" })
+		T.eq(inPack(w), 0, "300 in one request")
+		act(w, "Sell", { Key = "Raw|Coal||", Count = MAX + 1, From = "Pen" })
+		T.eq(#w.data.Storage, 5, "the pen's own cap still holds")
 	end)
 
 	withWorld("SellService: no double sale when two requests race", function(w)
@@ -586,7 +592,7 @@ return function(T, Loader)
 		local expected = price("Clean", "Copper", "Rough") * 3 + price("Clean", "Silver", "Rough") * 2
 		T.eq(w.data.Coins, expected, "each item paid once")
 		T.eq(w.data.Stats.ItemsSold, 5, "five items")
-		T.eq(#w.absorbed, 2, "each carried item absorbed once")
+		T.eq(inPack(w), 0, "the backpack sold once")
 		T.eq(#w.data.Storage, 0, "pen empty")
 	end)
 
@@ -659,7 +665,7 @@ return function(T, Loader)
 		local open = notes(w, "OpenUI", w.player)
 		T.eq(#open, 1, "opened")
 		T.eq(open[1].A, "Sell", "kind")
-		T.eq(open[1].B.Hands["Raw|Coal||"], 1, "hands sent along")
+		T.eq(open[1].B.Hands["Raw|Coal||"], 1, "the backpack sent along")
 		T.truthy(open[1].B.Counter == w.counter, "counter sent along")
 		w.standAt(w.player, 60)
 		sell.open(w.player, w.counter)

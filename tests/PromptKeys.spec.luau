@@ -7,7 +7,7 @@
 --      the modal close-ups in E_ALLOWED. Each of those suppresses every prompt
 --      while it is up (PromptController.setSuppressed), so one E press there
 --      never also fires a prompt behind it.
--- Plus PromptConfig.make itself and the role keys against Grab / Throw.
+-- Plus PromptConfig.make itself and the role keys against Grab / the backpack window.
 local roblox = require("@lune/roblox") :: any
 local Enum = roblox.Enum
 local Instance = roblox.Instance
@@ -150,7 +150,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("PromptKeys: Grab is F / X and no role shares a key with Grab or Throw", function()
+	T.test("PromptKeys: Grab is F / X and no role shares a key with Grab or the backpack window", function()
 		local interact = files["src/client/Controllers/InteractController.luau"]
 		local grab, throw
 		for _, args in bindings(interact) do
@@ -161,17 +161,21 @@ return function(T, Loader)
 				throw = args
 			end
 		end
-		T.truthy(grab and throw, "InteractController binds Grab and Throw")
+		T.truthy(grab, "InteractController binds Grab")
+		T.falsy(throw, "no Throw since the backpack (owner 2026-10-24: nothing is thrown)")
 		T.truthy(string.find(grab, "Enum.KeyCode.F,", 1, true), "Grab on F")
 		T.truthy(string.find(grab, "Enum.KeyCode.ButtonX", 1, true), "Grab on gamepad X")
 		T.eq(count(grab, E_KEY), 0, "Grab left E to the prompts")
+		-- the backpack window took the throw's Q / R1 (BackpackController)
+		local backpack = files["src/client/Controllers/BackpackController.luau"]
+		T.truthy(string.find(backpack, "BackpackController.Key = Enum.KeyCode.Q\n", 1, true), "the backpack on Q")
+		T.truthy(string.find(backpack, "BackpackController.PadKey = Enum.KeyCode.ButtonR1\n", 1, true), "and gamepad R1")
 		local taken = {
 			[Enum.KeyCode.F] = "Grab",
 			[Enum.KeyCode.ButtonX] = "Grab",
-			[Enum.KeyCode.Q] = "Throw",
-			[Enum.KeyCode.ButtonR1] = "Throw",
+			[Enum.KeyCode.Q] = "Backpack",
+			[Enum.KeyCode.ButtonR1] = "Backpack",
 		}
-		T.truthy(string.find(throw, "Enum.KeyCode.Q", 1, true) and string.find(throw, "Enum.KeyCode.ButtonR1", 1, true), "Throw Q / RB")
 		local seen = {}
 		for _, role in { "Main", "Second", "Panel" } do
 			local keys = PromptConfig.keys(role)

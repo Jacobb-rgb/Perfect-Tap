@@ -12,7 +12,8 @@
 
 	Where it goes (TutorialView.layout):
 	  mouse     the bottom-right corner (the right-side menu is centred above
-	            it, the hotbar and the carry slots are in the middle)
+	            it, the backpack button right of the middle; a narrow screen
+	            lifts the bubble over it)
 	  gamepad   the same corner, kept TenFootSafe of the screen from the
 	            edges (the TV's title-safe area)
 	  touch     the top-right corner: the bottom right is the jump and throw
@@ -150,6 +151,12 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	if tenFoot then
 		right = math.max(right, w * TutorialView.TenFootSafe)
 		bottom = math.max(bottom, h * TutorialView.TenFootSafe)
+	end
+	-- a narrow screen (4:3): over the HUD's backpack button when the bubble would reach it
+	local pack = if scale <= HudBubble.CompactScale then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local packRight = w / 2 + HudBubble.backpackX(scale, tenFoot) + pack.X
+	if w - right - TutorialView.Width < packRight + TutorialView.BarGap then
+		bottom = math.max(bottom, HudBubble.BackpackBottom + pack.Y + TutorialView.BarGap)
 	end
 	local body, row = TutorialView.Body, TutorialView.RowMouse
 	return {

@@ -147,7 +147,7 @@ MoveConfig.Extras = { Wave = true, Shrug = true } :: { [string]: boolean }
 MoveConfig.FiringHold = 0.6 -- seconds after another player's last BlastHit their gun arm counts as firing
 
 -- Server side
-MoveConfig.ClientMoves = { Throw = true, Wave = true, Shrug = true } :: { [string]: boolean } -- the Net "Move" whitelist
+MoveConfig.ClientMoves = { Wave = true, Shrug = true } :: { [string]: boolean } -- the Net "Move" whitelist (no Throw since the backpacks)
 MoveConfig.MaxNameLength = 24
 MoveConfig.LoopPoll = 0.4 -- seconds between the server's loop checks (cleaning -> Spray)
 MoveConfig.BigSell = { Items = 5, Window = 0.4 } -- a sale of at least Items within Window seconds at Tobin's -> CashToss

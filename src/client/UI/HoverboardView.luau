@@ -1025,7 +1025,7 @@ end
 	name, the picture, the speed chips, the perk line and the price (or OWNED;
 	a Robux board: its trail) above it. A wide card (phones, 3 + 2): the
 	picture on the left, the name, the chips and the price (a Robux board: its
-	"No carry slowdown") on the right (no perk line).
+	"Rainbow lightning") on the right (no perk line).
 ]]
 local function layoutCard(card: Card, m: Metrics, w: number, h: number)
 	local pad = 10

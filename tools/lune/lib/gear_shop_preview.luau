@@ -4,12 +4,10 @@
 	tools/preview/gear_shop_shots.json at the SHOP stall), plus two miners in
 	front of the stall wearing the Helmet Lamp (the band and lamp parts as
 	GearFxController builds them; the preview has no SpotLights, so only the
-	Neon lens glows; in town the real light is off anyway) and a miner
-	carrying 24 chunks (Backpack V + Strong Back) in CarryService's stack.
-	Everything is drawn with the game's own code (GearShopView.build /
+	Neon lens glows; in town the real light is off anyway). Everything is drawn with the game's own code (GearShopView.build /
 	layout / cards / setCards, HudView) from State snapshots.
 	UI overlays (build/preview/<name>.json):
-	  ui_gear_pc           PC 1600 x 900, mid-game: the Backpack just bought
+	  ui_gear_pc           PC 1600 x 900, mid-game: the Gloves just bought
 	                       ("BOUGHT!", the server's toast in the header)
 	  ui_gear_new          PC, a new player with $1,200: what they can buy
 	  ui_gear_status       PC, a card says why it can't buy (effect box)
@@ -18,7 +16,7 @@
 	  ui_gear_phone_small  568 x 320 pt phone (rows dropped to fit)
 	  ui_gear_tv           1080p TV (console): compact, the gamepad footer
 	                       (A buy, B close), a BUY waits for its answer
-	  ui_gear_carry_phone  667 x 375 pt phone HUD carrying 24 of 24 ("+17")
+	  ui_gear_carry_phone  667 x 375 pt phone HUD with a full backpack (30 / 30, FULL)
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -29,10 +27,10 @@ local Preview = {}
 
 Preview.Coins = 48250
 
--- A mid-game player: boots, a lamp, a big backpack, a small magnet.
+-- A mid-game player: boots, a lamp, a small magnet.
 Preview.State = {
 	Coins = Preview.Coins,
-	Gear = { Boots = 2, HelmetLamp = 1, Backpack = 3, Gloves = 0, Magnet = 1 },
+	Gear = { Boots = 2, HelmetLamp = 1, Gloves = 0, Magnet = 1 },
 	Perks = { StrongBack = false },
 }
 
@@ -96,24 +94,6 @@ local function miners(Loader: any, workspace: any)
 		skin = Color3.fromRGB(150, 104, 76),
 		hair = Color3.fromRGB(30, 24, 20),
 	})
-	-- a miner with Backpack V + Strong Back carrying all 24 chunks across the
-	-- plaza: the stack as CarryService builds it (root = feet + 3)
-	local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
-	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
-	-- (behind the stall and miners cameras, out on the plaza)
-	local at = Vector3.new(front.Position.X, ground, front.Position.Z) + front.LookVector * 24
-	local carrier = CFrame.lookAt(at, at + right)
-	Dummy.build(folder, CFrame, carrier, "carry", {
-		shirt = Color3.fromRGB(64, 150, 92),
-		pants = Color3.fromRGB(56, 50, 66),
-	})
-	local ores = { "Copper", "Iron", "Silver", "Coal", "Tin", "Gold" }
-	local capacity = GearConfig.carryCapacity({ Backpack = GearConfig.MaxLevel }, true)
-	for i = 1, capacity do
-		local cf = carrier * CFrame.new(0, 3, 0) * CarryService.stackOffset(i)
-		local item = ItemBuilder.build({ Kind = "Raw", OreId = ores[(i - 1) % #ores + 1] }, cf, 200 + i)
-		item.Parent = folder
-	end
 end
 
 function Preview.build(Loader: any, workspace: any): { [string]: any }
@@ -131,24 +111,14 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local smallScale = GearShopView.PhoneScale * 900 / 320 -- a 568 x 320 pt phone
 	local smallInset = math.floor(58 * 900 / 320) -- its 58 pt top bar, in render pixels
 
-	-- the HUD as HudController draws it (carryLayout: at most 8 squares, "+N")
+	-- the HUD as HudController draws it (the backpack button: "n / cap", FULL)
 	local function hud(uiScale: number, coins: number, carry: number, carried: number?): any
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(64)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
-		local count = carried or 0
-		local squares, shown, more, width = HudView.carryLayout(carry, count)
-		refs.CarryLabel.Text = `CARRYING {count}/{carry}`
-		for i = 1, squares do
-			if more > 0 and i == squares then
-				HudView.moreSlot(refs.CarrySlots, more, i)
-			else
-				HudView.slot(refs.CarrySlots, nil, i, i <= shown)
-			end
-		end
-		refs.CarryPanel.Size = roblox.UDim2.fromOffset(width, HudView.CarryPanelHeight)
+		HudView.setBackpack(refs, carried or 0, carry)
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end
@@ -172,21 +142,21 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local exports: { [string]: any } = {}
 	local pcWidth, pcHeight = 1600 / scale, (900 - 36) / scale
 
-	-- PC, mid-game: the Backpack just bought
+	-- PC, mid-game: the Gloves just bought
 	local bought = table.clone(Preview.State)
 	bought.Gear = table.clone(Preview.State.Gear)
 	local hud1 = hud(scale, Preview.Coins, 5)
 	local pc = view(scale, false, pcWidth, pcHeight, bought, Preview.Coins)
-	local pack = pc.Slots.Backpack.Button
+	local pack = pc.Slots.Gloves.Button
 	-- (as GearShopController's setBusy + style)
 	pack:SetAttribute("Busy", true)
 	pack.Text = "BOUGHT!"
 	GearShopView.style(pack, true, Theme.Good, Theme.GoodDark)
-	GearShopView.showReceipt(pc, "Ore Backpack III: you can carry 5 items!", Theme.Good)
+	GearShopView.showReceipt(pc, "Grip Gloves I: grab ore from 13 studs!", Theme.Good)
 	exports.ui_gear_pc = UiExport.export({ hud1.Gui, pc.Gui })
 
 	-- PC, a new player with $1,200
-	local fresh = { Coins = 1200, Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 }, Perks = {} }
+	local fresh = { Coins = 1200, Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 0 }, Perks = {} }
 	local hud2 = hud(scale, 1200, 1)
 	local new = view(scale, false, pcWidth, pcHeight, fresh, 1200)
 	exports.ui_gear_new = UiExport.export({ hud2.Gui, new.Gui })
@@ -194,7 +164,7 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	-- PC, a refused BUY says why in the card
 	local hud3 = hud(scale, Preview.Coins, 5)
 	local status = view(scale, false, pcWidth, pcHeight, Preview.State, Preview.Coins)
-	GearShopView.setStatus(status, "Backpack", GearConfig.Reasons.NoCoins, Theme.Bad)
+	GearShopView.setStatus(status, "Magnet", GearConfig.Reasons.NoCoins, Theme.Bad)
 	exports.ui_gear_status = UiExport.export({ hud3.Gui, status.Gui })
 
 	-- PC, everything at the top level
@@ -225,8 +195,8 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	GearShopView.setStatus(tv, "Gloves", GearShopView.StatusText.Waiting, Theme.Info)
 	exports.ui_gear_tv = UiExport.export({ hud7.Gui, tv.Gui })
 
-	-- a phone HUD carrying 24 of 24 (Backpack V + Strong Back): 8 squares, "+17"
-	local hud8 = hud(phoneScale, Preview.Coins, 24, 24)
+	-- a phone HUD with a full backpack: 30 / 30 and FULL
+	local hud8 = hud(phoneScale, Preview.Coins, 30, 30)
 	exports.ui_gear_carry_phone = UiExport.export({ hud8.Gui })
 	return exports
 end

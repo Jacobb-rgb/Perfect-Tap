@@ -201,7 +201,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 560,
 		Name = "Forgemaster's Pass",
-		Description = "Podiums 4 and 5, offline earnings for 12 hours, double carrying, the Glimmer Grotto and extra machine slots. "
+		Description = "Podiums 4 and 5, offline earnings for 12 hours, double backpack space, the Glimmer Grotto and extra machine slots. "
 			.. MonetizationConfig.grottoOddsText(),
 		Perks = { "Podiums", "OfflineExtension", "StrongBack", "ForgeVip", "Workshop" },
 	},
@@ -254,7 +254,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 49,
 		Name = "Terra Forge Custom Hoverboard",
-		Description = "The fastest hoverboard, painted with Terra Forge doodles: speed 38, no carry slowdown, a rainbow trail.",
+		Description = "The fastest hoverboard, painted with Terra Forge doodles: speed 38 and a rainbow trail.",
 		Grant = "Hoverboard",
 		BoardId = "TerraForgeCustom",
 	},

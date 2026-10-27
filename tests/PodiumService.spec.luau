@@ -55,6 +55,9 @@ return function(T, Loader)
 		p.GetAttribute = function(self, key)
 			return self.attributes[key]
 		end
+		p.SetAttribute = function(self, key, value)
+			self.attributes[key] = value
+		end
 		p.root = { Position = Vector3.new(0, 3, 0), CFrame = CFrame.new(0, 3, 0) }
 		p.Character = {
 			FindFirstChildOfClass = function(_, class: string)
@@ -72,7 +75,7 @@ return function(T, Loader)
 	end
 
 	local function setup(): any
-		local w: any = { notes = {}, changed = {}, carried = {}, now = NOW }
+		local w: any = { notes = {}, changed = {}, now = NOW }
 		w.plotModel = PlotBuilder.buildPlot(roblox.Instance.new("Folder"), WorldLayout.Plots[PLOT], Rng.new(PLOT))
 		w.player = fakePlayer(USER, "Owner")
 		w.other = fakePlayer(OTHER, "Neighbour")
@@ -117,19 +120,6 @@ return function(T, Loader)
 		patch(HttpService, "GenerateGUID", function()
 			w.ids = (w.ids or 0) + 1
 			return "podium-guid-" .. w.ids
-		end)
-		patch(CarryService, "list", function()
-			return w.carried
-		end)
-		patch(CarryService, "takeTop", function(_, predicate)
-			for i = #w.carried, 1, -1 do
-				local record = w.carried[i]
-				if not predicate or predicate(record) then
-					table.remove(w.carried, i)
-					return record
-				end
-			end
-			return nil
 		end)
 		ItemService._test.reset()
 		EconomyService._test.reset()
@@ -197,11 +187,14 @@ return function(T, Loader)
 		return nil
 	end
 
-	local function carry(w: any, desc: any): any
-		local record = ItemService.spawnDesc(desc, USER, CFrame.new(0, 5, 0), nil, true)
-		record.State = "Carried"
-		table.insert(w.carried, record)
-		return record
+	-- one item into the player's backpack (the real one: data.BackpackItems); its storage key
+	local function carry(w: any, desc: any): string
+		CarryService.add(w.player, desc, 1, true)
+		return ItemData.storageKey(desc)
+	end
+
+	local function inPack(w: any, key: string?): number
+		return if key then w.data.BackpackItems[key] or 0 else CarryService.countOf(w.data)
 	end
 
 	---------------------------------------------------------------- slots
@@ -356,7 +349,7 @@ return function(T, Loader)
 		local put, putWhy = PodiumService.placeFromHands(w.player, 1)
 		T.falsy(put, "put refused")
 		T.eq(putWhy, "Taken", "taken")
-		T.eq(gold.State, "Carried", "the gold stays in hand")
+		T.eq(inPack(w, gold), 1, "the gold stays in the backpack")
 		T.eq(w.data.Podiums[1], unknown, "still the unknown ore")
 		podium.prompt(w.player, PLOT, 1, "Place")
 		local open = lastNote(w, "OpenUI")
@@ -413,28 +406,28 @@ return function(T, Loader)
 		T.eq(inPen(w, COPPER) + onPodiums(w, COPPER), 1, "still exactly one copper")
 	end)
 
-	withWorld("PodiumService: Put On Podium takes the best cleaned ore from your hands", function(w)
+	withWorld("PodiumService: Put On Podium takes the best cleaned ore from your backpack", function(w)
 		carry(w, { K = "Raw", O = "Diamond" })
 		local copper = carry(w, { K = "Clean", O = "Copper", G = "Rough" })
 		local gold = carry(w, { K = "Clean", O = "Gold", G = "Pristine" })
 		carry(w, { K = "Clean", O = "Copper", G = "Clean" })
 		T.truthy(PodiumService.placeFromHands(w.player, 1), "placed")
-		T.eq(w.data.Podiums[1], GOLD, "the gold, not the top of the stack")
-		T.eq(gold.State, "Consumed", "out of the world")
-		T.eq(#w.carried, 3, "the rest stays carried")
+		T.eq(w.data.Podiums[1], GOLD, "the gold, the best one")
+		T.eq(inPack(w, gold), 0, "out of the backpack")
+		T.eq(inPack(w), 3, "the rest stays in the backpack")
 		T.truthy(PodiumService.placeFromHands(w.player, 2), "second")
 		T.eq(w.data.Podiums[2], "Clean|Copper|Clean|", "next best")
 		local ok, why = PodiumService.placeFromHands(w.player, 4)
 		T.falsy(ok, "locked")
 		T.eq(why, "Locked", "locked reason")
-		T.eq(copper.State, "Carried", "still in hand")
+		T.eq(inPack(w, copper), 1, "still in the backpack")
 		-- only dirty ore left: the prompt falls back to the pen picker
-		table.remove(w.carried, 2)
+		w.data.BackpackItems[copper] = nil
 		w.data.Podiums[1] = ""
 		podium.prompt(w.player, PLOT, 1, "Put")
 		local open = lastNote(w, "OpenUI")
 		T.truthy(open and open.A == "Pen" and open.B.Slot == 1, "pen opens in pick mode")
-		T.eq(#w.carried, 1, "dirty ore stays in hand")
+		T.eq(inPack(w), 1, "dirty ore stays in the backpack")
 	end)
 
 	withWorld("PodiumService: prompts and PodiumAction check owner, range and input", function(w)

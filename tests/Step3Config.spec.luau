@@ -800,8 +800,8 @@ return function(T, Loader)
 		-- plots' grid move (Migrations), which an old save needs once
 		T.eq(
 			DataTemplate.Version,
-			8,
-			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry)"
+			9,
+			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry, 9: the backpack)"
 		)
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")

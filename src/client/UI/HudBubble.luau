@@ -13,7 +13,9 @@
 	  left          the main menu tiles: BACKPACK, GOLEMS, BUILD, SHOP + MORE
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
 	                the thumbstick)
-	  bottom-centre the hotbar: the blaster in slot 1, carried items after it
+	  bottom-centre the hotbar: the blaster in slot 1 (the preview's build());
+	                the game HUD (buildGame) has the backpack button right of
+	                Roblox's own blaster slot instead (backpackButton)
 	  under the bar toasts (white pills with an icon)
 
 	Compact (phones, uiScale <= CompactScale): bigger touch targets in design
@@ -27,6 +29,7 @@ local Theme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local CashBuilder = require(Shared.Builders.CashBuilder)
 local Pop = require(script.Parent.Pop)
 
@@ -601,7 +604,9 @@ end
 	          starts hidden and shows when a controller claims it
 	          (claimTile: BuildView claims BUILD, TeleportView claims LIFT),
 	          so there are never dead buttons
-	  Carry   the hotbar row; the slots show the carried ore's rarity colour
+	  Carry   the backpack button right of the blaster's hotbar slot (owner
+	          2026-10-24: everything goes into the backpack): the pack's
+	          picture and "n / cap" (backpackButton / setBackpack)
 ]]
 
 -- The tiles the game menu can show (claimed by controllers).
@@ -641,11 +646,9 @@ export type GameRefs = {
 	Floaters: Frame,
 	Zone: TextLabel,
 	Toasts: Frame,
-	CarryPanel: Frame,
-	CarrySlots: Frame,
-	CarryLabel: TextLabel,
-	ThrowBar: Frame,
-	ThrowFill: Frame,
+	CarryPanel: Frame, -- the backpack button's holder (build mode hides it)
+	Backpack: TextButton, -- the backpack button: opens the inventory (BackpackController)
+	CarryLabel: TextLabel, -- the button's "n / cap"
 	Menu: Frame,
 	TopBar: Frame,
 }
@@ -834,55 +837,9 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		holder.Visible = false
 	end
 
-	-- the hotbar: carried items (HudController fills the slots)
-	local carryPanel = UIKit.new("Frame", {
-		Name = "Carry",
-		AnchorPoint = Vector2.new(0.5, 1),
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(260, layout.Slot + Theme.Lip),
-	}, gui)
-	-- (above the slots, measured from the bottom: HudController sizes the panel
-	-- for today's HUD, HudView.CarryPanelHeight)
-	local carryLabel = Pop.text(carryPanel, "CARRYING 0/1", 20, {
-		Name = "Label",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -(layout.Slot + Theme.Lip) - 6),
-		Size = UDim2.fromOffset(300, 22),
-	})
-	local slots = UIKit.new("Frame", {
-		Name = "Slots",
-		AnchorPoint = Vector2.new(0.5, 1),
-		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.new(1, 0, 0, layout.Slot + Theme.Lip),
-	}, carryPanel)
-	slots:SetAttribute("SlotSize", layout.Slot)
-	slots:SetAttribute("MaxRow", HudBubble.carryRowMax(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth()))
-	UIKit.list(slots, Enum.FillDirection.Horizontal, layout.SlotGap, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Bottom,
-	})
-
-	-- throw power bar
-	local throwBar = UIKit.new("Frame", {
-		Name = "ThrowBar",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Theme.Panel,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0.62, 0),
-		Size = UDim2.fromOffset(220, 22),
-		Visible = false,
-	}, gui)
-	Bubble.corner(throwBar, 11)
-	Bubble.stroke(throwBar, 3.5)
-	local throwFill = UIKit.new("Frame", {
-		Name = "Fill",
-		BackgroundColor3 = Theme.Good,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(0, 1),
-	}, throwBar)
-	Bubble.corner(throwFill, 11)
+	-- the backpack button right of the blaster's hotbar slot (HudController fills it,
+	-- BackpackController opens the inventory)
+	local carryPanel, backpack, carryLabel = HudBubble.backpackButton(gui, layout, uiScale or HudBubble.screenScale())
 
 	return {
 		Gui = gui,
@@ -893,10 +850,8 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Zone = zone,
 		Toasts = toasts,
 		CarryPanel = carryPanel,
-		CarrySlots = slots,
+		Backpack = backpack,
 		CarryLabel = carryLabel,
-		ThrowBar = throwBar,
-		ThrowFill = throwFill,
 		Menu = menu,
 		TopBar = topBar,
 	}
@@ -1115,229 +1070,147 @@ function HudBubble.selectionImage(): Frame
 end
 
 --[[
-	The hotbar's squares in the pixel reels' look (owner 2026-10-22): a dark
-	rounded well (a black outline, a shadow along its top inside, a light rim
-	lit from below, a faint lattice) holding the item's picture: a cleaned ore
-	is a chunky gem in its rarity colour with a black outline and a glint, a
-	dirty ore a grey rock with a pixel "?" (no rarity hint), "+N" a pixel word.
-	Everything inside is sized in scale: the squares shrink to fit the row
-	(fitSlots) when a big backpack shows many.
+	The backpack button (owner 2026-10-24: "everything into the backpack", a
+	backpack icon next to the Blaster slot opens the ore inventory;
+	docs/plans/OWNER_PLAYTEST_1024.md "4 + 5"). It took the place of the
+	hotbar's carried-ore squares: right of the blaster's slot in Roblox's own
+	hotbar (bottom centre, drawn in real pixels: backpackX keeps the gap at
+	every UI scale), in the hotbar wells' pixel look (a dark rounded well, a
+	black outline, a light rim lit from below, a faint lattice) holding the
+	pack's picture (IconAssets "backpack"; drawn from frames until the sheet
+	is uploaded) and "n / cap" in pixel letters. A full backpack paints the
+	count red and shows a red FULL tag on the top edge (setBackpack). The
+	key hint on the top-right corner names the open key (setBackpackKey: Q,
+	the gamepad's R1 glyph, nothing on touch). Clicking, tapping or a
+	gamepad's A on it opens the inventory (BackpackController). The dark HUD
+	(HudView) uses the same button.
 ]]
 HudBubble.SlotTop = Color3.fromRGB(20, 21, 27) -- the well's shadowed top inside
 HudBubble.SlotBottom = Color3.fromRGB(54, 58, 72)
 HudBubble.SlotRim = Color3.fromRGB(150, 160, 188)
-HudBubble.RockColor = Color3.fromRGB(150, 136, 122) -- dirty ore (no rarity colour until cleaned)
-HudBubble.CarryClear = 300 -- the money's reach from the screen's left edge (design units)
+HudBubble.BackpackSize = Vector2.new(176, 64) -- design units (PC)
+HudBubble.BackpackSizePhone = Vector2.new(196, 76) -- 47 pt tall at the phones' 0.62 scale
+HudBubble.BackpackBottom = 12 -- design units above the safe area's bottom edge
+HudBubble.BlasterSlot = 60 -- Roblox's hotbar slot in px (100 on a TV: GuiService:IsTenFootInterface)
+HudBubble.BlasterGap = 16 -- px between the slot's middle half and the button (its 5 px border included)
+HudBubble.FullColor = Color3.fromRGB(255, 92, 84)
+-- the drawn pack (no uploaded picture yet): the Rookie Pack's colours (BackpackData)
+local PACK = {
+	Body = Color3.fromRGB(240, 140, 58),
+	Flap = Color3.fromRGB(214, 120, 48),
+	Strap = Color3.fromRGB(122, 76, 44),
+	Buckle = Color3.fromRGB(250, 206, 90),
+}
 
--- The widest the hotbar's row gets (design units) on a screen `screenWidth`
--- pt wide at `uiScale`: centred, clear of the money on both sides. Pure (specs).
-function HudBubble.carryRowMax(uiScale: number, screenWidth: number?): number
-	local width = if screenWidth and screenWidth > 0 then screenWidth / math.max(uiScale, 0.01) else 1280
-	return math.max(160, math.floor(width - 2 * HudBubble.CarryClear))
+-- The button's X offset from the screen's middle (design units) at `uiScale`:
+-- right of the blaster's slot, which Roblox draws in real pixels. Pure (specs).
+function HudBubble.backpackX(uiScale: number, tenFoot: boolean?): number
+	local slot = if tenFoot then 100 else HudBubble.BlasterSlot
+	return math.ceil((slot / 2 + HudBubble.BlasterGap) / math.max(uiScale, 0.01))
 end
 
--- Fits the hotbar's squares into the row's MaxRow: they shrink (never grow past SlotSize).
-function HudBubble.fitSlots(row: Instance)
-	local size = (row:GetAttribute("SlotSize") :: number?) or 70
-	local max = row:GetAttribute("MaxRow") :: number?
-	local list = row:FindFirstChildOfClass("UIListLayout")
-	local gap = if list then list.Padding.Offset else 10
-	local squares: { Frame } = {}
-	for _, child in row:GetChildren() do
-		if child:IsA("Frame") then
-			table.insert(squares, child)
-		end
-	end
-	local n = #squares
-	local s = size
-	if max and n > 0 then
-		s = math.max(24, math.min(size, math.floor((max - (n - 1) * gap) / n)))
-	end
-	for _, square in squares do
-		square.Size = UDim2.fromOffset(s, s)
-	end
+-- "12 / 30": what the button says. Pure (specs).
+function HudBubble.backpackText(count: number, capacity: number): string
+	local n = if type(count) == "number" and count == count and count > 0 then math.floor(count) else 0
+	local cap = if type(capacity) == "number" and capacity == capacity and capacity > 0 then math.floor(capacity) else 0
+	return `{n} / {cap}`
 end
 
--- The cleaned ore gem's paint in `color` (lit top corner, dark bottom one).
-local function gemPaint(color: Color3): ColorSequence
-	return ColorSequence.new({
-		ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1, 1, 1), 0.55)),
-		ColorSequenceKeypoint.new(0.5, color),
-		ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0, 0, 0), 0.35)),
-	})
-end
-
--- A chunky gem (the cleaned ore's picture) in `color`, `share` of its parent.
-local function gem(parent: Instance, color: Color3, share: number): Frame
-	local body = UIKit.new("Frame", {
-		Name = "Ore",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.new(1, 1, 1),
+-- A rounded piece of the drawn pack (scale units of `parent`).
+local function packBit(parent: Instance, name: string, x0: number, y0: number, x1: number, y1: number, color: Color3, round: number): Frame
+	local bit = UIKit.new("Frame", {
+		Name = name,
+		BackgroundColor3 = color,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Rotation = 45,
-		Size = UDim2.fromScale(share, share),
+		Position = UDim2.fromScale(x0, y0),
+		Size = UDim2.fromScale(x1 - x0, y1 - y0),
 		ZIndex = 5,
 	}, parent)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.2, 0) }, body)
-	Pop.border(body, 3)
-	-- (turned 45 degrees: the gradient runs from the top corner down to the bottom one)
-	UIKit.new("UIGradient", {
-		Name = "Paint",
-		Rotation = 45,
-		Color = gemPaint(color),
-	}, body)
-	-- the top facet: a lighter square in the upper corner
-	local facet = UIKit.new("Frame", {
-		Name = "Facet",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.45,
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.14, 0.14),
-		Size = UDim2.fromScale(0.42, 0.42),
-		ZIndex = 6,
-	}, body)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.25, 0) }, facet)
-	return body
+	UIKit.new("UICorner", { CornerRadius = UDim.new(round, 0) }, bit)
+	return bit
 end
-
--- A grey rock (dirty ore's picture) `share` of its parent.
-local function rock(parent: Instance, share: number): Frame
-	local body = UIKit.new("Frame", {
-		Name = "Rock",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.54),
-		Rotation = 10,
-		Size = UDim2.fromScale(share, share * 0.86),
-		ZIndex = 5,
-	}, parent)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.3, 0) }, body)
-	Pop.border(body, 3)
-	local c = HudBubble.RockColor
-	UIKit.new("UIGradient", {
-		Name = "Paint",
-		Rotation = 90,
-		Color = ColorSequence.new(c:Lerp(Color3.new(1, 1, 1), 0.3), c:Lerp(Color3.new(0, 0, 0), 0.4)),
-	}, body)
-	return body
-end
-
-local SPARKLES = { "Sparkle", "Sparkle1", "Sparkle2" } -- (Pop.sparkle: one picture, or two bars)
 
 --[[
-	Shows what a hotbar slot (HudBubble.slot) holds, in place: "+N" (`more` >
-	0), a rock with "?" (`mystery`: dirty ore), a gem in the rarity colour
-	`filled`, or the empty well. Each picture is made the first time a slot
-	needs it and is then only recoloured, shown or hidden, so a carry change
-	never rebuilds the hotbar (HudController.refreshCarry).
+	The pack's picture `size` units square ("Pack"): the uploaded "backpack"
+	icon, or until the sheet is uploaded a drawn pack (straps, body, flap,
+	pocket, buckle; black outlines). Returns the frame.
 ]]
-function HudBubble.fillSlot(holder: Frame, filled: Color3?, mystery: boolean?, more: number?)
-	local face = holder:FindFirstChild("Face") :: Frame?
-	if not face then
-		return
+function HudBubble.packArt(parent: Instance, size: number, props: { [string]: any }?): Frame
+	local art = UIKit.new("Frame", {
+		Name = "Pack",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 4,
+	}, parent)
+	local icon = UIKit.new("ImageLabel", {
+		Name = "Icon",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 5,
+	}, art)
+	IconAssets.apply(icon, "backpack")
+	icon:SetAttribute("Icon", "backpack")
+	-- (only an uploaded sheet: the previews draw the pack like the game does until then)
+	local shows = IconAssets.find("backpack") ~= ""
+	icon.Visible = shows
+	if not shows then
+		local drawn = UIKit.new("Frame", {
+			Name = "Drawn",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 5,
+		}, art)
+		packBit(drawn, "StrapL", 0.24, 0.12, 0.34, 0.42, PACK.Strap, 0.4)
+		packBit(drawn, "StrapR", 0.66, 0.12, 0.76, 0.42, PACK.Strap, 0.4)
+		local handle = packBit(drawn, "Handle", 0.38, 0.06, 0.62, 0.18, PACK.Strap, 0.5)
+		Pop.border(handle, 2)
+		local body = packBit(drawn, "Body", 0.18, 0.16, 0.82, 0.9, PACK.Body, 0.24)
+		Pop.border(body, 2.5)
+		local flap = packBit(drawn, "Flap", 0.18, 0.16, 0.82, 0.44, PACK.Flap, 0.3)
+		Pop.border(flap, 2)
+		local pocket = packBit(drawn, "Pocket", 0.3, 0.56, 0.7, 0.82, PACK.Flap, 0.2)
+		Pop.border(pocket, 2)
+		local buckle = packBit(drawn, "Buckle", 0.44, 0.36, 0.56, 0.5, PACK.Buckle, 0.2)
+		Pop.border(buckle, 1.5)
+		local shine = packBit(drawn, "Shine", 0.24, 0.5, 0.28, 0.8, Color3.new(1, 1, 1), 0.5)
+		shine.BackgroundTransparency = 0.55
 	end
-	local row = holder.Parent
-	local size = (if row then row:GetAttribute("SlotSize") :: number? else nil) or 70
-	local showMore = more ~= nil and more > 0
-	local showDirty = mystery == true and not showMore
-	local showGem = filled ~= nil and not showMore and not showDirty
-	-- dirty ore: a grey rock and a pixel "?"
-	if showDirty and not face:FindFirstChild("Rock") then
-		rock(face, 0.56)
-		Pop.text(face, "?", math.floor(size * 0.5), {
-			Name = "Mystery",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.52),
-			Size = UDim2.fromScale(0.6, 0.6),
-			ZIndex = 7,
-		})
-	end
-	-- a cleaned ore: the rarity's soft glow, the gem and its glint
-	if showGem then
-		local color = filled :: Color3
-		local glow = face:FindFirstChild("Glow") :: Frame?
-		if glow then
-			glow.BackgroundColor3 = color
-			local ore = face:FindFirstChild("Ore")
-			local paint = if ore then ore:FindFirstChild("Paint") else nil
-			if paint and paint:IsA("UIGradient") then
-				paint.Color = gemPaint(color)
-			end
-		else
-			local made = UIKit.new("Frame", {
-				Name = "Glow",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = color,
-				BackgroundTransparency = 0.72,
-				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(0.8, 0.8),
-				ZIndex = 4,
-			}, face)
-			UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, made)
-			gem(face, color, 0.5)
-			Pop.sparkle(face, UDim2.fromScale(0.72, 0.26), math.floor(size * 0.24), 7, 0.05)
+	if props then
+		local target: any = art
+		for key, value in props do
+			target[key] = value
 		end
 	end
-	-- "+N": more carried than squares
-	local label = face:FindFirstChild("More") :: TextLabel?
-	if showMore then
-		local count = more :: number
-		local textSize = if count >= 100 then math.floor(size * 0.3) else math.floor(size * 0.4)
-		if label then
-			label.Text = `+{count}`
-			if label:GetAttribute("WordSize") ~= textSize then
-				Pop.fit(label, textSize)
-			end
-		else
-			label = Pop.text(face, `+{count}`, textSize, {
-				Name = "More",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(0.86, 0.6),
-				ZIndex = 7,
-			})
-		end
-	end
-	for _, name in { "Rock", "Mystery" } do
-		local part = face:FindFirstChild(name)
-		if part and part:IsA("GuiObject") then
-			part.Visible = showDirty
-		end
-	end
-	for _, name in { "Glow", "Ore", table.unpack(SPARKLES) } do
-		local part = face:FindFirstChild(name)
-		if part and part:IsA("GuiObject") then
-			part.Visible = showGem
-		end
-	end
-	if label then
-		label.Visible = showMore
-	end
+	return art
 end
 
--- One hotbar slot: a carried ore's picture in its rarity colour, a rock with
--- "?" for dirty ore, an empty well when nothing is carried.
-function HudBubble.slot(parent: Instance, filled: Color3?, order: number, mystery: boolean?): Frame
-	local size = (parent:GetAttribute("SlotSize") :: number?) or 70
+--[[
+	The backpack button in `gui` (see above): returns (holder "Carry", the
+	button "Backpack", its count label "Count"). `layout` picks the PC or
+	the phone size; `uiScale` places it right of the blaster's slot.
+]]
+function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number): (Frame, TextButton, TextLabel)
+	local size = if layout.Compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
 	local holder = UIKit.new("Frame", {
-		Name = "Slot" .. order,
+		Name = "Carry",
+		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
-		LayoutOrder = order,
-		Size = UDim2.fromOffset(size, size),
-	}, parent)
-	local face = UIKit.new("Frame", {
-		Name = "Face",
+		Position = UDim2.new(0.5, HudBubble.backpackX(uiScale), 1, -HudBubble.BackpackBottom),
+		Size = UDim2.fromOffset(size.X, size.Y),
+	}, gui)
+	local button = UIKit.new("TextButton", {
+		Name = "Backpack",
+		AutoButtonColor = true,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
-		ClipsDescendants = false,
+		Text = "",
 		Size = UDim2.fromScale(1, 1),
+		Selectable = true,
 		ZIndex = 2,
 	}, holder)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.2, 0) }, face)
-	Pop.border(face)
+	UIKit.corner(button, 14)
+	Pop.border(button)
 	UIKit.new("UIGradient", {
 		Name = "Paint",
 		Rotation = 90,
@@ -1346,16 +1219,16 @@ function HudBubble.slot(parent: Instance, filled: Color3?, order: number, myster
 			ColorSequenceKeypoint.new(0.3, HudBubble.SlotTop:Lerp(HudBubble.SlotBottom, 0.55)),
 			ColorSequenceKeypoint.new(1, HudBubble.SlotBottom),
 		}),
-	}, face)
-	-- the light rim inside the outline, lit from below (an inset, not a button)
+	}, button)
+	-- the light rim inside the outline, lit from below (an inset, like the old hotbar wells)
 	local rim = UIKit.new("Frame", {
 		Name = "Rim",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(3, 3),
 		Size = UDim2.new(1, -6, 1, -6),
 		ZIndex = 3,
-	}, face)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.17, 0) }, rim)
+	}, button)
+	UIKit.corner(rim, 11)
 	local light = UIKit.new("UIStroke", {
 		Name = "Light",
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
@@ -1370,45 +1243,90 @@ function HudBubble.slot(parent: Instance, filled: Color3?, order: number, myster
 			NumberSequenceKeypoint.new(1, 0),
 		}),
 	}, light)
-	Pop.studs(face, 12, 0.6, nil, 3)
-	HudBubble.fillSlot(holder, filled, mystery, nil)
-	HudBubble.fitSlots(parent)
-	return holder
+	Pop.studs(button, 14, 0.6, nil, 3)
+	Pop.fxTag(button, "Press")
+	local pic = size.Y - 8
+	HudBubble.packArt(button, pic, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+	})
+	local count = Pop.text(button, HudBubble.backpackText(0, 5), math.floor(size.Y * 0.44), {
+		Name = "Count",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, pic + 6, 0.5, 0),
+		Size = UDim2.new(1, -(pic + 12), 0, math.floor(size.Y * 0.56)),
+		ZIndex = 6,
+	})
+	-- a full backpack: the red FULL tag on the top edge, over the count
+	Pop.tag(button, "FULL", "Red", Vector2.new(if layout.Compact then 84 else 72, if layout.Compact then 30 else 26), {
+		Name = "Full",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, pic + 6 + math.floor((size.X - pic - 12) / 2), 0, 0),
+		Visible = false,
+		ZIndex = 8,
+	})
+	-- the open key on the top-right corner: a key cap (keyboards, like the TRAIN chip's T) or the gamepad's glyph
+	local keySize = if layout.Compact then 30 else 28
+	local key = Pop.text(button, "", 20, {
+		Name = "Key",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0,
+		Position = UDim2.new(1, -8, 0, 2),
+		Size = UDim2.fromOffset(keySize, keySize),
+		Visible = false,
+		ZIndex = 8,
+	})
+	UIKit.corner(key, 6)
+	Pop.border(key, 2.5)
+	UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -8, 0, 2),
+		Size = UDim2.fromOffset(keySize, keySize),
+		Visible = false,
+		ZIndex = 8,
+	}, button)
+	return holder, button, count
 end
 
--- The last hotbar slot when more items are carried than slots show: "+N".
-function HudBubble.moreSlot(parent: Instance, more: number, order: number): Frame
-	local holder = HudBubble.slot(parent, nil, order, false)
-	HudBubble.fillSlot(holder, nil, false, more)
-	return holder
-end
-
--- Hotbar slot `order` ("Slot<order>") showing `filled` / `mystery` / "+N"
--- (`more` > 0): the slot already there is updated in place (fillSlot), a
--- missing one is made once.
-function HudBubble.carrySlot(parent: Instance, order: number, filled: Color3?, mystery: boolean?, more: number?): Frame
-	local holder = parent:FindFirstChild("Slot" .. order)
-	if holder and holder:IsA("Frame") then
-		HudBubble.fillSlot(holder, filled, mystery, more)
-		return holder
-	end
-	local made = HudBubble.slot(parent, nil, order, false)
-	HudBubble.fillSlot(made, filled, mystery, more)
-	return made
-end
-
--- Removes the hotbar slots past `count` (a smaller backpack) and fits the rest.
-function HudBubble.trimSlots(parent: Instance, count: number)
-	local removed = false
-	for _, child in parent:GetChildren() do
-		if child:IsA("Frame") and child.LayoutOrder > count then
-			child:Destroy()
-			removed = true
+-- Shows "count / capacity" on the button; a full backpack gets the red count and the FULL tag.
+function HudBubble.setBackpack(button: GuiObject, count: number, capacity: number)
+	local full = capacity > 0 and count >= capacity
+	local label = button:FindFirstChild("Count") :: TextLabel?
+	if label then
+		local text = HudBubble.backpackText(count, capacity)
+		if label.Text ~= text then
+			label.Text = text
 		end
+		label.TextColor3 = if full then HudBubble.FullColor else PopTheme.Ink
 	end
-	if removed then
-		HudBubble.fitSlots(parent)
+	local tag = button:FindFirstChild("Full") :: GuiObject?
+	if tag then
+		tag.Visible = full
 	end
+	button:SetAttribute("Full", full)
+end
+
+-- The open key on the button: `text` (a keyboard key), `glyph` (a gamepad image), or neither (touch).
+function HudBubble.setBackpackKey(button: GuiObject, text: string?, glyph: string?)
+	local key = button:FindFirstChild("Key") :: TextLabel?
+	local image = button:FindFirstChild("Glyph") :: ImageLabel?
+	local showGlyph = glyph ~= nil and glyph ~= ""
+	if image then
+		image.Image = if showGlyph then glyph :: string else ""
+		image.Visible = showGlyph
+	end
+	if key then
+		key.Text = if showGlyph then "" else (text or "")
+		key.Visible = not showGlyph and text ~= nil and text ~= ""
+	end
+end
+
+-- Moves the button's holder right of the blaster's slot for a new UI scale.
+function HudBubble.placeBackpack(holder: GuiObject, uiScale: number, tenFoot: boolean?)
+	holder.Position = UDim2.new(0.5, HudBubble.backpackX(uiScale, tenFoot), 1, -HudBubble.BackpackBottom)
 end
 
 -- A floating "+$1.2K" under the coins (HudController moves and fades it).

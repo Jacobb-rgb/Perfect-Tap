@@ -1231,6 +1231,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 			d.Anchored = true
 		end
 	end
+	MineKit.dimLights(model, Floor.Index)
 	model.Parent = parent
 	return model
 end
