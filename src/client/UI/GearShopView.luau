@@ -80,7 +80,7 @@ export type Card = {
 	ChipColor: Color3,
 	Effect: string, -- "18 → 20" (top level: "26")
 	Unit: string, -- "walk speed"
-	Extra: string, -- the second stat ("Throw x1.08 → x1.16"), "" when none
+	Extra: string, -- the second stat (the Helmet Lamp's brightness), "" when none
 	EffectColor: Color3,
 	PriceText: string, -- "$3K"; "TOP LEVEL" when done
 	PriceColor: Color3,

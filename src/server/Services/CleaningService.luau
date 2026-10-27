@@ -251,9 +251,20 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 	if not record then
 		return
 	end
-	machine.State.Item = nil
-	-- back into the backpack (past its capacity if need be: never lost)
-	CarryService.add(player, ItemService.absorb(record), 1, true)
+	-- back into the backpack while it has room, else into the Ore Pen; with both
+	-- full it stays in the vise (never past the backpack's capacity, never lost)
+	if CarryService.room(player) > 0 then
+		machine.State.Item = nil
+		CarryService.add(player, ItemService.absorb(record), 1)
+	else
+		local stored = ItemService.storeDesc(player, ItemService.descOf(record), "Your backpack is full")
+		if stored == "Lost" then
+			Net.fire("Notify", player, { Text = "Your backpack and your Ore Pen are full.", Kind = "Deny" })
+			return
+		end
+		machine.State.Item = nil
+		ItemService.absorb(record)
+	end
 	updatePrompts(machine)
 end
 
@@ -666,6 +677,7 @@ CleaningService._test = {
 	submit = function(player: Player, sessionId: any, payload: any)
 		onSubmit(player, sessionId, payload)
 	end,
+	take = onTake,
 	session = function(player: Player): any
 		return sessions[player]
 	end,

@@ -1025,4 +1025,51 @@ return function(T, Loader)
 		T.eq(data.Settings.Subtitles, true)
 		T.eq(data.Settings[1], nil, "junk key")
 	end)
+	T.test("Migrations: the backpack's counts are whole stacks of at least 1; renamed ores join their new key", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BackpackItems = {
+			["Raw|Coal||"] = 0.5, -- under 1: no stack
+			["Raw|Iron||"] = -3,
+			["Raw|Gold||"] = 0,
+			["Raw|Tin||"] = 2.7, -- a fraction: its whole part
+			["Raw|Copper||"] = 0 / 0,
+			["Clean|Ruby|Rough|"] = 3, -- an old roster ore (OreData.Renamed: Ruby -> Bronze)
+			["Clean|Bronze|Rough|"] = 1,
+			["not a key"] = 4,
+		}
+		Migrations.run(data)
+		local items = data.BackpackItems
+		for _, gone in { "Raw|Coal||", "Raw|Iron||", "Raw|Gold||", "Raw|Copper||", "not a key", "Clean|Ruby|Rough|" } do
+			T.eq(items[gone], nil, gone .. " dropped")
+		end
+		T.eq(items["Raw|Tin||"], 2, "2.7 -> 2")
+		T.eq(items["Clean|Bronze|Rough|"], 4, "the renamed stack joined the new key")
+		Migrations.run(data)
+		T.eq(items["Clean|Bronze|Rough|"], 4, "idempotent")
+	end)
+	T.test("Migrations: the old Ore Backpack's coins come back, less the pack it becomes (Version 9, once)", function()
+		local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 8
+		data.Coins = 100
+		data.Gear.Backpack = 5 -- held 12, paid 800 + 5K + 30K + 180K + 1.1M
+		Migrations.run(data)
+		local paid = 800 + 5000 + 30000 + 180000 + 1100000
+		T.eq(data.Backpacks.Equipped, "TrailPack", "12 -> the Trail Pack (15)")
+		T.eq(data.Coins, 100 + paid - BackpackData.ById.TrailPack.Price, "paid back, less the Trail Pack")
+		Migrations.run(data)
+		T.eq(data.Coins, 100 + paid - BackpackData.ById.TrailPack.Price, "once")
+		local small = ProfileStore.deepCopy(DataTemplate)
+		small.Version = 8
+		small.Coins = 0
+		small.Gear.Backpack = 1 -- held 2: the free Rookie pack
+		Migrations.run(small)
+		T.eq(small.Coins, 800, "level I paid back in full")
+		local none = ProfileStore.deepCopy(DataTemplate)
+		none.Version = 8
+		none.Coins = 7
+		none.Gear.Backpack = 0
+		Migrations.run(none)
+		T.eq(none.Coins, 7, "no levels, no coins")
+	end)
 end

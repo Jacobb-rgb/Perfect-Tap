@@ -202,7 +202,8 @@ HoverboardData.List = {
 			Glow2 = rgb(60, 200, 255), -- sky blue glow
 		},
 		Description = "Painted all over with Terra Forge doodles: golems, gems, blasters and more.",
-		Perks = { "Fastest board", "No carry slowdown", "Rainbow trail" },
+		-- (Perks[2] is the card's gold line: the rainbow bolts, HoverboardFx; nothing is carried slowly any more)
+		Perks = { "Fastest board", "Rainbow lightning", "Rainbow trail" },
 	},
 } :: { Board }
 

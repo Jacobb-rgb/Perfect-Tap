@@ -21,19 +21,21 @@ export type Level = { Value: number, Price: number }
 local TrainConfig = {}
 
 -- Cargo slots per capacity level (index 1 = level 0, the starting train). The train grows
--- with the backpacks (owner 2026-10-24: "zvětši kapacitu vlaku"; packs 5..1000, BackpackData):
--- each level carries about a pack's worth more (balance_sim).
+-- with the backpacks (owner 2026-10-24: "zvětši kapacitu vlaku") but never past the Ore
+-- Pen it pours into: the top level with Express (x1.5) fills exactly the biggest pen
+-- (EconomyConfig.Pen: 40 + 7 x 20 = 180), so a train never waits at the stop for room
+-- a pen can't have (review 2026-10-27). Levels 0-5 are the old train's (no save jumps).
 TrainConfig.Capacity = {
 	{ Value = 8, Price = 0 },
-	{ Value = 15, Price = 2000 },
-	{ Value = 30, Price = 15000 },
-	{ Value = 60, Price = 120000 },
-	{ Value = 100, Price = 900000 },
-	{ Value = 175, Price = 6e6 },
-	{ Value = 275, Price = 60e6 },
-	{ Value = 400, Price = 900e6 },
-	{ Value = 600, Price = 12e9 },
-	{ Value = 1000, Price = 150e9 },
+	{ Value = 12, Price = 2000 },
+	{ Value = 18, Price = 15000 },
+	{ Value = 26, Price = 120000 },
+	{ Value = 36, Price = 900000 },
+	{ Value = 50, Price = 6e6 },
+	{ Value = 65, Price = 40e6 },
+	{ Value = 80, Price = 250e6 },
+	{ Value = 100, Price = 1.5e9 },
+	{ Value = 120, Price = 10e9 },
 } :: { Level }
 
 -- Trip seconds (station -> your stop) per speed level (index 1 = level 0).
@@ -53,7 +55,7 @@ TrainConfig.AutoDepartSeconds = 25 -- after the last load, a train with cargo le
 TrainConfig.MinTripSeconds = 5 -- no upgrade makes a trip shorter than this
 TrainConfig.ReturnSeconds = 6 -- the empty train rolls back before it can load again (the station shows "returning")
 TrainConfig.DeliveryRetry = 3 -- seconds between tries when the pen is full
-TrainConfig.MaxCargoSaved = 1600 -- hard cap per save (Cargo + TripCargo), DataStore safety (the top train with Express: 1500)
+TrainConfig.MaxCargoSaved = 200 -- hard cap per save (Cargo + TripCargo), DataStore safety (the top train with Express: 180)
 TrainConfig.MaxTripSpan = 600 -- clients refuse a TrainTrip with ArriveAt - DepartAt above this (the server never sends one)
 
 -- The prompts on every Mine Station / Mine Lift PromptPoint (shared contract,

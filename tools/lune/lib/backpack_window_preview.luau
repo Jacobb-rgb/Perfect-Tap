@@ -2,7 +2,7 @@
 	The backpack inventory window and the HUD's backpack button (owner
 	2026-10-24: everything goes into the backpack; docs/plans/
 	OWNER_PLAYTEST_1024.md "4 + 5") with nothing else on screen (scene
-	"backpack_quick" for tools/lune/export_scene.luau: no world, fast UI
+	"backpack_window" for tools/lune/export_scene.luau: no world, fast UI
 	iteration). Drawn with the game's own code (HudBubble, BackpackView,
 	BackpackState) from a State snapshot. UI overlays (build/preview/<name>.json):
 	  ui_backpack_pc      PC 1600 x 900: a mid-game Iron-Bound Pack, 62 / 100

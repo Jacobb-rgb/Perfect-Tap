@@ -236,9 +236,15 @@ return function(T, Loader)
 		T.eq(CarryService.capacity(w.player), trail.Capacity)
 		w.data.StarPerks = { DeepPockets = 3 }
 		Bonuses.invalidate(w.player)
-		T.eq(CarryService.capacity(w.player), math.floor(trail.Capacity * 1.3), "+10 % a level")
+		T.eq(CarryService.capacity(w.player), math.ceil(trail.Capacity * 1.3), "+10 % a level, rounded up")
 		w.player.attrs.Perk_StrongBack = true
 		Bonuses.invalidate(w.player)
-		T.eq(CarryService.capacity(w.player), math.floor(trail.Capacity * 1.3) * 2, "doubled by Strong Back")
+		T.eq(CarryService.capacity(w.player), math.ceil(trail.Capacity * 1.3) * 2, "doubled by Strong Back")
+		-- the Rookie pack's 5: Deep Pockets I still adds one
+		w.player.attrs.Perk_StrongBack = nil
+		w.data.Backpacks.Equipped = BackpackData.StarterId
+		w.data.StarPerks = { DeepPockets = 1 }
+		Bonuses.invalidate(w.player)
+		T.eq(CarryService.capacity(w.player), 6, "5 + 10 % rounded up")
 	end)
 end

@@ -205,7 +205,8 @@
 	  (Gear.Backpack, capacities 1 / 2 / 3 / 5 / 8 / 12 by level) becomes
 	  the smallest pack holding at least as much, owned and equipped if it
 	  is bigger than the one worn; Gear.Backpack goes (the line left the
-	  Gear shop).
+	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES), less
+	  that pack's own price, go back into data.Coins (review 2026-10-27).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -257,6 +258,8 @@ local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 -- Version 9: what the Gear shop's retired Ore Backpack held at each level 0..5 (frozen)
 local OLD_BACKPACK_CAPACITY = { 1, 2, 3, 5, 8, 12 }
+-- ... and what its levels 1..5 cost (frozen): the coins paid past the pack it becomes go back
+local OLD_BACKPACK_PRICES = { 800, 5000, 30000, 180000, 1100000 }
 -- the most of one item a backpack keeps (2x the biggest pack with Strong Back, and room
 -- for a newer build's bigger packs)
 local MAX_BACKPACK_KEPT = 5000
@@ -351,6 +354,22 @@ local function renameOres(data: { [string]: any })
 		end
 	end
 	walk(data, 0)
+	-- the backpack is keyed by storage key: a renamed ore's stack joins its new key
+	local items = data.BackpackItems
+	if type(items) == "table" then
+		local keys = {}
+		for key in items do
+			table.insert(keys, key)
+		end
+		for _, key in keys do
+			local new = if type(key) == "string" then storageKey(key) else key
+			local count = items[key]
+			if new ~= key and type(count) == "number" then
+				items[key] = nil
+				items[new] = (if type(items[new]) == "number" then items[new] else 0) + count
+			end
+		end
+	end
 	if type(data.BlasterOre) == "string" and renamed[data.BlasterOre] then
 		data.BlasterOre = renamed[data.BlasterOre]
 	end
@@ -1331,7 +1350,9 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local items = record(data, "BackpackItems", report)
 	for _, key in keysOf(items) do
 		local count = items[key]
-		local whole = if keyLike(key) then wholeIn(count, 1, MAX_BACKPACK_KEPT) else nil
+		-- a whole count of at least 1 (0, negative or a fraction under 1 is no stack)
+		local floored = if keyLike(key) and isFinite(count) then math.floor(count) else nil
+		local whole = if floored and floored >= 1 then math.min(floored, MAX_BACKPACK_KEPT) else nil
 		if whole == nil then
 			items[key] = nil
 			report.Dropped += 1
@@ -1363,6 +1384,15 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 				ownedPacks[pick.Id] = true
 				if pick.Capacity > BackpackData.capacity(packs.Equipped) then
 					packs.Equipped = pick.Id
+				end
+				-- the coins paid for the old levels, less the pack's own price, come back
+				local paid = 0
+				for i = 1, math.min(gearLevel, #OLD_BACKPACK_PRICES) do
+					paid += OLD_BACKPACK_PRICES[i]
+				end
+				local refund = math.max(0, paid - pick.Price)
+				if refund > 0 then
+					data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + refund
 				end
 			end
 		end

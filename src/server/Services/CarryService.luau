@@ -20,7 +20,10 @@
 	Net CarryPickup (the client's F / tap) does it at once; the auto-pickup
 	loop (owner: "by itself when you walk near") does it every AutoSeconds
 	for every item of yours in reach: only your own loose items (at most
-	GameConfig.MaxLooseItemsPerPlayer each), never a scan of the world. A
+	GameConfig.MaxLooseItemsPerPlayer each), never a scan of the world, and
+	never on a base (ItemService.onBase, like the magnet: belts, chutes,
+	machine queues and the pen's gate work with loose items; F / tap still
+	takes one there). A
 	full backpack says so, at most every FullToastGap seconds, and only when
 	something of yours lies in reach. The Ore Magnet puts what it fetched
 	into the backpack too (ItemService.setMagnetHands). Nothing is dropped
@@ -80,8 +83,9 @@ CarryService.FullText = "Your backpack is full! Bigger backpacks are sold at the
 local fullToastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 local pickupCallbacks: { (Player, Desc) -> () } = {}
 
--- Called after every pickup (the player, what went in): LeaderboardService counts it as
--- server-checked activity (its ActivitySources).
+-- Called after every pickup the player asked for (F / tap: the player, what went in):
+-- LeaderboardService counts it as server-checked activity (its ActivitySources). The
+-- auto-pickup and the magnet ("quiet") never call it: standing by a pile isn't playing.
 function CarryService.onPickup(callback: (Player, Desc) -> ())
 	table.insert(pickupCallbacks, callback)
 end
@@ -345,22 +349,29 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord, qui
 	CarryService.add(player, desc, 1, true)
 	-- dirty ore keeps its secret: no ore color for raw chunks (design v2)
 	Net.fire("Fx", player, "Pickup", at, if kind == "Raw" then nil else oreId)
-	for _, callback in pickupCallbacks do
-		task.spawn(callback, player, desc)
+	if not quiet then
+		for _, callback in pickupCallbacks do
+			task.spawn(callback, player, desc)
+		end
 	end
 	return true
 end
 
--- One auto-pickup pass for a player: every item of theirs in reach goes in while there is room.
+-- One auto-pickup pass for a player: every item of theirs in reach and off
+-- the bases goes in while there is room.
 local function autoPickup(player: Player, now: number)
 	local root = Guard.rootPart(player)
 	if not root or not DataService.get(player) then
 		return
 	end
+	local reach = CarryService.pickupRange(player) + PICKUP_SLACK
 	local blocked = false
 	for _, record in ItemService.ownedBy(player.UserId) do
 		if record.State == "Loose" and record.Kind ~= "Drop" and ItemService.isTrusted(record, now) then
-			if CarryService.hasReach(player, root, record) then
+			-- the cheap distance first, then the base test, the ray (hasReach) last
+			local at = record.Body.CFrame.Position
+			local near = (at - root.Position).Magnitude <= reach
+			if near and not ItemService.onBase(at) and CarryService.hasReach(player, root, record) then
 				if CarryService.room(player) <= 0 then
 					blocked = true
 					break

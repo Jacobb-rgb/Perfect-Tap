@@ -362,13 +362,13 @@ function Bonuses.throwMult(stats: Stats): number
 	return math.max(1, stats.ThrowMult or 1)
 end
 
--- Items you can carry (the StrongBack perk doubles it).
 -- Items the backpack holds: the worn pack (+ CarryCapacity bonuses), + CarryPct of it
--- (Deep Pockets), doubled by the StrongBack perk.
+-- rounded up (Deep Pockets: even the Rookie pack's 5 gets +1), doubled by the StrongBack perk.
 function Bonuses.carryCapacity(stats: Stats, player: Player?): number
 	local base = math.max(1, math.floor(stats.CarryCapacity or 1))
 	local share = math.max(0, stats.CarryPct or 0)
-	return math.floor(base * (1 + share)) * (if player and Perks.has(player, "StrongBack") then 2 else 1)
+	local extra = math.ceil(base * share - 1e-9) -- (no float dust: 10 x 0.3 is 3, not 4)
+	return (base + extra) * (if player and Perks.has(player, "StrongBack") then 2 else 1)
 end
 
 -- Head lamp range and brightness (0, 0 = no lamp).

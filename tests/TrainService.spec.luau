@@ -39,6 +39,7 @@ return function(T, Loader)
 	end
 	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -1234,6 +1235,26 @@ return function(T, Loader)
 		stranger.stand(TrainConfig.Station.PromptPoint)
 		train.load(stranger, hook)
 		T.eq(#w.data.Train.Cargo, 3, "unchanged")
+		-- the dirty ore first: 5 slots left, 4 clean gold and 3 coal in the backpack
+		for _ = 1, 4 do
+			carry(w, w.player, GOLD)
+		end
+		for _ = 1, 3 do
+			carry(w, w.player, COAL)
+		end
+		train.load(w.player, hook)
+		local t = w.data.Train
+		local raw, clean = 0, 0
+		for _, item in if #t.TripCargo > 0 then t.TripCargo else t.Cargo do
+			if item.K == "Raw" then
+				raw += 1
+			elseif item.K == "Clean" then
+				clean += 1
+			end
+		end
+		T.eq(raw, 3, "every coal went (dirty ore first)")
+		T.eq(clean, 2, "then the clean gold that fits")
+		T.eq(w.data.BackpackItems[ItemData.storageKey(GOLD)], 2, "the rest of the gold stays")
 	end)
 
 	withWorld("TrainService: prompt and Send hints fit every hook and can't be spammed", function(w)

@@ -192,9 +192,27 @@ return function(T, Loader)
 		send:SetAttribute("Action", "Send")
 		T.falsy(TrainController.applyLoadPrompt(send, false), "Send is no Load prompt")
 		T.truthy(send.Enabled, "and keeps showing")
-		-- the machines' Put In: anything in the backpack (PromptController reads the count)
+		-- the machines' Put In: only while the backpack holds a kind that machine takes
+		local PromptController = client("Controllers.PromptController")
+		local ME = 7
+		local function pack(items: any): any
+			local n = 0
+			for _, c in items do
+				n += c
+			end
+			return BackpackState.read({ Backpacks = { Items = items } }, n, 30)
+		end
+		local raw = pack({ ["Raw|Coal||"] = 3 })
+		local crushed = pack({ ["Crushed|Iron|Rough|"] = 2 })
+		local clean = pack({ ["Clean|Gold|Pristine|"] = 1, ["Raw|Coal||"] = 1 })
+		T.falsy(PromptController.loadShown(ME, "ClayFurnace", ME, raw), "a Furnace takes no dirty ore")
+		T.truthy(PromptController.loadShown(ME, "ClayFurnace", ME, crushed), "it takes crushed ore")
+		T.falsy(PromptController.loadShown(ME, "Crusher", ME, raw), "a Crusher takes no dirty ore")
+		T.truthy(PromptController.loadShown(ME, "Crusher", ME, clean), "it takes clean ore")
+		T.falsy(PromptController.loadShown(ME + 1, "Crusher", ME, clean), "never on someone else's machine")
+		T.falsy(PromptController.loadShown(ME, "Crusher", ME, pack({})), "an empty backpack")
+		T.truthy(PromptController.loadShown(ME, "FutureMachine", ME, raw), "a machine this build doesn't know: anything")
 		local prompts = fs.readFile(Loader.root .. "/src/client/Controllers/PromptController.luau")
-		T.truthy(prompts:find("BackpackState.count() > 0", 1, true), "machine Put In: the backpack holds something")
 		T.truthy(prompts:find("BackpackState.onChanged(refreshAll)", 1, true), "refreshed on CarryCount and State pushes")
 	end)
 

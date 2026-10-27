@@ -19,6 +19,8 @@ return function(T, Loader)
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 	local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local Players = Loader.game:GetService("Players")
 	local HttpService = Loader.game:GetService("HttpService")
 
@@ -206,6 +208,48 @@ return function(T, Loader)
 		Bonuses.invalidate(w.player)
 		CarryService._test.autoPickup(w.player, os.clock())
 		T.eq(CarryService.count(w.player), capacity + 2, "picked up the rest")
+	end)
+
+	-- (onPickup callbacks stay registered for the run: this one only counts)
+	local activity = { n = 0 }
+	CarryService.onPickup(function()
+		activity.n += 1
+	end)
+
+	withWorld("CarryService: only a pickup you ask for counts as activity (leaderboards), never the auto-pickup", function(w)
+		local task = require("@lune/task")
+		local start = activity.n
+		w.item(RAW, 2)
+		CarryService._test.autoPickup(w.player, os.clock())
+		T.eq(CarryService.count(w.player), 1, "auto-picked up")
+		local asked = w.item(RAW, 2)
+		CarryService._test.pickupRequest(w.player, asked.Model)
+		task.wait()
+		T.eq(CarryService.count(w.player), 2, "picked up on request")
+		T.eq(activity.n - start, 1, "only the request counts")
+	end)
+
+	withWorld("CarryService: the auto-pickup leaves your base alone (belts, chutes, the pen's gate); F still works", function(w)
+		-- standing at plot 1's pen gate with a belt item on the PEN chute (~6 studs away)
+		local plot = WorldLayout.plotCFrame(WorldLayout.Plots[1])
+		local gate = plot * CFrame.new(-12, 3, BaseLayout.YardZ0 + 2.5)
+		w.player.root.Position = gate.Position
+		w.player.root.CFrame = gate
+		local chute = ItemService.spawnDesc(CLEAN, USER, plot * CFrame.new(-10, 1, BaseLayout.YardZ0 - 2), nil, true)
+		assert(chute, "chute item")
+		T.truthy(ItemService.onBase(chute.Body.CFrame.Position), "the chute is on the base")
+		T.truthy(CarryService.hasReach(w.player, w.player.root, chute), "within reach")
+		CarryService._test.autoPickup(w.player, os.clock())
+		T.eq(chute.State, "Loose", "the belt item stays (the factory keeps its ore)")
+		T.eq(CarryService.count(w.player), 0, "nothing went in")
+		-- a full backpack says nothing about base items either
+		w.data.BackpackItems = { ["Raw|Coal||"] = CarryService.capacity(w.player) }
+		CarryService._test.autoPickup(w.player, os.clock())
+		T.eq(toasts(w, CarryService.FullText), 0, "no 'backpack full' toast for a belt")
+		-- F / tap still takes one on purpose
+		w.data.BackpackItems = {}
+		CarryService._test.pickupRequest(w.player, chute.Model)
+		T.eq(chute.State, "Consumed", "a manual pickup works on the base")
 	end)
 
 	withWorld("CarryService: stacks, has, take and add", function(w)

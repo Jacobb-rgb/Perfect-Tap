@@ -12,7 +12,8 @@
 	    ("SellAll", { Filter = "Dirty" | "AllButBest", From = "Pen" | "Hands" | nil })
 	  "Dirty" sells Dirty Ore (raw ore). "AllButBest" sells everything that
 	  is not Dirty Ore, but keeps the KEEP_BEST cleaned ores with the highest
-	  podium income. At most EconomyConfig.Sell.MaxPerRequest items per request.
+	  podium income. At most EconomyConfig.sellCap(From) items per request (the pen
+	  50, the backpack 3000: a whole backpack in one press).
 	- SellBin (tag, a Model with a child part "Intake"): items thrown or
 	  dropped in are sold (an IntakeService zone). The item's OWNER is paid,
 	  never whoever threw it, so dumping someone else's ore gains nothing.
@@ -411,8 +412,8 @@ end
 local function sellKey(player: Player, data: { [string]: any }, counter: BasePart, arg: { [any]: any })
 	local key = Guard.string(arg.Key, MAX_KEY_LENGTH)
 	local desc = key and ItemData.parseKey(key)
-	local count = Guard.integer(arg.Count, 1, EconomyConfig.Sell.MaxPerRequest)
 	local from = arg.From
+	local count = Guard.integer(arg.Count, 1, EconomyConfig.sellCap(from))
 	if not key or not desc or not count or (from ~= "Pen" and from ~= "Hands") then
 		return
 	end
@@ -445,12 +446,15 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 	local list = candidates(player, data)
 	local kept = if filter == "AllButBest" then bestKept(list) else {}
 	local picks: { Pick } = {}
+	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	local left = 0
 	for _, pick in list do
 		local wanted = (from == nil or pick.From == from)
 			and (if filter == "Dirty" then isDirty(pick.Desc) else not isDirty(pick.Desc) and not kept[pick])
 		if wanted then
-			if #picks < EconomyConfig.Sell.MaxPerRequest then
+			-- each section to its own cap (a whole backpack at once, the pen 50 at a time)
+			if counted[pick.From] < EconomyConfig.sellCap(pick.From) then
+				counted[pick.From] += 1
 				table.insert(picks, pick)
 			else
 				left += 1
@@ -464,7 +468,10 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 	local taken, total = takePicks(player, data, picks)
 	payout(player, data, taken, total, popupPosition(counter))
 	if left > 0 then
-		Net.fire("Notify", player, { Text = `{left} more left: Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time.`, Kind = "Info" })
+		Net.fire("Notify", player, {
+			Text = `{left} more left: Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen.`,
+			Kind = "Info",
+		})
 	end
 end
 

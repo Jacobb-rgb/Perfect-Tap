@@ -103,7 +103,7 @@ export type Refs = {
 }
 
 export type Plan = {
-	Count: number, -- items one request would sell (at most MaxPerRequest)
+	Count: number, -- items one request would sell (at most EconomyConfig.sellCap per section)
 	Eligible: number, -- items the filter matches in total
 	Total: number, -- coins for the known items in Count
 	Dirty: number, -- Dirty Ore among Count (price unknown)
@@ -319,7 +319,7 @@ end
 	What SellAll { Filter, From? } would sell from these summaries, with the
 	server's rules: "Dirty" = all Dirty Ore; "AllButBest" = everything else
 	except the KeepBest cleaned ores with the highest income. Hands first,
-	at most EconomyConfig.Sell.MaxPerRequest items. Total includes the sell
+	at most EconomyConfig.sellCap items of each section. Total includes the sell
 	bonus `sellMult` (nil = 1), rounded once like SellService.
 ]]
 function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sellMult: number?): Plan
@@ -338,7 +338,9 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 		for _, key in keys do
 			local desc = ItemData.parseKey(key)
 			local raw = summary[key]
-			local count = if type(raw) == "number" and raw == raw then math.floor(math.min(raw, 1000)) else 0
+			local count = if type(raw) == "number" and raw == raw
+				then math.floor(math.min(raw, EconomyConfig.Sell.MaxBackpackPerRequest))
+				else 0
 			if desc then
 				for _ = 1, count do
 					table.insert(units, {
@@ -376,13 +378,16 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 	end
 
 	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0, Kept = keptCount }
+	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	for _, unit in units do
 		local dirty = unit.Desc.K == "Raw"
 		local wanted = (from == nil or unit.Section == from)
 			and (if filter == "Dirty" then dirty elseif filter == "AllButBest" then not dirty and not kept[unit] else false)
 		if wanted then
 			plan.Eligible += 1
-			if plan.Count < EconomyConfig.Sell.MaxPerRequest then
+			-- each section to its own cap, like SellService (EconomyConfig.sellCap)
+			if counted[unit.Section] < EconomyConfig.sellCap(unit.Section) then
+				counted[unit.Section] += 1
 				plan.Count += 1
 				if dirty then
 					plan.Dirty += 1
@@ -423,7 +428,7 @@ end
 -- Text for a Sell-all button's confirm step.
 function SellView.confirmPlanText(plan: Plan, filter: string): string
 	local capped = if plan.Eligible > plan.Count
-		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time ({Format.commas(plan.Eligible)} in total).`
+		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen ({Format.commas(plan.Eligible)} in total).`
 		else ""
 	if filter == "Dirty" then
 		return `Sell {Format.commas(plan.Count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.{capped}`

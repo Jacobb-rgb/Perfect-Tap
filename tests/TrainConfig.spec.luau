@@ -6,6 +6,21 @@ return function(T, Loader)
 	local CFrame = Loader.CFrame
 	local Vector3 = (require("@lune/roblox") :: any).Vector3
 
+	T.test("Train: the top train with Express fits the biggest Ore Pen (it never waits for room a pen can't have)", function()
+		local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		local pen = EconomyConfig.Pen
+		local biggest = pen.BaseCapacity + #pen.Prices * pen.PerLevel
+		local top = TrainConfig.capacity(TrainConfig.maxLevel(TrainConfig.Capacity), true)
+		T.le(top, biggest, "the top train with Express")
+		T.le(biggest, GameConfig.MaxStoredItems, "the pen within the save cap")
+		T.le(top, TrainConfig.MaxCargoSaved, "the cargo within the save cap")
+		-- the old train's levels stay as they were (saves don't jump)
+		for i, value in { 8, 12, 18, 26, 36, 50 } do
+			T.eq(TrainConfig.Capacity[i].Value, value, "old level " .. (i - 1))
+		end
+	end)
+
 	T.test("Train: upgrades get better and pricier", function()
 		for _, list in { TrainConfig.Capacity, TrainConfig.Speed } do
 			T.eq(list[1].Price, 0, "level 0 is free")
@@ -23,7 +38,7 @@ return function(T, Loader)
 
 	T.test("Train: capacity, trip time and next price helpers", function()
 		T.eq(TrainConfig.capacity(0, false), 8)
-		T.eq(TrainConfig.capacity(99, false), 1000, "clamped high (the train grows with the backpacks)")
+		T.eq(TrainConfig.capacity(99, false), 120, "clamped high")
 		T.eq(TrainConfig.capacity(0 / 0, false), 8, "NaN")
 		T.eq(TrainConfig.capacity(0, true), 12, "Express +50 %")
 		T.eq(TrainConfig.tripSeconds(0, false), 30)

@@ -221,7 +221,7 @@ TrainService.ReturnText = "Your train is coming back"
 TrainService.PenFullText = "Your Ore Pen is full – make room"
 TrainService.PenOverText = "Your Ore Pen holds too much – take, sell or send some"
 TrainService.ChuteText = "Your train is unloading at your TRAIN chute"
-TrainService.EmptyText = "Your train is empty. Throw ore into a train hopper first."
+TrainService.EmptyText = "Your train is empty. Load the ore from your backpack first."
 TrainService.HandsText = "Your backpack is empty: mine some ore to load your train."
 TrainService.NoPlotText = "Your train leaves once you have a plot."
 -- PlotBuilder's banner colors (by plot id), for a plot whose Banner part can't be found.
@@ -921,11 +921,18 @@ local function loadFromHands(player: Player, hook: Hook)
 	local function shipped(desc: ItemService.Desc): boolean
 		return desc.K ~= "Relic"
 	end
-	-- no yield between taking them out of the backpack and loading them
+	local function dirty(desc: ItemService.Desc): boolean
+		return desc.K == "Raw"
+	end
+	-- no yield between taking them out of the backpack and loading them; the
+	-- dirty ore goes first (the train is the mine's ore line), then the rest
 	local loaded = 0
-	local room = cargoRoom(player, train)
-	if room > 0 then
-		for _, desc in CarryService.take(player, shipped, room) do
+	for _, pick in { dirty, shipped } do
+		local room = cargoRoom(player, train)
+		if room <= 0 then
+			break
+		end
+		for _, desc in CarryService.take(player, pick, room) do
 			table.insert(train.Cargo, desc)
 			loaded += 1
 		end

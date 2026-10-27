@@ -324,8 +324,8 @@ elseif sceneName == "hud_quick" then -- only the HUD overlays over an empty sky 
 	for name, guis in require("./lib/hud_pixel_preview").build(Loader) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "backpack_quick" then -- only the backpack window + its HUD button over an empty sky (tools/lune/lib/backpack_preview.luau)
-	for name, guis in require("./lib/backpack_preview").build(Loader) do
+elseif sceneName == "backpack_window" then -- only the backpack window + its HUD button over an empty sky (tools/lune/lib/backpack_window_preview.luau)
+	for name, guis in require("./lib/backpack_window_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "inv_quick" then -- only the inventory windows over an empty sky (tools/lune/lib/inv_preview.luau)

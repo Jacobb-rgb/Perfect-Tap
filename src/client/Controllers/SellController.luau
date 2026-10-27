@@ -229,7 +229,7 @@ local function sellRow(row: SellView.Row, all: boolean)
 		end)
 		return
 	end
-	local count = math.min(entry.Count, EconomyConfig.Sell.MaxPerRequest)
+	local count = math.min(entry.Count, EconomyConfig.sellCap(from))
 	local run: () -> ()
 	if entry.Dirty then
 		run = function()

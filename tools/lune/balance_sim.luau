@@ -546,7 +546,10 @@ local function flow(p: any): (number, number, any, number)
 	local rockTime = breakTime + A.RockWalk * walkMult(p)
 	local perRock = A.OresPerRock * (1 + (stats.TwinDropChance or 0))
 	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / BackpackData.List[p.Pack].Capacity) / A.Efficiency
-	local cap = trainCapacity(p.TrainCap)
+	-- a train pours into the Ore Pen: more than the biggest pen never arrives in one trip
+	-- (TrainService waits at the stop for room; TrainConfig keeps the top train within it)
+	local penTop = EconomyConfig.Pen.BaseCapacity + #EconomyConfig.Pen.Prices * EconomyConfig.Pen.PerLevel
+	local cap = math.min(trainCapacity(p.TrainCap), penTop)
 	local trainRate = cap / (trainTrip(p.TrainSpeed) + TrainConfig.ReturnSeconds + A.TrainLoad)
 	if p.Cleaners == 0 then
 		local trip = if p.Elevator then 8 else A.CleanTrip
