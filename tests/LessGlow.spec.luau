@@ -17,10 +17,11 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("less glow: floors 3, 5 and 6 keep their exposure near 0", function()
+	T.test("less glow: floors 3, 5 and 6 keep their exposure low", function()
 		for _, name in { "Lagoon", "Storm", "Core" } do
 			local lighting = LightingConfig.Presets[name].Lighting
-			T.le(lighting.ExposureCompensation, 0.1, name .. " exposure")
+			-- (0.45-0.5 washed them out; 2026-10-28 a tiny bit brighter than 0.05)
+			T.le(lighting.ExposureCompensation, 0.2, name .. " exposure")
 			T.le(LightingConfig.Presets[name].Bloom.Intensity, 0.5, name .. " bloom")
 		end
 	end)

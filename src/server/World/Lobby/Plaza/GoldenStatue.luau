@@ -74,24 +74,27 @@ GoldenStatue.Drum = { A = 5.0, H = 2.6 }
 GoldenStatue.Cap = { A = 5.7, H = 0.6 }
 GoldenStatue.Plinth = { A = 3.4, H = 0.5 } -- the gold slab under the feet
 
+-- (owner 2026-10-28: the town a little brighter, the statue as it was: its
+-- colors are a step deeper, matching the Surface preset's exposure step
+-- 0.05 -> 0.12, x 2^(-0.07 / 2.2) in sRGB)
 -- gold: three tones of one metal (shade by part, never by noise); a deep,
 -- saturated gold (Roblox's Metal reflects the bright sunset sky on top of it:
 -- the first, paler gold read as a white-hot blob in Studio)
-local GOLD = rgb(222, 156, 40)
-local GOLD_DEEP = rgb(184, 116, 26)
-local GOLD_LIGHT = rgb(236, 180, 70)
-local GOLD_PALE = rgb(242, 198, 110)
-local AMBER = rgb(255, 128, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
-local LENS = rgb(60, 170, 255)
-local FIRE_GLOW = rgb(240, 90, 14) -- the fire's neon edges (deep: stays orange under bloom)
-local WING_HOT = rgb(255, 140, 36) -- the wings' hot inner panels (plain, not neon: big neon glared)
-local FIRE_PLAIN = rgb(240, 96, 24) -- the mohawk's outer flames (plain)
+local GOLD = rgb(217, 153, 39)
+local GOLD_DEEP = rgb(180, 113, 25)
+local GOLD_LIGHT = rgb(231, 176, 68)
+local GOLD_PALE = rgb(237, 194, 108)
+local AMBER = rgb(249, 125, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
+local LENS = rgb(59, 166, 249)
+local FIRE_GLOW = rgb(235, 88, 14) -- the fire's neon edges (deep: stays orange under bloom)
+local WING_HOT = rgb(249, 137, 35) -- the wings' hot inner panels (plain, not neon: big neon glared)
+local FIRE_PLAIN = rgb(235, 94, 23) -- the mohawk's outer flames (plain)
 -- the sign
 local BOARD = rgb(40, 30, 58) -- the loading screen's dark plum
 local SILVER = rgb(232, 234, 244)
 local FORGE_GOLD = rgb(255, 178, 36)
 local OUTLINE = rgb(22, 14, 30)
-local BULB = rgb(255, 146, 40)
+local BULB = rgb(249, 143, 39)
 
 local OCT = math.tan(math.pi / 8)
 
