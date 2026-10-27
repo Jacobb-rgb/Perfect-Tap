@@ -617,6 +617,9 @@ HudBubble.GameMenu = {
 	HudBubble.Menu[4],
 	{ Id = "Elevator", Label = "ELEVATOR", Icon = "lift", Role = "Base" }, -- the side menu's Elevator entry claims it
 	HudBubble.Menu[5],
+	-- Spin & Win (owner 2026-10-28: the wheel's picture as a tile next to MORE, under
+	-- BOOSTS, instead of the FREE SPIN! chip; WheelController claims it, badge = spins ready)
+	{ Id = "Wheel", Label = "SPIN", Icon = "wheel", Role = "Wheel" },
 } :: { MenuEntry }
 
 HudBubble.CoinsWidth = 250
