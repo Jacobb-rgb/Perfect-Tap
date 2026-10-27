@@ -1,7 +1,7 @@
 --[[
 	StateService: sends each player a small snapshot of their own data for
 	the HUD and menus (coins, blaster, carry, machines, pen, podiums, codex,
-	machine upgrades, keep settings, Foundry stock...).
+	machine upgrades, keep settings...).
 	Other services add fields with StateService.addProvider().
 
 	Network diet (perf pass 1, SERVER_PERF_AUDIT #1):
@@ -18,8 +18,8 @@
 	  belt) goes out only after a layout edit, Discovered only after a find.
 	  A section that disappeared is listed in snapshot.Removed; the first
 	  push after a join is whole and says snapshot.Full = true.
-	- A changed flat section (string keys, plain values: the Storage and
-	  Foundry summaries, Stats, Train, Build...) whose keys mostly stayed the
+	- A changed flat section (string keys, plain values: the Storage,
+	  Stats, Train, Build...) whose keys mostly stayed the
 	  same goes as a patch instead: snapshot.Patch[section] = { Set = {key =
 	  value}, Clear = {keys} }. One ore into the pen sends one count, not the
 	  whole pen.
@@ -44,8 +44,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BackpackData = require(Shared.Config.BackpackData)
 local BlasterData = require(Shared.Config.BlasterData)
-local GearConfig = require(Shared.Config.GearConfig)
 local ItemData = require(Shared.Config.ItemData)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -325,34 +325,67 @@ local function storageSummary(storage: { ItemData.Desc }): { [string]: number }
 	return summary
 end
 
+--[[
+	State.Backpacks: { Equipped = the worn pack, Owned = { ids } (BackpackData
+	order, then a newer build's), Count = items inside, Capacity, Items = the
+	backpack's contents ({ [storage key] = count }) }. (Built here from the save:
+	BackpackService.summary says the same; StateService requires no service above it.)
+]]
+local function backpacksOf(player: Player, data: { [string]: any }): { [string]: any }
+	local packs = data.Backpacks
+	local set = if type(packs) == "table" and type(packs.Owned) == "table" then packs.Owned else {}
+	local owned: { string } = {}
+	for _, id in BackpackData.Ids do
+		if id == BackpackData.StarterId or set[id] == true then
+			table.insert(owned, id)
+		end
+	end
+	for id, on in set do
+		if on == true and type(id) == "string" and not BackpackData.ById[id] then
+			table.insert(owned, id)
+		end
+	end
+	local items = if type(data.BackpackItems) == "table" then data.BackpackItems else {}
+	local count = 0
+	for _, n in items do
+		if type(n) == "number" and n == n and n > 0 then
+			count += math.floor(n)
+		end
+	end
+	local equipped = if type(packs) == "table" and type(packs.Equipped) == "string" then packs.Equipped else BackpackData.StarterId
+	return {
+		Equipped = equipped,
+		Owned = owned,
+		Count = count,
+		Capacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
+		Items = items,
+	}
+end
+
 function StateService.snapshot(player: Player): { [string]: any }?
 	local data = DataService.get(player)
 	if not data then
 		return nil
 	end
-	local foundry = data.Foundry
-	local foundryStock: { ItemData.Desc } = if type(foundry) == "table" and type(foundry.Stock) == "table" then foundry.Stock else {}
 	local snapshot: { [string]: any } = {
 		Coins = data.Coins,
 		TotalEarned = data.TotalEarned,
 		BlasterLevel = BlasterData.get(data.BlasterLevel).Level,
 		BlasterOre = data.BlasterOre,
 		Podiums = data.Podiums,
-		-- deprecated mirror of the Backpack level (old CarryLevel = Backpack + 1)
-		CarryLevel = GearConfig.level(data.Gear, "Backpack") + 1,
-		-- the same number CarryService uses (Bonuses: Backpack, later providers, StrongBack)
+		-- the same number CarryService uses (Bonuses: the worn pack, later providers, StrongBack)
 		CarryCapacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
+		-- the backpack (owner 2026-10-24; BackpackService / CarryService, the shop window reads it)
+		Backpacks = backpacksOf(player, data),
 		Upgrades = data.Upgrades,
 		MachineInventory = data.MachineInventory,
 		PlacedCount = #data.PlacedMachines,
 		StorageCount = #data.Storage,
 		Storage = storageSummary(data.Storage),
-		-- step 3: Tech shop levels, the Iron Box / billboard keep settings, the Foundry's ingots
+		-- step 3: Tech shop levels, the Iron Box / billboard keep settings
 		MachineUpgrades = data.MachineUpgrades,
 		KeepMode = data.KeepMode,
 		KeepList = data.KeepList,
-		FoundryStock = storageSummary(foundryStock),
-		FoundryCount = #foundryStock,
 		-- steps 6-7: the saved records as they are (times are os.time() seconds:
 		-- compare with workspace:GetServerTimeNow()), crystal shards, and the
 		-- player's bonus numbers (Bonuses.summary)

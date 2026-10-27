@@ -4,28 +4,26 @@
 	- Hold the fire button: a beam hits the rock you aim at and takes
 	  Damage HP per second. A rock needs the zone's MinBlaster level
 	  (WorldLayout.Zones) before the beam does anything.
-	- 10 levels; level 11 is shown as "Coming soon". New levels are forged in
-	  the Foundry (step 3) from ingots + coins (Recipe). The blaster takes the
-	  look of the ore it was forged from (data.BlasterOre, "" = the rusty
-	  starter look) and a small damage bonus from that ore's rarity.
+	- 10 levels; level 11 is shown as "Coming soon". New levels are bought in
+	  the Blaster Vault for coins (owner 2026-10-24: no Foundry any more; the
+	  enchants in the shop make a blaster better). The blaster takes the look
+	  of its case's ore (data.BlasterOre, "" = the rusty starter look) and a
+	  small damage bonus from that ore's rarity.
 	- Rocks hold 1-3 ores (OreCountOdds). Their HP comes from the zone and
 	  grows with the number and hardness of the ores inside (rockHealth).
 ]]
 
 local OreData = require(script.Parent.OreData)
 
-export type Recipe = {
-	Ingots: number, -- ingots needed
-	MinRarity: string, -- every ingot must be at least this rare
-	Coins: number,
-}
-
 export type Blaster = {
 	Level: number,
 	Name: string,
 	Damage: number, -- rock HP per second
 	Range: number, -- studs from the character to the rock surface
-	Recipe: Recipe?, -- nil for level 1 (everyone starts with it)
+	-- the level's coin scale (nil for level 1, everyone starts with it): the Vault price is
+	-- Coins x Vault.PriceMultiplier, and the prices that follow the blaster (hoverboards, the
+	-- lift, coin boosts, quest floors, the rebirth stars) scale with it (the Foundry's old prices)
+	Coins: number?,
 	ComingSoon: boolean?,
 }
 
@@ -33,21 +31,21 @@ local BlasterData = {}
 
 BlasterData.Levels = {
 	{ Level = 1, Name = "Rusty Blaster", Damage = 5, Range = 22 },
-	{ Level = 2, Name = "Scrap Blaster", Damage = 9, Range = 24, Recipe = { Ingots = 3, MinRarity = "Common", Coins = 350 } },
-	{ Level = 3, Name = "Spark Blaster", Damage = 16, Range = 26, Recipe = { Ingots = 5, MinRarity = "Common", Coins = 17000 } },
-	{ Level = 4, Name = "Ember Blaster", Damage = 29, Range = 28, Recipe = { Ingots = 6, MinRarity = "Uncommon", Coins = 710000 } },
-	{ Level = 5, Name = "Forgefire Blaster", Damage = 52, Range = 30, Recipe = { Ingots = 8, MinRarity = "Uncommon", Coins = 2.1e6 } },
-	{ Level = 6, Name = "Sunlance", Damage = 94, Range = 32, Recipe = { Ingots = 8, MinRarity = "Rare", Coins = 73e6 } },
-	{ Level = 7, Name = "Stormlance", Damage = 170, Range = 34, Recipe = { Ingots = 10, MinRarity = "Rare", Coins = 130e6 } },
-	{ Level = 8, Name = "Starlance", Damage = 305, Range = 36, Recipe = { Ingots = 10, MinRarity = "Epic", Coins = 2.2e9 } },
-	{ Level = 9, Name = "Royal Sunlance", Damage = 550, Range = 38, Recipe = { Ingots = 12, MinRarity = "Epic", Coins = 31e9 } },
-	{ Level = 10, Name = "Heartlance", Damage = 990, Range = 40, Recipe = { Ingots = 12, MinRarity = "Legendary", Coins = 290e9 } },
+	{ Level = 2, Name = "Scrap Blaster", Damage = 9, Range = 24, Coins = 350 },
+	{ Level = 3, Name = "Spark Blaster", Damage = 16, Range = 26, Coins = 17000 },
+	{ Level = 4, Name = "Ember Blaster", Damage = 29, Range = 28, Coins = 710000 },
+	{ Level = 5, Name = "Forgefire Blaster", Damage = 52, Range = 30, Coins = 2.1e6 },
+	{ Level = 6, Name = "Sunlance", Damage = 94, Range = 32, Coins = 73e6 },
+	{ Level = 7, Name = "Stormlance", Damage = 170, Range = 34, Coins = 130e6 },
+	{ Level = 8, Name = "Starlance", Damage = 305, Range = 36, Coins = 2.2e9 },
+	{ Level = 9, Name = "Royal Sunlance", Damage = 550, Range = 38, Coins = 31e9 },
+	{ Level = 10, Name = "Heartlance", Damage = 990, Range = 40, Coins = 290e9 },
 	{ Level = 11, Name = "???", Damage = 0, Range = 0, ComingSoon = true },
 } :: { Blaster }
 
 BlasterData.MaxLevel = 10
 
--- Extra damage from the rarity of the ore a blaster was forged from.
+-- Extra damage from the rarity of the blaster's ore (its case's, BlasterData.vaultOre).
 BlasterData.RarityBonus = {
 	Common = 0,
 	Uncommon = 0.05,
@@ -77,29 +75,61 @@ BlasterData.Rocks = {
 
 --[[
 	The Blaster Vault (the blaster shop at the end of the lobby's south road):
-	it sells your NEXT blaster level for coins only (no ingots), in the look of
-	that level's weapon case, and opens the case in the crate-opening
-	cinematic. Levels go in order (no skipping). The Foundry stays the cheaper
-	way (ingots + coins) and lets you pick the ore look.
+	the only way to a better blaster (owner 2026-10-24). It sells your NEXT
+	blaster level for coins, in the look of that level's weapon case, and
+	opens the case in the crate-opening cinematic. Levels go in order (no
+	skipping).
 ]]
 BlasterData.Vault = {
-	PriceMultiplier = 4, -- x the level's Foundry coin price (Recipe.Coins)
+	-- x the level's Coins: `lune run tools/lune/balance_sim.luau calibrate-vault` puts a typical
+	-- player at LV 10 at ~8 h with it (2026-10-24, no Foundry; 4 while the Foundry was the cheap way)
+	PriceMultiplier = 1.15,
+	-- A rebirth keeps the factory and its income (droppers, Money Lasers, the podiums with
+	-- Podium Keeper), so in a rebirth run the low levels would cost seconds and the stars
+	-- would farm. There a level costs at least RunShare x RunSeconds[level] seconds of the
+	-- income kept at the rebirth (Stats.RunIncome, RebirthService): RunSeconds are the gaps
+	-- of a first run (balance_sim's targets), so an idle run takes at least RunShare of one.
+	RunShare = 0.5,
+	RunSeconds = { [2] = 180, [3] = 540, [4] = 780, [5] = 1200, [6] = 2100, [7] = 2400, [8] = 4500, [9] = 6300, [10] = 10800 },
 	-- the ore look of each level's case (ores kept in the 36-ore roster too); the
 	-- ores' rarity never falls as the level rises (owner 2026-10-20: LV 4 Emberite,
 	-- LV 6 Sapphire, LV 7 Amethyst, so the case colours follow the rarity)
 	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "Obsidian", "RoyalAurum", "Heartstone" },
 }
 
--- The coin price of a level's case in the Blaster Vault (nil for level 1 and unknown levels).
-function BlasterData.vaultPrice(level: any): number?
+--[[
+	The coin price of a level's case in the Blaster Vault (nil for level 1 and
+	unknown levels): Coins x PriceMultiplier rounded to 2 significant digits,
+	and in a rebirth run at least `runIncome` (Stats.RunIncome, coins / s) x
+	RunShare x RunSeconds[level], rounded up to 2 significant digits.
+]]
+function BlasterData.vaultPrice(level: any, runIncome: number?): number?
 	if type(level) ~= "number" or level ~= math.floor(level) then
 		return nil
 	end
 	local blaster = BlasterData.ByLevel[level]
-	if not blaster or not blaster.Recipe or blaster.ComingSoon then
+	if not blaster or not blaster.Coins or blaster.ComingSoon then
 		return nil
 	end
-	return blaster.Recipe.Coins * BlasterData.Vault.PriceMultiplier
+	local raw = blaster.Coins * BlasterData.Vault.PriceMultiplier
+	local digits = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+	local price = math.floor(raw / digits + 0.5) * digits
+	local seconds = BlasterData.Vault.RunSeconds[level]
+	if seconds and type(runIncome) == "number" and runIncome == runIncome and runIncome > 0 then
+		local floor = math.min(runIncome, 1e27) * seconds * BlasterData.Vault.RunShare
+		if floor > price then
+			local step = 10 ^ math.max(0, math.floor(math.log10(floor)) - 1)
+			price = math.ceil(floor / step) * step
+		end
+	end
+	return price
+end
+
+-- A level's coin scale (0 for level 1 and unknown levels): what the prices that follow
+-- the blaster scale with.
+function BlasterData.coins(level: any): number
+	local blaster = if type(level) == "number" then BlasterData.ByLevel[level] else nil
+	return if blaster and blaster.Coins then blaster.Coins else 0
 end
 
 -- The ore look of a level's case ("" = the rusty starter look).

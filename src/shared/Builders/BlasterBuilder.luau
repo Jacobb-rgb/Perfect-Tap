@@ -19,7 +19,7 @@
 	              skin (starSkin, the previews use it too), the forged
 	              level's Range and Level (the client's range and gates),
 	              the star's Glow as the beam, attribute Star = its id
-	  silhouette  a level's black outline (the Foundry's NEXT rack)
+	  silhouette  a level's black outline (a builder for racks and previews)
 
 	Pure: only Instance creation, so Lune tests and previews can build it.
 ]]
@@ -287,7 +287,7 @@ end
 --[[
 	A level's black silhouette (the whole outline in one color, 8-23 parts):
 	a Model of anchored, non-colliding parts in the gun's frame (the hand at
-	the origin, the barrel along -Z). The Foundry's NEXT rack uses it.
+	the origin, the barrel along -Z).
 ]]
 function BlasterBuilder.silhouette(level: any, color: Color3?): Model
 	local model = Instance.new("Model")

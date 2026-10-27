@@ -145,7 +145,7 @@ StoreConfig.Cards = {
 		Row = 1,
 		Title = "FORGEMASTER'S PASS",
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
-		Lines = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
+		Lines = { "Podiums 4 and 5", "12 h offline earnings", "Double backpack space", "The Glimmer Grotto", "Extra machine slots" },
 	}),
 	-- the Starter Pack (one per player, in the first hour of play: StarterPackService;
 	-- StoreController hides it once bought or when the offer is over)
@@ -368,27 +368,15 @@ StoreConfig.Cards = {
 		Tag = "FAST TRAIN",
 	}),
 	card({
-		Id = "Comet",
-		Keys = { "HoverboardComet" },
+		Id = "CustomBoard",
+		Keys = { "HoverboardCustom" },
 		Look = "Item",
-		Paint = "Teal",
+		Paint = "Rainbow",
 		Icon = "hoverboard",
-		Model = "board_NeonComet",
+		Model = "board_TerraForgeCustom",
 		Section = "Passes",
 		Row = 2,
-		Title = "Neon Comet",
-		Tag = "SPEED 35",
-	}),
-	card({
-		Id = "Phoenix",
-		Keys = { "HoverboardPhoenix" },
-		Look = "Item",
-		Paint = "Purple",
-		Icon = "hoverboard",
-		Model = "board_RoyalPhoenix",
-		Section = "Passes",
-		Row = 2,
-		Title = "Phoenix",
+		Title = "TF Custom",
 		Tag = "SPEED 38",
 	}),
 	card({

@@ -19,8 +19,8 @@
 	touch targets stay >= 44 pt at the smallest UI scale (Normal's 50-unit
 	buttons stay >= 44 pt down to a 0.88 scale). Given the screen's size in
 	design units (setCompact's `room`), the panel keeps clear of the HUD: it
-	shows as many rows as fit between the coins (top left) and the HANDS
-	box (bottom centre), and on phones it sits at the top, right of the
+	shows as many rows as fit between the coins (top left) and the
+	backpack button (bottom centre), and on phones it sits at the top, right of the
 	coins.
 	PenView.entries() turns the State snapshot into sorted rows (pure, tested).
 	The look is the Robux Shop's Pop kit (owner 2026-10-21: "new, modern,
@@ -117,7 +117,7 @@ PenView.OffColor = Color3.fromRGB(128, 118, 110)
 PenView.OffDark = Color3.fromRGB(74, 66, 60)
 PenView.MinRows = 2
 -- The HUD the panel keeps clear of (HudView, design units): the coins box
--- top left (16 + 74 tall, 16 + CoinsWidth 236 wide) and the HANDS box at
+-- top left (16 + 74 tall, 16 + CoinsWidth 236 wide) and the backpack button at
 -- the bottom centre (74 tall, 16 above the edge).
 PenView.HudTop = 90
 PenView.HudLeft = 252
@@ -1344,7 +1344,7 @@ function PenView.setMode(refs: Refs, mode: Mode, slot: number?)
 		refs.Empty.Text = "No cleaned ore in your pen yet. Clean dirty ore at the Cleaning Station, then come back."
 	else
 		refs.Title.Text = "ORE PEN"
-		refs.Empty.Text = "Your Ore Pen is empty. Throw or drop ore into the pen to keep it here."
+		refs.Empty.Text = "Your Ore Pen is empty. Use Put In at the pen to store the ore in your backpack."
 	end
 	layoutPanel(refs)
 end

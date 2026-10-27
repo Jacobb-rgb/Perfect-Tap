@@ -85,8 +85,9 @@ function Dummy.build(parent, CFrame, root, pose, colors, pickaxeTool)
 	return m
 end
 
--- Same stack layout as CarryService.stackOffset (three columns in front of
--- the chest from the middle out, then a bundle on the back).
+-- The old hand-carry stack layout (CarryService.stackOffset until the backpacks
+-- came, 2026-10-24: three columns in front of the chest from the middle out,
+-- then a bundle on the back); the moves previews still draw it.
 local COLUMN_ORDER = { 0, -1, 1 }
 function Dummy.stackOffset(CFrame, index)
 	local i = math.max(0, index - 1)

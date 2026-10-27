@@ -306,14 +306,16 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- the fire crystal spins once the Plaza package has landed
+		-- the golden dragon statue (2026-10-25, where the spinning fire crystal
+		-- stood) once the Plaza package has landed: its ring carries the Star
+		-- Forge prompt (RebirthService), nothing in the plaza spins any more
 		local plaza = map.Emberfall:FindFirstChild("Lobby") and map.Emberfall.Lobby:FindFirstChild("Plaza")
 		if plaza then
-			local spins = false
+			T.truthy(plaza:FindFirstChild("GoldenStatue"), "the Plaza's golden dragon statue")
+			T.truthy(plaza:FindFirstChild("FireCrystalRing"), "the statue's ring (the Star Forge prompt's parent)")
 			for _, inst in tagged.Spin or {} do
-				spins = spins or inst:IsDescendantOf(plaza)
+				T.falsy(inst:IsDescendantOf(plaza), inst:GetFullName() .. " spins in the plaza")
 			end
-			T.truthy(spins, "the Plaza's fire crystal is tagged Spin")
 		end
 	end)
 end

@@ -11,7 +11,8 @@
 	opts: Speed (face units / s), Spacing (row gap in spray radii), Input,
 	      Start (session clock of the first sample), Seed, Even (computed
 	      timestamps: t += SampleStep, what a script does), Linger (seconds to
-	      hold still on every crystal), Margin (face units past the clump's edge)
+	      hold still on every crystal before the rows: the strong jet finishes
+	      the job before a pass afterwards), Margin (face units past the clump's edge)
 	Returns submission, tracker.
 ]]
 
@@ -126,6 +127,12 @@ return function(Loader: any)
 		for _, p in pattern.Outline do
 			minV, maxV = math.min(minV, p.Y), math.max(maxV, p.Y)
 		end
+		if o.Linger then
+			for _, crystal in pattern.Crystals do
+				rec.hold(crystal.Center, o.Linger)
+				rec.lift(0.1)
+			end
+		end
 		local row = 0
 		local v = minV + spacing * 0.5
 		while v < maxV and not rec.done() do
@@ -140,12 +147,6 @@ return function(Loader: any)
 				row += 1
 			end
 			v += spacing
-		end
-		if o.Linger then
-			for _, crystal in pattern.Crystals do
-				rec.lift(0.1)
-				rec.hold(crystal.Center, o.Linger)
-			end
 		end
 		mopUp(rec, pattern, speed)
 		return rec.result()

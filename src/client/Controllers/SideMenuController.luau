@@ -54,7 +54,7 @@
 	shows over the menu while a gamepad is used; the touch grid opens), the
 	D-pad moves, A opens, B leaves; D-pad Left leaves from the first column
 	only (in a grid it moves left). The menu hides whenever the HUD's own
-	menu is hidden (build mode, the cleaning minigame, the Foundry moment),
+	menu is hidden (build mode, the cleaning minigame, the crate opening),
 	and the side menu's own panels (CODEX, SETTINGS, HALL OF FAME) close then.
 ]]
 
@@ -265,7 +265,7 @@ local function onJump(_: string, state: Enum.UserInputState): Enum.ContextAction
 	end
 	if light and state == Enum.UserInputState.Begin and GuiService.SelectedObject == nil then
 		-- the light UI: D-pad Left jumps onto the first light tile (not while the HUD is hidden:
-		-- the cleaning minigame, the Foundry moment)
+		-- the cleaning minigame, the crate opening)
 		local hud = HudController.refs()
 		local faces = if hud and hudVisible then HudBubble.linkMenu(hud.Menu) else {}
 		if faces[1] then

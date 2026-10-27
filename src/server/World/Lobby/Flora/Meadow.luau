@@ -41,6 +41,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Parent.Plaza.Common)
 local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
+local RoadFence = require(script.Parent.Parent.Plaza.RoadFence)
 local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
 local Railway = require(script.Parent.Parent.Parent.Railway)
@@ -69,22 +70,25 @@ Meadow.BridgeGarden = { Min = Vector3.new(-22, 0, -114), Max = Vector3.new(22, 0
 	sides (autumn toward the MINE in the west, pink and green toward the
 	hamlet in the east, like the woods either side), flower beds, grass
 	tufts, patches, bushes and stones. The town's passes (and the wilds) keep
-	out of it, and its lawn pieces count toward Meadow.Max (phones: no budget
-	raise), so the town's capped lawn thins by about a quarter (see
-	Meadow.Max). x +-52 meets the town's lawn
-	beside the plot roads (the MINE yard's rails reach x -59). nil at 12
-	cells, where the south coast is z 150.
+	out of it, and its lawn pieces have their own caps (Meadow.SouthLawnMax)
+	on top of the town's (Meadow.Max: owner 2026-10-24, quality over the
+	part limits, so the town's lawn is back to its full density). x +-52
+	meets the town's lawn beside the plot roads (the MINE yard's rails reach
+	x -59). nil at 12 cells, where the south coast is z 150.
 ]]
 Meadow.SouthLawn = if WorldLayout.PlotGrid.SouthShift > 0
 	then { Min = Vector3.new(-52, 0, 150), Max = Vector3.new(52, 0, Meadow.Area.Max.Z) }
 	else nil
 -- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
--- (2026-10-22: the lawn behind the Vault takes its share of these, Meadow.SouthLawnMax, and
--- 28 tufts went for its pond and trees: phones. The town's lawn, measured after the wilds
--- clear their spots, went from ~750 parts to ~550: tufts 100 -> 58, flower beds 47 -> 34,
--- patches 60 -> 52, bushes 36 -> 30, rocks 24 -> 20. Giving it back costs ~200 parts of
--- Flora's lobby budget and the map's, which have ~50 and ~110 left: the owner's call.)
-Meadow.Max = { Tufts = 72, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
+-- The town's lawn caps (Meadow.Area; the lawn behind the Vault has its own, Meadow.SouthLawnMax).
+-- (2026-10-22: the lawn behind the Vault took its share of these and 28 tufts went for its pond
+-- and trees (phones): the town's lawn, measured after the wilds clear their spots, went from
+-- ~750 parts to ~550: tufts 100 -> 58, flower beds 47 -> 34, patches 60 -> 52, bushes 36 -> 30,
+-- rocks 24 -> 20.)
+-- (owner 2026-10-24: "limit je jedno, hlavni je aby vse bylo nejlepsi", quality over the part
+-- limits, phones and PC alike: the town's lawn is back to its pre-bay-fill caps and the lawn behind
+-- the Vault keeps its own share on top; the budgets it needed went up by the measured parts.)
+Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
 Meadow.FencedStrips = {
@@ -97,11 +101,22 @@ Meadow.FencedStrips = {
 	WestSpur = true,
 	ToScanner = true,
 	MineLane = true,
+	-- (2026-10-25: the lane to the next area too, with the road fences)
+	ToNextArea = RoadFence.Enabled,
 }
-Meadow.FenceRun = 20 -- longest fence piece; a 3-stud gap follows each
+-- longest fence piece; a gap to walk through follows each
+Meadow.FenceRun = if RoadFence.Enabled then 24 else 20
+Meadow.FenceGap = 3
 Meadow.FenceHeight = 2.4
 -- fence line past the road edge (2026-10-20: behind the street lamps' feet, so the runs pass them)
 Meadow.FenceOffset = if StreetLampPlan.Enabled then 2.8 else 2
+-- (2026-10-25) the plot roads' town side: the street lamps and the tree belt with its
+-- hedges stand by the road, so the fence runs in one straight line behind the belt
+-- (Flora/Trees' old belt fence line, |x| 60.3): extra offset past FenceOffset
+Meadow.FenceBackOffsets = if RoadFence.Enabled then { EastPlotRoad = 2.4, WestPlotRoad = 2.4 } else {}
+-- (2026-10-25) the road fences may also stand past the meadow's north edge (the lane
+-- to the next area runs along the mountain foot at z -121)
+Meadow.FenceArea = { Min = Vector3.new(Meadow.Area.Min.X, 0, -125), Max = Meadow.Area.Max }
 
 local FLOWERS = { C.FlowerYellow, C.FlowerWhite, C.FlowerPurple, C.LeafPink, C.LeafPinkLight }
 
@@ -696,53 +711,75 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 		if not Meadow.FencedStrips[s.Id] then
 			continue
 		end
+		local from = Vector3.new(s.From.X, 0, s.From.Z)
 		local delta = Vector3.new(s.To.X - s.From.X, 0, s.To.Z - s.From.Z)
 		local length = delta.Magnitude
 		local dir = delta / length
 		local right = Vector3.new(-dir.Z, 0, dir.X)
+		-- (past the road's edge border and the street lamps' feet; then behind a tree belt)
+		local back = Meadow.FenceBackOffsets[s.Id]
+		local offsets = { s.Width / 2 + Meadow.FenceOffset + (back or 0) }
 		for _, side in { -1, 1 } do
-			-- (past the road's edge border and the street lamps' feet)
-			local offset = s.Width / 2 + Meadow.FenceOffset
+			-- the fence line at t: the first offset that is free there (0 = none)
+			local function lineAt(t: number): number
+				for i, offset in offsets do
+					local p = from + dir * t + right * side * offset
+					local lawn = p + right * side * 1.6
+					-- (the road fences stand in front of whatever is behind them: a
+					-- cliff, a stall, the belt's inner trees; the timber ones kept a lawn
+					-- behind them)
+					local ok = Meadow.allowed(p, 1, if RoadFence.Enabled then Meadow.FenceArea else nil)
+						and Vector3.new(p.X, 0, p.Z).Magnitude > Common.PlazaRadius + 6
+						and Common.offStrips(p, 1)
+						and Meadow.free(index, p, 0.7, 3.2)
+						and (RoadFence.Enabled or Meadow.free(index, lawn, 0.9, 3))
+					if ok then
+						return i
+					end
+				end
+				return 0
+			end
 			local runs: { { number } } = {}
 			local start: number? = nil
+			local line = 0
 			local t = 0
 			while t <= length + 0.01 do
-				local p = Vector3.new(s.From.X, 0, s.From.Z) + dir * t + right * side * offset
-				local lawn = p + right * side * 1.6
-				local ok = Meadow.allowed(p, 1)
-					and Vector3.new(p.X, 0, p.Z).Magnitude > Common.PlazaRadius + 6
-					and Common.offStrips(p, 1)
-					and Meadow.free(index, p, 0.7, 3.2)
-					and Meadow.free(index, lawn, 0.9, 3)
-				if ok and not start then
-					start = t
-				elseif not ok and start then
-					table.insert(runs, { start, t - 1 })
+				local here = lineAt(t)
+				if start and here ~= line then
+					table.insert(runs, { start, t - 1, line })
 					start = nil
+				end
+				if here > 0 and not start then
+					start, line = t, here
 				end
 				t += 1
 			end
 			if start then
-				table.insert(runs, { start, length })
+				table.insert(runs, { start, length, line })
 			end
 			for _, run in runs do
 				local a = run[1]
+				local offset = offsets[run[3]]
 				while run[2] - a >= 5 do
 					local b = math.min(run[2], a + Meadow.FenceRun)
-					local pa = Vector3.new(s.From.X, 0, s.From.Z) + dir * a + right * side * offset
-					local pb = Vector3.new(s.From.X, 0, s.From.Z) + dir * b + right * side * offset
-					for _, q in { pa, (pa + pb) / 2, pb } do
-						fenceLantern(m, q)
+					local pa = from + dir * a + right * side * offset
+					local pb = from + dir * b + right * side * offset
+					if RoadFence.Enabled then
+						track(index, RoadFence.run(m, pa, pb))
+					else
+						for _, q in { pa, (pa + pb) / 2, pb } do
+							fenceLantern(m, q)
+						end
+						local fence = Style.fence(m, pa, pb, {
+							Height = Meadow.FenceHeight,
+							PostEvery = 4,
+							Rails = 2,
+							PostColor = C.WoodDark,
+							RailColor = Style.vary(C.Wood, rng, 0.04),
+						})
+						track(index, fence)
 					end
-					local fence = Style.fence(m, pa, pb, {
-						Height = Meadow.FenceHeight,
-						PostEvery = 4,
-						Rails = 2,
-						PostColor = C.WoodDark,
-						RailColor = Style.vary(C.Wood, rng, 0.04),
-					})
-					track(index, fence)
-					a = b + 3
+					a = b + Meadow.FenceGap
 				end
 			end
 		end
@@ -969,8 +1006,9 @@ Meadow.SouthTrees = {
 	{ At = Vector3.new(-14, 0, 176), Kind = "Green", Scale = 0.9 },
 	{ At = Vector3.new(14, 0, 177), Kind = "Red", Scale = 0.9 },
 } :: { { At: Vector3, Kind: string, Scale: number } }
--- its share of the lawn's caps (Meadow.Max: the town's lawn gets the rest),
--- round its pond and its trees (Meadow.SouthNear studs past their edges);
+-- its own lawn caps, on top of the town's (Meadow.Max; owner 2026-10-24: they
+-- no longer come out of the town's lawn), round its pond and its trees
+-- (Meadow.SouthNear studs past their edges);
 -- per free lawn spot (~280 there, ~710 in the town) it is no denser than the
 -- town's lawn, so a smaller share would only thin it below the town's look
 Meadow.SouthLawnMax = { Tufts = 14, Flowers = 12, Patches = 8, Bushes = 6, Rocks = 4 }
@@ -991,8 +1029,8 @@ local function southSpot(index: Index, south: Box, at: Vector3, r: number, top: 
 	return nil
 end
 
--- Builds the lawn behind the Vault (nothing at 12 cells); returns what its
--- lawn pieces took of the caps.
+-- Builds the lawn behind the Vault (nothing at 12 cells); returns how many
+-- lawn pieces it placed (of Meadow.SouthLawnMax).
 local function southLawn(parent: Instance, index: Index, rng: Rng.Rng): LawnCounts
 	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
 	local south = Meadow.SouthLawn
@@ -1043,9 +1081,11 @@ function Meadow.build(map: Instance, rng: Rng.Rng): Model
 	jungle(m, map, index, Rng.new(`Meadow/Jungle/{rng:nextU32()}`))
 	local lawnRng = Rng.new(`Meadow/Lawn/{rng:nextU32()}`)
 	local butterflyRng = Rng.new(`Meadow/Butterflies/{rng:nextU32()}`)
-	-- the lawn behind the Vault first: its pieces count toward the town's caps
-	local count = southLawn(m, index, Rng.new(`Meadow/SouthLawn/{rng:nextU32()}`))
-	local _, beds = lawn(m, index, lawnRng, Meadow.Area, Meadow.Max, count)
+	-- the lawn behind the Vault first (its pond and trees take their ground), with its own
+	-- caps: the town's lawn counts from zero up to Meadow.Max (owner 2026-10-24)
+	southLawn(m, index, Rng.new(`Meadow/SouthLawn/{rng:nextU32()}`))
+	local town = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
+	local _, beds = lawn(m, index, lawnRng, Meadow.Area, Meadow.Max, town)
 	butterflies(m, beds, butterflyRng, Meadow.ButterflyBeds)
 	decorate(m)
 	return m

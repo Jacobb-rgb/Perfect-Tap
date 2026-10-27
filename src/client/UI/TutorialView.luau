@@ -12,7 +12,8 @@
 
 	Where it goes (TutorialView.layout):
 	  mouse     the bottom-right corner (the right-side menu is centred above
-	            it, the hotbar and the carry slots are in the middle)
+	            it, the backpack button right of the middle; a narrow screen
+	            lifts the bubble over it)
 	  gamepad   the same corner, kept TenFootSafe of the screen from the
 	            edges (the TV's title-safe area)
 	  touch     the top-right corner: the bottom right is the jump and throw
@@ -90,12 +91,12 @@ TutorialView.SkipWidth = 84
 TutorialView.AckWidth = 112
 
 -- The panels the steps send the player to (the Ore Pen for Clean, Tobin's
--- counter and the Tech shop for Grow, the Foundry for Blaster): the bubble
+-- counter and the Tech shop for Grow, the Blaster Vault for Blaster): the bubble
 -- stays up beside them. Any other open panel (MenuPanels.Names: the side
 -- menu's CODEX, GOLEMS, ARTIFACTS, BOOSTS, SETTINGS, HALL OF FAME, the
 -- wheel, the shops...) has the screen: the bubble and the guide hide and
 -- R3 is free (TutorialController).
-TutorialView.StepPanels = { "PenController", "SellController", "TechShopController", "FoundryController" }
+TutorialView.StepPanels = { "PenController", "SellController", "TechShopController", "VaultController" }
 
 -- Does one of these open panels hide the bubble?
 function TutorialView.panelHides(open: { string }): boolean
@@ -150,6 +151,12 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	if tenFoot then
 		right = math.max(right, w * TutorialView.TenFootSafe)
 		bottom = math.max(bottom, h * TutorialView.TenFootSafe)
+	end
+	-- a narrow screen (4:3): over the HUD's backpack button when the bubble would reach it
+	local pack = if scale <= HudBubble.CompactScale then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local packRight = w / 2 + HudBubble.backpackX(scale, tenFoot) + pack.X
+	if w - right - TutorialView.Width < packRight + TutorialView.BarGap then
+		bottom = math.max(bottom, HudBubble.BackpackBottom + pack.Y + TutorialView.BarGap)
 	end
 	local body, row = TutorialView.Body, TutorialView.RowMouse
 	return {

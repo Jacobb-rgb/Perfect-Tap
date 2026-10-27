@@ -19,8 +19,8 @@
 	grey with "Hold your blaster" while the blaster isn't in hand. A refused
 	pick says why on the hint line (put the ore down first...).
 
-	Never in a close-up (cleaning, build mode, the Foundry anvil, the
-	vault, any Scriptable camera): N and the tile do nothing there (every
+	Never in a close-up (cleaning, build mode, the vault, any
+	Scriptable camera): N and the tile do nothing there (every
 	pick would be refused, and the menu's B / Backspace would take the key
 	cleaning exits with).
 ]]
@@ -57,7 +57,6 @@ local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 
 -- what a refused pick says on the hint line
 EmoteController.Reasons = {
-	Carrying = "Put the ore down first.",
 	Building = "Not while building or cleaning.",
 	Riding = "Get off the hoverboard first.",
 	Seated = "Stand up first.",
@@ -252,7 +251,7 @@ local function onKey(_: string, inputState: Enum.UserInputState): Enum.ContextAc
 		return Enum.ContextActionResult.Pass
 	end
 	if not isOpen and inCloseUp() then
-		return Enum.ContextActionResult.Pass -- (cleaning, build mode, the Foundry...: no menu there)
+		return Enum.ContextActionResult.Pass -- (cleaning, build mode, the vault...: no menu there)
 	end
 	EmoteController.toggle()
 	return Enum.ContextActionResult.Sink

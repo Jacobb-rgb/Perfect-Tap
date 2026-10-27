@@ -63,7 +63,7 @@ export type Info = {
 	Start: number?, -- the level a rebirth starts with (RebirthConfig.startFor: Head Start + Robux levels)
 	Glow: string?, -- the Plot Glow colour shown ("" = off)
 	Weapons: { [string]: boolean }?, -- the STAR blasters owned
-	Weapon: string?, -- the one equipped ("" = the forged blaster)
+	Weapon: string?, -- the one equipped ("" = your own blaster)
 	RobuxOn: boolean?, -- Robux sales are on (the receipts gate)
 }
 
@@ -195,8 +195,8 @@ end
 function RebirthView.needText(info: Info): string
 	local reached = info.Reached or info.Level
 	if info.Ready and info.StarsNow <= 0 then
-		-- at the top with nothing forged this run: a rebirth is allowed, for no stars
-		return "Nothing left to forge: a rebirth now pays no stars"
+		-- at the top with no level bought with coins this run: a rebirth is allowed, for no stars
+		return "Nothing left to buy: a rebirth now pays no stars"
 	end
 	if info.Ready then
 		return `Blaster LV {reached}: a rebirth now pays {RebirthConfig.starsText(info.StarsNow)}`
@@ -207,9 +207,9 @@ function RebirthView.needText(info: Info): string
 	return `Reach blaster LV {RebirthConfig.MinBlaster} to rebirth (you have LV {info.Level})`
 end
 
--- What a run past MinBlaster with no rebirth level forged needs (bought levels never count).
+-- What a run past MinBlaster with no rebirth level bought with coins needs (Robux levels never count).
 function RebirthView.forgeText(level: number): string
-	return `Forge blaster LV {math.min(level + 1, BlasterData.MaxLevel)} at the Foundry to rebirth (bought levels don't count)`
+	return `Buy blaster LV {math.min(level + 1, BlasterData.MaxLevel)} with coins at the Blaster Vault to rebirth (Robux levels don't count)`
 end
 
 -- A perk card's level text and BUY button text (and whether it can be bought). `start` =

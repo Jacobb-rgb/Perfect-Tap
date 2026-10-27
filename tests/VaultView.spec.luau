@@ -26,9 +26,9 @@ return function(T, Loader)
 
 	T.test("VaultView: the cards follow the server's rules", function()
 		for current = 1, BlasterData.MaxLevel do
-			for _, case in { { 0 }, { 1e5 }, { 1e15 }, { 1e15, 0 }, { 1e15, 9 } } do
-				local coins, reached = case[1], case[2]
-				local cards = VaultView.cards(current, coins, reached)
+			for _, case in { { 0 }, { 1e5 }, { 1e15 }, { 1e15, 0 }, { 1e15, 1e9 }, { 1e8, 1e6 } } do
+				local coins, runIncome = case[1], case[2]
+				local cards = VaultView.cards(current, coins, runIncome)
 				T.eq(#cards, BlasterData.MaxLevel - VaultView.FirstLevel + 2, "levels 2..10 + coming soon")
 				local nexts = 0
 				for _, card in cards do
@@ -36,12 +36,12 @@ return function(T, Loader)
 						T.falsy(card.CanBuy, "coming soon can't be bought")
 						continue
 					end
-					local expected = VaultService.refusal(card.Level, current, coins, reached)
+					local expected = VaultService.refusal(card.Level, current, coins, runIncome)
 					T.eq(card.CanBuy, expected == nil, string.format("LV %d at %d with %d", card.Level, current, coins))
 					if expected and expected ~= "Max" then
 						T.eq(card.Reason, expected, "same reason as the server")
 					end
-					T.eq(card.Price, BlasterData.vaultPrice(card.Level), "price")
+					T.eq(card.Price, BlasterData.vaultPrice(card.Level, runIncome), "price (with the rebirth run's floor)")
 					T.eq(card.Ore, BlasterData.vaultOre(card.Level), "case look")
 					if card.State == "Next" then
 						nexts += 1
@@ -49,21 +49,17 @@ return function(T, Loader)
 					end
 					T.eq(
 						VaultView.buttonText(card),
-						if card.State == "Owned"
-							then "OWNED"
-							elseif card.State == "Locked" then "LOCKED"
-							elseif card.Reason == "ForgeFirst" then "FOUNDRY"
-							else "BUY",
+						if card.State == "Owned" then "OWNED" elseif card.State == "Locked" then "LOCKED" else "BUY",
 						"button text"
 					)
 				end
 				T.eq(nexts, if current < BlasterData.MaxLevel then 1 else 0, "one NEXT card")
 			end
 		end
-		-- the top level waits for the Foundry while a rebirth run has forged no rebirth level
+		-- the coin Vault sells the top level (owner 2026-10-24: no Foundry)
 		local top = VaultView.cards(BlasterData.MaxLevel - 1, 1e15, 0)
-		T.eq(top[#top - 1].Reason, "ForgeFirst")
-		T.eq(VaultView.buttonText(top[#top - 1]), "FOUNDRY")
+		T.truthy(top[#top - 1].CanBuy, "LV 10 for coins")
+		T.eq(VaultView.buttonText(top[#top - 1]), "BUY")
 		T.eq(top[#top].Reason, "StarForge", "the last card points to the Star Forge")
 		T.eq(VaultView.buttonText(top[#top]), "REBIRTH")
 		T.eq(VaultView.reasonText("NoCoins"), "Not enough coins", "reason text")

@@ -311,10 +311,8 @@ end
 -- The coin floor of a reward of `seconds` at a blaster level.
 function QuestLogic.coinFloor(seconds: number, level: number): number
 	local l = levelOf(level)
-	local nextBlaster = BlasterData.ByLevel[math.min(l + 1, BlasterData.MaxLevel)]
-	local recipe = nextBlaster and nextBlaster.Recipe
-	local forge = if recipe then recipe.Coins else 0
-	local base = math.max(QuestConfig.MinCoins, QuestConfig.FloorShare * forge)
+	local next = BlasterData.coins(math.min(l + 1, BlasterData.MaxLevel))
+	local base = math.max(QuestConfig.MinCoins, QuestConfig.FloorShare * next)
 	return math.floor(base * seconds / QuestConfig.FloorSeconds)
 end
 

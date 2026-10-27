@@ -73,9 +73,9 @@
 	  "OFF", what is kept and the lane's state. WP-Belts owns the board and
 	  arrived(); the Iron Box view (WP-CleanerBox) only edits KeepMode /
 	  KeepList.
-	  arrived() is ONLY for those sources: sinks and machines (the Foundry,
-	  the Iron Box) store with PenService.store (it refuses at the pen's
-	  capacity: then their item waits, see ConveyorService's sink hook), or
+	  arrived() is ONLY for those sources: machines (the Iron Box) store
+	  with PenService.store (it refuses at the pen's capacity: then their
+	  item waits), or
 	  the billboard would send their items out again in a loop.
 	- Direct Unload (PenAutomation >= EconomyConfig.PenAutomation.DirectUnload,
 	  TrainService): with a belt feeding from the TRAIN chute, the arrived
@@ -156,11 +156,9 @@ PenService.PromptTag = "PenPrompt"
 local RANGE_SLACK = 4 -- the server allows a little more (lag, walking while clicking)
 local FULL_TOAST_COOLDOWN = 5
 local FOREIGN_TOAST_COOLDOWN = 8
-local TAKE_SPACING = 0.6 -- taken items appear this much higher each
-local MAX_PUT_IN = 64 -- more than any carry stack
 local MAX_KEY_LENGTH = 80
 local GATE_OUT = 1.6 -- studs in front of the gate where items come out
-local HANDS_FULL = "Your hands are full and lots of items are lying around. Pick some up first!"
+local BACKPACK_FULL = "Your backpack is full! Bigger backpacks are sold at the BACKPACKS shop."
 local OVER_TOAST_COOLDOWN = 5
 
 -- The one reason code for "the pen is over its capacity" (see the header).
@@ -408,8 +406,9 @@ end
 
 ---------------------------------------------------------------- prompts
 
--- "Put In": everything you carry goes in while the pen has room (none
--- while it is over its capacity: "PenOver"). Returns the refusal, if any.
+-- "Put In": everything in your backpack goes in while the pen has room (none
+-- while it is over its capacity: "PenOver"; dusty relics stay in the backpack:
+-- they are cleaned, never stored). Returns the refusal, if any.
 local function putIn(player: Player, plotId: number): string?
 	if PlotService.ownerOf(plotId) ~= player then
 		toast(player, "That's not your Ore Pen.")
@@ -419,8 +418,8 @@ local function putIn(player: Player, plotId: number): string?
 	if not data then
 		return nil
 	end
-	if #CarryService.list(player) == 0 then
-		toast(player, "Carry ore here to put it in your pen.", "Info")
+	if CarryService.countOf(data) == 0 then
+		toast(player, "Your backpack is empty: bring ore here to put it in your pen.", "Info")
 		return nil
 	end
 	local why = PenService.refusal(data)
@@ -428,37 +427,25 @@ local function putIn(player: Player, plotId: number): string?
 		toast(player, PenService.overText(data))
 		return why
 	end
-	local stored: { Desc } = {}
-	for _ = 1, MAX_PUT_IN do
-		if PenService.refusal(data) then
-			break
-		end
-		-- (a dusty relic stays in the hands: it is cleaned, never stored)
-		local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
-			return r.Kind ~= "Relic"
-		end)
-		if not record then
-			break
-		end
-		-- no yield between taking it off the stack and storing it
-		local desc = ItemService.absorb(record)
+	local function storable(desc: Desc): boolean
+		return desc.K ~= "Relic"
+	end
+	-- no yield between taking them out of the backpack and storing them
+	local room = math.max(0, PenService.capacity(player) - #data.Storage)
+	local stored: { Desc } = if room > 0 then CarryService.take(player, storable, room) else {}
+	for _, desc in stored do
 		table.insert(data.Storage, desc)
-		table.insert(stored, desc)
 	end
 	if #stored > 0 then
 		DataService.changed(player)
 		Net.fire("Fx", player, "PenIn", PenService.gateCFrame(plotId).Position + Vector3.new(0, 1, 0))
 		PenService.arrived(player, stored, "Pen")
 	end
-	local held = CarryService.list(player)
-	if #held > 0 then
+	if CarryService.countOf(data) > 0 then
 		local left = PenService.refusal(data)
-		local onlyRelics = true
-		for _, record in held do
-			onlyRelics = onlyRelics and record.Kind == "Relic"
-		end
+		local onlyRelics = not CarryService.has(player, storable)
 		if not left and onlyRelics then
-			-- room left: only dusty relics stayed in the hands (never stored)
+			-- room left: only dusty relics stayed in the backpack (never stored)
 			toast(player, ItemData.RelicRefused, "Info")
 			return nil
 		end
@@ -527,40 +514,24 @@ end
 ---------------------------------------------------------------- PenAction
 
 --[[
-	"Take": at most what fits in free hands plus the room left under the
-	loose-item cap (so taking never pushes other items back into the pen).
-	Each item appears at the pen gate and goes into your hands while they
-	have room.
+	"Take": up to `count` of one stored item go straight into your backpack,
+	as many as it has room for (owner 2026-10-24: everything into the
+	backpack; nothing comes out loose at the gate any more).
 ]]
-local function takeItems(player: Player, plotId: number, data: { [string]: any }, key: string, count: number): number
-	local freeHands = math.max(0, CarryService.capacity(player) - #CarryService.list(player))
-	local baseRoom =
-		math.max(0, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom - ItemService.looseCount(player.UserId, "Base"))
-	-- and never past the hard ceiling of loose items (GameConfig.MaxLooseItemsTotal)
-	local looseRoom = math.min(baseRoom, ItemService.totalRoom(player.UserId))
-	local allowed = math.min(count, freeHands + looseRoom)
+local function takeItems(player: Player, _plotId: number, data: { [string]: any }, key: string, count: number): number
+	local allowed = math.min(count, CarryService.room(player))
 	if allowed <= 0 then
-		toast(player, HANDS_FULL)
+		toast(player, BACKPACK_FULL)
 		return 0
 	end
-	local gate = PenService.gateCFrame(plotId) * CFrame.new(0, 0.6, -GATE_OUT)
 	local taken = 0
-	for i = 1, allowed do
+	for _ = 1, allowed do
 		local entry = PenService.takeOne(player, key)
 		if not entry then
 			break
 		end
-		local record = ItemService.spawnDesc(entry, player.UserId, gate + Vector3.new(0, TAKE_SPACING * (i - 1), 0))
-		if not record then
-			-- never lose it: back into the pen
-			table.insert(data.Storage, entry)
-			warn(`[PenService] could not take {key} out for {player.Name}`)
-			break
-		end
-		taken += 1
-		if freeHands > 0 and CarryService.pickup(player, record) then
-			freeHands -= 1
-		end
+		-- no yield between taking it out of the pen and into the backpack
+		taken += CarryService.add(player, entry, 1, true)
 	end
 	if taken > 0 then
 		DataService.changed(player)

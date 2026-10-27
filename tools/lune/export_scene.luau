@@ -158,6 +158,18 @@ elseif sceneName == "hall" then -- the world + stand-in champions on the giant H
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	require("./lib/hall_preview").build(Loader, map)
+elseif sceneName == "shopkeepers" then -- the world + the shopkeeper golems on their spots, arg 2 = an emote at its peak (tools/lune/lib/shopkeeper_preview.luau)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	require("./lib/shopkeeper_preview").build(Loader, map, process.args[2])
+elseif sceneName == "shopkeeper_solo" then -- the shop golems in a row on a floor, arg 2 = an emote at its peak
+	require("./lib/shopkeeper_preview").buildSolo(Loader, workspace, process.args[2])
+elseif sceneName == "shopkeeper_golems" then -- candidate golems for the shops, in a row (args: kinds)
+	local kinds = {}
+	for i = 2, #process.args do
+		table.insert(kinds, process.args[i])
+	end
+	require("./lib/shopkeeper_preview").buildGolemLineup(Loader, workspace, kinds)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)
@@ -271,11 +283,6 @@ elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list over
 	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Foundry buildings and the chute line (+ the hammer moment and the reveal) and their UI (tools/lune/lib/foundry_preview.luau)
-	WorldBuilder.build(workspace)
-	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
-		uiExports[name] = guis
-	end
 elseif sceneName == "relic_flow" then -- dusty relic -> hand / Restoration Table cleaning -> museum (tools/lune/lib/relic_flow_preview.luau)
 	require("./lib/relic_flow_preview").build(Loader, workspace)
 elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
@@ -315,6 +322,10 @@ elseif sceneName == "store_quick" then -- only the STORE overlays over an empty 
 	end
 elseif sceneName == "hud_quick" then -- only the HUD overlays over an empty sky (tools/lune/lib/hud_pixel_preview.luau)
 	for name, guis in require("./lib/hud_pixel_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "backpack_window" then -- only the backpack window + its HUD button over an empty sky (tools/lune/lib/backpack_window_preview.luau)
+	for name, guis in require("./lib/backpack_window_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "inv_quick" then -- only the inventory windows over an empty sky (tools/lune/lib/inv_preview.luau)
@@ -451,10 +462,7 @@ elseif sceneName == "gameplay" then
 	refs.Coins.Text = "1,240"
 	refs.Zone.Text = "Greystone Quarry"
 	refs.Zone.TextTransparency = 0
-	refs.CarryLabel.Text = "CARRYING 2/3"
-	HudView.slot(refs.CarrySlots, Rarity.get("Uncommon").Color, 1)
-	HudView.slot(refs.CarrySlots, Rarity.get("Common").Color, 2)
-	HudView.slot(refs.CarrySlots, nil, 3)
+	HudView.setBackpack(refs, 2, 5)
 	HudView.toast(refs.Toasts, "New ore discovered: Silver!", Rarity.get("Uncommon").Color)
 	uiExports.hud_mining = UiExport.export({ refs.Gui })
 elseif sceneName == "cleaning" then
@@ -465,11 +473,17 @@ elseif sceneName == "cleaning" then
 	local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
 	local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
 	WorldBuilder.build(workspace)
-	-- plot 1 with the starter kit, like a new player
+	-- plot 1 with the starter kit and a Cleaning Station where the kit's stood (the shots in
+	-- tools/preview/shots.json frame that spot; the yard has its own station since 2026-10-24)
 	local plot = WorldLayout.Plots[1]
 	local plotCf = WorldLayout.plotCFrame(plot)
 	local stationCf
+	local kitShiftX, kitShiftZ = (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
+	local layout = { { Id = "CleaningStation", X = 4 + kitShiftX, Z = 4 + kitShiftZ, R = 0 } }
 	for _, entry in MachineData.StarterKit do
+		table.insert(layout, entry)
+	end
+	for _, entry in layout do
 		local machine = MachineData.ById[entry.Id]
 		local w, d = MachineData.footprint(machine, entry.R)
 		local half = GameConfig.PlotCells * GameConfig.CellSize / 2
@@ -559,6 +573,7 @@ elseif sceneName == "cleaning" then
 		local wandCf, tip = SprayParts.wandFrame(workCf, hit, true)
 		SprayParts.placeWand(wand, wandCf)
 		SprayParts.placeJet(SprayParts.jet(fx), tip, hit)
+		SprayParts.placeSpot(SprayParts.spot(fx), workCf, hit, tracker.radius * OreShellBuilder.Scale)
 		-- a few droplets around the hit (the splash emitter, frozen)
 		local rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new(5)
 		for _ = 1, 9 do
@@ -931,37 +946,24 @@ end
 
 ---------------------------------------------------------------- scene "yard_ingame" (plot style A)
 -- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
--- with every plot's Foundry building and FOUNDRY chute receiver as FoundryService
--- builds them at server start (their SurfaceGui frames painted for the renderer,
--- plot 5's chimney smoking) -> build/preview/yard_ingame.json. Shots:
--- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
--- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
+-- as the server shows it for owned plots: every yard's own Cleaning Station where
+-- the Foundry stood (CleaningService, owner 2026-10-25) -> build/preview/yard_ingame.json.
+-- Shots: tools/preview/plot_style_a_shots.json (the in-game pictures of the plot
+-- pieces in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
 if sceneName == "world" and process.args[2] == "yard_ingame" then
 	local YardPreview = require("./lib/yard_preview")
 	YardPreview.build(Loader, workspace)
-	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
-	local Gallery = require("./lib/machines_gallery")
-	local plots = workspace:FindFirstChild("Map"):FindFirstChild("Plots")
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+	local spot = BaseLayout.CleaningStation
 	for _, plot in WorldLayout.Plots do
-		local model = plots:FindFirstChild("Plot_" .. plot.Id)
-		local yard = model and model:FindFirstChild("Yard")
-		local old = yard and yard:FindFirstChild("Foundry")
-		if old then
-			local plotCF = WorldLayout.plotCFrame(plot)
-			old:Destroy()
-			local building = FoundryBuilder.build(plotCF, 3)
-			building.Parent = yard
-			local receiver = FoundryBuilder.receiver(plotCF)
-			receiver.Parent = model
-			Gallery.paintGuis(Loader, workspace, building)
-			Gallery.paintGuis(Loader, workspace, receiver)
-			if plot.Id == YardPreview.Plot then
-				local top = building:FindFirstChild("ChimneyTop", true)
-				if top then
-					Gallery.smoke(Loader, workspace, top, 0.8)
-				end
-			end
-		end
+		local station = MachineBuilder.build("CleaningStation", 0, 0)
+		station:PivotTo(
+			WorldLayout.plotCFrame(plot)
+				* Loader.CFrame.new(spot.Center.X, 0, spot.Center.Z)
+				* Loader.CFrame.Angles(0, -spot.R * math.pi / 2, 0)
+		)
+		station.Parent = workspace
 	end
 	local ingameScene = Export.collect(workspace)
 	ingameScene.presets = scene.presets

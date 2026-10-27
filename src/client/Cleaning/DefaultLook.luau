@@ -84,25 +84,26 @@ function DefaultLook.begin(ctx: any)
 	end
 	state.wand = SprayParts.wand(folder)
 	state.jet = SprayParts.jet(folder)
+	state.spot = SprayParts.spot(folder)
 	local splash = Geo.block(folder, HIDDEN, Vector3.new(0.1, 0.1, 0.1), JET_COLOR, nil, props({ Name = "Splash", Transparency = 1 }))
 	state.splash = splash
 	state.mist = emitter(splash, "rbxasset://textures/particles/smoke_main.dds", function(e)
 		e.Color = ColorSequence.new(Color3.fromRGB(205, 235, 255))
 		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
-		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.8) })
-		e.Lifetime = NumberRange.new(0.25, 0.4)
-		e.Speed = NumberRange.new(1, 2)
-		e.SpreadAngle = Vector2.new(70, 70)
-		e.Rate = 30
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1.3) })
+		e.Lifetime = NumberRange.new(0.25, 0.45)
+		e.Speed = NumberRange.new(1.5, 2.5)
+		e.SpreadAngle = Vector2.new(75, 75)
+		e.Rate = 40
 	end)
 	state.drops = emitter(splash, "rbxasset://textures/particles/sparkles_main.dds", function(e)
 		e.Color = ColorSequence.new(JET_COLOR)
-		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0) })
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
 		e.Lifetime = NumberRange.new(0.3, 0.5)
-		e.Speed = NumberRange.new(4, 7)
-		e.SpreadAngle = Vector2.new(60, 60)
+		e.Speed = NumberRange.new(4, 8)
+		e.SpreadAngle = Vector2.new(70, 70)
 		e.Acceleration = Vector3.new(0, -30, 0)
-		e.Rate = 45
+		e.Rate = 60
 		e.LightEmission = 0.6
 	end)
 	state.lastPop = 0
@@ -127,7 +128,8 @@ function DefaultLook.spray(uv: Vector2?, hit: Vector3?, active: boolean, ctx: an
 	-- a lifted finger has no hover: no wand without a touch
 	if not uv or not hit or (not active and ctx.Input == "Touch") then
 		SprayParts.placeWand(state.wand, nil)
-		state.jet.Transparency = 1
+		SprayParts.hideJet(state.jet)
+		SprayParts.placeSpot(state.spot, workCF, nil)
 		state.mist.Enabled = false
 		state.drops.Enabled = false
 		Sfx.loop("Spray", false)
@@ -137,9 +139,11 @@ function DefaultLook.spray(uv: Vector2?, hit: Vector3?, active: boolean, ctx: an
 	SprayParts.placeWand(state.wand, wandCF)
 	if active then
 		SprayParts.placeJet(state.jet, tip, hit)
+		SprayParts.placeSpot(state.spot, workCF, hit, ctx.Radius * OreShellBuilder.Scale)
 		state.splash.CFrame = CFrame.lookAt(hit, hit - workCF.LookVector)
 	else
-		state.jet.Transparency = 1
+		SprayParts.hideJet(state.jet)
+		SprayParts.placeSpot(state.spot, workCF, nil)
 	end
 	state.mist.Enabled = active
 	state.drops.Enabled = active
@@ -235,7 +239,8 @@ function DefaultLook.finished(ctx: any)
 	state.finished = true
 	Sfx.loop("Spray", false)
 	SprayParts.placeWand(state.wand, nil)
-	state.jet.Transparency = 1
+	SprayParts.hideJet(state.jet)
+	SprayParts.placeSpot(state.spot, ctx.WorkCF, nil)
 	state.mist.Enabled = false
 	state.drops.Enabled = false
 	for _, block in state.shell.Dirt do
@@ -405,6 +410,7 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 		view.CardOre.TextColor3 = rarity.Color
 		view.CardValue.Text = if result.Collected then "Added to your collection" else "Your relic is safe"
 		view.CardDetail.Text = detail(result)
+		CleaningView.setInto(view, nil)
 		popCard(ctx)
 		ctx.flash(rarity.Color, 0.4)
 		return
@@ -419,6 +425,8 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 	local worth = math.floor((result.Value or 0) * StateController.sellMult() + 0.5)
 	view.CardValue.Text = `Worth {Format.commas(worth)} coins`
 	view.CardDetail.Text = detail(result)
+	-- where it went: the backpack, else the pen (or sold), else the station's tray
+	CleaningView.setInto(view, result.Into)
 	CleaningView.setStreak(view, ctx.Streak)
 	-- the grade stamp lands on the ore itself
 	local state = ctx.LookState
@@ -448,7 +456,8 @@ function DefaultLook.cancel(ctx: any)
 	end
 	state.finished = true
 	SprayParts.placeWand(state.wand, nil)
-	state.jet.Transparency = 1
+	SprayParts.hideJet(state.jet)
+	SprayParts.placeSpot(state.spot, ctx.WorkCF, nil)
 	state.mist.Enabled = false
 	state.drops.Enabled = false
 end

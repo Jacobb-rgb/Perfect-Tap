@@ -25,10 +25,9 @@
 	  quote says "Max" for them.
 	- Effects (src/server/Bonuses.luau reads data.Gear) apply at once and
 	  after every respawn: the save change invalidates the bonus cache and
-	  CarryService sets the walk speed (Boots), the carry capacity
-	  (Backpack) and the PickupRange attribute (Gloves) again; throw power
-	  (Gloves) and the Ore Magnet pull (ItemService) read the bonuses when
-	  they act. The player attribute GearConfig.LampAttribute ("LampLevel",
+	  CarryService sets the walk speed (Boots) and the PickupRange attribute
+	  (Gloves: the auto-pickup's reach) again; the Ore Magnet pull
+	  (ItemService) reads the bonuses when it acts. The player attribute GearConfig.LampAttribute ("LampLevel",
 	  the HelmetLamp level) is kept in step for every client: the clients
 	  build the head lamps from it (GearFxController).
 	- GearService.onBought(callback): stats / analytics / tutorial hooks,
@@ -148,23 +147,14 @@ function GearService.boughtText(lineId: string, level: number, strongBack: boole
 	local function main(fallback: number): string
 		return number(if live then live.Now else fallback)
 	end
-	local function extra(fallback: number): string
-		local value = if live then live.ExtraNow else nil
-		return number(value or fallback)
-	end
 	if lineId == "Boots" then
 		return `{name}: walk speed {main(GearConfig.value("Boots", level))}!`
 	elseif lineId == "HelmetLamp" then
 		return `{name}: your lamp lights {main(GearConfig.value("HelmetLamp", level))} studs in dark caves!`
-	elseif lineId == "Backpack" then
-		local gear = { Backpack = level }
-		return `{name}: you can carry {main(GearConfig.carryCapacity(gear, strongBack == true))} items!`
 	elseif lineId == "Gloves" then
-		local reach = main(GearConfig.value("Gloves", level))
-		local throw = extra(GearConfig.value("Gloves", level, "ThrowMult"))
-		return `{name}: grab from {reach} studs, throw x{throw}!`
+		return `{name}: ore jumps into your backpack from {main(GearConfig.value("Gloves", level))} studs!`
 	elseif lineId == "Magnet" then
-		return `{name}: mined ore flies into your hands from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
+		return `{name}: mined ore flies into your backpack from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
 	end
 	return `{name} bought!`
 end
@@ -178,10 +168,9 @@ local function lineValues(lineId: string, stats: Bonuses.Stats, player: Player):
 	elseif lineId == "HelmetLamp" then
 		local range, brightness = Bonuses.lamp(stats)
 		return range, brightness
-	elseif lineId == "Backpack" then
-		return Bonuses.carryCapacity(stats, player), nil
 	elseif lineId == "Gloves" then
-		return Bonuses.pickupRange(stats), Bonuses.throwMult(stats)
+		-- (no throw power any more: nothing is thrown since the backpacks came)
+		return Bonuses.pickupRange(stats), nil
 	elseif lineId == "Magnet" then
 		return Bonuses.magnetRadius(stats), nil
 	end

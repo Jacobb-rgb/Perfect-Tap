@@ -349,9 +349,12 @@ Planets.Specs = {
 		-- clear of SHOP, the wheel and the terraces, wholly above the hero frame)
 		-- (round 3: higher and farther (the same apparent size): clear sky
 		-- between it, the teal world and the balloon, no beads on a string)
-		Az = 358,
+		-- (2026-10-25: the golden dragon's TERRA FORGE sign fills the spawn's
+		-- top-centre sky: the world moved left of it and a little lower, 358/26
+		-- -> 331/22, between the teal world and the balloon)
+		Az = 331,
 		Dist = 780,
-		Elev = 26,
+		Elev = 22,
 		Size = 5.75,
 		Roll = -26,
 		Lean = 18,

@@ -25,7 +25,8 @@ Open questions are at the bottom; once answered, fold everything into GAME_DESIG
 5. **Start:** you get one rusty, basic blaster. You get ore, put it on the podium, earn money.
 6. With money you buy machines: furnaces, conveyors, smelters, crushers, cleaners. Then you throw everything into a
    **foundry** ("slévárna"), which creates a **stronger blaster**. How strong depends on the value of the ore
-   (details to be agreed later).
+   (details to be agreed later). (Owner 2026-10-24: **no Foundry**: "you earn money, come to the Vault and buy a
+   better blaster"; blasters get better with enchants in the shop. Ingots are sold or alloyed.)
 7. The Mini Dungeon kit is only there to show how the various decorations should look.
 8. UI text stays in English (e.g. "Remove").
 
@@ -53,7 +54,7 @@ See the chat/answers section below.
    **150–200 Robux** (one-time purchase).
 6. **Podium:** one ore piece per podium; better-cleaned ore earns more. ✔
 7. **Podiums:** 2 for free. Podiums 3 and 4: **100 Robux**, or included in a bigger **game pass (~560 Robux)** that
-   has more benefits.
+   has more benefits. (Owner 2026-10-24: **3 free + 2 for Robux**, podiums 4 and 5 with the same pass.)
 8. **Offline earnings:** owner undecided, asked for proposals (see "Proposals for 8" below).
 9. **Pen:** ore you don't display stays in the pen. Later, **automation (only with an upgrade):** on a billboard you
    mark ore types to always keep in the pen; unmarked types are sent onto a conveyor (to machines).

@@ -180,7 +180,7 @@ return function(T, Loader)
 		local parts = refs.SubtitleParts
 		T.eq(parts[1].Text, "Your blaster: ")
 		T.eq(parts[2].Text, "Lv 7.")
-		T.eq(parts[3].Text, " Forge better blasters to unlock deeper floors.")
+		T.eq(parts[3].Text, " Buy better blasters in the Vault to unlock deeper floors.")
 		T.truthy(parts[2].TextColor3.R > 0.9 and parts[2].TextColor3.B < 0.4, "yellow level")
 		for _, part in parts do
 			T.truthy(part.Size.X.Offset >= ElevatorView.measure(part.Text, part.TextSize), "each part fits its text")

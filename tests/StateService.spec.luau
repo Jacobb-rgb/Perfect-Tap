@@ -117,7 +117,7 @@ return function(T, Loader)
 	end
 
 	-- A busy factory: ~70 placed entries (machines, belts, poles), a full
-	-- pen, codex, keep list, upgrades and Foundry ingots.
+	-- pen, codex, keep list and upgrades.
 	local function busyData(): { [string]: any }
 		local data = fresh()
 		local ids = { "Crusher", "ClayFurnace", "Anvil", "Polisher", "Sorter", "Splitter", "RobotArm", "PowerPole" }
@@ -141,9 +141,6 @@ return function(T, Loader)
 				O = ores[i % #ores + 1],
 				G = if kind == "Raw" then nil else grades[(i // 4) % #grades + 1],
 			})
-		end
-		for i = 1, 20 do
-			table.insert(data.Foundry.Stock, { K = "Ingot", O = ores[i % 6 + 1], G = grades[i % 4 + 1] })
 		end
 		for i = 1, 12 do
 			data.KeepList[ores[i]] = i % 2 == 0

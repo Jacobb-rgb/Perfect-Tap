@@ -39,6 +39,7 @@ return function(T, Loader)
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 	local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+	local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
 	local GearService = Loader.requirePath("ServerScriptService.Server.Services.GearService")
 	local GearShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GearShopView")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
@@ -281,8 +282,8 @@ return function(T, Loader)
 		-- the effects, right away
 		local stats = Bonuses.stats(w.player)
 		T.eq(w.player.humanoid.WalkSpeed, GearConfig.value("Boots", 1), "Boots I on the humanoid")
-		T.eq(CarryService.capacity(w.player), 2, "Backpack I: two items")
-		T.eq(w.player.attrs.CarryCapacity, 2, "the client's attribute")
+		T.eq(CarryService.capacity(w.player), 5, "the starter pack (no Backpack gear line any more)")
+		T.eq(w.player.attrs.CarryCapacity, 5, "the client's attribute")
 		T.eq(CarryService.pickupRange(w.player), 13, "Gloves I reach")
 		T.eq(w.player.attrs.PickupRange, 13, "the client's PickupRange")
 		T.near(Bonuses.throwMult(stats), 1.08, 1e-9, "Gloves I throw")
@@ -293,24 +294,23 @@ return function(T, Loader)
 		T.near(brightness, 1.2, 1e-9)
 		-- texts
 		T.eq(GearService.boughtText("Boots", 3, false), "Miner's Boots III: walk speed 22!")
-		T.eq(GearService.boughtText("Backpack", 2, true), "Ore Backpack II: you can carry 6 items!")
-		T.eq(GearService.boughtText("Gloves", 1, false), "Grip Gloves I: grab from 13 studs, throw x1.08!")
+		T.eq(GearService.boughtText("Gloves", 1, false), "Grip Gloves I: ore jumps into your backpack from 13 studs!")
 		T.eq(GearService.boughtText("HelmetLamp", 5, false), "Helmet Lamp V: your lamp lights 56 studs in dark caves!")
-		T.eq(GearService.boughtText("Magnet", 2, false), "Ore Magnet II: mined ore flies into your hands from 18 studs (not on bases)!")
+		T.eq(GearService.boughtText("Magnet", 2, false), "Ore Magnet II: mined ore flies into your backpack from 18 studs (not on bases)!")
 		-- with the server's preview: the real numbers
 		local values = { Level = 2, Now = 21, ExtraNow = nil }
 		T.eq(
 			GearService.boughtText("Magnet", 2, false, values),
-			"Ore Magnet II: mined ore flies into your hands from 21 studs (not on bases)!"
+			"Ore Magnet II: mined ore flies into your backpack from 21 studs (not on bases)!"
 		)
 		T.eq(
 			GearService.boughtText("Magnet", 3, false, values),
-			"Ore Magnet III: mined ore flies into your hands from 24 studs (not on bases)!",
+			"Ore Magnet III: mined ore flies into your backpack from 24 studs (not on bases)!",
 			"another level's preview is ignored"
 		)
 		T.eq(
-			GearService.boughtText("Gloves", 1, false, { Level = 1, Now = 13, ExtraNow = 1.5 }),
-			"Grip Gloves I: grab from 13 studs, throw x1.5!"
+			GearService.boughtText("Gloves", 1, false, { Level = 1, Now = 14, ExtraNow = 1.5 }),
+			"Grip Gloves I: ore jumps into your backpack from 14 studs!"
 		)
 	end)
 
@@ -320,7 +320,7 @@ return function(T, Loader)
 			return { MagnetBonus = 3, WalkSpeedPct = 0.25 }
 		end)
 		local ok, err = pcall(function()
-			w.data.Gear = { Boots = 0, HelmetLamp = 0, Backpack = 4, Gloves = 0, Magnet = 1 }
+			w.data.Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 1 }
 			w.player.attrs.Perk_StrongBack = true
 			Bonuses.invalidate(w.player)
 			local preview = GearService.preview(w.player)
@@ -331,12 +331,11 @@ return function(T, Loader)
 			T.eq(magnet.Next, 18 + 3, "Magnet II with Magnetism")
 			T.eq(preview.Boots.Now, 16 * 1.25, "the golems speed up the boots")
 			T.eq(preview.Boots.Next, 18 * 1.25)
-			T.eq(preview.Backpack.Now, 16, "Backpack IV with Strong Back")
-			T.eq(preview.Backpack.Next, 24, "Backpack V with Strong Back")
+			T.eq(preview.Backpack, nil, "no Backpack line (the packs are BackpackService's)")
 			T.eq(preview.HelmetLamp.Now, 0, "no lamp yet")
 			T.eq(preview.HelmetLamp.Next, 18)
 			T.near(preview.HelmetLamp.ExtraNext, 1.2, 1e-9, "its brightness")
-			T.near(preview.Gloves.ExtraNext, 1.08, 1e-9, "throw power")
+			T.eq(preview.Gloves.ExtraNext, nil, "no throw power (nothing is thrown)")
 			-- the same numbers the services use
 			local stats = Bonuses.stats(w.player)
 			T.eq(magnet.Now, Bonuses.magnetRadius(stats))
@@ -388,7 +387,7 @@ return function(T, Loader)
 			local toasts = notes(w, "Notify")
 			T.eq(
 				toasts[#toasts].A.Text,
-				"Ore Magnet II: mined ore flies into your hands from 21 studs (not on bases)!",
+				"Ore Magnet II: mined ore flies into your backpack from 21 studs (not on bases)!",
 				"the toast's real number"
 			)
 			local refusedResult = act(w, "Buy", { Line = "Magnet", Level = 2 })
@@ -481,7 +480,7 @@ return function(T, Loader)
 		T.eq(type(w.data.Gear), "table")
 		T.eq(w.data.Gear.Magnet, 1)
 		-- a newer server gave Boots 7: never lowered, "Max" here
-		w.data.Gear = { Boots = 7, HelmetLamp = 2, Backpack = 0, Gloves = 0, Magnet = 0, Cape = 3 }
+		w.data.Gear = { Boots = 7, HelmetLamp = 2, Gloves = 0, Magnet = 0, Cape = 3 }
 		Bonuses.invalidate(w.player)
 		local coins = w.data.Coins
 		refused(w, "Buy", { Line = "Boots", Level = 8 }, "Max", "a newer level")
@@ -493,9 +492,9 @@ return function(T, Loader)
 		T.eq(w.data.Coins, coins - GearConfig.ById.HelmetLamp.Prices[3])
 		T.eq(w.player.attrs[GearConfig.LampAttribute], 3)
 		-- a fractional / junk saved level counts as its clamp (GearConfig.level)
-		w.data.Gear.Backpack = 2.7
-		T.eq(buy(w, "Backpack", 3).Ok, true, "2.7 counts as 2")
-		T.eq(w.data.Gear.Backpack, 3)
+		w.data.Gear.Gloves = 2.7
+		T.eq(buy(w, "Gloves", 3).Ok, true, "2.7 counts as 2")
+		T.eq(w.data.Gear.Gloves, 3)
 	end)
 
 	withWorld("GearService: fuzz: coins and levels always add up", function(w)
@@ -1354,7 +1353,9 @@ return function(T, Loader)
 
 	T.test("GearShopView: one card per gear line, what it gives now and next", function()
 		local cards = GearShopView.cards(state(), 0)
-		T.eq(#cards, #GearConfig.Lines, "five cards")
+		T.eq(#cards, #GearConfig.Lines, "four cards (the backpacks have their own shop)")
+		T.eq(#cards, 4)
+		T.eq(cardOf(cards, "Backpack"), nil, "no Backpack card")
 		for i, card in cards do
 			T.eq(card.Line, LINES[i], "shop order")
 			T.eq(card.Order, i)
@@ -1377,9 +1378,9 @@ return function(T, Loader)
 		T.eq(lamp.Effect, "Off → 18")
 		T.eq(lamp.Extra, "Brightness 1.2")
 		T.eq(cardOf(cards, "Magnet").Effect, "Off → 14")
-		T.eq(cardOf(cards, "Gloves").Extra, "Throw x1 → x1.08")
-		T.eq(cardOf(cards, "Backpack").Effect, "1 → 2")
-		-- level 1 lamp, Strong Back, affordable
+		T.eq(cardOf(cards, "Gloves").Extra, "", "no throw power: nothing is thrown since the backpack")
+		T.eq(cardOf(cards, "Gloves").Effect, "11 → 13")
+		-- level 1 lamp, Strong Back (no gear line doubles any more), affordable
 		local s = state()
 		s.Gear.HelmetLamp = 1
 		s.Gear.Gloves = 3
@@ -1392,10 +1393,8 @@ return function(T, Loader)
 		T.eq(lamp1.Buy.Level, 2)
 		T.eq(lamp1.Buy.CanBuy, true)
 		T.eq(lamp1.PriceColor, Theme.Coin)
-		T.eq(cardOf(rich, "Gloves").Extra, "Throw x1.24 → x1.32")
-		local pack = cardOf(rich, "Backpack")
-		T.eq(pack.Effect, "2 → 4", "Strong Back doubles")
-		T.eq(pack.Unit, "items (Strong Back)")
+		T.eq(cardOf(rich, "Gloves").Extra, "")
+		T.eq(cardOf(rich, "Gloves").Effect, "17 → 20")
 		-- the top level
 		local top = state()
 		for _, line in LINES do
@@ -1414,7 +1413,7 @@ return function(T, Loader)
 		-- broken snapshots read as level 0
 		for _, junk in { nil, 5, { Gear = "x" }, { Gear = { Boots = "3", Magnet = -2 } } } do
 			local list = GearShopView.cards(junk, 0 / 0)
-			T.eq(#list, 5)
+			T.eq(#list, #GearConfig.Lines)
 			for _, card in list do
 				T.eq(card.Level, 0, "junk -> level 0")
 			end
@@ -1558,7 +1557,7 @@ return function(T, Loader)
 		T.truthy(top >= GearShopView.CoinsBottom, "below the HUD coins")
 		T.truthy(top + pc.Panel.Size.Y.Offset <= 720 - 36, "inside the screen")
 		T.truthy(pc.ShowDescription and pc.ShowPips and pc.ShowExtra, "PC shows every row")
-		T.eq(pc.List.ScrollingEnabled, false, "five cards side by side")
+		T.eq(pc.List.ScrollingEnabled, false, "four cards side by side")
 		-- the usual phone keeps the pips and the second stat
 		local phone = GearShopView.build(true)
 		GearShopView.layout(phone, true, SCREENS[5].Width, SCREENS[5].Height)
@@ -1605,7 +1604,7 @@ return function(T, Loader)
 		end
 		local states = { state() }
 		local mid = state()
-		mid.Gear = { Boots = 2, HelmetLamp = 3, Backpack = 4, Gloves = 4, Magnet = 4 }
+		mid.Gear = { Boots = 2, HelmetLamp = 3, Gloves = 4, Magnet = 4 }
 		mid.Perks.StrongBack = true
 		table.insert(states, mid)
 		local top = state()
@@ -1669,7 +1668,7 @@ return function(T, Loader)
 		local s = state()
 		s.Gear.Boots = GearConfig.MaxLevel
 		s.Gear.HelmetLamp = GearConfig.MaxLevel
-		GearShopView.setCards(refs, GearShopView.cards(s, GearConfig.ById.Backpack.Prices[1]))
+		GearShopView.setCards(refs, GearShopView.cards(s, GearConfig.ById.Gloves.Prices[1]))
 		local boots = refs.Slots.Boots
 		T.eq(boots.Button.Text, "MAX")
 		T.eq(boots.Title.Text, "MINER'S BOOTS")
@@ -1680,11 +1679,12 @@ return function(T, Loader)
 		T.eq(refs.Slots.HelmetLamp.Pips[1].BackgroundColor3, GearShopView.PipColors.Done)
 		T.eq(boots.Button.Parent:GetAttribute("PopButton"), true, "a painted Pop button")
 		T.eq(boots.Button:GetAttribute("Mark"), "", "MAX: no coin")
-		T.eq(refs.Slots.Backpack.Button:GetAttribute("Mark"), "coin", "BUY: the gold coin button")
+		T.eq(refs.Slots.Gloves.Button:GetAttribute("Mark"), "coin", "BUY: the gold coin button")
+		T.eq(refs.Slots.Backpack, nil, "no Backpack card")
 		-- the gamepad starts on the first card that can buy
-		T.truthy(GearShopView.firstButton(refs) == refs.Slots.Backpack.Button, "the backpack is affordable")
+		T.truthy(GearShopView.firstButton(refs) == refs.Slots.Gloves.Button, "the gloves are affordable")
 		-- a busy button keeps its text
-		local pack = refs.Slots.Backpack.Button
+		local pack = refs.Slots.Gloves.Button
 		pack:SetAttribute("Busy", true)
 		pack.Text = "..."
 		GearShopView.setCards(refs, GearShopView.cards(s, 0))
@@ -1764,62 +1764,6 @@ return function(T, Loader)
 		T.falsy(GearFxController.isDark(nil), "unknown: off")
 		T.falsy(GearFxController.isDark("Nope"), "unknown preset: off")
 		T.eq(GearFxController.MagnetTag, ItemService.Magnet.Tag, "the client listens to the server's tag")
-	end)
-
-	T.test("Carry: 24 items (Backpack V + Strong Back) stay a small stack and a small HUD panel", function()
-		local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
-		local top = GearConfig.carryCapacity({ Backpack = GearConfig.MaxLevel }, true)
-		T.eq(top, 24, "the biggest backpack")
-		-- the stack: never taller than the head, never far from the body
-		local seen = {}
-		for i = 1, 100 do
-			local p = CarryService.stackOffset(i).Position
-			T.truthy(p.Y <= 3, "item " .. i .. " no higher than the head: " .. p.Y)
-			T.truthy(p.Y >= -1, "item " .. i .. " not in the legs")
-			T.truthy(math.abs(p.X) <= 1.5 * CarryService.Stack.ColumnStep, "item " .. i .. " close to the body")
-			T.truthy(math.abs(p.Z) <= 2.6, "item " .. i .. " close to the body (front / back)")
-			if i <= 15 then
-				local key = string.format("%.2f %.2f %.2f", p.X, p.Y, p.Z)
-				T.falsy(seen[key], "the first 15 have their own place: " .. i)
-				seen[key] = true
-			end
-		end
-		T.eq(CarryService.stackOffset(1).Position.X, 0, "one item: in the middle")
-		T.truthy(CarryService.stackOffset(1).Position.Z < 0, "in front")
-		T.truthy(CarryService.stackOffset(6).Position.Z < 0, "six in front")
-		T.truthy(CarryService.stackOffset(7).Position.Z > 0, "then on the back")
-		-- the front never becomes a wall in front of the camera: two rows, below the chin
-		for i = 1, 100 do
-			local p = CarryService.stackOffset(i).Position
-			if p.Z < 0 then
-				T.truthy(p.Y <= 1.4, "front item " .. i .. " below the chin: " .. p.Y)
-			end
-		end
-		T.truthy(CarryService.stackOffset(top).Position.Y <= 1, "the back bundle stays below the shoulders")
-		-- the HUD: at most MaxCarrySlots squares, "+N" on the last one
-		for count = 0, top do
-			local squares, shown, more, width = HudView.carryLayout(top, count)
-			T.eq(squares, HudView.MaxCarrySlots, "squares")
-			T.truthy(shown + (if more > 0 then 1 else 0) <= squares, "fits the squares")
-			T.eq(shown + more, count, "every item is counted")
-			T.truthy(more == 0 or more >= 2, "a +N square stands for at least two")
-			-- a 667 x 375 pt phone at the HUD's 0.62 floor: well clear of the thumbstick and jump button
-			T.truthy(width * GearShopView.PhoneScale <= 0.35 * 667, "phone width " .. width)
-		end
-		local s1, n1, m1, w1 = HudView.carryLayout(2, 1)
-		T.eq(s1, 2)
-		T.eq(n1, 1)
-		T.eq(m1, 0)
-		T.eq(w1, 200, "small backpacks keep the old panel")
-		local _, _, m2 = HudView.carryLayout(5, 5)
-		T.eq(m2, 0, "five fit")
-		local _, _, _, wJunk = HudView.carryLayout(0 / 0, -3)
-		T.eq(wJunk, 200, "junk capacity")
-		-- the "+N" square is drawn
-		local refs = HudView.build()
-		local more = HudView.moreSlot(refs.CarrySlots, 17, 8)
-		local label = more:FindFirstChild("More")
-		T.truthy(label and label.Text == "+17", "the +N square")
 	end)
 
 	T.test("GearShopView: the TV shows A buy / B close, all MAX says so, the description sits under the pips", function()
@@ -1903,7 +1847,7 @@ return function(T, Loader)
 		)
 	end)
 
-	withWorld("Carry: long Gloves never reach through a wall; the magnet's catch is quiet", function(w)
+	withWorld("Carry: long Gloves never reach through a wall; the magnet's catch is quiet and fills the backpack", function(w)
 		magnetWorld(w, 0)
 		local root = w.player.root.Position
 		w.data.Gear.Gloves = GearConfig.MaxLevel
@@ -1935,174 +1879,30 @@ return function(T, Loader)
 			far.Body.CFrame = CFrame.new(root + Vector3.new(20, -2, 0))
 			T.falsy(CarryService.pickup(w.player, far), "refused")
 			T.eq(far.State, "Loose", "still on the ground")
-			-- the hands' room (Backpack, nothing carried)
-			T.eq(CarryService.room(w.player), 1, "Backpack 0: one item")
-			w.data.Gear.Backpack = 2
+			-- the backpack's room (the starter pack, nothing in it)
+			T.eq(CarryService.room(w.player), 5, "the starter pack: five")
+			w.data.Backpacks.Owned.TrailPack = true
+			w.data.Backpacks.Equipped = "TrailPack"
 			Bonuses.invalidate(w.player)
-			T.eq(CarryService.room(w.player), 3, "Backpack II: three")
-			-- the magnet's catch: a pickup when there is room, nothing (and no toast) when full
-			local picked = {}
-			local pickup = rawget(CarryService, "pickup")
-			local room = rawget(CarryService, "room")
-			rawset(CarryService, "pickup", function(_, record)
-				table.insert(picked, record)
-				return true
-			end)
-			local ok2, err2 = pcall(function()
-				T.truthy(CarryService.magnetCatch(w.player, near), "room: picked up")
-				T.eq(picked[1], near)
-				rawset(CarryService, "room", function()
-					return 0
-				end)
-				local toasts = #notes(w, "Notify")
-				T.falsy(CarryService.magnetCatch(w.player, far), "full hands: not picked up")
-				T.eq(#picked, 1, "no pickup tried")
-				T.eq(#notes(w, "Notify"), toasts, "and no 'hands full' toast")
-			end)
-			rawset(CarryService, "pickup", pickup)
-			rawset(CarryService, "room", room)
-			if not ok2 then
-				error(err2, 0)
+			T.eq(CarryService.room(w.player), BackpackData.capacity("TrailPack"), "the worn pack's capacity")
+			-- the magnet's catch: into the backpack when there is room, nothing (and no toast) when full
+			clear = true
+			-- (CarryService.init gives the magnet this catch: ItemService.setMagnetHands)
+			local function catch(p: any, record: any): boolean
+				return CarryService.pickup(p, record, true)
 			end
+			T.truthy(catch(w.player, near), "room: picked up")
+			T.eq(near.State, "Consumed", "out of the world")
+			T.eq(CarryService.count(w.player), 1, "into the backpack")
+			w.data.Backpacks.Equipped = "RookiePack"
+			w.data.BackpackItems = { ["Raw|Coal||"] = 5 }
+			Bonuses.invalidate(w.player)
+			local toasts = #notes(w, "Notify")
+			T.falsy(catch(w.player, far), "a full backpack: not picked up")
+			T.eq(far.State, "Loose", "still on the ground")
+			T.eq(#notes(w, "Notify"), toasts, "and no 'backpack full' toast")
 		end)
 		CarryService._test.setReach(nil)
-		if not ok then
-			error(err, 0)
-		end
-	end)
-
-	withWorld("Carry: hand drops and throws stop at the hard ceiling of loose items; death drops go into the pen", function(w)
-		magnetWorld(w, 0)
-		local rootPart = Instance.new("Part")
-		rootPart.Size = Vector3.new(2, 2, 1)
-		rootPart.CFrame = CFrame.new(w.player.root.Position)
-		rootPart.Position = w.player.root.Position
-		rootPart.AssemblyLinearVelocity = Vector3.zero
-		w.player.root = rootPart
-		local at = rootPart.CFrame.Position
-		w.data.Gear.Backpack = 5
-		Bonuses.invalidate(w.player)
-		CarryService._test.setDropSpot(function(_, root)
-			return root.CFrame * CFrame.new(0, 0, -3)
-		end)
-		local fireNear = rawget(Net, "fireNear")
-		rawset(Net, "fireNear", function() end)
-		local ok, err = pcall(function()
-			local total = GameConfig.MaxLooseItemsTotal
-			-- a player pouring items out: Take into the hands, drop, again and again
-			local dropped = 0
-			for _ = 1, total + 20 do
-				local item = chunk(w, USER, at + Vector3.new(1, -1, 0))
-				T.truthy(CarryService.pickup(w.player, item), "picked up")
-				CarryService._test.drop(w.player)
-				if item.State == "Loose" then
-					dropped += 1
-				else
-					break
-				end
-			end
-			T.eq(ItemService.looseCount(USER), total, "never more than the ceiling")
-			T.truthy(ItemService.atTotalCap(USER), "at the ceiling")
-			T.eq(#CarryService.list(w.player), 1, "the refused one stays in the hands")
-			T.eq(dropped, total, "every drop up to the ceiling went through")
-			-- a throw is refused the same way
-			CarryService._test.throw(w.player, Vector3.new(0, 0, -1), 0.5)
-			T.eq(#CarryService.list(w.player), 1, "no throw either")
-			T.eq(ItemService.looseCount(USER), total, "still at the ceiling")
-			-- dying at the ceiling: what was in the hands goes into the pen, not onto the ground
-			local before = #w.data.Storage
-			CarryService.dropAll(w.player)
-			T.eq(ItemService.looseCount(USER), total, "nothing more on the ground")
-			T.eq(#w.data.Storage, before + 1, "kept in the pen")
-			-- picking one up makes room for one drop
-			local any: any = nil
-			for _, record in ItemService.ownedBy(USER) do
-				if record.State == "Loose" then
-					any = record
-					break
-				end
-			end
-			T.truthy(any, "a loose item")
-			T.truthy(CarryService.pickup(w.player, any), "picked up")
-			CarryService._test.drop(w.player)
-			T.eq(any.State, "Loose", "room again: dropped")
-			T.eq(ItemService.totalRoom(USER), 0, "back at the ceiling")
-		end)
-		rawset(Net, "fireNear", fireNear)
-		CarryService._test.setDropSpot(nil)
-		if not ok then
-			error(err, 0)
-		end
-	end)
-
-	withWorld("Carry: a pickup wears the full look; consumed items leave the hands; drops pass on at most CharacterSpeedCap", function(w)
-		magnetWorld(w, 0)
-		-- a real root part (the carry weld needs an Instance)
-		local rootPart = Instance.new("Part")
-		rootPart.Size = Vector3.new(2, 2, 1)
-		rootPart.CFrame = CFrame.new(w.player.root.Position)
-		rootPart.Position = w.player.root.Position
-		rootPart.AssemblyLinearVelocity = Vector3.zero
-		w.player.root = rootPart
-		local at = rootPart.CFrame.Position
-		w.data.Gear.Backpack = 2
-		Bonuses.invalidate(w.player)
-		ItemService.onCarriedConsumed(CarryService.forget)
-		CarryService._test.setDropSpot(function(_, root)
-			return root.CFrame * CFrame.new(0, 0, -3)
-		end)
-		local fireNear = rawget(Net, "fireNear")
-		rawset(Net, "fireNear", function() end)
-		local ok, err = pcall(function()
-			-- a belt item (light) picked up: the full look, then the weld
-			local belt = chunk(w, USER, at + Vector3.new(2, -1, 0))
-			T.truthy(belt.Light, "light on the ground")
-			T.truthy(CarryService.pickup(w.player, belt), "picked up")
-			T.falsy(belt.Light, "full look in the hands")
-			local weld = belt.Body:FindFirstChild("CarryWeld")
-			T.truthy(weld and weld.Part1 == belt.Body, "welded to the (kept) Body after dressing")
-			T.eq(#CarryService.list(w.player), 1, "in the hands")
-			-- the engine destroyed it while carried: out of the hands at once (Security #11)
-			belt.Model.Parent = nil
-			ItemService._test.maintain(belt, os.clock())
-			T.eq(belt.State, "Consumed", "consumed")
-			T.eq(#CarryService.list(w.player), 0, "CarryService forgot it")
-			T.eq(w.player.attrs.CarryCount, 0, "the HUD count follows")
-			-- consumed without a word (any other path): never taken, never cleaned twice
-			local second = chunk(w, USER, at + Vector3.new(2, -1, 0))
-			T.truthy(CarryService.pickup(w.player, second), "picked up")
-			second.State = "Consumed"
-			T.eq(
-				CarryService.takeTop(w.player, function(r)
-					return r.Kind == "Clean"
-				end),
-				nil,
-				"a consumed record is never handed out"
-			)
-			T.eq(#CarryService.list(w.player), 0, "and dropped from the list")
-			-- drops and throws: the character's own speed counts at most CharacterSpeedCap
-			local cap = CarryService.CharacterSpeedCap
-			rootPart.AssemblyLinearVelocity = Vector3.new(500, 0, 0)
-			T.near(CarryService.characterVelocity(rootPart).Magnitude, cap, 1e-4, "a spoofed run is capped")
-			rootPart.AssemblyLinearVelocity = Vector3.new(0 / 0, 0, 0)
-			T.eq(CarryService.characterVelocity(rootPart).Magnitude, 0, "a broken one counts as standing")
-			rootPart.AssemblyLinearVelocity = Vector3.new(10, 0, 0)
-			T.near(CarryService.characterVelocity(rootPart).X, 10, 1e-4, "a real run is kept")
-			rootPart.AssemblyLinearVelocity = Vector3.new(500, 0, 0)
-			local dropped = chunk(w, USER, at + Vector3.new(2, -1, 0))
-			CarryService.pickup(w.player, dropped)
-			CarryService._test.drop(w.player)
-			T.eq(dropped.State, "Loose", "dropped")
-			T.le(dropped.Body.AssemblyLinearVelocity.Magnitude, cap + 4 + 1e-3, "drop: at most the cap + the push")
-			local thrown = chunk(w, USER, at + Vector3.new(2, -1, 0))
-			CarryService.pickup(w.player, thrown)
-			CarryService._test.throw(w.player, Vector3.new(0, 0, -1), 0)
-			T.eq(thrown.State, "Loose", "thrown")
-			local most = GameConfig.ThrowSpeedMin * Bonuses.throwMult(Bonuses.stats(w.player)) + 8 + cap * 0.5
-			T.le(thrown.Body.AssemblyLinearVelocity.Magnitude, most + 1e-3, "throw: half the capped run at most")
-		end)
-		rawset(Net, "fireNear", fireNear)
-		CarryService._test.setDropSpot(nil)
 		if not ok then
 			error(err, 0)
 		end

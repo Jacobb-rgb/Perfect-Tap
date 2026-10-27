@@ -2,7 +2,7 @@
 	GearShopController: the Gear shop at the SHOP stall (client side).
 
 	- Opens on OpenUI "Gear" { Counter, Preview } (the stall's "Gear Shop"
-	  prompt, added by GearService). The five cards come from the State
+	  prompt, added by GearService). The four cards come from the State
 	  snapshot (GearShopView.cards with your coins, counted up between
 	  snapshots like the HUD) and the server's Preview (the real numbers
 	  with every bonus; every Gear ActionResult brings a fresh one) and

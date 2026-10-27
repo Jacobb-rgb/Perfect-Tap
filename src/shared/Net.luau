@@ -24,11 +24,9 @@ export type Limit = { Rate: number, Burst: number }
 
 -- name = rate limit for client->server traffic (nil = server->client only)
 Net.Events = {
-	-- mining / carrying
+	-- mining / the backpack (CarryService: no drops or throws since the backpack, owner 2026-10-24)
 	MineBlast = { Rate = 10, Burst = 14 }, -- (rock: Model?) aim the held beam at a rock; nil = stop firing
-	CarryPickup = { Rate = 8, Burst = 10 },
-	CarryDrop = { Rate = 8, Burst = 10 },
-	CarryThrow = { Rate = 6, Burst = 8 },
+	CarryPickup = { Rate = 8, Burst = 10 }, -- (item: Model) put your own loose item into the backpack (the auto-pickup does it too)
 	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
 	Emote = { Rate = 2, Burst = 4 }, -- (name: an EmoteConfig.List name, or "" to stop) the EMOTES menu; EmoteService sets the character attribute
 	-- cleaning minigame
@@ -72,7 +70,7 @@ Net.Events = {
 	--   Every request read gets a TrainResult; a sent train or a bought level pushes State at once
 	--   (StateService.pushNow). TrainController keeps its own copy of this limit (a click over it
 	--   gets a sound there instead of being dropped here without a word).
-	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
+	-- automation (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
 	--   KeepMode, KeepList; dirty ore, crushed ore and ingots always pass on):
@@ -84,24 +82,6 @@ Net.Events = {
 	--                                                          follows the Rare+ rule again
 	--   The client redraws from the next State snapshot, so a dropped event never
 	--   leaves it out of step with the save.
-	FoundryAction = { Rate = 4, Burst = 8 }, -- (action, arg?):
-	--   "Open"                                    open your Foundry's panel (server answers OpenUI "Foundry")
-	--   "Forge"  { Ore: oreId? }                  start forging the next blaster level from data.Foundry.Stock;
-	--                                             Ore = the skin, an ore among the usable stock ingots
-	--                                             (default: the ore of the most valuable one). It uses
-	--                                             one ingot of the skin ore plus the lowest-value other
-	--                                             usable ingots (GameConfig, Foundry), never the best
-	--   "Strike" { SessionId, Times: { number } } the hammer taps, seconds since FoundryBegin, oldest first
-	--   "Cancel" { SessionId }
-	--   "Take"   { Key, Count }                   stock ingots of one type ("Ingot|O|G|", whole Count
-	--                                             1..GameConfig.MaxFoundryStock) back into the Ore Pen, as
-	--                                             many as fit (checked and moved with no yield; refused
-	--                                             while a forge session runs)
-	--   Nothing is taken when forging starts: on the Strike that finishes the
-	--   session the server checks the ingots and coins again and takes both in
-	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
-	--   then); in that same step the stock ingots the new next level can't use
-	--   move to the pen (as many as fit). Cancel, Timeout and BadStrikes cost nothing.
 	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop:
 	--   ({ Action = "Buy" }) buys it once for MineFloors.Elevator.Price coins (data.Upgrades.Elevator);
 	--   ({ Action = "Go", Floor }) rides to that floor's stop: owned, whole Floor 1..#MineFloors.List,
@@ -118,6 +98,10 @@ Net.Events = {
 	--   writes the level / inventory in one step with no yield, so a double tap buys one
 	--   level. Every request (except one the rate limit drops) gets a ShopResult answer.
 	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
+	-- the BACKPACKS shop (BackpackService; the window is the style chat's BackpackShopView):
+	--   ("Buy", { Id }) any pack you can afford, within the counter's reach (a bigger one is
+	--   worn at once); ("Equip", { Id }) a pack you own. Every request read gets a BackpackResult.
+	BackpackAction = { Rate = 3, Burst = 5 },
 	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
 	--   request read gets a VaultResult (see VaultService)
 	-- hoverboards (HoverboardService), anywhere: { Action = "Buy", Board } a coin board (EconomyService);
@@ -228,16 +212,6 @@ Net.Events = {
 	--   "Coins" (Upgrade), Kind?, Level?: the level the request named }; the client drops what it
 	--   showed ahead of the server for a refused one (TrainController)
 	TrainResult = false,
-	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
-	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number to be used,
-	--   Coins: the price, taken only on success (see FoundryAction) }
-	FoundryBegin = false,
-	-- { Id: SessionId ("" when "Forge" is refused before a session starts), Ok,
-	--   Reason?: "NotEnough" (ingots or coins missing, at Forge or at the final Strike) | "MaxLevel" |
-	--   "Busy" (a session already runs) | "TooFar" (not at your Foundry) | "BadOre" (the skin isn't
-	--   a known ore among the usable ingots) | "Cancelled" | "Timeout" | "BadStrikes",
-	--   Level?: new BlasterLevel, Ore?: new BlasterOre, Name?: BlasterData.displayName }
-	FoundryResult = false,
 	-- the answer to every ShopBuy the server reads: { Item, Ok, Reason?: an
 	--   EconomyConfig.TechShop.Reasons code ("BadItem" | "BadCount" | "MaxOwned" | "Max" |
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
@@ -255,6 +229,8 @@ Net.Events = {
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
+	-- the answer to a BackpackAction: { Id, Ok, Reason?: "TooFar" | "NoCoins" | "Owned" | "NotOwned" | "BadId" | "Locked" }
+	BackpackResult = false,
 	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
 	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
 	HoverboardResult = false,

@@ -2,18 +2,24 @@
 	CleaningService: the Cleaning Station (signature minigame), server side.
 
 	Flow:
-	1. Raw ore gets onto the station: the owner uses the station prompt while
-	   carrying raw ore, or drops/throws a raw chunk into the vise.
+	1. Raw ore gets onto the station: the owner uses the station prompt and
+	   the vise takes a dirty ore (or a dusty relic) out of their backpack
+	   (CarryService; owner 2026-10-24: everything goes into the backpack),
+	   or a loose raw chunk of theirs lands in the vise (the vise scan).
 	2. The server starts a session with a random seed and tells the client
 	   (CleanBegin). The client builds the same dirt (CleaningPatterns) from
 	   the seed and the player sprays it off.
 	3. The client sends its recorded spray (CleanSubmit). The server replays
 	   it with the shared SprayScoring code (it never trusts a client grade),
 	   sanity-checks the timing, lets CleaningGuard cap a scripted Flawless,
-	   and turns the raw chunk into a clean ore of that grade on the
-	   station's output tray (a dusty relic goes into the collection).
+	   and turns the raw chunk into a clean ore of that grade, straight into
+	   the backpack (owner 2026-10-24: not back onto the station); with no
+	   room there it goes into the Ore Pen (ItemService.storeDesc), and only
+	   when that fails too onto the station's output tray (a dusty relic
+	   goes into the collection).
 	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
-	gives it back.
+	puts it back into the backpack (past its capacity if need be: it was
+	yours a moment ago).
 	The station has no canAccept, so IntakeService leaves it alone: its own
 	vise scan below mounts dropped raw ore. Moving the station carries the
 	vise ore along; packing it up (or leaving) stashes it.
@@ -21,6 +27,17 @@
 	a set kept by the station's spawned / removed hooks, never every placed
 	machine. Its OverlapParams filter is set again only when the Items
 	folder changes, and a pass with no empty station does no work.
+
+	The yard station (owner 2026-10-24: the cleaner you use yourself stands
+	where the Foundry was; new players get no station on the grid any more):
+	every owned plot has one at BaseLayout.CleaningStation, built here when
+	PlotService gives the plot its owner and gone when the plot is freed
+	(its vise ore is stashed like a packed-up station's). It is the same
+	station (prompts, vise, sessions, the clean ore at its Output) but no
+	placed machine: no save entry, no grid cell, not in MachineService's
+	index; its model carries the "Machine" tag, Owner and Fixed = true
+	(build mode leaves it alone). Stations bought in the Tech shop still
+	stand on the grid as before.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -29,7 +46,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
+local MachineData = require(Shared.Config.MachineData)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
@@ -41,9 +60,11 @@ local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
 local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
+local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local MachineService = require(script.Parent.MachineService)
+local PlotService = require(script.Parent.PlotService)
 
 local CleaningService = {}
 
@@ -198,15 +219,24 @@ local function onPrompt(player: Player, machine: MachineService.PlacedMachine)
 		return
 	end
 	if not stationItem(machine) then
-		-- only a chunk really in the hands (CarryService.takeTop skips others too: #11)
-		local record = CarryService.takeTop(player, function(r)
-			return cleanable(r) and r.State == "Carried"
-		end)
-		if not record then
-			Net.fire("Notify", player, { Text = "Bring a raw ore chunk or a dusty relic to clean it.", Kind = "Info" })
+		-- a dirty ore or a dusty relic out of the backpack (no yield until it is in the vise)
+		local orePoint = MachineService.point(machine, "OrePoint")
+		local desc = if orePoint
+			then CarryService.take(player, function(d: ItemService.Desc): boolean
+				return d.K == "Raw" or d.K == "Relic"
+			end, 1)[1]
+			else nil
+		if not desc or not orePoint then
+			Net.fire("Notify", player, { Text = "Bring dirty ore or a dusty relic in your backpack to clean it.", Kind = "Info" })
 			return
 		end
-		if not mount(machine, record) then
+		local record = ItemService.spawnDesc(desc, player.UserId, orePoint, nil, true)
+		if not record or not mount(machine, record) then
+			-- never lost: back into the backpack
+			if record then
+				ItemService.destroy(record)
+			end
+			CarryService.add(player, desc, 1, true)
 			return
 		end
 	end
@@ -221,10 +251,20 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 	if not record then
 		return
 	end
-	machine.State.Item = nil
-	local output = MachineService.point(machine, "Output") or record.Model:GetPivot()
-	ItemService.release(record, output)
-	CarryService.pickup(player, record)
+	-- back into the backpack while it has room, else into the Ore Pen; with both
+	-- full it stays in the vise (never past the backpack's capacity, never lost)
+	if CarryService.room(player) > 0 then
+		machine.State.Item = nil
+		CarryService.add(player, ItemService.absorb(record), 1)
+	else
+		local stored = ItemService.storeDesc(player, ItemService.descOf(record), "Your backpack is full")
+		if stored == "Lost" then
+			Net.fire("Notify", player, { Text = "Your backpack and your Ore Pen are full.", Kind = "Deny" })
+			return
+		end
+		machine.State.Item = nil
+		ItemService.absorb(record)
+	end
 	updatePrompts(machine)
 end
 
@@ -320,11 +360,21 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		return
 	end
 
-	-- success: raw chunk becomes clean ore on the output tray
+	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen,
+	-- else the output tray)
 	machine.State.Item = nil
 	ItemService.destroy(record)
-	local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
-	local clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
+	local cleanDesc: ItemService.Desc = { K = "Clean", O = session.OreId, G = result.Grade }
+	local clean: ItemService.ItemRecord? = nil
+	local into = "Backpack"
+	if CarryService.add(player, cleanDesc) == 0 then
+		local stored = ItemService.storeDesc(player, cleanDesc, "Your backpack is full")
+		into = if stored == "Stored" then "Pen" elseif stored == "Sold" then "Sold" else "Tray"
+		if stored == "Lost" then
+			local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
+			clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
+		end
+	end
 	updatePrompts(machine)
 
 	local data = DataService.get(player)
@@ -350,6 +400,7 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,
+		Into = into, -- "Backpack" | "Pen" | "Sold" (the pen at the DataStore cap) | "Tray": where the clean ore went
 		New = isNew,
 	})
 	for _, callback in cleanedCallbacks do
@@ -448,38 +499,44 @@ local function intakeLoop()
 	end
 end
 
+local function stationSpawned(machine: MachineService.PlacedMachine)
+	stations[machine] = true
+	local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
+	-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
+	-- "Clean Ore". G / B are shared: the Pen, Train Send, Iron Box and Logistics
+	-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
+	-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
+	-- station) a G press in reach of one of those too fires both.
+	local take = makePrompt(machine, "TakePrompt", "Take Ore Back", "Second", 0.4, 1, Enum.ProximityPromptExclusivity.AlwaysShow, false)
+	machine.State.MainPrompt = main
+	machine.State.TakePrompt = take
+	main.Triggered:Connect(function(player)
+		onPrompt(player, machine)
+	end)
+	take.Triggered:Connect(function(player)
+		onTake(player, machine)
+	end)
+	updatePrompts(machine)
+end
+
+-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+local function stationRemoved(machine: MachineService.PlacedMachine)
+	stations[machine] = nil
+	local session = machine.State.Session :: Session?
+	if session then
+		endSession(session)
+	end
+	local record = stationItem(machine)
+	if record then
+		machine.State.Item = nil
+		ItemService.stash(record, nil)
+	end
+end
+
 local stationBehaviour: MachineService.Behaviour = {
-	spawned = function(machine)
-		stations[machine] = true
-		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", "Main", 0, 0)
-		-- the "Second" keys, G / gamepad B (E and Y stay "Clean Ore"), always shown next to
-		-- "Clean Ore". G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics
-		-- (Sorter) prompts use them too, on their own machines / anchors (8-10 studs reach,
-		-- default OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the
-		-- station) a G press in reach of one of those too fires both.
-		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", "Second", 0.4, 1, Enum.ProximityPromptExclusivity.AlwaysShow, false)
-		machine.State.MainPrompt = main
-		machine.State.TakePrompt = take
-		main.Triggered:Connect(function(player)
-			onPrompt(player, machine)
-		end)
-		take.Triggered:Connect(function(player)
-			onTake(player, machine)
-		end)
-		updatePrompts(machine)
-	end,
-	-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+	spawned = stationSpawned,
 	removed = function(machine, _reason)
-		stations[machine] = nil
-		local session = machine.State.Session :: Session?
-		if session then
-			endSession(session)
-		end
-		local record = stationItem(machine)
-		if record then
-			machine.State.Item = nil
-			ItemService.stash(record, nil)
-		end
+		stationRemoved(machine)
 	end,
 	-- moved in build mode: the ore in the vise moves with the station
 	moved = function(machine)
@@ -490,8 +547,80 @@ local stationBehaviour: MachineService.Behaviour = {
 	end,
 }
 
+---------------------------------------------------------------- the yard station
+
+-- plot id -> the yard station standing there (owned plots only)
+local yardStations: { [number]: MachineService.PlacedMachine } = {}
+
+-- World CFrame of a plot's yard station (the machine model's pivot, like a placed one's).
+function CleaningService.yardCFrame(plotId: number): CFrame
+	local spot = BaseLayout.CleaningStation
+	return PlotService.plotCFrame(plotId) * CFrame.new(spot.Center.X, 0, spot.Center.Z) * CFrame.Angles(0, -spot.R * math.pi / 2, 0)
+end
+
+local function removeYardStation(plotId: number)
+	local machine = yardStations[plotId]
+	if not machine then
+		return
+	end
+	yardStations[plotId] = nil
+	-- the vise ore is stashed, a session ends (as for a packed-up station)
+	stationRemoved(machine)
+	machine.Removed = true
+	machine.Model:Destroy()
+end
+
+local function buildYardStation(player: Player, plotId: number)
+	removeYardStation(plotId)
+	local plot = PlotService.model(plotId)
+	if not plot or not player.Parent or PlotService.plotOf(player) ~= plotId then
+		return
+	end
+	local model = MachineBuilder.build("CleaningStation", 0, 0)
+	model.Name = "YardStation"
+	model:PivotTo(CleaningService.yardCFrame(plotId))
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model:SetAttribute("Owner", player.UserId)
+	model:SetAttribute("Fixed", true)
+	model:SetAttribute("Status", "")
+	model:AddTag("Machine")
+	model.Parent = plot
+	local machine: MachineService.PlacedMachine = {
+		Model = model,
+		Id = "CleaningStation",
+		Owner = player,
+		PlotId = plotId,
+		X = -1,
+		Z = -1,
+		R = BaseLayout.CleaningStation.R,
+		L = 0,
+		State = {},
+		Entry = { Id = "CleaningStation", X = -1, Z = -1, R = BaseLayout.CleaningStation.R },
+		Info = MachineData.ById.CleaningStation,
+		Removed = false,
+	}
+	yardStations[plotId] = machine
+	stationSpawned(machine)
+end
+
 function CleaningService.init()
 	MachineService.register("CleaningStation", stationBehaviour)
+	PlotService.onAssigned(function(player: Player, plotId: number)
+		local ok, err = pcall(function()
+			buildYardStation(player, plotId)
+		end)
+		if not ok then
+			warn(`[CleaningService] yard station on plot {plotId}: {err}`)
+		end
+	end)
+	PlotService.onReleased(function(_player: Player, plotId: number)
+		local ok, err = pcall(function()
+			removeYardStation(plotId)
+		end)
+		if not ok then
+			warn(`[CleaningService] yard station off plot {plotId}: {err}`)
+		end
+	end)
 	Net.on("CleanSubmit", onSubmit)
 	Net.on("CleanCancel", onCancel)
 	Players.PlayerRemoving:Connect(function(player)
@@ -548,6 +677,7 @@ CleaningService._test = {
 	submit = function(player: Player, sessionId: any, payload: any)
 		onSubmit(player, sessionId, payload)
 	end,
+	take = onTake,
 	session = function(player: Player): any
 		return sessions[player]
 	end,
@@ -557,6 +687,11 @@ CleaningService._test = {
 	end,
 	newScan = newScan,
 	intakePass = intakePass,
+	yardStation = function(plotId: number): MachineService.PlacedMachine?
+		return yardStations[plotId]
+	end,
+	buildYard = buildYardStation,
+	removeYard = removeYardStation,
 	stations = function(): { MachineService.PlacedMachine }
 		local list = {}
 		for machine in stations do
@@ -568,6 +703,7 @@ CleaningService._test = {
 	end,
 	reset = function()
 		table.clear(stations)
+		table.clear(yardStations)
 	end,
 }
 

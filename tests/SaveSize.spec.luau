@@ -1,6 +1,7 @@
 -- Save size guard (docs/SAVE_AUDIT.md #11): a save filled to every cap the
 -- game enforces, written the way ProfileStore writes it (JSON with the lock),
--- stays far under Roblox's 4 MB per key. Measured on 2026-10-18: ~120 KB.
+-- stays far under Roblox's 4 MB per key. Measured on 2026-10-18: ~120 KB; 2026-10-27
+-- with the backpack (every ore x grade a stack) and the 200-slot train cargo: ~222 KB.
 -- When a feature adds a record to the save, add its maxed form here.
 return function(T, Loader)
 	local serde = require("@lune/serde")
@@ -11,7 +12,7 @@ return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 
-	T.Limit = 256 * 1024 -- 2x headroom over today's maxed save; Roblox's hard limit is 4 MB
+	T.Limit = 448 * 1024 -- ~2x headroom over today's maxed save; Roblox's hard limit is 4 MB
 
 	-- The longest strings a save can hold for an item (the longest ore id and grade, a recipe).
 	local function longestOre(): string
@@ -52,11 +53,23 @@ return function(T, Loader)
 			d.MachineInventory[id] = MachineData.MaxInventory
 			d.MachineUpgrades[id] = { Speed = 99, Quality = 99 }
 		end
-		for _ = 1, GameConfig.MaxFoundryStock do
-			table.insert(d.Foundry.Stock, { K = "Ingot", O = ore, G = "Pristine" })
-		end
 		for _ = 1, TrainConfig.MaxCargoSaved do
 			table.insert(d.Train.Cargo, item())
+		end
+		-- the backpack: a stack of every ore in every kind and grade, every pack owned
+		local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+		local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
+		for id in OreData.ById do
+			for _, kind in { "Raw", "Crushed" } do
+				d.BackpackItems[ItemData.storageKey({ K = kind, O = id })] = 5000
+			end
+			for _, grade in ItemData.Grades do
+				d.BackpackItems[ItemData.storageKey({ K = "Clean", O = id, G = grade.Id })] = 5000
+				d.BackpackItems[ItemData.storageKey({ K = "Ingot", O = id, G = grade.Id })] = 5000
+			end
+		end
+		for _, pack in BackpackData.List do
+			d.Backpacks.Owned[pack.Id] = true
 		end
 		for id in OreData.ById do
 			d.Discovered[id] = true

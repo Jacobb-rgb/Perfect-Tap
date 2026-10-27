@@ -99,8 +99,8 @@ MineFloors.GiantCrystal = {
 -- coins, bought once: about 2/3 of the blaster 7 price, a real goal before floor 4 (the
 -- balance sim in docs/BALANCE_SIM.md); follows the blaster prices, rounded to 2 digits
 local function elevatorPrice(): number
-	local blaster = BlasterData.ByLevel[7]
-	local raw = (if blaster and blaster.Recipe then blaster.Recipe.Coins else 3e6) * 2 / 3
+	local scale = BlasterData.coins(7)
+	local raw = (if scale > 0 then scale else 3e6) * 2 / 3
 	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
 	return math.floor(raw / step + 0.5) * step
 end

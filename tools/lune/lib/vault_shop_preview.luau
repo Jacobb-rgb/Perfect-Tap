@@ -6,13 +6,14 @@
 	UI overlays (build/preview/<name>.json):
 	  ui_vault_pc           PC: a level 3 player who can buy level 4
 	  ui_vault_pc_poor      PC: level 6 next, not enough coins (red price, the message)
-	  ui_vault_pc_forge     PC: a rebirth run at LV 9 with nothing forged: LV 10 says FOUNDRY, the
-	                        last card STAR BLASTERS (REBIRTH: they are in the Star Forge)
+	  ui_vault_pc_rebirth   PC: a rebirth run at LV 9 whose factory kept 50M / s: LV 10 costs
+	                        the run's floor, the last card STAR BLASTERS (REBIRTH: they are
+	                        in the Star Forge)
 	  ui_vault_phone        667 x 375 pt phone (compact: one row that scrolls)
 	  ui_vault_phone_small  568 x 320 pt phone: level 8 next ($4.8B)
 	  ui_vault_tv           1080p TV (console, HUD scale 1.25): the compact
 	                        layout, the top case next ($140B)
-	The coins fit the prices of balance pass 1 (4x the Foundry coins).
+	The coins fit the Vault prices (BlasterData.vaultPrice).
 	With LIGHT_UI=1 in the environment the same overlays use the light UI
 	(UIConfig.LightUI on) and their names end in "_light".
 ]]
@@ -45,10 +46,7 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(2400)
-		refs.CarryLabel.Text = "CARRYING 0/3"
-		for i = 1, 3 do
-			HudView.slot(refs.CarrySlots, nil, i)
-		end
+		HudView.setBackpack(refs, 0, 5)
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end
@@ -61,13 +59,13 @@ function Preview.build(Loader: any): { [string]: any }
 		level: number,
 		coins: number,
 		hint: string,
-		reached: number?
+		runIncome: number?
 	): any
 		local refs = VaultView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		VaultView.layout(refs, compact, maxWidth, maxHeight)
-		VaultView.setCards(refs, VaultView.cards(level, coins, reached))
+		VaultView.setCards(refs, VaultView.cards(level, coins, runIncome))
 		VaultView.setCoins(refs, coins)
 		VaultView.setCurrent(refs, level, BlasterData.vaultOre(level))
 		VaultView.setHint(refs, hint)
@@ -97,10 +95,11 @@ function Preview.build(Loader: any): { [string]: any }
 	-- level 3 with 2.1M: level 4 ($1.52M) can be bought
 	exports.ui_vault_pc = UiExport.export({ hud(scale, 2.1e6).Gui, view(scale, false, pcWidth, pcHeight, 3, 2.1e6, pcHint).Gui })
 
-	-- a rebirth run at LV 9 with nothing forged: LV 10 waits for the Foundry (FOUNDRY), the last card is the Star Forge's
-	local forge = view(scale, false, pcWidth, pcHeight, 9, 2e13, pcHint, 0)
-	VaultView.setMessage(forge, VaultView.reasonText("ForgeFirst"), VaultView.Style.Bad)
-	exports.ui_vault_pc_forge = UiExport.export({ hud(scale, 2e13).Gui, forge.Gui })
+	-- a rebirth run at LV 9 whose factory kept 50M coins / s: LV 10 costs the run's floor
+	-- (BlasterData.vaultPrice), the last card is the Star Forge's
+	local rebirth = view(scale, false, pcWidth, pcHeight, 9, 2e11, pcHint, 50e6)
+	VaultView.setMessage(rebirth, VaultView.reasonText("NoCoins"), VaultView.Style.Bad)
+	exports.ui_vault_pc_rebirth = UiExport.export({ hud(scale, 2e11).Gui, rebirth.Gui })
 
 	-- level 5 with 1.9M: level 6 costs $116M (red), BUY tells why
 	local poor = view(scale, false, pcWidth, pcHeight, 5, 1.9e6, pcHint)

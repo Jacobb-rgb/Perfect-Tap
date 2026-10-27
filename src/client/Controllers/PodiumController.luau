@@ -9,7 +9,8 @@
 	  every podium. This controller enables the one that fits on your own
 	  podiums only:
 	    an ore on it            -> "Remove"
-	    empty, you carry clean  -> "Put On Podium"
+	    empty, a cleaned ore in
+	    your backpack           -> "Put On Podium" (canPutOn, Util/BackpackState)
 	    empty otherwise         -> "Place Ore" (opens the pen in pick mode)
 	    locked (no Podiums perk)-> "Place Ore" shown as "Locked" / "100 R$"
 	  The server checks everything again.
@@ -34,6 +35,7 @@ local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local FxController = require(script.Parent.FxController)
@@ -75,13 +77,13 @@ local function unlockedSlots(state: { [string]: any }?): number
 	return slots or EconomyConfig.Podiums.Free
 end
 
-local function carriesCleanOre(): boolean
-	for _, item in CollectionService:GetTagged("Item") do
-		if item:GetAttribute("CarriedBy") == player.UserId and EconomyConfig.Podiums.Kinds[item:GetAttribute("Kind") :: any] then
-			return true
-		end
-	end
-	return false
+-- Does the backpack hold an ore "Put On Podium" takes (a cleaned one: EconomyConfig.Podiums.Kinds)?
+function PodiumController.canPutOn(backpack: BackpackState.Backpack): boolean
+	return BackpackState.has(BackpackState.podiumOre, backpack)
+end
+
+local function hasPodiumOre(): boolean
+	return PodiumController.canPutOn(BackpackState.get())
 end
 
 -- The yard's podium models of your plot that are streamed in.
@@ -105,7 +107,7 @@ end
 
 ---------------------------------------------------------------- prompts
 
-local function applyPrompt(instance: Instance, state: { [string]: any }?, carrying: boolean)
+local function applyPrompt(instance: Instance, state: { [string]: any }?, hasOre: boolean)
 	if not instance:IsA("ProximityPrompt") then
 		return
 	end
@@ -121,9 +123,9 @@ local function applyPrompt(instance: Instance, state: { [string]: any }?, carryi
 	if action == "Remove" then
 		prompt.Enabled = occupied
 	elseif action == "Put" then
-		prompt.Enabled = not occupied and unlocked and carrying
+		prompt.Enabled = not occupied and unlocked and hasOre
 	else
-		prompt.Enabled = not occupied and not (unlocked and carrying)
+		prompt.Enabled = not occupied and not (unlocked and hasOre)
 		prompt.ActionText = if unlocked then "Place Ore" else "Locked"
 		prompt.ObjectText = if unlocked then `Podium {slot}` else `Podium {slot} - 100 R$`
 	end
@@ -131,9 +133,9 @@ end
 
 local function refreshPrompts()
 	local state = StateController.get()
-	local carrying = carriesCleanOre()
+	local hasOre = hasPodiumOre()
 	for _, prompt in CollectionService:GetTagged("PodiumPrompt") do
-		applyPrompt(prompt, state, carrying)
+		applyPrompt(prompt, state, hasOre)
 	end
 end
 
@@ -382,14 +384,11 @@ end
 
 function PodiumController.start()
 	CollectionService:GetInstanceAddedSignal("PodiumPrompt"):Connect(function(prompt)
-		applyPrompt(prompt, StateController.get(), carriesCleanOre())
+		applyPrompt(prompt, StateController.get(), hasPodiumOre())
 	end)
 	refreshPrompts()
-	-- an item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
-	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
-		refreshPrompts()
-		task.delay(0.25, refreshPrompts)
-	end)
+	-- "Put On Podium" follows the backpack: CarryCount here, every State push (its items) in init
+	player:GetAttributeChangedSignal(BackpackState.CountAttribute):Connect(refreshPrompts)
 	player:GetAttributeChangedSignal("PlotId"):Connect(function()
 		hideHover()
 		refreshPrompts()

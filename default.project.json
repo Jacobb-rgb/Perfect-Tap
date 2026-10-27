@@ -66,7 +66,7 @@
         "EnvironmentSpecularScale": 0.6,
         "GlobalShadows": true,
         "ShadowSoftness": 0.3,
-        "ExposureCompensation": 0.15
+        "ExposureCompensation": 0.05
       },
       "Atmosphere": {
         "$className": "Atmosphere",
@@ -91,9 +91,9 @@
       "Bloom": {
         "$className": "BloomEffect",
         "$properties": {
-          "Intensity": 0.9,
-          "Size": 32,
-          "Threshold": 0.92
+          "Intensity": 0.5,
+          "Size": 24,
+          "Threshold": 1.15
         }
       },
       "ColorCorrection": {

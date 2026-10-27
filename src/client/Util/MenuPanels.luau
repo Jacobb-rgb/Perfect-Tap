@@ -32,7 +32,6 @@ MenuPanels.Names = {
 	"SellController",
 	"TrainController",
 	"IronBoxController",
-	"FoundryController",
 	"TechShopController",
 	"VaultController",
 	"BoostController",
@@ -51,6 +50,7 @@ MenuPanels.Names = {
 	"RebirthController",
 	"QuestController",
 	"EmoteController", -- the EMOTES menu
+	"BackpackController", -- the backpack inventory (the HUD's backpack button)
 }
 
 local cache: { [string]: any } = {}

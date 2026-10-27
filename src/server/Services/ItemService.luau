@@ -798,8 +798,8 @@ function ItemService.destroy(record: ItemRecord)
 end
 
 -- Takes an item out of the world (into a machine, a sale...) and returns
--- what it was. Works in any state except Consumed; a carried item should
--- come off the carry stack first (CarryService.takeTop). A light item
+-- what it was. Works in any state except Consumed (CarryService.pickup puts
+-- what it absorbs into the backpack's counts). A light item
 -- taken off the ground (a belt) leaves its model parked for the next spawn
 -- near it, and wakes its owner's sleeping items around it.
 function ItemService.absorb(record: ItemRecord): Desc

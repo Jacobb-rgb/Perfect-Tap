@@ -46,23 +46,9 @@ function Preview.build(Loader: any): { [string]: any }
 				HudBubble.addMore(refs.Menu, entry.Id, spec)
 			end
 		end
-		-- the hotbar as HudController fills it: 12 carried of 24 (8 squares, "+5" on the last)
-		local carried = 12
-		local squares, shown, more, width = HudView.carryLayout(24, carried)
-		local rarities = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }
-		for i = 1, squares do
-			if more > 0 and i == squares then
-				HudView.moreSlot(refs.CarrySlots, more, i)
-			elseif i <= shown then
-				local dirty = i == 3
-				local rarity = Rarity.get(rarities[((i - 1) % #rarities) + 1])
-				HudView.slot(refs.CarrySlots, if dirty then nil else rarity.Color, i, dirty)
-			else
-				HudView.slot(refs.CarrySlots, nil, i)
-			end
-		end
-		refs.CarryLabel.Text = `CARRYING {carried}/24`
-		refs.CarryPanel.Size = roblox.UDim2.fromOffset(width, HudView.CarryPanelHeight)
+		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
+		HudView.setBackpack(refs, 12, 30)
+		HudView.setBackpackKey(refs, if compact then nil else "Q", nil)
 		local list = { refs.Gui }
 		-- the TRAIN chip and the boost chips (TrainController / BoostController place them)
 		TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")

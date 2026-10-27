@@ -1330,6 +1330,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	if not cutaway then
 		voidEnclosure(m)
 	end
+	MineKit.dimLights(m, Floor.Index)
 	return m
 end
 

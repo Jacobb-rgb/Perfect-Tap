@@ -68,10 +68,7 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Coins.Text = Format.money(Preview.Coins)
 		refs.Income.Text = Format.perSecond(64)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
-		refs.CarryLabel.Text = "CARRYING 0/3"
-		for i = 1, 3 do
-			HudView.slot(refs.CarrySlots, nil, i)
-		end
+		HudView.setBackpack(refs, 0, 5)
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end

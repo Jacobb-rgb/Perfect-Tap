@@ -3,11 +3,17 @@
 	docs/plans/MINE_FLOORS_PLAN.md point 7): ride one anywhere to move faster
 	(the mine floors are big, floors 1-3 are walked).
 
-	- 3 boards for coins, each one faster than the one before.
-	- 2 boards for Robux (49 R$ each): faster than every coin board and with
-	  big particle effects and a light trail (owner: "more benefits"); the coin
-	  boards get small thruster effects only, no trail (owner 2026-10-21:
-	  "better effects").
+	- 4 boards for coins, each one faster than the one before.
+	- 1 board for Robux (49 R$): the Terra Forge Custom, a deck painted with
+	  doodles of the game (owner 2026-10-25: "the only Robux board is a custom
+	  Terra Forge one, like Pet Simulator's"), faster than every coin board,
+	  a rainbow trail and big effects (nothing slows a rider down any more:
+	  the backpack has no carry slowdown, 2026-10-24). The Neon Comet is
+	  gone (owner 2026-10-25) and the Royal Phoenix is the 4th coin board
+	  ("cheaper": 3x the Emberglass Glider); its old pass entry now sells the
+	  Terra Forge Custom (no pass id was ever made, nobody bought either).
+	  The first three coin boards get small thruster effects without a trail
+	  (owner 2026-10-21: "better effects"); the Phoenix keeps its flames.
 	- Speed is the Humanoid WalkSpeed while riding (CarryService walks at
 	  BaseWalkSpeed = 18 without a board). One formula for everything,
 	  HoverboardData.walkSpeed (CarryService.updateWalkSpeed uses it): every
@@ -23,16 +29,17 @@
 	Coin prices sit between the other one-time goals, so a board is always the
 	next nice thing to save for. They follow the blaster recipe prices
 	(priceFrom; today's numbers, the balance sim in docs/BALANCE_SIM.md):
-	  blaster 3   2,000     floor 2 opens
-	  BOARD 1     5,000     (Timber Drifter) 2.5x blaster 3: the first floor-1/2 treat
-	  blaster 4   15,000
-	  BOARD 2     80,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
-	  blaster 5   100,000   floor 3 opens
-	  blaster 6   700,000
-	  elevator    3,300,000 (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
-	  BOARD 3     5,000,000 (Emberglass Glider) = blaster 7: a goal past the first hour
-	  blaster 7   5,000,000 floor 4 opens
-	The Robux boards are faster than all of them from the first minute.
+	  blaster 3   17,000       floor 2 opens
+	  BOARD 1     43,000       (Timber Drifter) 2.5x blaster 3: the first floor-1/2 treat
+	  blaster 4   710,000
+	  BOARD 2     1,700,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
+	  blaster 5   2,100,000    floor 3 opens
+	  blaster 6   73,000,000
+	  elevator    87,000,000   (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
+	  BOARD 3     130,000,000  (Emberglass Glider) = blaster 7: a goal past the first hour
+	  blaster 7   130,000,000  floor 4 opens
+	  BOARD 4     390,000,000  (Royal Phoenix) 3 x BOARD 3: a long goal after it
+	The Robux board is faster than all of them from the first minute.
 
 	Robux boards are game passes (bought once, owned forever; a refund takes
 	the board back): each names its MonetizationConfig entry (PassKey), the
@@ -51,7 +58,7 @@ local MonetizationConfig = require(script.Parent.MonetizationConfig)
 local HoverboardData = {}
 
 export type Kind = "Coins" | "Robux"
-export type Effect = "None" | "Sparks" | "Vents" | "Lava" | "Comet" | "Phoenix"
+export type Effect = "None" | "Sparks" | "Vents" | "Lava" | "Phoenix" | "Custom"
 
 export type Colors = {
 	Main: Color3, -- the deck / body
@@ -89,12 +96,10 @@ HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHei
 
 local rgb = Color3.fromRGB
 
--- Coin prices follow the blaster prices (BlasterData Recipe.Coins), so a blaster re-balance
--- moves the boards with it: `factor` x the coin price of blaster `level`, rounded to 2 digits.
+-- Coin prices follow the blaster prices (BlasterData.coins), so a blaster re-balance
+-- moves the boards with it: `factor` x the coin scale of blaster `level`, rounded to 2 digits.
 function HoverboardData.priceFrom(level: number, factor: number): number
-	local blaster = BlasterData.ByLevel[level]
-	local coins = if blaster and blaster.Recipe then blaster.Recipe.Coins else 0
-	local raw = coins * factor
+	local raw = BlasterData.coins(level) * factor
 	if raw <= 0 then
 		return 0
 	end
@@ -161,34 +166,13 @@ HoverboardData.List = {
 		Perks = { "Faster than walking", "Lava glow" },
 	},
 	{
-		Id = "NeonComet",
-		Order = 4,
-		Name = "Neon Comet",
-		Kind = "Robux",
-		Robux = HoverboardData.RobuxPrice,
-		PassKey = "HoverboardComet",
-		Speed = 35,
-		IgnoresCarrySlow = true,
-		Effect = "Comet",
-		Colors = {
-			Main = rgb(42, 54, 140), -- night indigo
-			Trim = rgb(214, 232, 255), -- star white grip edges
-			Accent = rgb(255, 70, 200), -- magenta fins
-			Glow = rgb(40, 210, 255), -- cyan
-			Glow2 = rgb(255, 80, 210), -- magenta
-		},
-		Description = "A comet with a glowing core. Leaves a trail of stars.",
-		Perks = { "Faster than any coin board", "No carry slowdown", "Star trail" },
-	},
-	{
 		Id = "RoyalPhoenix",
-		Order = 5,
+		Order = 4,
 		Name = "Royal Phoenix",
-		Kind = "Robux",
-		Robux = HoverboardData.RobuxPrice,
-		PassKey = "HoverboardPhoenix",
-		Speed = 38,
-		IgnoresCarrySlow = true,
+		Kind = "Coins",
+		Price = HoverboardData.priceFrom(7, 3), -- 3x the Emberglass Glider (owner 2026-10-25: "cheaper")
+		Speed = 35,
+		IgnoresCarrySlow = false,
 		Effect = "Phoenix",
 		Colors = {
 			Main = rgb(104, 50, 186), -- royal violet
@@ -197,8 +181,29 @@ HoverboardData.List = {
 			Glow = rgb(176, 80, 255), -- violet glow
 			Glow2 = rgb(255, 170, 40), -- gold flame
 		},
-		Description = "The fastest board. Golden wings, a crown crystal and a flame trail.",
-		Perks = { "Fastest board", "No carry slowdown", "Flame trail" },
+		Description = "Golden wings, a crown crystal and a flame trail.",
+		Perks = { "The fastest coin board", "Flame trail" },
+	},
+	{
+		Id = "TerraForgeCustom",
+		Order = 5,
+		Name = "Terra Forge Custom",
+		Kind = "Robux",
+		Robux = HoverboardData.RobuxPrice,
+		PassKey = "HoverboardCustom",
+		Speed = 38,
+		IgnoresCarrySlow = true,
+		Effect = "Custom",
+		Colors = {
+			Main = rgb(250, 246, 236), -- the white painted deck
+			Trim = rgb(34, 30, 40), -- the black marker outline
+			Accent = rgb(255, 196, 40), -- sunny yellow doodles
+			Glow = rgb(255, 70, 190), -- hot pink glow
+			Glow2 = rgb(60, 200, 255), -- sky blue glow
+		},
+		Description = "Painted all over with Terra Forge doodles: golems, gems, blasters and more.",
+		-- (Perks[2] is the card's gold line: the rainbow bolts, HoverboardFx; nothing is carried slowly any more)
+		Perks = { "Fastest board", "Rainbow lightning", "Rainbow trail" },
 	},
 } :: { Board }
 

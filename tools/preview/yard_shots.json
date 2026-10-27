@@ -260,22 +260,6 @@
   "preset": "Surface",
   "shadowExtent": 120
  },
- "base_foundry": {
-  "scene": "yard",
-  "position": [
-   137,
-   4.8,
-   76
-  ],
-  "target": [
-   146.5,
-   3.3,
-   71
-  ],
-  "fov": 55,
-  "preset": "Surface",
-  "shadowExtent": 60
- },
  "base_lamp": {
   "scene": "yard",
   "position": [

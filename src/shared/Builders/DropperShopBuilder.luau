@@ -26,8 +26,8 @@
 	  - the counter: a neon edge, the DROPPERS plate, a big till (a gold "$"
 	    drawer, keypad, receipt roll, a "$$$" customer display), a service
 	    bell, coin stacks and a gold bar, a gem under a glass dome, a plant,
-	    an OPEN sign and a small Money Laser gate, the Dropper Master (the
-	    shopkeeper) behind it
+	    an OPEN sign and a small Money Laser gate (the shopkeeper is a big
+	    golem beside the counter: ShopkeeperController)
 	  - a heap of ore crystals and a terminal in the back corners
 	Three local PointLights (two ceiling panels, the hero); every part is
 	anchored, non-colliding and casts no shadow (the server's plinths and
@@ -151,11 +151,6 @@ local C = {
 	Panel = rgb(120, 150, 215),
 	Gold = rgb(255, 196, 64),
 	Screen = rgb(30, 92, 214),
-	Skin = rgb(236, 186, 140),
-	Overalls = rgb(52, 96, 176),
-	Shirt = rgb(232, 112, 40),
-	Hat = rgb(255, 204, 40),
-	Hair = rgb(120, 76, 44),
 	Laser = rgb(0, 255, 105),
 	LaserBody = rgb(40, 150, 70),
 	Carpet = rgb(150, 24, 44),
@@ -413,27 +408,6 @@ function DropperShopBuilder.build(frame: CFrame): Model
 	local beam = glow(at(lx, ctop + 0.6, cc.Z), Vector3.new(0.62, 1.1, 0.06), C.Laser)
 	beam.Name = DropperConfig.Laser.Id
 	beam.Transparency = 0.3
-
-	---------------------------------------------------------------- the Dropper Master
-	-- (beside the middle, behind the till: the DARK MATTER DROPPER stays in view)
-	local kx, kz = -2.3, cc.Z - cs.Z / 2 - 0.6
-	local function body(x: number, y: number, size: Vector3, color: Color3): Part
-		return part(at(kx + x, floorY + y, kz), size, color)
-	end
-	for _, sx in { -1, 1 } do
-		body(sx * 0.32, 0.8, Vector3.new(0.55, 1.6, 0.6), C.Overalls)
-		body(sx * 1.08, 2.85, Vector3.new(0.5, 1.6, 0.55), C.Shirt)
-	end
-	body(0, 2.6, Vector3.new(1.65, 1.8, 0.9), C.Shirt)
-	body(0, 2.35, Vector3.new(1.4, 1.3, 0.95), C.Overalls)
-	body(0, 4.05, Vector3.new(1.15, 1.1, 1.1), C.Skin)
-	body(0, 4.75, Vector3.new(1.3, 0.4, 1.3), C.Hat)
-	body(0, 4.58, Vector3.new(1.5, 0.1, 1.55), C.Hat)
-	for _, sx in { -1, 1 } do
-		glow(at(kx + sx * 0.27, floorY + 4.8, kz + 0.66), Vector3.new(0.34, 0.3, 0.08), rgb(90, 220, 255))
-		part(at(kx + sx * 0.25, floorY + 4.15, kz + 0.56), Vector3.new(0.16, 0.18, 0.05), rgb(30, 24, 30))
-	end
-	body(0, 3.82, Vector3.new(0.75, 0.2, 1.16), C.Hair)
 
 	---------------------------------------------------------------- the back corners
 	-- a heap of ore crystals (left), a terminal with a glowing screen (right)

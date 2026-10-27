@@ -134,15 +134,132 @@ return function(T, Loader)
 			error(err, 0)
 		end
 	end)
-	T.test("CleaningService: only a chunk really in the hands goes into the vise (security #11)", function()
+	T.test("CleaningService: every owned plot's yard has its own Cleaning Station (owner 2026-10-24)", function()
+		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+		local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+		local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		local player = {
+			UserId = 502,
+			Name = "Yardie",
+			Parent = true,
+			Character = nil,
+			GetAttribute = function()
+				return nil
+			end,
+		}
+		local data = deepCopy(DataTemplate)
+		data.StarterKitGiven = true
+		local plotModel = Instance.new("Model")
+		local folder = Instance.new("Folder")
+		folder.Name = "Machines"
+		folder.Parent = plotModel
+		local items = Instance.new("Folder")
+		local ok, err = pcall(function()
+			patch(DataService, "get", function(p)
+				return if p == player then data else nil
+			end)
+			patch(DataService, "changed", function() end)
+			patch(PlotService, "plotOf", function(p)
+				return if p == player then PLOT else nil
+			end)
+			patch(PlotService, "ownerOf", function(id)
+				return if id == PLOT then player else nil
+			end)
+			patch(PlotService, "model", function(id)
+				return if id == PLOT then plotModel else nil
+			end)
+			patch(Net, "fire", function() end)
+			patch(Workspace, "FindFirstChild", function(_, name: string)
+				return if name == "Items" then items else nil
+			end)
+			patch(Workspace, "GetPartBoundsInBox", function()
+				return {}
+			end)
+			internals.reset()
+			cleaning.reset()
+			-- the layout: the station's footprint in the yard, off the grid, where the Foundry stood
+			local spot = BaseLayout.CleaningStation
+			local w, d = Grid.footprint("CleaningStation", spot.R)
+			T.near(spot.Area.Size.X, w * GameConfig.CellSize, 1e-9, "the area is the footprint (x)")
+			T.near(spot.Area.Size.Z, d * GameConfig.CellSize, 1e-9, "the area is the footprint (z)")
+			T.eq(spot.Area.Center, spot.Center, "centred on the pivot")
+			T.lt(GameConfig.PlotCells * GameConfig.CellSize / 2, spot.Center.Z - d * GameConfig.CellSize / 2, "off the grid, in the yard")
+			T.falsy(MachineData.StarterKit[1].Id == "CleaningStation", "new players get no station on the grid")
+			for _, entry in MachineData.StarterKit do
+				T.falsy(entry.Id == "CleaningStation", "no station in the starter kit")
+			end
+
+			cleaning.buildYard(player, PLOT)
+			local machine = cleaning.yardStation(PLOT)
+			T.truthy(machine, "built for the owner")
+			local model = plotModel:FindFirstChild("YardStation")
+			T.truthy(model and model == machine.Model, "the YardStation model on the plot")
+			T.eq(model:GetAttribute("Owner"), player.UserId, "owned")
+			T.eq(model:GetAttribute("Fixed"), true, "build mode leaves it alone")
+			T.eq(model:GetAttribute("MachineId"), "CleaningStation", "the tutorial's arrow finds it")
+			T.truthy(model:HasTag("Machine"), "tagged like a machine (prompts, effects)")
+			local at = model:GetPivot()
+			local want = CleaningService.yardCFrame(PLOT)
+			T.near((at.Position - want.Position).Magnitude, 0, 1e-4, "at BaseLayout.CleaningStation")
+			local promptPoint = model.PrimaryPart:FindFirstChild("Prompt")
+			T.truthy(promptPoint and promptPoint:FindFirstChild("CleanPrompt"), "its Clean Ore prompt")
+			T.eq(#cleaning.stations(), 1, "in the vise scan's station list")
+			T.eq(CleaningService.stationOf(player), model, "stationOf")
+			T.eq(#MachineService.ofPlot(PLOT), 0, "no placed machine (no grid cell)")
+			T.eq(#data.PlacedMachines, 0, "nothing in the save")
+			local scan = { Params = {}, Folder = nil } -- (Lune has no OverlapParams)
+			T.eq(cleaning.intakePass(scan), 1, "the scan looks into it")
+			-- (a destroyed Instance can't be read under Lune: count the plot's children instead)
+			local function yardModels(): number
+				local n = 0
+				for _, child in plotModel:GetChildren() do
+					if child.Name == "YardStation" then
+						n += 1
+					end
+				end
+				return n
+			end
+			-- built again (a rebirth reload): still one
+			cleaning.buildYard(player, PLOT)
+			T.eq(#cleaning.stations(), 1, "one station per plot")
+			T.eq(yardModels(), 1, "the old model went")
+			T.truthy(machine.Removed, "the old station is marked removed")
+			local again = cleaning.yardStation(PLOT)
+			-- the plot is freed: the station goes
+			cleaning.removeYard(PLOT)
+			T.eq(cleaning.yardStation(PLOT), nil, "gone with the plot")
+			T.truthy(again.Removed, "marked removed")
+			T.eq(yardModels(), 0, "model destroyed")
+			T.eq(#cleaning.stations(), 0, "out of the scan")
+			-- no plot, no station
+			cleaning.buildYard(player, PLOT + 1)
+			T.eq(cleaning.yardStation(PLOT + 1), nil, "only on the owner's own plot")
+		end)
+		internals.reset()
+		cleaning.reset()
+		for i = #saved, 1, -1 do
+			rawset(saved[i][1], saved[i][2], saved[i][3])
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("CleaningService: only dirty ore or a relic from the backpack goes into the vise (security #11)", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/server/Services/CleaningService.luau")
-		T.truthy(source:find("return cleanable(r) and r.State == \"Carried\"", 1, true), "takeTop asks for a carried chunk or relic")
-		T.truthy(source:find("if not mount(machine, record) then", 1, true), "a refused mount starts no session")
+		T.truthy(source:find('return d.K == "Raw" or d.K == "Relic"', 1, true), "the backpack hands out a dirty chunk or a relic only")
+		T.truthy(source:find("if not record or not mount(machine, record) then", 1, true), "a refused mount starts no session")
+		T.truthy(source:find("CarryService.add(player, desc, 1, true)", 1, true), "and puts it back into the backpack")
 		T.truthy(source:find("if mount(machine, record) then", 1, true), "nor does the auto-start from the intake")
 		local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 		local consumed: any = { State = "Consumed", Model = Instance.new("Model") }
 		T.eq(ItemService.mount(consumed, roblox.CFrame.new()), false, "ItemService refuses a consumed record")
 	end)
-
 end

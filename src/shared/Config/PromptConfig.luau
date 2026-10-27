@@ -8,7 +8,7 @@
 	  Main    E         Y        shops, stalls, counters, machines: "Put In",
 	                             "Clean Ore", "Load Train", "Place Ore"...
 	  Second  G         B        the second prompt on the same spot: "Open
-	                             Pen", "Open Foundry", "Send Train", "Take Ore
+	                             Pen", "Send Train", "Take Ore
 	                             Back", "Keep List", "Change Sort"
 	  Panel   T         L3       the client's "Train" panel prompt at a station
 

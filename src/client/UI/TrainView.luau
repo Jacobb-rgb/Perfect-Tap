@@ -23,7 +23,7 @@
 	button at least 44 pt (TrainView.touchTargets lists them for the tests);
 	narrow panels move the price onto the detail line, short ones shrink the
 	upgrade rows (never under the 76-unit buttons). On phones the panel sits
-	at the bottom of the screen (over the carry bar) and under the HUD coins
+	at the bottom of the screen (over the backpack button) and under the HUD coins
 	when there is room; when it has to cover them, CoversCoins tells the
 	controller to hide them while it is open.
 	Helpers: read (a State snapshot's Train with safe defaults), status (the
@@ -823,13 +823,14 @@ function TrainView.build(compact: boolean?): Refs
 		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 	})
-	local subtitle = UIKit.label(panel, "Throw ore into the Mine Station hopper. Your train takes it home to your Ore Pen.", 16, {
-		Name = "Subtitle",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	})
+	local subtitle =
+		UIKit.label(panel, "Load the ore in your backpack at the Mine Station. Your train takes it home to your Ore Pen.", 16, {
+			Name = "Subtitle",
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Theme.TextDim,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		})
 	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
@@ -1067,7 +1068,7 @@ function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local height = math.max(minHeight, math.min(m.Height, maxHeight - 16))
 	local top: number
 	if compact then
-		-- phones: at the bottom of the screen, over the carry bar; under the HUD coins when it fits
+		-- phones: at the bottom of the screen, over the backpack button; under the HUD coins when it fits
 		local below = maxHeight - TrainView.CoinsBottom - 8
 		if below >= minHeight then
 			height = math.min(m.Height, below)

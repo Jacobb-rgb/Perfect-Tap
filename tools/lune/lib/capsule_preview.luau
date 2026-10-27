@@ -330,10 +330,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(186)
 		refs.Income.TextColor3 = Theme.Good
-		refs.CarryLabel.Text = "CARRYING 0/3"
-		for i = 1, 3 do
-			HudView.slot(refs.CarrySlots, nil, i)
-		end
+		HudView.setBackpack(refs, 0, 5)
 		return refs
 	end
 

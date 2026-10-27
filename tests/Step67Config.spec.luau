@@ -18,7 +18,6 @@ return function(T, Loader)
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
 	local StoryConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoryConfig")
-	local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
 	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
@@ -223,12 +222,11 @@ return function(T, Loader)
 	---------------------------------------------------------------- gear
 
 	T.test("Step67: gear lines, values per level and exponential prices", function()
-		T.eq(#GearConfig.Lines, 5)
+		T.eq(#GearConfig.Lines, 4, "the Ore Backpack line left (the backpacks are their own shop, 2026-10-24)")
 		T.eq(GearConfig.MaxLevel, 5)
 		local expected = {
 			Boots = { 16, 18, 20, 22, 24, 26 },
 			HelmetLamp = { 0, 18, 26, 34, 44, 56 },
-			Backpack = { 1, 2, 3, 5, 8, 12 },
 			Gloves = { 11, 13, 15, 17, 20, 24 },
 			Magnet = { 0, 14, 18, 24, 30, 38 },
 		}
@@ -263,7 +261,7 @@ return function(T, Loader)
 		T.eq(GearConfig.nextPrice("Cape", 0), nil)
 	end)
 
-	T.test("Step67: gear quote, stats and the ToolData shim", function()
+	T.test("Step67: gear quote and stats (four lines: the Ore Backpack left, owner 2026-10-24)", function()
 		local gear = { Boots = 2, Backpack = 5 }
 		T.eq(GearConfig.quote(gear, "Boots", 3), GearConfig.ById.Boots.Prices[3], "the next level")
 		local price, reason = GearConfig.quote(gear, "Boots", 2)
@@ -272,7 +270,9 @@ return function(T, Loader)
 		price, reason = GearConfig.quote(gear, "Boots", nil)
 		T.eq(reason, "Stale", "the level is required")
 		price, reason = GearConfig.quote(gear, "Backpack", 6)
-		T.eq(reason, "Max")
+		T.eq(reason, "BadItem", "the backpacks are their own shop now (BackpackService)")
+		T.eq(#GearConfig.Lines, 4)
+		T.eq(GearConfig.ById.Backpack, nil)
 		price, reason = GearConfig.quote(gear, "Jetpack", 1)
 		T.eq(reason, "BadItem")
 		price, reason = GearConfig.quote(nil, "Magnet", 1)
@@ -282,21 +282,10 @@ return function(T, Loader)
 		end
 		local stats = GearConfig.stats(gear)
 		T.eq(stats.WalkSpeed, 20)
-		T.eq(stats.CarryCapacity, 12)
+		T.eq(stats.CarryCapacity, nil, "the backpack's capacity is the worn pack's (Bonuses' Backpack source)")
 		T.eq(stats.MagnetRadius, 0)
 		T.eq(stats.PickupRange, 11)
 		T.eq(stats.LampRange, 0)
-		T.eq(GearConfig.carryCapacity(gear, false), 12)
-		T.eq(GearConfig.carryCapacity(gear, true), 24, "StrongBack doubles")
-		T.eq(GearConfig.carryCapacity(nil, false), 1, "bare hands")
-		-- the deprecated shim: old CarryLevel N = Backpack level N - 1
-		T.eq(#ToolData.CarryLevels, GearConfig.MaxLevel + 1)
-		local old = { 1, 2, 3, 5, 8 } -- the old CarryLevels 1..5
-		for n, capacity in old do
-			T.eq(ToolData.carryCapacity(n, false), capacity, "old carry level " .. n)
-			T.eq(ToolData.CarryLevels[n].Capacity, GearConfig.value("Backpack", n - 1))
-		end
-		T.eq(ToolData.carryCapacity(nil, false), 1, "nil = bare hands")
 	end)
 
 	---------------------------------------------------------------- enchants
@@ -791,10 +780,10 @@ return function(T, Loader)
 			local twoHours = BoostConfig.MaxStackSeconds / 300 * price
 			T.truthy(twoHours >= 24 * crystal, "2 h of coin Triple Lucky costs at least 24 Crystal capsules")
 		end
-		-- Hexa Lucky: 2 % of the next blaster forge (the top forge at the top), at least 2,500
+		-- Hexa Lucky: 2 % of the next blaster level's coin scale (the top one at the top), at least 2,500
 		-- (balance pass 1: 20 % was never bought in the sim, docs/BALANCE_SIM.md)
 		local function forge(level: number): number
-			return BlasterData.ByLevel[level].Recipe.Coins
+			return BlasterData.coins(level)
 		end
 		T.eq(BoostConfig.coinPrice("HexaLucky5", 1), 2500, "the minimum")
 		T.eq(BoostConfig.coinPrice("HexaLucky5", 3), math.max(2500, math.floor(forge(4) * 0.02 + 0.5)), "2 % of the level-4 forge")
@@ -1632,7 +1621,7 @@ return function(T, Loader)
 		end
 		T.truthy(
 			table.find(big.Perks, "Podiums") and table.find(big.Perks, "OfflineExtension"),
-			"the big pass has podiums 3-4 and 12 h offline"
+			"the big pass has podiums 4-5 and 12 h offline"
 		)
 		for _, product in MonetizationConfig.List do
 			T.eq(product.Id, 0, product.Key .. " is a placeholder")
@@ -1724,7 +1713,11 @@ return function(T, Loader)
 	T.test("Step67: the new save records", function()
 		-- steps 6-7 bumped no version (reconcile fills the records in); 4 is the
 		-- bigger plots' grid move (Migrations)
-		T.eq(DataTemplate.Version, 6, "no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace")
+		T.eq(
+			DataTemplate.Version,
+			9,
+			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack"
+		)
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
 		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")
 		for _, lineId in GearConfig.LineIds do
@@ -1753,19 +1746,24 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- migration
 
-	T.test("Step67 migration: a fresh save is untouched, CarryLevel folds into the Backpack", function()
+	T.test("Step67 migration: a fresh save is untouched, CarryLevel folds into the Backpack (a pack since v9)", function()
 		local data = fresh()
 		local copy = ProfileStore.deepCopy(data)
 		local report = Migrations.run(data, NOW)
 		T.truthy(deepEqual(data, copy), "fresh save untouched")
 		T.eq(report.Moved + report.Dropped, 0)
-		for carry, backpack in { [1] = 0, [2] = 1, [3] = 2, [4] = 3, [5] = 4, [9] = 4, [-2] = 0 } do
+		-- an old save (Version 8): the old CarryLevel -> the Gear Backpack level -> the smallest pack
+		-- holding at least as much (old capacities 1 / 2 / 3 / 5 / 8: the Rookie Pack's 5, the Trail Pack's 15)
+		for carry, pack in
+			{ [1] = "RookiePack", [2] = "RookiePack", [4] = "RookiePack", [5] = "TrailPack", [9] = "TrailPack", [-2] = "RookiePack" }
+		do
 			local save = fresh()
+			save.Version = 8
 			save.CarryLevel = carry
 			Migrations.run(save, NOW)
-			T.eq(save.Gear.Backpack, backpack, "CarryLevel " .. carry)
+			T.eq(save.Backpacks.Equipped, pack, "CarryLevel " .. carry)
+			T.eq(save.Gear.Backpack, nil, "the Gear line went")
 			T.eq(save.CarryLevel, nil, "removed")
-			T.eq(ToolData.carryCapacity(math.clamp(carry, 1, 5), false), GearConfig.carryCapacity(save.Gear, false), "same capacity")
 		end
 		-- paid boost time stacked past MaxStackSeconds (Robux packs, uncapped) is never lost
 		local paid = fresh()
@@ -1776,14 +1774,16 @@ return function(T, Loader)
 		T.eq(paid.Boosts.TripleLuckyUntil, NOW + 9 * 24 * 3600, "9 days of paid boost are kept")
 		T.lt(30 * 24 * 3600, BoostConfig.MaxSavedSeconds, "the save cap is only a junk guard")
 		local bought = fresh()
+		bought.Version = 8
 		bought.CarryLevel = 2
 		bought.Gear.Backpack = 4
 		Migrations.run(bought, NOW)
-		T.eq(bought.Gear.Backpack, 4, "the higher one wins")
+		T.eq(bought.Backpacks.Equipped, "TrailPack", "the higher one wins (level 4 held 8)")
 		local junk = fresh()
+		junk.Version = 8
 		junk.CarryLevel = "lots"
 		Migrations.run(junk, NOW)
-		T.eq(junk.Gear.Backpack, 0)
+		T.eq(junk.Backpacks.Equipped, "RookiePack")
 		T.eq(junk.CarryLevel, nil)
 	end)
 
@@ -1836,8 +1836,7 @@ return function(T, Loader)
 		-- gear
 		T.eq(data.Gear.Boots, 2)
 		T.eq(data.Gear.HelmetLamp, 0)
-		T.eq(data.Gear.Backpack, 99, "a higher level is kept (a newer server may sell it)")
-		T.eq(GearConfig.level(data.Gear, "Backpack"), GearConfig.MaxLevel, "readers clamp")
+		T.eq(data.Gear.Backpack, 99, "a line this build doesn't sell is kept (a Version 9 save: no v9 move)")
 		T.eq(data.Gear.Gloves, 0)
 		T.eq(data.Gear.Magnet, 0, "a string level is junk")
 		T.eq(data.Gear.Cape, 2, "a newer server's line is kept")
@@ -2075,16 +2074,16 @@ return function(T, Loader)
 		T.eq(Bonuses.magnetRadius(stats), 0)
 		T.eq(Bonuses.pickupRange(stats), 11)
 		T.eq(Bonuses.throwMult(stats), 1)
-		T.eq(Bonuses.carryCapacity(stats, nil), 1)
+		T.eq(Bonuses.carryCapacity(stats, nil), 5, "the starter pack holds 5")
 		local range, brightness = Bonuses.lamp(stats)
 		T.eq(range, 0)
 		T.eq(brightness, 0)
 		-- no save at all behaves the same
 		local none = Bonuses.compute(nil, NOW, nil)
 		T.eq(Bonuses.walkSpeed(none), 16)
-		T.eq(Bonuses.carryCapacity(none, nil), 1)
+		T.eq(Bonuses.carryCapacity(none, nil), 5, "no save: the starter pack")
 		local names = Bonuses._test.names()
-		for _, source in { "Gear", "Enchants", "Golems", "Boosts", "Collections" } do
+		for _, source in { "Backpack", "Gear", "Enchants", "Golems", "Boosts", "Collections" } do
 			T.truthy(table.find(names, source), "built-in source " .. source)
 		end
 		-- carrying: a capped slowdown, never below the floor
@@ -2105,10 +2104,10 @@ return function(T, Loader)
 		w.byPlayer[p] = fresh()
 		local summary = Bonuses.summary(p)
 		T.eq(summary.WalkSpeed, 16)
-		T.eq(summary.CarryCapacity, 1)
+		T.eq(summary.CarryCapacity, 5, "the starter pack")
 		T.eq(summary.TripleLucky, false)
 		p.attrs.Perk_StrongBack = true
-		T.eq(Bonuses.summary(p).CarryCapacity, 2, "StrongBack doubles")
+		T.eq(Bonuses.summary(p).CarryCapacity, 10, "StrongBack doubles")
 	end)
 
 	withBonuses("Step67 Bonuses: every source adds up", function(w)
@@ -2137,7 +2136,7 @@ return function(T, Loader)
 		T.eq(Bonuses.magnetRadius(stats), 14 + 3, "Magnet 1 + Magnetism I")
 		T.eq(Bonuses.pickupRange(stats), 24)
 		T.near(Bonuses.throwMult(stats), 1.4, EPS)
-		T.eq(Bonuses.carryCapacity(stats, p), 3)
+		T.eq(Bonuses.carryCapacity(stats, p), 5, "the worn pack (a Gear Backpack level means nothing now)")
 		local range = Bonuses.lamp(stats)
 		T.eq(range, 34)
 		T.eq(Bonuses.oreLuck(stats), 2.5, "Hexa Lucky")
@@ -2253,12 +2252,13 @@ return function(T, Loader)
 			return { CarryCapacity = 3 }
 		end)
 		local capacity = Bonuses.carryCapacity(Bonuses.stats(p), p)
-		T.eq(capacity, 4, "Backpack 0 (1) + an event's 3")
+		T.eq(capacity, 8, "the Rookie Pack's 5 + an event's 3")
 		local snapshot = StateService.snapshot(p) :: any
 		T.eq(snapshot.CarryCapacity, capacity, "the State shows what CarryService applies")
 		T.eq(snapshot.Bonuses.CarryCapacity, capacity)
 		p.attrs.Perk_StrongBack = true
-		T.eq(StateService.snapshot(p).CarryCapacity, 8, "StrongBack doubles it")
+		T.eq(StateService.snapshot(p).CarryCapacity, 16, "StrongBack doubles it")
+		T.eq(StateService.snapshot(p).Backpacks.Capacity, 16, "the backpack's State says the same")
 	end)
 
 	withBonuses("Step67 State: big records are sent only when they change", function(w)

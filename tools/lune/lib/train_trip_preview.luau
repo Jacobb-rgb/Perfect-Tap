@@ -265,10 +265,7 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		refs.Coins.Text = Format.money(Preview.Coins)
 		refs.Income.Text = Format.perSecond(42)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
-		refs.CarryLabel.Text = "CARRYING 1/3"
-		HudView.slot(refs.CarrySlots, nil, 1, true)
-		HudView.slot(refs.CarrySlots, nil, 2)
-		HudView.slot(refs.CarrySlots, nil, 3)
+		HudView.setBackpack(refs, 1, 5)
 		HudView.toast(refs.Toasts, "Your train is on its way home!", Rarity.get("Common").Color)
 		return refs
 	end
