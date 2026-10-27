@@ -38,7 +38,7 @@ local ORDER = {
 	"ShopkeeperController", -- a big golem behind every shop counter: idle, emotes, waves, talks
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
-	"MineJuiceController", -- the mining reel (Config/JuiceConfig): growing cracks + gold glints, chips, tok, SMASH!, ore into the bag
+	"MineJuiceController", -- the mining reel (Config/JuiceConfig): growing cracks + gold glints, chips, tok, ore into the bag
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)

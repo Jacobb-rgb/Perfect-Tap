@@ -6,8 +6,8 @@
 	RockCracks) and its gold glints flare, chips fly (RockFxLogic.chipPlan), the
 	rock trembles (RockFxLogic.shakeOffset); at each crack stage the server's
 	cracks open (RockBuilder.applyStage), a chunk breaks off, RockFx pops and an
-	ore drops; the last hit shatters it (RockFxLogic.shatterPlan) and SMASH!
-	pops (UI/PopWord); the three dirty ores are picked up and fly into the
+	ore drops; the last hit shatters it (RockFx: RockFxLogic.shatterPlan, dust,
+	the ground ring; no comic word: the owner turned it down); the dirty ores are picked up and fly into the
 	carry slots (UI/BagFly, the HUD of today's game) with a +1 each. A caption
 	line at the top (preview only) names the reel's steps and the sounds.
 
@@ -54,10 +54,10 @@ local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBu
 local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local CrackLogic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.CrackLogic")
+local Rules = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.MineJuiceRules")
 local Logic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RockFxLogic")
 local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 local BagFly = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BagFly")
-local PopWord = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.PopWord")
 local UIKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.UIKit")
 
 local W, H, INSET, SCALE, FOV = 1600, 900, 36, 1.25, 62
@@ -275,7 +275,7 @@ local function captionFor(t: number): string
 	elseif t < SHATTER - 0.02 then
 		return "BONUS: zlaté jiskry v prasklinách (stejné u každé rudy)"
 	elseif t < drops[1].Pick then
-		return "5 POSLEDNÍ ZÁSAH: SMASH! prach a kusy kamene"
+		return "5 POSLEDNÍ ZÁSAH: kámen se rozletí na kusy, prach"
 	end
 	return "5 Ruda vyskočí, zazáří a letí do batohu: +1"
 end
@@ -283,7 +283,7 @@ end
 -- the sound playing now (named, the video has none)
 local function soundFor(t: number): string
 	if t >= SHATTER and t < SHATTER + 0.45 then
-		return "zvuk: BUM! (rozbití)"
+		return "zvuk: rozbití kamene"
 	end
 	for s = 1, stages - 1 do
 		local at = stageTimes[s]
@@ -326,9 +326,13 @@ for i = 0, frames - 1 do
 	local rng = Rng.new("frame" .. i)
 	-- hits so far
 	local hits, lastHit = 0, -math.huge
+	local lastFlare: number? = nil -- the glints flare at most GlintFlaresPerSecond (MineJuiceRules.flare)
 	for k, at in hitTimes do
 		if t >= at then
 			hits, lastHit = k, at
+			if Rules.flare(at, lastFlare, false) then
+				lastFlare = at
+			end
 		end
 	end
 	local stage = stageOf(hits)
@@ -356,7 +360,16 @@ for i = 0, frames - 1 do
 		end
 		-- the crack on the rock as it is now (projected before the tremble, like the game)
 		if hits > 0 then
-			Juice.crack(Loader, extra, rock, plan, frameInfo, CrackLogic.growth(health, maxHealth), t - lastHit, JuiceConfig.Mining.Glints)
+			Juice.crack(
+				Loader,
+				extra,
+				rock,
+				plan,
+				frameInfo,
+				CrackLogic.growth(health, maxHealth),
+				t - (lastFlare or -math.huge),
+				JuiceConfig.Mining.Glints
+			)
 		end
 		-- the tremble of the last hit (RockFx.shake; a crack stage kicks harder)
 		if hits > 0 then
@@ -462,7 +475,7 @@ for i = 0, frames - 1 do
 		end
 	end
 
-	-- the UI: SMASH!, the ores flying into the carry slots, the +1 bumps, the count
+	-- the UI: the ores flying into the carry slots, the +1 bumps, the count
 	local landed = 0
 	local bumpOf = {} -- bump -> the drop that landed on it last
 	for s, d in drops do
@@ -484,10 +497,6 @@ for i = 0, frames - 1 do
 		BagFly.poseBump(bump, V2.new(x, y), V2.new(SLOT, SLOT) * SCALE, if s then t - drops[s].Pick - FLIGHT else -1, SCALE)
 	end
 	setCarry(landed)
-	local smashPoint = screen(center + V3.new(0, radius * 0.15 + 0.5, 0))
-	juice.SmashAt.Position = roblox.UDim2.fromOffset(math.floor(smashPoint.X), math.floor(smashPoint.Y))
-	juice.SmashFit.Scale = SCALE
-	PopWord.pose(juice.Smash, st)
 	captionText.Text = captionFor(t)
 	soundTag.Text = soundFor(t)
 
@@ -527,7 +536,7 @@ local board = {
 		{ frame = frameAt(hitTimes[2] + 0.06), caption = "1+2 Další zásah: prasklina roste, odletují úlomky" },
 		{ frame = frameAt((stageTimes[2] or 1) + 0.08), caption = "3 Prasknutí: křup, kus kamene odpadne, vypadne ruda" },
 		{ frame = frameAt(hitTimes[HITS - 1] + 0.05), caption = "BONUS Velká prasklina se zlatými jiskrami" },
-		{ frame = frameAt(SHATTER + 0.12), caption = "5 Poslední zásah: SMASH! prach a kusy" },
+		{ frame = frameAt(SHATTER + 0.12), caption = "5 Poslední zásah: kámen se rozletí, prach a kusy" },
 		{ frame = frameAt(drops[1].Pick + 0.25), caption = "5 Ruda vyskočí a zazáří" },
 		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... letí do batohu (sloty dole)" },
 		{ frame = frameAt(drops[stages].Pick + FLIGHT + 0.12), caption = "5 +1 v batohu, počet naskočí" },

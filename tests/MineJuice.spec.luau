@@ -1,5 +1,6 @@
--- The owner's two reels of 2026-10-27 (Config/JuiceConfig): growing rock cracks, chips, SMASH!,
--- the ore flying into the bag, and the level-up's slow fill, WHOOSH!, ticks, ripples and rays.
+-- The owner's two reels of 2026-10-27 (Config/JuiceConfig): growing rock cracks, chips, the ore
+-- flying into the bag (no comic word at the break: the owner turned it down), and the level-up's
+-- slow fill, WHOOSH!, ticks, ripples and rays.
 return function(T, Loader)
 	local fs = require("@lune/fs")
 	local roblox = require("@lune/roblox") :: any
@@ -18,6 +19,7 @@ return function(T, Loader)
 	local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
 	local PopWord = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.PopWord")
 	local BagFly = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BagFly")
+	local Rules = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.MineJuiceRules")
 
 	local function distance(a, b): number
 		return math.sqrt(((a.R - b.R) * 255) ^ 2 + ((a.G - b.G) * 255) ^ 2 + ((a.B - b.B) * 255) ^ 2)
@@ -29,9 +31,10 @@ return function(T, Loader)
 				T.eq(on, true, name .. " on")
 			end
 		end
-		for _, name in { "Cracks", "Glints", "Chips", "Tok", "Smash", "BagFly" } do
+		for _, name in { "Cracks", "Glints", "Chips", "Tok", "BagFly" } do
 			T.eq(type(JuiceConfig.Mining[name]), "boolean", "Mining." .. name)
 		end
+		T.eq(JuiceConfig.Mining.Smash, nil, "no SMASH! switch: the word is gone (owner 2026-10-27)")
 		for _, name in { "SlowFill", "Whoosh", "Chime", "Ripples", "Ticks" } do
 			T.eq(type(JuiceConfig.LevelUp[name]), "boolean", "LevelUp." .. name)
 		end
@@ -116,6 +119,76 @@ return function(T, Loader)
 		T.truthy(CrackLogic.growth(66, 100) >= CrackLogic.GlintFrom, "the glint shows by the second crack stage")
 		T.lt(CrackLogic.glint(0), CrackLogic.glint(CrackLogic.Heat), "the glint flares on a hit, then cools")
 		T.eq(CrackLogic.glint(10), CrackLogic.glint(CrackLogic.Heat), "a steady glow after")
+		for _, since in { 0, 0.1, 0.3, 10 } do
+			T.eq(CrackLogic.glint(since, true), CrackLogic.Steady, "Reduce motion: steady, no flare (" .. since .. ")")
+		end
+	end)
+
+	T.test("Juice: glints flare at most GlintFlaresPerSecond a second per rock, never with Reduce motion", function()
+		local rate = JuiceConfig.GlintFlaresPerSecond
+		T.truthy(rate >= 2 and rate <= 3, "2 to 3 flares a second")
+		T.near(Rules.flareGap(), 1 / rate, 1e-9, "the gap")
+		for _, every in { 0.05, 0.12, 0.2, 1 / 3, 0.5 } do
+			local last: number? = nil
+			local flares = {}
+			local t = 0
+			while t < 6 do
+				if Rules.flare(t, last, false) then
+					if last then
+						T.truthy(t - last >= Rules.flareGap() - 1e-6, "never closer than the gap (hits every " .. every .. ")")
+					end
+					last = t
+					table.insert(flares, t)
+				end
+				t += every
+			end
+			T.truthy(#flares >= 1, "the first hit flares")
+			-- in any one second: no more than the rate allows
+			for _, from in flares do
+				local n = 0
+				for _, at in flares do
+					if at >= from and at < from + 1 then
+						n += 1
+					end
+				end
+				T.le(n, math.ceil(rate), "at most " .. math.ceil(rate) .. " flares in a second (hits every " .. every .. ")")
+			end
+			if #flares >= 3 then
+				local span = flares[#flares] - flares[1]
+				T.le((#flares - 1) / span, rate + 1e-6, "the long-run rate (hits every " .. every .. ")")
+			end
+		end
+		T.truthy(Rules.flare(0, nil, false), "a fresh rock flares")
+		T.falsy(Rules.flare(0, nil, true), "Reduce motion: never")
+		T.falsy(Rules.flare(100, 0, true), "Reduce motion: never, however long after")
+	end)
+
+	T.test("Juice: Reduce motion stops the chips, the sparkle, the flight and the bump", function()
+		T.eq(Rules.chips(false, 10, false), 3, "PC: three chips")
+		T.eq(Rules.chips(false, 10, true), 2, "phone: two")
+		T.eq(Rules.chips(false, JuiceConfig.ChipRange + 1, false), 0, "too far: none")
+		T.eq(Rules.chips(true, 10, false), 0, "Reduce motion: none")
+		T.eq(Rules.chips(false, 0 / 0, false), 0, "no distance: none")
+		T.truthy(Rules.sparkle(false, 10), "the crack sparkle")
+		T.falsy(Rules.sparkle(true, 10), "Reduce motion: no sparkle")
+		T.falsy(Rules.sparkle(false, JuiceConfig.CrackRange + 1), "too far: no sparkle")
+		T.eq(Rules.pickup(false, true, true), "Fly", "an icon free, the spot on screen: it flies")
+		T.eq(Rules.pickup(false, false, true), "Bump", "every icon in the air: only the bump")
+		T.eq(Rules.pickup(false, true, false), "Bump", "off screen: only the bump")
+		for _, icon in { true, false } do
+			for _, onScreen in { true, false } do
+				T.eq(Rules.pickup(true, icon, onScreen), "Quiet", "Reduce motion: no flight, no bump")
+			end
+		end
+		-- the controller asks these rules (and plays no bump under Reduce motion)
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
+		T.truthy(string.find(controller, "MineJuiceRules.pickup(Motion.reduced()", 1, true), "the pickup asks the rule")
+		T.truthy(string.find(controller, "MineJuiceRules.chips(reduced", 1, true), "the chips ask the rule")
+		T.truthy(string.find(controller, "RockCracks.hit(rock, reduced)", 1, true), "the cracks get Reduce motion")
+		T.truthy(
+			string.find(controller, 'Sfx.play("BagPop")\n\tif Motion.reduced() then\n\t\treturn\n\tend', 1, true),
+			"land: no bump under Reduce motion"
+		)
 	end)
 
 	T.test("Juice: crack frames lie on the face, along the segment", function()
@@ -159,10 +232,9 @@ return function(T, Loader)
 		T.eq(#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Count = 2 }), 2, "phones ask for two")
 	end)
 
-	T.test("Juice: SMASH!, WHOOSH! and +1 pop, then hide; Reduce motion fades them straight", function()
+	T.test("Juice: WHOOSH! and +1 pop, then hide; Reduce motion fades them straight", function()
 		local gui = Instance.new("ScreenGui")
-		local word = PopWord.build(gui, "SMASH!", 64, { Star = true, Tilt = -12 })
-		T.truthy(word.Star ~= nil and #word.StarBars == 12, "the comic star")
+		local word = PopWord.build(gui, "+1", 34, { Tilt = -8 })
 		T.falsy(word.Holder.Visible, "hidden until posed")
 		local peak = 0
 		for t = 0, word.Seconds + 0.1, 0.02 do
@@ -179,7 +251,6 @@ return function(T, Loader)
 		PopWord.pose(word, 0.1, true)
 		T.eq(word.Scale.Scale, 1, "reduced: full size")
 		T.eq(word.Inner.Rotation, 0, "reduced: straight")
-		T.falsy((word.Star :: any).Visible, "reduced: no star burst")
 		local whoosh = PopWord.build(gui, "WHOOSH!", 34, { Lines = true })
 		T.eq(#whoosh.Lines, 3, "three speed lines")
 		PopWord.pose(whoosh, 0.2)
@@ -189,6 +260,12 @@ return function(T, Loader)
 		local view = BagFly.build()
 		T.eq(view.Gui.Name, "TerraForgeJuice", "its own overlay")
 		T.eq(#view.Flyers, JuiceConfig.Flyers, "pooled icons")
+		T.eq((view :: any).Smash, nil, "no SMASH! word on the overlay")
+		for _, d in view.Gui:GetDescendants() do
+			if d:IsA("TextLabel") then
+				T.falsy(string.find(d.Text, "SMASH", 1, true), "no SMASH! text anywhere")
+			end
+		end
 		local f = view.Flyers[1]
 		local from, to = Vector2.new(400, 300), Vector2.new(640, 680)
 		BagFly.poseFlyer(f, from, to, BagFly.Rise * 0.99, 1, 1.3)
@@ -270,6 +347,7 @@ return function(T, Loader)
 		LevelView.poseGlow(view, 1, 0, true)
 		LevelView.poseFull(view, 1, true)
 		T.eq(view.BarScale.Scale, 1, "reduced: the bar never grows")
+		T.eq(view.Hot.BackgroundTransparency, 1, "reduced: no white-hot flash")
 		T.eq(view.Whoosh.Holder.Parent, view.Bar, "WHOOSH! sits on the bar")
 		T.falsy(LevelView.poseWhoosh(view, 0.3), "playing")
 		T.truthy(view.Whoosh.Holder.Visible, "shows while it fills")
@@ -318,7 +396,8 @@ return function(T, Loader)
 	end)
 
 	T.test("Juice: the new sounds exist, play once and are Roblox-made ids or shipped files", function()
-		for _, name in { "RockTok", "RockCrunch", "RockSmash", "BagRise", "BagPop", "LevelWhoosh", "LevelChime", "LevelTick" } do
+		T.eq(SoundConfig.RockSmash, nil, "no SMASH! boom")
+		for _, name in { "RockTok", "RockCrunch", "BagRise", "BagPop", "LevelWhoosh", "LevelChime", "LevelTick" } do
 			local def = SoundConfig[name]
 			T.truthy(def, "sound " .. name)
 			T.falsy(def.Looped, name .. " plays once")

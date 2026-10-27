@@ -1,18 +1,16 @@
 --[[
-	PopWord: a comic word that pops (the owner's reels 2026-10-27: "SMASH!"
-	when your hit breaks a rock, "WHOOSH!" beside the XP bar while it fills,
-	"+1" when an ore lands in your bag). Pop look: chunky text in a
-	PopTheme.Titles gradient with a thick dark edge, tilted; SMASH! sits on
-	a spiky yellow-orange comic star with a black outline, WHOOSH! trails
-	three speed lines. Pure builder + pose (the Lune previews pose the same
-	frames): no services, nothing runs on its own.
+	PopWord: a comic word that pops (the owner's reels 2026-10-27: "WHOOSH!"
+	beside the XP bar while it fills, "+1" when an ore lands in your bag).
+	Pop look: chunky text in a PopTheme.Titles gradient with a thick dark
+	edge, tilted; WHOOSH! trails three speed lines. Pure builder + pose (the
+	Lune previews pose the same frames): no services, nothing runs on its own.
 
 	  build(parent, text, size, opts) -> Word (hidden until posed)
 	  pose(word, t, reduced?)         t seconds in (0..word.Seconds; outside it
 	                                  the word hides). Returns true when done.
 	The caller places word.Holder (Position / AnchorPoint) and may scale it
 	with word.Scale's parent; pose only moves the word inside its holder.
-	Reduce motion: no pop, wobble, star burst or rise; the word fades in and
+	Reduce motion: no pop, wobble or rise; the word fades in and
 	out at full size, straight.
 ]]
 
@@ -26,11 +24,10 @@ local PopWord = {}
 export type Opts = {
 	Colors: string?, -- a PopTheme.Titles name (default Gold)
 	Tilt: number?, -- degrees (default -10)
-	Star: boolean?, -- the comic star behind (SMASH!)
 	Lines: boolean?, -- speed lines on the left (WHOOSH!)
 	Seconds: number?, -- how long it stays (default 0.95)
 	Rise: number?, -- design units it drifts up while it stays (default 18)
-	Z: number?, -- the label's ZIndex (the star and lines go under it)
+	Z: number?, -- the label's ZIndex (the speed lines go under it)
 }
 
 export type Word = {
@@ -39,17 +36,12 @@ export type Word = {
 	Scale: UIScale,
 	Label: TextLabel,
 	Edge: UIStroke?,
-	Star: Frame?,
-	StarScale: UIScale?,
-	StarBars: { Frame },
 	Lines: { Frame },
 	Tilt: number,
 	Seconds: number,
 	Rise: number,
 	Size: number,
 }
-
-PopWord.StarColors = { Color3.fromRGB(255, 236, 90), Color3.fromRGB(255, 132, 24) }
 
 local function span(t: number, a: number, b: number): number
 	return math.clamp((t - a) / (b - a), 0, 1)
@@ -62,43 +54,6 @@ end
 
 local function easeOut(x: number): number
 	return 1 - (1 - x) ^ 3
-end
-
--- A spiky comic star `size` across: six bars crossing, a black copy a little bigger under them (one outline).
-local function star(parent: Instance, size: number, z: number, bars: { Frame }): Frame
-	local holder = UIKit.new("Frame", {
-		Name = "Star",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(size, size),
-		ZIndex = z,
-	}, parent)
-	for layer = 1, 2 do
-		local edge = layer == 1
-		for i = 1, 6 do
-			local long = if i % 2 == 1 then 1 else 0.78
-			local bar = UIKit.new("Frame", {
-				Name = (if edge then "Edge" else "Spike") .. i,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = if edge then PopTheme.Outline else Color3.new(1, 1, 1),
-				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Rotation = (i - 1) * 30 + 8,
-				Size = UDim2.fromOffset(size * long + (if edge then 8 else 0), size * 0.2 + (if edge then 8 else 0)),
-				ZIndex = z,
-			}, holder)
-			if not edge then
-				UIKit.new(
-					"UIGradient",
-					{ Color = ColorSequence.new(PopWord.StarColors[1], PopWord.StarColors[2]), Rotation = 90 - bar.Rotation },
-					bar
-				)
-			end
-			table.insert(bars, bar)
-		end
-	end
-	return holder
 end
 
 function PopWord.build(parent: Instance, text: string, size: number, opts: Opts?): Word
@@ -123,14 +78,6 @@ function PopWord.build(parent: Instance, text: string, size: number, opts: Opts?
 		ZIndex = z,
 	}, holder)
 	local scale = UIKit.new("UIScale", { Scale = 1 }, inner)
-	local starFrame: Frame? = nil
-	local starScale: UIScale? = nil
-	local starBars: { Frame } = {}
-	if o.Star then
-		local s = star(inner, math.floor(math.max(width, height) * 0.82), z - 1, starBars)
-		starFrame = s
-		starScale = UIKit.new("UIScale", { Scale = 1 }, s)
-	end
 	local lines: { Frame } = {}
 	if o.Lines then
 		for i = 1, 3 do
@@ -166,9 +113,6 @@ function PopWord.build(parent: Instance, text: string, size: number, opts: Opts?
 		Scale = scale,
 		Label = label,
 		Edge = edge,
-		Star = starFrame,
-		StarScale = starScale,
-		StarBars = starBars,
 		Lines = lines,
 		Tilt = o.Tilt or -10,
 		Seconds = o.Seconds or 0.95,
@@ -207,10 +151,6 @@ function PopWord.pose(word: Word, t: number, reduced: boolean?): boolean
 		word.Inner.Rotation = 0
 		word.Inner.Position = UDim2.fromScale(0.5, 0.5)
 		fade(word, span(t, 0, 0.15) * (1 - out))
-		local s = word.Star
-		if s then
-			s.Visible = false
-		end
 		return false
 	end
 	-- pops in big with an overshoot, wobbles out of its tilt, drifts up, fades
@@ -220,19 +160,6 @@ function PopWord.pose(word: Word, t: number, reduced: boolean?): boolean
 	word.Inner.Rotation = word.Tilt + wobble
 	word.Inner.Position = UDim2.new(0.5, 0, 0.5, -math.floor(word.Rise * easeOut(span(t, 0.12, total))))
 	fade(word, 1 - out)
-	-- the star bursts out behind it and is gone first
-	local s = word.Star
-	local ss = word.StarScale
-	if s and ss then
-		local burst = span(t, 0, 0.42)
-		s.Visible = burst < 1
-		ss.Scale = 0.55 + 0.75 * easeOut(burst)
-		s.Rotation = -word.Tilt * 0.5 + 25 * burst
-		local alpha = 1 - span(t, 0.18, 0.42)
-		for _, bar in word.StarBars do
-			bar.BackgroundTransparency = 1 - alpha
-		end
-	end
 	-- the speed lines streak in from the left, then fade first
 	for i, line in word.Lines do
 		local k = easeOut(span(t, 0.02 * i, 0.25 + 0.02 * i))

@@ -419,10 +419,10 @@ end
 --[[
 	The full bar's white-hot flash, `k` 0..1 (LevelController: up when the bar
 	is full, down after the moment starts): the fill turns white-hot, the glow
-	burns bright and the bar swells a little (not with Reduce motion).
+	burns bright and the bar swells a little. Reduce motion: no flash at all.
 ]]
 function LevelView.poseFull(view: View, k: number, reduced: boolean?)
-	local h = clamp01(k)
+	local h = if reduced then 0 else clamp01(k)
 	view.Hot.BackgroundTransparency = 1 - 0.8 * h
 	if h > 0 then
 		view.Glow.BackgroundColor3 = LevelView.GlowColor:Lerp(Color3.fromRGB(255, 244, 200), h)

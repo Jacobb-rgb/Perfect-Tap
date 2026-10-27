@@ -4,13 +4,17 @@
 	step 1 "cracks" and the bonus "ore glints"; Config/JuiceConfig Cracks /
 	Glints). Client only; the math is in Effects/CrackLogic.
 
-	  RockCracks.hit(rock)    the rock lost HP (MineJuiceController calls it on
+	  RockCracks.hit(rock, reduced)
+	                          the rock lost HP (MineJuiceController calls it on
 	                          every Health drop): plans its crack on the face
 	                          toward the camera the first time (one raycast at
 	                          the rock, then one per plan point onto its
 	                          surface; again when a crack stage broke a chunk
 	                          off), grows it to the rock's damage
-	                          (CrackLogic.growth) and makes the glints flare.
+	                          (CrackLogic.growth) and makes the glints flare, at
+	                          most JuiceConfig.GlintFlaresPerSecond a second
+	                          (MineJuiceRules.flare). `reduced` (Reduce motion):
+	                          the crack still grows, the glints glow steady.
 	                          Returns the crack's centre and face normal (the
 	                          chips fly from there), nil when the rock gets none.
 	  RockCracks.clear(rock)  gives the rock's parts back (the shatter; also
@@ -26,7 +30,8 @@
 	CrackLogic.PhoneDetail) have cracks at once, the oldest hit gives its parts
 	back; parts move only on a hit (one BulkMoveTo); one RenderStepped
 	connection runs only while a glint is still cooling (CrackLogic.Heat
-	seconds after the last hit) and makes no tables. The cracks don't follow
+	seconds after its last flare; never with Reduce motion) and makes no
+	tables. The cracks don't follow
 	RockFx's tiny tremble (0.07 studs, a fifth of a second).
 ]]
 
@@ -37,6 +42,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local JuiceConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("JuiceConfig"))
 local CrackLogic = require(script.Parent.CrackLogic)
+local MineJuiceRules = require(script.Parent.MineJuiceRules)
 local Vfx = require(script.Parent.Vfx)
 
 local RockCracks = {}
@@ -58,7 +64,9 @@ type Entry = {
 	Flecks: { BasePart },
 	Growth: number,
 	Stage: number,
-	HitAt: number,
+	HitAt: number, -- the last hit (the oldest hit gives its parts back first)
+	FlareAt: number?, -- the glints' last flare (nil = never)
+	Reduced: boolean, -- Reduce motion at the last hit: steady glints
 	Conn: RBXScriptConnection?,
 }
 
@@ -176,9 +184,9 @@ local function hide(part: BasePart)
 	table.insert(moveFrames, PARK)
 end
 
--- The glints' and flecks' transparency `since` seconds after the last hit.
+-- The glints' and flecks' transparency `since` seconds after their last flare.
 local function flare(entry: Entry, since: number)
-	local glow = CrackLogic.glint(since)
+	local glow = CrackLogic.glint(since, entry.Reduced)
 	local plan = entry.Plan
 	local glints = JuiceConfig.Mining.Glints
 	local g = 0
@@ -254,7 +262,7 @@ local function place(entry: Entry)
 	if #moveParts > 0 then
 		Workspace:BulkMoveTo(moveParts, moveFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
-	flare(entry, os.clock() - entry.HitAt)
+	flare(entry, os.clock() - (entry.FlareAt or -math.huge))
 end
 
 ---------------------------------------------------------------- the glint flare loop
@@ -263,8 +271,8 @@ local function step()
 	local now = os.clock()
 	local hot = false
 	for rock, entry in entries do
-		local since = now - entry.HitAt
-		if since <= CrackLogic.Heat + 0.05 then
+		local since = now - (entry.FlareAt or -math.huge)
+		if since <= CrackLogic.Heat + 0.05 and not entry.Reduced then
 			hot = true
 			if rock.Parent then
 				flare(entry, since)
@@ -343,6 +351,8 @@ local function make(rock: Model): Entry?
 		Growth = 0,
 		Stage = number(rock, "Stage") or 0,
 		HitAt = os.clock(),
+		FlareAt = nil,
+		Reduced = false,
 		Conn = nil,
 	}
 	entries[rock] = entry
@@ -356,10 +366,11 @@ local function make(rock: Model): Entry?
 end
 
 --[[
-	The rock lost HP: its crack grows to the damage now and the glints flare.
-	Returns the crack's centre and face normal (nil = no crack on this rock).
+	The rock lost HP: its crack grows to the damage now and the glints flare
+	(at most GlintFlaresPerSecond; `reduced`: steady). Returns the crack's
+	centre and face normal (nil = no crack on this rock).
 ]]
-function RockCracks.hit(rock: Model): (Vector3?, Vector3?)
+function RockCracks.hit(rock: Model, reduced: boolean?): (Vector3?, Vector3?)
 	if not JuiceConfig.Mining.Cracks or not rock.Parent or not rock.PrimaryPart then
 		return nil, nil
 	end
@@ -377,10 +388,18 @@ function RockCracks.hit(rock: Model): (Vector3?, Vector3?)
 		entry.Stage = stage
 		project(entry)
 	end
+	local now = os.clock()
+	local still = reduced == true
 	entry.Growth = math.max(entry.Growth, growth)
-	entry.HitAt = os.clock()
+	entry.HitAt = now
+	entry.Reduced = still
+	if MineJuiceRules.flare(now, entry.FlareAt, still) then
+		entry.FlareAt = now
+	end
 	place(entry)
-	ensureLoop()
+	if not still then
+		ensureLoop()
+	end
 	return entry.Origin, entry.Normal
 end
 

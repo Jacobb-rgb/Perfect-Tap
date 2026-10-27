@@ -21,7 +21,8 @@
 	  flatPoint(origin, right, up, p) -> a plan point in the world (before the surface)
 	  segmentFrame(a, b, normal, lift)-> a thin part's CFrame between two points, its length
 	  sizeFor(extents)                -> the crack's reach for a rock this big
-	  glint(since, shown)             -> the glint's transparency `since` seconds after a hit
+	  glint(since, reduced?)          -> the glint's transparency `since` seconds after its last
+	                                     flare (Reduce motion: steady, it never flares)
 	  counts(detail)                  -> dark segments, glint segments, flecks a plan uses (pool size)
 ]]
 
@@ -221,10 +222,18 @@ function CrackLogic.segmentFrame(a: Vector3, b: Vector3, normal: Vector3, lift: 
 	return CFrame.lookAt(mid, mid + look, up.Unit), length
 end
 
--- A glint's transparency `since` seconds after the rock's last hit: white-hot at the hit, then a steady glow.
-function CrackLogic.glint(since: number): number
+CrackLogic.Steady = 0.45 -- a glint's transparency when it doesn't flare
+
+--[[
+	A glint's transparency `since` seconds after its last flare: white-hot at
+	the flare, then the steady glow. `reduced` (Reduce motion): always steady.
+]]
+function CrackLogic.glint(since: number, reduced: boolean?): number
+	if reduced then
+		return CrackLogic.Steady
+	end
 	local k = math.clamp(since / CrackLogic.Heat, 0, 1)
-	return 0.45 * k ^ 0.7
+	return CrackLogic.Steady * k ^ 0.7
 end
 
 return CrackLogic

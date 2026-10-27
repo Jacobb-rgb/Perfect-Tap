@@ -11,9 +11,8 @@
 	             out of the crack (RockFx.chips, rocks near the camera only).
 	             RockFx keeps the tremble, MiningController the hit sparks.
 	  Fx NodeCrack    a crunch (RockCrunch) and a warm gold sparkle at the crack
-	  Fx NodeShatter  your own break (RockFx.wasMine): SMASH! pops over the
-	                  rock (UI/PopWord on the UI/BagFly overlay) with a boom
-	                  (RockSmash); RockFx keeps the dust, chunks, ring and shake
+	  (the break)     RockFx's own: dust, chunks, ground ring, its sounds and
+	                  shake (no word over it: the owner turned it down)
 	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
 	                  fires it to the picker only when an item really goes in
 	                  (hands today, the backpack on feat/backpack: the same
@@ -29,10 +28,13 @@
 	so both can run together.
 
 	Perf (phones first): nothing is made per hit except RockFx's pooled
-	chips; the overlay's icons, bumps and word are made once (BagFly.build);
+	chips; the overlay's icons and bumps are made once (BagFly.build);
 	one RenderStepped connection runs only while something flies or pops and
-	makes no tables. Reduce motion (UI/Motion.reduced): no flight (only the
-	bump, still), SMASH! fades in and out straight.
+	makes no tables. Reduce motion (UI/Motion.reduced; the rules are in
+	Effects/MineJuiceRules): the cracks still grow, their glints glow
+	steady (no flare, no frame loop); no chips, no gold sparkle; a pickup
+	plays only its sound (no flight, no bump). Glints flare at most
+	JuiceConfig.GlintFlaresPerSecond a second per rock.
 ]]
 
 local GuiService = game:GetService("GuiService")
@@ -48,9 +50,9 @@ local OreData = require(Shared.Config.OreData)
 local Net = require(Shared.Net)
 local RockLabels = require(script.Parent.Parent.UI.RockLabels)
 local BagFly = require(script.Parent.Parent.UI.BagFly)
-local PopWord = require(script.Parent.Parent.UI.PopWord)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local RockCracks = require(script.Parent.Parent.Effects.RockCracks)
+local MineJuiceRules = require(script.Parent.Parent.Effects.MineJuiceRules)
 local RockFx = require(script.Parent.Parent.Effects.RockFx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -58,11 +60,10 @@ local HudController = require(script.Parent.HudController)
 
 local MineJuiceController = {}
 
-MineJuiceController.ChipRange = 60 -- studs from the camera: farther hits throw no chips
 MineJuiceController.MergeGap = 0.3 -- seconds: landings closer than this on one target count up (+2, +3)
 
 type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number }
-type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, Count: number, Reduced: boolean }
+type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, Count: number }
 
 local player = Players.LocalPlayer
 local view: BagFly.View? = nil
@@ -70,9 +71,6 @@ local connection: RBXScriptConnection? = nil
 local flights: { Flight } = {}
 local busy: { [BagFly.Flyer]: boolean } = {}
 local landings: { Landing } = {}
-local smashStart: number? = nil
-local smashWorld = Vector3.zero
-local smashReduced = false
 local lastHit: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 local tokens = JuiceConfig.TokPerSecond
 local tokenAt = 0
@@ -164,6 +162,7 @@ local function ensureLoop()
 	end
 end
 
+-- An ore landed in the bag: the pop, the listeners, the bump (none with Reduce motion).
 local function land(target: GuiObject?, now: number)
 	local v = view
 	if not v then
@@ -173,6 +172,9 @@ local function land(target: GuiObject?, now: number)
 		task.spawn(callback, target)
 	end
 	Sfx.play("BagPop")
+	if Motion.reduced() then
+		return
+	end
 	-- more ore on the same target right away counts up: +2, +3 ...
 	for _, l in landings do
 		if l.Target == target and now - l.Start < MineJuiceController.MergeGap then
@@ -203,7 +205,7 @@ local function land(target: GuiObject?, now: number)
 	end
 	local b = bump :: BagFly.Bump
 	b.Plus.Label.Text = "+1"
-	table.insert(landings, { Bump = b, Target = target, Start = now, Count = 1, Reduced = Motion.reduced() })
+	table.insert(landings, { Bump = b, Target = target, Start = now, Count = 1 })
 	ensureLoop()
 end
 
@@ -228,22 +230,11 @@ step = function(_dt: number)
 	for i = #landings, 1, -1 do
 		local l = landings[i]
 		local at, size = targetPoint(l.Target, scale)
-		if BagFly.poseBump(l.Bump, at, size, now - l.Start, scale, l.Reduced) then
+		if BagFly.poseBump(l.Bump, at, size, now - l.Start, scale) then
 			table.remove(landings, i)
 		end
 	end
-	local started = smashStart
-	if started then
-		local point = toGui(smashWorld)
-		if point then
-			v.SmashAt.Position = UDim2.fromOffset(math.floor(point.X + 0.5), math.floor(point.Y + 0.5))
-		end
-		v.SmashFit.Scale = scale
-		if PopWord.pose(v.Smash, now - started, smashReduced) then
-			smashStart = nil
-		end
-	end
-	if #flights == 0 and #landings == 0 and smashStart == nil then
+	if #flights == 0 and #landings == 0 then
 		local current = connection
 		connection = nil
 		if current then
@@ -266,9 +257,10 @@ local function takeToken(now: number): boolean
 	return false
 end
 
-local function nearCamera(position: Vector3, range: number): boolean
+-- Studs from the camera (huge without one).
+local function cameraDistance(position: Vector3): number
 	local camera = Workspace.CurrentCamera
-	return camera ~= nil and (camera.CFrame.Position - position).Magnitude <= range
+	return if camera then (camera.CFrame.Position - position).Magnitude else math.huge
 end
 
 -- A labeled rock lost HP (any player's blaster): the crack grows, a tok, chips.
@@ -283,40 +275,25 @@ function MineJuiceController.onHit(rock: Model)
 		return
 	end
 	local mining = JuiceConfig.Mining
-	local origin, normal = RockCracks.hit(rock)
+	local reduced = Motion.reduced()
+	local origin, normal = RockCracks.hit(rock, reduced)
 	local at = origin or primary.Position
 	if mining.Tok and takeToken(now) then
 		Sfx.play("RockTok", at)
 	end
-	if mining.Chips and nearCamera(at, MineJuiceController.ChipRange) then
+	local chips = if mining.Chips then MineJuiceRules.chips(reduced, cameraDistance(at), isPhone()) else 0
+	if chips > 0 then
 		local out = normal
 		if not out then
 			local camera = Workspace.CurrentCamera
 			local toward = if camera then camera.CFrame.Position - at else Vector3.new(0, 0, 1)
 			out = if toward.Magnitude > 0.01 then toward.Unit else Vector3.new(0, 0, 1)
 		end
-		RockFx.chips(at, primary.Color, out, if isPhone() then 2 else 3, rock)
+		RockFx.chips(at, primary.Color, out, chips, rock)
 	end
 end
 
----------------------------------------------------------------- SMASH! and the bag
-
-local function smash(position: Vector3, radius: number)
-	local v = view
-	if not v then
-		return
-	end
-	smashWorld = position + Vector3.new(0, radius * 0.15 + 0.5, 0)
-	local point = toGui(smashWorld)
-	if not point then
-		return
-	end
-	v.SmashAt.Position = UDim2.fromOffset(math.floor(point.X + 0.5), math.floor(point.Y + 0.5))
-	smashStart = os.clock()
-	smashReduced = Motion.reduced()
-	Sfx.play("RockSmash")
-	ensureLoop()
-end
+---------------------------------------------------------------- the bag
 
 local function freeFlyer(v: BagFly.View): BagFly.Flyer?
 	for _, f in v.Flyers do
@@ -335,10 +312,11 @@ local function pickup(position: Vector3, oreId: any)
 	end
 	local now = os.clock()
 	local target = hudTarget()
-	local flyer = if Motion.reduced() then nil else freeFlyer(v)
+	local flyer = freeFlyer(v)
 	local from = toGui(position + Vector3.new(0, 0.6, 0)) or characterPoint()
-	if not flyer or not from then
-		-- Reduce motion, every icon in the air, or nothing on screen: only the bump
+	local mode = MineJuiceRules.pickup(Motion.reduced(), flyer ~= nil, from ~= nil)
+	if mode ~= "Fly" or not flyer or not from then
+		-- every icon in the air or nothing on screen: only the bump; Reduce motion: only the sound (land)
 		land(target, now)
 		return
 	end
@@ -350,7 +328,7 @@ local function pickup(position: Vector3, oreId: any)
 	ensureLoop()
 end
 
-local function onFx(kind: any, a: any, b: any, _c: any, _d: any, _e: any, f: any)
+local function onFx(kind: any, a: any, b: any)
 	if typeof(a) ~= "Vector3" or a.X ~= a.X or a.Y ~= a.Y or a.Z ~= a.Z then
 		return
 	end
@@ -360,14 +338,8 @@ local function onFx(kind: any, a: any, b: any, _c: any, _d: any, _e: any, f: any
 		if mining.Tok then
 			Sfx.play("RockCrunch", a)
 		end
-		if mining.Glints and nearCamera(a, JuiceConfig.CrackRange) then
+		if mining.Glints and MineJuiceRules.sparkle(Motion.reduced(), cameraDistance(a)) then
 			Vfx.burst("Glint", a, if isPhone() then 3 else 5, JuiceConfig.GlintColor)
-		end
-	elseif kind == "NodeShatter" then
-		-- (position, crust, glow, floor, kind, radius)
-		local radius = if type(f) == "number" and f == f then math.clamp(f, 0.5, 30) else 2.5
-		if mining.Smash and RockFx.wasMine(a, radius) then
-			smash(a, radius)
 		end
 	elseif kind == "Pickup" then
 		if mining.BagFly then

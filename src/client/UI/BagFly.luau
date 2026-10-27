@@ -6,8 +6,7 @@
 
 	  build()  -> View: Gui = ScreenGui "TerraForgeJuice" (DisplayOrder 9, no
 	              UIScale: pixels like the level orbs; the controller passes
-	              the HUD's UI scale), JuiceConfig.Flyers ore icons, 3 bumps
-	              and the SMASH! word
+	              the HUD's UI scale), JuiceConfig.Flyers ore icons and 3 bumps
 	  setOre(flyer, color?)         nil = a dirty chunk (grey stone with gold
 	                                flecks: never a rarity colour), a colour =
 	                                a cleaned ore's gem
@@ -19,8 +18,9 @@
 	                                the landing: a white flash and a ring
 	                                round the slot / backpack button (`size`
 	                                px) that grows and fades, a +1 pops above
-	Reduce motion: the controller skips the flight; only the bump plays, its
-	ring and flash still, the +1 fades in at full size.
+	Reduce motion: the controller (Effects/MineJuiceRules.pickup) plays neither
+	the flight nor the bump, only the sound; poseBump's `reduced` (a still
+	ring, the +1 fading in straight) is kept for callers that want it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,9 +65,6 @@ export type View = {
 	Gui: ScreenGui,
 	Flyers: { Flyer },
 	Bumps: { Bump },
-	Smash: PopWord.Word,
-	SmashAt: Frame,
-	SmashFit: UIScale,
 }
 
 local WHITE = Color3.new(1, 1, 1)
@@ -233,17 +230,7 @@ function BagFly.build(): View
 	for i = 1, BagFly.Bumps do
 		table.insert(bumps, bump(gui, i))
 	end
-	local smashAt = UIKit.new("Frame", {
-		Name = "SmashAt",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(1, 1),
-		ZIndex = 8,
-	}, gui)
-	local smashFit = UIKit.new("UIScale", { Scale = 1 }, smashAt)
-	local smash = PopWord.build(smashAt, "SMASH!", 54, { Colors = "Gold", Tilt = -12, Star = true, Seconds = 1.0, Rise = 22, Z = 9 })
-	smash.Holder.Position = UDim2.fromScale(0.5, 0.5)
-	return { Gui = gui, Flyers = flyers, Bumps = bumps, Smash = smash, SmashAt = smashAt, SmashFit = smashFit }
+	return { Gui = gui, Flyers = flyers, Bumps = bumps }
 end
 
 --[[
