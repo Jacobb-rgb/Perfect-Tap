@@ -53,6 +53,24 @@ MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-6 stream on
 MineKit.NearPartBudget = 1250 -- floors 1-3 stream in with the town (the quarry rim on phones): keep them light
 MineKit.LightBudget = 24
 
+-- How bright each floor's PointLights burn, by floor index (owner 2026-10-27:
+-- "you can barely see anything" on floors 3, 5 and 6: their pale ground under
+-- strong colored lights washed out). The floor builders call dimLights on
+-- their finished model; floors not listed keep their lights as built.
+MineKit.LightScale = { [3] = 0.6, [5] = 0.6, [6] = 0.6 } :: { [number]: number }
+
+function MineKit.dimLights(model: Instance, floorIndex: number)
+	local scale = MineKit.LightScale[floorIndex]
+	if not scale then
+		return
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("Light") then
+			d.Brightness *= scale
+		end
+	end
+end
+
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
 local DECOR = { CanTouch = false, CanQuery = false, CanCollide = false }
 local GLOW = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
