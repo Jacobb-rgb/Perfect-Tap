@@ -205,7 +205,8 @@
 	  (Gear.Backpack, capacities 1 / 2 / 3 / 5 / 8 / 12 by level) becomes
 	  the smallest pack holding at least as much, owned and equipped if it
 	  is bigger than the one worn; Gear.Backpack goes (the line left the
-	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES), less
+	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES; a level
+	  folded from an old CarryLevel in the same load: OLD_CARRY_PRICES), less
 	  that pack's own price, go back into data.Coins (review 2026-10-27).
 ]]
 
@@ -260,6 +261,9 @@ local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 local OLD_BACKPACK_CAPACITY = { 1, 2, 3, 5, 8, 12 }
 -- ... and what its levels 1..5 cost (frozen): the coins paid past the pack it becomes go back
 local OLD_BACKPACK_PRICES = { 800, 5000, 30000, 180000, 1100000 }
+-- what the retired ToolData carry levels 1..5 cost (frozen): a save that still had CarryLevel
+-- (folded into Gear.Backpack this load) paid these, not the Gear shop's prices
+local OLD_CARRY_PRICES = { 0, 300, 1500, 6000, 25000 }
 -- the most of one item a backpack keeps (2x the biggest pack with Strong Back, and room
 -- for a newer build's bigger packs)
 local MAX_BACKPACK_KEPT = 5000
@@ -1342,7 +1346,9 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local automation = bought.PenAutomation
 	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
 
-	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
+	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots); they fold
+	-- an old CarryLevel into Gear.Backpack (the v9 refund below pays what it really cost)
+	local foldedCarry = if isFinite(data.CarryLevel) then math.floor(data.CarryLevel) else nil
 	migrateSteps67(data, clock, report)
 	migrateStep8(data, report)
 
@@ -1385,10 +1391,17 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 				if pick.Capacity > BackpackData.capacity(packs.Equipped) then
 					packs.Equipped = pick.Id
 				end
-				-- the coins paid for the old levels, less the pack's own price, come back
+				-- the coins paid for the old levels, less the pack's own price, come back (a level
+				-- folded from the old CarryLevel this load: what those carry levels cost)
 				local paid = 0
-				for i = 1, math.min(gearLevel, #OLD_BACKPACK_PRICES) do
-					paid += OLD_BACKPACK_PRICES[i]
+				if foldedCarry then
+					for i = 1, math.clamp(foldedCarry, 0, #OLD_CARRY_PRICES) do
+						paid += OLD_CARRY_PRICES[i]
+					end
+				else
+					for i = 1, math.min(gearLevel, #OLD_BACKPACK_PRICES) do
+						paid += OLD_BACKPACK_PRICES[i]
+					end
 				end
 				local refund = math.max(0, paid - pick.Price)
 				if refund > 0 then

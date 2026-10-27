@@ -21,9 +21,10 @@
 	loop (owner: "by itself when you walk near") does it every AutoSeconds
 	for every item of yours in reach: only your own loose items (at most
 	GameConfig.MaxLooseItemsPerPlayer each), never a scan of the world, and
-	never on a base (ItemService.onBase, like the magnet: belts, chutes,
+	never on a base (ItemService.onBase with no margin: belts, chutes,
 	machine queues and the pen's gate work with loose items; F / tap still
-	takes one there). A
+	takes one there; the alleys between the plots, with the town's starter
+	outcrops, are no base). A
 	full backpack says so, at most every FullToastGap seconds, and only when
 	something of yours lies in reach. The Ore Magnet puts what it fetched
 	into the backpack too (ItemService.setMagnetHands). Nothing is dropped
@@ -371,7 +372,7 @@ local function autoPickup(player: Player, now: number)
 			-- the cheap distance first, then the base test, the ray (hasReach) last
 			local at = record.Body.CFrame.Position
 			local near = (at - root.Position).Magnitude <= reach
-			if near and not ItemService.onBase(at) and CarryService.hasReach(player, root, record) then
+			if near and not ItemService.onBase(at, 0) and CarryService.hasReach(player, root, record) then
 				if CarryService.room(player) <= 0 then
 					blocked = true
 					break
