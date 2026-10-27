@@ -59,29 +59,45 @@ yourself, not machines"). Picked with AskUserQuestion: "Jen na dvoře" (only in 
   saves keep their grid station; the Tech shop still sells more. TutorialConfig.StarterMachines 2, the Cleaning
   target's layout point is the yard station.
 
-## 4 + 5. The backpack
-Data: `data.Backpack` = counts by item key ("K|O|G|R" like the pen) and `data.BackpackLevel`; capacity per level
-5 -> 1000 (Strong Back pass: x2). Every mined chunk, cleaned ore, crushed pile, ingot, relic is a backpack item.
+## 4 + 5. The backpack (built on feat/backpack, from feat/no-foundry)
+Owner picks: "Ano, vše do batohu" (everything goes into the backpack), "Sám, když jdeš blízko" (auto-pickup when you
+walk near), start 5 / top 1000, a backpack shop, a bigger train, cleaned ore into the backpack; 2026-10-25 "Batohy
+zůstanou" (owned packs stay through a rebirth, the ore inside goes like the pen's).
+Split (agreed with "Styl a obchod batohu" + the integrator): they own src/shared/Config/BackpackData.luau (10 packs,
+BackpackData.capacity(id); copied here from art/backpacks b4f1ade1), the worn models (player attribute "Backpack"),
+the BACKPACKS shop building (part tagged "BackpackCounter", Attachment "BackpackPromptPoint") and the shop window
+(client: OpenUI "Backpacks" { Counter }, Net BackpackAction / BackpackResult, State.Backpacks). We own everything below.
+
+Data (save Version 9):
+- data.Backpacks = { Equipped = "RookiePack", Owned = { RookiePack = true } } (unknown ids kept: a newer build's).
+- data.BackpackItems = { [ItemData.storageKey] = whole count } (key-shaped unknown keys kept), total <= MAX.
+- v9 once (loaded Version < 9): the Gear shop's old Ore Backpack level (capacities 1/2/3/5/8/12 by level) becomes the
+  smallest pack holding at least as much (Owned + Equipped; RookiePack 5 covers levels 0-3, TrailPack 15 the rest);
+  data.Gear.Backpack goes. The Gear shop sells four lines (the Backpack line left GearConfig).
 
 Server:
-- CarryService keeps its API for the consumers (takeTop / list / capacity / pickup / room) on top of the backpack:
-  pickup = add the item's key and destroy the chunk; takeTop finds a matching item and gives a real record only
-  where a physical one is needed (the Cleaning Station's vise); a new takeDesc gives the description (train, pen,
-  sell, podium, machine queues).
-- Auto-pickup: a server loop per player (owner-locked chunks within a range from the root, a few times a second;
-  loose chunks per player are capped at 30, so it is cheap). Throwing and the hand stack go.
-- The train: one press at the mine station loads all dirty ore that fits (server-checked range); train capacity
-  levels grow to match the backpack (up to ~1000).
-- The Cleaning Station takes a dirty ore from the backpack; the cleaned ore goes back into the backpack (full: the
-  pen, then the tray).
-- Machines' Put In, the pen (take / put), podiums, Tobin and the Sell Box read the backpack.
-- Rebirth clears the backpack's ore like the pen. Old saves: the Gear shop's Ore Backpack level maps to the backpack
-  level with at least its capacity (once, loaded Version); the Gear item leaves the Gear shop.
+- CarryService = the backpack's contents: pickup(player, record) absorbs your own loose item (never a Drop) into
+  data.BackpackItems while there is room (manual: Net CarryPickup; automatic: a 4 Hz loop over each player's own
+  loose items within reach, at most GameConfig.MaxLooseItemsPerPlayer each); count / capacity / room / items /
+  has(predicate) / take(predicate, max) -> { Desc } / add(desc, n). No drops or throws (CarryDrop / CarryThrow go),
+  nothing welded to the character, no carry slowdown on the walk speed; the backpack is saved, so death, leaving and
+  teleports keep it. Attributes CarryCount (items inside), CarryCapacity, PickupRange stay.
+  Capacity = Bonuses.carryCapacity: the equipped pack (Bonuses' "Backpack" source sets CarryCapacity's base), the
+  CarryCapacity bonuses on top (Deep Pockets, golems), x2 with the Strong Back perk (StatConfig cap raised).
+- BackpackService = the packs: prompt on every "BackpackCounter" -> OpenUI "Backpacks" { Counter }; BackpackAction
+  ("Buy" | "Equip", { Id }) -> BackpackResult { Id, Ok, Reason? } (TooFar 16 studs | NoCoins | Owned | NotOwned |
+  BadId | Locked); any pack you can afford, a bigger buy auto-equips; player attribute "Backpack" = Equipped;
+  BackpackService.refresh(player). State.Backpacks = { Equipped, Owned = { ids }, Count, Capacity, Items }.
+- Consumers read the backpack: the train ("Load Train": all dirty ore that fits, one press), the Ore Pen (Put In:
+  everything but relics while it has room; Take: into the backpack), Tobin (sells backpack + pen items), podiums
+  (Put On Podium: the best clean ore), machines' Put In (what the machine accepts), the Cleaning Station (the vise
+  takes a dirty ore / relic from the backpack; Take Ore Back puts it back; a cleaned ore goes into the backpack, else
+  the pen, else its tray as before), the Ore Magnet (fetched ore goes into the backpack).
+- Rebirth: the backpack's ore goes (relics wait in the pen for the keeper); the packs stay.
+- The train's capacity levels grow to ~1000 (balance_sim).
 
-Client (plain, functional; styling hooks for the UI chat):
-- A backpack button next to the Blaster slot (count n / capacity) opens the window: ore stacks with icon, name,
-  grade, count and the actions that fit where you stand (put on the podium, sell, clean, put into a machine); the
-  BACKPACKS tab sells the next sizes. Phone and gamepad work.
-- The HUD's CARRYING chip becomes the backpack count.
-
-balance_sim: carry capacity from the backpack level (walking trips), the train capacity, the backpack prices.
+Client (one agent, plain look + named frames for the style chat): the hotbar's carried-item squares become one
+backpack button next to the Blaster slot (icon + "n / cap") that opens the inventory window (the ore stacks with
+picture, name, grade, count; a line about the BACKPACKS shop); InteractController keeps F / tap pickup, no drop /
+throw; prompts that waited for carried items read State.Backpacks.Items; the tutorial's "Hopper" step says load the
+train at the station; the Gear shop shows four lines.

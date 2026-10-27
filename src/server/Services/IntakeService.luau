@@ -55,6 +55,7 @@ type PlacedMachine = MachineService.PlacedMachine
 type ItemRecord = ItemService.ItemRecord
 type Reason = MachineService.Reason
 type Via = MachineService.Via
+type Desc = MachineService.Desc
 
 type Zone = {
 	Kind: "Hopper" | "Feeder",
@@ -77,7 +78,7 @@ local CELLS = GameConfig.PlotCells
 local HALF = CELLS * CELL / 2
 -- zone boxes that exactly touch a cell edge don't count that neighbour cell
 local EDGE = 0.01
--- Put In prompt: at most this many items per press (more than any carry stack)
+-- Put In prompt: at most this many items per press (a machine's queue holds far fewer)
 local MAX_LOAD = 64
 local WARN_COOLDOWN = 10
 -- Full / Busy feedback: a refusal after this many seconds without one is a
@@ -430,20 +431,21 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 		Net.fire("Notify", player, { Text = "That's not your machine.", Kind = "Deny" })
 		return
 	end
-	local function fits(record: ItemRecord): boolean
-		return (MachineService.canAccept(machine, ItemService.descOf(record), record.Owner, "Hand"))
+	local function fits(desc: Desc): boolean
+		return (MachineService.canAccept(machine, desc, player.UserId, "Hand"))
 	end
+	-- from the backpack, one at a time while the machine takes them (its queue may fill)
 	local loaded = 0
 	for _ = 1, MAX_LOAD do
-		local record = CarryService.takeTop(player, fits)
-		if not record then
+		local desc = CarryService.take(player, fits, 1)[1]
+		if not desc then
 			break
 		end
-		-- no yield between taking it off the stack and putting it in
-		if MachineService.insertRecord(machine, record, "Hand") then
+		-- no yield between taking it out of the backpack and putting it in
+		if MachineService.insertDesc(machine, desc, player.UserId, "Hand") then
 			loaded += 1
 		else
-			ItemService.eject(record, Vector3.zero)
+			CarryService.add(player, desc, 1, true)
 			break
 		end
 	end
@@ -451,10 +453,10 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 		return
 	end
 	-- nothing went in: say why
-	local carried = CarryService.list(player)
+	local stacks = CarryService.stacks(player)
 	local reason: Reason? = nil
-	for _, record in carried do
-		local ok, why = MachineService.canAccept(machine, ItemService.descOf(record), record.Owner, "Hand")
+	for _, stack in stacks do
+		local ok, why = MachineService.canAccept(machine, stack.Desc, player.UserId, "Hand")
 		if not ok and (why == "Full" or why == "Busy") then
 			reason = why :: Reason?
 			break
@@ -462,8 +464,8 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 		reason = reason or why :: Reason?
 	end
 	local name = machine.Info.Name
-	local text = if #carried == 0
-		then `Carry items here to put them in the {name}.`
+	local text = if #stacks == 0
+		then `Your backpack is empty: bring items here to put them in the {name}.`
 		elseif reason == "Full" then `Your {name} is full.`
 		elseif reason == "Busy" then `Your {name} is busy right now.`
 		else machine.Info.WrongHint or `That doesn't go in the {name}.`

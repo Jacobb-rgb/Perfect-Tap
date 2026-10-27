@@ -86,17 +86,18 @@
 	  and the selection stays inside the panel. Opening it closes the Pen and
 	  Sell panels; in build mode it says "finish building first"; the chip
 	  hides behind it. On phones it sits at the bottom of the screen over the
-	  carry bar, under the coins (when it has to cover them, the HUD coins
+	  backpack button, under the coins (when it has to cover them, the HUD coins
 	  hide while it is open).
 	- Prompt slots (TrainConfig.PromptSlots, read by TrainService too): the
 	  server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0)) and
 	  "TrainSendPrompt" (slot 1, (0, 72)) are tagged "TrainPrompt"
 	  (TrainConfig.PromptTag); this client's "TrainPanelPrompt" sits in
 	  slot 2 ((0, 144)). The Load prompts (attribute Action "Load") are
-	  Enabled only while you carry something (CarryCount > 0): refreshed
-	  when one is tagged in, when one shows (PromptShown) and when
-	  CarryCount changes (applyLoadPrompt, like PromptController's machine
-	  LoadPrompts).
+	  Enabled only while your backpack holds something the train takes
+	  (anything but a dusty relic: canLoad, Util/BackpackState): refreshed
+	  when one is tagged in, when one shows (PromptShown) and when the
+	  backpack changes (CarryCount, a State push; applyLoadPrompt, like
+	  PromptController's machine LoadPrompts).
 	- Fx "TrainUnload": starts the unload above unless the late TrainTrip
 	  already did (takeUnload; dust and glints in that pen when its train
 	  isn't on screen); "TrainLoad" (position): a puff and a
@@ -147,6 +148,7 @@ local Theme = require(Shared.Config.UITheme)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
 local Motion = require(script.Parent.Parent.UI.Motion)
@@ -2597,7 +2599,7 @@ local function send()
 			-- (locked: the last press is still on its way to the server)
 			Sfx.play("UIDeny")
 		else
-			deny("Your train is empty: throw ore into the Mine Station hopper!")
+			deny("Your train is empty: load the ore in your backpack at the Mine Station!")
 		end
 		return
 	end
@@ -2995,40 +2997,44 @@ end
 
 --[[
 	The server's "Load Train" prompts (tag "TrainPrompt", Action "Load") are
-	Enabled only while you carry something (CarryCount > 0), like
-	PromptController's machine LoadPrompts; the server never changes Enabled
-	after creating them, so this local choice sticks. Every other prompt
-	(Send, the panel prompt) is left alone. Returns true when it is a Load
-	prompt.
+	Enabled only while `loadable` (canLoad: the backpack holds something the
+	train takes), like PromptController's machine LoadPrompts; the server
+	never changes Enabled after creating them, so this local choice sticks.
+	Every other prompt (Send, the panel prompt) is left alone. Returns true
+	when it is a Load prompt.
 ]]
-function TrainController.applyLoadPrompt(instance: Instance, carryCount: any): boolean
+function TrainController.applyLoadPrompt(instance: Instance, loadable: any): boolean
 	if not instance:IsA("ProximityPrompt") or not instance:HasTag(TrainController.PromptTag) then
 		return false
 	end
 	if instance:GetAttribute("Action") ~= "Load" then
 		return false
 	end
-	local on = type(carryCount) == "number" and carryCount > 0
+	local on = loadable == true
 	if instance.Enabled ~= on then
 		instance.Enabled = on
 	end
 	return true
 end
 
-local function carryCount(): any
-	local me = player
-	return if me then me:GetAttribute("CarryCount") else nil
+-- Does the backpack hold anything "Load Train" takes? (everything but dusty relics: they are cleaned, never shipped)
+function TrainController.canLoad(backpack: BackpackState.Backpack): boolean
+	return BackpackState.has(BackpackState.notRelic, backpack)
+end
+
+local function loadable(): boolean
+	return TrainController.canLoad(BackpackState.get())
 end
 
 local function trackLoadPrompt(instance: Instance)
-	TrainController.applyLoadPrompt(instance, carryCount())
+	TrainController.applyLoadPrompt(instance, loadable())
 end
 
 -- (looked up by tag each time: no table of prompts that could miss one or keep a destroyed one)
 local function refreshLoadPrompts()
-	local count = carryCount()
+	local on = loadable()
 	for _, prompt in CollectionService:GetTagged(TrainController.PromptTag) do
-		TrainController.applyLoadPrompt(prompt, count)
+		TrainController.applyLoadPrompt(prompt, on)
 	end
 end
 
@@ -3145,13 +3151,10 @@ function TrainController.start()
 	end
 	-- (a Load prompt that shows anyway, e.g. streamed in before its tag signal ran, is checked again)
 	ProximityPromptService.PromptShown:Connect(trackLoadPrompt)
+	-- the backpack changed (CarryCount, or a State push with its items)
+	BackpackState.onChanged(refreshLoadPrompts)
 	local me = player
 	if me then
-		-- (an item's CarriedBy may arrive a moment after CarryCount: refresh twice, like PromptController)
-		me:GetAttributeChangedSignal("CarryCount"):Connect(function()
-			refreshLoadPrompts()
-			task.delay(0.25, refreshLoadPrompts)
-		end)
 		me:GetAttributeChangedSignal("PlotId"):Connect(function()
 			local plot = myPlot()
 			if plot then

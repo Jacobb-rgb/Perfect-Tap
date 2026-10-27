@@ -82,10 +82,7 @@ local hud = HudBubble.buildGame(1.25)
 TeleportView.build(hud.TopBar, 1.25, W / SCALE)
 hud.Gui.Scale.Scale = SCALE
 hud.Income.Text = Format.perSecond(1840)
-hud.CarryLabel.Text = "CARRYING 0/3"
-for i = 1, 3 do
-	HudView.slot(hud.CarrySlots, nil, i)
-end
+HudView.setBackpack(hud, 0, 5)
 hud.Toasts:ClearAllChildren()
 local cash = hud.CoinsPanel:FindFirstChild("Cash")
 -- (HudController's own pop of the money panel: named here so the preview scales it like Roblox)

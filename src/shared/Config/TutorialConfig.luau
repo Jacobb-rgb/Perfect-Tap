@@ -35,7 +35,7 @@ export type Data = { [string]: any }
 -- What the server knows beyond the save data (TutorialService fills it in).
 export type Signals = {
 	NearStation: boolean?, -- the character has stood within StationRadius of the Mine Station
-	Carrying: number?, -- the CarryCount attribute (CarryService)
+	Carrying: number?, -- the CarryCount attribute: items in the backpack (CarryService)
 }
 
 export type Input = string -- "Mouse" | "Touch" | "Gamepad"
@@ -206,8 +206,12 @@ TutorialConfig.Steps = {
 	{
 		Id = "Mine",
 		Title = "Blast a rock",
-		Text = "Blast a rock with your blaster, then grab the dirty ore.",
-		Hint = { Mouse = "Click a rock · F grabs", Touch = "Tap a rock · tap Grab", Gamepad = "R2 blasts · X grabs" },
+		Text = "Blast a rock with your blaster, then walk over the dirty ore: it goes into your backpack.",
+		Hint = {
+			Mouse = "Click a rock · walk over the ore",
+			Touch = "Tap a rock · walk over the ore",
+			Gamepad = "R2 blasts · walk over the ore",
+		},
 		Target = "Rock",
 		done = function(data: Data, signals: Signals): boolean
 			return (signals.Carrying or 0) > 0 or M.loaded(data) or M.home(data) or M.cleanedMined(data)
@@ -216,8 +220,8 @@ TutorialConfig.Steps = {
 	{
 		Id = "Load",
 		Title = "Load the train",
-		Text = "Throw the ore into the big hopper at the station.",
-		Hint = { Mouse = "Hold Q, then let go", Touch = "Hold Throw, then let go", Gamepad = "Hold R1, then let go" },
+		Text = "Load the ore from your backpack onto your train at the station.",
+		Hint = { Mouse = "E at the station", Touch = "Tap Load Train at the station", Gamepad = "Y at the station" },
 		Target = "Hopper",
 		done = function(data: Data, _signals: Signals): boolean
 			return M.loaded(data) or M.home(data) or M.cleanedMined(data)
@@ -236,7 +240,7 @@ TutorialConfig.Steps = {
 	{
 		Id = "Clean",
 		Title = "Clean your ore",
-		Text = "Take an ore out of your Ore Pen and clean it at the Cleaning Station.",
+		Text = "Take an ore out of your Ore Pen into your backpack, then clean it at the Cleaning Station.",
 		Hint = {
 			-- the pen's "Open Pen" is the second prompt (G / B), the station's "Clean Ore" the main one (E / Y)
 			Mouse = "G opens the pen · E cleans it",
@@ -358,7 +362,7 @@ function TutorialConfig.advance(step: number, data: Data, signals: Signals?): nu
 	return s
 end
 
--- Where the guide points for a step (EmptyTarget while the hands are empty).
+-- Where the guide points for a step (EmptyTarget while the backpack is empty).
 function TutorialConfig.targetOf(step: Step, carrying: number): Target?
 	if step.EmptyTarget and carrying <= 0 then
 		return step.EmptyTarget

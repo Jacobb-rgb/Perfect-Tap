@@ -680,7 +680,7 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		refs.Coins.Text = Format.money(120000)
 		refs.Income.Text = Format.perSecond(240)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
-		refs.CarryLabel.Text = "HANDS 0/3"
+		HudView.setBackpack(refs, 0, 5)
 		-- main's left side menu (ELEVATOR and HOVER among its buttons; STORE hidden like in
 		-- today's game); phones get its MENU button
 		local side = SideMenuView.build()

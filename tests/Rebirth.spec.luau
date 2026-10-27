@@ -88,7 +88,10 @@ return function(T, Loader)
 			TripDepartAt = 0,
 			TripArriveAt = 0,
 		}
-		data.Gear = { Boots = 3, HelmetLamp = 2, Backpack = 4, Gloves = 1, Magnet = 2 }
+		data.Gear = { Boots = 3, HelmetLamp = 2, Gloves = 1, Magnet = 2 }
+		-- packs bought (kept, owner 2026-10-25) and a full backpack: ore (cleared) and a relic (to the pen)
+		data.Backpacks = { Equipped = "MinersPack", Owned = { RookiePack = true, TrailPack = true, MinersPack = true } }
+		data.BackpackItems = { ["Clean|Gold|Pristine|"] = 4, ["Raw|Coal||"] = 9, ["Relic|CrownCoin||"] = 1 }
 		-- slot 2 holds a paid enchant (a game pass gave it)
 		data.Enchants = { Owned = { Lucky = 2, Midas = 3 }, Slots = { "Lucky", "Midas", "", "" }, Passes = { Midas = true } }
 		data.Golems = { Owned = { { Id = 1, Kind = "PebbleGolem" } }, Equipped = { 1 }, NextId = 2 }
@@ -186,7 +189,7 @@ return function(T, Loader)
 		-- a newer build's level and perk stay in the save, read as this build's top / ignored
 		data.StarPerks = { DeepPockets = 9, StarMagnet = 4 }
 		T.eq(RebirthConfig.levelOf(data.StarPerks, "DeepPockets"), 3, "read as the top")
-		T.eq(RebirthConfig.stats(data.StarPerks).CarryCapacity, 3)
+		T.near(RebirthConfig.stats(data.StarPerks).CarryPct, 0.3, 1e-9, "+30% backpack space")
 		T.eq(select(2, RebirthConfig.quote({ Stars = 99, StarPerks = data.StarPerks }, "DeepPockets")), "Max")
 		T.eq(RebirthConfig.stats(data.StarPerks).StarMagnet, nil, "an unknown perk gives nothing here")
 		-- Express Rails reaches the train through TrainConfig, half at most
@@ -201,7 +204,7 @@ return function(T, Loader)
 		T.near(totals.IncomePct, 0.3, 1e-9, "Golden Touch III")
 		T.near(totals.OreLuckPct, 0.1, 1e-9, "Lucky Rocks II")
 		T.near(totals.TrainTimeCutPct, 0.2, 1e-9, "Express Rails II")
-		T.near(totals.CarryCapacity - Bonuses.compute(ProfileStore.deepCopy(DataTemplate), 0, nil).CarryCapacity, 1, 1e-9, "Deep Pockets I")
+		T.near(totals.CarryPct, 0.1, 1e-9, "Deep Pockets I: +10% backpack space")
 	end)
 
 	T.test("Rebirth: the reset resets exactly its list and keeps everything else", function()
@@ -227,9 +230,10 @@ return function(T, Loader)
 		T.eq(data.Train.CapacityLevel, 0)
 		T.eq(data.Train.SpeedLevel, 0)
 		T.eq(#data.Train.Cargo, 0)
-		T.eq(data.Gear.Backpack, 0, "the backpack")
+		T.eq(next(data.BackpackItems), nil, "the backpack's ore is gone")
+		T.truthy(deepEqual(data.Backpacks, before.Backpacks), "the packs bought stay (owner 2026-10-25)")
 		-- the pen keeps only dusty relics (artifacts, never ore): from the pen, the train and the queues
-		T.eq(#data.Storage, 3, "the pen holds just the relics")
+		T.eq(#data.Storage, 4, "the pen holds just the relics (the backpack's too)")
 		for _, item in data.Storage do
 			T.eq(item.K, "Relic", "only relics")
 		end
@@ -485,7 +489,7 @@ return function(T, Loader)
 		T.eq(data.BlasterOre, BlasterData.vaultOre(data.BlasterLevel), "in that level's Vault look")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|", "the podium ores stay")
 		T.eq(data.Podiums[3], "Clean|Copper|Rough|")
-		T.eq(#data.Storage, 3, "the pen still empties (only the relics wait there)")
+		T.eq(#data.Storage, 4, "the pen still empties (only the relics wait there)")
 	end)
 
 	---------------------------------------------------------------- the service
@@ -602,8 +606,8 @@ return function(T, Loader)
 		table.sort(w.kept)
 		T.eq(
 			table.concat(w.kept, ","),
-			"AncientGear,CrownCoin,MinersLamp",
-			"the relics from the pen, the train and the Restoration Table went to the keeper"
+			"AncientGear,CrownCoin,CrownCoin,MinersLamp",
+			"the relics from the pen, the backpack, the train and the Restoration Table went to the keeper"
 		)
 		T.eq(#w.data.Storage, 0, "nothing left in the pen")
 		T.eq(w.trainResets, 1, "the train starts over")

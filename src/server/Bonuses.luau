@@ -13,7 +13,9 @@
 	  StatConfig.combine (Add stats summed, Mult stats multiplied, each total
 	  capped at its Max). A provider that errors or returns junk counts as
 	  nothing (warned once).
-	- The six built-in providers read the save (pure config functions):
+	- The seven built-in providers read the save (pure config functions):
+	    "Backpack"    CarryCapacity = the equipped pack's BackpackData.capacity
+	                  (data.Backpacks.Equipped; owner 2026-10-24: the backpack)
 	    "Gear"        GearConfig.stats(data.Gear)
 	    "Enchants"    EnchantConfig.stats(data.Enchants, data.BlasterLevel)
 	    "Golems"      GolemConfig.stats(data.Golems, Golem Bond from enchants + collections)
@@ -52,6 +54,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
+local BackpackData = require(Shared.Config.BackpackData)
 local GearConfig = require(Shared.Config.GearConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
@@ -122,6 +125,13 @@ end
 
 local BUILT_IN: { { Name: string, Provider: Provider } } = {
 	{
+		Name = "Backpack",
+		Provider = function(_player, data, _now)
+			local packs = data.Backpacks
+			return { CarryCapacity = BackpackData.capacity(if type(packs) == "table" then packs.Equipped else nil) }
+		end,
+	},
+	{
 		Name = "Gear",
 		Provider = function(_player, data, _now)
 			return GearConfig.stats(data.Gear)
@@ -159,7 +169,7 @@ local BUILT_IN: { { Name: string, Provider: Provider } } = {
 	},
 }
 
--- Puts the six built-in providers back (and drops every other one).
+-- Puts the seven built-in providers back (and drops every other one).
 function Bonuses.resetProviders()
 	table.clear(providers)
 	table.clear(warned)
@@ -352,10 +362,13 @@ function Bonuses.throwMult(stats: Stats): number
 	return math.max(1, stats.ThrowMult or 1)
 end
 
--- Items you can carry (the StrongBack perk doubles it).
+-- Items the backpack holds: the worn pack (+ CarryCapacity bonuses), + CarryPct of it
+-- rounded up (Deep Pockets: even the Rookie pack's 5 gets +1), doubled by the StrongBack perk.
 function Bonuses.carryCapacity(stats: Stats, player: Player?): number
 	local base = math.max(1, math.floor(stats.CarryCapacity or 1))
-	return base * (if player and Perks.has(player, "StrongBack") then 2 else 1)
+	local share = math.max(0, stats.CarryPct or 0)
+	local extra = math.ceil(base * share - 1e-9) -- (no float dust: 10 x 0.3 is 3, not 4)
+	return (base + extra) * (if player and Perks.has(player, "StrongBack") then 2 else 1)
 end
 
 -- Head lamp range and brightness (0, 0 = no lamp).

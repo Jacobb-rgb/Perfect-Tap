@@ -12,7 +12,7 @@
 	                   +1 % income; every 10th level a MILESTONE x5 row)
 
 	  build()  -> View: Gui (ScreenGui "TerraForgeLevel": the bar at the
-	              bottom centre over the carry slots, the moment over the
+	              bottom centre over the backpack button, the moment over the
 	              middle) and Orbs (ScreenGui "TerraForgeLevelOrbs", no
 	              UIScale: orbs fly in screen pixels)
 	Pop look (PopTheme): chunky white text with a black edge, painted faces.
@@ -43,7 +43,7 @@ local LevelView = {}
 LevelView.BarWidth = 380
 LevelView.BarHeight = 30
 LevelView.Badge = 58
-LevelView.BarBottom = 128 -- design units from the bottom edge (over the carry slots and their label)
+LevelView.BarBottom = 128 -- design units from the bottom edge (over the backpack button)
 LevelView.GlowFrom = 0.75 -- the bar starts to glow from this full
 LevelView.MomentSeconds = 3.6
 LevelView.MomentTop = 40 -- the moment's top (design units): over the character, not on it

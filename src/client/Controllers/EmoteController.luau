@@ -57,7 +57,6 @@ local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 
 -- what a refused pick says on the hint line
 EmoteController.Reasons = {
-	Carrying = "Put the ore down first.",
 	Building = "Not while building or cleaning.",
 	Riding = "Get off the hoverboard first.",
 	Seated = "Stand up first.",

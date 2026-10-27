@@ -193,10 +193,7 @@ function Preview.ui(Loader: any): { [string]: any }
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(income)
-		refs.CarryLabel.Text = "CARRYING 0/3"
-		for i = 1, 3 do
-			HudView.slot(refs.CarrySlots, nil, i)
-		end
+		HudView.setBackpack(refs, 0, 5)
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end

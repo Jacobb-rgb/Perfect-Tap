@@ -150,6 +150,18 @@ function ItemData.parseKey(key: string): Desc?
 	}
 end
 
+-- parseKey, or a dusty relic's key ("Relic|<ArtifactConfig id>||": its O is no ore, so
+-- parseKey refuses it): the backpack keeps counts by key and holds relics too
+-- (CarryService; the client's backpack window reads the same keys).
+function ItemData.parseStoredKey(key: string): Desc?
+	local desc = ItemData.parseKey(key)
+	if desc or type(key) ~= "string" or #key > MAX_KEY_LENGTH then
+		return desc
+	end
+	local id = string.match(key, "^Relic|([%w_]+)||$")
+	return if id and #id <= 40 then { K = "Relic", O = id } else nil
+end
+
 -- Podium income per second of one item at grade multiplier only (bonuses
 -- such as golems or passes are applied by EconomyService). 0 for anything a
 -- podium can't hold (only cleaned ore goes on podiums).

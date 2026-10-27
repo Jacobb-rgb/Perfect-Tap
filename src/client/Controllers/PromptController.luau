@@ -4,8 +4,11 @@
 	keys.
 
 	- Prompts on other players' machines are hidden.
-	- 'LoadPrompt' (Put In) on your own machines shows only while you carry
-	  something. The server never changes its Enabled, so this local choice sticks.
+	- 'LoadPrompt' (Put In) on your own machines shows only while your
+	  backpack holds something that machine takes (MachineData Accepts: the
+	  item kinds; Util/BackpackState, refreshed on its changes and every
+	  State push). The server never changes its Enabled, so this local
+	  choice sticks.
 	- setSuppressed(reason, on) hides every prompt during close-ups (build
 	  mode, the anvil, the cleaning minigame and its result card); prompts
 	  come back when no reason is left.
@@ -14,7 +17,7 @@
 	gamepad B for the second prompt on a spot, like the Cleaning Station's
 	"Take Ore Back" (always shown, its own keys, so it never fires together
 	with "Clean Ore"); "Panel" T / L3 for the Train panel. Taken elsewhere:
-	F / X Grab, Q / RB Throw; B is also Leave inside the cleaning minigame,
+	F / X Grab, Q / R1 the backpack window; B is also Leave inside the cleaning minigame,
 	while the prompts are suppressed. A modal that binds E itself (the
 	cleaning result card's Collect) suppresses the prompts
 	first, so one E press never also fires a prompt behind it.
@@ -23,32 +26,57 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local MachineData = require(ReplicatedStorage:WaitForChild("Shared").Config.MachineData)
+
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 
 local PromptController = {}
 
-local player = Players.LocalPlayer
+-- (read when used: the Lune tests require this module without a LocalPlayer)
+local function userId(): number
+	return Players.LocalPlayer.UserId
+end
 local suppressed: { [string]: boolean } = {}
 -- weak keys: prompts of machines that are gone drop out by themselves
 local loadPrompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local machineConnections: { [Instance]: RBXScriptConnection } = {}
 
-local function machineOwner(prompt: ProximityPrompt): number?
+-- The machine model a prompt sits on: its owner and its MachineId.
+local function machineOf(prompt: ProximityPrompt): (number?, string?)
 	local node: Instance? = prompt
 	while node do
-		if node:IsA("Model") and node:GetAttribute("MachineId") then
-			return node:GetAttribute("Owner") :: number?
+		local id = node:GetAttribute("MachineId")
+		if node:IsA("Model") and id then
+			return node:GetAttribute("Owner") :: number?, if type(id) == "string" then id else nil
 		end
 		node = node.Parent
 	end
-	return nil
+	return nil, nil
 end
 
-local function carryCount(): number
-	return (player:GetAttribute("CarryCount") :: number?) or 0
+-- Put In: your own machine, and the backpack holds an item kind it takes.
+function PromptController.loadShown(owner: number?, machineId: string?, userId: number, backpack: any?): boolean
+	if owner ~= userId then
+		return false
+	end
+	local b = backpack or BackpackState.get()
+	if b.Count <= 0 then
+		return false
+	elseif #b.Stacks == 0 then
+		return true -- the count is newer than the State's stacks: unknown contents, show it
+	end
+	local info = if machineId then MachineData.ById[machineId] else nil
+	local accepts = if info then info.Accepts else nil
+	return BackpackState.has(function(desc): boolean
+		return accepts == nil or accepts[desc.K] == true
+	end, b)
 end
 
 local function applyLoad(prompt: ProximityPrompt)
-	prompt.Enabled = machineOwner(prompt) == player.UserId and carryCount() > 0
+	local owner, id = machineOf(prompt)
+	prompt.Enabled = PromptController.loadShown(owner, id, userId())
 end
 
 local function refreshAll()
@@ -103,8 +131,8 @@ function PromptController.start()
 			applyLoad(prompt)
 			return
 		end
-		local owner = machineOwner(prompt)
-		if owner and owner ~= player.UserId then
+		local owner = machineOf(prompt)
+		if owner and owner ~= userId() then
 			prompt.Enabled = false
 		end
 	end)
@@ -115,11 +143,8 @@ function PromptController.start()
 		watchMachine(model)
 	end
 
-	-- an item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
-	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
-		refreshAll()
-		task.delay(0.25, refreshAll)
-	end)
+	-- the backpack changed (CarryCount, or a State push)
+	BackpackState.onChanged(refreshAll)
 end
 
 return PromptController

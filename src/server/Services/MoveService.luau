@@ -7,8 +7,8 @@
 	  Move      "<Name>:<seq>"  a one-shot move to play now (seq makes the same
 	            move twice a change: MoveRules.encode)
 	  MoveLoop  "Spray" while the player cleans at a station, nil otherwise (checked every
-	            MoveConfig.LoopPoll seconds; Carry needs nothing: every
-	            client reads the CarryCount player attribute)
+	            MoveConfig.LoopPoll seconds; no Carry loop: the backpack's ore
+	            is never in the hands)
 
 	MoveService.play(player, name) plays a one-shot move (at most once per its
 	MinGap). Celebrations come from existing server results, through the
@@ -116,12 +116,6 @@ local function onMove(player: Player, nameArg: any)
 	end
 	if not Guard.rootPart(player) then
 		return
-	end
-	if name == "Throw" then
-		local carrying = tonumber(player:GetAttribute(MoveConfig.CarryAttribute)) or 0
-		if not (carrying > 0) then
-			return
-		end
 	end
 	MoveService.play(player, name)
 end

@@ -410,6 +410,7 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 		view.CardOre.TextColor3 = rarity.Color
 		view.CardValue.Text = if result.Collected then "Added to your collection" else "Your relic is safe"
 		view.CardDetail.Text = detail(result)
+		CleaningView.setInto(view, nil)
 		popCard(ctx)
 		ctx.flash(rarity.Color, 0.4)
 		return
@@ -424,6 +425,8 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 	local worth = math.floor((result.Value or 0) * StateController.sellMult() + 0.5)
 	view.CardValue.Text = `Worth {Format.commas(worth)} coins`
 	view.CardDetail.Text = detail(result)
+	-- where it went: the backpack, else the pen (or sold), else the station's tray
+	CleaningView.setInto(view, result.Into)
 	CleaningView.setStreak(view, ctx.Streak)
 	-- the grade stamp lands on the ore itself
 	local state = ctx.LookState

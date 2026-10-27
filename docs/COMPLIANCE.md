@@ -264,12 +264,12 @@ What Terra Forge sells (design v2; the source of truth is
 
 | Product | Type | Key in code | What it does | Paid random? |
 |---|---|---|---|---|
-| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, 12 h offline earnings, 2× carrying (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
+| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, 12 h offline earnings, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
 | Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 4 and 5 (3 are free, owner 2026-10-24) | No |
 | Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |
-| Terra Forge Custom Hoverboard (49 R$) | Game pass | `HoverboardCustom` | The fastest hoverboard (speed 38), no carry slowdown, rainbow trail | No |
+| Terra Forge Custom Hoverboard (49 R$) | Game pass | `HoverboardCustom` | The fastest hoverboard (speed 38), rainbow trail (the carry slowdown it skipped went with the backpack, 2026-10-24) | No |
 | Starter Pack (99 R$) | Developer product, once per account | `StarterPack` | The Rare golem Gilded Porter (fixed, not rolled), 20 min of podium income in coins (at least 15,000; `PaidCoins`), the Pioneer podium skin + title. Offered only during the first hour of play (`data.Stats.PlaySeconds`), only while coins are buyable; "Owned" after the purchase (`data.StarterPack`) | No (nothing random: Triple Lucky was left out on purpose so the pack is sold in every policy region) |
 | Heartfire Enchant (20 R$) | Game pass | `EnchantHeartfire` | Mythic enchant: damage | No |
 | Starbreaker Enchant (20 R$) | Game pass | `EnchantStarbreaker` | Mythic enchant: +75 % ore luck, +50 % artifact chance | **Yes** (odds booster) |

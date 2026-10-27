@@ -4,8 +4,9 @@
 	               floating "+$X" popups (Earned) below
 	  top-center   the quick-teleport bar (TeleportView: BASE / LOBBY / VAULT),
 	               the zone name + toast notifications under it
-	  bottom       carry slots + hints
-	  center       throw power bar
+	  bottom       the backpack button right of the blaster's hotbar slot
+	               (HudBubble.backpackButton, both looks): the pack's picture
+	               and "n / cap"; it opens the inventory (BackpackController)
 	  right side   menu buttons (added by later steps)
 	The "While you were away" popup is its own ScreenGui (buildOffline).
 	While UIConfig.lightUI() is on, every builder here forwards to the light
@@ -22,14 +23,9 @@ local HudBubble = require(script.Parent.HudBubble)
 local HudView = {}
 
 HudView.CoinsWidth = 236
-HudView.DirtyColor = Color3.fromRGB(120, 114, 108) -- dirty ore: no rarity color until cleaned
 HudView.TopBarY = 10 -- the teleport bar at the top centre (design units)
 HudView.TopBarWidth = 440
 HudView.TopBarHeight = 58
--- carry squares drawn at most: a bigger backpack (24 with Strong Back) shows
--- "+N" on the last one, so the panel never covers the touch controls
-HudView.MaxCarrySlots = 8
-HudView.CarryPanelHeight = 74
 
 export type Refs = {
 	Gui: ScreenGui,
@@ -39,11 +35,9 @@ export type Refs = {
 	Floaters: Frame,
 	Zone: TextLabel,
 	Toasts: Frame,
-	CarryPanel: Frame,
-	CarrySlots: Frame,
-	CarryLabel: TextLabel,
-	ThrowBar: Frame,
-	ThrowFill: Frame,
+	CarryPanel: Frame, -- the backpack button's holder (build mode hides it)
+	Backpack: TextButton, -- the backpack button: opens the inventory (BackpackController)
+	CarryLabel: TextLabel, -- the button's "n / cap"
 	Menu: Frame,
 	TopBar: Frame,
 }
@@ -142,47 +136,9 @@ function HudView.build(): Refs
 	}, gui)
 	UIKit.list(toasts, Enum.FillDirection.Vertical, 8, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
-	-- carry slots
-	local carryPanel = UIKit.panel(gui, {
-		Name = "Carry",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(260, 74),
-	})
-	local carryLabel = UIKit.label(carryPanel, "HANDS 0/1", 16, {
-		Name = "Label",
-		Position = UDim2.fromOffset(0, 4),
-		Size = UDim2.new(1, 0, 0, 18),
-		TextColor3 = Theme.TextDim,
-	})
-	local slots = UIKit.new("Frame", {
-		Name = "Slots",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 26),
-		Size = UDim2.new(1, -16, 0, 38),
-		BackgroundTransparency = 1,
-	}, carryPanel)
-	UIKit.list(slots, Enum.FillDirection.Horizontal, 6, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
-
-	-- throw power bar
-	local throwBar = UIKit.new("Frame", {
-		Name = "ThrowBar",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.62, 0),
-		Size = UDim2.fromOffset(180, 16),
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-		Visible = false,
-	}, gui)
-	UIKit.corner(throwBar, 8)
-	UIKit.stroke(throwBar, 2.5)
-	local throwFill = UIKit.new("Frame", {
-		Name = "Fill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Theme.Accent,
-		BorderSizePixel = 0,
-	}, throwBar)
-	UIKit.corner(throwFill, 8)
+	-- the backpack button right of the blaster's hotbar slot (the light HUD's button; phone sized on phones)
+	local scale = HudBubble.screenScale()
+	local carryPanel, backpack, carryLabel = HudBubble.backpackButton(gui, HudBubble.layout(scale), scale)
 
 	-- right-side menu buttons (filled by later steps)
 	local menu = UIKit.new("Frame", {
@@ -208,126 +164,32 @@ function HudView.build(): Refs
 		Zone = zone,
 		Toasts = toasts,
 		CarryPanel = carryPanel,
-		CarrySlots = slots,
+		Backpack = backpack,
 		CarryLabel = carryLabel,
-		ThrowBar = throwBar,
-		ThrowFill = throwFill,
 		Menu = menu,
 		TopBar = topBar,
 	}
 end
 
---[[
-	How the carry panel shows `count` carried items of `capacity`: the
-	squares drawn (at most MaxCarrySlots), how many of them show an item,
-	the "+N" on the last square (0 = none: everything fits) and the panel's
-	width (design units). The text says the whole count ("CARRYING 12/24").
-]]
-function HudView.carryLayout(capacity: number, count: number): (number, number, number, number)
-	local cap = if type(capacity) == "number" and capacity == capacity then math.max(1, math.floor(capacity)) else 1
-	local carried = if type(count) == "number" and count == count then math.max(0, math.floor(count)) else 0
-	local squares = math.min(cap, HudView.MaxCarrySlots)
-	local shown = math.min(carried, squares)
-	local more = 0
-	if carried > squares then
-		shown = squares - 1
-		more = carried - shown
-	end
-	return squares, shown, more, math.max(200, squares * 40 + 24)
+---------------------------------------------------------------- the backpack button
+-- (one button for both looks: HudBubble.backpackButton)
+
+HudView.backpackText = HudBubble.backpackText
+HudView.backpackX = HudBubble.backpackX
+
+-- "count / capacity" on the backpack button; a full backpack gets the red count and the FULL tag.
+function HudView.setBackpack(refs: Refs, count: number, capacity: number)
+	HudBubble.setBackpack(refs.Backpack, count, capacity)
 end
 
--- The last carry square when more items are carried than squares are drawn: "+N".
-function HudView.moreSlot(parent: Instance, more: number, order: number): Frame
-	if UIConfig.lightUI() then
-		return HudBubble.moreSlot(parent, more, order)
-	end
-	local slot = HudView.slot(parent, Theme.PanelLight, order)
-	UIKit.label(slot, `+{more}`, if more >= 100 then 14 else 18, { Name = "More", Size = UDim2.fromScale(1, 1) })
-	return slot
+-- The open key on the backpack button: a keyboard key, a gamepad glyph, or neither (touch).
+function HudView.setBackpackKey(refs: Refs, text: string?, glyph: string?)
+	HudBubble.setBackpackKey(refs.Backpack, text, glyph)
 end
 
--- One carry slot square; color = rarity color or empty. `mystery` (dirty
--- ore) shows a "?" instead of hinting at the rarity.
-function HudView.slot(parent: Instance, filled: Color3?, order: number, mystery: boolean?): Frame
-	if UIConfig.lightUI() then
-		return HudBubble.slot(parent, filled, order, mystery)
-	end
-	local slot = UIKit.new("Frame", {
-		Name = "Slot" .. order,
-		LayoutOrder = order,
-		Size = UDim2.fromOffset(34, 34),
-		BackgroundColor3 = if mystery then HudView.DirtyColor else filled or Theme.PanelDark,
-		BorderSizePixel = 0,
-	}, parent)
-	UIKit.corner(slot, 8)
-	UIKit.stroke(slot, 2.5)
-	if filled or mystery then
-		UIKit.gradient(slot, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170))
-	end
-	if mystery then
-		UIKit.label(slot, "?", 22, { Name = "Mystery", Size = UDim2.fromScale(1, 1) })
-	end
-	return slot
-end
-
---[[
-	Carry slot `order` ("Slot<order>") showing `filled` (a rarity colour),
-	`mystery` (dirty ore: "?") or "+N" (`more` > 0), updated in place: the
-	slot already in the row is recoloured and its "?" / "+N" shown or hidden,
-	a missing one is made once (HudController.refreshCarry runs on every
-	carry change).
-]]
-function HudView.carrySlot(parent: Instance, order: number, filled: Color3?, mystery: boolean?, more: number?): Frame
-	if UIConfig.lightUI() then
-		return HudBubble.carrySlot(parent, order, filled, mystery, more)
-	end
-	local found = parent:FindFirstChild("Slot" .. order)
-	local slot = if found and found:IsA("Frame") then found else HudView.slot(parent, nil, order)
-	local showMore = more ~= nil and more > 0
-	local dirty = mystery == true and not showMore
-	local color = if showMore then Theme.PanelLight elseif dirty then HudView.DirtyColor else filled
-	slot.BackgroundColor3 = color or Theme.PanelDark
-	local gradient = slot:FindFirstChildOfClass("UIGradient")
-	if color and not gradient then
-		gradient = UIKit.gradient(slot, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170))
-	end
-	if gradient then
-		gradient.Enabled = color ~= nil
-	end
-	local question = slot:FindFirstChild("Mystery") :: TextLabel?
-	if dirty and not question then
-		question = UIKit.label(slot, "?", 22, { Name = "Mystery", Size = UDim2.fromScale(1, 1) })
-	end
-	if question then
-		question.Visible = dirty
-	end
-	local label = slot:FindFirstChild("More") :: TextLabel?
-	if showMore then
-		local count = more :: number
-		if not label then
-			label = UIKit.label(slot, "", 18, { Name = "More", Size = UDim2.fromScale(1, 1) })
-		end
-		local shown = label :: TextLabel
-		shown.Text = `+{count}`
-		shown.TextSize = if count >= 100 then 14 else 18
-	end
-	if label then
-		label.Visible = showMore
-	end
-	return slot
-end
-
--- Removes the carry slots past `count` (a smaller backpack).
-function HudView.trimSlots(parent: Instance, count: number)
-	if UIConfig.lightUI() then
-		HudBubble.trimSlots(parent, count)
-		return
-	end
-	for _, child in parent:GetChildren() do
-		if child:IsA("Frame") and child.LayoutOrder > count then
-			child:Destroy()
-		end
-	end
+-- Keeps the button right of the blaster's hotbar slot (Roblox draws it in real pixels) at `uiScale`.
+function HudView.placeBackpack(refs: Refs, uiScale: number, tenFoot: boolean?)
+	HudBubble.placeBackpack(refs.CarryPanel, uiScale, tenFoot)
 end
 
 -- A floating "+$1.2K" (the controller moves and fades it).

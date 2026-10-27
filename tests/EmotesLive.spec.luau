@@ -13,7 +13,8 @@
 	  MoveController    on fake services (Env), proved by the connections:
 	                    moves off = no Stepped loop, no Fx / ActionResult /
 	                    Notify listeners, no Move / MoveLoop / CarryCount
-	                    listeners, no sends; an emote nearby connects the one
+	                    listeners (no CarryCount one with the moves on either:
+	                    the backpack's ore is never in the hands), no sends; an emote nearby connects the one
 	                    loop, moving stops it (outro), the loop disconnects
 	                    when it is over; far away = no loop; the Gem Juggle's
 	                    gems come from the pool and go back
@@ -107,7 +108,6 @@ return function(T, Loader)
 
 	T.test("emotes live: what blocks a start and what stops a playing emote", function()
 		T.eq(EmoteRules.blocked({}), nil, "free to dance")
-		T.eq(EmoteRules.blocked({ Carrying = true }), "Carrying", "never while carrying ore")
 		T.eq(EmoteRules.blocked({ Cleaning = true }), "Cleaning", "never while cleaning")
 		T.eq(EmoteRules.blocked({ Building = true }), "Building", "never in build mode / a close-up")
 		T.eq(EmoteRules.blocked({ Riding = true }), "Riding", "never on a hoverboard")
@@ -129,7 +129,6 @@ return function(T, Loader)
 		T.eq(EmoteRules.stopReason("BlasterSpin", { Speed = 0 }), "NoBlaster", "the blaster put away stops it")
 		T.eq(EmoteRules.stopReason("Robot", { Speed = 0, Firing = true }), "Firing", "firing stops it")
 		T.eq(EmoteRules.stopReason("Robot", { Speed = 0, Panel = true }), "Panel", "a panel opening stops it")
-		T.eq(EmoteRules.stopReason("Robot", { Speed = 0, Carrying = true }), "Carrying", "picking ore up stops it")
 		T.truthy(EmoteRules.canPlay(nil, 0, 1) and not EmoteRules.canPlay(5, 5.5, 1) and EmoteRules.canPlay(5, 6, 1), "the cooldown")
 	end)
 
@@ -212,8 +211,10 @@ return function(T, Loader)
 			p.attrs[MoveConfig.CarryAttribute] = 2
 			now += 2
 			test.onEmote(p, "Headspin")
-			T.eq(attr(p), "", "never while carrying ore")
+			T.eq(attr(p), "Headspin:4", "ore in the backpack never blocks a dance (nothing is in the hands)")
+			test.onEmote(p, "")
 			p.attrs[MoveConfig.CarryAttribute] = 0
+			now += 2
 			cleaning = true
 			test.onEmote(p, "Headspin")
 			T.eq(attr(p), "", "never while cleaning")
@@ -235,8 +236,8 @@ return function(T, Loader)
 			T.eq(attr(p), "", "no Blaster Spin without the blaster")
 			p.Character.tool = blasterTool()
 			test.onEmote(p, "BlasterSpin")
-			T.eq(attr(p), "BlasterSpin:4", "with the blaster in hand")
-			-- the poll: the blaster put away / ore picked up clear it
+			T.eq(attr(p), "BlasterSpin:5", "with the blaster in hand")
+			-- the poll: the blaster put away clears it, ore picked up doesn't
 			p.Character.tool = nil
 			test.poll()
 			T.eq(attr(p), "", "the poll stops a Blaster Spin without the blaster")
@@ -244,7 +245,7 @@ return function(T, Loader)
 			test.onEmote(p, "Victory")
 			p.attrs[MoveConfig.CarryAttribute] = 1
 			test.poll()
-			T.eq(attr(p), "", "the poll stops it when ore is picked up")
+			T.eq(attr(p), "Victory:6", "ore going into the backpack never stops a dance")
 		end)
 		test.reset()
 		if not ok then
@@ -647,11 +648,12 @@ return function(T, Loader)
 		w.step(3)
 		T.eq(w.stepped.count(), 0, "idle again")
 
-		-- the blocks and the blaster
+		-- the blocks and the blaster (ore in the backpack is never in the hands: no block, owner 2026-10-24)
 		w.me.attrs[MoveConfig.CarryAttribute] = 2
-		local okCarry, reason = MoveController.playEmote("Worm")
-		T.falsy(okCarry, "not while carrying")
-		T.eq(reason, "Carrying", "says why")
+		local okCarry = MoveController.playEmote("Worm")
+		T.truthy(okCarry, "ore in the backpack doesn't block an emote")
+		MoveController.playEmote("Worm")
+		w.step(3)
 		w.me.attrs[MoveConfig.CarryAttribute] = 0
 		local okGun, gunReason = MoveController.playEmote("BlasterSpin")
 		T.falsy(okGun, "no Blaster Spin without the blaster")
@@ -838,7 +840,7 @@ return function(T, Loader)
 		end
 		T.truthy(w.meChar.signals[MoveConfig.Attribute], "the Move attribute is followed")
 		T.truthy(w.meChar.signals[MoveConfig.LoopAttribute], "the MoveLoop attribute is followed")
-		T.truthy(w.me.signals[MoveConfig.CarryAttribute], "CarryCount is followed")
+		T.eq(w.me.signals[MoveConfig.CarryAttribute], nil, "no CarryCount listener (no Carry loop since the backpack)")
 		MoveController.playLocal("Shrug")
 		T.eq(w.sends[1] and w.sends[1][1], "Move", "a client move is sent")
 		w.step(1)
