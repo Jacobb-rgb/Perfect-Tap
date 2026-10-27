@@ -1,13 +1,13 @@
 --[[
 	The plot pieces in the machines' style A "Soft" (owner 2026-10-20, ported
 	from the preview on art/plot-style-a): the pad walls and the yard fence,
-	the Ore Pen, the podiums and the train stop (PlotBuilder), the Foundry
-	building and the FOUNDRY chute receiver (FoundryBuilder). They keep every
-	name, attribute and attachment the services and controllers read
-	(PlotService, PenService, PodiumService / PodiumController,
-	ArtifactService's podium skins, FoundryService / FoundryController,
-	IntakeService, the railway) and use no more parts than the brick / Kenney
-	look did (PlotBuilder.PieceParts, FoundryBuilder.BuildingParts).
+	the Ore Pen, the podiums and the train stop (PlotBuilder; the Foundry
+	building and its chute receiver went with the Foundry, owner 2026-10-24).
+	They keep every name, attribute and attachment the services and
+	controllers read (PlotService, PenService, PodiumService /
+	PodiumController, ArtifactService's podium skins, IntakeService, the
+	railway) and use no more parts than the brick / Kenney look did
+	(PlotBuilder.PieceParts).
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -21,7 +21,6 @@ return function(T, Loader)
 	local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
 	local SoftKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.SoftKit")
 	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
-	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
 	local ArtifactService = Loader.requirePath("ServerScriptService.Server.Services.ArtifactService")
 
 	local P = KitMachines.Palette
@@ -127,7 +126,7 @@ return function(T, Loader)
 					bars += 1
 				end
 			end
-			T.eq(bars, PlotBuilder.HoloRing.Sides, "the holo-ring bars")
+			T.eq(bars, if locked then 0 else PlotBuilder.HoloRing.Sides, "the holo-ring bars (none on a locked slot)")
 			T.eq(podium:FindFirstChild("Lock") ~= nil, locked, "Lock on the locked slots")
 			if locked then
 				T.truthy(podium.Lock:FindFirstChild("LockedLight"), "the lock's red light")
@@ -157,15 +156,19 @@ return function(T, Loader)
 	T.test("Style A: ArtifactService paints the podium skins on the soft podiums and takes them off", function()
 		local model = buildPlot(WorldLayout.Plots[2])
 		local yard = model.Yard
-		local podium = yard.Podium3
+		-- a free podium (the holo-ring) and a locked one (the padlock, no ring)
+		local podium = yard["Podium" .. EconomyConfig.Podiums.Free]
+		local lockedPodium = yard["Podium" .. EconomyConfig.Podiums.Free + 1]
 		-- (a list: Lune hands out a new wrapper per lookup, so instances make poor table keys)
 		local own: { { Part: any, Color: any } } = {}
 		local rimColor, lockColors = podium.Rim.Color, {}
-		for _, d in podium:GetDescendants() do
-			if d:IsA("BasePart") then
-				table.insert(own, { Part = d, Color = d.Color })
-				if d:FindFirstAncestor("Lock") then
-					table.insert(lockColors, { Part = d, Color = d.Color })
+		for _, root in { podium, lockedPodium } do
+			for _, d in root:GetDescendants() do
+				if d:IsA("BasePart") then
+					table.insert(own, { Part = d, Color = d.Color })
+					if d:FindFirstAncestor("Lock") then
+						table.insert(lockColors, { Part = d, Color = d.Color })
+					end
 				end
 			end
 		end
@@ -190,68 +193,6 @@ return function(T, Loader)
 		for _, entry in own do
 			T.eq(entry.Part.Color, entry.Color, `{entry.Part.Name}: its own colour back`)
 		end
-	end)
-
-	T.test("Style A: the Foundry keeps FoundryService's contract with no more parts than the Kenney look", function()
-		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[4])
-		local building = FoundryBuilder.build(plotCF, 2)
-		T.le(#partsOf(building), FoundryBuilder.BuildingParts, "the building without the silhouette")
-		local base = building.PrimaryPart
-		T.eq(base and base.Name, "Base", "PrimaryPart Base")
-		for _, name in { "AnvilPoint", "CamPoint", "Prompt", "HopperIn", "HopperOut", "RackMount" } do
-			T.truthy(base:FindFirstChild(name) and base[name]:IsA("Attachment"), "attachment " .. name)
-		end
-		for _, name in { "Intake", "RackBoard", "RackSign", "HopperFloor", "Anvil", "Sign" } do
-			T.truthy(building:FindFirstChild(name), name)
-		end
-		T.truthy(building.RackBoard:FindFirstChild("Mystery"), "the rack's ? (COMING SOON)")
-		T.eq(labelOf(building.RackSign).Text, "NEXT: LV 2", "the rack sign")
-		local faces = 0
-		for _, gui in building.Sign:GetChildren() do
-			if gui:IsA("SurfaceGui") and gui:FindFirstChild("Text") and gui.Text.Text == "FOUNDRY" then
-				faces += 1
-			end
-		end
-		T.eq(faces, 2, "FOUNDRY on both faces (the yard and the trains)")
-		-- what FoundryController pulses and blinks
-		local warn, glow, molten = 0, 0, 0
-		for _, d in partsOf(building) do
-			if d.Name == "WarnLight" then
-				warn += 1
-			elseif d.Name == "Glow" then
-				glow += 1
-			elseif d.Name == "Molten" then
-				molten += 1
-			end
-			if d.Name == "WarnLight" or d.Name == "Glow" or d.Name == "Molten" then
-				T.eq(d.Material, Enum.Material.Neon, d.Name .. " glows")
-			end
-		end
-		T.eq(warn, 2, "two warning beacons")
-		T.le(2, glow, "the furnace door glows")
-		T.le(6, molten, "molten metal in the pipes, the channel and the mould")
-		local chimney = building:FindFirstChild("ChimneyTop", true)
-		T.truthy(chimney and chimney:FindFirstChild("Smoke") and chimney.Smoke:IsA("ParticleEmitter"), "the chimney smokes")
-		checkRoles(building)
-		-- setRack still rebuilds the silhouette and the sign on the style A rack
-		FoundryBuilder.setRack(building, 3)
-		T.truthy(building:FindFirstChild("Silhouette"), "the next blaster's silhouette")
-		T.eq(labelOf(building.RackSign).Text, "NEXT: LV 3")
-		FoundryBuilder.setRack(building, BlasterData.MaxLevel + 1)
-		T.eq(labelOf(building.RackSign).Text, "COMING SOON")
-	end)
-
-	T.test("Style A: the FOUNDRY chute receiver keeps its Hood, Mouth and PenFull sign, no more parts", function()
-		local receiver = FoundryBuilder.receiver(WorldLayout.plotCFrame(WorldLayout.Plots[4]))
-		T.le(#partsOf(receiver), 8, "receiver parts (8 before style A)")
-		local hood = receiver.PrimaryPart
-		T.eq(hood and hood.Name, "Hood", "PrimaryPart Hood")
-		T.eq(hood.Color, P.Frame, "a slate hood")
-		T.truthy(hood:FindFirstChild("Mouth") and hood.Mouth:IsA("Attachment"), "the Mouth attachment")
-		T.truthy(hood:FindFirstChild("PenFull") and hood.PenFull:IsA("BillboardGui"), "the PenFull sign")
-		local throat = receiver:FindFirstChild("Glow")
-		T.truthy(throat and throat.Material == Enum.Material.Neon, "the glowing throat")
-		checkRoles(receiver)
 	end)
 
 	T.test("SoftKit: hazard stripes keep each gradient within a ColorSequence's 20 keypoints, from 0 to 1", function()

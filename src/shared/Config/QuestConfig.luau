@@ -269,7 +269,7 @@ end
 QuestConfig.DailyReward = { Coins = 600, Shards = 10 } :: Reward
 QuestConfig.WeeklyReward = { Coins = 3600, Shards = 100, Boost = "TripleLucky", BoostSeconds = 900 } :: Reward
 
--- Coins: never under max(MinCoins, FloorShare x the next blaster forge's coins)
+-- Coins: never under max(MinCoins, FloorShare x the next blaster level's coin scale, BlasterData.coins)
 -- per 600 seconds of the reward (new players with no podium income).
 QuestConfig.MinCoins = 250
 QuestConfig.FloorShare = 0.03

@@ -39,16 +39,21 @@ Places:
 ## Rarities
 | Rarity | Color | Dirt thickness | Crystals | A good clean |
 |---|---|---|---|---|
-| Common | light grey | 1.0 | 0 | ~9 s |
-| Uncommon | green | 1.12 | 0 | ~10 s |
-| Rare | blue | 1.25 | 2 | ~11 s |
-| Epic | purple | 1.4 | 3 | ~12 s |
-| Legendary | gold | 1.55 | 4 | ~13 s |
-| Mythic | pink-red | 1.7 | 5 | ~15 s |
+| Common | light grey | 1.0 | 0 | ~5 s |
+| Uncommon | green | 1.12 | 0 | ~5 s |
+| Rare | blue | 1.25 | 2 | ~5 s |
+| Epic | purple | 1.4 | 3 | ~5 s |
+| Legendary | gold | 1.55 | 4 | ~5 s |
+| Mythic | pink-red | 1.7 | 5 | ~5 s |
 
 The dirt is a 14×14 grid of cells over the clump (CleaningPatterns); the spray washes every cell within its reach
-(SprayScoring). Spraying a glowing crystal point-blank for a third of a second cracks it. A steady sweep at par pace
-is Flawless, a slow careful one Pristine, scribbling with the spray always on Clean (tools/lune/spray_calibrate.luau).
+(SprayScoring). The jet is wide and strong (owner 2026-10-25: "clean in 5-7 s"): a steady sweep washes even thick
+Mythic dirt in one pass, so a good clean takes about 5 s on every rarity (a slow careful one ~7 s, scribbling ~8-10 s).
+Spraying a glowing crystal point-blank for a third of a second cracks it; a moving pass never stays that long, so the
+crystals only cost a player who parks the jet on them (rarer clumps no longer take longer: thicker dirt or touchier
+crystals would bring that back if the owner wants it). A steady sweep at par pace is Flawless, a slow careful one
+Pristine, scribbling with the spray always on mostly Clean (anything from Rough to a lucky Flawless)
+(tools/lune/spray_calibrate.luau).
 
 ## Ores
 | Ore | Rarity | Pickaxe tier | Base value | Node HP | Where |

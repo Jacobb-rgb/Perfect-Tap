@@ -174,10 +174,10 @@ return function(T, Loader)
 
 	withWorld("hoverboards: Robux boards are never sold for coins, bad boards are refused", function(w)
 		w.data.Coins = 1e12
-		local r = w.act({ Action = "Buy", Board = "NeonComet" })
+		local r = w.act({ Action = "Buy", Board = "TerraForgeCustom" })
 		T.eq(r.Reason, "Robux", "Robux board")
 		T.eq(w.data.Coins, 1e12, "no coins taken")
-		T.eq(w.data.Hoverboards.Owned.NeonComet, nil, "not owned")
+		T.eq(w.data.Hoverboards.Owned.TerraForgeCustom, nil, "not owned")
 		T.eq(w.act({ Action = "Buy", Board = "Nope" }).Reason, "BadBoard", "unknown board")
 		T.eq(w.act({ Action = "Buy", Board = 5 }).Reason, "BadBoard", "a number")
 		T.eq(w.act({ Action = "Buy" }).Reason, "BadBoard", "no board")
@@ -271,15 +271,15 @@ return function(T, Loader)
 	withWorld("hoverboards: one speed formula with carried items (Robux boards ignore it)", function(w)
 		-- CarryService.updateWalkSpeed (run for real) reads the character attribute
 		w.data.Hoverboards.Owned.CartCruiser = true
-		w.data.Hoverboards.Owned.RoyalPhoenix = true
+		w.data.Hoverboards.Owned.TerraForgeCustom = true
 		w.data.Hoverboards.Equipped = "CartCruiser"
 		T.truthy(w.act({ Action = "Ride", On = true }).Ok, "on the Cart Cruiser")
 		T.eq(w.player.humanoid.WalkSpeed, HoverboardData.walkSpeed("CartCruiser", 0), "empty hands")
 		T.eq(HoverboardData.walkSpeed("CartCruiser", 4), 25, "coin board: 27 - 4 x 0.5")
-		T.truthy(w.act({ Action = "Equip", Board = "RoyalPhoenix" }).Ok, "switch while riding")
-		T.eq(w.attr(), "RoyalPhoenix", "the new board under you")
+		T.truthy(w.act({ Action = "Equip", Board = "TerraForgeCustom" }).Ok, "switch while riding")
+		T.eq(w.attr(), "TerraForgeCustom", "the new board under you")
 		T.eq(w.player.humanoid.WalkSpeed, 38, "the new board's speed")
-		T.eq(HoverboardData.walkSpeed("RoyalPhoenix", 10), 38, "Robux board: no carry slowdown")
+		T.eq(HoverboardData.walkSpeed("TerraForgeCustom", 10), 38, "Robux board: no carry slowdown")
 		T.eq(w.player.attrs.CarryCount, 0, "CarryService published the carry count")
 	end)
 
@@ -312,12 +312,14 @@ return function(T, Loader)
 		T.eq(record.Equipped, "", "an unowned equipped board becomes none")
 		T.eq(type(record.Passes), "table", "an old save gets the Passes record")
 		w.data.Hoverboards = {
-			Owned = { NeonComet = true },
+			Owned = { TerraForgeCustom = true, NeonComet = true },
 			Equipped = "NeonComet",
-			Passes = { NeonComet = true, RoyalPhoenix = true, Nope = true, TimberDrifter = "yes" },
+			Passes = { TerraForgeCustom = true, RoyalPhoenix = true, Nope = true, TimberDrifter = "yes" },
 		}
 		record = HoverboardService.record(w.data)
-		T.eq(record.Passes.NeonComet, true, "a pass mark on an owned board stays")
+		T.eq(record.Passes.TerraForgeCustom, true, "a pass mark on an owned board stays")
+		T.eq(record.Owned.NeonComet, nil, "the removed Neon Comet (owner 2026-10-25) leaves")
+		T.eq(record.Equipped, "", "an equipped Neon Comet becomes none")
 		T.eq(record.Passes.RoyalPhoenix, nil, "a pass mark without the board leaves")
 		T.eq(record.Passes.Nope, nil, "unknown ids leave")
 		T.eq(record.Passes.TimberDrifter, nil, "non-true values leave")
@@ -333,13 +335,13 @@ return function(T, Loader)
 
 	withWorld("hoverboards: a game pass grants the board once and a refund takes back only it", function(w)
 		local entry = {
-			Key = "HoverboardPhoenix",
+			Key = "HoverboardCustom",
 			Kind = "GamePass",
 			Id = 1,
 			Robux = 49,
-			Name = "Royal Phoenix",
+			Name = "Terra Forge Custom",
 			Grant = "Hoverboard",
-			BoardId = "RoyalPhoenix",
+			BoardId = "TerraForgeCustom",
 		}
 		local unlocked = 0
 		local function countUnlocked()
@@ -356,11 +358,11 @@ return function(T, Loader)
 		T.falsy(h.grant(w.player, w.data, entry), "the next load: nothing new")
 		countUnlocked()
 		T.eq(unlocked, 1, "unlocked said once")
-		T.eq(w.data.Hoverboards.Equipped, "RoyalPhoenix", "the faster board is equipped")
+		T.eq(w.data.Hoverboards.Equipped, "TerraForgeCustom", "the faster board is equipped")
 		T.truthy(w.act({ Action = "Ride", On = true }).Ok, "ride the pass board")
-		T.eq(w.attr(), "RoyalPhoenix", "on it")
+		T.eq(w.attr(), "TerraForgeCustom", "on it")
 		T.truthy(h.revoke(w.player, w.data, entry), "refund: revoked")
-		T.eq(w.data.Hoverboards.Owned.RoyalPhoenix, nil, "the pass board left")
+		T.eq(w.data.Hoverboards.Owned.TerraForgeCustom, nil, "the pass board left")
 		T.eq(w.data.Hoverboards.Owned.CartCruiser, true, "the coin board stays")
 		T.eq(w.data.Hoverboards.Equipped, "", "unequipped")
 		T.eq(w.attr(), nil, "got off")
@@ -371,6 +373,6 @@ return function(T, Loader)
 		T.eq(w.data.Hoverboards.Owned.CartCruiser, true, "still owned")
 		-- Robux boards still can't be bought for coins
 		w.data.Coins = 1e12
-		T.eq(w.act({ Action = "Buy", Board = "RoyalPhoenix" }).Reason, "Robux", "only through the pass")
+		T.eq(w.act({ Action = "Buy", Board = "TerraForgeCustom" }).Reason, "Robux", "only through the pass")
 	end)
 end

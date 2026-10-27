@@ -26,7 +26,7 @@ end
 local Players = game:GetService("Players")
 local Services = game:GetService("ServerScriptService"):WaitForChild("Server"):WaitForChild("Services")
 local DataService = require(Services:WaitForChild("DataService"))
-local BOARDS = { "TimberDrifter", "CartCruiser", "EmberglassGlider", "NeonComet", "RoyalPhoenix" }
+local BOARDS = { "TimberDrifter", "CartCruiser", "EmberglassGlider", "RoyalPhoenix", "TerraForgeCustom" }
 local function unlock(player)
 	for _ = 1, 150 do
 		local data = DataService.get(player)
@@ -40,7 +40,7 @@ local function unlock(player)
 			for _, id in BOARDS do
 				data.Hoverboards.Owned[id] = true
 			end
-			data.Hoverboards.Equipped = "RoyalPhoenix"
+			data.Hoverboards.Equipped = "TerraForgeCustom"
 			DataService.changed(player)
 			print("[TEST] everything unlocked for " .. player.Name)
 			return

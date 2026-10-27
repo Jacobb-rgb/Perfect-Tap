@@ -221,8 +221,8 @@ TrainService.ReturnText = "Your train is coming back"
 TrainService.PenFullText = "Your Ore Pen is full – make room"
 TrainService.PenOverText = "Your Ore Pen holds too much – take, sell or send some"
 TrainService.ChuteText = "Your train is unloading at your TRAIN chute"
-TrainService.EmptyText = "Your train is empty. Throw ore into a train hopper first."
-TrainService.HandsText = "Carry ore here to load your train."
+TrainService.EmptyText = "Your train is empty. Load the ore from your backpack first."
+TrainService.HandsText = "Your backpack is empty: mine some ore to load your train."
 TrainService.NoPlotText = "Your train leaves once you have a plot."
 -- PlotBuilder's banner colors (by plot id), for a plot whose Banner part can't be found.
 TrainService.BannerColors = {
@@ -239,7 +239,6 @@ TrainService.BannerColors = {
 local RANGE_SLACK = 4 -- the server allows a little more (lag, walking while pressing)
 local TOAST_COOLDOWN = 5
 local PROMPT_TOAST_COOLDOWN = 2 -- hints for prompt presses and Send (a real press still gets one)
-local MAX_LOAD = 64 -- more than any carry stack
 local MAX_LOAD_COLORS = 6
 local BOUNCE_GAP = 1.5 -- studs outside the hopper box where refused items come out
 local OUT_SPEED = 8
@@ -900,7 +899,8 @@ local function isNear(player: Player, position: Vector3, range: number): boolean
 	return root ~= nil and (root.Position - position).Magnitude <= range + RANGE_SLACK
 end
 
--- "Load Train": everything you carry goes into your cargo while there is room.
+-- "Load Train" (one press, owner 2026-10-24): everything in your backpack but dusty
+-- relics (they are cleaned, never shipped) goes into your cargo while there is room.
 local function loadFromHands(player: Player, hook: Hook)
 	local data = DataService.get(player)
 	if not data or not PlotService.plotOf(player) then
@@ -910,7 +910,7 @@ local function loadFromHands(player: Player, hook: Hook)
 		return
 	end
 	local train = trainOf(data)
-	if #CarryService.list(player) == 0 then
+	if CarryService.countOf(data) == 0 then
 		hint(player, TrainService.HandsText, "Info")
 		return
 	end
@@ -918,32 +918,31 @@ local function loadFromHands(player: Player, hook: Hook)
 		hint(player, awayText(player, train))
 		return
 	end
+	local function shipped(desc: ItemService.Desc): boolean
+		return desc.K ~= "Relic"
+	end
+	local function dirty(desc: ItemService.Desc): boolean
+		return desc.K == "Raw"
+	end
+	-- no yield between taking them out of the backpack and loading them; the
+	-- dirty ore goes first (the train is the mine's ore line), then the rest
 	local loaded = 0
-	for _ = 1, MAX_LOAD do
-		if cargoRoom(player, train) <= 0 then
+	for _, pick in { dirty, shipped } do
+		local room = cargoRoom(player, train)
+		if room <= 0 then
 			break
 		end
-		local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
-			-- (a dusty relic stays in the hands: it is cleaned, never shipped)
-			return r.Owner == player.UserId and r.State == "Carried" and r.Kind ~= "Relic"
-		end)
-		if not record then
-			break
+		for _, desc in CarryService.take(player, pick, room) do
+			table.insert(train.Cargo, desc)
+			loaded += 1
 		end
-		-- no yield between taking it off the stack and loading it
-		table.insert(train.Cargo, ItemService.absorb(record))
-		loaded += 1
 	end
 	if loaded > 0 then
 		afterLoad(player, train, hook.Part.CFrame.Position)
 	end
-	local held = CarryService.list(player)
-	if #held > 0 then
-		local onlyRelics = true
-		for _, record in held do
-			onlyRelics = onlyRelics and record.Kind == "Relic"
-		end
-		-- room left at the station: only dusty relics stayed in the hands (never shipped)
+	if CarryService.countOf(data) > 0 then
+		local onlyRelics = not CarryService.has(player, shipped)
+		-- room left at the station: only dusty relics stayed in the backpack (never shipped)
 		hint(
 			player,
 			if isAway(player, train)

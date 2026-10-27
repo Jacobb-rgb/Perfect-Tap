@@ -163,6 +163,30 @@ function Export.collect(root: any, scene: any?)
 				entry[7] = { ext("X"), ext("Y"), ext("Z") }
 			end
 			table.insert(scene.emitters, entry)
+		elseif d:IsA("Decal") and d.Parent and d.Parent:IsA("BasePart") and d.Face == roblox.Enum.NormalId.Front then
+			-- a picture on a part's Front face (no upload in previews: its attribute PreviewImage
+			-- names the local file under build/preview, e.g. "/scenes/textures/x.png"):
+			-- { centre, the image's right half-edge, its up half-edge, url }; image right = -X
+			local file = d:GetAttribute("PreviewImage")
+			if type(file) == "string" and file ~= "" then
+				local cf, size = d.Parent.CFrame, d.Parent.Size
+				local c = cf * roblox.Vector3.new(0, 0, -size.Z / 2)
+				local r = cf.RightVector * (-size.X / 2)
+				local u = cf.UpVector * (size.Y / 2)
+				scene.decals = scene.decals or {}
+				table.insert(scene.decals, {
+					round(c.X),
+					round(c.Y),
+					round(c.Z),
+					round(r.X),
+					round(r.Y),
+					round(r.Z),
+					round(u.X),
+					round(u.Y),
+					round(u.Z),
+					file,
+				})
+			end
 		end
 	end
 	return scene

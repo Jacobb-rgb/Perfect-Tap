@@ -469,11 +469,12 @@ local function pendingPickup(model: Model): boolean
 	return false
 end
 
--- Your placed machine models (the server tags them "Machine").
+-- Your placed machine models (the server tags them "Machine"; the yard's Cleaning Station,
+-- attribute Fixed, is no placed machine: build mode leaves it alone).
 local function myMachines(includePacking: boolean?): { Model }
 	local list: { Model } = {}
 	for _, instance in CollectionService:GetTagged("Machine") do
-		if instance:IsA("Model") and instance:GetAttribute("Owner") == player.UserId then
+		if instance:IsA("Model") and instance:GetAttribute("Owner") == player.UserId and instance:GetAttribute("Fixed") ~= true then
 			if includePacking or not pendingPickup(instance) then
 				table.insert(list, instance)
 			end
@@ -2623,9 +2624,9 @@ function Ux.menuKey()
 end
 
 -- The HUD's BUILD tile: a badge with every machine waiting to be placed,
--- and a pulse while your Cleaning Station waits in the inventory (it's the
--- first thing to place after packing it up) or since you bought another
--- machine (until you open build mode).
+-- and a pulse since you bought another machine (until you open build mode).
+-- (A Cleaning Station waiting in the inventory pulsed it too until the yard
+-- got its own station, 2026-10-25.)
 function PlacementController.refreshButton()
 	local button = buildButton
 	local holder = button and button.Parent
@@ -2634,7 +2635,6 @@ function PlacementController.refreshButton()
 	end
 	local state = StateController.get()
 	local inventory = state and state.MachineInventory
-	local station = if type(inventory) == "table" then tonumber(inventory.CleaningStation) or 0 else 0
 	local count = MachineInfo.unplaced(inventory)
 	local seen = Ux.seen
 	if state and (seen == nil or active or count < seen) then
@@ -2643,7 +2643,7 @@ function PlacementController.refreshButton()
 		seen = count
 	end
 	BuildView.setMenuBadge(button, count)
-	local wanted = not active and (station > 0 or count > (seen or count))
+	local wanted = not active and count > (seen or count)
 	local scale = holder:FindFirstChild("Pulse")
 	if wanted and not pulse then
 		if not scale then

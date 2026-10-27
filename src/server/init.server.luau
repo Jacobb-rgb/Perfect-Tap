@@ -28,7 +28,8 @@ local ORDER = {
 	"ToolService",
 	"MovementService", -- the movement check: samples characters, trustedPosition for range checks (logging only)
 	"MiningService",
-	"CarryService",
+	"CarryService", -- the backpack's contents and the auto-pickup (owner 2026-10-24)
+	"BackpackService", -- the packs you own / wear and the BACKPACKS shop counter
 	"PlotService",
 	"MachineService",
 	"IntakeService",
@@ -37,7 +38,6 @@ local ORDER = {
 	"PenService",
 	"PodiumService",
 	"TrainService",
-	"FoundryService",
 	"CleaningService",
 	"ProcessingService",
 	"IronBoxService",
@@ -73,7 +73,7 @@ local ORDER = {
 	"QuestService", -- daily / weekly quests + the 7-day login streak (after Capsule, Wheel, Podium, State)
 	"StarterPackService", -- the one-time Starter Pack: its receipt handler and the State offer
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
-	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray / Hammer loops
+	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray loop
 	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
 }
 

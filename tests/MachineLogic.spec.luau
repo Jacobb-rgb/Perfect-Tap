@@ -221,42 +221,6 @@ return function(T, Loader)
 		T.truthy(ItemData.value(gear.K, gear.O, gear.G, gear.R) > 0, "gear has a value")
 	end)
 
-	T.test("MachineLogic: validateStrikes", function()
-		local gap = GameConfig.AnvilMinStrikeGap
-		local per = GameConfig.AnvilMinSecondsPerHit
-		T.truthy(MachineLogic.validateStrikes({ 0.5, 1.0, 1.5, 2.0 }, 4, 3), "normal hammering")
-		T.truthy(MachineLogic.validateStrikes({ 0.3, 0.6, 0.9 + 1e-9 }, 3, 0.95), "fast but human")
-		local function bad(strikes: any, hits: number, elapsed: number, label: string)
-			local ok, why = MachineLogic.validateStrikes(strikes, hits, elapsed)
-			T.falsy(ok, label)
-			T.truthy(type(why) == "string", label .. " gives a reason")
-		end
-		bad({ 0.5, 1.0, 1.5 }, 4, 3, "too few")
-		bad({ 0.5, 1.0, 1.5, 2.0, 2.5 }, 4, 3, "too many")
-		bad({ 0.5, 0 / 0, 1.5, 2.0 }, 4, 3, "NaN")
-		bad({ 0.5, 1.0, 1.5, math.huge }, 4, 3, "inf")
-		bad({ 0.5, 1.0, "1.5", 2.0 }, 4, 3, "string")
-		bad({ 0.5, 1.0, 1.0, 2.0 }, 4, 3, "not strictly increasing")
-		bad({ 0.5, 1.5, 1.0, 2.0 }, 4, 3, "going back")
-		bad({ 0.5, 0.5 + gap - 0.01, 1.5, 2.0 }, 4, 3, "gap under the minimum")
-		bad({ 0.0, 0.2, 0.4, 0.6 }, 4, 3, "under Hits x " .. per)
-		bad({ 0.5, 1.0, 1.5, 4.5 }, 4, 3, "after elapsed + 1")
-		bad({ -0.1, 1.0, 1.5, 2.0 }, 4, 3, "negative time")
-		bad({ 0.5, 1.0, 1.5, 2.0, Extra = 1 }, 4, 3, "extra keys")
-		bad({ [1] = 0.5, [2] = 1.0, [4] = 2.0, [5] = 2.5 }, 4, 3, "holes")
-		bad(nil, 4, 3, "nil")
-		bad({ 0.5 }, 0, 3, "zero hits")
-		bad({ 0.5, 1.0, 1.5, 2.0 }, 4, 0 / 0, "NaN elapsed")
-		-- every recipe can be hammered by a person at the minimum pace
-		for _, recipe in ItemData.Recipes do
-			local strikes = {}
-			for i = 1, recipe.Hits do
-				strikes[i] = i * math.max(gap, per) + 0.01
-			end
-			T.truthy(MachineLogic.validateStrikes(strikes, recipe.Hits, strikes[recipe.Hits]), recipe.Id .. " is doable")
-		end
-	end)
-
 	---------------------------------------------------------------- roster processors
 
 	local ROSTER = { "BrickFurnace", "Polisher", "CrystalExtractor", "PlasmaFurnace", "AlloyFurnace" }

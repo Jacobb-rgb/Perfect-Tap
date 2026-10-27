@@ -640,7 +640,7 @@ function ElevatorView.subtitleParts(mode: Mode, level: number): { { Text: string
 	return {
 		{ Text = "Your blaster: ", Color = TEXT },
 		{ Text = `Lv {level}.`, Color = GOLD },
-		{ Text = " Forge better blasters to unlock deeper floors.", Color = TEXT },
+		{ Text = " Buy better blasters in the Vault to unlock deeper floors.", Color = TEXT },
 	}
 end
 

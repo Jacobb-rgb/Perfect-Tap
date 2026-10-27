@@ -5,5 +5,5 @@
   "vault_ui_phone": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone", "uiInset": 58},
   "vault_ui_phone_small": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone_small", "uiInset": 163},
   "vault_ui_tv": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_tv", "uiInset": 30},
-  "vault_ui_pc_forge": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc_forge_light"}
+  "vault_ui_pc_rebirth": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc_rebirth_light"}
 }

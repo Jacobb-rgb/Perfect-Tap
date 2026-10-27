@@ -82,7 +82,7 @@ EnchantConfig.Reasons = {
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
 	Restricted = "This isn't available where you play",
 	BadSlot = "That slot doesn't exist",
-	Locked = "Forge a stronger blaster to open this slot",
+	Locked = "Get a stronger blaster to open this slot",
 	NotOwned = "Buy this enchant first",
 } :: { [string]: string }
 

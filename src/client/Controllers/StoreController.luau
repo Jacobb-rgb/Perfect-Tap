@@ -227,13 +227,13 @@ local function refresh()
 				key = fits
 				local current = if type(level) == "number" then math.floor(level) else 1
 				StoreView.setBig(view, id, `LV {current + 1}`)
-				-- LV 10 waits for one forged level this run (a rebirth needs it): the Vault's rule
+				-- LV 10 waits for one level bought with coins this run (a rebirth needs it)
 				local rebirth = state().Rebirth
 				local reached = if type(rebirth) == "table" and type(rebirth.Reached) == "number" then rebirth.Reached else 0
 				local start = if type(rebirth) == "table" and type(rebirth.Start) == "number" then rebirth.Start else 1
 				if RebirthConfig.topBlockedFor(current, reached) then
 					cardState = "Locked"
-					StoreView.setNote(view, id, "Forge LV 10 at the Foundry first")
+					StoreView.setNote(view, id, "Buy LV 10 with coins at the Vault")
 				elseif start >= BlasterData.MaxLevel - 1 then
 					StoreView.setNote(view, id, "Rebirth start is max (LV 9)")
 				else

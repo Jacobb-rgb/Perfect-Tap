@@ -76,7 +76,7 @@ command bar.
 2. Buy the elevator at its station next to the Mine Station and ride it to the Sunken Palace, the Stormglass Rift
    (blaster 8) and the Heartstone Core (blaster 9). The LIFT icon takes you to the lowest elevator stop.
 3. Listen in each floor: drips, rumbles, crystal hums, the elevator's arrival ding.
-4. HOVER in the side menu: buy a coin hoverboard, ride it (H, controller L2, or tap). The 2 Robux boards say
+4. HOVER in the side menu: buy a coin hoverboard, ride it (H, controller L2, or tap). The Robux board (Terra Forge Custom) says
    Coming soon. Phone: no frame drop on the Rift and in the Core.
 
 ### F. Dusty relics and the Restoration Table
@@ -146,3 +146,15 @@ command bar.
 5. Live text: put raw ore on the Cleaning Station ("Place Raw Ore" turns into "Clean Ore" while you watch it), step
    the Sorter (Change Sort), walk up to a locked podium ("Locked" / the price): the prompt text changes in place.
 6. Cleaning: on the result card, E collects and the station's "Clean Ore" does not start again behind it.
+
+### N. The golden dragon statue (owner 2026-10-25, map v59)
+1. Spawn in the town: the plaza's centre is a gold Flamewing dragon on a dark octagonal pedestal, arms raised,
+   holding the TERRA FORGE sign over its head on two gold poles; its wings, flame mohawk and tail burn orange with
+   flames and embers. No white glare from the wings (also with Lighting.ClockTime = 0 and with Graphics 1).
+2. The sign reads TERRA (silver) | crossed hammers | FORGE (gold) from the spawn AND from THE GREAT FORGE side
+   (walk round it); the letters are sharp from the spawn pad and from the plaza rim, with a dark outline.
+3. The Star Forge prompt (E / controller Y) shows at the pedestal's front, toward the spawn, from anywhere on the
+   ring (also behind the statue), not from the spawn pad; it opens the REBIRTH window.
+4. Jump onto the ring and the pedestal: you can't walk into the dragon's body; the sign and the poles high up
+   never block anything. No classic studs on the gold, the fire or the sign (the pedestal's dark metal may have them).
+5. Phone (568 x 320): the plaza still runs smoothly (about 250 more parts, 1 more light, 4 small emitters where the crystal had 3).

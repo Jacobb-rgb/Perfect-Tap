@@ -2,8 +2,8 @@
 	ToolService: every character gets exactly one Blaster tool, built for the
 	save's BlasterLevel + BlasterOre (BlasterBuilder), or the equipped STAR
 	blaster (StarBlasterData.equipped: BlasterBuilder.buildStar, with the
-	forged level's range). It is rebuilt when those change (Foundry, the
-	Vault, the Star Forge) and given again after every respawn. If the old
+	own level's range). It is rebuilt when those change (the Vault, the
+	Star Forge, a rebirth) and given again after every respawn. If the old
 	blaster was in the player's hand, the new one is equipped right away.
 ]]
 

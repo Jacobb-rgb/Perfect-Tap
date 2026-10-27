@@ -6,10 +6,9 @@
 
 	  Move      "<Name>:<seq>"  a one-shot move to play now (seq makes the same
 	            move twice a change: MoveRules.encode)
-	  MoveLoop  "Spray" while the player cleans at a station, "Hammer" while
-	            they forge at their Foundry, nil otherwise (checked every
-	            MoveConfig.LoopPoll seconds; Carry needs nothing: every
-	            client reads the CarryCount player attribute)
+	  MoveLoop  "Spray" while the player cleans at a station, nil otherwise (checked every
+	            MoveConfig.LoopPoll seconds; no Carry loop: the backpack's ore
+	            is never in the hands)
 
 	MoveService.play(player, name) plays a one-shot move (at most once per its
 	MinGap). Celebrations come from existing server results, through the
@@ -18,8 +17,8 @@
 	                             (Discovery.onDiscovered just before) or a
 	                             Flawless grade -> Celebrate
 	  CapsuleService.onOpened    a Legendary / Mythic golem -> BigCelebrate
-	  DataService.onChanged      a higher BlasterLevel (forged at the Foundry
-	                             or bought at the Vault) or one more rebirth
+	  DataService.onChanged      a higher BlasterLevel (bought at the Vault
+	                             or with Robux) or one more rebirth
 	                             -> BigCelebrate (MoveRules.forProgress)
 	  SellService.onSold         MoveConfig.BigSell.Items or more sold within
 	                             BigSell.Window while at Tobin's -> CashToss
@@ -52,8 +51,6 @@ local DataService = require(script.Parent.DataService)
 local CleaningService = require(script.Parent.CleaningService)
 local CapsuleService = require(script.Parent.CapsuleService)
 local SellService = require(script.Parent.SellService)
-local FoundryService = require(script.Parent.FoundryService)
-local PlotService = require(script.Parent.PlotService)
 
 local MoveService = {}
 
@@ -119,12 +116,6 @@ local function onMove(player: Player, nameArg: any)
 	end
 	if not Guard.rootPart(player) then
 		return
-	end
-	if name == "Throw" then
-		local carrying = tonumber(player:GetAttribute(MoveConfig.CarryAttribute)) or 0
-		if not (carrying > 0) then
-			return
-		end
 	end
 	MoveService.play(player, name)
 end
@@ -228,11 +219,6 @@ end
 local function loopOf(player: Player): string?
 	if CleaningService.isCleaning(player) then
 		return "Spray"
-	end
-	local plotId = PlotService.plotOf(player)
-	local building = if plotId then FoundryService.building(plotId) else nil
-	if building and building:GetAttribute("Forging") == true then
-		return "Hammer"
 	end
 	return nil
 end

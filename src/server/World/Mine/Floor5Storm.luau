@@ -1032,6 +1032,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	MineKit.ambience(heart, "StormCrackle", heart.CFrame.Position)
 	MineKit.ambienceNear(m, "MineRumble", O * v3(PLAZA, CEIL - 4))
 
+	MineKit.dimLights(m, Floor.Index)
 	m.Parent = parent
 	return m
 end

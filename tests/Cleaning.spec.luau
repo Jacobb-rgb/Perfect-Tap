@@ -19,11 +19,10 @@ return function(T, Loader)
 		byRarity[ore.Rarity] = byRarity[ore.Rarity] or ore.Id
 	end
 
-	-- a good player: steady rows at par pace (slower on thicker dirt), from the end of the intro
+	-- a good player: steady rows at par pace, from the end of the intro
 	local function goodSweep(pattern, opts)
 		local o = opts or {}
-		local thick = Rarity.get(pattern.Rarity).DirtThickness
-		o.Speed = o.Speed or 1.9 / thick
+		o.Speed = o.Speed or 2
 		o.Start = o.Start or P.Intro
 		return Players.sweep(pattern, o)
 	end
@@ -97,7 +96,8 @@ return function(T, Loader)
 				T.eq(r.Cracks, 0, info.Id .. ": a quick pass never cracks a crystal")
 				-- the client's live tracker and the server's replay agree exactly
 				T.eq(tracker:parts().Score, r.Score, info.Id .. ": client == server")
-				T.truthy(r.Time > 5 and r.Time < 20, `{info.Id}: a clean takes {r.Time}s`)
+				-- owner 2026-10-25: a clean takes about 5-7 s (a little longer on the thickest dirt)
+				T.truthy(r.Time > 3 and r.Time < 9, `{info.Id}: a clean takes {r.Time}s`)
 			end
 		end
 	end)
@@ -105,7 +105,7 @@ return function(T, Loader)
 	T.test("spray scoring: slow careful washing is Pristine, scribbling Clean or lower, never a fail", function()
 		for _, info in Rarity.List do
 			local p = Patterns.generate(byRarity[info.Id], 31337)
-			local slow = Scoring.score(p, goodSweep(p, { Speed = 1.2 / info.DirtThickness }))
+			local slow = Scoring.score(p, goodSweep(p, { Speed = 1.2 }))
 			T.truthy(slow.Valid, info.Id)
 			T.eq(slow.Grade, "Pristine", `{info.Id}: slow sweep {slow.Score}`)
 			local scribble = Scoring.score(p, (Players.scribble(p, { Speed = 3, Start = P.Intro, Seed = 3 })))
@@ -116,7 +116,7 @@ return function(T, Loader)
 		end
 		-- several minutes of slow washing are still graded
 		local p = Patterns.generate("Coal", 5)
-		local crawl = Scoring.score(p, goodSweep(p, { Speed = 0.2 }))
+		local crawl = Scoring.score(p, goodSweep(p, { Speed = 0.1 }))
 		T.truthy(crawl.Valid, tostring(crawl.Reason))
 		T.truthy(crawl.Time > 40, "it really took long")
 		T.truthy(crawl.Grade == "Clean" or crawl.Grade == "Rough", crawl.Grade)
@@ -391,6 +391,27 @@ return function(T, Loader)
 		)
 	end)
 
+	T.test("spray timeline: the fastest honest run never trips the server's too-fast gate", function()
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		-- quick wide sweeps on the thinnest dirt with the widest spray (a finger), many paces
+		local fastest = math.huge
+		for _, input in { "Mouse", "Touch" } do
+			for speed = 4, 9 do
+				for _, spacing in { 1.0, 1.2, 1.4, 1.6 } do
+					for seed = 1, 3 do
+						local p = Patterns.generate("Coal", seed * 977)
+						local sub, tracker =
+							Players.sweep(p, { Speed = speed, Spacing = spacing, Input = input, Seed = seed, Start = P.Intro })
+						if tracker:complete() then
+							fastest = math.min(fastest, latest(sub) + P.Finish)
+						end
+					end
+				end
+			end
+		end
+		T.truthy(fastest > GameConfig.CleaningMinSeconds + 0.25, `fastest honest submit at {fastest}s`)
+	end)
+
 	T.test("FLAWLESS guard: computed timestamps keep Pristine, real frame times keep Flawless", function()
 		local Guard = Loader.requirePath("ServerScriptService.Server.CleaningGuard")
 		local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
@@ -437,6 +458,22 @@ return function(T, Loader)
 				t += 0.05
 			end
 			T.truthy(Guard.check(short).Synthetic, "short strokes don't hide computed timestamps")
+			-- the same bot cut into 2-sample strokes, each starting where the last one ended
+			-- (intervals d, 0, d, 0 across the stream): it still sprays every step and scores
+			-- Flawless, so the gaps between strokes must not hide the computed timestamps
+			local p = Patterns.generate("Gold", 104729)
+			local bot = goodSweep(p, { Even = true, Seed = 1 })
+			local chopped = { Strokes = {}, Input = "Mouse" }
+			for _, stroke in bot.Strokes do
+				for i = 1, #stroke - 3, 3 do
+					table.insert(chopped.Strokes, table.move(stroke, i, i + 5, 1, {}))
+				end
+			end
+			local choppedResult = Scoring.score(p, chopped)
+			T.truthy(choppedResult.Valid, tostring(choppedResult.Reason))
+			T.eq(choppedResult.Grade, "Flawless", "the chopped bot still washes like the bot")
+			T.truthy(Guard.check(chopped).Synthetic, "2-sample strokes don't hide computed timestamps")
+			T.eq(Guard.gradeFor(choppedResult.Grade, Guard.check(chopped)), Guard.Config.CapGrade)
 			-- a nozzle moving at an exactly even speed (positions computed from frame times): noted
 			local even = { Strokes = { {} }, Input = "Mouse" }
 			local tt = 1

@@ -43,8 +43,8 @@ type Box = { Min: Vector3, Max: Vector3 }
 
 --[[
 	Design v2 base yards: every plot grew a yard on its sea side (plot-local
-	z 25..66, src/shared/Config/BaseLayout.luau) with the ore pen, podiums,
-	foundry and the train stop of the coastal railway (world |x| ~166). The
+	z 25..66, src/shared/Config/BaseLayout.luau) with the ore pen, podiums
+	and the train stop of the coastal railway (world |x| ~166). The
 	whole strip stays flat at y = 0: Land puts no decoration there (color
 	patches excepted). True if a ground point (with `radius`) is on a base.
 ]]

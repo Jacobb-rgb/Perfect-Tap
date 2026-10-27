@@ -85,6 +85,11 @@ Golems (owner 2026-10-25): a golem stands by the porch with the Runebound pack o
 (`Life.miner` builds a golem with a hard hat: pickaxe on the shoulder, swinging at an ore rock,
 or holding up a glowing chunk; same part count as the old miners).
 
+Budgets at landing (main ebbb9c5f, the budget tests' own counting): MapParts 34,330 and
+LobbyParts 14,730 hold as they are; Flora lobby parts 3,229 (LobbyParts 3,205 -> 3,260) and the
+BACKPACKS gateway 25,313 (StreamParts 25,240 -> 25,345), each the measured amount + ~30; the
+spawn, the plaza and the DROPPERS door pass under the old numbers.
+
 Budgets (main 958ddb46 -> this branch at 16 wide, the budget tests' own counting; at 18 wide the
 map is 33,445 and every budget test still passes: re-measured at landing): map 33,450 -> 33,459,
 lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round the spawn
@@ -94,8 +99,7 @@ lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round 
 streamed + its packs 853 (inside ones lite) + decor 90 + the DROPPERS showroom 526 = 25,311
 (tests/Backpacks.spec.luau): StreamParts 25,240 -> 25,345 (integrator 2026-10-24, owner:
 quality over limits).
-Map version 58 (`WorldBuilder.Version`, numbered past the pending podiums, no-Foundry and
-shopkeepers: renumber at landing).
+Map version 63 (`WorldBuilder.Version`, on main ebbb9c5f v62).
 
 ## What to test in Studio
 

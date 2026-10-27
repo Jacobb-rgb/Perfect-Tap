@@ -26,10 +26,8 @@ return function(T, Loader)
 		"Zone",
 		"Toasts",
 		"CarryPanel",
-		"CarrySlots",
+		"Backpack",
 		"CarryLabel",
-		"ThrowBar",
-		"ThrowFill",
 		"Menu",
 		"TopBar",
 	}
@@ -99,13 +97,10 @@ return function(T, Loader)
 					T.falsy(child.Visible, "tile hidden until claimed: " .. child.Name)
 				end
 			end
-			-- carry slots, floaters, toasts, offline popup
-			local slot = HudView.slot(refs.CarrySlots, Color3.new(1, 0, 0), 1, false)
-			T.truthy(slot:FindFirstChild("Ore", true), "ore colour in the slot")
-			local dirty = HudView.slot(refs.CarrySlots, nil, 2, true)
-			T.truthy(dirty:FindFirstChild("Mystery", true), "dirty ore shows ?")
-			local more = HudView.moreSlot(refs.CarrySlots, 7, 3)
-			T.eq((more:FindFirstChild("More", true) :: any).Text, "+7", "+N on the last slot")
+			-- the backpack button, floaters, toasts, offline popup
+			HudView.setBackpack(refs, 4, 5)
+			T.eq(refs.CarryLabel.Text, "4 / 5", "the backpack's n / cap")
+			T.truthy(refs.Backpack:FindFirstChild("Pack"), "the pack's picture")
 			T.truthy(HudView.floater(refs.Floaters, "+$5"):IsA("TextLabel"), "floater")
 			T.truthy(HudView.toast(refs.Toasts, "Hi", Color3.new(0, 1, 0)):FindFirstChild("Dot", true), "toast")
 			local offline = HudView.buildOffline()
@@ -327,7 +322,6 @@ return function(T, Loader)
 	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				Forge = ui("FoundryView").buildForge(false).Gui, -- (the Foundry panel wears the Pop look)
 				Cleaning = ui("CleaningView").build().Gui,
 			}
 		end
@@ -341,13 +335,12 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- the train panel, the Foundry, the Blaster Vault and the Star Forge wear the Pop
-	-- look (owner 2026-10-21): never the LightSkin recolouring; the same refs, every
-	-- touch target still >= 44 pt on phones, the BUY states as before
-	T.test("LightUI: the Pop windows (train, foundry, vault, star forge) keep their behaviour", function()
+	-- the train panel, the Blaster Vault and the Star Forge wear the Pop look (owner
+	-- 2026-10-21): never the LightSkin recolouring; the same refs, every touch target
+	-- still >= 44 pt on phones, the BUY states as before
+	T.test("LightUI: the Pop windows (train, vault, star forge) keep their behaviour", function()
 		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
 		local TrainView = ui("TrainView")
-		local FoundryView = ui("FoundryView")
 		local VaultView = ui("VaultView")
 		local RebirthView = ui("RebirthView")
 		local MenuPanel = ui("MenuPanel")
@@ -371,7 +364,6 @@ return function(T, Loader)
 		for name, gui in
 			{
 				Train = TrainView.build(false).Gui,
-				Foundry = FoundryView.build().Gui,
 				Vault = VaultView.build().Gui,
 				Rebirth = RebirthView.build().Gui,
 			}
@@ -410,28 +402,6 @@ return function(T, Loader)
 			local robux = train.Express.Buy:FindFirstChild("PopFace") :: any
 			T.truthy(robux and robux.Visible, "the green Robux button")
 			T.eq(robux:FindFirstChild("Amount").Text, tostring(TrainView.ExpressPrice))
-
-			-- the Foundry (the hammer moment keeps the light skin)
-			local foundry = FoundryView.build()
-			T.truthy(foundry.Gui:GetAttribute("PopSkin"), "Pop Foundry")
-			T.falsy(foundry.Gui:GetAttribute("LightSkin"), "no LightSkin on the Foundry")
-			FoundryView.setCompact(foundry, true)
-			local state = { FoundryStock = { ["Ingot|Gold|Clean|"] = 2, ["Ingot|Coal||"] = 4 }, BlasterLevel = 3, Coins = 1e9 }
-			FoundryView.setRows(foundry, FoundryView.oreRows(state.FoundryStock, 3), 6)
-			FoundryView.setCard(foundry, FoundryView.status(state, nil), state)
-			T.truthy(foundry.Rows.Gold.Frame:FindFirstChild("Picture"), "a live ingot per row")
-			T.eq(foundry.Rows.Gold.Take.Text, "TAKE")
-			T.eq(foundry.Rows.Coal.Take.Text, "TAKE ALL")
-			local coalShade = foundry.Rows.Coal.Frame:FindFirstChild("Shade") :: any
-			T.truthy(coalShade and coalShade.Visible, "a row the next level can't use is shaded")
-			T.truthy(foundry.Card:FindFirstChild("Picture"), "the next blaster's picture")
-			for _, button in { foundry.Close, foundry.Forge, foundry.Rows.Gold.Take, foundry.LookPrev } do
-				bigEnough("foundry", button.Parent)
-			end
-			-- (the TAKE switch's faces fit the header band: their buttons reach past them)
-			for _, button in { foundry.TakeOne, foundry.TakeEvery } do
-				bigEnough("foundry switch", button)
-			end
 
 			-- the Blaster Vault
 			local vault = VaultView.build()
@@ -629,9 +599,9 @@ return function(T, Loader)
 		end
 	end)
 
-	-- (review: every carry change once destroyed and rebuilt the whole hotbar)
-	T.test("LightUI: the hotbar's slots are updated in place", function()
-		local red, blue = Color3.fromRGB(255, 60, 60), Color3.fromRGB(60, 120, 255)
+	-- (review: every carry change once destroyed and rebuilt the whole hotbar; since the
+	-- backpack, owner 2026-10-24, one button that is only updated)
+	T.test("LightUI: the backpack button is updated in place", function()
 		local function count(root: any): number
 			return #root:GetDescendants()
 		end
@@ -640,44 +610,17 @@ return function(T, Loader)
 			UIConfig.LightUI = light
 			local ok, err = pcall(function()
 				local refs = HudView.build() :: any
-				local row = refs.CarrySlots
-				local function lookA()
-					HudView.carrySlot(row, 1, red, false, 0)
-					HudView.carrySlot(row, 2, nil, true, 0)
-					HudView.carrySlot(row, 3, nil, false, 7)
-				end
-				local function lookB()
-					HudView.carrySlot(row, 1, nil, true, 0)
-					HudView.carrySlot(row, 2, blue, false, 0)
-					HudView.carrySlot(row, 3, nil, false, 120)
-				end
-				lookA()
-				local first = row:FindFirstChild("Slot1")
-				lookB()
-				local warm = count(row)
-				lookA()
-				lookB()
-				T.eq(count(row), warm, `no new instances once every look was shown (light {light})`)
-				T.eq(row:FindFirstChild("Slot1"), first, `the same slot frame (light {light})`)
-				T.truthy((row:FindFirstChild("Slot1"):FindFirstChild("Mystery", true) :: any).Visible, `dirty ore shows ? (light {light})`)
-				T.eq((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Text, "+120", `+N updated (light {light})`)
-				if light then
-					local slot1 = row:FindFirstChild("Slot1") :: any
-					T.falsy(slot1:FindFirstChild("Ore", true).Visible, "the gem hides under the rock")
-					local slot2 = row:FindFirstChild("Slot2") :: any
-					T.truthy(slot2:FindFirstChild("Ore", true).Visible, "the gem shows")
-					T.falsy(slot2:FindFirstChild("Mystery", true).Visible, "no ? on a clean ore")
-					T.truthy(slot2:FindFirstChild("Glow", true).BackgroundColor3 == blue, "recoloured glow")
-				else
-					T.truthy((row:FindFirstChild("Slot2") :: any).BackgroundColor3 == blue, "recoloured square")
-				end
-				lookA()
-				T.falsy((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Visible == false, "+N back")
-				HudView.carrySlot(row, 3, nil, false, 0)
-				T.falsy((row:FindFirstChild("Slot3"):FindFirstChild("More", true) :: any).Visible, "+N hides on an empty well")
-				HudView.trimSlots(row, 2)
-				T.eq(row:FindFirstChild("Slot3"), nil, "a smaller backpack drops the extra slot")
-				T.truthy(row:FindFirstChild("Slot2"), "and keeps the rest")
+				local button = refs.Backpack
+				HudView.setBackpack(refs, 2, 5)
+				HudView.setBackpackKey(refs, "Q", nil)
+				local warm = count(button)
+				HudView.setBackpack(refs, 5, 5)
+				HudView.setBackpackKey(refs, "RB", "rbxasset://x")
+				HudView.setBackpack(refs, 0, 30)
+				HudView.setBackpackKey(refs, nil, nil)
+				T.eq(count(button), warm, `no new instances (light {light})`)
+				T.eq(refs.CarryLabel.Text, "0 / 30", `the count (light {light})`)
+				T.falsy(button:FindFirstChild("Full").Visible, `FULL hides again (light {light})`)
 			end)
 			UIConfig.LightUI = before
 			if not ok then
@@ -732,10 +675,10 @@ return function(T, Loader)
 				T.truthy(pill, "the green Shop pill")
 				local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
 				T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
-				-- the money sits bottom-left, the hotbar bottom-centre
+				-- the money sits bottom-left, the backpack button right of the screen's middle
 				local moneyRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
-				local hotbarLeft = width / 2 - refs.CarryPanel.Size.X.Offset / 2
-				T.truthy(moneyRight < hotbarLeft, `the money clear of the hotbar at {screen.X} x {screen.Y}`)
+				local backpackLeft = width / 2 + refs.CarryPanel.Position.X.Offset
+				T.truthy(moneyRight < backpackLeft, `the money clear of the backpack button at {screen.X} x {screen.Y}`)
 			end
 		end)
 	end)

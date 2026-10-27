@@ -21,15 +21,18 @@ return function(T, Loader)
 		return R15.solve(rootCF, pose), pose
 	end
 
-	-- the lowest corner of each foot (the dummy's floor = the deck)
-	local function feet(parts: any): (number, number)
+	-- the lowest corner of each foot above the deck (the dummy's floor; `turn` tilts it like the board
+	-- does in a turn: about the board's Root, DeckHeight under the deck)
+	local function feet(parts: any, turn: number?): (number, number)
+		local d = BoardPose.DeckHeight
+		local deck = CFrame.new(0, -d, 0) * CFrame.Angles(0, 0, BoardPose.MaxRoll * (turn or 0)) * CFrame.new(0, d, 0)
 		local lows = {}
 		for _, foot in { "LeftFoot", "RightFoot" } do
 			local size = R15.Parts[foot].Size
 			local low = math.huge
 			for cx = -1, 1, 2 do
 				for cz = -1, 1, 2 do
-					local p = parts[foot] * Vector3.new(cx * size.X / 2, -size.Y / 2, cz * size.Z / 2)
+					local p = deck:PointToObjectSpace(parts[foot] * Vector3.new(cx * size.X / 2, -size.Y / 2, cz * size.Z / 2))
 					low = math.min(low, p.Y)
 				end
 			end
@@ -69,7 +72,7 @@ return function(T, Loader)
 						for _, joint in BoardPose.Joints do
 							T.truthy(pose[joint] ~= nil, joint .. " posed")
 						end
-						local l, r = feet(parts)
+						local l, r = feet(parts, turn)
 						lowest = math.min(lowest, l, r)
 						highest = math.max(highest, l, r)
 						worstHands = math.max(worstHands, handsInBody(parts))
@@ -189,14 +192,16 @@ return function(T, Loader)
 		T.truthy(lowest > -0.35 and highest < 0.45, `tall legs crouch onto the deck ({lowest} .. {highest})`)
 	end)
 
-	T.test("board pose: with a tool in hand the chest faces forward", function()
+	T.test("board pose: you face forward, feet wide apart across the board", function()
 		local parts = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0, Tool = true })
 		local look = parts.UpperTorso.LookVector
 		local yaw = math.deg(math.atan2(-look.X, -look.Z))
 		T.le(math.abs(yaw), 12, `the chest (and the blaster hold) aims ahead ({yaw} degrees)`)
 		local free = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0 })
 		local freeLook = free.UpperTorso.LookVector
-		T.truthy(math.abs(math.deg(math.atan2(-freeLook.X, -freeLook.Z))) > 30, "without a tool the chest stays side-on")
+		T.le(math.abs(math.deg(math.atan2(-freeLook.X, -freeLook.Z))), 12, "the rider faces where they go (Pet Simulator 99 style)")
+		local l, r = parts.LeftFoot.Position, parts.RightFoot.Position
+		T.truthy(math.abs(l.X - r.X) > 2, `feet wide apart along the board lying across ({math.abs(l.X - r.X)})`)
 	end)
 
 	T.test("board pose: MoveRig override on every joint, the Animator's pose back on release", function()

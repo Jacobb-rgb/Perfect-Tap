@@ -18,8 +18,8 @@ EconomyConfig.IncomeTick = 1 -- seconds between podium payouts
 EconomyConfig.StatePushSeconds = 10
 
 EconomyConfig.Podiums = {
-	Free = 2, -- every base
-	Max = 4, -- podiums 3 and 4 come with the Podiums perk (Robux)
+	Free = 3, -- every base (owner 2026-10-24: three free, two for Robux)
+	Max = 5, -- podiums 4 and 5 come with the Podiums perk (Robux)
 	Kinds = { Clean = true }, -- only cleaned ore can go on a podium
 }
 
@@ -38,9 +38,17 @@ EconomyConfig.Pen = {
 }
 
 EconomyConfig.Sell = {
-	MaxPerRequest = 50, -- items one Sell request can sell
+	MaxPerRequest = 50, -- items of the Ore Pen one Sell request can sell
+	-- items of the backpack one request can sell: a whole full backpack in one press (the
+	-- biggest pack x Strong Back x Deep Pockets III = 1000 x 2 x 1.3; the backpack keeps counts)
+	MaxBackpackPerRequest = 3000,
 	ComboWindow = 0.8, -- sales closer together than this count as one combo (popups)
 }
+
+-- Items one Sell request may sell from a section ("Hands" = the backpack, else the pen).
+function EconomyConfig.sellCap(from: any): number
+	return if from == "Hands" then EconomyConfig.Sell.MaxBackpackPerRequest else EconomyConfig.Sell.MaxPerRequest
+end
 
 -- Pen automation (Tech shop, data.Upgrades.PenAutomation): level 1 = the sorting
 -- billboard at the pen (marks the ore types to keep, data.KeepList), level 2 =

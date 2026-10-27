@@ -37,7 +37,7 @@ return function(T, Loader)
 	end
 
 	local function setup(): any
-		local w: any = { notes = {}, ejects = {}, stashes = {}, inserts = {}, carried = {}, full = false }
+		local w: any = { notes = {}, ejects = {}, stashes = {}, inserts = {}, full = false, attrs = {} }
 		local plotModel = Instance.new("Model")
 		local folder = Instance.new("Folder")
 		folder.Name = "Machines"
@@ -46,8 +46,11 @@ return function(T, Loader)
 			UserId = USER,
 			Name = "Owner",
 			Parent = true,
-			GetAttribute = function()
-				return nil
+			GetAttribute = function(_, key)
+				return w.attrs[key]
+			end,
+			SetAttribute = function(_, key, value)
+				w.attrs[key] = value
 			end,
 		}
 		w.stranger = {
@@ -98,19 +101,6 @@ return function(T, Loader)
 			record.State = "Consumed"
 			table.insert(w.stashes, { Record = record, Reason = reason })
 			return true
-		end)
-		patch(CarryService, "takeTop", function(_, predicate)
-			for i = #w.carried, 1, -1 do
-				local record = w.carried[i]
-				if not predicate or predicate(record) then
-					table.remove(w.carried, i)
-					return record
-				end
-			end
-			return nil
-		end)
-		patch(CarryService, "list", function()
-			return w.carried
 		end)
 		patch(Players, "GetPlayerByUserId", function(_, id)
 			return if id == USER then w.player elseif id == STRANGER then w.stranger else nil
@@ -398,36 +388,27 @@ return function(T, Loader)
 		T.eq(#sold, 1, "outside the box")
 	end)
 
-	withWorld("IntakeService: Put In loads what fits from your hands", function(w)
-		local function carried(kind: string): any
-			return {
-				Id = kind,
-				Kind = kind,
-				OreId = "Copper",
-				Grade = if kind == "Raw" then nil else "Rough",
-				Owner = USER,
-				State = "Carried",
-			}
-		end
-		w.carried = { carried("Crushed"), carried("Raw"), carried("Crushed") }
+	withWorld("IntakeService: Put In loads what fits from your backpack", function(w)
+		local CRUSHED, RAW = "Crushed|Copper|Rough|", "Raw|Copper||"
+		w.data.BackpackItems = { [CRUSHED] = 2, [RAW] = 1 }
 		intake.load(w.player, w.furnace)
 		T.eq(#w.inserts, 2, "both crushed piles (the Furnace takes crushed ore only)")
 		T.eq(w.inserts[1].Via, "Hand", "via Hand")
-		T.eq(#w.carried, 1, "raw ore stays in your hands")
-		T.eq(w.carried[1].Kind, "Raw", "raw")
+		T.eq(CarryService.count(w.player), 1, "raw ore stays in your backpack")
+		T.eq(w.data.BackpackItems[RAW], 1, "raw")
 		local notes = #w.notes
 		intake.load(w.player, w.furnace)
 		T.eq(w.notes[notes + 1].A.Text, MachineData.ById.ClayFurnace.WrongHint, "why nothing went in")
-		w.carried = { carried("Crushed") }
+		w.data.BackpackItems = { [CRUSHED] = 1 }
 		w.full = true
 		intake.load(w.player, w.furnace)
 		T.eq(w.notes[#w.notes].A.Text, "Your Furnace is full.", "full")
-		T.eq(#w.carried, 1, "kept")
+		T.eq(w.data.BackpackItems[CRUSHED], 1, "kept")
 		intake.load(w.stranger, w.furnace)
 		T.eq(w.notes[#w.notes].A.Text, "That's not your machine.", "not yours")
-		w.carried = {}
+		w.data.BackpackItems = {}
 		intake.load(w.player, w.furnace)
-		T.eq(w.notes[#w.notes].A.Text, "Carry items here to put them in the Furnace.", "empty hands")
+		T.eq(w.notes[#w.notes].A.Text, "Your backpack is empty: bring items here to put them in the Furnace.", "empty backpack")
 	end)
 	---------------------------------------------------------------- town zone index (perf pass 1)
 
@@ -450,8 +431,8 @@ return function(T, Loader)
 		return WorldLayout.plotCFrame(WorldLayout.Plots[plotId]):PointToWorldSpace(Vector3.new(x, y, z))
 	end
 
-	-- Every plot gets a zone on its pad and one in its yard (like the pens and
-	-- the foundry hoppers), the town a SellBin, a turned box, two overlapping
+	-- Every plot gets a zone on its pad and one in its yard (like the pens),
+	-- the town a SellBin, a turned box, two overlapping
 	-- boxes and one across a plot's edge.
 	local function townZones(taken: { string }): { any }
 		local zones = {}

@@ -25,7 +25,7 @@
 	  slope, down a Slide's), which also wakes items that fell asleep;
 	  ConveyorMaxNudges nudges within ConveyorNudgeWindow push it off the
 	  belt's side (BeltRejectPop). An item that waits behind another item of
-	  the same line (a queue in front of a full machine or a sink) is not
+	  the same line (a queue in front of a full machine) is not
 	  stuck: it just waits. Belts that face each other are not a line: those
 	  items get nudged and pushed off, which clears the jam. The items ahead
 	  come from a cell index of the loose items, built once per IntakeService
@@ -50,9 +50,6 @@
 	  recipe); spawnAtSource refuses any other with "Bad" (the caller keeps
 	  it and moves on), and an error half way through never leaves a
 	  half-made item behind.
-	- Sinks (FOUNDRY): setSink(name, handler), see below. Another player's
-	  item at a sink is refused like at a machine ("Foreign": pushed off the
-	  belt, IntakeService sends it home after ForeignItemReturn).
 	- In the world every chute gets a colored floor plate on its cell and a
 	  small plaque high on the plot's back wall, facing the grid (per plot,
 	  built once in start(); PlotBuilder builds the wall). Every plaque's
@@ -60,46 +57,18 @@
 	  belt on the chute and the items riding it. Its top stays under the
 	  ORE PEN sign and the gate posts' caps. PEN stands on the cap's ledge
 	  behind its cell (a stud clear of the yard gate's post), TRAIN hangs on
-	  the gate post beside its cell (that cell sits in the gate opening),
-	  FOUNDRY stands on the cap's ledge past the wall pillar beside its cell
-	  (the Foundry's receiver hood, BaseLayout.FoundryIntake, covers the
-	  wall behind the cell), in the gap between two podiums, so their price
-	  tags stay in view; an arrow points from an off-cell plaque to its
-	  cell. A Source's plaque says "TURN BELT" while the belt on it faces
-	  SinkRotation. Build mode draws its own plates (PlacementController /
-	  GridOverlay).
+	  the gate post beside its cell (that cell sits in the gate opening);
+	  an arrow points from an off-cell plaque to its cell. A Source's
+	  plaque says "TURN BELT" while the belt on it faces SinkRotation.
+	  Build mode draws its own plates (PlacementController / GridOverlay).
+	- A belt that runs off the grid's back edge (SinkRotation) just stops
+	  its items at the plot's back wall (the FOUNDRY sink that took them
+	  went with the Foundry, owner 2026-10-24). A save from before still
+	  has its belt into the old FOUNDRY cell (OldFoundryCell): its items
+	  would pile up loose at the wall until the loose-item cap stops the
+	  factory, so the owner hears it once a session when the plot's layout
+	  loads (OldFoundryText).
 
-	THE SINK HOOK (for the package that owns a sink, e.g. FoundryService):
-	  ConveyorService.setSink("Foundry", function(player, record): boolean ... end)
-	- Called for a trusted loose item of the plot's OWNER only (player = the
-	  owner, record.Owner == player.UserId) that reached the sink:
-	    * the item is in the last FeedReachBelt studs of a belt on the chute
-	      cell whose front faces BaseLayout.SinkRotation (off the grid edge,
-	      into the back wall), or
-	    * no belt stands on the chute cell and the item lies or rolls on that
-	      cell, at most SinkScanUp studs over the pad (a look at the owner's
-	      items every GameConfig.IntakeTick; ore flying over it is not in).
-	  A belt on the cell that faces any other way just carries items across.
-	- The handler must not yield. It returns true when it took the item: it
-	  took it out of the world itself (ItemService.absorb) and stored it in
-	  the same step. It returns false to leave the item where it is: it
-	  waits there and is offered again every IntakeTick (the handler shows
-	  its own throttled hint, e.g. "Ore Pen full"). An error counts as false.
-	  A true is trusted: an item the handler says it took but left in the
-	  world is destroyed right there (with a warning), so it can never be
-	  offered, and stored, a second time.
-	- What doesn't go into the sink's own store goes into the Ore Pen with
-	  PenService.store, which refuses at the pen's capacity: then the handler
-	  stores nothing and returns false (the item waits at the sink, with the
-	  "Ore Pen full" hint). Never ItemService.storeDesc (it fills the pen
-	  past its capacity and then sells) and NEVER PenService.arrived:
-	  arrived() is for things a player brings to the pen (thrown in, Put In,
-	  a train delivery) and lets the sorting billboard send them on again,
-	  so an item stored that way would ride the PEN chute back to the sink
-	  and loop forever. Machines (the Iron Box) store the same way.
-	- setSink(name, nil) removes the handler. Without a handler items wait
-	  at the end of the belt (the plot's back wall stops them) and items on
-	  a belt-less cell stay where they are.
 ]]
 
 local PhysicsService = game:GetService("PhysicsService")
@@ -134,8 +103,6 @@ export type SourceWait = "NoPlot" | "NoBelt" | "Yard" | "Jammed" | "TooMany"
 -- Why spawnAtSource gave no item: a SourceWait (try again later) or "Bad"
 -- (this desc can never become an item: keep it and move on).
 export type SpawnFail = SourceWait | "Bad"
--- What a Sink does with an owner's item (see the header): true = taken.
-export type SinkHandler = (player: Player, record: ItemRecord) -> boolean
 
 type Jam = { SlowSince: number?, Nudges: { number } }
 -- Before / After: the arrow toward the chute cell around the line (off-cell plaques)
@@ -150,15 +117,12 @@ ConveyorService.SpawnBack = 0.6 -- studs toward the belt's back end (it rides th
 ConveyorService.SignLines = {
 	Pen = "ORE OUT",
 	Train = "ORE OUT",
-	Foundry = "BELT IN",
 } :: { [string]: string }
 ConveyorService.YardText = "Turn the belt away from the yard" -- toasts, the pen panel
 ConveyorService.YardSign = "TURN BELT" -- the plaque's line meanwhile
 -- A Source stops this many loose items below the machines' limit (the header):
 -- two machines' worth of finished items (MachineData.MaxOutBuffer each).
 ConveyorService.SourceReserve = 2 * MachineData.MaxOutBuffer
--- A belt-less Sink cell takes items at most this high over the pad.
-ConveyorService.SinkScanUp = 3
 
 local CELL = GameConfig.CellSize
 local CELLS = GameConfig.PlotCells
@@ -171,7 +135,6 @@ local ROOM_UP = 2 -- the box centre above the pad
 local WARN_COOLDOWN = 10
 
 local jams: { [ItemRecord]: Jam } = setmetatable({}, { __mode = "k" }) :: any
-local sinks: { [string]: SinkHandler } = {}
 local lastSpawn: { [string]: number } = {}
 local markers: { [number]: { [string]: Marker } } = {}
 -- the loose items of one IntakeService pass: where they were (flat arrays, so
@@ -509,116 +472,6 @@ function ConveyorService.waitText(chute: string, why: SourceWait?): string?
 	return nil
 end
 
----------------------------------------------------------------- chutes: sinks
-
--- The package that owns a Sink chute registers what it does with items (header).
-function ConveyorService.setSink(name: string, handler: SinkHandler?)
-	local info = chuteOf(name)
-	assert(info and info.Kind == "Sink", "Not a sink chute: " .. tostring(name))
-	if handler and sinks[name] then
-		warn("[ConveyorService] sink handler replaced: " .. name)
-	end
-	if handler then
-		sinks[name] = handler
-	else
-		sinks[name] = nil
-	end
-end
-
--- Offers an item to a sink. Returns true when the sink took it.
-local function offer(name: string, plotId: number, record: ItemRecord, belt: PlacedMachine?): boolean
-	local owner = PlotService.ownerOf(plotId)
-	if not owner or owner.UserId ~= record.Owner then
-		if belt then
-			-- another player's item: pushed off like at a machine, it goes home
-			IntakeService.react(belt, record, "Foreign", "Belt", belt)
-		end
-		return false
-	end
-	local handler = sinks[name]
-	if not handler then
-		return false
-	end
-	local ok, taken = pcall(handler, owner, record)
-	if not ok then
-		warnThrottled("sink" .. name, `[ConveyorService] {name} sink failed: {taken}`)
-		return false
-	end
-	if taken ~= true then
-		return false
-	end
-	if record.State == "Loose" then
-		-- the handler says it took (and stored) the item but left it in the
-		-- world: trust the answer and take it out, or it would be offered,
-		-- and stored, again every IntakeTick
-		warnThrottled("sinkLoose" .. name, `[ConveyorService] {name} sink took an item but left it in the world (absorb it)`)
-		ItemService.destroy(record)
-	end
-	return true
-end
-
--- The Sink chute a belt delivers into (on the sink cell, facing SinkRotation), if any.
-local function sinkOfBelt(belt: PlacedMachine): string?
-	local name = BaseLayout.chuteAt(belt.X, belt.Z)
-	local info = name and chuteOf(name)
-	if name and info and info.Kind == "Sink" and belt.R == BaseLayout.SinkRotation then
-		return name
-	end
-	return nil
-end
-
---[[
-	Items lying on a sink cell that has no belt (every IntakeTick). Only the
-	owner's items can go in, so only theirs are looked at (at most
-	MaxLooseItemsPerPlayer per owned plot, never every item on the server),
-	and only on the pad: at most SinkScanUp studs over it (an item flying
-	over the cell isn't on it).
-]]
-local function scanSinks(now: number)
-	if next(sinks) == nil then
-		return
-	end
-	for _, plot in WorldLayout.Plots do
-		local owner = PlotService.ownerOf(plot.Id)
-		if not owner then
-			continue
-		end
-		local open: { string }? = nil
-		for name in sinks do
-			local info = chuteOf(name)
-			if info and not MachineService.atCell(plot.Id, info.X, info.Z) then
-				local list = open or {}
-				open = list
-				table.insert(list, name)
-			end
-		end
-		if not open then
-			continue
-		end
-		local plotCF = PlotService.plotCFrame(plot.Id)
-		for _, record in ItemService.ownedBy(owner.UserId) do
-			if record.State ~= "Loose" then
-				continue
-			end
-			local localPos = plotCF:PointToObjectSpace(record.Body.CFrame.Position)
-			if localPos.Y < -1 or localPos.Y > ConveyorService.SinkScanUp then
-				continue
-			end
-			local cx, cz = Grid.cellFromLocal(localPos)
-			if not cx or not cz or not ItemService.isTrusted(record, now) then
-				continue
-			end
-			for _, name in open do
-				local info = chuteOf(name)
-				if info and cx == info.X and cz == info.Z then
-					offer(name, plot.Id, record, nil)
-					break
-				end
-			end
-		end
-	end
-end
-
 ---------------------------------------------------------------- jams
 
 -- Is an item on cell (cx, cz) of the belt's plot (just ahead, `y` world
@@ -746,13 +599,6 @@ local function onBelt(belt: PlacedMachine, record: ItemRecord, localPos: Vector3
 	if record.State ~= "Loose" or belt.Removed then
 		return
 	end
-	local sink = sinkOfBelt(belt)
-	if sink and localPos.Z <= -CELL / 2 + GameConfig.FeedReachBelt then
-		-- at the end of a sink belt: it goes in, or waits there (never nudged off)
-		jams[record] = nil
-		offer(sink, belt.PlotId, record, belt)
-		return
-	end
 	unjam(belt, record, now)
 end
 
@@ -791,37 +637,11 @@ ConveyorService.PlaqueSize = Vector2.new(2.6, 1.25)
 ConveyorService.PlaqueBottom = CAP_TOP + EDGE -- the board's bottom
 
 --[[
-	The middle of the gap between two neighbouring podiums (BaseLayout.Podiums,
-	plot-local x) nearest to `from` on its `side` (or at it), nil when there is
-	none: a plaque there leaves their price tags in view from the grid.
-]]
-local function podiumGap(from: number, side: number): number?
-	local spans: { { number } } = {}
-	for _, rect in BaseLayout.Podiums do
-		table.insert(spans, { rect.Center.X - rect.Size.X / 2, rect.Center.X + rect.Size.X / 2 })
-	end
-	table.sort(spans, function(a, b)
-		return a[1] < b[1]
-	end)
-	local best: number? = nil
-	for i = 1, #spans - 1 do
-		local mid = (spans[i][2] + spans[i + 1][1]) / 2
-		if (mid - from) * side >= 0 and (best == nil or math.abs(mid - from) < math.abs((best :: number) - from)) then
-			best = mid
-		end
-	end
-	return best
-end
-
---[[
 	Where a chute's plaque goes (plot-local): its centre x, the z of the face
 	it stands or hangs on (the plaque is in front of it) and the x of its
 	cell.
 	  gate opening   (no wall there) on the nearer gate post's front, its
 	                 inner edge at the opening
-	  receiver hood  (BaseLayout.FoundryIntake.Zone covers the wall behind
-	                 the cell) on the cap's ledge past the hood and the wall
-	                 pillar beside it, in the nearest gap between two podiums
 	  otherwise      on the cap's ledge right behind the cell, POST_CLEAR
 	                 from the yard gate's post
 	A ledge spot never reaches the corner pillar.
@@ -837,18 +657,6 @@ function ConveyorService.plaqueSpot(name: string): (number, number, number)
 	end
 	-- the ledge ends at the corner pillar's cap
 	local farthest = PILLAR_LINE - PILLAR_CAP / 2 - 0.1 - half
-	local zone = BaseLayout.FoundryIntake.Zone
-	local zoneMin, zoneMax = zone.Center.X - zone.Size.X / 2, zone.Center.X + zone.Size.X / 2
-	if cell.X + half > zoneMin and cell.X - half < zoneMax then
-		-- the wall pillar beside the hood: the first one out from the gate post
-		local pillarX = side * PlotBuilder.backPillars()[1]
-		local from = if side > 0
-			then math.max(zoneMax, pillarX + PILLAR_CAP / 2) + 0.1 + half
-			else math.min(zoneMin, pillarX - PILLAR_CAP / 2) - 0.1 - half
-		local gap = podiumGap(from, side)
-		local x = if gap and math.abs(gap) <= farthest then gap else from
-		return x, CAP_FACE, cell.X
-	end
 	local clear = gate.Width / 2 + POST_CAP + POST_CLEAR + half
 	local x = gate.CenterX + side * math.max(offset, clear)
 	return side * math.min(math.abs(x), farthest), CAP_FACE, cell.X
@@ -995,15 +803,41 @@ local function setupCollisionGroup()
 	end
 end
 
-local function onLayout(_: Player, plotId: number)
+-- The old FOUNDRY chute's cell (an ordinary cell since the Foundry went) and what its
+-- belt's owner hears once a session (the header).
+ConveyorService.OldFoundryCell = { X = 9 + (CELLS - 12) / 2, Z = CELLS - 1 }
+ConveyorService.OldFoundryText =
+	"Your belt at the back wall ran into the Foundry, which is gone: its items now stop at the wall. Turn that belt or pick it up."
+ConveyorService.NoticeDelay = 4 -- seconds after the layout loads (the HUD may still be starting)
+local foundryNoticed: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+-- A belt into the old FOUNDRY cell on this plot: its owner hears it once a session.
+local function noticeOldFoundryBelt(player: Player, plotId: number)
+	if foundryNoticed[player] then
+		return
+	end
+	local cell = ConveyorService.OldFoundryCell
+	local machine = MachineService.atCell(plotId, cell.X, cell.Z)
+	if not machine or not machine.Info.IsConveyor or machine.R ~= BaseLayout.SinkRotation or machine.L ~= 0 then
+		return
+	end
+	foundryNoticed[player] = true
+	task.delay(ConveyorService.NoticeDelay, function()
+		if player.Parent then
+			Net.fire("Notify", player, { Text = ConveyorService.OldFoundryText, Kind = "Info" })
+		end
+	end)
+end
+
+local function onLayout(player: Player, plotId: number)
 	updateRails(MachineService.ofPlot(plotId))
 	updateMarkers(plotId)
+	noticeOldFoundryBelt(player, plotId)
 end
 
 -- Internals for the Lune tests only (tests/ConveyorService.spec.luau).
 ConveyorService._test = {
 	onBelt = onBelt,
-	scanSinks = scanSinks,
 	onLayout = onLayout,
 	buildMarkers = buildMarkers,
 	markers = function(plotId: number): { [string]: Marker }?
@@ -1017,7 +851,7 @@ ConveyorService._test = {
 		moved = applyBelt,
 	},
 	reset = function()
-		table.clear(sinks)
+		table.clear(foundryNoticed)
 		table.clear(lastSpawn)
 		table.clear(markers)
 		table.clear(jams)
@@ -1062,15 +896,6 @@ function ConveyorService.start()
 			warn(`[ConveyorService] chute signs on plot {plot.Id}: {err}`)
 		end
 		updateMarkers(plot.Id)
-	end
-	while true do
-		task.wait(GameConfig.IntakeTick)
-		local ok, err = pcall(function()
-			scanSinks(os.clock())
-		end)
-		if not ok then
-			warnThrottled("scan", "[ConveyorService] sink scan failed: " .. tostring(err))
-		end
 	end
 end
 

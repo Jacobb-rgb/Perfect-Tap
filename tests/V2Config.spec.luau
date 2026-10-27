@@ -59,20 +59,17 @@ return function(T, Loader)
 	T.test("v2: blasters get stronger and pricier, level 11 is coming soon", function()
 		T.eq(#BlasterData.Levels, BlasterData.MaxLevel + 1)
 		T.truthy(BlasterData.Levels[BlasterData.MaxLevel + 1].ComingSoon, "level 11")
-		T.eq(BlasterData.get(1).Recipe, nil, "everyone starts with level 1")
+		T.eq(BlasterData.get(1).Coins, nil, "everyone starts with level 1")
 		for level = 2, BlasterData.MaxLevel do
 			local a, b = BlasterData.get(level - 1), BlasterData.get(level)
 			T.eq(b.Level, level)
 			T.lt(a.Damage, b.Damage, "damage " .. level)
 			T.le(a.Range, b.Range, "range " .. level)
-			local recipe = b.Recipe
-			T.truthy(recipe, "recipe " .. level)
-			if recipe then
-				T.truthy(Rarity.ById[recipe.MinRarity], "recipe rarity " .. level)
-				local before = a.Recipe
-				if before then
-					T.lt(before.Coins, recipe.Coins, "price " .. level)
-				end
+			T.truthy(b.Coins, "a coin scale " .. level)
+			T.truthy(BlasterData.vaultPrice(level), "a Vault price " .. level)
+			if a.Coins and b.Coins then
+				T.lt(a.Coins, b.Coins, "price " .. level)
+				T.lt(BlasterData.vaultPrice(level - 1) :: number, BlasterData.vaultPrice(level) :: number, "Vault price " .. level)
 			end
 		end
 		T.eq(BlasterData.get(0).Level, 1, "clamped low")

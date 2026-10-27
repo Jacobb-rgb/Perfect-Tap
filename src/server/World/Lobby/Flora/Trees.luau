@@ -19,6 +19,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
+local RoadFence = require(script.Parent.Parent.Plaza.RoadFence)
 
 local C = Style.C
 
@@ -282,7 +283,8 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 				end
 				local fenceA = Vector3.new(side * 60.3, 0, z0 + 0.4)
 				local fenceB = Vector3.new(side * 60.3, 0, z1 - 0.4)
-				if i % 2 == 1 and beltClear(fenceA, 0.6, 0.6, sites) and beltClear(fenceB, 0.6, 0.6, sites) then
+				-- (2026-10-25: the road fences run along this line behind the belt, Meadow)
+				if not RoadFence.Enabled and i % 2 == 1 and beltClear(fenceA, 0.6, 0.6, sites) and beltClear(fenceB, 0.6, 0.6, sites) then
 					Style.fence(m, fenceA, fenceB, { Height = 2.2, PostEvery = 4.5, Rails = 2, Caps = true })
 				end
 			end

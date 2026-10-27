@@ -179,10 +179,7 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Gui.Scale.Scale = screen.Px
 		refs.Coins.Text = Format.money(120)
 		refs.Income.Text = Format.perSecond(0)
-		refs.CarryLabel.Text = "CARRYING 0/2"
-		for i = 1, 2 do
-			HudView.slot(refs.CarrySlots, nil, i)
-		end
+		HudView.setBackpack(refs, 0, 5)
 		refs.Toasts:ClearAllChildren()
 		local bar = TeleportView.build(refs.TopBar, screen.Ui, screen.Pt.X)
 		TeleportView.relayout(bar, refs.TopBar, screen.Ui, screen.Pt.X)

@@ -65,9 +65,7 @@
 	- KeepMode is a short mode name (else the default; an unknown one reads
 	  as the default); KeepList keeps short ore ids mapped to a boolean (true
 	  keep, false send on; MachineData.keepsOre).
-	- Foundry.Stock: well-formed ingots (kind Ingot, no recipe, any ore and
-	  grade), at most GameConfig.MaxFoundryStock; other well-formed items
-	  and the overflow go to the pen, junk is dropped.
+	- (Foundry.Stock: the Foundry's ingots, until Version 8.)
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
 	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
 	  server may sell more levels).
@@ -178,12 +176,44 @@
 	- moves what isn't crushed ore out of its Furnaces' queues to the pen;
 	- gets a Crusher in its Build menu if its starter kit was given and it
 	  has none placed or waiting there.
+
+	Version 7 (owner 2026-10-24: three free podiums and two for Robux): the
+	podium list has 5 slots (a 4-slot list gets an empty 5th, always: the
+	repair below); slot 3 is free now and the Podiums perk unlocks 4 and 5.
+	The bump keeps an older server (4 slots, slot 3 behind the perk) from
+	loading a 5-slot save.
+
+	Version 8 (owner 2026-10-24: no Foundry, blasters come from the Vault
+	only): a save loaded with a Version below 8, once: the Foundry's ingot
+	stock (data.Foundry.Stock) goes into the Ore Pen (every well-formed
+	item, junk dropped) and data.Foundry goes. The bump keeps an older
+	server (which forges and rebuilds data.Foundry) from loading the save.
+	Stats.RunForged now counts the levels bought with coins in the run
+	(VaultService), and Stats.RunIncome (a number >= 0, the coins / s kept
+	at the last rebirth) floors the run's Vault prices.
+
+	Version 9 (owner 2026-10-24: the backpack): no ore is carried in the
+	hands any more, everything goes into the backpack.
+	- data.BackpackItems = { [storage key] = whole count }: key-shaped keys
+	  (a newer build's ores and grades too) with counts 1..MAX_BACKPACK_KEPT,
+	  junk dropped (every load).
+	- data.Backpacks = { Equipped, Owned = { [id] = true } }: short ids (an
+	  id this build doesn't know stays: a newer build's pack; its capacity
+	  reads as the starter's); the starter pack is always owned; an equipped
+	  KNOWN pack that isn't owned falls back to the starter (every load).
+	- Once (loaded Version below 9): the Gear shop's old Ore Backpack level
+	  (Gear.Backpack, capacities 1 / 2 / 3 / 5 / 8 / 12 by level) becomes
+	  the smallest pack holding at least as much, owned and equipped if it
+	  is bigger than the one worn; Gear.Backpack goes (the line left the
+	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES), less
+	  that pack's own price, go back into data.Coins (review 2026-10-27).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local BackpackData = require(Shared.Config.BackpackData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
@@ -199,7 +229,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 6 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once
+Migrations.Latest = 9 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -207,7 +237,7 @@ local MAX_INVENTORY = MachineData.MaxInventory
 -- Highest saved level of any upgrade line (readers clamp to what is sold;
 -- TrainService uses the same GameConfig number).
 local MAX_LEVEL_KEPT = GameConfig.MaxLevelKept
-local PODIUM_SLOTS = 4
+local PODIUM_SLOTS = 5 -- EconomyConfig.Podiums.Max (Version 7: 3 free + 2 for Robux; 4 before)
 -- Version 4: the 12 -> 16 grid move of a placed machine's cell. Frozen numbers of
 -- THIS step, never derived from GameConfig.PlotCells: a later resize would then
 -- mis-move the version 3 saves (a later resize adds its own step).
@@ -226,6 +256,13 @@ local MAX_FIELD_TEXT_LENGTH = 64
 local MAX_EQUIPPED_LENGTH = 64
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
+-- Version 9: what the Gear shop's retired Ore Backpack held at each level 0..5 (frozen)
+local OLD_BACKPACK_CAPACITY = { 1, 2, 3, 5, 8, 12 }
+-- ... and what its levels 1..5 cost (frozen): the coins paid past the pack it becomes go back
+local OLD_BACKPACK_PRICES = { 800, 5000, 30000, 180000, 1100000 }
+-- the most of one item a backpack keeps (2x the biggest pack with Strong Back, and room
+-- for a newer build's bigger packs)
+local MAX_BACKPACK_KEPT = 5000
 -- ids this server doesn't know (a newer build's ores, grades, kinds, modes)
 -- are kept when they are short strings (docs/SAVE_AUDIT.md #1(b))
 local MAX_ID_LENGTH = 64
@@ -317,6 +354,22 @@ local function renameOres(data: { [string]: any })
 		end
 	end
 	walk(data, 0)
+	-- the backpack is keyed by storage key: a renamed ore's stack joins its new key
+	local items = data.BackpackItems
+	if type(items) == "table" then
+		local keys = {}
+		for key in items do
+			table.insert(keys, key)
+		end
+		for _, key in keys do
+			local new = if type(key) == "string" then storageKey(key) else key
+			local count = items[key]
+			if new ~= key and type(count) == "number" then
+				items[key] = nil
+				items[new] = (if type(items[new]) == "number" then items[new] else 0) + count
+			end
+		end
+	end
 	if type(data.BlasterOre) == "string" and renamed[data.BlasterOre] then
 		data.BlasterOre = renamed[data.BlasterOre]
 	end
@@ -341,12 +394,6 @@ local function renameOres(data: { [string]: any })
 			end
 		end
 	end
-end
-
--- A well-formed ingot the Foundry can hold: an ingot without a recipe (an ore
--- or grade this server doesn't know too: a newer build's ingots stay).
-local function foundryIngot(item: any): boolean
-	return wellFormed(item) and item.K == "Ingot" and item.R == nil
 end
 
 -- The keys of a table (so entries can be removed while walking them).
@@ -470,7 +517,7 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		if isFinite(carry) then
 			-- the old levels were 1..OLD_CARRY_LEVELS: higher junk never gives more
 			local backpack = math.clamp(math.floor(carry) - 1, 0, OLD_CARRY_LEVELS - 1)
-			gear.Backpack = math.max(gear.Backpack, backpack)
+			gear.Backpack = math.max(tonumber(gear.Backpack) or 0, backpack)
 		end
 		data.CarryLevel = nil
 		-- from before the Gear shop: the old walk speed (18) is Boots I now
@@ -721,6 +768,10 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
 	end
 
+	-- the coins / s kept at the last rebirth (a floor under the run's Vault prices)
+	local runIncome = stats.RunIncome
+	stats.RunIncome = if isFinite(runIncome) and runIncome > 0 then math.min(runIncome, 1e27) else 0
+
 	if stats.RunPaid ~= nil and type(stats.RunPaid) ~= "boolean" then
 		stats.RunPaid = false
 		report.Dropped += 1
@@ -829,6 +880,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local gridShift = not (isFinite(loadedVersion) and loadedVersion >= 4)
 	-- a save from before the one Furnace: the v6 steps run once (Version 6)
 	local v6Step = not (isFinite(loadedVersion) and loadedVersion >= 6)
+	-- a save from before the Foundry went: its ingots go to the pen once (Version 8)
+	local v8Step = not (isFinite(loadedVersion) and loadedVersion >= 8)
+	-- a save from before the backpack: the Gear shop's Ore Backpack becomes a pack once (Version 9)
+	local v9Step = not (isFinite(loadedVersion) and loadedVersion >= 9)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -1050,10 +1105,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		data.BlasterOre = ""
 	end
 
-	-- v3: at least 4 podium strings, each a cleaned ore or "". A key this server
-	-- can't read (a newer build's ore or grade) stays as it is: PodiumService
-	-- shows that slot empty, and the newer server reads it again. Slots past
-	-- the 4th (a newer build's) stay as they are when "" or key-shaped.
+	-- v3 / v7: at least 5 podium strings (4 before Version 7), each a cleaned ore or "".
+	-- A key this server can't read (a newer build's ore or grade) stays as it is:
+	-- PodiumService shows that slot empty, and the newer server reads it again. Slots
+	-- past the 5th (a newer build's) stay as they are when "" or key-shaped.
 	local podiums = data.Podiums
 	local slots = {}
 	local lastPodium = PODIUM_SLOTS
@@ -1259,34 +1314,20 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 	end
 
-	-- step 3: the Foundry's ingot stock (other items and the overflow go to the pen)
-	local foundry = data.Foundry
-	if type(foundry) ~= "table" then
-		if foundry ~= nil then
-			report.Dropped += 1
-		end
-		foundry = {}
-		data.Foundry = foundry
-	end
-	local stock = foundry.Stock
-	local stockKept = {}
-	if type(stock) == "table" then
-		for _, item in values(stock) do
-			if not wellFormed(item) then
-				report.Dropped += 1
-			elseif foundryIngot(item) and #stockKept < GameConfig.MaxFoundryStock then
-				table.insert(stockKept, item)
-			else
-				table.insert(storage, item)
-				report.Moved += 1
+	-- v8 (once): the Foundry went (owner 2026-10-24): its ingots go to the pen
+	if v8Step and data.Foundry ~= nil then
+		local stock = if type(data.Foundry) == "table" then data.Foundry.Stock else nil
+		if type(stock) == "table" then
+			for _, item in values(stock) do
+				if wellFormed(item) then
+					table.insert(storage, item)
+					report.Moved += 1
+				else
+					report.Dropped += 1
+				end
 			end
 		end
-		refill(stock, stockKept)
-	else
-		if stock ~= nil then
-			report.Dropped += 1
-		end
-		foundry.Stock = stockKept
+		data.Foundry = nil
 	end
 
 	-- step 3: pen automation level (sorting billboard, Direct Unload)
@@ -1304,6 +1345,72 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
 	migrateSteps67(data, clock, report)
 	migrateStep8(data, report)
+
+	-- Version 9: the backpack (after steps 6-7: they fold the old CarryLevel into Gear.Backpack)
+	local items = record(data, "BackpackItems", report)
+	for _, key in keysOf(items) do
+		local count = items[key]
+		-- a whole count of at least 1 (0, negative or a fraction under 1 is no stack)
+		local floored = if keyLike(key) and isFinite(count) then math.floor(count) else nil
+		local whole = if floored and floored >= 1 then math.min(floored, MAX_BACKPACK_KEPT) else nil
+		if whole == nil then
+			items[key] = nil
+			report.Dropped += 1
+		elseif whole ~= count then
+			items[key] = whole
+		end
+	end
+	local packs = record(data, "Backpacks", report)
+	local ownedPacks = subTable(packs, "Owned", report)
+	for _, id in keysOf(ownedPacks) do
+		if not idLike(id) or ownedPacks[id] ~= true then
+			ownedPacks[id] = nil
+			report.Dropped += 1
+		end
+	end
+	ownedPacks[BackpackData.StarterId] = true
+	if v9Step then
+		local gearRecord = data.Gear
+		local gearLevel = if type(gearRecord) == "table" then wholeIn(gearRecord.Backpack, 0, MAX_LEVEL_KEPT) else nil
+		if gearLevel then
+			local held = OLD_BACKPACK_CAPACITY[math.min(gearLevel, #OLD_BACKPACK_CAPACITY - 1) + 1]
+			local pick: BackpackData.Backpack? = nil
+			for _, pack in BackpackData.List do
+				if pack.Capacity >= held and (pick == nil or pack.Capacity < (pick :: BackpackData.Backpack).Capacity) then
+					pick = pack
+				end
+			end
+			if pick then
+				ownedPacks[pick.Id] = true
+				if pick.Capacity > BackpackData.capacity(packs.Equipped) then
+					packs.Equipped = pick.Id
+				end
+				-- the coins paid for the old levels, less the pack's own price, come back
+				local paid = 0
+				for i = 1, math.min(gearLevel, #OLD_BACKPACK_PRICES) do
+					paid += OLD_BACKPACK_PRICES[i]
+				end
+				local refund = math.max(0, paid - pick.Price)
+				if refund > 0 then
+					data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + refund
+				end
+			end
+		end
+		if type(gearRecord) == "table" then
+			gearRecord.Backpack = nil
+		end
+	end
+	local equipped = packs.Equipped
+	if not idLike(equipped) then
+		if equipped ~= nil then
+			report.Dropped += 1
+		end
+		packs.Equipped = BackpackData.StarterId
+	elseif BackpackData.ById[equipped] and ownedPacks[equipped] ~= true then
+		-- a known pack nobody bought: the starter (an unknown id stays: a newer build's)
+		packs.Equipped = BackpackData.StarterId
+		report.Dropped += 1
+	end
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

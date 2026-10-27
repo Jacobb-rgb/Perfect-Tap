@@ -1,19 +1,24 @@
 --[[
 	Balance simulation: a typical player from the first minute to 10 hours.
-	`lune run tools/lune/balance_sim.luau [calibrate] [override=file.json]` -> build/balance/sim.json (+ a
+	`lune run tools/lune/balance_sim.luau [calibrate | calibrate-vault] [override=file.json]` -> build/balance/sim.json (+ a
 	summary on stdout); tools/balance/chart.mjs draws the chart and
 	docs/BALANCE_SIM.md explains the model and the results.
 
 	It reads the real config (OreData, BlasterData, ItemData, MachineData,
-	EconomyConfig, ToolData (the Gear shop's Backpack levels and prices since
-	steps 6-7), TrainConfig, MachineData power rules) and reads the mine
+	EconomyConfig, BackpackData (the backpacks: capacity and coin price per
+	pack, owner 2026-10-24; a walk to the train carries a backpack's worth), TrainConfig, MachineData power rules) and reads the mine
 	floors straight from MineFloors.List (Ores / CrystalOres weights,
 	MinBlaster gates, ViaElevator), the rock mix (SpawnChance, Seconds,
 	OreCount: the floor's weakest blaster breaks a rock in ~4.5 s, ~3.3 ores
 	per rock, 10 % Crystal rocks rolling from CrystalOres), the elevator price
-	(2/3 of the blaster 7 forge) and the coin hoverboards (HoverboardData:
+	(2/3 of the blaster 7 coin scale) and the coin hoverboards (HoverboardData:
 	walking x 16 / board speed, prices following their blaster level).
 	A.FloorTables replaces the floors with a proposal of the same shape.
+	Blasters come from the Blaster Vault only (owner 2026-10-24: no Foundry):
+	the next level costs its coin scale (BlasterData.coins, A.BlasterCoins) x
+	the Vault multiplier (A.VaultMult, BlasterData.Vault.PriceMultiplier);
+	`calibrate-vault` finds the multiplier that puts a Typical player at
+	blaster 10 at ~8 h.
 
 	Steps 6-7 (A.Steps67 = true, the default): the player also buys Boots,
 	the coin enchants (put into the open slots where they help most), coin
@@ -47,12 +52,11 @@ local Loader = require("./lib/loader")
 Loader.init(root)
 
 local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
-local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
-local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
+local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
 local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
@@ -66,6 +70,7 @@ local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloor
 local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 local LevelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LevelConfig")
+local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 
 -- The real rock mix (MineFloors): Small / Big / Crystal shares, seconds and ores per rock.
 local spawn = MineFloors.SpawnChance
@@ -88,12 +93,14 @@ local A = {
 	CrystalShare = spawn.Crystal or 0.1, -- Crystal rocks roll from the floor's CrystalOres
 	RockWalk = 2.5, -- seconds from one rock to the next
 	DropWalk = 12, -- seconds to carry a load to the floor's Mine Station (train) and back
-	HandClean = 18, -- seconds per ore in the cleaning minigame
+	HandClean = 12, -- seconds per ore in the cleaning minigame (18 before the strong spray of 2026-10-25)
 	CleanTrip = 30, -- seconds back from the base to the mine after a cleaning session (8 with the elevator)
 	CleanBatch = 20, -- ores cleaned per session at the base
 	TrainLoad = 5, -- seconds the train waits / loads at the station
-	HandGrades = { Rough = 0.1, Clean = 0.4, Pristine = 0.35, Flawless = 0.15 }, -- a typical player
-	Podiums = 2, -- free podiums (3 and 4 are a Robux perk)
+	-- a typical player since the strong spray of 2026-10-25 (Flawless is the norm; before:
+	-- Rough .1 / Clean .4 / Pristine .35 / Flawless .15)
+	HandGrades = { Rough = 0.05, Clean = 0.2, Pristine = 0.3, Flawless = 0.45 },
+	Podiums = EconomyConfig.Podiums.Free, -- free podiums (owner 2026-10-24: 3; 4 and 5 are a Robux perk)
 	-- the coin hoverboards: the blaster level each price follows (HoverboardData.priceFrom), in board order
 	HoverboardLevels = { 3, 5, 7 },
 	-- the floors: MineFloors.List, or a proposal (a list of { MinBlaster, ViaElevator, Ores = { [oreId] = weight },
@@ -109,8 +116,10 @@ local A = {
 	-- clean ore smelts too, the Crusher is bought).
 	OneFurnace = true,
 	Efficiency = 1, -- share of the player's own actions done well (mining, carrying, hand cleaning); machines run full
-	BlasterCoins = nil :: { [number]: number }?, -- Foundry coin price per level instead of BlasterData's (Vault = 4x)
-	ElevatorPrice = nil :: number?, -- nil = MineFloors' rule: 2/3 of the blaster 7 forge (the sim's price)
+	BlasterCoins = nil :: { [number]: number }?, -- the coin scale per level instead of BlasterData.coins
+	VaultMult = nil :: number?, -- the Vault price = the coin scale x this (nil = BlasterData.Vault.PriceMultiplier)
+	BlasterSaveMinutes = 15, -- the player saves for the next blaster once it costs at most this much income
+	ElevatorPrice = nil :: number?, -- nil = MineFloors' rule: 2/3 of the blaster 7 coin scale (the sim's price)
 	StopLevel = nil :: number?, -- calibration: stop a run once this blaster level is reached...
 	StopTime = nil :: number?, -- ...or after this many seconds
 	ShopEvery = 30, -- seconds between machine / upgrade shopping decisions
@@ -118,7 +127,7 @@ local A = {
 	-- price / design options (override files; nil = today's config)
 	MachinePrices = nil :: { [string]: number }?, -- machine id -> price instead of MachineData's
 	EnchantCoinMult = nil :: { [string]: number }?, -- enchant rarity -> multiplier on the coin prices
-	HexaForgeShare = nil :: number?, -- Hexa Lucky's coin offer: share of the next forge
+	HexaForgeShare = nil :: number?, -- Hexa Lucky's coin offer: share of the next level's coin scale
 	TrainCapacityExtra = nil :: { { Value: number, Price: number } }?, -- train capacity levels after the config's last
 	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
 	MachineUpgrades = true, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher): in the game since option 3
@@ -161,11 +170,6 @@ local SCENARIOS = {
 }
 
 ---------------------------------------------------------------- floors
-
-local rarityOrder: { [string]: number } = {}
-for _, r in Rarity.List do
-	rarityOrder[r.Id] = r.Order
-end
 
 local floors = {}
 
@@ -322,10 +326,14 @@ local GENERATORS = {
 	{ Id = "FusionReactor", Out = MachineData.ById.FusionReactor.PowerOut, Price = MachineData.ById.FusionReactor.Price },
 }
 
--- The Foundry coins of a blaster level in this run (A.BlasterCoins or BlasterData).
+-- The coin scale of a blaster level in this run (A.BlasterCoins or BlasterData.coins).
 local function forgeCoins(level: number): number
-	local entry = BlasterData.ByLevel[level]
-	return (A.BlasterCoins and A.BlasterCoins[level]) or (entry and entry.Recipe and entry.Recipe.Coins) or 0
+	return (A.BlasterCoins and A.BlasterCoins[level]) or BlasterData.coins(level)
+end
+
+-- The Vault price of a blaster level in this run.
+local function vaultPrice(level: number): number
+	return forgeCoins(level) * (A.VaultMult or BlasterData.Vault.PriceMultiplier)
 end
 
 -- 2 significant digits, the way MineFloors and HoverboardData round their prices.
@@ -337,7 +345,7 @@ local function round2(raw: number): number
 	return math.floor(raw / step + 0.5) * step
 end
 
--- The elevator's price: 2/3 of the blaster 7 forge (MineFloors' rule) unless overridden.
+-- The elevator's price: 2/3 of the blaster 7 coin scale (MineFloors' rule) unless overridden.
 local function elevatorPrice(): number
 	return A.ElevatorPrice or round2(forgeCoins(7) * 2 / 3)
 end
@@ -351,7 +359,7 @@ local function hoverboards(): { { Price: number, Walk: number } }
 		if board.Kind == "Coins" and board.Price then
 			i += 1
 			local level = A.HoverboardLevels[i]
-			local configCoins = if level then BlasterData.ByLevel[level].Recipe.Coins else 0
+			local configCoins = if level then BlasterData.coins(level) else 0
 			local price = if level and configCoins > 0 then round2(board.Price / configCoins * forgeCoins(level)) else board.Price
 			table.insert(list, { Price = price, Walk = A.BaseWalk / board.Speed })
 		end
@@ -397,7 +405,7 @@ local function newPlayer(): any
 		Earned = 0,
 		Blaster = 1,
 		BlasterOre = "",
-		Carry = 1,
+		Pack = 1, -- the worn backpack: index in BackpackData.List
 		TrainCap = 0, -- levels
 		TrainSpeed = 0,
 		Hover = 0,
@@ -412,10 +420,9 @@ local function newPlayer(): any
 		PowerDemand = 0,
 		Poles = 0,
 		Podium = {} :: { number },
-		IngotsReady = 0, -- ingots of the next blaster's rarity put aside
 		Pending = 0, -- fractional ores carried between steps
 		-- steps 6-7 (the save's shapes, so the real config helpers read them)
-		Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 },
+		Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 0 },
 		Enchants = { Owned = {}, Slots = { "", "", "", "" } },
 		Golems = { Owned = {}, Equipped = {}, NextId = 1 },
 		Artifacts = { Found = {}, Chapters = {} },
@@ -538,8 +545,11 @@ local function flow(p: any): (number, number, any, number)
 	local breakTime = floor.HP / dps * (2 / 3 + 1 / 3 / (1 + (stats.OverchargePct or 0)))
 	local rockTime = breakTime + A.RockWalk * walkMult(p)
 	local perRock = A.OresPerRock * (1 + (stats.TwinDropChance or 0))
-	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / ToolData.carryCapacity(p.Carry, false)) / A.Efficiency
-	local cap = trainCapacity(p.TrainCap)
+	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / BackpackData.List[p.Pack].Capacity) / A.Efficiency
+	-- a train pours into the Ore Pen: more than the biggest pen never arrives in one trip
+	-- (TrainService waits at the stop for room; TrainConfig keeps the top train within it)
+	local penTop = EconomyConfig.Pen.BaseCapacity + #EconomyConfig.Pen.Prices * EconomyConfig.Pen.PerLevel
+	local cap = math.min(trainCapacity(p.TrainCap), penTop)
 	local trainRate = cap / (trainTrip(p.TrainSpeed) + TrainConfig.ReturnSeconds + A.TrainLoad)
 	if p.Cleaners == 0 then
 		local trip = if p.Elevator then 8 else A.CleanTrip
@@ -751,15 +761,13 @@ end
 -- Purchase candidates: { Name, Price, Apply(p, rng), Gain? (expected, else measured on a copy) }.
 local function candidates(p: any): { any }
 	local list = {}
-	local carry = ToolData.CarryLevels[p.Carry + 1]
-	if carry then
+	local pack = BackpackData.List[p.Pack + 1]
+	if pack then
 		table.insert(list, {
-			Name = "Carry " .. carry.Name,
-			Price = carry.Price,
+			Name = pack.Name .. " (" .. pack.Capacity .. ")",
+			Price = pack.Price,
 			Apply = function(q)
-				q.Carry += 1
-				q.Gear.Backpack = q.Carry - 1
-				q.GearStats = nil
+				q.Pack += 1
 			end,
 		})
 	end
@@ -1146,11 +1154,10 @@ local function hexaLucky(p: any, floor: any, coinsNeeded: number, reserve: numbe
 		return
 	end
 	local offer = BoostConfig.OfferById.HexaLucky5
-	-- ForgeShare of the next forge; at the top level, of the top level's own forge (BoostConfig.coinPrice)
+	-- ForgeShare of the next level's coin scale; at the top level, of the top level's own (BoostConfig.coinPrice)
 	local forge = coinsNeeded
 	if forge <= 0 then
-		local top = BlasterData.MaxLevel
-		forge = (A.BlasterCoins and A.BlasterCoins[top]) or BlasterData.ByLevel[top].Recipe.Coins
+		forge = forgeCoins(BlasterData.MaxLevel)
 	end
 	local share = A.HexaForgeShare or offer.ForgeShare or 0
 	local price = math.max(offer.MinPrice or 0, math.floor(forge * share + 0.5))
@@ -1195,6 +1202,7 @@ local function levelStep(p: any, rocks: number, cleaned: number, raw: number, t:
 			rocks * w.RocksBroken.Xp
 			+ (cleaned + raw) * w.OresMined.Xp
 			+ cleaned * w.OresCleaned.Xp
+			+ (if p.Cleaners == 0 then cleaned * A.HandGrades.Flawless * w.FlawlessCleans.Xp else 0) -- hand cleans only
 			+ raw * w.ItemsSold.Xp
 			+ w.PlaySeconds.Xp
 		)
@@ -1237,13 +1245,10 @@ local function simulate(seed: number, start: any?): any
 		-- this step's cleaned ores: podium candidates, foundry ingots
 		p.Pending += cleaned * A.Step
 		local next = BlasterData.ByLevel[p.Blaster + 1]
-		local recipe = next and next.Recipe
-		local coinsNeeded = if recipe
-				and A.BlasterCoins
-				and A.BlasterCoins[p.Blaster + 1]
-			then A.BlasterCoins[p.Blaster + 1]
-			elseif recipe then recipe.Coins
-			else 0
+		local sold = next ~= nil and next.Coins ~= nil and not next.ComingSoon
+		-- the next level's coin scale (Hexa Lucky's price follows it) and its Vault price
+		local coinsNeeded = if sold then forgeCoins(p.Blaster + 1) else 0
+		local blasterPrice = if sold then vaultPrice(p.Blaster + 1) else 0
 		local luck = luckOf(p)
 		while p.Pending >= 1 do
 			p.Pending -= 1
@@ -1258,10 +1263,6 @@ local function simulate(seed: number, start: any?): any
 				if income > p.Podium[1] then
 					p.Podium[1] = income
 				end
-			end
-			-- an ingot of the next blaster's rarity goes to the Foundry stock
-			if recipe and #p.Furnaces > 0 and rarityOrder[ore.Rarity] >= rarityOrder[recipe.MinRarity] then
-				p.IngotsReady = math.min(recipe.Ingots, p.IngotsReady + 1)
 			end
 		end
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
@@ -1279,21 +1280,16 @@ local function simulate(seed: number, start: any?): any
 		findAndSpendShards(p, rng, rocks, cleaned, floor, t)
 		t += A.Step
 
-		-- 1) the next blaster: Foundry (ingots + coins) or the Vault (4x coins)
-		if recipe then
-			local vault = coinsNeeded * BlasterData.Vault.PriceMultiplier
+		-- 1) the next blaster at the Vault
+		if sold then
 			local bought = false
-			if p.IngotsReady >= recipe.Ingots and p.Coins >= coinsNeeded then
-				buy(p, "Blaster " .. (p.Blaster + 1) .. " (Foundry)", coinsNeeded, t)
-				p.BlasterOre = floor.Ores[1].ore.Id
-				bought = true
-			elseif p.Coins >= vault then
-				buy(p, "Blaster " .. (p.Blaster + 1) .. " (Vault)", vault, t)
+			if p.Coins >= blasterPrice then
+				buy(p, "Blaster " .. (p.Blaster + 1) .. " (Vault)", blasterPrice, t)
+				p.BlasterOre = BlasterData.vaultOre(p.Blaster + 1)
 				bought = true
 			end
 			if bought then
 				p.Blaster += 1
-				p.IngotsReady = 0
 				p.Stats = nil
 				p.EnchantStats = nil
 				refillSlots(p) -- a new enchant slot may be open
@@ -1345,8 +1341,8 @@ local function simulate(seed: number, start: any?): any
 		-- 4) the best-paying machine / upgrade / steps 6-7 item that pays back
 		-- in time, saving for the next blaster first when it is close
 		local reserve = 0
-		if recipe and p.IngotsReady >= recipe.Ingots then
-			reserve = coinsNeeded
+		if sold and blasterPrice <= income * A.BlasterSaveMinutes * 60 then
+			reserve = blasterPrice
 		end
 		if t % A.ShopEvery == 0 then
 			local bestScore, best = math.huge, nil
@@ -1556,8 +1552,8 @@ local function runScenario(scenario: any, starts: { any }?): any
 	}
 end
 
--- `calibrate`: Foundry coin prices per blaster level so the Typical player
--- reaches each level at the target time (binary search, one level at a time).
+-- `calibrate`: coin scales per blaster level so the Typical player reaches
+-- each level at the target time (binary search, one level at a time).
 local TARGETS = { [2] = 180, [3] = 720, [4] = 1500, [5] = 2700, [6] = 4800, [7] = 7200, [8] = 11700, [9] = 18000, [10] = 28800 }
 -- Each level's search starts every player from where they reached the level
 -- before (checkpoints, with the final price of that level): the history up to
@@ -1566,7 +1562,7 @@ local TARGETS = { [2] = 180, [3] = 720, [4] = 1500, [5] = 2700, [6] = 4800, [7] 
 local function calibrate(): { [number]: number }
 	local prices: { [number]: number } = {}
 	for level = 2, 10 do
-		prices[level] = BlasterData.ByLevel[level].Recipe.Coins
+		prices[level] = BlasterData.coins(level)
 	end
 	local players = A.Players
 	A.Players = A.CalibratePlayers or 24
@@ -1618,6 +1614,44 @@ local function calibrate(): { [number]: number }
 	return prices
 end
 
+-- `calibrate-vault`: the Vault multiplier (the coin scales stay, so everything that
+-- follows them stays too) that puts the Typical player at blaster 10 at its target
+-- (binary search on a log scale, rounded to 2 decimals).
+local function calibrateVault(): number
+	local players = A.Players
+	A.Players = A.CalibratePlayers or 24
+	local lo, hi = math.log(0.2), math.log(20)
+	for _ = 1, 14 do
+		local mid = (lo + hi) / 2
+		A.VaultMult = math.exp(mid)
+		local result = runScenario({
+			Name = "Calibrate",
+			Efficiency = 0.5,
+			CrystalMode = "Mixed",
+			StopLevel = 10,
+			StopTime = TARGETS[10] * 1.3,
+		})
+		local reached: number? = nil
+		for _, m in result.Milestones do
+			if m.Key == "Blaster 10" and m.Share >= 0.5 then
+				reached = m.Median
+			end
+		end
+		print(string.format("  x%.3f: blaster 10 at %s", A.VaultMult, if reached then string.format("%.0f s", reached) else "-"))
+		if reached and reached < TARGETS[10] then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	A.Players = players
+	A.StopLevel = nil
+	A.StopTime = nil
+	local mult = math.floor(math.exp((lo + hi) / 2) * 100 + 0.5) / 100
+	A.VaultMult = mult
+	return mult
+end
+
 -- `override=file.json`: a JSON object merged into the assumptions (any key of A,
 -- e.g. IncomeMult, BlasterCoins = { "4": 400000 }, Podiums); a "Scenarios" list
 -- replaces the scenario list. Works with and without `calibrate`.
@@ -1654,6 +1688,14 @@ if process.args[1] == "calibrate" then
 		)
 	end
 	results[1].Prices = prices
+elseif process.args[1] == "calibrate-vault" then
+	print("Calibrating the Vault multiplier for the Typical player...")
+	local mult = calibrateVault()
+	print(string.format("  Vault.PriceMultiplier = %.2f", mult))
+	for _, scenario in SCENARIOS do
+		table.insert(results, runScenario(scenario))
+	end
+	results[1].VaultMult = mult
 else
 	for _, scenario in SCENARIOS do
 		table.insert(results, runScenario(scenario))
@@ -1721,7 +1763,7 @@ local function priceWindows(result: any): { any }
 	local prices = result.Prices or A.BlasterCoins
 	local function forgeAfter(level: number): number
 		local nextLevel = math.min(level + 1, BlasterData.MaxLevel)
-		return (prices and prices[nextLevel]) or BlasterData.ByLevel[nextLevel].Recipe.Coins
+		return (prices and prices[nextLevel]) or BlasterData.coins(nextLevel)
 	end
 	for _, offer in BoostConfig.CoinOffers do
 		row(offer.Id .. " (" .. offer.Seconds / 60 .. " min)", function(level)

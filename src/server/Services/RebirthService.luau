@@ -6,12 +6,17 @@
 	                           MinBlaster, "Busy" while one runs), then in one
 	                           go, with no yield: PlotService.reload takes the
 	                           plot down (the machines unload, the vise ore,
-	                           the pen's intents, the Foundry session), every
+	                           the pen's intents), every
 	                           item the player owns leaves the world (loose,
 	                           carried, on belts), RebirthConfig.reset rewrites
 	                           the save (coins, blaster, upgrades, train,
 	                           backpack, every ore; the factory stays) and pays
-	                           the stars, and the plot comes back up from the
+	                           the stars, Stats.RunIncome = the coins / s the
+	                           factory kept (PodiumService.keptIncome: the
+	                           podiums and the droppers; the floor under the
+	                           run's Vault prices, raised whenever the factory
+	                           makes more during the run), and the plot comes
+	                           back up from the
 	                           save (the machines spawn with empty queues).
 	                           Then the train starts over (TrainService.
 	                           resetRun), the podiums redraw, DataService.
@@ -24,12 +29,13 @@
 	                           "Locked" for a colour the perk hasn't unlocked).
 	The Plot Glow (World/PlotGlow) follows the save: built into the plot when
 	it is assigned and whenever the pick changes, gone when the plot is
-	freed. THE GREAT FORGE plaza's fire crystal gets a "Star Forge" prompt
-	(CrystalPrompt, E / gamepad Y) that opens the window (OpenUI "Rebirth").
+	freed. The plaza's golden dragon statue (where the fire crystal stood)
+	gets a "Star Forge" prompt (CrystalPrompt, E / gamepad Y) at its
+	pedestal's front that opens the window (OpenUI "Rebirth").
 	  { Action = "Weapon", Id } buys a STAR blaster with Forge Stars
 	                           (StarBlasterData.quote / buy: "BadWeapon" |
 	                           "Owned" | "Locked" | "NoStars") and equips it.
-	  { Action = "Equip", Id } the star blaster to fight with ("" = your
+	  { Action = "Equip", Id } the star blaster to fight with ("" = your own
 	                           forged blaster; "Locked" for one you don't
 	                           own or that hasn't opened yet).
 	Every request read gets a RebirthResult { Action, Ok, Reason?, Perk?,
@@ -82,7 +88,13 @@ local RebirthService = {}
 
 RebirthService.StarsAttribute = "ForgeStars"
 RebirthService.CrystalPrompt = "StarForgePrompt"
-RebirthService.CrystalRange = 16 -- studs from the crystal's axis (the ring is 10.2 out, the walk-in base 12.4)
+-- (2026-10-25: the golden dragon statue stands where the fire crystal was:
+-- the prompt moved from the axis, inside its pedestal now, to the pedestal's
+-- front facing the spawn, Plaza/GoldenStatue's drum apothem 5.0 + 0.6)
+RebirthService.CrystalFront = 5.6
+-- studs from the prompt (the ring is 10.2 out, the walk-in base 12.4: the
+-- whole ring reaches it, behind the statue too, the spawn pad 20 away doesn't)
+RebirthService.CrystalRange = 18
 RebirthService.MomentSeconds = 3.2 -- the client's flash + banner, then the character goes home
 
 local MAX_PAYLOAD = 4
@@ -153,15 +165,16 @@ end
 ---------------------------------------------------------------- the crystal prompt
 
 --[[
-	The "Star Forge" prompt at THE GREAT FORGE plaza's fire crystal: an
-	invisible anchored part on the crystal's axis at chest height (the
-	crystal itself spins on the clients), under `parent`. Returns the prompt.
+	The "Star Forge" prompt at the plaza's golden dragon statue (where the
+	fire crystal stood): an invisible anchored part at chest height in front
+	of the pedestal (CrystalFront toward +Z, the statue's front), under
+	`parent`. Returns the prompt.
 ]]
 function RebirthService.setupCrystal(parent: Instance, center: Vector3, floorY: number): ProximityPrompt
 	local anchor = Instance.new("Part")
 	anchor.Name = RebirthService.CrystalPrompt
 	anchor.Size = Vector3.new(1, 1, 1)
-	anchor.CFrame = CFrame.new(center.X, floorY + 3, center.Z)
+	anchor.CFrame = CFrame.new(center.X, floorY + 3, center.Z + RebirthService.CrystalFront)
 	anchor.Transparency = 1
 	anchor.Anchored = true
 	anchor.CanCollide = false
@@ -207,6 +220,9 @@ local function doRebirth(player: Player, data: { [string]: any }): (number, numb
 			end
 		end
 		stars, count = RebirthConfig.reset(data)
+		-- the run's Vault price floor starts at what the factory still makes (a high-water
+		-- mark from here on: PodiumService.raiseRunIncome)
+		data.Stats.RunIncome = PodiumService.keptIncome(player, data)
 		-- the relics the reset kept in the pen (from queues, the train, the pen) go to the keeper
 		local storage = data.Storage
 		for i = #storage, 1, -1 do
@@ -460,6 +476,7 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		Glow = RebirthConfig.glowOf(data),
 		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
 		Reached = RebirthConfig.reachedOf(data),
+		RunIncome = RebirthConfig.runIncomeOf(data), -- the run's Vault price floor (BlasterData.vaultPrice)
 		Start = RebirthConfig.startFor(data),
 		MinBlaster = RebirthConfig.MinBlaster,
 		Weapons = weapons,
@@ -500,7 +517,7 @@ function RebirthService.init()
 end
 
 function RebirthService.start()
-	-- the "Star Forge" prompt at the plaza's fire crystal (the lobby is built by now)
+	-- the "Star Forge" prompt at the plaza's golden dragon statue (the lobby is built by now)
 	local map = Workspace:FindFirstChild("Map")
 	local ring = map and map:FindFirstChild("FireCrystalRing", true)
 	local ok, piece = pcall(LobbyLayout.get, "FireCrystal")

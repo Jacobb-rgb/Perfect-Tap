@@ -26,8 +26,8 @@ local ORDER = {
 	"IronBoxController",
 	"PodiumController",
 	"SellController",
+	"BackpackController", -- the backpack inventory window: the HUD's backpack button, Q, gamepad R1
 	"TrainController",
-	"FoundryController",
 	"TechShopController",
 	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening

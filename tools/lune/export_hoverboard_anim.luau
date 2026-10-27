@@ -110,7 +110,7 @@ local function stickGroup(name: string, length: number, core: number, glow: numb
 	})
 end
 -- one stick set per board in the reel, in its glow colour
-for _, boardId in { "RoyalPhoenix", "NeonComet", "TimberDrifter" } do
+for _, boardId in { "TerraForgeCustom", "RoyalPhoenix", "TimberDrifter" } do
 	local color = HoverboardData.get(boardId).Colors.Glow
 	for i = 1, ARC_STICKS do
 		stickGroup(`ArcStick_{boardId}_{i}`, ARC_STICK, HoverboardBolts.CoreWidth, HoverboardBolts.GlowWidth, color)
@@ -147,16 +147,18 @@ local function const(v: number): (number) -> number
 	end
 end
 
-local SIDE = { Position = { 9.5, 5.2, -6.5 }, Target = { 0, 3.2, 0 }, Fov = 42 }
+-- the rider faces -Z: BEHIND is the game's own camera (from behind, a little above)
+local BEHIND = { Position = { 4.5, 6.2, 10.5 }, Target = { 0, 3.0, 0 }, Fov = 42 }
+local SIDE = { Position = { 10, 5.2, 4 }, Target = { 0, 3.2, 0 }, Fov = 42 }
 local FRONT = { Position = { 4.5, 5.0, -10.5 }, Target = { 0, 3.0, 0 }, Fov = 42 }
-local CLOSE = { Position = { 8, 4.8, -6.5 }, Target = { 0, 2.6, 0 }, Fov = 44 }
-local HIGH = { Position = { 17, 9.5, -14 }, Target = { 0, 6.8, 0 }, Fov = 50 }
+local CLOSE = { Position = { 7, 5.6, 6.5 }, Target = { 0, 2.4, 0 }, Fov = 44 }
+local HIGH = { Position = { 10, 8.5, 11 }, Target = { 0, 5.6, 0 }, Fov = 52 }
 
 local SEGMENTS: { Seg } = {
 	{
 		Title = "NASKOČENÍ",
 		Subtitle = "prkno přiletí zespodu s otočkou, udeří do něj blesk, hráč naskočí",
-		Board = "RoyalPhoenix",
+		Board = "TerraForgeCustom",
 		Length = 2.6,
 		Mount = 0.5,
 		Speed = const(0),
@@ -165,21 +167,31 @@ local SEGMENTS: { Seg } = {
 		Picks = { { 0.62, "blesk z nebe" }, { 0.8, "skok na prkno" }, { 1.3, "dopad" } },
 	},
 	{
-		Title = "JÍZDA",
-		Subtitle = "surfařský postoj, s rychlostí se přikrčí, v zatáčkách se naklání",
-		Board = "RoyalPhoenix",
+		Title = "JÍZDA JAKO V PET SIM 99",
+		Subtitle = "prkno napříč pod nohama, hráč kouká dopředu, nohy od sebe",
+		Board = "TerraForgeCustom",
 		Length = 3.6,
 		Speed = ramp(0.1, 1, 0.2, 1.6),
 		Turn = function(t: number): number
 			return math.sin(t * 1.8) * math.clamp((t - 1.2) / 0.6, 0, 1)
 		end,
-		Camera = SIDE,
+		Camera = BEHIND,
 		Picks = { { 0.4, "klid" }, { 1.9, "plná rychlost" }, { 2.6, "zatáčka" } },
+	},
+	{
+		Title = "ZE STRANY",
+		Subtitle = "s rychlostí se přikrčí a nakloní dopředu",
+		Board = "TerraForgeCustom",
+		Length = 2.4,
+		Speed = ramp(0.2, 1, 0.2, 1.2),
+		Turn = const(0),
+		Camera = SIDE,
+		Picks = { { 0.3, "pomalu" }, { 1.4, "rychle" }, { 2.1, "plná rychlost" } },
 	},
 	{
 		Title = "SKOK + KICKFLIP",
 		Subtitle = "při skoku se prkno pod nohama protočí, dopad s výbojem",
-		Board = "RoyalPhoenix",
+		Board = "TerraForgeCustom",
 		Length = 3.2,
 		Speed = const(0.8),
 		Turn = const(0),
@@ -189,8 +201,8 @@ local SEGMENTS: { Seg } = {
 	},
 	{
 		Title = "BLESKY",
-		Subtitle = "z okrajů prkna šlehají blesky, nejvíc při plné rychlosti",
-		Board = "RoyalPhoenix",
+		Subtitle = "duhové blesky na Terra Forge Custom",
+		Board = "TerraForgeCustom",
 		Length = 2.6,
 		Speed = const(1),
 		Turn = const(0),
@@ -201,14 +213,14 @@ local SEGMENTS: { Seg } = {
 		Picks = { { 0.5, "jízda" }, { 1.1, "výboj" }, { 1.4, "výboj" } },
 	},
 	{
-		Title = "NEON COMET",
-		Subtitle = "azurové blesky",
-		Board = "NeonComet",
+		Title = "ROYAL PHOENIX",
+		Subtitle = "teď za mince",
+		Board = "RoyalPhoenix",
 		Length = 2.4,
 		Mount = 0.2,
 		Speed = ramp(0, 1, 0.9, 1.6),
 		Turn = const(0),
-		Camera = SIDE,
+		Camera = BEHIND,
 		Picks = { { 0.45, "blesk z nebe" }, { 1.2, "rozjezd" }, { 2.0, "plná rychlost" } },
 	},
 	{
@@ -219,7 +231,7 @@ local SEGMENTS: { Seg } = {
 		Mount = 0.2,
 		Speed = ramp(0, 1, 0.9, 1.6),
 		Turn = const(0),
-		Camera = SIDE,
+		Camera = BEHIND,
 		Picks = { { 0.45, "blesk z nebe" }, { 1.2, "rozjezd" }, { 2.0, "plná rychlost" } },
 	},
 }
@@ -287,7 +299,7 @@ for index, seg in SEGMENTS do
 		air += ((if inAir then 1 else 0) - air) * math.min(1, dt * (if inAir then 10 else 16))
 		local speed01 = math.clamp(seg.Speed(t), 0, 1)
 		local turn = math.clamp(seg.Turn(t), -1, 1)
-		roll += (turn * 0.22 - roll) * math.min(1, dt * 6)
+		roll += (turn * BoardPose.MaxRoll - roll) * math.min(1, dt * 6)
 		pitch += (speed01 * 0.07 - pitch) * math.min(1, dt * 4)
 		local hrp = CFrame.new(0, hrpY, 0)
 
@@ -305,7 +317,7 @@ for index, seg in SEGMENTS do
 			local pose = BoardPose.evaluate({
 				T = clock + t,
 				Speed = speed01,
-				Turn = roll / 0.22,
+				Turn = roll / BoardPose.MaxRoll,
 				Mount = mount,
 				Air = air,
 				Land = math.clamp(1 - (t - landAt) / BoardPose.LandTime, 0, 1),
@@ -331,7 +343,12 @@ for index, seg in SEGMENTS do
 				rise, spin = BoardPose.boardMount(mount)
 			end
 			local flip = if airAt and t - airAt < BoardPose.FlipTime then BoardPose.flip(t - airAt) else 0
-			local boardCF = hrp * offset * CFrame.new(0, bob + rise, 0) * CFrame.Angles(pitch, spin, roll) * BoardPose.flipFrame(flip)
+			local boardCF = hrp
+				* offset
+				* CFrame.new(0, bob + rise, 0)
+				* CFrame.Angles(pitch, spin, roll)
+				* BoardPose.Across
+				* BoardPose.flipFrame(flip)
 			row[groupIndex["Board_" .. seg.Board]] = cf12(boardCF)
 
 			-- the lightning (HoverboardController: one flicker every FlickerEvery)
@@ -378,7 +395,7 @@ local out = {
 	duration = round(clock),
 	brandNote = "hoverboardy: animace + blesky · náhled z herního kódu (BoardPose, HoverboardBolts)",
 	sheetTitle = "TERRA FORGE: HOVERBOARDY",
-	sheetSubtitle = "animace jízdy + blesky · náhled z herního kódu (BoardPose na R15 postavičce) · video: hoverboardy_animace.mp4",
+	sheetSubtitle = "jízda jako v Pet Sim 99 + Terra Forge Custom · náhled z herního kódu (BoardPose na R15 postavičce) · video: hoverboardy_jizda_custom.mp4",
 	groups = groups,
 	frames = frames,
 	segments = segmentsOut,

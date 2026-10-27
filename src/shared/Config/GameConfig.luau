@@ -89,34 +89,12 @@ local GameConfig = {
 	SellOthersRadius = 60, -- other players this close see the sell puff
 	StorageTakeMax = 5, -- items per Take request
 
-	-- Foundry (step 3): ingots wait in data.Foundry.Stock until a blaster is forged.
-	-- The FOUNDRY chute (BaseLayout.Chutes.Foundry; owner's items only) puts an
-	-- ingot the next blaster level can use (rarity >= that level's
-	-- Recipe.MinRarity) into the stock while it is below MaxFoundryStock; every
-	-- other item (other ingots, ore, any ingot once the blaster is at its top
-	-- level) and usable ingots once the stock is full go into the Ore Pen. Only
-	-- when the pen is full too does the item wait on the cell, and the
-	-- receiver shows why ("Ore Pen full"), so a full stock never jams the line.
-	-- Forging uses exactly Recipe.Ingots usable ingots: one of the skin ore
-	-- (its lowest-value ingot) plus the lowest-value other usable ingots
-	-- (ItemData.value ascending, ties in stock order), so the best ones stay.
-	-- In the same step a successful forge moves the stock ingots the NEW next
-	-- level can't use into the pen (as many as fit; the rest stay until
-	-- FoundryAction "Take" moves them). "Take" moves stock ingots to the pen.
-	MaxFoundryStock = 60, -- DataStore safety cap (Migrations moves extras to the pen)
-
-	-- Anvil
-	AnvilTimeout = 60, -- seconds before a forging session is cancelled
-	AnvilWalkAway = 20, -- studs from the anvil that cancel a session
-	AnvilMinStrikeGap = 0.18, -- seconds; no human hammers faster than this
-	AnvilMinSecondsPerHit = 0.3, -- the last strike comes at least Hits x this after the start
-
 	-- Studio testing
 	StudioDevKit = STUDIO_DEV_KIT,
 
 	-- Cleaning minigame (server sanity limits)
 	CleaningTimeout = 300, -- seconds before an open session is cancelled
-	CleaningMinSeconds = 3, -- no human can finish faster than this
+	CleaningMinSeconds = 2, -- no human can finish faster than this (the fastest honest spray run takes ~2.5 s)
 
 	-- Remotes
 	DefaultRateLimit = { Rate = 8, Burst = 16 }, -- events per second per player

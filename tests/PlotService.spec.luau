@@ -115,14 +115,35 @@ return function(T, Loader)
 		return WorldLayout.plotCFrame(plot):PointToObjectSpace(world.Position)
 	end
 
-	T.test("Yard: every plot has the pen, 4 podiums, foundry and train stop, named for the services", function()
+	T.test("Yard: every plot has the pen, 5 podiums and train stop (no Foundry), named for the services", function()
 		for _, plot in WorldLayout.Plots do
 			local model = buildPlot(plot)
 			local yard = model:FindFirstChild("Yard")
 			T.truthy(yard, "Yard")
-			for _, name in { "Ground", "Fence", "Pen", "Foundry", "TrainStop" } do
+			for _, name in { "Ground", "Fence", "Pen", "TrainStop" } do
 				T.truthy(yard:FindFirstChild(name), `plot {plot.Id} {name}`)
 			end
+			T.eq(yard:FindFirstChild("Foundry"), nil, `plot {plot.Id}: no Foundry (owner 2026-10-24)`)
+			-- the whole yard is the Ore Pen's tile floor (owner 2026-10-25: "no green at all"):
+			-- one walkable pad over the yard with painted tile seams, no lawn, no gravel paths
+			local ground = yard:FindFirstChild("Ground")
+			T.truthy(ground and ground:IsA("BasePart"), `plot {plot.Id}: the yard's ground`)
+			T.eq(ground.Color, yard.Pen.Floor.Color, "the Ore Pen's floor colour")
+			T.truthy(ground.CanCollide, "the ground you walk on")
+			local yardRect = BaseLayout.Yard
+			T.near(ground.Size.X, yardRect.Size.X, 1e-4, "the whole yard (x)")
+			T.near(ground.Size.Z, yardRect.Size.Z, 1e-4, "the whole yard (z)")
+			local paint = ground:FindFirstChild("Paint")
+			T.truthy(paint and paint:IsA("SurfaceGui") and paint.Face == roblox.Enum.NormalId.Top, "tile seams on top")
+			T.lt(10, #paint:GetChildren(), "a grid of seams, not a flat slab")
+			for _, child in yard:GetChildren() do
+				T.falsy(child.Name == "Path" or child.Name == "StationFloor", `plot {plot.Id}: no gravel path or extra pad ({child.Name})`)
+			end
+			-- the Cleaning Station's footprint lies on it
+			local area = BaseLayout.CleaningStation.Area
+			local p = WorldLayout.plotCFrame(plot):PointToObjectSpace(ground.CFrame.Position)
+			T.le(math.abs(p.X - area.Center.X) + area.Size.X / 2, ground.Size.X / 2 + 1e-4, "under the station (x)")
+			T.le(math.abs(p.Z - area.Center.Z) + area.Size.Z / 2, ground.Size.Z / 2 + 1e-4, "under the station (z)")
 			local intake = yard.Pen:FindFirstChild("Intake")
 			T.truthy(intake and intake:IsA("BasePart"), "Pen.Intake part")
 			T.eq(intake.Transparency, 1, "intake invisible")
@@ -470,7 +491,8 @@ return function(T, Loader)
 					T.near(d.CFrame.Position.Y - plotY, PlotBuilder.HoloRing.Y, 1e-3, "ring height")
 				end
 			end
-			T.eq(bars, PlotBuilder.HoloRing.Sides, "a closed holo-ring")
+			-- (a locked slot shows its padlock there; PodiumService copies the ring onto it with the perk)
+			T.eq(bars, if locked then 0 else PlotBuilder.HoloRing.Sides, "a closed holo-ring")
 			local hover = podium:FindFirstChild("Hover")
 			T.truthy(hover and hover:IsA("BasePart"), "hover box")
 			T.eq(hover.Transparency, 1, "hover box is invisible")

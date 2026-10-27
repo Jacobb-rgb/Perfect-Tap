@@ -769,13 +769,13 @@ return function(T, Loader)
 		end)
 		T.eq(layouts, 1, "spawn layout")
 		local seen = {}
-		MachineService.register("CleaningStation", {
+		MachineService.register("Crusher", {
 			spawned = function(m)
 				table.insert(seen, m)
 			end,
 		})
-		T.eq(#seen, 1, "the StarterKit station got the spawned hook")
-		T.eq(seen[1].Id, "CleaningStation", "station")
+		T.eq(#seen, 1, "the StarterKit Crusher got the spawned hook")
+		T.eq(seen[1].Id, "Crusher", "crusher")
 		settle(function()
 			return layouts >= 2
 		end)

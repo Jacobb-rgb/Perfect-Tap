@@ -35,7 +35,7 @@
 	  (OpenUI "Offline" { Amount, Seconds, Hours }). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
-	- StateService gets Income (per second), PodiumSlots (2 or 4) and
+	- StateService gets Income (per second), PodiumSlots (3 or 5) and
 	  PodiumIncome (per slot).
 	- Step 8: the "CoinPack" receipt handler (registerGrants): coin packs
 	  pay MonetizationConfig.coinPackAmount at the income now, only while
@@ -48,7 +48,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
@@ -102,7 +104,7 @@ local perkConnections: { [Player]: RBXScriptConnection } = {}
 -- players whose offline payout waits for their pass checks
 local waitingPasses: { [Player]: boolean } = {}
 -- an offline payout made while a pass check for an offline perk kept failing
--- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
+-- (the absence, what was paid, the income without / with podiums 4-5, the perks it counted)
 type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean, Money: boolean }
 local topUps: { [Player]: TopUp } = {}
 -- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
@@ -311,6 +313,8 @@ local function buildDisplay(plotId: number, slot: number, desc: Desc): (Model?, 
 end
 
 -- Locked slots: lock + price plate visible and a dull rim until the owner has the perk.
+-- (The paid slots never get a holo-ring, not even open: the map's phone budget; the lit
+-- gold rim shows an open slot. PlotBuilder.)
 local function refreshLocks(plotId: number, owner: Player?)
 	for slot = FREE + 1, MAX do
 		local podium = podiumModel(plotId, slot)
@@ -400,7 +404,7 @@ local function begin(player: Player, slot: number): ({ string }?, Reason?)
 end
 
 local function lockedToast(player: Player)
-	toast(player, "Podiums 3 and 4 come with the Podium Pass (100 R$). Coming soon!", "Info")
+	toast(player, "Podiums 4 and 5 come with the Podium Pass (100 R$). Coming soon!", "Info")
 end
 
 -- Places one ore with this storage key from the pen onto a slot.
@@ -513,28 +517,28 @@ function PodiumService.placeFromHands(player: Player, slot: number): (boolean, R
 		toast(player, "That podium already has an ore. Remove it first.")
 		return false, "Taken"
 	end
-	local best: ItemRecord? = nil
+	-- the backpack's best cleaned ore (the highest podium income)
+	local bestKey: string? = nil
 	local bestIncome = -1
-	for _, record in CarryService.list(player) do
-		if record.State == "Carried" and EconomyConfig.Podiums.Kinds[record.Kind] then
-			local income = ItemData.income(ItemService.descOf(record))
+	for _, stack in CarryService.stacks(player) do
+		if EconomyConfig.Podiums.Kinds[stack.Desc.K] then
+			local income = ItemData.income(stack.Desc)
 			if income > bestIncome then
-				best, bestIncome = record, income
+				bestKey, bestIncome = stack.Key, income
 			end
 		end
 	end
-	local chosen = best
+	local chosen = bestKey
 	if not chosen then
 		return false, "NothingCarried"
 	end
-	local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
-		return r == chosen
-	end)
-	if not record then
+	-- no yield between taking it out of the backpack and putting it on the podium
+	local desc = CarryService.take(player, function(d: ItemData.Desc): boolean
+		return ItemData.storageKey(d) == chosen
+	end, 1)[1]
+	if not desc then
 		return false, "NothingCarried"
 	end
-	-- no yield between taking it off the stack and putting it on the podium
-	local desc = ItemService.absorb(record)
 	list[slot] = ItemData.storageKey(desc)
 	DataService.changed(player)
 	local plotId = PlotService.plotOf(player)
@@ -572,7 +576,7 @@ local function isNear(player: Player, plotId: number, slot: number): boolean
 	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= PodiumService.Range + RANGE_SLACK
 end
 
--- PodiumAction (slot 1..4, "Remove" | "Place", { Key }?)
+-- PodiumAction (slot 1..5, "Remove" | "Place", { Key }?)
 local function onAction(player: Player, slotArg: any, actionArg: any, argArg: any)
 	local slot = Guard.integer(slotArg, 1, MAX)
 	local action = Guard.string(actionArg, 16)
@@ -654,12 +658,51 @@ end
 
 ---------------------------------------------------------------- income
 
+--[[
+	The coins / s a player's factory makes by itself: the podiums plus every placed
+	dropper at full flow, through the income multiplier (a Drop sold in a Sell Box
+	pays through it; DropperConfig.placedIncome counts the Money Laser).
+]]
+function PodiumService.keptIncome(player: Player, data: { [string]: any }): number
+	local podiums = PodiumService.incomeOf(player, data)
+	local droppers = DropperConfig.placedIncome(data.PlacedMachines) * EconomyService.incomeMultiplier(player)
+	local total = podiums + droppers
+	return if total == total and total > 0 then math.min(total, 1e27) else 0
+end
+
+--[[
+	A rebirth run's Vault price floor (Stats.RunIncome, BlasterData.vaultPrice) is the
+	HIGHEST income the factory made by itself during the run, not a snapshot: a player
+	who packs the droppers or takes the golems off before a rebirth and puts them back
+	afterwards raises it again (the review of 2026-10-25). RebirthService starts it at
+	the rebirth, every income tick and every Vault buy raise it (never lower). The
+	first run (no rebirth yet) has no floor. Returns true when it rose.
+]]
+function PodiumService.raiseRunIncome(player: Player, data: { [string]: any }): boolean
+	if RebirthConfig.countOf(data) <= 0 then
+		return false
+	end
+	local stats = data.Stats
+	if type(stats) ~= "table" then
+		return false
+	end
+	local kept = PodiumService.keptIncome(player, data)
+	if kept > RebirthConfig.runIncomeOf(data) then
+		stats.RunIncome = kept
+		return true
+	end
+	return false
+end
+
 local function payOne(player: Player, now: number)
 	local data = DataService.get(player)
 	if not data then
 		return
 	end
 	data.LastSeen = now
+	if PodiumService.raiseRunIncome(player, data) then
+		DataService.changed(player)
+	end
 	local amount = PodiumService.incomeOf(player, data) * EconomyConfig.IncomeTick
 	if amount >= 0.001 and amount <= EconomyConfig.MaxAward then
 		EconomyService.award(player, amount, "Podium", true)
@@ -760,7 +803,7 @@ end
 	The rest of an offline payout made while a check of a pass giving an
 	offline perk kept failing, once a later check says the player owned that
 	pass when they joined (never for a pass bought in this session): the
-	absence counted again with Night Shift's hours and podiums 3-4, minus
+	absence counted again with Night Shift's hours and podiums 4-5, minus
 	what was paid. Returns the amount.
 ]]
 local function topUpOffline(player: Player): number

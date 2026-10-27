@@ -148,7 +148,7 @@ end
 
 -- Colours a part in a palette role (Kit attribute, colour, material, see-through
 -- and shine of the role, then `flags`): the world pieces in style A use it too
--- (SoftKit: plot walls, Ore Pen, podiums, train stop, Foundry).
+-- (SoftKit: plot walls, Ore Pen, podiums, train stop).
 KitMachines.style = style
 
 local function block(m: Instance, cf: CFrame, size: Vector3, role: string, flags: Props?, name: string?): BasePart

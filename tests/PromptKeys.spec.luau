@@ -7,7 +7,7 @@
 --      the modal close-ups in E_ALLOWED. Each of those suppresses every prompt
 --      while it is up (PromptController.setSuppressed), so one E press there
 --      never also fires a prompt behind it.
--- Plus PromptConfig.make itself and the role keys against Grab / Throw.
+-- Plus PromptConfig.make itself and the role keys against Grab / the backpack window.
 local roblox = require("@lune/roblox") :: any
 local Enum = roblox.Enum
 local Instance = roblox.Instance
@@ -28,15 +28,11 @@ return function(T, Loader)
 		  result card. The card is part of the cleaning close-up, which
 		  suppresses the prompts ("Cleaning", from enter() to exit()), so the
 		  station's "Clean Ore" (back on the moment you submit) can't fire too.
-		- FoundryController COLLECT_ACTION: E (and Enter, Space, A, B,
-		  Backspace) on the forge reveal's AWESOME; the forge close-up
-		  suppresses the prompts ("Foundry").
 		Nothing else may bind E: Grab is F now, so E next to a podium or a
 		machine only ever fires the prompt.
 	]]
 	local E_ALLOWED: { [string]: { Action: string, Reason: string } } = {
 		["src/client/Controllers/CleaningController.luau"] = { Action = '"TerraForgeCleanCollect"', Reason = '"Cleaning"' },
-		["src/client/Controllers/FoundryController.luau"] = { Action = "COLLECT_ACTION", Reason = '"Foundry"' },
 	}
 
 	local function walk(dir: string, out: { string })
@@ -112,8 +108,9 @@ return function(T, Loader)
 				T.eq(count(text, "ProximityPromptStyle%.Custom"), 0, rel .. ": the stock prompt look")
 			end
 		end
-		-- the 21 sites live in 20 files: 18 server services, CodexController and TrainController
-		T.truthy(makers >= 20, "the prompt sites use the helper (" .. makers .. " files)")
+		-- the sites live in 19 files: 17 server services, CodexController and TrainController
+		-- (FoundryService went with the Foundry, owner 2026-10-24)
+		T.truthy(makers >= 19, "the prompt sites use the helper (" .. makers .. " files)")
 	end)
 
 	T.test("PromptKeys: E is the prompts' key; only modal close-ups that suppress the prompts bind it", function()
@@ -142,7 +139,7 @@ return function(T, Loader)
 				T.truthy(inBindings == 0 or E_ALLOWED[rel], rel .. ": E only in an allowed modal binding")
 			end
 		end
-		T.eq(allowedSeen, 2, "the two modal Collect bindings are still the only ones")
+		T.eq(allowedSeen, 1, "the cleaning card's Collect binding is still the only one (the Foundry's went with it)")
 		for rel, allowed in E_ALLOWED do
 			local text = files[rel]
 			T.truthy(text, rel .. " exists")
@@ -153,7 +150,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("PromptKeys: Grab is F / X and no role shares a key with Grab or Throw", function()
+	T.test("PromptKeys: Grab is F / X and no role shares a key with Grab or the backpack window", function()
 		local interact = files["src/client/Controllers/InteractController.luau"]
 		local grab, throw
 		for _, args in bindings(interact) do
@@ -164,17 +161,21 @@ return function(T, Loader)
 				throw = args
 			end
 		end
-		T.truthy(grab and throw, "InteractController binds Grab and Throw")
+		T.truthy(grab, "InteractController binds Grab")
+		T.falsy(throw, "no Throw since the backpack (owner 2026-10-24: nothing is thrown)")
 		T.truthy(string.find(grab, "Enum.KeyCode.F,", 1, true), "Grab on F")
 		T.truthy(string.find(grab, "Enum.KeyCode.ButtonX", 1, true), "Grab on gamepad X")
 		T.eq(count(grab, E_KEY), 0, "Grab left E to the prompts")
+		-- the backpack window took the throw's Q / R1 (BackpackController)
+		local backpack = files["src/client/Controllers/BackpackController.luau"]
+		T.truthy(string.find(backpack, "BackpackController.Key = Enum.KeyCode.Q\n", 1, true), "the backpack on Q")
+		T.truthy(string.find(backpack, "BackpackController.PadKey = Enum.KeyCode.ButtonR1\n", 1, true), "and gamepad R1")
 		local taken = {
 			[Enum.KeyCode.F] = "Grab",
 			[Enum.KeyCode.ButtonX] = "Grab",
-			[Enum.KeyCode.Q] = "Throw",
-			[Enum.KeyCode.ButtonR1] = "Throw",
+			[Enum.KeyCode.Q] = "Backpack",
+			[Enum.KeyCode.ButtonR1] = "Backpack",
 		}
-		T.truthy(string.find(throw, "Enum.KeyCode.Q", 1, true) and string.find(throw, "Enum.KeyCode.ButtonR1", 1, true), "Throw Q / RB")
 		local seen = {}
 		for _, role in { "Main", "Second", "Panel" } do
 			local keys = PromptConfig.keys(role)
@@ -237,11 +238,9 @@ return function(T, Loader)
 		T.eq(panel.KeyboardKeyCode, Enum.KeyCode.T)
 		T.eq(panel.UIOffset, Vector2.new(0, 144), "slot 2")
 		T.eq(PromptConfig.SlotHeight, 72, "the step every stacked prompt uses")
-		-- the slot step is the one the trains and the Foundry's client offset use
+		-- the slot step is the one the trains use
 		local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 		T.eq(TrainConfig.PromptSlotHeight, PromptConfig.SlotHeight, "TrainConfig's slot step")
-		local foundry = files["src/client/Controllers/FoundryController.luau"]
-		T.truthy(string.find(foundry, "local OPEN_OFFSET = PromptConfig.SlotHeight", 1, true), "the Foundry's Open offset")
 		-- (the HoldDuration/Text set before Parent: make() parents last; the setter order is in the helper)
 		local helper = files[HELPER]
 		local parentAt = string.find(helper, "prompt.Parent = spec.Parent", 1, true)

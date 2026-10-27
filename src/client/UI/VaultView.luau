@@ -4,8 +4,7 @@
 	draws it with the same code.
 
 	One card per blaster level 2..10 (+ "STAR BLASTERS": the Star Forge's
-	weapons above them, REBIRTH tells where; the top level says FOUNDRY
-	while a rebirth run hasn't forged its level, "ForgeFirst"): the weapon
+	weapons above them, REBIRTH tells where): the weapon
 	case drawn in its ore colours, LV, the blaster's name, its damage, the
 	price and one button: BUY on your next level (greyed with the price in
 	red while you can't afford it), OWNED below it, LOCKED above it. You can
@@ -30,7 +29,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
-local RebirthConfig = require(Shared.Config.RebirthConfig)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
@@ -87,7 +85,6 @@ VaultView.ReasonText = {
 	Owned = "You have this blaster already",
 	Locked = "Buy the level before it first",
 	Max = "You have the best blaster!",
-	ForgeFirst = "Forge LV 10 at the Foundry: a rebirth needs one forged level",
 	StarForge = "Star blasters wait in the Star Forge after a rebirth",
 	NoCoins = "Not enough coins",
 	TooFar = "Walk back to the counter",
@@ -120,24 +117,21 @@ export type Card = {
 
 --[[
 	The cards for a player at blaster `level` with `coins` (the same rules as
-	VaultService.refusal: only the next level, coins only; `reached` = the
-	State's Rebirth.Reached: the top level waits for the Foundry while it is
-	short, "ForgeFirst").
+	VaultService.refusal: only the next level, coins only; `runIncome` = the
+	State's Rebirth.RunIncome: the rebirth run's price floor).
 ]]
-function VaultView.cards(level: number, coins: number, reached: number?): { Card }
+function VaultView.cards(level: number, coins: number, runIncome: number?): { Card }
 	local current = BlasterData.get(level).Level
 	local list: { Card } = {}
 	for lv = VaultView.FirstLevel, BlasterData.MaxLevel do
 		local ore = BlasterData.vaultOre(lv)
-		local price = BlasterData.vaultPrice(lv)
+		local price = BlasterData.vaultPrice(lv, runIncome)
 		local state: CardState = if lv <= current then "Owned" elseif lv == current + 1 then "Next" else "Locked"
 		local reason: string? = nil
 		if state == "Owned" then
 			reason = "Owned"
 		elseif state == "Locked" then
 			reason = "Locked"
-		elseif reached and RebirthConfig.topBlockedFor(current, reached) then
-			reason = "ForgeFirst"
 		elseif not price or coins < price then
 			reason = "NoCoins"
 		end
@@ -176,8 +170,6 @@ function VaultView.buttonText(card: Card): string
 		return "LOCKED"
 	elseif card.State == "Soon" then
 		return "REBIRTH"
-	elseif card.Reason == "ForgeFirst" then
-		return "FOUNDRY"
 	end
 	return "BUY"
 end

@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 6, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace)
+	Version = 9, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -48,12 +48,6 @@ local DataTemplate = {
 	KeepMode = "RarePlus",
 	-- the player's choices for "List" mode: { [oreId] = true (keep) | false (send on) }
 	KeepList = {},
-	-- the Foundry on the base: ingots waiting to be forged into blasters,
-	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock;
-	-- FoundryAction "Take" moves them back to the pen)
-	Foundry = {
-		Stock = {},
-	},
 
 	-- machines: bought but not placed { [machineId] = count 1..MachineData.MaxInventory (999) } (no zero keys)
 	MachineInventory = {},
@@ -67,12 +61,18 @@ local DataTemplate = {
 	-- the Ore Pen on the base: every stored item, one list
 	-- { { K = kind, O = oreId, G = grade?, R = recipe? } }
 	Storage = {},
+	-- the backpack (owner 2026-10-24, CarryService): what you picked up, by storage key
+	-- (ItemData.storageKey "K|O|G|R") -> whole count; at most the equipped pack's capacity
+	BackpackItems = {},
+	-- the packs (BackpackService, BackpackData ids): the one you wear and the ones you own;
+	-- they stay through a rebirth (owner 2026-10-25), their ore doesn't
+	Backpacks = { Equipped = "RookiePack", Owned = { RookiePack = true } },
 	-- the pen's sorting billboard (Upgrades.PenAutomation >= 1) sends unkept
 	-- arrivals out of the PEN chute while this is on (PenAction "AutoSort";
 	-- readers treat anything but false as on)
 	AutoSort = true,
 	-- what stands on each podium: an ItemData.storageKey ("Clean|Gold|Pristine|") or ""
-	Podiums = { "", "", "", "" },
+	Podiums = { "", "", "", "", "" }, -- EconomyConfig.Podiums.Max slots
 	-- os.time() of the last moment the podiums were paying (offline earnings)
 	LastSeen = 0,
 
@@ -91,7 +91,7 @@ local DataTemplate = {
 	-- steps 6-7 (rules in Shared/Config: GearConfig, EnchantConfig, BoostConfig,
 	-- GolemConfig, WheelConfig, ArtifactConfig); Migrations keeps them sane
 	-- gear levels 0..GearConfig.MaxLevel, bought at the Gear shop
-	Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 },
+	Gear = { Boots = 0, HelmetLamp = 0, Gloves = 0, Magnet = 0 }, -- (the Ore Backpack line became data.Backpacks: Version 9)
 	-- blaster enchants: Owned = { [enchantId] = tier }, Slots = exactly
 	-- EnchantConfig.MaxSlots strings (an owned enchant id or "" = empty)
 	Enchants = { Owned = {}, Slots = { "", "", "", "" } },
@@ -138,7 +138,8 @@ local DataTemplate = {
 		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
 		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
 		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
-		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
+		RunForged = 0, -- the highest blaster level bought with coins this rebirth run (the Foundry's forged levels before 2026-10-24)
+		RunIncome = 0, -- coins / s the factory kept at the last rebirth: a floor under this run's Vault prices (BlasterData.vaultPrice)
 		RunPaid = false, -- a blaster level was bought with Robux this run (RebirthConfig.reachedOf)
 		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
 		BlasterCredit = 0, -- Robux of off-band blaster receipts not yet spent on start lifts (VaultService.spendCredit)

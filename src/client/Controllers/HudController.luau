@@ -1,6 +1,7 @@
 --[[
 	HudController: coins counter with the podium income under it, zone
-	banner, toast notifications, carry slots and UI scaling for small screens.
+	banner, toast notifications, the backpack button and UI scaling for
+	small screens.
 
 	- Coins count up smoothly: between two updates the counter keeps
 	  rising at the Income (coins per second, at most one tick ahead), so
@@ -19,10 +20,13 @@
 	  into one popup. Offline earnings get the "While you were away" popup
 	  instead (OpenUI "Offline" { Amount, Seconds, Hours }): COLLECT, B or
 	  Backspace closes it; gamepads start on COLLECT.
-	- Dirty ore in your hands shows as a grey "?" slot (no rarity hint).
+	- The backpack button (HudView.setBackpack, right of the blaster's hotbar
+	  slot) says "n / cap" and turns red with a FULL tag when the backpack is
+	  full: Util/BackpackState (the CarryCount / CarryCapacity attributes and
+	  State.Backpacks), refreshed on both. BackpackController opens the
+	  inventory from it.
 ]]
 
-local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -34,10 +38,10 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local Theme = require(Shared.Config.UITheme)
-local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
+local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
@@ -161,6 +165,10 @@ local function updateScale()
 		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
 		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
+	-- the backpack button stays right of the blaster's hotbar slot (Roblox draws it in real pixels)
+	if refs then
+		HudView.placeBackpack(refs, scale, GuiService:IsTenFootInterface())
+	end
 	-- phones: the boost chips stop short of the Shop pill on their row (BoostView.setChips)
 	if refs then
 		local width = refs.Gui.AbsoluteSize.X
@@ -171,35 +179,9 @@ local function updateScale()
 	end
 end
 
-local function rarityColorOfItem(model: Instance): Color3
-	local ore = OreData.ById[model:GetAttribute("OreId") :: string]
-	return if ore then Rarity.get(ore.Rarity).Color else Theme.PanelLight
-end
-
-local function refreshCarry()
-	local capacity = (player:GetAttribute("CarryCapacity") :: number?) or 1
-	local carried = {}
-	for _, item in CollectionService:GetTagged("Item") do
-		if item:GetAttribute("CarriedBy") == player.UserId then
-			table.insert(carried, item)
-		end
-	end
-	-- at most HudView.MaxCarrySlots squares (the last one says "+N"): a big
-	-- backpack never covers the phone's thumbstick and jump button. The
-	-- squares are made once and updated in place (HudView.carrySlot).
-	local squares, shown, more, width = HudView.carryLayout(capacity, #carried)
-	for i = 1, squares do
-		if more > 0 and i == squares then
-			HudView.carrySlot(refs.CarrySlots, i, nil, false, more)
-		else
-			local item = if i <= shown then carried[i] else nil
-			local dirty = item ~= nil and item:GetAttribute("Kind") == "Raw"
-			HudView.carrySlot(refs.CarrySlots, i, if item and not dirty then rarityColorOfItem(item) else nil, dirty, 0)
-		end
-	end
-	HudView.trimSlots(refs.CarrySlots, squares)
-	refs.CarryLabel.Text = `CARRYING {#carried}/{capacity}`
-	refs.CarryPanel.Size = UDim2.fromOffset(width, HudView.CarryPanelHeight)
+-- The backpack button: "n / cap", red with the FULL tag when full.
+local function refreshBackpack()
+	HudView.setBackpack(refs, BackpackState.count(), BackpackState.capacity())
 end
 
 local currentZone = ""
@@ -522,14 +504,9 @@ function HudController.start()
 	-- (the HUD's size lands a frame after the viewport's: the chips' limit follows it)
 	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
-	-- the item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
-	local function carryChanged()
-		refreshCarry()
-		task.delay(0.25, refreshCarry)
-	end
-	player:GetAttributeChangedSignal("CarryCount"):Connect(carryChanged)
-	player:GetAttributeChangedSignal("CarryCapacity"):Connect(carryChanged)
-	refreshCarry()
+	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
+	BackpackState.onChanged(refreshBackpack)
+	refreshBackpack()
 
 	task.spawn(zoneLoop)
 

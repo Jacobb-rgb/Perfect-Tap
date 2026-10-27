@@ -48,9 +48,10 @@ return function(T, Loader)
 			listed[name] = true
 			T.truthy(MoveConfig.Moves[name], name .. " exists")
 		end
-		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Hammer", "Celebrate", "BigCelebrate", "CashToss" } do
+		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Celebrate", "BigCelebrate", "CashToss" } do
 			T.truthy(listed[name], name .. " is one of the moves (owner's list)")
 		end
+		T.eq(MoveConfig.Moves.Hammer, nil, "the Foundry's Hammer went with the Foundry (owner 2026-10-24)")
 		for name, move in MoveConfig.Moves do
 			T.truthy(listed[name], name .. " is in MoveConfig.List")
 			T.eq(move.Name, name, name .. " name")
@@ -432,10 +433,11 @@ return function(T, Loader)
 	end)
 
 	T.test("moves: the client whitelist, gaps, loops, blocks, range, Reduce Motion", function()
-		for _, name in { "Throw", "Wave", "Shrug" } do
+		for _, name in { "Wave", "Shrug" } do
 			T.truthy(MoveRules.clientAllowed(name), name .. " a client may ask for")
 		end
-		for _, name in { "Celebrate", "BigCelebrate", "CashToss", "Recoil", "Carry", "Spray", "Hammer", "throw", "", 1, nil } do
+		-- (Throw left the whitelist with the backpacks: nothing is thrown any more)
+		for _, name in { "Throw", "Celebrate", "BigCelebrate", "CashToss", "Recoil", "Carry", "Spray", "Hammer", "throw", "", 1, nil } do
 			T.falsy(MoveRules.clientAllowed(name), tostring(name) .. " only the server plays")
 		end
 		for name in MoveConfig.ClientMoves do
@@ -456,7 +458,7 @@ return function(T, Loader)
 		T.eq(MoveRules.loopFor(2, nil), "Carry", "carrying")
 		T.eq(MoveRules.loopFor(0, nil), nil, "empty hands")
 		T.eq(MoveRules.loopFor(2, "Spray"), "Spray", "the server's loop first")
-		T.eq(MoveRules.loopFor(0, "Hammer"), "Hammer", "forging")
+		T.eq(MoveRules.loopFor(0, "Hammer"), nil, "no Hammer loop (no Foundry)")
 		T.eq(MoveRules.loopFor(1, "Throw"), "Carry", "a one-shot name is no loop")
 		T.eq(MoveRules.loopFor(0 / 0, "Nope"), nil, "NaN carry, unknown loop")
 		T.eq(MoveRules.loopFor("3", nil), nil, "a string count is no count")
@@ -600,22 +602,20 @@ return function(T, Loader)
 			test.onMove(p, bad)
 			T.eq(moveOf(p), nil, "refused: " .. tostring(bad))
 		end
-		test.onMove(p, "Throw")
-		T.eq(moveOf(p), nil, "Throw needs something in your hands")
 		p:SetAttribute(MoveConfig.CarryAttribute, 2)
 		test.onMove(p, "Throw")
-		T.eq(moveOf(p), "Throw:1", "Throw while carrying")
+		T.eq(moveOf(p), nil, "no Throw, even with ore in the backpack")
 		test.onMove(p, "Wave")
-		T.eq(moveOf(p), "Wave:2", "Wave, the next seq")
+		T.eq(moveOf(p), "Wave:1", "Wave")
 		now.value += 0.1
 		test.onMove(p, "Wave")
-		T.eq(moveOf(p), "Wave:2", "the same move within its MinGap: refused")
+		T.eq(moveOf(p), "Wave:1", "the same move within its MinGap: refused")
 		now.value += MoveConfig.Moves.Wave.MinGap
 		test.onMove(p, "Wave")
-		T.eq(moveOf(p), "Wave:3", "after the gap")
+		T.eq(moveOf(p), "Wave:2", "after the gap, the next seq")
 		local name, seq = MoveRules.decode(moveOf(p))
 		T.eq(name, "Wave", "the attribute decodes")
-		T.eq(seq, 3, "with its seq")
+		T.eq(seq, 2, "with its seq")
 		local dead = fakePlayer("Ghost", false)
 		test.onMove(dead, "Shrug")
 		T.eq(moveOf(dead), nil, "no move without a living character")
@@ -757,7 +757,7 @@ return function(T, Loader)
 			T.eq(MoveRules.substitute(name, false), name, name .. ": played without Reduce Motion")
 		end
 		T.truthy(MoveConfig.Extras.Wave and MoveConfig.Extras.Shrug, "Wave and Shrug are the extras")
-		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Hammer" } do
+		for _, name in { "Carry", "Throw", "Recoil", "Spray" } do
 			T.eq(MoveRules.substitute(name, true), name, name .. " stays (gameplay feedback)")
 			T.falsy(MoveConfig.Extras[name], name .. " is no extra")
 		end
@@ -848,20 +848,20 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the integrator's rules (static)
 
-	T.test("moves: one Stepped loop, no new input bindings, the one-line Throw hook", function()
+	T.test("moves: one Stepped loop, no new input bindings, no throw any more", function()
 		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MoveController.luau")
 		local _, stepped = controller:gsub("RunService%.Stepped:Connect", "")
 		T.eq(stepped, 1, "one RunService loop for every character")
 		for _, banned in { "RenderStepped", "Heartbeat", "BindAction", "InputBegan", "UserInputService", "ContextActionService" } do
 			T.falsy(controller:find(banned, 1, true), "MoveController uses no " .. banned)
 		end
+		-- (the backpack, owner 2026-10-24: nothing is thrown, so InteractController has no Throw hook)
 		local interact = fs.readFile(Loader.root .. "/src/client/Controllers/InteractController.luau")
-		local _, hooks = interact:gsub("MoveController", "")
-		T.eq(hooks, 2, "InteractController: one hook line (the call and its comment)")
-		T.truthy(
-			interact:find('pcall%(require%(script%.Parent%.MoveController%)%.playLocal, "Throw"%)[^\n]*\n%s*Net%.send%("CarryThrow"'),
-			"the hook plays Throw (pcall: never blocks it) right before the throw is sent"
-		)
+		T.falsy(interact:find("MoveController", 1, true), "InteractController: no move hook")
+		T.falsy(interact:find("CarryThrow", 1, true), "no throw is sent")
+		-- and no Carry loop: nothing is carried in the hands (CarryCount counts the backpack)
+		T.truthy(controller:find("MoveRules.loopFor(nil, ", 1, true), "the loop never reads the carry count")
+		T.falsy(controller:find("MoveConfig.CarryAttribute", 1, true), "no CarryCount listener or read")
 		local mathSource = fs.readFile(Loader.root .. "/src/shared/Moves/MoveMath.luau")
 		for _, banned in { "GetService", "Players", "LocalPlayer", "Instance.new" } do
 			T.falsy(mathSource:find(banned, 1, true), "MoveMath stays pure: no " .. banned)
