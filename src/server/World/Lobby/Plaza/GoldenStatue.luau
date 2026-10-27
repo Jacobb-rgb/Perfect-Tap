@@ -27,7 +27,10 @@
 	build(ring, parent, center, floorY): the pedestal into `ring` (the
 	FireCrystalRing model), the dragon and the sign into the Model
 	"GoldenStatue" under `parent` (tagged NoStuds: polished gold and fire,
-	no classic studs). About 330 parts, 2 PointLights, 4 emitters. The
+	no classic studs). About 330 parts, no PointLights, 3 emitters
+	(owner's Studio test 2026-10-25: "the dragon is terribly overexposed":
+	two lights on polished gold, a pale gold and big neon wing panels
+	glared in Roblox's Future lighting; the preview's bloom is gentler). The
 	statue faces +Z (the spawn); the Star Forge prompt stands at the
 	pedestal's front (RebirthService.CrystalFront).
 ]]
@@ -71,20 +74,24 @@ GoldenStatue.Drum = { A = 5.0, H = 2.6 }
 GoldenStatue.Cap = { A = 5.7, H = 0.6 }
 GoldenStatue.Plinth = { A = 3.4, H = 0.5 } -- the gold slab under the feet
 
--- gold: three tones of one metal (shade by part, never by noise)
-local GOLD = rgb(255, 196, 64)
-local GOLD_DEEP = rgb(226, 152, 40)
-local GOLD_LIGHT = rgb(255, 226, 128)
-local GOLD_PALE = rgb(255, 238, 172)
+-- gold: three tones of one metal (shade by part, never by noise); a deep,
+-- saturated gold (Roblox's Metal reflects the bright sunset sky on top of it:
+-- the first, paler gold read as a white-hot blob in Studio)
+local GOLD = rgb(222, 156, 40)
+local GOLD_DEEP = rgb(184, 116, 26)
+local GOLD_LIGHT = rgb(236, 180, 70)
+local GOLD_PALE = rgb(242, 198, 110)
 local AMBER = rgb(255, 128, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
 local LENS = rgb(60, 170, 255)
-local FIRE_GLOW = rgb(255, 104, 18) -- the burning wings' neon (deep: stays orange under bloom)
+local FIRE_GLOW = rgb(240, 90, 14) -- the fire's neon edges (deep: stays orange under bloom)
+local WING_HOT = rgb(255, 140, 36) -- the wings' hot inner panels (plain, not neon: big neon glared)
+local FIRE_PLAIN = rgb(240, 96, 24) -- the mohawk's outer flames (plain)
 -- the sign
 local BOARD = rgb(40, 30, 58) -- the loading screen's dark plum
 local SILVER = rgb(232, 234, 244)
 local FORGE_GOLD = rgb(255, 178, 36)
 local OUTLINE = rgb(22, 14, 30)
-local BULB = rgb(255, 170, 60)
+local BULB = rgb(255, 146, 40)
 
 local OCT = math.tan(math.pi / 8)
 
@@ -336,9 +343,17 @@ local function dragon(parent: Instance, feet: CFrame): Model
 				d.Material = NEON
 			elseif GoldenStatue.Fire and FIRE[kind] then
 				-- (the pet's white-hot and yellow neon, statue-sized, bloomed into a
-				-- white glare over the plaza: its glowing fire turns deep orange)
+				-- white glare over the plaza: the big wing panels and the flames of
+				-- the mohawk and the tail turn plain hot orange, only the thin wing
+				-- bones and the tail flame's small core still glow, deep; the
+				-- particles keep them burning)
 				if d.Material == NEON then
-					d.Color = FIRE_GLOW
+					if kind == "Wing" or kind == "Flame" or kind == "TailFlame" then
+						d.Color = if d.Name == "Flame1" or d.Name == "Flame3" then FIRE_PLAIN else WING_HOT
+						d.Material = SMOOTH
+					else
+						d.Color = FIRE_GLOW
+					end
 				end
 			elseif not KEEP[kind] then
 				d.Color = toneOf(d.Name)
@@ -536,7 +551,7 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 			poleZ += p.Z / 2
 		end
 	end
-	local signCf = sign(m, center.X, bottom, poleZ)
+	sign(m, center.X, bottom, poleZ)
 	for _, p in fists do
 		local from = Vector3.new(p.X, p.Y - 2.6, poleZ)
 		local to = Vector3.new(p.X, bottom + 0.4, poleZ)
@@ -555,31 +570,21 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 		Style.block(m, CFrame.new(to.X, bottom + 0.15, poleZ), Vector3.new(1.6, 0.5, 1.6), GOLD_DEEP, METAL, Style.tiny()).Name =
 			"SignCollar"
 	end
-	-- the lights: the medallion glows, a warm light washes the gold dragon
-	local glowPart = Style.block(m, signCf * CFrame.new(0, 0, 2.5), Vector3.new(0.2, 0.2, 0.2), GOLD, SMOOTH, Style.tiny())
-	glowPart.Transparency = 1
-	glowPart.Name = "SignLight"
-	Style.light(glowPart, C.Fire, 30, 1.6)
-	local wash = Style.block(m, CFrame.new(center.X, feetY + 4, center.Z + 9), Vector3.new(0.2, 0.2, 0.2), GOLD, SMOOTH, Style.tiny())
-	wash.Transparency = 1
-	wash.Name = "StatueLight"
-	Style.light(wash, rgb(255, 200, 120), 26, 1.4)
-	local body = golem:FindFirstChild("Body")
-	if body and body:IsA("BasePart") then
-		Style.emitter(body, "Sparkle", GOLD_LIGHT, 3)
-	end
+	-- (no lights, no sparkles: the sunset lights the gold; in Studio a light on
+	-- the sign and a warm wash on the dragon made the polished gold glare)
 	if GoldenStatue.Fire then
 		-- the burning wings: flames licking up off each wing's hot inner panel,
 		-- embers rising from the flame mohawk
 		for i = 1, 2 do
 			local panel = golem:FindFirstChild(`Wing{i}_2B`)
 			if panel and panel:IsA("BasePart") then
-				Style.emitter(panel, "Fire", C.Fire, 9)
+				local flames = Style.emitter(panel, "Fire", C.Fire, 6)
+				flames.LightEmission = 0.4 -- (1 added up to a white glow over the wings)
 			end
 		end
 		local mohawk = golem:FindFirstChild("Flame2")
 		if mohawk and mohawk:IsA("BasePart") then
-			Style.emitter(mohawk, "Embers", C.Fire, 5)
+			Style.emitter(mohawk, "Embers", C.Fire, 4)
 		end
 	end
 end
