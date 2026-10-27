@@ -344,7 +344,8 @@ local function note(parent: Instance, text: string, size: number, props: { [stri
 end
 
 local function heading(parent: Instance, text: string, colors: string, y: number): TextLabel
-	return Pop.title(parent, text, 32, colors, {
+	-- (the round look: "- DAILY QUESTS -", the reel's section headings)
+	return Pop.title(parent, Pop.section(text), 32, colors, {
 		Name = "Heading",
 		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(8, y),

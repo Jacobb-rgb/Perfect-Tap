@@ -2285,7 +2285,8 @@ function WheelView.buildChip(uiScale: number, screenWidth: number?): ChipRefs
 	label.TextScaled = true
 	local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
 	if fit then
-		fit.MaxTextSize = if compact then 22 else 17
+		-- (the round look's letters are narrower: bigger, still two lines when they don't fit one)
+		fit.MaxTextSize = if PopTheme.round() then (if compact then 26 else 22) elseif compact then 22 else 17
 	end
 	local edge = label:FindFirstChild("Edge") :: UIStroke?
 	if edge then

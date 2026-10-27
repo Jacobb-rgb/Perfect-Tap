@@ -998,6 +998,10 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		local starsX = tabX + (tabW + 10) * tabs
 		rect(refs.Stars, starsX, tabY, math.max(0, starsRight - starsX), m.Tab)
 		top = 0
+		-- the title (right of the round look's band icon) ends where the tabs start: it shrinks to fit
+		local title = refs.Frame.Title
+		local titleLeft = title.Position.X.Offset - MenuPanel.Pad
+		title.Size = UDim2.fromOffset(math.max(60, tabX - titleLeft - 8), title.Size.Y.Offset)
 	else
 		-- (8 down: the buttons' lip rises 5 toward the subtitle)
 		tabX, tabY = 0, 8

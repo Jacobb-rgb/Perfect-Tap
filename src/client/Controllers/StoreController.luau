@@ -47,6 +47,7 @@ local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local CardOdds = require(script.Parent.Parent.UI.CardOdds)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local Confetti = require(script.Parent.Parent.Effects.Confetti)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudController = require(script.Parent.HudController)
@@ -674,6 +675,18 @@ function StoreController.start()
 	if StateController.get() then
 		stateAt = serverNow()
 	end
+	-- a finished purchase (any Robux prompt in the game): a confetti burst over the screen
+	-- (the owner's UI pack reel, 2026-10-27); the grant itself still comes from the server
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, _, purchased)
+		if purchased then
+			Confetti.burst(nil, Motion.reduced())
+		end
+	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(_, _, purchased)
+		if purchased then
+			Confetti.burst(nil, Motion.reduced())
+		end
+	end)
 	-- a blaster prompt closed without a purchase: its card is buyable again
 	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, productId, purchased)
 		local wait = blasterWait
