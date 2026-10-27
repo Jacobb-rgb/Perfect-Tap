@@ -50,6 +50,7 @@ local function exportNode(instance): any?
 			node.tc = hex(instance.TextColor3)
 			node.tt = instance.TextTransparency
 			node.font = instance.FontFace.Family
+			node.fw = instance.FontFace.Weight.Value -- (the round look: Montserrat Black words, Bold sentences)
 			node.tx = instance.TextXAlignment.Name
 			node.ty = instance.TextYAlignment.Name
 			node.scaled = instance.TextScaled

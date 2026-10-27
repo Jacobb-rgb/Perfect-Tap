@@ -504,6 +504,11 @@ local function popCard(frame: Frame, paint: string | Pop.Paint)
 	end
 	Pop.face(frame, paint, 12, false)
 	frame.ClipsDescendants = true
+	if PopTheme.round() then
+		-- (the reel's Rebirth: dark boxes on the body, the colour on the edge and the heading)
+		Pop.cellFace(frame, Pop.paint(paint).Top, 10)
+		return
+	end
 	Pop.studs(frame, 12, 0.5, 44, 2)
 	local rim = frame:FindFirstChild("Rim") :: Frame?
 	if rim then
@@ -533,7 +538,8 @@ local function popPaintOf(button: TextButton): string | Pop.Paint
 	if c == RebirthView.Colors.Off then
 		return if role == "Tab" then "Slate" else PopTheme.Gray
 	elseif c == RebirthView.Colors.Rebirth then
-		return if role == "Rebirth" then "Yellow" else RebirthView.PopPaint
+		-- (the round look: the reel's big lime Rebirth)
+		return if role == "Rebirth" then (if PopTheme.round() then "Lime" else "Yellow") else RebirthView.PopPaint
 	elseif c == Theme.Good then
 		return if role == "Weapon" then "Yellow" else "Green" -- (a star blaster's star price in gold)
 	elseif c == Theme.Bad then
@@ -620,6 +626,10 @@ local function popSkin(refs: Refs)
 		column.Frame.ZIndex = 2
 		popCard(column.Frame, RebirthView.PopColumns[id] or "Slate")
 		popChip(column.Chip)
+		if PopTheme.round() then
+			-- (the heading pill in the column's colour, like the reel's x1.5 pills)
+			column.Chip.BackgroundColor3 = Pop.paint(RebirthView.PopColumns[id] or "Slate").Bottom
+		end
 		for _, row in column.Rows do
 			popText(row)
 			local dot = row:FindFirstChild("Dot") :: Frame?

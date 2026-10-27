@@ -937,6 +937,7 @@ function BoostView.popWindow(panel: Frame, title: TextLabel, paint: string)
 	}, body)
 	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
 	BoostView.popText(title, false, WHITE)
+	title.Text = Pop.caption(title.Text) -- (the round look: Title Case, the reel)
 	title.ZIndex = 3
 	Pop.shadow(title).ZIndex = 2
 end

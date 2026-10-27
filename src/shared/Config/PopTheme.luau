@@ -14,17 +14,20 @@
 	time for the specs and the previews):
 
 	"Round" (the default; owner 2026-10-27, the "Advanced UI Pack" reel:
-	"here you can see how my UI in our game should look"; pictures in
-	docs/art/reels_2026-10-27/ui_*): a heavy round cartoon font (Fredoka
-	One) with a thick dark outline for every word (titles, buttons, prices,
-	tiles, the money); every window's header band in its own colour
-	(PopTheme.Windows: Store red, Codex blue, Golems orange, Quests pink,
-	Settings grey, Elevator purple, Star Forge magenta, shops green / blue)
-	with diagonal stripes, the window's icon on the left of the title and a
-	big faded copy of it in the band; a dark charcoal body with a thin dark
-	border; section headings "- FEATURED -"; vivid cards with a sunburst
-	behind the picture; dark HUD tiles with a big coloured icon and a
-	coloured lip; clean faces (no lattice).
+	"here you can see how my UI in our game should look", then "completely
+	identical"; pictures in docs/art/reels_2026-10-27/ui_*, the plan in
+	docs/plans/UI_REEL4_EXACT.md): the reel's heavy geometric font
+	(Montserrat Black for every word, Montserrat Bold for sentences) with a
+	thick dark outline; Title Case titles and headings (Pop.caption); every
+	window's header band FLAT in its own colour (PopTheme.Windows: Store
+	red, Codex blue, Golems orange, Quests pink, Settings dark grey,
+	Elevator purple, Star Forge magenta, shops green / blue) with a fine
+	checker texture, broad light stripes, a darker lip, the window's icon
+	on the left of the title and a big faded copy of it in the band; a dark
+	slate body with a thin near-black border; section headings
+	"- Gamepass -"; vivid two-tone cards with a sunburst behind the
+	picture; dark cells for the item grids (Pop.cell); dark HUD tiles with
+	a big coloured icon and a coloured lip; clean faces (no lattice).
 
 	"Pixel" (owner 2026-10-22, eight Roblox UI reels; pictures in
 	docs/art/ui_pixel_refs): a chunky pixel font (Press Start 2P) for every
@@ -51,18 +54,20 @@ end
 local LOOK = "Round"
 
 local PIXEL = Font.new("rbxasset://fonts/families/PressStart2P.json")
--- the Round look's word font: Fredoka One, the reel's heavy round cartoon font. The family has
--- one face, so Bold draws exactly the sentences' face; the weight only tells a word
--- (Pop.isPixel: shrinks to fit its box) from a sentence (wraps).
-local WORD = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
+local FREDOKA = Font.fromEnum(Enum.Font.FredokaOne)
+-- the Round look's fonts: the reel's heavy geometric sans (Montserrat ships with Roblox): Black
+-- for every word, Bold for sentences (the weight tells a word, Pop.isPixel: shrinks to fit its
+-- box, from a sentence: wraps)
+local WORD = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy)
+local SENTENCE = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Bold)
 
 local PopTheme = {
 	Look = LOOK, -- "Round" | "Pixel" (PopTheme.setLook)
-	Font = Font.fromEnum(Enum.Font.FredokaOne), -- long wrapped text (descriptions, hints)
+	Font = FREDOKA, -- long wrapped text: descriptions, hints (the look's: setLook)
 	Pixel = PIXEL, -- the word font: titles, buttons, prices, tiles, labels (the look's: setLook)
 	Heavy = PIXEL, -- the money and big headings (the look's: setLook)
 	PixelScale = 0.74, -- a word's size next to the round font's (the pixel font is wide: 1 em a letter)
-	PixelAdvance = 1.0, -- a word letter's width in em (Fredoka One capitals: about 0.68)
+	PixelAdvance = 1.0, -- a word letter's width in em (Montserrat Black capitals: about 0.75)
 	PixelLine = 1.1, -- a word line's height in em
 	PixelMin = 10, -- the smallest a word shrinks to (design units); below it ends in "..."
 	PixelMax = 26, -- a longer text is a sentence: it keeps the round font (subtitles, hints)
@@ -95,12 +100,16 @@ local PopTheme = {
 		Night = paint(rgb(170, 60, 200), rgb(46, 22, 102), rgb(14, 14, 18)), -- the limited banner
 		Slate = paint(rgb(96, 100, 116), rgb(56, 60, 72), rgb(14, 14, 18)),
 		-- the reel's window colours (Round look)
-		Magenta = paint(rgb(255, 92, 230), rgb(186, 18, 168), rgb(14, 14, 18)), -- Rebirth
-		Steel = paint(rgb(176, 182, 196), rgb(100, 106, 124), rgb(14, 14, 18)), -- Settings
+		Magenta = paint(rgb(236, 70, 236), rgb(176, 22, 196), rgb(14, 14, 18)), -- Rebirth
+		Steel = paint(rgb(176, 182, 196), rgb(100, 106, 124), rgb(14, 14, 18)),
+		Concrete = paint(rgb(104, 108, 116), rgb(70, 72, 80), rgb(14, 14, 18)), -- Settings (the reel's dark grey)
 		Amber = paint(rgb(255, 204, 64), rgb(232, 128, 8), rgb(14, 14, 18)), -- Trade
-		Crimson = paint(rgb(255, 78, 104), rgb(208, 16, 58), rgb(14, 14, 18)), -- Store
-		Royal = paint(rgb(84, 156, 255), rgb(30, 84, 222), rgb(14, 14, 18)), -- Index
-		Violet = paint(rgb(176, 112, 255), rgb(104, 46, 222), rgb(14, 14, 18)), -- Teleport
+		Crimson = paint(rgb(255, 60, 100), rgb(226, 14, 56), rgb(14, 14, 18)), -- Store
+		Royal = paint(rgb(80, 160, 240), rgb(40, 116, 214), rgb(14, 14, 18)), -- Index
+		Violet = paint(rgb(170, 90, 240), rgb(124, 48, 210), rgb(14, 14, 18)), -- Teleport
+		Ember = paint(rgb(250, 130, 40), rgb(220, 84, 14), rgb(14, 14, 18)), -- Inventory
+		Lime = paint(rgb(206, 252, 60), rgb(116, 214, 18), rgb(14, 14, 18)), -- the reel's price buttons, Buy Cash
+		Sky = paint(rgb(110, 180, 245), rgb(60, 130, 220), rgb(14, 14, 18)), -- Item Shop
 	} :: { [string]: Paint },
 
 	--[[
@@ -117,14 +126,14 @@ local PopTheme = {
 		TerraForgeCodex = { Paint = "Royal", Icon = "book" }, -- the ore index (reel: Index blue)
 		TerraForgeArtifacts = { Paint = "Royal", Icon = "artifact" }, -- the relic book
 		TerraForgeJournal = { Paint = "Royal", Icon = "book" },
-		TerraForgeGolems = { Paint = "Orange", Icon = "golem" }, -- the golem inventory (reel: Inventory orange)
-		TerraForgeCapsules = { Paint = "Orange", Icon = "capsule_Stone" },
-		TerraForgePen = { Paint = "Orange", Icon = "ore_raw" },
-		TerraForgeBackpack = { Paint = "Orange", Icon = "backpack" },
+		TerraForgeGolems = { Paint = "Ember", Icon = "golem" }, -- the golem inventory (reel: Inventory orange)
+		TerraForgeCapsules = { Paint = "Ember", Icon = "capsule_Stone" },
+		TerraForgePen = { Paint = "Ember", Icon = "ore_raw" },
+		TerraForgeBackpack = { Paint = "Ember", Icon = "backpack" },
 		TerraForgeQuests = { Paint = "Pink", Icon = "check" }, -- (reel: Daily pink)
 		TerraForgeStreak = { Paint = "Pink", Icon = "medal" },
-		TerraForgeSettings = { Paint = "Steel", Icon = "cog" }, -- (reel: Settings grey)
-		TerraForgeIronBox = { Paint = "Steel", Icon = "machine_IronBox" },
+		TerraForgeSettings = { Paint = "Concrete", Icon = "cog" }, -- (reel: Settings dark grey)
+		TerraForgeIronBox = { Paint = "Concrete", Icon = "machine_IronBox" },
 		TerraForgeElevator = { Paint = "Violet", Icon = "lift" }, -- (reel: Teleport purple)
 		TerraForgeEmotes = { Paint = "Violet", Icon = "more" },
 		TerraForgeRebirth = { Paint = "Magenta", Icon = "rebirth" }, -- the Star Forge (reel: Rebirth magenta)
@@ -132,9 +141,9 @@ local PopTheme = {
 		TerraForgeTechShop = { Paint = "Green", Icon = "build" }, -- machines + upgrades (reel: Upgrade green)
 		TerraForgeDroppers = { Paint = "Green", Icon = "shop" },
 		TerraForgeEnchants = { Paint = "Purple", Icon = "enchant" },
-		TerraForgeGearShop = { Paint = "Blue", Icon = "helmet" }, -- (reel: Item Shop blue)
-		TerraForgeVault = { Paint = "Blue", Icon = "blaster" },
-		TerraForgeHoverboards = { Paint = "Blue", Icon = "hoverboard" },
+		TerraForgeGearShop = { Paint = "Sky", Icon = "helmet" }, -- (reel: Item Shop blue)
+		TerraForgeVault = { Paint = "Sky", Icon = "blaster" },
+		TerraForgeHoverboards = { Paint = "Sky", Icon = "hoverboard" },
 		TerraForgeHallOfFame = { Paint = "Amber", Icon = "trophy" }, -- (reel: Trade amber)
 		TerraForgeBoosts = { Paint = "Amber", Icon = "clover" },
 		TerraForgeTrainPanel = { Paint = "Amber", Icon = "train" },
@@ -165,9 +174,12 @@ local PopTheme = {
 	LatticeGap = 26, -- design units between two lattice lines
 	LatticeBands = 4, -- frames a way (six lines each)
 	Stripe = 0.8, -- the header's shine stripes (transparency)
-	Stripes = 0.86, -- the Round look's fine diagonal stripes over a header band (transparency)
-	StripeGap = 22, -- design units between two of them
-	Watermark = 0.7, -- the big faded icon in a Round header band (transparency)
+	Checker = 0.88, -- the Round look's fine checker over a header band (transparency)
+	CheckerGap = 14, -- design units between two of its lines
+	BandLip = 0.1, -- the darker lip along a Round band's bottom (a share of its height)
+	Watermark = 0.55, -- the big faded icon in a Round header band (transparency)
+	CellTop = rgb(40, 47, 60), -- the Round look's dark item cells (Pop.cell: the reel's index / inventory)
+	CellBottom = rgb(26, 30, 40),
 
 	BaseHeight = 720,
 }
@@ -176,15 +188,17 @@ local PopTheme = {
 local LOOKS = {
 	Round = {
 		Word = WORD,
+		Sentence = SENTENCE,
 		Scale = 1, -- (round words are drawn at the size the views give)
-		Advance = 0.68, -- (Fredoka One: capitals 0.62..0.7 em, digits about 0.55)
+		Advance = 0.75, -- (Montserrat Black: capitals 0.65..0.76 em, Title Case about 0.6, digits 0.63)
 		Line = 1.1, -- (a Roblox line is TextSize tall; 1.1 leaves the edge room, like the pixel font's)
-		Body = rgb(52, 54, 62), -- the reel's dark charcoal
-		BodyBottom = rgb(38, 40, 47),
-		Well = rgb(32, 34, 41),
+		Body = rgb(42, 48, 57), -- the reel's dark slate
+		BodyBottom = rgb(34, 39, 47),
+		Well = rgb(24, 28, 35), -- (the reel's darker rows and boxes)
 	},
 	Pixel = {
 		Word = PIXEL,
+		Sentence = FREDOKA,
 		Scale = 0.74,
 		Advance = 1.0,
 		Line = 1.1,
@@ -203,6 +217,7 @@ function PopTheme.setLook(look: string)
 	local name = if look == "Pixel" then "Pixel" else "Round"
 	local l = LOOKS[name]
 	PopTheme.Look = name
+	PopTheme.Font = l.Sentence
 	PopTheme.Pixel = l.Word
 	PopTheme.Heavy = l.Word
 	PopTheme.PixelScale = l.Scale

@@ -326,43 +326,51 @@ end
 
 --[[
 	The round look's header band (the reel): a "Lattice" clip (it holds the
-	gleam too) with fine light diagonal stripes leaning right across the
-	whole band, then Pop.dressBand (the window's colour and faded icon).
-	The stripes are LatticeBands frames of a fixed size like the lattice's,
-	so a band laid out again keeps them. Returns the clip.
+	gleam too) with a fine light checker over the whole band (thin lines
+	both ways, like the reel's studded paint), then Pop.dressBand (the
+	window's flat colour, its darker lip and faded icon). The lines are
+	frames of a fixed size, so a band laid out again keeps them (they cover
+	bands up to about 1400 units wide). Returns the clip.
 ]]
 function Pop.bandPattern(frame: GuiObject, z: number?): Frame
 	local clip = Pop.lattice(frame, z, 1)
-	local step = PopTheme.StripeGap
+	local step = PopTheme.CheckerGap
 	local seg = step * 6
-	local half = math.min(0.04, 4 / seg) -- (stripes about 8 units wide)
-	local t = PopTheme.Stripes
+	local half = math.min(0.03, 0.8 / seg) -- (lines about 1.6 units wide)
+	local t = PopTheme.Checker
 	local keys = { NumberSequenceKeypoint.new(0, 1) }
 	for i = 1, 6 do
 		local c = (i - 0.5) / 6
-		table.insert(keys, NumberSequenceKeypoint.new(c - half - 0.004, 1))
-		table.insert(keys, NumberSequenceKeypoint.new(c - half, t))
-		table.insert(keys, NumberSequenceKeypoint.new(c + half, t))
-		table.insert(keys, NumberSequenceKeypoint.new(c + half + 0.004, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(c - half, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(c, t))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half, 1))
 	end
 	table.insert(keys, NumberSequenceKeypoint.new(1, 1))
 	local lines = NumberSequence.new(keys)
-	local rotation = 30 -- (the frames' axis: the stripes across it lean right, "//")
-	local ux, uy = math.cos(math.rad(rotation)), math.sin(math.rad(rotation))
-	local count = PopTheme.LatticeBands + 2
-	for j = 1, count do
-		local along = (j - (count + 1) / 2) * seg
+	-- (upright lines: bands of `seg` side by side across the width; lying ones: two bands
+	-- across the height, enough for a band up to 2 * seg tall)
+	local across = math.ceil(1400 / seg)
+	for j = 1, across do
 		local band = UIKit.new("Frame", {
-			Name = "Stripes",
-			AnchorPoint = Vector2.new(0.5, 0.5),
+			Name = "Checker",
 			BackgroundColor3 = Color3.new(1, 1, 1),
 			BorderSizePixel = 0,
-			Position = UDim2.new(0.5, math.floor(ux * along + 0.5), 0.5, math.floor(uy * along + 0.5)),
-			Rotation = rotation,
-			Size = UDim2.fromOffset(seg, 600),
+			Position = UDim2.fromOffset((j - 1) * seg, 0),
+			Size = UDim2.new(0, seg, 1, 0),
 			ZIndex = z or frame.ZIndex,
 		}, clip)
 		UIKit.new("UIGradient", { Transparency = lines }, band)
+	end
+	for j = 1, 2 do
+		local band = UIKit.new("Frame", {
+			Name = "Checker",
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, (j - 1) * seg),
+			Size = UDim2.new(1, 0, 0, seg),
+			ZIndex = z or frame.ZIndex,
+		}, clip)
+		UIKit.new("UIGradient", { Transparency = lines, Rotation = 90 }, band)
 	end
 	Pop.dressBand(frame)
 	return clip
@@ -422,11 +430,42 @@ function Pop.dressBand(band: GuiObject, key: string?): PopTheme.WindowLook?
 		elseif parent and parent:IsA("GuiObject") and parent:FindFirstChild("Paint") then parent
 		else nil
 	if face then
-		Pop.repaint(face, look.Paint, false)
+		Pop.bandPaint(face, look.Paint)
 		face:SetAttribute("WindowPaint", look.Paint)
 	end
 	Pop.watermark(band, look.Icon)
 	return look
+end
+
+-- A round-look band's flat colour: between a paint's top and bottom (the reel's bands are one colour).
+function Pop.bandColor(paint: string | Paint): Color3
+	local p = Pop.paint(paint)
+	return p.Top:Lerp(p.Bottom, 0.62)
+end
+
+--[[
+	Paints a header band the reel's way: one flat colour, a darker lip along
+	its bottom (PopTheme.BandLip of its height), no light rim.
+]]
+function Pop.bandPaint(face: GuiObject, paint: string | Paint)
+	local color = Pop.bandColor(paint)
+	local deep = Pop.paint(paint).Bottom:Lerp(Color3.new(0, 0, 0), 0.42)
+	local gradient = face:FindFirstChild("Paint") :: UIGradient?
+	if gradient then
+		local cut = 1 - PopTheme.BandLip
+		gradient.Rotation = 90
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, color),
+			ColorSequenceKeypoint.new(cut - 0.001, color),
+			ColorSequenceKeypoint.new(cut, deep),
+			ColorSequenceKeypoint.new(1, deep),
+		})
+	end
+	local rim = face:FindFirstChild("Rim")
+	if rim and rim:IsA("GuiObject") then
+		rim.Visible = false
+	end
+	face:SetAttribute("Lip", PopTheme.BandLip)
 end
 
 --[[
@@ -445,10 +484,9 @@ function Pop.watermark(band: GuiObject, icon: string): ImageLabel
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		ImageTransparency = PopTheme.Watermark,
-		Position = UDim2.fromScale(0.56, 0.52),
-		Rotation = -10,
+		Position = UDim2.fromScale(0.5, 0.56),
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.new(0, 170, 1.9, 0), -- (Fit: a square 1.9 bands tall, at most 170 units)
+		Size = UDim2.new(0, 190, 1.7, 0), -- (Fit: a square 1.7 bands tall, at most 190 units)
 		Visible = IconAssets.shows(icon),
 		ZIndex = band.ZIndex,
 	}, holder)
@@ -487,17 +525,18 @@ function Pop.iconRoom(icon: ImageLabel?): number
 	return icon.Size.X.Offset + 6
 end
 
--- The round look's three broad light stripes across a header band ("//", the reel's shine).
+-- The round look's broad light stripes across a header band ("//", the reel's shine: a wide
+-- and a thin one either side of the faded icon).
 function Pop.shineStripes(band: GuiObject, z: number?)
-	for i, s in { { 0.66, 40 }, { 0.73, 18 }, { 0.82, 12 } } do
+	for i, s in { { 0.3, 30 }, { 0.36, 12 }, { 0.68, 30 }, { 0.74, 12 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = PopTheme.Stripe,
+			BackgroundTransparency = 0.74,
 			BorderSizePixel = 0,
-			Position = UDim2.new(s[1], (i - 1) * 30, 0.5, 0),
-			Rotation = 28,
+			Position = UDim2.fromScale(s[1], 0.5),
+			Rotation = 24,
 			Size = UDim2.new(0, s[2], 2.6, 0),
 			ZIndex = z or band.ZIndex,
 		}, band)
@@ -726,10 +765,59 @@ function Pop.title(parent: Instance, text: string, size: number, colors: string 
 	return label
 end
 
--- A section heading's words: "- PASSES -" in the round look (the reel's "- Gamepass -"), else as they are.
+-- the small words Title Case leaves lower case (not the first one)
+local SMALL = {
+	a = true,
+	an = true,
+	["and"] = true,
+	at = true,
+	by = true,
+	["for"] = true,
+	["in"] = true,
+	of = true,
+	on = true,
+	["or"] = true,
+	the = true,
+	to = true,
+}
+
+--[[
+	A title's words in the round look: an ALL CAPS text in Title Case ("MY
+	GOLEMS" -> "My Golems", "HALL OF FAME" -> "Hall of Fame",
+	"FORGEMASTER'S PASS" -> "Forgemaster's Pass", "2X MONEY" -> "2x Money");
+	a text with small letters already is left as it is. The pixel look
+	keeps its capitals.
+]]
+function Pop.caption(text: string): string
+	if not PopTheme.round() or string.find(text, "%l") then
+		return text
+	end
+	local first = true
+	return (
+		string.gsub(text, "%S+", function(word: string): string
+			local lower = string.lower(word)
+			local out: string
+			if not first and SMALL[lower] then
+				out = lower
+			else
+				-- the first letter up (after any leading signs or digits), the rest down
+				local at = string.find(lower, "%a") or 1
+				out = string.sub(lower, 1, at - 1) .. string.upper(string.sub(lower, at, at)) .. string.sub(lower, at + 1)
+				-- a word that starts with a digit or is a multiplier keeps its small x: "2x Money", "x2"
+				if string.match(lower, "^%d") or string.match(lower, "^x%d") then
+					out = lower
+				end
+			end
+			first = false
+			return out
+		end)
+	)
+end
+
+-- A section heading's words: "- Gamepass -" in the round look (Title Case, the reel), else as they are.
 function Pop.section(text: string): string
 	if PopTheme.round() and text ~= "" and string.sub(text, 1, 2) ~= "- " then
-		return "- " .. text .. " -"
+		return "- " .. Pop.caption(text) .. " -"
 	end
 	return text
 end
@@ -854,6 +942,14 @@ end
 -- Recolours a painted frame (a button that turns grey, a selected tab).
 function Pop.repaint(frame: GuiObject, paint: string | Paint, glossy: boolean?)
 	local p = Pop.paint(paint)
+	if frame:GetAttribute("Cell") == true then
+		Pop.cellAccent(frame, p.Top) -- (a dark cell keeps its face: the colour rides its inner edge)
+		return
+	end
+	if frame:GetAttribute("TwoTone") == true then
+		Pop.twoTone(frame, p)
+		return
+	end
 	local dark = frame:GetAttribute("DarkTile") == true
 	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
 	if gradient then
@@ -914,7 +1010,8 @@ function Pop.price(parent: Instance, robux: number?, size: Vector2, props: Props
 		Selectable = true,
 		ZIndex = 4,
 	}, parent)
-	Pop.face(button, PopTheme.Price)
+	-- (the round look: the reel's lime price buttons)
+	Pop.face(button, if PopTheme.round() then PopTheme.Paints.Lime else PopTheme.Price)
 	Pop.studs(button, PopTheme.Corner, 0.45, 28, 4)
 	Pop.gleam(button, 4)
 	Pop.fxTag(button, "Press")
@@ -1034,18 +1131,20 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		Active = true,
 		ZIndex = 1,
 	}, parent)
-	UIKit.corner(root, PopTheme.WindowCorner)
-	Pop.border(root, 4)
+	UIKit.corner(root, if round then 8 else PopTheme.WindowCorner)
+	-- (the reel: a thin near-black frame, the band and the body straight inside it)
+	local rim = if round then 3 else 4
+	Pop.border(root, rim)
 
 	local body = UIKit.new("Frame", {
 		Name = "Body",
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(4, h),
-		Size = UDim2.new(1, -8, 1, -(h + 4)),
+		Position = UDim2.fromOffset(rim, h),
+		Size = UDim2.new(1, -2 * rim, 1, -(h + rim)),
 		ZIndex = 1,
 	}, root)
-	UIKit.corner(body, 4)
+	UIKit.corner(body, if round then 6 else 4)
 	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
 	-- the body's studs (the photos' dark studded floor) and a shade under the header
 	Pop.studs(body, 4, 0.5, 36, 1)
@@ -1054,6 +1153,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		BackgroundColor3 = PopTheme.Outline,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 18),
+		Visible = not round, -- (the reel's band ends in its own darker lip)
 		ZIndex = 1,
 	}, body)
 	UIKit.new("UIGradient", {
@@ -1064,39 +1164,43 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 	local head = UIKit.new("Frame", {
 		Name = "Header",
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(4, 4),
-		Size = UDim2.new(1, -8, 0, h - 8),
+		Position = UDim2.fromOffset(rim, rim),
+		Size = UDim2.new(1, -2 * rim, 0, h - 2 * rim),
 		ClipsDescendants = true,
 		ZIndex = 2,
 	}, root)
 	Pop.face(head, paint or "Green", 4, false)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
-	headBorder.Thickness = 3
+	headBorder.Thickness = if round then 0 else 3
+	headBorder.Enabled = not round
 	-- (the pixel reels: the lattice over the band, a gleam now and then; no stripes;
-	-- the round look: fine stripes, three broad ones, the window's colour and faded icon)
-	head.Size = UDim2.fromOffset(size.X - 8, h - 8)
+	-- the round look: the fine checker, broad light stripes, the window's flat colour, its
+	-- darker lip and faded icon)
+	head.Size = UDim2.fromOffset(size.X - 2 * rim, h - 2 * rim)
 	Pop.studs(head, 4, 0.35, 40, 3)
 	if round then
 		Pop.shineStripes(head, 3)
 	end
 	Pop.gleam(head, 3)
-	head.Size = UDim2.new(1, -8, 0, h - 8)
+	head.Size = UDim2.new(1, -2 * rim, 0, h - 2 * rim)
+	-- the window's icon (the round look): a little bigger than the band, over its left end
 	local look = Pop.windowLook(Pop.windowKey(parent))
-	local icon = if look then Pop.bandIcon(head, look.Icon, h - 14, { Position = UDim2.new(0, 10, 0.5, 0) }) else nil
-	local left = 16 + Pop.iconRoom(icon)
-	local titleLabel = Pop.text(head, title, math.floor(h * (if round then 0.5 else 0.6)), {
+	local icon = if look then Pop.bandIcon(root, look.Icon, h + 2, { Position = UDim2.new(0, 4, 0, math.floor(h / 2) - 1) }) else nil
+	local room = Pop.iconRoom(icon)
+	local left = if room > 0 then room + 1 elseif round then 12 else 16
+	local titleLabel = Pop.text(head, Pop.caption(title), math.floor(h * (if round then 0.4 else 0.6)), {
 		Name = "Title",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, left, 0.5, 0),
+		Position = UDim2.new(0, left, 0.5, -(if round then 2 else 0)),
 		Size = UDim2.new(1, -(h + 14 + left), 1, -4),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
 	})
-	Pop.shadow(titleLabel)
-	local x = math.floor(h * 0.82)
+	Pop.shadow(titleLabel, if round then 3 else nil)
+	local x = math.floor(h * 0.82) -- (44 pt on a phone at the compact bands)
 	local close = Pop.close(root, x, {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0, math.floor(h / 2)),
+		Position = UDim2.new(1, if round then -14 else -10, 0, math.floor(h / 2) - (if round then 2 else 0)),
 	})
 	return { Root = root, Header = head, Title = titleLabel, Close = close, Body = body, Icon = icon }
 end
@@ -1143,6 +1247,101 @@ function Pop.rays(parent: Instance, center: UDim2, count: number, length: number
 end
 
 --[[
+	The round look's two-tone card paint (the reel's Store cards): the
+	paint's light top in the top-left corner to its deep bottom in the
+	bottom-right, no lip, and a deeper edge just inside the black outline.
+]]
+function Pop.twoTone(frame: GuiObject, paint: string | Paint)
+	local p = Pop.paint(paint)
+	frame:SetAttribute("TwoTone", true)
+	frame:SetAttribute("Lip", 0)
+	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
+	if gradient then
+		gradient.Color = ColorSequence.new(p.Top, p.Bottom)
+		gradient.Rotation = 35
+	end
+	local rim = frame:FindFirstChild("Rim")
+	local light = if rim then rim:FindFirstChild("Light") else nil
+	if light and light:IsA("UIStroke") then
+		light.Color = p.Bottom:Lerp(Color3.new(0, 0, 0), 0.22)
+		light.Thickness = 3
+		local fade = light:FindFirstChildOfClass("UIGradient")
+		if fade then
+			fade:Destroy() -- (an even edge all round)
+		end
+	end
+end
+
+--[[
+	The round look's dark item cell (the reel's index and inventory grids):
+	paints `frame` a dark slate gradient with a near-black outline, two
+	broad faint diagonal stripes, and a thin inner edge in `accent` (a
+	rarity's colour; none: a quiet grey). The cell keeps its face when a
+	view repaints it (Pop.repaint: the colour goes to the edge). Returns the
+	stripes' clip ("Lattice", it holds a gleam too).
+]]
+function Pop.cellFace(frame: GuiObject, accent: Color3?, corner: number?): Frame
+	frame.BackgroundColor3 = Color3.new(1, 1, 1)
+	frame.BackgroundTransparency = 0
+	frame.BorderSizePixel = 0
+	frame:SetAttribute("Cell", true)
+	frame:SetAttribute("Lip", 0)
+	local r = corner or 6
+	local c = frame:FindFirstChildOfClass("UICorner")
+	if c then
+		c.CornerRadius = UDim.new(0, r)
+	else
+		UIKit.corner(frame, r)
+	end
+	local border = frame:FindFirstChild("Border") :: UIStroke?
+	if border then
+		border.Thickness = 2.5
+		border.Color = PopTheme.Outline
+	else
+		Pop.border(frame, 2.5)
+	end
+	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
+	if not gradient then
+		gradient = UIKit.new("UIGradient", { Name = "Paint", Rotation = 90 }, frame)
+	end
+	local g = gradient :: UIGradient
+	g.Rotation = 90
+	g.Color = ColorSequence.new(PopTheme.CellTop, PopTheme.CellBottom)
+	local clip = Pop.lattice(frame, frame.ZIndex, 1)
+	for i, s in { { 0.32, 0.22 }, { 0.72, 0.12 } } do
+		UIKit.new("Frame", {
+			Name = "CellStripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.94,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(s[1], 0.5),
+			Rotation = 35,
+			Size = UDim2.fromScale(s[2], 2),
+			ZIndex = frame.ZIndex,
+		}, clip)
+	end
+	Pop.rim(frame, accent or Color3.fromRGB(70, 78, 92), r, 3, frame.ZIndex)
+	Pop.cellAccent(frame, accent or Color3.fromRGB(70, 78, 92))
+	return clip
+end
+
+-- A dark cell's inner edge colour (a rarity's, a picked cell's gold).
+function Pop.cellAccent(frame: GuiObject, color: Color3)
+	local rim = frame:FindFirstChild("Rim")
+	local light = if rim then rim:FindFirstChild("Light") else nil
+	if light and light:IsA("UIStroke") then
+		light.Color = color
+		light.Thickness = 1.5
+		light.Transparency = 0.15
+		local fade = light:FindFirstChildOfClass("UIGradient")
+		if fade then
+			fade:Destroy()
+		end
+	end
+end
+
+--[[
 	A painted card: the paint, light rays behind where the picture goes
 	(`rayCenter`, default upper middle), the black border. It clips its
 	rays. Children go on top (ZIndex 4+). Returns the button.
@@ -1159,6 +1358,10 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 	apply(button, props)
 	Pop.face(button, paint, PopTheme.Corner)
 	local p = Pop.paint(paint)
+	local round = PopTheme.round()
+	if round then
+		Pop.twoTone(button, p)
+	end
 	local size = button.Size
 	local short = math.min(size.X.Offset, size.Y.Offset)
 	local long = math.max(size.X.Offset, size.Y.Offset, 120)
@@ -1175,7 +1378,8 @@ function Pop.card(parent: Instance, paint: string | Paint, props: Props?, rayCen
 	if rays then
 		Pop.fxTag(rays, "Spin")
 	else
-		Pop.rays(button, centre, 10, long, 0.6, 2)
+		-- (the round look: the reel's strong sunburst, broad light wedges)
+		Pop.rays(button, centre, if round then 12 else 10, long, if round then 0.5 else 0.6, 2)
 	end
 	local glow = Pop.fx(button, "fx_glow", {
 		Name = "Glow",

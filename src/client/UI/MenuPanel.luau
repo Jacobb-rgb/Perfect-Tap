@@ -154,6 +154,7 @@ local function band(panel: Frame, paint: Pop.Paint): Frame
 	Pop.face(head, paint, 6, false)
 	local border = head:FindFirstChild("Border") :: UIStroke
 	border.Thickness = 3
+	border.Enabled = not PopTheme.round() -- (the reel's band sits straight in the window's frame)
 	-- (the pixel reels: the lattice over the band and a gleam now and then, no stripes;
 	-- the round look: fine stripes, three broad ones, the window's faded icon;
 	-- the band is sized by the layout later: the pattern assumes a wide one)
@@ -213,7 +214,7 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	floor(panel)
 	band(panel, MenuPanel.paintFor(name))
 
-	local titleLabel = Pop.text(panel, title, MenuPanel.Metrics.Normal.Title, {
+	local titleLabel = Pop.text(panel, Pop.caption(title), MenuPanel.Metrics.Normal.Title, {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -372,11 +373,12 @@ function MenuPanel.layout(refs: Refs, compact: boolean, width: number, height: n
 	-- the window's icon (the round look) at the band's left, the title right of it
 	local icon = refs.Panel:FindFirstChild("BandIcon") :: ImageLabel?
 	if icon then
-		local iconSize = bandH - 10
+		-- (the reel: a little bigger than the band, over its left end)
+		local iconSize = bandH + 6
 		icon.Size = UDim2.fromOffset(iconSize, iconSize)
-		icon.Position = UDim2.fromOffset(pad - 4, rim + math.floor(bandH / 2))
+		icon.Position = UDim2.fromOffset(rim + 2, rim + math.floor(bandH / 2))
 	end
-	local left = pad + (if icon then Pop.iconRoom(icon) - 4 else 0)
+	local left = if icon and icon.Visible then rim + 2 + Pop.iconRoom(icon) else pad
 	-- big screens: the title and the subtitle under it; compact: the title in the band's middle
 	refs.Title.Position = UDim2.fromOffset(left, if compact then rim + math.floor((bandH - 44) / 2) else 4)
 	refs.Title.Size = UDim2.new(1, -(left + pad + m.Close + 8), 0, if compact then 44 else 40)

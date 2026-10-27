@@ -1113,7 +1113,7 @@ function CollectionView.build(compact: boolean): Refs
 	})
 	chrome(panel, CollectionView.Paint, m.Header)
 	local room = CollectionView.titleRoom(panel)
-	local title = Pop.text(panel, "ARTIFACTS OF KALDRUM", m.Title, {
+	local title = Pop.text(panel, Pop.caption("ARTIFACTS OF KALDRUM"), m.Title, {
 		Name = "Title",
 		Position = UDim2.fromOffset(m.Pad + 4 + room, 10),
 		Size = UDim2.new(0, 520 - room, 0, m.Header - 20),

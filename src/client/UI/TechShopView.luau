@@ -1755,6 +1755,10 @@ local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
 	}, refs.Lists[spec.Tab])
 	Pop.face(frame, TechShopView.rowPaint(spec.Icon), ROW_CORNER, false)
 	Pop.studs(frame, ROW_CORNER, 0.5, 44, 1)
+	if PopTheme.round() then
+		-- (the reel's Upgrade rows: dark, the category colour on the inner edge)
+		Pop.cellFace(frame, Pop.paint(TechShopView.rowPaint(spec.Icon)).Top, 8)
+	end
 	local rim = frame:FindFirstChild("Rim") :: Frame?
 	if rim then
 		rim.ZIndex = 3
@@ -1913,7 +1917,7 @@ function TechShopView.build(compact: boolean?): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	})
 	chrome(panel, TechShopView.Paint)
-	local title = UIKit.label(panel, "TECH SHOP", 34, {
+	local title = UIKit.label(panel, Pop.caption("TECH SHOP"), 34, {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
@@ -2445,7 +2449,7 @@ end
 local function fillRow(row: Row, card: Card)
 	row.Card = card
 	row.Frame.LayoutOrder = card.Order
-	row.Title.Text = string.upper(card.Title)
+	row.Title.Text = Pop.caption(string.upper(card.Title))
 	row.Chip.Text = card.Chip
 	row.Chip.BackgroundColor3 = if card.ChipColor == Theme.PanelDark then PopTheme.Paints.Slate.Bottom else card.ChipColor
 	row.Description.Text = card.Description

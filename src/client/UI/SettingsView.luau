@@ -112,6 +112,37 @@ SettingsView.RowPaint = {
 SettingsView.NoteColor = Color3.fromRGB(196, 206, 226)
 SettingsView.ValueColor = Color3.fromRGB(255, 232, 110)
 
+--[[
+	The round look (owner 2026-10-27, the reel's Settings): dark rows with a
+	thin grey edge straight on the body, the name in white and a small grey
+	line under it, a white slider track with a lime fill, a lime ON and a
+	red OFF.
+]]
+SettingsView.Round = {
+	Row = { Top = Color3.fromRGB(32, 36, 45), Bottom = Color3.fromRGB(24, 27, 34), Edge = PopTheme.Outline },
+	RowEdge = Color3.fromRGB(64, 70, 84),
+	Note = Color3.fromRGB(150, 158, 174),
+	Value = Color3.fromRGB(255, 255, 255),
+	Track = Color3.fromRGB(236, 238, 242),
+	On = "Lime",
+	Off = "Red",
+	Fill = "Lime",
+}
+
+-- The look's paints and colours (round or pixel) for a part of a row.
+local function onPaint(): string | Pop.Paint
+	return if PopTheme.round() then SettingsView.Round.On else SettingsView.OnPaint
+end
+local function offPaint(): string | Pop.Paint
+	return if PopTheme.round() then SettingsView.Round.Off else SettingsView.OffPaint
+end
+local function noteColor(): Color3
+	return if PopTheme.round() then SettingsView.Round.Note else SettingsView.NoteColor
+end
+local function valueColor(): Color3
+	return if PopTheme.round() then SettingsView.Round.Value else SettingsView.ValueColor
+end
+
 local function metrics(compact: boolean): Metrics
 	return if compact then SettingsView.Metrics.Compact else SettingsView.Metrics.Normal
 end
@@ -189,8 +220,18 @@ local function rowFrame(parent: Instance, spec: RowSpec, order: number): (Frame,
 		LayoutOrder = order,
 		ZIndex = 3,
 	}, parent)
-	Pop.face(frame, SettingsView.RowPaint, 10, false)
+	local round = PopTheme.round()
+	Pop.face(frame, if round then SettingsView.Round.Row else SettingsView.RowPaint, if round then 6 else 10, false)
 	Pop.studs(frame, 10, 0.6, 36, 3)
+	if round then
+		local border = frame:FindFirstChild("Border") :: UIStroke
+		border.Color = SettingsView.Round.RowEdge
+		border.Thickness = 2
+		local rim = frame:FindFirstChild("Rim")
+		if rim and rim:IsA("GuiObject") then
+			rim.Visible = false
+		end
+	end
 	local icon = UIKit.new("TextLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
@@ -206,10 +247,18 @@ local function rowFrame(parent: Instance, spec: RowSpec, order: number): (Frame,
 	local note = Pop.text(frame, spec.Note, 15, {
 		Name = "Note",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = SettingsView.NoteColor,
+		TextColor3 = noteColor(),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 5,
 	})
+	if round then
+		-- (the reel's grey line: no black edge)
+		local edge = note:FindFirstChild("Edge") :: UIStroke?
+		if edge then
+			edge.Transparency = 0.6
+			edge.Thickness = 1
+		end
+	end
 	return frame, icon, title, note
 end
 
@@ -254,13 +303,13 @@ local function newVolume(refs: Refs, spec: RowSpec, order: number)
 	local bar = UIKit.new("Frame", {
 		Name = "Bar",
 		AnchorPoint = Vector2.new(0, 0.5),
-		BackgroundColor3 = PopTheme.Well,
+		BackgroundColor3 = if PopTheme.round() then SettingsView.Round.Track else PopTheme.Well,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.new(1, 0, 0, 20),
 		ZIndex = 4,
 	}, track)
-	UIKit.corner(bar, 10)
+	UIKit.corner(bar, if PopTheme.round() then 3 else 10)
 	Pop.border(bar, 3)
 	local fill = UIKit.new("Frame", {
 		Name = "Fill",
@@ -268,7 +317,13 @@ local function newVolume(refs: Refs, spec: RowSpec, order: number)
 		Size = UDim2.fromScale(0.5, 1),
 		ZIndex = 4,
 	}, bar)
-	Pop.face(fill, SettingsView.FillPaint, 10, true, false)
+	Pop.face(
+		fill,
+		if PopTheme.round() then SettingsView.Round.Fill else SettingsView.FillPaint,
+		if PopTheme.round() then 3 else 10,
+		true,
+		false
+	)
 	local fillBorder = fill:FindFirstChild("Border")
 	if fillBorder then
 		fillBorder:Destroy()
@@ -280,12 +335,21 @@ local function newVolume(refs: Refs, spec: RowSpec, order: number)
 		Size = UDim2.fromOffset(32, 32),
 		ZIndex = 6,
 	}, bar)
-	Pop.face(knob, { Top = Color3.new(1, 1, 1), Bottom = Color3.fromRGB(196, 204, 222), Edge = PopTheme.Outline }, 16, true, false)
+	-- (the round look: the reel's small lime grip at the fill's end)
+	Pop.face(
+		knob,
+		if PopTheme.round()
+			then PopTheme.Paints.Lime
+			else { Top = Color3.new(1, 1, 1), Bottom = Color3.fromRGB(196, 204, 222), Edge = PopTheme.Outline },
+		if PopTheme.round() then 4 else 16,
+		true,
+		false
+	)
 	local value = Pop.text(frame, "50%", 24, {
 		Name = "Value",
 		AnchorPoint = Vector2.new(1, 0.5),
 		FontFace = PopTheme.Heavy,
-		TextColor3 = SettingsView.ValueColor,
+		TextColor3 = valueColor(),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 5,
 	})
@@ -306,7 +370,7 @@ end
 
 local function newToggle(refs: Refs, spec: RowSpec, order: number)
 	local frame, icon, title, note = rowFrame(refs.List, spec, order)
-	local toggle = button(frame, "Toggle", "ON", SettingsView.OnPaint)
+	local toggle = button(frame, "Toggle", "ON", onPaint())
 	-- (the state word as the button's own Text, unseen: the painted word shows it)
 	toggle.Text = "ON"
 	toggle.TextTransparency = 1
@@ -322,6 +386,14 @@ function SettingsView.build(compact: boolean?): Refs
 		Position = UDim2.fromOffset(0, 6),
 		Size = UDim2.new(1, 0, 1, -6),
 	})
+	if PopTheme.round() then
+		-- (the reel: the rows straight on the body)
+		well.BackgroundTransparency = 1
+		local wellBorder = well:FindFirstChild("Border") :: UIStroke?
+		if wellBorder then
+			wellBorder.Enabled = false
+		end
+	end
 	local pad = SettingsView.WellPad
 	local list = UIKit.new("Frame", {
 		Name = "List",
@@ -399,7 +471,7 @@ function SettingsView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		local bar = row.Fill.Parent :: Frame
 		bar.Size = UDim2.new(1, 0, 0, if compact then 24 else 20)
 		local knob = if compact then 38 else 32
-		row.Knob.Size = UDim2.fromOffset(knob, knob)
+		row.Knob.Size = if PopTheme.round() then UDim2.fromOffset(math.floor(knob * 0.5), knob) else UDim2.fromOffset(knob, knob)
 		row.Value.TextSize = m.Value
 		row.Value.Position = UDim2.new(1, -12, 0.5, 0)
 		row.Value.Size = UDim2.fromOffset(valueW, 30)
@@ -425,14 +497,14 @@ function SettingsView.set(refs: Refs, settings: SettingsConfig.Settings)
 		row.Fill.Visible = v > 0.001
 		row.Knob.Position = UDim2.fromScale(v, 0.5)
 		row.Value.Text = SettingsConfig.percent(v)
-		row.Value.TextColor3 = if v > 0 then SettingsView.ValueColor else SettingsView.NoteColor
+		row.Value.TextColor3 = if v > 0 then valueColor() else noteColor()
 	end
 	for id, row in refs.Toggles do
 		local on = values[id] == true
 		local word = if on then "ON" else "OFF"
 		row.Button.Text = word
 		wordOf(row.Button).Text = word
-		Pop.repaint(row.Button, if on then SettingsView.OnPaint else SettingsView.OffPaint)
+		Pop.repaint(row.Button, if on then onPaint() else offPaint())
 	end
 end
 

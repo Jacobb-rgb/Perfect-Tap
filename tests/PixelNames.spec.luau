@@ -210,7 +210,7 @@ return function(T, Loader)
 					end
 				end
 				GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
-				T.eq(refs.Slots[3].Name.Text, "EMPTY")
+				T.eq(refs.Slots[3].Name.Text, Pop.caption("EMPTY"))
 				T.eq(refs.Slots[3].Name:GetAttribute("NameLines"), 1)
 			end
 			-- a phone turned / resized with the cards built: the names follow the new cells

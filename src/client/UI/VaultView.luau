@@ -775,7 +775,7 @@ function VaultView.build(): Refs
 	-- the orange header with the title and your coins
 	local header = body(face, S.Roles.Vault, "Header", false, 20)
 	header.Holder.Position = UDim2.fromOffset(10, 10)
-	local title = text(header.Face, "BLASTER VAULT", 34, {
+	local title = text(header.Face, Pop.caption("BLASTER VAULT"), 34, {
 		Name = "Title",
 		FontFace = S.TitleFont,
 		Position = UDim2.fromOffset(20, 0),

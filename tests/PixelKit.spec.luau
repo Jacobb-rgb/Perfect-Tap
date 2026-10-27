@@ -28,21 +28,30 @@ return function(T, Loader)
 	end
 
 	T.test("Pixel shop: every button in a pass card is the card or its wired Price tag", function()
-		local refs = StoreView.build()
-		local items = 0
-		for _, card in refs.Cards do
-			if card.Spec.Look == "Item" then
-				items += 1
-				for _, d in card.Button:GetDescendants() do
-					if d:IsA("GuiButton") then
-						T.truthy(d == card.Price, card.Spec.Id .. ": " .. d:GetFullName() .. " is the wired Price")
+		for _, look in { "Pixel", "Round" } do
+			inLook(look, function()
+				local refs = StoreView.build()
+				local items = 0
+				for _, card in refs.Cards do
+					if card.Spec.Look == "Item" then
+						items += 1
+						for _, d in card.Button:GetDescendants() do
+							if d:IsA("GuiButton") then
+								T.truthy(d == card.Price, card.Spec.Id .. ": " .. d:GetFullName() .. " is the wired Price")
+							end
+						end
+						-- (the pixel look's second tilted tag is a picture; the round look has one price)
+						local mirror = card.Button:FindFirstChild("PriceMirror")
+						if look == "Pixel" then
+							T.truthy(mirror ~= nil and not mirror:IsA("GuiButton"), card.Spec.Id .. " mirror is a picture")
+						else
+							T.eq(mirror, nil, card.Spec.Id .. ": one price")
+						end
 					end
 				end
-				local mirror = card.Button:FindFirstChild("PriceMirror")
-				T.truthy(mirror ~= nil and not mirror:IsA("GuiButton"), card.Spec.Id .. " mirror is a picture")
-			end
+				T.truthy(items >= 6, "the pass cards")
+			end)
 		end
-		T.truthy(items >= 6, "the pass cards")
 	end)
 
 	T.test("Pixel shop: a price keeps its size when the shop refreshes it", function()
@@ -56,8 +65,32 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Round shop: one list, two Gamepass cards a row, three Buy Cash cards, a short row centred", function()
+		inLook("Round", function()
+			local refs = StoreView.build()
+			T.falsy((refs.Group:FindFirstChild("Tabs") :: any).Visible, "no tab column")
+			T.eq(StoreView.sections()[1].Id, "Passes", "Gamepass first")
+			T.eq(StoreView.sectionTitle(StoreView.sections()[2]), "Buy Cash")
+			local half = (StoreView.CardsWidth - StoreView.Gap) / 2
+			for _, card in refs.Cards do
+				if card.Spec.Look == "Item" and card.State ~= "Hidden" then
+					T.near(card.Button.Size.X.Offset, math.floor(half), 1, card.Spec.Id .. ": two a row")
+				end
+			end
+			local third = math.floor((StoreView.CardsWidth - 2 * StoreView.Gap) / 3)
+			T.near(refs.Cards.CoinsSmall.Button.Size.X.Offset, third, 1, "three cash cards a row")
+			-- a hidden pass leaves five: the last one alone in its row, centred
+			StoreView.setCard(refs, "Podiums", refs.Cards.Podiums.Key, "Hidden")
+			local star = refs.Cards.Starbreaker
+			local x = star.Button.Position.X.Offset
+			T.near(x + star.Button.Size.X.Offset / 2, StoreView.CardsWidth / 2, 2, "Starbreaker centred")
+		end)
+	end)
+
 	T.test("Pixel shop: pass cards are never wider than three a row (a short row is centred)", function()
+		PopTheme.setLook("Pixel")
 		local refs = StoreView.build()
+		PopTheme.setLook(DEFAULT_LOOK)
 		local third = (StoreView.CardsWidth - 2 * StoreView.Gap) / 3
 		for _, card in refs.Cards do
 			if card.Spec.Look == "Item" and card.State ~= "Hidden" then
@@ -117,16 +150,20 @@ return function(T, Loader)
 
 	T.test("Round look: the default; words and sentences are Fredoka One, the switch flips to pixel and back", function()
 		T.eq(DEFAULT_LOOK, "Round", "the round look ships")
+		T.truthy(string.find(PopTheme.Pixel.Family, "Montserrat", 1, true) ~= nil, "the reel's Montserrat")
 		local holder = roblox.Instance.new("Frame")
 		inLook("Round", function()
 			local word = Pop.text(holder, "SHOP", 30, {})
 			T.truthy(Pop.isPixel(word.FontFace), "a short text is a word")
-			T.eq(word.FontFace.Family, PopTheme.Font.Family, "the same round face as the sentences")
+			T.eq(word.FontFace.Family, PopTheme.Font.Family, "the same family as the sentences (Black words, Bold sentences)")
 			T.eq(word.TextSize, 30, "drawn at its size (PixelScale 1)")
 			local sentence = Pop.text(holder, "Spray the dirt off raw ore by hand", 18, {})
 			T.falsy(Pop.isPixel(sentence.FontFace), "a long text is a sentence")
-			T.eq(Pop.section("PASSES"), "- PASSES -")
-			T.eq(Pop.section("- PASSES -"), "- PASSES -", "never twice")
+			T.eq(Pop.section("PASSES"), "- Passes -", "Title Case, the reel's - Gamepass -")
+			T.eq(Pop.section("- Passes -"), "- Passes -", "never twice")
+			T.eq(Pop.caption("HALL OF FAME"), "Hall of Fame")
+			T.eq(Pop.caption("2X MONEY"), "2x Money")
+			T.eq(Pop.caption("Already Fine"), "Already Fine", "small letters: left alone")
 			T.truthy(Pop.edgeFor(30) > 3, "the thick dark edge")
 		end)
 		inLook("Pixel", function()
@@ -134,6 +171,7 @@ return function(T, Loader)
 			T.truthy(string.find(word.FontFace.Family, "PressStart2P", 1, true) ~= nil, "pixel words")
 			T.eq(PopTheme.PixelScale, 0.74)
 			T.eq(Pop.section("PASSES"), "PASSES", "no dashes")
+			T.eq(Pop.caption("MY GOLEMS"), "MY GOLEMS", "the pixel look keeps its capitals")
 		end)
 		T.eq(PopTheme.Look, DEFAULT_LOOK, "back to the default")
 	end)
@@ -143,7 +181,8 @@ return function(T, Loader)
 			local gui = roblox.Instance.new("ScreenGui")
 			gui.Name = "TerraForgeSettings"
 			local window = Pop.window(gui, "SETTINGS", Vector2.new(600, 400), 70, "Green")
-			T.eq(window.Header:GetAttribute("WindowPaint"), "Steel", "the reel's grey Settings")
+			T.eq(window.Header:GetAttribute("WindowPaint"), "Concrete", "the reel's dark grey Settings")
+			T.eq(window.Title.Text, "Settings", "Title Case")
 			T.truthy(window.Header:FindFirstChild("Watermark", true) ~= nil, "the faded icon")
 			T.truthy(window.Icon ~= nil and window.Icon:GetAttribute("Icon") == "cog", "the icon left of the title")
 			for _, look in PopTheme.Windows do

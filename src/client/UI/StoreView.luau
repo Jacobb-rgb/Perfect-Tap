@@ -124,7 +124,8 @@ StoreView.PhoneScale = 0.62 -- HudController's UI scale on phones
 -- window keeps its width (the tabs sit beside it) and gets as tall as the
 -- screen allows; a screen too narrow or too short shrinks it all (fit < 1).
 function StoreView.windowSize(w: number, h: number, tab: number?): (Vector2, number)
-	local group = StoreView.Width + StoreView.TabGap + (tab or StoreView.TabSize)
+	-- (the round look: one scrolling list, no tab column beside the window)
+	local group = if PopTheme.round() then StoreView.Width else StoreView.Width + StoreView.TabGap + (tab or StoreView.TabSize)
 	local fit = math.min(1, (w - 24) / group, (h - 16) / 520)
 	local height = math.min(StoreView.MaxHeight, (h - 24) / fit)
 	return Vector2.new(StoreView.Width, math.floor(height)), fit
@@ -448,6 +449,265 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, w: number
 	return refs
 end
 
+--[[
+	The round look's card (owner 2026-10-27, the UI pack reel: "completely
+	identical"): a bright two-tone gradient with the sunburst from the big
+	picture on the left half, the title top-right in heavy Title Case, the
+	big line (a multiplier, "LV 5") and the description white and
+	right-aligned under it, the green price button bottom-right (OWNED in
+	its place once bought). Coins: the amount big top-left, "Adds $X to your
+	balance" top-right, the cash bottom-left (the reel's "Buy Cash").
+]]
+local function buildRoundCard(parent: Instance, spec: StoreConfig.CardSpec, w: number, h: number): CardRefs
+	local product = productOf(spec)
+	local paint = paintOf(spec)
+	local coins = spec.Look == "Coins"
+	local pictureSize = math.floor(math.min(h * (if coins then 0.62 else 0.8), w * 0.46))
+	local picX = if coins then math.floor(pictureSize * 0.5) + 14 else math.floor(w * 0.25)
+	local picY = if coins then h - math.floor(pictureSize * 0.5) - 10 else math.floor(h * 0.5)
+	local button = Pop.card(parent, paint, {
+		Name = spec.Id,
+		Size = UDim2.fromOffset(w, h),
+	}, UDim2.fromOffset(picX, picY))
+	if spec.Paint == "Rainbow" then
+		Pop.rainbow(button)
+	end
+	local priceH = math.max(44, math.floor(h * 0.19))
+	local priceW = math.floor(math.min(w * (if coins then 0.48 else 0.36), 200))
+	local price = Pop.price(button, product.Robux, Vector2.new(priceW, priceH), {
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -10, 1, -10),
+		Selectable = false, -- (one gamepad stop per card: the card buys)
+		ZIndex = 6,
+	})
+	price:SetAttribute("Motion", "Shine") -- (UIMotionController: a light streak every few seconds)
+	local priceAmount = (price:FindFirstChild("Row") :: Frame):FindFirstChild("Amount") :: TextLabel
+	local shade = UIKit.new("Frame", {
+		Name = "Shade",
+		BackgroundColor3 = PopTheme.Outline,
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		ZIndex = 9,
+	}, button)
+	UIKit.corner(shade, PopTheme.Corner)
+	local owned = ownedTag(button, priceH, true)
+	owned.Position = UDim2.new(1, -10, 1, -10)
+	owned.Size = UDim2.fromOffset(priceW, priceH)
+	local refs: CardRefs = {
+		Spec = spec,
+		Button = button,
+		Title = nil,
+		Amount = nil,
+		Description = nil,
+		Price = price,
+		PriceAmount = priceAmount,
+		Owned = owned,
+		Shade = shade,
+		Key = spec.Keys[1],
+		State = "Buy",
+	}
+	picture(button, spec, pictureSize, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(picX, picY),
+		ZIndex = 5,
+	})
+	-- the title's colours: the card's paint, light (the reel's gold "VIP Pass", lime "2x Cash")
+	local light = { paint.Top:Lerp(Color3.new(1, 1, 1), 0.62), paint.Top:Lerp(Color3.new(1, 1, 1), 0.2) }
+	local textW = math.floor(w * (if coins then 0.48 else 0.54))
+	local titleH = math.floor(math.min(h * 0.16, 40))
+	if coins then
+		refs.Amount = Pop.title(button, "$0", math.floor(titleH * 0.95), light, {
+			Name = "Amount",
+			AnchorPoint = Vector2.new(0, 0),
+			FontFace = PopTheme.Heavy,
+			Position = UDim2.fromOffset(12, 8),
+			Size = UDim2.new(0.5, -12, 0, titleH),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 7,
+		})
+		local line = Pop.text(button, "", 17, {
+			Name = "Description",
+			FontFace = PopTheme.Font,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -10, 0, 10),
+			Size = UDim2.fromOffset(textW, math.floor(h * 0.42)),
+			TextScaled = true,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 7,
+		})
+		Pop.limit(line, 18, 11)
+		refs.Description = line
+	else
+		local title = spec.Title or product.Name
+		refs.Title = Pop.title(button, Pop.caption(title), titleH, light, {
+			AnchorPoint = Vector2.new(1, 0),
+			FontFace = PopTheme.Heavy,
+			Position = UDim2.new(1, -12, 0, 8),
+			Size = UDim2.fromOffset(textW, titleH),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 7,
+		})
+		local y = 8 + titleH
+		-- the big line: a multiplier ("x2 Money"), the blaster's "LV 5", an egg's "x3", a pass's tag
+		local bigText = spec.Big or (if spec.Look == "Item" then spec.Tag else nil)
+		if bigText or spec.Look == "Boost" or spec.Look == "Star" or spec.Look == "Capsule" then
+			local bigH = math.floor(titleH * 0.66)
+			Pop.title(button, Pop.caption(bigText or ""), bigH, "Gold", {
+				Name = "Big",
+				AnchorPoint = Vector2.new(1, 0),
+				FontFace = PopTheme.Heavy,
+				Position = UDim2.new(1, -12, 0, y),
+				Size = UDim2.fromOffset(textW, bigH),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				ZIndex = 7,
+			})
+			y += bigH + 2
+		end
+		local lines: { string } = {}
+		local given: { string } = spec.Lines or {}
+		for _, line in given do
+			table.insert(lines, "+ " .. line)
+		end
+		local text = if spec.Look == "Bundle"
+			then table.concat(lines, "\n")
+			elseif spec.Look == "Item" then spec.Short or product.Description
+			else spec.Note or ""
+		local description = Pop.text(button, text, 18, {
+			Name = if spec.Look == "Item" or spec.Look == "Star" then "Description" else "Note",
+			FontFace = PopTheme.Font,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, y),
+			Size = UDim2.fromOffset(textW, math.max(20, h - y - priceH - 18)),
+			TextScaled = true,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 7,
+		})
+		Pop.limit(description, if spec.Look == "Bundle" then 22 else 20, 12)
+		if spec.Look == "Item" or spec.Look == "Star" then
+			refs.Description = description
+		end
+	end
+	if spec.Ribbon then
+		-- (left: the title holds the top-right; under a cash card's amount)
+		local ribbon = Pop.ribbon(button, spec.Ribbon, 136)
+		local size = ribbon.Size
+		ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
+		ribbon.Rotation = -8
+		ribbon.Position = UDim2.fromOffset(8 + size.X.Offset / 2, (if coins then titleH + 18 else 12) + size.Y.Offset / 2)
+		ribbon:SetAttribute("Motion", "Breathe")
+	end
+	return refs
+end
+
+--[[
+	The round look's list (the reel's Store: "- Gamepass -" first in two
+	columns, "- Buy Cash -" in three, then the rest in the same cards):
+	the sections' order, their headings, how many cards a row and how tall.
+]]
+StoreView.RoundOrder = { "Passes", "Money", "Featured", "Luck", "Eggs", "Blasters" }
+StoreView.RoundTitles = { Passes = "Gamepass", Money = "Buy Cash" } :: { [string]: string }
+StoreView.RoundColumns = { Passes = 2, Money = 3, Featured = 1, Luck = 3, Eggs = 2, Blasters = 2 } :: { [string]: number }
+StoreView.RoundHeights = { Passes = 236, Money = 196, Featured = 270, Luck = 220, Eggs = 216, Blasters = 236 } :: { [string]: number }
+StoreView.RoundHeading = 46
+
+-- The sections in the order the list shows them (the round look: StoreView.RoundOrder first).
+function StoreView.sections(): { StoreConfig.Section }
+	if not PopTheme.round() then
+		return StoreConfig.Sections
+	end
+	local out: { StoreConfig.Section } = {}
+	local seen: { [string]: boolean } = {}
+	for _, id in StoreView.RoundOrder do
+		local section = StoreConfig.SectionById[id]
+		if section then
+			table.insert(out, section)
+			seen[id] = true
+		end
+	end
+	for _, section in StoreConfig.Sections do
+		if not seen[section.Id] then
+			table.insert(out, section)
+		end
+	end
+	return out
+end
+
+-- A section's heading words ("- Gamepass -" in the round look).
+function StoreView.sectionTitle(section: StoreConfig.Section): string
+	if PopTheme.round() then
+		return StoreView.RoundTitles[section.Id] or section.Title
+	end
+	return section.Title
+end
+
+-- The round look's card size in a section (design units).
+function StoreView.roundCardSize(section: StoreConfig.Section): Vector2
+	local columns = StoreView.RoundColumns[section.Id] or 2
+	local w = math.floor((StoreView.CardsWidth - (columns - 1) * StoreView.Gap) / columns)
+	return Vector2.new(w, StoreView.RoundHeights[section.Id] or section.RowHeight)
+end
+
+-- The round look's relayout: every section a grid of equal cards, a short last row centred.
+local function roundRelayout(refs: Refs): number
+	local gap = StoreView.Gap
+	local y = 6
+	for _, section in StoreView.sections() do
+		local frame = refs.Sections[section.Id]
+		local inner = StoreView.RoundHeading
+		local any = false
+		local banner = refs.Banner
+		if banner and banner.Frame.Parent == frame then
+			banner.Frame.Position = UDim2.fromOffset(0, inner)
+			inner += StoreView.BannerHeight + gap
+			any = true
+		end
+		local shown: { CardRefs } = {}
+		for _, row in StoreConfig.rows(section.Id) do
+			for _, spec in row do
+				local card = refs.Cards[spec.Id]
+				if card and card.State ~= "Hidden" then
+					table.insert(shown, card)
+				end
+			end
+		end
+		local columns = StoreView.RoundColumns[section.Id] or 2
+		local size = StoreView.roundCardSize(section)
+		local rows = math.ceil(#shown / columns)
+		for i, card in shown do
+			local row = (i - 1) // columns
+			local col = (i - 1) % columns
+			local inRow = if row == rows - 1 then #shown - row * columns else columns
+			local x0 = math.floor((StoreView.CardsWidth - (inRow * size.X + (inRow - 1) * gap)) / 2)
+			card.Button.Position = UDim2.fromOffset(x0 + col * (size.X + gap), inner + row * (size.Y + gap))
+			card.Button.Size = UDim2.fromOffset(size.X, size.Y)
+		end
+		if #shown > 0 then
+			any = true
+			inner += rows * (size.Y + gap)
+		end
+		frame.Visible = any
+		local tab = refs.Tabs[section.Id]
+		if tab and tab.Parent then
+			(tab.Parent :: GuiObject).Visible = any
+		end
+		if any then
+			frame.Position = UDim2.fromOffset(0, y)
+			frame.Size = UDim2.fromOffset(StoreView.CardsWidth, inner)
+			refs.Tops[section.Id] = y
+			y += inner + 2
+		end
+	end
+	local total = y + 8
+	refs.Scroller.CanvasSize = UDim2.fromOffset(StoreView.CardsWidth, total)
+	return total
+end
+
 -- The heights of a section's rows (design units).
 local function rowHeight(section: StoreConfig.Section, row: number): number
 	return if row == 1 and section.BigRow then section.BigRow else section.RowHeight
@@ -459,6 +719,9 @@ end
 	their tabs hide). Returns the list's height.
 ]]
 function StoreView.relayout(refs: Refs): number
+	if PopTheme.round() then
+		return roundRelayout(refs)
+	end
 	local gap = StoreView.Gap
 	local y = 6
 	for _, section in StoreConfig.Sections do
@@ -991,7 +1254,8 @@ function StoreView.build(): Refs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, holder)
-	local window = Pop.window(group, string.upper(StoreConfig.Title), size, StoreView.Header, "Green")
+	-- (the round look: the reel's "Store"; the HUD button keeps "Shop")
+	local window = Pop.window(group, if PopTheme.round() then "Store" else string.upper(StoreConfig.Title), size, StoreView.Header, "Green")
 	window.Root.AnchorPoint = Vector2.new(0, 0)
 	window.Root.Position = UDim2.fromOffset(0, 0)
 	-- (the pixel reels' shop: a rainbow band, the cart picture over its left end, a big pixel SHOP;
@@ -1038,20 +1302,25 @@ function StoreView.build(): Refs
 	local sections: { [string]: Frame } = {}
 	local cards: { [string]: CardRefs } = {}
 	local order: { string } = {}
-	for _, section in StoreConfig.Sections do
+	local roundLook = PopTheme.round()
+	for _, section in StoreView.sections() do
 		local frame = UIKit.new("Frame", {
 			Name = section.Id,
 			BackgroundTransparency = 1,
 			Size = UDim2.fromOffset(StoreView.CardsWidth, 100),
 			ZIndex = 2,
 		}, scroller)
-		Pop.heading(frame, section.Title, section.Colors, 40)
+		Pop.heading(frame, StoreView.sectionTitle(section), section.Colors, if roundLook then 32 else 40)
 		sections[section.Id] = frame
 		for r, row in StoreConfig.rows(section.Id) do
 			local h = rowHeight(section, r)
 			local unit = (StoreView.CardsWidth - (#row - 1) * StoreView.Gap) / #row
 			for _, spec in row do
-				cards[spec.Id] = buildCard(frame, spec, math.floor(unit * (spec.Span or 1)), h)
+				-- (the round look: the reel's cards, built at their grid size)
+				local cell = StoreView.roundCardSize(section)
+				cards[spec.Id] = if roundLook
+					then buildRoundCard(frame, spec, cell.X, cell.Y)
+					else buildCard(frame, spec, math.floor(unit * (spec.Span or 1)), h)
 				table.insert(order, spec.Id)
 			end
 		end
@@ -1070,6 +1339,7 @@ function StoreView.build(): Refs
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ScrollBarThickness = 0,
 		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+		Visible = not roundLook, -- (the round look: one scrolling list, the reel's Store)
 	}, group)
 	UIKit.list(tabColumn, Enum.FillDirection.Vertical, StoreView.TabListGap)
 	for i, section in StoreConfig.Sections do
@@ -1232,7 +1502,7 @@ function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 	local m = if compact then StoreView.Metrics.Compact else StoreView.Metrics.Normal
 	local size, fit = StoreView.windowSize(w, h, m.Tab)
 	refs.Window.Root.Size = UDim2.fromOffset(size.X, size.Y)
-	refs.Group.Size = UDim2.fromOffset(size.X + StoreView.TabGap + m.Tab, size.Y)
+	refs.Group.Size = UDim2.fromOffset(if PopTheme.round() then size.X else size.X + StoreView.TabGap + m.Tab, size.Y)
 	local holder = refs.Group.Parent
 	local scale = if holder then holder:FindFirstChild("FitScale") else nil
 	if scale and scale:IsA("UIScale") then
@@ -1297,8 +1567,12 @@ function StoreView.setCard(refs: Refs, id: string, key: string, state: string)
 	card.State = state
 	Pop.setPrice(card.Price, product.Robux)
 	if card.Description and card.Spec.Look == "Item" then
-		card.Description.Text = StoreView.itemLine(card.Spec, product.Description)
-		card.Description.Visible = state ~= "Owned"
+		if PopTheme.round() then
+			card.Description.Text = card.Spec.Short or product.Description -- (the reel: the line stays, OWNED takes the price's place)
+		else
+			card.Description.Text = StoreView.itemLine(card.Spec, product.Description)
+			card.Description.Visible = state ~= "Owned"
+		end
 	end
 	card.Button.Visible = state ~= "Hidden"
 	card.Price.Visible = state == "Buy" or state == "Pending"
@@ -1347,6 +1621,9 @@ function StoreView.setCoins(refs: Refs, income: number)
 		if amount then
 			local coins = MonetizationConfig.coinPackAmount(card.Key, income) or 0
 			amount.Text = "$" .. Format.big(coins)
+			if card.Description and card.Spec.Look == "Coins" then
+				card.Description.Text = "Adds $" .. Format.big(coins) .. " to your balance" -- (the reel's Buy Cash line)
+			end
 		end
 	end
 end

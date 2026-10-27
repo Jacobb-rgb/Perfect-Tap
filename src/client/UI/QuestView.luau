@@ -42,6 +42,7 @@ export type DayRefs = {
 	Done: Frame,
 	ClaimTag: Frame,
 	Glow: UIStroke,
+	Locked: Frame?, -- the round look's red LOCKED chip on a day still to come
 }
 
 export type QuestRefs = {
@@ -112,6 +113,10 @@ QuestView.RewardW = 230
 QuestView.BadgeSize = 60
 QuestView.PopupCellH = 150
 QuestView.PopupHeight = 430
+-- the round look's Daily Rewards (the reel): days 1-6 in two rows of three, day 7 big on the right
+QuestView.RoundPopupWidth = 780
+QuestView.RoundPopupHeight = 572
+QuestView.RoundGridH = 300
 QuestView.WeeklyPaint = "Yellow"
 
 -- Design units a tap target needs to be 44 pt on a phone through the fit shrink.
@@ -120,10 +125,19 @@ function QuestView.minTouch(fit: number): number
 end
 
 -- The window's size and fit scale for a w x h design-unit screen.
-function QuestView.windowSize(w: number, h: number, maxHeight: number?): (Vector2, number)
-	local fit = math.min(1, (w - 24) / QuestView.Width, (h - 16) / 400)
+function QuestView.windowSize(w: number, h: number, maxHeight: number?, width: number?): (Vector2, number)
+	local wide = width or QuestView.Width
+	local fit = math.min(1, (w - 24) / wide, (h - 16) / 400)
 	local height = math.min(maxHeight or QuestView.MaxHeight, (h - 24) / fit)
-	return Vector2.new(QuestView.Width, math.floor(height)), fit
+	return Vector2.new(wide, math.floor(height)), fit
+end
+
+-- The popup's size: the round look's narrower Daily Rewards window, else the wide one.
+function QuestView.popupSize(): Vector2
+	if PopTheme.round() then
+		return Vector2.new(QuestView.RoundPopupWidth, QuestView.RoundPopupHeight)
+	end
+	return Vector2.new(QuestView.Width, QuestView.PopupHeight)
 end
 
 ---------------------------------------------------------------- pieces
@@ -227,22 +241,46 @@ local function dayCell(parent: Instance, spec: QuestConfig.StreakDay, size: Vect
 		ZIndex = 5,
 	})
 	local cover = shade(button, 7)
-	local done = Pop.tag(button, "DONE", "Green", Vector2.new(math.floor(size.X * 0.7), 30), {
-		Name = "Done",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Rotation = -8,
-		Visible = false,
-		ZIndex = 8,
-	})
-	-- (in the DAY title's place: setStreak hides the title meanwhile)
-	local claimTag = Pop.tag(button, "TODAY!", "Red", Vector2.new(math.floor(size.X * 0.78), titleSize + 6), {
-		Name = "ClaimTag",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(math.floor(size.X / 2), 4),
-		Visible = false,
-		ZIndex = 9,
-	})
+	local done: Frame
+	local claimTag: Frame
+	local locked: Frame? = nil
+	if PopTheme.round() then
+		-- (the reel's Daily Rewards: a chip at the bottom of every day: Claimed grey, Claim lime,
+		-- LOCKED red; the prize's words above it)
+		local chipH = math.floor(math.min(30, math.max(20, size.Y * 0.16)))
+		local chipW = math.floor(size.X * 0.8)
+		local function chip(name: string, text: string, paint: string | Pop.Paint): Frame
+			return Pop.tag(button, text, paint, Vector2.new(chipW, chipH), {
+				Name = name,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new(0.5, 0, 1, -6),
+				Visible = false,
+				ZIndex = 8,
+			})
+		end
+		done = chip("Done", "Claimed", PopTheme.Gray)
+		claimTag = chip("ClaimTag", "Claim", "Lime")
+		locked = chip("Locked", "LOCKED", "Red")
+		label.Position = UDim2.new(0.5, 0, 1, -(chipH + 10))
+		icon.Position = UDim2.new(0.5, 0, 0.42, 0)
+	else
+		done = Pop.tag(button, "DONE", "Green", Vector2.new(math.floor(size.X * 0.7), 30), {
+			Name = "Done",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Rotation = -8,
+			Visible = false,
+			ZIndex = 8,
+		})
+		-- (in the DAY title's place: setStreak hides the title meanwhile)
+		claimTag = Pop.tag(button, "TODAY!", "Red", Vector2.new(math.floor(size.X * 0.78), titleSize + 6), {
+			Name = "ClaimTag",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromOffset(math.floor(size.X / 2), 4),
+			Visible = false,
+			ZIndex = 9,
+		})
+	end
 	-- the glowing edge of today's cell
 	local glow = UIKit.new("UIStroke", {
 		Name = "Glow",
@@ -260,7 +298,35 @@ local function dayCell(parent: Instance, spec: QuestConfig.StreakDay, size: Vect
 		Done = done,
 		ClaimTag = claimTag,
 		Glow = glow,
+		Locked = locked,
 	}
+end
+
+--[[
+	The round look's Daily Rewards grid (the reel): days 1-6 in two rows of
+	three on the left, day 7 big and rainbow on the right, `width` x
+	`height` units.
+]]
+local function dayGrid(parent: Instance, width: number, height: number): { DayRefs }
+	local gap = 10
+	local count = #QuestConfig.Streak
+	local leftW = math.floor(width * 0.74)
+	local cellW = math.floor((leftW - 2 * gap) / 3)
+	local cellH = math.floor((height - gap) / 2)
+	local cells: { DayRefs } = {}
+	for i, spec in QuestConfig.Streak do
+		local last = i == count
+		local size = if last then Vector2.new(width - leftW - gap, height) else Vector2.new(cellW, cellH)
+		local cell = dayCell(parent, spec, size, i)
+		local col = (i - 1) % 3
+		local row = (i - 1) // 3
+		cell.Button.Position = if last then UDim2.fromOffset(leftW + gap, 0) else UDim2.fromOffset(col * (cellW + gap), row * (cellH + gap))
+		if last then
+			Pop.rainbow(cell.Button)
+		end
+		table.insert(cells, cell)
+	end
+	return cells
 end
 
 -- A row of the 7 day cells, `width` wide.
@@ -599,7 +665,8 @@ end
 
 function QuestView.buildPopup(): PopupRefs
 	local gui, _, group = screen("TerraForgeStreak", 17)
-	local size = Vector2.new(QuestView.Width, QuestView.PopupHeight)
+	local size = QuestView.popupSize()
+	local round = PopTheme.round()
 	group.Size = UDim2.fromOffset(size.X, size.Y)
 	local window = Pop.window(group, QuestView.PopupTitle, size, QuestView.Header, "Orange")
 	window.Root.AnchorPoint = Vector2.new(0, 0)
@@ -611,23 +678,24 @@ function QuestView.buildPopup(): PopupRefs
 		Size = UDim2.new(1, 0, 0, 34),
 		ZIndex = 3,
 	})
+	local rowH = if round then QuestView.RoundGridH else QuestView.PopupCellH
 	local inner = UIKit.new("Frame", {
 		Name = "Row",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(20, 52),
-		Size = UDim2.new(1, -40, 0, QuestView.PopupCellH),
+		Size = UDim2.new(1, -40, 0, rowH),
 		ZIndex = 2,
 	}, body)
-	local days = dayRow(inner, QuestView.Width - 48, QuestView.PopupCellH, 0)
+	local days = if round then dayGrid(inner, size.X - 48, rowH) else dayRow(inner, QuestView.Width - 48, QuestView.PopupCellH, 0)
 	local claim = Pop.button(body, "CLAIM", "Green", Vector2.new(300, 66), {
 		Name = "Claim",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 52 + QuestView.PopupCellH + 18),
+		Position = UDim2.new(0.5, 0, 0, 52 + rowH + 18),
 	})
 	local oddsButton = Pop.button(body, "ODDS", "Blue", Vector2.new(130, 52), {
 		Name = "OddsButton",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -24, 0, 52 + QuestView.PopupCellH + 25),
+		Position = UDim2.new(1, -24, 0, 52 + rowH + 25),
 	})
 	local footnote = note(body, "Miss a day and the streak starts again at day 1.", 18, {
 		Name = "Footnote",
@@ -656,8 +724,8 @@ end
 ---------------------------------------------------------------- layout
 
 -- Fits a window into a w x h design-unit screen (compact: phones / TVs).
-local function fitWindow(refs: any, w: number, h: number, compact: boolean?, maxHeight: number?): (number, number)
-	local size, fit = QuestView.windowSize(w, h, maxHeight)
+local function fitWindow(refs: any, w: number, h: number, compact: boolean?, maxHeight: number?, width: number?): (number, number)
+	local size, fit = QuestView.windowSize(w, h, maxHeight, width)
 	refs.Window.Root.Size = UDim2.fromOffset(size.X, size.Y)
 	refs.Group.Size = UDim2.fromOffset(size.X, size.Y)
 	local holder = refs.Group.Parent
@@ -693,7 +761,8 @@ function QuestView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 end
 
 function QuestView.layoutPopup(refs: PopupRefs, w: number, h: number, compact: boolean?)
-	local _, touch = fitWindow(refs, w, h, compact, QuestView.PopupHeight)
+	local popup = QuestView.popupSize()
+	local _, touch = fitWindow(refs, w, h, compact, popup.Y, popup.X)
 	refs.Claim.Size = UDim2.fromOffset(300, math.max(66, touch))
 	refs.OddsButton.Size = UDim2.fromOffset(130, math.max(52, touch))
 end
@@ -749,10 +818,20 @@ function QuestView.setStreak(cells: { DayRefs }, streak: { [string]: any }?)
 		end
 		local isDone = i <= done
 		local isToday = i == today and canClaim
-		cell.Shade.Visible = isDone
-		cell.Done.Visible = isDone
-		cell.ClaimTag.Visible = isToday
-		cell.Title.Visible = not isToday
+		local locked = cell.Locked
+		if locked then
+			-- (the round look: the chips say it, the card stays bright)
+			cell.Shade.Visible = false
+			cell.Done.Visible = isDone
+			cell.ClaimTag.Visible = isToday
+			locked.Visible = not isDone and not isToday
+			cell.Title.Visible = true
+		else
+			cell.Shade.Visible = isDone
+			cell.Done.Visible = isDone
+			cell.ClaimTag.Visible = isToday
+			cell.Title.Visible = not isToday
+		end
 		cell.Glow.Thickness = if isToday then 5 elseif i == today then 3 else 0
 		cell.Button.Selectable = isToday
 		cell.Button.Active = isToday

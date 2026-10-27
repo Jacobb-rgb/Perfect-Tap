@@ -7,6 +7,7 @@ return function(T, Loader)
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local HoverboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HoverboardView")
+	local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
 	local roblox = require("@lune/roblox") :: any
 
 	local B = HoverboardData.ById
@@ -89,7 +90,7 @@ return function(T, Loader)
 		local refs = HoverboardView.build()
 		T.truthy(refs.Gui:GetAttribute("TerraForge"), "UIScale applies")
 		T.falsy(refs.Gui.Enabled, "starts closed")
-		T.eq(refs.Title.Text, "HOVERBOARDS", "title")
+		T.eq(refs.Title.Text, Pop.caption("HOVERBOARDS"), "title (Title Case in the round look)")
 		T.eq(#refs.Cards, #HoverboardData.List, "a card per board")
 		T.truthy(refs.Root.SelectionGroup, "gamepad stays inside")
 		T.eq(refs.CloseLook.Style, "Close", "red X")

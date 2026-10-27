@@ -1375,6 +1375,21 @@ local function newCard(page: GuiObject, entry: FloorEntry): Card
 		ZIndex = 5,
 	}, face)
 	UIKit.corner(shade, PopTheme.Corner)
+	-- the round look's big gold padlock over a floor you can't ride to yet (the reel's Teleport)
+	if PopTheme.round() then
+		local padlock = Icons.lock(face, GOLD)
+		padlock.Name = "Padlock"
+		padlock.AnchorPoint = Vector2.new(0.5, 0.5)
+		padlock.Position = UDim2.fromScale(0.5, 0.42)
+		padlock.Size = UDim2.fromOffset(64, 64)
+		padlock.Visible = false
+		padlock.ZIndex = 6
+		for _, d in padlock:GetDescendants() do
+			if d:IsA("GuiObject") then
+				d.ZIndex = 6
+			end
+		end
+	end
 	-- the number badge, the name
 	local badge: Frame = UIKit.new("Frame", {
 		Name = "Badge",
@@ -1806,8 +1821,10 @@ local function fillCard(card: Card, entry: FloorEntry, m: Metrics)
 	local soon = entry.State == "Soon"
 	local closed = soon or entry.State == "Locked"
 	card.Number.Text = if soon then "?" else tostring(entry.Index)
-	-- the card and its badge in the floor's colour
-	Pop.repaint(card.Face, ElevatorView.paintFrom(entry.Color), false)
+	-- the card and its badge in the floor's colour (the round look: deeper, like the reel's
+	-- area pictures)
+	local round = PopTheme.round()
+	Pop.repaint(card.Face, ElevatorView.paintFrom(ElevatorView.cardColor(entry.Color)), false)
 	Pop.repaint(card.Badge, badgePaint(entry.Color))
 	card.Name.Text = entry.Name
 	card.Name.TextColor3 = if soon then TEXT_SOFT else TEXT
@@ -1823,6 +1840,10 @@ local function fillCard(card: Card, entry: FloorEntry, m: Metrics)
 	end
 	-- a floor you can't ride to: the dark shade, the requirement on the button's corner
 	card.Shade.Visible = closed
+	local padlock = card.Face:FindFirstChild("Padlock")
+	if padlock and padlock:IsA("GuiObject") then
+		padlock.Visible = round and entry.State == "Locked"
+	end
 	card.Chip.Text = entry.Requirement
 	local pill = if soon then ElevatorView.SoonColor elseif entry.Met then MET else UNMET
 	paintChip(card.ChipGradient, pill)
@@ -1844,6 +1865,11 @@ local function fillCard(card: Card, entry: FloorEntry, m: Metrics)
 	styleButton(card.Look, style, ElevatorView.buttonText(entry.State), if long then m.ButtonText - 4 else m.ButtonText + 4)
 	-- only GO moves you; a tap on LOCKED says why (the controller), the others do nothing
 	card.Button.Selectable = entry.State == "Open"
+end
+
+-- A floor card's colour: the floor's (the round look: deeper, like the reel's area pictures).
+function ElevatorView.cardColor(color: Color3): Color3
+	return if PopTheme.round() then color:Lerp(Color3.new(0, 0, 0), 0.28) else color
 end
 
 -- The Floors page: the cards and the blaster line in the header.
@@ -2031,11 +2057,17 @@ local function layoutCard(card: Card, m: Metrics, cardWidth: number, cardHeight:
 	end
 	card.ModeText.TextSize = m.ModeText
 	card.ModeText.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(card.ModeText.Text, m.ModeText)) + 4, m.ModeIcon + 2)
-	-- the button
+	-- the button (the round look: the reel's TELEPORT, bottom-right, half the card)
 	local holder = card.Look.Holder
-	holder.AnchorPoint = Vector2.new(0, 1)
-	holder.Position = UDim2.new(0, 12, 1, -12)
-	holder.Size = UDim2.new(1, -24, 0, buttonHeight)
+	if PopTheme.round() then
+		holder.AnchorPoint = Vector2.new(1, 1)
+		holder.Position = UDim2.new(1, -12, 1, -12)
+		holder.Size = UDim2.new(0.56, -12, 0, buttonHeight)
+	else
+		holder.AnchorPoint = Vector2.new(0, 1)
+		holder.Position = UDim2.new(0, 12, 1, -12)
+		holder.Size = UDim2.new(1, -24, 0, buttonHeight)
+	end
 	-- the requirement pill on the button's top-right corner (a locked floor)
 	local buttonTop = cardHeight - 12 - buttonHeight
 	local pillText = m.ChipText + 1

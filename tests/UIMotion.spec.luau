@@ -17,6 +17,7 @@ return function(T, Loader)
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
 	local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 	local UIKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.UIKit")
 	local StoreView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoreView")
 	local SettingsView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SettingsView")
@@ -350,9 +351,14 @@ return function(T, Loader)
 				ribbons += 1
 				T.eq(ribbon:GetAttribute("Motion"), "Breathe")
 				T.eq(ribbon.AnchorPoint, Vector2.new(0.5, 0.5))
-				-- the same corner as Pop.ribbon puts it: right edge 8 in, top 12 down
-				T.near(ribbon.Position.X.Offset + ribbon.Size.X.Offset / 2, -8, 1e-9)
-				T.near(ribbon.Position.Y.Offset - ribbon.Size.Y.Offset / 2, 12, 1e-9)
+				if PopTheme.round() then
+					-- (the round look: the left edge 8 in, the title holds the top-right)
+					T.near(ribbon.Position.X.Offset - ribbon.Size.X.Offset / 2, 8, 1e-9)
+				else
+					-- the same corner as Pop.ribbon puts it: right edge 8 in, top 12 down
+					T.near(ribbon.Position.X.Offset + ribbon.Size.X.Offset / 2, -8, 1e-9)
+					T.near(ribbon.Position.Y.Offset - ribbon.Size.Y.Offset / 2, 12, 1e-9)
+				end
 			end
 		end
 		T.truthy(ribbons >= 1, "a BEST VALUE ribbon")
