@@ -16,14 +16,27 @@
 	              middle) and Orbs (ScreenGui "TerraForgeLevelOrbs", no
 	              UIScale: orbs fly in screen pixels)
 	Pop look (PopTheme): chunky white text with a black edge, painted faces.
+
+	The owner's second level-up reel (2026-10-27, Config/JuiceConfig.LevelUp)
+	adds, each behind its switch:
+	  SlowFill  a level-up fill races, then slows right before full
+	            (fillCurve over fillSeconds), and the full bar flashes
+	            white-hot for FullHold seconds before the moment (poseFull)
+	  Whoosh    a comic WHOOSH! pops beside the bar while it fills (poseWhoosh;
+	            LevelController plays the rising sound)
+	  Ticks     the reward rows tick in one by one (RowGapTicked apart), the
+	            coins count up in CoinTicks clicks and every amount bumps as
+	            it changes (ticks() says how many clicks LevelController owes)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local PopTheme = require(Shared.Config.PopTheme)
 local Format = require(Shared.Util.Format)
+local JuiceConfig = require(Shared.Config.JuiceConfig)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
+local PopWord = require(script.Parent.PopWord)
 
 local LevelView = {}
 
@@ -40,8 +53,15 @@ LevelView.OrbCount = 14
 LevelView.OrbSize = 16 -- screen pixels at UI scale 1
 LevelView.FillColor = { Color3.fromRGB(255, 226, 90), Color3.fromRGB(255, 128, 24) }
 LevelView.GlowColor = Color3.fromRGB(255, 150, 40)
+-- the 2026-10-27 reel (JuiceConfig.LevelUp)
+LevelView.FillKnee = 0.45 -- the share of a level-up fill's time spent racing
+LevelView.FillReach = 0.86 -- how much of the way it has raced by then (the rest creeps)
+LevelView.FullHold = 0.24 -- seconds the full bar glows white-hot before LEVEL UP!
+LevelView.WhooshSeconds = 0.9
+LevelView.CoinTicks = 6 -- the coins row counts up in this many clicks
+LevelView.RowGapTicked = 0.45 -- seconds between two reward rows (0.35 without Ticks)
 
-export type Row = { Holder: Frame, Label: TextLabel, Amount: TextLabel, Scale: UIScale }
+export type Row = { Holder: Frame, Label: TextLabel, Amount: TextLabel, Scale: UIScale, Bump: UIScale }
 export type View = {
 	Gui: ScreenGui,
 	Orbs: ScreenGui,
@@ -64,6 +84,8 @@ export type View = {
 	SubtitleScale: UIScale,
 	Rows: { Row },
 	Fit: number, -- the moment's size share (fit(): short phone screens)
+	Hot: Frame, -- the white-hot flash over the full bar (poseFull)
+	Whoosh: PopWord.Word, -- WHOOSH! beside the bar (poseWhoosh)
 }
 
 local function clamp01(x: number): number
@@ -121,7 +143,8 @@ local function row(parent: Instance, name: string, paint: string, order: number)
 		ZIndex = 7,
 	})
 	Pop.limit(amount, 30, 14)
-	return { Holder = holder, Label = label, Amount = amount, Scale = scale }
+	local bump = UIKit.new("UIScale", { Name = "Bump", Scale = 1 }, amount)
+	return { Holder = holder, Label = label, Amount = amount, Scale = scale, Bump = bump }
 end
 
 function LevelView.build(): View
@@ -178,6 +201,16 @@ function LevelView.build(): View
 		ZIndex = 4,
 	}, fill)
 	UIKit.corner(shine, 4)
+	-- the white-hot flash of the full bar (the 2026-10-27 reel: "the full bar glows bright")
+	local hot = UIKit.new("Frame", {
+		Name = "Hot",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(255, 252, 230),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+	}, track)
+	UIKit.corner(hot, 10)
 	local xpText = Pop.text(track, "0 / 80 XP", 17, {
 		Name = "XpText",
 		Size = UDim2.fromScale(1, 1),
@@ -206,6 +239,11 @@ function LevelView.build(): View
 		Size = UDim2.new(1, 0, 0, 34),
 		ZIndex = 8,
 	})
+	-- WHOOSH! just above the bar's right end, tilted (the 2026-10-27 reel's step 4)
+	local whoosh =
+		PopWord.build(bar, "WHOOSH!", 34, { Colors = "Cyan", Tilt = -8, Lines = true, Seconds = LevelView.WhooshSeconds, Rise = 10, Z = 9 })
+	whoosh.Holder.AnchorPoint = Vector2.new(1, 1)
+	whoosh.Holder.Position = UDim2.new(1, 24, 0, -8)
 
 	-- the moment: flash, rays, LEVEL UP!, the level, the reward rows
 	local flash = UIKit.new("Frame", {
@@ -319,6 +357,8 @@ function LevelView.build(): View
 		Subtitle = subtitle,
 		SubtitleScale = subtitleScale,
 		Rows = rows,
+		Hot = hot,
+		Whoosh = whoosh,
 	}
 end
 
@@ -349,6 +389,57 @@ function LevelView.poseGlow(view: View, shown: number, clock: number, reduced: b
 	local grow = if reduced then 10 * k else 14 * k * pulse
 	view.Glow.Size = UDim2.new(1, 14 + grow, 1, 14 + grow)
 	view.BarScale.Scale = if reduced then 1 else 1 + 0.035 * k * pulse
+end
+
+-- How long a level-up fill from `from` (0..1) to full takes (seconds; JuiceConfig.LevelUp.SlowFill).
+function LevelView.fillSeconds(from: number): number
+	return 0.4 + 0.9 * (1 - clamp01(from))
+end
+
+--[[
+	The level-up fill `u` (0..1) of the way through its time, from `from`:
+	it races (FillReach of the way in the first FillKnee of the time, easing
+	off), then creeps the rest ("you hold your breath") and lands on full.
+]]
+function LevelView.fillCurve(from: number, u: number): number
+	local a = clamp01(from)
+	local x = clamp01(u)
+	local knee, reach = LevelView.FillKnee, LevelView.FillReach
+	local p: number
+	if x < knee then
+		local k = x / knee
+		p = reach * (1 - (1 - k) * (1 - k))
+	else
+		local k = (x - knee) / (1 - knee)
+		p = reach + (1 - reach) * (1 - math.cos(math.pi * k)) / 2
+	end
+	return a + (1 - a) * p
+end
+
+--[[
+	The full bar's white-hot flash, `k` 0..1 (LevelController: up when the bar
+	is full, down after the moment starts): the fill turns white-hot, the glow
+	burns bright and the bar swells a little. Reduce motion: no flash at all.
+]]
+function LevelView.poseFull(view: View, k: number, reduced: boolean?)
+	local h = if reduced then 0 else clamp01(k)
+	view.Hot.BackgroundTransparency = 1 - 0.8 * h
+	if h > 0 then
+		view.Glow.BackgroundColor3 = LevelView.GlowColor:Lerp(Color3.fromRGB(255, 244, 200), h)
+		view.Glow.BackgroundTransparency = math.min(view.Glow.BackgroundTransparency, 1 - 0.85 * h)
+		local grow = 18 * h
+		view.Glow.Size = UDim2.new(1, 14 + grow, 1, 14 + grow)
+		if not reduced then
+			view.BarScale.Scale = math.max(view.BarScale.Scale, 1 + 0.06 * h)
+		end
+	else
+		view.Glow.BackgroundColor3 = LevelView.GlowColor
+	end
+end
+
+-- WHOOSH! beside the bar `t` seconds after a level-up fill started (true when done).
+function LevelView.poseWhoosh(view: View, t: number, reduced: boolean?): boolean
+	return PopWord.pose(view.Whoosh, t, reduced)
 end
 
 -- An orb `u` (0..1) of the way from `from` to `to` (screen pixels) on an arc.
@@ -393,13 +484,55 @@ end
 -- Steps 3-5 at `t` seconds into the moment (0..MomentSeconds). `reduced`
 -- (Reduce motion): no flash, no rays, no pop or wobble: the words fade in
 -- and out at full size, the rows simply show, the numbers don't count.
+-- When reward row `i` (1 coins, 2 income, 3 milestone) lands, seconds into the moment.
+function LevelView.rowAt(i: number): number
+	local gap = if JuiceConfig.LevelUp.Ticks then LevelView.RowGapTicked else 0.35
+	return 0.85 + gap * (i - 1)
+end
+
+--[[
+	The coins row's clicks `t` seconds into the moment, its row landing at
+	`at`: how many of CoinTicks have happened and the seconds since the last
+	one (math.huge before the first). The count eases out, so the clicks come
+	fast, then slower.
+]]
+function LevelView.coinStep(t: number, at: number): (number, number)
+	local a, b = at + 0.15, at + 0.95
+	local step = math.floor(easeOutCubic(span(t, a, b)) * LevelView.CoinTicks + 1e-6)
+	if step <= 0 then
+		return 0, math.huge
+	end
+	-- when that click came: easeOutCubic(x) = step / CoinTicks
+	local x = 1 - (1 - step / LevelView.CoinTicks) ^ (1 / 3)
+	return step, t - (a + (b - a) * x)
+end
+
+--[[
+	How many clicks the reward rows have made `t` seconds into the moment
+	(LevelController plays one LevelTick per new one): one as each row lands,
+	one per coins step (not with Reduce motion: the numbers don't count).
+]]
+function LevelView.ticks(t: number, m: Moment, reduced: boolean?): number
+	local n = 0
+	for i = 1, if m.Milestone then 3 else 2 do
+		if t >= LevelView.rowAt(i) then
+			n += 1
+		end
+	end
+	if not reduced then
+		n += (LevelView.coinStep(t, LevelView.rowAt(1)))
+	end
+	return n
+end
+
 function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean?)
 	local total = LevelView.MomentSeconds
 	view.Moment.Visible = t >= 0 and t < total
 	view.Subtitle.Text = "LEVEL " .. Format.commas(m.Level)
-	local rows = { { At = 0.85, Kind = "Coins" }, { At = 1.2, Kind = "Income" } }
+	local ticked = JuiceConfig.LevelUp.Ticks
+	local rows = { { At = LevelView.rowAt(1), Kind = "Coins" }, { At = LevelView.rowAt(2), Kind = "Income" } }
 	if m.Milestone then
-		table.insert(rows, { At = 1.55, Kind = "Milestone" })
+		table.insert(rows, { At = LevelView.rowAt(3), Kind = "Milestone" })
 	end
 	local incomeLabel, incomeAmount = LevelView.incomeText(m)
 	if reduced then
@@ -415,6 +548,7 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 			local spec = rows[i]
 			r.Holder.Visible = spec ~= nil and t >= spec.At and t < total - 0.4
 			r.Scale.Scale = 1
+			r.Bump.Scale = 1
 			r.Holder.Position = UDim2.new(0.5, 0, 0, (LevelView.RowTop + (i - 1) * LevelView.RowGap) * view.Fit)
 			if spec and spec.Kind == "Coins" then
 				r.Amount.Text = "+" .. Format.money(math.floor(m.Coins))
@@ -463,6 +597,14 @@ function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean
 			(LevelView.RowTop + (i - 1) * LevelView.RowGap) * view.Fit
 		)
 		local count = easeOutCubic(span(t, spec.At + 0.15, spec.At + 0.95))
+		-- (Ticks: the amount bumps on every click; the coins count in CoinTicks clicks)
+		local since = t - (spec.At + 0.15)
+		if spec.Kind == "Coins" and ticked then
+			local step, after = LevelView.coinStep(t, spec.At)
+			count = step / LevelView.CoinTicks
+			since = after
+		end
+		r.Bump.Scale = if ticked and since >= 0 then 1 + 0.3 * (1 - span(since, 0, 0.14)) else 1
 		if spec.Kind == "Coins" then
 			r.Amount.Text = "+" .. Format.money(math.floor(m.Coins * count))
 			r.Amount.TextColor3 = PopTheme.Ink
