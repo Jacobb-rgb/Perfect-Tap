@@ -19,7 +19,7 @@
 	                   (posts every ~12.5 studs on the left side only, see
 	                   padWalls), the wall between pad and yard with the
 	                   YardGate between two posts
-	  Yard.Ground      lawn pad, gravel paths
+	  Yard.Ground      the slate tile pad over the whole yard (the pen's floor colour)
 	  Yard.Fence       the yard's cut back corners and the back walls up to
 	                   the train stop opening
 	  Yard.Pen         the Ore Pen: a slate tray floor with painted tile seams,
@@ -90,7 +90,6 @@ local rgb = Color3.fromRGB
 local C = Style.C
 local NEON = Enum.Material.Neon
 
-local LAWN = rgb(96, 150, 66) -- a deep warm lawn (no bright lime pitch in the hero view)
 -- the empty plot from above (lobby hero view): a mown lawn with subtle
 -- lighter stripes on every other cell row, framed by a band of light paving
 -- stones and a cobble edge
@@ -105,7 +104,6 @@ local PLOT_GLOW = rgb(255, 150, 50) -- glowing strips on the band
 local HEDGE = rgb(54, 122, 48) -- the front hedge strip along the road
 local POST_HEAD = rgb(255, 140, 48) -- the front lamp posts' neon heads (deep amber)
 local PLOT_EDGE = rgb(156, 142, 128)
-local GRAVEL = rgb(214, 192, 150)
 local RIM_GOLD = rgb(226, 116, 26) -- deep amber: no white bloom over the top plate
 local RIM_LOCKED = rgb(96, 88, 104)
 local ROBUX_GREEN = rgb(110, 255, 140)
@@ -376,40 +374,30 @@ end
 
 ---------------------------------------------------------------- yard pieces
 
+--[[
+	The yard's ground (owner 2026-10-25: "the whole yard from those tiles, no
+	green at all"): one slate pad in the Ore Pen's floor colour over the whole
+	yard (the podiums, the Cleaning Station, the train stop and the walk to it),
+	with painted tile seams of about the pen's tile size so it never looks flat.
+	It is the yard's walkable ground (the pen's tray lies on it).
+]]
+PlotBuilder.YardTile = 3.3 -- studs: about the Ore Pen's tiles
 local function ground(yard: Model, cf: CFrame)
 	local rect = BaseLayout.Yard
 	local c = rect.Center
 	local pad =
-		Geo.block(yard, cf * CFrame.new(c.X, -0.6, c.Z), Vector3.new(rect.Size.X, 1.2, rect.Size.Z), LAWN, nil, { CanTouch = false })
+		Geo.block(yard, cf * CFrame.new(c.X, -0.6, c.Z), Vector3.new(rect.Size.X, 1.2, rect.Size.Z), PEN_FLOOR, nil, { CanTouch = false })
 	pad.Name = "Ground"
-	-- gravel paths: along the front (pen gate .. podiums) and the middle lane
-	-- to the train stop
-	local pen = BaseLayout.Pen.Area
-	local penFront = pen.Center.Z - pen.Size.Z / 2
-	local lastPodium = BaseLayout.Podiums[#BaseLayout.Podiums]
-	local apronMinX = pen.Center.X - 3
-	local apronMaxX = lastPodium.Center.X + lastPodium.Size.X / 2 + 0.5
-	local yardFront = BaseLayout.YardZ0
-	local apron = Geo.block(
-		yard,
-		cf * CFrame.new((apronMinX + apronMaxX) / 2, 0.03, (yardFront + penFront - 0.2) / 2),
-		Vector3.new(apronMaxX - apronMinX, 0.06, penFront - 0.2 - yardFront),
-		GRAVEL,
-		nil,
-		GHOST
-	)
-	apron.Name = "Path"
-	local laneMinZ = penFront - 0.2
-	local laneMaxZ = BaseLayout.TrainStop.Center.Z - BaseLayout.TrainStop.Size.Z / 2 + 0.2
-	local lane = Geo.block(
-		yard,
-		cf * CFrame.new(0.7, 0.03, (laneMinZ + laneMaxZ) / 2),
-		Vector3.new(2.4, 0.06, laneMaxZ - laneMinZ),
-		GRAVEL,
-		nil,
-		GHOST
-	)
-	lane.Name = "Path"
+	local cols = math.max(1, math.round(rect.Size.X / PlotBuilder.YardTile))
+	local rows = math.max(1, math.round(rect.Size.Z / PlotBuilder.YardTile))
+	local seams: { SoftKit.Paint } = {}
+	for i = 1, cols - 1 do
+		table.insert(seams, { x = i / cols - 0.001, y = 0, w = 0.002, h = 1, color = P.Frame })
+	end
+	for j = 1, rows - 1 do
+		table.insert(seams, { x = 0, y = j / rows - 0.002, w = 1, h = 0.004, color = P.Frame })
+	end
+	SoftKit.paint(pad, Enum.NormalId.Top, seams)
 end
 
 -- The yard's back border (its long side walls belong to the pad's Walls):
@@ -455,7 +443,7 @@ local function pen(yard: Model, cf: CFrame)
 	local closedByYard = x0 - yardSide < 3
 	local wallX0 = if closedByYard then yardSide else x0
 
-	-- the floor: a slate tray with painted tile seams (no collision: the lawn is the ground)
+	-- the floor: a slate tray with painted tile seams (no collision: the yard's tile pad is the ground)
 	local floorX0 = if closedByYard then outerInside + 0.1 else x0 + 0.3
 	local floorX1 = x1 - 0.3
 	local floor = SoftKit.part(
@@ -654,34 +642,6 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 end
 
 --[[
-	The pad of the yard's own Cleaning Station (owner 2026-10-25: "the same ground as
-	under the ores, not grass"): the Ore Pen's slate tray with its painted tile seams
-	under the station's footprint (BaseLayout.CleaningStation, built there at runtime
-	by CleaningService for the plot's owner), a stud round it and the spot in front
-	where you stand to clean (the station's front faces -Z at R 0). One part, no
-	collision (the lawn stays the ground).
-]]
-PlotBuilder.StationPad = { Margin = 1, Front = 4 }
-local function stationPad(yard: Model, cf: CFrame)
-	local area = BaseLayout.CleaningStation.Area
-	local pad = PlotBuilder.StationPad
-	local sizeX = area.Size.X + 2 * pad.Margin
-	local sizeZ = area.Size.Z + 2 * pad.Margin + pad.Front
-	local centerZ = area.Center.Z - pad.Front / 2
-	local floor =
-		SoftKit.part(yard, cf * CFrame.new(area.Center.X, 0.1, centerZ), Vector3.new(sizeX, 0.2, sizeZ), PEN_FLOOR, TINY, "StationFloor")
-	local seams: { SoftKit.Paint } = {}
-	local cols, rows = 4, 4
-	for i = 1, cols - 1 do
-		table.insert(seams, { x = i / cols - 0.003, y = 0, w = 0.006, h = 1, color = P.Frame })
-	end
-	for j = 1, rows - 1 do
-		table.insert(seams, { x = 0, y = j / rows - 0.003, w = 1, h = 0.006, color = P.Frame })
-	end
-	SoftKit.paint(floor, Enum.NormalId.Top, seams)
-end
-
---[[
 	Train stop in style A: a light metal platform (the plot floor's plate)
 	with a glowing strip along its yard face and a striped safety edge on
 	the rail side, a slate step, the slate TRAIN STOP sign (both faces: the
@@ -793,7 +753,6 @@ function PlotBuilder.buildYard(parent: Instance, cf: CFrame): Model
 	for index, rect in BaseLayout.Podiums do
 		podium(yard, cf, index, rect)
 	end
-	stationPad(yard, cf)
 	trainStop(yard, cf)
 	return yard
 end
