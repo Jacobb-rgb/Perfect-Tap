@@ -32,7 +32,10 @@ return function(T, Loader)
 
 	T.test("weather: the config is sane", function()
 		T.truthy(type(WeatherConfig.Enabled) == "boolean", "a master switch")
-		T.eq(#WeatherConfig.Order, 7, "seven kinds")
+		T.eq(#WeatherConfig.Order, 6, "six kinds")
+		T.eq(WeatherConfig.Kinds.Fog, nil, "no fog (owner 2026-10-27)")
+		T.eq(WeatherConfig.Particles.Mist, nil, "no mist puffs")
+		T.eq(WeatherLogic.parseForce("fog"), nil, "fog cannot be forced either")
 		local longest = 0
 		for _, kind in WeatherConfig.Order do
 			local look = WeatherConfig.Kinds[kind]
@@ -43,7 +46,7 @@ return function(T, Loader)
 			T.le(look.Duration[2], 260, kind .. " is a 2-4 minute event")
 			local tail = if (look.Rainbow or 0) > 0 then WeatherConfig.Rainbow.Seconds - WeatherConfig.Rainbow.Lead else 0
 			longest = math.max(longest, look.Duration[2] + tail)
-			for _, key in { "Rain", "Hail", "Snow", "Leaves", "Mist", "Heat", "Splash", "Bounce", "Settle", "Clack" } do
+			for _, key in { "Rain", "Hail", "Snow", "Leaves", "Heat", "Splash", "Bounce", "Settle", "Clack" } do
 				local rate = look[key]
 				if rate ~= nil then
 					T.truthy(rate > 0 and rate <= 1200, `{kind}.{key} rate {rate}`)
@@ -177,11 +180,11 @@ return function(T, Loader)
 		end
 		local only = withKinds(function(kinds)
 			for name, look in kinds do
-				look.On = name == "Fog"
+				look.On = name == "Snow"
 			end
 		end)
 		for i = 0, 50 do
-			T.eq(WeatherLogic.pick(i / 50, only), "Fog", "only fog")
+			T.eq(WeatherLogic.pick(i / 50, only), "Snow", "only snow")
 		end
 		local off = table.clone(WeatherConfig)
 		off.Enabled = false
@@ -337,8 +340,8 @@ return function(T, Loader)
 		T.lt(storm.Brightness, WeatherLogic.tint("Rain", 1, 0).Brightness, "a storm is darker than rain")
 		T.truthy(WeatherLogic.tint("Heatwave", 1, 0).Saturation > 0, "the heatwave is vivid")
 		T.truthy(WeatherLogic.tint("Clear", 0, 1).Brightness > 0, "the sun is back with the rainbow")
-		local half = WeatherLogic.tint("Fog", 0.5, 0)
-		T.near(half.Contrast, WeatherConfig.Kinds.Fog.Tint.Contrast / 2, 1e-9, "half way")
+		local half = WeatherLogic.tint("Snow", 0.5, 0)
+		T.near(half.Contrast, WeatherConfig.Kinds.Snow.Tint.Contrast / 2, 1e-9, "half way")
 		local rain = WeatherConfig.Kinds.Rain.Rain
 		T.eq(WeatherLogic.rate(rain, 1, false, false), rain, "full rate")
 		T.lt(WeatherLogic.rate(rain, 1, true, false), rain, "phones lower")
@@ -423,5 +426,137 @@ return function(T, Loader)
 		T.near(WeatherLogic.rainbowTransparency(0, 1), 1, 1e-9, "hidden at alpha 0")
 		T.near(WeatherLogic.rainbowTransparency(1, 1), WeatherConfig.Rainbow.Transparency, 1e-9, "the top at full alpha")
 		T.truthy(WeatherLogic.rainbowTransparency(1, 0) > WeatherLogic.rainbowTransparency(1, 1), "the feet fade")
+	end)
+
+	T.test("weather: always a clear view (nothing falls near the lens)", function()
+		local box = WeatherConfig.Box
+		local P = WeatherConfig.Particles
+		local checked = 0
+		for _, kind in WeatherConfig.Order do
+			local look = WeatherConfig.Kinds[kind]
+			if (look.Rain or 0) > 0 or (look.Hail or 0) > 0 or (look.Snow or 0) > 0 then
+				checked += 1
+				local clear = look.Clear or box.Clear
+				T.truthy(clear >= 6, kind .. " keeps at least 6 studs clear")
+				local hole = WeatherLogic.hole(look)
+				local strips = WeatherLogic.strips(hole)
+				T.eq(#strips, 8, "two rings of four strips")
+				local share = 0
+				for _, strip in strips do
+					share += strip.Share
+					T.truthy(strip.SizeX >= 0 and strip.SizeZ >= 0, "no negative size")
+					if strip.Share > 0 then
+						-- the strip's nearest point to the camera's fall line (a square hole)
+						local nx = math.max(0, math.abs(strip.X) - strip.SizeX / 2)
+						local nz = math.max(0, math.abs(strip.Z) - strip.SizeZ / 2)
+						T.truthy(math.max(nx, nz) >= hole - 1e-6, kind .. ": no strip in the hole")
+						local fx = math.abs(strip.X) + strip.SizeX / 2
+						local fz = math.abs(strip.Z) + strip.SizeZ / 2
+						T.le(math.max(fx, fz), box.Field / 2 + 1e-6, "inside the field")
+					end
+				end
+				T.near(share, 1, 1e-9, kind .. ": the strips share the whole rate")
+				-- the worst sideways drift on the way down (the spread) still misses the clear view
+				local slant = WeatherLogic.lookSlant(look)
+				for _, key in { "Rain", "Hail", "Snow" } do
+					local rate = (look :: any)[key]
+					if rate and rate > 0 then
+						local drift = box.Height / math.cos(slant) * math.tan(math.rad(P[key].Spread or 0))
+						T.truthy(hole - drift >= clear - 1e-6, `{kind} {key} cannot drift into the clear view`)
+					end
+				end
+			end
+		end
+		T.eq(checked, 4, "rain, storm, hail and snow")
+		T.truthy(WeatherConfig.Kinds.Snow.Clear >= 12, "snow keeps the widest clear view")
+		T.truthy(box.NearSize < 1 and box.NearAlpha < 1, "smaller, fainter particles round the clear view")
+		local camera = Vector3.new(0, 10, 0)
+		T.falsy(WeatherLogic.padClear(Vector3.new(0, 0, 4), camera), "no splash or flake right under the lens")
+		T.truthy(WeatherLogic.padClear(Vector3.new(0, 0, 20), camera), "further out is fine")
+		T.truthy(WeatherConfig.Ground.Clear >= 10, "pads stay 10+ studs away")
+		T.le(P.Settle.Size[2], 1.2, "settled flakes stay small")
+	end)
+
+	T.test("weather: lightning flashes stay rare (photosensitivity)", function()
+		local L = WeatherConfig.Lightning
+		T.truthy(L.MinFlashGap >= 1, "a second between two flashes at least")
+		T.truthy(L.MinGap >= L.MinFlashGap, "strikes are further apart than that anyway")
+		T.truthy(WeatherLogic.flashAllowed(nil, 5), "the first flash")
+		T.falsy(WeatherLogic.flashAllowed(5, 5.5), "not half a second later")
+		T.truthy(WeatherLogic.flashAllowed(5, 5 + L.MinFlashGap), "after the gap")
+		-- the bright pulses (a flash and its flicker) of a list of strike times, as the controller
+		-- shows them (flashAllowed), sampled every 5 ms: at most 3 start in any second
+		local function pulses(strikes: { number }): { number }
+			local shown = {}
+			local last = nil
+			for _, at in strikes do
+				if WeatherLogic.flashAllowed(last, at) then
+					table.insert(shown, at)
+					last = at
+				end
+			end
+			local starts = {}
+			local before = 0
+			local stop = (strikes[#strikes] or 0) + 2
+			for t = 0, stop, 0.005 do
+				local v = 0
+				for _, at in shown do
+					v = math.max(v, WeatherLogic.flash(t - at))
+				end
+				if v - before > 0.03 then
+					table.insert(starts, t)
+				end
+				before = v
+			end
+			return starts
+		end
+		local function worstSecond(starts: { number }): number
+			local worst = 0
+			for i, a in starts do
+				local n = 0
+				for j = i, #starts do
+					if starts[j] < a + 1 then
+						n += 1
+					end
+				end
+				worst = math.max(worst, n)
+			end
+			return worst
+		end
+		-- even strikes every 0.2 s (a bug) would flash at most 2-3 times a second
+		local burst = {}
+		for i = 1, 40 do
+			table.insert(burst, 1 + i * 0.2)
+		end
+		T.le(worstSecond(pulses(burst)), 3, "a burst of strikes")
+		-- a real storm: far fewer
+		local storm
+		for slot = BASE, BASE + 400 do
+			local e = WeatherLogic.event(slot)
+			if e and e.Kind == "Storm" then
+				storm = e
+				break
+			end
+		end
+		T.truthy(storm, "a storm found")
+		local strikes = {}
+		local s = WeatherLogic.nextStrike(storm, 0)
+		while s and s.At < storm.Length do
+			table.insert(strikes, s.At)
+			s = WeatherLogic.nextStrike(storm, s.At)
+		end
+		local starts = pulses(strikes)
+		T.le(worstSecond(starts), 2, "a storm: a flash and its flicker at most in a second")
+		T.lt(#starts / storm.Length, 0.25, "a storm flashes far less than once a second on average")
+	end)
+
+	T.test("weather: Reduce motion calms everything", function()
+		local R = WeatherConfig.Reduced
+		T.falsy(R.Flash, "no lightning flashes")
+		T.falsy(R.Sway, "no tree sway")
+		T.falsy(R.Heat, "no wobbling heat puffs")
+		T.lt(R.Rate, 1, "fewer particles")
+		T.truthy(WeatherConfig.Rainbow.FadeIn >= 2 and WeatherConfig.Rainbow.FadeOut >= 2, "the rainbow only fades slowly")
+		T.truthy(S.FadeIn >= 5 and S.FadeOut >= 5, "weather comes and goes slowly")
 	end)
 end

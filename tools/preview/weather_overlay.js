@@ -2,10 +2,12 @@
 // once by viewer.js (index.html); this script draws the weather on top of it, frame by
 // frame, from build/preview/weather_reel.json (tools/lune/lib/weather_preview.luau: the
 // game's WeatherConfig / WeatherLogic numbers):
-//   - the particles as 2D sprites on a canvas over the render: the same boxes, pads,
-//     rates, speeds, sizes, lifetimes, colours and transparencies as the game's
-//     ParticleEmitters (simulated here: Roblox's particles cannot be rendered outside
-//     Roblox). Rain streak length is a guess for Squash (check in Studio). No occlusion.
+//   - the particles as 2D sprites on a canvas over the render: the same sky field (its
+//     strips round the clear-view hole, the inner ring smaller and fainter), boxes, pads
+//     (never within Ground.Clear of the camera), rates, speeds, sizes, lifetimes, colours
+//     and transparencies as the game's ParticleEmitters (simulated here: Roblox's particles
+//     cannot be rendered outside Roblox). Rain streak length is a guess for Squash (check
+//     in Studio). No occlusion.
 //   - WeatherTint (the game's ColorCorrectionEffect) as CSS: contrast / saturate filters
 //     on both canvases, a multiply layer for TintColor and a plus-lighter layer for a
 //     positive Brightness (the lightning flash).
@@ -79,13 +81,31 @@
     const s = frame.slant;
     const X = add(mul(wind, Math.cos(s)), mul(up, Math.sin(s)));
     const Y = add(mul(wind, -Math.sin(s)), mul(up, Math.cos(s)));
-    const skyCenter = add(add(at, mul(wind, -box.height * Math.tan(s))), [0, box.height, 0]);
+    // the sky field is centred on the camera's fall line (WeatherFx.place)
+    const skyCenter = add(add(cam.pos, mul(wind, -box.height * Math.tan(s))), [0, box.height, 0]);
     const airCenter = sub([at[0], data.groundY + box.air[1] / 2 - 0.5, at[2]], mul(wind, box.upwind));
+    const field = data.sky[frame.kind];
     return {
-      sky: { center: skyCenter, X, Y, Z, size: box.size, down: mul(Y, -1) },
+      sky: { center: skyCenter, X, Y, Z, strips: field ? field.strips : [], down: mul(Y, -1) },
       air: { center: airCenter, X: wind, Y: up, Z, size: box.air },
       wind,
     };
+  }
+  // a spot in one of the sky strips, picked by its share; returns [position, near]
+  function inSky(sky) {
+    let roll = rand();
+    let pick = sky.strips[sky.strips.length - 1];
+    for (const strip of sky.strips) {
+      roll -= strip[5];
+      if (roll < 0) {
+        pick = strip;
+        break;
+      }
+    }
+    const [x, z, sx, sz, near] = pick;
+    const u = x + rr(-0.5, 0.5) * sx;
+    const w = z + rr(-0.5, 0.5) * sz;
+    return [add(sky.center, add(add(mul(sky.X, u), mul(sky.Y, rr(-1, 1))), mul(sky.Z, w))), near];
   }
   function inBox(b) {
     return add(
@@ -96,14 +116,16 @@
 
   // ---------------------------------------------------------------- the simulation
   const SKY = ["Rain", "Hail", "Snow"];
-  const AIR = ["Leaves", "Leaves2", "Mist", "Heat"];
+  const AIR = ["Leaves", "Leaves2", "Heat"];
   const PAD = ["Ripple", "Drop", "Bounce", "Settle"];
 
-  function spawn(key, p, dir, look, kind) {
+  function spawn(key, p, dir, look, kind, near = false) {
     const speed = rr(look.speed[0], look.speed[1]);
     const v = mul(cone(dir, look.spread), speed);
-    const size = rr(look.size[0], look.size[1]);
+    // the inner ring round the clear view: smaller, fainter (Box.NearSize / NearAlpha)
+    const size = rr(look.size[0], look.size[1]) * (near ? data.box.nearSize : 1);
     particles.push({
+      near,
       key,
       kind,
       p,
@@ -130,9 +152,15 @@
       padClock -= data.ground.every;
       for (let k = 0; k < data.ground.perTick; k++) {
         padIndex = (padIndex + 1) % pads.length;
-        const r = Math.sqrt(rand()) * data.ground.radius;
-        const a = rand() * Math.PI * 2;
-        pads[padIndex] = [focus[0] + Math.cos(a) * r, data.groundY + 0.15, focus[2] + Math.sin(a) * r];
+        // clear view: a spot too close to the camera is tried again, else the pad rests
+        let spot = null;
+        for (let t = 0; t < data.ground.tries && !spot; t++) {
+          const r = Math.sqrt(rand()) * data.ground.radius;
+          const a = rand() * Math.PI * 2;
+          const c = [focus[0] + Math.cos(a) * r, data.groundY + 0.15, focus[2] + Math.sin(a) * r];
+          if (len(sub(c, cam.pos)) >= data.ground.clear) spot = c;
+        }
+        pads[padIndex] = spot;
       }
     }
     for (const [keys, where] of [
@@ -148,20 +176,23 @@
         while (accum[key] >= 1) {
           accum[key] -= 1;
           let p, dir;
+          let near = false;
           if (where === "sky") {
-            p = inBox(B.sky);
+            if (!B.sky.strips.length) continue;
+            [p, near] = inSky(B.sky);
             dir = B.sky.down;
           } else if (where === "air") {
             p = inBox(B.air);
             dir = key === "Heat" ? [0, 1, 0] : B.wind;
           } else {
             const live = pads.filter(Boolean);
+            if (!live.length) continue;
             const c = live[Math.floor(rand() * live.length)];
             const h = data.ground.pad / 2;
             p = [c[0] + rr(-h, h), c[1], c[2] + rr(-h, h)];
             dir = [0, 1, 0];
           }
-          spawn(key, p, dir, look, frame.kind);
+          spawn(key, p, dir, look, frame.kind, near);
         }
       }
     }
@@ -206,7 +237,7 @@
     else if (t < 0.1) a = t / 0.1;
     else if (t > 0.8) a = (1 - t) / 0.2;
     else a = 1;
-    return clamp(a) * (1 - look.transparency);
+    return clamp(a) * (1 - look.transparency) * (q.near ? data.box.nearAlpha : 1);
   }
   function soft(x, y, r, color, alpha, hard = 0.45) {
     const [cr, cg, cb] = rgb(color);
@@ -244,7 +275,7 @@
   function draw(frame) {
     ctx.clearRect(0, 0, W, H);
     const P = data.particles;
-    // far first (the mist puffs overlap)
+    // far first (the soft heat puffs overlap)
     const order = particles
       .map((q) => ({ q, s: project(q.p) }))
       .filter((e) => e.s && e.q.p[1] > data.groundY - 0.2)
@@ -292,7 +323,7 @@
         ctx.scale(1, ry / rx);
         soft(0, 0, rx, q.color, alpha, 0.35);
         ctx.restore();
-      } else if (q.key === "Mist" || q.key === "Heat") {
+      } else if (q.key === "Heat") {
         soft(x, y, Math.max(1, px / 2), q.color, alpha, 0.2);
       } else {
         soft(x, y, Math.max(0.8, px / 2), q.color, Math.min(1, alpha * 1.2), 0.55);

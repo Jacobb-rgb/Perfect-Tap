@@ -9,7 +9,6 @@
 	  Storm     heavier rain, the whole screen flashes, thunder a beat later
 	  Hail      little ice balls that bounce off the ground and clack
 	  Snow      slow drifting flakes; flakes settle on the ground for a while
-	  Fog       soft layers of mist roll past near the ground, colours wash out
 	  Wind      leaves blow across, the trees near you sway
 	  Heatwave  warm tint, the sun cranked up, heat wobbling off the ground
 	  Rainbow   (bonus) after a quick shower: a big arc opposite the sun
@@ -23,8 +22,15 @@
 	Switches for the owner: Enabled turns the whole weather off, a kind's On
 	= false (or Weight = 0) means it never comes. For a test in Studio set
 	the Workspace attribute WeatherForce to a kind ("Rain", "Storm", "Hail",
-	"Snow", "Fog", "Wind", "Heatwave", "Rainbow" or "Clear"); remove it to
-	go back to the schedule.
+	"Snow", "Wind", "Heatwave", "Rainbow" or "Clear"); remove it to go back
+	to the schedule. (Fog was removed on 2026-10-27: the owner did not want it.)
+
+	Always a clear view (owner 2026-10-27): no rain, hail or snow falls
+	within a kind's Clear studs of the camera (a hole in the sky field round
+	the camera's fall line, Box), the ring round that hole has smaller,
+	fainter particles, the field moves with the camera (walking never
+	carries the lens into falling flakes), and the ground pads stay
+	Ground.Clear studs from the camera.
 
 	Phones get fewer particles (Phone), Reduce motion turns the lightning
 	flashes and the tree sway off and halves the particles (Reduced).
@@ -35,7 +41,7 @@
 
 local SoundConfig = require(script.Parent.SoundConfig)
 
--- "Clear" or one of Order: "Rain" | "Storm" | "Hail" | "Snow" | "Fog" | "Wind" | "Heatwave"
+-- "Clear" or one of Order: "Rain" | "Storm" | "Hail" | "Snow" | "Wind" | "Heatwave"
 export type Kind = string
 
 -- The weather's own ColorCorrectionEffect (WeatherTint): blended from neutral by the strength.
@@ -58,7 +64,6 @@ export type Look = {
 	Hail: number?, -- falling ice balls
 	Snow: number?, -- flakes
 	Leaves: number?, -- leaves blowing across (half green, half amber)
-	Mist: number?, -- big soft mist puffs near the ground
 	Heat: number?, -- faint heat wobble rising off the ground
 	Splash: number?, -- per ground point: ripple rings + droplets
 	Bounce: number?, -- per ground point: hail bouncing off the ground
@@ -68,6 +73,7 @@ export type Look = {
 	Rainbow: number?, -- chance of a rainbow once it ends (Rainbow)
 	Sway: number?, -- radians: how far nearby trees lean (TreeSway)
 	Loops: { [string]: number }?, -- loop sound (Sounds key) -> share of its volume
+	Clear: number?, -- studs: no rain / hail / snow falls this close to the camera (Box.Clear if nil)
 }
 
 export type Particle = {
@@ -98,7 +104,7 @@ WeatherConfig.Enabled = true -- false: no weather anywhere (the controller does 
 WeatherConfig.ForceAttribute = "WeatherForce" -- Workspace attribute for tests in Studio (see the top)
 
 -- The kinds in a fixed order (the weighted pick walks this list, so it is deterministic).
-WeatherConfig.Order = { "Rain", "Storm", "Hail", "Snow", "Fog", "Wind", "Heatwave" } :: { Kind }
+WeatherConfig.Order = { "Rain", "Storm", "Hail", "Snow", "Wind", "Heatwave" } :: { Kind }
 
 WeatherConfig.Schedule = {
 	Seed = 271027, -- change to get a different sequence of weather
@@ -120,6 +126,7 @@ WeatherConfig.Kinds = {
 		Splash = 10,
 		Rainbow = 0.6,
 		Loops = { Rain = 0.75 },
+		Clear = 6,
 	},
 	Storm = {
 		On = true,
@@ -134,6 +141,7 @@ WeatherConfig.Kinds = {
 		Rainbow = 0.25,
 		Sway = 0.035,
 		Loops = { Rain = 1, Wind = 0.45 },
+		Clear = 6,
 	},
 	Hail = {
 		On = true,
@@ -146,6 +154,7 @@ WeatherConfig.Kinds = {
 		Bounce = 14,
 		Clack = 9,
 		Loops = { Rain = 0.35 },
+		Clear = 9,
 	},
 	Snow = {
 		On = true,
@@ -156,14 +165,7 @@ WeatherConfig.Kinds = {
 		Snow = 220,
 		Settle = 3,
 		Loops = { Wind = 0.25 },
-	},
-	Fog = {
-		On = true,
-		Weight = 14,
-		Duration = { 150, 240 },
-		Tint = { Color = rgb(236, 238, 250), Brightness = 0.07, Contrast = -0.24, Saturation = -0.4 },
-		Wind = 2,
-		Mist = 9,
+		Clear = 14, -- big soft flakes: the widest clear view
 	},
 	Wind = {
 		On = true,
@@ -222,7 +224,7 @@ WeatherConfig.Particles = {
 		Lifetime = { 7, 9 },
 		Transparency = 0.05,
 		LightEmission = 0.4,
-		Spread = 12,
+		Spread = 4, -- (small: the flakes must not drift into the clear view)
 		Drag = 0.2,
 		RotSpeed = 60,
 	},
@@ -238,17 +240,6 @@ WeatherConfig.Particles = {
 		Spread = 18,
 		Gravity = 3,
 		RotSpeed = 260,
-	},
-	Mist = {
-		Texture = SMOKE,
-		Color = rgb(240, 236, 246),
-		Size = { 16, 26 },
-		Speed = { 1, 3 },
-		Lifetime = { 9, 12 },
-		Transparency = 0.84,
-		LightEmission = 0.15,
-		Spread = 30,
-		RotSpeed = 8,
 	},
 	Heat = {
 		Texture = SMOKE,
@@ -298,24 +289,31 @@ WeatherConfig.Particles = {
 	Settle = {
 		Texture = SMOKE,
 		Color = rgb(255, 255, 255),
-		Size = { 0.9, 1.6 },
+		Size = { 0.4, 0.75 }, -- small: a flake on the ground never reads as a smudge
 		Speed = { 0.05, 0.05 },
 		Lifetime = { 7, 10 },
-		Transparency = 0.15,
+		Transparency = 0.25,
 		LightEmission = 0.2,
 		Orientation = "VelocityPerpendicular",
 	},
 } :: { [string]: Particle }
 
--- The boxes that follow the camera: the sky box (rain, hail, snow fall out of its bottom) and
--- the air box at eye height (leaves, mist, heat). Both lean a little ahead of the camera.
+-- What follows the camera. The sky field (rain, hail, snow fall out of it) is Field studs wide,
+-- Height studs above the camera, leaning with the wind, with a square hole round the camera's
+-- fall line: a kind's Clear studs plus what the particles' spread can drift on the way down
+-- (WeatherLogic.hole). It is 8 strips: the inner ring (NearWidth wide) with smaller, fainter
+-- particles (NearSize, NearAlpha) and the outer ring. The air box (leaves, heat) stands from the
+-- ground up, Ahead studs ahead of the camera and Upwind studs upwind.
 WeatherConfig.Box = {
-	Size = Vector3.new(60, 2, 60), -- the sky box
-	Height = 32, -- studs above the camera
-	Ahead = 20, -- studs ahead of the camera (flat): most of what falls is in view
-	Air = Vector3.new(70, 16, 70), -- the air box
-	AirHeight = -2, -- its centre relative to the camera's height
-	Upwind = 22, -- the air box sits this far upwind, so leaves cross the view
+	Field = 72,
+	Height = 32,
+	Clear = 6, -- studs: the clear view of a kind without its own Clear
+	NearWidth = 10,
+	NearSize = 0.6, -- size share of a particle in the inner ring
+	NearAlpha = 0.45, -- opacity share (1 - Transparency) in the inner ring
+	Ahead = 20,
+	Air = Vector3.new(70, 16, 70),
+	Upwind = 22, -- so leaves cross the view
 }
 
 -- Ground points: a few invisible pads put down by raycasts near the camera; splashes,
@@ -328,6 +326,8 @@ WeatherConfig.Ground = {
 	RayHeight = 60, -- the ray starts this far above the camera
 	RayLength = 220,
 	PerTick = 2, -- pads moved per check (they wander so the splashes spread)
+	Clear = 14, -- studs: no pad (splash, bouncing hail, settled flake) this close to the camera
+	Tries = 3, -- raycasts per pad move to find a spot far enough
 }
 
 WeatherConfig.Lightning = {
@@ -338,6 +338,7 @@ WeatherConfig.Lightning = {
 	MinIntensity = 0.45, -- strikes only while the storm is at least this strong
 	Delay = { 0.45, 2.6 }, -- seconds from the flash to its thunder (a beat later)
 	CrackBelow = 0.9, -- a close strike (shorter delay) also cracks
+	MinFlashGap = 1, -- seconds between two flashes at least (with the flicker: at most 2 a second)
 	Peak = 0.42, -- WeatherTint.Brightness added by the flash
 	Second = 0.24, -- the flicker after it
 	Flicker = 0.11, -- seconds from the flash to the flicker
@@ -381,7 +382,6 @@ WeatherConfig.TreeSway = {
 WeatherConfig.Phone = {
 	Rate = 0.45, -- particles
 	GroundPoints = 3,
-	Mist = 0.6, -- the big mist puffs cost the most (overdraw)
 	TreeSway = 3,
 }
 
@@ -389,6 +389,8 @@ WeatherConfig.Reduced = {
 	Rate = 0.5,
 	Flash = false, -- no lightning flashes (photosensitivity); the thunder still plays
 	Sway = false,
+	Heat = false, -- no wobbling heat puffs (the warm tint stays)
+	-- (the rainbow only fades in and out over seconds: it stays)
 }
 
 -- Where weather shows: WorldLayout zones by Id (true = yes). Outside every zone box (the sea,
@@ -409,7 +411,7 @@ WeatherConfig.TintSmooth = 6 -- per second: how fast the tint follows its target
 -- Sounds: Roblox's own public audio (creator id 1) and a shipped file, so they play with no
 -- upload. Rain = "Rain Effect" (59 s loop), Thunder = HalloweenThunder.wav, Crack =
 -- HalloweenLightning.wav, Clack = clickfast.wav sped up, Wind = the falling-wind loop slowed
--- (SoundConfig.AmbWind's sound). Snow, fog and the heatwave are silent.
+-- (SoundConfig.AmbWind's sound). Snow and the heatwave are silent.
 WeatherConfig.Group = "TerraForgeWeather"
 WeatherConfig.ParentGroup = "TerraForgeSfx" -- SettingsConfig.SfxGroup: the SETTINGS sound slider
 WeatherConfig.Sounds = {

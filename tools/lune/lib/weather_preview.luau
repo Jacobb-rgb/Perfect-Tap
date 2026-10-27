@@ -47,11 +47,30 @@ WeatherPreview.Segments = {
 		sub = "hustší déšť, blesk rozsvítí celé nebe, hrom o chvilku později",
 	},
 	{ kind = "Hail", length = 2.2, title = "3 · KRUPOBITÍ", sub = "kuličky ledu odskakují od země a ťukají" },
-	{ kind = "Snow", length = 2.4, title = "4 · SNÍH", sub = "vločky pomalu padají a chvíli leží na zemi" },
-	{ kind = "Fog", length = 2.2, title = "5 · MLHA", sub = "měkké chuchvalce mlhy u země, barvy vyblednou" },
-	{ kind = "Wind", length = 2.2, title = "6 · VÍTR", sub = "listí letí přes obraz, stromy se ve hře ohýbají" },
-	{ kind = "Heatwave", length = 2.0, title = "7 · VEDRO", sub = "teplé barvy, slunce naplno, horko stoupá od země" },
+	{ kind = "Snow", length = 2.4, title = "4 · SNÍH", sub = "vločky pomalu padají, u kamery nic: vždycky čistý výhled" },
+	{ kind = "Wind", length = 2.2, title = "5 · VÍTR", sub = "listí letí přes obraz, stromy se ve hře ohýbají" },
+	{ kind = "Heatwave", length = 2.0, title = "6 · VEDRO", sub = "teplé barvy, slunce naplno, horko stoupá od země" },
 	{ kind = "Rainbow", length = 2.6, title = "BONUS · DUHA", sub = "po krátké přeháňce se vrátí slunce a objeví se duha" },
+}
+
+-- the close still: snow seen from a player's camera on the plaza (the clear view round the lens)
+WeatherPreview.CloseShot = {
+	scene = "world",
+	position = { -14, 7, 46 },
+	target = { 20, 2, 34 },
+	fov = 70,
+	preset = "Surface",
+	sunDir = { -0.965, 0.225, 0.136 },
+	shadowExtent = 120,
+	maxLights = 24,
+}
+WeatherPreview.CloseSegments = {
+	{
+		kind = "Snow",
+		length = 2.4,
+		title = "SNÍH ZBLÍZKA",
+		sub = "kolem kamery nepadá nic, vločky dál jsou menší: vždycky čistý výhled",
+	},
 }
 
 local FADE_IN, FADE_OUT = 0.55, 0.45
@@ -131,21 +150,34 @@ local function ramp(t: number, length: number): number
 	return x * x * (3 - 2 * x)
 end
 
-function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?, height: number? }): any
+function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?, height: number?, close: boolean? }): any
 	local Vector3 = roblox.Vector3
 	local WeatherConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WeatherConfig")
 	local WeatherLogic = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherLogic")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 	local fps = opts.fps or 24
-	local shot = WeatherPreview.Shot
+	local shot = if opts.close then WeatherPreview.CloseShot else WeatherPreview.Shot
+	local reel = if opts.close then WeatherPreview.CloseSegments else WeatherPreview.Segments
 	local camera = Vector3.new(shot.position[1], shot.position[2], shot.position[3])
+
+	-- the sky field per kind: its clear hole and strips (WeatherLogic.hole / strips)
+	local sky = {}
+	for _, kind in WeatherConfig.Order do
+		local look = WeatherConfig.Kinds[kind]
+		local hole = WeatherLogic.hole(look)
+		local strips = {}
+		for _, strip in WeatherLogic.strips(hole) do
+			table.insert(strips, { strip.X, strip.Z, strip.SizeX, strip.SizeZ, strip.Near, strip.Share })
+		end
+		sky[kind] = { hole = hole, strips = strips }
+	end
 
 	local segments = {}
 	local frames = {}
 	local picks = {}
 	local start = 0
 	local L = WeatherConfig.Lightning
-	for index, seg in WeatherPreview.Segments do
+	for index, seg in reel do
 		table.insert(segments, { title = seg.title, sub = seg.sub, kind = seg.kind, start = start, length = seg.length })
 		local count = math.floor(seg.length * fps + 0.5)
 		table.insert(picks, #frames + math.floor(count * (if seg.kind == "Storm" then 0.33 else 0.72)))
@@ -174,7 +206,6 @@ function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?,
 				rates.Snow = rate(look.Snow)
 				rates.Leaves = rate(look.Leaves) / 2
 				rates.Leaves2 = rate(look.Leaves) / 2
-				rates.Mist = rate(look.Mist)
 				rates.Heat = rate(look.Heat)
 				rates.Ripple = rate(look.Splash)
 				rates.Drop = rate(look.Splash) * 0.6
@@ -188,17 +219,13 @@ function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?,
 				end
 			end
 			local tint = WeatherLogic.tint(kind, strength, bow)
-			local fall = WeatherConfig.Particles.Rain.Speed
-			if look and not look.Rain then
-				fall = if look.Hail then WeatherConfig.Particles.Hail.Speed else WeatherConfig.Particles.Snow.Speed
-			end
 			table.insert(frames, {
 				seg = index - 1,
 				kind = kind,
 				i = strength,
 				rb = bow,
 				wind = WIND_YAW,
-				slant = if look then WeatherLogic.slant(look.Wind, (fall[1] + fall[2]) / 2) else 0,
+				slant = WeatherLogic.lookSlant(look),
 				windSpeed = if look then look.Wind else 0,
 				tint = {
 					tint.Color.R,
@@ -223,8 +250,10 @@ function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?,
 		groundY = 0.2,
 		seaY = -2,
 		box = {
-			size = vec(WeatherConfig.Box.Size),
+			field = WeatherConfig.Box.Field,
 			height = WeatherConfig.Box.Height,
+			nearSize = WeatherConfig.Box.NearSize,
+			nearAlpha = WeatherConfig.Box.NearAlpha,
 			ahead = WeatherConfig.Box.Ahead,
 			air = vec(WeatherConfig.Box.Air),
 			upwind = WeatherConfig.Box.Upwind,
@@ -235,9 +264,12 @@ function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?,
 			ahead = WeatherConfig.Ground.Ahead,
 			radius = WeatherConfig.Ground.Radius,
 			perTick = WeatherConfig.Ground.PerTick,
+			clear = WeatherConfig.Ground.Clear,
+			tries = WeatherConfig.Ground.Tries,
 			every = WeatherConfig.CheckEvery,
 		},
 		particles = particles(WeatherConfig),
+		sky = sky,
 		rainbow = rainbow(WeatherLogic, WeatherConfig, LobbyLayout, camera),
 		lightning = { length = L.Length },
 		segments = segments,

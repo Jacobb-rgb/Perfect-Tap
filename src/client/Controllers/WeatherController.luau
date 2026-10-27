@@ -1,6 +1,6 @@
 --[[
 	WeatherController: the weather over Emberfall (owner reel 2026-10-27,
-	Config/WeatherConfig). Rain, thunderstorms, hail, snow, fog, wind, the
+	Config/WeatherConfig). Rain, thunderstorms, hail, snow, wind, the
 	heatwave and a rainbow after a shower, the same for every player with
 	no network at all: Weather/WeatherLogic computes the weather from
 	Workspace:GetServerTimeNow() and the config's seed. Effects/WeatherFx
@@ -13,11 +13,13 @@
 	  ride, the cleaning close-up or the loading screen; it fades out in
 	  GateFade seconds), the emitter rates (capped on phones and with Reduce
 	  motion), the loop volumes, the ground pads (a couple of raycasts per
-	  check), hail clacks.
+	  check, never closer than Ground.Clear to the camera), hail clacks, the
+	  sky field's clear hole for the kind (WeatherLogic.hole).
 	- One RenderStepped connection, only while there is weather (or its tint
 	  is still fading): the boxes follow the camera, the tint eases toward
-	  its target, the lightning strikes on time (a flash in WeatherTint, the
-	  thunder a beat later; no flash with Reduce motion), the rainbow stays
+	  its target, the lightning strikes on time (a flash in WeatherTint, at
+	  most one per Lightning.MinFlashGap, the thunder a beat later; no flash
+	  with Reduce motion, no heat puffs either), the rainbow stays
 	  opposite the sun, the trees near you sway (30 times a second at most).
 	- Nothing is built until the first weather comes; the server does
 	  nothing at all.
@@ -78,6 +80,7 @@ local settled = true
 local strikeEvent: WeatherLogic.Event? = nil
 local nextStrike: WeatherLogic.Strike? = nil
 local flashStart: number? = nil
+local lastFlash: number? = nil
 
 local rng = Random.new()
 local rates: { [string]: number } = {}
@@ -184,8 +187,7 @@ local function applyRates(f: WeatherFx.Fx, l: WeatherConfig.Look?)
 		local leaves = rate(l.Leaves) / 2
 		rates.Leaves = leaves
 		rates.Leaves2 = leaves
-		rates.Mist = rate(l.Mist) * (if phone then WeatherConfig.Phone.Mist else 1)
-		rates.Heat = rate(l.Heat)
+		rates.Heat = if reduced and not WeatherConfig.Reduced.Heat then 0 else rate(l.Heat)
 		rates.Ripple = rate(l.Splash)
 		rates.Drop = rate(l.Splash) * 0.6
 		rates.Bounce = rate(l.Bounce)
@@ -225,10 +227,18 @@ local function movePads(f: WeatherFx.Fx, l: WeatherConfig.Look?, camera: Camera)
 	local focus = cf.Position + (if flat.Magnitude > 1e-3 then flat.Unit * ground.Ahead else Vector3.zero)
 	for _ = 1, ground.PerTick do
 		padIndex = padIndex % count + 1
-		local spot = focus + WeatherLogic.scatter(rng:NextNumber(), rng:NextNumber(), ground.Radius)
-		local from = Vector3.new(spot.X, cf.Position.Y + ground.RayHeight, spot.Z)
-		local result = Workspace:Raycast(from, down, rayParams)
-		WeatherFx.placePad(f, padIndex, if result then result.Position else nil)
+		-- clear view: a spot too close to the camera is tried again (else the pad rests)
+		local placed: Vector3? = nil
+		for _ = 1, ground.Tries do
+			local spot = focus + WeatherLogic.scatter(rng:NextNumber(), rng:NextNumber(), ground.Radius)
+			local from = Vector3.new(spot.X, cf.Position.Y + ground.RayHeight, spot.Z)
+			local result = Workspace:Raycast(from, down, rayParams)
+			if result and WeatherLogic.padClear(result.Position, cf.Position) then
+				placed = result.Position
+				break
+			end
+		end
+		WeatherFx.placePad(f, padIndex, placed)
 	end
 end
 
@@ -246,16 +256,6 @@ local function clacks(f: WeatherFx.Fx, l: WeatherConfig.Look?, dt: number)
 	end
 end
 
--- The rain's lean: the wind over the fall speed of what falls (rain, else hail, else snow).
-local function slantFor(l: WeatherConfig.Look?): number
-	if not l then
-		return 0
-	end
-	local p = WeatherConfig.Particles
-	local fall = if l.Rain then p.Rain.Speed elseif l.Hail then p.Hail.Speed else p.Snow.Speed
-	return WeatherLogic.slant(l.Wind, (fall[1] + fall[2]) / 2)
-end
-
 ---------------------------------------------------------------- lightning
 
 local function strike(s: WeatherLogic.Strike, elapsed: number)
@@ -263,8 +263,10 @@ local function strike(s: WeatherLogic.Strike, elapsed: number)
 	if elapsed - s.At > 1 or intensity < WeatherConfig.Lightning.MinIntensity then
 		return
 	end
-	if WeatherConfig.Reduced.Flash or not reduced then
-		flashStart = os.clock()
+	local now = os.clock()
+	if (WeatherConfig.Reduced.Flash or not reduced) and WeatherLogic.flashAllowed(lastFlash, now) then
+		flashStart = now
+		lastFlash = now
 	end
 	local level = WeatherLogic.thunderLevel(s.Delay)
 	local close = s.Delay < WeatherConfig.Lightning.CrackBelow
@@ -402,7 +404,7 @@ local function check(dt: number)
 	look = if state.Kind ~= "Clear" then WeatherConfig.Kinds[state.Kind] else nil
 	target = WeatherLogic.tint(state.Kind, intensity, rainbowAlpha)
 	windYaw = state.WindYaw
-	slant = slantFor(look)
+	slant = WeatherLogic.lookSlant(look)
 	busy = intensity > 0.001 or rainbowAlpha > 0.001
 
 	local f = fx
@@ -422,6 +424,7 @@ local function check(dt: number)
 	local camera = Workspace.CurrentCamera
 	if busy and camera then
 		local made = ensureFx()
+		WeatherFx.setHole(made, WeatherLogic.hole(look))
 		sunDirection = Lighting:GetSunDirection()
 		applyRates(made, look)
 		applySounds(made, look)

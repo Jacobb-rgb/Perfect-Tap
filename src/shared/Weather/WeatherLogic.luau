@@ -18,6 +18,10 @@
 	- Looks: tint (the WeatherTint colour correction blended from neutral),
 	  rate (an emitter's rate after the phone / Reduce motion caps), the
 	  rain's slant, the rainbow's bands and arc, a tree's sway.
+	- Clear view (owner 2026-10-27): the hole in the sky field round the
+	  camera (hole, strips) so nothing falls near the lens, the ground pads'
+	  distance from the camera (padClear), at most one flash per
+	  Lightning.MinFlashGap (flashAllowed).
 	- isSurface(position): weather shows only on the surface (zones, sea).
 ]]
 
@@ -51,6 +55,17 @@ export type Strike = {
 	At: number, -- seconds since the event began
 	Delay: number, -- seconds from the flash to its thunder
 	Window: number,
+}
+
+-- A strip of the sky field in the field's own frame (x downwind, z across, centred on the
+-- camera's fall line): its centre, size, the inner ring or not, its share of the rates.
+export type Strip = {
+	X: number,
+	Z: number,
+	SizeX: number,
+	SizeZ: number,
+	Near: boolean,
+	Share: number,
 }
 
 export type Band = {
@@ -314,6 +329,13 @@ function WeatherLogic.flash(dt: number, cfg: Config?): number
 	return v * math.min(1, (1 - dt / l.Length) * 4)
 end
 
+-- May a strike flash now? Not within Lightning.MinFlashGap of the last flash (`last`, nil = none):
+-- with its flicker that is at most two flashes a second (photosensitivity).
+function WeatherLogic.flashAllowed(last: number?, now: number, cfg: Config?): boolean
+	local c = cfg or WeatherConfig
+	return last == nil or now - last >= c.Lightning.MinFlashGap
+end
+
 -- A thunder's volume share: a close strike (short delay) is louder.
 function WeatherLogic.thunderLevel(delay: number, cfg: Config?): number
 	local c = cfg or WeatherConfig
@@ -384,6 +406,81 @@ function WeatherLogic.slant(wind: number, fallSpeed: number): number
 		return 0
 	end
 	return math.atan(math.max(0, wind) / fallSpeed)
+end
+
+-- The lean of what falls in a kind (rain, else hail, else snow): its wind over the fall speed.
+function WeatherLogic.lookSlant(look: WeatherConfig.Look?, cfg: Config?): number
+	local c = cfg or WeatherConfig
+	if not look then
+		return 0
+	end
+	local p = c.Particles
+	local fall = if look.Rain then p.Rain.Speed elseif look.Hail then p.Hail.Speed else p.Snow.Speed
+	return WeatherLogic.slant(look.Wind, (fall[1] + fall[2]) / 2)
+end
+
+-- Half the width of the sky field's hole for a kind: its Clear studs plus how far its widest
+-- spread can drift a particle sideways before it reaches the camera's height.
+function WeatherLogic.hole(look: WeatherConfig.Look?, cfg: Config?): number
+	local c = cfg or WeatherConfig
+	local clear = if look and look.Clear then look.Clear else c.Box.Clear
+	if not look then
+		return clear
+	end
+	local p = c.Particles
+	local spread = 0
+	if (look.Rain or 0) > 0 then
+		spread = math.max(spread, p.Rain.Spread or 0)
+	end
+	if (look.Hail or 0) > 0 then
+		spread = math.max(spread, p.Hail.Spread or 0)
+	end
+	if (look.Snow or 0) > 0 then
+		spread = math.max(spread, p.Snow.Spread or 0)
+	end
+	local path = c.Box.Height / math.cos(WeatherLogic.lookSlant(look, c))
+	return clear + path * math.tan(math.rad(spread))
+end
+
+-- The sky field's 8 strips round a hole of half-width `hole`: the inner ring (Box.NearWidth wide,
+-- smaller fainter particles) then the outer ring out to Box.Field / 2; each ring is a strip on
+-- either side across the whole ring and one on either side between them. A strip of no area
+-- has Share 0. The shares add up to 1 (the whole field minus the hole).
+function WeatherLogic.strips(hole: number, cfg: Config?): { Strip }
+	local c = cfg or WeatherConfig
+	local half = c.Box.Field / 2
+	local h1 = math.clamp(hole, 0, half)
+	local h2 = math.clamp(hole + c.Box.NearWidth, h1, half)
+	local total = (2 * half) ^ 2 - (2 * h1) ^ 2
+	local out: { Strip } = {}
+	local function add(x: number, z: number, sx: number, sz: number, near: boolean)
+		local area = sx * sz
+		table.insert(out, {
+			X = x,
+			Z = z,
+			SizeX = sx,
+			SizeZ = sz,
+			Near = near,
+			Share = if total > 0 then area / total else 0,
+		})
+	end
+	local function ring(inner: number, outer: number, near: boolean)
+		local w = outer - inner
+		local mid = (inner + outer) / 2
+		add(0, mid, 2 * outer, w, near)
+		add(0, -mid, 2 * outer, w, near)
+		add(mid, 0, w, 2 * inner, near)
+		add(-mid, 0, w, 2 * inner, near)
+	end
+	ring(h1, h2, true)
+	ring(h2, half, false)
+	return out
+end
+
+-- May a ground pad go at `spot`? Only Ground.Clear studs or more from the camera.
+function WeatherLogic.padClear(spot: Vector3, camera: Vector3, cfg: Config?): boolean
+	local c = cfg or WeatherConfig
+	return (spot - camera).Magnitude >= c.Ground.Clear
 end
 
 -- A spot in a disc of `radius` for two rolls in [0, 1) (even over the area), flat.

@@ -5,6 +5,8 @@
 //   node tools/preview/render_weather.mjs [stills]      # stills: only the picked moments
 // -> build/preview/pocasi.mp4 (macOS AVFoundation), build/preview/pocasi.jpg (contact sheet),
 //    build/preview/shots/weather_<n>_<kind>.jpg (one still per weather kind)
+//   lune run tools/lune/export_weather.luau 24 close && node tools/preview/render_weather.mjs close
+// -> build/preview/shots/weather_snih_zblizka.jpg (snow from a player's camera: the clear view)
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,8 +22,11 @@ const repo = path.resolve(here, "../..");
 const scenesDir = path.join(repo, "build/preview");
 const framesDir = path.join(scenesDir, "weather_frames");
 const shotsDir = path.join(scenesDir, "shots");
-const stillsOnly = process.argv[2] === "stills";
-const data = JSON.parse(fs.readFileSync(path.join(scenesDir, "weather_reel.json"), "utf8"));
+const mode = process.argv[2] || "";
+const close = mode === "close";
+const stillsOnly = mode === "stills" || close;
+const reelFile = close ? "weather_close.json" : "weather_reel.json";
+const data = JSON.parse(fs.readFileSync(path.join(scenesDir, reelFile), "utf8"));
 const W = data.width;
 const H = data.height;
 const shot = { ...data.shot, width: W, height: H };
@@ -89,7 +94,7 @@ if (err) {
   process.exit(1);
 }
 await page.addScriptTag({ url: "/weather_overlay.js" });
-const info = await page.evaluate(() => window.weatherSetup("/scenes/weather_reel.json"));
+const info = await page.evaluate((url) => window.weatherSetup(url), `/scenes/${reelFile}`);
 
 let level = 0;
 async function frame(i) {
@@ -102,13 +107,13 @@ async function frame(i) {
   return r;
 }
 
-const names = ["jasno", "dest", "bourka", "krupobiti", "snih", "mlha", "vitr", "vedro", "duha"];
+const names = close ? ["snih_zblizka"] : ["jasno", "dest", "bourka", "krupobiti", "snih", "vitr", "vedro", "duha"];
 fs.mkdirSync(shotsDir, { recursive: true });
 const stills = [];
 if (stillsOnly) {
   for (const [n, i] of info.picks.entries()) {
     await frame(i);
-    const file = path.join(shotsDir, `weather_${n}_${names[n] || n}.jpg`);
+    const file = path.join(shotsDir, close ? `weather_${names[n]}.jpg` : `weather_${n}_${names[n] || n}.jpg`);
     await page.screenshot({ path: file, type: "jpeg", quality: 88 });
     stills.push(file);
     console.log("still", i, "->", path.relative(repo, file));
@@ -134,17 +139,23 @@ if (stillsOnly) {
   console.log("video ->", path.relative(repo, out));
 }
 
-// the contact sheet: one still per kind, 3 x 3
-const cell = 520;
+if (close) {
+  await browser.close();
+  server.close();
+  process.exit(0);
+}
+
+// the contact sheet: one still per kind, 4 x 2
+const cell = 480;
 const cellH = Math.round((cell * H) / W);
 const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#1b1626;font-family:'Avenir Next',sans-serif">
   <div style="color:#fff;font-weight:800;font-size:30px;padding:18px 22px 6px">TERRA FORGE · počasí <span style="font-weight:600;font-size:18px;color:#c9bfe0">(náhled z herního kódu, three.js, ne Roblox)</span></div>
-  <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:10px;padding:12px 22px 22px">
+  <div style="display:grid;grid-template-columns:repeat(4,${cell}px);gap:10px;padding:12px 22px 22px">
   ${stills.map((f) => `<img src="/scenes/shots/${path.basename(f)}" style="width:${cell}px;height:${cellH}px;display:block;border-radius:8px">`).join("")}
   </div></body></html>`;
 fs.writeFileSync(path.join(scenesDir, "weather_sheet.html"), html);
-const rows = Math.ceil(stills.length / 3);
-const sheet = await browser.newPage({ viewport: { width: cell * 3 + 20 + 44, height: cellH * rows + 10 * (rows - 1) + 100 } });
+const rows = Math.ceil(stills.length / 4);
+const sheet = await browser.newPage({ viewport: { width: cell * 4 + 30 + 44, height: cellH * rows + 10 * (rows - 1) + 100 } });
 await sheet.goto(`http://127.0.0.1:${port}/scenes/weather_sheet.html`, { waitUntil: "load" });
 await sheet.evaluate(async () => {
   await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => (img.onload = img.onerror = r)))));

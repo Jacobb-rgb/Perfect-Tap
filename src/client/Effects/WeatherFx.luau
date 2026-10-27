@@ -3,11 +3,15 @@
 	use and reused for every kind of weather (Config/WeatherConfig, the math
 	in Weather/WeatherLogic). WeatherController drives it.
 
-	  sky box   an invisible part above the camera, leaning with the wind:
-	            rain streaks (VelocityParallel + Squash), hail, snow fall out
-	            of its bottom
+	  sky       8 invisible strips above the camera, leaning with the wind,
+	            round a square hole on the camera's fall line (clear view,
+	            WeatherLogic.hole / strips): rain streaks (VelocityParallel +
+	            Squash), hail and snow fall out of their bottoms; the inner
+	            ring's particles are smaller and fainter; LockedToPart, so
+	            the falling field moves with the camera and walking never
+	            carries the lens into it
 	  air box   an invisible part from the ground up, turned downwind:
-	            leaves (green and amber), mist puffs, heat wobble
+	            leaves (green and amber), heat wobble
 	  pads      a few invisible pads the controller puts down by raycasts
 	            near the camera: ripple rings + droplets (rain), bouncing
 	            hail + a clack sound, settling snow flakes
@@ -49,11 +53,20 @@ export type BandBeams = {
 	B: Beam, -- top -> right foot
 }
 
+export type SkyStrip = {
+	Part: Part,
+	Emitters: { [string]: ParticleEmitter }, -- Rain, Hail, Snow
+	Offset: CFrame, -- in the sky field's frame
+	Share: number, -- of the sky rates
+	Near: boolean,
+}
+
 export type Fx = {
 	Folder: Folder,
-	Sky: Part,
+	Sky: { SkyStrip },
+	Hole: number, -- the sky field's hole now (half width, studs)
 	Air: Part,
-	Emitters: { [string]: ParticleEmitter }, -- by WeatherConfig.Particles key ("Leaves2" = the amber leaves, "Rain2".. = more rain)
+	Emitters: { [string]: ParticleEmitter }, -- the air box's, by WeatherConfig.Particles key ("Leaves2" = the amber leaves)
 	Rates: { [string]: number }, -- what is written now
 	Pads: { Pad },
 	Rainbow: Part,
@@ -69,9 +82,6 @@ export type Fx = {
 
 local SKY_KEYS = { "Rain", "Hail", "Snow" }
 local PAD_KEYS = { "Ripple", "Drop", "Bounce", "Settle" }
--- the rain's rate is shared by RAIN_SPLIT emitters (a storm's 1000 a second stays well under
--- what one emitter is happy with)
-local RAIN_SPLIT = 3
 
 local function invisiblePart(name: string, size: Vector3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -97,8 +107,24 @@ local function orientation(name: string?): Enum.ParticleOrientation
 	return Enum.ParticleOrientation.FacingCamera
 end
 
+-- The inner ring's version of a look: smaller and fainter (Box.NearSize, Box.NearAlpha).
+local function nearLook(p: WeatherConfig.Particle): WeatherConfig.Particle
+	local box = WeatherConfig.Box
+	local near = table.clone(p)
+	near.Size = { p.Size[1] * box.NearSize, p.Size[2] * box.NearSize }
+	near.Transparency = 1 - (1 - p.Transparency) * box.NearAlpha
+	return near
+end
+
 -- A ParticleEmitter from a WeatherConfig.Particles look; off (Rate 0) until the controller sets a rate.
-local function emitter(parent: Instance, name: string, p: WeatherConfig.Particle, direction: Enum.NormalId, color: Color3?): ParticleEmitter
+local function emitter(
+	parent: Instance,
+	name: string,
+	p: WeatherConfig.Particle,
+	direction: Enum.NormalId,
+	color: Color3?,
+	locked: boolean?
+): ParticleEmitter
 	local e = Instance.new("ParticleEmitter")
 	e.Name = name
 	e.Texture = p.Texture
@@ -142,7 +168,7 @@ local function emitter(parent: Instance, name: string, p: WeatherConfig.Particle
 	e.EmissionDirection = direction
 	e.Shape = Enum.ParticleEmitterShape.Box
 	e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
-	e.LockedToPart = false
+	e.LockedToPart = locked == true
 	e.Rate = 0
 	e.Enabled = false
 	e.Parent = parent
@@ -205,20 +231,23 @@ function WeatherFx.build(): Fx
 	folder.Parent = Workspace
 
 	local box = WeatherConfig.Box
-	local sky = invisiblePart("WeatherSky", box.Size, folder)
-	local air = invisiblePart("WeatherAir", box.Air, folder)
 	local particles = WeatherConfig.Particles
+	-- the sky field: WeatherLogic.strips' order (the inner ring's four, then the outer ring's)
+	local sky: { SkyStrip } = {}
+	for i, strip in WeatherLogic.strips(WeatherLogic.hole(nil)) do
+		local part = invisiblePart("WeatherSky" .. i, Vector3.new(1, 2, 1), folder)
+		local own: { [string]: ParticleEmitter } = {}
+		for _, key in SKY_KEYS do
+			local look = if strip.Near then nearLook(particles[key]) else particles[key]
+			own[key] = emitter(part, "Weather" .. key, look, Enum.NormalId.Bottom, nil, true)
+		end
+		table.insert(sky, { Part = part, Emitters = own, Offset = CFrame.identity, Share = 0, Near = strip.Near })
+	end
+	local air = invisiblePart("WeatherAir", box.Air, folder)
 	local emitters: { [string]: ParticleEmitter } = {}
-	for _, key in SKY_KEYS do
-		emitters[key] = emitter(sky, "Weather" .. key, particles[key], Enum.NormalId.Bottom)
-	end
-	for i = 2, RAIN_SPLIT do
-		emitters["Rain" .. i] = emitter(sky, "WeatherRain" .. i, particles.Rain, Enum.NormalId.Bottom)
-	end
 	local leaves = particles.Leaves
 	emitters.Leaves = emitter(air, "WeatherLeaves", leaves, Enum.NormalId.Right)
 	emitters.Leaves2 = emitter(air, "WeatherLeaves2", leaves, Enum.NormalId.Right, leaves.Color2)
-	emitters.Mist = emitter(air, "WeatherMist", particles.Mist, Enum.NormalId.Right)
 	emitters.Heat = emitter(air, "WeatherHeat", particles.Heat, Enum.NormalId.Top)
 
 	local group = soundGroup()
@@ -297,6 +326,7 @@ function WeatherFx.build(): Fx
 	local fx: Fx = {
 		Folder = folder,
 		Sky = sky,
+		Hole = -1,
 		Air = air,
 		Emitters = emitters,
 		Rates = {},
@@ -312,6 +342,7 @@ function WeatherFx.build(): Fx
 		Rng = Random.new(),
 	}
 	WeatherFx.tintParent(fx)
+	WeatherFx.setHole(fx, WeatherLogic.hole(nil))
 	return fx
 end
 
@@ -329,17 +360,21 @@ local function setRate(e: ParticleEmitter, rate: number)
 end
 
 -- Sets the rates (particles per second) by WeatherConfig.Particles key ("Leaves2" = the amber
--- leaves); missing keys go to 0. Pad keys apply to every placed pad (a pad that is not placed
--- stays off). The rain's rate is split over its emitters.
+-- leaves); missing keys go to 0. A sky key's rate is shared by the sky strips (by area), pad
+-- keys apply to every placed pad (a pad that is not placed stays off).
 function WeatherFx.setRates(fx: Fx, rates: { [string]: number })
 	for key, e in fx.Emitters do
 		local rate = rates[key] or 0
-		if string.sub(key, 1, 4) == "Rain" then
-			rate = (rates.Rain or 0) / RAIN_SPLIT
-		end
 		if fx.Rates[key] ~= rate then
 			fx.Rates[key] = rate
 			setRate(e, rate)
+		end
+	end
+	for _, key in SKY_KEYS do
+		local rate = rates[key] or 0
+		fx.Rates[key] = rate
+		for _, strip in fx.Sky do
+			setRate(strip.Emitters[key], rate * strip.Share)
 		end
 	end
 	for _, key in PAD_KEYS do
@@ -369,22 +404,44 @@ function WeatherFx.placePad(fx: Fx, index: number, position: Vector3?)
 	end
 end
 
+-- The sky field's hole (half width, studs: WeatherLogic.hole for the kind now): the strips are
+-- resized round it and share the sky rates by area. Only when it changes (a new kind).
+function WeatherFx.setHole(fx: Fx, hole: number)
+	if math.abs(fx.Hole - hole) < 1e-3 then
+		return
+	end
+	fx.Hole = hole
+	for i, strip in WeatherLogic.strips(hole) do
+		local own = fx.Sky[i]
+		if own then
+			own.Share = strip.Share
+			own.Offset = CFrame.new(strip.X, 0, strip.Z)
+			own.Part.Size = Vector3.new(math.max(strip.SizeX, 0.05), 2, math.max(strip.SizeZ, 0.05))
+		end
+	end
+	local rates = table.clone(fx.Rates)
+	table.clear(fx.Rates)
+	WeatherFx.setRates(fx, rates)
+end
+
 ---------------------------------------------------------------- placing (every frame)
 
--- The boxes around the camera: the sky box leans `slant` radians downwind (rain falls at an
--- angle), the air box stands from `groundY` up, `Upwind` studs upwind of the camera.
+-- What follows the camera. The sky field is centred on the camera's fall line (Height studs up
+-- and upwind by Height x tan(slant), so the slanted rain misses the lens by the hole) and leans
+-- `slant` radians downwind; the air box stands from `groundY` up, ahead and upwind.
 function WeatherFx.place(fx: Fx, camera: CFrame, windYaw: number, slant: number, groundY: number)
 	local box = WeatherConfig.Box
+	local wind = WeatherLogic.windDirection(windYaw)
+	local upwind = -wind * (box.Height * math.tan(slant))
+	-- yaw so the field's +X is downwind, then roll so its bottom faces point down and downwind
+	local turn = CFrame.fromMatrix(Vector3.zero, wind, Vector3.new(0, 1, 0))
+	local field = CFrame.new(camera.Position + upwind + Vector3.new(0, box.Height, 0)) * turn * CFrame.Angles(0, 0, slant)
+	for _, strip in fx.Sky do
+		strip.Part.CFrame = field * strip.Offset
+	end
 	local look = camera.LookVector
 	local flat = Vector3.new(look.X, 0, look.Z)
-	local ahead = if flat.Magnitude > 1e-3 then flat.Unit * box.Ahead else Vector3.zero
-	local at = camera.Position + ahead
-	local wind = WeatherLogic.windDirection(windYaw)
-	-- the box sits upwind by its height x tan(slant), so the slanted rain still lands round the camera
-	local upwind = -wind * (box.Height * math.tan(slant))
-	-- yaw so the box's +X is downwind, then roll so its bottom face points down and downwind
-	local turn = CFrame.fromMatrix(Vector3.zero, wind, Vector3.new(0, 1, 0))
-	fx.Sky.CFrame = CFrame.new(at + upwind + Vector3.new(0, box.Height, 0)) * turn * CFrame.Angles(0, 0, slant)
+	local at = camera.Position + (if flat.Magnitude > 1e-3 then flat.Unit * box.Ahead else Vector3.zero)
 	local airY = groundY + box.Air.Y / 2 - 0.5
 	fx.Air.CFrame = CFrame.new(Vector3.new(at.X, airY, at.Z) - wind * box.Upwind) * turn
 end
@@ -512,6 +569,11 @@ end
 function WeatherFx.clear(fx: Fx)
 	for _, e in fx.Emitters do
 		e:Clear()
+	end
+	for _, strip in fx.Sky do
+		for _, e in strip.Emitters do
+			e:Clear()
+		end
 	end
 	for _, pad in fx.Pads do
 		for _, e in pad.Emitters do
