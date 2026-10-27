@@ -1,0 +1,175 @@
+--[[
+	WeatherSway: the trees near the camera lean with the wind (Wind and Storm
+	weather, WeatherConfig.TreeSway). Client only and capped: at most
+	TreeSway.Max trees (Phone.TreeSway on phones) within TreeSway.Radius,
+	each turned about the bottom of its bounding box (so it bends from the
+	ground up) by WeatherLogic.sway, all its parts in one
+	Workspace:BulkMoveTo. Every tree goes back to its exact place when it
+	drops out of the nearest set or the wind stops (stop()).
+
+	Trees are the map's Models named "Tree" (Props, Lobby/Flora): found with
+	one scan of the Workspace the first time the wind needs them, then kept
+	up to date as models stream in and out. A tree with unanchored parts or
+	more than TreeSway.MaxParts parts is skipped.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local WeatherConfig = require(Shared.Config.WeatherConfig)
+local WeatherLogic = require(Shared.Weather.WeatherLogic)
+
+local WeatherSway = {}
+
+type Swaying = {
+	Model: Model,
+	Parts: { BasePart },
+	Home: { CFrame }, -- the parts' own CFrames
+	Moved: { CFrame }, -- reused every frame
+	Base: Vector3, -- the bottom of the bounding box
+	Phase: number,
+}
+
+local trees: { [Model]: true } = {}
+local scanned = false
+local swaying: { [Model]: Swaying } = {}
+local nextPick = 0
+
+local function isTree(instance: Instance): boolean
+	return instance.Name == "Tree" and instance:IsA("Model")
+end
+
+local function scan()
+	if scanned then
+		return
+	end
+	scanned = true
+	for _, d in Workspace:GetDescendants() do
+		if isTree(d) then
+			trees[d :: Model] = true
+		end
+	end
+	Workspace.DescendantAdded:Connect(function(d: Instance)
+		if isTree(d) then
+			trees[d :: Model] = true
+		end
+	end)
+	Workspace.DescendantRemoving:Connect(function(d: Instance)
+		if isTree(d) then
+			trees[d :: Model] = nil
+			swaying[d :: Model] = nil
+		end
+	end)
+end
+
+-- (pcall: a part may have streamed out since it was captured)
+local function restore(s: Swaying)
+	pcall(Workspace.BulkMoveTo, Workspace, s.Parts, s.Home, Enum.BulkMoveMode.FireCFrameChanged)
+end
+
+local function capture(model: Model): Swaying?
+	local parts: { BasePart } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			if not d.Anchored or #parts >= WeatherConfig.TreeSway.MaxParts then
+				return nil
+			end
+			table.insert(parts, d)
+		end
+	end
+	if #parts == 0 then
+		return nil
+	end
+	local home: { CFrame } = {}
+	for i, part in parts do
+		home[i] = part.CFrame
+	end
+	local cf, size = model:GetBoundingBox()
+	return {
+		Model = model,
+		Parts = parts,
+		Home = home,
+		Moved = table.clone(home),
+		Base = cf.Position - Vector3.new(0, size.Y / 2, 0),
+		Phase = (cf.Position.X * 0.37 + cf.Position.Z * 0.61) % (math.pi * 2),
+	}
+end
+
+-- Picks the nearest trees (at most `cap`), restoring the ones that drop out.
+local function pick(position: Vector3, cap: number)
+	local radius = WeatherConfig.TreeSway.Radius
+	local near: { { Model: Model, Distance: number } } = {}
+	for model in trees do
+		if model.Parent then
+			local pivot = model:GetPivot().Position
+			local distance = (pivot - position).Magnitude
+			if distance <= radius then
+				table.insert(near, { Model = model, Distance = distance })
+			end
+		end
+	end
+	table.sort(near, function(a, b)
+		return a.Distance < b.Distance
+	end)
+	local keep: { [Model]: boolean } = {}
+	for i = 1, math.min(cap, #near) do
+		keep[near[i].Model] = true
+	end
+	for model, s in swaying do
+		if not keep[model] then
+			restore(s)
+			swaying[model] = nil
+		end
+	end
+	for model in keep do
+		if not swaying[model] then
+			local s = capture(model)
+			if s then
+				swaying[model] = s
+			end
+		end
+	end
+end
+
+-- One frame of sway: `amount` radians at most, leaning toward `wind` (flat unit vector).
+function WeatherSway.step(now: number, position: Vector3, amount: number, wind: Vector3, cap: number)
+	scan()
+	if now >= nextPick then
+		nextPick = now + WeatherConfig.TreeSway.Rescan
+		pick(position, cap)
+	end
+	local axis = Vector3.new(0, 1, 0):Cross(wind)
+	if axis.Magnitude < 1e-3 then
+		return
+	end
+	axis = axis.Unit
+	local speed = WeatherConfig.TreeSway.Speed
+	for model, s in swaying do
+		local angle = WeatherLogic.sway(now, s.Phase, amount, speed)
+		-- turning about (up x wind) by +angle leans the top downwind, about the base
+		local turn = CFrame.new(s.Base) * CFrame.fromAxisAngle(axis, angle) * CFrame.new(-s.Base)
+		for i, home in s.Home do
+			s.Moved[i] = turn * home
+		end
+		local ok = pcall(Workspace.BulkMoveTo, Workspace, s.Parts, s.Moved, Enum.BulkMoveMode.FireCFrameChanged)
+		if not ok then
+			swaying[model] = nil
+		end
+	end
+end
+
+-- Every tree back to its place.
+function WeatherSway.stop()
+	for model, s in swaying do
+		restore(s)
+		swaying[model] = nil
+	end
+	nextPick = 0
+end
+
+function WeatherSway.active(): boolean
+	return next(swaying) ~= nil
+end
+
+return WeatherSway
