@@ -26,6 +26,7 @@ local Bubble = require(script.Parent.Bubble)
 local HudBubble = require(script.Parent.HudBubble)
 local Pop = require(script.Parent.Pop)
 local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 
 local TeleportView = {}
 
@@ -164,6 +165,10 @@ TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [
 -- The words' glyph height on the bar (design units) per layout: the pixel
 -- font is wide, so the word fits its button with room around it.
 TeleportView.PixelGlyph = { Normal = 20, Compact = 22, Narrow = 15 } :: { [string]: number }
+-- the round look's (Fredoka One is narrower and its capitals are about 0.7 em tall: bigger words)
+TeleportView.RoundGlyph = { Normal = 27, Compact = 30, Narrow = 21 } :: { [string]: number }
+-- the round look's picture on each tab, over its left end (the reel's Shop / Spawn / Plot tabs)
+TeleportView.Icons = { Base = "base", Lobby = "lobby", Vault = "vault" } :: { [string]: string }
 
 --[[
 	A bar button's word in the pixel reels' look (owner 2026-10-22): white
@@ -176,7 +181,8 @@ function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string
 	if not label then
 		return
 	end
-	local glyph = TeleportView.PixelGlyph[kind] or TeleportView.PixelGlyph.Normal
+	local glyphs = if PopTheme.round() then TeleportView.RoundGlyph else TeleportView.PixelGlyph
+	local glyph = glyphs[kind] or glyphs.Normal
 	local lip = Pop.lipUnits(size.Y)
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.Position = UDim2.new(0.5, 0, 0.5, -math.floor(lip / 2))
@@ -187,6 +193,36 @@ function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string
 		edge.Thickness = if glyph >= 20 then 2.5 else 2
 	end
 	Pop.shadow(label, 3)
+end
+
+--[[
+	The round look's tab picture (the reel's tabs): the spot's icon over the
+	button's left end, the word right of it. Nothing on the smallest phones'
+	square buttons, nor before the icon sheet is uploaded (the word stays
+	centred).
+]]
+function TeleportView.roundIcon(button: TextButton, size: Vector2, id: string, kind: string)
+	local icon = TeleportView.Icons[id]
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	if not icon or not label or kind == "Narrow" or not IconAssets.shows(icon) then
+		return
+	end
+	local lip = Pop.lipUnits(size.Y)
+	local pic = math.floor(size.Y * (if kind == "Compact" then 0.66 else 0.96))
+	local x = -math.floor(pic * 0.14)
+	Pop.bandIcon(button, icon, pic, {
+		Name = "Icon",
+		Position = UDim2.new(0, x, 0.5, -math.floor(lip / 2)),
+		ZIndex = 6,
+	})
+	local left = x + pic + 2
+	label.Position = UDim2.new(0.5, math.floor(left / 2), 0.5, -math.floor(lip / 2))
+	label.Size = UDim2.new(1, -(left + 8), 0, label.Size.Y.Offset)
+	local shade = button:FindFirstChild(label.Name .. "Shadow") :: TextLabel?
+	if shade then
+		shade.Position = label.Position + UDim2.fromOffset(0, 3)
+		shade.Size = label.Size
+	end
 end
 
 --[[
@@ -235,7 +271,11 @@ local function buildPop(topBar: Frame): Refs
 				LayoutOrder = i,
 			})
 			button:SetAttribute("Teleport", spot.Id)
-			TeleportView.pixelLabel(button, size, if narrow then "Narrow" elseif compact then "Compact" else "Normal")
+			local kind = if narrow then "Narrow" elseif compact then "Compact" else "Normal"
+			TeleportView.pixelLabel(button, size, kind)
+			if PopTheme.round() then
+				TeleportView.roundIcon(button, size, spot.Id, kind)
+			end
 			local cover = Pop.text(button, "", 26, {
 				Name = "Cooldown",
 				BackgroundColor3 = PopTheme.Outline,

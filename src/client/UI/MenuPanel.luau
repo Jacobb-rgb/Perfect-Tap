@@ -7,10 +7,13 @@
 
 	  header  a bright band in the window's own colour (MenuPanel.paintFor:
 	          Codex teal, Settings steel blue, Hall of Fame orange, Star Forge
-	          periwinkle) with studs, a light rim and diagonal shine stripes;
-	          the title in white chunky text with a black edge and a 3D drop
-	          shadow (and a subtitle line on big screens), the red square X
-	          (Pop.close; the gamepad's B glyph on it with a gamepad)
+	          periwinkle; the round look: PopTheme.Windows, Codex blue,
+	          Settings grey, Hall of Fame amber, Star Forge magenta) with the
+	          look's pattern, a light rim and diagonal shine stripes; the
+	          title in white chunky text with a black edge and a 3D drop
+	          shadow (and a subtitle line on big screens), the window's icon
+	          left of it (the round look), the red square X (Pop.close; the
+	          gamepad's B glyph on it with a gamepad)
 	  body    an empty Frame the panel fills in, over the dark studded floor
 	  footer  the control hint: a text (big screens only), or with a
 	          gamepad the platform's own button glyphs and a word for each
@@ -92,6 +95,11 @@ MenuPanel.Paints = {
 } :: { [string]: Pop.Paint }
 
 function MenuPanel.paintFor(name: string): Pop.Paint
+	-- (the round look: the reel's colour per window)
+	local look = Pop.windowLook(name)
+	if look then
+		return Pop.paint(look.Paint)
+	end
 	local paint = MenuPanel.Paints[name]
 	if paint then
 		return paint
@@ -147,9 +155,13 @@ local function band(panel: Frame, paint: Pop.Paint): Frame
 	local border = head:FindFirstChild("Border") :: UIStroke
 	border.Thickness = 3
 	-- (the pixel reels: the lattice over the band and a gleam now and then, no stripes;
-	-- the band is sized by the layout later: the lattice assumes a wide one)
+	-- the round look: fine stripes, three broad ones, the window's faded icon;
+	-- the band is sized by the layout later: the pattern assumes a wide one)
 	head.Size = UDim2.fromOffset(1100, 80)
 	Pop.studs(head, 6, 0.35, 40, 0)
+	if PopTheme.round() then
+		Pop.shineStripes(head, 0)
+	end
 	Pop.gleam(head, 0)
 	return head
 end
@@ -208,6 +220,11 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 		ZIndex = 3,
 	})
 	Pop.shadow(titleLabel)
+	-- the window's icon left of the title (the round look; placed by layout)
+	local look = Pop.windowLook(name)
+	if look then
+		Pop.bandIcon(panel, look.Icon, 50, { ZIndex = 3 })
+	end
 	local subtitleLabel = Pop.text(panel, subtitle, 15, {
 		Name = "Subtitle",
 		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
@@ -352,11 +369,19 @@ function MenuPanel.layout(refs: Refs, compact: boolean, width: number, height: n
 	end
 	refs.Close.TextSize = if compact then 30 else 26
 	refs.Title.TextSize = m.Title
+	-- the window's icon (the round look) at the band's left, the title right of it
+	local icon = refs.Panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if icon then
+		local iconSize = bandH - 10
+		icon.Size = UDim2.fromOffset(iconSize, iconSize)
+		icon.Position = UDim2.fromOffset(pad - 4, rim + math.floor(bandH / 2))
+	end
+	local left = pad + (if icon then Pop.iconRoom(icon) - 4 else 0)
 	-- big screens: the title and the subtitle under it; compact: the title in the band's middle
-	refs.Title.Position = UDim2.fromOffset(pad, if compact then rim + math.floor((bandH - 44) / 2) else 4)
-	refs.Title.Size = UDim2.new(1, -(pad * 2 + m.Close + 8), 0, if compact then 44 else 40)
-	refs.Subtitle.Position = UDim2.fromOffset(pad + 2, 42)
-	refs.Subtitle.Size = UDim2.new(1, -(pad * 2 + m.Close + 10), 0, 20)
+	refs.Title.Position = UDim2.fromOffset(left, if compact then rim + math.floor((bandH - 44) / 2) else 4)
+	refs.Title.Size = UDim2.new(1, -(left + pad + m.Close + 8), 0, if compact then 44 else 40)
+	refs.Subtitle.Position = UDim2.fromOffset(left + 2, 42)
+	refs.Subtitle.Size = UDim2.new(1, -(left + pad + m.Close + 10), 0, 20)
 	refs.Subtitle.Visible = not compact
 	refs.Body.Position = UDim2.fromOffset(pad, m.Header)
 	refs.Body.Size = UDim2.new(1, -pad * 2, 1, -(m.Header + footer))

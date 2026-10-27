@@ -994,17 +994,25 @@ function StoreView.build(): Refs
 	local window = Pop.window(group, string.upper(StoreConfig.Title), size, StoreView.Header, "Green")
 	window.Root.AnchorPoint = Vector2.new(0, 0)
 	window.Root.Position = UDim2.fromOffset(0, 0)
-	-- (the pixel reels' shop: a rainbow band, the cart picture over its left end, a big pixel SHOP)
-	Pop.rainbow(window.Header)
-	local cartSize = math.floor(StoreView.Header * 1.25)
+	-- (the pixel reels' shop: a rainbow band, the cart picture over its left end, a big pixel SHOP;
+	-- the round look: the reel's red Store band, the live cart in its left end instead of the
+	-- band icon, which shows only once the icon sheet is uploaded)
+	local round = PopTheme.round()
+	if not round then
+		Pop.rainbow(window.Header)
+	end
+	if window.Icon then
+		window.Icon:Destroy()
+	end
+	local cartSize = if round then StoreView.Header - 6 else math.floor(StoreView.Header * 1.25)
 	local cartModel = PictureModels.build("cart")
 	Pop.model(window.Root, "cart", cartSize, cartModel, {
 		Name = "Cart",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, -10, 0, math.floor(StoreView.Header / 2)),
+		Position = UDim2.new(0, if round then 8 else -10, 0, math.floor(StoreView.Header / 2)),
 		ZIndex = 6,
 	}, Vector3.new(-0.7, 0.45, -1))
-	window.Title.Position = UDim2.new(0, cartSize - 6, 0.5, 0)
+	window.Title.Position = UDim2.new(0, cartSize + (if round then 8 else -6), 0.5, 0)
 	window.Title.Size = UDim2.new(0, 420, 1, -6)
 	local titleShadow = window.Header:FindFirstChild("TitleShadow")
 	if titleShadow and titleShadow:IsA("GuiObject") then

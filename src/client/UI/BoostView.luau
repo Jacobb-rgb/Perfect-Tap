@@ -890,14 +890,20 @@ function BoostView.popWindow(panel: Frame, title: TextLabel, paint: string)
 		rim.ZIndex = 3
 	end
 	Pop.studs(band, 4, 0.35, 40, 1)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 0.42),
-		ZIndex = 2,
-	}, band)
+	-- (the round look: no shine over the top half, the window's icon left of the title: placeWindow)
+	local look = Pop.windowLook(Pop.windowKey(panel))
+	if look then
+		Pop.bandIcon(panel, look.Icon, 56, { ZIndex = 3 })
+	else
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 0.42),
+			ZIndex = 2,
+		}, band)
+	end
 	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,
@@ -945,6 +951,22 @@ function BoostView.placeWindow(panel: Frame, band: number)
 	bandFrame.Size = UDim2.new(1, -8, 0, band)
 	body.Position = UDim2.fromOffset(4, 4 + band)
 	body.Size = UDim2.new(1, -8, 1, -(band + 8))
+	-- the round look: the window's icon at the band's left; the title, the line under it and
+	-- the receipt (just placed by the layout) move right of it
+	local icon = panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if icon then
+		local size = math.min(band - 14, 56)
+		icon.Size = UDim2.fromOffset(size, size)
+		icon.Position = UDim2.fromOffset(14, 4 + math.floor(band / 2))
+		local room = Pop.iconRoom(icon) - 4
+		for _, name in { "Title", "Subtitle", "Receipt" } do
+			local label = panel:FindFirstChild(name)
+			if room > 0 and label and label:IsA("GuiObject") then
+				label.Position += UDim2.fromOffset(room, 0)
+				label.Size -= UDim2.fromOffset(room, 0)
+			end
+		end
+	end
 	local title = panel:FindFirstChild("Title") :: TextLabel?
 	local shadow = panel:FindFirstChild("TitleShadow") :: TextLabel?
 	if title and shadow then

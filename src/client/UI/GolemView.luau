@@ -1033,8 +1033,25 @@ function GolemView.chrome(panel: Frame, title: string, paint: string | Pop.Paint
 		ZIndex = 6,
 	})
 	Pop.shadow(label)
+	-- the round look: the window's icon left of the title (GolemView.placeIcon)
+	local look = Pop.windowLook(Pop.windowKey(panel))
+	if look then
+		Pop.bandIcon(panel, look.Icon, 56, { ZIndex = 6 })
+	end
 	GolemView.layoutChrome(panel, 70)
 	return label
+end
+
+-- Places the round look's band icon (a header `h` units tall) at `x`; returns the room it takes.
+function GolemView.placeIcon(panel: Frame, x: number, h: number): number
+	local icon = panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if not icon then
+		return 0
+	end
+	local size = h - 14
+	icon.Size = UDim2.fromOffset(size, size)
+	icon.Position = UDim2.fromOffset(x, math.floor(h / 2))
+	return Pop.iconRoom(icon)
 end
 
 local STRIPES = { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } }
@@ -1318,14 +1335,16 @@ local function repaintReel(frame: GuiObject, paint: string | Pop.Paint)
 	Pop.repaint(frame, paint)
 end
 
--- The window's header band in the reels' look: the lattice and a gleam (no shine stripes).
+-- The window's header band in the reels' look: the lattice and a gleam (no shine stripes;
+-- the round look keeps the broad stripes, like the reel's band).
 local function reelBand(panel: Frame)
 	local band = panel:FindFirstChild("Band")
 	if not band or not band:IsA("Frame") then
 		return
 	end
+	local round = PopTheme.round()
 	for _, child in band:GetChildren() do
-		if child.Name == "Shine" or string.sub(child.Name, 1, 6) == "Stripe" then
+		if child.Name == "Shine" or (not round and string.sub(child.Name, 1, 6) == "Stripe") then
 			child:Destroy()
 		end
 	end
@@ -1728,6 +1747,7 @@ function GolemView.build(compact: boolean?): Refs
 		Active = true,
 		ZIndex = 21,
 	}, confirm)
+	box:SetAttribute("Window", "") -- (the round look: the confirm box keeps its red band)
 	GolemView.chrome(box, "DELETE GOLEMS?", "Red")
 	reelBand(box)
 	local confirmText = GolemView.text(box, "", m.Text + 2, {
@@ -1846,10 +1866,11 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	GolemView.layoutChrome(refs.Panel, h)
 	local titleSize = m.Title + 4
 	local titleW = math.ceil(TechShopView.textWidth(refs.Title.Text, titleSize)) + 8
-	GolemView.placeTitle(refs.Title, PAD + 4, 4, titleW, h - 12, titleSize)
+	local titleX = PAD + 4 + GolemView.placeIcon(refs.Panel, PAD, h)
+	GolemView.placeTitle(refs.Title, titleX, 4, titleW, h - 12, titleSize)
 	GolemView.sizeChip(refs.Count, if compact then 108 else 96, if compact then 34 else 30)
 	refs.Count.TextSize = if compact then 20 else 18
-	refs.Count.Position = UDim2.fromOffset(PAD + 4 + titleW + 8, math.floor((h - refs.Count.Size.Y.Offset) / 2))
+	refs.Count.Position = UDim2.fromOffset(titleX + titleW + 8, math.floor((h - refs.Count.Size.Y.Offset) / 2))
 	local closeHolder = holderOf(refs.Close)
 	closeHolder.AnchorPoint = Vector2.new(1, 0)
 	closeHolder.Position = UDim2.new(1, -(PAD - 4), 0, math.floor((h - m.Close) / 2))

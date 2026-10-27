@@ -1093,6 +1093,9 @@ export type Chrome = {
 ]]
 function ElevatorView.popWindow(root: Frame, title: string, paint: string, band: number): Chrome
 	local window = Pop.window(root, title, Vector2.new(800, 500), band, paint)
+	if window.Icon then
+		window.Icon:Destroy() -- (the round look's band icon: this window brings its own, fitWindow)
+	end
 	local panel = window.Root
 	panel.Name = "Panel"
 	panel.Size = UDim2.fromScale(1, 1)

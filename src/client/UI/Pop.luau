@@ -37,6 +37,17 @@
 	  Gleam  a light band sweeps across;
 	  Lean   an icon tilts while its button is hovered;
 	  Press  hover grows, press squishes.
+
+	The round look (owner 2026-10-27, the UI pack reel; PopTheme.Look =
+	"Round", the default): the word font is Fredoka One with a thick dark
+	edge (the "pixel" names stay: PopTheme.Pixel is the look's word font,
+	Pop.isPixel tells a word from a sentence); faces are clean (no lattice);
+	  bandPattern  a header band's fine diagonal stripes, then dressBand;
+	  dressBand    the band in its window's colour (PopTheme.Windows by the
+	               ScreenGui's name) with a big faded copy of its icon;
+	  bandIcon     the window's icon on the left of the title;
+	  heading      "- FEATURED -" in white;
+	  tile         a dark HUD tile with the tile's colour on its lip and edge.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -67,8 +78,11 @@ function Pop.paint(name: string | Paint): Paint
 	return PopTheme.Paints[name] or PopTheme.Paints.Slate
 end
 
--- The black edge thickness for a text size.
+-- The black edge thickness for a text size (the round look: the reel's thick dark outline).
 function Pop.edgeFor(size: number): number
+	if PopTheme.round() then
+		return if size >= 44 then 4.5 elseif size >= 28 then 3.5 elseif size >= 18 then 2.8 elseif size >= 13 then 2.2 else 1.6
+	end
 	return if size >= 44 then 4 elseif size >= 26 then 3 elseif size >= 20 then 2.5 else 1.6
 end
 
@@ -83,9 +97,10 @@ function Pop.edge(label: GuiObject, thickness: number?): UIStroke
 	}, label)
 end
 
--- Whether a font is the pixel font.
+-- Whether a font is the look's word font (pixel: Press Start 2P; round: Fredoka One Bold, a
+-- sentence is Fredoka One Regular: the same face).
 function Pop.isPixel(font: Font): boolean
-	return font.Family == PopTheme.Pixel.Family
+	return font.Family == PopTheme.Pixel.Family and font.Weight == PopTheme.Pixel.Weight
 end
 
 -- Marks an instance for Controllers/PixelFxController: attribute PixelFx = Spin / Gleam / Lean / Press.
@@ -152,9 +167,19 @@ end
 	diagonal lattice (Pop.lattice: frames, no upload needed); a faint one
 	over dark bodies and wells (`transparency` 0.5 and more). `corner` and
 	`tile` belonged to the old stud picture and are kept for the callers.
+	A header band's pattern (`transparency` under 0.4: every window's band
+	asks for 0.35) is Pop.bandPattern in the round look, whose other faces
+	are clean (the reel): only the clip, which holds the gleam.
 ]]
 function Pop.studs(frame: GuiObject, corner: number, transparency: number?, tile: number?, z: number?): GuiObject?
-	local faint = (transparency or 0) >= 0.5
+	local t = transparency or 0
+	if PopTheme.round() then
+		if t < 0.4 then
+			return Pop.bandPattern(frame, z)
+		end
+		return Pop.lattice(frame, z, 1)
+	end
+	local faint = t >= 0.5
 	return Pop.lattice(frame, z, if faint then 0.94 else PopTheme.Lattice, if faint then 34 else nil)
 end
 
@@ -246,6 +271,9 @@ function Pop.lattice(frame: GuiObject, z: number?, transparency: number?, gap: n
 	}, frame)
 	local step = gap or PopTheme.LatticeGap
 	local t = transparency or PopTheme.Lattice
+	if t >= 1 then
+		return clip -- (no lines: the clip only, for a gleam)
+	end
 	-- the uploaded tile: one picture, any size
 	if IconAssets.textureShows("ui_lattice") then
 		local tile = UIKit.new("ImageLabel", {
@@ -294,6 +322,186 @@ function Pop.lattice(frame: GuiObject, z: number?, transparency: number?, gap: n
 		end
 	end
 	return clip
+end
+
+--[[
+	The round look's header band (the reel): a "Lattice" clip (it holds the
+	gleam too) with fine light diagonal stripes leaning right across the
+	whole band, then Pop.dressBand (the window's colour and faded icon).
+	The stripes are LatticeBands frames of a fixed size like the lattice's,
+	so a band laid out again keeps them. Returns the clip.
+]]
+function Pop.bandPattern(frame: GuiObject, z: number?): Frame
+	local clip = Pop.lattice(frame, z, 1)
+	local step = PopTheme.StripeGap
+	local seg = step * 6
+	local half = math.min(0.04, 4 / seg) -- (stripes about 8 units wide)
+	local t = PopTheme.Stripes
+	local keys = { NumberSequenceKeypoint.new(0, 1) }
+	for i = 1, 6 do
+		local c = (i - 0.5) / 6
+		table.insert(keys, NumberSequenceKeypoint.new(c - half - 0.004, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(c - half, t))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half, t))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half + 0.004, 1))
+	end
+	table.insert(keys, NumberSequenceKeypoint.new(1, 1))
+	local lines = NumberSequence.new(keys)
+	local rotation = 30 -- (the frames' axis: the stripes across it lean right, "//")
+	local ux, uy = math.cos(math.rad(rotation)), math.sin(math.rad(rotation))
+	local count = PopTheme.LatticeBands + 2
+	for j = 1, count do
+		local along = (j - (count + 1) / 2) * seg
+		local band = UIKit.new("Frame", {
+			Name = "Stripes",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Position = UDim2.new(0.5, math.floor(ux * along + 0.5), 0.5, math.floor(uy * along + 0.5)),
+			Rotation = rotation,
+			Size = UDim2.fromOffset(seg, 600),
+			ZIndex = z or frame.ZIndex,
+		}, clip)
+		UIKit.new("UIGradient", { Transparency = lines }, band)
+	end
+	Pop.dressBand(frame)
+	return clip
+end
+
+-- The name of the ScreenGui an instance is under (nil before it is parented to one).
+function Pop.guiName(instance: Instance): string?
+	local gui = if instance:IsA("ScreenGui") then instance else instance:FindFirstAncestorOfClass("ScreenGui")
+	return if gui then gui.Name else nil
+end
+
+-- Which window an instance is in: the attribute Window on it or its nearest ancestor that has one, else its ScreenGui's name.
+function Pop.windowKey(instance: Instance): string?
+	local at: Instance? = instance
+	while at and not at:IsA("ScreenGui") do
+		local value = at:GetAttribute("Window")
+		if type(value) == "string" then
+			return value
+		end
+		at = at.Parent
+	end
+	return Pop.guiName(instance)
+end
+
+-- A window's round-look header (PopTheme.Windows by ScreenGui name); nil in the pixel look or for a window not listed.
+function Pop.windowLook(key: string?): PopTheme.WindowLook?
+	if not PopTheme.round() or key == nil then
+		return nil
+	end
+	return PopTheme.Windows[key]
+end
+
+-- A window's header paint: its round-look colour, else `fallback` (the view's own).
+function Pop.windowPaint(key: string?, fallback: string | Paint): string | Paint
+	local look = Pop.windowLook(key)
+	return if look then look.Paint else fallback
+end
+
+--[[
+	Dresses a header band in its window's round look (nothing in the pixel
+	look or for a window PopTheme.Windows doesn't list): the band's face
+	(the band, or the face it clips over) repainted flat in the window's
+	colour, and a big faded copy of the window's icon in the band's middle
+	(Pop.watermark). `key` is the window's ScreenGui name (default: the
+	attribute Window on the band or its nearest ancestor that has one, else
+	its ScreenGui's name; Window = "" keeps a box's own colour: a red
+	confirm box inside a window). Returns the look.
+]]
+function Pop.dressBand(band: GuiObject, key: string?): PopTheme.WindowLook?
+	local look = Pop.windowLook(key or Pop.windowKey(band))
+	if not look then
+		return nil
+	end
+	local parent = band.Parent
+	local face: GuiObject? = if band:FindFirstChild("Paint")
+		then band
+		elseif parent and parent:IsA("GuiObject") and parent:FindFirstChild("Paint") then parent
+		else nil
+	if face then
+		Pop.repaint(face, look.Paint, false)
+		face:SetAttribute("WindowPaint", look.Paint)
+	end
+	Pop.watermark(band, look.Icon)
+	return look
+end
+
+--[[
+	The big faded copy of a window's icon in its header band (the reel),
+	inside the band's clip so it is cut at the band's edges; nothing shows
+	until the icon's sheet is uploaded (previews draw it).
+]]
+function Pop.watermark(band: GuiObject, icon: string): ImageLabel
+	local old = band:FindFirstChild("Watermark", true)
+	if old then
+		old:Destroy()
+	end
+	local holder = band:FindFirstChild("Lattice") or band
+	local mark = UIKit.new("ImageLabel", {
+		Name = "Watermark",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ImageTransparency = PopTheme.Watermark,
+		Position = UDim2.fromScale(0.56, 0.52),
+		Rotation = -10,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.new(0, 170, 1.9, 0), -- (Fit: a square 1.9 bands tall, at most 170 units)
+		Visible = IconAssets.shows(icon),
+		ZIndex = band.ZIndex,
+	}, holder)
+	IconAssets.apply(mark, icon)
+	mark:SetAttribute("Icon", icon)
+	return mark
+end
+
+--[[
+	The window's icon on the left of its title (the reel), `size` units
+	square; hidden until the icon's sheet is uploaded (previews draw it).
+	Pop.iconRoom says how far the title moves right for it.
+]]
+function Pop.bandIcon(parent: Instance, icon: string, size: number, props: Props?): ImageLabel
+	local image = UIKit.new("ImageLabel", {
+		Name = "BandIcon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(size, size),
+		Visible = IconAssets.shows(icon),
+		ZIndex = 6,
+	}, parent)
+	IconAssets.apply(image, icon)
+	image:SetAttribute("Icon", icon)
+	Pop.fxTag(image, "Lean")
+	apply(image, props)
+	return image
+end
+
+-- How far a title moves right for its band icon (0 when there is none or it is hidden).
+function Pop.iconRoom(icon: ImageLabel?): number
+	if icon == nil or not icon.Visible then
+		return 0
+	end
+	return icon.Size.X.Offset + 6
+end
+
+-- The round look's three broad light stripes across a header band ("//", the reel's shine).
+function Pop.shineStripes(band: GuiObject, z: number?)
+	for i, s in { { 0.66, 40 }, { 0.73, 18 }, { 0.82, 12 } } do
+		UIKit.new("Frame", {
+			Name = "Stripe" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = PopTheme.Stripe,
+			BorderSizePixel = 0,
+			Position = UDim2.new(s[1], (i - 1) * 30, 0.5, 0),
+			Rotation = 28,
+			Size = UDim2.new(0, s[2], 2.6, 0),
+			ZIndex = z or band.ZIndex,
+		}, band)
+	end
 end
 
 --[[
@@ -476,7 +684,8 @@ function Pop.fit(label: TextLabel, size: number)
 	l.MinTextSize = math.min(max, PopTheme.PixelMin)
 	local edge = label:FindFirstChild("Edge") :: UIStroke?
 	if edge then
-		edge.LineJoinMode = Enum.LineJoinMode.Miter
+		-- (square corners suit the pixel letters; the round font keeps a round edge)
+		edge.LineJoinMode = if PopTheme.round() then Enum.LineJoinMode.Round else Enum.LineJoinMode.Miter
 	end
 end
 
@@ -486,11 +695,16 @@ end
 	were about 7 pt on a 568x320 phone): pixel letters (Pop.fit at `size`)
 	while they fit at `floor` design units or more, else the round font
 	(it is narrower) when it is bigger, at most `roundMax`. A pixel letter
-	is 1 em wide, a round capital about 0.6 em. Returns true when round.
+	is 1 em wide, a round capital about 0.6 em (the round look's words are
+	round too: PopTheme.PixelAdvance). Returns true when round.
 ]]
 function Pop.fitOrRound(label: TextLabel, size: number, roundMax: number, floor: number, w: number, h: number): boolean
 	local n = math.max(1, utf8.len(label.Text) or #label.Text)
-	local pixelSize = math.min(math.max(8, math.floor(size * PopTheme.PixelScale + 0.5)), math.floor(w / n), math.floor(h / 1.1))
+	local pixelSize = math.min(
+		math.max(8, math.floor(size * PopTheme.PixelScale + 0.5)),
+		math.floor(w / (n * PopTheme.PixelAdvance)),
+		math.floor(h / PopTheme.PixelLine)
+	)
 	local roundSize = math.min(roundMax, math.floor(w / (n * 0.6)), math.floor(h / 1.2))
 	if pixelSize >= floor or roundSize <= pixelSize then
 		label:SetAttribute("Round", nil)
@@ -512,15 +726,25 @@ function Pop.title(parent: Instance, text: string, size: number, colors: string 
 	return label
 end
 
+-- A section heading's words: "- PASSES -" in the round look (the reel's "- Gamepass -"), else as they are.
+function Pop.section(text: string): string
+	if PopTheme.round() and text ~= "" and string.sub(text, 1, 2) ~= "- " then
+		return "- " .. text .. " -"
+	end
+	return text
+end
+
 -- "-- PASSES --": a section heading `width` wide.
 function Pop.heading(parent: Instance, text: string, colors: string, size: number, props: Props?): TextLabel
-	-- (the reels: a pixel word over the list, "GAMEPASSES")
-	local heading = Pop.title(parent, text, size, colors, {
-		Name = "Heading",
-		FontFace = PopTheme.Heavy,
-		Size = UDim2.new(1, 0, 0, size + 14),
-		TextXAlignment = Enum.TextXAlignment.Center,
-	})
+	-- (the reels: a pixel word over the list, "GAMEPASSES"; the round look: white "- PASSES -")
+	local round = PopTheme.round()
+	local heading =
+		Pop.title(parent, Pop.section(text), if round then math.floor(size * 0.8) else size, if round then "White" else colors, {
+			Name = "Heading",
+			FontFace = PopTheme.Heavy,
+			Size = UDim2.new(1, 0, 0, size + 14),
+			TextXAlignment = Enum.TextXAlignment.Center,
+		})
 	apply(heading, props)
 	heading.ZIndex = math.max(heading.ZIndex, 5)
 	Pop.shadow(heading)
@@ -596,18 +820,51 @@ function Pop.rimColor(paint: Paint): Color3
 	return paint.Top:Lerp(Color3.new(1, 1, 1), 0.6)
 end
 
+-- A dark tile's gradient: dark grey, warming toward its lip in the tile's colour.
+local function darkGradient(paint: Paint, lip: number): ColorSequence
+	local dark = PopTheme.TileDark
+	local cut = 1 - math.max(lip, 0.06)
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, dark.Top),
+		ColorSequenceKeypoint.new(cut - 0.16, dark.Bottom),
+		ColorSequenceKeypoint.new(cut - 0.001, dark.Bottom:Lerp(paint.Bottom, 0.3)),
+		ColorSequenceKeypoint.new(cut, paint.Bottom),
+		ColorSequenceKeypoint.new(1, paint.Bottom:Lerp(Color3.new(0, 0, 0), 0.25)),
+	})
+end
+
+--[[
+	The round look's dark HUD tile face (the reel): a dark grey gradient, a
+	lip along the bottom in the tile's colour (`paint`) and the light edge
+	inside the outline in the tile's colour, brightest along the bottom.
+	Pop.repaint keeps it dark (it recolours the lip and the edge).
+]]
+function Pop.darkTile(frame: GuiObject, paint: string | Paint, corner: number)
+	Pop.face(frame, PopTheme.TileDark, corner)
+	frame:SetAttribute("DarkTile", true)
+	local rim = frame:FindFirstChild("Rim")
+	local light = if rim then rim:FindFirstChild("Light") else nil
+	local fade = if light then light:FindFirstChildOfClass("UIGradient") else nil
+	if fade then
+		fade.Rotation = 270 -- (bright along the bottom, fading up)
+	end
+	Pop.repaint(frame, paint)
+end
+
 -- Recolours a painted frame (a button that turns grey, a selected tab).
 function Pop.repaint(frame: GuiObject, paint: string | Paint, glossy: boolean?)
 	local p = Pop.paint(paint)
+	local dark = frame:GetAttribute("DarkTile") == true
 	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
 	if gradient then
 		local lip = frame:GetAttribute("Lip")
-		gradient.Color = faceGradient(p, if glossy == false then 0 elseif type(lip) == "number" then lip else 0)
+		local l = if glossy == false then 0 elseif type(lip) == "number" then lip else 0
+		gradient.Color = if dark then darkGradient(p, l) else faceGradient(p, l)
 	end
 	local rim = frame:FindFirstChild("Rim")
 	local light = if rim then rim:FindFirstChild("Light") else nil
 	if light and light:IsA("UIStroke") then
-		light.Color = Pop.rimColor(p)
+		light.Color = if dark then p.Top else Pop.rimColor(p)
 	end
 end
 
@@ -754,15 +1011,19 @@ export type Window = {
 	Title: TextLabel,
 	Close: TextButton,
 	Body: Frame,
+	Icon: ImageLabel?, -- the round look's icon left of the title (Pop.bandIcon)
 }
 
 --[[
 	A window: a bright header band (`paint`, green by default) with diagonal
 	shine stripes, the title on the left and the red X on the right, over a
 	dark grey body. `size` in design units; `band` the header's height.
+	The round look: the band in the window's own colour (PopTheme.Windows by
+	the ScreenGui's name, Pop.dressBand), its icon left of the title.
 ]]
 function Pop.window(parent: Instance, title: string, size: Vector2, band: number?, paint: (string | Paint)?): Window
 	local h = band or 76
+	local round = PopTheme.round()
 	local root = UIKit.new("Frame", {
 		Name = "Window",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -811,16 +1072,23 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 	Pop.face(head, paint or "Green", 4, false)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
-	-- (the pixel reels: the lattice over the band, a gleam now and then; no stripes)
+	-- (the pixel reels: the lattice over the band, a gleam now and then; no stripes;
+	-- the round look: fine stripes, three broad ones, the window's colour and faded icon)
 	head.Size = UDim2.fromOffset(size.X - 8, h - 8)
 	Pop.studs(head, 4, 0.35, 40, 3)
+	if round then
+		Pop.shineStripes(head, 3)
+	end
 	Pop.gleam(head, 3)
 	head.Size = UDim2.new(1, -8, 0, h - 8)
-	local titleLabel = Pop.text(head, title, math.floor(h * 0.6), {
+	local look = Pop.windowLook(Pop.windowKey(parent))
+	local icon = if look then Pop.bandIcon(head, look.Icon, h - 14, { Position = UDim2.new(0, 10, 0.5, 0) }) else nil
+	local left = 16 + Pop.iconRoom(icon)
+	local titleLabel = Pop.text(head, title, math.floor(h * (if round then 0.5 else 0.6)), {
 		Name = "Title",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16, 0.5, 0),
-		Size = UDim2.new(1, -(h + 30), 1, -4),
+		Position = UDim2.new(0, left, 0.5, 0),
+		Size = UDim2.new(1, -(h + 14 + left), 1, -4),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
 	})
@@ -830,7 +1098,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0, math.floor(h / 2)),
 	})
-	return { Root = root, Header = head, Title = titleLabel, Close = close, Body = body }
+	return { Root = root, Header = head, Title = titleLabel, Close = close, Body = body, Icon = icon }
 end
 
 --[[
@@ -1185,16 +1453,24 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		ZIndex = 2,
 	}, holder)
 	-- (the pixel reels' square buttons: radius 10 of 100, the lattice, a
-	-- sunburst turning behind the picture, the picture leaning on hover)
+	-- sunburst turning behind the picture, the picture leaning on hover;
+	-- the round look: Pop.darkTile, the reel's dark tiles)
 	face.Size = UDim2.fromOffset(s, s)
-	Pop.face(face, o.Paint, math.floor(s * 0.12))
+	local paint = Pop.paint(o.Paint)
+	if PopTheme.round() then
+		Pop.darkTile(face, paint, math.floor(s * 0.12))
+		face:SetAttribute("TilePaint", if type(o.Paint) == "string" then o.Paint else nil)
+	else
+		Pop.face(face, o.Paint, math.floor(s * 0.12))
+	end
 	face.Size = UDim2.fromScale(1, 1)
 	local clip = Pop.studs(face, 10, 0.45, 30, 2) :: Frame
-	local paint = Pop.paint(o.Paint)
-	local rays = Pop.rays(clip, UDim2.fromScale(0.5, 0.42), 8, math.floor(s * 0.75), 0.55, 2)
-	for _, ray in rays:GetChildren() do
-		if ray:IsA("Frame") then
-			ray.BackgroundColor3 = paint.Top:Lerp(Color3.new(1, 1, 1), 0.75)
+	if not PopTheme.round() then
+		local rays = Pop.rays(clip, UDim2.fromScale(0.5, 0.42), 8, math.floor(s * 0.75), 0.55, 2)
+		for _, ray in rays:GetChildren() do
+			if ray:IsA("Frame") then
+				ray.BackgroundColor3 = paint.Top:Lerp(Color3.new(1, 1, 1), 0.75)
+			end
 		end
 	end
 	local icon = UIKit.new("ImageLabel", {

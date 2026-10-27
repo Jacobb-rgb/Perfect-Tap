@@ -1065,11 +1065,13 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	refs.Balance.AnchorPoint = Vector2.new(1, 0)
 	refs.Balance.Position = UDim2.new(1, -(PAD - 4 + m.Close + 2 * GAP + golemsW), 0, math.floor((h - 40) / 2))
 	refs.Balance.Size = UDim2.fromOffset(balanceW, 40)
-	local textW = width - (2 * PAD + m.Close + 3 * GAP + golemsW + balanceW)
-	GolemView.placeTitle(refs.Title, PAD + 4, 6, textW, m.Title + 6, m.Title + 2)
+	-- (the round look: the window's icon left of the title)
+	local iconRoom = GolemView.placeIcon(refs.Panel, PAD, h)
+	local textW = width - (2 * PAD + m.Close + 3 * GAP + golemsW + balanceW) - iconRoom
+	GolemView.placeTitle(refs.Title, PAD + 4 + iconRoom, 6, textW, m.Title + 6, m.Title + 2)
 	TechShopView.fitText(refs.Title, textW, m.Title + 6, m.Title + 2, 20)
-	GolemView.placeTitle(refs.Title, PAD + 4, 6, textW, m.Title + 6, refs.Title.TextSize)
-	place(refs.Subtitle, PAD + 6, m.Title + 12, textW, 20)
+	GolemView.placeTitle(refs.Title, PAD + 4 + iconRoom, 6, textW, m.Title + 6, refs.Title.TextSize)
+	place(refs.Subtitle, PAD + 6 + iconRoom, m.Title + 12, textW, 20)
 	refs.Subtitle.Visible = textW > 260
 	TechShopView.fitText(refs.Subtitle, textW, 20, m.Small + 1, 11)
 	GolemView.fitEdge(refs.Subtitle)

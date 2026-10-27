@@ -842,14 +842,23 @@ local function chrome(panel: Frame, paint: string | Pop.Paint, header: number)
 	local border = band:FindFirstChild("Border") :: UIStroke
 	border.Thickness = 3
 	Pop.studs(band, 6, 0.35, 40, 0)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 0,
-	}, band)
+	-- (the round look: no shine over the top half, the window's icon left of the title)
+	local look = Pop.windowLook(Pop.windowKey(panel))
+	if look then
+		Pop.bandIcon(panel, look.Icon, header - 16, {
+			Position = UDim2.fromOffset(14, math.floor(header / 2)),
+			ZIndex = 3,
+		})
+	else
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0.42, 0),
+			ZIndex = 0,
+		}, band)
+	end
 	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,
@@ -878,6 +887,11 @@ function CollectionView.layoutChrome(panel: Frame, header: number)
 		back.Position = UDim2.fromOffset(4, 4 + h)
 		back.Size = UDim2.new(1, -8, 1, -(8 + h))
 	end
+end
+
+-- How far a chrome'd panel's title moves right for the band icon (the round look; else 0).
+function CollectionView.titleRoom(panel: Frame): number
+	return Pop.iconRoom(panel:FindFirstChild("BandIcon") :: ImageLabel?)
 end
 
 -- (the journal, StoryView, is built from the same pieces)
@@ -1098,10 +1112,11 @@ function CollectionView.build(compact: boolean): Refs
 		Active = true,
 	})
 	chrome(panel, CollectionView.Paint, m.Header)
+	local room = CollectionView.titleRoom(panel)
 	local title = Pop.text(panel, "ARTIFACTS OF KALDRUM", m.Title, {
 		Name = "Title",
-		Position = UDim2.fromOffset(m.Pad + 4, 10),
-		Size = UDim2.new(0, 520, 0, m.Header - 20),
+		Position = UDim2.fromOffset(m.Pad + 4 + room, 10),
+		Size = UDim2.new(0, 520 - room, 0, m.Header - 20),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 3,
 	})
