@@ -567,7 +567,7 @@ return function(T, Loader)
 	T.test("Backpack client: the cleaning card says where the clean ore went", function()
 		T.eq(CleaningView.intoText("Backpack"), "In your backpack")
 		T.truthy(CleaningView.intoText("Pen"):find("Ore Pen", 1, true), "a full backpack: the pen")
-		T.truthy(CleaningView.intoText("Sold"):find("sold", 1, true))
+		T.eq(CleaningView.intoText("Sold"), "", "never sold any more (the server keeps it on the tray)")
 		T.truthy(CleaningView.intoText("Tray"):find("tray", 1, true), "the station's tray")
 		for _, junk in { nil, "Hands", 3 } do
 			T.eq(CleaningView.intoText(junk), "", "nothing for anything else")
