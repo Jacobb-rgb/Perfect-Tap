@@ -1812,9 +1812,14 @@ return function(T, Loader)
 	T.test("TrainClient: the phone panel never cuts the coins or the backpack button", function()
 		local scale = TrainView.PhoneScale
 		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
-		-- the HUD's backpack button (bottom, right of the blaster's hotbar slot; the phone size)
-		local pack = HudBubble.BackpackSizePhone
-		local packRight = HudBubble.backpackX(scale) + pack.X
+		-- the HUD's bottom group (the phone size): the light HUD's BLASTER slot and backpack button,
+		-- centred; the dark HUD's button right of Roblox's hotbar slot. The panel covers either.
+		local pack = HudBubble.carryGroupSize(true)
+		local _, lightRight = HudBubble.carrySpan(scale, false, true)
+		local lightLeft = HudBubble.carrySpan(scale, false, true)
+		local _, darkRight = HudBubble.carrySpan(scale, false, false)
+		T.eq(lightLeft, -lightRight, "the light group is centred")
+		local packRight = math.max(lightRight, darkRight)
 		for _, screen in { { 667, 375 }, { 812, 375 }, { 844, 390 }, { 800, 360 }, { 568, 320 } } do
 			local label = `{screen[1]}x{screen[2]}`
 			local refs, width, height = phone(screen[1], screen[2])

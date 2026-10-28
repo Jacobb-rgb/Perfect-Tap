@@ -218,11 +218,10 @@ function BackpackShopView.priceText(pack: BackpackData.Backpack): string
 	return if pack.Price <= 0 then "FREE" else Format.money(pack.Price)
 end
 
--- The card's capacity chip; `share` = the worn pack's bonus share (Deep
--- Pockets, Strong Back: the server's capacity against the pack's own), 1 without.
-function BackpackShopView.capacityText(pack: BackpackData.Backpack, share: number?): string
-	local s = if type(share) == "number" and share > 0 and share == share then share else 1
-	return `{Format.commas(math.floor(pack.Capacity * s + 0.5))} ORE`
+-- The card's capacity chip: what the pack holds worn, with the player's carry
+-- bonuses (State.Backpacks.Bonus: BackpackData.carried, the server's formula).
+function BackpackShopView.capacityText(pack: BackpackData.Backpack, bonus: any?): string
+	return `{Format.commas(BackpackData.carried(pack.Capacity, bonus))} ORE`
 end
 
 function BackpackShopView.buttonText(state: CardState): string
@@ -589,12 +588,12 @@ end
 
 -- Fills every card from the save: owned packs, the equipped one, your coins.
 -- Returns whether a capacity chip changed its text (the caller lays the window out again).
-function BackpackShopView.setCards(refs: Refs, owned: { [string]: boolean }, equipped: string, coins: any, share: number?): boolean
+function BackpackShopView.setCards(refs: Refs, owned: { [string]: boolean }, equipped: string, coins: any, bonus: any?): boolean
 	local m = metrics(refs.Compact)
 	local resized = false
 	for _, card in refs.Cards do
 		local label = card.SizeChip:FindFirstChildOfClass("TextLabel")
-		local text = BackpackShopView.capacityText(card.Pack, share)
+		local text = BackpackShopView.capacityText(card.Pack, bonus)
 		if label and label.Text ~= text then
 			label.Text = text
 			resized = true

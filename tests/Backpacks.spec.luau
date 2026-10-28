@@ -317,7 +317,9 @@ return function(T, Loader)
 	T.test("BACKPACKS shop: its client-built packs and decor stay out of the phones' budget spots, even after a visit", function()
 		-- (PhoneBudget.spec counts round the spawn and the plaza, DropperShop.spec at the
 		-- DROPPERS door: none of them may hold this shop's client parts as well; a pack
-		-- stays built until the camera is its range + Decor.Hysteresis away)
+		-- stays built until the player's HumanoidRootPart, ~3 studs over the ground, is
+		-- its range + Decor.Hysteresis away; MARGIN: a player a few steps closer)
+		local ROOT, MARGIN = Vector3.new(0, 3, 0), 3
 		local Backpacks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Backpacks")
 		local Droppers = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Droppers")
 		local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
@@ -339,14 +341,14 @@ return function(T, Loader)
 					local range = d:GetAttribute("DisplayRange")
 					T.eq(type(range), "number", d.Name .. " has its build range")
 					T.truthy(
-						(d.CFrame.Position - spot).Magnitude > range + Decor.Hysteresis,
+						(d.CFrame.Position - (spot + ROOT)).Magnitude > range + Decor.Hysteresis + MARGIN,
 						`{d.Name} {d:GetAttribute("BackpackId")} is not built (nor kept) at the {name}`
 					)
 				end
 			end
 			local frame = stall:GetAttribute(Decor.FrameAttribute)
 			T.truthy(
-				(frame.Position - spot).Magnitude > Decor.ShowRange + Decor.Hysteresis,
+				(frame.Position - (spot + ROOT)).Magnitude > Decor.ShowRange + Decor.Hysteresis + MARGIN,
 				`the decor is not built (nor kept) at the {name}`
 			)
 		end
@@ -361,8 +363,8 @@ return function(T, Loader)
 		display packs within their DisplayRange (the DisplayLite ones lite:
 		phones show those without their small details, inside the shop too),
 		its decor, the DROPPERS showroom within DropperShopBuilder.ShowDistance
-		and every shopkeeper golem within ShopkeeperConfig.ShowDistance, stay
-		under StreamParts.
+		and every shopkeeper golem within ShopkeeperConfig.HideDistance (one
+		built on the way stays until then), stay under StreamParts.
 	]]
 	T.test(
 		"BACKPACKS shop: what a phone holds at its gateway and its counter (streamed + its packs and decor + the DROPPERS showroom + the shopkeepers) stays under StreamParts",
@@ -441,7 +443,7 @@ return function(T, Loader)
 				local showroom = if (houseFrame.Position - spot).Magnitude <= DropperShopBuilder.ShowDistance then showroomParts else 0
 				local golems = 0
 				for _, k in keepers do
-					if (k.At - spot).Magnitude <= ShopkeeperConfig.ShowDistance then
+					if (k.At - spot).Magnitude <= ShopkeeperConfig.HideDistance then
 						golems += k.Parts
 					end
 				end
@@ -454,6 +456,29 @@ return function(T, Loader)
 			end
 		end
 	)
+
+	T.test("BACKPACKS capacities: BackpackData.carried is the server's Bonuses.carryCapacity for every pack", function()
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		-- (Deep Pockets is +10% a level; the reviewer's cases: DP III with Amethyst and Runebound, DP I with Rookie)
+		for _, flat in { 0, 3 } do
+			for _, pct in { 0, 0.1, 0.2, 0.3 } do
+				for _, pack in BackpackData.List do
+					local server = Bonuses.carryCapacity({ CarryCapacity = pack.Capacity + flat, CarryPct = pct } :: any, nil)
+					local client = BackpackData.carried(pack.Capacity, { Flat = flat, Pct = pct, Double = false })
+					T.eq(client, server, `{pack.Id} flat {flat} pct {pct}`)
+					T.eq(
+						BackpackData.carried(pack.Capacity, { Flat = flat, Pct = pct, Double = true }),
+						server * 2,
+						`{pack.Id} with Strong Back`
+					)
+				end
+			end
+		end
+		T.eq(BackpackData.carried(400, nil), 400, "no bonus: the pack's own")
+		T.eq(BackpackData.carried(275, { Flat = 0, Pct = 0.3, Double = false }), 358, "Amethyst with Deep Pockets III")
+		T.eq(BackpackData.carried(400, { Flat = 0, Pct = 0.3, Double = true }), 1040, "Runebound with DP III and Strong Back")
+		T.eq(ShopView.capacityText(BackpackData.ById.StarforgePack, { Flat = 0, Pct = 0.1, Double = false }), "1,100 ORE", "the card chip")
+	end)
 
 	T.test("BACKPACKS packs: no studs on worn or shown packs (their ClientBackpacks folder is skipped)", function()
 		-- (StudStyle: the owner's 10-24 rule, only ground, roads, buildings, stalls and machines get studs)

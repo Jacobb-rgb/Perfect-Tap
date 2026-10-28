@@ -377,7 +377,7 @@ StoreConfig.Cards = {
 		Section = "Passes",
 		Row = 2,
 		Title = "TF Custom",
-		Tag = "SPEED 38",
+		Tag = "SPEED 48",
 	}),
 	card({
 		Id = "Heartfire",

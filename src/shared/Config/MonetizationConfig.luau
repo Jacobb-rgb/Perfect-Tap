@@ -254,7 +254,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 49,
 		Name = "Terra Forge Custom Hoverboard",
-		Description = "The fastest hoverboard, painted with Terra Forge doodles: speed 38 and a rainbow trail.",
+		Description = "The fastest hoverboard, painted with Terra Forge doodles: speed 48 and a rainbow trail.",
 		Grant = "Hoverboard",
 		BoardId = "TerraForgeCustom",
 	},

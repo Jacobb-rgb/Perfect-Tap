@@ -52,6 +52,7 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local Hotbar = require(script.Parent.Parent.Util.Hotbar)
 local HudController = require(script.Parent.HudController)
 local LightingController = require(script.Parent.LightingController)
 local PromptController = require(script.Parent.PromptController)
@@ -428,7 +429,7 @@ local function finish(s: any)
 	s.view.Gui:Destroy()
 	s.popLighting()
 	if s.backpackWasEnabled ~= nil then
-		pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, s.backpackWasEnabled)
+		Hotbar.restoreCore(s.backpackWasEnabled) -- (never back on with the light UI: its own BLASTER slot)
 	end
 	local hud = HudController.refs()
 	if hud then

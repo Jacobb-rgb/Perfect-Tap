@@ -562,71 +562,213 @@ return function(T, Loader)
 	end)
 
 	-- (review: the wider pixel chips once covered the phone Shop pill; taps there opened Boosts)
-	T.test("LightUI: the phone boost chips keep off the Shop pill, even with hour-long timers", function()
+	-- the owner 2026-10-24 (his Studio photo): no TRIPLE pill beside the train chip, only the
+	-- clover with its time counting down under it, bottom right; clear of Roblox's touch jump
+	-- button, the game's Grab button, the Shop pill, the backpack button and the edges, at
+	-- least 44 pt, with one and two boosts. Measured like the game (review 2026-10-28 #1): in
+	-- the gui's frame, under Roblox's top bar (CoreUISafeInsets), not the whole screen.
+	T.test("LightUI: the boost corner shows the picture and the time alone, clear of the Shop pill and the touch buttons", function()
 		local HudBubble = ui("HudBubble")
-		local TrainView = ui("TrainView")
 		local BoostView = ui("BoostView")
+		local TutorialView = ui("TutorialView")
 		local NOW = 1.7e9
 		local function overlap(aPos: any, aSize: any, bPos: any, bSize: any): boolean
 			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
 		end
-		local beforeTop, beforeRight = TrainView.HudChipTop, BoostView.HudChipsRight
-		local ok, err = pcall(withLight, function()
-			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
+		local function rectOf(obj: any, width: number, height: number): (any, any)
+			if obj == nil then
+				-- (the round look on phones has no Shop pill on the chips' row: nothing to keep clear of)
+				return Vector2.new(width + 1e5, -1e5), Vector2.new(0, 0)
+			end
+			local size = Vector2.new(obj.Size.X.Offset, obj.Size.Y.Offset)
+			return Vector2.new(
+				width * obj.Position.X.Scale + obj.Position.X.Offset - obj.AnchorPoint.X * size.X,
+				height * obj.Position.Y.Scale + obj.Position.Y.Offset - obj.AnchorPoint.Y * size.Y
+			),
+				size
+		end
+		withLight(function()
+			-- { width, height, touch, the top bar's inset, the home bar's inset (px) }
+			local screens = {
+				{ 568, 320, true, 36, 0 },
+				{ 568, 320, true, 58, 0 },
+				{ 667, 375, true, 36, 0 },
+				{ 667, 375, true, 58, 0 },
+				{ 800, 360, true, 58, 0 },
+				{ 844, 390, true, 58, 21 },
+				{ 1024, 768, true, 36, 20 },
+				{ 1280, 720, false, 36, 0 },
+				{ 1920, 1080, false, 58, 0 },
+			}
+			for _, size in screens do
 				local screen = Vector2.new(size[1], size[2])
+				local touch = size[3] :: boolean
+				local gui = Vector2.new(size[1], size[2] - size[4] - size[5]) -- (the gui inside the safe insets)
 				local scale = HudBubble.scaleFor(screen)
+				local width, height = gui.X / scale, gui.Y / scale
 				local refs = HudBubble.buildGame(scale, size[1])
-				local width, height = size[1] / scale, size[2] / scale
-				-- (the round look on phones: no pill on the chips' row; the screen's right margin is the
-				-- limit, a line the chips must not cross)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillSize = if pill then Vector2.new(pill.Size.X.Offset, pill.Size.Y.Offset) else Vector2.new(0, 1e6)
-				local pillPos = if pill
-					then Vector2.new(
-						width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pillSize.X,
-						pill.Position.Y.Offset - pill.AnchorPoint.Y * pillSize.Y
-					)
-					else Vector2.new(width - 16, -5e5)
-				-- the TRAIN chip and the boost chips where TrainController / BoostController put them
-				TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")
-				local train = TrainView.build(true)
-				TrainView.layout(train, true, width, height)
-				local chips = BoostView.buildChips()
-				BoostView.placeChips(chips, BoostView.chipsTop(train.ChipFrame, true), BoostView.chipsLeft(train.ChipFrame))
-				BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, width)
-				T.truthy(BoostView.HudChipsRight, `the chips get a limit at {size[1]} x {size[2]}`)
-				local gap = (chips.Row:FindFirstChildOfClass("UIListLayout") :: any).Padding.Offset
-				-- typical timers, the 2 h stack cap, a day of late Robux time
-				for _, left in { { 222, 3900 }, { 7199, 7199 }, { 86399, 86399 } } do
-					local state = { Boosts = { TripleLuckyUntil = NOW + left[1], HexaLuckyUntil = NOW + left[2] } }
-					BoostView.setChips(chips, BoostView.chips(state, NOW), false)
-					local fit = chips.Row:GetAttribute("Fit")
-					local at = `{size[1]} x {size[2]}, {left[1]} s / {left[2]} s, fit {fit}`
-					local x, y = chips.Row.Position.X.Offset, chips.Row.Position.Y.Offset
-					for _, kindId in BoostView.Tabs do
-						local button = chips.Chips[kindId]
-						T.truthy(button.Visible, `{kindId} chip shows at {at}`)
-						local s = Vector2.new(button.Size.X.Offset, button.Size.Y.Offset)
-						T.falsy(overlap(Vector2.new(x, y), s, pillPos, pillSize), `{kindId} chip on the Shop pill at {at}`)
-						T.truthy(s.X * scale >= 44 and s.Y * scale >= 44, `{kindId} chip >= 44 pt at {at}`)
-						x += s.X + gap
-					end
-					T.truthy(BoostView.rowRight(chips) <= pillPos.X - HudBubble.ChipGap, `the row stops short of the pill at {at}`)
-					if size[1] >= 667 and left[1] == 222 then
-						T.eq(fit, "Tags", `room for the tags at {at}`)
-					elseif size[1] == 568 and not PopTheme.round() then
-						T.truthy(fit ~= "Tags", `the small phone drops the tags at {at}`)
+				local pillPos, pillSize = rectOf(pill, width, height)
+				local carryPos, carrySize = rectOf(refs.CarryPanel, width, height)
+				-- Roblox's touch jump button and the game's Grab button (InteractController:
+				-- SetPosition(1, -170, 1, -150)), from the gui's bottom-right, design units
+				local small = math.min(size[1], size[2]) <= 500
+				local jump = (if small then 70 else 120) / scale
+				local jumpPos = Vector2.new(width - (if small then 95 else 170) / scale, height - (if small then 90 else 210) / scale)
+				local grab = (if small then 70 else 90) / scale
+				local grabPos = Vector2.new(width - 170 / scale, height - 150 / scale)
+				-- the game's touch FIRE button (MiningController.layoutFireButton, its face lifted 5 px:
+				-- BoostView.TouchButtons, tied to the controller's source below)
+				local fireRect: any = nil
+				for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+					if b.Name == "Fire" then
+						fireRect = b
 					end
 				end
-				if pill then
-					T.truthy(pillSize.Y * scale >= 44 and pillSize.X * scale >= 44, `the Shop pill >= 44 pt at {size[1]} x {size[2]}`)
+				local firePos = Vector2.new(width - fireRect.Left / scale, height - fireRect.Top / scale)
+				local fireSize = Vector2.new((fireRect.Left - fireRect.Right) / scale, (fireRect.Top - fireRect.Bottom) / scale)
+				-- the toasts' column (HudController: up to 3 toasts, 440 wide, from 70 down)
+				local toastPos, toastSize = Vector2.new(width / 2 - 220, 70), Vector2.new(440, 3 * 56)
+				-- the touch tutorial bubble at the top right (TutorialView.layout, in the same gui)
+				local tutorial = TutorialView.layout(scale, gui, true)
+				local bubblePos = Vector2.new(tutorial.Position.X - tutorial.AnchorPoint.X * tutorial.Width, tutorial.Position.Y)
+				local bubbleSize = Vector2.new(tutorial.Width, tutorial.Height)
+				local cases = {}
+				for _, both in { false, true } do
+					table.insert(cases, { both, false })
+					if touch then
+						table.insert(cases, { both, true }) -- (the review 2026-10-28 follow-up: the bubble case)
+					end
 				end
+				for _, case in cases do
+					local both, withBubble = case[1], case[2]
+					local chips = BoostView.buildChips()
+					T.truthy(chips.Row:GetAttribute("Corner"), "the light chips are the corner row")
+					local count = if both then 2 else 1
+					local pillRect = if pill
+							and pill.AnchorPoint.Y == 0
+							and pill.Position.Y.Scale == 0
+						then { Left = pillPos.X, Top = pillPos.Y, Bottom = pillPos.Y + pillSize.Y }
+						else nil
+					local right, bottom, stacked, spot = BoostView.cornerSpot({
+						Screen = screen,
+						Gui = gui,
+						Scale = scale,
+						Touch = touch,
+						Count = count,
+						Pill = pillRect,
+						Bubble = if withBubble then { Left = bubblePos.X, Top = bubblePos.Y, Bottom = bubblePos.Y + bubbleSize.Y } else nil,
+					})
+					T.truthy(spot ~= "OnPill", `the bubble leaves the row a spot at {size[1]} x {size[2]}`)
+					BoostView.placeCorner(chips, right, bottom, stacked)
+					for _, left in { { 222, 3900 }, { 86399, 86399 } } do
+						local state =
+							{ Boosts = { TripleLuckyUntil = NOW + left[1], HexaLuckyUntil = if both then NOW + left[2] else nil } }
+						BoostView.setChips(chips, BoostView.chips(state, NOW), true)
+						local at =
+							`{size[1]} x {size[2]}, {count} boost(s), {left[1]} s{if withBubble then ", the tutorial bubble" else ""} ({spot})`
+						T.falsy(chips.Launcher.Visible, `no BOOSTS launcher in the corner at {at}`)
+						-- the tiles from the row's anchored bottom-right corner (the glyph is at the far end)
+						local rowRight = width + chips.Row.Position.X.Offset
+						local rowBottom = height + chips.Row.Position.Y.Offset
+						local gap = (chips.Row:FindFirstChildOfClass("UIListLayout") :: any).Padding.Offset
+						local x, y = rowRight, rowBottom
+						for i = #BoostView.Tabs, 1, -1 do
+							local kindId = BoostView.Tabs[i]
+							local button = chips.Chips[kindId]
+							if not both and kindId ~= "TripleLucky" then
+								T.falsy(button.Visible, `{kindId} hidden at {at}`)
+								continue
+							end
+							T.truthy(button.Visible, `{kindId} shows at {at}`)
+							local text = (button:FindFirstChild("Pill") :: any):FindFirstChild("Text").Text
+							T.falsy(string.find(text, BoostView.ChipTags[kindId], 1, true), `{kindId}: the time alone ({text}) at {at}`)
+							local s = Vector2.new(button.Size.X.Offset, button.Size.Y.Offset)
+							local pos = if stacked then Vector2.new(rowRight - s.X, y - s.Y) else Vector2.new(x - s.X, rowBottom - s.Y)
+							T.truthy(s.X * scale >= 44 and s.Y * scale >= 44, `{kindId} >= 44 pt at {at}`)
+							T.truthy(
+								pos.X >= 0 and pos.Y >= 0 and pos.X + s.X <= width and pos.Y + s.Y <= height,
+								`{kindId} on screen at {at}`
+							)
+							T.falsy(overlap(pos, s, pillPos, pillSize), `{kindId} off the Shop pill at {at}`)
+							T.falsy(overlap(pos, s, carryPos, carrySize), `{kindId} off the backpack button at {at}`)
+							-- (with the bubble and no clear spot, over the toasts' column: they take no taps)
+							if spot ~= "OverToasts" then
+								T.falsy(overlap(pos, s, toastPos, toastSize), `{kindId} off the toasts at {at}`)
+							end
+							if withBubble then
+								T.falsy(overlap(pos, s, bubblePos, bubbleSize), `{kindId} off the tutorial bubble (its SKIP) at {at}`)
+							end
+							if touch then
+								T.falsy(overlap(pos, s, jumpPos, Vector2.new(jump, jump)), `{kindId} off the jump button at {at}`)
+								T.falsy(overlap(pos, s, grabPos, Vector2.new(grab, grab)), `{kindId} off the Grab button at {at}`)
+								T.falsy(overlap(pos, s, firePos, fireSize), `{kindId} off the FIRE button at {at}`)
+							end
+							x -= s.X + gap
+							y -= s.Y + gap
+						end
+						if not touch then
+							T.eq(height - rowBottom, BoostView.CornerBottom, `the very corner at {at}`)
+							T.eq(width - rowRight, BoostView.CornerRight, `the very corner at {at}`)
+						end
+					end
+					chips.Gui:Destroy()
+				end
+				refs.Gui:Destroy()
 			end
 		end)
-		TrainView.HudChipTop, BoostView.HudChipsRight = beforeTop, beforeRight
-		if not ok then
-			error(err, 0)
+	end)
+
+	-- (the mouse tutorial card sits in that corner: the boosts stand on top of it; a TV keeps
+	-- the 5% title-safe band; the touch tutorial bubble at the top right is never covered)
+	T.test("LightUI: the boost corner stands over the tutorial card, keeps a TV's safe band and the touch bubble", function()
+		local BoostView = ui("BoostView")
+		local screen = Vector2.new(1280, 720)
+		local right, bottom = BoostView.cornerSpot({ Screen = screen, Gui = screen, Scale = 1, Touch = false })
+		T.eq(right, BoostView.CornerRight)
+		T.eq(bottom, BoostView.CornerBottom)
+		local _, lifted = BoostView.cornerSpot({ Screen = screen, Gui = screen, Scale = 1, Touch = false, TutorialTop = 150 })
+		T.eq(lifted, 150 + BoostView.CornerGap)
+		local tv = Vector2.new(1920, 1080)
+		local tvRight, tvBottom = BoostView.cornerSpot({ Screen = tv, Gui = tv, Scale = 1.25, Touch = false, TenFoot = true })
+		T.truthy(tvRight * 1.25 >= 1920 * 0.05 - 1 and tvBottom * 1.25 >= 1080 * 0.05 - 1, "inside the TV's 5% band")
+		-- a phone: the row stands on the Shop pill at the right edge; while the touch tutorial
+		-- bubble has that corner, left of it
+		local phone, gui = Vector2.new(568, 320), Vector2.new(568, 284)
+		local s = 0.62
+		local pill = { Left = 568 / s - 206, Top = 216, Bottom = 288 }
+		local r, b, stacked = BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 2, Pill = pill })
+		T.falsy(stacked, "a row")
+		T.eq(r, BoostView.CornerRight, "at the right edge")
+		T.truthy(gui.Y / s - b <= pill.Top - BoostView.CornerGap, "standing on the Shop pill")
+		-- the touch buttons BoostView keeps clear of are where their controllers put them
+		local fs = require("@lune/fs")
+		local root = Loader.root or "."
+		local interact = fs.readFile(root .. "/src/client/Controllers/InteractController.luau")
+		T.truthy(interact:find('SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))', 1, true), "Grab where BoostView thinks")
+		local mining = fs.readFile(root .. "/src/client/Controllers/MiningController.luau")
+		-- (FIRE from BoostView.TouchButtons: the holder's size and centre in layoutFireButton,
+		-- the face's lift in buildUI, the same small rule)
+		local lift = string.match(mining, 'Name = "Fire",[^}]-Position = UDim2%.fromOffset%(0, %-(%d+)%)')
+		T.truthy(lift, "the FIRE face's lift")
+		for _, kind in { "Small", "Large" } do
+			local fire: any = nil
+			for _, b in BoostView.TouchButtons[kind] do
+				if b.Name == "Fire" then
+					fire = b
+				end
+			end
+			local side = fire.Left - fire.Right
+			local size = `fireHolder.Size = UDim2.fromOffset({side}, {side})`
+			local at = `fireHolder.Position = UDim2.new(1, -{(fire.Left + fire.Right) / 2}, 1, -{fire.Bottom + side / 2})`
+			T.truthy(mining:find(size, 1, true), `{kind} FIRE: {size}`)
+			T.truthy(mining:find(at, 1, true), `{kind} FIRE: {at}`)
+			T.eq(fire.Top - fire.Bottom - side, tonumber(lift), kind .. " FIRE: the top is the lifted face's")
 		end
+		T.truthy(mining:find("local small = math.min(size.X, size.Y) <= 500", 1, true), "FIRE's small rule is BoostView's")
+		local bubble = { Left = 620, Bottom = 199 }
+		local r2 = BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 2, Pill = pill, Bubble = bubble })
+		T.truthy(gui.X / s - r2 <= bubble.Left - BoostView.CornerGap, "left of the tutorial bubble")
 	end)
 
 	-- (review: every carry change once destroyed and rebuilt the whole hotbar; since the
@@ -925,12 +1067,21 @@ return function(T, Loader)
 			local chips = BoostView.buildChips()
 			T.truthy(chips.Gui:GetAttribute("PopSkin"), "the pixel boost chips")
 			T.falsy(chips.Gui:GetAttribute("LightSkin"), "no LightSkin on the boost chips")
-			for _, button in { chips.Chips.TripleLucky, chips.Chips.HexaLucky, chips.Launcher } do
+			do
+				local pill = chips.Launcher:FindFirstChild("Pill") :: any
+				T.truthy(pill:FindFirstChild("Paint") and pill:FindFirstChild("Lattice"), "Launcher: a painted face")
+				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Paint"), "Launcher: the picture's painted square")
+				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, "Launcher: pixel words")
+				T.eq(chips.Launcher.Size.Y.Offset, BoostView.ChipHit, "Launcher: the touch area")
+			end
+			-- the running boosts: the corner tiles (the picture alone, the time under it)
+			for _, button in { chips.Chips.TripleLucky, chips.Chips.HexaLucky } do
 				local pill = button:FindFirstChild("Pill") :: any
-				T.truthy(pill:FindFirstChild("Paint") and pill:FindFirstChild("Lattice"), button.Name .. ": a painted face")
-				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Paint"), button.Name .. ": the picture's painted square")
-				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel words")
-				T.eq(button.Size.Y.Offset, BoostView.ChipHit, button.Name .. ": the touch area")
+				T.truthy(button:GetAttribute("Corner"), button.Name .. ": a corner tile")
+				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Art"), button.Name .. ": the boost's picture")
+				T.falsy(pill:FindFirstChild("Paint"), button.Name .. ": no pill face")
+				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel time")
+				T.eq(button.Size.Y.Offset, BoostView.CornerIcon + 2 + BoostView.CornerText, button.Name .. ": the touch area")
 			end
 		end)
 	end)

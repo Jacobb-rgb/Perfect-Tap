@@ -494,6 +494,14 @@ return function(T, Loader)
 				T.truthy(refs.Backpack and refs.Backpack:IsA("TextButton"), look .. ": the backpack button")
 				T.truthy(refs.Backpack.Selectable, look .. ": a gamepad can select it")
 				T.eq(refs.Backpack.Parent, refs.CarryPanel, look .. ": in the Carry holder (build mode hides it)")
+				-- the blaster's slot: the light HUD's own BLASTER slot in the same holder, left of the
+				-- button (owner 2026-10-28); the dark HUD keeps Roblox's hotbar slot
+				if light then
+					T.eq(refs.BlasterSlot and refs.BlasterSlot.Parent, refs.CarryPanel, "light: the BLASTER slot hides with it")
+					T.eq(refs.Backpack.AnchorPoint.X, 1, "light: the button at the group's right end")
+				else
+					T.eq(refs.BlasterSlot, nil, "dark: Roblox's own hotbar slot")
+				end
 				T.eq(refs.CarryLabel.Parent, refs.Backpack, look .. ": its count")
 				for _, gone in { "CarrySlots", "ThrowBar", "ThrowFill" } do
 					T.eq(refs[gone], nil, look .. ": no " .. gone)
@@ -522,7 +530,7 @@ return function(T, Loader)
 				T.falsy(glyph.Visible or keyLabel.Visible, look .. ": nothing on touch")
 			end)
 		end
-		-- right of Roblox's own hotbar slot (60 px, 100 on a TV, drawn in real pixels) at every scale
+		-- the dark HUD: right of Roblox's own hotbar slot (60 px, 100 on a TV, drawn in real pixels) at every scale
 		for _, scale in { 0.62, 0.8, 1, 1.25 } do
 			T.truthy(HudBubble.backpackX(scale) * scale >= HudBubble.BlasterSlot / 2 + 5, `clear of the blaster's slot at {scale}`)
 			T.truthy(HudBubble.backpackX(scale, true) * scale >= 50 + 5, `and of a TV's bigger slot at {scale}`)
@@ -531,6 +539,15 @@ return function(T, Loader)
 		local refs = HudView.build()
 		HudView.placeBackpack(refs, 0.62, false)
 		T.eq(refs.CarryPanel.Position.X.Offset, HudBubble.backpackX(0.62), "placed for the new scale")
+		-- the light HUD's group stays centred at any scale (design units, no Roblox slot to clear)
+		withLight(true, function()
+			local light = HudView.build()
+			for _, scale in { 0.62, 1, 1.25 } do
+				HudView.placeBackpack(light, scale, scale > 1)
+				local holder = light.CarryPanel
+				T.eq(2 * holder.Position.X.Offset + holder.Size.X.Offset, 0, `light: centred at {scale}`)
+			end
+		end)
 		T.eq(HudView.backpackText(12, 30), "12 / 30")
 		T.eq(HudView.backpackText(0 / 0, -1), "0 / 0", "junk reads 0")
 	end)
@@ -542,6 +559,7 @@ return function(T, Loader)
 			do
 				local scale = HudBubble.scaleFor(screen)
 				local refs = HudBubble.buildGame(scale, screen.X)
+				-- (the light HUD's holder is the whole group: the BLASTER slot and the button)
 				local holder = refs.CarryPanel
 				local width = screen.X / scale
 				local left = width / 2 + holder.Position.X.Offset
@@ -549,6 +567,9 @@ return function(T, Loader)
 				local where = `{screen.X} x {screen.Y}`
 				if scale <= HudBubble.CompactScale then
 					T.truthy(holder.Size.Y.Offset * scale >= 44, where .. ": >= 44 pt tall")
+					T.truthy(refs.Backpack.Size.Y.Offset * scale >= 44, where .. ": the button >= 44 pt tall")
+					local slot = refs.BlasterSlot :: any
+					T.truthy(slot.Size.X.Offset * scale >= 44 and slot.Size.Y.Offset * scale >= 44, where .. ": the slot >= 44 pt")
 					-- Roblox's jump button: 70 px on small screens, 25 px from the right edge
 					T.truthy(right * scale < screen.X - 95, `{where}: clear of the jump button ({right * scale})`)
 				end
