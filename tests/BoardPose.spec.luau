@@ -252,6 +252,82 @@ return function(T, Loader)
 		T.near(motors.RightShoulder.Transform.LookVector:Dot(base.LookVector), 1, 1e-6, "a masked arm keeps the hold")
 	end)
 
+	T.test("board pose: MoveRig finds Avatar Joint Upgrade joints (AnimationConstraints) and poses them", function()
+		local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
+		local MoveRig = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveRig")
+		local Instance = roblox.Instance
+		-- an R15 character as Roblox spawns it with StarterPlayer.AvatarJointUpgrade on: no Motor6Ds,
+		-- an AnimationConstraint per joint between two RigAttachments
+		local function character(named: boolean): any
+			local model = Instance.new("Model")
+			local parts: { [string]: any } = {}
+			for _, name in
+				{
+					"HumanoidRootPart",
+					"LowerTorso",
+					"UpperTorso",
+					"Head",
+					"LeftUpperArm",
+					"LeftLowerArm",
+					"LeftHand",
+					"RightUpperArm",
+					"RightLowerArm",
+					"RightHand",
+					"LeftUpperLeg",
+					"LeftLowerLeg",
+					"LeftFoot",
+					"RightUpperLeg",
+					"RightLowerLeg",
+					"RightFoot",
+				}
+			do
+				local part = Instance.new("Part")
+				part.Name = name
+				part.Parent = model
+				parts[name] = part
+			end
+			for _, j in R15.Joints do
+				local a0 = Instance.new("Attachment")
+				a0.Name = j.Name .. "RigAttachment"
+				a0.CFrame = j.C0
+				a0.Parent = parts[j.Part0]
+				local a1 = Instance.new("Attachment")
+				a1.Name = j.Name .. "RigAttachment"
+				a1.CFrame = j.C1
+				a1.Parent = parts[j.Part1]
+				local c = Instance.new("AnimationConstraint")
+				-- named like the joint in its part, or (the fallback) anonymous somewhere else
+				c.Name = if named then j.Name else "AnimationConstraint"
+				c.Attachment0 = a0
+				c.Attachment1 = a1
+				c.Parent = if named then parts[j.Part1] else parts.HumanoidRootPart
+			end
+			return model
+		end
+		for _, named in { true, false } do
+			local model = character(named)
+			local rig = MoveRig.find(model)
+			T.truthy(rig ~= nil, `an AJU character is a rig (named {named})`)
+			T.eq(rig.Count, #MoveConfig.Joints, "every joint found")
+			for i = 1, rig.Count do
+				T.truthy(rig.Motors[i]:IsA("AnimationConstraint"), rig.Names[i] .. " is the AnimationConstraint")
+				T.eq(rig.Motors[i].Attachment1.Name, rig.Names[i] .. "RigAttachment", rig.Names[i] .. " matched to its joint")
+			end
+			-- the riding pose lands on the constraints' Transform
+			local layers = { { Pose = {}, Weight = 1, Override = {} :: { [string]: boolean } } }
+			for _, name in BoardPose.Joints do
+				layers[1].Override[name] = true
+			end
+			BoardPose.evaluate({ T = 0, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0 }, layers[1].Pose)
+			MoveRig.step(rig, layers, 1)
+			local root = rig.Motors[table.find(rig.Names, "Root") :: number]
+			T.near((root.Transform.Position - layers[1].Pose.Root.Position).Magnitude, 0, 1e-4, "the Root moved")
+			T.near(root.Transform.LookVector:Dot(layers[1].Pose.Root.LookVector), 1, 1e-4, "and turned sideways")
+			MoveRig.release(rig)
+			T.falsy(MoveRig.holding(rig), "given back")
+		end
+	end)
+
 	T.test("board pose: the controller drives it in one Stepped pass over MoveRig", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/client/Controllers/HoverboardController.luau")

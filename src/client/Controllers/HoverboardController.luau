@@ -640,12 +640,27 @@ local function airborne(rider: Rider, root: BasePart, vy: number, wasAir: boolea
 end
 
 -- The leg length of a rig vs the block rig's (BoardPose.legScale), 1 when the joints are missing.
+-- A Motor6D gives its C0 / C1; an AnimationConstraint (Avatar Joint Upgrade) its attachments.
+local function pivots(joint: any): any
+	if joint == nil then
+		return nil
+	end
+	if joint:IsA("Motor6D") then
+		return joint
+	end
+	local a0, a1 = joint.Attachment0, joint.Attachment1
+	if a0 and a1 then
+		return { C0 = a0.CFrame, C1 = a1.CFrame }
+	end
+	return nil
+end
+
 local function legScaleOf(rig: MoveRig.Rig): number
-	local found: { [string]: Motor6D } = {}
+	local found: { [string]: any } = {}
 	for i = 1, rig.Count do
 		found[rig.Names[i]] = rig.Motors[i]
 	end
-	local hip, knee, ankle = found.LeftHip, found.LeftKnee, found.LeftAnkle
+	local hip, knee, ankle = pivots(found.LeftHip), pivots(found.LeftKnee), pivots(found.LeftAnkle)
 	if not hip or not knee or not ankle then
 		return 1
 	end
