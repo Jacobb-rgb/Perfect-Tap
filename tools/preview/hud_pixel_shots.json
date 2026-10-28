@@ -1,5 +1,11 @@
 {
-  "hud_pixel_pc": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_pc" },
-  "hud_pixel_phone": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_phone", "uiInset": 58 },
-  "hud_pixel_narrow": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_narrow", "uiInset": 58 }
+  "hud_pixel_pc": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_pc"},
+  "hud_pixel_phone": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_phone", "uiInset": 58},
+  "hud_pixel_narrow": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_narrow", "uiInset": 58},
+  "hud_corner_568_1": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_568_1_light", "uiInset": 163, "width": 1598, "height": 900},
+  "hud_corner_568_2": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_568_2_light", "uiInset": 163, "width": 1598, "height": 900},
+  "hud_corner_800_1": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_800_1_light", "uiInset": 145, "width": 2000, "height": 900},
+  "hud_corner_800_2": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_800_2_light", "uiInset": 145, "width": 2000, "height": 900},
+  "hud_corner_844_1": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_844_1_light", "uiInset": 134, "width": 1948, "height": 900},
+  "hud_corner_844_2": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_corner_844_2_light", "uiInset": 134, "width": 1948, "height": 900}
 }
