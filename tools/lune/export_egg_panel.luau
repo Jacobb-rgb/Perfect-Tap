@@ -158,12 +158,18 @@ print(`base scene: {#scene.parts} parts`)
 
 ---------------------------------------------------------------- screens
 
-type Screen = { W: number, H: number, Pixel: number, Phone: boolean, Fov: number }
+type Screen = { W: number, H: number, Pixel: number, Phone: boolean, Fov: number, K: number?, Ui: number? }
 -- PC: 1600 x 900 at the HUD's 1.25; a phone: 844 x 390 pt rendered at 2x (the HUD's 0.62 floor)
 local PC: Screen = { W = 1600, H = 900, Pixel = 1.25, Phone = false, Fov = 70 }
 local PHONE: Screen = { W = 1688, H = 780, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
 -- the small phone: 667 x 375 pt (an iPhone SE / 8) at 2x
 local PHONE_SMALL: Screen = { W = 1334, H = 750, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
+-- the smallest phone the game supports: 568 x 320 pt (iPhone SE 1st gen) at 2x
+local PHONE_TINY: Screen = { W = 1136, H = 640, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
+-- an iPad: 1024 x 768 pt at 1.5x (HudController's scale: min(768 / 720, 1024 / 1100))
+local IPAD_UI = math.min(768 / 720, 1024 / 1100)
+local IPAD: Screen = { W = 1536, H = 1152, Pixel = IPAD_UI * 1.5, Phone = true, Fov = 70, K = 1.5, Ui = IPAD_UI }
+local LIVE_INSET = 58 -- Roblox's top bar row on a device (pt; the previews' 36 is the old one)
 
 type Cam = { Position: any, Target: any }
 
@@ -224,6 +230,7 @@ type PanelSpec = {
 	PopCard: { [string]: number }?, -- a card that lit up: seconds since
 	Pressed: number?, -- an Open button pressed (its count)
 	Walk: { string }?, -- eggs the panel showed before this one: the cards get their golems' real models
+	Touch: Touch?, -- (touch) what else is on the screen
 }
 
 -- The controller's modelFor (EggPanelController): one golem model per kind, built once, lent to the cards.
@@ -242,13 +249,149 @@ end
 local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 
--- A phone's free part for the floating panel, in points (EggPanel.screen: under the HUD's teleport bar).
-local function phoneScreen(screen: Screen): any
-	local view = V2.new(screen.W / 2, screen.H / 2)
-	local scale = screen.Pixel / 2
-	local inset = HudBubble.PreviewInset
-	local bar = HudBubble.topBarSize(HudBubble.layout(scale, view.X, true, false))
-	return EggPanel.screen(view, inset + (HudBubble.topBarY(inset, scale) + bar.Y) * scale)
+local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
+local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
+local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
+local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+
+-- A touch screen's numbers: render px per point, the HUD's scale, the size in points.
+local function kOf(screen: Screen): number
+	return screen.K or 2
+end
+local function uiOf(screen: Screen): number
+	return screen.Ui or screen.Pixel / kOf(screen)
+end
+local function viewOf(screen: Screen): any
+	return V2.new(screen.W / kOf(screen), screen.H / kOf(screen))
+end
+
+-- What's on a touch still besides the egg's guis: boost tiles running, the tutorial bubble, held ones.
+type Touch = { Boosts: number?, Tutorial: boolean?, Held: boolean? }
+
+local function box(x0: number, y0: number, x1: number, y1: number): any
+	return { Min = V2.new(x0, y0), Max = V2.new(x1, y1) }
+end
+
+--[[
+	A touch screen as EggPanelController measures it (points): Roblox's top
+	bar row (LIVE_INSET), the HUD's teleport bar (HudBubble: centred), the
+	boost corner's tiles (BoostView.cornerSpot, as BoostController places
+	them) and the tutorial bubble (TutorialView.layout's touch bubble),
+	unless `touch.Held` (the panel made them step aside).
+]]
+local function touchScreen(screen: Screen, touch: Touch?): (any, any, any?)
+	local view, ui = viewOf(screen), uiOf(screen)
+	local inset = LIVE_INSET
+	local gui = V2.new(view.X, view.Y - inset) -- (the HUD's guis: under the top bar)
+	local bar = HudBubble.topBarSize(HudBubble.layout(ui, view.X, true, false)) * ui
+	local y0 = inset + HudBubble.topBarY(inset, ui) * ui
+	local topBar = box(view.X / 2 - bar.X / 2, y0, view.X / 2 + bar.X / 2, y0 + bar.Y)
+	local corner, bubble = nil, nil
+	local t = touch or {}
+	local boosts = t.Boosts or 0
+	if boosts > 0 then
+		local right, bottom, stacked = BoostView.cornerSpot({ Screen = gui, Gui = gui, Scale = ui, Touch = true, Count = boosts })
+		local w, h = gui.X / ui, gui.Y / ui
+		local tile = BoostView.cornerHeight()
+		local gap = BoostView.CornerGap
+		local x1, y1 = w - right, h - bottom
+		local x0 = if stacked then x1 - BoostView.CornerWidth else x1 - boosts * BoostView.CornerWidth - (boosts - 1) * gap
+		local y0c = if stacked then y1 - boosts * tile - (boosts - 1) * gap else y1 - tile
+		corner = box(x0 * ui, inset + y0c * ui, x1 * ui, inset + y1 * ui)
+	end
+	if t.Tutorial then
+		local l = TutorialView.layout(ui, gui, true, false)
+		local x1, y0b = l.Position.X, l.Position.Y
+		bubble = box((x1 - l.Width) * ui, inset + y0b * ui, x1 * ui, inset + (y0b + l.Height) * ui)
+	end
+	-- the left column: the tiles and the TRAIN chip under them (HudBubble)
+	local layout = HudBubble.layout(ui, view.X, true, false)
+	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local left = box(
+		0,
+		inset + m.Origin.Y.Offset * ui,
+		(m.Origin.X.Offset + m.Width) * ui,
+		inset + (HudBubble.chipTop(layout) + HudBubble.TouchChipHeight) * ui
+	)
+	local input = {
+		View = view,
+		Safe = box(0, inset, view.X, view.Y),
+		TopInset = inset,
+		Hud = { topBar, left },
+		Corner = corner,
+		Bubble = bubble,
+	}
+	local shown = table.clone(input)
+	if t.Held then
+		shown.Corner, shown.Bubble = nil, nil
+	end
+	return EggPanel.screen(shown), input, nil
+end
+
+-- The HUD the player sees on a touch still (the game's own code, as tools/lune/lib/hud_pixel_preview
+-- draws it): the top bar, the left tiles, the train chip, the boost corner, the tutorial bubble.
+local function hudGuis(screen: Screen, touch: Touch?): { any }
+	local t = touch or {}
+	local view, ui, k = viewOf(screen), uiOf(screen), kOf(screen)
+	local gui = V2.new(view.X, view.Y - LIVE_INSET)
+	local render = ui * k
+	local refs = HudBubble.buildGame(ui, gui.X, true, false)
+	BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, gui.X / ui)
+	TeleportView.build(refs.TopBar, ui, gui.X)
+	-- (HudController.placeTopBar: lifted into Roblox's row by the live inset, not the previews' 36)
+	refs.TopBar.Position = UDim2.new(0.5, 0, 0, HudBubble.topBarY(LIVE_INSET, ui))
+	refs.Gui.Scale.Scale = render
+	refs.Coins.Text = Format.money(4.82e6)
+	refs.Income.Text = Format.perSecond(1840)
+	refs.Toasts:ClearAllChildren()
+	local round = PopTheme.round()
+	HudBubble.claimTile(refs.Menu, "Build")
+	for _, entry in SideMenuView.sorted() do
+		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+		local main = if round then HudBubble.RoundMain[entry.Id] == true else entry.Group == "Main"
+		if main then
+			HudBubble.claimTile(refs.Menu, entry.Id, spec)
+		else
+			HudBubble.addMore(refs.Menu, entry.Id, spec)
+		end
+	end
+	if round then
+		HudBubble.claimTile(refs.Menu, "Backpack")
+	end
+	HudView.setBackpack(refs, 12, 30)
+	local list = { refs.Gui }
+	local boosts = t.Boosts or 0
+	if boosts > 0 and not t.Held then
+		local chips = BoostView.buildChips()
+		chips.Gui.Scale.Scale = render
+		if chips.Row:GetAttribute("Corner") then
+			BoostView.placeCorner(chips, BoostView.cornerSpot({ Screen = gui, Gui = gui, Scale = ui, Touch = true, Count = boosts }))
+		end
+		local NOW = 1.7e9
+		local state = { Boosts = { TripleLuckyUntil = NOW + 584, HexaLuckyUntil = if boosts > 1 then NOW + 3900 else nil } }
+		BoostView.setChips(chips, BoostView.chips(state, NOW), false)
+		chips.Gui.Enabled = true
+		table.insert(list, chips.Gui)
+	end
+	if t.Tutorial and not t.Held then
+		local tutorial = TutorialView.build()
+		tutorial.Gui.Scale.Scale = render
+		TutorialView.apply(tutorial, TutorialView.layout(ui, gui, true, false))
+		local index = 1
+		for i, step in TutorialConfig.Steps do
+			if step.Id == "Golems" then
+				index = i
+			end
+		end
+		local step = TutorialConfig.get(index)
+		TutorialView.setStep(tutorial, index, step, if step and step.Hint then step.Hint.Touch else nil)
+		tutorial.Bubble.Visible = true
+		table.insert(list, tutorial.Gui)
+	end
+	return list
 end
 
 local function back(x: number): number
@@ -268,7 +411,11 @@ local function panelGui(screen: Screen, cam: Cam, spec: PanelSpec): any
 	gui.Scale.Scale = screen.Pixel
 	local refs = EggPanel.build()
 	local lines = EggPanel.lines(spec.Egg, spec.Lucky, spec.Known)
-	local l = EggPanel.layout(#lines, screen.Phone, EggPanel.autoAllowed(spec.Egg))
+	local narrow = false
+	if screen.Phone then
+		narrow = EggPanel.pickNarrow((touchScreen(screen, spec.Touch)), uiOf(screen), #lines, EggPanel.autoAllowed(spec.Egg))
+	end
+	local l = EggPanel.layout(#lines, screen.Phone, EggPanel.autoAllowed(spec.Egg), { Narrow = narrow })
 	if spec.Walk then
 		-- the eggs before: their golems' models go into the cards and move on (EggPanel.setLines)
 		for _, before in spec.Walk do
@@ -345,15 +492,28 @@ local function panelGui(screen: Screen, cam: Cam, spec: PanelSpec): any
 		-- EggPanelController.float with EggPanel.floatAt, in points)
 		local look = (cam.Target - cam.Position).Unit
 		local camRight = look:Cross(up).Unit
+		local k = kOf(screen)
 		local mx, my = project(screen, cam, s.Center)
 		local sx = project(screen, cam, s.Center + camRight * s.Half)
 		local px = project(screen, cam, s.Prompt)
-		local scale = screen.Pixel / 2
-		local reach = math.max(math.abs(sx - mx), px - mx + EggPrompt.Width * screen.Pixel / 2) / 2
+		local scale = uiOf(screen)
+		local reach = math.max(math.abs(sx - mx), px - mx + EggPrompt.Width * screen.Pixel / 2) / k
 		local size = V2.new(math.ceil(l.Width * scale), math.ceil(l.Height * scale))
-		local at = EggPanel.floatAt(phoneScreen(screen), size, V2.new(mx / 2, my / 2), reach)
+		local touchS, input = touchScreen(screen, spec.Touch)
+		local row, odds = EggPanel.rowBox(l, scale), EggPanel.oddsBox(l, scale)
+		local egg = V2.new(mx / k, my / k)
+		local at, fit = EggPanel.floatAt(touchS, size, row, odds, egg, reach)
+		-- (EggPanelController.float: the corner / the bubble step aside where the panel can't keep clear of them)
+		local held = spec.Touch ~= nil and spec.Touch.Held == true
+		if not held and (fit.Hard > 0 or fit.Odds > 0) then
+			local corner, bubble = EggPanel.asides(input, size, row, odds, egg, reach)
+			gui:SetAttribute("Holds", corner or bubble)
+		end
+		print(
+			`  float {spec.Egg} {screen.W / k}x{screen.H / k}: at {at}, hard {fit.Hard}, odds {fit.Odds}, panel {fit.Panel}, narrow {narrow}`
+		)
 		panel.AnchorPoint = V2.new(0, 0)
-		panel.Position = UDim2.fromOffset(at.X * 2 / screen.Pixel, at.Y * 2 / screen.Pixel)
+		panel.Position = UDim2.fromOffset(at.X * k / screen.Pixel, at.Y * k / screen.Pixel)
 		gui:SetAttribute("FloatX", at.X)
 		gui:SetAttribute("FloatY", at.Y)
 		gui:SetAttribute("FloatW", size.X)
@@ -402,18 +562,18 @@ local function promptGui(screen: Screen, cam: Cam, spec: PromptSpec): any
 end
 
 --[[
-	A phone's reserved parts, outlined (the HUD isn't drawn here): the
-	thumbstick's start zone (left 40 %, lower two thirds), the touch
-	buttons in the bottom right (BoostView.TouchButtons) and the teleport
-	bar's foot; the floating panel keeps its buttons out of them.
+	What the preview can't draw, outlined: the thumbstick's start zone
+	(left 40 %, lower two thirds) and the touch buttons in the bottom right
+	(BoostView.TouchButtons: Roblox's jump, Grab, the blaster's FIRE); the
+	floating panel keeps its buttons out of them.
 ]]
 local function zonesGui(screen: Screen): any
 	local gui = UIKit.screen("PhoneZones", 3)
 	gui.IgnoreGuiInset = true
-	gui.Scale.Scale = 2 -- (points)
-	local w, h = screen.W / 2, screen.H / 2
-	local free = phoneScreen(screen)
-	local function box(name: string, x: number, y: number, bw: number, bh: number, color: any, text: string, round: boolean?)
+	gui.Scale.Scale = kOf(screen) -- (points)
+	local view = viewOf(screen)
+	local w, h = view.X, view.Y
+	local function outline(name: string, x: number, y: number, bw: number, bh: number, color: any, text: string, round: boolean?)
 		local f = UIKit.new("Frame", {
 			Name = name,
 			BackgroundColor3 = color,
@@ -436,11 +596,12 @@ local function zonesGui(screen: Screen): any
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}, f)
 	end
-	box("Thumbstick", 0, h / 3, w * EggPanel.ZoneWidth, h * 2 / 3, rgb(255, 80, 80), "thumbstick zone (left 40 %)")
-	box("TopBar", 0, 0, w, free.Top, rgb(90, 160, 255), "top bar (Roblox + teleport bar)")
+	outline("Thumbstick", 0, h / 3, w * EggPanel.ZoneWidth, h * 2 / 3, rgb(255, 80, 80), "thumbstick zone (left 40 %)")
+	local s = touchScreen(screen, nil)
 	local small = math.min(w, h) <= 500
-	for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
-		box(b.Name, w - b.Left, h - b.Top, b.Left - b.Right, b.Top - b.Bottom, rgb(255, 200, 60), b.Name, true)
+	for i, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+		local k = s.Keep[i]
+		outline(b.Name, k.Min.X, k.Min.Y, k.Max.X - k.Min.X, k.Max.Y - k.Min.Y, rgb(255, 200, 60), b.Name, true)
 	end
 	return gui
 end
@@ -451,14 +612,15 @@ local function covers(screen: Screen, cam: Cam, panel: any, egg: string): boolea
 	if x == nil then
 		return false
 	end
+	local k = kOf(screen)
 	local px, py = project(screen, cam, spots[egg].Prompt)
-	local size = V2.new(EggPrompt.Width, EggPrompt.Height) * (screen.Pixel / 2)
-	return EggPanel.overlaps(
-		V2.new(x, panel:GetAttribute("FloatY")),
-		V2.new(panel:GetAttribute("FloatW"), panel:GetAttribute("FloatH")),
-		V2.new(px / 2, py / 2) - size / 2,
-		size
-	)
+	local size = V2.new(EggPrompt.Width, EggPrompt.Height) * uiOf(screen)
+	local at = V2.new(x, panel:GetAttribute("FloatY"))
+	local prompt = V2.new(px / k, py / k) - size / 2
+	return EggPanel.overlap(
+		{ Min = at, Max = at + V2.new(panel:GetAttribute("FloatW"), panel:GetAttribute("FloatH")) },
+		{ Min = prompt, Max = prompt + size }
+	) > 0
 end
 
 -- The miner (a blocky stand-in for the player's avatar) at `feet`, facing `toward`.
@@ -522,7 +684,7 @@ local function still(name: string, screen: Screen, cam: Cam, extra: any, guis: {
 		ui = "egg_panel/" .. name .. "_ui",
 		width = screen.W,
 		height = screen.H,
-		uiInset = if screen.Phone then 72 else 36,
+		uiInset = if screen.Phone then LIVE_INSET * kOf(screen) else 36,
 		position = { cam.Position.X, cam.Position.Y, cam.Position.Z },
 		target = { cam.Target.X, cam.Target.Y, cam.Target.Z },
 		fov = screen.Fov,
@@ -636,30 +798,64 @@ for _, count in CapsuleConfig.Counts do
 	product.Id = count
 end
 
-for _, screen in { PC, PHONE, PHONE_SMALL } do
-	local tag = if screen == PHONE_SMALL then "phone667" elseif screen.Phone then "phone844" else "pc"
-	for _, egg in { "Stone", "Crystal", "Royal" } do
-		if screen.Phone and egg == "Crystal" then
-			continue
+for _, egg in { "Stone", "Crystal", "Royal" } do
+	local feet, cam = standAt(egg)
+	local extra = Instance.new("Model")
+	miner(extra, feet, spots[egg].Center)
+	stone(extra, 0.3, nil)
+	ringAt(extra, egg, 0.5)
+	local panel =
+		panelGui(PC, cam, { Egg = egg, Lucky = egg == "Crystal", Auto = egg == "Crystal", Known = knownSet(), Coins = 1e9, Since = 2.3 })
+	still(`egg4_{string.lower(egg)}_pc`, PC, cam, extra, { panel, promptGui(PC, cam, { Egg = egg, Since = 0.45 }) })
+end
+
+--[[
+	A touch still with the HUD drawn (the game's code): the panel floats as
+	EggPanelController.float puts it; where the boost corner or the tutorial
+	bubble would cover its row or a card they step aside (held: not drawn),
+	as in the game. `walk`: further back, the panel not up yet (the bubble
+	still shows).
+]]
+local function touchStill(name: string, screen: Screen, egg: string, touch: Touch, lucky: boolean?, walk: boolean?)
+	local feet, cam = standAt(egg, if walk then 17 else nil)
+	local extra = Instance.new("Model")
+	miner(extra, if walk then feet + front * 5 else feet, spots[egg].Center)
+	stone(extra, 0.3, nil)
+	ringAt(extra, egg, if walk then 1 else 0.5)
+	local t: Touch = table.clone(touch)
+	local guis = {}
+	if not walk then
+		local spec = { Egg = egg, Lucky = lucky == true, Auto = false, Known = knownSet(), Coins = 1e9, Since = 2.3, Touch = t }
+		local panel = panelGui(screen, cam, spec)
+		if panel:GetAttribute("Holds") then
+			t.Held = true
+			panel = panelGui(screen, cam, spec)
 		end
-		local feet, cam = standAt(egg)
-		local lucky = egg == "Crystal"
-		local auto = egg == "Crystal"
-		local extra = Instance.new("Model")
-		miner(extra, feet, spots[egg].Center)
-		stone(extra, 0.3, nil)
-		ringAt(extra, egg, 0.5)
-		local panel = panelGui(screen, cam, { Egg = egg, Lucky = lucky, Auto = auto, Known = knownSet(), Coins = 1e9, Since = 2.3 })
-		local guis = { panel }
+		table.insert(guis, panel)
 		if not covers(screen, cam, panel, egg) then
-			table.insert(guis, promptGui(screen, cam, { Egg = egg, Since = 0.45 }))
+			table.insert(guis, promptGui(screen, cam, { Egg = egg, Since = 0.45, Key = "Tap" }))
 		end
-		if screen.Phone then
-			table.insert(guis, zonesGui(screen))
-		end
-		still(`egg4_{string.lower(egg)}_{tag}`, screen, cam, extra, guis)
+	end
+	for _, g in hudGuis(screen, t) do
+		table.insert(guis, g)
+	end
+	table.insert(guis, zonesGui(screen))
+	still(name, screen, cam, extra, guis)
+end
+
+for _, case in { { PHONE_SMALL, "667" }, { PHONE, "844" }, { PHONE_TINY, "568" } } do
+	for _, egg in { "Stone", "Royal" } do
+		touchStill(`egg5_{string.lower(egg)}_{case[2]}`, case[1], egg, {})
 	end
 end
+-- the tutorial's "Golem helpers" step (its bubble top right): walking up, then at the egg (the bubble steps aside)
+touchStill("egg5_tutorial_walk_667", PHONE_SMALL, "Stone", { Tutorial = true }, false, true)
+touchStill("egg5_tutorial_egg_667", PHONE_SMALL, "Stone", { Tutorial = true })
+touchStill("egg5_tutorial_egg_844", PHONE, "Stone", { Tutorial = true })
+-- Triple Lucky running: an iPad (the clover tile stays, the panel above it), a phone with both boosts (they step aside)
+touchStill("egg5_ipad_triple_lucky", IPAD, "Stone", { Boosts = 1 }, true)
+touchStill("egg5_ipad_triple_lucky_crystal", IPAD, "Crystal", { Boosts = 1 }, true)
+touchStill("egg5_two_boosts_667", PHONE_SMALL, "Stone", { Boosts = 2 }, true)
 
 -- walking from egg to egg (Stone, Crystal, Royal, Stone): every card shows its own golem's model
 do

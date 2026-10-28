@@ -67,6 +67,7 @@ local done = true
 local asking = 0 -- os.clock() until SKIP waits for its second press (0 = not asking)
 local shownStep = 0 -- the step the bubble shows (pops when it changes)
 local visible = false
+local holds: { [string]: boolean } = {} -- (hold(): another view needs the bubble's place for a while)
 local bound = false
 local cardShown = false -- the finish card shows once
 local lastKind: Input? = nil
@@ -595,7 +596,10 @@ local function update()
 		return
 	end
 	local def = currentDef()
-	local blocked = CleaningController.isActive() or PlayerControls.owner() ~= nil or TutorialView.panelHides(openPanels())
+	local blocked = CleaningController.isActive()
+		or PlayerControls.owner() ~= nil
+		or TutorialView.panelHides(openPanels())
+		or next(holds) ~= nil
 	local show = loaded and def ~= nil and not blocked
 	if show ~= visible then
 		visible = show
@@ -714,6 +718,21 @@ function TutorialController.start()
 		loaded = true
 		update()
 	end)
+end
+
+--[[
+	Another view needs the bubble's place for a while (`name` holds it,
+	`on` false lets go): it hides meanwhile, as under a window. The EGGS
+	temple's egg panel on a phone (EggPanelController: the bubble would
+	cover its odds; the player is at the egg the step points to).
+]]
+function TutorialController.hold(name: string, on: boolean)
+	if on then
+		holds[name] = true
+	else
+		holds[name] = nil
+	end
+	update()
 end
 
 -- Is the bubble on screen? (other controllers may want to keep clear)

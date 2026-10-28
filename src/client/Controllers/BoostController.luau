@@ -99,6 +99,7 @@ local refs: BoostView.Refs? = nil
 local chipRefs: BoostView.ChipRefs? = nil
 local isOpen = false
 local launcherOn = true
+local holds: { [string]: boolean } = {} -- (hold(): another view needs the corner's place for a while)
 local tickConnection: RBXScriptConnection? = nil
 local scrollConnection: RBXScriptConnection? = nil
 local stickY = 0 -- the right stick (scrolls the odds list)
@@ -326,7 +327,7 @@ local function refreshChips()
 	if not chips then
 		return
 	end
-	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())
+	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen()) and next(holds) == nil
 	local running = BoostView.chips(StateController.get(), serverNow())
 	if chips.Row:GetAttribute("Corner") == true then
 		BoostView.placeCorner(chips, cornerSpot(chips, #running))
@@ -802,6 +803,21 @@ function BoostController.toggle(kindId: string?)
 end
 
 -- The BOOSTS launcher chip (shown while no boost runs). The side menu turns it off once it has a Boosts button.
+--[[
+	Another view needs the chips' place for a while (`name` holds it, `on`
+	false lets go): they hide meanwhile. The EGGS temple's egg panel on a
+	phone (EggPanelController: where the corner would cover its buttons or
+	odds; the panel shows the Triple Lucky odds itself).
+]]
+function BoostController.hold(name: string, on: boolean)
+	if on then
+		holds[name] = true
+	else
+		holds[name] = nil
+	end
+	refreshChips()
+end
+
 function BoostController.setLauncher(visible: boolean)
 	launcherOn = visible
 	refreshChips()

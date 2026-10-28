@@ -307,6 +307,23 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(width("Moonstone", 13) > 70, "the measure is the font's (Moonstone ~77 units at 13)")
+		-- a TV (all-platforms: 18 px and more at 1080p, the HUD's scale 1.25 there): names and the x3 grow
+		local tv = EggPanel.layout(14, false, true, { TenFoot = true })
+		local hud = 1.25
+		T.truthy(tv.TenFoot)
+		T.truthy(tv.NameSize * hud >= 18, `the name {tv.NameSize * hud} px on a TV`)
+		for _, word in { "Moonstone", "Heartstone", "Celestial", "Sovereign" } do
+			T.truthy(width(word, tv.NameSize) <= tv.Card - 2, word .. " fits a TV card")
+		end
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		T.truthy(math.floor(tv.LuckySize * PopTheme.PixelScale + 0.5) * hud >= 18, "the x3 18 px on a TV")
+		T.truthy(math.floor(tv.ChanceSize * PopTheme.PixelScale + 0.5) * hud >= 18, "the chance 18 px on a TV")
+		local tvRefs = EggPanel.build()
+		EggPanel.apply(tvRefs, "Stone", tv, hud)
+		local fit = tvRefs.Cards[1].Lucky:FindFirstChildOfClass("UITextSizeConstraint")
+		T.truthy(fit and fit.MaxTextSize * hud >= 18, "applied: the x3's size")
+		T.eq(tvRefs.Cards[1].Name.TextSize, tv.NameSize, "applied: the name's size")
+		T.falsy(EggPanel.layout(14, true, true, { TenFoot = true }).TenFoot, "a touch screen isn't a TV")
 	end)
 
 	T.test("EggPanel: layout (columns, cards inside the panel, Auto 44 pt on phones)", function()
@@ -906,56 +923,108 @@ return function(T, Loader)
 		T.eq(built, n, "one model per golem")
 	end)
 
-	T.test("EggPanel: on touch the panel floats clear of the thumbstick, the touch buttons and the top bar", function()
+	-- A touch screen as EggPanelController measures it (px): Roblox's top bar row `inset` tall (36 in the
+	-- previews, 58 live), the safe frame (`notch`: left, right, bottom insets), the HUD's teleport bar
+	-- (HudBubble: the round look's row, centred), and the boost corner / tutorial bubble when given.
+	-- The HUD's left column on a touch screen (HudBubble: the tiles, the TRAIN chip under them; under the top bar).
+	local function hudLeft(view: any, inset: number, scale: number): any
 		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+		local layout = HudBubble.layout(scale, view.X, true, false)
+		local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+		local bottom = HudBubble.chipTop(layout) + HudBubble.TouchChipHeight
+		return {
+			Min = Vector2.new(0, inset + m.Origin.Y.Offset * scale),
+			Max = Vector2.new((m.Origin.X.Offset + m.Width) * scale, inset + bottom * scale),
+		}
+	end
+	local function touchScreen(view: any, inset: number, notch: { number }?, corner: any?, bubble: any?): (any, number, any)
+		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+		local scale = math.clamp(math.min(view.Y / 720, view.X / 1100), 0.62, 1.25)
+		local n = notch or { 0, 0, 0 }
+		local safe = { Min = Vector2.new(n[1], inset), Max = Vector2.new(view.X - n[2], view.Y - n[3]) }
+		local bar = HudBubble.topBarSize(HudBubble.layout(scale, view.X, true, false)) * scale
+		local y0 = inset + HudBubble.topBarY(inset, scale) * scale
+		local cx = (safe.Min.X + safe.Max.X) / 2
+		local topBar = { Min = Vector2.new(cx - bar.X / 2, y0), Max = Vector2.new(cx + bar.X / 2, y0 + bar.Y) }
+		local input = {
+			View = view,
+			Safe = safe,
+			TopInset = inset,
+			Hud = { topBar, hudLeft(view, inset, scale) },
+			Corner = corner,
+			Bubble = bubble,
+		}
+		return EggPanel.screen(input), scale, input
+	end
+	local function touchInput(view: any, inset: number, notch: { number }?, corner: any?, bubble: any?): any
+		local _, _, input = touchScreen(view, inset, notch, corner, bubble)
+		return input
+	end
+	-- The floating panel of egg `id` on `s` as the controller lays it out and places it.
+	local function floatOn(s: any, scale: number, id: string, egg: any): any
+		local count = #EggPanel.lines(id, false, {})
+		local auto = EggPanel.autoAllowed(id)
+		local narrow = EggPanel.pickNarrow(s, scale, count, auto)
+		local l = EggPanel.layout(count, true, auto, { Narrow = narrow })
+		local size = Vector2.new(math.ceil(l.Width * scale), math.ceil(l.Height * scale))
+		local row, odds = EggPanel.rowBox(l, scale), EggPanel.oddsBox(l, scale)
+		local at, fit = EggPanel.floatAt(s, size, row, odds, egg, 40)
+		return { At = at, Fit = fit, Layout = l, Size = size, Row = row, Odds = odds, Narrow = narrow }
+	end
+	local function box(x0: number, y0: number, x1: number, y1: number): any
+		return { Min = Vector2.new(x0, y0), Max = Vector2.new(x1, y1) }
+	end
+
+	T.test("EggPanel: on touch the panel floats clear of the thumbstick, the touch buttons and the top bar", function()
 		local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
-		for _, screen in { Vector2.new(667, 375), Vector2.new(844, 390), Vector2.new(1024, 768) } do
-			-- the HUD's scale (HudController.uiScale) and its teleport bar's foot (HudBubble: the round look)
-			local scale = math.clamp(math.min(screen.Y / 720, screen.X / 1100), 0.62, 1.25)
-			local inset = HudBubble.PreviewInset
-			local bar = HudBubble.topBarSize(HudBubble.layout(scale, screen.X, true, false))
-			local top = inset + (HudBubble.topBarY(inset, scale) + bar.Y) * scale
-			local s = EggPanel.screen(screen, top)
-			local small = math.min(screen.X, screen.Y) <= 500
-			for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
-				T.truthy(s.Buttons <= screen.Y - b.Top, b.Name .. ": the panel stays above it")
-			end
-			T.near(s.Zone, screen.X * 0.4, 1e-9, "the thumbstick's zone")
-			for _, id in TEMPLE do
-				local l = EggPanel.layout(#EggPanel.lines(id, false, {}), true, EggPanel.autoAllowed(id))
-				local size = Vector2.new(math.ceil(l.Width * scale), math.ceil(l.Height * scale))
-				for _, ex in { 0.3, 0.45, 0.5, 0.55, 0.7 } do
-					for _, ey in { 0.35, 0.5, 0.65 } do
-						local egg = Vector2.new(screen.X * ex, screen.Y * ey)
-						local at = EggPanel.floatAt(s, size, egg, 40)
-						local where = `{id} on {screen.X}x{screen.Y}, the egg at ({ex}, {ey})`
-						-- on the screen
-						T.truthy(
-							at.X >= 0 and at.Y >= 0 and at.X + size.X <= screen.X and at.Y + size.Y <= screen.Y,
-							where .. ": on the screen"
-						)
-						-- the buttons (the opens and Auto: the white panel's last row) clear of the thumbstick's zone
-						local rowTop = at.Y + (l.Title + l.OpenY) * scale
-						local rowBottom = rowTop + l.Open.Y * scale
-						T.truthy(at.X >= s.Zone, where .. ": right of the thumbstick's zone")
-						-- and of the touch buttons in the bottom right (their tops)
-						T.truthy(
-							rowBottom <= s.Buttons,
-							where .. `: the opens' row (to {math.ceil(rowBottom)}) above the touch buttons ({s.Buttons})`
-						)
-						-- under the top bar where it fits (else the buttons win: by a few px at most)
-						local room = s.Buttons - s.Top - 2 * EggPanel.Margin
-						if size.Y <= room then
-							T.truthy(at.Y >= s.Top, where .. ": under the top bar")
-						else
-							T.truthy(at.Y >= s.Top - 12, where .. `: tucked under the top bar by {math.ceil(s.Top - at.Y)} px at most`)
+		for _, view in { Vector2.new(568, 320), Vector2.new(667, 375), Vector2.new(844, 390), Vector2.new(1024, 768) } do
+			for _, inset in { 36, 58 } do
+				local s, scale = touchScreen(view, inset)
+				local small = math.min(view.X, view.Y) <= 500
+				T.eq(
+					#s.Keep,
+					#BoostView.TouchButtons[if small then "Small" else "Large"] + 2,
+					"the touch buttons, the teleport bar, the left tiles"
+				)
+				T.near(s.Zone.Max.X, view.X * 0.4, 1e-3, "the thumbstick's zone")
+				for _, id in TEMPLE do
+					for _, ex in { 0.3, 0.45, 0.5, 0.55, 0.7 } do
+						for _, ey in { 0.35, 0.5, 0.65 } do
+							local f = floatOn(s, scale, id, Vector2.new(view.X * ex, view.Y * ey))
+							local where = `{id} on {view.X}x{view.Y} (inset {inset}), the egg at ({ex}, {ey})`
+							-- never: the opens' row in the zone, under a touch button or the top bar, the panel off the screen
+							T.eq(f.Fit.Hard, 0, where .. ": the opens' row clear, the panel on the screen")
+							local row = { Min = f.Row.Min + f.At, Max = f.Row.Max + f.At }
+							T.truthy(row.Min.X >= s.Zone.Max.X or row.Max.Y <= s.Zone.Min.Y, where .. ": the row out of the zone")
+							T.truthy(f.At.X >= 0 and f.At.Y >= 0 and f.At.X + f.Size.X <= view.X and f.At.Y + f.Size.Y <= view.Y)
+							if view.X >= 640 then
+								-- and every card (picture, chance, name) visible
+								T.eq(f.Fit.Odds, 0, where .. ": every odd visible")
+								T.falsy(f.Narrow, "the usual layout")
+							else
+								-- (568: the usual panel doesn't fit right of the zone under the top bar: the row on top, right-aligned)
+								T.truthy(f.Narrow, where .. ": the narrow layout")
+							end
 						end
 					end
 				end
-				-- beside the egg where there is room: right of it, its middle level with it
-				local free = EggPanel.floatAt(s, size, Vector2.new(s.Zone, screen.Y * 0.5), 10)
-				T.truthy(free.X >= s.Zone + 10, "right of the egg")
 			end
+		end
+		-- the narrow layout: its row on top, right-aligned, still 44 pt; the cards under it
+		local narrow = EggPanel.layout(14, true, true, { Narrow = true })
+		T.truthy(narrow.RowFirst)
+		T.eq(EggPanel.openAt(narrow, 1).Y, narrow.Pad, "the row first")
+		T.truthy(EggPanel.cardAt(narrow, 1).Y >= narrow.OpenY + narrow.Open.Y, "the cards under it")
+		local last = EggPanel.openAt(narrow, #CapsuleConfig.Counts + 1)
+		T.near(last.X + narrow.Open.X, narrow.Width - narrow.Pad, 1e-9, "flush right")
+		T.truthy(narrow.Open.Y * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, "44 pt")
+		-- the notch (844 x 390, an iPhone 12-14: 47 px each side, 21 at the bottom): inside the safe frame
+		local s, scale = touchScreen(Vector2.new(844, 390), 58, { 47, 47, 21 })
+		for _, ex in { 0.4, 0.5, 0.6 } do
+			local f = floatOn(s, scale, "Stone", Vector2.new(844 * ex, 195))
+			T.eq(f.Fit.Hard, 0, "notch: the row inside the safe frame, off FIRE (measured in it)")
+			T.eq(f.Fit.Odds, 0, "notch: no chance under the notch")
+			T.truthy(f.At.X + f.Size.X <= 844 - 47, "the panel's right edge inside")
 		end
 		-- the billboard's SizeOffset puts its top-left exactly there (x right, y up, in its own size)
 		local size = Vector2.new(300, 160)
@@ -965,8 +1034,63 @@ return function(T, Loader)
 		local center = Vector2.new(anchor.X + o.X * size.X, anchor.Y - o.Y * size.Y)
 		T.near(center.X - size.X / 2, at.X, 1e-9)
 		T.near(center.Y - size.Y / 2, at.Y, 1e-9)
-		T.truthy(EggPanel.overlaps(Vector2.new(0, 0), Vector2.new(10, 10), Vector2.new(5, 5), Vector2.new(10, 10)))
-		T.falsy(EggPanel.overlaps(Vector2.new(0, 0), Vector2.new(10, 10), Vector2.new(10, 0), Vector2.new(10, 10)))
+		T.eq(EggPanel.overlap(box(0, 0, 10, 10), box(5, 5, 15, 15)), 25)
+		T.eq(EggPanel.overlap(box(0, 0, 10, 10), box(10, 0, 20, 10)), 0)
+	end)
+
+	T.test("EggPanel: the tutorial bubble and the boost corner never hide the odds or the buttons", function()
+		-- the touch tutorial bubble (TutorialView, top right; review 2026-10-28: 667 x 375 x 467-658, y 64-172)
+		for _, case in { { Vector2.new(667, 375), box(467, 64, 658, 172) }, { Vector2.new(844, 390), box(625, 64, 835, 172) } } do
+			local view, bubble = case[1], case[2]
+			local s, scale = touchScreen(view, 58, nil, nil, bubble)
+			local f = floatOn(s, scale, "Stone", Vector2.new(view.X * 0.5, view.Y * 0.5))
+			local input = touchInput(view, 58, nil, nil, bubble)
+			local holdCorner, holdBubble = EggPanel.asides(input, f.Size, f.Row, f.Odds, Vector2.new(view.X * 0.5, view.Y * 0.5), 40)
+			T.falsy(holdCorner, "no corner here")
+			if holdBubble then
+				-- no room beside it on a phone: the bubble steps aside (the controller holds it) and every odd shows
+				local free, freeScale = touchScreen(view, 58)
+				local g = floatOn(free, freeScale, "Stone", Vector2.new(view.X * 0.5, view.Y * 0.5))
+				T.eq(g.Fit.Hard, 0, `{view.X}: with the bubble held, the opens clear`)
+				T.eq(g.Fit.Odds, 0, `{view.X}: with the bubble held, every odd visible`)
+			else
+				T.eq(f.Fit.Hard, 0, `{view.X}: the opens never under the bubble`)
+				T.eq(f.Fit.Odds, 0, `{view.X}: beside the bubble, every odd visible`)
+			end
+		end
+		-- the boost corner (BoostView.cornerSpot; review: an iPad with Triple Lucky, one tile x 938-1005, y 465-549)
+		local ipad = Vector2.new(1024, 768)
+		local tile = box(938, 465, 1005, 549)
+		local s, scale = touchScreen(ipad, 58, nil, tile)
+		for _, id in TEMPLE do
+			for _, ey in { 0.35, 0.45, 0.55, 0.65 } do
+				local f = floatOn(s, scale, id, Vector2.new(ipad.X * 0.5, ipad.Y * ey))
+				local where = `iPad {id}, the egg at y {ey}`
+				T.eq(f.Fit.Hard, 0, where .. ": Auto clear of the clover tile")
+				T.eq(f.Fit.Odds, 0, where .. ": every odd visible")
+				local holdCorner =
+					EggPanel.asides(touchInput(ipad, 58, nil, tile), f.Size, f.Row, f.Odds, Vector2.new(ipad.X * 0.5, ipad.Y * ey), 40)
+				T.falsy(holdCorner, where .. ": room beside it: the corner stays")
+			end
+		end
+		-- a phone with both boosts (review: 667 x 375, the column x 610-655, y 156-276; 844 x 390, y 171-291)
+		for _, case in { { Vector2.new(667, 375), box(610, 156, 655, 276) }, { Vector2.new(844, 390), box(787, 171, 832, 291) } } do
+			local view, column = case[1], case[2]
+			local p, pScale = touchScreen(view, 58, nil, column)
+			local f = floatOn(p, pScale, "Stone", Vector2.new(view.X * 0.5, view.Y * 0.5))
+			local holdCorner =
+				EggPanel.asides(touchInput(view, 58, nil, column), f.Size, f.Row, f.Odds, Vector2.new(view.X * 0.5, view.Y * 0.5), 40)
+			if holdCorner then
+				-- no room beside it: the corner steps aside (held), then the row and every odd are clear
+				local free, freeScale = touchScreen(view, 58)
+				local g = floatOn(free, freeScale, "Stone", Vector2.new(view.X * 0.5, view.Y * 0.5))
+				T.eq(g.Fit.Hard, 0, `{view.X}: Auto clear`)
+				T.eq(g.Fit.Odds, 0, `{view.X}: every odd visible`)
+			else
+				T.eq(f.Fit.Hard, 0, `{view.X}: Auto clear of the column`)
+				T.eq(f.Fit.Odds, 0, `{view.X}: every odd visible beside it`)
+			end
+		end
 	end)
 
 	T.test("EggPanel: the keys and their badges only where the prompt reaches; the red flash keeps its pace", function()
@@ -1038,8 +1162,8 @@ return function(T, Loader)
 				WaitForChild = function()
 					return playerGui
 				end,
-				GetAttribute = function()
-					return nil
+				GetAttribute = function(_, key: string)
+					return if key == "PaidRandomRestricted" then false else nil -- (the policy said: paid random items allowed)
 				end,
 				GetAttributeChangedSignal = function()
 					return signal()
@@ -1065,6 +1189,8 @@ return function(T, Loader)
 	end
 
 	function withLocal(body: (C: any, w: any) -> ())
+		hooks.inputChanged = hooks.inputChanged or signal()
+		local C0 = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.EggPanelController")
 		local CapsuleController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
 		local StateController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.StateController")
 		local HudController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.HudController")
@@ -1095,6 +1221,8 @@ return function(T, Loader)
 			selected = nil,
 			gamepad = false,
 			window = false,
+			touch = false,
+			holds = {},
 			tweens = {},
 			renders = {},
 		}
@@ -1174,8 +1302,8 @@ return function(T, Loader)
 			{
 				Run,
 				"BindToRenderStep",
-				function(_, name)
-					w.renders[name] = true
+				function(_, name, _priority, fn)
+					w.renders[name] = fn
 				end,
 			},
 			{
@@ -1185,7 +1313,51 @@ return function(T, Loader)
 					w.renders[name] = nil
 				end,
 			},
-			{ UIS, "LastInputTypeChanged", signal() },
+			{ UIS, "LastInputTypeChanged", hooks.inputChanged },
+			{ UIS, "TouchEnabled", false },
+			{ UIS, "MouseEnabled", true },
+			{
+				UIS,
+				"GetLastInputType",
+				function()
+					return Enum.UserInputType.MouseButton1
+				end,
+			},
+			{
+				Workspace,
+				"GetServerTimeNow",
+				function()
+					return NOW
+				end,
+			},
+			{
+				game:GetService("ReplicatedStorage"),
+				"GetAttribute",
+				function()
+					return nil
+				end,
+			},
+			{
+				HudController,
+				"predictedCoins",
+				function()
+					return w.coins
+				end,
+			},
+			{
+				C0,
+				"holdCorner",
+				function(on)
+					table.insert(w.holds, { "Corner", on })
+				end,
+			},
+			{
+				C0,
+				"holdBubble",
+				function(on)
+					table.insert(w.holds, { "Bubble", on })
+				end,
+			},
 			{
 				CapsuleController,
 				"buy",
@@ -1217,8 +1389,9 @@ return function(T, Loader)
 			{
 				CapsuleController,
 				"setAuto",
-				function(on)
+				function(on, note)
 					table.insert(w.auto, on)
+					w.autoNote = note
 				end,
 			},
 			{
@@ -1267,7 +1440,7 @@ return function(T, Loader)
 				MenuPanels,
 				"isTouch",
 				function()
-					return false
+					return w.touch
 				end,
 			},
 			{
@@ -1469,7 +1642,8 @@ return function(T, Loader)
 				C._test.tick()
 				w.window = false
 			end)
-			-- the odds change under Auto (Triple Lucky ran out under an end screen): it stops, says so
+			-- the odds change under Auto (Triple Lucky ran out under an end screen): it stops, and the
+			-- overlay says why (a toast would sit under its dim)
 			w.lucky = true
 			stops("Triple Lucky ran out", function()
 				w.opening, w.endFor = "End", C.AutoDwell + 0.1
@@ -1478,8 +1652,29 @@ return function(T, Loader)
 				C._test.tick()
 				T.eq(#w.buys, buys, "no egg on odds the player hasn't seen")
 			end)
-			T.truthy(string.find(w.toasts[#w.toasts] or "", "Auto stopped", 1, true), "a toast says why")
+			T.eq(w.autoNote, "Triple Lucky ended: Auto stopped", "the overlay's hint says why")
 			T.eq(C._test.state().Lucky, false, "the panel shows the normal odds now")
+			-- Triple Lucky begins under Auto (no opening up): it stops, a toast says why
+			stops("Triple Lucky began", function()
+				w.opening = "Idle"
+				w.lucky = true
+				hooks.onChanged() -- (the boost's State push)
+			end)
+			T.eq(w.autoNote, nil, "no overlay: no note")
+			T.eq(w.toasts[#w.toasts], "Triple Lucky is on: Auto stopped", "a toast")
+			T.eq(C._test.state().Lucky, true)
+			-- the boost runs out mid-hatch while the panel is laid out again (a resize, another device):
+			-- Auto compares with the odds it started on, not with the cards' (review 2026-10-28 LOW)
+			stops("Triple Lucky ran out during a re-layout", function()
+				w.opening = "Playing"
+				w.lucky = false
+				w.touch = true
+				hooks.inputChanged.fire() -- (LastInputTypeChanged: layOut clears the cards' egg, then refreshPanel)
+				w.touch = false
+			end)
+			T.eq(w.autoNote, "Triple Lucky ended: Auto stopped")
+			w.opening = "Idle"
+			hooks.inputChanged.fire()
 			-- never on a Robux egg
 			w.opening = "Idle"
 			w.at("Royal")
@@ -1636,4 +1831,147 @@ return function(T, Loader)
 			cut and string.find(cut, "flashTween:Cancel()", 1, true) and string.find(cut, "o.Flash.BackgroundTransparency = 1", 1, true)
 		)
 	end)
+	-- A camera for the controller (Lune has none): every point at `w.camZ` deep, on the screen when in front.
+	local function fakeCamera(w: any): any
+		local CFrame = Loader.CFrame
+		return {
+			ViewportSize = Vector2.new(667, 375),
+			CFrame = CFrame.new(),
+			WorldToViewportPoint = function(_, p)
+				local x = 333 + math.clamp(p.X - w.camAt.X, -5, 5) * 4
+				return Vector3.new(x, 190, w.camZ), w.camZ > 0
+			end,
+		}
+	end
+
+	T.test("EggPanelController: no keys with the panel off the screen; Auto's badge rests while the panel is focused", function()
+		withController(function(C, w)
+			w.gamepad = true
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			w.at("Stone")
+			local s = C._test.state()
+			T.truthy(s.Reach, "in reach, the panel on the screen")
+			T.eq(s.Refs.KeyText.Text, "ButtonB", "Auto's badge: B (its prompt's)")
+			-- the panel takes the selection: B lets go there, so Auto's badge rests
+			w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
+			T.eq(w.selected, s.Refs.Opens[1].Button)
+			T.falsy(s.Refs.Key.Visible, "focused: no B on Auto (A presses the selected button)")
+			w.actions.TerraForgeEggRelease("TerraForgeEggRelease", Enum.UserInputState.Begin)
+			T.truthy(s.Refs.Key.Visible, "let go: B toggles Auto again")
+			-- the player turns the camera away (the egg behind it): the panel isn't drawn, no key buys
+			w.camZ = -5
+			C._test.tick()
+			T.falsy(C._test.state().Reach, "the panel behind the camera: out of reach")
+			local before = #w.buys
+			local open10 = w.actions.TerraForgeEggOpen10
+			T.eq(open10("TerraForgeEggOpen10", Enum.UserInputState.Begin), Enum.ContextActionResult.Pass, "X passes")
+			local focus = w.actions.TerraForgeEggFocus
+			T.eq(focus("TerraForgeEggFocus", Enum.UserInputState.Begin), Enum.ContextActionResult.Pass, "D-pad Up: build / home")
+			T.eq(w.selected, nil)
+			T.eq(#w.buys, before, "nothing bought with the odds off the screen")
+			w.camZ = 10
+			C._test.tick()
+			T.truthy(C._test.state().Reach, "back on the screen")
+		end)
+	end)
+
+	T.test("EggPanelController: on touch the tutorial bubble and the boost corner step aside for the floating panel", function()
+		withController(function(C, w)
+			local Workspace = Loader.game:GetService("Workspace")
+			w.camZ, w.camAt = 10, Vector3.zero
+			rawset(Workspace, "CurrentCamera", fakeCamera(w))
+			local function screenWith(corner: any?, bubble: any?): any
+				return function()
+					return {
+						View = Vector2.new(667, 375),
+						Safe = box(0, 58, 667, 375),
+						TopInset = 58,
+						Hud = { box(206, 4, 461, 55), box(0, 58, 190, 230) },
+						Corner = corner,
+						Bubble = bubble,
+					}
+				end
+			end
+			local bubble = box(467, 64, 658, 172) -- (TutorialView's touch bubble on 667 x 375)
+			patched({ { C, "screenInput", screenWith(nil, bubble) } }, function()
+				w.touch = true
+				w.at("Stone")
+				local float = w.renders.TerraForgeEggPanelFloat
+				T.truthy(float ~= nil, "touch: the panel floats (every frame)")
+				float()
+				T.eq(w.holds[#w.holds] and w.holds[#w.holds][1], "Bubble", "the bubble would hide the odds: it steps aside")
+				T.eq(w.holds[#w.holds][2], true)
+				w.leave()
+				T.eq(w.holds[#w.holds][1], "Bubble")
+				T.eq(w.holds[#w.holds][2], false, "the panel gone: the bubble comes back")
+			end)
+			-- a corner the panel can't keep clear of (a tall column of tiles over the free part): it steps aside
+			table.clear(w.holds)
+			patched({ { C, "screenInput", screenWith(box(380, 60, 655, 300), nil) } }, function()
+				w.at("Stone")
+				w.renders.TerraForgeEggPanelFloat()
+				T.eq(w.holds[1] and w.holds[1][1], "Corner")
+				T.eq(w.holds[1] and w.holds[1][2], true, "the corner held")
+				w.leave()
+				T.eq(w.holds[#w.holds][2], false, "and back")
+			end)
+			-- nothing in the way: nothing held
+			table.clear(w.holds)
+			patched({ { C, "screenInput", screenWith(nil, nil) } }, function()
+				w.at("Stone")
+				w.renders.TerraForgeEggPanelFloat()
+				T.eq(#w.holds, 0, "nothing to hold")
+				local r = C._test.state().Refs
+				T.truthy(r.Gui.SizeOffset ~= Vector2.new(0, 0.5), "moved on the screen")
+				w.leave()
+			end)
+			w.touch = false
+		end)
+	end)
+
+	T.test(
+		"CapsuleController: Auto off brings back OPEN AGAIN and the odds note; a buy on odds the panel didn't show is refused",
+		function()
+			withController(function(_C, w)
+				local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+				local ok, err = pcall(function()
+					local result =
+						{ Capsule = "Stone", Count = 1, Lucky = true, Free = false, Golems = { { Id = 1, Kind = "PebbleGolem" } } }
+					-- Auto on, Triple Lucky gone meanwhile: no OPEN AGAIN, the note still the result's odds
+					local o = CC._test.endScreen(result, "Stone", 1, true)
+					T.falsy(CC._test.again(o), "Auto on: no OPEN AGAIN")
+					T.eq(o.Note.Text, "TRIPLE LUCKY ODDS", "the result's odds")
+					T.truthy(string.find(o.Hint.Text, "Auto is on", 1, true), "the hint: how to stop Auto")
+					-- Auto stops (the odds changed): OPEN AGAIN and the new odds' note are back, the hint says why
+					CC._test.setAuto(false, "Triple Lucky ended: Auto stopped")
+					T.truthy(CC._test.again(o), "OPEN AGAIN back")
+					T.eq(o.Note.Text, "Triple Lucky ended: normal odds now", "the note: OPEN AGAIN's odds")
+					T.truthy(string.find(o.Hint.Text, "Triple Lucky ended: Auto stopped", 1, true), "over the dim, not a toast under it")
+					CC._test.close()
+					-- the other way: the result on normal odds, Triple Lucky on now
+					local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+					w.state.Boosts = { [BoostConfig.Kinds.TripleLucky.Field] = NOW + 600 }
+					T.truthy(CC.luckyShown(), "Triple Lucky on now")
+					local plain =
+						{ Capsule = "Stone", Count = 1, Lucky = false, Free = false, Golems = { { Id = 2, Kind = "PebbleGolem" } } }
+					o = CC._test.endScreen(plain, "Stone", 1, true)
+					T.falsy(CC._test.again(o))
+					CC._test.setAuto(false, "Triple Lucky is on: Auto stopped")
+					T.truthy(CC._test.again(o), "OPEN AGAIN back")
+					T.eq(o.Note.Text, "Triple Lucky is on: OPEN AGAIN uses its odds", "the note: its odds now")
+					CC._test.close()
+					w.state.Boosts = {}
+					-- request(): the odds the panel showed (lucky) aren't the card's (normal): refused, nothing sent
+					local sent, reason = CC._test.request("Stone", 1, nil, true)
+					T.falsy(sent)
+					T.eq(reason, "OddsChanged", "refused: the panel shows the new odds first")
+				end)
+				CC._test.close()
+				if not ok then
+					error(err, 0)
+				end
+			end)
+		end
+	)
 end

@@ -156,6 +156,7 @@ local renderConnection: RBXScriptConnection? = nil
 local shownResult: Result? = nil -- the result on the end screen
 local endAt = 0 -- os.clock() when the end screen showed (openingState)
 local autoOn = false -- the temple's Auto runs (setAuto: the end screen's hint, no OPEN AGAIN)
+local autoNote: string? = nil -- why Auto stopped, while the overlay is up (setAuto: its hint says so, over the dim)
 local stopListeners: { (string) -> () } = {}
 -- the golem in the hero viewport (animated every frame while it shows)
 type Hero = { Model: Model, Start: number, Target: Vector3, Distance: number, RootHeight: number }
@@ -667,13 +668,22 @@ local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
 	else
 		o.Hint.Text = `Click or Space to skip{sep}Backspace: skip all`
 	end
+	local note = autoNote
+	if note then
+		o.Hint.Text = if o.Hint.Text == "" then note else note .. sep .. o.Hint.Text
+	end
 end
 
 local againText: (o: CapsuleView.OpenRefs, result: Result?) -> () -- (below: the end screen's OPEN AGAIN and its note)
 
--- Auto is on (the end screen says how to stop it and hides OPEN AGAIN).
-function CapsuleController.setAuto(on: boolean)
+--[[
+	Auto is on (the end screen says how to stop it and hides OPEN AGAIN).
+	Off with a `note` (the odds changed under it): the overlay's hint says
+	why until the overlay closes (a toast would sit under its dim).
+]]
+function CapsuleController.setAuto(on: boolean, note: string?)
 	autoOn = on
+	autoNote = if on then nil else note
 	local o = opening
 	if o and playing then
 		openingHint(o, atEnd)
@@ -1353,6 +1363,7 @@ local function play(result: Result)
 	clearHero(o)
 	atEnd = false
 	playing = false
+	autoNote = nil
 	if selectionConnection then
 		selectionConnection:Disconnect()
 		selectionConnection = nil
@@ -1557,6 +1568,31 @@ local function watchStall(stall: Instance)
 end
 
 ---------------------------------------------------------------- lifecycle
+
+-- The Lune specs (tests/EggPanel.spec.luau) stage an end screen and send opens through these, on fakes.
+CapsuleController._test = {
+	-- the end screen of `result` after the player's own `count` open of `capsule`, Auto on or off
+	endScreen = function(result: Result, capsule: string, count: number, auto: boolean): CapsuleView.OpenRefs
+		local o = ensureOpening()
+		playing, atEnd = true, true
+		autoOn = auto
+		shownResult = result
+		lastOpen = { Capsule = capsule, Count = count }
+		openingHint(o, true)
+		againText(o, result)
+		return o
+	end,
+	close = function()
+		playing, atEnd, autoOn, autoNote = false, false, false, nil
+		lastOpen = nil
+		pendingUntil, lastSend = 0, -math.huge
+	end,
+	again = function(o: CapsuleView.OpenRefs): boolean
+		return holderOf(o.Again).Visible
+	end,
+	request = request,
+	setAuto = CapsuleController.setAuto, -- (the real one: the specs swap the module's for a recorder)
+}
 
 function CapsuleController.init()
 	Net.listen("OpenUI", function(kind, payload)
