@@ -110,10 +110,12 @@ return function(T, Loader)
 		T.eq(dragon:GetAttribute("Golem"), nil, "a statue, not a pet (no golem attributes)")
 		-- gold metal, the Flamewing's fire on the wings (owner's pick B)
 		local gold, fire, glows = 0, 0, 0
+		-- (GoldenStatue.shade deepens every color by the town's exposure step: judge the gold before it)
+		local k = GoldenStatue.shadeFactor()
 		for _, part in parts(dragon) do
 			if part.Material == roblox.Enum.Material.Metal then
 				local c = part.Color
-				T.truthy(c.R > 0.68 and c.G > 0.4 and c.B < 0.5 and c.R > c.G and c.G > c.B, part.Name .. " is gold")
+				T.truthy(c.R > 0.68 * k and c.G > 0.4 * k and c.B < 0.5 * k and c.R > c.G and c.G > c.B, part.Name .. " is gold")
 				gold += 1
 			elseif
 				string.sub(part.Name, 1, 4) == "Wing"
