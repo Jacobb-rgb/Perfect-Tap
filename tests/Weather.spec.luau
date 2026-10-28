@@ -656,7 +656,8 @@ return function(T, Loader)
 				return false
 			end
 			local y = from.Y + t
-			if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, inTree(part), part.Size) then
+			local width, area = WeatherLogic.footprint(part.CFrame, part.Size)
+			if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, inTree(part), width, area) then
 				return true
 			end
 			from = Vector3.new(from.X, y + 0.05, from.Z)
@@ -881,13 +882,46 @@ return function(T, Loader)
 		T.falsy(WeatherLogic.roofGate(e, false, true, false, 0.5), "a jump right away: still off")
 	end)
 
-	T.test("weather: small high parts are no roof (the golden dragon's fists over the statue ring)", function()
+	T.test("weather: a roof is roof-sized from above (fists, signs, beams no; the museum lean-to, the SHOP header yes)", function()
 		local size = Vector3.new
-		T.falsy(WeatherLogic.roofCounts(14, 0, true, false, size(3.7, 3.4, 3.6)), "a fist")
-		T.falsy(WeatherLogic.roofCounts(3, 0, true, false, size(11, 3, 0.6)), "a sign board")
-		T.falsy(WeatherLogic.roofCounts(4, 0, true, false, size(1.2, 1.3, 1.2)), "a king's crown")
-		T.truthy(WeatherLogic.roofCounts(9, 0, true, false, size(30.6, 0.6, 15.6)), "the DROPPERS roof slab")
-		T.truthy(WeatherLogic.roofCounts(9, 0, true, false, size(0.9, 12, 32)), "a turned slab")
+		local CF = roblox.CFrame
+		local function counts(cf: any, s: any): boolean
+			local width, area = WeatherLogic.footprint(cf, s)
+			return WeatherLogic.roofCounts(9, 0, true, false, width, area)
+		end
+		local turned = CF.Angles(0, math.rad(34), 0)
+		T.falsy(counts(CF.new(), size(3.7, 3.4, 3.6)), "the golden dragon's fist")
+		T.falsy(counts(CF.Angles(0.4, 0.7, 0.2), size(3.7, 3.4, 3.6)), "a fist turned any way")
+		T.falsy(counts(turned, size(11, 3, 0.6)), "a sign board, turned 34 degrees")
+		T.falsy(counts(CF.new(), size(1.2, 1.3, 1.2)), "a king's crown")
+		T.falsy(counts(CF.new(), size(2, 1, 2)), "a lamp's head")
+		T.falsy(counts(turned, size(30, 2, 2)), "an arch's beam")
+		T.truthy(counts(turned, size(30.6, 0.6, 15.6)), "the DROPPERS roof slab (the house turned 34 degrees)")
+		T.truthy(counts(CF.Angles(math.rad(6), 0, 0), size(22.4, 0.35, 5.5)), "the yard museum's lean-to (tilted 6 degrees)")
+		T.truthy(counts(CF.new(), size(28, 6.6, 3)), "the SHOP / UPGRADES header frame over the porch")
+		T.truthy(counts(CF.Angles(0, 0, math.rad(90)), size(0.9, 12, 32)), "a slab stood on its edge, then laid flat")
+		local w, a = WeatherLogic.footprint(turned, size(11, 3, 0.6))
+		T.near(w, 0.6, 1e-4, "a turned board stays as thin as it is")
+		T.near(a, 11 * 0.6, 1e-3, "its footprint")
+		-- the yard museum: standing on the walkway under its lean-to
+		local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[1])
+		local museum = MuseumBuilder.build(plotCF)
+		local roof = museum:FindFirstChild("Roof")
+		T.truthy(roof, "the museum's roof")
+		local floorY = (plotCF * CF.new(0, MuseumBuilder.FloorTop, 0)).Position.Y
+		local mparts = partsOf(museum)
+		for _, u in { -0.3, 0, 0.3 } do
+			local edge = (roof.CFrame * CF.new(u * roof.Size.X, 0, -(roof.Size.Z / 2 - 0.8))).Position
+			local p = Vector3.new(edge.X, floorY + 3, edge.Z)
+			T.truthy(covered(p, mparts), `the museum walkway at {p}: under the lean-to`)
+		end
+		-- the SHOP porch in front of its door
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local Rng0 = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local stalls = roblox.Instance.new("Folder")
+		Stalls.build(stalls, Rng0.new(1))
+		T.truthy(covered(Vector3.new(-43, 3.6, -20), partsOf(stalls)), "the SHOP porch under the header frame")
 		local FireCrystal = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.FireCrystal")
 		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 		local folder = roblox.Instance.new("Folder")
