@@ -9,10 +9,12 @@
 	             the crack grows and its gold glints flare (Effects/RockCracks),
 	             a dry "tok" (RockTok in a 3-voice Sfx lane of its own, at most
 	             TokPerSecond), a few chips fly out of the crack (RockFx.chips
-	             under their own cap, rocks near the camera only). Your own
+	             under their own cap, rocks near the camera only; a rock with no
+	             crack face, waiting for a slot, throws none). Your own
 	             and your focused rock keep their crack (RockCracks.setKeep).
 	             RockFx keeps the tremble, MiningController the hit sparks.
-	  Fx NodeCrack    a crunch (RockCrunch, the same lane) and a warm gold sparkle at the crack
+	  Fx NodeCrack    a crunch (RockCrunch, in a lane of its own: the toks never cut it)
+	                  and a warm gold sparkle at the crack
 	  (the break)     RockFx's own: dust, chunks, ground ring, its sounds and
 	                  shake (no word over it: the owner turned it down)
 	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
@@ -309,19 +311,18 @@ function MineJuiceController.onHit(rock: Model)
 	local mining = JuiceConfig.Mining
 	local reduced = Motion.reduced()
 	local origin, normal = RockCracks.hit(rock, reduced)
+	if not origin then
+		-- waiting for a crack slot: the face it had before, if any (never the rock's hidden middle)
+		origin, normal = RockCracks.face(rock)
+	end
 	local at = origin or primary.Position
 	if mining.Tok and takeToken(now) then
 		Sfx.playIn("Rock", "RockTok", at)
 	end
-	local chips = if mining.Chips then MineJuiceRules.chips(reduced, cameraDistance(at), isPhone()) else 0
-	if chips > 0 then
-		local out = normal
-		if not out then
-			local camera = Workspace.CurrentCamera
-			local toward = if camera then camera.CFrame.Position - at else Vector3.new(0, 0, 1)
-			out = if toward.Magnitude > 0.01 then toward.Unit else Vector3.new(0, 0, 1)
-		end
-		RockFx.chips(at, primary.Color, out, chips, rock)
+	local face = origin ~= nil and normal ~= nil
+	local chips = if mining.Chips then MineJuiceRules.chips(reduced, cameraDistance(at), isPhone(), face) else 0
+	if chips > 0 and normal then
+		RockFx.chips(at, primary.Color, normal, chips, rock)
 	end
 end
 
@@ -371,7 +372,7 @@ local function onFx(kind: any, a: any, b: any)
 	if kind == "NodeCrack" then
 		-- (position, crust, stage, glow, stages): the crunch and a neutral gold sparkle
 		if mining.Tok then
-			Sfx.playIn("Rock", "RockCrunch", a)
+			Sfx.playIn("Crunch", "RockCrunch", a)
 		end
 		if mining.Glints and MineJuiceRules.sparkle(Motion.reduced(), cameraDistance(a)) then
 			Vfx.burst("Glint", a, if isPhone() then 3 else 5, JuiceConfig.GlintColor)
