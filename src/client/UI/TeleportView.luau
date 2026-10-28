@@ -161,6 +161,10 @@ end
 
 -- The bar's colours (owner's BASE / MINE / SPAWN photo: blue, teal, purple).
 TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [string]: string }
+-- the round look (the reel's Shop red / Spawn green / Plot yellow): the HUD's red Shop first,
+-- then Lobby green, Base yellow, Vault purple
+TeleportView.RoundPaints = { Base = "Yellow", Lobby = "Lime", Vault = "Violet" } :: { [string]: string }
+TeleportView.RoundOrder = { Lobby = 1, Base = 2, Vault = 3 } :: { [string]: number }
 
 -- The words' glyph height on the bar (design units) per layout: the pixel
 -- font is wide, so the word fits its button with room around it.
@@ -204,11 +208,12 @@ end
 function TeleportView.roundIcon(button: TextButton, size: Vector2, id: string, kind: string)
 	local icon = TeleportView.Icons[id]
 	local label = button:FindFirstChild("Label") :: TextLabel?
-	if not icon or not label or kind == "Narrow" or not IconAssets.shows(icon) then
+	-- (phones: words only, the four buttons are narrow)
+	if not icon or not label or kind ~= "Normal" or not IconAssets.shows(icon) then
 		return
 	end
 	local lip = Pop.lipUnits(size.Y)
-	local pic = math.floor(size.Y * (if kind == "Compact" then 0.66 else 0.96))
+	local pic = math.floor(size.Y * 0.96)
 	local x = -math.floor(pic * 0.14)
 	Pop.bandIcon(button, icon, pic, {
 		Name = "Icon",
@@ -263,12 +268,14 @@ local function buildPop(topBar: Frame): Refs
 		topBar:GetPropertyChangedSignal("Size"):Connect(placeHint)
 	end)
 	local order: { TextButton } = {}
+	local round = PopTheme.round()
 	for i, spot in TeleportConfig.Spots do
 		if spot.Bar then
-			local paint = Pop.paint(TeleportView.Paints[spot.Id] or "Slate")
-			local button = Pop.button(topBar, spot.Label, paint, size, {
+			local paints = if round then TeleportView.RoundPaints else TeleportView.Paints
+			local paint = Pop.paint(paints[spot.Id] or "Slate")
+			local button = Pop.button(topBar, Pop.caption(spot.Label), paint, size, {
 				Name = spot.Id,
-				LayoutOrder = i,
+				LayoutOrder = if round then TeleportView.RoundOrder[spot.Id] or i else i,
 			})
 			button:SetAttribute("Teleport", spot.Id)
 			local kind = if narrow then "Narrow" elseif compact then "Compact" else "Normal"
@@ -287,6 +294,16 @@ local function buildPop(topBar: Frame): Refs
 			UIKit.corner(cover, PopTheme.Corner)
 			buttons[spot.Id], covers[spot.Id] = button, cover
 			table.insert(order, button)
+		end
+	end
+	-- (the round look: left / right in the row's order, the HUD's Shop button first)
+	if round then
+		table.sort(order, function(a: TextButton, b: TextButton): boolean
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local shop = topBar:FindFirstChild("ShopPill")
+		if shop and shop:IsA("TextButton") then
+			table.insert(order, 1, shop)
 		end
 	end
 	for i, button in order do

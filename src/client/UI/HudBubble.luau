@@ -21,6 +21,16 @@
 	Compact (phones, uiScale <= CompactScale): bigger touch targets in design
 	units (>= 44 pt at uiScale 0.62) and the income chip beside the coins.
 	Designed for 720 design units of screen height.
+
+	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
+	"Round"): the game menu is the reel's 2 x 4 grid of dark tiles (RoundMenu:
+	Store, Rebirth, Golems, Inventory, Spin, Daily, Build, More; three a row
+	on phones), Title Case words, a tilted sticker ("FREE!" on Spin while
+	WheelController's badge counts a ready spin, setTileBadge); the top centre is a row of separate buttons
+	(Shop red: the Robux STORE, then LOBBY / BASE / VAULT from TeleportView);
+	the money bottom-left without the cash, the income line under it; three
+	offers mid-right (Offers: the product's picture, a green "R$99" tag, its
+	name; StoreController opens the Store at it and hides what is owned).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,6 +41,8 @@ local Bubble = require(script.Parent.Bubble)
 local PopTheme = require(Shared.Config.PopTheme)
 local IconAssets = require(Shared.Config.IconAssets)
 local CashBuilder = require(Shared.Builders.CashBuilder)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
+local StoreConfig = require(Shared.Config.StoreConfig)
 local Pop = require(script.Parent.Pop)
 
 local HudBubble = {}
@@ -48,6 +60,47 @@ HudBubble.Menu = {
 	{ Id = "Shop", Label = "BOOSTS", Icon = "clover", Role = "Boosts" },
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
+
+-- The round look's game menu (the reel's 2 x 4 tiles, in its order): every tile hidden
+-- until a controller claims it (StoreController Store, SideMenuController Rebirth / Golems /
+-- Quests, BackpackController Inventory, WheelController Spin (ui/boost-corner), BuildView Build).
+HudBubble.RoundMenu = {
+	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
+	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
+	{ Id = "Golems", Label = "Golems", Icon = "golem_GildedPorter", Role = "Golems" },
+	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
+	{ Id = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel" },
+	{ Id = "Quests", Label = "Daily", Icon = "medal", Role = "Quests" },
+	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
+	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
+} :: { MenuEntry }
+
+-- The round look's tile accents (the reel: every dark tile its own colour on the edge and the lip).
+HudBubble.RoundPaints = {
+	Store = "Crimson",
+	Rebirth = "Magenta",
+	Golems = "Orange",
+	Backpack = "Ember",
+	Wheel = "Violet",
+	Quests = "Pink",
+	Build = "Lime",
+	More = "Steel",
+} :: { [string]: string }
+
+-- The side menu entries that are tiles on the left in the round look (the rest go behind More).
+HudBubble.RoundMain = { Store = true, Rebirth = true, Golems = true, Quests = true } :: { [string]: boolean }
+
+--[[
+	The round look's offers mid-right (the reel's three potions with "R$49"):
+	a Store card each (StoreConfig), its picture, the tag and the name.
+]]
+HudBubble.Offers = {
+	{ Card = "StarterPack", Name = "Starter Pack", Icon = "golem_GildedPorter" },
+	{ Card = "DoubleMoney", Name = "2x Money", Icon = "cash_safe" },
+	{ Card = "TripleLucky15", Name = "Triple Lucky", Icon = "clover" },
+}
+HudBubble.OfferSize = 70 -- design units: the picture square (phones: OfferSizePhone)
+HudBubble.OfferSizePhone = 74 -- 46 pt at the phones' 0.62 scale
 
 HudBubble.Spots = {
 	{ Id = "Base", Label = "BASE", Icon = "base", Role = "Base" },
@@ -73,12 +126,14 @@ HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
 function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 	if uiScale <= HudBubble.CompactScale then
 		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
+		-- (the round look: the reel's eight tiles four a row in two rows, 72 units = 44.6 pt)
+		local round = PopTheme.round()
 		return {
 			Compact = true,
 			Narrow = narrow,
-			Tile = 78,
-			TileGap = 12,
-			Columns = 3,
+			Tile = if round then 72 else 78,
+			TileGap = if round then 6 else 12,
+			Columns = if round then 4 else 3,
 			TabWidth = if narrow then 74 else 118,
 			TabHeight = 72,
 			Slot = 76,
@@ -89,8 +144,8 @@ function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 	return {
 		Compact = false,
 		Narrow = false,
-		Tile = 82,
-		TileGap = 12,
+		Tile = if PopTheme.round() then 76 else 82, -- (the reel's tiles: 76 with a 6 gap)
+		TileGap = if PopTheme.round() then 6 else 12,
 		Columns = 2,
 		TabWidth = 140,
 		TabHeight = 52,
@@ -152,6 +207,40 @@ end
 	(HudController).
 ]]
 local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLabel)
+	if PopTheme.round() then
+		-- the reel: the amount big in green with a thick dark edge, no cash, and a white line
+		-- under it (the reel's "Friend Boost +0%": our income per second)
+		local big = if layout.Compact then 44 else 50
+		local line = math.floor(big * 0.52)
+		local panel = UIKit.new("Frame", {
+			Name = "Coins",
+			AnchorPoint = Vector2.new(0, 1),
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 18, 1, if layout.Compact then -22 else -16),
+			Size = UDim2.fromOffset(HudBubble.CoinsWidth + 40, big + line + 14),
+		}, gui)
+		local amount = Pop.text(panel, "$0", big, {
+			Name = "Amount",
+			AnchorPoint = Vector2.new(0, 0),
+			FontFace = PopTheme.Heavy,
+			Position = UDim2.fromOffset(0, 0),
+			Size = UDim2.new(1, 0, 0, big + 6),
+			TextColor3 = PopTheme.MoneyNumber,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		local amountEdge = amount:FindFirstChildOfClass("UIStroke") :: UIStroke
+		amountEdge.Thickness = 4.5
+		local income = Pop.text(panel, "+$0/s", line, {
+			Name = "Income",
+			AnchorPoint = Vector2.new(0, 1),
+			FontFace = PopTheme.Heavy,
+			Position = UDim2.new(0, 2, 1, 0),
+			Size = UDim2.new(1, -2, 0, line + 6),
+			TextColor3 = PopTheme.Ink,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		return panel, amount, income
+	end
 	local size = if layout.Compact then 42 else 48
 	local pic = size + 36
 	local panel = UIKit.new("Frame", {
@@ -306,14 +395,57 @@ function HudBubble.tile(
 	parent: Instance,
 	o: { Name: string, Label: string, Icon: string, Role: string, Size: number, LayoutOrder: number? }
 ): (TextButton, Frame)
+	local round = PopTheme.round()
 	return Pop.tile(parent, {
 		Name = o.Name,
-		Label = o.Label,
+		Label = Pop.caption(o.Label), -- (the round look: Title Case, the reel)
 		Icon = o.Icon,
-		Paint = HudBubble.RolePaints[o.Role] or "Slate",
+		Paint = (if round then HudBubble.RoundPaints[o.Role] else nil) or HudBubble.RolePaints[o.Role] or "Slate",
 		Size = o.Size,
 		LayoutOrder = o.LayoutOrder,
 	})
+end
+
+-- The tiles the game menu can show in this look (the round look: RoundMenu).
+function HudBubble.gameMenu(): { MenuEntry }
+	return if PopTheme.round() then HudBubble.RoundMenu else HudBubble.GameMenu
+end
+
+--[[
+	A tilted sticker word on a tile's top-left corner (the reel's "OP!"):
+	"FREE!" on Spin while a spin is ready. nil / "" takes it off.
+]]
+function HudBubble.setSticker(face: GuiObject, text: string?)
+	local old = face:FindFirstChild("Sticker")
+	if text == nil or text == "" then
+		if old then
+			old:Destroy()
+		end
+		return
+	end
+	if old and old:IsA("TextLabel") then
+		old.Text = text
+		return
+	end
+	-- (the tile's size from its holder, the grid's cell: 24 % of it)
+	local holder = face.Parent
+	local grid = if holder and holder.Parent then holder.Parent:FindFirstChildOfClass("UIGridLayout") else nil
+	local tile = if grid then grid.CellSize.Y.Offset else 76
+	local size = math.max(16, math.floor(tile * 0.22))
+	local sticker = Pop.title(face, text, size, "Gold", {
+		Name = "Sticker",
+		AnchorPoint = Vector2.new(0, 0.5),
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.new(0, -8, 0, math.floor(size * 0.85)),
+		Rotation = -12,
+		Size = UDim2.new(0.8, 0, 0, size + 6),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 9,
+	})
+	local edge = sticker:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Thickness = 3
+	end
 end
 
 HudBubble.MenuTop = 8 -- the tiles' top under Roblox's top bar (CoreUISafeInsets)
@@ -321,7 +453,7 @@ HudBubble.ChipGap = 12
 
 -- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
 function HudBubble.chipTop(layout: Layout): number
-	local m = HudBubble.menuMetrics(layout, #HudBubble.GameMenu)
+	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
 	-- (phones: the Shop pill rides on this row's right end, under the touch
 	-- tutorial bubble; the flat Pop tiles are shorter, so keep the old row)
 	local extra = if layout.Compact then 28 else 0
@@ -337,6 +469,10 @@ end
 	elsewhere (PC: over the money, bottom-left) or there is no width yet.
 ]]
 function HudBubble.chipsRight(gui: Instance, width: number): number?
+	-- (the round look on phones: no pill on the chips' row; they stop short of the screen's edge)
+	if PopTheme.round() and gui:GetAttribute("CompactHud") == true and width == width and width > 0 then
+		return width - 16 - HudBubble.ChipGap
+	end
 	local pill = gui:FindFirstChild("ShopPill")
 	if not (pill and pill:IsA("GuiObject")) or type(gui:GetAttribute("ChipTop")) ~= "number" then
 		return nil
@@ -669,17 +805,27 @@ HudBubble.TopBarGap = 8
 HudBubble.PreviewInset = 36 -- the preview renderer's top bar inset (px)
 
 function HudBubble.topBarButton(layout: Layout): Vector2
+	-- (the round look: four buttons in the row, the Shop first; a little narrower on phones so
+	-- the row stays clear of the left tiles)
+	local round = PopTheme.round()
 	if layout.Narrow then
-		return Vector2.new(88, 72) -- (the smallest phones: as wide as the old icon tabs)
+		return Vector2.new(if round then 80 else 88, 72) -- (the smallest phones: as wide as the old icon tabs)
 	elseif layout.Compact then
-		return Vector2.new(128, 72)
+		return Vector2.new(if round then 94 else 128, 72)
 	end
-	return Vector2.new(150, 46)
+	return if round then Vector2.new(120, 48) else Vector2.new(150, 46) -- (the round look: four in the row, clear of a tablet's tutorial bubble)
+end
+
+-- Does the round look's red Shop button lead the top row on this layout?
+function HudBubble.shopInRow(layout: Layout): boolean
+	return PopTheme.round() and not layout.Narrow
 end
 
 function HudBubble.topBarSize(layout: Layout): Vector2
 	local b = HudBubble.topBarButton(layout)
-	local count = #HudBubble.Spots
+	-- (the round look: the red Shop button leads the row; not on the smallest phones, where
+	-- the row must stay short: the Store tile is the left grid's first)
+	local count = #HudBubble.Spots + (if HudBubble.shopInRow(layout) then 1 else 0)
 	return Vector2.new(count * b.X + (count - 1) * HudBubble.TopBarGap + 2 * HudBubble.TopBarPad, b.Y + 2 * HudBubble.TopBarPad)
 end
 
@@ -713,6 +859,94 @@ function HudBubble.topBarY(insetTop: number, scale: number): number
 	return -math.floor(insetTop / math.max(scale, 0.01)) + 6
 end
 
+--[[
+	The round look's red Shop button in the top row (named "ShopPill": StoreController
+	opens the Store with it): the cart over its left end, "Shop" beside it.
+]]
+function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): TextButton
+	local button = Pop.button(topBar, "Shop", "Crimson", size, { Name = "ShopPill", LayoutOrder = 0 })
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local lip = Pop.lipUnits(size.Y)
+	if not layout.Compact and IconAssets.shows("cart") and label then
+		local pic = math.floor(size.Y * (if layout.Compact then 0.66 else 0.96))
+		local x = -math.floor(pic * 0.14)
+		Pop.bandIcon(button, "cart", pic, { Name = "Icon", Position = UDim2.new(0, x, 0.5, -math.floor(lip / 2)), ZIndex = 6 })
+		local left = x + pic + 2
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.new(0.5, math.floor(left / 2), 0.5, -math.floor(lip / 2))
+		label.Size = UDim2.new(1, -(left + 8), 0, math.floor(size.Y * 0.62))
+	end
+	if label then
+		Pop.fit(label, if layout.Compact then 30 else 27)
+		Pop.shadow(label, 3)
+	end
+	return button
+end
+
+--[[
+	The round look's offers mid-right (HudBubble.Offers): a picture button per
+	offer named like its Store card, with a green "R$99" tag on its top-right
+	corner and its name under it. StoreController opens the Store at the card
+	and hides an offer the player owns or can't buy. Returns the column.
+]]
+function HudBubble.offers(gui: Instance, layout: Layout): Frame
+	local size = if layout.Compact then HudBubble.OfferSizePhone else HudBubble.OfferSize
+	local nameH = if layout.Compact then 22 else 20
+	local gap = 10
+	local cell = size + nameH + gap
+	local column = UIKit.new("Frame", {
+		Name = "Offers",
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -16, 0.5, 0),
+		Size = UDim2.fromOffset(size + 40, #HudBubble.Offers * cell - gap),
+	}, gui)
+	UIKit.list(column, Enum.FillDirection.Vertical, gap, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	for i, offer in HudBubble.Offers do
+		local spec = StoreConfig.ById[offer.Card]
+		local product = if spec then MonetizationConfig.Products[spec.Keys[1]] else nil
+		local holder = UIKit.new("Frame", {
+			Name = offer.Card,
+			BackgroundTransparency = 1,
+			LayoutOrder = i,
+			Size = UDim2.fromOffset(size + 40, size + nameH),
+		}, column)
+		local button = UIKit.new("ImageButton", {
+			Name = "Offer",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			Image = "",
+			Position = UDim2.fromScale(0.5, 0),
+			ScaleType = Enum.ScaleType.Fit,
+			Selectable = true,
+			Size = UDim2.fromOffset(size, size),
+			ZIndex = 3,
+		}, holder)
+		IconAssets.apply(button, offer.Icon)
+		button:SetAttribute("Icon", offer.Icon)
+		button:SetAttribute("Card", offer.Card)
+		Pop.fxTag(button, "Lean")
+		if product and product.Robux then
+			local tagW = math.floor(size * 0.66)
+			Pop.tag(button, `R${product.Robux}`, "Lime", Vector2.new(tagW, math.floor(size * 0.3)), {
+				Name = "Price",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(1, -6, 0, 6),
+				Rotation = 10,
+				ZIndex = 6,
+			})
+		end
+		Pop.text(holder, offer.Name, nameH - 2, {
+			Name = "OfferName",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, 0),
+			Size = UDim2.new(1, 0, 0, nameH),
+			ZIndex = 4,
+		})
+	end
+	return column
+end
+
 function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	local layout = HudBubble.layout(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth())
 	local gui = UIKit.screen("TerraForgeHud", 5)
@@ -737,17 +971,20 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	-- right at the top"; TeleportView fills it, HudController.placeTopBar lifts
 	-- it by the real top inset); zone name and toasts under the safe area's top
 	local barSize = HudBubble.topBarSize(layout)
+	local round = PopTheme.round()
 	local topBar = UIKit.new("Frame", {
 		Name = "TopBar",
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = PopTheme.Well,
-		BackgroundTransparency = 0.1,
+		-- (the round look: the reel's separate buttons, no dark strip behind them)
+		BackgroundTransparency = if round then 1 else 0.1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0.5, 0, 0, HudBubble.topBarY(HudBubble.PreviewInset, 1)),
 		Size = UDim2.fromOffset(barSize.X, barSize.Y),
 	}, gui)
 	UIKit.corner(topBar, 12)
-	Pop.border(topBar, 3)
+	local barBorder = Pop.border(topBar, 3)
+	barBorder.Enabled = not round
 	UIKit.padding(topBar, HudBubble.TopBarPad)
 	topBar:SetAttribute("Pop", true)
 	topBar:SetAttribute("Bubble", true)
@@ -780,7 +1017,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	UIKit.list(toasts, Enum.FillDirection.Vertical, 10, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
 	-- the left menu: every tile hidden until a controller claims it
-	local m = HudBubble.menuMetrics(layout, #HudBubble.GameMenu)
+	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
@@ -795,19 +1032,30 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	-- and the FREE SPIN chip, so it sits at the right end of the TRAIN chip's row
 	local pill = if layout.Compact then HudBubble.ShopPillPhone else HudBubble.ShopPill
 	local moneyTop = -coinsPanel.Position.Y.Offset + coinsPanel.Size.Y.Offset
-	local shop = Pop.pill(gui, "Shop", "cart", "Green", pill, {
-		Name = "ShopPill",
-		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
-		Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout)) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
-	})
-	shop:SetAttribute("Opens", "StoreController")
+	local shop: GuiButton? = nil
+	if HudBubble.shopInRow(layout) then
+		-- the round look: the red Shop button leads the top row (the reel's Shop / Spawn / Plot)
+		shop = HudBubble.shopButton(topBar, HudBubble.topBarButton(layout), layout)
+	elseif not round then
+		shop = Pop.pill(gui, "Shop", "cart", "Green", pill, {
+			Name = "ShopPill",
+			AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
+			Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout)) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
+		})
+	end
+	if shop then
+		shop:SetAttribute("Opens", "StoreController")
+	end
+	gui:SetAttribute("CompactHud", layout.Compact)
 	gui:SetAttribute("ShortLuck", layout.Compact) -- (phones: the Server Luck line without "thanks name")
 	-- Server Luck running (StoreController fills it from ServerLuckUntil): next to the pill
 	Pop.text(gui, "", 22, {
 		Name = "ServerLuck",
-		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
-		Position = if layout.Compact
-			then UDim2.new(1, -18, 0, HudBubble.chipTop(layout) + pill.Y + 8)
+		AnchorPoint = if layout.Compact and not round then Vector2.new(1, 0) else Vector2.new(0, 1),
+		-- (the round look: over the money, where the pill was)
+		Position = if round
+			then UDim2.new(0, 22, 1, -(moneyTop + 8))
+			elseif layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout) + pill.Y + 8)
 			else UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
 		-- (phones: no wider than the pill's corner, clear of the tabs; the text shrinks to fit)
 		Size = if layout.Compact then UDim2.fromOffset(HudBubble.ShopPill.X + 90, 26) else UDim2.fromOffset(420, 28),
@@ -825,7 +1073,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		FillDirection = Enum.FillDirection.Horizontal,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, menu)
-	for i, entry in HudBubble.GameMenu do
+	for i, entry in HudBubble.gameMenu() do
 		local _, holder = HudBubble.tile(menu, {
 			Name = entry.Id,
 			Label = entry.Label,
@@ -840,6 +1088,11 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	-- the backpack button right of the blaster's hotbar slot (HudController fills it,
 	-- BackpackController opens the inventory)
 	local carryPanel, backpack, carryLabel = HudBubble.backpackButton(gui, layout, uiScale or HudBubble.screenScale())
+	-- (phones: no offers: the right edge holds the tutorial bubble and Roblox's jump button;
+	-- the Store tile and the Shop button are a tap away)
+	if round and not layout.Compact then
+		HudBubble.offers(gui, layout)
+	end
 
 	return {
 		Gui = gui,
@@ -950,8 +1203,14 @@ function HudBubble.setTileVisible(menu: Instance, id: string, visible: boolean)
 	end
 end
 
--- A count badge on a tile's face (0 hides it).
+-- A count badge on a tile's face (0 hides it). The round look's Spin tile (WheelController's
+-- badge: the spins ready) wears the reel's tilted sticker instead: "FREE!".
 function HudBubble.setTileBadge(face: GuiObject, count: number)
+	local holder = face.Parent
+	if PopTheme.round() and holder and holder.Name == "Wheel" then
+		HudBubble.setSticker(face, if count > 0 then "FREE!" else nil)
+		return
+	end
 	local badge = face:FindFirstChild("Badge")
 	if count <= 0 then
 		if badge then
@@ -1232,7 +1491,8 @@ function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number
 	local light = UIKit.new("UIStroke", {
 		Name = "Light",
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Color = HudBubble.SlotRim,
+		-- (the round look: the Inventory tile's orange on the dark tile's edge)
+		Color = if PopTheme.round() then Pop.paint("Ember").Top else HudBubble.SlotRim,
 		Thickness = 2,
 	}, rim)
 	UIKit.new("UIGradient", {

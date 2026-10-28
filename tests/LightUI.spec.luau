@@ -13,6 +13,10 @@ return function(T, Loader)
 	local function ui(name: string)
 		return Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI." .. name)
 	end
+	-- the round look (the UI pack reel, 2026-10-27): the Shop button in the top row, the reel's
+	-- tile grid and offers; the pixel look keeps the green Shop pill
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+	local Pop = ui("Pop")
 	local HudView = ui("HudView")
 	local TeleportView = ui("TeleportView")
 	local BuildView = ui("BuildView")
@@ -465,8 +469,16 @@ return function(T, Loader)
 			T.eq(lift.NextSelectionUp, build, "up the column")
 			T.truthy(shop.NextSelectionRight ~= lift, "the row ends at SHOP")
 			local teleport = TeleportView.build(refs.TopBar, 1.25)
-			T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
-			T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
+			if PopTheme.round() then
+				-- the reel's row: Shop, Lobby, Base, Vault
+				local shop = refs.TopBar:FindFirstChild("ShopPill")
+				T.eq(shop.NextSelectionRight, teleport.Buttons.Lobby, "Shop -> Lobby")
+				T.eq(teleport.Buttons.Lobby.NextSelectionRight, teleport.Buttons.Base, "Lobby -> Base")
+				T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Base, "Vault -> Base")
+			else
+				T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
+				T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
+			end
 			local outline = HudBubble.selectionImage()
 			T.truthy(outline:FindFirstChildOfClass("UIStroke"), "gold selection outline")
 		end)
@@ -495,11 +507,23 @@ return function(T, Loader)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
 				height -= screen[3] / scale
-				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") == 3
+				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") >= 3 -- (the round look: 4 on phones)
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
 				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
 				local chipBottom = chipTop + TrainView.chipSize(compact).Y
-				if compact then
+				if PopTheme.round() then
+					-- the round look: the Shop leads the top row (not on the smallest phones: the
+					-- Store tile), the Server Luck line over the money
+					local inRow = refs.TopBar:FindFirstChild("ShopPill")
+					T.eq(inRow ~= nil, screen[1] >= 600, `the Shop in the top row at {screen[1]} x {screen[2]}`)
+					T.eq(pill, nil, "no pill bottom-left")
+					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
+					local luckBottom = height + luck.Position.Y.Offset
+					T.truthy(
+						luckBottom <= height + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset,
+						"the Server Luck line over the money"
+					)
+				elseif compact then
 					-- phones and tablets: the pill at the top-right, clear of the tabs and the chips' row
 					local width = screen[1] / scale
 					local pillLeft = width - 18 - pill.Size.X.Offset
@@ -553,12 +577,16 @@ return function(T, Loader)
 				local scale = HudBubble.scaleFor(screen)
 				local refs = HudBubble.buildGame(scale, size[1])
 				local width, height = size[1] / scale, size[2] / scale
+				-- (the round look on phones: no pill on the chips' row; the screen's right margin is the
+				-- limit, a line the chips must not cross)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillSize = Vector2.new(pill.Size.X.Offset, pill.Size.Y.Offset)
-				local pillPos = Vector2.new(
-					width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pillSize.X,
-					pill.Position.Y.Offset - pill.AnchorPoint.Y * pillSize.Y
-				)
+				local pillSize = if pill then Vector2.new(pill.Size.X.Offset, pill.Size.Y.Offset) else Vector2.new(0, 1e6)
+				local pillPos = if pill
+					then Vector2.new(
+						width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pillSize.X,
+						pill.Position.Y.Offset - pill.AnchorPoint.Y * pillSize.Y
+					)
+					else Vector2.new(width - 16, -5e5)
 				-- the TRAIN chip and the boost chips where TrainController / BoostController put them
 				TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")
 				local train = TrainView.build(true)
@@ -586,11 +614,13 @@ return function(T, Loader)
 					T.truthy(BoostView.rowRight(chips) <= pillPos.X - HudBubble.ChipGap, `the row stops short of the pill at {at}`)
 					if size[1] >= 667 and left[1] == 222 then
 						T.eq(fit, "Tags", `room for the tags at {at}`)
-					elseif size[1] == 568 then
+					elseif size[1] == 568 and not PopTheme.round() then
 						T.truthy(fit ~= "Tags", `the small phone drops the tags at {at}`)
 					end
 				end
-				T.truthy(pillSize.Y * scale >= 44 and pillSize.X * scale >= 44, `the Shop pill >= 44 pt at {size[1]} x {size[2]}`)
+				if pill then
+					T.truthy(pillSize.Y * scale >= 44 and pillSize.X * scale >= 44, `the Shop pill >= 44 pt at {size[1]} x {size[2]}`)
+				end
 			end
 		end)
 		TrainView.HudChipTop, BoostView.HudChipsRight = beforeTop, beforeRight
@@ -643,13 +673,17 @@ return function(T, Loader)
 				local scale = HudBubble.scaleFor(screen)
 				local refs = HudBubble.buildGame(scale, size[1])
 				local width = size[1] / scale
+				local hudHeight = (size[2] - 58) / scale -- (CoreUISafeInsets: under Roblox's top bar)
 				local function rect(gui: any): (any, any)
 					local s = gui.Size
 					local x = width * gui.Position.X.Scale + gui.Position.X.Offset - gui.AnchorPoint.X * s.X.Offset
-					local y = gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
+					local y = hudHeight * gui.Position.Y.Scale + gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
 					return Vector2.new(x, y), Vector2.new(s.X.Offset, s.Y.Offset)
 				end
-				local pillPos, pillSize = rect(refs.Gui:FindFirstChild("ShopPill"))
+				-- (the round look: no pill on phones, the Shop is in the top row: the tabs' test; no offers)
+				T.eq(refs.Gui:FindFirstChild("Offers"), nil, "no offers on a phone")
+				local pillGui = refs.Gui:FindFirstChild("ShopPill") or refs.Gui:FindFirstChild("ServerLuck")
+				local pillPos, pillSize = rect(pillGui)
 				local luckPos, luckSize = rect(refs.Gui:FindFirstChild("ServerLuck"))
 				local bubble = TutorialView.layout(scale, screen, true)
 				local bubblePos = Vector2.new(bubble.Position.X - bubble.AnchorPoint.X * bubble.Width, bubble.Position.Y)
@@ -672,9 +706,16 @@ return function(T, Loader)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				T.truthy(pill, "the green Shop pill")
-				local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
-				T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				if PopTheme.round() then
+					-- (the round look: the Shop is one of the top row's buttons, or on the smallest
+					-- phones the Store tile only)
+					local inRow = refs.TopBar:FindFirstChild("ShopPill")
+					T.eq(inRow ~= nil, screen.X >= 600, `the Shop in the top row at {screen.X} x {screen.Y}`)
+				else
+					T.truthy(pill, "the green Shop pill")
+					local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
+					T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				end
 				-- the money sits bottom-left, the backpack button right of the screen's middle
 				local moneyRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
 				local backpackLeft = width / 2 + refs.CarryPanel.Position.X.Offset
@@ -1043,7 +1084,7 @@ return function(T, Loader)
 			end
 			T.eq(count, 1, "one ELEVATOR tile (the side menu's Elevator entry)")
 			local label = refs.Menu.Elevator:FindFirstChild("Label", true)
-			T.eq(label and label.Text, "ELEVATOR", "named like the side menu entry")
+			T.eq(label and label.Text, Pop.caption("ELEVATOR"), "named like the side menu entry (Title Case in the round look)")
 		end)
 	end)
 end

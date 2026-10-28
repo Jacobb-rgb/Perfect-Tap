@@ -223,6 +223,52 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("Round HUD: the reel's eight tiles, the Shop in the top row, offers mid-right clear of the rest", function()
+		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+		local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+		inLook("Round", function()
+			local ids = {}
+			for _, entry in HudBubble.gameMenu() do
+				table.insert(ids, entry.Id)
+			end
+			T.eq(table.concat(ids, ","), "Store,Rebirth,Golems,Backpack,Wheel,Quests,Build,More", "the reel's order")
+			for _, spec in { { 1280, 720, false }, { 1920, 1080, true }, { 1024, 768, false } } do
+				local screen = Vector2.new(spec[1], spec[2])
+				local scale = HudBubble.scaleFor(screen)
+				local refs = HudBubble.buildGame(scale, spec[1])
+				local where = `{spec[1]} x {spec[2]}`
+				T.truthy(refs.TopBar:FindFirstChild("ShopPill"), where .. ": the Shop leads the top row")
+				local offers = refs.Gui:FindFirstChild("Offers") :: any
+				T.truthy(offers, where .. ": the offers")
+				local w, h = spec[1] / scale, (spec[2] - 36) / scale
+				local left = w - 16 - offers.Size.X.Offset
+				local top = h * 0.5 - offers.Size.Y.Offset / 2
+				T.truthy(top > refs.TopBar.Size.Y.Offset and top + offers.Size.Y.Offset < h, where .. ": on screen, under the top row")
+				local bubble = TutorialView.layout(scale, screen, false, spec[3], nil)
+				local by = bubble.Position.Y - bubble.AnchorPoint.Y * bubble.Height
+				local bx = bubble.Position.X - bubble.AnchorPoint.X * bubble.Width
+				local apart = by >= top + offers.Size.Y.Offset or bx + bubble.Width <= left
+				T.truthy(apart, where .. ": the offers clear of the tutorial bubble")
+				for _, holder in offers:GetChildren() do
+					if holder:IsA("Frame") then
+						T.truthy(holder:FindFirstChild("Offer"):FindFirstChild("Price"), holder.Name .. ": its R$ tag")
+					end
+				end
+			end
+			-- the Spin tile's badge (spins ready) is the reel's FREE! sticker; other tiles keep a count
+			local refs = HudBubble.buildGame(1)
+			local spin = HudBubble.claimTile(refs.Menu, "Wheel")
+			HudBubble.setTileBadge(spin, 2)
+			T.eq(spin:FindFirstChild("Sticker").Text, "FREE!")
+			T.eq(spin:FindFirstChild("Badge"), nil)
+			HudBubble.setTileBadge(spin, 0)
+			T.eq(spin:FindFirstChild("Sticker"), nil)
+			local golems = HudBubble.claimTile(refs.Menu, "Golems")
+			HudBubble.setTileBadge(golems, 3)
+			T.truthy(golems:FindFirstChild("Badge"), "a count badge")
+		end)
+	end)
+
 	T.test("Confetti: bits start across the top, fall a while and are the same for a seed", function()
 		local a = Confetti.pieces(Confetti.Count, 42)
 		local b = Confetti.pieces(Confetti.Count, 42)

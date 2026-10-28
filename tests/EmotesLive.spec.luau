@@ -913,7 +913,8 @@ return function(T, Loader)
 		local face = HudBubble.claimTile(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 40 })
 		T.truthy(face and face:IsA("TextButton"), "the tile's button")
 		local label = face:FindFirstChild("Label") :: any
-		T.eq(label.Text, "EMOTES", "its word")
+		local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
+		T.eq(label.Text, Pop.caption("EMOTES"), "its word (Title Case in the round look)")
 		T.falsy(IconAssets.has("emotes"), "no picture: the word shows (never an emoji)")
 		local visible = 0
 		for _, child in refs.Menu:GetChildren() do
