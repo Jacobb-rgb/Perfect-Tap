@@ -1403,11 +1403,11 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 				end
 				-- a Gear level bought before the fold wins it (max): its Gear prices count then
 				if gearBefore then
-					local bought = 0
+					local gearPaid = 0
 					for i = 1, math.min(gearBefore, #OLD_BACKPACK_PRICES) do
-						bought += OLD_BACKPACK_PRICES[i]
+						gearPaid += OLD_BACKPACK_PRICES[i]
 					end
-					paid = math.max(paid, bought)
+					paid = math.max(paid, gearPaid)
 				end
 				local refund = math.max(0, paid - pick.Price)
 				if refund > 0 then
