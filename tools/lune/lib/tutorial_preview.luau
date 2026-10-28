@@ -23,6 +23,9 @@
 	  ui_tutorial_phone_small  568 x 320 pt phone: step 5 (the longest text),
 	                           kept above a right-side menu of two buttons
 	  ui_tutorial_done         PC: the finish card (+250 coins)
+	  ui_tutorial_tablet       a 1024 x 768 touch tablet: step 3, top right (review
+	                           2026-10-28: the round look's HUD with the bubble)
+	  ui_tutorial_ipad_mini    an iPad mini, 1133 x 744: the same
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -169,13 +172,20 @@ function Preview.build(Loader: any): { [string]: any }
 	local TV: Screen = { Px = 1.25 * 900 / 1080, Ui = 1.25, Pt = Vector2.new(1920, 1080 - 36), Touch = false, TenFoot = true }
 	local PHONE: Screen = { Px = 0.62 * 900 / 375, Ui = 0.62, Pt = Vector2.new(667, 375 - 24), Touch = true }
 	local SMALL: Screen = { Px = 0.62 * 900 / 320, Ui = 0.62, Pt = Vector2.new(568, 320 - 58), Touch = true }
+	-- touch tablets (HudController's scale: min(height / 720, width / 1100))
+	local tabletUi = math.min(768 / 720, 1024 / 1100)
+	local TABLET: Screen = { Px = tabletUi * 900 / 768, Ui = tabletUi, Pt = Vector2.new(1024, 768 - 36), Touch = true }
+	local miniUi = math.min(744 / 720, 1133 / 1100)
+	local MINI: Screen = { Px = miniUi * 900 / 744, Ui = miniUi, Pt = Vector2.new(1133, 744 - 36), Touch = true }
 
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 
 	local function hud(screen: Screen): any
 		-- the light HUD (LIGHT_UI=1) lays out for the real uiScale and screen width
-		local refs = if UIConfig.LightUI then HudBubble.buildGame(screen.Ui, screen.Pt.X) else HudView.build()
+		local refs = if UIConfig.LightUI
+			then HudBubble.buildGame(screen.Ui, screen.Pt.X, screen.Touch, screen.TenFoot == true)
+			else HudView.build()
 		refs.Gui.Scale.Scale = screen.Px
 		refs.Coins.Text = Format.money(120)
 		refs.Income.Text = Format.perSecond(0)
@@ -183,6 +193,12 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Toasts:ClearAllChildren()
 		local bar = TeleportView.build(refs.TopBar, screen.Ui, screen.Pt.X)
 		TeleportView.relayout(bar, refs.TopBar, screen.Ui, screen.Pt.X)
+		if UIConfig.LightUI then
+			-- the left tiles as the controllers claim them
+			for _, entry in HudBubble.gameMenu() do
+				HudBubble.claimTile(refs.Menu, entry.Id)
+			end
+		end
 		return refs
 	end
 
@@ -240,6 +256,8 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_tutorial_tv = UiExport.export({ hud(TV).Gui, bubble(TV, 2, "Gamepad").Gui })
 	exports.ui_tutorial_phone = UiExport.export({ hud(PHONE).Gui, bubble(PHONE, 3, "Touch").Gui })
 	exports.ui_tutorial_phone_small = UiExport.export({ hud(SMALL).Gui, bubble(SMALL, 5, "Touch").Gui })
+	exports.ui_tutorial_tablet = UiExport.export({ hud(TABLET).Gui, bubble(TABLET, 3, "Touch").Gui })
+	exports.ui_tutorial_ipad_mini = UiExport.export({ hud(MINI).Gui, bubble(MINI, 3, "Touch").Gui })
 	local done = TutorialView.build()
 	done.Gui.Scale.Scale = PC.Px
 	done.DoneText.Text = TutorialView.doneText(TutorialConfig.Reward)
