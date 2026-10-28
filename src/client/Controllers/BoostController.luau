@@ -163,11 +163,11 @@ local function trainChip(): GuiObject?
 	return if frame and frame:IsA("GuiObject") then frame else nil
 end
 
--- A frame's left edge and bottom in design units from its ScreenGui's top-left
+-- A frame's left edge, top and bottom in design units from its ScreenGui's top-left
 -- (the gui's own frame: under Roblox's top bar, like the chips' gui).
 local function rectIn(gui: ScreenGui, frame: GuiObject, scale: number): BoostView.PillRect
 	local at = frame.AbsolutePosition - gui.AbsolutePosition
-	return { Left = at.X / scale, Bottom = (at.Y + frame.AbsoluteSize.Y) / scale }
+	return { Left = at.X / scale, Top = at.Y / scale, Bottom = (at.Y + frame.AbsoluteSize.Y) / scale }
 end
 
 -- The light HUD's boost corner (bottom right, BoostView.cornerSpot), measured in the

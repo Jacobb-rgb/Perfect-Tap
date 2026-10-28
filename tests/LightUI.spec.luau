@@ -559,20 +559,22 @@ return function(T, Loader)
 				size
 		end
 		withLight(function()
-			-- { width, height, touch, the top bar's inset (px) }
+			-- { width, height, touch, the top bar's inset, the home bar's inset (px) }
 			local screens = {
-				{ 568, 320, true, 36 },
-				{ 667, 375, true, 36 },
-				{ 800, 360, true, 58 },
-				{ 844, 390, true, 58 },
-				{ 1024, 768, true, 36 },
-				{ 1280, 720, false, 36 },
-				{ 1920, 1080, false, 58 },
+				{ 568, 320, true, 36, 0 },
+				{ 568, 320, true, 58, 0 },
+				{ 667, 375, true, 36, 0 },
+				{ 667, 375, true, 58, 0 },
+				{ 800, 360, true, 58, 0 },
+				{ 844, 390, true, 58, 21 },
+				{ 1024, 768, true, 36, 20 },
+				{ 1280, 720, false, 36, 0 },
+				{ 1920, 1080, false, 58, 0 },
 			}
 			for _, size in screens do
 				local screen = Vector2.new(size[1], size[2])
 				local touch = size[3] :: boolean
-				local gui = Vector2.new(size[1], size[2] - size[4]) -- (the gui under the top bar)
+				local gui = Vector2.new(size[1], size[2] - size[4] - size[5]) -- (the gui inside the safe insets)
 				local scale = HudBubble.scaleFor(screen)
 				local width, height = gui.X / scale, gui.Y / scale
 				local refs = HudBubble.buildGame(scale, size[1])
@@ -586,12 +588,18 @@ return function(T, Loader)
 				local jumpPos = Vector2.new(width - (if small then 95 else 170) / scale, height - (if small then 90 else 210) / scale)
 				local grab = (if small then 70 else 90) / scale
 				local grabPos = Vector2.new(width - 170 / scale, height - 150 / scale)
+				-- the game's touch FIRE button (MiningController.layoutFireButton: centred there)
+				local fire = (if small then 88 else 116) / scale
+				local fireCentre = if small then Vector2.new(240, 100) else Vector2.new(310, 140)
+				local firePos = Vector2.new(width - fireCentre.X / scale - fire / 2, height - fireCentre.Y / scale - fire / 2)
+				-- the toasts' column (HudController: up to 3 toasts, 440 wide, from 70 down)
+				local toastPos, toastSize = Vector2.new(width / 2 - 220, 70), Vector2.new(440, 3 * 56)
 				for _, both in { false, true } do
 					local chips = BoostView.buildChips()
 					T.truthy(chips.Row:GetAttribute("Corner"), "the light chips are the corner row")
 					local count = if both then 2 else 1
 					local pillRect = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
-						then { Left = pillPos.X, Bottom = pillPos.Y + pillSize.Y }
+						then { Left = pillPos.X, Top = pillPos.Y, Bottom = pillPos.Y + pillSize.Y }
 						else nil
 					local right, bottom, stacked = BoostView.cornerSpot({
 						Screen = screen,
@@ -632,9 +640,11 @@ return function(T, Loader)
 							)
 							T.falsy(overlap(pos, s, pillPos, pillSize), `{kindId} off the Shop pill at {at}`)
 							T.falsy(overlap(pos, s, carryPos, carrySize), `{kindId} off the backpack button at {at}`)
+							T.falsy(overlap(pos, s, toastPos, toastSize), `{kindId} off the toasts at {at}`)
 							if touch then
 								T.falsy(overlap(pos, s, jumpPos, Vector2.new(jump, jump)), `{kindId} off the jump button at {at}`)
 								T.falsy(overlap(pos, s, grabPos, Vector2.new(grab, grab)), `{kindId} off the Grab button at {at}`)
+								T.falsy(overlap(pos, s, firePos, Vector2.new(fire, fire)), `{kindId} off the FIRE button at {at}`)
 							end
 							x -= s.X + gap
 							y -= s.Y + gap
@@ -664,17 +674,32 @@ return function(T, Loader)
 		local tv = Vector2.new(1920, 1080)
 		local tvRight, tvBottom = BoostView.cornerSpot({ Screen = tv, Gui = tv, Scale = 1.25, Touch = false, TenFoot = true })
 		T.truthy(tvRight * 1.25 >= 1920 * 0.05 - 1 and tvBottom * 1.25 >= 1080 * 0.05 - 1, "inside the TV's 5% band")
-		-- a small phone with the touch bubble over the right column: the row goes under it
+		-- a phone: the row stands on the Shop pill at the right edge; while the touch tutorial
+		-- bubble has that corner, left of it
 		local phone, gui = Vector2.new(568, 320), Vector2.new(568, 284)
 		local s = 0.62
-		local pill = { Left = 568 / s - 206, Bottom = 288 }
-		local bubble = { Left = 620, Bottom = 230 }
-		local r, b, stacked =
-			BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 1, Pill = pill, Bubble = bubble })
-		T.falsy(stacked, "beside the pill")
-		local top = gui.Y / s - b - BoostView.cornerHeight()
-		T.truthy(top >= bubble.Bottom + BoostView.CornerGap, "under the tutorial bubble")
-		T.truthy(gui.X / s - r <= pill.Left, "left of the pill")
+		local pill = { Left = 568 / s - 206, Top = 216, Bottom = 288 }
+		local r, b, stacked = BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 2, Pill = pill })
+		T.falsy(stacked, "a row")
+		T.eq(r, BoostView.CornerRight, "at the right edge")
+		T.truthy(gui.Y / s - b <= pill.Top - BoostView.CornerGap, "standing on the Shop pill")
+		-- the touch buttons BoostView keeps clear of are where their controllers put them
+		local fs = require("@lune/fs")
+		local root = Loader.root or "."
+		local interact = fs.readFile(root .. "/src/client/Controllers/InteractController.luau")
+		T.truthy(interact:find('SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))', 1, true), "Grab where BoostView thinks")
+		local mining = fs.readFile(root .. "/src/client/Controllers/MiningController.luau")
+		T.truthy(
+			mining:find("fireHolder.Size = UDim2.fromOffset(88, 88)", 1, true) and mining:find("UDim2.new(1, -240, 1, -100)", 1, true),
+			"small FIRE"
+		)
+		T.truthy(
+			mining:find("fireHolder.Size = UDim2.fromOffset(116, 116)", 1, true) and mining:find("UDim2.new(1, -310, 1, -140)", 1, true),
+			"large FIRE"
+		)
+		local bubble = { Left = 620, Bottom = 199 }
+		local r2 = BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 2, Pill = pill, Bubble = bubble })
+		T.truthy(gui.X / s - r2 <= bubble.Left - BoostView.CornerGap, "left of the tutorial bubble")
 	end)
 
 	-- (review: every carry change once destroyed and rebuilt the whole hotbar; since the

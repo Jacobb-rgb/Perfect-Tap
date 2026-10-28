@@ -1,7 +1,7 @@
 --[[
 	The EMOTES menu over the HUD, for the preview pictures (UI overlays only;
 	the world comes from the "store" scene: lune run tools/lune/export_scene.luau store).
-	Drawn with the game's own code (EmoteView, HudBubble: the EMOTES tile in the left menu).
+	Drawn with the game's own code (EmoteView, HudBubble: the EMOTES tile behind MORE, SPIN next to MORE).
 
 	  lune run tools/lune/export_emote_menu.luau
 	-> build/preview/ui_emotes_pc.json, ui_emotes_hud_pc, ui_emotes_phone, ui_emotes_hud_phone
