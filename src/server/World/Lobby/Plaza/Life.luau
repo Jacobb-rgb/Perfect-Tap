@@ -1,10 +1,12 @@
 --[[
 	Plaza life (concept fixes 2026-10-18, docs/art/lobby_concept*.webp):
 
-	  Miners     up to MaxMiners blocky miner NPCs from parts (hard hat with a
-	             lamp, overalls, a pickaxe or an ore chunk), standing on the
-	             lawns around the plaza looking at it. No Humanoid, no
-	             collision (the fire crystal stays the plaza's only spinner).
+	  Miners     up to MaxMiners blocky mining golems from parts (owner
+	             2026-10-25: golems in place of the human miners; a hard hat
+	             with a lamp, a pickaxe on the shoulder, swung at an ore rock
+	             or an ore chunk held up), standing on the lawns around the
+	             plaza looking at it. No Humanoid, no collision (the fire
+	             crystal stays the plaza's only spinner).
 	  Lanterns   warm hanging lanterns on their own L-posts at the front
 	             corners of the stalls (neon only, no lights)
 	  Props      crates, barrels and an ore sack beside the stall fronts
@@ -38,24 +40,24 @@ Life.MaxMiners = 9
 Life.PromptClear = 3 -- studs from a counter / tagged stall part
 Life.RingClear = 39 -- the plaza ring's walking area
 -- Stalls that get lanterns and props (the Hall of Fame boards and the wheel stay bare)
-Life.Stalls = { "Shop", "Upgrades", "CapsuleStall", "EnchantShop", "RockScanner", "FossilDig" }
+Life.Stalls = { "Shop", "Upgrades", "CapsuleStall", "EnchantShop", "BackpackStall", "FossilDig" }
 -- Kept clear: the Great Forge's porch and stairs, the vault and its approach.
 Life.Clear = {
 	{ Min = Vector3.new(-26, 0, -48), Max = Vector3.new(26, 0, -30) },
 	{ Min = Vector3.new(-72, 0, 58), Max = Vector3.new(72, 0, 160) },
 }
 
-local SKIN = { Color3.fromRGB(255, 204, 160), Color3.fromRGB(226, 168, 120), Color3.fromRGB(176, 118, 80), Color3.fromRGB(120, 78, 52) }
-local SHIRT = {
-	Color3.fromRGB(214, 110, 40),
-	Color3.fromRGB(176, 52, 46),
-	Color3.fromRGB(62, 110, 176),
-	Color3.fromRGB(70, 140, 70),
-	Color3.fromRGB(150, 98, 60),
-}
-local PANTS = { Color3.fromRGB(46, 60, 96), Color3.fromRGB(70, 56, 44), Color3.fromRGB(56, 56, 64) }
+-- the golems' looks (Districts.Kit.GolemLooks' family: silver, gold, copper, amethyst, ember, mossy, jade)
+local GOLEMS = {
+	{ Body = C.IronLight, Accent = C.Iron, Eyes = C.CrystalCyan },
+	{ Body = C.Gold, Accent = C.Brass, Eyes = C.Fire, Gem = C.CrystalPink },
+	{ Body = C.Copper, Accent = C.LeafOrangeDark, Eyes = C.CrystalCyan },
+	{ Body = C.StoneDark, Accent = C.StoneDeep, Eyes = C.CrystalPurple, Gem = C.CrystalPurple },
+	{ Body = C.StoneDeep, Accent = C.Iron, Eyes = C.Ember, Gem = C.Ember },
+	{ Body = C.Stone, Accent = C.StoneDark, Eyes = C.LampAmber, Moss = true },
+	{ Body = C.LeafGreenDark, Accent = C.StoneDark, Eyes = C.FireCore, Gem = C.CrystalCyan },
+} :: { { [string]: any } }
 local HAT = Color3.fromRGB(250, 196, 40)
-local BEARD = { Color3.fromRGB(90, 60, 40), Color3.fromRGB(200, 196, 190), Color3.fromRGB(150, 70, 30) }
 local ORE = { C.CrystalCyan, C.Gold, C.CrystalPurple, C.Ember }
 
 type Box = { Min: Vector3, Max: Vector3 }
@@ -142,60 +144,71 @@ end
 
 ---------------------------------------------------------------- miners
 
--- A blocky miner (R6 proportions, 1.25 scale) at `base` (feet), facing its
--- LookVector. Pose: "Pickaxe" (on the shoulder), "Ore" (holding a glowing
--- chunk), "Rest" (hands on the pickaxe in front). 14-17 parts.
+-- A blocky mining golem (owner 2026-10-25: golems in place of the human
+-- miners) at `base` (feet), facing its LookVector, about as tall as the old
+-- miners: stubby legs, a wide body, arm blocks, a big head with a face plate
+-- and a glowing visor, a yellow hard hat with a lamp. Pose: "Pickaxe" (on the
+-- shoulder), "Swing" (raised over the head at an ore rock in front), "Ore"
+-- (holding up a glowing chunk). 13-17 parts.
 function Life.miner(parent: Instance, base: CFrame, pose: string, rng: Rng.Rng): Model
 	local m = Style.model("Miner", parent)
-	local s = 1.25
-	local skin = SKIN[rng:int(1, #SKIN)]
-	local shirt = SHIRT[rng:int(1, #SHIRT)]
-	local pants = PANTS[rng:int(1, #PANTS)]
+	local s = 2.2
+	local look = GOLEMS[rng:int(1, #GOLEMS)]
+	local body: Color3, accent: Color3 = look.Body, look.Accent
 	local function part(cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?): Part
 		return Style.block(m, base * cf, size * s, color, material, Style.tiny())
 	end
-	-- legs, boots, torso, overall straps, belt
-	for _, x in { -0.5, 0.5 } do
-		part(CFrame.new(x * s, 1 * s, 0), Vector3.new(0.95, 2, 0.95), pants)
-		part(CFrame.new(x * s, 0.2 * s, -0.08 * s), Vector3.new(1, 0.4, 1.12), Color3.fromRGB(52, 40, 32))
+	local function at(x: number, y: number, z: number): CFrame
+		return CFrame.new(x * s, y * s, z * s)
 	end
-	local torso = part(CFrame.new(0, 3 * s, 0), Vector3.new(2, 2, 1), shirt)
+	-- legs, the body, the head with its face plate and visor
+	for _, x in { -0.32, 0.32 } do
+		part(at(x, 0.3, 0), Vector3.new(0.48, 0.6, 0.58), accent)
+	end
+	local torso = part(at(0, 0.98, 0), Vector3.new(1.2, 0.8, 0.85), body)
 	torso.Name = "Torso"
-	part(CFrame.new(0, 2.25 * s, 0), Vector3.new(2.05, 0.35, 1.05), Color3.fromRGB(86, 58, 36))
-	part(CFrame.new(0, 2.7 * s, -0.5 * s), Vector3.new(1.3, 0.9, 0.08), pants)
-	-- head, eyes, beard
-	local head = part(CFrame.new(0, 4.6 * s, 0), Vector3.new(1.2, 1.2, 1.2), skin)
+	local head = part(at(0, 1.92, 0), Vector3.new(1.4, 1.1, 1.2), body)
 	head.Name = "Head"
-	for _, x in { -0.25, 0.25 } do
-		part(CFrame.new(x * s, 4.75 * s, -0.61 * s), Vector3.new(0.17, 0.2, 0.05), Color3.fromRGB(30, 26, 26))
+	part(at(0, 1.86, -0.61), Vector3.new(1.1, 0.62, 0.03), accent)
+	part(at(0, 1.92, -0.64), Vector3.new(0.86, 0.2, 0.03), look.Eyes, NEON)
+	if look.Gem then
+		part(at(0, 1.0, -0.44) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.3, 0.3, 0.04), look.Gem, NEON)
+	elseif look.Moss then
+		part(at(-0.15, 1.42, 0.1), Vector3.new(0.9, 0.12, 0.7), C.GrassLight)
 	end
-	if rng:chance(0.6) then
-		part(CFrame.new(0, 4.2 * s, -0.55 * s), Vector3.new(1.1, 0.55, 0.2), BEARD[rng:int(1, #BEARD)])
-	end
-	-- hard hat with a lamp
-	part(CFrame.new(0, 5.35 * s, 0), Vector3.new(1.35, 0.45, 1.35), HAT)
-	part(CFrame.new(0, 5.15 * s, -0.1 * s), Vector3.new(1.65, 0.12, 1.75), HAT)
-	part(CFrame.new(0, 5.35 * s, -0.72 * s), Vector3.new(0.38, 0.3, 0.12), Color3.fromRGB(255, 236, 170), NEON)
+	-- the hard hat with a lamp
+	part(at(0, 2.6, 0), Vector3.new(1.5, 0.3, 1.3), HAT)
+	part(at(0, 2.5, -0.62), Vector3.new(1.5, 0.12, 0.3), HAT)
+	part(at(0, 2.62, -0.67), Vector3.new(0.34, 0.24, 0.06), Color3.fromRGB(255, 236, 170), NEON)
 	-- arms and the pose
-	local arm = Vector3.new(0.95, 2, 0.95)
+	local arm = Vector3.new(0.4, 0.85, 0.5)
 	if pose == "Pickaxe" then
-		part(CFrame.new(-1.5 * s, 3 * s, 0), arm, shirt)
-		part(CFrame.new(1.45 * s, 3.55 * s, 0.2 * s) * CFrame.Angles(math.rad(160), 0, math.rad(8)), arm, shirt)
-		local grip = CFrame.new(1.35 * s, 4.55 * s, 0.75 * s) * CFrame.Angles(math.rad(-35), 0, math.rad(15))
-		part(grip, Vector3.new(0.22, 2.8, 0.22), C.Wood)
-		part(grip * CFrame.new(0, -1.35 * s, 0), Vector3.new(2, 0.3, 0.32), C.IronLight)
-	elseif pose == "Ore" then
-		for _, x in { -1, 1 } do
-			part(CFrame.new(x * 1.2 * s, 3.4 * s, -0.7 * s) * CFrame.Angles(math.rad(70), 0, math.rad(-x * 18)), arm, shirt)
+		part(at(-0.8, 0.9, -0.05), arm, accent)
+		part(at(0.82, 1.3, 0.05) * CFrame.Angles(math.rad(160), 0, math.rad(8)), arm, accent)
+		local grip = at(0.78, 1.75, 0.3) * CFrame.Angles(math.rad(-35), 0, math.rad(15))
+		part(grip, Vector3.new(0.1, 1.3, 0.1), C.Wood)
+		part(grip * CFrame.new(0, -0.62 * s, 0), Vector3.new(0.9, 0.14, 0.15), C.IronLight)
+	elseif pose == "Swing" then
+		-- both arms up, the pickaxe over the head, its blade toward the ore rock in front
+		for _, x in { -0.55, 0.55 } do
+			part(at(x, 1.55, -0.3) * CFrame.Angles(math.rad(150), 0, math.rad(-x * 20)), arm, accent)
 		end
-		part(CFrame.new(0, 3.2 * s, -1.55 * s) * CFrame.Angles(0.4, 0.6, 0.2), Vector3.new(1, 0.9, 0.9), ORE[rng:int(1, #ORE)], NEON)
+		local grip = at(0, 2.35, -0.55) * CFrame.Angles(math.rad(-60), 0, 0)
+		part(grip, Vector3.new(0.1, 1.4, 0.1), C.Wood)
+		part(grip * CFrame.new(0, 0.68 * s, 0) * CFrame.Angles(math.rad(90), 0, 0), Vector3.new(0.9, 0.14, 0.15), C.IronLight)
+		local rock = at(0, 0.32, -1.25) * CFrame.Angles(0, rng:range(0, math.pi), 0)
+		part(rock, Vector3.new(0.9, 0.62, 0.8), C.StoneDark)
+		part(
+			rock * CFrame.new(0.1 * s, 0.22 * s, -0.2 * s) * CFrame.Angles(0.4, 0.5, 0.2),
+			Vector3.new(0.34, 0.34, 0.34),
+			ORE[rng:int(1, #ORE)],
+			NEON
+		)
 	else
 		for _, x in { -1, 1 } do
-			part(CFrame.new(x * 1.3 * s, 2.9 * s, -0.35 * s) * CFrame.Angles(math.rad(25), 0, math.rad(-x * 14)), arm, shirt)
+			part(at(x * 0.62, 1.12, -0.45) * CFrame.Angles(math.rad(70), 0, math.rad(-x * 18)), arm, accent)
 		end
-		local handle = CFrame.new(0, 1.7 * s, -1.25 * s)
-		part(handle, Vector3.new(0.22, 2.8, 0.22), C.Wood)
-		part(handle * CFrame.new(0, 1.45 * s, 0), Vector3.new(2, 0.3, 0.32), C.IronLight)
+		part(at(0, 1.2, -0.85) * CFrame.Angles(0.4, 0.6, 0.2), Vector3.new(0.5, 0.45, 0.45), ORE[rng:int(1, #ORE)], NEON)
 	end
 	m.PrimaryPart = torso
 	Style.streaming(m, "Atomic")
@@ -205,7 +218,7 @@ end
 local function miners(parent: Instance, index: Meadow.Index, prompts: { Box }, rng: Rng.Rng)
 	local m = Style.model("Miners", parent)
 	local placed: { Vector3 } = {}
-	local poses = { "Pickaxe", "Ore", "Rest" }
+	local poses = { "Pickaxe", "Swing", "Ore" }
 	local angles: { number } = {}
 	for i = 0, 35 do
 		table.insert(angles, i * 10 + rng:range(-3, 3))

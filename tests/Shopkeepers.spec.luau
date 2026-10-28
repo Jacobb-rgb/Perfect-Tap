@@ -20,7 +20,7 @@ return function(T, Loader)
 	local GolemKeeper = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemKeeper")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 
-	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault", "Droppers" }
+	local SHOPS = { "Gear", "Tech", "Sell", "Enchant", "Vault", "Droppers", "Backpacks" }
 	-- the counter tag each shop's spot hangs on
 	local COUNTERS = {
 		Gear = "ShopCounter",
@@ -29,6 +29,7 @@ return function(T, Loader)
 		Enchant = "EnchantCounter",
 		Vault = "VaultCounter",
 		Droppers = "DropperCounter",
+		Backpacks = "BackpackCounter",
 	}
 
 	local function hasTag(inst: any, tag: string): boolean
@@ -488,6 +489,13 @@ return function(T, Loader)
 		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Gear", Op = "Buy", Ok = true })[1], "Gear")
 		T.eq(ShopkeeperConfig.buyShops("ActionResult", { Action = "Enchant", Op = "Buy", Ok = true })[1], "Enchant")
 		T.eq(ShopkeeperConfig.buyShops("VaultResult", { Level = 3, Ok = true })[1], "Vault")
+		T.eq(ShopkeeperConfig.buyShops("BackpackResult", { Id = "TrailPack", Op = "Buy", Ok = true })[1], "Backpacks")
+		T.eq(ShopkeeperConfig.buyShops("BackpackResult", { Id = "TrailPack", Op = "Equip", Ok = true }), nil, "an equip is no buy")
+		T.eq(
+			ShopkeeperConfig.buyShops("BackpackResult", { Id = "TrailPack", Op = "Buy", Ok = false, Reason = "NoCoins" }),
+			nil,
+			"a refused buy"
+		)
 		local tech = ShopkeeperConfig.buyShops("ShopResult", { Item = "Crusher", Ok = true })
 		T.truthy(table.find(tech, "Tech") and table.find(tech, "Droppers"), "UPGRADES and DROPPERS both open the Tech shop")
 		T.eq(ShopkeeperConfig.buyShops("ShopResult", { Item = "Crusher", Ok = false, Reason = "NoCoins" }), nil, "a refusal")

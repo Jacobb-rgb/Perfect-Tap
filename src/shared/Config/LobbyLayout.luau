@@ -129,7 +129,11 @@ LobbyLayout.Budget = {
 	-- the spawn (21,680 + 2,779 + 352), 25,063 at the plaza (21,926 + 2,785 + 352) and 25,206 at the
 	-- DROPPERS shop's door (21,578 + 2,750 + 352 + the 526-part showroom, tests/DropperShop.spec.luau),
 	-- + ~30: 25,000 -> 25,240)
-	StreamParts = 25240,
+	-- (owner 2026-10-24: quality over limits; integrator review 2026-10-28: the BACKPACKS
+	-- shop's worst spot, its gateway, holds 20,784 + 2,661 + 352 + its packs 914 (phones show
+	-- the inside ones lite, inside too) + decor 90 + the DROPPERS showroom 512 + the shopkeepers
+	-- in range 215 = 25,528 (its counter 25,517), tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,560)
+	StreamParts = 25560,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -141,7 +145,7 @@ LobbyLayout.Budget = {
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 3500, LobbyParts = 3500, Lights = 30, LobbyLights = 30 }, -- (2026-10-25, owner: the golden dragon statue holding the TERRA FORGE sign in place of the fire crystal: 3,213 -> 3,459 measured, +1 light) (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2500, LobbyParts = 2500, Lights = 11, LobbyLights = 11 }, -- (2026-10-23: + the DROPPERS shop's grounds and round roof, 2,469 measured) + v2 stalls, concept v2 look (~2,080 parts after perf pass 1) + the walk-in DROPPERS shop (owner 2026-10-23, ~2,425; the map total stays inside MapParts / LobbyParts)
-		Flora = { Parts = 4150, LobbyParts = 3205, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area) (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, tufts 58 -> 100, flower beds 34 -> 48, patches 52 -> 60, bushes 30 -> 36, rocks 20 -> 24, the lawn behind the Vault keeping its own share on top, Meadow.Max / Meadow.SouthLawnMax: 4,046 measured, 3,173 of them in the lobby area, + ~30: LobbyParts 3,100 -> 3,205; Parts unchanged)
+		Flora = { Parts = 4150, LobbyParts = 3260, Lights = 8, LobbyLights = 8 }, -- (owner 2026-10-25: three trees round the BACKPACKS shop; 3,229 measured in the lobby area on main ebbb9c5f, + ~30) the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area) (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, tufts 58 -> 100, flower beds 34 -> 48, patches 52 -> 60, bushes 30 -> 36, rocks 20 -> 24, the lawn behind the Vault keeping its own share on top, Meadow.Max / Meadow.SouthLawnMax: 4,046 measured, 3,173 of them in the lobby area, + ~30: LobbyParts 3,100 -> 3,205; Parts unchanged)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -363,14 +367,6 @@ LobbyLayout.Pieces = {
 		Note = "Half-round neon walkway apron in front of the DROPPERS porch (Plaza/Roads), street lamps at its two ends.",
 	},
 	{
-		Id = "RockScanner",
-		Package = "Districts",
-		Center = v(43, 0, 69),
-		Size = v(12, 11, 10),
-		Facing = v(-0.6, 0, 0.8).Unit,
-		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 36 ores. Tag OreCodex on the terminal.",
-	},
-	{
 		Id = "CapsuleStall",
 		Package = "Districts",
 		-- front-left anchor (concept v2): its front reads from the spawn camera
@@ -382,6 +378,31 @@ LobbyLayout.Pieces = {
 		-- facing east, between the plaza and the spawn)
 		Facing = v(1, 0, 0),
 		Note = "The EGGS temple left of the spawn (owner 2026-10-21/22): an open gold rotunda with the three eggs on podiums, a curved navy back wall, crystal shards, a giant crowned egg on the roof, EGGS sign, odds board. Tag CapsuleStall (Model with PrimaryPart CapsuleMachine).",
+	},
+	{
+		-- (owner 2026-10-25: "a golem with a backpack" by the shop, in place of the
+		-- shopper in the preview pictures)
+		Id = "BackpackGolem",
+		Package = "Districts",
+		Center = v(36, 0, 66.5),
+		Size = v(5, 9, 5),
+		Facing = v(0.82, 0, 0.58).Unit,
+		Note = "A golem by the BACKPACKS shop's porch looking at the shop, the Runebound pack on its back (the clients build the pack on its invisible plate: attribute BackpackId).",
+	},
+	{
+		Id = "BackpackStall",
+		Package = "Districts",
+		-- (owner 2026-10-24: a new BACKPACKS stall; then "in place of the ROCK SCANNER, in
+		-- front of the Vault", bigger like a shop: the ROCK SCANNER went (the Ore Codex
+		-- opens from the side menu), the shop stands at the end of the ToScanner path,
+		-- its gateway to the path, between the DROPPERS house, the vault's east statue,
+		-- the red trees and the outcrop at (50, 58))
+		-- (owner: "a bit wider": 18 wide, its south side 1.3 studs off the statue's
+		-- base corner, its north side 6 off the outcrop at (50, 58))
+		Center = v(46, 0, 73),
+		Size = v(18, 16, 12),
+		Facing = v(-1, 0, 0),
+		Note = "BACKPACKS: a small walk-in shop (porch with two plinths, gold-framed gateway, BACKPACKS board, corner pillars with lantern cubes, a roof podium for the giant turning Starforge pack, side racks, the counter and the shopkeeper's step). Tag BackpackCounter (BasePart: the counter top, Attachments BackpackPromptPoint and KeeperFeet); the plates carry the attribute BackpackId (no tag): the clients build the ten display packs and the small decor (Builders/BackpackShopDecor), they are not map parts.",
 	},
 	{
 		Id = "EnchantShop",
@@ -459,6 +480,36 @@ LobbyLayout.Pieces = {
 		Facing = v(1, 0, 0),
 		Walkable = true,
 		Note = "Plank boardwalk on posts from the east coast out over the sea toward the Sky package's NextIsland.",
+	},
+	-- (owner 2026-10-25: "more trees round the backpack shop": three hero trees
+	-- on the free lawn north and west of it, clear of the ToScanner path, the
+	-- outcrop at (50, 58) and the east tree belt)
+	{
+		Id = "BackpackTreeNW",
+		Package = "Flora",
+		Center = v(35, 0, 56),
+		Size = v(9, 18, 9),
+		Radius = 4.5,
+		Facing = v(0, 0, 1),
+		Note = "A big green voxel tree by the BACKPACKS shop's north-west corner.",
+	},
+	{
+		Id = "BackpackTreeNE",
+		Package = "Flora",
+		Center = v(61, 0, 61),
+		Size = v(9, 18, 9),
+		Radius = 4.5,
+		Facing = v(0, 0, 1),
+		Note = "An orange voxel tree by the BACKPACKS shop's north-east corner.",
+	},
+	{
+		Id = "BackpackTreeW",
+		Package = "Flora",
+		Center = v(26, 0, 65),
+		Size = v(9, 18, 9),
+		Radius = 4.5,
+		Facing = v(0, 0, 1),
+		Note = "A green voxel tree north of the path to the BACKPACKS shop.",
 	},
 	{
 		Id = "PinkGrove",
@@ -811,7 +862,8 @@ LobbyLayout.Paths = {
 	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
 	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
-	-- south road north of the vault's steps)
+	-- south road north of the vault's steps; since 2026-10-24 it leads to the
+	-- BACKPACKS shop's gateway, the ROCK SCANNER went)
 	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
 	-- the MINE in the south-west corner: a dirt lane from the west plot road's
 	-- end to the yard, a dirt track under the rails to the portal
