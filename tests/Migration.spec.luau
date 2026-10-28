@@ -1074,6 +1074,15 @@ return function(T, Loader)
 		Migrations.run(folded)
 		local packPrice = BackpackData.ById[folded.Backpacks.Equipped].Price
 		T.eq(folded.Coins, math.max(0, 0 + 300 + 1500 + 6000 + 25000 - packPrice), "the carry levels' real cost, not the Gear prices")
+		-- both: a bought Gear level that won the fold keeps its Gear prices (the larger sum)
+		local mixed = ProfileStore.deepCopy(DataTemplate)
+		mixed.Version = 3
+		mixed.Coins = 0
+		mixed.CarryLevel = 1
+		mixed.Gear.Backpack = 3 -- held 5: the free Rookie pack
+		Migrations.run(mixed)
+		T.eq(mixed.Backpacks.Equipped, "RookiePack")
+		T.eq(mixed.Coins, 800 + 5000 + 30000, "the Gear levels bought, not the carry level's 0")
 		local none = ProfileStore.deepCopy(DataTemplate)
 		none.Version = 8
 		none.Coins = 7
