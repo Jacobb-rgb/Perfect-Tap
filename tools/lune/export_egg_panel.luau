@@ -805,7 +805,6 @@ if videoMode == "hatch" then
 		plane.CFrame = CF.lookAt(at, at + look)
 		local base = rgb(12, 8, 16)
 		plane.Color = if tint then base:Lerp(tint, tintAmount or 0) else base
-		plane.Material = Enum.Material.SmoothPlastic
 		plane.Material = Enum.Material.Neon -- (unlit: as dark as the overlay's dim)
 		plane.Color = plane.Color:Lerp(Color3.new(0, 0, 0), 0.2)
 		plane.Transparency = 1 - 0.82 * alpha
@@ -911,23 +910,38 @@ if videoMode == "hatch" then
 					end
 				end
 				golem.Parent = parent
-				o.Flash.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.45)
-				o.Flash.BackgroundTransparency = 1 - (if order >= 4 then 0.7 else 0.35) * (1 - ease(v / 0.45))
-				o.Rays.Visible = true
-				CapsuleView.setRayColor(o, color)
-				-- the aura sits under the hero in the game: here a glowing disc behind the 3D golem
+				-- SOLID (owner 2026-10-28): no flash over the golem; the rays, the aura and the
+				-- tint sit UNDER the hero in the game, so here they are drawn behind the 3D
+				-- golem (plain plastic: no bloom bleeding over it)
+				o.Flash.BackgroundTransparency = 1
+				o.Rays.Visible = false
 				HatchFx.setAura(fx, color, 0)
+				local behind = heroFrame(cam, D + 3)
+				local glowColor = color:Lerp(Color3.new(1, 1, 1), 0.25)
+				local pulse = 0.4 + 0.6 * back(v / 0.5)
+				local r = height * scaleFor(hd, D) * 1.25 * pulse
 				local aura = Instance.new("Part")
 				aura.Name = "Aura"
 				aura.Anchored = true
 				aura.Shape = Enum.PartType.Cylinder
-				aura.Material = Enum.Material.Neon
-				aura.Color = color
-				aura.Transparency = if order >= 4 then 0.55 else 0.75
-				local r = height * scaleFor(hd, D) * 1.1
+				aura.Material = Enum.Material.SmoothPlastic
+				aura.Color = glowColor
+				aura.Transparency = if order >= 4 then 0.35 else 0.6
 				aura.Size = V3.new(0.05, r, r)
-				aura.CFrame = heroFrame(cam, D + 2) * CF.Angles(0, math.pi / 2, 0)
+				aura.CFrame = behind * CF.Angles(0, math.pi / 2, 0)
 				aura.Parent = parent
+				for i = 1, 12 do
+					local ray = Instance.new("Part")
+					ray.Name = "Ray"
+					ray.Anchored = true
+					ray.Material = Enum.Material.SmoothPlastic
+					ray.Color = glowColor
+					ray.Transparency = if order >= 4 then 0.45 else 0.65
+					local long = r * 1.6
+					ray.Size = V3.new(long, 0.25 * r / 3, 0.04)
+					ray.CFrame = behind * CF.new(0, 0, 0.3) * CF.Angles(0, 0, (i - 1) * math.pi / 6 + v * 0.25) * CF.new(long / 2, 0, 0)
+					ray.Parent = parent
+				end
 				CapsuleView.setPlate(o, kind, h.New[1] == true)
 				o.Counter.Text = ""
 				if plan.Sparkles > 0 then
@@ -937,7 +951,7 @@ if videoMode == "hatch" then
 					Confetti.pose(fx.Confetti, V2.new(0.5, 0.5), 13, v)
 				end
 				if plan.Tint and v < HatchFx.TintTime then
-					tint, tintAmount = color, 0.55 * (1 - v / HatchFx.TintTime)
+					tint, tintAmount = color, 0.35 * (1 - v / HatchFx.TintTime) -- (the backdrop only)
 				end
 			else
 				o.Hero.Visible = false
@@ -952,6 +966,7 @@ if videoMode == "hatch" then
 					cell.Scale.Scale = if v >= at then 0.3 + 0.7 * back((v - at) / 0.25) else 0.3
 				end
 				Confetti.pose(fx.Confetti, V2.new(0.5, 0.5), 17, v)
+				o.Flash.BackgroundTransparency = 1 -- (no flash over the grid's golems)
 			end
 		end
 		dimPlane(parent, cam, ease(t / 0.15), tint, tintAmount)
@@ -983,6 +998,8 @@ if videoMode == "hatch" then
 				fov = VIDEO.Fov,
 				preset = "Surface",
 				shadowExtent = 120,
+				-- (the sun from behind the camera: the golem's front lit like the hero view's key light)
+				sunDir = { front.X * 0.7 + right.X * 0.2, 0.68, front.Z * 0.7 + right.Z * 0.2 },
 			}
 		end
 		print(`{prefix}: {frames} frames ({total} s)`)
