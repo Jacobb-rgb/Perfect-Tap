@@ -163,39 +163,52 @@ local function trainChip(): GuiObject?
 	return if frame and frame:IsA("GuiObject") then frame else nil
 end
 
--- The light HUD's boost corner (bottom right, BoostView.cornerSpot): clear of the touch
--- jump button and the phone's Shop pill, over the mouse tutorial card while it shows.
-local function cornerSpot(): (number, number)
+-- A frame's left edge and bottom in design units from its ScreenGui's top-left
+-- (the gui's own frame: under Roblox's top bar, like the chips' gui).
+local function rectIn(gui: ScreenGui, frame: GuiObject, scale: number): BoostView.PillRect
+	local at = frame.AbsolutePosition - gui.AbsolutePosition
+	return { Left = at.X / scale, Bottom = (at.Y + frame.AbsoluteSize.Y) / scale }
+end
+
+-- The light HUD's boost corner (bottom right, BoostView.cornerSpot), measured in the
+-- chips' gui (inside the safe insets): clear of the touch jump and Grab buttons, the
+-- phone's Shop pill and the touch tutorial bubble, over the mouse tutorial card.
+local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, number, boolean)
 	local camera = Workspace.CurrentCamera
-	local viewport = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-	local scale = HudController.uiScale()
+	local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	local scale = math.max(HudController.uiScale(), 0.01)
+	local gui = if chips.Gui.AbsoluteSize.Y > 0 then chips.Gui.AbsoluteSize else screen
 	local playerGui = player:FindFirstChildOfClass("PlayerGui")
 	local tutorial = if playerGui then playerGui:FindFirstChild("TerraForgeTutorial") else nil
 	local bubble = if tutorial then tutorial:FindFirstChild("Bubble") else nil
 	local tutorialTop: number? = nil
-	if
-		tutorial
-		and tutorial:IsA("ScreenGui")
-		and tutorial.Enabled
-		and bubble
-		and bubble:IsA("GuiObject")
-		and bubble.Visible
-		and bubble.AnchorPoint.Y == 1
-	then
-		tutorialTop = (viewport.Y - bubble.AbsolutePosition.Y) / math.max(scale, 0.01)
+	local bubbleRect: BoostView.PillRect? = nil
+	if tutorial and tutorial:IsA("ScreenGui") and tutorial.Enabled and bubble and bubble:IsA("GuiObject") and bubble.Visible then
+		local rect = rectIn(tutorial, bubble, scale)
+		if bubble.AnchorPoint.Y == 1 then
+			-- (the mouse card, bottom right: its top from the gui's bottom)
+			tutorialTop = (tutorial.AbsoluteSize.Y - (bubble.AbsolutePosition.Y - tutorial.AbsolutePosition.Y)) / scale
+		else
+			bubbleRect = rect -- (the touch bubble, top right)
+		end
 	end
 	local hud = HudController.refs()
 	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
-	local rect: BoostView.PillRect? = nil
-	if pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
-		-- (the phone's pill rides at the top right: its left edge and bottom, design units)
-		local width = viewport.X / math.max(scale, 0.01)
-		rect = {
-			Left = width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pill.Size.X.Offset,
-			Bottom = pill.Position.Y.Offset + pill.Size.Y.Offset,
-		}
+	local pillRect: BoostView.PillRect? = nil
+	if hud and pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
+		pillRect = rectIn(hud.Gui, pill, scale) -- (the phone's pill rides at the top right)
 	end
-	return BoostView.cornerSpot(viewport, scale, isTouch(), tutorialTop, rect)
+	return BoostView.cornerSpot({
+		Screen = screen,
+		Gui = gui,
+		Scale = scale,
+		Touch = isTouch(),
+		TenFoot = GuiService:IsTenFootInterface(),
+		Count = count,
+		TutorialTop = tutorialTop,
+		Bubble = bubbleRect,
+		Pill = pillRect,
+	})
 end
 
 local function coins(): number
@@ -306,13 +319,14 @@ local function refreshChips()
 		return
 	end
 	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())
+	local running = BoostView.chips(StateController.get(), serverNow())
 	if chips.Row:GetAttribute("Corner") == true then
-		BoostView.placeCorner(chips, cornerSpot())
+		BoostView.placeCorner(chips, cornerSpot(chips, #running))
 	else
 		local train = trainChip()
 		BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
 	end
-	BoostView.setChips(chips, BoostView.chips(StateController.get(), serverNow()), launcherOn)
+	BoostView.setChips(chips, running, launcherOn)
 end
 
 local function refresh()

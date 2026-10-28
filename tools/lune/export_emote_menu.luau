@@ -40,7 +40,7 @@ local function hud(uiScale: number): any
 	refs.Income.Text = Format.perSecond(1840)
 	HudView.setBackpack(refs, 0, 5)
 	refs.Toasts:ClearAllChildren()
-	-- the left tiles as the controllers claim them in the game, the EMOTES tile last
+	-- the left tiles as the controllers claim them in the game: SPIN next to MORE, EMOTES behind MORE
 	HudBubble.claimTile(refs.Menu, "Build")
 	for _, entry in SideMenuView.sorted() do
 		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
@@ -50,7 +50,8 @@ local function hud(uiScale: number): any
 			HudBubble.addMore(refs.Menu, entry.Id, spec)
 		end
 	end
-	HudBubble.claimTile(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 40 })
+	HudBubble.claimTile(refs.Menu, "Wheel")
+	HudBubble.addMore(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 20 })
 	return refs
 end
 

@@ -27,7 +27,8 @@ function Preview.build(Loader: any): { [string]: any }
 	local NOW = 1.7e9
 
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
-	local function hud(renderScale: number, uiScale: number, screen: Vector2): { any }
+	local function hud(renderScale: number, uiScale: number, screen: Vector2, boostCount: number?): { any }
+		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
 		local refs = HudBubble.buildGame(uiScale, screen.X)
 		-- (as HudController does: on phones the boost chips stop before the Shop pill)
@@ -76,9 +77,20 @@ function Preview.build(Loader: any): { [string]: any }
 					Bottom = pill.Position.Y.Offset + pill.Size.Y.Offset,
 				}
 				else nil
-			BoostView.placeCorner(boost, BoostView.cornerSpot(screen, uiScale, compact, nil, rect))
+			-- (`screen` is already the gui under the top bar: the export's height)
+			BoostView.placeCorner(
+				boost,
+				BoostView.cornerSpot({
+					Screen = screen,
+					Gui = screen,
+					Scale = uiScale,
+					Touch = compact,
+					Count = boosts,
+					Pill = rect,
+				})
+			)
 		end
-		local state = { Boosts = { TripleLuckyUntil = NOW + 584 } }
+		local state = { Boosts = { TripleLuckyUntil = NOW + 584, HexaLuckyUntil = if boosts > 1 then NOW + 3900 else nil } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = true
 		table.insert(list, boost.Gui)
@@ -99,6 +111,13 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_pixel_pc = UiExport.export(hud(1.25, 1.25, roblox.Vector2.new(1600, 864)))
 	exports.ui_hud_pixel_phone = UiExport.export(hud(0.62 * 900 / 375, 0.62, roblox.Vector2.new(667, 375 - 58 * 375 / 900)))
 	exports.ui_hud_pixel_narrow = UiExport.export(hud(0.62 * 900 / 320, 0.62, roblox.Vector2.new(568, 320 - 58 * 320 / 900)))
+	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
+	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
+		for _, count in { 1, 2 } do
+			local gui = roblox.Vector2.new(phone[1], phone[2] - 58)
+			exports[`ui_hud_corner_{phone[1]}_{count}`] = UiExport.export(hud(0.62 * 900 / phone[2], 0.62, gui, count))
+		end
+	end
 	return exports
 end
 
