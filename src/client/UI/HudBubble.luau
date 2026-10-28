@@ -131,11 +131,12 @@ export type Layout = {
 HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
 HudBubble.TenFootSafe = 0.05 -- a TV's title-safe band (TutorialView.TenFootSafe)
 
--- Is this a touch-first device (a phone or a tablet, no keyboard)? false in Lune.
+-- Is this a touch-first device (a phone or a tablet; with a keyboard too, but no mouse)? The test
+-- MenuPanels.isTouch, TrainController and BoostController use. false in Lune.
 function HudBubble.isTouch(): boolean
 	local ok, touch = pcall(function()
 		local input = game:GetService("UserInputService")
-		return input.TouchEnabled and not input.KeyboardEnabled
+		return input.TouchEnabled and not input.MouseEnabled
 	end)
 	return ok and touch == true
 end
@@ -179,7 +180,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 	return {
 		Compact = false,
 		Narrow = false,
-		Tile = if tablet then 64 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
+		Tile = if tablet then 58 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
 		TileGap = if tablet then 6 elseif PopTheme.round() then 7 else 12,
 		Columns = if tablet then 4 else 2,
 		TabWidth = 140,
@@ -495,6 +496,8 @@ end
 
 HudBubble.MenuTop = 8 -- the tiles' top under Roblox's top bar (CoreUISafeInsets)
 HudBubble.ChipGap = 12
+HudBubble.TabletChipGap = 6 -- a touch tablet's tiles and its TRAIN chip
+HudBubble.TouchChipHeight = 84 -- TrainView's compact chip (touch screens: TrainController)
 -- the round look on big screens: the reel's tiles sit lower, their middle a little above the
 -- screen's (rows 285..772 px of 1080), 10 units from the left edge
 HudBubble.RoundMenuTop = 140
@@ -532,7 +535,9 @@ function HudBubble.chipTop(layout: Layout): number
 		return HudBubble.menuTop(layout) + m.Height - m.CellHeight
 	end
 	local extra = if layout.Compact then 28 else 0
-	return HudBubble.menuTop(layout) + m.Height + HudBubble.ChipGap + extra
+	-- (a touch tablet: the compact chip, TouchChipHeight tall, ends above the thumbstick's zone)
+	local gap = if layout.Touch and not layout.Compact then HudBubble.TabletChipGap else HudBubble.ChipGap
+	return HudBubble.menuTop(layout) + m.Height + gap + extra
 end
 
 --[[
@@ -1128,11 +1133,14 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	}, gui)
 	UIKit.list(toasts, Enum.FillDirection.Vertical, 10, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
-	if round then
+	if round and layout.Compact then
 		-- (the round look's four tiles a row on phones reach under the toasts' and the zone's
 		-- first words: those draw over the tiles, they only show for a moment)
 		toasts.ZIndex = 8
 		zone.ZIndex = 8
+	elseif layout.Touch and not layout.Compact then
+		-- (a touch tablet: the TRAIN chip's gui draws over this one; the toasts start under it)
+		toasts.Position = UDim2.new(0.5, 0, 0, HudBubble.chipTop(layout) + HudBubble.TouchChipHeight + 8)
 	end
 
 	-- the left menu: every tile hidden until a controller claims it
@@ -1422,6 +1430,17 @@ function HudBubble.toggleMore(menu: Instance, open: boolean?): boolean
 		return false
 	end
 	local on = if open == nil then not flyout.Visible else open
+	if on then
+		-- (under the top row's buttons, which may reach below the tiles' top on a tablet; over the
+		-- toasts, the HUD's other pieces)
+		local bar = gui:FindFirstChild("TopBar")
+		local top = if menu:IsA("GuiObject") then menu.Position.Y.Offset else flyout.Position.Y.Offset
+		if bar and bar:IsA("GuiObject") then
+			top = math.max(top, bar.Position.Y.Offset + math.floor(bar.Size.Y.Offset * (1 - bar.AnchorPoint.Y)) + 8)
+		end
+		flyout.Position = UDim2.new(flyout.Position.X.Scale, flyout.Position.X.Offset, flyout.Position.Y.Scale, top)
+		flyout.ZIndex = 9
+	end
 	flyout.Visible = on
 	local hook = HudBubble.onMoreToggled
 	if hook then

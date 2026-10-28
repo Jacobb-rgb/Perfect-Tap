@@ -1271,8 +1271,16 @@ end
 
 -- A window closes: scale to 0.9 (and the dim fading), then `done` (else Visible = false).
 function Motion.close(window: GuiObject, done: (() -> ())?, dim: GuiObject?)
-	if not Motion.enabled() then
-		-- (UI motion off: it just goes, like before)
+	if not Motion.full() then
+		-- (UI motion off, or the round look's motions alone (the pop, not a closing shrink): it just
+		-- goes, like before; a popped window's scale back at rest)
+		local popped = window:FindFirstChild("MotionPop")
+		if popped and popped:IsA("UIScale") then
+			local s = scaleOf(window, "MotionPop")
+			s.Token += 1
+			stopTween(s)
+			s.Scale.Scale = s.Base
+		end
 		if done then
 			done()
 		else

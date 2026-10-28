@@ -743,6 +743,11 @@ return function(T, Loader)
 			Motion.countUp(label, 0, 5000, tostring)
 			T.eq(label.Text, "5000", "the number just changes")
 			T.falsy(Motion.flyTo(nil, label, "cash"), "no cash flies")
+			local closed = false
+			Motion.close(UIKit.new("Frame", { Name = "Shut" }, Instance.new("ScreenGui")), function()
+				closed = true
+			end)
+			T.truthy(closed, "a window closes at once (no closing shrink)")
 			Motion.tune(true)
 			T.eq(Motion.Profiles.Normal.Down, 0.93, "the reel's press")
 			T.eq(Motion.Profiles.Normal.Hover, 1.05, "the reel's hover")

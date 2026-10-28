@@ -509,6 +509,18 @@ function HudController.start()
 	-- (the HUD's size lands a frame after the viewport's: the chips' limit follows it)
 	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
+	-- the round look's offers at the right edge: hidden while the last input is touch (a touch
+	-- screen with a mouse or a keyboard got the PC layout: the touch tutorial's SKIP and Roblox's
+	-- jump button take that edge as soon as it is touched)
+	local offers = refs.Gui:FindFirstChild("Offers")
+	if offers and offers:IsA("GuiObject") then
+		local function showOffers()
+			offers.Visible = UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
+		end
+		showOffers()
+		UserInputService.LastInputTypeChanged:Connect(showOffers)
+	end
+
 	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
 	BackpackState.onChanged(refreshBackpack)
 	refreshBackpack()
