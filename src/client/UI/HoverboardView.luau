@@ -1640,8 +1640,16 @@ function HoverboardView.hideMessage(refs: Refs)
 	refs.Footer.Visible = true
 end
 
--- The first thing a gamepad selects: the equipped board's card (else the shown one, else the first).
+-- The first thing a gamepad selects: the picked board's card (a click before a switch to the
+-- gamepad: focus, gold pick and detail stay together), else the equipped one's, the shown one's,
+-- the first.
 function HoverboardView.firstButton(refs: Refs): TextButton?
+	if refs.Selected ~= "" then
+		local picked = cardOf(refs, refs.Shown)
+		if picked then
+			return picked.Button
+		end
+	end
 	for _, card in refs.Cards do
 		if card.State == "Equipped" then
 			return card.Button

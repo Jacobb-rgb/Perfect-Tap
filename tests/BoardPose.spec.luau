@@ -253,6 +253,57 @@ return function(T, Loader)
 		T.near(motors.RightShoulder.Transform.LookVector:Dot(base.LookVector), 1, 1e-6, "a masked arm keeps the hold")
 	end)
 
+	T.test("board pose: at the pose range edge the whole body fades (no 90 degree snap)", function()
+		local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
+		local MoveRig = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveRig")
+		local base = CFrame.Angles(0.2, 0, 0) -- the Animator's pose (another rider's replicated idle)
+		local motors: { [string]: any } = {}
+		for _, name in MoveConfig.Joints do
+			motors[name] = { Transform = base, Parent = true, Name = name }
+		end
+		T.truthy(motors.Root ~= nil, "the Root is a joint")
+		local rig = MoveRig.fromMotors(motors)
+		local all = {}
+		for _, name in BoardPose.Joints do
+			all[name] = true
+		end
+		local layers = { { Pose = {}, Weight = 1, Override = all } }
+		-- one frame as HoverboardController's poseStep does it
+		local function at(fade: number)
+			local state = { T = 0, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0, Fade = fade }
+			BoardPose.evaluate(state, layers[1].Pose)
+			layers[1].Weight = math.max(1e-3, BoardPose.blend(state))
+			for _, motor in motors do
+				motor.Transform = base -- the Animator writes its pose every frame
+			end
+			MoveRig.step(rig, layers, 1)
+		end
+		local function yaw(): number
+			local v = motors.Root.Transform.LookVector
+			return math.deg(math.atan2(-v.X, -v.Z))
+		end
+		at(0.02)
+		for name, motor in motors do
+			T.near(motor.Transform.LookVector:Dot(base.LookVector), 1, 1e-3, name .. ": a sliver of fade is still the Animator's pose")
+			T.near(motor.Transform.Position.Magnitude, 0, 0.01, name .. " not moved yet")
+		end
+		at(0.5)
+		T.truthy(yaw() > 25 and yaw() < 65, `half way turned half way ({yaw()} degrees)`)
+		at(1)
+		T.near(yaw(), BoardPose.Stance, 6, "faded in: sideways")
+		MoveRig.release(rig)
+		-- the fade: PoseFadeTime in and out; at once for your own rider and a hop on
+		local step = (1 / 60) / 0.3
+		local f = 0
+		for _ = 1, 9 do
+			f = BoardPose.stepFade(f, true, false, step)
+		end
+		T.near(f, 0.5, 1e-6, "half way after half the time")
+		T.eq(BoardPose.stepFade(0, true, true, step), 1, "yours / a hop on: at once")
+		T.eq(BoardPose.stepFade(0.01, false, true, step), 0, "out of range: fades to nothing")
+		T.near(BoardPose.blend({ T = 0, Speed = 0, Turn = 0, Mount = 1, Air = 0, Land = 0 }), 1, 1e-9, "no Fade: all of it")
+	end)
+
 	T.test("board pose: MoveRig finds Avatar Joint Upgrade joints (AnimationConstraints) and poses them", function()
 		local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
 		local MoveRig = Loader.requirePath("ReplicatedStorage.Shared.Moves.MoveRig")
@@ -335,5 +386,10 @@ return function(T, Loader)
 		T.truthy(string.find(source, "RunService.Stepped:Connect", 1, true) ~= nil, "Stepped (after the Animator)")
 		T.truthy(string.find(source, "MoveRig.step(rig, rider.Layers, 1)", 1, true) ~= nil, "MoveRig layering")
 		T.truthy(string.find(source, "MoveRig.release(rig)", 1, true) ~= nil, "the pose is given back")
+		T.truthy(
+			string.find(source, "layer.Weight = math.max(1e-3, BoardPose.blend(rider.State))", 1, true) ~= nil,
+			"the weight is the pose's own blend"
+		)
+		T.truthy(string.find(source, "rider.State.Fade = rider.PoseFade", 1, true) ~= nil, "the range edge fades the pose itself")
 	end)
 end

@@ -166,8 +166,8 @@ type Rider = {
 	Striking: boolean,
 	FlipAt: number?, -- the running kickflip started then
 	OnScreen: boolean, -- the board is on screen (others: no pose / lightning off screen)
-	Posed: boolean, -- the pose is on the rig (PoseRange hysteresis)
-	PoseFade: number, -- 0..1 how much of the pose shows (fades at the range edge)
+	Posed: boolean, -- the pose is on the rig (on screen and PoseFade > 0)
+	PoseFade: number, -- 0..1 in pose range (distance only; fades at the edge, PoseHysteresis slack)
 	GroundY: number?, -- world height of the ground under the board (kept in a jump: the rings)
 	RigRetryAt: number, -- no R15 rig yet (R6, still streaming): look again then
 	Tool: boolean, -- a tool in hand (LOD tick): arms masked, chest forward
@@ -813,24 +813,17 @@ local function poseStep(dt: number)
 	for p, rider in riders do
 		local isLocal = p == player
 		local root = rider.Character:FindFirstChild("HumanoidRootPart")
-		local near = false
 		local alive = rider.Model ~= nil and root ~= nil and root:IsA("BasePart")
-		if alive and (isLocal or rider.OnScreen) then
+		-- at the range edge (distance only: a camera pan never replays it) the whole pose fades in /
+		-- out (sideways <-> the Animator's facing ahead is a 90 degree turn); yours and a hop on (it
+		-- eases in by itself) show at once. Posed only on screen (yours always).
+		local inRange = false
+		if alive then
 			local distance = ((root :: BasePart).Position - focus).Magnitude
-			near = isLocal or distance <= range or (rider.Posed and distance <= range + HoverboardController.PoseHysteresis)
+			inRange = isLocal or distance <= range or (rider.PoseFade > 0 and distance <= range + HoverboardController.PoseHysteresis)
 		end
-		-- at the range edge the pose fades in / out (sideways <-> the Animator's facing ahead is a
-		-- 90 degree turn); yours and a hop on (it eases in by itself) show at once
-		local fade = rider.PoseFade
-		if near then
-			fade = if isLocal or rider.State.Mount < 1 then 1 else math.min(1, fade + fadeStep)
-		elseif alive and rider.Posed and rider.Rig and MoveRig.alive(rider.Rig) then
-			fade = math.max(0, fade - fadeStep)
-		else
-			fade = 0
-		end
-		rider.PoseFade = fade
-		if fade <= 0 then
+		rider.PoseFade = if alive then BoardPose.stepFade(rider.PoseFade, inRange, isLocal or rider.State.Mount < 1, fadeStep) else 0
+		if rider.PoseFade <= 0 or not (isLocal or rider.OnScreen) then
 			if rider.Posed then
 				rider.Posed = false
 				releaseRig(rider)
@@ -863,10 +856,11 @@ local function poseStep(dt: number)
 		end
 		local layer = rider.Layers[1]
 		rider.State.Tool = rider.Tool
+		rider.State.Fade = rider.PoseFade
 		BoardPose.evaluate(rider.State, layer.Pose)
-		-- from the Animator's pose at the start of the hop on to the board pose (MoveMath.layer override)
-		local shown = fade * fade * (3 - 2 * fade)
-		layer.Weight = math.max(1e-3, BoardPose.weight(rider.State.Mount) * shown)
+		-- from the Animator's pose to the board pose (the hop on, the range edge): the pose is lerped by
+		-- the same blend inside evaluate, the weight fades the Animator's pose under it (Override)
+		layer.Weight = math.max(1e-3, BoardPose.blend(rider.State))
 		MoveRig.step(rig, rider.Layers, 1)
 		rider.Posed = true
 	end
@@ -1167,10 +1161,22 @@ function HoverboardController.open()
 	view.Gui.Enabled = true
 	startTurn(view)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
-	ensureProgress().Value = 0
-	HoverboardView.pose(view, 0)
-	play(HoverboardView.OpenTime, HoverboardView.OpenTime)
-	selectDefault(view)
+	if settingsReduced or systemReduced then
+		-- Reduce Motion: no pop, no drop-in, open at once
+		stopAnimation()
+		ensureProgress().Value = HoverboardView.OpenTime
+		HoverboardView.pose(view, HoverboardView.OpenTime)
+		selectDefault(view)
+	else
+		ensureProgress().Value = 0
+		HoverboardView.pose(view, 0)
+		-- the gamepad's first stop once the cards are in (pose 0 hides them)
+		play(HoverboardView.OpenTime, HoverboardView.OpenTime, function()
+			if isOpen then
+				selectDefault(view)
+			end
+		end)
+	end
 	Sfx.play("UIClick")
 end
 
@@ -1190,7 +1196,7 @@ function HoverboardController.close(instant: boolean?)
 		GuiService.SelectedObject = nil
 	end
 	local gui = view.Gui
-	if instant then
+	if instant or settingsReduced or systemReduced then
 		stopAnimation()
 		gui.Enabled = false
 		return
