@@ -2,18 +2,22 @@
 	HoverboardController: hoverboards on the client (the server decides
 	everything: HoverboardService, MonetizationService).
 
-	- Hoverboards panel (HoverboardView): the HOVER button of main's left side
-	  menu (SideMenuView entry "Hoverboards", SideMenuController action: open /
-	  toggle / isOpen / close; MenuPanels: one panel at a time, build mode
-	  closes it) opens it from anywhere; it closes the other panels when it
-	  opens. Cards: BUY sends HoverboardAction { Action = "Buy", Board }
-	  (greyed out with a lock while you can't afford it: pressing it says how
-	  much is missing), EQUIP sends { Action = "Equip" }, the Robux button
-	  prompts the board's game pass (MarketplaceService:PromptGamePassPurchase,
-	  only for MonetizationConfig ids > 0; "COMING SOON" otherwise; the server
-	  grants it, never this client). The cards
-	  refresh on every State. Closes with the X, B (gamepad), Backspace or
-	  HOVER again; gamepads get a selected card on open.
+	- Hoverboards window (HoverboardView, the golem inventory's look): the
+	  HOVER button of main's left side menu (SideMenuView entry "Hoverboards",
+	  SideMenuController action: open / toggle / isOpen / close; MenuPanels:
+	  one panel at a time, build mode closes it) opens it from anywhere; it
+	  closes the other panels when it opens. A card (click / tap / A) picks a
+	  board: the detail card shows it (on open: the equipped board, else the
+	  first) and its slow-swinging 3D model (one camera move a frame while
+	  open; none with Reduce Motion). The detail's one button acts: BUY sends
+	  HoverboardAction { Action = "Buy", Board } (greyed out with a lock
+	  while you can't afford it: pressing it says how much is missing), EQUIP
+	  sends { Action = "Equip" }, the Robux price prompts the board's game
+	  pass (MarketplaceService:PromptGamePassPurchase, only for
+	  MonetizationConfig ids > 0; "COMING SOON" otherwise; the server grants
+	  it, never this client). Everything refreshes on every State. Closes
+	  with the X, B (gamepad), Backspace or HOVER again; gamepads start on
+	  the equipped board's card.
 	- RIDE: a round button in the HUD's right menu (above BUILD: clear of the
 	  touch jump button at the bottom right), the H key and the gamepad's
 	  GamepadKey (L2: the D-pad is taken: Up build mode, Down the teleport
@@ -46,12 +50,15 @@
 	  (yours always; the others only on screen, PoseHysteresis studs of slack
 	  so the range edge doesn't pop) Moves/BoardPose replaces the whole body
 	  pose through Moves/MoveRig in one RunService.Stepped (after the
-	  Animator): sideways like a surfer (the right side leading, the head
-	  looking ahead), feet apart along the deck, knees a little bent, arms
+	  Animator; at the range edge the pose fades in / out over PoseFadeTime,
+	  no 90 degree snap): sideways like a surfer (the right side leading, the
+	  head looking almost ahead), feet apart along the deck, knees a little bent, arms
 	  relaxed, bending and leaning a little with speed, rolling into turns
 	  with the board, the crouch scaled by the rider's real leg length. With
 	  a tool in hand (the blaster: mining while riding) the right arm points
-	  ahead. Hover rings ripple on the ground under every board on screen.
+	  ahead. Hover rings ripple on the ground under every board on screen
+	  (level on the floor, also while the board rolls, bobs or flips; in a
+	  jump they stay on the ground they left and fade).
 	  Hopping on blends from the Animator's pose into the hop (crouch, a
 	  jump that turns you sideways, squash) while the board
 	  flies in from below with a spin and lightning strikes it from the sky
@@ -85,6 +92,7 @@ local Theme = require(Shared.Config.UITheme)
 local HoverboardBuilder = require(Shared.Builders.HoverboardBuilder)
 local HoverboardFx = require(Shared.Builders.HoverboardFx)
 local HoverboardBolts = require(Shared.Builders.HoverboardBolts)
+local HoverboardRings = require(Shared.Builders.HoverboardRings)
 local BoardPose = require(Shared.Moves.BoardPose)
 local MoveRig = require(Shared.Moves.MoveRig)
 local Format = require(Shared.Util.Format)
@@ -113,6 +121,7 @@ HoverboardController.StrikeCooldown = 3 -- seconds: at most one strike per playe
 HoverboardController.LaunchSpeed = 25 -- studs/s up: another rider really jumped (a jump launches ~50)
 HoverboardController.PoseHysteresis = 5 -- studs past PoseRange before a posed rider is let go
 HoverboardController.PhonePoseRange = 45 -- PoseRange on phones
+HoverboardController.PoseFadeTime = 0.3 -- seconds the pose fades in / out at the range edge
 HoverboardController.MaxCarve = 0.35 -- radians the board swings behind a turn
 HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
@@ -157,7 +166,9 @@ type Rider = {
 	Striking: boolean,
 	FlipAt: number?, -- the running kickflip started then
 	OnScreen: boolean, -- the board is on screen (others: no pose / lightning off screen)
-	Posed: boolean, -- the pose is on the rig (PoseRange hysteresis)
+	Posed: boolean, -- the pose is on the rig (on screen and PoseFade > 0)
+	PoseFade: number, -- 0..1 in pose range (distance only; fades at the edge, PoseHysteresis slack)
+	GroundY: number?, -- world height of the ground under the board (kept in a jump: the rings)
 	RigRetryAt: number, -- no R15 rig yet (R6, still streaming): look again then
 	Tool: boolean, -- a tool in hand (LOD tick): arms masked, chest forward
 	Grounded: boolean, -- the others: ground right under them (LOD tick ray)
@@ -176,12 +187,14 @@ local rideLockedUntil = 0
 local messageToken = 0
 local progress: NumberValue? = nil
 local animTween: Tween? = nil
+local turnConnection: RBXScriptConnection? = nil -- the detail's board swinging while the window is open
 local riders: { [Player]: Rider } = {}
 local pools: { [string]: { Model } } = {}
 local folder: Folder? = nil
 local watched: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local strikeAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any -- last strike per player
 local rayParams = RaycastParams.new()
+local rayFilter: { Instance } = {}
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 local settingsReduced = false -- the SETTINGS Reduce Motion toggle
 local systemReduced = false -- Roblox's own Reduce Motion
@@ -502,6 +515,8 @@ local function refreshRider(p: Player)
 			FlipAt = nil,
 			OnScreen = true,
 			Posed = false,
+			PoseFade = 0,
+			GroundY = nil,
 			RigRetryAt = 0,
 			Tool = false,
 			Grounded = true,
@@ -550,7 +565,9 @@ end
 local function groundBelow(rider: Rider, root: BasePart): boolean
 	local humanoid = rider.Character:FindFirstChildOfClass("Humanoid")
 	local reach = (if humanoid then humanoid.HipHeight else 2) + root.Size.Y / 2 + 1.5
-	rayParams.FilterDescendantsInstances = { rider.Character, ensureFolder() }
+	rayFilter[1] = rider.Character
+	rayFilter[2] = ensureFolder()
+	rayParams.FilterDescendantsInstances = rayFilter
 	return Workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), rayParams) ~= nil
 end
 
@@ -587,8 +604,11 @@ local function lodStep()
 		local isLocal = p == player
 		local distance = (root.Position - focus).Magnitude
 		rider.Tool = rider.Character:FindFirstChildOfClass("Tool") ~= nil
-		if not isLocal and distance <= HoverboardController.PoseRange + HoverboardController.PoseHysteresis then
-			rider.Grounded = groundBelow(rider, root) -- the others' Air pose (falls off ledges)
+		if not isLocal then
+			-- the others' Air (pose, rings: falls off ledges) out to where either shows; farther
+			-- on, "on the ground" (a stale "in the air" would flip Air every frame)
+			local reach = math.max(HoverboardController.PoseRange + HoverboardController.PoseHysteresis, HoverboardController.FxRange)
+			rider.Grounded = distance > reach or groundBelow(rider, root)
 		end
 		if isLocal or distance <= HoverboardController.ShowRange then
 			show(rider)
@@ -724,6 +744,11 @@ local function animate(dt: number)
 					rider.AirAt = nil
 				end
 				rider.Air += ((if inAir then 1 else 0) - rider.Air) * math.min(1, dt * (if inAir then 10 else 16))
+				-- the floor under the character; in a jump the rings stay on the ground it left
+				local floorY = root.Position.Y + offset.Y
+				if not inAir or not rider.GroundY then
+					rider.GroundY = floorY
+				end
 				local flipAt, flip = BoardPose.stepFlip(rider.FlipAt, now, launched and not calm)
 				rider.FlipAt = flipAt
 
@@ -766,8 +791,12 @@ local function animate(dt: number)
 						HoverboardFx.flicker(set, math.random, speed01, surge, if calm then 0 else nil)
 					end
 					-- the hover rings on the ground: not in the air, faded in as the board arrives
+					-- (level on the ground: not the board's bob, pitch, roll or flip)
 					local rings = if rider.OnScreen then (1 - rider.Air) * math.clamp((mount - 0.5) * 2, 0, 1) else 0
-					HoverboardFx.rings(set, now + rider.Phase, rings)
+					local ground = if rings > 0
+						then HoverboardRings.groundFrame(weld.C0, offset, floorY - (rider.GroundY or floorY), rider.Carve)
+						else nil
+					HoverboardFx.rings(set, now + rider.Phase, rings, ground)
 				end
 			end
 		end
@@ -775,20 +804,26 @@ local function animate(dt: number)
 end
 
 -- After the Animator (RunService.Stepped): the riding pose on every R15 rider near you.
-local function poseStep()
+local function poseStep(dt: number)
 	local now = os.clock()
+	local fadeStep = math.clamp(dt, 0, 0.1) / HoverboardController.PoseFadeTime
 	local camera = Workspace.CurrentCamera
 	local focus = if camera then camera.CFrame.Position else Vector3.zero
 	local range = if isPhone() then HoverboardController.PhonePoseRange else HoverboardController.PoseRange
 	for p, rider in riders do
 		local isLocal = p == player
 		local root = rider.Character:FindFirstChild("HumanoidRootPart")
-		local near = false
-		if rider.Model and root and root:IsA("BasePart") and (isLocal or rider.OnScreen) then
-			local distance = (root.Position - focus).Magnitude
-			near = isLocal or distance <= range or (rider.Posed and distance <= range + HoverboardController.PoseHysteresis)
+		local alive = rider.Model ~= nil and root ~= nil and root:IsA("BasePart")
+		-- at the range edge (distance only: a camera pan never replays it) the whole pose fades in /
+		-- out (sideways <-> the Animator's facing ahead is a 90 degree turn); yours and a hop on (it
+		-- eases in by itself) show at once. Posed only on screen (yours always).
+		local inRange = false
+		if alive then
+			local distance = ((root :: BasePart).Position - focus).Magnitude
+			inRange = isLocal or distance <= range or (rider.PoseFade > 0 and distance <= range + HoverboardController.PoseHysteresis)
 		end
-		if not near then
+		rider.PoseFade = if alive then BoardPose.stepFade(rider.PoseFade, inRange, isLocal or rider.State.Mount < 1, fadeStep) else 0
+		if rider.PoseFade <= 0 or not (isLocal or rider.OnScreen) then
 			if rider.Posed then
 				rider.Posed = false
 				releaseRig(rider)
@@ -821,9 +856,11 @@ local function poseStep()
 		end
 		local layer = rider.Layers[1]
 		rider.State.Tool = rider.Tool
+		rider.State.Fade = rider.PoseFade
 		BoardPose.evaluate(rider.State, layer.Pose)
-		-- from the Animator's pose at the start of the hop on to the board pose (MoveMath.layer override)
-		layer.Weight = math.max(1e-3, BoardPose.weight(rider.State.Mount))
+		-- from the Animator's pose to the board pose (the hop on, the range edge): the pose is lerped by
+		-- the same blend inside evaluate, the weight fades the Animator's pose under it (Override)
+		layer.Weight = math.max(1e-3, BoardPose.blend(rider.State))
 		MoveRig.step(rig, rider.Layers, 1)
 		rider.Posed = true
 	end
@@ -915,13 +952,27 @@ local function send(payload: { [string]: any })
 	Sfx.play("UIClick")
 end
 
+-- With a gamepad: never leave the selection on the detail's button once it is no
+-- stop (EQUIP turned into EQUIPPED): back to the picked board's card.
+local function keepSelection(view: HoverboardView.Refs)
+	if not isOpen or not usingGamepad() then
+		return
+	end
+	if GuiService.SelectedObject == view.Action and not view.Action.Selectable then
+		GuiService.SelectedObject = HoverboardView.selectedCard(view).Button
+	end
+end
+
 local function refresh()
 	local view = refs
-	if not view then
+	-- (closed: nothing to fill in; opening refreshes)
+	if not view or not isOpen then
 		return
 	end
 	local owned, equipped, coins = snapshotBoards()
+	-- (the cards, the count and the detail of the picked board)
 	HoverboardView.setCards(view, owned, equipped, coins)
+	keepSelection(view)
 end
 
 local function fit(view: HoverboardView.Refs)
@@ -929,7 +980,8 @@ local function fit(view: HoverboardView.Refs)
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
-	local compact = isPhone() or scale <= 0.75 or size.Y < 520
+	-- (phones and TVs: the compact layout's big buttons and words)
+	local compact = isPhone() or GuiService:IsTenFootInterface() or scale <= 0.75 or size.Y < 520
 	HoverboardView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
 end
 
@@ -941,9 +993,9 @@ local function applyHint(view: HoverboardView.Refs)
 		view.HintGlyph.Image = if ok and type(image) == "string" then image else ""
 		HoverboardView.setHint(view, "Gamepad", "Choose a board · B: close")
 	elseif isPhone() then
-		HoverboardView.setHint(view, "Touch", "Tap a card")
+		HoverboardView.setHint(view, "Touch", "Tap a board to see it")
 	else
-		HoverboardView.setHint(view, "Mouse", "Click a card · H: ride · Backspace: close")
+		HoverboardView.setHint(view, "Mouse", "Click a board to see it · H: ride · Backspace: close")
 	end
 end
 
@@ -953,10 +1005,25 @@ local function selectDefault(view: HoverboardView.Refs)
 	end
 end
 
+-- A card was clicked / tapped / pressed (A): the detail shows its board.
 local function onCard(card: HoverboardView.Card)
-	if not isOpen then
+	local view = refs
+	if not isOpen or not view then
 		return
 	end
+	if view.Selected ~= card.Board.Id then
+		HoverboardView.select(view, card.Board.Id)
+	end
+	Sfx.play("UIClick")
+end
+
+-- The detail's button: what the picked board offers (HoverboardView.cardState).
+local function onAction()
+	local view = refs
+	if not isOpen or not view then
+		return
+	end
+	local card = HoverboardView.selectedCard(view)
 	local board = card.Board
 	local state = card.State
 	if state == "Buy" then
@@ -984,6 +1051,25 @@ local function onCard(card: HoverboardView.Card)
 	else
 		showMessage(`The {board.Name} is your board. Press RIDE to hover.`, "Info")
 	end
+end
+
+-- The detail's board swings slowly while the window is open (one camera move a frame).
+local function stopTurn()
+	local connection = turnConnection
+	turnConnection = nil
+	if connection then
+		connection:Disconnect()
+	end
+end
+
+local function startTurn(view: HoverboardView.Refs)
+	stopTurn()
+	local started = os.clock()
+	turnConnection = RunService.Heartbeat:Connect(function()
+		if not settingsReduced and not systemReduced then
+			HoverboardView.turnDetail(view, os.clock() - started)
+		end
+	end)
 end
 
 local function stopAnimation()
@@ -1044,6 +1130,7 @@ local function ensureView(): HoverboardView.Refs
 			onCard(card)
 		end)
 	end
+	view.Action.Activated:Connect(onAction)
 	refs = view
 	return view
 end
@@ -1065,16 +1152,31 @@ function HoverboardController.open()
 	end
 	isOpen = true
 	MenuPanels.closeOthers("HoverboardController")
+	-- (every opening starts on the equipped board, else the first)
+	view.Selected = ""
 	fit(view)
 	HoverboardView.hideMessage(view)
 	applyHint(view)
 	refresh()
 	view.Gui.Enabled = true
+	startTurn(view)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
-	ensureProgress().Value = 0
-	HoverboardView.pose(view, 0)
-	play(HoverboardView.OpenTime, HoverboardView.OpenTime)
-	selectDefault(view)
+	if settingsReduced or systemReduced then
+		-- Reduce Motion: no pop, no drop-in, open at once
+		stopAnimation()
+		ensureProgress().Value = HoverboardView.OpenTime
+		HoverboardView.pose(view, HoverboardView.OpenTime)
+		selectDefault(view)
+	else
+		ensureProgress().Value = 0
+		HoverboardView.pose(view, 0)
+		-- the gamepad's first stop once the cards are in (pose 0 hides them)
+		play(HoverboardView.OpenTime, HoverboardView.OpenTime, function()
+			if isOpen then
+				selectDefault(view)
+			end
+		end)
+	end
 	Sfx.play("UIClick")
 end
 
@@ -1084,6 +1186,7 @@ function HoverboardController.close(instant: boolean?)
 	end
 	isOpen = false
 	ContextActionService:UnbindAction(CLOSE_ACTION)
+	stopTurn()
 	local view = refs
 	if not view then
 		return
@@ -1093,7 +1196,7 @@ function HoverboardController.close(instant: boolean?)
 		GuiService.SelectedObject = nil
 	end
 	local gui = view.Gui
-	if instant then
+	if instant or settingsReduced or systemReduced then
 		stopAnimation()
 		gui.Enabled = false
 		return
@@ -1215,8 +1318,8 @@ function HoverboardController.start()
 		settingsReduced = current.ReduceMotion == true
 	end)
 	RunService.RenderStepped:Connect(animate)
-	RunService.Stepped:Connect(function()
-		local ok, err: any = pcall(poseStep)
+	RunService.Stepped:Connect(function(_: number, dt: number)
+		local ok, err: any = pcall(poseStep, dt)
 		if not ok then
 			warn("[HoverboardController] pose: " .. tostring(err))
 		end

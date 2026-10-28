@@ -8,7 +8,7 @@
 	  Ride   like Pet Simulator 99 (owner 2026-10-28, videos checked): the
 	         board points where you go and you stand on it SIDEWAYS like a
 	         surfer, your right side leading (the blaster hand), the head
-	         turned to look ahead, feet apart along the deck, knees a little
+	         turned (almost) ahead, feet apart along the deck, knees a little
 	         bent, arms relaxed and a little out. It breathes; with speed you
 	         bend a touch more and lean toward where you go; in turns you roll
 	         with the board
@@ -30,6 +30,8 @@
 	         taller avatars crouch onto the deck too (default 1)
 	  Tool   optional: a tool (the blaster) is in hand: the right arm aims ahead
 	  Carve  optional: radians the board swings behind a turn (you turn with it)
+	  Fade   optional: 0..1 how much of the pose shows (default 1): another
+	         rider at the edge of the pose range fades in / out (no snap)
 
 	Joint frames as in Config/MoveConfig: x pitch (limbs forward +, knees bend
 	-, torso leans BACK +), y yaw (turns LEFT +), z roll (toward the right +;
@@ -52,6 +54,7 @@ export type State = {
 	Leg: number?,
 	Tool: boolean?,
 	Carve: number?, -- radians the board (and you on it) trail behind a turn (HoverboardController)
+	Fade: number?, -- 0..1 how much of the pose shows (the pose range edge; default 1)
 }
 export type Pose = { [string]: CFrame }
 
@@ -136,10 +139,11 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	local rollTurn = pivot * CFrame.Angles(0, 0, BoardPose.MaxRoll * turn) * pivot:Inverse()
 	local carve = math.deg(state.Carve or 0)
 	pose.Root = rollTurn * CFrame.new(0, lift - drop, 0) * angles(lean, 0, 0) * angles(0, stance + carve, 0)
-	-- the chest turns a little and the head well toward where you go
-	local waistYaw = -0.12 * stance
+	-- the chest turns a little and the head almost all the way toward where you go (about
+	-- 13 degrees off: the Helmet Lamp on the head lights the way ahead)
+	local waistYaw = -0.18 * stance
 	pose.Waist = angles(-2 - 3 * speed + 2 * sway, waistYaw, 2 * sway2 * calm)
-	pose.Neck = angles(2 + 4 * speed, -0.42 * stance + 6 * turn, 0)
+	pose.Neck = angles(2 + 4 * speed, -0.68 * stance + 6 * turn, 0)
 
 	-- (the formula of MoveConfig crouch: thigh a, knee -2a, ankle a)
 	pose.LeftHip = angles(crouch, 0, -spread)
@@ -168,8 +172,8 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 		pose.RightElbow = angles(lerp(16, 10, speed), 0, 0)
 		pose.RightWrist = angles(0, 0, 4 * sway2)
 	end
-	-- the very start of the hop on eases out of the plain standing pose
-	local enter = BoardPose.weight(state.Mount)
+	-- the very start of the hop on (and the pose range edge) eases out of the plain standing pose
+	local enter = BoardPose.blend(state)
 	if enter < 1 then
 		for joint, cf in pose do
 			pose[joint] = CFrame.identity:Lerp(cf, enter)
@@ -181,6 +185,28 @@ end
 -- How far the riding pose has taken over (0..1): it eases in at the very start of the hop on.
 function BoardPose.weight(mount: number): number
 	return smooth(mount / 0.12)
+end
+
+--[[
+	How much of the pose shows (0..1): the hop on's ease in times the range
+	edge's Fade. evaluate() lerps every joint from identity by it, and the
+	MoveRig layer's Weight must be the same (with Override the weight only
+	fades the Animator's pose underneath: both together blend the whole body).
+]]
+function BoardPose.blend(state: State): number
+	return BoardPose.weight(state.Mount) * smooth(state.Fade or 1)
+end
+
+--[[
+	The pose range edge's Fade, one step: toward 1 while in range (at once when
+	`instant`: your own rider, a hop on that eases in by itself), toward 0 out
+	of it; `step` = the frame's seconds / the fade time.
+]]
+function BoardPose.stepFade(fade: number, inRange: boolean, instant: boolean, step: number): number
+	if inRange then
+		return if instant then 1 else math.min(1, fade + step)
+	end
+	return math.max(0, fade - step)
 end
 
 -- The board's own move during the hop-on (in its rest frame): rising from below with a spin.
