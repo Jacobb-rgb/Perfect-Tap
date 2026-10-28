@@ -3,6 +3,9 @@
 	Sfx.play("BlastHit")              -- 2D (UI / own actions)
 	Sfx.play("NodeShatter", position) -- 3D at a world position
 	Sfx.voice("LevelWhoosh")          -- a sound of its own the caller plays and bends
+	Sfx.playOwn("LevelChime")         -- 2D on its own sound: busy clicks never cut it off
+	Sfx.playIn("Rock", "RockTok", p)  -- 3D in a small lane of its own (LANE voices): many
+	                                  -- quick sounds never cut off the shared pool's long ones
 ]]
 
 local SoundService = game:GetService("SoundService")
@@ -15,12 +18,17 @@ local Sfx = {}
 
 local POOL_2D = 8
 local POOL_3D = 10
+local LANE = 3 -- voices per playIn lane
 
 local pool2D: { Sound } = {}
 local pool3D: { { part: Part, sound: Sound } } = {}
 local next2D, next3D = 1, 1
 local loops: { [string]: Sound } = {}
 local ready = false
+local group3D: SoundGroup? = nil
+local folder3D: Folder? = nil
+type Lane = { Slots: { { part: Part, sound: Sound } }, Next: number }
+local lanes: { [string]: Lane } = {}
 
 local function ensure()
 	if ready then
@@ -48,6 +56,8 @@ local function ensure()
 	local folder = Instance.new("Folder")
 	folder.Name = "ClientSfx"
 	folder.Parent = Workspace
+	folder3D = folder
+	group3D = group
 	for i = 1, POOL_3D do
 		local part = Instance.new("Part")
 		part.Name = "SfxEmitter" .. i
@@ -126,6 +136,64 @@ function Sfx.voice(name: string): Sound?
 	local s = sound :: Sound
 	configure(s, def)
 	return s
+end
+
+-- Plays `name` on its own sound (Sfx.voice) from the start: 2D, never cut off by the shared pool.
+function Sfx.playOwn(name: string)
+	local sound = Sfx.voice(name)
+	if sound then
+		sound.TimePosition = 0
+		sound:Play()
+	end
+end
+
+-- An emitter for a playIn lane (made once per voice).
+local function emitter(name: string): { part: Part, sound: Sound }
+	local part = Instance.new("Part")
+	part.Name = "SfxLane_" .. name
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Transparency = 1
+	part.Size = Vector3.new(0.2, 0.2, 0.2)
+	part.Parent = folder3D
+	local s = Instance.new("Sound")
+	s.RollOffMode = Enum.RollOffMode.InverseTapered
+	s.RollOffMinDistance = 8
+	s.RollOffMaxDistance = 120
+	s.SoundGroup = group3D
+	s.Parent = part
+	return { part = part, sound = s }
+end
+
+--[[
+	Plays `name` at `position` in the lane `lane`: LANE voices of its own taken
+	in turn, so a stream of short sounds (the rock toks) never restarts the
+	shared 3D pool's longer ones (a rock breaking).
+]]
+function Sfx.playIn(lane: string, name: string, position: Vector3, pitchScale: number?)
+	local def = SoundConfig[name]
+	if not def then
+		return
+	end
+	ensure()
+	local l = lanes[lane]
+	if not l then
+		local slots = {}
+		for _ = 1, LANE do
+			table.insert(slots, emitter(lane))
+		end
+		l = { Slots = slots, Next = 1 }
+		lanes[lane] = l
+	end
+	local ring = l :: Lane
+	local slot = ring.Slots[ring.Next]
+	ring.Next = ring.Next % #ring.Slots + 1
+	slot.part.CFrame = CFrame.new(position)
+	configure(slot.sound, def, pitchScale)
+	slot.sound.TimePosition = 0
+	slot.sound:Play()
 end
 
 -- Looping sound on/off (e.g. scraping while dragging).

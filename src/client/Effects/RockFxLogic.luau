@@ -65,6 +65,7 @@ export type CrackOpts = {
 }
 
 RockFxLogic.Cap = 30
+RockFxLogic.ChipCap = 8 -- hit chips (chipPlan) alive at once: a cap of their own, outside Cap
 RockFxLogic.MaxLife = 1.5
 RockFxLogic.Gravity = 80
 RockFxLogic.Bounce = 0.35 -- vertical speed kept at a bounce
@@ -277,11 +278,12 @@ export type ChipOpts = {
 	The chips of one hit (the owner's mining reel 2026-10-27: "little chips fly
 	off every hit"): a few small rock chips in the crust colours only (never a
 	glow: the ore stays secret), sprayed out of the face, short-lived. Under
-	the cap like every plan.
+	their own ChipCap (`Alive` = chips already flying), so they never take the
+	room of a crack or a break.
 ]]
 function RockFxLogic.chipPlan(opts: ChipOpts): { Piece }
 	local want = math.max(0, opts.Count or 3)
-	local count = math.min(want, math.max(0, RockFxLogic.Cap - (opts.Alive or 0)))
+	local count = math.min(want, math.max(0, RockFxLogic.ChipCap - (opts.Alive or 0)))
 	local rng = Rng.new(opts.Seed or "chip")
 	local pos = opts.Position
 	local outward = opts.Out or Vector3.new(0, 0, 1)

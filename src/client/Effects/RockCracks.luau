@@ -10,7 +10,9 @@
 	                          toward the camera the first time (one raycast at
 	                          the rock, then one per plan point onto its
 	                          surface; again when a crack stage broke a chunk
-	                          off), grows it to the rock's damage
+	                          off, and on the face toward you again when your
+	                          view of the rock turned away from it: FaceDot),
+	                          grows it to the rock's damage
 	                          (CrackLogic.growth) and makes the glints flare, at
 	                          most JuiceConfig.GlintFlaresPerSecond a second
 	                          (MineJuiceRules.flare). `reduced` (Reduce motion):
@@ -19,6 +21,9 @@
 	                          chips fly from there), nil when the rock gets none.
 	  RockCracks.clear(rock)  gives the rock's parts back (the shatter; also
 	                          automatic when the rock leaves the workspace)
+	  RockCracks.setKeep(fn)  fn(rock) = true for the rocks that must keep their
+	                          crack (MineJuiceController: your own and your
+	                          focused rock)
 	  RockCracks.count()      rocks with cracks now (tests / debug)
 
 	The glint colour is JuiceConfig.GlintColor for every rock: never the ore
@@ -27,8 +32,13 @@
 	Phones: every part is pooled (anchored, no collisions, no queries, no
 	touches, no shadows) and parked far below when unused; at most
 	JuiceConfig.CrackRocks rocks (CrackRocksPhone on phones, with the smaller
-	CrackLogic.PhoneDetail) have cracks at once, the oldest hit gives its parts
-	back; parts move only on a hit (one BulkMoveTo); one RenderStepped
+	CrackLogic.PhoneDetail) have cracks at once. A new rock takes the slot of
+	the rock hit least recently, never your own or focused rock and never one
+	hit in the last KeepHit seconds (then the new rock simply gets none:
+	MineJuiceRules.evict), so busy floors don't swap cracks back and forth. A
+	rock remembers its face, its plan and its glints' last flare in a weak
+	table, so losing and getting back a slot neither moves the crack nor
+	flares it early. Parts move only on a hit (one BulkMoveTo); one RenderStepped
 	connection runs only while a glint is still cooling (CrackLogic.Heat
 	seconds after its last flare; never with Reduce motion) and makes no
 	tables. The cracks don't follow
@@ -51,6 +61,8 @@ local PARK = CFrame.new(0, -5000, 0)
 
 type Entry = {
 	Rock: Model,
+	Center: Vector3, -- the rock's bounding box middle (when the crack was made)
+	Reach: number, -- a ray at the rock from the camera goes this far past the middle
 	Plan: CrackLogic.Plan,
 	Origin: Vector3,
 	Normal: Vector3,
@@ -65,14 +77,22 @@ type Entry = {
 	Growth: number,
 	Stage: number,
 	HitAt: number, -- the last hit (the oldest hit gives its parts back first)
-	FlareAt: number?, -- the glints' last flare (nil = never)
 	Reduced: boolean, -- Reduce motion at the last hit: steady glints
 	Conn: RBXScriptConnection?,
 }
 
+-- What a rock keeps while it has no crack slot (weak keys: it goes with the rock).
+type Memory = { FlareAt: number?, Plan: CrackLogic.Plan?, Origin: Vector3?, Normal: Vector3? }
+
+RockCracks.FaceDot = 0.3 -- your view of the crack's face below this (dot): the crack moves to the face toward you
+
 type Kind = "Dark" | "Glint" | "Fleck"
 
 local entries: { [Model]: Entry } = {}
+local memory: { [Model]: Memory } = setmetatable({}, { __mode = "k" }) :: any
+local keep: (Model) -> boolean = function()
+	return false
+end
 local idle: { [Kind]: { BasePart } } = { Dark = {}, Glint = {}, Fleck = {} }
 local connection: RBXScriptConnection? = nil
 local rayParams = RaycastParams.new()
@@ -140,6 +160,9 @@ function RockCracks.clear(rock: Model)
 		return
 	end
 	entries[rock] = nil
+	local mem: Memory = memory[rock] or { FlareAt = nil, Plan = nil, Origin = nil, Normal = nil }
+	mem.Plan, mem.Origin, mem.Normal = entry.Plan, entry.Origin, entry.Normal
+	memory[rock] = mem
 	local conn = entry.Conn
 	if conn then
 		conn:Disconnect()
@@ -159,6 +182,12 @@ function RockCracks.count(): number
 end
 
 ---------------------------------------------------------------- placing
+
+-- When the rock's glints last flared (kept across losing the crack slot).
+local function flareAt(rock: Model): number?
+	local mem = memory[rock]
+	return if mem then mem.FlareAt else nil
+end
 
 -- Puts every plan point onto the rock's surface (a ray along the face normal).
 local function project(entry: Entry)
@@ -262,7 +291,7 @@ local function place(entry: Entry)
 	if #moveParts > 0 then
 		Workspace:BulkMoveTo(moveParts, moveFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
-	flare(entry, os.clock() - (entry.FlareAt or -math.huge))
+	flare(entry, os.clock() - (flareAt(entry.Rock) or -math.huge))
 end
 
 ---------------------------------------------------------------- the glint flare loop
@@ -271,7 +300,7 @@ local function step()
 	local now = os.clock()
 	local hot = false
 	for rock, entry in entries do
-		local since = now - (entry.FlareAt or -math.huge)
+		local since = now - (flareAt(rock) or -math.huge)
 		if since <= CrackLogic.Heat + 0.05 and not entry.Reduced then
 			hot = true
 			if rock.Parent then
@@ -296,65 +325,114 @@ end
 
 ---------------------------------------------------------------- hits
 
--- The rock that was hit least recently gives its parts back.
-local function evictOldest()
-	local oldest: Model? = nil
-	local at = math.huge
-	for rock, entry in entries do
-		if entry.HitAt < at then
-			oldest, at = rock, entry.HitAt
-		end
-	end
-	if oldest then
-		RockCracks.clear(oldest)
-	end
+-- The rocks that must keep their crack: `fn(rock)` (your own and your focused rock).
+function RockCracks.setKeep(fn: (Model) -> boolean)
+	keep = fn
 end
 
-local function make(rock: Model): Entry?
-	local camera = Workspace.CurrentCamera
-	local box, extents = rock:GetBoundingBox()
-	local center = box.Position
-	local from = if camera then camera.CFrame.Position else center + Vector3.new(0, 4, 12)
-	if (from - center).Magnitude > JuiceConfig.CrackRange then
-		return nil
+--[[
+	Frees a slot for a new rock (`incomingKept`: it is yours): the rock hit
+	least recently that isn't yours and wasn't hit in the last KeepHit seconds
+	(MineJuiceRules.evict). False when none may go: the new rock waits.
+]]
+local function freeSlot(now: number, incomingKept: boolean): boolean
+	local slots: { [Model]: MineJuiceRules.Slot } = {}
+	for rock, entry in entries do
+		slots[rock] = { HitAt = entry.HitAt, Kept = keep(rock) }
 	end
-	rayParams.FilterDescendantsInstances = { rock }
-	local toward = center - from
-	local result = Workspace:Raycast(from, toward.Unit * (toward.Magnitude + extents.Magnitude), rayParams)
+	local victim = MineJuiceRules.evict(slots, now, incomingKept)
+	if not victim then
+		return false
+	end
+	RockCracks.clear(victim)
+	return true
+end
+
+-- Aims the crack at the rock's face toward the camera (one ray at its middle). False when the ray misses.
+local function aim(entry: Entry): boolean
+	local camera = Workspace.CurrentCamera
+	local from = if camera then camera.CFrame.Position else entry.Center + Vector3.new(0, 4, 12)
+	rayParams.FilterDescendantsInstances = { entry.Rock }
+	local toward = entry.Center - from
+	if toward.Magnitude < 0.1 then
+		return false
+	end
+	local result = Workspace:Raycast(from, toward.Unit * (toward.Magnitude + entry.Reach), rayParams)
 	if not result then
+		return false
+	end
+	entry.Origin = result.Position
+	entry.Normal = result.Normal
+	entry.Right, entry.Up = CrackLogic.basis(result.Normal)
+	return true
+end
+
+-- Your view of the crack's face (1 = straight at it); 1 without a camera.
+local function facing(entry: Entry): number
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return 1
+	end
+	local view = camera.CFrame.Position - entry.Center
+	return if view.Magnitude > 0.1 then view.Unit:Dot(entry.Normal) else 1
+end
+
+local function make(rock: Model, now: number): Entry?
+	local camera = Workspace.CurrentCamera
+	local primary = rock.PrimaryPart :: BasePart
+	if camera and (camera.CFrame.Position - primary.Position).Magnitude > JuiceConfig.CrackRange then
 		return nil
 	end
 	local phone = isPhone()
 	local limit = if phone then JuiceConfig.CrackRocksPhone else JuiceConfig.CrackRocks
+	local kept = keep(rock)
 	while RockCracks.count() >= limit do
-		evictOldest()
+		if not freeSlot(now, kept) then
+			return nil -- every slot is busy with a fresh or kept rock: this one waits
+		end
 	end
+	local box, extents = rock:GetBoundingBox()
+	local center = box.Position
 	local detail = if phone then CrackLogic.PhoneDetail else CrackLogic.Detail
-	local seed = string.format("%d,%d,%d", math.floor(center.X), math.floor(center.Y), math.floor(center.Z))
-	local plan = CrackLogic.plan(seed, CrackLogic.sizeFor(extents), detail)
 	local darks, glints, flecks = CrackLogic.counts(detail)
-	local normal = result.Normal
-	local right, up = CrackLogic.basis(normal)
+	local mem = memory[rock]
+	local plan = mem and mem.Plan
+	if not plan or #plan.Segs ~= darks then
+		local seed = string.format("%d,%d,%d", math.floor(center.X), math.floor(center.Y), math.floor(center.Z))
+		plan = CrackLogic.plan(seed, CrackLogic.sizeFor(extents), detail)
+	end
 	local entry: Entry = {
 		Rock = rock,
-		Plan = plan,
-		Origin = result.Position,
-		Normal = normal,
-		Right = right,
-		Up = up,
+		Center = center,
+		Reach = extents.Magnitude,
+		Plan = plan :: CrackLogic.Plan,
+		Origin = center,
+		Normal = Vector3.new(0, 1, 0),
+		Right = Vector3.new(1, 0, 0),
+		Up = Vector3.new(0, 0, 1),
 		Points = {},
 		Normals = {},
 		OnRock = {},
-		Dark = take("Dark", darks),
-		Glints = take("Glint", glints),
-		Flecks = take("Fleck", flecks),
+		Dark = {},
+		Glints = {},
+		Flecks = {},
 		Growth = 0,
 		Stage = number(rock, "Stage") or 0,
-		HitAt = os.clock(),
-		FlareAt = nil,
+		HitAt = now,
 		Reduced = false,
 		Conn = nil,
 	}
+	-- the face it had before it lost its slot, else the one toward you
+	local origin, normal = mem and mem.Origin, mem and mem.Normal
+	if origin and normal then
+		entry.Origin, entry.Normal = origin, normal
+		entry.Right, entry.Up = CrackLogic.basis(normal)
+	elseif not aim(entry) then
+		return nil
+	end
+	entry.Dark = take("Dark", darks)
+	entry.Glints = take("Glint", glints)
+	entry.Flecks = take("Fleck", flecks)
 	entries[rock] = entry
 	entry.Conn = rock.AncestryChanged:Connect(function()
 		if not rock:IsDescendantOf(Workspace) then
@@ -367,8 +445,9 @@ end
 
 --[[
 	The rock lost HP: its crack grows to the damage now and the glints flare
-	(at most GlintFlaresPerSecond; `reduced`: steady). Returns the crack's
-	centre and face normal (nil = no crack on this rock).
+	(at most GlintFlaresPerSecond per rock, also across losing its slot;
+	`reduced`: steady). Returns the crack's centre and face normal (nil = no
+	crack on this rock now).
 ]]
 function RockCracks.hit(rock: Model, reduced: boolean?): (Vector3?, Vector3?)
 	if not JuiceConfig.Mining.Cracks or not rock.Parent or not rock.PrimaryPart then
@@ -378,23 +457,30 @@ function RockCracks.hit(rock: Model, reduced: boolean?): (Vector3?, Vector3?)
 	if growth <= 0 then
 		return nil, nil
 	end
-	local entry = entries[rock] or make(rock)
+	local now = os.clock()
+	local entry = entries[rock] or make(rock, now)
 	if not entry then
 		return nil, nil
 	end
 	local stage = number(rock, "Stage") or 0
-	if stage ~= entry.Stage then
+	if facing(entry) < RockCracks.FaceDot and aim(entry) then
+		-- you look at the rock from another side now (another player's first hit planned it,
+		-- or you walked round it): the crack moves to the face toward you
+		entry.Stage = stage
+		project(entry)
+	elseif stage ~= entry.Stage then
 		-- a crack stage broke a chunk off: put the points onto what is left
 		entry.Stage = stage
 		project(entry)
 	end
-	local now = os.clock()
 	local still = reduced == true
 	entry.Growth = math.max(entry.Growth, growth)
 	entry.HitAt = now
 	entry.Reduced = still
-	if MineJuiceRules.flare(now, entry.FlareAt, still) then
-		entry.FlareAt = now
+	local mem: Memory = memory[rock] or { FlareAt = nil, Plan = nil, Origin = nil, Normal = nil }
+	memory[rock] = mem
+	if MineJuiceRules.flare(now, mem.FlareAt, still) then
+		mem.FlareAt = now
 	end
 	place(entry)
 	if not still then

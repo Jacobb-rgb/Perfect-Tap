@@ -525,6 +525,16 @@ function LevelView.ticks(t: number, m: Moment, reduced: boolean?): number
 	return n
 end
 
+--[[
+	The earliest a moment may make way for a level up queued behind it
+	(seconds in): 1.8, or later when its last reward row would still be popping
+	in (with Ticks the MILESTONE row lands at 1.75 s: it stays until it showed).
+]]
+function LevelView.cutAt(m: Moment): number
+	local last = LevelView.rowAt(if m.Milestone then 3 else 2)
+	return math.max(1.8, last + 0.5)
+end
+
 function LevelView.poseMoment(view: View, t: number, m: Moment, reduced: boolean?)
 	local total = LevelView.MomentSeconds
 	view.Moment.Visible = t >= 0 and t < total

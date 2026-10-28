@@ -7,8 +7,9 @@
 	rock trembles (RockFxLogic.shakeOffset); at each crack stage the server's
 	cracks open (RockBuilder.applyStage), a chunk breaks off, RockFx pops and an
 	ore drops; the last hit shatters it (RockFx: RockFxLogic.shatterPlan, dust,
-	the ground ring; no comic word: the owner turned it down); the dirty ores are picked up and fly into the
-	carry slots (UI/BagFly, the HUD of today's game) with a +1 each. A caption
+	the ground ring; no comic word: the owner turned it down); the dirty ores
+	are picked up and fly into the backpack button (UI/BagFly; the HUD since
+	feat/backpack) with its bump and +N. A caption
 	line at the top (preview only) names the reel's steps and the sounds.
 
 	  lune run tools/lune/export_mine_juice.luau [fps=20]
@@ -206,28 +207,18 @@ hud.Coins.Text = "$3.4K"
 hud.Zone.Text = ""
 hud.Toasts:ClearAllChildren()
 local CAPACITY = 24
+-- the backpack button (feat/backpack): "n / 24", right of the blaster's hotbar slot, as HudController places it
+HudView.placeBackpack(hud, SCALE)
 local function setCarry(count: number)
-	local squares, shown, more, width = HudView.carryLayout(CAPACITY, count)
-	for i = 1, squares do
-		if more > 0 and i == squares then
-			HudView.carrySlot(hud.CarrySlots, i, nil, false, more)
-		else
-			HudView.carrySlot(hud.CarrySlots, i, nil, i <= shown, 0)
-		end
-	end
-	HudView.trimSlots(hud.CarrySlots, squares)
-	hud.CarryLabel.Text = `CARRYING {count}/{CAPACITY}`
-	hud.CarryPanel.Size = roblox.UDim2.fromOffset(width, HudView.CarryPanelHeight)
-	return squares
+	HudView.setBackpack(hud, count, CAPACITY)
 end
-local squares = setCarry(0)
--- the n-th carry slot's middle (overlay pixels): the row is centred at the bottom
-local SLOT, GAP, LIP = 70, 10, 5
-local function slotCenter(n: number): any
-	local x = W / 2 + ((n - 1) - (squares - 1) / 2) * (SLOT + GAP) * SCALE
-	local y = (H - INSET) - (16 + (SLOT + LIP) / 2) * SCALE
-	return x, y
-end
+setCarry(0)
+-- the button's middle and size (overlay pixels): its holder hangs from the bottom centre (AnchorPoint 0, 1)
+local holder = hud.CarryPanel
+local packSize = V2.new(holder.Size.X.Offset, holder.Size.Y.Offset) * SCALE
+local packX = W / 2 + holder.Position.X.Offset * SCALE + packSize.X / 2
+local packY = (H - INSET) + holder.Position.Y.Offset * SCALE - packSize.Y / 2
+local packAt = V2.new(packX, packY)
 
 local juice = BagFly.build()
 
@@ -475,26 +466,74 @@ for i = 0, frames - 1 do
 		end
 	end
 
-	-- the UI: the ores flying into the carry slots, the +1 bumps, the count
+	-- the UI: the ores flying into the backpack button, its bump (MineJuiceController.land: an ore
+	-- landing while the bump shows only raises its +N; a new bump flashes at most once per flareGap)
 	local landed = 0
-	local bumpOf = {} -- bump -> the drop that landed on it last
 	for s, d in drops do
 		local flyer = juice.Flyers[s]
 		BagFly.setOre(flyer, nil)
 		local from = screen(chunkAt(d, d.Pick) + V3.new(0, 0.6, 0))
-		local x, y = slotCenter(s)
-		BagFly.poseFlyer(flyer, from, V2.new(x, y), t - d.Pick, SCALE, s * 1.37)
-		local b = (s - 1) % #juice.Bumps + 1
+		BagFly.poseFlyer(flyer, from, packAt, t - d.Pick, SCALE, s * 1.37)
 		if t - d.Pick - FLIGHT >= 0 then
 			landed += 1
-			bumpOf[b] = s
 		end
 	end
-	for b, bump in juice.Bumps do
-		local s = bumpOf[b]
-		local x, y = slotCenter(s or 1)
-		bump.Plus.Label.Text = "+1"
-		BagFly.poseBump(bump, V2.new(x, y), V2.new(SLOT, SLOT) * SCALE, if s then t - drops[s].Pick - FLIGHT else -1, SCALE)
+	local live = {} -- the controller's landings, replayed up to now: { Bump, Start, PlusAt, Count, Flash }
+	local lastFlash: number? = nil
+	for _, d in drops do
+		local at = d.Pick + FLIGHT
+		if at > t then
+			break
+		end
+		for k = #live, 1, -1 do
+			if at - live[k].PlusAt >= BagFly.BumpSeconds then
+				table.remove(live, k)
+			end
+		end
+		local last = live[#live]
+		local merge, flash = Rules.land(at, last ~= nil, lastFlash)
+		if merge and last then
+			last.Count += 1
+			last.PlusAt = at
+		else
+			if flash then
+				lastFlash = at
+			end
+			local used = {}
+			for _, l in live do
+				used[l.Bump] = true
+			end
+			local bump = nil
+			for _, b in juice.Bumps do
+				if not used[b] then
+					bump = b
+					break
+				end
+			end
+			if not bump then
+				bump = table.remove(live, 1).Bump
+			end
+			table.insert(live, { Bump = bump, Start = at, PlusAt = at, Count = 1, Flash = flash })
+		end
+	end
+	for _, bump in juice.Bumps do
+		local entry = nil
+		for _, l in live do
+			if l.Bump == bump then
+				entry = l
+			end
+		end
+		bump.Plus.Label.Text = if entry then "+" .. entry.Count else "+1"
+		BagFly.poseBump(
+			bump,
+			packAt,
+			packSize,
+			if entry then t - entry.Start else -1,
+			SCALE,
+			false,
+			if entry then entry.Flash else true,
+			if entry then t - entry.PlusAt else -1
+		)
 	end
 	setCarry(landed)
 	captionText.Text = captionFor(t)
@@ -538,7 +577,7 @@ local board = {
 		{ frame = frameAt(hitTimes[HITS - 1] + 0.05), caption = "BONUS Velká prasklina se zlatými jiskrami" },
 		{ frame = frameAt(SHATTER + 0.12), caption = "5 Poslední zásah: kámen se rozletí, prach a kusy" },
 		{ frame = frameAt(drops[1].Pick + 0.25), caption = "5 Ruda vyskočí a zazáří" },
-		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... letí do batohu (sloty dole)" },
+		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... letí do batohu (tlačítko batohu dole)" },
 		{ frame = frameAt(drops[stages].Pick + FLIGHT + 0.12), caption = "5 +1 v batohu, počet naskočí" },
 	},
 }
