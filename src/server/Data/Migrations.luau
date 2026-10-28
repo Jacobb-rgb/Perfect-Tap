@@ -205,9 +205,10 @@
 	  (Gear.Backpack, capacities 1 / 2 / 3 / 5 / 8 / 12 by level) becomes
 	  the smallest pack holding at least as much, owned and equipped if it
 	  is bigger than the one worn; Gear.Backpack goes (the line left the
-	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES; a level
-	  folded from an old CarryLevel in the same load: OLD_CARRY_PRICES), less
-	  that pack's own price, go back into data.Coins (review 2026-10-27).
+	  Gear shop), and the coins its levels cost (OLD_BACKPACK_PRICES for the
+	  Gear levels bought, OLD_CARRY_PRICES for an old CarryLevel folded in the
+	  same load: the larger), less that pack's own price, go back into
+	  data.Coins (review 2026-10-27).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1349,6 +1350,7 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots); they fold
 	-- an old CarryLevel into Gear.Backpack (the v9 refund below pays what it really cost)
 	local foldedCarry = if isFinite(data.CarryLevel) then math.floor(data.CarryLevel) else nil
+	local gearBefore = if type(data.Gear) == "table" then wholeIn(data.Gear.Backpack, 0, MAX_LEVEL_KEPT) else nil
 	migrateSteps67(data, clock, report)
 	migrateStep8(data, report)
 
@@ -1398,10 +1400,14 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 					for i = 1, math.clamp(foldedCarry, 0, #OLD_CARRY_PRICES) do
 						paid += OLD_CARRY_PRICES[i]
 					end
-				else
-					for i = 1, math.min(gearLevel, #OLD_BACKPACK_PRICES) do
-						paid += OLD_BACKPACK_PRICES[i]
+				end
+				-- a Gear level bought before the fold wins it (max): its Gear prices count then
+				if gearBefore then
+					local gearPaid = 0
+					for i = 1, math.min(gearBefore, #OLD_BACKPACK_PRICES) do
+						gearPaid += OLD_BACKPACK_PRICES[i]
 					end
+					paid = math.max(paid, gearPaid)
 				end
 				local refund = math.max(0, paid - pick.Price)
 				if refund > 0 then

@@ -96,7 +96,7 @@ shop's plates are dropped again beyond their range + 6 (BackpackShopDecor.Hyster
 roof 40, porch 32, golem and inside 30, decor 30), so the spawn, the plaza and the DROPPERS
 door hold none of its client parts even after a visit (tests/Backpacks.spec.luau).
 
-Map version 63 (`WorldBuilder.Version`, on main b1fab138 v62).
+Map version 64 (`WorldBuilder.Version`, on main e4dd151a v63).
 
 ## What to test in Studio
 
