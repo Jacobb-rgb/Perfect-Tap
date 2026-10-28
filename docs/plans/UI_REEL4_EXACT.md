@@ -124,9 +124,10 @@ Motion (sampled every 1/60 s):
 - Left tiles (PC): 77 units, gaps 7, 10 from the left, their top 140 under Roblox's bar (the reel's rows
   285..772 px); phones keep four a row at the top. Icon 72 % of the tile, corners ~4, thin slate face with
   the tile's colour in a thin bottom lip and the rim.
-- The backpack: no bottom button in the round look; the Inventory tile carries a "12/30" badge in its top-right
-  corner (still the "Backpack" button in "Carry": HudView.setBackpack, Q / R1's key cap in the tile's other
-  corner, the flying ore aim at it). The classic look keeps the bottom button.
+- The bottom centre (owner 2026-10-28, newest): [BLASTER slot | backpack button] centred like on main, in the
+  round look as the reel's dark tiles with their colour in the lip and the edge (blue blaster, orange pack);
+  on phones the pair keeps out of Roblox's thumbstick zone (left edge at 40 % of the screen at least, both
+  looks). The Inventory tile stays in the grid with no count on it (the round-3 badge was dropped).
 - Offers: 74-unit pictures every 133 units, a white sunburst behind each, "R$99" lime letters tilted -8 deg,
   no box; money 40 + 27 units, 6 from the left, 12 from the bottom.
 - Store: 605 x 563 units (StoreView.Looks.Round), cards 569 wide in all (cash 183 x 132, gamepasses two a
@@ -134,20 +135,24 @@ Motion (sampled every 1/60 s):
   titles in a light tint of the card's colour; the limited banner drawn 918 wide and shrunk into the list.
 - Inventory (PC): at most 584 x 470 units (BackpackView.RoundMaxWidth / RoundMaxHeight), five cells a row.
 - Window X on PC bands: 0.66 of the band (48 of 73), 15 in; compact bands keep 0.82 (44 pt on phones).
-- Motion: AnimConfig.RoundMotion (off until the owner says yes; Motion.roundMotion / Motion.tune /
+- Motion: AnimConfig.RoundMotion (ON since the owner's OK, 2026-10-28; Motion.roundMotion / Motion.tune /
   Motion.roundPopScale): windows 0.5 -> 1.1 -> 1 in 0.2 s, hover +5 % in 0.1 s, press 0.93 for 0.1 s and back
   in 0.1 s, no shine or breathe loops; Reduce motion stills it like UIMotion. Clip:
   docs/screenshots/reels_2026-10-27/ui3/round_motion.mp4 (preview, tools/lune/export_round_motion.luau).
 
+- Rebirth (owner 2026-10-28: "like the rebirth in the other pictures"): the reel's window, 600 x 500 units:
+  "Rebirth N" -> "Rebirth N+1", two pills with real numbers (Forge Stars now -> after this rebirth; blaster
+  LV now -> the level a rebirth starts with), a dark box with one line and a bar toward the requirement
+  (the level this run counts of MinBlaster), Rebirth (the same SURE? second press) OR Not now (closes).
+  STAR SHOP and BLASTERS stay as small tabs (their pages get the old room back).
+- Boost corner (main 920906f2): the reel's bright studded squares, the time over the bottom edge; the train
+  chip a dark tile with a blue edge.
+
 ### What is still not 1:1, and why
-- The TRAIN chip and the TRIPLE / HEXA chips under the tiles: the reel has nothing there. The boosts move to the
-  bottom-right corner with ui/boost-corner (f495149b, not on main yet), and the boost chips are laid out off the
-  train chip (BoostView), so restyling that row now would collide with it. Once it lands: the train chip as a
-  compact dark square under the tiles ("5/8" under it), the corner squares like the reel's (square tile, icon,
-  "inf" or the time under it).
-- Windows built on MenuPanel (Star Forge, Codex, Settings, ...) keep their own sizes and dodge the old top-left
-  coins spot, so they sit right of the middle; the reel's are ~570 units wide and centred. Our Star Forge has
-  three columns of rules and tabs where the reel's Rebirth has one card: shrinking it to 569 x 481 cuts words.
+- The TRAIN chip stays a chip with SEND under the tiles (the reel has nothing there; its SEND and the T key are
+  game features); it now wears the dark tile look.
+- Windows built on MenuPanel keep their own sizes (Codex, Settings, Quests...): their content is richer than
+  the reel's single cards; they are centred like the reel's unless they would cover the left tiles.
 - Studs on the faces and bands need the ui_studs picture uploaded (the previews draw it); until then the bands
   keep the fine checker.
 - The reel's world blur behind open windows (a camera BlurEffect) is not built; ours dims.
