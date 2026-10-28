@@ -177,7 +177,10 @@ function Pop.studs(frame: GuiObject, corner: number, transparency: number?, tile
 		if t < 0.4 then
 			return Pop.bandPattern(frame, z)
 		end
-		return Pop.lattice(frame, z, 1)
+		-- (the reel's faces: Roblox's faint "L" studs, when the stud picture shows)
+		local clip = Pop.lattice(frame, z, 1)
+		Pop.roundStuds(clip, z or frame.ZIndex, if t >= 0.5 then 0.9 else 0.84)
+		return clip
 	end
 	local faint = t >= 0.5
 	return Pop.lattice(frame, z, if faint then 0.94 else PopTheme.Lattice, if faint then 34 else nil)
@@ -332,8 +335,36 @@ end
 	frames of a fixed size, so a band laid out again keeps them (they cover
 	bands up to about 1400 units wide). Returns the clip.
 ]]
+-- The round look's studs: IconAssets' ui_studs tile (Roblox's "L" studs, our own picture) inside a clip;
+-- nothing until it is uploaded (the previews draw it). Returns the picture or nil.
+function Pop.roundStuds(clip: GuiObject, z: number, transparency: number): ImageLabel?
+	if not IconAssets.textureShows("ui_studs") then
+		return nil
+	end
+	local old = clip:FindFirstChild("Studs")
+	if old then
+		old:Destroy()
+	end
+	local studs = UIKit.new("ImageLabel", {
+		Name = "Studs",
+		BackgroundTransparency = 1,
+		ImageTransparency = transparency,
+		ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(PopTheme.StudTile, PopTheme.StudTile),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = z,
+	}, clip)
+	IconAssets.applyTexture(studs, "ui_studs")
+	return studs
+end
+
 function Pop.bandPattern(frame: GuiObject, z: number?): Frame
 	local clip = Pop.lattice(frame, z, 1)
+	-- (the reel's band: Roblox studs; the fine checker until the stud picture is uploaded)
+	if Pop.roundStuds(clip, z or frame.ZIndex, 0.72) then
+		Pop.dressBand(frame)
+		return clip
+	end
 	local step = PopTheme.CheckerGap
 	local seg = step * 6
 	local half = math.min(0.03, 0.8 / seg) -- (lines about 1.6 units wide)
@@ -489,6 +520,37 @@ function Pop.watermark(band: GuiObject, icon: string): ImageLabel
 		Size = UDim2.new(0, 190, 1.7, 0), -- (Fit: a square 1.7 bands tall, at most 190 units)
 		Visible = IconAssets.shows(icon),
 		ZIndex = band.ZIndex,
+	}, holder)
+	IconAssets.apply(mark, icon)
+	mark:SetAttribute("Icon", icon)
+	return mark
+end
+
+--[[
+	The round look's top-row button picture (the reel's Shop / Spawn / Plot
+	tabs): a big faded copy of `icon` over the button's left end, inside the
+	face's clip so its edges cut it; the word stays centred over it. Hidden
+	until the icon's sheet is uploaded (previews draw it). Returns it.
+]]
+function Pop.tabMark(button: GuiObject, icon: string, height: number): ImageLabel
+	local clip = button:FindFirstChild("Lattice") :: GuiObject?
+	local holder: GuiObject = clip or button
+	local old = holder:FindFirstChild("Icon")
+	if old then
+		old:Destroy()
+	end
+	local pic = math.floor(height * 1.25)
+	local mark = UIKit.new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		ImageTransparency = PopTheme.TabMark,
+		Position = UDim2.new(0, -math.floor(pic * 0.22), 0.5, math.floor(height * 0.18)),
+		Rotation = -10,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(pic, pic),
+		Visible = IconAssets.shows(icon),
+		ZIndex = holder.ZIndex,
 	}, holder)
 	IconAssets.apply(mark, icon)
 	mark:SetAttribute("Icon", icon)
@@ -910,14 +972,14 @@ end
 
 -- A dark tile's gradient: dark grey, warming toward its lip in the tile's colour.
 local function darkGradient(paint: Paint, lip: number): ColorSequence
+	-- (measured on the reel: slate all the way down, a thin band of the tile's colour at the bottom)
 	local dark = PopTheme.TileDark
-	local cut = 1 - math.max(lip, 0.06)
+	local cut = 1 - math.clamp(lip, 0.04, 0.06)
 	return ColorSequence.new({
 		ColorSequenceKeypoint.new(0, dark.Top),
-		ColorSequenceKeypoint.new(cut - 0.16, dark.Bottom),
-		ColorSequenceKeypoint.new(cut - 0.001, dark.Bottom:Lerp(paint.Bottom, 0.3)),
+		ColorSequenceKeypoint.new(cut - 0.001, dark.Bottom),
 		ColorSequenceKeypoint.new(cut, paint.Bottom),
-		ColorSequenceKeypoint.new(1, paint.Bottom:Lerp(Color3.new(0, 0, 0), 0.25)),
+		ColorSequenceKeypoint.new(1, paint.Bottom:Lerp(Color3.new(0, 0, 0), 0.2)),
 	})
 end
 
@@ -930,6 +992,11 @@ end
 function Pop.darkTile(frame: GuiObject, paint: string | Paint, corner: number)
 	Pop.face(frame, PopTheme.TileDark, corner)
 	frame:SetAttribute("DarkTile", true)
+	frame.BackgroundTransparency = 0.06 -- (the reel's tiles let the world through a touch)
+	local border = frame:FindFirstChild("Border") :: UIStroke?
+	if border then
+		border.Thickness = 2.5 -- (measured: 3.3 px at 1080p)
+	end
 	local rim = frame:FindFirstChild("Rim")
 	local light = if rim then rim:FindFirstChild("Light") else nil
 	local fade = if light then light:FindFirstChildOfClass("UIGradient") else nil
@@ -1036,16 +1103,25 @@ function Pop.price(parent: Instance, robux: number?, size: Vector2, props: Props
 	}, row)
 	IconAssets.apply(mark, "robux")
 	mark:SetAttribute("Icon", "robux")
-	local words = if robux then tostring(robux) else (text or "")
+	local words = Pop.priceWords(robux, text)
 	Pop.text(row, words, textSize, {
 		Name = "Amount",
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(Pop.textWidth(words, textSize), textSize + 6),
 		ZIndex = 6,
 	})
-	mark.Visible = robux ~= nil
+	-- (the round look: the reel's "R$179" words, no mark)
+	mark.Visible = robux ~= nil and not PopTheme.round()
 	apply(button, props)
 	return button
+end
+
+-- A price button's words: "R$179" in the round look (the reel), else the amount after the mark; `text` without one.
+function Pop.priceWords(robux: number?, text: string?): string
+	if robux then
+		return if PopTheme.round() then "R$" .. tostring(robux) else tostring(robux)
+	end
+	return text or ""
 end
 
 -- Sets a price button's amount (nil: `text` without the mark).
@@ -1056,9 +1132,9 @@ function Pop.setPrice(button: GuiObject, robux: number?, text: string?)
 	end
 	local mark = row:FindFirstChild("Mark") :: ImageLabel?
 	local amount = row:FindFirstChild("Amount") :: TextLabel?
-	local words = if robux then tostring(robux) else (text or "")
+	local words = Pop.priceWords(robux, text)
 	if mark then
-		mark.Visible = robux ~= nil
+		mark.Visible = robux ~= nil and not PopTheme.round()
 	end
 	if amount then
 		amount.Text = words
@@ -1131,7 +1207,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		Active = true,
 		ZIndex = 1,
 	}, parent)
-	UIKit.corner(root, if round then 8 else PopTheme.WindowCorner)
+	UIKit.corner(root, PopTheme.WindowCorner)
 	-- (the reel: a thin near-black frame, the band and the body straight inside it)
 	local rim = if round then 3 else 4
 	Pop.border(root, rim)
@@ -1144,7 +1220,7 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		Size = UDim2.new(1, -2 * rim, 1, -(h + rim)),
 		ZIndex = 1,
 	}, root)
-	UIKit.corner(body, if round then 6 else 4)
+	UIKit.corner(body, if round then 3 else 4)
 	UIKit.new("UIGradient", { Color = ColorSequence.new(PopTheme.Body, PopTheme.BodyBottom), Rotation = 90 }, body)
 	-- the body's studs (the photos' dark studded floor) and a shade under the header
 	Pop.studs(body, 4, 0.5, 36, 1)
@@ -1197,10 +1273,11 @@ function Pop.window(parent: Instance, title: string, size: Vector2, band: number
 		ZIndex = 5,
 	})
 	Pop.shadow(titleLabel, if round then 3 else nil)
-	local x = math.floor(h * 0.82) -- (44 pt on a phone at the compact bands)
+	-- (44 pt on a phone at the compact bands; the reel's X on a PC band: 48 of 73 units, 15 in)
+	local x = if round and h < 80 then math.floor(h * 0.66) else math.floor(h * 0.82)
 	local close = Pop.close(root, x, {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, if round then -14 else -10, 0, math.floor(h / 2) - (if round then 2 else 0)),
+		Position = UDim2.new(1, if round then -15 else -10, 0, math.floor(h / 2) - (if round then 2 else 0)),
 	})
 	return { Root = root, Header = head, Title = titleLabel, Close = close, Body = body, Icon = icon }
 end
@@ -1662,7 +1739,7 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 	face.Size = UDim2.fromOffset(s, s)
 	local paint = Pop.paint(o.Paint)
 	if PopTheme.round() then
-		Pop.darkTile(face, paint, math.floor(s * 0.12))
+		Pop.darkTile(face, paint, math.max(3, math.floor(s * 0.05))) -- (measured: radius ~5.6 px of 116)
 		face:SetAttribute("TilePaint", if type(o.Paint) == "string" then o.Paint else nil)
 	else
 		Pop.face(face, o.Paint, math.floor(s * 0.12))
@@ -1677,13 +1754,15 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 			end
 		end
 	end
+	local round = PopTheme.round()
 	local icon = UIKit.new("ImageLabel", {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0.44, 0),
+		-- (the reel's tiles: the picture 68 % of the tile, from 19 % down)
+		Position = UDim2.new(0.5, 0, if round then 0.47 else 0.44, 0),
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromScale(0.8, 0.8),
+		Size = if round then UDim2.fromScale(0.72, 0.72) else UDim2.fromScale(0.8, 0.8),
 		ZIndex = 3,
 	}, face)
 	IconAssets.apply(icon, o.Icon)
@@ -1696,7 +1775,7 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 	Pop.text(face, o.Label, math.floor(s * (if hasPicture then 0.2 else 0.26)), {
 		Name = "Label",
 		AnchorPoint = if hasPicture then Vector2.new(0.5, 0.5) else Vector2.new(0.5, 0.5),
-		Position = if hasPicture then UDim2.new(0.5, 0, 0.9, 0) else UDim2.fromScale(0.5, 0.5),
+		Position = if hasPicture then UDim2.new(0.5, 0, if round then 0.86 else 0.9, 0) else UDim2.fromScale(0.5, 0.5),
 		-- (relative to the tile: the word grows when a layout makes the tile bigger)
 		Size = if hasPicture then UDim2.new(1.04, 0, 0.22, 0) else UDim2.new(1, -8, 0.34, 0),
 		TextScaled = true,
