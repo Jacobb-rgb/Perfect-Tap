@@ -14,6 +14,9 @@
 	  returns the angle, setAngle(instance, radians) turns it there,
 	  release(instance) lets the idle turn go on from that angle
 	  (WheelController lands the lobby wheel on the player's own prize).
+	  bounce(instance) gives a spinner one happy hop with a little wobble
+	  on top of its turn (bounceAt: BounceSeconds; the EGGS temple's egg
+	  when you walk up to it, EggPanelController, never with Reduce motion).
 	- Cheap on phones: a spinner with no spin and no bob is never touched;
 	  every CheckSeconds each spinner is sorted by its distance to the camera
 	  and whether its bounding sphere is on screen (tier): near ones move
@@ -32,6 +35,9 @@ local DecorController = {}
 DecorController.NearDistance = 120 -- studs: every frame
 DecorController.FarDistance = 250 -- studs: past this (or off screen) not at all
 DecorController.CheckSeconds = 0.25 -- how often the tiers are worked out again
+DecorController.BounceSeconds = 0.7 -- one happy hop (bounce)
+DecorController.BounceHeight = 0.55 -- studs at its top
+DecorController.BounceTilt = 0.14 -- radians: the wobble at its start
 
 -- A spinner is a part or a whole model (all parts turn around the model's pivot).
 type Spinner = {
@@ -47,6 +53,7 @@ type Spinner = {
 	hop: boolean, -- hops up from its place (abs of the wave) instead of bobbing round it
 	angle: number, -- radians, about the pivot's Y axis
 	held: boolean, -- another controller drives the angle (hold / setAngle)
+	bounceAt: number?, -- os.clock() of a running bounce (bounce)
 	tier: number, -- 0 = skip, 1 = every frame, 2 = every 2nd frame
 }
 
@@ -137,11 +144,46 @@ local function addSpinner(instance: Instance)
 	}
 end
 
+--[[
+	A bounce `dt` seconds in: the lift (studs) and the wobble (radians round
+	the spinner's own Z) to add; both 0 before it and from BounceSeconds on.
+	A high hop, a small one after it, the wobble dying away (pure: tests).
+]]
+function DecorController.bounceAt(dt: number): (number, number)
+	local d = DecorController.BounceSeconds
+	if dt <= 0 or dt >= d then
+		return 0, 0
+	end
+	local k = dt / d
+	-- two hops: the first 60 % of the time full height, then a third of it
+	local hop = if k < 0.6 then math.sin(k / 0.6 * math.pi) else math.sin((k - 0.6) / 0.4 * math.pi) / 3
+	local wobble = math.sin(dt * 22) * DecorController.BounceTilt * (1 - k)
+	return hop * DecorController.BounceHeight, wobble
+end
+
+-- One happy hop for a spinner (nothing when it isn't one, e.g. not streamed in yet).
+function DecorController.bounce(instance: Instance)
+	local s = spinners[instance]
+	if s then
+		s.bounceAt = os.clock()
+	end
+end
+
 -- Moves a spinner's parts to its angle and bob at time `t`.
 local function place(s: Spinner, t: number)
 	local wave = math.sin(t * s.bobSpeed + s.phase)
 	local lift = if s.hop then math.abs(wave) * s.bob else wave * s.bob
-	local cf = s.pivot * CFrame.new(0, lift, 0) * CFrame.Angles(0, s.angle, 0)
+	local tilt = 0
+	local at = s.bounceAt
+	if at then
+		local hop, wobble = DecorController.bounceAt(os.clock() - at)
+		if os.clock() - at >= DecorController.BounceSeconds then
+			s.bounceAt = nil
+		end
+		lift += hop
+		tilt = wobble
+	end
+	local cf = s.pivot * CFrame.new(0, lift, 0) * CFrame.Angles(0, s.angle, tilt)
 	local cframes = s.cframes
 	for i, offset in s.offsets do
 		cframes[i] = cf * offset

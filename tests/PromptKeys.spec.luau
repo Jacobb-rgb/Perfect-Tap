@@ -20,6 +20,16 @@ return function(T, Loader)
 	local HELPER = "src/shared/Config/PromptConfig.luau"
 	-- the light UI's own pill sets the Custom style, only behind UIConfig.CustomPrompts (off)
 	local CUSTOM_STYLE = "src/client/Controllers/LightWorldController.luau"
+	--[[
+		The one other exception (owner 2026-10-28, round 2: "yes, a big E"):
+		the EGGS temple's egg prompts draw their own big round E
+		(UI/EggPrompt). EggPanelController sets the Custom style in exactly one
+		place, behind its own switch EggPanel.BigE, only on the prompts
+		it made with PromptConfig.make (so their keys are still the roles'),
+		and marks them OwnLook so the light UI never draws over them.
+	]]
+	local EGG_STYLE = "src/client/Controllers/EggPanelController.luau"
+	local EGG_SWITCH = "if EggPanel.BigE then Enum.ProximityPromptStyle.Custom else Enum.ProximityPromptStyle.Default"
 
 	--[[
 		The allow-list for E outside the prompts: modal close-ups whose own key
@@ -104,7 +114,11 @@ return function(T, Loader)
 					makers += 1
 				end
 			end
-			if rel ~= CUSTOM_STYLE then
+			if rel == EGG_STYLE then
+				T.eq(count(text, "ProximityPromptStyle%.Custom"), 1, rel .. ": the egg prompts' own look, in one place")
+				T.truthy(string.find(text, EGG_SWITCH, 1, true), rel .. ": only behind EggPanel.BigE")
+				T.truthy(string.find(text, ':SetAttribute("OwnLook", true)', 1, true), rel .. ": marked OwnLook (the light UI leaves them)")
+			elseif rel ~= CUSTOM_STYLE then
 				T.eq(count(text, "ProximityPromptStyle%.Custom"), 0, rel .. ": the stock prompt look")
 			end
 		end

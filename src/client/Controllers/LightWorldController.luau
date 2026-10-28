@@ -129,8 +129,9 @@ local function startPrompts()
 		useCustom(d)
 	end
 	Workspace.DescendantAdded:Connect(useCustom)
-	ProximityPromptService.PromptShown:Connect(function(prompt, inputType)
-		if prompt.Style == Enum.ProximityPromptStyle.Custom then
+	ProximityPromptService.PromptShown:Connect(function(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInputType)
+		-- (a prompt with its own look, OwnLook: the eggs' big E, EggPanelController)
+		if prompt.Style == Enum.ProximityPromptStyle.Custom and prompt:GetAttribute("OwnLook") ~= true then
 			show(prompt, inputType)
 		end
 	end)

@@ -1,10 +1,11 @@
 --[[
 	CapsuleController: golem capsules on the client (step 7).
 
-	- The eggs in the EGGS temple open one at a time from their own "Buy
-	  Egg!" prompts and Auto (EggPanelController, owner 2026-10-28):
-	  CapsuleController.buy runs the same request as OPEN 1 below, with the
-	  odds the egg's panel shows, and the same opening plays. buy(), quote(),
+	- The eggs in the EGGS temple open from their own "Buy Egg!" prompts,
+	  their panels' Open 1 / 3 / 10 and Auto (EggPanelController, owner
+	  2026-10-28): CapsuleController.buy runs the same request as OPEN 1 /
+	  3 / 10 below, with the odds the egg's panel shows, and the same
+	  opening plays. buy(), quote(),
 	  luckyShown(), openingState(), onStop() and setAuto() are for it.
 	- The shop panel (CapsuleView, every egg with x1 / x3 / x10 and every
 	  golem's name) opens from the golem inventory's EGGS button
@@ -31,12 +32,21 @@
 	  CapsuleView.ReceiptsAttribute), the others greyed "Coming soon"; the
 	  server answers PurchasePrompt ("Full" reads: the golem inventory is
 	  full, delete some golems first).
-	- CapsuleResult plays the opening (CapsuleView.buildOpening): the
-	  capsule shakes in its glow, cracks (cracks light up, the band turns the
-	  color of the rarest golem inside), bursts with a flash, and each golem
-	  pops out with rays in its rarity color, its name, rarity, bonus and
-	  NEW! when it is the first of its kind (x1 and x3 one by one, then x3 as
-	  a row of cards; x10 straight to a grid of 10 cards popping in). Click /
+	- CapsuleResult plays the opening (CapsuleView.buildOpening) with the
+	  hatch of UI/HatchFx (owner 2026-10-28: "a wow effect"): the egg (x3: a
+	  row of three, x10: rows of five, from a pool) wobbles harder and faster,
+	  squashes and stretches, its cracks spread and glow and leak light in the
+	  rarest golem's colour (a longer build-up and more light for rarer
+	  golems) to a rising sound and a crack sound per crack, then bursts (the
+	  eggs one after another): a flash, the halves flying, shell pieces, a
+	  small camera nudge. Each golem pops out with a bounce in its rarity's
+	  aura and rays, with its name, rarity, bonus and NEW! when it is the
+	  first of its kind; Rare and up sparkle, Mythic tints the screen once, a
+	  fanfare from Legendary (x1 and x3 one by one, then x3 as a row of
+	  cards; x10 straight to a grid of 10 cards popping in). Flashes stay
+	  HatchFx.FlashGap apart (2.5 a second at most); with Reduce motion
+	  nothing shakes, flashes or nudges: the eggs fade and the golem fades
+	  in. Click /
 	  tap / A / Space / Enter skips a step; B / Backspace skips to the end;
 	  a gamepad's selection stays on the overlay's buttons (their
 	  SelectionGroup, and it is put back if anything moves it away), and the
@@ -45,7 +55,8 @@
 	  note above says which odds it uses now: "TRIPLE LUCKY ODDS" or
 	  "Triple Lucky ended: normal odds"). Results that arrive while one
 	  plays wait their turn; a waiting one starts as soon as the end screen
-	  shows. While the overlay is up every prompt is suppressed
+	  shows. A NEW golem bursts out in confetti (UI/Confetti; not with Reduce
+	  motion). While the overlay is up every prompt is suppressed
 	  ("CapsuleOpening"), so a key meant for it never also fires a prompt
 	  behind it. With Auto on, OPEN AGAIN hides and the hint says OK stops
 	  it; closing the end screen (OK, B, Backspace, Space, Enter) stops Auto
@@ -81,6 +92,10 @@ local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
+local Confetti = require(script.Parent.Parent.UI.Confetti)
+local HatchFx = require(script.Parent.Parent.UI.HatchFx)
+local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
@@ -106,7 +121,6 @@ local OPEN_PRIORITY = Enum.ContextActionPriority.High.Value + 30 -- the overlay 
 local TICK = 0.25
 local STATUS_TIME = 3.5
 local REVEAL_TIME = 1.7 -- seconds one golem stays before the next (or the end) when not skipped
-local SHAKE_TIME = 1.35
 local LUCKY_COLOR = Color3.fromRGB(255, 206, 72)
 -- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
 -- the one list of every panel controller (a name that isn't in the game is skipped)
@@ -126,6 +140,8 @@ local stateAt: number? = nil -- server time the last State snapshot came (Capsul
 
 -- the opening overlay
 local opening: CapsuleView.OpenRefs? = nil
+local hatch: HatchFx.Overlay? = nil -- (the hatch's pieces, made with the overlay)
+local eggPool: { [string]: { HatchFx.Record } } = {} -- capsule id -> its eggs, built once
 local playing = false
 local atEnd = false
 local queue: { Result } = {}
@@ -395,16 +411,17 @@ local function request(capsuleId: string, count: number, button: TextButton?, ex
 end
 
 --[[
-	The EGGS temple's "Buy Egg!" and Auto (EggPanelController): opens ONE
-	egg through request() (the cooldown, the local refusals, the server's
-	CapsuleAction "Open" and the opening), with the odds the egg's panel
-	shows (`lucky`; refused "OddsChanged" when the card's differ now).
-	The capsule window is shut there, so a refusal is a toast; `quiet`
-	(Auto) skips the toast for a "one moment" wait. Returns whether it was
-	sent and request()'s reason.
+	The EGGS temple's "Buy Egg!", Open 1 / 3 / 10 and Auto
+	(EggPanelController): opens `count` eggs (CapsuleConfig.Counts) through
+	request() (the cooldown, the local refusals, the server's CapsuleAction
+	"Open" and the opening: one egg, a row of 3, a grid of 10), with the
+	odds the egg's panel shows (`lucky`; refused "OddsChanged" when the
+	card's differ now). The capsule window is shut there, so a refusal is a
+	toast; `quiet` (Auto) skips the toast for a "one moment" wait. Returns
+	whether it was sent and request()'s reason.
 ]]
-function CapsuleController.buy(capsuleId: string, lucky: boolean, quiet: boolean?): (boolean, string?)
-	local sent, reason = request(capsuleId, 1, nil, lucky)
+function CapsuleController.buy(capsuleId: string, count: number, lucky: boolean, quiet: boolean?): (boolean, string?)
+	local sent, reason = request(capsuleId, count, nil, lucky)
 	if not sent and not shown and reason ~= "Hidden" then
 		local busy = reason == "Busy" or reason == "Cooldown"
 		if not (busy and quiet) then
@@ -629,6 +646,10 @@ end
 local function fitOpening(o: CapsuleView.OpenRefs)
 	local w, h = room()
 	CapsuleView.layoutOpening(o, compactNow(), w, h)
+	local fx = hatch
+	if fx then
+		HatchFx.place(fx, o.Hero.Position, o.Hero.Size.X.Offset)
+	end
 end
 
 local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
@@ -668,7 +689,15 @@ local function pause(seconds: number): boolean
 	return false
 end
 
+local lastFlash = -math.huge -- (flashes stay HatchFx.FlashGap apart: 2.5 a second at most)
+
+-- A full-screen flash (never with Reduce motion, never sooner than FlashGap after the last).
 local function flash(o: CapsuleView.OpenRefs, color: Color3, strength: number)
+	local now = os.clock()
+	if Motion.reduced() or not HatchFx.flashOk(lastFlash, now) then
+		return
+	end
+	lastFlash = now
 	o.Flash.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.45)
 	o.Flash.BackgroundTransparency = 1 - strength
 	TweenService:Create(o.Flash, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 })
@@ -682,12 +711,19 @@ local function setRays(o: CapsuleView.OpenRefs, color: Color3?, visible: boolean
 	end
 end
 
+-- Empties the hero viewport (pooled eggs go back to the pool, golems are let go) and dims the aura.
 local function clearHero(o: CapsuleView.OpenRefs)
 	hero = nil
 	for _, child in o.Hero:GetChildren() do
-		if not child:IsA("Camera") then
+		if child:GetAttribute("Pooled") == true then
+			child.Parent = nil
+		elseif not child:IsA("Camera") then
 			child:Destroy()
 		end
+	end
+	local fx = hatch
+	if fx then
+		HatchFx.setAura(fx, Color3.new(1, 1, 1), 0)
 	end
 end
 
@@ -716,71 +752,165 @@ local function ownedBefore(result: Result): { [string]: boolean }
 	return kinds
 end
 
--- The capsule shakes, cracks and bursts (`color`: the rarest golem's).
-local function burst(o: CapsuleView.OpenRefs, capsuleId: string, color: Color3)
+-- `count` eggs of a capsule from the pool (built once, put back whole: HatchFx.reset).
+local function takeEggs(capsuleId: string, count: number): { HatchFx.Record }
+	local list = eggPool[capsuleId]
+	if not list then
+		list = {}
+		eggPool[capsuleId] = list
+	end
+	local pool = list :: { HatchFx.Record }
+	while #pool < count do
+		local model = GolemBuilder.capsule(capsuleId)
+		model:SetAttribute("Pooled", true)
+		table.insert(pool, HatchFx.record(model))
+	end
+	local out: { HatchFx.Record } = {}
+	for i = 1, count do
+		HatchFx.reset(pool[i])
+		table.insert(out, pool[i])
+	end
+	return out
+end
+
+-- The hero viewport's own scale (the golem's bounce).
+local function heroPop(o: CapsuleView.OpenRefs): UIScale
+	local existing = o.Hero:FindFirstChild("HeroPop")
+	if existing and existing:IsA("UIScale") then
+		return existing
+	end
+	local made = Instance.new("UIScale")
+	made.Name = "HeroPop"
+	made.Parent = o.Hero
+	return made
+end
+
+-- Some of a burst's pieces (`n` of them; the rest stay hidden).
+local function some(list: { Frame }, n: number): { Frame }
+	local out: { Frame } = {}
+	for i = 1, math.min(n, #list) do
+		out[i] = list[i]
+	end
+	return out
+end
+
+--[[
+	The hatch (UI/HatchFx): `count` eggs (one, a row of 3, rows of 5) wobble
+	together harder and faster, squash and stretch (one egg), crack, glow and
+	leak light in `color` (the rarest golem's; a longer build-up and more
+	light for rarer ones: plan), then burst one after another: a flash, the
+	halves flying, shell pieces, a crack and a burst sound, a small camera
+	nudge. A skip jumps to the break, a skip-all past it. Reduce motion: the
+	eggs stand a moment and fade, nothing shakes or flashes.
+]]
+local function burst(o: CapsuleView.OpenRefs, capsuleId: string, count: number, plan: HatchFx.Plan, color: Color3, shell: Color3)
 	clearHero(o)
-	local model = GolemBuilder.capsule(capsuleId)
-	model.Parent = o.Hero
-	aim(o, Vector3.zero, 15)
-	local band = model:FindFirstChild("Band", true) :: BasePart?
-	local glow = if band then band.Color else color
-	local cracks: { BasePart } = {}
-	for i = 1, 3 do
-		local crack = model:FindFirstChild("Crack" .. i, true)
-		if crack and crack:IsA("BasePart") then
-			table.insert(cracks, crack)
-		end
+	local fx = hatch
+	local n = math.clamp(count, 1, 10)
+	local spots, distance = HatchFx.arrange(n)
+	local eggs = takeEggs(capsuleId, n)
+	for _, rec in eggs do
+		rec.Model.Parent = o.Hero
 	end
+	aim(o, Vector3.zero, distance)
+	if Motion.reduced() then
+		for i, rec in eggs do
+			HatchFx.pose(rec, CFrame.new(spots[i]), 0, math.huge, plan, color, false)
+		end
+		pause(if skipAll then 0 else 0.5)
+		local t0 = os.clock()
+		while os.clock() - t0 < 0.3 and not skipAll do
+			local k = (os.clock() - t0) / 0.3
+			for _, rec in eggs do
+				for i, part in rec.Parts do
+					part.Transparency = rec.Trans[i] + (1 - rec.Trans[i]) * k
+				end
+			end
+			task.wait()
+		end
+		skipStep = false
+		for _, rec in eggs do
+			rec.Model.Parent = nil
+		end
+		Sfx.play("NodeShatter")
+		return
+	end
+	if fx then
+		HatchFx.paint(fx, shell, color)
+	end
+	local squash = n == 1 -- (many eggs move rigidly: cheaper on phones)
+	local last = plan.Shake + (n - 1) * HatchFx.Sequence
 	local start = os.clock()
-	local shake = if skipAll then 0 else SHAKE_TIME
 	local cracked = 0
-	while os.clock() - start < shake and not skipStep and not skipAll do
-		local t = (os.clock() - start) / shake
-		local amp = 0.05 + 0.3 * t * t
-		local wobble = math.sin(os.clock() * (16 + 14 * t)) * amp
-		local pop = 1 + 0.04 * math.sin(os.clock() * 30) * t
-		model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, 0.4 * math.sin(os.clock() * 2), wobble))
-		aim(o, Vector3.zero, 15 / pop - t * 1.5)
-		if band then
-			band.Color = glow:Lerp(color, t)
-		end
-		local due = math.floor(t * 3.2)
-		while cracked < math.min(due, #cracks) do
-			cracked += 1
-			cracks[cracked].Transparency = 0
-			cracks[cracked].Color = color:Lerp(Color3.new(1, 1, 1), 0.3)
-			Sfx.play("NodeCrack")
-		end
-		task.wait()
-	end
-	skipStep = false
-	-- burst: flash, the halves fly apart and fade
-	flash(o, color, 0.9)
-	Sfx.play("NodeShatter")
-	local top = model:FindFirstChild("Top") :: Model?
-	local bottom = model:FindFirstChild("Bottom") :: Model?
-	local t0 = os.clock()
-	while os.clock() - t0 < 0.4 do
-		local k = (os.clock() - t0) / 0.4
-		if top then
-			top:PivotTo(CFrame.new(1.4 * k, 1.4 + 5 * k, 0) * CFrame.Angles(0, 0, -1.6 * k))
-		end
-		if bottom then
-			bottom:PivotTo(CFrame.new(-0.8 * k, -4 * k * k, 0) * CFrame.Angles(0, 0, 0.8 * k))
-		end
-		for _, d in model:GetDescendants() do
-			if d:IsA("BasePart") and d.Name:sub(1, 5) ~= "Crack" and d.Name:sub(-4) ~= "Root" then
-				d.Transparency = k
+	local burstDone = 0
+	Sfx.loop("CaseCharge", true)
+	while true do
+		if skipAll then
+			start = os.clock() - (last + HatchFx.BurstTime)
+		elseif skipStep then
+			skipStep = false
+			if os.clock() - start < plan.Shake then
+				start = os.clock() - plan.Shake -- (a skip: straight to the break)
 			end
 		end
+		local t = os.clock() - start
+		if t >= last + HatchFx.BurstTime then
+			break
+		end
+		for i, rec in eggs do
+			local at = plan.Shake + (i - 1) * HatchFx.Sequence
+			HatchFx.pose(rec, CFrame.new(spots[i]), t, at, plan, color, squash)
+			if t >= at and i > burstDone then
+				burstDone = i
+				if i == 1 then
+					-- the break: a flash, the burst, shell pieces flying, a nudge
+					Sfx.loop("CaseCharge", false)
+					flash(o, color, 0.9)
+					Sfx.play("CaseBurst")
+					if plan.Order >= 4 then
+						Sfx.play("CaseBoom")
+					end
+					CameraShake.add(plan.Trauma)
+					if fx then
+						Confetti.burst(fx.Shards, Vector2.new(0.5, 0.5), os.clock())
+					end
+				else
+					Sfx.play("NodeShatter", nil, 1 + 0.04 * i)
+				end
+			end
+		end
+		-- a crack sound (higher each time) and a small nudge per crack of the first egg
+		local lit = HatchFx.cracksAt(math.min(t, plan.Shake - 0.001), plan)
+		while cracked < lit do
+			cracked += 1
+			Sfx.play("NodeCrack", nil, 0.85 + 0.2 * cracked)
+			CameraShake.add(plan.Trauma * 0.3)
+		end
+		if fx then
+			HatchFx.setLeak(fx, if t < plan.Shake then t else nil, plan, color)
+		end
+		-- (the camera leans in as it builds)
+		aim(o, Vector3.zero, distance * (1 - 0.12 * math.clamp(t / plan.Shake, 0, 1)))
 		task.wait()
 	end
-	model:Destroy()
+	Sfx.loop("CaseCharge", false)
+	skipStep = false
+	if fx then
+		HatchFx.setLeak(fx, nil, plan, color)
+	end
+	for _, rec in eggs do
+		rec.Model.Parent = nil
+	end
 end
 
 -- The hero golem's frame: the camera rushes in (Back easing), the golem
--- hops once, then turns slowly from side to side.
+-- hops once, then turns slowly from side to side (Reduce motion: still).
 local function animateHero(o: CapsuleView.OpenRefs, h: Hero)
+	if Motion.reduced() then
+		aim(o, h.Target, h.Distance)
+		h.Model:PivotTo(CFrame.new(0, h.RootHeight, 0))
+		return
+	end
 	local t = os.clock() - h.Start
 	local k = math.clamp(t / 0.35, 0, 1)
 	local back = 1 + 2.2 * (k - 1) ^ 3 + 1.2 * (k - 1) ^ 2
@@ -790,8 +920,13 @@ local function animateHero(o: CapsuleView.OpenRefs, h: Hero)
 	h.Model:PivotTo(CFrame.new(0, h.RootHeight + hop, 0) * CFrame.Angles(0, math.sin(t * 0.9) * 0.6, 0))
 end
 
--- One golem pops out of the burst; it stays REVEAL_TIME (or until a skip).
--- A single golem stays on screen for the end.
+--[[
+	One golem pops out of the burst with a bounce, in its rarity's aura and
+	the turning rays; Rare and up get sparkles, Mythic a short tint of the
+	whole screen, a NEW golem confetti, bigger sounds for rarer golems (a
+	fanfare from Legendary). Reduce motion: it only fades in. It stays
+	REVEAL_TIME (or until a skip); a single golem stays for the end.
+]]
 local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, index: number, total: number)
 	clearHero(o)
 	local golem = GolemConfig.ById[kind]
@@ -813,13 +948,54 @@ local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, ind
 	o.Counter.Text = if total > 1 then `{index} / {total}` else ""
 	local plateScale = o.Plate:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
 	plateScale.Parent = o.Plate
-	plateScale.Scale = 0.5
-	TweenService:Create(plateScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	local order = if golem then Rarity.ById[golem.Rarity].Order else 1
-	flash(o, color, if order >= 4 then 0.7 else 0.35)
+	local plan = HatchFx.plan(order)
+	local fx = hatch
+	local pop = heroPop(o)
+	if fx then
+		HatchFx.setAura(fx, color, if order >= 4 then 1 else 0.55)
+	end
+	if Motion.reduced() then
+		pop.Scale = 1
+		plateScale.Scale = 1
+		o.Hero.ImageTransparency = 1
+		TweenService:Create(o.Hero, TweenInfo.new(0.35), { ImageTransparency = 0 }):Play()
+	else
+		o.Hero.ImageTransparency = 0
+		pop.Scale = HatchFx.popAt(0)
+		TweenService:Create(pop, TweenInfo.new(HatchFx.PopTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		plateScale.Scale = 0.5
+		TweenService:Create(plateScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		flash(o, color, if order >= 4 then 0.7 else 0.35)
+		if fx then
+			if plan.Sparkles > 0 then
+				Confetti.burst(some(fx.Sparkles, plan.Sparkles), Vector2.new(0.5, 0.5), os.clock() + index)
+			end
+			if isNew then
+				Confetti.burst(fx.Confetti, Vector2.new(0.5, 0.5), os.clock())
+			end
+			if plan.Tint then
+				-- Mythic: the whole screen glows its colour once and fades (no flashing)
+				fx.Tint.BackgroundColor3 = color
+				fx.Tint.BackgroundTransparency = 0.45
+				TweenService:Create(fx.Tint, TweenInfo.new(HatchFx.TintTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					BackgroundTransparency = 1,
+				}):Play()
+			end
+		end
+		if order >= 5 then
+			CameraShake.add(plan.Trauma * 0.5)
+		end
+	end
 	Sfx.play("Reveal")
+	if order >= 3 then
+		Sfx.play("CoinBurst")
+	end
 	if order >= 5 then
 		Sfx.play("Discovery")
+	end
+	if order >= 6 then
+		Sfx.play("CaseRise")
 	end
 	if total == 1 then
 		return
@@ -848,14 +1024,24 @@ local function showGrid(o: CapsuleView.OpenRefs, allKinds: { string }, allNew: {
 	end
 	CapsuleView.setGrid(o, kinds, new, if #kinds > 1 then bestIndex else nil, counts)
 	o.Grid.Visible = true
+	local anyNew = false
+	for _, isNew in new do
+		anyNew = anyNew or isNew
+	end
+	local fx = hatch
+	if anyNew and fx and not Motion.reduced() then
+		Confetti.burst(fx.Confetti, Vector2.new(0.5, 0.5), os.clock())
+	end
 	setRays(o, if best then CapsuleView.rarityColor(best) else nil, best ~= nil and GolemConfig.order(best) >= 4)
 	for _, cell in o.Cells do
 		cell.Frame.Visible = true
-		cell.Scale.Scale = 0.3
-		TweenService:Create(cell.Scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		cell.Scale.Scale = if Motion.reduced() then 1 else 0.3
+		if not Motion.reduced() then
+			TweenService:Create(cell.Scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		end
 		local order = GolemConfig.order(cell.Kind)
 		if order >= 4 then
-			flash(o, CapsuleView.rarityColor(cell.Kind), 0.35)
+			flash(o, CapsuleView.rarityColor(cell.Kind), 0.35) -- (FlashGap apart at most)
 			Sfx.play(if order >= 5 then "Discovery" else "Reveal")
 		else
 			Sfx.play("Pickup")
@@ -978,6 +1164,7 @@ local function ensureOpening(): CapsuleView.OpenRefs
 	openingCompact = compact
 	local o = CapsuleView.buildOpening(compact)
 	o.Gui.Parent = player:WaitForChild("PlayerGui")
+	hatch = HatchFx.overlay(o.Gui)
 	o.Dim.Activated:Connect(function()
 		if playing and not atEnd then
 			skipStep = true
@@ -1047,9 +1234,17 @@ local function play(result: Result)
 		GuiService.SelectedObject = o.Skip
 	end
 	keepSelection(o)
+	local fx = hatch
+	if fx then
+		HatchFx.clear(fx)
+	end
+	o.Hero.ImageTransparency = 0
+	heroPop(o).Scale = 1
 	local spin = 0
 	renderConnection = RunService.RenderStepped:Connect(function(dt: number)
-		spin += dt * 14
+		if not Motion.reduced() then
+			spin += dt * 14 -- (Reduce motion: the rays stand still)
+		end
 		o.Rays.Rotation = spin
 		local h = hero
 		if h and h.Model.Parent then
@@ -1069,8 +1264,11 @@ local function play(result: Result)
 	end
 	local best = CapsuleView.best(kinds)
 	local color = if best then CapsuleView.rarityColor(best) else Theme.Accent
+	local plan = HatchFx.plan(if best then GolemConfig.order(best) else 1)
+	local capsule = CapsuleConfig.ById[result.Capsule]
+	local shell = if capsule then (capsule.Shell or capsule.Color) else Theme.Accent
 	local ok, err = pcall(function()
-		burst(o, result.Capsule, color)
+		burst(o, result.Capsule, #kinds, plan, color, shell)
 		if #kinds <= 3 then
 			for i, kind in kinds do
 				reveal(o, kind, new[i] == true, i, #kinds)
@@ -1125,6 +1323,10 @@ local function play(result: Result)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
 	if #queue == 0 then
 		o.Gui.Enabled = false
+		Sfx.loop("CaseCharge", false)
+		if fx then
+			HatchFx.clear(fx)
+		end
 		PromptController.setSuppressed("CapsuleOpening", false)
 		local selected = GuiService.SelectedObject
 		if selected and selected:IsDescendantOf(o.Gui) then

@@ -5,11 +5,15 @@
 -- player has none of are silhouettes on coin eggs only, the layout keeps
 -- Auto at 44 pt on phones and every card inside the white panel, the fade
 -- reaches every transparency, and the temple's three eggs are found in the
--- built stall with their prompts in front.
+-- built stall with their prompts in front. Round 2 (owner: "a big E, open
+-- by 10, even cooler"): Open 1 / 3 / 10 show the window's own buys, their
+-- keys are free at the temple, the big E is a 44 pt target on phones,
+-- confetti and the egg's hop are bounded, flashes stay under 3 a second.
 return function(T, Loader)
 	local fs = require("@lune/fs")
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
+	local Vector2 = roblox.Vector2
 	local Vector3 = roblox.Vector3
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
@@ -18,6 +22,11 @@ return function(T, Loader)
 	local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
 	local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
 	local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
+	local EggPrompt = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPrompt")
+	local Confetti = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Confetti")
+	local DecorController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.DecorController")
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 
 	local TEMPLE = { "Stone", "Royal", "Crystal" }
 
@@ -202,7 +211,14 @@ return function(T, Loader)
 				if touch then
 					T.truthy(l.Toggle.Y * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, `{id}: Auto is 44 pt on a phone`)
 				end
-				T.truthy(l.Toggle.Y <= l.Head, "Auto fits its row")
+				if l.AutoInRow then
+					T.eq(l.Toggle.Y, l.Open.Y, "touch: Auto is a button of the opens' row")
+					local at = EggPanel.openAt(l, #CapsuleConfig.Counts + 1)
+					T.truthy(at.X + l.Toggle.X <= l.Width - l.Pad + 0.5, "inside the panel")
+				else
+					T.truthy(l.Toggle.Y <= l.Head, "Auto fits the head row")
+				end
+				T.eq(l.Beside, touch, "beside the egg on touch, over it on PC")
 				-- readable on a phone: the chance at least 8 pt (the project's floor)
 				T.truthy(l.ChanceSize * EggPanel.PhoneScale >= 8, "the chance text is readable")
 			end
@@ -291,8 +307,10 @@ return function(T, Loader)
 		T.eq(table.concat(found, ","), "Crystal,Royal,Stone", "the three temple eggs")
 		local front = LobbyLayout.frame(LobbyLayout.get("CapsuleStall")).LookVector
 		for id, model in eggs do
-			local center, top, prompt = EggPanel.spotOf(model, front)
+			local center, top, prompt, bottom, half = EggPanel.spotOf(model, front)
 			T.truthy(top > center.Y + 1, id .. ": the top is over the centre")
+			T.truthy(bottom < center.Y - 1, id .. ": the foot is under it (the light ring)")
+			T.truthy(half > 1 and half < 5, id .. ": a sane half width")
 			local out = prompt - center
 			T.near(out.Y, 0, 1e-6, id .. ": the prompt at the egg's middle")
 			T.truthy(out:Dot(front) > 1.5, id .. ": the prompt in front of the egg, toward the plaza")
@@ -314,5 +332,335 @@ return function(T, Loader)
 		local shard = Instance.new("Model")
 		shard:SetAttribute("Capsule", "Dragonforge")
 		T.eq(EggPanel.eggId(shard), nil)
+	end)
+
+	T.test("EggPanel: Open 1 / 3 / 10 show the window's own buys (prices, grey when they can't be bought)", function()
+		local NOW = 1_800_000_000
+		local function state(level: number, owned: number): any
+			local list = {}
+			for i = 1, owned do
+				list[i] = { Id = i, Kind = "PebbleGolem" }
+			end
+			return { PriceLevel = level, Golems = { Owned = list, Equipped = {}, NextId = owned + 1 }, Boosts = {} }
+		end
+		for _, level in { 1, 5, 10 } do
+			local cards = CapsuleView.cards(state(level, 0), 1e15, false, NOW, nil, false)
+			for _, card in cards do
+				if card.Id == "Stone" or card.Id == "Crystal" then
+					local specs = EggPanel.opens(card.Buys, card.Robux)
+					T.eq(#specs, #CapsuleConfig.Counts, card.Id .. ": one button per count")
+					for i, spec in specs do
+						T.eq(spec.Count, CapsuleConfig.Counts[i], "the window's counts, in order")
+						T.eq(
+							spec.Price,
+							EggPanel.priceText(CapsuleConfig.price(card.Id, spec.Count, level)),
+							`{card.Id} x{spec.Count} at level {level}: the server's price`
+						)
+						T.truthy(spec.Enabled, "rich and room: buyable")
+						T.falsy(spec.Robux)
+					end
+				elseif card.Id == "Royal" then
+					local specs = EggPanel.opens(card.Buys, card.Robux)
+					for _, spec in specs do
+						T.truthy(spec.Robux)
+						T.eq(spec.Price, "Coming soon", "ids still 0: Coming soon")
+						T.falsy(spec.Enabled, "and grey")
+					end
+				end
+			end
+		end
+		-- poor: Open 1 can be paid, Open 10 can't; a full inventory greys them all
+		local price1 = CapsuleConfig.price("Stone", 1, 1)
+		local poor = CapsuleView.cards(state(1, 0), price1 * 2, false, NOW, nil, false)
+		for _, card in poor do
+			if card.Id == "Stone" then
+				local specs = EggPanel.opens(card.Buys, false)
+				T.truthy(specs[1].Enabled, "Open 1: enough coins")
+				T.falsy(specs[3].Enabled, "Open 10: not enough")
+				T.eq(specs[3].Reason, "NoCoins")
+			end
+		end
+		local full = CapsuleView.cards(state(1, GolemConfig.InventoryCap), 1e15, false, NOW, nil, false)
+		for _, card in full do
+			if card.Id == "Stone" then
+				for _, spec in EggPanel.opens(card.Buys, false) do
+					T.falsy(spec.Enabled, "a full golem inventory")
+					T.eq(spec.Reason, "InventoryFull")
+				end
+			end
+		end
+		-- the Royal egg once its products are live: their Robux prices
+		local p1 = MonetizationConfig.Products.RoyalCapsule1
+		local old = p1.Id
+		p1.Id = 1
+		for _, card in CapsuleView.cards(state(1, 0), 0, false, NOW, nil, true) do
+			if card.Id == "Royal" then
+				local specs = EggPanel.opens(card.Buys, true)
+				T.eq(specs[1].Price, `R$ {p1.Robux}`, "Royal x1: its Robux price")
+				T.truthy(specs[1].Enabled)
+				T.eq(specs[2].Price, "Coming soon", "x3 still a placeholder")
+			end
+		end
+		p1.Id = old
+	end)
+
+	T.test("EggPanel: the opens' keys (E is the prompt's; R and X are free at the temple)", function()
+		T.eq(EggPanel.OpenKeys[1], PromptConfig.Keys.Main.Keyboard.Name, "Open 1 is the prompt's key")
+		T.eq(EggPanel.OpenKeys[3], "R")
+		T.eq(EggPanel.OpenKeys[10], "X")
+		-- nothing else binds R or X except build mode (PlacementController, on the plot)
+		local function walk(dir: string, out: { string })
+			for _, entry in fs.readDir(dir) do
+				local path = dir .. "/" .. entry
+				if fs.isDir(path) then
+					walk(path, out)
+				elseif entry:match("%.luau$") then
+					table.insert(out, path)
+				end
+			end
+		end
+		local files = {}
+		walk(Loader.root .. "/src", files)
+		for _, full in files do
+			local rel = string.sub(full, #Loader.root + 2)
+			local code = string.gsub(string.gsub(fs.readFile(full), "%-%-%[(=*)%[.-%]%1%]", ""), "%-%-[^\n]*", "")
+			local uses = 0
+			for _, key in { "Enum%.KeyCode%.R%f[^%w_]", "Enum%.KeyCode%.X%f[^%w_]" } do
+				local _, n = string.gsub(code, key, "")
+				uses += n
+			end
+			if rel ~= "src/client/Controllers/PlacementController.luau" and rel ~= "src/client/Controllers/EggPanelController.luau" then
+				T.eq(uses, 0, rel .. ": R / X are the eggs' (and build mode's)")
+			end
+		end
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/EggPanelController.luau")
+		T.truthy(string.find(controller, "not ProximityPromptService.Enabled", 1, true), "the keys rest while the prompts are suppressed")
+		T.truthy(string.find(controller, "UnbindAction(OPEN3_ACTION)", 1, true), "and are unbound when the panel goes")
+	end)
+
+	T.test("EggPanel: the opens' layout (under the cards, inside the panel, 44 pt on phones)", function()
+		for _, id in TEMPLE do
+			local count = #EggPanel.lines(id, false, {})
+			for _, touch in { false, true } do
+				local l = EggPanel.layout(count, touch)
+				local lastCard = EggPanel.cardAt(l, count)
+				for i = 1, #CapsuleConfig.Counts do
+					local at = EggPanel.openAt(l, i)
+					T.truthy(at.Y >= lastCard.Y + l.Card, `{id} open {i}: under the cards`)
+					T.truthy(at.X >= l.Pad - 0.01 and at.X + l.Open.X <= l.Width - l.Pad + 0.5, `{id} open {i}: inside left / right`)
+					T.truthy(at.Y + l.Open.Y <= l.Body - l.Pad + 0.01, `{id} open {i}: above the foot`)
+				end
+				T.truthy(l.Open.X >= 110, 'room for "Open 10" and a price')
+				if touch then
+					T.truthy(l.Open.Y * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, `{id}: the opens are 44 pt on a phone`)
+				end
+			end
+		end
+		local refs = EggPanel.build()
+		T.eq(#refs.Opens, #CapsuleConfig.Counts)
+		EggPanel.apply(refs, "Stone", EggPanel.layout(14, true), EggPanel.PhoneScale)
+		for _, target in EggPanel.touchTargets(refs) do
+			T.truthy(target.Size.Y.Offset * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, target.Name .. ": 44 pt")
+		end
+		EggPanel.setOpens(refs, {
+			{ Count = 1, Robux = false, Price = "2,500", Enabled = true },
+			{ Count = 3, Robux = false, Price = "7,500", Enabled = false, Reason = "NoCoins" },
+		}, EggPanel.OpenKeys, nil)
+		T.eq(refs.Opens[1].Amount.Text, "2,500")
+		T.truthy(refs.Opens[1].Coin.Visible, "a coin before a coin price")
+		T.eq(refs.Opens[1].KeyText.Text, "E")
+		T.eq(refs.Opens[2].KeyText.Text, "R")
+		T.falsy(refs.Opens[3].Button.Visible, "no spec: hidden")
+		EggPanel.setOpens(refs, { { Count = 1, Robux = true, Price = "R$ 49", Enabled = true } }, nil, nil)
+		T.falsy(refs.Opens[1].Coin.Visible, "no coin on a Robux price")
+		T.falsy(refs.Opens[1].Key.Visible, "touch: no badge")
+		-- the glows and the chip's red flash are not in the fade list (they animate on their own)
+		for _, f in refs.Fades do
+			T.falsy(f.Target:GetAttribute("NoFade"), f.Target.Name .. " fades")
+		end
+	end)
+
+	T.test("EggPanel: the big round E (a 44 pt target on phones, its keys, its fade)", function()
+		T.truthy(EggPanel.BigE, "the eggs' own big E")
+		T.truthy(EggPrompt.Disc * EggPanel.PhoneScale >= EggPanel.MinTouch, "the disc is past 44 pt on a phone")
+		local p = EggPrompt.build()
+		T.eq(p.Gui.ClassName, "BillboardGui")
+		T.truthy(p.Gui.AlwaysOnTop)
+		EggPrompt.setScale(p, EggPanel.PhoneScale)
+		T.eq(p.Gui.Size.X.Offset, math.ceil(EggPrompt.Width * EggPanel.PhoneScale))
+		EggPrompt.setKey(p, "E", nil)
+		T.eq(p.Key.Text, "E")
+		T.truthy(p.Key.Visible)
+		T.falsy(p.Glyph.Visible)
+		EggPrompt.setKey(p, "", "rbxasset://textures/ui/Controls/xboxY.png")
+		T.truthy(p.Glyph.Visible, "a gamepad: its glyph")
+		T.falsy(p.Key.Visible)
+		EggPrompt.setKey(p, "Tap", nil)
+		T.eq(p.Key.Text, "Tap")
+		EggPrompt.setText(p, "Buy Egg!", "$2,500", false)
+		T.eq(p.Title.Text, "Buy Egg!")
+		T.eq(p.Price.Text, "$2,500")
+		EggPrompt.setFade(p, 1)
+		for _, f in p.Fades do
+			T.eq((f.Target :: any)[f.Property], 1)
+		end
+		EggPrompt.setFade(p, 0)
+		for _, f in p.Fades do
+			T.eq((f.Target :: any)[f.Property], f.Base)
+		end
+	end)
+
+	T.test("EggPanel: the motion stays calm (flashes under 3 a second, a bounded hop, confetti in reach)", function()
+		T.truthy(EggPanel.AlertFlashes / EggPanel.AlertSeconds <= 3, "the chip's red flash")
+		T.truthy(EggPanel.GlowPeriod >= 1, "the glows breathe at most once a second")
+		T.truthy(EggPrompt.ShineEvery >= 1 and EggPrompt.ShineTime < EggPrompt.ShineEvery, "the E's shine now and then")
+		-- the egg's happy hop: nothing before or after, never higher than BounceHeight
+		local a, b = DecorController.bounceAt(0)
+		T.eq(a, 0)
+		T.eq(b, 0)
+		a, b = DecorController.bounceAt(DecorController.BounceSeconds)
+		T.eq(a, 0, "it lands")
+		T.eq(b, 0)
+		local top = 0
+		for i = 1, 70 do
+			local lift, tilt = DecorController.bounceAt(i / 100)
+			T.truthy(lift >= 0 and lift <= DecorController.BounceHeight + 1e-9, "a hop up, never down")
+			T.truthy(math.abs(tilt) <= DecorController.BounceTilt + 1e-9, "a small wobble")
+			top = math.max(top, lift)
+		end
+		T.truthy(top > DecorController.BounceHeight * 0.9, "it really hops")
+		-- confetti: the same for the same seed, every piece within reach
+		local first = Confetti.targets(Confetti.Count, 42)
+		local again = Confetti.targets(Confetti.Count, 42)
+		T.eq(#first, Confetti.Count)
+		for i, t in first do
+			T.eq(t.X, again[i].X, "deterministic")
+			T.truthy(math.sqrt(t.X * t.X + t.Y * t.Y) <= Confetti.Spread + 0.25, "within reach")
+			T.truthy(t.Size >= 8 and t.Size <= 16)
+		end
+		local other = Confetti.targets(Confetti.Count, 7)
+		T.truthy(other[1].X ~= first[1].X or other[2].X ~= first[2].X, "another seed, another burst")
+		local holder = Instance.new("Frame")
+		local pieces = Confetti.build(holder, 6)
+		Confetti.pose(pieces, Vector2.new(0.5, 0.4), 3, 0.3)
+		T.truthy(pieces[1].Visible, "flying")
+		Confetti.pose(pieces, Vector2.new(0.5, 0.4), 3, Confetti.Seconds)
+		T.falsy(pieces[1].Visible, "gone at the end")
+	end)
+
+	T.test("HatchFx: a bigger hatch for rarer golems, the curves stay in bounds, flashes 0.4 s apart", function()
+		local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+		local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+		local CFrame = Loader.CFrame
+		local Color3 = roblox.Color3
+		-- rarer golems: a longer build-up, more and brighter light, sparkles, Mythic's tint
+		local previous = HatchFx.plan(1)
+		for order = 2, 6 do
+			local plan = HatchFx.plan(order)
+			T.truthy(plan.Shake > previous.Shake, `order {order}: a longer build-up`)
+			T.truthy(plan.Rays >= previous.Rays and plan.RayFade <= previous.RayFade, "more and brighter light")
+			T.truthy(plan.Sparkles >= previous.Sparkles)
+			T.truthy(plan.Rays <= HatchFx.MaxRays)
+			previous = plan
+		end
+		T.truthy(HatchFx.plan(6).Tint, "Mythic tints the screen")
+		T.falsy(HatchFx.plan(5).Tint)
+		T.eq(HatchFx.plan(99).Order, 6, "out of range: the nearest")
+		T.eq(HatchFx.plan(0 / 0).Order, 1)
+		-- the shake grows and speeds up, the squash stays gentle, the last fifth gathers
+		for _, order in { 1, 6 } do
+			local plan = HatchFx.plan(order)
+			local early, late = 0, 0
+			for i = 1, 200 do
+				local t = i / 200 * plan.Shake
+				local roll, sy, sxz, hop = HatchFx.shakeAt(t, plan)
+				T.truthy(math.abs(roll) <= 0.4 and sy >= 0.75 and sy <= 1.2 and sxz >= 0.85 and sxz <= 1.2, "in bounds")
+				T.truthy(hop >= 0 and hop <= 0.2)
+				if t < plan.Shake * 0.3 then
+					early = math.max(early, math.abs(roll))
+				elseif t < plan.Shake * 0.8 then
+					late = math.max(late, math.abs(roll))
+				end
+			end
+			T.truthy(late > early * 2, "harder as it builds")
+			local _, sy = HatchFx.shakeAt(plan.Shake * 0.99, plan)
+			T.truthy(sy < 0.85, "squashed just before the break")
+		end
+		local a, b, c, d = HatchFx.shakeAt(0, HatchFx.plan(1))
+		T.eq(a, 0)
+		T.eq(b, 1)
+		T.eq(c, 1)
+		T.eq(d, 0)
+		-- the cracks one after another, the light grows, the golem bounces to full size
+		local plan = HatchFx.plan(4)
+		T.eq(HatchFx.cracksAt(0.1, plan), 0)
+		T.eq(HatchFx.cracksAt(plan.Shake * 0.99, plan), 3)
+		local lit = 0
+		for i = 1, 100 do
+			local n = HatchFx.cracksAt(i / 100 * plan.Shake, plan)
+			T.truthy(n >= lit, "never fewer")
+			lit = n
+		end
+		T.eq(HatchFx.leakAt(0, plan), 0)
+		T.near(HatchFx.leakAt(plan.Shake, plan), 1, 1e-9)
+		T.near(HatchFx.popAt(0), 0.25, 1e-9)
+		T.near(HatchFx.popAt(HatchFx.PopTime), 1, 1e-9)
+		local over = 0
+		for i = 1, 40 do
+			over = math.max(over, HatchFx.popAt(i / 40 * HatchFx.PopTime))
+		end
+		T.truthy(over > 1.02 and over < 1.2, "a bounce past full size")
+		-- flashes: never sooner than FlashGap (2.5 a second at most)
+		T.truthy(1 / HatchFx.FlashGap <= 3)
+		T.falsy(HatchFx.flashOk(10, 10.2))
+		T.truthy(HatchFx.flashOk(10, 10 + HatchFx.FlashGap))
+		-- many eggs: a row of three, rows of five; they burst one after another, quickly
+		local three, d3 = HatchFx.arrange(3)
+		T.eq(#three, 3)
+		local ten, d10 = HatchFx.arrange(10)
+		T.eq(#ten, 10)
+		T.truthy(d10 > d3, "the camera backs off for ten")
+		T.truthy(HatchFx.Sequence * 9 < 1.5, "ten bursts in under a second and a half")
+		-- a pooled egg: posed through the hatch and the break, then back whole
+		local model = GolemBuilder.capsule("Stone")
+		local rec = HatchFx.record(model)
+		T.truthy(#rec.Parts > 10 and #rec.Cracks == 3, "the egg's parts and its three cracks")
+		local stone = HatchFx.plan(1)
+		local red = Color3.fromRGB(255, 0, 0)
+		HatchFx.pose(rec, CFrame.new(), stone.Shake * 0.95, stone.Shake, stone, red, true)
+		T.eq(rec.Cracks[3].Transparency, 0, "every crack glows at the end")
+		HatchFx.pose(rec, CFrame.new(), stone.Shake + HatchFx.BurstTime, stone.Shake, stone, red, true)
+		for i, part in rec.Parts do
+			T.truthy(part.Transparency >= 0.999, part.Name .. ": gone after the break")
+			local _ = i
+		end
+		HatchFx.reset(rec)
+		for i, part in rec.Parts do
+			T.eq(part.Transparency, rec.Trans[i], part.Name .. ": back as built")
+			T.eq(part.Size, rec.Sizes[i])
+		end
+		-- the overlay: every piece hidden after clear()
+		local gui = Instance.new("ScreenGui")
+		local fx = HatchFx.overlay(gui)
+		HatchFx.setLeak(fx, stone.Shake * 0.9, stone, red)
+		T.truthy(fx.Leak.Visible, "light leaks near the end")
+		HatchFx.setLeak(fx, nil, stone, red)
+		T.falsy(fx.Leak.Visible)
+		HatchFx.clear(fx)
+		T.eq(fx.Tint.BackgroundTransparency, 1)
+		for _, piece in fx.Shards do
+			T.falsy(piece.Visible)
+		end
+		-- the controller: nothing shakes, flashes or nudges with Reduce motion
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		T.truthy(
+			string.find(source, "if Motion.reduced() or not HatchFx.flashOk(lastFlash, now) then", 1, true),
+			"flash: reduced and rate-limited"
+		)
+		local burst = string.match(source, "local function burst%(.-\nend\n")
+		T.truthy(burst, "the hatch")
+		local reducedAt = string.find(burst, "if Motion.reduced() then", 1, true)
+		local shakeAt = string.find(burst, "CameraShake.add", 1, true)
+		T.truthy(reducedAt and shakeAt and reducedAt < shakeAt, "Reduce motion returns before any shake")
 	end)
 end
