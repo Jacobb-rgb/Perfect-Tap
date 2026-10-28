@@ -1502,23 +1502,25 @@ local BASE_MAX_Z = BaseLayout.Yard.Center.Z + BaseLayout.Yard.Size.Z / 2
 local BASE_REACH = math.sqrt(BASE_HALF_X * BASE_HALF_X + math.max(-BASE_MIN_Z, BASE_MAX_Z) ^ 2) + 16
 local baseFrames: { CFrame } = {}
 
--- Is a world position on or around any base (grid + yard, plus Magnet.BaseMargin)?
--- The magnet never pulls there: belts, chutes and the Ore Pen's intake work with loose items.
-function ItemService.onBase(position: Vector3): boolean
+-- Is a world position on or around any base (grid + yard, plus `margin`, default
+-- Magnet.BaseMargin)? The magnet never pulls there: belts, chutes and the Ore Pen's intake
+-- work with loose items. (CarryService's auto-pickup asks with margin 0: the margin would
+-- cover the alleys between the plots, where the town's starter outcrops stand.)
+function ItemService.onBase(position: Vector3, margin: number?): boolean
 	if #baseFrames == 0 then
 		for _, plot in WorldLayout.Plots do
 			table.insert(baseFrames, WorldLayout.plotCFrame(plot))
 		end
 	end
-	local margin = ItemService.Magnet.BaseMargin
+	local edge = if margin then margin else ItemService.Magnet.BaseMargin
 	for _, frame in baseFrames do
 		local offset = position - frame.Position
 		if offset.X * offset.X + offset.Z * offset.Z <= BASE_REACH * BASE_REACH then
 			local p = frame:PointToObjectSpace(position)
 			if
-				math.abs(p.X) <= BASE_HALF_X + margin
-				and p.Z >= BASE_MIN_Z - margin
-				and p.Z <= BASE_MAX_Z + margin
+				math.abs(p.X) <= BASE_HALF_X + edge
+				and p.Z >= BASE_MIN_Z - edge
+				and p.Z <= BASE_MAX_Z + edge
 				and p.Y >= -10
 				and p.Y <= 40
 			then

@@ -228,6 +228,19 @@ return function(T, Loader)
 		T.eq(activity.n - start, 1, "only the request counts")
 	end)
 
+	withWorld("CarryService: the auto-pickup takes the chunks of every town starter outcrop (no base there)", function(w)
+		for i, spot in WorldLayout.OutcropSpots do
+			local at = CFrame.new(spot + Vector3.new(0, 1, 0))
+			w.player.root.Position = at.Position + Vector3.new(0, 2, 3)
+			w.player.root.CFrame = CFrame.new(w.player.root.Position)
+			w.data.BackpackItems = {}
+			local chunk = ItemService.spawnDesc(RAW, USER, at, nil, true)
+			assert(chunk, "chunk")
+			CarryService._test.autoPickup(w.player, os.clock())
+			T.eq(chunk.State, "Consumed", `outcrop {i} at {spot}: auto-picked`)
+		end
+	end)
+
 	withWorld("CarryService: the auto-pickup leaves your base alone (belts, chutes, the pen's gate); F still works", function(w)
 		-- standing at plot 1's pen gate with a belt item on the PEN chute (~6 studs away)
 		local plot = WorldLayout.plotCFrame(WorldLayout.Plots[1])
