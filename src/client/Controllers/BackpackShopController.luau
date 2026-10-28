@@ -56,6 +56,7 @@ local ACTION = "BackpackAction"
 local RESULT = "BackpackResult"
 local TICK = 0.25
 local SEND_LOCK = 1
+local RESULT_LOCK = 3 -- seconds an Ok waits at most for its State
 local MESSAGE_TIME = 5
 local MESSAGE_COLORS: { [string]: Color3 } = {
 	Reward = Theme.Good,
@@ -115,13 +116,29 @@ local function snapshot(): ({ [string]: boolean }, string, number, number)
 	return owned, equipped, count, capacity
 end
 
+-- The worn pack's bonus share (Deep Pockets, Strong Back...: the server's
+-- capacity against the pack's own), 1 without bonuses.
+local function bonusShare(): number
+	local _, equipped, _, capacity = snapshot()
+	local base = BackpackData.capacity(equipped)
+	return if base > 0 and capacity > base then capacity / base else 1
+end
+
+-- What `pack` holds for this player (its capacity with the worn pack's bonus share).
+local function holds(pack: BackpackData.Backpack): number
+	return math.floor(pack.Capacity * bonusShare() + 0.5)
+end
+
 local function refresh()
 	local view = refs
 	if not view then
 		return
 	end
 	local owned, equipped, count, capacity = snapshot()
-	BackpackShopView.setCards(view, owned, equipped, coins())
+	if BackpackShopView.setCards(view, owned, equipped, coins(), bonusShare()) then
+		-- (a capacity chip changed its text: the chips are sized again)
+		BackpackShopView.layout(view, view.Compact, view.MaxWidth, view.MaxHeight)
+	end
 	BackpackShopView.setStatus(view, BackpackShopView.statusText(equipped, count, capacity))
 end
 
@@ -163,9 +180,32 @@ local function applyHint(view: BackpackShopView.Refs)
 	end
 end
 
+-- Is `object` shown (it and every GuiObject above it inside the window visible)?
+local function shown(object: GuiObject, view: BackpackShopView.Refs): boolean
+	local node: Instance? = object
+	while node and node ~= view.Gui do
+		if node:IsA("GuiObject") and not node.Visible then
+			return false
+		end
+		node = node.Parent
+	end
+	return node == view.Gui
+end
+
+-- (gamepad) The first card's button, once it shows: the opening hides the
+-- cards, and Roblox drops a selection made on a hidden button. Called on
+-- open and on every step of the opening; a shown selection inside the window stays.
 local function selectDefault(view: BackpackShopView.Refs)
-	if usingGamepad() and counter then
-		GuiService.SelectedObject = BackpackShopView.firstButton(view)
+	if not (usingGamepad() and counter) then
+		return
+	end
+	local selected = GuiService.SelectedObject
+	if selected and selected:IsDescendantOf(view.Gui) and selected.Selectable and shown(selected, view) then
+		return
+	end
+	local button = BackpackShopView.firstButton(view)
+	if button and shown(button, view) then
+		GuiService.SelectedObject = button
 	end
 end
 
@@ -200,7 +240,8 @@ local function onCard(card: BackpackShopView.Card)
 	elseif state == "Equip" then
 		send("Equip", pack.Id)
 	else
-		showMessage(`You're wearing the {pack.Name}: {Format.commas(pack.Capacity)} ore.`, "Info")
+		local _, _, _, capacity = snapshot()
+		showMessage(`You're wearing the {pack.Name}: {Format.commas(capacity)} ore.`, "Info")
 		Sfx.play("UIClick")
 	end
 end
@@ -209,8 +250,10 @@ local function onResult(result: any)
 	if type(result) ~= "table" then
 		return
 	end
-	-- an answer arrived: the next request may go
-	lockedUntil = 0
+	-- a refusal frees the next request at once; after a yes the cards still
+	-- show the old State, so the lock holds until the new State arrives (the
+	-- State listener frees it) or RESULT_LOCK runs out
+	lockedUntil = if result.Ok == true then os.clock() + RESULT_LOCK else 0
 	if result.Ok == false and counter then
 		local reason = if type(result.Reason) == "string" then BackpackShopView.Reasons[result.Reason] else nil
 		showMessage(reason or "That didn't work, try again.", "Deny")
@@ -221,7 +264,7 @@ local function onResult(result: any)
 			if request and request.Id == pack.Id and not request.Wears then
 				showMessage(`The {pack.Name} is yours! EQUIP it to wear it.`, "Reward")
 			else
-				showMessage(`{pack.Name}: {Format.commas(pack.Capacity)} ore on your back!`, "Reward")
+				showMessage(`{pack.Name}: {Format.commas(holds(pack))} ore on your back!`, "Reward")
 			end
 		end
 	end
@@ -251,6 +294,7 @@ local function ensureProgress(): NumberValue
 		local view = refs
 		if view then
 			BackpackShopView.pose(view, seconds)
+			selectDefault(view)
 		end
 	end)
 	progress = value

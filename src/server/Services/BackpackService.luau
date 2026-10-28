@@ -23,7 +23,8 @@
 	                    bought pack bigger than the one worn is worn at once.
 	  ("Equip", { Id }) a pack you own ("NotOwned"), anywhere.
 	  ("BadId" also for any other op or a broken payload.) Every request read
-	  gets a BackpackResult { Id, Ok, Reason? }.
+	  gets a BackpackResult { Id, Ok, Reason?, Op? } (Op = the request's "Buy" /
+	  "Equip": the BACKPACKS shopkeeper cheers for a bought pack only).
 	The worn pack shows on the character: the player attribute "Backpack" =
 	Equipped (every client builds that pack, BackpackBuilder). refresh(player)
 	sets it again with the backpack attributes (CarryService) after any change.
@@ -188,8 +189,8 @@ function BackpackService.equip(player: Player, id: string): (boolean, string?)
 	return true, nil
 end
 
-local function answer(player: Player, id: string, ok: boolean, reason: string?)
-	Net.fire("BackpackResult", player, { Id = id, Ok = ok, Reason = reason })
+local function answer(player: Player, id: string, ok: boolean, reason: string?, op: string?)
+	Net.fire("BackpackResult", player, { Id = id, Ok = ok, Reason = reason, Op = op })
 end
 
 local function onAction(player: Player, op: any, payload: any)
@@ -202,14 +203,14 @@ local function onAction(player: Player, op: any, payload: any)
 	local ok, reason
 	if op == "Buy" then
 		if not BackpackService.counterNear(player, BackpackService.Range) then
-			answer(player, id, false, "TooFar")
+			answer(player, id, false, "TooFar", op)
 			return
 		end
 		ok, reason = BackpackService.buy(player, id)
 	else
 		ok, reason = BackpackService.equip(player, id)
 	end
-	answer(player, id, ok, reason)
+	answer(player, id, ok, reason, op)
 end
 
 local function openView(player: Player, counter: BasePart)

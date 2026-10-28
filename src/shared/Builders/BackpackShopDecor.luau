@@ -30,6 +30,9 @@ local BackpackShopDecor = {}
 BackpackShopDecor.FrameAttribute = "ShopFrame" -- on the stall model: the shop's frame (CFrame)
 BackpackShopDecor.MaxParts = 120
 BackpackShopDecor.ShowRange = 30 -- studs from the camera to the shop: the clients build the decor (the DROPPERS door stays clear)
+-- studs past a shop plate's DisplayRange (and past ShowRange) before the clients drop its pack
+-- (the decor): small, so the spawn and the DROPPERS door stay clear even after a visit
+BackpackShopDecor.Hysteresis = 6
 BackpackShopDecor.LightName = "ShopLanternLight"
 
 BackpackShopDecor.Layout = {

@@ -59,57 +59,57 @@ and the shopkeeper's step. The clients build the rest (not map parts):
   Runebound and Emberforge, the racks Rookie/Trail/Leather and Miner's/Iron-Bound/Explorer's,
   the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.8 on a two-tier podium,
   standing still (owner 2026-10-25; the controller can still turn a plate with `DisplaySpin`),
-  its light on a PC). Each plate's `DisplayRange`: roof 45, porch 38, inside 30 studs. The
-  inside plates carry `DisplayLite`: phones show those packs without their small details
-  (`BackpackBuilder.lite`, ~40% of the parts) until the camera or the player is in the shop.
+  its light on a PC). Each plate's `DisplayRange`: roof 40, porch 32, golem and inside 30 studs
+  (dropped beyond the range + 6). The inside plates and the golem's carry `DisplayLite`:
+  phones show those packs without their small details (`BackpackBuilder.lite`, ~40% of the
+  parts), inside the shop too.
 - `Builders/BackpackShopDecor` (~100 parts, within 30 studs): rune banners, sign lamps, side
   wall crests, hanging lanterns (lights on a PC), the rune crest behind the shopkeeper, rug,
   crates, bedroll shelf, barrel, rope, rack brackets, maps, coins, ledger, bell, planters and
   the gold dust in the gateway (off with Reduce motion).
-- the shopkeeper: feat/shopkeepers (`ShopkeeperConfig.Shops.Backpacks` = SkySprite, Size 1.5)
-  lands first; when this branch lands: in `Backpacks.build` after the counter
-  `ShopkeeperConfig.mark(counter, counter.KeeperFeet.WorldCFrame, "Backpacks")` (require
-  Shared.Config.ShopkeeperConfig), and in tests/Shopkeepers.spec.luau "Backpacks" in SHOPS and
-  `Backpacks = "BackpackCounter"` in COUNTERS (the feet stand on the step, facing the gateway).
+- the shopkeeper (`ShopkeeperConfig.Shops.Backpacks` = SkySprite, Size 1.5): `Backpacks.build`
+  marks its spot after the counter (`ShopkeeperConfig.mark`, the feet on the step facing the
+  gateway; tests/Shopkeepers.spec.luau lists "Backpacks"). It cheers for a bought pack:
+  BackpackService answers BackpackResult { Id, Ok, Reason?, Op } and `ShopkeeperConfig.buyShops`
+  takes an Ok of Op "Buy" (an equip is no buy).
+- the worn and shown packs and the decor live in `Workspace.ClientBackpacks`, which
+  `StudStyleConfig.SkipNames` keeps smooth (no studs: the owner's 10-24 rule).
 
 Trees (owner 2026-10-25: "more trees round it"): three hero voxel trees on Flora pieces
 `BackpackTreeNW` (35, 56) green (scale 1.0), `BackpackTreeNE` (61, 61) orange and `BackpackTreeW` (26, 65)
-green, each with a flower ring (Flora/Trees.backpackTrees, ~60 parts; Flora LobbyParts 3,205 ->
-3,245, LobbyParts 14,730 -> 14,770 and MapParts 34,330 -> 34,370 by the measured amount + ~30; the
-meadow now keeps 12 studs off the railway tunnel mouths, a re-rolled lawn tuft touched the
-south-east portal).
+green, each with a flower ring (Flora/Trees.backpackTrees, ~60 parts; the meadow now keeps 12
+studs off the railway tunnel mouths: a re-rolled lawn tuft touched the south-east portal).
 
 Golems (owner 2026-10-25): a golem stands by the porch with the Runebound pack on its back (piece
 `BackpackGolem` (36, 0, 66.5), lean Districts Kit.golem, size 2.3, the pack on an invisible plate
-`GolemPack`: DisplayRange 33, DisplayLite), and Plaza Life's 9 miner spots are mining golems
+`GolemPack`: DisplayRange 30, DisplayLite), and Plaza Life's 9 miner spots are mining golems
 (`Life.miner` builds a golem with a hard hat: pickaxe on the shoulder, swinging at an ore rock,
 or holding up a glowing chunk; same part count as the old miners).
 
-Budgets at landing (main ebbb9c5f, the budget tests' own counting): MapParts 34,330 and
-LobbyParts 14,730 hold as they are; Flora lobby parts 3,229 (LobbyParts 3,205 -> 3,260) and the
-BACKPACKS gateway 25,313 (StreamParts 25,240 -> 25,345), each the measured amount + ~30; the
-spawn, the plaza and the DROPPERS door pass under the old numbers.
+Budgets at landing (main b1fab138, the budget tests' own counting): MapParts 34,330 and
+LobbyParts 14,730 hold as they are; Flora lobby parts 3,229 (LobbyParts 3,205 -> 3,260). The
+phones' worst spot by the shop is its gateway: 20,784 streamed + 2,661 always-streamed + 352
+museum + its packs 914 (phones show the 7 inside packs and the golem's lite, inside the shop
+too; PCs in full) + decor 90 + the DROPPERS showroom 512 + the shopkeeper golems in range 215 =
+25,528 (the counter 25,517): StreamParts 25,240 -> 25,560 (the measured worst + ~30). The
+shop's plates are dropped again beyond their range + 6 (BackpackShopDecor.Hysteresis; ranges
+roof 40, porch 32, golem and inside 30, decor 30), so the spawn, the plaza and the DROPPERS
+door hold none of its client parts even after a visit (tests/Backpacks.spec.luau).
 
-Budgets (main 958ddb46 -> this branch at 16 wide, the budget tests' own counting; at 18 wide the
-map is 33,445 and every budget test still passes: re-measured at landing): map 33,450 -> 33,459,
-lobby area + museums 14,699 -> 14,681 (LobbyParts 14,730), phones' stream round the spawn
-24,811 -> 24,820, the plaza 25,063 -> 25,072, the DROPPERS door 25,206 -> 25,215 (StreamParts
-25,240). The shop's client packs and decor are out of range at all three spots
-(tests/Backpacks.spec.luau). At the shop's own gateway a phone holds 20,832 + 2,658 + 352
-streamed + its packs 853 (inside ones lite) + decor 90 + the DROPPERS showroom 526 = 25,311
-(tests/Backpacks.spec.luau): StreamParts 25,240 -> 25,345 (integrator 2026-10-24, owner:
-quality over limits).
-Map version 63 (`WorldBuilder.Version`, on main ebbb9c5f v62).
+Map version 63 (`WorldBuilder.Version`, on main b1fab138 v62).
 
 ## What to test in Studio
 
 1. Walk to the BACKPACKS shop at the end of the path east of the Vault's steps: the giant
-   Starforge pack turns on the roof (from ~45 studs), the porch packs appear (~38), then the
-   racks, the banners, lanterns and crest (~30); walk away: they go. Reduce motion: it stops.
+   Starforge pack stands on the roof (from ~40 studs), the porch packs appear (~32), then the
+   racks, the golem's pack, the banners, lanterns and crest (~30); walk away: they go. No studs
+   on any pack. Phones: the inside packs look a little simpler (no small details).
 2. Press E at the counter: the shop opens (two rows of five cards, the 3D packs turn the right
    way); walk away: it closes. B / Backspace / X close it too. Phones: the cards scroll.
 3. Buy the Trail Pack with 250+ coins: the card turns EQUIPPED, the pack appears on your back
-   (top level with the shoulders, the straps over the shoulders), the header says 15 ore.
+   (top level with the shoulders, the straps over the shoulders), the header says 15 ore (more
+   with Deep Pockets / Strong Back, and the cards show the same bonus), the shopkeeper cheers.
+   A gamepad: the first card is selected when the window opens.
 4. EQUIP an older pack: it swaps on your back; other players see it within 120 studs.
 5. An R6 avatar and a big Rthro avatar: the pack sits on the back and scales with the torso.
 6. Settings > Reduce motion: the pack's particles stop.

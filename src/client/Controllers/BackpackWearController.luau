@@ -23,19 +23,23 @@
 	  them, its outer face toward the marker's front (-Z), built here (the
 	  display look: no shoulder straps) within DisplayRange and dropped beyond
 	  DisplayRange + DisplayHysteresis, so the shop costs the map no parts for
-	  them (a marker's DisplayRange attribute narrows that: the shop's
-	  inside packs only near it). Their particles follow FxRange, their lights stay off. A marker
+	  them (a marker's DisplayRange attribute narrows that, and such a marker
+	  is dropped beyond its range + ShopHysteresis: the phones' budget spots,
+	  the spawn and the DROPPERS door, stay clear of them even after a visit).
+	  Their particles follow FxRange, their lights stay off. A marker
 	  with the attribute DisplayScale shows a bigger pack (its own model, not
 	  pooled) and one with DisplaySpin turns it slowly (radians per second,
 	  its welded Root moved every frame while it is within FxRange; it stands
 	  still with Reduce motion); that one's light shines on a PC. Phones show
 	  a DisplayLite marker's pack without its small details
-	  (BackpackBuilder.lite) unless the camera or the player is in the shop.
+	  (BackpackBuilder.lite), inside the shop too (the phones' part budget at
+	  the counter, tests/Backpacks.spec.luau); PCs show every pack in full.
 	  (The markers carry no tag: Plaza Life keeps its miners off tagged
 	  parts as prompt spots.)
 	- The shop's small things (Builders/BackpackShopDecor: banners, lanterns,
 	  crates, the crest, the rug...): built from the shop model's ShopFrame
-	  attribute within BackpackShopDecor.ShowRange; the lanterns' lights
+	  attribute within BackpackShopDecor.ShowRange (dropped beyond it +
+	  ShopHysteresis); the lanterns' lights
 	  shine on a PC within FxRange, the gate dust drifts within FxRange (half
 	  rate on phones, none with Reduce motion).
 ]]
@@ -64,6 +68,7 @@ BackpackWearController.ShowRange = 120 -- studs: farther packs aren't built
 BackpackWearController.FxRange = 50 -- studs: farther packs get no particles
 BackpackWearController.DisplayRange = 70
 BackpackWearController.DisplayHysteresis = 20
+BackpackWearController.ShopHysteresis = BackpackShopDecor.Hysteresis -- for the shop's ranged plates and its decor
 BackpackWearController.LodInterval = 0.3
 BackpackWearController.PoolPerPack = 2
 
@@ -83,7 +88,7 @@ type Display = {
 	Spin: number, -- DisplaySpin (radians per second, 0 = still)
 	Range: number, -- DisplayRange (studs: built this near)
 	Lite: boolean, -- DisplayLite: phones show it without its small details unless the player is in the shop
-	Frame: CFrame?, -- the shop's frame (BackpackShopDecor.FrameAttribute) for the inside check
+	Hysteresis: number, -- studs past Range before the pack is dropped
 	Angle: number,
 	Turning: boolean, -- near enough to turn (lodStep)
 }
@@ -195,6 +200,9 @@ local function acquire(packId: string, rigged: boolean, lite: boolean?): Model
 	if lite then
 		BackpackBuilder.lite(model)
 	end
+	-- the effects go in at the pack's own size, before any ScaleTo, so a pooled pack
+	-- scaled for another body scales them with it
+	ensureFx(model)
 	model:SetAttribute("PoolKey", key)
 	return model
 end
@@ -372,6 +380,9 @@ local function showDisplay(display: Display, lite: boolean)
 	end
 	local own = display.Scale ~= 1 or display.Spin ~= 0
 	local model = if own then BackpackBuilder.build(display.PackId, true) else acquire(display.PackId, false, lite)
+	if own then
+		ensureFx(model) -- (before ScaleTo: the effects grow with the pack)
+	end
 	if display.Scale ~= 1 then
 		model:ScaleTo(display.Scale)
 	end
@@ -423,8 +434,6 @@ local function addMarker(marker: Instance)
 	local scale = marker:GetAttribute("DisplayScale")
 	local spin = marker:GetAttribute("DisplaySpin")
 	local range = marker:GetAttribute("DisplayRange")
-	local stall = marker.Parent
-	local frame = if stall then stall:GetAttribute(BackpackShopDecor.FrameAttribute) else nil
 	displays[marker] = {
 		Marker = marker,
 		PackId = id,
@@ -433,7 +442,9 @@ local function addMarker(marker: Instance)
 		Spin = if type(spin) == "number" then spin else 0,
 		Range = if type(range) == "number" and range > 0 then range else BackpackWearController.DisplayRange,
 		Lite = marker:GetAttribute("DisplayLite") == true,
-		Frame = if typeof(frame) == "CFrame" then frame else nil,
+		Hysteresis = if type(range) == "number" and range > 0
+			then BackpackWearController.ShopHysteresis
+			else BackpackWearController.DisplayHysteresis,
 		Angle = 0,
 		Turning = false,
 	}
@@ -500,25 +511,9 @@ local function decorFx(shop: Shop, near: boolean, lite: boolean)
 	end
 end
 
--- Is `p` inside the shop (between its walls, under its roof)?
-local function inShop(frame: CFrame, p: Vector3): boolean
-	local L = BackpackShopDecor.Layout
-	local q = frame:PointToObjectSpace(p)
-	return math.abs(q.X) <= L.Width / 2 and q.Z >= L.FrontZ - L.Wall0 / 2 and q.Z <= L.BackZ + L.Wall0 / 2 and q.Y <= L.Floor + L.Wall + 1
-end
-
--- Phones show a DisplayLite pack without its small details unless the camera or the player is in the shop.
-local function wantsLite(display: Display, focus: Vector3, lite: boolean): boolean
-	local frame = display.Frame
-	if not (display.Lite and lite and frame) then
-		return false
-	end
-	if inShop(frame, focus) then
-		return false
-	end
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	return not (root and root:IsA("BasePart") and inShop(frame, root.Position))
+-- Phones show a DisplayLite pack without its small details (inside the shop too).
+local function wantsLite(display: Display, lite: boolean): boolean
+	return display.Lite and lite
 end
 
 ---------------------------------------------------------------- the range check
@@ -576,14 +571,14 @@ local function lodStep()
 			continue
 		end
 		local distance = (marker.Position - focus).Magnitude
-		local wantLite = wantsLite(display, focus, lite)
+		local wantLite = wantsLite(display, lite)
 		local shown = display.Model
 		if shown and (shown:GetAttribute("Lite") == true) ~= wantLite then
 			hideDisplay(display) -- (the other look: built again below)
 		end
 		if distance <= display.Range then
 			showDisplay(display, wantLite)
-		elseif distance > display.Range + BackpackWearController.DisplayHysteresis then
+		elseif distance > display.Range + display.Hysteresis then
 			hideDisplay(display)
 		end
 		local model = display.Model
@@ -620,7 +615,7 @@ local function lodStep()
 				model.Parent = ensureFolder()
 				shop.Model = model
 			end
-		elseif distance > BackpackShopDecor.ShowRange + BackpackWearController.DisplayHysteresis then
+		elseif distance > BackpackShopDecor.ShowRange + BackpackWearController.ShopHysteresis then
 			hideDecor(shop)
 		end
 		decorFx(shop, distance <= BackpackWearController.FxRange, lite)

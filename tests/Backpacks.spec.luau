@@ -313,9 +313,10 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("BACKPACKS shop: its client-built packs and decor stay out of the phones' budget spots", function()
+	T.test("BACKPACKS shop: its client-built packs and decor stay out of the phones' budget spots, even after a visit", function()
 		-- (PhoneBudget.spec counts round the spawn and the plaza, DropperShop.spec at the
-		-- DROPPERS door: none of them may hold this shop's client parts as well)
+		-- DROPPERS door: none of them may hold this shop's client parts as well; a pack
+		-- stays built until the camera is its range + Decor.Hysteresis away)
 		local Backpacks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Backpacks")
 		local Droppers = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Droppers")
 		local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
@@ -337,27 +338,33 @@ return function(T, Loader)
 					local range = d:GetAttribute("DisplayRange")
 					T.eq(type(range), "number", d.Name .. " has its build range")
 					T.truthy(
-						(d.CFrame.Position - spot).Magnitude > range,
-						`{d.Name} {d:GetAttribute("BackpackId")} is not built at the {name}`
+						(d.CFrame.Position - spot).Magnitude > range + Decor.Hysteresis,
+						`{d.Name} {d:GetAttribute("BackpackId")} is not built (nor kept) at the {name}`
 					)
 				end
 			end
 			local frame = stall:GetAttribute(Decor.FrameAttribute)
-			T.truthy((frame.Position - spot).Magnitude > Decor.ShowRange, `the decor is not built at the {name}`)
+			T.truthy(
+				(frame.Position - spot).Magnitude > Decor.ShowRange + Decor.Hysteresis,
+				`the decor is not built (nor kept) at the {name}`
+			)
 		end
 	end)
 
 	--[[
-		The phone budget at the shop's gateway (integrator 2026-10-24): every
-		part within Workspace.StreamingTargetRadius of the porch's front edge,
+		The phone budget at the shop (integrator 2026-10-24, review 2026-10-28):
+		at its gateway and at its counter (the customer side, where a player
+		stands to shop), every part within Workspace.StreamingTargetRadius,
 		every Persistent model's parts beyond it and the yard museums (as
-		PhoneBudget.spec counts), plus what this client builds there: the
-		shop's display packs within their DisplayRange (the inside ones lite:
-		the camera is outside the shop), its decor and the DROPPERS showroom
-		(within DropperShopBuilder.ShowDistance), stay under StreamParts.
+		PhoneBudget.spec counts), plus what a phone builds there: the shop's
+		display packs within their DisplayRange (the DisplayLite ones lite:
+		phones show those without their small details, inside the shop too),
+		its decor, the DROPPERS showroom within DropperShopBuilder.ShowDistance
+		and every shopkeeper golem within ShopkeeperConfig.ShowDistance, stay
+		under StreamParts.
 	]]
 	T.test(
-		"BACKPACKS shop: what a phone holds at its gateway (streamed + its packs and decor + the DROPPERS showroom) stays under StreamParts",
+		"BACKPACKS shop: what a phone holds at its gateway and its counter (streamed + its packs and decor + the DROPPERS showroom + the shopkeepers) stays under StreamParts",
 		function()
 			local fs = require("@lune/fs")
 			local serde = require("@lune/serde")
@@ -367,62 +374,118 @@ return function(T, Loader)
 			local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
 			local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
 			local Decor = Loader.requirePath("ReplicatedStorage.Shared.Builders.BackpackShopDecor")
+			local ShopkeeperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ShopkeeperConfig")
+			local GolemKeeper = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemKeeper")
 			local project = serde.decode("json", fs.readFile("default.project.json"))
 			local radius = project.tree.Workspace["$properties"].StreamingTargetRadius
 			local map = WorldBuilder.build(roblox.Instance.new("DataModel"):GetService("Workspace"))
 			local shop = map:FindFirstChild("BackpackStall", true)
 			local frame = shop:GetAttribute(Decor.FrameAttribute)
-			local gate = (frame * CFrame.new(0, 0, Decor.Layout.PorchZ)).Position
+			local L = Decor.Layout
+			local spots = {
+				Gateway = (frame * CFrame.new(0, 0, L.PorchZ)).Position,
+				Counter = (frame * CFrame.new(0, 0, L.CounterZ - 1.6)).Position,
+			}
 			local function persistent(model: any): boolean
 				local ok, mode = pcall(function()
 					return model.ModelStreamingMode.Name
 				end)
 				return ok and mode == "Persistent"
 			end
-			local near, always = 0, 0
-			local function walk(instance: any, persists: boolean)
-				for _, child in instance:GetChildren() do
-					if child:IsA("BasePart") then
-						if (child.CFrame.Position - gate).Magnitude <= radius then
-							near += 1
-						elseif persists then
-							always += 1
-						end
-					end
-					walk(child, persists or (child:IsA("Model") and persistent(child)))
-				end
-			end
-			walk(map, false)
 			local museums = 0
 			for _, plot in WorldLayout.Plots do
 				museums += #partsOf(MuseumBuilder.build(WorldLayout.plotCFrame(plot)))
 			end
-			local packs = 0
 			local markers = table.clone(shop:GetChildren())
 			for _, d in map:FindFirstChild("BackpackGolem", true):GetChildren() do
 				table.insert(markers, d)
 			end
-			for _, d in markers do
-				local id = d:GetAttribute("BackpackId")
-				if id and (d.CFrame.Position - gate).Magnitude <= d:GetAttribute("DisplayRange") then
-					local model = BackpackBuilder.build(id, true)
-					packs += if d:GetAttribute("DisplayLite") then BackpackBuilder.lite(model) else #partsOf(model)
-				end
-			end
-			local decor = if (frame.Position - gate).Magnitude <= Decor.ShowRange then #partsOf(Decor.build(frame)) else 0
 			local house = map:FindFirstChild("DroppersHouse", true)
 			local houseFrame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
-			local showroom = if (houseFrame.Position - gate).Magnitude <= DropperShopBuilder.ShowDistance
-				then #partsOf(DropperShopBuilder.build(houseFrame))
-				else 0
-			local total = near + always + museums + packs + decor + showroom
-			T.le(
-				total,
-				LobbyLayout.Budget.StreamParts,
-				`gateway: {near} within {radius} + {always} always-streamed + {museums} museum + {packs} packs + {decor} decor + {showroom} DROPPERS showroom = {total}`
-			)
+			local showroomParts = #partsOf(DropperShopBuilder.build(houseFrame))
+			local decorParts = #partsOf(Decor.build(frame))
+			-- the shopkeeper spots (tagged Attachments on the counters) and their golems' parts
+			local keepers: { { At: Vector3, Parts: number } } = {}
+			for _, d in map:GetDescendants() do
+				if d:IsA("Attachment") and d:HasTag(ShopkeeperConfig.Tag) and d.Parent and d.Parent:IsA("BasePart") then
+					local feet = d.Parent.CFrame * d.CFrame
+					local kind, size = ShopkeeperConfig.golem(d:GetAttribute("Shop"))
+					table.insert(keepers, { At = feet.Position, Parts = #GolemKeeper.build(kind, feet, size).Parts })
+				end
+			end
+			for name, spot in spots do
+				local near, always = 0, 0
+				local function walk(instance: any, persists: boolean)
+					for _, child in instance:GetChildren() do
+						if child:IsA("BasePart") then
+							if (child.CFrame.Position - spot).Magnitude <= radius then
+								near += 1
+							elseif persists then
+								always += 1
+							end
+						end
+						walk(child, persists or (child:IsA("Model") and persistent(child)))
+					end
+				end
+				walk(map, false)
+				local packs = 0
+				for _, d in markers do
+					local id = d:GetAttribute("BackpackId")
+					if id and (d.CFrame.Position - spot).Magnitude <= d:GetAttribute("DisplayRange") then
+						local model = BackpackBuilder.build(id, true)
+						packs += if d:GetAttribute("DisplayLite") then BackpackBuilder.lite(model) else #partsOf(model)
+					end
+				end
+				local decor = if (frame.Position - spot).Magnitude <= Decor.ShowRange then decorParts else 0
+				local showroom = if (houseFrame.Position - spot).Magnitude <= DropperShopBuilder.ShowDistance then showroomParts else 0
+				local golems = 0
+				for _, k in keepers do
+					if (k.At - spot).Magnitude <= ShopkeeperConfig.ShowDistance then
+						golems += k.Parts
+					end
+				end
+				local total = near + always + museums + packs + decor + showroom + golems
+				T.le(
+					total,
+					LobbyLayout.Budget.StreamParts,
+					`{name}: {near} within {radius} + {always} always-streamed + {museums} museum + {packs} packs + {decor} decor + {showroom} DROPPERS showroom + {golems} shopkeepers = {total}`
+				)
+			end
 		end
 	)
+
+	T.test("BACKPACKS packs: no studs on worn or shown packs (their ClientBackpacks folder is skipped)", function()
+		-- (StudStyle: the owner's 10-24 rule, only ground, roads, buildings, stalls and machines get studs)
+		local StudStyle = Loader.requirePath("ReplicatedStorage.Shared.StudStyle")
+		local game = roblox.Instance.new("DataModel")
+		local workspace = game:GetService("Workspace")
+		local function packIn(folderName: string): (any, any)
+			local folder = roblox.Instance.new("Folder")
+			folder.Name = folderName
+			folder.Parent = workspace
+			local pack = BackpackBuilder.build("RookiePack")
+			for _, part in partsOf(pack) do
+				part.MaterialVariant = "" -- (Lune has no default for it; Roblox's is "")
+			end
+			pack.Parent = folder
+			return folder, pack
+		end
+		StudStyle.clearCache()
+		-- (the check is real: the same pack in another folder would get studs)
+		local _, loose = packIn("SomeFolder")
+		local studded = 0
+		for _, part in partsOf(loose) do
+			if StudStyle.skipReason(part) == nil then
+				studded += 1
+			end
+		end
+		T.truthy(studded > 0, "a pack outside ClientBackpacks would get studs")
+		local folder, worn = packIn("ClientBackpacks")
+		for _, part in partsOf(worn) do
+			T.truthy(StudStyle.skipReason(part) ~= nil, part.Name .. " stays smooth")
+		end
+		T.eq(StudStyle.applyTree(folder), 0, "nothing in ClientBackpacks gets studs")
+	end)
 
 	T.test("BACKPACKS packs: the lite look drops the small details, keeps the Root and the effect boxes", function()
 		for _, pack in BackpackData.List do
