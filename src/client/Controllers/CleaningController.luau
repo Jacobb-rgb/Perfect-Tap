@@ -67,6 +67,7 @@ local CameraFit = require(Cleaning.CameraFit)
 local DefaultLook = require(Cleaning.DefaultLook)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
+local Hotbar = require(script.Parent.Parent.Util.Hotbar)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local LightingController = require(script.Parent.LightingController)
 local HudController = require(script.Parent.HudController)
@@ -385,7 +386,7 @@ local function exit(ctx: any)
 		ctx.View.Gui:Destroy()
 	end)
 	if ctx.backpackWasEnabled ~= nil then
-		pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, ctx.backpackWasEnabled)
+		Hotbar.restoreCore(ctx.backpackWasEnabled) -- (never back on with the light UI: its own BLASTER slot)
 	end
 	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
 	if dof then

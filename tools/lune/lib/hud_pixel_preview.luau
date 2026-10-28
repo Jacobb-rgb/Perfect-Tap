@@ -7,6 +7,11 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
+	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
+	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
+	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
+	                        (1920 x 1080), 568 / 667 / 844 phones, each _off
+	                        (in the backpack) and _on (in hand: the gold ring)
 ]]
 
 local UiExport = require("./uiexport")
@@ -27,7 +32,14 @@ function Preview.build(Loader: any): { [string]: any }
 	local NOW = 1.7e9
 
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
-	local function hud(renderScale: number, uiScale: number, screen: Vector2, boostCount: number?, touchButtons: boolean?): { any }
+	local function hud(
+		renderScale: number,
+		uiScale: number,
+		screen: Vector2,
+		boostCount: number?,
+		touchButtons: boolean?,
+		equipped: boolean?
+	): { any }
 		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
 		local refs = HudBubble.buildGame(uiScale, screen.X)
@@ -50,6 +62,9 @@ function Preview.build(Loader: any): { [string]: any }
 		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
 		HudView.setBackpack(refs, 12, 30)
 		HudView.setBackpackKey(refs, if compact then nil else "Q", nil)
+		-- the BLASTER slot as BlasterSlotController fills it: "1" with a keyboard, the gold ring in hand
+		HudView.setBlasterKey(refs, if compact then nil else "1")
+		HudView.setBlasterEquipped(refs, equipped == true)
 		local list = { refs.Gui }
 		-- the TRAIN chip and the boost chips (TrainController / BoostController place them)
 		TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")
@@ -138,6 +153,19 @@ function Preview.build(Loader: any): { [string]: any }
 		for _, count in { 1, 2 } do
 			local gui = roblox.Vector2.new(phone[1], phone[2] - 58)
 			exports[`ui_hud_corner_{phone[1]}_{count}`] = UiExport.export(hud(0.62 * 900 / phone[2], 0.62, gui, count, true))
+		end
+	end
+	-- the BLASTER slot left of the backpack, the pair centred (owner 2026-10-28), before and
+	-- after equipping: PC (the render is 900 px tall; the gui under a 36 / 58 px top bar) and
+	-- phones under a 58 px top bar with the touch buttons' stand-ins
+	for _, state in { { "off", false }, { "on", true } } do
+		local on = state[2] :: boolean
+		exports[`ui_blaster_slot_pc_{state[1]}`] = UiExport.export(hud(900 / 720, 1, roblox.Vector2.new(1280, 720 - 36), 1, false, on))
+		exports[`ui_blaster_slot_pc_tv_{state[1]}`] =
+			UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58), 1, false, on))
+		for _, phone in { { 568, 320 }, { 667, 375 }, { 844, 390 } } do
+			local gui = roblox.Vector2.new(phone[1], phone[2] - 58)
+			exports[`ui_blaster_slot_{phone[1]}_{state[1]}`] = UiExport.export(hud(0.62 * 900 / phone[2], 0.62, gui, 1, true, on))
 		end
 	end
 	return exports

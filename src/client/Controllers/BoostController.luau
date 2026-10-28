@@ -198,7 +198,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 	if hud and pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
 		pillRect = rectIn(hud.Gui, pill, scale) -- (the phone's pill rides at the top right)
 	end
-	return BoostView.cornerSpot({
+	local right, bottom, stacked = BoostView.cornerSpot({
 		Screen = screen,
 		Gui = gui,
 		Scale = scale,
@@ -209,6 +209,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		Bubble = bubbleRect,
 		Pill = pillRect,
 	})
+	return right, bottom, stacked
 end
 
 local function coins(): number

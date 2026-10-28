@@ -4,9 +4,12 @@
 	               floating "+$X" popups (Earned) below
 	  top-center   the quick-teleport bar (TeleportView: BASE / LOBBY / VAULT),
 	               the zone name + toast notifications under it
-	  bottom       the backpack button right of the blaster's hotbar slot
-	               (HudBubble.backpackButton, both looks): the pack's picture
-	               and "n / cap"; it opens the inventory (BackpackController)
+	  bottom       the backpack button right of the blaster's slot in Roblox's
+	               own hotbar (HudBubble.backpackButton): the pack's picture
+	               and "n / cap"; it opens the inventory (BackpackController).
+	               The light HUD has its own BLASTER slot left of the button
+	               instead of Roblox's hotbar, the pair centred
+	               (HudBubble.carryGroup, BlasterSlotController)
 	  right side   menu buttons (added by later steps)
 	The "While you were away" popup is its own ScreenGui (buildOffline).
 	While UIConfig.lightUI() is on, every builder here forwards to the light
@@ -35,9 +38,10 @@ export type Refs = {
 	Floaters: Frame,
 	Zone: TextLabel,
 	Toasts: Frame,
-	CarryPanel: Frame, -- the backpack button's holder (build mode hides it)
+	CarryPanel: Frame, -- the backpack button's holder (build mode hides it); the light HUD's: the whole bottom group
 	Backpack: TextButton, -- the backpack button: opens the inventory (BackpackController)
 	CarryLabel: TextLabel, -- the button's "n / cap"
+	BlasterSlot: TextButton?, -- the light HUD's BLASTER slot (BlasterSlotController); nil here: Roblox's hotbar
 	Menu: Frame,
 	TopBar: Frame,
 }
@@ -166,13 +170,14 @@ function HudView.build(): Refs
 		CarryPanel = carryPanel,
 		Backpack = backpack,
 		CarryLabel = carryLabel,
+		BlasterSlot = nil,
 		Menu = menu,
 		TopBar = topBar,
 	}
 end
 
 ---------------------------------------------------------------- the backpack button
--- (one button for both looks: HudBubble.backpackButton)
+-- (one button for both looks: HudBubble's packButton; the light HUD adds the BLASTER slot)
 
 HudView.backpackText = HudBubble.backpackText
 HudView.backpackX = HudBubble.backpackX
@@ -187,9 +192,26 @@ function HudView.setBackpackKey(refs: Refs, text: string?, glyph: string?)
 	HudBubble.setBackpackKey(refs.Backpack, text, glyph)
 end
 
--- Keeps the button right of the blaster's hotbar slot (Roblox draws it in real pixels) at `uiScale`.
+-- Places the bottom group for `uiScale`: the light HUD's stays centred, the dark HUD's
+-- button keeps right of the blaster's hotbar slot (Roblox draws it in real pixels).
 function HudView.placeBackpack(refs: Refs, uiScale: number, tenFoot: boolean?)
 	HudBubble.placeBackpack(refs.CarryPanel, uiScale, tenFoot)
+end
+
+-- The BLASTER slot's key hint ("1" on a keyboard, nothing on touch or a gamepad); no-op on the dark HUD.
+function HudView.setBlasterKey(refs: Refs, text: string?)
+	local slot = refs.BlasterSlot
+	if slot then
+		HudBubble.setBackpackKey(slot, text, nil)
+	end
+end
+
+-- The BLASTER slot's gold ring while the Blaster is in hand; no-op on the dark HUD.
+function HudView.setBlasterEquipped(refs: Refs, on: boolean)
+	local slot = refs.BlasterSlot
+	if slot then
+		HudBubble.setBlasterEquipped(slot, on)
+	end
 end
 
 -- A floating "+$1.2K" (the controller moves and fades it).

@@ -3103,8 +3103,21 @@ end
 	- Touch, a phone (the Shop pill at the top right): the phone's bottom right
 	  is the jump, Grab and FIRE buttons, so the row stands on the Shop pill, at
 	  the right edge (review 2026-10-28: on any lower spot a tap meant for FIRE
-	  opened Boosts); while the touch tutorial bubble covers that corner, left of it.
-	Returns right, bottom, and whether the tiles stack in a column.
+	  opened Boosts). The touch tutorial bubble has that corner while it shows
+	  (its SKIP sits right over the pill's row), so the row goes, in this order
+	  (review 2026-10-28 follow-up: the moved row kept the right edge's height
+	  and could land on FIRE's top or on the toasts):
+	    Beside      left of the bubble, re-checked against the touch buttons
+	                under that strip, clear of the toasts' column (ToastColumn)
+	    Below       under the bubble at the right edge (and under the pill),
+	                when that is clear of the touch buttons and the toasts
+	    OverToasts  left of the bubble, clear of the touch buttons, over the
+	                toasts' column (toasts take no taps; the bubble's SKIP and
+	                FIRE do)
+	    OnPill      (no room at all) the pill's spot, under the bubble
+	Returns right, bottom, whether the tiles stack in a column, and the spot:
+	"Corner" (mouse, gamepad), "Column" (a tablet), "Pill" (a phone) or one of
+	the bubble's spots above.
 ]]
 export type PillRect = { Left: number, Top: number?, Bottom: number } -- design units from the gui's top-left
 
@@ -3121,20 +3134,25 @@ export type CornerInput = {
 }
 
 BoostView.TenFootSafe = 0.05 -- (TutorialView.TenFootSafe: the TV's title-safe band)
+-- The HUD's toast column (HudBubble.buildGame: centred, from y 70, HudBubble.toastColor's
+-- 440 wide pills; HudController shows 3 at most, 56 apart), design units from the gui's top.
+BoostView.ToastColumn = { Width = 440, Top = 70, Height = 3 * 56 }
 
 -- The touch buttons in the phone's bottom right, in px from the gui's bottom-right corner
 -- (left, top, right, bottom edges; small = the shorter screen side 500 px or less). The
--- LightUI spec reads InteractController / MiningController to keep these in step.
+-- LightUI spec reads InteractController / MiningController to keep these in step. (Grab:
+-- Roblox draws CAS buttons 45 px, 35 on a 320 px screen; 70 / 90 here is on the safe side.)
 BoostView.TouchButtons = {
 	Small = {
 		{ Name = "Jump", Left = 95, Top = 90, Right = 25, Bottom = 20 }, -- Roblox's jump button
 		{ Name = "Grab", Left = 170, Top = 150, Right = 100, Bottom = 80 }, -- InteractController: SetPosition(1, -170, 1, -150)
-		{ Name = "Fire", Left = 284, Top = 144, Right = 196, Bottom = 56 }, -- MiningController: 88 px centred at (1, -240, 1, -100)
+		-- MiningController: an 88 px holder centred at (1, -240, 1, -100), its face lifted 5 px (top 149)
+		{ Name = "Fire", Left = 284, Top = 149, Right = 196, Bottom = 56 },
 	},
 	Large = {
 		{ Name = "Jump", Left = 170, Top = 210, Right = 50, Bottom = 90 },
 		{ Name = "Grab", Left = 170, Top = 150, Right = 80, Bottom = 60 },
-		{ Name = "Fire", Left = 368, Top = 198, Right = 252, Bottom = 82 }, -- 116 px centred at (1, -310, 1, -140)
+		{ Name = "Fire", Left = 368, Top = 203, Right = 252, Bottom = 82 }, -- 116 px centred at (1, -310, 1, -140), lifted 5
 	},
 } :: { [string]: { { Name: string, Left: number, Top: number, Right: number, Bottom: number } } }
 
@@ -3152,7 +3170,33 @@ local function touchButtonsTop(screen: Vector2, w: number, h: number, s: number,
 	return top
 end
 
-function BoostView.cornerSpot(input: CornerInput): (number, number, boolean)
+--[[
+	Is a corner row `rowW` wide at `right` (design units from the gui's right
+	edge) with its top at `top` clear of the touch buttons under it, the
+	toasts' column (when `toasts`) and the gui's edges?
+]]
+local function rowClear(input: CornerInput, w: number, h: number, right: number, top: number, rowW: number, toasts: boolean): boolean
+	local s = math.max(input.Scale, 0.01)
+	local gap = BoostView.CornerGap
+	local tile = BoostView.cornerHeight()
+	local left = w - right - rowW
+	if left < gap or top < gap or top + tile > h - gap then
+		return false
+	end
+	if top + tile > touchButtonsTop(input.Screen, w, h, s, left, w - right) - gap then
+		return false
+	end
+	if toasts then
+		local column = BoostView.ToastColumn
+		local columnLeft, columnRight = w / 2 - column.Width / 2, w / 2 + column.Width / 2
+		if left < columnRight and columnLeft < w - right and top < column.Top + column.Height and column.Top < top + tile then
+			return false
+		end
+	end
+	return true
+end
+
+function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, string)
 	local s = math.max(input.Scale, 0.01)
 	local w, h = input.Gui.X / s, input.Gui.Y / s
 	local gap = BoostView.CornerGap
@@ -3163,6 +3207,7 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean)
 		bottom = math.max(bottom, math.ceil(h * BoostView.TenFootSafe))
 	end
 	local stacked = false
+	local spot = "Corner"
 	local pill, bubble = input.Pill, input.Bubble
 	local count = math.max(1, input.Count or #BoostConfig.KindIds)
 	if input.Touch and pill == nil then
@@ -3170,21 +3215,41 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean)
 		local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - right - BoostView.CornerWidth, w - right)
 		bottom = math.max(bottom, math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s))
 		stacked = true
+		spot = "Column"
 	elseif input.Touch and pill then
 		-- (a row on the Shop pill, and on any touch button its tiles would reach)
-		local rowLeft = w - right - count * BoostView.CornerWidth - (count - 1) * gap
-		local limit = math.min(pill.Top or (pill.Bottom - 72), touchButtonsTop(input.Screen, w, h, s, rowLeft, w - right))
-		local rowTop = math.max(gap, limit - gap - tile)
-		bottom = math.ceil(h - rowTop - tile)
-		-- (the touch tutorial bubble, at the top right, has the corner while it shows: left of it)
-		if bubble and w - right > bubble.Left and rowTop < bubble.Bottom + gap then
-			right = math.ceil(w - bubble.Left) + gap
+		local rowW = count * BoostView.CornerWidth + (count - 1) * gap
+		local pillTop = pill.Top or (pill.Bottom - 72)
+		local function onPill(r: number): number
+			local limit = math.min(pillTop, touchButtonsTop(input.Screen, w, h, s, w - r - rowW, w - r))
+			return math.max(gap, limit - gap - tile)
 		end
+		local rowTop = onPill(right)
+		spot = "Pill"
+		-- (the touch tutorial bubble, at the top right, has the corner while it shows: see above)
+		if bubble and w - right > bubble.Left and rowTop < bubble.Bottom + gap then
+			local beside = math.ceil(w - bubble.Left) + gap
+			local besideTop = onPill(beside)
+			local belowTop = bubble.Bottom + gap
+			if w - right > pill.Left and belowTop + tile + gap > pillTop then
+				belowTop = math.max(belowTop, pill.Bottom + gap) -- (under the pill too)
+			end
+			if rowClear(input, w, h, beside, besideTop, rowW, true) then
+				right, rowTop, spot = beside, besideTop, "Beside"
+			elseif rowClear(input, w, h, right, belowTop, rowW, true) then
+				rowTop, spot = belowTop, "Below"
+			elseif rowClear(input, w, h, beside, besideTop, rowW, false) then
+				right, rowTop, spot = beside, besideTop, "OverToasts"
+			else
+				spot = "OnPill"
+			end
+		end
+		bottom = math.ceil(h - rowTop - tile)
 	end
 	if input.TutorialTop then
 		bottom = math.max(bottom, input.TutorialTop + gap)
 	end
-	return right, bottom, stacked
+	return right, bottom, stacked, spot
 end
 
 -- Moves the corner row (a light build's chips) to `right`, `bottom` (BoostView.cornerSpot),
