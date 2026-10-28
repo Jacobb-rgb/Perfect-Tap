@@ -86,7 +86,7 @@ return function(T, Loader)
 		HoverboardData.ById.TestFastBoard = table.clone(HoverboardData.ById.TerraForgeCustom)
 		HoverboardData.ById.TestFastBoard.Id = "TestFastBoard"
 		HoverboardData.ById.TestFastBoard.PassKey = "HoverboardTestFast"
-		HoverboardData.ById.TestFastBoard.Speed = 45
+		HoverboardData.ById.TestFastBoard.Speed = HoverboardData.ById.TerraForgeCustom.Speed + 5 -- faster than the real one
 		MonetizationConfig.Entries.TestCoinPouch =
 			{ Key = "TestCoinPouch", Kind = "Product", Id = PRODUCT, Robux = 25, Name = "Test pouch", Grant = "TestPouch" }
 		m.reset()

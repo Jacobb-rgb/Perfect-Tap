@@ -14,8 +14,9 @@
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
 	                the thumbstick)
 	  bottom-centre the hotbar: the blaster in slot 1 (the preview's build());
-	                the game HUD (buildGame) has the backpack button right of
-	                Roblox's own blaster slot instead (backpackButton)
+	                the game HUD (buildGame) has its own BLASTER slot and the
+	                backpack button, one group in the middle, instead of
+	                Roblox's hotbar (carryGroup)
 	  under the bar toasts (white pills with an icon)
 
 	Compact (phones, uiScale <= CompactScale): bigger touch targets in design
@@ -43,6 +44,7 @@ local IconAssets = require(Shared.Config.IconAssets)
 local CashBuilder = require(Shared.Builders.CashBuilder)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
+local PictureModels = require(Shared.Builders.PictureModels)
 local Pop = require(script.Parent.Pop)
 
 local HudBubble = {}
@@ -755,19 +757,25 @@ end
 	          starts hidden and shows when a controller claims it
 	          (claimTile: BuildView claims BUILD, TeleportView claims LIFT),
 	          so there are never dead buttons
-	  Carry   the backpack button right of the blaster's hotbar slot (owner
-	          2026-10-24: everything goes into the backpack): the pack's
-	          picture and "n / cap" (backpackButton / setBackpack)
+	  Carry   the bottom group, centred (owner 2026-10-28): the BLASTER slot
+	          (blasterSlot: Roblox's own hotbar is off, Util/Hotbar) and the
+	          backpack button (owner 2026-10-24: everything goes into the
+	          backpack): the pack's picture and "n / cap" (carryGroup /
+	          setBackpack)
 ]]
 
 -- The tiles the game menu can show (claimed by controllers).
+-- (HudBubble.Menu[1], the BACKPACK tile, went next to the hotbar: backpackButton.
+-- The menu keeps two rows on phones: 6 tiles in 3 columns; EMOTES is behind MORE.)
 HudBubble.GameMenu = {
-	HudBubble.Menu[1],
 	HudBubble.Menu[2],
 	HudBubble.Menu[3],
 	HudBubble.Menu[4],
 	{ Id = "Elevator", Label = "ELEVATOR", Icon = "lift", Role = "Base" }, -- the side menu's Elevator entry claims it
 	HudBubble.Menu[5],
+	-- Spin & Win (owner 2026-10-28: the wheel's picture as a tile next to MORE, under
+	-- BOOSTS, instead of the FREE SPIN! chip; WheelController claims it, badge = spins ready)
+	{ Id = "Wheel", Label = "SPIN", Icon = "wheel", Role = "Wheel" },
 } :: { MenuEntry }
 
 HudBubble.CoinsWidth = 250
@@ -797,9 +805,10 @@ export type GameRefs = {
 	Floaters: Frame,
 	Zone: TextLabel,
 	Toasts: Frame,
-	CarryPanel: Frame, -- the backpack button's holder (build mode hides it)
+	CarryPanel: Frame, -- the bottom group's holder: the BLASTER slot + the backpack button (build mode hides it)
 	Backpack: TextButton, -- the backpack button: opens the inventory (BackpackController)
 	CarryLabel: TextLabel, -- the button's "n / cap"
+	BlasterSlot: TextButton?, -- the BLASTER slot left of it (BlasterSlotController); nil on the dark HUD
 	Menu: Frame,
 	TopBar: Frame,
 }
@@ -1123,9 +1132,10 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		holder.Visible = false
 	end
 
-	-- the backpack button right of the blaster's hotbar slot (HudController fills it,
-	-- BackpackController opens the inventory)
-	local carryPanel, backpack, carryLabel = HudBubble.backpackButton(gui, layout, uiScale or HudBubble.screenScale())
+	-- the BLASTER slot and the backpack button, centred at the bottom (Roblox's own hotbar
+	-- is off: Util/Hotbar; HudController fills the button, BackpackController opens the
+	-- inventory, BlasterSlotController equips the Blaster from the slot)
+	local carryPanel, backpack, carryLabel, blaster = HudBubble.carryGroup(gui, layout)
 	-- (phones: no offers: the right edge holds the tutorial bubble and Roblox's jump button;
 	-- the Store tile and the Shop button are a tap away)
 	if round and not layout.Compact then
@@ -1143,6 +1153,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		CarryPanel = carryPanel,
 		Backpack = backpack,
 		CarryLabel = carryLabel,
+		BlasterSlot = blaster,
 		Menu = menu,
 		TopBar = topBar,
 	}
@@ -1228,9 +1239,6 @@ function HudBubble.linkMenu(menu: Instance): { GuiObject }
 		link("NextSelectionRight", if col < columns - 1 then faces[i + 1] else nil)
 		link("NextSelectionUp", faces[i - columns])
 		link("NextSelectionDown", faces[i + columns])
-	end
-	if menu.Parent then
-		HudBubble.placeCarry(menu.Parent) -- (the round look's backpack badge follows its tile)
 	end
 	return faces
 end
@@ -1373,17 +1381,25 @@ end
 	The backpack button (owner 2026-10-24: "everything into the backpack", a
 	backpack icon next to the Blaster slot opens the ore inventory;
 	docs/plans/OWNER_PLAYTEST_1024.md "4 + 5"). It took the place of the
-	hotbar's carried-ore squares: right of the blaster's slot in Roblox's own
-	hotbar (bottom centre, drawn in real pixels: backpackX keeps the gap at
-	every UI scale), in the hotbar wells' pixel look (a dark rounded well, a
-	black outline, a light rim lit from below, a faint lattice) holding the
-	pack's picture (IconAssets "backpack"; drawn from frames until the sheet
-	is uploaded) and "n / cap" in pixel letters. A full backpack paints the
-	count red and shows a red FULL tag on the top edge (setBackpack). The
-	key hint on the top-right corner names the open key (setBackpackKey: Q,
-	the gamepad's R1 glyph, nothing on touch). Clicking, tapping or a
-	gamepad's A on it opens the inventory (BackpackController). The dark HUD
-	(HudView) uses the same button.
+	hotbar's carried-ore squares, in the hotbar wells' pixel look (a dark
+	rounded well, a black outline, a light rim lit from below, a faint
+	lattice) holding the pack's picture (IconAssets "backpack"; drawn from
+	frames until the sheet is uploaded) and "n / cap" in pixel letters. A
+	full backpack paints the count red and shows a red FULL tag on the top
+	edge (setBackpack). The key hint on the top-right corner names the open
+	key (setBackpackKey: Q, the gamepad's R1 glyph, nothing on touch).
+	Clicking, tapping or a gamepad's A on it opens the inventory
+	(BackpackController).
+	  light HUD  (carryGroup, owner 2026-10-28: "a custom slot for the
+	             blaster left of the backpack, the pair in the middle")
+	             Roblox's own hotbar is off (Util/Hotbar); the game's BLASTER
+	             slot (blasterSlot: the same well, the blaster's picture, the
+	             "1" key on the top-left corner, a gold ring while the Blaster
+	             is in hand) sits left of the button, and the pair is one
+	             group centred at the bottom (design units, carrySpan)
+	  dark HUD   (HudView, backpackButton) the button alone, right of the
+	             blaster's slot in Roblox's own hotbar (bottom centre, drawn
+	             in real pixels: backpackX keeps the gap at every UI scale)
 ]]
 HudBubble.SlotTop = Color3.fromRGB(20, 21, 27) -- the well's shadowed top inside
 HudBubble.SlotBottom = Color3.fromRGB(54, 58, 72)
@@ -1391,8 +1407,14 @@ HudBubble.SlotRim = Color3.fromRGB(150, 160, 188)
 HudBubble.BackpackSize = Vector2.new(176, 64) -- design units (PC)
 HudBubble.BackpackSizePhone = Vector2.new(196, 76) -- 47 pt tall at the phones' 0.62 scale
 HudBubble.BackpackBottom = 12 -- design units above the safe area's bottom edge
-HudBubble.BlasterSlot = 60 -- Roblox's hotbar slot in px (100 on a TV: GuiService:IsTenFootInterface)
-HudBubble.BlasterGap = 16 -- px between the slot's middle half and the button (its 5 px border included)
+HudBubble.BlasterSlot = 60 -- the dark HUD: Roblox's hotbar slot in px (100 on a TV: GuiService:IsTenFootInterface)
+HudBubble.BlasterGap = 16 -- the dark HUD: px between the slot's middle half and the button (its 5 px border included)
+HudBubble.GroupGap = 10 -- the light HUD: design units between the BLASTER slot and the backpack button
+HudBubble.WellCorner = 4 -- the round look's wells: the reel's nearly square tiles
+-- the round look's wells' colours (their lip and edge): the blaster's laser blue, the pack's orange
+HudBubble.WellPaints = { Blaster = "Blue", Backpack = "Ember" } :: { [string]: string }
+HudBubble.EquippedColor = Color3.fromRGB(255, 203, 46) -- the slot's ring while the Blaster is in hand
+HudBubble.DiscColor = Color3.fromRGB(130, 214, 255) -- the light behind the slot's blaster (a laser's cyan)
 HudBubble.FullColor = Color3.fromRGB(255, 92, 84)
 -- the drawn pack (no uploaded picture yet): the Rookie Pack's colours (BackpackData)
 local PACK = {
@@ -1402,11 +1424,63 @@ local PACK = {
 	Buckle = Color3.fromRGB(250, 206, 90),
 }
 
--- The button's X offset from the screen's middle (design units) at `uiScale`:
--- right of the blaster's slot, which Roblox draws in real pixels. Pure (specs).
+-- The dark HUD's button: its X offset from the screen's middle (design units) at
+-- `uiScale`, right of the blaster's slot, which Roblox draws in real pixels. Pure (specs).
 function HudBubble.backpackX(uiScale: number, tenFoot: boolean?): number
 	local slot = if tenFoot then 100 else HudBubble.BlasterSlot
 	return math.ceil((slot / 2 + HudBubble.BlasterGap) / math.max(uiScale, 0.01))
+end
+
+-- The light HUD's BLASTER slot: a square as tall as the backpack button (design units).
+function HudBubble.blasterSlotSize(compact: boolean): number
+	return (if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize).Y
+end
+
+-- The light HUD's bottom group: the BLASTER slot, the gap, the backpack button (design units).
+function HudBubble.carryGroupSize(compact: boolean): Vector2
+	local pack = if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	return Vector2.new(HudBubble.blasterSlotSize(compact) + HudBubble.GroupGap + pack.X, pack.Y)
+end
+
+--[[
+	What the HUD draws at the bottom centre at `uiScale`: its left and right
+	edges in design units from the screen's middle. The light HUD's group
+	(the BLASTER slot + the backpack button) is centred (on phones and
+	tablets kept out of the thumbstick's zone: carryLeft, with the gui's
+	`width` in design units); the dark HUD's backpack button sits right of
+	Roblox's slot (backpackX). Both stand BackpackBottom over the bottom
+	edge, carryGroupSize(...).Y tall. Pure (specs, TutorialView).
+]]
+function HudBubble.carrySpan(uiScale: number, tenFoot: boolean?, light: boolean, width: number?): (number, number)
+	local compact = uiScale <= HudBubble.CompactScale
+	if light then
+		local group = HudBubble.carryGroupSize(compact).X
+		local left = HudBubble.carryLeft(width, group, compact)
+		return left, left + group
+	end
+	local pack = if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local left = HudBubble.backpackX(uiScale, tenFoot)
+	return left, left + pack.X
+end
+
+-- Roblox's DynamicThumbstick starts on touches in the left 40 % of the screen (its lower two-thirds)
+HudBubble.ThumbZone = 0.4
+
+--[[
+	The light HUD's bottom group's left edge from the screen's middle (design
+	units): centred, but on phones and tablets (`compact`) never inside the
+	thumbstick's zone (a touch on the BLASTER slot there would not walk the
+	character; review 2026-10-28): the group moves right until its left edge
+	is ThumbZone of the gui's `width` (design units; nil: unknown, centred).
+	Its right end stays left of the touch jump button (BlasterSlot spec).
+	Pure.
+]]
+function HudBubble.carryLeft(width: number?, groupWidth: number, compact: boolean): number
+	local left = -math.floor(groupWidth / 2)
+	if compact and width and width > 0 then
+		left = math.max(left, math.ceil(-(0.5 - HudBubble.ThumbZone) * width))
+	end
+	return left
 end
 
 -- "12 / 30": what the button says. Pure (specs).
@@ -1486,34 +1560,31 @@ function HudBubble.packArt(parent: Instance, size: number, props: { [string]: an
 end
 
 --[[
-	The backpack button in `gui` (see above): returns (holder "Carry", the
-	button "Backpack", its count label "Count"). `layout` picks the PC or
-	the phone size; `uiScale` places it right of the blaster's slot.
+	A hotbar well button `name` in `parent` (the backpack button's and the
+	BLASTER slot's look): a dark rounded well, a black outline, a light rim
+	lit from below, a faint lattice, the press motion. `size` nil fills the
+	parent.
 ]]
-function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number): (Frame, TextButton, TextLabel)
-	-- (the round look's HUD: the count rides on the Inventory tile)
-	local menu = gui:FindFirstChild("Menu")
-	if PopTheme.round() and menu and menu:GetAttribute("Bubble") == true then
-		return HudBubble.backpackBadge(gui, layout)
-	end
-	local size = if layout.Compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
-	local holder = UIKit.new("Frame", {
-		Name = "Carry",
-		AnchorPoint = Vector2.new(0, 1),
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, HudBubble.backpackX(uiScale), 1, -HudBubble.BackpackBottom),
-		Size = UDim2.fromOffset(size.X, size.Y),
-	}, gui)
+local function well(parent: Instance, name: string, size: Vector2?, paint: string?): TextButton
 	local button = UIKit.new("TextButton", {
-		Name = "Backpack",
+		Name = name,
 		AutoButtonColor = true,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Text = "",
-		Size = UDim2.fromScale(1, 1),
+		Size = if size then UDim2.fromOffset(size.X, size.Y) else UDim2.fromScale(1, 1),
 		Selectable = true,
 		ZIndex = 2,
-	}, holder)
+	}, parent)
+	if PopTheme.round() then
+		-- the round look: the reel's dark tile, its colour in the lip and the edge (like the left tiles)
+		local look = Pop.paint(paint or "Slate")
+		Pop.darkTile(button, look, HudBubble.WellCorner)
+		button:SetAttribute("RimColor", look.Top)
+		Pop.studs(button, HudBubble.WellCorner, 0.6, nil, 3)
+		Pop.fxTag(button, "Press")
+		return button
+	end
 	UIKit.corner(button, 14)
 	Pop.border(button)
 	UIKit.new("UIGradient", {
@@ -1551,6 +1622,43 @@ function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number
 	}, light)
 	Pop.studs(button, 14, 0.6, nil, 3)
 	Pop.fxTag(button, "Press")
+	return button
+end
+
+--[[
+	A well's key hint (setBackpackKey fills it): a key cap "Key" (keyboards,
+	like the TRAIN chip's T) and a gamepad glyph "Glyph", both hidden, on the
+	top-right corner (`left`: the top-left).
+]]
+local function keyHint(button: TextButton, compact: boolean, left: boolean?)
+	local keySize = if compact then 30 else 28
+	local at = if left then UDim2.new(0, 8, 0, 2) else UDim2.new(1, -8, 0, 2)
+	local key = Pop.text(button, "", 20, {
+		Name = "Key",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0,
+		Position = at,
+		Size = UDim2.fromOffset(keySize, keySize),
+		Visible = false,
+		ZIndex = 8,
+	})
+	UIKit.corner(key, 6)
+	Pop.border(key, 2.5)
+	UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = at,
+		Size = UDim2.fromOffset(keySize, keySize),
+		Visible = false,
+		ZIndex = 8,
+	}, button)
+end
+
+-- The backpack button itself in `holder`: the well, the pack's picture, "n / cap", FULL, the key hint.
+local function packButton(holder: Instance, layout: Layout, size: Vector2, own: Vector2?): (TextButton, TextLabel)
+	local button = well(holder, "Backpack", own, HudBubble.WellPaints.Backpack)
 	local pic = size.Y - 8
 	HudBubble.packArt(button, pic, {
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -1572,171 +1680,151 @@ function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number
 		ZIndex = 8,
 	})
 	-- the open key on the top-right corner: a key cap (keyboards, like the TRAIN chip's T) or the gamepad's glyph
-	local keySize = if layout.Compact then 30 else 28
-	local key = Pop.text(button, "", 20, {
-		Name = "Key",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = PopTheme.Well,
-		BackgroundTransparency = 0,
-		Position = UDim2.new(1, -8, 0, 2),
-		Size = UDim2.fromOffset(keySize, keySize),
-		Visible = false,
-		ZIndex = 8,
-	})
-	UIKit.corner(key, 6)
-	Pop.border(key, 2.5)
-	UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -8, 0, 2),
-		Size = UDim2.fromOffset(keySize, keySize),
-		Visible = false,
-		ZIndex = 8,
-	}, button)
-	return holder, button, count
+	keyHint(button, layout.Compact)
+	return button, count
 end
 
 --[[
-	The round look's backpack count (the reel has no bottom button: its
-	Inventory tile opens the bag): a small dark "12/30" badge over the
-	Inventory tile's top-right corner. It is still the "Backpack" button in
-	the "Carry" holder (HudView.setBackpack, Q / R1's key cap, the ore that
-	flies into the bag aim at it), placed on the tile by HudBubble.placeCarry;
-	the tile's face is what a gamepad selects. Full: a red count and a red
-	ring ("Full").
+	The dark HUD's backpack button in `gui` (see above): returns (holder
+	"Carry", the button "Backpack", its count label "Count"). `layout` picks
+	the PC or the phone size; `uiScale` places it right of the blaster's slot
+	in Roblox's own hotbar.
 ]]
-function HudBubble.backpackBadge(gui: Instance, layout: Layout): (Frame, TextButton, TextLabel)
-	local size = if layout.Compact then HudBubble.BadgeSizePhone else HudBubble.BadgeSize
+function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number): (Frame, TextButton, TextLabel)
+	local size = if layout.Compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
 	local holder = UIKit.new("Frame", {
 		Name = "Carry",
-		AnchorPoint = Vector2.new(1, 0),
+		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, HudBubble.backpackX(uiScale), 1, -HudBubble.BackpackBottom),
 		Size = UDim2.fromOffset(size.X, size.Y),
-		ZIndex = 5,
 	}, gui)
-	holder:SetAttribute("OnTile", true)
-	local button = UIKit.new("TextButton", {
-		Name = "Backpack",
-		AutoButtonColor = true,
-		BackgroundColor3 = PopTheme.Well,
-		BackgroundTransparency = 0.05,
-		BorderSizePixel = 0,
-		Text = "",
-		Size = UDim2.fromScale(1, 1),
-		Selectable = false, -- (the tile under it is the gamepad's target)
-		ZIndex = 7,
-	}, holder)
-	UIKit.corner(button, 4)
-	Pop.border(button, 2)
-	local count = Pop.text(button, HudBubble.badgeText(0, 5), math.floor(size.Y * 0.7), {
-		Name = "Count",
-		FontFace = PopTheme.Heavy,
-		Size = UDim2.new(1, -6, 1, 0),
-		Position = UDim2.fromOffset(3, 0),
-		ZIndex = 8,
-	})
-	local ring = UIKit.new("Frame", {
-		Name = "Full",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		Visible = false,
-		ZIndex = 8,
-	}, button)
-	UIKit.corner(ring, 4)
-	UIKit.new("UIStroke", {
-		Name = "Ring",
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Color = HudBubble.FullColor,
-		Thickness = 2.5,
-	}, ring)
-	-- the open key cap in the tile's other top corner (keyboards: Q; a gamepad's glyph; nothing on
-	-- touch; HudBubble.placeCarry moves it there)
-	local keySize = size.Y
-	local key = Pop.text(button, "", math.floor(keySize * 0.7), {
-		Name = "Key",
-		AnchorPoint = Vector2.new(1, 0.5),
-		BackgroundColor3 = PopTheme.Well,
-		BackgroundTransparency = 0,
-		Position = UDim2.new(0, -3, 0.5, 0),
-		Size = UDim2.fromOffset(keySize, keySize),
-		Visible = false,
-		ZIndex = 8,
-	})
-	UIKit.corner(key, 4)
-	Pop.border(key, 2)
-	UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(1, 0.5),
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, -3, 0.5, 0),
-		Size = UDim2.fromOffset(keySize, keySize),
-		Visible = false,
-		ZIndex = 8,
-	}, button)
-	Pop.fxTag(button, "Press")
-	HudBubble.placeCarry(gui)
+	local button, count = packButton(holder, layout, size, nil)
 	return holder, button, count
 end
 
-HudBubble.BadgeSize = Vector2.new(50, 22) -- design units (PC)
-HudBubble.BadgeSizePhone = Vector2.new(56, 26)
+--[[
+	The light HUD's BLASTER slot in `parent` (owner 2026-10-28), at its
+	top-left: a square well as tall as the backpack button with the
+	blaster's picture (the uploaded IconAssets "blaster", else a live model:
+	PictureModels "blaster" in a Pop.model view; the previews draw the
+	"blaster" picture there), the "1" key cap on the top-left corner
+	(setBackpackKey fills it, nothing on touch or a gamepad) and a gold ring
+	with a gold rim while the Blaster is in hand (setBlasterEquipped).
+	BlasterSlotController equips / puts away the Blaster from it.
+]]
+function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
+	local side = HudBubble.blasterSlotSize(layout.Compact)
+	local button = well(parent, "Blaster", Vector2.new(side, side), HudBubble.WellPaints.Blaster)
+	-- a soft light disc behind the picture, lit from above (the blaster is dark iron:
+	-- it reads on the dark well); gold while in hand (setBlasterEquipped)
+	local disc = UIKit.new("Frame", {
+		Name = "Disc",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = HudBubble.DiscColor,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(side - 12, side - 12),
+		ZIndex = 4,
+	}, button)
+	UIKit.corner(disc, side)
+	UIKit.new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.05),
+			NumberSequenceKeypoint.new(1, 0.5),
+		}),
+	}, disc)
+	-- (a bit under the middle: the 1 key cap sits on the top-left corner)
+	local pic = side - 6
+	local at = UDim2.new(0.5, 2, 0.5, 4)
+	if IconAssets.find("blaster") ~= "" then
+		local icon = UIKit.new("ImageLabel", {
+			Name = "Icon",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Position = at,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(pic, pic),
+			ZIndex = 5,
+		}, button)
+		IconAssets.apply(icon, "blaster")
+		icon:SetAttribute("Icon", "blaster")
+	else
+		local model, from = PictureModels.build("blaster")
+		Pop.model(button, "blaster", pic, model, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = at,
+			ZIndex = 5,
+		}, from)
+	end
+	-- in hand: a gold ring round the black outline (outside the well, so it covers nothing)
+	local ring = UIKit.new("Frame", {
+		Name = "Equipped",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 2 * PopTheme.Edge, 1, 2 * PopTheme.Edge),
+		Visible = false,
+		ZIndex = 7,
+	}, button)
+	UIKit.corner(ring, (if PopTheme.round() then HudBubble.WellCorner else 14) + PopTheme.Edge)
+	UIKit.new("UIStroke", {
+		Name = "Gold",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = HudBubble.EquippedColor,
+		Thickness = 4,
+		LineJoinMode = Enum.LineJoinMode.Round,
+	}, ring)
+	keyHint(button, layout.Compact, true)
+	button:SetAttribute("Equipped", false)
+	return button
+end
 
--- The badge's words: "12/30" (backpackText without the spaces).
-function HudBubble.badgeText(count: number, capacity: number): string
-	return (string.gsub(HudBubble.backpackText(count, capacity), " ", ""))
+-- The slot's equipped look: the gold ring and a gold rim while the Blaster is in hand.
+function HudBubble.setBlasterEquipped(button: GuiObject, on: boolean)
+	local ring = button:FindFirstChild("Equipped") :: GuiObject?
+	if ring then
+		ring.Visible = on
+	end
+	local disc = button:FindFirstChild("Disc") :: GuiObject?
+	if disc then
+		disc.BackgroundColor3 = if on then HudBubble.EquippedColor else HudBubble.DiscColor
+	end
+	local rim = button:FindFirstChild("Rim")
+	local light = rim and rim:FindFirstChild("Light") :: UIStroke?
+	if light then
+		local rimColor = button:GetAttribute("RimColor") -- (the round look: the well's own colour)
+		light.Color = if on then HudBubble.EquippedColor elseif typeof(rimColor) == "Color3" then rimColor else HudBubble.SlotRim
+		light.Thickness = if on then 3 else 2
+	end
+	button:SetAttribute("Equipped", on)
 end
 
 --[[
-	Puts the round look's backpack badge (HudBubble.backpackBadge) over the
-	Inventory tile's top-right corner, wherever that tile sits among the
-	visible ones (HudBubble.linkMenu calls it whenever a tile shows or hides);
-	hidden while the tile is.
+	The light HUD's bottom group in `gui`: the BLASTER slot, a GroupGap,
+	the backpack button, centred at the bottom (carrySpan). Returns (holder
+	"Carry": the whole group, so whatever hides it hides both; the button
+	"Backpack", its count label "Count", the slot "Blaster").
 ]]
-function HudBubble.placeCarry(gui: Instance)
-	local carry = gui:FindFirstChild("Carry")
-	local menu = gui:FindFirstChild("Menu")
-	if not (carry and carry:IsA("GuiObject") and carry:GetAttribute("OnTile") and menu and menu:IsA("GuiObject")) then
-		return
-	end
-	local grid = menu:FindFirstChildOfClass("UIGridLayout")
-	local columns = (menu:GetAttribute("Columns") :: number?) or 2
-	local holders: { Frame } = {}
-	for _, child in menu:GetChildren() do
-		if child:IsA("Frame") and child.Visible and child:FindFirstChild("Face") then
-			table.insert(holders, child)
-		end
-	end
-	table.sort(holders, function(a, b)
-		return a.LayoutOrder < b.LayoutOrder
-	end)
-	local index = nil
-	for i, holder in holders do
-		if holder.Name == "Backpack" then
-			index = i
-		end
-	end
-	carry.Visible = index ~= nil and grid ~= nil
-	if not (index and grid) then
-		return
-	end
-	local col = (index - 1) % columns
-	local row = (index - 1) // columns
-	local cell, pad = grid.CellSize, grid.CellPadding
-	-- (inside the tile's top-right corner, clear of the tile above; the key cap in its top-left one)
-	local inset = 4
-	local x = menu.Position.X.Offset + col * (cell.X.Offset + pad.X.Offset) + cell.X.Offset - inset
-	local y = menu.Position.Y.Offset + row * (cell.Y.Offset + pad.Y.Offset) + inset
-	carry.Position = UDim2.new(menu.Position.X.Scale, x, menu.Position.Y.Scale, y)
-	local button = carry:FindFirstChild("Backpack")
-	local away = cell.X.Offset - 2 * inset - carry.Size.X.Offset -- (the badge's left edge to the tile's)
-	for _, name in { "Key", "Glyph" } do
-		local cap = if button then button:FindFirstChild(name) else nil
-		if cap and cap:IsA("GuiObject") then
-			cap.AnchorPoint = Vector2.new(0, 0)
-			cap.Position = UDim2.fromOffset(-away, 0)
-		end
-	end
+function HudBubble.carryGroup(gui: Instance, layout: Layout): (Frame, TextButton, TextLabel, TextButton)
+	local size = if layout.Compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local group = HudBubble.carryGroupSize(layout.Compact)
+	local holder = UIKit.new("Frame", {
+		Name = "Carry",
+		AnchorPoint = Vector2.new(0, 1),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, HudBubble.carryLeft(layout.Width, group.X, layout.Compact), 1, -HudBubble.BackpackBottom),
+		Size = UDim2.fromOffset(group.X, group.Y),
+	}, gui)
+	holder:SetAttribute("Group", true)
+	holder:SetAttribute("ScreenWidth", layout.Width) -- (placeBackpack: until the gui has a size)
+	local slot = HudBubble.blasterSlot(holder, layout)
+	local button, count = packButton(holder, layout, size, size)
+	button.AnchorPoint = Vector2.new(1, 0)
+	button.Position = UDim2.fromScale(1, 0)
+	return holder, button, count, slot
 end
 
 -- Shows "count / capacity" on the button; a full backpack gets the red count and the FULL tag.
@@ -1744,8 +1832,7 @@ function HudBubble.setBackpack(button: GuiObject, count: number, capacity: numbe
 	local full = capacity > 0 and count >= capacity
 	local label = button:FindFirstChild("Count") :: TextLabel?
 	if label then
-		local onTile = button.Parent ~= nil and button.Parent:GetAttribute("OnTile") == true
-		local text = if onTile then HudBubble.badgeText(count, capacity) else HudBubble.backpackText(count, capacity)
+		local text = HudBubble.backpackText(count, capacity)
 		if label.Text ~= text then
 			label.Text = text
 		end
@@ -1773,13 +1860,24 @@ function HudBubble.setBackpackKey(button: GuiObject, text: string?, glyph: strin
 	end
 end
 
--- Moves the button's holder right of the blaster's slot for a new UI scale.
+-- Places the "Carry" holder for a new UI scale: the light HUD's group stays centred
+-- (design units); the dark HUD's button moves right of Roblox's slot (real pixels).
 function HudBubble.placeBackpack(holder: GuiObject, uiScale: number, tenFoot: boolean?)
-	if holder:GetAttribute("OnTile") then
-		-- (the round look: on the Inventory tile)
-		if holder.Parent then
-			HudBubble.placeCarry(holder.Parent)
+	if holder:GetAttribute("Group") then
+		-- (centred; phones and tablets: out of the thumbstick's zone, carryLeft)
+		local seen = 0
+		local parent = holder.Parent
+		if parent and parent:IsA("GuiBase2d") then
+			local gui: GuiBase2d = parent
+			local ok, size = pcall(function() -- (Lune's instances have no AbsoluteSize)
+				return gui.AbsoluteSize
+			end)
+			seen = if ok and typeof(size) == "Vector2" then size.X else 0
 		end
+		local given = holder:GetAttribute("ScreenWidth")
+		local width = if seen > 0 then seen / math.max(uiScale, 0.01) elseif type(given) == "number" then given else nil
+		local left = HudBubble.carryLeft(width, holder.Size.X.Offset, uiScale <= HudBubble.CompactScale)
+		holder.Position = UDim2.new(0.5, left, 1, -HudBubble.BackpackBottom)
 		return
 	end
 	holder.Position = UDim2.new(0.5, HudBubble.backpackX(uiScale, tenFoot), 1, -HudBubble.BackpackBottom)

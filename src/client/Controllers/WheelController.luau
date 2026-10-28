@@ -93,9 +93,11 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
+local UIConfig = require(Shared.Config.UIConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local WheelView = require(script.Parent.Parent.UI.WheelView)
+local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -110,6 +112,8 @@ local SettingsController = require(script.Parent.SettingsController)
 local StateController = require(script.Parent.StateController)
 
 local WheelController = {}
+
+WheelController.TileId = "Wheel" -- the light HUD's SPIN tile (HudBubble.GameMenu)
 
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
@@ -145,6 +149,7 @@ WheelController.LobbyHold = 15 -- seconds the lobby wheel rests on the prize bef
 local player = Players.LocalPlayer
 local refs: WheelView.Refs? = nil
 local chip: WheelView.ChipRefs? = nil
+local tile: TextButton? = nil -- the light HUD's SPIN tile (instead of the chip)
 local open = false
 local openedAt = 0
 local busy = false -- a spin is in flight or the disc is turning
@@ -968,7 +973,26 @@ local function tutorialInTopRow(): boolean
 	return ok and result == true
 end
 
+-- The light HUD's SPIN tile (left menu, next to MORE): its badge counts the spins
+-- ready (the free one + the usable bought ones); the chip's chime when one comes.
+local function updateTile(face: TextButton)
+	local ready = isReady()
+	HudBubble.setTileBadge(face, if Loading.isDone() then spinsNow() else 0)
+	local away = screenBusy()
+	if ready and not chipReady and not open and not away then
+		Sfx.play("Discovery")
+	end
+	if not away or not ready then
+		chipReady = ready
+	end
+end
+
 local function updateChip()
+	local face = tile
+	if face then
+		updateTile(face)
+		return
+	end
 	local c = chip
 	if not c then
 		return
@@ -993,7 +1017,35 @@ local function updateChip()
 	end
 end
 
+-- The light HUD (a bubble menu): the SPIN tile instead of the chip. True when claimed.
+local function claimTile(): boolean
+	local hud = HudController.refs()
+	if not (UIConfig.lightUI() and hud and hud.Menu and hud.Menu:GetAttribute("Bubble")) then
+		return false
+	end
+	local face = HudBubble.claimTile(hud.Menu, WheelController.TileId, { Label = "SPIN", IconName = "Wheel" })
+	face.Activated:Connect(function()
+		-- (a stray tap while something else has the screen does nothing)
+		if screenBusy() then
+			return
+		end
+		Sfx.play("UIClick")
+		if open then
+			WheelController.close()
+		else
+			WheelController.open()
+		end
+	end)
+	tile = face
+	-- a spin that is already ready when the player joins doesn't chime at once
+	chipReady = isReady()
+	return true
+end
+
 local function buildChip()
+	if claimTile() then
+		return
+	end
 	local c = WheelView.buildChip(HudController.uiScale(), screenWidth())
 	c.Gui.Parent = player:WaitForChild("PlayerGui")
 	c.Button.Activated:Connect(function()

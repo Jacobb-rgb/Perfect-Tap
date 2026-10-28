@@ -505,10 +505,10 @@ local function rider(parent: any, feet: any, colors: any)
 end
 
 -- A board with a rider at `cf` (the board's Root frame).
--- The board lies across under the rider (BoardPose.Across); the rider faces along `cf`.
+-- The board points along `cf`; the rider stands on it sideways (BoardPose.Stance: turned left).
 local function ridingBoard(parent: any, boardId: string, cf: any, colors: any): any
-	local model = boardAt(parent, boardId, cf * Pose.Across)
-	rider(parent, CF.new(worldOf(model, "Feet").Position) * cf.Rotation, colors)
+	local model = boardAt(parent, boardId, cf)
+	rider(parent, CF.new(worldOf(model, "Feet").Position) * cf.Rotation * CF.Angles(0, math.rad(Pose.Stance), 0), colors)
 	return model
 end
 

@@ -5,14 +5,17 @@
 	over every rider near you with Override on every joint, so the walk / idle
 	animation never shows through).
 
-	  Ride   (owner 2026-10-25: "not riding facing forward along it, like Pet
-	         Simulator 99") the board lies ACROSS under you (BoardPose.Across:
-	         its nose to your right) and you face where you go: feet wide
-	         apart along the deck, knees bent, arms out and down for balance.
-	         It breathes and sways; with speed you crouch lower and lean
-	         forward with the arms swept back; in turns you lean into the turn
-	  Mount  hopping on (the first MountTime seconds): a crouch, a jump while
-	         the board flies in under you, a squashy landing
+	  Ride   like Pet Simulator 99 (owner 2026-10-28, videos checked): the
+	         board points where you go and you stand on it SIDEWAYS like a
+	         surfer, your right side leading (the blaster hand), the head
+	         turned to look ahead, feet apart along the deck, knees a little
+	         bent, arms relaxed and a little out. It breathes; with speed you
+	         bend a touch more and lean toward where you go; in turns you roll
+	         with the board
+	  Tool   with the blaster in hand the right arm points straight ahead
+	         (the way you ride) instead of the Animator's hold
+	  Mount  hopping on (the first MountTime seconds): a crouch, a jump that
+	         turns you sideways while the board flies in under you, a squash
 	  Air    in a jump: knees tucked up, arms up and out (the board kickflips)
 	  Land   touching down: a short squash
 
@@ -25,14 +28,14 @@
 	  Land   landing squash (1 = just landed, decays to 0)
 	  Leg    optional: the rider's leg length / the block rig's (legScale), so
 	         taller avatars crouch onto the deck too (default 1)
-	  Tool   optional: a tool (the blaster) is in hand (the controller masks
-	         the arms: the Animator's hold shows; you already face forward)
+	  Tool   optional: a tool (the blaster) is in hand: the right arm aims ahead
+	  Carve  optional: radians the board swings behind a turn (you turn with it)
 
 	Joint frames as in Config/MoveConfig: x pitch (limbs forward +, knees bend
 	-, torso leans BACK +), y yaw (turns LEFT +), z roll (toward the right +;
 	the right arm / leg out is +, the left one -). The Root's pose is
-	CFrame.new(offset) * tilt: the body drops by the crouch so the feet stay on
-	the deck (the HumanoidRootPart and the physics never move).
+	roll * CFrame.new(offset) * lean * yaw: the body drops by the crouch so the
+	feet stay on the deck (the HumanoidRootPart and the physics never move).
 ]]
 
 local MoveConfig = require(script.Parent.Parent.Config.MoveConfig)
@@ -48,19 +51,19 @@ export type State = {
 	Land: number,
 	Leg: number?,
 	Tool: boolean?,
+	Carve: number?, -- radians the board (and you on it) trail behind a turn (HoverboardController)
 }
 export type Pose = { [string]: CFrame }
 
 BoardPose.MountTime = 0.6 -- seconds of the hop-on
 BoardPose.LandTime = 0.35 -- seconds the landing squash lasts
-BoardPose.Crouch = 18 -- degrees of knee bend at rest
-BoardPose.SpeedCrouch = 12 -- more at top speed
-BoardPose.Spread = 24 -- degrees each leg is out (feet wide apart along the deck)
+BoardPose.Stance = 90 -- degrees the body turns left: sideways on the board, the right side leading
+BoardPose.Crouch = 13 -- degrees of knee bend at rest (a relaxed stand, like Pet Simulator 99)
+BoardPose.SpeedCrouch = 7 -- more at top speed
+BoardPose.Spread = 17 -- degrees each leg is out (feet apart along the deck)
 BoardPose.MaxRoll = 0.22 -- radians: the board's roll into a hard turn (HoverboardController); Turn = roll / MaxRoll
 BoardPose.HipToSole = 2 -- the block rig's Root joint above its soles (standing)
 BoardPose.DeckHeight = 1.5 -- the deck above the board's Root, its roll pivot (HoverboardBuilder.DeckHeight)
--- the board lies across under the rider (Pet Simulator 99 style): its nose (-Z) to the rider's right (+X)
-BoardPose.Across = CFrame.Angles(0, -math.pi / 2, 0)
 
 -- every joint the pose drives (all of them: Override, nothing of the walk shows)
 BoardPose.Joints = MoveConfig.Joints
@@ -81,7 +84,7 @@ local function smooth(x: number): number
 	return t * t * (3 - 2 * t)
 end
 
--- The hop-on split into its parts: (crouch prep 0..1, jump height 0..1, done-ness 0..1, landing squash 0..1).
+-- The hop-on split into its parts: (crouch prep 0..1, jump height 0..1, turn into the stance 0..1, landing squash 0..1).
 function BoardPose.mountPhases(u: number): (number, number, number, number)
 	local m = math.clamp(u, 0, 1)
 	local prep = if m < 0.2 then smooth(m / 0.2) elseif m < 0.3 then 1 - smooth((m - 0.2) / 0.1) else 0
@@ -101,7 +104,7 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	local speed = math.clamp(state.Speed, 0, 1)
 	local turn = math.clamp(state.Turn, -1, 1)
 	local air = math.clamp(state.Air, 0, 1)
-	local prep, jump, _, mountLand = BoardPose.mountPhases(state.Mount)
+	local prep, jump, stanceTurn, mountLand = BoardPose.mountPhases(state.Mount)
 	local squash = math.max(math.clamp(state.Land, 0, 1), mountLand)
 
 	-- breathing / balance sway (slower and smaller at speed)
@@ -109,31 +112,34 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	local sway2 = sin(t * 1.3 + 1.1)
 	local calm = 1 - 0.5 * speed
 
-	-- knees: rest crouch, deeper with speed, a squash on landing, tucked in the air
-	local crouch = BoardPose.Crouch + BoardPose.SpeedCrouch * speed + 2.5 * sway * calm
-	crouch += 22 * squash + 14 * prep
-	crouch = lerp(crouch, 58, air)
-	crouch = lerp(crouch, 50, jump)
+	-- knees: a relaxed bend, a little more with speed, a squash on landing, tucked in the air
+	local crouch = BoardPose.Crouch + BoardPose.SpeedCrouch * speed + 2 * sway * calm
+	crouch += 20 * squash + 14 * prep
+	crouch = lerp(crouch, 52, air)
+	crouch = lerp(crouch, 48, jump)
 	local leg = math.clamp(state.Leg or 1, 0.5, 2)
 	local drop = MoveConfig.crouchDrop(crouch) * leg
-	-- legs wide apart: the hips open out and the ankles keep the feet flat on the deck
+	-- feet apart along the deck: the hips open out, the ankles keep the feet flat
 	local spread = BoardPose.Spread * (1 - 0.4 * air)
 	-- the hop on: up and over; in a jump the feet come up off the deck so the board can flip
 	-- (the whole body, visual only: crouch drop + lift = how high the feet are); open legs
 	-- lift the feet a touch, the body comes down by as much
 	local lift = 1.5 * jump + 0.75 * air - BoardPose.BlockLeg * leg * (1 - math.cos(rad(spread)))
-	-- the forward lean tips the toes down: up a touch so they stay on the deck
-	lift += 0.08 * speed
+	lift += 0.04 * speed
 
-	-- the body faces where you go, leaning forward with speed; in turns it rolls exactly like
-	-- the board (HoverboardController: Turn = board roll / MaxRoll) about the same point, the
-	-- ground under the deck (hips -> soles -> deck), so both feet stay on the tilted deck
-	local lean = -(4 + 12 * speed) + 3 * sway2 * calm
+	-- sideways on the board (turned left, the right side leading), leaning a little toward where
+	-- you go; in turns the body rolls exactly like the board (HoverboardController: Turn = board
+	-- roll / MaxRoll) about the same point, the ground under the deck, so the feet stay on it
+	local stance = BoardPose.Stance * stanceTurn
+	local lean = -(2 + 6 * speed) + 2 * sway2 * calm
 	local pivot = CFrame.new(0, -(BoardPose.HipToSole * leg + BoardPose.DeckHeight), 0)
 	local rollTurn = pivot * CFrame.Angles(0, 0, BoardPose.MaxRoll * turn) * pivot:Inverse()
-	pose.Root = rollTurn * CFrame.new(0, lift - drop, 0) * angles(lean, 0, 0)
-	pose.Waist = angles(-3 - 6 * speed + 2.5 * sway, 4 * turn, 2.5 * sway2 * calm)
-	pose.Neck = angles(3 + 8 * speed, 8 * turn, 0)
+	local carve = math.deg(state.Carve or 0)
+	pose.Root = rollTurn * CFrame.new(0, lift - drop, 0) * angles(lean, 0, 0) * angles(0, stance + carve, 0)
+	-- the chest turns a little and the head well toward where you go
+	local waistYaw = -0.12 * stance
+	pose.Waist = angles(-2 - 3 * speed + 2 * sway, waistYaw, 2 * sway2 * calm)
+	pose.Neck = angles(2 + 4 * speed, -0.42 * stance + 6 * turn, 0)
 
 	-- (the formula of MoveConfig crouch: thigh a, knee -2a, ankle a)
 	pose.LeftHip = angles(crouch, 0, -spread)
@@ -143,16 +149,25 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	pose.RightKnee = angles(-2 * crouch, 0, 0)
 	pose.RightAnkle = angles(crouch, 0, -spread)
 
-	-- arms out and down for balance; swept back at speed; up and wide in the air, wide on a landing
-	local wave = 5 * sway * calm
-	local armOut = lerp(lerp(40, 52, speed), 120, air) + 22 * squash
-	local swing = lerp(14, -22, speed) * (1 - air)
+	-- arms relaxed and a little out; up and wide in the air, wide on a landing
+	local wave = 3 * sway * calm
+	local armOut = lerp(lerp(14, 22, speed), 110, air) + 26 * squash
+	local swing = lerp(6, -8, speed) * (1 - air)
 	pose.LeftShoulder = angles(swing, 0, -(armOut + wave))
-	pose.LeftElbow = angles(lerp(26, 14, speed), 0, 0)
-	pose.LeftWrist = angles(0, 0, -6 * sway2)
-	pose.RightShoulder = angles(swing, 0, armOut - wave)
-	pose.RightElbow = angles(lerp(26, 14, speed), 0, 0)
-	pose.RightWrist = angles(0, 0, 6 * sway2)
+	pose.LeftElbow = angles(lerp(16, 10, speed), 0, 0)
+	pose.LeftWrist = angles(0, 0, -4 * sway2)
+	if state.Tool == true then
+		-- the blaster arm points straight ahead, the way you ride: the hold (arm forward) turned
+		-- right by the stance, less the chest's own turn
+		local aim = -stance - waistYaw
+		pose.RightShoulder = angles(0, aim, 0) * angles(88, 0, 0)
+		pose.RightElbow = angles(4, 0, 0)
+		pose.RightWrist = CFrame.identity
+	else
+		pose.RightShoulder = angles(swing, 0, armOut - wave)
+		pose.RightElbow = angles(lerp(16, 10, speed), 0, 0)
+		pose.RightWrist = angles(0, 0, 4 * sway2)
+	end
 	-- the very start of the hop on eases out of the plain standing pose
 	local enter = BoardPose.weight(state.Mount)
 	if enter < 1 then

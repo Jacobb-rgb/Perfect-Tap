@@ -120,6 +120,34 @@ for _, boardId in { "TerraForgeCustom", "RoyalPhoenix", "TimberDrifter" } do
 	end
 end
 
+-- the hover rings: short white sticks around each ring (HoverboardRings, the same timing)
+local HoverboardRings = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardRings")
+local RING_STICKS = 28
+for r = 1, 4 do
+	for i = 1, RING_STICKS do
+		addGroup(`Ring_{r}_{i}`, {
+			{ 1, 0.1, 0.03, 0.42, cf12(CFrame.identity), "ffffff", "Neon", 0.35 },
+		})
+	end
+end
+
+-- the blaster in the right hand (the "with the blaster" segment), as in export_emotes
+local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+do
+	local blaster = BlasterBuilder.build(4, "Copper")
+	local handle = blaster:FindFirstChild("Handle")
+	local scene = Export.collect(blaster)
+	local inverse = handle.CFrame:Inverse()
+	local list = {}
+	for _, p in scene.parts do
+		local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = table.unpack(p[5])
+		local world = CFrame.new(x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+		table.insert(list, { p[1], p[2], p[3], p[4], cf12(inverse * world), p[6], p[7], p[8] })
+	end
+	addGroup("Blaster", list)
+end
+local GRIP = CFrame.new(0, -0.15, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+
 ---------------------------------------------------------------- the script of the reel
 
 type Seg = {
@@ -132,6 +160,7 @@ type Seg = {
 	Turn: (number) -> number,
 	Jumps: { number }?,
 	Surge: ((number) -> boolean)?,
+	Tool: boolean?, -- the blaster in the right hand
 	Camera: { Position: { number }, Target: { number }, Fov: number },
 	Picks: { { number | string } },
 }
@@ -168,7 +197,7 @@ local SEGMENTS: { Seg } = {
 	},
 	{
 		Title = "JÍZDA JAKO V PET SIM 99",
-		Subtitle = "prkno napříč pod nohama, hráč kouká dopředu, nohy od sebe",
+		Subtitle = "prkno míří dopředu, stojíš na něm bokem jako surfař, hlava kouká dopředu",
 		Board = "TerraForgeCustom",
 		Length = 3.6,
 		Speed = ramp(0.1, 1, 0.2, 1.6),
@@ -180,13 +209,24 @@ local SEGMENTS: { Seg } = {
 	},
 	{
 		Title = "ZE STRANY",
-		Subtitle = "s rychlostí se přikrčí a nakloní dopředu",
+		Subtitle = "nohy od sebe po délce prkna, s rychlostí se trochu přikrčí",
 		Board = "TerraForgeCustom",
 		Length = 2.4,
 		Speed = ramp(0.2, 1, 0.2, 1.2),
 		Turn = const(0),
 		Camera = SIDE,
 		Picks = { { 0.3, "pomalu" }, { 1.4, "rychle" }, { 2.1, "plná rychlost" } },
+	},
+	{
+		Title = "S BLASTEREM",
+		Subtitle = "když držíš blaster, míříš s ním dopředu tam, kam jedeš",
+		Board = "TerraForgeCustom",
+		Length = 2.6,
+		Speed = ramp(0.3, 0.9, 0.2, 1.4),
+		Turn = const(0),
+		Tool = true,
+		Camera = BEHIND,
+		Picks = { { 0.5, "blaster dopředu" }, { 1.4, "jízda" }, { 2.2, "jízda" } },
 	},
 	{
 		Title = "SKOK + KICKFLIP",
@@ -200,8 +240,8 @@ local SEGMENTS: { Seg } = {
 		Picks = { { 0.62, "odraz" }, { 0.75, "kickflip" }, { 1.05, "dopad" } },
 	},
 	{
-		Title = "BLESKY",
-		Subtitle = "duhové blesky na Terra Forge Custom",
+		Title = "BLESKY A KROUŽKY",
+		Subtitle = "pod prknem se na zemi vlní kroužky jako v PS99, z prkna šlehají blesky",
 		Board = "TerraForgeCustom",
 		Length = 2.6,
 		Speed = const(1),
@@ -321,6 +361,7 @@ for index, seg in SEGMENTS do
 				Mount = mount,
 				Air = air,
 				Land = math.clamp(1 - (t - landAt) / BoardPose.LandTime, 0, 1),
+				Tool = seg.Tool,
 			}, {})
 			for joint, cf in pose do
 				transforms[joint] = cf
@@ -333,6 +374,9 @@ for index, seg in SEGMENTS do
 				row[gi] = cf12(cf)
 			end
 		end
+		if seg.Tool then
+			row[groupIndex.Blaster] = cf12(parts.RightHand * GRIP)
+		end
 		-- the board (HoverboardController.animate)
 		if riding then
 			-- HoverboardController.boardOffset: down by the HRP half height + the riding HipHeight
@@ -343,12 +387,7 @@ for index, seg in SEGMENTS do
 				rise, spin = BoardPose.boardMount(mount)
 			end
 			local flip = if airAt and t - airAt < BoardPose.FlipTime then BoardPose.flip(t - airAt) else 0
-			local boardCF = hrp
-				* offset
-				* CFrame.new(0, bob + rise, 0)
-				* CFrame.Angles(pitch, spin, roll)
-				* BoardPose.Across
-				* BoardPose.flipFrame(flip)
+			local boardCF = hrp * offset * CFrame.new(0, bob + rise, 0) * CFrame.Angles(pitch, spin, roll) * BoardPose.flipFrame(flip)
 			row[groupIndex["Board_" .. seg.Board]] = cf12(boardCF)
 
 			-- the lightning (HoverboardController: one flicker every FlickerEvery)
@@ -384,6 +423,25 @@ for index, seg in SEGMENTS do
 				used = lay(arc, `ArcStick_{seg.Board}_`, ARC_STICK, ARC_STICKS, used)
 			end
 			lay(set.Bolts.Strike, `StrikeStick_{seg.Board}_`, STRIKE_STICK, STRIKE_STICKS, 0)
+			-- the hover rings (HoverboardController: hidden in the air, faded in as the board arrives)
+			local ringAlpha = (1 - air) * math.clamp((mount - 0.5) * 2, 0, 1)
+			if ringAlpha > 0.3 then
+				for r, ring in set.Rings.Rings do
+					if r > 4 then
+						break
+					end
+					local radius, step = HoverboardRings.at(ring.Phase, clock + t)
+					if step < HoverboardRings.Steps * 0.8 then
+						local z = set.Rings.Pads[r]
+						for i = 1, RING_STICKS do
+							local a = (i - 0.5) / RING_STICKS * math.pi * 2
+							local p = boardCF * Vector3.new(math.cos(a) * radius, HoverboardRings.Lift, z + math.sin(a) * radius)
+							local tangent = boardCF:VectorToWorldSpace(Vector3.new(-math.sin(a), 0, math.cos(a)))
+							row[groupIndex[`Ring_{r}_{i}`]] = cf12(CFrame.lookAt(p, p + tangent))
+						end
+					end
+				end
+			end
 		end
 		table.insert(frames, row)
 	end
@@ -395,7 +453,7 @@ local out = {
 	duration = round(clock),
 	brandNote = "hoverboardy: animace + blesky · náhled z herního kódu (BoardPose, HoverboardBolts)",
 	sheetTitle = "TERRA FORGE: HOVERBOARDY",
-	sheetSubtitle = "jízda jako v Pet Sim 99 + Terra Forge Custom · náhled z herního kódu (BoardPose na R15 postavičce) · video: hoverboardy_jizda_custom.mp4",
+	sheetSubtitle = "jízda jako v Pet Sim 99 (bokem jako surfař) + kroužky na zemi · náhled z herního kódu (BoardPose na R15 postavičce) · video: hoverboardy_ps99.mp4",
 	groups = groups,
 	frames = frames,
 	segments = segmentsOut,

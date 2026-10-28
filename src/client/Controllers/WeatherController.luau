@@ -181,7 +181,8 @@ local function roofAbove(origin: Vector3): boolean
 		end
 		local part = hit.Instance
 		local distance = hit.Position.Y - origin.Y
-		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, inTree(part), part.Size) then
+		local width, area = WeatherLogic.footprint(part.CFrame, part.Size)
+		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, inTree(part), width, area) then
 			return true
 		end
 		from = hit.Position + Vector3.new(0, 0.05, 0)

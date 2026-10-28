@@ -1,8 +1,21 @@
 --[[
-	MoveRig: puts MoveMath poses onto a rig's Motor6D.Transform, on top of
+	MoveRig: puts MoveMath poses onto a rig's joint Transforms, on top of
 	whatever the Animator plays (the default Animate walk / idle, a tool
-	hold). Works for any R15 rig: a player's character (MoveController) or a
-	quest NPC later (find(model), or fromMotors with its own joint map).
+	hold). Works for any R15 rig: a player's character (MoveController,
+	HoverboardController) or a quest NPC later (find(model), or fromMotors
+	with its own joint map).
+
+	The joints: classic Motor6Ds, or AnimationConstraints. Roblox's Avatar
+	Joint Upgrade (StarterPlayer.AvatarJointUpgrade "Default": live for every
+	game since 2026-05, forced for all at the end of 2026) gives R15 player
+	characters AnimationConstraints instead of Motor6Ds: same joints, the
+	offsets on RigAttachments (Attachment0 / Attachment1) instead of C0 / C1,
+	and the same .Transform, which the Animator resets every frame (so we
+	write it in PreSimulation / Stepped, after the Animator). find() takes
+	either; an AnimationConstraint is matched by its name or, failing that,
+	by its Attachment1 ("<Joint>RigAttachment"). (The owner's playtest
+	2026-10-28: no hoverboard pose and no emotes, because find() only
+	looked for Motor6Ds.)
 
 	Call step() every frame AFTER the Animator has written the Transforms
 	(RunService.Stepped / PreSimulation). For every joint a layer touches:
@@ -24,9 +37,11 @@
 local MoveConfig = require(script.Parent.Parent.Config.MoveConfig)
 local MoveMath = require(script.Parent.MoveMath)
 
+-- a Motor6D or an AnimationConstraint (both have .Transform and .Parent)
+export type Joint = any
 export type Rig = {
 	Names: { string },
-	Motors: { Motor6D },
+	Motors: { Joint },
 	Base: { [number]: CFrame },
 	Written: { [number]: CFrame },
 	Count: number,
@@ -52,8 +67,8 @@ local MoveRig = {}
 -- the joints a character must have to count as an R15 rig
 MoveRig.Required = { "Root", "Waist", "LeftShoulder", "RightShoulder" }
 
--- A rig from any joint name -> Motor6D map (names as in MoveConfig.Joints).
-function MoveRig.fromMotors(motors: { [string]: Motor6D }): Rig
+-- A rig from any joint name -> joint map (names as in MoveConfig.Joints).
+function MoveRig.fromMotors(motors: { [string]: Joint }): Rig
 	local rig: Rig = { Names = {}, Motors = {}, Base = {}, Written = {}, Count = 0 }
 	for _, name in MoveConfig.Joints do
 		local motor = motors[name]
@@ -66,14 +81,51 @@ function MoveRig.fromMotors(motors: { [string]: Motor6D }): Rig
 	return rig
 end
 
--- The R15 motors of a character / NPC model (nil: not R15, or not loaded yet).
+local function isJoint(inst: Instance?): boolean
+	return inst ~= nil and (inst:IsA("Motor6D") or inst:IsA("AnimationConstraint"))
+end
+
+-- The joint name of an AnimationConstraint: its own name, or its Attachment1's ("LeftHipRigAttachment").
+local JOINT_NAMES: { [string]: boolean } = {}
+for _, name in MoveConfig.Joints do
+	JOINT_NAMES[name] = true
+end
+function MoveRig.jointName(joint: Instance): string?
+	if JOINT_NAMES[joint.Name] then
+		return joint.Name
+	end
+	local a1 = if joint:IsA("AnimationConstraint") then joint.Attachment1 else nil
+	if a1 then
+		local name = string.match(a1.Name, "^(.+)RigAttachment$")
+		if name and JOINT_NAMES[name] then
+			return name
+		end
+	end
+	return nil
+end
+
+-- The R15 joints of a character / NPC model (nil: not R15, or not loaded yet).
 function MoveRig.find(model: Instance): Rig?
-	local motors: { [string]: Motor6D } = {}
+	local motors: { [string]: Joint } = {}
+	local missing = false
 	for _, name in MoveConfig.Joints do
 		local part = model:FindFirstChild(MoveConfig.JointPart[name])
-		local motor = part and part:FindFirstChild(name)
-		if motor and motor:IsA("Motor6D") then
-			motors[name] = motor
+		local joint = part and part:FindFirstChild(name)
+		if joint and isJoint(joint) then
+			motors[name] = joint
+		else
+			missing = true
+		end
+	end
+	if missing then
+		-- Avatar Joint Upgrade: the AnimationConstraints, wherever they sit and whatever their names
+		for _, d in model:GetDescendants() do
+			if d:IsA("AnimationConstraint") then
+				local name = MoveRig.jointName(d)
+				if name and not motors[name] then
+					motors[name] = d
+				end
+			end
 		end
 	end
 	for _, name in MoveRig.Required do

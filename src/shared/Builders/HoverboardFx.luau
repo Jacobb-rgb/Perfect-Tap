@@ -23,9 +23,10 @@
 	dust / spark / star / fire splash under the board), "Boost" when you reach
 	top speed (sparks from the thrusters; a fire flare on the Phoenix, a
 	rainbow confetti blast on the Custom).
-	The board lies ACROSS under the rider (BoardPose.Across): exhaust
-	emitters blow out of the board's +X side (backward for the rider) and the
-	trail runs from the back edge (FxTrailA / FxTrailB, made on mount).
+	The board points where the rider goes (Pet Simulator 99 style, owner
+	2026-10-28): exhausts blow out of the tail, the trail runs from the tail
+	(TrailLeft / TrailRight). Hover rings (HoverboardRings) ripple on the
+	ground under both pads of every board: HoverboardFx.rings, every frame.
 	Lightning (HoverboardBolts, owner 2026-10-24): every board crackles with
 	arcs in its glow colour (more and longer on the Robux boards, more with
 	speed and while surging) and a strike from the sky hits it when you hop
@@ -41,8 +42,8 @@
 	  end
 	  HoverboardFx.release(set)  -- disables, unmounts, keeps it for the next rider
 	Emitters sit on the board's Attachments (HoverboardBuilder contract; the
-	emitter's attribute "Mount" names it), trails between FxTrailA and
-	FxTrailB. Every emitter / trail starts disabled; burst emitters stay
+	emitter's attribute "Mount" names it), trails between TrailLeft and
+	TrailRight. Every emitter / trail starts disabled; burst emitters stay
 	disabled and only ever :Emit().
 
 	Pure: only Instance creation (no services), so Lune tests and previews can
@@ -50,6 +51,7 @@
 ]]
 
 local HoverboardBolts = require(script.Parent.HoverboardBolts)
+local HoverboardRings = require(script.Parent.HoverboardRings)
 local HoverboardData = require(script.Parent.Parent.Config.HoverboardData)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 
@@ -59,7 +61,7 @@ HoverboardFx.PoolSize = 4 -- spare effect sets kept per board id
 HoverboardFx.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
 HoverboardFx.Fire = "rbxasset://textures/particles/fire_main.dds"
 HoverboardFx.Smoke = "rbxasset://textures/particles/smoke_main.dds"
-HoverboardFx.TrailMounts = { "FxTrailA", "FxTrailB" } -- along the board's back edge (made on mount)
+HoverboardFx.TrailMounts = { "TrailLeft", "TrailRight" } -- the two ends of the trail at the tail
 HoverboardFx.BoostAt = 0.92 -- speed / board speed: the Boost burst fires when you reach this
 HoverboardFx.BoostReset = 0.6 -- ... and can fire again after slowing below this
 
@@ -73,6 +75,7 @@ export type FxSet = {
 	Bursts: { ParticleEmitter }, -- one-shot (attribute "Burst" = Start / Boost, "Count")
 	Trails: { Trail },
 	Bolts: HoverboardBolts.BoltSet?, -- the lightning
+	Rings: HoverboardRings.RingSet, -- the ripples on the ground under the pads
 	Model: Model?,
 }
 
@@ -146,10 +149,6 @@ local function emitter(set: FxSet, spec: EmitterSpec)
 	e.Rotation = NumberRange.new(0, 360)
 	e.RotSpeed = NumberRange.new(-90, 90)
 	e:SetAttribute("Mount", spec.Mount)
-	if string.sub(spec.Mount, 1, 7) == "Exhaust" then
-		-- the board lies across under the rider: blow out of its +X side (backward for the rider)
-		e.EmissionDirection = Enum.NormalId.Right
-	end
 	if spec.Burst then
 		e.Rate = 0
 		e:SetAttribute("Burst", spec.Burst)
@@ -504,6 +503,7 @@ function HoverboardFx.create(boardId: string, lite: boolean?): FxSet?
 		Bursts = {},
 		Trails = {},
 		Bolts = HoverboardBolts.create(board.Effect, glow(board.Colors.Glow), lite, if board.Effect == "Custom" then RAINBOW else nil),
+		Rings = HoverboardRings.create(board.Colors.Glow, lite),
 		Model = nil,
 	}
 	local build: (FxSet, HoverboardData.Colors) -> () = if board.Effect == "Sparks"
@@ -536,19 +536,6 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 		local a = if type(name) == "string" then root:FindFirstChild(name) else nil
 		return if a and a:IsA("Attachment") then a else nil
 	end
-	-- the trail along the board's back edge (it lies across under the rider): from the old
-	-- tail trail's height, the tail and the nose, made once per board model
-	local left, nose = find("TrailLeft"), find("Nose")
-	if #set.Trails > 0 and left and nose and not find(HoverboardFx.TrailMounts[1]) then
-		local at = left.CFrame.Position
-		local back = math.abs(at.X) + 0.3
-		for i, z in { nose.CFrame.Position.Z * 0.55, at.Z * 0.55 } do
-			local a = Instance.new("Attachment")
-			a.Name = HoverboardFx.TrailMounts[i]
-			a.CFrame = CFrame.new(back, at.Y, z)
-			a.Parent = root
-		end
-	end
 	for _, list in { set.Emitters, set.Bursts } do
 		for _, e in list do
 			if not find(e:GetAttribute("Mount")) then
@@ -575,8 +562,23 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 	if bolts then
 		HoverboardBolts.mount(bolts, root)
 	end
+	-- the hover rings under the pads: halfway between the middle and the nose / the tail
+	local nose, tail = find("Nose"), find("TrailLeft")
+	local padZ = 1.5
+	if nose and tail then
+		padZ = math.clamp(math.min(math.abs(nose.CFrame.Position.Z), math.abs(tail.CFrame.Position.Z)) * 0.5, 0.8, 2)
+	end
+	HoverboardRings.mount(set.Rings, root, padZ)
 	set.Model = model
 	return true
+end
+
+-- One frame of the hover rings (HoverboardController, boards on screen): `t` seconds,
+-- `alpha` 0..1 (0 = hidden: in the air, still flying in, Reduce Motion keeps them).
+function HoverboardFx.rings(set: FxSet, t: number, alpha: number)
+	if set.Model then
+		HoverboardRings.step(set.Rings, t, alpha, 0)
+	end
 end
 
 -- Takes the set off its board (disabled first, so nothing lingers).
@@ -599,6 +601,7 @@ function HoverboardFx.unmount(set: FxSet)
 	if bolts then
 		HoverboardBolts.unmount(bolts)
 	end
+	HoverboardRings.unmount(set.Rings)
 	set.Model = nil
 end
 
@@ -616,6 +619,9 @@ function HoverboardFx.setActive(set: FxSet, active: boolean, intensity: number?)
 	local bolts = set.Bolts
 	if bolts and not active then
 		HoverboardBolts.hide(bolts)
+	end
+	if not active then
+		HoverboardRings.hide(set.Rings)
 	end
 end
 
@@ -706,6 +712,7 @@ function HoverboardFx.release(set: FxSet)
 	if bolts then
 		HoverboardBolts.destroy(bolts)
 	end
+	HoverboardRings.destroy(set.Rings)
 end
 
 -- Spare sets waiting in the pool for a board (tests).

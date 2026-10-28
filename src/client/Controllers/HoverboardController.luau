@@ -40,19 +40,20 @@
 	  Animate script's state machine stays happy; weight back on dismount).
 	  No Animate script or no idle animation = no pose, nothing breaks.
 	- The riding pose (owner 2026-10-24: "no cool animation, it looks like
-	  I'm bugged onto a flying thing"; 2026-10-25: "not facing forward along
-	  it, like Pet Simulator 99"): the board lies ACROSS under the rider
-	  (BoardPose.Across in the weld, its nose to the right) and on every R15
-	  rider within PoseRange
+	  I'm bugged onto a flying thing"; 2026-10-28: "ride it like in Pet
+	  Simulator 99", checked on its videos): the board points where the rider
+	  goes and on every R15 rider within PoseRange
 	  (yours always; the others only on screen, PoseHysteresis studs of slack
 	  so the range edge doesn't pop) Moves/BoardPose replaces the whole body
 	  pose through Moves/MoveRig in one RunService.Stepped (after the
-	  Animator): facing forward, feet wide apart along the deck, knees bent,
-	  arms out, swaying, crouching and leaning with speed, rolling into turns
+	  Animator): sideways like a surfer (the right side leading, the head
+	  looking ahead), feet apart along the deck, knees a little bent, arms
+	  relaxed, bending and leaning a little with speed, rolling into turns
 	  with the board, the crouch scaled by the rider's real leg length. With
-	  a tool in hand (the blaster: mining while riding) the arm joints are
-	  masked (the Animator's hold shows). Hopping on blends from the
-	  Animator's pose into the hop (crouch, jump, squash) while the board
+	  a tool in hand (the blaster: mining while riding) the right arm points
+	  ahead. Hover rings ripple on the ground under every board on screen.
+	  Hopping on blends from the Animator's pose into the hop (crouch, a
+	  jump that turns you sideways, squash) while the board
 	  flies in from below with a spin and lightning strikes it from the sky
 	  (at most once per StrikeCooldown per player); a REAL jump (yours: the
 	  Humanoid's Jumping state; the others': LaunchSpeed up) starts a
@@ -112,6 +113,7 @@ HoverboardController.StrikeCooldown = 3 -- seconds: at most one strike per playe
 HoverboardController.LaunchSpeed = 25 -- studs/s up: another rider really jumped (a jump launches ~50)
 HoverboardController.PoseHysteresis = 5 -- studs past PoseRange before a posed rider is let go
 HoverboardController.PhonePoseRange = 45 -- PoseRange on phones
+HoverboardController.MaxCarve = 0.35 -- radians the board swings behind a turn
 HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
@@ -143,6 +145,7 @@ type Rider = {
 	Phase: number,
 	Pitch: number,
 	Roll: number,
+	Carve: number, -- radians the board trails behind a turn
 	Yaw: number?,
 	-- the pose and the moves (BoardPose)
 	MountAt: number, -- os.clock() of the hop on (the hop and the board flying in)
@@ -180,14 +183,6 @@ local watched: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local strikeAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any -- last strike per player
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
-local ARM_MASK: { [string]: boolean } = {
-	LeftShoulder = true,
-	LeftElbow = true,
-	LeftWrist = true,
-	RightShoulder = true,
-	RightElbow = true,
-	RightWrist = true,
-}
 local settingsReduced = false -- the SETTINGS Reduce Motion toggle
 local systemReduced = false -- Roblox's own Reduce Motion
 local ALL_JOINTS: { [string]: boolean } = {}
@@ -395,12 +390,12 @@ local function show(rider: Rider): boolean
 	end
 	-- put the board under the rider before it enters the world (a pooled or freshly
 	-- built model sits wherever it was made; owner's playtest 2026-10-20: board unseen)
-	model:PivotTo(root.CFrame * offset * BoardPose.Across)
+	model:PivotTo(root.CFrame * offset)
 	local weld = Instance.new("Weld")
 	weld.Name = "HoverboardWeld"
 	weld.Part0 = root
 	weld.Part1 = boardRoot
-	weld.C0 = offset * BoardPose.Across
+	weld.C0 = offset
 	weld.Parent = boardRoot
 	model.Parent = ensureFolder()
 	rider.Model = model
@@ -495,6 +490,7 @@ local function refreshRider(p: Player)
 			Phase = math.random() * math.pi * 2,
 			Pitch = 0,
 			Roll = 0,
+			Carve = 0,
 			Yaw = nil,
 			MountAt = os.clock(),
 			Air = 0,
@@ -644,12 +640,27 @@ local function airborne(rider: Rider, root: BasePart, vy: number, wasAir: boolea
 end
 
 -- The leg length of a rig vs the block rig's (BoardPose.legScale), 1 when the joints are missing.
+-- A Motor6D gives its C0 / C1; an AnimationConstraint (Avatar Joint Upgrade) its attachments.
+local function pivots(joint: any): any
+	if joint == nil then
+		return nil
+	end
+	if joint:IsA("Motor6D") then
+		return joint
+	end
+	local a0, a1 = joint.Attachment0, joint.Attachment1
+	if a0 and a1 then
+		return { C0 = a0.CFrame, C1 = a1.CFrame }
+	end
+	return nil
+end
+
 local function legScaleOf(rig: MoveRig.Rig): number
-	local found: { [string]: Motor6D } = {}
+	local found: { [string]: any } = {}
 	for i = 1, rig.Count do
 		found[rig.Names[i]] = rig.Motors[i]
 	end
-	local hip, knee, ankle = found.LeftHip, found.LeftKnee, found.LeftAnkle
+	local hip, knee, ankle = pivots(found.LeftHip), pivots(found.LeftKnee), pivots(found.LeftAnkle)
 	if not hip or not knee or not ankle then
 		return 1
 	end
@@ -685,6 +696,10 @@ local function animate(dt: number)
 				local rate = if dt > 0 then turn / dt else 0
 				local k = math.min(1, dt * 6)
 				rider.Roll += (math.clamp(rate * 0.07, -BoardPose.MaxRoll, BoardPose.MaxRoll) - rider.Roll) * k
+				-- the carve: the board (and the rider on it) swings a little behind a turn, so turning
+				-- glides instead of snapping round with the character
+				local carveTo = math.clamp(-rate * 0.09, -HoverboardController.MaxCarve, HoverboardController.MaxCarve)
+				rider.Carve += (carveTo - rider.Carve) * math.min(1, dt * 5)
 				rider.Pitch += (speed01 * 0.07 - rider.Pitch) * math.min(1, dt * 4)
 				local bob = math.sin(now * BOB_SPEED + rider.Phase) * BOB_HEIGHT * (1 - 0.5 * speed01)
 				local mount = math.clamp((now - rider.MountAt) / BoardPose.MountTime, 0, 1)
@@ -722,8 +737,7 @@ local function animate(dt: number)
 				end
 				weld.C0 = offset
 					* CFrame.new(0, bob + rise, 0)
-					* CFrame.Angles(rider.Pitch, spin, rider.Roll)
-					* BoardPose.Across
+					* CFrame.Angles(rider.Pitch, spin + rider.Carve, rider.Roll)
 					* BoardPose.flipFrame(flip)
 
 				-- the pose state for the Stepped pass
@@ -731,6 +745,7 @@ local function animate(dt: number)
 				state.T = now + rider.Phase
 				state.Speed = speed01
 				state.Turn = rider.Roll / BoardPose.MaxRoll
+				state.Carve = rider.Carve
 				state.Mount = mount
 				state.Air = rider.Air
 				state.Land = math.clamp(1 - (now - rider.LandAt) / BoardPose.LandTime, 0, 1)
@@ -750,6 +765,9 @@ local function animate(dt: number)
 						local surge = if now < rider.SurgeUntil then 0.6 else 0
 						HoverboardFx.flicker(set, math.random, speed01, surge, if calm then 0 else nil)
 					end
+					-- the hover rings on the ground: not in the air, faded in as the board arrives
+					local rings = if rider.OnScreen then (1 - rider.Air) * math.clamp((mount - 0.5) * 2, 0, 1) else 0
+					HoverboardFx.rings(set, now + rider.Phase, rings)
 				end
 			end
 		end
@@ -783,9 +801,15 @@ local function poseStep()
 			if now < rider.RigRetryAt then
 				continue
 			end
+			-- R6 never becomes a rig: stop looking (MoveRig.find's joint scan would run every retry)
+			local humanoid = rider.Character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.RigType == Enum.HumanoidRigType.R6 then
+				rider.RigRetryAt = math.huge
+				continue
+			end
 			local found = MoveRig.find(rider.Character)
 			if not found then
-				rider.RigRetryAt = now + HoverboardController.LodInterval -- R6 or still streaming in
+				rider.RigRetryAt = now + HoverboardController.LodInterval -- still streaming in
 				continue
 			end
 			rider.Rig = found
@@ -797,7 +821,6 @@ local function poseStep()
 		end
 		local layer = rider.Layers[1]
 		rider.State.Tool = rider.Tool
-		layer.Mask = if rider.Tool then ARM_MASK else nil
 		BoardPose.evaluate(rider.State, layer.Pose)
 		-- from the Animator's pose at the start of the hop on to the board pose (MoveMath.layer override)
 		layer.Weight = math.max(1e-3, BoardPose.weight(rider.State.Mount))

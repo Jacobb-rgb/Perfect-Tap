@@ -607,16 +607,34 @@ function WeatherLogic.roofOffsets(cfg: Config?): { Vector3 }
 	return out
 end
 
+-- A part's footprint seen from above: how far each of its own axes reaches across the ground
+-- (its side x the axis' flat share); the footprint is about the two longest of those: returns
+-- (width = the second longest, area = longest x width). A tilted slab keeps its footprint, a
+-- board turned any way round the vertical stays as thin as it is.
+function WeatherLogic.footprint(cf: CFrame, size: Vector3): (number, number)
+	local function flat(v: Vector3, s: number): number
+		return s * math.sqrt(v.X * v.X + v.Z * v.Z)
+	end
+	local a = flat(cf.RightVector, size.X)
+	local b = flat(cf.UpVector, size.Y)
+	local d = flat(cf.LookVector, size.Z)
+	local long = math.max(a, b, d)
+	local width = math.max(math.min(a, b), math.min(math.max(a, b), d)) -- the second longest
+	return width, long * width
+end
+
 -- Does a hit `distance` studs above a ray's start make a roof? A part that collides, not past
--- Roof.Reach, not part of a tree, not see-through, and roof-sized: its two bigger sides at least
--- Roof.MinSize (a statue's fist, a sign board or a lamp is no roof). (Parts that do not collide
--- never count: banners, awnings, lamp heads, the train track. Ghost roofs are Covered places.)
+-- Roof.Reach, not part of a tree, not see-through, and roof-sized from above: its footprint
+-- (WeatherLogic.footprint) at least Roof.MinWidth wide and Roof.MinArea big (a statue's fist, a
+-- sign board, a lamp or an arch's beam is no roof). (Parts that do not collide never count:
+-- banners, awnings, lamp heads, the train track. Ghost roofs are Covered places.)
 function WeatherLogic.roofCounts(
 	distance: number,
 	transparency: number,
 	canCollide: boolean,
 	tree: boolean,
-	size: Vector3,
+	width: number,
+	area: number,
 	cfg: Config?
 ): boolean
 	local c = cfg or WeatherConfig
@@ -624,9 +642,7 @@ function WeatherLogic.roofCounts(
 	if not canCollide or tree or distance > r.Reach or transparency >= r.SeeThrough then
 		return false
 	end
-	local a, b, d = size.X, size.Y, size.Z
-	local middle = math.max(math.min(a, b), math.min(math.max(a, b), d)) -- the second biggest side
-	return middle >= r.MinSize
+	return width >= r.MinWidth and area >= r.MinArea
 end
 
 -- Is a model with this name a tree? "Tree", "JungleTree", "JungleTree3" (the map's tree models).

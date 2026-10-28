@@ -3,7 +3,8 @@
 	docs/plans/MINE_FLOORS_PLAN.md point 7): ride one anywhere to move faster
 	(the mine floors are big, floors 1-3 are walked).
 
-	- 4 boards for coins, each one faster than the one before.
+	- 4 boards for coins, each one faster than the one before (owner 2026-10-28:
+	  "a bit faster": every board about a quarter faster, 28 / 33 / 38 / 43).
 	- 1 board for Robux (49 R$): the Terra Forge Custom, a deck painted with
 	  doodles of the game (owner 2026-10-25: "the only Robux board is a custom
 	  Terra Forge one, like Pet Simulator's"), faster than every coin board,
@@ -90,7 +91,7 @@ HoverboardData.BaseWalkSpeed = GearConfig.value("Boots", 0)
 HoverboardData.SlowPerItem = GearConfig.CarrySlowPerItem -- walk speed lost per carried item
 HoverboardData.MaxSlow = GearConfig.CarrySlowMax -- at most this much in total
 HoverboardData.MinWalkSpeed = GearConfig.MinWalkSpeed -- on foot, never slower
-HoverboardData.MaxRideSpeed = 50 -- never faster (Bonuses.walkSpeed's cap too)
+HoverboardData.MaxRideSpeed = 60 -- never faster (room for the speed bonuses on the fastest board)
 HoverboardData.RobuxPrice = 49
 HoverboardData.Attribute = "Hoverboard" -- character attribute while riding: the board id
 HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHeight before riding
@@ -115,7 +116,7 @@ HoverboardData.List = {
 		Name = "Timber Drifter",
 		Kind = "Coins",
 		Price = HoverboardData.priceFrom(3, 2.5), -- right after blaster 3 (floor 2)
-		Speed = 23,
+		Speed = 28,
 		IgnoresCarrySlow = false,
 		Effect = "Sparks",
 		Colors = {
@@ -134,7 +135,7 @@ HoverboardData.List = {
 		Name = "Cart Cruiser",
 		Kind = "Coins",
 		Price = HoverboardData.priceFrom(5, 0.8), -- just before blaster 5 (floor 3)
-		Speed = 27,
+		Speed = 33,
 		IgnoresCarrySlow = false,
 		Effect = "Vents",
 		Colors = {
@@ -153,7 +154,7 @@ HoverboardData.List = {
 		Name = "Emberglass Glider",
 		Kind = "Coins",
 		Price = HoverboardData.priceFrom(7, 1), -- a goal past the first hour (balance sim)
-		Speed = 31,
+		Speed = 38,
 		IgnoresCarrySlow = false,
 		Effect = "Lava",
 		Colors = {
@@ -172,7 +173,7 @@ HoverboardData.List = {
 		Name = "Royal Phoenix",
 		Kind = "Coins",
 		Price = HoverboardData.priceFrom(7, 3), -- 3x the Emberglass Glider (owner 2026-10-25: "cheaper")
-		Speed = 35,
+		Speed = 43,
 		IgnoresCarrySlow = false,
 		Effect = "Phoenix",
 		Colors = {
@@ -192,7 +193,7 @@ HoverboardData.List = {
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
 		PassKey = "HoverboardCustom",
-		Speed = 38,
+		Speed = 48,
 		IgnoresCarrySlow = true,
 		Effect = "Custom",
 		Colors = {
