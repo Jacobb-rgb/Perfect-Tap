@@ -362,7 +362,6 @@ end
 CleaningView.IntoText = {
 	Backpack = "In your backpack",
 	Pen = "Backpack full: moved to your Ore Pen",
-	Sold = "Backpack and Ore Pen full: sold to Tobin",
 	Tray = "Backpack full: waiting on the station's tray",
 } :: { [string]: string }
 
