@@ -40,12 +40,12 @@
 	chip, and the List is a grid of square dark cells (five a row on a PC):
 	every Row keeps its frames: Grade becomes the rarity word on top in its
 	colour, the Icon's picture sits in the middle, ItemName under it and
-	Count ("x4") at the picture's bottom-right. Dirty ore (DirtyByOre, the
-	owner's pick 2026-10-27): one stack per ore, "Dirty Ruby", its crust
-	chunk with a piece of the real ore poking out (only here: the Sell view
-	and the world keep the dirty secret); DirtyByOre = false brings back
-	the one shared "Dirty Ore" stack. The storage keys already name the
-	ore ("Raw|Ruby||"): nothing new reaches the client.
+	Count ("x4") at the picture's bottom-right. Dirty ore keeps its secret
+	(the owner 2026-10-28): one shared "Dirty Ore" stack, the crust chunk,
+	the rarity line "Dirty". DirtyByOre = true (the 10-27 idea, kept as a
+	switch) makes a stack per ore, "Dirty Ruby", its crust with a piece of
+	the real ore poking out; the storage keys already name the ore
+	("Raw|Ruby||"), so nothing new would reach the client.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -122,9 +122,10 @@ export type Refs = {
 
 BackpackView.Title = "BACKPACK"
 BackpackView.RoundTitle = "Inventory" -- (the round look: the reel's window title)
--- the owner's pick (2026-10-27): dirty ore stacks per ore and shows a piece of its real ore;
--- false: every dirty ore in one shared "Dirty Ore" stack that keeps the secret
-BackpackView.DirtyByOre = true
+-- the owner's pick (2026-10-28, reversing 10-27): every dirty ore in one shared "Dirty Ore" stack
+-- that keeps the secret (the players find out by cleaning); true: a stack per ore with a piece
+-- of its real ore poking out of the crust
+BackpackView.DirtyByOre = false
 BackpackView.Columns = 5 -- the round look's cells a row
 BackpackView.CellGap = 8
 BackpackView.SearchText = "Search..."

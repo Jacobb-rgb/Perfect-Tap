@@ -11,7 +11,7 @@
 	  ui_backpack_phone_small  667 x 375 pt phone drawn 2x (1334 x 750, uiInset 116)
 	  ui_backpack_tv      1080p TV drawn 1920 x 1080 (compact, the gamepad hint)
 	  ui_backpack_pixel   PC in the pixel look (PopTheme.setLook), dirty ore merged
-	  ui_backpack_merged  PC with BackpackView.DirtyByOre = false (one shared Dirty Ore)
+	  ui_backpack_merged  PC with BackpackView.DirtyByOre = true (the switch: a stack per ore)
 	Shots: tools/preview/backpack_window_shots.json.
 	  ui_backpack_full    PC, a full Rookie Pack (5 / 5: FULL on the bar and the button)
 	  ui_backpack_empty   PC, an empty backpack (the empty line)
@@ -108,7 +108,7 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_backpack_pixel = UiExport.export(shot(1.25, 1.25, pc, false, midGame, "Q or Backspace: close"))
 	PopTheme.setLook(look)
 	local byOre = BackpackView.DirtyByOre
-	BackpackView.DirtyByOre = false
+	BackpackView.DirtyByOre = not byOre
 	exports.ui_backpack_merged = UiExport.export(shot(1.25, 1.25, pc, false, midGame, "Q or Backspace: close"))
 	BackpackView.DirtyByOre = byOre
 	return exports

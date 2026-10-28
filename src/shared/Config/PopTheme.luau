@@ -130,6 +130,7 @@ local PopTheme = {
 		TerraForgeCapsules = { Paint = "Ember", Icon = "capsule_Stone" },
 		TerraForgePen = { Paint = "Ember", Icon = "ore_raw" },
 		TerraForgeBackpack = { Paint = "Ember", Icon = "backpack" },
+		TerraForgeBackpacks = { Paint = "Ember", Icon = "backpack" }, -- the BACKPACKS shop
 		TerraForgeQuests = { Paint = "Pink", Icon = "check" }, -- (reel: Daily pink)
 		TerraForgeStreak = { Paint = "Pink", Icon = "medal" },
 		TerraForgeSettings = { Paint = "Concrete", Icon = "cog" }, -- (reel: Settings dark grey)
