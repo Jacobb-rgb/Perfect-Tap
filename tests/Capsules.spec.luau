@@ -731,7 +731,22 @@ return function(T, Loader)
 		T.falsy(stray:FindFirstChild(CapsuleService.PointName), "no prompt for an unknown egg")
 	end)
 
-	withWorld("Capsules: the CapsuleStall gets one Capsules prompt in front of its capsule", function(w)
+	withWorld("Capsules: the EGGS temple has no Capsules prompt (its eggs have the clients' Buy Egg! prompts)", function(_w)
+		T.eq(CapsuleService.StallPrompt, false, "off by default (owner 2026-10-28: no window from the temple)")
+		local stall = Instance.new("Model")
+		local base = Instance.new("Part")
+		base.Name = "CapsuleMachine"
+		base.Parent = stall
+		stall.PrimaryPart = base
+		caps.hookStall(stall)
+		T.eq(#base:GetChildren(), 0, "no prompt spot on the pedestal")
+		for _, d in stall:GetDescendants() do
+			T.falsy(d:IsA("ProximityPrompt"), "no prompt anywhere in the stall")
+		end
+	end)
+
+	withWorld("Capsules: StallPrompt on: the CapsuleStall gets one Capsules prompt in front of its capsule", function(w)
+		CapsuleService.StallPrompt = true
 		local stall = Instance.new("Model")
 		local base = Instance.new("Part")
 		base.Name = "CapsuleMachine"
@@ -773,6 +788,7 @@ return function(T, Loader)
 		w.loaded = false
 		caps.open(w.player, stall)
 		T.eq(#notes(w, "OpenUI"), 1, "not before the save is loaded")
+		CapsuleService.StallPrompt = false
 	end)
 
 	---------------------------------------------------------------- golem actions

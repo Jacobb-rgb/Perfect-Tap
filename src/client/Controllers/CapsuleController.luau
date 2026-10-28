@@ -1,10 +1,17 @@
 --[[
 	CapsuleController: golem capsules on the client (step 7).
 
-	- The shop panel (CapsuleView) opens on OpenUI "Capsules" (the
-	  CapsuleStall's "Capsules" prompt, added by CapsuleService) and from the
-	  golem inventory's CAPSULES button (CapsuleController.open). Opening
-	  works anywhere, so the panel doesn't close when you walk away.
+	- The eggs in the EGGS temple open one at a time from their own "Buy
+	  Egg!" prompts and Auto (EggPanelController, owner 2026-10-28):
+	  CapsuleController.buy runs the same request as OPEN 1 below, with the
+	  odds the egg's panel shows, and the same opening plays. buy(), quote(),
+	  luckyShown(), openingState(), onStop() and setAuto() are for it.
+	- The shop panel (CapsuleView, every egg with x1 / x3 / x10 and every
+	  golem's name) opens from the golem inventory's EGGS button
+	  (CapsuleController.open) and on OpenUI "Capsules" (an egg's own podium
+	  out in the world, the SKY EGG's; the temple's old "Capsules" prompt is
+	  off: CapsuleService.StallPrompt). Opening works anywhere, so the panel
+	  doesn't close when you walk away.
 	  Tabs (click / tap, LB / RB): the capsules this player may open. The
 	  cards come from the State snapshot and update live (coins count up,
 	  the Triple Lucky banner counts down).
@@ -38,7 +45,11 @@
 	  note above says which odds it uses now: "TRIPLE LUCKY ODDS" or
 	  "Triple Lucky ended: normal odds"). Results that arrive while one
 	  plays wait their turn; a waiting one starts as soon as the end screen
-	  shows.
+	  shows. While the overlay is up every prompt is suppressed
+	  ("CapsuleOpening"), so a key meant for it never also fires a prompt
+	  behind it. With Auto on, OPEN AGAIN hides and the hint says OK stops
+	  it; closing the end screen (OK, B, Backspace, Space, Enter) stops Auto
+	  (onStop "Closed"), and so does every refusal (onStop with its reason).
 	- The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds per
 	  rarity: every BoardSeconds the next capsule the player may open (with
 	  the player's own Triple Lucky odds, refreshed within a second when it
@@ -125,6 +136,9 @@ local lastOpen: { Capsule: string, Count: number }? = nil
 local againPending = false
 local renderConnection: RBXScriptConnection? = nil
 local shownResult: Result? = nil -- the result on the end screen
+local endAt = 0 -- os.clock() when the end screen showed (openingState)
+local autoOn = false -- the temple's Auto runs (setAuto: the end screen's hint, no OPEN AGAIN)
+local stopListeners: { (string) -> () } = {}
 -- the golem in the hero viewport (animated every frame while it shows)
 type Hero = { Model: Model, Start: number, Target: Vector3, Distance: number, RootHeight: number }
 local hero: Hero? = nil
@@ -277,6 +291,23 @@ local function luckyShown(): boolean
 	return CapsuleView.luckyNow(StateController.get(), serverNow(), stateAt)
 end
 
+-- The same for the egg panels (EggPanelController): the odds every open sends.
+function CapsuleController.luckyShown(): boolean
+	return luckyShown()
+end
+
+-- One capsule's card as the window would show it now (its price at the
+-- player's level, whether it can be bought and why not, its odds): the egg
+-- panel's quote. nil when it isn't sold to this player here.
+function CapsuleController.quote(capsuleId: string): CapsuleView.Card?
+	for _, card in currentCards(HudController.predictedCoins(os.clock())) do
+		if card.Id == capsuleId then
+			return card
+		end
+	end
+	return nil
+end
+
 local function refresh()
 	local view = refs
 	if not view or not shown then
@@ -307,16 +338,23 @@ local function freeButton()
 	refresh()
 end
 
--- Sends an open (from the panel or OPEN AGAIN). Returns whether it was sent.
-local function request(capsuleId: string, count: number, button: TextButton?): boolean
+--[[
+	Sends an open (from the panel, OPEN AGAIN or an egg's prompt). Returns
+	whether it was sent and, when not, why: "Busy" (an open waits for its
+	answer), "Cooldown" (ClientCooldown), "Hidden" (not sold to this
+	player here), "OddsChanged" (`expectLucky`: the odds the egg's panel
+	showed are no longer the card's) or the buy's own Reason (NoCoins,
+	InventoryFull, ComingSoon).
+]]
+local function request(capsuleId: string, count: number, button: TextButton?, expectLucky: boolean?): (boolean, string?)
 	local now = os.clock()
 	if now < pendingUntil then
 		status("Opening... one moment", Theme.Info)
-		return false
+		return false, "Busy"
 	end
 	if now - lastSend < CapsuleConfig.ClientCooldown then
 		status("One moment...", Theme.Info)
-		return false
+		return false, "Cooldown"
 	end
 	local coins = HudController.predictedCoins(now)
 	cards = currentCards(coins)
@@ -330,12 +368,17 @@ local function request(capsuleId: string, count: number, button: TextButton?): b
 		end
 	end
 	if not card or not card.Visible or not buy then
-		return false
+		return false, "Hidden"
 	end
 	if not buy.CanBuy then
 		status(CapsuleView.reasonText(buy.Reason), Theme.Bad)
 		Sfx.play("UIDeny")
-		return false
+		return false, buy.Reason
+	end
+	if expectLucky ~= nil and card.Lucky ~= expectLucky then
+		status(CapsuleView.reasonText("OddsChanged"), Theme.Bad)
+		Sfx.play("UIDeny")
+		return false, "OddsChanged"
 	end
 	pendingUntil = now + CapsuleConfig.ResultTimeout
 	lastSend = now
@@ -348,7 +391,27 @@ local function request(capsuleId: string, count: number, button: TextButton?): b
 	Sfx.play("UIClick")
 	-- the odds this card shows: the server rolls exactly these (or refuses)
 	Net.send("CapsuleAction", "Open", { Capsule = capsuleId, Count = count, Lucky = card.Lucky })
-	return true
+	return true, nil
+end
+
+--[[
+	The EGGS temple's "Buy Egg!" and Auto (EggPanelController): opens ONE
+	egg through request() (the cooldown, the local refusals, the server's
+	CapsuleAction "Open" and the opening), with the odds the egg's panel
+	shows (`lucky`; refused "OddsChanged" when the card's differ now).
+	The capsule window is shut there, so a refusal is a toast; `quiet`
+	(Auto) skips the toast for a "one moment" wait. Returns whether it was
+	sent and request()'s reason.
+]]
+function CapsuleController.buy(capsuleId: string, lucky: boolean, quiet: boolean?): (boolean, string?)
+	local sent, reason = request(capsuleId, 1, nil, lucky)
+	if not sent and not shown and reason ~= "Hidden" then
+		local busy = reason == "Busy" or reason == "Cooldown"
+		if not (busy and quiet) then
+			HudController.toast(if busy then "One moment..." else CapsuleView.reasonText(reason), if busy then "Info" else "Deny")
+		end
+	end
+	return sent, reason
 end
 
 local function switchTab(dir: number)
@@ -528,6 +591,41 @@ end
 
 ---------------------------------------------------------------- the opening
 
+-- Tells the Auto listeners (onStop) why it must stop: "Closed" or a refusal's reason.
+local function stopped(reason: string)
+	for _, listener in stopListeners do
+		local ok, err = pcall(function(): any
+			listener(reason)
+			return nil
+		end)
+		if not ok then
+			warn("[CapsuleController] stop listener failed: " .. tostring(err))
+		end
+	end
+end
+
+-- Auto (EggPanelController) stops on these: the player closed the end
+-- screen ("Closed"), or the server refused an open (its reason code).
+function CapsuleController.onStop(listener: (string) -> ())
+	table.insert(stopListeners, listener)
+end
+
+--[[
+	Where the opening is, for Auto: "Waiting" (an open was sent, no answer
+	yet), "Playing" (an opening plays, or another result waits its turn),
+	"End" (its end screen shows; the number: seconds since) or "Idle".
+]]
+function CapsuleController.openingState(): (string, number)
+	if pendingUntil > os.clock() then
+		return "Waiting", 0
+	elseif playing and atEnd and #queue == 0 then
+		return "End", os.clock() - endAt
+	elseif playing or #queue > 0 then
+		return "Playing", 0
+	end
+	return "Idle", 0
+end
+
 local function fitOpening(o: CapsuleView.OpenRefs)
 	local w, h = room()
 	CapsuleView.layoutOpening(o, compactNow(), w, h)
@@ -535,7 +633,9 @@ end
 
 local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
 	local sep = CapsuleView.Separator
-	if ending then
+	if ending and autoOn then
+		o.Hint.Text = `Auto is on{sep}{if usingGamepad() then padName(Enum.KeyCode.ButtonB) else "OK"}: stop`
+	elseif ending then
 		o.Hint.Text = if usingGamepad() then `{padName(Enum.KeyCode.ButtonB)}: close` else ""
 	elseif usingGamepad() then
 		o.Hint.Text = `{padName(Enum.KeyCode.ButtonA)}: next{sep}{padName(Enum.KeyCode.ButtonB)}: skip all`
@@ -543,6 +643,15 @@ local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
 		o.Hint.Text = "Tap to skip"
 	else
 		o.Hint.Text = `Click or Space to skip{sep}Backspace: skip all`
+	end
+end
+
+-- Auto is on (the end screen says how to stop it and hides OPEN AGAIN).
+function CapsuleController.setAuto(on: boolean)
+	autoOn = on
+	local o = opening
+	if o and playing then
+		openingHint(o, atEnd)
 	end
 end
 
@@ -797,7 +906,7 @@ local function againText(o: CapsuleView.OpenRefs, result: Result?)
 			end
 		end
 	end
-	local visible = again ~= nil and buy ~= nil and card ~= nil and card.Visible and not card.Robux
+	local visible = again ~= nil and buy ~= nil and card ~= nil and card.Visible and not card.Robux and not autoOn
 	holderOf(o.Again).Visible = visible
 	if visible and buy and not againPending then
 		o.Again.Text = `OPEN {buy.Count} AGAIN  {buy.PriceText}`
@@ -890,12 +999,15 @@ local function ensureOpening(): CapsuleView.OpenRefs
 		if not again or againPending or not atEnd then
 			return
 		end
-		if request(again.Capsule, again.Count, nil) then
+		local sent, reason = request(again.Capsule, again.Count, nil)
+		if sent then
 			againPending = true
 			o.Again.Text = "..."
 			o.Hint.Text = ""
+		elseif reason == "Busy" or reason == "Cooldown" then
+			o.Hint.Text = "One moment..."
 		else
-			o.Hint.Text = refs and refs.Status.Text or ""
+			o.Hint.Text = CapsuleView.reasonText(reason)
 		end
 	end)
 	opening = o
@@ -910,6 +1022,8 @@ local function play(result: Result)
 	atEnd = false
 	skipStep = false
 	skipAll = false
+	-- (the overlay's keys never also fire a prompt behind it: an egg's Buy Egg! / Auto)
+	PromptController.setSuppressed("CapsuleOpening", true)
 	o.Gui.Enabled = true
 	o.Grid.Visible = false
 	o.Plate.Visible = false
@@ -971,6 +1085,7 @@ local function play(result: Result)
 	end
 	-- the end: OK / OPEN AGAIN
 	atEnd = true
+	endAt = os.clock()
 	endDone = false
 	againPending = false
 	holderOf(o.Skip).Visible = false
@@ -992,6 +1107,8 @@ local function play(result: Result)
 		end
 		task.wait()
 	end
+	-- (the player closed it: OK, B / Backspace, Space / Enter; a new result doesn't count)
+	local closed = endDone
 	endDone = false
 	if renderConnection then
 		renderConnection:Disconnect()
@@ -1008,6 +1125,7 @@ local function play(result: Result)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
 	if #queue == 0 then
 		o.Gui.Enabled = false
+		PromptController.setSuppressed("CapsuleOpening", false)
 		local selected = GuiService.SelectedObject
 		if selected and selected:IsDescendantOf(o.Gui) then
 			GuiService.SelectedObject = nil
@@ -1016,6 +1134,9 @@ local function play(result: Result)
 		if view and shown and usingGamepad() then
 			GuiService.SelectedObject = CapsuleView.firstButton(view)
 		end
+	end
+	if closed then
+		stopped("Closed")
 	end
 end
 
@@ -1069,6 +1190,7 @@ local function onActionResult(payload: any)
 	end
 	local text = CapsuleView.reasonText(payload.Reason)
 	againPending = false
+	stopped(if type(payload.Reason) == "string" then payload.Reason else "Refused")
 	local o = opening
 	if o and playing and atEnd then
 		o.Hint.Text = text

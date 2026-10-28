@@ -42,6 +42,7 @@ local ORDER = {
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
+	"EggPanelController", -- the EGGS temple: the panel over the nearest egg, Buy Egg! (E), Auto (after CapsuleController)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)

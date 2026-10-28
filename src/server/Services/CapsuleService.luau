@@ -4,9 +4,12 @@
 	(GolemConfig) into the player's inventory.
 
 	- The CapsuleStall (tag, a Model in the lobby: PrimaryPart = the pedestal
-	  "CapsuleMachine"): this service adds a "Capsules" prompt in front of the
-	  big capsule at runtime; it opens the capsule view (OpenUI "Capsules"
-	  { Stall }). Opening works anywhere (the side menu too), so the server
+	  "CapsuleMachine"): its eggs carry the clients' own "Buy Egg!" prompts
+	  (EggPanelController, owner 2026-10-28: one egg straight from its
+	  prompt, no window), which send the same CapsuleAction "Open" as the
+	  capsule window. The stall's old "Capsules" prompt that opened the
+	  window (OpenUI "Capsules" { Stall }) is off: StallPrompt. Opening
+	  works anywhere (the golem inventory's EGGS window too), so the server
 	  checks no range.
 	- CapsuleAction ("Open", { Capsule, Count, Lucky? }) (Net, rate limited;
 	  Count 1, 3 or 10; Lucky = whether the client showed the Triple Lucky
@@ -136,6 +139,9 @@ CapsuleService.EndSlack = 1.5 -- seconds before the boost's end a request that s
 CapsuleService.PurchaseGrace = 120 -- seconds a Royal prompt shown with Triple Lucky keeps it past the boost's end
 CapsuleService.AnnounceFrom = "Legendary" -- golems this rare are announced to the server
 CapsuleService.PromptDistance = 12
+-- the stall's own "Capsules" prompt (the capsule window): off since the eggs
+-- have the clients' "Buy Egg!" prompts (owner 2026-10-28; true brings it back)
+CapsuleService.StallPrompt = false
 -- an egg standing on its own podium out in the world (the SKY EGG on Sky
 -- Haven): a part tagged PodiumTag with attribute Capsule = its capsule id
 -- gets an "Open" prompt (the panel on that egg's tab) and an OddsBoard
@@ -744,7 +750,7 @@ local function promptPoint(stall: Model): (BasePart?, CFrame)
 end
 
 local function hookStall(instance: Instance)
-	if hooked[instance] or not instance:IsA("Model") then
+	if not CapsuleService.StallPrompt or hooked[instance] or not instance:IsA("Model") then
 		return
 	end
 	local stall = instance :: Model
