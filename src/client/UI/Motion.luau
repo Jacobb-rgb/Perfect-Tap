@@ -327,6 +327,16 @@ function Motion.enabled(): boolean
 	return AnimConfig.UIMotion == true or Motion.roundMotion()
 end
 
+-- The UIMotion set beyond the round look's pop, hover and press (pop-ins, slides, bumps, counters,
+-- flying cash, breathe and shine loops): AnimConfig.UIMotion (or setEnabled) only, never RoundMotion
+-- (the owner approved those three: review 2026-10-28).
+function Motion.full(): boolean
+	if enabledOverride ~= nil then
+		return enabledOverride
+	end
+	return AnimConfig.UIMotion == true
+end
+
 -- The round look's motions only (AnimConfig.RoundMotion with the round look, UIMotion off): the
 -- reel's pop, hover and press, no shine or breathe loops (UIMotionController asks).
 function Motion.roundMotion(): boolean
@@ -1138,7 +1148,7 @@ end
 -- A slow 1 <-> 1.03 pulse while it shows (a button keeps its press feel:
 -- the pulse pauses while it is pressed, hovered or selected).
 function Motion.breathe(gui: GuiObject)
-	if not Motion.enabled() then
+	if not Motion.full() then
 		return
 	end
 	local s = scaleOf(gui, "MotionScale")
@@ -1150,7 +1160,7 @@ end
 -- seconds (`phase` seconds late: neighbours don't flash together). A
 -- white gradient band in a clipping frame inset from the rounded corners.
 function Motion.shine(button: GuiObject, phase: number?)
-	if loops[button] or not Motion.enabled() then
+	if loops[button] or not Motion.full() then
 		return
 	end
 	local s = Motion.Shine
@@ -1307,7 +1317,7 @@ local slides: { [GuiObject]: Tween } = setmetatable({}, { __mode = "k" }) :: any
 
 -- Slides `gui` in from a side, `distance` design units (Motion.Slide.Distance).
 function Motion.slide(gui: GuiObject, from: Side, distance: number?)
-	if not Motion.enabled() then
+	if not Motion.full() then
 		return
 	end
 	local stored: Vector2? = anchors[gui]
@@ -1335,7 +1345,7 @@ end
 
 -- A toast or a reward card appears: a bounce in. Returns its UIScale.
 function Motion.popIn(gui: GuiObject): UIScale
-	if not Motion.enabled() then
+	if not Motion.full() then
 		-- (UI motion off: no bounce, no state; the gui's own scale, at rest)
 		local own = gui:FindFirstChildOfClass("UIScale")
 		if own then
@@ -1360,7 +1370,7 @@ end
 
 -- A quick bump (the cash pile when the money lands).
 function Motion.bump(gui: GuiObject)
-	if quiet() or not Motion.shown(gui) then
+	if quiet() or not Motion.full() or not Motion.shown(gui) then
 		return
 	end
 	local s = scaleOf(gui, "MotionPop")
@@ -1404,7 +1414,7 @@ end
 -- already running goes on from where it is to the new `to`.
 function Motion.countUp(label: TextLabel, from: number, to: number, format: (number) -> string, time: number?)
 	local c = counters[label]
-	if quiet() or not Motion.shown(label) then
+	if quiet() or not Motion.full() or not Motion.shown(label) then
 		if c then
 			c.Format = format
 			c.To = to
@@ -1595,7 +1605,7 @@ end
 -- space, or nil: the screen centre) and fly into `to`, which bumps when they
 -- land. At most one burst a second per target. False when nothing flew.
 function Motion.flyTo(from: (GuiObject | Vector2)?, to: GuiObject, icon: string?, count: number?): boolean
-	if quiet() or not Motion.shown(to) then
+	if quiet() or not Motion.full() or not Motion.shown(to) then
 		return false
 	end
 	local now = os.clock()

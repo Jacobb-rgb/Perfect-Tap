@@ -691,11 +691,11 @@ return function(T, Loader)
 		)
 		local hud = source("Controllers/HudController")
 		T.truthy(
-			hud:find('if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
+			hud:find('if Motion.full() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
 			"the toast"
 		)
 		T.truthy(hud:find("Motion.classicPop(shown.Panel, nil, 0.6, 0.3)", 1, true), "the offline popup")
-		T.truthy(hud:find("if big and not Motion.enabled() then", 1, true), "the coin glide")
+		T.truthy(hud:find("if big and not Motion.full() then", 1, true), "the coin glide")
 		T.truthy(hud:find("shownCoins += diff * 0.35", 1, true), "main's glide step")
 		T.truthy(
 			source("Controllers/UIMotionController"):find("if not Motion.enabled() then\n\t\t-- UI motion off", 1, true),
@@ -737,6 +737,12 @@ return function(T, Loader)
 			AnimConfig.RoundMotion = true
 			PopTheme.setLook("Round")
 			T.truthy(Motion.enabled() and Motion.roundMotion(), "on in the round look")
+			-- (only the pop, the hover and the press: no counters, flying cash, pop-ins, loops)
+			T.falsy(Motion.full(), "the rest of UIMotion stays off")
+			local label = UIKit.new("TextLabel", { Name = "Coins" }, Instance.new("ScreenGui"))
+			Motion.countUp(label, 0, 5000, tostring)
+			T.eq(label.Text, "5000", "the number just changes")
+			T.falsy(Motion.flyTo(nil, label, "cash"), "no cash flies")
 			Motion.tune(true)
 			T.eq(Motion.Profiles.Normal.Down, 0.93, "the reel's press")
 			T.eq(Motion.Profiles.Normal.Hover, 1.05, "the reel's hover")
