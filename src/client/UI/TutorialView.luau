@@ -154,7 +154,7 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	end
 	-- a narrow screen (4:3): over the HUD's bottom group (the light HUD's BLASTER slot and
 	-- backpack button, centred; the dark HUD's backpack button) when the bubble would reach it
-	local _, groupRight = HudBubble.carrySpan(scale, tenFoot, UIConfig.lightUI())
+	local _, groupRight = HudBubble.carrySpan(scale, tenFoot, UIConfig.lightUI(), w)
 	local group = HudBubble.carryGroupSize(scale <= HudBubble.CompactScale)
 	local packRight = w / 2 + groupRight
 	if w - right - TutorialView.Width < packRight + TutorialView.BarGap then

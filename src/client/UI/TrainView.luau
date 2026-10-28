@@ -1683,7 +1683,16 @@ end
 local function pixelChipLayout(refs: Refs)
 	local m = if refs.Compact then CHIP.Compact else CHIP.Normal
 	local frame = refs.ChipFrame
-	Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	if PopTheme.round() then
+		-- the round look: a dark tile like the reel's left tiles, the train's blue in its lip and edge
+		Pop.darkTile(frame, "Blue", PopTheme.Corner + 1)
+		local corner = frame:FindFirstChildOfClass("UICorner")
+		if corner then
+			corner.CornerRadius = UDim.new(0, PopTheme.Corner + 1)
+		end
+	else
+		Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	end
 	local lip = Pop.lipUnits(m.Height)
 	local area = m.Height - lip
 	-- the square and the locomotive in it
@@ -1716,7 +1725,7 @@ local function pixelChipLayout(refs: Refs)
 	-- SEND centred on the face above the lip
 	local send = holderOf(refs.ChipSend)
 	send.Position = UDim2.new(1, -10, 0, math.max(0, math.floor((area - m.SendHeight) / 2)))
-	Pop.face(send, TrainView.ChipPaints.Send, 10)
+	Pop.face(send, TrainView.ChipPaints.Send, if PopTheme.round() then PopTheme.Corner else 10)
 	TrainView.style(refs.ChipSend, refs.ChipSend.BackgroundColor3 ~= Theme.PanelLight, Theme.Good, Theme.GoodDark)
 	Pop.fit(refs.ChipSend :: any, m.SendText)
 end

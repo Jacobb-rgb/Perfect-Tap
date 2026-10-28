@@ -138,7 +138,8 @@ return function(T, Loader)
 			T.truthy(ring.Size.X.Offset >= 2 * PopTheme.Edge, "round the black outline, not over the picture")
 			HudView.setBlasterEquipped(refs, false)
 			T.falsy(ring.Visible, "put away: the plain well")
-			T.eq(light.Color, HudBubble.SlotRim, "the plain rim")
+			local own = slot:GetAttribute("RimColor") -- (the round look: the well's own colour)
+			T.eq(light.Color, if own then own else HudBubble.SlotRim, "the plain rim")
 			T.eq(slot:FindFirstChild("Disc").BackgroundColor3, HudBubble.DiscColor, "the cyan light again")
 			T.eq(#slot:GetDescendants(), count, "no new instances")
 		end)
@@ -146,37 +147,83 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- centred
 
-	T.test("BlasterSlot: the slot, a gap and the backpack button are one group in the screen's middle", function()
+	T.test(
+		"BlasterSlot: the slot, a gap and the backpack button are one group in the screen's middle (phones: out of the thumbstick)",
+		function()
+			withLight(true, function()
+				for _, screen in { { 568, 320 }, { 667, 375 }, { 844, 390 }, { 1024, 768 }, { 1280, 720 }, { 1920, 1080 } } do
+					local scale = HudBubble.scaleFor(Vector2.new(screen[1], screen[2]))
+					local refs = HudBubble.buildGame(scale, screen[1]) :: any
+					local where = `{screen[1]} x {screen[2]}`
+					local holder, slot, pack = refs.CarryPanel, refs.BlasterSlot, refs.Backpack
+					local width = screen[1] / scale
+					local left = width / 2 + holder.Position.X.Offset - holder.AnchorPoint.X * holder.Size.X.Offset
+					local right = left + holder.Size.X.Offset
+					local compact = scale <= HudBubble.CompactScale
+					if compact and holder.Size.X.Offset > (1 - 2 * HudBubble.ThumbZone) * width then
+						-- (phones: moved right, out of the DynamicThumbstick's zone)
+						T.near(left, HudBubble.ThumbZone * width, 1, `{where}: at the thumbstick zone's edge ({left} on {width})`)
+					else
+						T.truthy(math.abs((left + right) / 2 - width / 2) <= 0.5, `{where}: centred ({left}..{right} on {width})`)
+					end
+					T.eq(holder.Position.X.Scale, 0.5, where .. ": from the middle, in design units")
+					T.eq(holder.Position.Y.Offset, -HudBubble.BackpackBottom, where .. ": at the bottom")
+					-- inside: the slot at the left end, the gap, the button at the right end
+					T.eq(slot.Position.X.Offset + slot.Position.X.Scale * holder.Size.X.Offset, 0, where .. ": the slot first")
+					local packLeft = holder.Size.X.Offset * pack.Position.X.Scale - pack.AnchorPoint.X * pack.Size.X.Offset
+					T.eq(packLeft - slot.Size.X.Offset, HudBubble.GroupGap, where .. ": the gap between them")
+					T.eq(packLeft + pack.Size.X.Offset, holder.Size.X.Offset, where .. ": the button last")
+					-- the pure span (TutorialView, the train panel) says the same
+					local spanLeft, spanRight = HudBubble.carrySpan(scale, false, true, width)
+					T.eq(width / 2 + spanLeft, left, where .. ": carrySpan's left")
+					T.eq(width / 2 + spanRight, right, where .. ": carrySpan's right")
+					-- the same UI scale again (HudController) keeps it where it was
+					local before = holder.Position
+					HudView.placeBackpack(refs, scale, false)
+					T.eq(holder.Position, before, where .. ": the same after a re-placement")
+				end
+			end)
+			-- the dark HUD's span is unchanged: right of Roblox's slot
+			local darkLeft, darkRight = HudBubble.carrySpan(1, false, false)
+			T.eq(darkLeft, HudBubble.backpackX(1))
+			T.eq(darkRight, HudBubble.backpackX(1) + HudBubble.BackpackSize.X)
+		end
+	)
+
+	T.test("BlasterSlot: on phones the slot keeps out of the thumbstick's zone, in both looks", function()
+		-- Roblox's DynamicThumbstick starts on touches in the left 40 % of the screen, its lower
+		-- two-thirds (the group stands at the bottom: always in those two-thirds)
+		local look = PopTheme.Look
 		withLight(true, function()
-			for _, screen in { { 568, 320 }, { 667, 375 }, { 844, 390 }, { 1024, 768 }, { 1280, 720 }, { 1920, 1080 } } do
-				local scale = HudBubble.scaleFor(Vector2.new(screen[1], screen[2]))
-				local refs = HudBubble.buildGame(scale, screen[1]) :: any
-				local where = `{screen[1]} x {screen[2]}`
-				local holder, slot, pack = refs.CarryPanel, refs.BlasterSlot, refs.Backpack
-				local width = screen[1] / scale
-				local left = width / 2 + holder.Position.X.Offset - holder.AnchorPoint.X * holder.Size.X.Offset
-				local right = left + holder.Size.X.Offset
-				T.truthy(math.abs((left + right) / 2 - width / 2) <= 0.5, `{where}: centred ({left}..{right} on {width})`)
-				T.eq(holder.Position.X.Scale, 0.5, where .. ": from the middle, in design units")
-				T.eq(holder.Position.Y.Offset, -HudBubble.BackpackBottom, where .. ": at the bottom")
-				-- inside: the slot at the left end, the gap, the button at the right end
-				T.eq(slot.Position.X.Offset + slot.Position.X.Scale * holder.Size.X.Offset, 0, where .. ": the slot first")
-				local packLeft = holder.Size.X.Offset * pack.Position.X.Scale - pack.AnchorPoint.X * pack.Size.X.Offset
-				T.eq(packLeft - slot.Size.X.Offset, HudBubble.GroupGap, where .. ": the gap between them")
-				T.eq(packLeft + pack.Size.X.Offset, holder.Size.X.Offset, where .. ": the button last")
-				-- the pure span (TutorialView, the train panel) says the same
-				local spanLeft, spanRight = HudBubble.carrySpan(scale, false, true)
-				T.eq(width / 2 + spanLeft, left, where .. ": carrySpan's left")
-				T.eq(width / 2 + spanRight, right, where .. ": carrySpan's right")
-				-- a new UI scale (HudController) keeps it centred
-				HudView.placeBackpack(refs, scale * 0.9, true)
-				T.eq(2 * holder.Position.X.Offset + holder.Size.X.Offset, 0, where .. ": still centred after a re-placement")
+			for _, name in { "Round", "Pixel" } do
+				PopTheme.setLook(name)
+				for _, size in { { 568, 320 }, { 667, 375 }, { 844, 390 } } do
+					local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
+					local refs = HudBubble.buildGame(scale, size[1]) :: any
+					local width = size[1] / scale
+					local holder, slot = refs.CarryPanel, refs.BlasterSlot
+					local where = `{name} {size[1]} x {size[2]}`
+					local left = width / 2 + holder.Position.X.Offset
+					local ring = (slot:FindFirstChild("Equipped") :: any).Size.X.Offset / 2 - slot.Size.X.Offset / 2
+					T.truthy(
+						left - ring >= HudBubble.ThumbZone * width - 1e-6,
+						`{where}: the slot from {(left - ring) * scale} pt, the zone to {HudBubble.ThumbZone * size[1]} pt`
+					)
+					-- and its right end left of the touch jump button (BoostView.TouchButtons)
+					local small = math.min(size[1], size[2]) <= 500
+					for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+						if b.Name == "Jump" then
+							T.truthy(left + holder.Size.X.Offset <= width - b.Left / scale, `{where}: clear of the jump button`)
+						end
+					end
+					-- a new placement (HudController, the gui's size known) keeps it there
+					HudView.placeBackpack(refs, scale, false)
+					T.eq(width / 2 + holder.Position.X.Offset, left, where .. ": the same after a re-placement")
+					refs.Gui:Destroy()
+				end
 			end
 		end)
-		-- the dark HUD's span is unchanged: right of Roblox's slot
-		local darkLeft, darkRight = HudBubble.carrySpan(1, false, false)
-		T.eq(darkLeft, HudBubble.backpackX(1))
-		T.eq(darkRight, HudBubble.backpackX(1) + HudBubble.BackpackSize.X)
+		PopTheme.setLook(look)
 	end)
 
 	---------------------------------------------------------------- phones and PC
@@ -222,8 +269,10 @@ return function(T, Loader)
 				local badgeBottom = LevelView.BarBottom + LevelView.BarHeight / 2 - LevelView.Badge / 2
 				T.truthy(height - outer[2] < badgeBottom, `{where}: under the level bar ({height - outer[2]} < {badgeBottom})`)
 				-- the boost corner (BoostView.cornerSpot, one and two boosts)
-				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillRect = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any -- (the round look: in the top row)
+				local pillRect = if pill
+						and pill.AnchorPoint.Y == 0
+						and pill.Position.Y.Scale == 0
 					then {
 						Left = width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pill.Size.X.Offset,
 						Top = pill.Position.Y.Offset,

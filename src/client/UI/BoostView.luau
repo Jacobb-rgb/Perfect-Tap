@@ -3092,23 +3092,35 @@ local function cornerTile(button: TextButton, kindId: string)
 	pill.Size = UDim2.fromOffset(BoostView.CornerIcon, BoostView.CornerIcon)
 	pill.BackgroundTransparency = 1
 	pill.ClipsDescendants = false
+	local round = PopTheme.round()
+	if round then
+		-- the round look (the reel's bottom-right squares): a bright studded face in the boost's colour
+		local paints = BoostView.ChipPaints[kindId]
+		pill.BackgroundTransparency = 0
+		Pop.face(pill, if paints then paints.Face else "Green", PopTheme.Corner)
+		Pop.studs(pill, PopTheme.Corner, 0.45, 28, 2)
+	end
 	local dot = UIKit.new("Frame", {
 		Name = "Dot",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, if round then 0.46 else 0.5),
+		Size = UDim2.fromScale(if round then 0.8 else 1, if round then 0.8 else 1),
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 	}, pill)
 	BoostView.art(dot, kindId, false).Size = UDim2.fromScale(1, 1)
 	local label = UIKit.label(pill, "", BoostView.CornerText, {
 		Name = "Text",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 2),
+		AnchorPoint = Vector2.new(0.5, if round then 0.5 else 0),
+		-- (the round look: over the tile's bottom edge, the reel's "inf")
+		Position = if round then UDim2.new(0.5, 0, 1, 0) else UDim2.new(0.5, 0, 1, 2),
 		Size = UDim2.fromOffset(BoostView.CornerTextWidth, BoostView.CornerText),
 		FontFace = PopTheme.Pixel,
 		TextColor3 = PopTheme.Ink,
 		TextWrapped = false,
-		ZIndex = 4,
+		ZIndex = 5,
 	})
-	Pop.edge(label, 2)
+	Pop.edge(label, if round then 2.5 else 2)
 	Pop.fit(label, BoostView.CornerText)
 	button.Size = UDim2.fromOffset(BoostView.CornerWidth, BoostView.cornerHeight())
 end
@@ -3235,10 +3247,39 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	local count = math.max(1, input.Count or #BoostConfig.KindIds)
 	if input.Touch and pill == nil then
 		-- (a column at the right edge, on the touch buttons under it)
-		local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - right - BoostView.CornerWidth, w - right)
-		bottom = math.max(bottom, math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s))
+		local function columnBottom(r: number): number
+			local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - r - BoostView.CornerWidth, w - r)
+			return math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s)
+		end
+		bottom = math.max(bottom, columnBottom(right))
 		stacked = true
 		spot = "Column"
+		-- (the round look's phones have no Shop pill on the right: while the touch tutorial bubble
+		-- shows at the top right and the column would reach it, the column moves left of it)
+		local columnH = count * tile + (count - 1) * gap
+		if bubble and w - right > bubble.Left and h - bottom - columnH < bubble.Bottom + gap then
+			local beside = math.ceil(w - bubble.Left) + gap
+			right, bottom = beside, math.max(bottom, columnBottom(beside))
+			local rowW = BoostView.CornerWidth
+			if h - bottom - columnH < gap then
+				-- (no room for the column over the touch buttons: side by side instead)
+				stacked, columnH = false, tile
+				rowW = count * BoostView.CornerWidth + (count - 1) * gap
+				local rowBottom = 0
+				for _, r in { beside, beside + rowW - BoostView.CornerWidth } do
+					rowBottom = math.max(rowBottom, columnBottom(r))
+				end
+				bottom = math.max(bottom, rowBottom)
+			end
+			-- (over the toasts' column when it must: toasts take no taps)
+			local column = BoostView.ToastColumn
+			local left, top = w - right - rowW, h - bottom - columnH
+			local overToasts = left < w / 2 + column.Width / 2
+				and w / 2 - column.Width / 2 < w - right
+				and top < column.Top + column.Height
+				and column.Top < top + columnH
+			spot = if overToasts then "OverToasts" else "Beside"
+		end
 	elseif input.Touch and pill then
 		-- (a row on the Shop pill, and on any touch button its tiles would reach)
 		local rowW = count * BoostView.CornerWidth + (count - 1) * gap
