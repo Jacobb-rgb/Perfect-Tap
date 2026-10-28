@@ -7,9 +7,11 @@
 	Workspace:BulkMoveTo. Every tree goes back to its exact place when it
 	drops out of the nearest set or the wind stops (stop()).
 
-	Trees are the map's Models named "Tree" (Props, Lobby/Flora): found with
-	one scan of the Workspace the first time the wind needs them, then kept
-	up to date as models stream in and out. A tree with unanchored parts or
+	Trees are the map's Models named "Tree" (Props, Lobby/Flora): found by a
+	walk of the Workspace's folders and models when the wind starts, spread
+	over frames (TreeSway.ScanBudget seconds a frame: no hitch on phones),
+	and found again at the next windy spell (trees stream in and out). No
+	Workspace-wide signals stay connected. A tree with unanchored parts or
 	more than TreeSway.MaxParts parts is skipped.
 ]]
 
@@ -33,6 +35,7 @@ type Swaying = {
 
 local trees: { [Model]: true } = {}
 local scanned = false
+local scanning: thread? = nil
 local swaying: { [Model]: Swaying } = {}
 local nextPick = 0
 
@@ -40,26 +43,33 @@ local function isTree(instance: Instance): boolean
 	return instance.Name == "Tree" and instance:IsA("Model")
 end
 
+-- The tree search: a walk down the Workspace's folders and models (trees never sit inside a
+-- part), at most TreeSway.ScanBudget seconds a frame. The trees found so far sway at once.
 local function scan()
 	if scanned then
 		return
 	end
 	scanned = true
-	for _, d in Workspace:GetDescendants() do
-		if isTree(d) then
-			trees[d :: Model] = true
+	table.clear(trees)
+	scanning = task.spawn(function()
+		local budget = WeatherConfig.TreeSway.ScanBudget
+		local stack: { Instance } = { Workspace }
+		local slice = os.clock()
+		while #stack > 0 do
+			local node = table.remove(stack) :: Instance
+			for _, child in node:GetChildren() do
+				if isTree(child) then
+					trees[child :: Model] = true
+				elseif child:IsA("Folder") or child:IsA("Model") then
+					table.insert(stack, child)
+				end
+			end
+			if os.clock() - slice >= budget then
+				task.wait()
+				slice = os.clock()
+			end
 		end
-	end
-	Workspace.DescendantAdded:Connect(function(d: Instance)
-		if isTree(d) then
-			trees[d :: Model] = true
-		end
-	end)
-	Workspace.DescendantRemoving:Connect(function(d: Instance)
-		if isTree(d) then
-			trees[d :: Model] = nil
-			swaying[d :: Model] = nil
-		end
+		scanning = nil
 	end)
 end
 
@@ -166,6 +176,13 @@ function WeatherSway.stop()
 		swaying[model] = nil
 	end
 	nextPick = 0
+	-- the next windy spell looks for the trees again (they stream in and out)
+	local running = scanning
+	if running then
+		task.cancel(running)
+		scanning = nil
+	end
+	scanned = false
 end
 
 function WeatherSway.active(): boolean

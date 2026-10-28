@@ -34,12 +34,15 @@
 
 	Phones get fewer particles (Phone), Reduce motion turns the lightning
 	flashes and the tree sway off and halves the particles (Reduced).
-	Weather shows only on the surface (Zones, OutsideMinY); the controller
-	also hides it inside a LightingZone (the Blaster Vault), during the
-	elevator ride, the cleaning close-up and the loading screen.
+	Weather shows only on the surface (Zones, OutsideMinY, not in the
+	Covered boxes); the controller also hides it under a roof (Roof: a few
+	short rays up from the character, with a hold so it never blinks),
+	inside a LightingZone (the Blaster Vault), during the elevator ride, the
+	cleaning close-up and the loading screen.
 ]]
 
 local SoundConfig = require(script.Parent.SoundConfig)
+local WorldLayout = require(script.Parent.WorldLayout)
 
 -- "Clear" or one of Order: "Rain" | "Storm" | "Hail" | "Snow" | "Wind" | "Heatwave"
 export type Kind = string
@@ -74,6 +77,7 @@ export type Look = {
 	Sway: number?, -- radians: how far nearby trees lean (TreeSway)
 	Loops: { [string]: number }?, -- loop sound (Sounds key) -> share of its volume
 	Clear: number?, -- studs: no rain / hail / snow falls this close to the camera (Box.Clear if nil)
+	Height: number?, -- studs: the sky field above the camera for this kind (Box.Height if nil)
 }
 
 export type Particle = {
@@ -161,11 +165,12 @@ WeatherConfig.Kinds = {
 		Weight = 12,
 		Duration = { 150, 240 },
 		Tint = { Color = rgb(237, 244, 255), Brightness = 0.04, Contrast = -0.04, Saturation = -0.18 },
-		Wind = 4,
+		Wind = 2.5,
 		Snow = 220,
 		Settle = 3,
 		Loops = { Wind = 0.25 },
 		Clear = 14, -- big soft flakes: the widest clear view
+		Height = 20, -- slow flakes start lower, so they come down round the player (WeatherLogic.travel)
 	},
 	Wind = {
 		On = true,
@@ -198,7 +203,7 @@ WeatherConfig.Particles = {
 		Color = rgb(206, 222, 255),
 		Size = { 0.2, 0.26 }, -- Squash stretches it into a thin streak
 		Speed = { 78, 92 },
-		Lifetime = { 0.7, 0.85 },
+		Lifetime = { 0.75, 0.9 },
 		Transparency = 0.25,
 		LightEmission = 0.25,
 		Squash = 3,
@@ -220,12 +225,11 @@ WeatherConfig.Particles = {
 		Texture = SMOKE,
 		Color = rgb(255, 255, 255),
 		Size = { 0.35, 0.6 },
-		Speed = { 4.5, 7 },
-		Lifetime = { 7, 9 },
+		Speed = { 5.5, 7.5 },
+		Lifetime = { 8, 10 },
 		Transparency = 0.05,
 		LightEmission = 0.4,
 		Spread = 4, -- (small: the flakes must not drift into the clear view)
-		Drag = 0.2,
 		RotSpeed = 60,
 	},
 	Leaves = {
@@ -299,14 +303,17 @@ WeatherConfig.Particles = {
 } :: { [string]: Particle }
 
 -- What follows the camera. The sky field (rain, hail, snow fall out of it) is Field studs wide,
--- Height studs above the camera, leaning with the wind, with a square hole round the camera's
--- fall line: a kind's Clear studs plus what the particles' spread can drift on the way down
--- (WeatherLogic.hole). It is 8 strips: the inner ring (NearWidth wide) with smaller, fainter
--- particles (NearSize, NearAlpha) and the outer ring. The air box (leaves, heat) stands from the
--- ground up, Ahead studs ahead of the camera and Upwind studs upwind.
+-- Height studs above the camera (or a kind's own Height), leaning with the wind, with a square
+-- hole round the camera's fall line: a kind's Clear studs plus what the particles' spread can
+-- drift on the way down (WeatherLogic.hole). It is 8 strips: the inner ring (NearWidth wide)
+-- with smaller, fainter particles (NearSize, NearAlpha) and the outer ring. Whatever falls must
+-- stay visible until Below studs under the camera (WeatherLogic.travel / reach, the spec). The
+-- air box (leaves, heat) stands from the ground up, Ahead studs ahead of the camera and Upwind
+-- studs upwind.
 WeatherConfig.Box = {
 	Field = 72,
 	Height = 32,
+	Below = 8, -- studs: what falls stays visible at least this far below the camera (the ground)
 	Clear = 6, -- studs: the clear view of a kind without its own Clear
 	NearWidth = 10,
 	NearSize = 0.6, -- size share of a particle in the inner ring
@@ -368,6 +375,36 @@ WeatherConfig.Rainbow = {
 	Tint = { Color = rgb(255, 250, 238), Brightness = 0.03, Contrast = 0.04, Saturation = 0.1 }, -- the sun is back
 }
 
+-- Under a roof (the DROPPERS shop, THE GREAT FORGE's passage, the EGGS temple) the weather goes:
+-- every check, Rays short rays straight up from round the character (a triangle Spread studs
+-- out), each going on past what is not a roof (WeatherLogic.roofCounts: see-through parts, trees,
+-- small non-colliding decor) for at most Hops hits and Reach studs (so SKY HAVEN's islets and the
+-- sky islands far above never count). Need of them hitting = covered, and the reading must hold
+-- Hold seconds before the weather goes or comes back (no blinking under lamps and arches).
+WeatherConfig.Roof = {
+	Rays = 3,
+	Spread = 5,
+	Need = 2,
+	Reach = 24, -- studs: about one building
+	Hops = 4,
+	Hold = 0.5,
+	SeeThrough = 0.9, -- a part this transparent (or more) is no roof
+	GhostSize = 8, -- a non-colliding part counts only if this wide on its two big sides (a dome, a slab)
+}
+
+-- No weather in these boxes even where the zones say surface: the tunnel from the Quarry to
+-- the VIP Glimmer Grotto (World/Land builds it between the two zones, under solid rock).
+do
+	local grotto = WorldLayout.Caves.Grotto
+	local door = grotto.Entrance
+	WeatherConfig.Covered = {
+		{
+			Min = Vector3.new(WorldLayout.Quarry.Max.X - 1, door.Position.Y - 3, door.Position.Z - door.Width / 2 - 2),
+			Max = Vector3.new(grotto.Min.X + 1, door.Position.Y + door.Height + 1, door.Position.Z + door.Width / 2 + 2),
+		},
+	} :: { { Min: Vector3, Max: Vector3 } }
+end
+
 -- Trees near you lean with the wind (Wind, Storm): models named "Tree" in the map, nearest
 -- first, rotated about the bottom of their bounding box. Client only, restored exactly.
 WeatherConfig.TreeSway = {
@@ -377,6 +414,7 @@ WeatherConfig.TreeSway = {
 	MaxParts = 40, -- a tree with more parts is skipped (cost)
 	Speed = 1.6, -- radians per second of the sway wave
 	Rescan = 2, -- seconds between picks of the nearest trees
+	ScanBudget = 0.001, -- seconds per frame the tree search may take (spread over frames: no hitch)
 }
 
 WeatherConfig.Phone = {

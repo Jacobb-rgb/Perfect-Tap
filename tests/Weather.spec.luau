@@ -461,7 +461,8 @@ return function(T, Loader)
 				for _, key in { "Rain", "Hail", "Snow" } do
 					local rate = (look :: any)[key]
 					if rate and rate > 0 then
-						local drift = box.Height / math.cos(slant) * math.tan(math.rad(P[key].Spread or 0))
+						local path = WeatherLogic.fieldHeight(look) / math.cos(slant)
+						local drift = path * math.tan(math.rad(P[key].Spread or 0))
 						T.truthy(hole - drift >= clear - 1e-6, `{kind} {key} cannot drift into the clear view`)
 					end
 				end
@@ -558,5 +559,188 @@ return function(T, Loader)
 		T.lt(R.Rate, 1, "fewer particles")
 		T.truthy(WeatherConfig.Rainbow.FadeIn >= 2 and WeatherConfig.Rainbow.FadeOut >= 2, "the rainbow only fades slowly")
 		T.truthy(S.FadeIn >= 5 and S.FadeOut >= 5, "weather comes and goes slowly")
+	end)
+
+	T.test("weather: rain, hail and snow come down round the player (their travel reaches the ground)", function()
+		local box = WeatherConfig.Box
+		T.truthy(box.Below >= 6, "what falls stays visible below the camera")
+		local checked = 0
+		for _, kind in WeatherConfig.Order do
+			local look = WeatherConfig.Kinds[kind]
+			local need = WeatherLogic.reach(look)
+			T.near(need, (WeatherLogic.fieldHeight(look) + box.Below) / math.cos(WeatherLogic.lookSlant(look)), 1e-9, "reach")
+			for _, key in { "Rain", "Hail", "Snow" } do
+				local rate = (look :: any)[key]
+				if rate and rate > 0 then
+					checked += 1
+					-- the slowest, shortest-lived particle, until it starts to fade (80 % of its life)
+					local travel = WeatherLogic.travel(WeatherConfig.Particles[key], 0.8)
+					T.truthy(travel >= need, `{kind} {key}: travels {travel} of {need} studs before it fades`)
+				end
+			end
+		end
+		T.eq(checked, 5, "rain, storm, hail (rain + hail) and snow")
+		T.truthy(WeatherLogic.fieldHeight(WeatherConfig.Kinds.Snow) < box.Height, "the slow snow starts lower")
+		T.near(WeatherLogic.travel({ Speed = { 10, 10 }, Lifetime = { 2, 2 } } :: any, 0.5), 10, 1e-9, "no drag: v t")
+		T.lt(WeatherLogic.travel({ Speed = { 10, 10 }, Lifetime = { 2, 2 }, Drag = 1 } :: any, 0.5), 10, "drag slows it")
+	end)
+
+	T.test("weather: no weather in the Quarry -> Grotto tunnel", function()
+		for _, p in { Vector3.new(76, -9, -182), Vector3.new(73, -6, -178), Vector3.new(86, -9, -186) } do
+			T.falsy(WeatherLogic.isSurface(p), `tunnel {p}`)
+		end
+		T.truthy(WeatherLogic.isSurface(Vector3.new(0, 3, -112)), "the quarry rim road keeps its weather")
+		T.truthy(WeatherLogic.isSurface(Vector3.new(76, 220, -182)), "the sky far above it too")
+	end)
+
+	-- the roof rule with real geometry: an upward ray against the parts' boxes (the nearest one it
+	-- enters; a ray starting inside a part never hits it, like Workspace:Raycast)
+	local function rayUp(origin: any, length: number, parts: { any }): (any, number)
+		local up = Vector3.new(0, 1, 0)
+		local best, bestT = nil, length
+		for _, part in parts do
+			local o = part.CFrame:PointToObjectSpace(origin)
+			local d = part.CFrame:VectorToObjectSpace(up)
+			local tmin, tmax = -math.huge, math.huge
+			local ok = true
+			for _, axis in { "X", "Y", "Z" } do
+				local oa, da, h = o[axis], d[axis], part.Size[axis] / 2
+				if math.abs(da) < 1e-9 then
+					if math.abs(oa) > h then
+						ok = false
+						break
+					end
+				else
+					local t1, t2 = (-h - oa) / da, (h - oa) / da
+					if t1 > t2 then
+						t1, t2 = t2, t1
+					end
+					tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+					if tmin > tmax then
+						ok = false
+						break
+					end
+				end
+			end
+			if ok and tmin > 1e-4 and tmin < bestT then
+				best, bestT = part, tmin
+			end
+		end
+		return best, bestT
+	end
+	-- WeatherController.roofAbove / roofed, against `parts`
+	local function covered(position: any, parts: { any }): boolean
+		local R = WeatherConfig.Roof
+		local hits = 0
+		for _, offset in WeatherLogic.roofOffsets() do
+			local origin = position + offset
+			local from = origin
+			for _ = 1, R.Hops do
+				local left = R.Reach - (from.Y - origin.Y)
+				if left <= 0 then
+					break
+				end
+				local part, t = rayUp(from, left, parts)
+				if not part then
+					break
+				end
+				local y = from.Y + t
+				local tree = part:FindFirstAncestor("Tree") ~= nil
+				if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, tree, part.Size) then
+					hits += 1
+					break
+				end
+				from = Vector3.new(from.X, y + 0.05, from.Z)
+			end
+		end
+		return WeatherLogic.roofed(hits)
+	end
+
+	T.test("weather: off under the DROPPERS roof, on in the open plaza next to it", function()
+		local Droppers = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Droppers")
+		local DropperShopBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperShopBuilder")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local folder = roblox.Instance.new("Folder")
+		Droppers.build(folder, Rng.new(1))
+		local house = folder:FindFirstChild("DroppersHouse", true)
+		T.truthy(house, "the house is built")
+		local parts = {}
+		for _, d in house:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+			end
+		end
+		local frame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
+		local room = DropperShopBuilder.Room
+		local function at(x: number, y: number, z: number): any
+			return (frame * roblox.CFrame.new(x, y, z)).Position
+		end
+		local zc = room.Front - room.D / 2
+		-- inside: the middle, by the back wall, by a side wall, just inside the gateway
+		for _, p in
+			{
+				at(0, room.Plinth + 3, zc),
+				at(0, room.Plinth + 3, room.Front - room.D + 2),
+				at(room.W / 2 - 3, room.Plinth + 3, zc),
+				at(0, room.Plinth + 3, room.Front - 2),
+			}
+		do
+			T.truthy(covered(p, parts), `inside the shop at {p}: under the roof`)
+		end
+		-- outside: the open plaza in front, beside and behind the house
+		for _, p in { at(0, 3, room.Front + 14), at(room.W / 2 + 9, 3, zc), at(-room.W / 2 - 9, 3, zc), at(0, 3, room.Front - room.D - 10) } do
+			T.falsy(covered(p, parts), `the plaza at {p}: open sky`)
+		end
+	end)
+
+	T.test("weather: lamps, trees, glass and the islets far above are no roof", function()
+		local function part(cf: any, size: any, collide: boolean, transparency: number?, parent: any?): any
+			local x = roblox.Instance.new("Part")
+			x.CFrame = cf
+			x.Size = size
+			x.CanCollide = collide
+			x.Transparency = transparency or 0
+			x.Parent = parent
+			return x
+		end
+		local root = Vector3.new(0, 3, 0)
+		local CF = roblox.CFrame.new
+		T.falsy(covered(root, { part(CF(0, 10, 0), Vector3.new(2, 1, 2), true) }), "a lamp's head")
+		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 2, 2), true) }), "an arch's beam")
+		local tree = roblox.Instance.new("Model")
+		tree.Name = "Tree"
+		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(14, 6, 14), true, 0, tree) }), "a big tree's canopy")
+		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 1, 30), true, 0.95) }), "a glass roof you see through")
+		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 1, 3), false) }), "a thin non-colliding beam")
+		T.truthy(covered(root, { part(CF(0, 14, 0), Vector3.new(14, 1, 14), false) }), "a wide non-colliding dome (the EGGS temple)")
+		T.truthy(covered(root, { part(CF(0, 12, 0), Vector3.new(40, 1, 40), true) }), "a plain roof")
+		T.falsy(covered(root, { part(CF(0, 3 + WeatherConfig.Roof.Reach + 6, 0), Vector3.new(40, 4, 40), true) }), "an islet far above")
+		-- glass first, then the real roof above it
+		T.truthy(
+			covered(root, { part(CF(0, 9, 0), Vector3.new(30, 1, 30), true, 0.95), part(CF(0, 15, 0), Vector3.new(30, 1, 30), true) }),
+			"the roof above a glass ceiling"
+		)
+	end)
+
+	T.test("weather: the roof reading holds before the weather goes or comes back", function()
+		local hold = WeatherConfig.Roof.Hold
+		T.truthy(hold >= 0.4 and hold <= 1, "about half a second")
+		local c = WeatherLogic.newCover()
+		T.falsy(WeatherLogic.settleCover(c, false, 0), "open")
+		T.falsy(WeatherLogic.settleCover(c, true, 1), "under a roof: not yet")
+		T.falsy(WeatherLogic.settleCover(c, true, 1 + hold * 0.5), "still not")
+		T.truthy(WeatherLogic.settleCover(c, true, 1 + hold), "held: indoors")
+		-- a moment in the open (a gap in the roof) does not bring the weather back
+		T.truthy(WeatherLogic.settleCover(c, false, 2), "a gap")
+		T.truthy(WeatherLogic.settleCover(c, true, 2 + hold * 0.5), "covered again: still indoors")
+		T.truthy(WeatherLogic.settleCover(c, false, 3), "out")
+		T.truthy(WeatherLogic.settleCover(c, false, 3 + hold * 0.5), "not yet")
+		T.falsy(WeatherLogic.settleCover(c, false, 3 + hold), "held: the weather is back")
+		-- walking under a lamp: one covered reading never switches
+		T.falsy(WeatherLogic.settleCover(c, true, 4), "under a lamp")
+		T.falsy(WeatherLogic.settleCover(c, false, 4.25), "past it")
+		T.falsy(WeatherLogic.settleCover(c, false, 6), "never blinked")
+		T.eq(#WeatherLogic.roofOffsets(), WeatherConfig.Roof.Rays, "one start per ray")
+		T.truthy(WeatherConfig.Roof.Need >= 2, "more than one ray must find the roof")
 	end)
 end

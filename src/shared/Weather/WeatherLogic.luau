@@ -22,7 +22,13 @@
 	  camera (hole, strips) so nothing falls near the lens, the ground pads'
 	  distance from the camera (padClear), at most one flash per
 	  Lightning.MinFlashGap (flashAllowed).
-	- isSurface(position): weather shows only on the surface (zones, sea).
+	- Reach (review 2026-10-28): fieldHeight, travel: what falls stays visible
+	  until it is Box.Below studs under the camera (snow falls round you).
+	- Roofs: roofOffsets / roofCounts / roofed (the rays the controller casts
+	  up from the character and which hits make a roof) and settleCover (the
+	  hold that keeps it from blinking).
+	- isSurface(position): weather shows only on the surface (zones, sea, not
+	  the Covered boxes).
 ]]
 
 local WeatherConfig = require(script.Parent.Parent.Config.WeatherConfig)
@@ -66,6 +72,13 @@ export type Strip = {
 	SizeZ: number,
 	Near: boolean,
 	Share: number,
+}
+
+-- The roof reading with its hold (settleCover).
+export type Cover = {
+	Indoors: boolean, -- what the weather obeys
+	Pending: boolean, -- the latest reading
+	Since: number, -- when the reading last changed
 }
 
 export type Band = {
@@ -438,8 +451,31 @@ function WeatherLogic.hole(look: WeatherConfig.Look?, cfg: Config?): number
 	if (look.Snow or 0) > 0 then
 		spread = math.max(spread, p.Snow.Spread or 0)
 	end
-	local path = c.Box.Height / math.cos(WeatherLogic.lookSlant(look, c))
+	local path = WeatherLogic.fieldHeight(look, c) / math.cos(WeatherLogic.lookSlant(look, c))
 	return clear + path * math.tan(math.rad(spread))
+end
+
+-- Studs the sky field sits above the camera for a kind (its Height, else Box.Height).
+function WeatherLogic.fieldHeight(look: WeatherConfig.Look?, cfg: Config?): number
+	local c = cfg or WeatherConfig
+	return if look and look.Height then look.Height else c.Box.Height
+end
+
+-- How far the slowest, shortest-lived particle of a look travels in `share` of its life (drag
+-- slows it: v / d * (1 - e^-dt)).
+function WeatherLogic.travel(p: WeatherConfig.Particle, share: number): number
+	local v, t = p.Speed[1], p.Lifetime[1] * share
+	local d = p.Drag or 0
+	if d > 1e-6 then
+		return v / d * (1 - math.exp(-d * t))
+	end
+	return v * t
+end
+
+-- How far a particle of a kind must travel to fall Box.Below studs under the camera.
+function WeatherLogic.reach(look: WeatherConfig.Look?, cfg: Config?): number
+	local c = cfg or WeatherConfig
+	return (WeatherLogic.fieldHeight(look, c) + c.Box.Below) / math.cos(WeatherLogic.lookSlant(look, c))
 end
 
 -- The sky field's 8 strips round a hole of half-width `hole`: the inner ring (Box.NearWidth wide,
@@ -556,11 +592,79 @@ function WeatherLogic.rainbowTransparency(alpha: number, along: number, cfg: Con
 	return 1 - (1 - base) * math.clamp(alpha, 0, 1)
 end
 
+---------------------------------------------------------------- roofs
+
+-- Where the roof rays start round the character (flat offsets: a triangle Roof.Spread out).
+function WeatherLogic.roofOffsets(cfg: Config?): { Vector3 }
+	local c = cfg or WeatherConfig
+	local r = c.Roof
+	local out: { Vector3 } = {}
+	for i = 1, r.Rays do
+		local a = math.pi / 2 + (i - 1) / r.Rays * TAU
+		table.insert(out, Vector3.new(math.cos(a) * r.Spread, 0, math.sin(a) * r.Spread))
+	end
+	return out
+end
+
+-- Does a hit `distance` studs above a ray's start make a roof? Not past Roof.Reach, not a tree,
+-- not see-through, and a part that does not collide only if it is a wide slab or dome
+-- (its two bigger sides at least Roof.GhostSize).
+function WeatherLogic.roofCounts(
+	distance: number,
+	transparency: number,
+	canCollide: boolean,
+	tree: boolean,
+	size: Vector3,
+	cfg: Config?
+): boolean
+	local c = cfg or WeatherConfig
+	local r = c.Roof
+	if tree or distance > r.Reach or transparency >= r.SeeThrough then
+		return false
+	end
+	if canCollide then
+		return true
+	end
+	local a, b, d = size.X, size.Y, size.Z
+	local middle = math.max(math.min(a, b), math.min(math.max(a, b), d))
+	return middle >= r.GhostSize
+end
+
+-- Covered: Roof.Need of the rays found a roof.
+function WeatherLogic.roofed(hits: number, cfg: Config?): boolean
+	local c = cfg or WeatherConfig
+	return hits >= c.Roof.Need
+end
+
+function WeatherLogic.newCover(): Cover
+	return { Indoors = false, Pending = false, Since = 0 }
+end
+
+-- The roof reading after its hold: a change must last Roof.Hold seconds before the weather obeys
+-- it (walking under a lamp, an arch or a fence never makes the weather blink).
+function WeatherLogic.settleCover(state: Cover, covered: boolean, now: number, cfg: Config?): boolean
+	local c = cfg or WeatherConfig
+	if covered ~= state.Pending then
+		state.Pending = covered
+		state.Since = now
+	end
+	if covered ~= state.Indoors and now - state.Since >= c.Roof.Hold then
+		state.Indoors = covered
+	end
+	return state.Indoors
+end
+
 ---------------------------------------------------------------- where
 
--- True where weather shows: the surface (WeatherConfig.Zones), the sea and the sky above it.
+-- True where weather shows: the surface (WeatherConfig.Zones), the sea and the sky above it, but
+-- not in a Covered box (the Quarry -> Grotto tunnel).
 function WeatherLogic.isSurface(position: Vector3, cfg: Config?): boolean
 	local c = cfg or WeatherConfig
+	for _, box in c.Covered do
+		if WorldLayout.isInBox(position, box.Min, box.Max) then
+			return false
+		end
+	end
 	local zone = WorldLayout.zoneAt(position)
 	if zone then
 		return c.Zones[zone.Id] == true

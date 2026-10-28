@@ -169,7 +169,7 @@ function WeatherPreview.build(Loader: any, opts: { fps: number?, width: number?,
 		for _, strip in WeatherLogic.strips(hole) do
 			table.insert(strips, { strip.X, strip.Z, strip.SizeX, strip.SizeZ, strip.Near, strip.Share })
 		end
-		sky[kind] = { hole = hole, strips = strips }
+		sky[kind] = { hole = hole, strips = strips, height = WeatherLogic.fieldHeight(look) }
 	end
 
 	local segments = {}

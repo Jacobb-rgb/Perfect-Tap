@@ -81,10 +81,11 @@
     const s = frame.slant;
     const X = add(mul(wind, Math.cos(s)), mul(up, Math.sin(s)));
     const Y = add(mul(wind, -Math.sin(s)), mul(up, Math.cos(s)));
-    // the sky field is centred on the camera's fall line (WeatherFx.place)
-    const skyCenter = add(add(cam.pos, mul(wind, -box.height * Math.tan(s))), [0, box.height, 0]);
-    const airCenter = sub([at[0], data.groundY + box.air[1] / 2 - 0.5, at[2]], mul(wind, box.upwind));
+    // the sky field is centred on the camera's fall line, the kind's height up (WeatherFx.place)
     const field = data.sky[frame.kind];
+    const height = field ? field.height : box.height;
+    const skyCenter = add(add(cam.pos, mul(wind, -height * Math.tan(s))), [0, height, 0]);
+    const airCenter = sub([at[0], data.groundY + box.air[1] / 2 - 0.5, at[2]], mul(wind, box.upwind));
     return {
       sky: { center: skyCenter, X, Y, Z, strips: field ? field.strips : [], down: mul(Y, -1) },
       air: { center: airCenter, X: wind, Y: up, Z, size: box.air },

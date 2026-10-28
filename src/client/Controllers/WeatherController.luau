@@ -9,12 +9,15 @@
 	- Every CheckEvery seconds: the weather now (WeatherLogic.at, or the
 	  Workspace attribute WeatherForce in Studio), the gate (weather shows
 	  only on the surface: WeatherLogic.isSurface for the character, not
-	  inside a LightingZone like the Blaster Vault, not during the elevator
-	  ride, the cleaning close-up or the loading screen; it fades out in
-	  GateFade seconds), the emitter rates (capped on phones and with Reduce
-	  motion), the loop volumes, the ground pads (a couple of raycasts per
-	  check, never closer than Ground.Clear to the camera), hail clacks, the
-	  sky field's clear hole for the kind (WeatherLogic.hole).
+	  under a roof (WeatherConfig.Roof: three short rays up from round the
+	  character, two must hit a roof, held Roof.Hold seconds; only while
+	  there is weather), not inside a LightingZone like the Blaster Vault,
+	  not during the elevator ride, the cleaning close-up or the loading
+	  screen; it fades out in GateFade seconds), the emitter rates (capped
+	  on phones and with Reduce motion), the loop volumes, the ground pads
+	  (a couple of raycasts per check, never closer than Ground.Clear to the
+	  camera), hail clacks, the sky field's clear hole and height for the
+	  kind (WeatherLogic.hole, fieldHeight).
 	- One RenderStepped connection, only while there is weather (or its tint
 	  is still fading): the boxes follow the camera, the tint eases toward
 	  its target, the lightning strikes on time (a flash in WeatherTint, at
@@ -62,6 +65,7 @@ local reduced = false
 
 local windYaw = 0
 local slant = 0
+local fieldHeight = WeatherConfig.Box.Height
 local groundY = 0
 local sunDirection = Vector3.new(-0.965, 0.225, 0.136).Unit
 
@@ -91,6 +95,12 @@ local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.IgnoreWater = false
 local filteredCharacter: Model? = nil
+-- the roof rays: they skip our own weather parts, the 3D sound pool and every character
+local roofParams = RaycastParams.new()
+roofParams.FilterType = Enum.RaycastFilterType.Exclude
+roofParams.IgnoreWater = true
+local cover = WeatherLogic.newCover()
+local wasRaining = false
 
 -- The weather now (nil before the first check).
 function WeatherController.current(): WeatherLogic.State?
@@ -142,7 +152,59 @@ local function rootPosition(): Vector3?
 	return nil
 end
 
-local function allowedHere(): boolean
+-- One roof ray straight up from `origin`: true when it meets a roof within Roof.Reach; it goes on
+-- past what is no roof (WeatherLogic.roofCounts) for at most Roof.Hops hits.
+local function roofAbove(origin: Vector3): boolean
+	local r = WeatherConfig.Roof
+	local from = origin
+	for _ = 1, r.Hops do
+		local left = r.Reach - (from.Y - origin.Y)
+		if left <= 0 then
+			return false
+		end
+		local hit = Workspace:Raycast(from, Vector3.new(0, left, 0), roofParams)
+		if not hit then
+			return false
+		end
+		local part = hit.Instance
+		local tree = part:FindFirstAncestor("Tree") ~= nil
+		local distance = hit.Position.Y - origin.Y
+		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, tree, part.Size) then
+			return true
+		end
+		from = hit.Position + Vector3.new(0, 0.05, 0)
+	end
+	return false
+end
+
+-- Under a roof now (the rays round the character, Roof.Need of them hitting).
+local function roofed(position: Vector3): boolean
+	local list: { Instance } = {}
+	local f = fx
+	if f then
+		table.insert(list, f.Folder)
+	end
+	local sfx = Workspace:FindFirstChild("ClientSfx")
+	if sfx then
+		table.insert(list, sfx)
+	end
+	for _, other in Players:GetPlayers() do
+		if other.Character then
+			table.insert(list, other.Character)
+		end
+	end
+	roofParams.FilterDescendantsInstances = list
+	local hits = 0
+	for _, offset in WeatherLogic.roofOffsets() do
+		if roofAbove(position + offset) then
+			hits += 1
+		end
+	end
+	return WeatherLogic.roofed(hits)
+end
+
+-- `raining`: there is weather now (the roof rays only run then).
+local function allowedHere(raining: boolean): boolean
 	if CleaningController.isActive() or rideShowing() then
 		return false
 	end
@@ -151,7 +213,22 @@ local function allowedHere(): boolean
 	if not position then
 		return false
 	end
-	return WeatherLogic.isSurface(position) and not indoors(position)
+	if not WeatherLogic.isSurface(position) or indoors(position) then
+		return false
+	end
+	local now = os.clock()
+	if not raining then
+		wasRaining = false
+		WeatherLogic.settleCover(cover, false, now)
+		return true
+	end
+	local covered = roofed(position)
+	if not wasRaining then
+		-- weather just began: take the reading at once (no blip of rain indoors)
+		wasRaining = true
+		cover.Indoors, cover.Pending, cover.Since = covered, covered, now
+	end
+	return not WeatherLogic.settleCover(cover, covered, now)
 end
 
 ---------------------------------------------------------------- the instances
@@ -322,7 +399,7 @@ local function frame(dt: number)
 	end
 	local cf = camera.CFrame
 	if busy then
-		WeatherFx.place(f, cf, windYaw, slant, groundY)
+		WeatherFx.place(f, cf, windYaw, slant, groundY, fieldHeight)
 	end
 
 	-- lightning: strike on time, the flash eases off on its own curve
@@ -393,7 +470,7 @@ local function check(dt: number)
 	local now = Workspace:GetServerTimeNow()
 	local state = WeatherLogic.at(now, Workspace:GetAttribute(WeatherConfig.ForceAttribute))
 	current = state
-	local open = allowedHere()
+	local open = allowedHere(state.Kind ~= "Clear" or state.Rainbow > 0)
 	local was = gate
 	local step = dt / math.max(WeatherConfig.GateFade, 0.05)
 	gate = if open then math.min(1, gate + step) else math.max(0, gate - step)
@@ -405,6 +482,7 @@ local function check(dt: number)
 	target = WeatherLogic.tint(state.Kind, intensity, rainbowAlpha)
 	windYaw = state.WindYaw
 	slant = WeatherLogic.lookSlant(look)
+	fieldHeight = WeatherLogic.fieldHeight(look)
 	busy = intensity > 0.001 or rainbowAlpha > 0.001
 
 	local f = fx

@@ -426,16 +426,17 @@ end
 
 ---------------------------------------------------------------- placing (every frame)
 
--- What follows the camera. The sky field is centred on the camera's fall line (Height studs up
--- and upwind by Height x tan(slant), so the slanted rain misses the lens by the hole) and leans
--- `slant` radians downwind; the air box stands from `groundY` up, ahead and upwind.
-function WeatherFx.place(fx: Fx, camera: CFrame, windYaw: number, slant: number, groundY: number)
+-- What follows the camera. The sky field is centred on the camera's fall line (`height` studs
+-- up, WeatherLogic.fieldHeight, and upwind by height x tan(slant), so the slanted rain misses the
+-- lens by the hole) and leans `slant` radians downwind; the air box stands from `groundY` up,
+-- ahead and upwind.
+function WeatherFx.place(fx: Fx, camera: CFrame, windYaw: number, slant: number, groundY: number, height: number)
 	local box = WeatherConfig.Box
 	local wind = WeatherLogic.windDirection(windYaw)
-	local upwind = -wind * (box.Height * math.tan(slant))
+	local upwind = -wind * (height * math.tan(slant))
 	-- yaw so the field's +X is downwind, then roll so its bottom faces point down and downwind
 	local turn = CFrame.fromMatrix(Vector3.zero, wind, Vector3.new(0, 1, 0))
-	local field = CFrame.new(camera.Position + upwind + Vector3.new(0, box.Height, 0)) * turn * CFrame.Angles(0, 0, slant)
+	local field = CFrame.new(camera.Position + upwind + Vector3.new(0, height, 0)) * turn * CFrame.Angles(0, 0, slant)
 	for _, strip in fx.Sky do
 		strip.Part.CFrame = field * strip.Offset
 	end
