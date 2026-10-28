@@ -178,6 +178,20 @@ return function(T, Loader)
 		T.eq(e.BarText, `Blaster LV 3/{RebirthConfig.MinBlaster}`)
 		T.eq(e.Rows[1][2], tostring(RebirthConfig.starsFor(RebirthConfig.MinBlaster)), "a rebirth at the requirement")
 		T.eq(e.Rows[2][2], "LV 1")
+		T.eq(e.Lead, RebirthView.LeadText)
+		-- right after a rebirth the snapshot's Reached is 0 (no level bought with coins yet): the bar
+		-- reads the blaster's level, like the row above it (review 2026-10-28 #16)
+		local fresh = info(1, {}, 5)
+		fresh.Reached = 0
+		T.eq(RebirthView.reelValues(fresh).BarText, `Blaster LV 1/{RebirthConfig.MinBlaster}`)
+		-- past MinBlaster with no coin level this run (NotForged): the box says what the server wants
+		local lifted = info(RebirthConfig.MinBlaster + 1, {}, 0)
+		lifted.Ready = false
+		lifted.Reached = 0
+		local l = RebirthView.reelValues(lifted)
+		T.eq(l.Lead, RebirthView.forgeText(RebirthConfig.MinBlaster + 1), "the reason in the box")
+		T.eq(l.BarText, `Buy LV {RebirthConfig.MinBlaster + 2} with coins`)
+		T.eq(l.Rows[1][2], tostring(RebirthConfig.starsFor(RebirthConfig.MinBlaster + 2)), "what that rebirth would pay")
 		if not (PopTheme.round() and UIConfig.lightUI()) then
 			return
 		end

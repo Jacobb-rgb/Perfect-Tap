@@ -1394,9 +1394,13 @@ export type ReelRefs = {
 
 -- What the reel page shows for a save (pure: the specs read it): the heads, the rows' before /
 -- after words, the bar's share and its words.
-function RebirthView.reelValues(info: Info): { From: string, To: string, Rows: { { string } }, Bar: number, BarText: string }
-	local reached = info.Reached or info.Level
-	local paid = if info.Ready then info.StarsNow else RebirthConfig.starsFor(RebirthConfig.MinBlaster)
+function RebirthView.reelValues(info: Info): { From: string, To: string, Rows: { { string } }, Bar: number, BarText: string, Lead: string }
+	local min = RebirthConfig.MinBlaster
+	-- (the blaster's level, as the rows show it; past MinBlaster with no level bought with coins this
+	-- run (RebirthConfig.canRebirth "NotForged"), the box says what the server wants: forgeText)
+	local forge = not info.Ready and info.Level >= min
+	local nextLevel = math.min(info.Level + 1, BlasterData.MaxLevel)
+	local paid = if info.Ready then info.StarsNow elseif forge then RebirthConfig.starsFor(nextLevel) else RebirthConfig.starsFor(min)
 	local start = info.Start or RebirthConfig.startLevel(info.Perks)
 	return {
 		From = `Rebirth {info.Count}`,
@@ -1405,10 +1409,12 @@ function RebirthView.reelValues(info: Info): { From: string, To: string, Rows: {
 			{ tostring(info.Stars), tostring(info.Stars + math.max(0, paid)) },
 			{ `LV {info.Level}`, `LV {start}` },
 		},
-		Bar = if info.Ready then 1 else math.clamp(reached / RebirthConfig.MinBlaster, 0, 1),
+		Bar = if info.Ready or forge then 1 else math.clamp(info.Level / min, 0, 1),
 		BarText = if info.Ready
-			then `Blaster LV {reached}: ready!`
-			else `Blaster LV {math.min(reached, RebirthConfig.MinBlaster)}/{RebirthConfig.MinBlaster}`,
+			then `Blaster LV {info.Level}: ready!`
+			elseif forge then `Buy LV {nextLevel} with coins`
+			else `Blaster LV {info.Level}/{min}`,
+		Lead = if forge then RebirthView.forgeText(info.Level) else RebirthView.LeadText,
 	}
 end
 
@@ -1673,6 +1679,7 @@ local function reelFill(refs: Refs, info: Info)
 	end
 	reel.Fill.Size = UDim2.fromScale(values.Bar, 1)
 	reel.BarText.Text = values.BarText
+	reel.Lead.Text = values.Lead
 	refs.Need.Visible = false
 end
 

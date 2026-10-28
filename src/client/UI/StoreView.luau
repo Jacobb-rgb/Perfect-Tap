@@ -1510,7 +1510,9 @@ sizeBanner = function(refs: Refs)
 	end
 	local buttonH = StoreView.BannerButtonH
 	if refs.Compact then
-		buttonH = math.max(buttonH, StoreView.minTouch(refs.Fit))
+		-- (the round look's list shrinks the banner (ListFit): its buttons grow to stay 44 pt)
+		local k = if PopTheme.round() then StoreView.CardsWidth / StoreView.BannerWidth else 1
+		buttonH = math.max(buttonH, math.ceil(StoreView.minTouch(refs.Fit) / k))
 	end
 	for _, button in banner.Buys do
 		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)

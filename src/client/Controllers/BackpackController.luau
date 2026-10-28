@@ -120,7 +120,7 @@ local function keepSelection(view: BackpackView.Refs)
 		return
 	end
 	local selected = GuiService.SelectedObject
-	if selected and selected:IsDescendantOf(view.Gui) and selected.Parent ~= nil then
+	if selected and selected:IsDescendantOf(view.Gui) and selected.Parent ~= nil and selected.Visible then
 		return
 	end
 	local first = BackpackView.firstRow(view)
@@ -198,6 +198,12 @@ function BackpackController.open()
 	local view = ensureView()
 	isOpen = true
 	fit(view)
+	-- (a fresh look each time: the last search is cleared)
+	local search = view.Search
+	if search then
+		search.Text = ""
+	end
+	BackpackView.setSearch(view, "")
 	BackpackView.setBackpack(view, BackpackState.get())
 	updateHint(view)
 	view.Gui.Enabled = true

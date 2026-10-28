@@ -540,6 +540,20 @@ function BackpackView.setSearch(refs: Refs, text: string)
 	for _, row in refs.Rows do
 		row.Frame.Visible = refs.Filter == "" or string.find(string.lower(row.Entry.Name), refs.Filter, 1, true) ~= nil
 	end
+	BackpackView.showEmpty(refs)
+end
+
+BackpackView.NoMatchText = "Nothing in your backpack matches the search."
+
+-- The empty line: an empty backpack, or a search that hides every stack.
+function BackpackView.showEmpty(refs: Refs)
+	local any, shown = false, false
+	for _, row in refs.Rows do
+		any = true
+		shown = shown or row.Frame.Visible
+	end
+	refs.Empty.Text = if any then BackpackView.NoMatchText else BackpackView.EmptyText
+	refs.Empty.Visible = not shown
 end
 
 function BackpackView.build(): Refs
@@ -782,13 +796,18 @@ function BackpackView.layout(refs: Refs, w: number, h: number, compact: boolean?
 	local bodyW = size.X - 8
 	local bodyH = size.Y - m.Header - 4
 	local innerW = bodyW - 2 * m.Pad
-	refs.Info.Position = UDim2.fromOffset(m.Pad, m.Pad)
-	refs.Info.Size = UDim2.fromOffset(innerW, m.Info)
 	local search = refs.Search
+	-- (the round look's search box: a thumb tall on a phone, MinTouch points through the fit
+	-- shrink; the info row grows with it)
+	local touchLeast = if isCompact then math.ceil(BackpackView.MinTouch / (BackpackView.PhoneScale * math.max(fit, 0.3))) else 0
+	local searchH = if search then math.max(m.Info - 8, touchLeast) else 0
+	local infoH = math.max(m.Info, searchH + 8)
+	refs.Info.Position = UDim2.fromOffset(m.Pad, m.Pad)
+	refs.Info.Size = UDim2.fromOffset(innerW, infoH)
 	-- (the round look: the search box first, then the pack's name, its bar and the count chip)
 	local searchW = if search then math.floor(innerW * 0.34) else 0
 	if search then
-		search.Size = UDim2.fromOffset(searchW, m.Info - 8)
+		search.Size = UDim2.fromOffset(searchW, searchH)
 		search.TextSize = m.Text + 2
 	end
 	local nameX = if search then searchW + 10 else 0
@@ -806,7 +825,7 @@ function BackpackView.layout(refs: Refs, w: number, h: number, compact: boolean?
 	if barLabel then
 		Pop.fit(barLabel, math.floor(m.Bar * 0.9))
 	end
-	local listTop = m.Pad * 2 + m.Info
+	local listTop = m.Pad * 2 + infoH
 	local listH = bodyH - listTop - m.Footer - m.Pad
 	refs.List.Position = UDim2.fromOffset(m.Pad, listTop)
 	refs.List.Size = UDim2.fromOffset(innerW, math.max(m.Row, listH))
@@ -890,7 +909,7 @@ function BackpackView.setBackpack(refs: Refs, backpack: Backpack): { Row }
 			refs.Rows[id] = nil
 		end
 	end
-	refs.Empty.Visible = next(refs.Rows) == nil
+	BackpackView.showEmpty(refs)
 	return created
 end
 
@@ -902,7 +921,8 @@ end
 function BackpackView.firstRow(refs: Refs): Row?
 	local best: Row? = nil
 	for _, row in refs.Rows do
-		if not best or row.Frame.LayoutOrder < best.Frame.LayoutOrder then
+		-- (only a stack the search shows: a gamepad selection never sits on a hidden cell)
+		if row.Frame.Visible and (not best or row.Frame.LayoutOrder < best.Frame.LayoutOrder) then
 			best = row
 		end
 	end

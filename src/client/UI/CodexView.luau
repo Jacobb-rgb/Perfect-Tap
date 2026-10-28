@@ -823,6 +823,10 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 		frame.Panel.Position += UDim2.fromOffset(room, 0)
 	end
 	local mm = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
+	if not filters and refs.Filter ~= nil then
+		-- (no tabs on this layout: nothing could clear the filter, so every card shows)
+		CodexView.setFilter(refs, nil)
+	end
 	for id, tab in refs.Filters do
 		local info = Rarity.ById[id]
 		local i = if info then table.find(Rarity.List, info) or 1 else 1

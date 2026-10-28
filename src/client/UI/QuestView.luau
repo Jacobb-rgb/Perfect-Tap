@@ -117,6 +117,8 @@ QuestView.PopupHeight = 430
 QuestView.RoundPopupWidth = 780
 QuestView.RoundPopupHeight = 572
 QuestView.RoundGridH = 300
+QuestView.RoundGridMin = 180 -- the grid's least height when a phone's window is short (layoutPopup)
+QuestView.RoundPopupLeast = 480 -- under this height the round popup shrinks whole (fit < 1)
 QuestView.WeeklyPaint = "Yellow"
 
 -- Design units a tap target needs to be 44 pt on a phone through the fit shrink.
@@ -125,9 +127,10 @@ function QuestView.minTouch(fit: number): number
 end
 
 -- The window's size and fit scale for a w x h design-unit screen.
-function QuestView.windowSize(w: number, h: number, maxHeight: number?, width: number?): (Vector2, number)
+function QuestView.windowSize(w: number, h: number, maxHeight: number?, width: number?, least: number?): (Vector2, number)
 	local wide = width or QuestView.Width
-	local fit = math.min(1, (w - 24) / wide, (h - 16) / 400)
+	-- (`least`: the height under which the whole window shrinks (fit < 1) rather than get shorter)
+	local fit = math.min(1, (w - 24) / wide, (h - 16) / (least or 400))
 	local height = math.min(maxHeight or QuestView.MaxHeight, (h - 24) / fit)
 	return Vector2.new(wide, math.floor(height)), fit
 end
@@ -724,8 +727,16 @@ end
 ---------------------------------------------------------------- layout
 
 -- Fits a window into a w x h design-unit screen (compact: phones / TVs).
-local function fitWindow(refs: any, w: number, h: number, compact: boolean?, maxHeight: number?, width: number?): (number, number)
-	local size, fit = QuestView.windowSize(w, h, maxHeight, width)
+local function fitWindow(
+	refs: any,
+	w: number,
+	h: number,
+	compact: boolean?,
+	maxHeight: number?,
+	width: number?,
+	least: number?
+): (number, number)
+	local size, fit = QuestView.windowSize(w, h, maxHeight, width, least)
 	refs.Window.Root.Size = UDim2.fromOffset(size.X, size.Y)
 	refs.Group.Size = UDim2.fromOffset(size.X, size.Y)
 	local holder = refs.Group.Parent
@@ -762,9 +773,31 @@ end
 
 function QuestView.layoutPopup(refs: PopupRefs, w: number, h: number, compact: boolean?)
 	local popup = QuestView.popupSize()
-	local _, touch = fitWindow(refs, w, h, compact, popup.Y, popup.X)
-	refs.Claim.Size = UDim2.fromOffset(300, math.max(66, touch))
-	refs.OddsButton.Size = UDim2.fromOffset(130, math.max(52, touch))
+	-- (the round look's taller popup: on a short phone the whole window shrinks, not the grid alone)
+	local least = if PopTheme.round() then QuestView.RoundPopupLeast else nil
+	local _, touch = fitWindow(refs, w, h, compact, popup.Y, popup.X, least)
+	local claimH, oddsH = math.max(66, touch), math.max(52, touch)
+	refs.Claim.Size = UDim2.fromOffset(300, claimH)
+	refs.OddsButton.Size = UDim2.fromOffset(130, oddsH)
+	if not PopTheme.round() then
+		return
+	end
+	-- the round look's day grid: shrunk (a UIScale) when the window is shorter than it wants
+	-- (phones: CLAIM and ODDS stay inside, over the footnote)
+	local row = refs.Window.Body:FindFirstChild("Row") :: Frame?
+	if not row then
+		return
+	end
+	local bodyH = refs.Window.Root.Size.Y.Offset - QuestView.Header - 3
+	local below = math.max(18 + claimH, 25 + oddsH) + 6 + 32 -- (the buttons, a gap, the footnote)
+	local gridH = math.clamp(bodyH - 52 - below, QuestView.RoundGridMin, QuestView.RoundGridH)
+	local found = row:FindFirstChild("Fit")
+	local fit: UIScale = if found and found:IsA("UIScale") then found else UIKit.new("UIScale", { Name = "Fit" }, row) :: UIScale
+	fit.Scale = gridH / QuestView.RoundGridH
+	row.AnchorPoint = Vector2.new(0.5, 0)
+	row.Position = UDim2.new(0.5, 0, 0, 52)
+	refs.Claim.Position = UDim2.new(0.5, 0, 0, 52 + gridH + 18)
+	refs.OddsButton.Position = UDim2.new(1, -24, 0, 52 + gridH + 25)
 end
 
 ---------------------------------------------------------------- filling in
