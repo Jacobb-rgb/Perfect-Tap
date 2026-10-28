@@ -34,6 +34,8 @@ local ORDER = {
 	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board
 	"GearShopController", -- the Gear shop at the SHOP stall
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
+	"BackpackShopController", -- the backpack shop at the BACKPACKS stall (OpenUI "Backpacks")
+	"BackpackWearController", -- every player's backpack on their back, the stall's display packs
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
 	"ShopkeeperController", -- a big golem behind every shop counter: idle, emotes, waves, talks
@@ -49,7 +51,7 @@ local ORDER = {
 	"DropperShopController", -- the DROPPERS shop's showroom, built near the camera (DropperShopBuilder)
 	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
 	"LevelController", -- the player LEVEL: the XP bar, orbs, the juicy level-up moment
-	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
+	"CodexController", -- the ORE CODEX (side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
 	"ReduceMotionController", -- Reduce motion (SETTINGS + Roblox's own) -> UI/Motion.reduced(), with UI motion on or off
 	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names

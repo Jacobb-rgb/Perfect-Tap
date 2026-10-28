@@ -16,7 +16,7 @@
 	Gameplay hooks (CollectionService tags; services add prompts/zones):
 	  SellBin (+ child part "Intake"), SellCounter, ShopCounter   the SHOP
 	  UpgradeCounter   UPGRADES stall          EmberChest   on the SPIN & WIN wheel
-	  GuildBoard       notice board            OreCodex     ROCK SCANNER terminal
+	  GuildBoard       notice board            OreCodex     (none since 2026-10-24: side menu)
 	  FossilDig        FOSSIL DIG site         Spin         decor that rotates
 	  TownSpawn        the SpawnLocation (always built here)
 ]]

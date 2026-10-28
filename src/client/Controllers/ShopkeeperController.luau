@@ -474,7 +474,7 @@ function ShopkeeperController.start()
 	Net.listen("Earned", function(payload: any)
 		ShopkeeperController.onEarned(payload)
 	end)
-	for _, event in { "ShopResult", "VaultResult", "ActionResult" } do
+	for _, event in { "ShopResult", "VaultResult", "ActionResult", "BackpackResult" } do
 		Net.listen(event, function(payload: any)
 			ShopkeeperController.onBought(event, payload)
 		end)

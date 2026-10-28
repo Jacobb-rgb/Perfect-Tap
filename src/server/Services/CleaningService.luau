@@ -14,12 +14,13 @@
 	   sanity-checks the timing, lets CleaningGuard cap a scripted Flawless,
 	   and turns the raw chunk into a clean ore of that grade, straight into
 	   the backpack (owner 2026-10-24: not back onto the station); with no
-	   room there it goes into the Ore Pen (ItemService.storeDesc), and only
-	   when that fails too onto the station's output tray (a dusty relic
-	   goes into the collection).
+	   room there it goes into the Ore Pen while the pen has room
+	   (PenService.store: its capacity, never a sale), else onto the
+	   station's output tray (a dusty relic goes into the collection).
 	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
-	puts it back into the backpack (past its capacity if need be: it was
-	yours a moment ago).
+	puts it back into the backpack while it has room, else into the Ore Pen
+	while that has room (a toast says so), else it stays in the vise with
+	the pen's own refusal (a dusty relic only goes back into the backpack).
 	The station has no canAccept, so IntakeService leaves it alone: its own
 	vise scan below mounts dropped raw ore. Moving the station carries the
 	vise ore along; packing it up (or leaving) stashes it.
@@ -63,6 +64,7 @@ local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
+local PenService = require(script.Parent.PenService)
 local MachineService = require(script.Parent.MachineService)
 local PlotService = require(script.Parent.PlotService)
 
@@ -251,19 +253,31 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 	if not record then
 		return
 	end
-	-- back into the backpack while it has room, else into the Ore Pen; with both
-	-- full it stays in the vise (never past the backpack's capacity, never lost)
+	-- back into the backpack while it has room, else into the Ore Pen while IT has
+	-- room (PenService.store: its capacity, never a sale); else it stays in the vise.
+	-- A dusty relic only goes back into the backpack (it is cleaned, never stored).
 	if CarryService.room(player) > 0 then
 		machine.State.Item = nil
 		CarryService.add(player, ItemService.absorb(record), 1)
 	else
-		local stored = ItemService.storeDesc(player, ItemService.descOf(record), "Your backpack is full")
-		if stored == "Lost" then
-			Net.fire("Notify", player, { Text = "Your backpack and your Ore Pen are full.", Kind = "Deny" })
+		local desc = ItemService.descOf(record)
+		if desc.K == "Relic" then
+			Net.fire("Notify", player, { Text = "Your backpack is full.", Kind = "Deny" })
+			return
+		end
+		local stored, why = PenService.store(player, desc)
+		if not stored then
+			-- the pen's own words: full, or over its capacity (PenOver)
+			local data = DataService.get(player)
+			local text = if data then `Your backpack is full. {PenService.refusalText(data, why)}` else "Your backpack is full."
+			Net.fire("Notify", player, { Text = text, Kind = "Deny" })
 			return
 		end
 		machine.State.Item = nil
 		ItemService.absorb(record)
+		DataService.changed(player)
+		PenService.arrived(player, { desc }, "Pen")
+		Net.fire("Notify", player, { Text = "Your backpack is full: moved to your Ore Pen.", Kind = "Info" })
 	end
 	updatePrompts(machine)
 end
@@ -360,17 +374,19 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		return
 	end
 
-	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen,
-	-- else the output tray)
+	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen
+	-- while it has room, else the output tray: never past the pen's capacity, never sold)
 	machine.State.Item = nil
 	ItemService.destroy(record)
 	local cleanDesc: ItemService.Desc = { K = "Clean", O = session.OreId, G = result.Grade }
 	local clean: ItemService.ItemRecord? = nil
 	local into = "Backpack"
 	if CarryService.add(player, cleanDesc) == 0 then
-		local stored = ItemService.storeDesc(player, cleanDesc, "Your backpack is full")
-		into = if stored == "Stored" then "Pen" elseif stored == "Sold" then "Sold" else "Tray"
-		if stored == "Lost" then
+		if PenService.store(player, cleanDesc) then
+			into = "Pen"
+			PenService.arrived(player, { cleanDesc }, "Pen")
+		else
+			into = "Tray"
 			local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
 			clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
 		end
@@ -400,7 +416,7 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,
-		Into = into, -- "Backpack" | "Pen" | "Sold" (the pen at the DataStore cap) | "Tray": where the clean ore went
+		Into = into, -- "Backpack" | "Pen" | "Tray": where the clean ore went
 		New = isNew,
 	})
 	for _, callback in cleanedCallbacks do

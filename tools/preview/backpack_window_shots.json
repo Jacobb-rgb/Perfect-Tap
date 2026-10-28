@@ -1,0 +1,10 @@
+{
+  "backpack_pc": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_pc" },
+  "backpack_full": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_full" },
+  "backpack_empty": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_empty" },
+  "backpack_phone": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_phone", "width": 1688, "height": 780, "uiInset": 116 },
+  "backpack_phone_small": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_phone_small", "width": 1334, "height": 750, "uiInset": 116 },
+  "backpack_tv": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_tv", "width": 1920, "height": 1080 },
+  "backpack_pixel": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_pixel" },
+  "backpack_merged": { "scene": "backpack_window", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_backpack_merged" }
+}

@@ -337,12 +337,31 @@ function Trees.gapCloser(parent: Instance, rng: Rng.Rng): Model
 	return m
 end
 
+-- The trees round the BACKPACKS shop (owner 2026-10-25: "more trees round it"); the two
+-- between the shop and the spawn stay smaller, so its board and roof pack read over them.
+Trees.BackpackTrees = {
+	{ Id = "BackpackTreeNW", Kind = "Green", Scale = 1.0, Side = -1 },
+	{ Id = "BackpackTreeNE", Kind = "Orange", Scale = 1.2, Side = 1 },
+	{ Id = "BackpackTreeW", Kind = "Green", Scale = 0.95, Side = -1 },
+}
+
+function Trees.backpackTrees(parent: Instance, rng: Rng.Rng)
+	local m = Style.model("BackpackTrees", parent)
+	for _, spec in Trees.BackpackTrees do
+		local c = LobbyLayout.get(spec.Id).Center
+		Kit.bigTree(m, CFrame.new(c), spec.Kind, rng, spec.Scale, spec.Side)
+		Kit.flowerRing(m, c, 2.2, { C.FlowerYellow, C.FlowerWhite, C.FlowerPink }, rng, 4)
+	end
+	return m
+end
+
 function Trees.build(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }?)
 	Trees.pinkGrove(parent, Kit.sub(rng))
 	Trees.redTree(parent, Kit.sub(rng))
 	Trees.autumnCorner(parent, Kit.sub(rng))
 	Trees.belt(parent, Kit.sub(rng), sites or {})
 	Trees.gapCloser(parent, Kit.sub(rng))
+	Trees.backpackTrees(parent, Kit.sub(rng))
 end
 
 return Trees

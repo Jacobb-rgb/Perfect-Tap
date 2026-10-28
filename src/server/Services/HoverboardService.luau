@@ -29,7 +29,7 @@
 	id and the Humanoid's HipHeight rises by HoverboardBuilder.DeckHeight (the
 	old value is kept in HoverboardData.HipAttribute and put back); the walk
 	speed comes from CarryService.updateWalkSpeed (HoverboardData.walkSpeed:
-	the board's speed, Robux boards ignore the carry slowdown). Nothing visible
+	the board's speed; nobody carries anything since the backpacks). Nothing visible
 	is made here: every client builds the board under each rider
 	(HoverboardController). Off again on: death, a new character, sitting down,
 	a cleaning session starting, an elevator ride departing, unequipping.

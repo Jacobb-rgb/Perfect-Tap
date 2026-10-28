@@ -12,7 +12,7 @@
 	  ui_backpack_tv      1080p TV drawn 1920 x 1080 (compact, the gamepad hint)
 	  ui_backpack_pixel   PC in the pixel look (PopTheme.setLook), dirty ore merged
 	  ui_backpack_merged  PC with BackpackView.DirtyByOre = false (one shared Dirty Ore)
-	Shots: tools/preview/backpack_shots.json.
+	Shots: tools/preview/backpack_window_shots.json.
 	  ui_backpack_full    PC, a full Rookie Pack (5 / 5: FULL on the bar and the button)
 	  ui_backpack_empty   PC, an empty backpack (the empty line)
 ]]

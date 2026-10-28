@@ -1,7 +1,8 @@
 --[[
 	The ORE CODEX (pure builder + pure helpers; CodexController fills it in).
-	Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (tag
-	OreCodex) or the side menu's CODEX button. One MenuPanel in the Pop look
+	Opens from the side menu's CODEX button (the ROCK SCANNER terminal with
+	its "Ore Codex" prompt went 2026-10-24, owner; a model tagged OreCodex
+	still gets the prompt). One MenuPanel in the Pop look
 	(owner 2026-10-21: "new, modern, colourful, clean items, Roblox style",
 	like the Robux Shop):
 

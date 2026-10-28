@@ -41,6 +41,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LightingConfig = require(Shared.Config.LightingConfig)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
@@ -64,6 +65,19 @@ GoldenStatue.ArmRaise = math.rad(145) -- how far the arms swing up from hanging 
 -- their tips still show past the raised fists from the front
 GoldenStatue.WingSpread = 1.4
 GoldenStatue.WingLift = math.rad(12) -- and swing a little up and out
+
+-- The town's exposure the statue was toned down under (map v61, owner's
+-- Studio test 2026-10-25). When the Surface preset's exposure is higher
+-- (owner 2026-10-28: "the town a tiny bit brighter, not the statue") every
+-- color on the statue, its pedestal and its sign goes the matching step
+-- deeper (GoldenStatue.shade), so the statue keeps the look he approved.
+GoldenStatue.TunedExposure = 0.05
+
+-- The per-channel factor that cancels the exposure step (sRGB ~ linear^(1/2.2)).
+function GoldenStatue.shadeFactor(): number
+	local step = LightingConfig.Presets.Surface.Lighting.ExposureCompensation - GoldenStatue.TunedExposure
+	return 2 ^ (-step / 2.2)
+end
 
 -- the pedestal (octagon apothems and heights, studs)
 GoldenStatue.FloorRadius = 8.6 -- the dark floor inside the armor ring (round)
@@ -145,6 +159,34 @@ local function rod(
 	local p = Geo.cylinder(parent, cf.Position, length, diameter, color, material, props)
 	p.CFrame = cf
 	return p
+end
+
+---------------------------------------------------------------- shade
+
+local function shaded(c: Color3, k: number): Color3
+	return Color3.new(c.R * k, c.G * k, c.B * k)
+end
+
+-- Every part, particle, letter and outline color under `root` times `k`.
+function GoldenStatue.shade(root: Instance, k: number)
+	if k == 1 then
+		return
+	end
+	for _, d in root:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Color = shaded(d.Color, k)
+		elseif d:IsA("ParticleEmitter") then
+			local keys = {}
+			for _, key in d.Color.Keypoints do
+				table.insert(keys, ColorSequenceKeypoint.new(key.Time, shaded(key.Value, k)))
+			end
+			d.Color = ColorSequence.new(keys)
+		elseif d:IsA("TextLabel") then
+			d.TextColor3 = shaded(d.TextColor3, k)
+		elseif d:IsA("UIStroke") then
+			d.Color = shaded(d.Color, k)
+		end
+	end
 end
 
 ---------------------------------------------------------------- pedestal
@@ -529,7 +571,16 @@ end
 ---------------------------------------------------------------- build
 
 function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floorY: number)
-	local feetY = pedestal(ring, center, floorY)
+	local k = GoldenStatue.shadeFactor()
+	-- the pedestal joins the ring's model, shaded on its own first (the
+	-- ring's own pieces keep their colors)
+	local base = Instance.new("Model")
+	local feetY = pedestal(base, center, floorY)
+	GoldenStatue.shade(base, k)
+	for _, child in base:GetChildren() do
+		child.Parent = ring
+	end
+	base:Destroy()
 	local m = Style.model("GoldenStatue", parent)
 	m:AddTag("NoStuds")
 	local golem = dragon(m, CFrame.new(center.X, feetY, center.Z))
@@ -587,6 +638,7 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 			Style.emitter(mohawk, "Embers", C.Fire, 4)
 		end
 	end
+	GoldenStatue.shade(m, k)
 end
 
 return GoldenStatue

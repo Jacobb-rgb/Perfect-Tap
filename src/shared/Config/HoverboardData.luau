@@ -16,10 +16,11 @@
 	  (owner 2026-10-21: "better effects"); the Phoenix keeps its flames.
 	- Speed is the Humanoid WalkSpeed while riding (CarryService walks at
 	  BaseWalkSpeed = 18 without a board). One formula for everything,
-	  HoverboardData.walkSpeed (CarryService.updateWalkSpeed uses it): every
-	  carried item slows you by SlowPerItem, at most MaxSlow in total, on foot
-	  and on coin boards; Robux boards ignore the carry slowdown (owner:
-	  "more benefits").
+	  HoverboardData.walkSpeed (CarryService.updateWalkSpeed uses it). Since the
+	  backpacks (owner 2026-10-24) nothing is carried in the hands, so nobody
+	  is slowed: CarryService passes carried = 0. The carry slowdown
+	  (SlowPerItem, MaxSlow) and IgnoresCarrySlow (once a Robux board's perk)
+	  stay as legacy data the formula still reads.
 	- Bought once and kept forever: data.Hoverboards = { Owned = { [id] = true },
 	  Equipped = id or "" } (HoverboardService). While riding, the character
 	  has the attribute Attribute = the board id (the server sets it and raises
@@ -77,7 +78,7 @@ export type Board = {
 	Robux: number?, -- price shown on the button (Kind = "Robux")
 	PassKey: string?, -- MonetizationConfig.Entries key of its game pass (Kind = "Robux")
 	Speed: number, -- Humanoid.WalkSpeed while riding
-	IgnoresCarrySlow: boolean, -- true: carried items don't slow you down on it
+	IgnoresCarrySlow: boolean, -- legacy (nothing is carried since the backpacks): carried items wouldn't slow you on it
 	Effect: Effect,
 	Colors: Colors,
 	Description: string, -- one short line on the shop card
@@ -248,7 +249,7 @@ end
 --[[
 	The one walk speed formula (CarryService, the only WalkSpeed writer):
 	`boardId` = the board being ridden (nil, "" or an unknown id = on foot),
-	`carried` = items in your hands, `feet` = your own speed from boots and
+	`carried` = items in your hands (always 0 since the backpacks), `feet` = your own speed from boots and
 	bonuses (Bonuses.walkSpeed; default BaseWalkSpeed), `pct` = your percent
 	speed bonuses (Swift, golems: stats.WalkSpeedPct; default 0).
 	  on foot   feet minus the carry slowdown (SlowPerItem per item, at most
