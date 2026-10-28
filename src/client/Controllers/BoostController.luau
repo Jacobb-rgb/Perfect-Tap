@@ -198,6 +198,12 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 	if hud and pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
 		pillRect = rectIn(hud.Gui, pill, scale) -- (the phone's pill rides at the top right)
 	end
+	-- (the round look's offers at the right edge: the row keeps off them)
+	local offers = if hud then hud.Gui:FindFirstChild("Offers") else nil
+	local offersRect: BoostView.PillRect? = nil
+	if hud and offers and offers:IsA("GuiObject") and offers.Visible then
+		offersRect = rectIn(hud.Gui, offers, scale)
+	end
 	local right, bottom, stacked = BoostView.cornerSpot({
 		Screen = screen,
 		Gui = gui,
@@ -208,6 +214,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		TutorialTop = tutorialTop,
 		Bubble = bubbleRect,
 		Pill = pillRect,
+		Avoid = offersRect,
 	})
 	return right, bottom, stacked
 end

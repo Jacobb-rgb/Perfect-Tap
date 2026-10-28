@@ -3166,6 +3166,7 @@ export type CornerInput = {
 	TutorialTop: number?, -- the mouse tutorial card's top, design units from the gui's bottom
 	Bubble: PillRect?, -- the touch tutorial bubble (top right): its left edge and bottom
 	Pill: PillRect?, -- the phone's Shop pill (top right): its left edge, top and bottom
+	Avoid: PillRect?, -- the round look's offers column (right edge, middle): the row moves left of it
 }
 
 BoostView.TenFootSafe = 0.05 -- (TutorialView.TenFootSafe: the TV's title-safe band)
@@ -3312,6 +3313,18 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	end
 	if input.TutorialTop then
 		bottom = math.max(bottom, input.TutorialTop + gap)
+	end
+	-- the round look's offers at the right edge (HudBubble.offers): a row that would reach
+	-- them (standing on the tutorial card, a tall column) goes left of the column
+	local avoid = input.Avoid
+	if avoid then
+		local rowH = if stacked then count * tile + (count - 1) * gap else tile
+		local top = h - bottom - rowH
+		local avoidTop = avoid.Top or (avoid.Bottom - tile)
+		if w - right > avoid.Left - gap and top < avoid.Bottom + gap and avoidTop - gap < top + rowH then
+			right = math.ceil(w - avoid.Left) + gap
+			spot = "BesideOffers"
+		end
 	end
 	return right, bottom, stacked, spot
 end

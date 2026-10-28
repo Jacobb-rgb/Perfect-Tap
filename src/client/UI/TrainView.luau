@@ -53,6 +53,7 @@ TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
 -- the light HUD (HudBubble): the chip goes under its menu tiles (HudController sets it from the HUD)
 TrainView.HudChipTop = nil :: number?
+TrainView.HudChipLeft = nil :: number? -- the round look on a PC: beside the tiles' last row (HudBubble.chipLeft)
 -- compact (touch) layouts: the side menu's MENU button sits first in the chip's
 -- row (SideMenuView), so the chip starts this far right of ChipLeft (chipLeft)
 TrainView.MenuSlot = 88 -- MENU (84 wide at x 12) and a gap
@@ -208,7 +209,7 @@ local CHIP: { [string]: ChipMetrics } = {
 -- side menu's MENU button on compact (touch) layouts.
 function TrainView.chipLeft(compact: boolean): number
 	if TrainView.HudChipTop then
-		return TrainView.ChipLeft -- the light HUD has no MENU button there
+		return TrainView.HudChipLeft or TrainView.ChipLeft -- the light HUD has no MENU button there
 	end
 	return TrainView.ChipLeft + (if compact then TrainView.MenuSlot else 0)
 end

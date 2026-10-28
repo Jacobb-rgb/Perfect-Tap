@@ -122,9 +122,10 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	if touch then
 		local barRight
 		if UIConfig.lightUI() then
-			-- the light HUD's tabs (HudBubble.buildGame's top bar)
+			-- the light HUD's top bar (HudBubble.buildGame: its size for this screen, the round
+			-- look's four wider buttons too)
 			local light = HudBubble.layout(scale, screen.X)
-			barRight = w / 2 + (3 * light.TabWidth + 3 * 14 + 40) / 2
+			barRight = w / 2 + HudBubble.topBarSize(light).X / 2
 		else
 			local bar = TeleportView.layout(scale, screen.X)
 			barRight = w / 2 + (TeleportView.barWidth(bar, 3) + 44 + bar.Gap) / 2

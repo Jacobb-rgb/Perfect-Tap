@@ -123,12 +123,35 @@ export type Layout = {
 	Slots: number,
 	Narrow: boolean, -- the smallest phones: icon-only teleport tabs
 	Width: number, -- the screen's width in design units (1280 when unknown)
+	Touch: boolean, -- a touch-first screen (phones, tablets): no offers, the tiles at the top
+	TenFoot: boolean, -- a TV: the round look keeps out of the outer 5 % (Inset)
+	Inset: number, -- design units kept free at the left and right edges (TVs: 5 % of the width)
 }
 
 HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
+HudBubble.TenFootSafe = 0.05 -- a TV's title-safe band (TutorialView.TenFootSafe)
 
-function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
+-- Is this a touch-first device (a phone or a tablet, no keyboard)? false in Lune.
+function HudBubble.isTouch(): boolean
+	local ok, touch = pcall(function()
+		local input = game:GetService("UserInputService")
+		return input.TouchEnabled and not input.KeyboardEnabled
+	end)
+	return ok and touch == true
+end
+
+-- Is this a TV (Roblox's ten-foot interface)? false in Lune.
+function HudBubble.isTenFoot(): boolean
+	local ok, ten = pcall(function()
+		return game:GetService("GuiService"):IsTenFootInterface()
+	end)
+	return ok and ten == true
+end
+
+function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?): Layout
 	local width = if screenWidth and screenWidth > 0 and uiScale > 0 then screenWidth / uiScale else 1280
+	local isTouch, isTen = touch == true, tenFoot == true
+	local inset = if isTen then math.ceil(width * HudBubble.TenFootSafe) else 0
 	if uiScale <= HudBubble.CompactScale then
 		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
 		-- (the round look: the reel's eight tiles four a row in two rows, 72 units = 44.6 pt)
@@ -145,20 +168,29 @@ function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 			SlotGap = 10,
 			Slots = 5,
 			Width = width,
+			Touch = isTouch,
+			TenFoot = isTen,
+			Inset = inset,
 		}
 	end
+	-- (the round look on a touch tablet: four smaller tiles a row at the top, like a phone's, so the
+	-- grid stays above the thumbstick's start zone and left of the top row's buttons)
+	local tablet = PopTheme.round() and isTouch
 	return {
 		Compact = false,
 		Narrow = false,
-		Tile = if PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
-		TileGap = if PopTheme.round() then 7 else 12,
-		Columns = 2,
+		Tile = if tablet then 64 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
+		TileGap = if tablet then 6 elseif PopTheme.round() then 7 else 12,
+		Columns = if tablet then 4 else 2,
 		TabWidth = 140,
 		TabHeight = 52,
 		Slot = 70,
 		SlotGap = 10,
 		Slots = 6,
 		Width = width,
+		Touch = isTouch,
+		TenFoot = isTen,
+		Inset = inset,
 	}
 end
 
@@ -224,7 +256,12 @@ local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLab
 			Name = "Coins",
 			AnchorPoint = Vector2.new(0, 1),
 			BackgroundTransparency = 1,
-			Position = UDim2.new(0, if layout.Compact then 18 else 6, 1, if layout.Compact then -22 else -12),
+			Position = UDim2.new(
+				0,
+				(if layout.Compact then 18 else 6) + layout.Inset,
+				if layout.TenFoot then 0.95 else 1,
+				if layout.Compact then -22 else -12
+			),
 			Size = UDim2.fromOffset(HudBubble.CoinsWidth + 40, big + line + 14),
 		}, gui)
 		local amount = Pop.text(panel, "$0", big, {
@@ -372,7 +409,7 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	-- the top-left, right under Roblox's top bar; the TRAIN chip (and the boost
 	-- chips beside it) go under the tiles (ChipTop), the Shop pill and the money
 	-- at the bottom-left
-	local origin = UDim2.fromOffset(if PopTheme.round() then HudBubble.RoundMenuLeft else 18, HudBubble.menuTop(layout))
+	local origin = UDim2.fromOffset((if PopTheme.round() then HudBubble.RoundMenuLeft else 18) + layout.Inset, HudBubble.menuTop(layout))
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
 end
 
@@ -463,9 +500,26 @@ HudBubble.ChipGap = 12
 HudBubble.RoundMenuTop = 140
 HudBubble.RoundMenuLeft = 10
 
--- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets).
+-- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets). The reel's lower
+-- tiles on a PC or a TV only: on a touch tablet they stay at the top, out of the thumbstick's
+-- start zone (the left 40 %, the lower two-thirds).
 function HudBubble.menuTop(layout: Layout): number
-	return if PopTheme.round() and not layout.Compact then HudBubble.RoundMenuTop else HudBubble.MenuTop
+	return if HudBubble.chipBeside(layout) then HudBubble.RoundMenuTop else HudBubble.MenuTop
+end
+
+-- Does the TRAIN chip go beside the tiles' last row (the round look on a PC or a TV: the
+-- lowered tiles leave no room under them over the money's Server Luck line and floaters)?
+function HudBubble.chipBeside(layout: Layout): boolean
+	return PopTheme.round() and not layout.Compact and not layout.Touch
+end
+
+-- The TRAIN chip's left edge when it goes beside the tiles (design units), else nil (TrainView.ChipLeft).
+function HudBubble.chipLeft(layout: Layout): number?
+	if not HudBubble.chipBeside(layout) then
+		return nil
+	end
+	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	return m.Origin.X.Offset + m.Width + HudBubble.ChipGap
 end
 
 -- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
@@ -473,6 +527,10 @@ function HudBubble.chipTop(layout: Layout): number
 	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
 	-- (phones: the Shop pill rides on this row's right end, under the touch
 	-- tutorial bubble; the flat Pop tiles are shorter, so keep the old row)
+	if HudBubble.chipBeside(layout) then
+		-- (beside the last row of tiles, its top with theirs)
+		return HudBubble.menuTop(layout) + m.Height - m.CellHeight
+	end
 	local extra = if layout.Compact then 28 else 0
 	return HudBubble.menuTop(layout) + m.Height + HudBubble.ChipGap + extra
 end
@@ -928,7 +986,7 @@ function HudBubble.offers(gui: Instance, layout: Layout): Frame
 		Name = "Offers",
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -6, 0.5, 0),
+		Position = UDim2.new(1, -(6 + layout.Inset), 0.5, 0), -- (a TV: out of the safe band)
 		Size = UDim2.fromOffset(width, #HudBubble.Offers * cell - gap),
 	}, gui)
 	UIKit.list(column, Enum.FillDirection.Vertical, gap, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
@@ -993,8 +1051,15 @@ function HudBubble.offers(gui: Instance, layout: Layout): Frame
 	return column
 end
 
-function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
-	local layout = HudBubble.layout(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth())
+function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: boolean?, tenFoot: boolean?): GameRefs
+	local layout = HudBubble.layout(
+		uiScale or HudBubble.screenScale(),
+		screenWidth or HudBubble.screenWidth(),
+		if touch == nil then HudBubble.isTouch() else touch,
+		if tenFoot == nil then HudBubble.isTenFoot() else tenFoot
+	)
+	-- (a TV: the bottom-left pieces stand 5 % in from the edges, the safe band)
+	local bottom = if layout.TenFoot then 1 - HudBubble.TenFootSafe else 1
 	local gui = UIKit.screen("TerraForgeHud", 5)
 	gui:SetAttribute("Bubble", true)
 	-- TVs and notched phones: keep clear of the unsafe edges and of Roblox's top
@@ -1009,7 +1074,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Name = "Floaters",
 		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 20 + 60, 1, -(coinsPanel.Size.Y.Offset + 30)),
+		Position = UDim2.new(0, 20 + 60 + layout.Inset, bottom, -(coinsPanel.Size.Y.Offset + 30)),
 		Size = UDim2.fromOffset(HudBubble.CoinsWidth, 60),
 	}, gui)
 
@@ -1063,6 +1128,13 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}, gui)
 	UIKit.list(toasts, Enum.FillDirection.Vertical, 10, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
+	if round then
+		-- (the round look's four tiles a row on phones reach under the toasts' and the zone's
+		-- first words: those draw over the tiles, they only show for a moment)
+		toasts.ZIndex = 8
+		zone.ZIndex = 8
+	end
+
 	-- the left menu: every tile hidden until a controller claims it
 	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
 	local menu = UIKit.new("Frame", {
@@ -1073,6 +1145,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}, gui)
 	-- where the TRAIN chip goes (TrainView.HudChipTop, set by HudController)
 	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
+	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
 	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
 	-- above the money, bottom-left); on phones and tablets the left column is full
 	-- (tiles, the TRAIN chip, the money) and the top-right holds the tutorial bubble
@@ -1101,7 +1174,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		AnchorPoint = if layout.Compact and not round then Vector2.new(1, 0) else Vector2.new(0, 1),
 		-- (the round look: over the money, where the pill was)
 		Position = if round
-			then UDim2.new(0, 22, 1, -(moneyTop + 8))
+			then UDim2.new(0, 22 + layout.Inset, bottom, -(moneyTop + 8))
 			elseif layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout) + pill.Y + 8)
 			else UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
 		-- (phones: no wider than the pill's corner, clear of the tabs; the text shrinks to fit)
@@ -1136,9 +1209,9 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	-- is off: Util/Hotbar; HudController fills the button, BackpackController opens the
 	-- inventory, BlasterSlotController equips the Blaster from the slot)
 	local carryPanel, backpack, carryLabel, blaster = HudBubble.carryGroup(gui, layout)
-	-- (phones: no offers: the right edge holds the tutorial bubble and Roblox's jump button;
-	-- the Store tile and the Shop button are a tap away)
-	if round and not layout.Compact then
+	-- (phones and touch tablets: no offers: the right edge holds the tutorial bubble's SKIP and
+	-- Roblox's jump button; the Store tile and the Shop button are a tap away)
+	if round and not layout.Compact and not layout.Touch then
 		HudBubble.offers(gui, layout)
 	end
 
@@ -1252,13 +1325,17 @@ function HudBubble.setTileVisible(menu: Instance, id: string, visible: boolean)
 	end
 end
 
--- A count badge on a tile's face (0 hides it). The round look's Spin tile (WheelController's
--- badge: the spins ready) wears the reel's tilted sticker instead: "FREE!".
-function HudBubble.setTileBadge(face: GuiObject, count: number)
+-- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
+-- tilted "FREE!" sticker while the free spin is ready (`free`: WheelController; nil: any count),
+-- else the count of the bought spins held as a badge.
+function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
 	local holder = face.Parent
 	if PopTheme.round() and holder and holder.Name == "Wheel" then
-		HudBubble.setSticker(face, if count > 0 then "FREE!" else nil)
-		return
+		local sticker = if free == nil then count > 0 else free
+		HudBubble.setSticker(face, if sticker then "FREE!" else nil)
+		if sticker then
+			count = 0 -- (the sticker says it: no count badge with it)
+		end
 	end
 	local badge = face:FindFirstChild("Badge")
 	if count <= 0 then
@@ -1815,11 +1892,12 @@ function HudBubble.carryGroup(gui: Instance, layout: Layout): (Frame, TextButton
 		Name = "Carry",
 		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, HudBubble.carryLeft(layout.Width, group.X, layout.Compact), 1, -HudBubble.BackpackBottom),
+		Position = UDim2.new(0.5, HudBubble.carryLeft(layout.Width, group.X, layout.Compact or layout.Touch), 1, -HudBubble.BackpackBottom),
 		Size = UDim2.fromOffset(group.X, group.Y),
 	}, gui)
 	holder:SetAttribute("Group", true)
 	holder:SetAttribute("ScreenWidth", layout.Width) -- (placeBackpack: until the gui has a size)
+	holder:SetAttribute("Thumb", layout.Compact or layout.Touch) -- (a touch screen: the thumbstick's zone)
 	local slot = HudBubble.blasterSlot(holder, layout)
 	local button, count = packButton(holder, layout, size, size)
 	button.AnchorPoint = Vector2.new(1, 0)
@@ -1876,7 +1954,8 @@ function HudBubble.placeBackpack(holder: GuiObject, uiScale: number, tenFoot: bo
 		end
 		local given = holder:GetAttribute("ScreenWidth")
 		local width = if seen > 0 then seen / math.max(uiScale, 0.01) elseif type(given) == "number" then given else nil
-		local left = HudBubble.carryLeft(width, holder.Size.X.Offset, uiScale <= HudBubble.CompactScale)
+		local thumb = uiScale <= HudBubble.CompactScale or holder:GetAttribute("Thumb") == true
+		local left = HudBubble.carryLeft(width, holder.Size.X.Offset, thumb)
 		holder.Position = UDim2.new(0.5, left, 1, -HudBubble.BackpackBottom)
 		return
 	end

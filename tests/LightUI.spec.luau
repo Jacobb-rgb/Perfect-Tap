@@ -557,7 +557,17 @@ return function(T, Loader)
 				T.truthy(moneyTop > chipBottom, `the money under the TRAIN chip at {screen[1]} x {screen[2]}`)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
-				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
+				if type(chipLeft) == "number" then
+					-- (the round look on a PC: beside the tiles' last row, clear of them)
+					T.truthy(
+						chipLeft > menu.Position.X.Offset + menu.Size.X.Offset,
+						`the TRAIN chip right of the tiles at {screen[1]} x {screen[2]}`
+					)
+					T.truthy(chipBottom <= menuBottom + 1, `beside their last row at {screen[1]} x {screen[2]}`)
+				else
+					T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				end
 				-- the tiles (top-left) clear of the BASE / LOBBY / VAULT tabs (top centre)
 				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
 				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
