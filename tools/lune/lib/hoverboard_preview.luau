@@ -640,18 +640,22 @@ end
 ---------------------------------------------------------------- UI overlays
 
 --[[
-	The hoverboards panel and the RIDE button over the ride scene (PHASE 2 UI):
+	The hoverboards window (the golem inventory's look, owner 2026-10-28) and
+	the RIDE button over the ride scene. The player owns the Timber Drifter and
+	the Cart Cruiser (equipped) and has $150M: the Emberglass Glider is
+	affordable, the Royal Phoenix is not.
 	  ui_hover_hud         PC HUD: the BASE / LOBBY / VAULT bar, main's left side
 	                       menu (ELEVATOR and HOVER among its buttons), RIDE above
 	                       BUILD on the right
-	  ui_hover_panel       PC HUD + the hoverboards panel (owns the Timber Drifter,
-	                       equipped; $120K)
+	  ui_hover_panel       PC HUD + the window, the equipped board picked (EQUIPPED)
+	  ui_hover_panel_buy   the same, the Royal Phoenix picked (BUY greyed: too expensive)
+	  ui_hover_panel_robux the same, the Terra Forge Custom picked (the green Robux price)
 	  ui_hover_phone       an iPhone SE-sized landscape screen (667 x 375 pt) at
-	                       the 0.62 phone scale: compact panel
+	                       the 0.62 phone scale: the compact window
 	  ui_hover_hud_phone   the phone HUD with the RIDE button and stand-ins for
 	                       Roblox's touch thumbstick and jump button
-	  ui_hover_phone_small a small 568 x 320 pt phone: the compact panel's cards scroll
-	The Robux cards show their live R$ button (game pass ids simulated; with id 0
+	  ui_hover_phone_small a small 568 x 320 pt phone: the compact window still fits
+	The Robux card shows its live R$ button (game pass ids simulated; with id 0
 	the game shows COMING SOON).
 ]]
 function Preview.buildUi(Loader: any): { [string]: any }
@@ -669,6 +673,10 @@ function Preview.buildUi(Loader: any): { [string]: any }
 	local pc = 1.25 -- 900 px tall render / 720 design height
 	local phone = 0.62 * 900 / 375
 
+	local COINS = 150e6
+	local OWNED = { TimberDrifter = true, CartCruiser = true }
+	local EQUIPPED = "CartCruiser"
+
 	local function hud(scale: number, uiScale: number, riding: boolean, touch: boolean): { any }
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = scale
@@ -677,7 +685,7 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		HoverboardView.setRiding(ride, riding, if touch then "" else "H", "")
 		local teleport = TeleportView.build(refs.TopBar, uiScale)
 		TeleportView.relayout(teleport, refs.TopBar, uiScale)
-		refs.Coins.Text = Format.money(120000)
+		refs.Coins.Text = Format.money(COINS)
 		refs.Income.Text = Format.perSecond(240)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
 		HudView.setBackpack(refs, 0, 5)
@@ -695,16 +703,19 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		return { refs.Gui, side.Gui }
 	end
 
-	local function panel(scale: number, compact: boolean, maxWidth: number, maxHeight: number): any
+	local function panel(scale: number, compact: boolean, maxWidth: number, maxHeight: number, selected: string?): any
 		local refs = HoverboardView.build(compact)
 		refs.Gui.Scale.Scale = scale
 		refs.Gui.Enabled = true
-		HoverboardView.setCards(refs, { TimberDrifter = true }, "TimberDrifter", 120000)
 		HoverboardView.layout(refs, compact, maxWidth, maxHeight)
+		HoverboardView.setHint(
+			refs,
+			if compact then "Touch" else "Mouse",
+			if compact then "Tap a board to see it" else "Click a board to see it · H: ride · Backspace: close"
+		)
+		HoverboardView.setCards(refs, OWNED, EQUIPPED, COINS)
+		HoverboardView.select(refs, selected or HoverboardView.defaultBoard(EQUIPPED))
 		HoverboardView.pose(refs, HoverboardView.OpenTime)
-		if not compact then
-			HoverboardView.setHint(refs, "Mouse", "Click a card · H: ride · Backspace: close")
-		end
 		return refs.Gui
 	end
 
@@ -753,12 +764,18 @@ function Preview.buildUi(Loader: any): { [string]: any }
 	local ok, err = pcall(function()
 		exports.ui_hover_hud = UiExport.export(hud(pc, 1, false, false))
 		local withPanel = hud(pc, 1, false, false)
-		table.insert(withPanel, panel(pc, false, 1600 / pc, 900 / pc))
+		table.insert(withPanel, panel(pc, false, 1600 / pc, (900 - 36) / pc))
 		exports.ui_hover_panel = UiExport.export(withPanel)
+		local buyPanel = hud(pc, 1, false, false)
+		table.insert(buyPanel, panel(pc, false, 1600 / pc, (900 - 36) / pc, "RoyalPhoenix"))
+		exports.ui_hover_panel_buy = UiExport.export(buyPanel)
+		local robuxPanel = hud(pc, 1, false, false)
+		table.insert(robuxPanel, panel(pc, false, 1600 / pc, (900 - 36) / pc, "TerraForgeCustom"))
+		exports.ui_hover_panel_robux = UiExport.export(robuxPanel)
 		local phonePanel = hud(phone, 0.62, false, true)
 		table.insert(phonePanel, panel(phone, true, 667 / 0.62, (375 - 36) / 0.62))
 		exports.ui_hover_phone = UiExport.export(phonePanel)
-		-- a small 568 x 320 pt phone: the cards scroll (the second row peeks in)
+		-- a small 568 x 320 pt phone: the compact window still fits
 		local small = 0.62 * 900 / 320
 		local smallPanel = hud(small, 0.62, false, true)
 		table.insert(smallPanel, panel(small, true, 568 / 0.62, (320 - 36) / 0.62))

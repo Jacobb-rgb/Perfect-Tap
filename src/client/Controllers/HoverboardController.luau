@@ -2,18 +2,22 @@
 	HoverboardController: hoverboards on the client (the server decides
 	everything: HoverboardService, MonetizationService).
 
-	- Hoverboards panel (HoverboardView): the HOVER button of main's left side
-	  menu (SideMenuView entry "Hoverboards", SideMenuController action: open /
-	  toggle / isOpen / close; MenuPanels: one panel at a time, build mode
-	  closes it) opens it from anywhere; it closes the other panels when it
-	  opens. Cards: BUY sends HoverboardAction { Action = "Buy", Board }
-	  (greyed out with a lock while you can't afford it: pressing it says how
-	  much is missing), EQUIP sends { Action = "Equip" }, the Robux button
-	  prompts the board's game pass (MarketplaceService:PromptGamePassPurchase,
-	  only for MonetizationConfig ids > 0; "COMING SOON" otherwise; the server
-	  grants it, never this client). The cards
-	  refresh on every State. Closes with the X, B (gamepad), Backspace or
-	  HOVER again; gamepads get a selected card on open.
+	- Hoverboards window (HoverboardView, the golem inventory's look): the
+	  HOVER button of main's left side menu (SideMenuView entry "Hoverboards",
+	  SideMenuController action: open / toggle / isOpen / close; MenuPanels:
+	  one panel at a time, build mode closes it) opens it from anywhere; it
+	  closes the other panels when it opens. A card (click / tap / A) picks a
+	  board: the detail card shows it (on open: the equipped board, else the
+	  first) and its slow-swinging 3D model (one camera move a frame while
+	  open; none with Reduce Motion). The detail's one button acts: BUY sends
+	  HoverboardAction { Action = "Buy", Board } (greyed out with a lock
+	  while you can't afford it: pressing it says how much is missing), EQUIP
+	  sends { Action = "Equip" }, the Robux price prompts the board's game
+	  pass (MarketplaceService:PromptGamePassPurchase, only for
+	  MonetizationConfig ids > 0; "COMING SOON" otherwise; the server grants
+	  it, never this client). Everything refreshes on every State. Closes
+	  with the X, B (gamepad), Backspace or HOVER again; gamepads start on
+	  the equipped board's card.
 	- RIDE: a round button in the HUD's right menu (above BUILD: clear of the
 	  touch jump button at the bottom right), the H key and the gamepad's
 	  GamepadKey (L2: the D-pad is taken: Up build mode, Down the teleport
@@ -176,6 +180,7 @@ local rideLockedUntil = 0
 local messageToken = 0
 local progress: NumberValue? = nil
 local animTween: Tween? = nil
+local turnConnection: RBXScriptConnection? = nil -- the detail's board swinging while the window is open
 local riders: { [Player]: Rider } = {}
 local pools: { [string]: { Model } } = {}
 local folder: Folder? = nil
@@ -909,13 +914,27 @@ local function send(payload: { [string]: any })
 	Sfx.play("UIClick")
 end
 
+-- With a gamepad: never leave the selection on the detail's button once it is no
+-- stop (EQUIP turned into EQUIPPED): back to the picked board's card.
+local function keepSelection(view: HoverboardView.Refs)
+	if not isOpen or not usingGamepad() then
+		return
+	end
+	if GuiService.SelectedObject == view.Action and not view.Action.Selectable then
+		GuiService.SelectedObject = HoverboardView.selectedCard(view).Button
+	end
+end
+
 local function refresh()
 	local view = refs
-	if not view then
+	-- (closed: nothing to fill in; opening refreshes)
+	if not view or not isOpen then
 		return
 	end
 	local owned, equipped, coins = snapshotBoards()
+	-- (the cards, the count and the detail of the picked board)
 	HoverboardView.setCards(view, owned, equipped, coins)
+	keepSelection(view)
 end
 
 local function fit(view: HoverboardView.Refs)
@@ -923,7 +942,8 @@ local function fit(view: HoverboardView.Refs)
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
-	local compact = isPhone() or scale <= 0.75 or size.Y < 520
+	-- (phones and TVs: the compact layout's big buttons and words)
+	local compact = isPhone() or GuiService:IsTenFootInterface() or scale <= 0.75 or size.Y < 520
 	HoverboardView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
 end
 
@@ -935,9 +955,9 @@ local function applyHint(view: HoverboardView.Refs)
 		view.HintGlyph.Image = if ok and type(image) == "string" then image else ""
 		HoverboardView.setHint(view, "Gamepad", "Choose a board · B: close")
 	elseif isPhone() then
-		HoverboardView.setHint(view, "Touch", "Tap a card")
+		HoverboardView.setHint(view, "Touch", "Tap a board to see it")
 	else
-		HoverboardView.setHint(view, "Mouse", "Click a card · H: ride · Backspace: close")
+		HoverboardView.setHint(view, "Mouse", "Click a board to see it · H: ride · Backspace: close")
 	end
 end
 
@@ -947,10 +967,25 @@ local function selectDefault(view: HoverboardView.Refs)
 	end
 end
 
+-- A card was clicked / tapped / pressed (A): the detail shows its board.
 local function onCard(card: HoverboardView.Card)
-	if not isOpen then
+	local view = refs
+	if not isOpen or not view then
 		return
 	end
+	if view.Selected ~= card.Board.Id then
+		HoverboardView.select(view, card.Board.Id)
+	end
+	Sfx.play("UIClick")
+end
+
+-- The detail's button: what the picked board offers (HoverboardView.cardState).
+local function onAction()
+	local view = refs
+	if not isOpen or not view then
+		return
+	end
+	local card = HoverboardView.selectedCard(view)
 	local board = card.Board
 	local state = card.State
 	if state == "Buy" then
@@ -978,6 +1013,25 @@ local function onCard(card: HoverboardView.Card)
 	else
 		showMessage(`The {board.Name} is your board. Press RIDE to hover.`, "Info")
 	end
+end
+
+-- The detail's board swings slowly while the window is open (one camera move a frame).
+local function stopTurn()
+	local connection = turnConnection
+	turnConnection = nil
+	if connection then
+		connection:Disconnect()
+	end
+end
+
+local function startTurn(view: HoverboardView.Refs)
+	stopTurn()
+	local started = os.clock()
+	turnConnection = RunService.Heartbeat:Connect(function()
+		if not settingsReduced and not systemReduced then
+			HoverboardView.turnDetail(view, os.clock() - started)
+		end
+	end)
 end
 
 local function stopAnimation()
@@ -1038,6 +1092,7 @@ local function ensureView(): HoverboardView.Refs
 			onCard(card)
 		end)
 	end
+	view.Action.Activated:Connect(onAction)
 	refs = view
 	return view
 end
@@ -1059,11 +1114,14 @@ function HoverboardController.open()
 	end
 	isOpen = true
 	MenuPanels.closeOthers("HoverboardController")
+	-- (every opening starts on the equipped board, else the first)
+	view.Selected = ""
 	fit(view)
 	HoverboardView.hideMessage(view)
 	applyHint(view)
 	refresh()
 	view.Gui.Enabled = true
+	startTurn(view)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ensureProgress().Value = 0
 	HoverboardView.pose(view, 0)
@@ -1078,6 +1136,7 @@ function HoverboardController.close(instant: boolean?)
 	end
 	isOpen = false
 	ContextActionService:UnbindAction(CLOSE_ACTION)
+	stopTurn()
 	local view = refs
 	if not view then
 		return

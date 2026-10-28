@@ -1,37 +1,45 @@
 --[[
 	Hoverboards on screen (pure builder + pure helpers; HoverboardController
-	fills it in and animates it). Look: the bright "Pop" window kit (Pop.luau,
-	like the Robux Shop; owner 2026-10-21: "new, modern, colourful, clean
-	items, more Roblox style"), the same chrome as the elevator window
-	(ElevatorView.popWindow).
+	fills it in and animates it). The look copies the golem inventory
+	(GolemView: the pixel reels, itself like Pet Simulator 99's inventory;
+	owner 2026-10-28: the old window "looks old / different", "make it like
+	Pet Simulator 99"). One ScreenGui "TerraForgeHoverboards":
 
-	  panel    a Pop window: a blue header band (the side menu's Hover colour,
-	           BubbleTheme Lobby) with shine stripes and studs, a small board
-	           icon, "HOVERBOARDS" in white with a 3D shadow, the red square X;
-	           a dark studded body; under the band the pitch ("Ride anywhere,
-	           faster." or the last server message); a dark footer pill with
-	           the control hint (not on phones)
-	  cards    one per board (HoverboardData order: 4 coin boards, then the
-	           Robux board with a gold "ROBUX" ribbon): a bright painted Pop
-	           card (CardPaints) with light rays and a glow behind the board's
-	           live 3D model (PictureModels "board_<Id>": HoverboardBuilder in a
-	           ViewportFrame; drawn from Frames only if the model can't be
-	           built), the name, the speed as chips ("SPEED 23" and "+44%"),
-	           one perk line, the coin price (a Robux board: its trail, the
-	           price is only on its button) or an OWNED chip, and the button:
-	           BUY (green) / BUY with a lock (grey:
-	           not enough coins) / EQUIP (blue) / EQUIPPED (gold, a check; the
-	           card gets a gold outline and halo) / the green Pop.price "49"
-	           (Robux) / COMING SOON (grey: the product id is still 0)
-	  (the panel opens from main's left side menu: its HOVER entry, SideMenuView)
+	  header   a band in the window's colour (Paint: blue, the side menu's
+	           Hover colour) with the lattice and a gleam, "HOVERBOARDS" in
+	           white with its 3D shadow, a count chip (boards owned "3 / 5"),
+	           the red X
+	  grid     one square reel card per board on a dark well (HoverboardData
+	           order: 3 on top, the 4th coin board and the Robux board wider
+	           under them): the board's paint (CardPaints; the Robux board
+	           the rainbow) with the lattice, a turning sunburst behind its
+	           big live 3D model (PictureModels "board_<Id>", seen diagonally;
+	           drawn from Frames only if the model can't be built), the name
+	           in pixel letters on top, "SPEED 31" at the bottom, tilted tags:
+	           "E" (equipped) on the left, on the right OWNED, else the price
+	           (a coin; grey with a lock when you can't afford it) or ROBUX.
+	           The picked card: a thick gold outline and a white ring
+	  detail   the picked board as a big reel card: the name, its live 3D
+	           model (the controller swings it slowly: turnDetail), a pill
+	           COIN BOARD / ROBUX BOARD, chips "SPEED 31" and "+72%", the
+	           description and the perks (when there is room), and ONE
+	           action button from cardState: BUY with the coin price (yellow,
+	           the coin button; grey with a lock when you can't afford it),
+	           EQUIP (blue), EQUIPPED (gold, a check, not a gamepad stop),
+	           the green Robux price (the robux mark and "49"), COMING SOON
+	           (grey, a clock: the pass id is still 0)
+	  footer   the control hint (PC, gamepad: its glyph) or the pitch
+	           (phones), the last server message in its place for a while
 	  ride     the RIDE toggle for the HUD's right menu (rideButton): RIDE /
 	           STOP with a key chip ("H") or the gamepad glyph
 
+	Clicking a card picks it (the detail follows); the detail's button does
+	the action (HoverboardController). Faces, fonts and colours come from
+	Pop / PopTheme / GolemView only, so a new PopTheme look follows here.
 	Designed for 720 design units of height (HudController scales every
-	TerraForge gui). Five tall cards in a row when they fit, else 3 + 2 wide
-	cards (the picture on the left); the compact layout (phones, uiScale 0.62)
-	has 72-unit buttons (about 44 pt). A gamepad selection stays inside the
-	panel (SelectionGroup); only the card buttons and the X are selectable.
+	TerraForge gui); the compact layout (phones, uiScale 0.62) has 72-unit
+	buttons (about 44 pt) and fits 568 x 320 pt. A gamepad selection stays
+	inside the window (SelectionGroup): the cards, the action button, the X.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,71 +48,84 @@ local MonetizationConfig = require(Shared:WaitForChild("Config"):WaitForChild("M
 local HoverboardData = require(Shared.Config.HoverboardData)
 local PopTheme = require(Shared.Config.PopTheme)
 local PictureModels = require(Shared.Builders.PictureModels)
+local IconAssets = require(Shared.Config.IconAssets)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
-local ElevatorView = require(script.Parent.ElevatorView)
+local GolemView = require(script.Parent.GolemView)
+local TechShopView = require(script.Parent.TechShopView)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local HoverboardView = {}
 
 export type CardState = "Buy" | "BuyLocked" | "Equip" | "Equipped" | "Robux" | "Soon"
 export type HintKind = "Mouse" | "Gamepad" | "Touch"
 
--- a Pop button (ElevatorView.popButton: Pop.price's face with the drawn icons and the robux mark)
-export type ButtonRefs = ElevatorView.ButtonRefs
-
 export type Card = {
 	Board: HoverboardData.Board,
 	Frame: Frame, -- the holder (the layout places it; the drop-in scales it)
 	Scale: UIScale,
-	Face: TextButton, -- the painted Pop card (not selectable: its button is)
-	Stroke: UIStroke, -- the card's black edge (gold when equipped)
-	Glow: Frame, -- the equipped board's gold halo
+	Button: TextButton, -- the reel card itself: a click / tap / A picks the board
+	Stroke: UIStroke, -- its black edge (gold when picked)
+	Pick: Frame, -- the white ring inside the gold outline (picked)
 	ArtBack: Frame, -- where the picture sits
 	Picture: ImageLabel?, -- the live 3D board (nil: drawn on the Canvas instead)
 	Canvas: Frame, -- the board drawn from Frames (only without a model)
 	CanvasScale: UIScale,
-	Ribbon: Frame?,
 	Name: TextLabel,
-	SpeedChip: Frame,
-	Speed: TextLabel,
-	BonusChip: Frame,
-	Bonus: TextLabel,
-	Perk: TextLabel,
-	PriceRow: Frame, -- a coin board's price (a Robux board's price is its green button)
-	Coin: Frame,
-	Price: TextLabel,
-	Extra: TextLabel, -- a Robux board's extra perk where a coin board shows its price
-	Owned: Frame, -- the OWNED chip where the price was
-	Button: TextButton,
-	Look: ButtonRefs,
+	Line: TextLabel, -- the bottom line: "SPEED 31"
+	Equipped: TextLabel, -- the "E" tag
+	Tag: TextLabel, -- the right tag: OWNED / the price / ROBUX
+	TagCoin: Frame,
+	TagLock: Frame,
+	TagHeight: number, -- the tags' height on this card (the layout: smaller cards, smaller tags)
 	State: CardState,
+	Owned: boolean,
 }
 
 export type Refs = {
 	Gui: ScreenGui,
-	Root: Frame,
-	Pop: UIScale,
-	Panel: Frame, -- the Pop window
-	Header: Frame, -- the blue band
-	Body: Frame, -- the dark studded body
-	Chrome: ElevatorView.Chrome,
-	Icon: Frame,
+	Root: Frame, -- the window (the chrome's black frame; a SelectionGroup)
+	Panel: Frame, -- = Root (older callers)
+	Pop: UIScale, -- the opening pop (OpenPop)
 	Title: TextLabel,
-	TitleShadow: TextLabel,
-	Subtitle: TextLabel,
-	Message: TextLabel,
+	Count: TextLabel, -- "3 / 5"
 	Close: TextButton,
-	CloseLook: ButtonRefs,
-	CardPage: ScrollingFrame, -- the cards (they scroll on very short screens)
-	Scrolls: boolean, -- the last layout's cards scroll
+	GridWell: Frame,
+	Grid: Frame,
 	Cards: { Card },
+	Detail: Frame,
+	DetailName: TextLabel,
+	DetailPicture: ImageLabel, -- the 3D board (Icon attribute: the preview's picture)
+	DetailView: ViewportFrame,
+	DetailCamera: Camera,
+	DetailCanvas: Frame, -- the board drawn from Frames (only without a model)
+	DetailCanvasScale: UIScale,
+	DetailKind: TextLabel, -- COIN BOARD / ROBUX BOARD
+	DetailSpeed: TextLabel, -- SPEED 31
+	DetailBonus: TextLabel, -- +72%
+	DetailText: TextLabel, -- the description
+	DetailPerks: { TextLabel },
+	Action: TextButton, -- the one action button (holder "ActionHolder")
+	ActionRow: Frame,
+	ActionWord: TextLabel,
+	ActionAmount: TextLabel,
+	ActionIcons: { [string]: GuiObject }, -- Lock, Check, Clock, Coin, Mark
+	ActionStyle: string,
 	Footer: Frame,
 	Hint: TextLabel,
 	HintGlyph: ImageLabel,
+	HintText: string, -- the last setHint text (phones show the pitch instead)
+	HintKind: HintKind, -- the last setHint input kind
+	Message: TextLabel,
+	Selected: string, -- the board picked by a click ("" = none: the default, equipped else the first)
+	Shown: string, -- the board the detail shows (the pick, else the default)
+	DetailBoard: string?, -- the board the detail's model shows
+	DetailCenter: Vector3,
+	DetailDistance: number,
+	DetailFrom: Vector3,
 	Compact: boolean,
-	Columns: number,
 	MaxWidth: number,
 	MaxHeight: number,
 	PoseTime: number,
@@ -131,8 +152,6 @@ local BLACK = Color3.new(0, 0, 0)
 local NAVY_DEEP = rgb(10, 14, 32)
 local NEON_BRIGHT = rgb(120, 210, 255)
 local TEXT = rgb(255, 255, 255)
-local GOLD = rgb(255, 204, 64)
-local PERK_GOLD = rgb(255, 228, 120)
 local INK = rgb(10, 12, 26)
 
 HoverboardView.Title = "HOVERBOARDS"
@@ -142,7 +161,7 @@ HoverboardView.OpenTime = 0.42
 HoverboardView.CloseTime = 0.2
 -- asset ids for the owner's uploaded art ("" = draw it from Frames; only used without a 3D model)
 HoverboardView.BoardImages = {} :: { [string]: string }
--- each board's card paint (PopTheme.Paints; the Robux boards as in the shop's passes)
+-- each board's card paint (PopTheme.Paints)
 HoverboardView.CardPaints = {
 	TimberDrifter = "Orange",
 	CartCruiser = "Blue",
@@ -150,69 +169,75 @@ HoverboardView.CardPaints = {
 	RoyalPhoenix = "Purple",
 	TerraForgeCustom = "Pink",
 } :: { [string]: string }
+-- boards whose cards wear the rainbow (PopTheme.Rainbow) over their paint
+HoverboardView.Rainbow = { TerraForgeCustom = true } :: { [string]: boolean }
+-- the detail model's slow swing (turnDetail): radians each way, radians a second
+HoverboardView.TurnSwing = 0.5
+HoverboardView.TurnSpeed = 0.7
+-- a picture is this much of its square tall where the board is (boards are flat: the
+-- camera frames the board's bounding sphere, the board fills about half of it)
+HoverboardView.BoardHeight = 0.5
 
 type Metrics = {
 	Width: number,
 	Height: number,
-	Pad: number,
-	Band: number, -- the coloured header band
-	Header: number, -- the band + the pitch line: where the cards start
-	Title: number,
-	Icon: number,
-	Text: number,
-	Gap: number,
-	Button: number,
-	ButtonText: number,
-	Name: number,
-	Small: number,
-	Price: number,
-	Close: number,
+	Header: number,
 	Footer: number,
-	MinCard: number,
-	MinHeight: number, -- a card is at least this tall, else the cards scroll
+	Button: number,
+	Close: number,
+	Detail: number, -- the detail column's width
+	Title: number,
+	Text: number,
+	Small: number,
+	Tag: number, -- a card tag's height
+	Pill: number, -- the detail's pill and chips
+	NameFloor: number, -- a card name below this goes on two lines
+	MinPicture: number, -- the detail's picture row never shrinks under this (it drops the texts first)
+	MaxPicture: number,
 }
+
+local PAD = 16
+local GAP = 10
+local CELL_GAP = 8
+local INSET = 6 -- the cards inside their well (the picked card's gold outline shows)
+local CARD_TITLE = 26 -- a card's name row (one line)
+local CARD_LINE = 22 -- a card's bottom line
 
 local METRICS: { [string]: Metrics } = {
 	Normal = {
-		Width = 1080,
-		Height = 470,
-		Pad = 20,
-		Band = 76,
-		Header = 110,
-		Title = 46,
-		Icon = 52,
-		Text = 20,
-		Gap = 14,
-		Button = 56,
-		ButtonText = 24,
-		Name = 22,
-		Small = 17,
-		Price = 26,
-		Close = 62,
-		Footer = 36,
-		MinCard = 176,
-		MinHeight = 200,
+		Width = 940,
+		Height = 560,
+		Header = 70,
+		Footer = 30,
+		Button = 52,
+		Close = 54,
+		Detail = 320,
+		Title = 32,
+		Text = 18,
+		Small = 15,
+		Tag = 24,
+		Pill = 28,
+		NameFloor = 13,
+		MinPicture = 96,
+		MaxPicture = 176,
 	},
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
-		Width = 1320,
-		Height = 560,
-		Pad = 18,
-		Band = 76,
-		Header = 104,
-		Title = 46,
-		Icon = 50,
-		Text = 22,
-		Gap = 12,
+		Width = 1180,
+		Height = 600,
+		Header = 84,
+		Footer = 30,
 		Button = 72,
-		ButtonText = 27,
-		Name = 25,
-		Small = 20,
-		Price = 28,
-		Close = 64,
-		Footer = 0,
-		MinCard = 230,
-		MinHeight = 196,
+		Close = 72,
+		Detail = 340,
+		Title = 34,
+		Text = 20,
+		Small = 17,
+		Tag = 28,
+		Pill = 32,
+		NameFloor = 15,
+		MinPicture = 104,
+		MaxPicture = 176,
 	},
 }
 
@@ -260,6 +285,7 @@ function HoverboardView.bonusText(board: HoverboardData.Board): string
 	return `+{HoverboardData.speedBonus(board)}%`
 end
 
+-- The action button's word (BUY's price is a second word: amountText).
 function HoverboardView.buttonText(state: CardState, board: HoverboardData.Board): string
 	if state == "Buy" or state == "BuyLocked" then
 		return "BUY"
@@ -271,6 +297,29 @@ function HoverboardView.buttonText(state: CardState, board: HoverboardData.Board
 		return tostring(board.Robux or HoverboardData.RobuxPrice)
 	end
 	return "COMING SOON"
+end
+
+-- The action button's second word: a coin board's price on BUY ("" otherwise).
+function HoverboardView.amountText(state: CardState, board: HoverboardData.Board): string
+	if state == "Buy" or state == "BuyLocked" then
+		return Format.money(board.Price or 0)
+	end
+	return ""
+end
+
+-- The detail's pill: what kind of board it is.
+function HoverboardView.kindText(board: HoverboardData.Board): string
+	return if board.Kind == "Robux" then "ROBUX BOARD" else "COIN BOARD"
+end
+
+-- A card's right tag: OWNED, else what it costs (a coin board's price, ROBUX).
+function HoverboardView.tagText(board: HoverboardData.Board, owned: boolean): string
+	if owned then
+		return "OWNED"
+	elseif board.Kind == "Robux" then
+		return "ROBUX"
+	end
+	return Format.money(board.Price or 0)
 end
 
 -- The owned list of a State snapshot ({ Owned = { id... } }) as a set.
@@ -286,12 +335,21 @@ function HoverboardView.ownedSet(list: any): { [string]: boolean }
 	return set
 end
 
--- Cards per row for a panel `width` design units wide.
-function HoverboardView.columns(width: number, compact: boolean): number
-	local m = metrics(compact)
-	local count = #HoverboardData.List
-	local need = count * m.MinCard + (count - 1) * m.Gap + m.Pad * 2
-	return if width >= need then count else math.ceil(count / 2)
+-- "3 / 5": the boards you own of all of them.
+function HoverboardView.countText(owned: { [string]: boolean }): string
+	local n = 0
+	for _, board in HoverboardData.List do
+		if owned[board.Id] then
+			n += 1
+		end
+	end
+	return `{n} / {#HoverboardData.List}`
+end
+
+-- The board the detail shows first: the equipped one, else the first board.
+function HoverboardView.defaultBoard(equipped: string): string
+	local board = HoverboardData.get(equipped)
+	return if board then board.Id else HoverboardData.List[1].Id
 end
 
 -- A board's card paint.
@@ -299,7 +357,33 @@ function HoverboardView.cardPaint(board: HoverboardData.Board): Pop.Paint
 	return Pop.paint(HoverboardView.CardPaints[board.Id] or "Slate")
 end
 
----------------------------------------------------------------- drawing kit
+--[[
+	Where the cards go in a well `w` x `h` design units (inside it, INSET from
+	its edge): three on top, the rest (two) under them, widened to fill the
+	row. Returns { x, y, w, h } per card in board order.
+]]
+function HoverboardView.cells(w: number, h: number, count: number?): { { number } }
+	local n = count or #HoverboardData.List
+	local top = math.min(3, n)
+	local rows = if n > top then 2 else 1
+	local innerW = w - INSET * 2
+	local innerH = h - INSET * 2
+	local rowH = math.floor((innerH - CELL_GAP * (rows - 1)) / rows)
+	local out: { { number } } = {}
+	for row = 1, rows do
+		local first = if row == 1 then 1 else top + 1
+		local last = if row == 1 then top else n
+		local inRow = last - first + 1
+		local cellW = math.floor((innerW - CELL_GAP * (inRow - 1)) / inRow)
+		for i = first, last do
+			local column = i - first
+			table.insert(out, { INSET + column * (cellW + CELL_GAP), INSET + (row - 1) * (rowH + CELL_GAP), cellW, rowH })
+		end
+	end
+	return out
+end
+
+---------------------------------------------------------------- drawing kit (the stand-in without a 3D model)
 
 -- A frame at offset (x, y) (top-left) in a canvas, w x h, rotated `rot`, `corner` in offset.
 local function block(
@@ -585,7 +669,7 @@ function Icons.clock(parent: Instance, color: Color3): Frame
 	return box
 end
 
--- a tiny board (headers, the RIDE button)
+-- a tiny board (the RIDE button)
 function Icons.board(parent: Instance, color: Color3, glowColor: Color3): Frame
 	local box = iconBox(parent, "BoardIcon")
 	local glowBar = ink(box, 0.5, 0.82, 0.86, 0.14, glowColor, 0, 0.5)
@@ -602,104 +686,352 @@ function Icons.board(parent: Instance, color: Color3, glowColor: Color3): Frame
 	return box
 end
 
----------------------------------------------------------------- buttons
+---------------------------------------------------------------- the reel pieces (GolemView's look)
+--[[
+	The golem inventory's pixel reels, rebuilt here from the shared kit
+	(GolemView's own reel helpers are local to it): short words in the pixel
+	font shrink to fit their box, sentences stay round; a reel card is a
+	paint with its lip, the light edge, the lattice and a turning sunburst
+	with a soft glow behind its picture.
+]]
 
-type ButtonStyle = {
-	Paint: Pop.Paint,
-	Mid: Color3, -- the face's colour at its glossy step (Pop.face)
-	Icon: string?, -- a drawn icon before the word
-	Mark: boolean, -- the robux mark before the price (Pop.price)
-}
-
-local function buttonStyle(paint: Pop.Paint, icon: string?, mark: boolean?): ButtonStyle
-	return { Paint = paint, Mid = paint.Top:Lerp(paint.Bottom, 0.42), Icon = icon, Mark = mark == true }
+local function holderOf(button: TextButton): Frame
+	return button.Parent :: Frame
 end
 
-local STYLES: { [string]: ButtonStyle } = {
-	Buy = buttonStyle(PopTheme.Price),
-	BuyLocked = buttonStyle(PopTheme.Gray, "Lock"),
-	Equip = buttonStyle(Pop.paint("Blue")),
-	Equipped = buttonStyle(Pop.paint("Yellow"), "Check"),
-	Robux = buttonStyle(PopTheme.Price, nil, true), -- the green Pop.price: the robux mark and "49"
-	Soon = buttonStyle(PopTheme.Gray, "Clock"),
-	Close = buttonStyle(PopTheme.Close),
+-- A short word in the pixel font, shrunk to fit its box (Pop.fit).
+local function pixel(label: TextLabel | TextButton, size: number)
+	local l: any = label
+	l.FontFace = PopTheme.Pixel
+	l.TextWrapped = false
+	Pop.fit(l, size)
+end
+
+-- A pixel word sized to leave a margin inside `width` (and at most `size`).
+local function fitWord(label: TextLabel | TextButton, size: number, width: number)
+	local l: any = label
+	local s = size
+	while s > 10 and Pop.textWidth(l.Text, s) > width - 12 do
+		s -= 1
+	end
+	Pop.fit(l, s)
+end
+
+-- A sentence in the round font at `size` (round for good: Pop.round), still cut, never spilled.
+local function round(label: TextLabel, size: number)
+	local cut = label.TextTruncate
+	Pop.round(label, size)
+	label.TextTruncate = cut
+end
+
+-- A pixel name at `size` on `lines` lines (TextScaled under a cap: never bigger than `size`).
+local function setName(label: TextLabel, size: number, lines: number)
+	label.FontFace = PopTheme.Pixel
+	label.TextWrapped = lines > 1
+	label.TextScaled = true
+	label.TextSize = size
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label:SetAttribute("NameLines", lines)
+	local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		limit = UIKit.new("UITextSizeConstraint", { Name = "Fit" }, label)
+	end
+	local l = limit :: UITextSizeConstraint
+	l.MinTextSize = 1
+	l.MaxTextSize = size
+	l.MinTextSize = math.min(size, PopTheme.PixelMin)
+	local edge = label:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.LineJoinMode = Enum.LineJoinMode.Miter
+	end
+end
+
+-- Keeps a pixel word off a face's lip and its sides.
+local function padWord(object: GuiObject, left: number, right: number, lip: number)
+	local pad = object:FindFirstChildOfClass("UIPadding") or UIKit.new("UIPadding", {}, object)
+	local p = pad :: UIPadding
+	p.PaddingLeft = UDim.new(0, left)
+	p.PaddingRight = UDim.new(0, right)
+	p.PaddingTop = UDim.new(0, 2)
+	p.PaddingBottom = UDim.new(0, lip)
+end
+
+-- A Pop button (GolemView.popButton) with a pixel word, a gleam and the press bounce.
+local function reelButton(parent: Instance, text: string, paint: string | Pop.Paint, props: { [string]: any }?): TextButton
+	local button = GolemView.popButton(parent, text, paint, props)
+	button:SetAttribute("WordSize", button.TextSize)
+	pixel(button, button.TextSize)
+	padWord(button, 6, 6, 6)
+	local holder = holderOf(button)
+	Pop.gleam(holder, 2)
+	Pop.fxTag(holder, "Press")
+	return button
+end
+
+-- A small tag with a pixel word (E, OWNED, the price, the count).
+local function reelTag(parent: Instance, text: string, color: Color3, size: Vector2, props: { [string]: any }?): TextLabel
+	local chip = GolemView.solidChip(parent, text, color, size, props)
+	pixel(chip, math.floor(size.Y * 0.8))
+	padWord(chip, 5, 5, 2)
+	return chip
+end
+
+--[[
+	Paints `frame` as a reel card: the paint with its lip and light edge, the
+	lattice, and the sunburst (Pop.rays, turning) with a soft glow behind
+	`centre` (inside the lattice's clip). The frame's Size must be set first.
+]]
+local function reelFace(frame: GuiObject, paint: string | Pop.Paint, corner: number, centre: UDim2, reach: number)
+	Pop.face(frame, paint, corner)
+	local clip = Pop.studs(frame, corner, 0.45, 30, 2) :: Frame
+	Pop.rays(clip, centre, 8, reach, GolemView.RayFade, 2)
+	local short = math.min(frame.Size.X.Offset, frame.Size.Y.Offset, 220)
+	for i, k in { 0.7, 0.46 } do
+		local disc = UIKit.new("Frame", {
+			Name = "Glow" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = if i == 1 then 0.82 else 0.72,
+			BorderSizePixel = 0,
+			Position = centre,
+			Size = UDim2.fromOffset(math.floor(short * k), math.floor(short * k)),
+			ZIndex = 2,
+		}, clip)
+		UIKit.corner(disc, 999)
+	end
+	local rim = frame:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+end
+
+-- Moves a reel card's sunburst and glow to `centre` (its picture moved).
+local function aimReel(frame: Instance, centre: UDim2)
+	local clip = frame:FindFirstChild("Lattice")
+	if not clip then
+		return
+	end
+	-- (the clip sits 3 units inside the card)
+	local at = centre - UDim2.fromOffset(3, 3)
+	for _, name in { "Rays", "Glow1", "Glow2" } do
+		local piece = clip:FindFirstChild(name)
+		if piece and piece:IsA("GuiObject") then
+			piece.Position = at
+		end
+	end
+end
+
+-- The window's header band in the reels' look: the lattice and a gleam (no shine stripes).
+local function reelBand(panel: Frame)
+	local band = panel:FindFirstChild("Band")
+	if not band or not band:IsA("Frame") then
+		return
+	end
+	for _, child in band:GetChildren() do
+		if child.Name == "Shine" or string.sub(child.Name, 1, 6) == "Stripe" then
+			child:Destroy()
+		end
+	end
+	Pop.gleam(band, 3)
+end
+
+--[[
+	A board's reel paint on a face `h` units tall: its paint with the lip, or
+	the rainbow (HoverboardView.Rainbow; no lip: it runs left to right).
+]]
+local function paintBoard(frame: GuiObject, board: HoverboardData.Board, h: number)
+	if h > 0 then
+		frame:SetAttribute("Lip", Pop.lipUnits(h) / h)
+	end
+	local gradient = frame:FindFirstChild("Paint") :: UIGradient?
+	if gradient then
+		gradient.Rotation = 90
+	end
+	Pop.repaint(frame, HoverboardView.cardPaint(board))
+	if HoverboardView.Rainbow[board.Id] then
+		Pop.rainbow(frame)
+	end
+end
+
+-- The bounds (centre, radius) of every part in a model (Pop.show frames the same sphere).
+local function boundsOf(model: Instance): (Vector3, number)
+	local lo = Vector3.new(math.huge, math.huge, math.huge)
+	local hi = -lo
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			local cf = part.CFrame
+			local half = part.Size * 0.5
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local at = cf * Vector3.new(half.X * sx, half.Y * sy, half.Z * sz)
+						lo = Vector3.new(math.min(lo.X, at.X), math.min(lo.Y, at.Y), math.min(lo.Z, at.Z))
+						hi = Vector3.new(math.max(hi.X, at.X), math.max(hi.Y, at.Y), math.max(hi.Z, at.Z))
+					end
+				end
+			end
+		end
+	end
+	if lo.X > hi.X then
+		return Vector3.zero, 1
+	end
+	return (lo + hi) * 0.5, math.max(0.5, (hi - lo).Magnitude * 0.5)
+end
+
+---------------------------------------------------------------- the action button
+
+type ActionStyle = {
+	Paint: Pop.Paint,
+	Icon: string?, -- Lock / Check / Clock / Coin / Mark (the robux mark)
+	Coin: boolean, -- the coin before the price
+}
+
+local function actionStyle(paint: Pop.Paint, icon: string?, coin: boolean?): ActionStyle
+	return { Paint = paint, Icon = icon, Coin = coin == true }
+end
+
+local STYLES: { [string]: ActionStyle } = {
+	Buy = actionStyle(Pop.paint("Yellow"), nil, true), -- the coin button (Pop.coinButton's yellow)
+	BuyLocked = actionStyle(PopTheme.Gray, "Lock", true),
+	Equip = actionStyle(Pop.paint("Blue")),
+	Equipped = actionStyle(Pop.paint("Yellow"), "Check"),
+	Robux = actionStyle(PopTheme.Price, "Mark"), -- the green Pop.price: the robux mark and "49"
+	Soon = actionStyle(PopTheme.Gray, "Clock"),
 }
 HoverboardView.ButtonStyles = STYLES
 
-local ICON_MAKERS: { [string]: (Instance, Color3) -> Frame } = {
-	Check = Icons.check,
-	Lock = Icons.lock,
-	Clock = Icons.clock,
-}
+local function newAction(parent: Instance): (TextButton, Frame, TextLabel, TextLabel, { [string]: GuiObject })
+	local button = reelButton(parent, "", "Yellow", { Name = "Action", TextSize = 22, ZIndex = 6 })
+	button.Text = ""
+	-- (the row below sits above the lip itself: no word padding)
+	local pad = button:FindFirstChildOfClass("UIPadding")
+	if pad then
+		pad:Destroy()
+	end
+	local row: Frame = UIKit.new("Frame", {
+		Name = "Row",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 5,
+	}, button)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 6, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local icons: { [string]: GuiObject } = {}
+	icons.Lock = Icons.lock(row, WHITE)
+	icons.Check = Icons.check(row, WHITE)
+	icons.Clock = Icons.clock(row, WHITE)
+	local mark: ImageLabel = UIKit.new("ImageLabel", {
+		Name = "Mark",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(24, 24),
+		ZIndex = 6,
+	}, row)
+	IconAssets.apply(mark, "robux")
+	mark:SetAttribute("Icon", "robux")
+	icons.Mark = mark
+	for i, name in { "Lock", "Check", "Clock", "Mark" } do
+		local icon = icons[name]
+		icon.LayoutOrder = i
+		icon.Visible = false
+		icon.ZIndex = 6
+	end
+	local word = GolemView.text(row, "BUY", 22, { Name = "Word", LayoutOrder = 10, ZIndex = 6 })
+	local coin = Pop.coin(row, 24, { LayoutOrder = 11, Visible = false })
+	icons.Coin = coin
+	local amount = GolemView.text(row, "", 22, { Name = "Amount", LayoutOrder = 12, ZIndex = 6 })
+	return button, row, word, amount, icons
+end
 
-local function styleButton(look: ButtonRefs, styleName: string, text: string, textSize: number)
-	local style = STYLES[styleName]
-	look.Style = styleName
-	ElevatorView.paintButton(look, style.Paint, text, textSize, style.Icon, false)
-	local mark = look.Row:FindFirstChild("Mark") :: ImageLabel?
-	if mark then
-		mark.Visible = style.Mark
-		mark.Size = UDim2.fromOffset(textSize + 4, textSize + 4)
+-- Sizes the action button's row (the icon, the word, the price) for its holder.
+local function fitAction(refs: Refs)
+	local holder = holderOf(refs.Action)
+	local w, h = holder.Size.X.Offset, holder.Size.Y.Offset
+	local lip = Pop.lipUnits(h)
+	refs.ActionRow.Size = UDim2.new(1, 0, 1, -lip)
+	local style = STYLES[refs.ActionStyle] or STYLES.Equip
+	local hasAmount = refs.ActionAmount.Text ~= ""
+	local function width(size: number): number
+		local letter = math.floor(size * PopTheme.PixelScale + 0.5)
+		local sum = Pop.textWidth(refs.ActionWord.Text, size)
+		local items = 1
+		if style.Icon then
+			sum += math.floor(letter * 1.25) + 4
+			items += 1
+		end
+		if style.Coin and hasAmount then
+			sum += math.floor(letter * 1.25) + 4 + Pop.textWidth(refs.ActionAmount.Text, size)
+			items += 2
+		end
+		return sum + 6 * (items - 1)
+	end
+	local size = math.floor((h - lip) * 0.58)
+	while size > 12 and width(size) > w - 24 do
+		size -= 1
+	end
+	local letter = math.floor(size * PopTheme.PixelScale + 0.5)
+	for name, icon in refs.ActionIcons do
+		-- (the coin and the robux mark are round: a bit bigger than a letter)
+		local side = if name == "Coin" or name == "Mark" then math.floor(letter * 1.25) + 4 else letter + 4
+		icon.Size = UDim2.fromOffset(side, side)
+		icon.Visible = name == style.Icon or (name == "Coin" and style.Coin and hasAmount)
+	end
+	for _, label in { refs.ActionWord, refs.ActionAmount } do
+		label.Visible = label.Text ~= ""
+		label.Size = UDim2.fromOffset(Pop.textWidth(label.Text, size), h - lip)
+		Pop.fit(label, size)
 	end
 end
 
 ---------------------------------------------------------------- building
 
--- the size a card is built at (the layout resizes it; Pop.card sizes its rays and glow from it)
-local CARD_BUILD = Vector2.new(200, 320)
--- Pop.card's light burst (rays and glow): it follows the picture
-local CARD_FX = { "Rays", "Glow", "Glow1", "Glow2" }
--- the room round the cards inside their scroll (the equipped board's gold halo is not clipped)
-local CARD_MARGIN = 6
+-- the size a card is built at (the layout resizes it; the sunburst's reach covers the widest card)
+local CARD_BUILD = Vector2.new(184, 212)
+local CARD_REACH = 300
 
-local function newCard(page: GuiObject, board: HoverboardData.Board): Card
-	local robux = board.Kind == "Robux"
+local function newCard(grid: Frame, board: HoverboardData.Board): Card
 	local frame: Frame = UIKit.new("Frame", {
 		Name = board.Id,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		LayoutOrder = board.Order,
 		Size = UDim2.fromOffset(CARD_BUILD.X, CARD_BUILD.Y),
-	}, page)
+		ZIndex = 4,
+	}, grid)
 	local scale: UIScale = UIKit.new("UIScale", { Name = "Drop", Scale = 1 }, frame)
-	-- the equipped board's soft gold halo (outside the card's own gold edge)
-	local glow: Frame = UIKit.new("Frame", {
-		Name = "Glow",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 8, 1, 8),
-		Visible = false,
-		ZIndex = 1,
-	}, frame)
-	UIKit.corner(glow, PopTheme.Corner + 4)
-	ring(glow, 6, GOLD, 0.45)
-	-- the painted card: light rays and a glow behind the board, studs, sparkles, the light rim
-	local face = Pop.card(frame, HoverboardView.cardPaint(board), {
-		Name = "Face",
+	local button: TextButton = UIKit.new("TextButton", {
+		Name = "Card",
+		AutoButtonColor = false,
+		ClipsDescendants = true,
+		Selectable = true,
 		Size = UDim2.fromOffset(CARD_BUILD.X, CARD_BUILD.Y),
-		Selectable = false,
+		Text = "",
 		ZIndex = 2,
-	}, UDim2.fromScale(0.5, 0.36))
-	face.Size = UDim2.fromScale(1, 1)
-	local stroke = face:FindFirstChild("Border") :: UIStroke
-	-- the board: its live 3D model (like the shop's board passes), else drawn from Frames
+	}, frame)
+	reelFace(button, HoverboardView.cardPaint(board), GolemView.CardCorner, UDim2.fromScale(0.5, 0.5), CARD_REACH)
+	button.Size = UDim2.fromScale(1, 1)
+	paintBoard(button, board, CARD_BUILD.Y)
+	Pop.fxTag(button, "Press")
+	local stroke = button:FindFirstChild("Border") :: UIStroke
+	-- the board: its live 3D model (bigger than its spot: the board is flat), else drawn from Frames
 	local artBack: Frame = UIKit.new("Frame", {
 		Name = "ArtBack",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		ZIndex = 4,
-	}, face)
+	}, button)
 	local model, from = PictureModels.build("board_" .. board.Id)
 	local picture: ImageLabel? = nil
 	if model then
-		-- (a bit bigger than its spot: the camera frames the board's bounding sphere, a flat board
-		-- leaves room round it)
 		picture = Pop.model(artBack, "board_" .. board.Id, 160, model, {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(1.3, 1.3),
+			Size = UDim2.fromScale(1, 1),
 			ZIndex = 4,
 		}, from)
+		Pop.fxTag(picture :: ImageLabel, "Lean")
 	end
 	local canvas: Frame = UIKit.new("Frame", {
 		Name = "Art",
@@ -707,122 +1039,103 @@ local function newCard(page: GuiObject, board: HoverboardData.Board): Card
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(200, 110),
 		ZIndex = 4,
-	}, face)
+	}, button)
 	local canvasScale: UIScale = UIKit.new("UIScale", { Scale = 1 }, canvas)
 	if not picture then
 		HoverboardView.drawBoard(canvas, board)
 	end
-	-- the gold ROBUX ribbon on the picture's corner
-	local ribbon: Frame? = nil
-	if robux then
-		ribbon = Pop.ribbon(face, "ROBUX", 86)
-	end
-	local name = Pop.text(face, board.Name, 22, {
+	local name = GolemView.text(button, string.upper(board.Name), 20, {
 		Name = "BoardName",
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(5, 5),
 		ZIndex = 6,
 	})
-	-- the speed as chips: "SPEED 23" and the bonus "+44%"
-	local speedChip = Pop.chip(face, HoverboardView.speedText(board), "Slate", Vector2.new(100, 26), { ZIndex = 6 })
-	speedChip.Name = "SpeedChip"
-	local speed = speedChip:FindFirstChild("Label") :: TextLabel
-	local bonusChip = Pop.chip(face, HoverboardView.bonusText(board), "Green", Vector2.new(70, 26), { ZIndex = 6 })
-	bonusChip.Name = "BonusChip"
-	local bonus = bonusChip:FindFirstChild("Label") :: TextLabel
-	local perk = Pop.text(face, board.Perks[2] or board.Perks[1] or "", 16, {
-		Name = "Perk",
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextColor3 = if robux then PERK_GOLD else TEXT,
+	local line = GolemView.text(button, HoverboardView.speedText(board), 17, {
+		Name = "Line",
+		AnchorPoint = Vector2.new(0.5, 1),
+		TextColor3 = GolemView.BonusColor,
 		ZIndex = 6,
 	})
-	-- the coin price (a gold coin and the amount) or, once owned, the OWNED chip; a Robux
-	-- board's price is only on its green button, its line shows one more perk (its trail)
-	local priceRow: Frame = UIKit.new("Frame", {
-		Name = "PriceRow",
-		BackgroundTransparency = 1,
-		Visible = not robux,
-		ZIndex = 6,
-	}, face)
-	UIKit.list(priceRow, Enum.FillDirection.Horizontal, 6, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-	local coin = Pop.coin(priceRow, 26, { LayoutOrder = 1 })
-	local price = Pop.text(priceRow, HoverboardView.priceText(board), 26, {
-		Name = "Price",
-		LayoutOrder = 2,
-		FontFace = PopTheme.Heavy,
-		TextColor3 = Theme.Coin,
+	-- tilted tags beside the picture (the reels' price tags): E on the left, OWNED / the price / ROBUX on the right
+	local equipped = reelTag(button, "E", Pop.paint("Green").Bottom, Vector2.new(30, 26), {
+		Name = "EquippedBadge",
+		Rotation = -10,
+		Visible = false,
 		ZIndex = 7,
 	})
-	local extra = Pop.text(face, "", 18, {
-		Name = "Extra",
-		TextColor3 = PERK_GOLD,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Visible = robux,
-		ZIndex = 6,
+	local tag = reelTag(button, "", GolemView.ChipDark, Vector2.new(80, 24), {
+		Name = "Tag",
+		AnchorPoint = Vector2.new(1, 0),
+		Rotation = 10,
+		ZIndex = 7,
 	})
-	local owned = Pop.chip(face, "OWNED", "Green", Vector2.new(110, 28), { Visible = false, ZIndex = 6 })
-	owned.Name = "Owned"
-	-- the button (over the card, not clipped by it): BUY / EQUIP / EQUIPPED / the Robux price / COMING SOON
-	local look = ElevatorView.popButton(frame, "Action", { "Check", "Lock", "Clock" }, ICON_MAKERS)
-	look.Holder.ZIndex = 3
+	local tagCoin = Pop.coin(tag, 18, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		Visible = false,
+		ZIndex = 8,
+	})
+	local tagLock = Icons.lock(tag, WHITE)
+	tagLock.AnchorPoint = Vector2.new(0, 0.5)
+	tagLock.Position = UDim2.new(0, 5, 0.5, 0)
+	tagLock.Visible = false
+	tagLock.ZIndex = 8
+	for _, piece in tagLock:GetChildren() do
+		if piece:IsA("GuiObject") then
+			piece.ZIndex = 8
+		end
+	end
+	-- the picked card: a white ring inside the gold outline
+	local pick: Frame = UIKit.new("Frame", {
+		Name = "Pick",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 1, -8),
+		Visible = false,
+		ZIndex = 7,
+	}, button)
+	UIKit.corner(pick, GolemView.CardCorner - 4)
+	UIKit.new("UIStroke", {
+		Name = "Ring",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = GolemView.PickColor,
+		Thickness = 3,
+	}, pick)
 	return {
 		Board = board,
 		Frame = frame,
 		Scale = scale,
-		Face = face,
+		Button = button,
 		Stroke = stroke,
-		Glow = glow,
+		Pick = pick,
 		ArtBack = artBack,
 		Picture = picture,
 		Canvas = canvas,
 		CanvasScale = canvasScale,
-		Ribbon = ribbon,
 		Name = name,
-		SpeedChip = speedChip,
-		Speed = speed,
-		BonusChip = bonusChip,
-		Bonus = bonus,
-		Perk = perk,
-		PriceRow = priceRow,
-		Coin = coin,
-		Price = price,
-		Extra = extra,
-		Owned = owned,
-		Button = look.Button,
-		Look = look,
-		State = "Buy",
+		Line = line,
+		Equipped = equipped,
+		Tag = tag,
+		TagCoin = tagCoin,
+		TagLock = tagLock,
+		TagHeight = 24,
+		State = "BuyLocked",
+		Owned = false,
 	}
 end
 
-local function newFooter(root: Frame): (Frame, TextLabel, ImageLabel)
-	local footer, row = ElevatorView.popFooter(root)
-	footer.Size = UDim2.fromOffset(460, 36)
-	local glyph: ImageLabel = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(26, 26),
-		LayoutOrder = 1,
-		Visible = false,
-	}, row)
-	local hint = Pop.text(row, "", 17, {
-		Name = "Hint",
-		LayoutOrder = 2,
-	})
-	return footer, hint, glyph
-end
-
 function HoverboardView.build(compact: boolean?): Refs
+	local isCompact = compact == true
+	local m = metrics(isCompact)
 	local gui = UIKit.screen("TerraForgeHoverboards", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true) -- the Pop look: never the LightSkin (it would recolour the faces)
 	local root: Frame = UIKit.new("Frame", {
 		Name = "Root",
+		Active = true,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(METRICS.Normal.Width, METRICS.Normal.Height),
-		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(m.Width, m.Height),
 		SelectionGroup = true,
 		SelectionBehaviorUp = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
@@ -830,365 +1143,630 @@ function HoverboardView.build(compact: boolean?): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, gui)
 	local pop: UIScale = UIKit.new("UIScale", { Name = "OpenPop", Scale = 1 }, root)
-	-- the Pop window: the blue band (icon, title, X) over the dark studded body
-	local chrome = ElevatorView.popWindow(root, HoverboardView.Title, HoverboardView.Paint, METRICS.Normal.Band)
-	local panel = chrome.Panel
-	-- the band's icon: a violet tile with a white board
-	local icon: Frame = UIKit.new("Frame", {
-		Name = "HeaderIcon",
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-	}, chrome.Header)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, icon)
-	gradient3(icon, rgb(170, 100, 255), rgb(118, 56, 220), rgb(72, 30, 160))
-	ring(icon, 3, INK)
-	local board = Icons.board(icon, TEXT, rgb(120, 230, 255))
-	board.AnchorPoint = Vector2.new(0.5, 0.5)
-	board.Position = UDim2.fromScale(0.5, 0.5)
-	board.Size = UDim2.fromScale(0.8, 0.8)
-	-- the pitch under the band (or the last server message)
-	local subtitle = Pop.text(panel, HoverboardView.Pitch, 20, {
-		Name = "Subtitle",
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ZIndex = 3,
+	-- the chrome: the band in the window's colour (lattice, gleam), the title with its shadow
+	local title = GolemView.chrome(root, HoverboardView.Title, HoverboardView.Paint)
+	reelBand(root)
+	local count = reelTag(root, "0 / 5", GolemView.ChipDark, Vector2.new(96, 30), {
+		Name = "Count",
+		ZIndex = 6,
 	})
-	local message = Pop.text(panel, "", 20, {
-		Name = "Message",
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextColor3 = Theme.Bad,
-		Visible = false,
-		ZIndex = 3,
+	local close = reelButton(root, "X", PopTheme.Close, {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		FontFace = PopTheme.Heavy,
+		TextSize = 34,
+		ZIndex = 6,
 	})
-	-- the cards (a scroll that only scrolls when they don't fit: very short screens)
-	local page: ScrollingFrame = UIKit.new("ScrollingFrame", {
-		Name = "Cards",
+
+	-- the grid: a reel card per board on a dark studded well
+	local gridWell = Pop.well(root, { Name = "GridWell", ZIndex = 3 })
+	local grid: Frame = UIKit.new("Frame", {
+		Name = "Grid",
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 6,
-		ScrollBarImageColor3 = rgb(196, 200, 212),
-		ScrollingEnabled = false,
-		Selectable = false,
-		VerticalScrollBarInset = Enum.ScrollBarInset.None,
-		ZIndex = 3,
-	}, panel)
+		ZIndex = 4,
+	}, root)
 	local cards: { Card } = {}
-	for _, b in HoverboardData.List do
-		table.insert(cards, newCard(page, b))
+	for _, board in HoverboardData.List do
+		table.insert(cards, newCard(grid, board))
 	end
-	-- the footer pill on the root (over the frame's bottom edge)
-	local footer, hint, glyph = newFooter(root)
+
+	-- the detail: a big reel card of the picked board
+	local detail: Frame = UIKit.new("Frame", {
+		Name = "Detail",
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Size = UDim2.fromOffset(m.Detail, 420),
+		ZIndex = 3,
+	}, root)
+	reelFace(detail, HoverboardView.cardPaint(HoverboardData.List[1]), GolemView.CardCorner, UDim2.new(0.5, 0, 0, 120), 420)
+	local detailName = GolemView.text(detail, "", m.Text + 10, {
+		Name = "BoardName",
+		ZIndex = 6,
+	})
+	local detailPicture = Pop.model(detail, "board_" .. HoverboardData.List[1].Id, 200, nil, {
+		Name = "Picture",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ZIndex = 4,
+	})
+	Pop.fxTag(detailPicture, "Lean")
+	local detailView = detailPicture:FindFirstChild("View") :: ViewportFrame
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 30
+	camera.Parent = detailView
+	pcall(function()
+		detailView.CurrentCamera = camera
+	end)
+	local detailCanvas: Frame = UIKit.new("Frame", {
+		Name = "Art",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(200, 110),
+		Visible = false,
+		ZIndex = 4,
+	}, detail)
+	local detailCanvasScale: UIScale = UIKit.new("UIScale", { Scale = 1 }, detailCanvas)
+	local detailKind = reelTag(detail, "COIN BOARD", GolemView.ChipDark, Vector2.new(170, m.Pill), {
+		Name = "Kind",
+		AnchorPoint = Vector2.new(0.5, 0),
+	})
+	local detailSpeed = reelTag(detail, "SPEED 0", GolemView.ChipDark, Vector2.new(130, m.Pill), {
+		Name = "Speed",
+	})
+	local detailBonus = reelTag(detail, "+0%", GolemView.ChipDark, Vector2.new(80, m.Pill), {
+		Name = "Bonus",
+		TextColor3 = GolemView.BonusColor,
+	})
+	local detailText = GolemView.text(detail, "", m.Small - 1, {
+		Name = "Description",
+		BackgroundColor3 = PopTheme.Outline,
+		BackgroundTransparency = 0.5,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
+	})
+	round(detailText, m.Small - 1)
+	UIKit.corner(detailText, 8)
+	UIKit.new("UIPadding", {
+		PaddingTop = UDim.new(0, 5),
+		PaddingBottom = UDim.new(0, 5),
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+	}, detailText)
+	local perks: { TextLabel } = {}
+	for i = 1, 3 do
+		table.insert(
+			perks,
+			GolemView.text(detail, "", m.Small + 1, {
+				Name = "Perk" .. i,
+				TextColor3 = GolemView.BonusColor,
+				Visible = false,
+				ZIndex = 6,
+			})
+		)
+	end
+	local action, actionRow, actionWord, actionAmount, actionIcons = newAction(detail)
+
+	-- the footer: the control hint (with the gamepad's glyph) or the pitch; the server's message
+	local footer: Frame = UIKit.new("Frame", {
+		Name = "Footer",
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 5,
+	}, root)
+	UIKit.list(footer, Enum.FillDirection.Horizontal, 8, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local glyph: ImageLabel = UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		Size = UDim2.fromOffset(26, 26),
+		Visible = false,
+		ZIndex = 5,
+	}, footer)
+	local hint = GolemView.text(footer, "", m.Small, {
+		Name = "Hint",
+		LayoutOrder = 2,
+		TextColor3 = PopTheme.Ink:Lerp(PopTheme.Body, 0.22),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	round(hint, m.Small)
+	local message = GolemView.text(root, "", m.Small, {
+		Name = "Message",
+		AnchorPoint = Vector2.new(0.5, 1),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Visible = false,
+		ZIndex = 5,
+	})
+	round(message, m.Small)
+
 	local refs: Refs = {
 		Gui = gui,
 		Root = root,
+		Panel = root,
 		Pop = pop,
-		Panel = panel,
-		Header = chrome.Header,
-		Body = chrome.Body,
-		Chrome = chrome,
-		Icon = icon,
-		Title = chrome.Title,
-		TitleShadow = chrome.TitleShadow,
-		Subtitle = subtitle,
-		Message = message,
-		Close = chrome.CloseLook.Button,
-		CloseLook = chrome.CloseLook,
-		CardPage = page,
-		Scrolls = false,
+		Title = title,
+		Count = count,
+		Close = close,
+		GridWell = gridWell,
+		Grid = grid,
 		Cards = cards,
+		Detail = detail,
+		DetailName = detailName,
+		DetailPicture = detailPicture,
+		DetailView = detailView,
+		DetailCamera = camera,
+		DetailCanvas = detailCanvas,
+		DetailCanvasScale = detailCanvasScale,
+		DetailKind = detailKind,
+		DetailSpeed = detailSpeed,
+		DetailBonus = detailBonus,
+		DetailText = detailText,
+		DetailPerks = perks,
+		Action = action,
+		ActionRow = actionRow,
+		ActionWord = actionWord,
+		ActionAmount = actionAmount,
+		ActionIcons = actionIcons,
+		ActionStyle = "",
 		Footer = footer,
 		Hint = hint,
 		HintGlyph = glyph,
-		Compact = false,
-		Columns = #cards,
+		HintText = "",
+		HintKind = "Mouse",
+		Message = message,
+		Selected = "",
+		Shown = "",
+		DetailBoard = nil,
+		DetailCenter = Vector3.zero,
+		DetailDistance = 10,
+		DetailFrom = Vector3.new(-1, 0.75, -0.7).Unit,
+		Compact = isCompact,
 		MaxWidth = math.huge,
 		MaxHeight = math.huge,
 		PoseTime = HoverboardView.OpenTime,
 	}
+	HoverboardView.layout(refs, isCompact, math.huge, math.huge)
 	HoverboardView.setCards(refs, {}, "", 0)
-	HoverboardView.setHint(refs, "Mouse", "Click a card · H: ride · Backspace: close")
-	HoverboardView.layout(refs, compact == true, math.huge, math.huge)
+	HoverboardView.setHint(refs, "Mouse", "Click a board to see it · H: ride · Backspace: close")
+	-- like every window: Roblox's touch controls hide while it is open
+	TouchControls.follow(gui)
 	return refs
+end
+
+---------------------------------------------------------------- the detail's 3D board
+
+-- Points the detail's camera at its board, turned `yaw` radians round it.
+local function aimCamera(refs: Refs, yaw: number)
+	local turned = CFrame.Angles(0, yaw, 0) * refs.DetailFrom
+	local at = refs.DetailCenter + turned * refs.DetailDistance
+	refs.DetailCamera.CFrame = CFrame.lookAt(at, refs.DetailCenter)
+end
+
+-- Shows `board` in the detail's picture (its live model; drawn from Frames without one).
+local function showDetailBoard(refs: Refs, board: HoverboardData.Board)
+	if refs.DetailBoard == board.Id then
+		return
+	end
+	refs.DetailBoard = board.Id
+	for _, child in refs.DetailView:GetChildren() do
+		if child:IsA("Model") then
+			child:Destroy()
+		end
+	end
+	refs.DetailCanvas:ClearAllChildren()
+	refs.DetailCanvasScale = UIKit.new("UIScale", { Scale = 1 }, refs.DetailCanvas)
+	refs.DetailPicture:SetAttribute("Icon", "board_" .. board.Id)
+	local model, from = PictureModels.build("board_" .. board.Id)
+	if model then
+		model.Parent = refs.DetailView
+		local centre, radius = boundsOf(model)
+		refs.DetailCenter = centre
+		refs.DetailDistance = radius / math.sin(math.rad(15)) * 0.95
+		refs.DetailFrom = from.Unit
+		aimCamera(refs, 0)
+	else
+		HoverboardView.drawBoard(refs.DetailCanvas, board)
+	end
+	refs.DetailPicture.Visible = model ~= nil
+	refs.DetailCanvas.Visible = model == nil
+end
+
+--[[
+	The detail's board swinging slowly (`t` seconds since the window opened;
+	HoverboardController calls it every frame while the window is open and
+	Reduce Motion is off): one camera move, nothing rebuilt.
+]]
+function HoverboardView.turnDetail(refs: Refs, t: number)
+	if refs.DetailBoard == nil or not refs.DetailPicture.Visible then
+		return
+	end
+	aimCamera(refs, math.sin(t * HoverboardView.TurnSpeed) * HoverboardView.TurnSwing)
 end
 
 ---------------------------------------------------------------- filling in
 
--- Fills every card from the save: owned boards, the equipped one, your coins.
-function HoverboardView.setCards(refs: Refs, owned: { [string]: boolean }, equipped: string, coins: any)
-	local m = metrics(refs.Compact)
+local function cardOf(refs: Refs, id: string): Card?
 	for _, card in refs.Cards do
-		local state: CardState = HoverboardView.cardState(card.Board, owned, equipped, coins) :: any
-		card.State = state
-		styleButton(
-			card.Look,
-			state,
-			HoverboardView.buttonText(state, card.Board),
-			if state == "Soon" then m.ButtonText - 6 else m.ButtonText
-		)
-		-- the equipped board: a gold edge and the soft gold halo
-		local on = state == "Equipped"
-		card.Glow.Visible = on
-		card.Stroke.Color = if on then GOLD else PopTheme.Outline
-		card.Stroke.Thickness = if on then 4 else PopTheme.Edge
-		card.Button.Selectable = not on
-		local owns = state == "Equip" or on
-		local robux = card.Board.Kind == "Robux"
-		card.PriceRow.Visible = not owns and not robux
-		card.Extra.Visible = not owns and robux
-		card.Owned.Visible = owns
+		if card.Board.Id == id then
+			return card
+		end
 	end
+	return nil
+end
+
+-- The card of the board the detail shows (the pick, else the default).
+function HoverboardView.selectedCard(refs: Refs): Card
+	return cardOf(refs, refs.Shown) or refs.Cards[1]
+end
+
+--[[
+	Sizes a card's tags for its TagHeight: the right tag fits its word (and
+	the coin or the lock before it; a UIPadding moves a chip's children too,
+	so the icon sits left of the padded word), the E tag a little bigger.
+]]
+local function sizeTag(card: Card)
+	local h = card.TagHeight
+	local tag = card.Tag
+	local icon = card.TagCoin.Visible or card.TagLock.Visible
+	local iconW = if icon then h - 6 else 0
+	local left = 5 + iconW
+	padWord(tag, left, 5, 2)
+	card.TagCoin.Size = UDim2.fromOffset(h - 8, h - 8)
+	card.TagCoin.Position = UDim2.new(0, 4 - left, 0.5, 0)
+	card.TagLock.Size = UDim2.fromOffset(h - 10, h - 10)
+	card.TagLock.Position = UDim2.new(0, 6 - left, 0.5, 0)
+	local word = math.floor(h * 0.8)
+	GolemView.sizeChip(tag, math.ceil(Pop.textWidth(tag.Text, word)) + 6 + iconW, h)
+	Pop.fit(tag, word)
+	local e = h + 2
+	GolemView.sizeChip(card.Equipped, e + 4, e)
+	Pop.fit(card.Equipped, math.floor(e * 0.8))
+end
+
+-- Fills every card from the save: owned boards, the equipped one, your coins (and the detail).
+function HoverboardView.setCards(refs: Refs, owned: { [string]: boolean }, equipped: string, coins: any)
+	refs.Count.Text = HoverboardView.countText(owned)
+	for _, card in refs.Cards do
+		local board = card.Board
+		local state: CardState = HoverboardView.cardState(board, owned, equipped, coins)
+		card.State = state
+		card.Owned = owned[board.Id] == true
+		card.Equipped.Visible = state == "Equipped"
+		-- the right tag: OWNED (blue), ROBUX (gold), else the price (a coin; grey with a lock: too expensive)
+		local tag = card.Tag
+		tag.Text = HoverboardView.tagText(board, card.Owned)
+		local locked = state == "BuyLocked"
+		local priced = not card.Owned and board.Kind ~= "Robux"
+		tag.BackgroundColor3 = if card.Owned
+			then Pop.paint("Blue").Bottom
+			elseif board.Kind == "Robux" then Pop.paint("Yellow").Bottom
+			elseif locked then PopTheme.Gray.Bottom
+			else GolemView.ChipDark
+		tag.TextColor3 = if priced and not locked then Pop.paint("Yellow").Top else PopTheme.Ink
+		card.TagCoin.Visible = priced and not locked
+		card.TagLock.Visible = priced and locked
+		sizeTag(card)
+	end
+	HoverboardView.select(refs, refs.Selected)
+end
+
+-- Paints the action button for `state` (`board`: its words).
+local function styleAction(refs: Refs, state: CardState, board: HoverboardData.Board)
+	local style = STYLES[state]
+	refs.ActionStyle = state
+	GolemView.setPaint(refs.Action, style.Paint, true)
+	refs.ActionWord.Text = HoverboardView.buttonText(state, board)
+	refs.ActionAmount.Text = HoverboardView.amountText(state, board)
+	local dim = state == "BuyLocked" or state == "Soon"
+	refs.ActionWord.TextColor3 = if dim then PopTheme.Ink:Lerp(PopTheme.Gray.Bottom, 0.25) else PopTheme.Ink
+	refs.ActionAmount.TextColor3 = refs.ActionWord.TextColor3
+	-- EQUIPPED has nothing to do: not a gamepad stop
+	refs.Action.Selectable = state ~= "Equipped"
+	refs.Action:SetAttribute("State", state)
+	fitAction(refs)
+end
+
+--[[
+	Lays out the detail card for its board (the texts it shows depend on its
+	description and perks): the name, the picture row (as big as the room
+	allows, at least MinPicture: the perks go first, then the description),
+	the pill, the chips, the description, the perks, the button at the bottom.
+]]
+local function layoutDetail(refs: Refs)
+	local m = metrics(refs.Compact)
+	local card = HoverboardView.selectedCard(refs)
+	local board = card.Board
+	local w = refs.Detail.Size.X.Offset
+	local h = refs.Detail.Size.Y.Offset
+	local inner = w - 24
+	local buttonH = m.Button
+	local nameH = if refs.Compact then 34 else 30
+	local fixed = 10 + nameH + 4 + 6 + m.Pill + 6 + m.Pill + 8 + buttonH + 12
+	local spare = h - fixed
+	-- the description (round, at most three lines) and the perk lines (pixel)
+	local textSize = m.Small - 1
+	local lines = math.min(3, TechShopView.textLines(board.Description, inner - 16, textSize))
+	local descH = math.ceil(lines * textSize * TechShopView.LineHeight) + 12
+	local perkH = m.Small + 5
+	local perksH = #board.Perks * perkH
+	local showDesc, showPerks = true, true
+	local picture = spare - (descH + 6) - (perksH + 6)
+	if picture < m.MinPicture then
+		showPerks = false
+		picture = spare - (descH + 6)
+	end
+	if picture < m.MinPicture then
+		showDesc = false
+		picture = spare
+	end
+	picture = math.max(40, math.min(m.MaxPicture, picture))
+	-- the name on top
+	refs.DetailName.Position = UDim2.fromOffset(12, 10)
+	refs.DetailName.Size = UDim2.fromOffset(inner, nameH)
+	refs.DetailName.Text = string.upper(board.Name)
+	fitWord(refs.DetailName, if refs.Compact then 34 else 32, inner)
+	-- the picture row: the board big and turned (its square overflows the row: the board is flat)
+	local picTop = 10 + nameH + 4
+	local centreY = picTop + picture / 2
+	local square = math.floor(math.min(inner, picture / HoverboardView.BoardHeight))
+	refs.DetailPicture.Position = UDim2.fromOffset(w / 2, centreY)
+	refs.DetailPicture.Size = UDim2.fromOffset(square, square)
+	refs.DetailCanvas.Position = UDim2.fromOffset(w / 2, centreY)
+	refs.DetailCanvasScale.Scale = math.max(0.2, math.min(picture * 1.1 / 110, inner / 200))
+	aimReel(refs.Detail, UDim2.fromOffset(w / 2, centreY))
+	-- the pill and the chips
+	local y = picTop + picture + 6
+	local pillSize = math.floor(m.Pill * 0.8)
+	refs.DetailKind.Text = HoverboardView.kindText(board)
+	refs.DetailKind.BackgroundColor3 = (if board.Kind == "Robux" then PopTheme.Price else HoverboardView.cardPaint(board)).Bottom:Lerp(
+		PopTheme.Outline,
+		0.3
+	)
+	refs.DetailKind.Position = UDim2.new(0.5, 0, 0, y)
+	GolemView.sizeChip(refs.DetailKind, math.min(inner, math.ceil(Pop.textWidth(refs.DetailKind.Text, pillSize)) + 22), m.Pill)
+	Pop.fit(refs.DetailKind, pillSize)
+	y += m.Pill + 6
+	refs.DetailSpeed.Text = HoverboardView.speedText(board)
+	refs.DetailBonus.Text = HoverboardView.bonusText(board)
+	local speedW = math.ceil(Pop.textWidth(refs.DetailSpeed.Text, pillSize)) + 22
+	local bonusW = math.ceil(Pop.textWidth(refs.DetailBonus.Text, pillSize)) + 22
+	local chipsW = speedW + 8 + bonusW
+	local x = math.floor((w - chipsW) / 2)
+	refs.DetailSpeed.Position = UDim2.fromOffset(x, y)
+	GolemView.sizeChip(refs.DetailSpeed, speedW, m.Pill)
+	Pop.fit(refs.DetailSpeed, pillSize)
+	refs.DetailBonus.Position = UDim2.fromOffset(x + speedW + 8, y)
+	GolemView.sizeChip(refs.DetailBonus, bonusW, m.Pill)
+	Pop.fit(refs.DetailBonus, pillSize)
+	y += m.Pill + 6
+	-- the description and the perks (when there is room)
+	refs.DetailText.Visible = showDesc
+	refs.DetailText.Text = board.Description
+	refs.DetailText.Position = UDim2.fromOffset(12, y)
+	refs.DetailText.Size = UDim2.fromOffset(inner, descH)
+	TechShopView.fitText(refs.DetailText, inner - 16, descH - 10, textSize, 11)
+	GolemView.fitEdge(refs.DetailText)
+	if showDesc then
+		y += descH + 6
+	end
+	for i, label in refs.DetailPerks do
+		local perk = board.Perks[i]
+		label.Visible = showPerks and perk ~= nil
+		label.Text = if perk then "+ " .. string.upper(perk) else ""
+		label.Position = UDim2.fromOffset(12, y + (i - 1) * perkH)
+		label.Size = UDim2.fromOffset(inner, perkH - 2)
+		Pop.fitOrRound(label, m.Small + 1, m.Small + 1, if refs.Compact then 13 else 10, inner, perkH - 4)
+	end
+	-- the action button at the bottom
+	local holder = holderOf(refs.Action)
+	holder.AnchorPoint = Vector2.new(0, 0)
+	holder.Position = UDim2.fromOffset(12, h - buttonH - 12)
+	holder.Size = UDim2.fromOffset(inner, buttonH)
+	fitAction(refs)
+end
+
+--[[
+	Picks a board (`id`; "" or unknown: no pick, the default: the equipped
+	one, else the first; a refresh keeps a pick, setCards re-reads the default):
+	its card gets the gold outline and the white ring, the detail shows it
+	and its action. The gamepad's links follow (the right column's cards go
+	right to the action button while it is a stop, else to the X; the button
+	goes back left to the picked card).
+]]
+function HoverboardView.select(refs: Refs, id: string)
+	local card = cardOf(refs, id)
+	if not card then
+		local equipped = ""
+		for _, c in refs.Cards do
+			if c.State == "Equipped" then
+				equipped = c.Board.Id
+			end
+		end
+		card = cardOf(refs, HoverboardView.defaultBoard(equipped))
+	end
+	local picked = card or refs.Cards[1]
+	refs.Selected = if cardOf(refs, id) then id else ""
+	refs.Shown = picked.Board.Id
+	for _, c in refs.Cards do
+		local chosen = c == picked
+		c.Stroke.Thickness = if chosen then 6 else PopTheme.Edge
+		c.Stroke.Color = if chosen then GolemView.SelectColor else PopTheme.Outline
+		c.Pick.Visible = chosen
+	end
+	local board = picked.Board
+	paintBoard(refs.Detail, board, refs.Detail.Size.Y.Offset)
+	showDetailBoard(refs, board)
+	styleAction(refs, picked.State, board)
+	layoutDetail(refs)
+	-- the gamepad's links
+	local stop = refs.Action.Selectable
+	for i, c in refs.Cards do
+		local rightmost = i == 3 or i == #refs.Cards
+		if rightmost then
+			c.Button.NextSelectionRight = if stop then refs.Action else refs.Close
+		end
+	end
+	refs.Action.NextSelectionLeft = picked.Button
 end
 
 function HoverboardView.setHint(refs: Refs, kind: HintKind, text: string)
-	refs.Hint.Text = text
-	refs.Hint.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(text, refs.Hint.TextSize)) + 6, 26)
+	refs.HintText = text
+	refs.HintKind = kind
 	refs.HintGlyph.Visible = kind == "Gamepad" and refs.HintGlyph.Image ~= ""
-	local width = refs.Hint.Size.X.Offset + (if refs.HintGlyph.Visible then 34 else 0) + 40
-	refs.Footer.Size = UDim2.fromOffset(width, refs.Footer.Size.Y.Offset)
+	-- (phones: no hint; the pitch says what the boards are)
+	refs.Hint.Text = if refs.Compact and kind ~= "Gamepad" then HoverboardView.Pitch else text
+	local m = metrics(refs.Compact)
+	local width = refs.Footer.Size.X.Offset - (if refs.HintGlyph.Visible then 34 else 0)
+	refs.Hint.Size = UDim2.fromOffset(math.max(40, width), math.max(20, m.Footer - 6))
+	TechShopView.fitText(refs.Hint, math.max(40, width), math.max(20, m.Footer - 6), m.Small, 11)
+	GolemView.fitEdge(refs.Hint)
 end
 
 function HoverboardView.showMessage(refs: Refs, text: string, color: Color3)
 	refs.Message.Text = text
 	refs.Message.TextColor3 = color
 	refs.Message.Visible = true
-	refs.Subtitle.Visible = false
+	refs.Footer.Visible = false
+	local size = refs.Message.Size
+	TechShopView.fitText(refs.Message, size.X.Offset, size.Y.Offset, metrics(refs.Compact).Small + 1, 11)
+	GolemView.fitEdge(refs.Message)
 end
 
 function HoverboardView.hideMessage(refs: Refs)
 	refs.Message.Visible = false
-	refs.Subtitle.Visible = true
+	refs.Footer.Visible = true
 end
 
--- The first card button a gamepad should land on (the equipped card's neighbour, else the first actionable).
+-- The first thing a gamepad selects: the equipped board's card (else the shown one, else the first).
 function HoverboardView.firstButton(refs: Refs): TextButton?
 	for _, card in refs.Cards do
-		if card.State == "Buy" or card.State == "Robux" or card.State == "Equip" then
+		if card.State == "Equipped" then
 			return card.Button
 		end
 	end
+	local picked = cardOf(refs, refs.Shown)
+	if picked then
+		return picked.Button
+	end
+	return if refs.Cards[1] then refs.Cards[1].Button else refs.Close
+end
+
+-- Every button a finger or a gamepad uses (tests: 44 pt at the phone scale).
+function HoverboardView.touchTargets(refs: Refs): { GuiObject }
+	local list: { GuiObject } = { holderOf(refs.Close), holderOf(refs.Action) }
 	for _, card in refs.Cards do
-		if card.Button.Selectable then
-			return card.Button
-		end
+		table.insert(list, card.Button)
 	end
-	return refs.Close
+	return list
 end
 
 ---------------------------------------------------------------- layout
 
--- A label's text size for `room` design units (never under `least`), its black edge to match.
-local function fitText(label: TextLabel, size: number, room: number, least: number)
-	local wide = ElevatorView.measure(label.Text, size)
-	label.TextSize = if wide > room then math.max(least, math.floor(size * room / wide)) else size
-	local edge = label:FindFirstChild("Edge") :: UIStroke?
-	if edge then
-		edge.Thickness = Pop.edgeFor(label.TextSize)
-	end
-end
-
--- Sizes a row of chips for `textSize` (smaller when they don't fit `room`); returns the row's width.
-local function sizeChips(chips: { Frame }, textSize: number, height: number, room: number, gap: number): number
-	local function total(size: number): number
-		local sum = gap * (#chips - 1)
-		for _, chip in chips do
-			local label = chip:FindFirstChildOfClass("TextLabel")
-			if label then
-				sum += math.ceil(ElevatorView.measure(label.Text, size)) + 18
-			end
-		end
-		return sum
-	end
-	local size = textSize
-	local width = total(size)
-	if width > room then
-		size = math.max(11, math.floor(textSize * room / width))
-		width = total(size)
-	end
-	for _, chip in chips do
-		local label = chip:FindFirstChildOfClass("TextLabel")
-		if label then
-			label.TextSize = size
-			local edge = label:FindFirstChild("Edge") :: UIStroke?
-			if edge then
-				edge.Thickness = Pop.edgeFor(size)
-			end
-			chip.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(label.Text, size)) + 18, height)
-		end
-	end
-	return width
+local function place(object: GuiObject, x: number, y: number, w: number, h: number)
+	object.Position = UDim2.fromOffset(x, y)
+	object.Size = UDim2.fromOffset(w, h)
 end
 
 --[[
-	Inside a card: the button at the bottom. A tall card (PC, five a row): the
-	name, the picture, the speed chips, the perk line and the price (or OWNED;
-	a Robux board: its trail) above it. A wide card (phones, 3 + 2): the
-	picture on the left, the name, the chips and the price (a Robux board: its
-	"Rainbow lightning") on the right (no perk line).
+	Inside a card `w` x `h`: the pixel name on top (two lines when one would
+	be small), the bottom line, the picture between them (a square that
+	overflows the row: the board is flat), the tags beside the picture.
 ]]
 local function layoutCard(card: Card, m: Metrics, w: number, h: number)
-	local pad = 10
-	local holder = card.Look.Holder
-	holder.AnchorPoint = Vector2.new(0, 1)
-	holder.Position = UDim2.new(0, pad, 1, -pad)
-	holder.Size = UDim2.new(1, -pad * 2, 0, m.Button)
-	local bottom = h - pad - m.Button - 6 -- the words and the picture end here
-	local chipHeight = m.Small + 8
-	local priceHeight = m.Price + 6
-	local chips = { card.SpeedChip, card.BonusChip }
-	local px, py, pw, ph
-	if w <= h then
-		card.Name.TextXAlignment = Enum.TextXAlignment.Center
-		card.Name.Position = UDim2.fromOffset(pad, pad)
-		card.Name.Size = UDim2.fromOffset(w - pad * 2, m.Name + 6)
-		fitText(card.Name, m.Name, w - pad * 2 - 4, 13)
-		local priceTop = bottom - priceHeight
-		local perkTop = priceTop - 2 - (m.Small + 4)
-		local chipsTop = perkTop - 4 - chipHeight
-		card.Perk.Visible = true
-		card.Perk.TextXAlignment = Enum.TextXAlignment.Center
-		card.Perk.Position = UDim2.fromOffset(pad, perkTop)
-		card.Perk.Size = UDim2.fromOffset(w - pad * 2, m.Small + 4)
-		fitText(card.Perk, m.Small - 1, w - pad * 2 - 4, 12)
-		local chipsWidth = sizeChips(chips, m.Small - 2, chipHeight, w - pad * 2, 6)
-		local x = math.floor((w - chipsWidth) / 2)
-		card.SpeedChip.Position = UDim2.fromOffset(x, chipsTop)
-		card.BonusChip.Position = UDim2.fromOffset(x + card.SpeedChip.Size.X.Offset + 6, chipsTop)
-		card.PriceRow.Position = UDim2.fromOffset(pad, priceTop)
-		card.PriceRow.Size = UDim2.fromOffset(w - pad * 2, priceHeight)
-		card.Owned.AnchorPoint = Vector2.new(0.5, 0.5)
-		card.Owned.Position = UDim2.fromOffset(math.floor(w / 2), priceTop + math.floor(priceHeight / 2))
-		local perks = card.Board.Perks
-		card.Extra.Text = perks[3] or perks[1] or ""
-		card.Extra.TextXAlignment = Enum.TextXAlignment.Center
-		card.Extra.Position = UDim2.fromOffset(pad, priceTop)
-		card.Extra.Size = UDim2.fromOffset(w - pad * 2, priceHeight)
-		fitText(card.Extra, m.Small + 1, w - pad * 2 - 4, 12)
-		px, py = pad, pad + m.Name + 8
-		pw, ph = w - pad * 2, chipsTop - 4 - (pad + m.Name + 8)
-	else
-		pw, ph = math.floor(w * 0.44), bottom - pad
-		px, py = pad, pad
-		local x = pad + pw + 8
-		local room = w - x - pad
-		card.Name.TextXAlignment = Enum.TextXAlignment.Left
-		card.Name.Position = UDim2.fromOffset(x, pad)
-		card.Name.Size = UDim2.fromOffset(room, m.Name + 6)
-		fitText(card.Name, m.Name, room - 2, 13)
-		local chipsTop = pad + m.Name + 10
-		sizeChips(chips, m.Small - 2, chipHeight, room, 6)
-		card.SpeedChip.Position = UDim2.fromOffset(x, chipsTop)
-		card.BonusChip.Position = UDim2.fromOffset(x + card.SpeedChip.Size.X.Offset + 6, chipsTop)
-		card.Perk.Visible = false
-		local priceTop = chipsTop + chipHeight + 6
-		card.PriceRow.Position = UDim2.fromOffset(x, priceTop)
-		card.PriceRow.Size = UDim2.fromOffset(room, priceHeight)
-		card.Owned.AnchorPoint = Vector2.new(0, 0.5)
-		card.Owned.Position = UDim2.fromOffset(x, priceTop + math.floor(priceHeight / 2))
-		local perks = card.Board.Perks
-		card.Extra.Text = perks[2] or perks[1] or ""
-		card.Extra.TextXAlignment = Enum.TextXAlignment.Left
-		card.Extra.Position = UDim2.fromOffset(x, priceTop)
-		card.Extra.Size = UDim2.fromOffset(room, priceHeight)
-		fitText(card.Extra, m.Small + 1, room - 2, 12)
-	end
-	local list = card.PriceRow:FindFirstChildOfClass("UIListLayout")
-	if list then
-		list.HorizontalAlignment = if w <= h then Enum.HorizontalAlignment.Center else Enum.HorizontalAlignment.Left
-	end
-	-- the price: the coin and the amount
-	card.Price.TextSize = m.Price
-	card.Price.Size = UDim2.fromOffset(math.ceil(ElevatorView.measure(card.Price.Text, m.Price, true)) + 6, priceHeight)
-	card.Coin.Size = UDim2.fromOffset(m.Price, m.Price)
-	local coinMark = card.Coin:FindFirstChild("Mark") :: TextLabel?
-	if coinMark then
-		coinMark.TextSize = math.floor(m.Price * 0.62)
-	end
-	sizeChips({ card.Owned }, m.Small - 1, chipHeight + 2, w, 0)
-	-- the picture and the light burst behind it
-	card.ArtBack.Position = UDim2.fromOffset(px, py)
-	card.ArtBack.Size = UDim2.fromOffset(pw, math.max(20, ph))
-	local cx, cy = px + pw / 2, py + ph / 2
+	local lip = Pop.lipUnits(h)
+	paintBoard(card.Button, card.Board, h)
+	local nameText = string.upper(card.Board.Name)
+	card.Name.Text = nameText
+	local nameMax = math.floor((m.Small + 7) * PopTheme.PixelScale + 0.5)
+	local nameSize, nameLines = GolemView.nameFit(nameText, nameMax, w - 12, m.NameFloor)
+	local nameH = if nameLines > 1 then GolemView.nameHeight(nameSize, nameLines) else CARD_TITLE - 4
+	card.Name.Position = UDim2.fromOffset(5, 5)
+	card.Name.Size = UDim2.new(1, -10, 0, nameH)
+	setName(card.Name, nameSize, nameLines)
+	local picTop = math.max(CARD_TITLE, 5 + nameH + 1)
+	-- the bottom line
+	card.Line.Position = UDim2.new(0.5, 0, 1, -(lip + 2))
+	card.Line.Size = UDim2.new(1, -10, 0, CARD_LINE - 4)
+	Pop.fitOrRound(card.Line, m.Small + 2, m.Small + 2, if m == METRICS.Compact then 13 else 10, w - 10, CARD_LINE - 4)
+	-- the picture
+	local bottom = h - lip - CARD_LINE - 2
+	local ph = math.max(20, bottom - picTop)
+	local pw = w - 12
+	local square = math.floor(math.min(pw * 1.1, ph / HoverboardView.BoardHeight))
+	local cx, cy = w / 2, picTop + ph / 2
+	card.ArtBack.Position = UDim2.fromOffset(cx, cy)
+	card.ArtBack.Size = UDim2.fromOffset(square, square)
 	card.Canvas.Position = UDim2.fromOffset(cx, cy)
 	card.CanvasScale.Scale = math.max(0.2, math.min(ph * 1.12 / 110, pw / 200))
-	for _, fxName in CARD_FX do
-		local fx = card.Face:FindFirstChild(fxName)
-		if fx and fx:IsA("GuiObject") then
-			fx.Position = UDim2.fromOffset(cx, cy)
-		end
-	end
-	-- the ROBUX ribbon on the picture's top-right corner
-	local ribbon = card.Ribbon
-	if ribbon then
-		ribbon.AnchorPoint = Vector2.new(1, 0)
-		ribbon.Position = UDim2.fromOffset(px + pw, py)
-	end
+	aimReel(card.Button, UDim2.fromOffset(cx, cy))
+	-- the tags: E on the left, the right tag tilted on the right (smaller on small cards)
+	card.TagHeight = math.clamp(math.floor(h * 0.13), 20, m.Tag)
+	card.Equipped.Position = UDim2.fromOffset(6, picTop + 4)
+	card.Tag.Position = UDim2.new(1, -5, 0, picTop + 10)
+	sizeTag(card)
 end
 
 --[[
 	Sizes everything for the normal or compact (phone) layout and fits the
-	panel into `maxWidth` x `maxHeight` design units (math.huge = no limit).
+	window into `maxWidth` x `maxHeight` design units (math.huge = no limit).
 ]]
 function HoverboardView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	refs.MaxWidth = maxWidth
 	refs.MaxHeight = maxHeight
 	local m = metrics(compact)
-	local width = math.max(560, math.min(m.Width, maxWidth - 24))
-	local columns = HoverboardView.columns(width, compact)
-	refs.Columns = columns
-	local rows = math.ceil(#refs.Cards / columns)
-	local wantHeight = if rows > 1 then m.Height + 300 else m.Height
-	local height = math.max(380, math.min(wantHeight, maxHeight - 16))
+	local width = math.min(m.Width, maxWidth - 16)
+	local height = math.min(m.Height, maxHeight - 12)
+	width = math.max(width, 3 * 132 + 2 * CELL_GAP + INSET * 2 + m.Detail + 2 * PAD + GAP)
+	height = math.max(height, 380)
 	refs.Root.Size = UDim2.fromOffset(width, height)
-	refs.Root.AnchorPoint = if compact then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5)
-	refs.Root.Position = if compact then UDim2.new(0.5, 0, 1, -10) else UDim2.fromScale(0.5, 0.5)
-	-- the band: the icon, the title (with its shadow) and the X
-	ElevatorView.fitWindow(refs.Chrome, refs.Icon, m.Band, m.Title, m.Icon, m.Close)
-	-- the pitch line under the band
-	refs.Subtitle.Position = UDim2.fromOffset(m.Pad, m.Band + 2)
-	refs.Subtitle.Size = UDim2.new(1, -m.Pad * 2, 0, m.Header - m.Band - 4)
-	refs.Subtitle.TextSize = m.Text
-	refs.Message.Position = refs.Subtitle.Position
-	refs.Message.Size = refs.Subtitle.Size
-	refs.Message.TextSize = m.Text
-	refs.Footer.Visible = not compact
-	refs.Footer.Size = UDim2.fromOffset(refs.Footer.Size.X.Offset, math.max(m.Footer, 30))
-	-- the cards: one row of five, or 3 + 2 (the second row centred); on a very short screen
-	-- (a 568 x 320 phone) the cards keep MinHeight and the page scrolls (the next row peeks in)
-	local top = m.Header
-	local bottom = if compact then m.Pad else m.Pad + 14
-	local page = refs.CardPage
-	page.Position = UDim2.fromOffset(m.Pad - CARD_MARGIN, top - CARD_MARGIN)
-	page.Size = UDim2.new(1, -(m.Pad - CARD_MARGIN) * 2, 1, -(top + bottom) + CARD_MARGIN * 2)
-	local pageHeight = height - top - bottom
-	local fitHeight = math.floor((pageHeight - m.Gap * (rows - 1)) / rows)
-	local scrolls = rows > 1 and fitHeight < m.MinHeight
-	refs.Scrolls = scrolls
-	local barRoom = if scrolls then page.ScrollBarThickness + 4 else 0
-	local inner = width - m.Pad * 2 - barRoom
-	local cardWidth = math.floor((inner - m.Gap * (columns - 1)) / columns)
-	local cardHeight = if scrolls then m.MinHeight else fitHeight
-	for i, card in refs.Cards do
-		local row = math.floor((i - 1) / columns)
-		local column = (i - 1) % columns
-		local inRow = math.min(columns, #refs.Cards - row * columns)
-		local rowWidth = inRow * cardWidth + (inRow - 1) * m.Gap
-		local x = CARD_MARGIN + (inner - rowWidth) / 2 + column * (cardWidth + m.Gap) + cardWidth / 2
-		local y = CARD_MARGIN + row * (cardHeight + m.Gap) + cardHeight / 2
-		card.Frame.Position = UDim2.fromOffset(x, y)
-		card.Frame.Size = UDim2.fromOffset(cardWidth, cardHeight)
-		card.Frame:SetAttribute("BaseY", y)
-		layoutCard(card, m, cardWidth, cardHeight)
+
+	-- the header: the band, the title and its count, the X
+	local h = m.Header
+	GolemView.layoutChrome(refs.Root, h)
+	local titleSize = m.Title + 4
+	local titleW = math.ceil(Pop.textWidth(refs.Title.Text, titleSize)) + 8
+	GolemView.placeTitle(refs.Title, PAD + 4, 4, titleW, h - 12, titleSize)
+	local countH = if compact then 34 else 30
+	refs.Count.Position = UDim2.fromOffset(PAD + 4 + titleW + 8, math.floor((h - countH) / 2))
+	GolemView.sizeChip(refs.Count, if compact then 108 else 96, countH)
+	Pop.fit(refs.Count, if compact then 25 else 22)
+	local closeHolder = holderOf(refs.Close)
+	closeHolder.AnchorPoint = Vector2.new(1, 0)
+	closeHolder.Position = UDim2.new(1, -(PAD - 4), 0, math.floor((h - m.Close) / 2))
+	closeHolder.Size = UDim2.fromOffset(m.Close, m.Close)
+	Pop.fit(refs.Close :: any, math.floor(m.Close * 0.62))
+
+	-- the body: the grid on its well on the left, the detail card on the right
+	local bodyY = h + 8
+	local footer = m.Footer
+	local bodyH = height - bodyY - footer - 8
+	local detailX = width - PAD - m.Detail
+	local gridW = detailX - PAD - GAP
+	place(refs.GridWell, PAD - 4, bodyY - 4, gridW + 8, bodyH + 8)
+	place(refs.Grid, PAD - 4, bodyY - 4, gridW + 8, bodyH + 8)
+	for i, cell in HoverboardView.cells(gridW + 8, bodyH + 8, #refs.Cards) do
+		local card = refs.Cards[i]
+		local x, y, w, ch = cell[1], cell[2], cell[3], cell[4]
+		card.Frame.Size = UDim2.fromOffset(w, ch)
+		card.Frame.Position = UDim2.fromOffset(x + w / 2, y + ch / 2)
+		card.Frame:SetAttribute("BaseY", y + ch / 2)
+		layoutCard(card, m, w, ch)
 	end
-	page.CanvasSize = UDim2.fromOffset(0, CARD_MARGIN * 2 + rows * cardHeight + (rows - 1) * m.Gap)
-	page.ScrollingEnabled = scrolls
-	page.ScrollBarImageTransparency = if scrolls then 0.2 else 1
-	-- a new layout re-sized the buttons' text
-	for _, card in refs.Cards do
-		styleButton(card.Look, card.State, card.Look.Label.Text, if card.State == "Soon" then m.ButtonText - 6 else m.ButtonText)
-	end
+	place(refs.Detail, detailX, bodyY - 4, m.Detail, bodyH + 8)
+
+	-- the footer line (and the message in its place)
+	refs.Footer.Position = UDim2.new(0.5, 0, 1, -4)
+	refs.Footer.Size = UDim2.fromOffset(width - 40, footer - 4)
+	refs.Message.Position = UDim2.new(0.5, 0, 1, -4)
+	refs.Message.Size = UDim2.fromOffset(width - 40, footer - 4)
+	HoverboardView.setHint(refs, refs.HintKind, refs.HintText)
+
+	-- the detail (its texts follow the picked board)
+	HoverboardView.select(refs, refs.Selected)
 	HoverboardView.pose(refs, refs.PoseTime)
 end
 
@@ -1205,8 +1783,8 @@ local function backOut(x: number): number
 	return 1 + c3 * y * y * y + c1 * y * y
 end
 
--- The panel `seconds` into its opening (0 = closed, OpenTime = open): the panel
--- pops in, the cards drop in one after another. Closing plays it backwards.
+-- The window `seconds` into its opening (0 = closed, OpenTime = open): the
+-- window pops in, the cards drop in one after another. Closing plays it backwards.
 function HoverboardView.pose(refs: Refs, seconds: number)
 	local t = math.clamp(seconds, 0, HoverboardView.OpenTime)
 	refs.PoseTime = t
