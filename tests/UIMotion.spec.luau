@@ -26,9 +26,11 @@ return function(T, Loader)
 	local SCREEN = Vector2.new(1280, 720)
 	local STYLES = { "Linear", "Sine", "Quad", "Cubic", "Quart", "Quint", "Exponential", "Circular", "Back", "Bounce", "Elastic" }
 
-	-- (the tests below are UI motion ON, as on anim/all; the switch's own tests
+	-- (the tests below are UI motion ON, as on anim/all, with UIMotion's own timings (the round
+	-- look's RoundMotion tunes them like the reel: its test at the end); the switch's own tests
 	-- at the end turn it off; Config/AnimConfig decides in the game)
 	Motion.setEnabled(true)
+	Motion.tune(false)
 
 	---------------------------------------------------------------- pure
 
@@ -570,7 +572,7 @@ return function(T, Loader)
 	T.test("UIMotion off: nothing attached, connected or tweened, the store pops like main", function()
 		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
 		Motion.setEnabled(nil)
-		T.eq(Motion.enabled(), AnimConfig.UIMotion == true, "the game follows AnimConfig")
+		T.eq(Motion.enabled(), AnimConfig.UIMotion == true or Motion.roundMotion(), "the game follows AnimConfig")
 		Motion.setEnabled(false)
 		local made: { any } = {}
 		local fakeTween = {
@@ -710,9 +712,9 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the round look's motions (AnimConfig.RoundMotion)
 
-	T.test("RoundMotion: off by default; on, the round look's windows pop like the reel and buttons press to 0.93", function()
+	T.test("RoundMotion: on (owner 2026-10-28); the round look's windows pop like the reel and buttons press to 0.93", function()
 		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
-		T.eq(AnimConfig.RoundMotion, false, "off until the owner says yes")
+		T.eq(AnimConfig.RoundMotion, true, "the owner said yes")
 		local look, uiMotion = PopTheme.Look, AnimConfig.UIMotion
 		local made: { any } = {}
 		local done: { any } = {}
@@ -768,12 +770,12 @@ return function(T, Loader)
 			T.eq(Motion.Profiles.Normal.Down, 0.92, "the classic press back")
 			T.eq(Motion.Pop.Peak, nil, "the classic pop back")
 		end)
-		Motion.tune(false)
 		Motion.useTweens(nil)
-		AnimConfig.RoundMotion = false
+		AnimConfig.RoundMotion = true
 		AnimConfig.UIMotion = uiMotion
 		PopTheme.setLook(look)
 		Motion.setEnabled(nil)
+		Motion.tune(Motion.roundMotion() and AnimConfig.UIMotion ~= true) -- (as the game loads it)
 		if not ok then
 			error(err, 0)
 		end

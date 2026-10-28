@@ -117,6 +117,9 @@ export type Refs = {
 	Ready: boolean,
 	Compact: boolean,
 	Laid: boolean, -- layout ran (texts refit when they change)
+	Reel: ReelRefs?, -- the round look's REBIRTH page (the UI pack reel's Rebirth)
+	NotNow: TextButton?, -- its red Not now (closes the window)
+	Room: Vector2?, -- the last layout's room (the round look lays out again when the tab changes the size)
 }
 
 RebirthView.Colors = {
@@ -210,6 +213,30 @@ end
 -- What a run past MinBlaster with no rebirth level bought with coins needs (Robux levels never count).
 function RebirthView.forgeText(level: number): string
 	return `Buy blaster LV {math.min(level + 1, BlasterData.MaxLevel)} with coins at the Blaster Vault to rebirth (Robux levels don't count)`
+end
+
+-- the round look's REBIRTH page (the reel's Rebirth: see reelBuild below)
+RebirthView.LeadText = "Rebirth starts you over with your factory and earns Forge Stars"
+RebirthView.NotNowText = "Not now"
+-- the round look's panel on the REBIRTH tab (design units; the reel's is 569 x 481): PC, phones / TVs
+RebirthView.ReelSize = { Normal = Vector2.new(600, 500), Compact = Vector2.new(820, 600) }
+RebirthView.ReelTab = 32 -- the small tabs' height on a PC
+
+-- The big Rebirth button's words (the round look's Title Case).
+function RebirthView.rebirthWords(confirm: boolean): string
+	if PopTheme.round() then
+		return if confirm then "Sure?" else "Rebirth"
+	end
+	return if confirm then "SURE?" else "REBIRTH!"
+end
+
+-- The panel's size for this tab and look (the reel's small Rebirth; the shop pages keep their room).
+function RebirthView.panelSize(refs: Refs, compact: boolean): Vector2
+	local m = if compact then RebirthView.Metrics.Compact else RebirthView.Metrics.Normal
+	if refs.Reel and refs.Tab == "Rebirth" then
+		return if compact then RebirthView.ReelSize.Compact else RebirthView.ReelSize.Normal
+	end
+	return Vector2.new(m.Width, m.Height)
 end
 
 -- A perk card's level text and BUY button text (and whether it can be bought). `start` =
@@ -846,8 +873,15 @@ local function popLayout(refs: Refs)
 	popRestyle(refs)
 end
 
+-- (the round look's reel page: defined with the layout below)
+local reelBuild: (Refs) -> ()
+local reelRestyle: (Refs) -> ()
+
 function RebirthView.build(): Refs
-	local title, subtitle = "STAR FORGE", "Rebirth: start over with your factory and earn Forge Stars"
+	-- (the round look: the reel's band says "Rebirth", the box under the numbers says the rest)
+	local round = PopTheme.round()
+	local title = if round then "REBIRTH" else "STAR FORGE"
+	local subtitle = if round then "" else "Rebirth: start over with your factory and earn Forge Stars"
 	-- (the light UI: MenuPanel's Pop frame without the LightSkin, which would recolour the Pop faces)
 	local frame = MenuPanel.build("TerraForgeRebirth", title, subtitle, nil, UIConfig.lightUI())
 	local body = frame.Body
@@ -962,6 +996,10 @@ function RebirthView.build(): Refs
 	if isPop(refs) then
 		popSkin(refs)
 		popRestyle(refs)
+		if round then
+			reelBuild(refs)
+			reelRestyle(refs)
+		end
 	end
 	return refs
 end
@@ -992,7 +1030,8 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local m = RebirthView.metrics(compact)
 	refs.Compact = compact
 	refs.Laid = true
-	local body = MenuPanel.layout(refs.Frame, compact, m.Width, m.Height, maxWidth, maxHeight)
+	local wanted = RebirthView.panelSize(refs, compact)
+	local body = MenuPanel.layout(refs.Frame, compact, wanted.X, wanted.Y, maxWidth, maxHeight)
 	local w, h = body.X, body.Y
 	-- tabs and the star count (it keeps StarsRoom on the right)
 	local tabs = #RebirthView.TabIds
@@ -1143,14 +1182,12 @@ end
 function RebirthView.setConfirm(refs: Refs, on: boolean)
 	refs.Confirm = on and refs.Ready
 	local button = refs.Rebirth
+	button.Text = RebirthView.rebirthWords(refs.Confirm)
 	if not refs.Ready then
-		button.Text = "REBIRTH!"
 		MenuPanel.style(button, RebirthView.Colors.Off, RebirthView.Colors.OffDark)
 	elseif refs.Confirm then
-		button.Text = "SURE?"
 		MenuPanel.style(button, Theme.Bad, Theme.BadDark)
 	else
-		button.Text = "REBIRTH!"
 		MenuPanel.style(button, RebirthView.Colors.Rebirth, RebirthView.Colors.RebirthDark)
 	end
 end
@@ -1308,6 +1345,10 @@ end
 -- Every button (touch-size tests: MenuPanel.MinTouch at MenuPanel.PhoneScale).
 function RebirthView.buttons(refs: Refs): { TextButton }
 	local list = { refs.Tabs.Rebirth, refs.Tabs.Shop, refs.Tabs.Blasters, refs.Rebirth }
+	local notNow = refs.NotNow
+	if notNow then
+		table.insert(list, notNow)
+	end
 	for _, card in refs.Cards do
 		table.insert(list, card.Buy)
 		if card.Pick then
@@ -1323,13 +1364,342 @@ function RebirthView.buttons(refs: Refs): { TextButton }
 	return list
 end
 
+---------------------------------------------------------------- the round look: the reel's Rebirth
+
+--[[
+	The round look's REBIRTH page (owner 2026-10-28: "like the rebirth in the
+	other pictures", the UI pack reel): "Rebirth N" -> "Rebirth N+1" over
+	two rows of real before -> after numbers (the Forge Stars you have and
+	after this rebirth; the blaster level now and the one a rebirth starts
+	with), a dark box with one short line and a bar toward the requirement
+	(the blaster level this run counts, RebirthConfig.reachedOf, of
+	MinBlaster), and at the bottom the big lime Rebirth (the same button and
+	the same SURE? second press), "OR" and a red Not now that closes the
+	window. The YOU LOSE / KEEP / GET columns stay built (the specs read
+	them) but hidden; STAR SHOP and BLASTERS stay as small tabs.
+]]
+
+export type ReelRow = { Frame: Frame, Before: Frame, After: Frame, BeforeText: TextLabel, AfterText: TextLabel, Arrow: Frame }
+export type ReelRefs = {
+	From: TextLabel,
+	To: TextLabel,
+	Rows: { ReelRow },
+	Box: Frame,
+	Lead: TextLabel,
+	Track: Frame,
+	Fill: Frame,
+	BarText: TextLabel,
+	Or: TextLabel,
+}
+
+-- What the reel page shows for a save (pure: the specs read it): the heads, the rows' before /
+-- after words, the bar's share and its words.
+function RebirthView.reelValues(info: Info): { From: string, To: string, Rows: { { string } }, Bar: number, BarText: string }
+	local reached = info.Reached or info.Level
+	local paid = if info.Ready then info.StarsNow else RebirthConfig.starsFor(RebirthConfig.MinBlaster)
+	local start = info.Start or RebirthConfig.startLevel(info.Perks)
+	return {
+		From = `Rebirth {info.Count}`,
+		To = `Rebirth {info.Count + 1}`,
+		Rows = {
+			{ tostring(info.Stars), tostring(info.Stars + math.max(0, paid)) },
+			{ `LV {info.Level}`, `LV {start}` },
+		},
+		Bar = if info.Ready then 1 else math.clamp(reached / RebirthConfig.MinBlaster, 0, 1),
+		BarText = if info.Ready
+			then `Blaster LV {reached}: ready!`
+			else `Blaster LV {math.min(reached, RebirthConfig.MinBlaster)}/{RebirthConfig.MinBlaster}`,
+	}
+end
+
+-- A white arrow with a dark edge (frames: a shaft and a chevron; no glyph, no upload).
+local function reelArrow(parent: Instance, name: string): Frame
+	local holder = UIKit.new("Frame", { Name = name, BackgroundTransparency = 1, ZIndex = 4 }, parent)
+	for _, part in { "Shaft", "Up", "Down" } do
+		local bar = UIKit.new("Frame", {
+			Name = part,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			ZIndex = 4,
+		}, holder)
+		UIKit.corner(bar, 3)
+		UIKit.stroke(bar, 2.5, PopTheme.Outline)
+	end
+	return holder
+end
+
+local function placeArrow(arrow: Frame, x: number, y: number, w: number, h: number)
+	rect(arrow, x, y, w, h)
+	local t = math.max(6, math.floor(h * 0.26))
+	local bar = h * 0.62
+	local tipX = w - t * 0.4
+	local d = bar * 0.3536 -- (half the bar along 45 degrees)
+	local shaft = arrow:FindFirstChild("Shaft") :: Frame
+	local up = arrow:FindFirstChild("Up") :: Frame
+	local down = arrow:FindFirstChild("Down") :: Frame
+	local shaftW = tipX - t * 0.6
+	shaft.Position = UDim2.fromOffset(shaftW / 2, h / 2)
+	shaft.Size = UDim2.fromOffset(shaftW, t)
+	up.Position = UDim2.fromOffset(tipX - d, h / 2 - d)
+	up.Size = UDim2.fromOffset(bar, t)
+	up.Rotation = 45
+	down.Position = UDim2.fromOffset(tipX - d, h / 2 + d)
+	down.Size = UDim2.fromOffset(bar, t)
+	down.Rotation = -45
+end
+
+-- A painted chip with an icon over its left end and the words (a before or an after value).
+local function reelChip(parent: Instance, name: string, paint: string, icon: string): (Frame, TextLabel)
+	local chip = UIKit.new("Frame", { Name = name, ZIndex = 3 }, parent)
+	Pop.face(chip, paint, PopTheme.Corner)
+	Pop.studs(chip, PopTheme.Corner, 0.45, 28, 3)
+	local picture = UIKit.new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 6, 0.5, -2),
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(0.8, 0.8),
+		Visible = IconAssets.shows(icon),
+		ZIndex = 5,
+	}, chip)
+	IconAssets.apply(picture, icon)
+	picture:SetAttribute("Icon", icon)
+	local words = Pop.text(chip, "", 24, {
+		Name = "Value",
+		FontFace = PopTheme.Heavy,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.58, 0.45),
+		Size = UDim2.new(0.62, 0, 0.7, 0),
+		TextScaled = true,
+		ZIndex = 6,
+	})
+	return chip, words
+end
+
+-- Builds the reel page's pieces (round look) inside the REBIRTH page; the Not now button.
+reelBuild = function(refs: Refs)
+	local page = refs.Pages.Rebirth
+	local function head(name: string): TextLabel
+		return Pop.text(page, "", 26, { Name = name, FontFace = PopTheme.Heavy, ZIndex = 4 })
+	end
+	local rows: { ReelRow } = {}
+	for i, look in { { "Yellow", "star_token" }, { "Blue", "blaster" } } do
+		local frame = UIKit.new("Frame", { Name = "ReelRow" .. i, BackgroundTransparency = 1, ZIndex = 3 }, page)
+		local before, beforeText = reelChip(frame, "Before", look[1], look[2])
+		local after, afterText = reelChip(frame, "After", look[1], look[2])
+		table.insert(rows, {
+			Frame = frame,
+			Before = before,
+			After = after,
+			BeforeText = beforeText,
+			AfterText = afterText,
+			Arrow = reelArrow(frame, "Arrow"),
+		})
+	end
+	local box = UIKit.new("Frame", {
+		Name = "ReelBox",
+		BackgroundColor3 = PopTheme.Well,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, page)
+	UIKit.corner(box, PopTheme.Corner)
+	Pop.border(box, 2.5)
+	local lead = Pop.text(box, RebirthView.LeadText, 20, {
+		Name = "Lead",
+		TextScaled = true,
+		TextWrapped = true,
+		ZIndex = 5,
+	})
+	local track = UIKit.new("Frame", {
+		Name = "Track",
+		BackgroundColor3 = rgb(58, 64, 76),
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		ZIndex = 4,
+	}, box)
+	UIKit.corner(track, PopTheme.Corner)
+	Pop.border(track, 2)
+	local fill = UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(0, 1),
+		ZIndex = 4,
+	}, track)
+	local blue = Pop.paint("Blue")
+	UIKit.new("UIGradient", { Color = ColorSequence.new(blue.Top, blue.Bottom), Rotation = 90 }, fill)
+	local barText = Pop.text(track, "", 18, {
+		Name = "BarText",
+		FontFace = PopTheme.Heavy,
+		Size = UDim2.fromScale(1, 1),
+		TextScaled = true,
+		ZIndex = 6,
+	})
+	local orText = Pop.text(page, "OR", 30, { Name = "Or", FontFace = PopTheme.Heavy, ZIndex = 4 })
+	refs.Reel = {
+		From = head("From"),
+		To = head("To"),
+		Rows = rows,
+		Box = box,
+		Lead = lead,
+		Track = track,
+		Fill = fill,
+		BarText = barText,
+		Or = orText,
+	}
+	local notNow = chunky(page, RebirthView.NotNowText, Theme.Bad, Theme.BadDark, "NotNowButton")
+	popButton(notNow, "Red", "NotNow")
+	notNow.FontFace = PopTheme.Heavy
+	refs.NotNow = notNow
+	-- the classic pieces the reel has no room for
+	for _, column in refs.Columns do
+		column.Frame.Visible = false
+	end
+	local star = page:FindFirstChild("PopStar") :: GuiObject?
+	if star then
+		star:Destroy()
+	end
+	local glow = page:FindFirstChild("PopGlow") :: GuiObject?
+	if glow then
+		glow:Destroy()
+	end
+end
+
+-- Places the reel page (after the classic layout placed the tabs and the pages).
+local function reelLayout(refs: Refs)
+	local reel = refs.Reel
+	if not reel then
+		return
+	end
+	local m = RebirthView.metrics(refs.Compact)
+	local page = refs.Pages.Rebirth
+	if not refs.Compact then
+		-- the small tabs (the reel has none: STAR SHOP and BLASTERS stay a tap away) and the star count
+		local tabH = RebirthView.ReelTab
+		local bodyW = page.Size.X.Offset
+		local bottom = page.Position.Y.Offset + page.Size.Y.Offset
+		local tabW = 112
+		for i, id in RebirthView.TabIds do
+			local tab = refs.Tabs[id]
+			place(tab, (i - 1) * (tabW + 6), 0, tabW, tabH)
+			TechShopView.fitText(tab :: any, tabW - 12, tabH, m.Text - 2, m.Text - 8)
+		end
+		local starsX = #RebirthView.TabIds * (tabW + 6)
+		rect(refs.Stars, starsX, 0, math.max(0, bodyW - starsX), tabH)
+		TechShopView.fitText(refs.Stars, refs.Stars.Size.X.Offset, tabH, m.Text + 2, m.Text - 4)
+		local top = tabH + 8
+		for _, id in RebirthView.TabIds do
+			rect(refs.Pages[id], 0, top, bodyW, bottom - top)
+		end
+	end
+	local pw, ph = page.Size.X.Offset, page.Size.Y.Offset
+	local cw = math.min(pw, if refs.Compact then 720 else 560)
+	local x0 = math.floor((pw - cw) / 2)
+	local buttonH = if refs.Compact then math.max(72, m.Button) else 52
+	local k = math.min(if refs.Compact then 1.3 else 1, (ph - buttonH - 12) / 242)
+	local headH, rowH, boxH, gap = math.floor(30 * k), math.floor(44 * k), math.floor(84 * k), math.floor(8 * k)
+	local total = headH + gap + 2 * rowH + gap + 3 * gap + boxH + math.floor(gap * 1.5) + buttonH
+	local y = math.max(4, math.floor((ph - total) / 2))
+	local chipW = math.floor(cw * 0.36)
+	local leftX, rightX = x0, x0 + cw - chipW
+	rect(reel.From, leftX, y, chipW, headH)
+	rect(reel.To, rightX, y, chipW, headH)
+	for _, label in { reel.From, reel.To } do
+		label.TextSize = math.floor(headH * 0.85)
+	end
+	y += headH + gap
+	local arrowW = math.floor(cw * 0.14)
+	for _, row in reel.Rows do
+		rect(row.Frame, 0, y, pw, rowH)
+		rect(row.Before, leftX, 0, chipW, rowH)
+		rect(row.After, rightX, 0, chipW, rowH)
+		-- (the reel's pills: the picture at the left end, the value right of the middle)
+		local pic = math.floor(rowH * 0.78)
+		for _, chip in { row.Before, row.After } do
+			local icon = chip:FindFirstChild("Icon") :: ImageLabel?
+			if icon then
+				icon.Position = UDim2.new(0, 8, 0.5, -2)
+				icon.Size = UDim2.fromOffset(pic, pic)
+			end
+			local value = chip:FindFirstChild("Value") :: TextLabel?
+			if value then
+				value.Position = UDim2.new(0, pic + 12 + math.floor((chipW - pic - 20) / 2), 0.45, 0)
+				value.Size = UDim2.fromOffset(chipW - pic - 20, math.floor(rowH * 0.66))
+			end
+		end
+		placeArrow(row.Arrow, x0 + math.floor((cw - arrowW) / 2), math.floor(rowH * 0.1), arrowW, math.floor(rowH * 0.8))
+		y += rowH + gap
+	end
+	y += math.floor(gap * 2)
+	rect(reel.Box, x0, y, cw, boxH)
+	local pad = math.floor(10 * k)
+	local leadH = math.floor(boxH * 0.3)
+	rect(reel.Lead, pad, pad, cw - 2 * pad, leadH)
+	rect(refs.Message, x0 + pad, y + pad, cw - 2 * pad, leadH)
+	refs.Message.ZIndex = 7
+	rect(reel.Track, pad + 4, pad + leadH + math.floor(gap * 1.2), cw - 2 * pad - 8, boxH - 2 * pad - leadH - math.floor(gap * 1.2))
+	y += boxH + math.floor(gap * 1.5)
+	local buttonW = math.floor(cw * 0.38)
+	place(refs.Rebirth, x0, y, buttonW, buttonH)
+	refs.Rebirth.TextSize = math.floor(buttonH * 0.56)
+	local notNow = refs.NotNow
+	if notNow then
+		place(notNow, x0 + cw - buttonW, y, buttonW, buttonH)
+		TechShopView.fitText(notNow :: any, buttonW - 12, buttonH - 6, math.floor(buttonH * 0.5), m.Text - 6)
+		popEdge(notNow)
+	end
+	rect(reel.Or, x0 + buttonW, y, cw - 2 * buttonW, buttonH - 6)
+	reel.Or.TextSize = math.floor(buttonH * 0.5)
+	-- (hidden, but kept where the specs measure: the requirement line in the box)
+	rect(refs.Need, x0 + pad, y, cw - 2 * pad, buttonH)
+	TechShopView.fitText(refs.Need, cw - 2 * pad, buttonH, m.Text - 1, m.Text - 8)
+end
+
+-- Fills the reel page and keeps the classic pieces hidden.
+local function reelFill(refs: Refs, info: Info)
+	local reel = refs.Reel
+	if not reel then
+		return
+	end
+	local values = RebirthView.reelValues(info)
+	reel.From.Text = values.From
+	reel.To.Text = values.To
+	for i, row in reel.Rows do
+		local words = values.Rows[i]
+		row.BeforeText.Text = words[1]
+		row.AfterText.Text = words[2]
+	end
+	reel.Fill.Size = UDim2.fromScale(values.Bar, 1)
+	reel.BarText.Text = values.BarText
+	refs.Need.Visible = false
+end
+
+-- The round look's states: the message replaces the box's line; the big button's words and colour.
+reelRestyle = function(refs: Refs)
+	local reel = refs.Reel
+	if not reel then
+		return
+	end
+	refs.Need.Visible = false
+	reel.Lead.Visible = not refs.Message.Visible
+	refs.Rebirth.Text = RebirthView.rebirthWords(refs.Confirm)
+	for _, column in refs.Columns do
+		column.Frame.Visible = false
+	end
+end
+
 ---------------------------------------------------------------- the Pop look: after every state change
 
 local plainLayout = RebirthView.layout
 RebirthView.layout = function(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	refs.Room = Vector2.new(maxWidth, maxHeight)
 	plainLayout(refs, compact, maxWidth, maxHeight)
 	if isPop(refs) then
 		popLayout(refs)
+		reelLayout(refs)
+		reelRestyle(refs)
 	end
 end
 
@@ -1356,9 +1726,15 @@ end
 
 local plainSetTab = RebirthView.setTab
 RebirthView.setTab = function(refs: Refs, tab: string)
+	local before = RebirthView.panelSize(refs, refs.Compact)
 	plainSetTab(refs, tab)
 	if isPop(refs) then
 		popRestyle(refs)
+	end
+	-- (the round look: the reel's small Rebirth, the shop pages their room)
+	local room = refs.Room
+	if refs.Reel and refs.Laid and room and RebirthView.panelSize(refs, refs.Compact) ~= before then
+		RebirthView.layout(refs, refs.Compact, room.X, room.Y)
 	end
 end
 
@@ -1367,7 +1743,14 @@ RebirthView.setConfirm = function(refs: Refs, on: boolean)
 	plainSetConfirm(refs, on)
 	if isPop(refs) then
 		popRestyle(refs)
+		reelRestyle(refs)
 	end
+end
+
+local plainSetMessage = RebirthView.setMessage
+RebirthView.setMessage = function(refs: Refs, text: string?)
+	plainSetMessage(refs, text)
+	reelRestyle(refs)
 end
 
 local plainSetInfo = RebirthView.setInfo
@@ -1375,6 +1758,8 @@ RebirthView.setInfo = function(refs: Refs, info: Info)
 	plainSetInfo(refs, info)
 	if isPop(refs) then
 		popRestyle(refs)
+		reelFill(refs, info)
+		reelRestyle(refs)
 	end
 end
 

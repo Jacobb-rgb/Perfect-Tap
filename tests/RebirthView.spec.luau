@@ -68,13 +68,13 @@ return function(T, Loader)
 		local refs = RebirthView.build()
 		RebirthView.setInfo(refs, info(3, {}, 0))
 		RebirthView.setConfirm(refs, true)
-		T.eq(refs.Rebirth.Text, "REBIRTH!", "not ready: never SURE?")
+		T.eq(refs.Rebirth.Text, RebirthView.rebirthWords(false), "not ready: never SURE?")
 		T.falsy(refs.Confirm)
 		RebirthView.setInfo(refs, info(8, {}, 4))
 		RebirthView.setConfirm(refs, true)
-		T.eq(refs.Rebirth.Text, "SURE?")
+		T.eq(refs.Rebirth.Text, RebirthView.rebirthWords(true))
 		RebirthView.setConfirm(refs, false)
-		T.eq(refs.Rebirth.Text, "REBIRTH!")
+		T.eq(refs.Rebirth.Text, RebirthView.rebirthWords(false))
 		T.eq(refs.Stars.Text, "4 STARS")
 		T.eq(refs.Columns.Get.Rows[2].Text, "Rebirth #3")
 		RebirthView.setTab(refs, "Shop")
@@ -97,8 +97,12 @@ return function(T, Loader)
 			local panel = refs.Frame.Panel
 			local px, py, pw, ph = box(panel)
 			T.truthy(px >= 0 and py >= 0 and px + pw <= w + 1e-6 and py + ph <= h + 1e-6, label .. ": the panel is on screen")
-			-- every column row fits its column and its text fits the row
+			-- every column row fits its column and its text fits the row (the round look's reel
+			-- page hides the columns)
 			for id, column in refs.Columns do
+				if not column.Frame.Visible then
+					continue
+				end
 				local _, _, cw, chh = box(column.Frame)
 				for _, row in column.Rows do
 					local x, y, rw, rh = box(row)
@@ -122,7 +126,7 @@ return function(T, Loader)
 			T.truthy(refs.Stars.TextSize >= RebirthView.metrics(compact).Text, label .. ": the star count stays big")
 			-- the rows' bullet dots sit in the column, left of the text
 			for id, column in refs.Columns do
-				for _, row in column.Rows do
+				for _, row in if column.Frame.Visible then column.Rows else {} do
 					local dot = row:FindFirstChild("Dot") :: any
 					T.truthy(dot, `{label}: {id} row has its dot`)
 					local x = row.Position.X.Offset + dot.Position.X.Offset - dot.Size.X.Offset / 2
@@ -151,6 +155,71 @@ return function(T, Loader)
 					T.truthy(holder.Size.X.Offset * MenuPanel.PhoneScale >= MenuPanel.MinTouch, `{label}: {holder.Name} wide enough`)
 				end
 			end
+		end
+	end)
+
+	T.test("RebirthView: the round look's page is the reel's Rebirth with real numbers", function()
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		-- the numbers: the stars now and after this rebirth, the blaster level now and after
+		local ready = info(8, { HeadStart = 1 }, 4)
+		ready.Reached = 8
+		local v = RebirthView.reelValues(ready)
+		T.eq(v.From, "Rebirth 2")
+		T.eq(v.To, "Rebirth 3")
+		T.eq(v.Rows[1][1], "4")
+		T.eq(v.Rows[1][2], tostring(4 + RebirthConfig.starsFor(8)), "what this rebirth pays")
+		T.eq(v.Rows[2][1], "LV 8")
+		T.eq(v.Rows[2][2], `LV {RebirthConfig.HeadStartLevels[1]}`, "Head Start's level")
+		T.eq(v.Bar, 1)
+		local early = info(3, {}, 0)
+		local e = RebirthView.reelValues(early)
+		T.near(e.Bar, 3 / RebirthConfig.MinBlaster, 1e-9, "toward the requirement")
+		T.eq(e.BarText, `Blaster LV 3/{RebirthConfig.MinBlaster}`)
+		T.eq(e.Rows[1][2], tostring(RebirthConfig.starsFor(RebirthConfig.MinBlaster)), "a rebirth at the requirement")
+		T.eq(e.Rows[2][2], "LV 1")
+		if not (PopTheme.round() and UIConfig.lightUI()) then
+			return
+		end
+		-- the page: no columns, the two rows, the box, Rebirth / OR / Not now; the tabs stay
+		local refs = RebirthView.build()
+		RebirthView.setInfo(refs, ready)
+		RebirthView.layout(refs, false, 1280, 684)
+		local reel = refs.Reel :: any
+		T.truthy(reel, "the reel page")
+		for _, column in refs.Columns do
+			T.falsy(column.Frame.Visible, "no YOU LOSE / KEEP / GET")
+		end
+		T.eq(reel.Rows[1].BeforeText.Text, "4")
+		T.eq(reel.Rows[2].AfterText.Text, "LV 2")
+		T.eq(reel.Lead.Text, RebirthView.LeadText)
+		T.truthy(refs.NotNow and refs.NotNow.Text == RebirthView.NotNowText, "Not now")
+		T.truthy(table.find(RebirthView.buttons(refs), refs.NotNow), "a button like the others")
+		T.eq(refs.Frame.Panel.Size.X.Offset, RebirthView.ReelSize.Normal.X, "the reel's small window")
+		for _, id in RebirthView.TabIds do
+			T.truthy(MenuPanel.holderOf(refs.Tabs[id]).Visible, id .. " tab stays")
+		end
+		-- the same SURE? second press
+		RebirthView.setConfirm(refs, true)
+		T.eq(refs.Rebirth.Text, "Sure?")
+		-- a refusal replaces the box's line
+		RebirthView.setMessage(refs, "Not yet")
+		T.truthy(refs.Message.Visible and not reel.Lead.Visible)
+		RebirthView.setMessage(refs, nil)
+		T.truthy(reel.Lead.Visible)
+		-- the shop pages get their room back, the Rebirth tab the small window
+		RebirthView.setTab(refs, "Shop")
+		T.eq(refs.Frame.Panel.Size.X.Offset, RebirthView.Metrics.Normal.Width)
+		RebirthView.setTab(refs, "Rebirth")
+		T.eq(refs.Frame.Panel.Size.X.Offset, RebirthView.ReelSize.Normal.X)
+		-- the pieces stay inside the page
+		local page = refs.Pages.Rebirth
+		for _, piece in { reel.Box, MenuPanel.holderOf(refs.Rebirth), MenuPanel.holderOf(refs.NotNow :: any) } do
+			local x, y, w, h = box(piece)
+			T.truthy(
+				x >= 0 and y >= 0 and x + w <= page.Size.X.Offset + 1e-6 and y + h <= page.Size.Y.Offset + 1e-6,
+				piece.Name .. " inside"
+			)
 		end
 	end)
 end
