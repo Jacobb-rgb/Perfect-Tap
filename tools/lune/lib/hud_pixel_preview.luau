@@ -27,7 +27,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local NOW = 1.7e9
 
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
-	local function hud(renderScale: number, uiScale: number, screen: Vector2, boostCount: number?): { any }
+	local function hud(renderScale: number, uiScale: number, screen: Vector2, boostCount: number?, touchButtons: boolean?): { any }
 		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
 		local refs = HudBubble.buildGame(uiScale, screen.X)
@@ -94,6 +94,28 @@ function Preview.build(Loader: any): { [string]: any }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = true
 		table.insert(list, boost.Gui)
+		if touchButtons then
+			-- stand-ins for the touch buttons the preview can't draw (Roblox's jump, the game's
+			-- Grab and FIRE while mining), where BoostView.TouchButtons says they are
+			local UIKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.UIKit")
+			local pad = UIKit.screen("TouchStandIns", 4)
+			pad.Scale.Scale = renderScale
+			local small = math.min(screen.X, screen.Y + 58) <= 500
+			for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+				local button = UIKit.new("Frame", {
+					Name = b.Name,
+					AnchorPoint = roblox.Vector2.new(1, 1),
+					Position = roblox.UDim2.new(1, -b.Right / uiScale, 1, -b.Bottom / uiScale),
+					Size = roblox.UDim2.fromOffset((b.Left - b.Right) / uiScale, (b.Top - b.Bottom) / uiScale),
+					BackgroundColor3 = roblox.Color3.fromRGB(20, 20, 26),
+					BackgroundTransparency = 0.45,
+				}, pad)
+				UIKit.corner(button, 999)
+				UIKit.label(button, string.upper(b.Name), 22, { Size = roblox.UDim2.fromScale(1, 1), TextWrapped = false })
+			end
+			pad.Enabled = true
+			table.insert(list, pad)
+		end
 		if refs.Menu:FindFirstChild("Wheel") then
 			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
 			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
@@ -115,7 +137,7 @@ function Preview.build(Loader: any): { [string]: any }
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do
 			local gui = roblox.Vector2.new(phone[1], phone[2] - 58)
-			exports[`ui_hud_corner_{phone[1]}_{count}`] = UiExport.export(hud(0.62 * 900 / phone[2], 0.62, gui, count))
+			exports[`ui_hud_corner_{phone[1]}_{count}`] = UiExport.export(hud(0.62 * 900 / phone[2], 0.62, gui, count, true))
 		end
 	end
 	return exports
