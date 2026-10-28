@@ -202,10 +202,11 @@ function StoryView.build(compact: boolean): Refs
 	})
 	-- the Pop window: the book's colour on the band, the dark studded floor
 	CollectionView.chrome(panel, StoryView.Paint, m.Header)
-	local title = Pop.text(panel, "JOURNAL OF KALDRUM", m.Title, {
+	local room = CollectionView.titleRoom(panel) -- (the round look's band icon)
+	local title = Pop.text(panel, Pop.caption("JOURNAL OF KALDRUM"), m.Title, {
 		Name = "Title",
-		Position = UDim2.fromOffset(m.Pad + 4, 10),
-		Size = UDim2.new(0, 560, 0, m.Header - 20),
+		Position = UDim2.fromOffset(m.Pad + 4 + room, 10),
+		Size = UDim2.new(0, 560 - room, 0, m.Header - 20),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 3,
 	})

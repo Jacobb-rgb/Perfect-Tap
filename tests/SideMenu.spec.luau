@@ -933,9 +933,16 @@ return function(T, Loader)
 			T.truthy(top >= MenuPanel.TopBarBottom, `{size[1]}x{size[2]}: under the teleport bar`)
 			T.truthy(h >= size[2] * MenuPanel.BarShrink, "nearly whole")
 			T.le(top + h, 684)
-			-- the coins: below them or right of them
+			-- the coins: below them or right of them (the round look: the money sits bottom-left, the
+			-- panel stays centred and clears the left tiles when there is room)
 			local left = frame.Panel.Position.X.Offset
-			T.truthy(top >= MenuPanel.CoinsBottom or left >= 16 + HudView.CoinsWidth, "clear of the coins")
+			local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+			if PopTheme.round() then
+				local room = 1280 - frame.Panel.Size.X.Offset - 8
+				T.truthy(left >= MenuPanel.RoundTilesRight or room < MenuPanel.RoundTilesRight, "clear of the tiles")
+			else
+				T.truthy(top >= MenuPanel.CoinsBottom or left >= 16 + HudView.CoinsWidth, "clear of the coins")
+			end
 		end
 		-- too little room under the bar: the panel covers it from the top
 		MenuPanel.layout(frame, false, 900, 640, 1280, 500)

@@ -53,6 +53,7 @@ TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
 -- the light HUD (HudBubble): the chip goes under its menu tiles (HudController sets it from the HUD)
 TrainView.HudChipTop = nil :: number?
+TrainView.HudChipLeft = nil :: number? -- the round look on a PC: beside the tiles' last row (HudBubble.chipLeft)
 -- compact (touch) layouts: the side menu's MENU button sits first in the chip's
 -- row (SideMenuView), so the chip starts this far right of ChipLeft (chipLeft)
 TrainView.MenuSlot = 88 -- MENU (84 wide at x 12) and a gap
@@ -208,7 +209,7 @@ local CHIP: { [string]: ChipMetrics } = {
 -- side menu's MENU button on compact (touch) layouts.
 function TrainView.chipLeft(compact: boolean): number
 	if TrainView.HudChipTop then
-		return TrainView.ChipLeft -- the light HUD has no MENU button there
+		return TrainView.HudChipLeft or TrainView.ChipLeft -- the light HUD has no MENU button there
 	end
 	return TrainView.ChipLeft + (if compact then TrainView.MenuSlot else 0)
 end
@@ -1683,7 +1684,16 @@ end
 local function pixelChipLayout(refs: Refs)
 	local m = if refs.Compact then CHIP.Compact else CHIP.Normal
 	local frame = refs.ChipFrame
-	Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	if PopTheme.round() then
+		-- the round look: a dark tile like the reel's left tiles, the train's blue in its lip and edge
+		Pop.darkTile(frame, "Blue", PopTheme.Corner + 1)
+		local corner = frame:FindFirstChildOfClass("UICorner")
+		if corner then
+			corner.CornerRadius = UDim.new(0, PopTheme.Corner + 1)
+		end
+	else
+		Pop.face(frame, TrainView.ChipPaints.Face, 12)
+	end
 	local lip = Pop.lipUnits(m.Height)
 	local area = m.Height - lip
 	-- the square and the locomotive in it
@@ -1716,7 +1726,7 @@ local function pixelChipLayout(refs: Refs)
 	-- SEND centred on the face above the lip
 	local send = holderOf(refs.ChipSend)
 	send.Position = UDim2.new(1, -10, 0, math.max(0, math.floor((area - m.SendHeight) / 2)))
-	Pop.face(send, TrainView.ChipPaints.Send, 10)
+	Pop.face(send, TrainView.ChipPaints.Send, if PopTheme.round() then PopTheme.Corner else 10)
 	TrainView.style(refs.ChipSend, refs.ChipSend.BackgroundColor3 ~= Theme.PanelLight, Theme.Good, Theme.GoodDark)
 	Pop.fit(refs.ChipSend :: any, m.SendText)
 end

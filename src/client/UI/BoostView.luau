@@ -890,14 +890,20 @@ function BoostView.popWindow(panel: Frame, title: TextLabel, paint: string)
 		rim.ZIndex = 3
 	end
 	Pop.studs(band, 4, 0.35, 40, 1)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 0.42),
-		ZIndex = 2,
-	}, band)
+	-- (the round look: no shine over the top half, the window's icon left of the title: placeWindow)
+	local look = Pop.windowLook(Pop.windowKey(panel))
+	if look then
+		Pop.bandIcon(panel, look.Icon, 56, { ZIndex = 3 })
+	else
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 0.42),
+			ZIndex = 2,
+		}, band)
+	end
 	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,
@@ -931,6 +937,7 @@ function BoostView.popWindow(panel: Frame, title: TextLabel, paint: string)
 	}, body)
 	UIKit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.45, 1) }, shade)
 	BoostView.popText(title, false, WHITE)
+	title.Text = Pop.caption(title.Text) -- (the round look: Title Case, the reel)
 	title.ZIndex = 3
 	Pop.shadow(title).ZIndex = 2
 end
@@ -945,6 +952,22 @@ function BoostView.placeWindow(panel: Frame, band: number)
 	bandFrame.Size = UDim2.new(1, -8, 0, band)
 	body.Position = UDim2.fromOffset(4, 4 + band)
 	body.Size = UDim2.new(1, -8, 1, -(band + 8))
+	-- the round look: the window's icon at the band's left; the title, the line under it and
+	-- the receipt (just placed by the layout) move right of it
+	local icon = panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if icon then
+		local size = math.min(band - 14, 56)
+		icon.Size = UDim2.fromOffset(size, size)
+		icon.Position = UDim2.fromOffset(14, 4 + math.floor(band / 2))
+		local room = Pop.iconRoom(icon) - 4
+		for _, name in { "Title", "Subtitle", "Receipt" } do
+			local label = panel:FindFirstChild(name)
+			if room > 0 and label and label:IsA("GuiObject") then
+				label.Position += UDim2.fromOffset(room, 0)
+				label.Size -= UDim2.fromOffset(room, 0)
+			end
+		end
+	end
 	local title = panel:FindFirstChild("Title") :: TextLabel?
 	local shadow = panel:FindFirstChild("TitleShadow") :: TextLabel?
 	if title and shadow then
@@ -3069,23 +3092,35 @@ local function cornerTile(button: TextButton, kindId: string)
 	pill.Size = UDim2.fromOffset(BoostView.CornerIcon, BoostView.CornerIcon)
 	pill.BackgroundTransparency = 1
 	pill.ClipsDescendants = false
+	local round = PopTheme.round()
+	if round then
+		-- the round look (the reel's bottom-right squares): a bright studded face in the boost's colour
+		local paints = BoostView.ChipPaints[kindId]
+		pill.BackgroundTransparency = 0
+		Pop.face(pill, if paints then paints.Face else "Green", PopTheme.Corner)
+		Pop.studs(pill, PopTheme.Corner, 0.45, 28, 2)
+	end
 	local dot = UIKit.new("Frame", {
 		Name = "Dot",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, if round then 0.46 else 0.5),
+		Size = UDim2.fromScale(if round then 0.8 else 1, if round then 0.8 else 1),
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 	}, pill)
 	BoostView.art(dot, kindId, false).Size = UDim2.fromScale(1, 1)
 	local label = UIKit.label(pill, "", BoostView.CornerText, {
 		Name = "Text",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 2),
+		AnchorPoint = Vector2.new(0.5, if round then 0.5 else 0),
+		-- (the round look: over the tile's bottom edge, the reel's "inf")
+		Position = if round then UDim2.new(0.5, 0, 1, 0) else UDim2.new(0.5, 0, 1, 2),
 		Size = UDim2.fromOffset(BoostView.CornerTextWidth, BoostView.CornerText),
 		FontFace = PopTheme.Pixel,
 		TextColor3 = PopTheme.Ink,
 		TextWrapped = false,
-		ZIndex = 4,
+		ZIndex = 5,
 	})
-	Pop.edge(label, 2)
+	Pop.edge(label, if round then 2.5 else 2)
 	Pop.fit(label, BoostView.CornerText)
 	button.Size = UDim2.fromOffset(BoostView.CornerWidth, BoostView.cornerHeight())
 end
@@ -3131,6 +3166,7 @@ export type CornerInput = {
 	TutorialTop: number?, -- the mouse tutorial card's top, design units from the gui's bottom
 	Bubble: PillRect?, -- the touch tutorial bubble (top right): its left edge and bottom
 	Pill: PillRect?, -- the phone's Shop pill (top right): its left edge, top and bottom
+	Avoid: PillRect?, -- the round look's offers column (right edge, middle): the row moves left of it
 }
 
 BoostView.TenFootSafe = 0.05 -- (TutorialView.TenFootSafe: the TV's title-safe band)
@@ -3212,10 +3248,39 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	local count = math.max(1, input.Count or #BoostConfig.KindIds)
 	if input.Touch and pill == nil then
 		-- (a column at the right edge, on the touch buttons under it)
-		local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - right - BoostView.CornerWidth, w - right)
-		bottom = math.max(bottom, math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s))
+		local function columnBottom(r: number): number
+			local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - r - BoostView.CornerWidth, w - r)
+			return math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s)
+		end
+		bottom = math.max(bottom, columnBottom(right))
 		stacked = true
 		spot = "Column"
+		-- (the round look's phones have no Shop pill on the right: while the touch tutorial bubble
+		-- shows at the top right and the column would reach it, the column moves left of it)
+		local columnH = count * tile + (count - 1) * gap
+		if bubble and w - right > bubble.Left and h - bottom - columnH < bubble.Bottom + gap then
+			local beside = math.ceil(w - bubble.Left) + gap
+			right, bottom = beside, math.max(bottom, columnBottom(beside))
+			local rowW = BoostView.CornerWidth
+			if h - bottom - columnH < gap then
+				-- (no room for the column over the touch buttons: side by side instead)
+				stacked, columnH = false, tile
+				rowW = count * BoostView.CornerWidth + (count - 1) * gap
+				local rowBottom = 0
+				for _, r in { beside, beside + rowW - BoostView.CornerWidth } do
+					rowBottom = math.max(rowBottom, columnBottom(r))
+				end
+				bottom = math.max(bottom, rowBottom)
+			end
+			-- (over the toasts' column when it must: toasts take no taps)
+			local column = BoostView.ToastColumn
+			local left, top = w - right - rowW, h - bottom - columnH
+			local overToasts = left < w / 2 + column.Width / 2
+				and w / 2 - column.Width / 2 < w - right
+				and top < column.Top + column.Height
+				and column.Top < top + columnH
+			spot = if overToasts then "OverToasts" else "Beside"
+		end
 	elseif input.Touch and pill then
 		-- (a row on the Shop pill, and on any touch button its tiles would reach)
 		local rowW = count * BoostView.CornerWidth + (count - 1) * gap
@@ -3248,6 +3313,18 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	end
 	if input.TutorialTop then
 		bottom = math.max(bottom, input.TutorialTop + gap)
+	end
+	-- the round look's offers at the right edge (HudBubble.offers): a row that would reach
+	-- them (standing on the tutorial card, a tall column) goes left of the column
+	local avoid = input.Avoid
+	if avoid then
+		local rowH = if stacked then count * tile + (count - 1) * gap else tile
+		local top = h - bottom - rowH
+		local avoidTop = avoid.Top or (avoid.Bottom - tile)
+		if w - right > avoid.Left - gap and top < avoid.Bottom + gap and avoidTop - gap < top + rowH then
+			right = math.ceil(w - avoid.Left) + gap
+			spot = "BesideOffers"
+		end
 	end
 	return right, bottom, stacked, spot
 end

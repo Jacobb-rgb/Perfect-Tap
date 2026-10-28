@@ -26,6 +26,7 @@ local Bubble = require(script.Parent.Bubble)
 local HudBubble = require(script.Parent.HudBubble)
 local Pop = require(script.Parent.Pop)
 local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 
 local TeleportView = {}
 
@@ -160,10 +161,18 @@ end
 
 -- The bar's colours (owner's BASE / MINE / SPAWN photo: blue, teal, purple).
 TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [string]: string }
+-- the round look (the reel's Shop red / Spawn green / Plot yellow): the HUD's red Shop first,
+-- then Lobby green, Base yellow, Vault purple
+TeleportView.RoundPaints = { Base = "Yellow", Lobby = "Lime", Vault = "Violet" } :: { [string]: string }
+TeleportView.RoundOrder = { Lobby = 1, Base = 2, Vault = 3 } :: { [string]: number }
 
 -- The words' glyph height on the bar (design units) per layout: the pixel
 -- font is wide, so the word fits its button with room around it.
 TeleportView.PixelGlyph = { Normal = 20, Compact = 22, Narrow = 15 } :: { [string]: number }
+-- the round look's (Fredoka One is narrower and its capitals are about 0.7 em tall: bigger words)
+TeleportView.RoundGlyph = { Normal = 34, Compact = 30, Narrow = 21 } :: { [string]: number } -- (the reel: caps 25 units)
+-- the round look's picture on each tab, over its left end (the reel's Shop / Spawn / Plot tabs)
+TeleportView.Icons = { Base = "base", Lobby = "lobby", Vault = "vault" } :: { [string]: string }
 
 --[[
 	A bar button's word in the pixel reels' look (owner 2026-10-22): white
@@ -176,7 +185,8 @@ function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string
 	if not label then
 		return
 	end
-	local glyph = TeleportView.PixelGlyph[kind] or TeleportView.PixelGlyph.Normal
+	local glyphs = if PopTheme.round() then TeleportView.RoundGlyph else TeleportView.PixelGlyph
+	local glyph = glyphs[kind] or glyphs.Normal
 	local lip = Pop.lipUnits(size.Y)
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.Position = UDim2.new(0.5, 0, 0.5, -math.floor(lip / 2))
@@ -190,6 +200,21 @@ function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string
 end
 
 --[[
+	The round look's tab picture (the reel's tabs): a big faded copy of the
+	spot's icon over the button's left end, cut by its edges, the word centred
+	over it (Pop.tabMark). Nothing on the phones' narrow buttons, nor before
+	the icon sheet is uploaded.
+]]
+function TeleportView.roundIcon(button: TextButton, size: Vector2, id: string, kind: string)
+	local icon = TeleportView.Icons[id]
+	-- (phones: words only, the four buttons are narrow)
+	if not icon or kind ~= "Normal" or not IconAssets.shows(icon) then
+		return
+	end
+	Pop.tabMark(button, icon, size.Y)
+end
+
+--[[
 	The Pop bar (owner 2026-10-20): a dark rounded strip at the very top with
 	a bright button per spot, a light rim inside each, the word in white with
 	a black edge; text only. A dark cover shows the seconds left.
@@ -198,7 +223,9 @@ local function buildPop(topBar: Frame): Refs
 	local compact = topBar:GetAttribute("Compact") == true
 	local narrow = topBar:GetAttribute("Narrow") == true
 	local layout = HudBubble.layout(if compact then 0.62 else 1, if narrow then 0 else nil)
-	local size = HudBubble.topBarButton(layout)
+	-- (the HUD says how big its row's buttons are: the round look's follow the screen's width)
+	local given = topBar:GetAttribute("Button")
+	local size = if typeof(given) == "Vector2" then given else HudBubble.topBarButton(layout)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
 	-- the gamepad glyph (D-pad down jumps into the bar): just left of the bar, so
@@ -227,15 +254,21 @@ local function buildPop(topBar: Frame): Refs
 		topBar:GetPropertyChangedSignal("Size"):Connect(placeHint)
 	end)
 	local order: { TextButton } = {}
+	local round = PopTheme.round()
 	for i, spot in TeleportConfig.Spots do
 		if spot.Bar then
-			local paint = Pop.paint(TeleportView.Paints[spot.Id] or "Slate")
-			local button = Pop.button(topBar, spot.Label, paint, size, {
+			local paints = if round then TeleportView.RoundPaints else TeleportView.Paints
+			local paint = Pop.paint(paints[spot.Id] or "Slate")
+			local button = Pop.button(topBar, Pop.caption(spot.Label), paint, size, {
 				Name = spot.Id,
-				LayoutOrder = i,
+				LayoutOrder = if round then TeleportView.RoundOrder[spot.Id] or i else i,
 			})
 			button:SetAttribute("Teleport", spot.Id)
-			TeleportView.pixelLabel(button, size, if narrow then "Narrow" elseif compact then "Compact" else "Normal")
+			local kind = if narrow then "Narrow" elseif compact then "Compact" else "Normal"
+			TeleportView.pixelLabel(button, size, kind)
+			if PopTheme.round() then
+				TeleportView.roundIcon(button, size, spot.Id, kind)
+			end
 			local cover = Pop.text(button, "", 26, {
 				Name = "Cooldown",
 				BackgroundColor3 = PopTheme.Outline,
@@ -247,6 +280,16 @@ local function buildPop(topBar: Frame): Refs
 			UIKit.corner(cover, PopTheme.Corner)
 			buttons[spot.Id], covers[spot.Id] = button, cover
 			table.insert(order, button)
+		end
+	end
+	-- (the round look: left / right in the row's order, the HUD's Shop button first)
+	if round then
+		table.sort(order, function(a: TextButton, b: TextButton): boolean
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local shop = topBar:FindFirstChild("ShopPill")
+		if shop and shop:IsA("TextButton") then
+			table.insert(order, 1, shop)
 		end
 	end
 	for i, button in order do

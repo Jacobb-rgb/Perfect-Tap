@@ -107,7 +107,7 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	local frame = HudView.toast(refs.Toasts, text, color or TOAST_COLORS[kind or "Info"] or Theme.Info)
 	frame.LayoutOrder = math.floor(os.clock() * 100) % 1e6
 	-- (UI/Motion's bounce in, none with Reduce motion; UI motion off: the pop main has)
-	local scale = if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)
+	local scale = if Motion.full() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)
 	if kind == "Deny" then
 		Sfx.play("UIDeny")
 	elseif kind == "Discovery" then
@@ -445,6 +445,8 @@ function HudController.init()
 	if type(chipTop) == "number" then
 		TrainView.HudChipTop = chipTop
 	end
+	local chipLeft = refs.Gui:GetAttribute("ChipLeft")
+	TrainView.HudChipLeft = if type(chipLeft) == "number" then chipLeft else nil
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
 	if refs.Gui:GetAttribute("Bubble") then
@@ -507,6 +509,18 @@ function HudController.start()
 	-- (the HUD's size lands a frame after the viewport's: the chips' limit follows it)
 	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
+	-- the round look's offers at the right edge: hidden while the last input is touch (a touch
+	-- screen with a mouse or a keyboard got the PC layout: the touch tutorial's SKIP and Roblox's
+	-- jump button take that edge as soon as it is touched)
+	local offers = refs.Gui:FindFirstChild("Offers")
+	if offers and offers:IsA("GuiObject") then
+		local function showOffers()
+			offers.Visible = UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
+		end
+		showOffers()
+		UserInputService.LastInputTypeChanged:Connect(showOffers)
+	end
+
 	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
 	BackpackState.onChanged(refreshBackpack)
 	refreshBackpack()
@@ -529,7 +543,7 @@ function HudController.start()
 		if diff ~= 0 then
 			-- a jump bigger than a few seconds of income is a sale or a reward
 			local big = diff > math.max(1, income * 3)
-			if big and not Motion.enabled() then
+			if big and not Motion.full() then
 				-- (UI motion off, Config/AnimConfig: the glide main has, the panel popping as it goes)
 				coinScale.Scale = 1.12
 				TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()

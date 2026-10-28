@@ -116,6 +116,27 @@ function Preview.build(Loader: any): { [string]: any }
 		StoreView.setBannerOdds(limited, odds, false)
 	end
 	exports.ui_store_pc_limited = UiExport.export({ hud(scale).Gui, limited.Gui })
+	-- the limited banner on a 568 x 320 phone (review 2026-10-28: its 44 pt buy buttons under the
+	-- golems' chance %: the odds stay visible), scrolled to FEATURED
+	do
+		local small = 0.62 * 900 / 320
+		local w, h = 1600 / small, (900 - 163) / small
+		local phoneLimited = store(small, w, h, nil, true)
+		StoreView.setEdition(phoneLimited, edition())
+		StoreView.setTimer(phoneLimited, 29 * 86400 + 21 * 3600 + 15 * 60)
+		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+		local odds = {}
+		for _, line in CapsuleConfig.odds("Dragonforge", false) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(phoneLimited, odds, false)
+		StoreView.layout(phoneLimited, w, h, true)
+		phoneLimited.Scroller.CanvasPosition = (require("@lune/roblox") :: any).Vector2.new(
+			0,
+			StoreView.sectionTop(phoneLimited, "Featured")
+		)
+		exports.ui_store_phone_small_limited = UiExport.export({ hud(small).Gui, phoneLimited.Gui })
+	end
 	local odds = store(scale, pcW, pcH, "Eggs")
 	local lines = { "Royal Capsule x5: 5 golems, each one of:" }
 	for _, line in CapsuleConfig.odds("Royal", false) do

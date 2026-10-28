@@ -264,6 +264,14 @@ local function ensureView(): RebirthView.Refs
 		end)
 	end
 	view.Rebirth.Activated:Connect(onRebirthPressed)
+	local notNow = view.NotNow
+	if notNow then
+		-- (the round look's red Not now: the window closes, nothing else)
+		notNow.Activated:Connect(function()
+			RebirthController.close()
+			Sfx.play("UIClick")
+		end)
+	end
 	for _, card in view.Cards do
 		card.Buy.Activated:Connect(function()
 			send({ Action = "Buy", Perk = card.Id })

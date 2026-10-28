@@ -918,7 +918,8 @@ return function(T, Loader)
 		T.truthy(face and face:IsA("TextButton"), "the tile's button")
 		T.truthy(face:IsDescendantOf(refs.Gui:FindFirstChild("MoreFlyout")), "behind MORE")
 		local label = face:FindFirstChild("Label") :: any
-		T.eq(label.Text, "EMOTES", "its word")
+		local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
+		T.eq(label.Text, Pop.caption("EMOTES"), "its word (Title Case in the round look)")
 		T.falsy(IconAssets.has("emotes"), "no picture: the word shows (never an emoji)")
 		local visible = 0
 		for _, child in refs.Menu:GetChildren() do

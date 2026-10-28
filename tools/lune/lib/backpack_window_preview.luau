@@ -6,8 +6,13 @@
 	iteration). Drawn with the game's own code (HudBubble, BackpackView,
 	BackpackState) from a State snapshot. UI overlays (build/preview/<name>.json):
 	  ui_backpack_pc      PC 1600 x 900: a mid-game Iron-Bound Pack, 62 / 100
-	  ui_backpack_phone   667 x 375 pt phone (the compact layout)
-	  ui_backpack_tv      1080p TV (compact, the gamepad hint)
+	  ui_backpack_phone   844 x 390 pt phone drawn 2x (1688 x 780, Roblox's top bar 58 pt:
+	                      uiInset 116; the compact layout)
+	  ui_backpack_phone_small  667 x 375 pt phone drawn 2x (1334 x 750, uiInset 116)
+	  ui_backpack_tv      1080p TV drawn 1920 x 1080 (compact, the gamepad hint)
+	  ui_backpack_pixel   PC in the pixel look (PopTheme.setLook), dirty ore merged
+	  ui_backpack_merged  PC with BackpackView.DirtyByOre = true (the switch: a stack per ore)
+	Shots: tools/preview/backpack_window_shots.json.
 	  ui_backpack_full    PC, a full Rookie Pack (5 / 5: FULL on the bar and the button)
 	  ui_backpack_empty   PC, an empty backpack (the empty line)
 ]]
@@ -38,6 +43,8 @@ function Preview.build(Loader: any): { [string]: any }
 				[key("Raw", "Copper")] = 18,
 				[key("Raw", "Gold")] = 9,
 				[key("Raw", "Diamond")] = 3,
+				[key("Raw", "Ruby")] = 5,
+				[key("Raw", "Jade")] = 2,
 				[`Relic|{ArtifactConfig.List[1].Id}||`] = 1,
 				[key("Clean", "Diamond", "Flawless")] = 1,
 				[key("Clean", "Sunstone", "Pristine")] = 4,
@@ -88,11 +95,22 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_backpack_pc = UiExport.export(shot(1.25, 1.25, pc, false, midGame, "Q or Backspace: close"))
 	exports.ui_backpack_full = UiExport.export(shot(1.25, 1.25, pc, false, full, "Q or Backspace: close"))
 	exports.ui_backpack_empty = UiExport.export(shot(1.25, 1.25, pc, false, empty, "Q or Backspace: close"))
-	exports.ui_backpack_phone =
-		UiExport.export(shot(0.62 * 900 / 375, 0.62, roblox.Vector2.new(667, 375 - 58 * 375 / 900), true, midGame, "Tap X to close."))
-	local tvScale = 1.25 * 900 / 1080
+	-- phones drawn at 2 px a point; Roblox's top bar takes 58 pt (the shots' uiInset 116 px)
+	exports.ui_backpack_phone = UiExport.export(shot(0.62 * 2, 0.62, roblox.Vector2.new(844, 390 - 58), true, midGame, "Tap X to close."))
+	exports.ui_backpack_phone_small =
+		UiExport.export(shot(0.62 * 2, 0.62, roblox.Vector2.new(667, 375 - 58), true, midGame, "Tap X to close."))
 	exports.ui_backpack_tv =
-		UiExport.export(shot(tvScale, 1.25, roblox.Vector2.new(1920 / 1.25, (1080 - 36) / 1.25), true, midGame, "B: close", true))
+		UiExport.export(shot(1.25, 1.25, roblox.Vector2.new(1920 / 1.25, (1080 - 36) / 1.25), true, midGame, "B: close", true))
+	-- the other look and the shared Dirty Ore stack (the switches)
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+	local look = PopTheme.Look
+	PopTheme.setLook("Pixel")
+	exports.ui_backpack_pixel = UiExport.export(shot(1.25, 1.25, pc, false, midGame, "Q or Backspace: close"))
+	PopTheme.setLook(look)
+	local byOre = BackpackView.DirtyByOre
+	BackpackView.DirtyByOre = not byOre
+	exports.ui_backpack_merged = UiExport.export(shot(1.25, 1.25, pc, false, midGame, "Q or Backspace: close"))
+	BackpackView.DirtyByOre = byOre
 	return exports
 end
 

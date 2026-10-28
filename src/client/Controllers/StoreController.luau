@@ -47,6 +47,7 @@ local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local CardOdds = require(script.Parent.Parent.UI.CardOdds)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local Confetti = require(script.Parent.Parent.Effects.Confetti)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudController = require(script.Parent.HudController)
@@ -624,6 +625,59 @@ function StoreController.open()
 	end
 end
 
+-- Opens the Store at a card (the round look's HUD offers): the list scrolls to it.
+function StoreController.openAt(cardId: string)
+	StoreController.open()
+	local view = refs
+	local card = if view then view.Cards[cardId] else nil
+	if not view or not card then
+		return
+	end
+	local section = card.Button.Parent
+	local top = if section then StoreView.sectionTop(view, section.Name) else 0
+	view.Scroller.CanvasPosition = Vector2.new(0, math.max(0, top + card.Button.Position.Y.Offset - 8))
+	-- (a gamepad: the selection on the offered card, so A buys what the player picked)
+	if MenuPanels.usingGamepad() and card.Button.Visible then
+		GuiService.SelectedObject = card.Button
+	end
+end
+
+--[[
+	Does a HUD offer show (the round look, HudBubble.Offers)? Not when the
+	player owns it, the Starter Pack's offer is over, or paid random items
+	are restricted for this player.
+]]
+local function offerShows(cardId: string): boolean
+	local spec = StoreConfig.ById[cardId]
+	local product = if spec then MonetizationConfig.Products[spec.Keys[1]] else nil
+	if not product then
+		return false
+	end
+	if product.Grant == "StarterPack" then
+		local offer = state().StarterPack
+		if type(offer) ~= "table" or offer.Open ~= true then
+			return false
+		end
+	end
+	if product.PaidRandom and restricted() then
+		return false
+	end
+	return not owns(product)
+end
+
+local function refreshOffers()
+	local hud = HudController.refs()
+	local column = if hud then hud.Gui:FindFirstChild("Offers") else nil
+	if not column then
+		return
+	end
+	for _, holder in column:GetChildren() do
+		if holder:IsA("GuiObject") then
+			holder.Visible = offerShows(holder.Name)
+		end
+	end
+end
+
 function StoreController.toggle()
 	if isOpen then
 		StoreController.close()
@@ -674,6 +728,18 @@ function StoreController.start()
 	if StateController.get() then
 		stateAt = serverNow()
 	end
+	-- a finished purchase (any Robux prompt in the game): a confetti burst over the screen
+	-- (the owner's UI pack reel, 2026-10-27); the grant itself still comes from the server
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, _, purchased)
+		if purchased then
+			Confetti.burst(nil, Motion.reduced())
+		end
+	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(_, _, purchased)
+		if purchased then
+			Confetti.burst(nil, Motion.reduced())
+		end
+	end)
 	-- a blaster prompt closed without a purchase: its card is buyable again
 	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, productId, purchased)
 		local wait = blasterWait
@@ -685,11 +751,27 @@ function StoreController.start()
 			end
 		end
 	end)
-	-- the HUD's green Shop pill (the game HUD, HudBubble.buildGame)
+	-- the HUD's green Shop pill (the game HUD, HudBubble.buildGame; the round look: the red
+	-- Shop button in the top row)
 	local hud = HudController.refs()
-	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
+	local pill = if hud then hud.Gui:FindFirstChild("ShopPill", true) else nil
 	if pill and pill:IsA("GuiButton") then
 		pill.Activated:Connect(StoreController.toggle)
+	end
+	-- the round look's offers mid-right: the Store at that card; owned ones hide
+	local offers = if hud then hud.Gui:FindFirstChild("Offers") else nil
+	if offers then
+		for _, holder in offers:GetChildren() do
+			local button = holder:FindFirstChild("Offer")
+			if button and button:IsA("GuiButton") then
+				local cardId = holder.Name
+				button.Activated:Connect(function()
+					StoreController.openAt(cardId)
+				end)
+			end
+		end
+		refreshOffers()
+		player.AttributeChanged:Connect(refreshOffers) -- (the passes' Perk_ attributes)
 	end
 	-- the Server Luck line over the pill while it runs: "Server Luck x2 · 14:59 · thanks Kuba"
 	local luckLabel = if hud then hud.Gui:FindFirstChild("ServerLuck") else nil
@@ -712,6 +794,7 @@ function StoreController.start()
 	end
 	StateController.onChanged(function()
 		stateAt = serverNow()
+		refreshOffers()
 		if isOpen then
 			refresh()
 			-- the odds panel follows the State too (a boost started or ran out)

@@ -46,10 +46,15 @@ local function exportNode(instance): any?
 		end
 		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
 			node.text = instance.Text
+			if class == "TextBox" and instance.Text == "" and instance.PlaceholderText ~= "" then
+				-- (an empty box shows its placeholder in its placeholder colour)
+				node.text = instance.PlaceholderText
+			end
 			node.ts = instance.TextSize
-			node.tc = hex(instance.TextColor3)
+			node.tc = hex(if class == "TextBox" and instance.Text == "" then instance.PlaceholderColor3 else instance.TextColor3)
 			node.tt = instance.TextTransparency
 			node.font = instance.FontFace.Family
+			node.fw = instance.FontFace.Weight.Value -- (the round look: Montserrat Black words, Bold sentences)
 			node.tx = instance.TextXAlignment.Name
 			node.ty = instance.TextYAlignment.Name
 			node.scaled = instance.TextScaled

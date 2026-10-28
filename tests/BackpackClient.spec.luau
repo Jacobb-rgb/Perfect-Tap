@@ -39,6 +39,18 @@ return function(T, Loader)
 	local HudView = client("UI.HudView")
 	local HudBubble = client("UI.HudBubble")
 	local CleaningView = client("UI.CleaningView")
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+
+	-- runs fn with BackpackView.DirtyByOre set, always switching it back
+	local function withDirtyByOre(on: boolean, fn: () -> ())
+		local before = BackpackView.DirtyByOre
+		BackpackView.DirtyByOre = on
+		local ok, err = pcall(fn)
+		BackpackView.DirtyByOre = before
+		if not ok then
+			error(err, 0)
+		end
+	end
 
 	local function key(kind: string, ore: string, grade: string?): string
 		return ItemData.storageKey({ K = kind, O = ore, G = grade })
@@ -219,88 +231,138 @@ return function(T, Loader)
 	---------------------------------------------------------------- BackpackView
 
 	T.test("BackpackView: named frames, the merged Dirty Ore, relics, FULL and empty", function()
-		local refs = BackpackView.build()
-		T.falsy(refs.Gui.Enabled, "built hidden")
-		T.truthy(refs.Gui:GetAttribute("TerraForge"), "HudController scales it")
-		for name, frame in
-			{
-				Window = refs.Window.Root,
-				Title = refs.Title,
-				Close = refs.Close,
-				Body = refs.Window.Body,
-				Info = refs.Info,
-				PackName = refs.PackName,
-				Bar = refs.Bar,
-				CountLabel = refs.CountLabel,
-				List = refs.List,
-				Empty = refs.Empty,
-				Footer = refs.Footer,
-				ShopLine = refs.ShopLine,
-				Hint = refs.Hint,
-			}
-		do
-			T.eq(frame.Name, name, "a clear name for the style chat: " .. name)
-		end
-		T.eq(refs.Title.Text, "BACKPACK")
-		T.truthy(refs.ShopLine.Text:find("BACKPACKS shop", 1, true), "where bigger packs are sold")
-		T.truthy(refs.Group.SelectionGroup, "the gamepad selection stays inside")
+		withDirtyByOre(false, function()
+			local refs = BackpackView.build()
+			T.falsy(refs.Gui.Enabled, "built hidden")
+			T.truthy(refs.Gui:GetAttribute("TerraForge"), "HudController scales it")
+			for name, frame in
+				{
+					Window = refs.Window.Root,
+					Title = refs.Title,
+					Close = refs.Close,
+					Body = refs.Window.Body,
+					Info = refs.Info,
+					PackName = refs.PackName,
+					Bar = refs.Bar,
+					CountLabel = refs.CountLabel,
+					List = refs.List,
+					Empty = refs.Empty,
+					Footer = refs.Footer,
+					ShopLine = refs.ShopLine,
+					Hint = refs.Hint,
+				}
+			do
+				T.eq(frame.Name, name, "a clear name for the style chat: " .. name)
+			end
+			T.eq(refs.Title.Text, if PopTheme.round() then BackpackView.RoundTitle else "BACKPACK", "the reel's Inventory (round look)")
+			T.truthy(refs.ShopLine.Text:find("BACKPACKS shop", 1, true), "where bigger packs are sold")
+			T.truthy(refs.Group.SelectionGroup, "the gamepad selection stays inside")
 
-		local backpack = BackpackState.read(state())
-		local made = BackpackView.setBackpack(refs, backpack)
-		local rows = BackpackView.rows(refs)
-		T.eq(#made, 5, "one row per stack, every dirty ore in one")
-		T.eq(#rows, 5)
-		T.eq(refs.PackName.Text, string.upper(BackpackData.ById.TrailPack.Name))
-		T.eq(refs.CountLabel.Text, "10 / 15")
-		T.near(refs.Bar:FindFirstChild("Fill").Size.X.Scale, 10 / 15, 1e-6, "the fill bar")
-		T.eq(refs.Bar:FindFirstChild("Label").Text, "", "no FULL")
-		-- Dirty Ore keeps its secret: one row, no ore name, no rarity, a fixed picture
-		local dirty = rows[1]
-		T.eq(dirty.Id, "Dirty")
-		T.eq(dirty.ItemName.Text, ItemData.DirtyName)
-		T.eq(dirty.Count.Text, "x5", "both dirty stacks")
-		T.eq(dirty.Grade.Text, "UNKNOWN")
-		T.truthy(dirty.Mystery.Visible, "a ? on the picture")
-		T.eq(dirty.Entry.Rarity, nil, "no rarity paint")
-		T.eq(
-			dirty.Entry.Desc.O,
-			BackpackView.entries({ { Key = key("Raw", EPIC), Desc = { K = "Raw", O = EPIC }, Count = 1 } })[1].Desc.O,
-			"the same picture whatever it hides"
-		)
-		T.truthy(dirty.Frame.Selectable, "rows are selectable (a gamepad walks the list)")
-		-- the relic
-		T.eq(rows[2].ItemName.Text, ItemData.RelicName)
-		T.eq(rows[2].Grade.Text, "RELIC")
-		T.eq(rows[2].Entry.Rarity, nil, "no rarity hint before it is cleaned")
-		-- cleaned ore: "Flawless Diamond", its grade chip, the count
-		T.eq(rows[3].ItemName.Text, ItemData.displayName("Clean", EPIC, "Flawless"))
-		T.eq(rows[3].Grade.Text, "FLAWLESS")
-		T.eq(rows[3].Entry.Rarity, "Epic")
-		T.eq(rows[4].Count.Text, "x2")
-		T.falsy(rows[3].Mystery.Visible)
-		for _, row in rows do
-			T.truthy(row.Icon:FindFirstChild("Picture"), row.Id .. ": the live picture")
-			T.eq(row.Frame.Parent, refs.List, "in the list")
-		end
-		T.falsy(refs.Empty.Visible)
-		-- live: rows reused by id, gone ones removed, FULL
-		local before = refs.Rows.Dirty.Frame
-		local next = state({ Count = 15 })
-		next.Backpacks.Items[key("Clean", COMMON, "Rough")] = nil
-		local again = BackpackView.setBackpack(refs, BackpackState.read(next))
-		T.eq(#again, 0, "no new rows")
-		T.eq(refs.Rows.Dirty.Frame, before, "the same frame")
-		T.eq(refs.Rows[key("Clean", COMMON, "Rough")], nil, "a stack that went is gone")
-		T.eq(#BackpackView.rows(refs), 4)
-		T.eq(refs.Bar:FindFirstChild("Label").Text, "FULL", "FULL on the bar")
-		T.eq(refs.CountLabel.TextColor3, BackpackView.FullColor, "the count turns red")
-		T.truthy(refs.Gui:GetAttribute("Full"))
-		-- empty
-		BackpackView.setBackpack(refs, BackpackState.read(state(), 0))
-		T.eq(#BackpackView.rows(refs), 0, "no rows")
-		T.truthy(refs.Empty.Visible, "the empty line")
-		T.eq(BackpackView.firstRow(refs), nil)
-		T.eq(refs.CountLabel.Text, "0 / 15")
+			local backpack = BackpackState.read(state())
+			local made = BackpackView.setBackpack(refs, backpack)
+			local rows = BackpackView.rows(refs)
+			T.eq(#made, 5, "one row per stack, every dirty ore in one")
+			T.eq(#rows, 5)
+			T.eq(refs.PackName.Text, string.upper(BackpackData.ById.TrailPack.Name))
+			T.eq(refs.CountLabel.Text, "10 / 15")
+			T.near(refs.Bar:FindFirstChild("Fill").Size.X.Scale, 10 / 15, 1e-6, "the fill bar")
+			T.eq(refs.Bar:FindFirstChild("Label").Text, "", "no FULL")
+			-- Dirty Ore keeps its secret: one row, no ore name, no rarity, a fixed picture
+			local dirty = rows[1]
+			T.eq(dirty.Id, "Dirty")
+			T.eq(dirty.ItemName.Text, ItemData.DirtyName)
+			T.eq(dirty.Count.Text, "x5", "both dirty stacks")
+			T.eq(dirty.Grade.Text, if PopTheme.round() then "Dirty" else "UNKNOWN")
+			T.eq(dirty.Mystery.Visible, not PopTheme.round(), "a ? on the picture (the pixel look's rows)")
+			T.eq(dirty.Entry.Rarity, nil, "no rarity paint")
+			T.eq(
+				dirty.Entry.Desc.O,
+				BackpackView.entries({ { Key = key("Raw", EPIC), Desc = { K = "Raw", O = EPIC }, Count = 1 } })[1].Desc.O,
+				"the same picture whatever it hides"
+			)
+			T.truthy(dirty.Frame.Selectable, "rows are selectable (a gamepad walks the list)")
+			-- the relic
+			T.eq(rows[2].ItemName.Text, ItemData.RelicName)
+			T.eq(rows[2].Grade.Text, if PopTheme.round() then "Relic" else "RELIC")
+			T.eq(rows[2].Entry.Rarity, nil, "no rarity hint before it is cleaned")
+			-- cleaned ore: "Flawless Diamond", its grade chip, the count
+			T.eq(rows[3].ItemName.Text, ItemData.displayName("Clean", EPIC, "Flawless"))
+			T.eq(rows[3].Grade.Text, if PopTheme.round() then "Epic" else "FLAWLESS", "the rarity word (round) or the grade chip")
+			T.eq(rows[3].Entry.Rarity, "Epic")
+			T.eq(rows[4].Count.Text, "x2")
+			T.falsy(rows[3].Mystery.Visible)
+			for _, row in rows do
+				T.truthy(row.Icon:FindFirstChild("Picture"), row.Id .. ": the live picture")
+				T.eq(row.Frame.Parent, refs.List, "in the list")
+			end
+			T.falsy(refs.Empty.Visible)
+			-- live: rows reused by id, gone ones removed, FULL
+			local before = refs.Rows.Dirty.Frame
+			local next = state({ Count = 15 })
+			next.Backpacks.Items[key("Clean", COMMON, "Rough")] = nil
+			local again = BackpackView.setBackpack(refs, BackpackState.read(next))
+			T.eq(#again, 0, "no new rows")
+			T.eq(refs.Rows.Dirty.Frame, before, "the same frame")
+			T.eq(refs.Rows[key("Clean", COMMON, "Rough")], nil, "a stack that went is gone")
+			T.eq(#BackpackView.rows(refs), 4)
+			T.eq(refs.Bar:FindFirstChild("Label").Text, "FULL", "FULL on the bar")
+			T.eq(refs.CountLabel.TextColor3, BackpackView.FullColor, "the count turns red")
+			T.truthy(refs.Gui:GetAttribute("Full"))
+			-- empty
+			BackpackView.setBackpack(refs, BackpackState.read(state(), 0))
+			T.eq(#BackpackView.rows(refs), 0, "no rows")
+			T.truthy(refs.Empty.Visible, "the empty line")
+			T.eq(BackpackView.firstRow(refs), nil)
+			T.eq(refs.CountLabel.Text, "0 / 15")
+		end)
+	end)
+
+	T.test("BackpackView: dirty ore keeps its secret by default; the DirtyByOre switch stacks it per ore", function()
+		T.eq(BackpackView.DirtyByOre, false, "the default (owner 2026-10-28): one shared Dirty Ore stack")
+		local merged = BackpackView.entries(BackpackState.read(state()).Stacks)
+		T.eq(merged[1].Id, "Dirty", "one shared stack first")
+		T.eq(merged[1].Name, ItemData.DirtyName, "no ore name")
+		T.eq(merged[1].Piece, nil, "no piece of the ore")
+		T.eq(merged[1].Rarity, nil, "no rarity")
+		withDirtyByOre(true, function()
+			local entries = BackpackView.entries(BackpackState.read(state()).Stacks)
+			local dirty: { any } = {}
+			for _, entry in entries do
+				if entry.Dirty then
+					table.insert(dirty, entry)
+				end
+			end
+			T.eq(#dirty, 2, "one stack per ore")
+			for i, entry in dirty do
+				T.eq(entries[i], entry, "the dirty stacks lead")
+				local ore = OreData.ById[entry.Piece]
+				T.truthy(ore ~= nil, "the piece is that ore")
+				T.eq(entry.Name, "Dirty " .. ore.Name)
+				T.eq(entry.Id, key("Raw", entry.Piece), "the stack's own storage key: nothing new reaches the client")
+				T.eq(entry.Desc.K, "Raw", "the crust chunk")
+			end
+			local counts: { [string]: number } = {}
+			for _, entry in dirty do
+				counts[entry.Piece] = entry.Count
+			end
+			T.eq(counts[COMMON], 3)
+			T.eq(counts[EPIC], 2)
+			local refs = BackpackView.build()
+			BackpackView.setBackpack(refs, BackpackState.read(state()))
+			local row = refs.Rows[key("Raw", EPIC)]
+			T.truthy(row ~= nil, "a cell per dirty ore")
+			T.truthy(row.Icon:FindFirstChild("Piece") ~= nil, "a piece of the real ore pokes out")
+			T.falsy(row.Mystery.Visible, "no ? over it")
+			T.eq(row.Count.Text, "x2")
+			-- the search box filters by name
+			if refs.Search then
+				BackpackView.setSearch(refs, "diamond")
+				for id, r in refs.Rows do
+					T.eq(r.Frame.Visible, string.find(string.lower(r.Entry.Name), "diamond", 1, true) ~= nil, id .. " filtered")
+				end
+				BackpackView.setSearch(refs, "")
+			end
+		end)
 	end)
 
 	-- HudController.uiScale for a screen
@@ -367,6 +429,31 @@ return function(T, Loader)
 			local inner = { 0, 0, info[3], info[4] }
 			local name, bar, count = box(refs.PackName, inner), box(refs.Bar, inner), box(refs.CountLabel, inner)
 			T.truthy(name[1] + name[3] <= bar[1] and bar[1] + bar[3] <= count[1] + 0.01, where .. ": name, bar, count")
+			-- the round look's cells: everything inside, the rarity over the picture over the
+			-- name; a row of cells inside the list; a thumb wide and tall on a touch screen
+			if PopTheme.round() then
+				for _, row in BackpackView.rows(refs) do
+					local cw, ch = row.Frame.Size.X.Offset, row.Frame.Size.Y.Offset
+					local r = { 0, 0, cw, ch }
+					local icon, itemName, grade, n = box(row.Icon, r), box(row.ItemName, r), box(row.Grade, r), box(row.Count, r)
+					for label, part in { Icon = icon, ItemName = itemName, Grade = grade, Count = n } do
+						T.truthy(inside(part, r), `{where} {row.Id}: {label} inside the cell`)
+					end
+					T.truthy(grade[2] + grade[4] <= icon[2] + 0.01, where .. ": the rarity over the picture")
+					T.truthy(icon[2] + icon[4] <= itemName[2] + 0.01, where .. ": the picture over the name")
+					T.truthy(
+						BackpackView.Columns * cw + (BackpackView.Columns - 1) * BackpackView.CellGap <= list[3],
+						where .. ": a row of cells fits"
+					)
+					if compact then
+						T.truthy(
+							math.min(cw, ch) * fit * BackpackView.PhoneScale >= BackpackView.MinTouch - 0.5,
+							where .. ": cells a thumb big"
+						)
+					end
+				end
+				continue
+			end
 			-- every row: the picture, the name and the grade left of the count
 			for _, row in BackpackView.rows(refs) do
 				local r = { 0, 0, list[3] - 10, row.Frame.Size.Y.Offset }
@@ -475,9 +562,9 @@ return function(T, Loader)
 				-- (the light HUD's holder is the whole group: the BLASTER slot and the button)
 				local holder = refs.CarryPanel
 				local width = screen.X / scale
+				local where = `{screen.X} x {screen.Y}`
 				local left = width / 2 + holder.Position.X.Offset
 				local right = left + holder.Size.X.Offset
-				local where = `{screen.X} x {screen.Y}`
 				if scale <= HudBubble.CompactScale then
 					T.truthy(holder.Size.Y.Offset * scale >= 44, where .. ": >= 44 pt tall")
 					T.truthy(refs.Backpack.Size.Y.Offset * scale >= 44, where .. ": the button >= 44 pt tall")

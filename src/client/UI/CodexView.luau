@@ -89,6 +89,8 @@ export type Refs = {
 	DetailLore: TextLabel,
 	Selected: string?,
 	Compact: boolean,
+	Filters: { [string]: TextButton }, -- the round look's rarity tabs right of the window (the reel's Index)
+	Filter: string?, -- the rarity they show now (nil: every card)
 }
 
 type Metrics = {
@@ -133,6 +135,19 @@ CodexView.Metrics = {
 } :: { [string]: Metrics }
 
 CodexView.GridInset = 12 -- the grid's left padding, its scroll bar and a little room
+-- the round look's rarity filter tabs right of the window (the reel's Index: Common grey,
+-- Uncommon green, Rare blue, Epic purple, Legendary yellow, our Mythic pink)
+CodexView.FilterW = 170
+CodexView.FilterH = 52
+CodexView.FilterGap = 10
+CodexView.FilterPaints = {
+	Common = "Gray",
+	Uncommon = "Lime",
+	Rare = "Royal",
+	Epic = "Violet",
+	Legendary = "Yellow",
+	Mythic = "Pink",
+} :: { [string]: string }
 CodexView.ChipCard = 110 -- cards at least this tall show the rarity chip (phones: the detail shows it)
 CodexView.HiddenColor = Color3.fromRGB(58, 62, 74)
 CodexView.HiddenEdge = Color3.fromRGB(96, 102, 120)
@@ -370,8 +385,9 @@ local function markFx(card: GuiObject)
 end
 
 local function setFx(card: GuiObject, on: boolean)
+	local none = card:GetAttribute("NoFx") == true -- (the round look's cells: no sunburst)
 	for _, child in fxOf(card) do
-		child.Visible = on
+		child.Visible = on and not none
 	end
 end
 
@@ -382,6 +398,9 @@ end
 ]]
 local function paintFrame(frame: Frame, paint: Pop.Paint, centre: UDim2, long: number, short: number)
 	Pop.face(frame, paint, PopTheme.Corner + 2, false)
+	if PopTheme.round() then
+		Pop.twoTone(frame, paint)
+	end
 	frame.ClipsDescendants = true
 	local rays = Pop.fx(frame, "fx_rays", {
 		Name = "Rays",
@@ -496,6 +515,11 @@ local function newCard(refs: Refs, ore: OreData.Ore, order: number, m: Metrics)
 	}, UDim2.fromScale(0.5, 0.5))
 	button:SetAttribute("Ore", ore.Id)
 	markFx(button)
+	if PopTheme.round() then
+		-- (the reel's Index: a dark cell, the rarity on its inner edge, no sunburst)
+		Pop.cellFace(button, nil, 6)
+		button:SetAttribute("NoFx", true)
+	end
 	local stroke = button:FindFirstChild("Border") :: UIStroke
 	local gem = halo(button, "Gem", 4)
 	Pop.model(button, "item_Clean_" .. ore.Id, 60, nil, {
@@ -522,6 +546,19 @@ local function newCard(refs: Refs, ore: OreData.Ore, order: number, m: Metrics)
 		Visible = false,
 		ZIndex = 7,
 	})
+	if PopTheme.round() then
+		-- (the reel's Index: the rarity as a word in its colour on top of the cell, no chip)
+		strip.BackgroundTransparency = 1
+		local stripBorder = strip:FindFirstChild("Border") :: UIStroke?
+		if stripBorder then
+			stripBorder.Enabled = false
+		end
+		local label = strip:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.Text = ore.Rarity
+			label.TextColor3 = Pop.rarityPaint(ore.Rarity).Top:Lerp(Color3.new(1, 1, 1), 0.25)
+		end
+	end
 	local new = Pop.chip(button, "NEW", "Green", Vector2.new(42, 20), {
 		Name = "NewBadge",
 		AnchorPoint = Vector2.new(1, 0),
@@ -651,12 +688,57 @@ function CodexView.build(compact: boolean?): Refs
 		DetailLore = line("Lore", Color3.fromRGB(206, 214, 232)),
 		Selected = nil,
 		Compact = isCompact,
+		Filters = {},
+		Filter = nil,
 	}
 	for i, ore in OreData.List do
 		newCard(refs, ore, i, m)
 	end
+	if PopTheme.round() then
+		-- the reel's rarity tabs outside the window, on its right (a tap shows only the found
+		-- ores of that rarity, again shows all)
+		for i, rarity in Rarity.List do
+			local tab = Pop.button(
+				frame.Panel,
+				rarity.Name,
+				CodexView.FilterPaints[rarity.Id] or "Slate",
+				Vector2.new(CodexView.FilterW, CodexView.FilterH),
+				{
+					Name = "Filter" .. rarity.Id,
+					LayoutOrder = i,
+					ZIndex = 4,
+				}
+			)
+			refs.Filters[rarity.Id] = tab
+			pcall(function()
+				tab.Activated:Connect(function()
+					CodexView.setFilter(refs, if refs.Filter == rarity.Id then nil else rarity.Id)
+				end)
+			end)
+		end
+	end
 	CodexView.layout(refs, isCompact, math.huge, math.huge)
 	return refs
+end
+
+--[[
+	The round look's rarity filter: only the found ores of `rarity` show
+	(an undiscovered ore never tells its rarity); nil shows every card. The
+	picked tab gets a white edge.
+]]
+function CodexView.setFilter(refs: Refs, rarity: string?)
+	refs.Filter = rarity
+	for _, card in refs.CardList do
+		local ore = OreData.ById[card.OreId]
+		local found = card.Button:GetAttribute("Found") == true
+		card.Button.Visible = rarity == nil or (found and ore ~= nil and ore.Rarity == rarity)
+	end
+	for id, tab in refs.Filters do
+		local border = tab:FindFirstChild("Border") :: UIStroke?
+		if border then
+			border.Color = if id == rarity then Color3.new(1, 1, 1) else PopTheme.Outline
+		end
+	end
 end
 
 ---------------------------------------------------------------- layout
@@ -679,6 +761,32 @@ end
 
 local function layoutCard(card: Card, w: number, h: number, textSize: number, chip: boolean)
 	local button = card.Button
+	if PopTheme.round() then
+		-- (the reel's Index cell: the rarity word on top in its colour, the picture, the name at the bottom)
+		local word = math.max(12, textSize - 2)
+		card.Strip.AnchorPoint = Vector2.new(0.5, 0)
+		card.Strip.Position = UDim2.new(0.5, 0, 0, 5)
+		card.Strip.Size = UDim2.fromOffset(w - 10, word + 4)
+		card.Strip:SetAttribute("Room", true)
+		card.Name.TextSize = textSize
+		card.Name.AnchorPoint = Vector2.new(0.5, 1)
+		card.Name.Position = UDim2.new(0.5, 0, 1, -5)
+		card.Name.Size = UDim2.new(1, -8, 0, textSize + 4)
+		local top = 5 + word + 6
+		local bottom = h - (textSize + 10)
+		local size = math.max(24, math.floor(math.min(w - 16, bottom - top)))
+		local centre = UDim2.fromOffset(math.floor(w / 2), math.floor((top + bottom) / 2))
+		local picture = button:FindFirstChild("Picture") :: ImageLabel
+		picture.Position = centre
+		picture.Size = UDim2.fromOffset(size, size)
+		card.Gem.Position = centre
+		card.Gem.Size = UDim2.fromOffset(math.floor(size * 0.78), math.floor(size * 0.78))
+		card.Mark.Position = centre
+		card.Mark.Size = UDim2.fromOffset(size, size)
+		card.Mark.TextSize = math.floor(size * 0.62)
+		card.New.Position = UDim2.new(1, -3, 0, top)
+		return
+	end
 	card.Name.TextSize = textSize
 	card.Name.Position = UDim2.new(0.5, 0, 0, 4)
 	card.Name.Size = UDim2.new(1, -8, 0, textSize + 4)
@@ -706,8 +814,27 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.Compact = compact
 	local m = metrics(compact)
 	local frame = refs.Frame
-	local bodySize = MenuPanel.layout(frame, compact, m.Width, m.Height, maxWidth, maxHeight)
+	-- (the round look's filter tabs right of the window on big screens: the window leaves them room)
+	local filters = next(refs.Filters) ~= nil and not compact
+	local room = if filters then CodexView.FilterW + CodexView.FilterGap + 8 else 0
+	local bodySize = MenuPanel.layout(frame, compact, m.Width, m.Height, maxWidth - 2 * room, maxHeight)
+	if room > 0 and maxWidth < 1e6 and frame.Panel.AnchorPoint == Vector2.zero then
+		-- (laid out in a room narrower on both sides: back to the screen's middle, the tabs on its right)
+		frame.Panel.Position += UDim2.fromOffset(room, 0)
+	end
 	local mm = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
+	if not filters and refs.Filter ~= nil then
+		-- (no tabs on this layout: nothing could clear the filter, so every card shows)
+		CodexView.setFilter(refs, nil)
+	end
+	for id, tab in refs.Filters do
+		local info = Rarity.ById[id]
+		local i = if info then table.find(Rarity.List, info) or 1 else 1
+		local holder = tab :: GuiObject
+		holder.Visible = filters
+		holder.AnchorPoint = Vector2.new(0, 0)
+		holder.Position = UDim2.new(1, CodexView.FilterGap, 0, mm.Header + (i - 1) * (CodexView.FilterH + CodexView.FilterGap))
+	end
 
 	-- the count bar left of the X button, in the band's middle
 	local barH = if compact then 48 else 40
@@ -730,7 +857,7 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local cardW = math.floor((usable - (columns - 1) * m.Gap) / columns)
 	refs.GridLayout.CellSize = UDim2.fromOffset(cardW, m.CardH)
 	refs.GridLayout.CellPadding = UDim2.fromOffset(m.Gap, m.Gap)
-	local chip = m.CardH >= CodexView.ChipCard
+	local chip = m.CardH >= CodexView.ChipCard or PopTheme.round() -- (the round look: the rarity word always)
 	refs.Grid:SetAttribute("Chips", chip)
 	refs.Grid:SetAttribute("CardW", cardW)
 	refs.Grid:SetAttribute("CardText", m.CardText)
@@ -838,6 +965,9 @@ function CodexView.setEntries(refs: Refs, entries: { Entry })
 	end
 	local found, total = CodexView.count(entries)
 	Pop.setBar(refs.CountChip, if total > 0 then found / total else 0, CodexView.countText(found, total))
+	if refs.Filter then
+		CodexView.setFilter(refs, refs.Filter)
+	end
 end
 
 -- Shows one entry in the detail pane and marks its card.

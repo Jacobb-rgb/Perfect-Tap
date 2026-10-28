@@ -775,7 +775,7 @@ function VaultView.build(): Refs
 	-- the orange header with the title and your coins
 	local header = body(face, S.Roles.Vault, "Header", false, 20)
 	header.Holder.Position = UDim2.fromOffset(10, 10)
-	local title = text(header.Face, "BLASTER VAULT", 34, {
+	local title = text(header.Face, Pop.caption("BLASTER VAULT"), 34, {
 		Name = "Title",
 		FontFace = S.TitleFont,
 		Position = UDim2.fromOffset(20, 0),
@@ -1573,14 +1573,16 @@ local function popSkin(refs: Refs)
 	}, headerFace)
 	corner(shine, 10)
 	Pop.studs(shine, 10, 0.35, 40, 2)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 2,
-	}, shine)
+	if not PopTheme.round() then -- (the round look's band has no shine over its top half)
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0.42, 0),
+			ZIndex = 2,
+		}, shine)
+	end
 	for i, s in { { 0.62, 46 }, { 0.70, 22 }, { 0.80, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,

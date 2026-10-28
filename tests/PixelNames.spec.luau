@@ -6,6 +6,8 @@
 	at least 10 design units on PC and 8 pt on a 568x320 phone (UI scale 0.62),
 	fit its box on at most two lines (three for the book's longest names) and
 	never be cut. Sentences a view makes round stay round (Pop.round).
+	Both looks (PopTheme.setLook): the round look's words are Fredoka One
+	(PopTheme.PixelAdvance / PixelLine), the pixel look's Press Start 2P.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -20,10 +22,27 @@ return function(T, Loader)
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
 	local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
 
-	-- the fonts as the views budget them: a pixel letter is 1 em wide (Press Start 2P), a
-	-- round capital about 0.6 em; a line 1.1 em (pixel) or 1.2 em (round) tall
-	local PIXEL = { Em = 1, Line = 1.1 }
+	-- the fonts as the views budget them: a word letter is PopTheme.PixelAdvance em wide (the
+	-- pixel look's Press Start 2P: 1 em; the round look's Fredoka One capitals: about 0.68 em),
+	-- a sentence's round capital about 0.6 em; a line PopTheme.PixelLine (1.1 em pixel, 1.2 em
+	-- round) or 1.2 em (a sentence) tall
+	local function wordFont(): { Em: number, Line: number }
+		return { Em = PopTheme.PixelAdvance, Line = PopTheme.PixelLine }
+	end
 	local ROUND = { Em = 0.6, Line = 1.2 }
+
+	-- Runs `check` in both looks (the default look again afterwards, also when it fails).
+	local DEFAULT_LOOK = PopTheme.Look
+	local function eachLook(check: () -> ())
+		for _, look in { "Round", "Pixel" } do
+			PopTheme.setLook(look)
+			local ok, err = pcall(check)
+			PopTheme.setLook(DEFAULT_LOOK)
+			if not ok then
+				error(`{look} look: {err}`, 0)
+			end
+		end
+	end
 	local PHONE = 0.62 -- HudController's UI scale on phones
 	local PC_MIN = 10 -- design units at UI scale 1
 	local PHONE_PT = 8 -- points on a phone
@@ -61,7 +80,7 @@ return function(T, Loader)
 			w -= pad.PaddingLeft.Offset + pad.PaddingRight.Offset
 			h -= pad.PaddingTop.Offset + pad.PaddingBottom.Offset
 		end
-		local font = if Pop.isPixel(label.FontFace) then PIXEL else ROUND
+		local font = if Pop.isPixel(label.FontFace) then wordFont() else ROUND
 		local limit = label:FindFirstChildOfClass("UITextSizeConstraint")
 		local max = if label.TextScaled then (if limit then limit.MaxTextSize else 100) else label.TextSize
 		local min = if label.TextScaled then (if limit then limit.MinTextSize else 1) else label.TextSize
@@ -159,48 +178,50 @@ return function(T, Loader)
 	end
 
 	T.test("PixelNames: golem card and slot names stay readable on PC and phones", function()
-		for _, screen in SCREENS do
-			local refs = GolemView.build(screen.Compact)
-			GolemView.layout(refs, screen.Compact, screen.W, screen.H)
-			local s = golemState({ 1, 2, 5 })
-			local cards = GolemView.cards(s)
-			GolemView.setCards(refs, cards, cards[1].Id, nil)
-			GolemView.setEquipped(refs, GolemView.equipped(s), GolemView.totals(s))
-			GolemView.setDetail(refs, cards[1])
-			checkGolems(refs, screen)
-			-- the 19-letter names take two lines (a single line would be ~6 units)
-			for _, c in refs.Cards do
-				if letters(c.Name.Text) >= 18 then
-					T.eq(c.Name:GetAttribute("NameLines"), 2, `{screen.Name} "{c.Name.Text}": two lines`)
-				end
-			end
-			-- the other equipped golems in the slots; an empty slot is one line
-			local s2 = golemState({ 3, 4 })
-			GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
-			checkGolems(refs, screen)
-			-- Golem Bond: 13-letter bonus lines ("+13.8% MINING") in the slots and on the cards
-			for _, bond in { 0.25, 0.5 } do
-				local s3 = golemState({ 1, 4, 5 }, bond)
-				local bonded = GolemView.cards(s3)
-				GolemView.setCards(refs, bonded, bonded[1].Id, nil)
-				GolemView.setEquipped(refs, GolemView.equipped(s3), GolemView.totals(s3))
+		eachLook(function()
+			for _, screen in SCREENS do
+				local refs = GolemView.build(screen.Compact)
+				GolemView.layout(refs, screen.Compact, screen.W, screen.H)
+				local s = golemState({ 1, 2, 5 })
+				local cards = GolemView.cards(s)
+				GolemView.setCards(refs, cards, cards[1].Id, nil)
+				GolemView.setEquipped(refs, GolemView.equipped(s), GolemView.totals(s))
+				GolemView.setDetail(refs, cards[1])
 				checkGolems(refs, screen)
+				-- the 19-letter names take two lines (a single line would be ~6 units)
 				for _, c in refs.Cards do
-					readable(c.Bonus, refs.GridLayout.CellSize.X.Offset, screen, 1, "card bonus")
+					if letters(c.Name.Text) >= 18 then
+						T.eq(c.Name:GetAttribute("NameLines"), 2, `{screen.Name} "{c.Name.Text}": two lines`)
+					end
 				end
+				-- the other equipped golems in the slots; an empty slot is one line
+				local s2 = golemState({ 3, 4 })
+				GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
+				checkGolems(refs, screen)
+				-- Golem Bond: 13-letter bonus lines ("+13.8% MINING") in the slots and on the cards
+				for _, bond in { 0.25, 0.5 } do
+					local s3 = golemState({ 1, 4, 5 }, bond)
+					local bonded = GolemView.cards(s3)
+					GolemView.setCards(refs, bonded, bonded[1].Id, nil)
+					GolemView.setEquipped(refs, GolemView.equipped(s3), GolemView.totals(s3))
+					checkGolems(refs, screen)
+					for _, c in refs.Cards do
+						readable(c.Bonus, refs.GridLayout.CellSize.X.Offset, screen, 1, "card bonus")
+					end
+				end
+				GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
+				T.eq(refs.Slots[3].Name.Text, Pop.caption("EMPTY"))
+				T.eq(refs.Slots[3].Name:GetAttribute("NameLines"), 1)
 			end
-			GolemView.setEquipped(refs, GolemView.equipped(s2), GolemView.totals(s2))
-			T.eq(refs.Slots[3].Name.Text, "EMPTY")
-			T.eq(refs.Slots[3].Name:GetAttribute("NameLines"), 1)
-		end
-		-- a phone turned / resized with the cards built: the names follow the new cells
-		local refs = GolemView.build(true)
-		GolemView.layout(refs, true, SCREENS[3].W, SCREENS[3].H)
-		local s = golemState({ 1 })
-		GolemView.setCards(refs, GolemView.cards(s), nil, nil)
-		GolemView.setEquipped(refs, GolemView.equipped(s), GolemView.totals(s))
-		GolemView.layout(refs, true, SCREENS[4].W, SCREENS[4].H)
-		checkGolems(refs, SCREENS[4])
+			-- a phone turned / resized with the cards built: the names follow the new cells
+			local refs = GolemView.build(true)
+			GolemView.layout(refs, true, SCREENS[3].W, SCREENS[3].H)
+			local s = golemState({ 1 })
+			GolemView.setCards(refs, GolemView.cards(s), nil, nil)
+			GolemView.setEquipped(refs, GolemView.equipped(s), GolemView.totals(s))
+			GolemView.layout(refs, true, SCREENS[4].W, SCREENS[4].H)
+			checkGolems(refs, SCREENS[4])
+		end)
 	end)
 
 	T.test("PixelNames: GolemView.nameFit picks one line or two", function()
@@ -221,39 +242,45 @@ return function(T, Loader)
 			["Raw|Copper||"] = 1,
 		}
 		-- (income multipliers for the longest amounts: "+$1.23K/s", "+$12.3Qa/s")
-		for _, case in
-			{
-				{ SCREENS[1], 1 },
-				{ SCREENS[2], 1 },
-				{ SCREENS[3], 1 },
-				{ SCREENS[4], 1 },
-				{ SCREENS[4], 41 },
-				{ SCREENS[4], 4.1e16 },
-				{ SCREENS[1], 4.1e16 },
-			}
-		do
-			local screen, mult = case[1], case[2]
-			local refs = PenView.build()
-			PenView.setCompact(refs, screen.Compact, roblox.Vector2.new(screen.W, screen.H))
-			PenView.setEntries(refs, PenView.entries(summary, "Pen", mult), true)
-			local graded = 0
-			for _, row in refs.Rows do
-				local rowW = row.Frame.Size.X.Offset
-				readable(row.Name, rowW, screen, 1, "pen name")
-				if row.Grade.Visible then
-					graded += 1
-					readable(row.Grade, rowW, screen, 1, "grade")
-					local gradeRight = row.Grade.Position.X.Offset + row.Grade.Size.X.Offset
-					T.le(gradeRight, row.Income.Position.X.Offset, `{screen.Name} {row.Grade.Text}: the income right of the chip`)
+		eachLook(function()
+			for _, case in
+				{
+					{ SCREENS[1], 1 },
+					{ SCREENS[2], 1 },
+					{ SCREENS[3], 1 },
+					{ SCREENS[4], 1 },
+					{ SCREENS[4], 41 },
+					{ SCREENS[4], 4.1e16 },
+					{ SCREENS[1], 4.1e16 },
+				}
+			do
+				local screen, mult = case[1], case[2]
+				local refs = PenView.build()
+				PenView.setCompact(refs, screen.Compact, roblox.Vector2.new(screen.W, screen.H))
+				PenView.setEntries(refs, PenView.entries(summary, "Pen", mult), true)
+				local graded = 0
+				for _, row in refs.Rows do
+					local rowW = row.Frame.Size.X.Offset
+					readable(row.Name, rowW, screen, 1, "pen name")
+					if row.Grade.Visible then
+						graded += 1
+						readable(row.Grade, rowW, screen, 1, "grade")
+						local gradeRight = row.Grade.Position.X.Offset + row.Grade.Size.X.Offset
+						T.le(gradeRight, row.Income.Position.X.Offset, `{screen.Name} {row.Grade.Text}: the income right of the chip`)
+					end
+					if string.sub(row.Income.Text, 1, 1) == "+" then -- (an amount; the mystery line is a round sentence)
+						readable(row.Income, rowW, screen, 1, "income")
+					end
+					local textEnd = row.Name.Position.X.Offset + row.Name.Size.X.Offset
+					T.le(
+						row.Income.Position.X.Offset + row.Income.Size.X.Offset,
+						textEnd,
+						`{screen.Name}: the income inside the text column`
+					)
 				end
-				if string.sub(row.Income.Text, 1, 1) == "+" then -- (an amount; the mystery line is a round sentence)
-					readable(row.Income, rowW, screen, 1, "income")
-				end
-				local textEnd = row.Name.Position.X.Offset + row.Name.Size.X.Offset
-				T.le(row.Income.Position.X.Offset + row.Income.Size.X.Offset, textEnd, `{screen.Name}: the income inside the text column`)
+				T.eq(graded, 3, "three graded rows")
 			end
-			T.eq(graded, 3, "three graded rows")
-		end
+		end)
 	end)
 
 	T.test("PixelNames: the book's tile names and rarity chips stay readable", function()
@@ -262,59 +289,63 @@ return function(T, Loader)
 			found[art.Id] = 1
 		end
 		local record = { Found = found, Chapters = {} }
-		for _, screen in SCREENS do
-			local book = CollectionView.build(screen.Compact)
-			CollectionView.layout(book, screen.W, screen.H)
-			local cellW = book.Grid:FindFirstChildOfClass("UIGridLayout").CellSize.X.Offset
-			for _, collection in ArtifactConfig.Collections do
-				book.Collection = collection.Id
-				CollectionView.fill(book, record)
-				for _, t in book.Tiles do
-					if t.Button.Visible then
-						-- (every name at the floor: two lines, three for the two longest names
-						-- (23 and 27 letters) or in a box made taller for three lines on the
-						-- smallest phones, CollectionView.nameHeight)
-						local nameH = t.Name.Size.Y.Offset
-						local tall = nameH > (if screen.Compact then 18 else 16) * 2 + 4
-						local long = letters(t.Name.Text) > 19
-						readable(t.Name, cellW, screen, if long or tall then 3 else 2, "tile")
-						T.le(6 + nameH, t.Icon.Position.Y.Offset, `{screen.Name} "{t.Name.Text}": the name above the picture`)
-						T.truthy(t.Icon.Size.X.Offset >= 40, `{screen.Name}: the picture keeps its room`)
-						if t.Chip.Visible then
-							readable(t.Chip, cellW, screen, 1, "tile chip")
+		eachLook(function()
+			for _, screen in SCREENS do
+				local book = CollectionView.build(screen.Compact)
+				CollectionView.layout(book, screen.W, screen.H)
+				local cellW = book.Grid:FindFirstChildOfClass("UIGridLayout").CellSize.X.Offset
+				for _, collection in ArtifactConfig.Collections do
+					book.Collection = collection.Id
+					CollectionView.fill(book, record)
+					for _, t in book.Tiles do
+						if t.Button.Visible then
+							-- (every name at the floor: two lines, three for the two longest names
+							-- (23 and 27 letters) or in a box made taller for three lines on the
+							-- smallest phones, CollectionView.nameHeight)
+							local nameH = t.Name.Size.Y.Offset
+							local tall = nameH > (if screen.Compact then 18 else 16) * 2 + 4
+							local long = letters(t.Name.Text) > 19
+							readable(t.Name, cellW, screen, if long or tall then 3 else 2, "tile")
+							T.le(6 + nameH, t.Icon.Position.Y.Offset, `{screen.Name} "{t.Name.Text}": the name above the picture`)
+							T.truthy(t.Icon.Size.X.Offset >= 40, `{screen.Name}: the picture keeps its room`)
+							if t.Chip.Visible then
+								readable(t.Chip, cellW, screen, 1, "tile chip")
+							end
 						end
 					end
 				end
 			end
-		end
+		end)
 	end)
 
 	T.test("PixelNames: sentences made round stay round when a short text comes", function()
-		local refs = GolemView.build(false)
-		for _, label in { refs.Status, refs.Hint, refs.Totals } do
-			T.eq(label:GetAttribute("Round"), true, label.Name .. ": round for good")
-			label.Text = "Saved"
-			Pop.sentence(label, 15) -- (what the label's Text watcher does in the game)
-			T.falsy(Pop.isPixel(label.FontFace), label.Name .. ": still round")
-			T.eq(label.TextTruncate, roblox.Enum.TextTruncate.AtEnd, label.Name .. ": still cut, never spilled")
-		end
-		-- a pen row: the mystery sentence is round, an amount pixel again
-		local pen = PenView.build()
-		PenView.setEntries(pen, PenView.entries({ ["Raw|Copper||"] = 1 }, "Pen"), true)
-		local _, row = next(pen.Rows)
-		if row.Income.Text ~= "" then
-			T.eq(row.Income:GetAttribute("Round"), true, "the mystery line is round")
-			T.falsy(Pop.isPixel(row.Income.FontFace))
-		end
-		PenView.setEntries(pen, PenView.entries({ ["Clean|Gold|Pristine|"] = 1 }, "Pen"), true)
-		local _, gold = next(pen.Rows)
-		T.truthy(Pop.isPixel(gold.Income.FontFace), "an amount is a pixel word")
-		T.eq(gold.Income:GetAttribute("Round"), nil)
-		-- the book's hint
-		local book = CollectionView.build(false)
-		T.eq(book.Hint:GetAttribute("Round"), true, "the book's hint")
-		book.Hint.Text = "Tap a tile"
-		Pop.sentence(book.Hint, 16)
-		T.eq(book.Hint.FontFace, PopTheme.Font, "the book's hint stays round")
+		eachLook(function()
+			local refs = GolemView.build(false)
+			for _, label in { refs.Status, refs.Hint, refs.Totals } do
+				T.eq(label:GetAttribute("Round"), true, label.Name .. ": round for good")
+				label.Text = "Saved"
+				Pop.sentence(label, 15) -- (what the label's Text watcher does in the game)
+				T.falsy(Pop.isPixel(label.FontFace), label.Name .. ": still round")
+				T.eq(label.TextTruncate, roblox.Enum.TextTruncate.AtEnd, label.Name .. ": still cut, never spilled")
+			end
+			-- a pen row: the mystery sentence is round, an amount pixel again
+			local pen = PenView.build()
+			PenView.setEntries(pen, PenView.entries({ ["Raw|Copper||"] = 1 }, "Pen"), true)
+			local _, row = next(pen.Rows)
+			if row.Income.Text ~= "" then
+				T.eq(row.Income:GetAttribute("Round"), true, "the mystery line is round")
+				T.falsy(Pop.isPixel(row.Income.FontFace))
+			end
+			PenView.setEntries(pen, PenView.entries({ ["Clean|Gold|Pristine|"] = 1 }, "Pen"), true)
+			local _, gold = next(pen.Rows)
+			T.truthy(Pop.isPixel(gold.Income.FontFace), "an amount is a pixel word")
+			T.eq(gold.Income:GetAttribute("Round"), nil)
+			-- the book's hint
+			local book = CollectionView.build(false)
+			T.eq(book.Hint:GetAttribute("Round"), true, "the book's hint")
+			book.Hint.Text = "Tap a tile"
+			Pop.sentence(book.Hint, 16)
+			T.eq(book.Hint.FontFace, PopTheme.Font, "the book's hint stays round")
+		end)
 	end)
 end

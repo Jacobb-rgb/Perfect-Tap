@@ -253,7 +253,18 @@ local function selectDefault(view: CodexView.Refs)
 		return
 	end
 	local card = view.Selected and view.Cards[view.Selected]
-	GuiService.SelectedObject = if card then card.Button else view.CardList[1].Button
+	if card and not card.Button.Visible then
+		card = nil -- (the rarity filter hides it: the first card it shows instead)
+	end
+	local first = nil
+	for _, shown in view.CardList do
+		if shown.Button.Visible then
+			first = shown
+			break
+		end
+	end
+	local pick = card or first
+	GuiService.SelectedObject = if pick then pick.Button else view.Frame.Close
 end
 
 local function ensureView(): CodexView.Refs

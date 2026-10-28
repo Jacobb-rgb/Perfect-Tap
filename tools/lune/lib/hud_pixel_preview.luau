@@ -7,6 +7,10 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
+	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
+	are claimed as the controllers do (the reel's eight: Inventory by
+	BackpackController, Spin with its FREE! sticker by WheelController's badge,
+	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
@@ -29,6 +33,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 	local NOW = 1.7e9
 
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
@@ -50,14 +55,21 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Coins.Text = Format.money(4.82e6)
 		refs.Income.Text = Format.perSecond(1840)
 		refs.Toasts:ClearAllChildren()
+		local round = PopTheme.round()
 		HudBubble.claimTile(refs.Menu, "Build")
 		for _, entry in SideMenuView.sorted() do
 			local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
-			if entry.Group == "Main" then
+			-- (SideMenuController.groupOf: the round look's left tiles are HudBubble.RoundMain)
+			local main = if round then HudBubble.RoundMain[entry.Id] == true else entry.Group == "Main"
+			if main then
 				HudBubble.claimTile(refs.Menu, entry.Id, spec)
 			else
 				HudBubble.addMore(refs.Menu, entry.Id, spec)
 			end
+		end
+		if round then
+			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it)
+			HudBubble.claimTile(refs.Menu, "Backpack")
 		end
 		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
 		HudView.setBackpack(refs, 12, 30)

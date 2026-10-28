@@ -8,6 +8,7 @@ return function(T, Loader)
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local ElevatorView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ElevatorView")
+	local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
 	local roblox = require("@lune/roblox") :: any
 
 	local PRICE = MineFloors.Elevator.Price
@@ -29,7 +30,7 @@ return function(T, Loader)
 		T.eq(refs.Mode, "Buy")
 		T.truthy(refs.BuyPage.Visible, "Buy page")
 		T.falsy(refs.FloorPage.Visible, "no floor cards")
-		T.eq(refs.Title.Text, "ELEVATOR", "title")
+		T.eq(refs.Title.Text, Pop.caption("ELEVATOR"), "title (Title Case in the round look)")
 		T.eq(refs.Pitch.Text, "Ride to every floor you have unlocked. Buy once, keep forever.", "pitch")
 		T.eq(refs.Price.Text, Format.money(PRICE), "price")
 		T.eq(#refs.Tiles, #MineFloors.List + 1, "a chip per floor + coming soon")
@@ -122,7 +123,7 @@ return function(T, Loader)
 			T.eq(card.Stroke.Color, if here then gold else roblox.Color3.fromRGB(14, 14, 18), "Pop black edge, gold on the current floor")
 			-- painted in the floor's colour (Pop.card: its light top is the colour lifted toward white)
 			local top = card.Face:FindFirstChild("Paint").Color.Keypoints[1].Value
-			local want = ElevatorView.paintFrom(card.Entry.Color).Top
+			local want = ElevatorView.paintFrom(ElevatorView.cardColor(card.Entry.Color)).Top
 			T.near(top.R + top.G + top.B, want.R + want.G + want.B, 1e-3, "card in the floor's colour " .. i)
 			T.falsy(card.Face.Selectable, "the card itself is not a gamepad stop " .. i)
 			local closed = card.Entry.State == "Locked" or card.Entry.State == "Soon"

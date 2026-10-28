@@ -13,6 +13,10 @@ return function(T, Loader)
 	local function ui(name: string)
 		return Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI." .. name)
 	end
+	-- the round look (the UI pack reel, 2026-10-27): the Shop button in the top row, the reel's
+	-- tile grid and offers; the pixel look keeps the green Shop pill
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+	local Pop = ui("Pop")
 	local HudView = ui("HudView")
 	local TeleportView = ui("TeleportView")
 	local BuildView = ui("BuildView")
@@ -444,7 +448,12 @@ return function(T, Loader)
 					TechShopView.fits(need.Text, need.Size.X.Offset, need.Size.Y.Offset, need.TextSize, true),
 					"the requirement line fits"
 				)
-				T.truthy((rebirth.Pages.Rebirth:FindFirstChild("PopGlow") :: any).Visible, "REBIRTH! glows while ready")
+				if rebirth.Reel then
+					-- (the round look: the reel's lime Rebirth, no glow)
+					T.eq(rebirth.Rebirth.Text, RebirthView.rebirthWords(false), "Rebirth while ready")
+				else
+					T.truthy((rebirth.Pages.Rebirth:FindFirstChild("PopGlow") :: any).Visible, "REBIRTH! glows while ready")
+				end
 			end
 		end)
 	end)
@@ -465,8 +474,16 @@ return function(T, Loader)
 			T.eq(lift.NextSelectionUp, build, "up the column")
 			T.truthy(shop.NextSelectionRight ~= lift, "the row ends at SHOP")
 			local teleport = TeleportView.build(refs.TopBar, 1.25)
-			T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
-			T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
+			if PopTheme.round() then
+				-- the reel's row: Shop, Lobby, Base, Vault
+				local shop = refs.TopBar:FindFirstChild("ShopPill")
+				T.eq(shop.NextSelectionRight, teleport.Buttons.Lobby, "Shop -> Lobby")
+				T.eq(teleport.Buttons.Lobby.NextSelectionRight, teleport.Buttons.Base, "Lobby -> Base")
+				T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Base, "Vault -> Base")
+			else
+				T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
+				T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
+			end
 			local outline = HudBubble.selectionImage()
 			T.truthy(outline:FindFirstChildOfClass("UIStroke"), "gold selection outline")
 		end)
@@ -495,11 +512,23 @@ return function(T, Loader)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
 				height -= screen[3] / scale
-				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") == 3
+				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") >= 3 -- (the round look: 4 on phones)
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
 				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
 				local chipBottom = chipTop + TrainView.chipSize(compact).Y
-				if compact then
+				if PopTheme.round() then
+					-- the round look: the Shop leads the top row (not on the smallest phones: the
+					-- Store tile), the Server Luck line over the money
+					local inRow = refs.TopBar:FindFirstChild("ShopPill")
+					T.eq(inRow ~= nil, screen[1] >= 600, `the Shop in the top row at {screen[1]} x {screen[2]}`)
+					T.eq(pill, nil, "no pill bottom-left")
+					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
+					local luckBottom = height + luck.Position.Y.Offset
+					T.truthy(
+						luckBottom <= height + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset,
+						"the Server Luck line over the money"
+					)
+				elseif compact then
 					-- phones and tablets: the pill at the top-right, clear of the tabs and the chips' row
 					local width = screen[1] / scale
 					local pillLeft = width - 18 - pill.Size.X.Offset
@@ -528,7 +557,17 @@ return function(T, Loader)
 				T.truthy(moneyTop > chipBottom, `the money under the TRAIN chip at {screen[1]} x {screen[2]}`)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
-				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
+				if type(chipLeft) == "number" then
+					-- (the round look on a PC: beside the tiles' last row, clear of them)
+					T.truthy(
+						chipLeft > menu.Position.X.Offset + menu.Size.X.Offset,
+						`the TRAIN chip right of the tiles at {screen[1]} x {screen[2]}`
+					)
+					T.truthy(chipBottom <= menuBottom + 1, `beside their last row at {screen[1]} x {screen[2]}`)
+				else
+					T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				end
 				-- the tiles (top-left) clear of the BASE / LOBBY / VAULT tabs (top centre)
 				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
 				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
@@ -579,8 +618,12 @@ return function(T, Loader)
 				local scale = HudBubble.scaleFor(screen)
 				local width, height = gui.X / scale, gui.Y / scale
 				local refs = HudBubble.buildGame(scale, size[1])
+				-- (the round look: the Shop is one of the top row's buttons, no pill in the corner)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillPos, pillSize = rectOf(pill, width, height)
+				local pillPos, pillSize = Vector2.new(-1e6, -1e6), Vector2.new(0, 0)
+				if pill then
+					pillPos, pillSize = rectOf(pill, width, height)
+				end
 				local carryPos, carrySize = rectOf(refs.CarryPanel, width, height)
 				-- Roblox's touch jump button and the game's Grab button (InteractController:
 				-- SetPosition(1, -170, 1, -150)), from the gui's bottom-right, design units
@@ -617,7 +660,9 @@ return function(T, Loader)
 					local chips = BoostView.buildChips()
 					T.truthy(chips.Row:GetAttribute("Corner"), "the light chips are the corner row")
 					local count = if both then 2 else 1
-					local pillRect = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
+					local pillRect = if pill
+							and pill.AnchorPoint.Y == 0
+							and pill.Position.Y.Scale == 0
 						then { Left = pillPos.X, Top = pillPos.Y, Bottom = pillPos.Y + pillSize.Y }
 						else nil
 					local right, bottom, stacked, spot = BoostView.cornerSpot({
@@ -785,13 +830,17 @@ return function(T, Loader)
 				local scale = HudBubble.scaleFor(screen)
 				local refs = HudBubble.buildGame(scale, size[1])
 				local width = size[1] / scale
+				local hudHeight = (size[2] - 58) / scale -- (CoreUISafeInsets: under Roblox's top bar)
 				local function rect(gui: any): (any, any)
 					local s = gui.Size
 					local x = width * gui.Position.X.Scale + gui.Position.X.Offset - gui.AnchorPoint.X * s.X.Offset
-					local y = gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
+					local y = hudHeight * gui.Position.Y.Scale + gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
 					return Vector2.new(x, y), Vector2.new(s.X.Offset, s.Y.Offset)
 				end
-				local pillPos, pillSize = rect(refs.Gui:FindFirstChild("ShopPill"))
+				-- (the round look: no pill on phones, the Shop is in the top row: the tabs' test; no offers)
+				T.eq(refs.Gui:FindFirstChild("Offers"), nil, "no offers on a phone")
+				local pillGui = refs.Gui:FindFirstChild("ShopPill") or refs.Gui:FindFirstChild("ServerLuck")
+				local pillPos, pillSize = rect(pillGui)
 				local luckPos, luckSize = rect(refs.Gui:FindFirstChild("ServerLuck"))
 				local bubble = TutorialView.layout(scale, screen, true)
 				local bubblePos = Vector2.new(bubble.Position.X - bubble.AnchorPoint.X * bubble.Width, bubble.Position.Y)
@@ -814,9 +863,16 @@ return function(T, Loader)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				T.truthy(pill, "the green Shop pill")
-				local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
-				T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				if PopTheme.round() then
+					-- (the round look: the Shop is one of the top row's buttons, or on the smallest
+					-- phones the Store tile only)
+					local inRow = refs.TopBar:FindFirstChild("ShopPill")
+					T.eq(inRow ~= nil, screen.X >= 600, `the Shop in the top row at {screen.X} x {screen.Y}`)
+				else
+					T.truthy(pill, "the green Shop pill")
+					local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
+					T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				end
 				-- the money sits bottom-left, the backpack button right of the screen's middle
 				local moneyRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
 				local backpackLeft = width / 2 + refs.CarryPanel.Position.X.Offset
@@ -1038,7 +1094,8 @@ return function(T, Loader)
 				local pill = button:FindFirstChild("Pill") :: any
 				T.truthy(button:GetAttribute("Corner"), button.Name .. ": a corner tile")
 				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Art"), button.Name .. ": the boost's picture")
-				T.falsy(pill:FindFirstChild("Paint"), button.Name .. ": no pill face")
+				-- (the round look: the reel's bright studded square behind the picture; the pixel look: none)
+				T.eq(pill:FindFirstChild("Paint") ~= nil, PopTheme.round(), button.Name .. ": the square face in the round look only")
 				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel time")
 				T.eq(button.Size.Y.Offset, BoostView.CornerIcon + 2 + BoostView.CornerText, button.Name .. ": the touch area")
 			end
@@ -1194,7 +1251,7 @@ return function(T, Loader)
 			end
 			T.eq(count, 1, "one ELEVATOR tile (the side menu's Elevator entry)")
 			local label = refs.Menu.Elevator:FindFirstChild("Label", true)
-			T.eq(label and label.Text, "ELEVATOR", "named like the side menu entry")
+			T.eq(label and label.Text, Pop.caption("ELEVATOR"), "named like the side menu entry (Title Case in the round look)")
 		end)
 	end)
 end

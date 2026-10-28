@@ -32,6 +32,8 @@ local Workspace = game:GetService("Workspace")
 
 local BackpackView = require(script.Parent.Parent.UI.BackpackView)
 local HudView = require(script.Parent.Parent.UI.HudView)
+local HudBubble = require(script.Parent.Parent.UI.HudBubble)
+local PopTheme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Config.PopTheme)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local BackpackState = require(script.Parent.Parent.Util.BackpackState)
@@ -118,7 +120,7 @@ local function keepSelection(view: BackpackView.Refs)
 		return
 	end
 	local selected = GuiService.SelectedObject
-	if selected and selected:IsDescendantOf(view.Gui) and selected.Parent ~= nil then
+	if selected and selected:IsDescendantOf(view.Gui) and selected.Parent ~= nil and selected.Visible then
 		return
 	end
 	local first = BackpackView.firstRow(view)
@@ -196,6 +198,12 @@ function BackpackController.open()
 	local view = ensureView()
 	isOpen = true
 	fit(view)
+	-- (a fresh look each time: the last search is cleared)
+	local search = view.Search
+	if search then
+		search.Text = ""
+	end
+	BackpackView.setSearch(view, "")
 	BackpackView.setBackpack(view, BackpackState.get())
 	updateHint(view)
 	view.Gui.Enabled = true
@@ -241,7 +249,7 @@ function BackpackController.start()
 	-- the HUD's backpack button (right of the blaster's hotbar slot): click, tap, a gamepad's A
 	local hud = HudController.refs()
 	if hud then
-		hud.Backpack.Activated:Connect(function()
+		local function press()
 			if not isOpen and inCloseUp() then
 				return
 			end
@@ -249,7 +257,13 @@ function BackpackController.start()
 			if not isOpen then
 				Sfx.play("UIClick")
 			end
-		end)
+		end
+		hud.Backpack.Activated:Connect(press)
+		-- the round look: the Inventory tile of the reel's left grid opens it too
+		local menu = hud.Menu
+		if PopTheme.round() and menu and menu:GetAttribute("Bubble") then
+			HudBubble.claimTile(menu, "Backpack").Activated:Connect(press)
+		end
 	end
 	refreshKeyHint()
 	UserInputService.LastInputTypeChanged:Connect(function()

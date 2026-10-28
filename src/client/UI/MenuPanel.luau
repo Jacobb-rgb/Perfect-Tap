@@ -7,10 +7,13 @@
 
 	  header  a bright band in the window's own colour (MenuPanel.paintFor:
 	          Codex teal, Settings steel blue, Hall of Fame orange, Star Forge
-	          periwinkle) with studs, a light rim and diagonal shine stripes;
-	          the title in white chunky text with a black edge and a 3D drop
-	          shadow (and a subtitle line on big screens), the red square X
-	          (Pop.close; the gamepad's B glyph on it with a gamepad)
+	          periwinkle; the round look: PopTheme.Windows, Codex blue,
+	          Settings grey, Hall of Fame amber, Star Forge magenta) with the
+	          look's pattern, a light rim and diagonal shine stripes; the
+	          title in white chunky text with a black edge and a 3D drop
+	          shadow (and a subtitle line on big screens), the window's icon
+	          left of it (the round look), the red square X (Pop.close; the
+	          gamepad's B glyph on it with a gamepad)
 	  body    an empty Frame the panel fills in, over the dark studded floor
 	  footer  the control hint: a text (big screens only), or with a
 	          gamepad the platform's own button glyphs and a word for each
@@ -66,6 +69,7 @@ MenuPanel.Pad = 16
 MenuPanel.PhoneScale = 0.62 -- HudController's floor (phones)
 MenuPanel.MinTouch = 44 -- points
 MenuPanel.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap
+MenuPanel.RoundTilesRight = 180 -- the round look's left tiles end here on a PC (HudBubble: 10 + 2 x 77 + 7) and a gap
 -- under HudView's teleport bar (its frame is TopBarHeight tall; the phone
 -- buttons are taller and stick out evenly) and a gap
 MenuPanel.TopBarBottom = HudView.TopBarY
@@ -92,6 +96,11 @@ MenuPanel.Paints = {
 } :: { [string]: Pop.Paint }
 
 function MenuPanel.paintFor(name: string): Pop.Paint
+	-- (the round look: the reel's colour per window)
+	local look = Pop.windowLook(name)
+	if look then
+		return Pop.paint(look.Paint)
+	end
 	local paint = MenuPanel.Paints[name]
 	if paint then
 		return paint
@@ -146,10 +155,15 @@ local function band(panel: Frame, paint: Pop.Paint): Frame
 	Pop.face(head, paint, 6, false)
 	local border = head:FindFirstChild("Border") :: UIStroke
 	border.Thickness = 3
+	border.Enabled = not PopTheme.round() -- (the reel's band sits straight in the window's frame)
 	-- (the pixel reels: the lattice over the band and a gleam now and then, no stripes;
-	-- the band is sized by the layout later: the lattice assumes a wide one)
+	-- the round look: fine stripes, three broad ones, the window's faded icon;
+	-- the band is sized by the layout later: the pattern assumes a wide one)
 	head.Size = UDim2.fromOffset(1100, 80)
 	Pop.studs(head, 6, 0.35, 40, 0)
+	if PopTheme.round() then
+		Pop.shineStripes(head, 0)
+	end
 	Pop.gleam(head, 0)
 	return head
 end
@@ -201,13 +215,18 @@ local function popBuild(name: string, title: string, subtitle: string, displayOr
 	floor(panel)
 	band(panel, MenuPanel.paintFor(name))
 
-	local titleLabel = Pop.text(panel, title, MenuPanel.Metrics.Normal.Title, {
+	local titleLabel = Pop.text(panel, Pop.caption(title), MenuPanel.Metrics.Normal.Title, {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 3,
 	})
 	Pop.shadow(titleLabel)
+	-- the window's icon left of the title (the round look; placed by layout)
+	local look = Pop.windowLook(name)
+	if look then
+		Pop.bandIcon(panel, look.Icon, 50, { ZIndex = 3 })
+	end
 	local subtitleLabel = Pop.text(panel, subtitle, 15, {
 		Name = "Subtitle",
 		FontFace = PopTheme.Font, -- (a sentence: the round font, readable)
@@ -312,9 +331,16 @@ function MenuPanel.layout(refs: Refs, compact: boolean, width: number, height: n
 		end
 		-- the HUD coins (top left) would peek out from under the panel: move
 		-- the panel below them, else to their right when there is room
-		-- (phones: the panel covers them, nearly whole)
+		-- (phones: the panel covers them, nearly whole); the round look's money
+		-- sits bottom-left and its tiles down the left edge: a panel stays centred
+		-- (the reel's) unless it would cover the tiles and has room right of them
 		local coinsRight = 16 + HudView.CoinsWidth + 8
-		if left < coinsRight and top < MenuPanel.CoinsBottom then
+		if PopTheme.round() then
+			local tilesRight = MenuPanel.RoundTilesRight
+			if left < tilesRight and maxWidth - w - 8 >= tilesRight then
+				left = tilesRight + (maxWidth - w - 8 - tilesRight) / 2
+			end
+		elseif left < coinsRight and top < MenuPanel.CoinsBottom then
 			local below = maxHeight - MenuPanel.CoinsBottom - 8
 			if below >= h then
 				top = MenuPanel.CoinsBottom + (below - h) / 2
@@ -352,11 +378,20 @@ function MenuPanel.layout(refs: Refs, compact: boolean, width: number, height: n
 	end
 	refs.Close.TextSize = if compact then 30 else 26
 	refs.Title.TextSize = m.Title
+	-- the window's icon (the round look) at the band's left, the title right of it
+	local icon = refs.Panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if icon then
+		-- (the reel: a little bigger than the band, over its left end)
+		local iconSize = bandH + 6
+		icon.Size = UDim2.fromOffset(iconSize, iconSize)
+		icon.Position = UDim2.fromOffset(rim + 2, rim + math.floor(bandH / 2))
+	end
+	local left = if icon and icon.Visible then rim + 2 + Pop.iconRoom(icon) else pad
 	-- big screens: the title and the subtitle under it; compact: the title in the band's middle
-	refs.Title.Position = UDim2.fromOffset(pad, if compact then rim + math.floor((bandH - 44) / 2) else 4)
-	refs.Title.Size = UDim2.new(1, -(pad * 2 + m.Close + 8), 0, if compact then 44 else 40)
-	refs.Subtitle.Position = UDim2.fromOffset(pad + 2, 42)
-	refs.Subtitle.Size = UDim2.new(1, -(pad * 2 + m.Close + 10), 0, 20)
+	refs.Title.Position = UDim2.fromOffset(left, if compact then rim + math.floor((bandH - 44) / 2) else 4)
+	refs.Title.Size = UDim2.new(1, -(left + pad + m.Close + 8), 0, if compact then 44 else 40)
+	refs.Subtitle.Position = UDim2.fromOffset(left + 2, 42)
+	refs.Subtitle.Size = UDim2.new(1, -(left + pad + m.Close + 10), 0, 20)
 	refs.Subtitle.Visible = not compact
 	refs.Body.Position = UDim2.fromOffset(pad, m.Header)
 	refs.Body.Size = UDim2.new(1, -pad * 2, 1, -(m.Header + footer))

@@ -10,6 +10,7 @@ return function(T, Loader)
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local HoverboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HoverboardView")
 	local GolemView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GolemView")
+	local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
 	local roblox = require("@lune/roblox") :: any
 
 	local B = HoverboardData.ById
@@ -150,7 +151,7 @@ return function(T, Loader)
 		T.truthy(refs.Gui:GetAttribute("TerraForge"), "UIScale applies")
 		T.truthy(refs.Gui:GetAttribute("PopSkin"), "never the LightSkin")
 		T.falsy(refs.Gui.Enabled, "starts closed")
-		T.eq(refs.Title.Text, "HOVERBOARDS", "title")
+		T.eq(refs.Title.Text, Pop.caption("HOVERBOARDS"), "title (Title Case in the round look)")
 		T.truthy(refs.Root:FindFirstChild("TitleShadow") ~= nil, "the title's 3D shadow")
 		T.truthy(refs.Root:FindFirstChild("Band") ~= nil, "the header band")
 		T.eq(#refs.Cards, #HoverboardData.List, "a card per board")

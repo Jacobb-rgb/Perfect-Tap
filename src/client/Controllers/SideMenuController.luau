@@ -66,6 +66,7 @@ local Workspace = game:GetService("Workspace")
 
 local SideMenuView = require(script.Parent.Parent.UI.SideMenuView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
+local PopTheme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Config.PopTheme)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local HudController = require(script.Parent.HudController)
@@ -333,6 +334,16 @@ local function updateGlyph()
 	view.PadGlyph.Image = image
 end
 
+-- An entry's group on the light HUD: the round look's reel grid holds Store, Rebirth,
+-- Golems and Daily on the left (HudBubble.RoundMain), the rest behind More.
+local function groupOf(entry: SideMenuView.Entry): string
+	if PopTheme.round() then
+		return if HudBubble.RoundMain[entry.Id] then "Main" else "More"
+	end
+	return entry.Group
+end
+SideMenuController.groupOf = groupOf
+
 -- The light tiles follow the side menu's state: hidden entries hide, the
 -- badge counts show on the tiles (and the MORE tile adds up its flyout's).
 local function mirrorLight()
@@ -346,7 +357,7 @@ local function mirrorLight()
 		local face = tiles[entry.Id]
 		if face then
 			local hidden = view.Hidden[entry.Id] == true
-			if entry.Group == "Main" then
+			if groupOf(entry) == "Main" then
 				HudBubble.setTileVisible(hud.Menu, entry.Id, not hidden)
 			else
 				local holder = face.Parent :: Frame
@@ -354,7 +365,7 @@ local function mirrorLight()
 			end
 			local count = if hidden then 0 else (view.Counts[entry.Id] or 0)
 			HudBubble.setTileBadge(face, count)
-			if entry.Group == "More" then
+			if groupOf(entry) == "More" then
 				more += count
 			end
 		end
@@ -381,12 +392,12 @@ local function buildLight(view: SideMenuView.Refs)
 	local tiles: { [string]: TextButton } = {}
 	for _, entry in SideMenuView.sorted() do
 		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
-		local face = if entry.Group == "Main"
+		local face = if groupOf(entry) == "Main"
 			then HudBubble.claimTile(hud.Menu, entry.Id, spec)
 			else HudBubble.addMore(hud.Menu, entry.Id, spec)
 		face.Activated:Connect(function()
 			Sfx.play("UIClick")
-			if entry.Group == "More" then
+			if groupOf(entry) == "More" then
 				HudBubble.toggleMore(hud.Menu, false)
 			end
 			SideMenuController.press(entry.Id)

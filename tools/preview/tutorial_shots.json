@@ -173,5 +173,53 @@
   "maxLights": 24,
   "ui": "ui_tutorial_golems_phone",
   "uiInset": 58
+ },
+ "tutorial_ui_tablet": {
+  "scene": "tutorial_hopper",
+  "position": [
+   14,
+   -3,
+   -133
+  ],
+  "target": [
+   27,
+   -7.5,
+   -150
+  ],
+  "fov": 55,
+  "preset": "Quarry",
+  "sunDir": [
+   -0.5,
+   0.75,
+   0.43
+  ],
+  "ui": "ui_tutorial_tablet",
+  "uiInset": 42,
+  "width": 1200,
+  "height": 900
+ },
+ "tutorial_ui_ipad_mini": {
+  "scene": "tutorial_hopper",
+  "position": [
+   14,
+   -3,
+   -133
+  ],
+  "target": [
+   27,
+   -7.5,
+   -150
+  ],
+  "fov": 55,
+  "preset": "Quarry",
+  "sunDir": [
+   -0.5,
+   0.75,
+   0.43
+  ],
+  "ui": "ui_tutorial_ipad_mini",
+  "uiInset": 44,
+  "width": 1371,
+  "height": 900
  }
 }

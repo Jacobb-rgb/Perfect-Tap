@@ -1645,14 +1645,20 @@ local function chrome(panel: Frame, paint: string | Pop.Paint)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
 	Pop.studs(head, 4, 0.35, 40, 0)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 0,
-	}, head)
+	-- (the round look: no shine over the top half, the band's icon on its left)
+	local look = Pop.windowLook(Pop.windowKey(panel))
+	if look then
+		Pop.bandIcon(panel, look.Icon, 50, { ZIndex = 3 })
+	else
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0.42, 0),
+			ZIndex = 0,
+		}, head)
+	end
 	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,
@@ -1749,6 +1755,10 @@ local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
 	}, refs.Lists[spec.Tab])
 	Pop.face(frame, TechShopView.rowPaint(spec.Icon), ROW_CORNER, false)
 	Pop.studs(frame, ROW_CORNER, 0.5, 44, 1)
+	if PopTheme.round() then
+		-- (the reel's Upgrade rows: dark, the category colour on the inner edge)
+		Pop.cellFace(frame, Pop.paint(TechShopView.rowPaint(spec.Icon)).Top, 8)
+	end
 	local rim = frame:FindFirstChild("Rim") :: Frame?
 	if rim then
 		rim.ZIndex = 3
@@ -1907,7 +1917,7 @@ function TechShopView.build(compact: boolean?): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	})
 	chrome(panel, TechShopView.Paint)
-	local title = UIKit.label(panel, "TECH SHOP", 34, {
+	local title = UIKit.label(panel, Pop.caption("TECH SHOP"), 34, {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
@@ -2300,8 +2310,16 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 	refs.BalanceAmount.TextSize = if compact then 28 else 26
 	local headRight = 12 + m.Close + 12 + balanceWidth + 12
 	refs.Title.TextSize = if compact then 32 else 36
-	refs.Title.Position = UDim2.fromOffset(PAD, 0)
-	refs.Title.Size = UDim2.new(1, -(PAD + headRight), 0, m.Band)
+	-- (the round look: the window's icon left of the title)
+	local icon = refs.Panel:FindFirstChild("BandIcon") :: ImageLabel?
+	if icon then
+		local iconSize = m.Band - 18
+		icon.Size = UDim2.fromOffset(iconSize, iconSize)
+		icon.Position = UDim2.fromOffset(PAD - 4, math.floor(m.Band / 2))
+	end
+	local titleX = PAD + (if icon then Pop.iconRoom(icon) - 4 else 0)
+	refs.Title.Position = UDim2.fromOffset(titleX, 0)
+	refs.Title.Size = UDim2.new(1, -(titleX + headRight), 0, m.Band)
 	refs.Subtitle.Position = UDim2.fromOffset(PAD, m.Band + 4)
 	refs.Subtitle.Size = UDim2.new(1, -PAD * 2, 0, 24)
 	refs.Subtitle.Visible = not compact and not refs.Receipt.Visible
@@ -2309,12 +2327,12 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		-- next to the title, in the band (no room for a second header line)
 		local titleWidth = 250
 		refs.Title.Size = UDim2.fromOffset(titleWidth, m.Band)
-		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth, 10)
-		refs.Receipt.Size = UDim2.new(1, -(PAD + titleWidth + headRight), 0, m.Band - 20)
+		refs.Receipt.Position = UDim2.fromOffset(titleX + titleWidth, 10)
+		refs.Receipt.Size = UDim2.new(1, -(titleX + titleWidth + headRight), 0, m.Band - 20)
 		refs.Receipt.TextWrapped = true
 		refs.Receipt.TextTruncate = Enum.TextTruncate.None
 		refs.Receipt.TextSize = 18
-		refs.ReceiptBox = Vector2.new(width - (PAD + titleWidth + headRight) - 16, m.Band - 20)
+		refs.ReceiptBox = Vector2.new(width - (titleX + titleWidth + headRight) - 16, m.Band - 20)
 	else
 		refs.Receipt.Position = UDim2.fromOffset(PAD, m.Band + 3)
 		refs.Receipt.Size = UDim2.new(1, -PAD * 2, 0, 26)
@@ -2431,7 +2449,7 @@ end
 local function fillRow(row: Row, card: Card)
 	row.Card = card
 	row.Frame.LayoutOrder = card.Order
-	row.Title.Text = string.upper(card.Title)
+	row.Title.Text = Pop.caption(string.upper(card.Title))
 	row.Chip.Text = card.Chip
 	row.Chip.BackgroundColor3 = if card.ChipColor == Theme.PanelDark then PopTheme.Paints.Slate.Bottom else card.ChipColor
 	row.Description.Text = card.Description

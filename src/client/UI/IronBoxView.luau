@@ -443,14 +443,16 @@ local function chrome(panel: Frame, paint: string | Pop.Paint)
 	local headBorder = head:FindFirstChild("Border") :: UIStroke
 	headBorder.Thickness = 3
 	Pop.studs(head, 4, 0.35, 40, 0)
-	UIKit.new("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0.42, 0),
-		ZIndex = 0,
-	}, head)
+	if not PopTheme.round() then -- (the round look's band has no shine over its top half)
+		UIKit.new("Frame", {
+			Name = "Shine",
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.78,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0.42, 0),
+			ZIndex = 0,
+		}, head)
+	end
 	for i, s in { { 0.62, 46 }, { 0.7, 22 }, { 0.8, 14 } } do
 		UIKit.new("Frame", {
 			Name = "Stripe" .. i,

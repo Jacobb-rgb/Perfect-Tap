@@ -21,6 +21,7 @@ function mulHex(a, b) {
 
 function fontFamily(family) {
   if (!family) return "Fredoka One";
+  if (family.includes("Montserrat")) return "Montserrat"; // the round look's words (owner 2026-10-27, reel 4)
   if (family.includes("Luckiest")) return "Luckiest Guy";
   if (family.includes("ComicNeue")) return "Comic Neue Angular"; // Enum.Font.Cartoon
   if (family.includes("PressStart2P")) return "Press Start 2P"; // the pixel font (owner 2026-10-22 reels)
@@ -63,7 +64,7 @@ function contentSize(node, w, h) {
   let cx = 0;
   let cy = 0;
   if (node.text !== undefined && node.text !== "" && !node.scaled) {
-    measureCtx.font = `${node.ts}px "${fontFamily(node.font)}"`;
+    measureCtx.font = `${node.fw || 400} ${node.ts}px "${fontFamily(node.font)}"`;
     const lines = textLines(node.text, cw, node.wrap && !node.auto.includes("X"));
     cx = Math.max(...lines.map((l) => measureCtx.measureText(l).width));
     cy = lines.length * node.ts * LINE_HEIGHT;
@@ -111,10 +112,10 @@ function resolveSize(node, parentW, parentH) {
   return { w, h };
 }
 
-function fitText(text, font, maxW, maxH, wrap) {
+function fitText(text, font, maxW, maxH, wrap, weight) {
   let lo = 4, hi = 100;
   const fits = (size) => {
-    measureCtx.font = `${size}px "${font}"`;
+    measureCtx.font = `${weight || 400} ${size}px "${font}"`;
     if (!wrap) return measureCtx.measureText(text).width <= maxW && size * 1.05 <= maxH;
     // naive wrap estimate
     const words = text.split(/\s+/);
@@ -237,7 +238,8 @@ function styleElement(el, node, w, h) {
     span.style.justifyContent = node.tx === "Left" ? "flex-start" : node.tx === "Right" ? "flex-end" : "center";
     span.style.textAlign = node.tx === "Left" ? "left" : node.tx === "Right" ? "right" : "center";
     span.style.fontFamily = `"${font}"`;
-    let size = node.scaled ? fitText(node.text, font, w, h, node.wrap) : node.ts;
+    span.style.fontWeight = String(node.fw || 400); // (Font.Weight: the round look's Montserrat Black / Bold)
+    let size = node.scaled ? fitText(node.text, font, w, h, node.wrap, node.fw) : node.ts;
     // UITextSizeConstraint on a scaled label: Roblox keeps the fitted size within it
     if (node.scaled && node.maxts) size = Math.min(size, node.maxts);
     if (node.scaled && node.mints) size = Math.max(size, node.mints);
@@ -352,8 +354,9 @@ function layoutChildren(node, el, w, h) {
     childEl.dataset.name = p.k.n;
     const scale = child(p.k, "UIScale");
     if (scale && scale.s !== 1) {
-      if (scale.n && scale.n.startsWith("Motion")) {
-        // UI/Motion's scales: about the AnchorPoint like Roblox (rotation stays about the centre)
+      if (scale.n && (scale.n.startsWith("Motion") || scale.n === "ListFit" || scale.n === "Fit")) {
+        // UI/Motion's scales and the round look's fits (the Store's banner, the Daily grid): about
+        // the AnchorPoint like Roblox (rotation stays about the centre)
         const ax = p.origin ? p.origin[0] : (p.k.anchor[0] - 0.5) * p.w;
         const ay = p.origin ? p.origin[1] : (p.k.anchor[1] - 0.5) * p.h;
         childEl.style.transform = `translate(${ax}px, ${ay}px) scale(${scale.s}) translate(${-ax}px, ${-ay}px)`;

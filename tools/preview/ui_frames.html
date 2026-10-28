@@ -18,6 +18,21 @@
         src: url("/fonts/PressStart2P-Regular.ttf") format("truetype");
       }
       @font-face {
+        font-family: "Montserrat";
+        font-weight: 900;
+        src: url("/fonts/Montserrat-Black.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Montserrat";
+        font-weight: 700;
+        src: url("/fonts/Montserrat-Bold.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Montserrat";
+        font-weight: 500;
+        src: url("/fonts/Montserrat-Medium.ttf") format("truetype");
+      }
+      @font-face {
         font-family: "Luckiest Guy";
         src: url("/node_modules/@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2") format("woff2");
       }
@@ -85,8 +100,11 @@
         caption.textContent = text || "";
         caption.style.display = text ? "block" : "none";
         await Promise.all([...ui.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
+        await document.fonts.ready; // (a face the frame uses first loads now)
       };
-      Promise.all([document.fonts.ready, bg.decode().catch(() => {})]).then(() => (window.__ready = true));
+      // (the round look's Montserrat weights: loaded before the first frame)
+      const faces = ["900 20px Montserrat", "700 20px Montserrat", "500 20px Montserrat"].map((f) => document.fonts.load(f).catch(() => {}));
+      Promise.all([...faces, document.fonts.ready, bg.decode().catch(() => {})]).then(() => (window.__ready = true));
     </script>
   </body>
 </html>

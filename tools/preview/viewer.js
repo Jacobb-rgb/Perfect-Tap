@@ -432,6 +432,7 @@ async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
   await document.fonts.load('40px "Press Start 2P"');
+  for (const weight of [900, 700, 500]) await document.fonts.load(`${weight} 40px "Montserrat"`);
   const shots = await fetch(`/shots.json`).then((r) => r.json());
   const shot = shots[shotName];
   if (!shot) throw new Error("unknown shot " + shotName);
@@ -767,6 +768,7 @@ async function main() {
     uiLayer.style.height = `${HEIGHT}px`;
     // the fonts first: text is measured (TextScaled, AutomaticSize) while laying out
     await Promise.all(["Fredoka One", "Luckiest Guy", "Comic Neue Angular", "Press Start 2P"].map((f) => document.fonts.load(`20px "${f}"`).catch(() => {})));
+    await Promise.all([900, 700, 500].map((weight) => document.fonts.load(`${weight} 20px "Montserrat"`).catch(() => {})));
     renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
     if (shot.mobileControls) mobileControls(uiLayer, shot.mobileControls);
     // wait for the 3D icon pictures before the screenshot

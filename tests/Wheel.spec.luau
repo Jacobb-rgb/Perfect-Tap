@@ -1326,7 +1326,8 @@ return function(T, Loader)
 			T.truthy(refs.OddsBuy.Visible, "its price button")
 			T.eq(refs.OddsBuy:GetAttribute("Product"), "WheelSpins5")
 			local amount = refs.OddsBuy:FindFirstChild("Amount", true)
-			T.eq(amount.Text, "99", "the price")
+			local Pop = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Pop")
+			T.eq(amount.Text, Pop.priceWords(99), "the price") -- (the round look: "R$99")
 			T.truthy(string.find(refs.OddsTitle.Text, "5 SPINS", 1, true), "the pack in the title")
 			-- all 8 segments: the exact chance and what each pays this player, in view
 			local shown = 0
