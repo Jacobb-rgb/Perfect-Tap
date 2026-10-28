@@ -36,6 +36,7 @@ MenuPanels.Names = {
 	"VaultController",
 	"BoostController",
 	"GearShopController",
+	"BackpackShopController", -- the backpack shop at the BACKPACKS stall
 	"EnchantController",
 	"CapsuleController",
 	"GolemController",

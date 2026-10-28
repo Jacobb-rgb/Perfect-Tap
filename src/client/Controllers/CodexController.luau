@@ -1,11 +1,12 @@
 --[[
 	CodexController: the ORE CODEX (CodexView) on the client.
 
-	- Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (one
-	  ProximityPrompt on the cabinet of every Model tagged OreCodex: its
-	  PrimaryPart or the part named Cabinet, added when it streams in; a
-	  tagged BasePart gets it itself; E / gamepad Y like the other stalls)
-	  or from the side menu's CODEX button (CodexController.open / toggle).
+	- Opens from the side menu's CODEX button (CodexController.open /
+	  toggle). The ROCK SCANNER terminal went 2026-10-24 (owner: the
+	  BACKPACKS shop took its place); a model tagged OreCodex would still
+	  get the "Ore Codex" prompt (one ProximityPrompt on its PrimaryPart or
+	  the part named Cabinet, added when it streams in; a tagged BasePart
+	  gets it itself; E / gamepad Y like the other stalls).
 	- The cards come from the State snapshot's Discovered record and update
 	  live while it is open (only when what they show changes:
 	  CodexView.fingerprint). Ores discovered that you haven't looked at

@@ -14,7 +14,8 @@
 	  GuildBoard     Forgekeepers' notice board (tag GuildBoard)        here
 	  FossilDig      dig site with a dinosaur skeleton (tag FossilDig)  Dig
 	  DroppersHouse  the DROPPERS shop house (tag DropperCounter)      Droppers
-	  RockScanner    Ore Codex terminal (tag OreCodex)                  Scanner
+	  BackpackStall  the BACKPACKS shop (tag BackpackCounter)           Backpacks
+	  (the ROCK SCANNER went 2026-10-24, owner: the Ore Codex opens from the side menu)
 
 	Every piece is a Model named after its LobbyLayout piece id, built
 	inside the piece's footprint and height budget. Pure builder:
@@ -33,10 +34,10 @@ local Fronts = require(script.Fronts)
 local Wheel = require(script.Wheel)
 local Capsules = require(script.Capsules)
 local Enchant = require(script.Enchant)
+local Backpacks = require(script.Backpacks)
 local Hall = require(script.Hall)
 local Dig = require(script.Dig)
 local Droppers = require(script.Droppers)
-local Scanner = require(script.Scanner)
 
 local Districts = {}
 
@@ -110,11 +111,11 @@ function Districts.build(parent: Model, rng: Rng.Rng)
 	Wheel.build(parent, rng)
 	Capsules.build(parent, rng)
 	Enchant.build(parent, rng)
+	Backpacks.build(parent, rng)
 	Hall.build(parent, rng)
 	guildBoard(parent, rng)
 	Dig.build(parent, rng)
 	Droppers.build(parent, rng)
-	Scanner.build(parent, rng)
 end
 
 return Districts

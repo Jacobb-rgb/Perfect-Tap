@@ -115,7 +115,8 @@ ShopkeeperConfig.SellShops = { "Sell" } :: { string }
 	another reward. The UPGRADES and DROPPERS counters both open the Tech
 	shop: ShopResult. SHOP's gear and ENCHANT's runes answer with an
 	ActionResult of Action "Gear" / "Enchant", Op "Buy"; the Vault with a
-	VaultResult. The BACKPACKS shop adds its answer here when it lands.
+	VaultResult; the BACKPACKS shop a BackpackResult of Op "Buy" (an equip
+	is no buy).
 ]]
 function ShopkeeperConfig.buyShops(event: string, payload: any): { string }?
 	if type(payload) ~= "table" or payload.Ok ~= true then
@@ -125,6 +126,8 @@ function ShopkeeperConfig.buyShops(event: string, payload: any): { string }?
 		return { "Tech", "Droppers" }
 	elseif event == "VaultResult" then
 		return { "Vault" }
+	elseif event == "BackpackResult" and payload.Op == "Buy" then
+		return { "Backpacks" }
 	elseif event == "ActionResult" and payload.Op == "Buy" then
 		if payload.Action == "Gear" then
 			return { "Gear" }
