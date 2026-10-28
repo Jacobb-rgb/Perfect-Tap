@@ -41,11 +41,13 @@ local ORDER = {
 	"ShopkeeperController", -- a big golem behind every shop counter: idle, emotes, waves, talks
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
+	"MineJuiceController", -- the mining reel (Config/JuiceConfig): growing cracks + gold glints, chips, tok, ore into the bag
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)
 	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
+	"WeatherController", -- the weather on the surface: rain, storms, hail, snow, wind, heatwave, rainbow (WeatherConfig)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
 	"DropperShopController", -- the DROPPERS shop's showroom, built near the camera (DropperShopBuilder)

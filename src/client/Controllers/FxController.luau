@@ -16,6 +16,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local JuiceConfig = require(Shared.Config.JuiceConfig)
 local OreData = require(Shared.Config.OreData)
 local Net = require(Shared.Net)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -133,9 +134,15 @@ handlers.NodeShatter = function(position: any, crust: any, glow: any, floor: any
 	)
 end
 
+-- (the backpack's auto-pickup takes several items in one pass: one click per JuiceConfig.SoundGap)
+local pickupSoundAt = -math.huge
 handlers.Pickup = function(position: Vector3, oreId: any)
 	Vfx.burst("Glint", position, 5, colorOf(oreId, DEFAULT_GLOW, true))
-	Sfx.play("Pickup")
+	local now = os.clock()
+	if now - pickupSoundAt >= JuiceConfig.SoundGap then
+		pickupSoundAt = now
+		Sfx.play("Pickup")
+	end
 end
 
 handlers.Throw = function(position: Vector3)
