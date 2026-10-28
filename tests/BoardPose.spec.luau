@@ -192,16 +192,27 @@ return function(T, Loader)
 		T.truthy(lowest > -0.35 and highest < 0.45, `tall legs crouch onto the deck ({lowest} .. {highest})`)
 	end)
 
-	T.test("board pose: you face forward, feet wide apart across the board", function()
-		local parts = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0, Tool = true })
-		local look = parts.UpperTorso.LookVector
-		local yaw = math.deg(math.atan2(-look.X, -look.Z))
-		T.le(math.abs(yaw), 12, `the chest (and the blaster hold) aims ahead ({yaw} degrees)`)
+	T.test("board pose: sideways like a surfer (Pet Simulator 99), head ahead, blaster pointing ahead", function()
 		local free = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0 })
-		local freeLook = free.UpperTorso.LookVector
-		T.le(math.abs(math.deg(math.atan2(-freeLook.X, -freeLook.Z))), 12, "the rider faces where they go (Pet Simulator 99 style)")
-		local l, r = parts.LeftFoot.Position, parts.RightFoot.Position
-		T.truthy(math.abs(l.X - r.X) > 2, `feet wide apart along the board lying across ({math.abs(l.X - r.X)})`)
+		local function yawOf(v: any): number
+			return math.deg(math.atan2(-v.X, -v.Z))
+		end
+		local hips = yawOf(free.LowerTorso.LookVector)
+		T.truthy(math.abs(hips - BoardPose.Stance) < 6, `the body is turned sideways ({hips} degrees)`)
+		local head = yawOf(free.Head.LookVector)
+		T.truthy(head < hips - 25 and head > 0, `the head turns toward where you go ({head} degrees)`)
+		local l, r = free.LeftFoot.Position, free.RightFoot.Position
+		T.truthy(math.abs(l.Z - r.Z) > 1.0, `feet apart along the board ({math.abs(l.Z - r.Z)})`)
+		T.truthy(r.Z < l.Z, "the right foot leads")
+		T.truthy(math.abs(l.X - r.X) < 0.6, "both feet on the board's middle line")
+		-- with the blaster: the right hand far ahead of the shoulder, at shoulder height
+		local tool = solve({ T = 0.3, Speed = 0.5, Turn = 0, Mount = 1, Air = 0, Land = 0, Tool = true })
+		local hand, shoulder = tool.RightHand.Position, tool.RightUpperArm.Position
+		T.truthy(hand.Z < shoulder.Z - 1.2, `the blaster hand points ahead ({hand.Z - shoulder.Z})`)
+		T.truthy(math.abs(hand.Y - shoulder.Y) < 0.6, "at shoulder height")
+		-- the hop on starts facing forward and turns sideways
+		local start = solve({ T = 0, Speed = 0, Turn = 0, Mount = 0.13, Air = 0, Land = 0 })
+		T.truthy(math.abs(yawOf(start.LowerTorso.LookVector)) < 20, "the hop on starts facing ahead")
 	end)
 
 	T.test("board pose: MoveRig override on every joint, the Animator's pose back on release", function()

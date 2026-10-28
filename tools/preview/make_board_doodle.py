@@ -10,9 +10,10 @@ deck): a hand-drawn marker doodle covering the whole skateboard deck.
      IconAssets.Textures.board_custom_deck).
 
 Orientation (HoverboardBuilder.terraForgeCustom puts it on the deck's top as a
-Front-face decal): the image's right edge = the board's nose, the image's top =
-the far side of the deck as seen from behind the rider, so the doodles stand
-upright in the game camera.
+Front-face decal): the image's right edge = the board's nose. The board points
+where the rider goes (Pet Simulator 99 style), so the doodles are painted
+upright with their tops toward the nose (painted tall, then turned a quarter
+clockwise): they stand upright in the game camera behind the rider.
 
 Everything is wobbly on purpose: blobs are noisy circles, every line is drawn
 twice with jitter like a marker, fills get diagonal marker strokes. Seeded, so
@@ -283,75 +284,79 @@ def squiggle(draw, x0, y0, length, color=INK):
 
 
 def paint(out_path):
-    art = Image.new("RGBA", (S(W), S(H)), PAPER + (255,))
+    # painted upright on a tall canvas (the top = the board's nose, ahead of a rider seen from
+    # behind), then turned a quarter clockwise so the top lands on the image's right edge
+    PW, PH = H, W
+    art = Image.new("RGBA", (S(PW), S(PH)), PAPER + (255,))
     draw = ImageDraw.Draw(art, "RGBA")
     # paper grain
     for _ in range(9000):
-        x, y = rng.uniform(0, W), rng.uniform(0, H)
+        x, y = rng.uniform(0, PW), rng.uniform(0, PH)
         c = shade(PAPER, rng.uniform(-0.05, 0.0))
         draw.point((S(x), S(y)), fill=c + (255,))
 
     # the background: big wobbly paint blobs all over, overlapping (no white left but thin gaps)
     colors = ["blue", "orange", "green", "pink", "yellow", "purple", "teal", "red", "lime", "sky"]
     spots = []
-    cols, rows = 7, 3
+    cols, rows = 3, 7
     for gx in range(cols):
         for gy in range(rows):
-            x = (gx + 0.5) * W / cols + rng.uniform(-30, 30)
-            y = (gy + 0.5) * H / rows + rng.uniform(-24, 24)
+            x = (gx + 0.5) * PW / cols + rng.uniform(-24, 24)
+            y = (gy + 0.5) * PH / rows + rng.uniform(-30, 30)
             spots.append((x, y))
     rng.shuffle(spots)
     for i, (x, y) in enumerate(spots):
         blob(art, draw, x, y, rng.uniform(78, 104), PALETTE[colors[i % len(colors)]], squash=rng.uniform(0.75, 1.05), outline=6)
 
-    # doodles on top (image up = the far side of the deck seen from behind the rider)
-    golem(art, draw, 170, 200, 1.75)
-    slime(art, draw, 335, 115, 1.35, PALETTE["lime"])
-    pickaxe(art, draw, 300, 320, 1.3)
-    gem(art, draw, 455, 255, 1.5, PALETTE["sky"])
-    gem(art, draw, 505, 200, 1.0, PALETTE["purple"])
-    bolt(art, draw, 575, 120, 1.4)
-    heart(art, draw, 655, 300, 1.4)
-    coin(art, draw, 670, 105, 1.3)
-    star(art, draw, 790, 150, 1.6, PALETTE["yellow"])
-    slime(art, draw, 780, 335, 1.0, PALETTE["pink"])
-    flame(art, draw, 890, 290, 1.35)
-    orb(art, draw, 935, 120, 1.15)
-    star(art, draw, 70, 110, 0.7, PALETTE["orange"], face=False)
+    # doodles on top, upright for a rider seen from behind (the feet stand near y 340 and 680)
+    star(art, draw, 208, 125, 1.5, PALETTE["yellow"])
+    coin(art, draw, 92, 225, 1.15)
+    orb(art, draw, 322, 235, 1.0)
+    bolt(art, draw, 300, 365, 1.2)
+    golem(art, draw, 190, 490, 1.6)
+    gem(art, draw, 110, 640, 1.3, PALETTE["sky"])
+    gem(art, draw, 160, 590, 0.85, PALETTE["purple"])
+    heart(art, draw, 305, 650, 1.2)
+    slime(art, draw, 125, 790, 1.15, PALETTE["lime"])
+    flame(art, draw, 305, 820, 1.2)
+    pickaxe(art, draw, 235, 925, 1.0)
+    slime(art, draw, 110, 940, 0.8, PALETTE["pink"])
+    star(art, draw, 330, 965, 0.65, PALETTE["orange"], face=False)
     for _ in range(16):
-        sparkle(draw, rng.uniform(60, W - 60), rng.uniform(40, H - 40), rng.uniform(9, 16))
+        sparkle(draw, rng.uniform(40, PW - 40), rng.uniform(60, PH - 60), rng.uniform(9, 16))
     for _ in range(30):
-        dot(draw, rng.uniform(40, W - 40), rng.uniform(30, H - 30), rng.uniform(3, 6), (255, 255, 255))
+        dot(draw, rng.uniform(30, PW - 30), rng.uniform(40, PH - 40), rng.uniform(3, 6), (255, 255, 255))
 
     # the deck's shape: a rounded skateboard with a thick wobbly marker edge
     mask = Image.new("L", art.size, 0)
     md = ImageDraw.Draw(mask)
     inset = 6
-    md.rounded_rectangle([S(inset), S(inset), S(W - inset), S(H - inset)], radius=S(H / 2 - inset), fill=255)
+    md.rounded_rectangle([S(inset), S(inset), S(PW - inset), S(PH - inset)], radius=S(PW / 2 - inset), fill=255)
     edge = []
-    r = H / 2 - 16
+    r = PW / 2 - 16
+    side = PH - PW
+    perimeter = 2 * side + 2 * math.pi * r
     for i in range(120):
-        t = i / 120
-        # walk the pill outline: top straight, right cap, bottom straight, left cap
-        perimeter = 2 * (W - H) + 2 * math.pi * r
-        d = t * perimeter
-        top = W - H
-        if d < top:
-            p = (H / 2 + d, 16)
-        elif d < top + math.pi * r:
-            a = -math.pi / 2 + (d - top) / r
-            p = (W - H / 2 + math.cos(a) * r, H / 2 + math.sin(a) * r)
-        elif d < 2 * top + math.pi * r:
-            p = (W - H / 2 - (d - top - math.pi * r), H - 16)
+        d = i / 120 * perimeter
+        # walk the capsule: right side down, bottom cap, left side up, top cap
+        if d < side:
+            p = (PW - 16, PW / 2 + d)
+        elif d < side + math.pi * r:
+            a = (d - side) / r
+            p = (PW / 2 + math.cos(a) * r, PH - PW / 2 + math.sin(a) * r)
+        elif d < 2 * side + math.pi * r:
+            p = (16, PH - PW / 2 - (d - side - math.pi * r))
         else:
-            a = math.pi / 2 + (d - 2 * top - math.pi * r) / r
-            p = (H / 2 + math.cos(a) * r, H / 2 + math.sin(a) * r)
+            a = math.pi + (d - 2 * side - math.pi * r) / r
+            p = (PW / 2 + math.cos(a) * r, PW / 2 + math.sin(a) * r)
         edge.append(p)
     marker_line(draw, edge, 16, closed=True)
     art.putalpha(mask)
-    art = art.resize((W, H), Image.LANCZOS)
+    art = art.resize((PW, PH), Image.LANCZOS)
     # a touch of softness like real marker ink
     art = art.filter(ImageFilter.SMOOTH)
+    # the nose (the top) to the right edge
+    art = art.rotate(-90, expand=True)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     art.save(out_path)
     return art

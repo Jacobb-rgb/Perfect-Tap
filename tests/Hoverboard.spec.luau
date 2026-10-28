@@ -318,10 +318,10 @@ return function(T, Loader)
 				for _, t in set.Trails do
 					T.eq(t.Attachment0.Name, HoverboardFx.TrailMounts[1], t.Name .. " attachment 0")
 					T.eq(t.Attachment1.Name, HoverboardFx.TrailMounts[2], t.Name .. " attachment 1")
-					-- the board lies across under the rider: the trail runs along its back (+X) edge
+					-- the board points where you go: the trail streams from the tail
 					local a, b = t.Attachment0.CFrame.Position, t.Attachment1.CFrame.Position
-					T.truthy(a.X > 0.5 and b.X > 0.5, t.Name .. " on the back edge")
-					T.truthy(math.abs(a.Z - b.Z) > 2, t.Name .. " along the board's length")
+					T.truthy(a.Z > 1.5 and b.Z > 1.5, t.Name .. " at the tail")
+					T.truthy(math.abs(a.X - b.X) > 1, t.Name .. " across the tail")
 				end
 				HoverboardFx.setActive(set, true, 0.5)
 				T.truthy(set.Emitters[1].Enabled, "enabled while riding")
@@ -346,6 +346,40 @@ return function(T, Loader)
 			end
 		end
 		T.eq(HoverboardFx.acquire("NoSuchBoard"), nil, "unknown boards acquire nothing")
+	end)
+
+	T.test("hoverboard rings: ripples grow out under both pads and fade, hidden in the air", function()
+		local HoverboardRings = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardRings")
+		for _, board in HoverboardData.List do
+			local set = HoverboardFx.create(board.Id)
+			local model = HoverboardBuilder.build(board.Id)
+			T.truthy(HoverboardFx.mount(set, model), board.Id .. " mounts")
+			local rings = set.Rings
+			T.eq(#rings.Rings, 2 * HoverboardRings.Rings, board.Id .. " rings under two pads")
+			T.eq(rings.Rings[1].A.Parent, model.PrimaryPart, "rings under the board's Root")
+			T.truthy(rings.Pads[1] < 0 and rings.Pads[#rings.Pads] > 0, "a front pad and a back pad")
+			HoverboardFx.rings(set, 0.3, 1)
+			T.truthy(HoverboardRings.visible(rings) >= 2, board.Id .. " rings show")
+			for _, ring in rings.Rings do
+				local a, b = ring.A.CFrame.Position, ring.B.CFrame.Position
+				T.near(a.Y, HoverboardRings.Lift, 1e-3, "on the ground")
+				T.near((a - b).Magnitude / 2, (HoverboardRings.at(ring.Phase, 0.3)), 1e-3, "the ring's radius")
+				T.near(ring.Halves[1].CurveSize0, (a - b).Magnitude / 2 * 4 / 3, 1e-3, "a round half circle")
+				T.truthy(ring.Halves[1].CurveSize0 * ring.Halves[2].CurveSize0 < 0, "the two halves on opposite sides")
+			end
+			HoverboardFx.rings(set, 0.5, 0)
+			T.eq(HoverboardRings.visible(rings), 0, board.Id .. " hidden in the air")
+			HoverboardFx.release(set)
+			T.eq(rings.Rings[1].A.Parent, nil, "released rings are unmounted")
+		end
+		-- each ring grows from From to To and fades out over a Period
+		local r0, s0 = HoverboardRings.at(0, 0)
+		local r1, s1 = HoverboardRings.at(0, HoverboardRings.Period * 0.99)
+		T.near(r0, HoverboardRings.From, 1e-6, "starts small")
+		T.truthy(r1 > HoverboardRings.To - 0.05, "ends wide")
+		T.truthy(s0 < s1, "fades as it grows")
+		local lite = HoverboardFx.create("TimberDrifter", true)
+		T.eq(#lite.Rings.Rings, 2, "lite: one ring per pad")
 	end)
 
 	T.test("hoverboard lightning: a lit arc holds its shape, then rests (no strobing)", function()
