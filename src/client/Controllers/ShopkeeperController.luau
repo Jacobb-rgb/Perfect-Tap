@@ -355,8 +355,8 @@ function ShopkeeperController.onEarned(payload: any, now: number?)
 	end
 end
 
--- A purchase answer (`event`: ShopResult, VaultResult, ActionResult): a
--- bought item makes that shop's golem cheer when the player is at it.
+-- A purchase answer (`event`: ShopResult, VaultResult, ActionResult,
+-- BackpackResult): a bought item makes that shop's golem cheer when the player is at it.
 function ShopkeeperController.onBought(event: string, payload: any, now: number?)
 	local shops = ShopkeeperConfig.buyShops(event, payload)
 	local me = playerRoot()
