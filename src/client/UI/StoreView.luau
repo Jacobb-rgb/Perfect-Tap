@@ -689,7 +689,7 @@ local function roundRelayout(refs: Refs): number
 				else UIKit.new("UIScale", { Name = "ListFit" }, banner.Frame) :: UIScale
 			fit.Scale = k
 			banner.Frame.Position = UDim2.fromOffset(0, inner)
-			inner += math.floor(StoreView.BannerHeight * k) + gap
+			inner += math.floor(banner.Frame.Size.Y.Offset * k) + gap
 			any = true
 		end
 		local shown: { CardRefs } = {}
@@ -758,7 +758,7 @@ function StoreView.relayout(refs: Refs): number
 		if banner and banner.Frame.Parent == frame then
 			-- the limited edition opens the FEATURED section
 			banner.Frame.Position = UDim2.fromOffset(0, inner)
-			inner += StoreView.BannerHeight + gap
+			inner += banner.Frame.Size.Y.Offset + gap
 			any = true
 		end
 		for r, row in rows do
@@ -812,6 +812,11 @@ function StoreView.relayout(refs: Refs): number
 end
 
 StoreView.BannerHeight = 372
+StoreView.BannerTileGap = 6 -- between the golems' tiles (their chance %) and the buy buttons
+-- The golems' tiles' bottom in the banner (design units): their chance % sits just above it.
+function StoreView.bannerTilesBottom(): number
+	return StoreView.BannerHeight - 152 + 34 -- (buildBanner: the ground, the tiles 34 into it)
+end
 StoreView.BannerWidth = 918 -- the banner is drawn this wide (the round look's list shrinks it to fit)
 StoreView.BannerButtonH = 54
 StoreView.BannerCounts = { 50, 10, 3, 1 } -- the buy buttons, left to right (the photo)
@@ -962,7 +967,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		BackgroundColor3 = b.Ground,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, ground),
-		Size = UDim2.new(1, 0, 0, h - ground),
+		Size = UDim2.new(1, 0, 1, -ground), -- (to the bottom: sizeBanner may make the banner taller)
 		ZIndex = 4,
 	}, frame)
 	UIKit.new("UIGradient", {
@@ -1514,10 +1519,24 @@ sizeBanner = function(refs: Refs)
 		local k = if PopTheme.round() then StoreView.CardsWidth / StoreView.BannerWidth else 1
 		buttonH = math.max(buttonH, math.ceil(StoreView.minTouch(refs.Fit) / k))
 	end
-	for _, button in banner.Buys do
+	-- the buttons stand under the golems' tiles (their chance % at the tiles' bottom must show:
+	-- odds stay visible); taller buttons make the banner taller, its ground grows with it
+	local bottom = math.max(StoreView.BannerHeight - 30, StoreView.bannerTilesBottom() + StoreView.BannerTileGap + buttonH)
+	local frame = banner.Frame
+	local height = bottom + 30
+	local grew = frame.Size.Y.Offset ~= height
+	frame.Size = UDim2.fromOffset(frame.Size.X.Offset, height)
+	for n, button in banner.Buys do
 		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)
 		-- (AnchorPoint 0.5, 0.5: the bottom edge stays 30 above the banner's bottom)
-		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH / 2 - 30)
+		button.Position = UDim2.fromOffset(button.Position.X.Offset, bottom - buttonH / 2)
+		local count = frame:FindFirstChild("Count" .. n) :: GuiObject?
+		if count then
+			count.Position = UDim2.fromOffset(count.Position.X.Offset, bottom)
+		end
+	end
+	if grew then
+		StoreView.relayout(refs) -- (the list's room for the banner)
 	end
 end
 

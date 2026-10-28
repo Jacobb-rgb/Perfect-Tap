@@ -48,7 +48,7 @@ return function(T, Loader)
 	T.test("RoundReview: touch tablets get no offers and a short tile grid out of the thumbstick's zone", function()
 		inRound(function()
 			-- { width, height, the top inset (px) }: 1024 x 768, an iPad mini, a 1280 x 800 tablet
-			for _, size in { { 1024, 768, 36 }, { 1133, 744, 36 }, { 1280, 800, 36 } } do
+			for _, size in { { 1024, 768, 58 }, { 1133, 744, 58 }, { 1280, 800, 58 } } do
 				local screen = Vector2.new(size[1], size[2])
 				local scale = HudBubble.scaleFor(screen)
 				local where = `{size[1]} x {size[2]}`
@@ -62,9 +62,21 @@ return function(T, Loader)
 				T.truthy(right < width / 2 - refs.TopBar.Size.X.Offset / 2, where .. ": the tiles left of the top row")
 				local grid = menu:FindFirstChildOfClass("UIGridLayout") :: any
 				T.truthy(grid.CellSize.X.Offset * scale >= 44, where .. ": the tiles a thumb wide")
-				-- the TRAIN chip under them, also above the zone
+				-- the TRAIN chip under them (touch: TrainController's compact chip), also above the zone
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
-				T.truthy(chipTop + TrainView.chipSize(false).Y <= height / 3 + 1, where .. ": the TRAIN chip above the zone")
+				local chip = TrainView.chipSize(true)
+				T.eq(chip.Y, HudBubble.TouchChipHeight, "the HUD knows the touch chip's height")
+				local chipBottom = chipTop + chip.Y
+				T.truthy(chipBottom <= height / 3, `{where}: the TRAIN chip above the zone ({chipBottom} <= {height / 3})`)
+				-- the toasts start under the chip (its gui draws over the HUD's)
+				T.truthy(refs.Toasts.Position.Y.Offset >= chipBottom, where .. ": the toasts under the TRAIN chip")
+				-- the MORE flyout opens under the top row's buttons, over the toasts
+				HudBubble.addMore(refs.Menu, "Codex", { Label = "CODEX", IconName = "Codex", Order = 1 })
+				HudBubble.toggleMore(refs.Menu, true)
+				local flyout = refs.Gui:FindFirstChild("MoreFlyout") :: any
+				local bar = refs.TopBar
+				T.truthy(flyout.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, where .. ": the flyout under the top row")
+				T.truthy(flyout.ZIndex > refs.Toasts.ZIndex, where .. ": the flyout over the toasts")
 				T.eq(refs.Gui:GetAttribute("ChipLeft"), nil, where .. ": the chip at its usual left")
 				-- the BLASTER slot + backpack pair out of the thumbstick's zone on a tablet too
 				local pairLeft = width / 2 + refs.CarryPanel.Position.X.Offset
@@ -188,24 +200,53 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("RoundReview: the limited banner's buy buttons stay 44 pt on phones through the list's shrink", function()
+	T.test("RoundReview: the limited banner's buy buttons stay 44 pt and never cover the golems' odds", function()
 		inRound(function()
 			local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
 			if not edition then
 				return
 			end
-			local refs = StoreView.build()
-			StoreView.setEdition(refs, edition)
-			local scale = 0.62
-			StoreView.layout(refs, 667 / scale, (375 - 58) / scale, true)
+			-- { label, design width, design height, compact, the HUD scale }
+			local screens = {
+				{ "568 x 320", 568 / 0.62, (320 - 58) / 0.62, true, 0.62 },
+				{ "667 x 375", 667 / 0.62, (375 - 58) / 0.62, true, 0.62 },
+				{ "844 x 390", 844 / 0.62, (390 - 58) / 0.62, true, 0.62 },
+				{ "1024 x 768 touch", 1024 / 0.931, (768 - 58) / 0.931, true, 0.931 },
+				{ "TV 1920 x 1080", 1920 / 1.25, (1080 - 58) / 1.25, true, 1.25 },
+				{ "PC 1280 x 720", 1280, 684, false, 1 },
+			}
 			local k = StoreView.CardsWidth / StoreView.BannerWidth
-			local banner = refs.Banner :: any
-			for count, button in banner.Buys do
-				local pt = button.Size.Y.Offset * k * refs.Fit * scale
-				T.truthy(pt >= 44 - 1e-6, `x{count}: {pt} pt tall`)
-				T.truthy(button.Size.X.Offset * k * refs.Fit * scale >= 44, `x{count}: wide enough`)
-				local y = button.Position.Y.Offset - button.Size.Y.Offset / 2
-				T.truthy(y >= 0, `x{count}: inside the banner`)
+			for _, screen in screens do
+				local refs = StoreView.build()
+				StoreView.setEdition(refs, edition)
+				StoreView.layout(refs, screen[2], screen[3], screen[4])
+				local banner = refs.Banner :: any
+				local where = screen[1]
+				local height = banner.Frame.Size.Y.Offset
+				local boxes = {}
+				for count, button in banner.Buys do
+					local w, h = button.Size.X.Offset, button.Size.Y.Offset
+					local x, y = button.Position.X.Offset - w / 2, button.Position.Y.Offset - h / 2
+					table.insert(boxes, { x, y, x + w, y + h })
+					T.truthy(y + h <= height, `{where}: x{count} inside the banner`)
+					if screen[4] and screen[5] <= 0.75 then
+						T.truthy(h * k * refs.Fit * screen[5] >= 44 - 1e-6, `{where}: x{count} {h * k * refs.Fit * screen[5]} pt tall`)
+						T.truthy(w * k * refs.Fit * screen[5] >= 44, `{where}: x{count} wide enough`)
+					end
+				end
+				-- every golem's chance % (the tile's bottom-right label) clear of every button
+				for id, label in banner.Chances do
+					local tile = label.Parent :: any
+					local tx, ty = tile.Position.X.Offset, tile.Position.Y.Offset
+					local size = tile.Size.Y.Offset
+					local rect = { tx, ty + size - label.Size.Y.Offset, tx + tile.Size.X.Offset, ty + size }
+					for _, box in boxes do
+						T.falsy(overlap(rect, box), `{where}: {id}'s chance shows`)
+					end
+				end
+				-- the list leaves the banner its whole (shrunk) height
+				local section = banner.Frame.Parent :: any
+				T.truthy(section.Size.Y.Offset >= banner.Frame.Position.Y.Offset + height * k - 1, `{where}: the section holds the banner`)
 			end
 		end)
 	end)
