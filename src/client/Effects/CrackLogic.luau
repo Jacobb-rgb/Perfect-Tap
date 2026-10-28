@@ -21,6 +21,9 @@
 	  flatPoint(origin, right, up, p) -> a plan point in the world (before the surface)
 	  segmentFrame(a, b, normal, lift)-> a thin part's CFrame between two points, its length
 	  sizeFor(extents)                -> the crack's reach for a rock this big
+	  boxFace(box, size, view)        -> the middle and normal of the bounding box side a
+	                                     viewer at `view` looks at (the chips' face when
+	                                     Cracks is switched off)
 	  glint(since, reduced?)          -> the glint's transparency `since` seconds after its last
 	                                     flare (Reduce motion: steady, it never flares)
 	  counts(detail)                  -> dark segments, glint segments, flecks a plan uses (pool size)
@@ -195,6 +198,29 @@ function CrackLogic.basis(normal: Vector3): (Vector3, Vector3)
 	local right = ref:Cross(n).Unit
 	local up = n:Cross(right).Unit
 	return right, up
+end
+
+--[[
+	The side of a bounding box (`box` CFrame, `size`) that a viewer at `view`
+	looks at: its middle and outward normal (world). The side whose axis the
+	view point sticks out along most, in half-sizes.
+]]
+function CrackLogic.boxFace(box: CFrame, size: Vector3, view: Vector3): (Vector3, Vector3)
+	local rel = box:PointToObjectSpace(view)
+	local half = size / 2
+	local ax = math.abs(rel.X) / math.max(half.X, 1e-3)
+	local ay = math.abs(rel.Y) / math.max(half.Y, 1e-3)
+	local az = math.abs(rel.Z) / math.max(half.Z, 1e-3)
+	local n: Vector3
+	if ax >= ay and ax >= az then
+		n = Vector3.new(if rel.X < 0 then -1 else 1, 0, 0)
+	elseif ay >= az then
+		n = Vector3.new(0, if rel.Y < 0 then -1 else 1, 0)
+	else
+		n = Vector3.new(0, 0, if rel.Z < 0 then -1 else 1)
+	end
+	local middle = box:PointToWorldSpace(Vector3.new(n.X * half.X, n.Y * half.Y, n.Z * half.Z))
+	return middle, box:VectorToWorldSpace(n)
 end
 
 -- A plan point in the world, in the face plane at `origin` (before it is put onto the surface).

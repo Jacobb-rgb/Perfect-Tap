@@ -11,7 +11,9 @@
 	  Glints   warm gold glints and flecks in those cracks, flaring on a hit:
 	           ONE neutral colour for every rock (dirty ore never shows its
 	           rarity before it is cleaned, docs/DESIGN_V2_NOTES.md)
-	  Chips    a few rock chips in the crust colour fly off every hit (RockFx pool)
+	  Chips    a few rock chips in the crust colour fly off every hit (RockFx pool),
+	           out of the crack's face; with Cracks off out of the rock's side
+	           toward you (RockCracks.face), never from inside the rock
 	  Tok      a dry knock on every hit, a crunch at every crack stage
 	  BagFly   an ore you pick up pops up glowing at its spot, flies into
 	           your carry slots (or the backpack button) and a +1 bumps there
