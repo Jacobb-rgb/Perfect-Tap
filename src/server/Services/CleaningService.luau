@@ -14,12 +14,13 @@
 	   sanity-checks the timing, lets CleaningGuard cap a scripted Flawless,
 	   and turns the raw chunk into a clean ore of that grade, straight into
 	   the backpack (owner 2026-10-24: not back onto the station); with no
-	   room there it goes into the Ore Pen (ItemService.storeDesc), and only
-	   when that fails too onto the station's output tray (a dusty relic
-	   goes into the collection).
+	   room there it goes into the Ore Pen while the pen has room
+	   (PenService.store: its capacity, never a sale), else onto the
+	   station's output tray (a dusty relic goes into the collection).
 	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
-	puts it back into the backpack (past its capacity if need be: it was
-	yours a moment ago).
+	puts it back into the backpack while it has room, else into the Ore Pen
+	while that has room (a toast says so), else it stays in the vise with
+	the pen's own refusal (a dusty relic only goes back into the backpack).
 	The station has no canAccept, so IntakeService leaves it alone: its own
 	vise scan below mounts dropped raw ore. Moving the station carries the
 	vise ore along; packing it up (or leaving) stashes it.
@@ -260,8 +261,15 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 		CarryService.add(player, ItemService.absorb(record), 1)
 	else
 		local desc = ItemService.descOf(record)
-		if desc.K == "Relic" or not PenService.store(player, desc) then
-			local text = if desc.K == "Relic" then "Your backpack is full." else "Your backpack and your Ore Pen are full."
+		if desc.K == "Relic" then
+			Net.fire("Notify", player, { Text = "Your backpack is full.", Kind = "Deny" })
+			return
+		end
+		local stored, why = PenService.store(player, desc)
+		if not stored then
+			-- the pen's own words: full, or over its capacity (PenOver)
+			local data = DataService.get(player)
+			local text = if data then `Your backpack is full. {PenService.refusalText(data, why)}` else "Your backpack is full."
 			Net.fire("Notify", player, { Text = text, Kind = "Deny" })
 			return
 		end
@@ -269,6 +277,7 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 		ItemService.absorb(record)
 		DataService.changed(player)
 		PenService.arrived(player, { desc }, "Pen")
+		Net.fire("Notify", player, { Text = "Your backpack is full: moved to your Ore Pen.", Kind = "Info" })
 	end
 	updatePrompts(machine)
 end

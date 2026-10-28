@@ -223,6 +223,8 @@ return function(T, Loader)
 			T.eq(CarryService.count(w.player), capacity, "the backpack stays at its size")
 			T.eq(#w.data.Storage, before + 1, "into the pen")
 			T.eq(w.data.Storage[#w.data.Storage].O, "Copper", "the same ore")
+			local said = w.replies[#w.replies]
+			T.truthy(said.Event == "Notify" and said.A.Text:find("moved to your Ore Pen", 1, true), "a toast says where it went")
 			-- the pen full too: it stays in the vise (never past the pen's capacity, never sold)
 			local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
 			while #w.data.Storage < PenService.capacity(w.player) do
@@ -236,6 +238,9 @@ return function(T, Loader)
 			T.eq(machine.State.Item, third, "the vise holds it")
 			T.eq(#w.data.Storage, full, "the pen stays at its capacity")
 			T.eq(w.data.Coins, coins, "nothing sold")
+			local refused = w.replies[#w.replies]
+			T.truthy(refused.Event == "Notify" and refused.A.Kind == "Deny", "told why")
+			T.truthy(refused.A.Text:find("Ore Pen is full", 1, true), "in the pen's own words: " .. refused.A.Text)
 		end)
 		for i = #saved, 1, -1 do
 			rawset(saved[i][1], saved[i][2], saved[i][3])
