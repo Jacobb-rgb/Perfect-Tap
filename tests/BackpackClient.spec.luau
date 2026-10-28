@@ -26,6 +26,7 @@ return function(T, Loader)
 	local Instance = roblox.Instance
 	local Vector2 = roblox.Vector2
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
@@ -492,15 +493,17 @@ return function(T, Loader)
 				local refs = HudView.build() :: any
 				local look = if light then "light" else "dark"
 				T.truthy(refs.Backpack and refs.Backpack:IsA("TextButton"), look .. ": the backpack button")
-				T.truthy(refs.Backpack.Selectable, look .. ": a gamepad can select it")
+				-- (the round look's light HUD: a count badge on the Inventory tile, the tile is the gamepad's)
+				local badge = light and PopTheme.round()
+				T.eq(refs.Backpack.Selectable, not badge, look .. ": a gamepad selects it (or the tile under the badge)")
 				T.eq(refs.Backpack.Parent, refs.CarryPanel, look .. ": in the Carry holder (build mode hides it)")
 				T.eq(refs.CarryLabel.Parent, refs.Backpack, look .. ": its count")
 				for _, gone in { "CarrySlots", "ThrowBar", "ThrowFill" } do
 					T.eq(refs[gone], nil, look .. ": no " .. gone)
 				end
-				T.truthy(refs.Backpack:FindFirstChild("Pack"), look .. ": the pack's picture")
+				T.truthy(badge or refs.Backpack:FindFirstChild("Pack"), look .. ": the pack's picture (the tile's, on a badge)")
 				HudView.setBackpack(refs, 3, 5)
-				T.eq(refs.CarryLabel.Text, "3 / 5")
+				T.eq(refs.CarryLabel.Text, if badge then "3/5" else "3 / 5")
 				T.falsy(refs.Backpack:FindFirstChild("Full").Visible, look .. ": not full")
 				T.falsy(refs.Backpack:GetAttribute("Full"))
 				local count = #refs.Backpack:GetDescendants()
@@ -510,7 +513,7 @@ return function(T, Loader)
 				HudView.setBackpack(refs, 7, 5)
 				T.truthy(refs.Backpack:GetAttribute("Full"), "over the capacity is full too")
 				HudView.setBackpack(refs, 1000, 1000)
-				T.eq(refs.CarryLabel.Text, "1000 / 1000", "the biggest pack")
+				T.eq(refs.CarryLabel.Text, if badge then "1000/1000" else "1000 / 1000", "the biggest pack")
 				T.eq(#refs.Backpack:GetDescendants(), count, look .. ": updated in place")
 				-- the key hint: a key, a glyph, or nothing (touch)
 				local keyLabel, glyph = refs.Backpack:FindFirstChild("Key"), refs.Backpack:FindFirstChild("Glyph")
@@ -530,7 +533,15 @@ return function(T, Loader)
 		end
 		local refs = HudView.build()
 		HudView.placeBackpack(refs, 0.62, false)
-		T.eq(refs.CarryPanel.Position.X.Offset, HudBubble.backpackX(0.62), "placed for the new scale")
+		if refs.CarryPanel:GetAttribute("OnTile") then
+			-- (the round look: the badge stays on the Inventory tile at any scale)
+			HudBubble.claimTile(refs.Menu, "Backpack")
+			local before = refs.CarryPanel.Position
+			HudView.placeBackpack(refs, 0.62, false)
+			T.eq(refs.CarryPanel.Position, before, "the badge stays on its tile")
+		else
+			T.eq(refs.CarryPanel.Position.X.Offset, HudBubble.backpackX(0.62), "placed for the new scale")
+		end
 		T.eq(HudView.backpackText(12, 30), "12 / 30")
 		T.eq(HudView.backpackText(0 / 0, -1), "0 / 0", "junk reads 0")
 	end)
@@ -544,9 +555,31 @@ return function(T, Loader)
 				local refs = HudBubble.buildGame(scale, screen.X)
 				local holder = refs.CarryPanel
 				local width = screen.X / scale
+				local where = `{screen.X} x {screen.Y}`
+				if holder:GetAttribute("OnTile") then
+					-- the round look: a count badge over the Inventory tile's top-right corner; the
+					-- tile (a thumb tall) is what opens the bag
+					T.falsy(holder.Visible, where .. ": no badge before the tile shows")
+					local face = HudBubble.claimTile(refs.Menu, "Backpack")
+					T.truthy(holder.Visible, where .. ": the badge with its tile")
+					local tile = (face.Parent :: any).Size.Y.Offset
+					local grid = refs.Menu:FindFirstChildOfClass("UIGridLayout") :: any
+					T.truthy(grid.CellSize.Y.Offset * scale >= 44, where .. ": the Inventory tile >= 44 pt")
+					local faces = HudBubble.linkMenu(refs.Menu)
+					local index = table.find(faces, face) :: number
+					local columns = refs.Menu:GetAttribute("Columns")
+					local col, row = (index - 1) % columns, (index - 1) // columns
+					local tileRight = refs.Menu.Position.X.Offset + col * (grid.CellSize.X.Offset + grid.CellPadding.X.Offset) + tile
+					local tileTop = refs.Menu.Position.Y.Offset + row * (grid.CellSize.Y.Offset + grid.CellPadding.Y.Offset)
+					local badgeRight = holder.Position.X.Offset
+					local badgeY = holder.Position.Y.Offset
+					T.truthy(math.abs(badgeRight - tileRight) <= 8, `{where}: at the tile's right edge ({badgeRight} vs {tileRight})`)
+					T.truthy(math.abs(badgeY - tileTop) <= 8, `{where}: at its top ({badgeY} vs {tileTop})`)
+					T.truthy(badgeRight <= width, where .. ": on screen")
+					continue
+				end
 				local left = width / 2 + holder.Position.X.Offset
 				local right = left + holder.Size.X.Offset
-				local where = `{screen.X} x {screen.Y}`
 				if scale <= HudBubble.CompactScale then
 					T.truthy(holder.Size.Y.Offset * scale >= 44, where .. ": >= 44 pt tall")
 					-- Roblox's jump button: 70 px on small screens, 25 px from the right edge
@@ -579,6 +612,12 @@ return function(T, Loader)
 				local holder = refs.CarryPanel
 				local packLeft = w / 2 + holder.Position.X.Offset
 				local packTop = h - HudBubble.BackpackBottom - holder.Size.Y.Offset
+				if holder:GetAttribute("OnTile") then
+					-- (the round look: the badge on the Inventory tile, top-left)
+					HudBubble.claimTile(refs.Menu, "Backpack")
+					packLeft = holder.Position.X.Offset - holder.Size.X.Offset
+					packTop = holder.Position.Y.Offset
+				end
 				local layout = TutorialView.layout(scale, screen, false, tenFoot, nil)
 				local left = layout.Position.X - layout.AnchorPoint.X * layout.Width
 				local top = layout.Position.Y - layout.AnchorPoint.Y * layout.Height

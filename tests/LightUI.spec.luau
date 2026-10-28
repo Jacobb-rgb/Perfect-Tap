@@ -103,8 +103,14 @@ return function(T, Loader)
 			end
 			-- the backpack button, floaters, toasts, offline popup
 			HudView.setBackpack(refs, 4, 5)
-			T.eq(refs.CarryLabel.Text, "4 / 5", "the backpack's n / cap")
-			T.truthy(refs.Backpack:FindFirstChild("Pack"), "the pack's picture")
+			if PopTheme.round() then
+				-- (the round look: a "4/5" badge on the Inventory tile, which has the picture)
+				T.eq(refs.CarryLabel.Text, "4/5", "the backpack's n/cap badge")
+				T.truthy(refs.CarryPanel:GetAttribute("OnTile"), "on the Inventory tile")
+			else
+				T.eq(refs.CarryLabel.Text, "4 / 5", "the backpack's n / cap")
+				T.truthy(refs.Backpack:FindFirstChild("Pack"), "the pack's picture")
+			end
 			T.truthy(HudView.floater(refs.Floaters, "+$5"):IsA("TextLabel"), "floater")
 			T.truthy(HudView.toast(refs.Toasts, "Hi", Color3.new(0, 1, 0)):FindFirstChild("Dot", true), "toast")
 			local offline = HudView.buildOffline()
@@ -649,7 +655,8 @@ return function(T, Loader)
 				HudView.setBackpack(refs, 0, 30)
 				HudView.setBackpackKey(refs, nil, nil)
 				T.eq(count(button), warm, `no new instances (light {light})`)
-				T.eq(refs.CarryLabel.Text, "0 / 30", `the count (light {light})`)
+				local zero = if light and PopTheme.round() then "0/30" else "0 / 30" -- (the round look's badge)
+				T.eq(refs.CarryLabel.Text, zero, `the count (light {light})`)
 				T.falsy(button:FindFirstChild("Full").Visible, `FULL hides again (light {light})`)
 			end)
 			UIConfig.LightUI = before

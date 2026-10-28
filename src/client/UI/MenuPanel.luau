@@ -69,6 +69,7 @@ MenuPanel.Pad = 16
 MenuPanel.PhoneScale = 0.62 -- HudController's floor (phones)
 MenuPanel.MinTouch = 44 -- points
 MenuPanel.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap
+MenuPanel.RoundTilesRight = 180 -- the round look's left tiles end here on a PC (HudBubble: 10 + 2 x 77 + 7) and a gap
 -- under HudView's teleport bar (its frame is TopBarHeight tall; the phone
 -- buttons are taller and stick out evenly) and a gap
 MenuPanel.TopBarBottom = HudView.TopBarY
@@ -330,9 +331,16 @@ function MenuPanel.layout(refs: Refs, compact: boolean, width: number, height: n
 		end
 		-- the HUD coins (top left) would peek out from under the panel: move
 		-- the panel below them, else to their right when there is room
-		-- (phones: the panel covers them, nearly whole)
+		-- (phones: the panel covers them, nearly whole); the round look's money
+		-- sits bottom-left and its tiles down the left edge: a panel stays centred
+		-- (the reel's) unless it would cover the tiles and has room right of them
 		local coinsRight = 16 + HudView.CoinsWidth + 8
-		if left < coinsRight and top < MenuPanel.CoinsBottom then
+		if PopTheme.round() then
+			local tilesRight = MenuPanel.RoundTilesRight
+			if left < tilesRight and maxWidth - w - 8 >= tilesRight then
+				left = tilesRight + (maxWidth - w - 8 - tilesRight) / 2
+			end
+		elseif left < coinsRight and top < MenuPanel.CoinsBottom then
 			local below = maxHeight - MenuPanel.CoinsBottom - 8
 			if below >= h then
 				top = MenuPanel.CoinsBottom + (below - h) / 2
