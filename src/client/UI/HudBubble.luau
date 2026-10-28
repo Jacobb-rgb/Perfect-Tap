@@ -610,13 +610,17 @@ end
 ]]
 
 -- The tiles the game menu can show (claimed by controllers).
+-- (HudBubble.Menu[1], the BACKPACK tile, went next to the hotbar: backpackButton.
+-- The menu keeps two rows on phones: 6 tiles in 3 columns; EMOTES is behind MORE.)
 HudBubble.GameMenu = {
-	HudBubble.Menu[1],
 	HudBubble.Menu[2],
 	HudBubble.Menu[3],
 	HudBubble.Menu[4],
 	{ Id = "Elevator", Label = "ELEVATOR", Icon = "lift", Role = "Base" }, -- the side menu's Elevator entry claims it
 	HudBubble.Menu[5],
+	-- Spin & Win (owner 2026-10-28: the wheel's picture as a tile next to MORE, under
+	-- BOOSTS, instead of the FREE SPIN! chip; WheelController claims it, badge = spins ready)
+	{ Id = "Wheel", Label = "SPIN", Icon = "wheel", Role = "Wheel" },
 } :: { MenuEntry }
 
 HudBubble.CoinsWidth = 250
