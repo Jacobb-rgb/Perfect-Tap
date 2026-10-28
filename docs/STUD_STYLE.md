@@ -35,7 +35,8 @@ Names (`StudStyleConfig.SkipNames`, Lua patterns on the part and everything abov
 island's boundary walls, ghosts / previews, golem followers, hoverboards, WorldMotion effects, the golem
 `OpenPop`; the crystals (`^Crystals?%d*$`, `^CrystalCluster`, `^CrystalGroup`, `^CrystalFacet`, `EggCrystal`,
 `IconCrystal`; the plaza's FireCrystalRing, its CrystalFloor and the CrystalIsle's ground keep their studs); ores
-and relics on show (`^Display`, `^Artifact$`); the client's trains, the cleaning minigame and the crate opening.
+and relics on show (`^Display`, `^Artifact$`); the client's trains, the cleaning minigame, the crate opening and the
+worn and shown backpacks with the BACKPACKS shop's small things (`ClientBackpacks`).
 Only the map (ground, roads, floors, walls, fences, buildings, stalls, machines) gets studs, not what lies or
 moves on it (review 2026-10-24; crystals and trains can be switched back on by taking their patterns out).
 

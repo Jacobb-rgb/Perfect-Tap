@@ -6,15 +6,20 @@
 	- Opens on OpenUI "Backpacks" { Counter } (the stall counter's prompt,
 	  added by BackpackService). The ten cards (BackpackShopView) come from
 	  the State snapshot: State.Backpacks { Equipped, Owned = { ids }, Count,
-	  Capacity } and your coins (counted up between snapshots like the HUD);
-	  they refresh on every State and once a second while the shop is open.
+	  Capacity, Bonus } and your coins (counted up between snapshots like the
+	  HUD); they refresh on every State and once a second while the shop is
+	  open. Every capacity shown is the server's (BackpackData.carried with
+	  the Bonus: Deep Pockets, Strong Back...).
 	- BUY sends BackpackAction ("Buy", { Id }), EQUIP sends ("Equip", { Id }).
 	  A greyed-out BUY (not enough coins) answers here with how much is
 	  missing and sends nothing. The server answers BackpackResult { Id, Ok,
-	  Reason? }: a refusal shows its reason (BackpackShopView.Reasons) in the
-	  header; a buy that went through brings the new State (the bigger pack
-	  is equipped by the server). One request at a time (SEND_LOCK, freed by
-	  the answer or the next State).
+	  Reason?, Op? }: a refusal shows its reason (BackpackShopView.Reasons) in
+	  the header; a buy that went through brings the new State (the bigger
+	  pack is equipped by the server). One request at a time: the lock
+	  (SEND_LOCK) holds until the answer; a refusal frees it, an Ok keeps it
+	  until the next State after it (at most RESULT_LOCK), so the cards never
+	  offer the same BUY twice. A State that arrives before the answer leaves
+	  the lock alone.
 	- Until the backpack inventory lands (Net has no BackpackAction /
 	  BackpackResult yet) the buttons say the shop opens soon: nothing is sent.
 	- Closes with the X, B (gamepad), Backspace, walking away from the
@@ -69,6 +74,7 @@ local refs: BackpackShopView.Refs? = nil
 local counter: BasePart? = nil
 local tickConnection: RBXScriptConnection? = nil
 local lockedUntil = 0
+local answered = true -- the last request has its BackpackResult (the State listener may free the lock)
 -- the last request: does it end with that pack on your back (EQUIP, or a BUY bigger than the equipped pack)
 local pending: { Id: string, Wears: boolean }? = nil
 local messageToken = 0
@@ -116,17 +122,16 @@ local function snapshot(): ({ [string]: boolean }, string, number, number)
 	return owned, equipped, count, capacity
 end
 
--- The worn pack's bonus share (Deep Pockets, Strong Back...: the server's
--- capacity against the pack's own), 1 without bonuses.
-local function bonusShare(): number
-	local _, equipped, _, capacity = snapshot()
-	local base = BackpackData.capacity(equipped)
-	return if base > 0 and capacity > base then capacity / base else 1
+-- The State's carry bonuses (State.Backpacks.Bonus: Flat, Pct, Double), nil without.
+local function bonus(): any
+	local state = StateController.get()
+	local record = state and (state :: any).Backpacks
+	return if type(record) == "table" and type(record.Bonus) == "table" then record.Bonus else nil
 end
 
--- What `pack` holds for this player (its capacity with the worn pack's bonus share).
+-- What `pack` holds for this player when worn (the server's own formula).
 local function holds(pack: BackpackData.Backpack): number
-	return math.floor(pack.Capacity * bonusShare() + 0.5)
+	return BackpackData.carried(pack.Capacity, bonus())
 end
 
 local function refresh()
@@ -135,7 +140,7 @@ local function refresh()
 		return
 	end
 	local owned, equipped, count, capacity = snapshot()
-	if BackpackShopView.setCards(view, owned, equipped, coins(), bonusShare()) then
+	if BackpackShopView.setCards(view, owned, equipped, coins(), bonus()) then
 		-- (a capacity chip changed its text: the chips are sized again)
 		BackpackShopView.layout(view, view.Compact, view.MaxWidth, view.MaxHeight)
 	end
@@ -218,6 +223,7 @@ local function send(op: string, id: string)
 		return
 	end
 	lockedUntil = os.clock() + SEND_LOCK
+	answered = false
 	local _, equipped = snapshot()
 	-- the order rule: a buy is equipped when it is bigger than the equipped pack
 	pending = { Id = id, Wears = op == "Equip" or BackpackData.capacity(id) > BackpackData.capacity(equipped) }
@@ -251,8 +257,9 @@ local function onResult(result: any)
 		return
 	end
 	-- a refusal frees the next request at once; after a yes the cards still
-	-- show the old State, so the lock holds until the new State arrives (the
-	-- State listener frees it) or RESULT_LOCK runs out
+	-- show the old State, so the lock holds until the next State (the State
+	-- listener frees it) or RESULT_LOCK runs out
+	answered = true
 	lockedUntil = if result.Ok == true then os.clock() + RESULT_LOCK else 0
 	if result.Ok == false and counter then
 		local reason = if type(result.Reason) == "string" then BackpackShopView.Reasons[result.Reason] else nil
@@ -431,6 +438,7 @@ function BackpackShopController.open(part: BasePart)
 	counter = part
 	openedAt = os.clock()
 	lockedUntil = 0
+	answered = true
 	fit(view)
 	BackpackShopView.hideMessage(view)
 	applyHint(view)
@@ -467,7 +475,10 @@ function BackpackShopController.init()
 		end
 	end)
 	StateController.onChanged(function()
-		lockedUntil = 0
+		-- (a State built before the answer, a factory push say, leaves the lock alone)
+		if answered then
+			lockedUntil = 0
+		end
 		refresh()
 	end)
 	player.CharacterRemoving:Connect(function()

@@ -292,4 +292,23 @@ function BackpackData.capacity(id: any): number
 	return (pack or BackpackData.ById[BackpackData.StarterId]).Capacity
 end
 
+export type Bonus = { Flat: number, Pct: number, Double: boolean }
+
+--[[
+	What a pack of `capacity` holds with the player's carry bonuses (State.Backpacks.Bonus:
+	Flat = the other CarryCapacity bonuses, Pct = CarryPct (Deep Pockets), Double = Strong
+	Back): the server's Bonuses.carryCapacity with that pack worn, (base + ceil(base x Pct))
+	x 2 with Strong Back, base = capacity + Flat. No bonus (nil or broken): the capacity.
+]]
+function BackpackData.carried(capacity: number, bonus: any): number
+	if type(bonus) ~= "table" then
+		return capacity
+	end
+	local flat = if type(bonus.Flat) == "number" and bonus.Flat == bonus.Flat then bonus.Flat else 0
+	local pct = if type(bonus.Pct) == "number" and bonus.Pct == bonus.Pct then math.max(0, bonus.Pct) else 0
+	local base = math.max(1, math.floor(capacity + flat))
+	local extra = math.ceil(base * pct - 1e-9) -- (no float dust: 10 x 0.3 is 3, not 4)
+	return (base + extra) * (if bonus.Double == true then 2 else 1)
+end
+
 return BackpackData
