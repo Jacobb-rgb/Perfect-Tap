@@ -10,8 +10,10 @@
 	                          toward the camera the first time (one raycast at
 	                          the rock, then one per plan point onto its
 	                          surface; again when a crack stage broke a chunk
-	                          off, and on the face toward you again when your
-	                          view of the rock turned away from it: FaceDot),
+	                          off, and on a face toward you again when your view
+	                          of it turned away: MineJuiceRules.tryFace /
+	                          betterFace, at most once per KeepHit, only to a
+	                          clearly better face),
 	                          grows it to the rock's damage
 	                          (CrackLogic.growth) and makes the glints flare, at
 	                          most JuiceConfig.GlintFlaresPerSecond a second
@@ -21,6 +23,8 @@
 	                          chips fly from there), nil when the rock gets none.
 	  RockCracks.clear(rock)  gives the rock's parts back (the shatter; also
 	                          automatic when the rock leaves the workspace)
+	  RockCracks.face(rock)   the crack face a rock has or remembers (origin,
+	                          normal), nil when it never had one
 	  RockCracks.setKeep(fn)  fn(rock) = true for the rocks that must keep their
 	                          crack (MineJuiceController: your own and your
 	                          focused rock)
@@ -77,14 +81,13 @@ type Entry = {
 	Growth: number,
 	Stage: number,
 	HitAt: number, -- the last hit (the oldest hit gives its parts back first)
+	FaceTry: number?, -- the last look for a better face (MineJuiceRules.tryFace)
 	Reduced: boolean, -- Reduce motion at the last hit: steady glints
 	Conn: RBXScriptConnection?,
 }
 
 -- What a rock keeps while it has no crack slot (weak keys: it goes with the rock).
 type Memory = { FlareAt: number?, Plan: CrackLogic.Plan?, Origin: Vector3?, Normal: Vector3? }
-
-RockCracks.FaceDot = 0.3 -- your view of the crack's face below this (dot): the crack moves to the face toward you
 
 type Kind = "Dark" | "Glint" | "Fleck"
 
@@ -325,6 +328,19 @@ end
 
 ---------------------------------------------------------------- hits
 
+-- The crack face `rock` has now or remembers from a lost slot (origin, normal); nil = none yet.
+function RockCracks.face(rock: Model): (Vector3?, Vector3?)
+	local entry = entries[rock]
+	if entry then
+		return entry.Origin, entry.Normal
+	end
+	local mem = memory[rock]
+	if mem then
+		return mem.Origin, mem.Normal
+	end
+	return nil, nil
+end
+
 -- The rocks that must keep their crack: `fn(rock)` (your own and your focused rock).
 function RockCracks.setKeep(fn: (Model) -> boolean)
 	keep = fn
@@ -349,21 +365,36 @@ local function freeSlot(now: number, incomingKept: boolean): boolean
 end
 
 -- Aims the crack at the rock's face toward the camera (one ray at its middle). False when the ray misses.
-local function aim(entry: Entry): boolean
+-- The face toward the camera (one ray at the rock's middle): its point and normal, nil when it misses.
+local function cast(entry: Entry): (Vector3?, Vector3?)
 	local camera = Workspace.CurrentCamera
 	local from = if camera then camera.CFrame.Position else entry.Center + Vector3.new(0, 4, 12)
 	rayParams.FilterDescendantsInstances = { entry.Rock }
 	local toward = entry.Center - from
 	if toward.Magnitude < 0.1 then
-		return false
+		return nil, nil
 	end
 	local result = Workspace:Raycast(from, toward.Unit * (toward.Magnitude + entry.Reach), rayParams)
 	if not result then
+		return nil, nil
+	end
+	return result.Position, result.Normal
+end
+
+-- Puts the crack on a face (its point and normal).
+local function setFace(entry: Entry, origin: Vector3, normal: Vector3)
+	entry.Origin = origin
+	entry.Normal = normal
+	entry.Right, entry.Up = CrackLogic.basis(normal)
+end
+
+-- Aims the crack at the face toward the camera. False when the ray misses.
+local function aim(entry: Entry): boolean
+	local origin, normal = cast(entry)
+	if not origin or not normal then
 		return false
 	end
-	entry.Origin = result.Position
-	entry.Normal = result.Normal
-	entry.Right, entry.Up = CrackLogic.basis(result.Normal)
+	setFace(entry, origin, normal)
 	return true
 end
 
@@ -419,6 +450,7 @@ local function make(rock: Model, now: number): Entry?
 		Growth = 0,
 		Stage = number(rock, "Stage") or 0,
 		HitAt = now,
+		FaceTry = nil,
 		Reduced = false,
 		Conn = nil,
 	}
@@ -463,9 +495,24 @@ function RockCracks.hit(rock: Model, reduced: boolean?): (Vector3?, Vector3?)
 		return nil, nil
 	end
 	local stage = number(rock, "Stage") or 0
-	if facing(entry) < RockCracks.FaceDot and aim(entry) then
+	local moved = false
+	local old = facing(entry)
+	if MineJuiceRules.tryFace(now, entry.FaceTry, old) then
 		-- you look at the rock from another side now (another player's first hit planned it,
-		-- or you walked round it): the crack moves to the face toward you
+		-- or you walked round it): the crack moves to the face toward you, if it is clearly better
+		entry.FaceTry = now
+		local origin, normal = cast(entry)
+		if origin and normal then
+			local camera = Workspace.CurrentCamera
+			local view = if camera then camera.CFrame.Position - entry.Center else normal
+			local new = if view.Magnitude > 0.1 then view.Unit:Dot(normal) else 1
+			if MineJuiceRules.betterFace(old, new) then
+				setFace(entry, origin, normal)
+				moved = true
+			end
+		end
+	end
+	if moved then
 		entry.Stage = stage
 		project(entry)
 	elseif stage ~= entry.Stage then

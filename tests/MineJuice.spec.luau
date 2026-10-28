@@ -164,11 +164,12 @@ return function(T, Loader)
 	end)
 
 	T.test("Juice: Reduce motion stops the chips, the sparkle, the flight and the bump", function()
-		T.eq(Rules.chips(false, 10, false), 3, "PC: three chips")
-		T.eq(Rules.chips(false, 10, true), 2, "phone: two")
-		T.eq(Rules.chips(false, JuiceConfig.ChipRange + 1, false), 0, "too far: none")
-		T.eq(Rules.chips(true, 10, false), 0, "Reduce motion: none")
-		T.eq(Rules.chips(false, 0 / 0, false), 0, "no distance: none")
+		T.eq(Rules.chips(false, 10, false, true), 3, "PC: three chips")
+		T.eq(Rules.chips(false, 10, true, true), 2, "phone: two")
+		T.eq(Rules.chips(false, JuiceConfig.ChipRange + 1, false, true), 0, "too far: none")
+		T.eq(Rules.chips(true, 10, false, true), 0, "Reduce motion: none")
+		T.eq(Rules.chips(false, 0 / 0, false, true), 0, "no distance: none")
+		T.eq(Rules.chips(false, 10, false, false), 0, "no crack face (waiting for a slot): none, never from inside the rock")
 		T.truthy(Rules.sparkle(false, 10), "the crack sparkle")
 		T.falsy(Rules.sparkle(true, 10), "Reduce motion: no sparkle")
 		T.falsy(Rules.sparkle(false, JuiceConfig.CrackRange + 1), "too far: no sparkle")
@@ -287,6 +288,42 @@ return function(T, Loader)
 		T.truthy(string.find(controller, "MineJuiceRules.land(", 1, true), "landings ask the rule")
 		T.truthy(string.find(controller, "MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap)", 1, true), "one rise sound per pass")
 		T.truthy(string.find(controller, 'Sfx.playIn("Rock", "RockTok"', 1, true), "the toks have their own voices")
+	end)
+
+	T.test("Juice: the crack moves to a better face at most once per KeepHit, never between grazing shards", function()
+		T.falsy(Rules.tryFace(0, nil, 0.8), "a face you see well: stays")
+		T.truthy(Rules.tryFace(0, nil, 0.1), "a face turned away: look for a better one")
+		T.falsy(Rules.tryFace(0.2, 0, 0.1), "not again within KeepHit")
+		T.truthy(Rules.tryFace(JuiceConfig.KeepHit, 0, 0.1), "again after it")
+		T.falsy(Rules.betterFace(0.1, 0.2), "a grazing shard next to a grazing shard: no jump")
+		T.truthy(Rules.betterFace(0.1, 0.9), "a clearly better face: the crack moves")
+		T.falsy(Rules.betterFace(0.2, 0.2 + Rules.FaceMargin - 0.01), "just short of the margin: stays")
+		-- a grazing first face with hits about 3 a second from a swaying camera: few tries, no jumping
+		local tries, moves = 0, 0
+		local lastTry: number? = nil
+		local old = 0.12
+		local t = 0
+		while t < 10 do
+			if Rules.tryFace(t, lastTry, old) then
+				lastTry = t
+				tries += 1
+				local new = 0.12 + 0.1 * math.sin(t * 3) -- the ray lands on another grazing shard
+				if Rules.betterFace(old, new) then
+					old = new
+					moves += 1
+				end
+			end
+			t += 0.3
+		end
+		T.le(tries, math.ceil(10 / JuiceConfig.KeepHit) + 1, "at most one try per KeepHit")
+		T.eq(moves, 0, "never jumps between grazing shards")
+		local cracks = fs.readFile(Loader.root .. "/src/client/Effects/RockCracks.luau")
+		T.truthy(string.find(cracks, "MineJuiceRules.tryFace(now, entry.FaceTry, old)", 1, true), "RockCracks asks tryFace")
+		T.truthy(string.find(cracks, "MineJuiceRules.betterFace(old, new)", 1, true), "and betterFace")
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
+		T.truthy(string.find(controller, "origin, normal = RockCracks.face(rock)", 1, true), "a waiting rock uses its remembered face")
+		T.truthy(string.find(controller, 'Sfx.playIn("Crunch", "RockCrunch"', 1, true), "the crunch has a lane of its own")
+		T.falsy(string.find(controller, 'Sfx.playIn("Rock", "RockCrunch"', 1, true), "not the toks' lane")
 	end)
 
 	T.test("Juice: crack frames lie on the face, along the segment", function()

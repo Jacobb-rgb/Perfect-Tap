@@ -8,8 +8,18 @@
 	  flare(now, last, reduced)          may a rock's glints flare again now? At
 	                                     most JuiceConfig.GlintFlaresPerSecond a
 	                                     second per rock, never with Reduce motion
-	  chips(reduced, distance, phone)    chips one hit knocks off (0: Reduce
-	                                     motion, or farther than ChipRange)
+	  chips(reduced, distance, phone, hasFace)
+	                                     chips one hit knocks off (0: Reduce
+	                                     motion, farther than ChipRange, or no
+	                                     crack face to fly from: a rock waiting
+	                                     for a crack slot throws none, never
+	                                     from inside the rock)
+	  tryFace(now, lastTry, old)         try a new crack face? Only when your view
+	                                     of the old one is below FaceDot, at most
+	                                     once per KeepHit
+	  betterFace(old, new)               take it? Only when it beats the old face
+	                                     by FaceMargin (no jumping between
+	                                     grazing shards)
 	  sparkle(reduced, distance)         the gold sparkle at a crack stage?
 	  pickup(reduced, hasIcon, onScreen) what an ore entering your carry shows:
 	                                     "Fly" (the icon floats up and flies in,
@@ -37,6 +47,9 @@ local JuiceConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChil
 local MineJuiceRules = {}
 
 export type Pickup = "Fly" | "Bump" | "Quiet"
+
+MineJuiceRules.FaceDot = 0.3 -- your view of the crack's face below this (dot): look for a better face
+MineJuiceRules.FaceMargin = 0.25 -- a new face must face you this much better (dot) to take the crack
 -- A cracked rock as evict() sees it: when it was last hit, and whether it must keep its crack.
 export type Slot = { HitAt: number, Kept: boolean }
 
@@ -53,12 +66,26 @@ function MineJuiceRules.flare(now: number, last: number?, reduced: boolean): boo
 	return last == nil or now - last >= MineJuiceRules.flareGap() - 1e-9
 end
 
--- How many chips one hit `distance` studs from the camera knocks off.
-function MineJuiceRules.chips(reduced: boolean, distance: number, phone: boolean): number
-	if reduced or not (distance <= JuiceConfig.ChipRange) then
+-- How many chips one hit `distance` studs from the camera knocks off (`hasFace`: a crack face to fly from).
+function MineJuiceRules.chips(reduced: boolean, distance: number, phone: boolean, hasFace: boolean): number
+	if reduced or not hasFace or not (distance <= JuiceConfig.ChipRange) then
 		return 0
 	end
 	return if phone then 2 else 3
+end
+
+--[[
+	Should a crack whose face you see at `old` (dot, 1 = straight on) try a new
+	face now? Only below FaceDot and at most once per KeepHit seconds since the
+	last try (`lastTry`, nil = never).
+]]
+function MineJuiceRules.tryFace(now: number, lastTry: number?, old: number): boolean
+	return old < MineJuiceRules.FaceDot and (lastTry == nil or now - lastTry >= JuiceConfig.KeepHit - 1e-9)
+end
+
+-- Does a face seen at `new` beat the crack's face seen at `old` by FaceMargin?
+function MineJuiceRules.betterFace(old: number, new: number): boolean
+	return new >= old + MineJuiceRules.FaceMargin
 end
 
 -- The warm gold sparkle at a crack stage `distance` studs from the camera?
