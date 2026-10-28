@@ -135,6 +135,9 @@ BackpackView.EmptyText = "Your backpack is empty. Walk over ore to pick it up."
 BackpackView.MaxRows = 120
 BackpackView.MaxWidth = 660
 BackpackView.MaxHeight = 560
+-- the round look's window on a PC (the reel's Inventory: 570 x 438 units, five cells a row)
+BackpackView.RoundMaxWidth = 584
+BackpackView.RoundMaxHeight = 470
 BackpackView.MinTouch = 44 -- points
 BackpackView.PhoneScale = 0.62 -- HudController's floor (phones)
 BackpackView.DirtyColor = Color3.fromRGB(120, 112, 106)
@@ -737,11 +740,14 @@ end
 -- The window's design size and the fit scale for a w x h design-unit screen.
 function BackpackView.windowSize(w: number, h: number, compact: boolean): (Vector2, number)
 	local m = metrics(compact)
-	local maxWidth = if compact then BackpackView.MaxWidth + 80 else BackpackView.MaxWidth
+	local round = PopTheme.round() and not compact
+	local widest = if round then BackpackView.RoundMaxWidth else BackpackView.MaxWidth
+	local maxWidth = if compact then BackpackView.MaxWidth + 80 else widest
 	-- the least height: the band, the info row, two rows and the footer
 	local minHeight = m.Header + 4 + m.Pad * 3 + m.Info + 2 * m.Row + m.RowGap + m.Footer
 	local width = math.max(420, math.min(maxWidth, w - 40))
-	local height = math.max(minHeight, math.min(BackpackView.MaxHeight, h - 40))
+	local tallest = if round then BackpackView.RoundMaxHeight else BackpackView.MaxHeight
+	local height = math.max(minHeight, math.min(tallest, h - 40))
 	local fit = math.min(1, (w - 16) / width, (h - 16) / height)
 	return Vector2.new(math.floor(width), math.floor(height)), fit
 end
