@@ -59,7 +59,8 @@ and the shopkeeper's step. The clients build the rest (not map parts):
   Runebound and Emberforge, the racks Rookie/Trail/Leather and Miner's/Iron-Bound/Explorer's,
   the shelf Amethyst, the roof the giant Starforge: `DisplayScale` 2.8 on a two-tier podium,
   standing still (owner 2026-10-25; the controller can still turn a plate with `DisplaySpin`),
-  its light on a PC). Each plate's `DisplayRange`: roof 40, porch 32, golem and inside 30 studs
+  its light on a PC). Each plate's `DisplayRange`: roof 36, porch 30, golem and inside 28 studs
+  from the player's HumanoidRootPart (not the camera)
   (dropped beyond the range + 6). The inside plates and the golem's carry `DisplayLite`:
   phones show those packs without their small details (`BackpackBuilder.lite`, ~40% of the
   parts), inside the shop too.
@@ -82,27 +83,34 @@ studs off the railway tunnel mouths: a re-rolled lawn tuft touched the south-eas
 
 Golems (owner 2026-10-25): a golem stands by the porch with the Runebound pack on its back (piece
 `BackpackGolem` (36, 0, 66.5), lean Districts Kit.golem, size 2.3, the pack on an invisible plate
-`GolemPack`: DisplayRange 30, DisplayLite), and Plaza Life's 9 miner spots are mining golems
+`GolemPack`: DisplayRange 28, DisplayLite), and Plaza Life's 9 miner spots are mining golems
 (`Life.miner` builds a golem with a hard hat: pickaxe on the shoulder, swinging at an ore rock,
 or holding up a glowing chunk; same part count as the old miners).
 
-Budgets at landing (main b1fab138, the budget tests' own counting): MapParts 34,330 and
-LobbyParts 14,730 hold as they are; Flora lobby parts 3,229 (LobbyParts 3,205 -> 3,260). The
-phones' worst spot by the shop is its gateway: 20,784 streamed + 2,661 always-streamed + 352
-museum + its packs 914 (phones show the 7 inside packs and the golem's lite, inside the shop
-too; PCs in full) + decor 90 + the DROPPERS showroom 512 + the shopkeeper golems in range 215 =
-25,528 (the counter 25,517): StreamParts 25,240 -> 25,560 (the measured worst + ~30). The
-shop's plates are dropped again beyond their range + 6 (BackpackShopDecor.Hysteresis; ranges
-roof 40, porch 32, golem and inside 30, decor 30), so the spawn, the plaza and the DROPPERS
-door hold none of its client parts even after a visit (tests/Backpacks.spec.luau).
+Budgets (landed on main bb15e822; follow-ups 2026-10-28, the budget tests' own counting):
+MapParts 34,330 and LobbyParts 14,730 hold as they are; Flora lobby parts 3,229 (LobbyParts
+3,205 -> 3,260). The phones' worst spot by the shop is its gateway: 20,784 streamed + 2,661
+always-streamed + 352 museum + its packs 914 (phones show the 7 inside packs and the golem's
+lite, inside the shop too; PCs in full) + decor 90 + the DROPPERS showroom 512 + the shopkeeper
+golems still built there 264 (every one within ShopkeeperConfig.HideDistance: one built on the way
+stays until then) = 25,577 (the counter 25,566): StreamParts 25,240 -> 25,610 (the measured worst
++ ~30). The shop's packs and decor go by where the player stands (its HumanoidRootPart, as
+streaming does), not the camera, and are dropped again beyond their range + 6
+(BackpackShopDecor.Hysteresis; ranges roof 36, porch 30, golem and inside 28, decor 30): the
+spawn, the plaza and the DROPPERS door hold none of them even after a visit, measured at the
+root's height with 3 studs to spare (tests/Backpacks.spec.luau).
 
-Map version 64 (`WorldBuilder.Version`, on main e4dd151a v63).
+Capacities in the window are the server's: State.Backpacks.Bonus { Flat, Pct, Double } and
+BackpackData.carried, the same formula as Bonuses.carryCapacity (tested against it). One request
+at a time: the lock holds until the BackpackResult; an Ok keeps it until the next State.
+
+Map version 64 (`WorldBuilder.Version`, on main e4dd151a v63); 65 for the follow-ups (the plates' new ranges).
 
 ## What to test in Studio
 
 1. Walk to the BACKPACKS shop at the end of the path east of the Vault's steps: the giant
-   Starforge pack stands on the roof (from ~40 studs), the porch packs appear (~32), then the
-   racks, the golem's pack, the banners, lanterns and crest (~30); walk away: they go. No studs
+   Starforge pack stands on the roof (from ~36 studs), the porch packs appear (~30), then the
+   racks, the golem's pack (~28), the banners, lanterns and crest (~30); walk away: they go. No studs
    on any pack. Phones: the inside packs look a little simpler (no small details).
 2. Press E at the counter: the shop opens (two rows of five cards, the 3D packs turn the right
    way); walk away: it closes. B / Backspace / X close it too. Phones: the cards scroll.

@@ -4,7 +4,8 @@
 	crack or a shatter throws, in which colors, and where each piece is at time
 	t (a ballistic arc that bounces on the ground, spins, then shrinks and
 	fades). Also the envelopes of the flash light, the ground ring and the
-	small shake of a rock that is being blasted. No services, no Instances.
+	small shake of a rock that is being blasted, and the few chips every hit
+	knocks off (chipPlan). No services, no Instances.
 
 	Caps (phones): at most Cap = 30 debris pieces alive at once and every piece
 	is gone after MaxLife = 1.5 s; a burst that would go over the cap throws
@@ -64,6 +65,7 @@ export type CrackOpts = {
 }
 
 RockFxLogic.Cap = 30
+RockFxLogic.ChipCap = 8 -- hit chips (chipPlan) alive at once: a cap of their own, outside Cap
 RockFxLogic.MaxLife = 1.5
 RockFxLogic.Gravity = 80
 RockFxLogic.Bounce = 0.35 -- vertical speed kept at a bounce
@@ -256,6 +258,55 @@ function RockFxLogic.crackPlan(opts: CrackOpts): { Piece }
 			Spin = Vector3.new(rng:range(-10, 10), rng:range(-10, 10), rng:range(-10, 10)),
 			Turn = Vector3.new(rng:range(0, TAU), rng:range(0, TAU), rng:range(0, TAU)),
 			Life = rng:range(0.7, 0.95),
+			Ground = ground,
+		})
+	end
+	return pieces
+end
+
+export type ChipOpts = {
+	Position: Vector3, -- where the hit cracks the rock (the crack's centre)
+	Crust: Color3,
+	Out: Vector3?, -- the face's outward normal (chips spray off it, toward the viewer)
+	Count: number?, -- chips wanted (default 3)
+	Ground: number?,
+	Alive: number?,
+	Seed: (number | string)?,
+}
+
+--[[
+	The chips of one hit (the owner's mining reel 2026-10-27: "little chips fly
+	off every hit"): a few small rock chips in the crust colours only (never a
+	glow: the ore stays secret), sprayed out of the face, short-lived. Under
+	their own ChipCap (`Alive` = chips already flying), so they never take the
+	room of a crack or a break.
+]]
+function RockFxLogic.chipPlan(opts: ChipOpts): { Piece }
+	local want = math.max(0, opts.Count or 3)
+	local count = math.min(want, math.max(0, RockFxLogic.ChipCap - (opts.Alive or 0)))
+	local rng = Rng.new(opts.Seed or "chip")
+	local pos = opts.Position
+	local outward = opts.Out or Vector3.new(0, 0, 1)
+	local out = if outward.Magnitude > 0.01 then outward.Unit else Vector3.new(0, 0, 1)
+	local across = flat(out)
+	local side = Vector3.new(-across.Z, 0, across.X)
+	local ground = opts.Ground or (pos.Y - 2)
+	local rockColors = { opts.Crust, opts.Crust:Lerp(WHITE, 0.3), opts.Crust:Lerp(BLACK, 0.35) }
+	local pieces: { Piece } = {}
+	for i = 1, count do
+		local s = rng:range(0.14, 0.3)
+		local spray = (out + side * rng:range(-0.9, 0.9) + Vector3.new(0, rng:range(-0.1, 0.5), 0)).Unit
+		table.insert(pieces, {
+			Kind = "Chunk",
+			Wedge = i % 2 == 0,
+			Size = Vector3.new(s, s * rng:range(0.6, 0.9), s * rng:range(0.8, 1.2)),
+			Color = rockColors[(i - 1) % #rockColors + 1],
+			Neon = false,
+			Origin = pos + out * 0.15,
+			Velocity = spray * rng:range(6, 11) + Vector3.new(0, rng:range(7, 13), 0),
+			Spin = Vector3.new(rng:range(-14, 14), rng:range(-14, 14), rng:range(-14, 14)),
+			Turn = Vector3.new(rng:range(0, TAU), rng:range(0, TAU), rng:range(0, TAU)),
+			Life = rng:range(0.5, 0.75),
 			Ground = ground,
 		})
 	end
