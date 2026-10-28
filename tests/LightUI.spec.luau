@@ -546,6 +546,7 @@ return function(T, Loader)
 	T.test("LightUI: the boost corner shows the picture and the time alone, clear of the Shop pill and the touch buttons", function()
 		local HudBubble = ui("HudBubble")
 		local BoostView = ui("BoostView")
+		local TutorialView = ui("TutorialView")
 		local NOW = 1.7e9
 		local function overlap(aPos: any, aSize: any, bPos: any, bSize: any): boolean
 			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
@@ -588,33 +589,54 @@ return function(T, Loader)
 				local jumpPos = Vector2.new(width - (if small then 95 else 170) / scale, height - (if small then 90 else 210) / scale)
 				local grab = (if small then 70 else 90) / scale
 				local grabPos = Vector2.new(width - 170 / scale, height - 150 / scale)
-				-- the game's touch FIRE button (MiningController.layoutFireButton: centred there)
-				local fire = (if small then 88 else 116) / scale
-				local fireCentre = if small then Vector2.new(240, 100) else Vector2.new(310, 140)
-				local firePos = Vector2.new(width - fireCentre.X / scale - fire / 2, height - fireCentre.Y / scale - fire / 2)
+				-- the game's touch FIRE button (MiningController.layoutFireButton, its face lifted 5 px:
+				-- BoostView.TouchButtons, tied to the controller's source below)
+				local fireRect: any = nil
+				for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+					if b.Name == "Fire" then
+						fireRect = b
+					end
+				end
+				local firePos = Vector2.new(width - fireRect.Left / scale, height - fireRect.Top / scale)
+				local fireSize = Vector2.new((fireRect.Left - fireRect.Right) / scale, (fireRect.Top - fireRect.Bottom) / scale)
 				-- the toasts' column (HudController: up to 3 toasts, 440 wide, from 70 down)
 				local toastPos, toastSize = Vector2.new(width / 2 - 220, 70), Vector2.new(440, 3 * 56)
+				-- the touch tutorial bubble at the top right (TutorialView.layout, in the same gui)
+				local tutorial = TutorialView.layout(scale, gui, true)
+				local bubblePos = Vector2.new(tutorial.Position.X - tutorial.AnchorPoint.X * tutorial.Width, tutorial.Position.Y)
+				local bubbleSize = Vector2.new(tutorial.Width, tutorial.Height)
+				local cases = {}
 				for _, both in { false, true } do
+					table.insert(cases, { both, false })
+					if touch then
+						table.insert(cases, { both, true }) -- (the review 2026-10-28 follow-up: the bubble case)
+					end
+				end
+				for _, case in cases do
+					local both, withBubble = case[1], case[2]
 					local chips = BoostView.buildChips()
 					T.truthy(chips.Row:GetAttribute("Corner"), "the light chips are the corner row")
 					local count = if both then 2 else 1
 					local pillRect = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
 						then { Left = pillPos.X, Top = pillPos.Y, Bottom = pillPos.Y + pillSize.Y }
 						else nil
-					local right, bottom, stacked = BoostView.cornerSpot({
+					local right, bottom, stacked, spot = BoostView.cornerSpot({
 						Screen = screen,
 						Gui = gui,
 						Scale = scale,
 						Touch = touch,
 						Count = count,
 						Pill = pillRect,
+						Bubble = if withBubble then { Left = bubblePos.X, Top = bubblePos.Y, Bottom = bubblePos.Y + bubbleSize.Y } else nil,
 					})
+					T.truthy(spot ~= "OnPill", `the bubble leaves the row a spot at {size[1]} x {size[2]}`)
 					BoostView.placeCorner(chips, right, bottom, stacked)
 					for _, left in { { 222, 3900 }, { 86399, 86399 } } do
 						local state =
 							{ Boosts = { TripleLuckyUntil = NOW + left[1], HexaLuckyUntil = if both then NOW + left[2] else nil } }
 						BoostView.setChips(chips, BoostView.chips(state, NOW), true)
-						local at = `{size[1]} x {size[2]}, {count} boost(s), {left[1]} s`
+						local at =
+							`{size[1]} x {size[2]}, {count} boost(s), {left[1]} s{if withBubble then ", the tutorial bubble" else ""} ({spot})`
 						T.falsy(chips.Launcher.Visible, `no BOOSTS launcher in the corner at {at}`)
 						-- the tiles from the row's anchored bottom-right corner (the glyph is at the far end)
 						local rowRight = width + chips.Row.Position.X.Offset
@@ -640,11 +662,17 @@ return function(T, Loader)
 							)
 							T.falsy(overlap(pos, s, pillPos, pillSize), `{kindId} off the Shop pill at {at}`)
 							T.falsy(overlap(pos, s, carryPos, carrySize), `{kindId} off the backpack button at {at}`)
-							T.falsy(overlap(pos, s, toastPos, toastSize), `{kindId} off the toasts at {at}`)
+							-- (with the bubble and no clear spot, over the toasts' column: they take no taps)
+							if spot ~= "OverToasts" then
+								T.falsy(overlap(pos, s, toastPos, toastSize), `{kindId} off the toasts at {at}`)
+							end
+							if withBubble then
+								T.falsy(overlap(pos, s, bubblePos, bubbleSize), `{kindId} off the tutorial bubble (its SKIP) at {at}`)
+							end
 							if touch then
 								T.falsy(overlap(pos, s, jumpPos, Vector2.new(jump, jump)), `{kindId} off the jump button at {at}`)
 								T.falsy(overlap(pos, s, grabPos, Vector2.new(grab, grab)), `{kindId} off the Grab button at {at}`)
-								T.falsy(overlap(pos, s, firePos, Vector2.new(fire, fire)), `{kindId} off the FIRE button at {at}`)
+								T.falsy(overlap(pos, s, firePos, fireSize), `{kindId} off the FIRE button at {at}`)
 							end
 							x -= s.X + gap
 							y -= s.Y + gap
@@ -689,14 +717,25 @@ return function(T, Loader)
 		local interact = fs.readFile(root .. "/src/client/Controllers/InteractController.luau")
 		T.truthy(interact:find('SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))', 1, true), "Grab where BoostView thinks")
 		local mining = fs.readFile(root .. "/src/client/Controllers/MiningController.luau")
-		T.truthy(
-			mining:find("fireHolder.Size = UDim2.fromOffset(88, 88)", 1, true) and mining:find("UDim2.new(1, -240, 1, -100)", 1, true),
-			"small FIRE"
-		)
-		T.truthy(
-			mining:find("fireHolder.Size = UDim2.fromOffset(116, 116)", 1, true) and mining:find("UDim2.new(1, -310, 1, -140)", 1, true),
-			"large FIRE"
-		)
+		-- (FIRE from BoostView.TouchButtons: the holder's size and centre in layoutFireButton,
+		-- the face's lift in buildUI, the same small rule)
+		local lift = string.match(mining, 'Name = "Fire",[^}]-Position = UDim2%.fromOffset%(0, %-(%d+)%)')
+		T.truthy(lift, "the FIRE face's lift")
+		for _, kind in { "Small", "Large" } do
+			local fire: any = nil
+			for _, b in BoostView.TouchButtons[kind] do
+				if b.Name == "Fire" then
+					fire = b
+				end
+			end
+			local side = fire.Left - fire.Right
+			local size = `fireHolder.Size = UDim2.fromOffset({side}, {side})`
+			local at = `fireHolder.Position = UDim2.new(1, -{(fire.Left + fire.Right) / 2}, 1, -{fire.Bottom + side / 2})`
+			T.truthy(mining:find(size, 1, true), `{kind} FIRE: {size}`)
+			T.truthy(mining:find(at, 1, true), `{kind} FIRE: {at}`)
+			T.eq(fire.Top - fire.Bottom - side, tonumber(lift), kind .. " FIRE: the top is the lifted face's")
+		end
+		T.truthy(mining:find("local small = math.min(size.X, size.Y) <= 500", 1, true), "FIRE's small rule is BoostView's")
 		local bubble = { Left = 620, Bottom = 199 }
 		local r2 = BoostView.cornerSpot({ Screen = phone, Gui = gui, Scale = s, Touch = true, Count = 2, Pill = pill, Bubble = bubble })
 		T.truthy(gui.X / s - r2 <= bubble.Left - BoostView.CornerGap, "left of the tutorial bubble")
