@@ -154,6 +154,8 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 3. **Full automation of everything except mining** (owner's new idea, important):
    - **Dirty ore hides its rarity.** Raw ore is dirty: you don't know what it is until it is cleaned (cleaning = the
      reveal; fits the Cleaning Station reveal and the existing "???" idea).
+     Inventory only: dirty ore shows a piece of its real ore and stacks by ore (owner 2026-10-27); the Sell view and
+     the world keep the dirty secret.
    - With a high enough **pen upgrade**, the **train dumps raw ore straight into the cleaner** instead of the pen.
    - The **cleaner (cleaning plant)** is upgradeable: more upgrades = cleans **better** (higher grade cap) and
      **faster**. Every machine has upgrades (speed etc.).

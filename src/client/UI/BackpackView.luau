@@ -33,6 +33,19 @@
 	Rows are Selectable frames: a gamepad walks the list with the D-pad and
 	the list scrolls along. Pure builder + layout, no services: the Lune
 	previews and specs build it too.
+
+	The round look (owner 2026-10-27, the UI pack reel's Inventory; PopTheme.
+	Look = "Round"): the window is "Inventory", the Info row starts with a
+	"Search..." box (it filters the stacks by name) and ends in the count
+	chip, and the List is a grid of square dark cells (five a row on a PC):
+	every Row keeps its frames: Grade becomes the rarity word on top in its
+	colour, the Icon's picture sits in the middle, ItemName under it and
+	Count ("x4") at the picture's bottom-right. Dirty ore (DirtyByOre, the
+	owner's pick 2026-10-27): one stack per ore, "Dirty Ruby", its crust
+	chunk with a piece of the real ore poking out (only here: the Sell view
+	and the world keep the dirty secret); DirtyByOre = false brings back
+	the one shared "Dirty Ore" stack. The storage keys already name the
+	ore ("Raw|Ruby||"): nothing new reaches the client.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,7 +75,7 @@ export type Backpack = {
 }
 
 export type Entry = {
-	Id: string, -- "Dirty" (every dirty ore) or the stack's storage key
+	Id: string, -- "Dirty" (every dirty ore; DirtyByOre: one per ore) or the stack's storage key
 	Name: string,
 	Chip: string, -- "PRISTINE", "UNKNOWN", "RELIC", "" (no chip)
 	ChipColor: Color3,
@@ -71,6 +84,7 @@ export type Entry = {
 	Dirty: boolean,
 	Picture: string, -- the preview's icon name
 	Desc: Desc, -- what the live picture draws
+	Piece: string?, -- DirtyByOre: the ore whose piece pokes out of the dirty crust
 }
 
 export type Row = {
@@ -102,9 +116,18 @@ export type Refs = {
 	Hint: TextLabel,
 	Rows: { [string]: Row },
 	Compact: boolean,
+	Search: TextBox?, -- the round look's "Search..." box (filters the cells by name)
+	Filter: string, -- what the search box holds (lower case; "" shows every stack)
 }
 
 BackpackView.Title = "BACKPACK"
+BackpackView.RoundTitle = "Inventory" -- (the round look: the reel's window title)
+-- the owner's pick (2026-10-27): dirty ore stacks per ore and shows a piece of its real ore;
+-- false: every dirty ore in one shared "Dirty Ore" stack that keeps the secret
+BackpackView.DirtyByOre = true
+BackpackView.Columns = 5 -- the round look's cells a row
+BackpackView.CellGap = 8
+BackpackView.SearchText = "Search..."
 BackpackView.Paint = "Blue" -- the band: the backpack's colour (BubbleTheme Roles.Backpack, the Ore Pen's band)
 BackpackView.ShopText = "Bigger backpacks are sold at the BACKPACKS shop in the lobby."
 BackpackView.EmptyText = "Your backpack is empty. Walk over ore to pick it up."
@@ -179,6 +202,11 @@ local function metrics(compact: boolean): Metrics
 	return if compact then METRICS.Compact else METRICS.Normal
 end
 
+-- The round look's cell grid (else the pixel look's rows).
+local function grid(): boolean
+	return PopTheme.round()
+end
+
 -- The compact layout: touch screens, TVs, small scales and short windows (as the other panels).
 function BackpackView.compactFor(touch: boolean, tenFoot: boolean, scale: number, viewportHeight: number): boolean
 	return touch or tenFoot or scale <= 0.75 or viewportHeight < 520
@@ -216,10 +244,27 @@ end
 function BackpackView.entries(stacks: { Stack }): { Entry }
 	local list: { Entry } = {}
 	local dirty: Entry? = nil
+	local dirtyStacks = 0 -- (DirtyByOre: the dirty stacks lead the list, in the stacks' order)
 	for _, stack in stacks do
 		local desc = stack.Desc
 		if stack.Count > 0 then
-			if desc.K == "Raw" then
+			if desc.K == "Raw" and BackpackView.DirtyByOre then
+				-- (the owner's pick: a stack per ore, its crust with a piece of the real ore)
+				local ore = OreData.ById[desc.O]
+				dirtyStacks += 1
+				table.insert(list, dirtyStacks, {
+					Id = stack.Key,
+					Name = if ore then "Dirty " .. ore.Name else ItemData.DirtyName,
+					Chip = "DIRTY",
+					ChipColor = BackpackView.DirtyColor,
+					Count = stack.Count,
+					Rarity = rarityOf(desc.O),
+					Dirty = true,
+					Picture = "ore_raw",
+					Desc = { K = "Raw", O = DIRTY_PICTURE },
+					Piece = if ore then desc.O else nil,
+				})
+			elseif desc.K == "Raw" then
 				local merged: Entry
 				if dirty then
 					merged = dirty
@@ -304,6 +349,10 @@ local function newRow(refs: Refs, id: string): Row
 	frame:SetAttribute("Id", id)
 	Pop.face(frame, BackpackView.DirtyPaint, ROW_CORNER)
 	Pop.studs(frame, ROW_CORNER, 0.45, 40, 3)
+	if grid() then
+		-- (the round look: the reel's dark cell, the rarity on its inner edge)
+		Pop.cellFace(frame, nil, 6)
+	end
 	-- the picture: a light burst and a soft glow behind the item's live 3D look
 	local icon = UIKit.new("Frame", {
 		Name = "Icon",
@@ -311,12 +360,14 @@ local function newRow(refs: Refs, id: string): Row
 		BorderSizePixel = 0,
 		ZIndex = 4,
 	}, frame)
-	Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 80, 0.5, 4)
+	if not grid() then
+		Pop.rays(icon, UDim2.fromScale(0.5, 0.5), 8, 80, 0.5, 4)
+	end
 	local glow = UIKit.new("Frame", {
 		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.7,
+		BackgroundTransparency = if grid() then 0.88 else 0.7,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(0.86, 0.86),
@@ -374,6 +425,40 @@ end
 -- A row's sizes for the current layout.
 local function placeRow(refs: Refs, row: Row)
 	local m = metrics(refs.Compact)
+	if grid() then
+		-- a cell (its size: the list's grid): the rarity word on top, the picture, the name
+		-- under it (two lines at most), the count on the picture's bottom-right corner
+		local layout = refs.List:FindFirstChild("Grid") :: UIGridLayout?
+		local w = if layout then layout.CellSize.X.Offset else 110
+		local h = if layout then layout.CellSize.Y.Offset else 124
+		row.Frame.Size = UDim2.fromOffset(w, h) -- (the grid places it; the size says what it is)
+		local word = if refs.Compact then 15 else 13
+		local nameSize = if refs.Compact then 15 else 13
+		local nameH = nameSize * 2 + 4
+		row.Grade.AnchorPoint = Vector2.new(0.5, 0)
+		row.Grade.Position = UDim2.new(0.5, 0, 0, 4)
+		row.Grade.Size = UDim2.new(1, -8, 0, word + 4)
+		row.Grade.BackgroundTransparency = 1
+		Pop.fit(row.Grade, word)
+		local top = word + 8
+		local pic = math.max(24, math.min(w - 14, h - top - nameH - 8))
+		row.Icon.AnchorPoint = Vector2.new(0.5, 0)
+		row.Icon.Position = UDim2.new(0.5, 0, 0, top)
+		row.Icon.Size = UDim2.fromOffset(pic, pic)
+		row.ItemName.AnchorPoint = Vector2.new(0.5, 1)
+		row.ItemName.Position = UDim2.new(0.5, 0, 1, -4)
+		row.ItemName.Size = UDim2.new(1, -6, 0, nameH)
+		row.ItemName.TextXAlignment = Enum.TextXAlignment.Center
+		row.ItemName.TextWrapped = true
+		row.ItemName.TextScaled = true
+		Pop.limit(row.ItemName, nameSize + 1, nameSize)
+		local countH = if refs.Compact then 26 else 22
+		row.Count.AnchorPoint = Vector2.new(1, 1)
+		row.Count.Position = UDim2.fromOffset(w - 5, top + pic + 2)
+		row.Count.Size = UDim2.fromOffset(math.floor(w * 0.6), countH)
+		Pop.fit(row.Count, countH)
+		return
+	end
 	local h = m.Row
 	row.Frame.Size = UDim2.new(1, -SCROLLBAR, 0, h)
 	local pic = h - 8
@@ -401,12 +486,25 @@ local function fillPicture(row: Row, entry: Entry)
 		return
 	end
 	local ok, model = pcall(ItemBuilder.display, entry.Desc, CFrame.new(), entry.Picture)
+	local piece = entry.Piece
 	Pop.model(row.Icon, entry.Picture, 10, if ok then model else nil, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.52),
-		Size = UDim2.fromScale(1.12, 1.12),
+		Position = if piece then UDim2.fromScale(0.44, 0.58) else UDim2.fromScale(0.5, 0.52),
+		Size = if piece then UDim2.fromScale(0.96, 0.96) else UDim2.fromScale(1.12, 1.12),
 		ZIndex = 5,
 	}, Vector3.new(-0.5, 0.55, -1))
+	if piece then
+		-- DirtyByOre: a piece of the real ore poking out of the crust's top-right
+		local cleanOk, clean = pcall(ItemBuilder.display, { K = "Clean", O = piece, G = "Clean" }, CFrame.new(), "piece_" .. piece)
+		local made = Pop.model(row.Icon, `item_Clean_{piece}`, 10, if cleanOk then clean else nil, {
+			Name = "Piece",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.72, 0.3),
+			Size = UDim2.fromScale(0.62, 0.62),
+			ZIndex = 6,
+		}, Vector3.new(-0.5, 0.55, -1))
+		made.Rotation = 14
+	end
 end
 
 local function fillRow(refs: Refs, row: Row, entry: Entry, order: number)
@@ -414,13 +512,30 @@ local function fillRow(refs: Refs, row: Row, entry: Entry, order: number)
 	row.Frame.LayoutOrder = order
 	Pop.repaint(row.Frame, if entry.Rarity then Pop.rarityPaint(entry.Rarity) else BackpackView.DirtyPaint)
 	fillPicture(row, entry)
-	row.Mystery.Visible = entry.Dirty
+	row.Mystery.Visible = entry.Dirty and not entry.Piece and not grid()
 	row.ItemName.Text = entry.Name
-	row.Grade.Text = entry.Chip
-	row.Grade.BackgroundColor3 = entry.ChipColor
-	row.Grade.Visible = entry.Chip ~= ""
+	if grid() then
+		-- (the reel's cell: the rarity word on top in its colour; a dirty or dusty one says so)
+		local info = if entry.Rarity then Rarity.ById[entry.Rarity] else nil
+		row.Grade.Text = if info then info.Name elseif entry.Dirty then "Dirty" elseif entry.Chip == "RELIC" then "Relic" else ""
+		row.Grade.TextColor3 = if info then info.Color:Lerp(Color3.new(1, 1, 1), 0.2) else BackpackView.DirtyPaint.Top
+		row.Grade.Visible = row.Grade.Text ~= ""
+	else
+		row.Grade.Text = entry.Chip
+		row.Grade.BackgroundColor3 = entry.ChipColor
+		row.Grade.Visible = entry.Chip ~= ""
+	end
 	row.Count.Text = `x{entry.Count}`
+	row.Frame.Visible = refs.Filter == "" or string.find(string.lower(entry.Name), refs.Filter, 1, true) ~= nil
 	placeRow(refs, row)
+end
+
+-- The round look's search: only the stacks whose name holds `text` show ("" shows them all).
+function BackpackView.setSearch(refs: Refs, text: string)
+	refs.Filter = string.lower(text)
+	for _, row in refs.Rows do
+		row.Frame.Visible = refs.Filter == "" or string.find(string.lower(row.Entry.Name), refs.Filter, 1, true) ~= nil
+	end
 end
 
 function BackpackView.build(): Refs
@@ -458,8 +573,13 @@ function BackpackView.build(): Refs
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, holder)
 	local m = metrics(false)
-	local window =
-		Pop.window(group, BackpackView.Title, Vector2.new(BackpackView.MaxWidth, BackpackView.MaxHeight), m.Header, BackpackView.Paint)
+	local window = Pop.window(
+		group,
+		if grid() then BackpackView.RoundTitle else BackpackView.Title,
+		Vector2.new(BackpackView.MaxWidth, BackpackView.MaxHeight),
+		m.Header,
+		BackpackView.Paint
+	)
 	window.Root.AnchorPoint = Vector2.new(0, 0)
 	window.Root.Position = UDim2.fromOffset(0, 0)
 	local body = window.Body
@@ -487,6 +607,36 @@ function BackpackView.build(): Refs
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 4,
 	})
+	-- the round look: the reel's "Search..." box at the row's left (it filters the cells by
+	-- name), the count in a chip at its right
+	local search: TextBox? = nil
+	if grid() then
+		local box = UIKit.new("TextBox", {
+			Name = "Search",
+			AnchorPoint = Vector2.new(0, 0.5),
+			BackgroundColor3 = Color3.fromRGB(14, 16, 22),
+			BorderSizePixel = 0,
+			ClearTextOnFocus = false,
+			FontFace = PopTheme.Pixel,
+			PlaceholderColor3 = Color3.fromRGB(226, 230, 238),
+			PlaceholderText = BackpackView.SearchText,
+			Position = UDim2.fromScale(0, 0.5),
+			Text = "",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 20,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 4,
+		}, info)
+		UIKit.corner(box, 6)
+		Pop.border(box, 2)
+		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, box)
+		search = box
+		countLabel.BackgroundColor3 = Color3.fromRGB(150, 74, 24)
+		countLabel.BackgroundTransparency = 0
+		UIKit.corner(countLabel, 6)
+		Pop.border(countLabel, 2)
+		countLabel.TextXAlignment = Enum.TextXAlignment.Center
+	end
 
 	-- the stacks
 	local list = UIKit.new("ScrollingFrame", {
@@ -501,12 +651,23 @@ function BackpackView.build(): Refs
 		Selectable = false,
 		ZIndex = 2,
 	}, body)
-	UIKit.new("UIListLayout", {
-		Name = "Layout",
-		FillDirection = Enum.FillDirection.Vertical,
-		Padding = UDim.new(0, m.RowGap),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, list)
+	if grid() then
+		-- (the round look: the reel's grid of square cells; layout sizes them)
+		UIKit.new("UIGridLayout", {
+			Name = "Grid",
+			CellPadding = UDim2.fromOffset(BackpackView.CellGap, BackpackView.CellGap),
+			CellSize = UDim2.fromOffset(110, 124),
+			FillDirection = Enum.FillDirection.Horizontal,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, list)
+	else
+		UIKit.new("UIListLayout", {
+			Name = "Layout",
+			FillDirection = Enum.FillDirection.Vertical,
+			Padding = UDim.new(0, m.RowGap),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, list)
+	end
 	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2) }, list)
 	local empty = sentence(body, BackpackView.EmptyText, 20, {
 		Name = "Empty",
@@ -556,7 +717,16 @@ function BackpackView.build(): Refs
 		Hint = hint,
 		Rows = {},
 		Compact = false,
+		Search = search,
+		Filter = "",
 	}
+	if search then
+		pcall(function() -- (the game only: the Lune previews have no signals)
+			search:GetPropertyChangedSignal("Text"):Connect(function()
+				BackpackView.setSearch(refs, search.Text)
+			end)
+		end)
+	end
 	BackpackView.layout(refs, 1280, 720, false)
 	return refs
 end
@@ -607,12 +777,21 @@ function BackpackView.layout(refs: Refs, w: number, h: number, compact: boolean?
 	local innerW = bodyW - 2 * m.Pad
 	refs.Info.Position = UDim2.fromOffset(m.Pad, m.Pad)
 	refs.Info.Size = UDim2.fromOffset(innerW, m.Info)
-	local nameW = math.floor(innerW * 0.36)
+	local search = refs.Search
+	-- (the round look: the search box first, then the pack's name, its bar and the count chip)
+	local searchW = if search then math.floor(innerW * 0.34) else 0
+	if search then
+		search.Size = UDim2.fromOffset(searchW, m.Info - 8)
+		search.TextSize = m.Text + 2
+	end
+	local nameX = if search then searchW + 10 else 0
+	local nameW = if search then math.floor(innerW * 0.2) else math.floor(innerW * 0.36)
+	refs.PackName.Position = UDim2.new(0, nameX, 0.5, 0)
 	refs.PackName.Size = UDim2.fromOffset(nameW, m.Info)
-	Pop.fit(refs.PackName, m.Name)
-	refs.CountLabel.Size = UDim2.fromOffset(m.CountWidth, m.Info)
-	Pop.fit(refs.CountLabel, m.Count)
-	local barX = nameW + 10
+	Pop.fit(refs.PackName, if search then m.Name - 4 else m.Name)
+	refs.CountLabel.Size = UDim2.fromOffset(m.CountWidth, if search then m.Info - 8 else m.Info)
+	Pop.fit(refs.CountLabel, if search then m.Count - 6 else m.Count)
+	local barX = nameX + nameW + 10
 	local barW = math.max(60, innerW - barX - m.CountWidth - 10)
 	refs.Bar.Position = UDim2.new(0, barX, 0.5, 0)
 	refs.Bar.Size = UDim2.fromOffset(barW, m.Bar)
@@ -627,6 +806,18 @@ function BackpackView.layout(refs: Refs, w: number, h: number, compact: boolean?
 	local layout = refs.List:FindFirstChild("Layout") :: UIListLayout?
 	if layout then
 		layout.Padding = UDim.new(0, m.RowGap)
+	end
+	local cells = refs.List:FindFirstChild("Grid") :: UIGridLayout?
+	if cells then
+		-- the round look's cells: Columns a row, square-ish, at least a thumb on a phone
+		-- (MinTouch points through the fit shrink)
+		local gap = BackpackView.CellGap
+		local columns = BackpackView.Columns
+		local cellW = math.floor((innerW - SCROLLBAR - (columns - 1) * gap) / columns)
+		local least = if isCompact then math.ceil(BackpackView.MinTouch / (BackpackView.PhoneScale * math.max(fit, 0.3))) else 0
+		cellW = math.max(cellW, least)
+		cells.CellSize = UDim2.fromOffset(cellW, math.max(least, math.floor(cellW * 1.1)))
+		cells.CellPadding = UDim2.fromOffset(gap, gap)
 	end
 	refs.Empty.Position = UDim2.fromOffset(m.Pad + 10, listTop + 10)
 	refs.Empty.Size = UDim2.fromOffset(innerW - 20, math.min(listH, 80))
