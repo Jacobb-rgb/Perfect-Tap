@@ -41,6 +41,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local LightingConfig = require(Shared.Config.LightingConfig)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
@@ -65,6 +66,19 @@ GoldenStatue.ArmRaise = math.rad(145) -- how far the arms swing up from hanging 
 GoldenStatue.WingSpread = 1.4
 GoldenStatue.WingLift = math.rad(12) -- and swing a little up and out
 
+-- The town's exposure the statue was toned down under (map v61, owner's
+-- Studio test 2026-10-25). When the Surface preset's exposure is higher
+-- (owner 2026-10-28: "the town a tiny bit brighter, not the statue") every
+-- color on the statue, its pedestal and its sign goes the matching step
+-- deeper (GoldenStatue.shade), so the statue keeps the look he approved.
+GoldenStatue.TunedExposure = 0.05
+
+-- The per-channel factor that cancels the exposure step (sRGB ~ linear^(1/2.2)).
+function GoldenStatue.shadeFactor(): number
+	local step = LightingConfig.Presets.Surface.Lighting.ExposureCompensation - GoldenStatue.TunedExposure
+	return 2 ^ (-step / 2.2)
+end
+
 -- the pedestal (octagon apothems and heights, studs)
 GoldenStatue.FloorRadius = 8.6 -- the dark floor inside the armor ring (round)
 GoldenStatue.FloorHeight = 0.7
@@ -74,27 +88,24 @@ GoldenStatue.Drum = { A = 5.0, H = 2.6 }
 GoldenStatue.Cap = { A = 5.7, H = 0.6 }
 GoldenStatue.Plinth = { A = 3.4, H = 0.5 } -- the gold slab under the feet
 
--- (owner 2026-10-28: the town a little brighter, the statue as it was: its
--- colors are a step deeper, matching the Surface preset's exposure step
--- 0.05 -> 0.12, x 2^(-0.07 / 2.2) in sRGB)
 -- gold: three tones of one metal (shade by part, never by noise); a deep,
 -- saturated gold (Roblox's Metal reflects the bright sunset sky on top of it:
 -- the first, paler gold read as a white-hot blob in Studio)
-local GOLD = rgb(217, 153, 39)
-local GOLD_DEEP = rgb(180, 113, 25)
-local GOLD_LIGHT = rgb(231, 176, 68)
-local GOLD_PALE = rgb(237, 194, 108)
-local AMBER = rgb(249, 125, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
-local LENS = rgb(59, 166, 249)
-local FIRE_GLOW = rgb(235, 88, 14) -- the fire's neon edges (deep: stays orange under bloom)
-local WING_HOT = rgb(249, 137, 35) -- the wings' hot inner panels (plain, not neon: big neon glared)
-local FIRE_PLAIN = rgb(235, 94, 23) -- the mohawk's outer flames (plain)
+local GOLD = rgb(222, 156, 40)
+local GOLD_DEEP = rgb(184, 116, 26)
+local GOLD_LIGHT = rgb(236, 180, 70)
+local GOLD_PALE = rgb(242, 198, 110)
+local AMBER = rgb(255, 128, 22) -- the eyes, the core, the nostrils (deep: no white bloom)
+local LENS = rgb(60, 170, 255)
+local FIRE_GLOW = rgb(240, 90, 14) -- the fire's neon edges (deep: stays orange under bloom)
+local WING_HOT = rgb(255, 140, 36) -- the wings' hot inner panels (plain, not neon: big neon glared)
+local FIRE_PLAIN = rgb(240, 96, 24) -- the mohawk's outer flames (plain)
 -- the sign
 local BOARD = rgb(40, 30, 58) -- the loading screen's dark plum
 local SILVER = rgb(232, 234, 244)
 local FORGE_GOLD = rgb(255, 178, 36)
 local OUTLINE = rgb(22, 14, 30)
-local BULB = rgb(249, 143, 39)
+local BULB = rgb(255, 146, 40)
 
 local OCT = math.tan(math.pi / 8)
 
@@ -148,6 +159,34 @@ local function rod(
 	local p = Geo.cylinder(parent, cf.Position, length, diameter, color, material, props)
 	p.CFrame = cf
 	return p
+end
+
+---------------------------------------------------------------- shade
+
+local function shaded(c: Color3, k: number): Color3
+	return Color3.new(c.R * k, c.G * k, c.B * k)
+end
+
+-- Every part, particle, letter and outline color under `root` times `k`.
+function GoldenStatue.shade(root: Instance, k: number)
+	if k == 1 then
+		return
+	end
+	for _, d in root:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Color = shaded(d.Color, k)
+		elseif d:IsA("ParticleEmitter") then
+			local keys = {}
+			for _, key in d.Color.Keypoints do
+				table.insert(keys, ColorSequenceKeypoint.new(key.Time, shaded(key.Value, k)))
+			end
+			d.Color = ColorSequence.new(keys)
+		elseif d:IsA("TextLabel") then
+			d.TextColor3 = shaded(d.TextColor3, k)
+		elseif d:IsA("UIStroke") then
+			d.Color = shaded(d.Color, k)
+		end
+	end
 end
 
 ---------------------------------------------------------------- pedestal
@@ -532,7 +571,16 @@ end
 ---------------------------------------------------------------- build
 
 function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floorY: number)
-	local feetY = pedestal(ring, center, floorY)
+	local k = GoldenStatue.shadeFactor()
+	-- the pedestal joins the ring's model, shaded on its own first (the
+	-- ring's own pieces keep their colors)
+	local base = Instance.new("Model")
+	local feetY = pedestal(base, center, floorY)
+	GoldenStatue.shade(base, k)
+	for _, child in base:GetChildren() do
+		child.Parent = ring
+	end
+	base:Destroy()
 	local m = Style.model("GoldenStatue", parent)
 	m:AddTag("NoStuds")
 	local golem = dragon(m, CFrame.new(center.X, feetY, center.Z))
@@ -590,6 +638,7 @@ function GoldenStatue.build(ring: Model, parent: Instance, center: Vector3, floo
 			Style.emitter(mohawk, "Embers", C.Fire, 4)
 		end
 	end
+	GoldenStatue.shade(m, k)
 end
 
 return GoldenStatue

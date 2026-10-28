@@ -55,10 +55,9 @@ MineKit.LightBudget = 24
 
 -- How bright each floor's PointLights burn, by floor index (owner 2026-10-27:
 -- "you can barely see anything" on floors 3, 5 and 6: their pale ground under
--- strong colored lights washed out; 2026-10-28 "a tiny bit brighter": 0.6 ->
--- 0.7). The floor builders call dimLights on their finished model; floors
--- not listed keep their lights as built.
-MineKit.LightScale = { [3] = 0.7, [5] = 0.7, [6] = 0.7 } :: { [number]: number }
+-- strong colored lights washed out). The floor builders call dimLights on
+-- their finished model; floors not listed keep their lights as built.
+MineKit.LightScale = { [3] = 0.6, [5] = 0.6, [6] = 0.6 } :: { [number]: number }
 
 function MineKit.dimLights(model: Instance, floorIndex: number)
 	local scale = MineKit.LightScale[floorIndex]

@@ -100,8 +100,10 @@ local SUNSET_SKY = {
 -- sand and the gold along with the neon, so the screen washed out. Every
 -- preset keeps its Threshold over 1 (only neon and the sun's glints bloom),
 -- a smaller, softer bloom, and the caves no longer push their exposure up.
--- Owner 2026-10-28: "just a tiny bit brighter everywhere": every exposure
--- went up a small step (town +0.07, caves +0.1); the bloom stayed.
+-- Owner 2026-10-28: "just a tiny bit brighter everywhere, not the statue":
+-- every exposure went up a small step (town, quarry and the crate room
+-- +0.07, caves and the Vault +0.07-0.1); the bloom and the mine floors'
+-- lights stayed, and GoldenStatue.shade keeps the statue as it was.
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
@@ -399,7 +401,7 @@ LightingConfig.Presets = {
 			Brightness = 0.2,
 			Ambient = Color3.new(0.16, 0.14, 0.22),
 			OutdoorAmbient = Color3.new(0.06, 0.06, 0.1),
-			ExposureCompensation = 0.25,
+			ExposureCompensation = 0.32,
 			EnvironmentDiffuseScale = 0.1,
 			EnvironmentSpecularScale = 0.8,
 		},
