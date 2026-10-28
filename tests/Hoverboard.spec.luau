@@ -382,6 +382,44 @@ return function(T, Loader)
 		T.eq(#lite.Rings.Rings, 2, "lite: one ring per pad")
 	end)
 
+	T.test("hoverboard rings: level on the floor while the board bobs, rolls, pitches and flips", function()
+		local HoverboardRings = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardRings")
+		local BoardPose = Loader.requirePath("ReplicatedStorage.Shared.Moves.BoardPose")
+		local CFrame = roblox.CFrame
+		local set = HoverboardFx.create("EmberglassGlider")
+		T.truthy(HoverboardFx.mount(set, HoverboardBuilder.build("EmberglassGlider")), "mounts")
+		-- the character's root (upright, turned) and the weld's rest offset down to the floor
+		local hrp = CFrame.new(10, 5, -3) * CFrame.Angles(0, 0.7, 0)
+		local floor = CFrame.new(0, -3, 0)
+		local cases = {
+			{ Bob = 0.09, Pitch = 0.07, Carve = 0.3, Roll = 0.22, Flip = 0 },
+			{ Bob = -0.09, Pitch = 0, Carve = -0.35, Roll = -0.22, Flip = 2 },
+			{ Bob = 0, Pitch = 0.05, Carve = 0.1, Roll = 0.1, Flip = 4 },
+		}
+		for _, case in cases do
+			-- the board's weld as HoverboardController sets it every frame
+			local c0 = floor
+				* CFrame.new(0, case.Bob, 0)
+				* CFrame.Angles(case.Pitch, case.Carve, case.Roll)
+				* BoardPose.flipFrame(case.Flip)
+			for _, drop in { 0, 2.5 } do
+				HoverboardFx.rings(set, 0.4, 1, HoverboardRings.groundFrame(c0, floor, drop, case.Carve))
+				local rootWorld = hrp * c0
+				local groundY = hrp.Position.Y - 3 - drop + HoverboardRings.Lift
+				for i, ring in set.Rings.Rings do
+					local a, b = rootWorld * ring.A.CFrame, rootWorld * ring.B.CFrame
+					T.near(a.Position.Y, groundY, 1e-4, "on the floor (a jump: on the ground left)")
+					T.near(b.Position.Y, groundY, 1e-4, "both sides on the floor")
+					T.near(a.XVector.Y, 0, 1e-4, "the ring lies flat")
+					T.near((a.Position - b.Position).Magnitude / 2, (HoverboardRings.at(ring.Phase, 0.4)), 1e-4, "round")
+					-- centred under its pad, along the carved board
+					local mid = hrp:Inverse() * ((a.Position + b.Position) / 2)
+					T.near(Vector3.new(mid.X, 0, mid.Z).Magnitude, math.abs(set.Rings.Pads[i]), 1e-4, "under its pad")
+				end
+			end
+		end
+	end)
+
 	T.test("hoverboard lightning: a lit arc holds its shape, then rests (no strobing)", function()
 		local HoverboardBolts = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBolts")
 		T.truthy(HoverboardBolts.FlickerEvery >= 0.15, "ticks at most ~6 a second")

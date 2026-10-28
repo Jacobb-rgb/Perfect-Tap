@@ -13,6 +13,11 @@
 	Nothing is made while riding: step() only moves the attachments, sets the
 	curve sizes and picks a precomputed Transparency.
 
+	The Root bobs, pitches, rolls into turns and kickflips; the rings must not
+	(they would sink into the floor on one side): step() takes the ground's
+	frame in Root space (groundFrame: level, at the floor, turned only with the
+	board's carve), so they stay flat on the ground.
+
 	Lite (phones, crowds): one ring per pad.
 ]]
 
@@ -26,6 +31,7 @@ HoverboardRings.Width = 0.13
 HoverboardRings.Lift = 0.06 -- above the ground
 HoverboardRings.Steps = 12 -- transparency steps (no NumberSequence made per frame)
 local K = 4 / 3 -- cubic Bezier half circle
+local TURN = CFrame.Angles(0, -math.pi / 2, 0)
 
 export type Ring = {
 	A: Attachment,
@@ -146,11 +152,23 @@ function HoverboardRings.at(phase: number, t: number): (number, number)
 end
 
 --[[
-	One frame: every ring grows out from its pad and fades. `alpha` 0..1 fades the
-	whole set (0 = hidden: in the air, off screen). `ground` = the ground's height
-	in Root space (0 for a board resting on its Root).
+	The ground's frame in the board Root's space, for a Root welded to the
+	character with `c0` (Weld.C1 = identity): `floor` = the floor under the
+	character in its root's space (the weld's rest offset), `drop` = studs the
+	ground lies below that floor (a jump: the ground stays where it was), `yaw`
+	= the board's carve. Level and at the floor whatever the Root's bob, pitch,
+	roll and flip.
 ]]
-function HoverboardRings.step(set: RingSet, t: number, alpha: number, ground: number?)
+function HoverboardRings.groundFrame(c0: CFrame, floor: CFrame, drop: number, yaw: number): CFrame
+	return c0:Inverse() * floor * CFrame.new(0, -drop, 0) * CFrame.Angles(0, yaw, 0)
+end
+
+--[[
+	One frame: every ring grows out from its pad and fades. `alpha` 0..1 fades the
+	whole set (0 = hidden: in the air, off screen). `ground` = the ground's frame in
+	Root space (groundFrame; nil = the Root's own, a board resting on the ground).
+]]
+function HoverboardRings.step(set: RingSet, t: number, alpha: number, ground: CFrame?)
 	if not set.Root or alpha <= 0.02 then
 		if set.Shown then
 			HoverboardRings.hide(set)
@@ -158,15 +176,16 @@ function HoverboardRings.step(set: RingSet, t: number, alpha: number, ground: nu
 		return
 	end
 	set.Shown = true
-	local y = (ground or 0) + HoverboardRings.Lift
+	local base = ground or CFrame.identity
+	local y = HoverboardRings.Lift
 	local extra = math.floor((1 - math.clamp(alpha, 0, 1)) * HoverboardRings.Steps + 0.5)
 	for i, ring in set.Rings do
 		local radius, step = HoverboardRings.at(ring.Phase, t)
 		step = math.min(HoverboardRings.Steps, step + extra)
 		local z = set.Pads[i]
 		-- the attachments' X axis (Beam curve direction) points along +Z
-		ring.A.CFrame = CFrame.new(radius, y, z) * CFrame.Angles(0, -math.pi / 2, 0)
-		ring.B.CFrame = CFrame.new(-radius, y, z) * CFrame.Angles(0, -math.pi / 2, 0)
+		ring.A.CFrame = base * CFrame.new(radius, y, z) * TURN
+		ring.B.CFrame = base * CFrame.new(-radius, y, z) * TURN
 		local curve = K * radius
 		local front, back = ring.Halves[1], ring.Halves[2]
 		front.CurveSize0, front.CurveSize1 = curve, -curve

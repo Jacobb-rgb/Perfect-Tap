@@ -200,7 +200,8 @@ return function(T, Loader)
 		local hips = yawOf(free.LowerTorso.LookVector)
 		T.truthy(math.abs(hips - BoardPose.Stance) < 6, `the body is turned sideways ({hips} degrees)`)
 		local head = yawOf(free.Head.LookVector)
-		T.truthy(head < hips - 25 and head > 0, `the head turns toward where you go ({head} degrees)`)
+		-- almost ahead: the Helmet Lamp on the head (a 70 degree cone) lights the way
+		T.truthy(head > 0 and head < 20, `the head looks almost where you go ({head} degrees)`)
 		local l, r = free.LeftFoot.Position, free.RightFoot.Position
 		T.truthy(math.abs(l.Z - r.Z) > 1.0, `feet apart along the board ({math.abs(l.Z - r.Z)})`)
 		T.truthy(r.Z < l.Z, "the right foot leads")

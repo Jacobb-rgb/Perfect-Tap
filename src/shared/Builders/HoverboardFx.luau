@@ -574,10 +574,11 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 end
 
 -- One frame of the hover rings (HoverboardController, boards on screen): `t` seconds,
--- `alpha` 0..1 (0 = hidden: in the air, still flying in, Reduce Motion keeps them).
-function HoverboardFx.rings(set: FxSet, t: number, alpha: number)
+-- `alpha` 0..1 (0 = hidden: in the air, still flying in, Reduce Motion keeps them),
+-- `ground` = the ground's frame in the board Root's space (HoverboardRings.groundFrame).
+function HoverboardFx.rings(set: FxSet, t: number, alpha: number, ground: CFrame?)
 	if set.Model then
-		HoverboardRings.step(set.Rings, t, alpha, 0)
+		HoverboardRings.step(set.Rings, t, alpha, ground)
 	end
 end
 

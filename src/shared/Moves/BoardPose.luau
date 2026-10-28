@@ -8,7 +8,7 @@
 	  Ride   like Pet Simulator 99 (owner 2026-10-28, videos checked): the
 	         board points where you go and you stand on it SIDEWAYS like a
 	         surfer, your right side leading (the blaster hand), the head
-	         turned to look ahead, feet apart along the deck, knees a little
+	         turned (almost) ahead, feet apart along the deck, knees a little
 	         bent, arms relaxed and a little out. It breathes; with speed you
 	         bend a touch more and lean toward where you go; in turns you roll
 	         with the board
@@ -136,10 +136,11 @@ function BoardPose.evaluate(state: State, out: Pose?): Pose
 	local rollTurn = pivot * CFrame.Angles(0, 0, BoardPose.MaxRoll * turn) * pivot:Inverse()
 	local carve = math.deg(state.Carve or 0)
 	pose.Root = rollTurn * CFrame.new(0, lift - drop, 0) * angles(lean, 0, 0) * angles(0, stance + carve, 0)
-	-- the chest turns a little and the head well toward where you go
-	local waistYaw = -0.12 * stance
+	-- the chest turns a little and the head almost all the way toward where you go (about
+	-- 13 degrees off: the Helmet Lamp on the head lights the way ahead)
+	local waistYaw = -0.18 * stance
 	pose.Waist = angles(-2 - 3 * speed + 2 * sway, waistYaw, 2 * sway2 * calm)
-	pose.Neck = angles(2 + 4 * speed, -0.42 * stance + 6 * turn, 0)
+	pose.Neck = angles(2 + 4 * speed, -0.68 * stance + 6 * turn, 0)
 
 	-- (the formula of MoveConfig crouch: thigh a, knee -2a, ankle a)
 	pose.LeftHip = angles(crouch, 0, -spread)
