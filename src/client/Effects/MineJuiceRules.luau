@@ -17,6 +17,18 @@
 	                                     the spot is off screen: the bump only),
 	                                     "Quiet" (Reduce motion: no flight, no
 	                                     bump, only the sound)
+	  evict(slots, now, incomingKept)    which cracked rock gives its parts back
+	                                     for a new one (nil = none: skip the new
+	                                     rock). Never your own or focused rock
+	                                     (Kept), never one hit within KeepHit
+	                                     seconds unless the new rock is yours
+	                                     (one swap, then it stays: no thrash)
+	  land(now, showing, lastFlash)      an ore lands: merge into the bump still
+	                                     showing on that target (only its +N counts
+	                                     up and pops again) or start a new bump; a
+	                                     new bump flashes white at most once per
+	                                     flareGap() (flash safety)
+	  once(now, last, gap)               a sound or burst at most once per `gap`
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +37,8 @@ local JuiceConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChil
 local MineJuiceRules = {}
 
 export type Pickup = "Fly" | "Bump" | "Quiet"
+-- A cracked rock as evict() sees it: when it was last hit, and whether it must keep its crack.
+export type Slot = { HitAt: number, Kept: boolean }
 
 -- The shortest time between two glint flares of one rock (seconds).
 function MineJuiceRules.flareGap(): number
@@ -50,6 +64,41 @@ end
 -- The warm gold sparkle at a crack stage `distance` studs from the camera?
 function MineJuiceRules.sparkle(reduced: boolean, distance: number): boolean
 	return not reduced and distance <= JuiceConfig.CrackRange
+end
+
+--[[
+	Which of `slots` gives its crack back for a new rock (the key, or nil: the
+	new rock gets none this hit). `incomingKept`: the new rock is your own or
+	focused one.
+]]
+function MineJuiceRules.evict<K>(slots: { [K]: Slot }, now: number, incomingKept: boolean): K?
+	local best: K? = nil
+	local bestAt = math.huge
+	for key, slot in slots do
+		local fresh = now - slot.HitAt < JuiceConfig.KeepHit
+		if not slot.Kept and (incomingKept or not fresh) and slot.HitAt < bestAt then
+			best, bestAt = key, slot.HitAt
+		end
+	end
+	return best
+end
+
+--[[
+	An ore lands on a target whose bump is `showing` (its +N still on screen):
+	merge (the +N counts up and pops again: no new flash, ring or pop sound,
+	however many ores come); else a new bump, which flashes white only when the
+	target's last flash (`lastFlash`) is a flareGap() back. Returns (merge, flash).
+]]
+function MineJuiceRules.land(now: number, showing: boolean, lastFlash: number?): (boolean, boolean)
+	if showing then
+		return true, false
+	end
+	return false, MineJuiceRules.flare(now, lastFlash, false)
+end
+
+-- Something that should happen at most once per `gap` seconds (last = nil: never yet).
+function MineJuiceRules.once(now: number, last: number?, gap: number): boolean
+	return last == nil or now - last >= gap - 1e-9
 end
 
 -- What a pickup shows (see the header).

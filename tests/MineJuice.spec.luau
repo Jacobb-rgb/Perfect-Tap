@@ -186,9 +186,107 @@ return function(T, Loader)
 		T.truthy(string.find(controller, "MineJuiceRules.chips(reduced", 1, true), "the chips ask the rule")
 		T.truthy(string.find(controller, "RockCracks.hit(rock, reduced)", 1, true), "the cracks get Reduce motion")
 		T.truthy(
-			string.find(controller, 'Sfx.play("BagPop")\n\tif Motion.reduced() then\n\t\treturn\n\tend', 1, true),
+			string.find(controller, "if Motion.reduced() then\n\t\tpop(now)\n\t\treturn\n\tend", 1, true),
 			"land: no bump under Reduce motion"
 		)
+	end)
+
+	T.test("Juice: busy floors don't swap cracks back and forth; your own rock keeps its crack", function()
+		-- a phone (2 slots): you mine A, two other players mine B and C, each rock hit about 3 times a second
+		local slots: { [string]: { HitAt: number, Kept: boolean } } = {}
+		local lastFlare: { [string]: number? } = {} -- the weak per-rock memory: it outlives a lost slot
+		local flares: { [string]: { number } } = { A = {}, B = {}, C = {} }
+		local made, evicted = 0, 0
+		local function hit(rock: string, now: number)
+			local kept = rock == "A"
+			if not slots[rock] then
+				local count = 0
+				for _ in slots do
+					count += 1
+				end
+				if count >= JuiceConfig.CrackRocksPhone then
+					local victim = Rules.evict(slots, now, kept)
+					if not victim then
+						return -- every slot busy with a fresh or kept rock: this one waits
+					end
+					T.truthy(victim ~= "A", "your own rock is never evicted")
+					slots[victim] = nil
+					evicted += 1
+				end
+				made += 1
+			end
+			slots[rock] = { HitAt = now, Kept = kept }
+			if Rules.flare(now, lastFlare[rock], false) then
+				lastFlare[rock] = now
+				table.insert(flares[rock], now)
+			end
+		end
+		local t = 0
+		while t < 10 do
+			hit("B", t)
+			hit("C", t + 0.1)
+			hit("A", t + 0.2)
+			t += 0.3
+		end
+		T.le(made, 3, "the cracks are made once, not again and again")
+		T.le(evicted, 1, "at most one swap (your rock taking a slot)")
+		T.truthy(slots.A ~= nil, "your rock has its crack")
+		for rock, list in flares do
+			for i = 2, #list do
+				T.truthy(list[i] - list[i - 1] >= Rules.flareGap() - 1e-6, rock .. ": the flare cap holds")
+			end
+		end
+		-- a rock nobody hit for KeepHit seconds gives its slot to a new one
+		local idle = { Old = { HitAt = 0, Kept = false }, Mine = { HitAt = 0, Kept = true } }
+		T.eq(Rules.evict(idle, JuiceConfig.KeepHit + 0.01, false), "Old", "the idle rock goes")
+		T.eq(Rules.evict(idle, 0.2, false), nil, "a rock hit just now stays: the new one waits")
+		T.eq(Rules.evict(idle, 0.2, true), "Old", "your new rock takes the slot (once)")
+		T.eq(Rules.evict({ Mine = { HitAt = 0, Kept = true } }, 99, true), nil, "never your own")
+		local cracks = fs.readFile(Loader.root .. "/src/client/Effects/RockCracks.luau")
+		T.truthy(string.find(cracks, '__mode = "k"', 1, true), "the per-rock memory is weak")
+		T.truthy(string.find(cracks, "MineJuiceRules.evict(", 1, true), "eviction asks the rule")
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
+		T.truthy(string.find(controller, "RockFx.isMine(rock) or RockLabels.focused() == rock", 1, true), "own and focused rocks are kept")
+	end)
+
+	T.test("Juice: a stream of landings flashes the bag at most flareGap apart; merges only count up", function()
+		for _, every in { 0, 0.1, 0.25, 0.4, 0.9, 1.5 } do
+			local plusAt = -math.huge -- the bump's +N popped last (a merge pops it again)
+			local lastFlash: number? = nil
+			local flashes, merges, bumps = 0, 0, 0
+			local t = 0
+			while t < 6 do
+				local showing = t - plusAt < BagFly.BumpSeconds
+				local merge, flash = Rules.land(t, showing, lastFlash)
+				if merge then
+					T.falsy(flash, "a merge never flashes")
+					merges += 1
+				else
+					bumps += 1
+					if flash then
+						if lastFlash then
+							T.truthy(t - lastFlash >= Rules.flareGap() - 1e-6, "flashes at least flareGap apart (every " .. every .. ")")
+						end
+						lastFlash = t
+						flashes += 1
+					end
+				end
+				plusAt = t
+				t += if every > 0 then every else 0.02
+			end
+			T.le(flashes / 6, JuiceConfig.GlintFlaresPerSecond, "at most the flare rate (every " .. every .. ")")
+			if every < BagFly.BumpSeconds then
+				T.eq(flashes, 1, "a steady stream (every " .. every .. ") flashes once, then only counts up")
+				T.truthy(merges > bumps, "it merges")
+			end
+		end
+		T.truthy(Rules.once(1, nil, 0.3), "the first sound plays")
+		T.falsy(Rules.once(1.1, 1, 0.3), "not again within the gap")
+		T.truthy(Rules.once(1.3, 1, 0.3), "again after it")
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
+		T.truthy(string.find(controller, "MineJuiceRules.land(", 1, true), "landings ask the rule")
+		T.truthy(string.find(controller, "MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap)", 1, true), "one rise sound per pass")
+		T.truthy(string.find(controller, 'Sfx.playIn("Rock", "RockTok"', 1, true), "the toks have their own voices")
 	end)
 
 	T.test("Juice: crack frames lie on the face, along the segment", function()
@@ -227,8 +325,17 @@ return function(T, Loader)
 			local _, _, _, done = RockFxLogic.sample(p, p.Life + 0.01)
 			T.truthy(done, "gone after its life")
 		end
-		T.eq(#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Alive = RockFxLogic.Cap }), 0, "none when full")
-		T.eq(#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Alive = RockFxLogic.Cap - 1, Count = 3 }), 1, "only what fits")
+		T.eq(#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Alive = RockFxLogic.ChipCap }), 0, "none when full")
+		T.eq(
+			#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Alive = RockFxLogic.ChipCap - 1, Count = 3 }),
+			1,
+			"only what fits"
+		)
+		-- chips have a cap of their own: a busy floor's chips never take a break's room
+		T.le(RockFxLogic.ChipCap, 10, "a small chip cap")
+		local rockFx = fs.readFile(Loader.root .. "/src/client/Effects/RockFx.luau")
+		T.truthy(string.find(rockFx, "Alive = #live - chipsAlive,", 1, true), "cracks and breaks budget without the chips")
+		T.truthy(string.find(rockFx, "Alive = chipsAlive,", 1, true), "chips budget against their own cap")
 		T.eq(#RockFxLogic.chipPlan({ Position = Vector3.zero, Crust = crust, Count = 2 }), 2, "phones ask for two")
 	end)
 
@@ -323,6 +430,10 @@ return function(T, Loader)
 		T.eq(LevelView.ticks(LevelView.MomentSeconds, m, true), 3, "reduced: one per row, no counting")
 		T.lt(LevelView.rowAt(1), LevelView.rowAt(2), "coins first")
 		T.lt(LevelView.rowAt(2), LevelView.rowAt(3), "then income, then the milestone")
+		-- a level up queued behind waits until the last row has popped in (0.35 s)
+		T.truthy(LevelView.cutAt(m) >= LevelView.rowAt(3) + 0.35, "the MILESTONE row shows before the next moment")
+		T.eq(LevelView.cutAt({ Level = 11, Coins = 1, Bonus = 0.1, Increase = 0.01, Milestone = false }), 1.8, "no milestone: as before")
+		T.lt(LevelView.cutAt(m), LevelView.MomentSeconds, "still shorter than a whole moment")
 		local step, since = LevelView.coinStep(LevelView.rowAt(1) + 5, LevelView.rowAt(1))
 		T.eq(step, LevelView.CoinTicks, "every click at the end")
 		T.truthy(since > 0, "the last click is behind")
@@ -352,6 +463,14 @@ return function(T, Loader)
 		T.falsy(LevelView.poseWhoosh(view, 0.3), "playing")
 		T.truthy(view.Whoosh.Holder.Visible, "shows while it fills")
 		T.truthy(LevelView.poseWhoosh(view, LevelView.WhooshSeconds + 0.01), "done")
+		-- LevelController: a running fill waits while orbs fly (no freeze-then-jump), a queued
+		-- moment keeps the next fill's whoosh, the bell and the chime ring on sounds of their own
+		local level = fs.readFile(Loader.root .. "/src/client/Controllers/LevelController.luau")
+		T.truthy(string.find(level, "fillStart += dt", 1, true), "the fill clock waits with the orbs")
+		T.truthy(string.find(level, "if whoosh and fillFrom == nil then", 1, true), "only an idle whoosh stops")
+		T.truthy(string.find(level, 'Sfx.playOwn("LevelChime")', 1, true), "the chime on its own sound")
+		T.truthy(string.find(level, 'Sfx.playOwn("ElevatorDing")', 1, true), "the bell on its own sound")
+		T.truthy(string.find(level, "LevelView.cutAt(m.Up)", 1, true), "a milestone moment isn't cut early")
 	end)
 
 	T.test("Juice: rays shoot out of the character, three rings ripple out across the floor", function()

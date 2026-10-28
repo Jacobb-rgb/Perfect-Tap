@@ -144,15 +144,18 @@ local function startMoment(up: Up)
 		end
 	end
 	moment = { Up = up, Start = os.clock(), Burst = burst, Reduced = reduced, Ticks = 0 }
+	-- (a queued moment starts while the next level's fill already whooshes: that one keeps going)
 	local whoosh = whooshSound
-	if whoosh then
+	if whoosh and fillFrom == nil then
 		whoosh:Stop()
 	end
-	Sfx.play("ElevatorDing")
 	if JuiceConfig.LevelUp.Chime then
-		-- the 2026-10-27 reel: a warm chime instead of the glass burst
-		Sfx.play("LevelChime")
+		-- the 2026-10-27 reel: a warm chime instead of the glass burst; the bell and the chime
+		-- ring on sounds of their own, so the reward ticks never cut them off (Sfx.playOwn)
+		Sfx.playOwn("ElevatorDing")
+		Sfx.playOwn("LevelChime")
 	else
+		Sfx.play("ElevatorDing")
 		Sfx.play("CaseBurst")
 	end
 	task.delay(0.9, function()
@@ -230,7 +233,16 @@ local function step(dt: number)
 		end
 	end
 	local reduced = Motion.reduced()
-	if now >= holdUntil then
+	if now < holdUntil then
+		-- (orbs still flying: a running level-up fill waits where it is, then goes on smoothly)
+		if fillFrom ~= nil then
+			fillStart += dt
+		end
+		local full = fullAt
+		if full then
+			fullAt = full + dt
+		end
+	else
 		if shownLevel < target.Level and JuiceConfig.LevelUp.SlowFill and not reduced then
 			-- the 2026-10-27 reel: race, slow down right before full, hold the full bar white-hot
 			local full = fullAt
@@ -309,7 +321,7 @@ local function step(dt: number)
 			end
 		end
 		-- the next one waits for most of this one
-		local done = t >= LevelView.MomentSeconds or (#waiting > 0 and t >= 1.8)
+		local done = t >= LevelView.MomentSeconds or (#waiting > 0 and t >= LevelView.cutAt(m.Up))
 		if done then
 			if m.Burst then
 				LevelBurst.pose(m.Burst, -1)

@@ -57,6 +57,7 @@ local JuiceConfig = {
 	GlintColor = rgb(255, 212, 128), -- a pale warm gold: the same for every rock and ore, unlike every Rarity colour
 	CrackRocks = 3, -- rocks with cracks at once (the oldest hit gives its parts back)
 	CrackRocksPhone = 2,
+	KeepHit = 0.5, -- seconds: a cracked rock hit this recently keeps its crack (a new rock waits)
 	CrackRange = 80, -- studs from the camera: farther rocks get no cracks
 	GlintFlaresPerSecond = 2.5, -- a rock's glints flare at most this often (hits come ~3 a second)
 	HitGap = 0.12, -- seconds: a rock's hits closer than this count once (tok, chips)
@@ -66,6 +67,7 @@ local JuiceConfig = {
 	-- the bag flight (UI/BagFly)
 	DirtyChunk = rgb(120, 114, 108), -- a dirty ore's colour (HudView.DirtyColor: no rarity)
 	Flyers = 6, -- ore icons in flight at once (more pickups only bump)
+	SoundGap = 0.3, -- seconds: pickups in one pass rise, land and click once (not once each)
 }
 
 return JuiceConfig

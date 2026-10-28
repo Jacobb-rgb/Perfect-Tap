@@ -13,7 +13,9 @@
 	  RockFx.chips(...)       a few chips knocked off by one hit (MineJuiceController)
 
 	Phones: debris parts are pooled (anchored, no collisions, no shadows), at
-	most RockFxLogic.Cap = 30 alive and each gone within 1.5 s; at most 3 ground
+	most RockFxLogic.Cap = 30 alive (plus at most RockFxLogic.ChipCap = 8 hit
+	chips with a cap of their own: a busy floor's chips never take the room
+	of a crack or a break) and each gone within 1.5 s; at most 3 ground
 	rings (16 bars each) and 4 flash lights at once; one RenderStepped
 	connection runs only while something moves. The shake moves the rock's
 	anchored parts on this client only (the server never sees it) and puts
@@ -44,7 +46,7 @@ local RING_BARS = 16 -- the ground ring is drawn with this many thin neon bars
 local MAX_RINGS = 3 -- at once (many rocks breaking together skip the extra rings)
 local MAX_FLASHES = 4 -- flash lights at once
 
-type Live = { Part: BasePart, Piece: RockFxLogic.Piece, Born: number, Scale: number, Fade: number }
+type Live = { Part: BasePart, Piece: RockFxLogic.Piece, Born: number, Scale: number, Fade: number, Chip: boolean }
 type Flash = { Part: BasePart, Light: PointLight, Born: number, Duration: number, Peak: number }
 type Ring = { Parts: { BasePart }, Born: number, Duration: number, R0: number, R1: number, Center: Vector3, Width: number }
 type Shake = { Parts: { BasePart }, Base: { CFrame }, Pivot: CFrame, Born: number, Duration: number, Strength: number, Seed: number }
@@ -59,6 +61,8 @@ local shakes: { [Model]: Shake } = {}
 local lastShake: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 local connection: RBXScriptConnection? = nil
 local shooterAt: Vector3? = nil
+local shooterRock: Model? = nil
+local chipsAlive = 0 -- hit chips among `live` (their own cap)
 local shooterClock = -math.huge
 local moveParts: { BasePart } = {}
 local moveFrames: { CFrame } = {}
@@ -189,6 +193,9 @@ step = function(_dt: number)
 			if item.Part.Parent then
 				park(item.Part, item.Piece.Wedge)
 			end
+			if item.Chip then
+				chipsAlive -= 1
+			end
 			live[i] = live[#live]
 			live[#live] = nil
 		else
@@ -254,10 +261,12 @@ end
 
 ---------------------------------------------------------------- pieces
 
-local function spawn(pieces: { RockFxLogic.Piece })
+-- `chip`: hit chips (under RockFxLogic.ChipCap); everything else under RockFxLogic.Cap.
+local function spawn(pieces: { RockFxLogic.Piece }, chip: boolean?)
 	local now = os.clock()
+	local isChip: boolean = chip == true
 	for _, piece in pieces do
-		if #live >= RockFxLogic.Cap then
+		if (isChip and chipsAlive >= RockFxLogic.ChipCap) or (not isChip and #live - chipsAlive >= RockFxLogic.Cap) then
 			break
 		end
 		local part = table.remove(idle[piece.Wedge]) or newPart(piece.Wedge)
@@ -269,7 +278,11 @@ local function spawn(pieces: { RockFxLogic.Piece })
 		part.Material = if piece.Neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
 		part.Transparency = 0
 		part.CFrame = (RockFxLogic.sample(piece, 0))
-		table.insert(live, { Part = part, Piece = piece, Born = now, Scale = 0.5, Fade = 0 })
+		local item: Live = { Part = part, Piece = piece, Born = now, Scale = 0.5, Fade = 0, Chip = isChip }
+		table.insert(live, item)
+		if isChip then
+			chipsAlive += 1
+		end
 	end
 	if #live > 0 then
 		ensureLoop()
@@ -344,8 +357,14 @@ function RockFx.markShooter(rock: Model?)
 	local primary = rock and rock.PrimaryPart
 	if primary then
 		shooterAt = primary.Position
+		shooterRock = rock
 		shooterClock = os.clock()
 	end
+end
+
+-- Is the local player's beam on this rock (now or within the last SHOOTER_TIME)?
+function RockFx.isMine(rock: Model): boolean
+	return shooterRock == rock and os.clock() - shooterClock < SHOOTER_TIME
 end
 
 function RockFx.wasMine(position: Vector3, radius: number): boolean
@@ -458,7 +477,7 @@ function RockFx.crack(position: Vector3, crust: Color3, stage: number, glow: Col
 		Stages = total,
 		Out = towardCamera(position),
 		Ground = ground,
-		Alive = #live,
+		Alive = #live - chipsAlive,
 		Seed = os.clock() * 1000,
 	}))
 	if rock then
@@ -485,7 +504,7 @@ function RockFx.shatter(position: Vector3, crust: Color3, glow: Color3, floor: n
 		Kind = kind,
 		Radius = r,
 		Ground = ground,
-		Alive = #live,
+		Alive = #live - chipsAlive,
 		Seed = os.clock() * 1000,
 	}))
 	local floorPoint = Vector3.new(position.X, ground + 0.2, position.Z)
@@ -516,22 +535,26 @@ end
 --[[
 	The chips of one hit (MineJuiceController, Config/JuiceConfig Chips): a
 	few small chips in the crust colour fly out of the face at `position`
-	along `out` (the face normal), from the same pool and under the same cap.
-	`rock` (the one hit) is left out of the ground ray.
+	along `out` (the face normal), from the same pool under their own cap
+	(RockFxLogic.ChipCap: never the room of a crack or a break). `rock` (the
+	one hit) is left out of the ground ray.
 ]]
 function RockFx.chips(position: Vector3, crust: Color3, out: Vector3?, count: number?, rock: Instance?)
-	if #live >= RockFxLogic.Cap then
+	if chipsAlive >= RockFxLogic.ChipCap then
 		return
 	end
-	spawn(RockFxLogic.chipPlan({
-		Position = position,
-		Crust = crust,
-		Out = out,
-		Count = count,
-		Ground = groundBelow(position, 10, position.Y - 2, rock),
-		Alive = #live,
-		Seed = os.clock() * 1000,
-	}))
+	spawn(
+		RockFxLogic.chipPlan({
+			Position = position,
+			Crust = crust,
+			Out = out,
+			Count = count,
+			Ground = groundBelow(position, 10, position.Y - 2, rock),
+			Alive = chipsAlive,
+			Seed = os.clock() * 1000,
+		}),
+		true
+	)
 end
 
 -- Debris pieces alive now (tests / debug overlay).

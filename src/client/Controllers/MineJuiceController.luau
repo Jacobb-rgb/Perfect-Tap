@@ -7,10 +7,12 @@
 	  a hit      every Health drop of a labeled rock (UI/RockLabels.onHealthDrop,
 	             about 3 a second while anyone blasts it; one per HitGap):
 	             the crack grows and its gold glints flare (Effects/RockCracks),
-	             a dry "tok" (RockTok, at most TokPerSecond), a few chips fly
-	             out of the crack (RockFx.chips, rocks near the camera only).
+	             a dry "tok" (RockTok in a 3-voice Sfx lane of its own, at most
+	             TokPerSecond), a few chips fly out of the crack (RockFx.chips
+	             under their own cap, rocks near the camera only). Your own
+	             and your focused rock keep their crack (RockCracks.setKeep).
 	             RockFx keeps the tremble, MiningController the hit sparks.
-	  Fx NodeCrack    a crunch (RockCrunch) and a warm gold sparkle at the crack
+	  Fx NodeCrack    a crunch (RockCrunch, the same lane) and a warm gold sparkle at the crack
 	  (the break)     RockFx's own: dust, chunks, ground ring, its sounds and
 	                  shake (no word over it: the owner turned it down)
 	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
@@ -20,9 +22,13 @@
 	                  arc into the HUD's carry slot (TerraForgeHud.Carry: the
 	                  "Backpack" button, else Slots.Slot<CarryCount>, else the
 	                  panel, else the bottom centre) and a +1 bumps there with
-	                  a pop (BagRise, BagPop). The HUD is only read, never
-	                  changed: onLanded(callback) is the hook for a HUD owner
-	                  who wants the slot itself to bounce.
+	                  a pop (BagRise, BagPop). More ores landing on it while
+	                  its +N still shows only count it up and pop it again (no
+	                  new flash, ring or pop); a new bump flashes white at most once per
+	                  MineJuiceRules.flareGap per target, and pickups in one
+	                  pass rise and pop once per JuiceConfig.SoundGap. The HUD
+	                  is only read, never changed: onLanded(callback) is the
+	                  hook for a HUD owner who wants the slot itself to bounce.
 	The overlay hides with the HUD (the cleaning close-up). WorldMotionController's
 	ore pop (AnimConfig.WorldFx, off) is separate: this starts at the pickup,
 	so both can run together.
@@ -60,10 +66,8 @@ local HudController = require(script.Parent.HudController)
 
 local MineJuiceController = {}
 
-MineJuiceController.MergeGap = 0.3 -- seconds: landings closer than this on one target count up (+2, +3)
-
 type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number }
-type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, Count: number }
+type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, PlusAt: number, Count: number, Flash: boolean }
 
 local player = Players.LocalPlayer
 local view: BagFly.View? = nil
@@ -75,6 +79,10 @@ local lastHit: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 local tokens = JuiceConfig.TokPerSecond
 local tokenAt = 0
 local landedListeners: { (GuiObject?) -> () } = {}
+local NO_TARGET = {} -- lastFlash's key for landings with no HUD target
+local lastFlash: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
+local popAt: number? = nil -- the last BagPop
+local riseAt: number? = nil -- the last BagRise
 
 local function isPhone(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
@@ -162,7 +170,20 @@ local function ensureLoop()
 	end
 end
 
--- An ore landed in the bag: the pop, the listeners, the bump (none with Reduce motion).
+-- The bag's pop, at most once per SoundGap (pickups in one pass land together).
+local function pop(now: number)
+	if MineJuiceRules.once(now, popAt, JuiceConfig.SoundGap) then
+		popAt = now
+		Sfx.play("BagPop")
+	end
+end
+
+--[[
+	An ore landed in the bag: the listeners; with Reduce motion only the pop.
+	Else it merges into the bump still showing on that target (only its +N
+	changes) or starts a new bump with the pop, whose white flash comes at most
+	once per MineJuiceRules.flareGap() per target (MineJuiceRules.land).
+]]
 local function land(target: GuiObject?, now: number)
 	local v = view
 	if not v then
@@ -171,18 +192,29 @@ local function land(target: GuiObject?, now: number)
 	for _, callback in landedListeners do
 		task.spawn(callback, target)
 	end
-	Sfx.play("BagPop")
 	if Motion.reduced() then
+		pop(now)
 		return
 	end
-	-- more ore on the same target right away counts up: +2, +3 ...
+	local last: Landing? = nil
 	for _, l in landings do
-		if l.Target == target and now - l.Start < MineJuiceController.MergeGap then
-			l.Count += 1
-			l.Start = now
-			l.Bump.Plus.Label.Text = "+" .. l.Count
-			return
+		if l.Target == target then
+			last = l
 		end
+	end
+	local key: any = target or NO_TARGET
+	local showing = last ~= nil and now - last.PlusAt < BagFly.BumpSeconds
+	local merge, flash = MineJuiceRules.land(now, showing, lastFlash[key])
+	if merge and last then
+		-- more ore on the bump still showing: only the count goes up and pops again (+2, +3 ...)
+		last.Count += 1
+		last.PlusAt = now
+		last.Bump.Plus.Label.Text = "+" .. last.Count
+		return
+	end
+	pop(now)
+	if flash then
+		lastFlash[key] = now
 	end
 	local bump: BagFly.Bump? = nil
 	for _, b in v.Bumps do
@@ -205,7 +237,7 @@ local function land(target: GuiObject?, now: number)
 	end
 	local b = bump :: BagFly.Bump
 	b.Plus.Label.Text = "+1"
-	table.insert(landings, { Bump = b, Target = target, Start = now, Count = 1 })
+	table.insert(landings, { Bump = b, Target = target, Start = now, PlusAt = now, Count = 1, Flash = flash })
 	ensureLoop()
 end
 
@@ -230,7 +262,7 @@ step = function(_dt: number)
 	for i = #landings, 1, -1 do
 		local l = landings[i]
 		local at, size = targetPoint(l.Target, scale)
-		if BagFly.poseBump(l.Bump, at, size, now - l.Start, scale) then
+		if BagFly.poseBump(l.Bump, at, size, now - l.Start, scale, false, l.Flash, now - l.PlusAt) then
 			table.remove(landings, i)
 		end
 	end
@@ -279,7 +311,7 @@ function MineJuiceController.onHit(rock: Model)
 	local origin, normal = RockCracks.hit(rock, reduced)
 	local at = origin or primary.Position
 	if mining.Tok and takeToken(now) then
-		Sfx.play("RockTok", at)
+		Sfx.playIn("Rock", "RockTok", at)
 	end
 	local chips = if mining.Chips then MineJuiceRules.chips(reduced, cameraDistance(at), isPhone()) else 0
 	if chips > 0 then
@@ -324,7 +356,10 @@ local function pickup(position: Vector3, oreId: any)
 	BagFly.setOre(flyer, if ore then ore.Color else nil)
 	busy[flyer] = true
 	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10 })
-	Sfx.play("BagRise")
+	if MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap) then
+		riseAt = now
+		Sfx.play("BagRise")
+	end
 	ensureLoop()
 end
 
@@ -336,7 +371,7 @@ local function onFx(kind: any, a: any, b: any)
 	if kind == "NodeCrack" then
 		-- (position, crust, stage, glow, stages): the crunch and a neutral gold sparkle
 		if mining.Tok then
-			Sfx.play("RockCrunch", a)
+			Sfx.playIn("Rock", "RockCrunch", a)
 		end
 		if mining.Glints and MineJuiceRules.sparkle(Motion.reduced(), cameraDistance(a)) then
 			Vfx.burst("Glint", a, if isPhone() then 3 else 5, JuiceConfig.GlintColor)
@@ -360,6 +395,10 @@ function MineJuiceController.init()
 end
 
 function MineJuiceController.start()
+	-- your own rock (your beam is on it) and the one you aim at keep their crack
+	RockCracks.setKeep(function(rock: Model): boolean
+		return RockFx.isMine(rock) or RockLabels.focused() == rock
+	end)
 	RockLabels.onHealthDrop(MineJuiceController.onHit)
 	Net.listen("Fx", onFx)
 end

@@ -14,10 +14,14 @@
 	                                t seconds after the pickup: pops up at
 	                                `from` glowing and floats up (Rise), then
 	                                flies on an arc into `to`, shrinking (Fly)
-	  poseBump(bump, at, size, t, scale, reduced?) -> done
-	                                the landing: a white flash and a ring
-	                                round the slot / backpack button (`size`
-	                                px) that grows and fades, a +1 pops above
+	  poseBump(bump, at, size, t, scale, reduced?, flash?, plusT?) -> done
+	                                the landing: a white flash (flash ~= false;
+	                                the controller allows one per
+	                                MineJuiceRules.flareGap per target) and a
+	                                ring round the slot / backpack button
+	                                (`size` px) that grows and fades, a +1 pops
+	                                above (`plusT` seconds in: a merged landing
+	                                pops the +N again, the ring stays as it is)
 	Reduce motion: the controller (Effects/MineJuiceRules.pickup) plays neither
 	the flight nor the bump, only the sound; poseBump's `reduced` (a still
 	ring, the +1 fading in straight) is kept for callers that want it.
@@ -311,8 +315,17 @@ end
 	seconds after it landed: a white flash, a gold ring that grows and fades,
 	a +1 above. Returns true when it is over (then hidden).
 ]]
-function BagFly.poseBump(b: Bump, at: Vector2, size: Vector2, t: number, scale: number, reduced: boolean?): boolean
-	local done = PopWord.pose(b.Plus, t, reduced)
+function BagFly.poseBump(
+	b: Bump,
+	at: Vector2,
+	size: Vector2,
+	t: number,
+	scale: number,
+	reduced: boolean?,
+	flash: boolean?,
+	plusT: number?
+): boolean
+	local done = PopWord.pose(b.Plus, plusT or t, reduced)
 	b.Fit.Scale = scale
 	-- (the +1 sits on its own holder just above the target)
 	b.PlusAt.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y - size.Y / 2 - 4 * scale))
@@ -325,7 +338,7 @@ function BagFly.poseBump(b: Bump, at: Vector2, size: Vector2, t: number, scale: 
 		b.RingScale.Scale = if reduced then 1 else 1 + 0.45 * easeOut(k)
 		b.RingStroke.Transparency = k
 		b.RingStroke.Thickness = math.max(1, 5 * scale * (1 - 0.6 * k))
-		b.Flash.BackgroundTransparency = 0.3 + 0.7 * span(t, 0, 0.25)
+		b.Flash.BackgroundTransparency = if flash == false then 1 else 0.3 + 0.7 * span(t, 0, 0.25)
 	end
 	return done and ringOver
 end
