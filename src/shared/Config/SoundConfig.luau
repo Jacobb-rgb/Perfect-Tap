@@ -34,6 +34,19 @@ local SoundConfig: { [string]: SoundDef } = {
 	BlasterZap = { Id = "rbxassetid://12221996", Volume = 0.35, Pitch = { 1.15, 1.3 } },
 	BlastThud = { Id = "rbxassetid://12222046", Volume = 0.2, Pitch = { 0.85, 1.05 } },
 	RockBreak = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.4, Pitch = { 1.3, 1.45 } },
+	-- the owner's mining reel (2026-10-27, Config/JuiceConfig, MineJuiceController): a dry knock on every
+	-- hit (collide.wav lower), a crunch at a crack stage (the shipped explosion sped up), the ore floating
+	-- up (swoosh.wav high and soft) and landing in the bag (Roblox_UI_Cute_Pop)
+	RockTok = { Id = "rbxassetid://12221984", Volume = 0.32, Pitch = { 0.78, 0.92 } },
+	RockCrunch = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.3, Pitch = { 1.75, 1.95 } },
+	BagRise = { Id = "rbxassetid://12222200", Volume = 0.16, Pitch = { 1.55, 1.75 } },
+	BagPop = { Id = "rbxassetid://15675055424", Volume = 0.42, Pitch = { 1.0, 1.15 } },
+	-- the level-up reel (LevelController): a rising whoosh while the bar fills (Roblox_UI_Sweep; its pitch
+	-- climbs with the fill, Sfx.voice), a warm chime with LEVEL UP! (Roblox_UI_Tonal_Stinger), a click
+	-- for every reward tick (Roblox_UI_Bright_Click)
+	LevelWhoosh = { Id = "rbxassetid://15675046931", Volume = 0.45, Pitch = { 1.0, 1.0 } },
+	LevelChime = { Id = "rbxassetid://15675043410", Volume = 0.5, Pitch = { 1.0, 1.0 } },
+	LevelTick = { Id = "rbxassetid://15675059323", Volume = 0.3, Pitch = { 1.0, 1.04 } },
 	-- mine elevator (art/mine-floors): the arrival bell, the heavy door
 	ElevatorDing = { Id = "rbxassetid://16480570986", Volume = 0.5, Pitch = { 1.0, 1.0 } },
 	DoorThud = { Id = "rbxassetid://12221984", Volume = 0.6, Pitch = { 0.36, 0.42 } },

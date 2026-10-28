@@ -327,7 +327,8 @@ end
 
 --[[
 	State.Backpacks: { Equipped = the worn pack, Owned = { ids } (BackpackData
-	order, then a newer build's), Count = items inside, Capacity, Items = the
+	order, then a newer build's), Count = items inside, Capacity, Bonus = { Flat,
+	Pct, Double } (the carry bonuses: BackpackData.carried), Items = the
 	backpack's contents ({ [storage key] = count }) }. (Built here from the save:
 	BackpackService.summary says the same; StateService requires no service above it.)
 ]]
@@ -353,11 +354,19 @@ local function backpacksOf(player: Player, data: { [string]: any }): { [string]:
 		end
 	end
 	local equipped = if type(packs) == "table" and type(packs.Equipped) == "string" then packs.Equipped else BackpackData.StarterId
+	local stats = Bonuses.stats(player)
 	return {
 		Equipped = equipped,
 		Owned = owned,
 		Count = count,
-		Capacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
+		Capacity = Bonuses.carryCapacity(stats, player),
+		-- the carry bonuses, so the BACKPACKS window shows every pack's capacity the way the
+		-- server counts it (BackpackData.carried): the other CarryCapacity bonuses, CarryPct, Strong Back
+		Bonus = {
+			Flat = (stats.CarryCapacity or 0) - BackpackData.capacity(equipped),
+			Pct = stats.CarryPct or 0,
+			Double = Perks.has(player, "StrongBack"),
+		},
 		Items = items,
 	}
 end

@@ -299,6 +299,11 @@ function RockLabels.setFocus(rock: Model?, note: string)
 	end
 end
 
+-- The rock the player aims at now (setFocus), nil = none.
+function RockLabels.focused(): Model?
+	return focusRock
+end
+
 -- Calls `listener(rock)` when a labeled rock loses HP (any player's blaster).
 function RockLabels.onHealthDrop(listener: (Model) -> ())
 	table.insert(dropListeners, listener)

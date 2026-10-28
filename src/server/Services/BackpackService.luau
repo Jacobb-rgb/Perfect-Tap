@@ -24,12 +24,13 @@
 	  ("Equip", { Id }) a pack you own ("NotOwned"), anywhere.
 	  ("BadId" also for any other op or a broken payload.) Every request read
 	  gets a BackpackResult { Id, Ok, Reason?, Op? } (Op = the request's "Buy" /
-	  "Equip": the BACKPACKS shopkeeper cheers for a bought pack only).
+	  "Equip", none for any other op: the BACKPACKS shopkeeper cheers for a
+	  bought pack only).
 	The worn pack shows on the character: the player attribute "Backpack" =
 	Equipped (every client builds that pack, BackpackBuilder). refresh(player)
 	sets it again with the backpack attributes (CarryService) after any change.
 	State.Backpacks (StateService builds it from the save): { Equipped, Owned =
-	{ ids }, Count, Capacity, Items }.
+	{ ids }, Count, Capacity, Bonus = { Flat, Pct, Double }, Items }.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -197,7 +198,7 @@ local function onAction(player: Player, op: any, payload: any)
 	local args = Guard.table(payload, MAX_PAYLOAD)
 	local id = if args then Guard.string(args.Id, MAX_ID_LENGTH) else nil
 	if not id or (op ~= "Buy" and op ~= "Equip") then
-		answer(player, if id then id else "", false, "BadId")
+		answer(player, if id then id else "", false, "BadId", if op == "Buy" or op == "Equip" then op else nil)
 		return
 	end
 	local ok, reason
