@@ -20,11 +20,13 @@
 	  into one popup. Offline earnings get the "While you were away" popup
 	  instead (OpenUI "Offline" { Amount, Seconds, Hours }): COLLECT, B or
 	  Backspace closes it; gamepads start on COLLECT.
-	- The backpack button (HudView.setBackpack, right of the blaster's hotbar
-	  slot) says "n / cap" and turns red with a FULL tag when the backpack is
-	  full: Util/BackpackState (the CarryCount / CarryCapacity attributes and
-	  State.Backpacks), refreshed on both. BackpackController opens the
-	  inventory from it.
+	- The backpack button (HudView.setBackpack; the light HUD: right of its
+	  own BLASTER slot, the pair centred at the bottom; the dark HUD: right of
+	  the blaster's slot in Roblox's hotbar) says "n / cap" and turns red with
+	  a FULL tag when the backpack is full: Util/BackpackState (the
+	  CarryCount / CarryCapacity attributes and State.Backpacks), refreshed on
+	  both. BackpackController opens the inventory from it,
+	  BlasterSlotController equips the Blaster from the slot.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -165,7 +167,8 @@ local function updateScale()
 		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
 		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
-	-- the backpack button stays right of the blaster's hotbar slot (Roblox draws it in real pixels)
+	-- the bottom group: the light HUD's BLASTER slot + backpack button stay centred (design
+	-- units); the dark HUD's button stays right of Roblox's hotbar slot (real pixels)
 	if refs then
 		HudView.placeBackpack(refs, scale, GuiService:IsTenFootInterface())
 	end
