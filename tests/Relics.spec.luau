@@ -223,6 +223,19 @@ return function(T, Loader)
 			T.eq(CarryService.count(w.player), capacity, "the backpack stays at its size")
 			T.eq(#w.data.Storage, before + 1, "into the pen")
 			T.eq(w.data.Storage[#w.data.Storage].O, "Copper", "the same ore")
+			-- the pen full too: it stays in the vise (never past the pen's capacity, never sold)
+			local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
+			while #w.data.Storage < PenService.capacity(w.player) do
+				table.insert(w.data.Storage, { K = "Raw", O = "Coal" })
+			end
+			local full = #w.data.Storage
+			local coins = w.data.Coins
+			local third = vise()
+			cleaning.take(w.player, machine)
+			T.eq(third.State ~= "Consumed", true, "still in the vise")
+			T.eq(machine.State.Item, third, "the vise holds it")
+			T.eq(#w.data.Storage, full, "the pen stays at its capacity")
+			T.eq(w.data.Coins, coins, "nothing sold")
 		end)
 		for i = #saved, 1, -1 do
 			rawset(saved[i][1], saved[i][2], saved[i][3])
