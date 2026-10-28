@@ -663,4 +663,52 @@ return function(T, Loader)
 		local shakeAt = string.find(burst, "CameraShake.add", 1, true)
 		T.truthy(reducedAt and shakeAt and reducedAt < shakeAt, "Reduce motion returns before any shake")
 	end)
+
+	T.test("HatchFx: golems stay SOLID (nothing see-through over them, the glow behind)", function()
+		local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+		local Color3 = roblox.Color3
+		-- owner 2026-10-28: "the golems mustn't be see-through"
+		local o = CapsuleView.buildOpening(false)
+		local fx = HatchFx.overlay(o.Gui)
+		T.eq(o.Hero.ImageTransparency, 0, "the hero view is opaque")
+		T.truthy(fx.Tint.ZIndex < o.Hero.ZIndex, "the Mythic tint colours the backdrop, under the golem")
+		T.truthy(fx.Aura.ZIndex < o.Hero.ZIndex, "the aura glows behind the golem")
+		T.truthy(o.Rays.ZIndex < o.Hero.ZIndex, "the rays turn behind the golem")
+		HatchFx.setLeak(fx, nil, HatchFx.plan(6), Color3.new(1, 0, 0))
+		T.falsy(fx.Leak.Visible, "the leaking light (over the egg) is gone before the golem")
+		T.truthy(HatchFx.BurstTime >= 0.45, "the break's flash (0.45 s) has faded when the golem pops")
+		-- the controller: no flash over a golem (the reveal, the grid); the aura pulses behind instead
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		local reveal = string.match(source, "local function reveal%(.-\nend\n")
+		local grid = string.match(source, "local function showGrid%(.-\nend\n")
+		T.truthy(reveal and grid, "the reveal and the grid")
+		local code = function(text: string): string
+			return (string.gsub(text, "%-%-[^\n]*", ""))
+		end
+		T.falsy(string.find(code(reveal), "flash(", 1, true), "no flash over the revealed golem")
+		T.falsy(string.find(code(grid), "flash(", 1, true), "no flash over the grid's golems")
+		T.truthy(string.find(reveal, "o.Hero.ImageTransparency = 0", 1, true), "the golem's view made opaque")
+		T.truthy(string.find(reveal, "HatchFx.pulseAura(fx)", 1, true), "its glow bursts out behind it")
+		-- the grid's golems: every picture opaque
+		CapsuleView.setGrid(o, { "PebbleGolem", "HeartstoneColossus", "RoseKnight" }, { [2] = true }, 2)
+		for _, cell in o.Cells do
+			for _, d in cell.Frame:GetDescendants() do
+				if d:IsA("ViewportFrame") or (d:IsA("ImageLabel") and d.Name == "Picture") then
+					T.eq((d :: any).ImageTransparency, 0, cell.Kind .. ": " .. d.Name .. " opaque")
+				end
+			end
+		end
+		-- the egg panel's cards: opaque at rest (silhouettes black, never faded)
+		local refs = EggPanel.build()
+		local lines = EggPanel.lines("Crystal", false, { QuartzSprite = true })
+		EggPanel.apply(refs, "Crystal", EggPanel.layout(#lines, false), 1)
+		EggPanel.setLines(refs, lines, nil)
+		EggPanel.setFade(refs, 0)
+		for i, card in refs.Cards do
+			if lines[i] then
+				T.eq(card.View.ImageTransparency, 0, lines[i].Golem .. ": its picture opaque")
+				T.truthy(card.Picture.ZIndex > card.Rays.ZIndex, "the card's rays behind the golem")
+			end
+		end
+	end)
 end

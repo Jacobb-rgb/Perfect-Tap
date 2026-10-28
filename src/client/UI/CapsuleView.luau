@@ -1461,8 +1461,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Position = UDim2.fromScale(0.5, 0.42),
 		Size = UDim2.fromOffset(460, 460),
 		BackgroundTransparency = 1,
-		Ambient = rgb(170, 166, 170),
-		LightColor = rgb(255, 248, 236),
+		-- (a solid golem in its own colours: a softer ambient, a white key light; owner
+		-- 2026-10-28: "the golems mustn't be see-through")
+		Ambient = rgb(150, 148, 152),
+		LightColor = rgb(255, 255, 255),
 		LightDirection = Vector3.new(-0.5, -1, 0.7),
 		ZIndex = 3,
 	}, gui)

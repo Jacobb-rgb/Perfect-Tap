@@ -12,9 +12,12 @@
 	  break     a squash, a stretch, a flash (FlashGap apart at least: no
 	            more than 2.5 a second), the halves fly apart, shell pieces
 	            and sparkles burst out
-	  golem     pops out with a bounce (popAt) in a soft glow of its rarity
-	            colour (the aura) and the turning rays; Epic and up get
-	            sparkles, Mythic a short tint of the whole screen
+	  golem     pops out with a bounce (popAt), SOLID (owner 2026-10-28: "the
+	            golems mustn't be see-through"): nothing see-through ever
+	            goes over it, no flash, no leak; its rarity glows BEHIND it:
+	            the aura bursts out (pulseAura), the turning rays, Mythic's
+	            short tint of the backdrop (all under the hero: Tint 1,
+	            Aura 2 < the hero's 3); Epic and up get sparkles
 
 	plan(order) says how big each part is per rarity (a longer build-up for
 	rarer golems). A plan's numbers, the curves (shakeAt, cracksAt, popAt)
@@ -26,6 +29,8 @@
 	Reduce motion (Motion.reduced(), CapsuleController): none of it; the
 	golem only fades in.
 ]]
+
+local TweenService = game:GetService("TweenService")
 
 local UIKit = require(script.Parent.UIKit)
 local Confetti = require(script.Parent.Confetti)
@@ -298,6 +303,7 @@ export type Overlay = {
 
 -- Builds the hatch's pieces into the opening's gui (place() puts them on the hero).
 function HatchFx.overlay(gui: Instance): Overlay
+	-- (the tint colours the backdrop only: ZIndex 1, right over the dim, under the rays and the hero)
 	local tint = UIKit.new("Frame", {
 		Name = "HatchTint",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -305,7 +311,7 @@ function HatchFx.overlay(gui: Instance): Overlay
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, -40),
 		Size = UDim2.new(1, 0, 1, 80),
-		ZIndex = 2,
+		ZIndex = 1,
 	}, gui) :: Frame
 	local aura = UIKit.new("Frame", {
 		Name = "HatchAura",
@@ -315,6 +321,7 @@ function HatchFx.overlay(gui: Instance): Overlay
 		Visible = false,
 		ZIndex = 2,
 	}, gui) :: Frame
+	UIKit.new("UIScale", { Name = "Pulse", Scale = 1 }, aura)
 	local rings: { Frame } = {}
 	for i, k in { 1, 0.74, 0.5 } do
 		local ring = UIKit.new("Frame", {
@@ -422,6 +429,16 @@ function HatchFx.setAura(fx: Overlay, color: Color3, strength: number)
 	for i, ring in fx.Rings do
 		ring.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.15 * i)
 		ring.BackgroundTransparency = 1 - (0.12 + 0.08 * i) * math.clamp(strength, 0, 1)
+	end
+end
+
+-- The aura bursts out behind the golem (from small, past full size, back), the
+-- golem's glow in place of a flash over it (not with Reduce motion).
+function HatchFx.pulseAura(fx: Overlay)
+	local pulse = fx.Aura:FindFirstChild("Pulse")
+	if pulse and pulse:IsA("UIScale") then
+		pulse.Scale = 0.4
+		TweenService:Create(pulse, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	end
 end
 

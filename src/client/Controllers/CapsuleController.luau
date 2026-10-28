@@ -39,8 +39,10 @@
 	  rarest golem's colour (a longer build-up and more light for rarer
 	  golems) to a rising sound and a crack sound per crack, then bursts (the
 	  eggs one after another): a flash, the halves flying, shell pieces, a
-	  small camera nudge. Each golem pops out with a bounce in its rarity's
-	  aura and rays, with its name, rarity, bonus and NEW! when it is the
+	  small camera nudge. Each golem pops out SOLID (owner: "the golems
+	  mustn't be see-through": no flash or tint ever over a golem, in the
+	  reveal or the grid; its glow is behind it) with a bounce in its
+	  rarity's aura and rays, with its name, rarity, bonus and NEW! when it is the
 	  first of its kind; Rare and up sparkle, Mythic tints the screen once, a
 	  fanfare from Legendary (x1 and x3 one by one, then x3 as a row of
 	  cards; x10 straight to a grid of 10 cards popping in). Flashes stay
@@ -952,7 +954,13 @@ local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, ind
 	local plan = HatchFx.plan(order)
 	local fx = hatch
 	local pop = heroPop(o)
+	-- the golem is SOLID (owner 2026-10-28: "the golems mustn't be see-through"): its
+	-- view fully opaque, its own colours, no flash or leak over it; its rarity glows
+	-- BEHIND it (the aura, the rays, the Mythic tint: all under the hero)
+	o.Hero.ImageColor3 = Color3.new(1, 1, 1)
+	o.Hero.ImageTransparency = 0
 	if fx then
+		fx.Leak.Visible = false
 		HatchFx.setAura(fx, color, if order >= 4 then 1 else 0.55)
 	end
 	if Motion.reduced() then
@@ -966,8 +974,9 @@ local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, ind
 		TweenService:Create(pop, TweenInfo.new(HatchFx.PopTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 		plateScale.Scale = 0.5
 		TweenService:Create(plateScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		flash(o, color, if order >= 4 then 0.7 else 0.35)
 		if fx then
+			-- (the glow bursts out behind the golem: never a flash over it)
+			HatchFx.pulseAura(fx)
 			if plan.Sparkles > 0 then
 				Confetti.burst(some(fx.Sparkles, plan.Sparkles), Vector2.new(0.5, 0.5), os.clock() + index)
 			end
@@ -1041,7 +1050,7 @@ local function showGrid(o: CapsuleView.OpenRefs, allKinds: { string }, allNew: {
 		end
 		local order = GolemConfig.order(cell.Kind)
 		if order >= 4 then
-			flash(o, CapsuleView.rarityColor(cell.Kind), 0.35) -- (FlashGap apart at most)
+			-- (no flash over the cards: their golems stay solid; the rare card pops and the rays glow behind)
 			Sfx.play(if order >= 5 then "Discovery" else "Reveal")
 		else
 			Sfx.play("Pickup")
