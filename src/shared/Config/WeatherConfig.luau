@@ -379,17 +379,21 @@ WeatherConfig.Rainbow = {
 -- Under a roof (the DROPPERS shop, THE GREAT FORGE's nave) the weather goes. Every check one ray
 -- goes straight up from the character and Rays more from round it (a triangle Spread studs out);
 -- each goes on past what is no roof (WeatherLogic.roofCounts: see-through parts, trees, parts
--- that do not collide) for at most Hops hits and Reach studs (SKY HAVEN's islets and the sky
--- islands far above never count). Covered = the ray over the player AND Sides of the others hit
+-- that do not collide, parts smaller than MinSize on their two bigger sides like a statue's fist
+-- or a sign board) for at most Hops hits and Reach studs (SKY HAVEN's islets and the sky islands
+-- far above never count). Covered = the ray over the player AND Sides of the others hit
 -- (a block or a wheel rim beside you never counts on its own), and the reading must hold Hold
 -- seconds before the weather goes or comes back (no blinking under lamps and arches).
 -- Ghost roofs (Style.ghost / tiny: CanQuery off, no ray sees them: the EGGS temple's drum, THE
--- GREAT FORGE's side roofs) are Covered shapes below instead.
+-- GREAT FORGE's side roofs) are Covered shapes below instead; inside one the roof reading is
+-- set to covered (WeatherLogic.roofGate), so a jump out of its top or a step from an aisle into
+-- the nave never brings the weather back for a moment.
 WeatherConfig.Roof = {
 	Rays = 3,
 	Spread = 5,
 	Sides = 1,
 	Reach = 24, -- studs: about one building
+	MinSize = 6, -- studs: a roof part's two bigger sides at least this
 	Hops = 4,
 	Hold = 0.5,
 	SeeThrough = 0.9, -- a part this transparent (or more) is no roof
@@ -408,7 +412,8 @@ export type Covered = {
 --   GrottoTunnel  the tunnel from the Quarry to the VIP Glimmer Grotto (World/Land builds it
 --                 between the two zones, under solid rock)
 --   EggsTemple    under the EGGS temple's drum (Districts/Capsules: the drum is 17.4 across, its
---                 underside 10.5 up, centred 0.3 behind the piece's centre)
+--                 underside 10.5 up, centred 0.3 behind the piece's centre), up to 15 so a jump
+--                 from the dais or a podium (root up to ~13.5) stays inside
 --   ForgeAisleL/R under THE GREAT FORGE's wide side roofs (Plaza/GreatForge: local x 14.2 .. 21
 --                 either side, z NaveRoofZ0 + 0.6 = -10.6 .. 21.5, the eave 17.4 up at the edge)
 do
@@ -430,8 +435,8 @@ do
 		},
 		{
 			Name = "EggsTemple",
-			CFrame = eggs * CFrame.new(0, (-2 + 10.5) / 2, 0.3),
-			Size = Vector3.new(17.4, 10.5 + 2, 17.4),
+			CFrame = eggs * CFrame.new(0, (-2 + 15) / 2, 0.3),
+			Size = Vector3.new(17.4, 15 + 2, 17.4),
 			Round = true,
 		},
 	}

@@ -79,6 +79,7 @@ export type Cover = {
 	Indoors: boolean, -- what the weather obeys
 	Pending: boolean, -- the latest reading
 	Since: number, -- when the reading last changed
+	Raining: boolean, -- there was weather at the last check (roofGate)
 }
 
 export type Band = {
@@ -607,12 +608,25 @@ function WeatherLogic.roofOffsets(cfg: Config?): { Vector3 }
 end
 
 -- Does a hit `distance` studs above a ray's start make a roof? A part that collides, not past
--- Roof.Reach, not part of a tree, not see-through. (Parts that do not collide never count:
--- banners, awnings, lamp heads, the train track. Ghost roofs are WeatherConfig.Covered places.)
-function WeatherLogic.roofCounts(distance: number, transparency: number, canCollide: boolean, tree: boolean, cfg: Config?): boolean
+-- Roof.Reach, not part of a tree, not see-through, and roof-sized: its two bigger sides at least
+-- Roof.MinSize (a statue's fist, a sign board or a lamp is no roof). (Parts that do not collide
+-- never count: banners, awnings, lamp heads, the train track. Ghost roofs are Covered places.)
+function WeatherLogic.roofCounts(
+	distance: number,
+	transparency: number,
+	canCollide: boolean,
+	tree: boolean,
+	size: Vector3,
+	cfg: Config?
+): boolean
 	local c = cfg or WeatherConfig
 	local r = c.Roof
-	return canCollide and not tree and distance <= r.Reach and transparency < r.SeeThrough
+	if not canCollide or tree or distance > r.Reach or transparency >= r.SeeThrough then
+		return false
+	end
+	local a, b, d = size.X, size.Y, size.Z
+	local middle = math.max(math.min(a, b), math.min(math.max(a, b), d)) -- the second biggest side
+	return middle >= r.MinSize
 end
 
 -- Is a model with this name a tree? "Tree", "JungleTree", "JungleTree3" (the map's tree models).
@@ -627,7 +641,30 @@ function WeatherLogic.roofed(center: boolean, sides: number, cfg: Config?): bool
 end
 
 function WeatherLogic.newCover(): Cover
-	return { Indoors = false, Pending = false, Since = 0 }
+	return { Indoors = false, Pending = false, Since = 0, Raining = false }
+end
+
+-- One check of the roof gate (WeatherController): true = the weather may show here. `place`: the
+-- character is in a Covered place (the reading is set to covered, so leaving it through its top
+-- or into a real roof never opens the weather for a moment); `covered`: the roof rays' reading
+-- (only cast while `raining`); when weather begins the reading is taken at once (no blip
+-- indoors), after that it must hold Roof.Hold seconds (settleCover).
+function WeatherLogic.roofGate(state: Cover, place: boolean, raining: boolean, covered: boolean, now: number, cfg: Config?): boolean
+	if place then
+		state.Indoors, state.Pending, state.Since = true, true, now
+		state.Raining = raining
+		return false
+	end
+	if not raining then
+		state.Raining = false
+		WeatherLogic.settleCover(state, false, now, cfg)
+		return true
+	end
+	if not state.Raining then
+		state.Raining = true
+		state.Indoors, state.Pending, state.Since = covered, covered, now
+	end
+	return not WeatherLogic.settleCover(state, covered, now, cfg)
 end
 
 -- The roof reading after its hold: a change must last Roof.Hold seconds before the weather obeys
@@ -659,14 +696,23 @@ function WeatherLogic.inCovered(place: WeatherConfig.Covered, position: Vector3)
 	return math.abs(p.X) <= half.X and math.abs(p.Z) <= half.Z
 end
 
+-- Is `position` in any WeatherConfig.Covered place?
+function WeatherLogic.inAnyCovered(position: Vector3, cfg: Config?): boolean
+	local c = cfg or WeatherConfig
+	for _, place in c.Covered do
+		if WeatherLogic.inCovered(place, position) then
+			return true
+		end
+	end
+	return false
+end
+
 -- True where weather shows: the surface (WeatherConfig.Zones), the sea and the sky above it, but
 -- not in a Covered place (the Quarry -> Grotto tunnel, the EGGS temple, THE GREAT FORGE's aisles).
 function WeatherLogic.isSurface(position: Vector3, cfg: Config?): boolean
 	local c = cfg or WeatherConfig
-	for _, place in c.Covered do
-		if WeatherLogic.inCovered(place, position) then
-			return false
-		end
+	if WeatherLogic.inAnyCovered(position, c) then
+		return false
 	end
 	local zone = WorldLayout.zoneAt(position)
 	if zone then

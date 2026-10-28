@@ -656,7 +656,7 @@ return function(T, Loader)
 				return false
 			end
 			local y = from.Y + t
-			if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, inTree(part)) then
+			if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, inTree(part), part.Size) then
 				return true
 			end
 			from = Vector3.new(from.X, y + 0.05, from.Z)
@@ -788,7 +788,10 @@ return function(T, Loader)
 		local width = math.max(drum.Size.X, drum.Size.Y, drum.Size.Z)
 		T.near(eggs.Size.X, width, 0.2, "as wide as the drum")
 		local underside = drumAt.Y - math.min(drum.Size.X, drum.Size.Y, drum.Size.Z) / 2
-		T.near(eggs.CFrame.Position.Y + eggs.Size.Y / 2, underside, 0.2, "up to the drum's underside")
+		local top = eggs.CFrame.Position.Y + eggs.Size.Y / 2
+		T.truthy(top >= underside + 4, "over the drum's underside, with room for a jump")
+		-- a jump from the Royal podium (top 3.0): the root rises to 3 + 3 + 7.5 (CharacterJumpHeight)
+		T.truthy(top >= eggs.CFrame.Position.Y - eggs.Size.Y / 2 + 2 + 13.5 + 0.5, "a podium jump stays inside")
 		local dais = Vector3.new(drumAt.X, 1.2 + 3, drumAt.Z)
 		T.falsy(covered(dais, partsOf(temple)), "the rays see no roof over the dais (that is why the place is needed)")
 		T.falsy(WeatherLogic.isSurface(dais), "no weather on the dais")
@@ -847,5 +850,55 @@ return function(T, Loader)
 		T.falsy(WeatherLogic.settleCover(c, false, 6), "never blinked")
 		T.eq(#WeatherLogic.roofOffsets(), WeatherConfig.Roof.Rays, "one start per side ray")
 		T.truthy(WeatherConfig.Roof.Sides >= 1, "a ray round the player must agree with the one over it")
+	end)
+
+	T.test("weather: Covered places hold the roof reading (a jump in the EGGS temple, an aisle into the nave)", function()
+		local hold = WeatherConfig.Roof.Hold
+		-- a check every 0.25 s; returns true = the weather shows
+		local c = WeatherLogic.newCover()
+		T.truthy(WeatherLogic.roofGate(c, false, true, false, 0), "raining on the lawn")
+		T.falsy(WeatherLogic.roofGate(c, true, true, true, 0.25), "into the temple: no weather")
+		T.falsy(WeatherLogic.roofGate(c, true, true, true, 0.5), "on the dais")
+		-- a jump: one check above the place, where the rays see only ghosts (no roof)
+		T.falsy(WeatherLogic.roofGate(c, false, true, false, 0.75), "mid-jump: still no weather")
+		T.falsy(WeatherLogic.roofGate(c, true, true, true, 1.0), "landed")
+		-- THE GREAT FORGE: from a side aisle (a place) into the nave (the rays find its roof)
+		T.falsy(WeatherLogic.roofGate(c, true, true, true, 2.0), "in the aisle")
+		for t = 2.25, 4, 0.25 do
+			T.falsy(WeatherLogic.roofGate(c, false, true, true, t), `in the nave at {t}: never back on`)
+		end
+		-- out into the open: the weather comes back after the hold, not before
+		T.falsy(WeatherLogic.roofGate(c, false, true, false, 5), "out: not yet")
+		T.falsy(WeatherLogic.roofGate(c, false, true, false, 5 + hold / 2), "not yet")
+		T.truthy(WeatherLogic.roofGate(c, false, true, false, 5 + hold), "after the hold")
+		-- weather begins while you stand inside: no blip
+		local d = WeatherLogic.newCover()
+		T.truthy(WeatherLogic.roofGate(d, false, false, false, 0), "clear")
+		T.falsy(WeatherLogic.roofGate(d, false, true, true, 0.25), "rain begins under a roof: off at once")
+		local e = WeatherLogic.newCover()
+		T.falsy(WeatherLogic.roofGate(e, true, false, true, 0), "clear, in the temple")
+		T.falsy(WeatherLogic.roofGate(e, true, true, true, 0.25), "rain begins in the temple")
+		T.falsy(WeatherLogic.roofGate(e, false, true, false, 0.5), "a jump right away: still off")
+	end)
+
+	T.test("weather: small high parts are no roof (the golden dragon's fists over the statue ring)", function()
+		local size = Vector3.new
+		T.falsy(WeatherLogic.roofCounts(14, 0, true, false, size(3.7, 3.4, 3.6)), "a fist")
+		T.falsy(WeatherLogic.roofCounts(3, 0, true, false, size(11, 3, 0.6)), "a sign board")
+		T.falsy(WeatherLogic.roofCounts(4, 0, true, false, size(1.2, 1.3, 1.2)), "a king's crown")
+		T.truthy(WeatherLogic.roofCounts(9, 0, true, false, size(30.6, 0.6, 15.6)), "the DROPPERS roof slab")
+		T.truthy(WeatherLogic.roofCounts(9, 0, true, false, size(0.9, 12, 32)), "a turned slab")
+		local FireCrystal = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.FireCrystal")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local folder = roblox.Instance.new("Folder")
+		FireCrystal.build(folder, Rng.new(1))
+		T.truthy(folder:FindFirstChild("Fist1", true), "the dragon is built")
+		local parts = partsOf(folder)
+		for _, x in { -10, -9, -8, 8, 9, 10 } do
+			for _, z in { -1, 0.5, 2 } do
+				local p = Vector3.new(x, 1.83 + 3, z)
+				T.falsy(covered(p, parts), `the statue ring at {p}: open sky`)
+			end
+		end
 	end)
 end

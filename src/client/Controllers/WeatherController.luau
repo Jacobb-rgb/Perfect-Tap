@@ -102,7 +102,6 @@ local roofParams = RaycastParams.new()
 roofParams.FilterType = Enum.RaycastFilterType.Exclude
 roofParams.IgnoreWater = true
 local cover = WeatherLogic.newCover()
-local wasRaining = false
 
 -- The weather now (nil before the first check).
 function WeatherController.current(): WeatherLogic.State?
@@ -182,7 +181,7 @@ local function roofAbove(origin: Vector3): boolean
 		end
 		local part = hit.Instance
 		local distance = hit.Position.Y - origin.Y
-		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, inTree(part)) then
+		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, inTree(part), part.Size) then
 			return true
 		end
 		from = hit.Position + Vector3.new(0, 0.05, 0)
@@ -233,22 +232,16 @@ local function allowedHere(raining: boolean): boolean
 	if not position then
 		return false
 	end
+	local now = os.clock()
+	-- a Covered place (the EGGS temple, THE GREAT FORGE's aisles): the roof reading is set there
+	if WeatherLogic.inAnyCovered(position) then
+		return WeatherLogic.roofGate(cover, true, raining, true, now)
+	end
 	if not WeatherLogic.isSurface(position) or indoors(position) then
 		return false
 	end
-	local now = os.clock()
-	if not raining then
-		wasRaining = false
-		WeatherLogic.settleCover(cover, false, now)
-		return true
-	end
-	local covered = roofed(position)
-	if not wasRaining then
-		-- weather just began: take the reading at once (no blip of rain indoors)
-		wasRaining = true
-		cover.Indoors, cover.Pending, cover.Since = covered, covered, now
-	end
-	return not WeatherLogic.settleCover(cover, covered, now)
+	local covered = raining and roofed(position)
+	return WeatherLogic.roofGate(cover, false, raining, covered, now)
 end
 
 ---------------------------------------------------------------- the instances

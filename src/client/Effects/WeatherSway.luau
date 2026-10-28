@@ -54,7 +54,9 @@ local function scan()
 	end
 	scanned = true
 	scannedAt = os.clock()
-	table.clear(trees)
+	-- the first search fills the list as it goes (trees sway at once); a later one fills a fresh
+	-- list and swaps it in when it is done (the trees swaying now are never dropped meanwhile)
+	local found: { [Model]: true } = if next(trees) == nil then trees else {}
 	scanning = task.spawn(function()
 		local stack: { Instance } = { Workspace }
 		local slice = os.clock()
@@ -62,7 +64,7 @@ local function scan()
 			local node = table.remove(stack) :: Instance
 			for i, child in node:GetChildren() do
 				if isTree(child) then
-					trees[child :: Model] = true
+					found[child :: Model] = true
 				elseif child:IsA("Folder") or child:IsA("Model") then
 					table.insert(stack, child)
 				end
@@ -77,6 +79,7 @@ local function scan()
 				slice = os.clock()
 			end
 		end
+		trees = found
 		scanning = nil
 	end)
 end
