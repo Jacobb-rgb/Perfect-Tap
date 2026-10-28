@@ -3092,23 +3092,35 @@ local function cornerTile(button: TextButton, kindId: string)
 	pill.Size = UDim2.fromOffset(BoostView.CornerIcon, BoostView.CornerIcon)
 	pill.BackgroundTransparency = 1
 	pill.ClipsDescendants = false
+	local round = PopTheme.round()
+	if round then
+		-- the round look (the reel's bottom-right squares): a bright studded face in the boost's colour
+		local paints = BoostView.ChipPaints[kindId]
+		pill.BackgroundTransparency = 0
+		Pop.face(pill, if paints then paints.Face else "Green", PopTheme.Corner)
+		Pop.studs(pill, PopTheme.Corner, 0.45, 28, 2)
+	end
 	local dot = UIKit.new("Frame", {
 		Name = "Dot",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, if round then 0.46 else 0.5),
+		Size = UDim2.fromScale(if round then 0.8 else 1, if round then 0.8 else 1),
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 	}, pill)
 	BoostView.art(dot, kindId, false).Size = UDim2.fromScale(1, 1)
 	local label = UIKit.label(pill, "", BoostView.CornerText, {
 		Name = "Text",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 2),
+		AnchorPoint = Vector2.new(0.5, if round then 0.5 else 0),
+		-- (the round look: over the tile's bottom edge, the reel's "inf")
+		Position = if round then UDim2.new(0.5, 0, 1, 0) else UDim2.new(0.5, 0, 1, 2),
 		Size = UDim2.fromOffset(BoostView.CornerTextWidth, BoostView.CornerText),
 		FontFace = PopTheme.Pixel,
 		TextColor3 = PopTheme.Ink,
 		TextWrapped = false,
-		ZIndex = 4,
+		ZIndex = 5,
 	})
-	Pop.edge(label, 2)
+	Pop.edge(label, if round then 2.5 else 2)
 	Pop.fit(label, BoostView.CornerText)
 	button.Size = UDim2.fromOffset(BoostView.CornerWidth, BoostView.cornerHeight())
 end
@@ -3154,6 +3166,7 @@ export type CornerInput = {
 	TutorialTop: number?, -- the mouse tutorial card's top, design units from the gui's bottom
 	Bubble: PillRect?, -- the touch tutorial bubble (top right): its left edge and bottom
 	Pill: PillRect?, -- the phone's Shop pill (top right): its left edge, top and bottom
+	Avoid: PillRect?, -- the round look's offers column (right edge, middle): the row moves left of it
 }
 
 BoostView.TenFootSafe = 0.05 -- (TutorialView.TenFootSafe: the TV's title-safe band)
@@ -3235,43 +3248,38 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	local count = math.max(1, input.Count or #BoostConfig.KindIds)
 	if input.Touch and pill == nil then
 		-- (a column at the right edge, on the touch buttons under it)
-		local baseBottom = bottom
 		local function columnBottom(r: number): number
 			local buttonsTop = touchButtonsTop(input.Screen, w, h, s, w - r - BoostView.CornerWidth, w - r)
-			return math.max(baseBottom, math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s))
+			return math.ceil(h - buttonsTop + BoostView.CornerJumpGap / s)
 		end
-		bottom = columnBottom(right)
+		bottom = math.max(bottom, columnBottom(right))
 		stacked = true
 		spot = "Column"
-		-- (the touch tutorial bubble at the top right: a column that would reach up to it
-		-- steps left of it like the pill's row does, over the toasts' column when nothing
-		-- else is clear: they take no taps. The round look's phones have no Shop pill:
-		-- ui/egg-look's merge of main, 2026-10-28)
-		local stackH = count * (tile + gap) - gap
-		local function columnClear(r: number, b: number, toasts: boolean): boolean
-			local top = h - b - stackH
-			for i = 0, count - 1 do
-				if not rowClear(input, w, h, r, top + i * (tile + gap), BoostView.CornerWidth, toasts) then
-					return false
-				end
-			end
-			return true
-		end
-		if bubble and w - right > bubble.Left and h - bottom - stackH < bubble.Bottom + gap then
+		-- (the round look's phones have no Shop pill on the right: while the touch tutorial bubble
+		-- shows at the top right and the column would reach it, the column moves left of it)
+		local columnH = count * tile + (count - 1) * gap
+		if bubble and w - right > bubble.Left and h - bottom - columnH < bubble.Bottom + gap then
 			local beside = math.ceil(w - bubble.Left) + gap
-			local besideBottom = columnBottom(beside)
-			-- (or side by side, on the touch buttons under them, when a column doesn't fit there)
-			local rowW = count * BoostView.CornerWidth + (count - 1) * gap
-			local rowTop = math.max(gap, touchButtonsTop(input.Screen, w, h, s, w - beside - rowW, w - beside) - gap - tile)
-			if columnClear(beside, besideBottom, true) then
-				right, bottom, spot = beside, besideBottom, "Beside"
-			elseif rowClear(input, w, h, beside, rowTop, rowW, true) then
-				right, bottom, stacked, spot = beside, math.ceil(h - rowTop - tile), false, "Beside"
-			elseif columnClear(beside, besideBottom, false) then
-				right, bottom, spot = beside, besideBottom, "OverToasts"
-			elseif rowClear(input, w, h, beside, rowTop, rowW, false) then
-				right, bottom, stacked, spot = beside, math.ceil(h - rowTop - tile), false, "OverToasts"
+			right, bottom = beside, math.max(bottom, columnBottom(beside))
+			local rowW = BoostView.CornerWidth
+			if h - bottom - columnH < gap then
+				-- (no room for the column over the touch buttons: side by side instead)
+				stacked, columnH = false, tile
+				rowW = count * BoostView.CornerWidth + (count - 1) * gap
+				local rowBottom = 0
+				for _, r in { beside, beside + rowW - BoostView.CornerWidth } do
+					rowBottom = math.max(rowBottom, columnBottom(r))
+				end
+				bottom = math.max(bottom, rowBottom)
 			end
+			-- (over the toasts' column when it must: toasts take no taps)
+			local column = BoostView.ToastColumn
+			local left, top = w - right - rowW, h - bottom - columnH
+			local overToasts = left < w / 2 + column.Width / 2
+				and w / 2 - column.Width / 2 < w - right
+				and top < column.Top + column.Height
+				and column.Top < top + columnH
+			spot = if overToasts then "OverToasts" else "Beside"
 		end
 	elseif input.Touch and pill then
 		-- (a row on the Shop pill, and on any touch button its tiles would reach)
@@ -3305,6 +3313,18 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	end
 	if input.TutorialTop then
 		bottom = math.max(bottom, input.TutorialTop + gap)
+	end
+	-- the round look's offers at the right edge (HudBubble.offers): a row that would reach
+	-- them (standing on the tutorial card, a tall column) goes left of the column
+	local avoid = input.Avoid
+	if avoid then
+		local rowH = if stacked then count * tile + (count - 1) * gap else tile
+		local top = h - bottom - rowH
+		local avoidTop = avoid.Top or (avoid.Bottom - tile)
+		if w - right > avoid.Left - gap and top < avoid.Bottom + gap and avoidTop - gap < top + rowH then
+			right = math.ceil(w - avoid.Left) + gap
+			spot = "BesideOffers"
+		end
 	end
 	return right, bottom, stacked, spot
 end

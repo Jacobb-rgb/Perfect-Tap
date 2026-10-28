@@ -448,7 +448,12 @@ return function(T, Loader)
 					TechShopView.fits(need.Text, need.Size.X.Offset, need.Size.Y.Offset, need.TextSize, true),
 					"the requirement line fits"
 				)
-				T.truthy((rebirth.Pages.Rebirth:FindFirstChild("PopGlow") :: any).Visible, "REBIRTH! glows while ready")
+				if rebirth.Reel then
+					-- (the round look: the reel's lime Rebirth, no glow)
+					T.eq(rebirth.Rebirth.Text, RebirthView.rebirthWords(false), "Rebirth while ready")
+				else
+					T.truthy((rebirth.Pages.Rebirth:FindFirstChild("PopGlow") :: any).Visible, "REBIRTH! glows while ready")
+				end
 			end
 		end)
 	end)
@@ -552,7 +557,17 @@ return function(T, Loader)
 				T.truthy(moneyTop > chipBottom, `the money under the TRAIN chip at {screen[1]} x {screen[2]}`)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
-				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
+				if type(chipLeft) == "number" then
+					-- (the round look on a PC: beside the tiles' last row, clear of them)
+					T.truthy(
+						chipLeft > menu.Position.X.Offset + menu.Size.X.Offset,
+						`the TRAIN chip right of the tiles at {screen[1]} x {screen[2]}`
+					)
+					T.truthy(chipBottom <= menuBottom + 1, `beside their last row at {screen[1]} x {screen[2]}`)
+				else
+					T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				end
 				-- the tiles (top-left) clear of the BASE / LOBBY / VAULT tabs (top centre)
 				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
 				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
@@ -576,10 +591,6 @@ return function(T, Loader)
 			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
 		end
 		local function rectOf(obj: any, width: number, height: number): (any, any)
-			if obj == nil then
-				-- (the round look on phones has no Shop pill on the chips' row: nothing to keep clear of)
-				return Vector2.new(width + 1e5, -1e5), Vector2.new(0, 0)
-			end
 			local size = Vector2.new(obj.Size.X.Offset, obj.Size.Y.Offset)
 			return Vector2.new(
 				width * obj.Position.X.Scale + obj.Position.X.Offset - obj.AnchorPoint.X * size.X,
@@ -607,8 +618,12 @@ return function(T, Loader)
 				local scale = HudBubble.scaleFor(screen)
 				local width, height = gui.X / scale, gui.Y / scale
 				local refs = HudBubble.buildGame(scale, size[1])
+				-- (the round look: the Shop is one of the top row's buttons, no pill in the corner)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillPos, pillSize = rectOf(pill, width, height)
+				local pillPos, pillSize = Vector2.new(-1e6, -1e6), Vector2.new(0, 0)
+				if pill then
+					pillPos, pillSize = rectOf(pill, width, height)
+				end
 				local carryPos, carrySize = rectOf(refs.CarryPanel, width, height)
 				-- Roblox's touch jump button and the game's Grab button (InteractController:
 				-- SetPosition(1, -170, 1, -150)), from the gui's bottom-right, design units
@@ -1079,7 +1094,8 @@ return function(T, Loader)
 				local pill = button:FindFirstChild("Pill") :: any
 				T.truthy(button:GetAttribute("Corner"), button.Name .. ": a corner tile")
 				T.truthy(pill:FindFirstChild("Dot"):FindFirstChild("Art"), button.Name .. ": the boost's picture")
-				T.falsy(pill:FindFirstChild("Paint"), button.Name .. ": no pill face")
+				-- (the round look: the reel's bright studded square behind the picture; the pixel look: none)
+				T.eq(pill:FindFirstChild("Paint") ~= nil, PopTheme.round(), button.Name .. ": the square face in the round look only")
 				T.eq(pill:FindFirstChild("Text").FontFace.Family, PopTheme.Pixel.Family, button.Name .. ": pixel time")
 				T.eq(button.Size.Y.Offset, BoostView.CornerIcon + 2 + BoostView.CornerText, button.Name .. ": the touch area")
 			end

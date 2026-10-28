@@ -636,6 +636,10 @@ function StoreController.openAt(cardId: string)
 	local section = card.Button.Parent
 	local top = if section then StoreView.sectionTop(view, section.Name) else 0
 	view.Scroller.CanvasPosition = Vector2.new(0, math.max(0, top + card.Button.Position.Y.Offset - 8))
+	-- (a gamepad: the selection on the offered card, so A buys what the player picked)
+	if MenuPanels.usingGamepad() and card.Button.Visible then
+		GuiService.SelectedObject = card.Button
+	end
 end
 
 --[[

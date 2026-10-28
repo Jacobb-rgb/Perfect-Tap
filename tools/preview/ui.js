@@ -354,8 +354,9 @@ function layoutChildren(node, el, w, h) {
     childEl.dataset.name = p.k.n;
     const scale = child(p.k, "UIScale");
     if (scale && scale.s !== 1) {
-      if (scale.n && scale.n.startsWith("Motion")) {
-        // UI/Motion's scales: about the AnchorPoint like Roblox (rotation stays about the centre)
+      if (scale.n && (scale.n.startsWith("Motion") || scale.n === "ListFit" || scale.n === "Fit")) {
+        // UI/Motion's scales and the round look's fits (the Store's banner, the Daily grid): about
+        // the AnchorPoint like Roblox (rotation stays about the centre)
         const ax = p.origin ? p.origin[0] : (p.k.anchor[0] - 0.5) * p.w;
         const ay = p.origin ? p.origin[1] : (p.k.anchor[1] - 0.5) * p.h;
         childEl.style.transform = `translate(${ax}px, ${ay}px) scale(${scale.s}) translate(${-ax}px, ${-ay}px)`;

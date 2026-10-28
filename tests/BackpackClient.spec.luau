@@ -562,9 +562,9 @@ return function(T, Loader)
 				-- (the light HUD's holder is the whole group: the BLASTER slot and the button)
 				local holder = refs.CarryPanel
 				local width = screen.X / scale
+				local where = `{screen.X} x {screen.Y}`
 				local left = width / 2 + holder.Position.X.Offset
 				local right = left + holder.Size.X.Offset
-				local where = `{screen.X} x {screen.Y}`
 				if scale <= HudBubble.CompactScale then
 					T.truthy(holder.Size.Y.Offset * scale >= 44, where .. ": >= 44 pt tall")
 					T.truthy(refs.Backpack.Size.Y.Offset * scale >= 44, where .. ": the button >= 44 pt tall")

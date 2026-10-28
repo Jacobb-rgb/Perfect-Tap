@@ -7,16 +7,15 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
+	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
+	are claimed as the controllers do (the reel's eight: Inventory by
+	BackpackController, Spin with its FREE! sticker by WheelController's badge,
+	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
 	                        (1920 x 1080), 568 / 667 / 844 phones, each _off
 	                        (in the backpack) and _on (in hand: the gold ring)
-	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (the reel's eight: Inventory by
-	BackpackController, Spin with its FREE! sticker by WheelController's badge
-	(ui/boost-corner), the side menu's Store / Rebirth / Golems / Daily; the
-	rest behind More), no FREE SPIN chip.
 ]]
 
 local UiExport = require("./uiexport")
@@ -69,10 +68,7 @@ function Preview.build(Loader: any): { [string]: any }
 			end
 		end
 		if round then
-			-- (as the controllers do once ui/boost-corner is in: EMOTES behind More, the Spin tile
-			-- with its badge = a spin ready; BackpackController the Inventory tile)
-			HudBubble.addMore(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 40 })
-			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
+			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it)
 			HudBubble.claimTile(refs.Menu, "Backpack")
 		end
 		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
@@ -150,8 +146,8 @@ function Preview.build(Loader: any): { [string]: any }
 		if refs.Menu:FindFirstChild("Wheel") then
 			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
 			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
-		elseif not round then
-			-- the FREE SPIN chip right of the top bar (the round look: the Spin tile's sticker instead)
+		else
+			-- the FREE SPIN chip right of the top bar
 			local spin = WheelView.buildChip(uiScale, screen.X)
 			spin.Gui.Scale.Scale = renderScale
 			spin.Gui.Enabled = true

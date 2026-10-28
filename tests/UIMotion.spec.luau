@@ -26,9 +26,11 @@ return function(T, Loader)
 	local SCREEN = Vector2.new(1280, 720)
 	local STYLES = { "Linear", "Sine", "Quad", "Cubic", "Quart", "Quint", "Exponential", "Circular", "Back", "Bounce", "Elastic" }
 
-	-- (the tests below are UI motion ON, as on anim/all; the switch's own tests
+	-- (the tests below are UI motion ON, as on anim/all, with UIMotion's own timings (the round
+	-- look's RoundMotion tunes them like the reel: its test at the end); the switch's own tests
 	-- at the end turn it off; Config/AnimConfig decides in the game)
 	Motion.setEnabled(true)
+	Motion.tune(false)
 
 	---------------------------------------------------------------- pure
 
@@ -570,7 +572,7 @@ return function(T, Loader)
 	T.test("UIMotion off: nothing attached, connected or tweened, the store pops like main", function()
 		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
 		Motion.setEnabled(nil)
-		T.eq(Motion.enabled(), AnimConfig.UIMotion == true, "the game follows AnimConfig")
+		T.eq(Motion.enabled(), AnimConfig.UIMotion == true or Motion.roundMotion(), "the game follows AnimConfig")
 		Motion.setEnabled(false)
 		local made: { any } = {}
 		local fakeTween = {
@@ -689,11 +691,11 @@ return function(T, Loader)
 		)
 		local hud = source("Controllers/HudController")
 		T.truthy(
-			hud:find('if Motion.enabled() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
+			hud:find('if Motion.full() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
 			"the toast"
 		)
 		T.truthy(hud:find("Motion.classicPop(shown.Panel, nil, 0.6, 0.3)", 1, true), "the offline popup")
-		T.truthy(hud:find("if big and not Motion.enabled() then", 1, true), "the coin glide")
+		T.truthy(hud:find("if big and not Motion.full() then", 1, true), "the coin glide")
 		T.truthy(hud:find("shownCoins += diff * 0.35", 1, true), "main's glide step")
 		T.truthy(
 			source("Controllers/UIMotionController"):find("if not Motion.enabled() then\n\t\t-- UI motion off", 1, true),
@@ -706,5 +708,87 @@ return function(T, Loader)
 		Watcher.attach(button)
 		T.truthy(button:FindFirstChild("MotionScale"), "on: the press feel is attached")
 		Motion.setEnabled(nil)
+	end)
+
+	---------------------------------------------------------------- the round look's motions (AnimConfig.RoundMotion)
+
+	T.test("RoundMotion: on (owner 2026-10-28); the round look's windows pop like the reel and buttons press to 0.93", function()
+		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+		T.eq(AnimConfig.RoundMotion, true, "the owner said yes")
+		local look, uiMotion = PopTheme.Look, AnimConfig.UIMotion
+		local made: { any } = {}
+		local done: { any } = {}
+		Motion.useTweens(function(instance: any, time: number, style: any, direction: any, goal: any): any
+			table.insert(made, { Name = instance.Name, Time = time, Style = style, Goal = goal })
+			return {
+				Play = function() end,
+				Cancel = function() end,
+				Completed = {
+					Once = function(_, fn)
+						table.insert(done, fn)
+					end,
+					Connect = function() end,
+				},
+			}
+		end)
+		local ok, err = pcall(function()
+			Motion.setEnabled(nil)
+			AnimConfig.UIMotion = false
+			AnimConfig.RoundMotion = true
+			PopTheme.setLook("Round")
+			T.truthy(Motion.enabled() and Motion.roundMotion(), "on in the round look")
+			-- (only the pop, the hover and the press: no counters, flying cash, pop-ins, loops)
+			T.falsy(Motion.full(), "the rest of UIMotion stays off")
+			local label = UIKit.new("TextLabel", { Name = "Coins" }, Instance.new("ScreenGui"))
+			Motion.countUp(label, 0, 5000, tostring)
+			T.eq(label.Text, "5000", "the number just changes")
+			T.falsy(Motion.flyTo(nil, label, "cash"), "no cash flies")
+			local closed = false
+			Motion.close(UIKit.new("Frame", { Name = "Shut" }, Instance.new("ScreenGui")), function()
+				closed = true
+			end)
+			T.truthy(closed, "a window closes at once (no closing shrink)")
+			Motion.tune(true)
+			T.eq(Motion.Profiles.Normal.Down, 0.93, "the reel's press")
+			T.eq(Motion.Profiles.Normal.Hover, 1.05, "the reel's hover")
+			T.near(Motion.Press.HoverTime, 0.1, 1e-9)
+			local gui = Instance.new("ScreenGui")
+			local window = UIKit.new("Frame", {
+				Name = "Window",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = UDim2.fromOffset(600, 560),
+			}, gui)
+			Motion.pop(window, nil)
+			local scale = window:FindFirstChild("MotionPop") :: any
+			T.near(scale.Scale, 0.5, 1e-6, "from half size")
+			T.eq(#made, 1, "first the overshoot")
+			T.near(made[1].Goal.Scale, 1.1, 1e-6, "past full size")
+			T.near(made[1].Time, 0.09, 1e-6)
+			done[#done](roblox.Enum.PlaybackState.Completed)
+			T.eq(#made, 2, "then it settles")
+			T.near(made[2].Goal.Scale, 1, 1e-6, "back to full size")
+			T.near(made[1].Time + made[2].Time, 0.2, 1e-6, "in 0.2 s")
+			-- the pure curve the previews draw: the same three points
+			T.near(Motion.roundPopScale(0), 0.5, 1e-6)
+			T.near(Motion.roundPopScale(0.09), 1.1, 1e-6)
+			T.near(Motion.roundPopScale(0.2), 1, 1e-6)
+			T.truthy(Motion.roundPopScale(0.15) > 1, "still settling at 0.15 s")
+			-- the pixel look keeps UI motion's switch
+			PopTheme.setLook("Pixel")
+			T.falsy(Motion.roundMotion(), "not in the pixel look")
+			T.falsy(Motion.enabled(), "UIMotion off: nothing")
+			Motion.tune(false)
+			T.eq(Motion.Profiles.Normal.Down, 0.92, "the classic press back")
+			T.eq(Motion.Pop.Peak, nil, "the classic pop back")
+		end)
+		Motion.useTweens(nil)
+		AnimConfig.RoundMotion = true
+		AnimConfig.UIMotion = uiMotion
+		PopTheme.setLook(look)
+		Motion.setEnabled(nil)
+		Motion.tune(Motion.roundMotion() and AnimConfig.UIMotion ~= true) -- (as the game loads it)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end

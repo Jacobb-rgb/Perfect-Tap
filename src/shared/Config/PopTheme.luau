@@ -84,7 +84,7 @@ local PopTheme = {
 	Price = paint(rgb(156, 244, 64), rgb(72, 196, 22), rgb(14, 14, 18)),
 	Gray = paint(rgb(170, 174, 186), rgb(112, 116, 130), rgb(14, 14, 18)),
 	-- the Round look's HUD tile: a dark face (the tile's own colour rides its lip and edge)
-	TileDark = paint(rgb(86, 88, 100), rgb(50, 52, 62), rgb(14, 14, 18)),
+	TileDark = paint(rgb(70, 80, 92), rgb(58, 66, 78), rgb(14, 14, 18)), -- (measured: (64, 75, 86))
 
 	-- card and button faces
 	Paints = {
@@ -177,8 +177,10 @@ local PopTheme = {
 	Stripe = 0.8, -- the header's shine stripes (transparency)
 	Checker = 0.88, -- the Round look's fine checker over a header band (transparency)
 	CheckerGap = 14, -- design units between two of its lines
+	StudTile = 34, -- the round look's stud picture: two studs a tile (the reel: a stud every ~17 u)
 	BandLip = 0.1, -- the darker lip along a Round band's bottom (a share of its height)
 	Watermark = 0.55, -- the big faded icon in a Round header band (transparency)
+	TabMark = 0.5, -- the faded picture over a Round top-row button's left end (transparency)
 	CellTop = rgb(40, 47, 60), -- the Round look's dark item cells (Pop.cell: the reel's index / inventory)
 	CellBottom = rgb(26, 30, 40),
 
@@ -196,6 +198,8 @@ local LOOKS = {
 		Body = rgb(42, 48, 57), -- the reel's dark slate
 		BodyBottom = rgb(34, 39, 47),
 		Well = rgb(24, 28, 35), -- (the reel's darker rows and boxes)
+		Corner = 3, -- (measured: the reel's buttons and cards are nearly square, ~4 px at 1080p)
+		WindowCorner = 4,
 	},
 	Pixel = {
 		Word = PIXEL,
@@ -206,6 +210,8 @@ local LOOKS = {
 		Body = rgb(58, 60, 70),
 		BodyBottom = rgb(44, 46, 54),
 		Well = rgb(36, 38, 46),
+		Corner = 8,
+		WindowCorner = 10,
 	},
 }
 
@@ -227,6 +233,8 @@ function PopTheme.setLook(look: string)
 	PopTheme.Body = l.Body
 	PopTheme.BodyBottom = l.BodyBottom
 	PopTheme.Well = l.Well
+	PopTheme.Corner = l.Corner
+	PopTheme.WindowCorner = l.WindowCorner
 end
 
 -- Is the Round look on?

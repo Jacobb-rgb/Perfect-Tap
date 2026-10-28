@@ -114,6 +114,22 @@ StoreView.CardsWidth = 918 -- the cards' row width inside the scroller
 StoreView.Gap = 12
 StoreView.HeadingHeight = 56
 StoreView.MaxHeight = 640
+-- what the look changes (StoreView.applyLook: build and windowSize set the fields above); the round
+-- look's is the reel's Store: 601 x 563 units, its cash cards 183 x 132 with 10 between
+StoreView.Looks = {
+	Round = { Width = 605, CardsWidth = 569, Gap = 10, MaxHeight = 563, Header = 73 },
+	Pixel = { Width = 960, CardsWidth = 918, Gap = 12, MaxHeight = 640, Header = 76 },
+}
+
+-- Sets the window's sizes for the look in use (PopTheme.Look).
+function StoreView.applyLook()
+	local l = if PopTheme.round() then StoreView.Looks.Round else StoreView.Looks.Pixel
+	StoreView.Width = l.Width
+	StoreView.CardsWidth = l.CardsWidth
+	StoreView.Gap = l.Gap
+	StoreView.MaxHeight = l.MaxHeight
+	StoreView.Header = l.Header
+end
 StoreView.TabGap = 12
 StoreView.TabSize = 84
 StoreView.TabListGap = 10
@@ -124,6 +140,7 @@ StoreView.PhoneScale = 0.62 -- HudController's UI scale on phones
 -- window keeps its width (the tabs sit beside it) and gets as tall as the
 -- screen allows; a screen too narrow or too short shrinks it all (fit < 1).
 function StoreView.windowSize(w: number, h: number, tab: number?): (Vector2, number)
+	StoreView.applyLook()
 	-- (the round look: one scrolling list, no tab column beside the window)
 	local group = if PopTheme.round() then StoreView.Width else StoreView.Width + StoreView.TabGap + (tab or StoreView.TabSize)
 	local fit = math.min(1, (w - 24) / group, (h - 16) / 520)
@@ -472,8 +489,9 @@ local function buildRoundCard(parent: Instance, spec: StoreConfig.CardSpec, w: n
 	if spec.Paint == "Rainbow" then
 		Pop.rainbow(button)
 	end
-	local priceH = math.max(44, math.floor(h * 0.19))
-	local priceW = math.floor(math.min(w * (if coins then 0.48 else 0.36), 200))
+	-- (the reel's price buttons are small: the whole card is the button)
+	local priceH = math.max(28, math.floor(h * 0.24))
+	local priceW = math.floor(math.min(w * (if coins then 0.44 else 0.36), 200))
 	local price = Pop.price(button, product.Robux, Vector2.new(priceW, priceH), {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -10, 1, -10),
@@ -514,7 +532,7 @@ local function buildRoundCard(parent: Instance, spec: StoreConfig.CardSpec, w: n
 		ZIndex = 5,
 	})
 	-- the title's colours: the card's paint, light (the reel's gold "VIP Pass", lime "2x Cash")
-	local light = { paint.Top:Lerp(Color3.new(1, 1, 1), 0.62), paint.Top:Lerp(Color3.new(1, 1, 1), 0.2) }
+	local light = { paint.Top:Lerp(Color3.new(1, 1, 1), 0.5), paint.Top:Lerp(Color3.new(1, 1, 1), 0.12) }
 	local textW = math.floor(w * (if coins then 0.48 else 0.54))
 	local titleH = math.floor(math.min(h * 0.16, 40))
 	if coins then
@@ -595,7 +613,7 @@ local function buildRoundCard(parent: Instance, spec: StoreConfig.CardSpec, w: n
 	end
 	if spec.Ribbon then
 		-- (left: the title holds the top-right; under a cash card's amount)
-		local ribbon = Pop.ribbon(button, spec.Ribbon, 136)
+		local ribbon = Pop.ribbon(button, spec.Ribbon, math.min(136, 2 * math.floor(w * 0.31)))
 		local size = ribbon.Size
 		ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
 		ribbon.Rotation = -8
@@ -613,7 +631,7 @@ end
 StoreView.RoundOrder = { "Passes", "Money", "Featured", "Luck", "Eggs", "Blasters" }
 StoreView.RoundTitles = { Passes = "Gamepass", Money = "Buy Cash" } :: { [string]: string }
 StoreView.RoundColumns = { Passes = 2, Money = 3, Featured = 1, Luck = 3, Eggs = 2, Blasters = 2 } :: { [string]: number }
-StoreView.RoundHeights = { Passes = 236, Money = 196, Featured = 270, Luck = 220, Eggs = 216, Blasters = 236 } :: { [string]: number }
+StoreView.RoundHeights = { Passes = 150, Money = 132, Featured = 170, Luck = 132, Eggs = 140, Blasters = 150 } :: { [string]: number }
 StoreView.RoundHeading = 46
 
 -- The sections in the order the list shows them (the round look: StoreView.RoundOrder first).
@@ -663,8 +681,15 @@ local function roundRelayout(refs: Refs): number
 		local any = false
 		local banner = refs.Banner
 		if banner and banner.Frame.Parent == frame then
+			-- (the banner is drawn BannerWidth wide: shrunk into the round look's narrower list)
+			local k = StoreView.CardsWidth / StoreView.BannerWidth
+			local found = banner.Frame:FindFirstChild("ListFit")
+			local fit: UIScale = if found and found:IsA("UIScale")
+				then found
+				else UIKit.new("UIScale", { Name = "ListFit" }, banner.Frame) :: UIScale
+			fit.Scale = k
 			banner.Frame.Position = UDim2.fromOffset(0, inner)
-			inner += StoreView.BannerHeight + gap
+			inner += math.floor(banner.Frame.Size.Y.Offset * k) + gap
 			any = true
 		end
 		local shown: { CardRefs } = {}
@@ -733,7 +758,7 @@ function StoreView.relayout(refs: Refs): number
 		if banner and banner.Frame.Parent == frame then
 			-- the limited edition opens the FEATURED section
 			banner.Frame.Position = UDim2.fromOffset(0, inner)
-			inner += StoreView.BannerHeight + gap
+			inner += banner.Frame.Size.Y.Offset + gap
 			any = true
 		end
 		for r, row in rows do
@@ -787,6 +812,12 @@ function StoreView.relayout(refs: Refs): number
 end
 
 StoreView.BannerHeight = 372
+StoreView.BannerTileGap = 6 -- between the golems' tiles (their chance %) and the buy buttons
+-- The golems' tiles' bottom in the banner (design units): their chance % sits just above it.
+function StoreView.bannerTilesBottom(): number
+	return StoreView.BannerHeight - 152 + 34 -- (buildBanner: the ground, the tiles 34 into it)
+end
+StoreView.BannerWidth = 918 -- the banner is drawn this wide (the round look's list shrinks it to fit)
 StoreView.BannerButtonH = 54
 StoreView.BannerCounts = { 50, 10, 3, 1 } -- the buy buttons, left to right (the photo)
 
@@ -833,7 +864,7 @@ end
 	chance; four green buttons (50 / 10 / 3 / 1) with their counts.
 ]]
 local function buildBanner(parent: Instance, edition: Edition): BannerRefs
-	local w, h = StoreView.CardsWidth, StoreView.BannerHeight
+	local w, h = StoreView.BannerWidth, StoreView.BannerHeight
 	local b = edition.Backdrop
 	local frame = UIKit.new("Frame", {
 		Name = "Limited",
@@ -936,7 +967,7 @@ local function buildBanner(parent: Instance, edition: Edition): BannerRefs
 		BackgroundColor3 = b.Ground,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, ground),
-		Size = UDim2.new(1, 0, 0, h - ground),
+		Size = UDim2.new(1, 0, 1, -ground), -- (to the bottom: sizeBanner may make the banner taller)
 		ZIndex = 4,
 	}, frame)
 	UIKit.new("UIGradient", {
@@ -1219,6 +1250,7 @@ floatTab = function(parent: Instance, section: StoreConfig.Section, size: number
 end
 
 function StoreView.build(): Refs
+	StoreView.applyLook()
 	local gui = UIKit.screen("TerraForgeStore", 16)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
@@ -1292,7 +1324,7 @@ function StoreView.build(): Refs
 		Size = UDim2.new(1, -14, 1, -12),
 		CanvasSize = UDim2.fromOffset(StoreView.CardsWidth, 0),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 10,
+		ScrollBarThickness = if PopTheme.round() then 6 else 10,
 		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		VerticalScrollBarInset = Enum.ScrollBarInset.None,
 		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
@@ -1483,12 +1515,28 @@ sizeBanner = function(refs: Refs)
 	end
 	local buttonH = StoreView.BannerButtonH
 	if refs.Compact then
-		buttonH = math.max(buttonH, StoreView.minTouch(refs.Fit))
+		-- (the round look's list shrinks the banner (ListFit): its buttons grow to stay 44 pt)
+		local k = if PopTheme.round() then StoreView.CardsWidth / StoreView.BannerWidth else 1
+		buttonH = math.max(buttonH, math.ceil(StoreView.minTouch(refs.Fit) / k))
 	end
-	for _, button in banner.Buys do
+	-- the buttons stand under the golems' tiles (their chance % at the tiles' bottom must show:
+	-- odds stay visible); taller buttons make the banner taller, its ground grows with it
+	local bottom = math.max(StoreView.BannerHeight - 30, StoreView.bannerTilesBottom() + StoreView.BannerTileGap + buttonH)
+	local frame = banner.Frame
+	local height = bottom + 30
+	local grew = frame.Size.Y.Offset ~= height
+	frame.Size = UDim2.fromOffset(frame.Size.X.Offset, height)
+	for n, button in banner.Buys do
 		button.Size = UDim2.fromOffset(button.Size.X.Offset, buttonH)
 		-- (AnchorPoint 0.5, 0.5: the bottom edge stays 30 above the banner's bottom)
-		button.Position = UDim2.fromOffset(button.Position.X.Offset, StoreView.BannerHeight - buttonH / 2 - 30)
+		button.Position = UDim2.fromOffset(button.Position.X.Offset, bottom - buttonH / 2)
+		local count = frame:FindFirstChild("Count" .. n) :: GuiObject?
+		if count then
+			count.Position = UDim2.fromOffset(count.Position.X.Offset, bottom)
+		end
+	end
+	if grew then
+		StoreView.relayout(refs) -- (the list's room for the banner)
 	end
 end
 
@@ -1510,7 +1558,8 @@ function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 	end
 	-- (compact: the touch targets and texts keep their size through the fit shrink)
 	local k = if compact then 1 / math.max(fit, 0.5) else 1
-	local close = math.floor(m.Close * k)
+	-- (the round look's X on a PC: the reel's 48 units)
+	local close = math.floor((if PopTheme.round() and not compact then 48 else m.Close) * k)
 	refs.Window.Close.Size = UDim2.fromOffset(close, close)
 	local closeLabel = refs.Window.Close:FindFirstChild("Label") :: TextLabel?
 	if closeLabel then

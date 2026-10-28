@@ -170,7 +170,7 @@ TeleportView.RoundOrder = { Lobby = 1, Base = 2, Vault = 3 } :: { [string]: numb
 -- font is wide, so the word fits its button with room around it.
 TeleportView.PixelGlyph = { Normal = 20, Compact = 22, Narrow = 15 } :: { [string]: number }
 -- the round look's (Fredoka One is narrower and its capitals are about 0.7 em tall: bigger words)
-TeleportView.RoundGlyph = { Normal = 27, Compact = 30, Narrow = 21 } :: { [string]: number }
+TeleportView.RoundGlyph = { Normal = 34, Compact = 30, Narrow = 21 } :: { [string]: number } -- (the reel: caps 25 units)
 -- the round look's picture on each tab, over its left end (the reel's Shop / Spawn / Plot tabs)
 TeleportView.Icons = { Base = "base", Lobby = "lobby", Vault = "vault" } :: { [string]: string }
 
@@ -200,34 +200,18 @@ function TeleportView.pixelLabel(button: TextButton, size: Vector2, kind: string
 end
 
 --[[
-	The round look's tab picture (the reel's tabs): the spot's icon over the
-	button's left end, the word right of it. Nothing on the smallest phones'
-	square buttons, nor before the icon sheet is uploaded (the word stays
-	centred).
+	The round look's tab picture (the reel's tabs): a big faded copy of the
+	spot's icon over the button's left end, cut by its edges, the word centred
+	over it (Pop.tabMark). Nothing on the phones' narrow buttons, nor before
+	the icon sheet is uploaded.
 ]]
 function TeleportView.roundIcon(button: TextButton, size: Vector2, id: string, kind: string)
 	local icon = TeleportView.Icons[id]
-	local label = button:FindFirstChild("Label") :: TextLabel?
 	-- (phones: words only, the four buttons are narrow)
-	if not icon or not label or kind ~= "Normal" or not IconAssets.shows(icon) then
+	if not icon or kind ~= "Normal" or not IconAssets.shows(icon) then
 		return
 	end
-	local lip = Pop.lipUnits(size.Y)
-	local pic = math.floor(size.Y * 0.96)
-	local x = -math.floor(pic * 0.14)
-	Pop.bandIcon(button, icon, pic, {
-		Name = "Icon",
-		Position = UDim2.new(0, x, 0.5, -math.floor(lip / 2)),
-		ZIndex = 6,
-	})
-	local left = x + pic + 2
-	label.Position = UDim2.new(0.5, math.floor(left / 2), 0.5, -math.floor(lip / 2))
-	label.Size = UDim2.new(1, -(left + 8), 0, label.Size.Y.Offset)
-	local shade = button:FindFirstChild(label.Name .. "Shadow") :: TextLabel?
-	if shade then
-		shade.Position = label.Position + UDim2.fromOffset(0, 3)
-		shade.Size = label.Size
-	end
+	Pop.tabMark(button, icon, size.Y)
 end
 
 --[[
@@ -239,7 +223,9 @@ local function buildPop(topBar: Frame): Refs
 	local compact = topBar:GetAttribute("Compact") == true
 	local narrow = topBar:GetAttribute("Narrow") == true
 	local layout = HudBubble.layout(if compact then 0.62 else 1, if narrow then 0 else nil)
-	local size = HudBubble.topBarButton(layout)
+	-- (the HUD says how big its row's buttons are: the round look's follow the screen's width)
+	local given = topBar:GetAttribute("Button")
+	local size = if typeof(given) == "Vector2" then given else HudBubble.topBarButton(layout)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
 	-- the gamepad glyph (D-pad down jumps into the bar): just left of the bar, so

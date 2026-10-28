@@ -148,7 +148,8 @@ local function ownsSelection(): boolean
 			return true
 		end
 	end
-	return false
+	-- (the round look: the bar's red Shop button leads the row)
+	return selected.Name == "ShopPill" and selected.Parent ~= nil and selected.Parent.Name == "TopBar"
 end
 
 local function onGamepadKey(_name: string, state: Enum.UserInputState, _input: InputObject): Enum.ContextActionResult

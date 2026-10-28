@@ -977,7 +977,8 @@ end
 -- ready (the free one + the usable bought ones); the chip's chime when one comes.
 local function updateTile(face: TextButton)
 	local ready = isReady()
-	HudBubble.setTileBadge(face, if Loading.isDone() then spinsNow() else 0)
+	-- (the round look: "FREE!" only while the free spin is ready, else the bought spins' count)
+	HudBubble.setTileBadge(face, if Loading.isDone() then spinsNow() else 0, Loading.isDone() and ready)
 	local away = screenBusy()
 	if ready and not chipReady and not open and not away then
 		Sfx.play("Discovery")
