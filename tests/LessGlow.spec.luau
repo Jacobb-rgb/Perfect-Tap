@@ -13,6 +13,8 @@ return function(T, Loader)
 		for name, preset in LightingConfig.Presets do
 			local bloom = preset.Bloom
 			if bloom.Threshold ~= nil then
+				-- (the raw Threshold only: Roblox applies the exposure first, so the cutoff in
+				-- scene light is Threshold / 2^ExposureCompensation, e.g. Surface 0.83 = the 10-25 look)
 				T.truthy(bloom.Threshold >= 1, `{name}: Threshold 1 or more (pale stone and sand must not bloom)`)
 				T.le(bloom.Intensity, 1, `{name}: Intensity`)
 				T.le(bloom.Size, 32, `{name}: Size`)

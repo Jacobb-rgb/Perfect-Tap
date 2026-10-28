@@ -108,9 +108,11 @@ local SUNSET_SKY = {
 -- Then (owner's Studio test, 2026-10-28 evening: "the mines are bright
 -- enough, only the surface, lit almost like before", with his 10-25
 -- screenshot of the glowing plaza): Surface gets its 10-25 bloom back
--- (Intensity 0.9, Size 32) and keeps the brighter exposure; only the
--- Threshold stays at 1, so the neon glows as it did and the pale stone and
--- the statue's gold do not.
+-- (Intensity 0.9, Size 32) and keeps the brighter exposure. Roblox applies
+-- the exposure before the bloom Threshold, so the cutoff in scene light is
+-- Threshold / 2^Exposure: 1 / 2^0.27 = 0.83, the same as on 10-25
+-- (0.92 / 2^0.15). The neon and the brightest sunlit stone glow as they did
+-- then; the statue's gold blooms less, being shaded (GoldenStatue.shade).
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
