@@ -9,9 +9,10 @@
 
 	Trees are the map's Models named "Tree" (Props, Lobby/Flora): found by a
 	walk of the Workspace's folders and models when the wind starts, spread
-	over frames (TreeSway.ScanBudget seconds a frame: no hitch on phones),
-	and found again at the next windy spell (trees stream in and out). No
-	Workspace-wide signals stay connected. A tree with unanchored parts or
+	over frames (TreeSway.ScanBudget seconds a frame, the clock looked at
+	every TreeSway.ScanEvery children: no hitch on phones), and found again
+	at a windy spell once the last search is TreeSway.ScanAge old (trees
+	stream in and out). No Workspace-wide signals stay connected. A tree with unanchored parts or
 	more than TreeSway.MaxParts parts is skipped.
 ]]
 
@@ -35,6 +36,7 @@ type Swaying = {
 
 local trees: { [Model]: true } = {}
 local scanned = false
+local scannedAt = 0
 local scanning: thread? = nil
 local swaying: { [Model]: Swaying } = {}
 local nextPick = 0
@@ -46,25 +48,31 @@ end
 -- The tree search: a walk down the Workspace's folders and models (trees never sit inside a
 -- part), at most TreeSway.ScanBudget seconds a frame. The trees found so far sway at once.
 local function scan()
-	if scanned then
+	local sway = WeatherConfig.TreeSway
+	if scanned and os.clock() - scannedAt < sway.ScanAge then
 		return
 	end
 	scanned = true
+	scannedAt = os.clock()
 	table.clear(trees)
 	scanning = task.spawn(function()
-		local budget = WeatherConfig.TreeSway.ScanBudget
 		local stack: { Instance } = { Workspace }
 		local slice = os.clock()
 		while #stack > 0 do
 			local node = table.remove(stack) :: Instance
-			for _, child in node:GetChildren() do
+			for i, child in node:GetChildren() do
 				if isTree(child) then
 					trees[child :: Model] = true
 				elseif child:IsA("Folder") or child:IsA("Model") then
 					table.insert(stack, child)
 				end
+				-- (a folder can hold thousands of children: look at the clock inside it too)
+				if i % sway.ScanEvery == 0 and os.clock() - slice >= sway.ScanBudget then
+					task.wait()
+					slice = os.clock()
+				end
 			end
-			if os.clock() - slice >= budget then
+			if os.clock() - slice >= sway.ScanBudget then
 				task.wait()
 				slice = os.clock()
 			end
@@ -176,13 +184,14 @@ function WeatherSway.stop()
 		swaying[model] = nil
 	end
 	nextPick = 0
-	-- the next windy spell looks for the trees again (they stream in and out)
+	-- a search cut short starts again at the next windy spell; a finished one is kept for a while
+	-- (passing under a roof stops the sway, so it must not search the whole map again each time)
 	local running = scanning
 	if running then
 		task.cancel(running)
 		scanning = nil
+		scanned = false
 	end
-	scanned = false
 end
 
 function WeatherSway.active(): boolean

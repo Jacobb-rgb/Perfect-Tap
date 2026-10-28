@@ -594,11 +594,15 @@ return function(T, Loader)
 	end)
 
 	-- the roof rule with real geometry: an upward ray against the parts' boxes (the nearest one it
-	-- enters; a ray starting inside a part never hits it, like Workspace:Raycast)
+	-- enters; a ray starting inside a part never hits it, and a part with CanCollide and CanQuery
+	-- both off is never hit, like Workspace:Raycast)
 	local function rayUp(origin: any, length: number, parts: { any }): (any, number)
 		local up = Vector3.new(0, 1, 0)
 		local best, bestT = nil, length
 		for _, part in parts do
+			if not part.CanCollide and not part.CanQuery then
+				continue
+			end
 			local o = part.CFrame:PointToObjectSpace(origin)
 			local d = part.CFrame:VectorToObjectSpace(up)
 			local tmin, tmax = -math.huge, math.huge
@@ -628,32 +632,55 @@ return function(T, Loader)
 		end
 		return best, bestT
 	end
-	-- WeatherController.roofAbove / roofed, against `parts`
-	local function covered(position: any, parts: { any }): boolean
+	-- WeatherController.inTree / roofAbove / roofed, against `parts`
+	local function inTree(part: any): boolean
+		local node = part.Parent
+		while node do
+			if node:IsA("Model") and WeatherLogic.isTreeName(node.Name) then
+				return true
+			end
+			node = node.Parent
+		end
+		return false
+	end
+	local function roofAbove(origin: any, parts: { any }): boolean
 		local R = WeatherConfig.Roof
-		local hits = 0
+		local from = origin
+		for _ = 1, R.Hops do
+			local left = R.Reach - (from.Y - origin.Y)
+			if left <= 0 then
+				return false
+			end
+			local part, t = rayUp(from, left, parts)
+			if not part then
+				return false
+			end
+			local y = from.Y + t
+			if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, inTree(part)) then
+				return true
+			end
+			from = Vector3.new(from.X, y + 0.05, from.Z)
+		end
+		return false
+	end
+	local function covered(position: any, parts: { any }): boolean
+		local center = roofAbove(position, parts)
+		local sides = 0
 		for _, offset in WeatherLogic.roofOffsets() do
-			local origin = position + offset
-			local from = origin
-			for _ = 1, R.Hops do
-				local left = R.Reach - (from.Y - origin.Y)
-				if left <= 0 then
-					break
-				end
-				local part, t = rayUp(from, left, parts)
-				if not part then
-					break
-				end
-				local y = from.Y + t
-				local tree = part:FindFirstAncestor("Tree") ~= nil
-				if WeatherLogic.roofCounts(y - origin.Y, part.Transparency, part.CanCollide, tree, part.Size) then
-					hits += 1
-					break
-				end
-				from = Vector3.new(from.X, y + 0.05, from.Z)
+			if roofAbove(position + offset, parts) then
+				sides += 1
 			end
 		end
-		return WeatherLogic.roofed(hits)
+		return WeatherLogic.roofed(center, sides)
+	end
+	local function partsOf(root: any): { any }
+		local list = {}
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(list, d)
+			end
+		end
+		return list
 	end
 
 	T.test("weather: off under the DROPPERS roof, on in the open plaza next to it", function()
@@ -664,25 +691,23 @@ return function(T, Loader)
 		Droppers.build(folder, Rng.new(1))
 		local house = folder:FindFirstChild("DroppersHouse", true)
 		T.truthy(house, "the house is built")
-		local parts = {}
-		for _, d in house:GetDescendants() do
-			if d:IsA("BasePart") then
-				table.insert(parts, d)
-			end
-		end
+		local parts = partsOf(house)
 		local frame = house:GetAttribute(DropperShopBuilder.FrameAttribute)
 		local room = DropperShopBuilder.Room
 		local function at(x: number, y: number, z: number): any
 			return (frame * roblox.CFrame.new(x, y, z)).Position
 		end
 		local zc = room.Front - room.D / 2
-		-- inside: the middle, by the back wall, by a side wall, just inside the gateway
+		-- inside: the middle, by the back wall, by a side wall, just inside the gateway, and on the
+		-- front displays in both corners (the house is turned ~34 degrees to the world)
 		for _, p in
 			{
 				at(0, room.Plinth + 3, zc),
 				at(0, room.Plinth + 3, room.Front - room.D + 2),
 				at(room.W / 2 - 3, room.Plinth + 3, zc),
 				at(0, room.Plinth + 3, room.Front - 2),
+				at(12, room.Plinth + 3.4, room.Front - 2.5),
+				at(-12, room.Plinth + 3.4, room.Front - 2.5),
 			}
 		do
 			T.truthy(covered(p, parts), `inside the shop at {p}: under the roof`)
@@ -693,7 +718,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("weather: lamps, trees, glass and the islets far above are no roof", function()
+	T.test("weather: lamps, trees, glass, blocks beside you and the islets far above are no roof", function()
 		local function part(cf: any, size: any, collide: boolean, transparency: number?, parent: any?): any
 			local x = roblox.Instance.new("Part")
 			x.CFrame = cf
@@ -707,19 +732,99 @@ return function(T, Loader)
 		local CF = roblox.CFrame.new
 		T.falsy(covered(root, { part(CF(0, 10, 0), Vector3.new(2, 1, 2), true) }), "a lamp's head")
 		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 2, 2), true) }), "an arch's beam")
-		local tree = roblox.Instance.new("Model")
-		tree.Name = "Tree"
-		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(14, 6, 14), true, 0, tree) }), "a big tree's canopy")
+		for _, name in { "Tree", "JungleTree", "JungleTree3" } do
+			local tree = roblox.Instance.new("Model")
+			tree.Name = name
+			T.truthy(WeatherLogic.isTreeName(name), name .. " is a tree")
+			T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(14, 6, 14), true, 0, tree) }), `a big {name} crown`)
+		end
+		for _, name in { "Street", "TreeHouse", "Treetop", "DroppersHouse" } do
+			T.falsy(WeatherLogic.isTreeName(name), name .. " is no tree")
+		end
 		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 1, 30), true, 0.95) }), "a glass roof you see through")
 		T.falsy(covered(root, { part(CF(0, 12, 0), Vector3.new(30, 1, 3), false) }), "a thin non-colliding beam")
-		T.truthy(covered(root, { part(CF(0, 14, 0), Vector3.new(14, 1, 14), false) }), "a wide non-colliding dome (the EGGS temple)")
+		T.falsy(
+			covered(root, { part(CF(0, 14, 0), Vector3.new(14, 1, 14), false) }),
+			"a non-colliding slab never counts (ghost roofs are Covered places)"
+		)
 		T.truthy(covered(root, { part(CF(0, 12, 0), Vector3.new(40, 1, 40), true) }), "a plain roof")
 		T.falsy(covered(root, { part(CF(0, 3 + WeatherConfig.Roof.Reach + 6, 0), Vector3.new(40, 4, 40), true) }), "an islet far above")
-		-- glass first, then the real roof above it
 		T.truthy(
 			covered(root, { part(CF(0, 9, 0), Vector3.new(30, 1, 30), true, 0.95), part(CF(0, 15, 0), Vector3.new(30, 1, 30), true) }),
 			"the roof above a glass ceiling"
 		)
+		-- a block (a rim rock, a pedestal, a wheel's rim) right behind you, wide enough for two side
+		-- rays to start inside it and find its cap: the sky over you is open, so no roof
+		local block = part(CF(0, 3, -4), Vector3.new(14, 6, 5), true)
+		local cap = part(CF(0, 6.5, -4), Vector3.new(14, 1, 5), true)
+		T.falsy(covered(root, { block, cap }), "a block beside you with open sky above")
+		T.truthy(WeatherLogic.roofed(true, 1), "the middle ray and one more")
+		T.falsy(WeatherLogic.roofed(false, 3), "never without the ray over the player")
+		T.falsy(WeatherLogic.roofed(true, 0), "nor with the middle one alone (a lamp right above)")
+	end)
+
+	T.test("weather: no weather inside the EGGS temple or under THE GREAT FORGE's side roofs (ghost roofs)", function()
+		local Capsules = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Capsules")
+		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
+		local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local CF = roblox.CFrame.new
+		local places = {}
+		for _, place in WeatherConfig.Covered do
+			places[place.Name] = place
+		end
+
+		-- the EGGS temple: its drum and dome are ghosts no ray sees
+		local temple = roblox.Instance.new("Folder")
+		Capsules.build(temple, Rng.new(1))
+		local drum = temple:FindFirstChild("Drum", true)
+		T.truthy(drum, "the EGGS temple's drum")
+		T.falsy(drum.CanCollide or drum.CanQuery, "the drum is a ghost")
+		local eggs = places.EggsTemple
+		T.truthy(eggs and eggs.Round, "the temple is a round Covered place")
+		local drumAt = drum.CFrame.Position -- (Lune parts have no Position property)
+		local flat = Vector3.new(eggs.CFrame.Position.X - drumAt.X, 0, eggs.CFrame.Position.Z - drumAt.Z)
+		T.lt(flat.Magnitude, 0.2, "centred under the drum")
+		local width = math.max(drum.Size.X, drum.Size.Y, drum.Size.Z)
+		T.near(eggs.Size.X, width, 0.2, "as wide as the drum")
+		local underside = drumAt.Y - math.min(drum.Size.X, drum.Size.Y, drum.Size.Z) / 2
+		T.near(eggs.CFrame.Position.Y + eggs.Size.Y / 2, underside, 0.2, "up to the drum's underside")
+		local dais = Vector3.new(drumAt.X, 1.2 + 3, drumAt.Z)
+		T.falsy(covered(dais, partsOf(temple)), "the rays see no roof over the dais (that is why the place is needed)")
+		T.falsy(WeatherLogic.isSurface(dais), "no weather on the dais")
+		for i = 0, 5 do
+			local a = i / 6 * math.pi * 2
+			local p = dais + Vector3.new(math.cos(a) * 6, 0, math.sin(a) * 6)
+			T.falsy(WeatherLogic.isSurface(p), `no weather under the drum at {p}`)
+		end
+		local front = (LobbyLayout.frame(LobbyLayout.get("CapsuleStall")) * CF(0, 3, -16)).Position
+		T.truthy(WeatherLogic.isSurface(front), "the lawn in front of the temple keeps its weather")
+
+		-- THE GREAT FORGE: the wide side roofs are ghosts too; the nave's own roof is real
+		local forge = roblox.Instance.new("Folder")
+		GreatForge.build(forge, Rng.new(1))
+		local roofs = {}
+		for _, d in partsOf(forge) do
+			if d.Name == "Roof" and not d.CanCollide and not d.CanQuery then
+				table.insert(roofs, d)
+			end
+		end
+		T.eq(#roofs, 2, "two ghost side roofs")
+		for _, roof in roofs do
+			for _, u in { -0.4, 0, 0.4 } do
+				for _, v in { -0.45, 0, 0.45 } do
+					local top = (roof.CFrame * CF(u * roof.Size.X, 0, v * roof.Size.Z)).Position
+					local p = Vector3.new(top.X, 3, top.Z)
+					T.falsy(WeatherLogic.isSurface(p), `no weather under the side roof at {p}`)
+				end
+			end
+		end
+		local frame = LobbyLayout.frame(LobbyLayout.get("GreatForge"))
+		for _, side in { -1, 1 } do
+			local out = (frame * CF(side * 25, 3, 5)).Position
+			T.truthy(WeatherLogic.isSurface(out), `beside the forge at {out}: open sky`)
+		end
+		T.truthy(WeatherLogic.isSurface((frame * CF(0, 3, 5)).Position), "the nave is left to the rays (its roof collides)")
 	end)
 
 	T.test("weather: the roof reading holds before the weather goes or comes back", function()
@@ -740,7 +845,7 @@ return function(T, Loader)
 		T.falsy(WeatherLogic.settleCover(c, true, 4), "under a lamp")
 		T.falsy(WeatherLogic.settleCover(c, false, 4.25), "past it")
 		T.falsy(WeatherLogic.settleCover(c, false, 6), "never blinked")
-		T.eq(#WeatherLogic.roofOffsets(), WeatherConfig.Roof.Rays, "one start per ray")
-		T.truthy(WeatherConfig.Roof.Need >= 2, "more than one ray must find the roof")
+		T.eq(#WeatherLogic.roofOffsets(), WeatherConfig.Roof.Rays, "one start per side ray")
+		T.truthy(WeatherConfig.Roof.Sides >= 1, "a ray round the player must agree with the one over it")
 	end)
 end

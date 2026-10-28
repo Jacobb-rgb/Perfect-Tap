@@ -9,11 +9,13 @@
 	- Every CheckEvery seconds: the weather now (WeatherLogic.at, or the
 	  Workspace attribute WeatherForce in Studio), the gate (weather shows
 	  only on the surface: WeatherLogic.isSurface for the character, not
-	  under a roof (WeatherConfig.Roof: three short rays up from round the
-	  character, two must hit a roof, held Roof.Hold seconds; only while
-	  there is weather), not inside a LightingZone like the Blaster Vault,
-	  not during the elevator ride, the cleaning close-up or the loading
-	  screen; it fades out in GateFade seconds), the emitter rates (capped
+	  under a roof (WeatherConfig.Roof: a short ray straight up from the
+	  character and one of three round it must hit a roof, held Roof.Hold
+	  seconds; only while there is weather), not in a Covered place (the
+	  EGGS temple, THE GREAT FORGE's aisles, the Grotto tunnel), not inside
+	  a LightingZone like the Blaster Vault, not during the elevator ride,
+	  the cleaning close-up or the loading screen; it fades out in GateFade
+	  seconds), the emitter rates (capped
 	  on phones and with Reduce motion), the loop volumes, the ground pads
 	  (a couple of raycasts per check, never closer than Ground.Clear to the
 	  camera), hail clacks, the sky field's clear hole and height for the
@@ -152,6 +154,18 @@ local function rootPosition(): Vector3?
 	return nil
 end
 
+-- Is the part in a tree model ("Tree", "JungleTree", ...: WeatherLogic.isTreeName)?
+local function inTree(part: Instance): boolean
+	local node = part.Parent
+	while node and node ~= Workspace do
+		if node:IsA("Model") and WeatherLogic.isTreeName(node.Name) then
+			return true
+		end
+		node = node.Parent
+	end
+	return false
+end
+
 -- One roof ray straight up from `origin`: true when it meets a roof within Roof.Reach; it goes on
 -- past what is no roof (WeatherLogic.roofCounts) for at most Roof.Hops hits.
 local function roofAbove(origin: Vector3): boolean
@@ -167,9 +181,8 @@ local function roofAbove(origin: Vector3): boolean
 			return false
 		end
 		local part = hit.Instance
-		local tree = part:FindFirstAncestor("Tree") ~= nil
 		local distance = hit.Position.Y - origin.Y
-		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, tree, part.Size) then
+		if WeatherLogic.roofCounts(distance, part.Transparency, part.CanCollide, inTree(part)) then
 			return true
 		end
 		from = hit.Position + Vector3.new(0, 0.05, 0)
@@ -177,7 +190,8 @@ local function roofAbove(origin: Vector3): boolean
 	return false
 end
 
--- Under a roof now (the rays round the character, Roof.Need of them hitting).
+-- Under a roof now: the ray straight up from the character and Roof.Sides of the rays round it
+-- (the side rays are only cast when the middle one found a roof).
 local function roofed(position: Vector3): boolean
 	local list: { Instance } = {}
 	local f = fx
@@ -194,13 +208,19 @@ local function roofed(position: Vector3): boolean
 		end
 	end
 	roofParams.FilterDescendantsInstances = list
-	local hits = 0
+	if not roofAbove(position) then
+		return false
+	end
+	local sides = 0
 	for _, offset in WeatherLogic.roofOffsets() do
 		if roofAbove(position + offset) then
-			hits += 1
+			sides += 1
+			if WeatherLogic.roofed(true, sides) then
+				break
+			end
 		end
 	end
-	return WeatherLogic.roofed(hits)
+	return WeatherLogic.roofed(true, sides)
 end
 
 -- `raining`: there is weather now (the roof rays only run then).

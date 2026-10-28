@@ -35,13 +35,14 @@
 	Phones get fewer particles (Phone), Reduce motion turns the lightning
 	flashes and the tree sway off and halves the particles (Reduced).
 	Weather shows only on the surface (Zones, OutsideMinY, not in the
-	Covered boxes); the controller also hides it under a roof (Roof: a few
+	Covered places); the controller also hides it under a roof (Roof: a few
 	short rays up from the character, with a hold so it never blinks),
 	inside a LightingZone (the Blaster Vault), during the elevator ride, the
 	cleaning close-up and the loading screen.
 ]]
 
 local SoundConfig = require(script.Parent.SoundConfig)
+local LobbyLayout = require(script.Parent.LobbyLayout)
 local WorldLayout = require(script.Parent.WorldLayout)
 
 -- "Clear" or one of Order: "Rain" | "Storm" | "Hail" | "Snow" | "Wind" | "Heatwave"
@@ -375,34 +376,73 @@ WeatherConfig.Rainbow = {
 	Tint = { Color = rgb(255, 250, 238), Brightness = 0.03, Contrast = 0.04, Saturation = 0.1 }, -- the sun is back
 }
 
--- Under a roof (the DROPPERS shop, THE GREAT FORGE's passage, the EGGS temple) the weather goes:
--- every check, Rays short rays straight up from round the character (a triangle Spread studs
--- out), each going on past what is not a roof (WeatherLogic.roofCounts: see-through parts, trees,
--- small non-colliding decor) for at most Hops hits and Reach studs (so SKY HAVEN's islets and the
--- sky islands far above never count). Need of them hitting = covered, and the reading must hold
--- Hold seconds before the weather goes or comes back (no blinking under lamps and arches).
+-- Under a roof (the DROPPERS shop, THE GREAT FORGE's nave) the weather goes. Every check one ray
+-- goes straight up from the character and Rays more from round it (a triangle Spread studs out);
+-- each goes on past what is no roof (WeatherLogic.roofCounts: see-through parts, trees, parts
+-- that do not collide) for at most Hops hits and Reach studs (SKY HAVEN's islets and the sky
+-- islands far above never count). Covered = the ray over the player AND Sides of the others hit
+-- (a block or a wheel rim beside you never counts on its own), and the reading must hold Hold
+-- seconds before the weather goes or comes back (no blinking under lamps and arches).
+-- Ghost roofs (Style.ghost / tiny: CanQuery off, no ray sees them: the EGGS temple's drum, THE
+-- GREAT FORGE's side roofs) are Covered shapes below instead.
 WeatherConfig.Roof = {
 	Rays = 3,
 	Spread = 5,
-	Need = 2,
+	Sides = 1,
 	Reach = 24, -- studs: about one building
 	Hops = 4,
 	Hold = 0.5,
 	SeeThrough = 0.9, -- a part this transparent (or more) is no roof
-	GhostSize = 8, -- a non-colliding part counts only if this wide on its two big sides (a dome, a slab)
 }
 
--- No weather in these boxes even where the zones say surface: the tunnel from the Quarry to
--- the VIP Glimmer Grotto (World/Land builds it between the two zones, under solid rock).
+-- A place with no weather even where the zones say surface: a box (CFrame at its centre, Size)
+-- or, Round, an upright cylinder (Size.X across, Size.Y high).
+export type Covered = {
+	Name: string,
+	CFrame: CFrame,
+	Size: Vector3,
+	Round: boolean?,
+}
+
+-- The Covered places, from the map's own layout (no map change):
+--   GrottoTunnel  the tunnel from the Quarry to the VIP Glimmer Grotto (World/Land builds it
+--                 between the two zones, under solid rock)
+--   EggsTemple    under the EGGS temple's drum (Districts/Capsules: the drum is 17.4 across, its
+--                 underside 10.5 up, centred 0.3 behind the piece's centre)
+--   ForgeAisleL/R under THE GREAT FORGE's wide side roofs (Plaza/GreatForge: local x 14.2 .. 21
+--                 either side, z NaveRoofZ0 + 0.6 = -10.6 .. 21.5, the eave 17.4 up at the edge)
 do
 	local grotto = WorldLayout.Caves.Grotto
 	local door = grotto.Entrance
-	WeatherConfig.Covered = {
+	local x0, x1 = WorldLayout.Quarry.Max.X - 1, grotto.Min.X + 1
+	local y0, y1 = door.Position.Y - 3, door.Position.Y + door.Height + 1
+	local z0, z1 = door.Position.Z - door.Width / 2 - 2, door.Position.Z + door.Width / 2 + 2
+	local eggs = LobbyLayout.frame(LobbyLayout.get("CapsuleStall"))
+	local forge = LobbyLayout.frame(LobbyLayout.get("GreatForge"))
+	local aisleX0, aisleX1 = 13.7, 21 -- (a little under the nave's eave)
+	local aisleZ0, aisleZ1 = -10.6, 21.5
+	local aisleY0, aisleY1 = -3, 17.4
+	local list: { Covered } = {
 		{
-			Min = Vector3.new(WorldLayout.Quarry.Max.X - 1, door.Position.Y - 3, door.Position.Z - door.Width / 2 - 2),
-			Max = Vector3.new(grotto.Min.X + 1, door.Position.Y + door.Height + 1, door.Position.Z + door.Width / 2 + 2),
+			Name = "GrottoTunnel",
+			CFrame = CFrame.new((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+			Size = Vector3.new(x1 - x0, y1 - y0, z1 - z0),
 		},
-	} :: { { Min: Vector3, Max: Vector3 } }
+		{
+			Name = "EggsTemple",
+			CFrame = eggs * CFrame.new(0, (-2 + 10.5) / 2, 0.3),
+			Size = Vector3.new(17.4, 10.5 + 2, 17.4),
+			Round = true,
+		},
+	}
+	for _, side in { -1, 1 } do
+		table.insert(list, {
+			Name = if side < 0 then "ForgeAisleL" else "ForgeAisleR",
+			CFrame = forge * CFrame.new(side * (aisleX0 + aisleX1) / 2, (aisleY0 + aisleY1) / 2, (aisleZ0 + aisleZ1) / 2),
+			Size = Vector3.new(aisleX1 - aisleX0, aisleY1 - aisleY0, aisleZ1 - aisleZ0),
+		})
+	end
+	WeatherConfig.Covered = list
 end
 
 -- Trees near you lean with the wind (Wind, Storm): models named "Tree" in the map, nearest
@@ -415,6 +455,8 @@ WeatherConfig.TreeSway = {
 	Speed = 1.6, -- radians per second of the sway wave
 	Rescan = 2, -- seconds between picks of the nearest trees
 	ScanBudget = 0.001, -- seconds per frame the tree search may take (spread over frames: no hitch)
+	ScanEvery = 200, -- children between two looks at the clock (a folder can hold thousands)
+	ScanAge = 60, -- seconds a tree search stays good (the next windy spell after that searches again)
 }
 
 WeatherConfig.Phone = {

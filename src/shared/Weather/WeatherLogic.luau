@@ -24,11 +24,11 @@
 	  Lightning.MinFlashGap (flashAllowed).
 	- Reach (review 2026-10-28): fieldHeight, travel: what falls stays visible
 	  until it is Box.Below studs under the camera (snow falls round you).
-	- Roofs: roofOffsets / roofCounts / roofed (the rays the controller casts
-	  up from the character and which hits make a roof) and settleCover (the
-	  hold that keeps it from blinking).
+	- Roofs: roofOffsets / roofCounts / isTreeName / roofed (the rays the
+	  controller casts up from the character and which hits make a roof) and
+	  settleCover (the hold that keeps it from blinking).
 	- isSurface(position): weather shows only on the surface (zones, sea, not
-	  the Covered boxes).
+	  the Covered places: inCovered).
 ]]
 
 local WeatherConfig = require(script.Parent.Parent.Config.WeatherConfig)
@@ -606,34 +606,24 @@ function WeatherLogic.roofOffsets(cfg: Config?): { Vector3 }
 	return out
 end
 
--- Does a hit `distance` studs above a ray's start make a roof? Not past Roof.Reach, not a tree,
--- not see-through, and a part that does not collide only if it is a wide slab or dome
--- (its two bigger sides at least Roof.GhostSize).
-function WeatherLogic.roofCounts(
-	distance: number,
-	transparency: number,
-	canCollide: boolean,
-	tree: boolean,
-	size: Vector3,
-	cfg: Config?
-): boolean
+-- Does a hit `distance` studs above a ray's start make a roof? A part that collides, not past
+-- Roof.Reach, not part of a tree, not see-through. (Parts that do not collide never count:
+-- banners, awnings, lamp heads, the train track. Ghost roofs are WeatherConfig.Covered places.)
+function WeatherLogic.roofCounts(distance: number, transparency: number, canCollide: boolean, tree: boolean, cfg: Config?): boolean
 	local c = cfg or WeatherConfig
 	local r = c.Roof
-	if tree or distance > r.Reach or transparency >= r.SeeThrough then
-		return false
-	end
-	if canCollide then
-		return true
-	end
-	local a, b, d = size.X, size.Y, size.Z
-	local middle = math.max(math.min(a, b), math.min(math.max(a, b), d))
-	return middle >= r.GhostSize
+	return canCollide and not tree and distance <= r.Reach and transparency < r.SeeThrough
 end
 
--- Covered: Roof.Need of the rays found a roof.
-function WeatherLogic.roofed(hits: number, cfg: Config?): boolean
+-- Is a model with this name a tree? "Tree", "JungleTree", "JungleTree3" (the map's tree models).
+function WeatherLogic.isTreeName(name: string): boolean
+	return string.match(name, "Tree%d*$") ~= nil
+end
+
+-- Covered: the ray straight up from the player found a roof AND Roof.Sides of the side rays did.
+function WeatherLogic.roofed(center: boolean, sides: number, cfg: Config?): boolean
 	local c = cfg or WeatherConfig
-	return hits >= c.Roof.Need
+	return center and sides >= c.Roof.Sides
 end
 
 function WeatherLogic.newCover(): Cover
@@ -656,12 +646,25 @@ end
 
 ---------------------------------------------------------------- where
 
+-- Is `position` inside a Covered place (a box, or an upright cylinder when Round)?
+function WeatherLogic.inCovered(place: WeatherConfig.Covered, position: Vector3): boolean
+	local p = place.CFrame:PointToObjectSpace(position)
+	local half = place.Size / 2
+	if math.abs(p.Y) > half.Y then
+		return false
+	end
+	if place.Round then
+		return p.X * p.X + p.Z * p.Z <= half.X * half.X
+	end
+	return math.abs(p.X) <= half.X and math.abs(p.Z) <= half.Z
+end
+
 -- True where weather shows: the surface (WeatherConfig.Zones), the sea and the sky above it, but
--- not in a Covered box (the Quarry -> Grotto tunnel).
+-- not in a Covered place (the Quarry -> Grotto tunnel, the EGGS temple, THE GREAT FORGE's aisles).
 function WeatherLogic.isSurface(position: Vector3, cfg: Config?): boolean
 	local c = cfg or WeatherConfig
-	for _, box in c.Covered do
-		if WorldLayout.isInBox(position, box.Min, box.Max) then
+	for _, place in c.Covered do
+		if WeatherLogic.inCovered(place, position) then
 			return false
 		end
 	end
