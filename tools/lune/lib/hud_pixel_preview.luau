@@ -9,7 +9,8 @@
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
 	  ui_hud_round_studio   the owner's Studio window (995 x 485 pt, a mouse: the
 	                        tall block of tiles, owner 2026-10-28)
-	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch)
+	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
+	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
 	are claimed as the controllers do (the reel's eight: Inventory by
 	BackpackController, Spin with its FREE! sticker by WheelController's badge,
@@ -48,13 +49,13 @@ function Preview.build(Loader: any): { [string]: any }
 		boostCount: number?,
 		touchButtons: boolean?,
 		equipped: boolean?,
-		input: ("Mouse" | "Touch")?
+		input: ("Mouse" | "Touch" | "TV")?
 	): { any }
 		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
 		-- (phones are touch screens: `input` nil = touch when compact; `screen` is the gui's size)
 		local touch = if input then input == "Touch" else compact
-		local refs = HudBubble.buildGame(uiScale, screen.X, touch, false, screen.Y)
+		local refs = HudBubble.buildGame(uiScale, screen.X, touch, input == "TV", screen.Y)
 		-- (as HudController does: on phones the boost chips stop before the Shop pill)
 		BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, screen.X / uiScale)
 		TeleportView.build(refs.TopBar, uiScale, screen.X)
@@ -183,6 +184,13 @@ function Preview.build(Loader: any): { [string]: any }
 	local tabletScale = HudBubble.scaleFor(roblox.Vector2.new(1024, 768))
 	exports.ui_hud_round_tablet =
 		UiExport.export(hud(tabletScale * 900 / 768, tabletScale, roblox.Vector2.new(1024, 768 - 58 * 768 / 900), 1, true, false, "Touch"))
+	for _, phone in { { 640, 360 }, { 568, 320 } } do
+		exports[`ui_hud_round_phone{phone[1]}`] = UiExport.export(
+			hud(0.62 * 900 / phone[2], 0.62, roblox.Vector2.new(phone[1], phone[2] - 58 * phone[2] / 900), 1, true, false, "Touch")
+		)
+	end
+	exports.ui_hud_round_tv =
+		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
 	TrainView.useHud(nil)
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do

@@ -9,11 +9,14 @@
 	  build()  -> View: Gui = ScreenGui "TerraForgeJuice" (DisplayOrder 9, no
 	              UIScale: pixels like the level orbs; the controller passes
 	              the HUD's UI scale), JuiceConfig.Flyers ores and 3 bumps
-	  setOre(flyer, oreId?)         nil = a dirty chunk: the world's Raw chunk
+	  setOre(flyer, oreId?, kind?, recipe?)
+	                                nil = a dirty chunk: the world's Raw chunk
 	                                (ItemBuilder) with its glints in the one
 	                                neutral JuiceConfig.GlintColor (never a
-	                                rarity colour); an ore id = that cleaned
-	                                ore's Clean model, its glow tinted
+	                                rarity colour); an ore id = that item's
+	                                model (`kind`: Clean when nil, Crushed,
+	                                Ingot, Gear, Alloy, Relic (its id), with
+	                                `recipe`), its glow tinted
 	  poseFlyer(flyer, from, to, t, scale, seed, lift?) -> done
 	                                t seconds after the pickup: pops up at
 	                                `from` glowing and floats up (Rise), then
@@ -31,7 +34,7 @@
 	                                above (`plusT` seconds in: a merged landing
 	                                pops the +N again, the ring stays as it is)
 Perf (phones first): every flyer's dirty chunk is built once (build), a
-cleaned ore's model once per flyer (setOre; the last CleanCache kept), all
+cleaned item's model once per flyer (setOre; the last CleanCache kept), all
 of them still (anchored, no collisions, no welds, sparkles or lights). The
 tumble turns the viewport's camera and light round the model: one CFrame
 per flyer per frame, no tables, no parts moved.
@@ -44,6 +47,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local JuiceConfig = require(Shared:WaitForChild("Config"):WaitForChild("JuiceConfig"))
 local OreData = require(Shared:WaitForChild("Config"):WaitForChild("OreData"))
+local ArtifactConfig = require(Shared:WaitForChild("Config"):WaitForChild("ArtifactConfig"))
 local ItemBuilder = require(Shared:WaitForChild("Builders"):WaitForChild("ItemBuilder"))
 local UIKit = require(script.Parent.UIKit)
 local PopWord = require(script.Parent.PopWord)
@@ -59,7 +63,9 @@ BagFly.Fov = 30
 BagFly.LiftMin = 0.7 -- a lifted chunk starts 0.7 to 1.8 times the flying size
 BagFly.LiftMax = 1.8
 BagFly.ChunkStuds = 1.5 -- a chunk's width in the world (the controller measures it on screen)
-BagFly.CleanCache = 3 -- cleaned ore models kept per flyer
+BagFly.CleanCache = 3 -- cleaned item models kept per flyer
+-- the item kinds that fly as their own model (CarryService's Pickup sends the kind; Raw never: the secret)
+BagFly.Kinds = { Clean = true, Crushed = true, Ingot = true, Gear = true, Alloy = true, Relic = true } :: { [string]: boolean }
 BagFly.BumpSeconds = 0.85
 BagFly.Bumps = 3
 
@@ -72,7 +78,7 @@ export type Flyer = {
 	Camera: Camera,
 	Model: Model, -- the one in the view now
 	DirtyModel: Model,
-	Clean: { [string]: Model }, -- cleaned ore id -> its model (not shown: no parent)
+	Clean: { [string]: Model }, -- "kind|id|recipe" -> its model (not shown: no parent)
 	CleanOrder: { string }, -- oldest first
 	Radius: { [Model]: number }, -- every model's reach round its middle (the camera's distance)
 	Base: CFrame, -- the camera before the tumble
@@ -337,30 +343,41 @@ function BagFly.build(): View
 	return { Gui = gui, Flyers = flyers, Bumps = bumps }
 end
 
--- A cleaned ore's model for this flyer: built the first time, then kept (the last CleanCache ores).
-local function cleanModel(f: Flyer, oreId: string): Model
-	local kept: Model? = f.Clean[oreId]
+-- A cleaned item's model for this flyer: built the first time, then kept (the last CleanCache
+-- items); nil when the builder can't make it (it flies as a dirty chunk then).
+local function cleanModel(f: Flyer, oreId: string, kind: string, recipe: string?): Model?
+	local key = `{kind}|{oreId}|{recipe or ""}`
+	local kept: Model? = f.Clean[key]
 	if kept then
 		return kept
 	end
-	local model = ItemBuilder.build({ Kind = "Clean", OreId = oreId }, CFrame.new(), oreId)
+	local ok, built = pcall(ItemBuilder.build, { Kind = kind, OreId = oreId, Recipe = recipe }, CFrame.new(), oreId)
+	if not ok or typeof(built) ~= "Instance" then
+		return nil
+	end
+	local model = built :: Model
 	f.Radius[model] = still(model)
-	f.Clean[oreId] = model
-	table.insert(f.CleanOrder, oreId)
+	f.Clean[key] = model
+	table.insert(f.CleanOrder, key)
 	return model
 end
 
 --[[
-	The ore that flies: nil = a dirty chunk (the world's Raw chunk, its
-	glints and glow the neutral GlintColor: the same for every ore), a
-	cleaned ore's id = its Clean model, its glow tinted in its colour. An
-	unknown id flies as a dirty chunk.
+	What flies: nil = a dirty chunk (the world's Raw chunk, its glints and
+	glow the neutral GlintColor: the same for every ore); an id = that
+	item's model (`kind` nil = Clean; Crushed, Ingot, Gear, Alloy with
+	`recipe`; Relic with an ArtifactConfig id), its glow tinted in the ore's
+	colour. An unknown id or kind flies as a dirty chunk.
 ]]
-function BagFly.setOre(f: Flyer, oreId: string?)
-	local ore = if oreId then OreData.ById[oreId] else nil
-	f.Dirty = ore == nil
-	f.OreId = if ore then ore.Id else nil
-	local model = if ore then cleanModel(f, ore.Id) else f.DirtyModel
+function BagFly.setOre(f: Flyer, oreId: string?, kind: string?, recipe: string?)
+	local itemKind = if kind and BagFly.Kinds[kind] then kind else "Clean"
+	-- (a relic's id is an ArtifactConfig one; everything else is made of an ore)
+	local known = oreId ~= nil and (if itemKind == "Relic" then ArtifactConfig.ById[oreId] ~= nil else OreData.ById[oreId] ~= nil)
+	local built = if known and oreId then cleanModel(f, oreId, itemKind, recipe) else nil
+	local ore = if built and oreId then OreData.ById[oreId] else nil
+	f.Dirty = built == nil
+	f.OreId = if built then oreId else nil
+	local model = built or f.DirtyModel
 	if f.Model ~= model then
 		f.Model.Parent = nil
 		model.Parent = f.View

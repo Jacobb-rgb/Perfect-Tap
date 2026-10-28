@@ -25,6 +25,7 @@ local CardTheme = require(Shared.Config.CardTheme)
 local Geo = require(Shared.Builders.Geo)
 
 local DefaultLook = require(script.Parent.DefaultLook)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Card = require(script.Parent.Parent.UI.Card)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -194,7 +195,8 @@ function CardLook.finished(ctx: any)
 		end
 		-- and the clump's body breaks up into chunks as it crumbles (DefaultLook's crumble): a few
 		-- of its parts, spread over the body (it has dozens of wedges)
-		local body = state.shell.BackRock
+		-- (Reduce motion: the clump just goes)
+		local body = if Motion.reduced() then {} else state.shell.BackRock
 		local step = math.max(1, math.floor(#body / 6))
 		for i = 1, #body, step do
 			local part = body[i]

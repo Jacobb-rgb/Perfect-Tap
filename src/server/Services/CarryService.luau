@@ -344,12 +344,14 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord, qui
 		return false
 	end
 	local at = record.Body.CFrame.Position
-	local kind, oreId = record.Kind, record.OreId
+	local kind, oreId, recipe = record.Kind, record.OreId, record.Recipe
 	-- no yield between taking it out of the world and into the backpack
 	local desc = ItemService.absorb(record)
 	CarryService.add(player, desc, 1, true)
-	-- dirty ore keeps its secret: no ore color for raw chunks (design v2)
-	Net.fire("Fx", player, "Pickup", at, if kind == "Raw" then nil else oreId)
+	-- dirty ore keeps its secret: no ore id for raw chunks (design v2); the rest fly as
+	-- themselves (the client's BagFly builds the item: kind and recipe)
+	local raw = kind == "Raw"
+	Net.fire("Fx", player, "Pickup", at, if raw then nil else oreId, if raw then nil else kind, if raw then nil else recipe)
 	if not quiet then
 		for _, callback in pickupCallbacks do
 			task.spawn(callback, player, desc)

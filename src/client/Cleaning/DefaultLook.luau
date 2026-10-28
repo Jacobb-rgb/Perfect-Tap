@@ -26,6 +26,7 @@ local Geo = require(Shared.Builders.Geo)
 local RevealFx = require(script.Parent.RevealFx)
 local SprayParts = require(script.Parent.SprayParts)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
@@ -186,11 +187,18 @@ end
 --[[
 	The clump's dark body crumbles away with the last dirt (owner 2026-10-28:
 	"only the ore, not the dirt"): every part sinks back, shrinks and fades,
-	so the ore rises and spins on its own.
+	so the ore rises and spins on its own. Reduce motion: it just goes (no
+	tween, no dust; CardLook throws no chunks from it).
 ]]
 local CRUMBLE_TIME = 0.35
 
 local function crumble(shell: any)
+	if Motion.reduced() then
+		for _, part in shell.BackRock do
+			part:Destroy()
+		end
+		return
+	end
 	local back = shell.WorkCF.LookVector -- (away from the camera)
 	for i, part in shell.BackRock do
 		if part.Parent then

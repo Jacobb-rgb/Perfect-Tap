@@ -333,4 +333,49 @@ return function(T, Loader)
 		local teleport = source("Controllers/TeleportController")
 		T.truthy(teleport:find('selected.Name == "ShopPill"', 1, true), "the bar owns its Shop button")
 	end)
+
+	-- (review 2026-10-29) the grid is fitted to the screen's height: a full-screen PC layout refits when
+	-- the window shrinks (HudController: HudBubble.placeMenu on every size change), so the TRAIN chip
+	-- never lands on the money, its Server Luck line or the floaters
+	T.test("RoundReview: the tiles and the TRAIN chip refit when the window shrinks", function()
+		inRound(function()
+			local big = HudBubble.scaleFor(Vector2.new(1920, 1080))
+			local refs = HudBubble.buildGame(big, 1920, false, false, 1080 - 58) :: any
+			local small = HudBubble.scaleFor(Vector2.new(1280, 720))
+			local layout = HudBubble.layout(small, 1280, false, false, 720 - 58)
+			HudBubble.placeMenu(refs.Gui, refs.Menu, layout)
+			TrainView.useHud(refs.Gui)
+			local chip = TrainView.chipSize(false)
+			TrainView.useHud(nil)
+			local height = (720 - 58) / small
+			local chipBottom = refs.Gui:GetAttribute("ChipTop") + chip.Y
+			T.truthy(chipBottom <= HudBubble.roundFloor(layout, height), `the chip above the floaters ({chipBottom})`)
+			local grid = refs.Menu:FindFirstChildOfClass("UIGridLayout") :: any
+			T.eq(grid.CellSize.X.Offset, layout.Tile, "the tiles took the new size")
+			T.eq(refs.Menu.Size.Y.Offset, HudBubble.menuMetrics(layout, #HudBubble.gameMenu()).Height, "the block took the new height")
+			T.eq(refs.Gui:GetAttribute("ChipWidth"), refs.Menu.Size.X.Offset, "the chip as wide as the block again")
+			refs.Gui:Destroy()
+		end)
+	end)
+
+	-- (review 2026-10-29) a TV's stacked chip keeps its words 18 px at 1080p: the line on two rows, not smaller
+	T.test("RoundReview: a TV's stacked TRAIN chip keeps its line big (two rows)", function()
+		inRound(function()
+			local scale = HudBubble.scaleFor(Vector2.new(1920, 1080))
+			local refs = HudBubble.buildGame(scale, 1920, false, true, 1080 - 58) :: any
+			T.eq(refs.Gui:GetAttribute("ChipStack"), true, "stacked on a TV")
+			TrainView.useHud(refs.Gui)
+			T.eq(TrainView.chipSize(false).Y, HudBubble.StackChipHeightTv, "the HUD knows the TV chip's height")
+			local train = TrainView.build(false)
+			TrainView.layout(train, false, 1920 / scale, (1080 - 58) / scale)
+			TrainView.useHud(nil)
+			local line = train.ChipLine :: any
+			local fit = line:FindFirstChildOfClass("UITextSizeConstraint") :: any
+			T.truthy(fit and fit.MinTextSize * scale >= 18, "the line never under 18 px")
+			T.truthy(line.TextWrapped and line.Size.Y.Offset >= 2 * fit.MinTextSize, "two rows for a long line")
+			train.Gui:Destroy()
+			train.Chip:Destroy()
+			refs.Gui:Destroy()
+		end)
+	end)
 end

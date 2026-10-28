@@ -136,6 +136,7 @@ export type Layout = {
 	Top: number?, -- the tiles' top (design units under Roblox's top bar)
 	Chip: ("Under" | "Beside")?, -- the TRAIN chip under the tiles (as wide as them) or beside the last row
 	ChipStack: boolean?, -- under them on a mouse or a TV: TrainView's stacked chip (the block's width)
+	ChipCap: number?, -- beside them on touch: the chip ends here (the top row's right end: the tutorial bubble's left)
 }
 
 HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
@@ -526,10 +527,17 @@ HudBubble.RoundMenuTop = 140
 HudBubble.RoundMenuLeft = 10
 
 HudBubble.StackChipHeight = 104 -- TrainView's stacked chip (under the round look's tiles on a mouse or a TV)
+HudBubble.StackChipHeightTv = 130 -- the stacked chip on a TV (bigger words, the line on two rows)
+HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
 HudBubble.RoundTouchColumns = { 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.RoundColumns = { 2, 3, 4, 5 } -- a mouse or a TV: the tries (two: the owner's tall block)
+
+-- The stacked TRAIN chip's height on this layout (TrainView mirrors it: CHIP.Stack / CHIP.StackTv).
+function HudBubble.stackChipHeight(layout: Layout): number
+	return if layout.TenFoot then HudBubble.StackChipHeightTv else HudBubble.StackChipHeight
+end
 
 -- The money bottom-left in the round look: (the amount's text size, the income line's, the panel's height).
 function HudBubble.moneySize(layout: Layout): (number, number, number)
@@ -559,8 +567,11 @@ end
 	               under the top third) stays free on tablets; five a row where
 	               they stay left of the top row, else four; the touch chip
 	               (TouchChipHeight) under them as wide as them
-	  no fit       (the smallest screens) the tiles at the top, the chip beside
-	               their last row
+	  no fit       (the smallest screens) the tiles at the top, as many a row as
+	               stay left of the top row at their size (touch: never under
+	               44 pt), the chip beside their last row; on touch it ends at
+	               the top row's right end (ChipCap: the tutorial bubble's
+	               left, TutorialView.layout)
 ]]
 function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	local count = #HudBubble.RoundMenu
@@ -568,6 +579,8 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	local tabsLeft = layout.Width / 2 - HudBubble.topBarSize(layout).X / 2 - 8
 	local floor = HudBubble.roundFloor(layout, height)
 	local gap = layout.TileGap
+	local stackH = HudBubble.stackChipHeight(layout)
+	layout.ChipCap = nil
 	local function wide(columns: number, tile: number): number
 		return columns * tile + (columns - 1) * gap
 	end
@@ -591,10 +604,10 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	else
 		for _, columns in HudBubble.RoundColumns do
 			local rows = math.ceil(count / columns)
-			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - HudBubble.StackChipHeight - (rows - 1) * gap
+			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - stackH - (rows - 1) * gap
 			local tile = math.min(layout.Tile, math.floor(room / rows))
 			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
-				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + HudBubble.StackChipHeight
+				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + stackH
 				layout.Columns, layout.Tile = columns, tile
 				layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
 				layout.Chip, layout.ChipStack = "Under", true
@@ -602,12 +615,25 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			end
 		end
 	end
-	-- nothing fits: four a row at the top (the most that stay left of the top row), the chip beside
-	local columns = 4
-	layout.Columns = columns
-	layout.Tile = math.min(layout.Tile, math.floor((tabsLeft - left - (columns - 1) * gap) / columns))
-	layout.Top = HudBubble.MenuTop
+	-- nothing fits: at the top, as many a row as stay left of the top row (touch: at 44 pt;
+	-- fewer a row, more rows), the chip beside their last row
+	local tile = layout.Tile
+	if layout.Touch then
+		tile = math.max(tile, math.ceil(44 / math.max(uiScale, 0.01)))
+	end
+	local columns = 2
+	for _, try in { 5, 4, 3 } do
+		if left + wide(try, tile) <= tabsLeft then
+			columns = try
+			break
+		end
+	end
+	layout.Columns, layout.Tile, layout.Top = columns, tile, HudBubble.MenuTop
 	layout.Chip, layout.ChipStack = "Beside", false
+	if layout.Touch then
+		-- (the touch tutorial's bubble starts right of the top row: the chip stops under its end)
+		layout.ChipCap = layout.Width / 2 + HudBubble.topBarSize(layout).X / 2
+	end
 end
 
 -- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets): the round look's
@@ -634,8 +660,14 @@ function HudBubble.chipLeft(layout: Layout): number?
 	return m.Origin.X.Offset + m.Width + HudBubble.ChipGap
 end
 
--- The TRAIN chip's width when it goes under the round look's tiles (theirs), else nil (TrainView's own).
+-- The TRAIN chip's width when it goes under the round look's tiles (theirs), beside them on touch
+-- up to ChipCap at most, else nil (TrainView's own).
 function HudBubble.chipWidth(layout: Layout): number?
+	local cap = layout.ChipCap
+	if layout.Chip == "Beside" and cap then
+		local left = HudBubble.chipLeft(layout) :: number
+		return math.min(HudBubble.TouchChipWidth, math.floor(cap - left))
+	end
 	if layout.Chip ~= "Under" then
 		return nil
 	end
@@ -1289,12 +1321,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 		Position = m.Origin,
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
-	-- where the TRAIN chip goes (TrainView.HudChipTop, set by HudController)
-	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
-	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
-	-- (the round look: under the tiles the chip is as wide as them, stacked on a mouse or a TV)
-	gui:SetAttribute("ChipWidth", HudBubble.chipWidth(layout))
-	gui:SetAttribute("ChipStack", layout.ChipStack == true)
+	-- where the TRAIN chip goes (TrainView.useHud, HudController): placeMenu below
 	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
 	-- above the money, bottom-left); on phones and tablets the left column is full
 	-- (tiles, the TRAIN chip, the money) and the top-right holds the tutorial bubble
@@ -1335,7 +1362,6 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 		Visible = false,
 	})
 	menu:SetAttribute("Bubble", true)
-	menu:SetAttribute("Columns", layout.Columns)
 	UIKit.new("UIGridLayout", {
 		CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight),
 		CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap),
@@ -1353,6 +1379,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 		})
 		holder.Visible = false
 	end
+	HudBubble.placeMenu(gui, menu, layout)
 
 	-- the BLASTER slot and the backpack button, centred at the bottom (Roblox's own hotbar
 	-- is off: Util/Hotbar; HudController fills the button, BackpackController opens the
@@ -1379,6 +1406,36 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 		Menu = menu,
 		TopBar = topBar,
 	}
+end
+
+--[[
+	Puts the game menu's tiles where `layout` says and tells the TRAIN chip its
+	place (gui attributes ChipTop, ChipLeft, ChipWidth, ChipStack, ChipTenFoot:
+	TrainView.useHud). buildGame does it once; HudController again when the
+	screen changes size (the round look's grid is fitted to it: fitRound).
+]]
+function HudBubble.placeMenu(gui: Instance, menu: Frame, layout: Layout)
+	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	menu.Position = m.Origin
+	menu.Size = UDim2.fromOffset(m.Width, m.Height)
+	menu:SetAttribute("Columns", layout.Columns)
+	local grid = menu:FindFirstChildOfClass("UIGridLayout")
+	if grid then
+		grid.CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight)
+		grid.CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap)
+	end
+	-- (the MORE flyout opens right of the tiles)
+	local flyout = gui:FindFirstChild("MoreFlyout")
+	if flyout and flyout:IsA("GuiObject") then
+		flyout.Position = UDim2.new(m.Origin.X.Scale, m.Origin.X.Offset + m.Width + 20, flyout.Position.Y.Scale, flyout.Position.Y.Offset)
+	end
+	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
+	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
+	-- (the round look: under the tiles the chip is as wide as them, stacked on a mouse or a TV)
+	gui:SetAttribute("ChipWidth", HudBubble.chipWidth(layout))
+	gui:SetAttribute("ChipStack", layout.ChipStack == true)
+	gui:SetAttribute("ChipTenFoot", layout.TenFoot)
+	HudBubble.linkMenu(menu)
 end
 
 -- The side menu's IconNames (SideMenuView.Entries) -> 3D icon + colour role.
@@ -1481,11 +1538,12 @@ function HudBubble.keyCap(face: GuiObject): Frame
 	if existing and existing:IsA("Frame") then
 		return existing
 	end
+	-- (inside the tile's corner: the left neighbour's count badge pokes over its edge)
 	local cap = UIKit.new("Frame", {
 		Name = "KeyCap",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(6, 6),
-		Size = UDim2.fromOffset(30, 30),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.fromOffset(26, 26),
 		BackgroundColor3 = Theme.White,
 		BorderSizePixel = 0,
 		ZIndex = 5,
@@ -1493,7 +1551,7 @@ function HudBubble.keyCap(face: GuiObject): Frame
 	}, face)
 	Bubble.corner(cap, 8)
 	Bubble.stroke(cap, 2.5)
-	Bubble.ink(cap, "", 19, {
+	Bubble.ink(cap, "", 17, {
 		Name = "Text",
 		Size = UDim2.fromScale(1, 1),
 		TextColor3 = Theme.DarkInk,

@@ -17,7 +17,7 @@
 	                  and a warm gold sparkle at the crack
 	  (the break)     RockFx's own: dust, chunks, ground ring, its sounds and
 	                  shake (no word over it: the owner turned it down)
-	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
+	  Fx Pickup       (position, oreId or nil for dirty ore, kind, recipe): CarryService
 	                  fires it to the picker only when an item really goes in
 	                  (hands today, the backpack on feat/backpack: the same
 	                  event). The ore itself (UI/BagFly's 3D model: the dirty
@@ -57,7 +57,6 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local JuiceConfig = require(Shared.Config.JuiceConfig)
-local OreData = require(Shared.Config.OreData)
 local Net = require(Shared.Net)
 local RockLabels = require(script.Parent.Parent.UI.RockLabels)
 local BagFly = require(script.Parent.Parent.UI.BagFly)
@@ -111,11 +110,19 @@ local function toGui(world: Vector3): Vector2?
 	return Vector2.new(point.X, point.Y) - inset - v.Gui.AbsolutePosition
 end
 
--- How wide a chunk at `world` looks on the overlay (pixels; `at` = its middle there), nil off screen.
-local function chunkSize(world: Vector3, at: Vector2): number?
+-- How wide a chunk at `world` looks on the overlay (pixels), from its depth (so a chunk at the
+-- screen's edge measures too), nil behind the camera.
+local function chunkSize(world: Vector3): number?
 	local camera = Workspace.CurrentCamera
-	local edge = if camera then toGui(world + camera.CFrame.RightVector * BagFly.ChunkStuds) else nil
-	return if edge then (edge - at).Magnitude else nil
+	if not camera then
+		return nil
+	end
+	local depth = -camera.CFrame:PointToObjectSpace(world).Z
+	if depth <= 0.1 then
+		return nil
+	end
+	local half = math.tan(math.rad(camera.FieldOfView) / 2)
+	return BagFly.ChunkStuds * camera.ViewportSize.Y / (2 * depth * half)
 end
 
 local function characterPoint(): Vector2?
@@ -347,8 +354,9 @@ local function freeFlyer(v: BagFly.View): BagFly.Flyer?
 	return nil
 end
 
--- An item went into your carry at `position` (oreId: a cleaned ore's id; nil = dirty ore).
-local function pickup(position: Vector3, oreId: any)
+-- An item went into your carry at `position` (oreId: a cleaned item's ore / relic id, `kind` its
+-- kind, `recipe` its recipe; nil = dirty ore).
+local function pickup(position: Vector3, oreId: any, kind: any, recipe: any)
 	local v = view
 	if not v then
 		return
@@ -364,11 +372,15 @@ local function pickup(position: Vector3, oreId: any)
 		land(target, now)
 		return
 	end
-	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
-	BagFly.setOre(flyer, if ore then ore.Id else nil)
+	BagFly.setOre(
+		flyer,
+		if type(oreId) == "string" then oreId else nil,
+		if type(kind) == "string" then kind else nil,
+		if type(recipe) == "string" then recipe else nil
+	)
 	busy[flyer] = true
 	-- it lifts off as big as the chunk looked there (from the character: it pops in)
-	local lift = if at then chunkSize(position, at) else nil
+	local lift = if at then chunkSize(position) else nil
 	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10, Lift = lift })
 	if MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap) then
 		riseAt = now
@@ -377,7 +389,7 @@ local function pickup(position: Vector3, oreId: any)
 	ensureLoop()
 end
 
-local function onFx(kind: any, a: any, b: any)
+local function onFx(kind: any, a: any, b: any, c: any, d: any)
 	if typeof(a) ~= "Vector3" or a.X ~= a.X or a.Y ~= a.Y or a.Z ~= a.Z then
 		return
 	end
@@ -392,7 +404,7 @@ local function onFx(kind: any, a: any, b: any)
 		end
 	elseif kind == "Pickup" then
 		if mining.BagFly then
-			pickup(a, b)
+			pickup(a, b, c, d)
 		end
 	end
 end

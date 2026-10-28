@@ -503,17 +503,25 @@ return function(T, Loader)
 					{ 1440, 900, 58 },
 					{ 667, 375, 58 },
 					{ 568, 320, 58 },
+					-- touch phones (review 2026-10-29): the real HUD at their heights
+					{ 568, 320, 58, true },
+					{ 600, 340, 58, true },
+					{ 620, 350, 58, true },
+					{ 640, 360, 58, true },
+					{ 667, 375, 58, true },
+					{ 844, 390, 58, true },
 				}
 			do
 				local viewport = Vector2.new(screen[1], screen[2])
 				local scale = HudBubble.scaleFor(viewport)
+				local touch = screen[4] == true
 				-- (the screen width in points, the gui's height under Roblox's top bar)
-				local refs = HudBubble.buildGame(scale, screen[1], nil, nil, screen[2] - screen[3])
+				local refs = HudBubble.buildGame(scale, screen[1], touch, false, screen[2] - screen[3])
 				local height = screen[2] / scale
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
 				height -= screen[3] / scale
-				local compact = scale <= 0.75 -- (TrainController's compact chip)
+				local compact = touch or scale <= 0.75 -- (TrainController's compact chip)
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
 				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
 				TrainView.useHud(refs.Gui) -- (HudController: the chip's place and size from the HUD)
@@ -560,7 +568,24 @@ return function(T, Loader)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
 				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
-				if type(refs.Gui:GetAttribute("ChipWidth")) == "number" then
+				local grid = menu:FindFirstChildOfClass("UIGridLayout") :: any
+				if touch then
+					-- (a phone: every tile a thumb wide, the chip clear of the touch tutorial's bubble)
+					T.truthy(grid.CellSize.X.Offset * scale >= 44 - 1e-6, `the tiles >= 44 pt at {screen[1]} x {screen[2]} (touch)`)
+					local TutorialView = ui("TutorialView")
+					local bubble = TutorialView.layout(scale, Vector2.new(screen[1], screen[2] - screen[3]), true)
+					local size = TrainView.chipSize(compact)
+					local x0 = if type(chipLeft) == "number" then chipLeft else TrainView.ChipLeft
+					local chipRect = { x0, chipTop, x0 + size.X, chipTop + size.Y }
+					local bx = bubble.Position.X - bubble.Width
+					local bubbleRect = { bx, bubble.Position.Y, bubble.Position.X, bubble.Position.Y + bubble.Height }
+					local hit = chipRect[1] < bubbleRect[3]
+						and bubbleRect[1] < chipRect[3]
+						and chipRect[2] < bubbleRect[4]
+						and bubbleRect[2] < chipRect[4]
+					T.falsy(hit, `the TRAIN chip clear of the tutorial bubble at {screen[1]} x {screen[2]} (touch)`)
+				end
+				if type(chipLeft) == "number" and chipLeft == menu.Position.X.Offset then
 					-- (the round look, owner 2026-10-28: under the tiles, as wide as them, "ending like them")
 					T.eq(chipLeft, menu.Position.X.Offset, `the TRAIN chip under the tiles' left edge at {screen[1]} x {screen[2]}`)
 					T.eq(TrainView.chipSize(compact).X, menu.Size.X.Offset, `as wide as the tiles at {screen[1]} x {screen[2]}`)

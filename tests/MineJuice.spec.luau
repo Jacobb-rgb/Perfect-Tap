@@ -52,8 +52,8 @@ return function(T, Loader)
 		T.falsy(string.find(cracks, ".Glow,", 1, true) or string.find(cracks, ".Glow)", 1, true), "no ore glow colour")
 		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
 		T.truthy(
-			string.find(controller, "BagFly.setOre(flyer, if ore then ore.Id else nil)", 1, true),
-			"only a cleaned ore (a known id) flies as itself, in its colour"
+			string.find(controller, 'if type(oreId) == "string" then oreId else nil', 1, true),
+			"only an item the server names (never dirty ore) flies as itself, in its colour"
 		)
 		local bagFly = fs.readFile(Loader.root .. "/src/client/UI/BagFly.luau")
 		T.truthy(string.find(bagFly, "d.Color = JuiceConfig.GlintColor", 1, true), "the flying dirty chunk's glints are repainted neutral")
@@ -547,6 +547,18 @@ return function(T, Loader)
 		end
 		T.le(kept, BagFly.CleanCache, "only the last few cleaned ores are kept")
 		T.eq(f.Model.Name, "Clean_" .. OreData.List[BagFly.CleanCache + 2].Id, "the newest one shows")
+		-- (review 2026-10-29) other items fly as themselves: an ingot, a relic (its ArtifactConfig id)
+		BagFly.setOre(f, ore.Id, "Ingot")
+		T.eq(f.Model.Name, "Ingot_" .. ore.Id, "an ingot flies as an ingot")
+		T.falsy(f.Dirty, "not dirty")
+		local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+		local relic = ArtifactConfig.List[1].Id
+		BagFly.setOre(f, relic, "Relic")
+		T.eq(f.Model.Name, "Relic_" .. relic, "a relic flies as the dusty relic")
+		BagFly.setOre(f, ore.Id, "Raw")
+		T.eq(f.Model.Name, "Clean_" .. ore.Id, "a kind that never flies as itself (Raw) falls back to the cleaned ore")
+		BagFly.setOre(f, "NoSuchOre", "Ingot")
+		T.truthy(f.Dirty and f.Model == dirty, "an unknown id with a kind flies as dirty ore")
 		-- the tumble: the camera and the light go round the model's middle, never closer or farther
 		for _, id in { "", ore.Id } do
 			BagFly.setOre(f, if id == "" then nil else id)
