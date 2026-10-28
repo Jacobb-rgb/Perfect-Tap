@@ -104,7 +104,7 @@ Capacities in the window are the server's: State.Backpacks.Bonus { Flat, Pct, Do
 BackpackData.carried, the same formula as Bonuses.carryCapacity (tested against it). One request
 at a time: the lock holds until the BackpackResult; an Ok keeps it until the next State.
 
-Map version 64 (`WorldBuilder.Version`, on main e4dd151a v63).
+Map version 64 (`WorldBuilder.Version`, on main e4dd151a v63); 65 for the follow-ups (the plates' new ranges).
 
 ## What to test in Studio
 
