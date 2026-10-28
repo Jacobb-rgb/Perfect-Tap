@@ -440,13 +440,11 @@ end
 
 function HudController.init()
 	refs = HudView.build()
-	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles
-	local chipTop = refs.Gui:GetAttribute("ChipTop")
-	if type(chipTop) == "number" then
-		TrainView.HudChipTop = chipTop
+	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles (the
+	-- round look: as wide as them, stacked on a mouse or a TV)
+	if type(refs.Gui:GetAttribute("ChipTop")) == "number" then
+		TrainView.useHud(refs.Gui)
 	end
-	local chipLeft = refs.Gui:GetAttribute("ChipLeft")
-	TrainView.HudChipLeft = if type(chipLeft) == "number" then chipLeft else nil
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
 	if refs.Gui:GetAttribute("Bubble") then

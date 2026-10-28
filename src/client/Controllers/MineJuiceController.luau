@@ -20,8 +20,10 @@
 	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
 	                  fires it to the picker only when an item really goes in
 	                  (hands today, the backpack on feat/backpack: the same
-	                  event). The ore pops up glowing at its spot, flies on an
-	                  arc into the HUD's carry slot (TerraForgeHud.Carry: the
+	                  event). The ore itself (UI/BagFly's 3D model: the dirty
+	                  chunk, or the cleaned ore) lifts off glowing at its spot,
+	                  as big as it looked there, and tumbles on an arc into the
+	                  HUD's carry slot (TerraForgeHud.Carry: the
 	                  "Backpack" button, else Slots.Slot<CarryCount>, else the
 	                  panel, else the bottom centre) and a +1 bumps there with
 	                  a pop (BagRise, BagPop). More ores landing on it while
@@ -36,7 +38,8 @@
 	so both can run together.
 
 	Perf (phones first): nothing is made per hit except RockFx's pooled
-	chips; the overlay's icons and bumps are made once (BagFly.build);
+	chips; the overlay's ores and bumps are made once (BagFly.build; a
+	cleaned ore's model once per flyer);
 	one RenderStepped connection runs only while something flies or pops and
 	makes no tables. Reduce motion (UI/Motion.reduced; the rules are in
 	Effects/MineJuiceRules): the cracks still grow, their glints glow
@@ -68,7 +71,7 @@ local HudController = require(script.Parent.HudController)
 
 local MineJuiceController = {}
 
-type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number }
+type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number, Lift: number? }
 type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, PlusAt: number, Count: number, Flash: boolean }
 
 local player = Players.LocalPlayer
@@ -106,6 +109,13 @@ local function toGui(world: Vector3): Vector2?
 	-- viewport -> under the top bar inset -> the overlay's own corner
 	local inset = GuiService:GetGuiInset()
 	return Vector2.new(point.X, point.Y) - inset - v.Gui.AbsolutePosition
+end
+
+-- How wide a chunk at `world` looks on the overlay (pixels; `at` = its middle there), nil off screen.
+local function chunkSize(world: Vector3, at: Vector2): number?
+	local camera = Workspace.CurrentCamera
+	local edge = if camera then toGui(world + camera.CFrame.RightVector * BagFly.ChunkStuds) else nil
+	return if edge then (edge - at).Magnitude else nil
 end
 
 local function characterPoint(): Vector2?
@@ -255,7 +265,7 @@ step = function(_dt: number)
 	for i = #flights, 1, -1 do
 		local f = flights[i]
 		local to = targetPoint(f.Target, scale)
-		if BagFly.poseFlyer(f.Flyer, f.From, to, now - f.Start, scale, f.Seed) then
+		if BagFly.poseFlyer(f.Flyer, f.From, to, now - f.Start, scale, f.Seed, f.Lift) then
 			busy[f.Flyer] = nil
 			table.remove(flights, i)
 			land(f.Target, now)
@@ -346,17 +356,20 @@ local function pickup(position: Vector3, oreId: any)
 	local now = os.clock()
 	local target = hudTarget()
 	local flyer = freeFlyer(v)
-	local from = toGui(position + Vector3.new(0, 0.6, 0)) or characterPoint()
+	local at = toGui(position)
+	local from = at or characterPoint()
 	local mode = MineJuiceRules.pickup(Motion.reduced(), flyer ~= nil, from ~= nil)
 	if mode ~= "Fly" or not flyer or not from then
-		-- every icon in the air or nothing on screen: only the bump; Reduce motion: only the sound (land)
+		-- every ore in the air or nothing on screen: only the bump; Reduce motion: only the sound (land)
 		land(target, now)
 		return
 	end
 	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
-	BagFly.setOre(flyer, if ore then ore.Color else nil)
+	BagFly.setOre(flyer, if ore then ore.Id else nil)
 	busy[flyer] = true
-	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10 })
+	-- it lifts off as big as the chunk looked there (from the character: it pops in)
+	local lift = if at then chunkSize(position, at) else nil
+	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10, Lift = lift })
 	if MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap) then
 		riseAt = now
 		Sfx.play("BagRise")

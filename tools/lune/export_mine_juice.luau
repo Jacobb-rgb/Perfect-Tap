@@ -8,8 +8,9 @@
 	cracks open (RockBuilder.applyStage), a chunk breaks off, RockFx pops and an
 	ore drops; the last hit shatters it (RockFx: RockFxLogic.shatterPlan, dust,
 	the ground ring; no comic word: the owner turned it down); the dirty ores
-	are picked up and fly into the backpack button (UI/BagFly; the HUD since
-	feat/backpack) with its bump and +N. A caption
+	are picked up: each 3D chunk lifts off as big as it lies there and tumbles
+	into the backpack button (UI/BagFly's viewports, drawn live by ui.js; the
+	HUD since feat/backpack) with its bump and +N. A caption
 	line at the top (preview only) names the reel's steps and the sounds.
 
 	  lune run tools/lune/export_mine_juice.luau [fps=20]
@@ -213,14 +214,27 @@ local function setCarry(count: number)
 	HudView.setBackpack(hud, count, CAPACITY)
 end
 setCarry(0)
--- the button's middle and size (overlay pixels): its holder hangs from the bottom centre (AnchorPoint 0, 1)
+-- the button's middle and size (overlay pixels): its holder hangs from the bottom centre, the
+-- "Backpack" button sits in it (MineJuiceController.hudTarget flies there; else the whole holder)
 local holder = hud.CarryPanel
-local packSize = V2.new(holder.Size.X.Offset, holder.Size.Y.Offset) * SCALE
-local packX = W / 2 + holder.Position.X.Offset * SCALE + packSize.X / 2
-local packY = (H - INSET) + holder.Position.Y.Offset * SCALE - packSize.Y / 2
-local packAt = V2.new(packX, packY)
+local holderSize = V2.new(holder.Size.X.Offset, holder.Size.Y.Offset) * SCALE
+local holderCorner = V2.new(W / 2 + holder.Position.X.Offset * SCALE, (H - INSET) + holder.Position.Y.Offset * SCALE)
+	- V2.new(holder.AnchorPoint.X, holder.AnchorPoint.Y) * holderSize
+local button = holder:FindFirstChild("Backpack")
+local packSize, packAt = holderSize, holderCorner + holderSize / 2
+if button then
+	packSize = V2.new(button.Size.X.Offset, button.Size.Y.Offset) * SCALE
+	local at = V2.new(
+		button.Position.X.Scale * holderSize.X + button.Position.X.Offset * SCALE,
+		button.Position.Y.Scale * holderSize.Y + button.Position.Y.Offset * SCALE
+	)
+	packAt = holderCorner + at - V2.new(button.AnchorPoint.X, button.AnchorPoint.Y) * packSize + packSize / 2
+end
 
 local juice = BagFly.build()
+for _, flyer in juice.Flyers do
+	flyer.View:SetAttribute("PreviewLive", true) -- ui.js draws the viewport's 3D chunk (uiexport)
+end
 
 -- the caption line (preview only: what the reel's step is, which sound plays)
 local caption = Instance.new("ScreenGui")
@@ -268,7 +282,7 @@ local function captionFor(t: number): string
 	elseif t < drops[1].Pick then
 		return "5 POSLEDNÍ ZÁSAH: kámen se rozletí na kusy, prach"
 	end
-	return "5 Ruda vyskočí, zazáří a letí do batohu: +1"
+	return "5 Celá 3D ruda se zvedne ze země a točí se do batohu: +1"
 end
 
 -- the sound playing now (named, the video has none)
@@ -466,14 +480,17 @@ for i = 0, frames - 1 do
 		end
 	end
 
-	-- the UI: the ores flying into the backpack button, its bump (MineJuiceController.land: an ore
+	-- the UI: the 3D ores flying into the backpack button (MineJuiceController.pickup: from the
+	-- chunk's middle, as big as it looked there), its bump (MineJuiceController.land: an ore
 	-- landing while the bump shows only raises its +N; a new bump flashes at most once per flareGap)
 	local landed = 0
 	for s, d in drops do
 		local flyer = juice.Flyers[s]
 		BagFly.setOre(flyer, nil)
-		local from = screen(chunkAt(d, d.Pick) + V3.new(0, 0.6, 0))
-		BagFly.poseFlyer(flyer, from, packAt, t - d.Pick, SCALE, s * 1.37)
+		local lying = chunkAt(d, d.Pick)
+		local from = screen(lying)
+		local lift = (screen(lying + look.RightVector * BagFly.ChunkStuds) - from).Magnitude
+		BagFly.poseFlyer(flyer, from, packAt, t - d.Pick, SCALE, s * 1.37, lift)
 		if t - d.Pick - FLIGHT >= 0 then
 			landed += 1
 		end
@@ -576,8 +593,8 @@ local board = {
 		{ frame = frameAt((stageTimes[2] or 1) + 0.08), caption = "3 Prasknutí: křup, kus kamene odpadne, vypadne ruda" },
 		{ frame = frameAt(hitTimes[HITS - 1] + 0.05), caption = "BONUS Velká prasklina se zlatými jiskrami" },
 		{ frame = frameAt(SHATTER + 0.12), caption = "5 Poslední zásah: kámen se rozletí, prach a kusy" },
-		{ frame = frameAt(drops[1].Pick + 0.25), caption = "5 Ruda vyskočí a zazáří" },
-		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... letí do batohu (tlačítko batohu dole)" },
+		{ frame = frameAt(drops[1].Pick + 0.25), caption = "5 Celá 3D ruda se zvedne ze země a zazáří" },
+		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... a točí se cestou do batohu (tlačítko dole)" },
 		{ frame = frameAt(drops[stages].Pick + FLIGHT + 0.12), caption = "5 +1 v batohu, počet naskočí" },
 	},
 }

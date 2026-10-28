@@ -674,6 +674,10 @@ elseif sceneName == "cleaning" then
 				d:Destroy()
 			end
 		end
+		-- the clump crumbled away (DefaultLook's crumble): only the ore is left
+		for _, part in shell.BackRock do
+			part:Destroy()
+		end
 		local center = shell.TreasurePivot.Position
 		local rayCount = if rarity.Order >= 6 then 12 else 8
 		for i = 1, rayCount do

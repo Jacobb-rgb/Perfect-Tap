@@ -192,6 +192,17 @@ function CardLook.finished(ctx: any)
 				fling(ctx, state, block.Position, block.Color)
 			end
 		end
+		-- and the clump's body breaks up into chunks as it crumbles (DefaultLook's crumble): a few
+		-- of its parts, spread over the body (it has dozens of wedges)
+		local body = state.shell.BackRock
+		local step = math.max(1, math.floor(#body / 6))
+		for i = 1, #body, step do
+			local part = body[i]
+			if part.Parent and thrown < 18 then
+				thrown += 1
+				fling(ctx, state, part.Position, part.Color)
+			end
+		end
 	end
 	DefaultLook.finished(ctx)
 end

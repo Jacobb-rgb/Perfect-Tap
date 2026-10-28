@@ -7,6 +7,9 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
+	  ui_hud_round_studio   the owner's Studio window (995 x 485 pt, a mouse: the
+	                        tall block of tiles, owner 2026-10-28)
+	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch)
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
 	are claimed as the controllers do (the reel's eight: Inventory by
 	BackpackController, Spin with its FREE! sticker by WheelController's badge,
@@ -27,6 +30,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+	local HoverboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HoverboardView")
 	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
@@ -43,11 +47,14 @@ function Preview.build(Loader: any): { [string]: any }
 		screen: Vector2,
 		boostCount: number?,
 		touchButtons: boolean?,
-		equipped: boolean?
+		equipped: boolean?,
+		input: ("Mouse" | "Touch")?
 	): { any }
 		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
-		local refs = HudBubble.buildGame(uiScale, screen.X)
+		-- (phones are touch screens: `input` nil = touch when compact; `screen` is the gui's size)
+		local touch = if input then input == "Touch" else compact
+		local refs = HudBubble.buildGame(uiScale, screen.X, touch, false, screen.Y)
 		-- (as HudController does: on phones the boost chips stop before the Shop pill)
 		BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, screen.X / uiScale)
 		TeleportView.build(refs.TopBar, uiScale, screen.X)
@@ -68,8 +75,13 @@ function Preview.build(Loader: any): { [string]: any }
 			end
 		end
 		if round then
-			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it)
+			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it;
+			-- HoverboardController: the Ride tile with its H key on a keyboard)
 			HudBubble.claimTile(refs.Menu, "Backpack")
+			local ride = HoverboardView.rideTile(refs.Menu)
+			if ride then
+				HoverboardView.setRiding(ride, false, if touch then "" else "H", nil)
+			end
 		end
 		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
 		HudView.setBackpack(refs, 12, 30)
@@ -79,12 +91,14 @@ function Preview.build(Loader: any): { [string]: any }
 		HudView.setBlasterEquipped(refs, equipped == true)
 		local list = { refs.Gui }
 		-- the TRAIN chip and the boost chips (TrainController / BoostController place them)
-		TrainView.HudChipTop = refs.Gui:GetAttribute("ChipTop")
-		local train = TrainView.build(compact)
+		TrainView.useHud(refs.Gui) -- (HudController: under the tiles, as wide as them)
+		-- (TrainController: the compact chip on a touch screen or a small one)
+		local chipCompact = compact or touch
+		local train = TrainView.build(chipCompact)
 		train.Chip.Scale.Scale = renderScale
 		train.Gui.Scale.Scale = renderScale
-		TrainView.layout(train, compact, screen.X / uiScale, screen.Y / uiScale)
-		train.ChipKey.Visible = not compact
+		TrainView.layout(train, chipCompact, screen.X / uiScale, screen.Y / uiScale)
+		train.ChipKey.Visible = not chipCompact
 		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
 		train.Gui.Enabled = false
 		train.Chip.Enabled = true
@@ -160,6 +174,16 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_pixel_pc = UiExport.export(hud(1.25, 1.25, roblox.Vector2.new(1600, 864)))
 	exports.ui_hud_pixel_phone = UiExport.export(hud(0.62 * 900 / 375, 0.62, roblox.Vector2.new(667, 375 - 58 * 375 / 900)))
 	exports.ui_hud_pixel_narrow = UiExport.export(hud(0.62 * 900 / 320, 0.62, roblox.Vector2.new(568, 320 - 58 * 320 / 900)))
+	-- the round look's tall block (owner 2026-10-28): his Studio window (a mouse), a 1280 x 720 PC,
+	-- a touch tablet; renders 900 px tall under a 58 px top bar
+	local studioScale = HudBubble.scaleFor(roblox.Vector2.new(995, 485))
+	exports.ui_hud_round_studio =
+		UiExport.export(hud(studioScale * 900 / 485, studioScale, roblox.Vector2.new(995, 485 - 58 * 485 / 900), 1, false, false, "Mouse"))
+	exports.ui_hud_round_pc720 = UiExport.export(hud(900 / 720, 1, roblox.Vector2.new(1280, 720 - 58 * 720 / 900)))
+	local tabletScale = HudBubble.scaleFor(roblox.Vector2.new(1024, 768))
+	exports.ui_hud_round_tablet =
+		UiExport.export(hud(tabletScale * 900 / 768, tabletScale, roblox.Vector2.new(1024, 768 - 58 * 768 / 900), 1, true, false, "Touch"))
+	TrainView.useHud(nil)
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do

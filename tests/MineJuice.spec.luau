@@ -51,7 +51,12 @@ return function(T, Loader)
 		T.falsy(string.find(cracks, "OreData", 1, true), "RockCracks never reads ore data")
 		T.falsy(string.find(cracks, ".Glow,", 1, true) or string.find(cracks, ".Glow)", 1, true), "no ore glow colour")
 		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
-		T.truthy(string.find(controller, "if ore then ore.Color else nil", 1, true), "only a cleaned ore (an id) gets its colour")
+		T.truthy(
+			string.find(controller, "BagFly.setOre(flyer, if ore then ore.Id else nil)", 1, true),
+			"only a cleaned ore (a known id) flies as itself, in its colour"
+		)
+		local bagFly = fs.readFile(Loader.root .. "/src/client/UI/BagFly.luau")
+		T.truthy(string.find(bagFly, "d.Color = JuiceConfig.GlintColor", 1, true), "the flying dirty chunk's glints are repainted neutral")
 	end)
 
 	T.test("Juice: a crack plan is seeded, stays in reach and grows main arm first", function()
@@ -446,10 +451,22 @@ return function(T, Loader)
 		T.near(f.Holder.Position.Y.Offset, to.Y, 3, "lands on the slot (y)")
 		T.truthy(BagFly.poseFlyer(f, from, to, BagFly.Rise + BagFly.Fly + 0.01, 1, 1.3), "done")
 		T.falsy(f.Holder.Visible, "hidden after")
-		BagFly.setOre(f, nil)
-		T.truthy(f.Dirty and f.Flecks[1].Visible, "dirty: stone with gold flecks")
-		BagFly.setOre(f, OreData.ById[OreData.List[1].Id].Color)
-		T.falsy(f.Dirty or f.Flecks[1].Visible, "a cleaned ore: its gem")
+		-- it lifts off as big as the world chunk looked there (clamped), then flies at its own size
+		BagFly.poseFlyer(f, from, to, 0, 1, 1.3, 80)
+		T.near(f.Scale.Scale, 80 / BagFly.Icon, 1e-6, "starts the chunk's size on screen")
+		BagFly.poseFlyer(f, from, to, 0, 1.5, 1.3, 2000)
+		T.near(f.Scale.Scale, BagFly.LiftMax * 1.5, 1e-6, "a chunk right in front of the camera: clamped")
+		BagFly.poseFlyer(f, from, to, 0, 1, 1.3, 3)
+		T.near(f.Scale.Scale, BagFly.LiftMin, 1e-6, "a far one: clamped")
+		BagFly.poseFlyer(f, from, to, BagFly.Rise * 0.999, 1, 1.3, 80)
+		T.near(f.Scale.Scale, 1, 0.02, "the flying size at the top of the rise")
+		BagFly.poseFlyer(f, from, to, 0, 1, 1.3)
+		T.eq(f.Scale.Scale, 0, "no lift (it starts at the character): it pops in from nothing")
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MineJuiceController.luau")
+		T.truthy(
+			string.find(controller, "BagFly.poseFlyer(f.Flyer, f.From, to, now - f.Start, scale, f.Seed, f.Lift)", 1, true),
+			"the lift"
+		)
 		local b = view.Bumps[1]
 		local done = false
 		for t = 0, 1.2, 0.05 do
@@ -457,6 +474,112 @@ return function(T, Loader)
 		end
 		T.truthy(done, "the bump ends")
 		T.falsy(b.Ring.Visible, "its ring hides")
+	end)
+
+	T.test("Juice: the flying ore is the 3D chunk: dirty = the world's Raw chunk, glints neutral; cleaned = its own model", function()
+		local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+		local CF = roblox.CFrame
+		local view = BagFly.build()
+		for _, f in view.Flyers do
+			T.eq(f.View.ClassName, "ViewportFrame", "a 3D view per flyer")
+			T.eq(f.View.Parent, f.Holder, "inside the flyer")
+			T.eq(f.Camera.Parent, f.View, "its camera")
+			T.eq(f.Model.Parent, f.View, "a model in the view")
+			T.truthy(f.Dirty and f.Model == f.DirtyModel, "starts as a dirty chunk")
+		end
+		local f = view.Flyers[1]
+		local dirty = f.Model
+		-- the world's chunk: the same parts and sizes as a Raw build of any ore (only the glint colour differs there)
+		local function parts(model): { string }
+			local out = {}
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 0.99 then
+					table.insert(out, string.format("%s %.3f %.3f %.3f", d.Name, d.Size.X, d.Size.Y, d.Size.Z))
+				end
+			end
+			table.sort(out)
+			return out
+		end
+		for _, ore in { OreData.List[1], OreData.List[#OreData.List] } do
+			local world = ItemBuilder.build({ Kind = "Raw", OreId = ore.Id }, CF.new(), 7)
+			T.eq(table.concat(parts(dirty), "; "), table.concat(parts(world), "; "), "the world's Raw chunk (" .. ore.Id .. ")")
+		end
+		local glints = 0
+		for _, d in dirty:GetDescendants() do
+			T.truthy(d:IsA("BasePart"), "only parts: no welds, sparkles or lights (" .. d.ClassName .. ")")
+			if d:IsA("BasePart") then
+				T.truthy(d.Anchored and not d.CanCollide and not d.CanTouch and not d.CanQuery, "still, no collisions: " .. d.Name)
+				if d.Name == "Glint" then
+					glints += 1
+				end
+				if d.Name == "Glint" or d.Material == roblox.Enum.Material.Neon then
+					T.truthy(distance(d.Color, JuiceConfig.GlintColor) < 1, "the glint: the one neutral colour, never a rarity")
+				end
+			end
+		end
+		T.eq(glints, 2, "both glints, like the world chunk")
+		T.truthy(distance(f.Halo.BackgroundColor3, JuiceConfig.GlintColor) < 1, "dirty: the neutral glow")
+		-- a cleaned ore flies as its own Clean model, in its colour
+		local ore = OreData.List[#OreData.List]
+		BagFly.setOre(f, ore.Id)
+		T.falsy(f.Dirty, "a cleaned ore")
+		T.eq(f.OreId, ore.Id, "its id")
+		T.eq(f.Model.Name, "Clean_" .. ore.Id, "its Clean model")
+		T.eq(f.Model.Parent, f.View, "in the view")
+		T.eq(dirty.Parent, nil, "the dirty chunk waits outside the view")
+		local clean = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id }, CF.new(), ore.Id)
+		T.eq(table.concat(parts(f.Model), "; "), table.concat(parts(clean), "; "), "the same parts as the item")
+		T.truthy(distance(f.Halo.BackgroundColor3, ore.Color) < 1, "its glow in its colour")
+		local shown = f.Model
+		BagFly.setOre(f, ore.Id)
+		T.eq(f.Model, shown, "built once, then reused")
+		BagFly.setOre(f, nil)
+		T.eq(f.Model, dirty, "the same dirty chunk again: no new parts per pickup")
+		T.eq(shown.Parent, nil, "the cleaned ore waits")
+		BagFly.setOre(f, "NoSuchOre")
+		T.truthy(f.Dirty and f.Model == dirty, "an unknown id flies as dirty ore")
+		for i = 1, BagFly.CleanCache + 2 do
+			BagFly.setOre(f, OreData.List[i].Id)
+		end
+		local kept = 0
+		for _ in f.Clean do
+			kept += 1
+		end
+		T.le(kept, BagFly.CleanCache, "only the last few cleaned ores are kept")
+		T.eq(f.Model.Name, "Clean_" .. OreData.List[BagFly.CleanCache + 2].Id, "the newest one shows")
+		-- the tumble: the camera and the light go round the model's middle, never closer or farther
+		for _, id in { "", ore.Id } do
+			BagFly.setOre(f, if id == "" then nil else id)
+			local from, to = Vector2.new(400, 300), Vector2.new(640, 680)
+			local first, firstLight = nil, nil
+			local last = nil
+			for _, t in { 0.02, BagFly.Rise * 0.8, BagFly.Rise + BagFly.Fly * 0.4, BagFly.Rise + BagFly.Fly * 0.9 } do
+				BagFly.poseFlyer(f, from, to, t, 1, 2.4)
+				local cf = f.Camera.CFrame
+				local light = f.View.LightDirection
+				first = first or cf
+				firstLight = firstLight or light
+				T.near(cf.Position.Magnitude, first.Position.Magnitude, 1e-3, "the same distance: the chunk never zooms")
+				T.near((cf.Position + cf.LookVector * cf.Position.Magnitude).Magnitude, 0, 1e-3, "it looks at the middle")
+				T.near(cf.LookVector:Dot(light), first.LookVector:Dot(firstLight), 1e-3, "the light turns with the camera")
+				if last then
+					T.lt(cf.LookVector:Dot(last.LookVector), 0.9999, "it tumbles")
+				end
+				last = cf
+				-- every corner of the model stays inside the view however it turns
+				local half = math.rad(BagFly.Fov / 2)
+				for _, d in f.Model:GetDescendants() do
+					if d:IsA("BasePart") then
+						for k = 0, 7 do
+							local c = Vector3.new(if k % 2 == 0 then 1 else -1, if k % 4 < 2 then 1 else -1, if k < 4 then 1 else -1)
+							local corner = d.CFrame * (c * d.Size / 2)
+							local dir = (corner - cf.Position).Unit
+							T.le(math.acos(math.clamp(dir:Dot(cf.LookVector), -1, 1)), half + 1e-3, "in view: " .. d.Name)
+						end
+					end
+				end
+			end
+		end
 	end)
 
 	T.test("Juice: the level-up fill races, then creeps to full", function()

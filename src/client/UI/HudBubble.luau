@@ -24,9 +24,12 @@
 	Designed for 720 design units of screen height.
 
 	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
-	"Round"): the game menu is the reel's 2 x 4 grid of dark tiles (RoundMenu:
-	Store, Rebirth, Golems, Inventory, Spin, Daily, Build, More; three a row
-	on phones), Title Case words, a tilted sticker ("FREE!" on Spin while
+	"Round"): the game menu is the reel's grid of dark tiles (RoundMenu:
+	Store, Rebirth, Golems, Inventory, Spin, Ride, Daily, Build, More), two a
+	row in a tall block with the TRAIN chip under it as wide as it (owner
+	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
+	screen; touch screens keep it wide at the top, out of the thumbstick's
+	zone), Title Case words, a tilted sticker ("FREE!" on Spin while
 	WheelController's badge counts a ready spin, setTileBadge); the top centre is a row of separate buttons
 	(Shop red: the Robux STORE, then LOBBY / BASE / VAULT from TeleportView);
 	the money bottom-left without the cash, the income line under it; three
@@ -63,15 +66,17 @@ HudBubble.Menu = {
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
--- The round look's game menu (the reel's 2 x 4 tiles, in its order): every tile hidden
+-- The round look's game menu (the reel's tiles, in its order, and Ride): every tile hidden
 -- until a controller claims it (StoreController Store, SideMenuController Rebirth / Golems /
--- Quests, BackpackController Inventory, WheelController Spin (ui/boost-corner), BuildView Build).
+-- Quests, BackpackController Inventory, WheelController Spin (ui/boost-corner), HoverboardView
+-- Ride (owner 2026-10-28: a grey tile like the others, not the round violet button), BuildView Build).
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
 	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
 	{ Id = "Golems", Label = "Golems", Icon = "golem_GildedPorter", Role = "Golems" },
 	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
 	{ Id = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel" },
+	{ Id = "Ride", Label = "Ride", Icon = "hoverboard", Role = "Ride" },
 	{ Id = "Quests", Label = "Daily", Icon = "medal", Role = "Quests" },
 	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
@@ -84,6 +89,7 @@ HudBubble.RoundPaints = {
 	Golems = "Orange",
 	Backpack = "Ember",
 	Wheel = "Violet",
+	Ride = "Teal",
 	Quests = "Pink",
 	Build = "Lime",
 	More = "Steel",
@@ -126,6 +132,10 @@ export type Layout = {
 	Touch: boolean, -- a touch-first screen (phones, tablets): no offers, the tiles at the top
 	TenFoot: boolean, -- a TV: the round look keeps out of the outer 5 % (Inset)
 	Inset: number, -- design units kept free at the left and right edges (TVs: 5 % of the width)
+	-- the round look's grid for this screen (fitRound; nil in the other looks)
+	Top: number?, -- the tiles' top (design units under Roblox's top bar)
+	Chip: ("Under" | "Beside")?, -- the TRAIN chip under the tiles (as wide as them) or beside the last row
+	ChipStack: boolean?, -- under them on a mouse or a TV: TrainView's stacked chip (the block's width)
 }
 
 HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
@@ -149,15 +159,22 @@ function HudBubble.isTenFoot(): boolean
 	return ok and ten == true
 end
 
-function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?): Layout
+--[[
+	The layout for a screen: `uiScale` (HudController's), the screen's width in
+	points, touch / TV, and `guiHeight`: the HUD gui's height in points (the
+	screen under Roblox's top bar; nil = this screen's, else a 16:9 one at
+	`uiScale`). The round look's grid is fitted to it (fitRound).
+]]
+function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?, guiHeight: number?): Layout
 	local width = if screenWidth and screenWidth > 0 and uiScale > 0 then screenWidth / uiScale else 1280
 	local isTouch, isTen = touch == true, tenFoot == true
 	local inset = if isTen then math.ceil(width * HudBubble.TenFootSafe) else 0
+	local layout: Layout
 	if uiScale <= HudBubble.CompactScale then
 		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
-		-- (the round look: the reel's eight tiles four a row in two rows, 72 units = 44.6 pt)
+		-- (the round look: 72 units = 44.6 pt; fitRound picks the columns)
 		local round = PopTheme.round()
-		return {
+		layout = {
 			Compact = true,
 			Narrow = narrow,
 			Tile = if round then 72 else 78,
@@ -173,26 +190,32 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 			TenFoot = isTen,
 			Inset = inset,
 		}
+	else
+		-- (the round look on a touch tablet: smaller tiles a row at the top, like a phone's, so the
+		-- grid stays above the thumbstick's start zone and left of the top row's buttons)
+		local tablet = PopTheme.round() and isTouch
+		layout = {
+			Compact = false,
+			Narrow = false,
+			Tile = if tablet then 58 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
+			TileGap = if tablet then 6 elseif PopTheme.round() then 7 else 12,
+			Columns = if tablet then 4 else 2,
+			TabWidth = 140,
+			TabHeight = 52,
+			Slot = 70,
+			SlotGap = 10,
+			Slots = 6,
+			Width = width,
+			Touch = isTouch,
+			TenFoot = isTen,
+			Inset = inset,
+		}
 	end
-	-- (the round look on a touch tablet: four smaller tiles a row at the top, like a phone's, so the
-	-- grid stays above the thumbstick's start zone and left of the top row's buttons)
-	local tablet = PopTheme.round() and isTouch
-	return {
-		Compact = false,
-		Narrow = false,
-		Tile = if tablet then 58 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
-		TileGap = if tablet then 6 elseif PopTheme.round() then 7 else 12,
-		Columns = if tablet then 4 else 2,
-		TabWidth = 140,
-		TabHeight = 52,
-		Slot = 70,
-		SlotGap = 10,
-		Slots = 6,
-		Width = width,
-		Touch = isTouch,
-		TenFoot = isTen,
-		Inset = inset,
-	}
+	if PopTheme.round() then
+		local height = guiHeight or HudBubble.guiHeight() or 720 * uiScale - HudBubble.PreviewInset
+		HudBubble.fitRound(layout, height / math.max(uiScale, 0.01), uiScale)
+	end
+	return layout
 end
 
 export type Refs = {
@@ -251,8 +274,7 @@ local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLab
 		-- the reel: the amount big in green with a thick dark edge, no cash, and a white line
 		-- under it (the reel's "Friend Boost +0%": our income per second)
 		-- (measured: "$0" 53 px and the line's capitals 35 px tall at 1080p, 8 px from the left edge)
-		local big = if layout.Compact then 44 else 40
-		local line = if layout.Compact then math.floor(big * 0.52) else 27
+		local big, line, tall = HudBubble.moneySize(layout)
 		local panel = UIKit.new("Frame", {
 			Name = "Coins",
 			AnchorPoint = Vector2.new(0, 1),
@@ -263,7 +285,7 @@ local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLab
 				if layout.TenFoot then 0.95 else 1,
 				if layout.Compact then -22 else -12
 			),
-			Size = UDim2.fromOffset(HudBubble.CoinsWidth + 40, big + line + 14),
+			Size = UDim2.fromOffset(HudBubble.CoinsWidth + 40, tall),
 		}, gui)
 		local amount = Pop.text(panel, "$0", big, {
 			Name = "Amount",
@@ -503,41 +525,144 @@ HudBubble.TouchChipHeight = 84 -- TrainView's compact chip (touch screens: Train
 HudBubble.RoundMenuTop = 140
 HudBubble.RoundMenuLeft = 10
 
--- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets). The reel's lower
--- tiles on a PC or a TV only: on a touch tablet they stay at the top, out of the thumbstick's
--- start zone (the left 40 %, the lower two-thirds).
+HudBubble.StackChipHeight = 104 -- TrainView's stacked chip (under the round look's tiles on a mouse or a TV)
+HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
+HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
+HudBubble.RoundTouchColumns = { 5, 4 } -- touch: the tries, the first that fits wins
+HudBubble.RoundColumns = { 2, 3, 4, 5 } -- a mouse or a TV: the tries (two: the owner's tall block)
+
+-- The money bottom-left in the round look: (the amount's text size, the income line's, the panel's height).
+function HudBubble.moneySize(layout: Layout): (number, number, number)
+	local big = if layout.Compact then 44 else 40
+	local line = if layout.Compact then math.floor(big * 0.52) else 27
+	return big, line, big + line + 14
+end
+
+-- The lowest the round look's left column (the tiles and the TRAIN chip) may reach in a gui
+-- `height` design units tall: above the "+$X" floaters over the money (and its Server Luck line).
+function HudBubble.roundFloor(layout: Layout, height: number): number
+	local _, _, money = HudBubble.moneySize(layout)
+	local bottom = if layout.TenFoot then height * (1 - HudBubble.TenFootSafe) else height
+	return bottom - (money + 30 + 60) - 6 -- (the floaters: 60 tall, 30 over the money; a margin)
+end
+
+--[[
+	The round look's grid for a gui `height` design units tall at `uiScale` (owner
+	2026-10-28: "the block tall, not wide", the TRAIN chip under it, "ending like
+	it"): sets layout.Columns, Tile, Top, Chip and ChipStack.
+	  mouse / TV   two a row (the reel's column), the tiles smaller on a short
+	               screen (never under RoundMinTile); three, four, five a row
+	               when two can't fit; the stacked chip (StackChipHeight) under
+	               them as wide as them, all above the floaters (roundFloor). As
+	               low as the reel's tiles (RoundMenuTop) where there is room.
+	  touch        at the top, wide: the thumbstick's start zone (the left 40 %
+	               under the top third) stays free on tablets; five a row where
+	               they stay left of the top row, else four; the touch chip
+	               (TouchChipHeight) under them as wide as them
+	  no fit       (the smallest screens) the tiles at the top, the chip beside
+	               their last row
+]]
+function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
+	local count = #HudBubble.RoundMenu
+	local left = HudBubble.RoundMenuLeft + layout.Inset
+	local tabsLeft = layout.Width / 2 - HudBubble.topBarSize(layout).X / 2 - 8
+	local floor = HudBubble.roundFloor(layout, height)
+	local gap = layout.TileGap
+	local function wide(columns: number, tile: number): number
+		return columns * tile + (columns - 1) * gap
+	end
+	if layout.Touch then
+		-- (a tablet: above the thumbstick's zone too; a phone's tiles are never smaller than 44 pt)
+		local limit = if layout.Compact then floor else math.min(floor, height / 3)
+		local minTile = math.ceil(44 / math.max(uiScale, 0.01))
+		local chipGap = if layout.Compact then HudBubble.ChipGap else HudBubble.TabletChipGap
+		for _, columns in HudBubble.RoundTouchColumns do
+			local rows = math.ceil(count / columns)
+			local tile = layout.Tile
+			-- (narrower tiles to stay left of the top row, and shorter ones to stay above the zone)
+			tile = math.min(tile, math.floor((tabsLeft - left - (columns - 1) * gap) / columns))
+			tile = math.min(tile, math.floor((limit - HudBubble.MenuTop - chipGap - HudBubble.TouchChipHeight - (rows - 1) * gap) / rows))
+			if tile >= minTile then
+				layout.Columns, layout.Tile, layout.Top = columns, tile, HudBubble.MenuTop
+				layout.Chip, layout.ChipStack = "Under", false
+				return
+			end
+		end
+	else
+		for _, columns in HudBubble.RoundColumns do
+			local rows = math.ceil(count / columns)
+			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - HudBubble.StackChipHeight - (rows - 1) * gap
+			local tile = math.min(layout.Tile, math.floor(room / rows))
+			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
+				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + HudBubble.StackChipHeight
+				layout.Columns, layout.Tile = columns, tile
+				layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
+				layout.Chip, layout.ChipStack = "Under", true
+				return
+			end
+		end
+	end
+	-- nothing fits: four a row at the top (the most that stay left of the top row), the chip beside
+	local columns = 4
+	layout.Columns = columns
+	layout.Tile = math.min(layout.Tile, math.floor((tabsLeft - left - (columns - 1) * gap) / columns))
+	layout.Top = HudBubble.MenuTop
+	layout.Chip, layout.ChipStack = "Beside", false
+end
+
+-- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets): the round look's
+-- fitted top (fitRound), else right under the bar.
 function HudBubble.menuTop(layout: Layout): number
-	return if HudBubble.chipBeside(layout) then HudBubble.RoundMenuTop else HudBubble.MenuTop
+	return layout.Top or HudBubble.MenuTop
 end
 
--- Does the TRAIN chip go beside the tiles' last row (the round look on a PC or a TV: the
--- lowered tiles leave no room under them over the money's Server Luck line and floaters)?
+-- Does the TRAIN chip go beside the tiles' last row (the round look when it can't go under them)?
 function HudBubble.chipBeside(layout: Layout): boolean
-	return PopTheme.round() and not layout.Compact and not layout.Touch
+	return layout.Chip == "Beside"
 end
 
--- The TRAIN chip's left edge when it goes beside the tiles (design units), else nil (TrainView.ChipLeft).
+-- The TRAIN chip's left edge in the round look (design units): the tiles' left edge (under
+-- them) or right of them (beside); nil in the other looks (TrainView.ChipLeft).
 function HudBubble.chipLeft(layout: Layout): number?
-	if not HudBubble.chipBeside(layout) then
+	if layout.Chip == nil then
 		return nil
 	end
 	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	if layout.Chip == "Under" then
+		return m.Origin.X.Offset
+	end
 	return m.Origin.X.Offset + m.Width + HudBubble.ChipGap
+end
+
+-- The TRAIN chip's width when it goes under the round look's tiles (theirs), else nil (TrainView's own).
+function HudBubble.chipWidth(layout: Layout): number?
+	if layout.Chip ~= "Under" then
+		return nil
+	end
+	return HudBubble.menuMetrics(layout, #HudBubble.gameMenu()).Width
 end
 
 -- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
 function HudBubble.chipTop(layout: Layout): number
 	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local top = HudBubble.menuTop(layout)
+	if layout.Chip == "Beside" then
+		-- (beside the last row of tiles, its top with theirs; the taller compact chip ends with them)
+		local chip = if layout.Compact or layout.Touch then HudBubble.TouchChipHeight else 0
+		return top + m.Height - math.max(m.CellHeight, chip)
+	elseif layout.Chip == "Under" then
+		local gap = if layout.ChipStack
+			then HudBubble.StackGap
+			elseif layout.Touch and not layout.Compact then HudBubble.TabletChipGap
+			else HudBubble.ChipGap
+		return top + m.Height + gap
+	end
 	-- (phones: the Shop pill rides on this row's right end, under the touch
 	-- tutorial bubble; the flat Pop tiles are shorter, so keep the old row)
-	if HudBubble.chipBeside(layout) then
-		-- (beside the last row of tiles, its top with theirs)
-		return HudBubble.menuTop(layout) + m.Height - m.CellHeight
-	end
 	local extra = if layout.Compact then 28 else 0
 	-- (a touch tablet: the compact chip, TouchChipHeight tall, ends above the thumbstick's zone)
 	local gap = if layout.Touch and not layout.Compact then HudBubble.TabletChipGap else HudBubble.ChipGap
-	return HudBubble.menuTop(layout) + m.Height + gap + extra
+	return top + m.Height + gap + extra
 end
 
 --[[
@@ -885,6 +1010,18 @@ function HudBubble.screenWidth(): number?
 	return if ok and type(width) == "number" and width > 0 then width else nil
 end
 
+-- This screen's HUD gui height in points (the viewport under Roblox's top bar), nil without a camera.
+function HudBubble.guiHeight(): number?
+	local ok, height = pcall(function()
+		local camera = game:GetService("Workspace").CurrentCamera
+		if not camera then
+			return nil
+		end
+		return camera.ViewportSize.Y - game:GetService("GuiService"):GetGuiInset().Y
+	end)
+	return if ok and type(height) == "number" and height > 0 then height else nil
+end
+
 -- The teleport bar (owner 2026-10-20: BASE / MINE / SPAWN in his photo, text
 -- only, at the very top): button sizes per layout, design units.
 HudBubble.TopBarPad = 5
@@ -1056,12 +1193,13 @@ function HudBubble.offers(gui: Instance, layout: Layout): Frame
 	return column
 end
 
-function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: boolean?, tenFoot: boolean?): GameRefs
+function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: boolean?, tenFoot: boolean?, guiHeight: number?): GameRefs
 	local layout = HudBubble.layout(
 		uiScale or HudBubble.screenScale(),
 		screenWidth or HudBubble.screenWidth(),
 		if touch == nil then HudBubble.isTouch() else touch,
-		if tenFoot == nil then HudBubble.isTenFoot() else tenFoot
+		if tenFoot == nil then HudBubble.isTenFoot() else tenFoot,
+		guiHeight
 	)
 	-- (a TV: the bottom-left pieces stand 5 % in from the edges, the safe band)
 	local bottom = if layout.TenFoot then 1 - HudBubble.TenFootSafe else 1
@@ -1154,6 +1292,9 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	-- where the TRAIN chip goes (TrainView.HudChipTop, set by HudController)
 	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
 	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
+	-- (the round look: under the tiles the chip is as wide as them, stacked on a mouse or a TV)
+	gui:SetAttribute("ChipWidth", HudBubble.chipWidth(layout))
+	gui:SetAttribute("ChipStack", layout.ChipStack == true)
 	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
 	-- above the money, bottom-left); on phones and tablets the left column is full
 	-- (tiles, the TRAIN chip, the money) and the top-right holds the tutorial bubble
@@ -1331,6 +1472,61 @@ function HudBubble.setTileVisible(menu: Instance, id: string, visible: boolean)
 		holder.Visible = visible
 		HudBubble.linkMenu(menu)
 	end
+end
+
+-- A tile's key hint: a white keycap on its top left corner ("B" on Build, "H" on Ride), made once,
+-- hidden until setKeyCap.
+function HudBubble.keyCap(face: GuiObject): Frame
+	local existing = face:FindFirstChild("KeyCap")
+	if existing and existing:IsA("Frame") then
+		return existing
+	end
+	local cap = UIKit.new("Frame", {
+		Name = "KeyCap",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(6, 6),
+		Size = UDim2.fromOffset(30, 30),
+		BackgroundColor3 = Theme.White,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Visible = false,
+	}, face)
+	Bubble.corner(cap, 8)
+	Bubble.stroke(cap, 2.5)
+	Bubble.ink(cap, "", 19, {
+		Name = "Text",
+		Size = UDim2.fromScale(1, 1),
+		TextColor3 = Theme.DarkInk,
+		ZIndex = 6,
+	})
+	UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 6,
+		Visible = false,
+	}, cap)
+	return cap
+end
+
+-- The tile's key: `cap` on the keycap ("B"), or the gamepad's own glyph `image`; neither hides it
+-- (touch: the tile is the way).
+function HudBubble.setKeyCap(face: GuiObject, cap: string?, image: string?)
+	local frame = HudBubble.keyCap(face)
+	local text = frame:FindFirstChild("Text") :: TextLabel
+	local glyph = frame:FindFirstChild("Glyph") :: ImageLabel
+	local stroke = frame:FindFirstChildOfClass("UIStroke")
+	local hasImage = image ~= nil and image ~= ""
+	glyph.Image = image or ""
+	glyph.Visible = hasImage
+	text.Text = if hasImage then "" else cap or ""
+	text.Visible = not hasImage
+	frame.BackgroundTransparency = if hasImage then 1 else 0
+	if stroke then
+		stroke.Enabled = not hasImage
+	end
+	frame.Visible = hasImage or (cap ~= nil and cap ~= "")
 end
 
 -- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's

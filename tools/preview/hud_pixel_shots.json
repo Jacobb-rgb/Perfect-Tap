@@ -1,4 +1,7 @@
 {
+  "hud_round_studio": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_studio", "uiInset": 58, "width": 1846, "height": 900},
+  "hud_round_pc720": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_pc720", "uiInset": 58, "width": 1600, "height": 900},
+  "hud_round_tablet": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_tablet", "uiInset": 58, "width": 1200, "height": 900},
   "hud_pixel_pc": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_pc"},
   "hud_pixel_phone": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_phone", "uiInset": 58},
   "hud_pixel_narrow": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_pixel_narrow", "uiInset": 58},

@@ -3,6 +3,8 @@
 	HTML UI renderer in tools/preview/ui.js.
 ]]
 
+local Export = require("./export")
+
 local UiExport = {}
 
 local function hex(c): string
@@ -18,6 +20,33 @@ local function safe(instance, prop)
 		return instance[prop]
 	end)
 	return if ok then value else nil
+end
+
+--[[
+	A live ViewportFrame (attribute PreviewLive, set by a preview: e.g. the
+	mining reel's tumbling ores): its parts (Export.collect's format), its
+	camera (the Camera inside it: Lune can't read CurrentCamera back) and its
+	light, for ui.js to draw through that camera. Nil without camera or parts.
+]]
+local function liveView(view): any?
+	local camera = view:FindFirstChildOfClass("Camera")
+	if not camera then
+		return nil
+	end
+	local parts = Export.collect(view).parts
+	if #parts == 0 then
+		return nil
+	end
+	local cf = { camera.CFrame:GetComponents() }
+	local light = view.LightDirection
+	return {
+		cf = cf,
+		fov = camera.FieldOfView,
+		amb = hex(view.Ambient),
+		lc = hex(view.LightColor),
+		ld = { light.X, light.Y, light.Z },
+		parts = parts,
+	}
 end
 
 local function exportNode(instance): any?
@@ -43,6 +72,9 @@ local function exportNode(instance): any?
 		end
 		if class == "ViewportFrame" then
 			node.icon = instance:GetAttribute("Icon") -- a preview stand-in for the live 3D picture
+			if instance:GetAttribute("PreviewLive") then
+				node.vp = liveView(instance) -- drawn in 3D by ui.js (a picture that turns every frame)
+			end
 		end
 		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
 			node.text = instance.Text
