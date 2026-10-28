@@ -12,6 +12,10 @@
 	  PixelFx       the pixel reels (owner 2026-10-22): rays turn behind      ON
 	                pictures, a gleam sweeps across buttons, pictures lean
 	                on hover (Controllers/PixelFxController)
+	  RoundMotion   the UI pack reel's motions in the round look (2026-10-28): off
+	                windows pop 0.5 -> 1.1 -> 1 in about 0.2 s, buttons grow
+	                5 % under the mouse and squash to 0.93 on a press; no
+	                shine or breathe loops (UI/Motion.roundMotion)
 ]]
 
 local AnimConfig = {
@@ -21,6 +25,7 @@ local AnimConfig = {
 	UIMotion = false,
 	WorldFx = false,
 	PixelFx = true,
+	RoundMotion = false,
 }
 
 return AnimConfig

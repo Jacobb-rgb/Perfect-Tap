@@ -707,4 +707,75 @@ return function(T, Loader)
 		T.truthy(button:FindFirstChild("MotionScale"), "on: the press feel is attached")
 		Motion.setEnabled(nil)
 	end)
+
+	---------------------------------------------------------------- the round look's motions (AnimConfig.RoundMotion)
+
+	T.test("RoundMotion: off by default; on, the round look's windows pop like the reel and buttons press to 0.93", function()
+		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+		T.eq(AnimConfig.RoundMotion, false, "off until the owner says yes")
+		local look, uiMotion = PopTheme.Look, AnimConfig.UIMotion
+		local made: { any } = {}
+		local done: { any } = {}
+		Motion.useTweens(function(instance: any, time: number, style: any, direction: any, goal: any): any
+			table.insert(made, { Name = instance.Name, Time = time, Style = style, Goal = goal })
+			return {
+				Play = function() end,
+				Cancel = function() end,
+				Completed = {
+					Once = function(_, fn)
+						table.insert(done, fn)
+					end,
+					Connect = function() end,
+				},
+			}
+		end)
+		local ok, err = pcall(function()
+			Motion.setEnabled(nil)
+			AnimConfig.UIMotion = false
+			AnimConfig.RoundMotion = true
+			PopTheme.setLook("Round")
+			T.truthy(Motion.enabled() and Motion.roundMotion(), "on in the round look")
+			Motion.tune(true)
+			T.eq(Motion.Profiles.Normal.Down, 0.93, "the reel's press")
+			T.eq(Motion.Profiles.Normal.Hover, 1.05, "the reel's hover")
+			T.near(Motion.Press.HoverTime, 0.1, 1e-9)
+			local gui = Instance.new("ScreenGui")
+			local window = UIKit.new("Frame", {
+				Name = "Window",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = UDim2.fromOffset(600, 560),
+			}, gui)
+			Motion.pop(window, nil)
+			local scale = window:FindFirstChild("MotionPop") :: any
+			T.near(scale.Scale, 0.5, 1e-6, "from half size")
+			T.eq(#made, 1, "first the overshoot")
+			T.near(made[1].Goal.Scale, 1.1, 1e-6, "past full size")
+			T.near(made[1].Time, 0.09, 1e-6)
+			done[#done](roblox.Enum.PlaybackState.Completed)
+			T.eq(#made, 2, "then it settles")
+			T.near(made[2].Goal.Scale, 1, 1e-6, "back to full size")
+			T.near(made[1].Time + made[2].Time, 0.2, 1e-6, "in 0.2 s")
+			-- the pure curve the previews draw: the same three points
+			T.near(Motion.roundPopScale(0), 0.5, 1e-6)
+			T.near(Motion.roundPopScale(0.09), 1.1, 1e-6)
+			T.near(Motion.roundPopScale(0.2), 1, 1e-6)
+			T.truthy(Motion.roundPopScale(0.15) > 1, "still settling at 0.15 s")
+			-- the pixel look keeps UI motion's switch
+			PopTheme.setLook("Pixel")
+			T.falsy(Motion.roundMotion(), "not in the pixel look")
+			T.falsy(Motion.enabled(), "UIMotion off: nothing")
+			Motion.tune(false)
+			T.eq(Motion.Profiles.Normal.Down, 0.92, "the classic press back")
+			T.eq(Motion.Pop.Peak, nil, "the classic pop back")
+		end)
+		Motion.tune(false)
+		Motion.useTweens(nil)
+		AnimConfig.RoundMotion = false
+		AnimConfig.UIMotion = uiMotion
+		PopTheme.setLook(look)
+		Motion.setEnabled(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end

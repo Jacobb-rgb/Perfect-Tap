@@ -50,7 +50,10 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local Motion = require(script.Parent.Parent.UI.Motion)
+local AnimConfig = require(ReplicatedStorage:WaitForChild("Shared").Config.AnimConfig)
 
 local UIMotionController = {}
 
@@ -282,9 +285,11 @@ local function consider(d: Instance)
 	if press then
 		UIMotionController.attach(d :: GuiButton)
 	end
-	if motion == "Breathe" then
+	-- (the round look's motions alone: the reel has no breathe or shine loops)
+	local loops = AnimConfig.UIMotion == true or not Motion.roundMotion()
+	if motion == "Breathe" and loops then
 		Motion.breathe(d)
-	elseif motion == "Shine" then
+	elseif motion == "Shine" and loops then
 		-- (staggered: the price buttons side by side never flash together)
 		shines += 1
 		Motion.shine(d, (shines * 0.53) % Motion.Shine.Period)

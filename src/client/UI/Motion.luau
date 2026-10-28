@@ -75,7 +75,7 @@ export type Pointer = "Mouse" | "Touch" | "Gamepad"
 
 ---------------------------------------------------------------- tuning
 
-Motion.Pop = { From = 0.85, Near = 0.95, Time = 0.22, DimTime = 0.18 }
+Motion.Pop = { From = 0.85, Near = 0.95, Time = 0.22, DimTime = 0.18, Peak = nil :: number? }
 Motion.Close = { To = 0.9, Time = 0.12 }
 Motion.Slide = { Distance = 48, Time = 0.3 }
 -- (EdgeRoom: a press point stays this share of the half size inside the squashed edge)
@@ -97,6 +97,14 @@ Motion.Fly = { Bits = 7, Burst = 0.16, Travel = 0.42, Gap = 0.045, Every = 1, Sp
 Motion.PopIn = { From = 0.5, Time = 0.32 }
 Motion.Bump = { Peak = 1.15, Time = 0.09 }
 Motion.SweepEvery = 1 -- seconds between the loops' visibility checks
+-- the round look's motions (AnimConfig.RoundMotion), measured on the UI pack reel: a window
+-- from half size past full (1.1 at about 0.09 s) and back by 0.2 s; +5 % under the mouse in 0.1 s;
+-- 0.93 on a press for 0.1 s and back in 0.1 s
+Motion.RoundTuning = {
+	Pop = { From = 0.5, Near = 0.8, Time = 0.2, DimTime = 0.15, Peak = 1.1 },
+	Normal = { Down = 0.93, Hover = 1.05 },
+	Press = { DownTime = 0.1, UpTime = 0.1, HoverTime = 0.1 },
+}
 -- the other controllers' own UIScales that Reduce motion stills (calm)
 local CALM = { OpenPop = true, Pulse = true } :: { [string]: boolean }
 
@@ -175,6 +183,17 @@ end
 function Motion.popScale(t: number, from: number?): number
 	local start = from or Motion.Pop.From
 	return start + (1 - start) * Motion.ease("Back", "Out", t / Motion.Pop.Time)
+end
+
+-- The round look's pop `t` seconds in (Motion.RoundTuning.Pop, the reel's): half size, Quad out past
+-- full size to the peak, then Sine in-out back to 1.
+function Motion.roundPopScale(t: number): number
+	local p = Motion.RoundTuning.Pop
+	local up = p.Time * 0.45
+	if t <= up then
+		return p.From + (p.Peak - p.From) * Motion.ease("Quad", "Out", math.max(0, t) / up)
+	end
+	return p.Peak + (1 - p.Peak) * Motion.ease("Sine", "InOut", math.min(1, (t - up) / (p.Time - up)))
 end
 
 -- How long a count-up runs: bigger jumps a little longer (0.45 .. 0.9 s).
@@ -300,12 +319,42 @@ end
 local enabledOverride: boolean? = nil
 local settleAll: () -> ()
 
--- Is UI motion on (Config/AnimConfig.UIMotion, or setEnabled)?
+-- Is UI motion on (Config/AnimConfig.UIMotion or RoundMotion, or setEnabled)?
 function Motion.enabled(): boolean
 	if enabledOverride ~= nil then
 		return enabledOverride
 	end
-	return AnimConfig.UIMotion == true
+	return AnimConfig.UIMotion == true or Motion.roundMotion()
+end
+
+-- The round look's motions only (AnimConfig.RoundMotion with the round look, UIMotion off): the
+-- reel's pop, hover and press, no shine or breathe loops (UIMotionController asks).
+function Motion.roundMotion(): boolean
+	return AnimConfig.RoundMotion == true and PopTheme.round()
+end
+
+local classic = {
+	Pop = table.clone(Motion.Pop),
+	Normal = table.clone(Motion.Profiles.Normal),
+	Press = table.clone(Motion.Press),
+}
+
+-- Uses the reel's timings and sizes (`on`) or the classic ones (UIMotion's).
+function Motion.tune(on: boolean)
+	local pick: any = if on then Motion.RoundTuning else classic
+	local pop: any, press: any = Motion.Pop, Motion.Press
+	for _, key in { "From", "Near", "Time", "DimTime" } do
+		pop[key] = pick.Pop[key]
+	end
+	Motion.Pop.Peak = if on then Motion.RoundTuning.Pop.Peak else nil
+	Motion.Profiles.Normal.Down = pick.Normal.Down
+	Motion.Profiles.Normal.Hover = pick.Normal.Hover
+	for _, key in { "DownTime", "UpTime", "HoverTime" } do
+		press[key] = pick.Press[key]
+	end
+end
+if Motion.roundMotion() and AnimConfig.UIMotion ~= true then
+	Motion.tune(true)
 end
 
 -- Turns UI motion on or off (nil: back to AnimConfig). Turning it off puts
@@ -1198,6 +1247,15 @@ function Motion.pop(window: GuiObject, dim: GuiObject?)
 	end
 	local p = Motion.Pop
 	s.Scale.Scale = s.Base * (if Motion.centred(window.AnchorPoint) then p.From else p.Near)
+	local peak = p.Peak
+	if peak then
+		-- (the round look's pop, the reel's: past full size, then settling back)
+		local base, settleTime = s.Base, p.Time * 0.55
+		run(s, makeTween(s.Scale, nil, p.Time * 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { Scale = base * peak }), function()
+			run(s, makeTween(s.Scale, nil, settleTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, { Scale = base }))
+		end)
+		return
+	end
 	run(s, makeTween(s.Scale, "Pop", p.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out, { Scale = s.Base }))
 end
 
