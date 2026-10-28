@@ -147,7 +147,8 @@ return function(T, Loader)
 				table.sort(d)
 				T.truthy(d[2] < 2.5 or d[2] * d[3] < 12, part.Name .. " is a small glow or a thin strip, not a glaring neon panel")
 			elseif part.Material == roblox.Enum.Material.Metal then
-				T.lt(math.max(part.Color.R, part.Color.G, part.Color.B), 0.94, part.Name .. " is a deep gold (no white-hot metal)")
+				-- (in the same frame as the gold check above: before GoldenStatue.shade)
+				T.lt(math.max(part.Color.R, part.Color.G, part.Color.B), 0.94 * k, part.Name .. " is a deep gold (no white-hot metal)")
 			end
 		end
 		for _, d in dragon:GetDescendants() do

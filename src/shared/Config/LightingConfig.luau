@@ -105,6 +105,12 @@ local SUNSET_SKY = {
 -- +0.07, caves and the Vault +0.07-0.1); the bloom and the mine floors'
 -- lights stayed, and GoldenStatue.shade keeps the statue as it was. Then
 -- "a bit more brightness, not on the statue": every exposure another +0.15.
+-- Then (owner's Studio test, 2026-10-28 evening: "the mines are bright
+-- enough, only the surface, lit almost like before", with his 10-25
+-- screenshot of the glowing plaza): Surface gets its 10-25 bloom back
+-- (Intensity 0.9, Size 32) and keeps the brighter exposure; only the
+-- Threshold stays at 1, so the neon glows as it did and the pale stone and
+-- the statue's gold do not.
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
@@ -131,7 +137,7 @@ LightingConfig.Presets = {
 			Saturation = 0.28,
 			TintColor = Color3.new(1, 0.98, 0.97),
 		},
-		Bloom = { Intensity = 0.5, Size = 24, Threshold = 1.15 },
+		Bloom = { Intensity = 0.9, Size = 32, Threshold = 1 },
 		SunRays = { Intensity = 0.12, Spread = 0.7 },
 		Sky = SUNSET_SKY,
 	},
