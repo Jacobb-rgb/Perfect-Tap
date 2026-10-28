@@ -23,8 +23,9 @@ return function(T, Loader)
 	T.test("less glow: floors 3, 5 and 6 keep their exposure low", function()
 		for _, name in { "Lagoon", "Storm", "Core" } do
 			local lighting = LightingConfig.Presets[name].Lighting
-			-- (0.45-0.5 washed them out; 2026-10-28 a tiny bit brighter than 0.05)
-			T.le(lighting.ExposureCompensation, 0.2, name .. " exposure")
+			-- (0.4-0.5 with the old bloom washed them out on 10-27; the owner has since asked
+			-- twice for a bit more brightness, so the guard is "below the washed-out values")
+			T.lt(lighting.ExposureCompensation, 0.4, name .. " exposure")
 			T.le(LightingConfig.Presets[name].Bloom.Intensity, 0.5, name .. " bloom")
 		end
 	end)
