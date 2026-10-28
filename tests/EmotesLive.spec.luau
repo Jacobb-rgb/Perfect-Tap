@@ -897,7 +897,7 @@ return function(T, Loader)
 		T.falsy(refs.Cards.Robot.Tag.Visible, "gone again")
 	end)
 
-	T.test("emotes live: the EMOTES tile in the left HUD menu fits with the others", function()
+	T.test("emotes live: the EMOTES tile behind MORE, the left HUD menu keeps its rows", function()
 		local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 		local refs = HudBubble.buildGame(1)
@@ -910,8 +910,13 @@ return function(T, Loader)
 				HudBubble.addMore(refs.Menu, entry.Id, spec)
 			end
 		end
-		local face = HudBubble.claimTile(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 40 })
+		HudBubble.claimTile(refs.Menu, "Wheel") -- (the SPIN tile next to MORE)
+		-- (as EmoteController.start adds it: its source says so, the controller needs a game)
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/EmoteController.luau")
+		T.truthy(source:find("HudBubble.addMore(hud.Menu, EmoteController.TileId, EmoteController.TileSpec)", 1, true), "added behind MORE")
+		local face = HudBubble.addMore(refs.Menu, "Emotes", { Label = "EMOTES", IconName = "Emotes", Order = 20 })
 		T.truthy(face and face:IsA("TextButton"), "the tile's button")
+		T.truthy(face:IsDescendantOf(refs.Gui:FindFirstChild("MoreFlyout")), "behind MORE")
 		local label = face:FindFirstChild("Label") :: any
 		T.eq(label.Text, "EMOTES", "its word")
 		T.falsy(IconAssets.has("emotes"), "no picture: the word shows (never an emoji)")
@@ -922,8 +927,9 @@ return function(T, Loader)
 			end
 		end
 		T.le(visible, #HudBubble.GameMenu, "every claimed tile fits the menu's rows (nothing under the TRAIN chip)")
-		local faces = HudBubble.linkMenu(refs.Menu)
-		T.truthy(table.find(faces, face), "the D-pad reaches it")
+		T.le(#HudBubble.GameMenu, 6, "two rows of three on a phone")
+		local faces = HudBubble.linkMenu(refs.Gui:FindFirstChild("MoreFlyout") :: any)
+		T.truthy(table.find(faces, face), "the D-pad reaches it in the flyout")
 	end)
 
 	---------------------------------------------------------------- keys

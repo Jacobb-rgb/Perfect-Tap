@@ -67,22 +67,31 @@ function Preview.build(Loader: any): { [string]: any }
 		if boost.Row:GetAttribute("Corner") then
 			-- the boost corner as BoostController puts it (the owner's photo: Triple Lucky running)
 			local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-			local pillBottom = if pill
+			local w = screen.X / uiScale
+			local rect = if pill
 					and pill.AnchorPoint.Y == 0
 					and pill.Position.Y.Scale == 0
-				then pill.Position.Y.Offset + pill.Size.Y.Offset
+				then {
+					Left = w * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pill.Size.X.Offset,
+					Bottom = pill.Position.Y.Offset + pill.Size.Y.Offset,
+				}
 				else nil
-			BoostView.placeCorner(boost, BoostView.cornerSpot(screen, uiScale, compact, nil, pillBottom))
+			BoostView.placeCorner(boost, BoostView.cornerSpot(screen, uiScale, compact, nil, rect))
 		end
 		local state = { Boosts = { TripleLuckyUntil = NOW + 584 } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = true
 		table.insert(list, boost.Gui)
-		-- the FREE SPIN chip right of the top bar
-		local spin = WheelView.buildChip(uiScale, screen.X)
-		spin.Gui.Scale.Scale = renderScale
-		spin.Gui.Enabled = true
-		table.insert(list, spin.Gui)
+		if refs.Menu:FindFirstChild("Wheel") then
+			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
+			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
+		else
+			-- the FREE SPIN chip right of the top bar
+			local spin = WheelView.buildChip(uiScale, screen.X)
+			spin.Gui.Scale.Scale = renderScale
+			spin.Gui.Enabled = true
+			table.insert(list, spin.Gui)
+		end
 		return list
 	end
 

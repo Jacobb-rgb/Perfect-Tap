@@ -3094,39 +3094,39 @@ end
 	Where the corner row goes (design units from the screen's right edge and
 	bottom). Mouse and gamepad: the very corner, standing on the tutorial card
 	while it shows there (`tutorialTop`: its top, from the bottom). Touch:
-	over Roblox's jump button (70 px reaching 90 px up and 95 px in on a
-	small screen, else 120 px reaching 210 px up and 170 px in); when that
-	would run into the phone's Shop pill (`pillBottom`: its bottom, from the
-	top) - a small phone - beside the jump button at the bottom instead, the
-	tiles stacked (`stacked`: a column, clear of a full backpack's hotbar).
+	over Roblox's jump button (70 px reaching 90 px up on a small screen, else
+	120 px reaching 210 px up); when that would run into the phone's Shop pill
+	(`pill`: its left edge and bottom, design units from the top-left) - a
+	small phone, where the backpack button fills the bottom - left of the
+	pill, level with its bottom. (`stacked`: a column; kept for callers, false here.)
 ]]
+export type PillRect = { Left: number, Bottom: number }
+
 function BoostView.cornerSpot(
 	viewport: Vector2,
 	scale: number,
 	touch: boolean,
 	tutorialTop: number?,
-	pillBottom: number?
+	pill: PillRect?
 ): (number, number, boolean)
 	local s = math.max(scale, 0.01)
 	local right, bottom = BoostView.CornerRight, BoostView.CornerBottom
-	local stacked = false
 	if touch then
 		local small = math.min(viewport.X, viewport.Y) <= 500
 		local jumpTop = if small then 90 else 210
-		local jumpLeft = if small then 95 else 170
 		local over = math.ceil((jumpTop + BoostView.CornerJumpGap) / s)
 		local top = viewport.Y / s - over - BoostView.cornerHeight()
-		if pillBottom == nil or top >= pillBottom + BoostView.CornerGap then
+		if pill == nil or top >= pill.Bottom + BoostView.CornerGap then
 			bottom = over
 		else
-			right = math.ceil((jumpLeft + BoostView.CornerJumpGap) / s)
-			stacked = true
+			right = math.ceil(viewport.X / s - pill.Left) + BoostView.CornerGap
+			bottom = math.floor(viewport.Y / s - pill.Bottom)
 		end
 	end
 	if tutorialTop then
 		bottom = math.max(bottom, tutorialTop + BoostView.CornerGap)
 	end
-	return right, bottom, stacked
+	return right, bottom, false
 end
 
 -- Moves the corner row (a light build's chips) to `right`, `bottom` (BoostView.cornerSpot),

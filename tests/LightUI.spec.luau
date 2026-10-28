@@ -581,15 +581,11 @@ return function(T, Loader)
 				local jumpPos = Vector2.new(width - (if small then 95 else 170) / scale, height - (if small then 90 else 210) / scale)
 				local chips = BoostView.buildChips()
 				T.truthy(chips.Row:GetAttribute("Corner"), "the light chips are the corner row")
-				local pillBottom = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
-					then pill.Position.Y.Offset + pill.Size.Y.Offset
+				local rect = if pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0
+					then { Left = pillPos.X, Bottom = pillPos.Y + pillSize.Y }
 					else nil
-				local right, bottom, stacked = BoostView.cornerSpot(screen, scale, touch, nil, pillBottom)
+				local right, bottom, stacked = BoostView.cornerSpot(screen, scale, touch, nil, rect)
 				BoostView.placeCorner(chips, right, bottom, stacked)
-				-- (the widest hotbar: a full backpack's 8 squares)
-				local _, _, _, hotbarWidth = ui("HudView").carryLayout(24, 12)
-				carrySize = Vector2.new(math.max(carrySize.X, hotbarWidth), carrySize.Y)
-				carryPos = Vector2.new(width / 2 - carrySize.X / 2, carryPos.Y)
 				for _, left in { { 222, 3900 }, { 7199, 7199 }, { 86399, 86399 } } do
 					local state = { Boosts = { TripleLuckyUntil = NOW + left[1], HexaLuckyUntil = NOW + left[2] } }
 					BoostView.setChips(chips, BoostView.chips(state, NOW), true)
@@ -611,7 +607,7 @@ return function(T, Loader)
 						T.truthy(s.X * scale >= 44 and s.Y * scale >= 44, `{kindId} >= 44 pt at {at}`)
 						T.truthy(pos.X >= 0 and pos.Y >= 0, `{kindId} on screen at {at}`)
 						T.falsy(overlap(pos, s, pillPos, pillSize), `{kindId} off the Shop pill at {at}`)
-						T.falsy(overlap(pos, s, carryPos, carrySize), `{kindId} off the hotbar at {at}`)
+						T.falsy(overlap(pos, s, carryPos, carrySize), `{kindId} off the backpack button at {at}`)
 						if touch then
 							T.falsy(overlap(pos, s, jumpPos, Vector2.new(jumpSize, jumpSize)), `{kindId} off the jump button at {at}`)
 						end

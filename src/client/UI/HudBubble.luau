@@ -610,8 +610,9 @@ end
 ]]
 
 -- The tiles the game menu can show (claimed by controllers).
+-- (HudBubble.Menu[1], the BACKPACK tile, went next to the hotbar: backpackButton.
+-- The menu keeps two rows on phones: 6 tiles in 3 columns; EMOTES is behind MORE.)
 HudBubble.GameMenu = {
-	HudBubble.Menu[1],
 	HudBubble.Menu[2],
 	HudBubble.Menu[3],
 	HudBubble.Menu[4],

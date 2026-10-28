@@ -186,11 +186,16 @@ local function cornerSpot(): (number, number)
 	end
 	local hud = HudController.refs()
 	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
-	local pillBottom: number? = nil
+	local rect: BoostView.PillRect? = nil
 	if pill and pill:IsA("GuiObject") and pill.Visible and pill.AnchorPoint.Y == 0 and pill.Position.Y.Scale == 0 then
-		pillBottom = pill.Position.Y.Offset + pill.Size.Y.Offset
+		-- (the phone's pill rides at the top right: its left edge and bottom, design units)
+		local width = viewport.X / math.max(scale, 0.01)
+		rect = {
+			Left = width * pill.Position.X.Scale + pill.Position.X.Offset - pill.AnchorPoint.X * pill.Size.X.Offset,
+			Bottom = pill.Position.Y.Offset + pill.Size.Y.Offset,
+		}
 	end
-	return BoostView.cornerSpot(viewport, scale, isTouch(), tutorialTop, pillBottom)
+	return BoostView.cornerSpot(viewport, scale, isTouch(), tutorialTop, rect)
 end
 
 local function coins(): number
