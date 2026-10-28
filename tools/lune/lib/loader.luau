@@ -82,6 +82,10 @@ local function applyPatches()
 			{ "TextBox", "Focused" },
 			{ "BasePart", "Touched" },
 			{ "ProximityPrompt", "Triggered" },
+			{ "ProximityPrompt", "PromptShown" },
+			{ "ProximityPrompt", "PromptHidden" },
+			{ "ProximityPrompt", "PromptButtonHoldBegan" },
+			{ "ProximityPrompt", "PromptButtonHoldEnded" },
 			{ "Instance", "Changed" },
 			{ "Instance", "AncestryChanged" },
 			{ "Instance", "Destroying" },
@@ -340,6 +344,19 @@ local function baseEnvironment()
 		Ray = roblox.Ray,
 		Faces = roblox.Faces,
 		Axes = roblox.Axes,
+		-- (no tweens run in Lune: a TweenInfo is its numbers, for the specs that drive a controller on fakes)
+		TweenInfo = {
+			new = function(time: number?, style: any?, direction: any?, repeats: number?, reverses: boolean?, delay: number?)
+				return {
+					Time = time or 1,
+					EasingStyle = style,
+					EasingDirection = direction,
+					RepeatCount = repeats or 0,
+					Reverses = reverses == true,
+					DelayTime = delay or 0,
+				}
+			end,
+		},
 		task = task,
 		tick = os.clock,
 		time = os.clock,

@@ -38,6 +38,8 @@ local player = Players.LocalPlayer
 LightWorldController.Skip = {
 	RockLabel = true, -- art/mine-floors: the rock name + HP labels
 	TerraForgePrompt = true, -- our own prompt pills (UIConfig.CustomPrompts)
+	TerraForgeEggPanel = true, -- the EGGS temple's egg panel and big E: drawn in their own look
+	TerraForgeEggPrompt = true, -- (UI/EggPanel, UI/EggPrompt)
 } :: { [string]: boolean }
 
 -- The ScreenGui Roblox's prompt core script keeps its prompt UI in (PlayerGui).

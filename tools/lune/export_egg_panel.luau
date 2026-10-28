@@ -16,7 +16,10 @@
 	  lune run tools/lune/export_egg_panel.luau [fps=20] [video=hatch|walk]
 	  -> build/preview/egg_panel_base.json        the world, once (without the Stone egg: it hops)
 	     build/preview/egg_panel/*.json           the egg, the miner and the ring (extra parts) and the UI per still / frame
-	     build/preview/egg_panel_shots.json       the stills
+	     build/preview/egg_panel_shots.json       the stills (round 4, egg4_*: the names under the
+	                                              silhouettes; touch at 667 x 375 and 844 x 390 with the
+	                                              thumbstick zone, the touch buttons and the top bar outlined;
+	                                              the walk Stone -> Crystal -> Royal -> Stone with real models)
 	     build/preview/egg_video_shots.json       the round 2 video's frames (video "walk")
 	     build/preview/egg_hatch_{stone,crystal}_shots.json   the hatch video's two parts (video "hatch",
 	                                              the default: a Common hatch, Open 10, a Mythic hatch)
@@ -159,6 +162,8 @@ type Screen = { W: number, H: number, Pixel: number, Phone: boolean, Fov: number
 -- PC: 1600 x 900 at the HUD's 1.25; a phone: 844 x 390 pt rendered at 2x (the HUD's 0.62 floor)
 local PC: Screen = { W = 1600, H = 900, Pixel = 1.25, Phone = false, Fov = 70 }
 local PHONE: Screen = { W = 1688, H = 780, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
+-- the small phone: 667 x 375 pt (an iPhone SE / 8) at 2x
+local PHONE_SMALL: Screen = { W = 1334, H = 750, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
 
 type Cam = { Position: any, Target: any }
 
@@ -218,7 +223,33 @@ type PanelSpec = {
 	Since: number?, -- seconds since it came up (the cards' pop-in, the rays, the glows; nil: at rest)
 	PopCard: { [string]: number }?, -- a card that lit up: seconds since
 	Pressed: number?, -- an Open button pressed (its count)
+	Walk: { string }?, -- eggs the panel showed before this one: the cards get their golems' real models
 }
+
+-- The controller's modelFor (EggPanelController): one golem model per kind, built once, lent to the cards.
+local models: { [string]: any } = {}
+local function modelFor(kind: string): (any, any, number)
+	local model = models[kind]
+	if not model then
+		model = GolemBuilder.build(kind)
+		model:SetAttribute("Kind", kind)
+		models[kind] = model
+	end
+	local center, radius = EggPanel.bounds(model)
+	return model, center, radius
+end
+
+local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+
+-- A phone's free part for the floating panel, in points (EggPanel.screen: under the HUD's teleport bar).
+local function phoneScreen(screen: Screen): any
+	local view = V2.new(screen.W / 2, screen.H / 2)
+	local scale = screen.Pixel / 2
+	local inset = HudBubble.PreviewInset
+	local bar = HudBubble.topBarSize(HudBubble.layout(scale, view.X, true, false))
+	return EggPanel.screen(view, inset + (HudBubble.topBarY(inset, scale) + bar.Y) * scale)
+end
 
 local function back(x: number): number
 	x = math.clamp(x, 0, 1)
@@ -238,8 +269,31 @@ local function panelGui(screen: Screen, cam: Cam, spec: PanelSpec): any
 	local refs = EggPanel.build()
 	local lines = EggPanel.lines(spec.Egg, spec.Lucky, spec.Known)
 	local l = EggPanel.layout(#lines, screen.Phone, EggPanel.autoAllowed(spec.Egg))
+	if spec.Walk then
+		-- the eggs before: their golems' models go into the cards and move on (EggPanel.setLines)
+		for _, before in spec.Walk do
+			local earlier = EggPanel.lines(before, false, spec.Known)
+			EggPanel.apply(refs, before, EggPanel.layout(#earlier, screen.Phone, EggPanel.autoAllowed(before)), 1)
+			EggPanel.setLines(refs, earlier, modelFor)
+		end
+	end
 	EggPanel.apply(refs, spec.Egg, l, 1)
-	EggPanel.setLines(refs, lines, nil)
+	EggPanel.setLines(refs, lines, if spec.Walk then modelFor else nil)
+	if spec.Walk then
+		-- each card's picture: the golem model really in its view (the renderer draws no viewports)
+		for i, card in refs.Cards do
+			local kinds = {}
+			for _, child in card.View:GetChildren() do
+				if child:IsA("Model") then
+					table.insert(kinds, child:GetAttribute("Kind"))
+				end
+			end
+			if lines[i] then
+				assert(#kinds == 1 and kinds[1] == lines[i].Golem, `{spec.Egg} card {i}: {table.concat(kinds, "+")}`)
+			end
+			card.Picture:SetAttribute("Icon", if #kinds == 1 then "golem_" .. kinds[1] else nil)
+		end
+	end
 	local capsule = CapsuleConfig.ById[spec.Egg]
 	if capsule.Currency == "Robux" then
 		local product = MonetizationConfig.get(CapsuleConfig.product(spec.Egg, 1))
@@ -269,7 +323,8 @@ local function panelGui(screen: Screen, cam: Cam, spec: PanelSpec): any
 			if card.Glow.Visible then
 				local wave = 0.5 - 0.5 * math.cos(since / (EggPanel.GlowPeriod / 2) * math.pi)
 				card.Glow.BackgroundTransparency = 0.55 + (0.82 - 0.55) * wave
-				card.Picture.Position = UDim2.fromScale(0.5, 0.44 - 0.05 * (0.5 - 0.5 * math.cos(since / 0.9 * math.pi)))
+				local rest = card.Picture:GetAttribute("Rest") :: number
+				card.Picture.Position = UDim2.fromOffset(l.Card / 2, rest - 3 * (0.5 - 0.5 * math.cos(since / 0.9 * math.pi)))
 			end
 		end
 	end
@@ -286,12 +341,23 @@ local function panelGui(screen: Screen, cam: Cam, spec: PanelSpec): any
 	local pop = spec.Pop or 1
 	refs.Scale.Scale = pop
 	if l.Beside then
-		-- (touch: beside the egg, its right edge half a shell to the camera's left: EggPanel.place)
+		-- (touch: floating beside the egg, clear of the thumbstick, the touch buttons and the top bar:
+		-- EggPanelController.float with EggPanel.floatAt, in points)
 		local look = (cam.Target - cam.Position).Unit
 		local camRight = look:Cross(up).Unit
-		local x, y = project(screen, cam, s.Center - camRight * (s.Half + EggPanel.Aside))
-		panel.AnchorPoint = V2.new(1, 0.5)
-		panel.Position = UDim2.fromOffset(x / screen.Pixel - l.Width * (1 - pop) / 2, y / screen.Pixel)
+		local mx, my = project(screen, cam, s.Center)
+		local sx = project(screen, cam, s.Center + camRight * s.Half)
+		local px = project(screen, cam, s.Prompt)
+		local scale = screen.Pixel / 2
+		local reach = math.max(math.abs(sx - mx), px - mx + EggPrompt.Width * screen.Pixel / 2) / 2
+		local size = V2.new(math.ceil(l.Width * scale), math.ceil(l.Height * scale))
+		local at = EggPanel.floatAt(phoneScreen(screen), size, V2.new(mx / 2, my / 2), reach)
+		panel.AnchorPoint = V2.new(0, 0)
+		panel.Position = UDim2.fromOffset(at.X * 2 / screen.Pixel, at.Y * 2 / screen.Pixel)
+		gui:SetAttribute("FloatX", at.X)
+		gui:SetAttribute("FloatY", at.Y)
+		gui:SetAttribute("FloatW", size.X)
+		gui:SetAttribute("FloatH", size.Y)
 	else
 		local x, y = project(screen, cam, V3.new(s.Center.X, s.Top + EggPanel.Lift, s.Center.Z))
 		-- (the preview scales a UIScale about the frame's centre; the game about its bottom edge)
@@ -333,6 +399,66 @@ local function promptGui(screen: Screen, cam: Cam, spec: PromptSpec): any
 	p.Root.Parent = gui
 	p.Root.Position = UDim2.fromOffset(x / screen.Pixel, y / screen.Pixel)
 	return gui
+end
+
+--[[
+	A phone's reserved parts, outlined (the HUD isn't drawn here): the
+	thumbstick's start zone (left 40 %, lower two thirds), the touch
+	buttons in the bottom right (BoostView.TouchButtons) and the teleport
+	bar's foot; the floating panel keeps its buttons out of them.
+]]
+local function zonesGui(screen: Screen): any
+	local gui = UIKit.screen("PhoneZones", 3)
+	gui.IgnoreGuiInset = true
+	gui.Scale.Scale = 2 -- (points)
+	local w, h = screen.W / 2, screen.H / 2
+	local free = phoneScreen(screen)
+	local function box(name: string, x: number, y: number, bw: number, bh: number, color: any, text: string, round: boolean?)
+		local f = UIKit.new("Frame", {
+			Name = name,
+			BackgroundColor3 = color,
+			BackgroundTransparency = 0.82,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(x, y),
+			Size = UDim2.fromOffset(bw, bh),
+		}, gui)
+		UIKit.corner(f, if round then 999 else 6)
+		UIKit.stroke(f, 1.5, color, 0.1)
+		UIKit.new("TextLabel", {
+			Name = "Label",
+			BackgroundTransparency = 1,
+			FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Bold),
+			Position = UDim2.fromOffset(4, 2),
+			Size = UDim2.new(1, -8, 0, 12),
+			Text = text,
+			TextColor3 = rgb(255, 255, 255),
+			TextSize = 10,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, f)
+	end
+	box("Thumbstick", 0, h / 3, w * EggPanel.ZoneWidth, h * 2 / 3, rgb(255, 80, 80), "thumbstick zone (left 40 %)")
+	box("TopBar", 0, 0, w, free.Top, rgb(90, 160, 255), "top bar (Roblox + teleport bar)")
+	local small = math.min(w, h) <= 500
+	for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+		box(b.Name, w - b.Left, h - b.Top, b.Left - b.Right, b.Top - b.Bottom, rgb(255, 200, 60), b.Name, true)
+	end
+	return gui
+end
+
+-- Does the floating panel (panelGui's attributes, points) cover the big E at the egg's prompt? (the game hides it then)
+local function covers(screen: Screen, cam: Cam, panel: any, egg: string): boolean
+	local x = panel:GetAttribute("FloatX")
+	if x == nil then
+		return false
+	end
+	local px, py = project(screen, cam, spots[egg].Prompt)
+	local size = V2.new(EggPrompt.Width, EggPrompt.Height) * (screen.Pixel / 2)
+	return EggPanel.overlaps(
+		V2.new(x, panel:GetAttribute("FloatY")),
+		V2.new(panel:GetAttribute("FloatW"), panel:GetAttribute("FloatH")),
+		V2.new(px / 2, py / 2) - size / 2,
+		size
+	)
 end
 
 -- The miner (a blocky stand-in for the player's avatar) at `feet`, facing `toward`.
@@ -510,10 +636,10 @@ for _, count in CapsuleConfig.Counts do
 	product.Id = count
 end
 
-for _, screen in { PC, PHONE } do
-	local tag = if screen.Phone then "phone" else "pc"
+for _, screen in { PC, PHONE, PHONE_SMALL } do
+	local tag = if screen == PHONE_SMALL then "phone667" elseif screen.Phone then "phone844" else "pc"
 	for _, egg in { "Stone", "Crystal", "Royal" } do
-		if screen.Phone and egg ~= "Stone" then
+		if screen.Phone and egg == "Crystal" then
 			continue
 		end
 		local feet, cam = standAt(egg)
@@ -523,11 +649,31 @@ for _, screen in { PC, PHONE } do
 		miner(extra, feet, spots[egg].Center)
 		stone(extra, 0.3, nil)
 		ringAt(extra, egg, 0.5)
-		local guis = {
-			panelGui(screen, cam, { Egg = egg, Lucky = lucky, Auto = auto, Known = knownSet(), Coins = 1e9, Since = 2.3 }),
-			promptGui(screen, cam, { Egg = egg, Since = 0.45 }),
-		}
-		still(`egg2_{string.lower(egg)}_{tag}`, screen, cam, extra, guis)
+		local panel = panelGui(screen, cam, { Egg = egg, Lucky = lucky, Auto = auto, Known = knownSet(), Coins = 1e9, Since = 2.3 })
+		local guis = { panel }
+		if not covers(screen, cam, panel, egg) then
+			table.insert(guis, promptGui(screen, cam, { Egg = egg, Since = 0.45 }))
+		end
+		if screen.Phone then
+			table.insert(guis, zonesGui(screen))
+		end
+		still(`egg4_{string.lower(egg)}_{tag}`, screen, cam, extra, guis)
+	end
+end
+
+-- walking from egg to egg (Stone, Crystal, Royal, Stone): every card shows its own golem's model
+do
+	local walk = { "Stone", "Crystal", "Royal", "Stone" }
+	for i, egg in walk do
+		local feet, cam = standAt(egg)
+		local extra = Instance.new("Model")
+		miner(extra, feet, spots[egg].Center)
+		stone(extra, 0.3, nil)
+		ringAt(extra, egg, 0.5)
+		local before = table.move(walk, 1, i - 1, 1, {})
+		local panel =
+			panelGui(PC, cam, { Egg = egg, Lucky = false, Auto = false, Known = knownSet(), Coins = 1e9, Since = 2.3, Walk = before })
+		still(`egg4_walk{i}_{string.lower(egg)}`, PC, cam, extra, { panel, promptGui(PC, cam, { Egg = egg, Since = 0.45 }) })
 	end
 end
 

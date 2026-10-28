@@ -19,10 +19,14 @@
 	  golem with the exact chance the server rolls (Triple Lucky's while it
 	  runs: quote().Lucky, CapsuleView.luckyNow) and Open 1 / 3 / 10 with
 	  their prices (the window's buys; grey when they can't be bought, a click
-	  still says why). Golems the player has none of are black silhouettes on
-	  coin eggs (EggPanel.known: the inventory is all the save tracks, so a
-	  deleted kind goes dark again; Robux eggs show every golem); a card that
-	  lights up because its golem just woke pops and the egg sparkles.
+	  still says why). Every card names its golem; golems the player has
+	  none of are black silhouettes on coin eggs, their names under them
+	  (EggPanel.known: the inventory is all the save tracks, so a deleted
+	  kind goes dark again; Robux eggs show every golem); a card that lights
+	  up because its golem just woke pops and the egg sparkles, never while
+	  an egg hatches (the reveal comes first: EggPanel.holdCards). On touch
+	  the panel floats beside the egg (float(): clear of the thumbstick, the
+	  touch buttons and the top bar; the big E hides where it would cover it).
 	- "Buy Egg!" (a prompt per egg, PromptConfig "Main": E / gamepad Y / a
 	  tap) drawn as the big round E (UI/EggPrompt: Style Custom on these
 	  prompts only, EggPanel.BigE, the one exception
@@ -33,9 +37,11 @@
 	  "Open" with the odds the panel shows, the server's rules, then the
 	  same opening). Open 3 and Open 10 are the panel's buttons (click /
 	  tap; keyboard R and X, free at the temple: R and X are bound only in
-	  build mode, on the plot; the gamepad has no free button, every one is
-	  bound already: its Open 3 / 10 are the buttons through Roblox's own UI
-	  navigation, or the golem inventory's EGGS window). The Royal egg goes
+	  build mode, on the plot; a gamepad's FocusKey, D-pad Up, selects the
+	  panel's Open 1, the D-pad walks to Open 3 / 10 and Auto, A opens, B or
+	  walking away lets go; nothing is selected when the panel shows, so the
+	  stick keeps walking). The keys and their badges work within the
+	  prompt's reach only (EggPanel.inReach), where E does. The Royal egg goes
 	  the same way into the Robux purchase (PurchasePrompt) or says "Coming
 	  soon!". Only the egg whose panel shows has its prompts and keys on, so
 	  its odds are always on screen before a buy (the Royal egg's before its
@@ -49,9 +55,9 @@
 	  always hold: one open at a time). It stops when you walk away (the
 	  panel moves or hides), when a refusal comes (no coins, a full golem
 	  inventory, the server's own: buy's toast says why), when you close an
-	  opening's end screen (OK / B) or a window opens, and when you respawn.
-	  After the odds change it waits LuckySettle seconds so the new odds are
-	  on the panel first.
+	  opening's end screen (OK / B) or a window opens, when you respawn, and
+	  when the odds change under it (Triple Lucky begins or runs out, maybe
+	  under an end screen: it never buys on odds the player hasn't seen).
 	- Cool (none of it with Reduce motion, Motion.reduced(): then things
 	  only fade): the egg hops and wobbles once with a sparkle when its panel
 	  comes up (DecorController.bounce, Vfx Glint), a soft ring of light on
@@ -67,6 +73,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -101,11 +108,20 @@ EggPanelController.FadeIn = 0.18
 EggPanelController.FadeOut = 0.15
 EggPanelController.PopFrom = 0.82 -- the pop-in's first scale (not with Reduce motion)
 EggPanelController.CountSeconds = 0.45 -- the price chip counting to a new price
+-- the gamepad's button that FOCUSES the panel (selects Open 1; the D-pad then walks to
+-- Open 3, Open 10 and Auto; B or walking away lets go). Nothing is selected when the
+-- panel shows: the left stick keeps walking. D-pad Up is build mode's (on the plot) and
+-- "home" elsewhere; at an egg, within the prompt's reach, it is the panel's.
+EggPanelController.FocusKey = Enum.KeyCode.DPadUp
 
 local STALL_TAG = "CapsuleStall"
 local OPEN3_ACTION = "TerraForgeEggOpen3"
 local OPEN10_ACTION = "TerraForgeEggOpen10"
+local FOCUS_ACTION = "TerraForgeEggFocus"
+local RELEASE_ACTION = "TerraForgeEggRelease"
 local OPEN_KEYS: { [number]: Enum.KeyCode } = { [3] = Enum.KeyCode.R, [10] = Enum.KeyCode.X }
+local KEY_PRIORITY = Enum.ContextActionPriority.High.Value + 20 -- (over D-pad Up's build / home and B's own uses)
+local FLOAT_STEP = "TerraForgeEggPanelFloat"
 
 type Spot = {
 	Id: string,
@@ -115,6 +131,7 @@ type Spot = {
 	Bottom: number, -- its foot (the light ring)
 	Half: number, -- its half width
 	Point: Attachment, -- the prompts (in front of the egg, at its middle)
+	PromptAt: Vector3, -- (its world position)
 	Anchor: Attachment, -- the panel (over the egg's top)
 	Buy: ProximityPrompt,
 	Auto: ProximityPrompt?,
@@ -147,6 +164,12 @@ local counter: NumberValue? = nil
 local counterTween: Tween? = nil
 local alertTween: Tween? = nil
 local keysBound = false
+local reach = false -- the player is within the "Buy Egg!" prompt's reach (the keys work, their badges show)
+local releaseBound = false -- B lets go of the panel's selection (bound while it holds it)
+local lastAlert = -math.huge -- when the price chip last flashed red (EggPanel.alertOk)
+local floating = false -- touch: the panel floats on the screen (float(), every frame)
+local floatOffset = Vector2.zero
+local promptCovered = false -- touch: the floating panel would cover the big E (it hides; Open 1 buys the same)
 local ring: Part? = nil -- the light ring on the active egg's podium
 local front = Vector3.new(1, 0, 0)
 -- the big E
@@ -221,6 +244,13 @@ end
 
 ---------------------------------------------------------------- the panel's motion
 
+-- A card's picture at rest (EggPanel.apply sets its height: "Rest"), `lift` units up.
+local function pictureAt(card: EggPanel.Card, lift: number): UDim2
+	local rest = card.Picture:GetAttribute("Rest")
+	local y = if type(rest) == "number" then rest else 30
+	return UDim2.fromOffset(card.Picture.Position.X.Offset, y - lift)
+end
+
 -- Stops the panel's loops and puts everything at rest (glows off: they aren't in the fade list).
 local function stopLoops()
 	for _, tween in loops do
@@ -231,7 +261,7 @@ local function stopLoops()
 	if r then
 		for _, card in r.Cards do
 			card.Rays.Rotation = 0
-			card.Picture.Position = UDim2.fromScale(0.5, 0.44)
+			card.Picture.Position = pictureAt(card, 0)
 			card.Glow.BackgroundTransparency = 1
 		end
 	end
@@ -254,7 +284,7 @@ local function startLoops()
 			card.Glow.BackgroundTransparency = 0.55
 			if not still then
 				table.insert(loops, loop(card.Glow, EggPanel.GlowPeriod / 2, { BackgroundTransparency = 0.82 }, true))
-				table.insert(loops, loop(card.Picture, 0.9, { Position = UDim2.fromScale(0.5, 0.39) }, true))
+				table.insert(loops, loop(card.Picture, 0.9, { Position = pictureAt(card, 3) }, true))
 			end
 		end
 		if card.Frame.Visible and card.Rays.Visible and not still then
@@ -308,12 +338,15 @@ local function popCard(index: number)
 	end
 end
 
--- The price chip flashes red twice (Reduce motion: it turns red once and fades).
+-- The price chip flashes red twice (Reduce motion: it turns red once and fades); never
+-- again before it is done (mashing a key keeps it at 2.5 flashes a second: EggPanel.alertOk).
 local function flashAlert()
 	local r = refs
-	if not r then
+	local now = os.clock()
+	if not r or not EggPanel.alertOk(lastAlert, now) then
 		return
 	end
+	lastAlert = now
 	if alertTween then
 		alertTween:Cancel()
 	end
@@ -453,10 +486,13 @@ local function ensurePanel(): EggPanel.Refs
 	return r
 end
 
--- The key on Auto's badge: the keyboard letter, the gamepad's glyph, nothing on touch.
+-- The key on Auto's badge: the keyboard letter, the gamepad's glyph, nothing on touch
+-- or out of the prompt's reach (the key does nothing there).
 local function autoKey(): (string, string?)
 	local keys = PromptConfig.keys("Second")
-	if MenuPanels.usingGamepad() then
+	if not reach then
+		return "", nil
+	elseif MenuPanels.usingGamepad() then
 		local image = MenuPanels.glyph(keys.Gamepad)
 		return if image ~= "" then "" else MenuPanels.padName(keys.Gamepad), if image ~= "" then image else nil
 	elseif isTouch() then
@@ -465,16 +501,39 @@ local function autoKey(): (string, string?)
 	return keys.Keyboard.Name, nil
 end
 
--- The opens' key badges: E / R / X on a keyboard, the main prompt's glyph on Open 1 for a gamepad, none on touch.
-local function openKeys(): ({ [number]: string }?, string?)
-	if MenuPanels.usingGamepad() then
+--[[
+	The opens' key badges: E / R / X on a keyboard; for a gamepad the main
+	prompt's button on Open 1 and the focus button on Open 3 and Open 10
+	(press it, then the D-pad); none on touch, none out of the prompt's
+	reach (the keys do nothing there).
+]]
+local function openKeys(): ({ [number]: string }?, { [number]: string }?)
+	if not reach then
+		return nil, nil
+	elseif MenuPanels.usingGamepad() then
+		local keys: { [number]: string } = {}
+		local glyphs: { [number]: string } = {}
 		local main = PromptConfig.keys("Main").Gamepad
-		local image = MenuPanels.glyph(main)
-		return if image ~= "" then nil else { [1] = MenuPanels.padName(main) }, if image ~= "" then image else nil
+		for count, key in { [1] = main, [3] = EggPanelController.FocusKey, [10] = EggPanelController.FocusKey } do
+			local image = MenuPanels.glyph(key)
+			if image ~= "" then
+				glyphs[count] = image
+			else
+				keys[count] = MenuPanels.padName(key)
+			end
+		end
+		return keys, glyphs
 	elseif isTouch() then
 		return nil, nil
 	end
 	return EggPanel.OpenKeys, nil
+end
+
+-- Does the panel hold the gamepad's selection (focused: the D-pad walks its buttons)?
+local function focused(): boolean
+	local r = refs
+	local selected = GuiService.SelectedObject
+	return r ~= nil and selected ~= nil and selected:IsDescendantOf(r.Gui)
 end
 
 -- The prompts of every egg: on only for the egg whose panel shows and can be bought.
@@ -485,7 +544,8 @@ local function updatePrompts()
 		spot.Buy.Enabled = on
 		local auto = spot.Auto
 		if auto then
-			auto.Enabled = on and EggPanel.autoAllowed(id)
+			-- (off while the panel holds the selection: B lets go of it there, never toggles Auto)
+			auto.Enabled = on and EggPanel.autoAllowed(id) and not focused()
 			auto.ObjectText = if autoEgg == id then "On" else "Off"
 		end
 	end
@@ -532,7 +592,9 @@ function refreshPanel()
 	if not r or not id then
 		return
 	end
-	if knownDirty then
+	local opening = CapsuleController.openingState()
+	-- (the golems the player has wait while an egg hatches: a card lighting up there would tell the new golem before the reveal)
+	if knownDirty and not EggPanel.holdCards(opening) then
 		knownDirty = false
 		local now = EggPanel.known(StateController.get())
 		local changed = false
@@ -549,6 +611,13 @@ function refreshPanel()
 	end
 	local card = CapsuleController.quote(id)
 	local lucky = card ~= nil and card.Lucky == true
+	if autoEgg == id and linesEgg == id and lucky ~= shownLucky then
+		-- the odds changed under Auto (Triple Lucky began or ran out, maybe under an end
+		-- screen): Auto stops, the new odds show, the player starts it again on them
+		autoEgg = nil
+		CapsuleController.setAuto(false)
+		HudController.toast(if lucky then "Triple Lucky is on: Auto stopped" else "Triple Lucky ended: Auto stopped", "Info")
+	end
 	if id ~= linesEgg or lucky ~= shownLucky or linesVersion ~= knownVersion then
 		local sameEgg = id == linesEgg
 		if id ~= linesEgg or lucky ~= shownLucky then
@@ -594,8 +663,8 @@ function refreshPanel()
 				spot.Buy.ObjectText = EggPanel.promptText(false, buy.Price, buy.PriceText, true)
 			end
 		end
-		local keys, glyph = openKeys()
-		EggPanel.setOpens(r, EggPanel.opens(card.Buys, card.Robux), keys, glyph)
+		local keys, glyphs = openKeys()
+		EggPanel.setOpens(r, EggPanel.opens(card.Buys, card.Robux), keys, glyphs)
 	end
 	local autoShown = sellable and EggPanel.autoAllowed(id)
 	local text, image = autoKey()
@@ -605,6 +674,85 @@ function refreshPanel()
 		updatePromptText(id, card)
 	end
 	updatePrompts()
+end
+
+-- The top of a touch screen's free part (px): under Roblox's top bar and the HUD's teleport bar.
+local function topBand(): number
+	local inset = GuiService:GetGuiInset()
+	local top = inset.Y
+	local hud = HudController.refs()
+	local bar = if hud then hud.Gui:FindFirstChild("TopBar") else nil
+	if hud and bar and bar:IsA("GuiObject") and bar.Visible then
+		local shift = if hud.Gui.IgnoreGuiInset then 0 else inset.Y
+		top = math.max(top, bar.AbsolutePosition.Y + bar.AbsoluteSize.Y + shift)
+	end
+	return top
+end
+
+--[[
+	Touch: the panel floats on the screen beside the egg (EggPanel.floatAt:
+	right of it and of the big E, clear of the thumbstick's zone, the touch
+	buttons and the top bar), moved by its SizeOffset; the big E hides
+	where the panel would cover it (the panel's Open 1 buys the same). Every
+	frame while it floats, after the camera moved.
+]]
+local function float()
+	local r = refs
+	local id = current
+	local spot = if id then spots[id] else nil
+	local camera = Workspace.CurrentCamera
+	local l = if r then r.Layout else nil
+	if not r or not spot or not camera or not l or not l.Beside then
+		return
+	end
+	local mid = camera:WorldToViewportPoint(spot.Center)
+	if mid.Z <= 0 then
+		return -- (behind the camera: not drawn)
+	end
+	local egg = Vector2.new(mid.X, mid.Y)
+	local side = camera:WorldToViewportPoint(spot.Center + camera.CFrame.RightVector * spot.Half)
+	local reachPx = math.abs(side.X - mid.X)
+	local promptSize = Vector2.new(EggPrompt.Width, EggPrompt.Height) * HudController.uiScale()
+	local point = camera:WorldToViewportPoint(spot.PromptAt)
+	local promptAt = Vector2.new(point.X, point.Y) - promptSize / 2
+	if promptFor == spot.Buy and point.Z > 0 then
+		reachPx = math.max(reachPx, point.X + promptSize.X / 2 - mid.X)
+	end
+	local size = Vector2.new(r.Gui.Size.X.Offset, r.Gui.Size.Y.Offset)
+	local at = EggPanel.floatAt(EggPanel.screen(camera.ViewportSize, topBand()), size, egg, reachPx)
+	local offset = EggPanel.floatOffset(egg, at, size)
+	if (offset - floatOffset).Magnitude > 1e-4 then
+		floatOffset = offset
+		r.Gui.SizeOffset = offset
+	end
+	local cover = point.Z > 0 and EggPanel.overlaps(at, size, promptAt, promptSize)
+	if cover ~= promptCovered then
+		promptCovered = cover
+		local p = prompt
+		if p and promptFor then
+			p.Gui.Enabled = not cover
+		end
+	end
+end
+
+local function setFloating(on: boolean)
+	if on == floating then
+		return
+	end
+	floating = on
+	if on then
+		floatOffset = Vector2.new(0, 0.5)
+		RunService:BindToRenderStep(FLOAT_STEP, Enum.RenderPriority.Camera.Value + 1, float)
+	else
+		RunService:UnbindFromRenderStep(FLOAT_STEP)
+		if promptCovered then
+			promptCovered = false
+			local p = prompt
+			if p and promptFor then
+				p.Gui.Enabled = true
+			end
+		end
+	end
 end
 
 -- Lays the panel out for the egg and the device (again when either changed).
@@ -620,9 +768,11 @@ local function layOut(r: EggPanel.Refs, id: string)
 	EggPanel.apply(r, id, EggPanel.layout(count, touch, EggPanel.autoAllowed(id)), scale)
 	local spot = spots[id]
 	if spot then
-		-- (over the egg on PC, beside it on touch: EggPanel.place)
-		EggPanel.place(r, spot.Top + EggPanel.Lift - spot.Center.Y, spot.Half)
+		-- (over the egg on PC; on touch at its middle, floating beside it: float())
+		EggPanel.place(r, spot.Top + EggPanel.Lift - spot.Center.Y)
 	end
+	local l = r.Layout
+	setFloating(current ~= nil and l ~= nil and l.Beside)
 	linesEgg = nil
 	local p = prompt
 	if p then
@@ -649,14 +799,79 @@ local function fadeTo(target: number, seconds: number)
 	tween:Play()
 end
 
--- R / X: Open 3 / Open 10 while a panel shows (never while the prompts are suppressed: an overlay, build mode).
+-- R / X: Open 3 / Open 10 within the prompt's reach (where E opens one; never while the prompts are suppressed: an overlay, build mode).
 local function onOpenKey(action: string, state: Enum.UserInputState): Enum.ContextActionResult
 	local id = current
-	if state ~= Enum.UserInputState.Begin or not id or not sellable or not ProximityPromptService.Enabled then
+	if state ~= Enum.UserInputState.Begin or not id or not sellable or not reach or not ProximityPromptService.Enabled then
 		return Enum.ContextActionResult.Pass
 	end
 	EggPanelController.open(id, if action == OPEN10_ACTION then 10 else 3)
 	return Enum.ContextActionResult.Sink
+end
+
+-- B while the panel holds the selection: it lets go (the stick walks again).
+local function onRelease(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin then
+		return Enum.ContextActionResult.Pass
+	end
+	if not focused() then
+		return Enum.ContextActionResult.Pass -- (another window holds it now: its B)
+	end
+	EggPanelController.release()
+	return Enum.ContextActionResult.Sink
+end
+
+local function bindRelease(on: boolean)
+	if on == releaseBound then
+		return
+	end
+	releaseBound = on
+	if on then
+		ContextActionService:BindActionAtPriority(RELEASE_ACTION, onRelease, false, KEY_PRIORITY, Enum.KeyCode.ButtonB)
+	else
+		ContextActionService:UnbindAction(RELEASE_ACTION)
+	end
+end
+
+--[[
+	The gamepad's focus button (FocusKey) within the prompt's reach: the
+	panel takes the selection (Open 1; the D-pad walks to Open 3, Open 10
+	and Auto, A opens). Anywhere else, or while something holds the
+	selection already, it does what it does elsewhere.
+]]
+local function onFocus(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin or GuiService.SelectedObject ~= nil then
+		return Enum.ContextActionResult.Pass
+	end
+	if not EggPanelController.focus() then
+		return Enum.ContextActionResult.Pass
+	end
+	return Enum.ContextActionResult.Sink
+end
+
+-- The panel takes the gamepad's selection (its Open 1). Returns whether it did.
+function EggPanelController.focus(): boolean
+	local r = refs
+	if not r or not current or not sellable or not reach or not ProximityPromptService.Enabled then
+		return false
+	end
+	local first = r.Opens[1].Button
+	if not first.Visible then
+		return false
+	end
+	GuiService.SelectedObject = first
+	bindRelease(true)
+	updatePrompts() -- (Auto's prompt rests: B lets go here)
+	return true
+end
+
+-- The panel lets go of the gamepad's selection (B, walking away, the panel hiding).
+function EggPanelController.release()
+	if focused() then
+		GuiService.SelectedObject = nil
+	end
+	bindRelease(false)
+	updatePrompts()
 end
 
 local function bindKeys(on: boolean)
@@ -667,9 +882,11 @@ local function bindKeys(on: boolean)
 	if on then
 		ContextActionService:BindAction(OPEN3_ACTION, onOpenKey, false, OPEN_KEYS[3])
 		ContextActionService:BindAction(OPEN10_ACTION, onOpenKey, false, OPEN_KEYS[10])
+		ContextActionService:BindActionAtPriority(FOCUS_ACTION, onFocus, false, KEY_PRIORITY, EggPanelController.FocusKey)
 	else
 		ContextActionService:UnbindAction(OPEN3_ACTION)
 		ContextActionService:UnbindAction(OPEN10_ACTION)
+		ContextActionService:UnbindAction(FOCUS_ACTION)
 	end
 end
 
@@ -681,6 +898,8 @@ local function show(id: string)
 	local r = ensurePanel()
 	local switching = r.Gui.Enabled and r.Gui.Adornee ~= spot.Anchor
 	layOut(r, id)
+	local l = r.Layout
+	setFloating(l ~= nil and l.Beside)
 	r.Gui.Adornee = spot.Anchor
 	r.Gui.Enabled = true
 	chipPrice = nil -- (a new egg: its price shows at once)
@@ -710,6 +929,7 @@ local function show(id: string)
 		DecorController.bounce(spot.Model)
 		Vfx.burst("Glint", spot.Center + Vector3.new(0, 1, 0), 16, glowOf(id))
 	end
+	-- (nothing is selected: the left stick keeps walking; the focus button selects)
 	bindKeys(true)
 	Sfx.play("UIClick")
 end
@@ -717,7 +937,9 @@ end
 local function hide()
 	fadeTo(1, EggPanelController.FadeOut)
 	stopLoops()
+	EggPanelController.release()
 	bindKeys(false)
+	setFloating(false)
 end
 
 ---------------------------------------------------------------- the big E (UI/EggPrompt)
@@ -784,7 +1006,7 @@ local function showPrompt(spot: Spot, inputType: Enum.ProximityPromptInputType)
 	local p = ensurePrompt()
 	promptFor = spot.Buy
 	p.Gui.Adornee = spot.Point
-	p.Gui.Enabled = true
+	p.Gui.Enabled = not promptCovered -- (touch: hidden where the floating panel covers it: float())
 	EggPrompt.setScale(p, HudController.uiScale())
 	if inputType == Enum.ProximityPromptInputType.Gamepad then
 		local main = PromptConfig.keys("Main").Gamepad
@@ -899,7 +1121,7 @@ local function autoStep()
 	end
 	local card = CapsuleController.quote(id)
 	if card and card.Lucky ~= shownLucky then
-		refreshPanel() -- (the boost began or ended: the new odds show, then Auto goes on)
+		refreshPanel() -- (the boost began or ended: the new odds show and Auto stops there)
 		return
 	end
 	local sent, reason = CapsuleController.buy(id, 1, shownLucky, true)
@@ -941,6 +1163,7 @@ local function addEgg(id: string, model: Model)
 		Bottom = bottom,
 		Half = half,
 		Point = point,
+		PromptAt = promptAt,
 		Anchor = anchor,
 		Buy = buy,
 		Auto = nil,
@@ -1026,8 +1249,39 @@ local function tick()
 		end
 		updatePrompts()
 	end
+	-- within the "Buy Egg!" prompt's reach the keys work and their badges show (EggPanel.inReach)
+	local spot = if current then spots[current] else nil
+	local near = position ~= nil and spot ~= nil and EggPanel.inReach(position, spot.PromptAt)
+	if near ~= reach then
+		reach = near
+		if current then
+			refreshPanel()
+		end
+	end
+	if releaseBound and not focused() then
+		bindRelease(false) -- (something else took the selection: an opening, a window)
+		updatePrompts()
+	end
 	autoStep()
 end
+
+-- The Lune specs drive the controller through these (tests/EggPanel.spec.luau, on fakes for Roblox's services).
+EggPanelController._test = {
+	tick = tick,
+	watch = watchStall,
+	state = function(): { [string]: any }
+		return {
+			Current = current,
+			Auto = autoEgg,
+			Sellable = sellable,
+			Reach = reach,
+			Refs = refs,
+			Lines = lines,
+			Lucky = shownLucky,
+			Spots = spots,
+		}
+	end,
+}
 
 function EggPanelController.init()
 	local ok, piece = pcall(LobbyLayout.get, "CapsuleStall")

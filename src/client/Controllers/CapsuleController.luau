@@ -669,12 +669,17 @@ local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
 	end
 end
 
+local againText: (o: CapsuleView.OpenRefs, result: Result?) -> () -- (below: the end screen's OPEN AGAIN and its note)
+
 -- Auto is on (the end screen says how to stop it and hides OPEN AGAIN).
 function CapsuleController.setAuto(on: boolean)
 	autoOn = on
 	local o = opening
 	if o and playing then
 		openingHint(o, atEnd)
+	end
+	if o and playing and atEnd and not on then
+		againText(o, shownResult) -- (Auto stopped on its end screen: OPEN AGAIN and the odds' note come back)
 	end
 end
 
@@ -692,6 +697,7 @@ local function pause(seconds: number): boolean
 end
 
 local lastFlash = -math.huge -- (flashes stay HatchFx.FlashGap apart: 2.5 a second at most)
+local flashTween: Tween? = nil
 
 -- A full-screen flash (never with Reduce motion, never sooner than FlashGap after the last).
 local function flash(o: CapsuleView.OpenRefs, color: Color3, strength: number)
@@ -702,8 +708,23 @@ local function flash(o: CapsuleView.OpenRefs, color: Color3, strength: number)
 	lastFlash = now
 	o.Flash.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.45)
 	o.Flash.BackgroundTransparency = 1 - strength
-	TweenService:Create(o.Flash, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 })
-		:Play()
+	if flashTween then
+		flashTween:Cancel()
+	end
+	local tween = TweenService:Create(o.Flash, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency = 1,
+	})
+	flashTween = tween
+	tween:Play()
+end
+
+-- No flash over a golem: a skip-all lands on the reveal or the grid while the break's flash still fades.
+local function noFlash(o: CapsuleView.OpenRefs)
+	if flashTween then
+		flashTween:Cancel()
+		flashTween = nil
+	end
+	o.Flash.BackgroundTransparency = 1
 end
 
 local function setRays(o: CapsuleView.OpenRefs, color: Color3?, visible: boolean)
@@ -754,16 +775,21 @@ local function ownedBefore(result: Result): { [string]: boolean }
 	return kinds
 end
 
--- `count` eggs of a capsule from the pool (built once, put back whole: HatchFx.reset).
-local function takeEggs(capsuleId: string, count: number): { HatchFx.Record }
-	local list = eggPool[capsuleId]
+--[[
+	`count` eggs of a capsule from the pool (built once, put back whole:
+	HatchFx.reset). `calm`: the calm eggs (no neon but the band, emblem and
+	crown core: GolemBuilder.capsule's Calm), for many eggs on a phone.
+]]
+local function takeEggs(capsuleId: string, count: number, calm: boolean): { HatchFx.Record }
+	local key = if calm then capsuleId .. "|Calm" else capsuleId
+	local list = eggPool[key]
 	if not list then
 		list = {}
-		eggPool[capsuleId] = list
+		eggPool[key] = list
 	end
 	local pool = list :: { HatchFx.Record }
 	while #pool < count do
-		local model = GolemBuilder.capsule(capsuleId)
+		local model = GolemBuilder.capsule(capsuleId, nil, { Calm = calm })
 		model:SetAttribute("Pooled", true)
 		table.insert(pool, HatchFx.record(model))
 	end
@@ -810,7 +836,8 @@ local function burst(o: CapsuleView.OpenRefs, capsuleId: string, count: number, 
 	local fx = hatch
 	local n = math.clamp(count, 1, 10)
 	local spots, distance = HatchFx.arrange(n)
-	local eggs = takeEggs(capsuleId, n)
+	-- (many eggs on a phone: the calm ones; they move rigidly anyway: HatchFx.pose)
+	local eggs = takeEggs(capsuleId, n, n > 3 and compactNow())
 	for _, rec in eggs do
 		rec.Model.Parent = o.Hero
 	end
@@ -840,7 +867,7 @@ local function burst(o: CapsuleView.OpenRefs, capsuleId: string, count: number, 
 	if fx then
 		HatchFx.paint(fx, shell, color)
 	end
-	local squash = n == 1 -- (many eggs move rigidly: cheaper on phones)
+	local squash = n == 1 -- (many eggs move rigidly, a PivotTo each: cheaper on phones)
 	local last = plan.Shake + (n - 1) * HatchFx.Sequence
 	local start = os.clock()
 	local cracked = 0
@@ -931,6 +958,7 @@ end
 ]]
 local function reveal(o: CapsuleView.OpenRefs, kind: string, isNew: boolean, index: number, total: number)
 	clearHero(o)
+	noFlash(o)
 	local golem = GolemConfig.ById[kind]
 	local color = CapsuleView.rarityColor(kind)
 	local model = GolemBuilder.build(kind)
@@ -1017,6 +1045,7 @@ end
 -- The result grid pops in, card by card (a big opening: a card per kind with its count).
 local function showGrid(o: CapsuleView.OpenRefs, allKinds: { string }, allNew: { [number]: boolean })
 	clearHero(o)
+	noFlash(o)
 	o.Plate.Visible = false
 	o.Counter.Text = `{#allKinds} GOLEMS WOKE UP!`
 	local kinds, new, counts = allKinds, allNew, nil :: { [number]: number }?
@@ -1084,7 +1113,7 @@ local function endNote(o: CapsuleView.OpenRefs, result: Result, againShown: bool
 end
 
 -- OPEN AGAIN: only after the player's own coin open (not a wheel prize or a Robux receipt).
-local function againText(o: CapsuleView.OpenRefs, result: Result?)
+function againText(o: CapsuleView.OpenRefs, result: Result?)
 	local again = lastOpen
 	if again and result and (result.Free or result.Capsule ~= again.Capsule or result.Count ~= again.Count) then
 		again = nil

@@ -169,6 +169,12 @@ export type Record = {
 	Cracks: { BasePart },
 	Band: BasePart?,
 	Center: CFrame,
+	-- the rigid moves (many eggs, and every egg once its halves fly): Model:PivotTo moves
+	-- the parts in one call instead of one CFrame a part from Lua
+	Pivot: CFrame, -- the model's pivot from the centre
+	Halves: { { Model: Model, Pivot: CFrame } }?, -- the Top and Bottom halves (with their pivots), when both pivot
+	Bent: boolean, -- a part's size or place is squashed or stretched now (the next pose puts each back)
+	Faded: boolean, -- every part is fully see-through after the break (nothing more to write)
 }
 
 -- Records an egg as built (GolemBuilder.capsule: halves Top / Bottom, Crack1..3, the Band).
@@ -186,8 +192,19 @@ function HatchFx.record(model: Model): Record
 		Cracks = {},
 		Band = nil,
 		Center = center,
+		Pivot = center:ToObjectSpace(model:GetPivot()),
+		Halves = nil,
+		Bent = false,
+		Faded = false,
 	}
 	local top = model:FindFirstChild("Top")
+	local bottom = model:FindFirstChild("Bottom")
+	if top and bottom and top:IsA("Model") and bottom:IsA("Model") and top.PrimaryPart and bottom.PrimaryPart then
+		rec.Halves = {
+			{ Model = top, Pivot = center:ToObjectSpace(top:GetPivot()) },
+			{ Model = bottom, Pivot = center:ToObjectSpace(bottom:GetPivot()) },
+		}
+	end
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			table.insert(rec.Parts, d)
@@ -220,6 +237,8 @@ function HatchFx.reset(rec: Record)
 		part.Color = rec.Colors[i]
 		part.CFrame = rec.Center * rec.Base[i]
 	end
+	rec.Bent = false
+	rec.Faded = false
 end
 
 --[[
@@ -238,14 +257,21 @@ function HatchFx.pose(rec: Record, place: CFrame, t: number, burstAt: number, pl
 		end
 		local cf = place * CFrame.new(0, hop, 0) * CFrame.Angles(0, 0.4 * math.sin(t * 2), roll)
 		local scale = Vector3.new(sxz, sy, sxz)
-		for i, part in rec.Parts do
-			local base = rec.Base[i]
-			if squash then
+		if squash then
+			for i, part in rec.Parts do
+				local base = rec.Base[i]
 				part.CFrame = cf * CFrame.new(base.Position * scale) * base.Rotation
 				part.Size = rec.Sizes[i] * scale
-			else
-				part.CFrame = cf * base
 			end
+			rec.Bent = true
+		elseif rec.Bent then
+			for i, part in rec.Parts do
+				part.CFrame = cf * rec.Base[i]
+				part.Size = rec.Sizes[i]
+			end
+			rec.Bent = false
+		else
+			rec.Model:PivotTo(cf * rec.Pivot) -- (rigid: one call moves every part)
 		end
 		local lit = HatchFx.cracksAt(t, plan)
 		for i, crack in rec.Cracks do
@@ -268,23 +294,41 @@ function HatchFx.pose(rec: Record, place: CFrame, t: number, burstAt: number, pl
 	local stretch = if squash and u < 0.08 then 1.22 else 1
 	local up = place * CFrame.new(1.4 * k, 1.4 + 5 * k, 0) * CFrame.Angles(0, 0, -1.6 * k) * CFrame.new(0, -1.4, 0)
 	local down = place * CFrame.new(-0.8 * k, -4 * k * k, 0) * CFrame.Angles(0, 0, 0.8 * k)
-	for i, part in rec.Parts do
-		local base = rec.Base[i]
-		local half = if rec.Top[part] then up else down
-		if stretch ~= 1 then
-			local s = Vector3.new(0.88, stretch, 0.88)
-			part.CFrame = half * CFrame.new(base.Position * s) * base.Rotation
-			part.Size = rec.Sizes[i] * s
-		else
-			part.CFrame = half * base
-			part.Size = rec.Sizes[i]
+	if rec.Faded then
+		return -- (gone: nothing left to move or fade)
+	end
+	local halves = rec.Halves
+	if stretch ~= 1 or rec.Bent or not halves then
+		-- part by part: the stretch, the first frame after it (each part back in place, its
+		-- size as built: written once, not every frame), or an egg without two halves
+		local s = Vector3.new(0.88, stretch, 0.88)
+		for i, part in rec.Parts do
+			local base = rec.Base[i]
+			local half = if rec.Top[part] then up else down
+			if stretch ~= 1 then
+				part.CFrame = half * CFrame.new(base.Position * s) * base.Rotation
+				part.Size = rec.Sizes[i] * s
+			else
+				part.CFrame = half * base
+				if rec.Bent then
+					part.Size = rec.Sizes[i]
+				end
+			end
 		end
+		rec.Bent = stretch ~= 1
+	else
+		-- the halves fly rigidly: two calls (the root pivot stays: it is invisible)
+		halves[1].Model:PivotTo(up * halves[1].Pivot)
+		halves[2].Model:PivotTo(down * halves[2].Pivot)
+	end
+	for i, part in rec.Parts do
 		if string.sub(part.Name, 1, 5) ~= "Crack" then
 			part.Transparency = rec.Trans[i] + (1 - rec.Trans[i]) * k
 		else
 			part.Transparency = k
 		end
 	end
+	rec.Faded = k >= 1
 end
 
 ---------------------------------------------------------------- the overlay

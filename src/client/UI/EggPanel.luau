@@ -7,8 +7,9 @@
 	         Stone Egg                    the egg's name, big, white, a dark edge
 	  +----------------------------+
 	  | (coin) 2,500     [Auto  G] |      the price chip, Auto (coin eggs only)
-	  | [45%] [30%] [20%] [5%] ... |      a card per golem: its rarity's paint,
-	  | [ ..% ] ...                |      its live 3D picture, its exact chance
+	  | [pic ] [pic ] [pic ] ...   |      a card per golem: its rarity's paint,
+	  | [ 45%] [ 30%] [ 20%]       |      its live 3D picture, its exact chance
+	  | Pebble Copper Coal  ...    |      and its NAME (a silhouette's too)
 	  | [Open 1 E][Open 3 R][Open 10 X] | the opens with their prices (owner
 	  +----------------------------+      round 2: "add opening by 10 etc.")
 
@@ -16,16 +17,20 @@
 	  top; one alive at a time (EggPanelController moves it to the nearest
 	  egg). Laid out in design units (720 high, like every window) and scaled
 	  by the HUD's scale: at the phone floor (0.62) the touch layout's Auto
-	  and opens are 72 units, 44 pt. On touch the layout is compact (smaller
-	  cards, Auto as a fourth button in the opens' row) and the panel stands
-	  BESIDE the egg, its middle at the egg's middle (the owner's first photo):
-	  a phone's short screen would cut a tall panel over a tall egg (place()).
+	  and opens are 72 units, 44 pt. On touch the layout is compact (no head
+	  row: the opens show the price; Auto as a fourth button in the opens'
+	  row) and the panel FLOATS beside the egg on the screen (floatAt):
+	  right of the thumbstick's start zone, above the touch buttons, under
+	  the top bar, so a thumb that starts a walk never lands on a buy.
 	- Cards: CapsuleConfig.odds order (the server's roll table, rarer last),
 	  the chance in at most three significant digits and three decimals
 	  ("45%", "20.5%", "0.28%"); with Triple Lucky on, its odds and an "x3"
-	  on every golem it triples. A golem the player has none of is a black
-	  silhouette on a coin egg (silhouettes: the inventory, State Golems
-	  Owned + Pending, is what we know; a Robux egg always shows its golems).
+	  on every golem it triples. Every card names its golem: the eggs are
+	  paid random items (coins can be bought), so each chance belongs to a
+	  golem the player can tell before buying. A golem the player has none
+	  of is a black silhouette on a coin egg, its name under it all the same
+	  (silhouettes: the inventory, State Golems Owned + Pending, is what we
+	  know; a Robux egg always shows its golems in colour).
 	- The pictures: ViewportFrames, one per card slot, made once; the
 	  controller lends each slot a cached golem model (setLines' `modelFor`).
 	  In the Lune previews the "Picture" ImageLabel's Icon attribute stands in.
@@ -36,7 +41,9 @@
 	  with the Robux price, grey when they can't be bought (no coins, no
 	  room, a Robux product not live yet: the click still says why); a key
 	  badge on each (E / R / X on a keyboard, the main prompt's glyph on
-	  Open 1 for a gamepad, none on touch).
+	  Open 1 and the focus button's on Open 3 / 10 for a gamepad, none on
+	  touch), shown only where the keys work: within the "Buy Egg!"
+	  prompt's reach (inReach).
 	- The "even cooler" parts the controller animates (never with Reduce
 	  motion): each card's PopScale (they pop in one after another), a ray
 	  burst behind Epic+ golems (Rays), a soft glow behind Legendary+ cards
@@ -55,6 +62,7 @@ local Rarity = require(Shared.Config.Rarity)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
+local BoostView = require(script.Parent.BoostView)
 
 local EggPanel = {}
 
@@ -63,7 +71,6 @@ EggPanel.HideRange = 15 -- past this it fades out (a little hysteresis: no flick
 EggPanel.SwitchMargin = 1.5 -- another egg takes the panel when it is this much nearer
 EggPanel.PromptDistance = 8 -- the "Buy Egg!" prompt's MaxActivationDistance (the panel shows first)
 EggPanel.Lift = 0.4 -- studs between the egg's top and the panel's bottom edge
-EggPanel.Aside = 1.2 -- touch: studs between the egg's side and the panel's right edge (clear of the big E)
 EggPanel.MaxColumns = 7
 EggPanel.PhoneScale = 0.62 -- HudController.uiScale's floor (phones)
 EggPanel.MinTouch = 44 -- points
@@ -152,7 +159,8 @@ function EggPanel.autoAllowed(capsuleId: string): boolean
 end
 
 -- Does this egg show the golems the player has none of as silhouettes? Coin
--- eggs only: a Robux egg always shows exactly what can come out of it.
+-- eggs only: a Robux egg always shows exactly what can come out of it. (A
+-- silhouette keeps its golem's name under it: coin eggs are paid random items too.)
 function EggPanel.silhouettes(capsuleId: string): boolean
 	local capsule = CapsuleConfig.ById[capsuleId]
 	return EggPanel.Silhouettes and capsule ~= nil and capsule.Currency == "Coins"
@@ -180,6 +188,7 @@ end
 
 export type Line = {
 	Golem: string,
+	Name: string, -- the golem's name (on its card under the picture: a silhouette names its golem)
 	Rarity: string,
 	Chance: number,
 	Text: string,
@@ -206,6 +215,7 @@ function EggPanel.lines(capsuleId: string, lucky: boolean, known: { [string]: bo
 		if golem then
 			table.insert(lines, {
 				Golem = line.Golem,
+				Name = golem.Name,
 				Rarity = golem.Rarity,
 				Chance = line.Chance,
 				Text = EggPanel.chanceText(line.Chance),
@@ -244,6 +254,32 @@ function EggPanel.nearest(spots: { Spot }, position: Vector3, current: string?):
 		return best
 	end
 	return nil
+end
+
+--[[
+	Is a player at `position` within the "Buy Egg!" prompt's reach (its
+	point `point`, MaxActivationDistance PromptDistance)? Only there do the
+	keys open (E / Y by the prompt, R / X and the gamepad's focus here) and
+	their badges show: the panel itself shows from further away.
+]]
+function EggPanel.inReach(position: Vector3, point: Vector3): boolean
+	return (position - point).Magnitude <= EggPanel.PromptDistance
+end
+
+-- May the price chip flash red again (`last`: when it last did)? Not while it flashes: mashing stays at 2.5 a second.
+function EggPanel.alertOk(last: number, now: number): boolean
+	return now - last >= EggPanel.AlertSeconds
+end
+
+--[[
+	Do the cards wait (the golems the player has, their silhouettes) while
+	an opening goes on (CapsuleController.openingState)? While an open waits
+	for its answer or the egg hatches: a card that lights up there would
+	tell the new golem before the reveal. On the end screen the golem is
+	out: its card may light up.
+]]
+function EggPanel.holdCards(opening: string): boolean
+	return opening == "Waiting" or opening == "Playing"
 end
 
 --[[
@@ -336,21 +372,24 @@ export type Layout = {
 	Count: number,
 	Columns: number,
 	Rows: number,
-	Card: number,
+	Card: number, -- a card's width (room for the golem's longest word, "Moonstone", at NameSize)
+	CardH: number, -- its height (the picture, its chance and the name's two lines under it)
 	Gap: number,
 	Pad: number,
-	Head: number, -- the row of the price chip and Auto
+	Head: number, -- the row of the price chip and Auto (PC; none on touch: the opens show the price)
 	HeadGap: number,
 	Title: number, -- the egg's name above the white panel
 	TitleSize: number,
 	ChanceSize: number,
+	NameSize: number, -- the golem's name on its card (8 pt at least on a phone)
+	NameH: number, -- the name's two lines at the card's foot
 	Chip: number, -- the price chip's height
 	Toggle: Vector2, -- Auto
 	Open: Vector2, -- one Open 1 / 3 / 10 button
 	OpenGap: number, -- between them (and above their row)
 	OpenY: number, -- their row's top in the white panel
 	AutoInRow: boolean, -- Auto is the opens' row's last button (touch), not in the head row
-	Beside: boolean, -- the panel stands beside the egg (touch), not over it
+	Beside: boolean, -- touch: the panel floats beside the egg, kept clear of the thumbstick (screenOffset)
 	Width: number,
 	Body: number, -- the white panel's height
 	Height: number, -- Title + Body (the billboard, in design units)
@@ -368,50 +407,64 @@ function EggPanel.columns(count: number): number
 end
 
 --[[
-	The panel's sizes for `count` cards (design units). `touch`: phones and
-	tablets: the opens (and Auto) are 72 units tall, 44 pt at the phone
-	scale (0.62); compact: smaller cards, a low head row, Auto as the opens'
-	row's last button when the egg has it (`auto`, default true), the panel
-	beside the egg. PC: Auto in the head row, the panel over the egg.
+	The panel's sizes for `count` cards (design units). Every card names its
+	golem under the picture (two lines; the longest name, "Heartstone
+	Colossus", wraps after its first word; its longest word, "Moonstone",
+	is 77 units at 13 in the round font: the cards are 80 wide). `touch`: phones and tablets:
+	compact, so it fits right of the thumbstick between the top bar and the
+	jump button (screenOffset): no head row (the opens show the price), a
+	low title, the opens (and Auto, the row's last button when the egg has
+	it: `auto`, default true) 72 units tall, 44 pt at the phone scale
+	(0.62), the names 13 units (8 pt). PC: the price chip and Auto in a head
+	row, the panel over the egg.
 ]]
 function EggPanel.layout(count: number, touch: boolean, auto: boolean?): Layout
 	local columns = EggPanel.columns(count)
 	local rows = math.max(1, math.ceil(math.max(1, count) / columns))
-	local card, gap, pad = if touch then 56 else 66, 6, 12
-	local head = if touch then 48 else 40
+	local card = 80
+	local cardH = if touch then 70 else 80
+	local gap = if touch then 4 else 6
+	local pad = if touch then 8 else 12
+	local head = if touch then 0 else 40
+	local headGap = if touch then 0 else 10
 	local chip = if touch then 40 else 34
 	local openH = if touch then 72 else 56 -- (72 units: 44 pt at the phone scale)
-	local openGap = 8
+	local openGap = if touch then 6 else 8
 	local inRow = touch and auto ~= false
 	local slots = #CapsuleConfig.Counts + (if inRow then 1 else 0)
 	local grid = pad * 2 + columns * card + (columns - 1) * gap
 	-- the head row needs the chip and Auto (PC); the opens 110 (touch) / 136 (PC: the key badge too) units each
-	local headMin = pad * 2 + 160 + (if inRow or touch then 0 else 12 + 112)
+	local headMin = if touch then 0 else pad * 2 + 160 + (if inRow then 0 else 12 + 112)
 	local openMin = if touch then 110 else 136
 	local width = math.max(grid, headMin, pad * 2 + slots * openMin + (slots - 1) * openGap)
 	local openW = math.floor((width - pad * 2 - (slots - 1) * openGap) / slots)
 	local toggle = if inRow then Vector2.new(openW, openH) else Vector2.new(112, 36)
-	local cardsBottom = pad + head + 10 + rows * card + (rows - 1) * gap
-	local body = cardsBottom + openGap + 2 + openH + pad
-	local title = if touch then 44 else 50
+	local cardsBottom = pad + head + headGap + rows * cardH + (rows - 1) * gap
+	local openY = cardsBottom + openGap + (if touch then 0 else 2)
+	local body = openY + openH + pad
+	local title = if touch then 30 else 50
+	local nameSize = 13 -- (8 pt at the phone scale)
 	return {
 		Touch = touch,
 		Count = count,
 		Columns = columns,
 		Rows = rows,
 		Card = card,
+		CardH = cardH,
 		Gap = gap,
 		Pad = pad,
 		Head = head,
-		HeadGap = 10,
+		HeadGap = headGap,
 		Title = title,
-		TitleSize = 40,
-		ChanceSize = 21,
+		TitleSize = if touch then 30 else 40,
+		ChanceSize = if touch then 19 else 21,
+		NameSize = nameSize,
+		NameH = nameSize * 2 + 2,
 		Chip = chip,
 		Toggle = toggle,
 		Open = Vector2.new(openW, openH),
 		OpenGap = openGap,
-		OpenY = cardsBottom + openGap + 2,
+		OpenY = openY,
 		AutoInRow = inRow,
 		Beside = touch,
 		Width = width,
@@ -433,7 +486,7 @@ function EggPanel.cardAt(l: Layout, i: number): Vector2
 	local inRow = if row == l.Rows - 1 then l.Count - row * l.Columns else l.Columns
 	local rowWidth = inRow * l.Card + (inRow - 1) * l.Gap
 	local x0 = (l.Width - rowWidth) / 2
-	return Vector2.new(x0 + col * (l.Card + l.Gap), l.Pad + l.Head + l.HeadGap + row * (l.Card + l.Gap))
+	return Vector2.new(x0 + col * (l.Card + l.Gap), l.Pad + l.Head + l.HeadGap + row * (l.CardH + l.Gap))
 end
 
 ---------------------------------------------------------------- builder
@@ -449,8 +502,9 @@ export type Card = {
 	Rays: Frame, -- a ray burst behind the golem (Epic and up)
 	Glow: Frame, -- a soft glow under the card (Legendary and up; not in the fade list)
 	Chance: TextLabel,
+	Name: TextLabel, -- the golem's name at the card's foot (under the picture, a silhouette's too)
 	Lucky: TextLabel,
-	Kind: string?,
+	Kind: string?, -- the golem whose model the card's view holds (nil: none, setLines lends one)
 	Order: number, -- the golem's Rarity Order (0: none)
 }
 
@@ -550,9 +604,19 @@ local function newCard(body: Frame, i: number): Card
 	local chance = Pop.text(frame, "", 21, {
 		Name = "Chance",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -3, 1, -1),
-		Size = UDim2.new(1, -4, 0, 27),
+		Position = UDim2.new(1, -3, 1, -30),
+		Size = UDim2.new(1, -4, 0, 25),
 		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 6,
+	})
+	-- (wrapped: the round font, two lines at most; apply() sizes it)
+	local name = Pop.text(frame, "", 14, {
+		Name = "GolemName",
+		AnchorPoint = Vector2.new(0.5, 1),
+		LineHeight = 0.9,
+		Position = UDim2.new(0.5, 0, 1, -1),
+		Size = UDim2.new(1, -2, 0, 30),
+		TextWrapped = true,
 		ZIndex = 6,
 	})
 	local lucky = Pop.text(frame, "x3", 14, {
@@ -573,6 +637,7 @@ local function newCard(body: Frame, i: number): Card
 		Rays = rays,
 		Glow = glow,
 		Chance = chance,
+		Name = name,
 		Lucky = lucky,
 		Kind = nil,
 		Order = 0,
@@ -882,25 +947,45 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 		refs.Toggle.Position = UDim2.new(1, -l.Pad, 0, headY)
 	end
 	refs.Toggle.Size = UDim2.fromOffset(l.Toggle.X, l.Toggle.Y)
-	-- over the egg (its bottom edge at the anchor) or beside it (its right edge at the anchor, its middle level)
-	refs.Gui.SizeOffset = if l.Beside then Vector2.new(-0.5, 0) else Vector2.new(0, 0.5)
+	-- over the egg: its bottom edge at the anchor (touch: floatOffset moves it every frame)
+	refs.Gui.SizeOffset = Vector2.new(0, 0.5)
+	-- (touch: no head row, the chip only says "Not available" in the opens' row: setPrice)
+	refs.Chip.Visible = l.Head > 0
 	local keySize = math.floor(l.Toggle.Y * 0.7)
 	refs.Key.Size = UDim2.fromOffset(keySize, keySize)
 	refs.ToggleLabel.Size = UDim2.new(1, -(keySize + 16), 0.9, 0)
 	Pop.limit(refs.ToggleLabel, math.floor(l.Toggle.Y * 0.56))
 	Pop.limit(refs.Price, math.floor(l.Chip * 0.62))
 	refs.KeyText.TextSize = math.floor(keySize * 0.66)
-	refs.LuckyTag.Position = UDim2.fromOffset(l.Width / 2, headY)
+	if l.Head > 0 then
+		refs.LuckyTag.AnchorPoint = Vector2.new(0.5, 0.5)
+		refs.LuckyTag.Position = UDim2.fromOffset(l.Width / 2, headY)
+	else
+		-- (touch: a sticker on the white panel's top edge, at its right)
+		refs.LuckyTag.AnchorPoint = Vector2.new(1, 0.5)
+		refs.LuckyTag.Position = UDim2.fromOffset(l.Width - l.Pad, 0)
+	end
+	-- a card: the golem's picture, its chance over the picture's foot, its name under it
+	local picture = l.CardH - l.NameH + 10
 	for i, card in refs.Cards do
 		local shown = i <= l.Count
 		card.Frame.Visible = shown
 		if shown then
 			local at = EggPanel.cardAt(l, i)
 			card.Frame.Position = UDim2.fromOffset(at.X, at.Y)
-			card.Frame.Size = UDim2.fromOffset(l.Card, l.Card)
-			card.Glow.Position = UDim2.fromOffset(at.X + l.Card / 2, at.Y + l.Card / 2)
-			card.Glow.Size = UDim2.fromOffset(l.Card + 12, l.Card + 12)
+			card.Frame.Size = UDim2.fromOffset(l.Card, l.CardH)
+			card.Glow.Position = UDim2.fromOffset(at.X + l.Card / 2, at.Y + l.CardH / 2)
+			card.Glow.Size = UDim2.fromOffset(l.Card + 12, l.CardH + 12)
 		end
+		card.Picture.Position = UDim2.fromOffset(l.Card / 2, picture / 2)
+		card.Picture.Size = UDim2.fromOffset(picture, picture)
+		card.Picture:SetAttribute("Rest", picture / 2) -- (EggPanelController's bob starts from here)
+		card.Rays.Position = UDim2.fromOffset(l.Card / 2, picture / 2)
+		card.Chance.Position = UDim2.new(1, -3, 0, l.CardH - l.NameH + 2)
+		card.Chance.Size = UDim2.new(1, -4, 0, l.ChanceSize + 4)
+		Pop.limit(card.Chance, l.ChanceSize)
+		card.Name.Size = UDim2.new(1, -2, 0, l.NameH)
+		card.Name.TextSize = l.NameSize
 		card.Glow.Visible = false
 	end
 	for i, open in refs.Opens do
@@ -917,21 +1002,79 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 end
 
 --[[
-	Where the billboard stands for an egg whose anchor is `drop` studs over
-	its middle (top + Lift - centre): over the egg (no offsets: SizeOffset
-	puts its bottom edge on the anchor), or beside it (touch): back down to
-	the egg's middle and `half` + Aside studs to the camera's left, so its
-	right edge clears the shell and the big E on the egg's front.
+	Where the billboard's anchor stands for an egg whose anchor is `drop`
+	studs over its middle (top + Lift - centre): PC, over the egg (no
+	offsets: SizeOffset puts its bottom edge on the anchor); touch, back
+	down at the egg's middle (floatOffset then moves the panel on the
+	screen, every frame).
 ]]
-function EggPanel.place(refs: Refs, drop: number, half: number)
+function EggPanel.place(refs: Refs, drop: number)
 	local l = refs.Layout
-	if l and l.Beside then
-		refs.Gui.StudsOffsetWorldSpace = Vector3.new(0, -drop, 0)
-		refs.Gui.StudsOffset = Vector3.new(-(half + EggPanel.Aside), 0, 0)
-	else
-		refs.Gui.StudsOffsetWorldSpace = Vector3.zero
-		refs.Gui.StudsOffset = Vector3.zero
+	refs.Gui.StudsOffset = Vector3.zero
+	refs.Gui.StudsOffsetWorldSpace = if l and l.Beside then Vector3.new(0, -drop, 0) else Vector3.zero
+end
+
+-- The free part of a touch screen for the floating panel (px, the viewport's).
+export type Screen = {
+	View: Vector2, -- the viewport's size
+	Top: number, -- the lowest bottom of what sits at the top (Roblox's top bar, the HUD's teleport bar)
+	Buttons: number, -- the top of the touch buttons in the bottom right (Jump, Grab, the blaster's Fire)
+	Zone: number, -- the right edge of the thumbstick's start zone (the left 40 %, lower two thirds)
+}
+
+EggPanel.Margin = 8 -- px between the floating panel and what it keeps clear of
+EggPanel.ZoneWidth = 0.4 -- Roblox's dynamic thumbstick starts in the left 40 % of the screen...
+EggPanel.ZoneTop = 1 / 3 -- ...below its top third
+
+--[[
+	The touch screen's free part for a `view` sized viewport: under `top`
+	(px: the top bar's foot), above the touch buttons in the bottom right
+	(BoostView.TouchButtons: small on a screen whose shorter side is 500 px
+	or less) and right of the thumbstick's start zone.
+]]
+function EggPanel.screen(view: Vector2, top: number): Screen
+	local small = math.min(view.X, view.Y) <= 500
+	local high = 0
+	for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+		high = math.max(high, b.Top)
 	end
+	return { View = view, Top = top, Buttons = view.Y - high, Zone = view.X * EggPanel.ZoneWidth }
+end
+
+--[[
+	The floating panel's top-left (px) on a touch screen: right of the egg
+	(`egg`: its middle on the screen, `reach`: how far right of it the
+	panel starts, px: the egg's half width or the big E's, the wider),
+	its middle level with the egg, then kept inside the free part: right
+	of the thumbstick's zone (its opens and Auto never start a walk), above
+	the touch buttons (they stay pressable), under the top bar, on the
+	screen. When it is too tall, the buttons win over the top bar; the
+	screen's edges win over everything.
+]]
+function EggPanel.floatAt(s: Screen, size: Vector2, egg: Vector2, reach: number): Vector2
+	local m = EggPanel.Margin
+	local x = egg.X + reach + m
+	x = math.max(math.min(x, s.View.X - m - size.X), s.Zone + m)
+	x = math.max(math.min(x, s.View.X - 2 - size.X), 2)
+	local y = egg.Y - size.Y / 2
+	y = math.min(math.max(y, s.Top + m), s.Buttons - m - size.Y)
+	y = math.max(math.min(y, s.View.Y - 2 - size.Y), 2)
+	return Vector2.new(math.floor(x + 0.5), math.floor(y + 0.5))
+end
+
+--[[
+	The SizeOffset that draws a `size` billboard whose anchor is at
+	`anchor` on the screen (px) with its top-left at `at` (SizeOffset moves
+	a billboard by its own size: x to the right, y up).
+]]
+function EggPanel.floatOffset(anchor: Vector2, at: Vector2, size: Vector2): Vector2
+	local center = at + size / 2
+	return Vector2.new((center.X - anchor.X) / math.max(size.X, 1), (anchor.Y - center.Y) / math.max(size.Y, 1))
+end
+
+-- Do two screen rectangles (top-left, size) overlap?
+function EggPanel.overlaps(a: Vector2, aSize: Vector2, b: Vector2, bSize: Vector2): boolean
+	return a.X < b.X + bSize.X and b.X < a.X + aSize.X and a.Y < b.Y + bSize.Y and b.Y < a.Y + aSize.Y
 end
 
 -- A golem model's framing for a card (centre, radius of its parts' box).
@@ -948,13 +1091,34 @@ local FROM = Vector3.new(-0.3, 0.22, -1).Unit -- a golem's picture: from the fro
 -- What setLines asks the controller for a kind: its cached model and framing (nil: no 3D picture).
 export type ModelFor = (kind: string) -> (Model?, Vector3, number)
 
+-- Takes every golem model out of a card's view (they are the controller's cached models: let go, not destroyed).
+local function emptyView(card: Card)
+	for _, child in card.View:GetChildren() do
+		if child:IsA("Model") then
+			child.Parent = nil
+		end
+	end
+	card.Kind = nil
+end
+
 --[[
 	Fills the cards: each line's rarity paint, chance, "x3" when Triple
-	Lucky triples it, and its picture (a silhouette: black). `modelFor`
-	lends each card its golem model (moved into the card's own viewport,
-	the card's camera framed on it); nil in the previews.
+	Lucky triples it, the golem's name and its picture (a silhouette:
+	black, its name under it all the same). `modelFor` lends each card its
+	golem's cached model (moved into the card's own viewport, the card's
+	camera framed on it); nil in the previews. A model is in one view at a
+	time and a view holds one model at most: first every card lets go of a
+	model it shouldn't show any more (its slot hides, or it shows another
+	golem now: the walk from one egg to the next moves the shared models
+	between slots), then the cards without one take theirs.
 ]]
 function EggPanel.setLines(refs: Refs, lines: { Line }, modelFor: ModelFor?)
+	for i, card in refs.Cards do
+		local line = lines[i]
+		if not line or card.Kind ~= line.Golem then
+			emptyView(card)
+		end
+	end
 	for i, card in refs.Cards do
 		local line = lines[i]
 		if not line then
@@ -964,6 +1128,7 @@ function EggPanel.setLines(refs: Refs, lines: { Line }, modelFor: ModelFor?)
 		card.Frame.Visible = true
 		Pop.repaint(card.Frame, Pop.rarityPaint(line.Rarity))
 		card.Chance.Text = line.Text
+		card.Name.Text = line.Name
 		card.Lucky.Visible = line.Lucky
 		local info = Rarity.ById[line.Rarity]
 		card.Order = if info then info.Order else 0
@@ -974,15 +1139,18 @@ function EggPanel.setLines(refs: Refs, lines: { Line }, modelFor: ModelFor?)
 		card.View.ImageColor3 = black
 		card.Picture.ImageColor3 = black -- (the previews' stand-in picture; the game's Image is empty)
 		card.Picture:SetAttribute("Icon", "golem_" .. line.Golem)
-		if card.Kind ~= line.Golem and modelFor then
-			local model, center, radius = modelFor(line.Golem)
-			if model then
-				model.Parent = card.View
-				local at = center + FROM * (radius / math.sin(math.rad(15)) * 0.95)
-				card.Camera.CFrame = CFrame.lookAt(at, center)
+		if card.Kind == nil then
+			if modelFor then
+				local model, center, radius = modelFor(line.Golem)
+				if model then
+					emptyView(card) -- (never two in one view)
+					model.Parent = card.View
+					local at = center + FROM * (radius / math.sin(math.rad(15)) * 0.95)
+					card.Camera.CFrame = CFrame.lookAt(at, center)
+				end
 			end
+			card.Kind = line.Golem
 		end
-		card.Kind = line.Golem
 	end
 end
 
@@ -1006,6 +1174,13 @@ function EggPanel.setPrice(refs: Refs, kind: string, text: string, affordable: b
 	local width = left + Pop.textWidth(text, textSize) + 12
 	refs.Chip.Size = UDim2.fromOffset(math.clamp(math.ceil(width), h + 40, 220), h)
 	Pop.repaint(refs.Chip, if kind == "Robux" then "Lime" elseif kind == "Off" then PopTheme.Gray else CHIP_PAINT, false)
+	if l and l.Head <= 0 then
+		-- touch (no head row: the opens show the price): only "Not available" / "Coming
+		-- soon" shows, where the opens' row would be
+		refs.Chip.Visible = kind == "Off"
+		refs.Chip.AnchorPoint = Vector2.new(0.5, 0.5)
+		refs.Chip.Position = UDim2.fromOffset(l.Width / 2, l.OpenY + l.Open.Y / 2)
+	end
 end
 
 -- The "Triple Lucky" tag in the head row (hidden when there is no room for it).
@@ -1013,6 +1188,10 @@ function EggPanel.setLucky(refs: Refs, on: boolean, autoShown: boolean)
 	local l = refs.Layout
 	if not l then
 		refs.LuckyTag.Visible = false
+		return
+	end
+	if l.Head <= 0 then
+		refs.LuckyTag.Visible = on -- (touch: the sticker on the panel's top edge, apply())
 		return
 	end
 	local right = if autoShown and not l.AutoInRow then l.Toggle.X else 0
@@ -1087,10 +1266,11 @@ end
 --[[
 	Paints the Open buttons (`specs`: opens()): green with the coin price,
 	lime with the Robux price, grey when they can't be bought. `keys` gives
-	each count's key badge text (nil / "": no badge); `glyph` an image for
-	Open 1's badge (a gamepad's main prompt button).
+	each count's key badge text (nil / "": no badge); `glyphs` each count's
+	badge image instead (a gamepad: the main prompt's button on Open 1, the
+	panel's focus button on Open 3 and Open 10).
 ]]
-function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: string }?, glyph: string?)
+function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: string }?, glyphs: { [number]: string }?)
 	for _, open in refs.Opens do
 		local spec: OpenSpec? = nil
 		for _, s in specs do
@@ -1109,7 +1289,7 @@ function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: st
 			Pop.repaint(open.Button, paint)
 		end
 		local text = if keys then keys[open.Count] else nil
-		local image = if open.Count == 1 then glyph else nil
+		local image = if glyphs then glyphs[open.Count] else nil
 		local hasImage = image ~= nil and image ~= ""
 		open.Key.Visible = hasImage or (text ~= nil and text ~= "")
 		open.KeyText.Text = text or ""
