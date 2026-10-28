@@ -63,6 +63,7 @@ local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
+local PenService = require(script.Parent.PenService)
 local MachineService = require(script.Parent.MachineService)
 local PlotService = require(script.Parent.PlotService)
 
@@ -251,19 +252,23 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 	if not record then
 		return
 	end
-	-- back into the backpack while it has room, else into the Ore Pen; with both
-	-- full it stays in the vise (never past the backpack's capacity, never lost)
+	-- back into the backpack while it has room, else into the Ore Pen while IT has
+	-- room (PenService.store: its capacity, never a sale); else it stays in the vise.
+	-- A dusty relic only goes back into the backpack (it is cleaned, never stored).
 	if CarryService.room(player) > 0 then
 		machine.State.Item = nil
 		CarryService.add(player, ItemService.absorb(record), 1)
 	else
-		local stored = ItemService.storeDesc(player, ItemService.descOf(record), "Your backpack is full")
-		if stored == "Lost" then
-			Net.fire("Notify", player, { Text = "Your backpack and your Ore Pen are full.", Kind = "Deny" })
+		local desc = ItemService.descOf(record)
+		if desc.K == "Relic" or not PenService.store(player, desc) then
+			local text = if desc.K == "Relic" then "Your backpack is full." else "Your backpack and your Ore Pen are full."
+			Net.fire("Notify", player, { Text = text, Kind = "Deny" })
 			return
 		end
 		machine.State.Item = nil
 		ItemService.absorb(record)
+		DataService.changed(player)
+		PenService.arrived(player, { desc }, "Pen")
 	end
 	updatePrompts(machine)
 end
@@ -360,17 +365,19 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		return
 	end
 
-	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen,
-	-- else the output tray)
+	-- success: the raw chunk becomes a clean ore, straight into the backpack (else the pen
+	-- while it has room, else the output tray: never past the pen's capacity, never sold)
 	machine.State.Item = nil
 	ItemService.destroy(record)
 	local cleanDesc: ItemService.Desc = { K = "Clean", O = session.OreId, G = result.Grade }
 	local clean: ItemService.ItemRecord? = nil
 	local into = "Backpack"
 	if CarryService.add(player, cleanDesc) == 0 then
-		local stored = ItemService.storeDesc(player, cleanDesc, "Your backpack is full")
-		into = if stored == "Stored" then "Pen" elseif stored == "Sold" then "Sold" else "Tray"
-		if stored == "Lost" then
+		if PenService.store(player, cleanDesc) then
+			into = "Pen"
+			PenService.arrived(player, { cleanDesc }, "Pen")
+		else
+			into = "Tray"
 			local output = MachineService.point(machine, "Output") or machine.Model:GetPivot()
 			clean = ItemService.spawn({ Kind = "Clean", OreId = session.OreId, Grade = result.Grade }, player.UserId, output)
 		end
@@ -400,7 +407,7 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,
-		Into = into, -- "Backpack" | "Pen" | "Sold" (the pen at the DataStore cap) | "Tray": where the clean ore went
+		Into = into, -- "Backpack" | "Pen" | "Tray": where the clean ore went
 		New = isNew,
 	})
 	for _, callback in cleanedCallbacks do

@@ -74,15 +74,18 @@ function PromptController.loadShown(owner: number?, machineId: string?, userId: 
 	end, b)
 end
 
-local function applyLoad(prompt: ProximityPrompt)
+-- `backpack`: the BackpackState read once for many prompts (refreshAll), else read here.
+local function applyLoad(prompt: ProximityPrompt, backpack: any?)
 	local owner, id = machineOf(prompt)
-	prompt.Enabled = PromptController.loadShown(owner, id, userId())
+	prompt.Enabled = PromptController.loadShown(owner, id, userId(), backpack)
 end
 
 local function refreshAll()
+	-- one read (parse + sort of every stack) for every machine's prompt
+	local backpack = BackpackState.get()
 	for prompt in loadPrompts do
 		if prompt.Parent then
-			applyLoad(prompt)
+			applyLoad(prompt, backpack)
 		end
 	end
 end
