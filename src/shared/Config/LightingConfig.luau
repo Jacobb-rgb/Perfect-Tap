@@ -103,7 +103,8 @@ local SUNSET_SKY = {
 -- Owner 2026-10-28: "just a tiny bit brighter everywhere, not the statue":
 -- every exposure went up a small step (town, quarry and the crate room
 -- +0.07, caves and the Vault +0.07-0.1); the bloom and the mine floors'
--- lights stayed, and GoldenStatue.shade keeps the statue as it was.
+-- lights stayed, and GoldenStatue.shade keeps the statue as it was. Then
+-- "a bit more brightness, not on the statue": every exposure another +0.15.
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
@@ -112,7 +113,7 @@ LightingConfig.Presets = {
 			Brightness = 2.4,
 			Ambient = Color3.new(0.27, 0.25, 0.35),
 			OutdoorAmbient = Color3.new(0.5, 0.48, 0.62),
-			ExposureCompensation = 0.12,
+			ExposureCompensation = 0.27,
 			EnvironmentDiffuseScale = 0.5,
 			EnvironmentSpecularScale = 0.6,
 		},
@@ -140,7 +141,7 @@ LightingConfig.Presets = {
 			Brightness = 2.4,
 			Ambient = Color3.new(0.28, 0.25, 0.34),
 			OutdoorAmbient = Color3.new(0.5, 0.47, 0.6),
-			ExposureCompensation = 0.12,
+			ExposureCompensation = 0.27,
 			EnvironmentDiffuseScale = 0.5,
 			EnvironmentSpecularScale = 0.55,
 		},
@@ -168,7 +169,7 @@ LightingConfig.Presets = {
 			Brightness = 0.6,
 			Ambient = Color3.new(0.32, 0.19, 0.14),
 			OutdoorAmbient = Color3.new(0.2, 0.12, 0.09),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.45,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 0.8,
 		},
@@ -195,7 +196,7 @@ LightingConfig.Presets = {
 			Brightness = 0.3,
 			Ambient = Color3.new(0.2, 0.2, 0.3),
 			OutdoorAmbient = Color3.new(0.12, 0.12, 0.18),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.45,
 			EnvironmentDiffuseScale = 0.15,
 			EnvironmentSpecularScale = 0.9,
 		},
@@ -222,7 +223,7 @@ LightingConfig.Presets = {
 			Brightness = 0.5,
 			Ambient = Color3.new(0.18, 0.27, 0.28),
 			OutdoorAmbient = Color3.new(0.08, 0.12, 0.12),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.45,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 1,
 		},
@@ -249,7 +250,7 @@ LightingConfig.Presets = {
 			Brightness = 0.4,
 			Ambient = Color3.new(0.16, 0.26, 0.32),
 			OutdoorAmbient = Color3.new(0.08, 0.14, 0.18),
-			ExposureCompensation = 0.15,
+			ExposureCompensation = 0.3,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 1,
 		},
@@ -276,7 +277,7 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.22, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.12, 0.2),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.45,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 1,
 		},
@@ -303,7 +304,7 @@ LightingConfig.Presets = {
 			Brightness = 0.3,
 			Ambient = Color3.new(0.24, 0.18, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.1, 0.22),
-			ExposureCompensation = 0.1,
+			ExposureCompensation = 0.25,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 1,
 		},
@@ -339,7 +340,7 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.28, 0.4),
 			OutdoorAmbient = Color3.new(0.12, 0.14, 0.22),
-			ExposureCompensation = 0.15,
+			ExposureCompensation = 0.3,
 			EnvironmentDiffuseScale = 0.2,
 			EnvironmentSpecularScale = 1,
 		},
@@ -380,7 +381,7 @@ LightingConfig.Presets = {
 		Lighting = {
 			Ambient = Color3.new(0.05, 0.04, 0.07),
 			OutdoorAmbient = Color3.new(0.2, 0.18, 0.26),
-			ExposureCompensation = -0.38,
+			ExposureCompensation = -0.23,
 			EnvironmentDiffuseScale = 0.15,
 		},
 		Atmosphere = {},
@@ -401,7 +402,7 @@ LightingConfig.Presets = {
 			Brightness = 0.2,
 			Ambient = Color3.new(0.16, 0.14, 0.22),
 			OutdoorAmbient = Color3.new(0.06, 0.06, 0.1),
-			ExposureCompensation = 0.32,
+			ExposureCompensation = 0.47,
 			EnvironmentDiffuseScale = 0.1,
 			EnvironmentSpecularScale = 0.8,
 		},
