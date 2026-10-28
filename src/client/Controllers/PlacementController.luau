@@ -2583,7 +2583,9 @@ function PlacementController.exit()
 
 	hideHud(false)
 	if savedBackpack ~= nil then
-		pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, savedBackpack)
+		-- (never back on with the light UI: its own BLASTER slot; required here: the file's
+		-- top level is at Luau's 200 local registers)
+		require(script.Parent.Parent.Util.Hotbar).restoreCore(savedBackpack)
 		savedBackpack = nil
 	end
 	pcall(function()

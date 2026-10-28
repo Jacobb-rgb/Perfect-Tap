@@ -229,7 +229,8 @@ Net.Events = {
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
-	-- the answer to a BackpackAction: { Id, Ok, Reason?: "TooFar" | "NoCoins" | "Owned" | "NotOwned" | "BadId" | "Locked" }
+	-- the answer to a BackpackAction: { Id, Ok, Reason?: "TooFar" | "NoCoins" | "Owned" | "NotOwned" | "BadId" | "Locked",
+	--   Op?: the request's "Buy" | "Equip" } (the BACKPACKS shopkeeper cheers for an Ok "Buy")
 	BackpackResult = false,
 	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
 	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change

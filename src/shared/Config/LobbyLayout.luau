@@ -131,9 +131,10 @@ LobbyLayout.Budget = {
 	-- + ~30: 25,000 -> 25,240)
 	-- (owner 2026-10-24: quality over limits; integrator review 2026-10-28: the BACKPACKS
 	-- shop's worst spot, its gateway, holds 20,784 + 2,661 + 352 + its packs 914 (phones show
-	-- the inside ones lite, inside too) + decor 90 + the DROPPERS showroom 512 + the shopkeepers
-	-- in range 215 = 25,528 (its counter 25,517), tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,560)
-	StreamParts = 25560,
+	-- the inside ones lite, inside too) + decor 90 + the DROPPERS showroom 512 + the shopkeeper
+	-- golems still built there 264 (within HideDistance) = 25,577 (its counter 25,566),
+	-- tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,610)
+	StreamParts = 25610,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,

@@ -71,8 +71,8 @@ return function(T, Loader)
 			end
 		end
 		T.lt(fastestCoin, slowestRobux, "every Robux board beats every coin board")
-		local expected = math.floor((23 / HoverboardData.BaseWalkSpeed - 1) * 100 + 0.5)
-		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), expected, `23 vs walking {HoverboardData.BaseWalkSpeed}`)
+		local expected = math.floor((28 / HoverboardData.BaseWalkSpeed - 1) * 100 + 0.5)
+		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), expected, `28 vs walking {HoverboardData.BaseWalkSpeed}`)
 	end)
 
 	T.test("hoverboards: game pass ids live in MonetizationConfig, 0 is never prompted or matched", function()

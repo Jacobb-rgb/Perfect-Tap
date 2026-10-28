@@ -12,7 +12,7 @@
 
 	Where it goes (TutorialView.layout):
 	  mouse     the bottom-right corner (the right-side menu is centred above
-	            it, the backpack button right of the middle; a narrow screen
+	            it, the HUD's bottom group in the middle; a narrow screen
 	            lifts the bubble over it)
 	  gamepad   the same corner, kept TenFootSafe of the screen from the
 	            edges (the TV's title-safe area)
@@ -152,11 +152,13 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 		right = math.max(right, w * TutorialView.TenFootSafe)
 		bottom = math.max(bottom, h * TutorialView.TenFootSafe)
 	end
-	-- a narrow screen (4:3): over the HUD's backpack button when the bubble would reach it
-	local pack = if scale <= HudBubble.CompactScale then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
-	local packRight = w / 2 + HudBubble.backpackX(scale, tenFoot) + pack.X
+	-- a narrow screen (4:3): over the HUD's bottom group (the light HUD's BLASTER slot and
+	-- backpack button, centred; the dark HUD's backpack button) when the bubble would reach it
+	local _, groupRight = HudBubble.carrySpan(scale, tenFoot, UIConfig.lightUI())
+	local group = HudBubble.carryGroupSize(scale <= HudBubble.CompactScale)
+	local packRight = w / 2 + groupRight
 	if w - right - TutorialView.Width < packRight + TutorialView.BarGap then
-		bottom = math.max(bottom, HudBubble.BackpackBottom + pack.Y + TutorialView.BarGap)
+		bottom = math.max(bottom, HudBubble.BackpackBottom + group.Y + TutorialView.BarGap)
 	end
 	local body, row = TutorialView.Body, TutorialView.RowMouse
 	return {

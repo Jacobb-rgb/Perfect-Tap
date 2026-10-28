@@ -49,6 +49,8 @@ local EmoteController = {}
 
 EmoteController.Key = Enum.KeyCode.N
 EmoteController.TileId = "Emotes"
+-- its tile in the MORE flyout (after the side menu's More entries)
+EmoteController.TileSpec = { Label = "EMOTES", IconName = "Emotes", Order = 20 }
 
 local NAME = "EmoteController"
 local KEY_ACTION = "TerraForgeEmotes"
@@ -262,12 +264,14 @@ function EmoteController.start()
 		return
 	end
 	ContextActionService:BindAction(KEY_ACTION, onKey, false, EmoteController.Key)
-	-- the left HUD menu's EMOTES tile (the light UI; touch and gamepad open the menu here)
+	-- the EMOTES tile behind MORE (the light UI; touch and gamepad open the menu here;
+	-- owner 2026-10-28: the SPIN tile took its place next to MORE, the menu keeps two rows)
 	local hud = HudController.refs()
 	if hud and hud.Menu and hud.Menu:GetAttribute("Bubble") then
-		local face = HudBubble.claimTile(hud.Menu, EmoteController.TileId, { Label = "EMOTES", IconName = "Emotes", Order = 40 })
+		local face = HudBubble.addMore(hud.Menu, EmoteController.TileId, EmoteController.TileSpec)
 		face.Activated:Connect(function()
 			Sfx.play("UIClick")
+			HudBubble.toggleMore(hud.Menu, false)
 			EmoteController.toggle()
 		end)
 	end

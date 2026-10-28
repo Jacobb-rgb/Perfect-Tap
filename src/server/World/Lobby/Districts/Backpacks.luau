@@ -63,7 +63,7 @@ Backpacks.Displays = {
 Backpacks.Golem = {
 	Pack = "RuneboundPack",
 	Size = 2.3,
-	Range = 30, -- (with the clients' ShopHysteresis the DROPPERS door, ~39 studs away, stays clear of it)
+	Range = 28, -- (with the clients' hysteresis the DROPPERS door, ~39 studs away, stays clear of it)
 	Look = {
 		Body = Color3.fromRGB(176, 182, 196),
 		Accent = Color3.fromRGB(92, 96, 116),
@@ -73,13 +73,14 @@ Backpacks.Golem = {
 }
 Backpacks.RoofScale = 2.8 -- the roof emblem's size against a normal pack (owner: a big turning pack on the roof)
 Backpacks.RoofSpin = 0 -- radians per second (owner 2026-10-25: it stands still)
--- how near the camera must be for the clients to build each display pack
--- (studs; dropped again beyond the range + BackpackWearController.ShopHysteresis,
--- 6: the phones' budget spots, the spawn and the DROPPERS door ~39 studs from the
--- porch, stay clear of them even after a visit): the roof emblem, the porch, inside.
--- (The inside plates also carry DisplayLite: phones show those packs without their
--- small details, the phones' part budget at the counter.)
-Backpacks.Ranges = { Roof = 40, Porch = 32, Inside = 30 }
+-- how near the player must be for the clients to build each display pack
+-- (studs from the player's HumanoidRootPart, dropped again beyond the range +
+-- BackpackShopDecor.Hysteresis: the phones' budget spots, the spawn and the DROPPERS
+-- door ~39 studs from the porch, stay at least 3 studs clear of them even after a
+-- visit, tests/Backpacks.spec.luau): the roof emblem, the porch, inside. (The inside
+-- plates and the golem's also carry DisplayLite: phones show those packs without
+-- their small details, inside the shop too.)
+Backpacks.Ranges = { Roof = 36, Porch = 30, Inside = 28 }
 
 local rgb = Color3.fromRGB
 local TEAL = rgb(16, 176, 168) -- deep enough to stay teal under bloom
@@ -112,7 +113,7 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 		display(p, packId)
 		p:SetAttribute("DisplayRange", range)
 		if range == Backpacks.Ranges.Inside then
-			-- (phones show the inside packs without their small details until the camera is in the shop)
+			-- (phones show the inside packs without their small details, inside the shop too)
 			p:SetAttribute("DisplayLite", true)
 		end
 		return p
@@ -292,7 +293,6 @@ function Backpacks.build(parent: Instance, rng: Rng.Rng)
 	display(back, spec.Pack)
 	back:SetAttribute("DisplayRange", spec.Range)
 	back:SetAttribute("DisplayLite", true)
-	g:SetAttribute(BackpackShopDecor.FrameAttribute, cf) -- (the inside check of the lite look)
 	g.PrimaryPart = golem.PrimaryPart
 end
 

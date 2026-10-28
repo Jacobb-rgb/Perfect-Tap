@@ -26,6 +26,8 @@
 	  them (a marker's DisplayRange attribute narrows that, and such a marker
 	  is dropped beyond its range + ShopHysteresis: the phones' budget spots,
 	  the spawn and the DROPPERS door, stay clear of them even after a visit).
+	  The shop's packs and decor go by the player's HumanoidRootPart (as
+	  streaming does), not the camera; worn packs go by the camera.
 	  Their particles follow FxRange, their lights stay off. A marker
 	  with the attribute DisplayScale shows a bigger pack (its own model, not
 	  pooled) and one with DisplaySpin turns it slowly (radians per second,
@@ -87,7 +89,7 @@ type Display = {
 	Scale: number, -- DisplayScale (1 = a normal pack)
 	Spin: number, -- DisplaySpin (radians per second, 0 = still)
 	Range: number, -- DisplayRange (studs: built this near)
-	Lite: boolean, -- DisplayLite: phones show it without its small details unless the player is in the shop
+	Lite: boolean, -- DisplayLite: phones show it without its small details (inside the shop too)
 	Hysteresis: number, -- studs past Range before the pack is dropped
 	Angle: number,
 	Turning: boolean, -- near enough to turn (lodStep)
@@ -563,6 +565,11 @@ local function lodStep()
 		end
 	end
 	scanMarkers()
+	-- (the shop's packs and decor go by where the player stands, as streaming does,
+	-- not by the camera: a camera zoomed out toward the shop builds nothing there)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local here = if root and root:IsA("BasePart") then root.Position else focus
 	local gone: { BasePart } = {}
 	for marker, display in displays do
 		if not marker:IsDescendantOf(Workspace) then
@@ -570,7 +577,7 @@ local function lodStep()
 			table.insert(gone, marker)
 			continue
 		end
-		local distance = (marker.Position - focus).Magnitude
+		local distance = (marker.Position - here).Magnitude
 		local wantLite = wantsLite(display, lite)
 		local shown = display.Model
 		if shown and (shown:GetAttribute("Lite") == true) ~= wantLite then
@@ -608,7 +615,7 @@ local function lodStep()
 			table.insert(left, stall)
 			continue
 		end
-		local distance = (shop.Frame.Position - focus).Magnitude
+		local distance = (shop.Frame.Position - here).Magnitude
 		if distance <= BackpackShopDecor.ShowRange then
 			if not shop.Model then
 				local model = BackpackShopDecor.build(shop.Frame)

@@ -806,9 +806,15 @@ local function poseStep()
 			if now < rider.RigRetryAt then
 				continue
 			end
+			-- R6 never becomes a rig: stop looking (MoveRig.find's joint scan would run every retry)
+			local humanoid = rider.Character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.RigType == Enum.HumanoidRigType.R6 then
+				rider.RigRetryAt = math.huge
+				continue
+			end
 			local found = MoveRig.find(rider.Character)
 			if not found then
-				rider.RigRetryAt = now + HoverboardController.LodInterval -- R6 or still streaming in
+				rider.RigRetryAt = now + HoverboardController.LodInterval -- still streaming in
 				continue
 			end
 			rider.Rig = found
