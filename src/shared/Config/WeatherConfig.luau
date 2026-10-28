@@ -379,9 +379,9 @@ WeatherConfig.Rainbow = {
 -- Under a roof (the DROPPERS shop, THE GREAT FORGE's nave) the weather goes. Every check one ray
 -- goes straight up from the character and Rays more from round it (a triangle Spread studs out);
 -- each goes on past what is no roof (WeatherLogic.roofCounts: see-through parts, trees, parts
--- that do not collide, parts smaller than MinSize on their two bigger sides like a statue's fist
--- or a sign board) for at most Hops hits and Reach studs (SKY HAVEN's islets and the sky islands
--- far above never count). Covered = the ray over the player AND Sides of the others hit
+-- that do not collide, parts whose footprint seen from above is narrower than MinWidth or
+-- smaller than MinArea, like a statue's fist, a sign board or an arch's beam) for at most Hops
+-- hits and Reach studs (SKY HAVEN's islets and the sky islands far above never count). Covered = the ray over the player AND Sides of the others hit
 -- (a block or a wheel rim beside you never counts on its own), and the reading must hold Hold
 -- seconds before the weather goes or comes back (no blinking under lamps and arches).
 -- Ghost roofs (Style.ghost / tiny: CanQuery off, no ray sees them: the EGGS temple's drum, THE
@@ -393,7 +393,11 @@ WeatherConfig.Roof = {
 	Spread = 5,
 	Sides = 1,
 	Reach = 24, -- studs: about one building
-	MinSize = 6, -- studs: a roof part's two bigger sides at least this
+	-- a roof part's footprint seen from above (WeatherLogic.footprint): at least this wide (the
+	-- SHOP porch's 3-deep header counts, an arch's 2-wide beam does not) and this big in square
+	-- studs (the museum's 22.4 x 5.5 lean-to counts, the golden dragon's 3.7 x 3.6 fist does not)
+	MinWidth = 2.8,
+	MinArea = 40,
 	Hops = 4,
 	Hold = 0.5,
 	SeeThrough = 0.9, -- a part this transparent (or more) is no roof
