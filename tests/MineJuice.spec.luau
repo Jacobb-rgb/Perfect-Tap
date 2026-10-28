@@ -326,6 +326,33 @@ return function(T, Loader)
 		T.falsy(string.find(controller, 'Sfx.playIn("Rock", "RockCrunch"', 1, true), "not the toks' lane")
 	end)
 
+	T.test("Juice: with Cracks off the chips still fly from the rock's side toward you", function()
+		local CF = roblox.CFrame
+		local box = CF.new(10, 3, -4)
+		local size = Vector3.new(6, 4, 8)
+		local cases = {
+			{ View = Vector3.new(10, 4, 20), Normal = Vector3.new(0, 0, 1) }, -- in front
+			{ View = Vector3.new(-30, 3, -4), Normal = Vector3.new(-1, 0, 0) }, -- to the left
+			{ View = Vector3.new(10, 60, -4), Normal = Vector3.new(0, 1, 0) }, -- from above
+		}
+		for _, c in cases do
+			local middle, normal = CrackLogic.boxFace(box, size, c.View)
+			T.near((normal - c.Normal).Magnitude, 0, 1e-6, "the side toward the viewer")
+			T.truthy((c.View - middle):Dot(normal) > 0, "it faces the viewer")
+			local rel = box:PointToObjectSpace(middle)
+			T.truthy(math.abs(rel.X) <= 3 + 1e-6 and math.abs(rel.Y) <= 2 + 1e-6 and math.abs(rel.Z) <= 4 + 1e-6, "on the box")
+		end
+		-- a turned box: the normal turns with it
+		local turned = CF.new(0, 0, 0) * CF.Angles(0, math.rad(90), 0)
+		local _, n = CrackLogic.boxFace(turned, size, Vector3.new(0, 0, 50))
+		T.near(math.abs(n.Z), 1, 1e-6, "a turned box still faces the viewer")
+		local cracks = fs.readFile(Loader.root .. "/src/client/Effects/RockCracks.luau")
+		T.truthy(string.find(cracks, "CrackLogic.boxFace(box, size, view)", 1, true), "RockCracks.face falls back to the box side")
+		T.truthy(string.find(cracks, "if JuiceConfig.Mining.Cracks or not rock.Parent then", 1, true), "only with Cracks off")
+		T.truthy(string.find(cracks, "memory[rock] = kept", 1, true), "once per rock, kept in the weak memory")
+		T.falsy(string.find(cracks, "False when the ray misses.\n-- The face toward the camera", 1, true), "no stale duplicate comment")
+	end)
+
 	T.test("Juice: crack frames lie on the face, along the segment", function()
 		for _, normal in { Vector3.new(0, 0, 1), Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0.3, -0.9, 0.2).Unit } do
 			local right, up = CrackLogic.basis(normal)

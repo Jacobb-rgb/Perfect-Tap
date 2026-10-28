@@ -24,7 +24,11 @@
 	  RockCracks.clear(rock)  gives the rock's parts back (the shatter; also
 	                          automatic when the rock leaves the workspace)
 	  RockCracks.face(rock)   the crack face a rock has or remembers (origin,
-	                          normal), nil when it never had one
+	                          normal), nil when it never had one; with Cracks
+	                          switched off the side of its bounding box toward
+	                          the camera put onto the rock with one ray
+	                          (CrackLogic.boxFace), once per rock, so the chips
+	                          still fly from a face
 	  RockCracks.setKeep(fn)  fn(rock) = true for the rocks that must keep their
 	                          crack (MineJuiceController: your own and your
 	                          focused rock)
@@ -328,17 +332,37 @@ end
 
 ---------------------------------------------------------------- hits
 
--- The crack face `rock` has now or remembers from a lost slot (origin, normal); nil = none yet.
+--[[
+	The crack face `rock` has now or remembers from a lost slot (origin,
+	normal); nil = none yet. With Cracks switched off (no crack ever plans a
+	face) the side of the rock's bounding box toward the camera, put onto the
+	rock with one ray, made once per rock and kept in the weak memory.
+]]
 function RockCracks.face(rock: Model): (Vector3?, Vector3?)
 	local entry = entries[rock]
 	if entry then
 		return entry.Origin, entry.Normal
 	end
 	local mem = memory[rock]
-	if mem then
+	if mem and mem.Origin and mem.Normal then
 		return mem.Origin, mem.Normal
 	end
-	return nil, nil
+	if JuiceConfig.Mining.Cracks or not rock.Parent then
+		return nil, nil
+	end
+	local camera = Workspace.CurrentCamera
+	local box, size = rock:GetBoundingBox()
+	local view = if camera then camera.CFrame.Position else box.Position + Vector3.new(0, 4, 12)
+	local origin, normal = CrackLogic.boxFace(box, size, view)
+	rayParams.FilterDescendantsInstances = { rock }
+	local result = Workspace:Raycast(origin + normal, normal * -(size.Magnitude + 1), rayParams)
+	if result then
+		origin = result.Position
+	end
+	local kept: Memory = mem or { FlareAt = nil, Plan = nil, Origin = nil, Normal = nil }
+	kept.Origin, kept.Normal = origin, normal
+	memory[rock] = kept
+	return origin, normal
 end
 
 -- The rocks that must keep their crack: `fn(rock)` (your own and your focused rock).
@@ -364,7 +388,6 @@ local function freeSlot(now: number, incomingKept: boolean): boolean
 	return true
 end
 
--- Aims the crack at the rock's face toward the camera (one ray at its middle). False when the ray misses.
 -- The face toward the camera (one ray at the rock's middle): its point and normal, nil when it misses.
 local function cast(entry: Entry): (Vector3?, Vector3?)
 	local camera = Workspace.CurrentCamera
