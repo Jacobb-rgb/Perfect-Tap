@@ -120,6 +120,7 @@ EggPanelController.CountSeconds = 0.45 -- the price chip counting to a new price
 -- panel shows: the left stick keeps walking. D-pad Up is build mode's (on the plot) and
 -- "home" elsewhere; at an egg, within the prompt's reach, it is the panel's.
 EggPanelController.FocusKey = Enum.KeyCode.DPadUp
+EggPanelController.TinyWidth = 640 -- px: a phone narrower than this (568 x 320) gets Grab and FIRE held for the narrow panel
 
 local STALL_TAG = "CapsuleStall"
 local OPEN3_ACTION = "TerraForgeEggOpen3"
@@ -181,7 +182,11 @@ local measureFull: ScreenGui? = nil -- (float(): the whole viewport's frame)
 local measureSafe: ScreenGui? = nil -- (the notch-safe frame)
 local heldCorner = false -- the boost corner steps aside for the floating panel
 local heldBubble = false -- the tutorial bubble too
-local docked: { Key: string, Egg: Vector2, Time: number, At: Vector2, Fit: EggPanel.Fit }? = nil
+local heldTouch = false -- the Grab and FIRE touch buttons (the narrow panel, 568 x 320)
+local relayout = false -- a hold changed the screen: the panel is laid out again (pickNarrow)
+local docked: { Key: number, Egg: Vector2, At: Vector2, Fit: EggPanel.Fit }? = nil
+local measured: EggPanel.ScreenInput? = nil -- (screenInput, re-measured a few times a second)
+local measuredAt = -math.huge
 local autoLucky = false -- the odds Auto started on (it stops when the shown odds aren't these any more)
 local ring: Part? = nil -- the light ring on the active egg's podium
 local front = Vector3.new(1, 0, 0)
@@ -630,7 +635,7 @@ function refreshPanel()
 		-- opening's overlay says why while it is up (a toast would sit under its dim)
 		autoEgg = nil
 		local text = if lucky then "Triple Lucky is on: Auto stopped" else "Triple Lucky ended: Auto stopped"
-		if opening == "Idle" then
+		if not CapsuleController.showing() then -- (no overlay up, even while a buy waits: a toast)
 			CapsuleController.setAuto(false)
 			HudController.toast(text, "Info")
 		else
@@ -733,7 +738,8 @@ local function cornerBox(playerGui: Instance, origin: Vector2): EggPanel.Box?
 	end
 	local box: EggPanel.Box? = nil
 	for _, child in row:GetChildren() do
-		if child:IsA("GuiObject") and child.Visible and child.AbsoluteSize.X > 0 then
+		-- (the tiles: visible TextButtons, as BoostView.rowRight counts them; not the glyph's holder)
+		if child:IsA("TextButton") and child.Visible and child.AbsoluteSize.X > 0 then
 			local b = boxOf(child, origin)
 			local u = box
 			box = if u then { Min = u.Min:Min(b.Min), Max = u.Max:Max(b.Max) } else b
@@ -788,8 +794,11 @@ function EggPanelController.screenInput(camera: Camera): EggPanel.ScreenInput
 		Hud = blocks,
 		Corner = cornerBox(playerGui, origin),
 		Bubble = bubbleBox(playerGui, origin),
+		Held = if heldTouch then { Grab = true, Fire = true } else nil,
 	}
 end
+
+local relayoutNow: (r: EggPanel.Refs, id: string) -> () -- (below layOut)
 
 -- The boost corner steps aside (hides) while the floating panel needs its place, or comes back.
 -- (BoostController and TutorialController are required when first needed: they load the
@@ -803,15 +812,53 @@ function EggPanelController.holdBubble(on: boolean)
 	require(script.Parent.TutorialController).hold("EggPanel", on)
 end
 
+-- Grab and FIRE likewise (the narrow panel on the smallest phones: they'd cover its odds; nothing to grab or blast at an egg).
+function EggPanelController.holdTouch(on: boolean)
+	require(script.Parent.InteractController).hold("EggPanel", on)
+	require(script.Parent.MiningController).hold("EggPanel", on)
+end
+
 local function holdOthers(corner: boolean, bubble: boolean)
 	if corner ~= heldCorner then
 		heldCorner = corner
+		relayout = true
 		EggPanelController.holdCorner(corner)
 	end
 	if bubble ~= heldBubble then
 		heldBubble = bubble
+		relayout = true
 		EggPanelController.holdBubble(bubble)
 	end
+end
+
+local function holdTouchButtons(on: boolean)
+	if on ~= heldTouch then
+		heldTouch = on
+		measured = nil
+		EggPanelController.holdTouch(on)
+	end
+end
+
+-- The screen as measured lately (re-measured MeasureEvery seconds: the HUD's guis barely move).
+local MEASURE_EVERY = 0.25
+local function measure(camera: Camera): EggPanel.ScreenInput
+	local now = os.clock()
+	local last = measured
+	if last and now - measuredAt < MEASURE_EVERY then
+		return last
+	end
+	local input = EggPanelController.screenInput(camera)
+	measured, measuredAt = input, now
+	return input
+end
+
+-- A number for a screen and a panel size (the docked place is searched again only when it changes).
+local function signature(s: EggPanel.Screen, size: Vector2): number
+	local key = s.View.X * 7 + s.View.Y * 11 + size.X * 13 + size.Y * 17
+	for i, b in s.Avoid do
+		key += i * (math.floor(b.Min.X) * 3 + math.floor(b.Min.Y) * 5 + math.floor(b.Max.X) * 7 + math.floor(b.Max.Y) * 11)
+	end
+	return key
 end
 
 --[[
@@ -850,24 +897,23 @@ local function float()
 	local scale = r.Scale.Scale
 	local size = Vector2.new(r.Gui.Size.X.Offset, r.Gui.Size.Y.Offset)
 	local row, odds = EggPanel.rowBox(l, scale), EggPanel.oddsBox(l, scale)
-	local input = EggPanelController.screenInput(camera)
+	-- the narrow panel on the smallest phones (568 x 320) asks Grab and FIRE to step aside while it
+	-- floats: no room there to keep its lower cards clear of them (nothing to grab or blast at an egg)
+	holdTouchButtons(l.RowFirst and camera.ViewportSize.X < EggPanelController.TinyWidth)
+	local input = measure(camera)
 	local s = EggPanel.screen(input)
 	local want = EggPanel.wantAt(s, size, row, egg, reachPx)
 	local fit = EggPanel.fitAt(s, want, size, row, odds)
 	local at = want
 	if fit.Hard > 0 or fit.Odds > 0 or fit.Panel > 0 then
 		-- (a docked place: searched again when the screen changed, the egg moved far or a while passed)
-		local key = `{size.X}x{size.Y}|{#s.Avoid}|{s.View.X}x{s.View.Y}`
-		for _, b in s.Avoid do
-			key ..= `|{math.floor(b.Min.X)},{math.floor(b.Min.Y)},{math.floor(b.Max.X)},{math.floor(b.Max.Y)}`
-		end
-		local now = os.clock()
+		local key = signature(s, size)
 		local last = docked
-		if last and last.Key == key and (last.Egg - egg).Magnitude < 48 and now - last.Time < 1 then
-			at, fit = last.At, last.Fit
+		if last and last.Key == key and (last.Egg - egg).Magnitude < 48 then
+			at, fit = last.At, last.Fit -- (the same screen, the egg barely moved: the same place)
 		else
 			at, fit = EggPanel.dockAt(s, size, row, odds, want)
-			docked = { Key = key, Egg = egg, Time = now, At = at, Fit = fit }
+			docked = { Key = key, Egg = egg, At = at, Fit = fit }
 			-- the corner and the bubble step aside where the panel can't keep its row and its
 			-- cards clear of them (held until it stops floating)
 			if (fit.Hard > 0 or fit.Odds > 0) and (input.Corner or input.Bubble) then
@@ -889,6 +935,14 @@ local function float()
 			p.Gui.Enabled = not cover
 		end
 	end
+	if relayout and id then
+		-- (a hold changed the screen: the layout is picked again on it, pickNarrow)
+		relayout = false
+		measured = nil
+		docked = nil
+		laidOut = ""
+		relayoutNow(r, id)
+	end
 end
 EggPanelController._float = float -- (the Lune specs run it on a fake camera)
 
@@ -904,6 +958,8 @@ local function setFloating(on: boolean)
 	else
 		RunService:UnbindFromRenderStep(FLOAT_STEP)
 		holdOthers(false, false)
+		holdTouchButtons(false)
+		relayout = false
 		if promptCovered then
 			promptCovered = false
 			local p = prompt
@@ -924,8 +980,21 @@ local function onScreen(spot: Spot?): boolean
 	if not camera then
 		return true
 	end
-	local point = camera:WorldToViewportPoint(spot.Center)
 	local view = camera.ViewportSize
+	local r = refs
+	local l = if r then r.Layout else nil
+	if r and l and not l.Beside then
+		-- PC: the panel stands over the egg (its bottom edge at the anchor): its card rows must be on the screen
+		local anchor = camera:WorldToViewportPoint(Vector3.new(spot.Center.X, spot.Top + EggPanel.Lift, spot.Center.Z))
+		if anchor.Z <= 0 then
+			return false
+		end
+		local odds = EggPanel.oddsBox(l, r.Scale.Scale)
+		local top = anchor.Y - r.Gui.Size.Y.Offset
+		return top + odds.Min.Y >= 0 and top + odds.Max.Y <= view.Y and anchor.X >= 0 and anchor.X <= view.X
+	end
+	-- touch: the panel floats on the screen; the egg in front of the camera, on the screen
+	local point = camera:WorldToViewportPoint(spot.Center)
 	return point.Z > 0 and point.X >= 0 and point.Y >= 0 and point.X <= view.X and point.Y <= view.Y
 end
 
@@ -960,6 +1029,12 @@ local function layOut(r: EggPanel.Refs, id: string)
 	if p then
 		EggPrompt.setScale(p, scale)
 	end
+end
+
+-- (float(): lays the panel out again when a hold changed the screen)
+function relayoutNow(r: EggPanel.Refs, id: string)
+	layOut(r, id)
+	refreshPanel()
 end
 
 local function fadeTo(target: number, seconds: number)

@@ -73,6 +73,25 @@ function InteractController.resume()
 	bindGrab()
 end
 
+local holds: { [string]: boolean } = {}
+--[[
+	Another view needs the Grab touch button's place for a while (`name`
+	holds it, `on` false lets go): the button (and F / X) rest meanwhile.
+	The EGGS temple's floating egg panel on the smallest phones (568 x 320):
+	there the button would cover two of its odds; nothing to grab at an egg.
+]]
+function InteractController.hold(name: string, on: boolean)
+	if on then
+		holds[name] = true
+		ContextActionService:UnbindAction("TerraForgeGrab")
+	else
+		holds[name] = nil
+		if next(holds) == nil and enabled then
+			bindGrab()
+		end
+	end
+end
+
 local function itemFromPart(part: Instance?): Model?
 	local node = part
 	while node and node ~= Workspace do
@@ -246,6 +265,9 @@ end
 
 function InteractController.start()
 	bindGrab = function()
+		if next(holds) ~= nil then
+			return -- (held: hold() binds it again when let go)
+		end
 		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
 		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
 		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))

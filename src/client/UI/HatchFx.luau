@@ -156,6 +156,186 @@ function HatchFx.arrange(count: number): ({ Vector3 }, number)
 	return out, 34
 end
 
+---------------------------------------------------------------- hatch v2 (owner 2026-10-29)
+
+--[[
+	Hatch v2 ("much, much better, like Pet Simulator": docs/plans/HATCH_V2.md):
+	the eggs FLY in from the bottom into a neat stage (one big; a row of 3;
+	two rows of 5), wobble together, a Legendary / Mythic egg gathers light
+	(suspense), they burst in a quick ripple and each golem pops out where
+	its egg was, named; a Legendary / Mythic then gets its jackpot moment.
+	Auto plays the fast timings; Reduce motion the short, still ones. Every
+	result always shows (at least MinShow seconds, named): fast is fine,
+	skipping a result is not (paid random items).
+]]
+HatchFx.FlyTime = 0.35 -- the eggs fly in
+HatchFx.FlyFast = 0.2
+HatchFx.Ripple = 0.06 -- seconds between two eggs bursting (a batch)
+HatchFx.PopDelay = 0.12 -- a golem pops this long after its egg bursts
+HatchFx.MinShow = 0.3 -- every result shows at least this long, whatever is skipped
+HatchFx.Suspense = 1.1 -- a Legendary / Mythic egg gathers light before the break
+HatchFx.SuspenseFast = 0.6
+HatchFx.HoldOne = 1.7 -- one golem stays this long before the end screen (Auto: its dwell follows)
+HatchFx.HoldMany = 1.6 -- a batch on the stage
+HatchFx.HoldFast = 0.8
+HatchFx.JackpotHold = 2.4 -- the jackpot moment (Auto; a tap goes on sooner)
+HatchFx.JackpotFast = 1.2
+HatchFx.ShakeShare = 0.75 -- the v2 wobble is this share of plan.Shake (the suspense adds to the rare ones)
+HatchFx.ShakeFast = 0.35
+HatchFx.StageTurn = 0.3 -- radians a golem on the stage turns from facing the camera (a 3/4 view)
+
+export type Timeline = {
+	Count: number,
+	Order: number,
+	Fast: boolean,
+	Reduced: boolean,
+	Fly: number, -- the eggs fly in (0 .. Fly)
+	Shake: number, -- they wobble (Fly .. Fly + Shake)
+	Suspense: number, -- the rare egg gathers light (0: none)
+	Ripple: number,
+	Burst: { number }, -- each egg's burst, seconds from the start
+	Pop: { number }, -- each golem's pop
+	Hold: number, -- the golems stay before the jackpot or the end screen
+	Jackpot: number, -- the jackpot moment's hold (0: none)
+	JackpotAt: number, -- when it starts (math.huge: none; one egg: its reveal is the moment)
+	Total: number, -- the end screen (OK, OPEN AGAIN)
+}
+
+--[[
+	The timings of a hatch: `count` eggs, the rarest golem's Rarity `order`,
+	`fast` (Auto), `reduced` (Reduce motion: no flight, a short still
+	wobble, no suspense, no ripple). Pure: the controller and the previews
+	play it, the specs check it.
+]]
+function HatchFx.timeline(order: number, count: number, fast: boolean, reduced: boolean): Timeline
+	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
+	local plan = HatchFx.plan(order)
+	local jackpot = plan.Order >= 5
+	local fly = if reduced or fast then HatchFx.FlyFast else HatchFx.FlyTime
+	local shake = if reduced then 0.4 else plan.Shake * (if fast then HatchFx.ShakeFast else HatchFx.ShakeShare)
+	local suspense = if jackpot and not reduced then (if fast then HatchFx.SuspenseFast else HatchFx.Suspense) else 0
+	local ripple = if n > 1 and not reduced then HatchFx.Ripple else 0
+	local start = fly + shake + suspense
+	local bursts, pops = {}, {}
+	for i = 1, n do
+		bursts[i] = start + (i - 1) * ripple
+		pops[i] = bursts[i] + (if reduced then 0.3 else HatchFx.PopDelay)
+	end
+	local last = pops[n]
+	local hold = if fast then HatchFx.HoldFast elseif n == 1 then HatchFx.HoldOne else HatchFx.HoldMany
+	hold = math.max(hold, HatchFx.MinShow)
+	local moment = if jackpot then (if fast then HatchFx.JackpotFast else HatchFx.JackpotHold) else 0
+	local jackpotAt = if jackpot and n > 1 then last + hold else math.huge
+	local total
+	if n == 1 then
+		total = last + (if jackpot then moment else hold)
+	elseif jackpot then
+		total = jackpotAt + moment
+	else
+		total = last + hold
+	end
+	return {
+		Count = n,
+		Order = plan.Order,
+		Fast = fast,
+		Reduced = reduced,
+		Fly = fly,
+		Shake = shake,
+		Suspense = suspense,
+		Ripple = ripple,
+		Burst = bursts,
+		Pop = pops,
+		Hold = hold,
+		Jackpot = moment,
+		JackpotAt = jackpotAt,
+		Total = total,
+	}
+end
+
+--[[
+	An egg `u` seconds into its flight of `fly`: how far along (0 from
+	below and in front of the stage, 1 in its place, a little past it on the
+	way: Back ease), its scale and its spin (radians, unwinding to 0).
+]]
+function HatchFx.flyAt(u: number, fly: number): (number, number, number)
+	if fly <= 0 or u >= fly then
+		return 1, 1, 0
+	end
+	local x = math.clamp(u / fly, 0, 1)
+	local ease = 1 - (1 - x) ^ 3
+	return back(x), 0.35 + 0.65 * ease, (1 - ease) * math.pi * 1.5
+end
+
+-- Where an egg flies in from (studs from its place: below the stage and further back: it grows as it comes).
+HatchFx.FlyFrom = Vector3.new(0, -8, 9)
+
+--[[
+	The rare egg gathering light `u` seconds into the suspense of `d`: it
+	rises (studs), swells, trembles fast and small (radians) and glows
+	(0..1, the controller's light and the leak).
+]]
+function HatchFx.suspenseAt(u: number, d: number): (number, number, number, number)
+	if d <= 0 or u <= 0 then
+		return 0, 1, 0, 0
+	end
+	local k = math.clamp(u / d, 0, 1)
+	local ease = 1 - (1 - k) ^ 2
+	return 0.4 * ease, 1 + 0.1 * ease, 0.05 * k * math.sin(u * 60), k
+end
+
+export type Stage = {
+	Spots: { Vector3 }, -- each egg's (and then its golem's) place, round the origin
+	Distance: number, -- the stage camera: straight on, from -Z, FOV 30, this far
+	Cells: { Vector2 }, -- each spot on the stage's viewport (shares: x right, y down; its +X is the screen's left)
+	Cell: Vector2, -- a cell's size (shares of the viewport): the name under the golem fits it
+}
+
+local TAN15 = math.tan(math.rad(15))
+
+--[[
+	The stage for `count` eggs on a viewport `aspect` wide (width / height):
+	one egg big in the middle; up to 3 in a row; more in two rows of five
+	(PS99's neat grid, our spacing). The camera stands back just enough for
+	every egg and golem (about 4.6 studs tall) with a margin.
+]]
+function HatchFx.stage(count: number, aspect: number): Stage
+	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
+	local a = math.max(0.5, if aspect == aspect then aspect else 1)
+	local spots: { Vector3 } = {}
+	local cols, rows, dx, dy
+	if n == 1 then
+		cols, rows, dx, dy = 1, 1, 0, 0
+		spots[1] = Vector3.zero
+	elseif n <= 3 then
+		cols, rows, dx, dy = n, 1, 5.2, 0
+		for i = 1, n do
+			spots[i] = Vector3.new(((n + 1) / 2 - i) * dx, 0, 0) -- (the first on the screen's left)
+		end
+	else
+		cols, rows, dx, dy = 5, 2, 4.8, 5.6
+		for i = 1, n do
+			local col = (i - 1) % cols
+			local row = (i - 1) // cols
+			local inRow = math.min(cols, n - row * cols)
+			spots[i] = Vector3.new(((inRow - 1) / 2 - col) * dx, ((rows - 1) / 2 - row) * dy + 0.5, 0)
+		end
+	end
+	-- (one egg fills most of the hero: PS99's big egg; a batch keeps a margin round its golems)
+	local tall = (rows - 1) * dy + (if n == 1 then 5.4 else 6.2)
+	local wide = (cols - 1) * dx + (if n == 1 then 5.4 else 5)
+	local distance = math.max(tall / 2 / TAN15, wide / 2 / (TAN15 * a))
+	local cells: { Vector2 } = {}
+	for i, spot in spots do
+		-- (the camera looks along +Z: the stage's +X shows on the left)
+		cells[i] = Vector2.new(0.5 - spot.X / (2 * distance * TAN15 * a), 0.5 - spot.Y / (2 * distance * TAN15))
+	end
+	local cell = Vector2.new(
+		(if n == 1 then 0.6 else math.max(dx, 4) / (2 * distance * TAN15 * a)),
+		(if n == 1 then 0.6 else (if rows > 1 then dy else 5.6) / (2 * distance * TAN15))
+	)
+	return { Spots = spots, Distance = distance, Cells = cells, Cell = cell }
+end
+
 ---------------------------------------------------------------- the egg
 
 export type Record = {
@@ -329,6 +509,53 @@ function HatchFx.pose(rec: Record, place: CFrame, t: number, burstAt: number, pl
 		end
 	end
 	rec.Faded = k >= 1
+end
+
+--[[
+	Hatch v2's egg `i` of a timeline `tl`, `t` seconds from the start, at
+	its stage spot `spot` (a CFrame facing the stage camera): flying in,
+	wobbling (pose's build-up with tl's shorter wobble), the jackpot egg
+	(`rare`) gathering light in the suspense (rising, swelling when
+	`squash`, trembling), then its break (pose). Returns the light it
+	gathers (0..1: the controller's leak and glow).
+]]
+function HatchFx.poseV2(rec: Record, spot: CFrame, t: number, tl: Timeline, i: number, plan: Plan, color: Color3, squash: boolean, rare: boolean): number
+	local burstAt = tl.Burst[i] or tl.Burst[#tl.Burst]
+	if t < tl.Fly then
+		local k, _, spin = HatchFx.flyAt(t, tl.Fly)
+		local place = spot * CFrame.new(HatchFx.FlyFrom * (1 - k)) * CFrame.Angles(0, spin, 0)
+		if rec.Bent then
+			HatchFx.reset(rec)
+		end
+		rec.Model:PivotTo(place * rec.Pivot)
+		return 0
+	end
+	local wobble = table.clone(plan)
+	wobble.Shake = math.max(tl.Shake, 0.05)
+	local u = t - tl.Fly
+	local suspenseAt = tl.Fly + tl.Shake
+	if rare and tl.Suspense > 0 and t >= suspenseAt and t < burstAt then
+		local lift, swell, tremble, glow = HatchFx.suspenseAt(t - suspenseAt, tl.Suspense)
+		local cf = spot * CFrame.new(0, lift, 0) * CFrame.Angles(0, 0, tremble)
+		if squash then
+			local scale = Vector3.new(swell, swell, swell)
+			for j, part in rec.Parts do
+				local base = rec.Base[j]
+				part.CFrame = cf * CFrame.new(base.Position * scale) * base.Rotation
+				part.Size = rec.Sizes[j] * scale
+			end
+			rec.Bent = true
+		else
+			rec.Model:PivotTo(cf * rec.Pivot)
+		end
+		for _, crack in rec.Cracks do
+			crack.Transparency = 0
+			crack.Color = color:Lerp(Color3.new(1, 1, 1), 0.2 + 0.5 * glow)
+		end
+		return glow
+	end
+	HatchFx.pose(rec, spot, u, burstAt - tl.Fly, wobble, color, squash)
+	return if t < burstAt then HatchFx.leakAt(u, wobble) else 0
 end
 
 ---------------------------------------------------------------- the overlay

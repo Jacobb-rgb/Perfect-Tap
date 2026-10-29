@@ -1093,6 +1093,7 @@ export type ScreenInput = {
 	Hud: { Box }?, -- the HUD's buttons the panel could meet: the teleport bar, the left tiles, the TRAIN chip
 	Corner: Box?, -- the boost corner's tiles (BoostView.cornerSpot, live)
 	Bubble: Box?, -- the touch tutorial bubble (live)
+	Held: { [string]: boolean }?, -- touch buttons stepped aside for the panel (BoostView.TouchButtons' names: Grab, Fire)
 }
 
 EggPanel.Margin = 8 -- px between the floating panel and what it keeps clear of
@@ -1160,7 +1161,11 @@ function EggPanel.screen(input: ScreenInput): Screen
 	local edges: { Box } = {}
 	local small = math.min(view.X, view.Y) <= 500
 	local buttons: Box? = nil
+	local held = input.Held or {}
 	for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+		if held[b.Name] then
+			continue -- (hidden while the panel floats)
+		end
 		local box = {
 			Min = Vector2.new(safe.Max.X - b.Left, safe.Max.Y - b.Top),
 			Max = Vector2.new(safe.Max.X - b.Right, safe.Max.Y - b.Bottom),

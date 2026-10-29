@@ -205,7 +205,23 @@ export type OpenRefs = {
 	Again: TextButton,
 	Hint: TextLabel,
 	Compact: boolean,
+	-- hatch v2 (owner 2026-10-29, docs/plans/HATCH_V2.md): a batch's stage
+	Stage: ViewportFrame, -- the eggs, then the golems where they were (x3, x10)
+	StageCamera: Camera,
+	StageDim: Frame, -- dims the stage behind a jackpot moment
+	Tags: { Tag }, -- a result's tag under its golem on the stage
 }
+
+-- A result's tag on the stage: a rarity glow behind the golem, its name, its chance, NEW!.
+export type Tag = {
+	Frame: Frame,
+	Glow: Frame,
+	Name: TextLabel,
+	Chance: TextLabel,
+	New: TextLabel,
+}
+
+CapsuleView.StageTags = 10 -- the most results a batch shows on the stage (CapsuleConfig.Counts' largest)
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1473,6 +1489,109 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 	camera.FieldOfView = 30
 	camera.Parent = hero
 	hero.CurrentCamera = camera
+	-- hatch v2: a batch's stage (the eggs fly in, wobble together, burst, and each golem
+	-- stands where its egg was: HatchFx.stage), its tags, and the dim of a jackpot moment
+	local stageDim = UIKit.new("Frame", {
+		Name = "StageDim",
+		BackgroundColor3 = rgb(8, 6, 12),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, -40),
+		Size = UDim2.new(1, 0, 1, 80),
+		Visible = false,
+		ZIndex = 4,
+	}, gui) :: Frame
+	local stage = UIKit.new("ViewportFrame", {
+		Name = "Stage",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(1000, 420),
+		BackgroundTransparency = 1,
+		Ambient = rgb(150, 148, 152),
+		LightColor = rgb(255, 255, 255),
+		LightDirection = Vector3.new(-0.5, -1, 0.7),
+		Visible = false,
+		ZIndex = 3,
+	}, gui) :: ViewportFrame
+	local stageCamera = Instance.new("Camera")
+	stageCamera.Name = "StageCamera"
+	stageCamera.FieldOfView = 30
+	stageCamera.Parent = stage
+	stage.CurrentCamera = stageCamera
+	local tags: { Tag } = {}
+	for i = 1, CapsuleView.StageTags do
+		local holder = UIKit.new("Frame", {
+			Name = "Tag" .. i,
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(200, 60),
+			Visible = false,
+			ZIndex = 6,
+		}, gui) :: Frame
+		local glow = UIKit.new("Frame", {
+			Name = "TagGlow" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.35,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(160, 160),
+			Visible = false,
+			ZIndex = 2,
+		}, gui) :: Frame
+		UIKit.corner(glow, 999)
+		UIKit.new("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.1),
+				NumberSequenceKeypoint.new(0.55, 0.55),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}, glow)
+		local tagName = UIKit.new("TextLabel", {
+			Name = "TagName",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = PopTheme.Pixel,
+			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.new(1, 0, 0, 28),
+			Text = "",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextScaled = true,
+			ZIndex = 6,
+		}, holder) :: TextLabel
+		UIKit.new("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 14 }, tagName)
+		Pop.edge(tagName, 2.6)
+		local tagChance = UIKit.new("TextLabel", {
+			Name = "TagChance",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = PopTheme.Font,
+			Position = UDim2.new(0.5, 0, 0, 29),
+			Size = UDim2.new(1, 0, 0, 22),
+			Text = "",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 18,
+			ZIndex = 6,
+		}, holder) :: TextLabel
+		Pop.edge(tagChance, 2)
+		local tagNew = UIKit.new("TextLabel", {
+			Name = "TagNew",
+			AnchorPoint = Vector2.new(0.5, 1),
+			BackgroundColor3 = rgb(132, 214, 60),
+			FontFace = PopTheme.Pixel,
+			Position = UDim2.new(0.5, 0, 0, -2),
+			Rotation = -6,
+			Size = UDim2.fromOffset(64, 24),
+			Text = "NEW!",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 17,
+			Visible = false,
+			ZIndex = 7,
+		}, holder) :: TextLabel
+		UIKit.corner(tagNew, 7)
+		Pop.border(tagNew, 2)
+		Pop.edge(tagNew, 1.8)
+		table.insert(tags, { Frame = holder, Glow = glow, Name = tagName, Chance = tagChance, New = tagNew })
+	end
 	local flash = UIKit.new("Frame", {
 		Name = "Flash",
 		Size = UDim2.new(1, 0, 1, 80),
@@ -1611,6 +1730,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Again = again,
 		Hint = hint,
 		Compact = isCompact,
+		Stage = stage,
+		StageCamera = stageCamera,
+		StageDim = stageDim,
+		Tags = tags,
 	}
 	CapsuleView.layoutOpening(refs, isCompact, 1280, 720)
 	return refs
@@ -1664,6 +1787,9 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Grid.Position = UDim2.fromOffset(width / 2, top + gridH / 2)
 	refs.Grid.Size = UDim2.fromOffset(width - 40, gridH)
 	refs.GridRoom = Vector2.new(width - 40, gridH)
+	-- (hatch v2's stage takes the grid's room, a little higher: the tags go under the golems)
+	refs.Stage.Position = UDim2.fromOffset(width / 2, top + gridH / 2 - 10)
+	refs.Stage.Size = UDim2.fromOffset(width - 40, gridH - 20)
 	refs.Controls.Position = UDim2.fromOffset(0, 0)
 	refs.Controls.Size = UDim2.fromOffset(width, height)
 	local skipHolder = holderOf(refs.Skip)

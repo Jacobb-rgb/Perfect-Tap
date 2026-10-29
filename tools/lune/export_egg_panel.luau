@@ -1505,3 +1505,459 @@ if videoMode == "hatch" then
 		fs.writeFile(root .. "/build/preview/egg_hatch_crystal_shots.json", serde.encode("json", shots))
 	end
 end
+
+---------------------------------------------------------------- hatch v2 (video "hatch2", owner 2026-10-29)
+
+--[[
+	Hatch v2 (docs/plans/HATCH_V2.md), posed with the game's own timings
+	(HatchFx.timeline, HatchFx.poseV2, HatchFx.stage) and reveal look
+	(Effects/RevealFx): a Common, an Epic, a Mythic jackpot, Open 3, Open 10
+	with its Legendary's jackpot moment, and Auto's fast hatch with a tap
+	that skips to the break. The renderer draws no viewports and draws the
+	UI over the 3D world, so the eggs and golems stand in the world where
+	the hero / stage viewports show them, and RevealFx's rays and glow are
+	3D bars BEHIND them (in the game they sit under the viewports: the
+	golems stay solid); the banner, the headline, the tags and the buttons
+	are the game's UI.
+	  lune run tools/lune/export_egg_panel.luau 15 hatch2
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_hatch2_shots.json vejce_hatch2 15
+]]
+if videoMode == "hatch2" then
+	local RevealFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealFx")
+	local VIDEO = PC
+	local W, H = VIDEO.W, VIDEO.H
+	local designW, designH = W / VIDEO.Pixel, (H - 36) / VIDEO.Pixel
+	local D = 8 -- studs from the camera where the hero / the stage stand in the world (in front of the temple)
+	local TAN35 = math.tan(math.rad(35))
+	local TAN15 = math.tan(math.rad(15))
+
+	-- an overlay offset (design units) on the render (px)
+	local function toPx(at: any): (number, number)
+		return at.X.Offset * VIDEO.Pixel, 36 + at.Y.Offset * VIDEO.Pixel
+	end
+	-- the world frame on the camera's ray through (px, py) at `depth`, its -Z towards the camera
+	local function viewFrame(cam: Cam, depth: number, px: number, py: number): any
+		local look = CF.lookAt(cam.Position, cam.Target)
+		local x = (px / W * 2 - 1) * TAN35 * (W / H)
+		local y = (1 - py / H * 2) * TAN35
+		local dir = ((look * CF.new(x, y, -1)).Position - cam.Position).Unit
+		local at = cam.Position + dir * depth
+		return CF.lookAt(at, cam.Position)
+	end
+	local function worldPx(depth: number): number
+		return H / (2 * depth * TAN35)
+	end
+	-- a model built round its origin, scaled by k and set in `frame`
+	local function place(model: any, frame: any, k: number)
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				local cf = d.CFrame
+				d.CFrame = frame * (CF.new(cf.Position * k) * (cf - cf.Position))
+				d.Size *= k
+			end
+		end
+	end
+	local function plane(parent: any, cam: Cam, depth: number, color: any, alpha: number)
+		local look = (cam.Target - cam.Position).Unit
+		local at = cam.Position + look * depth
+		local p = Instance.new("Part")
+		p.Name = "DimPlane"
+		p.Anchored = true
+		p.Size = V3.new(160, 100, 0.1)
+		p.CFrame = CF.lookAt(at, at + look)
+		p.Material = Enum.Material.Neon -- (unlit; the renderer blends a see-through plane too faintly:
+		p.CastShadow = false -- the dim is drawn as the overlay's colour over the world, `alpha` mixing in the world's dark)
+		p.Color = color:Lerp(Color3.fromRGB(28, 30, 44), 1 - alpha)
+		p.Transparency = 0
+		p.Parent = parent
+	end
+	-- RevealFx's rays and glow as 3D bars behind the item (radius in studs at the frame)
+	local function rays3d(parent: any, frame: any, radius: number, rarity: string, t: number)
+		local tier = RevealFx.Tiers[RevealFx.tierOf(rarity)]
+		local layers = if tier.Back ~= 0 then 2 else 1
+		local glow = Instance.new("Part")
+		glow.Name = "Glow"
+		glow.Anchored = true
+		glow.Shape = Enum.PartType.Cylinder
+		glow.Material = Enum.Material.SmoothPlastic
+		glow.Color = RevealFx.palette(rarity).Glow
+		glow.Transparency = 0.45
+		glow.Size = V3.new(0.05, radius * 1.15, radius * 1.15)
+		glow.CFrame = frame * CF.Angles(0, math.pi / 2, 0)
+		glow.Parent = parent
+		local swell = RevealFx.swellAt(t)
+		for layer = 1, layers do
+			local bars = math.floor(tier.Rays / 2)
+			local speed = math.rad(if layer == 1 then tier.Speed else tier.Back)
+			local width = radius * (if layer == 1 then 0.17 else 0.1)
+			for i = 1, bars do
+				local angle = (i - 1) * math.pi / bars + (layer - 1) * math.pi / (2 * bars) + t * speed
+				local color = RevealFx.rayColor(rarity, i + (layer - 1), bars, t)
+				for _, seg in { { 0.12, 0.5, 0.35 }, { 0.5, 0.82, 0.6 }, { 0.82, 1, 0.84 } } do
+					for _, side in { 1, -1 } do
+						local from, to = seg[1] * radius * swell, seg[2] * radius * swell
+						local bar = Instance.new("Part")
+						bar.Name = "Ray"
+						bar.Anchored = true
+						bar.Material = Enum.Material.SmoothPlastic
+						bar.Color = color
+						bar.Transparency = seg[3] + (if layer == 2 then 0.12 else 0)
+						bar.Size = V3.new(to - from, width, 0.04)
+						bar.CFrame = frame
+							* CF.new(0, 0, 0.05 * layer)
+							* CF.Angles(0, 0, angle)
+							* CF.new(side * (from + to) / 2, 0, 0)
+						bar.Parent = parent
+					end
+				end
+			end
+		end
+	end
+	local function ui(o: any): any
+		return RevealFx
+	end
+	local _ = ui
+
+	type Hatch2 = { Kinds: { string }, New: { [number]: boolean }, Egg: string, Fast: boolean?, Skip: number?, Again: string, Caption: string }
+
+	--[[
+		One hatch `t` seconds in, posed like CapsuleController's hatchV2 plays
+		it. Returns the overlay's gui and the caption's.
+	]]
+	local function poseHatch2(parent: any, cam: Cam, t: number, h: Hatch2): { any }
+		local o = CapsuleView.buildOpening(false)
+		o.Gui.Scale.Scale = VIDEO.Pixel
+		CapsuleView.layoutOpening(o, false, designW, designH)
+		o.Dim.BackgroundTransparency = 1 -- (the world's dim plane stands in for it)
+		o.Rays.Visible = false
+		o.Plate.Visible = false
+		o.Gui.Enabled = true
+		local fx = HatchFx.overlay(o.Gui)
+		HatchFx.place(fx, o.Hero.Position, o.Hero.Size.X.Offset)
+		local n = #h.Kinds
+		local best = CapsuleView.best(h.Kinds) or h.Kinds[1]
+		local bestIndex = table.find(h.Kinds, best) or 1
+		local order = GolemConfig.order(best)
+		local plan = HatchFx.plan(order)
+		local color = CapsuleView.rarityColor(best)
+		local tl = HatchFx.timeline(order, n, h.Fast == true, false)
+		-- (a tap before the break: straight to it, as the controller does)
+		local tt = t
+		if h.Skip and t >= h.Skip and h.Skip < tl.Burst[1] then
+			tt = t - h.Skip + tl.Burst[1]
+		end
+		local single = n == 1
+		local view = if single then o.Hero else o.Stage
+		local aspect = if single then 1 else view.Size.X.Offset / view.Size.Y.Offset
+		local stage = HatchFx.stage(n, aspect)
+		local cx, cy = toPx(view.Position)
+		local viewH = view.Size.Y.Offset * VIDEO.Pixel
+		local k = (viewH / (2 * stage.Distance * TAN15)) / worldPx(D)
+		local frame = viewFrame(cam, D, cx, cy)
+		local capsule = CapsuleConfig.ById[h.Egg]
+		HatchFx.paint(fx, capsule.Shell or capsule.Color, color)
+		local rare = if order >= 5 then bestIndex else nil
+		local dimAlpha = ease(t / 0.15)
+		local tint, tintAmount = nil, 0
+		-- the eggs
+		for i, spot in stage.Spots do
+			if tt < tl.Burst[i] + HatchFx.BurstTime then
+				-- (calm: the viewport has no bloom; the preview's neon would glow over it)
+				local model = GolemBuilder.capsule(h.Egg, nil, { Calm = true })
+				local rec = HatchFx.record(model)
+				HatchFx.poseV2(rec, CF.new(spot), tt, tl, i, plan, color, single, i == rare)
+				place(model, frame, k)
+				model.Parent = parent
+			end
+		end
+		if single then
+			HatchFx.setLeak(fx, if tt >= tl.Fly and tt < tl.Burst[1] then tt - tl.Fly else nil, plan, color)
+		end
+		if tt >= tl.Burst[1] and tt < tl.Burst[1] + 0.3 then
+			Confetti.pose(fx.Shards, V2.new(0.5, 0.45), 5, tt - tl.Burst[1])
+		end
+		-- the flash (under the golems: the backdrop lights up), one per hatch
+		local flashAt = if single then tl.Pop[1] else tl.Burst[1]
+		if tt >= flashAt and tt < flashAt + RevealFx.FlashTime then
+			tint = RevealFx.palette(GolemConfig.ById[best].Rarity).Flash
+			tintAmount = 0.75 * (1 - ease((tt - flashAt) / RevealFx.FlashTime))
+		end
+		local suspenseAt = tl.Fly + tl.Shake
+		if rare and tt >= suspenseAt and tt < tl.Burst[1] then
+			-- (the rare egg gathers light: the backdrop darkens, its colour rises)
+			local glow = (tt - suspenseAt) / math.max(0.01, tl.Suspense)
+			tint, tintAmount = color, 0.25 * glow
+		end
+		local guis = { o.Gui }
+		-- the golems
+		local function heroGolem(kind: string, v: number, depth: number, isNew: boolean, z: number?)
+			local golem = GolemBuilder.build(kind)
+			local height = golem:GetAttribute("Height") or 3
+			local rootHeight = golem:GetAttribute("RootHeight") or 1
+			local rush = 1 / (2.4 - 1.4 * back(v / 0.35))
+			local hd = height * 2.9 + 1
+			local heroPx = o.Hero.Size.X.Offset * VIDEO.Pixel
+			local hk = (heroPx / (2 * hd * TAN15)) / worldPx(depth) * rush * HatchFx.popAt(v)
+			local hop = math.max(0, math.sin(math.clamp(v / 0.45, 0, 1) * math.pi)) * 0.6
+			local hx, hy = toPx(o.Hero.Position)
+			local hframe = viewFrame(cam, depth, hx, hy)
+			-- (the hero camera's 3/4 view: the golem turned, its middle on the frame)
+			local placeAt = hframe * CF.new(0, (hop - height / 2) * hk, 0) * CF.Angles(0, -0.32 + math.sin(v * 0.9) * 0.6, 0)
+			for _, d in golem:GetDescendants() do
+				if d:IsA("BasePart") then
+					local cf = d.CFrame
+					d.CFrame = placeAt * (CF.new((cf.Position - V3.new(0, 0, 0)) * hk) * (cf - cf.Position))
+					d.Size *= hk
+				end
+			end
+			golem.Parent = parent
+			-- RevealFx: its banner and headline (UI), its rays and glow (3D, behind)
+			local rarity = GolemConfig.ById[kind].Rarity
+			local revealSize = o.Hero.Size.X.Offset * 1.55
+			local handle = RevealFx.show("Golem", kind, rarity, {
+				Parent = o.Gui,
+				Center = o.Hero.Position,
+				Size = revealSize,
+				Chance = (function(): string
+					for _, line in CapsuleConfig.odds(h.Egg, false) do
+						if line.Golem == kind then
+							return EggPanel.chanceText(line.Chance)
+						end
+					end
+					return ""
+				end)(),
+				New = isNew,
+				ZIndex = z or 1,
+				Manual = true,
+				Flash = false,
+				Sound = false,
+				Shake = false,
+				Reduced = false,
+				Phone = false,
+			})
+			handle:pose(v)
+			for _, layer in handle.Layers do
+				layer.Visible = false
+			end
+			handle.Glow.Visible = false
+			local radius = (revealSize * VIDEO.Pixel / 2) / worldPx(depth + 1.6)
+			rays3d(parent, viewFrame(cam, depth + 1.6, hx, hy), radius, rarity, v)
+			if isNew then
+				Confetti.pose(fx.Confetti, V2.new(0.5, 0.5), 13, v)
+			end
+			if GolemConfig.order(kind) >= 6 and v < HatchFx.TintTime then
+				tint, tintAmount = CapsuleView.rarityColor(kind), 0.35 * (1 - v / HatchFx.TintTime)
+			end
+		end
+		if single then
+			if tt >= tl.Pop[1] then
+				heroGolem(h.Kinds[1], tt - tl.Pop[1], D, h.New[1] == true)
+			end
+		else
+			local size = V2.new(o.Stage.Size.X.Offset, o.Stage.Size.Y.Offset)
+			local origin = V2.new(o.Stage.Position.X.Offset, o.Stage.Position.Y.Offset) - size / 2
+			local jackpot = rare ~= nil and tt >= tl.JackpotAt and tt < tl.JackpotAt + tl.Jackpot
+			for i, kind in h.Kinds do
+				if tt >= tl.Pop[i] and not jackpot then
+					local v = tt - tl.Pop[i]
+					local golem = GolemBuilder.build(kind)
+					local height = golem:GetAttribute("Height") or 3
+					local rootHeight = golem:GetAttribute("RootHeight") or 1
+					local hop = math.max(0, math.sin(math.clamp(v / 0.4, 0, 1) * math.pi)) * 0.9
+					golem:PivotTo(
+						CF.new(stage.Spots[i] + V3.new(0, rootHeight - height / 2 + hop, 0)) * CF.Angles(0, HatchFx.StageTurn, 0)
+					)
+					place(golem, frame, k)
+					golem.Parent = parent
+					local cell = stage.Cells[i]
+					local center = origin + V2.new(cell.X * size.X, cell.Y * size.Y)
+					local cellPx = V2.new(stage.Cell.X * size.X, stage.Cell.Y * size.Y)
+					local tag = o.Tags[i]
+					local info = GolemConfig.ById[kind]
+					local rcolor = CapsuleView.rarityColor(kind)
+					tag.Frame.Position = UDim2.fromOffset(center.X, center.Y + cellPx.Y * 0.42)
+					tag.Frame.Size = UDim2.fromOffset(math.max(120, cellPx.X - 8), 52)
+					tag.Name.Text = info.Name
+					tag.Name.TextColor3 = if GolemConfig.order(kind) >= 4 then rcolor:Lerp(Color3.new(1, 1, 1), 0.35) else Color3.new(1, 1, 1)
+					for _, line in CapsuleConfig.odds(h.Egg, false) do
+						if line.Golem == kind then
+							tag.Chance.Text = EggPanel.chanceText(line.Chance)
+						end
+					end
+					tag.New.Visible = h.New[i] == true
+					tag.Frame.Visible = not jackpot
+					local s = Instance.new("UIScale")
+					s.Scale = 0.4 + 0.6 * back(v / 0.3)
+					s.Parent = tag.Frame
+					-- the rarity glow behind the golem (3D: a soft disc)
+					local disc = Instance.new("Part")
+					disc.Name = "TagGlow"
+					disc.Anchored = true
+					disc.Shape = Enum.PartType.Cylinder
+					disc.Material = Enum.Material.SmoothPlastic
+					disc.Color = rcolor
+					disc.Transparency = 0.6
+					local r = (cellPx.X * VIDEO.Pixel * 0.58) / worldPx(D + 1.4)
+					disc.Size = V3.new(0.05, r, r)
+					local gx, gy = toPx(UDim2.fromOffset(center.X, center.Y))
+					disc.CFrame = viewFrame(cam, D + 1.4, gx, gy) * CF.Angles(0, math.pi / 2, 0)
+					disc.Parent = parent
+					if i == bestIndex and order >= 3 then
+						local rr = (math.min(cellPx.X, cellPx.Y) * 1.25 * VIDEO.Pixel / 2) / worldPx(D + 1.6)
+						rays3d(parent, viewFrame(cam, D + 1.6, gx, gy), rr, info.Rarity, v)
+					end
+				end
+			end
+			if jackpot then
+				-- the batch's Legendary / Mythic: the stage dimmed, the golem big in front of it
+				plane(parent, cam, D - 1, Color3.fromRGB(8, 6, 12), 0.6)
+				local v = tt - tl.JackpotAt
+				heroGolem(h.Kinds[bestIndex], v, D - 4, h.New[bestIndex] == true, 4)
+				o.StageDim.Visible = false
+				for _, tag in o.Tags do
+					tag.Frame.Visible = false
+				end
+			end
+			o.Counter.Text = if jackpot then "" else `{n} EGGS`
+		end
+		-- the buttons: SKIP while it hatches, then OK and OPEN AGAIN
+		local ending = tt >= tl.Total
+		o.Skip.Parent.Visible = not ending
+		o.Ok.Parent.Visible = ending
+		o.Again.Parent.Visible = ending
+		o.Again.Text = h.Again
+		o.Hint.Text = if ending then "" elseif h.Fast then "Auto is on" else `Click or Space to skip{CapsuleView.Separator}Backspace: skip all`
+		o.Note.Text = ""
+		plane(parent, cam, D + 2.6, if tint then Color3.fromRGB(12, 8, 16):Lerp(tint, tintAmount) else Color3.fromRGB(10, 6, 13), 0.82 * dimAlpha)
+		-- the caption (the video's chapter, not the game's)
+		local cap = UIKit.screen("Caption", 50)
+		cap.IgnoreGuiInset = true
+		cap.Scale.Scale = 1
+		local label = UIKit.new("TextLabel", {
+			Name = "Caption",
+			BackgroundColor3 = rgb(0, 0, 0),
+			BackgroundTransparency = 0.35,
+			FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Bold),
+			Position = UDim2.fromOffset(20, 56),
+			Size = UDim2.fromOffset(460, 40),
+			Text = "  " .. h.Caption,
+			TextColor3 = rgb(255, 255, 255),
+			TextSize = 22,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, cap)
+		UIKit.corner(label, 10)
+		table.insert(guis, cap)
+		return guis
+	end
+
+	local shots = {}
+	local function segment(prefix: string, cam: Cam, h: Hatch2, extraEnd: number)
+		local best = CapsuleView.best(h.Kinds) or h.Kinds[1]
+		local tl = HatchFx.timeline(GolemConfig.order(best), #h.Kinds, h.Fast == true, false)
+		local total = tl.Total + extraEnd - (if h.Skip then tl.Burst[1] - h.Skip else 0)
+		local frames = math.floor(total * fps)
+		for i = 0, frames - 1 do
+			local t = i / fps
+			local extra = Instance.new("Model")
+			local guis = { UIKit.screen("Empty", 0) }
+			for _, gui in poseHatch2(extra, cam, t, h) do
+				table.insert(guis, gui)
+			end
+			local name = string.format("%s_%04d", prefix, i)
+			fs.writeFile(OUT .. "/" .. name .. "_fx.json", serde.encode("json", Export.collect(extra)))
+			fs.writeFile(OUT .. "/" .. name .. "_ui.json", serde.encode("json", UiExport.export(guis)))
+			shots[name] = {
+				scene = "egg_panel_base",
+				extra = "egg_panel/" .. name .. "_fx",
+				ui = "egg_panel/" .. name .. "_ui",
+				width = W,
+				height = H,
+				uiInset = 36,
+				position = { cam.Position.X, cam.Position.Y, cam.Position.Z },
+				target = { cam.Target.X, cam.Target.Y, cam.Target.Z },
+				fov = VIDEO.Fov,
+				preset = "Surface",
+				shadowExtent = 120,
+				sunDir = { front.X * 0.7 + right.X * 0.2, 0.68, front.Z * 0.7 + right.Z * 0.2 },
+			}
+		end
+		print(`{prefix}: {frames} frames ({total} s)`)
+	end
+	for product, id in royalIds do
+		product.Id = id
+	end
+	local _, cam = standAt("Stone", 18, 8)
+	local only = process.args[3] -- (one segment: a, b, c, d, e, f)
+	local list = {
+		{ "a", { Kinds = { "TinTumbler" }, New = { [1] = true }, Egg = "Stone", Again = "OPEN 1 AGAIN  $2,500", Caption = "1. Common: one egg" }, 0.8 },
+		{ "b", { Kinds = { "RoseKnight" }, New = { [1] = true }, Egg = "Stone", Again = "OPEN 1 AGAIN  $2,500", Caption = "2. Epic" }, 0.8 },
+		{
+			"c",
+			{ Kinds = { "HeartstoneColossus" }, New = { [1] = true }, Egg = "Crystal", Again = "OPEN 1 AGAIN  $750K", Caption = "3. Mythic: the jackpot" },
+			0.6,
+		},
+		{
+			"d",
+			{
+				Kinds = { "CopperTinker", "SilverSquire", "SapphireSage" },
+				New = { [3] = true },
+				Egg = "Stone",
+				Again = "OPEN 3 AGAIN  $7,500",
+				Caption = "4. Open 3",
+			},
+			0.8,
+		},
+		{
+			"e",
+			{
+				Kinds = {
+					"QuartzSprite",
+					"SilverSquire",
+					"EmberImp",
+					"JadeGardener",
+					"MoonstoneOracle",
+					"AmethystAcolyte",
+					"CobaltDiver",
+					"QuartzSprite",
+					"RoseKnight",
+					"SilverSquire",
+				},
+				New = { [5] = true, [9] = true },
+				Egg = "Crystal",
+				Again = "OPEN 10 AGAIN  $6.75M",
+				Caption = "5. Open 10 with a Legendary",
+			},
+			0.8,
+		},
+		{
+			"f",
+			{
+				Kinds = {
+					"PebbleGolem",
+					"CopperTinker",
+					"CoalChomper",
+					"PebbleGolem",
+					"TinTumbler",
+					"QuartzSprite",
+					"CopperTinker",
+					"JadeGardener",
+					"PebbleGolem",
+					"EmberImp",
+				},
+				New = {},
+				Egg = "Stone",
+				Fast = true,
+				Skip = 0.45,
+				Again = "OPEN 10 AGAIN  $22.5K",
+				Caption = "6. Auto (fast) + a tap to skip",
+			},
+			0.3,
+		},
+	}
+	for _, seg in list do
+		if not only or only == seg[1] then
+			segment("h2" .. seg[1], cam, seg[2] :: any, seg[3] :: number)
+		end
+	end
+	fs.writeFile(root .. "/build/preview/egg_hatch2_shots.json", serde.encode("json", shots))
+end

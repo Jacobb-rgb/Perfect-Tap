@@ -795,15 +795,16 @@ return function(T, Loader)
 		end
 		-- the controller: nothing shakes, flashes or nudges with Reduce motion
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		T.truthy(
-			string.find(source, "if Motion.reduced() or not HatchFx.flashOk(lastFlash, now) then", 1, true),
-			"flash: reduced and rate-limited"
-		)
-		local burst = string.match(source, "local function burst%(.-\nend\n")
-		T.truthy(burst, "the hatch")
-		local reducedAt = string.find(burst, "if Motion.reduced() then", 1, true)
-		local shakeAt = string.find(burst, "CameraShake.add", 1, true)
-		T.truthy(reducedAt and shakeAt and reducedAt < shakeAt, "Reduce motion returns before any shake")
+		-- (hatch v2: every flash asks RevealFx's one clock, which knows Reduce motion and the gap)
+		local reveal = fs.readFile(Loader.root .. "/src/client/Effects/RevealFx.luau")
+		T.truthy(string.find(reveal, "if Motion.reduced() or not RevealFx.flashOk(lastFlash, now) then", 1, true), "flash: reduced and rate-limited")
+		local hatch = string.match(source, "local function hatchV2%(.-\nend\n")
+		T.truthy(hatch, "the hatch")
+		for shake in string.gmatch(hatch, "[^\n]*CameraShake%.add[^\n]*") do
+			local at = string.find(hatch, shake, 1, true) or 0
+			local guard = string.sub(hatch, math.max(1, at - 400), at)
+			T.truthy(string.find(guard, "not reduced", 1, true), "no shake with Reduce motion: " .. shake)
+		end
 	end)
 
 	T.test("HatchFx: golems stay SOLID (nothing see-through over them, the glow behind)", function()
@@ -821,16 +822,18 @@ return function(T, Loader)
 		T.truthy(HatchFx.BurstTime >= 0.45, "the break's flash (0.45 s) has faded when the golem pops")
 		-- the controller: no flash over a golem (the reveal, the grid); the aura pulses behind instead
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		local reveal = string.match(source, "local function reveal%(.-\nend\n")
-		local grid = string.match(source, "local function showGrid%(.-\nend\n")
-		T.truthy(reveal and grid, "the reveal and the grid")
+		-- (hatch v2: the hero's reveal and the stage's golems; RevealFx's rays, glow and flash UNDER them)
+		local reveal = string.match(source, "local function revealHero%(.-\nend\n")
+		local grid = string.match(source, "local function standGolems%(.-\nend\n")
+		T.truthy(reveal and grid, "the reveal and the stage")
 		local code = function(text: string): string
 			return (string.gsub(text, "%-%-[^\n]*", ""))
 		end
-		T.falsy(string.find(code(reveal), "flash(", 1, true), "no flash over the revealed golem")
-		T.falsy(string.find(code(grid), "flash(", 1, true), "no flash over the grid's golems")
+		T.falsy(string.find(code(source), "o.Flash", 1, true), "the full-screen flash (over everything) is never used")
 		T.truthy(string.find(reveal, "o.Hero.ImageTransparency = 0", 1, true), "the golem's view made opaque")
-		T.truthy(string.find(reveal, "HatchFx.pulseAura(fx)", 1, true), "its glow bursts out behind it")
+		T.truthy(string.find(reveal, "RevealFx.show(", 1, true), "its rarity glows behind it (RevealFx)")
+		T.truthy(string.find(source, "RevealFx.flash(o.Gui, color:Lerp(Color3.new(1, 1, 1), 0.45), 0.85, 2)", 1, true), "the batch's flash under the stage")
+		T.truthy(o.Stage.ZIndex > 2 and o.Hero.ZIndex > 2, "the flash (ZIndex 2) under the stage and the hero")
 		-- the grid's golems: every picture opaque
 		CapsuleView.setGrid(o, { "PebbleGolem", "HeartstoneColossus", "RoseKnight" }, { [2] = true }, 2)
 		for _, cell in o.Cells do
@@ -1019,6 +1022,18 @@ return function(T, Loader)
 						end
 					end
 				end
+			end
+		end
+		-- 568 x 320: Grab and FIRE step aside for the narrow panel (EggPanelController.TinyWidth): every odd shows
+		for _, inset in { 36, 58 } do
+			local tiny, tinyScale, input = touchScreen(Vector2.new(568, 320), inset)
+			input.Held = { Grab = true, Fire = true }
+			tiny = EggPanel.screen(input)
+			T.eq(#tiny.Keep - #input.Hud, 1, "only Jump left of the touch buttons (the HUD's boxes stay)")
+			for _, id in TEMPLE do
+				local f = floatOn(tiny, tinyScale, id, Vector2.new(284, 160))
+				T.eq(f.Fit.Hard, 0, `568 {id}: the row clear`)
+				T.eq(f.Fit.Odds, 0, `568 {id} (inset {inset}): with Grab and FIRE held, every odd visible`)
 			end
 		end
 		-- the narrow layout: its row on top, right-aligned, still 44 pt; the cards under it
@@ -1370,6 +1385,20 @@ return function(T, Loader)
 				end,
 			},
 			{
+				C0,
+				"holdTouch",
+				function(on)
+					table.insert(w.holds, { "Touch", on })
+				end,
+			},
+			{
+				CapsuleController,
+				"showing",
+				function()
+					return w.opening == "Playing" or w.opening == "End"
+				end,
+			},
+			{
 				CapsuleController,
 				"buy",
 				function(id, count, lucky, quiet)
@@ -1430,7 +1459,7 @@ return function(T, Loader)
 				HudController,
 				"uiScale",
 				function()
-					return 1
+					return w.scale or 1
 				end,
 			},
 			{
@@ -1832,25 +1861,17 @@ return function(T, Loader)
 		end
 		-- the controller: calm eggs for many on a phone; no flash left over the golem after a skip-all
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		T.truthy(string.find(source, "takeEggs(capsuleId, n, n > 3 and compactNow())", 1, true), "Open 10 on a phone: calm eggs")
-		for _, name in { "reveal", "showGrid" } do
-			local fn = string.match(source, "local function " .. name .. "%(.-\nend\n")
-			T.truthy(fn and string.find(fn, "noFlash(o)", 1, true), name .. ": the break's flash cut")
-		end
-		local cut = string.match(source, "local function noFlash%(.-\nend\n")
-		T.truthy(
-			cut and string.find(cut, "flashTween:Cancel()", 1, true) and string.find(cut, "o.Flash.BackgroundTransparency = 1", 1, true)
-		)
+		T.truthy(string.find(source, "takeEggs(result.Capsule, n, n > 3 and compactNow())", 1, true), "Open 10 on a phone: calm eggs")
 	end)
 	-- A camera for the controller (Lune has none): every point at `w.camZ` deep, on the screen when in front.
 	local function fakeCamera(w: any): any
 		local CFrame = Loader.CFrame
 		return {
-			ViewportSize = Vector2.new(667, 375),
+			ViewportSize = w.view or Vector2.new(667, 375),
 			CFrame = CFrame.new(),
 			WorldToViewportPoint = function(_, p)
 				local x = 333 + math.clamp(p.X - w.camAt.X, -5, 5) * 4
-				return Vector3.new(x, 190, w.camZ), w.camZ > 0
+				return Vector3.new(x, w.camY or 190, w.camZ), w.camZ > 0
 			end,
 		}
 	end
@@ -1858,6 +1879,8 @@ return function(T, Loader)
 	T.test("EggPanelController: no keys with the panel off the screen; Auto's badge rests while the panel is focused", function()
 		withController(function(C, w)
 			w.gamepad = true
+			-- (PC: the panel over the egg, its card rows on a 1280 x 900 screen)
+			w.view, w.camY = Vector2.new(1280, 900), 700
 			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
 			w.camZ, w.camAt = 10, Vector3.zero
 			w.at("Stone")
@@ -1905,6 +1928,7 @@ return function(T, Loader)
 				end
 			end
 			local bubble = box(467, 64, 658, 172) -- (TutorialView's touch bubble on 667 x 375)
+			w.scale = 0.62 -- (a phone's HUD scale)
 			patched({ { C, "screenInput", screenWith(nil, bubble) } }, function()
 				w.touch = true
 				w.at("Stone")

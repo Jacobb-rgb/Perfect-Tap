@@ -88,6 +88,27 @@ local hint: Frame
 local hintIcon: ImageLabel
 local hintText: TextLabel
 
+local fireHolds: { [string]: boolean } = {}
+--[[
+	Another view needs the touch FIRE button's place for a while (`name`
+	holds it, `on` false lets go): it hides meanwhile. The EGGS temple's
+	floating egg panel on the smallest phones (568 x 320): FIRE would cover
+	a card's odds there; there's no rock to blast at an egg.
+]]
+function MiningController.hold(name: string, on: boolean)
+	if on then
+		fireHolds[name] = true
+	else
+		fireHolds[name] = nil
+	end
+	if fireHolder then
+		local touchGui = fireHolder.Parent
+		if on and touchGui and touchGui:IsA("ScreenGui") then
+			touchGui.Enabled = false
+		end
+	end
+end
+
 function MiningController.setBusy(value: boolean)
 	busy = value
 	if value then
@@ -792,7 +813,7 @@ local function slowUpdate()
 	updateFocus(someTool)
 	updateHint(near and someTool ~= nil and (aimRock ~= nil or device ~= "Mouse"))
 	local touchGui = fireHolder.Parent :: ScreenGui
-	touchGui.Enabled = device == "Touch" and canUse() and someTool ~= nil and (tool ~= nil or near)
+	touchGui.Enabled = device == "Touch" and canUse() and someTool ~= nil and (tool ~= nil or near) and next(fireHolds) == nil
 end
 
 function MiningController.init()
