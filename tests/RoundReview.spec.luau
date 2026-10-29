@@ -398,7 +398,19 @@ return function(T, Loader)
 	T.test("RoundReview: on the smallest touch phones the TRAIN chip keeps off the touch buttons and the boost corner", function()
 		inRound(function()
 			local TutorialView = ui("TutorialView")
-			for _, size in { { 568, 320 }, { 600, 320 }, { 600, 340 }, { 620, 350 }, { 640, 320 }, { 640, 360 }, { 654, 334 } } do
+			for _, size in
+				{
+					{ 533, 300 },
+					{ 568, 320 },
+					{ 600, 320 },
+					{ 600, 340 },
+					{ 620, 350 },
+					{ 640, 320 },
+					{ 640, 360 },
+					{ 654, 334 },
+					{ 699, 343 },
+				}
+			do
 				for _, inset in { 36, 58 } do
 					local where = `{size[1]} x {size[2]} (inset {inset})`
 					local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
@@ -415,7 +427,11 @@ return function(T, Loader)
 					for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
 						local r = { w - b.Left / scale, h - b.Top / scale, w - b.Right / scale, h - b.Bottom / scale }
 						buttons[b.Name] = r
-						T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
+						-- (from 568 x 320 up, the smallest phone Roblox runs on: under it the tiles, the
+						-- chip and FIRE can't all fit in the top half)
+						if size[1] >= 568 then
+							T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
+						end
 					end
 					-- (review 2026-10-29) where it reaches the floaters' band over the money or the toasts'
 					-- column, it draws under the HUD: those stay readable over it
@@ -438,8 +454,17 @@ return function(T, Loader)
 					local bubble = TutorialView.layout(scale, gui, true)
 					local bubbleRect =
 						{ Left = bubble.Position.X - bubble.Width, Top = bubble.Position.Y, Bottom = bubble.Position.Y + bubble.Height }
+					-- the bubble's SKIP and GOT IT (TutorialView.apply: the row at its bottom right)
+					local bLeft, bTop = bubble.Position.X - bubble.Width, bubble.Position.Y
+					local rowY = bTop + TutorialView.Head + bubble.BodyHeight + TutorialView.Gap + 5
+					local skipLeft = bLeft + bubble.Width - 12 - TutorialView.SkipWidth
+					local ackLeft = skipLeft - 8 - TutorialView.AckWidth
+					local bubbleButtons = {
+						Skip = { skipLeft, rowY, skipLeft + TutorialView.SkipWidth, rowY + bubble.RowHeight },
+						Ack = { ackLeft, rowY, ackLeft + TutorialView.AckWidth, rowY + bubble.RowHeight },
+					}
 					for _, count in { 1, 2 } do
-						local right, bottom, stacked = BoostView.cornerSpot({
+						local right, bottom, stacked, spot = BoostView.cornerSpot({
 							Screen = Vector2.new(size[1], size[2]),
 							Gui = gui,
 							Scale = scale,
@@ -457,6 +482,13 @@ return function(T, Loader)
 							T.falsy(overlap(corner, r), `{where}: the boost corner ({count}) clear of {name}`)
 						end
 						T.truthy(corner[2] >= 0, `{where}: the boost corner ({count}) on the screen`)
+						-- (review 2026-10-29) the bubble's buttons stay tappable: the corner never covers them,
+						-- or it waits while the bubble shows (BoostController hides an "OverBubble" corner)
+						if spot ~= "OverBubble" then
+							for name, r in bubbleButtons do
+								T.falsy(overlap(corner, r), `{where}: the boost corner ({count}) clear of the bubble's {name}`)
+							end
+						end
 					end
 					refs.Gui:Destroy()
 				end
@@ -465,6 +497,8 @@ return function(T, Loader)
 			T.eq(HudBubble.BoostColumnRoom, 2 * BoostView.CornerGap + BoostView.CornerWidth, "the corner column's room")
 			T.eq(HudBubble.TutorialBarGap, TutorialView.BarGap, "the tutorial bubble's gap")
 			T.eq(BoostView.TouchButtons, HudBubble.TouchButtons, "one table of touch buttons")
+			local controller = require("@lune/fs").readFile(Loader.root .. "/src/client/Controllers/BoostController.luau")
+			T.truthy(controller:find('covering = spot == "OverBubble"', 1, true), "the corner waits while it would cover the bubble")
 		end)
 	end)
 end

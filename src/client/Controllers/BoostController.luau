@@ -174,7 +174,7 @@ end
 -- The light HUD's boost corner (bottom right, BoostView.cornerSpot), measured in the
 -- chips' gui (inside the safe insets): clear of the touch jump and Grab buttons, the
 -- phone's Shop pill and the touch tutorial bubble, over the mouse tutorial card.
-local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, number, boolean)
+local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, number, boolean, string)
 	local camera = Workspace.CurrentCamera
 	local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local scale = math.max(HudController.uiScale(), 0.01)
@@ -213,7 +213,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		local r = rectIn(trainGui, trainChip, scale)
 		chipRect = { Left = r.Left, Top = r.Top or r.Bottom, Right = r.Left + trainChip.AbsoluteSize.X / scale, Bottom = r.Bottom }
 	end
-	local right, bottom, stacked = BoostView.cornerSpot({
+	local right, bottom, stacked, spot = BoostView.cornerSpot({
 		Screen = screen,
 		Gui = gui,
 		Scale = scale,
@@ -226,7 +226,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		Avoid = offersRect,
 		Chip = chipRect,
 	})
-	return right, bottom, stacked
+	return right, bottom, stacked, spot
 end
 
 local function coins(): number
@@ -330,20 +330,25 @@ end
 -- The chips hide with the HUD, while a panel is open (a wide panel would
 -- cut them off; the Boosts panel shows the same timers) and while the touch
 -- side menu's grid is open in their place (BoostView.chipsVisible). They stay
--- under the train chip, whatever size it has.
+-- under the train chip, whatever size it has. The light build's corner also
+-- waits while the touch tutorial's bubble shows and no spot clears it (the
+-- smallest phones with two boosts: "OverBubble" would cover its SKIP).
 local function refreshChips()
 	local chips = chipRefs
 	if not chips then
 		return
 	end
-	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen()) and next(holds) == nil
 	local running = BoostView.chips(StateController.get(), serverNow())
+	local covering = false
 	if chips.Row:GetAttribute("Corner") == true then
-		BoostView.placeCorner(chips, cornerSpot(chips, #running))
+		local right, bottom, stacked, spot = cornerSpot(chips, #running)
+		covering = spot == "OverBubble"
+		BoostView.placeCorner(chips, right, bottom, stacked)
 	else
 		local train = trainChip()
 		BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
 	end
+	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen()) and next(holds) == nil and not covering
 	BoostView.setChips(chips, running, launcherOn)
 end
 
