@@ -86,6 +86,7 @@
 local BlasterData = require(script.Parent.BlasterData)
 local EnchantConfig = require(script.Parent.EnchantConfig)
 local ItemData = require(script.Parent.ItemData)
+local SecretOreConfig = require(script.Parent.SecretOreConfig)
 
 export type Perk = {
 	Id: string,
@@ -471,19 +472,22 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	stats.RunPaid = false
 	-- (RebirthService writes the income the factory kept, once the plot is back: runIncomeOf)
 	stats.RunIncome = 0
-	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper)
+	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper);
+	-- SECRET ores stay too (owner 2026-10-29: "Zůstanou"): from the pen, the train and the
+	-- machines into the pen, in the backpack and on the podiums where they are
 	local relics = {}
 	local function keepRelics(list: any)
 		if type(list) == "table" then
 			for _, item in list do
-				if type(item) == "table" and item.K == "Relic" and type(item.O) == "string" then
-					table.insert(relics, { K = "Relic", O = item.O, G = item.G, R = item.R })
+				if type(item) == "table" and type(item.O) == "string" and (item.K == "Relic" or SecretOreConfig.isSecret(item.O)) then
+					table.insert(relics, { K = item.K, O = item.O, G = item.G, R = item.R })
 				end
 			end
 		end
 	end
 	keepRelics(data.Storage)
-	-- the backpack keeps counts by storage key: its relics wait in the pen too
+	-- the backpack keeps counts by storage key: its relics wait in the pen, its secret ores stay in it
+	local backpackKept: { [string]: number } = {}
 	if type(data.BackpackItems) == "table" then
 		for key, n in data.BackpackItems do
 			local item = if type(key) == "string" then ItemData.parseStoredKey(key) else nil
@@ -491,6 +495,8 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 				for _ = 1, math.min(math.floor(n), 1000) do
 					table.insert(relics, { K = "Relic", O = item.O, G = item.G, R = item.R })
 				end
+			elseif item and SecretOreConfig.isSecret(item.O) and type(n) == "number" and n == n and n >= 1 then
+				backpackKept[key :: string] = math.floor(n)
 			end
 		end
 	end
@@ -540,10 +546,11 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	train.TripArriveAt = 0
 	-- every ore you own (the factory itself stays where it stands; the packs stay too)
 	data.Storage = relics
-	data.BackpackItems = {}
+	data.BackpackItems = backpackKept
 	if RebirthConfig.levelOf(perks, "PodiumKeeper") < 1 and type(data.Podiums) == "table" then
 		for i, key in data.Podiums do
-			if type(key) == "string" then
+			local item = if type(key) == "string" then ItemData.parseStoredKey(key) else nil
+			if type(key) == "string" and not (item and SecretOreConfig.isSecret(item.O)) then
 				data.Podiums[i] = ""
 			end
 		end

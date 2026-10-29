@@ -639,9 +639,13 @@ function BoostView.secretRows(zoneId: string?, luckBefore: number, luckAfter: nu
 	if not floor then
 		return rows
 	end
-	for _, secret in SecretOreConfig.forFloor(floor.Id) do
+	local list = SecretOreConfig.forFloor(floor.Id)
+	table.sort(list, function(a, b)
+		return a.OneIn > b.OneIn -- the rarest first
+	end)
+	for _, secret in list do
 		local row = BoostView.row(
-			"??? Secret",
+			"??? Secret " .. string.rep("★", secret.Stars),
 			Rarity.get("Secret").Color,
 			SecretOreConfig.chance(secret, luckBefore),
 			SecretOreConfig.chance(secret, luckAfter)
@@ -703,8 +707,9 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 				table.insert(rows, row)
 			end
 		end
-		for _, row in BoostView.secretRows(zone.Id, without, with) do
-			table.insert(rows, row)
+		-- the SECRET ores on top: the rarest first, like every row under them
+		for k, row in BoostView.secretRows(zone.Id, without, with) do
+			table.insert(rows, k, row)
 		end
 		local before = BoostConfig.rareShare(weights, without)
 		local crystalBefore = if crystal then BoostConfig.rareShare(crystal, without) else 0

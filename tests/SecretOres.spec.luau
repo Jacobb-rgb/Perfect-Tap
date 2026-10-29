@@ -177,9 +177,12 @@ return function(T, Loader)
 		for _, floor in MineFloors.List do
 			local rows = BoostView.secretRows(floor.ZoneId, 1, 4)
 			local own = SecretOreConfig.forFloor(floor.Id)
-			T.eq(#rows, #own, floor.Id .. ": one row per secret it can turn into")
+			table.sort(own, function(a, b)
+				return a.OneIn > b.OneIn
+			end)
+			T.eq(#rows, #own, floor.Id .. ": one row per secret it can turn into, the rarest first")
 			for k, row in rows do
-				T.eq(row.Name, "??? Secret", floor.Id .. ": the name hidden")
+				T.eq(row.Name, "??? Secret " .. string.rep("★", own[k].Stars), floor.Id .. ": the name hidden, its stars shown")
 				T.eq(row.Before, SecretOreConfig.oddsText(own[k], 1), floor.Id .. ": the chance now")
 				T.eq(row.After, SecretOreConfig.oddsText(own[k], 4), floor.Id .. ": the chance with the luck")
 			end

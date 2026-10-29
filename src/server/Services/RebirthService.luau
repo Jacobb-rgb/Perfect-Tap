@@ -68,6 +68,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local PromptConfig = require(Shared.Config.PromptConfig)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local BlasterData = require(Shared.Config.BlasterData)
@@ -209,10 +210,11 @@ local function doRebirth(player: Player, data: { [string]: any }): (number, numb
 		PodiumService.settleOffline(player)
 		-- every item the player owns leaves the world (the unload above already
 		-- stashed the vise ore: the reset empties the pen with it); a dusty
-		-- relic is an artifact: stashed (the relic keeper adds it to the collection)
+		-- relic is an artifact: stashed (the relic keeper adds it to the collection);
+		-- a SECRET ore is stashed too: the reset keeps it in the pen (owner 2026-10-29)
 		for _, record in ItemService.ownedBy(player.UserId) do
 			if record.State ~= "Consumed" then
-				if record.Kind == "Relic" then
+				if record.Kind == "Relic" or SecretOreConfig.isSecret(ItemService.descOf(record).O) then
 					ItemService.stash(record, nil)
 				else
 					ItemService.destroy(record)

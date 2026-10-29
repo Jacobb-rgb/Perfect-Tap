@@ -118,6 +118,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local MenuPanel = Loader.requirePath(UI .. "MenuPanel")
 	local SideMenuView = Loader.requirePath(UI .. "SideMenuView")
 	local CodexView = Loader.requirePath(UI .. "CodexView")
+	local SecretOreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SecretOreConfig")
 	local SettingsView = Loader.requirePath(UI .. "SettingsView")
 	local LeaderboardView = Loader.requirePath(UI .. "LeaderboardView")
 
@@ -257,12 +258,16 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_menu_column_small_open = UiExport.export(column(smallScale, PHONE, smallDesignH, true))
 
 	-- the codex
-	local function codex(renderScale: number, compact: boolean, maxW: number, maxH: number, select: string): any
+	local function codex(renderScale: number, compact: boolean, maxW: number, maxH: number, select: string, found: any?): any
 		local refs = CodexView.build(compact)
 		refs.Gui.Scale.Scale = renderScale
 		refs.Gui.Enabled = true
 		CodexView.layout(refs, compact, maxW, maxH)
-		local entries = CodexView.entries(discovered, Preview.Fresh)
+		local entries = CodexView.entries(found or discovered, Preview.Fresh)
+		-- the SECRET ores' cards after the 36 (as CodexController does)
+		for _, entry in CodexView.secretEntries(found or discovered, Preview.Fresh) do
+			table.insert(entries, entry)
+		end
 		CodexView.setEntries(refs, entries)
 		for _, entry in entries do
 			if entry.Ore.Id == select then
@@ -270,10 +275,30 @@ function Preview.build(Loader: any): { [string]: any }
 			end
 		end
 		MenuPanel.setHint(refs.Frame, "Click an ore to read about it · Backspace: close", nil)
+		if found then
+			-- the secret shots: live 3D pictures of the secret ores (no icon files for them) and the
+			-- grid scrolled down to their cards, after the 36
+			for _, d in refs.Gui:GetDescendants() do
+				if d:IsA("ViewportFrame") and SecretOreConfig.isSecret(d:GetAttribute("Ore")) then
+					d:SetAttribute("PreviewLive", true)
+				elseif d:IsA("ScrollingFrame") then
+					local canvas = d.CanvasSize.Y.Offset
+					local shown = d.Size.Y.Offset
+					if canvas > shown and shown > 0 then
+						d.CanvasPosition = Vector2.new(0, canvas - shown)
+					end
+				end
+			end
+		end
 		return refs
 	end
 	exports.ui_codex = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Bronze").Gui })
 	exports.ui_codex_hidden = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Heartstone").Gui })
+	-- the secret ores: a found one (Hollow Eye) and a hidden one (??? and its chance)
+	local withSecret = table.clone(discovered)
+	withSecret.HollowEye = true
+	exports.ui_codex_secret = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "HollowEye", withSecret).Gui })
+	exports.ui_codex_secret_hidden = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "RainbowNova", withSecret).Gui })
 	exports.ui_codex_phone = UiExport.export({
 		hud(phoneScale, PHONE).Gui,
 		menu(phoneScale, PHONE, phoneDesignH).Gui,

@@ -11,6 +11,8 @@ return function(T, Loader)
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local SellView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SellView")
+	local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 	local SecretRevealController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.SecretRevealController")
 
 	-- runs `fn` with Net's fire / fireAll and SecretService's hooks swapped for recorders
@@ -215,6 +217,35 @@ return function(T, Loader)
 		T.eq(rest.Count, 0, "the secret Nova is not sold")
 		-- the wheel's ore prize follows the player's best ore, not a jackpot
 		T.eq(WheelConfig.bestIncome({ Coal = true, RainbowNova = true }), OreData.get("Coal").Income, "no secret prize")
+	end)
+
+	T.test("secret ores: a rebirth keeps exactly the secret ores, where they are (owner: Zůstanou)", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BlasterLevel = 8
+		data.Storage = {
+			{ K = "Raw", O = "HollowEye" },
+			{ K = "Clean", O = "Coal", G = "Rough" },
+			{ K = "Clean", O = "RainbowNova", G = "Flawless" },
+		}
+		data.BackpackItems = { ["Clean|TidecrownPearl|Flawless|"] = 2, ["Raw|Coal||"] = 5 }
+		data.Podiums = { "Clean|HeartOfTerra|Flawless|", "Clean|Gold|Rough|", "", "", "" }
+		data.Train.Cargo = { { K = "Raw", O = "CagedLightning" }, { K = "Raw", O = "Tin" } }
+		data.Discovered = { HollowEye = true, Coal = true }
+		data.Stats.SecretsFound = 4
+		RebirthConfig.reset(data)
+		local pen = {}
+		for _, item in data.Storage do
+			table.insert(pen, item.K .. "|" .. item.O)
+		end
+		table.sort(pen)
+		T.eq(table.concat(pen, ","), "Clean|RainbowNova,Raw|CagedLightning,Raw|HollowEye", "the pen: its secrets + the train's")
+		T.eq(data.BackpackItems["Clean|TidecrownPearl|Flawless|"], 2, "the backpack's secrets stay in it")
+		T.eq(data.BackpackItems["Raw|Coal||"], nil, "the rest of the backpack goes")
+		T.eq(data.Podiums[1], "Clean|HeartOfTerra|Flawless|", "a secret stays on its podium")
+		T.eq(data.Podiums[2], "", "other podiums empty")
+		T.eq(#data.Train.Cargo, 0, "the train is empty")
+		T.truthy(data.Discovered.HollowEye, "still discovered")
+		T.eq(data.Stats.SecretsFound, 4, "the count stays")
 	end)
 
 	T.test("secret ores: a v9 save holding secrets comes to v10 with them all kept", function()
