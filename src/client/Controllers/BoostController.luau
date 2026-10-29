@@ -205,6 +205,14 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 	if hud and offers and offers:IsA("GuiObject") and offers.Visible then
 		offersRect = rectIn(hud.Gui, offers, scale)
 	end
+	-- (the round look's TRAIN chip beside the tiles on the smallest phones: the corner keeps off it)
+	local trainGui = if playerGui then playerGui:FindFirstChild("TerraForgeTrain") else nil
+	local trainChip = if trainGui then trainGui:FindFirstChild("TrainChip", true) else nil
+	local chipRect: BoostView.ChipRect? = nil
+	if trainGui and trainGui:IsA("ScreenGui") and trainGui.Enabled and trainChip and trainChip:IsA("GuiObject") and trainChip.Visible then
+		local r = rectIn(trainGui, trainChip, scale)
+		chipRect = { Left = r.Left, Top = r.Top or r.Bottom, Right = r.Left + trainChip.AbsoluteSize.X / scale, Bottom = r.Bottom }
+	end
 	local right, bottom, stacked = BoostView.cornerSpot({
 		Screen = screen,
 		Gui = gui,
@@ -216,6 +224,7 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		Bubble = bubbleRect,
 		Pill = pillRect,
 		Avoid = offersRect,
+		Chip = chipRect,
 	})
 	return right, bottom, stacked
 end

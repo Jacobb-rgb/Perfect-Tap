@@ -136,7 +136,9 @@ export type Layout = {
 	Top: number?, -- the tiles' top (design units under Roblox's top bar)
 	Chip: ("Under" | "Beside")?, -- the TRAIN chip under the tiles (as wide as them) or beside the last row
 	ChipStack: boolean?, -- under them on a mouse or a TV: TrainView's stacked chip (the block's width)
-	ChipCap: number?, -- beside them on touch: the chip ends here (the top row's right end: the tutorial bubble's left)
+	ChipCap: number?, -- beside them on touch: the chip ends here (left of the boost column beside the tutorial bubble)
+	ChipY: number?, -- beside them on touch: the chip's top (lifted over the touch buttons under it)
+	ChipGap: number?, -- under them squeezed (the smallest phones): the gap over the chip
 }
 
 HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
@@ -527,11 +529,48 @@ HudBubble.RoundMenuTop = 140
 HudBubble.RoundMenuLeft = 10
 
 HudBubble.StackChipHeight = 104 -- TrainView's stacked chip (under the round look's tiles on a mouse or a TV)
-HudBubble.StackChipHeightTv = 130 -- the stacked chip on a TV (bigger words, the line on two rows)
+HudBubble.StackChipHeightTv = 144 -- the stacked chip on a TV (the name and the line on two rows each)
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
 HudBubble.RoundTouchColumns = { 5, 4 } -- touch: the tries, the first that fits wins
+HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
+HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
+-- BoostView's corner column beside the touch tutorial bubble: CornerGap + CornerWidth + CornerGap
+HudBubble.BoostColumnRoom = 14 + 72 + 14
+
+--[[
+	The touch buttons in the phone's bottom right, in px from the gui's bottom-right corner
+	(left, top, right, bottom edges; small = the shorter screen side 500 px or less): Roblox's
+	jump, the game's Grab and FIRE (BoostView.TouchButtons is this table; the LightUI spec
+	reads InteractController / MiningController to keep it in step. Grab: Roblox draws CAS
+	buttons 45 px, 35 on a 320 px screen; 70 / 90 here is on the safe side.)
+]]
+HudBubble.TouchButtons = {
+	Small = {
+		{ Name = "Jump", Left = 95, Top = 90, Right = 25, Bottom = 20 }, -- Roblox's jump button
+		{ Name = "Grab", Left = 170, Top = 150, Right = 100, Bottom = 80 }, -- InteractController: SetPosition(1, -170, 1, -150)
+		-- MiningController: an 88 px holder centred at (1, -240, 1, -100), its face lifted 5 px (top 149)
+		{ Name = "Fire", Left = 284, Top = 149, Right = 196, Bottom = 56 },
+	},
+	Large = {
+		{ Name = "Jump", Left = 170, Top = 210, Right = 50, Bottom = 90 },
+		{ Name = "Grab", Left = 170, Top = 150, Right = 80, Bottom = 60 },
+		{ Name = "Fire", Left = 368, Top = 203, Right = 252, Bottom = 82 }, -- 116 px centred at (1, -310, 1, -140), lifted 5
+	},
+} :: { [string]: { { Name: string, Left: number, Top: number, Right: number, Bottom: number } } }
+
+-- The touch buttons as boxes in a gui `width` x `height` design units at `uiScale` (small: the
+-- shorter screen side, `height` plus Roblox's top bar, 500 pt or less).
+function HudBubble.touchButtonBoxes(width: number, height: number, uiScale: number): { { number } }
+	local s = math.max(uiScale, 0.01)
+	local small = math.min(width * s, height * s + HudBubble.PreviewInset) <= 500
+	local boxes = {}
+	for _, b in HudBubble.TouchButtons[if small then "Small" else "Large"] do
+		table.insert(boxes, { width - b.Left / s, height - b.Top / s, width - b.Right / s, height - b.Bottom / s })
+	end
+	return boxes
+end
 HudBubble.RoundColumns = { 2, 3, 4, 5 } -- a mouse or a TV: the tries (two: the owner's tall block)
 
 -- The stacked TRAIN chip's height on this layout (TrainView mirrors it: CHIP.Stack / CHIP.StackTv).
@@ -569,9 +608,13 @@ end
 	               (TouchChipHeight) under them as wide as them
 	  no fit       (the smallest screens) the tiles at the top, as many a row as
 	               stay left of the top row at their size (touch: never under
-	               44 pt), the chip beside their last row; on touch it ends at
-	               the top row's right end (ChipCap: the tutorial bubble's
-	               left, TutorialView.layout)
+	               44 pt), the chip beside their last row. Touch: squeezed
+	               under them (44 pt tiles, a small gap) when they are wide
+	               enough for the chip and it ends above the money; else
+	               beside, lifted over the touch buttons under it (FIRE,
+	               Grab, Jump: TouchButtons) and ending left of the boost
+	               column that stands beside the tutorial bubble (ChipCap,
+	               ChipY; TutorialView.layout, BoostView.cornerSpot)
 ]]
 function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	local count = #HudBubble.RoundMenu
@@ -580,7 +623,7 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	local floor = HudBubble.roundFloor(layout, height)
 	local gap = layout.TileGap
 	local stackH = HudBubble.stackChipHeight(layout)
-	layout.ChipCap = nil
+	layout.ChipCap, layout.ChipY, layout.ChipGap = nil, nil, nil
 	local function wide(columns: number, tile: number): number
 		return columns * tile + (columns - 1) * gap
 	end
@@ -630,10 +673,38 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	end
 	layout.Columns, layout.Tile, layout.Top = columns, tile, HudBubble.MenuTop
 	layout.Chip, layout.ChipStack = "Beside", false
-	if layout.Touch then
-		-- (the touch tutorial's bubble starts right of the top row: the chip stops under its end)
-		layout.ChipCap = layout.Width / 2 + HudBubble.topBarSize(layout).X / 2
+	if not layout.Touch then
+		return
 	end
+	local rows = math.ceil(count / columns)
+	-- squeezed under the tiles: 44 pt tiles from 4 units down, the chip 4 under them, above the money
+	local _, _, money = HudBubble.moneySize(layout)
+	local moneyTop = height - money - (if layout.Compact then 22 else 12)
+	local squeezeTop, squeezeGap = 4, 4
+	local roomTile = math.floor((moneyTop - 1 - HudBubble.TouchChipHeight - squeezeGap - squeezeTop - (rows - 1) * gap) / rows)
+	local squeezed = math.min(tile, roomTile)
+	local minTile = math.ceil(44 / math.max(uiScale, 0.01))
+	if squeezed >= minTile and wide(columns, squeezed) >= HudBubble.TouchChipMinWidth then
+		layout.Tile, layout.Top = squeezed, squeezeTop
+		layout.Chip, layout.ChipGap = "Under", squeezeGap
+		return
+	end
+	-- beside: it ends left of the boost column beside the tutorial bubble (which starts right of
+	-- the top row) and rises over the touch buttons under it, never into the top row
+	local barRight = layout.Width / 2 + HudBubble.topBarSize(layout).X / 2
+	local cap = barRight + HudBubble.TutorialBarGap - HudBubble.BoostColumnRoom
+	layout.ChipCap = cap
+	local chipLeft = left + wide(columns, tile) + HudBubble.ChipGap
+	local chipRight = math.min(chipLeft + HudBubble.TouchChipWidth, cap)
+	local chipH = HudBubble.TouchChipHeight
+	local chipTop = HudBubble.MenuTop + rows * tile + (rows - 1) * gap - math.max(tile, chipH)
+	for _, b in HudBubble.touchButtonBoxes(layout.Width, height, uiScale) do
+		if chipLeft < b[3] and b[1] < chipRight and chipTop + chipH > b[2] - 6 then
+			chipTop = b[2] - 6 - chipH
+		end
+	end
+	local barBottom = HudBubble.TopBarUnderRow + HudBubble.topBarSize(layout).Y + 4
+	layout.ChipY = math.max(chipTop, barBottom)
 end
 
 -- The tiles' top (design units under Roblox's top bar, CoreUISafeInsets): the round look's
@@ -679,12 +750,16 @@ function HudBubble.chipTop(layout: Layout): number
 	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
 	local top = HudBubble.menuTop(layout)
 	if layout.Chip == "Beside" then
+		if layout.ChipY then
+			return layout.ChipY -- (touch: lifted over the touch buttons, fitRound)
+		end
 		-- (beside the last row of tiles, its top with theirs; the taller compact chip ends with them)
 		local chip = if layout.Compact or layout.Touch then HudBubble.TouchChipHeight else 0
 		return top + m.Height - math.max(m.CellHeight, chip)
 	elseif layout.Chip == "Under" then
-		local gap = if layout.ChipStack
-			then HudBubble.StackGap
+		local gap = if layout.ChipGap
+			then layout.ChipGap
+			elseif layout.ChipStack then HudBubble.StackGap
 			elseif layout.Touch and not layout.Compact then HudBubble.TabletChipGap
 			else HudBubble.ChipGap
 		return top + m.Height + gap

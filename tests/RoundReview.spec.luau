@@ -373,9 +373,71 @@ return function(T, Loader)
 			local fit = line:FindFirstChildOfClass("UITextSizeConstraint") :: any
 			T.truthy(fit and fit.MinTextSize * scale >= 18, "the line never under 18 px")
 			T.truthy(line.TextWrapped and line.Size.Y.Offset >= 2 * fit.MinTextSize, "two rows for a long line")
+			-- (review 2026-10-29) and the name: "TRAIN" / "120/180" on two rows across the chip, never under 18 px
+			local title = train.ChipTitle :: any
+			local titleFit = title:FindFirstChildOfClass("UITextSizeConstraint") :: any
+			T.truthy(titleFit and titleFit.MinTextSize * scale >= 18, "the name never under 18 px")
+			T.truthy(title.TextWrapped and title.Size.Y.Offset >= 2 * titleFit.MinTextSize, "two rows for the name")
+			T.truthy(title.Size.X.Offset >= 7 * titleFit.MinTextSize, "room for 120/180 at that size")
 			train.Gui:Destroy()
 			train.Chip:Destroy()
 			refs.Gui:Destroy()
+		end)
+	end)
+
+	-- (review 2026-10-29) the smallest touch phones: the TRAIN chip (beside or squeezed under the
+	-- tiles) keeps off FIRE, Grab and Jump (BoostView.TouchButtons, measured like BoostController)
+	-- and off the boost corner that moves left of the touch tutorial's bubble
+	T.test("RoundReview: on the smallest touch phones the TRAIN chip keeps off the touch buttons and the boost corner", function()
+		inRound(function()
+			local TutorialView = ui("TutorialView")
+			for _, size in { { 568, 320 }, { 600, 340 }, { 620, 350 }, { 640, 360 } } do
+				for _, inset in { 36, 58 } do
+					local where = `{size[1]} x {size[2]} (inset {inset})`
+					local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
+					local gui = Vector2.new(size[1], size[2] - inset)
+					local w, h = gui.X / scale, gui.Y / scale
+					local refs = HudBubble.buildGame(scale, size[1], true, false, gui.Y) :: any
+					TrainView.useHud(refs.Gui)
+					local chip = TrainView.chipSize(true)
+					TrainView.useHud(nil)
+					local x0, y0 = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
+					local chipRect = { x0, y0, x0 + chip.X, y0 + chip.Y }
+					local small = math.min(size[1], size[2]) <= 500
+					for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+						local r = { w - b.Left / scale, h - b.Top / scale, w - b.Right / scale, h - b.Bottom / scale }
+						T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
+					end
+					-- the money under it
+					local moneyTop = h + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset
+					T.truthy(chipRect[4] <= moneyTop, `{where}: the chip above the money`)
+					-- the boost corner while the touch tutorial's bubble shows
+					local bubble = TutorialView.layout(scale, gui, true)
+					local bubbleRect =
+						{ Left = bubble.Position.X - bubble.Width, Top = bubble.Position.Y, Bottom = bubble.Position.Y + bubble.Height }
+					for _, count in { 1, 2 } do
+						local right, bottom, stacked = BoostView.cornerSpot({
+							Screen = Vector2.new(size[1], size[2]),
+							Gui = gui,
+							Scale = scale,
+							Touch = true,
+							Count = count,
+							Bubble = bubbleRect,
+							Chip = { Left = chipRect[1], Top = chipRect[2], Right = chipRect[3], Bottom = chipRect[4] },
+						})
+						local tile, gap = BoostView.cornerHeight(), BoostView.CornerGap
+						local rowW = if stacked then BoostView.CornerWidth else count * BoostView.CornerWidth + (count - 1) * gap
+						local rowH = if stacked then count * tile + (count - 1) * gap else tile
+						local corner = { w - right - rowW, h - bottom - rowH, w - right, h - bottom }
+						T.falsy(overlap(chipRect, corner), `{where}: the chip clear of the boost corner ({count})`)
+					end
+					refs.Gui:Destroy()
+				end
+			end
+			-- (HudBubble mirrors these: the corner column's room and the bubble's gap)
+			T.eq(HudBubble.BoostColumnRoom, 2 * BoostView.CornerGap + BoostView.CornerWidth, "the corner column's room")
+			T.eq(HudBubble.TutorialBarGap, TutorialView.BarGap, "the tutorial bubble's gap")
+			T.eq(BoostView.TouchButtons, HudBubble.TouchButtons, "one table of touch buttons")
 		end)
 	end)
 end

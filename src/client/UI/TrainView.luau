@@ -212,16 +212,32 @@ local CHIP: { [string]: ChipMetrics } = {
 	-- and the bar on top, the line under them, SEND as wide as the chip at the bottom (its Width
 	-- is the tiles', HudChipWidth; HudBubble.StackChipHeight mirrors the Height)
 	Stack = { Width = 150, Height = 104, Icon = 34, Title = 18, Line = 13, SendWidth = 0, SendHeight = 30, SendText = 18, Key = 18 },
-	-- a TV: the words at least 18 px at 1080p (15 units), the line on two rows (HudBubble.StackChipHeightTv)
-	StackTv = { Width = 161, Height = 130, Icon = 38, Title = 20, Line = 15, SendWidth = 0, SendHeight = 34, SendText = 20, Key = 20 },
+	-- a TV: the words at least 18 px at 1080p (15 units): the name across the chip on two rows
+	-- ("TRAIN" / "120/180"), the line on two rows (HudBubble.StackChipHeightTv)
+	StackTv = { Width = 161, Height = 144, Icon = 38, Title = 20, Line = 15, SendWidth = 0, SendHeight = 34, SendText = 20, Key = 20 },
 }
 
 -- The stacked chip's rows (design units from its top): the locomotive's square with the name
--- and the bar beside it, the line under them (two rows on a TV), then SEND as wide as the chip.
-local STACK = { Pad = 6, Square = 34, LineTop = 42, LineRows = 1, SendTop = 59, Bottom = 5 }
-local STACK_TV = { Pad = 6, Square = 38, LineTop = 47, LineRows = 2, SendTop = 84, Bottom = 5 }
+-- and the bar beside it, the line under them, then SEND as wide as the chip. A TV: the name
+-- across the chip on two rows (no square: the words stay 15 units), the bar under it, the line
+-- on two rows, SEND.
+type StackRows = {
+	Pad: number,
+	Square: number,
+	TitleRows: number,
+	TitleMin: number,
+	BarTop: number,
+	LineTop: number,
+	LineRows: number,
+	SendTop: number,
+	Bottom: number,
+}
+local STACK: StackRows =
+	{ Pad = 6, Square = 34, TitleRows = 1, TitleMin = 0, BarTop = 0, LineTop = 42, LineRows = 1, SendTop = 59, Bottom = 5 }
+local STACK_TV: StackRows =
+	{ Pad = 6, Square = 0, TitleRows = 2, TitleMin = 15, BarTop = 46, LineTop = 57, LineRows = 2, SendTop = 95, Bottom = 5 }
 
-local function stackRows(): typeof(STACK)
+local function stackRows(): StackRows
 	return if TrainView.HudChipTenFoot then STACK_TV else STACK
 end
 
@@ -1792,22 +1808,36 @@ local function pixelStackLayout(refs: Refs, m: ChipMetrics, area: number)
 	local pad, s = k.Pad, k.Square
 	local square = refs.ChipFrame:FindFirstChild("IconSquare") :: Frame?
 	if square then
+		square.Visible = s > 0
 		square.Position = UDim2.fromOffset(pad, pad)
 		square.Size = UDim2.fromOffset(s, s)
 	end
-	local iw = s - 6
+	refs.ChipIcon.Visible = s > 0
+	local iw = math.max(s - 6, 0)
 	local ih = iw / ICON_ASPECT
 	refs.ChipIcon.Size = UDim2.fromOffset(iw, ih)
 	refs.ChipIcon.Position = UDim2.fromOffset(pad + 3, pad + math.floor((s - ih) / 2))
-	local textLeft = pad + s + 6
+	local textLeft = if s > 0 then pad + s + 6 else pad + 2
 	local titleH = math.floor(m.Title * PopTheme.PixelScale + 0.5) + 4
 	local keyRoom = m.Key + 4 -- (the T key or the gamepad's glyph right of the name)
 	refs.ChipTitle.Position = UDim2.fromOffset(textLeft, pad + 2)
-	refs.ChipTitle.Size = UDim2.fromOffset(m.Width - textLeft - pad - keyRoom, titleH)
-	Pop.fit(refs.ChipTitle, m.Title)
+	refs.ChipTitle.Size = UDim2.fromOffset(m.Width - textLeft - pad - keyRoom, k.TitleRows * titleH)
+	if k.TitleRows > 1 then
+		-- (a TV: "TRAIN" / "120/180" on two rows, never under TitleMin)
+		refs.ChipTitle.TextWrapped = true
+		shrinkLine(refs.ChipTitle, m.Title, k.TitleMin)
+	else
+		refs.ChipTitle.TextWrapped = false
+		Pop.fit(refs.ChipTitle, m.Title)
+	end
 	refs.ChipTitle.TextXAlignment = Enum.TextXAlignment.Left
-	refs.ChipBar.Position = UDim2.fromOffset(textLeft, pad + 2 + titleH + 4)
-	refs.ChipBar.Size = UDim2.fromOffset(m.Width - textLeft - pad, 7)
+	if k.BarTop > 0 then
+		refs.ChipBar.Position = UDim2.fromOffset(pad + 2, k.BarTop)
+		refs.ChipBar.Size = UDim2.fromOffset(m.Width - 2 * (pad + 2), 7)
+	else
+		refs.ChipBar.Position = UDim2.fromOffset(textLeft, pad + 2 + titleH + 4)
+		refs.ChipBar.Size = UDim2.fromOffset(m.Width - textLeft - pad, 7)
+	end
 	refs.ChipLine.Position = UDim2.fromOffset(pad + 2, k.LineTop)
 	refs.ChipLine.Size = UDim2.fromOffset(m.Width - 2 * (pad + 2), k.LineRows * (m.Line + 2))
 	refs.ChipLine.TextXAlignment = Enum.TextXAlignment.Left
