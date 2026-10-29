@@ -88,6 +88,7 @@ local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
+local SecretService = require(script.Parent.SecretService)
 local MovementService = require(script.Parent.MovementService)
 local WorldService = require(script.Parent.WorldService)
 
@@ -470,10 +471,14 @@ local function spawnChunk(player: Player, rock: Rock, oreId: string, from: Vecto
 end
 
 -- Bonuses: ore luck may upgrade the rock's ore, Twin Drop may add a second chunk.
+-- A mine floor's rock: the ore may turn into a SECRET ore (SecretService, the same luck raising it);
+-- its twin stays the ore it was, so a secret is never doubled.
 local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
 	local stats = Bonuses.stats(player)
 	local oreId = Bonuses.rollOre(stats, rock.Weights, rolled, random)
-	spawnChunk(player, rock, oreId, from)
+	local floor = if rock.Floor then MineFloors.ByIndex[rock.Floor] else nil
+	local secret = if floor then SecretService.rollDrop(Bonuses.oreLuck(stats), floor.Id) else nil
+	spawnChunk(player, rock, secret or oreId, from)
 	local twin = Bonuses.twinDrop(stats)
 	if twin > 0 and random() < twin then
 		spawnChunk(player, rock, oreId, from)

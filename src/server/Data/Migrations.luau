@@ -231,7 +231,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 9 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack
+Migrations.Latest = 10 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile)
 
 export type Report = { Moved: number, Dropped: number }
 

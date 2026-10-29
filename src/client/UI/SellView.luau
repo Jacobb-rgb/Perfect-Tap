@@ -33,6 +33,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UIConfig = require(Shared.Config.UIConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
@@ -341,7 +342,8 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 			local count = if type(raw) == "number" and raw == raw
 				then math.floor(math.min(raw, EconomyConfig.Sell.MaxBackpackPerRequest))
 				else 0
-			if desc then
+			-- (a SECRET ore is never sold in a batch: SellService skips it the same way)
+			if desc and not SecretOreConfig.isSecret(desc.O) then
 				for _ = 1, count do
 					table.insert(units, {
 						Section = section,

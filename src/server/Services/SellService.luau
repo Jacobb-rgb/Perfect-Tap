@@ -43,6 +43,7 @@ local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Format = require(Shared.Util.Format)
@@ -443,7 +444,13 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 	if from ~= nil and from ~= "Pen" and from ~= "Hands" then
 		return
 	end
-	local list = candidates(player, data)
+	local list = {}
+	for _, pick in candidates(player, data) do
+		-- a SECRET ore is never sold in a batch (owner 2026-10-29): only on its own, by choice
+		if not SecretOreConfig.isSecret(pick.Desc.O) then
+			table.insert(list, pick)
+		end
+	end
 	local kept = if filter == "AllButBest" then bestKept(list) else {}
 	local picks: { Pick } = {}
 	local counted: { [string]: number } = { Pen = 0, Hands = 0 }

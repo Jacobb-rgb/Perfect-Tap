@@ -52,6 +52,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local Net = require(Shared.Net)
@@ -67,6 +68,7 @@ local CarryService = require(script.Parent.CarryService)
 local PenService = require(script.Parent.PenService)
 local MachineService = require(script.Parent.MachineService)
 local PlotService = require(script.Parent.PlotService)
+local SecretService = require(script.Parent.SecretService)
 
 local CleaningService = {}
 
@@ -346,7 +348,9 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 	-- scripted runs keep at most Pristine: FLAWLESS needs real hands (CleaningGuard, audit #4)
 	local verdict = CleaningGuard.check(payload)
 	CleaningGuard.note(player, verdict, result.Grade)
-	result.Grade = CleaningGuard.gradeFor(result.Grade, verdict)
+	-- a SECRET ore comes out Flawless (owner 2026-10-29), unless the guard caps a scripted run
+	local secret = session.Relic == nil and SecretOreConfig.isSecret(session.OreId)
+	result.Grade = CleaningGuard.gradeFor(if secret then SecretOreConfig.Grade else result.Grade, verdict)
 
 	-- a dusty relic: the artifact goes into the collection (the find moment at the station)
 	local relic = session.Relic
@@ -395,8 +399,15 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 
 	local data = DataService.get(player)
 	local isNew = false
+	if secret then
+		-- the jackpot (before Discovery marks it, so a first find is NEW!), the chat line, the
+		-- column of light over the station for everyone near
+		SecretService.found(player, session.OreId)
+		local at = (MachineService.point(machine, "Output") or machine.Model:GetPivot()).Position
+		Net.fireNear("Fx", at, SecretService.PillarRadius, nil, "SecretPillar", at, session.OreId)
+	end
 	if data then
-		isNew = Discovery.mark(player, data, session.OreId)
+		isNew = Discovery.mark(player, data, session.OreId, secret)
 		data.Stats.OresCleaned += 1
 		if result.Grade == "Flawless" then
 			data.Stats.FlawlessCleans += 1

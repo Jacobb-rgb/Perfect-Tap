@@ -69,6 +69,7 @@ local ORDER = {
 	"EmoteController", -- the EMOTES menu: the N key, the EMOTES tile (AnimConfig.Emotes)
 	"UIMotionController", -- UI/Motion everywhere: windows pop, buttons squash, shop cards breathe, cash flies in
 	"PixelFxController", -- the pixel reels' motion: rays turn, gleams sweep, pictures lean
+	"SecretRevealController", -- the SECRET ores: the jackpot screen, the chat line
 }
 
 local loaded = {}

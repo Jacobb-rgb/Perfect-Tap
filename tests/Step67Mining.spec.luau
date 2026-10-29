@@ -17,6 +17,7 @@ return function(T, Loader)
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 	local MiningService = Loader.requirePath("ServerScriptService.Server.Services.MiningService")
+	local SecretService = Loader.requirePath("ServerScriptService.Server.Services.SecretService")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
@@ -281,6 +282,38 @@ return function(T, Loader)
 		mining.blast(p, other.Model)
 		w.step()
 		T.eq(#w.spawned, 1, "no twin above the chance")
+	end)
+
+	withWorld("Secret ores: a mine floor rock's ore may turn secret, its twin stays the ore; zone rocks never", function(w)
+		local p = w.player
+		slot(p, { TwinDrop = 3 }, { "TwinDrop" }) -- 15 %
+		local dice = SecretService.random
+		local ok, err = pcall(function()
+			SecretService.random = function()
+				return 0 -- every secret roll hits: the rarest (Rainbow Nova) first
+			end
+			local rock = w.rock("Outcrops", { "Tin" }, 0.01)
+			rock.Floor = 3 -- a Deep Hollow rock
+			w.rolls = { 0.5, 0.5, 0.5, 0.5, 0.1 }
+			mining.blast(p, rock.Model)
+			w.step()
+			T.eq(#w.spawned, 2, "the chunk and its twin")
+			T.eq(w.spawned[1].Info.OreId, "RainbowNova", "the chunk turned secret")
+			T.eq(w.spawned[1].Info.Kind, "Raw", "a (sparkly) dirty ore: the jackpot is at the cleaning")
+			T.eq(w.spawned[2].Info.OreId, "Tin", "the twin stays the ore: never a second secret")
+			-- an old zone rock (no floor: town outcrops, the VIP Grotto) never turns secret
+			w.spawned = {}
+			local zoneRock = w.rock("Outcrops", { "Tin" }, 0.01)
+			w.rolls = { 0.5, 0.5, 0.5, 0.5, 0.9 }
+			mining.blast(p, zoneRock.Model)
+			w.step()
+			T.eq(#w.spawned, 1, "one chunk")
+			T.eq(w.spawned[1].Info.OreId, "Tin", "no secret from a zone rock")
+		end)
+		SecretService.random = dice
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withWorld("Step67 Mining: the artifact roll calls its listeners, Prospector raises the chance", function(w)

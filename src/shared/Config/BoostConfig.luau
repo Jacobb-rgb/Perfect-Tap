@@ -89,6 +89,7 @@ local MineFloors = require(script.Parent.MineFloors)
 local CapsuleConfig = require(script.Parent.CapsuleConfig)
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
 local StatConfig = require(script.Parent.StatConfig)
+local SecretOreConfig = require(script.Parent.SecretOreConfig)
 
 export type Kind = {
 	Id: string,
@@ -161,9 +162,9 @@ BoostConfig.LuckPower = {
 	Epic = 1.5,
 	Legendary = 2,
 	Mythic = 2.5,
-	-- the secret ores (SecretOreConfig: their own roll, not a weight): the square root,
-	-- so the most luck there is (StatConfig.MaxOreLuck x6.25) makes a secret 2.5x likelier
-	Secret = 0.5,
+	-- the secret ores (SecretOreConfig: their own roll, not a weight; not in Rarity.List, so not in
+	-- the luck tables): the square root, the most luck (StatConfig.MaxOreLuck x6.25) = x2.5
+	Secret = SecretOreConfig.LuckPower,
 } :: { [string]: number }
 
 -- BoostAction / ActionResult reason codes -> text for the player

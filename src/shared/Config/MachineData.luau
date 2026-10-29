@@ -25,6 +25,7 @@
 
 local GameConfig = require(script.Parent.GameConfig)
 local OreData = require(script.Parent.OreData)
+local SecretOreConfig = require(script.Parent.SecretOreConfig)
 local DropperConfig = require(script.Parent.DropperConfig)
 local Format = require(script.Parent.Parent.Util.Format)
 local Rarity = require(script.Parent.Rarity)
@@ -808,6 +809,13 @@ MachineData.Keep = {
 	RareFrom = "Rare", -- the lowest rarity "RarePlus" keeps (and "List" for ores not on the list)
 }
 
+-- No machine takes a SECRET ore, dirty or clean (owner 2026-10-29: never into a machine by
+-- mistake): it is cleaned by hand at the Cleaning Station and lives in the pen, the backpack
+-- or on a podium. MachineService.canAccept refuses it ("Wrong": pushed back out, never consumed).
+function MachineData.refuses(desc: any): boolean
+	return type(desc) == "table" and SecretOreConfig.isSecret(desc.O)
+end
+
 -- Item kinds that always pass on (never kept), see above.
 local PASSING_KINDS = { Raw = true, Crushed = true, Ingot = true }
 
@@ -822,6 +830,9 @@ function MachineData.keepsOre(mode: any, keepList: any, oreId: any): boolean
 	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
 	if not ore then
 		return false
+	end
+	if SecretOreConfig.isSecret(ore.Id) then
+		return true -- a SECRET ore is always kept, whatever the mode or the list says
 	end
 	local m: KeepMode = if MachineData.isKeepMode(mode) then mode else MachineData.Keep.Default
 	if m == "All" then
@@ -839,7 +850,14 @@ end
 -- Does the player keep this item (Iron Box: to the pen; pen: stays)?
 -- `mode` and `keepList` are data.KeepMode and data.KeepList.
 function MachineData.keeps(mode: any, keepList: any, desc: any): boolean
-	if type(desc) ~= "table" or type(desc.K) ~= "string" or PASSING_KINDS[desc.K] then
+	if type(desc) ~= "table" or type(desc.K) ~= "string" then
+		return false
+	end
+	-- a SECRET ore, dirty or clean, never passes on (no machine takes it: MachineData.refuses)
+	if SecretOreConfig.isSecret(desc.O) then
+		return true
+	end
+	if PASSING_KINDS[desc.K] then
 		return false
 	end
 	if desc.K ~= "Clean" then

@@ -33,8 +33,10 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local OreData = require(Shared.Config.OreData)
 local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local SecretOreFx = require(Shared.Builders.SecretOreFx)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -283,6 +285,7 @@ type Spinner = {
 	Phase: number,
 	Light: PointLight?,
 	LightBase: number,
+	Rig: SecretOreFx.Rig?, -- a secret ore's moving parts (SecretOreFx), posed after the turn
 }
 local spinners: { [Model]: Spinner } = {}
 
@@ -319,12 +322,14 @@ local function scanSpinners()
 									light = d
 								end
 							end
+							local rig = SecretOreFx.rig(display, pivot)
 							spinners[display] = {
 								Pivot = pivot,
 								Parts = parts,
 								Phase = math.random() * 6,
 								Light = light,
 								LightBase = if light then light.Brightness else 0,
+								Rig = if #rig.Entries > 0 then rig else nil,
 							}
 						end
 					end
@@ -351,6 +356,9 @@ local function spin(t: number)
 			local light = s.Light
 			if light then
 				light.Brightness = s.LightBase * (0.75 + 0.35 * math.sin(t * 2.2 + s.Phase))
+			end
+			if s.Rig then
+				SecretOreFx.pose(s.Rig, cf, t + s.Phase, Motion.reduced())
 			end
 		else
 			spinners[display] = nil

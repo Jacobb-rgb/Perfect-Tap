@@ -282,6 +282,9 @@ Net.Events = {
 	--   10th, Next: XP to the level after } (the juicy moment: burst, LEVEL UP!, the rewards)
 	XpGain = false,
 	LevelUp = false,
+	-- the SECRET ores (SecretService, owner 2026-10-29)
+	SecretFound = false, -- { OreId, New, Stars } to the finder: the jackpot (SecretRevealController)
+	SecretChat = false, -- { UserId, Name (DisplayName), OreId, Global } to everyone: the chat line, built on the client from OreData
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

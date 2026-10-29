@@ -54,6 +54,46 @@ for _, secret in SecretOreConfig.List do
 	SecretOreConfig.ByOre[secret.Ore] = secret
 end
 
+-- Luck (StatConfig.oreLuck: x1 .. x6.25) raises a secret's chance by its square root, at most x2.5.
+SecretOreConfig.LuckPower = 0.5
+SecretOreConfig.MaxLuckMult = 2.5
+
+-- The chance multiplier at ore luck `luck` (broken or below x1: x1).
+function SecretOreConfig.luckMult(luck: any): number
+	if type(luck) ~= "number" or luck ~= luck or luck <= 1 or luck == math.huge then
+		return 1 -- broken luck counts as none (like BoostConfig)
+	end
+	return math.min(luck ^ SecretOreConfig.LuckPower, SecretOreConfig.MaxLuckMult)
+end
+
+-- The chance (0..1) that a dropped ore turns into this secret at ore luck `luck`.
+function SecretOreConfig.chance(secret: Secret, luck: any): number
+	return SecretOreConfig.luckMult(luck) / secret.OneIn
+end
+
+-- "1 in N" with luck applied (what the odds panels show; N rounded to a whole number).
+function SecretOreConfig.oddsText(secret: Secret, luck: any): string
+	return SecretOreConfig.chanceText(math.max(1, math.floor(secret.OneIn / SecretOreConfig.luckMult(luck) + 0.5)))
+end
+
+--[[
+	The server's roll for one dropped ore on floor `floorId`: the secret it
+	turns into, or nil. The rarest is rolled first (Rainbow Nova, then the
+	floor's own), one draw each from `random` (0..1).
+]]
+function SecretOreConfig.roll(floorId: string?, luck: any, random: () -> number): string?
+	local list = SecretOreConfig.forFloor(floorId)
+	table.sort(list, function(a, b)
+		return a.OneIn > b.OneIn
+	end)
+	for _, secret in list do
+		if random() < SecretOreConfig.chance(secret, luck) then
+			return secret.Ore
+		end
+	end
+	return nil
+end
+
 function SecretOreConfig.isSecret(oreId: any): boolean
 	return type(oreId) == "string" and SecretOreConfig.ByOre[oreId] ~= nil
 end
