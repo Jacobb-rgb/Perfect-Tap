@@ -105,6 +105,18 @@ Violence and resubmit.**
   Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
+  **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
+  floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
+  and ore luck raises that chance by its square root (at most x2.5), so every
+  paid luck item changes them too. Every ore odds table and luck card shows
+  them as "??? Secret" with "1 in N" now and with the buy
+  (`BoostView.secretRows` / `secretLines`: Hexa Lucky, the luck enchants,
+  the store's Server Luck / Hexa cards); the ORE CODEX shows each one's
+  chance before it is found. The name may stay "???", the chance never.
+  No Robux product sells a secret ore or raises only their chance. The
+  find's chat line is built on every client from the finder's DisplayName
+  and OreData (no player text); Rainbow Nova's every-server message
+  (MessagingService) carries only UserId, DisplayName and the ore id.
 - Trading or gifting items between players → Paid item trading.
 - A drawing board, paintable signs or a free-text bulletin board → Free-form
   user creation, which limits the game to players aged 16+.

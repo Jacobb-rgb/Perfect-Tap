@@ -89,7 +89,7 @@
 	types are dropped; the config readers clamp or ignore what they don't
 	know (GearConfig.level, EnchantConfig.tierOf, GolemConfig.stats/equip,
 	ArtifactConfig.countOf).
-	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the five lines
+	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the four lines
 	  this server sells always exist, broken = 0; other junk keys dropped).
 	  The old CarryLevel N (1..5) folds into Backpack level N - 1 (same
 	  capacity; the higher of the two wins) and CarryLevel is removed. A

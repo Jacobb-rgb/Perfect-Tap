@@ -464,7 +464,7 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 	local worth = math.floor((result.Value or 0) * StateController.sellMult() + 0.5)
 	view.CardValue.Text = `Worth {Format.commas(worth)} coins`
 	view.CardDetail.Text = detail(result)
-	-- where it went: the backpack, else the pen (or sold), else the station's tray
+	-- where it went: the backpack, else the pen (while it has room, never sold), else the station's tray
 	CleaningView.setInto(view, result.Into)
 	CleaningView.setStreak(view, ctx.Streak)
 	-- the grade stamp lands on the ore itself
