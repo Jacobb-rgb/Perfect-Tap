@@ -551,10 +551,18 @@ local LIST: { any } = {
 		Material = M.Glass,
 		Lore = "A piece of Terra's broken heart. Little hearts float around it.",
 	},
-	---------------------------------------------------------------- Secret
-	-- (owner 2026-10-29) Never in a rock's weights: any ore that drops may turn into one with a tiny
-	-- chance (SecretOreConfig: which floor, "1 in N"). Born clean and shining; Income = about 5x the
-	-- best ore of its floor. Hardness is unused (no rock holds them).
+}
+
+--[[
+	The SECRET ores (owner 2026-10-29, SecretOreConfig): never in a rock's
+	weights; any ore that drops may turn into one with a tiny chance (which
+	floor, "1 in N"). They drop as a sparkly dirty ore and come out of the
+	cleaning Flawless; Income = about 5x the best ore of its floor; Hardness
+	is unused (no rock holds them). They are NOT in OreData.List (the 36 ores
+	every list, odds row and shop iterates) but in OreData.Secrets; ById,
+	get and exists know them.
+]]
+local SECRETS: { any } = {
 	{
 		Id = "FrostflameCrystal",
 		Name = "Frostflame Crystal",
@@ -646,9 +654,17 @@ for index, entry in LIST do
 	entry.Value = entry.Income * OreData.SellSeconds
 end
 OreData.List = LIST :: { Ore }
+for k, entry in SECRETS do
+	entry.Index = #LIST + k
+	entry.Value = entry.Income * OreData.SellSeconds
+end
+OreData.Secrets = SECRETS :: { Ore }
 
 OreData.ById = {} :: { [string]: Ore }
 for _, ore in OreData.List do
+	OreData.ById[ore.Id] = ore
+end
+for _, ore in OreData.Secrets do
 	OreData.ById[ore.Id] = ore
 end
 

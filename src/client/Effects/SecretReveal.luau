@@ -55,6 +55,7 @@ local ItemBuilder = require(Builders:WaitForChild("ItemBuilder"))
 local SecretOreShapes = require(Builders:WaitForChild("SecretOreShapes"))
 local SecretOreFx = require(Builders:WaitForChild("SecretOreFx"))
 local UIKit = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("UIKit"))
+local RevealKit = require(script.Parent:WaitForChild("RevealKit"))
 
 local SecretReveal = {}
 
@@ -80,15 +81,13 @@ SecretReveal.Center = UDim2.fromScale(0.5, 0.42) -- the middle of it all (Reveal
 SecretReveal.DimTo = 0.28 -- the dark overlay's transparency at its darkest (3 stars: SpaceTo)
 SecretReveal.SpaceTo = 0.06
 SecretReveal.OreSize = 320 -- design units: the 3D ore's viewport
-SecretReveal.RayLength = 860 -- design units, end to end through the middle
-SecretReveal.Bars = { Front = 10, Back = 8, Gold = 6, Phone = 6 } -- a bar is two rays
 SecretReveal.PhoneConfetti = 16
 SecretReveal.PhoneTwinkles = 6
 SecretReveal.SpaceStars = 44
 SecretReveal.Fov = 30
-SecretReveal.FlashColor = Color3.fromRGB(255, 240, 200)
-SecretReveal.Dark = Color3.fromRGB(14, 10, 22)
-SecretReveal.Gold = Color3.fromRGB(255, 206, 72)
+SecretReveal.FlashColor = RevealKit.Style.FlashColor
+SecretReveal.Dark = RevealKit.Style.Dark
+SecretReveal.Gold = RevealKit.Style.Gold
 
 export type Info = { Chance: string?, New: boolean? }
 
@@ -98,6 +97,7 @@ export type Opts = {
 	Target: Vector2?,
 	Reduced: boolean?,
 	Phone: boolean?,
+	Flash: boolean?, -- false: no flash (another reveal flashed less than RevealKit.FlashGap ago)
 }
 
 type Piece = { Frame: Frame, Dir: Vector2, Speed: number, Spin: number, Delay: number }
@@ -110,9 +110,7 @@ export type View = {
 	Flash: Frame,
 	Stage: Frame,
 	Scale: UIScale,
-	Front: { Frame },
-	Back: { Frame },
-	GoldBars: { Frame },
+	Rays: RevealKit.Rays,
 	Glow: Frame,
 	Halo: Frame,
 	Shocks: { Frame },
@@ -202,33 +200,10 @@ function SecretReveal.shake(t: number, stars: number?): number
 	return trauma
 end
 
--- Fades every word, edge and filled box under `root` (alpha 0 = shown, 1 = gone).
-local function fade(root: Instance, alpha: number)
-	for _, d in root:GetDescendants() do
-		if d:IsA("TextLabel") then
-			d.TextTransparency = alpha
-		elseif d:IsA("UIStroke") then
-			d.Transparency = alpha
-		elseif d:IsA("Frame") then
-			d.BackgroundTransparency = alpha
-		end
-	end
-end
-
-local function rainbowSequence(shift: number): ColorSequence
-	local colors = SecretOreShapes.Rainbow
-	local keys = {}
-	for k = 1, #colors + 1 do
-		local color = colors[(k - 1 + math.floor(shift)) % #colors + 1]
-		table.insert(keys, ColorSequenceKeypoint.new((k - 1) / #colors, color))
-	end
-	return ColorSequence.new(keys)
-end
-
--- A rainbow hue at turn `x` (0..1), bright enough to read on black.
-local function hue(x: number): Color3
-	return Color3.fromHSV(x % 1, 0.72, 1)
-end
+local fade = RevealKit.fade
+local rainbowSequence = RevealKit.rainbow
+local hue = RevealKit.hue
+local word = RevealKit.word
 
 --[[
 	A built item made still for a viewport: its visible parts and its moving
@@ -293,44 +268,6 @@ local function still(model: Model): number
 	return reach
 end
 
-local function bar(parent: Instance, name: string, width: number, z: number): Frame
-	local frame = UIKit.new("Frame", {
-		Name = name,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(width, SecretReveal.RayLength),
-		Visible = false,
-		ZIndex = z,
-	}, parent)
-	-- bright near the middle, gone at both ends
-	UIKit.new("UIGradient", {
-		Rotation = 90,
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.3, 0.45),
-			NumberSequenceKeypoint.new(0.5, 0.1),
-			NumberSequenceKeypoint.new(0.7, 0.45),
-			NumberSequenceKeypoint.new(1, 1),
-		}),
-	}, frame)
-	return frame
-end
-
-local function word(parent: Instance, name: string, text: string, size: number, heavy: boolean, z: number): TextLabel
-	return UIKit.new("TextLabel", {
-		Name = name,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", if heavy then Enum.FontWeight.Heavy else Enum.FontWeight.Bold),
-		Text = text,
-		TextColor3 = PopTheme.Ink,
-		TextSize = size,
-		Size = UDim2.fromOffset(math.max(200, #text * size * 0.8), size * 1.25),
-		ZIndex = z,
-	}, parent)
-end
-
 local function disc(parent: Instance, name: string, size: number, color: Color3, z: number): Frame
 	local frame = UIKit.new("Frame", {
 		Name = name,
@@ -388,34 +325,11 @@ function SecretReveal.build(): View
 		ZIndex = 2,
 	}, gui)
 	local scale = UIKit.new("UIScale", { Scale = 1 }, stage)
-	local front, back, gold = {}, {}, {}
-	for k = 1, SecretReveal.Bars.Gold do
-		table.insert(gold, bar(stage, "Gold" .. k, 120, 2))
-	end
-	for k = 1, SecretReveal.Bars.Back do
-		table.insert(back, bar(stage, "Back" .. k, 40, 2))
-	end
-	for k = 1, SecretReveal.Bars.Front do
-		table.insert(front, bar(stage, "Ray" .. k, 70, 3))
-	end
+	local rays = RevealKit.rays(stage, 2)
 	local halo = disc(stage, "Halo", 560, SecretReveal.FlashColor, 4)
 	local glow = disc(stage, "Glow", 320, WHITE, 4)
 	-- shockwave rings: thick, fast, thinning as they fly out
-	local shocks = {}
-	for k = 1, 3 do
-		local ring = UIKit.new("Frame", {
-			Name = "Shock" .. k,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(200, 200),
-			Visible = false,
-			ZIndex = 5,
-		}, stage)
-		round(ring)
-		UIKit.new("UIStroke", { Color = WHITE, Thickness = 18, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
-		UIKit.new("UIScale", { Scale = 1 }, ring)
-		table.insert(shocks, ring)
-	end
+	local shocks = RevealKit.rings(stage, 3, 5)
 	-- the ore: a viewport, the camera turns round it
 	local oreHolder = UIKit.new("Frame", {
 		Name = "Ore",
@@ -596,19 +510,10 @@ function SecretReveal.build(): View
 		Gui = gui,
 		Dim = dim,
 		Space = space,
-		Flash = UIKit.new("Frame", {
-			Name = "Flash",
-			BackgroundColor3 = SecretReveal.FlashColor,
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 5,
-		}, gui),
+		Flash = RevealKit.flash(gui, 5),
 		Stage = stage,
 		Scale = scale,
-		Front = front,
-		Back = back,
-		GoldBars = gold,
+		Rays = rays,
 		Glow = glow,
 		Halo = halo,
 		Shocks = shocks,
@@ -707,24 +612,15 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 		end
 	end
 
-	-- the flash (once, at the BOOM)
-	local f = span(t, 0, 0.45)
-	view.Flash.BackgroundTransparency = if not reduced and f < 1 then 1 - 0.9 * (1 - easeOut(f)) else 1
+	-- the flash (once, at the BOOM; the caller took its slot: RevealKit.takeFlash)
+	RevealKit.poseFlash(view.Flash, if reduced or opts.Flash == false then -1 else t / RevealKit.Style.FlashTime)
 
-	-- shockwaves: one ring per tier step, thick and white, then rainbow and thin
+	-- shockwaves: one ring per tier step, the first white-gold, the others rainbow
 	for k, ring in view.Shocks do
 		local at = tier.Shocks[k]
-		local u = if at then span(t, at, at + 0.62) else 1
-		local on = not reduced and at ~= nil and t >= at and u < 1
-		ring.Visible = on
-		if on then
-			local ringScale = ring:FindFirstChildOfClass("UIScale") :: UIScale
-			local ringStroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
-			ringScale.Scale = 0.35 + 7 * easeOut(u)
-			ringStroke.Thickness = 22 * (1 - u) + 2
-			ringStroke.Color = if k == 1 then SecretReveal.FlashColor:Lerp(hue(t * 0.6), u) else hue(k * 0.33 + u * 0.5)
-			ringStroke.Transparency = u ^ 1.5
-		end
+		local u = if at and not reduced then (t - at) / 0.62 else -1
+		local color = if k == 1 then SecretReveal.FlashColor:Lerp(hue(t * 0.6), math.clamp(u, 0, 1)) else hue(k * 0.33 + u * 0.5)
+		RevealKit.poseRing(ring, u, color)
 	end
 
 	-- the ore: pops out big, whirls, breathes; its moving parts are alive
@@ -770,40 +666,7 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 
 	-- rays: two layers turning opposite ways (near-black and drifting rainbow), a gold one behind
 	local grow = if reduced then span(t, 0, 0.3) else easeOutBack(span(t, 0.02, 0.45))
-	local front = if phone then SecretReveal.Bars.Phone else #view.Front
-	for k, frame in view.Front do
-		local on = k <= front and stay > 0
-		frame.Visible = on
-		if on then
-			local spin = if reduced then 0 else t * 45
-			frame.Rotation = (k - 1) * 180 / front + spin
-			frame.Size = UDim2.fromOffset(70, SecretReveal.RayLength * grow)
-			frame.BackgroundColor3 = if k % 2 == 1 then SecretReveal.Dark else hue((k - 1) / front + t * 0.25)
-			frame.BackgroundTransparency = leave
-		end
-	end
-	for k, frame in view.Back do
-		local on = not phone and stay > 0
-		frame.Visible = on
-		if on then
-			local spin = if reduced then 0 else -t * 30
-			frame.Rotation = (k - 0.5) * 180 / #view.Back + spin
-			frame.Size = UDim2.fromOffset(40, SecretReveal.RayLength * 0.86 * grow)
-			frame.BackgroundColor3 = hue((k - 1) / #view.Back + 0.5 + t * 0.25)
-			frame.BackgroundTransparency = 0.45 + 0.55 * leave
-		end
-	end
-	for k, frame in view.GoldBars do
-		local on = tier.Gold and stay > 0 and (not phone or k % 2 == 0)
-		frame.Visible = on
-		if on then
-			local spin = if reduced then 0 else t * 12
-			frame.Rotation = (k - 1) * 180 / #view.GoldBars + 15 + spin
-			frame.Size = UDim2.fromOffset(120, SecretReveal.RayLength * 1.25 * grow)
-			frame.BackgroundColor3 = SecretReveal.Gold
-			frame.BackgroundTransparency = 0.55 + 0.45 * leave
-		end
-	end
+	RevealKit.poseRays(view.Rays, t, grow, leave, { Phone = phone, Reduced = reduced, Gold = tier.Gold })
 	-- the warm glow behind the ore, a beat at every shockwave
 	local swell = 0
 	for _, at in tier.Shocks do
