@@ -38,6 +38,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local MineFloors = require(Shared.Config.MineFloors)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local Rarity = require(Shared.Config.Rarity)
 local PopTheme = require(Shared.Config.PopTheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -216,9 +218,11 @@ end
 function CodexView.fingerprint(discovered: any, fresh: { [string]: boolean }?): string
 	local found = if type(discovered) == "table" then discovered else {}
 	local parts = table.create(#OreData.List)
-	for _, ore in OreData.List do
-		if found[ore.Id] == true then
-			table.insert(parts, if fresh and fresh[ore.Id] then ore.Id .. "!" else ore.Id)
+	for _, list in { OreData.List, OreData.Secrets } do
+		for _, ore in list do
+			if found[ore.Id] == true then
+				table.insert(parts, if fresh and fresh[ore.Id] then ore.Id .. "!" else ore.Id)
+			end
 		end
 	end
 	return table.concat(parts, ",")
@@ -241,15 +245,43 @@ function CodexView.entries(discovered: any, fresh: { [string]: boolean }?): { En
 	return list
 end
 
--- How many entries are discovered, and the total.
+--[[
+	The SECRET ores' cards (OreData.Secrets, after the 36): "???" until
+	found; the detail always tells the chance and where (SecretOreConfig).
+	They don't count in "17 / 36 FOUND" (a jackpot, not the roster).
+]]
+function CodexView.secretEntries(discovered: any, fresh: { [string]: boolean }?): { Entry }
+	local found = if type(discovered) == "table" then discovered else {}
+	local list = table.create(#OreData.Secrets)
+	for _, ore in OreData.Secrets do
+		local isFound = found[ore.Id] == true
+		table.insert(list, { Ore = ore, Found = isFound, New = isFound and fresh ~= nil and fresh[ore.Id] == true, Zones = {} })
+	end
+	return list
+end
+
+-- How many entries are discovered, and the total (the 36; secrets don't count).
 function CodexView.count(entries: { Entry }): (number, number)
-	local n = 0
+	local n, total = 0, 0
 	for _, entry in entries do
-		if entry.Found then
-			n += 1
+		if entry.Ore.Rarity ~= "Secret" then
+			total += 1
+			if entry.Found then
+				n += 1
+			end
 		end
 	end
-	return n, #entries
+	return n, total
+end
+
+-- Where a secret ore comes from and its chance: "Deep Hollow, 1 in 4,000 per ore mined".
+local function secretWhere(ore: OreData.Ore): string
+	local secret = SecretOreConfig.ByOre[ore.Id]
+	if not secret then
+		return ""
+	end
+	local floor = if secret.Floor then MineFloors.ById[secret.Floor] else nil
+	return `{if floor then floor.Name else "Any mine floor"}, {SecretOreConfig.chanceText(secret.OneIn)} per ore mined`
 end
 
 -- "17 / 36 FOUND"
@@ -268,6 +300,17 @@ export type DetailText = {
 	Lore: string,
 }
 function CodexView.detailText(entry: Entry): DetailText
+	if not entry.Found and entry.Ore.Rarity == "Secret" then
+		return {
+			Name = CodexView.HiddenName,
+			Rarity = "Secret",
+			Income = `A SECRET ore: {secretWhere(entry.Ore)}. It drops as a sparkly dirty ore: clean it!`,
+			Value = "",
+			Tier = "",
+			Where = "",
+			Lore = "",
+		}
+	end
 	if not entry.Found then
 		return {
 			Name = CodexView.HiddenName,
@@ -286,7 +329,10 @@ function CodexView.detailText(entry: Entry): DetailText
 	local clean = ItemData.value("Clean", ore.Id, "Rough")
 	local best = ItemData.value("Clean", ore.Id, "Flawless")
 	local dirty = ItemData.value("Raw", ore.Id)
-	local where = if #entry.Zones > 0 then table.concat(entry.Zones, ", ") else "Deep in the mines"
+	local where = if ore.Rarity == "Secret"
+		then secretWhere(ore)
+		elseif #entry.Zones > 0 then table.concat(entry.Zones, ", ")
+		else "Deep in the mines"
 	return {
 		Name = ore.Name,
 		Rarity = ore.Rarity,
@@ -334,9 +380,14 @@ local function deep(paint: Pop.Paint): Pop.Paint
 	return { Top = paint.Bottom:Lerp(black, 0.1), Bottom = paint.Bottom:Lerp(black, 0.5), Edge = PopTheme.Outline }
 end
 
+-- A rarity's paint (a SECRET ore: purple, it is not one of Pop's six rarities).
+local function rarityPaint(rarity: string): Pop.Paint
+	return if rarity == "Secret" then Pop.paint("Purple") else Pop.rarityPaint(rarity)
+end
+
 -- A card's paint: its rarity's (found) or the dark slate (undiscovered).
 local function paintOf(ore: OreData.Ore?): Pop.Paint
-	return if ore then Pop.rarityPaint(ore.Rarity) else CodexView.HiddenPaint
+	return if ore then rarityPaint(ore.Rarity) else CodexView.HiddenPaint
 end
 
 -- A cleaned ore for a picture (nil when the builder fails).
@@ -540,7 +591,7 @@ local function newCard(refs: Refs, ore: OreData.Ore, order: number, m: Metrics)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 7,
 	})
-	local strip = Pop.chip(button, string.upper(ore.Rarity), deep(Pop.rarityPaint(ore.Rarity)), Vector2.new(72, 18), {
+	local strip = Pop.chip(button, string.upper(ore.Rarity), deep(rarityPaint(ore.Rarity)), Vector2.new(72, 18), {
 		Name = "Strip",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Visible = false,
@@ -556,7 +607,7 @@ local function newCard(refs: Refs, ore: OreData.Ore, order: number, m: Metrics)
 		local label = strip:FindFirstChild("Label") :: TextLabel?
 		if label then
 			label.Text = ore.Rarity
-			label.TextColor3 = Pop.rarityPaint(ore.Rarity).Top:Lerp(Color3.new(1, 1, 1), 0.25)
+			label.TextColor3 = rarityPaint(ore.Rarity).Top:Lerp(Color3.new(1, 1, 1), 0.25)
 		end
 	end
 	local new = Pop.chip(button, "NEW", "Green", Vector2.new(42, 20), {
@@ -693,6 +744,9 @@ function CodexView.build(compact: boolean?): Refs
 	}
 	for i, ore in OreData.List do
 		newCard(refs, ore, i, m)
+	end
+	for k, ore in OreData.Secrets do
+		newCard(refs, ore, #OreData.List + k, m)
 	end
 	if PopTheme.round() then
 		-- the reel's rarity tabs outside the window, on its right (a tap shows only the found
@@ -999,7 +1053,7 @@ function CodexView.select(refs: Refs, entry: Entry)
 	rarityChip.Visible = info ~= nil
 	if info then
 		refs.DetailRarity.Text = info.Name
-		Pop.repaint(rarityChip, deep(Pop.rarityPaint(info.Id)))
+		Pop.repaint(rarityChip, deep(rarityPaint(info.Id)))
 	end
 	refs.DetailIncome.Text = text.Income
 	refs.DetailIncome.TextColor3 = if entry.Found then PopTheme.Money else Color3.fromRGB(206, 214, 232)

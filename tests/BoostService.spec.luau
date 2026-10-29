@@ -655,9 +655,15 @@ return function(T, Loader)
 				local before = BoostConfig.oreOdds(weights, without)
 				local after = BoostConfig.oreOdds(weights, with)
 				local crystalRows = if crystal then #BoostConfig.oreOdds(crystal, without) else 0
-				T.eq(#t.Rows, #before + crystalRows, zone.Id .. ": every ore (and every crystal rock ore)")
-				for i = #before + 1, #t.Rows do
-					T.truthy(t.Rows[i].Name:find("(crystal rock)", 1, true), zone.Id .. ": crystal rock rows last")
+				local secretRows = #BoostView.secretRows(zone.Id, without, with)
+				T.eq(#t.Rows, #before + crystalRows + secretRows, zone.Id .. ": every ore (and every crystal rock ore, the secrets)")
+				for i = #before + 1, #before + crystalRows do
+					T.truthy(t.Rows[i].Name:find("(crystal rock)", 1, true), zone.Id .. ": crystal rock rows next")
+				end
+				-- the SECRET ores last: ??? names, "1 in N" chances (SecretOreConfig)
+				for i = #before + crystalRows + 1, #t.Rows do
+					T.eq(t.Rows[i].Name, "??? Secret", zone.Id .. ": the secret's name stays hidden")
+					T.truthy(t.Rows[i].Before:find("1 in ", 1, true), zone.Id .. ": its chance is shown")
 				end
 				t = table.clone(t)
 				t.Rows = table.move(t.Rows, 1, #before, 1, {})

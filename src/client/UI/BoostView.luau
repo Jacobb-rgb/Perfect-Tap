@@ -65,6 +65,8 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local LimitedGolems = require(Shared.Config.LimitedGolems)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local OreData = require(Shared.Config.OreData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
+local MineFloors = require(Shared.Config.MineFloors)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local PopTheme = require(Shared.Config.PopTheme)
@@ -625,6 +627,44 @@ function BoostView.rarestFirst(rows: { OddsRow }, orders: { number }): { OddsRow
 end
 
 --[[
+	The SECRET ores' rows for a zone (SecretOreConfig): any ore that drops
+	on a mine floor may turn into one and ore luck raises that too, so every
+	odds table that shows ore chances shows theirs ("1 in N" at the luck
+	before and after): the chance always, the name only as ??? (none for a
+	zone that is no mine floor).
+]]
+function BoostView.secretRows(zoneId: string?, luckBefore: number, luckAfter: number): { OddsRow }
+	local rows: { OddsRow } = {}
+	local floor = if zoneId then MineFloors.ByZone[zoneId] else nil
+	if not floor then
+		return rows
+	end
+	for _, secret in SecretOreConfig.forFloor(floor.Id) do
+		local row = BoostView.row(
+			"??? Secret",
+			Rarity.get("Secret").Color,
+			SecretOreConfig.chance(secret, luckBefore),
+			SecretOreConfig.chance(secret, luckAfter)
+		)
+		row.Before = SecretOreConfig.oddsText(secret, luckBefore)
+		row.After = SecretOreConfig.oddsText(secret, luckAfter)
+		table.insert(rows, row)
+	end
+	return rows
+end
+
+-- The same as text lines for a luck card (StoreController): every secret, its floor, before -> after.
+function BoostView.secretLines(luckBefore: number, luckAfter: number): { string }
+	local lines = { "Chance a mine-floor chunk is a ??? Secret ore:" }
+	for _, secret in SecretOreConfig.List do
+		local floor = if secret.Floor then MineFloors.ById[secret.Floor] else nil
+		local where = if floor then floor.Name else "every floor"
+		table.insert(lines, `{where}:  {SecretOreConfig.oddsText(secret, luckBefore)}  →  {SecretOreConfig.oddsText(secret, luckAfter)}`)
+	end
+	return lines
+end
+
+--[[
 	Hexa Lucky's table for a zone: the chance of every ore of the zone in
 	one ore roll without and with the boost (BoostConfig.oreOdds at the
 	player's luck from BoostConfig.hexaLuck), rarest first, "Rare or
@@ -662,6 +702,9 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 			for _, row in block(crystal, " (crystal rock)") do
 				table.insert(rows, row)
 			end
+		end
+		for _, row in BoostView.secretRows(zone.Id, without, with) do
+			table.insert(rows, row)
 		end
 		local before = BoostConfig.rareShare(weights, without)
 		local crystalBefore = if crystal then BoostConfig.rareShare(crystal, without) else 0

@@ -53,6 +53,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local OreData = require(Shared.Config.OreData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
@@ -65,6 +66,7 @@ local Cleaning = script.Parent.Parent.Cleaning
 local PointerInput = require(Cleaning.PointerInput)
 local CameraFit = require(Cleaning.CameraFit)
 local DefaultLook = require(Cleaning.DefaultLook)
+local SecretCleanFx = require(Cleaning.SecretCleanFx)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Hotbar = require(script.Parent.Parent.Util.Hotbar)
@@ -111,16 +113,43 @@ function CleaningController.defaultLook(): any
 end
 
 -- Calls one of the look's callbacks (a broken look never breaks the session).
-local function call(ctx: any, name: string, ...: any)
+local function callLook(ctx: any, name: string, args: { n: number, [number]: any })
 	local fn = ctx.look[name]
 	if type(fn) ~= "function" then
 		return
 	end
-	local args = table.pack(...)
 	args[args.n + 1] = ctx
 	local ok, err = pcall(fn, table.unpack(args, 1, args.n + 1))
 	if not ok then
 		warn(`[Cleaning] look.{name} error: {err}`)
+	end
+end
+
+-- The look's callback, and for a SECRET ore the jackpot's build-up next to it (Cleaning/SecretCleanFx);
+-- its done plays the BOOM and the jackpot screen first, then the look's done (the card).
+local function call(ctx: any, name: string, ...: any)
+	local args = table.pack(...)
+	local secret = ctx.secretFx == true
+	if secret and name == "done" then
+		local ok, err = pcall(function()
+			SecretCleanFx.done(args[1], ctx, function()
+				callLook(ctx, "done", table.pack(table.unpack(args, 1, args.n)))
+			end)
+		end)
+		if not ok then
+			warn(`[Cleaning] SecretCleanFx.done error: {err}`)
+			callLook(ctx, "done", args)
+		end
+		return
+	end
+	callLook(ctx, name, table.pack(table.unpack(args, 1, args.n)))
+	local fx = if secret then (SecretCleanFx :: any)[name] else nil
+	if type(fx) == "function" then
+		args[args.n + 1] = ctx
+		local ok, err = pcall(fx, table.unpack(args, 1, args.n + 1))
+		if not ok then
+			warn(`[Cleaning] SecretCleanFx.{name} error: {err}`)
+		end
 	end
 end
 
@@ -165,6 +194,8 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		Connections = {},
 		LookState = {},
 		look = look,
+		-- a SECRET ore in the vise: the jackpot's build-up runs next to the look (SecretCleanFx)
+		secretFx = relicId == nil and SecretOreConfig.isSecret(data.OreId),
 		pointer = pointer,
 		tracker = tracker,
 		submission = { Strokes = {}, Input = pointer.Kind },

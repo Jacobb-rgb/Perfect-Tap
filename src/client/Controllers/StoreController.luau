@@ -305,6 +305,10 @@ local function luckLines(delta: { [string]: number }): { string }
 			table.insert(lines, `{if info then info.Name else zone.Zone}:  {percent(zone.Before)}  →  {percent(zone.After)}`)
 		end
 	end
+	-- luck raises the SECRET ores' chance too: always shown (BoostView.secretLines)
+	for _, line in BoostView.secretLines(preview.LuckBefore, preview.LuckAfter) do
+		table.insert(lines, line)
+	end
 	return lines
 end
 

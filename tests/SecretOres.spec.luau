@@ -172,6 +172,50 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("secret ores: every ore odds table shows ??? Secret with its chance, luck applied", function()
+		local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+		for _, floor in MineFloors.List do
+			local rows = BoostView.secretRows(floor.ZoneId, 1, 4)
+			local own = SecretOreConfig.forFloor(floor.Id)
+			T.eq(#rows, #own, floor.Id .. ": one row per secret it can turn into")
+			for k, row in rows do
+				T.eq(row.Name, "??? Secret", floor.Id .. ": the name hidden")
+				T.eq(row.Before, SecretOreConfig.oddsText(own[k], 1), floor.Id .. ": the chance now")
+				T.eq(row.After, SecretOreConfig.oddsText(own[k], 4), floor.Id .. ": the chance with the luck")
+			end
+		end
+		T.eq(#BoostView.secretRows("NoSuchZone", 1, 1), 0, "no mine floor, no secret")
+		local lines = BoostView.secretLines(1, 6.25)
+		T.eq(#lines, #SecretOreConfig.List + 1, "a title and a line per secret")
+		T.truthy(lines[#lines]:find("every floor:  1 in 1,000,000  →  1 in 400,000", 1, true), lines[#lines])
+	end)
+
+	T.test("secret ores: the codex shows them as ??? with their chance, never in the 36 count", function()
+		local CodexView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CodexView")
+		local found = { Coal = true, HollowEye = true }
+		local secrets = CodexView.secretEntries(found, { HollowEye = true })
+		T.eq(#secrets, 6, "six secret cards")
+		local all = CodexView.entries(found)
+		for _, e in secrets do
+			table.insert(all, e)
+		end
+		local n, total = CodexView.count(all)
+		T.eq(n, 1, "only Coal counts")
+		T.eq(total, #OreData.List, "the 36")
+		for _, e in secrets do
+			local text = CodexView.detailText(e)
+			if e.Ore.Id == "HollowEye" then
+				T.truthy(e.Found and e.New, "found and NEW")
+				T.eq(text.Name, "Hollow Eye")
+				T.truthy(text.Where:find("1 in 4,000", 1, true), text.Where)
+			else
+				T.eq(text.Name, CodexView.HiddenName, e.Ore.Id .. " hidden")
+				T.truthy(text.Income:find("1 in ", 1, true), e.Ore.Id .. ": the chance is never hidden")
+				T.falsy(text.Income:find(e.Ore.Name, 1, true), e.Ore.Id .. ": the name is")
+			end
+		end
+	end)
+
 	T.test("secret ores: the Hollow Eye blinks (iris hidden, lid shown) only now and then", function()
 		local shown = ItemBuilder.display({ K = "Clean", O = "HollowEye", G = "Flawless" }, CF.new(), 1)
 		local pivot = CF.new(shown:GetAttribute("Center"))

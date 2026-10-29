@@ -682,6 +682,9 @@ function EnchantView.odds(
 		if not effect.NoEffect then
 			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, effect.Before, effect.After)
 		end
+		for _, row in BoostView.secretRows(effect.Zone, preview.LuckBefore, preview.LuckAfter) do
+			table.insert(rows, row)
+		end
 	end
 	if artifacts then
 		for _, line in preview.Artifacts do

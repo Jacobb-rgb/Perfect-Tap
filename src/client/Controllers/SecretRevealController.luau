@@ -8,6 +8,10 @@
 	      find on this server (Global: Rainbow Nova from any server), built
 	      here from OreData (TextChatService RBXGeneral:DisplaySystemMessage):
 	      "[SECRET] Mia found Hollow Eye! (1 in 4,000)"
+	  Fx "SecretPillar" (position, oreId)   a column of rainbow light over a
+	      station where someone near found a secret (everyone within
+	      SecretService.PillarRadius sees it): six turning shafts round a
+	      white core, rings climbing it, PillarSeconds, then it fades.
 	  play(oreId, onDone?)   the jackpot screen (Effects/SecretReveal) from
 	      the BOOM: posed every frame, a tap / click / A skips to the flight
 	      after SecretReveal.SkipAfter, Reduce motion (Motion.reduced()), a
@@ -37,6 +41,8 @@ local SecretRevealController = {}
 
 SecretRevealController.KeepFound = 30 -- seconds a SecretFound waits for its cleaning to burst
 SecretRevealController.Color = "#FF78E6" -- the chat line's colour (Rarity.Secret)
+SecretRevealController.PillarSeconds = 3.6
+SecretRevealController.PillarHeight = 120
 
 ---------------------------------------------------------------- pure (specced)
 
@@ -149,7 +155,81 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 	end)
 end
 
+-- The column of light over a station (Fx "SecretPillar").
+local function pillar(position: any, _oreId: any)
+	if typeof(position) ~= "Vector3" then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "SecretPillar"
+	folder.Parent = Workspace
+	local function neon(color: Color3): Part
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Material = Enum.Material.Neon
+		p.Color = color
+		p.Parent = folder
+		return p
+	end
+	local shafts = {}
+	for _, color in SecretOreConfig.Rainbow do
+		table.insert(shafts, neon(color))
+	end
+	local core = neon(Color3.fromRGB(255, 246, 228))
+	local rings = {}
+	for k = 1, 3 do
+		local bars = {}
+		for j = 1, 12 do
+			table.insert(bars, neon(SecretOreConfig.Rainbow[(j + k) % #SecretOreConfig.Rainbow + 1]))
+		end
+		rings[k] = bars
+	end
+	local reduced = Motion.reduced()
+	local started = os.clock()
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		local st = os.clock() - started
+		local life = SecretRevealController.PillarSeconds
+		if st >= life then
+			connection:Disconnect()
+			folder:Destroy()
+			return
+		end
+		local up = if reduced then 1 else math.min(st / 0.25, 1)
+		local fade = math.clamp((st - (life - 0.8)) / 0.8, 0, 1)
+		local height = SecretRevealController.PillarHeight * up
+		local spin = if reduced then 0 else st * 1.6
+		for k, shaft in shafts do
+			local a = k * math.pi / 3 + spin
+			shaft.Size = Vector3.new(0.7, height, 0.7)
+			shaft.CFrame = CFrame.new(position + Vector3.new(math.cos(a) * 1.3, height / 2, math.sin(a) * 1.3))
+			shaft.Transparency = 0.25 + 0.75 * fade
+		end
+		core.Size = Vector3.new(1.4, height, 1.4)
+		core.CFrame = CFrame.new(position + Vector3.new(0, height / 2, 0))
+		core.Transparency = 0.15 + 0.85 * fade
+		for k, bars in rings do
+			local u = if reduced then k / 3 else (st * 0.7 + k / 3) % 1
+			local y = position.Y + 4 + u * 50
+			local r = 2.6 + 1.5 * math.sin(u * math.pi)
+			for j, bar in bars do
+				local a = j * math.pi / 6 + spin
+				local at = Vector3.new(position.X + math.cos(a) * r, y, position.Z + math.sin(a) * r)
+				bar.Size = Vector3.new(0.25, 0.25, r * 0.5)
+				bar.CFrame = CFrame.lookAt(at, at + Vector3.new(-math.sin(a), 0, math.cos(a)))
+				bar.Transparency = math.max(fade, u * 0.8)
+			end
+		end
+	end)
+end
+
 function SecretRevealController.init()
+	local FxController = require(script.Parent.FxController)
+	FxController.register("SecretPillar", pillar)
 	Net.listen("SecretFound", function(data)
 		if type(data) == "table" and SecretOreConfig.isSecret(data.OreId) then
 			found[data.OreId] = { New = data.New == true, At = os.clock() }
