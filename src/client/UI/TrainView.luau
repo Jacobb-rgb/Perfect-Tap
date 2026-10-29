@@ -59,6 +59,10 @@ TrainView.HudChipLeft = nil :: number? -- the round look: under the tiles' left 
 TrainView.HudChipWidth = nil :: number?
 TrainView.HudChipStack = false
 TrainView.HudChipTenFoot = false -- a TV: the stacked chip's bigger words (CHIP.StackTv)
+-- The chip's ScreenGui order: over the HUD (5), or under it in the round look (the chip by its
+-- tiles: the HUD's toasts, "+$X" floaters and Server Luck line stay readable over it there).
+TrainView.ChipOrder = 6
+TrainView.UnderHudOrder = 4
 -- compact (touch) layouts: the side menu's MENU button sits first in the chip's
 -- row (SideMenuView), so the chip starts this far right of ChipLeft (chipLeft)
 TrainView.MenuSlot = 88 -- MENU (84 wide at x 12) and a gap
@@ -214,7 +218,7 @@ local CHIP: { [string]: ChipMetrics } = {
 	Stack = { Width = 150, Height = 104, Icon = 34, Title = 18, Line = 13, SendWidth = 0, SendHeight = 30, SendText = 18, Key = 18 },
 	-- a TV: the words at least 18 px at 1080p (15 units): the name across the chip on two rows
 	-- ("TRAIN" / "120/180"), the line on two rows (HudBubble.StackChipHeightTv)
-	StackTv = { Width = 161, Height = 144, Icon = 38, Title = 20, Line = 15, SendWidth = 0, SendHeight = 34, SendText = 20, Key = 20 },
+	StackTv = { Width = 161, Height = 158, Icon = 38, Title = 20, Line = 15, SendWidth = 0, SendHeight = 34, SendText = 20, Key = 20 },
 }
 
 -- The stacked chip's rows (design units from its top): the locomotive's square with the name
@@ -234,8 +238,10 @@ type StackRows = {
 }
 local STACK: StackRows =
 	{ Pad = 6, Square = 34, TitleRows = 1, TitleMin = 0, BarTop = 0, LineTop = 42, LineRows = 1, SendTop = 59, Bottom = 5 }
+-- (a TV's rows follow the name's two rows: pixelStackLayout puts the bar, the line and SEND under
+-- them; BarTop / LineTop / SendTop here fit the widest pixel font, 24 units a row)
 local STACK_TV: StackRows =
-	{ Pad = 6, Square = 0, TitleRows = 2, TitleMin = 15, BarTop = 46, LineTop = 57, LineRows = 2, SendTop = 95, Bottom = 5 }
+	{ Pad = 6, Square = 0, TitleRows = 2, TitleMin = 15, BarTop = 60, LineTop = 71, LineRows = 2, SendTop = 109, Bottom = 5 }
 
 local function stackRows(): StackRows
 	return if TrainView.HudChipTenFoot then STACK_TV else STACK
@@ -1169,6 +1175,7 @@ end
 ]]
 function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
+	refs.Chip.DisplayOrder = if TrainView.HudChipLeft and TrainView.HudChipTop then TrainView.UnderHudOrder else TrainView.ChipOrder
 	placeChip(refs, chipMetrics(compact))
 	refs.ChipFrame.Position = UDim2.fromOffset(TrainView.chipLeft(compact), TrainView.chipTop())
 
@@ -1831,14 +1838,19 @@ local function pixelStackLayout(refs: Refs, m: ChipMetrics, area: number)
 		Pop.fit(refs.ChipTitle, m.Title)
 	end
 	refs.ChipTitle.TextXAlignment = Enum.TextXAlignment.Left
+	local lineTop, sendTop = k.LineTop, k.SendTop
 	if k.BarTop > 0 then
-		refs.ChipBar.Position = UDim2.fromOffset(pad + 2, k.BarTop)
+		-- (a TV: the bar under the name's two rows, the line and SEND under it)
+		local barTop = math.min(k.BarTop, pad + 2 + k.TitleRows * titleH + 4)
+		refs.ChipBar.Position = UDim2.fromOffset(pad + 2, barTop)
 		refs.ChipBar.Size = UDim2.fromOffset(m.Width - 2 * (pad + 2), 7)
+		lineTop = barTop + 7 + 4
+		sendTop = lineTop + k.LineRows * (m.Line + 2) + 4
 	else
 		refs.ChipBar.Position = UDim2.fromOffset(textLeft, pad + 2 + titleH + 4)
 		refs.ChipBar.Size = UDim2.fromOffset(m.Width - textLeft - pad, 7)
 	end
-	refs.ChipLine.Position = UDim2.fromOffset(pad + 2, k.LineTop)
+	refs.ChipLine.Position = UDim2.fromOffset(pad + 2, lineTop)
 	refs.ChipLine.Size = UDim2.fromOffset(m.Width - 2 * (pad + 2), k.LineRows * (m.Line + 2))
 	refs.ChipLine.TextXAlignment = Enum.TextXAlignment.Left
 	refs.ChipLine.TextWrapped = k.LineRows > 1 -- (a TV: a long line goes on two rows, not smaller)
@@ -1846,8 +1858,8 @@ local function pixelStackLayout(refs: Refs, m: ChipMetrics, area: number)
 	-- SEND across the bottom, above the lip
 	local send = holderOf(refs.ChipSend)
 	send.AnchorPoint = Vector2.new(0, 0)
-	send.Position = UDim2.fromOffset(pad, k.SendTop)
-	send.Size = UDim2.fromOffset(m.Width - 2 * pad, math.max(20, area - k.SendTop - k.Bottom))
+	send.Position = UDim2.fromOffset(pad, sendTop)
+	send.Size = UDim2.fromOffset(m.Width - 2 * pad, math.max(20, area - sendTop - k.Bottom))
 	Pop.face(send, TrainView.ChipPaints.Send, if PopTheme.round() then PopTheme.Corner else 10)
 	TrainView.style(refs.ChipSend, refs.ChipSend.BackgroundColor3 ~= Theme.PanelLight, Theme.Good, Theme.GoodDark)
 	Pop.fit(refs.ChipSend :: any, m.SendText)

@@ -379,6 +379,13 @@ return function(T, Loader)
 			T.truthy(titleFit and titleFit.MinTextSize * scale >= 18, "the name never under 18 px")
 			T.truthy(title.TextWrapped and title.Size.Y.Offset >= 2 * titleFit.MinTextSize, "two rows for the name")
 			T.truthy(title.Size.X.Offset >= 7 * titleFit.MinTextSize, "room for 120/180 at that size")
+			-- (review 2026-10-29) the rows never overlap: the name, the bar, the line, SEND
+			local bar = train.ChipBar :: any
+			local send = (train.ChipSend :: any).Parent
+			T.truthy(bar.Position.Y.Offset >= title.Position.Y.Offset + title.Size.Y.Offset, "the bar under the name")
+			T.truthy(line.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, "the line under the bar")
+			T.truthy(send.Position.Y.Offset >= line.Position.Y.Offset + line.Size.Y.Offset, "SEND under the line")
+			T.truthy(send.Position.Y.Offset + send.Size.Y.Offset <= HudBubble.StackChipHeightTv, "SEND inside the chip")
 			train.Gui:Destroy()
 			train.Chip:Destroy()
 			refs.Gui:Destroy()
@@ -391,7 +398,7 @@ return function(T, Loader)
 	T.test("RoundReview: on the smallest touch phones the TRAIN chip keeps off the touch buttons and the boost corner", function()
 		inRound(function()
 			local TutorialView = ui("TutorialView")
-			for _, size in { { 568, 320 }, { 600, 340 }, { 620, 350 }, { 640, 360 } } do
+			for _, size in { { 568, 320 }, { 600, 320 }, { 600, 340 }, { 620, 350 }, { 640, 320 }, { 640, 360 }, { 654, 334 } } do
 				for _, inset in { 36, 58 } do
 					local where = `{size[1]} x {size[2]} (inset {inset})`
 					local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
@@ -404,9 +411,25 @@ return function(T, Loader)
 					local x0, y0 = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
 					local chipRect = { x0, y0, x0 + chip.X, y0 + chip.Y }
 					local small = math.min(size[1], size[2]) <= 500
+					local buttons = {}
 					for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
 						local r = { w - b.Left / scale, h - b.Top / scale, w - b.Right / scale, h - b.Bottom / scale }
+						buttons[b.Name] = r
 						T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
+					end
+					-- (review 2026-10-29) where it reaches the floaters' band over the money or the toasts'
+					-- column, it draws under the HUD: those stay readable over it
+					local column = BoostView.ToastColumn
+					local toasts = { w / 2 - column.Width / 2, column.Top, w / 2 + column.Width / 2, column.Top + column.Height }
+					local layout = HudBubble.layout(scale, size[1], true, false, gui.Y)
+					if chipRect[4] > HudBubble.roundFloor(layout, h) or overlap(chipRect, toasts) then
+						TrainView.useHud(refs.Gui)
+						local train = TrainView.build(true)
+						TrainView.layout(train, true, w, h)
+						TrainView.useHud(nil)
+						T.truthy(train.Chip.DisplayOrder < refs.Gui.DisplayOrder, `{where}: the chip under the HUD's toasts and floaters`)
+						train.Gui:Destroy()
+						train.Chip:Destroy()
 					end
 					-- the money under it
 					local moneyTop = h + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset
@@ -430,6 +453,10 @@ return function(T, Loader)
 						local rowH = if stacked then count * tile + (count - 1) * gap else tile
 						local corner = { w - right - rowW, h - bottom - rowH, w - right, h - bottom }
 						T.falsy(overlap(chipRect, corner), `{where}: the chip clear of the boost corner ({count})`)
+						for name, r in buttons do
+							T.falsy(overlap(corner, r), `{where}: the boost corner ({count}) clear of {name}`)
+						end
+						T.truthy(corner[2] >= 0, `{where}: the boost corner ({count}) on the screen`)
 					end
 					refs.Gui:Destroy()
 				end

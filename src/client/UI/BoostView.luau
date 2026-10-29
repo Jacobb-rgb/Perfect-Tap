@@ -3240,6 +3240,7 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	local spot = "Corner"
 	local pill, bubble = input.Pill, input.Bubble
 	local count = math.max(1, input.Count or #BoostConfig.KindIds)
+	local edgeRight = right -- (the right edge's spot, before any move)
 	if input.Touch and pill == nil then
 		-- (a column at the right edge, on the touch buttons under it)
 		local function columnBottom(r: number): number
@@ -3272,7 +3273,16 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 					and sideTop < chip.Bottom
 					and chip.Top < sideTop + tile
 				if onChip then
-					bottom = math.ceil(h - gap - columnH)
+					local topDown = math.ceil(h - gap - columnH)
+					if topDown >= columnBottom(beside) then
+						bottom = topDown -- (from the top down, still over the touch buttons)
+					else
+						-- (no room left of the bubble at all: the column at the right edge over the
+						-- bubble's right part, clear of FIRE, the chip and the bubble's GOT IT at its left)
+						right = edgeRight
+						bottom = math.min(columnBottom(edgeRight), math.ceil(h - gap - columnH))
+						spot = "OverBubble"
+					end
 				else
 					stacked, columnH, rowW, bottom = false, tile, sideW, sideBottom
 				end
@@ -3284,7 +3294,9 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 				and w / 2 - column.Width / 2 < w - right
 				and top < column.Top + column.Height
 				and column.Top < top + columnH
-			spot = if overToasts then "OverToasts" else "Beside"
+			if spot ~= "OverBubble" then
+				spot = if overToasts then "OverToasts" else "Beside"
+			end
 		end
 	elseif input.Touch and pill then
 		-- (a row on the Shop pill, and on any touch button its tiles would reach)

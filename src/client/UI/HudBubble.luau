@@ -529,7 +529,7 @@ HudBubble.RoundMenuTop = 140
 HudBubble.RoundMenuLeft = 10
 
 HudBubble.StackChipHeight = 104 -- TrainView's stacked chip (under the round look's tiles on a mouse or a TV)
-HudBubble.StackChipHeightTv = 144 -- the stacked chip on a TV (the name and the line on two rows each)
+HudBubble.StackChipHeightTv = 158 -- the stacked chip on a TV (the name and the line on two rows each)
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
