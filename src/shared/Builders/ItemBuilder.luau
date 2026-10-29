@@ -30,6 +30,7 @@ local Rarity = require(script.Parent.Parent.Config.Rarity)
 local OreShapesLow = require(script.Parent.OreShapesLow)
 local OreShapesHigh = require(script.Parent.OreShapesHigh)
 local SecretOreShapes = require(script.Parent.SecretOreShapes)
+local SecretOreFx = require(script.Parent.SecretOreFx)
 local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
 
 local ItemBuilder = {}
@@ -44,6 +45,8 @@ export type ItemInfo = {
 ItemBuilder.CleanScale = 0.85 -- unit recipe -> physical clean ore
 ItemBuilder.DisplayScale = 1.15 -- unit recipe -> podium / pen display
 ItemBuilder.Budget = { Raw = 6, Clean = 8, Ingot = 4, Display = 14 }
+-- a secret ore on a podium: its moving parts and the aura (SecretOreFx); they are rare
+ItemBuilder.Budget.SecretDisplay = 34
 
 -- Dirty Ore crust (the same for every ore: it must not hint at the rarity).
 ItemBuilder.DirtyCrust = Color3.fromRGB(122, 106, 92)
@@ -100,6 +103,14 @@ type Spec = {
 	Transparency: number,
 	Reflectance: number,
 	Neon: boolean,
+	-- a moving part (secret ores, SecretOreFx): its Move kind and how (unit space)
+	Name: string?,
+	Move: string?,
+	Pivot: Vector3?,
+	Axis: Vector3?,
+	Speed: number?,
+	Phase: number?,
+	Amount: number?,
 }
 
 type Pal = {
@@ -966,6 +977,14 @@ local function makePart(spec: Spec, root: CFrame, k: number, props: { [string]: 
 	part.Transparency = spec.Transparency
 	part.Reflectance = spec.Reflectance
 	part.CastShadow = not spec.Neon and spec.Transparency < 0.2 and math.max(size.X, size.Y, size.Z) >= 0.9
+	if spec.Name then
+		part.Name = spec.Name
+	end
+	if spec.Move then
+		local pivot = root:PointToWorldSpace((spec.Pivot or spec.CF.Position) * k)
+		local axis = root:VectorToWorldSpace(spec.Axis or Vector3.yAxis)
+		SecretOreFx.mark(part, spec.Move, pivot, axis, spec.Speed, spec.Phase, spec.Amount)
+	end
 	return part
 end
 
@@ -1083,23 +1102,26 @@ local function rawChunk(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 			})
 		)
 	)
-	-- a smear of mud
+	-- a smear of mud (a secret ore: a crack with light leaking out of it instead)
+	local secret = Rarity.get(ore.Rarity).Order >= 7
 	addDecor(
 		model,
 		b,
 		Geo.make(
 			"Part",
 			decorProps({
+				Name = if secret then "Crack" else "Part",
 				CFrame = cf * CFrame.new(-0.25, -0.08, -0.66) * CFrame.Angles(0, 0, rng:range(-0.4, 0.4)),
-				Size = Vector3.new(0.72, 0.5, 0.08),
-				Color = ItemBuilder.DirtyMud,
-				Material = SMOOTH,
+				Size = if secret then Vector3.new(0.7, 0.1, 0.06) else Vector3.new(0.72, 0.5, 0.08),
+				Color = if secret then Color3.fromRGB(214, 120, 255) else ItemBuilder.DirtyMud,
+				Material = if secret then NEON else SMOOTH,
 			})
 		)
 	)
 	-- the tiny glint: the only thing that differs between ores
+	-- (a secret ore's are bigger and rainbow, and the chunk sparkles: "something special inside")
 	local glintSpots = { CFrame.new(0.42, 0.42, -0.62), CFrame.new(-0.5, 0.5, 0.52) }
-	local glintSizes = { 0.26, 0.18 }
+	local glintSizes = if secret then { 0.34, 0.28 } else { 0.26, 0.18 }
 	for i, spot in glintSpots do
 		local glintPart = Geo.make(
 			"Part",
@@ -1107,11 +1129,14 @@ local function rawChunk(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 				Name = "Glint",
 				CFrame = cf * spot * CFrame.Angles(0, i * 0.8, 0) * VERTEX_UP,
 				Size = Vector3.one * glintSizes[i],
-				Color = glint,
+				Color = if secret then SecretOreShapes.Rainbow[i * 3 - 2] else glint,
 				Material = NEON,
 			})
 		)
 		addDecor(model, b, glintPart)
+	end
+	if secret then
+		SecretOreFx.sparkly(model, b)
 	end
 end
 
@@ -1806,6 +1831,11 @@ local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: str
 		light.Parent = main
 	end
 	model:SetAttribute("Center", center)
+	-- Secret: the halo, the aura and the glowing floor (SecretOreFx moves them)
+	if c.Order >= 7 then
+		local reach = math.max(mx.X - mn.X, mx.Y - mn.Y, mx.Z - mn.Z) / 2 * k
+		SecretOreFx.dress(model, ore.Id, CFrame.new(center) * cf.Rotation, reach, cf.Position.Y)
+	end
 end
 
 --[[

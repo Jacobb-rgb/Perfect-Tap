@@ -1,19 +1,25 @@
 --[[
-	SecretReveal: the jackpot screen when a SECRET ore drops (owner
-	2026-10-29: "u nich musime udelat nejake cool animace ... inspiruj se
-	pet simulatorem"). Pure builder + pose (SecretRevealController plays it,
-	the Lune preview tools/lune/export_secret_reveal.luau poses the same
-	frames); nothing runs on its own.
+	SecretReveal: the jackpot screen of a SECRET ore (owner 2026-10-29: "u
+	nich musime udelat nejake cool animace ... inspiruj se pet simulatorem";
+	his answers to the concept: the jackpot plays when the player CLEANS the
+	sparkly dirty ore, "udělej to ještě mnohem mnohem víc cool"). Pure
+	builder + pose (SecretRevealController plays it when the cleaning's dirt
+	bursts, the Lune previews pose the same frames); nothing runs on its own.
+	The build-up happens in the world before it (the cleaning: light leaking
+	through the dirt, the shell shaking, heartbeats); this screen starts at
+	the BOOM.
 
-	The sequence (seconds, SecretReveal.* below):
-	  0     the screen darkens (Dim)
-	  0.35  a black silhouette of the ore turns in the middle, three heartbeats
-	        (Thumps), each one bigger, a ring flies off every beat
-	  Burst a gold-white flash (one: within the shared 2.5 a second cap), the
-	        ore shows itself big and spinning, two layers of rays turn behind
-	        it (near-black and rainbow, like RevealFx's "Secret" tier),
-	        confetti, "SECRET!" pops over it, its name, a SECRET pill and the
-	        chance ("1 in 4,000") slide up under it, NEW! on a first find
+	The show (seconds; rarer = bigger, SecretOreConfig Stars 1..3, Tiers):
+	  0     one gold-white flash (the shared 2.5 a second cap), a shockwave
+	        ring (more rings a moment apart at 2 and 3 stars), the screen
+	        darkens (3 stars: deep space with twinkling stars), the ore pops
+	        out big, whirling, its moving parts alive (SecretOreFx), the
+	        viewport camera pulls back
+	  0.05  "SECRET!" slams down from big, rainbow letters; two layers of rays
+	        (near-black and rainbow, RevealFx's "Secret" tier), a third gold
+	        layer at 2 and 3 stars; confetti, twinkling sparkles round the ore
+	  0.3   its name, the SECRET pill with its stars and the chance slide up,
+	        NEW! on a first find; 3 stars: a gold ONE IN A MILLION! ribbon
 	  Hold  it flies into the backpack button (Fly), everything else fades
 	A tap skips to the flight from SkipAfter (the controller moves t on).
 
@@ -24,19 +30,18 @@
 	                                 Scale = the HUD's UI scale, Target =
 	                                 the bag's middle (px, nil = fade in place),
 	                                 Reduced = Motion.reduced(), Phone = true
-	                                 for fewer rays and confetti }
-
+	                                 for fewer rays and pieces }
+	  total(stars), shake(t, stars) -> the camera nudge (0..1) for the world
 	Until Animace's RevealFx (Effects/RevealFx, the egg hatch family) is on
-	main the rays, flash and banner are drawn here with its "Secret" values:
-	20 rays (10 bars) alternating (14,10,22) and rainbow hues drifting 0.25
-	turn/s, two layers (+45 / -30 degrees a second), flash (255,240,200) at
-	most 0.9 opaque fading in 0.45 s; Montserrat: headline 64 Heavy white with
-	a 5-unit rainbow edge, name 46 Heavy with a 4-unit edge, a 34 tall round
-	pill, the chance 22 Bold.
-	Reduce motion: no flash, beats, confetti or spin; the rays stand still,
-	words fade in at full size and the ore fades out where it is.
+	main the rays, flash and banner are drawn here with its "Secret" values
+	(20 rays, (14,10,22) and a rainbow drifting 0.25 turn/s, layers +45 /
+	-30 degrees a second, flash (255,240,200) <= 0.9 opaque, gone in 0.45 s;
+	Montserrat: headline 64 Heavy with rainbow letters and a 5-unit edge,
+	name 46 Heavy, a 34 tall round pill, the chance 22 Bold).
+	Reduce motion: no flash, shockwaves, confetti, sparkles or spin; the rays
+	stand still, words fade in at full size, the ore fades out where it is.
 	Perf: everything is built once (build); a secret ore's model once per ore
-	(setOre keeps them: there are 6). A pose sets transforms and colours only.
+	(setOre keeps them: there are 6). A pose sets transforms and colours.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -45,28 +50,45 @@ local Config = Shared:WaitForChild("Config")
 local OreData = require(Config:WaitForChild("OreData"))
 local PopTheme = require(Config:WaitForChild("PopTheme"))
 local SecretOreConfig = require(Config:WaitForChild("SecretOreConfig"))
-local ItemBuilder = require(Shared:WaitForChild("Builders"):WaitForChild("ItemBuilder"))
-local SecretOreShapes = require(Shared:WaitForChild("Builders"):WaitForChild("SecretOreShapes"))
+local Builders = Shared:WaitForChild("Builders")
+local ItemBuilder = require(Builders:WaitForChild("ItemBuilder"))
+local SecretOreShapes = require(Builders:WaitForChild("SecretOreShapes"))
+local SecretOreFx = require(Builders:WaitForChild("SecretOreFx"))
 local UIKit = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("UIKit"))
 
 local SecretReveal = {}
 
-SecretReveal.Dim = 0.35 -- seconds: the screen darkens
-SecretReveal.Thumps = { 0.62, 1.02, 1.38 } -- the hidden ore's heartbeats
-SecretReveal.Burst = 1.62 -- the flash: the secret shows itself
-SecretReveal.Hold = 4.7 -- from here it flies into the bag
+export type Tier = {
+	Hold: number, -- seconds until it flies into the bag
+	Shocks: { number }, -- when each shockwave ring starts
+	Gold: boolean, -- the third (gold) ray layer
+	Confetti: number,
+	Twinkles: number,
+	Cosmos: boolean, -- deep space behind it, the ONE IN A MILLION! ribbon
+	Shake: number, -- the world camera's nudge at the BOOM (0..1)
+}
+
+SecretReveal.Tiers = {
+	{ Hold = 3.6, Shocks = { 0 }, Gold = false, Confetti = 28, Twinkles = 8, Cosmos = false, Shake = 0.5 },
+	{ Hold = 4.2, Shocks = { 0, 0.3 }, Gold = true, Confetti = 36, Twinkles = 12, Cosmos = false, Shake = 0.7 },
+	{ Hold = 5.2, Shocks = { 0, 0.3, 0.6 }, Gold = true, Confetti = 44, Twinkles = 16, Cosmos = true, Shake = 0.9 },
+} :: { Tier }
+
 SecretReveal.Fly = 0.7
-SecretReveal.Total = SecretReveal.Hold + SecretReveal.Fly + 0.1
-SecretReveal.SkipAfter = SecretReveal.Burst + 0.45 -- a tap skips to the flight from here
+SecretReveal.SkipAfter = 0.8 -- a tap skips to the flight from here
 SecretReveal.Center = UDim2.fromScale(0.5, 0.42) -- the middle of it all (RevealFx's Center)
-SecretReveal.DimTo = 0.28 -- the dark overlay's transparency at its darkest
-SecretReveal.OreSize = 300 -- design units: the 3D ore's viewport
-SecretReveal.RayLength = 820 -- design units, end to end through the middle
-SecretReveal.Bars = { Front = 10, Back = 8, Phone = 6 } -- a bar is two rays
-SecretReveal.Confetti = { Full = 28, Phone = 16 }
+SecretReveal.DimTo = 0.28 -- the dark overlay's transparency at its darkest (3 stars: SpaceTo)
+SecretReveal.SpaceTo = 0.06
+SecretReveal.OreSize = 320 -- design units: the 3D ore's viewport
+SecretReveal.RayLength = 860 -- design units, end to end through the middle
+SecretReveal.Bars = { Front = 10, Back = 8, Gold = 6, Phone = 6 } -- a bar is two rays
+SecretReveal.PhoneConfetti = 16
+SecretReveal.PhoneTwinkles = 6
+SecretReveal.SpaceStars = 44
 SecretReveal.Fov = 30
 SecretReveal.FlashColor = Color3.fromRGB(255, 240, 200)
 SecretReveal.Dark = Color3.fromRGB(14, 10, 22)
+SecretReveal.Gold = Color3.fromRGB(255, 206, 72)
 
 export type Info = { Chance: string?, New: boolean? }
 
@@ -79,39 +101,47 @@ export type Opts = {
 }
 
 type Piece = { Frame: Frame, Dir: Vector2, Speed: number, Spin: number, Delay: number }
+type Twinkle = { Frame: Frame, Scale: UIScale, At: Vector2, Phase: number }
 
 export type View = {
 	Gui: ScreenGui,
 	Dim: Frame,
+	Space: { Frame },
 	Flash: Frame,
 	Stage: Frame,
 	Scale: UIScale,
 	Front: { Frame },
 	Back: { Frame },
+	GoldBars: { Frame },
 	Glow: Frame,
 	Halo: Frame,
-	Rings: { Frame },
+	Shocks: { Frame },
 	OreHolder: Frame,
 	OreScale: UIScale,
 	View: ViewportFrame,
 	Camera: Camera,
 	Models: { [string]: Model },
-	Shadows: { [string]: Model },
+	Rigs: { [Model]: SecretOreFx.Rig },
 	Radius: { [Model]: number },
 	OreId: string?,
+	Stars: number,
 	New: boolean,
 	Headline: Frame,
 	HeadScale: UIScale,
 	HeadLabel: TextLabel,
 	HeadEdge: UIGradient,
+	Ribbon: Frame,
+	RibbonScale: UIScale,
 	Info: Frame,
 	Name: TextLabel,
 	Pill: Frame,
+	PillText: TextLabel,
 	Chance: TextLabel,
 	NewTag: Frame,
 	NewScale: UIScale,
 	Hint: TextLabel,
 	Confetti: { Piece },
+	Twinkles: { Twinkle },
 }
 
 local WHITE = Color3.new(1, 1, 1)
@@ -149,6 +179,29 @@ local function round(frame: Frame)
 	UIKit.corner(frame, 999)
 end
 
+-- The tier of a secret ore (1 star for an unknown one).
+function SecretReveal.tierOf(stars: number?): Tier
+	return SecretReveal.Tiers[math.clamp(stars or 1, 1, #SecretReveal.Tiers)]
+end
+
+-- How long the whole show of a `stars` secret takes.
+function SecretReveal.total(stars: number?): number
+	return SecretReveal.tierOf(stars).Hold + SecretReveal.Fly + 0.1
+end
+
+-- The world camera's nudge at `t` (0..1): a hard kick at every shockwave, dying out fast.
+function SecretReveal.shake(t: number, stars: number?): number
+	local tier = SecretReveal.tierOf(stars)
+	local trauma = 0
+	for k, at in tier.Shocks do
+		local dt = t - at
+		if dt >= 0 and dt < 0.6 then
+			trauma = math.max(trauma, tier.Shake * (if k == 1 then 1 else 0.6) * (1 - dt / 0.6) ^ 2)
+		end
+	end
+	return trauma
+end
+
 -- Fades every word, edge and filled box under `root` (alpha 0 = shown, 1 = gone).
 local function fade(root: Instance, alpha: number)
 	for _, d in root:GetDescendants() do
@@ -165,9 +218,9 @@ end
 local function rainbowSequence(shift: number): ColorSequence
 	local colors = SecretOreShapes.Rainbow
 	local keys = {}
-	for k = 0, #colors do
-		local color = colors[(k + math.floor(shift)) % #colors + 1]
-		table.insert(keys, ColorSequenceKeypoint.new(k / #colors, color))
+	for k = 1, #colors + 1 do
+		local color = colors[(k - 1 + math.floor(shift)) % #colors + 1]
+		table.insert(keys, ColorSequenceKeypoint.new((k - 1) / #colors, color))
 	end
 	return ColorSequence.new(keys)
 end
@@ -178,9 +231,10 @@ local function hue(x: number): Color3
 end
 
 --[[
-	A built item made still for a viewport: only its visible parts (no welds,
-	sparkles or lights), anchored, its middle at the origin. Returns how far
-	its farthest corner reaches from the middle.
+	A built item made still for a viewport: its visible parts and its moving
+	parts (SecretOreFx: a blinking lid is see-through until it blinks), no
+	welds, sparkles, lights or floor disc, anchored, its middle at the
+	origin. Returns how far its farthest corner reaches from the middle.
 ]]
 local function still(model: Model): number
 	local parts: { BasePart } = {}
@@ -203,7 +257,8 @@ local function still(model: Model): number
 	local lo = Vector3.new(math.huge, math.huge, math.huge)
 	local hi = -lo
 	for _, part in parts do
-		if part.Transparency >= 0.99 then
+		local moving = part:GetAttribute("Move") ~= nil
+		if part.Name == "Floor" or (part.Transparency >= 0.99 and not moving) then
 			part:Destroy()
 			continue
 		end
@@ -213,6 +268,9 @@ local function still(model: Model): number
 		part.CanQuery = false
 		part.CastShadow = false
 		table.insert(kept, part)
+		if part.Transparency >= 0.99 then
+			continue
+		end
 		local half = part.Size / 2
 		for _, corner in CORNERS do
 			local at = part.CFrame * (corner * half)
@@ -235,21 +293,6 @@ local function still(model: Model): number
 	return reach
 end
 
--- The same model all black: the "???" the player sees before the flash.
-local function shadowOf(model: Model): Model
-	local shadow = model:Clone()
-	for _, d in shadow:GetDescendants() do
-		if d:IsA("BasePart") then
-			d.Color = SecretReveal.Dark
-			d.Material = Enum.Material.SmoothPlastic
-			d.Reflectance = 0
-			d.Transparency = 0
-		end
-	end
-	shadow.Name = model.Name .. "_Shadow"
-	return shadow
-end
-
 local function bar(parent: Instance, name: string, width: number, z: number): Frame
 	local frame = UIKit.new("Frame", {
 		Name = name,
@@ -257,6 +300,7 @@ local function bar(parent: Instance, name: string, width: number, z: number): Fr
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(width, SecretReveal.RayLength),
+		Visible = false,
 		ZIndex = z,
 	}, parent)
 	-- bright near the middle, gone at both ends
@@ -287,6 +331,20 @@ local function word(parent: Instance, name: string, text: string, size: number, 
 	}, parent)
 end
 
+local function disc(parent: Instance, name: string, size: number, color: Color3, z: number): Frame
+	local frame = UIKit.new("Frame", {
+		Name = name,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = color,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	}, parent)
+	round(frame)
+	return frame
+end
+
 function SecretReveal.build(): View
 	local gui = UIKit.new("ScreenGui", {
 		Name = "TerraForgeSecret",
@@ -304,6 +362,23 @@ function SecretReveal.build(): View
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 	}, gui)
+	-- deep space (3 stars): little stars all over the screen, twinkling
+	local space = {}
+	for k = 1, SecretReveal.SpaceStars do
+		local size = 2 + (k * 7) % 4
+		local star = UIKit.new("Frame", {
+			Name = "Star" .. k,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = if k % 5 == 0 then SecretReveal.Gold else WHITE,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(((k * 0.618034) % 1), ((k * 0.381966 + 0.13) % 1)),
+			Size = UDim2.fromOffset(size, size),
+			Visible = false,
+			ZIndex = 1,
+		}, gui)
+		round(star)
+		table.insert(space, star)
+	end
 	local stage = UIKit.new("Frame", {
 		Name = "Stage",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -313,47 +388,33 @@ function SecretReveal.build(): View
 		ZIndex = 2,
 	}, gui)
 	local scale = UIKit.new("UIScale", { Scale = 1 }, stage)
-	local front, back = {}, {}
+	local front, back, gold = {}, {}, {}
+	for k = 1, SecretReveal.Bars.Gold do
+		table.insert(gold, bar(stage, "Gold" .. k, 120, 2))
+	end
 	for k = 1, SecretReveal.Bars.Back do
 		table.insert(back, bar(stage, "Back" .. k, 40, 2))
 	end
 	for k = 1, SecretReveal.Bars.Front do
 		table.insert(front, bar(stage, "Ray" .. k, 70, 3))
 	end
-	local halo = UIKit.new("Frame", {
-		Name = "Halo",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = SecretReveal.FlashColor,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(520, 520),
-		ZIndex = 4,
-	}, stage)
-	round(halo)
-	local glow = UIKit.new("Frame", {
-		Name = "Glow",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(300, 300),
-		ZIndex = 4,
-	}, stage)
-	round(glow)
-	local rings = {}
-	for k = 1, #SecretReveal.Thumps do
+	local halo = disc(stage, "Halo", 560, SecretReveal.FlashColor, 4)
+	local glow = disc(stage, "Glow", 320, WHITE, 4)
+	-- shockwave rings: thick, fast, thinning as they fly out
+	local shocks = {}
+	for k = 1, 3 do
 		local ring = UIKit.new("Frame", {
-			Name = "Beat" .. k,
+			Name = "Shock" .. k,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(240, 240),
+			Size = UDim2.fromOffset(200, 200),
 			Visible = false,
-			ZIndex = 4,
+			ZIndex = 5,
 		}, stage)
 		round(ring)
-		UIKit.new("UIStroke", { Color = Color3.fromRGB(190, 140, 255), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
+		UIKit.new("UIStroke", { Color = WHITE, Thickness = 18, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
 		UIKit.new("UIScale", { Scale = 1 }, ring)
-		table.insert(rings, ring)
+		table.insert(shocks, ring)
 	end
 	-- the ore: a viewport, the camera turns round it
 	local oreHolder = UIKit.new("Frame", {
@@ -379,13 +440,46 @@ function SecretReveal.build(): View
 	camera.FieldOfView = SecretReveal.Fov
 	camera.Parent = view
 	view.CurrentCamera = camera
+	-- twinkling sparkles round the ore: a thin cross that grows, turns and shrinks
+	local twinkles: { Twinkle } = {}
+	for k = 1, SecretReveal.Tiers[#SecretReveal.Tiers].Twinkles do
+		local a = k * 2.399963 -- the golden angle: spread round the ore
+		local r = 170 + (k * 37) % 120
+		local frame = UIKit.new("Frame", {
+			Name = "Twinkle" .. k,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(44, 44),
+			Visible = false,
+			ZIndex = 7,
+		}, stage)
+		local color = if k % 3 == 0 then SecretReveal.Gold else WHITE
+		for _, size in { Vector2.new(44, 6), Vector2.new(6, 44) } do
+			local arm = UIKit.new("Frame", {
+				Name = "Arm",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = color,
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(size.X, size.Y),
+				ZIndex = 7,
+			}, frame)
+			round(arm)
+		end
+		table.insert(twinkles, {
+			Frame = frame,
+			Scale = UIKit.new("UIScale", { Scale = 0 }, frame),
+			At = Vector2.new(math.cos(a) * r, math.sin(a) * r * 0.8),
+			Phase = (k * 0.37) % 1,
+		})
+	end
 	-- NEW! on a first find: a tilted gold sticker at the ore's top right
 	local newTag = UIKit.new("Frame", {
 		Name = "New",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = Color3.fromRGB(255, 214, 64),
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(120, -112),
+		Position = UDim2.fromOffset(130, -118),
 		Rotation = 12,
 		Size = UDim2.fromOffset(92, 40),
 		Visible = false,
@@ -403,8 +497,8 @@ function SecretReveal.build(): View
 		Name = "Headline",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, -205),
-		Size = UDim2.fromOffset(420, 90),
+		Position = UDim2.fromOffset(0, -212),
+		Size = UDim2.fromOffset(440, 96),
 		Visible = false,
 		ZIndex = 8,
 	}, stage)
@@ -413,14 +507,34 @@ function SecretReveal.build(): View
 	headLabel.Position = UDim2.fromScale(0.5, 0.5)
 	headLabel.Size = UDim2.fromScale(1, 1)
 	headLabel.Rotation = -6
+	headLabel.TextColor3 = WHITE
 	UIKit.textStroke(headLabel, 5, PopTheme.Outline)
 	local headEdge = UIKit.new("UIGradient", { Color = rainbowSequence(0), Rotation = 0 }, headLabel)
-	-- under the ore: name, the SECRET pill, the chance
+	-- 3 stars: a gold ribbon over the headline
+	local ribbon = UIKit.new("Frame", {
+		Name = "Ribbon",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = SecretReveal.Gold,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, -282),
+		Size = UDim2.fromOffset(330, 40),
+		Visible = false,
+		ZIndex = 8,
+	}, stage)
+	UIKit.corner(ribbon, 12)
+	UIKit.stroke(ribbon, 3, PopTheme.Outline)
+	local ribbonScale = UIKit.new("UIScale", { Scale = 1 }, ribbon)
+	local ribbonWord = word(ribbon, "Text", "ONE IN A MILLION!", 24, true, 9)
+	ribbonWord.Position = UDim2.fromScale(0.5, 0.5)
+	ribbonWord.Size = UDim2.fromScale(1, 1)
+	ribbonWord.TextColor3 = WHITE
+	UIKit.textStroke(ribbonWord, 3, PopTheme.Outline)
+	-- under the ore: name, the SECRET pill with its stars, the chance
 	local info = UIKit.new("Frame", {
 		Name = "Info",
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 150),
+		Position = UDim2.fromOffset(0, 160),
 		Size = UDim2.fromOffset(560, 150),
 		Visible = false,
 		ZIndex = 8,
@@ -428,6 +542,7 @@ function SecretReveal.build(): View
 	local name = word(info, "Name", "", 46, true, 8)
 	name.Position = UDim2.new(0.5, 0, 0, 28)
 	name.Size = UDim2.new(1, 0, 0, 58)
+	name.TextColor3 = WHITE
 	UIKit.textStroke(name, 4, PopTheme.Outline)
 	local pill = UIKit.new("Frame", {
 		Name = "Pill",
@@ -435,7 +550,7 @@ function SecretReveal.build(): View
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0.5, 0, 0, 80),
-		Size = UDim2.fromOffset(176, 34),
+		Size = UDim2.fromOffset(196, 34),
 		ZIndex = 8,
 	}, info)
 	round(pill)
@@ -444,23 +559,26 @@ function SecretReveal.build(): View
 	local pillText = word(pill, "Text", "SECRET", 22, true, 9)
 	pillText.Position = UDim2.fromScale(0.5, 0.5)
 	pillText.Size = UDim2.fromScale(1, 1)
+	pillText.TextColor3 = WHITE
 	UIKit.textStroke(pillText, 3, PopTheme.Outline)
 	local chance = word(info, "Chance", "", 22, false, 8)
 	chance.Position = UDim2.new(0.5, 0, 0, 118)
 	chance.Size = UDim2.new(1, 0, 0, 28)
+	chance.TextColor3 = WHITE
 	UIKit.textStroke(chance, 2, PopTheme.Outline)
 	local hint = word(stage, "Hint", "Tap to continue", 20, false, 9)
-	hint.Position = UDim2.fromOffset(0, 306)
+	hint.Position = UDim2.fromOffset(0, 316)
+	hint.TextColor3 = WHITE
 	hint.TextTransparency = 1
 	UIKit.textStroke(hint, 2, PopTheme.Outline)
-	-- confetti: a fixed spray (the same every time), coloured by the rainbow
+	-- confetti: a fixed spray (the same every time), coloured by the rainbow (and gold)
 	local confetti: { Piece } = {}
-	for k = 1, SecretReveal.Confetti.Full do
+	for k = 1, SecretReveal.Tiers[#SecretReveal.Tiers].Confetti do
 		local a = (k * 137.508) % 360
 		local frame = UIKit.new("Frame", {
 			Name = "Confetti" .. k,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = SecretOreShapes.Rainbow[(k - 1) % #SecretOreShapes.Rainbow + 1],
+			BackgroundColor3 = if k % 7 == 0 then SecretReveal.Gold else SecretOreShapes.Rainbow[(k - 1) % #SecretOreShapes.Rainbow + 1],
 			BorderSizePixel = 0,
 			Size = UDim2.fromOffset(if k % 3 == 0 then 10 else 16, if k % 3 == 0 then 10 else 8),
 			Visible = false,
@@ -469,7 +587,7 @@ function SecretReveal.build(): View
 		table.insert(confetti, {
 			Frame = frame,
 			Dir = Vector2.new(math.cos(math.rad(a)), math.sin(math.rad(a)) * 0.8 - 0.35),
-			Speed = 420 + (k * 53) % 260,
+			Speed = 460 + (k * 53) % 300,
 			Spin = ((k * 97) % 720) - 360,
 			Delay = (k % 5) * 0.03,
 		})
@@ -477,6 +595,7 @@ function SecretReveal.build(): View
 	return {
 		Gui = gui,
 		Dim = dim,
+		Space = space,
 		Flash = UIKit.new("Frame", {
 			Name = "Flash",
 			BackgroundColor3 = SecretReveal.FlashColor,
@@ -489,59 +608,66 @@ function SecretReveal.build(): View
 		Scale = scale,
 		Front = front,
 		Back = back,
+		GoldBars = gold,
 		Glow = glow,
 		Halo = halo,
-		Rings = rings,
+		Shocks = shocks,
 		OreHolder = oreHolder,
 		OreScale = oreScale,
 		View = view,
 		Camera = camera,
 		Models = {},
-		Shadows = {},
+		Rigs = {},
 		Radius = {},
 		OreId = nil,
+		Stars = 1,
 		New = false,
 		Headline = headline,
 		HeadScale = headScale,
 		HeadLabel = headLabel,
 		HeadEdge = headEdge,
+		Ribbon = ribbon,
+		RibbonScale = ribbonScale,
 		Info = info,
 		Name = name,
 		Pill = pill,
+		PillText = pillText,
 		Chance = chance,
 		NewTag = newTag,
 		NewScale = newScale,
 		Hint = hint,
 		Confetti = confetti,
+		Twinkles = twinkles,
 	}
 end
 
--- The secret ore to reveal next (its model and black copy are built the first time, then kept).
+-- The secret ore to reveal next (its model is built the first time, then kept).
 function SecretReveal.setOre(view: View, oreId: string, info: Info?)
 	local ore = OreData.get(oreId)
 	if not view.Models[oreId] then
 		local model = ItemBuilder.display({ K = "Clean", O = oreId, G = SecretOreConfig.Grade }, CFrame.new(), oreId)
 		local reach = still(model)
-		local shadow = shadowOf(model)
 		view.Models[oreId] = model
-		view.Shadows[oreId] = shadow
+		view.Rigs[model] = SecretOreFx.rig(model, CFrame.identity)
 		view.Radius[model] = reach
-		view.Radius[shadow] = reach
 	end
+	local secret = SecretOreConfig.ByOre[oreId]
 	view.OreId = oreId
+	view.Stars = if secret then secret.Stars else 1
 	view.New = info ~= nil and info.New == true
 	view.Name.Text = ore.Name
-	local secret = SecretOreConfig.ByOre[oreId]
+	view.PillText.Text = "SECRET " .. string.rep("★", view.Stars)
+	view.Pill.Size = UDim2.fromOffset(176 + 22 * view.Stars, 34)
 	view.Chance.Text = if info and info.Chance then info.Chance elseif secret then SecretOreConfig.chanceText(secret.OneIn) else ""
 end
 
--- Shows one of the ore's two models (the black one before the flash).
-local function showModel(view: View, shadow: boolean): Model?
+-- Shows the current ore's model in the viewport.
+local function showModel(view: View): Model?
 	local id = view.OreId
 	if not id then
 		return nil
 	end
-	local want = if shadow then view.Shadows[id] else view.Models[id]
+	local want = view.Models[id]
 	for _, child in view.View:GetChildren() do
 		if child:IsA("Model") and child ~= want then
 			child.Parent = nil
@@ -553,52 +679,67 @@ local function showModel(view: View, shadow: boolean): Model?
 	return want
 end
 
--- One frame `t` seconds in. Returns true when it is over (the gui is then disabled).
+-- One frame `t` seconds after the BOOM. Returns true when it is over (the gui is then disabled).
 function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 	local reduced = opts.Reduced == true
-	if t >= SecretReveal.Total then
+	local phone = opts.Phone == true
+	local tier = SecretReveal.tierOf(view.Stars)
+	local hold = tier.Hold
+	if t >= hold + SecretReveal.Fly + 0.1 or t < 0 then
 		view.Gui.Enabled = false
-		return true
+		return t >= 0
 	end
 	view.Gui.Enabled = true
 	view.Scale.Scale = opts.Scale
-	local burst = SecretReveal.Burst
-	local revealed = t >= burst
-	local leave = span(t, SecretReveal.Hold, SecretReveal.Hold + 0.35) -- everything but the ore fades out
+	local leave = span(t, hold, hold + 0.35) -- everything but the ore fades out
 	local stay = 1 - leave
 
-	-- the dark overlay
-	local dark = span(t, 0, SecretReveal.Dim) * stay
-	view.Dim.BackgroundTransparency = 1 - (1 - SecretReveal.DimTo) * dark
-
-	-- the flash (once, at the burst)
-	local f = span(t, burst, burst + 0.45)
-	local flashing = not reduced and t >= burst and f < 1
-	view.Flash.BackgroundTransparency = if flashing then 1 - 0.9 * (1 - easeOut(f)) else 1
-
-	-- the ore: the black one turns and beats, then the real one pops and spins
-	local model = showModel(view, not revealed)
-	local reach = if model then view.Radius[model] or 1 else 1
-	local size: number
-	if not revealed then
-		size = 0.5 + 0.28 * easeOut(span(t, SecretReveal.Dim * 0.5, burst))
-		if not reduced then
-			for k, at in SecretReveal.Thumps do
-				local beat = span(t, at, at + 0.24)
-				if beat > 0 and beat < 1 then
-					size += math.sin(beat * math.pi) * (0.08 + k * 0.05)
-				end
-			end
+	-- the dark (3 stars: deep space)
+	local dark = easeOut(span(t, 0, 0.14)) * stay
+	local darkest = if tier.Cosmos then SecretReveal.SpaceTo else SecretReveal.DimTo
+	view.Dim.BackgroundTransparency = 1 - (1 - darkest) * dark
+	for k, star in view.Space do
+		local on = tier.Cosmos and stay > 0 and (not phone or k % 2 == 0)
+		star.Visible = on
+		if on then
+			local twinkle = if reduced then 0.5 else 0.5 + 0.5 * math.sin(t * (2 + k % 5) + k)
+			star.BackgroundTransparency = 1 - (0.25 + 0.75 * twinkle) * dark
 		end
-	else
-		local pop = span(t, burst, burst + 0.38)
-		size = if reduced then 1 else 0.78 + 0.22 * easeOutBack(pop)
-		size += if reduced then 0 else math.sin((t - burst) * 2.4) * 0.025
 	end
+
+	-- the flash (once, at the BOOM)
+	local f = span(t, 0, 0.45)
+	view.Flash.BackgroundTransparency = if not reduced and f < 1 then 1 - 0.9 * (1 - easeOut(f)) else 1
+
+	-- shockwaves: one ring per tier step, thick and white, then rainbow and thin
+	for k, ring in view.Shocks do
+		local at = tier.Shocks[k]
+		local u = if at then span(t, at, at + 0.62) else 1
+		local on = not reduced and at ~= nil and t >= at and u < 1
+		ring.Visible = on
+		if on then
+			local ringScale = ring:FindFirstChildOfClass("UIScale") :: UIScale
+			local ringStroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
+			ringScale.Scale = 0.35 + 7 * easeOut(u)
+			ringStroke.Thickness = 22 * (1 - u) + 2
+			ringStroke.Color = if k == 1 then SecretReveal.FlashColor:Lerp(hue(t * 0.6), u) else hue(k * 0.33 + u * 0.5)
+			ringStroke.Transparency = u ^ 1.5
+		end
+	end
+
+	-- the ore: pops out big, whirls, breathes; its moving parts are alive
+	local model = showModel(view)
+	local reach = if model then view.Radius[model] or 1 else 1
+	if model and view.Rigs[model] then
+		SecretOreFx.pose(view.Rigs[model], CFrame.identity, t, reduced)
+	end
+	local pop = span(t, 0, 0.4)
+	local size = if reduced then 1 else 0.55 + 0.45 * easeOutBack(pop)
+	size += if reduced then 0 else math.sin(t * 2.4) * 0.025
 	local away = Vector2.zero
 	local gone = 0
-	if t >= SecretReveal.Hold then
-		local u = span(t, SecretReveal.Hold, SecretReveal.Hold + SecretReveal.Fly)
+	if t >= hold then
+		local u = span(t, hold, hold + SecretReveal.Fly)
 		if opts.Target and not reduced then
 			-- an arc into the bag, shrinking
 			local middle = Vector2.new(opts.Screen.X * SecretReveal.Center.X.Scale, opts.Screen.Y * SecretReveal.Center.Y.Scale)
@@ -613,43 +754,28 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 	view.OreHolder.Position = UDim2.fromOffset(away.X, away.Y)
 	view.OreScale.Scale = size
 	view.View.ImageTransparency = gone
-	-- the camera: slow turn while hidden, a fast whirl at the burst, then a steady spin
+	-- the viewport camera: a fast whirl and a pull back at the BOOM, then a steady turn
 	local turn = 0
+	local pull = 1
 	if not reduced then
-		turn = t * 1.1
-		if revealed then
-			turn += math.pi * 2 * easeOut(span(t, burst, burst + 0.7))
-		end
-		if t >= SecretReveal.Hold then
-			turn += (t - SecretReveal.Hold) * 9
+		turn = t * 1.1 + math.pi * 2 * easeOut(span(t, 0, 0.8))
+		pull = 0.72 + 0.28 * easeOut(span(t, 0, 0.9))
+		if t >= hold then
+			turn += (t - hold) * 9
 		end
 	end
 	local from = CFrame.Angles(0, turn, 0):VectorToWorldSpace(VIEW_FROM)
-	local distance = reach / math.tan(math.rad(SecretReveal.Fov) / 2) * 1.08
+	local distance = reach / math.tan(math.rad(SecretReveal.Fov) / 2) * 1.08 * pull
 	view.Camera.CFrame = CFrame.lookAt(from * distance, Vector3.zero)
 
-	-- beats: a ring flies off every heartbeat
-	for k, ring in view.Rings do
-		local at = SecretReveal.Thumps[k]
-		local u = span(t, at, at + 0.55)
-		local on = not reduced and not revealed and u > 0 and u < 1
-		ring.Visible = on
-		if on then
-			local ringScale = ring:FindFirstChildOfClass("UIScale") :: UIScale
-			local ringStroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
-			ringScale.Scale = 0.7 + 1.3 * easeOut(u)
-			ringStroke.Transparency = u
-		end
-	end
-
-	-- rays: two layers turning opposite ways, near-black and drifting rainbow
-	local grow = if revealed then (if reduced then span(t, burst, burst + 0.3) else easeOutBack(span(t, burst, burst + 0.42))) else 0
-	local front = if opts.Phone then SecretReveal.Bars.Phone else #view.Front
+	-- rays: two layers turning opposite ways (near-black and drifting rainbow), a gold one behind
+	local grow = if reduced then span(t, 0, 0.3) else easeOutBack(span(t, 0.02, 0.45))
+	local front = if phone then SecretReveal.Bars.Phone else #view.Front
 	for k, frame in view.Front do
-		local on = revealed and k <= front and stay > 0
+		local on = k <= front and stay > 0
 		frame.Visible = on
 		if on then
-			local spin = if reduced then 0 else (t - burst) * 45
+			local spin = if reduced then 0 else t * 45
 			frame.Rotation = (k - 1) * 180 / front + spin
 			frame.Size = UDim2.fromOffset(70, SecretReveal.RayLength * grow)
 			frame.BackgroundColor3 = if k % 2 == 1 then SecretReveal.Dark else hue((k - 1) / front + t * 0.25)
@@ -657,63 +783,105 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 		end
 	end
 	for k, frame in view.Back do
-		local on = revealed and not opts.Phone and stay > 0
+		local on = not phone and stay > 0
 		frame.Visible = on
 		if on then
-			local spin = if reduced then 0 else -(t - burst) * 30
+			local spin = if reduced then 0 else -t * 30
 			frame.Rotation = (k - 0.5) * 180 / #view.Back + spin
 			frame.Size = UDim2.fromOffset(40, SecretReveal.RayLength * 0.86 * grow)
 			frame.BackgroundColor3 = hue((k - 1) / #view.Back + 0.5 + t * 0.25)
 			frame.BackgroundTransparency = 0.45 + 0.55 * leave
 		end
 	end
-	-- the glow behind the ore: a violet pulse while hidden, warm white after
-	if revealed then
-		view.Glow.BackgroundColor3 = SecretReveal.FlashColor
-		view.Glow.BackgroundTransparency = 0.66 + 0.34 * leave
-		view.Halo.BackgroundTransparency = 0.88 + 0.12 * leave
-	else
-		local pulse = 0.5 + 0.5 * math.sin(t * 7)
-		view.Glow.BackgroundColor3 = Color3.fromRGB(120, 70, 220)
-		view.Glow.BackgroundTransparency = 1 - (0.14 + 0.1 * pulse) * span(t, SecretReveal.Dim * 0.5, SecretReveal.Dim + 0.2)
-		view.Halo.BackgroundTransparency = 1
+	for k, frame in view.GoldBars do
+		local on = tier.Gold and stay > 0 and (not phone or k % 2 == 0)
+		frame.Visible = on
+		if on then
+			local spin = if reduced then 0 else t * 12
+			frame.Rotation = (k - 1) * 180 / #view.GoldBars + 15 + spin
+			frame.Size = UDim2.fromOffset(120, SecretReveal.RayLength * 1.25 * grow)
+			frame.BackgroundColor3 = SecretReveal.Gold
+			frame.BackgroundTransparency = 0.55 + 0.45 * leave
+		end
+	end
+	-- the warm glow behind the ore, a beat at every shockwave
+	local swell = 0
+	for _, at in tier.Shocks do
+		local u = span(t, at, at + 0.4)
+		if u > 0 and u < 1 then
+			swell = math.max(swell, math.sin(u * math.pi))
+		end
+	end
+	view.Glow.BackgroundColor3 = SecretReveal.FlashColor
+	view.Glow.BackgroundTransparency = 0.66 - 0.3 * swell * (if reduced then 0 else 1) + 0.34 * leave
+	view.Halo.BackgroundColor3 = if tier.Cosmos then SecretReveal.Gold else SecretReveal.FlashColor
+	view.Halo.BackgroundTransparency = 0.86 + 0.14 * leave
+
+	-- sparkles twinkling round the ore
+	local twinkles = if phone then SecretReveal.PhoneTwinkles else tier.Twinkles
+	for k, tw in view.Twinkles do
+		local on = not reduced and k <= twinkles and stay > 0 and t > 0.15
+		tw.Frame.Visible = on
+		if on then
+			local u = ((t - 0.15) * 0.9 + tw.Phase) % 1
+			tw.Scale.Scale = math.sin(u * math.pi) ^ 2 * (0.7 + 0.3 * (k % 3))
+			tw.Frame.Rotation = u * 90
+			tw.Frame.Position = UDim2.fromOffset(tw.At.X, tw.At.Y)
+		end
 	end
 
-	-- confetti: out from the middle, falling and turning, gone after 2 s
-	local pieces = if opts.Phone then SecretReveal.Confetti.Phone else #view.Confetti
+	-- confetti: out from the middle, falling and turning, gone after 2.2 s
+	local pieces = if phone then SecretReveal.PhoneConfetti else tier.Confetti
 	for k, piece in view.Confetti do
-		local dt = t - burst - piece.Delay
-		local on = revealed and not reduced and k <= pieces and dt > 0 and dt < 2.1
+		local dt = t - piece.Delay
+		local on = not reduced and k <= pieces and dt > 0 and dt < 2.2
 		piece.Frame.Visible = on
 		if on then
 			local fly = piece.Dir * piece.Speed * dt * (1 - 0.35 * math.min(dt, 1.4))
 			local fall = 260 * dt * dt
 			piece.Frame.Position = UDim2.fromOffset(fly.X, fly.Y + fall)
 			piece.Frame.Rotation = piece.Spin * dt
-			piece.Frame.BackgroundTransparency = span(dt, 1.4, 2.1)
+			piece.Frame.BackgroundTransparency = span(dt, 1.5, 2.2)
 		end
 	end
 
-	-- SECRET! pops over the ore, its rainbow edge turning
-	local headIn = span(t, burst + 0.08, burst + 0.46)
-	view.Headline.Visible = revealed and stay > 0
+	-- SECRET! slams down from big (a squash on impact), its rainbow drifting
+	local slam = span(t, 0.05, 0.27)
+	view.Headline.Visible = stay > 0
 	if view.Headline.Visible then
-		view.HeadScale.Scale = if reduced then 1 else easeOutBack(headIn) * (1 + 0.03 * math.sin((t - burst) * 5))
-		fade(view.Headline, if reduced then 1 - headIn * stay else leave)
+		local s: number
+		if reduced then
+			s = 1
+		elseif slam < 1 then
+			s = 2.6 - 1.6 * slam * slam
+		else
+			local after = t - 0.27
+			s = 1 + 0.12 * math.exp(-after * 9) * math.cos(after * 30) + 0.03 * math.sin(t * 5)
+		end
+		view.HeadScale.Scale = s
+		fade(view.Headline, if reduced then 1 - span(t, 0, 0.3) * stay else math.max(leave, 1 - slam * 3))
 		view.HeadEdge.Rotation = (t * 120) % 360
 		view.HeadEdge.Color = rainbowSequence(t * 3)
 	end
+	-- 3 stars: the gold ONE IN A MILLION! ribbon
+	local ribbonIn = span(t, 0.35, 0.65)
+	view.Ribbon.Visible = tier.Cosmos and ribbonIn > 0 and stay > 0
+	if view.Ribbon.Visible then
+		view.RibbonScale.Scale = if reduced then 1 else easeOutBack(ribbonIn) * (1 + 0.04 * math.sin(t * 6))
+		view.Ribbon.BackgroundTransparency = leave
+		fade(view.Ribbon, leave)
+	end
 	-- name, pill and chance slide up under it
-	local infoIn = span(t, burst + 0.32, burst + 0.68)
-	view.Info.Visible = revealed and infoIn > 0 and stay > 0
+	local infoIn = span(t, 0.3, 0.64)
+	view.Info.Visible = infoIn > 0 and stay > 0
 	if view.Info.Visible then
 		local rise = if reduced then 0 else 26 * (1 - easeOut(infoIn))
-		view.Info.Position = UDim2.fromOffset(0, 150 + rise)
+		view.Info.Position = UDim2.fromOffset(0, 160 + rise)
 		fade(view.Info, 1 - infoIn * stay)
 	end
 	-- NEW! (a first find)
-	local newIn = span(t, burst + 0.62, burst + 0.9)
-	view.NewTag.Visible = view.New and revealed and newIn > 0 and stay > 0
+	local newIn = span(t, 0.58, 0.86)
+	view.NewTag.Visible = view.New and newIn > 0 and stay > 0
 	if view.NewTag.Visible then
 		view.NewScale.Scale = if reduced then 1 else easeOutBack(newIn)
 		view.NewTag.BackgroundTransparency = leave

@@ -1,5 +1,6 @@
 // Renders a frame-by-frame reel exported by a Lune tool (the shots of build/preview/<tag>_shots.json:
-// one world scene + per-frame "extra" parts and a UI overlay), encodes an MP4 and draws its storyboard.
+// one world scene + per-frame "extra" parts, a UI overlay and an optional camera "cam": { position, target, fov }),
+// encodes an MP4 and draws its storyboard.
 //   node tools/preview/render_reel.mjs <tag> [fps=20] [bitrate=4000000] [stills=i,j,...|-|board]
 //   tags: levelup (lune run tools/lune/export_levelup.luau), minejuice (lune run tools/lune/export_mine_juice.luau)
 // Frames: build/preview/<tag>_frames/, video: build/preview/<tag>.mp4 (macOS AVFoundation through encode_mp4.swift),
@@ -72,7 +73,7 @@ if (stills) {
   fs.mkdirSync(path.join(scenesDir, "shots"), { recursive: true });
   for (const i of stills) {
     const name = names[Math.min(i, names.length - 1)];
-    await page.evaluate(([fx, ui]) => window.__frame(fx, ui), [shots[name].extra, shots[name].ui]);
+    await page.evaluate(([fx, ui, cam]) => window.__frame(fx, ui, cam), [shots[name].extra, shots[name].ui, shots[name].cam]);
     const file = path.join(scenesDir, "shots", `${tag}_${pad(i)}.jpg`);
     await page.screenshot({ path: file, type: "jpeg", quality: 90 });
     console.log("still", i, "->", path.relative(repo, file));
@@ -83,7 +84,7 @@ if (stills) {
     fs.mkdirSync(framesDir, { recursive: true });
     const t0 = Date.now();
     for (const [i, name] of names.entries()) {
-      await page.evaluate(([fx, ui]) => window.__frame(fx, ui), [shots[name].extra, shots[name].ui]);
+      await page.evaluate(([fx, ui, cam]) => window.__frame(fx, ui, cam), [shots[name].extra, shots[name].ui, shots[name].cam]);
       await page.screenshot({ path: path.join(framesDir, `frame_${pad(i)}.jpg`), type: "jpeg", quality: 90 });
       if (i % 20 === 0) console.log(`frame ${i}/${names.length} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     }

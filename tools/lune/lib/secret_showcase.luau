@@ -13,11 +13,20 @@ local roblox = require("@lune/roblox") :: any
 
 local Showcase = {}
 
-Showcase.Gap = 3.4 -- studs between two pedestals
+Showcase.Gap = 4.6 -- studs between two pedestals (the halos need room)
 Showcase.Pedestal = roblox.Vector3.new(2.5, 1.2, 2.5)
 Showcase.Rise = 0.45 -- each pedestal is this much taller than the one before
 
-function Showcase.build(Loader: any, parent: any, hidden: boolean?)
+-- Where the i-th of `count` ores stands (the bottom middle of its display).
+function Showcase.itemFrame(Loader: any, i: number, count: number): any
+	local x = (i - (count + 1) / 2) * Showcase.Gap
+	local h = Showcase.Pedestal.Y + (i - 1) * Showcase.Rise
+	return Loader.CFrame.new(x, h + 0.06, 0) * Loader.CFrame.Angles(0, 0.3, 0)
+end
+
+-- `t`: the moment the moving parts are posed at (SecretOreFx; default 1.3 s);
+-- `bare`: no ores (a video poses them every frame: tools/lune/export_secret_spin.luau)
+function Showcase.build(Loader: any, parent: any, hidden: boolean?, t: number?, bare: boolean?)
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
 	local C3 = roblox.Color3
@@ -27,6 +36,7 @@ function Showcase.build(Loader: any, parent: any, hidden: boolean?)
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local SecretOreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SecretOreConfig")
+	local SecretOreFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.SecretOreFx")
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local NEON = roblox.Enum.Material.Neon
 	local root = roblox.Instance.new("Model")
@@ -74,13 +84,17 @@ function Showcase.build(Loader: any, parent: any, hidden: boolean?)
 		local rim = if secret.Floor == nil then GOLD else secretColor
 		Geo.block(root, CF.new(x, h + 0.03, 0), V3.new(ped.X + 0.12, 0.06, ped.Z + 0.12), BOX)
 		Geo.block(root, CF.new(x, h + 0.02, ped.Z / 2 + 0.07), V3.new(ped.X + 0.12, 0.05, 0.05), rim, NEON)
-		local item = ItemBuilder.display(
-			{ K = "Clean", O = ore.Id, G = SecretOreConfig.Grade },
-			CF.new(x, h + 0.06, 0) * CF.Angles(0, 0.3, 0),
-			ore.Id
-		)
+		local item =
+			ItemBuilder.display({ K = "Clean", O = ore.Id, G = SecretOreConfig.Grade }, Showcase.itemFrame(Loader, i, count), ore.Id)
+		local pivot = CF.new(item:GetAttribute("Center"))
+		SecretOreFx.pose(SecretOreFx.rig(item, pivot), pivot, t or 1.3)
 		if hidden then
-			-- a black cut-out of the ore: nothing glows, nothing sparkles
+			-- a black cut-out of the ore: nothing glows, nothing sparkles, no aura
+			for _, d in item:GetChildren() do
+				if d:IsA("BasePart") and (d.Name == "Halo" or d.Name == "Floor") then
+					d:Destroy()
+				end
+			end
 			for _, d in item:GetDescendants() do
 				if d:IsA("BasePart") then
 					d.Color = silhouette
@@ -92,7 +106,7 @@ function Showcase.build(Loader: any, parent: any, hidden: boolean?)
 				end
 			end
 		end
-		item.Parent = root
+		item.Parent = if bare then nil else root
 		local floorName = if secret.Floor then MineFloors.ById[secret.Floor].Name else "Every floor"
 		local name = if hidden then "???" else ore.Name
 		label(CF.new(x, h - 0.32, ped.Z / 2 + 0.05), ped.X - 0.15, 0.5, name, rim, TEXT)

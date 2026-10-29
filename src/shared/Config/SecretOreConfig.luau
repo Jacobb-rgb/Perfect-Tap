@@ -5,7 +5,12 @@
 	(Floor = nil) can come from any floor. The chance is "1 in OneIn" per ore
 	that drops, before luck. Secret ores are OreData entries with Rarity
 	"Secret" (looks: Builders/SecretOreShapes); they never sit in a rock's
-	weights, they drop clean and Flawless (Grade).
+	weights. Owner 2026-10-29 (answers to the concept): a secret drops as a
+	SPARKLY dirty ore (rainbow glints: "something special inside") and the
+	jackpot plays when the player cleans it; it comes out Flawless (Grade).
+	Luck raises the chance by its square root (BoostConfig.LuckPower.Secret:
+	at most x2.5). Rainbow Nova is announced on every server.
+	Stars = how big the jackpot is (Effects/SecretReveal: rarer = bigger).
 
 	Balance (tools/lune/balance_sim.luau, Typical player): ores mined per floor
 	Ember Caves ~380, Deep Hollow ~2,100, Sunken Palace ~1,200, Stormglass
@@ -19,18 +24,29 @@ export type Secret = {
 	Ore: string, -- OreData Id (Rarity "Secret")
 	Floor: string?, -- MineFloors Id; nil = every floor
 	OneIn: number, -- the chance per dropped ore before luck: 1 / OneIn
+	Stars: number, -- 1..3: the jackpot's size (more shockwaves, rays, a longer show)
 }
 
 SecretOreConfig.List = {
-	{ Ore = "FrostflameCrystal", Floor = "EmberCaves", OneIn = 2000 },
-	{ Ore = "HollowEye", Floor = "DeepHollow", OneIn = 4000 },
-	{ Ore = "TidecrownPearl", Floor = "SunkenPalace", OneIn = 8000 },
-	{ Ore = "CagedLightning", Floor = "StormglassRift", OneIn = 15000 },
-	{ Ore = "HeartOfTerra", Floor = "HeartstoneCore", OneIn = 40000 },
-	{ Ore = "RainbowNova", Floor = nil, OneIn = 1000000 },
+	{ Ore = "FrostflameCrystal", Floor = "EmberCaves", OneIn = 2000, Stars = 1 },
+	{ Ore = "HollowEye", Floor = "DeepHollow", OneIn = 4000, Stars = 1 },
+	{ Ore = "TidecrownPearl", Floor = "SunkenPalace", OneIn = 8000, Stars = 1 },
+	{ Ore = "CagedLightning", Floor = "StormglassRift", OneIn = 15000, Stars = 2 },
+	{ Ore = "HeartOfTerra", Floor = "HeartstoneCore", OneIn = 40000, Stars = 2 },
+	{ Ore = "RainbowNova", Floor = nil, OneIn = 1000000, Stars = 3 },
 } :: { Secret }
 
--- The grade a secret ore drops with (it is born clean and shining).
+-- The secret rainbow, red to violet (SecretOreShapes.Rainbow, SecretOreFx.Rainbow: the same six).
+SecretOreConfig.Rainbow = {
+	Color3.fromRGB(255, 70, 96),
+	Color3.fromRGB(255, 156, 48),
+	Color3.fromRGB(255, 228, 64),
+	Color3.fromRGB(80, 236, 120),
+	Color3.fromRGB(64, 156, 255),
+	Color3.fromRGB(176, 92, 255),
+}
+
+-- The grade a secret ore comes out of the cleaning with.
 SecretOreConfig.Grade = "Flawless"
 
 SecretOreConfig.ByOre = {} :: { [string]: Secret }

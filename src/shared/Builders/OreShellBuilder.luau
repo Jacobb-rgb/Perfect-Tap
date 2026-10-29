@@ -23,6 +23,7 @@
 local Geo = require(script.Parent.Geo)
 local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
+local SecretOreConfig = require(script.Parent.Parent.Config.SecretOreConfig)
 local Geometry2D = require(script.Parent.Parent.Cleaning.Geometry2D)
 local ItemBuilder = require(script.Parent.ItemBuilder)
 local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
@@ -37,6 +38,7 @@ OreShellBuilder.CellOverlap = 1.18 -- dirt blocks are a little bigger than their
 OreShellBuilder.BodyFront = -0.7 -- the clump's dark body behind the treasure
 OreShellBuilder.TreasureSize = 1.85 -- studs across: the ore (or relic) under the dirt
 OreShellBuilder.TreasureTurn = CFrame.Angles(-0.22, math.pi - 0.55, 0) -- three-quarters toward the camera
+OreShellBuilder.SecretTurn = CFrame.Angles(-0.12, 0.3, 0) -- a secret ore shows its face (the eye looks at you)
 OreShellBuilder.CrystalBaseSize = 0.2 -- face units; the pale base under a crystal
 OreShellBuilder.CrystalLean = 45 -- degrees out of the face, toward the camera
 OreShellBuilder.DirtColors = { Color3.fromRGB(104, 78, 54), Color3.fromRGB(90, 68, 50), Color3.fromRGB(116, 88, 60) }
@@ -193,10 +195,18 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?, 
 	end
 
 	-- the treasure under the dirt: the real ore in its podium look, or the dusty relic
-	local turn = workCF * OreShellBuilder.TreasureTurn
+	local secret = relicId == nil and SecretOreConfig.isSecret(pattern.OreId)
+	local turn = workCF * (if secret then OreShellBuilder.SecretTurn else OreShellBuilder.TreasureTurn)
 	local treasure: Model? = if relicId then ArtifactBuilder.build(relicId, turn, 1, true) else nil
 	if not treasure then
-		treasure = ItemBuilder.display({ K = "Clean", O = pattern.OreId }, turn, pattern.Seed)
+		local shown = ItemBuilder.display({ K = "Clean", O = pattern.OreId }, turn, pattern.Seed)
+		-- a secret ore's halo and floor glow (SecretOreFx) stay on the podium: only the ore is under the dirt
+		for _, d in shown:GetChildren() do
+			if d:IsA("BasePart") and (d.Name == "Halo" or d.Name == "Floor") then
+				d:Destroy()
+			end
+		end
+		treasure = shown
 	end
 	local found = treasure :: Model
 	found.Name = "Treasure"
@@ -235,6 +245,25 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?, 
 		)
 		block:SetAttribute("FullSize", block.Size)
 		dirt[cell.Index] = block
+	end
+	-- a secret ore's dirt sparkles: rainbow specks in every fifth cell (they wash off with it)
+	if secret then
+		local rainbow = SecretOreConfig.Rainbow
+		for index, block in dirt do
+			if index % 5 == 2 then
+				local half = block.Size / 2
+				Geo.block(
+					block,
+					block.CFrame
+						* CFrame.new(rng:range(-0.5, 0.5) * half.X, rng:range(-0.5, 0.5) * half.Y, half.Z)
+						* CFrame.Angles(0.6, 0.8, 0),
+					Vector3.one * 0.09,
+					rainbow[index % #rainbow + 1],
+					Enum.Material.Neon,
+					props({ Name = "Speck", CastShadow = false })
+				)
+			end
+		end
 	end
 
 	-- glowing crystals leaning out toward the camera (so they read on a phone) on a small pale base

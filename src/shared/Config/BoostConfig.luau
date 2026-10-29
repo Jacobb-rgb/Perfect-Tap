@@ -161,6 +161,9 @@ BoostConfig.LuckPower = {
 	Epic = 1.5,
 	Legendary = 2,
 	Mythic = 2.5,
+	-- the secret ores (SecretOreConfig: their own roll, not a weight): the square root,
+	-- so the most luck there is (StatConfig.MaxOreLuck x6.25) makes a secret 2.5x likelier
+	Secret = 0.5,
 } :: { [string]: number }
 
 -- BoostAction / ActionResult reason codes -> text for the player

@@ -1,21 +1,20 @@
 --[[
-	Video frames of the SECRET ore reveal (owner 2026-10-29: secret ores with
-	"cool animace", Pet Simulator style), posed with the game's own code: a
-	miner on mine floor 3 (Deep Hollow) blasts a rock; its crack stages drop
+	Video frames of a SECRET ore dropping in the mine (owner 2026-10-29: the
+	jackpot plays when the player CLEANS it, so in the mine only a hint):
+	a miner on mine floor 3 (Deep Hollow) blasts a rock; its crack stages drop
 	two dirty ores (RockBuilder.applyStage); the last hit shatters it
-	(RockFxLogic.shatterPlan) and instead of a dirty chunk a column of
-	rainbow light shoots up out of it (everyone near sees it) with the secret
-	ore spinning in it; then the jackpot screen (Effects/SecretReveal: the
-	dark, the black silhouette's three heartbeats, the flash, rays, confetti,
-	SECRET!, Hollow Eye, the chance, NEW!) and the ore flies into the
-	backpack button (UI/BagFly's bump and +1). The server's chat line for
-	everyone shows in a stand-in chat box at the top left. A caption line at
-	the top (preview only) names the steps and the sounds.
+	(RockFxLogic.shatterPlan) and out pops a SPARKLY dirty ore
+	(ItemBuilder Raw of a secret ore: rainbow glints, SecretOreFx.sparkly):
+	a little rainbow ping (a ring on the ground, a short shaft of light,
+	sparkles), a toast "Something sparkly dropped!", then it jumps to the
+	miner and into the backpack (UI/BagFly's bump and +1). What is inside
+	shows at the Cleaning Station (tools/lune/export_secret_clean.luau).
+	A caption line (preview only) names the steps and the sounds.
 
-	  lune run tools/lune/export_secret_reveal.luau [fps=20] [ore=HollowEye]
-	-> build/preview/secretreveal_base.json, build/preview/secretreveal/fx_NNNN.json + ui_NNNN.json,
-	   build/preview/secretreveal_shots.json, build/preview/secretreveal_board.json
-	then: node tools/preview/render_reel.mjs secretreveal
+	  lune run tools/lune/export_secret_reveal.luau [fps=20] [ore=HollowEye] [tag=secretmine]
+	-> build/preview/<tag>_base.json, build/preview/<tag>/fx_NNNN.json + ui_NNNN.json,
+	   build/preview/<tag>_shots.json, build/preview/<tag>_board.json
+	then: node tools/preview/render_reel.mjs <tag>
 ]]
 
 local fs = require("@lune/fs")
@@ -55,13 +54,13 @@ local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.Bla
 local SecretOreShapes = Loader.requirePath("ReplicatedStorage.Shared.Builders.SecretOreShapes")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local Logic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RockFxLogic")
-local SecretReveal = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.SecretReveal")
+local SecretOreFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.SecretOreFx")
 local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 local BagFly = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BagFly")
 local UIKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.UIKit")
 
 local W, H, INSET, SCALE, FOV = 1600, 900, 36, 1.25, 62
-local tag = "secretreveal"
+local tag = process.args[3] or "secretmine"
 local secret = SecretOreConfig.ByOre[SECRET]
 assert(secret, "not a secret ore: " .. SECRET)
 local floor = MineFloors.get(if secret.Floor then secret.Floor else 3)
@@ -173,11 +172,15 @@ for s = 1, stages - 1 do
 		Velocity = out * (11 + 1.5 * s) + V3.new(0, 15, 0),
 	}
 end
-local REVEAL = SHATTER + 0.45 -- the jackpot screen starts (the column of light has shot up)
-local reveal = function(t: number): number
-	return t - REVEAL
-end
-local LAND = REVEAL + SecretReveal.Hold + SecretReveal.Fly
+-- the sparkly ore pops out of the break, lands, sparkles, then jumps to the miner and into the bag
+local sparkly = {
+	At = SHATTER,
+	Ore = SECRET,
+	Origin = center + V3.new(0, radius * 0.5 + 1.2, 0) + away * 0.6,
+	Velocity = right * 7 + away * 3 + V3.new(0, 20, 0), -- towards the camera: it lands in plain view
+}
+local JUMP = SHATTER + 1.7 -- it jumps to the miner
+local LAND = JUMP + 0.45 -- in the bag
 local total = LAND + BagFly.BumpSeconds + 0.9
 
 local function chunkAt(d, t: number): any
@@ -218,9 +221,6 @@ end
 local packFull = packAt + V2.new(0, INSET)
 
 local juice = BagFly.build()
-local view = SecretReveal.build()
-SecretReveal.setOre(view, SECRET, { Chance = chanceText, New = true })
-view.View:SetAttribute("PreviewLive", true)
 
 -- a stand-in for Roblox's chat box: the server's line for everyone on the server
 local chat = Instance.new("ScreenGui")
@@ -288,29 +288,22 @@ local soundTag = UIKit.new("TextLabel", {
 	Text = "",
 }, caption)
 
-local burstAt = REVEAL + SecretReveal.Burst
 local function captionFor(t: number): string
 	if t < SHATTER then
 		return "Těžíš úplně normálně..."
-	elseif t < REVEAL + 0.1 then
-		return "Z kamene vystřelí duhový sloup světla: všichni kolem ho vidí"
-	elseif t < burstAt then
-		return "Obrazovka ztmavne: černý stín rudy, tři údery srdce"
-	elseif t < REVEAL + SecretReveal.Hold then
-		return "SECRET! Záblesk, paprsky, konfety, jméno a šance"
+	elseif t < JUMP then
+		return "Padne TŘPYTIVÁ špinavá ruda: duhové jiskry, něco v ní je!"
 	elseif t < LAND + 0.1 then
-		return "Tajná ruda letí do batohu"
+		return "Skočí ti do batohu"
 	end
-	return "+1 v batohu. A celý server to vidí v chatu"
+	return "Co v ní je, uvidíš až při čištění"
 end
 
 local function soundFor(t: number): string
-	if t >= SHATTER and t < SHATTER + 0.5 then
-		return "zvuk: hluboké BUM + zvonivý třpyt"
-	elseif t >= REVEAL + SecretReveal.Thumps[1] and t < burstAt then
-		return "zvuk: buch... buch... BUCH (srdce)"
-	elseif t >= burstAt and t < burstAt + 1.2 then
-		return "zvuk: jackpot fanfára + cinkání"
+	if t >= SHATTER and t < SHATTER + 0.6 then
+		return "zvuk: prask + kouzelné cinknutí (ding!)"
+	elseif t >= SHATTER + 0.6 and t < JUMP then
+		return "zvuk: tiché třpytivé zvonění"
 	elseif t >= LAND and t < LAND + 0.4 then
 		return "zvuk: pop (do batohu)"
 	end
@@ -409,57 +402,73 @@ for i = 0, frames - 1 do
 		Juice.flashBall(Geo, extra, center, WHITE, 9, st)
 	end
 
-	-- the column of rainbow light (SecretService's world beam: 3 s, everyone near sees it)
-	if st >= 0 and st < 3.2 then
-		local up = math.min(st / 0.25, 1)
-		local fade = math.clamp((st - 2.4) / 0.8, 0, 1)
-		local height = 46 * up
+	-- the sparkly ore's ping: a rainbow ring on the ground, a short shaft of light, sparkles
+	if st >= 0 and st < 1.1 then
 		local base = V3.new(center.X, ground, center.Z)
+		local up = math.min(st / 0.15, 1)
+		local fade = math.clamp((st - 0.5) / 0.6, 0, 1)
+		local height = 9 * up
 		for k, color in SecretOreShapes.Rainbow do
-			-- six thin coloured shafts round a white core, slowly turning
-			local a = k * math.pi / 3 + st * 1.6
-			local at = base + V3.new(math.cos(a) * 0.9, height / 2, math.sin(a) * 0.9)
+			local a = k * math.pi / 3 + st * 3
 			Geo.block(
 				extra,
-				CF.new(at),
-				V3.new(0.5, height, 0.5),
+				CF.new(base + V3.new(math.cos(a) * 0.4, height / 2, math.sin(a) * 0.4)),
+				V3.new(0.22, height, 0.22),
 				color,
 				NEON,
-				{ CastShadow = false, CanCollide = false, Transparency = 0.25 + 0.75 * fade }
+				{
+					CastShadow = false,
+					CanCollide = false,
+					Transparency = 0.3 + 0.7 * fade,
+				}
 			)
 		end
-		Geo.block(
-			extra,
-			CF.new(base + V3.new(0, height / 2, 0)),
-			V3.new(1.1, height, 1.1),
-			WHITE,
-			NEON,
-			{ CastShadow = false, CanCollide = false, Transparency = 0.15 + 0.85 * fade }
-		)
 		if st < 0.6 then
-			local diameter, transparency = Logic.ring(st, 0.6, radius * 0.6, radius * 3.2)
+			local diameter, transparency = Logic.ring(st, 0.6, radius * 0.5, radius * 2.4)
 			local bars, length = Logic.ringSegments(V3.new(center.X, ground + 0.2, center.Z), diameter, 18)
 			for k, cf in bars do
-				local color = SecretOreShapes.Rainbow[(k - 1) % #SecretOreShapes.Rainbow + 1]
-				Geo.block(
-					extra,
-					cf,
-					V3.new(0.35, 0.14, length),
-					color,
-					NEON,
-					{ CastShadow = false, CanCollide = false, Transparency = transparency }
-				)
+				Geo.block(extra, cf, V3.new(0.3, 0.12, length), SecretOreShapes.Rainbow[(k - 1) % #SecretOreShapes.Rainbow + 1], NEON, {
+					CastShadow = false,
+					CanCollide = false,
+					Transparency = transparency,
+				})
 			end
 		end
-		-- the secret ore itself rises in the light until the jackpot screen takes it
-		if t < REVEAL then
-			local lift = math.min(st / 0.4, 1)
-			local item = ItemBuilder.display(
-				{ K = "Clean", O = SECRET, G = SecretOreConfig.Grade },
-				CF.new(center.X, ground + 1.2 + 2.4 * lift, center.Z) * CF.Angles(0, st * 5, 0),
-				SECRET
+	end
+	-- the sparkly ore: out of the break, landing, sparkling; then it jumps to the miner
+	if t >= sparkly.At and t < LAND then
+		local p = chunkAt(sparkly, t)
+		local spin = math.min(t - sparkly.At, 0.7) * 4
+		local s = 1
+		if t >= JUMP then
+			local u = (t - JUMP) / (LAND - JUMP)
+			local to = feet + V3.new(0, 3, 0)
+			p = p:Lerp(to, u * u) + V3.new(0, 3 * math.sin(u * math.pi), 0)
+			s = 1 - 0.7 * u
+		end
+		local chunk = ItemBuilder.build({ Kind = "Raw", OreId = SECRET }, CF.new(p) * CF.Angles(0.4, spin + 1, 0.2), 4242)
+		for _, d in chunk:GetDescendants() do
+			if d:IsA("BasePart") then
+				local q = d.CFrame.Position
+				d.CFrame = CF.new(p + (q - p) * s) * d.CFrame.Rotation
+				d.Size = d.Size * s
+			end
+		end
+		SecretOreFx.pose(SecretOreFx.rig(chunk, CF.new(p)), CF.new(p), t)
+		chunk.Parent = extra
+		-- sparkles twinkling round it (the game's rainbow emitter, drawn as dots here)
+		for k = 1, 9 do
+			local a = k * 2.4 + t * 2.2
+			local u = ((t * 1.3 + k * 0.29) % 1)
+			local at = p + V3.new(math.cos(a) * (0.8 + 0.3 * u), -0.3 + 1.6 * u, math.sin(a) * (0.8 + 0.3 * u))
+			Geo.ball(
+				extra,
+				at,
+				0.24 * math.sin(u * math.pi) * s + 0.03,
+				SecretOreShapes.Rainbow[(k - 1) % 6 + 1],
+				NEON,
+				{ CanCollide = false }
 			)
-			item.Parent = extra
 		end
 	end
 
@@ -472,29 +481,38 @@ for i = 0, frames - 1 do
 		end
 	end
 
-	-- the jackpot screen, then the bump at the bag
-	SecretReveal.pose(view, reveal(t), { Screen = V2.new(W, H), Scale = SCALE, Target = packFull, Reduced = false })
-	if t < REVEAL then
-		view.Gui.Enabled = false
+	-- the toast, then the bump at the bag
+	hud.Toasts:ClearAllChildren()
+	if t >= SHATTER + 0.3 and t < SHATTER + 2.6 then
+		HudView.toast(hud.Toasts, "Something SPARKLY dropped!", C3.fromRGB(255, 120, 230))
 	end
 	local bump = juice.Bumps[1]
 	bump.Plus.Label.Text = "+1"
 	BagFly.poseBump(bump, packAt, packSize, t - LAND, SCALE, false, true, t - LAND)
 	HudView.setBackpack(hud, carried + (if t >= LAND then 1 else 0), CAPACITY)
-	local said = t >= burstAt
-	secretLine.Text = if said then "[SECRET] Kuba found Hollow Eye!" else ""
-	secretLine2.Text = if said then `    ({chanceText}, Deep Hollow)` else ""
-	if SECRET ~= "HollowEye" then
-		secretLine.Text = if said then `[SECRET] Kuba found {secretOre.Name}!` else ""
-	end
+	secretLine.Text = ""
+	secretLine2.Text = ""
 	captionText.Text = captionFor(t)
 	soundTag.Text = soundFor(t)
+
+	-- the camera leans in on the sparkly ore while it lies there, then back
+	local lean = 0
+	if t >= SHATTER + 0.15 then
+		lean = math.min((t - SHATTER - 0.15) / 0.6, 1)
+		if t >= JUMP then
+			lean *= 1 - math.min((t - JUMP) / 0.5, 1)
+		end
+		lean = lean * lean * (3 - 2 * lean)
+	end
+	local rest = chunkAt(sparkly, SHATTER + 1)
+	local camAt = camPos:Lerp(rest + (camPos - rest).Unit * 7, lean * 0.8)
+	local lookAt = camTarget:Lerp(rest, lean * 0.7)
 
 	local name = string.format("%04d", i)
 	fs.writeFile(root .. "/build/preview/" .. tag .. "/fx_" .. name .. ".json", serde.encode("json", Export.collect(extra)))
 	fs.writeFile(
 		root .. "/build/preview/" .. tag .. "/ui_" .. name .. ".json",
-		serde.encode("json", UiExport.export({ hud.Gui, juice.Gui, chat, view.Gui, caption }))
+		serde.encode("json", UiExport.export({ hud.Gui, juice.Gui, chat, caption }))
 	)
 	shots[tag .. "_" .. name] = {
 		scene = tag .. "_base",
@@ -506,6 +524,7 @@ for i = 0, frames - 1 do
 		position = { camPos.X, camPos.Y, camPos.Z },
 		target = { camTarget.X, camTarget.Y, camTarget.Z },
 		fov = FOV,
+		cam = { position = { camAt.X, camAt.Y, camAt.Z }, target = { lookAt.X, lookAt.Y, lookAt.Z }, fov = FOV },
 		preset = floor.Lighting,
 		shadowExtent = 90,
 		maxLights = 24,
@@ -518,17 +537,13 @@ local function frameAt(seconds: number): number
 	return math.clamp(math.floor(seconds * fps + 0.5), 0, frames - 1)
 end
 local board = {
-	title = "TAJNÁ RUDA (SECRET): jak vypadá, když padne",
+	title = "TAJNÁ RUDA (SECRET): v dole padne třpytivá ruda",
 	fps = fps,
 	cells = {
 		{ frame = frameAt(hitTimes[3]), caption = "1 Těžíš normálně, padají špinavé rudy" },
-		{ frame = frameAt(SHATTER + 0.3), caption = "2 Poslední zásah: duhový sloup světla" },
-		{ frame = frameAt(REVEAL + SecretReveal.Thumps[2] + 0.1), caption = "3 Tma, černý stín rudy, údery srdce" },
-		{ frame = frameAt(burstAt + 0.12), caption = "4 ZÁBLESK: tajná ruda se ukáže" },
-		{ frame = frameAt(burstAt + 0.9), caption = "5 SECRET! Jméno, šance 1 z 4 000, NEW!" },
-		{ frame = frameAt(REVEAL + SecretReveal.Hold - 0.6), caption = "6 Paprsky se točí, ruda se točí" },
-		{ frame = frameAt(REVEAL + SecretReveal.Hold + 0.45), caption = "7 Letí do batohu" },
-		{ frame = frameAt(LAND + 0.3), caption = "8 +1 v batohu, celý server to vidí v chatu" },
+		{ frame = frameAt(SHATTER + 0.15), caption = "2 Poslední zásah: duhové cinknutí" },
+		{ frame = frameAt(SHATTER + 1.0), caption = "3 Třpytivá ruda: duhové jiskry" },
+		{ frame = frameAt(LAND + 0.3), caption = "4 Do batohu, čistit!" },
 	},
 }
 fs.writeFile(root .. "/build/preview/" .. tag .. "_board.json", serde.encode("json", board))

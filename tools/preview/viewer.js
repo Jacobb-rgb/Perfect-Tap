@@ -778,7 +778,14 @@ async function main() {
   // video frames (tools/preview/render_levelup.mjs): the world stays, only the small
   // "extra" part set (an effect posed per frame) and the UI overlay change
   let extraGroup = null;
-  window.__frame = async (extraName, uiName) => {
+  window.__frame = async (extraName, uiName, cam) => {
+    // an optional per-frame camera ({ position, target, fov }): camera moves in reels
+    if (cam && cam.position && cam.target) {
+      camera.position.set(...cam.position);
+      if (cam.fov) camera.fov = cam.fov;
+      camera.updateProjectionMatrix();
+      camera.lookAt(new THREE.Vector3(...cam.target));
+    }
     if (extraGroup) world.remove(extraGroup);
     extraGroup = new THREE.Group();
     const extra = await fetch(`/scenes/${extraName}.json`).then((r) => r.json());
