@@ -12,6 +12,11 @@ contact sheets of the openings at 10 frames per second). We take the flow, the f
 them from our own things (our eggs, golems, colours, sounds, names). Never copy the game's images, sounds, names or
 exact UI art: Terra Forge is its own game.
 
+> **2026-10-30 ~00:40, owner: packages B and C are cancelled.** After the in-progress pictures he wrote (gist): "don't
+> add the golden things after all, not the machine and not the pets, so no rolling either; focus on the other things;
+> the profile etc. you don't have to do like this either, nor the rebirth". Only package A (the eggs) continues. The
+> unfinished work is parked and must never land: `feat/golden-forge` b9d3e420, `ui/side-panels` 9865dcb7.
+
 ## 1. What the video does
 
 ### The egg opening (Open 3 with Auto; t from the press)
@@ -111,7 +116,7 @@ Not: GolemConfig, GolemBuilder, GolemView, GolemController (package B); HUD file
 - Pictures: Open 1 Common, Open 3 mixed (one Epic), Open 10 with a Legendary, a Mythic, Reduce Motion, phone; the panel
   on PC, phone and TV; a short video of an opening.
 
-### B. `feat/golden-forge`: golden golems
+### B. `feat/golden-forge`: golden golems (CANCELLED by the owner 2026-10-30, parked b9d3e420)
 Owns: new `src/shared/Config/GoldenForgeConfig.luau`, new `src/server/Services/GoldenForgeService.luau` (or new ops on
 GolemAction in `GolemService.luau`), `src/shared/Config/GolemConfig.luau` (golden helpers), `GolemService.luau`, the
 golem part of `src/server/Bonuses.luau`, `src/shared/Builders/GolemBuilder.luau` (the golden look),
@@ -133,7 +138,7 @@ golem part of `src/server/Bonuses.luau`, `src/shared/Builders/GolemBuilder.luau`
 - World: a Golden Forge station by the eggs in our forge style (a gold anvil / crucible with molten gold, a sign, an
   E prompt), inside the lobby budget (measure).
 
-### C. `ui/side-panels`: profile + quest pop, then the rebirth in the side-panel look
+### C. `ui/side-panels`: profile + quest pop, then the rebirth in the side-panel look (CANCELLED by the owner 2026-10-30, parked 9865dcb7)
 Owns: new `src/client/UI/DockPanel.luau` (the right-side panel + its icon bar, BrightTheme), new
 `src/client/UI/ProfileView.luau` + `src/client/Controllers/ProfileController.luau` (its button: a MORE flyout entry
 through `HudBubble.addMore`, no HudBubble edits), the quest pop (new `src/client/UI/QuestPop.luau`, hooked from
