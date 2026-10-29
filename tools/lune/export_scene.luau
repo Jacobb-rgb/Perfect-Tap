@@ -210,6 +210,8 @@ elseif sceneName == "droppers" then -- the seven droppers, Money Laser and SELL 
 	end
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
+elseif sceneName == "secret_showcase" or sceneName == "secret_hidden" then -- the SECRET ores on pedestals (tools/lune/lib/secret_showcase.luau)
+	require("./lib/secret_showcase").build(Loader, workspace, sceneName == "secret_hidden")
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
 	require("./lib/cute_styles_gallery").build(Loader, workspace)
 elseif sceneName == "kit_machines" then -- the Factory Kit machines + upgrade crystal levels (tools/lune/lib/kit_machines_gallery.luau)

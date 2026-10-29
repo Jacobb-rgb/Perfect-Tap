@@ -93,6 +93,20 @@ Rarity.List = {
 		FragileSpots = 5,
 		Reveal = 3,
 	},
+	-- (owner 2026-10-29) Secret ores (SecretOreConfig) drop clean, so the mining and cleaning
+	-- numbers only matter if one ever reaches a rock or a cleaner: they behave like Mythic.
+	{
+		Id = "Secret",
+		Name = "Secret",
+		Order = 7,
+		Color = Color3.fromRGB(255, 120, 230),
+		DarkColor = Color3.fromRGB(24, 14, 36),
+		RespawnTime = 150,
+		BonusChunkChance = 0.1,
+		DirtThickness = 1.7,
+		FragileSpots = 5,
+		Reveal = 3,
+	},
 } :: { RarityInfo }
 
 Rarity.ById = {} :: { [string]: RarityInfo }

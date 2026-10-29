@@ -29,6 +29,7 @@ local DropperConfig = require(script.Parent.Parent.Config.DropperConfig)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 local OreShapesLow = require(script.Parent.OreShapesLow)
 local OreShapesHigh = require(script.Parent.OreShapesHigh)
+local SecretOreShapes = require(script.Parent.SecretOreShapes)
 local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
 
 local ItemBuilder = {}
@@ -898,6 +899,7 @@ local KIT = {
 }
 OreShapesLow.register(SHAPES, KIT)
 OreShapesHigh.register(SHAPES, KIT)
+SecretOreShapes.register(SHAPES, KIT)
 
 ItemBuilder.Shapes = SHAPES
 
@@ -1758,7 +1760,8 @@ local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: str
 			mote.Shape = Enum.PartType.Ball
 			mote.Size = Vector3.one * (0.18 + (i % 2) * 0.05)
 			mote.CFrame = orbit * CFrame.new(math.cos(a) * radius, 0, math.sin(a) * radius)
-			mote.Color = glow
+			-- Secret ores: rainbow motes
+			mote.Color = if c.Order >= 7 then SecretOreShapes.Rainbow[i * 2 - 1] else glow
 			mote.Material = NEON
 			mote.Parent = model
 		end
