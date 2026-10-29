@@ -26,6 +26,7 @@ local Geo = require(Shared.Builders.Geo)
 local RevealFx = require(script.Parent.RevealFx)
 local SprayParts = require(script.Parent.SprayParts)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
@@ -183,6 +184,42 @@ local function popBlock(ctx: any, block: BasePart)
 	end
 end
 
+--[[
+	The clump's dark body crumbles away with the last dirt (owner 2026-10-28:
+	"only the ore, not the dirt"): every part sinks back, shrinks and fades,
+	so the ore rises and spins on its own. Reduce motion: it just goes (no
+	tween, no dust; CardLook throws no chunks from it).
+]]
+local CRUMBLE_TIME = 0.35
+
+local function crumble(shell: any)
+	if Motion.reduced() then
+		for _, part in shell.BackRock do
+			part:Destroy()
+		end
+		return
+	end
+	local back = shell.WorkCF.LookVector -- (away from the camera)
+	for i, part in shell.BackRock do
+		if part.Parent then
+			local sink = back * (0.5 + 0.15 * (i % 3)) - Vector3.new(0, 0.6, 0)
+			local tween = TweenService:Create(
+				part,
+				TweenInfo.new(CRUMBLE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ CFrame = part.CFrame + sink, Size = part.Size * 0.2, Transparency = 1 }
+			)
+			tween:Play()
+			tween.Completed:Once(function()
+				part:Destroy()
+			end)
+		end
+	end
+	local body = shell.BackRock[1]
+	if body then
+		Vfx.burst("Dust", body.Position, 10, body.Color)
+	end
+end
+
 function DefaultLook.cleaned(cells: { number }, ctx: any)
 	local state = ctx.LookState
 	if not state then
@@ -266,6 +303,8 @@ function DefaultLook.finished(ctx: any)
 			d:Destroy()
 		end
 	end
+	-- the clump crumbles: only the ore (or relic) is left
+	crumble(shell)
 	-- the ore (or relic) rises out of the clump and turns like on a turntable
 	local parts: { BasePart } = shell.Core
 	local pivot = shell.TreasurePivot

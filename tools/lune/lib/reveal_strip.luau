@@ -90,6 +90,10 @@ function Strip.build(Loader: any, parent: any)
 			end
 			local center = workCf:PointToWorldSpace(V3.new(0, 0, OreShellBuilder.CoreFront))
 			if f >= 2 then
+				-- the clump has crumbled away (DefaultLook's crumble): only the ore is left
+				for _, part in shell.BackRock do
+					part:Destroy()
+				end
 				-- the ore's light
 				local holder = Geo.ball(root, center, 0.1, ore.Glow, nil, { Transparency = 1, CanCollide = false })
 				local light = roblox.Instance.new("PointLight")

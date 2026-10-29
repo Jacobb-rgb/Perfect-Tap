@@ -1503,40 +1503,8 @@ function BuildView.setLayer(refs: Refs, ground: boolean)
 	end
 end
 
--- The BUILD tile's key hint: a keycap on its top left corner (hidden until setMenuKey).
-local function menuKeyCap(button: GuiObject): Frame
-	local existing = button:FindFirstChild("KeyCap")
-	if existing and existing:IsA("Frame") then
-		return existing
-	end
-	local cap = UIKit.new("Frame", {
-		Name = "KeyCap",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(6, 6),
-		Size = UDim2.fromOffset(30, 30),
-		BackgroundColor3 = BubbleTheme.White,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-		Visible = false,
-	}, button)
-	Bubble.corner(cap, 8)
-	Bubble.stroke(cap, 2.5)
-	Bubble.ink(cap, "", 19, {
-		Name = "Text",
-		Size = UDim2.fromScale(1, 1),
-		TextColor3 = BubbleTheme.DarkInk,
-		ZIndex = 6,
-	})
-	UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 6,
-		Visible = false,
-	}, cap)
-	return cap
-end
+-- The BUILD tile's key hint: a keycap on its top left corner (HudBubble.keyCap, hidden until setMenuKey).
+local menuKeyCap = HudBubble.keyCap
 
 -- The BUILD button for the HUD's right-side menu (HudController.refs().Menu).
 function BuildView.menuButton(menu: Instance): TextButton
@@ -1558,20 +1526,7 @@ end
 -- The BUILD tile's key: `cap` on a keycap ("B"), or the gamepad's own
 -- glyph `image` (D-pad Up); neither hides it (touch: the tile is the way).
 function BuildView.setMenuKey(button: TextButton, cap: string?, image: string?)
-	local frame = menuKeyCap(button)
-	local text = frame:FindFirstChild("Text") :: TextLabel
-	local glyph = frame:FindFirstChild("Glyph") :: ImageLabel
-	local stroke = frame:FindFirstChildOfClass("UIStroke")
-	local hasImage = image ~= nil and image ~= ""
-	glyph.Image = image or ""
-	glyph.Visible = hasImage
-	text.Text = if hasImage then "" else cap or ""
-	text.Visible = not hasImage
-	frame.BackgroundTransparency = if hasImage then 1 else 0
-	if stroke then
-		stroke.Enabled = not hasImage
-	end
-	frame.Visible = hasImage or (cap ~= nil and cap ~= "")
+	HudBubble.setKeyCap(button, cap, image)
 end
 
 -- The BUILD tile's badge: how many machines wait to be placed (0 hides it).

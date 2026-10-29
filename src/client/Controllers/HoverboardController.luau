@@ -24,6 +24,8 @@
 	  bar, Left the side menu, Right the luck boosts) send { Action = "Ride", On } (no board yet:
 	  the panel opens). The button shows only while a board is equipped:
 	  RIDE / STOP, with an "H" chip or the gamepad glyph (none on touch).
+	  The round look: the grey Ride tile of the HUD's grid instead (owner
+	  2026-10-28), always shown (no board: the panel opens), Ride / Stop.
 	  Refused on the client while a minigame or build mode holds the controls.
 	- Every rider's board (also other players): when a character has the
 	  attribute HoverboardData.Attribute, this client builds that board
@@ -887,7 +889,8 @@ updateRideButton = function()
 	end
 	local _, equipped = snapshotBoards()
 	local riding = HoverboardController.isRiding()
-	button.Holder.Visible = equipped ~= "" or riding
+	-- (the round look's tile always shows: with no board it opens the panel)
+	button.Holder.Visible = button.Tile or equipped ~= "" or riding
 	local hint, glyph = rideHint()
 	HoverboardView.setRiding(button, riding, hint, glyph)
 end
@@ -1247,9 +1250,13 @@ end
 
 local function buildRide()
 	local hud = HudController.refs()
-	local button = HoverboardView.rideButton(hud.Menu)
+	-- the round look: the Ride tile of the HUD's grid; else the round button in the right menu
+	local button = HoverboardView.rideTile(hud.Menu) or HoverboardView.rideButton(hud.Menu)
 	ride = button
-	hookBounce(button.Button, button.Scale)
+	local scale = button.Scale
+	if scale then
+		hookBounce(button.Button, scale)
+	end
 	button.Button.Activated:Connect(HoverboardController.toggleRide)
 	updateRideButton()
 end

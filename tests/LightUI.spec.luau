@@ -503,18 +503,28 @@ return function(T, Loader)
 					{ 1440, 900, 58 },
 					{ 667, 375, 58 },
 					{ 568, 320, 58 },
+					-- touch phones (review 2026-10-29): the real HUD at their heights
+					{ 568, 320, 58, true },
+					{ 600, 340, 58, true },
+					{ 620, 350, 58, true },
+					{ 640, 360, 58, true },
+					{ 667, 375, 58, true },
+					{ 844, 390, 58, true },
 				}
 			do
 				local viewport = Vector2.new(screen[1], screen[2])
 				local scale = HudBubble.scaleFor(viewport)
-				local refs = HudBubble.buildGame(scale, screen[1]) -- (the screen width in points)
+				local touch = screen[4] == true
+				-- (the screen width in points, the gui's height under Roblox's top bar)
+				local refs = HudBubble.buildGame(scale, screen[1], touch, false, screen[2] - screen[3])
 				local height = screen[2] / scale
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
 				height -= screen[3] / scale
-				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") >= 3 -- (the round look: 4 on phones)
+				local compact = touch or scale <= 0.75 -- (TrainController's compact chip)
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
 				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
+				TrainView.useHud(refs.Gui) -- (HudController: the chip's place and size from the HUD)
 				local chipBottom = chipTop + TrainView.chipSize(compact).Y
 				if PopTheme.round() then
 					-- the round look: the Shop leads the top row (not on the smallest phones: the
@@ -558,8 +568,30 @@ return function(T, Loader)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
 				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
-				if type(chipLeft) == "number" then
-					-- (the round look on a PC: beside the tiles' last row, clear of them)
+				local grid = menu:FindFirstChildOfClass("UIGridLayout") :: any
+				if touch then
+					-- (a phone: every tile a thumb wide, the chip clear of the touch tutorial's bubble)
+					T.truthy(grid.CellSize.X.Offset * scale >= 44 - 1e-6, `the tiles >= 44 pt at {screen[1]} x {screen[2]} (touch)`)
+					local TutorialView = ui("TutorialView")
+					local bubble = TutorialView.layout(scale, Vector2.new(screen[1], screen[2] - screen[3]), true)
+					local size = TrainView.chipSize(compact)
+					local x0 = if type(chipLeft) == "number" then chipLeft else TrainView.ChipLeft
+					local chipRect = { x0, chipTop, x0 + size.X, chipTop + size.Y }
+					local bx = bubble.Position.X - bubble.Width
+					local bubbleRect = { bx, bubble.Position.Y, bubble.Position.X, bubble.Position.Y + bubble.Height }
+					local hit = chipRect[1] < bubbleRect[3]
+						and bubbleRect[1] < chipRect[3]
+						and chipRect[2] < bubbleRect[4]
+						and bubbleRect[2] < chipRect[4]
+					T.falsy(hit, `the TRAIN chip clear of the tutorial bubble at {screen[1]} x {screen[2]} (touch)`)
+				end
+				if type(chipLeft) == "number" and chipLeft == menu.Position.X.Offset then
+					-- (the round look, owner 2026-10-28: under the tiles, as wide as them, "ending like them")
+					T.eq(chipLeft, menu.Position.X.Offset, `the TRAIN chip under the tiles' left edge at {screen[1]} x {screen[2]}`)
+					T.eq(TrainView.chipSize(compact).X, menu.Size.X.Offset, `as wide as the tiles at {screen[1]} x {screen[2]}`)
+					T.truthy(chipTop >= menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				elseif type(chipLeft) == "number" then
+					-- (the round look on the smallest screens: beside the tiles' last row, clear of them)
 					T.truthy(
 						chipLeft > menu.Position.X.Offset + menu.Size.X.Offset,
 						`the TRAIN chip right of the tiles at {screen[1]} x {screen[2]}`
@@ -572,6 +604,7 @@ return function(T, Loader)
 				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
 				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
 				T.truthy(menuRight < tabsLeft, `the tiles left of the tabs at {screen[1]} x {screen[2]}`)
+				TrainView.useHud(nil)
 			end
 		end)
 	end)
@@ -1205,7 +1238,7 @@ return function(T, Loader)
 	end)
 
 	T.test("LightUI: game HUD touch sizes on phones", function()
-		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
+		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)), 844, true)
 		T.truthy(layout.Compact, "a phone gets the compact layout")
 		T.truthy(layout.Tile * 0.62 >= 44 and layout.Slot * 0.62 >= 44 and layout.TabHeight * 0.62 >= 44, ">= 44 pt")
 	end)

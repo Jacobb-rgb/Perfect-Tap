@@ -31,7 +31,9 @@
 	  footer   the control hint (PC, gamepad: its glyph) or the pitch
 	           (phones), the last server message in its place for a while
 	  ride     the RIDE toggle for the HUD's right menu (rideButton): RIDE /
-	           STOP with a key chip ("H") or the gamepad glyph
+	           STOP with a key chip ("H") or the gamepad glyph; in the round
+	           look the Ride tile of the HUD's grid instead (rideTile, owner
+	           2026-10-28: grey like the other tiles), Ride / Stop
 
 	Clicking a card picks it (the detail follows); the detail's button does
 	the action (HoverboardController). Faces, fonts and colours come from
@@ -53,6 +55,7 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
+local HudBubble = require(script.Parent.HudBubble)
 local GolemView = require(script.Parent.GolemView)
 local TechShopView = require(script.Parent.TechShopView)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
@@ -134,12 +137,13 @@ export type Refs = {
 export type RideButton = {
 	Holder: Frame,
 	Button: TextButton,
-	Scale: UIScale,
-	Gradient: UIGradient,
-	Ring: UIStroke,
+	Scale: UIScale?, -- (the round button's bounce; a tile presses by itself: Pop's "Press")
+	Gradient: UIGradient?, -- (the round button's paint)
+	Ring: UIStroke?,
 	Label: TextLabel,
-	Key: TextLabel,
-	Glyph: ImageLabel,
+	Key: TextLabel?, -- (the round button's key chip; a tile wears HudBubble's keycap)
+	Glyph: ImageLabel?,
+	Tile: boolean, -- the round look's grey tile in the HUD's grid (always shown)
 	Riding: boolean,
 }
 
@@ -1879,6 +1883,26 @@ function HoverboardView.rideButton(parent: Instance): RideButton
 		Label = label,
 		Key = key,
 		Glyph = glyph,
+		Tile = false,
+		Riding = false,
+	}
+	HoverboardView.setRiding(ride, false)
+	return ride
+end
+
+-- The round look's Ride tile in the HUD's grid (HudBubble.RoundMenu "Ride"): a dark tile like
+-- Spin or Build, its word Ride / Stop, the H keycap; nil when the grid has no Ride tile.
+function HoverboardView.rideTile(menu: Instance): RideButton?
+	if not (menu:GetAttribute("Bubble") and menu:FindFirstChild("Ride")) then
+		return nil
+	end
+	local face = HudBubble.claimTile(menu, "Ride")
+	local label = face:FindFirstChild("Label") :: TextLabel
+	local ride: RideButton = {
+		Holder = face.Parent :: Frame,
+		Button = face,
+		Label = label,
+		Tile = true,
 		Riding = false,
 	}
 	HoverboardView.setRiding(ride, false)
@@ -1889,21 +1913,28 @@ end
 -- text ("H"), "" hides it (touch); `glyph` = a gamepad image shown instead.
 function HoverboardView.setRiding(ride: RideButton, riding: boolean, hint: string?, glyph: string?)
 	ride.Riding = riding
+	local gradient, ringStroke, key, glyphLabel = ride.Gradient, ride.Ring, ride.Key, ride.Glyph
+	if ride.Tile or not (gradient and ringStroke and key and glyphLabel) then
+		-- the tile: only its word and its keycap change
+		ride.Label.Text = Pop.caption(if riding then "Stop" else "Ride")
+		HudBubble.setKeyCap(ride.Button, if glyph and glyph ~= "" then nil else hint or "H", glyph)
+		return
+	end
 	if riding then
-		setGradient3(ride.Gradient, rgb(255, 140, 120), rgb(236, 70, 66), rgb(176, 34, 44))
-		ride.Ring.Color = rgb(90, 14, 20)
+		setGradient3(gradient, rgb(255, 140, 120), rgb(236, 70, 66), rgb(176, 34, 44))
+		ringStroke.Color = rgb(90, 14, 20)
 		ride.Label.Text = "STOP"
 	else
-		setGradient3(ride.Gradient, rgb(176, 116, 255), rgb(118, 56, 230), rgb(70, 28, 160))
-		ride.Ring.Color = INK
+		setGradient3(gradient, rgb(176, 116, 255), rgb(118, 56, 230), rgb(70, 28, 160))
+		ringStroke.Color = INK
 		ride.Label.Text = "RIDE"
 	end
 	local image = glyph or ""
-	ride.Glyph.Image = image
-	ride.Glyph.Visible = image ~= ""
+	glyphLabel.Image = image
+	glyphLabel.Visible = image ~= ""
 	local text = hint or "H"
-	ride.Key.Text = text
-	ride.Key.Visible = image == "" and text ~= ""
+	key.Text = text
+	key.Visible = image == "" and text ~= ""
 end
 
 return HoverboardView

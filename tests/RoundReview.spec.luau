@@ -2,7 +2,8 @@
 	The round look's review (2026-10-28, round_look_review_findings): touch
 	tablets get no offers and keep a short tile grid at the top (out of the
 	thumbstick's start zone, clear of the top row), the boost corner keeps
-	off the offers, the PC TRAIN chip sits beside the tiles clear of the
+	off the offers, the PC TRAIN chip sits under the tiles (owner
+	2026-10-28: the tall block, the chip as wide as it) clear of the
 	Server Luck line and the floaters, a TV keeps the HUD out of its safe
 	band, the Daily Reward popup fits phones, the limited banner's buy
 	buttons stay 44 pt, the Spin tile says FREE! only for the free spin, the
@@ -52,7 +53,7 @@ return function(T, Loader)
 				local screen = Vector2.new(size[1], size[2])
 				local scale = HudBubble.scaleFor(screen)
 				local where = `{size[1]} x {size[2]}`
-				local refs = HudBubble.buildGame(scale, size[1], true, false) :: any
+				local refs = HudBubble.buildGame(scale, size[1], true, false, size[2] - size[3]) :: any
 				T.eq(refs.Gui:FindFirstChild("Offers"), nil, where .. ": no offers on a touch tablet")
 				local width, height = size[1] / scale, (size[2] - size[3]) / scale
 				local menu = refs.Menu
@@ -77,16 +78,23 @@ return function(T, Loader)
 				local bar = refs.TopBar
 				T.truthy(flyout.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, where .. ": the flyout under the top row")
 				T.truthy(flyout.ZIndex > refs.Toasts.ZIndex, where .. ": the flyout over the toasts")
-				T.eq(refs.Gui:GetAttribute("ChipLeft"), nil, where .. ": the chip at its usual left")
+				-- (owner 2026-10-28: the chip under the tiles, as wide as them)
+				T.eq(refs.Gui:GetAttribute("ChipLeft"), menu.Position.X.Offset, where .. ": the chip under the tiles' left edge")
+				TrainView.useHud(refs.Gui)
+				T.eq(TrainView.chipSize(true).X, menu.Size.X.Offset, where .. ": the chip as wide as the tiles")
+				TrainView.useHud(nil)
 				-- the BLASTER slot + backpack pair out of the thumbstick's zone on a tablet too
 				local pairLeft = width / 2 + refs.CarryPanel.Position.X.Offset
 				T.truthy(pairLeft >= HudBubble.ThumbZone * width - 1e-6, `{where}: the bottom pair from {pairLeft} of {width}`)
 				refs.Gui:Destroy()
 			end
-			-- a PC keeps the reel's lowered tiles and the offers
-			local pc = HudBubble.buildGame(1, 1280, false, false) :: any
+			-- a PC keeps the offers and the tall block of tiles, two a row (owner 2026-10-28)
+			local pc = HudBubble.buildGame(1, 1280, false, false, 720 - 58) :: any
 			T.truthy(pc.Gui:FindFirstChild("Offers"), "PC: the offers")
-			T.eq(pc.Menu.Position.Y.Offset, HudBubble.RoundMenuTop, "PC: the reel's lowered tiles")
+			T.eq(pc.Menu:GetAttribute("Columns"), 2, "PC: two a row")
+			local big = HudBubble.buildGame(1.25, 1920, false, false, 1080 - 58) :: any
+			T.eq(big.Menu:GetAttribute("Columns"), 2, "1920 x 1080: two a row")
+			T.truthy(big.Menu.Position.Y.Offset > HudBubble.MenuTop, "1920 x 1080: lower, like the reel's, where there is room")
 		end)
 	end)
 
@@ -131,16 +139,22 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("RoundReview: the PC TRAIN chip beside the tiles, clear of the Server Luck line and the floaters", function()
+	T.test("RoundReview: the PC TRAIN chip under the tiles as wide as them, clear of the Server Luck line and the floaters", function()
 		inRound(function()
 			for _, size in { { 1280, 720, 58 }, { 1366, 768, 58 }, { 1280, 800, 36 }, { 1920, 1080, 58 } } do
 				local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
 				local width, height = size[1] / scale, (size[2] - size[3]) / scale
-				local refs = HudBubble.buildGame(scale, size[1], false, false) :: any
+				local refs = HudBubble.buildGame(scale, size[1], false, false, size[2] - size[3]) :: any
 				local where = `{size[1]} x {size[2]}`
 				local chipLeft, chipTop = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
-				T.truthy(type(chipLeft) == "number", where .. ": beside the tiles")
+				T.eq(chipLeft, refs.Menu.Position.X.Offset, where .. ": under the tiles' left edge")
+				T.eq(refs.Gui:GetAttribute("ChipStack"), true, where .. ": the stacked chip")
+				TrainView.useHud(refs.Gui)
 				local chip = TrainView.chipSize(false)
+				TrainView.useHud(nil)
+				T.eq(chip.X, refs.Menu.Size.X.Offset, where .. ": as wide as the tiles")
+				T.eq(chip.Y, HudBubble.StackChipHeight, where .. ": the HUD knows the stacked chip's height")
+				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": two a row")
 				local chipRect = { chipLeft, chipTop, chipLeft + chip.X, chipTop + chip.Y }
 				local function rectOf(object: any): { number }
 					local x = width * object.Position.X.Scale + object.Position.X.Offset - object.AnchorPoint.X * object.Size.X.Offset
@@ -318,5 +332,173 @@ return function(T, Loader)
 		T.truthy(store:find("GuiService.SelectedObject = card.Button", 1, true), "an offer selects its card")
 		local teleport = source("Controllers/TeleportController")
 		T.truthy(teleport:find('selected.Name == "ShopPill"', 1, true), "the bar owns its Shop button")
+	end)
+
+	-- (review 2026-10-29) the grid is fitted to the screen's height: a full-screen PC layout refits when
+	-- the window shrinks (HudController: HudBubble.placeMenu on every size change), so the TRAIN chip
+	-- never lands on the money, its Server Luck line or the floaters
+	T.test("RoundReview: the tiles and the TRAIN chip refit when the window shrinks", function()
+		inRound(function()
+			local big = HudBubble.scaleFor(Vector2.new(1920, 1080))
+			local refs = HudBubble.buildGame(big, 1920, false, false, 1080 - 58) :: any
+			local small = HudBubble.scaleFor(Vector2.new(1280, 720))
+			local layout = HudBubble.layout(small, 1280, false, false, 720 - 58)
+			HudBubble.placeMenu(refs.Gui, refs.Menu, layout)
+			TrainView.useHud(refs.Gui)
+			local chip = TrainView.chipSize(false)
+			TrainView.useHud(nil)
+			local height = (720 - 58) / small
+			local chipBottom = refs.Gui:GetAttribute("ChipTop") + chip.Y
+			T.truthy(chipBottom <= HudBubble.roundFloor(layout, height), `the chip above the floaters ({chipBottom})`)
+			local grid = refs.Menu:FindFirstChildOfClass("UIGridLayout") :: any
+			T.eq(grid.CellSize.X.Offset, layout.Tile, "the tiles took the new size")
+			T.eq(refs.Menu.Size.Y.Offset, HudBubble.menuMetrics(layout, #HudBubble.gameMenu()).Height, "the block took the new height")
+			T.eq(refs.Gui:GetAttribute("ChipWidth"), refs.Menu.Size.X.Offset, "the chip as wide as the block again")
+			refs.Gui:Destroy()
+		end)
+	end)
+
+	-- (review 2026-10-29) a TV's stacked chip keeps its words 18 px at 1080p: the line on two rows, not smaller
+	T.test("RoundReview: a TV's stacked TRAIN chip keeps its line big (two rows)", function()
+		inRound(function()
+			local scale = HudBubble.scaleFor(Vector2.new(1920, 1080))
+			local refs = HudBubble.buildGame(scale, 1920, false, true, 1080 - 58) :: any
+			T.eq(refs.Gui:GetAttribute("ChipStack"), true, "stacked on a TV")
+			TrainView.useHud(refs.Gui)
+			T.eq(TrainView.chipSize(false).Y, HudBubble.StackChipHeightTv, "the HUD knows the TV chip's height")
+			local train = TrainView.build(false)
+			TrainView.layout(train, false, 1920 / scale, (1080 - 58) / scale)
+			TrainView.useHud(nil)
+			local line = train.ChipLine :: any
+			local fit = line:FindFirstChildOfClass("UITextSizeConstraint") :: any
+			T.truthy(fit and fit.MinTextSize * scale >= 18, "the line never under 18 px")
+			T.truthy(line.TextWrapped and line.Size.Y.Offset >= 2 * fit.MinTextSize, "two rows for a long line")
+			-- (review 2026-10-29) and the name: "TRAIN" / "120/180" on two rows across the chip, never under 18 px
+			local title = train.ChipTitle :: any
+			local titleFit = title:FindFirstChildOfClass("UITextSizeConstraint") :: any
+			T.truthy(titleFit and titleFit.MinTextSize * scale >= 18, "the name never under 18 px")
+			T.truthy(title.TextWrapped and title.Size.Y.Offset >= 2 * titleFit.MinTextSize, "two rows for the name")
+			T.truthy(title.Size.X.Offset >= 7 * titleFit.MinTextSize, "room for 120/180 at that size")
+			-- (review 2026-10-29) the rows never overlap: the name, the bar, the line, SEND
+			local bar = train.ChipBar :: any
+			local send = (train.ChipSend :: any).Parent
+			T.truthy(bar.Position.Y.Offset >= title.Position.Y.Offset + title.Size.Y.Offset, "the bar under the name")
+			T.truthy(line.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, "the line under the bar")
+			T.truthy(send.Position.Y.Offset >= line.Position.Y.Offset + line.Size.Y.Offset, "SEND under the line")
+			T.truthy(send.Position.Y.Offset + send.Size.Y.Offset <= HudBubble.StackChipHeightTv, "SEND inside the chip")
+			train.Gui:Destroy()
+			train.Chip:Destroy()
+			refs.Gui:Destroy()
+		end)
+	end)
+
+	-- (review 2026-10-29) the smallest touch phones: the TRAIN chip (beside or squeezed under the
+	-- tiles) keeps off FIRE, Grab and Jump (BoostView.TouchButtons, measured like BoostController)
+	-- and off the boost corner that moves left of the touch tutorial's bubble
+	T.test("RoundReview: on the smallest touch phones the TRAIN chip keeps off the touch buttons and the boost corner", function()
+		inRound(function()
+			local TutorialView = ui("TutorialView")
+			for _, size in
+				{
+					{ 533, 300 },
+					{ 568, 320 },
+					{ 600, 320 },
+					{ 600, 340 },
+					{ 620, 350 },
+					{ 640, 320 },
+					{ 640, 360 },
+					{ 654, 334 },
+					{ 699, 343 },
+				}
+			do
+				for _, inset in { 36, 58 } do
+					local where = `{size[1]} x {size[2]} (inset {inset})`
+					local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
+					local gui = Vector2.new(size[1], size[2] - inset)
+					local w, h = gui.X / scale, gui.Y / scale
+					local refs = HudBubble.buildGame(scale, size[1], true, false, gui.Y) :: any
+					TrainView.useHud(refs.Gui)
+					local chip = TrainView.chipSize(true)
+					TrainView.useHud(nil)
+					local x0, y0 = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
+					local chipRect = { x0, y0, x0 + chip.X, y0 + chip.Y }
+					local small = math.min(size[1], size[2]) <= 500
+					local buttons = {}
+					for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+						local r = { w - b.Left / scale, h - b.Top / scale, w - b.Right / scale, h - b.Bottom / scale }
+						buttons[b.Name] = r
+						-- (from 568 x 320 up, the smallest phone Roblox runs on: under it the tiles, the
+						-- chip and FIRE can't all fit in the top half)
+						if size[1] >= 568 then
+							T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
+						end
+					end
+					-- (review 2026-10-29) where it reaches the floaters' band over the money or the toasts'
+					-- column, it draws under the HUD: those stay readable over it
+					local column = BoostView.ToastColumn
+					local toasts = { w / 2 - column.Width / 2, column.Top, w / 2 + column.Width / 2, column.Top + column.Height }
+					local layout = HudBubble.layout(scale, size[1], true, false, gui.Y)
+					if chipRect[4] > HudBubble.roundFloor(layout, h) or overlap(chipRect, toasts) then
+						TrainView.useHud(refs.Gui)
+						local train = TrainView.build(true)
+						TrainView.layout(train, true, w, h)
+						TrainView.useHud(nil)
+						T.truthy(train.Chip.DisplayOrder < refs.Gui.DisplayOrder, `{where}: the chip under the HUD's toasts and floaters`)
+						train.Gui:Destroy()
+						train.Chip:Destroy()
+					end
+					-- the money under it
+					local moneyTop = h + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset
+					T.truthy(chipRect[4] <= moneyTop, `{where}: the chip above the money`)
+					-- the boost corner while the touch tutorial's bubble shows
+					local bubble = TutorialView.layout(scale, gui, true)
+					local bubbleRect =
+						{ Left = bubble.Position.X - bubble.Width, Top = bubble.Position.Y, Bottom = bubble.Position.Y + bubble.Height }
+					-- the bubble's SKIP and GOT IT (TutorialView.apply: the row at its bottom right)
+					local bLeft, bTop = bubble.Position.X - bubble.Width, bubble.Position.Y
+					local rowY = bTop + TutorialView.Head + bubble.BodyHeight + TutorialView.Gap + 5
+					local skipLeft = bLeft + bubble.Width - 12 - TutorialView.SkipWidth
+					local ackLeft = skipLeft - 8 - TutorialView.AckWidth
+					local bubbleButtons = {
+						Skip = { skipLeft, rowY, skipLeft + TutorialView.SkipWidth, rowY + bubble.RowHeight },
+						Ack = { ackLeft, rowY, ackLeft + TutorialView.AckWidth, rowY + bubble.RowHeight },
+					}
+					for _, count in { 1, 2 } do
+						local right, bottom, stacked, spot = BoostView.cornerSpot({
+							Screen = Vector2.new(size[1], size[2]),
+							Gui = gui,
+							Scale = scale,
+							Touch = true,
+							Count = count,
+							Bubble = bubbleRect,
+							Chip = { Left = chipRect[1], Top = chipRect[2], Right = chipRect[3], Bottom = chipRect[4] },
+						})
+						local tile, gap = BoostView.cornerHeight(), BoostView.CornerGap
+						local rowW = if stacked then BoostView.CornerWidth else count * BoostView.CornerWidth + (count - 1) * gap
+						local rowH = if stacked then count * tile + (count - 1) * gap else tile
+						local corner = { w - right - rowW, h - bottom - rowH, w - right, h - bottom }
+						T.falsy(overlap(chipRect, corner), `{where}: the chip clear of the boost corner ({count})`)
+						for name, r in buttons do
+							T.falsy(overlap(corner, r), `{where}: the boost corner ({count}) clear of {name}`)
+						end
+						T.truthy(corner[2] >= 0, `{where}: the boost corner ({count}) on the screen`)
+						-- (review 2026-10-29) the bubble's buttons stay tappable: the corner never covers them,
+						-- or it waits while the bubble shows (BoostController hides an "OverBubble" corner)
+						if spot ~= "OverBubble" then
+							for name, r in bubbleButtons do
+								T.falsy(overlap(corner, r), `{where}: the boost corner ({count}) clear of the bubble's {name}`)
+							end
+						end
+					end
+					refs.Gui:Destroy()
+				end
+			end
+			-- (HudBubble mirrors these: the corner column's room and the bubble's gap)
+			T.eq(HudBubble.BoostColumnRoom, 2 * BoostView.CornerGap + BoostView.CornerWidth, "the corner column's room")
+			T.eq(HudBubble.TutorialBarGap, TutorialView.BarGap, "the tutorial bubble's gap")
+			T.eq(BoostView.TouchButtons, HudBubble.TouchButtons, "one table of touch buttons")
+			local controller = require("@lune/fs").readFile(Loader.root .. "/src/client/Controllers/BoostController.luau")
+			T.truthy(controller:find('covering = spot == "OverBubble"', 1, true), "the corner waits while it would cover the bubble")
+		end)
 	end)
 end

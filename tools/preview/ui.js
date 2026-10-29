@@ -166,6 +166,92 @@ function gradientStops(grad, base, alpha) {
     .join(", ");
 }
 
+// ---- live ViewportFrames (uiexport's node.vp: a ViewportFrame a preview marked PreviewLive) ----
+// Its parts drawn with three.js through its own camera and Roblox's viewport light (Ambient +
+// LightColor along LightDirection), into a canvas in the frame. Pages without three.js
+// (no node_modules) leave such a frame empty; every other ViewportFrame keeps its Icon picture.
+let THREE = null;
+try {
+  THREE = await import("/node_modules/three/build/three.module.js");
+} catch {
+  THREE = null;
+}
+const VP_RES = 2; // drawn at twice its size: UIScales enlarge it with CSS
+let vpRenderer = null;
+let vpShapes = null;
+
+function vpGeometries() {
+  if (vpShapes) return vpShapes;
+  // (the same shapes as viewer.js: Block, Ball, Cylinder along X, Wedge tall at +Z)
+  const B0 = [-0.5, -0.5, -0.5], B1 = [0.5, -0.5, -0.5], B2 = [0.5, -0.5, 0.5], B3 = [-0.5, -0.5, 0.5];
+  const T2 = [0.5, 0.5, 0.5], T3 = [-0.5, 0.5, 0.5];
+  const tris = [[B0, B1, B2], [B0, B2, B3], [B3, B2, T2], [B3, T2, T3], [B0, T3, T2], [B0, T2, B1], [B0, B3, T3], [B1, T2, B2]];
+  const wedge = new THREE.BufferGeometry();
+  wedge.setAttribute("position", new THREE.Float32BufferAttribute(tris.flat(2), 3));
+  wedge.computeVertexNormals();
+  vpShapes = {
+    0: new THREE.BoxGeometry(1, 1, 1),
+    1: new THREE.SphereGeometry(0.5, 20, 14),
+    2: new THREE.CylinderGeometry(0.5, 0.5, 1, 20).rotateZ(-Math.PI / 2),
+    3: wedge,
+  };
+  return vpShapes;
+}
+
+function vpColor(hex) {
+  const c = new THREE.Color();
+  c.setRGB(parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255, THREE.SRGBColorSpace);
+  return c;
+}
+
+function liveViewport(el, vp, w, h) {
+  if (!THREE || w < 1 || h < 1) return;
+  const W = Math.ceil(w * VP_RES);
+  const H = Math.ceil(h * VP_RES);
+  if (!vpRenderer) {
+    vpRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    vpRenderer.setPixelRatio(1);
+    vpRenderer.setClearColor(0x000000, 0);
+  }
+  vpRenderer.setSize(W, H, false);
+  const scene = new THREE.Scene();
+  // three's lights carry a 1/pi (physical units): times pi gives Roblox's plain "colour x light"
+  scene.add(new THREE.AmbientLight(vpColor(vp.amb), Math.PI));
+  const sun = new THREE.DirectionalLight(vpColor(vp.lc), Math.PI);
+  sun.position.set(-vp.ld[0], -vp.ld[1], -vp.ld[2]); // (it shines toward the origin)
+  scene.add(sun);
+  const shapes = vpGeometries();
+  const materials = [];
+  const m = new THREE.Matrix4();
+  for (const [shape, sx, sy, sz, cf, color, mat, transparency] of vp.parts) {
+    // Neon draws flat and bright in a viewport (no bloom there)
+    const material = mat === "Neon" ? new THREE.MeshBasicMaterial({ color: vpColor(color) }) : new THREE.MeshLambertMaterial({ color: vpColor(color) });
+    if (transparency > 0.01) {
+      material.transparent = true;
+      material.opacity = Math.max(0.05, 1 - transparency);
+    }
+    materials.push(material);
+    const mesh = new THREE.Mesh(shapes[shape] || shapes[0], material);
+    const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = cf;
+    m.set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(m).multiply(new THREE.Matrix4().makeScale(sx, sy, sz));
+    scene.add(mesh);
+  }
+  const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = vp.cf;
+  const camera = new THREE.PerspectiveCamera(vp.fov, W / H, 0.05, 2000); // (Roblox's FieldOfView is vertical too)
+  m.set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
+  m.decompose(camera.position, camera.quaternion, camera.scale);
+  vpRenderer.render(scene, camera);
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+  canvas.getContext("2d").drawImage(vpRenderer.domElement, 0, 0);
+  el.appendChild(canvas);
+  for (const material of materials) material.dispose();
+}
+
 function styleElement(el, node, w, h) {
   const corner = child(node, "UICorner");
   if (corner) {
@@ -220,6 +306,8 @@ function styleElement(el, node, w, h) {
       img.style.opacity = String(1 - (node.it || 0));
       el.appendChild(img);
     }
+  } else if (node.vp) {
+    liveViewport(el, node.vp, w, h);
   }
   // (after a UIScale's scale: both apply)
   if (node.rot) el.style.transform = `${el.style.transform || ""} rotate(${node.rot}deg)`.trim();

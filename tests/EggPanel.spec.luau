@@ -926,15 +926,26 @@ return function(T, Loader)
 	-- A touch screen as EggPanelController measures it (px): Roblox's top bar row `inset` tall (36 in the
 	-- previews, 58 live), the safe frame (`notch`: left, right, bottom insets), the HUD's teleport bar
 	-- (HudBubble: the round look's row, centred), and the boost corner / tutorial bubble when given.
-	-- The HUD's left column on a touch screen (HudBubble: the tiles, the TRAIN chip under them; under the top bar).
-	local function hudLeft(view: any, inset: number, scale: number): any
+	-- The HUD's left column on a touch screen as EggPanelController measures it: the tiles and the
+	-- TRAIN chip, two boxes (HudBubble: the chip under the tiles or, on the smallest phones, beside
+	-- their last row; under the top bar; the gui `view.Y - inset` tall).
+	local function hudLeft(view: any, inset: number, scale: number): { any }
 		local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
-		local layout = HudBubble.layout(scale, view.X, true, false)
+		local layout = HudBubble.layout(scale, view.X, true, false, view.Y - inset)
 		local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
-		local bottom = HudBubble.chipTop(layout) + HudBubble.TouchChipHeight
+		local x0, y0 = m.Origin.X.Offset, m.Origin.Y.Offset
+		local chipLeft = HudBubble.chipLeft(layout) or x0
+		local chipTop = HudBubble.chipTop(layout)
+		local chipWidth = HudBubble.chipWidth(layout) or HudBubble.TouchChipWidth
 		return {
-			Min = Vector2.new(0, inset + m.Origin.Y.Offset * scale),
-			Max = Vector2.new((m.Origin.X.Offset + m.Width) * scale, inset + bottom * scale),
+			{
+				Min = Vector2.new(x0 * scale, inset + y0 * scale),
+				Max = Vector2.new((x0 + m.Width) * scale, inset + (y0 + m.Height) * scale),
+			},
+			{
+				Min = Vector2.new(chipLeft * scale, inset + chipTop * scale),
+				Max = Vector2.new((chipLeft + chipWidth) * scale, inset + (chipTop + HudBubble.TouchChipHeight) * scale),
+			},
 		}
 	end
 	local function touchScreen(view: any, inset: number, notch: { number }?, corner: any?, bubble: any?): (any, number, any)
@@ -950,7 +961,7 @@ return function(T, Loader)
 			View = view,
 			Safe = safe,
 			TopInset = inset,
-			Hud = { topBar, hudLeft(view, inset, scale) },
+			Hud = { topBar, table.unpack(hudLeft(view, inset, scale)) },
 			Corner = corner,
 			Bubble = bubble,
 		}
@@ -983,8 +994,8 @@ return function(T, Loader)
 				local small = math.min(view.X, view.Y) <= 500
 				T.eq(
 					#s.Keep,
-					#BoostView.TouchButtons[if small then "Small" else "Large"] + 2,
-					"the touch buttons, the teleport bar, the left tiles"
+					#BoostView.TouchButtons[if small then "Small" else "Large"] + 3,
+					"the touch buttons, the teleport bar, the left tiles, the TRAIN chip"
 				)
 				T.near(s.Zone.Max.X, view.X * 0.4, 1e-3, "the thumbstick's zone")
 				for _, id in TEMPLE do

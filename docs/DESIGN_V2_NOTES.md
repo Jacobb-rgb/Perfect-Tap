@@ -231,3 +231,15 @@ data: src/shared/Config/MineFloors.luau, rocks: src/shared/Builders/RockBuilder.
 5. **No crystal crust** mechanic; instead the crystals must look **better and cooler on every deeper floor**.
 6. Yes to: better ore deeper inside each floor (veins), **special rocks** (golden rock, geode, artifact rock) and the
    server-wide **Giant Crystal**.
+
+### Detail fixes (owner, 2026-10-28, chat "Úpravy detailů")
+- **HUD tiles: a tall block, not a wide one.** The round look's tiles go two a row on a mouse or a TV
+  (HudBubble.fitRound shrinks them on short screens, never below 56 units); the hoverboard's **Ride is a grey tile
+  like the others** (after Spin, H keycap, Ride / Stop), not the round violet button; the **TRAIN chip sits under
+  the tiles, exactly as wide as them** (TrainView's stacked chip: name and bar, the line, SEND across the bottom).
+  Touch screens keep the tiles wide at the top (the thumbstick's start zone stays free), the chip under them,
+  as wide as them.
+- **Cleaning: only the ore at the end.** When the last dirt goes, the dark clump crumbles away too
+  (DefaultLook's crumble, CardLook throws its chunks), so the ore rises and spins on its own.
+- **Mining: the real 3D ore flies into the backpack**, not a flat icon (BagFly: a ViewportFrame with the world's
+  dirty chunk, its glint in the neutral gold so it never hints the rarity). The inventory's icons stay as they are.

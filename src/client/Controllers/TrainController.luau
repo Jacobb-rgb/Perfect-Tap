@@ -2568,6 +2568,11 @@ local function fit()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
 	local compact = isTouch() or scale <= 0.75 or size.Y < 520
+	-- the light HUD's place for the chip (it refits the tiles when the screen changes size)
+	local hud = HudController.refs()
+	if hud and type(hud.Gui:GetAttribute("ChipTop")) == "number" then
+		TrainView.useHud(hud.Gui)
+	end
 	TrainView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
 	updateHints()
 	applyChip()
@@ -3112,6 +3117,20 @@ function TrainController.start()
 		hud.Gui:GetPropertyChangedSignal("Enabled"):Connect(mirror)
 		hud.Gui:GetAttributeChangedSignal("Building"):Connect(mirror)
 		mirror()
+		-- (the HUD moved the chip's place: HudBubble.placeMenu sets these together, one fit after them)
+		local pending = false
+		local function refit()
+			if not pending then
+				pending = true
+				task.defer(function()
+					pending = false
+					fit()
+				end)
+			end
+		end
+		for _, name in { "ChipTop", "ChipLeft", "ChipWidth", "ChipStack", "ChipTenFoot" } do
+			hud.Gui:GetAttributeChangedSignal(name):Connect(refit)
+		end
 	end
 	fit()
 	local camera = Workspace.CurrentCamera

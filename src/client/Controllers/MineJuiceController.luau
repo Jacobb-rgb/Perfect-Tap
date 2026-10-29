@@ -17,11 +17,13 @@
 	                  and a warm gold sparkle at the crack
 	  (the break)     RockFx's own: dust, chunks, ground ring, its sounds and
 	                  shake (no word over it: the owner turned it down)
-	  Fx Pickup       (position, oreId or nil for dirty ore): CarryService
+	  Fx Pickup       (position, oreId or nil for dirty ore, kind, recipe): CarryService
 	                  fires it to the picker only when an item really goes in
 	                  (hands today, the backpack on feat/backpack: the same
-	                  event). The ore pops up glowing at its spot, flies on an
-	                  arc into the HUD's carry slot (TerraForgeHud.Carry: the
+	                  event). The ore itself (UI/BagFly's 3D model: the dirty
+	                  chunk, or the cleaned ore) lifts off glowing at its spot,
+	                  as big as it looked there, and tumbles on an arc into the
+	                  HUD's carry slot (TerraForgeHud.Carry: the
 	                  "Backpack" button, else Slots.Slot<CarryCount>, else the
 	                  panel, else the bottom centre) and a +1 bumps there with
 	                  a pop (BagRise, BagPop). More ores landing on it while
@@ -36,7 +38,8 @@
 	so both can run together.
 
 	Perf (phones first): nothing is made per hit except RockFx's pooled
-	chips; the overlay's icons and bumps are made once (BagFly.build);
+	chips; the overlay's ores and bumps are made once (BagFly.build; a
+	cleaned ore's model once per flyer);
 	one RenderStepped connection runs only while something flies or pops and
 	makes no tables. Reduce motion (UI/Motion.reduced; the rules are in
 	Effects/MineJuiceRules): the cracks still grow, their glints glow
@@ -54,7 +57,6 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local JuiceConfig = require(Shared.Config.JuiceConfig)
-local OreData = require(Shared.Config.OreData)
 local Net = require(Shared.Net)
 local RockLabels = require(script.Parent.Parent.UI.RockLabels)
 local BagFly = require(script.Parent.Parent.UI.BagFly)
@@ -68,7 +70,7 @@ local HudController = require(script.Parent.HudController)
 
 local MineJuiceController = {}
 
-type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number }
+type Flight = { Flyer: BagFly.Flyer, From: Vector2, Target: GuiObject?, Start: number, Seed: number, Lift: number? }
 type Landing = { Bump: BagFly.Bump, Target: GuiObject?, Start: number, PlusAt: number, Count: number, Flash: boolean }
 
 local player = Players.LocalPlayer
@@ -106,6 +108,21 @@ local function toGui(world: Vector3): Vector2?
 	-- viewport -> under the top bar inset -> the overlay's own corner
 	local inset = GuiService:GetGuiInset()
 	return Vector2.new(point.X, point.Y) - inset - v.Gui.AbsolutePosition
+end
+
+-- How wide a chunk at `world` looks on the overlay (pixels), from its depth (so a chunk at the
+-- screen's edge measures too), nil behind the camera.
+local function chunkSize(world: Vector3): number?
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local depth = -camera.CFrame:PointToObjectSpace(world).Z
+	if depth <= 0.1 then
+		return nil
+	end
+	local half = math.tan(math.rad(camera.FieldOfView) / 2)
+	return BagFly.ChunkStuds * camera.ViewportSize.Y / (2 * depth * half)
 end
 
 local function characterPoint(): Vector2?
@@ -255,7 +272,7 @@ step = function(_dt: number)
 	for i = #flights, 1, -1 do
 		local f = flights[i]
 		local to = targetPoint(f.Target, scale)
-		if BagFly.poseFlyer(f.Flyer, f.From, to, now - f.Start, scale, f.Seed) then
+		if BagFly.poseFlyer(f.Flyer, f.From, to, now - f.Start, scale, f.Seed, f.Lift) then
 			busy[f.Flyer] = nil
 			table.remove(flights, i)
 			land(f.Target, now)
@@ -337,8 +354,9 @@ local function freeFlyer(v: BagFly.View): BagFly.Flyer?
 	return nil
 end
 
--- An item went into your carry at `position` (oreId: a cleaned ore's id; nil = dirty ore).
-local function pickup(position: Vector3, oreId: any)
+-- An item went into your carry at `position` (oreId: a cleaned item's ore / relic id, `kind` its
+-- kind, `recipe` its recipe; nil = dirty ore).
+local function pickup(position: Vector3, oreId: any, kind: any, recipe: any)
 	local v = view
 	if not v then
 		return
@@ -346,17 +364,24 @@ local function pickup(position: Vector3, oreId: any)
 	local now = os.clock()
 	local target = hudTarget()
 	local flyer = freeFlyer(v)
-	local from = toGui(position + Vector3.new(0, 0.6, 0)) or characterPoint()
+	local at = toGui(position)
+	local from = at or characterPoint()
 	local mode = MineJuiceRules.pickup(Motion.reduced(), flyer ~= nil, from ~= nil)
 	if mode ~= "Fly" or not flyer or not from then
-		-- every icon in the air or nothing on screen: only the bump; Reduce motion: only the sound (land)
+		-- every ore in the air or nothing on screen: only the bump; Reduce motion: only the sound (land)
 		land(target, now)
 		return
 	end
-	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
-	BagFly.setOre(flyer, if ore then ore.Color else nil)
+	BagFly.setOre(
+		flyer,
+		if type(oreId) == "string" then oreId else nil,
+		if type(kind) == "string" then kind else nil,
+		if type(recipe) == "string" then recipe else nil
+	)
 	busy[flyer] = true
-	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10 })
+	-- it lifts off as big as the chunk looked there (from the character: it pops in)
+	local lift = if at then chunkSize(position) else nil
+	table.insert(flights, { Flyer = flyer, From = from, Target = target, Start = now, Seed = math.random() * 10, Lift = lift })
 	if MineJuiceRules.once(now, riseAt, JuiceConfig.SoundGap) then
 		riseAt = now
 		Sfx.play("BagRise")
@@ -364,7 +389,7 @@ local function pickup(position: Vector3, oreId: any)
 	ensureLoop()
 end
 
-local function onFx(kind: any, a: any, b: any)
+local function onFx(kind: any, a: any, b: any, c: any, d: any)
 	if typeof(a) ~= "Vector3" or a.X ~= a.X or a.Y ~= a.Y or a.Z ~= a.Z then
 		return
 	end
@@ -379,7 +404,7 @@ local function onFx(kind: any, a: any, b: any)
 		end
 	elseif kind == "Pickup" then
 		if mining.BagFly then
-			pickup(a, b)
+			pickup(a, b, c, d)
 		end
 	end
 end

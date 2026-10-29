@@ -167,6 +167,21 @@ local function updateScale()
 		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
 		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
+	-- the round look's tiles and the TRAIN chip's place refit to the screen (HudBubble.fitRound is
+	-- per screen height: a full-screen layout would run into the money in a smaller window)
+	if refs and refs.Gui:GetAttribute("Bubble") and type(refs.Gui:GetAttribute("ChipTop")) == "number" then
+		local guiHeight = refs.Gui.AbsoluteSize.Y
+		local layout = HudBubble.layout(
+			scale,
+			camera.ViewportSize.X,
+			HudBubble.isTouch(),
+			GuiService:IsTenFootInterface(),
+			if guiHeight > 0 then guiHeight else nil
+		)
+		if layout.Chip ~= nil then
+			HudBubble.placeMenu(refs.Gui, refs.Menu, layout)
+		end
+	end
 	-- the bottom group: the light HUD's BLASTER slot + backpack button stay centred (design
 	-- units); the dark HUD's button stays right of Roblox's hotbar slot (real pixels)
 	if refs then
@@ -440,13 +455,11 @@ end
 
 function HudController.init()
 	refs = HudView.build()
-	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles
-	local chipTop = refs.Gui:GetAttribute("ChipTop")
-	if type(chipTop) == "number" then
-		TrainView.HudChipTop = chipTop
+	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles (the
+	-- round look: as wide as them, stacked on a mouse or a TV)
+	if type(refs.Gui:GetAttribute("ChipTop")) == "number" then
+		TrainView.useHud(refs.Gui)
 	end
-	local chipLeft = refs.Gui:GetAttribute("ChipLeft")
-	TrainView.HudChipLeft = if type(chipLeft) == "number" then chipLeft else nil
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
 	if refs.Gui:GetAttribute("Bubble") then
