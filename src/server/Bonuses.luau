@@ -31,7 +31,7 @@
 	  (incomePct). So golems, enchants, collections and any later provider
 	  reach the podiums exactly once.
 	- The 2x Money pass (perk MonetizationConfig.MoneyPassPerk): a separate
-	  multiplier OUTSIDE the StatConfig caps (IncomePct 2, SellPct 3), so it
+	  multiplier OUTSIDE the StatConfig caps (IncomePct 6, SellPct 4), so it
 	  always doubles: moneyMult(player) is added to EconomyService as the
 	  income factor "MoneyPass", and compute(..., player) puts it in the
 	  totals as MoneyMult, which sellMult multiplies in. A perk change goes

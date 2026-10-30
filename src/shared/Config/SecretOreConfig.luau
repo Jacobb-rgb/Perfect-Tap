@@ -54,7 +54,7 @@ for _, secret in SecretOreConfig.List do
 	SecretOreConfig.ByOre[secret.Ore] = secret
 end
 
--- Luck (StatConfig.oreLuck: x1 .. x6.25) raises a secret's chance by its square root, at most x2.5.
+-- Luck (StatConfig.oreLuck: x1 .. x10) raises a secret's chance by its square root, at most x2.5.
 SecretOreConfig.LuckPower = 0.5
 SecretOreConfig.MaxLuckMult = 2.5
 

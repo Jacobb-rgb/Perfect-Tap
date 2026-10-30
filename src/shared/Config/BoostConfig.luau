@@ -17,7 +17,7 @@
 	               about x6 ("Hexa") - rename it or change Mult if you like.
 
 	Ore luck (one number L >= 1, StatConfig.oreLuck: (1 + OreLuckPct) x
-	OreLuckMult, at most x6.25, which never cuts Hexa Lucky's x2.5): the
+	OreLuckMult, at most x10, which never cuts Hexa Lucky's x2.5): the
 	Lucky and Starbreaker enchants and the Luck
 	golems add to OreLuckPct, Hexa Lucky multiplies. It GROWS WITH RARITY:
 	an ore's weight is multiplied by L ^ LuckPower[its rarity] (Rare 1, Epic
@@ -163,7 +163,7 @@ BoostConfig.LuckPower = {
 	Legendary = 2,
 	Mythic = 2.5,
 	-- the secret ores (SecretOreConfig: their own roll, not a weight; not in Rarity.List, so not in
-	-- the luck tables): the square root, the most luck (StatConfig.MaxOreLuck x6.25) = x2.5
+	-- the luck tables): the square root, the most luck (StatConfig.MaxOreLuck x10) is capped at x2.5
 	Secret = SecretOreConfig.LuckPower,
 } :: { [string]: number }
 

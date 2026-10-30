@@ -1134,13 +1134,15 @@ GolemView.ShortBonus = {
 	["Walk speed"] = "SPEED",
 } :: { [string]: string }
 
--- "+16% Mining speed" -> "+16% MINING" (the reels' short bottom line).
+-- "+16% Mining speed" -> "+16% MINING" (the reels' short bottom line); a
+-- HUGE golem's two: "+120% Mining speed, +20% Income" -> "+120% MINING +20% INCOME".
 function GolemView.shortBonus(bonus: string): string
-	local value, label = string.match(bonus, "^(%S+)%s+(.+)$")
-	if not value or not label then
-		return string.upper(bonus)
+	local parts = {}
+	for _, one in string.split(bonus, ", ") do
+		local value, label = string.match(one, "^(%S+)%s+(.+)$")
+		table.insert(parts, if value and label then `{value} {GolemView.ShortBonus[label] or string.upper(label)}` else string.upper(one))
 	end
-	return `{value} {GolemView.ShortBonus[label] or string.upper(label)}`
+	return table.concat(parts, " ")
 end
 
 -- A short word in the pixel font, shrunk to fit its box (Pop.fit).

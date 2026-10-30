@@ -443,7 +443,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 20,
 		Name = "Starbreaker Enchant",
-		Description = "The Mythic Starbreaker enchant for your blaster, yours forever: +75% ore luck, +50% artifact chance. Ore luck bonuses add up to at most +150% (new odds shown before buying).",
+		Description = "The Mythic Starbreaker enchant for your blaster, yours forever: +75% ore luck, +50% artifact chance. Ore luck bonuses add up to at most +300% (new odds shown before buying).",
 		PaidRandom = true,
 		Enchant = "Starbreaker",
 	},

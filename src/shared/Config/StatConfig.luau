@@ -37,22 +37,27 @@
 	best gear can reach, so the numbers on the cards are what the game
 	applies (the UI shows the capped totals from State.Bonuses). Ore luck is
 	the product oreLuck() = (1 + OreLuckPct) x OreLuckMult, at most
-	MaxOreLuck = (1 + the OreLuckPct cap) x the OreLuckMult cap (x6.25): the
+	MaxOreLuck = (1 + the OreLuckPct cap) x the OreLuckMult cap (x10): the
 	product cap never cuts a multiplier, so Hexa Lucky is always exactly x2.5
 	(what its Robux pack promises, docs/COMPLIANCE.md 2.6) and the odds on a
 	luck card match the rolls. The OreLuckPct cap does cut a percent bonus
-	(Starbreaker's +75% ore luck adds nothing to a player already at +150%):
+	(Starbreaker's +75% ore luck adds nothing to a player already at +300%):
 	every text that sells one says so, and the cards show the real odds.
 	How ore luck acts on the ores (it grows with rarity): BoostConfig header.
-	The caps keep paid golems (Royal capsules) and the Mythic enchants from
-	skipping blaster progression: a whole blaster level is about x1.8 damage,
-	and the best possible damage is x2.5 (x5 on a cracked rock's last third).
-	Today's highest sums (3 equipped Mythic/Legendary golems with Golem Bond
-	III + Golemworks, the best enchants) and the caps:
-	  DamagePct     ~3.0  -> cap 1.5     OverchargePct ~1.3  -> cap 1
-	  IncomePct     ~2.1  -> cap 2       SellPct       ~1.3  (cap 3)
-	  OreLuckPct    ~2.45 -> cap 1.5     ArtifactPct    1.5  (cap 3)
-	  WalkSpeedPct  ~0.24 (cap 0.5)      MagnetBonus    10   (cap 20)
+	The caps were raised on 2026-10-30 for the owner's new golem stats
+	(each egg tiers apart, the Sky egg's HUGE golems, the Dragonforge golems
+	at +100..350%): the best three golems of a stat now fit under its cap
+	without Golem Bond, and the bond and the enchants fill the rest. The
+	best possible damage is x6 (a whole blaster level is about x1.8): the
+	rarest golems are meant to skip a few levels. The best three golems
+	of each stat, and the caps:
+	  DamagePct     4.2  Magma Wyvern + Sky Titan + Cinder Whelp      -> cap 5
+	  IncomePct     5.1  Dragon King + Aether King + Cloud Colossus  -> cap 6
+	  OreLuckPct    2.5  Ember Hatchling + Cloud Colossus + Sky Sprite -> cap 3
+	  SellPct       2.03 Dragonscale Knight + Storm Titan + Sapphire Sage -> cap 4
+	  WalkSpeedPct  1    Flamewing -> cap 1 (twice as fast; Bonuses.walkSpeed
+	                     still stops at 50 studs/s, so nobody outruns the map)
+	  OverchargePct ~1.3 (cap 1), ArtifactPct 1.5 (cap 3), MagnetBonus 10 (cap 20)
 ]]
 
 export type StatKind = "Add" | "Mult"
@@ -68,19 +73,19 @@ export type Stat = {
 local StatConfig = {}
 
 StatConfig.List = {
-	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 1.5 },
+	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 5 },
 	{ Id = "OverchargePct", Kind = "Add", Label = "damage on a cracked rock's last third", Format = "Percent", Max = 1 },
 	{ Id = "ReachStuds", Kind = "Add", Label = "blaster range", Format = "Studs", Max = 12 },
-	{ Id = "OreLuckPct", Kind = "Add", Label = "ore luck", Format = "Percent", Max = 1.5 },
+	{ Id = "OreLuckPct", Kind = "Add", Label = "ore luck", Format = "Percent", Max = 3 },
 	{ Id = "OreLuckMult", Kind = "Mult", Label = "ore luck", Format = "Times", Max = 2.5 },
 	{ Id = "CapsuleLuckMult", Kind = "Mult", Label = "capsule luck", Format = "Times", Max = 3 },
 	{ Id = "TwinDropChance", Kind = "Add", Label = "chance of a twin chunk", Format = "Percent", Max = 0.5 },
 	{ Id = "ArtifactPct", Kind = "Add", Label = "artifact chance", Format = "Percent", Max = 3 },
-	{ Id = "SellPct", Kind = "Add", Label = "sell value", Format = "Percent", Max = 3 },
-	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 2 },
+	{ Id = "SellPct", Kind = "Add", Label = "sell value", Format = "Percent", Max = 4 },
+	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 6 },
 	{ Id = "GolemBondPct", Kind = "Add", Label = "golem bonuses", Format = "Percent", Max = 1 },
 	{ Id = "WalkSpeed", Kind = "Add", Label = "walk speed", Format = "Speed", Max = 40 },
-	{ Id = "WalkSpeedPct", Kind = "Add", Label = "walk speed", Format = "Percent", Max = 0.5 },
+	{ Id = "WalkSpeedPct", Kind = "Add", Label = "walk speed", Format = "Percent", Max = 1 },
 	{ Id = "MagnetRadius", Kind = "Add", Label = "magnet radius", Format = "Studs", Max = 60 },
 	{ Id = "MagnetBonus", Kind = "Add", Label = "ore magnet radius", Format = "Studs", Max = 20 },
 	{ Id = "PickupRange", Kind = "Add", Label = "pickup range", Format = "Studs", Max = 40 },
@@ -99,7 +104,7 @@ for _, stat in StatConfig.List do
 end
 
 -- The highest total ore luck (the product, see the header): the two luck
--- caps multiplied, so it never cuts Hexa Lucky's multiplier (x6.25).
+-- caps multiplied, so it never cuts Hexa Lucky's multiplier (x10).
 StatConfig.MaxOreLuck = (1 + (StatConfig.ById.OreLuckPct.Max :: number)) * (StatConfig.ById.OreLuckMult.Max :: number)
 
 local function finite(v: any): boolean

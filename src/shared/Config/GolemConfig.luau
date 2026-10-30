@@ -6,7 +6,10 @@
 	(helmets, visors, crowns, crystals on the back...). No Minecraft look or
 	names.
 
-	- 18 capsule kinds, Common..Mythic, plus the LIMITED EDITION sets
+	- 18 egg kinds, Common..Mythic (owner 2026-10-30: each egg wakes its own
+	  golems, one per rarity, so the Stone, Crystal and Royal eggs are tiers
+	  apart; 4 are retired from the eggs), the Sky egg's (two of them HUGE:
+	  giants with two bonuses), plus the LIMITED EDITION sets
 	  (Edition = the set's id, Config/LimitedGolems: sold only as their Robux
 	  capsule in the shop's banner while the edition runs; once woken they
 	  are ordinary golems forever). Each gives one bonus (BonusTypes) while
@@ -20,7 +23,8 @@
 	  in the save (Migrations), count toward InventoryCap, give nothing, can't
 	  be equipped, and are never deleted here (they may be paid ones).
 	- Budgets (mobile, 8 players x 3 followers): a golem model has at most
-	  MaxParts parts (a limited edition golem: LimitedMaxParts by rarity), no
+	  MaxParts parts (an egg golem: EggMaxParts, a limited edition golem:
+	  LimitedMaxParts by rarity, a HUGE one: HugeMaxParts), no
 	  lights (the Glow is a Neon part; Mythics may add one small PointLight,
 	  Legendary and Mythic limited golems one slow ember ParticleEmitter). Followers are BUILT AND ANIMATED ON EACH CLIENT from
 	  the player attribute EquippedAttribute ("PebbleGolem,EmberImp,..."): the
@@ -69,10 +73,18 @@ export type Golem = {
 	Accessory: string, -- GolemConfig.Accessories
 	Scale: number, -- model scale (rarer golems are a bit bigger)
 	Bonus: { Type: BonusType, Value: number },
+	-- a HUGE golem's second bonus (it gives both while equipped)
+	Bonus2: { Type: BonusType, Value: number }?,
 	Lore: string,
 	-- a LIMITED EDITION golem: its set's id (Config/LimitedGolems); its model
 	-- may use GolemConfig.LimitedMaxParts[Rarity] for the set's costume
 	Edition: string?,
+	-- an egg golem: the egg whose costumes it wears ("Stone" | "Crystal" |
+	-- "Royal", Builders/EggGear; its model may use EggMaxParts[Rarity])
+	Family: string?,
+	-- a HUGE golem (the Sky egg's rarest two): a giant, two bonuses, its
+	-- model may use HugeMaxParts
+	Huge: boolean?,
 }
 
 export type Owned = { Id: number, Kind: string, Paid: boolean?, Locked: boolean? }
@@ -91,6 +103,13 @@ GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
 -- followers x 96 = 2304; 10 of each go to its rounded corners welded, non-colliding parts, hidden beyond
 -- FollowerHideDistance) stays far below a phone's budget.
 GolemConfig.LimitedMaxParts = { Rare = 66, Epic = 72, Legendary = 80, Mythic = 96 } :: { [string]: number }
+-- an egg golem's budget by rarity (its egg's costume: armour, gold trim,
+-- crystals; owner 2026-10-30 "víc clean"): below the Robux sets', most
+-- followers are egg golems
+GolemConfig.EggMaxParts = { Common = 36, Uncommon = 40, Rare = 46, Epic = 52, Legendary = 60, Mythic = 68 } :: { [string]: number }
+-- a HUGE golem's budget (0.5 % / 0.3 % of a Sky egg: almost never three in
+-- one server; past FollowerHideDistance it is hidden like every follower)
+GolemConfig.HugeMaxParts = 130
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
@@ -128,6 +147,8 @@ GolemConfig.Accessories = {
 	SkyPuff = true, -- Sky egg: a black wind knight's helm with a sky-blue visor, wing crests, a star lance
 	StormArmor = true, -- Sky egg: storm armour, lightning horns and a lightning spear
 	AetherWings = true, -- Sky egg: black and gold armour, a crown and halo, angel wings
+	TitanArmor = true, -- HUGE Sky Titan: white and gold armour, crystal wings, a gold halo, a staff
+	CloudStorm = true, -- HUGE Cloud Colossus: dark rock, cloud shoulders, floating rocks, a storm ring
 } :: { [string]: boolean }
 
 -- GolemAction / ActionResult reason codes -> text for the player
@@ -160,7 +181,10 @@ local function limited(entry: { [string]: any }): Golem
 end
 
 GolemConfig.List = {
-	---------------------------------------------------------------- Common
+	---------------------------------------------------------------- the STONE EGG
+	-- (owner 2026-10-30: every egg wakes its own golems, one per rarity, so
+	-- the eggs are tiers apart; Family = the egg whose costumes it wears,
+	-- Builders/EggGear)
 	oreGolem({
 		Id = "PebbleGolem",
 		Name = "Pebble Golem",
@@ -173,98 +197,20 @@ GolemConfig.List = {
 		Accessory = "None",
 		Scale = 1,
 		Bonus = { Type = "Income", Value = 0.03 },
+		Family = "Stone",
 		Lore = "A round little heap of river stones. The first golem every apprentice wakes.",
 	}),
 	oreGolem({
 		Id = "CopperTinker",
 		Name = "Copper Tinker",
-		Rarity = "Common",
+		Rarity = "Uncommon",
 		Ore = "Copper",
 		Trim = rgb(120, 70, 40),
 		Accessory = "Goggles",
-		Scale = 1,
-		Bonus = { Type = "MiningSpeed", Value = 0.04 },
+		Scale = 1.05,
+		Bonus = { Type = "MiningSpeed", Value = 0.05 },
+		Family = "Stone",
 		Lore = "Always fiddling with something. It hums while you blast.",
-	}),
-	oreGolem({
-		Id = "CoalChomper",
-		Name = "Coal Chomper",
-		Rarity = "Common",
-		Ore = "Coal",
-		Trim = rgb(36, 32, 36),
-		Accessory = "None",
-		Scale = 1,
-		Bonus = { Type = "SellValue", Value = 0.04 },
-		Lore = "Its belly glows like a stove. Tobin swears it haggles for you.",
-	}),
-	oreGolem({
-		Id = "TinTumbler",
-		Name = "Tin Tumbler",
-		Rarity = "Common",
-		Ore = "Tin",
-		Trim = rgb(110, 120, 108),
-		Accessory = "PotHelmet",
-		Scale = 1,
-		Bonus = { Type = "WalkSpeed", Value = 0.03 },
-		Lore = "Rolls more than it walks, and still keeps up.",
-	}),
-	---------------------------------------------------------------- Uncommon
-	oreGolem({
-		Id = "QuartzSprite",
-		Name = "Quartz Sprite",
-		Rarity = "Uncommon",
-		Ore = "Quartz",
-		Trim = rgb(170, 160, 160),
-		Accessory = "CrystalBack",
-		Scale = 1.05,
-		Bonus = { Type = "Luck", Value = 0.05 },
-		Lore = "Clear spikes grow on its back. It points at shiny things.",
-	}),
-	oreGolem({
-		Id = "SilverSquire",
-		Name = "Silver Squire",
-		Rarity = "Uncommon",
-		Ore = "Silver",
-		Trim = rgb(120, 126, 140),
-		Material = Enum.Material.Metal,
-		Accessory = "SquireHelm",
-		Scale = 1.05,
-		Bonus = { Type = "Income", Value = 0.06 },
-		Lore = "Bows to every podium it passes. Kaldrum's golems were very polite.",
-	}),
-	oreGolem({
-		Id = "AmethystAcolyte",
-		Name = "Amethyst Acolyte",
-		Rarity = "Uncommon",
-		Ore = "Amethyst",
-		Trim = rgb(86, 50, 130),
-		Accessory = "Hood",
-		Scale = 1.05,
-		Bonus = { Type = "SellValue", Value = 0.07 },
-		Lore = "Wears a stone hood and whispers old prices to itself.",
-	}),
-	oreGolem({
-		Id = "JadeGardener",
-		Name = "Jade Gardener",
-		Rarity = "Uncommon",
-		Ore = "Jade",
-		Trim = rgb(56, 120, 86),
-		Accessory = "Leaf",
-		Scale = 1.05,
-		Bonus = { Type = "WalkSpeed", Value = 0.05 },
-		Lore = "A leaf keeps sprouting on its head, however often it falls off.",
-	}),
-	---------------------------------------------------------------- Rare
-	oreGolem({
-		Id = "EmberImp",
-		Name = "Ember Imp",
-		Rarity = "Rare",
-		Ore = "Emberite",
-		Trim = rgb(120, 40, 20),
-		Accessory = "Horns",
-		Scale = 1.1,
-		Bonus = { Type = "MiningSpeed", Value = 0.1 },
-		Lore = "Tiny, hot and cheeky. Rocks crack faster when it giggles.",
 	}),
 	oreGolem({
 		Id = "CobaltDiver",
@@ -274,31 +220,58 @@ GolemConfig.List = {
 		Trim = rgb(30, 50, 110),
 		Accessory = "Visor",
 		Scale = 1.1,
-		Bonus = { Type = "Luck", Value = 0.1 },
+		Bonus = { Type = "Luck", Value = 0.07 },
+		Family = "Stone",
 		Lore = "Built to explore flooded tunnels. It still looks for treasure everywhere.",
 	}),
 	oreGolem({
-		Id = "GildedPorter",
-		Name = "Gilded Porter",
-		Rarity = "Rare",
-		Ore = "Gold",
-		Trim = rgb(150, 100, 20),
-		Accessory = "LampHelmet",
-		Scale = 1.1,
-		Bonus = { Type = "Income", Value = 0.1 },
-		Lore = "Carried gold for the Royal Railway. Old habits: it counts your coins.",
-	}),
-	---------------------------------------------------------------- Epic
-	oreGolem({
-		Id = "RoseKnight",
-		Name = "Rose Knight",
+		Id = "CoalChomper",
+		Name = "Coal Chomper",
 		Rarity = "Epic",
-		Ore = "CrystalRose",
-		Trim = rgb(110, 20, 36),
-		Accessory = "KnightHelm",
+		Ore = "Coal",
+		Trim = rgb(36, 32, 36),
+		Accessory = "None",
 		Scale = 1.15,
-		Bonus = { Type = "MiningSpeed", Value = 0.16 },
-		Lore = "Guarded the throne room of the Ember Kings. Now it guards you.",
+		Bonus = { Type = "SellValue", Value = 0.1 },
+		Family = "Stone",
+		Lore = "Its belly glows like a stove. Tobin swears it haggles for you.",
+	}),
+	---------------------------------------------------------------- the CRYSTAL EGG
+	oreGolem({
+		Id = "JadeGardener",
+		Name = "Jade Gardener",
+		Rarity = "Common",
+		Ore = "Jade",
+		Trim = rgb(56, 120, 86),
+		Accessory = "Leaf",
+		Scale = 1,
+		Bonus = { Type = "Income", Value = 0.1 },
+		Family = "Crystal",
+		Lore = "A leaf keeps sprouting on its head, however often it falls off.",
+	}),
+	oreGolem({
+		Id = "AmethystAcolyte",
+		Name = "Amethyst Acolyte",
+		Rarity = "Uncommon",
+		Ore = "Amethyst",
+		Trim = rgb(86, 50, 130),
+		Accessory = "Hood",
+		Scale = 1.05,
+		Bonus = { Type = "MiningSpeed", Value = 0.12 },
+		Family = "Crystal",
+		Lore = "Wears a stone hood and hums old mining chants. Rocks crack in time.",
+	}),
+	oreGolem({
+		Id = "QuartzSprite",
+		Name = "Quartz Sprite",
+		Rarity = "Rare",
+		Ore = "Quartz",
+		Trim = rgb(170, 160, 160),
+		Accessory = "CrystalBack",
+		Scale = 1.1,
+		Bonus = { Type = "Luck", Value = 0.15 },
+		Family = "Crystal",
+		Lore = "Clear spikes grow on its back. It points at shiny things.",
 	}),
 	oreGolem({
 		Id = "SapphireSage",
@@ -309,20 +282,59 @@ GolemConfig.List = {
 		Accessory = "Halo",
 		Scale = 1.15,
 		Bonus = { Type = "SellValue", Value = 0.18 },
+		Family = "Crystal",
 		Lore = "Remembers what every ore was worth in Kaldrum, and tells Tobin.",
 	}),
 	oreGolem({
 		Id = "DiamondDuke",
 		Name = "Diamond Duke",
-		Rarity = "Epic",
+		Rarity = "Legendary",
 		Ore = "Diamond",
 		Trim = rgb(150, 190, 220),
 		Accessory = "Crown",
-		Scale = 1.15,
-		Bonus = { Type = "Income", Value = 0.15 },
+		Scale = 1.22,
+		Bonus = { Type = "Income", Value = 0.2 },
+		Family = "Crystal",
 		Lore = "Very sparkly and very proud. Podiums shine brighter when it walks by.",
 	}),
-	---------------------------------------------------------------- Legendary
+	---------------------------------------------------------------- the ROYAL EGG
+	oreGolem({
+		Id = "SilverSquire",
+		Name = "Silver Squire",
+		Rarity = "Uncommon",
+		Ore = "Silver",
+		Trim = rgb(120, 126, 140),
+		Material = Enum.Material.Metal,
+		Accessory = "SquireHelm",
+		Scale = 1.05,
+		Bonus = { Type = "Income", Value = 0.2 },
+		Family = "Royal",
+		Lore = "Bows to every podium it passes. Kaldrum's golems were very polite.",
+	}),
+	oreGolem({
+		Id = "RoseKnight",
+		Name = "Rose Knight",
+		Rarity = "Rare",
+		Ore = "CrystalRose",
+		Trim = rgb(110, 20, 36),
+		Accessory = "KnightHelm",
+		Scale = 1.1,
+		Bonus = { Type = "MiningSpeed", Value = 0.25 },
+		Family = "Royal",
+		Lore = "Guarded the throne room of the Ember Kings. Now it guards you.",
+	}),
+	oreGolem({
+		Id = "MoonstoneOracle",
+		Name = "Moonstone Oracle",
+		Rarity = "Epic",
+		Ore = "Moonstone",
+		Trim = rgb(120, 130, 170),
+		Accessory = "Halo",
+		Scale = 1.15,
+		Bonus = { Type = "Luck", Value = 0.3 },
+		Family = "Royal",
+		Lore = "Its eyes shift like the moon. It always knows which rock to break.",
+	}),
 	oreGolem({
 		Id = "StormTitan",
 		Name = "Storm Titan",
@@ -331,21 +343,10 @@ GolemConfig.List = {
 		Trim = rgb(40, 50, 90),
 		Accessory = "CrystalBack",
 		Scale = 1.22,
-		Bonus = { Type = "MiningSpeed", Value = 0.25 },
-		Lore = "Lightning crawls over its back. Rocks fall apart in fear.",
+		Bonus = { Type = "SellValue", Value = 0.35 },
+		Family = "Royal",
+		Lore = "Lightning crawls over its back. Tobin pays extra just to keep it calm.",
 	}),
-	oreGolem({
-		Id = "MoonstoneOracle",
-		Name = "Moonstone Oracle",
-		Rarity = "Legendary",
-		Ore = "Moonstone",
-		Trim = rgb(120, 130, 170),
-		Accessory = "Halo",
-		Scale = 1.22,
-		Bonus = { Type = "Luck", Value = 0.25 },
-		Lore = "Its eyes shift like the moon. It always knows which rock to break.",
-	}),
-	---------------------------------------------------------------- Mythic
 	oreGolem({
 		Id = "CelestialSovereign",
 		Name = "Celestial Sovereign",
@@ -355,7 +356,47 @@ GolemConfig.List = {
 		Accessory = "Crown",
 		Scale = 1.3,
 		Bonus = { Type = "Income", Value = 0.4 },
+		Family = "Royal",
 		Lore = "The last golem the Ember Kings ever crowned. It still expects a bow.",
+	}),
+	---------------------------------------------------------------- retired from the eggs
+	-- (2026-10-30: no egg wakes them any more; the ones players own stay,
+	-- with their bonus and a costume of their old egg)
+	oreGolem({
+		Id = "TinTumbler",
+		Name = "Tin Tumbler",
+		Rarity = "Common",
+		Ore = "Tin",
+		Trim = rgb(110, 120, 108),
+		Accessory = "PotHelmet",
+		Scale = 1,
+		Bonus = { Type = "WalkSpeed", Value = 0.03 },
+		Family = "Stone",
+		Lore = "Rolls more than it walks, and still keeps up.",
+	}),
+	oreGolem({
+		Id = "EmberImp",
+		Name = "Ember Imp",
+		Rarity = "Rare",
+		Ore = "Emberite",
+		Trim = rgb(120, 40, 20),
+		Accessory = "Horns",
+		Scale = 1.1,
+		Bonus = { Type = "MiningSpeed", Value = 0.1 },
+		Family = "Stone",
+		Lore = "Tiny, hot and cheeky. Rocks crack faster when it giggles.",
+	}),
+	oreGolem({
+		Id = "GildedPorter",
+		Name = "Gilded Porter",
+		Rarity = "Rare",
+		Ore = "Gold",
+		Trim = rgb(150, 100, 20),
+		Accessory = "LampHelmet",
+		Scale = 1.1,
+		Bonus = { Type = "Income", Value = 0.1 },
+		Family = "Royal",
+		Lore = "Carried gold for the Royal Railway. Old habits: it counts your coins.",
 	}),
 	oreGolem({
 		Id = "HeartstoneColossus",
@@ -366,6 +407,7 @@ GolemConfig.List = {
 		Accessory = "CrystalBack",
 		Scale = 1.3,
 		Bonus = { Type = "MiningSpeed", Value = 0.4 },
+		Family = "Crystal",
 		Lore = "Woken by a true shard of the Heartstone. Small, but it beats like a forge.",
 	}),
 	---------------------------------------------------------------- Limited edition: Dragonforge
@@ -380,7 +422,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Basalt,
 		Accessory = "DragonHorns",
 		Scale = 1.1,
-		Bonus = { Type = "MiningSpeed", Value = 0.11 },
+		Bonus = { Type = "MiningSpeed", Value = 1 },
 		Lore = "A baby dragon golem. When it sneezes, sparks fly.",
 		Edition = "Dragonforge",
 	}),
@@ -394,7 +436,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Slate,
 		Accessory = "DragonEgg",
 		Scale = 1.1,
-		Bonus = { Type = "Luck", Value = 0.11 },
+		Bonus = { Type = "Luck", Value = 1 },
 		Lore = "Just hatched from a dragon egg and still wears the shell as a hat.",
 		Edition = "Dragonforge",
 	}),
@@ -408,7 +450,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Basalt,
 		Accessory = "DragonHelm",
 		Scale = 1.15,
-		Bonus = { Type = "SellValue", Value = 0.19 },
+		Bonus = { Type = "SellValue", Value = 1.5 },
 		Lore = "Its armour is made of real dragon scales. They were a gift, it says.",
 		Edition = "Dragonforge",
 	}),
@@ -422,7 +464,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Slate,
 		Accessory = "DragonWings",
 		Scale = 1.15,
-		Bonus = { Type = "WalkSpeed", Value = 0.12 },
+		Bonus = { Type = "WalkSpeed", Value = 1 },
 		Lore = "Its wings are a bit too small to fly. It flaps them anyway, very fast.",
 		Edition = "Dragonforge",
 	}),
@@ -436,7 +478,7 @@ GolemConfig.List = {
 		Material = Enum.Material.CrackedLava,
 		Accessory = "DragonWings",
 		Scale = 1.22,
-		Bonus = { Type = "MiningSpeed", Value = 0.28 },
+		Bonus = { Type = "MiningSpeed", Value = 2 },
 		Lore = "Lava runs in its cracks. Rocks melt a little when it stares at them.",
 		Edition = "Dragonforge",
 	}),
@@ -450,7 +492,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Basalt,
 		Accessory = "DragonCrown",
 		Scale = 1.3,
-		Bonus = { Type = "Income", Value = 0.45 },
+		Bonus = { Type = "Income", Value = 3.5 },
 		Lore = "Crowned in the heart of the volcano. Every dragon in the sky bows to it.",
 		Edition = "Dragonforge",
 	}),
@@ -467,7 +509,7 @@ GolemConfig.List = {
 		Material = Enum.Material.SmoothPlastic,
 		Accessory = "SkyPuff",
 		Scale = 1.15,
-		Bonus = { Type = "Luck", Value = 0.11 },
+		Bonus = { Type = "Luck", Value = 0.5 },
 		Lore = "A knight of the wind over Sky Haven. It naps on the clouds.",
 		Edition = "Sky",
 	}),
@@ -481,7 +523,7 @@ GolemConfig.List = {
 		Material = Enum.Material.Slate,
 		Accessory = "StormArmor",
 		Scale = 1.22,
-		Bonus = { Type = "MiningSpeed", Value = 0.26 },
+		Bonus = { Type = "MiningSpeed", Value = 0.65 },
 		Lore = "Guards the island's edge. Every step it takes is a thunderclap.",
 		Edition = "Sky",
 	}),
@@ -495,9 +537,43 @@ GolemConfig.List = {
 		Material = Enum.Material.SmoothPlastic,
 		Accessory = "AetherWings",
 		Scale = 1.3,
-		Bonus = { Type = "Income", Value = 0.42 },
+		Bonus = { Type = "Income", Value = 1 },
 		Lore = "Rules the sky over Sky Haven. The clouds part where it walks.",
 		Edition = "Sky",
+	}),
+	-- the two HUGE golems (owner 2026-10-30, his Sky egg concept): giants
+	-- with two bonuses each, 0.5 % and 0.3 % of a Sky egg
+	limited({
+		Id = "SkyTitan",
+		Name = "Sky Titan",
+		Rarity = "Mythic",
+		Body = rgb(236, 244, 255),
+		Trim = rgb(255, 190, 55),
+		Glow = rgb(90, 215, 255),
+		Material = Enum.Material.SmoothPlastic,
+		Accessory = "TitanArmor",
+		Scale = 2.2,
+		Bonus = { Type = "MiningSpeed", Value = 1.2 },
+		Bonus2 = { Type = "Income", Value = 0.2 },
+		Lore = "A giant in white and gold armour. Crystal wings hum when it lifts its staff.",
+		Edition = "Sky",
+		Huge = true,
+	}),
+	limited({
+		Id = "CloudColossus",
+		Name = "Cloud Colossus",
+		Rarity = "Mythic",
+		Body = rgb(35, 48, 72),
+		Trim = rgb(220, 235, 255),
+		Glow = rgb(0, 125, 255),
+		Material = Enum.Material.Slate,
+		Accessory = "CloudStorm",
+		Scale = 2.2,
+		Bonus = { Type = "Income", Value = 0.6 },
+		Bonus2 = { Type = "Luck", Value = 1 },
+		Lore = "A mountain of storm rock wrapped in clouds. Rocks float wherever it walks.",
+		Edition = "Sky",
+		Huge = true,
 	}),
 } :: { Golem }
 
@@ -528,24 +604,48 @@ function GolemConfig.order(kind: string): number
 	return if info then info.Order else 0
 end
 
--- Sort score of a kind ("best" first): rarity, then bonus value.
-function GolemConfig.score(kind: string): number
-	local golem = GolemConfig.ById[kind]
-	if not golem then
-		return -1
-	end
-	return GolemConfig.order(kind) * 10 + golem.Bonus.Value
+-- A golem's bonuses: { Bonus } or a HUGE golem's { Bonus, Bonus2 }.
+function GolemConfig.bonuses(golem: Golem): { { Type: BonusType, Value: number } }
+	local second = golem.Bonus2
+	return if second then { golem.Bonus, second } else { golem.Bonus }
 end
 
--- Card text of a kind's bonus: "+10% Income".
+-- The whole bonus of a kind (a HUGE golem's two added up; 0 when unknown).
+function GolemConfig.value(kind: string): number
+	local golem = GolemConfig.ById[kind]
+	local total = 0
+	for _, bonus in if golem then GolemConfig.bonuses(golem) else {} do
+		total += bonus.Value
+	end
+	return total
+end
+
+-- Sort score of a kind ("best" first): the whole bonus, then rarity
+-- (2026-10-30: a Rare limited golem's +100% beats a Mythic egg golem's +40%).
+function GolemConfig.score(kind: string): number
+	if not GolemConfig.ById[kind] then
+		return -1
+	end
+	return math.floor(GolemConfig.value(kind) * 1000 + 0.5) * 10 + GolemConfig.order(kind)
+end
+
+local function bonusText(bonus: { Type: BonusType, Value: number }, bond: number): string
+	local percent = string.format("%.1f", bonus.Value * bond * 100):gsub("%.0$", "")
+	return `+{percent}% {GolemConfig.BonusTypes[bonus.Type].Label}`
+end
+
+-- Card text of a kind's bonus: "+10% Income" (a HUGE golem's two:
+-- "+120% Mining speed, +20% Income").
 function GolemConfig.describe(kind: string, bondPct: number?): string
 	local golem = GolemConfig.ById[kind]
 	if not golem then
 		return ""
 	end
-	local value = golem.Bonus.Value * (1 + (bondPct or 0))
-	local percent = string.format("%.1f", value * 100):gsub("%.0$", "")
-	return `+{percent}% {GolemConfig.BonusTypes[golem.Bonus.Type].Label}`
+	local texts = {}
+	for _, bonus in GolemConfig.bonuses(golem) do
+		table.insert(texts, bonusText(bonus, 1 + (bondPct or 0)))
+	end
+	return table.concat(texts, ", ")
 end
 
 -- The record's Owned list / Equipped list (missing or broken = empty).
@@ -760,8 +860,10 @@ function GolemConfig.stats(golems: any, bondPct: number?): { [string]: number }
 		if golem then
 			seen[id] = true
 			used += 1
-			local stat = GolemConfig.BonusTypes[golem.Bonus.Type].Stat
-			out[stat] = (out[stat] or 0) + golem.Bonus.Value * bond
+			for _, bonus in GolemConfig.bonuses(golem) do
+				local stat = GolemConfig.BonusTypes[bonus.Type].Stat
+				out[stat] = (out[stat] or 0) + bonus.Value * bond
+			end
 		end
 	end
 	return out
@@ -784,8 +886,12 @@ end
 for _, golem in GolemConfig.List do
 	assert(GolemConfig.Accessories[golem.Accessory], "GolemConfig: unknown accessory " .. golem.Accessory)
 	assert(Rarity.ById[golem.Rarity], "GolemConfig: unknown rarity " .. golem.Rarity)
-	local bonusType = GolemConfig.BonusTypes[golem.Bonus.Type]
-	assert(bonusType and StatConfig.ById[bonusType.Stat], "GolemConfig: bad bonus on " .. golem.Id)
+	for _, bonus in GolemConfig.bonuses(golem) do
+		local bonusType = GolemConfig.BonusTypes[bonus.Type]
+		assert(bonusType and StatConfig.ById[bonusType.Stat] and bonus.Value > 0, "GolemConfig: bad bonus on " .. golem.Id)
+	end
+	assert(golem.Bonus2 == nil or golem.Huge, "GolemConfig: only a HUGE golem has two bonuses " .. golem.Id)
+	assert(golem.Family == nil or golem.Family == "Stone" or golem.Family == "Crystal" or golem.Family == "Royal", "GolemConfig: bad Family " .. golem.Id)
 end
 for old, new in GolemConfig.Renamed do
 	assert(GolemConfig.ById[new] and not GolemConfig.ById[old], "GolemConfig: bad rename " .. old)

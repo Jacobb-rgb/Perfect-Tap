@@ -440,11 +440,17 @@ end
 
 ---------------------------------------------------------------- golems
 
--- The part budget of a kind: GolemConfig.LimitedMaxParts[rarity] for a
--- limited edition golem (an upcoming set's preview look too).
+-- The part budget of a kind: GolemConfig.HugeMaxParts for a HUGE golem,
+-- EggMaxParts[rarity] for an egg golem (its Family's costume),
+-- LimitedMaxParts[rarity] for a limited edition golem (an upcoming set's
+-- preview look too).
 function GolemBuilder.budget(kind: string): number
-	local golem = GolemConfig.ById[kind] or LimitedUpcoming.ById[kind]
-	if golem and golem.Edition ~= nil then
+	local golem: any = GolemConfig.ById[kind] or LimitedUpcoming.ById[kind]
+	if golem and golem.Huge then
+		return GolemConfig.HugeMaxParts
+	elseif golem and golem.Family ~= nil then
+		return GolemConfig.EggMaxParts[golem.Rarity] or GolemConfig.MaxParts
+	elseif golem and golem.Edition ~= nil then
 		return GolemConfig.LimitedMaxParts[golem.Rarity] or GolemConfig.MaxParts
 	end
 	return GolemBuilder.MaxParts

@@ -1660,7 +1660,7 @@ return function(T, Loader)
 			T.truthy(MonetizationConfig.get(key).Description:find("new odds shown before buying", 1, true), key .. " promises the odds")
 		end
 		-- a percent bonus can hit its cap: the pass says where (Hexa's x2.5 never does: MaxOreLuck)
-		T.truthy(MonetizationConfig.get("EnchantStarbreaker").Description:find("at most +150%", 1, true), "Starbreaker names the cap")
+		T.truthy(MonetizationConfig.get("EnchantStarbreaker").Description:find("at most +300%", 1, true), "Starbreaker names the cap")
 		T.near(StatConfig.ById.OreLuckPct.Max :: number, 1.5, EPS, "the cap the Starbreaker text names")
 		T.truthy(MonetizationConfig.PromptMemorySeconds >= 60, "a Royal prompt remembers the Triple Lucky state it showed")
 		for _, product in MonetizationConfig.List do
