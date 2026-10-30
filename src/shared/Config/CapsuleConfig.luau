@@ -159,7 +159,7 @@ CapsuleConfig.List = {
 	},
 	{
 		-- the SKY EGG on the Sky Haven island (islands chat + owner 2026-10-22):
-		-- three golems only, better than Crystal, still below the Robux eggs
+		-- three sky golems and (2026-10-30) two HUGE ones: the top egg tier
 		Id = "Sky",
 		Name = "Sky Egg",
 		Currency = "Coins",

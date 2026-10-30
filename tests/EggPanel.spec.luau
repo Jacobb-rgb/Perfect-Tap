@@ -280,7 +280,7 @@ return function(T, Loader)
 					T.eq(card.Name.Text, GolemConfig.ById[line.Golem].Name, "...with its golem's name under it")
 				end
 			end
-			T.truthy(shadows >= 10, "Crystal: the golems the player has none of are silhouettes")
+			T.eq(shadows, #lines - 1, "Crystal: the golems the player has none of are silhouettes")
 			-- the name sits under the picture, inside the card (the card clips)
 			local card = refs.Cards[1]
 			T.truthy(card.Name.Size.Y.Offset == l.NameH and l.NameH >= 2 * l.NameSize, "two lines")
@@ -1013,8 +1013,9 @@ return function(T, Loader)
 								T.eq(f.Fit.Odds, 0, where .. ": every odd visible")
 								T.falsy(f.Narrow, "the usual layout")
 							else
-								-- (568: the usual panel doesn't fit right of the zone under the top bar: the row on top, right-aligned)
-								T.truthy(f.Narrow, where .. ": the narrow layout")
+								-- (568: where the usual panel doesn't fit right of the zone under the top bar,
+								-- the row on top, right-aligned; an egg of few golems may still fit)
+								T.truthy(f.Narrow or f.Fit.Odds == 0, where .. ": the narrow layout, or every odd visible")
 							end
 						end
 					end
