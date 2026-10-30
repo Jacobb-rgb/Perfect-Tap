@@ -34,7 +34,9 @@ Totals: Open 3 Commons 4.64 s, Epic 4.84 s, Legendary 6.19 s, Mythic 6.79 s, Aut
 - Skip (tap / Space / Enter / A) goes to the burst, then on only after MinShow: every golem is seen, named.
 - Auto plays the fast timings; x50 packs play as openings of 10 ("2 / 5").
 - Reduce motion: no rise, float, orbit, motes, pulses, shake, flash or spin; fades only.
-- Phones: fewer motes, one orbit per egg on Open 4+.
+- Phones: the full show (owner 2026-10-30: "don't hold back for phones, it must be clean and smooth").
+- Smooth: every rock of the eggs is a slow sway (HatchFx.sway, 2.8 - 4.4 a second) whose strength only
+  ramps (crack steps ease in, the silhouette stills it eased): no buzz, no jump between two frames.
 - Everything is pooled (CapsuleView.buildOpening) and hidden by HatchStage.clear; the world tint is
   removed with the blur (CapsuleController.endChain).
 

@@ -99,8 +99,8 @@ export type Run = {
 	BestColor: Color3,
 	Bonuses: { [number]: string }, -- per slot: its golem's bonus ("+10% Income"; none: no entry)
 	Badged: boolean, -- up to CapsuleView.BadgeSlots golems: a rarity pill over each head
-	MotesPer: number, -- motes per egg (fewer for many eggs, fewer on a phone)
-	OrbitsPer: number, -- energy rings per egg (a phone opening many: 1)
+	MotesPer: number, -- motes per egg (fewer for many eggs: the pool is shared)
+	OrbitsPer: number, -- energy rings per egg (owner 2026-10-30: the full show on phones too)
 	BadgeSize: { [number]: number }, -- per slot: the text size its pill was measured at (measured once, placed each frame)
 	EggPoses: { [number]: HatchFx.EggPose }, -- each egg's pose this frame (its orbits and motes follow it)
 	Fired: { [string]: boolean },
@@ -224,8 +224,8 @@ function HatchStage.new(args: Args): Run
 		BestColor = BrightTheme.crackColour(bestRarity),
 		Bonuses = {},
 		Badged = n <= CapsuleView.BadgeSlots,
-		MotesPer = math.min(if args.Phone then math.ceil(motes * 0.6) else motes, math.floor(#o.Motes / n)),
-		OrbitsPer = if args.Phone and n > 3 then 1 else HatchFx.OrbitCount,
+		MotesPer = math.min(motes, math.floor(#o.Motes / n)),
+		OrbitsPer = HatchFx.OrbitCount,
 		EggPoses = {},
 		BadgeSize = {},
 		Fired = {},

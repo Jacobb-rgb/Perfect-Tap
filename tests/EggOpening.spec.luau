@@ -381,7 +381,7 @@ return function(T, Loader)
 					local tl = run.Timeline
 					local label = `x{count} {if phone then "phone" else "PC"}`
 					T.truthy(run.MotesPer * count <= #o.Motes, label .. ": the motes' pool is enough")
-					T.eq(run.OrbitsPer, if phone and count > 3 then 1 else HatchFx.OrbitCount, label .. ": orbits per egg")
+					T.eq(run.OrbitsPer, HatchFx.OrbitCount, label .. ": orbits per egg (the full show on phones too)")
 					local sawOrbit, sawMote, sawPlatform, sawAura = false, false, false, false
 					local t = 0
 					while t <= tl.Total do
@@ -588,6 +588,48 @@ return function(T, Loader)
 					end
 				end
 			end
+		end
+	end)
+
+	T.test("EggOpening V2: the eggs rock smoothly (owner 2026-10-30: no stutter): small steps frame to frame, no jumps", function()
+		for _, order in { 1, 4, 5, 6 } do
+			for _, count in { 1, 3, 10 } do
+				for _, fast in { false, true } do
+					local tl = HatchFx.timeline(order, count, fast, false)
+					local special = HatchFx.centreSlot(count)
+					for slot = 1, count do
+						local last: number? = nil
+						local lastScale: number? = nil
+						local t = tl.Float
+						while t < tl.Burst do
+							local pose = HatchFx.eggPose(t, tl, slot, order >= 5 and slot == special)
+							if pose.Shown and last and lastScale then
+								-- (at 60 frames a second: the egg turns at most 6 degrees and grows at most 3 % a frame)
+								T.truthy(
+									math.abs(pose.Roll - last) <= math.rad(6),
+									`order {order} x{count} slot {slot}: a smooth rock at {t}`
+								)
+								if t < tl.Silhouette then -- (then the quick swell before the burst: a pop on purpose)
+									T.truthy(
+										math.abs(pose.Scale / lastScale - 1) <= 0.03,
+										`order {order} x{count} slot {slot}: a smooth pulse at {t}`
+									)
+								end
+							end
+							last, lastScale = pose.Roll, pose.Scale
+							t += 1 / 60
+						end
+					end
+				end
+			end
+		end
+		-- the sway: slow waves, -1..1
+		for i = 0, 600 do
+			local v = HatchFx.sway(i / 100, HatchFx.SwayHz.Suspense, 1.3)
+			T.truthy(math.abs(v) <= 1 + 1e-9, "the sway in -1..1")
+		end
+		for _, hz in HatchFx.SwayHz do
+			T.truthy(hz <= 5, "a few times a second: never a buzz")
 		end
 	end)
 

@@ -73,7 +73,7 @@ HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever i
 HatchFx.Fov = 40 -- the stage viewport's camera
 HatchFx.Turn = 0.22 -- radians a golem turns from facing the camera (a 3/4 look)
 HatchFx.RingCount = 3 -- shockwave rings per egg
-HatchFx.OrbitCount = 2 -- energy rings orbiting each egg while it charges (a phone opening many: 1)
+HatchFx.OrbitCount = 2 -- energy rings orbiting each egg while it charges
 
 export type Times = {
 	Pop: number, -- an egg's entrance (it rises into its place, growing)
@@ -592,6 +592,27 @@ local function easeOut(x: number): number
 	return 1 - k * k * k
 end
 
+--[[
+	A smooth sway (-1..1): two slow waves a golden ratio apart (it never
+	repeats in a way the eye catches, never buzzes). `hz` its main speed
+	(a few a second: smooth at 30 frames a second, at 60 too), `seed` its
+	egg's own start.
+]]
+HatchFx.SwayHz = { Cracks = 2.8, Charge = 3.4, Suspense = 4.4 }
+function HatchFx.sway(t: number, hz: number, seed: number): number
+	local w = 2 * math.pi * hz
+	return 0.62 * math.sin(t * w + seed) + 0.38 * math.sin(t * w * 1.618 + seed * 2.3)
+end
+
+-- How cracked the eggs are at `t` (0..3): each crack step eases in over 0.15 s (the tremble grows, never jumps).
+function HatchFx.crackedAt(t: number, tl: Timeline): number
+	local k = 0
+	for _, s in tl.Steps do
+		k += easeOut((t - s) / 0.15)
+	end
+	return k
+end
+
 -- How far into the energy charge `t` is (0..1): from the charge's start to the silhouette.
 function HatchFx.chargeAt(t: number, tl: Timeline): number
 	return clamp01((t - tl.Charge) / math.max(0.01, tl.Silhouette - tl.Charge))
@@ -653,20 +674,27 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	local floating = clamp01((t - tl.Float) / 0.25) * (1 - 0.7 * charge)
 	drop += HatchFx.Bob * math.sin((t - start) * 2 * math.pi * 0.7 + i * 0.9) * floating
 	yaw += HatchFx.FloatTurn * math.sin((t - start) * 2 * math.pi * 0.22 + i * 1.1) * floating
-	-- the charge: a pulse twice a second (its size only: never a flicker) and a shake growing with it
+	-- the charge: a pulse twice a second (its size only: never a flicker) and a rock growing with it.
+	-- (owner 2026-10-30: "the shaking stutters, not clean": every rock is a slow, smooth sway
+	-- (HatchFx.sway, a few times a second), its strength only ever ramps: never a buzz, never a jump)
 	local roll = 0
-	if charge > 0 and t < tl.Silhouette then
-		scale *= 1 + 0.035 * charge * (0.5 + 0.5 * math.sin((t - tl.Charge) * 2 * math.pi * 2))
-		roll += 0.05 * charge * charge * math.sin(t * 2 * math.pi * 13 + i * 2.1)
+	if charge > 0 then
+		-- (it eases out over the silhouette: no jump when the egg turns into its colour)
+		local still = 1 - clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
+		scale *= 1 + 0.035 * charge * still * (0.5 + 0.5 * math.sin((t - tl.Charge) * 2 * math.pi * 2))
+		if t < tl.Silhouette then
+			roll += 0.06 * charge * charge * HatchFx.sway(t, HatchFx.SwayHz.Charge, i * 2.1)
+		end
 	end
-	-- the tremble of the cracks (grows with each step)
-	if level > 0 then
-		roll += (0.025 + 0.018 * level) * math.sin(t * 2 * math.pi * 9 + i * 1.3)
+	-- the tremble of the cracks (grows with each step, eased in)
+	local cracked = HatchFx.crackedAt(t, tl)
+	if cracked > 0 then
+		roll += (0.012 + 0.015 * cracked) * HatchFx.sway(t, HatchFx.SwayHz.Cracks, i * 1.3)
 	end
 	local suspense = HatchFx.suspenseAt(t, tl)
 	if suspense > 0 and t < tl.Silhouette then
 		local hard = if special then 1 else 0.45
-		roll += hard * (0.05 + 0.06 * suspense) * math.sin(t * 2 * math.pi * 16 + i)
+		roll += hard * (0.05 + 0.06 * suspense) * clamp01(suspense * 6) * HatchFx.sway(t, HatchFx.SwayHz.Suspense, i)
 		if special then
 			scale *= 1 + 0.08 * suspense
 		end
@@ -675,7 +703,7 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	local silhouette = clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
 	if t >= tl.Silhouette then
 		scale *= 1 + 0.12 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette))
-		roll *= 0.3
+		roll *= 1 - 0.7 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6)) -- (it stills, eased)
 	end
 	local bright = if suspense > 0 then suspense else 0
 	return {
