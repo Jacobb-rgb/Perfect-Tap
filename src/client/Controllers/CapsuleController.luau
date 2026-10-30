@@ -975,18 +975,13 @@ end
 
 -- The window keys, sunk while an opening plays (A, B, G, Space, Enter and Backspace are the
 -- opening's own): a gamepad's (L3 opens the train window, R3 asks and confirms the tutorial's
--- Skip) and their keyboard twins (T the train, B build mode, L the boosts, J the book, N the
--- emotes, P the golems, Q the backpack, H the hoverboard): none acts unseen under it.
+-- Skip) and their keyboard twins (T the train, B build mode, and the keys other controllers own
+-- and export, read from them: the backpack's, the emotes', the golems', the hoverboard's, the
+-- book's, the boosts'): none acts unseen under it.
 local SINK_ACTION = "TerraForgeCapsuleSink"
 local SINK_KEYS = {
 	Enum.KeyCode.T,
 	Enum.KeyCode.B,
-	Enum.KeyCode.L,
-	Enum.KeyCode.J,
-	Enum.KeyCode.N,
-	Enum.KeyCode.P,
-	Enum.KeyCode.Q,
-	Enum.KeyCode.H,
 	Enum.KeyCode.ButtonL1,
 	Enum.KeyCode.ButtonR1,
 	Enum.KeyCode.ButtonL2,
@@ -1000,7 +995,44 @@ local SINK_KEYS = {
 	Enum.KeyCode.DPadLeft,
 	Enum.KeyCode.DPadRight,
 }
-CapsuleController.SinkKeys = SINK_KEYS
+-- (controller name, its exported key or list of keys: those keys are theirs alone, never named here)
+local OWNED_KEYS = {
+	{ "BackpackController", "Key" },
+	{ "EmoteController", "Key" },
+	{ "GolemController", "ToggleKey" },
+	{ "HoverboardController", "Key" },
+	{ "ArtifactController", "BookKey" },
+	{ "BoostController", "OpenKeys" },
+}
+
+CapsuleController.OwnedKeys = OWNED_KEYS
+
+-- Every key sunk under an opening: the list above and the other controllers' own (missing ones skipped).
+function CapsuleController.sinkKeys(): { Enum.KeyCode }
+	local out = table.clone(SINK_KEYS)
+	local function add(value: any)
+		local key: any = value
+		if typeof(value) == "EnumItem" and not table.find(out, key) then
+			table.insert(out, key)
+		end
+	end
+	for _, entry in OWNED_KEYS do
+		local module = script.Parent:FindFirstChild(entry[1])
+		if module and module:IsA("ModuleScript") then
+			local ok, controller = pcall(require, module :: any)
+			local value = if ok and type(controller) == "table" then (controller :: any)[entry[2]] else nil
+			if type(value) == "table" then
+				for _, key in value do
+					add(key)
+				end
+			else
+				add(value)
+			end
+		end
+	end
+	return out
+end
+
 local function onSink(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	return if playing then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
 end
@@ -1304,7 +1336,7 @@ local function beginChain(o: CapsuleView.OpenRefs)
 		Enum.KeyCode.ButtonB
 	)
 	ContextActionService:BindActionAtPriority(AUTO_ACTION, onAuto, false, OPEN_PRIORITY, PromptConfig.keys("Second").Keyboard)
-	ContextActionService:BindActionAtPriority(SINK_ACTION, onSink, false, OPEN_PRIORITY, table.unpack(SINK_KEYS))
+	ContextActionService:BindActionAtPriority(SINK_ACTION, onSink, false, OPEN_PRIORITY, table.unpack(CapsuleController.sinkKeys()))
 	keepNoSelection(true)
 end
 

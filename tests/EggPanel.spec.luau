@@ -2617,23 +2617,25 @@ return function(T, Loader)
 				T.eq(why, "Busy")
 				CC._test.ended(nil)
 				T.eq(w.actions.TerraForgeCapsuleSink, nil, "the keys free again")
-				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it)
-				for _, key in
-					{
-						roblox.Enum.KeyCode.ButtonL3, -- the train window
-						roblox.Enum.KeyCode.ButtonR3, -- the tutorial's Skip
-						roblox.Enum.KeyCode.T, -- the train window
-						roblox.Enum.KeyCode.B, -- build mode
-						roblox.Enum.KeyCode.P, -- the golems
-						roblox.Enum.KeyCode.Q, -- the backpack
-					}
-				do
-					T.truthy(table.find(CC.SinkKeys, key), key.Name .. " sunk while an egg opens")
+				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it);
+				-- the keys other controllers own are read from their exports (theirs alone: never named in src)
+				local sunk = CC.sinkKeys()
+				local wanted = {
+					roblox.Enum.KeyCode.ButtonL3, -- the train window
+					roblox.Enum.KeyCode.ButtonR3, -- the tutorial's Skip
+					roblox.Enum.KeyCode.T, -- the train window
+					roblox.Enum.KeyCode.B, -- build mode
+				}
+				for _, key in wanted do
+					T.truthy(table.find(sunk, key), key.Name .. " sunk while an egg opens")
 				end
-				for _, own in
-					{ roblox.Enum.KeyCode.Space, roblox.Enum.KeyCode.Return, roblox.Enum.KeyCode.Backspace, roblox.Enum.KeyCode.G }
-				do
-					T.falsy(table.find(CC.SinkKeys, own), own.Name .. ": the opening's own key")
+				for _, entry in CC.OwnedKeys do
+					local source = fs.readFile(Loader.root .. "/src/client/Controllers/" .. entry[1] .. ".luau")
+					T.truthy(string.find(source, `{entry[1]}.{entry[2]} = `, 1, true), `{entry[1]}.{entry[2]}: the key it exports`)
+				end
+				local own = { roblox.Enum.KeyCode.Space, roblox.Enum.KeyCode.Return, roblox.Enum.KeyCode.Backspace, roblox.Enum.KeyCode.G }
+				for _, key in own do
+					T.falsy(table.find(sunk, key), key.Name .. ": the opening's own key")
 				end
 				T.falsy(CC._test.selectionWatched(), "the selection lock let go")
 				T.eq(CC._test.queued(), 0)
