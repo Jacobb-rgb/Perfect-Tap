@@ -293,7 +293,9 @@ return function(T, Loader)
 				return 0 -- every secret roll hits: the rarest (Rainbow Nova) first
 			end
 			local rock = w.rock("Outcrops", { "Tin" }, 0.01)
-			rock.Floor = 3 -- a Deep Hollow rock
+			-- a Deep Hollow rock (the outcrop's blaster gate kept: the test player's blaster opens it)
+			rock.Floor = 3
+			rock.Zone = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout").ZoneById.DeepHollow
 			w.rolls = { 0.5, 0.5, 0.5, 0.5, 0.1 }
 			mining.blast(p, rock.Model)
 			w.step()
@@ -301,9 +303,10 @@ return function(T, Loader)
 			T.eq(w.spawned[1].Info.OreId, "RainbowNova", "the chunk turned secret")
 			T.eq(w.spawned[1].Info.Kind, "Raw", "a (sparkly) dirty ore: the jackpot is at the cleaning")
 			T.eq(w.spawned[2].Info.OreId, "Tin", "the twin stays the ore: never a second secret")
-			-- an old zone rock (no floor: town outcrops, the VIP Grotto) never turns secret
+			-- the town's outcrops (floor 1 rocks in town) and old zone rocks never turn secret
 			w.spawned = {}
 			local zoneRock = w.rock("Outcrops", { "Tin" }, 0.01)
+			zoneRock.Floor = 1
 			w.rolls = { 0.5, 0.5, 0.5, 0.5, 0.9 }
 			mining.blast(p, zoneRock.Model)
 			w.step()

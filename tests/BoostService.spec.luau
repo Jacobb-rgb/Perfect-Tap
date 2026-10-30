@@ -700,7 +700,9 @@ return function(T, Loader)
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores in plain rocks, no summary")
 				else
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores, no summary")
-					T.truthy(t.Note:find("changes nothing"), zone.Id .. ": says so")
+					-- (a mine floor: luck still raises its ??? Secret chance, and the note says that instead)
+					local says = if secretRows > 0 then "only raises the ??? Secret" else "changes nothing"
+					T.truthy(t.Note:find(says, 1, true), zone.Id .. ": says so")
 				end
 			end
 		end

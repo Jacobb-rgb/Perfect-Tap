@@ -102,7 +102,9 @@ return function(T, Loader)
 				{ U = 1.5, N = "Mia", O = "RainbowNova", J = "j" },
 				{ U = 0 / 0, N = "Mia", O = "RainbowNova", J = "j" },
 				{ U = 5, N = "", O = "RainbowNova", J = "j" },
-				{ U = 5, N = string.rep("a", 41), O = "RainbowNova", J = "j" },
+				{ U = 5, N = string.rep("a", 21), O = "RainbowNova", J = "j" },
+				{ U = 5, N = string.rep("é", 21), O = "RainbowNova", J = "j" },
+				{ U = 5, N = "\255\254", O = "RainbowNova", J = "j" },
 				{ U = 5, N = "<b>x</b>", O = "RainbowNova", J = "j" },
 				{ U = 5, N = "Mia\n", O = "RainbowNova", J = "j" },
 				{ U = 5, N = "Mia", O = "HollowEye", J = "j" },
@@ -113,6 +115,16 @@ return function(T, Loader)
 		do
 			T.eq(SecretService.read(bad), nil, "dropped")
 		end
+	end)
+
+	T.test("secret service: a name is cut at 20 characters, never inside one", function()
+		T.eq(SecretService.shortName("Mia"), "Mia")
+		T.eq(SecretService.shortName(string.rep("é", 25)), string.rep("é", 20), "20 two-byte characters")
+		T.eq(utf8.len(SecretService.shortName(string.rep("😀", 30))), 20, "emoji kept whole")
+		T.eq(SecretService.shortName("\255"), "", "not UTF-8")
+		local u, n = SecretService.read({ U = 5, N = string.rep("é", 20), O = "RainbowNova", J = "j" })
+		T.eq(u, 5, "20 characters (40 bytes) read fine")
+		T.eq(n, string.rep("é", 20))
 	end)
 
 	T.test("secret service: receiving another server's Rainbow Nova (checked, own server skipped, limited)", function()

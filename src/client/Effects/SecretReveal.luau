@@ -71,8 +71,8 @@ export type Tier = {
 
 SecretReveal.Tiers = {
 	{ Hold = 3.6, Shocks = { 0 }, Gold = false, Confetti = 28, Twinkles = 8, Cosmos = false, Shake = 0.5 },
-	{ Hold = 4.2, Shocks = { 0, 0.3 }, Gold = true, Confetti = 36, Twinkles = 12, Cosmos = false, Shake = 0.7 },
-	{ Hold = 5.2, Shocks = { 0, 0.3, 0.6 }, Gold = true, Confetti = 44, Twinkles = 16, Cosmos = true, Shake = 0.9 },
+	{ Hold = 4.2, Shocks = { 0, 0.4 }, Gold = true, Confetti = 36, Twinkles = 12, Cosmos = false, Shake = 0.7 },
+	{ Hold = 5.2, Shocks = { 0, 0.4, 0.8 }, Gold = true, Confetti = 44, Twinkles = 16, Cosmos = true, Shake = 0.9 },
 } :: { Tier }
 
 SecretReveal.Fly = 0.7
@@ -84,6 +84,9 @@ SecretReveal.OreSize = 320 -- design units: the 3D ore's viewport
 SecretReveal.PhoneConfetti = 16
 SecretReveal.PhoneTwinkles = 6
 SecretReveal.SpaceStars = 44
+-- design units the show reaches above its middle (the headline; 3 stars: the ribbon) and below (the hint)
+SecretReveal.Reach = { Up = 262, UpCosmos = 304, Down = 330 }
+SecretReveal.Hints = { Touch = "Tap to continue", Gamepad = "Press A to continue", Mouse = "Click to continue" }
 SecretReveal.Fov = 30
 SecretReveal.FlashColor = RevealKit.Style.FlashColor
 SecretReveal.Dark = RevealKit.Style.Dark
@@ -98,6 +101,8 @@ export type Opts = {
 	Reduced: boolean?,
 	Phone: boolean?,
 	Flash: boolean?, -- false: no flash (another reveal flashed less than RevealKit.FlashGap ago)
+	Input: string?, -- "Touch" | "Gamepad" | "Mouse": what the skip hint says
+	TopInset: number?, -- px the top bar covers (default 58: a phone's)
 }
 
 type Piece = { Frame: Frame, Dir: Vector2, Speed: number, Spin: number, Delay: number }
@@ -595,7 +600,13 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 		return t >= 0
 	end
 	view.Gui.Enabled = true
-	view.Scale.Scale = opts.Scale
+	-- the HUD's scale, smaller when the screen is too short (a landscape phone): the headline
+	-- (3 stars: the ribbon) stays clear of the top bar, the hint above the bottom
+	local up = if tier.Cosmos then SecretReveal.Reach.UpCosmos else SecretReveal.Reach.Up
+	local midY = opts.Screen.Y * SecretReveal.Center.Y.Scale
+	local room = math.min((midY - (opts.TopInset or 58)) / up, (opts.Screen.Y - midY - 8) / SecretReveal.Reach.Down)
+	view.Scale.Scale = math.max(0.3, math.min(opts.Scale, room))
+	view.Hint.Text = SecretReveal.Hints[opts.Input or "Mouse"] or SecretReveal.Hints.Mouse
 	local leave = span(t, hold, hold + 0.35) -- everything but the ore fades out
 	local stay = 1 - leave
 
@@ -668,11 +679,12 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 	local grow = if reduced then span(t, 0, 0.3) else easeOutBack(span(t, 0.02, 0.45))
 	RevealKit.poseRays(view.Rays, t, grow, leave, { Phone = phone, Reduced = reduced, Gold = tier.Gold })
 	-- the warm glow behind the ore, a beat at every shockwave
+	-- (the later ones softer: with the flash, never more than 2.5 bright pulses a second)
 	local swell = 0
-	for _, at in tier.Shocks do
+	for k, at in tier.Shocks do
 		local u = span(t, at, at + 0.4)
 		if u > 0 and u < 1 then
-			swell = math.max(swell, math.sin(u * math.pi))
+			swell = math.max(swell, math.sin(u * math.pi) * (if k == 1 then 1 else 0.35))
 		end
 	end
 	view.Glow.BackgroundColor3 = SecretReveal.FlashColor

@@ -123,7 +123,7 @@ export type ZoneEffect = {
 	Before: number, -- chance that a chunk is Rare or rarer now
 	After: number, -- the same with the boost
 	Rarities: { RarityLine }, -- per lucky rarity found in the zone (Rare first, Mythic last)
-	NoEffect: boolean, -- the zone has no Rare+ ore
+	NoEffect: boolean, -- the zone has no Rare+ ore (luck still raises its ??? Secret chance: SecretOreConfig)
 }
 export type ArtifactEffect = { Zone: string, Before: number, After: number }
 -- What a luck card compares (the numbers from State.Bonuses, capped totals).
@@ -173,7 +173,7 @@ BoostConfig.Reasons = {
 	Full = "That boost already has 2 hours left",
 	CoinLimit = "Coins top a boost up only when less than 10 minutes are left",
 	NoCoins = "Not enough coins",
-	NoEffect = "No effect yet: none of your mines has Rare ores",
+	NoEffect = "No effect yet: none of your mines has Rare ores (only the tiny ??? Secret chance would rise)",
 	Restricted = "Boosts aren't available where you play",
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
 } :: { [string]: string }

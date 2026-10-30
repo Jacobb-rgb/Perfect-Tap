@@ -219,6 +219,85 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("secret ores: the jackpot screen fits a landscape phone, says the right skip, keeps its pulses apart", function()
+		local roblox2 = require("@lune/roblox") :: any
+		local SecretReveal = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.SecretReveal")
+		local RevealKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealKit")
+		local view = SecretReveal.build()
+		SecretReveal.setOre(view, "RainbowNova", { New = true })
+		local screen = roblox2.Vector2.new(812, 375)
+		SecretReveal.pose(view, 1, { Screen = screen, Scale = 1, TopInset = 58, Input = "Gamepad" })
+		local scale = view.Scale.Scale
+		T.truthy(scale < 1, "smaller than the HUD's scale on a short screen")
+		local midY = screen.Y * SecretReveal.Center.Y.Scale
+		T.truthy(midY - SecretReveal.Reach.UpCosmos * scale >= 58 - 1e-6, "the ribbon clears the top bar")
+		T.truthy(midY + SecretReveal.Reach.Down * scale <= screen.Y, "the hint stays on screen")
+		T.eq(view.Hint.Text, "Press A to continue", "a gamepad's skip")
+		SecretReveal.pose(view, 1, { Screen = roblox2.Vector2.new(1920, 1080), Scale = 1.25, Input = "Touch" })
+		T.eq(view.Scale.Scale, 1.25, "a big screen keeps the HUD's scale")
+		T.eq(view.Hint.Text, "Tap to continue")
+		for stars, tier in SecretReveal.Tiers do
+			for k = 2, #tier.Shocks do
+				T.truthy(tier.Shocks[k] - tier.Shocks[k - 1] >= RevealKit.FlashGap - 1e-9, stars .. " stars: shockwaves FlashGap apart")
+			end
+		end
+		RevealKit.resetFlash()
+		T.truthy(RevealKit.takeFlash(10), "a flash")
+		T.falsy(RevealKit.takeFlash(10.2), "not within FlashGap")
+		T.truthy(RevealKit.takeFlash(10.45), "after it")
+		RevealKit.resetFlash()
+	end)
+
+	T.test("secret ores: moving parts come back to rest exactly (a podium out of range), and stay in the dirt's ore", function()
+		local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
+		local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
+		for _, secret in SecretOreConfig.List do
+			local shown = ItemBuilder.display({ K = "Clean", O = secret.Ore, G = "Flawless" }, CF.new(), 1)
+			local pivot = CF.new(shown:GetAttribute("Center"))
+			local rig = SecretOreFx.rig(shown, pivot)
+			local rest = {}
+			for _, e in rig.Entries do
+				rest[e.Part] = { e.Part.CFrame, e.Part.Size, e.Part.Transparency, e.Part.Color }
+			end
+			SecretOreFx.pose(rig, pivot * CF.Angles(0, 1.3, 0), 2.37)
+			SecretOreFx.rest(rig, pivot)
+			for part, r in rest do
+				T.truthy((part.CFrame.Position - r[1].Position).Magnitude < 1e-4, secret.Ore .. " back in place")
+				T.truthy((part.Size - r[2]).Magnitude < 1e-4, secret.Ore .. " back to size")
+				T.eq(part.Transparency, r[3], secret.Ore .. " back to its transparency")
+			end
+			-- the same ore under the dirt (fitted smaller): its movers stay round it
+			local shell = OreShellBuilder.build(Patterns.generate(secret.Ore, 7), CF.new(0, 5, 0), nil)
+			local treasure = shell.Treasure
+			local center = treasure:GetAttribute("Center")
+			local reach = 0
+			local list = {}
+			for _, d in treasure:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 0.99 then
+					table.insert(list, d)
+				end
+			end
+			local mid = roblox.Vector3.zero
+			for _, d in list do
+				mid += d.CFrame.Position
+			end
+			mid /= #list
+			for _, d in list do
+				reach = math.max(reach, (d.CFrame.Position - mid).Magnitude)
+			end
+			local shellRig = SecretOreFx.rig(treasure, CF.new(center))
+			for _, t in { 0.3, 0.9, 1.7, 2.6 } do
+				SecretOreFx.pose(shellRig, CF.new(center), t)
+				for _, e in shellRig.Entries do
+					T.truthy(
+						(e.Part.CFrame.Position - mid).Magnitude <= reach * 1.2 + 0.05,
+						secret.Ore .. " mover stays near the ore under the dirt"
+					)
+				end
+			end
+		end
+	end)
+
 	T.test("secret ores: the Hollow Eye blinks (iris hidden, lid shown) only now and then", function()
 		local shown = ItemBuilder.display({ K = "Clean", O = "HollowEye", G = "Flawless" }, CF.new(), 1)
 		local pivot = CF.new(shown:GetAttribute("Center"))

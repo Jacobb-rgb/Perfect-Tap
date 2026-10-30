@@ -67,6 +67,7 @@ local PointerInput = require(Cleaning.PointerInput)
 local CameraFit = require(Cleaning.CameraFit)
 local DefaultLook = require(Cleaning.DefaultLook)
 local SecretCleanFx = require(Cleaning.SecretCleanFx)
+local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Hotbar = require(script.Parent.Parent.Util.Hotbar)
@@ -264,6 +265,10 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		end)
 	end
 	function ctx.flash(color: Color3, startTransparency: number)
+		-- one flash clock for every reveal (RevealKit.FlashGap: 2.5 a second at most)
+		if not RevealKit.takeFlash(os.clock()) then
+			return
+		end
 		view.Flash.BackgroundColor3 = color
 		view.Flash.BackgroundTransparency = startTransparency
 		TweenService:Create(view.Flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
@@ -672,6 +677,10 @@ local function run(ctx: any)
 	ctx.Streak = streak
 	call(ctx, "done", result)
 	ContextActionService:BindAction("TerraForgeCleanCollect", function(_, state)
+		-- (a SECRET ore's jackpot screen is still up: its own skip gets the key, the card comes after it)
+		if ctx.revealing then
+			return Enum.ContextActionResult.Pass
+		end
 		if state == Enum.UserInputState.Begin then
 			collect(ctx)
 		end

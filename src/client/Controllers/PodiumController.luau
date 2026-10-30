@@ -313,16 +313,23 @@ local function scanSpinners()
 					if (pivot.Position - eye).Magnitude <= SPIN_RANGE then
 						seen[display] = true
 						if not spinners[display] then
+							-- a secret ore's moving parts are posed by its rig (SecretOreFx), the rest turn here
+							local rig = SecretOreFx.rig(display, pivot)
+							local movers: { [BasePart]: boolean } = {}
+							for _, e in rig.Entries do
+								movers[e.Part] = true
+							end
 							local parts = {}
 							local light: PointLight? = nil
 							for _, d in display:GetDescendants() do
 								if d:IsA("BasePart") then
-									table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame), Mote = d.Name == "Mote" })
+									if not movers[d] then
+										table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame), Mote = d.Name == "Mote" })
+									end
 								elseif d:IsA("PointLight") and display:GetAttribute("Pulse") == true then
 									light = d
 								end
 							end
-							local rig = SecretOreFx.rig(display, pivot)
 							spinners[display] = {
 								Pivot = pivot,
 								Parts = parts,
@@ -337,8 +344,15 @@ local function scanSpinners()
 			end
 		end
 	end
-	for display in spinners do
+	for display, s in spinners do
 		if not seen[display] then
+			-- out of range: everything back to how it was built, so the next look starts from rest
+			for _, entry in s.Parts do
+				entry.Part.CFrame = s.Pivot * entry.Offset
+			end
+			if s.Rig then
+				SecretOreFx.rest(s.Rig, s.Pivot)
+			end
 			spinners[display] = nil
 		end
 	end

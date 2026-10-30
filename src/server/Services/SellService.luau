@@ -418,6 +418,10 @@ local function sellKey(player: Player, data: { [string]: any }, counter: BasePar
 	if not key or not desc or not count or (from ~= "Pen" and from ~= "Hands") then
 		return
 	end
+	if desc.K == "Raw" and SecretOreConfig.isSecret(desc.O) then
+		deny(player, "Something special is inside this ore: clean it at the Cleaning Station first!")
+		return
+	end
 	local picks: { Pick } = {}
 	for _, pick in candidates(player, data) do
 		if #picks >= count then

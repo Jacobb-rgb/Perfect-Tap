@@ -659,7 +659,7 @@ end
 
 -- The same as text lines for a luck card (StoreController): every secret, its floor, before -> after.
 function BoostView.secretLines(luckBefore: number, luckAfter: number): { string }
-	local lines = { "Chance a mine-floor chunk is a ??? Secret ore:" }
+	local lines = { "??? Secret ore chance, per ore a mine-floor rock drops (a Twin Drop never is one):" }
 	for _, secret in SecretOreConfig.List do
 		local floor = if secret.Floor then MineFloors.ById[secret.Floor] else nil
 		local where = if floor then floor.Name else "every floor"
@@ -716,7 +716,10 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 		if before > 0 then
 			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(weights, with))
 		elseif crystalBefore <= 0 then
-			note = "No Rare ores in this zone: Hexa Lucky changes nothing here."
+			-- (luck still raises the ??? Secret chance in the rows above: SecretOreConfig)
+			note = if #BoostView.secretRows(zone.Id, without, with) > 0
+				then "No Rare ores in this zone: Hexa Lucky only raises the ??? Secret chance here."
+				else "No Rare ores in this zone: Hexa Lucky changes nothing here."
 		end
 	end
 	return {

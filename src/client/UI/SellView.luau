@@ -206,6 +206,16 @@ function SellView.priceText(price: number?): string
 	return Format.money(price)
 end
 
+-- The rarity of a row's RarityOrder (Rarity.ById: the six and Secret, which Rarity.List leaves out).
+local function rarityByOrder(order: number): Rarity.RarityInfo?
+	for _, info in Rarity.ById do
+		if info.Order == order then
+			return info
+		end
+	end
+	return nil
+end
+
 local function rarityOf(oreId: string): (number, Color3)
 	local ore = OreData.ById[oreId]
 	local info = ore and Rarity.ById[ore.Rarity]
@@ -231,6 +241,10 @@ function SellView.entries(summary: any, section: Section, sellMult: number?): { 
 	for key, rawCount in summary do
 		local desc = if type(key) == "string" then ItemData.parseKey(key) else nil
 		local count = if type(rawCount) == "number" and rawCount == rawCount then math.floor(rawCount) else 0
+		-- a dirty SECRET ore is never for sale (SellService refuses it): it is cleaned first
+		if desc and desc.K == "Raw" and SecretOreConfig.isSecret(desc.O) then
+			count = 0
+		end
 		if desc and count >= 1 then
 			if desc.K == "Raw" then
 				local row = dirty
@@ -421,7 +435,7 @@ function SellView.confirmRowText(entry: Entry, count: number): string
 	local price = SellView.withBonus((entry.Base or entry.Price or 0) * count, entry.Mult)
 	local rarity = ""
 	if entry.RarityOrder >= SellView.ConfirmRarity then
-		local info = Rarity.List[entry.RarityOrder]
+		local info = rarityByOrder(entry.RarityOrder)
 		rarity = if info then ` ({info.Name})` else ""
 	end
 	return `Sell {Format.commas(count)} {entry.Name}{rarity} for {Format.money(price)}?`
@@ -662,7 +676,7 @@ function SellView.rowPaint(entry: Entry): Pop.Paint
 	if entry.Dirty then
 		return SellView.DirtyPaint
 	end
-	local info = Rarity.List[entry.RarityOrder]
+	local info = rarityByOrder(entry.RarityOrder)
 	return Pop.rarityPaint(if info then info.Id else nil)
 end
 

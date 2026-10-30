@@ -476,7 +476,8 @@ end
 local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
 	local stats = Bonuses.stats(player)
 	local oreId = Bonuses.rollOre(stats, rock.Weights, rolled, random)
-	local floor = if rock.Floor then MineFloors.ByIndex[rock.Floor] else nil
+	-- (only in the mine: the town's starter outcrops count as floor 1 but never hold a secret)
+	local floor = if rock.Floor and rock.Zone.Id ~= "Outcrops" then MineFloors.ByIndex[rock.Floor] else nil
 	local secret = if floor then SecretService.rollDrop(Bonuses.oreLuck(stats), floor.Id) else nil
 	spawnChunk(player, rock, secret or oreId, from)
 	local twin = Bonuses.twinDrop(stats)

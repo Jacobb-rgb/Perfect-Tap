@@ -1905,6 +1905,37 @@ return function(T, Loader)
 		T.eq(b.Pen._test.queue(w.player), nil, "nothing for the chute without a belt")
 	end)
 
+	withBelts("Secret ores: a dirty secret on Direct Unload goes into the pen and the trip ends (never stuck on the train)", function(w, b)
+		w.data.Upgrades.PenAutomation = 2
+		table.clear(w.data.Storage)
+		drop(w.station, USER, COAL)
+		drop(w.station, USER, { K = "Raw", O = "HollowEye" })
+		local total = census(w, USER, w.data)
+		local tripsBefore = w.data.Stats.TrainTrips
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		local t = 100
+		for _ = 1, 6 do
+			b.Pen.tickSend(t)
+			b.rideAway()
+			t += b.Pen.SendInterval
+		end
+		advance(w, TrainConfig.DeliveryRetry + 1)
+		T.eq(#w.data.Train.TripCargo, 0, "nothing left on the train")
+		T.eq(w.data.Stats.TrainTrips, tripsBefore + 1, "the trip is over")
+		local secrets = 0
+		for _, item in w.data.Storage do
+			if item.O == "HollowEye" then
+				secrets += 1
+			end
+		end
+		T.eq(secrets, 1, "the secret waits in the pen, to be cleaned")
+		for _, record in b.onBelt() do
+			T.truthy(record.Info.OreId ~= "HollowEye", "never onto the belt")
+		end
+		T.eq(census(w, USER, w.data), total, "nothing lost")
+	end)
+
 	withBelts("TrainService: leaving mid Direct Unload keeps the dirty ore on the train; a failing chute falls back", function(w, b)
 		w.data.Upgrades.PenAutomation = 2
 		dropMany(w.station, USER, COAL, 4)

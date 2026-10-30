@@ -54,6 +54,7 @@ export type Entry = {
 	Offset: CFrame, -- the part in pivot space
 	Size: Vector3,
 	Transparency: number,
+	Color: Color3,
 	Kind: string,
 	Pivot: Vector3, -- pivot space
 	Axis: Vector3, -- pivot space, unit
@@ -206,6 +207,7 @@ function SecretOreFx.rig(model: Instance, pivot: CFrame): Rig
 					Offset = pivot:ToObjectSpace(d.CFrame),
 					Size = d.Size,
 					Transparency = d.Transparency,
+					Color = d.Color,
 					Kind = kind,
 					Pivot = pivot:PointToObjectSpace(d.CFrame:PointToWorldSpace(p)),
 					Axis = pivot:VectorToObjectSpace(d.CFrame:VectorToWorldSpace(a)).Unit,
@@ -284,14 +286,32 @@ function SecretOreFx.pose(rig: Rig, pivot: CFrame, t: number, reduced: boolean?)
 			transparency = e.Transparency + (1 - e.Transparency) * u * u
 		end
 		local offset = m * e.Offset
+		local size = e.Size
 		if scale ~= 1 then
 			-- grow round the pivot (Beat) or its own middle (Pulse, Rise)
 			local around = if kind == "Beat" then e.Pivot else offset.Position
 			offset = CFrame.new(around + (offset.Position - around) * scale) * offset.Rotation
-			part.Size = e.Size * scale
+			size = e.Size * scale
+		end
+		-- (only what changed is written: a podium poses many parts every frame)
+		if (part.Size - size).Magnitude > 1e-4 then
+			part.Size = size
 		end
 		part.CFrame = pivot * offset
-		part.Transparency = transparency
+		if part.Transparency ~= transparency then
+			part.Transparency = transparency
+		end
+	end
+end
+
+-- Every moving part back where, how big, how see-through and what colour it was built
+-- (a podium out of range: the next rig reads the rest pose again, never a moved one).
+function SecretOreFx.rest(rig: Rig, pivot: CFrame)
+	for _, e in rig.Entries do
+		e.Part.CFrame = pivot * e.Offset
+		e.Part.Size = e.Size
+		e.Part.Transparency = e.Transparency
+		e.Part.Color = e.Color
 	end
 end
 

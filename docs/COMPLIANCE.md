@@ -116,7 +116,10 @@ Violence and resubmit.**
   No Robux product sells a secret ore or raises only their chance. The
   find's chat line is built on every client from the finder's DisplayName
   and OreData (no player text); Rainbow Nova's every-server message
-  (MessagingService) carries only UserId, DisplayName and the ore id.
+  (MessagingService, never from Studio) carries only the finder's UserId,
+  DisplayName (at most 20 characters), the ore id and the sending server's
+  JobId (so that server doesn't show it twice); the receivers check every
+  field and build the line themselves.
 - Trading or gifting items between players → Paid item trading.
 - A drawing board, paintable signs or a free-text bulletin board → Free-form
   user creation, which limits the game to players aged 16+.

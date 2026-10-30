@@ -146,6 +146,15 @@ function OreShellBuilder.fitTreasure(model: Model, workCF: CFrame, pattern: any)
 		local rel = pivot:ToObjectSpace(part.CFrame)
 		part.Size *= k
 		part.CFrame = pivot * CFrame.new(rel.Position * k) * (rel - rel.Position)
+		-- a secret ore's moving part (SecretOreFx): its pivot (in its own space) and a rise in studs scale too
+		local movePivot = part:GetAttribute("MovePivot")
+		if typeof(movePivot) == "Vector3" then
+			part:SetAttribute("MovePivot", movePivot * k)
+			local amount = part:GetAttribute("MoveAmount")
+			if part:GetAttribute("Move") == "Rise" and type(amount) == "number" then
+				part:SetAttribute("MoveAmount", amount * k)
+			end
+		end
 	end)
 	mn, mx = faceBox(model, workCF)
 	local shift = workCF:VectorToWorldSpace(Vector3.new(-(mn.X + mx.X) / 2, -(mn.Y + mx.Y) / 2, OreShellBuilder.CoreFront - 0.03 - mx.Z))

@@ -697,7 +697,7 @@ return function(T, Loader)
 					end
 					if effect.NoEffect then
 						T.eq(tbl.Summary, nil)
-						T.truthy(tbl.Note:find("changes nothing"), "says so")
+						T.truthy(tbl.Note:find("changes nothing") or tbl.Note:find("only raises the ??? Secret", 1, true), "says so")
 					else
 						T.eq(tbl.Summary.Before, BoostView.pct(effect.Before))
 						T.eq(tbl.Summary.After, BoostView.pct(effect.After))

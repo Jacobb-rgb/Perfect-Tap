@@ -700,7 +700,9 @@ function EnchantView.odds(
 			then `Your ore luck is at its cap ({BoostView.mult(StatConfig.MaxOreLuck)}): this buy doesn't change it.`
 			else "Your ore luck from enchants and golems is at its cap: this buy doesn't change it."
 	elseif effect and effect.NoEffect then
-		note = "No Rare ores in this zone: ore luck changes nothing here."
+		note = if #BoostView.secretRows(effect.Zone, preview.LuckBefore, preview.LuckAfter) > 0
+			then "No Rare ores in this zone: ore luck only raises the ??? Secret chance here."
+			else "No Rare ores in this zone: ore luck changes nothing here."
 	end
 	local soonNote = if artifactsSoon and (delta.ArtifactPct or 0) > 0 then " Artifacts: coming soon." else ""
 	return {

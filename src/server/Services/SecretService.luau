@@ -41,7 +41,8 @@ SecretService.ChatPerServer = 8 -- chat lines a minute on one server
 SecretService.PublishPerPlayer = 2 -- every-server messages per finder per 10 minutes
 SecretService.PublishPerServer = 2 -- every-server messages a minute from one server
 SecretService.ReceivePerServer = 6 -- every-server messages shown a minute on one server
-SecretService.MaxName = 40 -- a DisplayName is at most 20 characters; anything longer is not one
+SecretService.MaxName = 20 -- characters (code points): a DisplayName is at most 20; anything longer is not one
+SecretService.SubscribeRetry = { First = 5, Max = 300 } -- seconds between tries of SubscribeAsync, doubling
 SecretService.PillarRadius = 160 -- studs: who sees the column of light over the station (Fx "SecretPillar")
 
 ---------------------------------------------------------------- pure parts (specced)
@@ -81,12 +82,25 @@ function SecretService.isGlobal(oreId: any): boolean
 	return secret ~= nil and secret.Floor == nil
 end
 
+-- At most MaxName characters of `name`, cut between two characters (never inside one).
+function SecretService.shortName(name: string): string
+	local length = utf8.len(name)
+	if not length then
+		return "" -- not UTF-8
+	end
+	if length <= SecretService.MaxName then
+		return name
+	end
+	local cut = utf8.offset(name, SecretService.MaxName + 1) :: number
+	return string.sub(name, 1, cut - 1)
+end
+
 -- The every-server message for a find (nil for anything but a global secret).
 function SecretService.payload(userId: number, name: string, oreId: string, jobId: string): { [string]: any }?
 	if not SecretService.isGlobal(oreId) then
 		return nil
 	end
-	return { U = userId, N = string.sub(name, 1, SecretService.MaxName), O = oreId, J = jobId }
+	return { U = userId, N = SecretService.shortName(name), O = oreId, J = jobId }
 end
 
 -- A received message checked: (userId, name, oreId, jobId), or nil for anything broken or unknown.
@@ -98,7 +112,8 @@ function SecretService.read(data: any): (number?, string?, string?, string?)
 	if type(u) ~= "number" or u ~= u or u % 1 ~= 0 or u <= 0 then
 		return nil
 	end
-	if type(n) ~= "string" or #n == 0 or #n > SecretService.MaxName or n:find("[%c<>]") then
+	local length = if type(n) == "string" then utf8.len(n) else nil
+	if type(n) ~= "string" or not length or length == 0 or length > SecretService.MaxName or n:find("[%c<>]") then
 		return nil
 	end
 	if not SecretService.isGlobal(o) or not OreData.exists(o) then
@@ -128,6 +143,14 @@ end
 -- Hooks the tests swap: the clock, the publish, the player data, the dice.
 SecretService.clock = os.clock
 SecretService.publish = function(payload: { [string]: any }): boolean
+	-- (Studio never tells the live servers: a test Nova stays in the test)
+	local studio = false
+	pcall(function()
+		studio = game:GetService("RunService"):IsStudio()
+	end)
+	if studio then
+		return false
+	end
 	local ok, err = pcall(function()
 		game:GetService("MessagingService"):PublishAsync(SecretService.Topic, payload)
 	end)
@@ -218,8 +241,20 @@ function SecretService.init()
 end
 
 function SecretService.start()
-	pcall(function()
-		game:GetService("MessagingService"):SubscribeAsync(SecretService.Topic, SecretService.receive)
+	-- listen for the other servers' Rainbow Novas; a failed subscribe is tried again, later each time
+	task.spawn(function()
+		local wait = SecretService.SubscribeRetry.First
+		while true do
+			local ok, err = pcall(function()
+				game:GetService("MessagingService"):SubscribeAsync(SecretService.Topic, SecretService.receive)
+			end)
+			if ok then
+				return
+			end
+			warn(`[SecretService] listening for other servers' Rainbow Novas failed (again in {wait} s): {err}`)
+			task.wait(wait)
+			wait = math.min(wait * 2, SecretService.SubscribeRetry.Max)
+		end
 	end)
 end
 

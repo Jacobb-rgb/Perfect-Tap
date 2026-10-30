@@ -52,8 +52,9 @@ end
 
 -- The chat line for a SecretChat (nil for an unknown ore or a broken name).
 function SecretRevealController.chatLine(data: any): string?
-	if type(data) ~= "table" or type(data.Name) ~= "string" or #data.Name == 0 or #data.Name > 40 then
-		return nil
+	local length = if type(data) == "table" and type(data.Name) == "string" then utf8.len(data.Name) else nil
+	if not length or length == 0 or length > 20 then
+		return nil -- (a DisplayName is 1..20 characters)
 	end
 	local secret = if type(data.OreId) == "string" then SecretOreConfig.ByOre[data.OreId] else nil
 	local ore = if secret then OreData.ById[secret.Ore] else nil
@@ -128,7 +129,22 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 	pcall(function()
 		scale = require(script.Parent.HudController).uiScale()
 	end)
-	local opts: SecretReveal.Opts = { Screen = screen, Scale = scale, Reduced = reduced, Phone = phone, Flash = flash }
+	local last = UserInputService:GetLastInputType()
+	local input = if last == Enum.UserInputType.Touch then "Touch" elseif last.Name:find("Gamepad") then "Gamepad" else "Mouse"
+	local topInset = 58
+	pcall(function()
+		local inset = game:GetService("GuiService"):GetGuiInset()
+		topInset = math.max(inset.Y, 36)
+	end)
+	local opts: SecretReveal.Opts = {
+		Screen = screen,
+		Scale = scale,
+		Reduced = reduced,
+		Phone = phone,
+		Flash = flash,
+		Input = input,
+		TopInset = topInset,
+	}
 	if not reduced then
 		CameraShake.add(SecretReveal.tierOf(secret.Stars).Shake)
 	end

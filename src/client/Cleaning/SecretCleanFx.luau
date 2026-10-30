@@ -248,8 +248,11 @@ function SecretCleanFx.done(result: any, ctx: any, after: () -> ())
 			ctx.Camera.FieldOfView = ctx.FitFov
 		end
 	end
+	-- while the jackpot screen is up, Collect's keys pass to its skip (CleaningController)
+	ctx.revealing = true
 	local SecretRevealController = require(script.Parent.Parent.Controllers.SecretRevealController)
 	SecretRevealController.play(oreId, function()
+		ctx.revealing = false
 		if not ctx.ended() then
 			after()
 		end

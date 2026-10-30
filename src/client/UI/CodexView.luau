@@ -380,10 +380,7 @@ local function deep(paint: Pop.Paint): Pop.Paint
 	return { Top = paint.Bottom:Lerp(black, 0.1), Bottom = paint.Bottom:Lerp(black, 0.5), Edge = PopTheme.Outline }
 end
 
--- A rarity's paint (a SECRET ore: purple, it is not one of Pop's six rarities).
-local function rarityPaint(rarity: string): Pop.Paint
-	return if rarity == "Secret" then Pop.paint("Purple") else Pop.rarityPaint(rarity)
-end
+local rarityPaint = Pop.rarityPaint
 
 -- A card's paint: its rarity's (found) or the dark slate (undiscovered).
 local function paintOf(ore: OreData.Ore?): Pop.Paint
