@@ -9,6 +9,7 @@
 
 	  RevealKit.Style                      the look: fonts, colours, counts, sizes, speeds
 	  RevealKit.takeFlash(now) -> boolean  may a reveal flash now? (true takes the slot)
+	  RevealKit.nextFlashAt() -> number    when the next one may (a flash that waits plays then)
 	  RevealKit.word(parent, name, text, size, heavy, z) -> TextLabel
 	  RevealKit.rays(parent, z) -> Rays     three layers of two-tone bars
 	  RevealKit.poseRays(rays, t, grow, leave, opts)
@@ -64,6 +65,11 @@ function RevealKit.takeFlash(now: number): boolean
 	end
 	lastFlash = now
 	return true
+end
+
+-- When the next reveal flash may come (os.clock() seconds): a flash that had to wait plays then.
+function RevealKit.nextFlashAt(): number
+	return lastFlash + RevealKit.FlashGap
 end
 
 -- (tests) forget the last flash

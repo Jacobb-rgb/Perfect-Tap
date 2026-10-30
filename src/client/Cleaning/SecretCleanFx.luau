@@ -48,6 +48,7 @@ type State = {
 	Pivot: CFrame?,
 	Shell: any,
 	Parts: { BasePart },
+	Movers: { [BasePart]: boolean }, -- the rig's parts (posed with the shake, not moved by it)
 	Offset: Vector3, -- the shake now (moved by its change each frame, so the look's own moves stay)
 	Boom: boolean,
 	Start: number,
@@ -109,6 +110,7 @@ function SecretCleanFx.begin(ctx: any)
 		Pivot = nil,
 		Shell = shell,
 		Parts = {},
+		Movers = {},
 		Offset = Vector3.zero,
 		Boom = false,
 		Start = os.clock(),
@@ -119,7 +121,11 @@ function SecretCleanFx.begin(ctx: any)
 		if typeof(center) == "Vector3" then
 			local pivot = CFrame.new(center)
 			state.Pivot = pivot
-			state.Rig = SecretOreFx.rig(shell.Treasure, pivot)
+			local rig = SecretOreFx.rig(shell.Treasure, pivot)
+			state.Rig = rig
+			for _, e in rig.Entries do
+				state.Movers[e.Part] = true
+			end
 		end
 	end
 	if shell and shell.Model then
@@ -136,10 +142,6 @@ function SecretCleanFx.begin(ctx: any)
 		RunService.RenderStepped:Connect(function()
 			local t = os.clock() - state.Start
 			local hold = if state.FinishedAt then math.clamp((os.clock() - state.FinishedAt) / 0.9, 0, 1) else 0
-			-- the ore lives under the dirt (until the look lifts it out at the finish)
-			if state.Rig and state.Pivot and not state.FinishedAt then
-				SecretOreFx.pose(state.Rig, state.Pivot, t, reduced)
-			end
 			-- the shake: harder the cleaner it is, hardest in the hold, none after the BOOM
 			local offset = Vector3.zero
 			if not reduced and not state.Boom and state.Progress > 0.05 then
@@ -147,10 +149,16 @@ function SecretCleanFx.begin(ctx: any)
 				local face: CFrame = ctx.WorkCF
 				offset = face:VectorToWorldSpace(Vector3.new(math.sin(t * 61), math.cos(t * 47), 0)) * amount
 			end
+			-- the ore lives under the dirt, shaking with it (until the look lifts it out at the finish:
+			-- from then on its moving parts move with the rest by the shake's change)
+			local posing = state.Rig ~= nil and state.Pivot ~= nil and not state.FinishedAt
+			if posing and state.Rig and state.Pivot then
+				SecretOreFx.pose(state.Rig, CFrame.new(offset) * state.Pivot, t, reduced)
+			end
 			local delta = offset - state.Offset
 			if delta.Magnitude > 1e-5 then
 				for _, p in state.Parts do
-					if p.Parent then
+					if p.Parent and not (posing and state.Movers[p]) then
 						p.CFrame += delta
 					end
 				end
