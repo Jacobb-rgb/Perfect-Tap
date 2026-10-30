@@ -32,7 +32,7 @@ return function(T, Loader)
 	local function runOf(
 		egg: string,
 		kinds: { string },
-		opts: { Fast: boolean?, Reduced: boolean?, Phone: boolean?, W: number?, H: number? }?
+		opts: { Fast: boolean?, Reduced: boolean?, Phone: boolean?, W: number?, H: number?, Deleted: { [number]: boolean }? }?
 	): (any, any, { number })
 		local o2 = opts or {}
 		local o = CapsuleView.buildOpening(o2.Phone == true)
@@ -60,6 +60,7 @@ return function(T, Loader)
 				claims[1] += 1
 				return true
 			end,
+			Deleted = o2.Deleted,
 		})
 		return o, run, claims
 	end
@@ -77,7 +78,10 @@ return function(T, Loader)
 						label .. ": the burst after the cracks"
 					)
 					T.truthy(tl.Reveal < tl.Fly and tl.Fly < tl.Total, label .. ": the golems, then their flight")
-					T.truthy(tl.Fly - tl.Reveal >= HatchFx.MinShow + tl.Times.GolemPop, label .. ": every golem shows MinShow at least")
+					T.truthy(
+						tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow,
+						label .. ": the last golem's name shows MinShow at least"
+					)
 					-- the last egg is in before the first crack (Open 10's ripple)
 					T.truthy(tl.Steps[1] >= (count - 1) * tl.Stagger + tl.Times.Pop, label .. ": every egg in before it cracks")
 					T.eq(tl.Suspense > 0, order >= 5 and mode ~= "calm", label .. ": the suspense only for a Legendary / Mythic (not calm)")
@@ -100,7 +104,15 @@ return function(T, Loader)
 		local tl = HatchFx.timeline(3, 3, false, false)
 		T.eq(HatchFx.skipTo(0.2, tl, 0), tl.Burst, "a tap while the eggs crack: straight to the burst")
 		T.eq(HatchFx.skipTo(tl.Reveal + 0.1, tl, 0.1), nil, "the golems just came out: not yet")
-		T.eq(HatchFx.skipTo(tl.Reveal + 0.1, tl, tl.Times.GolemPop + HatchFx.MinShow), tl.Fly, "seen: on to their flight")
+		T.eq(HatchFx.skipTo(tl.Reveal + 0.1, tl, HatchFx.namedAt(tl) + HatchFx.MinShow), tl.Fly, "seen: on to their flight")
+		-- Open 10 skipped (review 2026-10-30 LOW 5): the flight waits until the LAST golem's name showed MinShow
+		for _, fast in { false, true } do
+			local ten = HatchFx.timeline(3, 10, fast, false)
+			local named = HatchFx.namedAt(ten)
+			T.eq(HatchFx.skipTo(ten.Reveal + 0.2, ten, named + HatchFx.MinShow - 0.01), nil, "not before slot 10 was readable MinShow")
+			T.eq(HatchFx.golemPose(ten.Reveal + named, ten, 10).Name, 0, "slot 10's name fully shown at namedAt")
+			T.truthy(HatchFx.golemPose(ten.Reveal + named - 0.05, ten, 10).Name > 0, "and not before")
+		end
 		T.eq(HatchFx.skipTo(tl.Fly + 0.1, tl, 2), tl.Fly + 0.1, "the flight: nothing to skip")
 		-- the controller: skip-all waits for MinShow in real time, B / Backspace / A / Space are bound
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
@@ -247,7 +259,7 @@ return function(T, Loader)
 		T.truthy(frame.BackgroundTransparency >= 1 - HatchFx.FlashPeak - 1e-6 and HatchFx.FlashPeak < 1, "never fully opaque")
 		RevealKit.poseFlash(frame, HatchFx.flashU(HatchFx.FlashTime), HatchFx.FlashPeak)
 		T.eq(frame.BackgroundTransparency, 1, "gone in FlashTime")
-		T.truthy(1 / HatchFx.FlashGap <= 2.5 + 1e-9)
+		T.truthy(1 / RevealKit.FlashGap <= 2.5 + 1e-9, "RevealKit's one gap: 2.5 flashes a second at most")
 		T.truthy(HatchFx.FlashTime <= 0.35, "it fades in about 0.3 s (the video)")
 	end)
 
@@ -256,6 +268,8 @@ return function(T, Loader)
 		T.eq(HatchFx.crackColor("Epic", 0, 0, 0), Rarity.ById.Epic.Color, "the rarity's colour")
 		T.truthy(HatchFx.crackColor("Mythic", 0, 0.2, 0) ~= HatchFx.crackColor("Mythic", 0.5, 0.2, 0), "Mythic's rainbow moves")
 		T.truthy(HatchFx.crackColor("Mythic", 0, 0, 0) ~= HatchFx.crackColor("Mythic", 0, 0.5, 0), "and runs along the cracks")
+		-- the suspense whitens the cracks steadily: no pulse (review 2026-10-30 LOW 8: never over 2.5 a second)
+		T.eq(HatchFx.crackColor("Legendary", 1.0, 0.3, 0.8), HatchFx.crackColor("Legendary", 1.07, 0.3, 0.8), "no flicker")
 		-- the network: built once on the opening's eggs, hidden, Neon, flat on the shell, three steps
 		local model = GolemBuilder.capsule("Stone")
 		local before = 0
@@ -367,6 +381,52 @@ return function(T, Loader)
 			end
 		end
 		T.eq(models, 0, "the stage empty: the golems freed, the eggs back in the pool")
+	end)
+
+	T.test("EggOpening: an auto-deleted golem comes out greyed, DELETED under its name, and never flies to the player", function()
+		local kinds = { "RoseKnight", "PebbleGolem", "CopperTinker" }
+		local o, run = runOf("Stone", kinds, { Deleted = { [2] = true } })
+		local tl = run.Timeline
+		local aspect = 1280 / 720
+		HatchStage.pose(run, tl.Reveal + tl.Times.GolemPop + 0.05)
+		local slot: number? = nil
+		for s, on in run.Deleted do
+			if on then
+				slot = s
+			end
+		end
+		T.truthy(slot ~= nil, "the auto-deleted golem has a slot")
+		local gone = slot :: number
+		T.eq(run.Standing[gone].Model:GetAttribute("Kind") or kinds[2], kinds[2], "the PebbleGolem's slot")
+		for s = 1, #kinds do
+			local tag = o.Tags[s]
+			T.truthy(tag.Frame.Visible, `slot {s} named`)
+			T.eq(tag.Deleted.Visible, s == gone, `slot {s}: DELETED only under the auto-deleted one`)
+		end
+		-- greyed (its shape stays, never see-through, no glow)
+		for _, d in run.Standing[gone].Model:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				local c = d.Color
+				T.truthy(math.abs(c.R - c.G) < 0.02 and math.abs(c.B - c.G) < 0.05, d.Name .. ": grey")
+				T.truthy(d.Material ~= roblox.Enum.Material.Neon, d.Name .. ": no glow")
+			end
+		end
+		local function screenOf(s: number): Vector2
+			local at = HatchFx.project(run.Standing[s].Model:GetPivot().Position, aspect)
+			return at
+		end
+		local other = if gone == 1 then 2 else 1
+		local target = Vector2.new(0.5, 0.86)
+		local goneAt, otherAt = screenOf(gone), screenOf(other)
+		local goneDeep = -run.Standing[gone].Model:GetPivot().Position.Z
+		-- the flight: the others go to the player, the auto-deleted one stays where it stood and shrinks away
+		HatchStage.pose(run, tl.Fly + tl.Times.Fly * 0.8)
+		T.truthy(math.abs(screenOf(gone).X - goneAt.X) < 0.01, "it stays where it stood")
+		T.truthy((screenOf(gone) - target).Magnitude > (goneAt - target).Magnitude - 0.03, "never toward the player")
+		T.truthy(-run.Standing[gone].Model:GetPivot().Position.Z > goneDeep * 1.2, "it shrinks away (further off)")
+		T.truthy((screenOf(other) - target).Magnitude < (otherAt - target).Magnitude - 0.05, "the kept ones fly to the player")
+		HatchStage.pose(run, tl.Total)
+		HatchStage.clear(o, HatchStage.golems(run))
 	end)
 
 	T.test("EggOpening: Open 10 with a Legendary (centred, bigger), a Mythic, Reduce motion and Auto all end, named", function()
@@ -493,11 +553,13 @@ return function(T, Loader)
 		T.truthy(string.find(code, 'string.sub(gui.Name, 1, 10) ~= "TerraForge"', 1, true), "only our own guis step away")
 	end)
 
-	T.test("EggOpening: a seventh Rarity (the secret ores' Secret) never reaches the egg screens", function()
+	T.test("EggOpening: a seventh Rarity (the secret ores' Secret) never reaches the egg screens or the stall", function()
 		local beforeRarities = #CapsuleConfig.rarities()
 		local beforeOdds = CapsuleConfig.odds("Crystal", false)
 		local beforeLines = EggPanel.lines("Crystal", false, {})
 		local beforeView = CapsuleView.oddsLines("Crystal", false)
+		local Stall = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Capsules")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 		local secret = {
 			Id = "Secret",
 			Name = "Secret",
@@ -510,41 +572,69 @@ return function(T, Loader)
 			FragileSpots = 4,
 			Reveal = 3,
 		}
-		-- (main's Rarity keeps its Secret in ById only, Order 7: this one goes in the List too, the worst case)
-		local hadSecret = Rarity.ById.Secret
-		table.insert(Rarity.List, secret)
-		Rarity.ById.Secret = secret
-		local ok, err = pcall(function()
-			T.eq(beforeRarities, 6, "the golems' six")
-			T.eq(#CapsuleConfig.rarities(), 6, "still six with a seventh Rarity")
-			-- the stall's board: six rows
-			local board = Instance.new("Frame")
-			CapsuleView.fillBoard(board, "Crystal", false)
-			local rows = 0
-			for _, child in board:GetChildren() do
-				if string.match(child.Name, "^Row%d+$") then
+		-- the stall's odds board: its row labels and its RarityChips
+		local function stallRows(): (number, number, { string })
+			local stall = Instance.new("Model")
+			Stall.build(stall, Rng.new("Lobby/Districts/capsules"))
+			local rows, chips, names = 0, 0, {}
+			for _, d in stall:GetDescendants() do
+				if d.Name == "RarityChip" then
+					chips += 1
+				elseif d:IsA("TextLabel") and string.match(d.Name, "^Row%d+$") then
 					rows += 1
+					table.insert(names, d.Text)
 				end
 			end
-			T.eq(rows, 6, "the board's six rows")
-			-- the odds, the egg panel's cards and the window's rows: unchanged
-			local odds = CapsuleConfig.odds("Crystal", false)
-			T.eq(#odds, #beforeOdds)
-			for i, line in odds do
-				T.eq(line.Golem, beforeOdds[i].Golem)
-				T.eq(line.Chance, beforeOdds[i].Chance)
+			return rows, chips, names
+		end
+		local hadSecret = Rarity.ById.Secret
+		-- main's shape (the secret ores' Secret in ById only, Order 7), then the worst case: in the List too
+		for _, inList in { false, true } do
+			local case = if inList then "Secret in the List too" else "Secret in ById only (main)"
+			if inList then
+				table.insert(Rarity.List, secret)
 			end
-			local lines = EggPanel.lines("Crystal", false, {})
-			T.eq(#lines, #beforeLines, "the panel's cards")
-			local view = CapsuleView.oddsLines("Crystal", false)
-			T.eq(#view, #beforeView, "the window's odds rows")
-			local layout = EggPanel.layout(#lines, false)
-			T.eq(layout.Count, EggPanel.layout(#beforeLines, false).Count, "the panel's layout")
-		end)
-		table.remove(Rarity.List, table.find(Rarity.List, secret))
-		Rarity.ById.Secret = hadSecret
-		if not ok then
-			error(err, 0)
+			Rarity.ById.Secret = if inList then secret else (hadSecret or secret)
+			local ok, err = pcall(function()
+				T.eq(beforeRarities, 6, "the golems' six")
+				T.eq(#CapsuleConfig.rarities(), 6, case .. ": still six")
+				-- the client's board: six rows
+				local board = Instance.new("Frame")
+				CapsuleView.fillBoard(board, "Crystal", false)
+				local rows = 0
+				for _, child in board:GetChildren() do
+					if string.match(child.Name, "^Row%d+$") then
+						rows += 1
+					end
+				end
+				T.eq(rows, 6, case .. ": the board's six rows")
+				-- the stall's own board (Districts/Capsules): six rows, six chips, never "Secret"
+				local stallRowCount, chips, names = stallRows()
+				T.eq(stallRowCount, 6, case .. ": the stall's six rows")
+				T.eq(chips, 6, case .. ": the stall's six chips")
+				T.falsy(table.find(names, "Secret"), case .. ": no Secret row")
+				-- the odds, the egg panel's cards and the window's rows: unchanged
+				local odds = CapsuleConfig.odds("Crystal", false)
+				T.eq(#odds, #beforeOdds)
+				for i, line in odds do
+					T.eq(line.Golem, beforeOdds[i].Golem)
+					T.eq(line.Chance, beforeOdds[i].Chance)
+				end
+				local lines = EggPanel.lines("Crystal", false, {})
+				T.eq(#lines, #beforeLines, case .. ": the panel's cards")
+				local view = CapsuleView.oddsLines("Crystal", false)
+				T.eq(#view, #beforeView, case .. ": the window's odds rows")
+				local layout = EggPanel.layout(#lines, false)
+				T.eq(layout.Count, EggPanel.layout(#beforeLines, false).Count, case .. ": the panel's layout")
+			end)
+			local at = table.find(Rarity.List, secret)
+			if at then
+				table.remove(Rarity.List, at)
+			end
+			Rarity.ById.Secret = hadSecret
+			if not ok then
+				error(err, 0)
+			end
 		end
 	end)
 end

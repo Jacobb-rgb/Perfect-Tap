@@ -45,7 +45,7 @@
 	  three steps, soft blobs of the best colour behind; a Legendary / Mythic
 	  gets a suspense (brighter cracks, a harder shake) and stands centred,
 	  bigger; each egg turns into a glowing silhouette and bursts: ONE flash
-	  in the best colour (RevealFx.claimFlash: never sooner than FlashGap
+	  in the best colour (RevealKit.takeFlash: never sooner than FlashGap
 	  after the last), shell pieces; the golems stand where their eggs were,
 	  HUGE and SOLID (nothing see-through over them: the flash and the
 	  sunburst sit under the stage) on a soft white sunburst with a little
@@ -91,7 +91,7 @@ local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local HatchFx = require(script.Parent.Parent.UI.HatchFx)
 local HatchStage = require(script.Parent.Parent.UI.HatchStage)
-local RevealFx = require(script.Parent.Parent.Effects.RevealFx)
+local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -102,7 +102,8 @@ local StateController = require(script.Parent.StateController)
 local CapsuleController = {}
 
 type Panel = { isOpen: () -> boolean, close: () -> () }
-type Result = { Capsule: string, Count: number, Golems: { { Id: number, Kind: string } }, Lucky: boolean, Free: boolean? }
+-- (a golem Deleted: auto-deleted by the player's trash icon, Id 0, not kept: it shows greyed and stays)
+type Result = { Capsule: string, Count: number, Golems: { { Id: number, Kind: string, Deleted: boolean? } }, Lucky: boolean, Free: boolean? }
 
 CapsuleController.BoardSeconds = 6 -- seconds each capsule's odds stay on the stall's board
 CapsuleController.BoardTick = 1 -- seconds between two checks of the board (Triple Lucky starting / ending)
@@ -705,6 +706,15 @@ function CapsuleController.setAuto(on: boolean, note: string?)
 end
 
 --[[
+	The egg panel's trash icon: auto-delete golems of `kind` from now on
+	(`on`) or not. CapsuleAction "AutoDelete" (the server checks the kind
+	and the cap; the State push shows the change, a refusal is a toast).
+]]
+function CapsuleController.setAutoDelete(kind: string, on: boolean)
+	Net.send("CapsuleAction", "AutoDelete", { Kind = kind, On = on })
+end
+
+--[[
 	What the opening's Auto button does (EggPanelController sets it): is
 	Auto possible here (`available`), and `toggle` it for the egg the player
 	stands at.
@@ -769,7 +779,7 @@ local addedConnection: RBXScriptConnection? = nil
 local HOLD_NAME = "CapsuleOpening"
 
 local function holdControllers(on: boolean)
-	for _, name in { "MiningController", "InteractController" } do
+	for _, name in { "MiningController", "InteractController", "BoostController" } do
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)
@@ -845,7 +855,17 @@ local function hideHud(on: boolean)
 		end
 		table.clear(hiddenGuis)
 	end
-	holdControllers(on)
+	if on then
+		holdControllers(true)
+	else
+		-- (a moment later: the HUD's frames measure again once its scale is back, so the boost
+		-- corner, placed on its release, lands right; a new opening meanwhile keeps the holds)
+		task.delay(0.05, function()
+			if not hudHidden then
+				holdControllers(false)
+			end
+		end)
+	end
 end
 
 -- The world behind softly blurred while an opening plays (a client BlurEffect on the camera).
@@ -879,6 +899,47 @@ local function setBlur(on: boolean)
 end
 
 ---------------------------------------------------------------- the play
+
+-- While an opening plays nothing is selected: a window's key (L1, R1, the D-pad) that opens a
+-- window under the opening (scale 0) would leave a gamepad's A on a button nobody sees.
+local selectionWatch: RBXScriptConnection? = nil
+local function keepNoSelection(on: boolean)
+	if selectionWatch then
+		selectionWatch:Disconnect()
+		selectionWatch = nil
+	end
+	if not on then
+		return
+	end
+	GuiService.SelectedObject = nil
+	selectionWatch = GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+		if playing and GuiService.SelectedObject ~= nil then
+			task.defer(function()
+				if playing then
+					GuiService.SelectedObject = nil
+				end
+			end)
+		end
+	end)
+end
+
+-- The window keys a gamepad has, sunk while an opening plays (A, B and G are the opening's own).
+local SINK_ACTION = "TerraForgeCapsuleSink"
+local SINK_KEYS = {
+	Enum.KeyCode.ButtonL1,
+	Enum.KeyCode.ButtonR1,
+	Enum.KeyCode.ButtonL2,
+	Enum.KeyCode.ButtonR2,
+	Enum.KeyCode.ButtonX,
+	Enum.KeyCode.ButtonY,
+	Enum.KeyCode.DPadUp,
+	Enum.KeyCode.DPadDown,
+	Enum.KeyCode.DPadLeft,
+	Enum.KeyCode.DPadRight,
+}
+local function onSink(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	return if playing then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
+end
 
 --[[
 	The opening of a result (HatchFx, docs/plans/CLICKER_VIDEO_2026-10-29.md
@@ -949,6 +1010,17 @@ end
 	on to their flight once they showed MinShow (real time since they came
 	out: it waits for that); skip-all does both.
 ]]
+-- Which of a result's golems were auto-deleted (index -> true).
+local function deletedOf(result: Result): { [number]: boolean }
+	local out: { [number]: boolean } = {}
+	for i, g in result.Golems do
+		if g.Deleted == true then
+			out[i] = true
+		end
+	end
+	return out
+end
+
 local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local n = math.clamp(#kinds, 1, CapsuleView.StageTags)
 	local phone = compactNow()
@@ -957,13 +1029,20 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 		Capsule = result.Capsule,
 		Lucky = result.Lucky == true,
 		Kinds = kinds,
+		Deleted = deletedOf(result),
 		Eggs = takeEggs(result.Capsule, n, if phone and n > 3 then 2 else 3),
 		Fast = autoOn,
 		Reduced = Motion.reduced(),
 		Phone = phone,
 		Target = playerOnScreen(),
 		Golem = golemModel,
-		Claim = RevealFx.claimFlash,
+		-- (RevealKit's one flash gap for every reveal; Reduce motion: none)
+		Claim = function(): boolean
+			return not Motion.reduced() and RevealKit.takeFlash(os.clock())
+		end,
+		Wait = function(): number
+			return RevealKit.nextFlashAt() - os.clock()
+		end,
 	})
 	local tl = run.Timeline
 	if not tl.Reduced then
@@ -1141,6 +1220,8 @@ local function play(result: Result)
 		Enum.KeyCode.ButtonB
 	)
 	ContextActionService:BindActionAtPriority(AUTO_ACTION, onAuto, false, OPEN_PRIORITY, PromptConfig.keys("Second").Keyboard)
+	ContextActionService:BindActionAtPriority(SINK_ACTION, onSink, false, OPEN_PRIORITY, table.unpack(SINK_KEYS))
+	keepNoSelection(true)
 	local kinds: { string } = {}
 	for _, g in result.Golems do
 		table.insert(kinds, g.Kind)
@@ -1156,6 +1237,8 @@ local function play(result: Result)
 	ContextActionService:UnbindAction(SKIP_ACTION)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
 	ContextActionService:UnbindAction(AUTO_ACTION)
+	ContextActionService:UnbindAction(SINK_ACTION)
+	keepNoSelection(false)
 	playing = false
 	autoNote = nil
 	if #queue == 0 then
@@ -1190,10 +1273,10 @@ local function onResult(payload: any)
 	if type(payload) ~= "table" or type(payload.Capsule) ~= "string" or type(payload.Golems) ~= "table" then
 		return
 	end
-	local golems: { { Id: number, Kind: string } } = {}
+	local golems: { { Id: number, Kind: string, Deleted: boolean? } } = {}
 	for _, g in payload.Golems do
 		if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" and #golems < 10 then
-			table.insert(golems, { Id = g.Id, Kind = g.Kind })
+			table.insert(golems, { Id = g.Id, Kind = g.Kind, Deleted = if g.Deleted == true then true else nil })
 		end
 	end
 	if #golems == 0 then
@@ -1214,6 +1297,13 @@ end
 
 local function onActionResult(payload: any)
 	if type(payload) ~= "table" or payload.Action ~= "Capsule" then
+		return
+	end
+	if payload.Op == "AutoDelete" then
+		-- (the trash icon's answer: the State push shows it; a refusal says why)
+		if payload.Ok ~= true then
+			HudController.toast(CapsuleView.reasonText(payload.Reason), "Deny")
+		end
 		return
 	end
 	freeButton()
@@ -1390,6 +1480,13 @@ function CapsuleController.init()
 		end
 	end)
 	Net.listen("CapsuleResult", onResult)
+	-- (the HUD's toasts hide under an opening: a notice then shows by its Auto button)
+	Net.listen("Notify", function(message: any)
+		local o = opening
+		if playing and o and type(message) == "table" and type(message.Text) == "string" then
+			showNote(o, message.Text)
+		end
+	end)
 	Net.listen("ActionResult", onActionResult)
 	Net.listen("PurchasePrompt", onPurchasePrompt)
 	if StateController.get() then

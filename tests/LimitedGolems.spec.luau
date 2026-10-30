@@ -292,22 +292,5 @@ return function(T, Loader)
 		T.eq(big.Count, 50, "all 50 rolled")
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.MaxSaved, "the inventory takes up to MaxSaved")
 		T.eq(left, 50 - (GolemConfig.MaxSaved - 40), "the rest don't fit")
-		-- the opening shows a card per kind
-		local kinds = {}
-		for _, golem in big.Golems do
-			table.insert(kinds, golem.Kind)
-		end
-		local new = {}
-		local cards, fresh, counts = CapsuleView.summary(kinds, new)
-		T.truthy(#cards <= 6, "at most the six kinds")
-		local total = 0
-		for i, kind in cards do
-			total += counts[i]
-			T.falsy(fresh[i])
-			if i > 1 then
-				T.truthy(GolemConfig.score(cards[i - 1]) >= GolemConfig.score(kind), "rarest first")
-			end
-		end
-		T.eq(total, #kinds, "every golem counted")
 	end)
 end

@@ -77,6 +77,7 @@ local Pop = require(script.Parent.Pop)
 local Confetti = require(script.Parent.Confetti)
 local HatchFx = require(script.Parent.HatchFx)
 local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
+local TrashIcon = require(script.Parent.TrashIcon)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local GolemView = require(script.Parent.GolemView)
 local TechShopView = require(script.Parent.TechShopView)
@@ -189,11 +190,13 @@ export type Refs = {
 	Compact: boolean,
 }
 
--- A golem's name under it in the opening: the NAME and "1 in N" in its rarity's colour (nothing else).
+-- A golem's name under it in the opening: the NAME and "1 in N" in its rarity's colour (an
+-- auto-deleted golem: a trash mark and "DELETED" under them).
 export type Tag = {
 	Frame: Frame,
 	Name: TextLabel,
 	Chance: TextLabel,
+	Deleted: Frame,
 }
 
 export type OpenRefs = {
@@ -393,6 +396,10 @@ function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: 
 	local level = if type(state) == "table" then (if state.PriceLevel ~= nil then state.PriceLevel else state.BlasterLevel) else nil
 	local room = GolemConfig.room(golemsOf(state))
 	local owned = GolemConfig.count(golemsOf(state))
+	-- the kinds the player auto-deletes (the egg panel's trash): a coin egg holding one of them
+	-- may still open with too little room (the server counts only the golems it keeps)
+	local golems = golemsOf(state)
+	local deleting = if type(golems) == "table" and type(golems.AutoDelete) == "table" then golems.AutoDelete else {}
 	local luckySeconds = CapsuleView.luckySeconds(state, now)
 	local lucky = CapsuleView.luckyNow(state, now, stateAt)
 	local cash = num(coins)
@@ -418,7 +425,8 @@ function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: 
 				})
 			else
 				local price = CapsuleConfig.price(capsule.Id, count, level) or math.huge
-				local reason: string? = if room < count then "InventoryFull" elseif cash < price then "NoCoins" else nil
+				local full = room < count and not CapsuleView.deletesAny(capsule.Id, deleting)
+				local reason: string? = if full then "InventoryFull" elseif cash < price then "NoCoins" else nil
 				table.insert(buys, {
 					Count = count,
 					Text = `OPEN {count}`,
@@ -451,9 +459,25 @@ function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: 
 	return cards
 end
 
+-- Does this egg hold a golem the player auto-deletes (`deleting`: State Golems.AutoDelete)?
+function CapsuleView.deletesAny(capsuleId: string, deleting: { [any]: any }): boolean
+	local capsule = CapsuleConfig.ById[capsuleId]
+	if not capsule or capsule.Currency ~= "Coins" then
+		return false
+	end
+	for kind in capsule.Odds do
+		if deleting[kind] == true then
+			return true
+		end
+	end
+	return false
+end
+
 -- Refusals CapsuleConfig.Reasons doesn't list yet (CapsuleService's own).
 CapsuleView.ExtraReasons = {
 	OddsChanged = "The odds just changed: check them and open again",
+	TooMany = "That's the most golems you can auto-delete",
+	BadGolem = "That golem can't be auto-deleted",
 } :: { [string]: string }
 
 -- The text for a refusal (CapsuleConfig.Reasons, MonetizationConfig.StatusText).
@@ -565,11 +589,6 @@ CapsuleView.Paints = {
 
 function CapsuleView.paintOf(capsuleId: string): string
 	return CapsuleView.Paints[capsuleId] or "Pink"
-end
-
--- A button's look: its Pop paint when enabled, else grey (GolemView.style).
-function CapsuleView.style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
-	GolemView.style(button, enabled, color, dark)
 end
 
 --[[
@@ -1608,7 +1627,32 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		name.Position = UDim2.fromScale(0.5, 0)
 		local chance = brightText(holder, "OneIn", 26, 9)
 		chance.Position = UDim2.new(0.5, 0, 0, 40)
-		table.insert(tags, { Frame = holder, Name = name, Chance = chance })
+		-- an auto-deleted golem: a red trash mark and DELETED under its chance
+		local deleted = UIKit.new("Frame", {
+			Name = "Deleted",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundColor3 = BrightTheme.Bad,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(130, 30),
+			Visible = false,
+			ZIndex = 9,
+		}, holder) :: Frame
+		UIKit.corner(deleted, BrightTheme.PillCorner)
+		UIKit.new(
+			"UIStroke",
+			{ Name = "Rim", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = BrightTheme.Outline, Thickness = 2 },
+			deleted
+		)
+		local can = TrashIcon.build(deleted, 22, Color3.new(1, 1, 1), 10)
+		can.AnchorPoint = Vector2.new(0, 0.5)
+		can.Position = UDim2.new(0, 8, 0.5, 0)
+		local word = brightText(deleted, "Word", 18, 10)
+		word.Text = "DELETED"
+		word.AnchorPoint = Vector2.new(0, 0.5)
+		word.Position = UDim2.new(0, 34, 0.5, 0)
+		word.Size = UDim2.new(1, -38, 0, 24)
+		word.TextXAlignment = Enum.TextXAlignment.Left
+		table.insert(tags, { Frame = holder, Name = name, Chance = chance, Deleted = deleted })
 	end
 
 	-- the Auto button (bottom left; touch: above the thumbstick's zone) and its note, in the safe frame
@@ -1853,7 +1897,8 @@ function CapsuleView.setTag(
 	color: Color3,
 	at: Vector2,
 	size: number,
-	room: number?
+	room: number?,
+	deleted: boolean?
 )
 	local tag = refs.Tags[slot]
 	if not tag then
@@ -1879,8 +1924,11 @@ function CapsuleView.setTag(
 			edge.Thickness = CapsuleView.TextEdge(label.TextSize)
 		end
 	end
+	-- (auto-deleted: the trash mark and DELETED under the chance)
+	tag.Deleted.Visible = deleted == true
+	tag.Deleted.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
 	tag.Frame.Position = UDim2.fromOffset(at.X, at.Y)
-	tag.Frame.Size = UDim2.fromOffset(math.max(160, math.min(width, fit * 12)), fit + small + 12)
+	tag.Frame.Size = UDim2.fromOffset(math.max(160, math.min(width, fit * 12)), fit + small + 12 + (if deleted then 36 else 0))
 end
 
 --[[
@@ -1913,12 +1961,6 @@ function CapsuleView.openTargets(refs: OpenRefs): { GuiObject }
 	return { refs.Auto }
 end
 
--- The rarity color of a kind (the rays, the flash, the cell frames).
-function CapsuleView.rarityColor(kind: string): Color3
-	local golem = GolemConfig.ById[kind]
-	return if golem then Rarity.ById[golem.Rarity].Color else Theme.PanelLight
-end
-
 -- The best kind of a batch (highest GolemConfig.score; first on a tie).
 function CapsuleView.best(kinds: { string }): string?
 	local best: string? = nil
@@ -1928,44 +1970,6 @@ function CapsuleView.best(kinds: { string }): string?
 		end
 	end
 	return best
-end
-
--- More golems than this (a limited capsule's x50) show one card per kind with its count.
-CapsuleView.GridMax = 10
-
---[[
-	A big opening as one card per kind (summary of `kinds` / `new`): the
-	kinds rarest first (GolemConfig.score), how many of each woke and
-	whether any of them is NEW.
-]]
-function CapsuleView.summary(kinds: { string }, new: { [number]: boolean }): ({ string }, { [number]: boolean }, { [number]: number })
-	local order: { string } = {}
-	local counts: { [string]: number } = {}
-	local fresh: { [string]: boolean } = {}
-	for i, kind in kinds do
-		if counts[kind] == nil then
-			table.insert(order, kind)
-			counts[kind] = 0
-		end
-		counts[kind] += 1
-		if new[i] then
-			fresh[kind] = true
-		end
-	end
-	table.sort(order, function(a: string, b: string): boolean
-		local sa, sb = GolemConfig.score(a), GolemConfig.score(b)
-		if sa ~= sb then
-			return sa > sb
-		end
-		return a < b
-	end)
-	local outNew: { [number]: boolean } = {}
-	local outCounts: { [number]: number } = {}
-	for i, kind in order do
-		outNew[i] = fresh[kind] == true
-		outCounts[i] = counts[kind]
-	end
-	return order, outNew, outCounts
 end
 
 ---------------------------------------------------------------- the stall's odds board

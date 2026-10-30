@@ -1,8 +1,8 @@
 --[[
 	RevealKit: the drawing parts every "you got it" reveal shares (owner
-	2026-10-29: the secret ores' jackpot now, the egg opening once both are on
-	main: the second to land moves Animace's RevealFx onto this, keeping its
-	API). Pure: a parent + opts in, instances out, poses set transforms and
+	2026-10-29: the secret ores' jackpot, and the egg opening's rings and its
+	one flash, HatchStage / CapsuleController, straight from here: the old
+	Effects/RevealFx is gone). Pure: a parent + opts in, instances out, poses set transforms and
 	colours; the one global thing is the flash gap tracker, so two flashes
 	anywhere in the game are never closer than FlashGap (2.5 a second at most).
 	Reduce motion is the caller's opts flag (Reduced).
@@ -12,8 +12,7 @@
 	  RevealKit.nextFlashAt() -> number    when the next one may (a flash that waits plays then)
 	  RevealKit.word(parent, name, text, size, heavy, z) -> TextLabel
 	  RevealKit.rays(parent, z) -> Rays     three layers of two-tone bars
-	  RevealKit.poseRays(rays, t, grow, leave, opts)   opts.Paint / Count / Back: another
-	                                       reveal's colours and layers (RevealFx's tiers)
+	  RevealKit.poseRays(rays, t, grow, leave, opts)
 	  RevealKit.rings(parent, count, z) -> { Frame }   shockwave rings
 	  RevealKit.poseRing(ring, u, color, opts?)   u = 0..1 through its flight; opts
 	                                       From / Grow / Thickness: a thinner, smaller ring
@@ -131,10 +130,6 @@ export type RayOpts = {
 	Phone: boolean?,
 	Reduced: boolean?,
 	Gold: boolean?, -- the third, gold layer
-	-- (additive, for other reveals: RevealFx's tiers; nil keeps the secret look)
-	Paint: ((layer: string, k: number, count: number, t: number) -> Color3)?, -- a bar's colour ("Front" / "Back")
-	Count: number?, -- front bars shown (default: all; Phone on a phone)
-	Back: boolean?, -- false: no back layer
 }
 
 local function bar(parent: Instance, name: string, width: number, z: number): Frame
@@ -183,32 +178,25 @@ function RevealKit.poseRays(rays: Rays, t: number, grow: number, leave: number, 
 	local reduced = opts.Reduced == true
 	local phone = opts.Phone == true
 	local on = leave < 1
-	local paint = opts.Paint
-	local wanted = opts.Count or #rays.Front
-	local front = math.clamp(if phone then math.min(wanted, style.Rays.Phone) else wanted, 1, #rays.Front)
+	local front = if phone then style.Rays.Phone else #rays.Front
 	for k, frame in rays.Front do
 		local show = on and k <= front
 		frame.Visible = show
 		if show then
 			frame.Rotation = (k - 1) * 180 / front + (if reduced then 0 else t * style.Rays.Front.Speed)
 			frame.Size = UDim2.fromOffset(style.Rays.Front.Width, style.RayLength * grow)
-			frame.BackgroundColor3 = if paint
-				then paint("Front", k, front, t)
-				elseif k % 2 == 1 then style.Dark
-				else RevealKit.hue((k - 1) / front + t * style.Rays.HueDrift)
+			frame.BackgroundColor3 = if k % 2 == 1 then style.Dark else RevealKit.hue((k - 1) / front + t * style.Rays.HueDrift)
 			frame.BackgroundTransparency = leave
 		end
 	end
 	local back = style.Rays.Back
 	for k, frame in rays.Back do
-		local show = on and not phone and opts.Back ~= false
+		local show = on and not phone
 		frame.Visible = show
 		if show then
 			frame.Rotation = (k - 0.5) * 180 / #rays.Back + (if reduced then 0 else t * back.Speed)
 			frame.Size = UDim2.fromOffset(back.Width, style.RayLength * back.Length * grow)
-			frame.BackgroundColor3 = if paint
-				then paint("Back", k, #rays.Back, t)
-				else RevealKit.hue((k - 1) / #rays.Back + 0.5 + t * style.Rays.HueDrift)
+			frame.BackgroundColor3 = RevealKit.hue((k - 1) / #rays.Back + 0.5 + t * style.Rays.HueDrift)
 			frame.BackgroundTransparency = back.Transparency + (1 - back.Transparency) * leave
 		end
 	end

@@ -110,7 +110,7 @@ return function(T, Loader)
 					T.eq(line.Chance, table_[i].Chance, `{id} {lucky} {line.Golem}: the exact chance`)
 					T.eq(line.Chance, window[i].Chance, `{id} {lucky} {line.Golem}: the window's chance`)
 					T.eq(line.Rarity, GolemConfig.ById[line.Golem].Rarity)
-					T.eq(line.Text, EggPanel.chanceText(line.Chance))
+					T.eq(line.Text, BrightTheme.chanceText(line.Chance), "the card's text: the bright look's")
 					T.eq(
 						line.Lucky,
 						lucky and GolemConfig.order(line.Golem) >= from,
@@ -145,27 +145,27 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("EggPanel: chance and price texts (three significant digits, three decimals at most)", function()
-		T.eq(EggPanel.chanceText(0.45), "45%")
-		T.eq(EggPanel.chanceText(0.64), "64%")
-		T.eq(EggPanel.chanceText(0.205), "20.5%")
-		T.eq(EggPanel.chanceText(0.125), "12.5%")
-		T.eq(EggPanel.chanceText(0.0255), "2.55%")
-		T.eq(EggPanel.chanceText(0.0028), "0.28%")
-		T.eq(EggPanel.chanceText(0.0003), "0.03%")
-		T.eq(EggPanel.chanceText(0.06), "6%")
-		T.eq(EggPanel.chanceText(1), "100%")
-		T.eq(EggPanel.chanceText(0), "0%")
-		T.eq(EggPanel.chanceText(0 / 0), "0%", "junk")
-		T.eq(EggPanel.chanceText(1e-7), "<0.001%", "a golem that can come out never reads 0%")
+	T.test("EggPanel: chance and price texts (the cards: two decimals at most, 1 in N under 0.1 %)", function()
+		-- (the owner's clicker video: "46.33%", "6.5%", "1 in 3,333"; BrightTheme.chanceText)
+		T.eq(BrightTheme.chanceText(0.4633), "46.33%")
+		T.eq(BrightTheme.chanceText(0.45), "45%")
+		T.eq(BrightTheme.chanceText(0.065), "6.5%")
+		T.eq(BrightTheme.chanceText(0.001), "0.1%")
+		T.eq(BrightTheme.chanceText(0.0003), "1 in 3,333")
+		T.eq(BrightTheme.chanceText(1), "100%")
+		T.eq(BrightTheme.chanceText(0), "-")
+		T.eq(BrightTheme.chanceText(0 / 0), "-", "junk")
 		for _, id in TEMPLE do
 			for _, lucky in { false, true } do
 				for _, line in EggPanel.lines(id, lucky, {}) do
-					local digits = string.gsub(string.match(line.Text, "^[%d%.]+") or "", "%.", "")
-					digits = string.gsub(digits, "^0+", "")
-					T.truthy(#digits >= 1 and #digits <= 3, `{line.Text}: at most three significant digits`)
-					local decimals = string.match(line.Text, "%.(%d+)%%$")
-					T.truthy(decimals == nil or #decimals <= 3, `{line.Text}: at most three decimals`)
+					T.truthy(line.Text ~= "-" and line.Text ~= "0%", `{line.Golem}: a golem that can come out never reads 0`)
+					if line.Chance < BrightTheme.OneInBelow then
+						T.truthy(string.match(line.Text, "^1 in [%d,]+$") ~= nil, `{line.Text}: "1 in N" under 0.1 %`)
+					else
+						local decimals = string.match(line.Text, "%.(%d+)%%$")
+						T.truthy(string.match(line.Text, "^[%d%.]+%%$") ~= nil, `{line.Text}: a percentage`)
+						T.truthy(decimals == nil or #decimals <= 2, `{line.Text}: two decimals at most`)
+					end
 				end
 			end
 		end
@@ -287,8 +287,9 @@ return function(T, Loader)
 			T.truthy(card.Name.Size.Y.Offset == l.NameH and l.NameH >= 2 * l.NameSize, "two lines")
 			T.truthy(card.Chance.Position.Y.Offset <= l.CardH - l.NameH + 2, "the chance over the name")
 		end
-		-- readable: 8 pt on a phone, every word of every name fits its card's width in the round font
-		local width = fontWidth(Loader.root .. "/tools/preview/fonts/Montserrat-Bold.ttf")
+		-- readable: 8 pt on a phone, every word of every name fits its card's width in the bright look's font
+		-- (BrightTheme.Font, FredokaOne: the preview's copy)
+		local width = fontWidth(Loader.root .. "/tools/preview/fonts/FredokaOne-Regular.ttf")
 		for _, touch in { false, true } do
 			local l = EggPanel.layout(14, touch)
 			T.truthy(l.NameSize * EggPanel.PhoneScale >= 8, "the name 8 pt on a phone")
@@ -307,7 +308,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.truthy(width("Moonstone", 13) > 70, "the measure is the font's (Moonstone ~77 units at 13)")
+		T.truthy(width("Moonstone", 13) > 65, "the measure is the font's (Moonstone ~70 units at 13)")
 		-- a TV (all-platforms: 18 px and more at 1080p, the HUD's scale 1.25 there): names and the x3 grow
 		local tv = EggPanel.layout(14, false, true, { TenFoot = true })
 		local hud = 1.25
@@ -316,13 +317,12 @@ return function(T, Loader)
 		for _, word in { "Moonstone", "Heartstone", "Celestial", "Sovereign" } do
 			T.truthy(width(word, tv.NameSize) <= tv.Card - 2, word .. " fits a TV card")
 		end
-		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
-		T.truthy(math.floor(tv.LuckySize * PopTheme.PixelScale + 0.5) * hud >= 18, "the x3 18 px on a TV")
-		T.truthy(math.floor(tv.ChanceSize * PopTheme.PixelScale + 0.5) * hud >= 18, "the chance 18 px on a TV")
+		T.truthy(tv.LuckySize * hud >= 18, "the x3 18 px on a TV")
+		T.truthy(tv.ChanceSize * hud >= 18, "the chance 18 px on a TV")
 		local tvRefs = EggPanel.build()
 		EggPanel.apply(tvRefs, "Stone", tv, hud)
-		local fit = tvRefs.Cards[1].Lucky:FindFirstChildOfClass("UITextSizeConstraint")
-		T.truthy(fit and fit.MaxTextSize * hud >= 18, "applied: the x3's size")
+		T.eq(tvRefs.Cards[1].Lucky.TextSize, tv.LuckySize, "applied: the x3's size")
+		T.eq(tvRefs.Cards[1].Chance.TextSize, tv.ChanceSize, "applied: the chance's size")
 		T.eq(tvRefs.Cards[1].Name.TextSize, tv.NameSize, "applied: the name's size")
 		T.falsy(EggPanel.layout(14, true, true, { TenFoot = true }).TenFoot, "a touch screen isn't a TV")
 	end)
@@ -339,14 +339,17 @@ return function(T, Loader)
 				local l = EggPanel.layout(count, touch)
 				T.eq(l.Height, l.Title + l.Body)
 				T.eq(l.Rows * l.Columns >= count, true, "room for every card")
+				-- (PC: no opens in the panel, they stand round the big E: the cards end over the panel's foot)
+				local foot = if touch then l.OpenY - l.OpenGap else l.Body - l.Pad
 				for i = 1, count do
 					local at = EggPanel.cardAt(l, i)
 					T.truthy(at.X >= l.Pad - 0.01 and at.X + l.Card <= l.Width - l.Pad + 0.01, `{id} card {i}: inside left / right`)
 					T.truthy(
-						at.Y >= l.Pad + l.Head and at.Y + l.CardH <= l.OpenY - l.OpenGap + 0.01,
-						`{id} card {i}: under the head row, above the opens`
+						at.Y >= l.Pad + l.Head and at.Y + l.CardH <= foot + 0.01,
+						`{id} card {i}: under the head row, above the opens (touch) or the foot (PC)`
 					)
 				end
+				T.truthy(l.Picture >= (if touch then 44 else 72), `{id}: a big golem picture ({l.Picture})`)
 				if touch then
 					T.truthy(l.Toggle.Y * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, `{id}: Auto is 44 pt on a phone`)
 				end
@@ -581,10 +584,10 @@ return function(T, Loader)
 		T.truthy(string.find(controller, "UnbindAction(OPEN3_ACTION)", 1, true), "and are unbound when the panel goes")
 	end)
 
-	T.test("EggPanel: the opens' layout (under the cards, inside the panel, 44 pt on phones)", function()
+	T.test("EggPanel: the opens' layout (touch: under the cards, 44 pt; PC: round the big E)", function()
 		for _, id in TEMPLE do
 			local count = #EggPanel.lines(id, false, {})
-			for _, touch in { false, true } do
+			for _, touch in { true } do
 				local l = EggPanel.layout(count, touch)
 				local lastCard = EggPanel.cardAt(l, count)
 				for i = 1, #CapsuleConfig.Counts do
@@ -602,9 +605,14 @@ return function(T, Loader)
 		local refs = EggPanel.build()
 		T.eq(#refs.Opens, #CapsuleConfig.Counts)
 		EggPanel.apply(refs, "Stone", EggPanel.layout(14, true), EggPanel.PhoneScale)
-		for _, target in EggPanel.touchTargets(refs) do
-			T.truthy(target.Size.Y.Offset * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, target.Name .. ": 44 pt")
+		local targets = EggPanel.touchTargets(refs)
+		local trashes = 0
+		for _, target in targets do
+			T.truthy(target.Size.Y.Offset * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, target.Name .. ": 44 pt high")
+			T.truthy(target.Size.X.Offset * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, target.Name .. ": 44 pt wide")
+			trashes += if target.Name == "Trash" then 1 else 0
 		end
+		T.eq(trashes, math.min(14, EggPanel.MaxCards), "every card's trash is a 44 pt target (the whole card on touch)")
 		EggPanel.setOpens(refs, {
 			{ Count = 1, Robux = false, Price = "2,500", Enabled = true },
 			{ Count = 3, Robux = false, Price = "7,500", Enabled = false, Reason = "NoCoins" },
@@ -621,6 +629,58 @@ return function(T, Loader)
 		for _, f in refs.Fades do
 			T.falsy(f.Target:GetAttribute("NoFade"), f.Target.Name .. " fades")
 		end
+		-- PC and gamepads: no opens in the panel; they stand round the big E (owner's clicker video):
+		-- Open 1 left of the disc (green, E), Open 3 under it (orange, R), Open 10 right (purple, X)
+		local specs = {
+			{ Count = 1, Robux = false, Price = "2,500", Enabled = true },
+			{ Count = 3, Robux = false, Price = "7,500", Enabled = true },
+			{ Count = 10, Robux = false, Price = "25K", Enabled = true },
+		}
+		EggPanel.apply(refs, "Stone", EggPanel.layout(14, false), 1)
+		EggPanel.setOpens(refs, specs, EggPanel.OpenKeys, nil)
+		for _, open in refs.Opens do
+			T.falsy(open.Button.Visible, `PC: no Open {open.Count} in the panel`)
+		end
+		local p = EggPrompt.build()
+		EggPrompt.setCluster(p, true)
+		EggPrompt.setOpens(p, specs, EggPanel.OpenKeys, nil)
+		local function boxOf(g: any): any
+			local size = Vector2.new(g.Size.X.Offset, g.Size.Y.Offset)
+			local at = Vector2.new(g.Position.X.Offset, g.Position.Y.Offset)
+				- Vector2.new(g.AnchorPoint.X * size.X, g.AnchorPoint.Y * size.Y)
+			return { Min = at, Max = at + size }
+		end
+		local disc = boxOf(p.Disc)
+		local by: { [number]: any } = {}
+		for _, open in p.Opens do
+			local b = boxOf(open.Button)
+			by[open.Count] = b
+			T.truthy(open.Button.Visible, `Open {open.Count} round the E`)
+			T.truthy(b.Min.X >= 0 and b.Min.Y >= 0 and b.Max.X <= EggPrompt.Width and b.Max.Y <= EggPrompt.Height, "inside the billboard")
+			T.eq(EggPanel.overlap(b, disc), 0, `Open {open.Count} clear of the disc`)
+			local paint = open.Button:FindFirstChild("Paint")
+			T.eq(paint.Color.Keypoints[1].Value, BrightTheme.Paints[EggPanel.OpenPaints[open.Count]].Top, "its paint")
+			T.eq(open.KeyText.Text, EggPanel.OpenKeys[open.Count], "its key")
+		end
+		T.truthy(by[1].Max.X <= disc.Min.X, "Open 1 left of the E")
+		T.truthy(by[10].Min.X >= disc.Max.X, "Open 10 right of it")
+		T.truthy(by[3].Min.Y >= disc.Max.Y, "Open 3 under it")
+		T.truthy(p.Title.Position.Y.Offset <= disc.Min.Y, '"Buy Egg!" above the E')
+		T.eq(EggPanel.OpenPaints[1], "Green")
+		T.eq(EggPanel.OpenPaints[3], "Orange")
+		T.eq(EggPanel.OpenPaints[10], "Purple")
+		-- a gamepad walks round them: Open 1 -> Open 10 (right), Open 3 under both
+		T.eq(by[1] and p.Opens[1].Button.NextSelectionRight, p.Opens[3].Button, "Open 1 -> Open 10")
+		T.eq(p.Opens[1].Button.NextSelectionDown, p.Opens[2].Button, "Open 1 -> Open 3")
+		T.eq(p.Opens[2].Button.NextSelectionUp, p.Opens[1].Button, "Open 3 -> Open 1")
+		-- touch: the disc alone with its price under it (the floating panel has the opens)
+		EggPrompt.setCluster(p, false)
+		for _, open in p.Opens do
+			T.falsy(open.Button.Visible, "touch: no opens round the E")
+		end
+		T.truthy(p.Price.Visible, "touch: the price under the disc")
+		T.eq(EggPrompt.size(false), EggPrompt.Single)
+		T.eq(EggPrompt.size(true), Vector2.new(EggPrompt.Width, EggPrompt.Height))
 	end)
 
 	T.test("EggPanel: the big round E (a 44 pt target on phones, its keys, its fade)", function()
@@ -1089,6 +1149,7 @@ return function(T, Loader)
 			holds = {},
 			tweens = {},
 			renders = {},
+			deletes = {},
 		}
 		setmetatable(me.Root, {
 			__index = function(_, key)
@@ -1273,6 +1334,13 @@ return function(T, Loader)
 			},
 			{
 				CapsuleController,
+				"setAutoDelete",
+				function(kind, on)
+					table.insert(w.deletes, { Kind = kind, On = on })
+				end,
+			},
+			{
+				CapsuleController,
 				"openingState",
 				function()
 					return w.opening, w.endFor
@@ -1409,6 +1477,10 @@ return function(T, Loader)
 					local inner, problem = pcall(body, C, w)
 					w.opening = "Idle"
 					w.leave()
+					-- (Roblox hides a prompt out of reach: PromptHidden, which Lune can't fire)
+					for id in C._test.state().Spots do
+						C._test.unprompt(id)
+					end
 					if not inner then
 						error(problem, 0)
 					end
@@ -1429,6 +1501,15 @@ return function(T, Loader)
 			T.truthy(s.Reach, "at its prompt: in reach")
 			T.truthy(s.Refs.Gui.Enabled)
 			T.eq(s.Refs.Opens[1].KeyText.Text, "E", "the keys' badges show in reach")
+			-- PC: the opens stand round the big E (its prompt shows in reach), with their keys
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
+			s = C._test.state()
+			T.truthy(s.Prompt.Cluster, "PC: the opens round the E")
+			for i, open in s.Prompt.Opens do
+				T.truthy(open.Button.Visible, `Open {open.Count} shows round the E`)
+				T.eq(open.KeyText.Text, EggPanel.OpenKeys[open.Count])
+				T.falsy(s.Refs.Opens[i].Button.Visible, "and not in the panel")
+			end
 			-- the panel's buttons and keys
 			C.open("Stone", 10)
 			T.eq(#w.buys, 1)
@@ -1591,24 +1672,27 @@ return function(T, Loader)
 		withController(function(C, w)
 			w.gamepad = true
 			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Gamepad)
 			local s = C._test.state()
 			T.eq(s.Current, "Stone")
 			T.eq(w.selected, nil, "the panel came up and selected nothing: the stick still walks")
 			T.eq(w.actions.TerraForgeEggFocusKey, C.FocusKey, "the focus button is bound")
-			T.eq(s.Refs.Opens[2].KeyText.Text, C.FocusKey.Name, "Open 3's badge: the focus button")
-			T.eq(s.Refs.Opens[3].KeyText.Text, C.FocusKey.Name, "Open 10's badge")
+			T.eq(s.Prompt.Opens[2].KeyText.Text, C.FocusKey.Name, "Open 3's badge: the focus button")
+			T.eq(s.Prompt.Opens[3].KeyText.Text, C.FocusKey.Name, "Open 10's badge")
 			-- out of reach the focus button keeps its usual job
 			w.at("Stone", EggPanel.PromptDistance + 0.5)
 			local result = w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
 			T.eq(result, Enum.ContextActionResult.Pass, "not in reach: passed on")
 			T.eq(w.selected, nil)
-			-- in reach: Open 1 is selected, the D-pad walks to Open 3 / 10, Auto's prompt (B) rests
+			-- in reach: Open 1 round the E is selected, the D-pad walks to Open 10 / 3 and up to the cards' trash and Auto
 			w.at("Stone")
 			result = w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
 			T.eq(result, Enum.ContextActionResult.Sink)
-			T.eq(w.selected, s.Refs.Opens[1].Button, "Open 1 selected")
-			T.eq(s.Refs.Opens[1].Button.NextSelectionRight, s.Refs.Opens[2].Button, "the D-pad: Open 3")
-			T.eq(s.Refs.Opens[2].Button.NextSelectionRight, s.Refs.Opens[3].Button, "then Open 10")
+			T.eq(w.selected, s.Prompt.Opens[1].Button, "Open 1 (round the E) selected")
+			T.eq(s.Prompt.Opens[1].Button.NextSelectionRight, s.Prompt.Opens[3].Button, "the D-pad: Open 10 right")
+			T.eq(s.Prompt.Opens[1].Button.NextSelectionDown, s.Prompt.Opens[2].Button, "Open 3 under it")
+			T.eq(s.Prompt.Opens[1].Button.NextSelectionUp, s.Refs.Toggle, "up: Auto (no golem found yet: no trash)")
+			T.eq(s.Refs.Toggle.NextSelectionDown, s.Prompt.Opens[3].Button, "and back down")
 			T.falsy(s.Spots.Stone.Auto.Enabled, "B lets go here, it doesn't toggle Auto")
 			T.truthy(w.actions.TerraForgeEggRelease ~= nil, "B is bound")
 			-- B lets go
@@ -1619,7 +1703,7 @@ return function(T, Loader)
 			T.truthy(s.Spots.Stone.Auto.Enabled, "Auto's prompt back")
 			-- walking away lets go too
 			w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
-			T.eq(w.selected, s.Refs.Opens[1].Button)
+			T.eq(w.selected, s.Prompt.Opens[1].Button)
 			w.leave()
 			T.eq(w.selected, nil, "walked away: let go")
 			T.eq(w.actions.TerraForgeEggFocus, nil, "and the focus button is free again")
@@ -1682,12 +1766,13 @@ return function(T, Loader)
 			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
 			w.camZ, w.camAt = 10, Vector3.zero
 			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Gamepad)
 			local s = C._test.state()
 			T.truthy(s.Reach, "in reach, the panel on the screen")
 			T.eq(s.Refs.KeyText.Text, "ButtonB", "Auto's badge: B (its prompt's)")
 			-- the panel takes the selection: B lets go there, so Auto's badge rests
 			w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
-			T.eq(w.selected, s.Refs.Opens[1].Button)
+			T.eq(w.selected, s.Prompt.Opens[1].Button)
 			T.falsy(s.Refs.Key.Visible, "focused: no B on Auto (A presses the selected button)")
 			w.actions.TerraForgeEggRelease("TerraForgeEggRelease", Enum.UserInputState.Begin)
 			T.truthy(s.Refs.Key.Visible, "let go: B toggles Auto again")
@@ -1705,6 +1790,165 @@ return function(T, Loader)
 			w.camZ = 10
 			C._test.tick()
 			T.truthy(C._test.state().Reach, "back on the screen")
+		end)
+	end)
+
+	T.test("EggPanelController: A on a focused open while an egg opens buys nothing (review HIGH 1)", function()
+		withController(function(C, w)
+			w.gamepad = true
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Gamepad)
+			local s = C._test.state()
+			w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
+			T.eq(w.selected, s.Prompt.Opens[1].Button, "focused: Open 1 round the E")
+			C.open("Stone", 1)
+			local before = #w.buys
+			T.eq(before, 1, "A buys while nothing opens")
+			-- an egg opens: the panel veils, the selection is let go
+			w.opening = "Playing"
+			hooks.onPlaying(true)
+			T.eq(w.selected, nil, "the opening let go of the selection")
+			T.eq(w.actions.TerraForgeEggRelease, nil, "B is the opening's again")
+			-- A on the button anyway (what its Activated calls): no buy is sent
+			C.open("Stone", 1)
+			C.open("Stone", 10)
+			T.eq(#w.buys, before, "no buy while an egg opens")
+			-- R / X and the focus button pass on (the opening's own keys), selecting nothing
+			local r3 = w.actions.TerraForgeEggOpen3("TerraForgeEggOpen3", Enum.UserInputState.Begin)
+			T.eq(r3, Enum.ContextActionResult.Pass, "R passes during the opening")
+			local f = w.actions.TerraForgeEggFocus("TerraForgeEggFocus", Enum.UserInputState.Begin)
+			T.eq(f, Enum.ContextActionResult.Pass, "D-pad Up selects nothing under the opening")
+			T.eq(w.selected, nil)
+			T.eq(#w.buys, before)
+			-- the opening is over: the panel is back and buys again
+			w.opening = "Idle"
+			hooks.onPlaying(false)
+			C.open("Stone", 1)
+			T.eq(#w.buys, before + 1, "after the opening it buys again")
+		end)
+	end)
+
+	T.test("EggPanelController: a card's trash asks first, then auto-deletes its golem; off at once; never on a Robux egg", function()
+		withController(function(C, w)
+			local kind = CapsuleConfig.odds("Stone", false)[1].Golem
+			w.state.Golems.Owned = { { Id = 1, Kind = kind } }
+			hooks.onChanged()
+			w.at("Stone")
+			local s = C._test.state()
+			local index = nil
+			for i, line in s.Lines do
+				if line.Golem == kind then
+					index = i
+				end
+				-- a silhouette (a golem not found yet) has no trash
+				T.eq(s.Refs.Cards[i].Trash.Visible, not line.Silhouette, line.Golem .. ": a trash only on a found golem")
+			end
+			T.truthy(index ~= nil, "the found golem's card")
+			local i = index :: number
+			local card = s.Refs.Cards[i]
+			T.truthy(card.Trash.Visible, "a coin egg's found golem: its trash")
+			T.falsy(card.Confirm.Visible)
+			-- first click: it asks
+			C._test.trash(i)
+			T.truthy(card.Confirm.Visible, 'first click: "AUTO-DELETE?"')
+			T.eq(#w.deletes, 0, "nothing sent yet")
+			-- second click: on (red), sent to the server
+			C._test.trash(i)
+			T.eq(#w.deletes, 1)
+			T.eq(w.deletes[1].Kind, kind)
+			T.eq(w.deletes[1].On, true)
+			T.falsy(card.Confirm.Visible)
+			T.eq(card.TrashDisc.BackgroundColor3, BrightTheme.Bad, "red while on")
+			-- the server's State push keeps it on
+			w.state.Golems.AutoDelete = { [kind] = true }
+			hooks.onChanged()
+			T.truthy(C._test.state().Deleting[kind], "the State's set")
+			T.eq(card.TrashDisc.BackgroundColor3, BrightTheme.Bad)
+			-- a change the State never takes (refused) shows the old state again once its wait is over
+			patched({ { C, "TrashWait", -1 } }, function()
+				C._test.trash(i)
+				T.eq(#w.deletes, 2)
+				T.eq(w.deletes[2].On, false)
+				T.eq(card.TrashDisc.BackgroundColor3, BrightTheme.Bad, "the State still says on: red again")
+			end)
+			-- one click turns it off
+			C._test.trash(i)
+			T.eq(#w.deletes, 3)
+			T.eq(w.deletes[3].On, false, "off at once, no question")
+			T.eq(card.TrashDisc.BackgroundColor3, EggPanel.TrashOff)
+			T.eq(card.TrashDisc.BackgroundTransparency, 0, "opaque either way (the panel's fade lerps from it)")
+			-- never while an egg opens
+			w.opening = "Playing"
+			hooks.onPlaying(true)
+			C._test.trash(i)
+			C._test.trash(i)
+			T.eq(#w.deletes, 3, "the trash rests during an opening")
+			w.opening = "Idle"
+			hooks.onPlaying(false)
+			-- an auto-deleted golem the player has none of stays found: its card in colour, its trash red
+			w.state.Golems.Owned = {}
+			hooks.onChanged()
+			s = C._test.state()
+			T.falsy(s.Lines[i].Silhouette, "auto-deleted: still discovered")
+			T.truthy(s.Refs.Cards[i].Trash.Visible)
+			-- a Robux egg: no trash at all (never a paid golem)
+			w.at("Royal")
+			s = C._test.state()
+			T.eq(s.Current, "Royal")
+			for j, line in s.Lines do
+				T.falsy(line.Trash, line.Golem .. ": no trash on a Robux egg")
+				T.falsy(s.Refs.Cards[j].Trash.Visible)
+			end
+			w.state.Golems.AutoDelete = nil
+		end)
+	end)
+
+	T.test("EggPanelController: on touch the opens stay in the floating panel (the E alone), 44 pt", function()
+		withController(function(C, w)
+			w.touch = true
+			w.scale = EggPanel.PhoneScale
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Touch)
+			local s = C._test.state()
+			T.falsy(s.Prompt.Cluster, "touch: the disc alone")
+			for i, open in s.Prompt.Opens do
+				T.falsy(open.Button.Visible, "no opens round the E on touch")
+				T.truthy(s.Refs.Opens[i].Button.Visible, "they are in the panel's row")
+				T.truthy(s.Refs.Opens[i].Button.Size.Y.Offset * EggPanel.PhoneScale >= EggPanel.MinTouch - 0.5, "44 pt")
+			end
+			T.truthy(s.Prompt.Price.Visible, "the price under the disc")
+			w.touch = false
+			w.scale = nil
+		end)
+	end)
+
+	T.test("EggPanelController: on PC the panel stays on the screen (down under the top bar, never over the big E)", function()
+		withController(function(C, w)
+			w.view, w.camY = Vector2.new(1280, 900), 300
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			-- the panel up, out of the prompt's reach (no big E): its top would be off the screen
+			w.at("Stone", EggPanel.PromptDistance + 0.5)
+			local s = C._test.state()
+			local float = w.renders.TerraForgeEggPanelFloat
+			T.truthy(float ~= nil, "PC: kept on the screen every frame while it shows")
+			float()
+			local h = s.Refs.Gui.Size.Y.Offset
+			T.truthy(300 - h < 0, "(over the egg its top would be off the screen)")
+			local top = 300 - h * (0.5 + s.Refs.Gui.SizeOffset.Y)
+			T.near(top, EggPanel.Margin, 1, "it moved down: its top just under the top bar")
+			-- far enough down the screen: over the egg as always
+			w.camY = 700
+			float()
+			T.near(s.Refs.Gui.SizeOffset.Y, 0.5, 1e-6, "its bottom edge on the egg's top")
+			-- the big E up under it: the panel never moves down over its opens
+			w.camY = 300
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
+			float()
+			T.near(s.Refs.Gui.SizeOffset.Y, 0.5, 1e-6, "no room over the big E: it stays")
+			w.leave()
+			T.eq(w.renders.TerraForgeEggPanelFloat, nil, "unbound when the panel goes")
 		end)
 	end)
 

@@ -5,12 +5,17 @@
 	Custom on that prompt only, EggPanel.BigE: the keys, the hold and
 	the trigger stay Roblox's own).
 
-	        Buy Egg!          white, a dark edge
-	      .--------.
-	     (    E     )         a big white disc, a thick dark ring, a big E
-	      '--------'          (a gamepad: its button's glyph; touch: "Tap")
-	        $2,500            the price under it
+	                 Buy Egg!                 white, a dark edge
+	              .--------.
+	  [Open 1  E] (    E     ) [Open 10 X]    a big white disc, a thick dark ring, a big E
+	   2,500      '--------'    22.5K         (a gamepad: its button's glyph; touch: "Tap")
+	              [Open 3  R]                 the opens round it (owner's clicker video
+	                 7,500                    2026-10-29): Open 1 left (green), Open 3 under
+	                                          it (orange), Open 10 right (purple), their prices
 
+	- The opens round the disc on PC and gamepads (setCluster true); on
+	  touch the panel floats with its own row of opens (EggPanel), so the
+	  disc stands alone there with the price under it (setCluster false).
 	- Cool: a soft ring of light behind the disc that breathes (Glow,
 	  GlowScale: EggPanel.GlowPeriod), a light band sweeping across the disc
 	  now and then (Shine: a UIGradient Offset, ShineEvery seconds apart) and a
@@ -27,6 +32,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local PopTheme = require(Shared.Config.PopTheme)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
@@ -36,8 +42,11 @@ local EggPrompt = {}
 
 EggPrompt.Disc = 96 -- the white disc (design units)
 EggPrompt.GlowSize = 136 -- the ring of light behind it
-EggPrompt.Width = 220
-EggPrompt.Height = 206
+EggPrompt.Pill = Vector2.new(132, 58) -- an open round the disc
+EggPrompt.Width = 392 -- (the billboard: the disc in its middle, the opens round it)
+EggPrompt.Height = 234
+EggPrompt.Single = Vector2.new(220, 206) -- the disc alone (touch): what the floating panel must not cover
+EggPrompt.DiscLift = 11 -- design units the disc sits over the billboard's middle (the prompt's point)
 EggPrompt.ShineEvery = 2.6 -- seconds from one sweep to the next (EggPanelController)
 EggPrompt.ShineTime = 0.55
 
@@ -58,6 +67,8 @@ export type Refs = {
 	GlowRing: UIStroke,
 	GlowScale: UIScale,
 	Price: TextLabel,
+	Opens: { EggPanel.Open }, -- Open 1 left, Open 3 under the disc, Open 10 right
+	Cluster: boolean, -- the opens show (PC, gamepads); false: the disc alone (touch)
 	Fades: { EggPanel.Fade },
 }
 
@@ -82,12 +93,15 @@ function EggPrompt.build(): Refs
 		Size = UDim2.fromOffset(EggPrompt.Width, EggPrompt.Height),
 	}, gui) :: Frame
 	local scale = UIKit.new("UIScale", { Name = "Fit", Scale = 1 }, root) :: UIScale
+	-- (the disc a little over the prompt's point, as before the opens came: the billboard is centred on the point)
+	local discY = EggPrompt.Height / 2 - EggPrompt.DiscLift
 	local title = Pop.text(root, "Buy Egg!", 28, {
 		Name = "Title",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromOffset(0, discY - EggPrompt.Disc / 2 - 6),
 		Size = UDim2.new(1, 0, 0, 36),
 		ZIndex = 6,
 	})
-	local discY = 36 + 8 + EggPrompt.Disc / 2
 	-- the ring of light: a thick soft stroke round an empty circle, breathing
 	local glow = UIKit.new("Frame", {
 		Name = "Glow",
@@ -164,6 +178,39 @@ function EggPrompt.build(): Refs
 		Size = UDim2.fromOffset(EggPrompt.Width, 32),
 		ZIndex = 6,
 	})
+	-- the opens round the disc: Open 1 left, Open 3 under it, Open 10 right
+	local opens: { EggPanel.Open } = {}
+	local pill = EggPrompt.Pill
+	local side = EggPrompt.Disc / 2 + 10
+	for _, count in CapsuleConfig.Counts do
+		local open = EggPanel.buildOpen(root, count)
+		if count == 1 then
+			open.Button.AnchorPoint = Vector2.new(1, 0.5)
+			open.Button.Position = UDim2.fromOffset(EggPrompt.Width / 2 - side, discY)
+		elseif count == 3 then
+			open.Button.AnchorPoint = Vector2.new(0.5, 0)
+			open.Button.Position = UDim2.fromOffset(EggPrompt.Width / 2, discY + EggPrompt.Disc / 2 + 8)
+		else
+			open.Button.AnchorPoint = Vector2.new(0, 0.5)
+			open.Button.Position = UDim2.fromOffset(EggPrompt.Width / 2 + side, discY)
+		end
+		EggPanel.fitOpen(open, pill.X, pill.Y)
+		table.insert(opens, open)
+	end
+	-- (a gamepad's D-pad walks round them)
+	local byCount: { [number]: TextButton } = {}
+	for _, open in opens do
+		byCount[open.Count] = open.Button
+	end
+	if byCount[1] and byCount[3] and byCount[10] then
+		byCount[1].NextSelectionRight = byCount[10]
+		byCount[10].NextSelectionLeft = byCount[1]
+		byCount[1].NextSelectionDown = byCount[3]
+		byCount[10].NextSelectionDown = byCount[3]
+		byCount[3].NextSelectionUp = byCount[1]
+		byCount[3].NextSelectionLeft = byCount[1]
+		byCount[3].NextSelectionRight = byCount[10]
+	end
 	return {
 		Gui = gui,
 		Root = root,
@@ -178,8 +225,32 @@ function EggPrompt.build(): Refs
 		GlowRing = ring,
 		GlowScale = glowScale,
 		Price = price,
+		Opens = opens,
+		Cluster = true,
 		Fades = EggPanel.fadesOf(root),
 	}
+end
+
+-- The opens round the disc (PC, gamepads) or the disc alone with its price (touch: the panel has the opens).
+function EggPrompt.setCluster(refs: Refs, on: boolean)
+	refs.Cluster = on
+	for _, open in refs.Opens do
+		open.Button.Visible = on and open.Button:GetAttribute("Spec") ~= false
+	end
+	refs.Price.Visible = not on
+end
+
+-- The opens' prices, paints and key badges (EggPanel.opens / EggPanel.paintOpens).
+function EggPrompt.setOpens(refs: Refs, specs: { EggPanel.OpenSpec }, keys: { [number]: string }?, glyphs: { [number]: string }?)
+	EggPanel.paintOpens(refs.Opens, specs, keys, glyphs)
+	for _, open in refs.Opens do
+		open.Button.Visible = refs.Cluster and open.Button:GetAttribute("Spec") == true
+	end
+end
+
+-- The billboard's size in design units: the cluster's, or the disc alone's (touch).
+function EggPrompt.size(cluster: boolean): Vector2
+	return if cluster then Vector2.new(EggPrompt.Width, EggPrompt.Height) else EggPrompt.Single
 end
 
 -- The billboard's size for the HUD's scale.

@@ -17,9 +17,9 @@
 	             soft blobs of the best colour drift behind
 	  suspense   Legendary / Mythic: brighter cracks, a harder shake
 	  silhouette each egg turns into a solid glowing silhouette of its colour
-	  burst      it bursts: ONE flash in the best colour (the controller asks
-	             RevealFx.claimFlash: never sooner than FlashGap after the
-	             last), shell pieces, a puff
+	  burst      it bursts: ONE flash in the best colour (RevealKit's one
+	             flash gap: never sooner than FlashGap after the last; a
+	             refused flash waits for its slot), shell pieces, a puff
 	  reveal     the golems stand where their eggs were, HUGE and SOLID, on a
 	             soft white sunburst with a little confetti, each with its
 	             name and "1 in N" (a Legendary / Mythic in a batch centred,
@@ -47,7 +47,6 @@ local BrightTheme = require(Shared.Config.BrightTheme)
 
 local HatchFx = {}
 
-HatchFx.FlashGap = 0.4 -- seconds between two flashes at least (RevealKit's one tracker: 2.5 a second at most)
 HatchFx.FlashTime = 0.3 -- the flash fades in this long (RevealKit.poseFlash)
 HatchFx.FlashPeak = 0.85 -- its strongest (1 - BackgroundTransparency; RevealKit caps it at its FlashPeak)
 HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever is skipped (paid random items)
@@ -179,12 +178,21 @@ function HatchFx.skipTo(t: number, tl: Timeline, shown: number): number?
 	if t < tl.Burst then
 		return tl.Burst
 	elseif t < tl.Fly then
-		if shown >= tl.Times.GolemPop + HatchFx.MinShow then
+		if shown >= HatchFx.namedAt(tl) + HatchFx.MinShow then
 			return tl.Fly
 		end
 		return nil
 	end
 	return t
+end
+
+HatchFx.GolemRipple = 0.03 -- seconds between two golems popping out (a batch)
+HatchFx.NameIn = 0.16 -- a golem's name is fully shown this long after its pop
+
+-- Seconds from the reveal until the LAST golem's name is fully shown (MinShow counts from there: every one named).
+function HatchFx.namedAt(tl: Timeline): number
+	local ripple = if tl.Reduced then 0 else HatchFx.GolemRipple
+	return (tl.Count - 1) * ripple + (if tl.Reduced then tl.Times.GolemPop else HatchFx.NameIn)
 end
 
 ---------------------------------------------------------------- the stage's camera
@@ -492,7 +500,7 @@ export type GolemPose = {
 ]]
 function HatchFx.golemPose(t: number, tl: Timeline, i: number): GolemPose
 	local times = tl.Times
-	local at = tl.Reveal + (if tl.Reduced then 0 else (i - 1) * 0.03)
+	local at = tl.Reveal + (if tl.Reduced then 0 else (i - 1) * HatchFx.GolemRipple)
 	if t < at or t >= tl.Total then
 		return { Shown = false, Scale = 1, Lift = 0, Spin = 0, Fly = 0, Fade = 1, Name = 1 }
 	end
@@ -509,7 +517,7 @@ function HatchFx.golemPose(t: number, tl: Timeline, i: number): GolemPose
 		spin = fly * fly * math.pi * 4 -- (two turns, speeding up)
 		lift = 0
 	end
-	local name = if fly > 0 then clamp01(fly * 4) else clamp01(1 - (u - 0.06) / 0.1)
+	local name = if fly > 0 then clamp01(fly * 4) else clamp01(1 - (u - (HatchFx.NameIn - 0.1)) / 0.1)
 	return { Shown = true, Scale = scale, Lift = lift, Spin = spin, Fly = fly, Fade = 0, Name = name }
 end
 
@@ -568,7 +576,8 @@ function HatchFx.crackColor(rarity: string, t: number, along: number, bright: nu
 		color = BrightTheme.crackColour(rarity)
 	end
 	if bright > 0 then
-		color = color:Lerp(Color3.new(1, 1, 1), (if rarity == "Mythic" then 0.25 else 0.45) * bright * (0.6 + 0.4 * math.sin(t * 22)))
+		-- (a steady whitening over the suspense: no pulse, never a flicker)
+		color = color:Lerp(Color3.new(1, 1, 1), (if rarity == "Mythic" then 0.2 else 0.4) * bright)
 	end
 	return color
 end

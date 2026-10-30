@@ -46,7 +46,9 @@ export type Args = {
 	Phone: boolean, -- fewer rings
 	Target: Vector2, -- where the golems fly (the player on the screen, shares)
 	Golem: (kind: string) -> (Model, number, number), -- a golem's model, its height, its pivot over its feet
-	Claim: () -> boolean, -- may the flash go off (RevealFx.claimFlash: the shared cap)
+	Claim: () -> boolean, -- may the flash go off now (RevealKit.takeFlash: the game's one flash gap; false with Reduce motion)
+	Wait: (() -> number)?, -- seconds until the next flash may (RevealKit.nextFlashAt): a refused flash waits, at most FlashGap
+	Deleted: { [number]: boolean }?, -- the result's golems the player auto-deletes (by index): greyed, they stay
 }
 
 type Standing = { Model: Model, Height: number, Root: number, Depth: number, Spot: Vector2, Turn: number }
@@ -61,6 +63,7 @@ export type Run = {
 	Kinds: { string }, -- per slot
 	Rarities: { string }, -- per slot
 	Colors: { Color3 }, -- per slot: its crack colour
+	Deleted: { [number]: boolean }, -- per slot: auto-deleted (greyed, DELETED, no flight)
 	BestRarity: string,
 	BestOrder: number,
 	Size: Vector2, -- the screen (design units) the layout is for
@@ -68,7 +71,8 @@ export type Run = {
 	EggDepth: { number },
 	Standing: { [number]: Standing },
 	Fired: { [string]: boolean },
-	Flash: boolean, -- the burst's flash went off (the cap allowed it)
+	FlashFrom: number?, -- t when the burst's flash went off (nil: not yet / none)
+	FlashRetry: number?, -- t when a refused flash asks again (it waited for the shared gap)
 	Spin: number, -- the sunburst's turn
 	Last: number, -- the last pose's t
 }
@@ -114,6 +118,7 @@ function HatchStage.new(args: Args): Run
 		Kinds = {},
 		Rarities = {},
 		Colors = {},
+		Deleted = {},
 		BestRarity = bestRarity,
 		BestOrder = bestOrder,
 		Size = o.Size,
@@ -121,7 +126,8 @@ function HatchStage.new(args: Args): Run
 		EggDepth = {},
 		Standing = {},
 		Fired = {},
-		Flash = false,
+		FlashFrom = nil,
+		FlashRetry = nil,
 		Spin = 0,
 		Last = 0,
 	}
@@ -131,6 +137,7 @@ function HatchStage.new(args: Args): Run
 		run.Kinds[slot] = kind
 		run.Rarities[slot] = if info then info.Rarity else "Common"
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
+		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
 	end
 	relayout(run)
 	-- the blobs in the best colour, the shell pieces in each egg's (and white)
@@ -187,6 +194,21 @@ function HatchStage.clear(o: CapsuleView.OpenRefs, golems: { Model }?)
 	o.Sunburst.Visible = false
 	o.Flash.BackgroundTransparency = 1
 	o.Stage.ImageTransparency = 0
+end
+
+-- An auto-deleted golem: every part a stone grey (its shape stays; never see-through).
+function HatchStage.grey(model: Model)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local c = d.Color
+			local v = 0.3 * c.R + 0.59 * c.G + 0.11 * c.B
+			local g = 0.28 + 0.42 * v
+			d.Color = Color3.new(g, g, math.min(1, g * 1.04))
+			if d.Material == Enum.Material.Neon then
+				d.Material = Enum.Material.SmoothPlastic
+			end
+		end
+	end
 end
 
 -- The golems of a run (the controller frees them when it ends).
@@ -314,7 +336,10 @@ local function reveal(run: Run, aspect: number)
 		}
 		run.Standing[slot] = standing
 		local info = GolemConfig.ById[kind]
-		-- the name under its feet, "1 in N" in the rarity's colour (nothing else)
+		if run.Deleted[slot] then
+			HatchStage.grey(model)
+		end
+		-- the name under its feet, "1 in N" in the rarity's colour (nothing else; DELETED when auto-deleted)
 		local feet = HatchFx.at(s.Golem.X, s.Golem.Y, standing.Depth, aspect) - Vector3.new(0, height / 2, 0)
 		local under = HatchFx.project(feet, aspect)
 		CapsuleView.setTag(
@@ -328,7 +353,8 @@ local function reveal(run: Run, aspect: number)
 			-- (the name fits between its neighbours: a big one gets the room of one and a half)
 			run.Layout.Spacing
 				* size.X
-				* (if slot == run.Special then 1.5 else 0.96)
+				* (if slot == run.Special then 1.5 else 0.96),
+			run.Deleted[slot]
 		)
 	end
 end
@@ -345,8 +371,13 @@ local function poseGolems(run: Run, t: number, aspect: number)
 			continue
 		end
 		local spot, depth = HatchFx.flyTo(g.Spot, g.Depth / pose.Scale, run.Args.Target, pose.Fly)
+		local spin = pose.Spin
+		if run.Deleted[slot] then
+			-- auto-deleted: it never flies to the player; it shrinks away where it stood
+			spot, depth, spin = g.Spot, g.Depth / pose.Scale * (1 + 5 * pose.Fly * pose.Fly), 0
+		end
 		local middle = HatchFx.at(spot.X, spot.Y, depth, aspect) + Vector3.new(0, g.Height * pose.Lift, 0)
-		g.Model:PivotTo(CFrame.new(middle + Vector3.new(0, g.Root - g.Height / 2, 0)) * CFrame.Angles(0, math.pi + g.Turn + pose.Spin, 0))
+		g.Model:PivotTo(CFrame.new(middle + Vector3.new(0, g.Root - g.Height / 2, 0)) * CFrame.Angles(0, math.pi + g.Turn + spin, 0))
 		if g.Model.Parent ~= o.Stage then
 			g.Model.Parent = o.Stage
 		end
@@ -449,12 +480,26 @@ function HatchStage.pose(run: Run, t: number): { string }
 	poseEggs(run, t, aspect)
 	poseRings(run, t)
 	poseBlobs(run, t)
-	if t >= tl.Burst and once("Burst") then
-		run.Flash = not tl.Reduced and run.Args.Claim()
+	-- ONE flash in the best colour (RevealKit's, its one gap: refused, it waits for the next slot
+	-- (nextFlashAt, at most FlashGap); the reveal's timing never waits for it)
+	if t >= tl.Burst and once("Burst") and not tl.Reduced then
 		o.Flash.BackgroundColor3 = HatchFx.crackColor(run.BestRarity, t, 0.3, 0)
+		if run.Args.Claim() then
+			run.FlashFrom = tl.Burst
+		else
+			local wait = if run.Args.Wait then run.Args.Wait() else RevealKit.FlashGap
+			run.FlashRetry = tl.Burst + math.clamp(wait, 0, RevealKit.FlashGap)
+		end
 	end
-	-- (RevealKit's flash, its colour the best rarity's)
-	RevealKit.poseFlash(o.Flash, if run.Flash then HatchFx.flashU(t - tl.Burst) else -1, HatchFx.FlashPeak)
+	local retry = run.FlashRetry
+	if retry and t >= retry then
+		run.FlashRetry = nil
+		if run.Args.Claim() then
+			run.FlashFrom = t
+		end
+	end
+	local from = run.FlashFrom
+	RevealKit.poseFlash(o.Flash, if from then HatchFx.flashU(t - from) else -1, HatchFx.FlashPeak)
 	if t >= tl.Reveal and once("Reveal") then
 		reveal(run, aspect)
 	end
