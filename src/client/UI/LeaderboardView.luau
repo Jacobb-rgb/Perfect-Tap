@@ -535,7 +535,7 @@ end
 
 function LeaderboardView.buildPanel(compact: boolean?): Panel
 	local frame =
-		MenuPanel.build("TerraForgeHallOfFame", "HALL OF FAME", "The best Forgekeepers of all servers. Updated every minute.", 16, true)
+		MenuPanel.build("TerraForgeHallOfFame", "HALL OF FAME", "The best miners of all servers. Updated every minute.", 16, true)
 	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1, ZIndex = 3 }, frame.Body)
 	local tabs: { [string]: TextButton } = {}
 	for _, board in LeaderboardConfig.Boards do

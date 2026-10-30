@@ -3,9 +3,9 @@
 	builds it too: tools/lune/lib/loading_preview.luau). Plain instances
 	only, no services.
 
-	A dark voxel stone wall over a lava glow, the TERRA FORGE logo in the
-	middle (the uploaded image, or the text logo: stone TERRA, molten FORGE,
-	the crossed-hammers emblem and the MINE • CLEAN • FORGE • BUILD ribbon),
+	A dark voxel stone wall over a lava glow, the DEEP TERRA logo in the
+	middle (the uploaded image, or the text logo: stone DEEP, molten TERRA,
+	the crossed-hammers emblem and the MINE • CLEAN • SMELT • BUILD ribbon),
 	and the light UI's chunky pills under it (navy outline, white face, a
 	lip and a gloss): the progress bar with its green fill, the status line,
 	the tip with a gold TIP chip, and the SKIP button in the bottom right
@@ -279,8 +279,8 @@ local function textLogo(logo: Frame)
 	gradient(ember, MOLTEN, 90)
 	hammer(emblem, -42)
 	hammer(emblem, 42)
-	word(logo, "Terra", "TERRA", 0.31, 0.28, two(STONE_TOP, STONE_BASE))
-	word(logo, "Forge", "FORGE", 0.55, 0.38, MOLTEN)
+	word(logo, "Deep", "DEEP", 0.31, 0.28, two(STONE_TOP, STONE_BASE))
+	word(logo, "Terra", "TERRA", 0.55, 0.38, MOLTEN)
 	local ribbon = frame(logo, "Ribbon", {
 		Color = LoadingView.White,
 		Anchor = Vector2.new(0.5, 0),
@@ -291,7 +291,7 @@ local function textLogo(logo: Frame)
 	corner(ribbon, UDim.new(0, 14))
 	stroke(ribbon, 4, AMBER, true)
 	gradient(ribbon, two(Color3.fromRGB(59, 44, 79), Color3.fromRGB(36, 26, 51)), 90)
-	label(ribbon, "Words", "MINE • CLEAN • FORGE • BUILD", FREDOKA, Color3.fromRGB(255, 244, 224), {
+	label(ribbon, "Words", "MINE • CLEAN • SMELT • BUILD", FREDOKA, Color3.fromRGB(255, 244, 224), {
 		Anchor = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(0.9, 0.66),

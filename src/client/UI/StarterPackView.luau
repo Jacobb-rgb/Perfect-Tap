@@ -53,7 +53,7 @@ function StarterPackView.build(): Refs
 		Position = UDim2.new(0.24, 0, 0.44, 0),
 		ZIndex = 4,
 	})
-	Pop.title(body, "FOR NEW FORGERS", 30, "Gold", {
+	Pop.title(body, "FOR NEW MINERS", 30, "Gold", {
 		AnchorPoint = Vector2.new(0, 0),
 		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(250, 12),

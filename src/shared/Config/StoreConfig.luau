@@ -143,7 +143,7 @@ StoreConfig.Cards = {
 		Model = "pass_crown",
 		Section = "Featured",
 		Row = 1,
-		Title = "FORGEMASTER'S PASS",
+		Title = "VIP Pass", -- mixed case on purpose: Pop.caption would turn an ALL CAPS "VIP" into "Vip"
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
 		Lines = { "Podiums 4 and 5", "12 h offline earnings", "Double backpack space", "The Glimmer Grotto", "Extra machine slots" },
 	}),

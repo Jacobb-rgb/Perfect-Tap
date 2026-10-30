@@ -339,7 +339,7 @@ return function(T, Loader)
 			Kind = "GamePass",
 			Id = 1,
 			Robux = 49,
-			Name = "Terra Forge Custom",
+			Name = "Deep Terra Custom",
 			Grant = "Hoverboard",
 			BoardId = "TerraForgeCustom",
 		}

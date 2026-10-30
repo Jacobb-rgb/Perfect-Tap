@@ -265,7 +265,7 @@ TutorialConfig.Steps = {
 	},
 	{
 		Id = "Grow",
-		Title = "Grow your forge",
+		Title = "Grow your base",
 		Text = "Sell ore at Tobin's stall, or buy a machine at the Tech shop.",
 		Target = "Sell",
 		done = function(data: Data, _signals: Signals): boolean

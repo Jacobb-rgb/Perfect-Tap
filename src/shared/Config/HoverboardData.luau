@@ -189,7 +189,7 @@ HoverboardData.List = {
 	{
 		Id = "TerraForgeCustom",
 		Order = 5,
-		Name = "Terra Forge Custom",
+		Name = "Deep Terra Custom",
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
 		PassKey = "HoverboardCustom",
@@ -203,7 +203,7 @@ HoverboardData.List = {
 			Glow = rgb(255, 70, 190), -- hot pink glow
 			Glow2 = rgb(60, 200, 255), -- sky blue glow
 		},
-		Description = "Painted all over with Terra Forge doodles: golems, gems, blasters and more.",
+		Description = "Painted all over with Deep Terra doodles: golems, gems, blasters and more.",
 		-- (Perks[2] is the card's gold line: the rainbow bolts, HoverboardFx; nothing is carried slowly any more)
 		Perks = { "Fastest board", "Rainbow lightning", "Rainbow trail" },
 	},

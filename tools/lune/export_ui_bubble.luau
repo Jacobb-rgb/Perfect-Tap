@@ -200,7 +200,7 @@ local shopData = {
 	Tab = "Passes",
 	Hero = {
 		Id = "BigPass",
-		Name = "Forgemaster's Pass",
+		Name = "VIP Pass",
 		Description = "",
 		Icon = "medal",
 		Price = "560",
@@ -498,7 +498,7 @@ local boardsData = {
 	Tab = "TotalEarned",
 	Entries = boardEntries,
 	You = { Rank = 7, Name = "YOU", Value = "$9.24T", You = true },
-	Note = "The best Forgekeepers of all servers. Updated every minute.",
+	Note = "The best miners of all servers. Updated every minute.",
 }
 local settingsRows = {
 	{ Id = "Sounds", Name = "Sounds", Hint = "Every game sound", Icon = "speaker", Kind = "Slider", Value = 0.8 },

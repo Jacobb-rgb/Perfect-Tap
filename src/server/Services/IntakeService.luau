@@ -556,7 +556,7 @@ local function scanOne(record: ItemRecord, now: number)
 			foreignSince[record] = now
 		elseif now - since >= GameConfig.ForeignItemReturn then
 			foreignSince[record] = nil
-			ItemService.stash(record, "Your item landed on another forge")
+			ItemService.stash(record, "Your item landed on another base")
 		end
 	else
 		foreignSince[record] = nil

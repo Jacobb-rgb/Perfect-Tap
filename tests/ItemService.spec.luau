@@ -243,10 +243,10 @@ return function(T, Loader)
 
 	withWorld("ItemService: stash and the loose cap keep every item", function(w)
 		local record = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
-		T.truthy(ItemService.stash(record, "Your item landed on another forge"), "stashed")
+		T.truthy(ItemService.stash(record, "Your item landed on another base"), "stashed")
 		T.eq(record.State, "Consumed", "gone from the world")
 		T.eq(#w.data.Storage, 1, "in storage")
-		T.eq(w.notes[1].Payload.Text, "Your item landed on another forge (moved to your Ore Pen)", "toast")
+		T.eq(w.notes[1].Payload.Text, "Your item landed on another base (moved to your Ore Pen)", "toast")
 
 		-- the loose cap: nothing is moved into the pen behind your back any
 		-- more (the sources stop instead: atLooseCap, MiningService)

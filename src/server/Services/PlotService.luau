@@ -126,7 +126,7 @@ local function assign(player: Player)
 			if model then
 				model:SetAttribute("OwnerUserId", player.UserId)
 			end
-			PlotService.setSignText(plot.Id, player.DisplayName .. "'s Forge")
+			PlotService.setSignText(plot.Id, player.DisplayName .. "'s Mine")
 			for _, callback in assignedCallbacks do
 				task.spawn(callback, player, plot.Id)
 			end

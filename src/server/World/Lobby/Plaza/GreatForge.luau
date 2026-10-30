@@ -630,7 +630,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	local sign = Style.sign(
 		m,
 		at(0, GreatForge.SignY, signZ),
-		"THE GREAT FORGE",
+		"THE DEEP GATE",
 		signW,
 		GreatForge.SignHeight,
 		{ Kind = "Wood", Depth = GreatForge.SignDepth, BoardColor = FORGE_BOARD }

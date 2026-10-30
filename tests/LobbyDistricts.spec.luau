@@ -720,7 +720,7 @@ return function(T, Loader)
 			HallOfFame = "HALL OF FAME",
 			BackpackStall = "BACKPACKS",
 			FossilDig = "FOSSIL DIG",
-			GuildBoard = "FORGEKEEPERS' GUILD",
+			GuildBoard = "MINERS' GUILD",
 		}
 		for id, text in want do
 			local found = false

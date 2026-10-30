@@ -64,7 +64,7 @@ local RELEASE_WAIT = 40 -- a rejoin waits this long for its last session's final
 local CALLBACK_LIMIT = 5 -- seconds the beforeRelease callbacks get before the final save starts anyway
 local AUTOSAVE_CHECK = 5 -- seconds between autosave checks (each profile saves AutosaveInterval after its last save)
 local AUTOSAVE_RETRY = 15 -- a failed autosave (the lock refresh) is tried again this soon
-local SESSION_LOST_TEXT = "Your Terra Forge session was opened on another server."
+local SESSION_LOST_TEXT = "Your Deep Terra session was opened on another server."
 
 local profiles: { [Player]: ProfileStore.Profile } = {}
 local loading: { [number]: boolean } = {} -- userId -> a load is running (one per user on this server)
@@ -118,15 +118,15 @@ end
 -- What a player whose save couldn't be loaded is told (ProfileStore.load reasons).
 function DataService.kickText(reason: string?): string
 	if reason == "locked" then
-		return "Your Terra Forge data is still being saved. Please rejoin in a minute."
+		return "Your Deep Terra data is still being saved. Please rejoin in a minute."
 	elseif reason == "newer" then
 		return "The game just updated, please rejoin"
 	elseif reason == "malformed" then
-		return "Terra Forge couldn't read your save safely, so nothing was changed. Please rejoin later."
+		return "Deep Terra couldn't read your save safely, so nothing was changed. Please rejoin later."
 	elseif type(reason) == "string" and string.sub(reason, 1, 15) == "error: migrate:" then
-		return "Terra Forge couldn't prepare your save, so nothing was changed. Please rejoin later."
+		return "Deep Terra couldn't prepare your save, so nothing was changed. Please rejoin later."
 	end
-	return "Terra Forge could not load your data (Roblox servers are busy). Please rejoin."
+	return "Deep Terra could not load your data (Roblox servers are busy). Please rejoin."
 end
 
 --[[

@@ -770,7 +770,7 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 	end
 	local zone = rock.Zone
 	if zone.VipOnly and not Perks.has(player, "ForgeVip") then
-		refuse(player, shooter, rock, zone.Name .. " rocks are for Forge VIPs.", from, now)
+		refuse(player, shooter, rock, zone.Name .. " rocks are for VIPs.", from, now)
 		return
 	end
 	if blaster.Level < rock.MinBlaster then

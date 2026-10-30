@@ -38,7 +38,7 @@ return function(T, Loader)
 		end
 		T.falsy(StoreConfig.sells("Nope"), "unknown key")
 		-- (review #12) the pass opens the Glimmer Grotto: its odds show before the buy
-		T.truthy(StoreConfig.ById.BigPass.Odds, "the Forgemaster's Pass card shows the Grotto odds first")
+		T.truthy(StoreConfig.ById.BigPass.Odds, "the VIP Pass card shows the Grotto odds first")
 		-- (review #4/#11) the blaster texts say what a rebirth really does
 		for _, key in { "BlasterNextA", "BlasterNextB", "BlasterNextC", "BlasterNextD" } do
 			T.truthy(string.find(MonetizationConfig.get(key).Description, "1 level higher", 1, true) ~= nil, key .. " text")

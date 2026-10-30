@@ -92,7 +92,7 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 	-- edge to edge), orange studs in the casing corners, a thick blue neon
 	-- line along the casing's top edge (the module's roof line)
 	-- (round 2: a plate 1.5x taller, the title on two lines: bigger letters)
-	local title = "FORGEKEEPERS'\nGUILD"
+	local title = "MINERS'\nGUILD"
 	Tech.sign(m, at(0, 8.75, -0.1), title, 7.6, 2.4, {
 		Back = true,
 		Words = { { Text = title, Width = 7.6 * 0.86 } },

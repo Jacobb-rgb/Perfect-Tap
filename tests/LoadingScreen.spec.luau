@@ -76,7 +76,7 @@ return function(T, Loader)
 		T.truthy(refs.Logo:FindFirstChild("Image"), "an uploaded logo shows as an image")
 		LoadingConfig.Logo.Id = keep
 		local text = LoadingView.build()
-		T.truthy(text.Logo:FindFirstChild("Forge") and text.Logo:FindFirstChild("Emblem"), "the text logo")
+		T.truthy(text.Logo:FindFirstChild("Terra") and text.Logo:FindFirstChild("Emblem"), "the text logo")
 	end)
 
 	-- the rectangle (in design units) of an offset-sized element on the canvas

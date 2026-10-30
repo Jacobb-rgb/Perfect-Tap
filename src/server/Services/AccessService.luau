@@ -33,7 +33,7 @@ function AccessService.start()
 				if WorldLayout.isInBox(p, grotto.Min, grotto.Max) or pastDoor then
 					character:PivotTo(OUTSIDE)
 					MovementService.serverMoved(player)
-					Net.fire("Notify", player, { Text = "The Glimmer Grotto is for Forge VIPs.", Kind = "Deny" })
+					Net.fire("Notify", player, { Text = "The Glimmer Grotto is for VIPs.", Kind = "Deny" })
 				end
 			end
 		end

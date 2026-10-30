@@ -3,7 +3,7 @@
 	golden statue of this dragon holding the TERRA FORGE sign" - the
 	Flamewing golem of the Dragonforge set): the real Flamewing (GolemBuilder)
 	built statue-sized and cast in gold, its stubby arms raised in a cheer,
-	each fist gripping a gold pole that lifts the big TERRA FORGE sign over
+	each fist gripping a gold pole that lifts the big sign (DEEP TERRA since the rename, owner 2026-10-30) over
 	its horns and flame mohawk. Its wings, the mohawk and the tail flame keep
 	burning in the Flamewing's fire colors with real flames and embers on
 	them (owner's pick B, 2026-10-25: "the golden dragon with burning
@@ -16,11 +16,11 @@
 	crossed-hammers emblem front and back, a gold-edged cap.
 
 	The sign (GoldenStatue.Sign):
-	  "Wide"  one line, TERRA | hammers medallion | FORGE, gold banner rods
+	  "Wide"  one line, DEEP | hammers medallion | TERRA, gold banner rods
 	          at both ends
-	  "Logo"  the loading screen's logo: TERRA over FORGE, the hammers
+	  "Logo"  the loading screen's logo: DEEP over TERRA, the hammers
 	          medallion on top
-	Silver TERRA and gold FORGE on a dark plum board (the loading screen's
+	Silver DEEP and gold TERRA on a dark plum board (the loading screen's
 	colors), a thick gold frame, an orange glow line inside it, warm bulbs
 	round it, readable from both sides.
 
@@ -531,16 +531,16 @@ end
 -- studs over the plaza no one reaches it, and the walkable plaza stays free). Returns the board's frame (+Z front) and its
 -- outer half width.
 local FLIP = CFrame.Angles(0, math.pi, 0) -- a part's Front face (its -Z) to the world's +Z
-local TERRA: Word = { Text = "TERRA", Color = SILVER }
-local FORGE: Word = { Text = "FORGE", Color = FORGE_GOLD }
+local DEEP_WORD: Word = { Text = "DEEP", Color = SILVER }
+local TERRA_WORD: Word = { Text = "TERRA", Color = FORGE_GOLD }
 local function sign(m: Model, x: number, bottom: number, z: number): (CFrame, number)
 	local t = 0.8
 	local depth = 1.0
 	if GoldenStatue.Sign == "Logo" then
 		local w, h = 20, 11.6
 		local cf = CFrame.new(x, bottom + t + h / 2, z)
-		wordPlate(m, cf * CFrame.new(0, h / 4, 0) * FLIP, w, h / 2, depth, TERRA, TERRA)
-		wordPlate(m, cf * CFrame.new(0, -h / 4, 0) * FLIP, w, h / 2, depth, FORGE, FORGE)
+		wordPlate(m, cf * CFrame.new(0, h / 4, 0) * FLIP, w, h / 2, depth, DEEP_WORD, DEEP_WORD)
+		wordPlate(m, cf * CFrame.new(0, -h / 4, 0) * FLIP, w, h / 2, depth, TERRA_WORD, TERRA_WORD)
 		frame(m, cf, w, h, depth, t)
 		medallion(m, cf * CFrame.new(0, h / 2 + t + 1.6, 0), 6.4, 1.6)
 		for _, sx in { -1, 1 } do
@@ -549,15 +549,15 @@ local function sign(m: Model, x: number, bottom: number, z: number): (CFrame, nu
 		end
 		return cf, w / 2 + t
 	end
-	-- Wide: TERRA | medallion | FORGE
+	-- Wide: DEEP | medallion | TERRA
 	local w, h = 33, 6.8
 	local md = 9.8
 	local cf = CFrame.new(x, bottom + t + h / 2, z)
 	local half = (w - md) / 2 - 0.2
 	local mid = md / 2 + 0.2 + half / 2
-	-- (the spawn side reads TERRA on the left, world -X; from behind that plate is on the right)
-	wordPlate(m, cf * CFrame.new(-mid, 0, 0) * FLIP, half, h, depth, TERRA, FORGE)
-	wordPlate(m, cf * CFrame.new(mid, 0, 0) * FLIP, half, h, depth, FORGE, TERRA)
+	-- (the spawn side reads DEEP on the left, world -X; from behind that plate is on the right)
+	wordPlate(m, cf * CFrame.new(-mid, 0, 0) * FLIP, half, h, depth, DEEP_WORD, TERRA_WORD)
+	wordPlate(m, cf * CFrame.new(mid, 0, 0) * FLIP, half, h, depth, TERRA_WORD, DEEP_WORD)
 	-- (the board behind the medallion, so the frame's glow line runs unbroken)
 	Style.block(m, cf, Vector3.new(md + 0.6, h, depth), BOARD, SMOOTH, Style.tiny()).Name = "SignBoard"
 	frame(m, cf, w, h, depth, t)

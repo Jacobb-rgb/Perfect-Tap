@@ -185,10 +185,10 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(signBottom > headTop, "the sign is held over the horns and the mohawk")
-		T.eq(words.left[1], "TERRA", "TERRA on the left from the spawn")
-		T.eq(words.right[1], "FORGE", "FORGE on the right from the spawn")
-		T.eq(words.right[2], "TERRA", "from behind TERRA is on the left again (the right plate's back)")
-		T.eq(words.left[2], "FORGE", "and FORGE on the right")
+		T.eq(words.left[1], "DEEP", "DEEP on the left from the spawn")
+		T.eq(words.right[1], "TERRA", "TERRA on the right from the spawn")
+		T.eq(words.right[2], "DEEP", "from behind DEEP is on the left again (the right plate's back)")
+		T.eq(words.left[2], "TERRA", "and TERRA on the right")
 		-- two poles from the fists to the sign's frame
 		local frameBottom = math.huge
 		for _, part in parts(statue) do
@@ -319,7 +319,7 @@ return function(T, Loader)
 				hasGlow = true
 			end
 			local gui = part:FindFirstChild("FrontText")
-			if gui and gui:FindFirstChildWhichIsA("TextLabel").Text == "THE GREAT FORGE" then
+			if gui and gui:FindFirstChildWhichIsA("TextLabel").Text == "THE DEEP GATE" then
 				hasSign = true
 			end
 		end
@@ -327,7 +327,7 @@ return function(T, Loader)
 		T.lt(ridge, 37.01, "ridge (everything but the chimneys) <= 37")
 		T.truthy(ridge > 26, "the forge is a landmark (ridge > 26)")
 		T.truthy(hasGlow, "glowing ForgeGlow interior")
-		T.truthy(hasSign, "THE GREAT FORGE sign")
+		T.truthy(hasSign, "THE DEEP GATE sign")
 		local chimneys = 0
 		for _, d in forge:GetChildren() do
 			if d.Name == "Chimney" then

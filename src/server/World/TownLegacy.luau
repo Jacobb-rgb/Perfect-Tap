@@ -193,7 +193,7 @@ local function greatForge(parent: Instance, rng: Rng.Rng)
 	)
 	Props.pointLight(glow, Palette.ForgeGlow, 40, 3, false)
 	Props.emitter(glow, "Embers", Palette.ForgeGlow, 10)
-	Props.sign(m, cf * CFrame.new(0, 15.5, -7.6), "THE GREAT FORGE", 20, 3.2, Palette.WoodDark, Palette.Gold)
+	Props.sign(m, cf * CFrame.new(0, 15.5, -7.6), "THE DEEP GATE", 20, 3.2, Palette.WoodDark, Palette.Gold)
 	-- chimneys with glowing tops and smoke
 	for _, x in { -12, 12 } do
 		Geo.block(m, cf * CFrame.new(x, 22, 8), Vector3.new(7, 36, 7), Palette.StoneDark, nil, solid())
@@ -439,7 +439,7 @@ local function guildBoard(parent: Instance)
 	for _, x in { -3.4, 3.4 } do
 		Geo.block(m, cf * CFrame.new(x, 3.5, 0), Vector3.new(0.6, 7, 0.6), Palette.WoodDark, nil, solid())
 	end
-	local board = Props.sign(m, cf * CFrame.new(0, 4.5, 0), "FORGEKEEPERS' GUILD", 7.2, 3.6, Palette.WoodLight, Palette.WoodDark)
+	local board = Props.sign(m, cf * CFrame.new(0, 4.5, 0), "MINERS' GUILD", 7.2, 3.6, Palette.WoodLight, Palette.WoodDark)
 	board.Name = "Board"
 	Geo.wedge(m, cf * CFrame.new(0, 7.6, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(1.4, 1.2, 4), Palette.RoofRed, nil, decor())
 	Geo.wedge(m, cf * CFrame.new(0, 7.6, 0) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(1.4, 1.2, 4), Palette.RoofRed, nil, decor())

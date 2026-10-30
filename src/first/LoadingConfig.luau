@@ -41,9 +41,9 @@ local LoadingConfig = {}
 
 LoadingConfig.Attribute = "LoadingDone"
 
--- TODO(owner): the TERRA FORGE logo uploaded as a Decal / image
--- (NAHRAJ_DO_ROBLOXU/obchod/logo_terra_forge.png, NAVOD.md step 8). 0 = the
--- text logo in the same style (stone TERRA, molten FORGE, crossed hammers).
+-- TODO(owner): a DEEP TERRA logo uploaded as a Decal / image (the old
+-- NAHRAJ_DO_ROBLOXU/obchod/logo_terra_forge.png is the old name: do not upload it). 0 = the
+-- text logo in the same style (stone DEEP, molten TERRA, crossed hammers).
 LoadingConfig.Logo = { Id = 0 }
 
 -- simple English, only what the game has today

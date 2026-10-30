@@ -362,9 +362,9 @@ end
 -- The finish card's line ("+250 coins" when there was a reward).
 function TutorialView.doneText(reward: number?): string
 	if reward and reward > 0 then
-		return `Nice work, forger! +{reward} coins`
+		return `Nice work, miner! +{reward} coins`
 	end
-	return "Nice work, forger!"
+	return "Nice work, miner!"
 end
 
 -- The bubble's buttons with their on-screen size in pt (for the touch-size tests).
