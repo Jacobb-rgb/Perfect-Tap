@@ -10,13 +10,14 @@
 	the BOOM.
 
 	The show (seconds; rarer = bigger, SecretOreConfig Stars 1..3, Tiers):
-	  0     one gold-white flash (the shared 2.5 a second cap), a shockwave
+	  0     one gold-white flash (the shared 2.5 a second cap: one too soon
+	        after another flash starts up to RevealKit.FlashGap later), a shockwave
 	        ring (more rings a moment apart at 2 and 3 stars), the screen
 	        darkens (3 stars: deep space with twinkling stars), the ore pops
 	        out big, whirling, its moving parts alive (SecretOreFx), the
 	        viewport camera pulls back
 	  0.05  "SECRET!" slams down from big, rainbow letters; two layers of rays
-	        (near-black and rainbow, RevealFx's "Secret" tier), a third gold
+	        (near-black and rainbow, RevealKit's Style), a third gold
 	        layer at 2 and 3 stars; confetti, twinkling sparkles round the ore
 	  0.3   its name, the SECRET pill with its stars and the chance slide up,
 	        NEW! on a first find; 3 stars: a gold ONE IN A MILLION! ribbon
@@ -30,10 +31,11 @@
 	                                 Scale = the HUD's UI scale, Target =
 	                                 the bag's middle (px, nil = fade in place),
 	                                 Reduced = Motion.reduced(), Phone = true
-	                                 for fewer rays and pieces }
+	                                 for fewer rays and pieces, FlashAt = the
+	                                 second its flash starts }
 	  total(stars), shake(t, stars) -> the camera nudge (0..1) for the world
-	Until Animace's RevealFx (Effects/RevealFx, the egg hatch family) is on
-	main the rays, flash and banner are drawn here with its "Secret" values
+	The rays, flash and rings come from RevealKit (the egg opening draws
+	its own from it too), the banner is drawn here; the "Secret" values
 	(20 rays, (14,10,22) and a rainbow drifting 0.25 turn/s, layers +45 /
 	-30 degrees a second, flash (255,240,200) <= 0.9 opaque, gone in 0.45 s;
 	Montserrat: headline 64 Heavy with rainbow letters and a 5-unit edge,
@@ -77,7 +79,7 @@ SecretReveal.Tiers = {
 
 SecretReveal.Fly = 0.7
 SecretReveal.SkipAfter = 0.8 -- a tap skips to the flight from here
-SecretReveal.Center = UDim2.fromScale(0.5, 0.42) -- the middle of it all (RevealFx's Center)
+SecretReveal.Center = UDim2.fromScale(0.5, 0.42) -- the middle of it all
 SecretReveal.DimTo = 0.28 -- the dark overlay's transparency at its darkest (3 stars: SpaceTo)
 SecretReveal.SpaceTo = 0.06
 SecretReveal.OreSize = 320 -- design units: the 3D ore's viewport
@@ -100,7 +102,9 @@ export type Opts = {
 	Target: Vector2?,
 	Reduced: boolean?,
 	Phone: boolean?,
-	Flash: boolean?, -- false: no flash (another reveal flashed less than RevealKit.FlashGap ago)
+	-- the show's second the flash starts (default 0, the BOOM); math.huge: none yet (another
+	-- reveal flashed less than RevealKit.FlashGap ago: the controller sets it once it may)
+	FlashAt: number?,
 	Input: string?, -- "Touch" | "Gamepad" | "Mouse": what the skip hint says
 	TopInset: number?, -- px the top bar covers (default 58: a phone's)
 }
@@ -623,8 +627,8 @@ function SecretReveal.pose(view: View, t: number, opts: Opts): boolean
 		end
 	end
 
-	-- the flash (once, at the BOOM; the caller took its slot: RevealKit.takeFlash)
-	RevealKit.poseFlash(view.Flash, if reduced or opts.Flash == false then -1 else t / RevealKit.Style.FlashTime)
+	-- the flash (once, at the BOOM or a moment after it; the caller took its slot: RevealKit.takeFlash)
+	RevealKit.poseFlash(view.Flash, if reduced then -1 else (t - (opts.FlashAt or 0)) / RevealKit.Style.FlashTime)
 
 	-- shockwaves: one ring per tier step, the first white-gold, the others rainbow
 	for k, ring in view.Shocks do
