@@ -226,6 +226,8 @@ export type Banner = {
 	Paint: UIGradient,
 	Edge: UIStroke,
 	Sub: TextLabel, -- the best golem's bonus under the word (its pill's place: the banner says its rarity)
+	WordSize: number, -- the word's full text size on this screen (layoutOpening); a run may fit it smaller (fitBanner)
+	SubSize: number, -- the sub line's (never under TagMin, never scaled down)
 }
 
 export type OpenRefs = {
@@ -1900,6 +1902,8 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Paint = bannerPaint,
 		Edge = bannerWord:FindFirstChild("Edge") :: UIStroke, -- (brightText's)
 		Sub = bannerSub,
+		WordSize = 60,
+		SubSize = 22,
 	}
 
 	-- the Auto button (bottom left; touch: above the thumbstick's zone) and its note, in the safe frame
@@ -2126,17 +2130,16 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	-- over the golems, under the top bar and the chain's "2 / 5")
 	local bannerSize = math.clamp(math.floor(height * 0.075), 30, 68)
 	local subSize = math.max(CapsuleView.TagMin, math.floor(bannerSize * 0.36))
-	refs.Banner.Word.TextSize = bannerSize
-	refs.Banner.Word.Size = UDim2.new(1, 0, 0, bannerSize + 8)
-	refs.Banner.Edge.Thickness = math.clamp(bannerSize * 0.08, 3, 6)
+	refs.Banner.WordSize = bannerSize
+	refs.Banner.SubSize = subSize
 	refs.Banner.Sub.TextSize = subSize
-	refs.Banner.Sub.Position = UDim2.new(0.5, 0, 0, bannerSize + 4)
 	refs.Banner.Sub.Size = UDim2.new(1, 0, 0, subSize + 6)
 	local subEdge = refs.Banner.Sub:FindFirstChild("Edge")
 	if subEdge and subEdge:IsA("UIStroke") then
 		subEdge.Thickness = CapsuleView.TextEdge(subSize)
 	end
 	refs.Banner.Frame.Size = UDim2.fromOffset(math.floor(width * 0.9), bannerSize + subSize + 14)
+	CapsuleView.fitBanner(refs, 1)
 	-- the Auto button and its note (the Controls gui: under the top bar, the safe frame)
 	local disc = if compact or touch then CapsuleView.AutoDisc.Compact else CapsuleView.AutoDisc.Normal
 	local room = height - inset -- (the Controls gui's height)
@@ -2480,6 +2483,17 @@ end
 	units), `size` the rarity's text size (the bonus's ChanceShare of it,
 	never under TagMin). Hidden: `at` nil.
 ]]
+-- (V2) A rarity pill's size (design units) for `rarityId`, `bonus` (nil: the rarity alone) at text `size`.
+function CapsuleView.badgeSize(rarityId: string, bonus: string?, size: number): (number, number)
+	local info = Rarity.ById[rarityId] or Rarity.ById.Common
+	local small = math.max(CapsuleView.TagMin, math.floor(size * HatchFx.ChanceShare + 0.5))
+	local width = TechShopView.textWidth(string.upper(info.Name), size) * 1.06
+	if bonus then
+		width = math.max(width, TechShopView.textWidth(bonus, small) * 1.04)
+	end
+	return math.ceil(width) + 22, size + 8 + (if bonus then small + 4 else 0)
+end
+
 function CapsuleView.setBadge(refs: OpenRefs, slot: number, rarityId: string?, bonus: string?, at: Vector2?, size: number)
 	local badge = refs.Badges[slot]
 	if not badge then
@@ -2490,13 +2504,9 @@ function CapsuleView.setBadge(refs: OpenRefs, slot: number, rarityId: string?, b
 		return
 	end
 	local info = Rarity.ById[rarityId] or Rarity.ById.Common
-	local word = string.upper(info.Name or rarityId)
+	local word = string.upper(info.Name)
 	local small = math.max(CapsuleView.TagMin, math.floor(size * HatchFx.ChanceShare + 0.5))
-	local width = TechShopView.textWidth(word, size) * 1.06
-	if bonus then
-		width = math.max(width, TechShopView.textWidth(bonus, small) * 1.04)
-	end
-	local height = size + 8 + (if bonus then small + 4 else 0)
+	local frameW, height = CapsuleView.badgeSize(rarityId, bonus, size)
 	badge.Rarity.Text = word
 	badge.Rarity.TextSize = size
 	badge.Rarity.Size = UDim2.new(1, 0, 0, size + 6)
@@ -2519,7 +2529,7 @@ function CapsuleView.setBadge(refs: OpenRefs, slot: number, rarityId: string?, b
 	end
 	badge.Rim.Color = info.DarkColor
 	badge.Frame.Position = UDim2.fromOffset(math.floor(at.X), math.floor(at.Y))
-	badge.Frame.Size = UDim2.fromOffset(math.ceil(width) + 22, height)
+	badge.Frame.Size = UDim2.fromOffset(frameW, height)
 	badge.Frame.Visible = true
 end
 
@@ -2537,6 +2547,26 @@ function CapsuleView.fadeBadge(badge: Badge, alpha: number)
 	end
 end
 
+--[[
+	(V2) The banner at `fit` of its word's full size (a wide phone: it clears the pills beside it).
+	Only the word shrinks, never under TagMin; the sub line keeps its size (TagMin at least): a run
+	fits it once (HatchStage), the UIScale is the slam's alone.
+]]
+function CapsuleView.fitBanner(refs: OpenRefs, fit: number)
+	local b = refs.Banner
+	local word = math.max(CapsuleView.TagMin, math.floor(b.WordSize * math.clamp(fit, 0, 1) + 0.5))
+	b.Word.TextSize = word
+	b.Word.Size = UDim2.new(1, 0, 0, word + 8)
+	b.Edge.Thickness = math.clamp(word * 0.08, 2, 6)
+	b.Sub.Position = UDim2.new(0.5, 0, 0, word + 4)
+	b.Frame.Size = UDim2.fromOffset(b.Frame.Size.X.Offset, word + b.SubSize + 14)
+end
+
+-- (V2) A text's width at `size` (design units: the font's measure the names use).
+function CapsuleView.textWidth(text: string, size: number): number
+	return TechShopView.textWidth(text, size)
+end
+
 -- (V2) How wide the banner's word (or its sub line, the wider) is at its text size (design units).
 function CapsuleView.bannerWidth(refs: OpenRefs): number
 	local b = refs.Banner
@@ -2551,6 +2581,7 @@ function CapsuleView.setBanner(refs: OpenRefs, word: string, sub: string?, rarit
 	b.Word.Text = word
 	b.Sub.Text = sub or ""
 	b.Sub.Visible = sub ~= nil
+	b.Paint.Rotation = 90 -- (a Mythic's turns while it shows: HatchStage)
 	if rarityId == "Mythic" then
 		b.Paint.Color = RevealKit.rainbow(0)
 	else

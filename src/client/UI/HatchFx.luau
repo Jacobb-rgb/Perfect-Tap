@@ -678,32 +678,29 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	-- (owner 2026-10-30: "the shaking stutters, not clean": every rock is a slow, smooth sway
 	-- (HatchFx.sway, a few times a second), its strength only ever ramps: never a buzz, never a jump)
 	local roll = 0
+	-- (review 2026-10-30: every sway and swell eases out over the silhouette, never a hard cut there)
+	local still = 1 - clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
 	if charge > 0 then
-		-- (it eases out over the silhouette: no jump when the egg turns into its colour)
-		local still = 1 - clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
 		scale *= 1 + 0.035 * charge * still * (0.5 + 0.5 * math.sin((t - tl.Charge) * 2 * math.pi * 2))
-		if t < tl.Silhouette then
-			roll += 0.06 * charge * charge * HatchFx.sway(t, HatchFx.SwayHz.Charge, i * 2.1)
-		end
+		roll += 0.06 * charge * charge * still * HatchFx.sway(t, HatchFx.SwayHz.Charge, i * 2.1)
 	end
 	-- the tremble of the cracks (grows with each step, eased in)
 	local cracked = HatchFx.crackedAt(t, tl)
 	if cracked > 0 then
-		roll += (0.012 + 0.015 * cracked) * HatchFx.sway(t, HatchFx.SwayHz.Cracks, i * 1.3)
+		roll += (0.012 * math.min(1, cracked) + 0.015 * cracked) * (0.3 + 0.7 * still) * HatchFx.sway(t, HatchFx.SwayHz.Cracks, i * 1.3)
 	end
 	local suspense = HatchFx.suspenseAt(t, tl)
-	if suspense > 0 and t < tl.Silhouette then
+	if suspense > 0 then
 		local hard = if special then 1 else 0.45
-		roll += hard * (0.05 + 0.06 * suspense) * clamp01(suspense * 6) * HatchFx.sway(t, HatchFx.SwayHz.Suspense, i)
+		roll += hard * (0.05 + 0.06 * suspense) * clamp01(suspense * 6) * still * HatchFx.sway(t, HatchFx.SwayHz.Suspense, i)
 		if special then
-			scale *= 1 + 0.08 * suspense
+			scale *= 1 + 0.08 * suspense -- (kept through the silhouette: the special egg never shrinks back)
 		end
 	end
 	scale *= 1 + 0.06 * HatchFx.pulseAt(t, tl)
 	local silhouette = clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
 	if t >= tl.Silhouette then
 		scale *= 1 + 0.12 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette))
-		roll *= 1 - 0.7 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6)) -- (it stills, eased)
 	end
 	local bright = if suspense > 0 then suspense else 0
 	return {

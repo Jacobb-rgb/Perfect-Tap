@@ -1,6 +1,7 @@
 -- The egg opening (owner 2026-10-29: the clicker-sim video, "open them exactly like there, this
--- clean, glowing by rarity"; docs/plans/CLICKER_VIDEO_2026-10-29.md section 1): the timings (the
--- video's ~3.5 s Open 3, Auto's ~2 s, Reduce motion's calm one), the skips that never hide a
+-- clean, glowing by rarity"; docs/plans/CLICKER_VIDEO_2026-10-29.md section 1; V2 2026-10-30:
+-- docs/plans/EGG_OPENING_V2.md): the timings (V2: Open 3 of Commons ~4.6 s, Auto's ~2 s, Reduce
+-- motion's calm one), the skips that never hide a
 -- golem, where the eggs and golems stand (1 / 3 / 10, the special one centred and bigger, the top
 -- centre free), the stage camera's maths, the poses in bounds, the cracks in the
 -- colour of the golem inside each egg, ONE flash, the whole opening posed by HatchStage (every golem
@@ -557,23 +558,59 @@ return function(T, Loader)
 		end
 	)
 
-	T.test("EggOpening V2: LEGENDARY! clears the neighbours' rarity pills (PC, a wide phone, an iPad-like 4:3)", function()
-		for _, screen in { { 1280, 720, false }, { 1688, 780, true }, { 1100, 825, false } } do
+	T.test("EggOpening V2: LEGENDARY! clears the neighbours' pills, fitted ONCE, its words never under TagMin", function()
+		-- (design units: PC; 1361 x 629, the reference phone; 916 x 516 and 1310 x 605, 568 x 320 and
+		-- 812 x 375 pt phones at the phone scale; an iPad-like 4:3; PC under the chain's "2 / 5")
+		local shrunk = false
+		for _, screen in
+			{
+				{ 1280, 720, false },
+				{ 1361, 629, true },
+				{ 916, 516, true },
+				{ 1310, 605, true },
+				{ 1688, 780, true },
+				{ 1100, 825, false },
+				{ 1280, 720, false, true },
+			}
+		do
 			for _, rarityId in { "Legendary", "Mythic" } do
 				local o, run = runOf(
 					"Crystal",
 					{ kindOf("Uncommon"), kindOf(rarityId), kindOf("Rare") },
 					{ W = screen[1], H = screen[2], Phone = screen[3] }
 				)
-				local tl = run.Timeline
-				local t = 0
-				while t < tl.Fly - 0.05 do
-					t = math.min(tl.Fly - 0.05, t + 1 / 30)
-					HatchStage.pose(run, t)
+				if screen[4] then
+					CapsuleView.setChain(o, 2, 5)
 				end
-				local label = `{rarityId} {screen[1]}x{screen[2]}`
+				local tl = run.Timeline
+				local label = `{rarityId} {screen[1]}x{screen[2]}{if screen[4] then " chain" else ""}`
+				local t = 0
+				local words: { number } = {}
+				while t < tl.Fly - 0.05 do
+					t = math.min(tl.Fly - 0.05, t + 1 / 60)
+					HatchStage.pose(run, t)
+					local b = o.Banner
+					if b.Frame.Visible then
+						table.insert(words, b.Word.TextSize)
+						-- (once settled: the slam over; the words never under the floor)
+						if t >= tl.Banner + 0.35 then
+							T.near(b.Scale.Scale, 1, 1e-6, label .. ": settled, the slam alone scales")
+							T.truthy(b.Word.TextSize * b.Scale.Scale >= CapsuleView.TagMin, label .. ": the word at TagMin or more")
+							if b.Sub.Visible then
+								T.truthy(b.Sub.TextSize * b.Scale.Scale >= CapsuleView.TagMin, label .. ": the sub line at TagMin or more")
+							end
+						end
+					end
+				end
+				-- fitted once: the word's size never changes frame to frame (no jumps from the bobbing pills)
+				for i = 2, #words do
+					T.eq(words[i], words[i - 1], label .. ": the word's size fixed for the run")
+				end
 				local b = o.Banner
-				T.truthy(b.Frame.Visible and b.Scale.Scale >= 0.6 - 1e-9, label .. ": the banner shows, never tiny")
+				if b.Word.TextSize < b.WordSize then
+					shrunk = true
+				end
+				T.truthy(b.Frame.Visible and b.Word.TextSize >= math.floor(b.WordSize * 0.6), label .. ": the banner shows, never tiny")
 				local half = CapsuleView.bannerWidth(o) * b.Scale.Scale / 2
 				local mid = b.Frame.Position.X.Offset
 				local top = b.Frame.Position.Y.Offset - b.Frame.Size.Y.Offset * b.Scale.Scale / 2
@@ -589,9 +626,120 @@ return function(T, Loader)
 				end
 			end
 		end
+		T.truthy(shrunk, "a wide phone's banner really shrinks to clear the pills")
 	end)
 
-	T.test("EggOpening V2: the eggs rock smoothly (owner 2026-10-30: no stutter): small steps frame to frame, no jumps", function()
+	T.test("EggOpening V2: the rarity pills step aside for AUTO like the names (phones, Open 3 and 5)", function()
+		for _, screen in { { 916, 516 }, { 1310, 605 }, { 1361, 629 } } do
+			for _, count in { 3, 5 } do
+				local kinds = {}
+				for i = 1, count do
+					kinds[i] = kindOf(if i % 2 == 0 then "Rare" else "Common")
+				end
+				local o, run = runOf("Stone", kinds, { W = screen[1], H = screen[2], Phone = true, Auto = true })
+				local tl = run.Timeline
+				HatchStage.pose(run, tl.Reveal + tl.GolemPop + 0.3)
+				local label = `x{count} {screen[1]}x{screen[2]}`
+				for _, badge in o.Badges do
+					if badge.Frame.Visible then
+						local x, y = badge.Frame.Position.X.Offset, badge.Frame.Position.Y.Offset
+						local w, h = badge.Frame.Size.X.Offset, badge.Frame.Size.Y.Offset
+						for _, keep in o.AutoKeep do
+							local over = x - w / 2 < keep.Max.X and x + w / 2 > keep.Min.X and y - h < keep.Max.Y and y > keep.Min.Y
+							T.falsy(over, label .. ": no pill under the Auto button")
+						end
+					end
+				end
+			end
+		end
+	end)
+
+	T.test("EggOpening V2: an auto-deleted best golem is never celebrated (no banner, no pulses, no tint)", function()
+		local legendary = kindOf("Legendary")
+		local o, run = runOf("Crystal", { kindOf("Common"), legendary, kindOf("Uncommon") }, { Deleted = { [2] = true } })
+		local tl = run.Timeline
+		T.eq(run.ShowRarity, "Uncommon", "the show follows the best golem kept")
+		T.eq(run.Tier, HatchFx.Tiers[2])
+		T.truthy(run.Kinds[run.BestSlot] ~= legendary, "its pulses are not the deleted golem's")
+		T.eq(run.ShowOrder, 2, "the tint follows the kept Uncommon: none (CapsuleController.MoodFrom is 4, Epic)")
+		local seen: { string } = {}
+		local t = 0
+		while t <= tl.Total do
+			for _, event in HatchStage.pose(run, t) do
+				table.insert(seen, event)
+			end
+			T.falsy(o.Banner.Frame.Visible, "no LEGENDARY! for a deleted golem")
+			t += 1 / 30
+		end
+		T.falsy(table.find(seen, "Banner"), "no Banner event (no chime)")
+		-- all deleted: the calmest show
+		local _, none = runOf("Crystal", { legendary }, { Deleted = { [1] = true } })
+		T.eq(none.Tier, HatchFx.Tiers[1])
+		T.eq(none.BestSlot, 0, "no pulses")
+	end)
+
+	T.test("EggOpening V2: Reduce motion: the new layers stay still (no rise, turn, grow, slam, breathe or turning rainbow)", function()
+		for _, order in { 1, 5, 6 } do
+			local tl = HatchFx.timeline(order, 3, false, true)
+			local t = 0
+			local aura: number? = nil
+			while t <= tl.Total do
+				for slot = 1, 3 do
+					local pose = HatchFx.eggPose(t, tl, slot, slot == 2)
+					T.eq(pose.Drop, 0, "no rise or bob")
+					T.eq(pose.Yaw, 0, "no turn")
+					local _, k = HatchFx.platformAt(t, tl, slot)
+					T.eq(k, 1, "the platform never grows or flares")
+				end
+				local scale, alpha = HatchFx.bannerAt(t, tl)
+				if alpha < 1 then
+					T.eq(scale, 1, "the banner fades in at its size")
+				end
+				if t >= tl.Reveal + 0.25 and t < tl.Fly then
+					local a = HatchFx.auraAt(t, tl, 1)
+					if aura then
+						T.near(a, aura, 1e-9, "the aura never breathes")
+					end
+					aura = a
+				end
+				t += 1 / 30
+			end
+		end
+		-- the Mythic banner's rainbow stays put
+		local o, run = runOf("Crystal", { kindOf("Mythic") }, { Reduced = true })
+		local tl = run.Timeline
+		local rotation: number? = nil
+		local t = tl.Banner
+		while t < tl.Fly do
+			HatchStage.pose(run, t)
+			if rotation then
+				T.eq(o.Banner.Paint.Rotation, rotation, "the rainbow never turns")
+			end
+			rotation = o.Banner.Paint.Rotation
+			t += 1 / 30
+		end
+	end)
+
+	T.test("EggOpening V2: Mythic's rainbow letters turn evenly (one sequence, no jumps)", function()
+		local o, run = runOf("Crystal", { kindOf("Mythic") })
+		local tl = run.Timeline
+		local color = o.Banner.Paint.Color
+		local last: number? = nil
+		local t = tl.Banner
+		while t < tl.Fly do
+			HatchStage.pose(run, t)
+			local r = o.Banner.Paint.Rotation
+			if last then
+				local step = (r - last) % 360
+				T.truthy(step > 0 and step <= 2, `an even turn at {t} ({step} degrees a frame)`)
+			end
+			last = r
+			T.eq(o.Banner.Paint.Color, color, "the same ColorSequence: never rebuilt")
+			t += 1 / 60
+		end
+	end)
+
+	T.test("EggOpening V2: the eggs rock smoothly (owner 2026-10-30: no stutter): sampled every ms, no jumps anywhere", function()
 		for _, order in { 1, 4, 5, 6 } do
 			for _, count in { 1, 3, 10 } do
 				for _, fast in { false, true } do
@@ -604,24 +752,42 @@ return function(T, Loader)
 						while t < tl.Burst do
 							local pose = HatchFx.eggPose(t, tl, slot, order >= 5 and slot == special)
 							if pose.Shown and last and lastScale then
-								-- (at 60 frames a second: the egg turns at most 6 degrees and grows at most 3 % a frame)
+								-- (review 2026-10-30: through the silhouette too, at most 0.5 degrees and 0.4 % a ms)
 								T.truthy(
-									math.abs(pose.Roll - last) <= math.rad(6),
+									math.abs(pose.Roll - last) <= math.rad(0.5),
 									`order {order} x{count} slot {slot}: a smooth rock at {t}`
 								)
-								if t < tl.Silhouette then -- (then the quick swell before the burst: a pop on purpose)
-									T.truthy(
-										math.abs(pose.Scale / lastScale - 1) <= 0.03,
-										`order {order} x{count} slot {slot}: a smooth pulse at {t}`
-									)
-								end
+								T.truthy(
+									math.abs(pose.Scale / lastScale - 1) <= 0.004,
+									`order {order} x{count} slot {slot}: a smooth size at {t}`
+								)
 							end
 							last, lastScale = pose.Roll, pose.Scale
-							t += 1 / 60
+							t += 0.001
 						end
 					end
 				end
 			end
+		end
+		-- the rock grows with the charge; the special egg swells with the suspense
+		for _, order in { 1, 5 } do
+			local tl = HatchFx.timeline(order, 3, false, false)
+			local function maxRoll(from: number, to: number): number
+				local m = 0
+				local t = from
+				while t < to do
+					m = math.max(m, math.abs(HatchFx.eggPose(t, tl, 1, false).Roll))
+					t += 0.002
+				end
+				return m
+			end
+			local early = maxRoll(tl.Charge, tl.Charge + 0.3)
+			local late = maxRoll(tl.Silhouette - 0.3, tl.Silhouette)
+			T.truthy(late > 1.5 * early, `order {order}: the rock grows with the charge ({early} -> {late})`)
+		end
+		for _, order in { 5, 6 } do
+			local tl = HatchFx.timeline(order, 3, false, false)
+			T.truthy(HatchFx.eggPose(tl.Silhouette - 0.005, tl, 2, true).Scale >= 1.05, `order {order}: the special egg swells`)
 		end
 		-- the sway: slow waves, -1..1
 		for i = 0, 600 do

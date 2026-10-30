@@ -3095,4 +3095,52 @@ return function(T, Loader)
 			end
 		end)
 	end)
+
+	T.test("EggPanel V2: the world's tint: one at an Epic+ burst, none below or with Reduce motion, gone at the flight", function()
+		local Color3 = roblox.Color3
+		withController(function(_C, w)
+			local CapsuleController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local seam = CapsuleController._test
+			local camera = Instance.new("Camera")
+			local function count(): number
+				local n = 0
+				for _, child in camera:GetChildren() do
+					if child.Name == "TerraForgeOpeningMood" then
+						n += 1
+					end
+				end
+				return n
+			end
+			local function finishTweens()
+				for _, made in w.tweens do
+					made.Completed.fire()
+				end
+				table.clear(w.tweens)
+			end
+			seam.setMood(5, Color3.new(1, 0.7, 0.1), false, camera)
+			T.eq(count(), 1, "one tint at an Epic+ burst")
+			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, camera)
+			T.eq(count(), 1, "never two (two Epic+ openings)")
+			seam.setMood(0, Color3.new(1, 1, 1), false, camera)
+			finishTweens()
+			T.eq(count(), 0, "gone at the flight")
+			T.eq(seam.mood(), nil)
+			seam.setMood(5, Color3.new(1, 0.7, 0.1), true, camera)
+			T.eq(count(), 0, "none with Reduce motion")
+			seam.setMood(3, Color3.new(0, 0.5, 1), false, camera)
+			T.eq(count(), 0, "none below Epic")
+			-- (left on by a skipped flight: the chain's end and a failing opening take it away)
+			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, camera)
+			seam.setMood(0, Color3.new(1, 1, 1), true)
+			finishTweens()
+			T.eq(count(), 0, "endChain's setMood(0, ..., true) clears it whatever was skipped")
+		end)
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		local flat = string.gsub(source, "%s+", " ")
+		T.truthy(string.find(flat, "setBlur(false) setMood(0, Color3.new(1, 1, 1), true)", 1, true), "endChain clears it")
+		T.truthy(
+			string.find(flat, 'setMood(0, Color3.new(1, 1, 1), true) pcall(Sfx.loop, "CaseCharge", false)', 1, true),
+			"a failing opening clears it and the hum"
+		)
+	end)
 end

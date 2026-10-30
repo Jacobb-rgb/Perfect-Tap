@@ -38,7 +38,13 @@ Totals: Open 3 Commons 4.64 s, Epic 4.84 s, Legendary 6.19 s, Mythic 6.79 s, Aut
 - Smooth: every rock of the eggs is a slow sway (HatchFx.sway, 2.8 - 4.4 a second) whose strength only
   ramps (crack steps ease in, the silhouette stills it eased): no buzz, no jump between two frames.
 - Everything is pooled (CapsuleView.buildOpening) and hidden by HatchStage.clear; the world tint is
-  removed with the blur (CapsuleController.endChain).
+  removed with the blur (CapsuleController.endChain) and after a failing opening.
+- Review round 1 (integrator 2026-10-30): the banner's word is fitted ONCE a run (HatchStage.bannerFit,
+  from the pills' rest and bob range; only the word shrinks, the sub line stays at TagMin or more); the
+  pills step aside for AUTO like the names (else the rarity alone, else none); the show (Tier, banner,
+  pulses, tint) follows the best golem the player KEEPS, an auto-deleted one is never celebrated; the
+  Mythic banner's rainbow turns evenly (Paint.Rotation, one sequence); every sway eases out over the
+  silhouette (sampled every ms: at most 0.5 degrees and 0.4 % a ms).
 
 ## Files
 - src/client/UI/HatchFx.luau: Times (entrance, float), Tiers, timeline, eggPose (Drop, Yaw, Charge),

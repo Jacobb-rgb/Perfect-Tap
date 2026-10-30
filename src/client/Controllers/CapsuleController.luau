@@ -958,8 +958,8 @@ end
 ]]
 CapsuleController.MoodFrom = 4 -- the best rarity's Order from which the world takes its colour
 local mood: ColorCorrectionEffect? = nil
-local function setMood(order: number, color: Color3, reduced: boolean)
-	local camera = Workspace.CurrentCamera
+local function setMood(order: number, color: Color3, reduced: boolean, onCamera: Camera?)
+	local camera = onCamera or Workspace.CurrentCamera -- (onCamera: the specs' own)
 	local on = order >= CapsuleController.MoodFrom and not reduced and camera ~= nil
 	local made = mood
 	if on and camera then
@@ -1151,7 +1151,7 @@ local function onEvents(run: HatchStage.Run, events: { string })
 			if run.BestOrder >= 5 and not reduced then
 				CameraShake.add(if run.BestOrder >= 6 then 0.5 else 0.38)
 			end
-			setMood(run.BestOrder, run.BestColor, reduced)
+			setMood(run.ShowOrder, run.ShowColor, reduced) -- (the best KEPT golem's: a deleted one isn't celebrated)
 		elseif event == "Reveal" then
 			if run.BestOrder >= 5 then
 				Sfx.play("Discovery")
@@ -1166,7 +1166,7 @@ local function onEvents(run: HatchStage.Run, events: { string })
 				Sfx.play("LevelChime", nil, 1.25)
 			end
 		elseif event == "Fly" then
-			setMood(0, run.BestColor, reduced)
+			setMood(0, run.ShowColor, reduced)
 			if not reduced then
 				Sfx.play("LevelWhoosh", nil, 1.1)
 			end
@@ -1491,6 +1491,9 @@ local function play(result: Result)
 	currentRun = nil -- (also after a failing one)
 	if not ok then
 		warn("[CapsuleController] opening failed: " .. tostring(err))
+		-- (V2: a step failing after the burst leaves no world tint and no charge hum to the next opening)
+		setMood(0, Color3.new(1, 1, 1), true)
+		pcall(Sfx.loop, "CaseCharge", false)
 	end
 	HatchStage.clear(o, stageGolems) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
 	table.clear(stageGolems)
@@ -1748,6 +1751,10 @@ end
 
 -- The Lune specs (tests/EggPanel.spec.luau, tests/EggRedo.spec.luau) drive these, on fakes.
 CapsuleController._test = {
+	setMood = setMood, -- (V2: the world's tint, on a camera the spec gives)
+	mood = function(): ColorCorrectionEffect?
+		return mood
+	end,
 	close = function()
 		playing, autoOn, autoNote = false, false, nil
 		pendingUntil, lastSend = 0, -math.huge
