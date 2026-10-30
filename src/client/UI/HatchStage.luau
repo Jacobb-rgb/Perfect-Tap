@@ -148,6 +148,9 @@ local function relayout(run: Run)
 	run.SafeBottom = run.Refs.SafeBottom
 	local aspect = size.X / math.max(1, size.Y)
 	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, HatchStage.marks(run))
+	-- (a screen too short for the second row's marks even with the smallest golems: said, as setTag's
+	-- UnderAuto; the specs hold it never is)
+	run.Refs.Gui:SetAttribute("MarksOverrun", run.Layout.Overrun)
 	for slot, rec in run.Args.Eggs do
 		local s = run.Layout.Slots[slot]
 		if s then

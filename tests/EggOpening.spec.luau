@@ -40,11 +40,15 @@ return function(T, Loader)
 			H: number?,
 			Deleted: { [number]: boolean }?,
 			Waiting: { [number]: boolean }?,
+			Auto: boolean?, -- the Auto button shown (true) or hidden (false) before the run lays itself out
 		}?
 	): (any, any, { number })
 		local o2 = opts or {}
 		local o = CapsuleView.buildOpening(o2.Phone == true)
 		CapsuleView.layoutOpening(o, o2.Phone == true, o2.W or 1280, o2.H or 720, { Touch = o2.Phone == true, Inset = 36 })
+		if o2.Auto ~= nil then
+			CapsuleView.setAuto(o, o2.Auto, false, "", nil)
+		end
 		local eggs = {}
 		for _ = 1, #kinds do
 			local model = GolemBuilder.capsule(egg)
@@ -533,6 +537,28 @@ return function(T, Loader)
 									table.insert(boxes, { Slot = slot, Box = part })
 								end
 							end
+							if tag.Deleted.Visible then
+								-- the pill: its trash mark and DELETED; beside the button the trash mark alone, in
+								-- its middle (the word never spills out of the narrow pill)
+								local narrow = tag.Deleted.Size.X.Offset == CapsuleView.DeletedNarrow
+								T.truthy(narrow or tag.Deleted.Size.X.Offset == CapsuleView.DeletedWide, label .. ": one of its two forms")
+								T.eq(tag.DeletedWord.Visible, not narrow, label .. ": DELETED only in the wide pill")
+								local can = tag.DeletedCan
+								if narrow then
+									T.eq(can.AnchorPoint, Vector2.new(0.5, 0.5), label .. ": the trash mark centred")
+									T.eq(can.Position, roblox.UDim2.fromScale(0.5, 0.5))
+								else
+									T.eq(can.AnchorPoint, Vector2.new(0, 0.5), label .. ": the trash mark left of the word")
+								end
+							end
+							-- (all of it on the screen: nothing under its bottom, the stroke round a pill included)
+							for _, part in parts do
+								local rim = if part[1] == "note" or part[1] == "DELETED" then 2 else 0
+								T.truthy(
+									part[2].Max.Y + rim <= size.Y - o.SafeBottom,
+									`{label}: its {part[1]} on the screen ({part[2].Max.Y + rim} of {size.Y - o.SafeBottom})`
+								)
+							end
 							table.insert(boxes, { Slot = slot, Box = parts[1][2] })
 							if autoShown then
 								-- (the keep boxes carry a 4-unit margin round the button: a hair of it may touch, nothing more)
@@ -544,6 +570,7 @@ return function(T, Loader)
 								end
 							end
 						end
+						T.eq(o.Gui:GetAttribute("MarksOverrun"), nil, `{W}x{H} n {n}: the marks fit the screen`)
 						-- no tag runs into a neighbour's (its name, its mark)
 						for i = 1, #boxes do
 							for j = i + 1, #boxes do
@@ -653,11 +680,12 @@ return function(T, Loader)
 						H = H,
 						Waiting = if mark == "Waiting" then marked else nil,
 						Deleted = if mark == "Deleted" then marked else nil,
+						Auto = autoShown, -- (laid out with it from the start: the comparison below is real)
 					})
 					local label = `{phone[1]}x{phone[2]}, {mark}, Auto {if autoShown then "shown" else "hidden"}`
 					T.truthy(run.Marked, label .. ": marks in the second row count too")
 					T.eq(run.Special, 3, "(the Legendary in the top row's middle)")
-					CapsuleView.setAuto(o, autoShown, false, "", nil)
+					T.eq(o.AutoHolder.Visible, autoShown, "(laid out with Auto shown or hidden)")
 					local before = run.Layout.Slots[6].Golem.Y
 					-- (the safe frame settles after the opening began: the home indicator under it)
 					CapsuleView.layoutOpening(o, true, W, H, { Touch = true, Inset = 58 / scale, SafeBottom = safe })
@@ -666,6 +694,7 @@ return function(T, Loader)
 						T.truthy(run.Layout.Slots[6].Golem.Y ~= before, label .. ": laid out again for it")
 					end
 					local floor = run.Size.Y - o.SafeBottom
+					T.eq(o.Gui:GetAttribute("MarksOverrun"), nil, label .. ": the marks fit above the home indicator")
 					for slot = 6, 10 do
 						local tag = o.Tags[slot]
 						local m = if mark == "Waiting" then tag.Waiting else tag.Deleted

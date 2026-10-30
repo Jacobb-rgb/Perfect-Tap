@@ -314,14 +314,18 @@ end
 
 -- (the Lune specs: a pickup target shown, a hold, the loop's next look)
 InteractController._test = {
-	parts = function(): (any, any) -- (stand-ins for the highlight and the hint: Lune's instances can't hold a nil Adornee)
+	parts = function(): (any, any, () -> ()) -- (stand-ins for the highlight and the hint: Lune's instances can't hold a nil Adornee)
+		local wasHighlight, wasHint, wasName, wasAction = highlight, hint, hintName, hintAction
 		local fakeHighlight: any = { Adornee = nil }
 		local fakeHint: any = { Adornee = nil, Enabled = false }
 		local fakeName: any, fakeAction: any = { Text = "" }, { Text = "" }
 		highlight = fakeHighlight
 		hint = fakeHint
 		hintName, hintAction = fakeName, fakeAction
-		return fakeName, fakeAction -- (the hint's two lines: the item's name, "[F] Pick up ...")
+		-- (the hint's two lines: the item's name, "[F] Pick up ..."; and the parts as they were, back)
+		return fakeName, fakeAction, function()
+			highlight, hint, hintName, hintAction = wasHighlight, wasHint, wasName, wasAction
+		end
 	end,
 	show = function(model: Model)
 		target = model

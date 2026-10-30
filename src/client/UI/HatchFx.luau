@@ -235,6 +235,7 @@ export type Layout = {
 	Special: number?,
 	Slots: { Slot },
 	Spacing: number, -- between two neighbours' middles (a share of the screen's width): a name fits in it
+	Overrun: boolean?, -- the second row's marks still pass `Floor` at the smallest golems (HatchStage reports it)
 }
 
 HatchFx.ChanceShare = 0.74 -- the "1 in N" under a name, against the name's size
@@ -283,6 +284,7 @@ function HatchFx.layout(count: number, aspect: number, special: number?, marks: 
 	local a = math.max(0.8, if aspect == aspect then aspect else 16 / 9)
 	local slots: { Slot } = {}
 	local spacing = 0.9
+	local overrun = false
 	if n == 1 then
 		local big = special == 1
 		table.insert(slots, {
@@ -344,9 +346,11 @@ function HatchFx.layout(count: number, aspect: number, special: number?, marks: 
 				local feet = math.max(rowY[1] - 0.01 + h / 2, if special then rowY[1] + 0.005 + hs / 2 else 0)
 				-- (the second row's golem heads under the top row's tags, a little gap)
 				local y2 = math.max(rowY[2], feet + marks.Top + 0.02 + 0.01 + h / 2)
-				if y2 - 0.01 + h / 2 + marks.Low <= marks.Floor or h <= 0.17 then
+				local fits = y2 - 0.01 + h / 2 + marks.Low <= marks.Floor
+				if fits or h <= 0.17 then
 					rowY = { rowY[1], y2 }
 					golemH, specialH, eggH = h, hs, 0.29 * h / 0.25
+					overrun = not fits -- (the smallest golems and still past it: a screen too short)
 					break
 				end
 				h -= 0.01
@@ -366,7 +370,7 @@ function HatchFx.layout(count: number, aspect: number, special: number?, marks: 
 			})
 		end
 	end
-	return { Count = n, Special = special, Slots = slots, Spacing = spacing }
+	return { Count = n, Special = special, Slots = slots, Spacing = spacing, Overrun = if overrun then true else nil }
 end
 
 --[[

@@ -493,8 +493,9 @@ local onScreen: (spot: Spot?) -> boolean -- (below: is the egg's panel, its odds
 	  any distance the panel shows from (ShowRange); Auto's steps too.
 	- any other, within the "Buy Egg!" prompt's reach as well: "Pointer"
 	  (the big E's disc tapped or clicked, the opens round it, a pad's A on
-	  them), "Prompt" (the Auto prompt: G, a gamepad's B) and nil (the keys:
-	  E, R / X, a gamepad's focus).
+	  them), "Prompt" (the Auto prompt: G, a gamepad's B), "Opening" (the
+	  opening's own Auto button, G, B: they only stop Auto) and nil (the
+	  keys: E, R / X, a gamepad's focus).
 	"Odds": turn to see the odds; "Far": come closer. A turned camera
 	never buys on odds off the screen. (What a press meant to skip the
 	opening that just ended lands on, "Panel", "Pointer" and "Prompt",
@@ -1696,6 +1697,9 @@ local function autoStep()
 		autoWaits = waits
 		waitsSaid = false
 		refreshPanel() -- ("Waiting" on the toggle while the odds are off the screen)
+		if autoEgg ~= id then
+			return -- (that refresh stopped Auto: the odds changed under it; its own toast says so)
+		end
 	end
 	if waits and not waitsSaid and not toggleSeen(spots[id]) then
 		-- (the toggle's "Waiting" isn't seen: a toast says why, once a pause)
@@ -1718,9 +1722,12 @@ end
 
 ---------------------------------------------------------------- the eggs
 
--- The Auto prompt (G, a gamepad's B: also the opening's skip-all) triggered at egg `id`.
-local function onAutoPrompt(id: string)
-	EggPanelController.toggleAuto(id, "Prompt")
+-- A prompt's Triggered handler, kept for the specs: they fire the very function the prompt calls
+-- (Lune's prompts fire nothing).
+local triggers: { [ProximityPrompt]: () -> () } = setmetatable({}, { __mode = "k" }) :: any
+local function onTriggered(prompt: ProximityPrompt, handler: () -> ())
+	triggers[prompt] = handler
+	prompt.Triggered:Connect(handler)
 end
 
 local function addEgg(id: string, model: Model)
@@ -1759,7 +1766,7 @@ local function addEgg(id: string, model: Model)
 		Buy = buy,
 		Auto = nil,
 	}
-	buy.Triggered:Connect(function()
+	onTriggered(buy, function()
 		local from = if os.clock() - discAt < 0.5 then "Pointer" else nil -- (the disc tapped, or E / a pad's Y)
 		if EggPanelController.open(id, 1, from) then
 			squash() -- (only a press that buys: a refused one says why instead)
@@ -1792,8 +1799,9 @@ local function addEgg(id: string, model: Model)
 		})
 		eggLook(made)
 		made.Parent = point
-		made.Triggered:Connect(function()
-			onAutoPrompt(id)
+		-- (G, a gamepad's B: also the opening's skip-all, mashed as an opening ends: "Prompt" rests RebuyGuard)
+		onTriggered(made, function()
+			EggPanelController.toggleAuto(id, "Prompt")
 		end)
 		spot.Auto = made
 	end
@@ -1865,7 +1873,14 @@ end
 -- The Lune specs drive the controller through these (tests/EggPanel.spec.luau, on fakes for Roblox's services).
 EggPanelController._test = {
 	tick = tick,
-	autoPrompt = onAutoPrompt, -- (the prompt's Triggered: Lune's prompts fire nothing)
+	-- (a prompt's Triggered, as Roblox fires it: false when it has no handler)
+	trigger = function(prompt: ProximityPrompt): boolean
+		local handler = triggers[prompt]
+		if handler then
+			handler()
+		end
+		return handler ~= nil
+	end,
 	watch = watchStall,
 	state = function(): { [string]: any }
 		return {
@@ -1926,7 +1941,7 @@ function EggPanelController.init()
 		toggle = function()
 			local id = autoEgg or current
 			if id then
-				EggPanelController.toggleAuto(id)
+				EggPanelController.toggleAuto(id, "Opening") -- (stop-only: available() is false while it shows)
 			end
 		end,
 	})

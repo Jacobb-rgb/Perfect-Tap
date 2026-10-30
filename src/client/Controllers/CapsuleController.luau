@@ -130,6 +130,7 @@ export type Result = {
 
 CapsuleController.Batch = 10 -- the most golems one opening shows (CapsuleView.StageTags): a x50 is 5 openings
 CapsuleController.RebuyGuard = 0.5 -- seconds after an opening ends the shop's OPEN buttons rest (A mashed to skip)
+CapsuleController.SafeShare = 0.1 -- the most of the screen's height read as under its safe frame (a home indicator: ~5 %)
 CapsuleController.BoardSeconds = 6 -- seconds each capsule's odds stay on the stall's board
 CapsuleController.BoardTick = 1 -- seconds between two checks of the board (Triple Lucky starting / ending)
 CapsuleController.BoardPixels = 120 -- the board's SurfaceGui PixelsPerStud (sharper text)
@@ -1277,12 +1278,14 @@ local function fitOpening(o: CapsuleView.OpenRefs)
 		end
 	end
 	-- (what lies under the safe frame, a phone's home indicator: the Controls gui sits in that frame,
-	-- CoreUISafeInsets; its Absolute* frame, as every gui's, starts under Roblox's top bar row)
+	-- CoreUISafeInsets; its Absolute* frame, as every gui's, starts under Roblox's top bar row. Not laid
+	-- out yet (0) or not yet the new window's: at most SafeShare of the screen, fitted again as it settles)
 	local safeBottom = 0
 	pcall(function()
 		local size = o.Controls.AbsoluteSize
 		if size.Y > 0 then
-			safeBottom = math.max(0, (view.Y - inset.Y) - (o.Controls.AbsolutePosition.Y + size.Y))
+			local under = (view.Y - inset.Y) - (o.Controls.AbsolutePosition.Y + size.Y)
+			safeBottom = math.clamp(under, 0, view.Y * CapsuleController.SafeShare)
 		end
 	end)
 	CapsuleView.layoutOpening(o, compactNow(), view.X / scale, view.Y / scale, {

@@ -2141,31 +2141,79 @@ return function(T, Loader)
 				-- (the controller's own RebuyGuard, not the harness's stand-in)
 				patched({ { CC, "justEnded", CC._test.justEnded } }, function()
 					w.at("Stone")
+					local spot = C._test.state().Spots.Stone
 					local toasts = #w.toasts
 					-- a pad's B mashed to skip the chain of openings (its skip-all) lands on the Auto prompt
-					-- (Role "Second": B, G on a keyboard) the moment the chain ends and the prompts come back
+					-- (Role "Second": B, G on a keyboard) the moment the chain ends and the prompts come back:
+					-- its own Triggered handler, as Roblox fires it
 					CC._test.ended(os.clock())
-					C._test.autoPrompt("Stone")
+					T.truthy(C._test.trigger(spot.Auto), "(the Auto prompt's handler)")
 					T.eq(C._test.state().Auto, nil, "within RebuyGuard: Auto stays off")
 					T.eq(#w.toasts, toasts, "quietly")
 					-- RebuyGuard later: a press means it
 					CC._test.ended(os.clock() - CC.RebuyGuard - 0.05)
-					C._test.autoPrompt("Stone")
+					C._test.trigger(spot.Auto)
 					T.eq(C._test.state().Auto, "Stone", "after RebuyGuard: Auto on")
 					-- it stops at once, though, even right after an opening
 					CC._test.ended(os.clock())
-					C._test.autoPrompt("Stone")
+					C._test.trigger(spot.Auto)
 					T.eq(C._test.state().Auto, nil, "a press right after an opening still stops it")
-					-- and E (one egg, never a skip) isn't guarded
+					-- and E on the "Buy Egg!" prompt (one egg, never a skip) isn't guarded
 					local before = #w.buys
-					T.truthy(C.open("Stone", 1), "E buys")
-					T.eq(#w.buys, before + 1)
+					T.truthy(C._test.trigger(spot.Buy), "(the Buy prompt's handler)")
+					T.eq(#w.buys, before + 1, "E buys")
 				end)
 			end)
 			CC._test.ended(nil) -- (also when an assertion threw)
 			if not ok then
 				error(err, 0)
 			end
+		end)
+	end)
+
+	T.test("EggPanelController: a pause that begins or ends as Triple Lucky runs out: only Auto's stop is told, nothing bought", function()
+		withController(function(C, w)
+			w.view, w.camY = Vector2.new(1280, 900), 700
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			-- (past the prompt's reach: the panel's toggle runs Auto from ShowRange; the tick's own refresh
+			-- for a reach change stays out of it)
+			w.lucky = true
+			w.at("Stone", EggPanel.PromptDistance + 1)
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard) -- (the big E up: the panel can't come down)
+			local function auto()
+				C.toggleAuto("Stone", "Panel")
+				T.eq(C._test.state().Auto, "Stone", "(Auto on)")
+				T.truthy(C._test.state().Lucky, "(on Triple Lucky's odds)")
+			end
+			local function turn(camY: number)
+				w.camY = camY
+				w.renders.TerraForgeEggPanelFloat()
+				C._test.tick()
+			end
+			-- the camera turns away (the odds off the screen) the moment Triple Lucky runs out
+			auto()
+			local toasts, buys = #w.toasts, #w.buys
+			w.lucky = false
+			turn(150)
+			T.eq(C._test.state().Auto, nil, "Auto stopped on the new odds")
+			T.eq(#w.toasts, toasts + 1, `one toast ({w.toasts[#w.toasts]})`)
+			T.eq(w.toasts[#w.toasts], "Triple Lucky ended: Auto stopped", "Auto's stop, no Auto waits after it")
+			T.eq(#w.buys, buys, "nothing bought")
+			-- the other way: Auto waiting, the odds come back the moment Triple Lucky runs out
+			turn(700)
+			w.lucky = true
+			hooks.onChanged()
+			auto()
+			turn(150)
+			T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting", "(Auto waits)")
+			toasts, buys = #w.toasts, #w.buys
+			w.lucky = false
+			turn(700)
+			T.eq(C._test.state().Auto, nil, "Auto stopped on the new odds")
+			T.eq(w.toasts[#w.toasts], "Triple Lucky ended: Auto stopped")
+			T.eq(#w.buys, buys, "no egg bought as Auto stopped (the new odds only just showed)")
+			w.lucky = false
 		end)
 	end)
 
@@ -2237,6 +2285,11 @@ return function(T, Loader)
 				T.eq(said(), before + 1, "touch, the egg behind the camera: the toast")
 				turn(190, -5)
 				T.eq(said(), before + 1, "once a pause")
+				-- in front again (still off the side: the same pause), then behind once more: no second toast
+				turn(190, 10)
+				T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting", "(the same pause)")
+				turn(190, -5)
+				T.eq(said(), before + 1, "behind, in front, behind: still once a pause")
 				w.camShift = nil
 				turn(190, 10)
 				C.toggleAuto("Stone", "Panel")
@@ -2694,6 +2747,7 @@ return function(T, Loader)
 				-- (an all-waiting opening: the rows part, so no top-row note covers a second-row golem's head)
 				play(p, last, "names", function(run: any)
 					T.truthy(run.Marked, `{view.X}: the top row carries notes`)
+					T.eq(p.Gui:GetAttribute("MarksOverrun"), nil, `{view.X}: the marks fit above the safe bottom`)
 					local size = run.Size
 					local aspect = size.X / size.Y
 					local heads = {}
@@ -2951,7 +3005,7 @@ return function(T, Loader)
 	T.test("InteractController: held by an opening, its pickup target, highlight and hint go and stay off", function()
 		withController(function(_C, _w)
 			local IC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.InteractController")
-			local _name, action = IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
+			local _name, action, restore = IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
 			local item = Instance.new("Model") -- (a dirty chunk on the ground: its hint "[F] Pick up")
 			item:SetAttribute("Kind", "Raw")
 			item:SetAttribute("OreId", "Coal")
@@ -2986,9 +3040,10 @@ return function(T, Loader)
 				T.truthy(target == item and adornee == item and shown, "and the item is its target again, highlighted, its hint up")
 				T.truthy(string.find(action.Text, "[F] Pick up", 1, true) == 1, `its hint names F: {action.Text}`)
 			end)
-			-- (also when an assertion threw: the real chooser back, no hold left)
+			-- (also when an assertion threw: the real chooser and parts back, no hold left)
 			IC._test.setChooser(nil)
 			IC.hold("CapsuleOpening", false)
+			restore()
 			if not ok then
 				error(err, 0)
 			end
