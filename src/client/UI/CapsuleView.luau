@@ -2625,12 +2625,22 @@ function CapsuleView.openTargets(refs: OpenRefs): { GuiObject }
 	return { refs.Auto }
 end
 
--- The best kind of a batch (highest GolemConfig.score; first on a tie).
+--[[
+	The best kind of a batch for the opening: the RAREST (its Rarity order; the owner's brief: "use the
+	highest rarity to determine the special cinematic effect"), then the highest GolemConfig.score,
+	the first on a tie. (Rarity first on purpose: score may weigh bonuses above rarity.)
+]]
 function CapsuleView.best(kinds: { string }): string?
 	local best: string? = nil
 	for _, kind in kinds do
-		if best == nil or GolemConfig.score(kind) > GolemConfig.score(best) then
+		local current = best
+		if current == nil then
 			best = kind
+		else
+			local order, bestOrder = GolemConfig.order(kind), GolemConfig.order(current)
+			if order > bestOrder or (order == bestOrder and GolemConfig.score(kind) > GolemConfig.score(current)) then
+				best = kind
+			end
 		end
 	end
 	return best

@@ -799,6 +799,26 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("EggOpening V2: the show follows the RAREST golem, whatever a golem's score weighs", function()
+		local had = GolemConfig.score
+		local ok, err = pcall(function()
+			-- (a score that puts bonuses above rarity, as a golem-stats change may: the opening must not follow it)
+			GolemConfig.score = function(kind: string): number
+				local golem = GolemConfig.ById[kind]
+				return if golem then golem.Bonus.Value * 1000 - GolemConfig.order(kind) else -1
+			end
+			local legendary = kindOf("Legendary")
+			local _, run = runOf("Crystal", { kindOf("Common"), legendary, kindOf("Uncommon") })
+			T.eq(run.ShowRarity, "Legendary", "the Legendary's show")
+			T.eq(run.Kinds[run.BestSlot], legendary, "its slot")
+			T.eq(CapsuleView.best({ kindOf("Rare"), kindOf("Mythic"), kindOf("Epic") }), kindOf("Mythic"))
+		end)
+		GolemConfig.score = had
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("EggOpening: the cracks glow in the colour of the golem inside (white Common, a moving rainbow Mythic)", function()
 		T.eq(HatchFx.crackColor("Common", 0, 0, 0), BrightTheme.crackColour("Common"), "white for Common")
 		T.eq(HatchFx.crackColor("Epic", 0, 0, 0), Rarity.ById.Epic.Color, "the rarity's colour")
