@@ -71,17 +71,19 @@
 	  client shows the odds that hold now. A request without Lucky (an older
 	  client) and the wheel's free capsule get the server's view (on, or
 	  within the grace).
-	- CapsuleAction ("AutoDelete", { Kind, On }) (owner 2026-10-29, the egg
-	  panel's trash icon; the same rate limit): data.Golems.AutoDelete[Kind]
+	- CapsuleTrash ({ Kind, On }) (owner 2026-10-29, the egg panel's trash
+	  icon; its own rate limit, Net.Events): data.Golems.AutoDelete[Kind]
 	  = true (a known golem kind, at most MaxAutoDelete kinds) or nil. A
-	  golem of such a kind out of a COIN or a free egg still opens, counts
-	  (Stats.CapsulesOpened, the quests' onOpened) and shows in the opening
-	  (its Woken entry Deleted = true, Id 0), but is not added to Owned; a
-	  paid golem (Robux eggs, a bought wheel spin) is never auto-deleted.
-	  The room check counts only the golems that are kept: an open whose
-	  every golem is auto-deleted works with a full inventory. Answer:
-	  ActionResult { Action = "Capsule", Op = "AutoDelete", Ok, Kind, On,
-	  Reason? }.
+	  golem of such a kind out of an egg the player opens with COINS
+	  (openCoins: Open, Auto) still opens, counts (Stats.CapsulesOpened, the
+	  quests' onOpened) and shows in the opening (its Woken entry Deleted =
+	  true, Id 0), but is not added to Owned; that open's room check counts
+	  only the golems that are kept (one whose every golem is auto-deleted
+	  works with a full inventory). Never auto-deleted: a free capsule's
+	  golem (grantFree: the wheel, a quest; the room for all of it as
+	  before, so the wheel's full-inventory coins stay true) and a paid
+	  golem (Robux packs, a bought spin). Answer: ActionResult { Action =
+	  "Capsule", Op = "AutoDelete", Ok, Kind, On, Reason? }.
 	- Rolls: a fresh Random.new() per call (seeded by the engine; swappable
 	  for the tests).
 	- Data: golems through GolemConfig.add, Stats.CapsulesOpened counts every
@@ -248,16 +250,22 @@ function CapsuleService.roll(capsuleId: string, count: number, lucky: boolean, r
 	return kinds
 end
 
--- The kinds the player auto-deletes (data.Golems.AutoDelete), or nil: none. Never for a paid golem.
-local function autoDeleting(data: { [string]: any }, paid: boolean?): { [string]: any }?
+--[[
+	The kinds the player auto-deletes (data.Golems.AutoDelete), or nil:
+	none. Only for a `coins` open: an egg the player opens with coins
+	(openCoins: Open, Auto). Never for a free capsule (the wheel, a quest:
+	their full-inventory refusal and its fallback stay as promised) or a
+	paid golem (Robux packs, bought spins).
+]]
+local function autoDeleting(data: { [string]: any }, coins: boolean?): { [string]: any }?
 	local golems = data.Golems
-	local set = if not paid and type(golems) == "table" then golems.AutoDelete else nil
+	local set = if coins == true and type(golems) == "table" then golems.AutoDelete else nil
 	return if type(set) == "table" and next(set) ~= nil then set else nil
 end
 
--- How many of `kinds` the save keeps (the others are auto-deleted: the room check counts only these).
-function CapsuleService.kept(data: { [string]: any }, kinds: { string }, paid: boolean?): number
-	local set = autoDeleting(data, paid)
+-- How many of `kinds` the save keeps (a `coins` open's auto-deleted ones aren't: its room check counts only the kept).
+function CapsuleService.kept(data: { [string]: any }, kinds: { string }, coins: boolean?): number
+	local set = autoDeleting(data, coins)
 	local n = 0
 	for _, kind in kinds do
 		if not (set and set[kind] == true) then
@@ -270,15 +278,22 @@ end
 -- Adds already-rolled kinds to the save (pure on `data`; the caller calls
 -- DataService.changed). Returns the woken golems, how many didn't fit
 -- (only with `overCap`, past GolemConfig.MaxSaved; otherwise the caller
--- checked the room first) and those kinds. An auto-deleted kind (not
--- `paid`) wakes too (Deleted, Id 0: it counts and shows) but isn't kept.
-local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?, paid: boolean?): ({ Woken }, number, { string })
+-- checked the room first) and those kinds. In a `coins` open (openCoins)
+-- an auto-deleted kind wakes too (Deleted, Id 0: it counts and shows) but
+-- isn't kept.
+local function add(
+	data: { [string]: any },
+	kinds: { string },
+	overCap: boolean?,
+	paid: boolean?,
+	coins: boolean?
+): ({ Woken }, number, { string })
 	if type(data.Golems) ~= "table" then
 		data.Golems = { Owned = {}, Equipped = {}, NextId = 1 }
 	end
 	local woken: { Woken } = {}
 	local left: { string } = {}
-	local deleting = autoDeleting(data, paid)
+	local deleting = autoDeleting(data, coins)
 	for _, kind in kinds do
 		if deleting and deleting[kind] == true then
 			table.insert(woken, { Id = 0, Kind = kind, Deleted = true })
@@ -387,7 +402,7 @@ function CapsuleService.openCoins(player: Player, capsuleId: string, count: numb
 	end
 	-- (the room counts only the golems that are kept: with auto-delete on, after the roll)
 	local room = GolemConfig.room(data.Golems)
-	if room < count and not autoDeleting(data, false) then
+	if room < count and not autoDeleting(data, true) then
 		return false, "InventoryFull", nil
 	end
 	if not EconomyService.canAfford(player, price) then
@@ -402,7 +417,7 @@ function CapsuleService.openCoins(player: Player, capsuleId: string, count: numb
 	if #kinds ~= count then
 		return false, "BadCapsule", nil -- a broken odds table: nothing is spent
 	end
-	if CapsuleService.kept(data, kinds, false) > room then
+	if CapsuleService.kept(data, kinds, true) > room then
 		return false, "InventoryFull", nil -- (nothing spent; the roll is dropped)
 	end
 	if type(data.Golems) ~= "table" then
@@ -411,8 +426,8 @@ function CapsuleService.openCoins(player: Player, capsuleId: string, count: numb
 	if not EconomyService.spend(player, price, "Capsule:" .. capsuleId) then
 		return false, "NoCoins", nil
 	end
-	-- paid: grant in the same step (the room was checked, every kind is known)
-	local woken = add(data, kinds)
+	-- paid: grant in the same step (the room was checked, every kind is known; the trash applies here)
+	local woken = add(data, kinds, nil, nil, true)
 	DataService.changed(player)
 	local result: Result = { Capsule = capsuleId, Count = count, Golems = woken, Lucky = lucky }
 	opened(player, { Capsule = capsuleId, Count = count, Kinds = kindsOf(woken), Lucky = lucky, Source = "Coins", Price = price })
@@ -440,17 +455,14 @@ function CapsuleService.grantFree(player: Player, capsuleId: string, count: numb
 		return nil, "BadCapsule"
 	end
 	local bought = paid == true
-	local room = GolemConfig.room(data.Golems)
-	if room < n and not autoDeleting(data, bought) then
+	-- (no auto-delete for a free capsule: the room for all of it, as the wheel's fallback promises)
+	if GolemConfig.room(data.Golems) < n then
 		return nil, "InventoryFull"
 	end
 	local lucky = CapsuleService.tripleLucky(player, data, clock())
 	local kinds = CapsuleService.roll(capsuleId, n, lucky, newRandom(player))
 	if #kinds ~= n then
 		return nil, "BadCapsule"
-	end
-	if CapsuleService.kept(data, kinds, bought) > room then
-		return nil, "InventoryFull"
 	end
 	local woken = add(data, kinds, false, bought)
 	DataService.changed(player)
@@ -720,9 +732,9 @@ end
 ---------------------------------------------------------------- requests
 
 --[[
-	CapsuleAction ("AutoDelete", { Kind, On }): the egg panel's trash icon.
-	Kind must be a known golem; at most MaxAutoDelete kinds. Returns the
-	refusal's reason or nil (pure on the data; the caller answers).
+	CapsuleTrash ({ Kind, On }): the egg panel's trash icon. Kind must be a
+	known golem; at most MaxAutoDelete kinds. Returns the refusal's reason
+	or nil (pure on the data; the caller answers).
 ]]
 function CapsuleService.setAutoDelete(player: Player, kind: any, on: any): string?
 	local data = DataService.get(player)
@@ -752,23 +764,24 @@ function CapsuleService.setAutoDelete(player: Player, kind: any, on: any): strin
 	return nil
 end
 
--- CapsuleAction ("Open", { Capsule, Count, Lucky? }) and ("AutoDelete", { Kind, On }): see the header.
+-- CapsuleTrash ({ Kind, On }): the egg panel's trash icon (see the header); one answer each.
+local function onCapsuleTrash(player: Player, arg: any)
+	local args = Guard.table(arg, MAX_PAYLOAD)
+	local kind = if args then args.Kind else nil
+	local on = if args then args.On else nil
+	local reason = CapsuleService.setAutoDelete(player, kind, on)
+	Net.fire("ActionResult", player, {
+		Action = "Capsule",
+		Op = "AutoDelete",
+		Ok = reason == nil,
+		Reason = reason,
+		Kind = Guard.string(kind, MAX_ID_LENGTH),
+		On = on == true,
+	})
+end
+
+-- CapsuleAction ("Open", { Capsule, Count, Lucky? }): see the header.
 local function onCapsuleAction(player: Player, action: any, arg: any)
-	if action == "AutoDelete" then
-		local args = Guard.table(arg, MAX_PAYLOAD)
-		local kind = if args then args.Kind else nil
-		local on = if args then args.On else nil
-		local reason = CapsuleService.setAutoDelete(player, kind, on)
-		Net.fire("ActionResult", player, {
-			Action = "Capsule",
-			Op = "AutoDelete",
-			Ok = reason == nil,
-			Reason = reason,
-			Kind = Guard.string(kind, MAX_ID_LENGTH),
-			On = on == true,
-		})
-		return
-	end
 	if action ~= "Open" then
 		Net.fire("ActionResult", player, {
 			Action = "Capsule",
@@ -956,6 +969,7 @@ end
 -- Internals for the Lune tests only (tests/Capsules.spec.luau).
 CapsuleService._test = {
 	action = onCapsuleAction,
+	trash = onCapsuleTrash,
 	hookStall = hookStall,
 	hookPodium = hookPodium,
 	promptPoint = promptPoint,
@@ -999,6 +1013,7 @@ CapsuleService._test = {
 
 function CapsuleService.init()
 	Net.on("CapsuleAction", onCapsuleAction)
+	Net.on("CapsuleTrash", onCapsuleTrash)
 	-- step 8: Royal capsule receipts; the pending-golem credit wakes when there is room
 	CapsuleService.registerGrants()
 	DataService.onLoaded(function(player: Player)

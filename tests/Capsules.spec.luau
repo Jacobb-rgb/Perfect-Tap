@@ -180,6 +180,21 @@ return function(T, Loader)
 		return answers[1].Name, answers[1].A
 	end
 
+	-- Sends one CapsuleTrash (the egg panel's trash icon) and returns the one answer it got.
+	local function trash(w: any, arg: any): (string, any)
+		local before = #w.notes
+		caps.trash(w.player, arg)
+		local answers = {}
+		for i = before + 1, #w.notes do
+			local note = w.notes[i]
+			if note.Player == w.player and note.Name == "ActionResult" then
+				table.insert(answers, note)
+			end
+		end
+		T.eq(#answers, 1, "exactly one answer per toggle")
+		return answers[1].Name, answers[1].A
+	end
+
 	local function refused(w: any, arg: any, reason: string, label: string, action: any?)
 		local coins = w.data.Coins
 		local count = GolemConfig.count(w.data.Golems)
@@ -558,8 +573,13 @@ return function(T, Loader)
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap)
 	end)
 
-	withWorld("Capsules: AutoDelete (the egg panel's trash) is set through CapsuleAction, validated and capped", function(w)
-		local name, answer = act(w, "AutoDelete", { Kind = "PebbleGolem", On = true })
+	withWorld("Capsules: AutoDelete (the egg panel's trash) is set through CapsuleTrash, validated and capped", function(w)
+		-- its own remote and bucket: quick toggles never take an Open's token
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		T.truthy(Net.Events.CapsuleTrash and Net.Events.CapsuleTrash.Rate >= 4, "CapsuleTrash: its own rate limit")
+		local _, other = act(w, "AutoDelete", { Kind = "PebbleGolem", On = true })
+		T.eq(other.Ok, false, "not an op of CapsuleAction any more")
+		local name, answer = trash(w, { Kind = "PebbleGolem", On = true })
 		T.eq(name, "ActionResult")
 		T.eq(answer.Action, "Capsule")
 		T.eq(answer.Op, "AutoDelete")
@@ -568,7 +588,7 @@ return function(T, Loader)
 		T.eq(answer.On, true)
 		T.eq(w.data.Golems.AutoDelete.PebbleGolem, true, "saved")
 		local changed = w.changed
-		_, answer = act(w, "AutoDelete", { Kind = "PebbleGolem", On = false })
+		_, answer = trash(w, { Kind = "PebbleGolem", On = false })
 		T.eq(answer.Ok, true)
 		T.eq(w.data.Golems.AutoDelete.PebbleGolem, nil, "off: the kind leaves the set (no false kept)")
 		T.truthy(w.changed > changed, "DataService.changed")
@@ -583,13 +603,13 @@ return function(T, Loader)
 			false,
 		}
 		for i, arg in junk do
-			_, answer = act(w, "AutoDelete", arg)
+			_, answer = trash(w, arg)
 			T.eq(answer.Ok, false, `junk {i}: refused`)
 			T.eq(answer.Reason, "BadGolem", `junk {i}`)
 			T.truthy(CapsuleView.ExtraReasons[answer.Reason], "the reason has a text")
 			T.eq(next(w.data.Golems.AutoDelete), nil, `junk {i}: nothing set`)
 		end
-		_, answer = act(w, "AutoDelete", nil)
+		_, answer = trash(w, nil)
 		T.eq(answer.Reason, "BadGolem", "nothing")
 		-- the cap: at most MaxAutoDelete kinds (turning one off always works); room for every coin egg's golem
 		local coinGolems: { [string]: boolean } = {}
@@ -673,13 +693,25 @@ return function(T, Loader)
 		refused(w, { Capsule = "Stone", Count = 1 }, "InventoryFull", "auto-delete off")
 	end)
 
-	withWorld("Capsules: auto-delete never takes a paid golem (Robux receipts, bought spins)", function(w)
+	withWorld("Capsules: auto-delete is for coin opens only: never a free capsule (wheel, quest) or a paid golem", function(w)
 		local kind = CapsuleConfig.odds("Royal", false)[1].Golem
 		w.data.Golems.AutoDelete = { [kind] = true }
-		-- a free wheel capsule is not paid: its auto-deleted golem isn't kept
+		-- a free capsule (the wheel's, a quest's): kept whatever the set says
 		w.values = { 0.001 }
 		local free = CapsuleService.grantFree(w.player, "Royal", 1, true)
-		T.truthy(free and free.Golems[1].Kind == kind and free.Golems[1].Deleted, "a free capsule's golem is auto-deleted")
+		T.truthy(free and free.Golems[1].Kind == kind, "the trashed kind rolled")
+		T.falsy(free.Golems[1].Deleted, "a free capsule is never auto-deleted")
+		T.truthy(GolemConfig.find(w.data.Golems, free.Golems[1].Id), "the golem is kept")
+		-- a full inventory: a free capsule is refused as before (the wheel pays its coins instead)
+		local beforeFull = GolemConfig.count(w.data.Golems)
+		fill(w.data, GolemConfig.InventoryCap - beforeFull)
+		w.values = { 0.001 }
+		local none, reason = CapsuleService.grantFree(w.player, "Royal", 1, true)
+		T.eq(none, nil, "full: refused, although the roll would be trashed")
+		T.eq(reason, "InventoryFull")
+		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing added")
+		table.clear(w.data.Golems.Owned)
+		w.data.Golems.Equipped = {}
 		-- a bought spin's capsule (paid): kept whatever the set says
 		local before = GolemConfig.count(w.data.Golems)
 		w.values = nil
@@ -692,8 +724,8 @@ return function(T, Loader)
 			end
 		end
 		T.eq(GolemConfig.count(w.data.Golems), before + 5, "every paid golem kept")
-		T.eq(CapsuleService.kept(w.data, { kind, kind }, true), 2, "the room check keeps paid golems")
-		T.eq(CapsuleService.kept(w.data, { kind, kind }, false), 0, "and drops coin ones")
+		T.eq(CapsuleService.kept(w.data, { kind, kind }, true), 0, "a coin open's room check drops the trashed")
+		T.eq(CapsuleService.kept(w.data, { kind, kind }, false), 2, "every other grant keeps them")
 		-- a Robux receipt (grantProduct): kept
 		local product = MonetizationConfig.Products.RoyalCapsule10
 		local oldId = product.Id

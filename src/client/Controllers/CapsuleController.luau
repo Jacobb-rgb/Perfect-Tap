@@ -729,11 +729,12 @@ end
 
 --[[
 	The egg panel's trash icon: auto-delete golems of `kind` from now on
-	(`on`) or not. CapsuleAction "AutoDelete" (the server checks the kind
-	and the cap; the State push shows the change, a refusal is a toast).
+	(`on`) or not. CapsuleTrash, its own remote and rate limit (quick
+	toggles never take an Open's token; the server checks the kind and the
+	cap; the State push shows the change, a refusal is a toast).
 ]]
 function CapsuleController.setAutoDelete(kind: string, on: boolean)
-	Net.send("CapsuleAction", "AutoDelete", { Kind = kind, On = on })
+	Net.send("CapsuleTrash", { Kind = kind, On = on })
 end
 
 --[[

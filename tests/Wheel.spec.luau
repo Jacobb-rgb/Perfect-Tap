@@ -398,6 +398,38 @@ return function(T, Loader)
 		T.eq(w.reveal(), nil, "once")
 	end)
 
+	withWheel("Wheel + the real CapsuleService: the eggs' trash never touches a free spin (kept; full: the coins)", function(w)
+		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		WheelService._test.setCapsules(CapsuleService :: any)
+		-- every Crystal golem in the egg panel's trash (auto-delete is for coin opens only)
+		w.data.Golems.AutoDelete = {}
+		for kind in CapsuleConfig.ById.Crystal.Odds do
+			w.data.Golems.AutoDelete[kind] = true
+		end
+		local result = w.spin(rollFor(8)).A
+		T.eq(result.Capsule, "Crystal")
+		T.truthy(result.Golem, "a golem woke")
+		T.falsy(result.Golem.Deleted, "never auto-deleted")
+		T.eq(#w.data.Golems.Owned, 1, "kept: the prize the wheel named is the player's")
+		T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
+		local opening = w.reveal()
+		T.falsy(opening.A.Golems[1].Deleted, "the opening shows it kept")
+		-- a full inventory: the share of the capsule in coins, as the wheel promises
+		w.now += DAY
+		while GolemConfig.room(w.data.Golems) > 0 do
+			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
+		end
+		local coins = w.data.Coins
+		local full = w.spin(rollFor(8)).A
+		T.eq(full.Kind, "Capsule")
+		T.falsy(full.Golem, "no golem")
+		local share = WheelConfig.capsuleFallbackCoins("Crystal", w.data.BlasterLevel)
+		T.truthy(share > 0)
+		T.eq(full.Coins, share, "the fallback coins")
+		T.eq(w.data.Coins - coins, share)
+		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing past the cap")
+	end)
+
 	withWheel("Wheel: an older capsule package sends the opening itself: the wheel never sends it again", function(w)
 		local fake = fakeCapsules(w, false)
 		WheelService._test.setCapsules(fake)
