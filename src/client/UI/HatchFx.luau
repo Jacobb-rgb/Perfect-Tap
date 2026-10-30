@@ -257,7 +257,17 @@ end
 	front. The top centre stays free (nothing above 16 % of the height
 	there: room for a quest card).
 ]]
-function HatchFx.layout(count: number, aspect: number, special: number?, marked: boolean?): Layout
+--[[
+	Two rows whose top row carries marks under its names (DELETED pills,
+	waiting notes) part downward only (the top row and the top centre stay):
+	`Top` the top row's tallest tag under its golem's feet, `Low` the second
+	row's, `Floor` how far down the second row's tags may reach (the safe
+	bottom, above a phone's home indicator); shares of the screen's height.
+	Where the screen is short the golems get a little smaller.
+]]
+export type Marks = { Top: number, Low: number, Floor: number }
+
+function HatchFx.layout(count: number, aspect: number, special: number?, marks: Marks?): Layout
 	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
 	local a = math.max(0.8, if aspect == aspect then aspect else 16 / 9)
 	local slots: { Slot } = {}
@@ -309,19 +319,28 @@ function HatchFx.layout(count: number, aspect: number, special: number?, marked:
 		end
 	else
 		-- two rows of 5 (the second may be shorter); a special one makes room: the rows part a little;
-		-- `marked` (a top-row golem has a DELETED pill or a waiting note under its name): more, so the
-		-- mark never covers a second-row golem's head
+		-- `marks` (the top row's tags carry DELETED pills or waiting notes): the second row moves down
+		-- until no mark covers a second-row golem's head, its own tags above `Floor` (smaller golems
+		-- where that needs it); the top row and the top centre never move
 		local dx = math.min(0.17, 0.33 / a)
 		spacing = dx
-		-- (marked: the rows part and the golems are a little smaller, so a phone's second row keeps its
-		-- notes on the screen; with a special its bigger golem's taller tag needs the most)
-		local rowY = if marked and special
-			then { 0.29, 0.74 }
-			elseif marked then { 0.3, 0.73 }
-			elseif special then { 0.33, 0.71 }
-			else { 0.33, 0.69 }
-		local golemH = if marked then 0.23 else 0.25
-		local specialH = if marked then 0.3 else 0.33
+		local rowY = if special then { 0.33, 0.71 } else { 0.33, 0.69 }
+		local golemH, specialH, eggH = 0.25, 0.33, 0.29
+		if marks then
+			local h = 0.25
+			while true do
+				local hs = h * 1.32
+				local feet = math.max(rowY[1] - 0.01 + h / 2, if special then rowY[1] + 0.005 + hs / 2 else 0)
+				-- (the second row's golem heads under the top row's tags, a little gap)
+				local y2 = math.max(rowY[2], feet + marks.Top + 0.02 + 0.01 + h / 2)
+				if y2 - 0.01 + h / 2 + marks.Low <= marks.Floor or h <= 0.17 then
+					rowY = { rowY[1], y2 }
+					golemH, specialH, eggH = h, hs, 0.29 * h / 0.25
+					break
+				end
+				h -= 0.01
+			end
+		end
 		for i = 1, n do
 			local row = if i <= 5 then 1 else 2
 			local inRow = if row == 1 then 5 else n - 5
@@ -330,7 +349,7 @@ function HatchFx.layout(count: number, aspect: number, special: number?, marked:
 			local isSpecial = special == i
 			table.insert(slots, {
 				Egg = Vector2.new(x, rowY[row]),
-				EggH = 0.29,
+				EggH = eggH,
 				Golem = Vector2.new(x, if isSpecial then rowY[row] + 0.005 else rowY[row] - 0.01),
 				GolemH = if isSpecial then specialH else golemH,
 				Text = if isSpecial then 26 else 22,

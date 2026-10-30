@@ -425,6 +425,11 @@ export type Layout = {
 	TrashCard: boolean, -- touch: the whole card is the trash's tap area (44 pt); else the icon itself
 }
 
+-- The smallest the Auto toggle's word may get (design units): 10 pt on a phone, 18 px on a TV.
+function EggPanel.ToggleFloor(l: Layout): number
+	return if l.Touch then 16 elseif l.TenFoot then 15 else 12
+end
+
 -- Columns for `count` cards: one row up to 5, two rows up to 10, then MaxColumns a row.
 function EggPanel.columns(count: number): number
 	local n = math.max(1, math.floor(count))
@@ -1049,7 +1054,7 @@ function EggPanel.build(): Refs
 	local toggleLabel = brightText(toggle, "Label", "Auto", 22, 5)
 	toggleLabel.Position = UDim2.fromOffset(8, 0)
 	toggleLabel.Size = UDim2.new(1, -44, 0.9, 0)
-	-- (a longer word, "Auto waits...", shrinks to the pill: at most the layout's size)
+	-- (a longer word, "Waiting", shrinks to the pill: at most the layout's size, never under its floor)
 	toggleLabel.TextScaled = true
 	UIKit.new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 22, MinTextSize = 10 }, toggleLabel)
 	local key = UIKit.new("Frame", {
@@ -1172,6 +1177,8 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 	local toggleFit = refs.ToggleLabel:FindFirstChildOfClass("UITextSizeConstraint")
 	if toggleFit then
 		toggleFit.MaxTextSize = refs.ToggleLabel.TextSize
+		-- (the floors: 10 pt on a phone, 18 px on a 1080p TV)
+		toggleFit.MinTextSize = math.min(refs.ToggleLabel.TextSize, EggPanel.ToggleFloor(l))
 	end
 	fitEdge(refs.ToggleLabel)
 	refs.Price.TextSize = math.floor(l.Chip * 0.6)
@@ -1703,7 +1710,7 @@ end
 ]]
 function EggPanel.setAuto(refs: Refs, visible: boolean, on: boolean, text: string, image: string?, label: string?)
 	refs.Toggle.Visible = visible
-	refs.ToggleLabel.Text = label or "Auto" -- ("Auto waits..." while its egg's odds are off the screen)
+	refs.ToggleLabel.Text = label or "Auto" -- ("Waiting" while its egg's odds are off the screen)
 	repaint(refs.Toggle, if on then BrightTheme.Paints.Green else BrightTheme.Paints.Grey)
 	local hasImage = image ~= nil and image ~= ""
 	refs.Key.Visible = hasImage or text ~= ""

@@ -90,11 +90,43 @@ function HatchStage.chance(capsuleId: string, lucky: boolean, kind: string): num
 	return 0
 end
 
+--[[
+	How much room the marks need when the top row of two carries some
+	(HatchFx.Marks; nil: none): the tallest tag under a golem's feet in each
+	row (its name, its "1 in N" and its mark, as CapsuleView.setTag builds
+	them; the second row's first golem may need two lines for its name
+	beside the Auto button) and the safe bottom (above a phone's home
+	indicator: the opening's SafeBottom), as shares of the screen's height.
+]]
+function HatchStage.marks(run: Run): HatchFx.Marks?
+	if not run.Marked then
+		return nil
+	end
+	local o = run.Refs
+	local height = math.max(1, o.Size.Y)
+	local function tagOf(slot: number, fit: number, lines: number): number
+		local small = math.max(CapsuleView.TagMin, math.floor(fit * HatchFx.ChanceShare + 0.5))
+		local mark = if run.Deleted[slot] then 30 elseif run.Waiting[slot] then CapsuleView.TagMin + 12 else 0
+		return (4 + lines * (fit + 2) + small + 6 + mark) / height
+	end
+	local top, low = 0, 0
+	for slot = 1, run.Count do
+		local isSpecial = run.Special == slot
+		local fit = if isSpecial then 26 else 22
+		if slot <= 5 then
+			top = math.max(top, tagOf(slot, fit, 1))
+		else
+			low = math.max(low, tagOf(slot, fit, if slot == 6 and o.AutoHolder.Visible then 2 else 1))
+		end
+	end
+	return { Top = top, Low = low, Floor = 1 - (o.SafeBottom + 6) / height }
+end
+
 local function relayout(run: Run)
 	local size = run.Refs.Size
 	run.Size = size
 	local aspect = size.X / math.max(1, size.Y)
-	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, run.Marked)
+	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, HatchStage.marks(run))
 	for slot, rec in run.Args.Eggs do
 		local s = run.Layout.Slots[slot]
 		if s then
@@ -358,13 +390,17 @@ local function placeTags(run: Run, aspect: number)
 			run.Colors[slot],
 			Vector2.new(under.X * size.X, under.Y * size.Y + 4),
 			s.Text,
-			-- (the name fits between its neighbours: a big one gets the room of one and a half)
+			-- (the name fits between its neighbours. The big middle one of two rows stands well under
+			-- the top row's names: the room of one and a half. Of one row it stands only a little
+			-- lower than its neighbours: its own column, a long name on two lines; its neighbours'
+			-- too where one line won't fit at the text floor)
 			run.Layout.Spacing
 				* size.X
-				* (if slot == run.Special then 1.5 else 0.96),
+				* (if slot == run.Special and run.Count > 5 then 1.5 else 0.96),
 			run.Deleted[slot],
 			run.Waiting[slot],
-			run.Layout.Spacing * size.X * 0.96 -- (a note never wider than the golems' pitch)
+			run.Layout.Spacing * size.X * 0.96, -- (a note never wider than the golems' pitch)
+			if run.Count > 5 then nil elseif slot == run.Special then s.Text else CapsuleView.TagMin
 		)
 	end
 end

@@ -109,7 +109,7 @@ Not: GolemConfig, GolemBuilder, GolemView, GolemController (package B); HUD file
 - A2 the egg panel in BrightTheme: a white card, big rarity-colour cards (`rarityPaint`, `chanceText`), silhouettes
   for golems not found yet WITH their names (paid random rule), price chip + Auto in the top row; around the big E:
   Open 1 left (E), Open 3 below (R), Open 10 right (X) with prices; a trash icon per card = auto-delete that golem
-  kind (server: `data.Golems.AutoDelete = { [kind] = true }`, CapsuleAction op "AutoDelete"; an auto-deleted golem
+  kind (server: `data.Golems.AutoDelete = { [kind] = true }`, its own remote CapsuleTrash; an auto-deleted golem
   still shows in the opening, greyed with a trash mark, and does not fly to you; never auto-delete a paid golem
   (Robux eggs) or more than the save allows). Keep the touch placement rules (thumbstick zone, tutorial bubble,
   boost corner), D-pad Up focus, BigE.

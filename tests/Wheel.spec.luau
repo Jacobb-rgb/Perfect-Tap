@@ -396,55 +396,65 @@ return function(T, Loader)
 
 	withWheel("Wheel + the real CapsuleService: a quiet free capsule, its opening once on Reveal", function(w)
 		local CapsuleService = realCapsules()
-		T.eq(CapsuleService.QuietFree, true, "the capsule package honors quiet")
-		WheelService._test.setCapsules(CapsuleService :: any)
-		local result = w.spin(rollFor(8)).A
-		T.eq(result.Capsule, "Crystal")
-		T.truthy(result.Golem, "a golem woke")
-		T.eq(#w.data.Golems.Owned, 1, "added once, by the capsule package")
-		T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
-		T.truthy(CapsuleConfig.ById.Crystal.Odds[result.Golem.Kind], "rolled from the Crystal capsule's odds")
-		T.eq(w.data.Stats.CapsulesOpened, 1)
-		T.eq(count(w, "CapsuleResult"), 0, "nothing spoils the turning disc")
-		local opening = w.reveal()
-		T.eq(opening.Event, "CapsuleResult")
-		T.eq(opening.A.Free, true)
-		T.eq(opening.A.Golems[1].Id, result.Golem.Id)
-		T.eq(w.reveal(), nil, "once")
-		CapsuleService._test.reset()
+		local ok, err = pcall(function()
+			T.eq(CapsuleService.QuietFree, true, "the capsule package honors quiet")
+			WheelService._test.setCapsules(CapsuleService :: any)
+			local result = w.spin(rollFor(8)).A
+			T.eq(result.Capsule, "Crystal")
+			T.truthy(result.Golem, "a golem woke")
+			T.eq(#w.data.Golems.Owned, 1, "added once, by the capsule package")
+			T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
+			T.truthy(CapsuleConfig.ById.Crystal.Odds[result.Golem.Kind], "rolled from the Crystal capsule's odds")
+			T.eq(w.data.Stats.CapsulesOpened, 1)
+			T.eq(count(w, "CapsuleResult"), 0, "nothing spoils the turning disc")
+			local opening = w.reveal()
+			T.eq(opening.Event, "CapsuleResult")
+			T.eq(opening.A.Free, true)
+			T.eq(opening.A.Golems[1].Id, result.Golem.Id)
+			T.eq(w.reveal(), nil, "once")
+		end)
+		CapsuleService._test.reset() -- (also when an assertion threw: the next spec gets the default back)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withWheel("Wheel + the real CapsuleService: the eggs' trash never touches a free spin (kept; full: the coins)", function(w)
 		local CapsuleService = realCapsules()
-		WheelService._test.setCapsules(CapsuleService :: any)
-		-- every Crystal golem in the egg panel's trash (auto-delete is for coin opens only)
-		w.data.Golems.AutoDelete = {}
-		for kind in CapsuleConfig.ById.Crystal.Odds do
-			w.data.Golems.AutoDelete[kind] = true
+		local ok, err = pcall(function()
+			WheelService._test.setCapsules(CapsuleService :: any)
+			-- every Crystal golem in the egg panel's trash (auto-delete is for coin opens only)
+			w.data.Golems.AutoDelete = {}
+			for kind in CapsuleConfig.ById.Crystal.Odds do
+				w.data.Golems.AutoDelete[kind] = true
+			end
+			local result = w.spin(rollFor(8)).A
+			T.eq(result.Capsule, "Crystal")
+			T.truthy(result.Golem, "a golem woke")
+			T.falsy(result.Golem.Deleted, "never auto-deleted")
+			T.eq(#w.data.Golems.Owned, 1, "kept: the prize the wheel named is the player's")
+			T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
+			local opening = w.reveal()
+			T.falsy(opening.A.Golems[1].Deleted, "the opening shows it kept")
+			-- a full inventory: the share of the capsule in coins, as the wheel promises
+			w.now += DAY
+			while GolemConfig.room(w.data.Golems) > 0 do
+				GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
+			end
+			local coins = w.data.Coins
+			local full = w.spin(rollFor(8)).A
+			T.eq(full.Kind, "Capsule")
+			T.falsy(full.Golem, "no golem")
+			local share = WheelConfig.capsuleFallbackCoins("Crystal", w.data.BlasterLevel)
+			T.truthy(share > 0)
+			T.eq(full.Coins, share, "the fallback coins")
+			T.eq(w.data.Coins - coins, share)
+			T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing past the cap")
+		end)
+		CapsuleService._test.reset() -- (also when an assertion threw)
+		if not ok then
+			error(err, 0)
 		end
-		local result = w.spin(rollFor(8)).A
-		T.eq(result.Capsule, "Crystal")
-		T.truthy(result.Golem, "a golem woke")
-		T.falsy(result.Golem.Deleted, "never auto-deleted")
-		T.eq(#w.data.Golems.Owned, 1, "kept: the prize the wheel named is the player's")
-		T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
-		local opening = w.reveal()
-		T.falsy(opening.A.Golems[1].Deleted, "the opening shows it kept")
-		-- a full inventory: the share of the capsule in coins, as the wheel promises
-		w.now += DAY
-		while GolemConfig.room(w.data.Golems) > 0 do
-			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
-		end
-		local coins = w.data.Coins
-		local full = w.spin(rollFor(8)).A
-		T.eq(full.Kind, "Capsule")
-		T.falsy(full.Golem, "no golem")
-		local share = WheelConfig.capsuleFallbackCoins("Crystal", w.data.BlasterLevel)
-		T.truthy(share > 0)
-		T.eq(full.Coins, share, "the fallback coins")
-		T.eq(w.data.Coins - coins, share)
-		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing past the cap")
-		CapsuleService._test.reset()
 	end)
 
 	withWheel("Wheel: an older capsule package sends the opening itself: the wheel never sends it again", function(w)

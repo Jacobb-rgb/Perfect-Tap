@@ -72,8 +72,8 @@
 	  opens one egg, waits for the result and its opening (Auto's fast one,
 	  about 2 s), then the next at once (CapsuleConfig.ClientCooldown and the
 	  server's CapsuleAction rate limit always hold: one open at a time; it
-	  waits while the player is out of the prompt's reach or the odds are
-	  off the screen, canBuy, the rule every buy path follows). It
+	  waits, "Waiting" on its toggle, while its egg's odds are off the
+	  screen: refusal(), the rule every buy path follows). It
 	  stops when you walk away (the panel moves or hides), when a refusal
 	  comes (no coins, a full golem inventory, the server's own: buy's toast
 	  or the opening's note says why), when you turn it off or a window
@@ -209,7 +209,8 @@ local measured: EggPanel.ScreenInput? = nil -- (screenInput, re-measured a few t
 local measuredAt = -math.huge
 local autoLucky = false -- the odds Auto started on (it stops when the shown odds aren't these any more)
 local veiled = false -- an egg opens: the panel steps aside (CapsuleController.onPlaying)
-local autoWaits = false -- Auto runs but waits: its egg's odds are off the screen ("Auto waits..." on the toggle)
+local autoWaits = false -- Auto runs but waits: its egg's odds are off the screen ("Waiting" on the toggle)
+local discAt = -math.huge -- os.clock() the big E's disc was tapped or clicked (its Triggered is a pointer's)
 local deleting: { [string]: boolean } = {} -- the golem kinds the player auto-deletes (State Golems.AutoDelete)
 local trashAsk: { Kind: string, Until: number }? = nil -- a card's trash asked "AUTO-DELETE?" (a second click turns it on)
 local trashSent: { [string]: { On: boolean, Until: number } } = {} -- sent, not in the State yet
@@ -495,10 +496,16 @@ local onScreen: (spot: Spot?) -> boolean -- (below: is the egg's panel, its odds
 	never buys on odds off the screen.
 ]]
 local function refusal(id: string, from: string?): string?
-	if not onScreen(spots[id]) then
+	local spot = spots[id]
+	if not onScreen(spot) then
 		return "Odds"
-	elseif from ~= "Panel" and not reach then
-		return "Far"
+	end
+	if from ~= "Panel" then
+		-- (measured now, not the last tick's: E on the frame the prompt shows never says "come closer")
+		local position = rootPosition()
+		if not spot or not position or not EggPanel.inReach(position, spot.PromptAt) then
+			return "Far"
+		end
 	end
 	return nil
 end
@@ -512,14 +519,16 @@ EggPanelController.RefuseText = {
 	Far = "Come closer to the egg",
 } :: { [string]: string }
 EggPanelController.RefuseEvery = 1.2 -- seconds between two of these toasts (mashing: one)
+EggPanelController.AutoWaitsText = "Auto waits: turn to see the egg's odds"
 local lastRefusal = -math.huge
--- A refused press says why: the deny sound and a toast (once in a while when mashed).
+-- A refused press says why: a toast (it plays the deny sound), once in a while when mashed; the sound alone between.
 local function refuse(why: string)
-	Sfx.play("UIDeny")
 	local now = os.clock()
 	if now - lastRefusal >= EggPanelController.RefuseEvery then
 		lastRefusal = now
 		HudController.toast(EggPanelController.RefuseText[why] or "Not now", "Deny")
+	else
+		Sfx.play("UIDeny")
 	end
 end
 
@@ -531,7 +540,11 @@ end
 	it); out of the rule: the deny sound and why. Returns whether it went.
 ]]
 function EggPanelController.open(id: string, count: number, from: string?): boolean
-	if id ~= current or not sellable or veiled or CapsuleController.showing() or CapsuleController.justEnded() then
+	if id ~= current or not sellable or veiled or CapsuleController.showing() then
+		return false
+	end
+	-- (a tap, a click or a pad's A meant to skip the opening that just ended: never an egg; a key isn't a skip)
+	if (from == "Panel" or from == "Pointer") and CapsuleController.justEnded() then
 		return false
 	end
 	local why = refusal(id, from)
@@ -797,6 +810,7 @@ function refreshPanel()
 		-- opening): Auto stops, the new odds show, the player starts it again on them; the
 		-- opening says why by its Auto button while it is up (the HUD's toasts hide then)
 		autoEgg = nil
+		autoWaits = false
 		local text = if lucky then "Triple Lucky is on: Auto stopped" else "Triple Lucky ended: Auto stopped"
 		if not CapsuleController.showing() then -- (no opening up, even while a buy waits: a toast)
 			CapsuleController.setAuto(false)
@@ -864,7 +878,7 @@ function refreshPanel()
 	end
 	local autoShown = sellable and EggPanel.autoAllowed(id)
 	local text, image = autoKey()
-	EggPanel.setAuto(r, autoShown, autoEgg == id, text, image, if autoEgg == id and autoWaits then "Auto waits..." else nil)
+	EggPanel.setAuto(r, autoShown, autoEgg == id, text, image, if autoEgg == id and autoWaits then "Waiting" else nil)
 	EggPanel.setLucky(r, lucky, autoShown)
 	-- (a gamepad's D-pad: the trash icons, Auto and the opens round the E)
 	EggPanel.linkPad(r, if p and p.Cluster and promptFor ~= nil and p.Gui.Enabled then p.Opens else nil)
@@ -1193,8 +1207,9 @@ local function setFloating(on: boolean)
 	end
 end
 
--- Is the egg's panel on the screen (its middle in front of the camera, inside the view)? The keys need it:
--- with the egg behind the camera R / X / D-pad Up would buy with the odds off the screen (and E does nothing).
+-- Are the egg's odds on the screen? PC: the panel's card rows whole (its sides inside the view, its
+-- first row under Roblox's top bar); touch: the egg in front of the camera, on the screen (the panel
+-- floats beside it). Every buy path needs it (refusal), so a turned camera never buys unseen odds.
 function onScreen(spot: Spot?): boolean
 	if not spot then
 		return false
@@ -1479,6 +1494,7 @@ local function ensurePrompt(): EggPrompt.Refs
 		local t = input.UserInputType
 		local target = promptFor
 		if target and (t == Enum.UserInputType.Touch or t == Enum.UserInputType.MouseButton1) then
+			discAt = os.clock() -- (the prompt's Triggered that follows is a tap, not a key)
 			target:InputHoldBegin()
 		end
 	end)
@@ -1489,13 +1505,13 @@ local function ensurePrompt(): EggPrompt.Refs
 			target:InputHoldEnd()
 		end
 	end)
-	-- the opens round the disc (PC, gamepads): the egg whose prompt this is
+	-- the opens round the disc (PC, gamepads): the egg whose prompt this is (a click, a pad's A: a pointer)
 	for _, open in p.Opens do
 		open.Button.Activated:Connect(function()
 			local id = current
 			local spot = if id then spots[id] else nil
 			if id and spot and promptFor == spot.Buy then
-				EggPanelController.open(id, open.Count)
+				EggPanelController.open(id, open.Count, "Pointer")
 			end
 		end)
 	end
@@ -1611,8 +1627,11 @@ function EggPanelController.toggleAuto(id: string, from: string?)
 	if id ~= current or not sellable or not EggPanel.autoAllowed(id) then
 		return
 	end
-	if veiled or CapsuleController.showing() or CapsuleController.justEnded() then
-		return -- (never on while an egg opens, the odds away, nor by a tap meant to skip one; it stops, though)
+	if veiled or CapsuleController.showing() then
+		return -- (never on while an egg opens, the odds away; it stops, though)
+	end
+	if from == "Panel" and CapsuleController.justEnded() then
+		return -- (a tap meant to skip the opening that just ended; G / B aren't skips)
 	end
 	local why = refusal(id, from) -- (the panel's toggle: the odds on the screen; G / B: the prompt's reach too)
 	if why then
@@ -1651,7 +1670,13 @@ local function autoStep()
 	local waits = not canBuy(id, "Panel")
 	if waits ~= autoWaits then
 		autoWaits = waits
-		refreshPanel() -- ("Auto waits..." on the toggle while the odds are off the screen)
+		refreshPanel() -- ("Waiting" on the toggle while the odds are off the screen)
+		local r = refs
+		local l = if r then r.Layout else nil
+		if waits and l and not l.Touch then
+			-- (PC: the toggle's head row is off the screen with the cards then: a toast, once a pause)
+			HudController.toast(EggPanelController.AutoWaitsText, "Info")
+		end
 	end
 	if waits then
 		return -- (the next egg once they're back)
@@ -1706,7 +1731,8 @@ local function addEgg(id: string, model: Model)
 		Auto = nil,
 	}
 	buy.Triggered:Connect(function()
-		if EggPanelController.open(id, 1) then
+		local from = if os.clock() - discAt < 0.5 then "Pointer" else nil -- (the disc tapped, or E / a pad's Y)
+		if EggPanelController.open(id, 1, from) then
 			squash() -- (only a press that buys: a refused one says why instead)
 		end
 	end)

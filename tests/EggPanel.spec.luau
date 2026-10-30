@@ -373,6 +373,31 @@ return function(T, Loader)
 		T.eq(EggPanel.cardAt(l, 1).X, EggPanel.cardAt(l, 8).X, "two full rows line up")
 	end)
 
+	T.test("EggPanel: Auto's Waiting fits its toggle at its floor (phones, the narrow phone, a TV)", function()
+		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+		local refs = EggPanel.build()
+		for _, case in
+			{
+				{ 14, true, nil, EggPanel.PhoneScale, 9.9, "a phone, 14 golems" },
+				{ 5, true, nil, EggPanel.PhoneScale, 9.9, "a phone, a five-golem egg" },
+				{ 3, true, nil, EggPanel.PhoneScale, 9.9, "a phone, a three-golem egg (the Sky egg's size)" },
+				{ 14, true, { Narrow = true }, EggPanel.PhoneScale, 9.9, "the narrow phone (568 x 320)" },
+				{ 14, false, { TenFoot = true }, 1.25, 18, "a TV" },
+			}
+		do
+			local count, touch, opts, scale, floor, label = case[1], case[2], case[3], case[4], case[5], case[6]
+			local l = EggPanel.layout(count, touch, true, opts)
+			EggPanel.apply(refs, "Stone", l, scale)
+			EggPanel.setAuto(refs, true, true, if touch then "" else "G", nil, "Waiting")
+			T.eq(refs.ToggleLabel.Text, "Waiting")
+			local fit = refs.ToggleLabel:FindFirstChildOfClass("UITextSizeConstraint")
+			T.truthy(fit ~= nil, label .. ": shrinks to its pill")
+			T.truthy(fit.MinTextSize * scale >= floor, `{label}: never under {floor} ({fit.MinTextSize * scale})`)
+			local room = refs.Toggle.Size.X.Offset + refs.ToggleLabel.Size.X.Offset
+			T.truthy(TechShopView.textWidth("Waiting", fit.MinTextSize) + 4 <= room, `{label}: "Waiting" fits at its floor ({room} units)`)
+		end
+	end)
+
 	T.test("EggPanel: the built panel (cards, silhouettes, x3, price, Auto, fade)", function()
 		local refs = EggPanel.build()
 		T.eq(refs.Gui.ClassName, "BillboardGui")
@@ -2011,7 +2036,7 @@ return function(T, Loader)
 			w.camY = 150
 			w.renders.TerraForgeEggPanelFloat()
 			C._test.tick()
-			T.eq(s.Refs.ToggleLabel.Text, "Auto waits...", "the toggle says Auto waits")
+			T.eq(s.Refs.ToggleLabel.Text, "Waiting", "the toggle says Auto waits")
 			local toasts = #w.toasts
 			patched({ { C, "RefuseEvery", -1 } }, function() -- (a toast now, whatever the last spec showed)
 				T.falsy(C.open("Stone", 1, "Panel"))
@@ -2045,6 +2070,94 @@ return function(T, Loader)
 				C._test.tick()
 				T.falsy(C._test.state().Reach, "the first row under the top bar: not on the screen")
 			end)
+		end)
+	end)
+
+	T.test("EggPanelController: refusals: live reach, one deny sound, keys never rebuy-guarded, Auto's Waiting cleared", function()
+		withController(function(C, w)
+			local Sfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Sfx")
+			local sounds: { string } = {}
+			patched({
+				{
+					Sfx,
+					"play",
+					function(name: string)
+						table.insert(sounds, name)
+					end,
+				},
+				{ C, "RefuseEvery", 60 },
+			}, function()
+				-- reach measured live: a step into the prompt's reach on this very frame (no tick yet) buys
+				w.at("Stone", EggPanel.PromptDistance + 1)
+				T.falsy(C._test.state().Reach, "(the last tick: out of reach)")
+				local spot = C._test.state().Spots.Stone
+				w.position = spot.PromptAt
+				local before = #w.buys
+				T.truthy(C.open("Stone", 1), "E pressed the moment the prompt shows: it buys")
+				T.eq(#w.buys, before + 1)
+				-- one deny sound a refusal: the toast plays it; a mash between toasts plays it alone
+				w.at("Stone", EggPanel.PromptDistance + 1)
+				table.clear(sounds)
+				local toasts = #w.toasts
+				patched({ { C, "RefuseEvery", -1 } }, function()
+					C.open("Stone", 1)
+				end)
+				T.eq(#w.toasts, toasts + 1, "a toast says why")
+				T.falsy(table.find(sounds, "UIDeny"), "and plays the deny sound itself: none more")
+				C.open("Stone", 1)
+				T.eq(#w.toasts, toasts + 1, "a mash: no second toast")
+				T.eq(#sounds, 1, "the deny sound alone")
+				-- right after an opening: a pointer's press rests (a skip's tap), a key's buys
+				w.at("Stone")
+				w.justEnded = true
+				before = #w.buys
+				T.falsy(C.open("Stone", 10, "Pointer"), "the Open 10 round the E, clicked to skip: no")
+				T.falsy(C.open("Stone", 3, "Panel"), "the panel's open: no")
+				T.truthy(C.open("Stone", 1), "E (a key, never a skip): yes")
+				T.eq(#w.buys, before + 1)
+				-- and a card's trash: a skip's tap never asks "AUTO-DELETE?"
+				local kind = CapsuleConfig.odds("Stone", false)[1].Golem
+				w.state.Golems.Owned = { { Id = 1, Kind = kind } }
+				hooks.onChanged()
+				local card = C._test.state().Refs.Cards[1]
+				T.truthy(card.Trash.Visible, "(a found golem's trash)")
+				C._test.trash(1)
+				T.falsy(card.Confirm.Visible, "no question by a skip's tap")
+				w.justEnded = false
+				C._test.trash(1)
+				T.truthy(card.Confirm.Visible, "a real tap asks")
+				w.state.Golems.Owned = {}
+				hooks.onChanged()
+			end)
+		end)
+	end)
+
+	T.test("EggPanelController: Auto's Waiting is gone once Triple Lucky stops it", function()
+		withController(function(C, w)
+			w.view, w.camY = Vector2.new(1280, 900), 700
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
+			local s = C._test.state()
+			C.toggleAuto("Stone", "Panel")
+			w.camY = 150
+			w.renders.TerraForgeEggPanelFloat()
+			C._test.tick()
+			T.eq(s.Refs.ToggleLabel.Text, "Waiting")
+			-- Triple Lucky begins: Auto stops (the odds changed under it)
+			w.lucky = true
+			hooks.onChanged()
+			T.eq(C._test.state().Auto, nil, "stopped")
+			w.camY = 700
+			w.renders.TerraForgeEggPanelFloat()
+			C._test.tick()
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, "Stone")
+			T.eq(s.Refs.ToggleLabel.Text, "Auto", "on again: no stale Waiting")
+			C.toggleAuto("Stone", "Panel")
+			w.lucky = false
+			hooks.onChanged()
 		end)
 	end)
 
@@ -2450,15 +2563,16 @@ return function(T, Loader)
 			-- narrow; no two notes touch, none under the Auto button (the bottom-left golem's steps aside)
 			for _, case in
 				{
-					{ Vector2.new(1280, 720), 1, false, 29 },
-					{ Vector2.new(844, 390), 0.62, true, 58 },
-					{ Vector2.new(568, 320), 0.62, true, 58 },
+					{ Vector2.new(1280, 720), 1, false, 29, 0 },
+					{ Vector2.new(844, 390), 0.62, true, 58, 21 }, -- (a notched iPhone: its home indicator, 21 pt)
+					{ Vector2.new(568, 320), 0.62, true, 58, 0 },
 				}
 			do
-				local view, scale, phone, inset = case[1], case[2], case[3], case[4]
+				local view, scale, phone, inset, safe = case[1], case[2], case[3], case[4], case[5]
 				w.touch = phone
 				local p = CapsuleView.buildOpening(phone)
-				CapsuleView.layoutOpening(p, phone, view.X / scale, view.Y / scale, { Touch = phone, Inset = inset / scale })
+				local opts = { Touch = phone, Inset = inset / scale, SafeBottom = safe / scale }
+				CapsuleView.layoutOpening(p, phone, view.X / scale, view.Y / scale, opts)
 				local last = all[5]
 				-- (an all-waiting opening: the rows part, so no top-row note covers a second-row golem's head)
 				play(p, last, "names", function(run: any)
@@ -2488,7 +2602,10 @@ return function(T, Loader)
 					for slot = 6, #last.Golems do
 						local tag = p.Tags[slot]
 						local bottom = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset + tag.Waiting.Size.Y.Offset
-						T.truthy(bottom <= size.Y, `{view.X}: the second row's note {slot} on the screen ({bottom} of {size.Y})`)
+						T.truthy(
+							bottom <= size.Y - p.SafeBottom,
+							`{view.X}: the second row's note {slot} above the safe bottom ({bottom} of {size.Y - p.SafeBottom})`
+						)
 						T.eq(tag.Waiting.Size.Y.Offset, CapsuleView.TagMin + 12, `{view.X}: one line`)
 					end
 					for slot = 1, 5 do
@@ -2541,6 +2658,16 @@ return function(T, Loader)
 			local plays: { boolean } = {}
 			local listening = true
 			local ok, err = pcall(function()
+				-- (stand-ins for the controllers whose keys an opening sinks: Lune can't load them)
+				local K = roblox.Enum.KeyCode
+				CC._test.setOwners({
+					BackpackController = { Key = K.Q },
+					EmoteController = { Key = K.N },
+					GolemController = { ToggleKey = K.P },
+					HoverboardController = { Key = K.H },
+					ArtifactController = { BookKey = K.J },
+					BoostController = { OpenKeys = { K.L, K.DPadRight } },
+				})
 				CC._test.onPlaying(function(on: boolean)
 					if listening then
 						table.insert(plays, on)
@@ -2612,29 +2739,20 @@ return function(T, Loader)
 				T.falsy(CC._test.hudHidden(), "the HUD back once, after the last opening")
 				T.falsy(CC._test.playing())
 				-- right after it the shop's OPEN buttons rest a moment (a gamepad's A pressed to skip it)
+				local view = CC._test.view()
 				local sent, why = CC._test.request("Stone", 1, Instance.new("TextButton"))
 				T.falsy(sent, "no egg bought by the A meant as a skip")
 				T.eq(why, "Busy")
+				T.eq(view.Status.Text, "One moment...", "a real click says why")
 				CC._test.ended(nil)
 				T.eq(w.actions.TerraForgeCapsuleSink, nil, "the keys free again")
 				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it);
-				-- the keys other controllers own are read from their exports (theirs alone: never named in src)
+				-- the keys other controllers own are read from their exports (stand-ins here)
 				local sunk = CC.sinkKeys()
-				local wanted = {
-					roblox.Enum.KeyCode.ButtonL3, -- the train window
-					roblox.Enum.KeyCode.ButtonR3, -- the tutorial's Skip
-					roblox.Enum.KeyCode.T, -- the train window
-					roblox.Enum.KeyCode.B, -- build mode
-				}
-				for _, key in wanted do
+				for _, key in { K.ButtonL3, K.ButtonR3, K.T, K.B, K.Q, K.N, K.P, K.H, K.J, K.L, K.DPadRight } do
 					T.truthy(table.find(sunk, key), key.Name .. " sunk while an egg opens")
 				end
-				for _, entry in CC.OwnedKeys do
-					local source = fs.readFile(Loader.root .. "/src/client/Controllers/" .. entry[1] .. ".luau")
-					T.truthy(string.find(source, `{entry[1]}.{entry[2]} = `, 1, true), `{entry[1]}.{entry[2]}: the key it exports`)
-				end
-				local own = { roblox.Enum.KeyCode.Space, roblox.Enum.KeyCode.Return, roblox.Enum.KeyCode.Backspace, roblox.Enum.KeyCode.G }
-				for _, key in own do
+				for _, key in { K.Space, K.Return, K.Backspace, K.G, K.ButtonA, K.ButtonB } do
 					T.falsy(table.find(sunk, key), key.Name .. ": the opening's own key")
 				end
 				T.falsy(CC._test.selectionWatched(), "the selection lock let go")
@@ -2704,6 +2822,7 @@ return function(T, Loader)
 			end)
 			listening = false
 			CC._test.setHatch(nil)
+			CC._test.setOwners(nil)
 			CC._test.close()
 			CC._test.hideHud(false) -- (a failure mid-chain must not leave the HUD away for the next specs)
 			if not ok then
@@ -2716,7 +2835,10 @@ return function(T, Loader)
 		withController(function(_C, _w)
 			local IC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.InteractController")
 			IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
-			local item = Instance.new("Model")
+			local item = Instance.new("Model") -- (a dirty chunk on the ground: its hint "[F] Pick up")
+			item:SetAttribute("Kind", "Raw")
+			item:SetAttribute("OreId", "Coal")
+			item:SetAttribute("Value", 5)
 			IC._test.show(item)
 			local target, adornee, shown = IC._test.view()
 			T.truthy(target == item and adornee == item and shown, "an item targeted: highlighted, its hint up")
@@ -2725,10 +2847,26 @@ return function(T, Loader)
 			T.eq(target, nil, "held: no pickup target")
 			T.eq(adornee, nil, "no highlight")
 			T.falsy(shown, "no hint")
+			-- (an item right there to pick: the loop's next look would take it, if it looked)
+			local looked = 0
+			IC._test.setChooser(function(_root: any): any
+				looked += 1
+				return item
+			end)
 			IC._test.step()
 			target, adornee, shown = IC._test.view()
 			T.truthy(target == nil and adornee == nil and not shown, "still off after the loop's next look")
+			T.eq(looked, 0, "held: it doesn't even look")
 			IC.hold("CapsuleOpening", false)
+			-- (its hint names the key: a keyboard's F)
+			local UIS = Loader.game:GetService("UserInputService")
+			patched({ { UIS, "GamepadEnabled", false }, { UIS, "KeyboardEnabled", true } }, function()
+				IC._test.step()
+			end)
+			IC._test.setChooser(nil)
+			T.eq(looked, 1, "let go: it looks again")
+			target, adornee, shown = IC._test.view()
+			T.truthy(target == item and adornee == item and shown, "and the item is its target again, highlighted, its hint up")
 		end)
 	end)
 

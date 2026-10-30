@@ -23,11 +23,15 @@
 	                                              egg6_* (a TV, the trash and the opens round the E at 2x)
 	     build/preview/egg_redo_stills_shots.json the egg opening's key moments, PC ("redo", the default;
 	     build/preview/egg_redo_phone_shots.json  "stills" or "all"), the phone's (844 x 390) in their own file
+	     build/preview/egg_redo_long_shots.json   long names beside AUTO: PC at 1280 x 720 (redo_long720_*),
+	     build/preview/egg_redo_long_tv_shots.json and a TV's (redo_longtv_*) in its own file
 	     build/preview/egg_redo_video_shots.json  an Open 3 and Auto's fast one, frame by frame ("video" or "all")
 	then (icons first: lune run tools/lune/export_icon_parts.luau; node tools/preview/render_icons.mjs golem_* capsule_*):
 	  SHOTS_EXTRA=build/preview/egg_panel_shots.json node tools/preview/render.mjs egg_panel_base <names>
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_stills_shots.json egg_redo_stills 15 <names>
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_phone_shots.json egg_redo_phone 15 <names>
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_long_shots.json egg_redo_long 15
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_long_tv_shots.json egg_redo_long_tv 15
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_video_shots.json egg_redo_open3 15
 ]]
 
@@ -162,6 +166,8 @@ local PC: Screen = { W = 1600, H = 900, Pixel = 1.25, Phone = false, Fov = 70 }
 local PHONE: Screen = { W = 1688, H = 780, Pixel = 0.62 * 2, Phone = true, Fov = 70 }
 -- a TV: 1920 x 1080 (the HUD's 1.25 there), the ten-foot layout and a gamepad's keys
 local TV: Screen = { W = 1920, H = 1080, Pixel = 1.25, Phone = false, Fov = 70, TenFoot = true }
+-- PC at 1280 x 720 (the HUD's 1: the design size itself)
+local PC720: Screen = { W = 1280, H = 720, Pixel = 1, Phone = false, Fov = 70 }
 -- PC at twice the pixels (the opens round the big E, close up: a crop of it)
 local PC2: Screen = { W = 3200, H = 1800, Pixel = 2.5, Phone = false, Fov = 70 }
 -- the small phone: 667 x 375 pt (an iPhone SE / 8) at 2x
@@ -995,7 +1001,7 @@ if videoMode == "redo" then
 
 	-- the opening on `screen`, `case` posed by HatchStage to each of `times` in turn (one run)
 	local function opening(screen: Screen, case: Redo): (any, any)
-		local compact = screen.Phone
+		local compact = screen.Phone or screen.TenFoot == true -- (phones and TVs: compact, as in the game)
 		local o = CapsuleView.buildOpening(compact)
 		local ui = if screen.Phone then uiOf(screen) * kOf(screen) else screen.Pixel
 		o.Gui.Scale.Scale = ui
@@ -1004,10 +1010,15 @@ if videoMode == "redo" then
 		CapsuleView.layoutOpening(o, compact, screen.W / ui, screen.H / ui, {
 			Touch = screen.Phone,
 			Inset = insetPx / ui,
+			-- (the 844 x 390 phone is a notched iPhone: its home indicator, 21 pt, under the safe frame)
+			SafeBottom = if screen == PHONE then 21 * kOf(screen) / ui else 0,
+			TenFoot = screen.TenFoot,
 		})
 		o.Gui.Enabled = true
 		o.Controls.Enabled = true
-		CapsuleView.setAuto(o, true, case.Auto == true, if screen.Phone then "" else "G", nil)
+		-- (a gamepad: its key only while Auto is on, B; off, B is skip-all)
+		local key = if screen.Phone then "" elseif screen.TenFoot then (if case.Auto then "B" else "") else "G"
+		CapsuleView.setAuto(o, true, case.Auto == true, key, nil)
 		CapsuleView.setChain(o, case.Batch, case.Batches)
 		o.Stage:SetAttribute("PreviewLive", true)
 		local eggs = {}
@@ -1221,6 +1232,32 @@ if videoMode == "redo" then
 			Auto = true,
 			Caption = "Auto: the fast opening (about 2 s)",
 		},
+		-- long names beside the Auto button (review 2026-10-30: "Amethyst Acolyte" under it): they step
+		-- right within their column, get smaller, or go on two lines; the waiting note too
+		long = {
+			Egg = "Crystal",
+			Kinds = { -- (the Crystal egg's own golems: each with its 1 in N)
+				"MoonstoneOracle",
+				"SapphireSage",
+				"CelestialSovereign",
+				"GildedPorter",
+				"SilverSquire",
+				"AmethystAcolyte",
+				"JadeGardener",
+				"MoonstoneOracle",
+				"QuartzSprite",
+				"AmethystAcolyte",
+			},
+			Auto = true,
+			Waiting = { [6] = true },
+			Caption = "Long names beside AUTO: right of it, smaller or on two lines",
+		},
+		-- an Open 3 with a Mythic: the big middle one's long name in its own column, on two lines
+		long3 = {
+			Egg = "Crystal",
+			Kinds = { "AmethystAcolyte", "CelestialSovereign", "MoonstoneOracle" },
+			Caption = "Open 3, a Mythic: its long name on two lines, clear of its neighbours",
+		},
 	}
 
 	-- the stills: each case at its key moments (seconds into its timeline)
@@ -1247,6 +1284,8 @@ if videoMode == "redo" then
 	end
 	local stillShots = {}
 	local phoneShots = {} -- (a render batch takes its size from its first shot: the phone's go in their own file)
+	local longShots = {} -- (PC at 1280 x 720)
+	local longTvShots = {} -- (a TV)
 	local function stillsOf(prefix: string, screen: Screen, caseName: string, only: { string }?)
 		local case = cases[caseName]
 		local o, run = opening(screen, case)
@@ -1262,7 +1301,11 @@ if videoMode == "redo" then
 				HatchStage.pose(run, t)
 			end
 			local name = `{prefix}_{m[1]}`
-			local list = if screen.Phone then phoneShots else stillShots
+			local list = if screen.Phone
+				then phoneShots
+				elseif screen == PC720 then longShots
+				elseif screen == TV then longTvShots
+				else stillShots
 			list[name] = shotOf(name, screen, o, run, case, if screen.Phone then { zones(screen) } else nil)
 		end
 	end
@@ -1277,8 +1320,13 @@ if videoMode == "redo" then
 		stillsOf("redo_x50", PC, "x50", { "c_cracks", "g_reveal" })
 		stillsOf("redo_waiting", PC, "waiting", { "g_reveal" })
 		stillsOf("redo_waiting_phone", PHONE, "waiting", { "g_reveal" })
+		stillsOf("redo_long3", PC, "long3", { "g_reveal" })
+		stillsOf("redo_long720", PC720, "long", { "g_reveal" })
+		stillsOf("redo_longtv", TV, "long", { "g_reveal" })
 		fs.writeFile(root .. "/build/preview/egg_redo_stills_shots.json", serde.encode("json", stillShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_phone_shots.json", serde.encode("json", phoneShots))
+		fs.writeFile(root .. "/build/preview/egg_redo_long_shots.json", serde.encode("json", longShots))
+		fs.writeFile(root .. "/build/preview/egg_redo_long_tv_shots.json", serde.encode("json", longTvShots))
 		local n = 0
 		for _ in stillShots do
 			n += 1

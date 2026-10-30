@@ -273,6 +273,8 @@ function InteractController.init()
 	})
 end
 
+local chooser: (root: BasePart) -> Model? = chooseTarget -- (the specs: a target of their own, _test.setChooser)
+
 -- One look for a pickup target (the render loop's, ten times a second): none while held or disabled.
 function step()
 	if not enabled or next(holds) ~= nil then
@@ -281,7 +283,7 @@ function step()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	-- a full backpack takes nothing: no pickup target (F / Grab pass)
-	local newTarget = if root and not BackpackState.isFull() then chooseTarget(root) else nil
+	local newTarget = if root and not BackpackState.isFull() then chooser(root) else nil
 	if newTarget ~= target then
 		target = newTarget
 	end
@@ -315,8 +317,10 @@ InteractController._test = {
 	parts = function() -- (stand-ins for the highlight and the hint: Lune's instances can't hold a nil Adornee)
 		local fakeHighlight: any = { Adornee = nil }
 		local fakeHint: any = { Adornee = nil, Enabled = false }
+		local fakeName: any, fakeAction: any = { Text = "" }, { Text = "" }
 		highlight = fakeHighlight
 		hint = fakeHint
+		hintName, hintAction = fakeName, fakeAction
 	end,
 	show = function(model: Model)
 		target = model
@@ -328,6 +332,9 @@ InteractController._test = {
 	end,
 	step = function()
 		step()
+	end,
+	setChooser = function(fn: ((root: BasePart) -> Model?)?)
+		chooser = fn or chooseTarget
 	end,
 }
 

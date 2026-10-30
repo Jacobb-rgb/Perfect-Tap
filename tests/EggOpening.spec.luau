@@ -134,35 +134,57 @@ return function(T, Loader)
 	end)
 
 	T.test("EggOpening: where the eggs and golems stand (1 big, 3 overlapping, 10 in two rows; the special one centred, bigger)", function()
+		-- (and with marks under the top row's names: the rows part downward only, the top centre stays free)
+		local markCases: { any } = {
+			false,
+			{ Top = 0.13, Low = 0.15, Floor = 0.95 }, -- PC-like
+			{ Top = 0.16, Low = 0.19, Floor = 0.93 }, -- a phone with a home indicator
+		}
 		for _, aspect in { 4 / 3, 16 / 9, 2.16, 844 / 390 } do
 			for _, count in { 1, 3, 10 } do
 				for _, special in { false, true } do
-					local slot = if special then HatchFx.centreSlot(count) else nil
-					local l = HatchFx.layout(count, aspect, slot)
-					local label = `x{count} at {math.floor(aspect * 100) / 100}{if special then " special" else ""}`
-					T.eq(#l.Slots, count, label)
-					for i, s in l.Slots do
-						-- on the screen, the egg and the golem whole
-						T.truthy(s.Egg.Y - s.EggH / 2 >= 0.02 and s.Egg.Y + s.EggH / 2 <= 0.98, `{label} {i}: the egg on the screen`)
-						T.truthy(
-							s.Golem.Y - s.GolemH / 2 >= 0.02 and s.Golem.Y + s.GolemH / 2 <= 0.9,
-							`{label} {i}: the golem with room for its name`
-						)
-						T.truthy(s.Egg.X > 0.05 and s.Egg.X < 0.95, `{label} {i}: inside the width`)
-						-- the top centre stays free (room for a quest card)
-						if math.abs(s.Egg.X - 0.5) < 0.2 then
-							T.truthy(s.Egg.Y - s.EggH / 2 >= 0.16, `{label} {i}: the top centre free`)
-						end
-						-- names at least 18 px at 1080p (the HUD's 1.25)
-						T.truthy(s.Text * 1.25 >= 18, `{label} {i}: the name's size`)
-					end
-					if special and slot then
-						local s = l.Slots[slot]
-						T.near(s.Golem.X, 0.5, 1e-9, label .. ": the special golem centred")
-						for i, other in l.Slots do
-							if i ~= slot then
-								T.truthy(s.GolemH > other.GolemH, label .. ": and bigger")
+					for _, marks in markCases do
+						local slot = if special then HatchFx.centreSlot(count) else nil
+						local l = HatchFx.layout(count, aspect, slot, if marks then marks else nil)
+						local label = `x{count} at {math.floor(aspect * 100) / 100}{if special then " special" else ""}{if marks
+							then " marked"
+							else ""}`
+						T.eq(#l.Slots, count, label)
+						for i, s in l.Slots do
+							-- on the screen, the egg and the golem whole
+							T.truthy(s.Egg.Y - s.EggH / 2 >= 0.02 and s.Egg.Y + s.EggH / 2 <= 0.98, `{label} {i}: the egg on the screen`)
+							T.truthy(
+								s.Golem.Y - s.GolemH / 2 >= 0.02 and s.Golem.Y + s.GolemH / 2 <= 0.9,
+								`{label} {i}: the golem with room for its name`
+							)
+							T.truthy(s.Egg.X > 0.05 and s.Egg.X < 0.95, `{label} {i}: inside the width`)
+							-- the top centre stays free (room for a quest card)
+							if math.abs(s.Egg.X - 0.5) < 0.2 then
+								T.truthy(s.Egg.Y - s.EggH / 2 >= 0.16, `{label} {i}: the top centre free`)
 							end
+							-- names at least 18 px at 1080p (the HUD's 1.25)
+							T.truthy(s.Text * 1.25 >= 18, `{label} {i}: the name's size`)
+						end
+						if special and slot then
+							local s = l.Slots[slot]
+							T.near(s.Golem.X, 0.5, 1e-9, label .. ": the special golem centred")
+							for i, other in l.Slots do
+								if i ~= slot then
+									T.truthy(s.GolemH > other.GolemH, label .. ": and bigger")
+								end
+							end
+						end
+						if marks and count == 10 then
+							local plain = HatchFx.layout(count, aspect, slot)
+							T.eq(l.Slots[1].Egg.Y, plain.Slots[1].Egg.Y, label .. ": the top row stays")
+							T.truthy(l.Slots[6].Egg.Y >= plain.Slots[6].Egg.Y, label .. ": the second row only moves down")
+							-- the second row's golem heads under the top row's tags
+							local feet = 0
+							for i = 1, 5 do
+								feet = math.max(feet, l.Slots[i].Golem.Y + l.Slots[i].GolemH / 2)
+							end
+							local head = l.Slots[6].Golem.Y - l.Slots[6].GolemH / 2
+							T.truthy(feet + marks.Top <= head + 1e-6, label .. ": no top-row mark over a second-row head")
 						end
 					end
 				end
@@ -426,61 +448,155 @@ return function(T, Loader)
 		HatchStage.clear(o, HatchStage.golems(run))
 	end)
 
-	T.test("EggOpening: names step aside for the Auto button only while it shows, never out of their column", function()
+	T.test("EggOpening: names step aside for the Auto button only while it shows, within their column, never under it", function()
 		local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
 		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
-		-- long names (the review's case: "Dragonscale Knight" under the bottom-left of an Open 10)
-		local long = { "ScaleKnight", "HeartstoneColossus", "CelestialSovereign", "MoonstoneOracle", "AmethystAcolyte" }
-		for _, n in { 5, 10 } do
-			local kinds = {}
-			for i = 1, n do
-				kinds[i] = long[(i - 1) % #long + 1]
-			end
-			for _, autoShown in { false, true } do
-				local o, run = runOf(if n == 10 then "Crystal" else "Royal", kinds, { Waiting = { [6] = true, [1] = true } })
-				CapsuleView.layoutOpening(o, false, 1280, 720, { Inset = 29 })
-				CapsuleView.setAuto(o, autoShown, false, "G", nil)
-				local tl = run.Timeline
-				HatchStage.pose(run, tl.Reveal + HatchFx.namedAt(tl) + 0.05)
-				local size = run.Size
-				local aspect = size.X / size.Y
-				local pitch = run.Layout.Spacing * size.X * 0.96
-				local boxes = {}
-				for slot, standing in run.Standing do
-					local tag = o.Tags[slot]
-					local feet = HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect)
-						- Vector3.new(0, standing.Height / 2, 0)
-					local under = HatchFx.project(feet, aspect).X * size.X
-					local x = tag.Frame.Position.X.Offset
-					local label = `n {n}, Auto {if autoShown then "shown" else "hidden"}, slot {slot}`
-					-- (offsets are whole units)
-					if not autoShown then
-						T.near(x, under, 1, label .. ": under its golem")
-					else
-						T.truthy(x >= under - 1 and x - under <= pitch / 2 + 1, label .. ": within its own column")
+		-- long names (the review's: "Amethyst Acolyte" lost its "A" under the bottom-left of an Open 10)
+		local long = { "AmethystAcolyte", "MoonstoneOracle", "CelestialSovereign", "HeartstoneColossus", "EmberHatchling", "ScaleKnight" }
+		for _, screen in
+			{
+				{ 1280, 720, false, false },
+				{ 1100, 825, false, false },
+				{ 1536, 864, true, true }, -- (a TV: its compact layout, the ten-foot Auto)
+			}
+		do
+			local W, H, compact, tv = screen[1], screen[2], screen[3], screen[4]
+			for _, n in { 5, 10 } do
+				for shift = 0, #long - 1 do
+					local kinds = {}
+					for i = 1, n do
+						kinds[i] = long[(i - 1 + shift) % #long + 1]
 					end
-					-- (what shows of it: the name as setTag measures it, its note)
-					local nameW = TechShopView.textWidth(tag.Name.Text, tag.Name.TextSize) * 1.04 + 8
-					local w = math.max(nameW, if tag.Waiting.Visible then tag.Waiting.Size.X.Offset else 0)
-					table.insert(boxes, {
-						Slot = slot,
-						Box = {
-							Min = Vector2.new(x - w / 2, tag.Frame.Position.Y.Offset),
-							Max = Vector2.new(x + w / 2, tag.Frame.Position.Y.Offset + 30),
-						},
-					})
+					for _, autoShown in { false, true } do
+						local o, run = runOf(if n == 10 then "Crystal" else "Royal", kinds, { Waiting = { [6] = true, [1] = true } })
+						CapsuleView.layoutOpening(o, compact, W, H, { Inset = 29, TenFoot = tv })
+						CapsuleView.setAuto(o, autoShown, false, "G", nil)
+						local tl = run.Timeline
+						HatchStage.pose(run, tl.Reveal + HatchFx.namedAt(tl) + 0.05)
+						local size = run.Size
+						local aspect = size.X / size.Y
+						local pitch = run.Layout.Spacing * size.X * 0.96
+						local boxes = {}
+						for slot, standing in run.Standing do
+							local tag = o.Tags[slot]
+							local feet = HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect)
+								- Vector3.new(0, standing.Height / 2, 0)
+							local under = HatchFx.project(feet, aspect).X * size.X
+							local x = tag.Frame.Position.X.Offset
+							local label = `{W}x{H} n {n}, Auto {if autoShown then "shown" else "hidden"}, slot {slot} ({tag.Name.Text})`
+							-- (offsets are whole units)
+							if not autoShown then
+								T.near(x, under, 1, label .. ": under its golem")
+							else
+								T.truthy(x >= under - 1 and x - under <= pitch / 2 + 1, label .. ": within its own column")
+							end
+							T.truthy(tag.Name.TextSize >= CapsuleView.TagMin, label .. ": never under the text floor")
+							-- (what shows of it: the name as setTag measures it, a line at a time, its note)
+							local widest, lines = 0, 0
+							for line in string.gmatch(tag.Name.Text, "[^\n]+") do
+								widest = math.max(widest, TechShopView.textWidth(line, tag.Name.TextSize))
+								lines += 1
+							end
+							local nameW = widest * 1.04 + 8
+							local y = tag.Frame.Position.Y.Offset
+							local name = {
+								Min = Vector2.new(x - nameW / 2, y),
+								Max = Vector2.new(x + nameW / 2, y + lines * (tag.Name.TextSize + 2) + 4),
+							}
+							if autoShown then
+								-- (the keep boxes carry a 4-unit margin round the button: a hair of it may touch, no letter)
+								for _, keep in o.AutoKeep do
+									local inner = { Min = keep.Min + Vector2.new(1, 1), Max = keep.Max - Vector2.new(1, 1) }
+									T.eq(EggPanel.overlap(name, inner), 0, label .. ": no letter under the Auto button")
+								end
+							end
+							table.insert(boxes, { Slot = slot, Box = name })
+							if tag.Waiting.Visible then
+								-- (the note steps aside on its own: its own box)
+								local nx = x + tag.Waiting.Position.X.Offset
+								local ny = y + tag.Waiting.Position.Y.Offset
+								local half = tag.Waiting.Size.X.Offset / 2
+								local note =
+									{ Min = Vector2.new(nx - half, ny), Max = Vector2.new(nx + half, ny + tag.Waiting.Size.Y.Offset) }
+								table.insert(boxes, { Slot = slot, Box = note })
+							end
+						end
+						-- no tag runs into a neighbour's (its name, its note)
+						for i = 1, #boxes do
+							for j = i + 1, #boxes do
+								local a, b = boxes[i].Box, boxes[j].Box
+								if boxes[i].Slot ~= boxes[j].Slot then
+									T.eq(EggPanel.overlap(a, b), 0, `{W}x{H} n {n}: slots {boxes[i].Slot} and {boxes[j].Slot} apart`)
+								end
+							end
+						end
+						HatchStage.pose(run, tl.Total)
+						HatchStage.clear(o, HatchStage.golems(run))
+					end
 				end
-				-- no tag runs into a neighbour (the same row)
-				for i = 1, #boxes do
-					for j = i + 1, #boxes do
-						local a, b = boxes[i].Box, boxes[j].Box
-						if math.abs(a.Min.Y - b.Min.Y) < 20 then
-							T.eq(EggPanel.overlap(a, b), 0, `n {n}: slots {boxes[i].Slot} and {boxes[j].Slot} apart`)
+			end
+		end
+	end)
+
+	T.test("EggOpening: of one row, long names keep to their columns (the big middle one's on two lines), above the safe bottom", function()
+		local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
+		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+		-- (its neighbours' names are as long: one and a half rooms ran its name into theirs)
+		for _, screen in { { 844, 390, 0.62, 21 }, { 568, 320, 0.62, 0 }, { 1280, 720, 1, 0 } } do
+			local scale = screen[3]
+			local W, H, phone = screen[1] / scale, screen[2] / scale, scale < 1
+			for _, n in { 2, 3, 5 } do
+				for _, mark in { "none", "wait", "del" } do
+					local kinds, marks = {}, {}
+					for i = 1, n do
+						kinds[i] = if i == 1 then "CelestialSovereign" else "HeartstoneColossus"
+						marks[i] = true
+					end
+					local o, run = runOf("Royal", kinds, {
+						Phone = phone,
+						W = W,
+						H = H,
+						Waiting = if mark == "wait" then marks else nil,
+						Deleted = if mark == "del" then marks else nil,
+					})
+					CapsuleView.layoutOpening(o, phone, W, H, { Touch = phone, Inset = 58 / scale, SafeBottom = screen[4] / scale })
+					HatchStage.pose(run, run.Timeline.Reveal + HatchFx.namedAt(run.Timeline) + 0.05)
+					local label = `{screen[1]}x{screen[2]} n {n}, {mark}`
+					local special = run.Special
+					T.truthy(special ~= nil and run.Kinds[special] == "CelestialSovereign", label .. ": the Mythic in the middle")
+					local pitch = run.Layout.Spacing * run.Size.X * 0.96
+					local boxes = {}
+					for slot in run.Standing do
+						local tag = o.Tags[slot]
+						local widest, lines = 0, 0
+						for line in string.gmatch(tag.Name.Text, "[^\n]+") do
+							widest = math.max(widest, TechShopView.textWidth(line, tag.Name.TextSize))
+							lines += 1
+						end
+						local w = widest * 1.04 + 8
+						local x, y = tag.Frame.Position.X.Offset, tag.Frame.Position.Y.Offset
+						boxes[slot] = {
+							Min = Vector2.new(x - w / 2, y),
+							Max = Vector2.new(x + w / 2, y + lines * (tag.Name.TextSize + 2) + 4),
+						}
+						T.truthy(y + tag.Frame.Size.Y.Offset <= run.Size.Y - o.SafeBottom, `{label}, slot {slot}: above the safe bottom`)
+						if slot == special then
+							T.truthy(w <= pitch + 1, label .. ": the middle one in its own column")
+							T.eq(lines, 2, label .. ": the long name on two lines")
+							T.truthy(tag.Name.TextSize >= CapsuleView.TagMin, label .. ": never under the text floor")
 						end
 					end
+					-- (no name runs into another's: the middle one's nor its neighbours')
+					for slot, box in boxes do
+						for other, box2 in boxes do
+							if other > slot then
+								T.eq(EggPanel.overlap(box, box2), 0, `{label}: slots {slot} and {other} apart`)
+							end
+						end
+					end
+					HatchStage.pose(run, run.Timeline.Total)
+					HatchStage.clear(o, HatchStage.golems(run))
 				end
-				HatchStage.pose(run, tl.Total)
-				HatchStage.clear(o, HatchStage.golems(run))
 			end
 		end
 	end)

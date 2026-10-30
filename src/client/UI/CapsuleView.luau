@@ -192,6 +192,8 @@ export type Refs = {
 
 -- A rectangle in the opening's design units (its top-left and bottom-right).
 export type KeepBox = { Min: Vector2, Max: Vector2 }
+-- (a waiting note's form: its text, its lines, its widest line's width)
+type NoteOption = { Text: string, Lines: number, Width: number }
 
 -- A golem's name under it in the opening: the NAME and "1 in N" in its rarity's colour (an
 -- auto-deleted golem: a trash mark and "DELETED" under them; a won golem past the inventory's
@@ -231,6 +233,7 @@ export type OpenRefs = {
 	Note: TextLabel, -- why Auto stopped (the HUD's toasts hide while an opening plays)
 	Chain: TextLabel, -- "2 / 5": a big pack's openings, one after another (setChain)
 	AutoKeep: { KeepBox }, -- the Auto button's disc with its key, and its label (the stage's design units): names step aside while it shows
+	SafeBottom: number, -- design units under the safe frame (a phone's home indicator): no tag goes there
 	Size: Vector2, -- the screen in design units (layoutOpening)
 	Touch: boolean,
 	Compact: boolean,
@@ -238,7 +241,7 @@ export type OpenRefs = {
 
 CapsuleView.StageTags = 10 -- the most results an opening shows (CapsuleConfig.Counts' largest)
 CapsuleView.WaitingText = "Waiting: inventory full" -- under a won golem past the inventory's hard cap
-CapsuleView.WaitingShort = "Inventory full" -- (where the whole note doesn't fit on one line: a phone's Open 10)
+CapsuleView.WaitingShort = "Waiting: full" -- (where the whole note doesn't fit on one line: a phone's Open 10)
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1849,6 +1852,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Note = note,
 		Chain = chain,
 		AutoKeep = {},
+		SafeBottom = 0,
 		Size = Vector2.new(1280, 720),
 		Touch = false,
 		Compact = isCompact,
@@ -1867,6 +1871,7 @@ end
 export type OpeningOpts = {
 	Touch: boolean?, -- a touch screen: the thumbstick's zone stays free (left 40 %, lower 2/3)
 	Inset: number?, -- Roblox's top bar row (design units): the safe frame starts under it
+	SafeBottom: number?, -- design units under the safe frame at the bottom (a phone's home indicator)
 	TenFoot: boolean?, -- a TV: the Auto button inside the TV-safe margin
 }
 
@@ -1887,6 +1892,7 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Compact = compact
 	refs.Touch = touch
 	refs.Size = Vector2.new(width, height)
+	refs.SafeBottom = math.max(0, o.SafeBottom or 0)
 	local zone = CapsuleView.ThumbZone
 	if touch then
 		refs.Tap.Position = UDim2.fromOffset(width * zone.Width, 0)
@@ -2001,25 +2007,83 @@ function CapsuleView.setTag(
 	room: number?,
 	deleted: boolean?,
 	waiting: boolean?,
-	pitch: number?
+	pitch: number?,
+	splitBelow: number?
 )
 	local tag = refs.Tags[slot]
 	if not tag then
 		return
 	end
+	at = Vector2.new(at.X, math.floor(at.Y)) -- (whole units, as the tag stands: what clears the button is measured there)
 	local fit = size
 	local width = room or math.huge
-	while fit > CapsuleView.TagMin and TechShopView.textWidth(name, fit) * 1.04 + 8 > width do
+	local function smallOf(f: number): number
+		return math.max(CapsuleView.TagMin, math.floor(f * HatchFx.ChanceShare + 0.5))
+	end
+	-- (a two-word or longer name can go on two lines, split at the space nearest its middle)
+	local first, second = name, nil :: string?
+	do
+		local best = math.huge
+		for i = 1, #name do
+			if string.sub(name, i, i) == " " and math.abs(i - #name / 2) < best then
+				best = math.abs(i - #name / 2)
+				first, second = string.sub(name, 1, i - 1), string.sub(name, i + 1)
+			end
+		end
+	end
+	local function nameWidth(f: number, lines: number): number
+		local line2 = second
+		if lines == 2 and line2 then
+			return math.max(TechShopView.textWidth(first, f), TechShopView.textWidth(line2, f)) * 1.04 + 8
+		end
+		return TechShopView.textWidth(name, f) * 1.04 + 8
+	end
+	-- the name and its "1 in N" as rows { width, top, height } at a name size, on `lines` lines
+	local function textRows(f: number, lines: number): { { number } }
+		local s = smallOf(f)
+		local nameH = lines * (f + 2) + 4
+		return {
+			{ math.ceil(nameWidth(f, lines)), 0, nameH },
+			{ math.ceil(TechShopView.textWidth(chance, s) + 8), nameH - 4, s + 6 },
+		}
+	end
+	-- (`splitBelow`: a name that would get smaller than that to fit its room on one line goes on two
+	-- lines: of one row, the big middle one's at its own size (it keeps to its own column), the others'
+	-- at the text floor)
+	local splitAt = math.clamp(splitBelow or 0, CapsuleView.TagMin, math.max(CapsuleView.TagMin, size))
+	local lines = if splitBelow and second and nameWidth(splitAt, 1) > width then 2 else 1
+	while fit > CapsuleView.TagMin and nameWidth(fit, lines) > width do
 		fit -= 1
 	end
-	local small = math.max(CapsuleView.TagMin, math.floor(fit * HatchFx.ChanceShare + 0.5))
-	tag.Name.Text = name
+	if lines == 2 then
+		-- (two lines only as big as the safe bottom allows: the name, its "1 in N" and its mark above it)
+		local floor = refs.Size.Y - refs.SafeBottom - 6
+		local markH = if deleted then 36 elseif waiting then CapsuleView.TagMin + 2 + 14 else 0
+		while fit > CapsuleView.TagMin and at.Y + 2 * (fit + 2) + smallOf(fit) + 10 + markH > floor do
+			fit -= 1
+		end
+	end
+	-- (the Auto button shows: the name steps right of it within its column; where that isn't enough
+	-- it gets smaller, never under the floor; still not: on two lines; so no letter hides under it)
+	local roomFit = fit
+	while fit > CapsuleView.TagMin and not CapsuleView.clears(refs, at, textRows(fit, lines), pitch) do
+		fit -= 1
+	end
+	if lines == 1 and second and not CapsuleView.clears(refs, at, textRows(fit, 1), pitch) then
+		lines, fit = 2, roomFit
+		while fit > CapsuleView.TagMin and not CapsuleView.clears(refs, at, textRows(fit, 2), pitch) do
+			fit -= 1
+		end
+	end
+	local small = smallOf(fit)
+	local nameH = lines * (fit + 2) + 4
+	tag.Name.Text = if lines == 2 and second then first .. "\n" .. second else name
 	tag.Name.TextSize = fit
-	tag.Name.Size = UDim2.new(1, 0, 0, fit + 6)
+	tag.Name.Size = UDim2.new(1, 0, 0, nameH)
 	tag.Chance.Text = chance
 	tag.Chance.TextSize = small
 	tag.Chance.TextColor3 = color
-	tag.Chance.Position = UDim2.new(0.5, 0, 0, fit + 2)
+	tag.Chance.Position = UDim2.new(0.5, 0, 0, nameH - 4)
 	tag.Chance.Size = UDim2.new(1, 0, 0, small + 6)
 	for _, label in { tag.Name, tag.Chance } do
 		local edge = label:FindFirstChild("Edge")
@@ -2030,44 +2094,54 @@ function CapsuleView.setTag(
 	-- (auto-deleted: the trash mark and DELETED under the chance; won but waiting: its gold note)
 	local wait = waiting == true and deleted ~= true
 	tag.Deleted.Visible = deleted == true
-	tag.Deleted.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
 	tag.Waiting.Visible = wait
 	local frameW = math.max(160, math.min(width, fit * 12))
+	local markTop = nameH - 4 + small + 6
 	local markW, markH = if deleted then 130 else 0, if deleted then 36 else 0
 	if wait then
-		-- the note at the text floor (TagMin: 10 pt on a phone), on two lines where its room is narrow
-		-- (its room: the golems' pitch `pitch`, even for the big middle one whose name gets more)
+		-- the note at the text floor (TagMin: 10 pt on a phone), its room the golems' pitch (the big
+		-- middle one's too): the whole note on one line where it fits, else the short one, else that
+		-- on two lines; the first that also clears the Auto button (beside it) wins
 		local noteRoom = math.min(width, pitch or width)
 		local noteSize = CapsuleView.TagMin
-		-- (one line: the whole note where it fits, else the short one; only a tinier room wraps it,
-		-- so a top row's notes stay clear of the second row's golems)
-		local text = CapsuleView.WaitingText
-		local lines, widest = 1, TechShopView.textWidth(text, noteSize)
-		if widest + 22 > noteRoom then
-			text = CapsuleView.WaitingShort
-			lines, widest = CapsuleView.wrap(text, noteSize, math.max(40, noteRoom - 22))
+		local options: { NoteOption } = {}
+		local whole = TechShopView.textWidth(CapsuleView.WaitingText, noteSize)
+		if whole + 22 <= noteRoom then
+			table.insert(options, { Text = CapsuleView.WaitingText, Lines = 1, Width = whole })
 		end
-		tag.WaitingText.Text = text
+		local short = TechShopView.textWidth(CapsuleView.WaitingShort, noteSize)
+		if short + 22 <= noteRoom then
+			table.insert(options, { Text = CapsuleView.WaitingShort, Lines = 1, Width = short })
+		end
+		local noteLines, widest = CapsuleView.wrap(CapsuleView.WaitingShort, noteSize, math.max(40, noteRoom - 22))
+		local head, rest = string.match(CapsuleView.WaitingShort, "^(%S+)%s+(.+)$")
+		local twoLines = if head and rest then head .. "\n" .. rest else CapsuleView.WaitingShort
+		table.insert(options, { Text = twoLines, Lines = math.max(2, noteLines), Width = widest })
+		local pick = options[#options]
+		for _, option in options do
+			local w = math.min(math.ceil(option.Width) + 22, math.max(60, noteRoom))
+			if CapsuleView.clears(refs, at, { { w, markTop, option.Lines * (noteSize + 2) + 10 } }, pitch) then
+				pick = option
+				break
+			end
+		end
+		tag.WaitingText.Text = pick.Text
 		tag.WaitingText.TextSize = noteSize
 		local noteEdge = tag.WaitingText:FindFirstChild("Edge")
 		if noteEdge and noteEdge:IsA("UIStroke") then
 			noteEdge.Thickness = CapsuleView.TextEdge(noteSize)
 		end
-		markW = math.min(math.ceil(widest) + 22, math.max(60, noteRoom)) -- (never wider than its room: neighbours never touch)
-		markH = lines * (noteSize + 2) + 10
+		markW = math.min(math.ceil(pick.Width) + 22, math.max(60, noteRoom)) -- (never wider than its room: neighbours never touch)
+		markH = pick.Lines * (noteSize + 2) + 10
 		tag.Waiting.Size = UDim2.fromOffset(markW, markH)
-		tag.Waiting.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
 		markH += 4
 	end
-	local frameH = fit + small + 12 + markH
+	local frameH = markTop + 4 + markH
 	-- the name and its "1 in N" step aside together; the mark (narrower) on its own, as far as it needs
-	local x = CapsuleView.stepAside(refs, at, {
-		{ math.ceil(TechShopView.textWidth(name, fit) * 1.04 + 8), 0, fit + 6 }, -- the name
-		{ math.ceil(TechShopView.textWidth(chance, small) + 8), fit + 2, small + 6 }, -- "1 in N"
-	}, pitch)
-	local markX = CapsuleView.stepAside(refs, at, { { markW, fit + small + 8, markH } }, pitch) -- DELETED / the note
+	local x = CapsuleView.stepAside(refs, at, textRows(fit, lines), pitch)
+	local markX = CapsuleView.stepAside(refs, at, { { markW, markTop, markH } }, pitch) -- DELETED / the note
 	for _, mark in { tag.Deleted, tag.Waiting } do
-		mark.Position = UDim2.new(0.5, math.ceil(markX - math.floor(x)), 0, fit + small + 8)
+		mark.Position = UDim2.new(0.5, math.ceil(markX - math.floor(x)), 0, markTop)
 	end
 	tag.Frame.Position = UDim2.fromOffset(x, at.Y)
 	tag.Frame.Size = UDim2.fromOffset(frameW, frameH)
@@ -2103,6 +2177,27 @@ function CapsuleView.stepAside(refs: OpenRefs, at: Vector2, rows: { { number } }
 	end
 	-- (whole units, rounded up: offsets are whole numbers, the part clears the button)
 	return math.ceil(at.X + math.min(need, math.max(0, pitch / 2 - half)))
+end
+
+-- Do `rows` (stepped aside as stepAside puts them) clear the Auto button? (Hidden Auto: always.)
+function CapsuleView.clears(refs: OpenRefs, at: Vector2, rows: { { number } }, pitch: number?): boolean
+	if not refs.AutoHolder.Visible or not pitch then
+		return true
+	end
+	local x = CapsuleView.stepAside(refs, at, rows, pitch)
+	for _, row in rows do
+		local w, top, h = row[1], row[2], row[3]
+		if w > 0 and h > 0 then
+			for _, keep in refs.AutoKeep do
+				local y0, y1 = at.Y + top, at.Y + top + h
+				local x0, x1 = x - w / 2, x + w / 2
+				if y0 < keep.Max.Y and y1 > keep.Min.Y and x0 < keep.Max.X and x1 > keep.Min.X then
+					return false
+				end
+			end
+		end
+	end
+	return true
 end
 
 -- `text` wrapped at word breaks into lines at most `width` wide at `size`: how many, and the widest.

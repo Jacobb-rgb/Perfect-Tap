@@ -1007,27 +1007,47 @@ local OWNED_KEYS = {
 
 CapsuleController.OwnedKeys = OWNED_KEYS
 
--- Every key sunk under an opening: the list above and the other controllers' own (missing ones skipped).
+local owners: { [string]: any }? = nil -- (the specs' stand-ins for those controllers: _test.setOwners)
+local warnedOwner: { [string]: boolean } = {}
+
+-- Every key sunk under an opening: the list above and the other controllers' own (one that exports
+-- no key under its name is skipped, with a warning once: it would act unseen under an opening).
 function CapsuleController.sinkKeys(): { Enum.KeyCode }
 	local out = table.clone(SINK_KEYS)
-	local function add(value: any)
+	local function add(value: any): boolean
 		local key: any = value
-		if typeof(value) == "EnumItem" and not table.find(out, key) then
+		if typeof(value) ~= "EnumItem" then
+			return false
+		end
+		if not table.find(out, key) then
 			table.insert(out, key)
 		end
+		return true
 	end
 	for _, entry in OWNED_KEYS do
-		local module = script.Parent:FindFirstChild(entry[1])
-		if module and module:IsA("ModuleScript") then
-			local ok, controller = pcall(require, module :: any)
-			local value = if ok and type(controller) == "table" then (controller :: any)[entry[2]] else nil
-			if type(value) == "table" then
-				for _, key in value do
-					add(key)
-				end
-			else
-				add(value)
+		local controller: any = nil
+		local stand = owners
+		if stand then
+			controller = stand[entry[1]]
+		else
+			local module = script.Parent:FindFirstChild(entry[1])
+			if module and module:IsA("ModuleScript") then
+				local ok, loaded = pcall(require, module :: any)
+				controller = if ok then loaded else nil
 			end
+		end
+		local value = if type(controller) == "table" then controller[entry[2]] else nil
+		local found = false
+		if type(value) == "table" then
+			for _, key in value do
+				found = add(key) or found
+			end
+		else
+			found = add(value)
+		end
+		if not found and not warnedOwner[entry[1]] then
+			warnedOwner[entry[1]] = true
+			warn(`[CapsuleController] no {entry[1]}.{entry[2]} key to sink under an opening`)
 		end
 	end
 	return out
@@ -1256,9 +1276,19 @@ local function fitOpening(o: CapsuleView.OpenRefs)
 			s.Scale = scale
 		end
 	end
+	-- (what lies under the safe frame, a phone's home indicator: the Controls gui sits in that frame,
+	-- CoreUISafeInsets; its Absolute* frame, as every gui's, starts under Roblox's top bar row)
+	local safeBottom = 0
+	pcall(function()
+		local size = o.Controls.AbsoluteSize
+		if size.Y > 0 then
+			safeBottom = math.max(0, (view.Y - inset.Y) - (o.Controls.AbsolutePosition.Y + size.Y))
+		end
+	end)
 	CapsuleView.layoutOpening(o, compactNow(), view.X / scale, view.Y / scale, {
 		Touch = isTouch(),
 		Inset = inset.Y / scale,
+		SafeBottom = safeBottom / scale,
 		TenFoot = GuiService:IsTenFootInterface(),
 	})
 end
@@ -1693,6 +1723,12 @@ CapsuleController._test = {
 	end,
 	skips = function(): (boolean, boolean)
 		return skipStep, skipAll
+	end,
+	setOwners = function(map: { [string]: any }?)
+		owners = map
+	end,
+	view = function(): CapsuleView.Refs
+		return ensureView()
 	end,
 	ended = function(at: number?)
 		chainEndedAt = at or -math.huge
