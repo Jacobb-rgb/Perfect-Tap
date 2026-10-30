@@ -265,13 +265,23 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		end)
 	end
 	function ctx.flash(color: Color3, startTransparency: number)
-		-- one flash clock for every reveal (RevealKit.FlashGap: 2.5 a second at most)
-		if not RevealKit.takeFlash(os.clock()) then
+		local function show()
+			view.Flash.BackgroundColor3 = color
+			view.Flash.BackgroundTransparency = startTransparency
+			TweenService:Create(view.Flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+		end
+		-- one flash clock for every reveal (RevealKit.FlashGap: 2.5 a second at most); a flash
+		-- too soon after another (a crystal's crack just before the reveal) plays once it may
+		local now = os.clock()
+		if RevealKit.takeFlash(now) then
+			show()
 			return
 		end
-		view.Flash.BackgroundColor3 = color
-		view.Flash.BackgroundTransparency = startTransparency
-		TweenService:Create(view.Flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+		task.delay(math.max(0, RevealKit.nextFlashAt() - now), function()
+			if not ctx.ended() and RevealKit.takeFlash(os.clock()) then
+				show()
+			end
+		end)
 	end
 	return ctx
 end
