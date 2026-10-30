@@ -14,16 +14,21 @@
 	The tweens the game plays are posed here frame by frame with the same
 	numbers.
 
-	  lune run tools/lune/export_egg_panel.luau [fps=20] [video=redo] [redo: all|stills|video|panel]
+	  lune run tools/lune/export_egg_panel.luau [fps=20] [redo] [all|stills|video]
 	  -> build/preview/egg_panel_base.json        the world, once (without the Stone egg: it hops)
 	     build/preview/egg_panel/*.json           the egg, the miner and the ring (extra parts) and the UI per still / frame
-	     build/preview/egg_panel_shots.json       the panel's stills (egg4_* / egg5_*: PC, phones with the
-	                                              thumbstick zone, the touch buttons and the top bar outlined)
-	     build/preview/egg_redo_*_shots.json      the egg opening (video "redo", the default) and the
-	                                              clean panel's pictures (see its block below)
+	     build/preview/egg_panel_shots.json       the panel's stills, always: egg3_* (the big E or Roblox's
+	                                              prompt), egg4_* (PC), egg5_* (phones and an iPad with the
+	                                              thumbstick zone, the touch buttons and the top bar outlined),
+	                                              egg6_* (a TV, the trash and the opens round the E at 2x)
+	     build/preview/egg_redo_stills_shots.json the egg opening's key moments, PC ("redo", the default;
+	     build/preview/egg_redo_phone_shots.json  "stills" or "all"), the phone's (844 x 390) in their own file
+	     build/preview/egg_redo_video_shots.json  an Open 3 and Auto's fast one, frame by frame ("video" or "all")
 	then (icons first: lune run tools/lune/export_icon_parts.luau; node tools/preview/render_icons.mjs golem_* capsule_*):
-	  SHOTS_EXTRA=build/preview/egg_panel_shots.json node tools/preview/render.mjs egg_panel_base
+	  SHOTS_EXTRA=build/preview/egg_panel_shots.json node tools/preview/render.mjs egg_panel_base <names>
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_stills_shots.json egg_redo_stills 15 <names>
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_phone_shots.json egg_redo_phone 15 <names>
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_video_shots.json egg_redo_open3 15
 ]]
 
 local fs = require("@lune/fs")
@@ -1271,6 +1276,7 @@ if videoMode == "redo" then
 		stillsOf("redo_deleted", PC, "deleted", { "g_reveal", "h_fly" })
 		stillsOf("redo_x50", PC, "x50", { "c_cracks", "g_reveal" })
 		stillsOf("redo_waiting", PC, "waiting", { "g_reveal" })
+		stillsOf("redo_waiting_phone", PHONE, "waiting", { "g_reveal" })
 		fs.writeFile(root .. "/build/preview/egg_redo_stills_shots.json", serde.encode("json", stillShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_phone_shots.json", serde.encode("json", phoneShots))
 		local n = 0

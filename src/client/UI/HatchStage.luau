@@ -153,8 +153,10 @@ function HatchStage.new(args: Args): Run
 			end
 		end
 	end
+	-- (each egg's pieces in its own colour: poseBits hands every egg a block of `per` shards)
+	local per = math.max(1, math.floor(#o.Shards / n))
 	for i, piece in o.Shards do
-		local c = run.Colors[(i - 1) % n + 1]
+		local c = run.Colors[math.min(n, (i - 1) // per + 1)]
 		piece.BackgroundColor3 = if i % 3 == 0 then Color3.new(1, 1, 1) else c
 	end
 	for _, rec in args.Eggs do
@@ -321,31 +323,26 @@ local function poseBlobs(run: Run, t: number)
 	end
 end
 
-local function reveal(run: Run, aspect: number)
+-- A golem's 3/4 look: turned a little toward the middle, the middle one a little to its left.
+local function turnOf(spot: Vector2): number
+	return (spot.X - 0.5) * 0.45 + (if math.abs(spot.X - 0.5) < 0.01 then HatchFx.Turn else 0)
+end
+
+--[[
+	Every standing golem's name under its feet, "1 in N" in the rarity's
+	colour (nothing else; DELETED when auto-deleted, "Waiting: inventory
+	full" for a won golem past the inventory's hard cap): at the reveal and
+	again when the screen changes mid-opening (the golems moved).
+]]
+local function placeTags(run: Run, aspect: number)
 	local o = run.Refs
 	local size = run.Size
 	local args = run.Args
-	for slot = 1, run.Count do
+	for slot, standing in run.Standing do
 		local kind = run.Kinds[slot]
 		local s = run.Layout.Slots[slot]
-		local model, height, root = args.Golem(kind)
-		local standing: Standing = {
-			Model = model,
-			Height = height,
-			Root = root,
-			Depth = HatchFx.depthFor(height, s.GolemH),
-			Spot = s.Golem,
-			-- (a 3/4 look: turned a little toward the middle, the middle one a little to its left)
-			Turn = (s.Golem.X - 0.5) * 0.45 + (if math.abs(s.Golem.X - 0.5) < 0.01 then HatchFx.Turn else 0),
-		}
-		run.Standing[slot] = standing
 		local info = GolemConfig.ById[kind]
-		if run.Deleted[slot] then
-			HatchStage.grey(model)
-		end
-		-- the name under its feet, "1 in N" in the rarity's colour (nothing else; DELETED when
-		-- auto-deleted, "Waiting: inventory full" for a won golem past the inventory's hard cap)
-		local feet = HatchFx.at(s.Golem.X, s.Golem.Y, standing.Depth, aspect) - Vector3.new(0, height / 2, 0)
+		local feet = HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect) - Vector3.new(0, standing.Height / 2, 0)
 		local under = HatchFx.project(feet, aspect)
 		CapsuleView.setTag(
 			o,
@@ -360,9 +357,31 @@ local function reveal(run: Run, aspect: number)
 				* size.X
 				* (if slot == run.Special then 1.5 else 0.96),
 			run.Deleted[slot],
-			run.Waiting[slot]
+			run.Waiting[slot],
+			run.Layout.Spacing * size.X * 0.96 -- (a note never wider than the golems' pitch)
 		)
 	end
+end
+
+local function reveal(run: Run, aspect: number)
+	local args = run.Args
+	for slot = 1, run.Count do
+		local kind = run.Kinds[slot]
+		local s = run.Layout.Slots[slot]
+		local model, height, root = args.Golem(kind)
+		run.Standing[slot] = {
+			Model = model,
+			Height = height,
+			Root = root,
+			Depth = HatchFx.depthFor(height, s.GolemH),
+			Spot = s.Golem,
+			Turn = turnOf(s.Golem),
+		}
+		if run.Deleted[slot] then
+			HatchStage.grey(model)
+		end
+	end
+	placeTags(run, aspect)
 end
 
 local function poseGolems(run: Run, t: number, aspect: number)
@@ -396,6 +415,7 @@ local function poseGolems(run: Run, t: number, aspect: number)
 					edge.Transparency = pose.Name
 				end
 			end
+			CapsuleView.fadeMarks(tag, pose.Name) -- (DELETED and the waiting note fade with the name)
 		end
 	end
 	if tl.Reduced then
@@ -477,6 +497,16 @@ function HatchStage.pose(run: Run, t: number): { string }
 	end
 	if o.Size ~= run.Size then
 		relayout(run) -- (the screen turned or changed size mid-opening)
+		if next(run.Standing) ~= nil then
+			-- (the golems out already: where they stand and their names follow the new layout)
+			for slot, standing in run.Standing do
+				local s = run.Layout.Slots[slot]
+				standing.Depth = HatchFx.depthFor(standing.Height, s.GolemH)
+				standing.Spot = s.Golem
+				standing.Turn = turnOf(s.Golem)
+			end
+			placeTags(run, run.Size.X / math.max(1, run.Size.Y))
+		end
 	end
 	local aspect = run.Size.X / math.max(1, run.Size.Y)
 	local level = HatchFx.levelAt(t, tl)

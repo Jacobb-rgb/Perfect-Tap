@@ -1285,6 +1285,10 @@ return function(T, Loader)
 				end
 			end
 			T.eq(CapsuleView.firstButton(refs), refs.Buttons[1], "gamepad: the first OPEN button")
+			-- after an opening a gamepad rests on a control that never buys (A mashed to skip it)
+			local rest = CapsuleView.restButton(refs)
+			T.falsy(table.find(refs.Buttons, rest), "never an OPEN button")
+			T.eq(rest, refs.Tabs.Stone, "the shown tab")
 			-- Royal (allowed, not live): the note instead of the buttons
 			refs.Tab = "Royal"
 			CapsuleView.setCards(refs, CapsuleView.cards(state(), 1e9, false, NOW))

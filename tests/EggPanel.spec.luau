@@ -2148,33 +2148,29 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("CapsuleController: a x50 pack is 5 openings of 10, every golem named once (the waiting ones with their note)", function()
-		withController(function(_C, _w)
+	T.test("CapsuleController: a x50 pack is 5 openings of 10, every golem named once (calm, skip-all, phones, all waiting)", function()
+		withController(function(_C, w)
 			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
 			local HatchStage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
 			local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
-			local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
-			local function golemOf(kind: string): (any, number, number)
-				local model = GolemBuilder.build(kind)
-				return model, model:GetAttribute("Height") or 3, model:GetAttribute("RootHeight") or 1
-			end
-			-- a x50 Dragonforge pack: 40 woke, 10 rolled past the inventory's hard cap (the result's Pending)
+			local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
+			-- a x50 Dragonforge pack: `woke` woke, the rest rolled past the inventory's hard cap (Pending)
 			local odds = CapsuleConfig.odds("Dragonforge", false)
-			local golems, pending = {}, {}
-			local want: { [string]: number } = {}
-			for i = 1, 50 do
-				local kind = odds[(i - 1) % #odds + 1].Golem
-				if i <= 40 then
-					table.insert(golems, { Id = i, Kind = kind })
-				else
-					table.insert(pending, kind)
+			local function pack(woke: number): (any, { [string]: number })
+				local golems, pending = {}, {}
+				local want: { [string]: number } = {}
+				for i = 1, 50 do
+					local kind = odds[(i - 1) % #odds + 1].Golem
+					if i <= woke then
+						table.insert(golems, { Id = i, Kind = kind })
+					else
+						table.insert(pending, kind)
+					end
+					local name = GolemConfig.ById[kind].Name
+					want[name] = (want[name] or 0) + 1
 				end
-				local name = GolemConfig.ById[kind].Name
-				want[name] = (want[name] or 0) + 1
+				return { Capsule = "Dragonforge", Count = 50, Golems = golems, Pending = pending, Lucky = false }, want
 			end
-			local payload = { Capsule = "Dragonforge", Count = 50, Golems = golems, Pending = pending, Lucky = false }
-			local openings = CC.batches(payload)
-			T.eq(#openings, 5, "a x50: five openings")
 			-- junk: no golems, unknown pending kinds, more than a pack holds
 			T.eq(#CC.batches({ Capsule = "Stone", Golems = {} }), 0)
 			T.eq(#CC.batches("x"), 0)
@@ -2185,21 +2181,107 @@ return function(T, Loader)
 			for i = 1, 70 do
 				many[i] = { Id = i, Kind = "PebbleGolem" }
 			end
-			local capped = CC.batches({ Capsule = "Stone", Golems = many })
 			local total = 0
-			for _, r in capped do
+			for _, r in CC.batches({ Capsule = "Stone", Golems = many }) do
 				total += #r.Golems
 			end
 			T.eq(total, CapsuleConfig.MaxCount, "never more than the biggest pack")
-			-- each opening posed to the moment every name shows: each golem named exactly once
-			local o = CapsuleView.buildOpening(false)
-			CapsuleView.layoutOpening(o, false, 1280, 720, {})
-			local named: { [string]: number } = {}
-			local notes, ids = 0, {}
+			--[[
+				One opening as hatch() plays it, with hatch()'s own arguments (CC.hatchArgs): "whole" to its end,
+				"skip" with skip-all at its start (hatch's rule: to the burst, the flight once the last name
+				showed MinShow), "names" until every name shows. Each golem counted once, when its name is
+				fully on; its waiting note checked then.
+			]]
+			local function play(o: any, result: any, mode: string): ({ [string]: number }, number)
+				local kinds = {}
+				for _, g in result.Golems do
+					table.insert(kinds, g.Kind)
+				end
+				local args = CC.hatchArgs(o, result, kinds)
+				T.eq(args.Fast, (result.Batch or 1) > 1, "the later openings of a pack in the fast timings")
+				T.eq(args.Reduced, Motion.reduced(), "Reduce motion's calm opening when it is on")
+				local run = HatchStage.new(args)
+				local tl = run.Timeline
+				T.truthy(tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow, "MinShow after the last name")
+				local named: { [string]: number } = {}
+				local seen: { [number]: boolean } = {}
+				local notes = 0
+				local function look()
+					for slot = 1, #kinds do
+						local tag = o.Tags[slot]
+						if not seen[slot] and tag.Frame.Visible and tag.Name.TextTransparency == 0 then
+							seen[slot] = true
+							named[tag.Name.Text] = (named[tag.Name.Text] or 0) + 1
+							T.eq(tag.Waiting.Visible, run.Waiting[slot], "the waiting note only on a waiting golem")
+							if tag.Waiting.Visible then
+								notes += 1
+								T.eq(tag.WaitingText.Text, "Waiting: inventory full")
+								T.eq(tag.Waiting.BackgroundTransparency, 0, "solid with its name")
+								-- (never under the Auto button, its key or its label: the bottom-left golem's note)
+								local x = tag.Frame.Position.X.Offset
+								local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
+								local half = tag.Waiting.Size.X.Offset / 2
+								local note = { Min = Vector2.new(x - half, y), Max = Vector2.new(x + half, y + tag.Waiting.Size.Y.Offset) }
+								T.eq(EggPanel.overlap(note, o.AutoKeep), 0, `slot {slot}: its note clear of the Auto button`)
+							end
+						end
+					end
+				end
+				local real, offset = 0, 0
+				local revealedAt: number? = nil
+				local wantFly = false
+				if mode == "skip" then
+					local t1 = HatchFx.skipTo(0, tl, 0)
+					offset += if t1 then t1 else 0
+					wantFly = true
+				end
+				while true do
+					local shown = if revealedAt then real - revealedAt else 0
+					if wantFly then
+						local tt = real + offset
+						local jump = if tt >= tl.Burst then HatchFx.skipTo(tt, tl, shown) else nil
+						if jump then
+							offset += jump - tt
+							wantFly = false
+						end
+					end
+					local t = math.min(real + offset, tl.Total)
+					local events = HatchStage.pose(run, t)
+					if table.find(events, "Reveal") then
+						revealedAt = real
+					end
+					look()
+					local done = 0
+					for _ in seen do
+						done += 1
+					end
+					if t >= tl.Total or (mode == "names" and done == #kinds) then
+						break
+					end
+					real += 1 / 30
+				end
+				T.eq(
+					#kinds,
+					(function(): number
+						local n = 0
+						for _ in seen do
+							n += 1
+						end
+						return n
+					end)(),
+					"every golem of the opening named"
+				)
+				HatchStage.pose(run, tl.Total)
+				HatchStage.clear(o, HatchStage.golems(run))
+				return named, notes
+			end
+			local payload, want = pack(40)
+			local openings = CC.batches(payload)
+			T.eq(#openings, 5, "a x50: five openings")
+			local ids = {}
 			for b, result in openings do
 				T.eq(result.Batch, b)
 				T.eq(result.Batches, 5)
-				T.eq(result.Count, 10)
 				T.eq(#result.Golems, 10, `opening {b}: ten golems`)
 				for _, g in result.Golems do
 					if g.Id > 0 then
@@ -2207,63 +2289,85 @@ return function(T, Loader)
 						ids[g.Id] = true
 					end
 				end
-				local deleted, waiting = CC.marks(result)
-				local kinds = {}
-				local eggs = {}
-				for _, g in result.Golems do
-					table.insert(kinds, g.Kind)
-					local egg = GolemBuilder.capsule("Dragonforge")
-					HatchFx.addCracks(egg, 3)
-					egg:SetAttribute("Pooled", true)
-					table.insert(eggs, HatchFx.record(egg))
-				end
-				local run = HatchStage.new({
-					Refs = o,
-					Capsule = "Dragonforge",
-					Lucky = false,
-					Kinds = kinds,
-					Eggs = eggs,
-					Fast = b > 1, -- (the controller: the later openings in the fast timings)
-					Reduced = false,
-					Phone = false,
-					Target = Vector2.new(0.5, 0.86),
-					Golem = golemOf,
-					Claim = function(): boolean
-						return true
+			end
+			local o = CapsuleView.buildOpening(false)
+			CapsuleView.layoutOpening(o, false, 1280, 720, {})
+			for _, case in { { "whole", false }, { "whole", true }, { "skip", false } } do
+				local mode, calm = case[1], case[2]
+				patched({ {
+					Motion,
+					"reduced",
+					function(): boolean
+						return calm
 					end,
-					Deleted = deleted,
-					Waiting = waiting,
-				})
-				local tl = run.Timeline
-				T.truthy(tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow, `opening {b}: MinShow after the last name`)
-				local at = tl.Reveal + HatchFx.namedAt(tl) + 0.02
-				local t = 0
-				while t < at do
-					t = math.min(at, t + 1 / 30)
-					HatchStage.pose(run, t)
+				} }, function()
+					local named: { [string]: number } = {}
+					local notes = 0
+					for _, result in openings do
+						local got, n = play(o, result, mode)
+						for name, k in got do
+							named[name] = (named[name] or 0) + k
+						end
+						notes += n
+					end
+					local label = `{mode}{if calm then " (Reduce motion)" else ""}`
+					for name, n in want do
+						T.eq(named[name], n, `{label}: {name} named once for each of its golems`)
+					end
+					for name in named do
+						T.truthy(want[name] ~= nil, name .. ": a golem of the pack")
+					end
+					T.eq(notes, 10, label .. ": the ten past the cap shown won, each with its note")
+				end)
+			end
+			-- the pack's whole pack past the cap (the inventory at its hard cap): 5 openings, all waiting
+			local all = CC.batches((pack(0)))
+			T.eq(#all, 5, "no golem woke: still five openings")
+			local waiting = 0
+			for _, result in all do
+				local _named, n = play(o, result, "names")
+				waiting += n
+			end
+			T.eq(waiting, 50, "all 50 shown, each waiting")
+			-- phones (the HUD's 0.62): the note at the text floor, on two lines where the room is narrow;
+			-- no two names or notes touch, none under the Auto button
+			w.touch = true
+			for _, view in { Vector2.new(844, 390), Vector2.new(568, 320) } do
+				local scale = 0.62
+				local p = CapsuleView.buildOpening(true)
+				CapsuleView.layoutOpening(p, true, view.X / scale, view.Y / scale, { Touch = true, Inset = 58 / scale })
+				local last = all[5]
+				play(p, last, "names")
+				local boxes = {}
+				for slot = 1, #last.Golems do
+					local tag = p.Tags[slot]
+					T.truthy(tag.Waiting.Visible, `{view.X}: the note`)
+					T.truthy(tag.WaitingText.TextSize * scale >= 9.9, `{view.X}: the note {tag.WaitingText.TextSize * scale} pt`)
+					local wide = math.max(tag.Frame.Size.X.Offset, tag.Waiting.Size.X.Offset)
+					local x = tag.Frame.Position.X.Offset - wide / 2
+					local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
+					table.insert(boxes, {
+						Min = Vector2.new(x, y),
+						Max = Vector2.new(
+							x + tag.Waiting.Size.X.Offset + (wide - tag.Waiting.Size.X.Offset),
+							y + tag.Waiting.Size.Y.Offset
+						),
+						Note = {
+							Min = Vector2.new(tag.Frame.Position.X.Offset - tag.Waiting.Size.X.Offset / 2, y),
+							Max = Vector2.new(tag.Frame.Position.X.Offset + tag.Waiting.Size.X.Offset / 2, y + tag.Waiting.Size.Y.Offset),
+						},
+					})
+					T.eq(EggPanel.overlap(boxes[#boxes].Note, p.AutoKeep), 0, `{view.X} slot {slot}: clear of the Auto button`)
 				end
-				for slot = 1, #kinds do
-					local tag = o.Tags[slot]
-					T.truthy(tag.Frame.Visible and tag.Name.TextTransparency == 0, `opening {b} slot {slot}: named`)
-					named[tag.Name.Text] = (named[tag.Name.Text] or 0) + 1
-					T.eq(tag.Waiting.Visible, run.Waiting[slot], `opening {b} slot {slot}: the waiting note only on a waiting golem`)
-					if tag.Waiting.Visible then
-						notes += 1
-						T.eq(tag.WaitingText.Text, CapsuleView.WaitingText)
-						T.eq(tag.WaitingText.Text, "Waiting: inventory full")
-						T.falsy(tag.Deleted.Visible)
+				for i = 1, #boxes do
+					for j = i + 1, #boxes do
+						T.eq(EggPanel.overlap(boxes[i].Note, boxes[j].Note), 0, `{view.X}: notes {i} and {j} never touch`)
 					end
 				end
-				HatchStage.pose(run, tl.Total)
-				HatchStage.clear(o, HatchStage.golems(run))
+				p.Gui:Destroy()
+				p.Controls:Destroy()
 			end
-			for name, n in want do
-				T.eq(named[name], n, name .. ": named once for each of its golems")
-			end
-			for name in named do
-				T.truthy(want[name] ~= nil, name .. ": a golem of the pack")
-			end
-			T.eq(notes, 10, "the ten past the cap: shown won, each with its note")
+			w.touch = false
 			-- the counter: "2 / 5" while a pack's openings play, none for one opening
 			CapsuleView.setChain(o, 2, 5)
 			T.truthy(o.Chain.Visible)
@@ -2306,6 +2410,7 @@ return function(T, Loader)
 						Playing = CC._test.playing(),
 						Sink = w.actions.TerraForgeCapsuleSink ~= nil,
 						Skip = w.actions.TerraForgeCapsuleSkip ~= nil,
+						Watch = CC._test.selectionWatched(),
 						Chain = if o.Chain.Visible then o.Chain.Text else "",
 					})
 					local step, all = CC._test.skips()
@@ -2341,14 +2446,21 @@ return function(T, Loader)
 				for i, p in played do
 					T.truthy(p.Hidden, `opening {i}: the HUD away`)
 					T.truthy(p.Playing, `opening {i}: playing (the egg panel and its keys rest)`)
-					T.truthy(p.Sink and p.Skip, `opening {i}: the keys and the selection lock held`)
+					T.truthy(p.Sink and p.Skip, `opening {i}: the keys held`)
+					T.truthy(p.Watch, `opening {i}: the selection lock watching (nothing gets selected under it)`)
 				end
 				T.eq(#plays, 2, "the chain told once that it began and once that it ended")
 				T.eq(plays[1], true)
 				T.eq(plays[2], false)
 				T.falsy(CC._test.hudHidden(), "the HUD back once, after the last opening")
 				T.falsy(CC._test.playing())
+				-- right after it the shop's OPEN buttons rest a moment (a gamepad's A pressed to skip it)
+				local sent, why = CC._test.request("Stone", 1, Instance.new("TextButton"))
+				T.falsy(sent, "no egg bought by the A meant as a skip")
+				T.eq(why, "Busy")
+				CC._test.ended(nil)
 				T.eq(w.actions.TerraForgeCapsuleSink, nil, "the keys free again")
+				T.falsy(CC._test.selectionWatched(), "the selection lock let go")
 				T.eq(CC._test.queued(), 0)
 				-- an opening that fails still lets the chain go on and end
 				table.clear(played)
@@ -2363,6 +2475,27 @@ return function(T, Loader)
 				T.eq(#played, 2, "the second opening plays after a failed first")
 				T.eq(#plays, 2, "one begin, one end")
 				T.falsy(CC._test.hudHidden())
+				-- the notes by the Auto button: why Auto stopped shows once (not again on every opening of a
+				-- chain), and a receipt's own notice waits for its result's opening (never on the one playing)
+				local receipt = { Capsule = "Royal", Count = 1, Golems = { { Id = 77, Kind = "EmberImp" } }, Lucky = false }
+				local notes = {}
+				CC._test.setAuto(false, "Triple Lucky ended: Auto stopped")
+				CC._test.setHatch(function(o: any, result: any)
+					table.insert(notes, { Capsule = result.Capsule, Batch = result.Batch, Text = o.Note.Text, Shown = o.Note.Visible })
+					o.Note.Visible = false -- (its time is up before the next opening)
+					o.Note.Text = ""
+					if #notes == 1 then
+						CC._test.result(receipt) -- (a Robux receipt during the pack's first opening)
+						CC.notice({ Text = "Your golem inventory is full", Kind = "Info" })
+						T.eq(o.Note.Text, "", "its notice doesn't land on the opening playing")
+					end
+				end)
+				CC._test.result({ Capsule = "Stone", Count = 20, Golems = table.move(pack, 1, 20, 1, {}), Lucky = false })
+				T.eq(#notes, 3, "the pack's two openings, then the receipt's")
+				T.truthy(notes[1].Shown and notes[1].Text == "Triple Lucky ended: Auto stopped", "Auto's note on the first opening")
+				T.falsy(notes[2].Shown, "not again on the second")
+				T.eq(notes[3].Capsule, "Royal")
+				T.truthy(notes[3].Shown and notes[3].Text == "Your golem inventory is full", "the receipt's notice with its own opening")
 			end)
 			listening = false
 			CC._test.setHatch(nil)

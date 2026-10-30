@@ -32,7 +32,15 @@ return function(T, Loader)
 	local function runOf(
 		egg: string,
 		kinds: { string },
-		opts: { Fast: boolean?, Reduced: boolean?, Phone: boolean?, W: number?, H: number?, Deleted: { [number]: boolean }? }?
+		opts: {
+			Fast: boolean?,
+			Reduced: boolean?,
+			Phone: boolean?,
+			W: number?,
+			H: number?,
+			Deleted: { [number]: boolean }?,
+			Waiting: { [number]: boolean }?,
+		}?
 	): (any, any, { number })
 		local o2 = opts or {}
 		local o = CapsuleView.buildOpening(o2.Phone == true)
@@ -61,6 +69,7 @@ return function(T, Loader)
 				return true
 			end,
 			Deleted = o2.Deleted,
+			Waiting = o2.Waiting,
 		})
 		return o, run, claims
 	end
@@ -383,6 +392,84 @@ return function(T, Loader)
 		T.eq(models, 0, "the stage empty: the golems freed, the eggs back in the pool")
 	end)
 
+	T.test("EggOpening: each egg's shell pieces in its own colour; the names follow the golems when the screen changes", function()
+		local kinds = { "RoseKnight", "QuartzSprite", "CopperTinker" }
+		local o, run = runOf("Stone", kinds)
+		-- poseBits hands egg k the k-th block of `per` pieces: they are its colour (or white)
+		local per = math.max(1, math.floor(#o.Shards / run.Count))
+		for i, piece in o.Shards do
+			local slot = math.min(run.Count, (i - 1) // per + 1)
+			local c = piece.BackgroundColor3
+			local white = c.R == 1 and c.G == 1 and c.B == 1
+			T.truthy(white or c == run.Colors[slot], `piece {i}: egg {slot}'s colour or white`)
+		end
+		-- the golems out, then the screen turns (a phone rotated, a window resized): the names move with them
+		local tl = run.Timeline
+		HatchStage.pose(run, tl.Reveal + tl.Times.GolemPop + 0.2)
+		local function check(label: string)
+			local size = run.Size
+			local aspect = size.X / size.Y
+			for slot, standing in run.Standing do
+				local feet = HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect) - Vector3.new(0, standing.Height / 2, 0)
+				local under = HatchFx.project(feet, aspect)
+				local tag = o.Tags[slot]
+				T.near(tag.Frame.Position.X.Offset, under.X * size.X, 1.5, `{label} slot {slot}: the name under its golem`)
+			end
+		end
+		check("1280 x 720")
+		local before = o.Tags[1].Frame.Position.X.Offset
+		CapsuleView.layoutOpening(o, false, 1600, 720, {})
+		HatchStage.pose(run, tl.Reveal + tl.Times.GolemPop + 0.3)
+		check("1600 x 720")
+		T.truthy(math.abs(o.Tags[1].Frame.Position.X.Offset - before) > 4, "(it moved)")
+		HatchStage.pose(run, tl.Total)
+		HatchStage.clear(o, HatchStage.golems(run))
+	end)
+
+	T.test("EggOpening: DELETED and the waiting note fade with the names (Reduce motion's calm fade too)", function()
+		for _, calm in { false, true } do
+			local o, run = runOf("Stone", { "RoseKnight", "PebbleGolem", "CopperTinker" }, {
+				Reduced = calm,
+				Deleted = { [2] = true },
+				Waiting = { [3] = true },
+			})
+			local tl = run.Timeline
+			local partial, solid = 0, 0
+			local t = tl.Reveal
+			while t < tl.Total do
+				HatchStage.pose(run, t)
+				for slot = 1, 3 do
+					local tag = o.Tags[slot]
+					if tag.Frame.Visible then
+						local a = tag.Name.TextTransparency
+						for _, mark in { tag.Deleted, tag.Waiting } do
+							if mark.Visible then
+								T.near(
+									mark.BackgroundTransparency,
+									a,
+									1e-4,
+									`{if calm then "calm" else "normal"}: {mark.Name} with its name`
+								)
+								local rim = mark:FindFirstChild("Rim")
+								T.near(rim.Transparency, a, 1e-4)
+								partial += if a > 0.05 and a < 0.95 then 1 else 0
+								solid += if a == 0 then 1 else 0
+							end
+						end
+						if tag.Waiting.Visible then
+							T.near(tag.WaitingText.TextTransparency, a, 1e-4, "the note's words too")
+						end
+					end
+				end
+				t += 1 / 30
+			end
+			T.truthy(partial > 0, "(seen mid-fade)")
+			T.truthy(solid > 0, "(and solid)")
+			HatchStage.pose(run, tl.Total)
+			HatchStage.clear(o, HatchStage.golems(run))
+		end
+	end)
+
 	T.test("EggOpening: an auto-deleted golem comes out greyed, DELETED under its name, and never flies to the player", function()
 		local kinds = { "RoseKnight", "PebbleGolem", "CopperTinker" }
 		local o, run = runOf("Stone", kinds, { Deleted = { [2] = true } })
@@ -501,6 +588,11 @@ return function(T, Loader)
 		local tv = CapsuleView.buildOpening(true)
 		CapsuleView.layoutOpening(tv, true, 1536, 864, { Inset = 29, TenFoot = true })
 		T.truthy(tv.AutoHolder.Position.X.Offset >= 1536 * 0.05, "a TV: inside its safe margin")
+		-- the "2 / 5" counter: just under the top bar; a TV: inside its 5 % title-safe band too
+		CapsuleView.setChain(tv, 2, 5)
+		T.truthy(29 + tv.Chain.Position.Y.Offset >= 864 * 0.05 - 1e-6, "a TV: the counter inside the title-safe band")
+		T.eq(pc.Chain.Position.Y.Offset, 8, "PC: just under the top bar")
+		T.truthy(tv.Chain.TextSize * 1.25 >= 18, "the counter: 18 px at 1080p")
 		-- text: 18 px at 1080p (1.25), 10 pt on a phone
 		for _, label in { pc.AutoLabel, pc.Note } do
 			T.truthy(label.TextSize * 1.25 >= 18, label.Name .. ": 18 px at 1080p")
@@ -551,6 +643,11 @@ return function(T, Loader)
 		)
 		T.truthy(string.find(code, "if phone and n > 3 then 2 else 3", 1, true), "a phone opening many: two crack steps")
 		T.truthy(string.find(code, 'string.sub(gui.Name, 1, 10) ~= "TerraForge"', 1, true), "only our own guis step away")
+		-- (review 2026-10-30) L3 (the train window) and R3 (the tutorial's Skip) never act unseen under it
+		T.truthy(string.find(code, "Enum.KeyCode.ButtonL3", 1, true) and string.find(code, "Enum.KeyCode.ButtonR3", 1, true))
+		-- the pickup hint and highlight rest while the opening holds InteractController
+		local interact = fs.readFile(Loader.root .. "/src/client/Controllers/InteractController.luau")
+		T.truthy(string.find(interact, "if not enabled or next(holds) ~= nil then", 1, true), "held: no pickup target")
 	end)
 
 	T.test("EggOpening: a seventh Rarity (the secret ores' Secret) never reaches the egg screens or the stall", function()

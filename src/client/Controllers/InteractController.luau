@@ -84,6 +84,15 @@ function InteractController.hold(name: string, on: boolean)
 	if on then
 		holds[name] = true
 		ContextActionService:UnbindAction("TerraForgeGrab")
+		-- (no pickup target meanwhile: the item's highlight and its "[F] Pick up" hint go too)
+		target = nil
+		if highlight then
+			highlight.Adornee = nil
+		end
+		if hint then
+			clearHint()
+			hint.Enabled = false
+		end
 	else
 		holds[name] = nil
 		if next(holds) == nil and enabled then
@@ -281,8 +290,8 @@ function InteractController.start()
 			return
 		end
 		accumulator = 0
-		if not enabled then
-			return
+		if not enabled or next(holds) ~= nil then
+			return -- (held: hold() cleared the target and the hint)
 		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?

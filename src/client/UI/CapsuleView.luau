@@ -190,6 +190,9 @@ export type Refs = {
 	Compact: boolean,
 }
 
+-- A rectangle in the opening's design units (its top-left and bottom-right).
+export type KeepBox = { Min: Vector2, Max: Vector2 }
+
 -- A golem's name under it in the opening: the NAME and "1 in N" in its rarity's colour (an
 -- auto-deleted golem: a trash mark and "DELETED" under them; a won golem past the inventory's
 -- hard cap, a Robux pack's: "Waiting: inventory full" under them, it wakes when there is room).
@@ -227,6 +230,7 @@ export type OpenRefs = {
 	AutoGlyph: ImageLabel,
 	Note: TextLabel, -- why Auto stopped (the HUD's toasts hide while an opening plays)
 	Chain: TextLabel, -- "2 / 5": a big pack's openings, one after another (setChain)
+	AutoKeep: KeepBox, -- the Auto button, its key and label (the stage's design units): no name tag goes under it
 	Size: Vector2, -- the screen in design units (layoutOpening)
 	Touch: boolean,
 	Compact: boolean,
@@ -1420,6 +1424,19 @@ function CapsuleView.firstButton(refs: Refs): GuiObject
 	return refs.Close
 end
 
+-- A control that never buys, for a gamepad's selection after an opening (A mashed to skip it must
+-- not open another egg): the shown tab, else the odds list, else X.
+function CapsuleView.restButton(refs: Refs): GuiObject
+	local tab = refs.Tabs[refs.Tab]
+	if tab and holderOf(tab).Visible then
+		return tab
+	end
+	if refs.Right.Visible then
+		return refs.List
+	end
+	return refs.Close
+end
+
 -- Every button a finger or a gamepad uses (tests: 44 pt at the phone scale).
 function CapsuleView.touchTargets(refs: Refs): { GuiObject }
 	local list: { GuiObject } = { holderOf(refs.Close), holderOf(refs.Golems) }
@@ -1676,8 +1693,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		local wait = brightText(waiting, "Word", 16, 10)
 		wait.Text = CapsuleView.WaitingText
 		wait.AnchorPoint = Vector2.new(0.5, 0.5)
+		wait.LineHeight = 0.95
 		wait.Position = UDim2.fromScale(0.5, 0.5)
 		wait.Size = UDim2.new(1, -10, 1, -4)
+		wait.TextWrapped = true -- (two lines where its golem's room is narrow: a phone's Open 10)
 		table.insert(tags, { Frame = holder, Name = name, Chance = chance, Deleted = deleted, Waiting = waiting, WaitingText = wait })
 	end
 
@@ -1828,6 +1847,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		AutoGlyph = glyph,
 		Note = note,
 		Chain = chain,
+		AutoKeep = { Min = Vector2.zero, Max = Vector2.zero },
 		Size = Vector2.new(1280, 720),
 		Touch = false,
 		Compact = isCompact,
@@ -1902,6 +1922,8 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	if edge and edge:IsA("UIStroke") then
 		edge.Thickness = CapsuleView.TextEdge(labelSize) * 0.8
 	end
+	-- (the key badge sits on the disc's top-right corner, 9 units out; KEEP more round it all)
+	local KEEP = 6
 	if touch then
 		-- above the thumbstick's zone, the label to the right of the disc
 		local zoneTop = height * zone.Top - inset
@@ -1912,13 +1934,22 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 		refs.AutoLabel.Position = UDim2.new(1, 10, 0.5, 0)
 		refs.AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
 		refs.Note.Position = UDim2.fromOffset(margin + disc + 10, y + disc / 2 + labelSize * 0.6)
+		refs.AutoKeep = {
+			Min = Vector2.new(margin - KEEP, inset + y - 9 - KEEP),
+			Max = Vector2.new(margin + disc + 10 + 120 + KEEP, inset + y + disc + KEEP),
+		}
 	else
+		local top = room - margin - labelSize - 6 - disc -- (the disc's top in the Controls gui)
 		refs.AutoHolder.AnchorPoint = Vector2.new(0, 1)
 		refs.AutoHolder.Position = UDim2.fromOffset(margin + 10, room - margin - labelSize - 6)
 		refs.AutoLabel.AnchorPoint = Vector2.new(0.5, 0)
 		refs.AutoLabel.Position = UDim2.new(0.5, 0, 1, 2)
 		refs.AutoLabel.TextXAlignment = Enum.TextXAlignment.Center
 		refs.Note.Position = UDim2.fromOffset(margin, room - margin - labelSize - 6 - disc - 34)
+		refs.AutoKeep = {
+			Min = Vector2.new(margin + 10 - 30 - KEEP, inset + top - 9 - KEEP),
+			Max = Vector2.new(margin + 10 + disc + 30 + KEEP, inset + top + disc + 2 + labelSize + 6 + KEEP),
+		}
 	end
 	refs.Note.Size = UDim2.fromOffset(math.min(width - 2 * margin, 460), 24)
 	refs.Note.TextSize = if compact or touch then 20 else 18
@@ -1926,7 +1957,8 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	local chainSize = if compact or touch then 26 else 30
 	refs.Chain.TextSize = chainSize
 	refs.Chain.Size = UDim2.fromOffset(200, chainSize + 6)
-	refs.Chain.Position = UDim2.fromOffset(width / 2, 8)
+	-- (a TV: inside its 5 % title-safe band, as Auto and its note)
+	refs.Chain.Position = UDim2.fromOffset(width / 2, if o.TenFoot then math.max(8, math.ceil(height * 0.05) - inset) else 8)
 	local chainEdge = refs.Chain:FindFirstChild("Edge")
 	if chainEdge and chainEdge:IsA("UIStroke") then
 		chainEdge.Thickness = CapsuleView.TextEdge(chainSize)
@@ -1946,7 +1978,8 @@ function CapsuleView.setTag(
 	size: number,
 	room: number?,
 	deleted: boolean?,
-	waiting: boolean?
+	waiting: boolean?,
+	pitch: number?
 )
 	local tag = refs.Tags[slot]
 	if not tag then
@@ -1978,22 +2011,86 @@ function CapsuleView.setTag(
 	tag.Deleted.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
 	tag.Waiting.Visible = wait
 	local frameW = math.max(160, math.min(width, fit * 12))
+	local markW, markH = if deleted then 130 else 0, if deleted then 36 else 0
 	if wait then
-		-- (the note fits its room: a smaller word between close neighbours, never under 10 units)
-		local noteSize = 16
-		while noteSize > 10 and TechShopView.textWidth(CapsuleView.WaitingText, noteSize) + 22 > math.max(frameW, width) do
-			noteSize -= 1
-		end
+		-- the note at the text floor (TagMin: 10 pt on a phone), on two lines where its room is narrow
+		-- (its room: the golems' pitch `pitch`, even for the big middle one whose name gets more)
+		local noteRoom = math.min(width, pitch or width)
+		local noteSize = CapsuleView.TagMin
+		local lines, widest = CapsuleView.wrap(CapsuleView.WaitingText, noteSize, math.max(40, noteRoom - 22))
 		tag.WaitingText.TextSize = noteSize
 		local noteEdge = tag.WaitingText:FindFirstChild("Edge")
 		if noteEdge and noteEdge:IsA("UIStroke") then
 			noteEdge.Thickness = CapsuleView.TextEdge(noteSize)
 		end
-		tag.Waiting.Size = UDim2.fromOffset(math.ceil(TechShopView.textWidth(CapsuleView.WaitingText, noteSize)) + 22, noteSize + 12)
+		markW = math.min(math.ceil(widest) + 22, math.max(60, noteRoom)) -- (never wider than its room: neighbours never touch)
+		markH = lines * (noteSize + 2) + 10
+		tag.Waiting.Size = UDim2.fromOffset(markW, markH)
 		tag.Waiting.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
+		markH += 4
 	end
-	tag.Frame.Position = UDim2.fromOffset(at.X, at.Y)
-	tag.Frame.Size = UDim2.fromOffset(frameW, fit + small + 12 + (if deleted then 36 elseif wait then 34 else 0))
+	local frameH = fit + small + 12 + markH
+	-- never under the Auto button (its key and label): the tag steps right of it
+	local x = at.X
+	local half = math.max(frameW, markW) / 2
+	local keep = refs.AutoKeep
+	local overlapsY = at.Y < keep.Max.Y and at.Y + frameH > keep.Min.Y
+	if overlapsY and x - half < keep.Max.X and x + half > keep.Min.X then
+		x = keep.Max.X + half
+	end
+	tag.Frame.Position = UDim2.fromOffset(x, at.Y)
+	tag.Frame.Size = UDim2.fromOffset(frameW, frameH)
+end
+
+-- `text` wrapped at word breaks into lines at most `width` wide at `size`: how many, and the widest.
+function CapsuleView.wrap(text: string, size: number, width: number): (number, number)
+	local lines, widest = 1, 0
+	local line = ""
+	for word in string.gmatch(text, "%S+") do
+		local try = if line == "" then word else line .. " " .. word
+		if line ~= "" and TechShopView.textWidth(try, size) > width then
+			widest = math.max(widest, TechShopView.textWidth(line, size))
+			lines += 1
+			line = word
+		else
+			line = try
+		end
+	end
+	return lines, math.max(widest, TechShopView.textWidth(line, size))
+end
+
+--[[
+	A tag's DELETED pill and its waiting note fade with the name (`alpha`
+	0 shown .. 1 gone: HatchStage poses it with the name's), so Reduce
+	motion's calm opening fades them with the stage too.
+]]
+function CapsuleView.fadeMarks(tag: Tag, alpha: number)
+	local a = math.clamp(alpha, 0, 1)
+	for _, mark in { tag.Deleted, tag.Waiting } do
+		if not mark.Visible then
+			continue
+		end
+		mark.BackgroundTransparency = a
+		for _, d in mark:GetDescendants() do
+			if d:IsA("UIStroke") then
+				d.Transparency = a
+			elseif d:IsA("TextLabel") then
+				d.TextTransparency = a
+			elseif d:IsA("Frame") then
+				-- (the trash mark's can: solid; its slits see-through, 0.55; its holder stays clear)
+				local name = d.Name
+				if name == "Handle" or name == "Lid" or name == "Body" then
+					d.BackgroundTransparency = a
+				elseif string.sub(name, 1, 4) == "Slit" then
+					d.BackgroundTransparency = 0.55 + 0.45 * a
+				end
+			end
+		end
+		local rim = mark:FindFirstChild("Rim")
+		if rim and rim:IsA("UIStroke") then
+			rim.Transparency = a
+		end
+	end
 end
 
 --[[

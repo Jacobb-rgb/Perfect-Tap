@@ -124,9 +124,12 @@ export type Result = {
 	Free: boolean?,
 	Batch: number?,
 	Batches: number?,
+	Arrived: number?, -- os.clock() its result came (its first opening)
+	Note: string?, -- a notice that came with it (a receipt's own "inventory full"): shown with its opening
 }
 
 CapsuleController.Batch = 10 -- the most golems one opening shows (CapsuleView.StageTags): a x50 is 5 openings
+CapsuleController.RebuyGuard = 0.5 -- seconds after an opening ends the shop's OPEN buttons rest (A mashed to skip)
 CapsuleController.BoardSeconds = 6 -- seconds each capsule's odds stay on the stall's board
 CapsuleController.BoardTick = 1 -- seconds between two checks of the board (Triple Lucky starting / ending)
 CapsuleController.BoardPixels = 120 -- the board's SurfaceGui PixelsPerStud (sharper text)
@@ -370,8 +373,12 @@ end
 	showed are no longer the card's) or the buy's own Reason (NoCoins,
 	InventoryFull, ComingSoon).
 ]]
+local chainEndedAt = -math.huge -- os.clock() when the last chain of openings ended
 local function request(capsuleId: string, count: number, button: TextButton?, expectLucky: boolean?): (boolean, string?)
 	local now = os.clock()
+	if button and now - chainEndedAt < CapsuleController.RebuyGuard then
+		return false, "Busy" -- (a gamepad's A pressed to skip the opening that just ended: never another egg)
+	end
 	if now < pendingUntil then
 		status("Opening... one moment", Theme.Info)
 		return false, "Busy"
@@ -949,13 +956,16 @@ local function keepNoSelection(on: boolean)
 	end)
 end
 
--- The window keys a gamepad has, sunk while an opening plays (A, B and G are the opening's own).
+-- The window keys a gamepad has, sunk while an opening plays (A, B and G are the opening's own;
+-- L3 opens the train window, R3 asks and confirms the tutorial's Skip: neither unseen under it).
 local SINK_ACTION = "TerraForgeCapsuleSink"
 local SINK_KEYS = {
 	Enum.KeyCode.ButtonL1,
 	Enum.KeyCode.ButtonR1,
 	Enum.KeyCode.ButtonL2,
 	Enum.KeyCode.ButtonR2,
+	Enum.KeyCode.ButtonL3,
+	Enum.KeyCode.ButtonR3,
 	Enum.KeyCode.ButtonX,
 	Enum.KeyCode.ButtonY,
 	Enum.KeyCode.DPadUp,
@@ -1050,11 +1060,17 @@ function CapsuleController.marks(result: Result): ({ [number]: boolean }, { [num
 	return deleted, waiting
 end
 
-local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
+--[[
+	The stage's arguments for one opening of `result` (its golems `kinds`):
+	what hatch() plays and the specs pose (the marks, the timings: Auto's
+	fast ones and a big pack's later openings, Reduce motion's calm ones,
+	the eggs from the pool, RevealKit's flash gap).
+]]
+function CapsuleController.hatchArgs(o: CapsuleView.OpenRefs, result: Result, kinds: { string }): HatchStage.Args
 	local n = math.clamp(#kinds, 1, CapsuleView.StageTags)
 	local phone = compactNow()
 	local deleted, waiting = CapsuleController.marks(result)
-	local run = HatchStage.new({
+	return {
 		Refs = o,
 		Capsule = result.Capsule,
 		Lucky = result.Lucky == true,
@@ -1075,7 +1091,11 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 		Wait = function(): number
 			return RevealKit.nextFlashAt() - os.clock()
 		end,
-	})
+	}
+end
+
+local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
+	local run = HatchStage.new(CapsuleController.hatchArgs(o, result, kinds))
 	local tl = run.Timeline
 	if not tl.Reduced then
 		Sfx.play("BagPop", nil, 0.9)
@@ -1276,9 +1296,10 @@ local function endChain()
 	hideHud(false)
 	tellPlaying(false)
 	PromptController.setSuppressed("CapsuleOpening", false)
+	chainEndedAt = os.clock()
 	local view = refs
 	if view and shown and usingGamepad() then
-		GuiService.SelectedObject = CapsuleView.firstButton(view)
+		GuiService.SelectedObject = CapsuleView.restButton(view) -- (never an OPEN button: A to skip must not buy)
 	end
 	pcall(Sfx.loop, "CaseCharge", false) -- (last: the HUD and the prompts never wait on a sound)
 end
@@ -1292,7 +1313,13 @@ local function play(result: Result)
 	setBlur(true) -- (kept on: a new camera since the last opening gets it too)
 	HatchStage.clear(o)
 	refreshAuto(o)
-	showNote(o, autoNote)
+	-- (its own notice, or why Auto stopped, once: a notice still showing from the last opening stays)
+	if result.Note then
+		showNote(o, result.Note)
+	elseif autoNote then
+		showNote(o, autoNote)
+		autoNote = nil
+	end
 	CapsuleView.setChain(o, result.Batch, result.Batches)
 	o.Gui.Enabled = true
 	o.Controls.Enabled = true
@@ -1376,6 +1403,27 @@ function CapsuleController.batches(payload: any): { Result }
 	return out
 end
 
+--[[
+	A server notice while openings play (the HUD's toasts hide then): by
+	the Auto button. One that comes right after a result still waiting in
+	the queue (a receipt's own "your inventory is full") waits for that
+	result's opening instead of landing on the one playing.
+]]
+CapsuleController.NoticeJoin = 1 -- seconds after its result a notice still belongs to it
+local lastQueued: Result? = nil -- the first opening of the newest result queued (its notice joins it)
+function CapsuleController.notice(message: any)
+	local o = opening
+	if not playing or not o or type(message) ~= "table" or type(message.Text) ~= "string" then
+		return
+	end
+	local waiting = lastQueued
+	if waiting and table.find(queue, waiting) and os.clock() - (waiting.Arrived or 0) < CapsuleController.NoticeJoin then
+		waiting.Note = if waiting.Note then waiting.Note .. "  " .. message.Text else message.Text
+		return
+	end
+	showNote(o, message.Text)
+end
+
 -- A CapsuleResult (also a late one, a wheel prize or a Robux receipt): its openings queue after
 -- every one already queued (a chain that plays takes them on; else one starts).
 local function onResult(payload: any)
@@ -1383,6 +1431,8 @@ local function onResult(payload: any)
 	if #openings == 0 then
 		return
 	end
+	openings[1].Arrived = os.clock()
+	lastQueued = openings[1]
 	if pendingUntil > 0 or pendingButton then
 		freeButton()
 	end
@@ -1579,6 +1629,12 @@ CapsuleController._test = {
 	skips = function(): (boolean, boolean)
 		return skipStep, skipAll
 	end,
+	ended = function(at: number?)
+		chainEndedAt = at or -math.huge
+	end,
+	selectionWatched = function(): boolean
+		return selectionWatch ~= nil
+	end,
 	onPlaying = CapsuleController.onPlaying, -- (the real one: the egg panel's specs swap the module's)
 }
 
@@ -1599,10 +1655,7 @@ function CapsuleController.init()
 	Net.listen("CapsuleResult", onResult)
 	-- (the HUD's toasts hide under an opening: a notice then shows by its Auto button)
 	Net.listen("Notify", function(message: any)
-		local o = opening
-		if playing and o and type(message) == "table" and type(message.Text) == "string" then
-			showNote(o, message.Text)
-		end
+		CapsuleController.notice(message)
 	end)
 	Net.listen("ActionResult", onActionResult)
 	Net.listen("PurchasePrompt", onPurchasePrompt)
