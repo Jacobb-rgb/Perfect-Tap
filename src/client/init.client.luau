@@ -41,6 +41,7 @@ local ORDER = {
 	"EnchantController", -- the Enchant shop at the rune table
 	"ShopkeeperController", -- a big golem behind every shop counter: idle, emotes, waves, talks
 	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
+	"RoyalCapeController", -- the Dragon King's royal cape on every player who has it equipped (built on each client)
 	"WorldMotionController", -- world animations: golem hops / equip jump, ore pops, hit flash, sell cash burst
 	"MineJuiceController", -- the mining reel (Config/JuiceConfig): growing cracks + gold glints, chips, tok, ore into the bag
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)

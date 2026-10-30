@@ -936,3 +936,28 @@ What to test in Studio:
 4. An old save with a Blast Furnace: it is gone, its price is back in coins, its items wait in the pen, and a
    Crusher waits in the Build menu.
 5. Rebirth: the furnaces are clay again.
+
+## Dragon King royal cape (owner 2026-10-30, branch feat/dragon-cape)
+- Builders/RoyalCape (pure, 32 parts with the invisible Root): deep red velvet (Fabric) in three hinged panels,
+  gold edges along the flare, a double gold hem, a mantle with a gold edge whose ends go over the shoulders to two
+  gold clasps with rubies and a sagging gold chain, the Dragon King crest (crown, flame, wings) and one sparkle
+  emitter (rbxasset sparkles, 3/s). Every part unanchored, massless, CanCollide / CanTouch / CanQuery off.
+- RoyalCapeController: every client builds the cape for every player whose EquippedGolems holds DragonKing (no
+  server parts, no remotes), welded to UpperTorso (R15) / Torso (R6) with a Weld (never a Motor6D: Avatar Joint
+  Upgrade), sized to the torso and the worn backpack (the cape goes under the pack and flows from below it).
+  Built within 120 studs (yours always, one new cape per 0.25 s), still beyond 60, sparkles within 50 (half rate on
+  phones and others' capes); dropped on unequip, respawn, leaving, a streamed-out torso. Motion at 30 Hz: lift and
+  flutter from the character's own speed, billow falling, swing turning, kept behind the legs and arms (heels
+  kicked back push it out); Reduce motion: a smaller smooth lift, no flutter, no sparkles.
+- Tests: tests/RoyalCape.spec.luau. Pictures: obrazky/plast_dragon_king_2026-10-30 (tools/lune/export_cape.luau).
+What to test in Studio:
+1. Equip the Dragon King: the cape appears on your back at once; unequip it: gone at once; equip again: one cape.
+2. Walk, run, jump, ride a hoverboard, turn on the spot: the cape lifts, flutters and swings, never through the
+   legs; standing it waves gently. Your speed and jumping feel exactly as before (no extra weight, no bumping).
+3. A second player (Test > Clients and Servers, 2 players): each sees the other's cape and its motion; walk 130
+   studs away and back: it goes and comes back. Respawn (reset): the cape is back on the new character.
+4. Wear each backpack: the pack sits over the cape, the cape flows from below it, the crest shows under it.
+5. An R6 avatar and a big / small R15 avatar (Avatar settings): the cape fits the torso, the hem stays off the
+   ground. A Rthro / layered-clothing avatar: check the mantle and clasps sit on the shoulders.
+6. SETTINGS Reduce motion on: the cape only lifts a little when running, no sparkles.
+7. Phone emulator and a gamepad: nothing to press; FPS unchanged with 3 caped players near.

@@ -1,0 +1,209 @@
+{
+  "cape_back": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      16.4,
+      5.4,
+      11.0
+    ],
+    "target": [
+      14,
+      2.9,
+      0
+    ]
+  },
+  "cape_34back": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      21.5,
+      4.8,
+      7.5
+    ],
+    "target": [
+      14,
+      2.8,
+      0.3
+    ]
+  },
+  "cape_front34": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      8.0,
+      4.6,
+      -8.0
+    ],
+    "target": [
+      14,
+      3.1,
+      0
+    ]
+  },
+  "cape_walk": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      36.0,
+      4.4,
+      7.0
+    ],
+    "target": [
+      28,
+      2.6,
+      0.9
+    ]
+  },
+  "cape_pack": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      44.4,
+      5.6,
+      11.0
+    ],
+    "target": [
+      42,
+      3.0,
+      0
+    ]
+  },
+  "cape_run_pack": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      64.0,
+      4.6,
+      7.5
+    ],
+    "target": [
+      56,
+      2.7,
+      0.9
+    ]
+  },
+  "cape_fast": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      78.0,
+      4.6,
+      7.5
+    ],
+    "target": [
+      70,
+      2.7,
+      0.9
+    ]
+  },
+  "cape_r6": {
+    "scene": "cape",
+    "fov": 38,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      2.4,
+      5.4,
+      11.0
+    ],
+    "target": [
+      0,
+      2.9,
+      0
+    ]
+  },
+  "cape_lineup": {
+    "scene": "cape",
+    "fov": 46,
+    "preset": "Surface",
+    "sunDir": [
+      0.35,
+      0.8,
+      0.55
+    ],
+    "exposure": 1.3,
+    "shadowExtent": 40,
+    "maxLights": 8,
+    "position": [
+      35,
+      11,
+      52
+    ],
+    "target": [
+      35,
+      2.6,
+      0
+    ]
+  }
+}
