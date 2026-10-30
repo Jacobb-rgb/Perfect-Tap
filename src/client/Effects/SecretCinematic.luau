@@ -279,6 +279,9 @@ SecretCinematic.Phone = { Bars = 8, Fans = 4, Sparks = 16, Fragments = 6, Motes 
 SecretCinematic.Full = { Bars = 12, Fans = 6, Trail = 3 }
 
 SecretCinematic.FlashPeak = 0.72 -- softer than RevealKit's (and never past it)
+SecretCinematic.GlowDiscs = 7 -- the soft glow's discs (a phone: GlowPhone)
+SecretCinematic.GlowPhone = 5
+SecretCinematic.GlowSize = 620 -- design units: the glow's widest
 SecretCinematic.Blur = { Discovery = 12, Charge = 16, Peak = 23, Reveal = 10 } -- BlurEffect.Size
 SecretCinematic.RayLength = 900 -- design units, end to end through the middle
 SecretCinematic.OreSize = 300 -- design units: the ore's viewport
@@ -487,8 +490,7 @@ export type View = {
 	Stage: Frame,
 	StageScale: UIScale,
 	Rig: Frame,
-	Halo: Frame,
-	Glow: Frame,
+	Glows: { Frame }, -- the soft glow behind the ore: discs stacked from wide and faint to small
 	Core: Frame,
 	Bars: { Frame },
 	Fans: { Frame },
@@ -739,7 +741,12 @@ function SecretCinematic.build(): View
 	local stageScale = UIKit.new("UIScale", { Scale = 1 }, stage)
 	-- the ore and everything round it
 	local rig = frame(stage, "Rig", Vector2.zero, 1)
-	local halo = disc(rig, "Halo", 640, 1)
+	-- the soft glow: discs from wide (the palette's A) to small (white), each faint: stacked they fall
+	-- off smoothly from the middle (no picture needed)
+	local glows: { Frame } = {}
+	for k = 1, SecretCinematic.GlowDiscs do
+		table.insert(glows, disc(rig, "Glow" .. k, 100, 1))
+	end
 	local fans: { Frame } = {}
 	for k = 1, SecretCinematic.Full.Fans do
 		local fan = frame(rig, "Fan" .. k, Vector2.new(150, SecretCinematic.RayLength), 2)
@@ -760,7 +767,6 @@ function SecretCinematic.build(): View
 		}, b)
 		table.insert(bars, b)
 	end
-	local glow = disc(rig, "Glow", 380, 4)
 	local core = disc(rig, "Core", 220, 5)
 	local shocks = RevealKit.rings(rig, 4, 6)
 	-- energy rings: a bright arc fading round each, turning opposite ways (5 + k seconds a turn)
@@ -1112,8 +1118,7 @@ function SecretCinematic.build(): View
 		Stage = stage,
 		StageScale = stageScale,
 		Rig = rig,
-		Halo = halo,
-		Glow = glow,
+		Glows = glows,
 		Core = core,
 		Bars = bars,
 		Fans = fans,
@@ -1244,6 +1249,7 @@ function SecretCinematic.setInfo(view: View, info: Info)
 	view.ValueLabel.TextColor3 = palette.Light
 	view.ValueStroke.Color = palette.A
 	view.Dim.BackgroundColor3 = palette.Deep
+	view.Flash.BackgroundColor3 = palette.Light:Lerp(WHITE, 0.6)
 	if not palette.Rainbow then
 		local tones = threeTone(palette.A, palette.Light, palette.B)
 		view.AuroraGradient.Color = threeTone(palette.A, palette.Deep, palette.B)
@@ -1406,7 +1412,7 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	local textScale = mode.TextScale
 
 	-- the screen: dark, the vignette, the drifting gradient
-	local dark = (0.55 * easeOut(span(t, 0, 1.2)) + 0.27 * span(t, C, E) + 0.14 * easeOut(span(t, E, E + 0.3))) * stay
+	local dark = (0.68 * easeOut(span(t, 0, 1.2)) + 0.16 * span(t, C, E) + 0.12 * easeOut(span(t, E, E + 0.3))) * stay
 	view.Dim.BackgroundTransparency = 1 - dark
 	view.VignetteX.BackgroundTransparency = 1 - 0.7 * dark
 	view.VignetteY.BackgroundTransparency = 1 - 0.55 * dark
@@ -1460,15 +1466,24 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	local pulse = bump(span(t, P, P + 0.7))
 	local rest = easeOut(span(t, E + 0.6, R + 0.4))
 	local breathe = if reduced then 0 else 0.04 * math.sin(t * 2.2)
-	view.Halo.BackgroundColor3 = tone(palette, 0, t)
-	view.Halo.BackgroundTransparency = 1 - (0.05 + 0.1 * charge + 0.3 * burst + 0.04 * pulse) * stay
-	view.Halo.Size = UDim2.fromOffset(640 * (0.8 + 0.2 * charge + breathe), 640 * (0.8 + 0.2 * charge + breathe))
-	local glowAlpha = (0.14 + 0.26 * charge ^ 1.4 + 0.45 * burst + 0.12 * pulse) * (1 - 0.35 * rest * (1 - pulse))
-	view.Glow.BackgroundColor3 = tone(palette, 0.6, t + 2)
-	view.Glow.BackgroundTransparency = 1 - glowAlpha * stay
-	local glowSize = 380 * (0.75 + 0.3 * charge + 0.2 * burst + 0.08 * pulse + breathe)
-	view.Glow.Size = UDim2.fromOffset(glowSize, glowSize)
-	view.Core.BackgroundTransparency = 1 - (0.05 + 0.4 * charge ^ 2 + 0.5 * burst + 0.1 * pulse) * (1 - 0.6 * rest) * stay
+	local glow = (0.4 + 0.4 * charge ^ 1.3 + 0.5 * burst + 0.25 * pulse) * (1 - 0.3 * rest * (1 - pulse))
+	local glowSize = SecretCinematic.GlowSize * (0.62 + 0.25 * charge + 0.25 * burst + 0.06 * pulse + breathe)
+	local discs = if phone then SecretCinematic.GlowPhone else #view.Glows
+	for k, d in view.Glows do
+		local on = k <= discs and glow * stay > 0.005
+		d.Visible = on
+		if on then
+			local inner = (k - 1) / math.max(discs - 1, 1) -- 0 the widest .. 1 the smallest
+			local size = glowSize * (1 - 0.78 * inner)
+			d.Size = UDim2.fromOffset(size, size)
+			d.BackgroundColor3 = if palette.Rainbow
+				then RevealKit.hue(inner * 0.6 + t * 0.12):Lerp(WHITE, inner ^ 2)
+				elseif inner < 0.5 then palette.A:Lerp(palette.B, inner * 2)
+				else palette.B:Lerp(WHITE, (inner - 0.5) * 2)
+			d.BackgroundTransparency = 1 - math.min(1, glow * (0.09 + 0.07 * inner)) * stay
+		end
+	end
+	view.Core.BackgroundTransparency = 1 - (0.04 + 0.3 * charge ^ 2 + 0.55 * burst + 0.1 * pulse) * (1 - 0.6 * rest) * stay
 	local coreSize = 220 * (0.7 + 0.35 * charge + 0.3 * burst + breathe)
 	view.Core.Size = UDim2.fromOffset(coreSize, coreSize)
 
@@ -1506,7 +1521,7 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		end
 	end
 	local fans = if phone then SecretCinematic.Phone.Fans else #view.Fans
-	local fanAlpha = (0.1 * charge + 0.18 * easeOut(span(t, E, E + 0.3))) * stay * (if reduced then 0.6 else 1)
+	local fanAlpha = (0.08 * charge + 0.12 * easeOut(span(t, E, E + 0.3))) * stay * (if reduced then 0.6 else 1)
 	for k, fan in view.Fans do
 		local on = k <= fans and fanAlpha > 0.005
 		fan.Visible = on
@@ -1584,13 +1599,18 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		local color = palette.Light
 		if k <= #tier.Shocks and not reduced then
 			u = (t - E - tier.Shocks[k]) / 0.62
-			color = if k == 1
-				then RevealKit.Style.FlashColor:Lerp(tone(palette, 0, t), math.clamp(u, 0, 1))
-				else alternate(palette, k, 3, t)
+			color = if k == 1 then palette.Light:Lerp(tone(palette, 0, t), math.clamp(u, 0, 1)) else alternate(palette, k, 3, t)
 		elseif k == #view.Shocks then
 			u = (t - P) / 0.9
 		end
 		RevealKit.poseRing(ring, if stay < 1 then -1 else u, color)
+		if ring.Visible then
+			-- (thinner than the shared look: a clean line, not a band over the whole screen)
+			local edge = ring:FindFirstChildOfClass("UIStroke")
+			if edge then
+				edge.Thickness *= if k == #view.Shocks then 0.3 else 0.28
+			end
+		end
 	end
 
 	-- sparks of the burst
