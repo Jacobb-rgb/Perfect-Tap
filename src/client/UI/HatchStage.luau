@@ -66,6 +66,7 @@ export type Run = {
 	Colors: { Color3 }, -- per slot: its crack colour
 	Deleted: { [number]: boolean }, -- per slot: auto-deleted (greyed, DELETED, no flight)
 	Waiting: { [number]: boolean }, -- per slot: won but waiting for room ("Waiting: inventory full")
+	Marked: boolean, -- a golem of the top row carries a mark (DELETED, a waiting note): the rows part
 	BestRarity: string,
 	BestOrder: number,
 	Size: Vector2, -- the screen (design units) the layout is for
@@ -93,7 +94,7 @@ local function relayout(run: Run)
 	local size = run.Refs.Size
 	run.Size = size
 	local aspect = size.X / math.max(1, size.Y)
-	run.Layout = HatchFx.layout(run.Count, aspect, run.Special)
+	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, run.Marked)
 	for slot, rec in run.Args.Eggs do
 		local s = run.Layout.Slots[slot]
 		if s then
@@ -122,6 +123,7 @@ function HatchStage.new(args: Args): Run
 		Colors = {},
 		Deleted = {},
 		Waiting = {},
+		Marked = false,
 		BestRarity = bestRarity,
 		BestOrder = bestOrder,
 		Size = o.Size,
@@ -142,6 +144,10 @@ function HatchStage.new(args: Args): Run
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
 		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
 		run.Waiting[slot] = args.Waiting ~= nil and args.Waiting[order[slot]] == true
+		-- (the top row of two: its marks hang under its names, toward the second row's golems)
+		if slot <= 5 and n > 5 and (run.Deleted[slot] or run.Waiting[slot]) then
+			run.Marked = true
+		end
 	end
 	relayout(run)
 	-- the blobs in the best colour, the shell pieces in each egg's (and white)
@@ -360,6 +366,13 @@ local function placeTags(run: Run, aspect: number)
 			run.Waiting[slot],
 			run.Layout.Spacing * size.X * 0.96 -- (a note never wider than the golems' pitch)
 		)
+	end
+end
+
+-- The names placed again (the Auto button showed or hid: they step aside for it only while it shows).
+function HatchStage.retag(run: Run)
+	if next(run.Standing) ~= nil then
+		placeTags(run, run.Size.X / math.max(1, run.Size.Y))
 	end
 end
 

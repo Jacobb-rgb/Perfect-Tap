@@ -1368,6 +1368,13 @@ return function(T, Loader)
 			},
 			{
 				CapsuleController,
+				"justEnded",
+				function()
+					return w.justEnded == true
+				end,
+			},
+			{
+				CapsuleController,
 				"setAutoDelete",
 				function(kind, on)
 					table.insert(w.deletes, { Kind = kind, On = on })
@@ -1779,14 +1786,16 @@ return function(T, Loader)
 			w.state.Golems.Owned = {}
 		end)
 	end)
-	-- A camera for the controller (Lune has none): every point at `w.camZ` deep, on the screen when in front.
+	-- A camera for the controller (Lune has none): every point at `w.camZ` deep, on the screen when in front;
+	-- the egg in the view's middle (`w.camShift` px aside).
 	local function fakeCamera(w: any): any
 		local CFrame = Loader.CFrame
+		local view = w.view or Vector2.new(667, 375)
 		return {
-			ViewportSize = w.view or Vector2.new(667, 375),
+			ViewportSize = view,
 			CFrame = CFrame.new(),
 			WorldToViewportPoint = function(_, p)
-				local x = 333 + math.clamp(p.X - w.camAt.X, -5, 5) * 4
+				local x = view.X / 2 + math.clamp(p.X - w.camAt.X, -5, 5) * 4 + (w.camShift or 0)
 				return Vector3.new(x, w.camY or 190, w.camZ), w.camZ > 0
 			end,
 		}
@@ -1940,6 +1949,102 @@ return function(T, Loader)
 				T.falsy(s.Refs.Cards[j].Trash.Visible)
 			end
 			w.state.Golems.AutoDelete = nil
+		end)
+	end)
+
+	T.test("EggPanelController: the panel's own buttons buy from ShowRange; the keys and the E need the prompt's reach", function()
+		withController(function(C, w)
+			-- a phone, a stud past the prompt's reach (the floating panel shows from ShowRange)
+			w.touch = true
+			w.scale = EggPanel.PhoneScale
+			w.at("Stone", EggPanel.PromptDistance + 1)
+			local s = C._test.state()
+			T.eq(s.Current, "Stone", "the panel shows")
+			T.falsy(s.Reach, "past the prompt's reach")
+			local before = #w.buys
+			T.truthy(C.open("Stone", 10, "Panel"), "the panel's own Open 10 buys")
+			T.eq(#w.buys, before + 1)
+			-- the big E's way (the keys, the disc, its opens) needs the reach: it says why
+			local toasts = #w.toasts
+			patched({ { C, "RefuseEvery", -1 } }, function() -- (a toast now, whatever the last spec showed)
+				T.falsy(C.open("Stone", 1), "not from here")
+			end)
+			T.eq(#w.buys, before + 1)
+			T.eq(w.toasts[#w.toasts], C.RefuseText.Far, "come closer")
+			T.eq(#w.toasts, toasts + 1)
+			-- mashing: one toast
+			C.open("Stone", 1)
+			C.open("Stone", 1)
+			T.eq(#w.toasts, toasts + 1, "one toast for a mash")
+			-- Auto from the panel's toggle: it starts and buys from here
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, "Stone", "the toggle starts Auto from ShowRange")
+			local auto = #w.buys
+			C._test.tick()
+			T.truthy(#w.buys > auto, "Auto buys from here (the odds on the screen)")
+			T.eq(s.Refs.ToggleLabel.Text, "Auto")
+			C.toggleAuto("Stone", "Panel")
+			-- right after an opening (a tap meant to skip it): the panel's buttons rest, quietly
+			w.justEnded = true
+			local quiet = #w.toasts
+			T.falsy(C.open("Stone", 10, "Panel"), "no egg by a skip's tap")
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, nil, "no Auto by a skip's tap")
+			T.eq(#w.toasts, quiet, "quietly")
+			w.justEnded = false
+			w.touch = false
+			w.scale = nil
+		end)
+	end)
+
+	T.test("EggPanelController: odds off the screen: the panel's buttons say so, Auto shows it waits", function()
+		withController(function(C, w)
+			w.view, w.camY = Vector2.new(1280, 900), 700
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard) -- (the big E up: the panel can't come down)
+			local s = C._test.state()
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, "Stone")
+			-- the camera pitched: the first card row above the screen
+			w.camY = 150
+			w.renders.TerraForgeEggPanelFloat()
+			C._test.tick()
+			T.eq(s.Refs.ToggleLabel.Text, "Auto waits...", "the toggle says Auto waits")
+			local toasts = #w.toasts
+			patched({ { C, "RefuseEvery", -1 } }, function() -- (a toast now, whatever the last spec showed)
+				T.falsy(C.open("Stone", 1, "Panel"))
+			end)
+			T.eq(w.toasts[#w.toasts], C.RefuseText.Odds, "turn to see the odds")
+			T.truthy(#w.toasts > toasts)
+			w.camY = 700
+			w.renders.TerraForgeEggPanelFloat()
+			C._test.tick()
+			T.eq(s.Refs.ToggleLabel.Text, "Auto", "back: Auto again")
+			C.toggleAuto("Stone", "Panel")
+			-- the PC odds box's sides: an egg near the screen's left edge has columns off the side
+			w.camY = 700
+			w.camShift = -500
+			w.renders.TerraForgeEggPanelFloat()
+			C._test.tick()
+			T.falsy(C._test.state().Reach, "columns off the left side: not on the screen")
+			w.camShift = nil
+			C._test.tick()
+			T.truthy(C._test.state().Reach, "in the middle: on it")
+			-- and under Roblox's top bar: a first card row there isn't seen
+			patched({
+				{
+					Loader.game:GetService("GuiService"),
+					"GetGuiInset",
+					function()
+						return Vector2.new(0, 500), Vector2.zero -- (the first card row at 434 px)
+					end,
+				},
+			}, function()
+				C._test.tick()
+				T.falsy(C._test.state().Reach, "the first row under the top bar: not on the screen")
+			end)
 		end)
 	end)
 
@@ -2192,7 +2297,7 @@ return function(T, Loader)
 				showed MinShow), "names" until every name shows. Each golem counted once, when its name is
 				fully on; its waiting note checked then.
 			]]
-			local function play(o: any, result: any, mode: string): ({ [string]: number }, number)
+			local function play(o: any, result: any, mode: string, inspect: ((any) -> ())?): ({ [string]: number }, number)
 				local kinds = {}
 				for _, g in result.Golems do
 					table.insert(kinds, g.Kind)
@@ -2215,14 +2320,23 @@ return function(T, Loader)
 							T.eq(tag.Waiting.Visible, run.Waiting[slot], "the waiting note only on a waiting golem")
 							if tag.Waiting.Visible then
 								notes += 1
-								T.eq((string.gsub(tag.WaitingText.Text, "\n", " ")), "Waiting: inventory full", "the note's words")
+								T.truthy(
+									tag.WaitingText.Text == CapsuleView.WaitingText or tag.WaitingText.Text == CapsuleView.WaitingShort,
+									"the note's words: the whole note, or the short one where it doesn't fit"
+								)
 								T.eq(tag.Waiting.BackgroundTransparency, 0, "solid with its name")
 								-- (never under the Auto button, its key or its label: the bottom-left golem's note)
-								local x = tag.Frame.Position.X.Offset
+								local x = tag.Frame.Position.X.Offset + tag.Waiting.Position.X.Offset
 								local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
 								local half = tag.Waiting.Size.X.Offset / 2
 								local note = { Min = Vector2.new(x - half, y), Max = Vector2.new(x + half, y + tag.Waiting.Size.Y.Offset) }
-								T.eq(EggPanel.overlap(note, o.AutoKeep), 0, `slot {slot}: its note clear of the Auto button`)
+								for _, keep in o.AutoKeep do
+									T.eq(
+										EggPanel.overlap(note, keep),
+										0,
+										`slot {slot}: its note clear of the Auto button ({note.Min} {note.Max} vs {keep.Min} {keep.Max}, {o.Size}, Auto {o.AutoHolder.Visible})`
+									)
+								end
 							end
 						end
 					end
@@ -2271,6 +2385,9 @@ return function(T, Loader)
 					end)(),
 					"every golem of the opening named"
 				)
+				if inspect then
+					inspect(run)
+				end
 				HatchStage.pose(run, tl.Total)
 				HatchStage.clear(o, HatchStage.golems(run))
 				return named, notes
@@ -2343,18 +2460,61 @@ return function(T, Loader)
 				local p = CapsuleView.buildOpening(phone)
 				CapsuleView.layoutOpening(p, phone, view.X / scale, view.Y / scale, { Touch = phone, Inset = inset / scale })
 				local last = all[5]
-				play(p, last, "names")
+				-- (an all-waiting opening: the rows part, so no top-row note covers a second-row golem's head)
+				play(p, last, "names", function(run: any)
+					T.truthy(run.Marked, `{view.X}: the top row carries notes`)
+					local size = run.Size
+					local aspect = size.X / size.Y
+					local heads = {}
+					for slot, standing in run.Standing do
+						if slot > 5 then
+							local top = HatchFx.project(
+								HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect)
+									+ Vector3.new(0, standing.Height / 2, 0),
+								aspect
+							)
+							local feet = HatchFx.project(
+								HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect)
+									- Vector3.new(0, standing.Height / 2, 0),
+								aspect
+							)
+							local h = (feet.Y - top.Y) * size.Y
+							table.insert(heads, {
+								Min = Vector2.new(top.X * size.X - h * 0.35, top.Y * size.Y),
+								Max = Vector2.new(top.X * size.X + h * 0.35, feet.Y * size.Y),
+							})
+						end
+					end
+					for slot = 6, #last.Golems do
+						local tag = p.Tags[slot]
+						local bottom = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset + tag.Waiting.Size.Y.Offset
+						T.truthy(bottom <= size.Y, `{view.X}: the second row's note {slot} on the screen ({bottom} of {size.Y})`)
+						T.eq(tag.Waiting.Size.Y.Offset, CapsuleView.TagMin + 12, `{view.X}: one line`)
+					end
+					for slot = 1, 5 do
+						local tag = p.Tags[slot]
+						local x = tag.Frame.Position.X.Offset + tag.Waiting.Position.X.Offset
+						local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
+						local half = tag.Waiting.Size.X.Offset / 2
+						local note = { Min = Vector2.new(x - half, y), Max = Vector2.new(x + half, y + tag.Waiting.Size.Y.Offset) }
+						for _, head in heads do
+							T.eq(EggPanel.overlap(note, head), 0, `{view.X}: top-row note {slot} clear of the second row's golems`)
+						end
+					end
+				end)
 				local notes = {}
 				for slot = 1, #last.Golems do
 					local tag = p.Tags[slot]
 					T.truthy(tag.Waiting.Visible, `{view.X}: the note`)
 					T.truthy(tag.WaitingText.TextSize * scale >= 9.9, `{view.X}: the note {tag.WaitingText.TextSize * scale} pt`)
-					local x = tag.Frame.Position.X.Offset
+					local x = tag.Frame.Position.X.Offset + tag.Waiting.Position.X.Offset
 					local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
 					local half = tag.Waiting.Size.X.Offset / 2
 					local note = { Min = Vector2.new(x - half, y), Max = Vector2.new(x + half, y + tag.Waiting.Size.Y.Offset) }
 					table.insert(notes, note)
-					T.eq(EggPanel.overlap(note, p.AutoKeep), 0, `{view.X} slot {slot}: clear of the Auto button`)
+					for _, keep in p.AutoKeep do
+						T.eq(EggPanel.overlap(note, keep), 0, `{view.X} slot {slot}: clear of the Auto button`)
+					end
 				end
 				for i = 1, #notes do
 					for j = i + 1, #notes do
@@ -2457,6 +2617,24 @@ return function(T, Loader)
 				T.eq(why, "Busy")
 				CC._test.ended(nil)
 				T.eq(w.actions.TerraForgeCapsuleSink, nil, "the keys free again")
+				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it)
+				for _, key in
+					{
+						roblox.Enum.KeyCode.ButtonL3, -- the train window
+						roblox.Enum.KeyCode.ButtonR3, -- the tutorial's Skip
+						roblox.Enum.KeyCode.T, -- the train window
+						roblox.Enum.KeyCode.B, -- build mode
+						roblox.Enum.KeyCode.P, -- the golems
+						roblox.Enum.KeyCode.Q, -- the backpack
+					}
+				do
+					T.truthy(table.find(CC.SinkKeys, key), key.Name .. " sunk while an egg opens")
+				end
+				for _, own in
+					{ roblox.Enum.KeyCode.Space, roblox.Enum.KeyCode.Return, roblox.Enum.KeyCode.Backspace, roblox.Enum.KeyCode.G }
+				do
+					T.falsy(table.find(CC.SinkKeys, own), own.Name .. ": the opening's own key")
+				end
 				T.falsy(CC._test.selectionWatched(), "the selection lock let go")
 				T.eq(CC._test.queued(), 0)
 				-- an opening that fails still lets the chain go on and end
@@ -2493,6 +2671,34 @@ return function(T, Loader)
 				T.falsy(notes[2].Shown, "not again on the second")
 				T.eq(notes[3].Capsule, "Royal")
 				T.truthy(notes[3].Shown and notes[3].Text == "Your golem inventory is full", "the receipt's notice with its own opening")
+				-- Auto stopped DURING an opening: its note shows then, and not again on the next one
+				table.clear(notes)
+				CC._test.setHatch(function(o: any, result: any)
+					table.insert(notes, { Batch = result.Batch, Text = o.Note.Text, Shown = o.Note.Visible })
+					if #notes == 1 then
+						CC._test.setAuto(false, "Auto stopped: not enough coins")
+						T.eq(o.Note.Text, "Auto stopped: not enough coins", "shown at once")
+					end
+					o.Note.Visible = false
+					o.Note.Text = ""
+				end)
+				CC._test.result({ Capsule = "Stone", Count = 20, Golems = table.move(pack, 1, 20, 1, {}), Lucky = false })
+				T.eq(#notes, 2)
+				T.falsy(notes[2].Shown, "the next opening doesn't show it again")
+				-- another player's notice right after a queued result shows at once (only a receipt's joins it)
+				table.clear(notes)
+				CC._test.setHatch(function(o: any, result: any)
+					table.insert(notes, { Capsule = result.Capsule, Text = o.Note.Text })
+					if #notes == 1 then
+						CC._test.result(receipt)
+						CC.notice({ Text = "Someone woke a Legendary!", Kind = "Discovery" })
+						T.eq(o.Note.Text, "Someone woke a Legendary!", "on the opening playing")
+					end
+					o.Note.Text = ""
+				end)
+				CC._test.result({ Capsule = "Stone", Count = 1, Golems = { pack[1] }, Lucky = false })
+				T.eq(#notes, 2)
+				T.eq(notes[2].Text, "", "not carried to the receipt's opening")
 			end)
 			listening = false
 			CC._test.setHatch(nil)
@@ -2501,6 +2707,26 @@ return function(T, Loader)
 			if not ok then
 				error(err, 0)
 			end
+		end)
+	end)
+
+	T.test("InteractController: held by an opening, its pickup target, highlight and hint go and stay off", function()
+		withController(function(_C, _w)
+			local IC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.InteractController")
+			IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
+			local item = Instance.new("Model")
+			IC._test.show(item)
+			local target, adornee, shown = IC._test.view()
+			T.truthy(target == item and adornee == item and shown, "an item targeted: highlighted, its hint up")
+			IC.hold("CapsuleOpening", true)
+			target, adornee, shown = IC._test.view()
+			T.eq(target, nil, "held: no pickup target")
+			T.eq(adornee, nil, "no highlight")
+			T.falsy(shown, "no hint")
+			IC._test.step()
+			target, adornee, shown = IC._test.view()
+			T.truthy(target == nil and adornee == nil and not shown, "still off after the loop's next look")
+			IC.hold("CapsuleOpening", false)
 		end)
 	end)
 

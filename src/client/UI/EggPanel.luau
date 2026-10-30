@@ -41,7 +41,7 @@
 	- The trash (coin eggs only, never a paid golem; only on a golem the
 	  player found): the first click asks ("AUTO-DELETE?" over the picture),
 	  a second one turns it on (red); one click turns it off. The server
-	  keeps the set (State Golems.AutoDelete, CapsuleAction "AutoDelete"):
+	  keeps the set (State Golems.AutoDelete, CapsuleTrash):
 	  such a golem still opens, counts and stays discovered, it is just not
 	  kept. On touch the whole card is its tap area (44 pt).
 	- The pictures: ViewportFrames, one per card slot, made once; the
@@ -1049,6 +1049,9 @@ function EggPanel.build(): Refs
 	local toggleLabel = brightText(toggle, "Label", "Auto", 22, 5)
 	toggleLabel.Position = UDim2.fromOffset(8, 0)
 	toggleLabel.Size = UDim2.new(1, -44, 0.9, 0)
+	-- (a longer word, "Auto waits...", shrinks to the pill: at most the layout's size)
+	toggleLabel.TextScaled = true
+	UIKit.new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 22, MinTextSize = 10 }, toggleLabel)
 	local key = UIKit.new("Frame", {
 		Name = "Key",
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1166,6 +1169,10 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 	refs.Key.Size = UDim2.fromOffset(keySize, keySize)
 	refs.ToggleLabel.Size = UDim2.new(1, -(keySize + 16), 0.9, 0)
 	refs.ToggleLabel.TextSize = math.floor(l.Toggle.Y * 0.5)
+	local toggleFit = refs.ToggleLabel:FindFirstChildOfClass("UITextSizeConstraint")
+	if toggleFit then
+		toggleFit.MaxTextSize = refs.ToggleLabel.TextSize
+	end
 	fitEdge(refs.ToggleLabel)
 	refs.Price.TextSize = math.floor(l.Chip * 0.6)
 	refs.KeyText.TextSize = math.floor(keySize * 0.66)
@@ -1694,8 +1701,9 @@ end
 	keyboard key's letter, a gamepad glyph (`image`), or nothing on touch
 	(`text` "" and no image: the badge hides).
 ]]
-function EggPanel.setAuto(refs: Refs, visible: boolean, on: boolean, text: string, image: string?)
+function EggPanel.setAuto(refs: Refs, visible: boolean, on: boolean, text: string, image: string?, label: string?)
 	refs.Toggle.Visible = visible
+	refs.ToggleLabel.Text = label or "Auto" -- ("Auto waits..." while its egg's odds are off the screen)
 	repaint(refs.Toggle, if on then BrightTheme.Paints.Green else BrightTheme.Paints.Grey)
 	local hasImage = image ~= nil and image ~= ""
 	refs.Key.Visible = hasImage or text ~= ""

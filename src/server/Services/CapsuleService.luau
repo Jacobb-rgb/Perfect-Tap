@@ -192,6 +192,7 @@ end
 local prompter: (player: Player, productId: number) -> () = function(player: Player, productId: number)
 	game:GetService("MarketplaceService"):PromptProductPurchase(player, productId)
 end
+local defaultRandom, defaultPrompter = newRandom, prompter -- (_test.reset puts them back)
 
 -- Listeners: (player, Opened) after every grant (coins, Robux or free).
 function CapsuleService.onOpened(callback: OpenedCallback)
@@ -1002,6 +1003,8 @@ CapsuleService._test = {
 		table.clear(prompts)
 		Receipts._test.reset()
 		clock = os.time
+		newRandom = defaultRandom -- (a spec's swapped random never leaks into the next spec)
+		prompter = defaultPrompter
 		listPlayers = function(): { Player }
 			return Players:GetPlayers()
 		end

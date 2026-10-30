@@ -257,7 +257,7 @@ end
 	front. The top centre stays free (nothing above 16 % of the height
 	there: room for a quest card).
 ]]
-function HatchFx.layout(count: number, aspect: number, special: number?): Layout
+function HatchFx.layout(count: number, aspect: number, special: number?, marked: boolean?): Layout
 	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
 	local a = math.max(0.8, if aspect == aspect then aspect else 16 / 9)
 	local slots: { Slot } = {}
@@ -308,10 +308,20 @@ function HatchFx.layout(count: number, aspect: number, special: number?): Layout
 			})
 		end
 	else
-		-- two rows of 5 (the second may be shorter); a special one makes room: the rows part a little
+		-- two rows of 5 (the second may be shorter); a special one makes room: the rows part a little;
+		-- `marked` (a top-row golem has a DELETED pill or a waiting note under its name): more, so the
+		-- mark never covers a second-row golem's head
 		local dx = math.min(0.17, 0.33 / a)
 		spacing = dx
-		local rowY = if special then { 0.33, 0.71 } else { 0.33, 0.69 }
+		-- (marked: the rows part and the golems are a little smaller, so a phone's second row keeps its
+		-- notes on the screen; with a special its bigger golem's taller tag needs the most)
+		local rowY = if marked and special
+			then { 0.29, 0.74 }
+			elseif marked then { 0.3, 0.73 }
+			elseif special then { 0.33, 0.71 }
+			else { 0.33, 0.69 }
+		local golemH = if marked then 0.23 else 0.25
+		local specialH = if marked then 0.3 else 0.33
 		for i = 1, n do
 			local row = if i <= 5 then 1 else 2
 			local inRow = if row == 1 then 5 else n - 5
@@ -322,7 +332,7 @@ function HatchFx.layout(count: number, aspect: number, special: number?): Layout
 				Egg = Vector2.new(x, rowY[row]),
 				EggH = 0.29,
 				Golem = Vector2.new(x, if isSpecial then rowY[row] + 0.005 else rowY[row] - 0.01),
-				GolemH = if isSpecial then 0.33 else 0.25,
+				GolemH = if isSpecial then specialH else golemH,
 				Text = if isSpecial then 26 else 22,
 				Front = isSpecial,
 			})

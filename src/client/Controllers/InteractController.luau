@@ -74,6 +74,7 @@ function InteractController.resume()
 end
 
 local holds: { [string]: boolean } = {}
+local step: () -> () -- (below: the render loop's look for a pickup target)
 --[[
 	Another view needs the Grab touch button's place for a while (`name`
 	holds it, `on` false lets go): the button (and F / X) rest meanwhile.
@@ -272,6 +273,21 @@ function InteractController.init()
 	})
 end
 
+-- One look for a pickup target (the render loop's, ten times a second): none while held or disabled.
+function step()
+	if not enabled or next(holds) ~= nil then
+		return -- (held: hold() cleared the target and the hint)
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	-- a full backpack takes nothing: no pickup target (F / Grab pass)
+	local newTarget = if root and not BackpackState.isFull() then chooseTarget(root) else nil
+	if newTarget ~= target then
+		target = newTarget
+	end
+	updateHint()
+end
+
 function InteractController.start()
 	bindGrab = function()
 		if next(holds) ~= nil then
@@ -290,18 +306,29 @@ function InteractController.start()
 			return
 		end
 		accumulator = 0
-		if not enabled or next(holds) ~= nil then
-			return -- (held: hold() cleared the target and the hint)
-		end
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		-- a full backpack takes nothing: no pickup target (F / Grab pass)
-		local newTarget = if root and not BackpackState.isFull() then chooseTarget(root) else nil
-		if newTarget ~= target then
-			target = newTarget
-		end
-		updateHint()
+		step()
 	end)
 end
+
+-- (the Lune specs: a pickup target shown, a hold, the loop's next look)
+InteractController._test = {
+	parts = function() -- (stand-ins for the highlight and the hint: Lune's instances can't hold a nil Adornee)
+		local fakeHighlight: any = { Adornee = nil }
+		local fakeHint: any = { Adornee = nil, Enabled = false }
+		highlight = fakeHighlight
+		hint = fakeHint
+	end,
+	show = function(model: Model)
+		target = model
+		highlight.Adornee = model
+		hint.Enabled = true
+	end,
+	view = function(): (Model?, Instance?, boolean)
+		return target, highlight.Adornee, hint.Enabled
+	end,
+	step = function()
+		step()
+	end,
+}
 
 return InteractController

@@ -209,6 +209,7 @@ local measured: EggPanel.ScreenInput? = nil -- (screenInput, re-measured a few t
 local measuredAt = -math.huge
 local autoLucky = false -- the odds Auto started on (it stops when the shown odds aren't these any more)
 local veiled = false -- an egg opens: the panel steps aside (CapsuleController.onPlaying)
+local autoWaits = false -- Auto runs but waits: its egg's odds are off the screen ("Auto waits..." on the toggle)
 local deleting: { [string]: boolean } = {} -- the golem kinds the player auto-deletes (State Golems.AutoDelete)
 local trashAsk: { Kind: string, Until: number }? = nil -- a card's trash asked "AUTO-DELETE?" (a second click turns it on)
 local trashSent: { [string]: { On: boolean, Until: number } } = {} -- sent, not in the State yet
@@ -482,22 +483,61 @@ local refreshPanel: () -> () -- (below: the opens and Auto call it)
 local onScreen: (spot: Spot?) -> boolean -- (below: is the egg's panel, its odds, on the screen)
 
 --[[
-	May a buy go now at the shown egg `id`: the player within the "Buy Egg!"
-	prompt's reach and the egg's odds on the screen (onScreen, measured
-	now). Every buy path asks it: E and the disc, the opens (round the big
-	E or in the panel), a gamepad's A on a focused open, R / X, Auto's start
-	and each of its steps. Off: nothing is bought (the same quiet refusal
-	as R / X), so a turned camera never buys on odds off the screen.
+	Why a buy at the shown egg `id` may not start now (nil: it may), by
+	where it comes from (`from`):
+	- "Panel": the panel's own buttons (the touch opens' row, the Auto
+	  toggle): the egg's odds on the screen (onScreen, measured now), at
+	  any distance the panel shows from (ShowRange); Auto's steps too.
+	- "Reach" (the default): the keys (E, R / X, a gamepad's focus and A,
+	  G / B) and the big E with its opens: within the "Buy Egg!" prompt's
+	  reach as well.
+	"Odds": turn to see the odds; "Far": come closer. A turned camera
+	never buys on odds off the screen.
 ]]
-local function canBuy(id: string): boolean
-	return reach and onScreen(spots[id])
+local function refusal(id: string, from: string?): string?
+	if not onScreen(spots[id]) then
+		return "Odds"
+	elseif from ~= "Panel" and not reach then
+		return "Far"
+	end
+	return nil
 end
 
--- One egg (or 3, or 10) with the odds on the panel: refused when they just changed, and while an
--- egg opens (the panel is away then: a button still selected under it never buys unseen).
-function EggPanelController.open(id: string, count: number)
-	if id ~= current or not sellable or veiled or CapsuleController.showing() or not canBuy(id) then
-		return
+local function canBuy(id: string, from: string?): boolean
+	return refusal(id, from) == nil
+end
+
+EggPanelController.RefuseText = {
+	Odds = "Turn to see the egg's odds",
+	Far = "Come closer to the egg",
+} :: { [string]: string }
+EggPanelController.RefuseEvery = 1.2 -- seconds between two of these toasts (mashing: one)
+local lastRefusal = -math.huge
+-- A refused press says why: the deny sound and a toast (once in a while when mashed).
+local function refuse(why: string)
+	Sfx.play("UIDeny")
+	local now = os.clock()
+	if now - lastRefusal >= EggPanelController.RefuseEvery then
+		lastRefusal = now
+		HudController.toast(EggPanelController.RefuseText[why] or "Not now", "Deny")
+	end
+end
+
+--[[
+	One egg (or 3, or 10) with the odds on the panel (`from`: refusal's;
+	"Panel" for the panel's own opens). Quietly nothing while an egg opens
+	(the panel is away then: a button still selected under it never buys
+	unseen) and RebuyGuard after one ended (a tap or an A meant to skip
+	it); out of the rule: the deny sound and why. Returns whether it went.
+]]
+function EggPanelController.open(id: string, count: number, from: string?): boolean
+	if id ~= current or not sellable or veiled or CapsuleController.showing() or CapsuleController.justEnded() then
+		return false
+	end
+	local why = refusal(id, from)
+	if why then
+		refuse(why)
+		return false
 	end
 	local _sent, reason = CapsuleController.buy(id, count, shownLucky, false)
 	if reason == "OddsChanged" then
@@ -505,6 +545,7 @@ function EggPanelController.open(id: string, count: number)
 	elseif reason == "NoCoins" then
 		flashAlert()
 	end
+	return true
 end
 
 --[[
@@ -541,15 +582,19 @@ end
 
 --[[
 	A card's trash clicked (tapped, A on a gamepad): off, it asks
-	("AUTO-DELETE?" over the picture); asked, it turns on (CapsuleAction
-	"AutoDelete": the server keeps the set, a coin egg's golem the player
-	found only); on, it turns off at once. Never while an egg opens.
+	("AUTO-DELETE?" over the picture); asked, it turns on (CapsuleTrash:
+	the server keeps the set, a coin egg's golem the player found only);
+	on, it turns off at once. Never while an egg opens, nor RebuyGuard
+	after one ended.
 ]]
 local function onTrash(index: number)
 	local r = refs
 	local line = lines[index]
 	if not r or not line or not line.Trash or trashBlocked[index] or veiled or CapsuleController.showing() then
 		return
+	end
+	if CapsuleController.justEnded() then
+		return -- (a tap meant to skip the opening that just ended)
 	end
 	local kind = line.Golem
 	local state = trashState(kind)
@@ -586,14 +631,14 @@ local function ensurePanel(): EggPanel.Refs
 	r.Toggle.Activated:Connect(function()
 		local id = current
 		if id then
-			EggPanelController.toggleAuto(id)
+			EggPanelController.toggleAuto(id, "Panel")
 		end
 	end)
 	for _, open in r.Opens do
 		open.Button.Activated:Connect(function()
 			local id = current
 			if id then
-				EggPanelController.open(id, open.Count)
+				EggPanelController.open(id, open.Count, "Panel")
 			end
 		end)
 	end
@@ -819,7 +864,7 @@ function refreshPanel()
 	end
 	local autoShown = sellable and EggPanel.autoAllowed(id)
 	local text, image = autoKey()
-	EggPanel.setAuto(r, autoShown, autoEgg == id, text, image)
+	EggPanel.setAuto(r, autoShown, autoEgg == id, text, image, if autoEgg == id and autoWaits then "Auto waits..." else nil)
 	EggPanel.setLucky(r, lucky, autoShown)
 	-- (a gamepad's D-pad: the trash icons, Auto and the opens round the E)
 	EggPanel.linkPad(r, if p and p.Cluster and promptFor ~= nil and p.Gui.Enabled then p.Opens else nil)
@@ -1169,7 +1214,9 @@ function onScreen(spot: Spot?): boolean
 		end
 		local odds = EggPanel.oddsBox(l, r.Scale.Scale)
 		local top = anchor.Y - r.Gui.Size.Y.Offset * (0.5 + r.Gui.SizeOffset.Y) -- (keepOnScreen may move it down)
-		return top + odds.Min.Y >= 0 and top + odds.Max.Y <= view.Y and anchor.X >= 0 and anchor.X <= view.X
+		local left = anchor.X - r.Gui.Size.X.Offset / 2 -- (the billboard centred on its anchor)
+		local inset = GuiService:GetGuiInset() -- (Roblox's top bar: a card row under it isn't seen)
+		return top + odds.Min.Y >= inset.Y and top + odds.Max.Y <= view.Y and left + odds.Min.X >= 0 and left + odds.Max.X <= view.X
 	end
 	-- touch: the panel floats on the screen; the egg in front of the camera, on the screen
 	local point = camera:WorldToViewportPoint(spot.Center)
@@ -1548,13 +1595,14 @@ local function stopAuto()
 		return
 	end
 	autoEgg = nil
+	autoWaits = false
 	CapsuleController.setAuto(false)
 	refreshPanel()
 	updatePrompts()
 end
 
 -- Auto on / off for the shown egg (coin eggs only).
-function EggPanelController.toggleAuto(id: string)
+function EggPanelController.toggleAuto(id: string, from: string?)
 	if autoEgg == id then
 		stopAuto()
 		Sfx.play("UIClick")
@@ -1563,11 +1611,13 @@ function EggPanelController.toggleAuto(id: string)
 	if id ~= current or not sellable or not EggPanel.autoAllowed(id) then
 		return
 	end
-	if veiled or CapsuleController.showing() then
-		return -- (never on while an egg opens: the panel and its odds are away; it stops then, though)
+	if veiled or CapsuleController.showing() or CapsuleController.justEnded() then
+		return -- (never on while an egg opens, the odds away, nor by a tap meant to skip one; it stops, though)
 	end
-	if not canBuy(id) then
-		return -- (out of the prompt's reach, or the odds off the screen: as R / X)
+	local why = refusal(id, from) -- (the panel's toggle: the odds on the screen; G / B: the prompt's reach too)
+	if why then
+		refuse(why)
+		return
 	end
 	refreshPanel() -- (the odds as they are now on the panel: Auto runs on these and stops when they change)
 	if id ~= current or not sellable then
@@ -1598,8 +1648,13 @@ local function autoStep()
 	if os.clock() - luckySince < EggPanelController.LuckySettle then
 		return -- (new odds: on the panel first)
 	end
-	if not canBuy(id) then
-		return -- (the odds off the screen, a step out of reach: Auto waits, the next egg when they're back)
+	local waits = not canBuy(id, "Panel")
+	if waits ~= autoWaits then
+		autoWaits = waits
+		refreshPanel() -- ("Auto waits..." on the toggle while the odds are off the screen)
+	end
+	if waits then
+		return -- (the next egg once they're back)
 	end
 	local card = CapsuleController.quote(id)
 	if card and card.Lucky ~= shownLucky then
@@ -1651,10 +1706,15 @@ local function addEgg(id: string, model: Model)
 		Auto = nil,
 	}
 	buy.Triggered:Connect(function()
-		squash()
-		EggPanelController.open(id, 1)
+		if EggPanelController.open(id, 1) then
+			squash() -- (only a press that buys: a refused one says why instead)
+		end
 	end)
-	buy.PromptButtonHoldBegan:Connect(squash)
+	buy.PromptButtonHoldBegan:Connect(function()
+		if canBuy(id) then
+			squash()
+		end
+	end)
 	buy.PromptShown:Connect(function(inputType: Enum.ProximityPromptInputType)
 		if buy.Style == Enum.ProximityPromptStyle.Default then
 			return -- (Roblox draws its own)

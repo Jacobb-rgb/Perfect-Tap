@@ -379,8 +379,23 @@ return function(T, Loader)
 		T.eq(w.reveal(), nil, "once")
 	end)
 
-	withWheel("Wheel + the real CapsuleService: a quiet free capsule, its opening once on Reveal", function(w)
+	-- The real CapsuleService rolls with a seeded random here (Lune has no Random); `_test.reset` after.
+	local function realCapsules(): any
 		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local rng = Rng.new(8128)
+		CapsuleService._test.setRandom(function(_p: any): any
+			return {
+				NextNumber = function(_self: any): number
+					return rng:next()
+				end,
+			}
+		end)
+		return CapsuleService
+	end
+
+	withWheel("Wheel + the real CapsuleService: a quiet free capsule, its opening once on Reveal", function(w)
+		local CapsuleService = realCapsules()
 		T.eq(CapsuleService.QuietFree, true, "the capsule package honors quiet")
 		WheelService._test.setCapsules(CapsuleService :: any)
 		local result = w.spin(rollFor(8)).A
@@ -396,10 +411,11 @@ return function(T, Loader)
 		T.eq(opening.A.Free, true)
 		T.eq(opening.A.Golems[1].Id, result.Golem.Id)
 		T.eq(w.reveal(), nil, "once")
+		CapsuleService._test.reset()
 	end)
 
 	withWheel("Wheel + the real CapsuleService: the eggs' trash never touches a free spin (kept; full: the coins)", function(w)
-		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		local CapsuleService = realCapsules()
 		WheelService._test.setCapsules(CapsuleService :: any)
 		-- every Crystal golem in the egg panel's trash (auto-delete is for coin opens only)
 		w.data.Golems.AutoDelete = {}
@@ -428,6 +444,7 @@ return function(T, Loader)
 		T.eq(full.Coins, share, "the fallback coins")
 		T.eq(w.data.Coins - coins, share)
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing past the cap")
+		CapsuleService._test.reset()
 	end)
 
 	withWheel("Wheel: an older capsule package sends the opening itself: the wheel never sends it again", function(w)
@@ -868,7 +885,7 @@ return function(T, Loader)
 		T.eq(paidGolem.Paid, true, "Paid")
 		T.eq(paidGolem.Locked, true, "Locked")
 		-- through the real capsule package: the same, and its opening says PaidSpin
-		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		local CapsuleService = realCapsules()
 		WheelService._test.setCapsules(CapsuleService :: any)
 		local sources: { string } = {}
 		CapsuleService.onOpened(function(_p: any, info: any)

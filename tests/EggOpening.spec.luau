@@ -426,6 +426,65 @@ return function(T, Loader)
 		HatchStage.clear(o, HatchStage.golems(run))
 	end)
 
+	T.test("EggOpening: names step aside for the Auto button only while it shows, never out of their column", function()
+		local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
+		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+		-- long names (the review's case: "Dragonscale Knight" under the bottom-left of an Open 10)
+		local long = { "ScaleKnight", "HeartstoneColossus", "CelestialSovereign", "MoonstoneOracle", "AmethystAcolyte" }
+		for _, n in { 5, 10 } do
+			local kinds = {}
+			for i = 1, n do
+				kinds[i] = long[(i - 1) % #long + 1]
+			end
+			for _, autoShown in { false, true } do
+				local o, run = runOf(if n == 10 then "Crystal" else "Royal", kinds, { Waiting = { [6] = true, [1] = true } })
+				CapsuleView.layoutOpening(o, false, 1280, 720, { Inset = 29 })
+				CapsuleView.setAuto(o, autoShown, false, "G", nil)
+				local tl = run.Timeline
+				HatchStage.pose(run, tl.Reveal + HatchFx.namedAt(tl) + 0.05)
+				local size = run.Size
+				local aspect = size.X / size.Y
+				local pitch = run.Layout.Spacing * size.X * 0.96
+				local boxes = {}
+				for slot, standing in run.Standing do
+					local tag = o.Tags[slot]
+					local feet = HatchFx.at(standing.Spot.X, standing.Spot.Y, standing.Depth, aspect)
+						- Vector3.new(0, standing.Height / 2, 0)
+					local under = HatchFx.project(feet, aspect).X * size.X
+					local x = tag.Frame.Position.X.Offset
+					local label = `n {n}, Auto {if autoShown then "shown" else "hidden"}, slot {slot}`
+					-- (offsets are whole units)
+					if not autoShown then
+						T.near(x, under, 1, label .. ": under its golem")
+					else
+						T.truthy(x >= under - 1 and x - under <= pitch / 2 + 1, label .. ": within its own column")
+					end
+					-- (what shows of it: the name as setTag measures it, its note)
+					local nameW = TechShopView.textWidth(tag.Name.Text, tag.Name.TextSize) * 1.04 + 8
+					local w = math.max(nameW, if tag.Waiting.Visible then tag.Waiting.Size.X.Offset else 0)
+					table.insert(boxes, {
+						Slot = slot,
+						Box = {
+							Min = Vector2.new(x - w / 2, tag.Frame.Position.Y.Offset),
+							Max = Vector2.new(x + w / 2, tag.Frame.Position.Y.Offset + 30),
+						},
+					})
+				end
+				-- no tag runs into a neighbour (the same row)
+				for i = 1, #boxes do
+					for j = i + 1, #boxes do
+						local a, b = boxes[i].Box, boxes[j].Box
+						if math.abs(a.Min.Y - b.Min.Y) < 20 then
+							T.eq(EggPanel.overlap(a, b), 0, `n {n}: slots {boxes[i].Slot} and {boxes[j].Slot} apart`)
+						end
+					end
+				end
+				HatchStage.pose(run, tl.Total)
+				HatchStage.clear(o, HatchStage.golems(run))
+			end
+		end
+	end)
+
 	T.test("EggOpening: DELETED and the waiting note fade with the names (Reduce motion's calm fade too)", function()
 		for _, calm in { false, true } do
 			local o, run = runOf("Stone", { "RoseKnight", "PebbleGolem", "CopperTinker" }, {
@@ -592,9 +651,13 @@ return function(T, Loader)
 		CapsuleView.setChain(tv, 2, 5)
 		T.truthy(29 + tv.Chain.Position.Y.Offset >= 864 * 0.05 - 1e-6, "a TV: the counter inside the title-safe band")
 		T.eq(pc.Chain.Position.Y.Offset, 8, "PC: just under the top bar")
-		-- touch: top right (the top middle is a big golem's head there), out of the thumbstick's zone
+		-- touch: top right (the top middle is a big golem's head there), out of the thumbstick's zone, against
+		-- the Controls gui's own right edge (its notch-safe frame, narrower than the viewport on a notched phone)
 		T.eq(o.Chain.AnchorPoint, Vector2.new(1, 0))
-		T.truthy(o.Chain.Position.X.Offset - o.Chain.Size.X.Offset > w * CapsuleView.ThumbZone.Width, "right of the zone")
+		T.eq(o.Chain.Position.X.Scale, 1, "the gui's own width, never the viewport's")
+		T.truthy(o.Chain.Position.X.Offset < 0, "inside its right edge")
+		local chainLeft = w + o.Chain.Position.X.Offset - o.Chain.Size.X.Offset
+		T.truthy(chainLeft > w * CapsuleView.ThumbZone.Width, "right of the zone")
 		T.truthy(
 			inset + o.Chain.Position.Y.Offset + o.Chain.Size.Y.Offset <= h * CapsuleView.ThumbZone.Top,
 			"at the top, just under Roblox's row"
@@ -650,11 +713,8 @@ return function(T, Loader)
 		)
 		T.truthy(string.find(code, "if phone and n > 3 then 2 else 3", 1, true), "a phone opening many: two crack steps")
 		T.truthy(string.find(code, 'string.sub(gui.Name, 1, 10) ~= "TerraForge"', 1, true), "only our own guis step away")
-		-- (review 2026-10-30) L3 (the train window) and R3 (the tutorial's Skip) never act unseen under it
-		T.truthy(string.find(code, "Enum.KeyCode.ButtonL3", 1, true) and string.find(code, "Enum.KeyCode.ButtonR3", 1, true))
-		-- the pickup hint and highlight rest while the opening holds InteractController
-		local interact = fs.readFile(Loader.root .. "/src/client/Controllers/InteractController.luau")
-		T.truthy(string.find(interact, "if not enabled or next(holds) ~= nil then", 1, true), "held: no pickup target")
+		-- (the window keys sunk under it, L3 / R3 and T / B among them: tests/EggPanel.spec's chain spec;
+		-- InteractController's held pickup hint: its own spec there)
 	end)
 
 	T.test("EggOpening: a seventh Rarity (the secret ores' Secret) never reaches the egg screens or the stall", function()

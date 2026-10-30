@@ -230,7 +230,7 @@ export type OpenRefs = {
 	AutoGlyph: ImageLabel,
 	Note: TextLabel, -- why Auto stopped (the HUD's toasts hide while an opening plays)
 	Chain: TextLabel, -- "2 / 5": a big pack's openings, one after another (setChain)
-	AutoKeep: KeepBox, -- the Auto button, its key and label (the stage's design units): no name tag goes under it
+	AutoKeep: { KeepBox }, -- the Auto button's disc with its key, and its label (the stage's design units): names step aside while it shows
 	Size: Vector2, -- the screen in design units (layoutOpening)
 	Touch: boolean,
 	Compact: boolean,
@@ -238,7 +238,7 @@ export type OpenRefs = {
 
 CapsuleView.StageTags = 10 -- the most results an opening shows (CapsuleConfig.Counts' largest)
 CapsuleView.WaitingText = "Waiting: inventory full" -- under a won golem past the inventory's hard cap
-CapsuleView.WaitingLines = { "Waiting:", "inventory full" } -- (the same on two lines, where its room is narrow)
+CapsuleView.WaitingShort = "Inventory full" -- (where the whole note doesn't fit on one line: a phone's Open 10)
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1848,7 +1848,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		AutoGlyph = glyph,
 		Note = note,
 		Chain = chain,
-		AutoKeep = { Min = Vector2.zero, Max = Vector2.zero },
+		AutoKeep = {},
 		Size = Vector2.new(1280, 720),
 		Touch = false,
 		Compact = isCompact,
@@ -1923,8 +1923,8 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	if edge and edge:IsA("UIStroke") then
 		edge.Thickness = CapsuleView.TextEdge(labelSize) * 0.8
 	end
-	-- (the key badge sits on the disc's top-right corner, 9 units out; KEEP more round it all)
-	local KEEP = 6
+	-- (the key badge sits on the disc's top-right corner, 9 units out; KEEP more round each part)
+	local KEEP = 4
 	if touch then
 		-- above the thumbstick's zone, the label to the right of the disc
 		local zoneTop = height * zone.Top - inset
@@ -1936,8 +1936,14 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 		refs.AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
 		refs.Note.Position = UDim2.fromOffset(margin + disc + 10, y + disc / 2 + labelSize * 0.6)
 		refs.AutoKeep = {
-			Min = Vector2.new(margin - KEEP, inset + y - 9 - KEEP),
-			Max = Vector2.new(margin + disc + 10 + 120 + KEEP, inset + y + disc + KEEP),
+			{ -- the disc and its key
+				Min = Vector2.new(margin - KEEP, inset + y - 9 - KEEP),
+				Max = Vector2.new(margin + disc + 9 + KEEP, inset + y + disc + KEEP),
+			},
+			{ -- its label, beside it
+				Min = Vector2.new(margin + disc + 10 - KEEP, inset + y + disc / 2 - (labelSize + 6) / 2 - KEEP),
+				Max = Vector2.new(margin + disc + 10 + 120 + KEEP, inset + y + disc / 2 + (labelSize + 6) / 2 + KEEP),
+			},
 		}
 	else
 		local top = room - margin - labelSize - 6 - disc -- (the disc's top in the Controls gui)
@@ -1947,9 +1953,16 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 		refs.AutoLabel.Position = UDim2.new(0.5, 0, 1, 2)
 		refs.AutoLabel.TextXAlignment = Enum.TextXAlignment.Center
 		refs.Note.Position = UDim2.fromOffset(margin, room - margin - labelSize - 6 - disc - 34)
+		local left = margin + 10
 		refs.AutoKeep = {
-			Min = Vector2.new(margin + 10 - 30 - KEEP, inset + top - 9 - KEEP),
-			Max = Vector2.new(margin + 10 + disc + 30 + KEEP, inset + top + disc + 2 + labelSize + 6 + KEEP),
+			{ -- the disc and its key
+				Min = Vector2.new(left - KEEP, inset + top - 9 - KEEP),
+				Max = Vector2.new(left + disc + 9 + KEEP, inset + top + disc + KEEP),
+			},
+			{ -- "AUTO" under it
+				Min = Vector2.new(left + disc / 2 - (disc + 60) / 2 - KEEP, inset + top + disc + 2 - KEEP),
+				Max = Vector2.new(left + disc / 2 + (disc + 60) / 2 + KEEP, inset + top + disc + 2 + labelSize + 6 + KEEP),
+			},
 		}
 	end
 	refs.Note.Size = UDim2.fromOffset(math.min(width - 2 * margin, 460), 24)
@@ -1961,8 +1974,9 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	-- (a TV: inside its 5 % title-safe band, as Auto and its note; touch: top right, over no golem's
 	-- head and out of the thumbstick's zone, Auto's corner is the top left there)
 	if touch then
+		-- (against the Controls gui's own right edge: the notch-safe frame, never the viewport's)
 		refs.Chain.AnchorPoint = Vector2.new(1, 0)
-		refs.Chain.Position = UDim2.fromOffset(width - margin, 8)
+		refs.Chain.Position = UDim2.new(1, -margin, 0, 8)
 	else
 		refs.Chain.AnchorPoint = Vector2.new(0.5, 0)
 		refs.Chain.Position = UDim2.fromOffset(width / 2, if o.TenFoot then math.max(8, math.ceil(height * 0.05) - inset) else 8)
@@ -2025,14 +2039,13 @@ function CapsuleView.setTag(
 		-- (its room: the golems' pitch `pitch`, even for the big middle one whose name gets more)
 		local noteRoom = math.min(width, pitch or width)
 		local noteSize = CapsuleView.TagMin
-		local lines, widest = 1, TechShopView.textWidth(CapsuleView.WaitingText, noteSize)
+		-- (one line: the whole note where it fits, else the short one; only a tinier room wraps it,
+		-- so a top row's notes stay clear of the second row's golems)
 		local text = CapsuleView.WaitingText
+		local lines, widest = 1, TechShopView.textWidth(text, noteSize)
 		if widest + 22 > noteRoom then
-			-- ("Waiting:" over "inventory full": the narrowest it reads well; a tinier room wraps that too)
-			local first, second = CapsuleView.WaitingLines[1], CapsuleView.WaitingLines[2]
-			local more, wide = CapsuleView.wrap(second, noteSize, math.max(40, noteRoom - 22))
-			lines, widest = 1 + more, math.max(TechShopView.textWidth(first, noteSize), wide)
-			text = first .. "\n" .. second
+			text = CapsuleView.WaitingShort
+			lines, widest = CapsuleView.wrap(text, noteSize, math.max(40, noteRoom - 22))
 		end
 		tag.WaitingText.Text = text
 		tag.WaitingText.TextSize = noteSize
@@ -2047,17 +2060,49 @@ function CapsuleView.setTag(
 		markH += 4
 	end
 	local frameH = fit + small + 12 + markH
-	-- never under the Auto button (its key and label): the tag steps right of it, just enough
-	-- (what shows of it: the name, the chance, the mark; its neighbour keeps its room)
-	local x = at.X
-	local half = math.max(TechShopView.textWidth(name, fit) * 1.04 + 8, TechShopView.textWidth(chance, small) + 8, markW) / 2
-	local keep = refs.AutoKeep
-	local overlapsY = at.Y < keep.Max.Y and at.Y + frameH > keep.Min.Y
-	if overlapsY and x - half < keep.Max.X and x + half > keep.Min.X then
-		x = keep.Max.X + half
+	-- the name and its "1 in N" step aside together; the mark (narrower) on its own, as far as it needs
+	local x = CapsuleView.stepAside(refs, at, {
+		{ math.ceil(TechShopView.textWidth(name, fit) * 1.04 + 8), 0, fit + 6 }, -- the name
+		{ math.ceil(TechShopView.textWidth(chance, small) + 8), fit + 2, small + 6 }, -- "1 in N"
+	}, pitch)
+	local markX = CapsuleView.stepAside(refs, at, { { markW, fit + small + 8, markH } }, pitch) -- DELETED / the note
+	for _, mark in { tag.Deleted, tag.Waiting } do
+		mark.Position = UDim2.new(0.5, math.ceil(markX - math.floor(x)), 0, fit + small + 8)
 	end
 	tag.Frame.Position = UDim2.fromOffset(x, at.Y)
 	tag.Frame.Size = UDim2.fromOffset(frameW, frameH)
+end
+
+--[[
+	A name tag's x (its middle) under its golem at `at`: while the Auto
+	button shows, a tag whose parts (`rows`: { width, top, height } each,
+	centred) would lie under its disc, key or label steps right, just
+	enough, but never out of its own column (`pitch`: the golems' pitch, a
+	tag of a neighbour keeps its room); hidden Auto: it stays put.
+]]
+function CapsuleView.stepAside(refs: OpenRefs, at: Vector2, rows: { { number } }, pitch: number?): number
+	if not refs.AutoHolder.Visible or not pitch then
+		return at.X
+	end
+	local need, half = 0, 0
+	for _, row in rows do
+		local w, top, h = row[1], row[2], row[3]
+		if w > 0 and h > 0 then
+			half = math.max(half, w / 2)
+			for _, keep in refs.AutoKeep do
+				local y0, y1 = at.Y + top, at.Y + top + h
+				local x0, x1 = at.X - w / 2, at.X + w / 2
+				if y0 < keep.Max.Y and y1 > keep.Min.Y and x0 < keep.Max.X and x1 > keep.Min.X then
+					need = math.max(need, keep.Max.X - x0)
+				end
+			end
+		end
+	end
+	if need <= 0 then
+		return at.X
+	end
+	-- (whole units, rounded up: offsets are whole numbers, the part clears the button)
+	return math.ceil(at.X + math.min(need, math.max(0, pitch / 2 - half)))
 end
 
 -- `text` wrapped at word breaks into lines at most `width` wide at `size`: how many, and the widest.

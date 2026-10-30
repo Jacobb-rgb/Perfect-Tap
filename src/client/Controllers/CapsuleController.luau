@@ -374,10 +374,18 @@ end
 	InventoryFull, ComingSoon).
 ]]
 local chainEndedAt = -math.huge -- os.clock() when the last chain of openings ended
+
+-- Did a chain of openings end less than RebuyGuard ago? (A tap or an A meant to skip it lands on
+-- a buy button then: the window's OPEN, the egg panel's opens, Auto and trash rest that long.)
+function CapsuleController.justEnded(): boolean
+	return os.clock() - chainEndedAt < CapsuleController.RebuyGuard
+end
 local function request(capsuleId: string, count: number, button: TextButton?, expectLucky: boolean?): (boolean, string?)
 	local now = os.clock()
 	if button and now - chainEndedAt < CapsuleController.RebuyGuard then
-		return false, "Busy" -- (a gamepad's A pressed to skip the opening that just ended: never another egg)
+		-- (an A or a tap pressed to skip the opening that just ended: never another egg; a real click says why)
+		status("One moment...", Theme.Info)
+		return false, "Busy"
 	end
 	if now < pendingUntil then
 		status("Opening... one moment", Theme.Info)
@@ -693,11 +701,17 @@ local function autoKey(): (string, string?)
 end
 
 -- The Auto button: shown where Auto can run (the egg the player stands at, a coin egg) or while it runs.
+local currentRun: HatchStage.Run? = nil -- the opening on the stage now (hatch)
 local function refreshAuto(o: CapsuleView.OpenRefs)
 	local hook = autoHook
 	local available = hook ~= nil and (autoOn or hook.available())
 	local text, glyph = autoKey()
+	local was = o.AutoHolder.Visible
 	CapsuleView.setAuto(o, available, autoOn, text, glyph)
+	local run = currentRun
+	if run and was ~= o.AutoHolder.Visible then
+		HatchStage.retag(run) -- (the names step aside for the Auto button only while it shows)
+	end
 end
 
 local noteToken = 0
@@ -724,13 +738,16 @@ end
 ]]
 function CapsuleController.setAuto(on: boolean, note: string?)
 	autoOn = on
-	autoNote = if on then nil else note
 	local o = opening
 	if o and playing then
+		-- (shown now, once: the next opening of the chain doesn't show it again)
+		autoNote = nil
 		refreshAuto(o)
 		if note and not on then
 			showNote(o, note)
 		end
+	else
+		autoNote = if on then nil else note -- (the next opening shows it)
 	end
 end
 
@@ -956,10 +973,20 @@ local function keepNoSelection(on: boolean)
 	end)
 end
 
--- The window keys a gamepad has, sunk while an opening plays (A, B and G are the opening's own;
--- L3 opens the train window, R3 asks and confirms the tutorial's Skip: neither unseen under it).
+-- The window keys, sunk while an opening plays (A, B, G, Space, Enter and Backspace are the
+-- opening's own): a gamepad's (L3 opens the train window, R3 asks and confirms the tutorial's
+-- Skip) and their keyboard twins (T the train, B build mode, L the boosts, J the book, N the
+-- emotes, P the golems, Q the backpack, H the hoverboard): none acts unseen under it.
 local SINK_ACTION = "TerraForgeCapsuleSink"
 local SINK_KEYS = {
+	Enum.KeyCode.T,
+	Enum.KeyCode.B,
+	Enum.KeyCode.L,
+	Enum.KeyCode.J,
+	Enum.KeyCode.N,
+	Enum.KeyCode.P,
+	Enum.KeyCode.Q,
+	Enum.KeyCode.H,
 	Enum.KeyCode.ButtonL1,
 	Enum.KeyCode.ButtonR1,
 	Enum.KeyCode.ButtonL2,
@@ -973,6 +1000,7 @@ local SINK_KEYS = {
 	Enum.KeyCode.DPadLeft,
 	Enum.KeyCode.DPadRight,
 }
+CapsuleController.SinkKeys = SINK_KEYS
 local function onSink(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	return if playing then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
 end
@@ -1096,6 +1124,7 @@ end
 
 local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local run = HatchStage.new(CapsuleController.hatchArgs(o, result, kinds))
+	currentRun = run
 	local tl = run.Timeline
 	if not tl.Reduced then
 		Sfx.play("BagPop", nil, 0.9)
@@ -1137,6 +1166,7 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 		end
 		task.wait()
 	end
+	currentRun = nil
 	Sfx.loop("CaseCharge", false)
 end
 
@@ -1330,6 +1360,7 @@ local function play(result: Result)
 	local ok, err = pcall(function()
 		hatchOne(o, result, kinds)
 	end)
+	currentRun = nil -- (also after a failing one)
 	if not ok then
 		warn("[CapsuleController] opening failed: " .. tostring(err))
 	end
@@ -1417,7 +1448,9 @@ function CapsuleController.notice(message: any)
 		return
 	end
 	local waiting = lastQueued
-	if waiting and table.find(queue, waiting) and os.clock() - (waiting.Arrived or 0) < CapsuleController.NoticeJoin then
+	-- (only a receipt's own kind of notice, "Info": another player's "woke a Legendary!" shows now)
+	local joins = message.Kind == "Info" and waiting ~= nil and table.find(queue, waiting) ~= nil
+	if waiting and joins and os.clock() - (waiting.Arrived or 0) < CapsuleController.NoticeJoin then
 		waiting.Note = if waiting.Note then waiting.Note .. "  " .. message.Text else message.Text
 		return
 	end
