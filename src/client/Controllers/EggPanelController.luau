@@ -210,6 +210,7 @@ local veiled = false -- an egg opens: the panel steps aside (CapsuleController.o
 local deleting: { [string]: boolean } = {} -- the golem kinds the player auto-deletes (State Golems.AutoDelete)
 local trashAsk: { Kind: string, Until: number }? = nil -- a card's trash asked "AUTO-DELETE?" (a second click turns it on)
 local trashSent: { [string]: { On: boolean, Until: number } } = {} -- sent, not in the State yet
+local trashBlocked: { [number]: boolean } = {} -- touch: cards in the thumbstick's zone where the panel floats (no trash there)
 local ring: Part? = nil -- the light ring on the active egg's podium
 local front = Vector3.new(1, 0, 0)
 -- the big E
@@ -513,7 +514,11 @@ end
 local function syncTrash(r: EggPanel.Refs)
 	for i, card in r.Cards do
 		local line = lines[i]
-		if line and line.Trash and card.Frame.Visible then
+		local shown = line ~= nil and line.Trash and card.Frame.Visible and not trashBlocked[i]
+		if card.Trash.Visible ~= shown then
+			card.Trash.Visible = shown -- (touch: none in the thumbstick's zone, EggPanel.trashInZone)
+		end
+		if line and shown then
 			EggPanel.setTrash(card, trashState(line.Golem))
 		end
 	end
@@ -528,7 +533,7 @@ end
 local function onTrash(index: number)
 	local r = refs
 	local line = lines[index]
-	if not r or not line or not line.Trash or veiled or CapsuleController.showing() then
+	if not r or not line or not line.Trash or trashBlocked[index] or veiled or CapsuleController.showing() then
 		return
 	end
 	local kind = line.Golem
@@ -802,7 +807,7 @@ function refreshPanel()
 	EggPanel.setAuto(r, autoShown, autoEgg == id, text, image)
 	EggPanel.setLucky(r, lucky, autoShown)
 	-- (a gamepad's D-pad: the trash icons, Auto and the opens round the E)
-	EggPanel.linkPad(r, if p and p.Cluster then p.Opens else nil)
+	EggPanel.linkPad(r, if p and p.Cluster and promptFor ~= nil and p.Gui.Enabled then p.Opens else nil)
 	if promptFor and spot and promptFor == spot.Buy then
 		updatePromptText(id, card)
 	end
@@ -1042,6 +1047,19 @@ local function float()
 		floatOffset = offset
 		r.Gui.SizeOffset = offset
 	end
+	-- the cards' trash (the whole card is its tap area) never in the thumbstick's zone
+	local blocked = EggPanel.trashInZone(l, at, scale, s.Zone)
+	local moved = false
+	for i in blocked do
+		moved = moved or not trashBlocked[i]
+	end
+	for i in trashBlocked do
+		moved = moved or not blocked[i]
+	end
+	if moved then
+		trashBlocked = blocked
+		syncTrash(r)
+	end
 	local cover = point.Z > 0 and EggPanel.overlap({ Min = at, Max = at + size }, { Min = promptAt, Max = promptAt + promptSize }) > 0
 	if cover ~= promptCovered then
 		promptCovered = cover
@@ -1163,6 +1181,7 @@ local function layOut(r: EggPanel.Refs, id: string)
 	laidOut = key
 	EggPanel.apply(r, id, EggPanel.layout(count, touch, auto, { TenFoot = tenFoot, Narrow = narrow }), scale)
 	floatOffset = r.Gui.SizeOffset -- (apply put it back over the anchor: float / keepOnScreen move it from there)
+	trashBlocked = {} -- (float measures them again)
 	local spot = spots[id]
 	if spot then
 		-- (over the egg on PC; on touch at its middle, floating beside it: float())
@@ -1723,6 +1742,7 @@ EggPanelController._test = {
 			Spots = spots,
 			Prompt = prompt,
 			Deleting = deleting,
+			TrashBlocked = trashBlocked,
 		}
 	end,
 	-- (Roblox shows the prompt: PromptShown / PromptHidden, which Lune can't fire)

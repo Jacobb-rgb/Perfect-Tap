@@ -1530,6 +1530,28 @@ function EggPanel.floatOffset(anchor: Vector2, at: Vector2, size: Vector2): Vect
 	return Vector2.new((center.X - anchor.X) / math.max(size.X, 1), (anchor.Y - center.Y) / math.max(size.Y, 1))
 end
 
+--[[
+	Touch: the cards whose tap area (the whole card: its trash) would lie in
+	the thumbstick's start zone with the floating panel at `at` (its
+	top-left, px, at `scale`): their trash rests there, hidden, so a thumb
+	that starts a walk never lands on one. Only the narrow layout of the
+	smallest phones (568 x 320) puts a card there.
+]]
+function EggPanel.trashInZone(l: Layout, at: Vector2, scale: number, zone: Box): { [number]: boolean }
+	local out: { [number]: boolean } = {}
+	if not l.TrashCard then
+		return out
+	end
+	for i = 1, l.Count do
+		local c = EggPanel.cardAt(l, i)
+		local min = at + Vector2.new(c.X, l.Title + c.Y) * scale
+		if area({ Min = min, Max = min + Vector2.new(l.Card, l.CardH) * scale }, zone) > 0 then
+			out[i] = true
+		end
+	end
+	return out
+end
+
 -- A golem model's framing for a card (centre, radius of its parts' box).
 function EggPanel.bounds(model: Instance): (Vector3, number)
 	local lo, hi = box(model)

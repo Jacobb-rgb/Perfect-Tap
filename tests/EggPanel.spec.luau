@@ -957,6 +957,33 @@ return function(T, Loader)
 		T.near(center.Y - size.Y / 2, at.Y, 1e-9)
 		T.eq(EggPanel.overlap(box(0, 0, 10, 10), box(5, 5, 15, 15)), 25)
 		T.eq(EggPanel.overlap(box(0, 0, 10, 10), box(10, 0, 20, 10)), 0)
+		-- the cards' trash: on touch the whole card is its tap area, never in the thumbstick's zone
+		-- (only the narrow layout of the smallest phones puts a card there: its trash rests, hidden)
+		local tinyS, tinyScale = touchScreen(Vector2.new(568, 320), 36)
+		local rested = 0
+		for _, id in TEMPLE do
+			local f = floatOn(tinyS, tinyScale, id, Vector2.new(284, 160))
+			local blocked = EggPanel.trashInZone(f.Layout, f.At, tinyScale, tinyS.Zone)
+			for i = 1, f.Layout.Count do
+				local c = EggPanel.cardAt(f.Layout, i)
+				local min = f.At + Vector2.new(c.X, f.Layout.Title + c.Y) * tinyScale
+				local card = { Min = min, Max = min + Vector2.new(f.Layout.Card, f.Layout.CardH) * tinyScale }
+				local inZone = EggPanel.overlap(card, tinyS.Zone) > 0
+				T.eq(blocked[i] == true, inZone, `568 {id} card {i}: its trash rests exactly where the zone is`)
+				rested += if inZone then 1 else 0
+			end
+		end
+		T.truthy(rested > 0, "(the smallest phone does put a card in the zone)")
+		for _, view in { Vector2.new(667, 375), Vector2.new(844, 390) } do
+			local s, scale = touchScreen(view, 58)
+			for _, id in TEMPLE do
+				local f = floatOn(s, scale, id, Vector2.new(view.X * 0.5, view.Y * 0.5))
+				local blocked = EggPanel.trashInZone(f.Layout, f.At, scale, s.Zone)
+				T.eq(next(blocked), nil, `{view.X} {id}: every card (its trash) clear of the zone`)
+			end
+		end
+		local everywhere = box(0, 0, 9999, 9999)
+		T.eq(next(EggPanel.trashInZone(EggPanel.layout(14, false), Vector2.zero, 1, everywhere)), nil, "PC: the icon only, no zone")
 	end)
 
 	T.test("EggPanel: the tutorial bubble and the boost corner never hide the odds or the buttons", function()
@@ -1876,7 +1903,13 @@ return function(T, Loader)
 			T.eq(#w.deletes, 3)
 			T.eq(w.deletes[3].On, false, "off at once, no question")
 			T.eq(card.TrashDisc.BackgroundColor3, EggPanel.TrashOff)
-			T.eq(card.TrashDisc.BackgroundTransparency, 0, "opaque either way (the panel's fade lerps from it)")
+			local base: number? = nil
+			for _, f in s.Refs.Fades do
+				if f.Target == card.TrashDisc and f.Property == "BackgroundTransparency" then
+					base = f.Base
+				end
+			end
+			T.eq(base, 0, "opaque either way: the panel's fade lerps from it (never washes the red out)")
 			-- never while an egg opens
 			w.opening = "Playing"
 			hooks.onPlaying(true)
