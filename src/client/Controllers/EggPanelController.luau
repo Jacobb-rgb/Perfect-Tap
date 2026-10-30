@@ -71,7 +71,9 @@
 	  G, a gamepad's B while it runs: CapsuleController.setAutoHook). On, it
 	  opens one egg, waits for the result and its opening (Auto's fast one,
 	  about 2 s), then the next at once (CapsuleConfig.ClientCooldown and the
-	  server's CapsuleAction rate limit always hold: one open at a time). It
+	  server's CapsuleAction rate limit always hold: one open at a time; it
+	  waits while the player is out of the prompt's reach or the odds are
+	  off the screen, canBuy, the rule every buy path follows). It
 	  stops when you walk away (the panel moves or hides), when a refusal
 	  comes (no coins, a full golem inventory, the server's own: buy's toast
 	  or the opening's note says why), when you turn it off or a window
@@ -477,11 +479,24 @@ end
 ---------------------------------------------------------------- the panel
 
 local refreshPanel: () -> () -- (below: the opens and Auto call it)
+local onScreen: (spot: Spot?) -> boolean -- (below: is the egg's panel, its odds, on the screen)
+
+--[[
+	May a buy go now at the shown egg `id`: the player within the "Buy Egg!"
+	prompt's reach and the egg's odds on the screen (onScreen, measured
+	now). Every buy path asks it: E and the disc, the opens (round the big
+	E or in the panel), a gamepad's A on a focused open, R / X, Auto's start
+	and each of its steps. Off: nothing is bought (the same quiet refusal
+	as R / X), so a turned camera never buys on odds off the screen.
+]]
+local function canBuy(id: string): boolean
+	return reach and onScreen(spots[id])
+end
 
 -- One egg (or 3, or 10) with the odds on the panel: refused when they just changed, and while an
 -- egg opens (the panel is away then: a button still selected under it never buys unseen).
 function EggPanelController.open(id: string, count: number)
-	if id ~= current or not sellable or veiled or CapsuleController.showing() then
+	if id ~= current or not sellable or veiled or CapsuleController.showing() or not canBuy(id) then
 		return
 	end
 	local _sent, reason = CapsuleController.buy(id, count, shownLucky, false)
@@ -1135,7 +1150,7 @@ end
 
 -- Is the egg's panel on the screen (its middle in front of the camera, inside the view)? The keys need it:
 -- with the egg behind the camera R / X / D-pad Up would buy with the odds off the screen (and E does nothing).
-local function onScreen(spot: Spot?): boolean
+function onScreen(spot: Spot?): boolean
 	if not spot then
 		return false
 	end
@@ -1551,6 +1566,9 @@ function EggPanelController.toggleAuto(id: string)
 	if veiled or CapsuleController.showing() then
 		return -- (never on while an egg opens: the panel and its odds are away; it stops then, though)
 	end
+	if not canBuy(id) then
+		return -- (out of the prompt's reach, or the odds off the screen: as R / X)
+	end
 	refreshPanel() -- (the odds as they are now on the panel: Auto runs on these and stops when they change)
 	if id ~= current or not sellable then
 		return
@@ -1579,6 +1597,9 @@ local function autoStep()
 	end
 	if os.clock() - luckySince < EggPanelController.LuckySettle then
 		return -- (new odds: on the panel first)
+	end
+	if not canBuy(id) then
+		return -- (the odds off the screen, a step out of reach: Auto waits, the next egg when they're back)
 	end
 	local card = CapsuleController.quote(id)
 	if card and card.Lucky ~= shownLucky then

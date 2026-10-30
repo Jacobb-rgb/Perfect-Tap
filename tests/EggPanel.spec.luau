@@ -1992,6 +1992,55 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("EggPanelController: with the odds off the screen nothing buys: E, the opens, pad A and Auto refuse like R / X", function()
+		withController(function(C, w)
+			-- (PC, 1280 x 900: the panel over the egg; the big E with its opens up)
+			w.view, w.camY = Vector2.new(1280, 900), 700
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
+			local float = w.renders.TerraForgeEggPanelFloat
+			C.open("Stone", 1)
+			T.eq(#w.buys, 1, "the odds on the screen: E buys")
+			-- the camera pitched down: the panel's first card row above the screen; keepOnScreen can't
+			-- move it down over the big E's opens, so the odds stay off
+			w.camY = 150
+			float()
+			C._test.tick()
+			local s = C._test.state()
+			T.falsy(s.Reach, "the odds off the screen")
+			T.near(s.Refs.Gui.SizeOffset.Y, 0.5, 1e-6, "(not moved: the big E is under it)")
+			C.open("Stone", 1) -- (E, the disc, Open 1 round the E)
+			C.open("Stone", 10) -- (Open 10, a gamepad's A on a focused open)
+			T.eq(#w.buys, 1, "nothing bought")
+			local x = w.actions.TerraForgeEggOpen10("TerraForgeEggOpen10", Enum.UserInputState.Begin)
+			T.eq(x, Enum.ContextActionResult.Pass, "X passes, as before")
+			C.toggleAuto("Stone")
+			T.eq(C._test.state().Auto, nil, "Auto doesn't start on odds off the screen")
+			-- Auto running: it waits while the odds are off, the next egg once they are back
+			w.camY = 700
+			float()
+			C._test.tick()
+			T.truthy(C._test.state().Reach)
+			C.toggleAuto("Stone")
+			T.eq(C._test.state().Auto, "Stone", "on the screen: Auto starts")
+			local before = #w.buys
+			w.camY = 150
+			float()
+			C._test.tick()
+			C._test.tick()
+			T.eq(#w.buys, before, "Auto waits while the odds are off the screen")
+			T.eq(C._test.state().Auto, "Stone", "(still on)")
+			w.camY = 700
+			float()
+			C._test.tick()
+			T.truthy(#w.buys > before, "back on the screen: the next egg")
+			C.toggleAuto("Stone")
+			T.eq(C._test.state().Auto, nil)
+		end)
+	end)
+
 	T.test("EggPanelController: on touch the tutorial bubble and the boost corner step aside for the floating panel", function()
 		withController(function(C, w)
 			local Workspace = Loader.game:GetService("Workspace")
