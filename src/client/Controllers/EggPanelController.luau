@@ -73,7 +73,8 @@
 	  about 2 s), then the next at once (CapsuleConfig.ClientCooldown and the
 	  server's CapsuleAction rate limit always hold: one open at a time; it
 	  waits, "Waiting" on its toggle, while its egg's odds are off the
-	  screen: refusal(), the rule every buy path follows). It
+	  screen: refusal(), the rule every buy path follows; where the toggle
+	  isn't seen then, a toast says why, once a pause). It
 	  stops when you walk away (the panel moves or hides), when a refusal
 	  comes (no coins, a full golem inventory, the server's own: buy's toast
 	  or the opening's note says why), when you turn it off or a window
@@ -210,6 +211,7 @@ local measuredAt = -math.huge
 local autoLucky = false -- the odds Auto started on (it stops when the shown odds aren't these any more)
 local veiled = false -- an egg opens: the panel steps aside (CapsuleController.onPlaying)
 local autoWaits = false -- Auto runs but waits: its egg's odds are off the screen ("Waiting" on the toggle)
+local waitsSaid = false -- this pause's toast said why (once a pause, where the toggle isn't seen)
 local discAt = -math.huge -- os.clock() the big E's disc was tapped or clicked (its Triggered is a pointer's)
 local deleting: { [string]: boolean } = {} -- the golem kinds the player auto-deletes (State Golems.AutoDelete)
 local trashAsk: { Kind: string, Until: number }? = nil -- a card's trash asked "AUTO-DELETE?" (a second click turns it on)
@@ -489,11 +491,14 @@ local onScreen: (spot: Spot?) -> boolean -- (below: is the egg's panel, its odds
 	- "Panel": the panel's own buttons (the touch opens' row, the Auto
 	  toggle): the egg's odds on the screen (onScreen, measured now), at
 	  any distance the panel shows from (ShowRange); Auto's steps too.
-	- "Reach" (the default): the keys (E, R / X, a gamepad's focus and A,
-	  G / B) and the big E with its opens: within the "Buy Egg!" prompt's
-	  reach as well.
+	- any other, within the "Buy Egg!" prompt's reach as well: "Pointer"
+	  (the big E's disc tapped or clicked, the opens round it, a pad's A on
+	  them), "Prompt" (the Auto prompt: G, a gamepad's B) and nil (the keys:
+	  E, R / X, a gamepad's focus).
 	"Odds": turn to see the odds; "Far": come closer. A turned camera
-	never buys on odds off the screen.
+	never buys on odds off the screen. (What a press meant to skip the
+	opening that just ended lands on, "Panel", "Pointer" and "Prompt",
+	rests RebuyGuard: CapsuleController.justEnded.)
 ]]
 local function refusal(id: string, from: string?): string?
 	local spot = spots[id]
@@ -1630,10 +1635,12 @@ function EggPanelController.toggleAuto(id: string, from: string?)
 	if veiled or CapsuleController.showing() then
 		return -- (never on while an egg opens, the odds away; it stops, though)
 	end
-	if from == "Panel" and CapsuleController.justEnded() then
-		return -- (a tap meant to skip the opening that just ended; G / B aren't skips)
+	if (from == "Panel" or from == "Prompt") and CapsuleController.justEnded() then
+		-- (right after an opening: a tap meant to skip it, or its skip-all B (G too) landing on the Auto
+		-- prompt as it comes back: never Auto on; it stops, though)
+		return
 	end
-	local why = refusal(id, from) -- (the panel's toggle: the odds on the screen; G / B: the prompt's reach too)
+	local why = refusal(id, from) -- (the panel's toggle: the odds on the screen; the prompt: its reach too)
 	if why then
 		refuse(why)
 		return
@@ -1648,6 +1655,23 @@ function EggPanelController.toggleAuto(id: string, from: string?)
 	Sfx.play("UIClick")
 	refreshPanel()
 	updatePrompts()
+end
+
+--[[
+	Is the panel's Auto toggle seen while Auto waits (its odds off the
+	screen)? PC: no (the panel stands over the egg: its rows, the toggle's
+	head row too, are what went off the screen). Touch: it floats on the
+	screen, docked where it fits, whenever its egg is in front of the
+	camera; behind it, it isn't drawn.
+]]
+local function toggleSeen(spot: Spot?): boolean
+	local r = refs
+	local l = if r then r.Layout else nil
+	local camera = Workspace.CurrentCamera
+	if not r or not l or not l.Beside or not spot or not camera then
+		return false
+	end
+	return camera:WorldToViewportPoint(spot.Center).Z > 0
 end
 
 -- One step of Auto: the next egg as soon as the last opening ended (the golems flew to the player).
@@ -1670,13 +1694,13 @@ local function autoStep()
 	local waits = not canBuy(id, "Panel")
 	if waits ~= autoWaits then
 		autoWaits = waits
+		waitsSaid = false
 		refreshPanel() -- ("Waiting" on the toggle while the odds are off the screen)
-		local r = refs
-		local l = if r then r.Layout else nil
-		if waits and l and not l.Touch then
-			-- (PC: the toggle's head row is off the screen with the cards then: a toast, once a pause)
-			HudController.toast(EggPanelController.AutoWaitsText, "Info")
-		end
+	end
+	if waits and not waitsSaid and not toggleSeen(spots[id]) then
+		-- (the toggle's "Waiting" isn't seen: a toast says why, once a pause)
+		waitsSaid = true
+		HudController.toast(EggPanelController.AutoWaitsText, "Info")
 	end
 	if waits then
 		return -- (the next egg once they're back)
@@ -1693,6 +1717,11 @@ local function autoStep()
 end
 
 ---------------------------------------------------------------- the eggs
+
+-- The Auto prompt (G, a gamepad's B: also the opening's skip-all) triggered at egg `id`.
+local function onAutoPrompt(id: string)
+	EggPanelController.toggleAuto(id, "Prompt")
+end
 
 local function addEgg(id: string, model: Model)
 	if spots[id] then
@@ -1764,7 +1793,7 @@ local function addEgg(id: string, model: Model)
 		eggLook(made)
 		made.Parent = point
 		made.Triggered:Connect(function()
-			EggPanelController.toggleAuto(id)
+			onAutoPrompt(id)
 		end)
 		spot.Auto = made
 	end
@@ -1836,6 +1865,7 @@ end
 -- The Lune specs drive the controller through these (tests/EggPanel.spec.luau, on fakes for Roblox's services).
 EggPanelController._test = {
 	tick = tick,
+	autoPrompt = onAutoPrompt, -- (the prompt's Triggered: Lune's prompts fire nothing)
 	watch = watchStall,
 	state = function(): { [string]: any }
 		return {
@@ -1867,6 +1897,11 @@ EggPanelController._test = {
 	end,
 	trash = function(index: number)
 		onTrash(index)
+	end,
+	-- (the screen measured again, its docked place searched again: a spec's fake screen never leaks
+	-- into the next one through MEASURE_EVERY)
+	fresh = function()
+		measured, docked = nil, nil
 	end,
 }
 

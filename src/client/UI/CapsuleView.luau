@@ -203,6 +203,8 @@ export type Tag = {
 	Name: TextLabel,
 	Chance: TextLabel,
 	Deleted: Frame,
+	DeletedCan: Frame, -- (its trash mark)
+	DeletedWord: TextLabel, -- (its "DELETED")
 	Waiting: Frame,
 	WaitingText: TextLabel,
 }
@@ -242,6 +244,9 @@ export type OpenRefs = {
 CapsuleView.StageTags = 10 -- the most results an opening shows (CapsuleConfig.Counts' largest)
 CapsuleView.WaitingText = "Waiting: inventory full" -- under a won golem past the inventory's hard cap
 CapsuleView.WaitingShort = "Waiting: full" -- (where the whole note doesn't fit on one line: a phone's Open 10)
+CapsuleView.WaitingLines = "Waiting:\nfull" -- (the short one on two lines: the narrowest, beside the Auto button)
+CapsuleView.DeletedWide = 130 -- the DELETED pill: its trash mark and the word
+CapsuleView.DeletedNarrow = 38 -- the trash mark alone (where the pill would run under the Auto button)
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1659,7 +1664,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundColor3 = BrightTheme.Bad,
 			BorderSizePixel = 0,
-			Size = UDim2.fromOffset(130, 30),
+			Size = UDim2.fromOffset(CapsuleView.DeletedWide, 30),
 			Visible = false,
 			ZIndex = 9,
 		}, holder) :: Frame
@@ -1701,7 +1706,16 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		wait.Position = UDim2.fromScale(0.5, 0.5)
 		wait.Size = UDim2.new(1, -10, 1, -4)
 		wait.TextWrapped = true -- (two lines where its golem's room is narrow: a phone's Open 10)
-		table.insert(tags, { Frame = holder, Name = name, Chance = chance, Deleted = deleted, Waiting = waiting, WaitingText = wait })
+		table.insert(tags, {
+			Frame = holder,
+			Name = name,
+			Chance = chance,
+			Deleted = deleted,
+			DeletedCan = can,
+			DeletedWord = word,
+			Waiting = waiting,
+			WaitingText = wait,
+		})
 	end
 
 	-- the Auto button (bottom left; touch: above the thumbstick's zone) and its note, in the safe frame
@@ -2097,46 +2111,64 @@ function CapsuleView.setTag(
 	tag.Waiting.Visible = wait
 	local frameW = math.max(160, math.min(width, fit * 12))
 	local markTop = nameH - 4 + small + 6
-	local markW, markH = if deleted then 130 else 0, if deleted then 36 else 0
-	if wait then
+	-- (does every part clear the Auto button beside it? None of the forms left: the tag says so, its
+	-- UnderAuto attribute; the specs hold it never does)
+	local clear = CapsuleView.clears(refs, at, textRows(fit, lines), pitch)
+	local markW, markH, gap = 0, 0, 0 -- (the mark's box under the "1 in N"; the room kept under it)
+	if deleted then
+		-- the pill (the trash mark and DELETED) where it clears the Auto button beside it, else the
+		-- trash mark alone (a 4:3 screen's Open 10: its second row's first golem beside AUTO ON)
+		local wide = CapsuleView.clears(refs, at, { { CapsuleView.DeletedWide, markTop, 30 } }, pitch)
+		markW, markH, gap = if wide then CapsuleView.DeletedWide else CapsuleView.DeletedNarrow, 30, 6
+		clear = clear and (wide or CapsuleView.clears(refs, at, { { markW, markTop, markH } }, pitch))
+		tag.Deleted.Size = UDim2.fromOffset(markW, markH)
+		tag.DeletedWord.Visible = wide
+		tag.DeletedCan.AnchorPoint = if wide then Vector2.new(0, 0.5) else Vector2.new(0.5, 0.5)
+		tag.DeletedCan.Position = if wide then UDim2.new(0, 8, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
+	elseif wait then
 		-- the note at the text floor (TagMin: 10 pt on a phone), its room the golems' pitch (the big
 		-- middle one's too): the whole note on one line where it fits, else the short one, else that
-		-- on two lines; the first that also clears the Auto button (beside it) wins
+		-- on two lines (the narrowest); the first that also clears the Auto button (beside it) wins
 		local noteRoom = math.min(width, pitch or width)
 		local noteSize = CapsuleView.TagMin
 		local options: { NoteOption } = {}
-		local whole = TechShopView.textWidth(CapsuleView.WaitingText, noteSize)
-		if whole + 22 <= noteRoom then
-			table.insert(options, { Text = CapsuleView.WaitingText, Lines = 1, Width = whole })
+		for _, text in { CapsuleView.WaitingText, CapsuleView.WaitingShort } do
+			local w = TechShopView.textWidth(text, noteSize)
+			if w + 22 <= noteRoom then
+				table.insert(options, { Text = text, Lines = 1, Width = w })
+			end
 		end
-		local short = TechShopView.textWidth(CapsuleView.WaitingShort, noteSize)
-		if short + 22 <= noteRoom then
-			table.insert(options, { Text = CapsuleView.WaitingShort, Lines = 1, Width = short })
+		local widest, count = 0, 0
+		for line in string.gmatch(CapsuleView.WaitingLines, "[^\n]+") do
+			widest = math.max(widest, TechShopView.textWidth(line, noteSize))
+			count += 1
 		end
-		local noteLines, widest = CapsuleView.wrap(CapsuleView.WaitingShort, noteSize, math.max(40, noteRoom - 22))
-		local head, rest = string.match(CapsuleView.WaitingShort, "^(%S+)%s+(.+)$")
-		local twoLines = if head and rest then head .. "\n" .. rest else CapsuleView.WaitingShort
-		table.insert(options, { Text = twoLines, Lines = math.max(2, noteLines), Width = widest })
-		local pick = options[#options]
+		table.insert(options, { Text = CapsuleView.WaitingLines, Lines = count, Width = widest })
+		local function boxOf(option: NoteOption): (number, number)
+			return math.min(math.ceil(option.Width) + 22, math.max(60, noteRoom)), option.Lines * (noteSize + 2) + 10
+		end
+		local pick: NoteOption? = nil
 		for _, option in options do
-			local w = math.min(math.ceil(option.Width) + 22, math.max(60, noteRoom))
-			if CapsuleView.clears(refs, at, { { w, markTop, option.Lines * (noteSize + 2) + 10 } }, pitch) then
+			local w, h = boxOf(option)
+			if CapsuleView.clears(refs, at, { { w, markTop, h } }, pitch) then
 				pick = option
 				break
 			end
 		end
-		tag.WaitingText.Text = pick.Text
+		clear = clear and pick ~= nil
+		local chosen = pick or options[#options] -- (none clears: the narrowest)
+		tag.WaitingText.Text = chosen.Text
 		tag.WaitingText.TextSize = noteSize
 		local noteEdge = tag.WaitingText:FindFirstChild("Edge")
 		if noteEdge and noteEdge:IsA("UIStroke") then
 			noteEdge.Thickness = CapsuleView.TextEdge(noteSize)
 		end
-		markW = math.min(math.ceil(pick.Width) + 22, math.max(60, noteRoom)) -- (never wider than its room: neighbours never touch)
-		markH = pick.Lines * (noteSize + 2) + 10
+		markW, markH = boxOf(chosen) -- (never wider than its room: neighbours never touch)
+		gap = 4
 		tag.Waiting.Size = UDim2.fromOffset(markW, markH)
-		markH += 4
 	end
-	local frameH = markTop + 4 + markH
+	tag.Frame:SetAttribute("UnderAuto", if clear then nil else true)
+	local frameH = markTop + 4 + markH + gap
 	-- the name and its "1 in N" step aside together; the mark (narrower) on its own, as far as it needs
 	local x = CapsuleView.stepAside(refs, at, textRows(fit, lines), pitch)
 	local markX = CapsuleView.stepAside(refs, at, { { markW, markTop, markH } }, pitch) -- DELETED / the note
@@ -2198,23 +2230,6 @@ function CapsuleView.clears(refs: OpenRefs, at: Vector2, rows: { { number } }, p
 		end
 	end
 	return true
-end
-
--- `text` wrapped at word breaks into lines at most `width` wide at `size`: how many, and the widest.
-function CapsuleView.wrap(text: string, size: number, width: number): (number, number)
-	local lines, widest = 1, 0
-	local line = ""
-	for word in string.gmatch(text, "%S+") do
-		local try = if line == "" then word else line .. " " .. word
-		if line ~= "" and TechShopView.textWidth(try, size) > width then
-			widest = math.max(widest, TechShopView.textWidth(line, size))
-			lines += 1
-			line = word
-		else
-			line = try
-		end
-	end
-	return lines, math.max(widest, TechShopView.textWidth(line, size))
 end
 
 --[[

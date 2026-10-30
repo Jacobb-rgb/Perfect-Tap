@@ -24,7 +24,9 @@
 	     build/preview/egg_redo_stills_shots.json the egg opening's key moments, PC ("redo", the default;
 	     build/preview/egg_redo_phone_shots.json  "stills" or "all"), the phone's (844 x 390) in their own file
 	     build/preview/egg_redo_long_shots.json   long names beside AUTO: PC at 1280 x 720 (redo_long720_*),
-	     build/preview/egg_redo_long_tv_shots.json and a TV's (redo_longtv_*) in its own file
+	     build/preview/egg_redo_long_tv_shots.json and a TV's (redo_longtv_*) in its own file,
+	     build/preview/egg_redo_long1100_shots.json a 4:3-ish PC's, 1100 x 825 (redo_long1100_*: the note,
+	                                              redo_longdel1100_*: DELETED beside AUTO ON)
 	     build/preview/egg_redo_video_shots.json  an Open 3 and Auto's fast one, frame by frame ("video" or "all")
 	then (icons first: lune run tools/lune/export_icon_parts.luau; node tools/preview/render_icons.mjs golem_* capsule_*):
 	  SHOTS_EXTRA=build/preview/egg_panel_shots.json node tools/preview/render.mjs egg_panel_base <names>
@@ -32,6 +34,7 @@
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_phone_shots.json egg_redo_phone 15 <names>
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_long_shots.json egg_redo_long 15
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_long_tv_shots.json egg_redo_long_tv 15
+	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_long1100_shots.json egg_redo_long1100 15
 	  node tools/preview/render_shot_frames.mjs build/preview/egg_redo_video_shots.json egg_redo_open3 15
 ]]
 
@@ -168,6 +171,8 @@ local PHONE: Screen = { W = 1688, H = 780, Pixel = 0.62 * 2, Phone = true, Fov =
 local TV: Screen = { W = 1920, H = 1080, Pixel = 1.25, Phone = false, Fov = 70, TenFoot = true }
 -- PC at 1280 x 720 (the HUD's 1: the design size itself)
 local PC720: Screen = { W = 1280, H = 720, Pixel = 1, Phone = false, Fov = 70 }
+-- a 4:3-ish PC window, 1100 x 825 (the HUD's 1): its AUTO ON takes more of an Open 10's first column
+local PC1100: Screen = { W = 1100, H = 825, Pixel = 1, Phone = false, Fov = 70 }
 -- PC at twice the pixels (the opens round the big E, close up: a crop of it)
 local PC2: Screen = { W = 3200, H = 1800, Pixel = 2.5, Phone = false, Fov = 70 }
 -- the small phone: 667 x 375 pt (an iPhone SE / 8) at 2x
@@ -1252,6 +1257,25 @@ if videoMode == "redo" then
 			Waiting = { [6] = true },
 			Caption = "Long names beside AUTO: right of it, smaller or on two lines",
 		},
+		-- the same with the first golem of each row auto-deleted: beside AUTO ON the trash mark alone
+		longdel = {
+			Egg = "Crystal",
+			Kinds = {
+				"MoonstoneOracle",
+				"SapphireSage",
+				"CelestialSovereign",
+				"GildedPorter",
+				"SilverSquire",
+				"AmethystAcolyte",
+				"JadeGardener",
+				"MoonstoneOracle",
+				"QuartzSprite",
+				"AmethystAcolyte",
+			},
+			Auto = true,
+			Deleted = { [1] = true, [6] = true },
+			Caption = "DELETED beside AUTO: the trash mark alone where the pill won't fit",
+		},
 		-- an Open 3 with a Mythic: the big middle one's long name in its own column, on two lines
 		long3 = {
 			Egg = "Crystal",
@@ -1286,6 +1310,7 @@ if videoMode == "redo" then
 	local phoneShots = {} -- (a render batch takes its size from its first shot: the phone's go in their own file)
 	local longShots = {} -- (PC at 1280 x 720)
 	local longTvShots = {} -- (a TV)
+	local long1100Shots = {} -- (PC at 1100 x 825)
 	local function stillsOf(prefix: string, screen: Screen, caseName: string, only: { string }?)
 		local case = cases[caseName]
 		local o, run = opening(screen, case)
@@ -1305,6 +1330,7 @@ if videoMode == "redo" then
 				then phoneShots
 				elseif screen == PC720 then longShots
 				elseif screen == TV then longTvShots
+				elseif screen == PC1100 then long1100Shots
 				else stillShots
 			list[name] = shotOf(name, screen, o, run, case, if screen.Phone then { zones(screen) } else nil)
 		end
@@ -1323,10 +1349,13 @@ if videoMode == "redo" then
 		stillsOf("redo_long3", PC, "long3", { "g_reveal" })
 		stillsOf("redo_long720", PC720, "long", { "g_reveal" })
 		stillsOf("redo_longtv", TV, "long", { "g_reveal" })
+		stillsOf("redo_long1100", PC1100, "long", { "g_reveal" })
+		stillsOf("redo_longdel1100", PC1100, "longdel", { "g_reveal" })
 		fs.writeFile(root .. "/build/preview/egg_redo_stills_shots.json", serde.encode("json", stillShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_phone_shots.json", serde.encode("json", phoneShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_long_shots.json", serde.encode("json", longShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_long_tv_shots.json", serde.encode("json", longTvShots))
+		fs.writeFile(root .. "/build/preview/egg_redo_long1100_shots.json", serde.encode("json", long1100Shots))
 		local n = 0
 		for _ in stillShots do
 			n += 1

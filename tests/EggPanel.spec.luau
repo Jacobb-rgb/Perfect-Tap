@@ -378,10 +378,11 @@ return function(T, Loader)
 		local refs = EggPanel.build()
 		for _, case in
 			{
-				{ 14, true, nil, EggPanel.PhoneScale, 9.9, "a phone, 14 golems" },
-				{ 5, true, nil, EggPanel.PhoneScale, 9.9, "a phone, a five-golem egg" },
-				{ 3, true, nil, EggPanel.PhoneScale, 9.9, "a phone, a three-golem egg (the Sky egg's size)" },
-				{ 14, true, { Narrow = true }, EggPanel.PhoneScale, 9.9, "the narrow phone (568 x 320)" },
+				-- (phones: 10 pt outright at the HUD's 0.62 floor)
+				{ 14, true, nil, EggPanel.PhoneScale, 10, "a phone, 14 golems" },
+				{ 5, true, nil, EggPanel.PhoneScale, 10, "a phone, a five-golem egg" },
+				{ 3, true, nil, EggPanel.PhoneScale, 10, "a phone, a three-golem egg (the Sky egg's size)" },
+				{ 14, true, { Narrow = true }, EggPanel.PhoneScale, 10, "the narrow phone (568 x 320)" },
 				{ 14, false, { TenFoot = true }, 1.25, 18, "a TV" },
 			}
 		do
@@ -1540,6 +1541,7 @@ return function(T, Loader)
 						C._test.tick()
 					end
 					w.leave()
+					C._test.fresh()
 					local inner, problem = pcall(body, C, w)
 					w.opening = "Idle"
 					w.leave()
@@ -2132,6 +2134,118 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("EggPanelController: B or G on the Auto prompt right after an opening never turns Auto on; later it does", function()
+		withController(function(C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local ok, err = pcall(function()
+				-- (the controller's own RebuyGuard, not the harness's stand-in)
+				patched({ { CC, "justEnded", CC._test.justEnded } }, function()
+					w.at("Stone")
+					local toasts = #w.toasts
+					-- a pad's B mashed to skip the chain of openings (its skip-all) lands on the Auto prompt
+					-- (Role "Second": B, G on a keyboard) the moment the chain ends and the prompts come back
+					CC._test.ended(os.clock())
+					C._test.autoPrompt("Stone")
+					T.eq(C._test.state().Auto, nil, "within RebuyGuard: Auto stays off")
+					T.eq(#w.toasts, toasts, "quietly")
+					-- RebuyGuard later: a press means it
+					CC._test.ended(os.clock() - CC.RebuyGuard - 0.05)
+					C._test.autoPrompt("Stone")
+					T.eq(C._test.state().Auto, "Stone", "after RebuyGuard: Auto on")
+					-- it stops at once, though, even right after an opening
+					CC._test.ended(os.clock())
+					C._test.autoPrompt("Stone")
+					T.eq(C._test.state().Auto, nil, "a press right after an opening still stops it")
+					-- and E (one egg, never a skip) isn't guarded
+					local before = #w.buys
+					T.truthy(C.open("Stone", 1), "E buys")
+					T.eq(#w.buys, before + 1)
+				end)
+			end)
+			CC._test.ended(nil) -- (also when an assertion threw)
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
+	T.test("EggPanelController: Auto waits: a toast says why once a pause where the toggle isn't seen (PC; touch: egg behind)", function()
+		withController(function(C, w)
+			local function said(): number
+				local n = 0
+				for _, text in w.toasts do
+					if text == C.AutoWaitsText then
+						n += 1
+					end
+				end
+				return n
+			end
+			-- PC: the panel over the egg, its odds rows on a 1280 x 900 screen
+			w.view, w.camY = Vector2.new(1280, 900), 700
+			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+			w.camZ, w.camAt = 10, Vector3.zero
+			w.at("Stone")
+			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard) -- (the big E up: the panel can't come down)
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, "Stone")
+			local function turn(camY: number, camZ: number)
+				w.camY, w.camZ = camY, camZ
+				w.renders.TerraForgeEggPanelFloat()
+				C._test.tick()
+			end
+			turn(150, 10) -- (the first card row above the screen)
+			T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting")
+			T.eq(said(), 1, "PC: the toast once")
+			turn(150, 10)
+			turn(140, 10)
+			T.eq(said(), 1, "once a pause")
+			turn(700, 10)
+			T.eq(C._test.state().Refs.ToggleLabel.Text, "Auto", "the odds back")
+			turn(150, 10)
+			T.eq(said(), 2, "the next pause: once more")
+			turn(700, 10)
+			C.toggleAuto("Stone", "Panel")
+			T.eq(C._test.state().Auto, nil)
+			-- touch: the panel floats on the screen while its egg is in front of the camera (a 667 x 375 phone)
+			local function phone(): any
+				return {
+					View = Vector2.new(667, 375),
+					Safe = box(0, 58, 667, 375),
+					TopInset = 58,
+					Hud = { box(206, 4, 461, 55), box(0, 58, 190, 230) },
+				}
+			end
+			patched({ { C, "screenInput", phone } }, function()
+				w.touch = true
+				w.scale = EggPanel.PhoneScale
+				w.view = Vector2.new(667, 375)
+				rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
+				hooks.inputChanged.fire() -- (the touch layout: the panel floats beside the egg)
+				w.at("Stone")
+				turn(190, 10)
+				T.truthy(C._test.state().Refs.Layout.Beside, "(touch: it floats)")
+				C.toggleAuto("Stone", "Panel")
+				T.eq(C._test.state().Auto, "Stone", "(touch: Auto on)")
+				local before = said()
+				-- the egg off the screen's side, in front: the panel docks on the screen, its toggle says Waiting
+				w.camShift = 900
+				turn(190, 10)
+				T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting")
+				T.eq(said(), before, "touch, the panel on the screen: its toggle says it, no toast")
+				-- then behind the camera: the panel isn't drawn: the toast, once
+				turn(190, -5)
+				T.eq(said(), before + 1, "touch, the egg behind the camera: the toast")
+				turn(190, -5)
+				T.eq(said(), before + 1, "once a pause")
+				w.camShift = nil
+				turn(190, 10)
+				C.toggleAuto("Stone", "Panel")
+				w.touch = false
+				w.scale = nil
+			end)
+		end)
+	end)
+
 	T.test("EggPanelController: Auto's Waiting is gone once Triple Lucky stops it", function()
 		withController(function(C, w)
 			w.view, w.camY = Vector2.new(1280, 900), 700
@@ -2433,9 +2547,12 @@ return function(T, Loader)
 							T.eq(tag.Waiting.Visible, run.Waiting[slot], "the waiting note only on a waiting golem")
 							if tag.Waiting.Visible then
 								notes += 1
+								local words = tag.WaitingText.Text
 								T.truthy(
-									tag.WaitingText.Text == CapsuleView.WaitingText or tag.WaitingText.Text == CapsuleView.WaitingShort,
-									"the note's words: the whole note, or the short one where it doesn't fit"
+									words == CapsuleView.WaitingText
+										or words == CapsuleView.WaitingShort
+										or words == CapsuleView.WaitingLines,
+									"the note's words: the whole note, the short one where it doesn't fit, that on two lines beside AUTO"
 								)
 								T.eq(tag.Waiting.BackgroundTransparency, 0, "solid with its name")
 								-- (never under the Auto button, its key or its label: the bottom-left golem's note)
@@ -2834,39 +2951,47 @@ return function(T, Loader)
 	T.test("InteractController: held by an opening, its pickup target, highlight and hint go and stay off", function()
 		withController(function(_C, _w)
 			local IC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.InteractController")
-			IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
+			local _name, action = IC._test.parts() -- (the highlight and the "[F] Pick up" hint)
 			local item = Instance.new("Model") -- (a dirty chunk on the ground: its hint "[F] Pick up")
 			item:SetAttribute("Kind", "Raw")
 			item:SetAttribute("OreId", "Coal")
 			item:SetAttribute("Value", 5)
-			IC._test.show(item)
-			local target, adornee, shown = IC._test.view()
-			T.truthy(target == item and adornee == item and shown, "an item targeted: highlighted, its hint up")
-			IC.hold("CapsuleOpening", true)
-			target, adornee, shown = IC._test.view()
-			T.eq(target, nil, "held: no pickup target")
-			T.eq(adornee, nil, "no highlight")
-			T.falsy(shown, "no hint")
-			-- (an item right there to pick: the loop's next look would take it, if it looked)
-			local looked = 0
-			IC._test.setChooser(function(_root: any): any
-				looked += 1
-				return item
-			end)
-			IC._test.step()
-			target, adornee, shown = IC._test.view()
-			T.truthy(target == nil and adornee == nil and not shown, "still off after the loop's next look")
-			T.eq(looked, 0, "held: it doesn't even look")
-			IC.hold("CapsuleOpening", false)
-			-- (its hint names the key: a keyboard's F)
-			local UIS = Loader.game:GetService("UserInputService")
-			patched({ { UIS, "GamepadEnabled", false }, { UIS, "KeyboardEnabled", true } }, function()
+			local ok, err = pcall(function()
+				IC._test.show(item)
+				local target, adornee, shown = IC._test.view()
+				T.truthy(target == item and adornee == item and shown, "an item targeted: highlighted, its hint up")
+				IC.hold("CapsuleOpening", true)
+				target, adornee, shown = IC._test.view()
+				T.eq(target, nil, "held: no pickup target")
+				T.eq(adornee, nil, "no highlight")
+				T.falsy(shown, "no hint")
+				-- (an item right there to pick: the loop's next look would take it, if it looked)
+				local looked = 0
+				IC._test.setChooser(function(_root: any): any
+					looked += 1
+					return item
+				end)
 				IC._test.step()
+				target, adornee, shown = IC._test.view()
+				T.truthy(target == nil and adornee == nil and not shown, "still off after the loop's next look")
+				T.eq(looked, 0, "held: it doesn't even look")
+				IC.hold("CapsuleOpening", false)
+				-- (its hint names the key: a keyboard's F)
+				local UIS = Loader.game:GetService("UserInputService")
+				patched({ { UIS, "GamepadEnabled", false }, { UIS, "KeyboardEnabled", true } }, function()
+					IC._test.step()
+				end)
+				T.eq(looked, 1, "let go: it looks again")
+				target, adornee, shown = IC._test.view()
+				T.truthy(target == item and adornee == item and shown, "and the item is its target again, highlighted, its hint up")
+				T.truthy(string.find(action.Text, "[F] Pick up", 1, true) == 1, `its hint names F: {action.Text}`)
 			end)
+			-- (also when an assertion threw: the real chooser back, no hold left)
 			IC._test.setChooser(nil)
-			T.eq(looked, 1, "let go: it looks again")
-			target, adornee, shown = IC._test.view()
-			T.truthy(target == item and adornee == item and shown, "and the item is its target again, highlighted, its hint up")
+			IC.hold("CapsuleOpening", false)
+			if not ok then
+				error(err, 0)
+			end
 		end)
 	end)
 

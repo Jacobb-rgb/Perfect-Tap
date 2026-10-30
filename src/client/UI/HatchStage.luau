@@ -66,7 +66,8 @@ export type Run = {
 	Colors: { Color3 }, -- per slot: its crack colour
 	Deleted: { [number]: boolean }, -- per slot: auto-deleted (greyed, DELETED, no flight)
 	Waiting: { [number]: boolean }, -- per slot: won but waiting for room ("Waiting: inventory full")
-	Marked: boolean, -- a golem of the top row carries a mark (DELETED, a waiting note): the rows part
+	Marked: boolean, -- two rows, a golem's tag carries a mark (DELETED, a waiting note): HatchStage.marks
+	SafeBottom: number, -- the opening's SafeBottom the layout was made for (it settles: laid out again)
 	BestRarity: string,
 	BestOrder: number,
 	Size: Vector2, -- the screen (design units) the layout is for
@@ -91,12 +92,12 @@ function HatchStage.chance(capsuleId: string, lucky: boolean, kind: string): num
 end
 
 --[[
-	How much room the marks need when the top row of two carries some
+	How much room the marks need when tags of two rows carry some
 	(HatchFx.Marks; nil: none): the tallest tag under a golem's feet in each
 	row (its name, its "1 in N" and its mark, as CapsuleView.setTag builds
-	them; the second row's first golem may need two lines for its name
-	beside the Auto button) and the safe bottom (above a phone's home
-	indicator: the opening's SafeBottom), as shares of the screen's height.
+	them; a tag beside the Auto button may need two lines for its name and
+	its note) and the safe bottom (above a phone's home indicator: the
+	opening's SafeBottom), as shares of the screen's height.
 ]]
 function HatchStage.marks(run: Run): HatchFx.Marks?
 	if not run.Marked then
@@ -104,19 +105,38 @@ function HatchStage.marks(run: Run): HatchFx.Marks?
 	end
 	local o = run.Refs
 	local height = math.max(1, o.Size.Y)
-	local function tagOf(slot: number, fit: number, lines: number): number
+	local aspect = o.Size.X / height
+	-- (a tag beside the Auto button may need two lines, its name's and its note's: the second row's
+	-- first golem of a PC Open 10, its column reaching over the button at the bottom left; on touch
+	-- the button sits top left)
+	local function beside(slot: number): boolean
+		if o.Touch or not o.AutoHolder.Visible or slot <= 5 then
+			return false
+		end
+		local x, dx = HatchFx.rowX(slot, run.Count, aspect)
+		local left = (x - dx * 0.48) * o.Size.X
+		for _, keep in o.AutoKeep do
+			if left < keep.Max.X then
+				return true
+			end
+		end
+		return false
+	end
+	local function tagOf(slot: number, fit: number): number
+		local two = beside(slot)
+		local lines = if two then 2 else 1
 		local small = math.max(CapsuleView.TagMin, math.floor(fit * HatchFx.ChanceShare + 0.5))
-		local mark = if run.Deleted[slot] then 30 elseif run.Waiting[slot] then CapsuleView.TagMin + 12 else 0
+		local note = (if two then 2 else 1) * (CapsuleView.TagMin + 2) + 10
+		local mark = if run.Deleted[slot] then 30 elseif run.Waiting[slot] then note else 0
 		return (4 + lines * (fit + 2) + small + 6 + mark) / height
 	end
 	local top, low = 0, 0
 	for slot = 1, run.Count do
-		local isSpecial = run.Special == slot
-		local fit = if isSpecial then 26 else 22
+		local fit = if run.Special == slot then 26 else 22
 		if slot <= 5 then
-			top = math.max(top, tagOf(slot, fit, 1))
+			top = math.max(top, tagOf(slot, fit))
 		else
-			low = math.max(low, tagOf(slot, fit, if slot == 6 and o.AutoHolder.Visible then 2 else 1))
+			low = math.max(low, tagOf(slot, fit))
 		end
 	end
 	return { Top = top, Low = low, Floor = 1 - (o.SafeBottom + 6) / height }
@@ -125,6 +145,7 @@ end
 local function relayout(run: Run)
 	local size = run.Refs.Size
 	run.Size = size
+	run.SafeBottom = run.Refs.SafeBottom
 	local aspect = size.X / math.max(1, size.Y)
 	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, HatchStage.marks(run))
 	for slot, rec in run.Args.Eggs do
@@ -156,6 +177,7 @@ function HatchStage.new(args: Args): Run
 		Deleted = {},
 		Waiting = {},
 		Marked = false,
+		SafeBottom = o.SafeBottom,
 		BestRarity = bestRarity,
 		BestOrder = bestOrder,
 		Size = o.Size,
@@ -176,8 +198,9 @@ function HatchStage.new(args: Args): Run
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
 		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
 		run.Waiting[slot] = args.Waiting ~= nil and args.Waiting[order[slot]] == true
-		-- (the top row of two: its marks hang under its names, toward the second row's golems)
-		if slot <= 5 and n > 5 and (run.Deleted[slot] or run.Waiting[slot]) then
+		-- (two rows: a top-row mark hangs toward the second row's golems, a second-row one toward the
+		-- screen's safe bottom)
+		if n > 5 and (run.Deleted[slot] or run.Waiting[slot]) then
 			run.Marked = true
 		end
 	end
@@ -544,8 +567,8 @@ function HatchStage.pose(run: Run, t: number): { string }
 		table.insert(events, name)
 		return true
 	end
-	if o.Size ~= run.Size then
-		relayout(run) -- (the screen turned or changed size mid-opening)
+	if o.Size ~= run.Size or o.SafeBottom ~= run.SafeBottom then
+		relayout(run) -- (the screen turned or changed size mid-opening, or its safe frame settled)
 		if next(run.Standing) ~= nil then
 			-- (the golems out already: where they stand and their names follow the new layout)
 			for slot, standing in run.Standing do

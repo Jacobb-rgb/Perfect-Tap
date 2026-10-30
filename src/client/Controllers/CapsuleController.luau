@@ -1323,6 +1323,13 @@ local function ensureOpening(): CapsuleView.OpenRefs
 			toggleAuto()
 		end
 	end)
+	-- (the safe frame settles a moment after the gui is first shown, or after the window changed: fitted
+	-- again, the second row's tags keep above a phone's home indicator from the first opening on)
+	o.Controls:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if playing and opening == o then
+			fitOpening(o)
+		end
+	end)
 	opening = o
 	return o
 end
@@ -1688,6 +1695,7 @@ CapsuleController._test = {
 	end,
 	request = request,
 	setAuto = CapsuleController.setAuto, -- (the real ones: the specs swap the module's for recorders)
+	justEnded = CapsuleController.justEnded,
 	setAutoHook = CapsuleController.setAutoHook,
 	opening = function(): CapsuleView.OpenRefs
 		local o = ensureOpening()

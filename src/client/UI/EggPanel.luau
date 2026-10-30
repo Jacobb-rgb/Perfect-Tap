@@ -425,9 +425,10 @@ export type Layout = {
 	TrashCard: boolean, -- touch: the whole card is the trash's tap area (44 pt); else the icon itself
 }
 
--- The smallest the Auto toggle's word may get (design units): 10 pt on a phone, 18 px on a TV.
+-- The smallest the Auto toggle's word may get (design units): over 10 pt on a phone (17 at the HUD's
+-- 0.62 floor: 10.5 pt), 18 px on a TV.
 function EggPanel.ToggleFloor(l: Layout): number
-	return if l.Touch then 16 elseif l.TenFoot then 15 else 12
+	return if l.Touch then 17 elseif l.TenFoot then 15 else 12
 end
 
 -- Columns for `count` cards: one row up to 5, two rows up to 10, then MaxColumns a row.

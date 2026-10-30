@@ -453,10 +453,16 @@ return function(T, Loader)
 		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
 		-- long names (the review's: "Amethyst Acolyte" lost its "A" under the bottom-left of an Open 10)
 		local long = { "AmethystAcolyte", "MoonstoneOracle", "CelestialSovereign", "HeartstoneColossus", "EmberHatchling", "ScaleKnight" }
+		-- a part of a tag (`x` its middle, `y` its top, `w` x `h`) as a box
+		local function boxAt(x: number, y: number, w: number, h: number): any
+			return { Min = Vector2.new(x - w / 2, y), Max = Vector2.new(x + w / 2, y + h) }
+		end
 		for _, screen in
 			{
 				{ 1280, 720, false, false },
-				{ 1100, 825, false, false },
+				{ 1100, 825, false, false }, -- (4:3-ish: the review's notes and pills beside AUTO ON)
+				{ 1100, 880, false, false },
+				{ 1152, 720, false, false },
 				{ 1536, 864, true, true }, -- (a TV: its compact layout, the ten-foot Auto)
 			}
 		do
@@ -467,10 +473,13 @@ return function(T, Loader)
 					for i = 1, n do
 						kinds[i] = long[(i - 1 + shift) % #long + 1]
 					end
+					-- (waiting notes and DELETED pills in turn: the first golem of each row carries one)
+					local marked = { [6] = true, [1] = true }
+					local marks = if shift % 2 == 0 then { Waiting = marked } else { Deleted = marked }
 					for _, autoShown in { false, true } do
-						local o, run = runOf(if n == 10 then "Crystal" else "Royal", kinds, { Waiting = { [6] = true, [1] = true } })
+						local o, run = runOf(if n == 10 then "Crystal" else "Royal", kinds, marks)
 						CapsuleView.layoutOpening(o, compact, W, H, { Inset = 29, TenFoot = tv })
-						CapsuleView.setAuto(o, autoShown, false, "G", nil)
+						CapsuleView.setAuto(o, autoShown, true, "G", nil) -- ("AUTO ON": the wider label)
 						local tl = run.Timeline
 						HatchStage.pose(run, tl.Reveal + HatchFx.namedAt(tl) + 0.05)
 						local size = run.Size
@@ -491,37 +500,51 @@ return function(T, Loader)
 								T.truthy(x >= under - 1 and x - under <= pitch / 2 + 1, label .. ": within its own column")
 							end
 							T.truthy(tag.Name.TextSize >= CapsuleView.TagMin, label .. ": never under the text floor")
-							-- (what shows of it: the name as setTag measures it, a line at a time, its note)
+							T.eq(tag.Frame:GetAttribute("UnderAuto"), nil, label .. ": setTag found a form clear of the Auto button")
+							-- what shows of it: the name as setTag measures it (a line at a time), its "1 in N",
+							-- its waiting note or DELETED pill
 							local widest, lines = 0, 0
 							for line in string.gmatch(tag.Name.Text, "[^\n]+") do
 								widest = math.max(widest, TechShopView.textWidth(line, tag.Name.TextSize))
 								lines += 1
 							end
-							local nameW = widest * 1.04 + 8
 							local y = tag.Frame.Position.Y.Offset
-							local name = {
-								Min = Vector2.new(x - nameW / 2, y),
-								Max = Vector2.new(x + nameW / 2, y + lines * (tag.Name.TextSize + 2) + 4),
+							local parts = {
+								{ "name", boxAt(x, y, widest * 1.04 + 8, lines * (tag.Name.TextSize + 2) + 4) },
+								{
+									"1 in N",
+									boxAt(
+										x,
+										y + tag.Chance.Position.Y.Offset,
+										TechShopView.textWidth(tag.Chance.Text, tag.Chance.TextSize) + 8,
+										tag.Chance.Size.Y.Offset
+									),
+								},
 							}
-							if autoShown then
-								-- (the keep boxes carry a 4-unit margin round the button: a hair of it may touch, no letter)
-								for _, keep in o.AutoKeep do
-									local inner = { Min = keep.Min + Vector2.new(1, 1), Max = keep.Max - Vector2.new(1, 1) }
-									T.eq(EggPanel.overlap(name, inner), 0, label .. ": no letter under the Auto button")
+							for _, mark in { tag.Waiting, tag.Deleted } do
+								if mark.Visible then
+									local part = boxAt(
+										x + mark.Position.X.Offset,
+										y + mark.Position.Y.Offset,
+										mark.Size.X.Offset,
+										mark.Size.Y.Offset
+									)
+									table.insert(parts, { if mark == tag.Waiting then "note" else "DELETED", part })
+									table.insert(boxes, { Slot = slot, Box = part })
 								end
 							end
-							table.insert(boxes, { Slot = slot, Box = name })
-							if tag.Waiting.Visible then
-								-- (the note steps aside on its own: its own box)
-								local nx = x + tag.Waiting.Position.X.Offset
-								local ny = y + tag.Waiting.Position.Y.Offset
-								local half = tag.Waiting.Size.X.Offset / 2
-								local note =
-									{ Min = Vector2.new(nx - half, ny), Max = Vector2.new(nx + half, ny + tag.Waiting.Size.Y.Offset) }
-								table.insert(boxes, { Slot = slot, Box = note })
+							table.insert(boxes, { Slot = slot, Box = parts[1][2] })
+							if autoShown then
+								-- (the keep boxes carry a 4-unit margin round the button: a hair of it may touch, nothing more)
+								for _, keep in o.AutoKeep do
+									local inner = { Min = keep.Min + Vector2.new(1, 1), Max = keep.Max - Vector2.new(1, 1) }
+									for _, part in parts do
+										T.eq(EggPanel.overlap(part[2], inner), 0, `{label}: its {part[1]} never under the Auto button`)
+									end
+								end
 							end
 						end
-						-- no tag runs into a neighbour's (its name, its note)
+						-- no tag runs into a neighbour's (its name, its mark)
 						for i = 1, #boxes do
 							for j = i + 1, #boxes do
 								local a, b = boxes[i].Box, boxes[j].Box
@@ -597,6 +620,66 @@ return function(T, Loader)
 					HatchStage.pose(run, run.Timeline.Total)
 					HatchStage.clear(o, HatchStage.golems(run))
 				end
+			end
+		end
+	end)
+
+	T.test("EggOpening: second-row marks keep above a phone's home indicator; touch's Auto costs the golems nothing", function()
+		-- a Robux Open 10 with a Legendary (the top row's middle), the second row's golems waiting or
+		-- deleted (none in the top row: the rows still mind the safe bottom)
+		local kinds = {
+			"EmberImp",
+			"CobaltDiver",
+			"StormTitan",
+			"GildedPorter",
+			"RoseKnight",
+			"SapphireSage",
+			"DiamondDuke",
+			"MoonstoneOracle",
+			"EmberImp",
+			"CobaltDiver",
+		}
+		local scale = 0.62
+		-- (notched iPhones: their home indicator, 21 pt; the smallest phone has none)
+		for _, phone in { { 812, 375, 21 }, { 844, 390, 21 }, { 568, 320, 0 } } do
+			local W, H, safe = phone[1] / scale, phone[2] / scale, phone[3] / scale
+			for _, mark in { "Waiting", "Deleted" } do
+				local marked = { [6] = true, [7] = true, [8] = true, [9] = true, [10] = true }
+				local heights = {}
+				for _, autoShown in { false, true } do
+					local o, run = runOf("Royal", kinds, {
+						Phone = true,
+						W = W,
+						H = H,
+						Waiting = if mark == "Waiting" then marked else nil,
+						Deleted = if mark == "Deleted" then marked else nil,
+					})
+					local label = `{phone[1]}x{phone[2]}, {mark}, Auto {if autoShown then "shown" else "hidden"}`
+					T.truthy(run.Marked, label .. ": marks in the second row count too")
+					T.eq(run.Special, 3, "(the Legendary in the top row's middle)")
+					CapsuleView.setAuto(o, autoShown, false, "", nil)
+					local before = run.Layout.Slots[6].Golem.Y
+					-- (the safe frame settles after the opening began: the home indicator under it)
+					CapsuleView.layoutOpening(o, true, W, H, { Touch = true, Inset = 58 / scale, SafeBottom = safe })
+					HatchStage.pose(run, run.Timeline.Reveal + HatchFx.namedAt(run.Timeline) + 0.05)
+					if safe > 0 then
+						T.truthy(run.Layout.Slots[6].Golem.Y ~= before, label .. ": laid out again for it")
+					end
+					local floor = run.Size.Y - o.SafeBottom
+					for slot = 6, 10 do
+						local tag = o.Tags[slot]
+						local m = if mark == "Waiting" then tag.Waiting else tag.Deleted
+						T.truthy(m.Visible, `{label}, slot {slot}: its mark`)
+						-- (the pill's 2-unit rim drawn outside it)
+						local bottom = tag.Frame.Position.Y.Offset + m.Position.Y.Offset + m.Size.Y.Offset + 2
+						T.truthy(bottom <= floor, `{label}, slot {slot}: above the home indicator ({bottom} of {floor})`)
+					end
+					table.insert(heights, run.Layout.Slots[1].GolemH)
+					HatchStage.pose(run, run.Timeline.Total)
+					HatchStage.clear(o, HatchStage.golems(run))
+				end
+				-- (touch: the Auto button sits top left, no tag beside it: the golems keep their size)
+				T.eq(heights[2], heights[1], `{phone[1]}x{phone[2]}, {mark}: Auto shown, the golems as big`)
 			end
 		end
 	end)
