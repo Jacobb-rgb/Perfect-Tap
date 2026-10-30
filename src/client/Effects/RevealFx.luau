@@ -1,9 +1,10 @@
 --[[
-	RevealFx: the "you got it" moment, shared by every reveal in the game so
-	they look like one family: the EGGS temple's hatch (CapsuleController,
-	UI/HatchFx: hatch v2, owner 2026-10-29 "much, much better, like Pet
-	Simulator") and the secret ores' jackpot (Effects/SecretReveal, the
-	"Návrhy strojů" chat). Our own look: no picture or sound of another game.
+	RevealFx: the "you got it" moment, shared by the reveals in the game so
+	they look like one family: the secret ores' jackpot (Effects/SecretReveal,
+	the "Návrhy strojů" chat) and, later, the Vault's cases. The egg opening
+	(owner 2026-10-29, the clicker-sim video: UI/HatchStage) has its own clean
+	look now and shares only the flash cap (claimFlash). Our own look: no
+	picture or sound of another game.
 
 	API
 	  RevealFx.show(kind, itemId, rarity, opts?) -> Handle
@@ -60,7 +61,7 @@
 	    none with Reduce motion. It sits UNDER the caller's picture (ZIndex
 	    + 1): the item is never covered (golems stay solid).
 	Pure parts (tierOf, palette, rayColor, flashOk, the pose curves) are
-	specced in tests/HatchV2.spec.luau.
+	specced in tests/RevealShow.spec.luau.
 ]]
 
 local Players = game:GetService("Players")
@@ -260,7 +261,7 @@ end
 local lastFlash = -math.huge
 
 -- Claims the shared flash clock: false when a flash went off anywhere less than FlashGap ago, or with Reduce motion.
--- (CapsuleController's break flash draws its own frame and asks here first.)
+-- (the egg opening's burst flash draws its own frame and asks here first: HatchStage's Claim.)
 function RevealFx.claimFlash(): boolean
 	local now = os.clock()
 	if Motion.reduced() or not RevealFx.flashOk(lastFlash, now) then

@@ -56,15 +56,20 @@
 	- Auto (coin eggs only, never a Robux egg: EggPanel.autoAllowed), one
 	  egg at a time: the panel's toggle (click / tap) or its prompt
 	  (PromptConfig "Second": G / gamepad B, no drawing of its own: the
-	  toggle's badge shows the key). On, it opens one egg, waits for the
-	  result and AutoDwell seconds of its end screen, then the next
-	  (CapsuleConfig.ClientCooldown and the server's CapsuleAction rate limit
-	  always hold: one open at a time). It stops when you walk away (the
-	  panel moves or hides), when a refusal comes (no coins, a full golem
-	  inventory, the server's own: buy's toast says why), when you close an
-	  opening's end screen (OK / B) or a window opens, when you respawn, and
-	  when the odds change under it (Triple Lucky begins or runs out, maybe
-	  under an end screen: it never buys on odds the player hasn't seen).
+	  toggle's badge shows the key; during an opening its own Auto button,
+	  G, a gamepad's B while it runs: CapsuleController.setAutoHook). On, it
+	  opens one egg, waits for the result and its opening (Auto's fast one,
+	  about 2 s), then the next at once (CapsuleConfig.ClientCooldown and the
+	  server's CapsuleAction rate limit always hold: one open at a time). It
+	  stops when you walk away (the panel moves or hides), when a refusal
+	  comes (no coins, a full golem inventory, the server's own: buy's toast
+	  or the opening's note says why), when you turn it off or a window
+	  opens, when you respawn, and when the odds change under it (Triple
+	  Lucky begins or runs out, maybe during an opening: it never buys on
+	  odds the player hasn't seen).
+	- While an egg opens (CapsuleController.showing()) the panel and its
+	  big E step away: the opening hides the HUD and shows its own Auto
+	  button; they come back with the HUD.
 	- Cool (none of it with Reduce motion, Motion.reduced(): then things
 	  only fade): the egg hops and wobbles once with a sparkle when its panel
 	  comes up (DecorController.bounce, Vfx Glint), a soft ring of light on
@@ -109,7 +114,6 @@ local EggPanelController = {}
 
 EggPanelController.Tick = 0.1 -- seconds between two looks at where the player stands
 EggPanelController.Refresh = 0.5 -- seconds between two refreshes of the shown panel (coins, the boost's clock)
-EggPanelController.AutoDwell = 1.2 -- seconds the end screen shows a golem before Auto opens the next
 EggPanelController.LuckySettle = 1 -- Auto waits this long after the panel's odds changed
 EggPanelController.FadeIn = 0.18
 EggPanelController.FadeOut = 0.15
@@ -630,12 +634,12 @@ function refreshPanel()
 	local card = CapsuleController.quote(id)
 	local lucky = card ~= nil and card.Lucky == true
 	if autoEgg == id and lucky ~= autoLucky then
-		-- the odds changed under Auto (Triple Lucky began or ran out, maybe under an end
-		-- screen): Auto stops, the new odds show, the player starts it again on them; the
-		-- opening's overlay says why while it is up (a toast would sit under its dim)
+		-- the odds changed under Auto (Triple Lucky began or ran out, maybe during an
+		-- opening): Auto stops, the new odds show, the player starts it again on them; the
+		-- opening says why by its Auto button while it is up (the HUD's toasts hide then)
 		autoEgg = nil
 		local text = if lucky then "Triple Lucky is on: Auto stopped" else "Triple Lucky ended: Auto stopped"
-		if not CapsuleController.showing() then -- (no overlay up, even while a buy waits: a toast)
+		if not CapsuleController.showing() then -- (no opening up, even while a buy waits: a toast)
 			CapsuleController.setAuto(false)
 			HudController.toast(text, "Info")
 		else
@@ -1153,6 +1157,8 @@ local function bindKeys(on: boolean)
 	end
 end
 
+local veiled = false -- an egg opens: the panel steps aside (CapsuleController.onPlaying)
+
 local function show(id: string)
 	local spot = spots[id]
 	if not spot then
@@ -1164,7 +1170,7 @@ local function show(id: string)
 	local l = r.Layout
 	setFloating(l ~= nil and l.Beside)
 	r.Gui.Adornee = spot.Anchor
-	r.Gui.Enabled = true
+	r.Gui.Enabled = not veiled
 	chipPrice = nil -- (a new egg: its price shows at once)
 	placeRing(spot)
 	linesEgg = nil
@@ -1367,7 +1373,7 @@ function EggPanelController.toggleAuto(id: string)
 	updatePrompts()
 end
 
--- One step of Auto: the next egg when the last one's end screen has shown long enough.
+-- One step of Auto: the next egg as soon as the last opening ended (the golems flew to the player).
 local function autoStep()
 	local id = autoEgg
 	if not id then
@@ -1377,11 +1383,8 @@ local function autoStep()
 		stopAuto() -- (walked away, or it can't be bought here any more)
 		return
 	end
-	local where, endFor = CapsuleController.openingState()
+	local where = CapsuleController.openingState()
 	if where == "Waiting" or where == "Playing" then
-		return
-	end
-	if where == "End" and endFor < EggPanelController.AutoDwell then
 		return
 	end
 	if os.clock() - luckySince < EggPanelController.LuckySettle then
@@ -1562,8 +1565,31 @@ function EggPanelController.init()
 			refreshPanel()
 		end
 	end)
+	-- the opening's Auto button (the panel is hidden while an egg opens)
+	CapsuleController.setAutoHook({
+		available = function(): boolean
+			local id = current
+			return id ~= nil and sellable and EggPanel.autoAllowed(id)
+		end,
+		toggle = function()
+			local id = autoEgg or current
+			if id then
+				EggPanelController.toggleAuto(id)
+			end
+		end,
+	})
+	CapsuleController.onPlaying(function(on: boolean)
+		veiled = on
+		local r = refs
+		if r and current then
+			r.Gui.Enabled = not on
+			if not on then
+				refreshPanel() -- (the golems that just woke light their cards now)
+			end
+		end
+	end)
 	CapsuleController.onStop(function(_reason: string)
-		stopAuto() -- (the end screen was closed, or the server refused: its own message says why)
+		stopAuto() -- (the server refused: its own message says why)
 	end)
 	player.CharacterRemoving:Connect(function()
 		stopAuto()

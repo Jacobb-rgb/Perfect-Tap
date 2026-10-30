@@ -1,5 +1,10 @@
 # Hatch v2: the egg opening, Pet Simulator 99 quality (owner 2026-10-29)
 
+> Superseded the same night (owner 2026-10-29, ~23:00): the egg opening follows the owner's
+> clicker-sim video instead (docs/plans/CLICKER_VIDEO_2026-10-29.md, package A1: UI/HatchFx,
+> UI/HatchStage). This plan was never shown in game; only RevealFx (its shared reveal, used by the
+> secret ores) stays from it.
+
 Owner: "a much, much better look and animation for opening eggs; take
 inspiration from Pet Simulator". The starting point is the 2026-10-28 "wow
 hatch" (HatchFx: wobble, cracks, leaking light, the break, the solid golem

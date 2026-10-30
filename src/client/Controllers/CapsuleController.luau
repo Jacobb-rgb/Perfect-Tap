@@ -32,38 +32,34 @@
 	  CapsuleView.ReceiptsAttribute), the others greyed "Coming soon"; the
 	  server answers PurchasePrompt ("Full" reads: the golem inventory is
 	  full, delete some golems first).
-	- CapsuleResult plays the opening (CapsuleView.buildOpening) with the
-	  hatch of UI/HatchFx (owner 2026-10-28: "a wow effect"): the egg (x3: a
-	  row of three, x10: rows of five, from a pool) wobbles harder and faster,
-	  squashes and stretches, its cracks spread and glow and leak light in the
-	  rarest golem's colour (a longer build-up and more light for rarer
-	  golems) to a rising sound and a crack sound per crack, then bursts (the
-	  eggs one after another): a flash, the halves flying, shell pieces, a
-	  small camera nudge. Each golem pops out SOLID (owner: "the golems
-	  mustn't be see-through": no flash or tint ever over a golem, in the
-	  reveal or the grid; its glow is behind it) with a bounce in its
-	  rarity's aura and rays, with its name, rarity, bonus and NEW! when it is the
-	  first of its kind; Rare and up sparkle, Mythic tints the screen once, a
-	  fanfare from Legendary (x1 and x3 one by one, then x3 as a row of
-	  cards; x10 straight to a grid of 10 cards popping in). Flashes stay
-	  HatchFx.FlashGap apart (2.5 a second at most); with Reduce motion
-	  nothing shakes, flashes or nudges: the eggs fade and the golem fades
-	  in. Click /
-	  tap / A / Space / Enter skips a step; B / Backspace skips to the end;
-	  a gamepad's selection stays on the overlay's buttons (their
-	  SelectionGroup, and it is put back if anything moves it away), and the
-	  shop's buttons behind it do nothing while it plays;
-	  at the end OK closes and OPEN AGAIN opens the same capsules again (the
-	  note above says which odds it uses now: "TRIPLE LUCKY ODDS" or
-	  "Triple Lucky ended: normal odds"). Results that arrive while one
-	  plays wait their turn; a waiting one starts as soon as the end screen
-	  shows. A NEW golem bursts out in confetti (UI/Confetti; not with Reduce
-	  motion). While the overlay is up every prompt is suppressed
-	  ("CapsuleOpening"), so a key meant for it never also fires a prompt
-	  behind it. With Auto on, OPEN AGAIN hides and the hint says OK stops
-	  it; closing the end screen (OK, B, Backspace, Space, Enter) stops Auto
-	  (onStop "Closed"), and so does every refusal (onStop with its reason).
-	- The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds per
+	- CapsuleResult plays the opening (owner 2026-10-29, the clicker-sim
+	  video: "open them exactly like there, this clean, glowing by rarity";
+	  docs/plans/CLICKER_VIDEO_2026-10-29.md section 1; UI/HatchFx holds the
+	  flow, the timings and the maths, CapsuleView the pieces): the world stays
+	  (softly blurred: a BlurEffect on the camera, nothing dims it), the HUD
+	  steps away but the opening's Auto button (hideHud: scale 0, the touch
+	  FIRE and Grab held), the eggs pop in HUGE in front of the camera (1 in
+	  the middle, 3 side by side, the middle one bigger, 10 in two rows of 5),
+	  wobble, white rings and a puff, their cracks glow in the colour of the
+	  golem inside each (BrightTheme.crackColour, Mythic a moving rainbow) in
+	  three steps, soft blobs of the best colour behind; a Legendary / Mythic
+	  gets a suspense (brighter cracks, a harder shake) and stands centred,
+	  bigger; each egg turns into a glowing silhouette and bursts: ONE flash
+	  in the best colour (RevealFx.claimFlash: never sooner than FlashGap
+	  after the last), shell pieces; the golems stand where their eggs were,
+	  HUGE and SOLID (nothing see-through over them: the flash and the
+	  sunburst sit under the stage) on a soft white sunburst with a little
+	  confetti, each with its NAME and "1 in N" (the odds it was rolled at);
+	  a bob, then they spin and fly to the player and the HUD comes back. A
+	  click / tap (on touch off the thumbstick's zone) / Space / Enter / A
+	  skips a step, Backspace / B skips to the end; every golem still shows
+	  at least HatchFx.MinShow, named (paid random items). Auto plays the fast
+	  timings (about 2 s) and opens the next egg at once; G (B while it runs)
+	  or the Auto button toggles it; Reduce motion gets the calm version
+	  (fades, no shake, rings, flash or spin). Results that arrive while one
+	  plays wait their turn. While it plays every prompt is suppressed
+	  ("CapsuleOpening"). Refusals stop Auto (onStop with the reason).
+- The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds per
 	  rarity: every BoardSeconds the next capsule the player may open (with
 	  the player's own Triple Lucky odds, refreshed within a second when it
 	  starts or ends), filled locally by CapsuleView.fillBoard as soon as
@@ -85,17 +81,16 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
-local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
-local Confetti = require(script.Parent.Parent.UI.Confetti)
 local HatchFx = require(script.Parent.Parent.UI.HatchFx)
-local EggPanel = require(script.Parent.Parent.UI.EggPanel)
+local HatchStage = require(script.Parent.Parent.UI.HatchStage)
 local RevealFx = require(script.Parent.Parent.Effects.RevealFx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local Motion = require(script.Parent.Parent.UI.Motion)
@@ -117,13 +112,13 @@ local CLOSE_ACTION = "TerraForgeCapsulesClose"
 local TAB_ACTION = "TerraForgeCapsulesTab"
 local SKIP_ACTION = "TerraForgeCapsuleSkip"
 local SKIP_ALL_ACTION = "TerraForgeCapsuleSkipAll"
+local AUTO_ACTION = "TerraForgeCapsuleAuto"
 local STALL_TAG = "CapsuleStall"
 local PODIUM_TAG = "EggPodium" -- an egg on its own podium (CapsuleService.PodiumTag)
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local OPEN_PRIORITY = Enum.ContextActionPriority.High.Value + 30 -- the overlay is above every panel
 local TICK = 0.25
 local STATUS_TIME = 3.5
-local LUCKY_COLOR = Color3.fromRGB(255, 206, 72)
 -- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
 -- the one list of every panel controller (a name that isn't in the game is skipped)
 
@@ -140,27 +135,18 @@ local openedAt = 0
 local others: { Panel }? = nil
 local stateAt: number? = nil -- server time the last State snapshot came (CapsuleView.luckyNow)
 
--- the opening overlay
+-- the opening
 local opening: CapsuleView.OpenRefs? = nil
-local hatch: HatchFx.Overlay? = nil -- (the hatch's pieces, made with the overlay)
-local eggPool: { [string]: { HatchFx.Record } } = {} -- capsule id -> its eggs, built once
+local eggPool: { [string]: { HatchFx.Record } } = {} -- capsule id (and crack steps) -> its eggs, built once
 local playing = false
-local atEnd = false
 local queue: { Result } = {}
 local skipStep = false
 local skipAll = false
-local endDone = false -- the end screen's OK / B / a click (play() polls it)
-local lastOpen: { Capsule: string, Count: number }? = nil
-local againPending = false
-local renderConnection: RBXScriptConnection? = nil
-local shownResult: Result? = nil -- the result on the end screen
-local endAt = 0 -- os.clock() when the end screen showed (openingState)
-local autoOn = false -- the temple's Auto runs (setAuto: the end screen's hint, no OPEN AGAIN)
-local autoNote: string? = nil -- why Auto stopped, while the overlay is up (setAuto: its hint says so, over the dim)
+local autoOn = false -- the temple's Auto runs (setAuto: the fast timings, the Auto button on)
+local autoNote: string? = nil -- why Auto stopped, while an opening is up (setAuto: by the Auto button)
+type AutoHookRef = { available: () -> boolean, toggle: () -> () }
+local autoHook: AutoHookRef? = nil -- what the opening's Auto button does (EggPanelController)
 local stopListeners: { (string) -> () } = {}
--- the golem in the hero viewport (animated every frame while it shows)
-type Hero = { Model: Model, Start: number, Target: Vector3, Distance: number, RootHeight: number }
-local hero: Hero? = nil
 
 function CapsuleController.isOpen(): boolean
 	return shown
@@ -181,10 +167,6 @@ end
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
-end
-
-local function holderOf(button: TextButton): Frame
-	return button.Parent :: Frame
 end
 
 local function otherPanels(): { Panel }
@@ -406,7 +388,6 @@ local function request(capsuleId: string, count: number, button: TextButton?, ex
 		button:SetAttribute("Busy", true)
 		button.Text = "..."
 	end
-	lastOpen = { Capsule = capsuleId, Count = count }
 	Sfx.play("UIClick")
 	-- the odds this card shows: the server rolls exactly these (or refuses)
 	Net.send("CapsuleAction", "Open", { Capsule = capsuleId, Count = count, Lucky = card.Lucky })
@@ -611,7 +592,7 @@ end
 
 ---------------------------------------------------------------- the opening
 
--- Tells the Auto listeners (onStop) why it must stop: "Closed" or a refusal's reason.
+-- Tells the Auto listeners (onStop) why it must stop: a refusal's reason.
 local function stopped(reason: string)
 	for _, listener in stopListeners do
 		local ok, err = pcall(function(): any
@@ -624,136 +605,122 @@ local function stopped(reason: string)
 	end
 end
 
--- Auto (EggPanelController) stops on these: the player closed the end
--- screen ("Closed"), or the server refused an open (its reason code).
+-- Auto (EggPanelController) stops on these: the server refused an open (its reason code).
 function CapsuleController.onStop(listener: (string) -> ())
 	table.insert(stopListeners, listener)
 end
 
---[[
-	Where the opening is, for Auto: "Waiting" (an open was sent, no answer
-	yet), "Playing" (an opening plays, or another result waits its turn),
-	"End" (its end screen shows; the number: seconds since) or "Idle".
-]]
--- Is the opening's overlay up (an opening plays or its end screen shows)? A note for it can show there.
+local playingListeners: { (boolean) -> () } = {}
+-- An opening starts (true) or the last one ends (false): the egg panel steps aside meanwhile.
+function CapsuleController.onPlaying(listener: (boolean) -> ())
+	table.insert(playingListeners, listener)
+end
+
+local function tellPlaying(on: boolean)
+	for _, listener in playingListeners do
+		local ok, err = pcall(function(): any
+			listener(on)
+			return nil
+		end)
+		if not ok then
+			warn("[CapsuleController] playing listener failed: " .. tostring(err))
+		end
+	end
+end
+
+-- Is an opening on the screen (one plays, or another result waits its turn)? Its Auto note can show there.
 function CapsuleController.showing(): boolean
 	return playing
 end
 
+--[[
+	Where the opening is, for Auto: "Waiting" (an open was sent, no answer
+	yet), "Playing" (an opening plays, or another result waits its turn)
+	or "Idle" (it ended: the golems flew to the player, the HUD is back).
+]]
 function CapsuleController.openingState(): (string, number)
 	if pendingUntil > os.clock() then
 		return "Waiting", 0
-	elseif playing and atEnd and #queue == 0 then
-		return "End", os.clock() - endAt
 	elseif playing or #queue > 0 then
 		return "Playing", 0
 	end
 	return "Idle", 0
 end
 
-local function fitOpening(o: CapsuleView.OpenRefs)
-	local w, h = room()
-	CapsuleView.layoutOpening(o, compactNow(), w, h)
-	local fx = hatch
-	if fx then
-		HatchFx.place(fx, o.Hero.Position, o.Hero.Size.X.Offset)
-	end
-end
-
-local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
-	local sep = CapsuleView.Separator
-	if ending and autoOn then
-		o.Hint.Text = `Auto is on{sep}{if usingGamepad() then padName(Enum.KeyCode.ButtonB) else "OK"}: stop`
-	elseif ending then
-		o.Hint.Text = if usingGamepad() then `{padName(Enum.KeyCode.ButtonB)}: close` else ""
-	elseif usingGamepad() then
-		o.Hint.Text = `{padName(Enum.KeyCode.ButtonA)}: next{sep}{padName(Enum.KeyCode.ButtonB)}: skip all`
+-- The Auto key on the opening's button: G on a keyboard, the gamepad's B while Auto runs (B stops it), none on touch.
+local function autoKey(): (string, string?)
+	local keys = PromptConfig.keys("Second")
+	if usingGamepad() then
+		if not autoOn then
+			return "", nil -- (B is skip-all while Auto is off: it never turns Auto on)
+		end
+		local image = UserInputService:GetImageForKeyCode(keys.Gamepad)
+		return if image ~= "" then "" else padName(keys.Gamepad), if image ~= "" then image else nil
 	elseif isTouch() then
-		o.Hint.Text = "Tap to skip"
-	else
-		o.Hint.Text = `Click or Space to skip{sep}Backspace: skip all`
+		return "", nil
 	end
-	local note = autoNote
-	if note then
-		o.Hint.Text = if o.Hint.Text == "" then note else note .. sep .. o.Hint.Text
-	end
+	return keys.Keyboard.Name, nil
 end
 
-local againText: (o: CapsuleView.OpenRefs, result: Result?) -> () -- (below: the end screen's OPEN AGAIN and its note)
+-- The Auto button: shown where Auto can run (the egg the player stands at, a coin egg) or while it runs.
+local function refreshAuto(o: CapsuleView.OpenRefs)
+	local hook = autoHook
+	local available = hook ~= nil and (autoOn or hook.available())
+	local text, glyph = autoKey()
+	CapsuleView.setAuto(o, available, autoOn, text, glyph)
+end
+
+local noteToken = 0
+-- A short note by the Auto button (the HUD's toasts hide while an opening plays).
+local function showNote(o: CapsuleView.OpenRefs, text: string?)
+	noteToken += 1
+	local token = noteToken
+	o.Note.Text = text or ""
+	o.Note.Visible = text ~= nil and text ~= ""
+	if text then
+		task.delay(STATUS_TIME, function()
+			if noteToken == token then
+				o.Note.Visible = false
+			end
+		end)
+	end
+end
 
 --[[
-	Auto is on (the end screen says how to stop it and hides OPEN AGAIN).
-	Off with a `note` (the odds changed under it): the overlay's hint says
-	why until the overlay closes (a toast would sit under its dim).
+	Auto runs (EggPanelController): the opening's Auto button shows it on,
+	the next egg opens as soon as one ends, in the fast timings. Off with a
+	`note` (the odds changed under it): the note shows by the Auto button
+	while an opening is up.
 ]]
 function CapsuleController.setAuto(on: boolean, note: string?)
 	autoOn = on
 	autoNote = if on then nil else note
 	local o = opening
 	if o and playing then
-		openingHint(o, atEnd)
-	end
-	if o and playing and atEnd and not on then
-		againText(o, shownResult) -- (Auto stopped on its end screen: OPEN AGAIN and the odds' note come back)
-	end
-end
-
-
-local function setRays(o: CapsuleView.OpenRefs, color: Color3?, visible: boolean)
-	o.Rays.Visible = visible
-	if color then
-		CapsuleView.setRayColor(o, color)
-	end
-end
-
--- Empties the hero viewport (pooled eggs go back to the pool, golems are let go) and dims the aura.
-local function clearHero(o: CapsuleView.OpenRefs)
-	hero = nil
-	for _, child in o.Hero:GetChildren() do
-		if child:GetAttribute("Pooled") == true then
-			child.Parent = nil
-		elseif not child:IsA("Camera") then
-			child:Destroy()
+		refreshAuto(o)
+		if note and not on then
+			showNote(o, note)
 		end
 	end
-	local fx = hatch
-	if fx then
-		HatchFx.setAura(fx, Color3.new(1, 1, 1), 0)
-	end
-end
-
--- Camera looking at a point of the hero viewport from the front, a 3/4 turn.
-local function aim(o: CapsuleView.OpenRefs, target: Vector3, distance: number)
-	local a = 0.32
-	local eye = target + Vector3.new(math.sin(a) * distance, distance * 0.12, -math.cos(a) * distance)
-	o.Camera.CFrame = CFrame.lookAt(eye, target)
-end
-
--- Kinds the player owned before this result (State minus the result's golems).
-local function ownedBefore(result: Result): { [string]: boolean }
-	local state = StateController.get()
-	local golems = if state then state.Golems else nil
-	local owned = if type(golems) == "table" and type(golems.Owned) == "table" then golems.Owned else {}
-	local fresh: { [number]: boolean } = {}
-	for _, g in result.Golems do
-		fresh[g.Id] = true
-	end
-	local kinds: { [string]: boolean } = {}
-	for _, entry in owned do
-		if type(entry) == "table" and not fresh[entry.Id] and type(entry.Kind) == "string" then
-			kinds[entry.Kind] = true
-		end
-	end
-	return kinds
 end
 
 --[[
-	`count` eggs of a capsule from the pool (built once, put back whole:
-	HatchFx.reset). `calm`: the calm eggs (no neon but the band, emblem and
-	crown core: GolemBuilder.capsule's Calm), for many eggs on a phone.
+	What the opening's Auto button does (EggPanelController sets it): is
+	Auto possible here (`available`), and `toggle` it for the egg the player
+	stands at.
 ]]
-local function takeEggs(capsuleId: string, count: number, calm: boolean): { HatchFx.Record }
-	local key = if calm then capsuleId .. "|Calm" else capsuleId
+export type AutoHook = { available: () -> boolean, toggle: () -> () }
+function CapsuleController.setAutoHook(hook: AutoHook?)
+	autoHook = hook
+end
+
+--[[
+	`count` eggs of a capsule from the pool (built once with the opening's
+	crack network: HatchFx.addCracks; put back whole: HatchFx.reset).
+	`cracks`: the last crack step built (a phone opening many eggs: 2).
+]]
+local function takeEggs(capsuleId: string, count: number, cracks: number): { HatchFx.Record }
+	local key = `{capsuleId}|{cracks}`
 	local list = eggPool[key]
 	if not list then
 		list = {}
@@ -761,7 +728,8 @@ local function takeEggs(capsuleId: string, count: number, calm: boolean): { Hatc
 	end
 	local pool = list :: { HatchFx.Record }
 	while #pool < count do
-		local model = GolemBuilder.capsule(capsuleId, nil, { Calm = calm })
+		local model = GolemBuilder.capsule(capsuleId)
+		HatchFx.addCracks(model, cracks)
 		model:SetAttribute("Pooled", true)
 		table.insert(pool, HatchFx.record(model))
 	end
@@ -773,100 +741,7 @@ local function takeEggs(capsuleId: string, count: number, calm: boolean): { Hatc
 	return out
 end
 
--- The hero viewport's own scale (the golem's bounce).
-local function heroPop(o: CapsuleView.OpenRefs): UIScale
-	local existing = o.Hero:FindFirstChild("HeroPop")
-	if existing and existing:IsA("UIScale") then
-		return existing
-	end
-	local made = Instance.new("UIScale")
-	made.Name = "HeroPop"
-	made.Parent = o.Hero
-	return made
-end
-
--- Some of a burst's pieces (`n` of them; the rest stay hidden).
-local function some(list: { Frame }, n: number): { Frame }
-	local out: { Frame } = {}
-	for i = 1, math.min(n, #list) do
-		out[i] = list[i]
-	end
-	return out
-end
-
--- The hero golem's frame: the camera rushes in (Back easing), the golem
--- hops once, then turns slowly from side to side (Reduce motion: still).
-local function animateHero(o: CapsuleView.OpenRefs, h: Hero)
-	if Motion.reduced() then
-		aim(o, h.Target, h.Distance)
-		h.Model:PivotTo(CFrame.new(0, h.RootHeight, 0))
-		return
-	end
-	local t = os.clock() - h.Start
-	local k = math.clamp(t / 0.35, 0, 1)
-	local back = 1 + 2.2 * (k - 1) ^ 3 + 1.2 * (k - 1) ^ 2
-	aim(o, h.Target, h.Distance * (2.4 - 1.4 * back))
-	local hop = math.max(0, math.sin(math.clamp(t / 0.45, 0, 1) * math.pi)) * 0.6
-	-- (the pivot is the Body: RootHeight above the feet)
-	h.Model:PivotTo(CFrame.new(0, h.RootHeight + hop, 0) * CFrame.Angles(0, math.sin(t * 0.9) * 0.6, 0))
-end
-
----------------------------------------------------------------- hatch v2 (owner 2026-10-29)
-
---[[
-	Hatch v2 ("much, much better, like Pet Simulator": docs/plans/HATCH_V2.md):
-	the eggs fly in and stand on a stage (one big in the hero viewport; a
-	batch in the wide Stage, a row of 3 or two rows of 5: HatchFx.stage),
-	wobble together, a Legendary / Mythic egg gathers light, they burst in
-	a quick ripple, and each golem pops out where its egg was, named, its
-	chance under it; the rarest on its rarity's rays (Effects/RevealFx, the
-	look the secret ores share). A Legendary / Mythic in a batch then gets
-	its jackpot moment in the hero. HatchFx.timeline holds every timing:
-	Auto plays the fast ones, Reduce motion the short, still ones. A tap
-	(Space, A) jumps to the next step, skip-all (B, Backspace) to the end;
-	every result always shows, named (MinShow at least): paid random items.
-]]
-
-local reveals: { RevealFx.Handle } = {} -- the open reveals (closed when the hero or the stage empties)
-local stageGolems: { Model } = {} -- the batch's golems on the stage (destroyed when it empties)
-
-local function closeReveals()
-	for _, handle in reveals do
-		handle:close()
-	end
-	table.clear(reveals)
-end
-
--- The chance a result's golem had: the odds it was rolled at ("4.5%"), as the egg panel showed them.
-local function chanceOf(result: Result, kind: string): string
-	for _, line in CapsuleConfig.odds(result.Capsule, result.Lucky == true) do
-		if line.Golem == kind then
-			return EggPanel.chanceText(line.Chance)
-		end
-	end
-	return ""
-end
-
--- Empties the stage: the eggs back to the pool, the golems let go, the tags hidden.
-local function clearStage(o: CapsuleView.OpenRefs)
-	for _, child in o.Stage:GetChildren() do
-		if child:GetAttribute("Pooled") == true then
-			child.Parent = nil
-		end
-	end
-	for _, model in stageGolems do
-		model:Destroy()
-	end
-	table.clear(stageGolems)
-	for _, tag in o.Tags do
-		tag.Frame.Visible = false
-		tag.Glow.Visible = false
-	end
-	o.Stage.Visible = false
-	o.StageDim.Visible = false
-end
-
--- A golem's model for the hero or the stage: its height, the pivot's height over its feet.
+-- A golem's model for the stage: its height, the pivot's height over its feet.
 local function golemModel(kind: string): (Model, number, number)
 	local model = GolemBuilder.build(kind)
 	local height = (model:GetAttribute("Height") :: number?) or 3
@@ -874,436 +749,325 @@ local function golemModel(kind: string): (Model, number, number)
 	return model, height, rootHeight
 end
 
+---------------------------------------------------------------- the HUD steps away
+
 --[[
-	One golem out in the hero, big: it pops with a bounce on its rarity's
-	rays, its name, rarity and chance under it (RevealFx), Mythic's tint
-	behind it, a NEW golem's confetti. The golem is SOLID (owner 2026-10-28):
-	the rays, the glow and the flash sit under the hero (ZIndex 1 .. 2 < 3),
-	the banner over it. Reduce motion: it fades in, still.
+	While an opening plays the HUD hides, except the opening's Auto button
+	(the video: only Auto Open stays): every TerraForge ScreenGui with the
+	HUD's "Scale" goes to scale 0 (no Enabled is touched: the windows and
+	chips keep their own state; a Scale written meanwhile is kept and put
+	back), the touch FIRE and Grab step aside (MiningController.hold,
+	InteractController.hold); the egg panel steps aside itself
+	(EggPanelController reads showing()). Not hidden: guis that aren't the
+	game's own (Roblox's: the thumbstick, the chat),
+	the fades of a teleport. Back when the last opening ends.
 ]]
-local function revealHero(o: CapsuleView.OpenRefs, result: Result, kind: string, isNew: boolean, z: number?)
-	clearHero(o)
-	closeReveals()
-	o.Hero.Visible = true
-	o.Hero.ZIndex = if z then z + 2 else 3
-	local golem = GolemConfig.ById[kind]
-	local rarity = if golem then golem.Rarity else "Common"
-	local order = GolemConfig.order(kind)
-	local model, height, rootHeight = golemModel(kind)
-	model.Parent = o.Hero
-	local h: Hero = {
-		Model = model,
-		Start = os.clock(),
-		Target = Vector3.new(0, height * 0.5, 0),
-		Distance = height * 2.9 + 1,
-		RootHeight = rootHeight,
-	}
-	hero = h
-	animateHero(o, h)
-	o.Plate.Visible = false
-	o.Rays.Visible = false
-	o.Hero.ImageColor3 = Color3.new(1, 1, 1)
-	o.Hero.ImageTransparency = 0
-	local pop = heroPop(o)
-	local reduced = Motion.reduced()
-	local handle = RevealFx.show("Golem", kind, rarity, {
-		Parent = o.Gui :: Instance,
-		Center = o.Hero.Position,
-		Size = o.Hero.Size.X.Offset * 1.55,
-		Chance = chanceOf(result, kind),
-		New = isNew,
-		ZIndex = z or 1,
-		Sound = true,
-		Reduced = reduced,
-	})
-	table.insert(reveals, handle)
-	local fx = hatch
-	if reduced then
-		pop.Scale = 1
-		o.Hero.ImageTransparency = 1
-		TweenService:Create(o.Hero, TweenInfo.new(0.35), { ImageTransparency = 0 }):Play()
+type Hidden = { Scale: UIScale, Wanted: number, Connection: RBXScriptConnection }
+local hiddenGuis: { [Instance]: Hidden } = {}
+local hudHidden = false
+local addedConnection: RBXScriptConnection? = nil
+local HOLD_NAME = "CapsuleOpening"
+
+local function holdControllers(on: boolean)
+	for _, name in { "MiningController", "InteractController" } do
+		local module = script.Parent:FindFirstChild(name)
+		if module and module:IsA("ModuleScript") then
+			local ok, controller = pcall(require, module :: any)
+			local c = controller :: any
+			if ok and type(c) == "table" and type(c.hold) == "function" then
+				pcall(c.hold, HOLD_NAME, on)
+			end
+		end
+	end
+end
+
+local function hideGui(gui: Instance)
+	local o = opening
+	if hiddenGuis[gui] or not gui:IsA("ScreenGui") or string.sub(gui.Name, 1, 10) ~= "TerraForge" then
+		return
+	end
+	if o and (gui == o.Gui or gui == o.Controls) then
+		return
+	end
+	local scale = gui:FindFirstChild("Scale")
+	if not scale or not scale:IsA("UIScale") then
+		return -- (the fades and flying bits without the HUD's scale finish as they are)
+	end
+	local entry: Hidden = { Scale = scale, Wanted = scale.Scale, Connection = nil :: any }
+	hiddenGuis[gui] = entry
+	scale.Scale = 0
+	entry.Connection = scale:GetPropertyChangedSignal("Scale"):Connect(function()
+		if scale.Scale ~= 0 then
+			entry.Wanted = scale.Scale -- (the HUD's scale changed: kept for later)
+			scale.Scale = 0
+		end
+	end)
+end
+
+local function hideHud(on: boolean)
+	if on == hudHidden then
+		return
+	end
+	hudHidden = on
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+	if on then
+		if playerGui then
+			for _, gui in playerGui:GetChildren() do
+				hideGui(gui)
+			end
+			addedConnection = playerGui.ChildAdded:Connect(function(gui: Instance)
+				task.defer(function()
+					if hudHidden and gui.Parent then
+						hideGui(gui)
+					end
+				end)
+			end)
+		end
+		-- (a gamepad selection on a hidden button would press it unseen)
+		local selected = GuiService.SelectedObject
+		if selected then
+			for gui in hiddenGuis do
+				if selected:IsDescendantOf(gui) then
+					GuiService.SelectedObject = nil
+				end
+			end
+		end
 	else
-		pop.Scale = HatchFx.popAt(0)
-		TweenService:Create(pop, TweenInfo.new(HatchFx.PopTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		if fx then
-			fx.Leak.Visible = false
-			if isNew then
-				Confetti.burst(fx.Confetti, Vector2.new(0.5, 0.5), os.clock())
-			end
-			if order >= 6 then
-				-- Mythic: the backdrop glows its colour once and fades (under the golem; no flashing)
-				local color = CapsuleView.rarityColor(kind)
-				fx.Tint.BackgroundColor3 = color
-				fx.Tint.BackgroundTransparency = 0.45
-				TweenService:Create(fx.Tint, TweenInfo.new(HatchFx.TintTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					BackgroundTransparency = 1,
-				}):Play()
-			end
+		if addedConnection then
+			addedConnection:Disconnect()
+			addedConnection = nil
 		end
+		for _, entry in hiddenGuis do
+			entry.Connection:Disconnect()
+			-- (a scale written meanwhile wins: the watcher may not have seen the last write)
+			local now = entry.Scale.Scale
+			entry.Scale.Scale = if now ~= 0 then now else entry.Wanted
+		end
+		table.clear(hiddenGuis)
+	end
+	holdControllers(on)
+end
+
+-- The world behind softly blurred while an opening plays (a client BlurEffect on the camera).
+CapsuleController.BlurSize = 10
+local blur: BlurEffect? = nil
+local function setBlur(on: boolean)
+	local camera = Workspace.CurrentCamera
+	if on then
+		local made = blur
+		if not made or made.Parent ~= camera then
+			if made then
+				made:Destroy()
+			end
+			local effect = Instance.new("BlurEffect")
+			effect.Name = "TerraForgeOpeningBlur"
+			effect.Size = 0
+			effect.Parent = camera
+			blur = effect
+			made = effect
+		end
+		TweenService:Create(made :: BlurEffect, TweenInfo.new(0.2), { Size = CapsuleController.BlurSize }):Play()
+	elseif blur then
+		local effect = blur :: BlurEffect
+		blur = nil
+		local tween = TweenService:Create(effect, TweenInfo.new(0.25), { Size = 0 })
+		tween.Completed:Connect(function()
+			effect:Destroy()
+		end)
+		tween:Play()
 	end
 end
 
--- Waits until `t` (seconds from `start`) passes or a skip comes: "Skip" (a tap), "All" (skip all) or nil.
-local function waitUntil(start: number, t: number): string?
-	while os.clock() - start < t do
-		if skipAll then
-			return "All"
-		elseif skipStep then
-			skipStep = false
-			return "Skip"
+---------------------------------------------------------------- the play
+
+--[[
+	The opening of a result (HatchFx, docs/plans/CLICKER_VIDEO_2026-10-29.md
+	section 1): the eggs pop in huge in front of the camera, wobble, white
+	rings and a puff, their cracks glow in the colour of the golem inside
+	each, in steps, soft blobs of the best colour behind; a Legendary /
+	Mythic's suspense; each egg a glowing silhouette, the burst, ONE flash
+	in the best colour; the golems where their eggs were, huge and solid,
+	on a soft white sunburst with a little confetti, their names and
+	"1 in N"; a bob, then they spin and fly to the player. A tap (click,
+	Space, Enter, A) skips a step, skip-all (Backspace, B) to the end; every
+	golem always shows, named (HatchFx.MinShow: paid random items). Auto
+	plays the fast timings, Reduce motion the calm ones.
+]]
+local stageGolems: { Model } = {} -- the golems of the opening that plays (freed when it ends)
+
+-- The player's character on the screen (shares), where the golems fly; the bottom middle if it isn't seen.
+local function playerOnScreen(): Vector2
+	local camera = Workspace.CurrentCamera
+	local character = player.Character
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	if camera and root and root:IsA("BasePart") then
+		local point, inView = camera:WorldToViewportPoint(root.Position)
+		local size = camera.ViewportSize
+		if inView and size.X > 0 and size.Y > 0 then
+			return Vector2.new(math.clamp(point.X / size.X, 0.25, 0.75), math.clamp(point.Y / size.Y, 0.55, 0.92))
 		end
-		task.wait()
 	end
-	return nil
+	return Vector2.new(0.5, 0.86)
 end
 
--- The golems of a batch on the stage at their spots (`popped`: how many are out), their tags, the rarest's rays.
-local function standGolems(o: CapsuleView.OpenRefs, result: Result, kinds: { string }, new: { [number]: boolean }, stage: HatchFx.Stage, from: number, to: number, bestIndex: number?)
-	local size = Vector2.new(o.Stage.Size.X.Offset, o.Stage.Size.Y.Offset)
-	local origin = Vector2.new(o.Stage.Position.X.Offset, o.Stage.Position.Y.Offset) - size / 2
-	for i = from, to do
-		local kind = kinds[i]
-		local model, height, rootHeight = golemModel(kind)
-		-- (its middle on the egg's spot; the pivot is RootHeight over its feet)
-		local spot = stage.Spots[i]
-		-- (built facing -Z, the stage camera's side; a little turn shows its depth)
-		model:PivotTo(CFrame.new(spot + Vector3.new(0, rootHeight - height / 2, 0)) * CFrame.Angles(0, HatchFx.StageTurn, 0))
-		model.Parent = o.Stage
-		table.insert(stageGolems, model)
-		local cell = stage.Cells[i]
-		local center = origin + Vector2.new(cell.X * size.X, cell.Y * size.Y)
-		local cellPx = Vector2.new(stage.Cell.X * size.X, stage.Cell.Y * size.Y)
-		local tag = o.Tags[i]
-		if tag then
-			local golem = GolemConfig.ById[kind]
-			local color = CapsuleView.rarityColor(kind)
-			tag.Frame.Position = UDim2.fromOffset(center.X, center.Y + cellPx.Y * 0.42)
-			tag.Frame.Size = UDim2.fromOffset(math.max(120, cellPx.X - 8), 52)
-			tag.Name.Text = if golem then golem.Name else kind
-			tag.Name.TextColor3 = if GolemConfig.order(kind) >= 4 then color:Lerp(Color3.new(1, 1, 1), 0.35) else Color3.new(1, 1, 1)
-			tag.Chance.Text = chanceOf(result, kind)
-			tag.New.Visible = new[i] == true
-			tag.Frame.Visible = true
-			tag.Glow.Position = UDim2.fromOffset(center.X, center.Y)
-			tag.Glow.Size = UDim2.fromOffset(cellPx.X * 0.58, cellPx.X * 0.58)
-			tag.Glow.BackgroundColor3 = color
-			tag.Glow.Visible = true
-			local scale = tag.Frame:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
-			scale.Parent = tag.Frame
-			if Motion.reduced() then
-				scale.Scale = 1
-			else
-				scale.Scale = 0.4
-				TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+-- The sounds and the camera nudge of a run's events (HatchStage.pose).
+local function onEvents(run: HatchStage.Run, events: { string })
+	local reduced = run.Timeline.Reduced
+	for _, event in events do
+		if event == "Step1" or event == "Step2" or event == "Step3" then
+			local step = tonumber(string.sub(event, 5)) or 1
+			Sfx.play("NodeCrack", nil, 0.8 + 0.18 * step)
+			if step == 1 and not reduced then
+				Sfx.loop("CaseCharge", true)
 			end
-		end
-		if i == bestIndex then
-			-- the rarest: its rarity's rays behind it (no banner: the tag names it; no second flash)
-			local golem = GolemConfig.ById[kind]
-			local handle = RevealFx.show("Golem", kind, if golem then golem.Rarity else "Common", {
-				Parent = o.Gui :: Instance,
-				Center = UDim2.fromOffset(center.X, center.Y),
-				Size = math.min(cellPx.X, cellPx.Y) * 1.25,
-				Banner = false,
-				Headline = "",
-				Flash = false,
-				Shake = false,
-				Sound = GolemConfig.order(kind) >= 3,
-				ZIndex = 1,
-			})
-			handle.Headline.Visible = false
-			table.insert(reveals, handle)
-		end
-		if GolemConfig.order(kind) < 3 then
-			Sfx.play("Pickup", nil, 1 + 0.03 * i)
+		elseif event == "Burst" then
+			Sfx.loop("CaseCharge", false)
+			Sfx.play("CaseBurst")
+			if run.BestOrder >= 4 then
+				Sfx.play("CaseBoom")
+			end
+			if run.BestOrder >= 5 and not reduced then
+				CameraShake.add(if run.BestOrder >= 6 then 0.5 else 0.38)
+			end
+		elseif event == "Reveal" then
+			if run.BestOrder >= 5 then
+				Sfx.play("Discovery")
+			end
+			Sfx.play("Reveal", nil, 1 + 0.04 * math.min(run.BestOrder, 6))
+			stageGolems = HatchStage.golems(run)
+		elseif event == "Fly" and not reduced then
+			Sfx.play("LevelWhoosh", nil, 1.1)
+		elseif event == "End" and not reduced then
+			Sfx.play("BagPop", nil, 1.2)
 		end
 	end
 end
 
 --[[
-	The whole hatch of a result (see the block's header): the eggs on the
-	stage, their flight, wobble, suspense and ripple of bursts, the golems,
-	then (a batch with a Legendary / Mythic) its jackpot moment. Returns when
-	the end screen may show (every golem out and named).
+	Plays a result's opening (HatchStage poses it, frame by frame): a tap
+	before the burst goes straight to it; a tap while the golems stand goes
+	on to their flight once they showed MinShow (real time since they came
+	out: it waits for that); skip-all does both.
 ]]
-local function hatchV2(o: CapsuleView.OpenRefs, result: Result, kinds: { string }, new: { [number]: boolean })
+local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local n = math.clamp(#kinds, 1, CapsuleView.StageTags)
-	local best = CapsuleView.best(kinds) or kinds[1]
-	local bestIndex = table.find(kinds, best) or 1
-	local order = GolemConfig.order(best)
-	local plan = HatchFx.plan(order)
-	local color = CapsuleView.rarityColor(best)
-	local reduced = Motion.reduced()
-	local tl = HatchFx.timeline(order, n, autoOn, reduced)
-	local single = n == 1
-	local capsule = CapsuleConfig.ById[result.Capsule]
-	local shell = if capsule then (capsule.Shell or capsule.Color) else Theme.Accent
-	local fx = hatch
-	clearHero(o)
-	clearStage(o)
-	closeReveals()
-	o.Rays.Visible = false
-	o.Plate.Visible = false
-	o.Grid.Visible = false
-	local view: ViewportFrame = if single then o.Hero else o.Stage
-	local camera: Camera = if single then o.Camera else o.StageCamera
-	local aspect = if single then 1 else o.Stage.Size.X.Offset / math.max(1, o.Stage.Size.Y.Offset)
-	local stage = HatchFx.stage(n, aspect)
-	view.Visible = true
-	o.Hero.Visible = single
-	camera.CFrame = CFrame.lookAt(Vector3.new(0, 0, -stage.Distance), Vector3.zero)
-	o.Counter.Text = if n > 1 then `{n} EGGS` else ""
-	-- the eggs (a batch on a phone: the calm ones; they move rigidly)
-	local eggs = takeEggs(result.Capsule, n, n > 3 and compactNow())
-	for _, rec in eggs do
-		rec.Model.Parent = view
+	local phone = compactNow()
+	local run = HatchStage.new({
+		Refs = o,
+		Capsule = result.Capsule,
+		Lucky = result.Lucky == true,
+		Kinds = kinds,
+		Eggs = takeEggs(result.Capsule, n, if phone and n > 3 then 2 else 3),
+		Fast = autoOn,
+		Reduced = Motion.reduced(),
+		Phone = phone,
+		Target = playerOnScreen(),
+		Golem = golemModel,
+		Claim = RevealFx.claimFlash,
+	})
+	local tl = run.Timeline
+	if not tl.Reduced then
+		Sfx.play("BagPop", nil, 0.9)
 	end
-	if fx then
-		HatchFx.paint(fx, shell, color)
-	end
-	local rare = if order >= 5 then bestIndex else nil
-	local squash = single
 	local start = os.clock()
-	local burstDone, popped, cracked = 0, 0, 0
-	local lastPop = tl.Pop[n]
-	if not reduced then
-		Sfx.play("UIClick")
-		Sfx.loop("CaseCharge", true)
-	end
-	-- the eggs: fly in, wobble, (suspense), burst; the golems pop where they were
-	while popped < n do
-		if skipAll then
-			start = os.clock() - lastPop -- (to the end: every golem out at once)
-		elseif skipStep then
-			skipStep = false
-			if os.clock() - start < tl.Burst[1] then
-				start = os.clock() - tl.Burst[1] -- (a tap: straight to the break)
+	local offset = 0 -- (skips move the clock on)
+	local revealedAt: number? = nil -- (os.clock() when the golems came out: MinShow counts from it)
+	local wantFly = false -- (a skip asked for the flight: it waits for MinShow)
+	while true do
+		local now = os.clock()
+		local shownFor = if revealedAt then now - revealedAt else 0
+		if skipStep or skipAll then
+			local t0 = now - start + offset
+			local t1 = HatchFx.skipTo(t0, tl, shownFor)
+			if t1 then
+				offset += t1 - t0
+			end
+			if (t1 == nil or skipAll) and t0 < tl.Fly then
+				wantFly = true
+			end
+			skipStep, skipAll = false, false
+		end
+		if wantFly then
+			local t0 = now - start + offset
+			local t1 = if t0 >= tl.Burst then HatchFx.skipTo(t0, tl, shownFor) else nil
+			if t1 then
+				offset += t1 - t0
+				wantFly = false
 			end
 		end
-		local t = os.clock() - start
-		local glow = 0
-		for i, rec in eggs do
-			if not rec.Faded then
-				local spot = CFrame.new(stage.Spots[i])
-				glow = math.max(glow, HatchFx.poseV2(rec, spot, t, tl, i, plan, color, squash, i == rare))
-			end
-			if t >= tl.Burst[i] and i > burstDone then
-				burstDone = i
-				if i == 1 then
-					Sfx.loop("CaseCharge", false)
-					-- (one egg: the reveal's own flash comes with the golem; a batch: one flash at the first break)
-					if not single then
-						-- (under the stage: the golems that pop right after it are never behind a flash)
-						RevealFx.flash(o.Gui, color:Lerp(Color3.new(1, 1, 1), 0.45), 0.85, 2)
-					end
-					Sfx.play("CaseBurst")
-					if order >= 4 then
-						Sfx.play("CaseBoom")
-					end
-					if not reduced then
-						CameraShake.add(plan.Trauma * (if single then 1 else 0.6))
-						if fx then
-							Confetti.burst(some(fx.Shards, if compactNow() then 12 else #fx.Shards), Vector2.new(0.5, 0.45), os.clock())
-						end
-					end
-				else
-					Sfx.play("NodeShatter", nil, 1 + 0.04 * i)
-				end
-			end
-			if t >= tl.Pop[i] and i > popped then
-				local from = popped + 1
-				popped = i
-				if single then
-					revealHero(o, result, kinds[1], new[1] == true)
-				else
-					standGolems(o, result, kinds, new, stage, from, i, if order >= 3 then bestIndex else nil)
-				end
-			end
+		local t = math.min(now - start + offset, tl.Total)
+		local events = HatchStage.pose(run, t)
+		if table.find(events, "Reveal") then
+			revealedAt = now
 		end
-		-- the cracks' sounds (one egg) and the light leaking out
-		if not reduced and t >= tl.Fly then
-			local wobble = table.clone(plan)
-			wobble.Shake = math.max(tl.Shake, 0.05)
-			local lit = HatchFx.cracksAt(math.min(t - tl.Fly, wobble.Shake - 0.001), wobble)
-			while cracked < lit do
-				cracked += 1
-				Sfx.play("NodeCrack", nil, 0.85 + 0.2 * cracked)
-				CameraShake.add(plan.Trauma * 0.25)
-			end
-		end
-		if fx and single then
-			HatchFx.setLeak(fx, if t >= tl.Fly and t < tl.Burst[1] then t - tl.Fly else nil, plan, color)
-		end
-		if popped >= n then
+		onEvents(run, events)
+		if t >= tl.Total then
 			break
 		end
 		task.wait()
 	end
 	Sfx.loop("CaseCharge", false)
-	if fx then
-		HatchFx.setLeak(fx, nil, plan, color)
-	end
-	-- the eggs' halves finish flying, then back to the pool
-	if not skipAll then
-		local settle = os.clock()
-		while os.clock() - settle < HatchFx.BurstTime do
-			local t = os.clock() - start
-			for i, rec in eggs do
-				if not rec.Faded then
-					HatchFx.poseV2(rec, CFrame.new(stage.Spots[i]), t, tl, i, plan, color, squash, i == rare)
-				end
-			end
-			if skipAll or skipStep then
-				break
-			end
-			task.wait()
-		end
-	end
-	for _, rec in eggs do
-		rec.Model.Parent = nil
-	end
-	-- every golem out: it stays at least MinShow (a tap can't skip it unseen), then holds
-	if waitUntil(os.clock(), HatchFx.MinShow) == "All" then
-		skipAll = false
-	end
-	if not single and rare and not skipAll then
-		-- the batch's Legendary / Mythic: its jackpot moment in the hero, the stage dimmed behind
-		local wait = waitUntil(start, tl.JackpotAt)
-		if wait ~= "All" then
-			o.StageDim.Visible = true
-			o.StageDim.BackgroundTransparency = 0.4
-			local counter = o.Counter.Text
-			o.Counter.Text = "" -- (the headline takes the top)
-			revealHero(o, result, kinds[bestIndex], new[bestIndex] == true, 4)
-			waitUntil(os.clock(), math.max(HatchFx.MinShow, tl.Jackpot))
-			clearHero(o)
-			closeReveals()
-			o.StageDim.Visible = false
-			o.Hero.Visible = false
-			o.Hero.ZIndex = 3
-			o.Counter.Text = counter
-			-- (the batch's rays come back behind its rarest)
-			local golem = GolemConfig.ById[kinds[bestIndex]]
-			local size = Vector2.new(o.Stage.Size.X.Offset, o.Stage.Size.Y.Offset)
-			local origin = Vector2.new(o.Stage.Position.X.Offset, o.Stage.Position.Y.Offset) - size / 2
-			local cell = stage.Cells[bestIndex]
-			local handle = RevealFx.show("Golem", kinds[bestIndex], if golem then golem.Rarity else "Common", {
-				Parent = o.Gui :: Instance,
-				Center = UDim2.fromOffset(origin.X + cell.X * size.X, origin.Y + cell.Y * size.Y),
-				Size = math.min(stage.Cell.X * size.X, stage.Cell.Y * size.Y) * 1.25,
-				Banner = false,
-				Headline = "",
-				Flash = false,
-				Shake = false,
-				Sound = false,
-				ZIndex = 1,
-			})
-			handle.Headline.Visible = false
-			table.insert(reveals, handle)
-		end
-	elseif single and not skipAll and not autoOn then
-		-- (one golem: its moment holds a little before OK shows)
-		waitUntil(os.clock(), math.min(0.6, tl.Hold))
-	end
-	skipAll = false
-	skipStep = false
-end
-
--- The end screen's note: which odds the result had, or (with OPEN AGAIN)
--- which odds OPEN AGAIN uses now.
-local function endNote(o: CapsuleView.OpenRefs, result: Result, againShown: boolean)
-	local lucky = luckyShown()
-	if result.Free then
-		o.Note.Text = "A FREE CAPSULE!"
-		o.Note.TextColor3 = Theme.Accent
-	elseif againShown and result.Lucky and not lucky then
-		o.Note.Text = "Triple Lucky ended: normal odds now"
-		o.Note.TextColor3 = Theme.Text
-	elseif againShown and lucky and not result.Lucky then
-		o.Note.Text = "Triple Lucky is on: OPEN AGAIN uses its odds"
-		o.Note.TextColor3 = LUCKY_COLOR
-	elseif result.Lucky then
-		o.Note.Text = "TRIPLE LUCKY ODDS"
-		o.Note.TextColor3 = LUCKY_COLOR
-	else
-		o.Note.Text = ""
-	end
-end
-
--- OPEN AGAIN: only after the player's own coin open (not a wheel prize or a Robux receipt).
-function againText(o: CapsuleView.OpenRefs, result: Result?)
-	local again = lastOpen
-	if again and result and (result.Free or result.Capsule ~= again.Capsule or result.Count ~= again.Count) then
-		again = nil
-	end
-	if again then
-		cards = currentCards(HudController.predictedCoins(os.clock()))
-	end
-	local card = if again then cardOf(again.Capsule) else nil
-	local buy: CapsuleView.Buy? = nil
-	if card and again then
-		for _, b in card.Buys do
-			if b.Count == again.Count then
-				buy = b
-			end
-		end
-	end
-	local visible = again ~= nil and buy ~= nil and card ~= nil and card.Visible and not card.Robux and not autoOn
-	holderOf(o.Again).Visible = visible
-	if visible and buy and not againPending then
-		o.Again.Text = `OPEN {buy.Count} AGAIN  {buy.PriceText}`
-		CapsuleView.style(o.Again, buy.CanBuy, Theme.Accent, Theme.AccentDark)
-	end
-	if result then
-		endNote(o, result, visible)
-	end
 end
 
 local function onSkip(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin or not playing then
 		return Enum.ContextActionResult.Pass
 	end
-	if atEnd then
-		endDone = true
-	else
-		skipStep = true
-	end
+	skipStep = true
 	return Enum.ContextActionResult.Sink
 end
 
-local function onSkipAll(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+local function toggleAuto()
+	local hook = autoHook
+	if hook and (autoOn or hook.available()) then
+		hook.toggle()
+		local o = opening
+		if o then
+			refreshAuto(o)
+		end
+	end
+end
+
+-- B / Backspace: skip all; a gamepad's B while Auto runs stops Auto instead (its badge says so).
+local function onSkipAll(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin or not playing then
 		return Enum.ContextActionResult.Pass
 	end
-	if atEnd then
-		endDone = true
+	if input.KeyCode == PromptConfig.keys("Second").Gamepad and autoOn then
+		toggleAuto()
 	else
 		skipAll = true
 	end
 	return Enum.ContextActionResult.Sink
 end
 
-local openingCompact: boolean? = nil -- the layout the opening was built for
-local selectionConnection: RBXScriptConnection? = nil
-
--- While the opening plays, a gamepad's selection stays on its buttons
--- (SKIP, or OK at the end): put back when anything moves it elsewhere.
-local function keepSelection(o: CapsuleView.OpenRefs)
-	if selectionConnection then
-		selectionConnection:Disconnect()
+local function onAuto(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin or not playing then
+		return Enum.ContextActionResult.Pass
 	end
-	selectionConnection = GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
-		local selected = GuiService.SelectedObject
-		if not playing or not selected or selected:IsDescendantOf(o.Controls) then
-			return
+	toggleAuto()
+	return Enum.ContextActionResult.Sink
+end
+
+local openingCompact: boolean? = nil -- the layout the opening was built for
+
+-- The opening's screen: the whole screen in design units (the HUD's scale), Roblox's top bar row.
+local function fitOpening(o: CapsuleView.OpenRefs)
+	local camera = Workspace.CurrentCamera
+	local scale = HudController.uiScale()
+	local view = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	local inset = GuiService:GetGuiInset()
+	for _, gui in { o.Gui, o.Controls } do
+		local s = gui:FindFirstChild("Scale")
+		if s and s:IsA("UIScale") then
+			s.Scale = scale
 		end
-		task.defer(function()
-			local now = GuiService.SelectedObject
-			if playing and now and not now:IsDescendantOf(o.Controls) then
-				GuiService.SelectedObject = if atEnd then o.Ok else o.Skip
-			end
-		end)
-	end)
+	end
+	CapsuleView.layoutOpening(o, compactNow(), view.X / scale, view.Y / scale, {
+		Touch = isTouch(),
+		Inset = inset.Y / scale,
+		TenFoot = GuiService:IsTenFootInterface(),
+	})
 end
 
 local function ensureOpening(): CapsuleView.OpenRefs
@@ -1315,177 +1079,97 @@ local function ensureOpening(): CapsuleView.OpenRefs
 	if existing then
 		-- (only between two openings: play() calls this before it starts)
 		existing.Gui:Destroy()
+		existing.Controls:Destroy()
 		opening = nil
 	end
 	openingCompact = compact
 	local o = CapsuleView.buildOpening(compact)
-	o.Gui.Parent = player:WaitForChild("PlayerGui")
-	hatch = HatchFx.overlay(o.Gui)
-	o.Dim.Activated:Connect(function()
-		if playing and not atEnd then
-			skipStep = true
-		end
-	end)
-	o.Skip.Activated:Connect(function()
-		if playing and not atEnd then
-			skipStep = true
-		end
-	end)
-	o.Ok.Activated:Connect(function()
-		if playing and atEnd then
+	local playerGui = player:WaitForChild("PlayerGui")
+	o.Gui.Parent = playerGui
+	o.Controls.Parent = playerGui
+	for _, tap in { o.Tap, o.TapTop } do
+		tap.Activated:Connect(function()
+			if playing then
+				skipStep = true
+			end
+		end)
+	end
+	o.Auto.Activated:Connect(function()
+		if playing then
 			Sfx.play("UIClick")
-			endDone = true
-		end
-	end)
-	o.Again.Activated:Connect(function()
-		local again = lastOpen
-		if not again or againPending or not atEnd then
-			return
-		end
-		local sent, reason = request(again.Capsule, again.Count, nil)
-		if sent then
-			againPending = true
-			o.Again.Text = "..."
-			o.Hint.Text = ""
-		elseif reason == "Busy" or reason == "Cooldown" then
-			o.Hint.Text = "One moment..."
-		else
-			o.Hint.Text = CapsuleView.reasonText(reason)
+			toggleAuto()
 		end
 	end)
 	opening = o
 	return o
 end
 
--- Plays one result from start to end, then waits for OK (or the next open).
+-- Plays one result from start to end (the next one waiting starts at once).
 local function play(result: Result)
 	local o = ensureOpening()
 	fitOpening(o)
 	playing = true
-	atEnd = false
 	skipStep = false
 	skipAll = false
-	-- (the overlay's keys never also fire a prompt behind it: an egg's Buy Egg! / Auto)
+	-- (the keys never also fire a prompt behind it: an egg's Buy Egg! / Auto)
 	PromptController.setSuppressed("CapsuleOpening", true)
+	if not hudHidden then
+		tellPlaying(true)
+	end
+	hideHud(true)
+	setBlur(true)
+	HatchStage.clear(o)
+	refreshAuto(o)
+	showNote(o, autoNote)
 	o.Gui.Enabled = true
-	o.Grid.Visible = false
-	o.Plate.Visible = false
-	setRays(o, nil, false)
-	holderOf(o.Skip).Visible = true
-	holderOf(o.Ok).Visible = false
-	holderOf(o.Again).Visible = false
-	o.Counter.Text = ""
-	endNote(o, result, false)
-	openingHint(o, false)
-	ContextActionService:BindActionAtPriority(SKIP_ACTION, onSkip, false, OPEN_PRIORITY, Enum.KeyCode.Space, Enum.KeyCode.Return)
+	o.Controls.Enabled = true
+	ContextActionService:BindActionAtPriority(
+		SKIP_ACTION,
+		onSkip,
+		false,
+		OPEN_PRIORITY,
+		Enum.KeyCode.Space,
+		Enum.KeyCode.Return,
+		Enum.KeyCode.ButtonA
+	)
 	ContextActionService:BindActionAtPriority(
 		SKIP_ALL_ACTION,
 		onSkipAll,
 		false,
 		OPEN_PRIORITY,
-		Enum.KeyCode.ButtonB,
-		Enum.KeyCode.Backspace
+		Enum.KeyCode.Backspace,
+		Enum.KeyCode.ButtonB
 	)
-	if usingGamepad() then
-		GuiService.SelectedObject = o.Skip
-	end
-	keepSelection(o)
-	local fx = hatch
-	if fx then
-		HatchFx.clear(fx)
-	end
-	o.Hero.ImageTransparency = 0
-	heroPop(o).Scale = 1
-	local spin = 0
-	renderConnection = RunService.RenderStepped:Connect(function(dt: number)
-		if not Motion.reduced() then
-			spin += dt * 14 -- (Reduce motion: the rays stand still)
-		end
-		o.Rays.Rotation = spin
-		local h = hero
-		if h and h.Model.Parent then
-			animateHero(o, h)
-		end
-	end)
-
+	ContextActionService:BindActionAtPriority(AUTO_ACTION, onAuto, false, OPEN_PRIORITY, PromptConfig.keys("Second").Keyboard)
 	local kinds: { string } = {}
 	for _, g in result.Golems do
 		table.insert(kinds, g.Kind)
 	end
-	local before = ownedBefore(result)
-	local new: { [number]: boolean } = {}
-	for i, kind in kinds do
-		new[i] = not before[kind]
-		before[kind] = true
-	end
 	local ok, err = pcall(function()
-		hatchV2(o, result, kinds, new)
+		hatch(o, result, kinds)
 	end)
 	if not ok then
 		warn("[CapsuleController] opening failed: " .. tostring(err))
 	end
-	-- the end: OK / OPEN AGAIN
-	atEnd = true
-	endAt = os.clock()
-	endDone = false
-	againPending = false
-	holderOf(o.Skip).Visible = false
-	holderOf(o.Ok).Visible = true
-	shownResult = result
-	againText(o, result)
-	openingHint(o, true)
-	if usingGamepad() then
-		GuiService.SelectedObject = o.Ok
-	end
-	-- until OK / B / a click, or a new result (OPEN AGAIN, one already
-	-- waiting, a wheel prize) starts at once; the note and OPEN AGAIN
-	-- follow the odds of the moment (Triple Lucky may end meanwhile)
-	local nextCheck = 0
-	while not endDone and #queue == 0 do
-		if os.clock() >= nextCheck then
-			nextCheck = os.clock() + TICK
-			againText(o, result)
-		end
-		task.wait()
-	end
-	-- (the player closed it: OK, B / Backspace, Space / Enter; a new result doesn't count)
-	local closed = endDone
-	endDone = false
-	if renderConnection then
-		renderConnection:Disconnect()
-		renderConnection = nil
-	end
-	clearHero(o)
-	clearStage(o) -- (the batch's golems destroyed, the eggs back in the pool: phones keep nothing)
-	closeReveals()
-	o.Hero.Visible = true
-	atEnd = false
-	playing = false
-	autoNote = nil
-	if selectionConnection then
-		selectionConnection:Disconnect()
-		selectionConnection = nil
-	end
+	HatchStage.clear(o, stageGolems) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
+	table.clear(stageGolems)
 	ContextActionService:UnbindAction(SKIP_ACTION)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
+	ContextActionService:UnbindAction(AUTO_ACTION)
+	playing = false
+	autoNote = nil
 	if #queue == 0 then
 		o.Gui.Enabled = false
+		o.Controls.Enabled = false
 		Sfx.loop("CaseCharge", false)
-		if fx then
-			HatchFx.clear(fx)
-		end
+		setBlur(false)
+		hideHud(false)
+		tellPlaying(false)
 		PromptController.setSuppressed("CapsuleOpening", false)
-		local selected = GuiService.SelectedObject
-		if selected and selected:IsDescendantOf(o.Gui) then
-			GuiService.SelectedObject = nil
-		end
 		local view = refs
 		if view and shown and usingGamepad() then
 			GuiService.SelectedObject = CapsuleView.firstButton(view)
 		end
-	end
-	if closed then
-		stopped("Closed")
 	end
 end
 
@@ -1518,7 +1202,6 @@ local function onResult(payload: any)
 	if pendingUntil > 0 or pendingButton then
 		freeButton()
 	end
-	againPending = false
 	table.insert(queue, {
 		Capsule = payload.Capsule,
 		Count = #golems,
@@ -1538,12 +1221,10 @@ local function onActionResult(payload: any)
 		return
 	end
 	local text = CapsuleView.reasonText(payload.Reason)
-	againPending = false
 	stopped(if type(payload.Reason) == "string" then payload.Reason else "Refused")
 	local o = opening
-	if o and playing and atEnd then
-		o.Hint.Text = text
-		againText(o, shownResult)
+	if o and playing then
+		showNote(o, text)
 	end
 	if shown then
 		status(text, Theme.Bad)
@@ -1667,29 +1348,31 @@ end
 
 ---------------------------------------------------------------- lifecycle
 
--- The Lune specs (tests/EggPanel.spec.luau) stage an end screen and send opens through these, on fakes.
+-- The Lune specs (tests/EggPanel.spec.luau, tests/EggRedo.spec.luau) drive these, on fakes.
 CapsuleController._test = {
-	-- the end screen of `result` after the player's own `count` open of `capsule`, Auto on or off
-	endScreen = function(result: Result, capsule: string, count: number, auto: boolean): CapsuleView.OpenRefs
-		local o = ensureOpening()
-		playing, atEnd = true, true
-		autoOn = auto
-		shownResult = result
-		lastOpen = { Capsule = capsule, Count = count }
-		openingHint(o, true)
-		againText(o, result)
-		return o
-	end,
 	close = function()
-		playing, atEnd, autoOn, autoNote = false, false, false, nil
-		lastOpen = nil
+		playing, autoOn, autoNote = false, false, nil
 		pendingUntil, lastSend = 0, -math.huge
 	end,
-	again = function(o: CapsuleView.OpenRefs): boolean
-		return holderOf(o.Again).Visible
-	end,
 	request = request,
-	setAuto = CapsuleController.setAuto, -- (the real one: the specs swap the module's for a recorder)
+	setAuto = CapsuleController.setAuto, -- (the real ones: the specs swap the module's for recorders)
+	setAutoHook = CapsuleController.setAutoHook,
+	opening = function(): CapsuleView.OpenRefs
+		local o = ensureOpening()
+		fitOpening(o)
+		return o
+	end,
+	refreshAuto = function()
+		local o = opening
+		if o then
+			refreshAuto(o)
+		end
+	end,
+	hideHud = hideHud,
+	onSkipAll = onSkipAll,
+	setPlaying = function(on: boolean)
+		playing = on
+	end,
 }
 
 function CapsuleController.init()
@@ -1740,7 +1423,7 @@ function CapsuleController.init()
 		end
 		local o = opening
 		if o and playing then
-			openingHint(o, atEnd)
+			refreshAuto(o)
 		end
 	end)
 	local camera = Workspace.CurrentCamera

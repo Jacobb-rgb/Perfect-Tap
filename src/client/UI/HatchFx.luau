@@ -1,749 +1,804 @@
 --[[
-	HatchFx: the egg hatch with a WOW effect (owner 2026-10-28: "make the
-	egg's shaking animation much cooler, so it has a wow effect").
-	CapsuleController plays it in the capsule opening; the previews pose the
+	HatchFx: the egg opening in the flow of the owner's clicker-sim video
+	(2026-10-29: "open them exactly like there, this clean, glowing by
+	rarity"; docs/plans/CLICKER_VIDEO_2026-10-29.md, section 1). Our eggs
+	(their skins unchanged) and our golems; CapsuleController plays it in
+	the full-screen viewport of CapsuleView's opening, the previews pose the
 	same functions frame by frame.
 
-	  build-up  the egg wobbles harder and faster, squashes and stretches,
-	            hops; cracks spread over the shell one after another and
-	            glow, light rays leak out of them (more, brighter and in the
-	            rarest golem's colour for rarer golems); a rising sound,
-	            a crack sound per crack, a small camera nudge
-	  break     a squash, a stretch, a flash (FlashGap apart at least: no
-	            more than 2.5 a second), the halves fly apart, shell pieces
-	            and sparkles burst out
-	  golem     pops out with a bounce (popAt), SOLID (owner 2026-10-28: "the
-	            golems mustn't be see-through"): nothing see-through ever
-	            goes over it, no flash, no leak; its rarity glows BEHIND it:
-	            the aura bursts out (pulseAura), the turning rays, Mythic's
-	            short tint of the backdrop (all under the hero: Tint 1,
-	            Aura 2 < the hero's 3); Epic and up get sparkles
+	  pop in     the eggs pop in HUGE right in front of the camera (one in
+	             the middle at 60 % of the screen's height; 3 side by side
+	             and overlapping, the middle one bigger; 10 in two rows of 5)
+	  wobble     they rock about +-12 degrees
+	  rings      white shockwave rings and a puff come out: the first cracks
+	  cracks     glow in the rarity colour of the golem inside THAT egg
+	             (BrightTheme.crackColour; Mythic a moving rainbow), growing
+	             in three steps, the egg pulsing a little bigger at each;
+	             soft blobs of the best colour drift behind
+	  suspense   Legendary / Mythic: brighter cracks, a harder shake
+	  silhouette each egg turns into a solid glowing silhouette of its colour
+	  burst      it bursts: ONE flash in the best colour (the controller asks
+	             RevealFx.claimFlash: never sooner than FlashGap after the
+	             last), shell pieces, a puff
+	  reveal     the golems stand where their eggs were, HUGE and SOLID, on a
+	             soft white sunburst with a little confetti, each with its
+	             name and "1 in N" (a Legendary / Mythic in a batch centred,
+	             bigger, in front)
+	  hold       a gentle bob
+	  fly        they spin and fly toward the player, shrinking; the HUD
+	             comes back
 
-	plan(order) says how big each part is per rarity (a longer build-up for
-	rarer golems). A plan's numbers, the curves (shakeAt, cracksAt, popAt)
-	and the egg's pose (pose: every part placed from its recorded spot, so
-	a pooled egg comes back whole with reset) are pure: the Lune specs and
-	the previews run them. Several eggs (x3, x10: arrange) wobble together
-	and burst one after another (pose's `burstAt`).
-
-	Reduce motion (Motion.reduced(), CapsuleController): none of it; the
-	golem only fades in.
+	Everything here is pure (the Lune specs and the previews run it): the
+	timeline (timeline: Auto's fast one, Reduce motion's calm one), the
+	layout (layout: where each egg and golem stands, as shares of the
+	screen), the camera maths of the stage viewport (at, project, depthFor:
+	its camera at the origin looking along -Z, FieldOfView Fov), the poses
+	(eggPose, golemPose) and the crack network (Cracks, addCracks: thin Neon
+	parts on the egg's front, built once on the opening's pooled eggs, never
+	on the eggs in the world). Reduce motion: no pop, wobble, rings, shake,
+	flash or spin; the eggs fade in, crack, fade out, the golems fade in and
+	out.
 ]]
 
-local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local UIKit = require(script.Parent.UIKit)
-local Confetti = require(script.Parent.Confetti)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BrightTheme = require(Shared.Config.BrightTheme)
 
 local HatchFx = {}
 
-HatchFx.FlashGap = 0.4 -- seconds between two flashes at least (2.5 a second at most)
-HatchFx.BurstTime = 0.45 -- the halves fly apart and fade
-HatchFx.Sequence = 0.14 -- seconds between two eggs bursting (x3, x10)
-HatchFx.PopTime = 0.42 -- the golem's bounce
-HatchFx.TintTime = 0.7 -- the Mythic screen tint fades out
-HatchFx.MaxRays = 12
+HatchFx.FlashGap = 0.4 -- seconds between two flashes at least (RevealFx's shared clock: 2.5 a second at most)
+HatchFx.FlashTime = 0.3 -- the flash fades in this long
+HatchFx.FlashPeak = 0.85 -- its strongest (1 - BackgroundTransparency)
+HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever is skipped (paid random items)
+HatchFx.Fov = 40 -- the stage viewport's camera
+HatchFx.Turn = 0.22 -- radians a golem turns from facing the camera (a 3/4 look)
+HatchFx.RingCount = 3 -- shockwave rings per egg
+HatchFx.Suspense = 0.8 -- a Legendary / Mythic in the batch: the build-up is this much longer
+HatchFx.SuspenseFast = 0.4
 
-export type Plan = {
+export type Times = {
+	Pop: number, -- an egg pops in
+	Stagger: number, -- between two eggs popping in (x3: 3, x10: 10)
+	Wobble: number, -- the first wobble ends
+	Rings: number, -- the rings and the puff
+	Steps: { number }, -- the cracks' three steps
+	Glow: number, -- the last step to the silhouette
+	Silhouette: number, -- the silhouette to the burst
+	GolemPop: number, -- a golem's pop
+	Hold: number, -- the golems stay (after their pop)
+	Fly: number, -- they fly to the player
+}
+
+HatchFx.Times = {
+	Normal = {
+		Pop = 0.18,
+		Stagger = 0.04,
+		Wobble = 0.6,
+		Rings = 0.42,
+		Steps = { 0.62, 1.02, 1.42 },
+		Glow = 0.36,
+		Silhouette = 0.1,
+		GolemPop = 0.25,
+		Hold = 0.95,
+		Fly = 0.4,
+	},
+	-- Auto (about 2 s an opening, every golem still shown, named)
+	Fast = {
+		Pop = 0.12,
+		Stagger = 0.02,
+		Wobble = 0.3,
+		Rings = 0.16,
+		Steps = { 0.3, 0.45, 0.6 },
+		Glow = 0.14,
+		Silhouette = 0.06,
+		GolemPop = 0.2,
+		Hold = 0.62,
+		Fly = 0.3,
+	},
+	-- Reduce motion: the eggs fade in, crack, fade out; the golems fade in and out
+	Calm = {
+		Pop = 0.2,
+		Stagger = 0,
+		Wobble = 0,
+		Rings = math.huge,
+		Steps = { 0.35, 0.6, 0.85 },
+		Glow = 0.2,
+		Silhouette = 0.25, -- (the eggs' fade out)
+		GolemPop = 0.25, -- (the golems' fade in)
+		Hold = 1.0,
+		Fly = 0.3, -- (their fade out)
+	},
+} :: { [string]: Times }
+
+export type Timeline = {
+	Count: number,
 	Order: number, -- the rarest golem's Rarity Order
-	Shake: number, -- seconds of build-up
-	Rays: number, -- light rays leaking out of the cracks at the end of it
-	RayFade: number, -- their transparency at full strength (lower: brighter)
-	Sparkles: number, -- sparkles round the golem (0: none)
-	Tint: boolean, -- a short tint of the whole screen (Mythic)
-	Trauma: number, -- the camera nudge at the break (CameraShake.add)
+	Fast: boolean,
+	Reduced: boolean,
+	Times: Times,
+	Stagger: number,
+	Rings: number, -- the rings and the puff (math.huge: none)
+	Steps: { number }, -- each crack step
+	Suspense: number, -- seconds of it (0: none), from the last step
+	Silhouette: number, -- the eggs turn into their colour
+	Burst: number, -- they burst: the flash
+	Reveal: number, -- the golems pop
+	Fly: number, -- they fly to the player
+	Total: number, -- the opening ends: the HUD comes back
 }
 
-local PLANS: { [number]: Plan } = {
-	[1] = { Order = 1, Shake = 1.4, Rays = 4, RayFade = 0.72, Sparkles = 0, Tint = false, Trauma = 0.22 },
-	[2] = { Order = 2, Shake = 1.5, Rays = 5, RayFade = 0.66, Sparkles = 0, Tint = false, Trauma = 0.25 },
-	[3] = { Order = 3, Shake = 1.7, Rays = 6, RayFade = 0.55, Sparkles = 10, Tint = false, Trauma = 0.3 },
-	[4] = { Order = 4, Shake = 1.95, Rays = 8, RayFade = 0.42, Sparkles = 18, Tint = false, Trauma = 0.4 },
-	[5] = { Order = 5, Shake = 2.25, Rays = 10, RayFade = 0.3, Sparkles = 24, Tint = false, Trauma = 0.5 },
-	[6] = { Order = 6, Shake = 2.55, Rays = 12, RayFade = 0.2, Sparkles = 28, Tint = true, Trauma = 0.6 },
-}
-
--- The hatch for the rarest golem inside (Rarity Order 1..6; outside: the nearest).
-function HatchFx.plan(order: number): Plan
-	local n = math.clamp(math.floor(if order == order then order else 1), 1, 6)
-	return PLANS[n]
+--[[
+	The timings of an opening of `count` eggs whose rarest golem has Rarity
+	`order`: `fast` (Auto), `reduced` (Reduce motion). Open 3 takes about
+	3.5 s (the video), Auto's about 2 s; a Legendary / Mythic adds the
+	suspense (Reduce motion: none).
+]]
+function HatchFx.timeline(order: number, count: number, fast: boolean, reduced: boolean): Timeline
+	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
+	local o = math.clamp(math.floor(if order == order then order else 1), 1, 6)
+	local times = if reduced then HatchFx.Times.Calm elseif fast then HatchFx.Times.Fast else HatchFx.Times.Normal
+	local stagger = if n > 3 then times.Stagger * 0.6 else times.Stagger
+	local suspense = if o >= 5 and not reduced then (if fast then HatchFx.SuspenseFast else HatchFx.Suspense) else 0
+	local steps = table.clone(times.Steps)
+	local spread = stagger * (n - 1) -- (the last egg pops in this much later: everything waits for it)
+	for i, s in steps do
+		steps[i] = s + spread
+	end
+	local silhouette = steps[#steps] + suspense + times.Glow
+	local burst = silhouette + times.Silhouette
+	local reveal = burst + (if reduced then times.Silhouette * 0.4 else 0.04)
+	local fly = reveal + times.GolemPop + times.Hold
+	return {
+		Count = n,
+		Order = o,
+		Fast = fast,
+		Reduced = reduced,
+		Times = times,
+		Stagger = stagger,
+		Rings = if reduced then math.huge else times.Rings + spread,
+		Steps = steps,
+		Suspense = suspense,
+		Silhouette = silhouette,
+		Burst = burst,
+		Reveal = reveal,
+		Fly = fly,
+		Total = fly + times.Fly,
+	}
 end
 
-local function back(x: number): number
-	x = math.clamp(x, 0, 1)
+--[[
+	Where a tap at `t` goes: before the burst straight to it (the flash and
+	the golems); while the golems stand on to their flight, but only once
+	they have been out `shown` seconds (real time: their pop and MinShow):
+	nil means "not yet" (the controller waits and goes then). Skip-all is a
+	tap that also asks for the flight. Never back: every golem is seen,
+	named (paid random items).
+]]
+function HatchFx.skipTo(t: number, tl: Timeline, shown: number): number?
+	if t < tl.Burst then
+		return tl.Burst
+	elseif t < tl.Fly then
+		if shown >= tl.Times.GolemPop + HatchFx.MinShow then
+			return tl.Fly
+		end
+		return nil
+	end
+	return t
+end
+
+---------------------------------------------------------------- the stage's camera
+
+local function tanHalf(): number
+	return math.tan(math.rad(HatchFx.Fov / 2))
+end
+
+-- The stage camera's point on the ray through the screen share (u right, v down) at depth z.
+function HatchFx.at(u: number, v: number, z: number, aspect: number): Vector3
+	local t = tanHalf()
+	return Vector3.new((2 * u - 1) * t * aspect * z, (1 - 2 * v) * t * z, -z)
+end
+
+-- A stage point's screen share (u right, v down) and its depth.
+function HatchFx.project(p: Vector3, aspect: number): (Vector2, number)
+	local z = math.max(1e-3, -p.Z)
+	local t = tanHalf()
+	return Vector2.new(0.5 + p.X / (2 * z * t * aspect), 0.5 - p.Y / (2 * z * t)), z
+end
+
+-- How far a thing `height` studs tall stands to fill `share` of the screen's height.
+function HatchFx.depthFor(height: number, share: number): number
+	return height / (math.max(0.01, share) * 2 * tanHalf())
+end
+
+---------------------------------------------------------------- the layout
+
+export type Slot = {
+	Egg: Vector2, -- the egg's middle (screen shares: x right, y down)
+	EggH: number, -- its height (a share of the screen's height)
+	Golem: Vector2, -- its golem's middle
+	GolemH: number,
+	Text: number, -- the name's text size (design units; the chance's is ChanceShare of it)
+	Front: boolean, -- drawn in front (the middle egg of a row, the special golem)
+}
+
+export type Layout = {
+	Count: number,
+	Special: number?,
+	Slots: { Slot },
+	Spacing: number, -- between two neighbours' middles (a share of the screen's width): a name fits in it
+}
+
+HatchFx.ChanceShare = 0.74 -- the "1 in N" under a name, against the name's size
+
+-- The slot in the middle of `count` eggs (where a Legendary / Mythic of the batch goes).
+function HatchFx.centreSlot(count: number): number
+	local n = math.clamp(math.floor(count), 1, 10)
+	if n <= 5 then
+		return math.ceil(n / 2)
+	end
+	return 3 -- (the top row's middle)
+end
+
+--[[
+	Where `count` eggs and their golems stand on a screen `aspect` wide
+	(width / height): one in the middle at 60 % of the height; up to 3 side
+	by side, overlapping, the middle one bigger (about 70 % of the height
+	together, the video); 4-5 in a row; more in two rows of 5. `special`: the
+	slot of a Legendary / Mythic, whose golem stands centred, bigger, in
+	front. The top centre stays free (nothing above 16 % of the height
+	there: room for a quest card).
+]]
+function HatchFx.layout(count: number, aspect: number, special: number?): Layout
+	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
+	local a = math.max(0.8, if aspect == aspect then aspect else 16 / 9)
+	local slots: { Slot } = {}
+	local spacing = 0.9
+	if n == 1 then
+		local big = special == 1
+		table.insert(slots, {
+			Egg = Vector2.new(0.5, 0.5),
+			EggH = 0.6,
+			Golem = Vector2.new(0.5, if big then 0.46 else 0.47),
+			GolemH = if big then 0.56 else 0.5,
+			Text = 44,
+			Front = true,
+		})
+	elseif n <= 3 then
+		-- (side by side and overlapping: the middles a third of the height apart, the middle one bigger, in front;
+		-- the golems a little further apart: their names fit between)
+		local dx = math.min(0.26, 0.33 / a)
+		local gdx = math.min(0.28, 0.37 / a)
+		spacing = gdx * (if n == 2 then 1.15 else 1)
+		local mid = (n + 1) / 2
+		for i = 1, n do
+			local off = i - mid
+			local centre = math.abs(off) < 0.01
+			local isSpecial = special == i
+			table.insert(slots, {
+				Egg = Vector2.new(0.5 + off * dx * (if n == 2 then 0.9 else 1), if centre then 0.52 else 0.555),
+				EggH = if centre then 0.64 else 0.52,
+				Golem = Vector2.new(0.5 + off * spacing, if isSpecial then 0.455 elseif centre then 0.465 else 0.49),
+				GolemH = if isSpecial then 0.56 elseif centre then 0.48 else 0.42,
+				Text = if isSpecial then 38 else 34,
+				Front = centre or isSpecial,
+			})
+		end
+	elseif n <= 5 then
+		local dx = math.min(0.19, 0.31 / a)
+		spacing = dx
+		local mid = (n + 1) / 2
+		for i = 1, n do
+			local isSpecial = special == i
+			table.insert(slots, {
+				Egg = Vector2.new(0.5 + (i - mid) * dx, 0.52),
+				EggH = 0.42,
+				Golem = Vector2.new(0.5 + (i - mid) * dx, if isSpecial then 0.47 else 0.49),
+				GolemH = if isSpecial then 0.44 else 0.34,
+				Text = if isSpecial then 32 else 28,
+				Front = isSpecial,
+			})
+		end
+	else
+		-- two rows of 5 (the second may be shorter); a special one makes room: the rows part a little
+		local dx = math.min(0.17, 0.33 / a)
+		spacing = dx
+		local rowY = if special then { 0.33, 0.71 } else { 0.33, 0.69 }
+		for i = 1, n do
+			local row = if i <= 5 then 1 else 2
+			local inRow = if row == 1 then 5 else n - 5
+			local col = if row == 1 then i else i - 5
+			local x = 0.5 + (col - (inRow + 1) / 2) * dx
+			local isSpecial = special == i
+			table.insert(slots, {
+				Egg = Vector2.new(x, rowY[row]),
+				EggH = 0.29,
+				Golem = Vector2.new(x, if isSpecial then rowY[row] + 0.005 else rowY[row] - 0.01),
+				GolemH = if isSpecial then 0.33 else 0.25,
+				Text = if isSpecial then 26 else 22,
+				Front = isSpecial,
+			})
+		end
+	end
+	return { Count = n, Special = special, Slots = slots, Spacing = spacing }
+end
+
+--[[
+	The order the results stand in: a Legendary / Mythic (`best`, the
+	batch's rarest, when its Rarity order is 5 or more) goes to the middle
+	slot, the others keep their order round it. Returns the result index for
+	each slot and the special slot (nil: none).
+]]
+function HatchFx.arrange(count: number, best: number, bestOrder: number): ({ number }, number?)
+	local n = math.clamp(math.floor(count), 1, 10)
+	local out: { number } = {}
+	for i = 1, n do
+		out[i] = i
+	end
+	if bestOrder < 5 or best < 1 or best > n then
+		return out, nil
+	end
+	local centre = HatchFx.centreSlot(n)
+	if n > 1 then
+		table.remove(out, best)
+		table.insert(out, centre, best)
+	end
+	return out, centre
+end
+
+---------------------------------------------------------------- the poses (pure)
+
+local function clamp01(x: number): number
+	return math.clamp(x, 0, 1)
+end
+
+-- Back easing (overshoots, then settles): 0 -> 1.
+function HatchFx.back(x: number): number
+	x = clamp01(x)
 	local c1, c3 = 1.70158, 2.70158
 	return 1 + c3 * (x - 1) ^ 3 + c1 * (x - 1) ^ 2
 end
 
---[[
-	The egg `t` seconds into the build-up: its roll (radians), its height
-	and width scales (squash and stretch) and a hop (studs). The wobble
-	grows and speeds up (3 to 8 a second); the last fifth is a held squash
-	(the wobble calms: the egg gathers itself); past Shake (an egg waiting
-	its turn to burst) it keeps wobbling at full strength.
-]]
-function HatchFx.shakeAt(t: number, plan: Plan): (number, number, number, number)
-	if t <= 0 then
-		return 0, 1, 1, 0
+-- How many crack steps have come by `t` (0..3).
+function HatchFx.levelAt(t: number, tl: Timeline): number
+	local level = 0
+	for i, s in tl.Steps do
+		if t >= s then
+			level = i
+		end
 	end
-	local d = plan.Shake
-	local k = math.clamp(t / d, 0, 1)
-	local phase = 2 * math.pi * (3 * t + 2.5 * k * t)
-	local amp = 0.06 + 0.32 * k * k
-	local squash = (0.03 + 0.11 * k * k) * math.sin(2 * phase)
-	local hold = math.clamp((k - 0.8) / 0.2, 0, 1) -- (the last fifth)
-	if t >= d then
-		hold = 0 -- (waiting its turn: the full wobble)
-	end
-	local roll = amp * math.sin(phase) * (1 - 0.7 * hold)
-	local sy = 1 - squash * (1 - hold) - 0.2 * hold
-	local sxz = 1 + squash * 0.5 * (1 - hold) + 0.1 * hold
-	local hop = math.max(0, math.sin(phase)) * 0.16 * k * (1 - hold)
-	return roll, sy, sxz, hop
+	return level
 end
 
--- How many of the egg's three cracks glow `t` seconds into the build-up (from a quarter of it on).
-function HatchFx.cracksAt(t: number, plan: Plan): number
-	local k = t / plan.Shake
-	if k < 0.25 then
+-- The little swell of a crack step (0 .. 1 .. 0 in 0.16 s after each step).
+local PULSE = 0.16
+function HatchFx.pulseAt(t: number, tl: Timeline): number
+	if tl.Reduced then
 		return 0
 	end
-	return math.clamp(math.floor((k - 0.25) / 0.75 * 3) + 1, 1, 3)
-end
-
--- How strong the leaking light is (0..1) `t` seconds into the build-up.
-function HatchFx.leakAt(t: number, plan: Plan): number
-	local k = t / plan.Shake
-	return math.clamp((k - 0.25) / 0.7, 0, 1) ^ 1.5
-end
-
--- The golem's scale `u` seconds after the break: from small, past full size, back (a bounce).
-function HatchFx.popAt(u: number): number
-	if u <= 0 then
-		return 0.25
-	end
-	return 0.25 + 0.75 * back(u / HatchFx.PopTime)
-end
-
--- May a flash go off now (`last`: the last one's os.clock(); FlashGap apart)?
-function HatchFx.flashOk(last: number, now: number): boolean
-	return now - last >= HatchFx.FlashGap
-end
-
---[[
-	Where `count` eggs stand (x1: one; up to 3: a row; more: rows of five)
-	round the origin, and how far the hero camera stands back to see them all.
-]]
-function HatchFx.arrange(count: number): ({ Vector3 }, number)
-	local n = math.clamp(math.floor(count), 1, 10)
-	local out: { Vector3 } = {}
-	if n == 1 then
-		return { Vector3.zero }, 15
-	elseif n <= 3 then
-		for i = 1, n do
-			table.insert(out, Vector3.new((i - (n + 1) / 2) * 3.6, 0, 0))
+	local best = 0
+	for _, s in tl.Steps do
+		local u = t - s
+		if u >= 0 and u < PULSE then
+			best = math.max(best, math.sin(u / PULSE * math.pi))
 		end
-		return out, 24
 	end
-	local perRow = 5
-	local rows = math.ceil(n / perRow)
-	for i = 1, n do
-		local col = (i - 1) % perRow
-		local row = (i - 1) // perRow
-		local inRow = math.min(perRow, n - row * perRow)
-		table.insert(out, Vector3.new((col - (inRow - 1) / 2) * 3.5, ((rows - 1) / 2 - row) * 4.4, 0))
-	end
-	return out, 34
+	return best
 end
 
----------------------------------------------------------------- hatch v2 (owner 2026-10-29)
+-- How far into the suspense `t` is (0..1; 0 without one).
+function HatchFx.suspenseAt(t: number, tl: Timeline): number
+	if tl.Suspense <= 0 then
+		return 0
+	end
+	local from = tl.Steps[#tl.Steps]
+	return clamp01((t - from) / tl.Suspense)
+end
 
---[[
-	Hatch v2 ("much, much better, like Pet Simulator": docs/plans/HATCH_V2.md):
-	the eggs FLY in from the bottom into a neat stage (one big; a row of 3;
-	two rows of 5), wobble together, a Legendary / Mythic egg gathers light
-	(suspense), they burst in a quick ripple and each golem pops out where
-	its egg was, named; a Legendary / Mythic then gets its jackpot moment.
-	Auto plays the fast timings; Reduce motion the short, still ones. Every
-	result always shows (at least MinShow seconds, named): fast is fine,
-	skipping a result is not (paid random items).
-]]
-HatchFx.FlyTime = 0.35 -- the eggs fly in
-HatchFx.FlyFast = 0.2
-HatchFx.Ripple = 0.06 -- seconds between two eggs bursting (a batch)
-HatchFx.PopDelay = 0.12 -- a golem pops this long after its egg bursts
-HatchFx.MinShow = 0.3 -- every result shows at least this long, whatever is skipped
-HatchFx.Suspense = 1.1 -- a Legendary / Mythic egg gathers light before the break
-HatchFx.SuspenseFast = 0.6
-HatchFx.HoldOne = 1.7 -- one golem stays this long before the end screen (Auto: its dwell follows)
-HatchFx.HoldMany = 1.6 -- a batch on the stage
-HatchFx.HoldFast = 0.8
-HatchFx.JackpotHold = 2.4 -- the jackpot moment (Auto; a tap goes on sooner)
-HatchFx.JackpotFast = 1.2
-HatchFx.ShakeShare = 0.75 -- the v2 wobble is this share of plan.Shake (the suspense adds to the rare ones)
-HatchFx.ShakeFast = 0.35
-HatchFx.StageTurn = 0.3 -- radians a golem on the stage turns from facing the camera (a 3/4 view)
-
-export type Timeline = {
-	Count: number,
-	Order: number,
-	Fast: boolean,
-	Reduced: boolean,
-	Fly: number, -- the eggs fly in (0 .. Fly)
-	Shake: number, -- they wobble (Fly .. Fly + Shake)
-	Suspense: number, -- the rare egg gathers light (0: none)
-	Ripple: number,
-	Burst: { number }, -- each egg's burst, seconds from the start
-	Pop: { number }, -- each golem's pop
-	Hold: number, -- the golems stay before the jackpot or the end screen
-	Jackpot: number, -- the jackpot moment's hold (0: none)
-	JackpotAt: number, -- when it starts (math.huge: none; one egg: its reveal is the moment)
-	Total: number, -- the end screen (OK, OPEN AGAIN)
+export type EggPose = {
+	Shown: boolean, -- false: popped (the burst) or not in yet
+	Scale: number, -- its size against its place's (the pop, the pulses, the swell)
+	Roll: number, -- its rock (radians, about its foot)
+	Fade: number, -- 0 seen .. 1 gone (Reduce motion's fades)
+	Level: number, -- cracks lit (0..3)
+	Bright: number, -- 0..1: the cracks whiten (the suspense)
+	Silhouette: number, -- 0..1: the egg turns into its colour
 }
 
 --[[
-	The timings of a hatch: `count` eggs, the rarest golem's Rarity `order`,
-	`fast` (Auto), `reduced` (Reduce motion: no flight, a short still
-	wobble, no suspense, no ripple). Pure: the controller and the previews
-	play it, the specs check it.
+	Egg `i` (of the timeline `tl`) at `t`: its pop in (from 0.25 of its size,
+	past it, back: Back), the first wobble (about +-12 degrees, fading), a
+	small tremble growing with the cracks, the pulse of each crack step, the
+	suspense (a harder, faster shake and a swell for the `special` egg; the
+	cracks whiten on every egg), the silhouette (swelling a little), the
+	burst (gone). Reduce motion: still; it fades in and out.
 ]]
-function HatchFx.timeline(order: number, count: number, fast: boolean, reduced: boolean): Timeline
-	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
-	local plan = HatchFx.plan(order)
-	local jackpot = plan.Order >= 5
-	local fly = if reduced or fast then HatchFx.FlyFast else HatchFx.FlyTime
-	local shake = if reduced then 0.4 else plan.Shake * (if fast then HatchFx.ShakeFast else HatchFx.ShakeShare)
-	local suspense = if jackpot and not reduced then (if fast then HatchFx.SuspenseFast else HatchFx.Suspense) else 0
-	local ripple = if n > 1 and not reduced then HatchFx.Ripple else 0
-	local start = fly + shake + suspense
-	local bursts, pops = {}, {}
-	for i = 1, n do
-		bursts[i] = start + (i - 1) * ripple
-		pops[i] = bursts[i] + (if reduced then 0.3 else HatchFx.PopDelay)
+function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): EggPose
+	local times = tl.Times
+	local start = (i - 1) * tl.Stagger
+	local level = HatchFx.levelAt(t, tl)
+	if t < start or t >= tl.Burst then
+		return { Shown = false, Scale = 1, Roll = 0, Fade = 1, Level = level, Bright = 0, Silhouette = 0 }
 	end
-	local last = pops[n]
-	local hold = if fast then HatchFx.HoldFast elseif n == 1 then HatchFx.HoldOne else HatchFx.HoldMany
-	hold = math.max(hold, HatchFx.MinShow)
-	local moment = if jackpot then (if fast then HatchFx.JackpotFast else HatchFx.JackpotHold) else 0
-	local jackpotAt = if jackpot and n > 1 then last + hold else math.huge
-	local total
-	if n == 1 then
-		total = last + (if jackpot then moment else hold)
-	elseif jackpot then
-		total = jackpotAt + moment
-	else
-		total = last + hold
+	if tl.Reduced then
+		local fadeIn = 1 - clamp01((t - start) / times.Pop)
+		local fadeOut = clamp01((t - tl.Silhouette) / times.Silhouette)
+		return { Shown = true, Scale = 1, Roll = 0, Fade = math.max(fadeIn, fadeOut), Level = level, Bright = 0, Silhouette = 0 }
 	end
-	return {
-		Count = n,
-		Order = plan.Order,
-		Fast = fast,
-		Reduced = reduced,
-		Fly = fly,
-		Shake = shake,
-		Suspense = suspense,
-		Ripple = ripple,
-		Burst = bursts,
-		Pop = pops,
-		Hold = hold,
-		Jackpot = moment,
-		JackpotAt = jackpotAt,
-		Total = total,
-	}
+	local u = t - start
+	local scale = if u < times.Pop then 0.25 + 0.75 * HatchFx.back(u / times.Pop) else 1
+	-- the first wobble: about +-12 degrees, two swings, fading
+	local roll = 0
+	if u < times.Wobble then
+		local k = u / times.Wobble
+		roll = math.rad(12) * math.sin(k * math.pi * 2.6 + i * 0.35) * (1 - k * 0.55) * clamp01(u / 0.06)
+	end
+	-- the tremble of the cracks (grows with each step)
+	if level > 0 then
+		roll += (0.025 + 0.018 * level) * math.sin(t * 2 * math.pi * 9 + i * 1.3)
+	end
+	local suspense = HatchFx.suspenseAt(t, tl)
+	if suspense > 0 and t < tl.Silhouette then
+		local hard = if special then 1 else 0.45
+		roll += hard * (0.05 + 0.06 * suspense) * math.sin(t * 2 * math.pi * 16 + i)
+		if special then
+			scale *= 1 + 0.08 * suspense
+		end
+	end
+	scale *= 1 + 0.06 * HatchFx.pulseAt(t, tl)
+	local silhouette = clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
+	if t >= tl.Silhouette then
+		scale *= 1 + 0.12 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette))
+		roll *= 0.3
+	end
+	local bright = if suspense > 0 then suspense else 0
+	return { Shown = true, Scale = scale, Roll = roll, Fade = 0, Level = level, Bright = bright, Silhouette = silhouette }
 end
 
---[[
-	An egg `u` seconds into its flight of `fly`: how far along (0 from
-	below and in front of the stage, 1 in its place, a little past it on the
-	way: Back ease), its scale and its spin (radians, unwinding to 0).
-]]
-function HatchFx.flyAt(u: number, fly: number): (number, number, number)
-	if fly <= 0 or u >= fly then
-		return 1, 1, 0
+-- A white shockwave ring `j` of an egg at `t`: its size (a share of the egg's height) and transparency (1: none).
+function HatchFx.ringAt(t: number, tl: Timeline, j: number): (number, number)
+	local u = t - tl.Rings - (j - 1) * 0.08
+	local d = if tl.Fast then 0.3 else 0.45
+	if u < 0 or u >= d then
+		return 0, 1
 	end
-	local x = math.clamp(u / fly, 0, 1)
-	local ease = 1 - (1 - x) ^ 3
-	return back(x), 0.35 + 0.65 * ease, (1 - ease) * math.pi * 1.5
+	local k = u / d
+	local grow = 1 - (1 - k) ^ 2
+	return 0.45 + 1.25 * grow, 0.15 + 0.85 * k
 end
 
--- Where an egg flies in from (studs from its place: below the stage and further back: it grows as it comes).
-HatchFx.FlyFrom = Vector3.new(0, -8, 9)
-
---[[
-	The rare egg gathering light `u` seconds into the suspense of `d`: it
-	rises (studs), swells, trembles fast and small (radians) and glows
-	(0..1, the controller's light and the leak).
-]]
-function HatchFx.suspenseAt(u: number, d: number): (number, number, number, number)
-	if d <= 0 or u <= 0 then
-		return 0, 1, 0, 0
+-- The puff at the rings (and at the burst): a soft white glow's size (egg heights) and transparency.
+function HatchFx.puffAt(u: number): (number, number)
+	if u < 0 or u >= 0.35 then
+		return 0, 1
 	end
-	local k = math.clamp(u / d, 0, 1)
-	local ease = 1 - (1 - k) ^ 2
-	return 0.4 * ease, 1 + 0.1 * ease, 0.05 * k * math.sin(u * 60), k
+	local k = u / 0.35
+	return 0.4 + 0.6 * (1 - (1 - k) ^ 2), 0.62 + 0.38 * k
 end
 
-export type Stage = {
-	Spots: { Vector3 }, -- each egg's (and then its golem's) place, round the origin
-	Distance: number, -- the stage camera: straight on, from -Z, FOV 30, this far
-	Cells: { Vector2 }, -- each spot on the stage's viewport (shares: x right, y down; its +X is the screen's left)
-	Cell: Vector2, -- a cell's size (shares of the viewport): the name under the golem fits it
+export type GolemPose = {
+	Shown: boolean,
+	Scale: number, -- against its place's (the pop: Back)
+	Lift: number, -- the bob (a share of its height)
+	Spin: number, -- radians round its upright (the flight)
+	Fly: number, -- 0..1 of the flight (toward the player, shrinking)
+	Fade: number, -- 0 seen .. 1 gone (Reduce motion's fades)
+	Name: number, -- the name's transparency (1: hidden)
 }
 
-local TAN15 = math.tan(math.rad(15))
+--[[
+	Golem `i` at `t`: it pops where its egg was (a quick ripple across the
+	batch), bobs gently, then spins and flies to the player (Fly 0..1, the
+	controller moves it there and shrinks it). Reduce motion: it fades in,
+	stays still, fades out.
+]]
+function HatchFx.golemPose(t: number, tl: Timeline, i: number): GolemPose
+	local times = tl.Times
+	local at = tl.Reveal + (if tl.Reduced then 0 else (i - 1) * 0.03)
+	if t < at or t >= tl.Total then
+		return { Shown = false, Scale = 1, Lift = 0, Spin = 0, Fly = 0, Fade = 1, Name = 1 }
+	end
+	local u = t - at
+	if tl.Reduced then
+		local fade = math.max(1 - clamp01(u / times.GolemPop), clamp01((t - tl.Fly) / times.Fly))
+		return { Shown = true, Scale = 1, Lift = 0, Spin = 0, Fly = 0, Fade = fade, Name = fade }
+	end
+	local scale = if u < times.GolemPop then 0.3 + 0.7 * HatchFx.back(u / times.GolemPop) else 1
+	local lift = 0.025 * math.sin(math.max(0, u - times.GolemPop) * 2 * math.pi * 0.9)
+	local fly = clamp01((t - tl.Fly) / times.Fly)
+	local spin = 0
+	if fly > 0 then
+		spin = fly * fly * math.pi * 4 -- (two turns, speeding up)
+		lift = 0
+	end
+	local name = if fly > 0 then clamp01(fly * 4) else clamp01(1 - (u - 0.06) / 0.1)
+	return { Shown = true, Scale = scale, Lift = lift, Spin = spin, Fly = fly, Fade = 0, Name = name }
+end
 
 --[[
-	The stage for `count` eggs on a viewport `aspect` wide (width / height):
-	one egg big in the middle; up to 3 in a row; more in two rows of five
-	(PS99's neat grid, our spacing). The camera stands back just enough for
-	every egg and golem (about 4.6 studs tall) with a margin.
+	A golem on its flight (`k` 0..1) from its place (screen share `from`,
+	depth `z`) to the player (`to`, a screen share): its screen point and
+	depth (further: smaller; four times as far at the end), speeding up.
 ]]
-function HatchFx.stage(count: number, aspect: number): Stage
-	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
-	local a = math.max(0.5, if aspect == aspect then aspect else 1)
-	local spots: { Vector3 } = {}
-	local cols, rows, dx, dy
-	if n == 1 then
-		cols, rows, dx, dy = 1, 1, 0, 0
-		spots[1] = Vector3.zero
-	elseif n <= 3 then
-		cols, rows, dx, dy = n, 1, 5.2, 0
-		for i = 1, n do
-			spots[i] = Vector3.new(((n + 1) / 2 - i) * dx, 0, 0) -- (the first on the screen's left)
-		end
+function HatchFx.flyTo(from: Vector2, z: number, to: Vector2, k: number): (Vector2, number)
+	local e = k * k
+	return from:Lerp(to, e), z * (1 + 3 * e)
+end
+
+---------------------------------------------------------------- the light behind
+
+-- The sunburst's strength (0..1) at `t`: in at the reveal, settling to a soft glow, out with the flight.
+function HatchFx.sunburstAt(t: number, tl: Timeline): number
+	if t < tl.Reveal then
+		return 0
+	end
+	local inK = clamp01((t - tl.Reveal) / 0.12)
+	local settle = 1 - 0.35 * clamp01((t - tl.Reveal - 0.2) / 0.6)
+	local out = 1 - clamp01((t - tl.Fly) / (tl.Times.Fly * 0.7))
+	return inK * settle * out
+end
+
+-- The soft blobs behind the eggs (0..1): from the first crack to the reveal.
+function HatchFx.blobsAt(t: number, tl: Timeline): number
+	local from = tl.Steps[1]
+	if t < from then
+		return 0
+	end
+	local inK = clamp01((t - from) / 0.4)
+	local out = 1 - clamp01((t - tl.Reveal) / 0.4)
+	return inK * out * (0.75 + 0.25 * HatchFx.suspenseAt(t, tl))
+end
+
+-- The flash's opacity (1 - transparency) `u` seconds after the burst (none before, gone after FlashTime).
+function HatchFx.flashAt(u: number): number
+	if u < 0 or u >= HatchFx.FlashTime then
+		return 0
+	end
+	return HatchFx.FlashPeak * (1 - u / HatchFx.FlashTime) ^ 1.6
+end
+
+---------------------------------------------------------------- colours
+
+--[[
+	A crack's colour for a golem of `rarity` (BrightTheme.crackColour: white
+	for Common, the rarity's colour above it) at `t`; Mythic a rainbow that
+	moves along the cracks (`along`: the segment's place, 0..1). `bright`
+	whitens it (the suspense).
+]]
+function HatchFx.crackColor(rarity: string, t: number, along: number, bright: number): Color3
+	local color
+	if rarity == "Mythic" then
+		color = Color3.fromHSV((t * 0.55 + along * 0.6) % 1, 0.72, 1)
 	else
-		cols, rows, dx, dy = 5, 2, 4.8, 5.6
-		for i = 1, n do
-			local col = (i - 1) % cols
-			local row = (i - 1) // cols
-			local inRow = math.min(cols, n - row * cols)
-			spots[i] = Vector3.new(((inRow - 1) / 2 - col) * dx, ((rows - 1) / 2 - row) * dy + 0.5, 0)
-		end
+		color = BrightTheme.crackColour(rarity)
 	end
-	-- (one egg fills most of the hero: PS99's big egg; a batch keeps a margin round its golems)
-	local tall = (rows - 1) * dy + (if n == 1 then 5.4 else 6.2)
-	local wide = (cols - 1) * dx + (if n == 1 then 5.4 else 5)
-	local distance = math.max(tall / 2 / TAN15, wide / 2 / (TAN15 * a))
-	local cells: { Vector2 } = {}
-	for i, spot in spots do
-		-- (the camera looks along +Z: the stage's +X shows on the left)
-		cells[i] = Vector2.new(0.5 - spot.X / (2 * distance * TAN15 * a), 0.5 - spot.Y / (2 * distance * TAN15))
+	if bright > 0 then
+		color = color:Lerp(Color3.new(1, 1, 1), (if rarity == "Mythic" then 0.25 else 0.45) * bright * (0.6 + 0.4 * math.sin(t * 22)))
 	end
-	local cell = Vector2.new(
-		(if n == 1 then 0.6 else math.max(dx, 4) / (2 * distance * TAN15 * a)),
-		(if n == 1 then 0.6 else (if rows > 1 then dy else 5.6) / (2 * distance * TAN15))
-	)
-	return { Spots = spots, Distance = distance, Cells = cells, Cell = cell }
+	return color
 end
 
 ---------------------------------------------------------------- the egg
 
+--[[
+	The crack network on an egg's front (studs, the egg's own frame: the
+	premium egg's shape, CapsuleEggs: a sphere of radius R round the
+	middle, an ellipsoid 2.8 R tall above it 0.4 R up; its front -Z): each
+	crack a zig-zag line, Level 1 the first two, 2 two more, 3 the
+	branches. Every point is on the front, round the emblem.
+]]
+HatchFx.Cracks = {
+	{ Level = 1, Points = { { 0.02, 2.05 }, { -0.16, 1.78 }, { 0.08, 1.56 }, { -0.42, 1.36 }, { -0.62, 1.0 }, { -0.5, 0.62 } } },
+	{ Level = 1, Points = { { 0.12, 0.34 }, { -0.18, 0.12 }, { 0.1, -0.2 }, { -0.16, -0.5 }, { 0.04, -0.82 } } },
+	{ Level = 2, Points = { { 0.08, 1.56 }, { 0.46, 1.42 }, { 0.6, 1.08 }, { 0.84, 0.86 } } },
+	{ Level = 2, Points = { { -0.5, 0.62 }, { -0.2, 0.42 }, { 0.12, 0.34 }, { 0.5, 0.42 }, { 0.78, 0.2 } } },
+	{ Level = 3, Points = { { -0.18, 0.12 }, { -0.56, 0.0 }, { -0.82, -0.3 } } },
+	{ Level = 3, Points = { { 0.1, -0.2 }, { 0.46, -0.36 }, { 0.62, -0.68 } } },
+	{ Level = 3, Points = { { -0.16, 1.78 }, { -0.46, 1.86 }, { -0.62, 1.64 } } },
+	{ Level = 3, Points = { { 0.6, 1.08 }, { 0.42, 0.76 } } },
+} :: { { Level: number, Points: { { number } } } }
+
+HatchFx.CrackWidth = { 0.07, 0.1, 0.14 } -- studs, at each step (every lit crack thickens)
+HatchFx.CrackDepth = 0.035 -- studs (flat on the shell)
+HatchFx.CrackLift = 0.05 -- studs over the shell (over the band and the scales)
+
+local EGG_R = 1.25 -- CapsuleEggs.Radius
+
+-- The front surface of the premium egg at (x, y): its point and its outward normal.
+function HatchFx.eggFront(x: number, y: number): (Vector3, Vector3)
+	local r = EGG_R
+	local zs = r * r - x * x - y * y
+	local cy = 0.4 * r
+	local ry = 1.4 * r
+	local ye = (y - cy) / ry
+	local ze = r * r * (1 - ye * ye) - x * x
+	local sphere = if zs > 0 then math.sqrt(zs) else -1
+	local ellipsoid = if ze > 0 then math.sqrt(ze) else -1
+	if sphere >= ellipsoid and sphere > 0 then
+		local p = Vector3.new(x, y, -sphere)
+		return p, p.Unit
+	elseif ellipsoid > 0 then
+		local p = Vector3.new(x, y, -ellipsoid)
+		return p, Vector3.new(x / (r * r), (y - cy) / (ry * ry), -ellipsoid / (r * r)).Unit
+	end
+	return Vector3.new(x, y, 0), Vector3.new(0, 0, -1)
+end
+
+export type CrackPart = { Part: BasePart, Level: number, Length: number, Along: number }
+
 export type Record = {
 	Model: Model,
 	Parts: { BasePart },
-	Base: { CFrame }, -- each part's place from the egg's centre, as built
-	Sizes: { Vector3 },
-	Trans: { number },
 	Colors: { Color3 },
-	Top: { [BasePart]: boolean }, -- the parts of the top half
-	Cracks: { BasePart },
-	Band: BasePart?,
-	Center: CFrame,
-	-- the rigid moves (many eggs, and every egg once its halves fly): Model:PivotTo moves
-	-- the parts in one call instead of one CFrame a part from Lua
-	Pivot: CFrame, -- the model's pivot from the centre
-	Halves: { { Model: Model, Pivot: CFrame } }?, -- the Top and Bottom halves (with their pivots), when both pivot
-	Bent: boolean, -- a part's size or place is squashed or stretched now (the next pose puts each back)
-	Faded: boolean, -- every part is fully see-through after the break (nothing more to write)
+	Materials: { Enum.Material },
+	Trans: { number },
+	Cracks: { CrackPart },
+	Mid: number, -- its visual middle over its pivot (studs)
+	Height: number, -- top to bottom (studs)
+	Foot: number, -- its lowest point under the pivot (studs, negative)
+	Lit: number, -- the crack level shown now
+	Tint: Color3?, -- the silhouette's colour now (nil: as built)
+	Faded: number, -- the transparency added now (Reduce motion's fades)
 }
 
--- Records an egg as built (GolemBuilder.capsule: halves Top / Bottom, Crack1..3, the Band).
+--[[
+	Adds the crack network (Cracks) to an egg built round the origin
+	(GolemBuilder.capsule with no base), hidden: thin Neon parts on its
+	front shell, `maxLevel` the last step built (phones with many eggs: 2).
+]]
+function HatchFx.addCracks(model: Model, maxLevel: number?)
+	local folder = Instance.new("Model")
+	folder.Name = "HatchCracks"
+	local top = maxLevel or 3
+	local total = 0
+	for _, crack in HatchFx.Cracks do
+		total += #crack.Points - 1
+	end
+	local index = 0
+	for c, crack in HatchFx.Cracks do
+		if crack.Level > top then
+			continue
+		end
+		for j = 1, #crack.Points - 1 do
+			index += 1
+			local a, na = HatchFx.eggFront(crack.Points[j][1], crack.Points[j][2])
+			local b, nb = HatchFx.eggFront(crack.Points[j + 1][1], crack.Points[j + 1][2])
+			local normal = (na + nb).Unit
+			local mid = (a + b) / 2 + normal * HatchFx.CrackLift
+			local along = b - a
+			local length = along.Magnitude + 0.06
+			local yAxis = (along - normal * along:Dot(normal)).Unit
+			local xAxis = yAxis:Cross(normal).Unit
+			local part = Instance.new("Part")
+			part.Name = `Crack{c}_{j}`
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Material = Enum.Material.Neon
+			part.Color = Color3.new(1, 1, 1)
+			part.Transparency = 1
+			part.Size = Vector3.new(HatchFx.CrackWidth[1], length, HatchFx.CrackDepth)
+			part.CFrame = CFrame.fromMatrix(mid, xAxis, yAxis, normal)
+			part:SetAttribute("CrackLevel", crack.Level)
+			part:SetAttribute("CrackAlong", index / math.max(1, total))
+			part.Parent = folder
+		end
+	end
+	folder.Parent = model
+end
+
+--[[
+	Records an egg as built (its parts' colours, materials and transparency
+	to put back, its cracks, its size round its pivot). The model's pivot is
+	its middle (GolemBuilder.capsule's Root).
+]]
 function HatchFx.record(model: Model): Record
-	local root = model.PrimaryPart
-	local center = if root then root.CFrame else model:GetPivot()
+	local pivot = model:GetPivot()
 	local rec: Record = {
 		Model = model,
 		Parts = {},
-		Base = {},
-		Sizes = {},
-		Trans = {},
 		Colors = {},
-		Top = {},
+		Materials = {},
+		Trans = {},
 		Cracks = {},
-		Band = nil,
-		Center = center,
-		Pivot = center:ToObjectSpace(model:GetPivot()),
-		Halves = nil,
-		Bent = false,
-		Faded = false,
+		Mid = 0.8,
+		Height = 4.4,
+		Foot = -1.3,
+		Lit = 0,
+		Tint = nil,
+		Faded = 0,
 	}
-	local top = model:FindFirstChild("Top")
-	local bottom = model:FindFirstChild("Bottom")
-	if top and bottom and top:IsA("Model") and bottom:IsA("Model") and top.PrimaryPart and bottom.PrimaryPart then
-		rec.Halves = {
-			{ Model = top, Pivot = center:ToObjectSpace(top:GetPivot()) },
-			{ Model = bottom, Pivot = center:ToObjectSpace(bottom:GetPivot()) },
-		}
-	end
+	local low, high = math.huge, -math.huge
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			table.insert(rec.Parts, d)
-			table.insert(rec.Base, center:ToObjectSpace(d.CFrame))
-			table.insert(rec.Sizes, d.Size)
-			table.insert(rec.Trans, d.Transparency)
 			table.insert(rec.Colors, d.Color)
-			if top and d:IsDescendantOf(top) then
-				rec.Top[d] = true
-			end
-			if d.Name == "Band" then
-				rec.Band = d
+			table.insert(rec.Materials, d.Material)
+			table.insert(rec.Trans, d.Transparency)
+			local level = d:GetAttribute("CrackLevel")
+			if type(level) == "number" then
+				local along = d:GetAttribute("CrackAlong")
+				table.insert(rec.Cracks, {
+					Part = d,
+					Level = level,
+					Length = d.Size.Y,
+					Along = if type(along) == "number" then along else 0,
+				})
+			elseif d.Transparency < 1 then
+				local y = pivot:PointToObjectSpace(d.CFrame.Position).Y
+				local half = math.max(d.Size.X, d.Size.Y, d.Size.Z) / 2
+				low = math.min(low, y - half * 0.7)
+				high = math.max(high, y + half * 0.7)
 			end
 		end
 	end
-	for i = 1, 3 do
-		local crack = model:FindFirstChild("Crack" .. i, true)
-		if crack and crack:IsA("BasePart") then
-			rec.Cracks[i] = crack
-		end
+	if low < high then
+		rec.Foot = low
+		rec.Height = high - low
+		rec.Mid = (high + low) / 2
 	end
 	return rec
 end
 
--- Puts a pooled egg back as it was built (its parts' size, look and the cracks hidden).
+-- Puts a pooled egg back as it was built (colours, materials, see-through; the cracks hidden).
 function HatchFx.reset(rec: Record)
 	for i, part in rec.Parts do
-		part.Size = rec.Sizes[i]
-		part.Transparency = rec.Trans[i]
 		part.Color = rec.Colors[i]
-		part.CFrame = rec.Center * rec.Base[i]
+		part.Material = rec.Materials[i]
+		part.Transparency = rec.Trans[i]
 	end
-	rec.Bent = false
-	rec.Faded = false
+	for _, crack in rec.Cracks do
+		crack.Part.Transparency = 1
+	end
+	rec.Lit = 0
+	rec.Tint = nil
+	rec.Faded = 0
 end
 
 --[[
-	Poses an egg `t` seconds into its hatch at `place` (its centre):
-	before `burstAt` the build-up (shakeAt: the roll, the squash and
-	stretch when `squash`, the hop; the cracks glowing in `color`, the band
-	turning to it); after it the break (a stretch, then the halves fly
-	apart and fade in BurstTime). `squash` false (many eggs: cheaper) moves
-	the parts rigidly.
+	Paints an egg's cracks for `pose` (its lit level, each a step thicker,
+	in `rarity`'s colour at `t`) and its silhouette (the whole egg one solid
+	glowing colour, Neon: no light on it) and its fade (Reduce motion).
+	Writes only what changed.
 ]]
-function HatchFx.pose(rec: Record, place: CFrame, t: number, burstAt: number, plan: Plan, color: Color3, squash: boolean)
-	if t < burstAt then
-		local roll, sy, sxz, hop = HatchFx.shakeAt(t, plan)
-		if not squash then
-			sy, sxz = 1, 1
-		end
-		local cf = place * CFrame.new(0, hop, 0) * CFrame.Angles(0, 0.4 * math.sin(t * 2), roll)
-		local scale = Vector3.new(sxz, sy, sxz)
-		if squash then
-			for i, part in rec.Parts do
-				local base = rec.Base[i]
-				part.CFrame = cf * CFrame.new(base.Position * scale) * base.Rotation
-				part.Size = rec.Sizes[i] * scale
-			end
-			rec.Bent = true
-		elseif rec.Bent then
-			for i, part in rec.Parts do
-				part.CFrame = cf * rec.Base[i]
-				part.Size = rec.Sizes[i]
-			end
-			rec.Bent = false
-		else
-			rec.Model:PivotTo(cf * rec.Pivot) -- (rigid: one call moves every part)
-		end
-		local lit = HatchFx.cracksAt(t, plan)
-		for i, crack in rec.Cracks do
-			if i <= lit then
-				crack.Transparency = 0
-				crack.Color = color:Lerp(Color3.new(1, 1, 1), 0.35)
-			end
-		end
-		local band = rec.Band
-		if band then
-			local k = math.clamp(t / plan.Shake, 0, 1)
-			local index = table.find(rec.Parts, band)
-			band.Color = (if index then rec.Colors[index] else band.Color):Lerp(color, k)
-		end
-		return
-	end
-	-- the break: a stretch, then the halves fly apart and fade
-	local u = t - burstAt
-	local k = math.clamp(u / HatchFx.BurstTime, 0, 1)
-	local stretch = if squash and u < 0.08 then 1.22 else 1
-	local up = place * CFrame.new(1.4 * k, 1.4 + 5 * k, 0) * CFrame.Angles(0, 0, -1.6 * k) * CFrame.new(0, -1.4, 0)
-	local down = place * CFrame.new(-0.8 * k, -4 * k * k, 0) * CFrame.Angles(0, 0, 0.8 * k)
-	if rec.Faded then
-		return -- (gone: nothing left to move or fade)
-	end
-	local halves = rec.Halves
-	if stretch ~= 1 or rec.Bent or not halves then
-		-- part by part: the stretch, the first frame after it (each part back in place, its
-		-- size as built: written once, not every frame), or an egg without two halves
-		local s = Vector3.new(0.88, stretch, 0.88)
+function HatchFx.paintEgg(rec: Record, pose: EggPose, rarity: string, t: number)
+	local level = math.clamp(pose.Level, 0, 3)
+	local fadeChanged = pose.Fade ~= rec.Faded
+	if fadeChanged then
 		for i, part in rec.Parts do
-			local base = rec.Base[i]
-			local half = if rec.Top[part] then up else down
-			if stretch ~= 1 then
-				part.CFrame = half * CFrame.new(base.Position * s) * base.Rotation
-				part.Size = rec.Sizes[i] * s
-			else
-				part.CFrame = half * base
-				if rec.Bent then
-					part.Size = rec.Sizes[i]
+			if rec.Trans[i] < 1 then
+				part.Transparency = rec.Trans[i] + (1 - rec.Trans[i]) * pose.Fade
+			end
+		end
+		rec.Faded = pose.Fade
+	end
+	if level ~= rec.Lit or fadeChanged or rarity == "Mythic" or pose.Bright > 0 then
+		local width = HatchFx.CrackWidth[math.max(1, level)]
+		for _, crack in rec.Cracks do
+			local on = crack.Level <= level
+			crack.Part.Transparency = if on then pose.Fade else 1
+			if on then
+				crack.Part.Color = HatchFx.crackColor(rarity, t, crack.Along, pose.Bright)
+			end
+			if level ~= rec.Lit then
+				crack.Part.Size = Vector3.new(width, crack.Length, HatchFx.CrackDepth)
+			end
+		end
+		rec.Lit = level
+	end
+	if pose.Silhouette > 0 then
+		-- (the whole egg one flat glowing colour: Neon takes no light in a viewport)
+		local tint = HatchFx.crackColor(rarity, t, 0.5, 0)
+		if rec.Tint ~= tint then
+			for i, part in rec.Parts do
+				if rec.Trans[i] < 1 then
+					part.Color = tint
+					part.Material = Enum.Material.Neon
 				end
 			end
-		end
-		rec.Bent = stretch ~= 1
-	else
-		-- the halves fly rigidly: two calls (the root pivot stays: it is invisible)
-		halves[1].Model:PivotTo(up * halves[1].Pivot)
-		halves[2].Model:PivotTo(down * halves[2].Pivot)
-	end
-	for i, part in rec.Parts do
-		if string.sub(part.Name, 1, 5) ~= "Crack" then
-			part.Transparency = rec.Trans[i] + (1 - rec.Trans[i]) * k
-		else
-			part.Transparency = k
-		end
-	end
-	rec.Faded = k >= 1
-end
-
---[[
-	Hatch v2's egg `i` of a timeline `tl`, `t` seconds from the start, at
-	its stage spot `spot` (a CFrame facing the stage camera): flying in,
-	wobbling (pose's build-up with tl's shorter wobble), the jackpot egg
-	(`rare`) gathering light in the suspense (rising, swelling when
-	`squash`, trembling), then its break (pose). Returns the light it
-	gathers (0..1: the controller's leak and glow).
-]]
-function HatchFx.poseV2(rec: Record, spot: CFrame, t: number, tl: Timeline, i: number, plan: Plan, color: Color3, squash: boolean, rare: boolean): number
-	local burstAt = tl.Burst[i] or tl.Burst[#tl.Burst]
-	if t < tl.Fly then
-		local k, _, spin = HatchFx.flyAt(t, tl.Fly)
-		local place = spot * CFrame.new(HatchFx.FlyFrom * (1 - k)) * CFrame.Angles(0, spin, 0)
-		if rec.Bent then
-			HatchFx.reset(rec)
-		end
-		rec.Model:PivotTo(place * rec.Pivot)
-		return 0
-	end
-	local wobble = table.clone(plan)
-	wobble.Shake = math.max(tl.Shake, 0.05)
-	local u = t - tl.Fly
-	local suspenseAt = tl.Fly + tl.Shake
-	if rare and tl.Suspense > 0 and t >= suspenseAt and t < burstAt then
-		local lift, swell, tremble, glow = HatchFx.suspenseAt(t - suspenseAt, tl.Suspense)
-		local cf = spot * CFrame.new(0, lift, 0) * CFrame.Angles(0, 0, tremble)
-		if squash then
-			local scale = Vector3.new(swell, swell, swell)
-			for j, part in rec.Parts do
-				local base = rec.Base[j]
-				part.CFrame = cf * CFrame.new(base.Position * scale) * base.Rotation
-				part.Size = rec.Sizes[j] * scale
-			end
-			rec.Bent = true
-		else
-			rec.Model:PivotTo(cf * rec.Pivot)
-		end
-		for _, crack in rec.Cracks do
-			crack.Transparency = 0
-			crack.Color = color:Lerp(Color3.new(1, 1, 1), 0.2 + 0.5 * glow)
-		end
-		return glow
-	end
-	HatchFx.pose(rec, spot, u, burstAt - tl.Fly, wobble, color, squash)
-	return if t < burstAt then HatchFx.leakAt(u, wobble) else 0
-end
-
----------------------------------------------------------------- the overlay
-
-export type Overlay = {
-	Leak: Frame, -- the light rays leaking out of the cracks (over the egg)
-	Rays: { Frame },
-	Aura: Frame, -- the golem's soft glow (behind it)
-	Rings: { Frame },
-	Tint: Frame, -- the Mythic screen tint
-	Burst: Frame, -- the layer the pieces fly in (round the hero)
-	Shards: { Frame },
-	Sparkles: { Frame },
-	Confetti: { Frame },
-}
-
--- Builds the hatch's pieces into the opening's gui (place() puts them on the hero).
-function HatchFx.overlay(gui: Instance): Overlay
-	-- (the tint colours the backdrop only: ZIndex 1, right over the dim, under the rays and the hero)
-	local tint = UIKit.new("Frame", {
-		Name = "HatchTint",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, -40),
-		Size = UDim2.new(1, 0, 1, 80),
-		ZIndex = 1,
-	}, gui) :: Frame
-	local aura = UIKit.new("Frame", {
-		Name = "HatchAura",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(460, 460),
-		Visible = false,
-		ZIndex = 2,
-	}, gui) :: Frame
-	UIKit.new("UIScale", { Name = "Pulse", Scale = 1 }, aura)
-	local rings: { Frame } = {}
-	for i, k in { 1, 0.74, 0.5 } do
-		local ring = UIKit.new("Frame", {
-			Name = "Ring" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = 0.82 - i * 0.08,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(k, k),
-			ZIndex = 2,
-		}, aura) :: Frame
-		UIKit.corner(ring, 999)
-		table.insert(rings, ring)
-	end
-	local leak = UIKit.new("Frame", {
-		Name = "HatchLeak",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(460, 460),
-		Visible = false,
-		ZIndex = 4,
-	}, gui) :: Frame
-	local rays: { Frame } = {}
-	for i = 1, HatchFx.MaxRays do
-		-- a thin beam from the middle out, bright at the shell and fading (turned a little unevenly)
-		local holder = UIKit.new("Frame", {
-			Name = "Beam" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Rotation = (i - 1) * (360 / HatchFx.MaxRays) + (i % 3) * 11,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 4,
-		}, leak) :: Frame
-		local ray = UIKit.new("Frame", {
-			Name = "Ray",
-			AnchorPoint = Vector2.new(0, 0.5),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(0.5, 0, 0, if i % 2 == 0 then 10 else 16),
-			ZIndex = 4,
-		}, holder) :: Frame
-		UIKit.new("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 1),
-				NumberSequenceKeypoint.new(0.18, 0),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-		}, ray)
-		table.insert(rays, ray)
-	end
-	local layer = UIKit.new("Frame", {
-		Name = "HatchBurst",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(1100, 900),
-		ZIndex = 6,
-	}, gui) :: Frame
-	return {
-		Leak = leak,
-		Rays = rays,
-		Aura = aura,
-		Rings = rings,
-		Tint = tint,
-		Burst = layer,
-		Shards = Confetti.build(layer, 18, 6),
-		Sparkles = Confetti.build(layer, 28, 7),
-		Confetti = Confetti.build(layer, Confetti.Count, 8),
-	}
-end
-
--- Puts the pieces on the hero (its centre and size in the gui's units: CapsuleView.layoutOpening).
-function HatchFx.place(fx: Overlay, center: UDim2, size: number)
-	fx.Leak.Position = center
-	fx.Leak.Size = UDim2.fromOffset(size * 1.5, size * 1.5)
-	fx.Aura.Position = center
-	fx.Aura.Size = UDim2.fromOffset(size * 1.25, size * 1.25)
-	fx.Burst.Position = center
-	fx.Burst.Size = UDim2.fromOffset(size * 2.6, size * 2.2)
-end
-
--- The leaking light `t` seconds into the build-up (none after it: `t` nil), in `color`.
-function HatchFx.setLeak(fx: Overlay, t: number?, plan: Plan, color: Color3)
-	if not t then
-		fx.Leak.Visible = false
-		return
-	end
-	local strength = HatchFx.leakAt(t, plan)
-	fx.Leak.Visible = strength > 0
-	fx.Leak.Rotation = t * 24
-	local shown = math.max(1, math.ceil(plan.Rays * strength))
-	for i, ray in fx.Rays do
-		ray.Visible = i <= shown
-		ray.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.35)
-		ray.BackgroundTransparency = 1 - (1 - plan.RayFade) * strength
-		ray.Size = UDim2.new(0.25 + 0.25 * strength, 0, 0, ray.Size.Y.Offset)
-	end
-end
-
--- The golem's aura (behind it) in its rarity colour; `strength` 0 hides it.
-function HatchFx.setAura(fx: Overlay, color: Color3, strength: number)
-	fx.Aura.Visible = strength > 0
-	for i, ring in fx.Rings do
-		ring.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.15 * i)
-		ring.BackgroundTransparency = 1 - (0.12 + 0.08 * i) * math.clamp(strength, 0, 1)
-	end
-end
-
--- The aura bursts out behind the golem (from small, past full size, back), the
--- golem's glow in place of a flash over it (not with Reduce motion).
-function HatchFx.pulseAura(fx: Overlay)
-	local pulse = fx.Aura:FindFirstChild("Pulse")
-	if pulse and pulse:IsA("UIScale") then
-		pulse.Scale = 0.4
-		TweenService:Create(pulse, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	end
-end
-
--- The Mythic tint `u` seconds after the break (none once it faded).
-function HatchFx.setTint(fx: Overlay, color: Color3, u: number?)
-	if not u or u >= HatchFx.TintTime then
-		fx.Tint.BackgroundTransparency = 1
-		return
-	end
-	fx.Tint.BackgroundColor3 = color
-	fx.Tint.BackgroundTransparency = 0.45 + 0.55 * math.clamp(u / HatchFx.TintTime, 0, 1)
-end
-
--- The shell pieces' colours (the egg's shell) and the sparkles' (white and gold, a touch of the rarity's).
-function HatchFx.paint(fx: Overlay, shell: Color3, rarity: Color3)
-	for i, piece in fx.Shards do
-		piece.BackgroundColor3 = if i % 3 == 0 then shell:Lerp(Color3.new(0, 0, 0), 0.25) else shell
-	end
-	for i, piece in fx.Sparkles do
-		piece.BackgroundColor3 = if i % 3 == 0
-			then rarity:Lerp(Color3.new(1, 1, 1), 0.4)
-			elseif i % 3 == 1 then Color3.fromRGB(255, 226, 120)
-			else Color3.new(1, 1, 1)
-	end
-end
-
--- Hides every piece (between two openings).
-function HatchFx.clear(fx: Overlay)
-	fx.Leak.Visible = false
-	fx.Aura.Visible = false
-	fx.Tint.BackgroundTransparency = 1
-	for _, list in { fx.Shards, fx.Sparkles, fx.Confetti } do
-		for _, piece in list do
-			piece.Visible = false
+			rec.Tint = tint
 		end
 	end
 end

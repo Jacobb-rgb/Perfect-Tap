@@ -20,6 +20,7 @@ return function(T, Loader)
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+	local BrightTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BrightTheme")
 	local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
 	local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
 	local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
@@ -690,172 +691,6 @@ return function(T, Loader)
 		T.falsy(pieces[1].Visible, "gone at the end")
 	end)
 
-	T.test("HatchFx: a bigger hatch for rarer golems, the curves stay in bounds, flashes 0.4 s apart", function()
-		local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
-		local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
-		local CFrame = Loader.CFrame
-		local Color3 = roblox.Color3
-		-- rarer golems: a longer build-up, more and brighter light, sparkles, Mythic's tint
-		local previous = HatchFx.plan(1)
-		for order = 2, 6 do
-			local plan = HatchFx.plan(order)
-			T.truthy(plan.Shake > previous.Shake, `order {order}: a longer build-up`)
-			T.truthy(plan.Rays >= previous.Rays and plan.RayFade <= previous.RayFade, "more and brighter light")
-			T.truthy(plan.Sparkles >= previous.Sparkles)
-			T.truthy(plan.Rays <= HatchFx.MaxRays)
-			previous = plan
-		end
-		T.truthy(HatchFx.plan(6).Tint, "Mythic tints the screen")
-		T.falsy(HatchFx.plan(5).Tint)
-		T.eq(HatchFx.plan(99).Order, 6, "out of range: the nearest")
-		T.eq(HatchFx.plan(0 / 0).Order, 1)
-		-- the shake grows and speeds up, the squash stays gentle, the last fifth gathers
-		for _, order in { 1, 6 } do
-			local plan = HatchFx.plan(order)
-			local early, late = 0, 0
-			for i = 1, 200 do
-				local t = i / 200 * plan.Shake
-				local roll, sy, sxz, hop = HatchFx.shakeAt(t, plan)
-				T.truthy(math.abs(roll) <= 0.4 and sy >= 0.75 and sy <= 1.2 and sxz >= 0.85 and sxz <= 1.2, "in bounds")
-				T.truthy(hop >= 0 and hop <= 0.2)
-				if t < plan.Shake * 0.3 then
-					early = math.max(early, math.abs(roll))
-				elseif t < plan.Shake * 0.8 then
-					late = math.max(late, math.abs(roll))
-				end
-			end
-			T.truthy(late > early * 2, "harder as it builds")
-			local _, sy = HatchFx.shakeAt(plan.Shake * 0.99, plan)
-			T.truthy(sy < 0.85, "squashed just before the break")
-		end
-		local a, b, c, d = HatchFx.shakeAt(0, HatchFx.plan(1))
-		T.eq(a, 0)
-		T.eq(b, 1)
-		T.eq(c, 1)
-		T.eq(d, 0)
-		-- the cracks one after another, the light grows, the golem bounces to full size
-		local plan = HatchFx.plan(4)
-		T.eq(HatchFx.cracksAt(0.1, plan), 0)
-		T.eq(HatchFx.cracksAt(plan.Shake * 0.99, plan), 3)
-		local lit = 0
-		for i = 1, 100 do
-			local n = HatchFx.cracksAt(i / 100 * plan.Shake, plan)
-			T.truthy(n >= lit, "never fewer")
-			lit = n
-		end
-		T.eq(HatchFx.leakAt(0, plan), 0)
-		T.near(HatchFx.leakAt(plan.Shake, plan), 1, 1e-9)
-		T.near(HatchFx.popAt(0), 0.25, 1e-9)
-		T.near(HatchFx.popAt(HatchFx.PopTime), 1, 1e-9)
-		local over = 0
-		for i = 1, 40 do
-			over = math.max(over, HatchFx.popAt(i / 40 * HatchFx.PopTime))
-		end
-		T.truthy(over > 1.02 and over < 1.2, "a bounce past full size")
-		-- flashes: never sooner than FlashGap (2.5 a second at most)
-		T.truthy(1 / HatchFx.FlashGap <= 3)
-		T.falsy(HatchFx.flashOk(10, 10.2))
-		T.truthy(HatchFx.flashOk(10, 10 + HatchFx.FlashGap))
-		-- many eggs: a row of three, rows of five; they burst one after another, quickly
-		local three, d3 = HatchFx.arrange(3)
-		T.eq(#three, 3)
-		local ten, d10 = HatchFx.arrange(10)
-		T.eq(#ten, 10)
-		T.truthy(d10 > d3, "the camera backs off for ten")
-		T.truthy(HatchFx.Sequence * 9 < 1.5, "ten bursts in under a second and a half")
-		-- a pooled egg: posed through the hatch and the break, then back whole
-		local model = GolemBuilder.capsule("Stone")
-		local rec = HatchFx.record(model)
-		T.truthy(#rec.Parts > 10 and #rec.Cracks == 3, "the egg's parts and its three cracks")
-		local stone = HatchFx.plan(1)
-		local red = Color3.fromRGB(255, 0, 0)
-		HatchFx.pose(rec, CFrame.new(), stone.Shake * 0.95, stone.Shake, stone, red, true)
-		T.eq(rec.Cracks[3].Transparency, 0, "every crack glows at the end")
-		HatchFx.pose(rec, CFrame.new(), stone.Shake + HatchFx.BurstTime, stone.Shake, stone, red, true)
-		for i, part in rec.Parts do
-			T.truthy(part.Transparency >= 0.999, part.Name .. ": gone after the break")
-			local _ = i
-		end
-		HatchFx.reset(rec)
-		for i, part in rec.Parts do
-			T.eq(part.Transparency, rec.Trans[i], part.Name .. ": back as built")
-			T.eq(part.Size, rec.Sizes[i])
-		end
-		-- the overlay: every piece hidden after clear()
-		local gui = Instance.new("ScreenGui")
-		local fx = HatchFx.overlay(gui)
-		HatchFx.setLeak(fx, stone.Shake * 0.9, stone, red)
-		T.truthy(fx.Leak.Visible, "light leaks near the end")
-		HatchFx.setLeak(fx, nil, stone, red)
-		T.falsy(fx.Leak.Visible)
-		HatchFx.clear(fx)
-		T.eq(fx.Tint.BackgroundTransparency, 1)
-		for _, piece in fx.Shards do
-			T.falsy(piece.Visible)
-		end
-		-- the controller: nothing shakes, flashes or nudges with Reduce motion
-		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		-- (hatch v2: every flash asks RevealFx's one clock, which knows Reduce motion and the gap)
-		local reveal = fs.readFile(Loader.root .. "/src/client/Effects/RevealFx.luau")
-		T.truthy(string.find(reveal, "if Motion.reduced() or not RevealFx.flashOk(lastFlash, now) then", 1, true), "flash: reduced and rate-limited")
-		local hatch = string.match(source, "local function hatchV2%(.-\nend\n")
-		T.truthy(hatch, "the hatch")
-		for shake in string.gmatch(hatch, "[^\n]*CameraShake%.add[^\n]*") do
-			local at = string.find(hatch, shake, 1, true) or 0
-			local guard = string.sub(hatch, math.max(1, at - 400), at)
-			T.truthy(string.find(guard, "not reduced", 1, true), "no shake with Reduce motion: " .. shake)
-		end
-	end)
-
-	T.test("HatchFx: golems stay SOLID (nothing see-through over them, the glow behind)", function()
-		local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
-		local Color3 = roblox.Color3
-		-- owner 2026-10-28: "the golems mustn't be see-through"
-		local o = CapsuleView.buildOpening(false)
-		local fx = HatchFx.overlay(o.Gui)
-		T.eq(o.Hero.ImageTransparency, 0, "the hero view is opaque")
-		T.truthy(fx.Tint.ZIndex < o.Hero.ZIndex, "the Mythic tint colours the backdrop, under the golem")
-		T.truthy(fx.Aura.ZIndex < o.Hero.ZIndex, "the aura glows behind the golem")
-		T.truthy(o.Rays.ZIndex < o.Hero.ZIndex, "the rays turn behind the golem")
-		HatchFx.setLeak(fx, nil, HatchFx.plan(6), Color3.new(1, 0, 0))
-		T.falsy(fx.Leak.Visible, "the leaking light (over the egg) is gone before the golem")
-		T.truthy(HatchFx.BurstTime >= 0.45, "the break's flash (0.45 s) has faded when the golem pops")
-		-- the controller: no flash over a golem (the reveal, the grid); the aura pulses behind instead
-		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		-- (hatch v2: the hero's reveal and the stage's golems; RevealFx's rays, glow and flash UNDER them)
-		local reveal = string.match(source, "local function revealHero%(.-\nend\n")
-		local grid = string.match(source, "local function standGolems%(.-\nend\n")
-		T.truthy(reveal and grid, "the reveal and the stage")
-		local code = function(text: string): string
-			return (string.gsub(text, "%-%-[^\n]*", ""))
-		end
-		T.falsy(string.find(code(source), "o.Flash", 1, true), "the full-screen flash (over everything) is never used")
-		T.truthy(string.find(reveal, "o.Hero.ImageTransparency = 0", 1, true), "the golem's view made opaque")
-		T.truthy(string.find(reveal, "RevealFx.show(", 1, true), "its rarity glows behind it (RevealFx)")
-		T.truthy(string.find(source, "RevealFx.flash(o.Gui, color:Lerp(Color3.new(1, 1, 1), 0.45), 0.85, 2)", 1, true), "the batch's flash under the stage")
-		T.truthy(o.Stage.ZIndex > 2 and o.Hero.ZIndex > 2, "the flash (ZIndex 2) under the stage and the hero")
-		-- the grid's golems: every picture opaque
-		CapsuleView.setGrid(o, { "PebbleGolem", "HeartstoneColossus", "RoseKnight" }, { [2] = true }, 2)
-		for _, cell in o.Cells do
-			for _, d in cell.Frame:GetDescendants() do
-				if d:IsA("ViewportFrame") or (d:IsA("ImageLabel") and d.Name == "Picture") then
-					T.eq((d :: any).ImageTransparency, 0, cell.Kind .. ": " .. d.Name .. " opaque")
-				end
-			end
-		end
-		-- the egg panel's cards: opaque at rest (silhouettes black, never faded)
-		local refs = EggPanel.build()
-		local lines = EggPanel.lines("Crystal", false, { QuartzSprite = true })
-		EggPanel.apply(refs, "Crystal", EggPanel.layout(#lines, false), 1)
-		EggPanel.setLines(refs, lines, nil)
-		EggPanel.setFade(refs, 0)
-		for i, card in refs.Cards do
-			if lines[i] then
-				T.eq(card.View.ImageTransparency, 0, lines[i].Golem .. ": its picture opaque")
-				T.truthy(card.Picture.ZIndex > card.Rays.ZIndex, "the card's rays behind the golem")
-			end
-		end
-	end)
 	T.test("EggPanel: switching eggs moves the golem models between the cards (a real modelFor)", function()
 		local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 		-- the controller's modelFor: one model per kind, built once and kept, lent to a card
@@ -1130,8 +965,7 @@ return function(T, Loader)
 		for _, state in { "Waiting", "Playing" } do
 			T.truthy(EggPanel.holdCards(state), state .. ": the cards wait (no spoiler before the reveal)")
 		end
-		T.falsy(EggPanel.holdCards("End"), "the golem is out")
-		T.falsy(EggPanel.holdCards("Idle"))
+		T.falsy(EggPanel.holdCards("Idle"), "the opening ended: the golems are out")
 		-- the light skin leaves the eggs' own guis alone
 		local light = fs.readFile(Loader.root .. "/src/client/Controllers/LightWorldController.luau")
 		local skip = string.match(light, "LightWorldController%.Skip = {(.-)}")
@@ -1184,9 +1018,13 @@ return function(T, Loader)
 				UserId = 1,
 				Root = root,
 				Humanoid = humanoid,
+				PlayerGui = playerGui,
 				CharacterRemoving = signal(),
 				WaitForChild = function()
 					return playerGui
+				end,
+				FindFirstChildOfClass = function(_, class: string)
+					return if class == "PlayerGui" then playerGui else nil
 				end,
 				GetAttribute = function(_, key: string)
 					return if key == "PaidRandomRestricted" then false else nil -- (the policy said: paid random items allowed)
@@ -1395,7 +1233,21 @@ return function(T, Loader)
 				CapsuleController,
 				"showing",
 				function()
-					return w.opening == "Playing" or w.opening == "End"
+					return w.opening == "Playing"
+				end,
+			},
+			{
+				CapsuleController,
+				"setAutoHook",
+				function(hook)
+					hooks.autoHook = hook -- (set once, at the controller's init)
+				end,
+			},
+			{
+				CapsuleController,
+				"onPlaying",
+				function(fn)
+					hooks.onPlaying = fn
 				end,
 			},
 			{
@@ -1625,19 +1477,20 @@ return function(T, Loader)
 			w.at("Stone")
 			C.toggleAuto("Stone")
 			T.eq(C._test.state().Auto, "Stone", "Auto on")
-			T.eq(w.auto[#w.auto], true, "the end screen knows")
+			T.eq(w.auto[#w.auto], true, "the opening knows (its fast timings, its Auto button on)")
 			C._test.tick()
 			T.eq(#w.buys, 1, "it opens one")
 			T.truthy(w.buys[1].Quiet and w.buys[1].Count == 1, "one egg, quietly")
-			-- one at a time: nothing while an open waits, plays or its end screen is young
-			for _, state in { { "Waiting", 0 }, { "Playing", 0 }, { "End", C.AutoDwell * 0.5 } } do
-				w.opening, w.endFor = state[1], state[2]
+			-- one at a time: nothing while an open waits or its opening plays
+			for _, state in { "Waiting", "Playing" } do
+				w.opening = state
 				C._test.tick()
-				T.eq(#w.buys, 1, state[1] .. ": it waits")
+				T.eq(#w.buys, 1, state .. ": it waits")
 			end
-			w.opening, w.endFor = "End", C.AutoDwell + 0.1
+			w.opening = "Idle"
 			C._test.tick()
-			T.eq(#w.buys, 2, "the next egg after the end screen showed")
+			T.eq(#w.buys, 2, "the next egg as soon as the opening ended (the golems flew to the player)")
+			T.eq(C.AutoDwell, nil, "no end screen to dwell on")
 			-- a short wait isn't a stop
 			for _, reason in { "Busy", "Cooldown" } do
 				w.answer = { false, reason }
@@ -1655,7 +1508,7 @@ return function(T, Loader)
 				T.eq(C._test.state().Auto, "Stone", label .. ": on first")
 				make()
 				T.eq(C._test.state().Auto, nil, label .. ": Auto stopped")
-				T.eq(w.auto[#w.auto], false, label .. ": the end screen knows")
+				T.eq(w.auto[#w.auto], false, label .. ": the opening knows")
 			end
 			stops("no coins", function()
 				w.answer = { false, "NoCoins" }
@@ -1668,8 +1521,9 @@ return function(T, Loader)
 			stops("the server refused", function()
 				hooks.onStop("RateLimited")
 			end)
-			stops("the end screen closed", function()
-				hooks.onStop("Closed")
+			stops("its button in the opening", function()
+				T.truthy(hooks.autoHook and hooks.autoHook.available(), "the opening's Auto button shows here")
+				hooks.autoHook.toggle()
 			end)
 			stops("walking away", function()
 				w.leave()
@@ -1682,17 +1536,19 @@ return function(T, Loader)
 				C._test.tick()
 				w.window = false
 			end)
-			-- the odds change under Auto (Triple Lucky ran out under an end screen): it stops, and the
-			-- overlay says why (a toast would sit under its dim)
+			-- the odds change under Auto (Triple Lucky ran out during an opening): it stops, and the
+			-- opening says why by its Auto button (the HUD's toasts hide while it plays)
 			w.lucky = true
 			stops("Triple Lucky ran out", function()
-				w.opening, w.endFor = "End", C.AutoDwell + 0.1
+				w.opening = "Playing"
 				w.lucky = false
 				local buys = #w.buys
+				hooks.onChanged() -- (the boost's end pushes State while the egg opens)
+				w.opening = "Idle"
 				C._test.tick()
 				T.eq(#w.buys, buys, "no egg on odds the player hasn't seen")
 			end)
-			T.eq(w.autoNote, "Triple Lucky ended: Auto stopped", "the overlay's hint says why")
+			T.eq(w.autoNote, "Triple Lucky ended: Auto stopped", "the opening's note says why")
 			T.eq(C._test.state().Lucky, false, "the panel shows the normal odds now")
 			-- Triple Lucky begins under Auto (no opening up): it stops, a toast says why
 			stops("Triple Lucky began", function()
@@ -1715,6 +1571,12 @@ return function(T, Loader)
 			T.eq(w.autoNote, "Triple Lucky ended: Auto stopped")
 			w.opening = "Idle"
 			hooks.inputChanged.fire()
+			-- while an egg opens the panel steps aside (the opening's own Auto button shows), then comes back
+			local r = C._test.state().Refs
+			hooks.onPlaying(true)
+			T.falsy(r.Gui.Enabled, "the panel steps aside while an egg opens")
+			hooks.onPlaying(false)
+			T.truthy(r.Gui.Enabled, "back with the HUD")
 			-- never on a Robux egg
 			w.opening = "Idle"
 			w.at("Royal")
@@ -1791,77 +1653,13 @@ return function(T, Loader)
 			w.opening = "Waiting"
 			hooks.onChanged()
 			T.truthy(C._test.state().Lines[index].Silhouette, "nor while the next open waits")
-			-- the reveal is over (the end screen): it lights up
-			w.opening = "End"
+			-- the opening is over (the golems flew to the player): it lights up
+			w.opening = "Idle"
 			hooks.onChanged()
 			T.falsy(C._test.state().Lines[index].Silhouette, "in colour after the reveal")
 			T.eq(s.Refs.Cards[index].View.ImageColor3, roblox.Color3.new(1, 1, 1))
 			w.state.Golems.Owned = {}
 		end)
-	end)
-	T.test("HatchFx: many eggs move rigidly (a PivotTo an egg, a half), sizes as built, faded eggs left alone", function()
-		local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
-		local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
-		local CFrame = Loader.CFrame
-		local Color3 = roblox.Color3
-		local plan = HatchFx.plan(3)
-		local red = Color3.fromRGB(255, 0, 0)
-		local place = CFrame.new(2, 1, -3)
-		local function near(a: any, b: any): boolean
-			return (a.Position - b.Position).Magnitude < 1e-3
-				and (a.LookVector - b.LookVector).Magnitude < 1e-3
-				and (a.UpVector - b.UpVector).Magnitude < 1e-3
-		end
-		for _, id in TEMPLE do
-			local rec = HatchFx.record(GolemBuilder.capsule(id, nil, { Calm = true }))
-			T.truthy(rec.Halves ~= nil, id .. ": two halves that pivot")
-			-- the build-up, rigid: every part where the per-part pose would put it
-			local t = plan.Shake * 0.6
-			HatchFx.pose(rec, place, t, plan.Shake, plan, red, false)
-			local roll, _, _, hop = HatchFx.shakeAt(t, plan)
-			local cf = place * CFrame.new(0, hop, 0) * CFrame.Angles(0, 0.4 * math.sin(t * 2), roll)
-			for i, part in rec.Parts do
-				T.truthy(near(part.CFrame, cf * rec.Base[i]), `{id} {part.Name}: in place (build-up)`)
-				T.eq(part.Size, rec.Sizes[i], "as built")
-			end
-			-- the break: the halves fly rigidly
-			local u = HatchFx.BurstTime * 0.5
-			HatchFx.pose(rec, place, plan.Shake + u, plan.Shake, plan, red, false)
-			local k = math.clamp(u / HatchFx.BurstTime, 0, 1)
-			local up = place * CFrame.new(1.4 * k, 1.4 + 5 * k, 0) * CFrame.Angles(0, 0, -1.6 * k) * CFrame.new(0, -1.4, 0)
-			local down = place * CFrame.new(-0.8 * k, -4 * k * k, 0) * CFrame.Angles(0, 0, 0.8 * k)
-			local top = rec.Model:FindFirstChild("Top")
-			local bottom = rec.Model:FindFirstChild("Bottom")
-			for i, part in rec.Parts do
-				local half = if part:IsDescendantOf(top) then up elseif part:IsDescendantOf(bottom) then down else nil
-				if half then
-					T.truthy(near(part.CFrame, half * rec.Base[i]), `{id} {part.Name}: its half's place (break)`)
-				end
-				T.eq(part.Size, rec.Sizes[i], "no stretch: the size as built")
-			end
-			-- gone: once every part is see-through nothing is written any more
-			HatchFx.pose(rec, place, plan.Shake + HatchFx.BurstTime + 0.01, plan.Shake, plan, red, false)
-			T.truthy(rec.Faded, id .. ": faded")
-			rec.Parts[1].Transparency = 0.5
-			HatchFx.pose(rec, place, plan.Shake + HatchFx.BurstTime + 0.1, plan.Shake, plan, red, false)
-			T.eq(rec.Parts[1].Transparency, 0.5, "a faded egg is left alone")
-			HatchFx.reset(rec)
-			T.falsy(rec.Faded, "back in the pool: whole")
-		end
-		-- one egg: squashed and stretched part by part, then every size back as built (once)
-		local rec = HatchFx.record(GolemBuilder.capsule("Crystal"))
-		HatchFx.pose(rec, place, plan.Shake * 0.99, plan.Shake, plan, red, true)
-		T.truthy(rec.Bent, "squashed")
-		HatchFx.pose(rec, place, plan.Shake + 0.02, plan.Shake, plan, red, true)
-		T.truthy(rec.Bent, "stretched at the break")
-		HatchFx.pose(rec, place, plan.Shake + 0.2, plan.Shake, plan, red, true)
-		T.falsy(rec.Bent, "then whole again")
-		for i, part in rec.Parts do
-			T.eq(part.Size, rec.Sizes[i], part.Name .. ": as built")
-		end
-		-- the controller: calm eggs for many on a phone; no flash left over the golem after a skip-all
-		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
-		T.truthy(string.find(source, "takeEggs(result.Capsule, n, n > 3 and compactNow())", 1, true), "Open 10 on a phone: calm eggs")
 	end)
 	-- A camera for the controller (Lune has none): every point at `w.camZ` deep, on the screen when in front.
 	local function fakeCamera(w: any): any
@@ -1965,48 +1763,101 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test(
-		"CapsuleController: Auto off brings back OPEN AGAIN and the odds note; a buy on odds the panel didn't show is refused",
-		function()
-			withController(function(_C, w)
-				local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
-				local ok, err = pcall(function()
-					local result =
-						{ Capsule = "Stone", Count = 1, Lucky = true, Free = false, Golems = { { Id = 1, Kind = "PebbleGolem" } } }
-					-- Auto on, Triple Lucky gone meanwhile: no OPEN AGAIN, the note still the result's odds
-					local o = CC._test.endScreen(result, "Stone", 1, true)
-					T.falsy(CC._test.again(o), "Auto on: no OPEN AGAIN")
-					T.eq(o.Note.Text, "TRIPLE LUCKY ODDS", "the result's odds")
-					T.truthy(string.find(o.Hint.Text, "Auto is on", 1, true), "the hint: how to stop Auto")
-					-- Auto stops (the odds changed): OPEN AGAIN and the new odds' note are back, the hint says why
-					CC._test.setAuto(false, "Triple Lucky ended: Auto stopped")
-					T.truthy(CC._test.again(o), "OPEN AGAIN back")
-					T.eq(o.Note.Text, "Triple Lucky ended: normal odds now", "the note: OPEN AGAIN's odds")
-					T.truthy(string.find(o.Hint.Text, "Triple Lucky ended: Auto stopped", 1, true), "over the dim, not a toast under it")
-					CC._test.close()
-					-- the other way: the result on normal odds, Triple Lucky on now
-					local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
-					w.state.Boosts = { [BoostConfig.Kinds.TripleLucky.Field] = NOW + 600 }
-					T.truthy(CC.luckyShown(), "Triple Lucky on now")
-					local plain =
-						{ Capsule = "Stone", Count = 1, Lucky = false, Free = false, Golems = { { Id = 2, Kind = "PebbleGolem" } } }
-					o = CC._test.endScreen(plain, "Stone", 1, true)
-					T.falsy(CC._test.again(o))
-					CC._test.setAuto(false, "Triple Lucky is on: Auto stopped")
-					T.truthy(CC._test.again(o), "OPEN AGAIN back")
-					T.eq(o.Note.Text, "Triple Lucky is on: OPEN AGAIN uses its odds", "the note: its odds now")
-					CC._test.close()
-					w.state.Boosts = {}
-					-- request(): the odds the panel showed (lucky) aren't the card's (normal): refused, nothing sent
-					local sent, reason = CC._test.request("Stone", 1, nil, true)
-					T.falsy(sent)
-					T.eq(reason, "OddsChanged", "refused: the panel shows the new odds first")
-				end)
-				CC._test.close()
-				if not ok then
-					error(err, 0)
-				end
+	T.test("CapsuleController: the opening's Auto button and note, B stops Auto, a buy on odds the panel didn't show is refused", function()
+		withController(function(C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local ok, err = pcall(function()
+				-- (the real controller's hook: the fake's recorder stands in the module, the real one here)
+				local toggled = 0
+				local available = true
+				local o = CC._test.opening()
+				CC._test.setAutoHook({
+					available = function(): boolean
+						return available
+					end,
+					toggle = function()
+						toggled += 1
+					end,
+				})
+				CC._test.setPlaying(true)
+				CC._test.setAuto(true)
+				T.truthy(o.AutoHolder.Visible, "Auto runs: its button shows")
+				T.eq(o.AutoLabel.Text, "AUTO ON")
+				T.eq(o.Auto.BackgroundColor3, BrightTheme.Paints.Green.Bottom, "green while on")
+				-- a gamepad's B while Auto runs stops Auto (never skip-all then); off, B skips all
+				local B = { KeyCode = roblox.Enum.KeyCode.ButtonB }
+				CC._test.onSkipAll("x", roblox.Enum.UserInputState.Begin, B)
+				T.eq(toggled, 1, "B: Auto off")
+				-- the odds changed under it: the note by the Auto button says why (the HUD's toasts hide)
+				CC._test.setAuto(false, "Triple Lucky ended: Auto stopped")
+				T.truthy(o.Note.Visible)
+				T.eq(o.Note.Text, "Triple Lucky ended: Auto stopped")
+				T.eq(o.AutoLabel.Text, "AUTO")
+				CC._test.onSkipAll("x", roblox.Enum.UserInputState.Begin, B)
+				T.eq(toggled, 1, "B with Auto off skips all: it never turns Auto on")
+				-- nowhere to run Auto (no egg here): no button
+				available = false
+				CC._test.refreshAuto()
+				T.falsy(o.AutoHolder.Visible, "no Auto here: no button")
+				CC._test.setPlaying(false)
+				CC._test.setAutoHook(nil)
+				-- request(): the odds the panel showed (lucky) aren't the card's (normal): refused, nothing sent
+				local sent, reason = CC._test.request("Stone", 1, nil, true)
+				T.falsy(sent)
+				T.eq(reason, "OddsChanged", "refused: the panel shows the new odds first")
+				local _ = C
+				local _w = w
 			end)
-		end
-	)
+			CC._test.close()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
+	T.test("CapsuleController: the HUD steps away while an egg opens (scale 0), what changed meanwhile is kept, back after", function()
+		withController(function(_C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local ok, err = pcall(function()
+				local playerGui = me.PlayerGui
+				local function screen(name: string, scale: number?): (any, any)
+					local gui = Instance.new("ScreenGui")
+					gui.Name = name
+					local s = Instance.new("UIScale")
+					s.Name = "Scale"
+					s.Scale = scale or 1.25
+					s.Parent = gui
+					gui.Parent = playerGui
+					return gui, s
+				end
+				local hud, hudScale = screen("TerraForgeHud")
+				local shop, shopScale = screen("TerraForgeCapsules")
+				local quest, questScale = screen("QuestPop") -- (a gui that isn't the game's own: never hidden)
+				local fade = Instance.new("ScreenGui") -- (a fade without the HUD's scale finishes as it is)
+				fade.Name = "TerraForgeTeleportFade"
+				fade.Parent = playerGui
+				hud.Enabled = true
+				shop.Enabled = false
+				CC._test.hideHud(true)
+				T.eq(hudScale.Scale, 0, "the HUD hides")
+				T.eq(shopScale.Scale, 0, "a window too")
+				T.eq(questScale.Scale, 1.25, "a gui that isn't ours stays")
+				T.truthy(hud.Enabled and not shop.Enabled, "no Enabled is touched (the windows keep their own state)")
+				T.truthy(fade.Enabled, "the fade untouched")
+				-- the HUD's scale changes meanwhile (a resize): the game's watcher hides it again at once
+				-- (Lune's instances fire no property signals); the restore keeps the scale written
+				hudScale.Scale = 0.9
+				CC._test.hideHud(false)
+				T.near(hudScale.Scale, 0.9, 1e-6, "back at the scale written meanwhile")
+				T.eq(shopScale.Scale, 1.25, "back")
+				for _, g in { hud, shop, quest, fade } do
+					g:Destroy()
+				end
+				local _ = w
+			end)
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
 end

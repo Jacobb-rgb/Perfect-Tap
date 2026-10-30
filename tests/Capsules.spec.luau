@@ -1133,60 +1133,34 @@ return function(T, Loader)
 		CapsuleView.setCards(pc, cardsNow)
 		CapsuleView.setCards(fresh, cardsNow)
 		sameLook(pc.Gui, fresh.Gui, "shop back to PC")
-		-- the opening overlay
+		-- the opening (both of its guis)
 		local o1 = CapsuleView.buildOpening(false)
-		CapsuleView.layoutOpening(o1, true, w, h)
+		CapsuleView.layoutOpening(o1, true, w, h, { Touch = true, Inset = 58 / 0.62 })
 		local o2 = CapsuleView.buildOpening(true)
-		CapsuleView.layoutOpening(o2, true, w, h)
+		CapsuleView.layoutOpening(o2, true, w, h, { Touch = true, Inset = 58 / 0.62 })
 		sameLook(o1.Gui, o2.Gui, "opening")
-		T.truthy(o2.Hint.TextSize >= 20 and o2.Note.TextSize >= 20 and o2.Counter.TextSize >= 28, "opening texts on a phone")
+		sameLook(o1.Controls, o2.Controls, "opening's Auto")
+		T.truthy(o2.Note.TextSize >= 20 and o2.AutoLabel.TextSize >= 20, "opening texts on a phone")
 	end)
 
-	T.test("Capsules view: the opening overlay lays out on PC and phones", function()
+	T.test("Capsules view: the opening lays out on PC and phones (the whole screen, the Auto button 44 pt)", function()
 		for _, compact in { false, true } do
 			local o = CapsuleView.buildOpening(compact)
-			local w, h = if compact then 916 else 1280, if compact then 423 else 684
-			CapsuleView.layoutOpening(o, compact, w, h)
-			CapsuleView.setPlate(o, "CelestialSovereign", true)
-			T.truthy(o.Plate.Visible)
-			T.eq(o.PlateRarity.Text, "MYTHIC")
-			T.truthy(o.PlateNew.Visible)
-			local kinds = {
-				"PebbleGolem",
-				"RoseKnight",
-				"EmberImp",
-				"TinTumbler",
-				"QuartzSprite",
-				"CoalChomper",
-				"GildedPorter",
-				"SilverSquire",
-				"JadeGardener",
-				"MoonstoneOracle",
-			}
-			CapsuleView.setGrid(o, kinds, { [2] = true }, 10)
-			T.eq(#o.Cells, 10)
-			local cell = o.GridLayout.CellSize
-			local perRow = math.floor((o.Grid.Size.X.Offset + 12) / (cell.X.Offset + 12))
-			T.truthy(perRow >= 5, "5 per row")
-			local rowsH = 2 * cell.Y.Offset + 12
-			T.le(rowsH, o.Grid.Size.Y.Offset, "two rows fit")
-			T.eq(CapsuleView.best(kinds), "MoonstoneOracle", "the rarest")
+			local w, h = if compact then 1361 else 1280, if compact then 629 else 720
+			CapsuleView.layoutOpening(o, compact, w, h, { Touch = compact, Inset = if compact then 58 / 0.62 else 29 })
+			T.eq(o.Stage.Size.X.Offset, w, "the stage: the whole screen")
+			T.eq(o.Stage.Size.Y.Offset, h)
+			T.eq(o.Flash.Size.X.Offset, w)
+			T.eq(#o.Tags, CapsuleView.StageTags, "a name for every golem of an Open 10")
 			if compact then
 				for _, target in CapsuleView.openTargets(o) do
 					T.truthy(target.Size.Y.Offset * CapsuleView.PhoneScale >= CapsuleView.MinTouch - 0.5, target.Name .. " 44 pt")
 				end
 			end
 			for _, target in CapsuleView.openTargets(o) do
-				T.le(target.Position.Y.Offset, h, target.Name .. " on screen")
-				T.truthy(target:IsDescendantOf(o.Controls), target.Name .. " in the overlay's selection group")
+				T.truthy(target:IsDescendantOf(o.Controls), target.Name .. " in the opening's own gui")
 			end
-			-- a gamepad can't leave the overlay for the shop behind it
-			T.eq(o.Controls.SelectionGroup, true)
-			for _, side in { "Up", "Down", "Left", "Right" } do
-				T.eq(o.Controls["SelectionBehavior" .. side], roblox.Enum.SelectionBehavior.Stop, side .. " stops")
-			end
-			T.eq(o.Controls.Size.X.Offset, w, "the group covers the screen (button positions unchanged)")
-			T.eq(o.Controls.Size.Y.Offset, h)
+			T.eq(CapsuleView.best({ "PebbleGolem", "MoonstoneOracle", "RoseKnight" }), "MoonstoneOracle", "the rarest")
 		end
 	end)
 
@@ -1225,7 +1199,7 @@ return function(T, Loader)
 				T.eq(title.Text, string.upper(capsule.Name), "the old labels are gone")
 				local odds = CapsuleConfig.rarityOdds(capsule.Id, lucky)
 				local sum = 0
-				for i, info in Rarity.List do
+				for i, info in CapsuleConfig.rarities() do -- (the golems' six: a "Secret" Rarity is for ores)
 					local total = gui:FindFirstChild("Total" .. i)
 					T.truthy(total, "row " .. i)
 					if odds[info.Id] then
@@ -1240,7 +1214,7 @@ return function(T, Loader)
 				end
 				T.near(sum, 1, 1e-9, "the totals add up")
 				-- no row label or total under the stall's neon RarityChip parts
-				for i = 1, #Rarity.List do
+				for i = 1, #CapsuleConfig.rarities() do
 					for _, name in { "Row" .. i, "Total" .. i } do
 						local l = gui:FindFirstChild(name)
 						T.truthy(l.Position.X.Scale >= chipEnd - 1e-6, `{name} starts right of the stall's chips ({l.Position.X.Scale} >= {chipEnd})`)
