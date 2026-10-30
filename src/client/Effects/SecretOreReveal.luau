@@ -46,6 +46,7 @@ local Workspace = game:GetService("Workspace")
 
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Format"))
 local SecretCinematic = require(script.Parent:WaitForChild("SecretCinematic"))
+local RevealKit = require(script.Parent:WaitForChild("RevealKit"))
 
 local SecretOreReveal = {}
 
@@ -69,7 +70,10 @@ export type Env = {
 	Input: () -> string, -- "Touch" | "Gamepad" | "Mouse"
 	Phone: () -> boolean,
 	Touch: () -> boolean,
-	Reduced: () -> boolean,
+	Reduced: () -> boolean, -- (read every frame: turned on mid-show it latches on, never back)
+	KeyImage: () -> string, -- the pad's A glyph (Cross on PlayStation; "" none)
+	KeyName: () -> string, -- its name for the skip hint ("A", "Cross")
+	TenFoot: () -> boolean, -- a TV (the hint inside the overscan band)
 	Sound: (name: string) -> (),
 	Hum: (volume: number, speed: number) -> (), -- the charging hum's voice (volume 0: stopped)
 	Shake: (amount: number) -> (),
@@ -83,6 +87,7 @@ export type Request = {
 	Chance: string?,
 	Value: string?,
 	New: boolean?,
+	OnReveal: (() -> ())?,
 	OnDone: (() -> ())?,
 	Target: (() -> Vector2?)?,
 	Timing: { [string]: any }?,
@@ -92,6 +97,7 @@ export type Opts = {
 	Chance: string?,
 	New: boolean?,
 	Stars: number?,
+	OnReveal: (() -> ())?, -- once, when the name shows (the reveal), or at the end if it never did
 	OnDone: (() -> ())?,
 	Target: (() -> Vector2?)?,
 	Timing: { [string]: any }?,
@@ -121,9 +127,20 @@ type Show = {
 	Step: Connection?,
 	Reset: Connection?,
 	Target: (() -> Vector2?)?,
+	OnReveal: (() -> ())?,
 	OnDone: (() -> ())?,
 	Finished: boolean,
 }
+
+-- Runs a caller's hook once, its errors only warned.
+local function hook(name: string, fn: (() -> ())?)
+	if fn then
+		local ok, err = pcall(fn :: () -> any)
+		if not ok then
+			warn(`[SecretOreReveal] {name} error: {err}`)
+		end
+	end
+end
 
 -- The post effect `name` of `className` under `parent`: the one already there (a leftover) or a new one.
 local function effect(parent: Instance, className: string, name: string): Instance
@@ -169,14 +186,12 @@ function SecretOreReveal.new(env: Env): Runner
 		if current == show then
 			current = nil
 		end
+		local reveal = show.OnReveal
+		show.OnReveal = nil
+		hook("OnReveal", reveal) -- (never reached the reveal: at its end, never lost)
 		local done = show.OnDone
 		show.OnDone = nil
-		if done then
-			local ok, err = pcall(done :: () -> any)
-			if not ok then
-				warn(`[SecretOreReveal] OnDone error: {err}`)
-			end
-		end
+		hook("OnDone", done)
 	end
 
 	local function frame(show: Show, dt: number)
@@ -191,12 +206,24 @@ function SecretOreReveal.new(env: Env): Runner
 		if not show.Opts.ContinuedAt and t >= tm.AutoContinue then
 			show.Opts.ContinuedAt = t -- nobody gets stuck
 		end
-		-- the burst: its one flash (RevealKit's gap) and the world camera's kick
+		-- Reduce motion turned on mid-show: on from now (no flash, no retry, no kick), never back
+		if not show.Reduced and env.Reduced() then
+			show.Reduced = true
+			show.Opts.Reduced = true
+			show.Retry = nil
+			show.Opts.FlashAt = math.huge
+		end
+		-- the burst: its one flash (RevealKit's gap) and the world camera's kick; a long frame (a hitch,
+		-- the app back from the background) that jumped past the flash's whole fade takes no slot
 		if not show.Boomed and t >= tm.Explosion then
 			show.Boomed = true
-			local at, retry = SecretCinematic.boomFlash(env.Clock(), show.Reduced)
-			show.Opts.FlashAt = if at < math.huge then tm.Explosion + at else math.huge
-			show.Retry = retry
+			if t - tm.Explosion < RevealKit.Style.FlashTime then
+				local at, retry = SecretCinematic.boomFlash(env.Clock(), show.Reduced)
+				show.Opts.FlashAt = if at < math.huge then tm.Explosion + at else math.huge
+				show.Retry = retry
+			else
+				show.Opts.FlashAt = math.huge
+			end
 			if not show.Reduced then
 				env.Shake(SecretCinematic.tierOf(show.Stars).Shake)
 			end
@@ -209,11 +236,17 @@ function SecretOreReveal.new(env: Env): Runner
 				show.Opts.FlashAt = tm.Explosion + since
 			end
 		end
-		-- the sounds the clock passed
+		-- the sounds the clock passed (a long frame plays only the last quarter second's: never a pile-up)
 		for _, cue in show.Cues do
-			if cue.At > before and cue.At <= t then
+			if cue.At > before and cue.At <= t and t - cue.At <= 0.25 then
 				env.Sound(cue.Sound)
 			end
+		end
+		-- the reveal: the caller's hook (the finder's own chat line waits for it)
+		if before < tm.Reveal and t >= tm.Reveal then
+			local reveal = show.OnReveal
+			show.OnReveal = nil
+			hook("OnReveal", reveal)
 		end
 		env.Hum(SecretCinematic.hum(t, tm))
 		-- the world behind it
@@ -221,6 +254,10 @@ function SecretOreReveal.new(env: Env): Runner
 		opts.Screen = env.Screen()
 		opts.TopInset = env.TopInset()
 		opts.Input = env.Input()
+		if opts.Input == "Gamepad" then
+			opts.KeyImage = env.KeyImage()
+			opts.KeyName = env.KeyName()
+		end
 		local target = show.Target
 		if opts.ContinuedAt and not opts.Target and target then
 			opts.Target = target()
@@ -275,16 +312,32 @@ function SecretOreReveal.new(env: Env): Runner
 			return v
 		end
 		local built = SecretCinematic.build()
-		-- CONTINUE by a click or a tap on the button itself (the binding takes the rest)
-		built.Button.Activated:Connect(press)
+		-- CONTINUE by a click or a tap on the button itself (the binding takes the rest), only a press that
+		-- began once it takes presses (a mash of the dead zone released after it never continues)
+		local downAt = -math.huge
+		built.Button.InputBegan:Connect(function(input: InputObject)
+			local show = current
+			local kind = input.UserInputType
+			if show and (kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch) then
+				downAt = show.T
+			end
+		end)
+		built.Button.Activated:Connect(function()
+			local show = current
+			if show and downAt >= show.Timing.ContinueAt then
+				press()
+			end
+		end)
 		view = built
 		return built
 	end
 
 	local function play(request: Request)
+		-- one show at a time: the one still up closes cleanly first (and one its OnDone started, too)
 		local old = current
-		if old then
-			finish(old) -- one show at a time: the one still up closes cleanly first
+		while old do
+			finish(old)
+			old = current
 		end
 		local v = ensureView()
 		local parent = env.GuiParent()
@@ -321,6 +374,7 @@ function SecretOreReveal.new(env: Env): Runner
 				Phone = env.Phone(),
 				Touch = env.Touch(),
 				Input = env.Input(),
+				TenFoot = env.TenFoot(),
 				FlashAt = math.huge, -- (set at the burst: RevealKit's gap)
 				ContinuedAt = nil,
 				Target = nil,
@@ -336,6 +390,7 @@ function SecretOreReveal.new(env: Env): Runner
 			Step = nil,
 			Reset = nil,
 			Target = request.Target,
+			OnReveal = request.OnReveal,
 			OnDone = request.OnDone,
 			Finished = false,
 		}
@@ -459,6 +514,24 @@ local function robloxEnv(): Env
 			return UserInputService.TouchEnabled
 		end,
 		Reduced = Motion.reduced,
+		KeyImage = function()
+			local ok, image = pcall(function()
+				return UserInputService:GetImageForKeyCode(Enum.KeyCode.ButtonA)
+			end)
+			return if ok and type(image) == "string" then image else ""
+		end,
+		KeyName = function()
+			local ok, name = pcall(function()
+				return UserInputService:GetStringForKeyCode(Enum.KeyCode.ButtonA)
+			end)
+			if ok and type(name) == "string" and name ~= "" then
+				return (string.gsub(name, "^Button", ""))
+			end
+			return "A"
+		end,
+		TenFoot = function()
+			return GuiService:IsTenFootInterface()
+		end,
 		Sound = function(name)
 			Sfx.play(name)
 		end,
@@ -511,6 +584,7 @@ function SecretOreReveal.Play(ore: Model | string, oreName: string, rarity: numb
 		Chance = o.Chance,
 		Value = if type(value) == "number" then Format.money(value) elseif value ~= "" then value else nil,
 		New = o.New,
+		OnReveal = o.OnReveal,
 		OnDone = o.OnDone,
 		Target = o.Target,
 		Timing = o.Timing,

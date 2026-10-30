@@ -40,6 +40,7 @@ local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local SecretCinematic = require(script.Parent.Parent.Effects.SecretCinematic)
 local SecretOreReveal = require(script.Parent.Parent.Effects.SecretOreReveal)
 local Motion = require(script.Parent.Parent.UI.Motion)
+local StateController = require(script.Parent.StateController)
 
 local SecretRevealController = {}
 
@@ -84,17 +85,20 @@ end
 
 -- The value the cinematic shows: the server's graded value of the clean ore (CleanResult.Value),
 -- else what a Flawless one is worth (ItemData.value, the grade the cleaning gives a secret).
-function SecretRevealController.valueOf(oreId: string, result: any?): number
+function SecretRevealController.valueOf(oreId: string, result: any?, sellMult: number?): number
+	-- (review 2026-10-30: the same number the Flawless card says a moment later: the value times the
+	-- player's sell bonus, rounded like DefaultLook's "Worth")
+	local mult = sellMult or StateController.sellMult()
 	local value = if type(result) == "table" then result.Value else nil
 	if type(value) == "number" and value == value and value > 0 and value < math.huge then
-		return value
+		return math.floor(value * mult + 0.5)
 	end
 	local grade = if type(result) == "table"
 			and type(result.Grade) == "string"
 			and ItemData.GradeById[result.Grade]
 		then result.Grade
 		else SecretOreConfig.Grade
-	return ItemData.value("Clean", oreId, grade)
+	return math.floor(ItemData.value("Clean", oreId, grade) * mult + 0.5)
 end
 
 -- Where the ore flies at the close (px on the cinematic's full screen): into the bag when the clean
@@ -121,11 +125,7 @@ function SecretRevealController.takeFound(oreId: string): { New: boolean }?
 	return nil
 end
 
-local function showChat(data: any)
-	local line = SecretRevealController.chatLine(data)
-	if not line then
-		return
-	end
+local function sayLine(line: string)
 	pcall(function()
 		local channels = game:GetService("TextChatService"):FindFirstChild("TextChannels")
 		local general = channels and channels:FindFirstChild("RBXGeneral")
@@ -133,6 +133,44 @@ local function showChat(data: any)
 			general:DisplaySystemMessage(line)
 		end
 	end)
+end
+
+--[[
+	The finder's own line waits for the cinematic's reveal (review 2026-10-30: the server announces
+	before the cleaning's result, so it would name the ore while the cinematic still hides it): held
+	until the reveal (OnReveal), the show's end, or HoldChat seconds at most; never dropped.
+]]
+SecretRevealController.HoldChat = 25
+local held: { string } = {}
+local function releaseChat()
+	local lines = table.clone(held)
+	table.clear(held)
+	for _, line in lines do
+		sayLine(line)
+	end
+end
+
+-- Whether a SecretChat is the local finder's own (held until the reveal) (pure: the specs).
+function SecretRevealController.isOwnLine(data: any, userId: number): boolean
+	return type(data) == "table" and data.UserId == userId and data.Global ~= true
+end
+
+local function showChat(data: any)
+	local line = SecretRevealController.chatLine(data)
+	if not line then
+		return
+	end
+	local me = Players.LocalPlayer
+	if me and SecretRevealController.isOwnLine(data, me.UserId) then
+		table.insert(held, line)
+		task.delay(SecretRevealController.HoldChat, function()
+			if table.find(held, line) then
+				releaseChat() -- (no cinematic came: never dropped)
+			end
+		end)
+		return
+	end
+	sayLine(line)
 end
 
 -- The HUD's backpack button's middle on the cinematic's full screen (nil when the HUD is hidden:
@@ -170,7 +208,13 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?, result:
 	SecretOreReveal.Play(oreId, OreData.get(oreId).Name, secret.Stars, SecretRevealController.valueOf(oreId, result), {
 		Chance = SecretOreConfig.chanceText(secret.OneIn),
 		New = info ~= nil and info.New,
-		OnDone = onDone,
+		OnReveal = releaseChat, -- (the finder's own chat line: now, with the name on screen)
+		OnDone = function()
+			releaseChat() -- (a skip, a cancel or a reset: never dropped)
+			if onDone then
+				onDone()
+			end
+		end,
 		Target = function()
 			local camera = Workspace.CurrentCamera
 			local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)

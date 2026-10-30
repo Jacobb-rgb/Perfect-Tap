@@ -296,7 +296,7 @@ SecretCinematic.Blur = { Discovery = 12, Charge = 16, Peak = 23, Reveal = 10 } -
 SecretCinematic.RayLength = 900 -- design units, end to end through the middle
 SecretCinematic.OreSize = 300 -- design units: the ore's viewport
 SecretCinematic.Fov = 30
-SecretCinematic.Hints = { Touch = "Tap to skip", Gamepad = "Press A to skip", Mouse = "Click to skip" }
+SecretCinematic.Hints = { Touch = "Tap to skip", Gamepad = "Press %s to skip", Mouse = "Click to skip" } -- (%s: the pad's A)
 SecretCinematic.Gold = { rgb(255, 246, 196), rgb(255, 204, 72), rgb(255, 160, 40) }
 
 function SecretCinematic.tierOf(stars: number?): Tier
@@ -350,12 +350,12 @@ SecretCinematic.Layouts = {
 		Half = 380,
 		OreAt = Vector2.new(-190, 0),
 		TextScale = 0.78,
-		Ribbon = Vector2.new(175, -178),
-		Title = Vector2.new(175, -124),
-		Name = Vector2.new(175, -56),
-		Row = Vector2.new(175, -6),
-		Value = Vector2.new(175, 38),
-		Button = Vector2.new(175, 116),
+		Ribbon = Vector2.new(162, -178),
+		Title = Vector2.new(162, -124),
+		Name = Vector2.new(162, -56),
+		Row = Vector2.new(162, -6),
+		Value = Vector2.new(162, 38),
+		Button = Vector2.new(162, 116),
 		New = Vector2.new(-82, -112),
 	},
 } :: { [string]: Mode }
@@ -413,6 +413,9 @@ export type Opts = {
 	Phone: boolean?, -- fewer pieces
 	Touch: boolean?, -- CONTINUE at least MinTouch tall
 	Input: string?, -- "Touch" | "Gamepad" | "Mouse": the skip hint, CONTINUE's key chip
+	KeyImage: string?, -- a gamepad's A (Cross on PlayStation): UserInputService:GetImageForKeyCode(ButtonA)
+	KeyName: string?, -- its name for the hint ("A", "Cross"): GetStringForKeyCode, without "Button"
+	TenFoot: boolean?, -- a TV: the skip hint inside the 5 % overscan band
 	FlashAt: number?, -- the show's second its flash starts (default Explosion; math.huge: none)
 	ContinuedAt: number?, -- the second CONTINUE was pressed (nil: not yet)
 	Target: Vector2?, -- px: where the ore flies at the close (nil: it fades where it is)
@@ -1101,6 +1104,17 @@ function SecretCinematic.build(): View
 	keyWord.Position = UDim2.fromScale(0.5, 0.5)
 	keyWord.Size = UDim2.fromScale(1, 1)
 	keyWord.TextColor3 = PopTheme.Outline
+	-- (the pad's own glyph where Roblox has one: Cross on PlayStation, A on Xbox)
+	UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Image = "",
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.86, 0.86),
+		Visible = false,
+		ZIndex = 11,
+	}, key)
 	-- the skip hint at the screen's bottom (before the reveal)
 	local hint = UIKit.new("TextLabel", {
 		Name = "Hint",
@@ -1469,13 +1483,17 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	end
 	view.Stage.Position = UDim2.fromOffset(layout.Center.X + shake.X, layout.Center.Y + shake.Y)
 	-- the ore's place: the middle, in the reveal its layout's place
-	local slide = easeInOut(span(t, R, R + 0.6))
+	local slide = if reduced then 1 else easeInOut(span(t, R, R + 0.6)) -- (Reduce motion: at its place, no slide)
 	local at = mode.OreAt * slide
 	view.Rig.Position = UDim2.fromOffset(at.X, at.Y)
 
 	-- the glow behind it: mysterious, growing with the charge, a swell at the burst and the pulse
 	local charge = span(t, C, E)
-	local burst = if t >= E then math.exp(-(t - E) * 3.2) else 0
+	-- (Reduce motion: no flash-strength surge: a third as strong, eased in over half a second)
+	local burst = if t < E
+		then 0
+		elseif reduced then 0.35 * easeOut(span(t, E, E + 0.5)) * math.exp(-math.max(0, t - E - 0.5) * 2)
+		else math.exp(-(t - E) * 3.2)
 	local pulse = bump(span(t, P, P + 0.7))
 	local rest = easeOut(span(t, E + 0.6, R + 0.4))
 	local breathe = if reduced then 0 else 0.04 * math.sin(t * 2.2)
@@ -1508,6 +1526,12 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		length = 0.5 * easeInOut(span(t, C + 0.2, E))
 		beamAlpha = (0.15 + 0.4 * charge) * span(t, C, C + 0.4)
 		beamWidth = 8 + 4 * charge
+	elseif reduced then
+		-- (Reduce motion: no shoot-out, no jump: they ease on from where the charge left them, slowly)
+		local on = easeInOut(span(t, E, E + 0.6))
+		length = 0.5 + 0.15 * on - 0.2 * easeInOut(span(t, E + 0.6, R))
+		beamAlpha = 0.55 + 0.15 * on - 0.3 * easeInOut(span(t, E + 0.6, R + 0.3)) + 0.25 * pulse
+		beamWidth = 12
 	else
 		local out = easeOut(span(t, E, E + 0.25))
 		length = 0.5 + 0.8 * out - 0.35 * easeInOut(span(t, E + 0.3, R))
@@ -1534,7 +1558,7 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		end
 	end
 	local fans = if phone then SecretCinematic.Phone.Fans else #view.Fans
-	local fanAlpha = (0.08 * charge + 0.12 * easeOut(span(t, E, E + 0.3))) * stay * (if reduced then 0.6 else 1)
+	local fanAlpha = (0.08 * charge + 0.12 * easeOut(span(t, E, E + (if reduced then 0.6 else 0.3)))) * stay * (if reduced then 0.6 else 1)
 	for k, fan in view.Fans do
 		local on = k <= fans and fanAlpha > 0.005
 		fan.Visible = on
@@ -1613,7 +1637,7 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		if k <= #tier.Shocks and not reduced then
 			u = (t - E - tier.Shocks[k]) / 0.62
 			color = if k == 1 then palette.Light:Lerp(tone(palette, 0, t), math.clamp(u, 0, 1)) else alternate(palette, k, 3, t)
-		elseif k == #view.Shocks then
+		elseif k == #view.Shocks and not reduced then
 			u = (t - P) / 0.9
 		end
 		RevealKit.poseRing(ring, if stay < 1 then -1 else u, color)
@@ -1691,9 +1715,9 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	view.OreHolder.Position = UDim2.fromOffset(away.X, away.Y)
 	view.OreScale.Scale = size
 	view.Port.ImageTransparency = gone
-	local light = 0.08 + 0.55 * charge ^ 1.5 + 0.37 * easeOut(span(t, E, E + 0.15))
-	if t >= E then
-		light = 1
+	local light = 0.08 + 0.55 * charge ^ 1.5 + 0.37 * easeOut(span(t, E, E + (if reduced then 0.6 else 0.15)))
+	if t >= E and not reduced then
+		light = 1 -- (under the flash)
 	end
 	view.Port.Ambient = DARK_AMBIENT:Lerp(LIT_AMBIENT, light)
 	view.Port.LightColor = DARK_LIGHT:Lerp(LIT_LIGHT, light)
@@ -1790,6 +1814,7 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		view.NewTag.Position = UDim2.fromOffset(place.X, place.Y)
 		view.NewScale.Scale = textScale * (if reduced then 1 else easeOutBack(newIn))
 		RevealKit.fade(view.NewTag, 1 - newIn * stay)
+		view.NewTag.BackgroundTransparency = 1 - newIn * stay -- (its gold body: fade only fades what is inside)
 	end
 	-- CONTINUE: pops in (mostly in when it starts taking presses), breathes, its bar fills until it
 	-- goes on its own
@@ -1797,17 +1822,34 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	view.ButtonHolder.Visible = buttonIn > 0 and stay > 0
 	if view.ButtonHolder.Visible then
 		view.ButtonHolder.Position = UDim2.fromOffset(mode.Button.X, mode.Button.Y)
-		local pop = if reduced then 1 else easeOutBack(buttonIn) * (1 + 0.025 * math.sin(t * 4))
+		local pop = if reduced then 1 else easeOutBack(buttonIn) * (1 + 0.0125 * (1 + math.sin(t * 4))) -- (up only: >= MinTouch)
 		view.ButtonScale.Scale = textScale * SecretCinematic.buttonScale(layout, opts.Touch) * pop
 		local alpha = 1 - (if reduced then buttonIn else math.min(1, buttonIn * 2)) * stay
 		fadeButton(view, alpha)
 		view.ButtonFill.Size = UDim2.fromScale(span(t, tm.ContinueAt, tm.AutoContinue), 1)
 		view.ButtonKey.Visible = opts.Input == "Gamepad"
+		if view.ButtonKey.Visible then
+			local glyph = view.ButtonKey:FindFirstChild("Glyph")
+			local text = view.ButtonKey:FindFirstChild("Text")
+			local image = opts.KeyImage or ""
+			if glyph and glyph:IsA("ImageLabel") then
+				glyph.Image = image
+				glyph.Visible = image ~= ""
+				glyph.ImageTransparency = alpha
+			end
+			if text and text:IsA("TextLabel") then
+				text.Visible = image == ""
+				text.Text = string.sub(opts.KeyName or "A", 1, 2)
+			end
+		end
 	end
 	-- the skip hint (before the burst's tail)
 	local hintAlpha = span(t, tm.SkipFrom + 0.4, tm.SkipFrom + 0.9) * (1 - span(t, tm.SkipTo - 0.3, tm.SkipTo)) * stay
-	view.Hint.Text = SecretCinematic.Hints[opts.Input or "Mouse"] or SecretCinematic.Hints.Mouse
+	local hintText = SecretCinematic.Hints[opts.Input or "Mouse"] or SecretCinematic.Hints.Mouse
+	view.Hint.Text = if opts.Input == "Gamepad" then string.format(hintText, opts.KeyName or "A") else hintText
 	view.Hint.TextSize = math.max(14, 20 * layout.Scale)
+	local lift = if opts.TenFoot then math.max(14, math.ceil(0.05 * opts.Screen.Y)) else 14
+	view.Hint.Position = UDim2.new(0.5, 0, 1, -lift)
 	textFade(view.Hint, 1 - 0.65 * hintAlpha)
 	return false
 end

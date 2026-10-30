@@ -365,6 +365,15 @@ return function(T, Loader)
 		env.Reduced = function()
 			return state.Reduced == true
 		end
+		env.KeyImage = function()
+			return state.KeyImage or ""
+		end
+		env.KeyName = function()
+			return state.KeyName or "A"
+		end
+		env.TenFoot = function()
+			return false
+		end
 		env.Sound = function(name)
 			table.insert(state.Sounds, name)
 		end
@@ -439,6 +448,200 @@ return function(T, Loader)
 	local function request(ore, name, stars, done)
 		return { Ore = ore, Name = name, Stars = stars, Chance = "1 in 4,000", Value = "$1.8M", OnDone = done }
 	end
+
+	-- (review 2026-10-30) a frame's flash onsets: the frame turning visible after it was not
+	local function flashOnsets(runner, s, seconds: number, dt: number, onTick: ((number) -> ())?): number
+		local onsets, was = 0, false
+		local left = seconds
+		while left > 1e-9 do
+			local d = math.min(dt, left)
+			left -= d
+			s.tick(d, d)
+			local view = runner.view()
+			local on = view ~= nil and view.Flash.BackgroundTransparency < 1
+			if on and not was then
+				onsets += 1
+			end
+			was = on
+			if onTick then
+				onTick(runner.time())
+			end
+		end
+		return onsets
+	end
+
+	T.test("secret cinematic (review 1): Reduce motion has no flash-strength surge at the burst (small steps a frame)", function()
+		local view = SecretCinematic.build()
+		SecretCinematic.setOre(view, "HollowEye")
+		SecretCinematic.setInfo(view, { Name = "Hollow Eye", Stars = 1, Chance = "1 in 4,000", Value = "$1.8M" })
+		local last: { [any]: number } = {}
+		local t = tm.Explosion - 0.2
+		while t < tm.Explosion + 1 do
+			SecretCinematic.pose(view, t, opts({ Reduced = true }))
+			T.eq(view.Flash.BackgroundTransparency, 1, "no flash")
+			local now: { [any]: number } = { [view.Core] = view.Core.BackgroundTransparency }
+			for _, d in view.Glows do
+				now[d] = if d.Visible then d.BackgroundTransparency else 1
+			end
+			for _, b in view.Bars do
+				now[b] = if b.Visible then b.BackgroundTransparency else 1
+			end
+			for frame, alpha in now do
+				local before = last[frame]
+				if before then
+					T.truthy(math.abs(alpha - before) <= 0.04, `{frame.Name} changes at most 0.04 a frame at {t} ({before} -> {alpha})`)
+				end
+			end
+			last = now
+			t += 1 / 60
+		end
+		-- the pulse's ring, the shockwaves: never; the Side layout: the ore never slides
+		local side = SecretCinematic.build()
+		SecretCinematic.setOre(side, "HollowEye")
+		local at: any = nil
+		t = 0
+		while t < tm.AutoContinue do
+			SecretCinematic.pose(side, t, opts({ Reduced = true, Screen = V2.new(812, 375), Phone = true, Touch = true }))
+			for _, ring in side.Shocks do
+				T.falsy(ring.Visible, `no ring with Reduce motion at {t}`)
+			end
+			local p = side.Rig.Position
+			if at then
+				T.eq(p, at, "the ore stays at its place")
+			end
+			at = p
+			t += 1 / 20
+		end
+	end)
+
+	T.test("secret cinematic player (review 1): Reduce motion (from the start or turned on mid-show): no flash, kick or punch", function()
+		for _, midway in { false, true } do
+			RevealKit.resetFlash()
+			local env, s = fakeEnv()
+			s.Reduced = not midway
+			local runner = SecretOreReveal.new(env)
+			runner.play(request("HollowEye", "Hollow Eye", 1))
+			local scale: number? = nil
+			local onsets = flashOnsets(runner, s, tm.AutoContinue + 1, 1 / 60, function(t)
+				if midway and t >= 2 then
+					s.Reduced = true -- (turned on in the charge)
+				end
+				local view = runner.view()
+				if view and view.Gui.Enabled and t > tm.Explosion - 0.1 and t < tm.Reveal then
+					if scale then
+						T.near(view.StageScale.Scale, scale, 1e-9, "no punch")
+					end
+					scale = view.StageScale.Scale
+				end
+			end)
+			T.eq(onsets, 0, "no flash")
+			T.eq(s.Shakes, 0, "no camera kick")
+			T.truthy(RevealKit.takeFlash(s.Clock), "the shared flash clock still free")
+		end
+	end)
+
+	T.test("secret cinematic player (review 1): exactly one flash a show; a refused one comes once, in its window", function()
+		RevealKit.resetFlash()
+		local env, s = fakeEnv()
+		local runner = SecretOreReveal.new(env)
+		runner.play(request("HollowEye", "Hollow Eye", 1))
+		T.eq(flashOnsets(runner, s, tm.AutoContinue + 1, 1 / 60), 1, "one flash over the whole show")
+		-- another flash 0.15 s before the burst: this one waits its turn, once, never after FlashWindow
+		RevealKit.resetFlash()
+		local env2, s2 = fakeEnv()
+		local runner2 = SecretOreReveal.new(env2)
+		runner2.play(request("HollowEye", "Hollow Eye", 1))
+		s2.tick(tm.Explosion - 0.15, 1 / 60)
+		T.truthy(RevealKit.takeFlash(s2.Clock), "someone else flashes just before")
+		local first: number? = nil
+		local onsets = flashOnsets(runner2, s2, tm.FlashWindow + 0.5 + 0.15, 1 / 60, function(t)
+			local view = runner2.view()
+			if not first and view and view.Flash.BackgroundTransparency < 1 then
+				first = t
+			end
+		end)
+		T.eq(onsets, 1, "it flashed once")
+		T.truthy(first ~= nil and first > tm.Explosion and first <= tm.Explosion + tm.FlashWindow, "late, in its window")
+	end)
+
+	T.test("secret cinematic player (review 1): cancel and reset silence the hum and hide the gui; OnReveal once", function()
+		for _, how in { "cancel", "reset" } do
+			RevealKit.resetFlash()
+			local env, s = fakeEnv()
+			local runner = SecretOreReveal.new(env)
+			local reveals = 0
+			local r = request("HollowEye", "Hollow Eye", 1)
+			r.OnReveal = function()
+				reveals += 1
+			end
+			runner.play(r)
+			s.tick(2.2, 1 / 30)
+			T.truthy(s.Hum > 0, "the charge hums")
+			if how == "cancel" then
+				runner.cancel()
+			else
+				s.reset()
+			end
+			T.eq(s.Hum, 0, how .. ": the hum stops")
+			T.falsy(runner.view().Gui.Enabled, how .. ": the gui hides")
+			T.eq(reveals, 1, how .. ": OnReveal still ran once (the held chat line is never lost)")
+		end
+		RevealKit.resetFlash()
+		local env, s = fakeEnv()
+		local runner = SecretOreReveal.new(env)
+		local reveals, at = 0, nil
+		local r = request("HollowEye", "Hollow Eye", 1)
+		r.OnReveal = function()
+			reveals += 1
+			at = runner.time()
+		end
+		runner.play(r)
+		s.tick(tm.Reveal + 1, 1 / 30)
+		T.eq(reveals, 1, "OnReveal once")
+		T.truthy(at ~= nil and at >= tm.Reveal and at < tm.Reveal + 0.05, "at the reveal")
+	end)
+
+	T.test(
+		"secret cinematic (review 1): the words are fully in when CONTINUE starts taking presses; NEW!'s gold body; the pad's glyph",
+		function()
+			local view = SecretCinematic.build()
+			SecretCinematic.setOre(view, "HollowEye")
+			SecretCinematic.setInfo(view, { Name = "Hollow Eye", Stars = 1, Chance = "1 in 4,000", Value = "$1.8M", New = true })
+			for t = 0, tm.ContinueAt, 1 / 30 do
+				SecretCinematic.pose(view, t, opts())
+			end
+			SecretCinematic.pose(view, tm.ContinueAt, opts())
+			for _, letter in view.Letters do
+				T.eq(letter.Label.TextTransparency, 0, "S E C R E T in")
+			end
+			T.eq(view.Name.TextTransparency, 0, "the name in")
+			T.truthy(view.ValueHolder.Visible, "the value in")
+			SecretCinematic.pose(view, tm.Settle, opts())
+			T.truthy(view.NewTag.BackgroundTransparency < 0.01, "NEW!'s gold body shows")
+			SecretCinematic.pose(
+				view,
+				tm.Settle,
+				opts({ Input = "Gamepad", KeyImage = "rbxasset://textures/ui/Controls/xboxA.png", KeyName = "Cross" })
+			)
+			local glyph = view.ButtonKey:FindFirstChild("Glyph") :: any
+			local text = view.ButtonKey:FindFirstChild("Text") :: any
+			T.truthy(glyph.Visible and glyph.Image ~= "" and not text.Visible, "the pad's own glyph")
+			SecretCinematic.pose(view, tm.SkipFrom + 1, opts({ Input = "Gamepad", KeyName = "Cross" }))
+			T.eq(view.Hint.Text, "Press Cross to skip", "the pad's own name")
+			SecretCinematic.pose(view, tm.Settle, opts({ Input = "Gamepad", KeyName = "A" }))
+			T.truthy(text.Visible and not glyph.Visible, "no glyph image: the letter")
+		end
+	)
+
+	T.test("secret cinematic (review 1): the chip's value is the card's (the sell bonus); the finder's own line is held", function()
+		local base = Controller.valueOf("HollowEye", { Value = 1000 }, 1)
+		T.eq(base, 1000)
+		T.eq(Controller.valueOf("HollowEye", { Value = 1000 }, 2), 2000, "times the sell bonus, as the card's Worth")
+		T.eq(Controller.valueOf("HollowEye", { Value = 999.6 }, 1.5), math.floor(999.6 * 1.5 + 0.5), "rounded like the card")
+		T.truthy(Controller.isOwnLine({ UserId = 7, Global = false }, 7), "my own line waits for the reveal")
+		T.falsy(Controller.isOwnLine({ UserId = 8 }, 7), "someone else's shows at once")
+		T.falsy(Controller.isOwnLine({ UserId = 7, Global = true }, 7), "a Nova from another server shows at once")
+	end)
 
 	T.test("secret cinematic player: a whole show, CONTINUE, then everything cleaned up", function()
 		RevealKit.resetFlash()
