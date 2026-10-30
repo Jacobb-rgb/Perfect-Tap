@@ -76,6 +76,7 @@ local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
 local Confetti = require(script.Parent.Confetti)
 local HatchFx = require(script.Parent.HatchFx)
+local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local GolemView = require(script.Parent.GolemView)
 local TechShopView = require(script.Parent.TechShopView)
@@ -1503,14 +1504,9 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		end
 		table.insert(blobs, blob)
 	end
-	-- ONE flash in the best colour (under the stage: the golems that pop in are never behind it)
-	local flash = UIKit.new("Frame", {
-		Name = "Flash",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 3,
-	}, gui) :: Frame
+	-- ONE flash in the best colour (RevealKit's; under the stage: the golems that pop in are never behind it)
+	local flash = RevealKit.flash(gui, 3)
+	flash.BackgroundColor3 = Color3.new(1, 1, 1)
 	-- the soft white sunburst behind the golems: rays through the middle and a glow
 	local sunburst = UIKit.new("Frame", {
 		Name = "Sunburst",
@@ -1573,19 +1569,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 	local rings: { { Frame } } = {}
 	local puffs: { Frame } = {}
 	for i = 1, CapsuleView.StageTags do
-		local list: { Frame } = {}
-		for j = 1, 3 do
-			local ring = UIKit.new("Frame", {
-				Name = `Ring{i}_{j}`,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				Size = UDim2.fromOffset(100, 100),
-				Visible = false,
-				ZIndex = 6,
-			}, gui) :: Frame
-			UIKit.corner(ring, 9999)
-			UIKit.new("UIStroke", { Name = "Line", Color = Color3.new(1, 1, 1), Thickness = 5 }, ring)
-			table.insert(list, ring)
+		-- (RevealKit's shockwave rings: HatchStage poses them thin and white round the egg)
+		local list = RevealKit.rings(gui, HatchFx.RingCount, 6)
+		for j, ring in list do
+			ring.Name = `Ring{i}_{j}`
 		end
 		table.insert(rings, list)
 		local puff = UIKit.new("Frame", {

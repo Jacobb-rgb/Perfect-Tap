@@ -7,6 +7,7 @@ return function(T, Loader)
 	local Instance = roblox.Instance
 	local Vector2 = roblox.Vector2
 	local RevealFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealFx")
+	local RevealKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealKit")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 
 	T.test("RevealFx: tiers, palettes and the shared flash cap", function()
@@ -82,13 +83,23 @@ return function(T, Loader)
 		T.truthy(reduced.NewLabel.Visible)
 		T.eq(reduced.Headline.Text, "MYTHIC!")
 		T.eq(#reduced.Sparkles + #reduced.Confetti, 0, "Reduce motion: no pieces")
-		local bars = 0
-		for _, list in reduced.RayFrames do
-			bars += #list
+		-- the rays are RevealKit's bars: on a phone its few front ones, no back layer
+		local function shown(handle: any): (number, number)
+			local front, back = 0, 0
+			for _, bar in handle.Kit.Front do
+				front += if bar.Visible then 1 else 0
+			end
+			for _, bar in handle.Kit.Back do
+				back += if bar.Visible then 1 else 0
+			end
+			return front, back
 		end
-		T.truthy(bars * 2 <= RevealFx.PhoneRays, "phones: 12 rays at most")
+		local front, back = shown(reduced)
+		T.truthy(front * 2 <= RevealFx.PhoneRays and back == 0, "phones: 12 rays at most, one layer")
+		T.truthy(reduced.Kit.Front[1]:IsDescendantOf(reduced.Root), "RevealKit's bars in the reveal")
+		local still = reduced.Kit.Front[2].Rotation
 		reduced:pose(2)
-		T.eq(reduced.Layers[1].Rotation, 0, "Reduce motion: the rays stand still")
+		T.eq(reduced.Kit.Front[2].Rotation, still, "Reduce motion: the rays stand still")
 		T.eq(reduced.NameLabel.TextTransparency, 0, "and the banner just shows")
 		reduced:close()
 		T.eq(reduced.Root.Parent, nil, "closed: let go")
@@ -113,12 +124,32 @@ return function(T, Loader)
 		T.truthy(#secret.HeadlineGradient.Color.Keypoints >= 6, "the letters a rainbow")
 		T.falsy(secret.Banner.Visible, "no banner when asked")
 		T.truthy(#secret.Confetti > 0, "a jackpot's confetti")
+		local before = secret.Kit.Front[1].Rotation
 		secret:pose(0.5)
-		T.truthy(secret.Layers[1].Rotation > 0 and #secret.Layers == 2, "two layers turning")
+		local sf, sb = shown(secret)
+		T.truthy(secret.Kit.Front[1].Rotation ~= before and sf > 0 and sb > 0, "two layers turning")
+		-- the secret look is RevealKit's own: its near-black bars, its gold layer
+		T.eq(secret.Kit.Front[1].BackgroundColor3, RevealKit.Style.Dark, "RevealKit's secret look")
+		T.truthy(secret.Kit.Gold[2].Visible, "and its gold layer")
 		secret:close()
 		-- text sizes: 18 px at 1080p (the HUD's 1.25), 8 pt on a phone (0.62)
 		T.truthy(secret.ChanceLabel.TextSize * 0.62 >= 8 and secret.ChanceLabel.TextSize * 1.25 >= 18)
 		T.truthy(secret.PillLabel.TextSize * 1.25 >= 18)
 		local _ = Vector2
+	end)
+
+	T.test("RevealFx: its flashes and RevealKit.takeFlash share ONE gap (a second within 0.4 s is refused)", function()
+		local parent = Instance.new("Frame")
+		RevealKit.resetFlash()
+		T.truthy(RevealFx.flash(parent, roblox.Color3.new(1, 1, 1), 0.8, 2), "the first flash goes off")
+		T.falsy(RevealKit.takeFlash(os.clock()), "RevealKit refuses one right after RevealFx's")
+		T.falsy(RevealFx.claimFlash(), "and RevealFx too")
+		RevealKit.resetFlash()
+		T.truthy(RevealKit.takeFlash(os.clock()), "a RevealKit flash (a secret ore's)")
+		T.falsy(RevealFx.flash(parent, roblox.Color3.new(1, 1, 1)), "then RevealFx waits its gap")
+		T.eq(RevealFx.FlashGap, RevealKit.FlashGap, "one gap")
+		local frame = parent:FindFirstChild("RevealFlash")
+		T.truthy(frame ~= nil, "RevealKit's flash frame, under the caller's picture")
+		RevealKit.resetFlash()
 	end)
 end

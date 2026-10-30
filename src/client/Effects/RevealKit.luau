@@ -11,11 +11,15 @@
 	  RevealKit.takeFlash(now) -> boolean  may a reveal flash now? (true takes the slot)
 	  RevealKit.word(parent, name, text, size, heavy, z) -> TextLabel
 	  RevealKit.rays(parent, z) -> Rays     three layers of two-tone bars
-	  RevealKit.poseRays(rays, t, grow, leave, opts)
+	  RevealKit.poseRays(rays, t, grow, leave, opts)   opts.Paint / Count / Back: another
+	                                       reveal's colours and layers (RevealFx's tiers)
 	  RevealKit.rings(parent, count, z) -> { Frame }   shockwave rings
-	  RevealKit.poseRing(ring, u, color)   u = 0..1 through its flight
+	  RevealKit.poseRing(ring, u, color, opts?)   u = 0..1 through its flight; opts
+	                                       From / Grow / Thickness: a thinner, smaller ring
+	                                       (the egg opening's white rings)
 	  RevealKit.flash(parent, z) -> Frame  a full-screen flash frame
-	  RevealKit.poseFlash(frame, f)        f = 0..1 through its fade (>= 1: gone)
+	  RevealKit.poseFlash(frame, f, peak?) f = 0..1 through its fade (>= 1: gone); peak:
+	                                       its strongest (default Style.FlashPeak)
 	  RevealKit.fade(root, alpha), rainbow(shift) -> ColorSequence, hue(x) -> Color3
 	Style "Secret" values (the egg hatch v2's RevealFx "Secret" tier): rays
 	alternating near-black (14,10,22) and a rainbow drifting 0.25 turn/s, layers
@@ -121,6 +125,10 @@ export type RayOpts = {
 	Phone: boolean?,
 	Reduced: boolean?,
 	Gold: boolean?, -- the third, gold layer
+	-- (additive, for other reveals: RevealFx's tiers; nil keeps the secret look)
+	Paint: ((layer: string, k: number, count: number, t: number) -> Color3)?, -- a bar's colour ("Front" / "Back")
+	Count: number?, -- front bars shown (default: all; Phone on a phone)
+	Back: boolean?, -- false: no back layer
 }
 
 local function bar(parent: Instance, name: string, width: number, z: number): Frame
@@ -169,25 +177,32 @@ function RevealKit.poseRays(rays: Rays, t: number, grow: number, leave: number, 
 	local reduced = opts.Reduced == true
 	local phone = opts.Phone == true
 	local on = leave < 1
-	local front = if phone then style.Rays.Phone else #rays.Front
+	local paint = opts.Paint
+	local wanted = opts.Count or #rays.Front
+	local front = math.clamp(if phone then math.min(wanted, style.Rays.Phone) else wanted, 1, #rays.Front)
 	for k, frame in rays.Front do
 		local show = on and k <= front
 		frame.Visible = show
 		if show then
 			frame.Rotation = (k - 1) * 180 / front + (if reduced then 0 else t * style.Rays.Front.Speed)
 			frame.Size = UDim2.fromOffset(style.Rays.Front.Width, style.RayLength * grow)
-			frame.BackgroundColor3 = if k % 2 == 1 then style.Dark else RevealKit.hue((k - 1) / front + t * style.Rays.HueDrift)
+			frame.BackgroundColor3 = if paint
+				then paint("Front", k, front, t)
+				elseif k % 2 == 1 then style.Dark
+				else RevealKit.hue((k - 1) / front + t * style.Rays.HueDrift)
 			frame.BackgroundTransparency = leave
 		end
 	end
 	local back = style.Rays.Back
 	for k, frame in rays.Back do
-		local show = on and not phone
+		local show = on and not phone and opts.Back ~= false
 		frame.Visible = show
 		if show then
 			frame.Rotation = (k - 0.5) * 180 / #rays.Back + (if reduced then 0 else t * back.Speed)
 			frame.Size = UDim2.fromOffset(back.Width, style.RayLength * back.Length * grow)
-			frame.BackgroundColor3 = RevealKit.hue((k - 1) / #rays.Back + 0.5 + t * style.Rays.HueDrift)
+			frame.BackgroundColor3 = if paint
+				then paint("Back", k, #rays.Back, t)
+				else RevealKit.hue((k - 1) / #rays.Back + 0.5 + t * style.Rays.HueDrift)
 			frame.BackgroundTransparency = back.Transparency + (1 - back.Transparency) * leave
 		end
 	end
@@ -226,18 +241,26 @@ function RevealKit.rings(parent: Instance, count: number, z: number): { Frame }
 	return list
 end
 
+export type RingOpts = {
+	From: number?, -- its first scale (default 0.35)
+	Grow: number?, -- how much it grows (default Style.Ring.Grow)
+	Thickness: number?, -- its line at the start (default Style.Ring.Thickness)
+}
+
 -- A ring `u` (0..1) through its flight: it grows fast, thins and fades (u outside 0..1: hidden).
-function RevealKit.poseRing(ring: Frame, u: number, color: Color3)
+-- `opts` (additive): a smaller, thinner ring (the egg opening's, round each egg).
+function RevealKit.poseRing(ring: Frame, u: number, color: Color3, opts: RingOpts?)
 	local on = u >= 0 and u < 1
 	ring.Visible = on
 	if not on then
 		return
 	end
 	local style = RevealKit.Style.Ring
+	local o: RingOpts = opts or {}
 	local scale = ring:FindFirstChildOfClass("UIScale") :: UIScale
 	local stroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
-	scale.Scale = 0.35 + style.Grow * (1 - (1 - u) ^ 3)
-	stroke.Thickness = style.Thickness * (1 - u) + 2
+	scale.Scale = (o.From or 0.35) + (o.Grow or style.Grow) * (1 - (1 - u) ^ 3)
+	stroke.Thickness = (o.Thickness or style.Thickness) * (1 - u) + 2
 	stroke.Color = color
 	stroke.Transparency = u ^ 1.5
 end
@@ -255,10 +278,11 @@ function RevealKit.flash(parent: Instance, z: number): Frame
 	}, parent)
 end
 
--- The flash `f` (0..1) through its fade; f >= 1 or < 0: gone.
-function RevealKit.poseFlash(frame: Frame, f: number)
+-- The flash `f` (0..1) through its fade; f >= 1 or < 0: gone. `peak` (additive): its strongest, never past Style.FlashPeak.
+function RevealKit.poseFlash(frame: Frame, f: number, peak: number?)
 	local style = RevealKit.Style
-	frame.BackgroundTransparency = if f >= 0 and f < 1 then 1 - style.FlashPeak * (1 - f) ^ 3 else 1
+	local top = math.min(style.FlashPeak, peak or style.FlashPeak)
+	frame.BackgroundTransparency = if f >= 0 and f < 1 then 1 - top * (1 - f) ^ 3 else 1
 end
 
 return RevealKit

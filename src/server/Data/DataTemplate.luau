@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 10, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores)
+	Version = 11, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -100,7 +100,7 @@ local DataTemplate = {
 	-- golem pets: Owned = { { Id = number, Kind = golemId } }, Equipped = { Id }
 	-- (at most GolemConfig.EquipSlots), NextId = the next Id to hand out, Pending = paid
 	-- golems a Royal capsule receipt rolled past GolemConfig.MaxSaved (CapsuleService wakes them)
-	Golems = { Owned = {}, Equipped = {}, NextId = 1, Pending = {} },
+	Golems = { Owned = {}, Equipped = {}, NextId = 1, Pending = {}, AutoDelete = {} }, -- AutoDelete: [kind] = true, the egg panel's trash (CapsuleService)
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
 	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
 	Wheel = { NextSpinAt = 0, Spins = 0 },

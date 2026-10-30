@@ -222,8 +222,8 @@ return function(T, Loader)
 			local pose = HatchFx.eggPose(t, calm, 2, true)
 			T.eq(pose.Roll, 0, "no wobble")
 			T.eq(pose.Scale, 1, "no pop")
-			local _, alpha = HatchFx.ringAt(t, calm, 1)
-			T.eq(alpha, 1, "no ring")
+			local u = HatchFx.ringU(t, calm, 1)
+			T.truthy(u < 0 or u >= 1, "no ring")
 		end
 		T.truthy(HatchFx.eggPose(0.05, calm, 1, false).Fade > 0, "it fades in")
 		-- the golems pop, bob, fly to the player shrinking; their names go first
@@ -238,9 +238,15 @@ return function(T, Loader)
 		T.truthy(depth > 30, "far: small")
 		T.falsy(HatchFx.golemPose(tl.Total, tl, 1).Shown, "gone at the end")
 		-- ONE flash, never fully opaque, gone in FlashTime; 2.5 a second at most (the shared clock)
-		T.eq(HatchFx.flashAt(-0.01), 0)
-		T.truthy(HatchFx.flashAt(0) <= HatchFx.FlashPeak and HatchFx.FlashPeak < 1)
-		T.eq(HatchFx.flashAt(HatchFx.FlashTime), 0)
+		-- (RevealKit's flash frame and fade)
+		local RevealKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealKit")
+		local frame = Instance.new("Frame")
+		RevealKit.poseFlash(frame, HatchFx.flashU(-0.01), HatchFx.FlashPeak)
+		T.eq(frame.BackgroundTransparency, 1, "none before the burst")
+		RevealKit.poseFlash(frame, HatchFx.flashU(0), HatchFx.FlashPeak)
+		T.truthy(frame.BackgroundTransparency >= 1 - HatchFx.FlashPeak - 1e-6 and HatchFx.FlashPeak < 1, "never fully opaque")
+		RevealKit.poseFlash(frame, HatchFx.flashU(HatchFx.FlashTime), HatchFx.FlashPeak)
+		T.eq(frame.BackgroundTransparency, 1, "gone in FlashTime")
 		T.truthy(1 / HatchFx.FlashGap <= 2.5 + 1e-9)
 		T.truthy(HatchFx.FlashTime <= 0.35, "it fades in about 0.3 s (the video)")
 	end)
@@ -504,6 +510,8 @@ return function(T, Loader)
 			FragileSpots = 4,
 			Reveal = 3,
 		}
+		-- (main's Rarity keeps its Secret in ById only, Order 7: this one goes in the List too, the worst case)
+		local hadSecret = Rarity.ById.Secret
 		table.insert(Rarity.List, secret)
 		Rarity.ById.Secret = secret
 		local ok, err = pcall(function()
@@ -534,7 +542,7 @@ return function(T, Loader)
 			T.eq(layout.Count, EggPanel.layout(#beforeLines, false).Count, "the panel's layout")
 		end)
 		table.remove(Rarity.List, table.find(Rarity.List, secret))
-		Rarity.ById.Secret = nil
+		Rarity.ById.Secret = hadSecret
 		if not ok then
 			error(err, 0)
 		end

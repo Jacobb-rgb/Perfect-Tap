@@ -3,8 +3,17 @@
 	they look like one family: the secret ores' jackpot (Effects/SecretReveal,
 	the "Návrhy strojů" chat) and, later, the Vault's cases. The egg opening
 	(owner 2026-10-29, the clicker-sim video: UI/HatchStage) has its own clean
-	look now and shares only the flash cap (claimFlash). Our own look: no
-	picture or sound of another game.
+	look now and shares the flash cap and RevealKit's rings and flash. Our own
+	look: no picture or sound of another game.
+
+	A thin wrapper over Effects/RevealKit (the drawing parts every reveal
+	shares, owned by the secret ores' chat): the flash gap is RevealKit's ONE
+	tracker (claimFlash / flash: RevealKit.takeFlash), the flash frame is
+	RevealKit.flash / poseFlash, the rays are RevealKit.rays / poseRays (the
+	"Secret" tier exactly RevealKit's secret look; the other tiers its bars in
+	their rarity's colours: poseRays' Paint). RevealFx adds the tiers, the
+	palette, the banner (name, rarity pill, chance, NEW!), the headline, the
+	glow, the sparkles and the confetti.
 
 	API
 	  RevealFx.show(kind, itemId, rarity, opts?) -> Handle
@@ -39,15 +48,15 @@
 	           RevealFx.FlashGap = 0.4
 
 	LOOK
-	  Rays (two-tone bars through the middle, a soft round glow behind):
-	    Normal  (Common, Uncommon)   12 rays, 20 deg/s, the rarity's colour 35 % to white
-	    Rare    (Rare, Epic)         16 rays, 30 deg/s, the colour and its dark shade; 12 sparkles
-	    Jackpot (Legendary, Mythic)  20 rays in each of two layers (+40, -25 deg/s); Legendary gold
+	  Rays (RevealKit's bars through the middle, its speeds; a soft round glow behind):
+	    Normal  (Common, Uncommon)   6 bars (12 rays), the rarity's colour 35 % to white
+	    Rare    (Rare, Epic)         8 bars, the colour and its dark shade; 12 sparkles
+	    Jackpot (Legendary, Mythic)  10 bars and RevealKit's back layer; Legendary gold
 	                                 (255,214,64)/(255,176,32), Mythic a rainbow drifting 0.2 turn/s;
 	                                 confetti 40 (phones 24), a camera nudge, the headline
-	    Secret  ("Secret")           20 rays a layer, near-black (14,10,22) and a rainbow drifting
-	                                 0.25 turn/s, two layers (+45, -30 deg/s); gold-white flash
-	    Phones: 12 rays in all, sparkles 10, confetti 24.
+	    Secret  ("Secret")           exactly RevealKit's secret look (near-black and its rainbow,
+	                                 the back and gold layers); gold-white flash
+	    Phones: RevealKit's 6 front bars (12 rays), no back layer; sparkles 10, confetti 24.
 	  Banner (under the item; design units; the Round look's Montserrat):
 	    name 46 Heavy white with a 4-unit dark edge; the rarity pill 34 tall,
 	    round ends, the rarity's colour (top 15 % to white, bottom its dark
@@ -67,7 +76,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -80,15 +88,16 @@ local Confetti = require(script.Parent.Parent.UI.Confetti)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CameraShake = require(script.Parent.CameraShake)
+local RevealKit = require(script.Parent.RevealKit)
 local Sfx = require(script.Parent.Sfx)
 
 local RevealFx = {}
 
-RevealFx.FlashGap = 0.4 -- seconds between two flashes, anywhere (2.5 a second at most)
-RevealFx.FlashPeak = 0.9 -- the flash's strongest (1 - BackgroundTransparency)
-RevealFx.FlashTime = 0.45 -- its fade
+RevealFx.FlashGap = RevealKit.FlashGap -- seconds between two flashes, anywhere (2.5 a second at most: RevealKit's one tracker)
+RevealFx.FlashPeak = RevealKit.Style.FlashPeak -- the flash's strongest (1 - BackgroundTransparency)
+RevealFx.FlashTime = RevealKit.Style.FlashTime -- its fade
 RevealFx.Size = 620 -- the rays' diameter (design units)
-RevealFx.PhoneRays = 12
+RevealFx.PhoneRays = RevealKit.Style.Rays.Phone * 2 -- (RevealKit's front bars on a phone: two rays a bar)
 RevealFx.PhoneSparkles = 10
 RevealFx.PhoneConfetti = 24
 RevealFx.BannerIn = 0.15 -- seconds after show: the name comes in, the pill and the chance after it
@@ -258,24 +267,20 @@ end
 
 ---------------------------------------------------------------- the flash (shared)
 
-local lastFlash = -math.huge
-
--- Claims the shared flash clock: false when a flash went off anywhere less than FlashGap ago, or with Reduce motion.
--- (the egg opening's burst flash draws its own frame and asks here first: HatchStage's Claim.)
+-- Claims the shared flash clock (RevealKit.takeFlash, the game's one tracker): false when a flash
+-- went off anywhere less than FlashGap ago, or with Reduce motion. (The egg opening asks here: HatchStage's Claim.)
 function RevealFx.claimFlash(): boolean
-	local now = os.clock()
-	if Motion.reduced() or not RevealFx.flashOk(lastFlash, now) then
+	if Motion.reduced() then
 		return false
 	end
-	lastFlash = now
-	return true
+	return RevealKit.takeFlash(os.clock())
 end
 
 --[[
-	A flash in `parent` (a frame filling it, made once per parent: "RevealFlash"),
+	A flash in `parent` (RevealKit.flash, made once per parent: "RevealFlash"),
 	`color` at `strength` (0..1, never past FlashPeak), fading in FlashTime.
 	Returns false when it didn't go off: too soon after the last one
-	anywhere (FlashGap), or Reduce motion.
+	anywhere (FlashGap: RevealKit's tracker), or Reduce motion.
 ]]
 function RevealFx.flash(parent: Instance, color: Color3, strength: number?, z: number?): boolean
 	if not RevealFx.claimFlash() then
@@ -283,23 +288,25 @@ function RevealFx.flash(parent: Instance, color: Color3, strength: number?, z: n
 	end
 	local frame = parent:FindFirstChild("RevealFlash")
 	if not frame or not frame:IsA("Frame") then
-		frame = UIKit.new("Frame", {
-			Name = "RevealFlash",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = WHITE,
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(3, 3),
-			ZIndex = z or 1,
-		}, parent)
+		local made = RevealKit.flash(parent, z or 1)
+		made.Name = "RevealFlash"
+		frame = made
 	end
 	local f = frame :: Frame
 	f.BackgroundColor3 = color
-	f.BackgroundTransparency = 1 - math.min(RevealFx.FlashPeak, strength or RevealFx.FlashPeak)
-	TweenService:Create(f, TweenInfo.new(RevealFx.FlashTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 1,
-	}):Play()
+	-- (RevealKit's fade, frame by frame, gone in FlashTime)
+	local start = os.clock()
+	RevealKit.poseFlash(f, 0, strength)
+	task.spawn(function()
+		while f.Parent do
+			task.wait()
+			local u = (os.clock() - start) / RevealFx.FlashTime
+			RevealKit.poseFlash(f, u, strength)
+			if u >= 1 then
+				break
+			end
+		end
+	end)
 	return true
 end
 
@@ -329,8 +336,9 @@ export type Handle = {
 	Root: Frame,
 	Tier: string,
 	Rarity: string,
-	Layers: { Frame }, -- the ray layers
-	RayFrames: { { Frame } },
+	Layers: { Frame }, -- the rays' holder (RevealKit's bars in it)
+	RayFrames: { { Frame } }, -- RevealKit's front and back bars
+	Kit: RevealKit.Rays, -- RevealKit.rays (posed by RevealKit.poseRays)
 	Glow: Frame,
 	Banner: Frame,
 	NameLabel: TextLabel,
@@ -344,6 +352,7 @@ export type Handle = {
 	Confetti: { Frame },
 	Spec: Tier,
 	Reduced: boolean,
+	Phone: boolean,
 	Started: number,
 	Seed: number,
 	Gui: ScreenGui?, -- (its own, when no Parent was given)
@@ -386,21 +395,21 @@ local function pose(self: Handle, t: number)
 	local spec = self.Spec
 	local still = self.Reduced
 	local swell = if still then 1 else RevealFx.swellAt(t)
-	for layer, holder in self.Layers do
-		local speed = if layer == 1 then spec.Speed else spec.Back
-		holder.Rotation = if still then 0 else (t * speed) % 360
-		local scale = holder:FindFirstChildOfClass("UIScale")
-		if scale then
-			scale.Scale = swell
-		end
-		local p = RevealFx.palette(self.Rarity)
-		if p.Rainbow > 0 then
-			local rays = self.RayFrames[layer]
-			for i, ray in rays do
-				ray.BackgroundColor3 = RevealFx.rayColor(self.Rarity, i + (layer - 1), #rays, if still then 0 else t)
-			end
-		end
-	end
+	-- the rays: RevealKit's bars (Secret: its own secret look; the others in their rarity's colours)
+	local rarity = self.Rarity
+	local secret = self.Tier == "Secret"
+	RevealKit.poseRays(self.Kit, if still then 0 else t, swell, 0, {
+		Phone = self.Phone,
+		Reduced = still,
+		Gold = secret,
+		Count = if secret then nil else math.max(1, math.floor(spec.Rays / 2)),
+		Back = spec.Back ~= 0,
+		Paint = if secret
+			then nil
+			else function(layer: string, k: number, count: number, at: number): Color3
+				return RevealFx.rayColor(rarity, k + (if layer == "Back" then 1 else 0), count, at)
+			end,
+	})
 	-- the glow breathes
 	self.Glow.BackgroundTransparency = if still then 0.55 else 0.5 + 0.12 * math.sin(t * 3)
 	-- the headline pops, its rainbow turns
@@ -543,12 +552,22 @@ local function build(): Handle
 	UIKit.new("UIScale", { Scale = 1 }, headline)
 	edge(headline, 5) -- (a plain dark edge: a gradient on a text's stroke smudges inside the letters)
 	local gradient = UIKit.new("UIGradient", { Name = "Paint" }, headline) :: UIGradient
+	-- the rays: RevealKit's bars round the middle (a zero-size holder: their middle is its point)
+	local holder = UIKit.new("Frame", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(0, 0),
+	}, root) :: Frame
+	local kit = RevealKit.rays(holder, 2)
 	local self = {
 		Root = root,
 		Tier = "Normal",
 		Rarity = "Common",
-		Layers = {},
-		RayFrames = {},
+		Layers = { holder },
+		RayFrames = { kit.Front, kit.Back },
+		Kit = kit,
 		Glow = glow,
 		Banner = banner,
 		NameLabel = nameLabel,
@@ -562,6 +581,7 @@ local function build(): Handle
 		Confetti = {},
 		Spec = RevealFx.Tiers.Normal,
 		Reduced = false,
+		Phone = false,
 		Started = 0,
 		Seed = 1,
 		Gui = nil,
@@ -572,54 +592,6 @@ local function build(): Handle
 		setCenter = setCenter,
 	} :: Handle
 	return self
-end
-
--- (re)makes the ray layers for `count` rays, `layers` of them.
-local function rays(self: Handle, count: number, layers: number, z: number)
-	for _, holder in self.Layers do
-		holder:Destroy()
-	end
-	table.clear(self.Layers)
-	table.clear(self.RayFrames)
-	for layer = 1, layers do
-		local holder = UIKit.new("Frame", {
-			Name = "Rays" .. layer,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = z,
-		}, self.Root) :: Frame
-		UIKit.new("UIScale", { Scale = 1 }, holder)
-		local list: { Frame } = {}
-		local bars = math.max(1, math.floor(count / 2)) -- (a bar is two rays through the middle)
-		for i = 1, bars do
-			local ray = UIKit.new("Frame", {
-				Name = "Ray" .. i,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = WHITE,
-				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Rotation = (i - 1) * (180 / bars) + (layer - 1) * (90 / bars),
-				Size = UDim2.new(1, 0, 0, math.floor(RevealFx.Size * (if layer == 1 then 0.085 else 0.05))),
-				ZIndex = z,
-			}, holder) :: Frame
-			UIKit.new("UIGradient", {
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 1),
-					NumberSequenceKeypoint.new(0.18, if layer == 1 then 0.35 else 0.5),
-					NumberSequenceKeypoint.new(0.42, 0.75),
-					NumberSequenceKeypoint.new(0.5, 1),
-					NumberSequenceKeypoint.new(0.58, 0.75),
-					NumberSequenceKeypoint.new(0.82, if layer == 1 then 0.35 else 0.5),
-					NumberSequenceKeypoint.new(1, 1),
-				}),
-			}, ray)
-			table.insert(list, ray)
-		end
-		table.insert(self.Layers, holder)
-		table.insert(self.RayFrames, list)
-	end
 end
 
 local function pieces(parent: Instance, count: number, z: number, existing: { Frame }): { Frame }
@@ -634,11 +606,7 @@ end
 
 local function paintGradient(gradient: UIGradient, rarity: string, tier: string)
 	if tier == "Secret" then
-		local stops = {}
-		for i = 0, 6 do
-			table.insert(stops, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6, 0.75, 1)))
-		end
-		gradient.Color = ColorSequence.new(stops)
+		gradient.Color = RevealKit.rainbow(0) -- (the secret look's own rainbow)
 		gradient.Rotation = 0
 	elseif rarity == "Mythic" then
 		local stops = {}
@@ -717,16 +685,14 @@ function RevealFx.show(kind: string, itemId: string, rarity: string, opts: Optio
 	local fit = self.Root:FindFirstChild("Fit") :: UIScale
 	fit.Scale = (o.Scale or 1) * size / RevealFx.Size
 	self.Root.Size = UDim2.fromOffset(RevealFx.Size, RevealFx.Size)
-	-- the rays and the glow (under the caller's picture); phones: PhoneRays in all
-	local layers = if spec.Back ~= 0 then 2 else 1
-	local count = if phone then math.min(spec.Rays, math.floor(RevealFx.PhoneRays / layers)) else spec.Rays
-	rays(self, count, layers, z)
-	local p = RevealFx.palette(rarity)
-	for layer, list in self.RayFrames do
-		for i, ray in list do
-			ray.BackgroundColor3 = RevealFx.rayColor(rarity, i + (layer - 1), #list, 0)
+	-- the rays (RevealKit's: on a phone its fewer front bars, no back layer) and the glow, under the caller's picture
+	self.Phone = phone
+	for _, list in { self.Kit.Front, self.Kit.Back, self.Kit.Gold } do
+		for _, bar in list do
+			bar.ZIndex = z
 		end
 	end
+	local p = RevealFx.palette(rarity)
 	self.Glow.BackgroundColor3 = p.Glow
 	self.Glow.ZIndex = z
 	-- the banner and the headline (over the picture)

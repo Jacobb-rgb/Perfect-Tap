@@ -47,9 +47,9 @@ local BrightTheme = require(Shared.Config.BrightTheme)
 
 local HatchFx = {}
 
-HatchFx.FlashGap = 0.4 -- seconds between two flashes at least (RevealFx's shared clock: 2.5 a second at most)
-HatchFx.FlashTime = 0.3 -- the flash fades in this long
-HatchFx.FlashPeak = 0.85 -- its strongest (1 - BackgroundTransparency)
+HatchFx.FlashGap = 0.4 -- seconds between two flashes at least (RevealKit's one tracker: 2.5 a second at most)
+HatchFx.FlashTime = 0.3 -- the flash fades in this long (RevealKit.poseFlash)
+HatchFx.FlashPeak = 0.85 -- its strongest (1 - BackgroundTransparency; RevealKit caps it at its FlashPeak)
 HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever is skipped (paid random items)
 HatchFx.Fov = 40 -- the stage viewport's camera
 HatchFx.Turn = 0.22 -- radians a golem turns from facing the camera (a 3/4 look)
@@ -455,16 +455,14 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	return { Shown = true, Scale = scale, Roll = roll, Fade = 0, Level = level, Bright = bright, Silhouette = silhouette }
 end
 
--- A white shockwave ring `j` of an egg at `t`: its size (a share of the egg's height) and transparency (1: none).
-function HatchFx.ringAt(t: number, tl: Timeline, j: number): (number, number)
+-- How far a white shockwave ring `j` of an egg is through its flight at `t` (0..1; outside it: none).
+-- RevealKit.poseRing draws it (Rings: from RingFrom of the egg's height, growing RingGrow more).
+HatchFx.RingFrom = 0.45
+HatchFx.RingGrow = 1.25
+function HatchFx.ringU(t: number, tl: Timeline, j: number): number
 	local u = t - tl.Rings - (j - 1) * 0.08
 	local d = if tl.Fast then 0.3 else 0.45
-	if u < 0 or u >= d then
-		return 0, 1
-	end
-	local k = u / d
-	local grow = 1 - (1 - k) ^ 2
-	return 0.45 + 1.25 * grow, 0.15 + 0.85 * k
+	return u / d
 end
 
 -- The puff at the rings (and at the burst): a soft white glow's size (egg heights) and transparency.
@@ -549,12 +547,9 @@ function HatchFx.blobsAt(t: number, tl: Timeline): number
 	return inK * out * (0.75 + 0.25 * HatchFx.suspenseAt(t, tl))
 end
 
--- The flash's opacity (1 - transparency) `u` seconds after the burst (none before, gone after FlashTime).
-function HatchFx.flashAt(u: number): number
-	if u < 0 or u >= HatchFx.FlashTime then
-		return 0
-	end
-	return HatchFx.FlashPeak * (1 - u / HatchFx.FlashTime) ^ 1.6
+-- How far the flash is through its fade `u` seconds after the burst (RevealKit.poseFlash's f: 0..1; outside: none).
+function HatchFx.flashU(u: number): number
+	return u / HatchFx.FlashTime
 end
 
 ---------------------------------------------------------------- colours

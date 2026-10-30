@@ -29,6 +29,7 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local HatchFx = require(script.Parent.HatchFx)
 local Confetti = require(script.Parent.Confetti)
 local CapsuleView = require(script.Parent.CapsuleView)
+local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 
 local HatchStage = {}
 
@@ -235,19 +236,16 @@ local function poseRings(run: Run, t: number)
 		local s = run.Layout.Slots[slot]
 		local center = Vector2.new(s.Egg.X * size.X, s.Egg.Y * size.Y)
 		local eggPx = s.EggH * size.Y
+		-- (RevealKit's shockwave rings, thin and white round each egg)
 		for j, ring in o.Rings[slot] do
-			local k, alpha = HatchFx.ringAt(t, tl, j)
-			local show = alpha < 1 and j <= rings
-			ring.Visible = show
-			if show then
-				ring.Position = UDim2.fromOffset(center.X, center.Y)
-				ring.Size = UDim2.fromOffset(eggPx * k, eggPx * k)
-				local line = ring:FindFirstChildOfClass("UIStroke")
-				if line then
-					line.Transparency = alpha
-					line.Thickness = math.max(2, eggPx * 0.014)
-				end
-			end
+			local u = if j <= rings then HatchFx.ringU(t, tl, j) else -1
+			ring.Position = UDim2.fromOffset(center.X, center.Y)
+			ring.Size = UDim2.fromOffset(eggPx, eggPx)
+			RevealKit.poseRing(ring, u, Color3.new(1, 1, 1), {
+				From = HatchFx.RingFrom,
+				Grow = HatchFx.RingGrow,
+				Thickness = math.max(3, eggPx * 0.016),
+			})
 		end
 		-- the puff: with the rings, and again (bigger) at the burst
 		local puffK, puffAlpha = HatchFx.puffAt(t - tl.Rings)
@@ -455,7 +453,8 @@ function HatchStage.pose(run: Run, t: number): { string }
 		run.Flash = not tl.Reduced and run.Args.Claim()
 		o.Flash.BackgroundColor3 = HatchFx.crackColor(run.BestRarity, t, 0.3, 0)
 	end
-	o.Flash.BackgroundTransparency = if run.Flash then 1 - HatchFx.flashAt(t - tl.Burst) else 1
+	-- (RevealKit's flash, its colour the best rarity's)
+	RevealKit.poseFlash(o.Flash, if run.Flash then HatchFx.flashU(t - tl.Burst) else -1, HatchFx.FlashPeak)
 	if t >= tl.Reveal and once("Reveal") then
 		reveal(run, aspect)
 	end
