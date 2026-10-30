@@ -75,6 +75,7 @@ local ORDER = {
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray loop
 	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
+	"SecretService", -- the SECRET ores: the drop roll, the find (data), the chat line, Rainbow Nova on every server
 }
 
 local loaded = {}

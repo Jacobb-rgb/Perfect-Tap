@@ -89,7 +89,7 @@
 	types are dropped; the config readers clamp or ignore what they don't
 	know (GearConfig.level, EnchantConfig.tierOf, GolemConfig.stats/equip,
 	ArtifactConfig.countOf).
-	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the five lines
+	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the four lines
 	  this server sells always exist, broken = 0; other junk keys dropped).
 	  The old CarryLevel N (1..5) folds into Backpack level N - 1 (same
 	  capacity; the higher of the two wins) and CarryLevel is removed. A
@@ -231,7 +231,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 9 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack
+Migrations.Latest = 10 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile)
 
 export type Report = { Moved: number, Dropped: number }
 

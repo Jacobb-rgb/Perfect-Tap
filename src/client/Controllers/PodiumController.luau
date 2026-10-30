@@ -33,8 +33,10 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local OreData = require(Shared.Config.OreData)
 local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local SecretOreFx = require(Shared.Builders.SecretOreFx)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local BackpackState = require(script.Parent.Parent.Util.BackpackState)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -283,6 +285,7 @@ type Spinner = {
 	Phase: number,
 	Light: PointLight?,
 	LightBase: number,
+	Rig: SecretOreFx.Rig?, -- a secret ore's moving parts (SecretOreFx), posed after the turn
 }
 local spinners: { [Model]: Spinner } = {}
 
@@ -310,11 +313,19 @@ local function scanSpinners()
 					if (pivot.Position - eye).Magnitude <= SPIN_RANGE then
 						seen[display] = true
 						if not spinners[display] then
+							-- a secret ore's moving parts are posed by its rig (SecretOreFx), the rest turn here
+							local rig = SecretOreFx.rig(display, pivot)
+							local movers: { [BasePart]: boolean } = {}
+							for _, e in rig.Entries do
+								movers[e.Part] = true
+							end
 							local parts = {}
 							local light: PointLight? = nil
 							for _, d in display:GetDescendants() do
 								if d:IsA("BasePart") then
-									table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame), Mote = d.Name == "Mote" })
+									if not movers[d] then
+										table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame), Mote = d.Name == "Mote" })
+									end
 								elseif d:IsA("PointLight") and display:GetAttribute("Pulse") == true then
 									light = d
 								end
@@ -325,6 +336,7 @@ local function scanSpinners()
 								Phase = math.random() * 6,
 								Light = light,
 								LightBase = if light then light.Brightness else 0,
+								Rig = if #rig.Entries > 0 then rig else nil,
 							}
 						end
 					end
@@ -332,8 +344,15 @@ local function scanSpinners()
 			end
 		end
 	end
-	for display in spinners do
+	for display, s in spinners do
 		if not seen[display] then
+			-- out of range: everything back to how it was built, so the next look starts from rest
+			for _, entry in s.Parts do
+				entry.Part.CFrame = s.Pivot * entry.Offset
+			end
+			if s.Rig then
+				SecretOreFx.rest(s.Rig, s.Pivot)
+			end
 			spinners[display] = nil
 		end
 	end
@@ -351,6 +370,9 @@ local function spin(t: number)
 			local light = s.Light
 			if light then
 				light.Brightness = s.LightBase * (0.75 + 0.35 * math.sin(t * 2.2 + s.Phase))
+			end
+			if s.Rig then
+				SecretOreFx.pose(s.Rig, cf, t + s.Phase, Motion.reduced())
 			end
 		else
 			spinners[display] = nil

@@ -21,8 +21,8 @@ function Discovery.onDiscovered(callback: (Player, string) -> ...any)
 	table.insert(callbacks, callback)
 end
 
--- Returns true when `oreId` was new for this player.
-function Discovery.mark(player: Player, data: { [string]: any }, oreId: string): boolean
+-- Returns true when `oreId` was new for this player. `quiet`: no toast (a SECRET ore has its jackpot).
+function Discovery.mark(player: Player, data: { [string]: any }, oreId: string, quiet: boolean?): boolean
 	local ore = OreData.ById[oreId]
 	if not ore then
 		return false
@@ -34,7 +34,7 @@ function Discovery.mark(player: Player, data: { [string]: any }, oreId: string):
 		return false
 	end
 	data.Discovered[oreId] = true
-	if player.Parent then
+	if player.Parent and not quiet then
 		Net.fire("Notify", player, {
 			Text = "New ore discovered: " .. ore.Name .. "!",
 			Kind = "Discovery",

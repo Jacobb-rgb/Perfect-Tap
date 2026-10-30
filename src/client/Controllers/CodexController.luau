@@ -199,6 +199,9 @@ function CodexController.refresh()
 	local discovered = if state then state.Discovered else nil
 	shownPrint = CodexView.fingerprint(discovered, fresh)
 	entriesNow = CodexView.entries(discovered, fresh)
+	for _, entry in CodexView.secretEntries(discovered, fresh) do
+		table.insert(entriesNow, entry)
+	end
 	CodexView.setEntries(view, entriesNow)
 	local current = entryFor(view.Selected)
 	if not current then

@@ -701,6 +701,22 @@ return function(T, Loader)
 		T.eq(SellView.pickKey(list[1], 0.99), "Raw|Gold||", "high roll")
 	end)
 
+	withWorld("Secret ores: a dirty secret is never sold (not in the Dirty Ore row, Sell 1 and Sell all refuse it)", function(w)
+		pen(w, { { "Raw", "RainbowNova", nil }, { "Raw", "Coal", nil, 2 } })
+		local rows = SellView.entries({ ["Raw|RainbowNova||"] = 1, ["Raw|Coal||"] = 2 }, "Pen")
+		T.eq(#rows, 1, "only the Dirty Ore row")
+		T.eq(rows[1].Count, 2, "the secret isn't in it")
+		for _ = 1, 20 do
+			T.eq(SellView.pickKey(rows[1], math.random()), "Raw|Coal||", "Sell 1 never picks the secret")
+		end
+		-- a client asking for it anyway: refused, it stays in the pen
+		act(w, "Sell", { Key = "Raw|RainbowNova||", Count = 1, From = "Pen" })
+		T.eq(count(w.data.Storage, "Raw|RainbowNova||"), 1, "still in the pen")
+		act(w, "SellAll", { Filter = "Dirty" })
+		T.eq(count(w.data.Storage, "Raw|RainbowNova||"), 1, "Sell all Dirty skips it")
+		T.eq(count(w.data.Storage, "Raw|Coal||"), 0, "the Coal is sold")
+	end)
+
 	T.test("SellView: confirm rules never leak a Dirty Ore's rarity", function()
 		T.falsy(SellView.needsConfirm(10, 3), "10 rare items")
 		T.truthy(SellView.needsConfirm(11, 1), "11 items")

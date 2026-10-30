@@ -119,6 +119,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
+local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
@@ -570,9 +571,10 @@ end
 	pen as without the upgrade.
 ]]
 
--- Does this cargo item pour out of the TRAIN chute (dirty ore that can spawn)?
+-- Does this cargo item pour out of the TRAIN chute (dirty ore that can spawn)? A SECRET ore
+-- never does (no machine takes it, MachineData.refuses): it goes into the pen with the rest.
 local function pours(item: any): boolean
-	return type(item) == "table" and item.K == "Raw" and ConveyorService.spawnable(item)
+	return type(item) == "table" and item.K == "Raw" and ConveyorService.spawnable(item) and not MachineData.refuses(item)
 end
 
 -- Is there dirty ore for the chute on board?

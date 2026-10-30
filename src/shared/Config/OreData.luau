@@ -553,14 +553,118 @@ local LIST: { any } = {
 	},
 }
 
+--[[
+	The SECRET ores (owner 2026-10-29, SecretOreConfig): never in a rock's
+	weights; any ore that drops may turn into one with a tiny chance (which
+	floor, "1 in N"). They drop as a sparkly dirty ore and come out of the
+	cleaning Flawless; Income = about 5x the best ore of its floor; Hardness
+	is unused (no rock holds them). They are NOT in OreData.List (the 36 ores
+	every list, odds row and shop iterates) but in OreData.Secrets; ById,
+	get and exists know them.
+]]
+local SECRETS: { any } = {
+	{
+		Id = "FrostflameCrystal",
+		Name = "Frostflame Crystal",
+		Rarity = "Secret",
+		Tier = 3,
+		Income = 2000,
+		Hardness = 1,
+		Color = rgb(156, 230, 255),
+		Glow = rgb(255, 226, 170),
+		Crust = rgb(70, 60, 80),
+		Shape = "FrostflameCrystal",
+		Material = M.Glass,
+		Lore = "Half ice, half fire, and neither ever wins. Only the Ember Caves make one, almost never.",
+	},
+	{
+		Id = "HollowEye",
+		Name = "Hollow Eye",
+		Rarity = "Secret",
+		Tier = 5,
+		Income = 25000,
+		Hardness = 1,
+		Color = rgb(228, 234, 252),
+		Glow = rgb(170, 90, 255),
+		Crust = rgb(60, 50, 80),
+		Shape = "HollowEye",
+		Material = M.SmoothPlastic,
+		Lore = "The eye of the Deep Hollow. Miners swear it blinks when nobody is looking.",
+	},
+	{
+		Id = "TidecrownPearl",
+		Name = "Tidecrown Pearl",
+		Rarity = "Secret",
+		Tier = 7,
+		Income = 200000,
+		Hardness = 1,
+		Color = rgb(36, 40, 64),
+		Glow = rgb(60, 240, 220),
+		Crust = rgb(40, 50, 70),
+		Shape = "TidecrownPearl",
+		Material = M.Glass,
+		Lore = "A black pearl that wears a crown. The lost queen of the Sunken Palace kept it.",
+	},
+	{
+		Id = "CagedLightning",
+		Name = "Caged Lightning",
+		Rarity = "Secret",
+		Tier = 8,
+		Income = 1400000,
+		Hardness = 1,
+		Color = rgb(130, 180, 255),
+		Glow = rgb(255, 232, 80),
+		Crust = rgb(50, 56, 80),
+		Shape = "CagedLightning",
+		Material = M.Glass,
+		Lore = "A storm caught in a glass cube. It still crackles when you hold it.",
+	},
+	{
+		Id = "HeartOfTerra",
+		Name = "Heart of Terra",
+		Rarity = "Secret",
+		Tier = 9,
+		Income = 4000000,
+		Hardness = 1,
+		Color = rgb(255, 96, 150),
+		Glow = rgb(255, 206, 90),
+		Crust = rgb(70, 36, 50),
+		Shape = "HeartOfTerra",
+		Material = M.SmoothPlastic,
+		Lore = "Terra's whole heart, mended with gold. Every Heartstone Shard was once part of it.",
+	},
+	{
+		Id = "RainbowNova",
+		Name = "Rainbow Nova",
+		Rarity = "Secret",
+		Tier = 1,
+		Income = 12000000,
+		Hardness = 1,
+		Color = rgb(30, 24, 44),
+		Glow = rgb(255, 120, 230),
+		Crust = rgb(30, 24, 44),
+		Shape = "RainbowNova",
+		Material = M.SmoothPlastic,
+		Lore = "A star that fell into the mine. One rock in a million holds it, on any floor.",
+	},
+}
+
 for index, entry in LIST do
 	entry.Index = index
 	entry.Value = entry.Income * OreData.SellSeconds
 end
 OreData.List = LIST :: { Ore }
+for k, entry in SECRETS do
+	entry.Index = #LIST + k
+	entry.Value = entry.Income * OreData.SellSeconds
+end
+OreData.Secrets = SECRETS :: { Ore }
 
 OreData.ById = {} :: { [string]: Ore }
 for _, ore in OreData.List do
+	OreData.ById[ore.Id] = ore
+end
+for _, ore in OreData.Secrets do
 	OreData.ById[ore.Id] = ore
 end
 

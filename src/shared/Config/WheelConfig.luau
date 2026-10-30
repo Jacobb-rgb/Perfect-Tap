@@ -318,7 +318,8 @@ function WheelConfig.bestIncome(discovered: any): number
 	end
 	for oreId, found in discovered do
 		local ore = if type(oreId) == "string" and found then OreData.ById[oreId] else nil
-		if ore and ore.Income > best then
+		-- (a SECRET ore found once never sets the prize: it is a jackpot, not the player's level)
+		if ore and ore.Rarity ~= "Secret" and ore.Income > best then
 			best = ore.Income
 		end
 	end

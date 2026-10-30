@@ -941,7 +941,7 @@ function MachineService.canAccept(machine: PlacedMachine, desc: Desc, ownerUserI
 	if machine.Removed then
 		return false, "Busy"
 	end
-	if not MachineLogic.isValidDesc(desc) then
+	if not MachineLogic.isValidDesc(desc) or MachineData.refuses(desc) then
 		return false, "Wrong"
 	end
 	local behaviour = intakeOf(machine.Id)

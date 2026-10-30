@@ -655,12 +655,18 @@ return function(T, Loader)
 				local before = BoostConfig.oreOdds(weights, without)
 				local after = BoostConfig.oreOdds(weights, with)
 				local crystalRows = if crystal then #BoostConfig.oreOdds(crystal, without) else 0
-				T.eq(#t.Rows, #before + crystalRows, zone.Id .. ": every ore (and every crystal rock ore)")
-				for i = #before + 1, #t.Rows do
+				local secretRows = #BoostView.secretRows(zone.Id, without, with)
+				T.eq(#t.Rows, #before + crystalRows + secretRows, zone.Id .. ": every ore (and every crystal rock ore, the secrets)")
+				-- the SECRET ores first (the rarest): ??? names, "1 in N" chances (SecretOreConfig)
+				for i = 1, secretRows do
+					T.eq(t.Rows[i].Name:sub(1, 10), "??? Secret", zone.Id .. ": the secret's name stays hidden")
+					T.truthy(t.Rows[i].Before:find("1 in ", 1, true), zone.Id .. ": its chance is shown")
+				end
+				for i = secretRows + #before + 1, #t.Rows do
 					T.truthy(t.Rows[i].Name:find("(crystal rock)", 1, true), zone.Id .. ": crystal rock rows last")
 				end
 				t = table.clone(t)
-				t.Rows = table.move(t.Rows, 1, #before, 1, {})
+				t.Rows = table.move(t.Rows, secretRows + 1, secretRows + #before, 1, {})
 				local byName = {}
 				local order = math.huge
 				for _, row in t.Rows do
@@ -694,7 +700,9 @@ return function(T, Loader)
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores in plain rocks, no summary")
 				else
 					T.eq(t.Summary, nil, zone.Id .. ": no Rare ores, no summary")
-					T.truthy(t.Note:find("changes nothing"), zone.Id .. ": says so")
+					-- (a mine floor: luck still raises its ??? Secret chance, and the note says that instead)
+					local says = if secretRows > 0 then "only raises the ??? Secret" else "changes nothing"
+					T.truthy(t.Note:find(says, 1, true), zone.Id .. ": says so")
 				end
 			end
 		end

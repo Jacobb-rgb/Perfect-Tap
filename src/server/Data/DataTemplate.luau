@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 9, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack)
+	Version = 10, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -143,6 +143,7 @@ local DataTemplate = {
 		RunPaid = false, -- a blaster level was bought with Robux this run (RebirthConfig.reachedOf)
 		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
 		BlasterCredit = 0, -- Robux of off-band blaster receipts not yet spent on start lifts (VaultService.spendCredit)
+		SecretsFound = 0, -- SECRET ores cleaned, duplicates too (SecretService.found)
 	},
 	-- the player LEVEL (LevelConfig, LevelService): never reset by a rebirth. Xp = towards
 	-- the next level, Seen = { [counter id] = the value at the last look }, Ready = false on a

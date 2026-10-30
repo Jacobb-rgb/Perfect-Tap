@@ -705,7 +705,7 @@ return function(T, Loader)
 
 	T.test("codex: the view shows found cards, the count and the selected ore", function()
 		local refs = CodexView.build(false)
-		T.eq(#refs.CardList, #OreData.List)
+		T.eq(#refs.CardList, #OreData.List + #OreData.Secrets, "the 36 and the secret ores' cards after them")
 		local entries = CodexView.entries({ Copper = true, Silver = true }, { Silver = true })
 		CodexView.setEntries(refs, entries)
 		T.eq(refs.Count.Text, `2 / {#OreData.List} FOUND`)

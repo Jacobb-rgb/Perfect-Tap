@@ -689,14 +689,15 @@ return function(T, Loader)
 			local preview = BoostConfig.preview(ctx, EnchantConfig.nextDelta(s.Enchants, 5, "Lucky"))
 			for _, effect in preview.Zones do
 				if effect.Zone == zone.Id then
-					T.eq(#tbl.Rows, #effect.Rarities, zone.Id .. ": one row per lucky rarity")
+					local secrets = #BoostView.secretRows(zone.Id, preview.LuckBefore, preview.LuckAfter)
+					T.eq(#tbl.Rows, #effect.Rarities + secrets, zone.Id .. ": one row per lucky rarity (and the secrets)")
 					for i, line in effect.Rarities do
 						T.eq(tbl.Rows[i].Before, BoostView.pct(line.Before))
 						T.eq(tbl.Rows[i].After, BoostView.pct(line.After))
 					end
 					if effect.NoEffect then
 						T.eq(tbl.Summary, nil)
-						T.truthy(tbl.Note:find("changes nothing"), "says so")
+						T.truthy(tbl.Note:find("changes nothing") or tbl.Note:find("only raises the ??? Secret", 1, true), "says so")
 					else
 						T.eq(tbl.Summary.Before, BoostView.pct(effect.Before))
 						T.eq(tbl.Summary.After, BoostView.pct(effect.After))

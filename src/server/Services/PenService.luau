@@ -564,7 +564,8 @@ end
 	ore the player has marked Keep since then stays.
 ]]
 local function matches(intent: Intent, entry: any, data: { [string]: any }): boolean
-	if not ConveyorService.spawnable(entry) then
+	-- a SECRET ore never goes onto the belts (no machine takes it): it waits in the pen / the train
+	if not ConveyorService.spawnable(entry) or MachineData.refuses(entry) then
 		return false
 	end
 	if intent.Cargo then

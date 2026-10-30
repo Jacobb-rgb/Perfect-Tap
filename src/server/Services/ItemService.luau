@@ -129,6 +129,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local DropperConfig = require(Shared.Config.DropperConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -879,7 +880,8 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 	end
 	local result: StoreResult
 	local value = 0
-	if #data.Storage < GameConfig.MaxStoredItems then
+	-- a SECRET ore is never sold off: it is kept even past the cap (a handful at most)
+	if #data.Storage < GameConfig.MaxStoredItems or SecretOreConfig.isSecret(desc.O) then
 		table.insert(data.Storage, { K = desc.K, O = desc.O, G = desc.G, R = desc.R })
 		result = "Stored"
 		DataService.changed(player)

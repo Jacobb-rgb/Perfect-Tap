@@ -126,6 +126,16 @@ local SoundConfig: { [string]: SoundDef } = {
 	AmbHammer = { Id = "rbxassetid://12222225", Volume = 0.25, Pitch = { 0.85, 1.0 } },
 	AmbCrackle = { Id = "rbxassetid://12222140", Volume = 0.07, Pitch = { 1.8, 2.6 } },
 	AmbWind = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.16, Pitch = { 0.5, 0.55 }, Looped = true },
+	-- the SECRET ores (SecretCleanFx, SecretRevealController), layered from the ids above (shipped files
+	-- and Roblox's own uploads): the dirty ore's ding, the heartbeats, the rising tone, the BOOM, the
+	-- chime and the fanfare of the jackpot, the sparkles.
+	SecretDing = { Id = "rbxassetid://15675043410", Volume = 0.45, Pitch = { 1.45, 1.55 } },
+	SecretThump = { Id = "rbxassetid://12221984", Volume = 0.7, Pitch = { 0.3, 0.32 } },
+	SecretRise = { Id = "rbxassetid://15675046931", Volume = 0.5, Pitch = { 0.8, 0.8 } },
+	SecretBoom = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.7, Pitch = { 0.5, 0.55 } },
+	SecretChime = { Id = "rbxassetid://15675043410", Volume = 0.6, Pitch = { 1.2, 1.2 } },
+	SecretFanfare = { Id = "rbxassetid://16480570986", Volume = 0.55, Pitch = { 1.0, 1.0 } },
+	SecretSparkle = { Id = "rbxassetid://12222005", Volume = 0.18, Pitch = { 2.6, 3.0 } },
 }
 
 return SoundConfig

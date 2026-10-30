@@ -95,10 +95,30 @@ Rarity.List = {
 	},
 } :: { RarityInfo }
 
+--[[
+	(owner 2026-10-29) The SECRET ores' rarity (SecretOreConfig). NOT in
+	Rarity.List: the six rarities every odds row, egg panel, world board,
+	luck table and sorter iterates stay six; ById and get know it. Its dirty
+	ore cleans like a Mythic one.
+]]
+Rarity.Secret = {
+	Id = "Secret",
+	Name = "Secret",
+	Order = 7,
+	Color = Color3.fromRGB(255, 120, 230),
+	DarkColor = Color3.fromRGB(24, 14, 36),
+	RespawnTime = 150,
+	BonusChunkChance = 0.1,
+	DirtThickness = 1.7,
+	FragileSpots = 5,
+	Reveal = 3,
+} :: RarityInfo
+
 Rarity.ById = {} :: { [string]: RarityInfo }
 for _, info in Rarity.List do
 	Rarity.ById[info.Id] = info
 end
+Rarity.ById.Secret = Rarity.Secret
 
 function Rarity.get(id: string): RarityInfo
 	local info = Rarity.ById[id]

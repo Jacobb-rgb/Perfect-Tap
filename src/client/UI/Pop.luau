@@ -1802,6 +1802,7 @@ Pop.RarityPaints = {
 	Epic = "Purple",
 	Legendary = "Yellow",
 	Mythic = "Pink",
+	Secret = "Purple", -- the SECRET ores (Rarity.Secret, outside Rarity.List)
 } :: { [string]: string }
 
 function Pop.rarityPaint(rarity: string?): Paint
