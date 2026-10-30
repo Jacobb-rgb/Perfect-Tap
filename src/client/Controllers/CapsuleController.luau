@@ -56,9 +56,18 @@
 	  at least HatchFx.MinShow, named (paid random items). Auto plays the fast
 	  timings (about 2 s) and opens the next egg at once; G (B while it runs)
 	  or the Auto button toggles it; Reduce motion gets the calm version
-	  (fades, no shake, rings, flash or spin). Results that arrive while one
-	  plays wait their turn. While it plays every prompt is suppressed
-	  ("CapsuleOpening"). Refusals stop Auto (onStop with the reason).
+	  (fades, no shake, rings, flash or spin). A result of more than 10
+	  golems (a x50 limited Robux pack: paid random items show each result)
+	  plays as consecutive openings of 10 (batches: "2 / 5" at the top, the
+	  later ones in the fast timings, MinShow in each; a skip finishes the
+	  opening it is in, never the next), including a pack's golems past the
+	  inventory's hard cap (the result's Pending: shown won, "Waiting:
+	  inventory full" under the name). The openings in a row are ONE chain:
+	  the HUD hold, the blur, the keys and the selection lock carry across
+	  them and come back once, after the last; a result that arrives
+	  meanwhile (a new receipt) waits after the whole chain. While it plays
+	  every prompt is suppressed ("CapsuleOpening"). Refusals stop Auto
+	  (onStop with the reason).
 - The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds per
 	  rarity: every BoardSeconds the next capsule the player may open (with
 	  the player's own Triple Lucky odds, refreshed within a second when it
@@ -81,6 +90,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
+local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local Theme = require(Shared.Config.UITheme)
@@ -102,9 +112,21 @@ local StateController = require(script.Parent.StateController)
 local CapsuleController = {}
 
 type Panel = { isOpen: () -> boolean, close: () -> () }
--- (a golem Deleted: auto-deleted by the player's trash icon, Id 0, not kept: it shows greyed and stays)
-type Result = { Capsule: string, Count: number, Golems: { { Id: number, Kind: string, Deleted: boolean? } }, Lucky: boolean, Free: boolean? }
+-- (a golem Deleted: auto-deleted by the player's trash icon, Id 0, not kept: it shows greyed and stays;
+-- Waiting: won past the inventory's hard cap, Id 0, in the pending credit: it shows won, with a note)
+export type Golem = { Id: number, Kind: string, Deleted: boolean?, Waiting: boolean? }
+-- One opening: a whole result, or batch `Batch` of `Batches` of a big one (at most Batch golems each).
+export type Result = {
+	Capsule: string,
+	Count: number,
+	Golems: { Golem },
+	Lucky: boolean,
+	Free: boolean?,
+	Batch: number?,
+	Batches: number?,
+}
 
+CapsuleController.Batch = 10 -- the most golems one opening shows (CapsuleView.StageTags): a x50 is 5 openings
 CapsuleController.BoardSeconds = 6 -- seconds each capsule's odds stay on the stall's board
 CapsuleController.BoardTick = 1 -- seconds between two checks of the board (Triple Lucky starting / ending)
 CapsuleController.BoardPixels = 120 -- the board's SurfaceGui PixelsPerStud (sharper text)
@@ -874,6 +896,9 @@ local blur: BlurEffect? = nil
 local function setBlur(on: boolean)
 	local camera = Workspace.CurrentCamera
 	if on then
+		if not camera then
+			return -- (no camera this moment: the next opening of the chain puts it on)
+		end
 		local made = blur
 		if not made or made.Parent ~= camera then
 			if made then
@@ -1010,28 +1035,34 @@ end
 	on to their flight once they showed MinShow (real time since they came
 	out: it waits for that); skip-all does both.
 ]]
--- Which of a result's golems were auto-deleted (index -> true).
-local function deletedOf(result: Result): { [number]: boolean }
-	local out: { [number]: boolean } = {}
+-- Which of an opening's golems were auto-deleted, and which won but wait for room (index -> true each).
+function CapsuleController.marks(result: Result): ({ [number]: boolean }, { [number]: boolean })
+	local deleted: { [number]: boolean } = {}
+	local waiting: { [number]: boolean } = {}
 	for i, g in result.Golems do
 		if g.Deleted == true then
-			out[i] = true
+			deleted[i] = true
+		elseif g.Waiting == true then
+			waiting[i] = true
 		end
 	end
-	return out
+	return deleted, waiting
 end
 
 local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local n = math.clamp(#kinds, 1, CapsuleView.StageTags)
 	local phone = compactNow()
+	local deleted, waiting = CapsuleController.marks(result)
 	local run = HatchStage.new({
 		Refs = o,
 		Capsule = result.Capsule,
 		Lucky = result.Lucky == true,
 		Kinds = kinds,
-		Deleted = deletedOf(result),
+		Deleted = deleted,
+		Waiting = waiting,
 		Eggs = takeEggs(result.Capsule, n, if phone and n > 3 then 2 else 3),
-		Fast = autoOn,
+		-- (Auto's fast timings; a big pack's later openings too: the first one plays whole)
+		Fast = autoOn or (result.Batch or 1) > 1,
 		Reduced = Motion.reduced(),
 		Phone = phone,
 		Target = playerOnScreen(),
@@ -1183,13 +1214,18 @@ local function ensureOpening(): CapsuleView.OpenRefs
 	return o
 end
 
--- Plays one result from start to end (the next one waiting starts at once).
-local function play(result: Result)
-	local o = ensureOpening()
-	fitOpening(o)
+--[[
+	The chain: every opening queued plays one after another under ONE hold
+	(beginChain .. endChain): the prompts suppressed, the HUD away, the
+	blur, the keys and the selection lock carry across them (a x50 pack's 5
+	openings, and a result that came meanwhile after them) and come back
+	once, after the last opening, whatever happened (a failing opening, a
+	death: the openings are ResetOnSpawn off and play on).
+]]
+local hatchOne = hatch -- (the specs swap in a recorder: _test.setHatch)
+
+local function beginChain(o: CapsuleView.OpenRefs)
 	playing = true
-	skipStep = false
-	skipAll = false
 	-- (the keys never also fire a prompt behind it: an egg's Buy Egg! / Auto)
 	PromptController.setSuppressed("CapsuleOpening", true)
 	if not hudHidden then
@@ -1197,9 +1233,6 @@ local function play(result: Result)
 	end
 	hideHud(true)
 	setBlur(true)
-	HatchStage.clear(o)
-	refreshAuto(o)
-	showNote(o, autoNote)
 	o.Gui.Enabled = true
 	o.Controls.Enabled = true
 	ContextActionService:BindActionAtPriority(
@@ -1222,18 +1255,9 @@ local function play(result: Result)
 	ContextActionService:BindActionAtPriority(AUTO_ACTION, onAuto, false, OPEN_PRIORITY, PromptConfig.keys("Second").Keyboard)
 	ContextActionService:BindActionAtPriority(SINK_ACTION, onSink, false, OPEN_PRIORITY, table.unpack(SINK_KEYS))
 	keepNoSelection(true)
-	local kinds: { string } = {}
-	for _, g in result.Golems do
-		table.insert(kinds, g.Kind)
-	end
-	local ok, err = pcall(function()
-		hatch(o, result, kinds)
-	end)
-	if not ok then
-		warn("[CapsuleController] opening failed: " .. tostring(err))
-	end
-	HatchStage.clear(o, stageGolems) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
-	table.clear(stageGolems)
+end
+
+local function endChain()
 	ContextActionService:UnbindAction(SKIP_ACTION)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
 	ContextActionService:UnbindAction(AUTO_ACTION)
@@ -1241,57 +1265,129 @@ local function play(result: Result)
 	keepNoSelection(false)
 	playing = false
 	autoNote = nil
-	if #queue == 0 then
+	local o = opening
+	if o then
 		o.Gui.Enabled = false
 		o.Controls.Enabled = false
-		Sfx.loop("CaseCharge", false)
-		setBlur(false)
-		hideHud(false)
-		tellPlaying(false)
-		PromptController.setSuppressed("CapsuleOpening", false)
-		local view = refs
-		if view and shown and usingGamepad() then
-			GuiService.SelectedObject = CapsuleView.firstButton(view)
-		end
+		CapsuleView.setChain(o, nil, nil)
 	end
+	setBlur(false)
+	hideHud(false)
+	tellPlaying(false)
+	PromptController.setSuppressed("CapsuleOpening", false)
+	local view = refs
+	if view and shown and usingGamepad() then
+		GuiService.SelectedObject = CapsuleView.firstButton(view)
+	end
+	pcall(Sfx.loop, "CaseCharge", false) -- (last: the HUD and the prompts never wait on a sound)
+end
+
+-- Plays one opening of the chain from start to end (a skip finishes this one only: the next plays whole).
+local function play(result: Result)
+	local o = ensureOpening() -- (the layout of the moment: rebuilt only between two openings)
+	fitOpening(o)
+	skipStep = false
+	skipAll = false
+	setBlur(true) -- (kept on: a new camera since the last opening gets it too)
+	HatchStage.clear(o)
+	refreshAuto(o)
+	showNote(o, autoNote)
+	CapsuleView.setChain(o, result.Batch, result.Batches)
+	o.Gui.Enabled = true
+	o.Controls.Enabled = true
+	local kinds: { string } = {}
+	for _, g in result.Golems do
+		table.insert(kinds, g.Kind)
+	end
+	local ok, err = pcall(function()
+		hatchOne(o, result, kinds)
+	end)
+	if not ok then
+		warn("[CapsuleController] opening failed: " .. tostring(err))
+	end
+	HatchStage.clear(o, stageGolems) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
+	table.clear(stageGolems)
 end
 
 local function pump()
-	if playing then
-		return
+	if playing or #queue == 0 then
+		return -- (the chain that plays takes it, after the ones before it)
 	end
+	local o = ensureOpening()
+	fitOpening(o)
+	beginChain(o)
 	task.spawn(function()
 		while #queue > 0 do
 			local result = table.remove(queue, 1) :: Result
 			play(result)
 		end
+		endChain()
 	end)
 end
 
--- A CapsuleResult (also a late one, a wheel prize or a Robux receipt).
-local function onResult(payload: any)
+--[[
+	A CapsuleResult as the openings that show it (paid random items: a
+	multi-open shows each result): its golems (the woken and the
+	auto-deleted, then a Robux pack's Pending kinds, rolled past the
+	inventory's hard cap: shown won, waiting), at most CapsuleConfig.MaxCount,
+	cut into consecutive openings of Batch (a x50: 5). Junk is dropped
+	(a Pending kind must be a known golem); none: nothing to play.
+]]
+function CapsuleController.batches(payload: any): { Result }
 	if type(payload) ~= "table" or type(payload.Capsule) ~= "string" or type(payload.Golems) ~= "table" then
-		return
+		return {}
 	end
-	local golems: { { Id: number, Kind: string, Deleted: boolean? } } = {}
+	local golems: { Golem } = {}
+	local most = CapsuleConfig.MaxCount
 	for _, g in payload.Golems do
-		if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" and #golems < 10 then
+		if #golems >= most then
+			break
+		end
+		if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" then
 			table.insert(golems, { Id = g.Id, Kind = g.Kind, Deleted = if g.Deleted == true then true else nil })
 		end
 	end
-	if #golems == 0 then
+	if type(payload.Pending) == "table" then
+		for _, kind in payload.Pending do
+			if #golems >= most then
+				break
+			end
+			if type(kind) == "string" and GolemConfig.ById[kind] then
+				table.insert(golems, { Id = 0, Kind = kind, Waiting = true })
+			end
+		end
+	end
+	local out: { Result } = {}
+	local size = CapsuleController.Batch
+	local count = math.ceil(#golems / size)
+	for b = 1, count do
+		local part: { Golem } = table.move(golems, (b - 1) * size + 1, math.min(b * size, #golems), 1, {})
+		table.insert(out, {
+			Capsule = payload.Capsule,
+			Count = #part,
+			Golems = part,
+			Lucky = payload.Lucky == true,
+			Free = payload.Free == true,
+			Batch = b,
+			Batches = count,
+		})
+	end
+	return out
+end
+
+-- A CapsuleResult (also a late one, a wheel prize or a Robux receipt): its openings queue after
+-- every one already queued (a chain that plays takes them on; else one starts).
+local function onResult(payload: any)
+	local openings = CapsuleController.batches(payload)
+	if #openings == 0 then
 		return
 	end
 	if pendingUntil > 0 or pendingButton then
 		freeButton()
 	end
-	table.insert(queue, {
-		Capsule = payload.Capsule,
-		Count = #golems,
-		Golems = golems,
-		Lucky = payload.Lucky == true,
-		Free = payload.Free == true,
-	})
+	for _, result in openings do
+		table.insert(queue, result)
+	end
 	pump()
 end
 
@@ -1463,6 +1559,26 @@ CapsuleController._test = {
 	setPlaying = function(on: boolean)
 		playing = on
 	end,
+	-- the chain (tests/EggOpening.spec.luau): a result in, the openings it plays (a recorder for the hatch)
+	result = function(payload: any)
+		onResult(payload)
+	end,
+	setHatch = function(fn: ((CapsuleView.OpenRefs, Result, { string }) -> ())?)
+		hatchOne = fn or hatch
+	end,
+	hudHidden = function(): boolean
+		return hudHidden
+	end,
+	queued = function(): number
+		return #queue
+	end,
+	playing = function(): boolean
+		return playing
+	end,
+	skips = function(): (boolean, boolean)
+		return skipStep, skipAll
+	end,
+	onPlaying = CapsuleController.onPlaying, -- (the real one: the egg panel's specs swap the module's)
 }
 
 function CapsuleController.init()

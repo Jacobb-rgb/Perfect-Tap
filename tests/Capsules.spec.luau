@@ -771,6 +771,44 @@ return function(T, Loader)
 		end
 	end)
 
+	withWorld("Capsules: a pack past the hard cap sends its waiting golems too (Pending: every one is shown)", function(w)
+		-- a x50 limited pack with room for 3 (paid golems may pass InventoryCap up to MaxSaved)
+		local product = MonetizationConfig.Products.DragonforgeCapsule50
+		local oldId = product.Id
+		product.Id = 778
+		CapsuleService.setReceiptsReady(true)
+		local ok, err = pcall(function()
+			fill(w.data, GolemConfig.MaxSaved - 3, nil, true)
+			local before = #notes(w, "CapsuleResult")
+			local result, missing, left = CapsuleService.grantProduct(w.player, "DragonforgeCapsule50")
+			T.truthy(result, "granted")
+			T.eq(#result.Golems, 3, "three woke (up to MaxSaved)")
+			T.eq(missing, 47)
+			T.eq(#left, 47)
+			T.eq(type(result.Pending), "table", "the rest rides along in the result")
+			T.eq(#result.Pending, 47, "all 47 waiting golems")
+			for i, kind in result.Pending do
+				T.eq(kind, left[i], "the kinds the credit keeps, in order")
+				T.truthy(GolemConfig.ById[kind], kind .. ": a golem")
+			end
+			T.eq(#result.Golems + #result.Pending, 50, "the result holds all 50: the opening shows every one")
+			local sent = notes(w, "CapsuleResult")
+			T.eq(#sent, before + 1, "one CapsuleResult")
+			T.eq(sent[#sent].A, result, "the result sent is this one (Pending in it)")
+			-- room for all: no Pending at all
+			table.clear(w.data.Golems.Owned)
+			w.data.Golems.Equipped = {}
+			local roomy = CapsuleService.grantProduct(w.player, "DragonforgeCapsule50")
+			T.eq(#roomy.Golems, 50)
+			T.eq(roomy.Pending, nil, "nothing waits: no Pending")
+		end)
+		product.Id = oldId
+		CapsuleService.setReceiptsReady(false)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	---------------------------------------------------------------- fuzz
 
 	withWorld("Capsules: fuzz: random requests never lose or duplicate coins or golems", function(w)

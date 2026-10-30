@@ -136,6 +136,9 @@ export type Result = {
 	Golems: { Woken },
 	Lucky: boolean,
 	Free: boolean?,
+	-- a Robux pack's golems rolled past GolemConfig.MaxSaved (grantProduct): won, they wait in the
+	-- pending-golem credit; the client shows them with the others ("Waiting: inventory full")
+	Pending: { string }?,
 }
 export type Opened = { Capsule: string, Count: number, Kinds: { string }, Lucky: boolean, Source: Source, Price: number? }
 export type OpenedCallback = (Player, Opened) -> ...any
@@ -491,10 +494,11 @@ end
 	moment for a purchase made another way, e.g. the Store tab); the golems
 	are paid (Paid = true), locked (Locked = true) and may pass the
 	inventory cap up to GolemConfig.MaxSaved. Returns the CapsuleResult
-	(also sent), how many golems didn't fit past MaxSaved and their kinds
-	(the receipt handler keeps those as a pending-golem credit, never coins:
-	MonetizationConfig's step 8 contract). nil for a product that isn't a
-	capsule.
+	(also sent; the kinds past MaxSaved in its Pending, so the opening
+	shows every golem of the pack), how many golems didn't fit past
+	MaxSaved and their kinds (the receipt handler keeps those as a
+	pending-golem credit, never coins: MonetizationConfig's step 8
+	contract). nil for a product that isn't a capsule.
 ]]
 function CapsuleService.grantProduct(player: Player, productKey: string): (Result?, number, { string })
 	local data = DataService.get(player)
@@ -514,6 +518,9 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	end
 	DataService.changed(player)
 	local result: Result = { Capsule = product.Capsule, Count = count, Golems = woken, Lucky = lucky }
+	if #left > 0 then
+		result.Pending = table.clone(left) -- (shown won with the others: every golem of a paid pack is seen)
+	end
 	Net.fire("CapsuleResult", player, result)
 	opened(player, { Capsule = product.Capsule, Count = count, Kinds = kindsOf(woken), Lucky = lucky, Source = "Robux" })
 	return result, missing, left

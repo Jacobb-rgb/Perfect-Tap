@@ -191,12 +191,15 @@ export type Refs = {
 }
 
 -- A golem's name under it in the opening: the NAME and "1 in N" in its rarity's colour (an
--- auto-deleted golem: a trash mark and "DELETED" under them).
+-- auto-deleted golem: a trash mark and "DELETED" under them; a won golem past the inventory's
+-- hard cap, a Robux pack's: "Waiting: inventory full" under them, it wakes when there is room).
 export type Tag = {
 	Frame: Frame,
 	Name: TextLabel,
 	Chance: TextLabel,
 	Deleted: Frame,
+	Waiting: Frame,
+	WaitingText: TextLabel,
 }
 
 export type OpenRefs = {
@@ -223,12 +226,14 @@ export type OpenRefs = {
 	AutoKeyText: TextLabel,
 	AutoGlyph: ImageLabel,
 	Note: TextLabel, -- why Auto stopped (the HUD's toasts hide while an opening plays)
+	Chain: TextLabel, -- "2 / 5": a big pack's openings, one after another (setChain)
 	Size: Vector2, -- the screen in design units (layoutOpening)
 	Touch: boolean,
 	Compact: boolean,
 }
 
 CapsuleView.StageTags = 10 -- the most results an opening shows (CapsuleConfig.Counts' largest)
+CapsuleView.WaitingText = "Waiting: inventory full" -- under a won golem past the inventory's hard cap
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1652,7 +1657,28 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		word.Position = UDim2.new(0, 34, 0.5, 0)
 		word.Size = UDim2.new(1, -38, 0, 24)
 		word.TextXAlignment = Enum.TextXAlignment.Left
-		table.insert(tags, { Frame = holder, Name = name, Chance = chance, Deleted = deleted })
+		-- a won golem that waits (a Robux pack past the inventory's hard cap): a gold note under its chance
+		local waiting = UIKit.new("Frame", {
+			Name = "Waiting",
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundColor3 = BrightTheme.Paints.Gold.Bottom,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(220, 28),
+			Visible = false,
+			ZIndex = 9,
+		}, holder) :: Frame
+		UIKit.corner(waiting, BrightTheme.PillCorner)
+		UIKit.new(
+			"UIStroke",
+			{ Name = "Rim", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = BrightTheme.Outline, Thickness = 2 },
+			waiting
+		)
+		local wait = brightText(waiting, "Word", 16, 10)
+		wait.Text = CapsuleView.WaitingText
+		wait.AnchorPoint = Vector2.new(0.5, 0.5)
+		wait.Position = UDim2.fromScale(0.5, 0.5)
+		wait.Size = UDim2.new(1, -10, 1, -4)
+		table.insert(tags, { Frame = holder, Name = name, Chance = chance, Deleted = deleted, Waiting = waiting, WaitingText = wait })
 	end
 
 	-- the Auto button (bottom left; touch: above the thumbstick's zone) and its note, in the safe frame
@@ -1773,6 +1799,10 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		ZIndex = 3,
 	}, controls) :: TextLabel
 	UIKit.new("UIStroke", { Name = "Edge", Color = BrightTheme.Outline, Thickness = 2 }, note)
+	-- a big pack's openings one after another: "2 / 5" at the top (setChain; under the top bar)
+	local chain = brightText(controls, "Chain", 30, 3)
+	chain.Size = UDim2.fromOffset(200, 36)
+	chain.Visible = false
 	local refs: OpenRefs = {
 		Gui = gui,
 		Controls = controls,
@@ -1797,12 +1827,20 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		AutoKeyText = keyText,
 		AutoGlyph = glyph,
 		Note = note,
+		Chain = chain,
 		Size = Vector2.new(1280, 720),
 		Touch = false,
 		Compact = isCompact,
 	}
 	CapsuleView.layoutOpening(refs, isCompact, 1280, 720)
 	return refs
+end
+
+-- "2 / 5": opening `batch` of `batches` (a big pack shown 10 golems at a time); hidden for one opening.
+function CapsuleView.setChain(refs: OpenRefs, batch: number?, batches: number?)
+	local of = batches or 1
+	refs.Chain.Visible = of > 1
+	refs.Chain.Text = if of > 1 then `{batch or 1} / {of}` else ""
 end
 
 export type OpeningOpts = {
@@ -1884,6 +1922,15 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	end
 	refs.Note.Size = UDim2.fromOffset(math.min(width - 2 * margin, 460), 24)
 	refs.Note.TextSize = if compact or touch then 20 else 18
+	-- the chain's "2 / 5": top middle, just under the top bar (on touch above the thumbstick's zone)
+	local chainSize = if compact or touch then 26 else 30
+	refs.Chain.TextSize = chainSize
+	refs.Chain.Size = UDim2.fromOffset(200, chainSize + 6)
+	refs.Chain.Position = UDim2.fromOffset(width / 2, 8)
+	local chainEdge = refs.Chain:FindFirstChild("Edge")
+	if chainEdge and chainEdge:IsA("UIStroke") then
+		chainEdge.Thickness = CapsuleView.TextEdge(chainSize)
+	end
 end
 
 -- A golem's name and "1 in N" under its feet (`at`: the tag's top middle, design units; `size`: the
@@ -1898,7 +1945,8 @@ function CapsuleView.setTag(
 	at: Vector2,
 	size: number,
 	room: number?,
-	deleted: boolean?
+	deleted: boolean?,
+	waiting: boolean?
 )
 	local tag = refs.Tags[slot]
 	if not tag then
@@ -1924,11 +1972,28 @@ function CapsuleView.setTag(
 			edge.Thickness = CapsuleView.TextEdge(label.TextSize)
 		end
 	end
-	-- (auto-deleted: the trash mark and DELETED under the chance)
+	-- (auto-deleted: the trash mark and DELETED under the chance; won but waiting: its gold note)
+	local wait = waiting == true and deleted ~= true
 	tag.Deleted.Visible = deleted == true
 	tag.Deleted.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
+	tag.Waiting.Visible = wait
+	local frameW = math.max(160, math.min(width, fit * 12))
+	if wait then
+		-- (the note fits its room: a smaller word between close neighbours, never under 10 units)
+		local noteSize = 16
+		while noteSize > 10 and TechShopView.textWidth(CapsuleView.WaitingText, noteSize) + 22 > math.max(frameW, width) do
+			noteSize -= 1
+		end
+		tag.WaitingText.TextSize = noteSize
+		local noteEdge = tag.WaitingText:FindFirstChild("Edge")
+		if noteEdge and noteEdge:IsA("UIStroke") then
+			noteEdge.Thickness = CapsuleView.TextEdge(noteSize)
+		end
+		tag.Waiting.Size = UDim2.fromOffset(math.ceil(TechShopView.textWidth(CapsuleView.WaitingText, noteSize)) + 22, noteSize + 12)
+		tag.Waiting.Position = UDim2.new(0.5, 0, 0, fit + small + 8)
+	end
 	tag.Frame.Position = UDim2.fromOffset(at.X, at.Y)
-	tag.Frame.Size = UDim2.fromOffset(math.max(160, math.min(width, fit * 12)), fit + small + 12 + (if deleted then 36 else 0))
+	tag.Frame.Size = UDim2.fromOffset(frameW, fit + small + 12 + (if deleted then 36 elseif wait then 34 else 0))
 end
 
 --[[

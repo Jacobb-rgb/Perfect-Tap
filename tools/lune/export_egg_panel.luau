@@ -976,6 +976,9 @@ if videoMode == "redo" then
 		Reduced: boolean?,
 		Auto: boolean?, -- Auto on (the button green)
 		Deleted: { [number]: boolean }?, -- the result's golems the player auto-deletes (greyed, DELETED, they stay)
+		Waiting: { [number]: boolean }?, -- won past the inventory's hard cap ("Waiting: inventory full")
+		Batch: number?, -- a big pack's opening `Batch` of `Batches` ("2 / 5" at the top)
+		Batches: number?,
 		Caption: string,
 	}
 
@@ -1000,6 +1003,7 @@ if videoMode == "redo" then
 		o.Gui.Enabled = true
 		o.Controls.Enabled = true
 		CapsuleView.setAuto(o, true, case.Auto == true, if screen.Phone then "" else "G", nil)
+		CapsuleView.setChain(o, case.Batch, case.Batches)
 		o.Stage:SetAttribute("PreviewLive", true)
 		local eggs = {}
 		local n = #case.Kinds
@@ -1024,6 +1028,7 @@ if videoMode == "redo" then
 				return true
 			end,
 			Deleted = case.Deleted,
+			Waiting = case.Waiting,
 		})
 		return o, run
 	end
@@ -1152,6 +1157,12 @@ if videoMode == "redo" then
 	local _ = pc
 
 	local OPEN3 = { "RoseKnight", "QuartzSprite", "CopperTinker" } -- (purple, green and white cracks, like the video)
+	-- ten golems of the Dragonforge egg, its odds' golems in turn
+	local DRAGON10 = {}
+	local dragonOdds = CapsuleConfig.odds("Dragonforge", false)
+	for i = 1, 10 do
+		DRAGON10[i] = dragonOdds[(i - 1) % #dragonOdds + 1].Golem
+	end
 	local cases: { [string]: Redo } = {
 		common = { Egg = "Stone", Kinds = { "TinTumbler" }, Caption = "Open 1: a Common (white cracks)" },
 		open3 = { Egg = "Stone", Kinds = OPEN3, Caption = "Open 3: an Epic, an Uncommon, a Common" },
@@ -1178,6 +1189,25 @@ if videoMode == "redo" then
 			Kinds = OPEN3,
 			Deleted = { [3] = true },
 			Caption = "Auto-delete on for Copper Tinker: greyed, DELETED, it stays",
+		},
+		-- a x50 limited pack: five openings of 10 one after another (the later ones in the fast timings)
+		x50 = {
+			Egg = "Dragonforge",
+			Kinds = DRAGON10,
+			Fast = true,
+			Batch = 2,
+			Batches = 5,
+			Caption = "Dragonforge x50: opening 2 of 5, every golem shown and named",
+		},
+		-- the pack's last opening with the inventory full: the golems past the cap shown won, waiting
+		waiting = {
+			Egg = "Dragonforge",
+			Kinds = DRAGON10,
+			Fast = true,
+			Batch = 5,
+			Batches = 5,
+			Waiting = { [5] = true, [6] = true, [7] = true, [8] = true, [9] = true, [10] = true },
+			Caption = "Inventory full: the last 6 shown won, they wake when there is room",
 		},
 		fast = {
 			Egg = "Stone",
@@ -1239,6 +1269,8 @@ if videoMode == "redo" then
 		stillsOf("redo_calm", PC, "calm", { "a_pop", "c_cracks", "d_cracks_full", "g_reveal" })
 		stillsOf("redo_phone", PHONE, "open3", { "c_cracks", "g_reveal" })
 		stillsOf("redo_deleted", PC, "deleted", { "g_reveal", "h_fly" })
+		stillsOf("redo_x50", PC, "x50", { "c_cracks", "g_reveal" })
+		stillsOf("redo_waiting", PC, "waiting", { "g_reveal" })
 		fs.writeFile(root .. "/build/preview/egg_redo_stills_shots.json", serde.encode("json", stillShots))
 		fs.writeFile(root .. "/build/preview/egg_redo_phone_shots.json", serde.encode("json", phoneShots))
 		local n = 0

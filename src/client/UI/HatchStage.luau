@@ -49,6 +49,7 @@ export type Args = {
 	Claim: () -> boolean, -- may the flash go off now (RevealKit.takeFlash: the game's one flash gap; false with Reduce motion)
 	Wait: (() -> number)?, -- seconds until the next flash may (RevealKit.nextFlashAt): a refused flash waits, at most FlashGap
 	Deleted: { [number]: boolean }?, -- the result's golems the player auto-deletes (by index): greyed, they stay
+	Waiting: { [number]: boolean }?, -- won past the inventory's hard cap (a Robux pack's, by index): a note under the name
 }
 
 type Standing = { Model: Model, Height: number, Root: number, Depth: number, Spot: Vector2, Turn: number }
@@ -64,6 +65,7 @@ export type Run = {
 	Rarities: { string }, -- per slot
 	Colors: { Color3 }, -- per slot: its crack colour
 	Deleted: { [number]: boolean }, -- per slot: auto-deleted (greyed, DELETED, no flight)
+	Waiting: { [number]: boolean }, -- per slot: won but waiting for room ("Waiting: inventory full")
 	BestRarity: string,
 	BestOrder: number,
 	Size: Vector2, -- the screen (design units) the layout is for
@@ -119,6 +121,7 @@ function HatchStage.new(args: Args): Run
 		Rarities = {},
 		Colors = {},
 		Deleted = {},
+		Waiting = {},
 		BestRarity = bestRarity,
 		BestOrder = bestOrder,
 		Size = o.Size,
@@ -138,6 +141,7 @@ function HatchStage.new(args: Args): Run
 		run.Rarities[slot] = if info then info.Rarity else "Common"
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
 		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
+		run.Waiting[slot] = args.Waiting ~= nil and args.Waiting[order[slot]] == true
 	end
 	relayout(run)
 	-- the blobs in the best colour, the shell pieces in each egg's (and white)
@@ -339,7 +343,8 @@ local function reveal(run: Run, aspect: number)
 		if run.Deleted[slot] then
 			HatchStage.grey(model)
 		end
-		-- the name under its feet, "1 in N" in the rarity's colour (nothing else; DELETED when auto-deleted)
+		-- the name under its feet, "1 in N" in the rarity's colour (nothing else; DELETED when
+		-- auto-deleted, "Waiting: inventory full" for a won golem past the inventory's hard cap)
 		local feet = HatchFx.at(s.Golem.X, s.Golem.Y, standing.Depth, aspect) - Vector3.new(0, height / 2, 0)
 		local under = HatchFx.project(feet, aspect)
 		CapsuleView.setTag(
@@ -354,7 +359,8 @@ local function reveal(run: Run, aspect: number)
 			run.Layout.Spacing
 				* size.X
 				* (if slot == run.Special then 1.5 else 0.96),
-			run.Deleted[slot]
+			run.Deleted[slot],
+			run.Waiting[slot]
 		)
 	end
 end

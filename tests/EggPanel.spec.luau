@@ -1246,6 +1246,13 @@ return function(T, Loader)
 			},
 			{
 				Gui,
+				"GetPropertyChangedSignal",
+				function()
+					return signal() -- (the opening's selection lock watches SelectedObject: never fires here)
+				end,
+			},
+			{
+				Gui,
 				"IsTenFootInterface",
 				function()
 					return false
@@ -2086,6 +2093,232 @@ return function(T, Loader)
 				local _w = w
 			end)
 			CC._test.close()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
+	T.test("CapsuleController: a x50 pack is 5 openings of 10, every golem named once (the waiting ones with their note)", function()
+		withController(function(_C, _w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local HatchStage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
+			local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+			local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+			local function golemOf(kind: string): (any, number, number)
+				local model = GolemBuilder.build(kind)
+				return model, model:GetAttribute("Height") or 3, model:GetAttribute("RootHeight") or 1
+			end
+			-- a x50 Dragonforge pack: 40 woke, 10 rolled past the inventory's hard cap (the result's Pending)
+			local odds = CapsuleConfig.odds("Dragonforge", false)
+			local golems, pending = {}, {}
+			local want: { [string]: number } = {}
+			for i = 1, 50 do
+				local kind = odds[(i - 1) % #odds + 1].Golem
+				if i <= 40 then
+					table.insert(golems, { Id = i, Kind = kind })
+				else
+					table.insert(pending, kind)
+				end
+				local name = GolemConfig.ById[kind].Name
+				want[name] = (want[name] or 0) + 1
+			end
+			local payload = { Capsule = "Dragonforge", Count = 50, Golems = golems, Pending = pending, Lucky = false }
+			local openings = CC.batches(payload)
+			T.eq(#openings, 5, "a x50: five openings")
+			-- junk: no golems, unknown pending kinds, more than a pack holds
+			T.eq(#CC.batches({ Capsule = "Stone", Golems = {} }), 0)
+			T.eq(#CC.batches("x"), 0)
+			local junk = CC.batches({ Capsule = "Stone", Golems = { { Id = 1, Kind = "PebbleGolem" } }, Pending = { "NoSuchGolem", 5 } })
+			T.eq(#junk, 1)
+			T.eq(#junk[1].Golems, 1, "an unknown pending kind is dropped")
+			local many = {}
+			for i = 1, 70 do
+				many[i] = { Id = i, Kind = "PebbleGolem" }
+			end
+			local capped = CC.batches({ Capsule = "Stone", Golems = many })
+			local total = 0
+			for _, r in capped do
+				total += #r.Golems
+			end
+			T.eq(total, CapsuleConfig.MaxCount, "never more than the biggest pack")
+			-- each opening posed to the moment every name shows: each golem named exactly once
+			local o = CapsuleView.buildOpening(false)
+			CapsuleView.layoutOpening(o, false, 1280, 720, {})
+			local named: { [string]: number } = {}
+			local notes, ids = 0, {}
+			for b, result in openings do
+				T.eq(result.Batch, b)
+				T.eq(result.Batches, 5)
+				T.eq(result.Count, 10)
+				T.eq(#result.Golems, 10, `opening {b}: ten golems`)
+				for _, g in result.Golems do
+					if g.Id > 0 then
+						T.falsy(ids[g.Id], `golem {g.Id} in one opening only`)
+						ids[g.Id] = true
+					end
+				end
+				local deleted, waiting = CC.marks(result)
+				local kinds = {}
+				local eggs = {}
+				for _, g in result.Golems do
+					table.insert(kinds, g.Kind)
+					local egg = GolemBuilder.capsule("Dragonforge")
+					HatchFx.addCracks(egg, 3)
+					egg:SetAttribute("Pooled", true)
+					table.insert(eggs, HatchFx.record(egg))
+				end
+				local run = HatchStage.new({
+					Refs = o,
+					Capsule = "Dragonforge",
+					Lucky = false,
+					Kinds = kinds,
+					Eggs = eggs,
+					Fast = b > 1, -- (the controller: the later openings in the fast timings)
+					Reduced = false,
+					Phone = false,
+					Target = Vector2.new(0.5, 0.86),
+					Golem = golemOf,
+					Claim = function(): boolean
+						return true
+					end,
+					Deleted = deleted,
+					Waiting = waiting,
+				})
+				local tl = run.Timeline
+				T.truthy(tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow, `opening {b}: MinShow after the last name`)
+				local at = tl.Reveal + HatchFx.namedAt(tl) + 0.02
+				local t = 0
+				while t < at do
+					t = math.min(at, t + 1 / 30)
+					HatchStage.pose(run, t)
+				end
+				for slot = 1, #kinds do
+					local tag = o.Tags[slot]
+					T.truthy(tag.Frame.Visible and tag.Name.TextTransparency == 0, `opening {b} slot {slot}: named`)
+					named[tag.Name.Text] = (named[tag.Name.Text] or 0) + 1
+					T.eq(tag.Waiting.Visible, run.Waiting[slot], `opening {b} slot {slot}: the waiting note only on a waiting golem`)
+					if tag.Waiting.Visible then
+						notes += 1
+						T.eq(tag.WaitingText.Text, CapsuleView.WaitingText)
+						T.eq(tag.WaitingText.Text, "Waiting: inventory full")
+						T.falsy(tag.Deleted.Visible)
+					end
+				end
+				HatchStage.pose(run, tl.Total)
+				HatchStage.clear(o, HatchStage.golems(run))
+			end
+			for name, n in want do
+				T.eq(named[name], n, name .. ": named once for each of its golems")
+			end
+			for name in named do
+				T.truthy(want[name] ~= nil, name .. ": a golem of the pack")
+			end
+			T.eq(notes, 10, "the ten past the cap: shown won, each with its note")
+			-- the counter: "2 / 5" while a pack's openings play, none for one opening
+			CapsuleView.setChain(o, 2, 5)
+			T.truthy(o.Chain.Visible)
+			T.eq(o.Chain.Text, "2 / 5")
+			CapsuleView.setChain(o, 1, 1)
+			T.falsy(o.Chain.Visible)
+		end)
+	end)
+
+	T.test("CapsuleController: a chain of openings is one HUD hold; a result that comes meanwhile waits after it", function()
+		withController(function(_C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local played = {}
+			local plays: { boolean } = {}
+			local listening = true
+			local ok, err = pcall(function()
+				CC._test.onPlaying(function(on: boolean)
+					if listening then
+						table.insert(plays, on)
+					end
+				end)
+				local pack = {}
+				for i = 1, 50 do
+					pack[i] = { Id = i, Kind = "PebbleGolem" }
+				end
+				local later = { Capsule = "Crystal", Count = 1, Golems = { { Id = 99, Kind = "QuartzSprite" } }, Lucky = false }
+				-- (a recorder for the opening itself: the chain around it is the real one)
+				CC._test.setHatch(function(o: any, result: any, kinds: { string })
+					local idsOf = {}
+					for _, g in result.Golems do
+						table.insert(idsOf, g.Id)
+					end
+					table.insert(played, {
+						Capsule = result.Capsule,
+						Batch = result.Batch,
+						Batches = result.Batches,
+						Ids = idsOf,
+						Kinds = #kinds,
+						Hidden = CC._test.hudHidden(),
+						Playing = CC._test.playing(),
+						Sink = w.actions.TerraForgeCapsuleSink ~= nil,
+						Skip = w.actions.TerraForgeCapsuleSkip ~= nil,
+						Chain = if o.Chain.Visible then o.Chain.Text else "",
+					})
+					local step, all = CC._test.skips()
+					played[#played].Skipped = step or all
+					if #played == 1 then
+						-- (skip-all pressed twice in the first opening: it finishes that opening only)
+						local backspace = { KeyCode = roblox.Enum.KeyCode.Backspace }
+						CC._test.onSkipAll("x", roblox.Enum.UserInputState.Begin, backspace)
+						CC._test.onSkipAll("x", roblox.Enum.UserInputState.Begin, backspace)
+					end
+					if #played == 2 then
+						CC._test.result(later) -- (a new receipt arrives while the pack's second opening plays)
+					end
+				end)
+				CC._test.result({ Capsule = "Stone", Count = 50, Golems = pack, Lucky = false })
+				-- (the recorder never yields: the whole chain ran)
+				T.eq(#played, 6, "the pack's five openings, then the one that came meanwhile")
+				for i = 1, 5 do
+					local p = played[i]
+					T.eq(p.Capsule, "Stone")
+					T.eq(p.Batch, i)
+					T.eq(p.Batches, 5)
+					T.eq(p.Kinds, 10)
+					T.eq(p.Ids[1], (i - 1) * 10 + 1, `opening {i}: its golems in order`)
+					T.eq(p.Ids[10], i * 10)
+					T.eq(p.Chain, `{i} / 5`, "the counter")
+				end
+				for i, p in played do
+					T.falsy(p.Skipped, `opening {i} starts unskipped: a skip (or two) finished the one it was pressed in only`)
+				end
+				T.eq(played[6].Capsule, "Crystal", "the new result: after the WHOLE chain, never between its openings")
+				T.eq(played[6].Chain, "", "one opening: no counter")
+				for i, p in played do
+					T.truthy(p.Hidden, `opening {i}: the HUD away`)
+					T.truthy(p.Playing, `opening {i}: playing (the egg panel and its keys rest)`)
+					T.truthy(p.Sink and p.Skip, `opening {i}: the keys and the selection lock held`)
+				end
+				T.eq(#plays, 2, "the chain told once that it began and once that it ended")
+				T.eq(plays[1], true)
+				T.eq(plays[2], false)
+				T.falsy(CC._test.hudHidden(), "the HUD back once, after the last opening")
+				T.falsy(CC._test.playing())
+				T.eq(w.actions.TerraForgeCapsuleSink, nil, "the keys free again")
+				T.eq(CC._test.queued(), 0)
+				-- an opening that fails still lets the chain go on and end
+				table.clear(played)
+				table.clear(plays)
+				CC._test.setHatch(function(_o: any, result: any)
+					table.insert(played, result.Batch)
+					if result.Batch == 1 then
+						error("a broken opening")
+					end
+				end)
+				CC._test.result({ Capsule = "Stone", Count = 20, Golems = table.move(pack, 1, 20, 1, {}), Lucky = false })
+				T.eq(#played, 2, "the second opening plays after a failed first")
+				T.eq(#plays, 2, "one begin, one end")
+				T.falsy(CC._test.hudHidden())
+			end)
+			listening = false
+			CC._test.setHatch(nil)
+			CC._test.close()
+			CC._test.hideHud(false) -- (a failure mid-chain must not leave the HUD away for the next specs)
 			if not ok then
 				error(err, 0)
 			end
