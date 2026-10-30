@@ -186,6 +186,25 @@ return function(T, Loader)
 		T.truthy(loud.Blur <= SecretCinematic.Blur.Peak + 1e-6, "the blur never past its peak")
 	end)
 
+	T.test("secret cinematic: the shakes are smooth (owner 2026-10-30: no stutter): small steps at 60 fps", function()
+		local view = SecretCinematic.build()
+		local tm = SecretCinematic.Timing
+		local last: any = nil
+		local t = tm.Explosion - 1
+		while t < tm.Explosion + 1 do
+			SecretCinematic.pose(view, t, opts())
+			local at = V2.new(view.Stage.Position.X.Offset, view.Stage.Position.Y.Offset)
+			if last then
+				T.truthy((at - last).Magnitude <= 5, `the stage moves at most 5 units a frame at {t}`)
+			end
+			last = at
+			t += 1 / 60
+		end
+		for i = 0, 400 do
+			T.truthy(math.abs(SecretCinematic.sway(i / 100, 4.6, 0.3)) <= 1 + 1e-9, "the sway in -1..1")
+		end
+	end)
+
 	T.test("secret cinematic: the burst's one flash waits once for RevealKit's gap, never late", function()
 		RevealKit.resetFlash()
 		local at, retry = SecretCinematic.boomFlash(10, false)

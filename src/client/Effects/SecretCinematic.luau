@@ -199,6 +199,16 @@ function SecretCinematic.cues(timing: Timing?, stars: number?): { Cue }
 	return out
 end
 
+--[[
+	A smooth sway (-1..1): two slow waves a golden ratio apart, `hz` a few a
+	second (smooth at 30 frames a second, at 60 too: never a buzz), `seed`
+	its own start. The shakes are a sway times a strength that eases.
+]]
+function SecretCinematic.sway(t: number, hz: number, seed: number): number
+	local w = 2 * math.pi * hz
+	return 0.62 * math.sin(t * w + seed) + 0.38 * math.sin(t * w * 1.618 + seed * 2.3)
+end
+
 local function span(t: number, a: number, b: number): number
 	if b <= a then
 		return if t >= b then 1 else 0
@@ -1447,11 +1457,14 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 	view.StageScale.Scale = layout.Scale * (1 + punch)
 	local shake = Vector2.zero
 	if not reduced then
+		-- (owner 2026-10-30, the eggs: "the shaking stutters, not clean": a smooth sway a few times a
+		-- second whose strength only eases in and out, never a 10 Hz buzz: clean at 30 and 60 fps)
 		local tremble = if t < E then 3 * span(t, E - 0.9, E) ^ 2 else 0
-		local kick = if t >= E then 16 * (1 - span(t, E, E + 0.7)) ^ 2 else 0
+		-- (the burst's kick: in over a few frames, an impact, never a jump; then it eases away)
+		local kick = if t >= E then 9 * easeOut(span(t, E, E + 0.06)) * (1 - span(t, E, E + 0.7)) ^ 2 else 0
 		local amount = math.max(tremble, kick)
 		if amount > 0 then
-			shake = Vector2.new(math.sin(t * 67.3) + 0.5 * math.sin(t * 41.1), math.cos(t * 59.7) + 0.5 * math.sin(t * 37.9)) * amount / 1.5
+			shake = Vector2.new(SecretCinematic.sway(t, 3.8, 0.3), SecretCinematic.sway(t, 3.2, 1.7)) * amount
 		end
 	end
 	view.Stage.Position = UDim2.fromOffset(layout.Center.X + shake.X, layout.Center.Y + shake.Y)
@@ -1654,7 +1667,9 @@ function SecretCinematic.pose(view: View, t: number, opts: Opts): boolean
 		size += 0.02 * math.sin(t * 2.4)
 	end
 	local float = if reduced then 0 else 7 * math.sin(t * 1.7)
-	local tremble = if reduced or t >= E then Vector2.zero else Vector2.new(math.sin(t * 83), math.cos(t * 71)) * 3 * span(t, E - 0.8, E)
+	local tremble = if reduced or t >= E
+		then Vector2.zero
+		else Vector2.new(SecretCinematic.sway(t, 4.2, 2.6), SecretCinematic.sway(t, 3.6, 0.9)) * 3 * span(t, E - 0.8, E)
 	local away = Vector2.new(tremble.X, float + tremble.Y)
 	local gone = 0
 	if continued then
