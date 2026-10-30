@@ -613,8 +613,11 @@ end
 -- The whole bonus of a kind (a HUGE golem's two added up; 0 when unknown).
 function GolemConfig.value(kind: string): number
 	local golem = GolemConfig.ById[kind]
+	if not golem then
+		return 0
+	end
 	local total = 0
-	for _, bonus in if golem then GolemConfig.bonuses(golem) else {} do
+	for _, bonus in GolemConfig.bonuses(golem) do
 		total += bonus.Value
 	end
 	return total
