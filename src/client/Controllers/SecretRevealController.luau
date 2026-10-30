@@ -16,7 +16,8 @@
 	      the BOOM: posed every frame, a tap / click / A skips to the flight
 	      after SecretReveal.SkipAfter, Reduce motion (Motion.reduced()), a
 	      phone gets fewer rays and pieces, one flash at most
-	      (RevealKit.takeFlash), the world camera kicks (CameraShake), the
+	      (RevealKit.takeFlash: one too soon after another flash waits its
+	      turn once, flashPlan / retryFlash), the world camera kicks (CameraShake), the
 	      sounds play in layers. onDone runs when it is over.
 ]]
 
@@ -64,6 +65,29 @@ function SecretRevealController.chatLine(data: any): string?
 	local chance = SecretOreConfig.chanceText(secret.OneIn)
 	local text = `[SECRET] {escape(data.Name)} found {ore.Name}! ({chance})`
 	return `<font color="{SecretRevealController.Color}"><b>{text}</b></font>`
+end
+
+-- When the jackpot's one flash starts (RevealKit's gap): FlashAt 0 (the BOOM) if it may flash
+-- `now`; else math.huge and the clock time to try once more (a flash too soon after another, a
+-- crystal's crack just before: it plays then, where the show is). Reduce motion: none, no slot taken.
+function SecretRevealController.flashPlan(now: number, reduced: boolean): (number, number?)
+	if reduced then
+		return math.huge, nil
+	end
+	if RevealKit.takeFlash(now) then
+		return 0, nil
+	end
+	return math.huge, RevealKit.nextFlashAt()
+end
+
+-- The flash that waited (flashPlan's retry) at clock `now`, `t` into the show: its FlashAt if it
+-- may flash now, nil if not: the slot is taken again, or the show is past SkipAfter (a hitch, a
+-- skip: no full-screen flash on the flight into the bag), and then it takes no slot.
+function SecretRevealController.retryFlash(t: number, now: number): number?
+	if t < SecretReveal.SkipAfter and RevealKit.takeFlash(now) then
+		return t
+	end
+	return nil
 end
 
 ---------------------------------------------------------------- the client
@@ -124,7 +148,7 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 	local camera = Workspace.CurrentCamera
 	local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local phone = UserInputService.TouchEnabled and math.min(screen.X, screen.Y) < 600
-	local flash = RevealKit.takeFlash(os.clock())
+	local flashAt, retry = SecretRevealController.flashPlan(os.clock(), reduced)
 	local scale = 1
 	pcall(function()
 		scale = require(script.Parent.HudController).uiScale()
@@ -141,7 +165,7 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 		Scale = scale,
 		Reduced = reduced,
 		Phone = phone,
-		Flash = flash,
+		FlashAt = flashAt,
 		Input = input,
 		TopInset = topInset,
 	}
@@ -154,12 +178,17 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 	ContextActionService:BindAction("TerraForgeSecretSkip", function(_, state)
 		if state == Enum.UserInputState.Begin and t >= SecretReveal.SkipAfter and t < hold then
 			t = hold
+			retry = nil
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch, Enum.KeyCode.ButtonA, Enum.KeyCode.Space)
 	local connection: RBXScriptConnection
 	connection = RunService.RenderStepped:Connect(function(dt)
 		t += dt
+		if retry and os.clock() >= retry then
+			retry = nil
+			opts.FlashAt = SecretRevealController.retryFlash(t, os.clock()) or math.huge
+		end
 		if SecretReveal.pose(v, t, opts) then
 			connection:Disconnect()
 			ContextActionService:UnbindAction("TerraForgeSecretSkip")

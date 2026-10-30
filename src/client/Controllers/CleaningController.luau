@@ -67,7 +67,7 @@ local PointerInput = require(Cleaning.PointerInput)
 local CameraFit = require(Cleaning.CameraFit)
 local DefaultLook = require(Cleaning.DefaultLook)
 local SecretCleanFx = require(Cleaning.SecretCleanFx)
-local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
+local CleanFlash = require(Cleaning.CleanFlash)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Hotbar = require(script.Parent.Parent.Util.Hotbar)
@@ -265,22 +265,14 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		end)
 	end
 	function ctx.flash(color: Color3, startTransparency: number)
-		local function show()
+		-- one flash clock for every reveal (CleanFlash: a flash too soon after another waits its
+		-- turn once; none in Reduce motion)
+		CleanFlash.play(function()
 			view.Flash.BackgroundColor3 = color
 			view.Flash.BackgroundTransparency = startTransparency
 			TweenService:Create(view.Flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
-		end
-		-- one flash clock for every reveal (RevealKit.FlashGap: 2.5 a second at most); a flash
-		-- too soon after another (a crystal's crack just before the reveal) plays once it may
-		local now = os.clock()
-		if RevealKit.takeFlash(now) then
-			show()
-			return
-		end
-		task.delay(math.max(0, RevealKit.nextFlashAt() - now), function()
-			if not ctx.ended() and RevealKit.takeFlash(os.clock()) then
-				show()
-			end
+		end, function()
+			return not ctx.ended()
 		end)
 	end
 	return ctx
