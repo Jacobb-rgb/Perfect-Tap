@@ -12,7 +12,8 @@
 	  finished   the last bit: three heartbeats (a rainbow ring off the
 	             clump each), a rising tone, the camera pushes in
 	  done       BOOM: a shockwave ring, the camera kicks back, and the
-	             jackpot screen (SecretRevealController.play); then the
+	             cinematic reveal (SecretRevealController.play: its
+	             discovery picks up where this build-up ends); then the
 	             look's own done (the Flawless card)
 	  cancel     everything goes
 	Reduce motion (Motion.reduced()): no shake, no push, rings and rays
@@ -256,7 +257,8 @@ function SecretCleanFx.done(result: any, ctx: any, after: () -> ())
 			ctx.Camera.FieldOfView = ctx.FitFov
 		end
 	end
-	-- while the jackpot screen is up, Collect's keys pass to its skip (CleaningController)
+	-- while the cinematic is up, Collect's keys pass to its skip / CONTINUE (CleaningController);
+	-- the server's result tells it the graded value and where the clean ore went
 	ctx.revealing = true
 	local SecretRevealController = require(script.Parent.Parent.Controllers.SecretRevealController)
 	SecretRevealController.play(oreId, function()
@@ -264,7 +266,7 @@ function SecretCleanFx.done(result: any, ctx: any, after: () -> ())
 		if not ctx.ended() then
 			after()
 		end
-	end)
+	end, result)
 end
 
 function SecretCleanFx.cancel(ctx: any)
