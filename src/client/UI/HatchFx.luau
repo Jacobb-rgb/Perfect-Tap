@@ -6,24 +6,43 @@
 	the full-screen viewport of CapsuleView's opening, the previews pose the
 	same functions frame by frame.
 
-	  pop in     the eggs pop in HUGE right in front of the camera (one in
-	             the middle at 60 % of the screen's height; 3 side by side
-	             and overlapping, the middle one bigger; 10 in two rows of 5)
-	  wobble     they rock about +-12 degrees
-	  rings      white shockwave rings and a puff come out: the first cracks
-	  cracks     glow in the rarity colour of the golem inside THAT egg
-	             (BrightTheme.crackColour; Mythic a moving rainbow), growing
-	             in three steps, the egg pulsing a little bigger at each;
-	             soft blobs of the best colour drift behind
+	V2 (owner 2026-10-30, "ULTIMATE EGG OPENING V2": an entrance, a float,
+	an energy charge, a rarity cinematic) keeps that flow and adds to it:
+
+	  entrance   the eggs rise into their places from below, growing (0.3 of
+	             their size, past it, back: Back), one after another, a
+	             quick half turn settling; a glowing platform grows under
+	             each (one in the middle at 60 % of the screen's height; 3
+	             side by side and overlapping, the middle one bigger; 10 in
+	             two rows of 5)
+	  float      they float: a slow bob and a slow turn, a few motes rising
+	  charge     white shockwave rings and a puff: the energy starts; two
+	             energy rings orbit each egg (opposite ways, faster and
+	             faster), motes stream into it, its glow grows, it pulses
+	             and shakes harder; the cracks glow in the rarity colour of
+	             the golem inside THAT egg (BrightTheme.crackColour; Mythic
+	             a moving rainbow), growing in three steps, the egg pulsing
+	             a little bigger at each; soft blobs of the best colour
+	             drift behind
 	  suspense   Legendary / Mythic: brighter cracks, a harder shake
 	  silhouette each egg turns into a solid glowing silhouette of its colour
 	  burst      it bursts: ONE flash in the best colour (RevealKit's one
 	             flash gap: never sooner than FlashGap after the last; a
-	             refused flash waits for its slot), shell pieces, a puff
+	             refused flash waits for its slot; stronger for the rarer,
+	             Tiers), shell pieces, a puff, the rings fly apart, the
+	             platforms flare and go
 	  reveal     the golems stand where their eggs were, HUGE and SOLID, on a
-	             soft white sunburst with a little confetti, each with its
-	             name and "1 in N" (a Legendary / Mythic in a batch centred,
-	             bigger, in front)
+	             soft sunburst with a little confetti and a soft aura each,
+	             each with its name and "1 in N" (a Legendary / Mythic in a
+	             batch centred, bigger, in front); up to 5: a pill over each
+	             head with its rarity and its bonus ("RARE", "+10% Income")
+	  rarity     the batch's best rarity sets the show (Tiers): Common a soft
+	             white glow; Uncommon a green energy pulse; Rare blue energy
+	             rings, more confetti; Epic a purple aura, a stronger flash;
+	             Legendary golden rays, a slow-motion reveal, gold confetti,
+	             LEGENDARY!; Mythic rainbow rays and energy, a brighter
+	             stage, rainbow confetti, MYTHIC! (the server tells the
+	             others: CapsuleService.announce)
 	  hold       a gentle bob
 	  fly        they spin and fly toward the player, shrinking; the HUD
 	             comes back
@@ -35,9 +54,10 @@
 	its camera at the origin looking along -Z, FieldOfView Fov), the poses
 	(eggPose, golemPose) and the crack network (Cracks, addCracks: thin Neon
 	parts on the egg's front, built once on the opening's pooled eggs, never
-	on the eggs in the world). Reduce motion: no pop, wobble, rings, shake,
-	flash or spin; the eggs fade in, crack, fade out, the golems fade in and
-	out.
+	on the eggs in the world). Reduce motion: no rise, float, orbit, motes,
+	rings, shake, flash or spin; the eggs fade in, crack, fade out, the
+	golems fade in and out (the platforms, auras, pills and the banner fade
+	with them, still).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,42 +73,42 @@ HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever i
 HatchFx.Fov = 40 -- the stage viewport's camera
 HatchFx.Turn = 0.22 -- radians a golem turns from facing the camera (a 3/4 look)
 HatchFx.RingCount = 3 -- shockwave rings per egg
-HatchFx.Suspense = 0.8 -- a Legendary / Mythic in the batch: the build-up is this much longer
-HatchFx.SuspenseFast = 0.4
+HatchFx.OrbitCount = 2 -- energy rings orbiting each egg while it charges (a phone opening many: 1)
 
 export type Times = {
-	Pop: number, -- an egg pops in
-	Stagger: number, -- between two eggs popping in (x3: 3, x10: 10)
-	Wobble: number, -- the first wobble ends
-	Rings: number, -- the rings and the puff
-	Steps: { number }, -- the cracks' three steps
+	Pop: number, -- an egg's entrance (it rises into its place, growing)
+	Stagger: number, -- between two eggs coming in (x3: 3, x10: 10)
+	Float: number, -- the eggs float this long before the charge
+	Rings: number, -- the white rings and the puff, from the charge's start
+	Steps: { number }, -- the cracks' three steps, from the charge's start
 	Glow: number, -- the last step to the silhouette
 	Silhouette: number, -- the silhouette to the burst
-	GolemPop: number, -- a golem's pop
+	GolemPop: number, -- a golem's pop (a Legendary / Mythic: its Tier's, slower)
 	Hold: number, -- the golems stay (after their pop)
 	Fly: number, -- they fly to the player
 }
 
 HatchFx.Times = {
+	-- (Open 3 of Commons about 4.6 s; a Legendary about 6.2 s, a Mythic about 6.8 s: Tiers)
 	Normal = {
-		Pop = 0.18,
-		Stagger = 0.04,
-		Wobble = 0.6,
-		Rings = 0.42,
-		Steps = { 0.62, 1.02, 1.42 },
-		Glow = 0.36,
-		Silhouette = 0.1,
-		GolemPop = 0.25,
-		Hold = 0.95,
-		Fly = 0.4,
+		Pop = 0.5,
+		Stagger = 0.09,
+		Float = 0.55,
+		Rings = 0,
+		Steps = { 0.3, 0.7, 1.1 },
+		Glow = 0.35,
+		Silhouette = 0.12,
+		GolemPop = 0.3,
+		Hold = 1.05,
+		Fly = 0.45,
 	},
 	-- Auto (about 2 s an opening, every golem still shown, named)
 	Fast = {
-		Pop = 0.12,
-		Stagger = 0.02,
-		Wobble = 0.3,
-		Rings = 0.16,
-		Steps = { 0.3, 0.45, 0.6 },
+		Pop = 0.2,
+		Stagger = 0.03,
+		Float = 0.1,
+		Rings = 0,
+		Steps = { 0.12, 0.27, 0.42 },
 		Glow = 0.14,
 		Silhouette = 0.06,
 		GolemPop = 0.2,
@@ -99,9 +119,9 @@ HatchFx.Times = {
 	Calm = {
 		Pop = 0.2,
 		Stagger = 0,
-		Wobble = 0,
+		Float = 0.2,
 		Rings = math.huge,
-		Steps = { 0.35, 0.6, 0.85 },
+		Steps = { 0.15, 0.4, 0.65 },
 		Glow = 0.2,
 		Silhouette = 0.25, -- (the eggs' fade out)
 		GolemPop = 0.25, -- (the golems' fade in)
@@ -110,57 +130,161 @@ HatchFx.Times = {
 	},
 } :: { [string]: Times }
 
+--[[
+	The rarity cinematic: the batch's BEST rarity (its Order, 1 Common ..
+	6 Mythic) sets it. The same flow for every rarity, more of it for the
+	rarer: never slower for a Common than its timings.
+]]
+export type Tier = {
+	Suspense: number, -- seconds more build-up before the silhouette (Auto: SuspenseFast; Reduce motion: none)
+	SuspenseFast: number,
+	GolemPop: number?, -- a slow-motion reveal: the golems' pop this long (nil: the timings')
+	Hold: number, -- seconds more they stand (Auto: HoldFast): the banner is read
+	HoldFast: number,
+	Flash: number, -- the burst's flash at its strongest (<= FlashPeak)
+	Pulses: number, -- energy rings out of the best golem at the reveal, in its colour
+	Confetti: number, -- confetti pieces at the reveal (of CapsuleView.ConfettiCount)
+	Aura: number, -- the golems' aura (0..1)
+	Rays: boolean, -- the sunburst's rays in the rarity's colour (Mythic: a rainbow); else soft white
+	Banner: string?, -- a big word over the golems
+	Light: number, -- the stage's light lifts (Mythic's stronger light: 0..1)
+}
+
+HatchFx.Tiers = {
+	-- Common: a soft white glow, a few bits
+	{ Suspense = 0, SuspenseFast = 0, Hold = 0, HoldFast = 0, Flash = 0.55, Pulses = 0, Confetti = 8, Aura = 0.4, Rays = false, Light = 0 },
+	-- Uncommon: green, a small energy pulse
+	{ Suspense = 0, SuspenseFast = 0, Hold = 0, HoldFast = 0, Flash = 0.6, Pulses = 1, Confetti = 12, Aura = 0.5, Rays = false, Light = 0 },
+	-- Rare: blue energy rings, more bits
+	{
+		Suspense = 0,
+		SuspenseFast = 0,
+		Hold = 0.1,
+		HoldFast = 0,
+		Flash = 0.65,
+		Pulses = 2,
+		Confetti = 18,
+		Aura = 0.6,
+		Rays = false,
+		Light = 0,
+	},
+	-- Epic: a purple aura, a stronger flash
+	{
+		Suspense = 0,
+		SuspenseFast = 0,
+		Hold = 0.2,
+		HoldFast = 0,
+		Flash = 0.8,
+		Pulses = 2,
+		Confetti = 18,
+		Aura = 0.9,
+		Rays = false,
+		Light = 0,
+	},
+	-- Legendary: golden rays, a slow-motion reveal, gold confetti, LEGENDARY!
+	{
+		Suspense = 0.8,
+		SuspenseFast = 0.4,
+		GolemPop = 0.55,
+		Hold = 0.5,
+		HoldFast = 0.35,
+		Flash = 0.85,
+		Pulses = 3,
+		Confetti = 18,
+		Aura = 1,
+		Rays = true,
+		Banner = "LEGENDARY!",
+		Light = 0,
+	},
+	-- Mythic: rainbow rays and energy, a brighter stage, rainbow confetti, MYTHIC!
+	{
+		Suspense = 1.0,
+		SuspenseFast = 0.4,
+		GolemPop = 0.65,
+		Hold = 0.8,
+		HoldFast = 0.35,
+		Flash = 0.85,
+		Pulses = 3,
+		Confetti = 18,
+		Aura = 1,
+		Rays = true,
+		Banner = "MYTHIC!",
+		Light = 0.35,
+	},
+} :: { Tier }
+
+-- The Tier of a batch whose best golem has Rarity `order` (1..6).
+function HatchFx.tierOf(order: number): Tier
+	return HatchFx.Tiers[math.clamp(math.floor(if order == order then order else 1), 1, #HatchFx.Tiers)]
+end
+
 export type Timeline = {
 	Count: number,
 	Order: number, -- the rarest golem's Rarity Order
 	Fast: boolean,
 	Reduced: boolean,
 	Times: Times,
+	Tier: Tier, -- the best rarity's cinematic
 	Stagger: number,
+	Float: number, -- the last egg is in: the float
+	Charge: number, -- the energy charge starts (the orbits, the motes, the glow)
 	Rings: number, -- the rings and the puff (math.huge: none)
 	Steps: { number }, -- each crack step
 	Suspense: number, -- seconds of it (0: none), from the last step
 	Silhouette: number, -- the eggs turn into their colour
 	Burst: number, -- they burst: the flash
 	Reveal: number, -- the golems pop
+	GolemPop: number, -- their pop (the Tier's slow motion)
+	Banner: number, -- the big word slams in (math.huge: none)
 	Fly: number, -- they fly to the player
 	Total: number, -- the opening ends: the HUD comes back
 }
 
 --[[
 	The timings of an opening of `count` eggs whose rarest golem has Rarity
-	`order`: `fast` (Auto), `reduced` (Reduce motion). Open 3 takes about
-	3.5 s (the video), Auto's about 2 s; a Legendary / Mythic adds the
-	suspense (Reduce motion: none).
+	`order`: `fast` (Auto), `reduced` (Reduce motion). Open 3 of Commons
+	takes about 4.6 s, Auto's about 2 s; a rarer best golem adds its Tier
+	(the suspense, a slower pop, a longer hold; Reduce motion: no suspense,
+	no slow motion, the hold for the banner).
 ]]
 function HatchFx.timeline(order: number, count: number, fast: boolean, reduced: boolean): Timeline
 	local n = math.clamp(math.floor(if count == count then count else 1), 1, 10)
 	local o = math.clamp(math.floor(if order == order then order else 1), 1, 6)
 	local times = if reduced then HatchFx.Times.Calm elseif fast then HatchFx.Times.Fast else HatchFx.Times.Normal
+	local tier = HatchFx.tierOf(o)
 	local stagger = if n > 3 then times.Stagger * 0.6 else times.Stagger
-	local suspense = if o >= 5 and not reduced then (if fast then HatchFx.SuspenseFast else HatchFx.Suspense) else 0
+	local suspense = if reduced then 0 elseif fast then tier.SuspenseFast else tier.Suspense
+	local spread = stagger * (n - 1) -- (the last egg comes in this much later: everything waits for it)
+	local float = times.Pop + spread
+	local charge = float + times.Float
 	local steps = table.clone(times.Steps)
-	local spread = stagger * (n - 1) -- (the last egg pops in this much later: everything waits for it)
 	for i, s in steps do
-		steps[i] = s + spread
+		steps[i] = s + charge
 	end
 	local silhouette = steps[#steps] + suspense + times.Glow
 	local burst = silhouette + times.Silhouette
 	local reveal = burst + (if reduced then times.Silhouette * 0.4 else 0.04)
-	local fly = reveal + times.GolemPop + times.Hold
+	local pop = if fast or reduced then times.GolemPop else (tier.GolemPop or times.GolemPop)
+	local hold = times.Hold + (if fast then tier.HoldFast else tier.Hold)
+	local fly = reveal + pop + hold
 	return {
 		Count = n,
 		Order = o,
 		Fast = fast,
 		Reduced = reduced,
 		Times = times,
+		Tier = tier,
 		Stagger = stagger,
-		Rings = if reduced then math.huge else times.Rings + spread,
+		Float = float,
+		Charge = charge,
+		Rings = if reduced then math.huge else charge + times.Rings,
 		Steps = steps,
 		Suspense = suspense,
 		Silhouette = silhouette,
 		Burst = burst,
 		Reveal = reveal,
+		GolemPop = pop,
+		Banner = if tier.Banner then reveal + pop * 0.5 else math.huge,
 		Fly = fly,
 		Total = fly + times.Fly,
 	}
@@ -447,18 +571,38 @@ end
 
 export type EggPose = {
 	Shown: boolean, -- false: popped (the burst) or not in yet
-	Scale: number, -- its size against its place's (the pop, the pulses, the swell)
+	Scale: number, -- its size against its place's (the entrance, the pulses, the swell)
 	Roll: number, -- its rock (radians, about its foot)
+	Yaw: number, -- its turn round its upright (radians: the entrance's half turn, the float's slow turn)
+	Drop: number, -- how far under its place it is (a share of the screen's height: the rise, the bob)
 	Fade: number, -- 0 seen .. 1 gone (Reduce motion's fades)
 	Level: number, -- cracks lit (0..3)
 	Bright: number, -- 0..1: the cracks whiten (the suspense)
 	Silhouette: number, -- 0..1: the egg turns into its colour
+	Charge: number, -- 0..1: the energy charge (its orbits, motes and glow)
 }
 
+HatchFx.Rise = 0.42 -- an egg rises this far into its place (a share of the screen's height)
+HatchFx.Bob = 0.012 -- the float's bob (a share of the screen's height)
+HatchFx.FloatTurn = 0.28 -- the float's slow turn (radians each way)
+
+-- Ease out (cubic): fast, then settling.
+local function easeOut(x: number): number
+	local k = 1 - clamp01(x)
+	return 1 - k * k * k
+end
+
+-- How far into the energy charge `t` is (0..1): from the charge's start to the silhouette.
+function HatchFx.chargeAt(t: number, tl: Timeline): number
+	return clamp01((t - tl.Charge) / math.max(0.01, tl.Silhouette - tl.Charge))
+end
+
 --[[
-	Egg `i` (of the timeline `tl`) at `t`: its pop in (from 0.25 of its size,
-	past it, back: Back), the first wobble (about +-12 degrees, fading), a
-	small tremble growing with the cracks, the pulse of each crack step, the
+	Egg `i` (of the timeline `tl`) at `t`: its entrance (it rises into its
+	place from below, from 0.3 of its size, past it, back: Back, a half turn
+	settling), the float (a slow bob and a slow turn, calming as the charge
+	grows), the charge (it pulses twice a second, a shake growing with it),
+	a tremble growing with the cracks, the pulse of each crack step, the
 	suspense (a harder, faster shake and a swell for the `special` egg; the
 	cracks whiten on every egg), the silhouette (swelling a little), the
 	burst (gone). Reduce motion: still; it fades in and out.
@@ -467,21 +611,53 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	local times = tl.Times
 	local start = (i - 1) * tl.Stagger
 	local level = HatchFx.levelAt(t, tl)
+	local charge = HatchFx.chargeAt(t, tl)
 	if t < start or t >= tl.Burst then
-		return { Shown = false, Scale = 1, Roll = 0, Fade = 1, Level = level, Bright = 0, Silhouette = 0 }
+		return {
+			Shown = false,
+			Scale = 1,
+			Roll = 0,
+			Yaw = 0,
+			Drop = 0,
+			Fade = 1,
+			Level = level,
+			Bright = 0,
+			Silhouette = 0,
+			Charge = charge,
+		}
 	end
 	if tl.Reduced then
 		local fadeIn = 1 - clamp01((t - start) / times.Pop)
 		local fadeOut = clamp01((t - tl.Silhouette) / times.Silhouette)
-		return { Shown = true, Scale = 1, Roll = 0, Fade = math.max(fadeIn, fadeOut), Level = level, Bright = 0, Silhouette = 0 }
+		return {
+			Shown = true,
+			Scale = 1,
+			Roll = 0,
+			Yaw = 0,
+			Drop = 0,
+			Fade = math.max(fadeIn, fadeOut),
+			Level = level,
+			Bright = 0,
+			Silhouette = 0,
+			Charge = charge,
+		}
 	end
 	local u = t - start
-	local scale = if u < times.Pop then 0.25 + 0.75 * HatchFx.back(u / times.Pop) else 1
-	-- the first wobble: about +-12 degrees, two swings, fading
+	local side = if i % 2 == 0 then -1 else 1
+	-- the entrance: up from below, growing (Back), a half turn settling
+	local e = u / times.Pop
+	local scale = if e < 1 then 0.3 + 0.7 * HatchFx.back(e) else 1
+	local drop = HatchFx.Rise * (1 - easeOut(e))
+	local yaw = side * math.pi * 0.6 * (1 - easeOut(e))
+	-- the float: a slow bob and a slow turn (they calm while the energy grows)
+	local floating = clamp01((t - tl.Float) / 0.25) * (1 - 0.7 * charge)
+	drop += HatchFx.Bob * math.sin((t - start) * 2 * math.pi * 0.7 + i * 0.9) * floating
+	yaw += HatchFx.FloatTurn * math.sin((t - start) * 2 * math.pi * 0.22 + i * 1.1) * floating
+	-- the charge: a pulse twice a second (its size only: never a flicker) and a shake growing with it
 	local roll = 0
-	if u < times.Wobble then
-		local k = u / times.Wobble
-		roll = math.rad(12) * math.sin(k * math.pi * 2.6 + i * 0.35) * (1 - k * 0.55) * clamp01(u / 0.06)
+	if charge > 0 and t < tl.Silhouette then
+		scale *= 1 + 0.035 * charge * (0.5 + 0.5 * math.sin((t - tl.Charge) * 2 * math.pi * 2))
+		roll += 0.05 * charge * charge * math.sin(t * 2 * math.pi * 13 + i * 2.1)
 	end
 	-- the tremble of the cracks (grows with each step)
 	if level > 0 then
@@ -502,7 +678,88 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 		roll *= 0.3
 	end
 	local bright = if suspense > 0 then suspense else 0
-	return { Shown = true, Scale = scale, Roll = roll, Fade = 0, Level = level, Bright = bright, Silhouette = silhouette }
+	return {
+		Shown = true,
+		Scale = scale,
+		Roll = roll,
+		Yaw = yaw,
+		Drop = drop,
+		Fade = 0,
+		Level = level,
+		Bright = bright,
+		Silhouette = silhouette,
+		Charge = charge,
+	}
+end
+
+--[[
+	The glowing platform under egg `i` at `t`: its strength (0 none .. 1)
+	and its size against its place's: it grows in with its egg, glows
+	brighter with the charge, flares at the burst and goes (Reduce motion:
+	it fades in and out, still).
+]]
+function HatchFx.platformAt(t: number, tl: Timeline, i: number): (number, number)
+	local start = (i - 1) * tl.Stagger
+	if t < start then
+		return 0, 1
+	end
+	local inK = clamp01((t - start) / tl.Times.Pop)
+	local strength = 0.55 + 0.45 * HatchFx.chargeAt(t, tl)
+	local size = if tl.Reduced then 1 else 0.4 + 0.6 * easeOut(inK)
+	if t >= tl.Burst then
+		local k = clamp01((t - tl.Burst) / 0.35)
+		return (1 - k) * strength, size * (1 + (if tl.Reduced then 0 else 0.45 * easeOut(k)))
+	end
+	return inK * strength, size
+end
+
+--[[
+	Energy ring `j` (1, 2) orbiting egg `i` at `t`: its strength (0..1), its
+	turn (degrees: the rings go opposite ways, faster and faster) and its
+	size against the egg's height. In with the charge, brighter toward the
+	burst; at the burst it flies apart and fades. Reduce motion: none.
+]]
+function HatchFx.orbitAt(t: number, tl: Timeline, i: number, j: number): (number, number, number)
+	if tl.Reduced or t < tl.Charge then
+		return 0, 0, 1
+	end
+	local u = t - tl.Charge
+	local dir = if j % 2 == 1 then 1 else -1
+	local turn = dir * (110 * u + 150 * u * u) + i * 47 + j * 90
+	local size = if j % 2 == 1 then 0.98 else 1.16 -- (egg heights: close round it, the eggs of an Open 3 overlap)
+	if t >= tl.Burst then
+		local k = clamp01((t - tl.Burst) / 0.3)
+		return 1 - k, turn, size * (1 + 1.1 * easeOut(k))
+	end
+	local charge = HatchFx.chargeAt(t, tl)
+	return clamp01(u / 0.3) * (0.45 + 0.55 * charge), turn, size * (1 - 0.08 * charge)
+end
+
+--[[
+	Mote `k` of `count` round egg `i` at `t`: shown, where (x, y: egg heights
+	from its middle, y down), its size against the egg's height and its
+	strength. Floating: a few rise slowly round the egg; charging: they
+	stream into it (each comes back out at its edge and in again), brighter
+	and quicker as the charge grows; gone at the burst. Reduce motion: none.
+]]
+function HatchFx.moteAt(t: number, tl: Timeline, i: number, k: number, count: number): (boolean, number, number, number, number)
+	if tl.Reduced or t < tl.Float or t >= tl.Burst then
+		return false, 0, 0, 0, 0
+	end
+	local seed = i * 7.31 + k * 2.399
+	local angle = seed % (2 * math.pi)
+	if t < tl.Charge then
+		-- (rising slowly round the egg, a little to and fro)
+		local p = ((t - tl.Float) * 0.45 + k / math.max(1, count)) % 1
+		local x = math.cos(angle) * 0.62 + 0.05 * math.sin((t + seed) * 3)
+		local y = 0.45 - p * 0.95
+		return true, x, y, 0.035, math.sin(p * math.pi) * 0.5
+	end
+	local charge = HatchFx.chargeAt(t, tl)
+	local p = ((t - tl.Charge) * (0.9 + 1.4 * charge) + k / math.max(1, count)) % 1
+	local reach = 0.95 * (1 - p ^ 1.5) + 0.08
+	local a = angle + p * 0.9
+	return true, math.cos(a) * reach, math.sin(a) * reach * 0.9, 0.03 + 0.02 * charge, math.sin(p * math.pi) * (0.45 + 0.55 * charge)
 end
 
 -- How far a white shockwave ring `j` of an egg is through its flight at `t` (0..1; outside it: none).
@@ -548,11 +805,12 @@ function HatchFx.golemPose(t: number, tl: Timeline, i: number): GolemPose
 	end
 	local u = t - at
 	if tl.Reduced then
-		local fade = math.max(1 - clamp01(u / times.GolemPop), clamp01((t - tl.Fly) / times.Fly))
+		local fade = math.max(1 - clamp01(u / tl.GolemPop), clamp01((t - tl.Fly) / times.Fly))
 		return { Shown = true, Scale = 1, Lift = 0, Spin = 0, Fly = 0, Fade = fade, Name = fade }
 	end
-	local scale = if u < times.GolemPop then 0.3 + 0.7 * HatchFx.back(u / times.GolemPop) else 1
-	local lift = 0.025 * math.sin(math.max(0, u - times.GolemPop) * 2 * math.pi * 0.9)
+	-- (0.3 of its size, past it, back: Back; a Legendary / Mythic's slower: the slow motion)
+	local scale = if u < tl.GolemPop then 0.3 + 0.7 * HatchFx.back(u / tl.GolemPop) else 1
+	local lift = 0.025 * math.sin(math.max(0, u - tl.GolemPop) * 2 * math.pi * 0.9)
 	local fly = clamp01((t - tl.Fly) / times.Fly)
 	local spin = 0
 	if fly > 0 then
@@ -600,6 +858,86 @@ end
 -- How far the flash is through its fade `u` seconds after the burst (RevealKit.poseFlash's f: 0..1; outside: none).
 function HatchFx.flashU(u: number): number
 	return u / HatchFx.FlashTime
+end
+
+-- The burst's flash at its strongest for the batch's best rarity (its Tier's; never over FlashPeak).
+function HatchFx.flashPeakOf(tl: Timeline): number
+	return math.min(HatchFx.FlashPeak, tl.Tier.Flash)
+end
+
+--[[
+	The glow of slot `i` at `t` (0..1): behind its egg while it charges
+	(growing with it), then the aura behind its golem (the Tier's, breathing
+	gently: slower than once a second), gone with the flight. Reduce motion:
+	it fades with the stage, still.
+]]
+function HatchFx.auraAt(t: number, tl: Timeline, i: number): number
+	if t < tl.Charge then
+		return 0
+	end
+	if t < tl.Reveal then
+		local glow = 0.25 + 0.6 * HatchFx.chargeAt(t, tl)
+		return if t >= tl.Burst then glow * (1 - clamp01((t - tl.Burst) / 0.1)) else glow
+	end
+	local at = tl.Reveal + (if tl.Reduced then 0 else (i - 1) * HatchFx.GolemRipple)
+	local inK = clamp01((t - at) / 0.25)
+	local out = 1 - clamp01((t - tl.Fly) / (tl.Times.Fly * 0.6))
+	local breathe = if tl.Reduced then 1 else 0.86 + 0.14 * math.sin((t - at) * 2 * math.pi * 0.6)
+	return tl.Tier.Aura * inK * out * breathe
+end
+
+--[[
+	The rarity's energy pulses at the reveal (Tier.Pulses rings out of the
+	best golem): how far ring `j` is through its flight at `t` (0..1;
+	outside: none). Reduce motion: none.
+]]
+function HatchFx.pulseU(t: number, tl: Timeline, j: number): number
+	if tl.Reduced or j > tl.Tier.Pulses then
+		return -1
+	end
+	return (t - tl.Reveal - (j - 1) * 0.14) / (if tl.Fast then 0.4 else 0.6)
+end
+
+--[[
+	The big word of a Legendary / Mythic (Tier.Banner) at `t`: its scale (it
+	slams in from big: Back) and its transparency (1: hidden); out with the
+	flight. Reduce motion: it fades in at its size.
+]]
+function HatchFx.bannerAt(t: number, tl: Timeline): (number, number)
+	if t < tl.Banner or t >= tl.Total then
+		return 1, 1
+	end
+	local u = t - tl.Banner
+	local out = clamp01((t - tl.Fly) / (tl.Times.Fly * 0.6))
+	if tl.Reduced then
+		return 1, math.max(1 - clamp01(u / 0.25), out)
+	end
+	local slam = 0.32
+	local scale = if u < slam then 2.1 - 1.1 * HatchFx.back(u / slam) else 1
+	return scale, math.max(1 - clamp01(u / 0.12), out)
+end
+
+-- The stage's light lift (0..1) of a Mythic (Tier.Light) at `t`: up at the burst, down with the flight.
+function HatchFx.lightAt(t: number, tl: Timeline): number
+	if tl.Tier.Light <= 0 or t < tl.Burst then
+		return 0
+	end
+	return tl.Tier.Light * clamp01((t - tl.Burst) / 0.3) * (1 - clamp01((t - tl.Fly) / tl.Times.Fly))
+end
+
+--[[
+	A golem's rarity pill ("RARE") and its bonus ("+10% Income") over its
+	head: the bonus's words (`labels`: GolemConfig.BonusTypes; nil: none).
+]]
+function HatchFx.bonusText(bonusType: string, value: number, labels: { [string]: { Stat: string, Label: string } }): string?
+	local kind = labels[bonusType]
+	if not kind or type(value) ~= "number" or value ~= value or value <= 0 then
+		return nil
+	end
+	local pct = value * 100
+	local whole = math.floor(pct + 0.5)
+	local text = if math.abs(pct - whole) < 0.05 then tostring(whole) else string.format("%.1f", pct)
+	return `+{text}% {kind.Label}`
 end
 
 ---------------------------------------------------------------- colours

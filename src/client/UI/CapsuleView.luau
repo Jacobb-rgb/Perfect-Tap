@@ -209,11 +209,36 @@ export type Tag = {
 	WaitingText: TextLabel,
 }
 
+-- A golem's rarity pill over its head (V2, up to 5 golems): "RARE" and its bonus "+10% Income".
+export type Badge = {
+	Frame: Frame, -- the pill, in the rarity's paint (BrightTheme.rarityPaint)
+	Paint: UIGradient,
+	Rim: UIStroke,
+	Rarity: TextLabel,
+	Bonus: TextLabel,
+}
+
+-- The big word of a Legendary / Mythic batch (V2): "LEGENDARY!" in gold, "MYTHIC!" in a moving rainbow.
+export type Banner = {
+	Frame: Frame,
+	Scale: UIScale,
+	Word: TextLabel,
+	Paint: UIGradient,
+	Edge: UIStroke,
+	Sub: TextLabel, -- the best golem's bonus under the word (its pill's place: the banner says its rarity)
+}
+
 export type OpenRefs = {
 	Gui: ScreenGui, -- "TerraForgeCapsuleOpen": the whole screen (IgnoreGuiInset), the world shows through
 	Controls: ScreenGui, -- "TerraForgeCapsuleAuto": the Auto button and its note, in the safe frame
 	Tap: TextButton, -- a click / tap skips (touch: right of the thumbstick's zone)
 	TapTop: TextButton, -- (touch: the thumbstick column's top third)
+	Platforms: { Frame }, -- per egg slot: the glowing platform under it (V2)
+	Orbits: { { Frame } }, -- per egg slot: its energy rings while it charges (V2)
+	Motes: { Frame }, -- the motes rising round the eggs and streaming into them (V2, shared)
+	Auras: { Frame }, -- per slot: the glow behind its egg while it charges, then behind its golem (V2)
+	Badges: { Badge }, -- per golem slot (up to 5): its rarity and bonus over its head (V2)
+	Banner: Banner, -- LEGENDARY! / MYTHIC! (V2)
 	Blobs: { Frame }, -- soft blobs of the best colour drifting behind the eggs
 	Flash: Frame, -- ONE flash in the best colour, under the stage
 	Sunburst: Frame, -- the soft white sunburst behind the golems
@@ -236,6 +261,7 @@ export type OpenRefs = {
 	Chain: TextLabel, -- "2 / 5": a big pack's openings, one after another (setChain)
 	AutoKeep: { KeepBox }, -- the Auto button's disc with its key, and its label (the stage's design units): names step aside while it shows
 	SafeBottom: number, -- design units under the safe frame (a phone's home indicator): no tag goes there
+	Inset: number, -- design units of Roblox's top bar row (the banner goes under it)
 	Size: Vector2, -- the screen in design units (layoutOpening)
 	Touch: boolean,
 	Compact: boolean,
@@ -1509,6 +1535,20 @@ CapsuleView.SunRays = 16
 CapsuleView.ShardCount = 30 -- shell pieces at the burst (shared by the eggs)
 CapsuleView.ConfettiCount = 18 -- "a little confetti" at the reveal
 CapsuleView.AutoDisc = { Normal = 88, Compact = 72 } -- the Auto button (compact: 72 units = 44.6 pt at the phone floor)
+CapsuleView.MoteCount = 30 -- the motes round the eggs (shared: HatchStage hands each egg its share)
+CapsuleView.BadgeSlots = 5 -- rarity pills over the golems' heads: openings of up to 5
+CapsuleView.StageAmbient = rgb(168, 166, 172) -- the stage's light (a Mythic lifts it: HatchStage)
+CapsuleView.StageLight = rgb(255, 255, 255)
+
+-- A rounded pill (a stadium: the platforms under the eggs) of `color`.
+local function pill(parent: Instance, name: string, color: Color3, transparency: number, z: number): Frame
+	local disc = circle(parent, name, color, transparency, z)
+	local corner = disc:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0.5, 0)
+	end
+	return disc
+end
 
 --[[
 	Builds the opening (see the header): two ScreenGuis, the whole screen's
@@ -1599,13 +1639,61 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 			}),
 		}, ray)
 	end
+	-- (V2) per slot: the glow behind its egg while it charges, then the aura behind its golem (three
+	-- soft discs: a soft edge), and the glowing platform under its egg (a soft pill, a bright core, a rim)
+	local auras: { Frame } = {}
+	local platforms: { Frame } = {}
+	for i = 1, CapsuleView.StageTags do
+		local aura = UIKit.new("Frame", {
+			Name = "Aura" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(200, 200),
+			Visible = false,
+			ZIndex = 4,
+		}, gui) :: Frame
+		for j, k in { 1, 0.7, 0.42 } do
+			local disc = circle(aura, "Soft" .. j, Color3.new(1, 1, 1), 1, 4)
+			disc.Size = UDim2.fromScale(k, k)
+		end
+		table.insert(auras, aura)
+		local platform = UIKit.new("Frame", {
+			Name = "Platform" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(200, 56),
+			Visible = false,
+			ZIndex = 4,
+		}, gui) :: Frame
+		local outer = pill(platform, "Outer", Color3.new(1, 1, 1), 1, 4)
+		UIKit.new("UIGradient", {
+			Name = "Soft",
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.3, 0.35),
+				NumberSequenceKeypoint.new(0.5, 0.15),
+				NumberSequenceKeypoint.new(0.7, 0.35),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}, outer)
+		UIKit.new("UIStroke", {
+			Name = "Rim",
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Color = Color3.new(1, 1, 1),
+			Thickness = 3,
+			Transparency = 1,
+		}, outer)
+		local bright = pill(platform, "Core", Color3.new(1, 1, 1), 1, 4)
+		bright.Size = UDim2.fromScale(0.56, 0.42)
+		table.insert(platforms, platform)
+	end
 	-- the stage: the eggs, then the golems, in front of the camera over the world (the whole screen)
 	local stage = UIKit.new("ViewportFrame", {
 		Name = "Stage",
 		BackgroundTransparency = 1,
 		-- (solid, bright, clean: a soft ambient and a white key light from the front)
-		Ambient = rgb(168, 166, 172),
-		LightColor = rgb(255, 255, 255),
+		Ambient = CapsuleView.StageAmbient,
+		LightColor = CapsuleView.StageLight,
 		LightDirection = Vector3.new(-0.35, -0.75, -0.55),
 		ZIndex = 5,
 	}, gui) :: ViewportFrame
@@ -1638,6 +1726,51 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 			disc.Size = UDim2.fromScale(k, k)
 		end
 		table.insert(puffs, puff)
+	end
+	-- (V2) the energy rings orbiting each egg: a thin ring whose glow runs round it like a comet's
+	-- tail (its gradient turns with the ring), a spark at its head
+	local orbits: { { Frame } } = {}
+	for i = 1, CapsuleView.StageTags do
+		local list: { Frame } = {}
+		for j = 1, HatchFx.OrbitCount do
+			local ring = UIKit.new("Frame", {
+				Name = `Orbit{i}_{j}`,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(200, 200),
+				Visible = false,
+				ZIndex = 6,
+			}, gui) :: Frame
+			UIKit.corner(ring, 9999)
+			local line = UIKit.new("UIStroke", {
+				Name = "Line",
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				Color = Color3.new(1, 1, 1),
+				Thickness = 3,
+			}, ring)
+			UIKit.new("UIGradient", {
+				Name = "Tail",
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(0.45, 0.85),
+					NumberSequenceKeypoint.new(0.8, 0.2),
+					NumberSequenceKeypoint.new(1, 0),
+				}),
+			}, line)
+			local spark = circle(ring, "Spark", Color3.new(1, 1, 1), 1, 6)
+			spark.Position = UDim2.fromScale(1, 0.5)
+			spark.Size = UDim2.fromScale(0.08, 0.08)
+			table.insert(list, ring)
+		end
+		table.insert(orbits, list)
+	end
+	-- (V2) the motes: rising round the eggs, then streaming into them
+	local motes: { Frame } = {}
+	for i = 1, CapsuleView.MoteCount do
+		local mote = circle(gui, "Mote" .. i, Color3.new(1, 1, 1), 1, 6)
+		mote.Size = UDim2.fromOffset(8, 8)
+		mote.Visible = false
+		table.insert(motes, mote)
 	end
 	-- the shell pieces and the confetti fly in a layer the size of the screen (Confetti's shares)
 	local bits = UIKit.new("Frame", { Name = "Bits", BackgroundTransparency = 1, ZIndex = 7 }, gui) :: Frame
@@ -1717,6 +1850,57 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 			WaitingText = wait,
 		})
 	end
+	-- (V2) the rarity pills over the golems' heads (up to 5): the rarity's paint, its dark rim, the
+	-- rarity in white and the bonus under it
+	local badges: { Badge } = {}
+	for i = 1, CapsuleView.BadgeSlots do
+		local frame = UIKit.new("Frame", {
+			Name = "Badge" .. i,
+			AnchorPoint = Vector2.new(0.5, 1),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(150, 52),
+			Visible = false,
+			ZIndex = 9,
+		}, gui) :: Frame
+		UIKit.corner(frame, BrightTheme.PillCorner)
+		local paint = UIKit.new("UIGradient", { Name = "Paint", Rotation = 90 }, frame) :: UIGradient
+		local rim = UIKit.new("UIStroke", {
+			Name = "Rim",
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Color = BrightTheme.Outline,
+			Thickness = 3,
+		}, frame) :: UIStroke
+		local rarity = brightText(frame, "Rarity", 22, 10)
+		rarity.Position = UDim2.new(0.5, 0, 0, 2)
+		local bonus = brightText(frame, "Bonus", 15, 10)
+		bonus.FontFace = BrightTheme.SmallFont
+		table.insert(badges, { Frame = frame, Paint = paint, Rim = rim, Rarity = rarity, Bonus = bonus })
+	end
+	-- (V2) LEGENDARY! / MYTHIC!: a big word at the top middle (the band the golems leave free), its
+	-- letters in a gradient (gold; a moving rainbow), a thick dark edge; it slams in (its UIScale)
+	local bannerFrame = UIKit.new("Frame", {
+		Name = "Banner",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(800, 90),
+		Visible = false,
+		ZIndex = 10,
+	}, gui) :: Frame
+	local bannerScale = UIKit.new("UIScale", { Name = "Slam", Scale = 1 }, bannerFrame) :: UIScale
+	local bannerWord = brightText(bannerFrame, "Word", 60, 10)
+	bannerWord.Position = UDim2.fromScale(0.5, 0)
+	local bannerPaint = UIKit.new("UIGradient", { Name = "Paint", Rotation = 90 }, bannerWord) :: UIGradient
+	local bannerSub = brightText(bannerFrame, "Sub", 22, 10)
+	bannerSub.FontFace = BrightTheme.SmallFont
+	local banner: Banner = {
+		Frame = bannerFrame,
+		Scale = bannerScale,
+		Word = bannerWord,
+		Paint = bannerPaint,
+		Edge = bannerWord:FindFirstChild("Edge") :: UIStroke, -- (brightText's)
+		Sub = bannerSub,
+	}
 
 	-- the Auto button (bottom left; touch: above the thumbstick's zone) and its note, in the safe frame
 	local controls = UIKit.screen("TerraForgeCapsuleAuto", 41)
@@ -1845,6 +2029,12 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Controls = controls,
 		Tap = tap,
 		TapTop = tapTop,
+		Platforms = platforms,
+		Orbits = orbits,
+		Motes = motes,
+		Auras = auras,
+		Badges = badges,
+		Banner = banner,
 		Blobs = blobs,
 		Flash = flash,
 		Sunburst = sunburst,
@@ -1867,6 +2057,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Chain = chain,
 		AutoKeep = {},
 		SafeBottom = 0,
+		Inset = 0,
 		Size = Vector2.new(1280, 720),
 		Touch = false,
 		Compact = isCompact,
@@ -1907,6 +2098,7 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Touch = touch
 	refs.Size = Vector2.new(width, height)
 	refs.SafeBottom = math.max(0, o.SafeBottom or 0)
+	refs.Inset = math.max(0, inset)
 	local zone = CapsuleView.ThumbZone
 	if touch then
 		refs.Tap.Position = UDim2.fromOffset(width * zone.Width, 0)
@@ -1930,6 +2122,21 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	for _, blob in refs.Blobs do
 		blob.Size = UDim2.fromOffset(height * 0.62, height * 0.62)
 	end
+	-- (V2) LEGENDARY! / MYTHIC!: its size by the screen's height (HatchStage places it in the band
+	-- over the golems, under the top bar and the chain's "2 / 5")
+	local bannerSize = math.clamp(math.floor(height * 0.075), 30, 68)
+	local subSize = math.max(CapsuleView.TagMin, math.floor(bannerSize * 0.36))
+	refs.Banner.Word.TextSize = bannerSize
+	refs.Banner.Word.Size = UDim2.new(1, 0, 0, bannerSize + 8)
+	refs.Banner.Edge.Thickness = math.clamp(bannerSize * 0.08, 3, 6)
+	refs.Banner.Sub.TextSize = subSize
+	refs.Banner.Sub.Position = UDim2.new(0.5, 0, 0, bannerSize + 4)
+	refs.Banner.Sub.Size = UDim2.new(1, 0, 0, subSize + 6)
+	local subEdge = refs.Banner.Sub:FindFirstChild("Edge")
+	if subEdge and subEdge:IsA("UIStroke") then
+		subEdge.Thickness = CapsuleView.TextEdge(subSize)
+	end
+	refs.Banner.Frame.Size = UDim2.fromOffset(math.floor(width * 0.9), bannerSize + subSize + 14)
 	-- the Auto button and its note (the Controls gui: under the top bar, the safe frame)
 	local disc = if compact or touch then CapsuleView.AutoDisc.Compact else CapsuleView.AutoDisc.Normal
 	local room = height - inset -- (the Controls gui's height)
@@ -2264,6 +2471,97 @@ function CapsuleView.fadeMarks(tag: Tag, alpha: number)
 			rim.Transparency = a
 		end
 	end
+end
+
+--[[
+	(V2) Golem `slot`'s rarity pill over its head: `rarity`'s name in white
+	on its paint (Mythic: a rainbow), its dark rim, `bonus` under it
+	("+10% Income"; nil: the name alone), `at` its bottom middle (design
+	units), `size` the rarity's text size (the bonus's ChanceShare of it,
+	never under TagMin). Hidden: `at` nil.
+]]
+function CapsuleView.setBadge(refs: OpenRefs, slot: number, rarityId: string?, bonus: string?, at: Vector2?, size: number)
+	local badge = refs.Badges[slot]
+	if not badge then
+		return
+	end
+	if not rarityId or not at then
+		badge.Frame.Visible = false
+		return
+	end
+	local info = Rarity.ById[rarityId] or Rarity.ById.Common
+	local word = string.upper(info.Name or rarityId)
+	local small = math.max(CapsuleView.TagMin, math.floor(size * HatchFx.ChanceShare + 0.5))
+	local width = TechShopView.textWidth(word, size) * 1.06
+	if bonus then
+		width = math.max(width, TechShopView.textWidth(bonus, small) * 1.04)
+	end
+	local height = size + 8 + (if bonus then small + 4 else 0)
+	badge.Rarity.Text = word
+	badge.Rarity.TextSize = size
+	badge.Rarity.Size = UDim2.new(1, 0, 0, size + 6)
+	badge.Bonus.Visible = bonus ~= nil
+	badge.Bonus.Text = bonus or ""
+	badge.Bonus.TextSize = small
+	badge.Bonus.Position = UDim2.new(0.5, 0, 0, size + 4)
+	badge.Bonus.Size = UDim2.new(1, 0, 0, small + 4)
+	for _, label in { badge.Rarity, badge.Bonus } do
+		local edge = label:FindFirstChild("Edge")
+		if edge and edge:IsA("UIStroke") then
+			edge.Thickness = CapsuleView.TextEdge(label.TextSize) * 0.8
+		end
+	end
+	if rarityId == "Mythic" then
+		badge.Paint.Color = RevealKit.rainbow(0)
+	else
+		local paint = BrightTheme.rarityPaint(rarityId)
+		badge.Paint.Color = ColorSequence.new(paint.Top, paint.Bottom)
+	end
+	badge.Rim.Color = info.DarkColor
+	badge.Frame.Position = UDim2.fromOffset(math.floor(at.X), math.floor(at.Y))
+	badge.Frame.Size = UDim2.fromOffset(math.ceil(width) + 22, height)
+	badge.Frame.Visible = true
+end
+
+-- (V2) A badge's fade with its golem's name (`alpha` 0 shown .. 1 gone).
+function CapsuleView.fadeBadge(badge: Badge, alpha: number)
+	local a = math.clamp(alpha, 0, 1)
+	badge.Frame.BackgroundTransparency = a
+	badge.Rim.Transparency = a
+	for _, label in { badge.Rarity, badge.Bonus } do
+		label.TextTransparency = a
+		local edge = label:FindFirstChild("Edge")
+		if edge and edge:IsA("UIStroke") then
+			edge.Transparency = a
+		end
+	end
+end
+
+-- (V2) How wide the banner's word (or its sub line, the wider) is at its text size (design units).
+function CapsuleView.bannerWidth(refs: OpenRefs): number
+	local b = refs.Banner
+	local word = TechShopView.textWidth(b.Word.Text, b.Word.TextSize) * 1.06
+	local sub = if b.Sub.Visible then TechShopView.textWidth(b.Sub.Text, b.Sub.TextSize) * 1.04 else 0
+	return math.max(word, sub)
+end
+
+-- (V2) The banner's word (LEGENDARY! in gold; MYTHIC!: RevealKit's rainbow, HatchStage moves it) and its sub line.
+function CapsuleView.setBanner(refs: OpenRefs, word: string, sub: string?, rarityId: string)
+	local b = refs.Banner
+	b.Word.Text = word
+	b.Sub.Text = sub or ""
+	b.Sub.Visible = sub ~= nil
+	if rarityId == "Mythic" then
+		b.Paint.Color = RevealKit.rainbow(0)
+	else
+		local info = Rarity.ById[rarityId] or Rarity.ById.Common
+		b.Paint.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, info.Color:Lerp(Color3.new(1, 1, 1), 0.6)),
+			ColorSequenceKeypoint.new(0.55, info.Color),
+			ColorSequenceKeypoint.new(1, info.DarkColor:Lerp(info.Color, 0.5)),
+		})
+	end
+	b.Edge.Color = BrightTheme.Outline
 end
 
 --[[

@@ -1383,4 +1383,97 @@ if videoMode == "redo" then
 		fs.writeFile(root .. "/build/preview/egg_redo_video_shots.json", serde.encode("json", videoShots))
 		print(`redo video: {index} frames`)
 	end
+	--[[
+		V2 (owner 2026-10-30, "ULTIMATE EGG OPENING V2"): the entrance, the
+		float, the energy charge, the burst, the reveal with the rarity pills
+		and each rarity's show (LEGENDARY!, MYTHIC!).
+		  lune run tools/lune/export_egg_panel.luau 15 redo v2        (stills)
+		  lune run tools/lune/export_egg_panel.luau 15 redo v2video   (an Open 3 with a Legendary, then a Mythic)
+		  node tools/preview/render_shot_frames.mjs build/preview/egg_v2_stills_shots.json egg_v2_stills 15
+		  node tools/preview/render_shot_frames.mjs build/preview/egg_v2_phone_shots.json egg_v2_phone 15
+		  node tools/preview/render_shot_frames.mjs build/preview/egg_v2_video_shots.json egg_v2_video 15
+	]]
+	local v2: { [string]: Redo } = {
+		common = { Egg = "Stone", Kinds = { "PebbleGolem", "TinTumbler", "CopperTinker" }, Caption = "V2 Open 3: Commons (a soft white glow)" },
+		rare = { Egg = "Stone", Kinds = { "QuartzSprite", "EmberImp", "CoalChomper" }, Caption = "V2 Open 3: a Rare (blue energy rings)" },
+		epic = { Egg = "Crystal", Kinds = { "SilverSquire", "RoseKnight", "PebbleGolem" }, Caption = "V2 Open 3: an Epic (a purple aura)" },
+		legendary = {
+			Egg = "Crystal",
+			Kinds = { "QuartzSprite", "StormTitan", "CobaltDiver" },
+			Caption = "V2 Open 3: a Legendary (golden rays, slow motion)",
+		},
+		mythic = {
+			Egg = "Crystal",
+			Kinds = { "SilverSquire", "CelestialSovereign", "GildedPorter" },
+			Caption = "V2 Open 3: a Mythic (rainbow energy, MYTHIC!)",
+		},
+		single = { Egg = "Stone", Kinds = { "RoseKnight" }, Caption = "V2 Open 1: an Epic" },
+		open10 = { Egg = "Crystal", Kinds = cases.open10.Kinds, Caption = "V2 Open 10 with a Legendary" },
+		calm = { Egg = "Stone", Kinds = OPEN3, Reduced = true, Caption = "V2 Reduce Motion: fades, nothing moves" },
+	}
+	local function v2Moments(run: any): { { any } }
+		local tl = run.Timeline
+		local list = {
+			{ "a_entrance", tl.Times.Pop * 0.55 },
+			{ "b_float", tl.Float + (tl.Charge - tl.Float) * 0.6 },
+			{ "c_charge", tl.Charge + (tl.Silhouette - tl.Charge) * 0.45 },
+			{ "d_charged", tl.Silhouette - 0.04 },
+			{ "e_burst", tl.Burst + 0.05 },
+			{ "f_reveal", tl.Reveal + tl.GolemPop + 0.3 },
+			{ "g_hold", tl.Fly - 0.15 },
+		}
+		return list
+	end
+	local v2Stills, v2Phone = {}, {}
+	local function v2Of(prefix: string, screen: Screen, caseName: string, only: { string }?)
+		local case = v2[caseName]
+		local o, run = opening(screen, case)
+		CapsuleView.setAuto(o, false, false, "", nil) -- (the stills show the opening alone; Auto's button has its own shots)
+		local t = 0
+		for _, m in v2Moments(run) do
+			local at = m[2] :: number
+			if only and not table.find(only, m[1]) then
+				continue
+			end
+			while t < at do
+				t = math.min(at, t + 1 / 30)
+				HatchStage.pose(run, t)
+			end
+			local name = `{prefix}_{m[1]}`
+			local list = if screen.Phone then v2Phone else v2Stills
+			list[name] = shotOf(name, screen, o, run, case, if screen.Phone then { zones(screen) } else nil)
+		end
+	end
+	if which == "v2" then
+		v2Of("v2_common", PC, "common")
+		v2Of("v2_rare", PC, "rare", { "c_charge", "f_reveal" })
+		v2Of("v2_epic", PC, "epic", { "c_charge", "e_burst", "f_reveal" })
+		v2Of("v2_legendary", PC, "legendary")
+		v2Of("v2_mythic", PC, "mythic", { "c_charge", "d_charged", "e_burst", "f_reveal", "g_hold" })
+		v2Of("v2_single", PC, "single", { "b_float", "c_charge", "f_reveal" })
+		v2Of("v2_open10", PC, "open10", { "c_charge", "f_reveal" })
+		v2Of("v2_calm", PC, "calm", { "c_charge", "f_reveal" })
+		v2Of("v2_phone", PHONE, "legendary", { "c_charge", "f_reveal" })
+		fs.writeFile(root .. "/build/preview/egg_v2_stills_shots.json", serde.encode("json", v2Stills))
+		fs.writeFile(root .. "/build/preview/egg_v2_phone_shots.json", serde.encode("json", v2Phone))
+		print("v2 stills written")
+	elseif which == "v2video" then
+		local videoShots = {}
+		local index = 0
+		for _, caseName in { "legendary", "mythic" } do
+			local case = v2[caseName]
+			local o, run = opening(PC, case)
+			CapsuleView.setAuto(o, false, false, "", nil)
+			local tl = run.Timeline
+			local frames = math.floor(tl.Total * fps) + 1
+			for i = 0, frames - 1 do
+				HatchStage.pose(run, math.min(i / fps, tl.Total))
+				local name = string.format("v2_v_%04d", index)
+				index += 1
+				videoShots[name] = shotOf(name, PC, o, run, case)
+			end
+		end
+		fs.writeFile(root .. "/build/preview/egg_v2_video_shots.json", serde.encode("json", videoShots))
+		print(`v2 video: {index} frames`)
+	end
 end

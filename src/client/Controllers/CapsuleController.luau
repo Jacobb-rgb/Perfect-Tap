@@ -949,6 +949,48 @@ local function setBlur(on: boolean)
 	end
 end
 
+--[[
+	(V2) The world behind an Epic or rarer reveal takes its colour for a
+	moment (a client ColorCorrectionEffect on the camera, only this
+	player's screen): a soft tint and a little more light, a Mythic's a
+	little stronger. In at the burst, out with the flight; gone with the
+	blur (setMood(0)). Reduce motion: none.
+]]
+CapsuleController.MoodFrom = 4 -- the best rarity's Order from which the world takes its colour
+local mood: ColorCorrectionEffect? = nil
+local function setMood(order: number, color: Color3, reduced: boolean)
+	local camera = Workspace.CurrentCamera
+	local on = order >= CapsuleController.MoodFrom and not reduced and camera ~= nil
+	local made = mood
+	if on and camera then
+		if not made or made.Parent ~= camera then
+			if made then
+				made:Destroy()
+			end
+			local effect = Instance.new("ColorCorrectionEffect")
+			effect.Name = "TerraForgeOpeningMood"
+			effect.TintColor = Color3.new(1, 1, 1)
+			effect.Parent = camera
+			mood = effect
+			made = effect
+		end
+		local strong = order >= 6
+		TweenService:Create(made :: ColorCorrectionEffect, TweenInfo.new(0.25), {
+			TintColor = Color3.new(1, 1, 1):Lerp(color, if strong then 0.35 else 0.25),
+			Brightness = if strong then 0.08 else 0.05,
+			Saturation = if strong then 0.2 else 0.1,
+		}):Play()
+	elseif made then
+		mood = nil
+		local effect = made :: ColorCorrectionEffect
+		local tween = TweenService:Create(effect, TweenInfo.new(0.3), { TintColor = Color3.new(1, 1, 1), Brightness = 0, Saturation = 0 })
+		tween.Completed:Connect(function()
+			effect:Destroy()
+		end)
+		tween:Play()
+	end
+end
+
 ---------------------------------------------------------------- the play
 
 -- While an opening plays nothing is selected: a window's key (L1, R1, the D-pad) that opens a
@@ -1092,12 +1134,14 @@ end
 local function onEvents(run: HatchStage.Run, events: { string })
 	local reduced = run.Timeline.Reduced
 	for _, event in events do
-		if event == "Step1" or event == "Step2" or event == "Step3" then
-			local step = tonumber(string.sub(event, 5)) or 1
-			Sfx.play("NodeCrack", nil, 0.8 + 0.18 * step)
-			if step == 1 and not reduced then
+		if event == "Charge" then
+			-- (V2: the energy charge's hum, from the first ring on)
+			if not reduced then
 				Sfx.loop("CaseCharge", true)
 			end
+		elseif event == "Step1" or event == "Step2" or event == "Step3" then
+			local step = tonumber(string.sub(event, 5)) or 1
+			Sfx.play("NodeCrack", nil, 0.8 + 0.18 * step)
 		elseif event == "Burst" then
 			Sfx.loop("CaseCharge", false)
 			Sfx.play("CaseBurst")
@@ -1107,14 +1151,25 @@ local function onEvents(run: HatchStage.Run, events: { string })
 			if run.BestOrder >= 5 and not reduced then
 				CameraShake.add(if run.BestOrder >= 6 then 0.5 else 0.38)
 			end
+			setMood(run.BestOrder, run.BestColor, reduced)
 		elseif event == "Reveal" then
 			if run.BestOrder >= 5 then
 				Sfx.play("Discovery")
 			end
 			Sfx.play("Reveal", nil, 1 + 0.04 * math.min(run.BestOrder, 6))
 			stageGolems = HatchStage.golems(run)
-		elseif event == "Fly" and not reduced then
-			Sfx.play("LevelWhoosh", nil, 1.1)
+		elseif event == "Banner" then
+			-- (V2: LEGENDARY! / MYTHIC!: its own chime, a Mythic's higher and with a boom under it)
+			Sfx.playOwn("LevelChime")
+			if run.BestOrder >= 6 then
+				Sfx.play("CaseBoom", nil, 0.8)
+				Sfx.play("LevelChime", nil, 1.25)
+			end
+		elseif event == "Fly" then
+			setMood(0, run.BestColor, reduced)
+			if not reduced then
+				Sfx.play("LevelWhoosh", nil, 1.1)
+			end
 		elseif event == "End" and not reduced then
 			Sfx.play("BagPop", nil, 1.2)
 		end
@@ -1395,6 +1450,7 @@ local function endChain()
 		CapsuleView.setChain(o, nil, nil)
 	end
 	setBlur(false)
+	setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
 	hideHud(false)
 	tellPlaying(false)
 	PromptController.setSuppressed("CapsuleOpening", false)

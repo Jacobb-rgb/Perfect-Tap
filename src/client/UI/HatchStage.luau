@@ -8,8 +8,10 @@
 	  run = HatchStage.new(args)       the eggs placed, the colours chosen
 	  events = HatchStage.pose(run, t) everything at `t` seconds; returns
 	                                   what happened since the last call:
+	                                   "Charge" (the energy starts),
 	                                   "Step1".."Step3" (a crack step),
-	                                   "Burst", "Reveal", "Fly", "End"
+	                                   "Burst", "Reveal", "Banner" (a
+	                                   Legendary / Mythic's), "Fly", "End"
 	  HatchStage.clear(refs)           every piece hidden, the golems freed,
 	                                   the pooled eggs out of the stage
 
@@ -18,6 +20,24 @@
 	origin looking along -Z (HatchFx.at / project); the eggs and golems
 	face it and get their size by their distance (HatchFx.depthFor), so
 	everything moves rigidly (one PivotTo a model a frame).
+
+	V2 (owner 2026-10-30) adds layers, each posed by its own function from
+	HatchFx's pure poses (the owner's names in brackets):
+	  poseEggs       the entrance, the float, the charge's pulse and shake
+	                 (playEggEntrance, playFloatingAnimation)
+	  posePlatforms  the glowing platform under each egg
+	  poseOrbits     two energy rings round each egg, opposite ways
+	                 (playEnergyCharging, with poseMotes and poseAuras)
+	  poseMotes      motes rising round the eggs, then streaming into them
+	  poseAuras      the glow behind each charging egg, then each golem's aura
+	  poseRings, poseBits, the flash   the burst (playEggExplosion)
+	  reveal, poseGolems, poseBadges   the golems, their names, "1 in N",
+	                 their rarity and bonus (playPetReveal)
+	  poseRarity     the best rarity's show: the rays' colour, its pulses, the
+	                 banner, Mythic's light (playRarityEffect)
+	  "End"          the controller gives the HUD back (playOpeningComplete)
+	Everything is pooled (CapsuleView.buildOpening) and hidden again by
+	clear(); a cancelled opening is just a clear().
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -74,6 +94,15 @@ export type Run = {
 	Layout: HatchFx.Layout,
 	EggDepth: { number },
 	Standing: { [number]: Standing },
+	Tier: HatchFx.Tier, -- the best rarity's cinematic (its Timeline's)
+	BestSlot: number, -- the slot of the batch's best golem (its pulses, the banner's bonus)
+	BestColor: Color3,
+	Bonuses: { [number]: string }, -- per slot: its golem's bonus ("+10% Income"; none: no entry)
+	Badged: boolean, -- up to CapsuleView.BadgeSlots golems: a rarity pill over each head
+	MotesPer: number, -- motes per egg (fewer for many eggs, fewer on a phone)
+	OrbitsPer: number, -- energy rings per egg (a phone opening many: 1)
+	BadgeSize: { [number]: number }, -- per slot: the text size its pill was measured at (measured once, placed each frame)
+	EggPoses: { [number]: HatchFx.EggPose }, -- each egg's pose this frame (its orbits and motes follow it)
 	Fired: { [string]: boolean },
 	FlashFrom: number?, -- t when the burst's flash went off (nil: not yet / none)
 	FlashRetry: number?, -- t when a refused flash asks again (it waited for the shared gap)
@@ -166,11 +195,14 @@ function HatchStage.new(args: Args): Run
 	local bestOrder = GolemConfig.order(best)
 	local golem = GolemConfig.ById[best]
 	local bestRarity = if golem then golem.Rarity else "Common"
-	local order, special = HatchFx.arrange(n, table.find(args.Kinds, best) or 1, bestOrder)
+	local bestIndex = table.find(args.Kinds, best) or 1
+	local order, special = HatchFx.arrange(n, bestIndex, bestOrder)
+	local timeline = HatchFx.timeline(bestOrder, n, args.Fast, args.Reduced)
+	local motes = if n <= 3 then 8 elseif n <= 5 then 5 else 3
 	local run: Run = {
 		Args = args,
 		Refs = o,
-		Timeline = HatchFx.timeline(bestOrder, n, args.Fast, args.Reduced),
+		Timeline = timeline,
 		Count = n,
 		Special = special,
 		Order = order,
@@ -187,6 +219,15 @@ function HatchStage.new(args: Args): Run
 		Layout = HatchFx.layout(n, 16 / 9, special),
 		EggDepth = {},
 		Standing = {},
+		Tier = timeline.Tier,
+		BestSlot = table.find(order, bestIndex) or 1,
+		BestColor = BrightTheme.crackColour(bestRarity),
+		Bonuses = {},
+		Badged = n <= CapsuleView.BadgeSlots,
+		MotesPer = math.min(if args.Phone then math.ceil(motes * 0.6) else motes, math.floor(#o.Motes / n)),
+		OrbitsPer = if args.Phone and n > 3 then 1 else HatchFx.OrbitCount,
+		EggPoses = {},
+		BadgeSize = {},
 		Fired = {},
 		FlashFrom = nil,
 		FlashRetry = nil,
@@ -201,6 +242,10 @@ function HatchStage.new(args: Args): Run
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
 		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
 		run.Waiting[slot] = args.Waiting ~= nil and args.Waiting[order[slot]] == true
+		local bonus = if info then HatchFx.bonusText(info.Bonus.Type, info.Bonus.Value, GolemConfig.BonusTypes) else nil
+		if bonus then
+			run.Bonuses[slot] = bonus
+		end
 		-- (two rows: a top-row mark hangs toward the second row's golems, a second-row one toward the
 		-- screen's safe bottom)
 		if n > 5 and (run.Deleted[slot] or run.Waiting[slot]) then
@@ -226,7 +271,53 @@ function HatchStage.new(args: Args): Run
 	for _, rec in args.Eggs do
 		rec.Model.Parent = nil
 	end
+	HatchStage.dress(run)
 	return run
+end
+
+-- The confetti's own colours (Confetti.build's), put back between openings.
+local function confettiColor(i: number): Color3
+	return Confetti.Colors[(i - 1) % #Confetti.Colors + 1]
+end
+
+--[[
+	(V2) The best rarity's colours on the pooled pieces of a new run: the
+	sunburst (soft white; a Common's to an Epic's core lightly tinted;
+	Legendary golden rays, Mythic rainbow rays), the confetti (Legendary
+	gold, Mythic a rainbow, else its own), the banner's word and its sub
+	line (the best golem's bonus).
+]]
+function HatchStage.dress(run: Run)
+	local o = run.Refs
+	local tier = run.Tier
+	local rarity = run.BestRarity
+	local white = Color3.new(1, 1, 1)
+	local tint = if rarity == "Common" then white else run.BestColor:Lerp(white, if tier.Rays then 0.15 else 0.6)
+	for i, piece in o.Sunburst:GetChildren() do
+		if piece:IsA("Frame") then
+			if piece.Name == "Glow" or piece.Name == "Core" then
+				piece.BackgroundColor3 = tint
+			elseif tier.Rays and rarity == "Mythic" then
+				piece.BackgroundColor3 = Color3.fromHSV((i / 16) % 1, 0.55, 1)
+			else
+				piece.BackgroundColor3 = if tier.Rays then tint else white
+			end
+		end
+	end
+	local gold = { Color3.fromRGB(255, 214, 64), Color3.fromRGB(255, 240, 170), Color3.fromRGB(255, 170, 30), white }
+	for i, piece in o.Confetti do
+		if rarity == "Legendary" then
+			piece.BackgroundColor3 = gold[(i - 1) % #gold + 1]
+		elseif rarity == "Mythic" then
+			piece.BackgroundColor3 = Color3.fromHSV((i * 0.13) % 1, 0.65, 1)
+		else
+			piece.BackgroundColor3 = confettiColor(i)
+		end
+	end
+	local word = tier.Banner
+	if word then
+		CapsuleView.setBanner(o, word, run.Bonuses[run.BestSlot], rarity)
+	end
 end
 
 -- Every piece hidden, the golems freed, the pooled eggs out of the stage (between two openings).
@@ -264,6 +355,26 @@ function HatchStage.clear(o: CapsuleView.OpenRefs, golems: { Model }?)
 	o.Sunburst.Visible = false
 	o.Flash.BackgroundTransparency = 1
 	o.Stage.ImageTransparency = 0
+	-- (V2) the platforms, orbits, motes, auras, pills and the banner; the stage's own light back
+	for i, platform in o.Platforms do
+		platform.Visible = false
+		for _, ring in o.Orbits[i] do
+			ring.Visible = false
+		end
+		o.Auras[i].Visible = false
+	end
+	for _, mote in o.Motes do
+		mote.Visible = false
+	end
+	for _, badge in o.Badges do
+		badge.Frame.Visible = false
+	end
+	o.Banner.Frame.Visible = false
+	o.Stage.Ambient = CapsuleView.StageAmbient
+	o.Stage.LightColor = CapsuleView.StageLight
+	for i, piece in o.Confetti do
+		piece.BackgroundColor3 = confettiColor(i)
+	end
 end
 
 -- An auto-deleted golem: every part a stone grey (its shape stays; never see-through).
@@ -299,18 +410,20 @@ local function poseEggs(run: Run, t: number, aspect: number)
 			continue
 		end
 		local pose = HatchFx.eggPose(t, tl, slot, slot == run.Special)
+		run.EggPoses[slot] = pose
 		if pose.Shown then
 			if rec.Model.Parent ~= o.Stage then
 				rec.Model.Parent = o.Stage
 			end
-			-- (bigger by coming closer; it rocks about its foot; it faces the camera, turned a little to the middle)
+			-- (bigger by coming closer; it rises and bobs (Drop); it rocks about its foot; it faces the
+			-- camera, turned a little to the middle, and turns slowly (Yaw))
 			local depth = run.EggDepth[slot] / pose.Scale
-			local middle = HatchFx.at(s.Egg.X, s.Egg.Y, depth, aspect)
+			local middle = HatchFx.at(s.Egg.X, s.Egg.Y + pose.Drop, depth, aspect)
 			local foot = middle + Vector3.new(0, rec.Foot - rec.Mid, 0)
 			local cf = CFrame.new(foot)
 				* CFrame.Angles(0, 0, pose.Roll)
 				* CFrame.new(0, -rec.Foot, 0)
-				* CFrame.Angles(0, math.pi + (0.5 - s.Egg.X) * 0.5, 0)
+				* CFrame.Angles(0, math.pi + (0.5 - s.Egg.X) * 0.5 + pose.Yaw, 0)
 			rec.Model:PivotTo(cf)
 			HatchFx.paintEgg(rec, pose, run.Rarities[slot], t)
 		elseif rec.Model.Parent then
@@ -328,9 +441,22 @@ local function poseRings(run: Run, t: number)
 		local s = run.Layout.Slots[slot]
 		local center = Vector2.new(s.Egg.X * size.X, s.Egg.Y * size.Y)
 		local eggPx = s.EggH * size.Y
-		-- (RevealKit's shockwave rings, thin and white round each egg)
+		-- (RevealKit's shockwave rings, thin and white round each egg; the best golem's slot: its
+		-- rarity's energy pulses at the reveal, in its colour, round the golem: HatchFx.pulseU)
 		for j, ring in o.Rings[slot] do
 			local u = if j <= rings then HatchFx.ringU(t, tl, j) else -1
+			local pu = if slot == run.BestSlot and not (u >= 0 and u < 1) then HatchFx.pulseU(t, tl, j) else -1
+			if pu >= 0 and pu < 1 and s then
+				local golemPx = s.GolemH * size.Y
+				ring.Position = UDim2.fromOffset(s.Golem.X * size.X, s.Golem.Y * size.Y)
+				ring.Size = UDim2.fromOffset(golemPx, golemPx)
+				RevealKit.poseRing(ring, pu, HatchFx.crackColor(run.BestRarity, t, j / 3, 0), {
+					From = 0.55,
+					Grow = 1.5,
+					Thickness = math.max(3, golemPx * 0.022),
+				})
+				continue
+			end
 			ring.Position = UDim2.fromOffset(center.X, center.Y)
 			ring.Size = UDim2.fromOffset(eggPx, eggPx)
 			RevealKit.poseRing(ring, u, Color3.new(1, 1, 1), {
@@ -357,6 +483,169 @@ local function poseRings(run: Run, t: number)
 				if disc:IsA("Frame") then
 					disc.BackgroundTransparency = puffAlpha
 				end
+			end
+		end
+	end
+end
+
+-- (V2) The soft white-blue the platforms and motes glow in before the charge colours them.
+HatchStage.Neutral = Color3.fromRGB(205, 232, 255)
+
+-- An egg's energy colour at `t` (its golem's rarity: the cracks'; Mythic a moving rainbow) from the
+-- soft neutral as the charge grows (so nothing tells the rarity before the cracks do).
+local function energyOf(run: Run, slot: number, t: number, along: number): Color3
+	local charge = HatchFx.chargeAt(t, run.Timeline)
+	local c = HatchFx.crackColor(run.Rarities[slot], t, along, 0)
+	return if charge >= 1 or t >= run.Timeline.Burst then c else HatchStage.Neutral:Lerp(c, charge)
+end
+
+-- An egg's middle on the screen now (design units) and its height there: its place, its rise and bob.
+local function eggOnScreen(run: Run, slot: number): (Vector2, number)
+	local s = run.Layout.Slots[slot]
+	local pose = run.EggPoses[slot]
+	local drop = if pose and pose.Shown then pose.Drop else 0
+	local scale = if pose and pose.Shown then pose.Scale else 1
+	return Vector2.new(s.Egg.X * run.Size.X, (s.Egg.Y + drop) * run.Size.Y), s.EggH * run.Size.Y * scale
+end
+
+-- (V2) The glowing platform under each egg: it grows in with its egg, glows with the charge, flares at the burst.
+local function posePlatforms(run: Run, t: number, aspect: number)
+	local o = run.Refs
+	local size = run.Size
+	for slot, platform in o.Platforms do
+		local s = run.Layout.Slots[slot]
+		local strength, k = 0, 1
+		if s and slot <= run.Count then
+			strength, k = HatchFx.platformAt(t, run.Timeline, slot)
+		end
+		platform.Visible = strength > 0.01
+		if not platform.Visible then
+			continue
+		end
+		local width = s.EggH * size.Y * 0.78 * k -- (an Open 3's overlapping eggs: their platforms only touch)
+		-- (at its egg's feet where it rests: the egg rises into it and floats over it)
+		local rec = run.Args.Eggs[slot]
+		local y = (s.Egg.Y + s.EggH * 0.4) * size.Y
+		if rec and run.EggDepth[slot] then
+			local middle = HatchFx.at(s.Egg.X, s.Egg.Y, run.EggDepth[slot], aspect)
+			y = HatchFx.project(middle + Vector3.new(0, rec.Foot - rec.Mid, 0), aspect).Y * size.Y
+		end
+		platform.Position = UDim2.fromOffset(s.Egg.X * size.X, y)
+		platform.Size = UDim2.fromOffset(width, width * 0.26)
+		local color = energyOf(run, slot, t, 0.5)
+		local outer = platform:FindFirstChild("Outer")
+		local core = platform:FindFirstChild("Core")
+		if outer and outer:IsA("Frame") then
+			outer.BackgroundColor3 = color
+			outer.BackgroundTransparency = 1 - 0.9 * strength
+			local rim = outer:FindFirstChild("Rim")
+			if rim and rim:IsA("UIStroke") then
+				rim.Color = color
+				rim.Thickness = math.max(2, width * 0.012)
+				rim.Transparency = 1 - 0.75 * strength
+			end
+		end
+		if core and core:IsA("Frame") then
+			core.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.35)
+			core.BackgroundTransparency = 1 - 0.85 * strength
+		end
+	end
+end
+
+-- (V2) Two energy rings orbiting each charging egg (opposite ways, faster and faster); they fly apart at the burst.
+local function poseOrbits(run: Run, t: number)
+	local o = run.Refs
+	local tl = run.Timeline
+	for slot, list in o.Orbits do
+		for j, ring in list do
+			local strength, turn, k = 0, 0, 1
+			if slot <= run.Count and j <= run.OrbitsPer then
+				strength, turn, k = HatchFx.orbitAt(t, tl, slot, j)
+			end
+			ring.Visible = strength > 0.01
+			if not ring.Visible then
+				continue
+			end
+			local center, eggPx = eggOnScreen(run, slot)
+			local d = eggPx * k
+			local charge = HatchFx.chargeAt(t, tl)
+			local color = energyOf(run, slot, t, j / 2)
+			ring.Position = UDim2.fromOffset(center.X, center.Y)
+			ring.Size = UDim2.fromOffset(d, d)
+			ring.Rotation = turn
+			local line = ring:FindFirstChild("Line")
+			if line and line:IsA("UIStroke") then
+				line.Color = color
+				line.Thickness = math.max(2, eggPx * (0.008 + 0.01 * charge))
+				line.Transparency = 1 - strength
+			end
+			local spark = ring:FindFirstChild("Spark")
+			if spark and spark:IsA("Frame") then
+				spark.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.6)
+				spark.BackgroundTransparency = 1 - strength
+			end
+		end
+	end
+end
+
+-- (V2) The motes: a few rising round each floating egg, then streaming into it while it charges.
+local function poseMotes(run: Run, t: number)
+	local o = run.Refs
+	local tl = run.Timeline
+	local per = run.MotesPer
+	for i, mote in o.Motes do
+		local slot = (i - 1) // math.max(1, per) + 1
+		local k = (i - 1) % math.max(1, per) + 1
+		local shown, x, y, share, strength = false, 0, 0, 0, 0
+		if per > 0 and slot <= run.Count then
+			shown, x, y, share, strength = HatchFx.moteAt(t, tl, slot, k, per)
+		end
+		mote.Visible = shown and strength > 0.02
+		if not mote.Visible then
+			continue
+		end
+		local center, eggPx = eggOnScreen(run, slot)
+		local d = math.max(4, eggPx * share)
+		mote.Position = UDim2.fromOffset(center.X + x * eggPx, center.Y + y * eggPx)
+		mote.Size = UDim2.fromOffset(d, d)
+		mote.BackgroundColor3 = energyOf(run, slot, t, k / per):Lerp(Color3.new(1, 1, 1), 0.3)
+		mote.BackgroundTransparency = 1 - strength
+	end
+end
+
+-- (V2) The glow behind each charging egg, then the soft aura behind each golem (its rarity's colour).
+local function poseAuras(run: Run, t: number)
+	local o = run.Refs
+	local tl = run.Timeline
+	local size = run.Size
+	for slot, aura in o.Auras do
+		local strength = if slot <= run.Count then HatchFx.auraAt(t, tl, slot) else 0
+		if run.Deleted[slot] and t >= tl.Reveal then
+			strength = 0 -- (an auto-deleted golem: greyed, no glow)
+		end
+		aura.Visible = strength > 0.01
+		if not aura.Visible then
+			continue
+		end
+		local s = run.Layout.Slots[slot]
+		local center: Vector2, px: number, color: Color3
+		if t < tl.Reveal then
+			local eggPx
+			center, eggPx = eggOnScreen(run, slot)
+			px = eggPx * 1.35
+			color = energyOf(run, slot, t, 0.3)
+		else
+			center = Vector2.new(s.Golem.X * size.X, s.Golem.Y * size.Y)
+			px = s.GolemH * size.Y * 1.3
+			color = HatchFx.crackColor(run.Rarities[slot], t, 0.3, 0)
+		end
+		aura.Position = UDim2.fromOffset(center.X, center.Y)
+		aura.Size = UDim2.fromOffset(px, px)
+		for _, disc in aura:GetChildren() do
+			if disc:IsA("Frame") then
+				local j = tonumber(string.sub(disc.Name, 5)) or 1
+				disc.BackgroundColor3 = color
+				disc.BackgroundTransparency = 1 - (0.1 + 0.08 * j) * strength
 			end
 		end
 	end
@@ -510,11 +799,107 @@ local function poseSunburst(run: Run, t: number, dt: number)
 		run.Spin += dt * HatchStage.SunSpin
 	end
 	o.Sunburst.Rotation = run.Spin
-	for _, piece in o.Sunburst:GetChildren() do
+	local rays = run.Tier.Rays -- (V2: a Legendary's golden rays, a Mythic's rainbow ones: stronger)
+	local mythic = rays and run.BestRarity == "Mythic"
+	for i, piece in o.Sunburst:GetChildren() do
 		if piece:IsA("Frame") then
-			local base = if piece.Name == "Glow" then 0.55 else 0.35
+			local base = if piece.Name == "Glow" then 0.55 elseif rays and piece.Name ~= "Core" then 0.2 else 0.35
 			piece.BackgroundTransparency = 1 - (1 - base) * sun
+			if mythic and piece.Name ~= "Glow" and piece.Name ~= "Core" then
+				piece.BackgroundColor3 = Color3.fromHSV((i / 16 + t * 0.2) % 1, 0.55, 1)
+			end
 		end
+	end
+end
+
+--[[
+	(V2) Each standing golem's rarity pill over its head (openings of up to
+	BadgeSlots): its rarity and its bonus, fading with its name; none for
+	an auto-deleted golem, nor for the best one when the banner says its
+	rarity (its bonus is the banner's sub line).
+]]
+local function poseBadges(run: Run, t: number, aspect: number)
+	local o = run.Refs
+	local tl = run.Timeline
+	local size = run.Size
+	for slot = 1, #o.Badges do
+		local g = run.Standing[slot]
+		local s = run.Layout.Slots[slot]
+		local pose = if g and run.Badged then HatchFx.golemPose(t, tl, slot) else nil
+		local banner = run.Tier.Banner ~= nil and slot == run.BestSlot
+		if not g or not s or not pose or not pose.Shown or pose.Name >= 1 or run.Deleted[slot] or banner then
+			o.Badges[slot].Frame.Visible = false
+			continue
+		end
+		-- (over its head as it stands now: its pop, its bob; measured once, at its text size)
+		local depth = g.Depth / pose.Scale
+		local middle = HatchFx.at(g.Spot.X, g.Spot.Y, depth, aspect) + Vector3.new(0, g.Height * pose.Lift, 0)
+		local head = HatchFx.project(middle + Vector3.new(0, g.Height / 2, 0), aspect)
+		local at = Vector2.new(head.X * size.X, head.Y * size.Y - 6)
+		local text = math.max(CapsuleView.TagMin, math.floor(s.Text * 0.62 + 0.5))
+		if run.BadgeSize[slot] ~= text then
+			run.BadgeSize[slot] = text
+			CapsuleView.setBadge(o, slot, run.Rarities[slot], run.Bonuses[slot], at, text)
+		end
+		local badge = o.Badges[slot]
+		badge.Frame.Position = UDim2.fromOffset(math.floor(at.X), math.floor(at.Y))
+		badge.Frame.Visible = true
+		CapsuleView.fadeBadge(badge, pose.Name)
+	end
+end
+
+--[[
+	(V2) The best rarity's show (Tier): LEGENDARY! / MYTHIC! slamming in
+	over the golems (in the band they leave free, under the top bar and
+	the chain's "2 / 5"; Mythic's letters a moving rainbow), and Mythic's
+	stronger, rainbow-tinted stage light.
+]]
+local function poseRarity(run: Run, t: number)
+	local o = run.Refs
+	local tl = run.Timeline
+	local b = o.Banner
+	local scale, alpha = HatchFx.bannerAt(t, tl)
+	b.Frame.Visible = run.Tier.Banner ~= nil and alpha < 1
+	if b.Frame.Visible then
+		local chain = o.Chain.Visible and not o.Touch -- (touch: the chain sits top right)
+		local top = o.Inset + 8 + (if chain then o.Chain.Size.Y.Offset + 6 else 0)
+		local height = b.Frame.Size.Y.Offset
+		local fit = if chain then 0.75 else 1
+		-- (a wide phone: the pills over the neighbours' heads reach the band; the word gets smaller
+		-- until it clears them, never under 0.6 of its size)
+		local half = CapsuleView.bannerWidth(o) / 2 + 12
+		local middle = run.Size.X / 2
+		for _, badge in o.Badges do
+			if badge.Frame.Visible then
+				local by = badge.Frame.Position.Y.Offset
+				local bh = badge.Frame.Size.Y.Offset
+				if by - bh < top + height * fit and by > top then
+					local room = math.abs(badge.Frame.Position.X.Offset - middle) - badge.Frame.Size.X.Offset / 2
+					fit = math.min(fit, math.max(0.6, room / half))
+				end
+			end
+		end
+		b.Frame.Position = UDim2.fromOffset(middle, top + height * fit / 2)
+		b.Scale.Scale = scale * fit
+		b.Word.TextTransparency = alpha
+		b.Edge.Transparency = alpha
+		b.Sub.TextTransparency = alpha
+		local subEdge = b.Sub:FindFirstChild("Edge")
+		if subEdge and subEdge:IsA("UIStroke") then
+			subEdge.Transparency = alpha
+		end
+		if run.BestRarity == "Mythic" and not tl.Reduced then
+			b.Paint.Color = RevealKit.rainbow(t * 0.35)
+		end
+	end
+	local light = HatchFx.lightAt(t, tl)
+	if light > 0 then
+		local hue = (t * 0.15) % 1
+		o.Stage.Ambient = CapsuleView.StageAmbient:Lerp(Color3.fromHSV(hue, 0.22, 1), light)
+		o.Stage.LightColor = CapsuleView.StageLight:Lerp(Color3.fromHSV((hue + 0.5) % 1, 0.3, 1), light * 0.8)
+	elseif o.Stage.Ambient ~= CapsuleView.StageAmbient then
+		o.Stage.Ambient = CapsuleView.StageAmbient
+		o.Stage.LightColor = CapsuleView.StageLight
 	end
 end
 
@@ -542,11 +927,17 @@ local function poseBits(run: Run, t: number)
 			end
 		end
 	end
+	-- (V2: as many pieces as the best rarity's Tier, gold for a Legendary, a rainbow for a Mythic: dress)
 	local c = t - tl.Reveal
+	local many = math.clamp(run.Tier.Confetti, 0, #o.Confetti)
+	local pieces = table.move(o.Confetti, 1, many, 1, {})
+	for i = many + 1, #o.Confetti do
+		o.Confetti[i].Visible = false
+	end
 	if c >= 0 and c < Confetti.Seconds then
-		Confetti.pose(o.Confetti, Vector2.new(0.5, 0.42), 11, c)
+		Confetti.pose(pieces, Vector2.new(0.5, 0.42), 11, c)
 	else
-		for _, piece in o.Confetti do
+		for _, piece in pieces do
 			piece.Visible = false
 		end
 	end
@@ -584,11 +975,18 @@ function HatchStage.pose(run: Run, t: number): { string }
 		end
 	end
 	local aspect = run.Size.X / math.max(1, run.Size.Y)
+	if t >= tl.Charge then
+		once("Charge") -- (V2: the energy starts)
+	end
 	local level = HatchFx.levelAt(t, tl)
 	for step = 1, level do
 		once("Step" .. step)
 	end
 	poseEggs(run, t, aspect)
+	posePlatforms(run, t, aspect)
+	poseOrbits(run, t)
+	poseMotes(run, t)
+	poseAuras(run, t)
 	poseRings(run, t)
 	poseBlobs(run, t)
 	-- ONE flash in the best colour (RevealKit's, its one gap: refused, it waits for the next slot
@@ -610,12 +1008,18 @@ function HatchStage.pose(run: Run, t: number): { string }
 		end
 	end
 	local from = run.FlashFrom
-	RevealKit.poseFlash(o.Flash, if from then HatchFx.flashU(t - from) else -1, HatchFx.FlashPeak)
+	-- (V2: stronger for the rarer: the Tier's)
+	RevealKit.poseFlash(o.Flash, if from then HatchFx.flashU(t - from) else -1, HatchFx.flashPeakOf(tl))
 	if t >= tl.Reveal and once("Reveal") then
 		reveal(run, aspect)
 	end
+	if t >= tl.Banner then
+		once("Banner") -- (V2: LEGENDARY! / MYTHIC!)
+	end
 	poseGolems(run, t, aspect)
+	poseBadges(run, t, aspect)
 	poseSunburst(run, t, dt)
+	poseRarity(run, t)
 	poseBits(run, t)
 	if t >= tl.Fly then
 		once("Fly")
