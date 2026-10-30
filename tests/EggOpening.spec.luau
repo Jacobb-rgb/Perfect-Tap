@@ -592,6 +592,13 @@ return function(T, Loader)
 		CapsuleView.setChain(tv, 2, 5)
 		T.truthy(29 + tv.Chain.Position.Y.Offset >= 864 * 0.05 - 1e-6, "a TV: the counter inside the title-safe band")
 		T.eq(pc.Chain.Position.Y.Offset, 8, "PC: just under the top bar")
+		-- touch: top right (the top middle is a big golem's head there), out of the thumbstick's zone
+		T.eq(o.Chain.AnchorPoint, Vector2.new(1, 0))
+		T.truthy(o.Chain.Position.X.Offset - o.Chain.Size.X.Offset > w * CapsuleView.ThumbZone.Width, "right of the zone")
+		T.truthy(
+			inset + o.Chain.Position.Y.Offset + o.Chain.Size.Y.Offset <= h * CapsuleView.ThumbZone.Top,
+			"at the top, just under Roblox's row"
+		)
 		T.truthy(tv.Chain.TextSize * 1.25 >= 18, "the counter: 18 px at 1080p")
 		-- text: 18 px at 1080p (1.25), 10 pt on a phone
 		for _, label in { pc.AutoLabel, pc.Note } do

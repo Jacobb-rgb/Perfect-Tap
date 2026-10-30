@@ -238,6 +238,7 @@ export type OpenRefs = {
 
 CapsuleView.StageTags = 10 -- the most results an opening shows (CapsuleConfig.Counts' largest)
 CapsuleView.WaitingText = "Waiting: inventory full" -- under a won golem past the inventory's hard cap
+CapsuleView.WaitingLines = { "Waiting:", "inventory full" } -- (the same on two lines, where its room is narrow)
 
 local rgb = Color3.fromRGB
 local DARK = rgb(26, 22, 26)
@@ -1956,9 +1957,16 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	-- the chain's "2 / 5": top middle, just under the top bar (on touch above the thumbstick's zone)
 	local chainSize = if compact or touch then 26 else 30
 	refs.Chain.TextSize = chainSize
-	refs.Chain.Size = UDim2.fromOffset(200, chainSize + 6)
-	-- (a TV: inside its 5 % title-safe band, as Auto and its note)
-	refs.Chain.Position = UDim2.fromOffset(width / 2, if o.TenFoot then math.max(8, math.ceil(height * 0.05) - inset) else 8)
+	refs.Chain.Size = UDim2.fromOffset(130, chainSize + 6) -- (room for "10 / 10")
+	-- (a TV: inside its 5 % title-safe band, as Auto and its note; touch: top right, over no golem's
+	-- head and out of the thumbstick's zone, Auto's corner is the top left there)
+	if touch then
+		refs.Chain.AnchorPoint = Vector2.new(1, 0)
+		refs.Chain.Position = UDim2.fromOffset(width - margin, 8)
+	else
+		refs.Chain.AnchorPoint = Vector2.new(0.5, 0)
+		refs.Chain.Position = UDim2.fromOffset(width / 2, if o.TenFoot then math.max(8, math.ceil(height * 0.05) - inset) else 8)
+	end
 	local chainEdge = refs.Chain:FindFirstChild("Edge")
 	if chainEdge and chainEdge:IsA("UIStroke") then
 		chainEdge.Thickness = CapsuleView.TextEdge(chainSize)
@@ -2017,7 +2025,16 @@ function CapsuleView.setTag(
 		-- (its room: the golems' pitch `pitch`, even for the big middle one whose name gets more)
 		local noteRoom = math.min(width, pitch or width)
 		local noteSize = CapsuleView.TagMin
-		local lines, widest = CapsuleView.wrap(CapsuleView.WaitingText, noteSize, math.max(40, noteRoom - 22))
+		local lines, widest = 1, TechShopView.textWidth(CapsuleView.WaitingText, noteSize)
+		local text = CapsuleView.WaitingText
+		if widest + 22 > noteRoom then
+			-- ("Waiting:" over "inventory full": the narrowest it reads well; a tinier room wraps that too)
+			local first, second = CapsuleView.WaitingLines[1], CapsuleView.WaitingLines[2]
+			local more, wide = CapsuleView.wrap(second, noteSize, math.max(40, noteRoom - 22))
+			lines, widest = 1 + more, math.max(TechShopView.textWidth(first, noteSize), wide)
+			text = first .. "\n" .. second
+		end
+		tag.WaitingText.Text = text
 		tag.WaitingText.TextSize = noteSize
 		local noteEdge = tag.WaitingText:FindFirstChild("Edge")
 		if noteEdge and noteEdge:IsA("UIStroke") then
@@ -2030,9 +2047,10 @@ function CapsuleView.setTag(
 		markH += 4
 	end
 	local frameH = fit + small + 12 + markH
-	-- never under the Auto button (its key and label): the tag steps right of it
+	-- never under the Auto button (its key and label): the tag steps right of it, just enough
+	-- (what shows of it: the name, the chance, the mark; its neighbour keeps its room)
 	local x = at.X
-	local half = math.max(frameW, markW) / 2
+	local half = math.max(TechShopView.textWidth(name, fit) * 1.04 + 8, TechShopView.textWidth(chance, small) + 8, markW) / 2
 	local keep = refs.AutoKeep
 	local overlapsY = at.Y < keep.Max.Y and at.Y + frameH > keep.Min.Y
 	if overlapsY and x - half < keep.Max.X and x + half > keep.Min.X then

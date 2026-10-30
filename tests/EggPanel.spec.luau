@@ -2215,7 +2215,7 @@ return function(T, Loader)
 							T.eq(tag.Waiting.Visible, run.Waiting[slot], "the waiting note only on a waiting golem")
 							if tag.Waiting.Visible then
 								notes += 1
-								T.eq(tag.WaitingText.Text, "Waiting: inventory full")
+								T.eq((string.gsub(tag.WaitingText.Text, "\n", " ")), "Waiting: inventory full", "the note's words")
 								T.eq(tag.Waiting.BackgroundTransparency, 0, "solid with its name")
 								-- (never under the Auto button, its key or its label: the bottom-left golem's note)
 								local x = tag.Frame.Position.X.Offset
@@ -2329,39 +2329,36 @@ return function(T, Loader)
 				waiting += n
 			end
 			T.eq(waiting, 50, "all 50 shown, each waiting")
-			-- phones (the HUD's 0.62): the note at the text floor, on two lines where the room is narrow;
-			-- no two names or notes touch, none under the Auto button
-			w.touch = true
-			for _, view in { Vector2.new(844, 390), Vector2.new(568, 320) } do
-				local scale = 0.62
-				local p = CapsuleView.buildOpening(true)
-				CapsuleView.layoutOpening(p, true, view.X / scale, view.Y / scale, { Touch = true, Inset = 58 / scale })
+			-- PC and phones (the HUD's 0.62): the note at the text floor, on two lines where the room is
+			-- narrow; no two notes touch, none under the Auto button (the bottom-left golem's steps aside)
+			for _, case in
+				{
+					{ Vector2.new(1280, 720), 1, false, 29 },
+					{ Vector2.new(844, 390), 0.62, true, 58 },
+					{ Vector2.new(568, 320), 0.62, true, 58 },
+				}
+			do
+				local view, scale, phone, inset = case[1], case[2], case[3], case[4]
+				w.touch = phone
+				local p = CapsuleView.buildOpening(phone)
+				CapsuleView.layoutOpening(p, phone, view.X / scale, view.Y / scale, { Touch = phone, Inset = inset / scale })
 				local last = all[5]
 				play(p, last, "names")
-				local boxes = {}
+				local notes = {}
 				for slot = 1, #last.Golems do
 					local tag = p.Tags[slot]
 					T.truthy(tag.Waiting.Visible, `{view.X}: the note`)
 					T.truthy(tag.WaitingText.TextSize * scale >= 9.9, `{view.X}: the note {tag.WaitingText.TextSize * scale} pt`)
-					local wide = math.max(tag.Frame.Size.X.Offset, tag.Waiting.Size.X.Offset)
-					local x = tag.Frame.Position.X.Offset - wide / 2
+					local x = tag.Frame.Position.X.Offset
 					local y = tag.Frame.Position.Y.Offset + tag.Waiting.Position.Y.Offset
-					table.insert(boxes, {
-						Min = Vector2.new(x, y),
-						Max = Vector2.new(
-							x + tag.Waiting.Size.X.Offset + (wide - tag.Waiting.Size.X.Offset),
-							y + tag.Waiting.Size.Y.Offset
-						),
-						Note = {
-							Min = Vector2.new(tag.Frame.Position.X.Offset - tag.Waiting.Size.X.Offset / 2, y),
-							Max = Vector2.new(tag.Frame.Position.X.Offset + tag.Waiting.Size.X.Offset / 2, y + tag.Waiting.Size.Y.Offset),
-						},
-					})
-					T.eq(EggPanel.overlap(boxes[#boxes].Note, p.AutoKeep), 0, `{view.X} slot {slot}: clear of the Auto button`)
+					local half = tag.Waiting.Size.X.Offset / 2
+					local note = { Min = Vector2.new(x - half, y), Max = Vector2.new(x + half, y + tag.Waiting.Size.Y.Offset) }
+					table.insert(notes, note)
+					T.eq(EggPanel.overlap(note, p.AutoKeep), 0, `{view.X} slot {slot}: clear of the Auto button`)
 				end
-				for i = 1, #boxes do
-					for j = i + 1, #boxes do
-						T.eq(EggPanel.overlap(boxes[i].Note, boxes[j].Note), 0, `{view.X}: notes {i} and {j} never touch`)
+				for i = 1, #notes do
+					for j = i + 1, #notes do
+						T.eq(EggPanel.overlap(notes[i], notes[j]), 0, `{view.X}: notes {i} and {j} never touch`)
 					end
 				end
 				p.Gui:Destroy()
