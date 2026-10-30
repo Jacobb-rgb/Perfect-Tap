@@ -17,7 +17,7 @@
 	      after SecretReveal.SkipAfter, Reduce motion (Motion.reduced()), a
 	      phone gets fewer rays and pieces, one flash at most
 	      (RevealKit.takeFlash: one too soon after another flash waits its
-	      turn once, flashPlan), the world camera kicks (CameraShake), the
+	      turn once, flashPlan / retryFlash), the world camera kicks (CameraShake), the
 	      sounds play in layers. onDone runs when it is over.
 ]]
 
@@ -78,6 +78,16 @@ function SecretRevealController.flashPlan(now: number, reduced: boolean): (numbe
 		return 0, nil
 	end
 	return math.huge, RevealKit.nextFlashAt()
+end
+
+-- The flash that waited (flashPlan's retry) at clock `now`, `t` into the show: its FlashAt if it
+-- may flash now, nil if not: the slot is taken again, or the show is past SkipAfter (a hitch, a
+-- skip: no full-screen flash on the flight into the bag), and then it takes no slot.
+function SecretRevealController.retryFlash(t: number, now: number): number?
+	if t < SecretReveal.SkipAfter and RevealKit.takeFlash(now) then
+		return t
+	end
+	return nil
 end
 
 ---------------------------------------------------------------- the client
@@ -168,6 +178,7 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 	ContextActionService:BindAction("TerraForgeSecretSkip", function(_, state)
 		if state == Enum.UserInputState.Begin and t >= SecretReveal.SkipAfter and t < hold then
 			t = hold
+			retry = nil
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch, Enum.KeyCode.ButtonA, Enum.KeyCode.Space)
@@ -176,9 +187,7 @@ function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
 		t += dt
 		if retry and os.clock() >= retry then
 			retry = nil
-			if RevealKit.takeFlash(os.clock()) then
-				opts.FlashAt = t
-			end
+			opts.FlashAt = SecretRevealController.retryFlash(t, os.clock()) or math.huge
 		end
 		if SecretReveal.pose(v, t, opts) then
 			connection:Disconnect()

@@ -34,8 +34,8 @@
 	                                 for fewer rays and pieces, FlashAt = the
 	                                 second its flash starts }
 	  total(stars), shake(t, stars) -> the camera nudge (0..1) for the world
-	The rays, flash and rings come from RevealKit (the egg opening draws
-	its own from it too), the banner is drawn here; the "Secret" values
+	The rays, flash and rings come from RevealKit (the egg opening moves
+	onto it with anim/egg-redo), the banner is drawn here; the "Secret" values
 	(20 rays, (14,10,22) and a rainbow drifting 0.25 turn/s, layers +45 /
 	-30 degrees a second, flash (255,240,200) <= 0.9 opaque, gone in 0.45 s;
 	Montserrat: headline 64 Heavy with rainbow letters and a 5-unit edge,
