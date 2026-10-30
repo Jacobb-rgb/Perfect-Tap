@@ -79,6 +79,15 @@ return function(T, Loader)
 		T.eq(BlasterData.damage(2, ""), 9, "rusty")
 		T.eq(BlasterData.displayName(3, "Gold"), "Gold Spark Blaster")
 		T.eq(BlasterData.displayName(1, ""), "Rusty Blaster")
+		T.eq(BlasterData.displayName(9, "RoyalAurum"), "Royal Aurum Sunlance", "no Royal twice")
+		for level = 2, 10 do
+			local name = BlasterData.displayName(level, BlasterData.vaultOre(level))
+			local seen = {}
+			for word in string.gmatch(name, "%S+") do
+				T.falsy(seen[string.lower(word)], `"{name}" says a word twice`)
+				seen[string.lower(word)] = true
+			end
+		end
 	end)
 
 	T.test("v2: zone gates let a level-1 blaster start and need upgrades deeper", function()

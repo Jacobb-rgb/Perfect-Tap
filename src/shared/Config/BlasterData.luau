@@ -171,12 +171,23 @@ function BlasterData.damage(level: any, oreId: string?): number
 	return blaster.Damage * (1 + bonus)
 end
 
--- Display name, e.g. "Gold Spark Blaster" (or "Rusty Blaster").
+-- Display name, e.g. "Gold Spark Blaster" (or "Rusty Blaster"). A word the ore's
+-- name already has is said once: Royal Aurum + Royal Sunlance = "Royal Aurum Sunlance".
 function BlasterData.displayName(level: any, oreId: string?): string
 	local blaster = BlasterData.get(level)
 	local ore = if oreId and oreId ~= "" then OreData.ById[oreId] else nil
 	if ore and blaster.Level > 1 then
-		return ore.Name .. " " .. blaster.Name
+		local said = {}
+		for word in string.gmatch(ore.Name, "%S+") do
+			said[string.lower(word)] = true
+		end
+		local words = { ore.Name }
+		for word in string.gmatch(blaster.Name, "%S+") do
+			if not said[string.lower(word)] then
+				table.insert(words, word)
+			end
+		end
+		return table.concat(words, " ")
 	end
 	return blaster.Name
 end
