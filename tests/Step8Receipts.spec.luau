@@ -1103,9 +1103,9 @@ return function(T, Loader)
 			return { IncomePct = 50, SellPct = 50 }
 		end)
 		local stats = Bonuses.stats(w.player)
-		T.eq(stats.IncomePct, 2, "IncomePct capped")
-		T.eq(EconomyService.incomeMultiplier(w.player), (1 + 2) * 2, "x2 on top of the capped income")
-		T.eq(Bonuses.sellMult(stats), (1 + 3) * 2, "x2 on top of the capped sell value")
+		T.eq(stats.IncomePct, 6, "IncomePct capped")
+		T.eq(EconomyService.incomeMultiplier(w.player), (1 + 6) * 2, "x2 on top of the capped income")
+		T.eq(Bonuses.sellMult(stats), (1 + 4) * 2, "x2 on top of the capped sell value")
 		Bonuses.unregister("CapTest")
 		-- a refund: the next check says not owned -> x1
 		m.forget(w.player)

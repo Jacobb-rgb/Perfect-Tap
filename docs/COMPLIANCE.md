@@ -506,8 +506,15 @@ Three capsules wake random golems (`CapsuleConfig`): **Stone** and
 placeholder ids). The code (`CapsuleService`, `CapsuleController`,
 `CapsuleView`) follows these rules:
 
-- **The SKY EGG** (`CapsuleConfig` "Sky", 2026-10-22): a coin egg of three
-  golems (Sky Sprite 84 %, Storm Sentinel 14 %, Aether King 2 %), sold only
+- **Each egg wakes its own golems** (owner 2026-10-30): Stone 4 golems
+  (70 / 22 / 7 / 1 %), Crystal 5 (55 / 28 / 12 / 4 / 1 %), Royal 5
+  (48 / 30 / 16 / 5 / 1 %); four older golems no egg wakes any more stay
+  in the saves of the players who own them. Every list is still exact and
+  shown before every open.
+- **The SKY EGG** (`CapsuleConfig` "Sky", 2026-10-22; HUGE golems
+  2026-10-30): a coin egg of five golems (Sky Sprite 83.2 %, Storm
+  Sentinel 14 %, Aether King 2 %, the HUGE Sky Titan 0.5 % and Cloud
+  Colossus 0.3 %), sold only
   at its podium at the top of the SKY HAVEN parkour (`Podium = true`: the
   server refuses an open unless the player stands within PromptDistance +
   PodiumSlack of the `EggPodium`-tagged podium, "Climb to SKY HAVEN to open

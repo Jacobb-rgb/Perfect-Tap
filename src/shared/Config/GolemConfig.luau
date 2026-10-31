@@ -106,10 +106,10 @@ GolemConfig.LimitedMaxParts = { Rare = 66, Epic = 72, Legendary = 80, Mythic = 9
 -- an egg golem's budget by rarity (its egg's costume: armour, gold trim,
 -- crystals; owner 2026-10-30 "víc clean"): below the Robux sets', most
 -- followers are egg golems
-GolemConfig.EggMaxParts = { Common = 36, Uncommon = 40, Rare = 46, Epic = 52, Legendary = 60, Mythic = 68 } :: { [string]: number }
+GolemConfig.EggMaxParts = { Common = 42, Uncommon = 46, Rare = 52, Epic = 58, Legendary = 66, Mythic = 74 } :: { [string]: number }
 -- a HUGE golem's budget (0.5 % / 0.3 % of a Sky egg: almost never three in
 -- one server; past FollowerHideDistance it is hidden like every follower)
-GolemConfig.HugeMaxParts = 130
+GolemConfig.HugeMaxParts = 170
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
@@ -552,7 +552,7 @@ GolemConfig.List = {
 		Glow = rgb(90, 215, 255),
 		Material = Enum.Material.SmoothPlastic,
 		Accessory = "TitanArmor",
-		Scale = 2.2,
+		Scale = 3.2,
 		Bonus = { Type = "MiningSpeed", Value = 1.2 },
 		Bonus2 = { Type = "Income", Value = 0.2 },
 		Lore = "A giant in white and gold armour. Crystal wings hum when it lifts its staff.",
@@ -568,7 +568,7 @@ GolemConfig.List = {
 		Glow = rgb(0, 125, 255),
 		Material = Enum.Material.Slate,
 		Accessory = "CloudStorm",
-		Scale = 2.2,
+		Scale = 3.2,
 		Bonus = { Type = "Income", Value = 0.6 },
 		Bonus2 = { Type = "Luck", Value = 1 },
 		Lore = "A mountain of storm rock wrapped in clouds. Rocks float wherever it walks.",
@@ -613,8 +613,11 @@ end
 -- The whole bonus of a kind (a HUGE golem's two added up; 0 when unknown).
 function GolemConfig.value(kind: string): number
 	local golem = GolemConfig.ById[kind]
+	if not golem then
+		return 0
+	end
 	local total = 0
-	for _, bonus in if golem then GolemConfig.bonuses(golem) else {} do
+	for _, bonus in GolemConfig.bonuses(golem) do
 		total += bonus.Value
 	end
 	return total
