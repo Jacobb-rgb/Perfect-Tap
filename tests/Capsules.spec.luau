@@ -665,7 +665,7 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the stall
 
-	withWorld("Capsules: the SKY EGG is a coin egg of three golems, better than Crystal, below the Robux eggs", function(_w)
+	withWorld("Capsules: the SKY EGG is a coin egg of five golems (two HUGE), the top of the egg tiers", function(_w)
 		local sky = CapsuleConfig.ById.Sky
 		T.truthy(sky and sky.Currency == "Coins" and sky.Limited == nil, "a coin egg")
 		T.truthy(table.find(CapsuleConfig.Stall, sky), "it has its tab and its board")
@@ -675,17 +675,19 @@ return function(T, Loader)
 			sum += chance
 			n += 1
 		end
-		T.eq(n, 3, "three golems")
+		T.eq(n, 5, "three golems and two HUGE ones")
 		T.near(sum, 1, 1e-9, "odds sum to 1")
 		local function expected(id: string): number
 			local e = 0
 			for golem, chance in CapsuleConfig.ById[id].Odds do
-				e += chance * GolemConfig.ById[golem].Bonus.Value
+				e += chance * GolemConfig.value(golem)
 			end
 			return e
 		end
-		T.truthy(expected("Sky") > expected("Crystal"), "better than the Crystal egg")
-		T.truthy(expected("Sky") < expected("Royal"), "still below the Royal egg")
+		-- (owner 2026-10-30: the eggs are tiers apart, Stone < Crystal < Royal < Sky)
+		T.truthy(expected("Crystal") > expected("Stone"), "Crystal beats Stone")
+		T.truthy(expected("Royal") > expected("Crystal"), "Royal beats Crystal")
+		T.truthy(expected("Sky") > expected("Royal"), "Sky beats Royal")
 		T.truthy(sky.Price and sky.Price > CapsuleConfig.ById.Crystal.Price, "costs more than Crystal")
 	end)
 

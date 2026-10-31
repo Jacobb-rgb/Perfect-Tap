@@ -182,12 +182,12 @@ return function(T, Loader)
 		T.eq(StatConfig.describe("WalkSpeed", 2), "+2 walk speed")
 		-- real caps: the best gear today can reach them, the totals never pass them
 		local caps = {
-			DamagePct = 1.5,
-			OreLuckPct = 1.5,
+			DamagePct = 5,
+			OreLuckPct = 3,
 			OreLuckMult = 2.5,
-			IncomePct = 2,
-			SellPct = 3,
-			WalkSpeedPct = 0.5,
+			IncomePct = 6,
+			SellPct = 4,
+			WalkSpeedPct = 1,
 			GolemBondPct = 1,
 			ArtifactPct = 3,
 			OverchargePct = 1,
@@ -201,8 +201,8 @@ return function(T, Loader)
 		-- ore luck: the product is capped too, broken values are no luck
 		T.eq(StatConfig.oreLuck(0, 1), 1)
 		T.near(StatConfig.oreLuck(0.5, 2.5), 3.75, EPS)
-		T.eq(StatConfig.oreLuck(1.5, 2.5), StatConfig.MaxOreLuck, "the two caps multiplied")
-		T.near(StatConfig.MaxOreLuck, 6.25, EPS)
+		T.eq(StatConfig.oreLuck(3, 2.5), StatConfig.MaxOreLuck, "the two caps multiplied")
+		T.near(StatConfig.MaxOreLuck, 10, EPS)
 		T.eq(StatConfig.oreLuck(9, 9), StatConfig.MaxOreLuck, "never past it")
 		-- Hexa Lucky is sold as "ore luck x2.5": exactly x2.5 at every OreLuckPct the caps allow
 		for _, pct in { 0, 0.15, 0.3, 0.6, 0.75, 1.05, 1.25, 1.5, 3 } do
@@ -408,8 +408,8 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- golems + capsules
 
-	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones, 3 of the Sky egg", function()
-		T.eq(#GolemConfig.List, 27)
+	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones, 5 of the Sky egg", function()
+		T.eq(#GolemConfig.List, 29)
 		local editions = {}
 		for _, golem in GolemConfig.List do
 			if golem.Edition then
@@ -417,8 +417,8 @@ return function(T, Loader)
 			end
 		end
 		T.eq(editions.Dragonforge, 6, "the Dragonforge set")
-		T.eq(editions.Sky, 3, "the Sky egg's golems")
-		T.eq(#GolemConfig.List - 9, 18, "the capsule golems")
+		T.eq(editions.Sky, 5, "the Sky egg's golems (2 HUGE)")
+		T.eq(#GolemConfig.List - 11, 18, "the capsule golems")
 		local names, rarities = {}, {}
 		for _, golem in GolemConfig.List do
 			T.falsy(names[golem.Name], "unique name " .. golem.Name)
@@ -426,7 +426,8 @@ return function(T, Loader)
 			rarities[golem.Rarity] = true
 			T.truthy(GolemConfig.Accessories[golem.Accessory], golem.Id .. " accessory")
 			T.truthy(GolemConfig.BonusTypes[golem.Bonus.Type], golem.Id .. " bonus type")
-			T.truthy(golem.Bonus.Value > 0 and golem.Bonus.Value <= 0.5, golem.Id .. " bonus size")
+			local cap = StatConfig.ById[GolemConfig.BonusTypes[golem.Bonus.Type].Stat].Max :: number
+			T.truthy(golem.Bonus.Value > 0 and golem.Bonus.Value <= cap, golem.Id .. " bonus size")
 			T.eq(typeof(golem.Body), "Color3")
 			T.eq(typeof(golem.Glow), "Color3")
 			T.eq(typeof(golem.Trim), "Color3")
@@ -436,11 +437,16 @@ return function(T, Loader)
 		for _, info in Rarity.List do
 			T.truthy(rarities[info.Id], "a golem of rarity " .. info.Id)
 		end
-		-- rarer golems give at least as much as commoner ones of the same bonus type
-		for _, a in GolemConfig.List do
-			for _, b in GolemConfig.List do
-				if a.Bonus.Type == b.Bonus.Type and order(a.Rarity) > order(b.Rarity) then
-					T.truthy(a.Bonus.Value >= b.Bonus.Value, `{a.Id} >= {b.Id}`)
+		-- in one egg, rarer golems give at least as much as commoner ones of the
+		-- same bonus type (owner 2026-10-30: across eggs a Rare limited golem's
+		-- +100% beats a Mythic Royal one's +40%: the eggs are tiers apart)
+		for _, capsule in CapsuleConfig.List do
+			for aId in capsule.Odds do
+				for bId in capsule.Odds do
+					local a, b = GolemConfig.ById[aId], GolemConfig.ById[bId]
+					if a.Bonus.Type == b.Bonus.Type and order(a.Rarity) > order(b.Rarity) then
+						T.truthy(a.Bonus.Value >= b.Bonus.Value, `{capsule.Id}: {a.Id} >= {b.Id}`)
+					end
 				end
 			end
 		end
@@ -472,11 +478,11 @@ return function(T, Loader)
 		ok, why = GolemConfig.unequip(golems, d.Id)
 		T.eq(why, "NotEquipped")
 		local stats = GolemConfig.stats(golems, 0)
-		T.near(stats.IncomePct, 0.03 + 0.15, EPS, "Pebble + Duke income")
+		T.near(stats.IncomePct, 0.03 + 0.2, EPS, "Pebble + Duke income")
 		T.near(stats.DamagePct, 0.1, EPS, "Ember Imp mining speed")
 		stats = GolemConfig.stats(golems, 0.5)
-		T.near(stats.IncomePct, (0.03 + 0.15) * 1.5, EPS, "Golem Bond +50%")
-		T.eq(GolemConfig.describe("DiamondDuke", 0), "+15% Income")
+		T.near(stats.IncomePct, (0.03 + 0.2) * 1.5, EPS, "Golem Bond +50%")
+		T.eq(GolemConfig.describe("DiamondDuke", 0), "+20% Income")
 		local best = GolemConfig.equipBest(golems)
 		T.eq(#best, 3)
 		T.eq(best[1], d.Id, "the Mythic first")
@@ -531,7 +537,8 @@ return function(T, Loader)
 
 	T.test("Step67: renamed golems (the 36-ore roster names) keep their rarity, colors and saves", function()
 		local renames = {
-			{ Old = "RubyKnight", New = "RoseKnight", Name = "Rose Knight", Rarity = "Epic", Ore = "CrystalRose" },
+			-- (Rose Knight became the Royal egg's Rare on 2026-10-30, the owner's list)
+			{ Old = "RubyKnight", New = "RoseKnight", Name = "Rose Knight", Rarity = "Rare", Ore = "CrystalRose" },
 			{ Old = "StormcoreTitan", New = "StormTitan", Name = "Storm Titan", Rarity = "Legendary", Ore = "StormGem" },
 			{
 				Old = "StarmetalSovereign",
@@ -856,7 +863,7 @@ return function(T, Loader)
 		local now, with = BoostConfig.hexaLuck(0.5)
 		T.near(now, 1.5, EPS)
 		T.near(with, 3.75, EPS)
-		local _, capped = BoostConfig.hexaLuck(1.5)
+		local _, capped = BoostConfig.hexaLuck(3)
 		T.eq(capped, StatConfig.MaxOreLuck, "the card shows the capped luck")
 		T.truthy(BoostConfig.Reasons.NoEffect)
 		T.truthy(BoostConfig.OfferById.TripleLucky15.Seconds == 900, "Triple Lucky 15 min")
@@ -1176,7 +1183,7 @@ return function(T, Loader)
 		T.truthy(star.Artifacts[1].After > star.Artifacts[1].Before)
 		-- a capped player sees no change (what the game would apply)
 		local capped = BoostConfig.preview(
-			{ BlasterLevel = 5, OreLuckPct = 1.5, OreLuckMult = 1, ArtifactPct = 3 },
+			{ BlasterLevel = 5, OreLuckPct = 3, OreLuckMult = 1, ArtifactPct = 3 },
 			{ OreLuckPct = 0.75, ArtifactPct = 0.5 }
 		)
 		T.eq(capped.LuckBefore, capped.LuckAfter)
@@ -1661,7 +1668,7 @@ return function(T, Loader)
 		end
 		-- a percent bonus can hit its cap: the pass says where (Hexa's x2.5 never does: MaxOreLuck)
 		T.truthy(MonetizationConfig.get("EnchantStarbreaker").Description:find("at most +300%", 1, true), "Starbreaker names the cap")
-		T.near(StatConfig.ById.OreLuckPct.Max :: number, 1.5, EPS, "the cap the Starbreaker text names")
+		T.near(StatConfig.ById.OreLuckPct.Max :: number, 3, EPS, "the cap the Starbreaker text names")
 		T.truthy(MonetizationConfig.PromptMemorySeconds >= 60, "a Royal prompt remembers the Triple Lucky state it showed")
 		for _, product in MonetizationConfig.List do
 			if product.Kind == "Product" then
@@ -1715,8 +1722,8 @@ return function(T, Loader)
 		-- bigger plots' grid move (Migrations)
 		T.eq(
 			DataTemplate.Version,
-			10,
-			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack, 10 secret ores"
+			12,
+			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack, 10 secret ores, 11 the golems' auto-delete, 12 the HUGE golems"
 		)
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
 		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")

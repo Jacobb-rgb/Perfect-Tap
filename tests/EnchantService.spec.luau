@@ -725,11 +725,11 @@ return function(T, Loader)
 		local top = state({ Enchants = { Owned = { Lucky = 3 }, Slots = { "Lucky", "", "", "" } } })
 		T.eq(EnchantView.odds(top, "Lucky", "DeepHollow", NOW), nil, "top tier: nothing to buy")
 		-- ore luck at its cap: the card says the buy changes nothing
-		local capped = state({ Bonuses = { OreLuckPct = 1.5, OreLuckMult = 2.5, ArtifactPct = 0 }, Boosts = { HexaLuckyUntil = NOW + 60 } })
+		local capped = state({ Bonuses = { OreLuckPct = 3, OreLuckMult = 2.5, ArtifactPct = 0 }, Boosts = { HexaLuckyUntil = NOW + 60 } })
 		local c = EnchantView.odds(capped, "Lucky", "DeepHollow", NOW) :: any
 		T.truthy(c.Note:find("cap"), "at the cap")
 		T.eq(c.Summary.Before, c.Summary.After, "no change")
-		T.near(StatConfig.MaxOreLuck, 6.25, 1e-9)
+		T.near(StatConfig.MaxOreLuck, 10, 1e-9)
 		-- the lasting odds: a running Hexa Lucky is left out (Lucky I + Hexa: Starbreaker
 		-- shows x1.15 -> x1.9, not the temporary x2.88 -> x4)
 		local hexa = state({ Bonuses = { OreLuckPct = 0.15, OreLuckMult = 2.5, ArtifactPct = 0 }, Boosts = { HexaLuckyUntil = NOW + 600 } })
