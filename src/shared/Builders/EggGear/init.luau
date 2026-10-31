@@ -1,15 +1,20 @@
 --[[
 	The EGG GOLEMS' costumes (GolemConfig Family; owner 2026-10-30: "make
 	the golems like in this picture, those are cleaner": the Sky and
-	Dragonforge limited golems). Every golem of an egg wears its egg's look,
-	so each egg's golems read as one set, and a rarer one wears more of it
-	and glows more:
+	Dragonforge limited golems; 10-31: "crisp two-tone armour, a strong
+	signature each"). Every golem of an egg wears its egg's armour set
+	(plates in its own colour over a darker under-suit, the egg's metal for
+	the trim, the egg's emblem on the breastplate), so each egg's golems read
+	as one set, plus its own signature silhouette; a rarer one wears more
+	(back pieces, floating bits) and glows more:
 
-	  Stone    polished stone, bronze armour, miner and tinker gear, a warm ember glow
-	  Crystal  clean light bodies, gem plates and crystals in the ore's colour,
-	           silver trim, a cool glow
-	  Royal    ore-metal armour trimmed with gold, crests, crowns and halos
-	           (divine; no capes: a cape is the Dragon King's alone)
+	  Stone    polished stone plates, bronze trim, a bronze cog, miner and tinker
+	           gear, a warm ember glow
+	  Crystal  gem-coloured plates, silver trim, a silver frame holding a crystal,
+	           crystals growing from the shoulders, a cool glow
+	  Royal    ore-metal plates trimmed with gold, a gold crest, helms, crowns,
+	           halos, wings of light (divine; no capes: a cape is the Dragon
+	           King's alone)
 
 	Each family lives in its own module (EggGear/<Family>.luau) and builds
 	its costumes from the shared clean pieces (EggGear/Clean.luau). A costume
@@ -18,7 +23,7 @@
 	may re-dress the body's own parts at no part cost, adds optional parts
 	only while c.Room() allows (GolemConfig.EggMaxParts by rarity) and
 	returns roughly the top of what it added (GolemBuilder measures the real
-	Height). GolemBuilder rounds the body and the helm (else the head) and any
+	Height). GolemBuilder rounds the helm (else the head) and any
 	part a costume marks with the attribute "Round" (a hood's head). Legendary
 	and Mythic costumes may add one slow ember emitter (tools.embers), a
 	Mythic one light (tools.light; a follower drops it). Each golem keeps its

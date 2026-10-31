@@ -200,10 +200,17 @@ return function(T, Loader)
 		for _, name in { "Pauldron2", "Fist2" } do
 			T.eq(pebble[name], "ArmR", "the Pebble's " .. name .. " on the right arm")
 		end
-		for _, name in { "Head", "HeadFill", "HeadEdge1", "Brow", "Eye1", "Pebble1", "Pebble2" } do
+		for _, name in { "Head", "HeadFill", "HeadEdge1", "Brow", "Eye1", "HeadBand", "HeadGuard1", "Pebble1", "Pebble2" } do
 			T.eq(pebble[name], "Head", "the Pebble's " .. name .. " on the head")
 		end
-		for _, name in { "Body", "BodyFill", "BodyEdge2", "Core", "CorePlate", "Boulder", "Crystal", "PickHandle", "PickHead" } do
+		for _, name in { "Bracer1", "PauldronRim1" } do
+			T.eq(pebble[name], "ArmL", "the Pebble's " .. name .. " on the left arm")
+		end
+		T.eq(pebble.Boot1, "LegL", "the Pebble's left boot on its leg")
+		for _, name in { "PickHandle", "PickHead1", "PickHead2" } do
+			T.eq(pebble[name], "ArmR", "the Pebble's pickaxe in its right hand")
+		end
+		for _, name in { "Body", "Breastplate", "Collar", "Core", "Cog", "Boulder", "Crystal" } do
 			T.eq(pebble[name], nil, "the Pebble's " .. name .. " stays on the body")
 		end
 		-- the egg golems' staffs and forks swing whole with the right fist (clear of the big head)

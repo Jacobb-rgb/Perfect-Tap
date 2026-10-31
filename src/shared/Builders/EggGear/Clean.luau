@@ -1,24 +1,26 @@
 --[[
-	The clean armour every egg golem's costume is cut from (EggGear; owner
+	The armour set every egg golem's costume is cut from (EggGear; owner
 	2026-10-30: "make the golems like in this picture, those are cleaner":
-	the Sky and Dragonforge limited golems). Instead of the rock golem's
-	turned stone chunks: gauntlets lined up with the arms, a rounded plate
-	on each shoulder, a framed gem emblem on the chest, a belt with a
-	buckle, a dark visor (or a slim brow) for the glowing eyes;
-	GolemBuilder rounds the body and the head (or helm) afterwards.
+	the Sky and Dragonforge limited golems, crisp two-tone armour). The
+	rock golem becomes a little knight of its egg: a dark under-suit (body,
+	arms, legs), plates in the golem's own colour (the head, a breastplate,
+	domed shoulder plates, boots) and trim in the egg's metal (gauntlets, a
+	collar, rims under the shoulder plates, a band round the head, the belt's
+	buckle, the emblem's frame), the glowing eyes in a dark visor.
+	GolemBuilder rounds the head (or helm) afterwards.
 	Positions are unscaled golem units from the feet (GolemBuilder's Ctx),
 	the front is -Z.
 
-	  dress(c, d)      re-dress the body's own parts (no part cost): skin,
-	                   arms, boots, gauntlets (Fist1/2), the face (the Brow:
-	                   a visor, a slim brow or nothing), the belt (the rock
-	                   golem's Boulder) and its buckle (its Crystal)
-	  pauldrons(c, color, material, rim?, rimMaterial?)
-	                   rounded Pauldron1/2 (they swing with the arms; a rim under each)
-	  emblem(c, frame, frameMaterial, gem, y?)   the framed gem on the chest
-	                   (the body's Core is the gem)
-	  collar(c, color, material)   a trim strip along the top of the chest,
-	                   under the big head (it keeps the head apart from the body)
+	  dress(c, d)      the set: re-dresses the body's own parts (no part
+	                   cost: the under-suit, the head, the gauntlets Fist1/2,
+	                   the face on the Brow, the belt on the rock golem's
+	                   Boulder, its buckle on its Crystal), then adds the
+	                   breastplate, the shoulder plates, the collar, the boots,
+	                   the rims, the band round the head, the dark cap over it,
+	                   the guards on its sides and the bracers
+	  cog / gemFrame / crest   the eggs' emblems round the glowing Core on the
+	                   breastplate: Stone a bronze cog, Crystal a silver frame
+	                   holding a crystal, Royal a gold crest
 	  shard(c, name, at, w, h, color, material)   a crystal (a square prism
 	                   turned on its length)
 	  crystal(c, name, from, to, w, color, material)   a crystal growing from
@@ -30,8 +32,9 @@
 	  ring(c, name, y, z, r, n, width, color, material, tilt)   a halo
 	  crown(c, spec)   a band with points and gems (parts named Crown*: they
 	                   ride on the head)
-	  held(c, name, from, to, width, color, material)   a shaft in the right
-	                   fist (a staff, a sword's blade)
+	  held(c, name, from, to, width, color, material)   a shaft in a fist (a
+	                   staff, a handle; held ones stay clear of the big head,
+	                   x >= 0.95, so they swing with the arm)
 	Every helper adds its parts only while c.Room() allows.
 ]]
 
@@ -47,26 +50,32 @@ local M = Enum.Material
 local NEON = M.Neon
 local PI = math.pi
 
--- the face (the body's Brow): a dark band the eyes glow on, a slim
--- straight brow over them, or nothing (a bare face; a covered one has no Brow)
-export type Face = "Visor" | "Brow" | "Bare"
+Clean.Visor = Color3.fromRGB(26, 22, 30)
+
+-- the face (the body's Brow): a dark visor the eyes glow on, or nothing (a
+-- bare face; a covered one has no Brow)
+export type Face = "Visor" | "Bare"
 
 export type Dress = {
-	Skin: Color3, -- the head
-	SkinMaterial: Enum.Material,
-	Torso: Color3?, -- the body (nil: the skin; a deeper shade keeps the big head apart from it)
-	Limbs: Color3?, -- the arms (nil: the torso a little toward the boots)
-	Boots: Color3, -- the legs
-	BootMaterial: Enum.Material,
-	Armour: Color3, -- the gauntlets (Fist1/2)
-	ArmourMaterial: Enum.Material,
-	Belt: Color3, -- the belt (the body's Boulder)
+	Plate: Color3, -- the armour plates: breastplate, shoulder plates, boots (and the head)
+	PlateMaterial: Enum.Material,
+	Head: Color3?, -- (nil: the plates' colour)
+	HeadMaterial: Enum.Material?,
+	Suit: Color3, -- the under-suit: body, arms, legs (a shade darker)
+	SuitMaterial: Enum.Material,
+	Metal: Color3, -- the trim: gauntlets, collar, rims, the band round the head
+	MetalMaterial: Enum.Material,
+	Belt: Color3,
 	BeltMaterial: Enum.Material,
-	Buckle: Color3, -- its buckle (the body's Crystal)
+	Buckle: Color3,
 	BuckleMaterial: Enum.Material,
 	Face: Face,
-	FaceColor: Color3?, -- the visor's or the brow's
-	FaceMaterial: Enum.Material?,
+	FaceZ: number?, -- the visor's depth (a helm's front is further out than the head's)
+	Band: boolean?, -- false: no band round the head (a hat, a hood, a helm brings its own)
+	Guards: boolean?, -- false: no metal guards on the head's sides (a closed helm covers them)
+	Ridge: boolean?, -- false: no dark cap over the band (a sprout grows there)
+	Boots: Color3?, -- (nil: the plates' colour)
+	BootMaterial: Enum.Material?,
 }
 
 export type Crown = {
@@ -77,15 +86,17 @@ export type Crown = {
 	Point: number, -- a point's size (the front one is a third bigger)
 	Color: Color3,
 	Material: Enum.Material,
+	PointMaterial: Enum.Material?, -- (nil: the band's; Neon: points of light)
+	PointColor: Color3?,
 	Gems: { Color3 }?, -- gems on the band's front (the middle first)
 }
 
 export type Gear = {
 	diamond: (parent: Instance, name: string, cf: CFrame, w: number, thick: number, color: Color3, material: Enum.Material?) -> Part,
 	dress: (c: Ctx, d: Dress) -> (),
-	pauldrons: (c: Ctx, color: Color3, material: Enum.Material, rim: Color3?, rimMaterial: Enum.Material?) -> (),
-	emblem: (c: Ctx, frame: Color3, frameMaterial: Enum.Material, gem: Color3, y: number?) -> (),
-	collar: (c: Ctx, color: Color3, material: Enum.Material) -> (),
+	cog: (c: Ctx, color: Color3, material: Enum.Material, gem: Color3) -> (),
+	gemFrame: (c: Ctx, color: Color3, material: Enum.Material, crystal: Color3, gem: Color3) -> (),
+	crest: (c: Ctx, color: Color3, material: Enum.Material, gem: Color3) -> (),
 	shard: (c: Ctx, name: string, at: CFrame, w: number, h: number, color: Color3, material: Enum.Material?) -> Part?,
 	crystal: (c: Ctx, name: string, from: Vector3, to: Vector3, w: number, color: Color3, material: Enum.Material?) -> Part?,
 	backCluster: (c: Ctx, name: string, list: { { number } }, color: Color3, material: Enum.Material) -> (),
@@ -105,6 +116,11 @@ export type Gear = {
 	held: (c: Ctx, name: string, from: Vector3, to: Vector3, width: number, color: Color3, material: Enum.Material) -> Part?,
 }
 
+-- where the shoulder plates sit (their rims, gems and spikes build on it)
+function Clean.shoulder(c: Ctx, side: number): CFrame
+	return c.At(side * 0.84, 1.44, 0) * CFrame.Angles(0, 0, -side * 0.25)
+end
+
 -- The helpers for one build kit (GolemBuilder's part makers and the limited sets' tools).
 function Clean.new(K: Kit, T: Tools): Gear
 	local function diamond(
@@ -120,74 +136,115 @@ function Clean.new(K: Kit, T: Tools): Gear
 	end
 
 	local function dress(c: Ctx, d: Dress)
-		local torso = d.Torso or d.Skin
-		T.recolor(c, "Head", d.Skin, d.SkinMaterial)
-		T.recolor(c, "Body", torso, d.SkinMaterial)
-		for _, name in { "Arm1", "Arm2" } do
-			T.recolor(c, name, d.Limbs or torso:Lerp(d.Boots, 0.2), d.SkinMaterial)
+		-- the body's own parts: the under-suit, the head, the gauntlets
+		for _, name in { "Body", "Arm1", "Arm2", "Leg1", "Leg2" } do
+			T.recolor(c, name, d.Suit, d.SuitMaterial)
 		end
-		for _, name in { "Leg1", "Leg2" } do
-			T.recolor(c, name, d.Boots, d.BootMaterial)
-		end
+		T.recolor(c, "Head", d.Head or d.Plate, d.HeadMaterial or d.PlateMaterial)
 		for i, side in { -1, 1 } do
-			-- gauntlets in line with the arms (not turned rock chunks)
+			-- (in line with the arms, not turned rock chunks)
 			T.redress(
 				c,
 				"Fist" .. i,
 				c.At(side * 0.845, 0.66, -0.02) * CFrame.Angles(0, 0, side * 0.1),
 				c.V(0.48, 0.42, 0.52),
-				d.Armour,
-				d.ArmourMaterial
+				d.Metal,
+				d.MetalMaterial
 			)
 		end
 		-- the rock golem's shoulder boulder and crystal become the belt and its buckle
-		T.redress(c, "Boulder", c.At(0, 0.6, 0), c.V(1.24, 0.12, 0.89), d.Belt, d.BeltMaterial)
-		T.redress(c, "Crystal", c.At(0, 0.6, -0.455), c.V(0.24, 0.17, 0.04), d.Buckle, d.BuckleMaterial)
-		local faceColor = d.FaceColor or Color3.fromRGB(28, 24, 32)
-		local faceMaterial = d.FaceMaterial or M.SmoothPlastic
+		T.redress(c, "Boulder", c.At(0, 0.6, 0), c.V(1.24, 0.13, 0.9), d.Belt, d.BeltMaterial)
+		T.redress(c, "Crystal", c.At(0, 0.6, -0.465), c.V(0.26, 0.19, 0.05), d.Buckle, d.BuckleMaterial)
+		local z = d.FaceZ or -0.66
 		if d.Face == "Visor" then
-			T.redress(c, "Brow", c.At(0, 2.02, -0.66), c.V(1.04, 0.36, 0.03), faceColor, faceMaterial)
-		elseif d.Face == "Brow" then
-			T.redress(c, "Brow", c.At(0, 2.33, -0.675), c.V(1.0, 0.13, 0.08), faceColor, faceMaterial)
+			T.redress(c, "Brow", c.At(0, 2.02, z), c.V(1.12, 0.42, 0.03), Clean.Visor, M.SmoothPlastic)
+			for i, x in { -0.28, 0.28 } do
+				T.redress(c, "Eye" .. i, c.At(x, 2.02, z - 0.025), c.V(0.3, 0.24, 0.03), c.Glow, NEON)
+			end
 		else
 			-- (a bare face: the brow shrinks away inside the head)
-			T.redress(c, "Brow", c.At(0, 2.1, 0), c.V(0.1, 0.1, 0.1), d.Skin, d.SkinMaterial)
+			T.redress(c, "Brow", c.At(0, 2.1, 0), c.V(0.1, 0.1, 0.1), d.Head or d.Plate, d.HeadMaterial or d.PlateMaterial)
 		end
-	end
-
-	local function pauldrons(c: Ctx, color: Color3, material: Enum.Material, rim: Color3?, rimMaterial: Enum.Material?)
+		-- the plates and the trim, the ones that change the look most first
+		if c.Room() >= 1 then
+			K.part(c.Model, "Breastplate", c.At(0, 1.0, -0.45), c.V(0.96, 0.62, 0.06), d.Plate, d.PlateMaterial)
+		end
 		for i, side in { -1, 1 } do
-			if c.Room() < 1 then
-				return
+			if c.Room() >= 1 then
+				T.ellipsoid(c.Model, "Pauldron" .. i, Clean.shoulder(c, side), c.V(0.86, 0.54, 0.92), d.Plate, d.PlateMaterial)
 			end
-			local at = c.At(side * 0.8, 1.42, 0) * CFrame.Angles(0, 0, -side * 0.25)
-			T.ellipsoid(c.Model, "Pauldron" .. i, at, c.V(0.66, 0.42, 0.72), color, material)
-			if rim and c.Room() >= 1 then
-				K.upright(
+		end
+		if c.Room() >= 1 then
+			K.part(c.Model, "Collar", c.At(0, 1.37, -0.005), c.V(1.0, 0.13, 0.9), d.Metal, d.MetalMaterial)
+		end
+		for i, x in { -0.3, 0.3 } do
+			if c.Room() >= 1 then
+				K.part(
 					c.Model,
-					"PauldronRim" .. i,
-					at * CFrame.new(0, -0.03 * c.S, 0),
-					0.07 * c.S,
-					0.76 * c.S,
-					rim,
-					rimMaterial or material
+					"Boot" .. i,
+					c.At(x, 0.12, -0.05),
+					c.V(0.5, 0.24, 0.64),
+					d.Boots or d.Plate,
+					d.BootMaterial or d.PlateMaterial
 				)
 			end
 		end
+		for i, side in { -1, 1 } do
+			if c.Room() >= 1 then
+				local rim = Clean.shoulder(c, side) * CFrame.new(0, -0.04 * c.S, 0)
+				K.upright(c.Model, "PauldronRim" .. i, rim, 0.09 * c.S, 0.98 * c.S, d.Metal, d.MetalMaterial)
+			end
+		end
+		if d.Band ~= false and c.Room() >= 1 then
+			K.part(c.Model, "HeadBand", c.At(0, 2.4, 0), c.V(1.54, 0.13, 1.34), d.Metal, d.MetalMaterial)
+		end
+		-- the helmet's dark cap over the band (the head two-toned like the body)
+		if d.Ridge ~= false and d.Band ~= false and c.Room() >= 1 then
+			K.part(c.Model, "HeadCap", c.At(0, 2.585, 0), c.V(1.52, 0.25, 1.32), d.Suit, d.SuitMaterial)
+		end
+		-- metal guards on the head's sides (a helmet's cheeks), plate bracers on the dark forearms
+		for i, side in { -1, 1 } do
+			if d.Guards ~= false and c.Room() >= 1 then
+				K.part(c.Model, "HeadGuard" .. i, c.At(side * 0.78, 1.98, -0.04), c.V(0.08, 0.76, 0.96), d.Metal, d.MetalMaterial)
+			end
+		end
+		for i, side in { -1, 1 } do
+			if c.Room() >= 1 then
+				local at = c.At(side * 0.83, 0.95, -0.01) * CFrame.Angles(0, 0, side * 0.1)
+				K.part(c.Model, "Bracer" .. i, at, c.V(0.46, 0.14, 0.56), d.Plate, d.PlateMaterial)
+			end
+		end
 	end
 
-	local function emblem(c: Ctx, frame: Color3, frameMaterial: Enum.Material, gem: Color3, y: number?)
-		local h = y or 1.08
-		if c.Room() >= 1 then
-			diamond(c.Model, "CorePlate", c.At(0, h, -0.48), 0.42 * c.S, 0.03 * c.S, frame, frameMaterial)
+	-- the Stone egg's emblem: a bronze cog round the glowing core
+	local function cog(c: Ctx, color: Color3, material: Enum.Material, gem: Color3)
+		if c.Room() >= 3 then
+			local at = c.At(0, 1.0, -0.5)
+			K.facing(c.Model, "Cog", at, 0.04 * c.S, 0.4 * c.S, color, material)
+			K.part(c.Model, "CogTeeth1", at, c.V(0.54, 0.1, 0.04), color, material)
+			K.part(c.Model, "CogTeeth2", at * CFrame.Angles(0, 0, PI / 2), c.V(0.54, 0.1, 0.04), color, material)
 		end
-		T.redress(c, "Core", c.At(0, h, -0.505) * CFrame.Angles(0, 0, PI / 4), c.V(0.26, 0.26, 0.03), gem, NEON)
+		T.redress(c, "Core", c.At(0, 1.0, -0.53) * CFrame.Angles(0, 0, PI / 4), c.V(0.2, 0.2, 0.03), gem, NEON)
 	end
 
-	local function collar(c: Ctx, color: Color3, material: Enum.Material)
+	-- the Crystal egg's emblem: a silver frame holding a crystal over the glowing core
+	local function gemFrame(c: Ctx, color: Color3, material: Enum.Material, crystal: Color3, gem: Color3)
 		if c.Room() >= 1 then
-			K.part(c.Model, "Collar", c.At(0, 1.37, -0.005), c.V(1.0, 0.13, 0.9), color, material)
+			diamond(c.Model, "CorePlate", c.At(0, 1.0, -0.495), 0.46 * c.S, 0.04 * c.S, color, material)
 		end
+		T.redress(c, "Core", c.At(0, 0.98, -0.525) * CFrame.Angles(0, 0, PI / 4), c.V(0.22, 0.22, 0.03), gem, NEON)
+		if c.Room() >= 1 then
+			K.part(c.Model, "CoreCrystal", c.At(0, 1.2, -0.53) * CFrame.Angles(0, PI / 4, 0), c.V(0.12, 0.3, 0.12), crystal, M.Glass)
+		end
+	end
+
+	-- the Royal egg's emblem: a gold crest (a little shield) with the gem in it
+	local function crest(c: Ctx, color: Color3, material: Enum.Material, gem: Color3)
+		if c.Room() >= 2 then
+			K.part(c.Model, "Crest", c.At(0, 1.06, -0.495), c.V(0.44, 0.3, 0.04), color, material)
+			diamond(c.Model, "CrestPoint", c.At(0, 0.92, -0.495), 0.31 * c.S, 0.04 * c.S, color, material)
+		end
+		T.redress(c, "Core", c.At(0, 1.0, -0.525) * CFrame.Angles(0, 0, PI / 4), c.V(0.2, 0.2, 0.03), gem, NEON)
 	end
 
 	local function shard(c: Ctx, name: string, at: CFrame, w: number, h: number, color: Color3, material: Enum.Material?): Part?
@@ -261,8 +318,8 @@ function Clean.new(K: Kit, T: Tools): Gear
 				c.At(math.sin(a) * spec.Radius * 0.96, y, -math.cos(a) * spec.Radius * 0.96) * CFrame.Angles(0, -a, 0),
 				size * c.S,
 				0.07 * c.S,
-				spec.Color,
-				spec.Material
+				spec.PointColor or spec.Color,
+				spec.PointMaterial or spec.Material
 			)
 			top = math.max(top, y + size * 0.71)
 		end
@@ -297,9 +354,9 @@ function Clean.new(K: Kit, T: Tools): Gear
 	return {
 		diamond = diamond,
 		dress = dress,
-		pauldrons = pauldrons,
-		emblem = emblem,
-		collar = collar,
+		cog = cog,
+		gemFrame = gemFrame,
+		crest = crest,
 		shard = shard,
 		crystal = crystal,
 		backCluster = backCluster,

@@ -400,14 +400,20 @@ return function(T, Loader)
 			local n = GolemBuilder.partCount(model)
 			T.eq(GolemBuilder.budget(golem.Id), GolemConfig.EggMaxParts[golem.Rarity], golem.Id .. " egg budget")
 			T.le(n, GolemConfig.EggMaxParts[golem.Rarity], golem.Id .. " parts")
-			T.truthy(n >= 28, `{golem.Id}: a rich costume ({n} parts)`)
-			-- rounded like the limited golems: the body and the head (or the helm over it)
-			T.truthy(model:FindFirstChild("BodyFill") and model:FindFirstChild("BodyEdge4"), golem.Id .. " rounded body")
+			T.truthy(n >= 36, `{golem.Id}: a rich costume ({n} parts)`)
+			-- the head (or the helm over it) rounded; the body wears plates instead
 			T.truthy(model:FindFirstChild("HeadFill") or model:FindFirstChild("HelmFill"), golem.Id .. " rounded head or helm")
-			-- the clean armour: shoulder plates, gauntlets in line with the arms, the glowing gem
-			for _, name in { "Pauldron1", "Pauldron2" } do
+			T.falsy(model:FindFirstChild("BodyFill"), golem.Id .. " body under plates, not rounded")
+			-- the armour set: plates in the golem's colour over a darker under-suit, trim
+			for _, name in { "Breastplate", "Pauldron1", "Pauldron2", "PauldronRim1", "Boot1", "Boot2", "Bracer1", "Collar" } do
 				T.truthy(model:FindFirstChild(name), golem.Id .. " " .. name)
 			end
+			local plate, suit = model:FindFirstChild("Breastplate"), model:FindFirstChild("Body")
+			T.truthy(plate.Color ~= suit.Color, golem.Id .. ": two-tone (plates over the under-suit)")
+			local function luma(c: any): number
+				return 0.3 * c.R + 0.59 * c.G + 0.11 * c.B
+			end
+			T.truthy(luma(suit.Color) < luma(plate.Color), golem.Id .. ": the under-suit is the darker one")
 			for i, side in { -1, 1 } do
 				local fist = model:FindFirstChild("Fist" .. i)
 				T.near(fist.CFrame.LookVector.Z, -1, 0.01, golem.Id .. " gauntlet faces front (no turned rock chunk)")

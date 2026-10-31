@@ -31,9 +31,10 @@
 	                              EGG golems (GolemConfig Family: the Stone,
 	                              Crystal and Royal eggs' golems) wear their
 	                              egg's clean costume (Builders/EggGear) within
-	                              GolemConfig.EggMaxParts (by rarity), rounded
-	                              and measured like a limited golem; their
-	                              Accessory name stays (the 2D portraits).
+	                              GolemConfig.EggMaxParts (by rarity), the head
+	                              (or helm) rounded, measured like a limited
+	                              golem; their Accessory name stays (the 2D
+	                              portraits).
 	                              PrimaryPart = "Body" (the torso); the
 	                              model's attribute "RootHeight" is the Body
 	                              center's height above the base (the hover
@@ -89,6 +90,8 @@ GolemBuilder.ShardMaxParts = 66
 GolemBuilder.RoundRadius = 0.3 -- unscaled
 GolemBuilder.EggRoundRadius = 0.2 -- an egg golem's (its big head stays a block over its body)
 GolemBuilder.RoundParts = 10
+-- an egg golem rounds only its head (or helm): its body wears a breastplate and shoulder plates
+GolemBuilder.EggRoundParts = 5
 -- a costume part with this attribute is rounded too (a hood's head; the costume leaves the room)
 GolemBuilder.RoundAttribute = "Round"
 GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
@@ -533,10 +536,12 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		lighter(look.Glow, 0.1),
 		crystalMaterial
 	)
-	-- the gear (a limited or egg golem keeps RoundParts for its rounded head and body)
+	-- the gear (a limited golem keeps RoundParts for its rounded head and body,
+	-- an egg golem EggRoundParts for its head)
 	local costume = if look.Family ~= nil then EGG_COSTUMES[look.Id] else nil
 	local rounded = look.Edition ~= nil or costume ~= nil
-	local reserve = (if premium then 1 else 0) + (if rounded then GolemBuilder.RoundParts else 0)
+	local roundParts = if costume then GolemBuilder.EggRoundParts elseif rounded then GolemBuilder.RoundParts else 0
+	local reserve = (if premium then 1 else 0) + roundParts
 	local function room(): number
 		return budget - GolemBuilder.partCount(model) - reserve
 	end
@@ -557,7 +562,8 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		local helm = model:FindFirstChild("Helm")
 		local radius = (if costume then GolemBuilder.EggRoundRadius else GolemBuilder.RoundRadius) * s
 		local done: { [Instance]: boolean } = {}
-		for _, name in { "Body", if helm then "Helm" else "Head" } do
+		local blocks: { string } = if costume then { if helm then "Helm" else "Head" } else { "Body", if helm then "Helm" else "Head" }
+		for _, name in blocks do
 			local p = model:FindFirstChild(name)
 			if p and p:IsA("Part") then
 				GolemBuilder.round(p, radius)
