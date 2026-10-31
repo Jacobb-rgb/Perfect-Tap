@@ -28,6 +28,12 @@
 	                              may use GolemConfig.LimitedMaxParts (by
 	                              rarity) instead; their Height is measured
 	                              from the parts.
+	                              EGG golems (GolemConfig Family: the Stone,
+	                              Crystal and Royal eggs' golems) wear their
+	                              egg's clean costume (Builders/EggGear) within
+	                              GolemConfig.EggMaxParts (by rarity), rounded
+	                              and measured like a limited golem; their
+	                              Accessory name stays (the 2D portraits).
 	                              PrimaryPart = "Body" (the torso); the
 	                              model's attribute "RootHeight" is the Body
 	                              center's height above the base (the hover
@@ -64,6 +70,7 @@
 local CapsuleConfig = require(script.Parent.Parent.Config.CapsuleConfig)
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
 local GolemGearLimited = require(script.Parent.GolemGearLimited)
+local EggGear = require(script.Parent.EggGear)
 local CapsuleEggs = require(script.Parent.CapsuleEggs)
 local LimitedUpcoming = require(script.Parent.Parent.Config.LimitedUpcoming)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
@@ -78,9 +85,12 @@ GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
 -- a limited edition's SHARD (its set's egg, GolemGearLimited.shard) instead
 -- of the pill: only one is ever built at a time (the opening, a picture)
 GolemBuilder.ShardMaxParts = 66
--- a limited golem's rounded corners (GolemBuilder.round on its body and head / helm)
+-- a limited or egg golem's rounded corners (GolemBuilder.round on its body and head / helm)
 GolemBuilder.RoundRadius = 0.3 -- unscaled
+GolemBuilder.EggRoundRadius = 0.2 -- an egg golem's (its big head stays a block over its body)
 GolemBuilder.RoundParts = 10
+-- a costume part with this attribute is rounded too (a hood's head; the costume leaves the room)
+GolemBuilder.RoundAttribute = "Round"
 GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
 GolemBuilder.Hover = 0.25 -- how high a Premium golem's feet float (unscaled)
 GolemBuilder.AuraSize = 2.3 -- the aura disc's diameter (unscaled)
@@ -437,6 +447,8 @@ local EGGS = CapsuleEggs.eggs(KIT, EGG_TOOLS)
 for name, add in GolemGearLimited.accessories(KIT) do
 	ACCESSORIES[name] = add :: any
 end
+-- the egg golems' costumes (Builders/EggGear; golem id -> builder)
+local EGG_COSTUMES: { [string]: (Ctx) -> number } = EggGear.costumes(KIT, EGG_TOOLS) :: any
 
 ---------------------------------------------------------------- golems
 
@@ -521,8 +533,10 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		lighter(look.Glow, 0.1),
 		crystalMaterial
 	)
-	-- the gear (a limited golem keeps RoundParts for its rounded head and body)
-	local reserve = (if premium then 1 else 0) + (if look.Edition ~= nil then GolemBuilder.RoundParts else 0)
+	-- the gear (a limited or egg golem keeps RoundParts for its rounded head and body)
+	local costume = if look.Family ~= nil then EGG_COSTUMES[look.Id] else nil
+	local rounded = look.Edition ~= nil or costume ~= nil
+	local reserve = (if premium then 1 else 0) + (if rounded then GolemBuilder.RoundParts else 0)
 	local function room(): number
 		return budget - GolemBuilder.partCount(model) - reserve
 	end
@@ -536,15 +550,27 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		Top = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y,
 		Room = room,
 	}
-	local add = ACCESSORIES[look.Accessory] or ACCESSORIES.None
+	local add = costume or ACCESSORIES[look.Accessory] or ACCESSORIES.None
 	local top = math.max(ctx.Top, add(ctx))
-	-- a limited golem's big blocks get rounded vertical edges (a clean, soft look)
-	if look.Edition ~= nil then
+	-- a limited or egg golem's big blocks get rounded vertical edges (a clean, soft look)
+	if rounded then
 		local helm = model:FindFirstChild("Helm")
+		local radius = (if costume then GolemBuilder.EggRoundRadius else GolemBuilder.RoundRadius) * s
+		local done: { [Instance]: boolean } = {}
 		for _, name in { "Body", if helm then "Helm" else "Head" } do
 			local p = model:FindFirstChild(name)
 			if p and p:IsA("Part") then
-				GolemBuilder.round(p, GolemBuilder.RoundRadius * s)
+				GolemBuilder.round(p, radius)
+				done[p] = true
+			end
+		end
+		-- the parts a costume marked (it left the room: 5 parts each, the aura still fits)
+		for _, p in model:GetChildren() do
+			if p:IsA("Part") and p:GetAttribute(GolemBuilder.RoundAttribute) ~= nil then
+				p:SetAttribute(GolemBuilder.RoundAttribute, nil)
+				if not done[p] and GolemBuilder.partCount(model) + 5 + (if premium then 1 else 0) <= budget then
+					GolemBuilder.round(p, radius)
+				end
 			end
 		end
 	end
@@ -554,13 +580,14 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 			upright(model, "Aura", ground * CFrame.new(0, 0.025 * s, 0), 0.05 * s, GolemBuilder.AuraSize * s, glow, Enum.Material.Neon)
 		aura.Transparency = 0.35
 	end
-	-- a glowing ore vein cracking the chest above the core, while the budget allows
-	if GolemBuilder.partCount(model) < budget then
+	-- a glowing ore vein cracking the chest above the core, while the budget
+	-- allows (an egg golem's clean armour has none)
+	if costume == nil and GolemBuilder.partCount(model) < budget then
 		part(model, "Vein", at(-0.4, 1.27, -0.435) * CFrame.Angles(0, 0, 0.6), v(0.06, 0.3, 0.04), glow, Enum.Material.Neon)
 	end
-	-- a limited edition golem's gear (wings, hats, halos) is too varied to
-	-- guess: its Height is measured from its parts
-	if look.Edition ~= nil then
+	-- a limited edition or egg golem's gear (wings, hats, halos) is too
+	-- varied to guess: its Height is measured from its parts
+	if rounded then
 		top = GolemBuilder.topOver(model, feet) / s
 	end
 
