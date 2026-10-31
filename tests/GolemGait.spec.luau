@@ -175,7 +175,8 @@ return function(T, Loader)
 			end
 			return rig, where, model
 		end
-		local rig, where = groups("PebbleGolem")
+		-- the plain stone golem (an unknown kind's: the old rock look)
+		local rig, where = groups("FutureGolem")
 		T.near(rig.Scale, FOLLOWER, 1e-4, "studs per golem unit")
 		T.eq(where.Leg1, "LegL", "Leg1 is the left leg")
 		T.eq(where.Leg2, "LegR")
@@ -189,7 +190,41 @@ return function(T, Loader)
 		for _, name in { "Body", "Core", "Boulder", "Crystal", "Vein" } do
 			T.eq(where[name], nil, name .. " stays on the body")
 		end
-		T.eq(rig.Count, 11, "11 limb parts on the Pebble Golem (legs, arms + fists, head, brow, eyes, the chip on its head)")
+		T.eq(rig.Count, 11, "11 limb parts on the plain golem (legs, arms + fists, head, brow, eyes, the chip on its head)")
+		-- the Pebble Golem in its Stone egg costume: the shoulder plates swing with the arms,
+		-- the cairn and the visor with the head, the rounded corners with their blocks
+		local _, pebble = groups("PebbleGolem")
+		for _, name in { "Pauldron1", "Fist1" } do
+			T.eq(pebble[name], "ArmL", "the Pebble's " .. name .. " on the left arm")
+		end
+		for _, name in { "Pauldron2", "Fist2" } do
+			T.eq(pebble[name], "ArmR", "the Pebble's " .. name .. " on the right arm")
+		end
+		for _, name in { "Head", "HeadFill", "HeadEdge1", "Brow", "Eye1", "HeadBand", "HeadGuard1", "Pebble1", "Pebble2" } do
+			T.eq(pebble[name], "Head", "the Pebble's " .. name .. " on the head")
+		end
+		for _, name in { "Bracer1", "PauldronRim1" } do
+			T.eq(pebble[name], "ArmL", "the Pebble's " .. name .. " on the left arm")
+		end
+		T.eq(pebble.Boot1, "LegL", "the Pebble's left boot on its leg")
+		for _, name in { "PickHandle", "PickHead1", "PickHead2" } do
+			T.eq(pebble[name], "ArmR", "the Pebble's pickaxe in its right hand")
+		end
+		for _, name in { "Body", "Breastplate", "Collar", "Core", "Cog", "Boulder", "Crystal" } do
+			T.eq(pebble[name], nil, "the Pebble's " .. name .. " stays on the body")
+		end
+		-- the egg golems' staffs and forks swing whole with the right fist (clear of the big head)
+		for _, kind in { "SapphireSage", "MoonstoneOracle", "CelestialSovereign", "EmberImp" } do
+			local _, held = groups(kind)
+			local n = 0
+			for name, key in held do
+				if string.find(name, "^Staff") or string.find(name, "^Orb") or string.find(name, "^Star") or string.find(name, "^Fork") then
+					T.eq(key, "ArmR", kind .. "'s " .. name .. " in the right hand")
+					n += 1
+				end
+			end
+			T.truthy(n >= 2, kind .. " holds its staff")
+		end
 		-- the hips sit at the top of the legs, the shoulders at the top of the arms
 		local hip = rig.LegL.Pivot.Position
 		T.near(hip.Y, (Gait.Hip.Y - 0.975) * FOLLOWER, 1e-4, "hip height")

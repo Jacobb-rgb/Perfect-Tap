@@ -5,7 +5,9 @@
 -- reports RootHeight / Height / Hover right at every size, never collides /
 -- touches / is queried, welds onto its Body for followers with every part
 -- created in place, survives unknown kinds; every accessory builds; the
--- opening capsule has its halves and hidden cracks.
+-- egg golems wear their egg's clean costume (Builders/EggGear: rounded,
+-- matching sets, rarer = richer, no capes, embers and lights only where
+-- allowed); the opening capsule has its halves and hidden cracks.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -42,10 +44,23 @@ return function(T, Loader)
 			T.truthy(budget and budget > last and budget <= 96, rarity .. " limited budget grows and stays phone-friendly")
 			last = budget
 		end
+		-- an egg golem's costume: its rarity's budget, rarer = richer, below the Robux sets'
+		last = 0
+		for _, rarity in { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" } do
+			local budget = GolemConfig.EggMaxParts[rarity]
+			T.truthy(budget and budget > last and budget <= 96, rarity .. " egg budget grows and stays phone-friendly")
+			local limited = GolemConfig.LimitedMaxParts[rarity]
+			T.truthy(limited == nil or budget < limited, rarity .. " egg golems stay below the limited ones")
+			last = budget
+		end
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
 			local n = GolemBuilder.partCount(model)
-			local budget = if golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity] else GolemBuilder.MaxParts
+			local budget = if golem.Huge
+				then GolemConfig.HugeMaxParts
+				elseif golem.Family then GolemConfig.EggMaxParts[golem.Rarity]
+				elseif golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity]
+				else GolemBuilder.MaxParts
 			T.eq(GolemBuilder.budget(golem.Id), budget, golem.Id .. " budget")
 			T.le(n, budget, golem.Id .. " parts")
 			T.truthy(n >= 14, golem.Id .. " has its body, head, limbs and gear")
@@ -71,8 +86,8 @@ return function(T, Loader)
 				T.le(GolemBuilder.partCount(model), GolemBuilder.MaxParts, accessory .. " in budget")
 			end
 		end
-		-- each accessory adds at least one part over the bare golem
-		local base = GolemBuilder.partCount(GolemBuilder.build("PebbleGolem"))
+		-- each accessory adds at least one part over the bare golem (an unknown kind's plain stone golem)
+		local base = GolemBuilder.partCount(GolemBuilder.build("FutureGolem"))
 		for _, golem in GolemConfig.List do
 			if golem.Accessory ~= "None" then
 				T.truthy(GolemBuilder.partCount(GolemBuilder.build(golem.Id)) > base - 2, golem.Id .. " wears its " .. golem.Accessory)
@@ -139,8 +154,8 @@ return function(T, Loader)
 					T.truthy(part.Name == "Body" or part.Name == "Head", "only Body and Head cast shadows")
 				end
 			end
-			-- (a limited costume may glow more: fire wings, lava, crowns; under half of it)
-			local glowCap = if golem.Edition then math.floor(GolemBuilder.budget(golem.Id) * 0.45) else 9
+			-- (a limited or egg costume may glow more: fire wings, lava, crowns, halos; under half of it)
+			local glowCap = if golem.Edition or golem.Family then math.floor(GolemBuilder.budget(golem.Id) * 0.45) else 9
 			T.le(neon, glowCap, golem.Id .. " glowing parts")
 			T.truthy(neon >= 3, golem.Id .. " eyes and core glow")
 		end
@@ -194,12 +209,15 @@ return function(T, Loader)
 				bodyMaterial ~= roblox.Enum.Material.SmoothPlastic and bodyMaterial ~= roblox.Enum.Material.Glass,
 				golem.Id .. " body is no plastic or glass"
 			)
-			-- (a limited edition golem spends its budget on its gear first)
-			if not model:FindFirstChild("Vein") and not golem.Edition then
+			-- (a limited edition golem spends its budget on its gear first; an
+			-- egg golem's clean armour has no crack)
+			if golem.Family then
+				T.falsy(model:FindFirstChild("Vein"), golem.Id .. ": clean armour, no vein")
+			elseif not model:FindFirstChild("Vein") and not golem.Edition then
 				noVein += 1
 			end
 		end
-		T.truthy(noVein <= 4, "nearly every capsule golem has its ore vein (the budget allows)")
+		T.truthy(noVein <= 4, "nearly every plain capsule golem has its ore vein (the budget allows)")
 	end)
 
 	T.test("GolemBuilder: Legendary and Mythic golems float on a glowing aura", function()
@@ -350,5 +368,130 @@ return function(T, Loader)
 		T.eq(lights(full), 1, "the Mythic's one light")
 		T.eq(lights(follower), 0, "none on a follower")
 		T.eq(GolemBuilder.partCount(follower), GolemBuilder.partCount(full), "the same costume")
+	end)
+
+	-- the egg golems (GolemConfig Family): their egg's clean costume (Builders/EggGear)
+	local function eggGolems(): { any }
+		local out = {}
+		for _, golem in GolemConfig.List do
+			if golem.Family then
+				table.insert(out, golem)
+			end
+		end
+		return out
+	end
+
+	local function count(model: any, className: string): number
+		local n = 0
+		for _, d in model:GetDescendants() do
+			if d:IsA(className) then
+				n += 1
+			end
+		end
+		return n
+	end
+
+	T.test("GolemBuilder: every egg golem wears its egg's clean costume (rounded, armoured, its accessory kept)", function()
+		local families: { [string]: number } = {}
+		for _, golem in eggGolems() do
+			families[golem.Family] = (families[golem.Family] or 0) + 1
+			T.truthy(golem.Family == "Stone" or golem.Family == "Crystal" or golem.Family == "Royal", golem.Id .. " family")
+			local model = GolemBuilder.build(golem.Id)
+			local n = GolemBuilder.partCount(model)
+			T.eq(GolemBuilder.budget(golem.Id), GolemConfig.EggMaxParts[golem.Rarity], golem.Id .. " egg budget")
+			T.le(n, GolemConfig.EggMaxParts[golem.Rarity], golem.Id .. " parts")
+			T.truthy(n >= 36, `{golem.Id}: a rich costume ({n} parts)`)
+			-- the head (or the helm over it) rounded; the body wears plates instead
+			T.truthy(model:FindFirstChild("HeadFill") or model:FindFirstChild("HelmFill"), golem.Id .. " rounded head or helm")
+			T.falsy(model:FindFirstChild("BodyFill"), golem.Id .. " body under plates, not rounded")
+			-- the armour set: plates in the golem's colour over a darker under-suit, trim
+			for _, name in { "Breastplate", "Pauldron1", "Pauldron2", "PauldronRim1", "Boot1", "Boot2", "Bracer1", "Collar" } do
+				T.truthy(model:FindFirstChild(name), golem.Id .. " " .. name)
+			end
+			local plate, suit = model:FindFirstChild("Breastplate"), model:FindFirstChild("Body")
+			T.truthy(plate.Color ~= suit.Color, golem.Id .. ": two-tone (plates over the under-suit)")
+			local function luma(c: any): number
+				return 0.3 * c.R + 0.59 * c.G + 0.11 * c.B
+			end
+			T.truthy(luma(suit.Color) < luma(plate.Color), golem.Id .. ": the under-suit is the darker one")
+			for i, side in { -1, 1 } do
+				local fist = model:FindFirstChild("Fist" .. i)
+				T.near(fist.CFrame.LookVector.Z, -1, 0.01, golem.Id .. " gauntlet faces front (no turned rock chunk)")
+				T.truthy(fist.CFrame.Position.X * side > 0, golem.Id .. " gauntlet on its side")
+			end
+			T.eq(model:FindFirstChild("Core").Material, roblox.Enum.Material.Neon, golem.Id .. " glowing gem")
+			-- no cape: a cape is the Dragon King's alone
+			for _, part in parts(model) do
+				T.falsy(string.find(part.Name, "^Cape"), golem.Id .. " wears no cape")
+			end
+			-- nothing marked for rounding is left over
+			for _, part in parts(model) do
+				T.eq(part:GetAttribute(GolemBuilder.RoundAttribute), nil, golem.Id .. " " .. part.Name)
+			end
+		end
+		T.truthy(families.Stone >= 4 and families.Crystal >= 4 and families.Royal >= 4, "three eggs' sets")
+	end)
+
+	T.test("GolemBuilder: an egg's golems read as one set, a rarer one is richer", function()
+		local byFamily: { [string]: { any } } = {}
+		for _, golem in eggGolems() do
+			local list = byFamily[golem.Family] or {}
+			byFamily[golem.Family] = list
+			local model = GolemBuilder.build(golem.Id)
+			table.insert(list, {
+				Id = golem.Id,
+				Order = GolemConfig.order(golem.Id),
+				Parts = GolemBuilder.partCount(model),
+				Fist = model:FindFirstChild("Fist1"),
+				Pauldron = model:FindFirstChild("Pauldron1"),
+			})
+		end
+		for family, list in byFamily do
+			local first = list[1]
+			for _, g in list do
+				-- the same gauntlets and shoulder plates' material in one egg
+				T.eq(g.Fist.Color, first.Fist.Color, `{family}: {g.Id} wears its egg's gauntlets`)
+				T.eq(g.Fist.Material, first.Fist.Material, `{family}: {g.Id} gauntlet material`)
+				T.eq(g.Pauldron.Material, first.Pauldron.Material, `{family}: {g.Id} shoulder plates`)
+				for _, other in list do
+					if other.Order > g.Order then
+						T.truthy(other.Parts >= g.Parts, `{family}: {other.Id} (rarer) is no plainer than {g.Id}`)
+					end
+				end
+			end
+		end
+		-- the three eggs look different (their gauntlets: bronze, silver, gold)
+		local stone, crystal, royal = byFamily.Stone[1].Fist, byFamily.Crystal[1].Fist, byFamily.Royal[1].Fist
+		T.truthy(stone.Color ~= crystal.Color and crystal.Color ~= royal.Color and stone.Color ~= royal.Color, "three different sets")
+	end)
+
+	T.test("GolemBuilder: egg golems: embers only Legendary+, a light only on a Mythic's full build, followers carry none", function()
+		for _, golem in eggGolems() do
+			local order = GolemConfig.order(golem.Id)
+			local full = GolemBuilder.build(golem.Id)
+			local follower = GolemBuilder.build(golem.Id, CFrame.new(3, 0, 1), { Welded = true, Size = 0.85 })
+			local emitters = count(full, "ParticleEmitter")
+			if order >= 5 then
+				T.eq(emitters, 1, golem.Id .. ": one slow ember emitter")
+				for _, d in full:GetDescendants() do
+					if d:IsA("ParticleEmitter") then
+						T.le(d.Rate, 5, golem.Id .. " embers are slow")
+						T.eq(d.Parent, full.PrimaryPart, golem.Id .. " embers on the body")
+					end
+				end
+			else
+				T.eq(emitters, 0, golem.Id .. ": no emitter below Legendary")
+			end
+			T.eq(count(full, "PointLight"), if order >= 6 then 1 else 0, golem.Id .. " lights")
+			T.eq(count(follower, "PointLight"), 0, golem.Id .. ": a follower carries no light")
+			T.eq(GolemBuilder.partCount(follower), GolemBuilder.partCount(full), golem.Id .. ": the same costume as a follower")
+			local body = follower.PrimaryPart
+			for _, part in parts(follower) do
+				if part ~= body then
+					local weld = part:FindFirstChildOfClass("WeldConstraint")
+					T.truthy(weld and weld.Part0 == body, golem.Id .. " " .. part.Name .. " welded to Body")
+				end
+			end
+		end
 	end)
 end
