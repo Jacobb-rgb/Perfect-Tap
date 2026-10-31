@@ -2,14 +2,19 @@
 	GolemFit: room for a golem, pure maths (GolemController and the specs
 	use it).
 
-	- radius(model, feet): how far the golem reaches from the axis through
-	  its feet (studs, whichever way it turns: wings, a staff, floating
-	  rocks included).
+	- radius(model, feet, below?): how far the golem reaches from the axis
+	  through its feet (studs, whichever way it turns: wings, a staff,
+	  floating rocks included); with `below`, only its parts that come
+	  lower than that many studs over its feet (a huge golem's wings and
+	  halo pass over a player's head: its Low reach, under PlayerHeight).
 	- slots(sizes): where the followers walk, in owner space (+X right, +Z
 	  behind; slot -> offset). Ordinary golems keep the Base slots (left,
 	  right, back). A HUGE golem (GolemConfig Huge) walks beside and a
 	  little further back (HugeBack), far enough out that it never overlaps
-	  its player (PlayerRadius) and Gap studs apart from the others, and
+	  its player (PlayerRadius, by its Low reach) and Gap studs apart from
+	  the others (an ordinary golem is no taller than a player: the Low
+	  reach again; two huge golems: their whole reach, their wings meet
+	  over the player's head), and
 	  never in the back slot straight behind the player (between the player
 	  and the default camera): a huge golem equipped third swaps places
 	  with a side golem that isn't huge (the right one first, the first
@@ -25,11 +30,13 @@
 
 local GolemFit = {}
 
-export type Size = { Radius: number, Huge: boolean }
+-- Radius: the whole reach, Low: the reach under PlayerHeight (nil: Radius)
+export type Size = { Radius: number, Low: number?, Huge: boolean }
 
 -- slots behind the owner (owner space: +X right, +Z behind): left, right, back
 GolemFit.Base = { Vector3.new(-3.1, 0, 3.0), Vector3.new(3.1, 0, 3.0), Vector3.new(0, 0, 5.2) }
 GolemFit.PlayerRadius = 1.6 -- studs: the player's own reach (an avatar, arms included)
+GolemFit.PlayerHeight = 5.5 -- studs: a player (and an ordinary follower) is no taller
 GolemFit.Gap = 0.5 -- studs between a huge golem and its player or another golem
 GolemFit.HugeBack = 1.5 -- studs a huge golem walks further back than a side slot (the default camera still sees it)
 GolemFit.BackMax = 7.0 -- studs: the back slot steps back at most this far (the default camera is 12.5 behind)
@@ -38,21 +45,61 @@ GolemFit.ViewYaw = 0.35 -- radians the portrait camera stands off the golem's fr
 GolemFit.ViewSpin = 0.7 -- radians the portrait golem turns either way
 GolemFit.ViewMargin = 1.1 -- the portrait keeps this much room round a wide golem
 
--- How far the golem reaches from the vertical axis through `feet` (studs):
--- every part's farthest corner, so any turn stays inside.
-function GolemFit.radius(model: Instance, feet: CFrame): number
+-- a box's 8 corners (signs) and its 12 edges (corner pairs one sign apart)
+local CORNERS: { Vector3 } = {}
+local EDGES: { { number } } = {}
+for i = 0, 7 do
+	table.insert(CORNERS, Vector3.new(if i % 2 == 1 then 1 else -1, if i % 4 >= 2 then 1 else -1, if i >= 4 then 1 else -1))
+end
+for i = 0, 7 do
+	for _, bit in { 1, 2, 4 } do
+		if (i // bit) % 2 == 0 then
+			table.insert(EDGES, { i + 1, i + bit + 1 })
+		end
+	end
+end
+
+local function flat(p: Vector3): number
+	return math.sqrt(p.X * p.X + p.Z * p.Z)
+end
+
+--[[
+	How far the golem reaches from the vertical axis through `feet`
+	(studs): every part's farthest corner, so any turn stays inside. With
+	`below`, only what comes lower than `below` studs over the feet (each
+	part's box cut at that height: a wing rising from the shoulders counts
+	up to there, its tip high over a player's head doesn't).
+]]
+function GolemFit.radius(model: Instance, feet: CFrame, below: number?): number
 	local r = 0
+	local corners: { Vector3 } = table.create(8)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			local rel = feet:ToObjectSpace(d.CFrame)
 			local h = d.Size / 2
-			local ex = math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z
-			local ez = math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z
-			local p = rel.Position
-			r = math.max(r, math.sqrt((math.abs(p.X) + ex) ^ 2 + (math.abs(p.Z) + ez) ^ 2))
+			for i, sign in CORNERS do
+				local p = rel * (sign * h)
+				corners[i] = p
+				if below == nil or p.Y < below then
+					r = math.max(r, flat(p))
+				end
+			end
+			if below then
+				for _, edge in EDGES do
+					local a, b = corners[edge[1]], corners[edge[2]]
+					if (a.Y < below) ~= (b.Y < below) then
+						r = math.max(r, flat(a + (b - a) * ((below - a.Y) / (b.Y - a.Y))))
+					end
+				end
+			end
 		end
 	end
 	return r
+end
+
+-- The reach a golem keeps from its player and the ordinary golems.
+local function low(size: Size): number
+	return size.Low or size.Radius
 end
 
 -- The followers' offsets (see the header): sizes[slot] -> offsets[slot].
@@ -82,11 +129,22 @@ function GolemFit.slots(sizes: { [number]: Size }): { [number]: Vector3 }
 			elseif size.Huge then
 				-- beside and further back, clear of its player
 				local b = base[p]
-				local x = math.max(math.abs(b.X), GolemFit.PlayerRadius + GolemFit.Gap + size.Radius)
+				local x = math.max(math.abs(b.X), GolemFit.PlayerRadius + GolemFit.Gap + low(size))
 				out[slot] = Vector3.new(if b.X < 0 then -x else x, 0, b.Z + GolemFit.HugeBack)
 				table.insert(huge, slot)
 			else
 				out[slot] = base[p]
+			end
+		end
+	end
+	-- huge golems on both sides keep their whole reach apart (their wings meet over the player's head)
+	if #huge == 2 then
+		local a, b = huge[1], huge[2]
+		local short = sizes[a].Radius + sizes[b].Radius + GolemFit.Gap - math.abs(out[a].X - out[b].X)
+		if short > 0 then
+			for _, s in huge do
+				local at = out[s]
+				out[s] = Vector3.new(at.X + (if at.X < 0 then -short / 2 else short / 2), 0, at.Z)
 			end
 		end
 	end
@@ -100,14 +158,14 @@ function GolemFit.slots(sizes: { [number]: Size }): { [number]: Vector3 }
 		-- (a huge golem is left in the back place only with huge golems on both sides)
 		-- behind the left one, never straight behind the player
 		local at = out[1]
-		local x = math.max(math.abs(at.X), GolemFit.PlayerRadius + GolemFit.Gap + size.Radius)
+		local x = math.max(math.abs(at.X), GolemFit.PlayerRadius + GolemFit.Gap + low(size))
 		out[slot] = Vector3.new(-x, 0, at.Z + left.Radius + size.Radius + GolemFit.Gap)
 		return out
 	end
 	-- the back slot steps back to clear the huge golems beside it (at most to BackMax) ...
 	local z = base[3].Z
 	for _, s in huge do
-		local at, reach = out[s], sizes[s].Radius + size.Radius + GolemFit.Gap
+		local at, reach = out[s], low(sizes[s]) + size.Radius + GolemFit.Gap
 		if reach > math.abs(at.X) then
 			z = math.max(z, at.Z + math.sqrt(reach ^ 2 - at.X ^ 2))
 		end
@@ -116,7 +174,7 @@ function GolemFit.slots(sizes: { [number]: Size }): { [number]: Vector3 }
 	out[slot] = Vector3.new(0, 0, z)
 	-- ... and they step out the rest of the way
 	for _, s in huge do
-		local at, reach = out[s], sizes[s].Radius + size.Radius + GolemFit.Gap
+		local at, reach = out[s], low(sizes[s]) + size.Radius + GolemFit.Gap
 		local dz = z - at.Z
 		if reach > math.abs(dz) then
 			local x = math.max(math.abs(at.X), math.sqrt(reach ^ 2 - dz ^ 2))

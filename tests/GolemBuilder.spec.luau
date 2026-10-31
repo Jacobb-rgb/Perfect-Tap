@@ -45,7 +45,12 @@ return function(T, Loader)
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
 			local n = GolemBuilder.partCount(model)
-			local budget = if golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity] else GolemBuilder.MaxParts
+			-- (a HUGE golem: HugeMaxParts; an egg golem: EggMaxParts; a limited edition one: LimitedMaxParts)
+			local budget = if golem.Huge
+				then GolemConfig.HugeMaxParts
+				elseif golem.Family then GolemConfig.EggMaxParts[golem.Rarity]
+				elseif golem.Edition then GolemConfig.LimitedMaxParts[golem.Rarity]
+				else GolemBuilder.MaxParts
 			T.eq(GolemBuilder.budget(golem.Id), budget, golem.Id .. " budget")
 			T.le(n, budget, golem.Id .. " parts")
 			T.truthy(n >= 14, golem.Id .. " has its body, head, limbs and gear")

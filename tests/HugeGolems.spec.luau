@@ -68,6 +68,8 @@ return function(T, Loader)
 			local n = GolemBuilder.partCount(model)
 			T.le(n, GolemConfig.HugeMaxParts, kind .. " parts")
 			T.truthy(n > GolemConfig.LimitedMaxParts.Mythic, `{kind}: richer than a Mythic ({n} parts)`)
+			local king = GolemBuilder.partCount(GolemBuilder.build("AetherKing"))
+			T.truthy(n >= king * 1.5, `{kind}: clearly more detailed than the Aether King ({n} vs {king} parts)`)
 			T.eq(model.PrimaryPart.Name, "Body", kind .. " PrimaryPart")
 			T.eq(model:FindFirstChild("Brow"), nil, kind .. ": a closed helm, no stone brow")
 			T.truthy(model:FindFirstChild("Helm") and model:FindFirstChild("Aura"), kind .. ": its helm and its aura")
@@ -76,14 +78,14 @@ return function(T, Loader)
 			end
 		end
 		local titan = GolemBuilder.build("SkyTitan")
-		T.eq(count(titan, "Halo", "Part"), 14, "the Sky Titan's great golden halo")
+		T.eq(count(titan, "Halo", "Part"), 16, "the Sky Titan's great golden halo")
 		T.truthy(count(titan, "Wing", "WedgePart") >= 16, "its crystal wings of ice shards")
-		T.truthy(count(titan, "CrownPoint") == 5 and titan:FindFirstChild("CrownBand"), "its crowned helm")
+		T.truthy(count(titan, "CrownPoint") == 7 and titan:FindFirstChild("CrownBand"), "its crowned helm")
 		T.truthy(titan:FindFirstChild("Staff") and titan:FindFirstChild("StaffGem"), "its gold staff with the ice crystal")
 		T.eq(titan:FindFirstChild("StaffGem").Material, roblox.Enum.Material.Neon, "the staff's crystal glows")
 		T.truthy(titan:FindFirstChild("Pauldron1_1") and titan:FindFirstChild("Pauldron2_1"), "its gold pauldrons")
 		local colossus = GolemBuilder.build("CloudColossus")
-		T.eq(count(colossus, "StormRing", "Part"), 12, "the Cloud Colossus's storm ring")
+		T.eq(count(colossus, "StormRing", "Part"), 14, "the Cloud Colossus's storm ring")
 		T.truthy(count(colossus, "Pauldron") >= 10, "its huge cloud shoulders")
 		T.truthy(count(colossus, "BoulderRock") >= 8, "rocks floating round it")
 		T.truthy(count(colossus, "Bolt") + count(colossus, "ArmBolt") + count(colossus, "LegBolt") >= 8, "its lightning veins")
@@ -120,9 +122,9 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(height >= tallest * 1.4, `{kind}: towers over every other golem ({height} vs {tallest})`)
-			T.truthy(height / king >= 1.5 and height / king <= 2.5, `{kind}: about twice the Aether King ({height} vs {king})`)
+			T.truthy(height / king >= 2 and height / king <= 3.2, `{kind}: two to three Aether Kings tall ({height} vs {king})`)
 			T.truthy(
-				height >= PLAYER_HEIGHT * 1.3 and height <= PLAYER_HEIGHT * 2,
+				height >= PLAYER_HEIGHT * 1.8 and height <= PLAYER_HEIGHT * 2.8,
 				`{kind}: a giant next to its player, not a building ({height})`
 			)
 		end
@@ -165,7 +167,7 @@ return function(T, Loader)
 				end
 			end
 			for _, p in parts(model) do
-				for _, prefix in { "Wing", "BoulderRock", "Core", "Breastplate" } do
+				for _, prefix in { "Wing", "BoulderRock", "Core", "Body" } do
 					if string.sub(p.Name, 1, #prefix) == prefix then
 						T.eq(where[p.Name], nil, kind .. " " .. p.Name .. " stays on the body")
 					end
@@ -193,21 +195,31 @@ return function(T, Loader)
 	local function sizeOf(kind: string): any
 		local start = CFrame.new(2, 0, -1) * CFrame.Angles(0, 0.6, 0)
 		local model = GolemBuilder.build(kind, start, { Welded = true, Size = FOLLOWER })
-		return { Radius = GolemFit.radius(model, start), Huge = GolemConfig.ById[kind].Huge == true }
+		return {
+			Radius = GolemFit.radius(model, start),
+			Low = GolemFit.radius(model, start, GolemFit.PlayerHeight),
+			Huge = GolemConfig.ById[kind].Huge == true,
+		}
 	end
 
-	T.test("GolemFit: the reach of a golem covers all its parts, whichever way it turns", function()
+	T.test("GolemFit: the reach of a golem covers all its parts, whichever way it turns (Low: those under a player's head)", function()
 		for _, kind in { "PebbleGolem", "AetherKing", "SkyTitan", "CloudColossus" } do
 			local start = CFrame.new(4, 1, -3) * CFrame.Angles(0, 0.9, 0)
 			local model = GolemBuilder.build(kind, start, { Welded = true, Size = FOLLOWER })
 			local r = GolemFit.radius(model, start)
+			local low = GolemFit.radius(model, start, GolemFit.PlayerHeight)
+			T.le(low, r, kind .. ": the low reach is part of the whole one")
 			for _, p in parts(model) do
 				local h = p.Size / 2
 				for _, sx in { -1, 1 } do
 					for _, sy in { -1, 1 } do
 						for _, sz in { -1, 1 } do
 							local corner = start:PointToObjectSpace((p.CFrame * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
-							T.truthy(math.sqrt(corner.X ^ 2 + corner.Z ^ 2) <= r + 1e-6, kind .. " " .. p.Name .. " inside its reach")
+							local d = math.sqrt(corner.X ^ 2 + corner.Z ^ 2)
+							T.truthy(d <= r + 1e-4, kind .. " " .. p.Name .. " inside its reach")
+							if corner.Y < GolemFit.PlayerHeight then
+								T.truthy(d <= low + 1e-4, kind .. " " .. p.Name .. " (down at a player's height) inside its low reach")
+							end
 						end
 					end
 				end
@@ -215,6 +227,13 @@ return function(T, Loader)
 		end
 		local titan, king = sizeOf("SkyTitan"), sizeOf("AetherKing")
 		T.truthy(titan.Radius > king.Radius * 1.6, "a huge golem reaches much further (its wings)")
+		-- every ordinary golem is no taller than a player: its whole reach is its low reach
+		for _, golem in GolemConfig.List do
+			if not golem.Huge then
+				local height = GolemBuilder.build(golem.Id, nil, { Size = FOLLOWER }):GetAttribute("Height")
+				T.le(height, GolemFit.PlayerHeight, golem.Id .. " is no taller than a player")
+			end
+		end
 	end)
 
 	T.test("GolemFit: ordinary golems keep their slots; huge ones walk beside, further back, clear of everyone", function()
@@ -269,21 +288,27 @@ return function(T, Loader)
 				if size.Huge then
 					-- clear of its player (and so never straight behind it), a bit further back
 					T.truthy(
-						math.abs(at.X) - size.Radius >= GolemFit.PlayerRadius + GolemFit.Gap - 1e-6,
+						math.abs(at.X) - size.Low >= GolemFit.PlayerRadius + GolemFit.Gap - 1e-6,
 						`{label}: huge slot {slot} clears its player`
 					)
 					T.truthy(at.Z >= sideZ + GolemFit.HugeBack - 1e-6, `{label}: huge slot {slot} walks further back`)
 					-- the default camera (behind the player, CAMERA_ZOOM away) still sees the player past it
 					local depth = CAMERA_ZOOM - at.Z
 					if depth > 0 then
-						local edge = (math.abs(at.X) - size.Radius) / depth
+						local edge = (math.abs(at.X) - size.Low) / depth
 						T.truthy(edge > GolemFit.PlayerRadius / CAMERA_ZOOM, `{label}: huge slot {slot} leaves the player in view`)
 					end
 				end
 				for other, otherSize in list do
 					if other > slot and (size.Huge or otherSize.Huge) then
+						-- (two huge golems: their whole reach; a huge one by an ordinary one, no taller
+						-- than a player: the huge one's low reach)
+						local need = if size.Huge and otherSize.Huge
+							then size.Radius + otherSize.Radius
+							elseif size.Huge then size.Low + otherSize.Radius
+							else size.Radius + otherSize.Low
 						local d = (Vector3.new(at.X, 0, at.Z) - Vector3.new(out[other].X, 0, out[other].Z)).Magnitude
-						T.truthy(d >= size.Radius + otherSize.Radius - 1e-6, `{label}: slots {slot} and {other} don't overlap ({d})`)
+						T.truthy(d >= need - 1e-6, `{label}: slots {slot} and {other} don't overlap ({d})`)
 					end
 				end
 			end

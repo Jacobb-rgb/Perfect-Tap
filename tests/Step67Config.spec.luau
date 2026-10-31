@@ -209,12 +209,13 @@ return function(T, Loader)
 			local without, with = BoostConfig.hexaLuck(math.min(pct, StatConfig.ById.OreLuckPct.Max :: number))
 			T.near(with / without, BoostConfig.Kinds.HexaLucky.Mult, EPS, `Hexa Lucky x2.5 at +{pct * 100}% ore luck`)
 		end
-		-- balance: the best damage stays within ~1.5 blaster levels (x1.8 each), the
-		-- best income bonus at most x3, even with paid golems and Mythic enchants
+		-- balance (the caps raised 2026-10-30 for the owner's golem stats, StatConfig header): the
+		-- best damage is x6 (the rarest golems skip a few blaster levels), x12 at most on a
+		-- cracked rock's last third, the best income x7, even with paid golems and Mythic enchants
 		local best = StatConfig.combine({ { DamagePct = 10, OverchargePct = 10, IncomePct = 10 } })
-		T.truthy(1 + best.DamagePct <= 2.5, "damage at most x2.5")
-		T.truthy((1 + best.DamagePct) * (1 + best.OverchargePct) <= 5, "x5 at most on a cracked rock's last third")
-		T.truthy(1 + best.IncomePct <= 3, "income at most x3")
+		T.truthy(1 + best.DamagePct <= 6, "damage at most x6")
+		T.truthy((1 + best.DamagePct) * (1 + best.OverchargePct) <= 12, "x12 at most on a cracked rock's last third")
+		T.truthy(1 + best.IncomePct <= 7, "income at most x7")
 		T.eq(StatConfig.oreLuck(0 / 0, -2), 1)
 		T.eq(StatConfig.oreLuck(-1, 1), 1, "never below 1")
 	end)

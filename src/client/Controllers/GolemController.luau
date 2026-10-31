@@ -799,6 +799,7 @@ type Pet = {
 	NextLook: number,
 	Floats: boolean, -- a Premium golem (GolemBuilder "Hover"): glides, never hops
 	Radius: number, -- its reach from its axis (studs, GolemFit.radius)
+	Low: number, -- its reach under a player's height (a huge golem's wings pass over the player's head)
 	Huge: boolean, -- a HUGE golem (GolemConfig): walks beside, further back (GolemFit.slots)
 }
 type Follower = {
@@ -888,6 +889,7 @@ local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
 		NextLook = 0,
 		Floats = hover > 0,
 		Radius = GolemFit.radius(model, start),
+		Low = GolemFit.radius(model, start, GolemFit.PlayerHeight),
 		Huge = look ~= nil and look.Huge == true,
 	}
 end
@@ -923,7 +925,7 @@ local function syncPets(f: Follower, root: BasePart): number
 	-- where each walks now (a huge golem moves the others aside); new ones start there
 	local sizes: { [number]: GolemFit.Size } = {}
 	for slot, pet in pets do
-		sizes[slot] = { Radius = pet.Radius, Huge = pet.Huge }
+		sizes[slot] = { Radius = pet.Radius, Low = pet.Low, Huge = pet.Huge }
 	end
 	f.Offsets = GolemFit.slots(sizes)
 	local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
