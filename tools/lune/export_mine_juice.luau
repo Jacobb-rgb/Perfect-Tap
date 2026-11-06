@@ -1,8 +1,11 @@
 --[[
 	Video frames of the mining reel (owner 2026-10-27, "How do games make MINING
 	feel satisfying?"; Config/JuiceConfig.Mining) in our game, posed with the
-	game's own code: a miner on mine floor 1 blasts a rock; every hit (a Health
-	drop, about 3 a second) grows the crack (Effects/CrackLogic laid out like
+	game's own code: a player holding the minigun at the hip (MoveConfig's
+	BlasterHold) fires at a rock on mine floor 1; the barrels spin up and the
+	separate energy shots get faster with them (BlasterFeel.shotStep), each with
+	its trail, muzzle flash and small impact; every hit (a Health drop, about 3 a
+	second) grows the crack (Effects/CrackLogic laid out like
 	RockCracks) and its gold glints flare, chips fly (RockFxLogic.chipPlan), the
 	rock trembles (RockFxLogic.shakeOffset); at each crack stage the server's
 	cracks open (RockBuilder.applyStage), a chunk breaks off, RockFx pops and an
@@ -19,7 +22,8 @@
 	   build/preview/minejuice_shots.json, build/preview/minejuice_board.json
 	then: node tools/preview/render_reel.mjs minejuice
 	(three.js approximation of Roblox: no physics, the chunks fly on simple arcs,
-	no camera shake, sounds are named in the caption.)
+	no camera shake, sounds are named in the caption. The camera starts behind the
+	player like in the game, then swings to the side.)
 ]]
 
 local fs = require("@lune/fs")
@@ -32,12 +36,14 @@ local Export = require("./lib/export")
 local UiExport = require("./lib/uiexport")
 local Juice = require("./lib/mine_juice_preview")
 local Gallery = require("./lib/blaster_gallery")
+local R15 = require("./lib/dummy_r15")
+local MovePose = require("./lib/move_pose")
 
 local root = process.cwd
 Loader.init(root)
 Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 
-local fps = tonumber(process.args[1]) or 20
+local fps = tonumber(process.args[1]) or 60
 local CF = Loader.CFrame
 local V3 = roblox.Vector3
 local V2 = roblox.Vector2
@@ -54,6 +60,10 @@ local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
 local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+local BlasterFeel = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterFeel")
+local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
+local BarrelSpin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BarrelSpin")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local CrackLogic = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.CrackLogic")
 local Rules = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.MineJuiceRules")
@@ -102,19 +112,38 @@ local radius = math.max(size.X, size.Z) / 2 * 0.8
 local ground = 0
 print(`rock Big at {center}, size {size}, {stages} stages`)
 
--- the miner 8 studs off, blasting it
+-- the player 16 studs off, firing at it (the shots need room to be seen)
+local LEVEL = 10
 local away = V3.new(-6.5, 0, 5).Unit
-local feet = V3.new(center.X, ground, center.Z) + away * 8
+local feet = V3.new(center.X, ground, center.Z) + away * 16
 local aimPoint = Gallery.surface(pristine, feet, 0.6)
-local _, muzzle = Gallery.forgekeeper(Loader, area, CF.lookAt(feet, V3.new(center.X, ground, center.Z)), aimPoint, 3, "Copper")
-local beamGlow = BlasterBuilder.look(3, "Copper").Glow
+local shotGlow = BlasterBuilder.look(LEVEL, BlasterData.vaultOre(LEVEL)).Glow
+local tier = BlasterFeel.tier(LEVEL)
 
--- the camera from the side, like the reel: the miner on the left, the rock big on the right
+-- the game's camera behind the player, then swinging to the side: the player left, the rock big on the right
 local facing = -away
 local right = V3.new(-facing.Z, 0, facing.X)
 local middle = (feet + V3.new(center.X, ground, center.Z)) / 2
-local camPos = middle + right * 12.5 + facing * 1.5 + V3.new(0, 5.2, 0)
-local camTarget = middle + facing * 2 + V3.new(0, 2.6, 0)
+local sidePos = middle + right * 16 + facing * 1.5 + V3.new(0, 5.6, 0)
+local sideTarget = middle + facing * 1 + V3.new(0, 2.6, 0)
+local behindPos = feet - facing * 6.5 + right * 8.5 + V3.new(0, 4.4, 0)
+local behindTarget = feet + facing * 7.5 + V3.new(0, 3, 0)
+local SWING_FROM, SWING_TO = 2.6, 4.2
+local function cameraAt(t: number): (any, any)
+	local u = math.clamp((t - SWING_FROM) / (SWING_TO - SWING_FROM), 0, 1)
+	u = u * u * (3 - 2 * u)
+	local mid = (behindTarget + sideTarget) / 2
+	local from, to = behindPos - mid, sidePos - mid
+	-- round the rock's side, not through the player: an arc about the middle
+	local flat = from * V3.new(1, 0, 1)
+	local goal = to * V3.new(1, 0, 1)
+	local angle = math.atan2(flat:Cross(goal).Y, flat:Dot(goal)) * u
+	local radius_ = flat.Magnitude + (goal.Magnitude - flat.Magnitude) * u
+	local dir = CF.Angles(0, angle, 0):VectorToWorldSpace(flat.Unit)
+	local pos = mid + dir * radius_ + V3.new(0, from.Y + (to.Y - from.Y) * u, 0)
+	return pos, behindTarget + (sideTarget - behindTarget) * u
+end
+local camPos, camTarget = sidePos, sideTarget
 
 local function presetToJson(preset)
 	local o = {}
@@ -138,7 +167,7 @@ fs.writeFile(root .. "/build/preview/" .. tag .. "_base.json", serde.encode("jso
 print(`base scene: {#scene.parts} parts`)
 
 -- the screen point (overlay pixels, under the top inset) of a world point
-local look = CF.lookAt(camPos, camTarget)
+local look = CF.lookAt(camPos, camTarget) -- (the side view: the ores fly into the bag after the swing)
 local function screen(p): any
 	local rel = look:PointToObjectSpace(p)
 	local f = 1 / math.tan(math.rad(FOV) / 2)
@@ -149,8 +178,8 @@ end
 
 ---------------------------------------------------------------- the timeline (seconds)
 
-local FIRE = 0.5
-local HITS = 12
+local FIRE = 0.9
+local HITS = 16
 local HIT_GAP = 0.34
 local hitTimes = {}
 for k = 1, HITS do
@@ -243,7 +272,7 @@ caption.IgnoreGuiInset = false
 local box = UIKit.new("Frame", {
 	Name = "Box",
 	AnchorPoint = V2.new(0.5, 0),
-	Position = roblox.UDim2.new(0.5, 0, 0, 44),
+	Position = roblox.UDim2.new(0.5, 0, 0, 60),
 	Size = roblox.UDim2.fromOffset(980, 50),
 	BackgroundColor3 = C3.fromRGB(20, 22, 30),
 	BackgroundTransparency = 0.25,
@@ -262,7 +291,7 @@ local soundTag = UIKit.new("TextLabel", {
 	Name = "Sound",
 	AnchorPoint = V2.new(0.5, 0),
 	BackgroundTransparency = 1,
-	Position = roblox.UDim2.new(0.5, 0, 0, 98),
+	Position = roblox.UDim2.new(0.5, 0, 0, 114),
 	Size = roblox.UDim2.fromOffset(600, 30),
 	FontFace = roblox.Font.fromEnum(roblox.Enum.Font.FredokaOne),
 	TextSize = 24,
@@ -272,17 +301,18 @@ local soundTag = UIKit.new("TextLabel", {
 
 local function captionFor(t: number): string
 	if t < FIRE then
-		return "Těžba podle videa: laser míří na kámen"
-	elseif t < (stageTimes[2] or SHATTER) - 0.05 then
-		return "1 PRASKLINY: každý zásah tmavou prasklinu prodlouží"
-	elseif t < (stageTimes[3] or SHATTER) - 0.05 then
-		return "2 ÚLOMKY odletují  ·  4 kámen se při zásahu otřese"
+		return "Hráč míří s minigunem u pasu"
 	elseif t < SHATTER - 0.02 then
-		return "BONUS: zlaté jiskry v prasklinách (stejné u každé rudy)"
+		local spin = math.clamp((t - FIRE) / BlasterFeel.Shots.SpinUp, 0, 1)
+		local rate = math.floor(BlasterFeel.shotRate(spin) + 0.5)
+		if spin >= 1 then
+			return `Plné otáčky · {rate} střel za sekundu`
+		end
+		return `Kotouč se roztáčí · {rate} střel za sekundu`
 	elseif t < drops[1].Pick then
-		return "5 POSLEDNÍ ZÁSAH: kámen se rozletí na kusy, prach"
+		return "Poslední zásah: kámen se rozletí na kusy"
 	end
-	return "5 Celá 3D ruda se zvedne ze země a točí se do batohu: +1"
+	return "Ruda se zvedne ze země a letí do batohu: +1"
 end
 
 -- the sound playing now (named, the video has none)
@@ -301,10 +331,8 @@ local function soundFor(t: number): string
 			return "zvuk: pop (do batohu)"
 		end
 	end
-	for _, at in hitTimes do
-		if t >= at and t < at + 0.14 and t < SHATTER then
-			return "zvuk: ťuk"
-		end
+	if t >= FIRE and t < SHATTER then
+		return "zvuk: střely, hučení roste s kotoučem"
 	end
 	return ""
 end
@@ -324,6 +352,203 @@ local frameInfo = { Origin = origin, Normal = normal, Right = cRight, Up = cUp }
 
 local crust = pristine.PrimaryPart.Color
 local frames = math.floor(total * fps)
+
+---------------------------------------------------------------- the player and the gun
+
+local NEON = roblox.Enum.Material.Neon
+local FX = { CanCollide = false, CastShadow = false }
+local function fxProps(transparency: number)
+	return { CanCollide = false, CastShadow = false, Transparency = transparency }
+end
+local hold = MoveConfig.Moves[MoveConfig.Hold]
+local GRIP = CF.new(0, -0.15, 0) * CF.Angles(math.rad(-90), 0, 0)
+-- turned a little so the gun at the hip points at the rock
+local stand = CF.lookAt(feet, V3.new(center.X, ground, center.Z)) * CF.Angles(0, math.rad(-8), 0)
+local holdBase = function(joint: string)
+	return if joint == "RightShoulder" then CF.Angles(math.rad(90), 0, 0) else CF.identity
+end
+local function posed(t: number): any
+	local parts, pose = MovePose.solve(Loader, hold, 0.4 + t, nil, holdBase)
+	return parts, parts.RightHand * GRIP * (pose.RightGrip or CF.identity)
+end
+local body = Instance.new("Model")
+local bodyPieces = {}
+for _, partName in R15.Order do
+	for _, piece in R15.pieces(partName) do
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.Size = piece.Size
+		p.Color = piece.Color
+		p.Material = roblox.Enum.Material[piece.Material]
+		if piece.Shape == 1 then
+			p.Shape = roblox.Enum.PartType.Ball
+		elseif piece.Shape == 2 then
+			p.Shape = roblox.Enum.PartType.Cylinder
+		end
+		p.Parent = body
+		table.insert(bodyPieces, { Part = p, Name = partName, At = piece.CFrame })
+	end
+end
+local gun = BlasterBuilder.build(LEVEL, BlasterData.vaultOre(LEVEL))
+local handle = gun:FindFirstChild("Handle")
+local hub = gun:FindFirstChild(BlasterBuilder.SpinHub)
+local muzzleAt = handle:FindFirstChild("Muzzle").Position
+local axis = handle.CFrame:Inverse() * hub.CFrame
+local gunPieces = {}
+for _, d in gun:GetDescendants() do
+	if d:IsA("BasePart") then
+		local weld = d:FindFirstChildOfClass("WeldConstraint")
+		local spins = weld ~= nil and weld.Part0 == hub
+		local from = if spins then hub.CFrame else handle.CFrame
+		table.insert(gunPieces, { Part = d, Spins = spins, At = from:Inverse() * d.CFrame })
+	end
+end
+-- the barrels' angle per frame and the recoil's kicks (BarrelSpin.speed, BlasterFx.fired)
+local angles = {}
+do
+	local speed, angle = 0, 0
+	for i = 0, frames - 1 do
+		local firing = i / fps >= FIRE and i / fps < SHATTER
+		speed = BarrelSpin.speed(speed, firing, 1 / fps, BarrelSpin.Full)
+		angle = (angle + speed / fps) % (math.pi * 2)
+		angles[i] = angle
+	end
+end
+
+---------------------------------------------------------------- the shots (Effects/BlasterShots)
+
+local Shots = BlasterFeel.Shots
+local shotList = {}
+do
+	local spin, due, step = 0, 1, 1 / 120
+	local at = FIRE
+	while at < SHATTER do
+		local count
+		spin, due, count = BlasterFeel.shotStep(spin, due, step, true)
+		for _ = 1, count do
+			table.insert(shotList, { At = at, Barrel = #shotList % Shots.Barrels + 1, Spin = spin })
+		end
+		at += step
+	end
+end
+print(`{#shotList} shots`)
+-- the kick left at t (at most one kick every BlasterFeel.Pulse)
+local kicks = {}
+do
+	local last = -math.huge
+	for _, shot in shotList do
+		if shot.At - last >= BlasterFeel.Pulse then
+			last = shot.At
+			table.insert(kicks, last)
+		end
+	end
+end
+local function kickAt(t: number): number
+	local amount = 0
+	for _, at in kicks do
+		if at <= t then
+			amount = BlasterFeel.settle(t - at)
+		end
+	end
+	return amount
+end
+local function handleAt(t: number): any
+	local _, grip = posed(t)
+	local recoil = BlasterFeel.Recoil
+	local amount = kickAt(t)
+	return stand * grip * CF.new(0, 0, recoil.GunBack * amount) * CF.Angles(recoil.GunLift * amount, 0, 0)
+end
+-- where a shot starts: the muzzle at that moment, a little off the axis (the next barrel)
+for _, shot in shotList do
+	local origin = handleAt(shot.At) * muzzleAt
+	local line = CF.lookAt(origin, aimPoint)
+	local a = shot.Barrel / Shots.Barrels * math.pi * 2
+	local start = origin + line.RightVector * (math.cos(a) * Shots.Spiral) + line.UpVector * (math.sin(a) * Shots.Spiral)
+	shot.Start = start
+	shot.Dir = (aimPoint - start).Unit
+	shot.Length = (aimPoint - start).Magnitude
+end
+
+local function round(parent, a: any, b: any, width: number, color: any, transparency: number)
+	-- a cylinder from a to b (it runs along its X)
+	local cf = CF.lookAt((a + b) / 2, b) * CF.Angles(0, math.pi / 2, 0)
+	local p = Geo.block(parent, cf, V3.new((b - a).Magnitude, width, width), color, NEON, fxProps(transparency))
+	p.Shape = roblox.Enum.PartType.Cylinder
+	return p
+end
+
+local TRAIL_STEPS = 5
+local function drawShots(parent, t: number)
+	local width = tier.ShotWidth
+	local hot = shotGlow:Lerp(WHITE, 0.35)
+	local glare = 0
+	for k, shot in shotList do
+		local age = t - shot.At
+		if age >= 0 then
+			local travelled = age * Shots.Speed
+			if travelled < shot.Length then
+				-- the head and the fading trail, the white core in it (BlasterShots: a ball and two Beams)
+				local head = shot.Start + shot.Dir * travelled
+				Geo.ball(parent, head, width * 0.85, hot, NEON, FX)
+				for i = 1, TRAIL_STEPS do
+					local u0, u1 = (i - 1) / TRAIL_STEPS, i / TRAIL_STEPS
+					local a = head - shot.Dir * math.min(travelled, Shots.Trail * u0)
+					local b = head - shot.Dir * math.min(travelled, Shots.Trail * u1)
+					if (b - a).Magnitude > 0.01 then
+						round(parent, a, b, width * (1 - 0.85 * u0), shotGlow:Lerp(hot, 1 - u0), 0.15 + 0.8 * u0)
+						if u1 <= 0.6 then
+							round(parent, a, b, tier.ShotCore * (1 - 0.8 * u0 / 0.6), WHITE, 0.05)
+						end
+					end
+				end
+			else
+				local since = age - shot.Length / Shots.Speed
+				if since < 0.5 then
+					-- the small impact: the hot flash and a spark or two back at the shooter
+					glare = math.max(glare, 1 - since * Shots.LightFade)
+					if since < 0.14 then
+						local f = 1 - since / 0.14
+						Geo.ball(parent, aimPoint, 0.2 + 0.7 * f, shotGlow:Lerp(WHITE, 0.35), NEON, fxProps(1 - f * 0.75))
+					end
+					local rng = Rng.new("spark" .. k)
+					local sparks = BlasterFeel.resolve(LEVEL, false).Sparks
+					for _ = 1, sparks do
+						local life = rng:range(0.25, 0.5)
+						local out = (-shot.Dir + V3.new(rng:range(-0.9, 0.9), rng:range(-0.5, 0.9), rng:range(-0.9, 0.9))).Unit
+						local speed = rng:range(16, 30)
+						if since < life then
+							-- (Drag 3, Acceleration -60: Vfx's Sparks)
+							local p = aimPoint + out * (speed / 3 * (1 - math.exp(-3 * since))) - V3.new(0, 30 * since * since, 0)
+							local size = 0.3 * (1 - since / life)
+							Geo.ball(parent, p, math.max(size, 0.03), shotGlow:Lerp(WHITE, 0.5), NEON, FX)
+						end
+					end
+				end
+			end
+			-- the muzzle flash on the gun, a moment per shot
+			if age < 0.06 then
+				local f = 1 - age / 0.06
+				local origin = handleAt(t) * muzzleAt
+				Geo.ball(parent, origin, tier.Flash * (0.2 + 0.35 * f), shotGlow:Lerp(WHITE, 0.45), NEON, fxProps(1 - f * 0.7))
+			end
+		end
+	end
+	if glare > 0 then
+		local holder = Geo.block(
+			parent,
+			CF.new(aimPoint - (shotList[1].Dir * 0.8)),
+			V3.new(0.1, 0.1, 0.1),
+			WHITE,
+			nil,
+			{ Transparency = 1, CanCollide = false }
+		)
+		local light = Instance.new("PointLight")
+		light.Color = shotGlow
+		light.Range = 14
+		light.Brightness = tier.Light * glare
+		light.Parent = holder
+	end
+end
 local shots = {}
 for i = 0, frames - 1 do
 	local t = i / fps
@@ -388,19 +613,32 @@ for i = 0, frames - 1 do
 				end
 			end
 		end
-		-- the beam
-		if t >= FIRE then
-			Gallery.beam(Loader, extra, muzzle, aimPoint, beamGlow)
-		end
 	end
 
-	-- every hit: chips out of the crack, a puff of dust
+	-- the player at the hip with both hands (the game's BlasterHold), the barrels turning
+	do
+		local parts = posed(t)
+		for _, piece in bodyPieces do
+			piece.Part.CFrame = stand * parts[piece.Name] * piece.At
+		end
+		body.Parent = extra
+		local handleCF = handleAt(t)
+		local spinCF = handleCF * axis * CF.Angles(0, 0, angles[i])
+		for _, piece in gunPieces do
+			piece.Part.CFrame = (if piece.Spins then spinCF else handleCF) * piece.At
+		end
+		gun.Parent = extra
+	end
+
+	-- the shots
+	drawShots(extra, t)
+
+	-- every hit: chips out of the crack (the game's soft dust puff would be a hard ball here: left out)
 	for k = 1, math.min(hits, HITS - 1) do
 		local dt = t - hitTimes[k]
 		if dt < 0.8 then
 			local pieces = Logic.chipPlan({ Position = origin, Crust = crust, Out = normal, Count = 3, Ground = ground, Seed = k * 31 })
 			Juice.debris(Geo, extra, pieces, dt, Logic)
-			Juice.particles(Geo, extra, Rng.new("dust" .. k), "Dust", aimPoint, 1, pal.Light, dt)
 		end
 	end
 
@@ -451,8 +689,8 @@ for i = 0, frames - 1 do
 		})
 		Juice.debris(Geo, extra, pieces, st, Logic)
 		local colors = Logic.colors(FLOOR, pristine:GetAttribute("Kind"), pal.Mid, glow)
-		Juice.particles(Geo, extra, Rng.new("sd"), "Dust", center, 16, colors.Rock[2], st)
-		Juice.particles(Geo, extra, Rng.new("sf"), "Dust", V3.new(center.X, ground + 0.8, center.Z), 8, colors.Rock[1], st)
+		Juice.particles(Geo, extra, Rng.new("sd"), "Dust", center, 8, colors.Rock[2], st)
+		Juice.particles(Geo, extra, Rng.new("sf"), "Dust", V3.new(center.X, ground + 0.8, center.Z), 4, colors.Rock[1], st)
 		Juice.particles(Geo, extra, Rng.new("sb"), "Burst", center, 18, glow, st)
 		Juice.particles(Geo, extra, Rng.new("sg"), "Glint", center + V3.new(0, radius * 0.4, 0), 8, colors.Crystal[1]:Lerp(WHITE, 0.3), st)
 		Juice.flashBall(Geo, extra, center, glow:Lerp(WHITE, 0.25), 8, st)
@@ -558,6 +796,9 @@ for i = 0, frames - 1 do
 
 	local name = string.format("%04d", i)
 	fs.writeFile(root .. "/build/preview/" .. tag .. "/fx_" .. name .. ".json", serde.encode("json", Export.collect(extra)))
+	body.Parent = nil
+	gun.Parent = nil
+	local framePos, frameTarget = cameraAt(t)
 	fs.writeFile(
 		root .. "/build/preview/" .. tag .. "/ui_" .. name .. ".json",
 		serde.encode("json", UiExport.export({ hud.Gui, juice.Gui, caption }))
@@ -571,6 +812,7 @@ for i = 0, frames - 1 do
 		uiInset = INSET,
 		position = { camPos.X, camPos.Y, camPos.Z },
 		target = { camTarget.X, camTarget.Y, camTarget.Z },
+		cam = { position = { framePos.X, framePos.Y, framePos.Z }, target = { frameTarget.X, frameTarget.Y, frameTarget.Z }, fov = FOV },
 		fov = FOV,
 		preset = floor.Lighting,
 		shadowExtent = 90,
@@ -584,18 +826,19 @@ fs.writeFile(root .. "/build/preview/" .. tag .. "_shots.json", serde.encode("js
 local function frameAt(seconds: number): number
 	return math.clamp(math.floor(seconds * fps + 0.5), 0, frames - 1)
 end
+local fullSpin = FIRE + Shots.SpinUp
 local board = {
-	title = "TĚŽBA podle videa (27. 10.)",
+	title = "STŘELBA A TĚŽBA (6. 11.)",
 	fps = fps,
 	cells = {
-		{ frame = frameAt(hitTimes[1] + 0.1), caption = "1 První zásah: malá tmavá prasklina, ťuk" },
-		{ frame = frameAt(hitTimes[2] + 0.06), caption = "1+2 Další zásah: prasklina roste, odletují úlomky" },
-		{ frame = frameAt((stageTimes[2] or 1) + 0.08), caption = "3 Prasknutí: křup, kus kamene odpadne, vypadne ruda" },
-		{ frame = frameAt(hitTimes[HITS - 1] + 0.05), caption = "BONUS Velká prasklina se zlatými jiskrami" },
-		{ frame = frameAt(SHATTER + 0.12), caption = "5 Poslední zásah: kámen se rozletí, prach a kusy" },
-		{ frame = frameAt(drops[1].Pick + 0.25), caption = "5 Celá 3D ruda se zvedne ze země a zazáří" },
-		{ frame = frameAt(drops[2].Pick + 0.55), caption = "5 ... a točí se cestou do batohu (tlačítko dole)" },
-		{ frame = frameAt(drops[stages].Pick + FLIGHT + 0.12), caption = "5 +1 v batohu, počet naskočí" },
+		{ frame = frameAt(FIRE + 0.25), caption = "Začátek: pomalé střely, kotouč se rozjíždí" },
+		{ frame = frameAt(FIRE + 1), caption = "Zrychluje: 14 střel za sekundu" },
+		{ frame = frameAt(fullSpin + 0.1), caption = "Plné otáčky: 24 střel za sekundu" },
+		{ frame = frameAt((stageTimes[2] or fullSpin) + 0.08), caption = "Prasknutí: kus kamene odpadne, vypadne ruda" },
+		{ frame = frameAt(hitTimes[HITS - 1] + 0.05), caption = "Velká prasklina, střely pořád jednotlivě" },
+		{ frame = frameAt(SHATTER + 0.12), caption = "Poslední zásah: kámen se rozletí" },
+		{ frame = frameAt(drops[1].Pick + 0.25), caption = "Ruda se zvedne ze země" },
+		{ frame = frameAt(drops[stages].Pick + FLIGHT + 0.12), caption = "+1 v batohu" },
 	},
 }
 fs.writeFile(root .. "/build/preview/" .. tag .. "_board.json", serde.encode("json", board))

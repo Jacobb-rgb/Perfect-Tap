@@ -9,10 +9,11 @@
 	  poke(tool)      another player's gun: each BlastHit of theirs keeps it
 	                  turning for Hold seconds (FxController)
 
-	The barrels spin up to Full radians a second over SpinUp seconds and run
-	down over SpinDown when the firing ends (they stay where they stop: six
-	barrels look the same at any angle). One Stepped connection while any
-	gun turns, none otherwise; a gun put away or destroyed is dropped.
+	The barrels spin up to Full radians a second over SpinUp seconds, the
+	shots getting faster with them (BlasterFeel.Shots, Effects/BlasterShots),
+	and run down over SpinDown when the firing ends (they stay where they
+	stop: six barrels look the same at any angle). One Stepped connection
+	while any gun turns, none otherwise; a gun put away or destroyed is dropped.
 	Reduce motion: the barrels turn slower (ReducedFull).
 ]]
 
@@ -21,14 +22,15 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
+local BlasterFeel = require(Shared.Config.BlasterFeel)
 local Motion = require(script.Parent.Parent.UI.Motion)
 
 local BarrelSpin = {}
 
-BarrelSpin.Full = 15 -- radians a second at full spin (about 2.4 turns)
+BarrelSpin.Full = BlasterFeel.barrelSpeed() -- radians a second at full spin (4 turns: a barrel per shot)
 BarrelSpin.ReducedFull = 6 -- with Reduce motion
-BarrelSpin.SpinUp = 0.25 -- seconds to full spin
-BarrelSpin.SpinDown = 0.9 -- seconds to a stop
+BarrelSpin.SpinUp = BlasterFeel.Shots.SpinUp -- seconds to full spin
+BarrelSpin.SpinDown = BlasterFeel.Shots.SpinDown -- seconds to a stop
 BarrelSpin.Hold = 0.4 -- seconds another player's gun keeps turning after their last hit
 
 type Spin = { Motor: Motor6D, Angle: number, Speed: number, Until: number, On: boolean }

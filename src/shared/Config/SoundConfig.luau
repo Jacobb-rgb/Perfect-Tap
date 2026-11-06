@@ -21,8 +21,8 @@
 export type SoundDef = { Id: string, Volume: number, Pitch: { number }, Looped: boolean? }
 
 local SoundConfig: { [string]: SoundDef } = {
-	-- laser blaster (MiningController, Effects/BlasterFx, BlasterFeel): the hum loop and a soft beam
-	-- layer while firing, a zap when the trigger goes down, a crackle + a thud on hits, the break
+	-- blaster (MiningController, Effects/BlasterFx, BlasterFeel): the hum loop while firing, a zap when
+	-- the trigger goes down, a quick shot sound as each shot leaves, a crackle + a thud on hits, the break
 	BlasterHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.22, Pitch = { 2.3, 2.4 }, Looped = true },
 	BlasterStart = { Id = "rbxassetid://12221990", Volume = 0.35, Pitch = { 0.5, 0.56 } },
 	BlasterStop = { Id = "rbxassetid://12221976", Volume = 0.25, Pitch = { 0.6, 0.7 } },
@@ -30,7 +30,7 @@ local SoundConfig: { [string]: SoundDef } = {
 	BlastBounce = { Id = "rbxassetid://12221967", Volume = 0.4, Pitch = { 0.5, 0.6 } },
 	NodeCrack = { Id = "rbxassetid://12222140", Volume = 0.6, Pitch = { 0.55, 0.7 } },
 	NodeShatter = { Id = "rbxassetid://12222005", Volume = 0.55, Pitch = { 0.45, 0.6 } },
-	BlasterBeam = { Id = "rbxassetid://162670130", Volume = 0.12, Pitch = { 1.5, 1.6 }, Looped = true },
+	BlasterShot = { Id = "rbxassetid://12221996", Volume = 0.14, Pitch = { 1.75, 1.95 } },
 	BlasterZap = { Id = "rbxassetid://12221996", Volume = 0.35, Pitch = { 1.15, 1.3 } },
 	BlastThud = { Id = "rbxassetid://12222046", Volume = 0.2, Pitch = { 0.85, 1.05 } },
 	RockBreak = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.4, Pitch = { 1.3, 1.45 } },
