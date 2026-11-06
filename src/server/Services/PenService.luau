@@ -364,7 +364,7 @@ local function onIntake(plotId: number, record: ItemRecord)
 			local now = os.clock()
 			if now - (lastForeignToast[thrower] or -math.huge) >= FOREIGN_TOAST_COOLDOWN then
 				lastForeignToast[thrower] = now
-				toast(thrower, "That's not your Ore Pen. Your pen is in the yard behind your own base.", "Info")
+				toast(thrower, "That's not your Ore Pen. Your pen is in the yard behind your own forge.", "Info")
 			end
 		end
 		return
