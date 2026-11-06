@@ -90,19 +90,19 @@ Kit.C = {
 
 local C = Kit.C
 
-export type LevelLook = { Body: Color3, Glow: Color3, Magma: boolean }
+export type LevelLook = { Body: Color3, Glow: Color3 }
 
 --[[
-	The looks of the ten blaster levels for the display cases and rims: the
-	cases the shop sells (BlasterData.Vault.Ores in CaseBuilder's colours),
-	so the cases behind the counter match the shop window and the opening.
+	The looks of the ten blaster levels for the display crates and rims: the
+	crates the shop sells (BlasterData.Vault.Ores in CaseBuilder's colours),
+	so the crates behind the counter match the shop window and the opening.
 ]]
 Kit.Levels = {} :: { LevelLook }
 for level = 1, BlasterData.MaxLevel do
 	local ore = BlasterData.vaultOre(level)
 	local color = BlasterData.skin(ore)
-	local _, _, glow, hot = CaseBuilder.look(ore)
-	table.insert(Kit.Levels, { Body = color, Glow = glow, Magma = hot })
+	local _, _, glow = CaseBuilder.look(ore)
+	table.insert(Kit.Levels, { Body = color, Glow = glow })
 end
 
 ---------------------------------------------------------------- frames
@@ -454,40 +454,42 @@ function Kit.blaster(parent: Instance, cf: CFrame, length: number, colors: Blast
 end
 
 --[[
-	A weapon case in a level's ore look (the Kenney crate silhouette): a dark
-	body with an ore-colored band, a lid, a glowing seam and latches, a glowing
-	diamond on the lid, ore crystals on top from level 4. cf = its bottom
-	center, its length along local X. 12-17 parts.
+	A void crate in a level's look (Builders/CaseBuilder, simplified for the map):
+	a black body, a metal lid, corner posts, a glowing seam and strips, the glowing
+	diamond core on the front, the lid's corners glow from level 4, a diamond on
+	top from level 7. cf = its bottom center, its length along local X, its front
+	+Z. 14-21 parts.
 ]]
 function Kit.case(parent: Instance, cf: CFrame, length: number, level: number)
 	local look = Kit.Levels[math.clamp(level, 1, #Kit.Levels)]
 	local L = length
-	local w, hb, hl = L * 0.5, L * 0.19, L * 0.14
-	local body = if look.Magma then rgb(34, 28, 30) else look.Body:Lerp(rgb(0, 0, 0), 0.62)
-	local panel = if look.Magma then rgb(46, 40, 42) else look.Body:Lerp(rgb(0, 0, 0), 0.45)
-	Kit.bit(parent, cf * CFrame.new(0, hb / 2, 0), Vector3.new(L, hb, w), body)
-	Kit.bit(parent, cf * CFrame.new(0, hb * 0.45, 0), Vector3.new(L + 0.04, hb * 0.18, w + 0.04), look.Glow:Lerp(body, 0.35), Kit.NEON)
-	Kit.bit(parent, cf * CFrame.new(0, hb + hl / 2, 0), Vector3.new(L - 0.1, hl, w - 0.1), panel)
-	Kit.glow(parent, cf * CFrame.new(0, hb + 0.02, 0), Vector3.new(L + 0.06, 0.07, w + 0.06), look.Glow)
+	local w, hb, hl = L * 0.7, L * 0.38, L * 0.12
+	local black, plate, steel = rgb(18, 17, 27), rgb(46, 43, 58), rgb(70, 68, 84)
+	Kit.bit(parent, cf * CFrame.new(0, L * 0.02, 0), Vector3.new(L + 0.08, L * 0.04, w + 0.08), plate, Kit.METAL)
+	Kit.bit(parent, cf * CFrame.new(0, hb / 2, 0), Vector3.new(L - 0.1, hb, w - 0.1), black)
+	Kit.bit(parent, cf * CFrame.new(0, hb + hl / 2 + 0.02, 0), Vector3.new(L + 0.08, hl, w + 0.08), plate, Kit.METAL)
+	Kit.glow(parent, cf * CFrame.new(0, hb + 0.01, 0), Vector3.new(L, 0.05, w), look.Glow)
 	for _, sx in { -1, 1 } do
-		-- latches on the front, straps over the lid, dark end caps
-		Kit.glow(parent, cf * CFrame.new(sx * L * 0.3, hb * 0.82, w / 2 + 0.03), Vector3.new(L * 0.12, hb * 0.3, 0.08), look.Glow)
-		Kit.bit(parent, cf * CFrame.new(sx * L * 0.3, hb + hl / 2, 0), Vector3.new(L * 0.08, hl + 0.06, w + 0.02), C.SteelDark)
-		Kit.bit(parent, cf * CFrame.new(sx * (L / 2 - 0.05), (hb + hl) / 2, 0), Vector3.new(0.14, hb + hl, w + 0.08), C.SteelDark)
-	end
-	Kit.glow(
-		parent,
-		cf * CFrame.new(0, hb + hl + 0.03, 0) * CFrame.Angles(0, math.pi / 4, 0),
-		Vector3.new(L * 0.13, 0.06, L * 0.13),
-		look.Glow
-	)
-	if level >= 4 then
-		local top = (cf * CFrame.new(0, hb + hl, 0)).Position
-		Kit.shard(parent, top, cf.UpVector, L * 0.06, L * (0.14 + 0.02 * level), look.Glow)
-		if level >= 7 then
-			Kit.shard(parent, top + cf.RightVector * L * 0.08, (cf.UpVector + cf.RightVector * 0.6).Unit, L * 0.045, L * 0.12, look.Glow)
-			Kit.shard(parent, top - cf.RightVector * L * 0.08, (cf.UpVector - cf.RightVector * 0.6).Unit, L * 0.045, L * 0.1, look.Glow)
+		for _, sz in { -1, 1 } do
+			local corner = cf * CFrame.new(sx * (L / 2 - 0.1), 0, sz * (w / 2 - 0.1))
+			Kit.bit(parent, corner * CFrame.new(0, (hb + hl) / 2, 0), Vector3.new(L * 0.1, hb + hl + 0.1, L * 0.1), steel, Kit.METAL)
+			if level >= 4 then
+				Kit.glow(parent, corner * CFrame.new(0, hb + hl + 0.08, 0), Vector3.new(L * 0.11, 0.04, L * 0.11), look.Glow)
+			end
 		end
+		-- the strips on the front, either side of the core
+		Kit.glow(parent, cf * CFrame.new(sx * L * 0.31, hb * 0.5, w / 2 - 0.03), Vector3.new(L * 0.13, 0.08, 0.08), look.Glow)
+	end
+	local face = cf * CFrame.new(0, hb * 0.5, w / 2 - 0.02) * CFrame.Angles(0, 0, math.pi / 4)
+	Kit.bit(parent, face, Vector3.new(L * 0.2, L * 0.2, 0.08), steel, Kit.METAL)
+	Kit.glow(parent, face * CFrame.new(0, 0, 0.05), Vector3.new(L * 0.14, L * 0.14, 0.05), look.Glow)
+	if level >= 7 then
+		Kit.glow(
+			parent,
+			cf * CFrame.new(0, hb + hl + 0.04, 0) * CFrame.Angles(0, math.pi / 4, 0),
+			Vector3.new(L * 0.13, 0.05, L * 0.13),
+			look.Glow
+		)
 	end
 end
 
