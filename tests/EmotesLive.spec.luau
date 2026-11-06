@@ -885,6 +885,18 @@ return function(T, Loader)
 		T.eq(w.stepped.count(), 0, "and the loop sleeps")
 	end, "emotes live: the blaster hold: both hands low with the blaster in hand", true)
 
+	withController(false, true, function(w)
+		local late = fakeCharacter("Late", Vector3.new(4, 3, 0))
+		late.tool = blasterTool()
+		T.eq(w.stepped.count(), 0, "nobody holds one yet")
+		w.them.CharacterAdded.fire(late)
+		T.eq(w.stepped.count(), 1, "a character reaching you with a blaster in hand wakes the loop")
+		T.truthy(MoveController._test.entryOf(late).Active, "and it is followed")
+		w.step(0.6)
+		local loop = MoveController._test.entryOf(late).Slots[1].Move
+		T.eq(loop and loop.Name, MoveConfig.Hold, "it holds the gun at the hip")
+	end, "emotes live: the blaster hold: a player who reaches you already holding one", true)
+
 	withController(false, false, function(w)
 		T.eq(w.stepped.count(), 0, "both off: no loop")
 		T.eq(#w.listens, 0, "no listeners")

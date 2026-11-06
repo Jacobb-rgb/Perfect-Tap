@@ -36,6 +36,7 @@ local Vfx = require(script.Parent.Vfx)
 local Sfx = require(script.Parent.Sfx)
 local CameraShake = require(script.Parent.CameraShake)
 local BarrelSpin = require(script.Parent.BarrelSpin)
+local Motion = require(script.Parent.Parent.UI.Motion)
 
 local BlasterFx = {}
 
@@ -341,7 +342,7 @@ function BlasterFx.hit(point: Vector3, shotGlow: Color3, back: Vector3?, gated: 
 		Vfx.chips(point + out, feel.Chips, rockColor, 0.8)
 		Vfx.burst("Glint", point + out, math.max(1, feel.Sparks), shotGlow:Lerp(Color3.new(1, 1, 1), 0.5))
 		Sfx.play("BlastThud", point)
-		if feel.Rings > 0 then
+		if feel.Rings > 0 and not Motion.reduced() then
 			ringAt(point + out * 0.5, shotGlow)
 		end
 	end

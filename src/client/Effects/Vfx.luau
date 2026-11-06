@@ -9,6 +9,8 @@
 
 local Workspace = game:GetService("Workspace")
 
+local Motion = require(script.Parent.Parent.UI.Motion)
+
 local Vfx = {}
 
 local POOL_SIZE = 10
@@ -213,10 +215,15 @@ function Vfx.flash(position: Vector3, color: Color3, size: number)
 	emitter:Emit(1)
 end
 
--- Where a shot lands: a hot flash and sparks bouncing back toward the shooter.
+-- Where a shot lands: a hot flash (not with Reduce motion) and sparks bouncing back toward the shooter.
 function Vfx.impact(position: Vector3, color: Color3, back: Vector3?, sparks: number?)
-	Vfx.burst("Impact", position, 1, color:Lerp(Color3.new(1, 1, 1), 0.35))
-	Vfx.burst("Sparks", position, sparks or 3, color:Lerp(Color3.new(1, 1, 1), 0.5), back)
+	if not Motion.reduced() then
+		Vfx.burst("Impact", position, 1, color:Lerp(Color3.new(1, 1, 1), 0.35))
+	end
+	local count = sparks or 3
+	if count > 0 then
+		Vfx.burst("Sparks", position, count, color:Lerp(Color3.new(1, 1, 1), 0.5), back)
+	end
 end
 
 return Vfx

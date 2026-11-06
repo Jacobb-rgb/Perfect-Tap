@@ -478,10 +478,11 @@ local function round(parent, a: any, b: any, width: number, color: any, transpar
 end
 
 local TRAIL_STEPS = 5
+local reelGlare = 0 -- the steady hit light (BlasterFeel.glareStep; the frames run in order)
 local function drawShots(parent, t: number)
 	local width = tier.ShotWidth
 	local hot = shotGlow:Lerp(WHITE, 0.35)
-	local glare = 0
+	local landing = false
 	for k, shot in shotList do
 		local age = t - shot.At
 		if age >= 0 then
@@ -505,7 +506,7 @@ local function drawShots(parent, t: number)
 				local since = age - shot.Length / Shots.Speed
 				if since < 0.5 then
 					-- the small impact: the hot flash and a spark or two back at the shooter
-					glare = math.max(glare, 1 - since * Shots.LightFade)
+					landing = landing or since < Shots.LightHold
 					if since < 0.14 then
 						local f = 1 - since / 0.14
 						Geo.ball(parent, aimPoint, 0.2 + 0.7 * f, shotGlow:Lerp(WHITE, 0.35), NEON, fxProps(1 - f * 0.75))
@@ -533,7 +534,8 @@ local function drawShots(parent, t: number)
 			end
 		end
 	end
-	if glare > 0 then
+	reelGlare = BlasterFeel.glareStep(reelGlare, 1 / fps, landing, Shots.LightLevel)
+	if reelGlare > 0 then
 		local holder = Geo.block(
 			parent,
 			CF.new(aimPoint - (shotList[1].Dir * 0.8)),
@@ -545,7 +547,7 @@ local function drawShots(parent, t: number)
 		local light = Instance.new("PointLight")
 		light.Color = shotGlow
 		light.Range = 14
-		light.Brightness = tier.Light * glare
+		light.Brightness = tier.Light * reelGlare
 		light.Parent = holder
 	end
 end

@@ -632,7 +632,10 @@ local function addEntry(player: Player, character: Model)
 			table.insert(entry.Connections, removed:Connect(toolChanged))
 		end
 		if not playerMoves then
+			-- (a character that reaches you already holding one: the loop wakes for it)
 			updateLoop(entry)
+			check(clockNow())
+			wake()
 		end
 	end
 	if emotesOn then

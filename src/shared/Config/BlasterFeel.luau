@@ -21,7 +21,9 @@
 	every Pulse seconds.
 
 	Phones: half the particles, half the muzzle flashes, no camera kick, a
-	smaller gun kick. One light per gun, at its hit point.
+	smaller gun kick. One light per gun, at its hit point: steady while shots land
+	(never a strobe: at most 3 large flashes a second, glareStep). Reduce motion: no
+	muzzle or impact flashes, only soft sparks and a dim steady light.
 ]]
 
 local BlasterFeel = {}
@@ -98,10 +100,15 @@ BlasterFeel.Shots = {
 	Trail = 2, -- how long a shot's trail is (studs)
 	Pool = 48, -- shots in the air at most, every gun together
 	PhonePool = 24,
+	Reserve = 12, -- ... other players' guns leave this many for yours (your longest stream)
 	MaxPerFrame = 3, -- a slow frame fires at most this many
 	SoundGap = 0.055, -- seconds between shot sounds at least
 	Guns = 12, -- guns firing at most (you and the others nearby)
-	LightFade = 14, -- how fast the hit light dies after a shot (per second)
+	LightLevel = 0.85, -- the hit light while shots land (x the tier's Light); it holds steady, no strobe
+	ReducedLight = 0.3, -- ... with Reduce motion
+	LightUp = 0.15, -- seconds to come up
+	LightDown = 0.3, -- seconds to go out after the last shot
+	LightHold = 0.3, -- it counts as "shots landing" this long after each (the slowest gap is 0.25 s)
 }
 
 BlasterFeel.Pulse = 0.11 -- seconds between hit pulses
@@ -214,6 +221,18 @@ function BlasterFeel.shotStep(spin: number, due: number, dt: number, on: boolean
 	local total = due + BlasterFeel.shotRate(nextSpin, top) * dt
 	local count = math.floor(total)
 	return nextSpin, total - count, math.min(count, shots.MaxPerFrame)
+end
+
+-- The hit light next frame: toward `level` while shots land (lit), out after the last one. Smooth, no pulse.
+function BlasterFeel.glareStep(glare: number, dt: number, lit: boolean, level: number): number
+	local shots = BlasterFeel.Shots
+	if lit then
+		if glare > level then
+			return math.max(level, glare - dt / shots.LightDown)
+		end
+		return math.min(level, glare + dt / shots.LightUp)
+	end
+	return math.max(0, glare - dt / shots.LightDown)
 end
 
 -- The barrels' full speed (radians a second): one barrel goes by for every shot at FastRate.

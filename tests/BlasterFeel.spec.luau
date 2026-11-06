@@ -8,6 +8,8 @@
 	the shared list lost.
 ]]
 return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local Instance, Enum, Vector3, Color3 = roblox.Instance, roblox.Enum, roblox.Vector3, roblox.Color3
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local BlasterFeel = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterFeel")
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
@@ -145,6 +147,179 @@ return function(T, Loader)
 		local BlasterFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterFx")
 		T.eq(BlasterFx.beamStyle, nil, "and its style")
 		T.truthy(Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterShots").aim, "the shots are there")
+	end)
+
+	T.test("Shots: the hit light holds steady while shots land, it never strobes", function()
+		local shots = BlasterFeel.Shots
+		for _, rate in { 4, 8, 12, 24 } do
+			local dt, glare, nextLand, lastLand = 1 / 60, 0, 0, -math.huge
+			local low, high = math.huge, 0
+			for frame = 1, 60 * 4 do
+				local t = frame * dt
+				if t >= nextLand then
+					lastLand, nextLand = t, nextLand + 1 / rate
+				end
+				glare = BlasterFeel.glareStep(glare, dt, t - lastLand < shots.LightHold, shots.LightLevel)
+				if t > shots.LightUp + dt then
+					low, high = math.min(low, glare), math.max(high, glare)
+				end
+			end
+			T.near(high - low, 0, 1e-6, rate .. " shots a second: no pulse at all")
+			T.near(high, shots.LightLevel, 1e-6, rate .. " shots a second: at its level")
+			-- the last shot: it fades, no jump
+			local frames = 0
+			while glare > 0 do
+				local was = glare
+				glare = BlasterFeel.glareStep(glare, dt, false, shots.LightLevel)
+				T.le(was - glare, dt / shots.LightDown + 1e-9, "a soft fade")
+				frames += 1
+			end
+			T.le(frames * dt, shots.LightDown + 2 * dt, "out in LightDown")
+		end
+		T.lt(1 / shots.SlowRate, shots.LightHold, "the slowest gap between shots keeps it on")
+	end)
+
+	-- a gun firing for real in BlasterShots: Env and Vfx stood in; returns what it flashed and its light
+	local function firing(own: boolean, reduced: boolean): any
+		local Vfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Vfx")
+		local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
+		local BlasterShots = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterShots")
+		local out = { Muzzle = 0, Impact = 0, Sparks = 0, Shot = 0, Hit = 0, Bright = {} }
+		local env = BlasterShots.Env
+		local savedEnv, savedBurst, savedFolder = table.clone(env), Vfx.burst, Vfx.folder
+		local fx = Instance.new("Folder")
+		Vfx.folder = function()
+			return fx
+		end
+		env.inWorld = function()
+			return true
+		end
+		env.isPhone = function()
+			return false
+		end
+		env.worldOf = function()
+			return Vector3.zero
+		end
+		local stepFn: any = nil
+		env.connect = function(fn)
+			stepFn = fn
+			return {
+				Disconnect = function()
+					stepFn = nil
+				end,
+			}
+		end
+		env.move = function(parts, frames)
+			for i, p in parts do
+				p.CFrame = frames[i]
+			end
+		end
+		env.emit = function()
+			out.Muzzle += 1
+		end
+		Vfx.burst = function(kind: string)
+			if kind == "Impact" then
+				out.Impact += 1
+			elseif kind == "Sparks" then
+				out.Sparks += 1
+			end
+		end
+		Motion.setReduced(reduced)
+		local holder = Instance.new("Part")
+		holder.Parent = fx
+		local muzzle = Instance.new("Attachment")
+		muzzle.Parent = holder
+		local key = {}
+		local hooks = if own
+			then {
+				Shot = function()
+					out.Shot += 1
+				end,
+				Hit = function(point: Vector3, back: Vector3)
+					out.Hit += 1
+					Vfx.impact(point, Color3.new(1, 0, 1), back, 1)
+				end,
+			}
+			else nil
+		local to = Vector3.new(0, 0, -24)
+		local ok, err = pcall(function()
+			local dt = 1 / 30
+			for frame = 1, 30 * 3 do
+				BlasterShots.aim(key, muzzle, Vector3.zero, to, true, Color3.new(1, 0, 1), 10, if own then nil else 0.35, hooks)
+				stepFn(dt)
+				local lamp = out.Lamp
+				if not lamp then
+					for _, d in Vfx.folder():GetChildren() do
+						if d.Name == "ShotLamp" then
+							lamp = d
+						end
+					end
+					out.Lamp = lamp
+				end
+				local light = lamp and lamp:FindFirstChildOfClass("PointLight")
+				if light and frame * dt > 1 then
+					table.insert(out.Bright, light.Brightness)
+				end
+			end
+			BlasterShots.release(key)
+		end)
+		Motion.setReduced(false)
+		-- let the shots in the air land and the module go back to sleep
+		for _ = 1, 90 do
+			if stepFn then
+				stepFn(1 / 30)
+			end
+		end
+		Vfx.burst, Vfx.folder = savedBurst, savedFolder
+		for k, v in savedEnv do
+			env[k] = v
+		end
+		if not ok then
+			error(err)
+		end
+		return out
+	end
+
+	local function spread(list: { number }): number
+		local low, high = math.huge, -math.huge
+		for _, v in list do
+			low, high = math.min(low, v), math.max(high, v)
+		end
+		return high - low
+	end
+
+	T.test("Shots: firing for real: separate shots, a steady light, your own hooks", function()
+		local mine = firing(true, false)
+		T.truthy(mine.Muzzle > 20, "muzzle flashes: " .. mine.Muzzle)
+		T.truthy(mine.Impact > 20, "small impacts: " .. mine.Impact)
+		T.eq(mine.Shot, mine.Muzzle, "your sound and recoil with each shot")
+		T.truthy(mine.Hit > 20, "your hit pulses")
+		T.truthy(#mine.Bright > 0, "the light was sampled")
+		T.near(spread(mine.Bright), 0, 1e-6, "your gun's light never pulses")
+		local theirs = firing(false, false)
+		T.truthy(theirs.Impact > 10, "their small impacts: " .. theirs.Impact)
+		T.near(spread(theirs.Bright), 0, 1e-6, "their gun's light never pulses")
+		T.lt(theirs.Muzzle, mine.Muzzle, "their guns fire slower")
+	end)
+
+	T.test("Shots: Reduce motion: no muzzle or impact flashes, a dim steady light", function()
+		local shots = BlasterFeel.Shots
+		for _, own in { true, false } do
+			local out = firing(own, true)
+			local label = if own then "your gun: " else "their gun: "
+			T.eq(out.Muzzle, 0, label .. "no muzzle flashes")
+			T.eq(out.Impact, 0, label .. "no impact flashes")
+			T.near(spread(out.Bright), 0, 1e-6, label .. "a constant light")
+			T.near(out.Bright[1], BlasterFeel.tier(10).Light * shots.ReducedLight, 1e-6, label .. "a dim one")
+		end
+		T.lt(shots.ReducedLight, shots.LightLevel, "dimmer than the normal one")
+	end)
+
+	T.test("Shots: other players' guns leave room for yours", function()
+		local shots = BlasterFeel.Shots
+		local range = BlasterData.Levels[BlasterData.MaxLevel].Range
+		T.le(math.ceil(range / shots.Speed * shots.FastRate), shots.Reserve, "your longest stream fits the reserve")
+		T.lt(shots.Reserve, shots.PhonePool, "others still fly on phones")
 	end)
 
 	T.test("Sounds: every id plays in today's clients, no key lost", function()

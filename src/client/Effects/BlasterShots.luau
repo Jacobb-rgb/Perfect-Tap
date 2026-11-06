@@ -15,17 +15,22 @@
 	A gun's fire rate follows its spin (BlasterFeel.shotStep): the same ramp as
 	its barrels, so the shots get faster as they spin up. Each shot leaves from
 	the next barrel, so a stream winds slightly round the barrels' axis, and
-	throws a muzzle flash; when it lands: a small impact and the gun's one
-	light flares at the hit.
+	throws a muzzle flash; when it lands: a small impact. The gun's one light at
+	the hit holds steady while shots land and fades after the last (no strobe:
+	BlasterFeel.glareStep).
 
 	Hooks (your own gun): Shot(spin) as a shot leaves, Hit(point, back) when it
 	lands. Without hooks: only the small flash at the hit.
 
 	A shot = one anchored Neon ball (the head) and two Beams (the glow trail and
-	its white core), made once and reused: Shots.Pool at most in the air (the
-	gun skips a shot when none is free). One Heartbeat connection while anything
-	flies or a gun runs, all moved with one BulkMoveTo.
-	Reduce motion: a slower top rate (Shots.ReducedRate), straight streams.
+	its white core), made once and reused: Shots.Pool at most in the air, other
+	players' guns leave Shots.Reserve for yours (a gun skips a shot when none is
+	free; your sound and recoil still play). One Heartbeat connection while
+	anything flies or a gun runs, all moved with one BulkMoveTo.
+	Reduce motion: a slower top rate (Shots.ReducedRate), straight streams, no
+	muzzle or impact flashes (soft sparks), a dim steady light.
+
+	Env: what a Lune spec replaces (it has no real signals, emitters or BulkMoveTo).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,6 +44,27 @@ local Motion = require(script.Parent.Parent.UI.Motion)
 local Vfx = require(script.Parent.Vfx)
 
 local BlasterShots = {}
+
+BlasterShots.Env = {
+	connect = function(fn: (number) -> ()): RBXScriptConnection
+		return RunService.Heartbeat:Connect(fn)
+	end,
+	move = function(parts: { BasePart }, frames: { CFrame })
+		Workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+	end,
+	emit = function(flash: ParticleEmitter)
+		flash:Emit(1)
+	end,
+	inWorld = function(instance: Instance): boolean
+		return instance:IsDescendantOf(Workspace)
+	end,
+	worldOf = function(attachment: Attachment): Vector3
+		return attachment.WorldPosition
+	end,
+	isPhone = function(): boolean
+		return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+	end,
+}
 
 local SHOTS = BlasterFeel.Shots
 local GLOW = "rbxasset://textures/particles/forcefield_glow_main.dds"
@@ -71,6 +97,7 @@ type Gun = {
 	Lamp: BasePart,
 	Light: PointLight,
 	Glare: number, -- the hit light now (0..1)
+	LandedAt: number, -- when its last shot landed
 }
 
 type Shot = {
@@ -96,10 +123,6 @@ local made = 0
 local connection: RBXScriptConnection? = nil
 local moveParts: { BasePart } = {}
 local moveFrames: { CFrame } = {}
-
-local function isPhone(): boolean
-	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-end
 
 ---------------------------------------------------------------- the pool
 
@@ -160,8 +183,12 @@ local function newShot(): Shot
 	}
 end
 
--- A free shot (nil: all in the air). A shot whose part is gone (the effects folder was reset) is dropped.
-local function take(): Shot?
+-- A free shot (nil: none for this gun). A shot whose part is gone (the effects folder was reset) is dropped.
+local function take(own: boolean): Shot?
+	local pool = if BlasterShots.Env.isPhone() then SHOTS.PhonePool else SHOTS.Pool
+	if #flying >= (if own then pool else pool - SHOTS.Reserve) then
+		return nil
+	end
 	while #free > 0 do
 		local shot = table.remove(free) :: Shot
 		if shot.Part.Parent then
@@ -169,7 +196,7 @@ local function take(): Shot?
 		end
 		made -= 1
 	end
-	return if made < (if isPhone() then SHOTS.PhonePool else SHOTS.Pool) then newShot() else nil
+	return newShot()
 end
 
 local function put(shot: Shot)
@@ -223,26 +250,31 @@ local function muzzleFlash(gun: Gun, muzzle: Attachment)
 		flash.Color = ColorSequence.new(gun.Color:Lerp(WHITE, 0.45))
 		flash.Size = NumberSequence.new(size, size * 0.4)
 	end
-	flash:Emit(1)
+	BlasterShots.Env.emit(flash)
 end
 
 -- A shot leaves the gun, `late` seconds ago (a frame's shots leave evenly apart).
 local function fire(gun: Gun, late: number)
+	local hooks = gun.Hooks
+	if hooks and hooks.Shot then
+		hooks.Shot(gun.Spin) -- (your sound and recoil, even when no shot is free)
+	end
 	local muzzle = gun.Muzzle
-	local alive = muzzle ~= nil and muzzle:IsDescendantOf(Workspace)
-	local origin = if alive and muzzle then muzzle.WorldPosition else gun.From
+	local alive = muzzle ~= nil and BlasterShots.Env.inWorld(muzzle)
+	local origin = if alive and muzzle then BlasterShots.Env.worldOf(muzzle) else gun.From
 	local line = gun.To - origin
 	if line.Magnitude < 0.5 then
 		return
 	end
-	local shot = take()
+	local shot = take(hooks ~= nil)
 	if not shot then
 		return
 	end
 	-- the next barrel: a little off the axis (it still lands on the point)
 	gun.Barrel = gun.Barrel % SHOTS.Barrels + 1
 	local start = origin
-	if not Motion.reduced() then
+	local calm = Motion.reduced()
+	if not calm then
 		local angle = gun.Barrel / SHOTS.Barrels * math.pi * 2
 		local axis = CFrame.lookAt(origin, gun.To)
 		start = origin + axis.RightVector * (math.cos(angle) * SHOTS.Spiral) + axis.UpVector * (math.sin(angle) * SHOTS.Spiral)
@@ -273,12 +305,8 @@ local function fire(gun: Gun, late: number)
 	shot.Glow.Enabled = true
 	shot.Core.Enabled = true
 	table.insert(flying, shot)
-	if alive and muzzle then
+	if alive and muzzle and not calm then
 		muzzleFlash(gun, muzzle)
-	end
-	local hooks = gun.Hooks
-	if hooks and hooks.Shot then
-		hooks.Shot(gun.Spin)
 	end
 end
 
@@ -292,9 +320,9 @@ local function land(shot: Shot)
 	if hooks and hooks.Hit then
 		hooks.Hit(shot.To, back)
 	else
-		Vfx.burst("Impact", shot.To, 1, gun.Color:Lerp(WHITE, 0.35))
+		Vfx.impact(shot.To, gun.Color, nil, 0)
 	end
-	gun.Glare = 1
+	gun.LandedAt = os.clock()
 	if gun.Lamp.Parent then
 		gun.Lamp.CFrame = CFrame.new(shot.To + back * 0.8)
 	end
@@ -312,12 +340,13 @@ local function step(dt: number)
 		for i = 1, count do
 			fire(gun, dt * (count - i) / count)
 		end
-		if gun.Glare > 0 then
-			gun.Glare = math.max(0, gun.Glare - dt * SHOTS.LightFade)
+		local lit = now - gun.LandedAt < SHOTS.LightHold
+		if lit or gun.Glare > 0 then
+			gun.Glare = BlasterFeel.glareStep(gun.Glare, dt, lit, if Motion.reduced() then SHOTS.ReducedLight else SHOTS.LightLevel)
 			gun.Light.Enabled = gun.Glare > 0
 			gun.Light.Brightness = gun.Tier.Light * gun.Glare
 		end
-		running = running or on or gun.Spin > 0 or gun.Glare > 0
+		running = running or on or gun.Spin > 0 or lit or gun.Glare > 0
 	end
 	table.clear(moveParts)
 	table.clear(moveFrames)
@@ -336,7 +365,7 @@ local function step(dt: number)
 		end
 	end
 	if #moveParts > 0 then
-		Workspace:BulkMoveTo(moveParts, moveFrames, Enum.BulkMoveMode.FireCFrameChanged)
+		BlasterShots.Env.move(moveParts, moveFrames)
 	end
 	local current = connection
 	if not running and #flying == 0 and current then
@@ -393,6 +422,7 @@ local function gunOf(key: any): Gun?
 		Lamp = lamp,
 		Light = light,
 		Glare = 0,
+		LandedAt = -math.huge,
 	}
 	guns[key] = fresh
 	gunCount += 1
@@ -425,7 +455,7 @@ function BlasterShots.aim(
 		gun.Tier = tier
 		gun.Light.Color = color
 		gun.FlashColor = nil
-		gun.FlashEvery = BlasterFeel.resolve(level, isPhone()).FlashEvery
+		gun.FlashEvery = BlasterFeel.resolve(level, BlasterShots.Env.isPhone()).FlashEvery
 	end
 	local top = if hooks then SHOTS.FastRate else SHOTS.OtherRate
 	gun.Top = if Motion.reduced() then math.min(top, SHOTS.ReducedRate) else top
@@ -435,7 +465,7 @@ function BlasterShots.aim(
 		gun.On = true
 	end
 	if not connection then
-		connection = RunService.Heartbeat:Connect(step)
+		connection = BlasterShots.Env.connect(step)
 	end
 end
 
