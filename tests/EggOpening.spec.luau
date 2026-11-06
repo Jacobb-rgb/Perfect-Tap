@@ -963,9 +963,10 @@ return function(T, Loader)
 		for _, kind in kinds do
 			local name = GolemConfig.ById[kind].Name
 			local chance = HatchStage.chance("Stone", false, kind)
-			T.eq(named[name], BrightTheme.oneInText(chance), name .. ": named, its 1 in N")
+			T.eq(named[name], HatchStage.chanceWords(chance), name .. ": named, its chance")
 		end
 		T.eq(named["Coal Chomper"], "1 in 100")
+		T.eq(named["Pebble Golem"], "70%", "likely golems in the panel's own words, never 1 in 1")
 		-- the end: the golems gone, nothing left on the screen
 		for _, tag in o.Tags do
 			T.falsy(tag.Frame.Visible, "the names gone")

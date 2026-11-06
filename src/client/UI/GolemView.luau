@@ -43,6 +43,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GolemConfig = require(Shared.Config.GolemConfig)
 local Rarity = require(Shared.Config.Rarity)
+local StatConfig = require(Shared.Config.StatConfig)
 local Theme = require(Shared.Config.UITheme)
 local PopTheme = require(Shared.Config.PopTheme)
 local PictureModels = require(Shared.Builders.PictureModels)
@@ -298,7 +299,8 @@ function GolemView.equipped(state: any): { Card }
 	return out
 end
 
--- "+16% Income  •  +10% Mining speed" for the equipped golems (Golem Bond included).
+-- "+16% Income  •  +10% Mining speed" for the equipped golems (Golem Bond included, each
+-- at most its StatConfig cap: what the game applies).
 function GolemView.totals(state: any): string
 	local stats = GolemConfig.stats(golemsOf(state), bondOf(state))
 	local parts = {}
@@ -306,7 +308,8 @@ function GolemView.totals(state: any): string
 		local info = GolemConfig.BonusTypes[bonusType]
 		local value = stats[info.Stat]
 		if value and value > 0 then
-			local percent = string.format("%.1f", value * 100):gsub("%.0$", "")
+			local capped = math.min(value, StatConfig.ById[info.Stat].Max or math.huge)
+			local percent = string.format("%.1f", capped * 100):gsub("%.0$", "")
 			table.insert(parts, `+{percent}% {info.Label}`)
 		end
 	end
@@ -1134,15 +1137,15 @@ GolemView.ShortBonus = {
 	["Walk speed"] = "SPEED",
 } :: { [string]: string }
 
--- "+16% Mining speed" -> "+16% MINING" (the reels' short bottom line); a
--- HUGE golem's two: "+120% Mining speed, +20% Income" -> "+120% MINING +20% INCOME".
+-- "+16% Mining speed" -> "+16% MINING" (the reels' short bottom line); of a HUGE golem's
+-- two its first (small cards keep their text floor; the detail panel names both).
 function GolemView.shortBonus(bonus: string): string
-	local parts = {}
-	for _, one in string.split(bonus, ", ") do
-		local value, label = string.match(one, "^(%S+)%s+(.+)$")
-		table.insert(parts, if value and label then `{value} {GolemView.ShortBonus[label] or string.upper(label)}` else string.upper(one))
+	local first = string.split(bonus, ", ")[1]
+	local value, label = string.match(first, "^(%S+)%s+(.+)$")
+	if not value or not label then
+		return string.upper(first)
 	end
-	return table.concat(parts, " ")
+	return `{value} {GolemView.ShortBonus[label] or string.upper(label)}`
 end
 
 -- A short word in the pixel font, shrunk to fit its box (Pop.fit).

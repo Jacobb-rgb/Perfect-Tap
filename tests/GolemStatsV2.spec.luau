@@ -14,6 +14,10 @@ return function(T, Loader)
 	local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
 	local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
 	local HatchStage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
+	local GolemView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GolemView")
+	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
+	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
 
 	local EPS = 1e-9
@@ -269,5 +273,76 @@ return function(T, Loader)
 		T.near(HatchStage.golemDepth("SkyTitan", 10, top), HatchFx.depthFor(10, 0.46), EPS, "its head stays on the screen")
 		local tight = { Golem = Vector2.new(0.5, 0.2), GolemH = 0.42 } :: any
 		T.near(HatchStage.golemDepth("SkyTitan", 10, tight), HatchFx.depthFor(10, 0.42), EPS, "never smaller than its slot")
+	end)
+
+	T.test("Golem stats v2: the opening never says a golem is sure: no 1 in 1 in any egg, also with Triple Lucky", function()
+		for _, capsule in CapsuleConfig.List do
+			for _, lucky in { false, true } do
+				for _, line in CapsuleConfig.odds(capsule.Id, lucky) do
+					local words = HatchStage.chanceWords(line.Chance)
+					T.truthy(words ~= "1 in 1", `{capsule.Id} {line.Golem} at {line.Chance} says {words}`)
+				end
+			end
+		end
+		T.eq(HatchStage.chanceWords(0.7), "70%")
+		T.eq(HatchStage.chanceWords(0.832), "83.2%")
+		T.eq(HatchStage.chanceWords(0.3), "1 in 3")
+		T.eq(HatchStage.chanceWords(0.005), "1 in 200")
+	end)
+
+	T.test("Golem stats v2: the equipped totals say what the game applies (the caps), like Bonuses.compute", function()
+		local function totals(kinds: { string }): (string, any)
+			local owned, equipped = {}, {}
+			for i, kind in kinds do
+				owned[i] = { Id = i, Kind = kind }
+				equipped[i] = i
+			end
+			local golems = { Owned = owned, Equipped = equipped, NextId = #kinds + 1 }
+			local data = ProfileStore.deepCopy(DataTemplate)
+			data.Golems = golems
+			return GolemView.totals({ Golems = golems, Bonuses = { GolemBond = 0 } }), Bonuses.compute(data, 1_800_000_000)
+		end
+		local text, stats = totals({ "DragonKing", "DragonKing", "Flamewing" })
+		T.near(stats.IncomePct, 6, EPS, "the server's cap")
+		T.truthy(text:find("+600% Income", 1, true), text)
+		T.truthy(text:find("+100% Walk speed", 1, true), text)
+		text, stats = totals({ "Flamewing", "Flamewing", "Flamewing" })
+		T.near(stats.WalkSpeedPct, 1, EPS, "the server's cap")
+		T.eq(text, "+100% Walk speed", "not +300%")
+		text, stats = totals({ "MagmaWyvern", "MagmaWyvern", "MagmaWyvern" })
+		T.near(stats.DamagePct, 5, EPS, "the server's cap")
+		T.eq(text, "+500% Mining speed", "not +600%")
+		T.eq((totals({ "PebbleGolem" })), "+3% Income", "under its cap: as it is")
+	end)
+
+	T.test("Golem stats v2: small cards keep the text floor (a HUGE golem's first bonus), the odds list shows both", function()
+		T.eq(GolemView.shortBonus(GolemConfig.describe("SkyTitan")), "+120% MINING")
+		T.eq(GolemView.shortBonus(GolemConfig.describe("CloudColossus")), "+60% INCOME")
+		T.eq(GolemView.shortBonus(GolemConfig.describe("DragonKing")), "+350% INCOME")
+		T.eq(GolemConfig.describe("SkyTitan"), "+120% Mining speed, +20% Income", "the detail panel names both")
+		-- the PC stall window's odds rows: a HUGE golem's two bonuses wrap onto two lines, others stay one line
+		local refs = CapsuleView.build(false)
+		refs.Tab = "Sky"
+		local state = { Golems = { Owned = {}, Equipped = {}, NextId = 1 }, AtPodium = "Sky" }
+		CapsuleView.setCards(refs, CapsuleView.cards(state, 1e9, false, 1_800_000_000, nil, true))
+		local wrapped, seen = 0, 0
+		for _, row in refs.Rows do
+			if row.Frame.Visible and row.Bonus.Text ~= "" then
+				seen += 1
+				local two = row.Bonus.Text:find(", ", 1, true) ~= nil
+				T.eq(row.Bonus.TextWrapped, two, row.Name.Text .. ": two lines only for two bonuses")
+				if two then
+					wrapped += 1
+					T.truthy(
+						TechShopView.fits(row.Bonus.Text, row.Bonus.Size.X.Offset, row.Bonus.Size.Y.Offset, row.Bonus.TextSize, true),
+						row.Name.Text .. ": both seen"
+					)
+					T.truthy(row.Bonus.TextSize >= 10, row.Name.Text .. ": at the text floor or above")
+				end
+			end
+		end
+		T.truthy(seen > 0, "the odds list shows")
+		T.eq(refs.Tab, "Sky", "the Sky egg shown")
+		T.eq(wrapped, 2, "the two HUGE golems")
 	end)
 end

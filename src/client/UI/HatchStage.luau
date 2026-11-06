@@ -56,6 +56,12 @@ local HatchStage = {}
 -- A HUGE golem stands this much bigger than its slot's other golems would (never off the screen).
 HatchStage.HugeShare = 1.25
 
+-- The chance under a golem's name: "1 in N", from even odds up the panel's own "70%"
+-- (1 / 0.7 rounds to "1 in 1", which would say guaranteed).
+function HatchStage.chanceWords(chance: number): string
+	return if chance >= 0.5 then BrightTheme.chanceText(chance) else BrightTheme.oneInText(chance)
+end
+
 -- The words over a golem's head: its bonus, a HUGE golem's two on one line.
 function HatchStage.bonusLine(info: GolemConfig.Golem): string?
 	local words = {}
@@ -751,7 +757,7 @@ local function placeTags(run: Run, aspect: number)
 			o,
 			slot,
 			if info then info.Name else kind,
-			BrightTheme.oneInText(HatchStage.chance(args.Capsule, args.Lucky, kind)),
+			HatchStage.chanceWords(HatchStage.chance(args.Capsule, args.Lucky, kind)),
 			run.Colors[slot],
 			Vector2.new(under.X * size.X, under.Y * size.Y + 4),
 			s.Text,

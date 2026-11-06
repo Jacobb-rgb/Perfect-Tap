@@ -46,7 +46,7 @@
 	  golems, HUGE and SOLID: nothing see-through over them), the white rings
 	  and puffs, the shell pieces and a little confetti, and under each
 	  golem its NAME (FredokaOne, white, a thick dark edge) and "1 in N" in
-	  its rarity's colour (BrightTheme.oneInText), nothing else.
+	  its rarity's colour (HatchStage.chanceWords), nothing else.
 	  "TerraForgeCapsuleAuto" (the safe frame): the Auto button bottom left
 	  (touch: above the thumbstick's zone; a TV: inside its safe margin),
 	  green while on, its key on a badge (G / the gamepad's glyph), and a
@@ -1374,6 +1374,8 @@ local function showCard(refs: Refs, card: Card)
 		row.Rarity.Text = string.upper(line.Rarity)
 		row.Rarity.BackgroundColor3 = GolemView.rarityChip(line.Rarity)
 		row.Bonus.Text = line.Bonus
+		-- (a HUGE golem's two bonuses, both seen before buying: on two lines)
+		row.Bonus.TextWrapped = string.find(line.Bonus, ", ", 1, true) ~= nil
 		row.Chance.Text = line.Text
 		row.Chance.TextColor3 = if line.Lucky then LUCKY else PopTheme.Ink
 		row.Lucky.Visible = line.Lucky
