@@ -12,6 +12,12 @@
 	               Stepped loop for them, no Fx / ActionResult / Notify
 	               listeners, no Move / MoveLoop listeners, no
 	               sends (playLocal returns at once), no tag scans
+	  BlasterHold  the blaster in hand held low at the hip with both hands,
+	               ready or firing (owner 2026-10-31): the Loop slot plays
+	               MoveConfig.Hold on every character holding one within
+	               range; its RightGrip pose turns the gun level on the
+	               RightGrip weld's C0. The loop also runs while a character
+	               near you holds a blaster (an emote over it wins)
 	  Emotes       the 12 emotes (the EMOTES menu: EmoteController). The
 	               Stepped loop runs only while an emote plays on a
 	               character within range and on screen; it disconnects when
@@ -117,6 +123,7 @@ type Entry = {
 	Seq: number?,
 	EmoteSeq: number?,
 	LoopName: string?,
+	ServerLoop: string?, -- the loop the server's attribute asks for (it wins over the blaster hold)
 	Pending: string?,
 	PendingAt: number,
 	KickAt: number,
@@ -171,6 +178,7 @@ local enabled = true
 local started = false
 local playerMoves = false
 local emotesOn = false
+local blasterHold = false
 local localPlayer: Player? = nil
 local stepConnection: RBXScriptConnection? = nil
 local slowQueued = false
@@ -245,13 +253,34 @@ local function start(entry: Entry, name: string, scale: number?): boolean
 	return true
 end
 
--- Starts / stops the entry's loop (Spray) to match its attributes.
-local function updateLoop(entry: Entry)
-	if not playerMoves then
-		return
+-- Is this character's blaster firing? (yours: the trigger; the others': a recent BlastHit)
+local function firingOf(entry: Entry, now: number): boolean
+	if entry.Local then
+		return isFiring()
 	end
-	-- (no carry count: nothing is carried in the hands since the backpack, so no Carry loop)
-	local want = MoveRules.loopFor(nil, entry.Character:GetAttribute(MoveConfig.LoopAttribute))
+	return now - entry.FiredAt < MoveConfig.FiringHold
+end
+
+local function holdsTool(entry: Entry): boolean
+	return entry.Character:FindFirstChildOfClass("Tool") ~= nil
+end
+
+local function holdsBlaster(entry: Entry): boolean
+	local tool = entry.Character:FindFirstChild(EmoteRules.BlasterTool)
+	return tool ~= nil and tool:IsA("Tool")
+end
+
+-- The blaster hold this character plays now (AnimConfig.BlasterHold), nil = none.
+local function holdFor(entry: Entry): string?
+	return if blasterHold and holdsBlaster(entry) then MoveConfig.Hold else nil
+end
+
+local function isHold(move: MoveConfig.Move?): boolean
+	return move ~= nil and move.Name == MoveConfig.Hold
+end
+
+-- Starts / stops the entry's loop slot: `want` plays (nil = the loop fades out).
+local function setLoop(entry: Entry, want: string?)
 	if want == entry.LoopName then
 		return
 	end
@@ -268,6 +297,17 @@ local function updateLoop(entry: Entry)
 	elseif slot.Move and not slot.Stop then
 		slot.Stop = clockNow()
 	end
+end
+
+-- Starts / stops the entry's loop to match its attributes (Spray), else its blaster hold.
+local function updateLoop(entry: Entry)
+	if not playerMoves and not blasterHold then
+		return
+	end
+	-- (no carry count: nothing is carried in the hands since the backpack, so no Carry loop)
+	local server = if playerMoves then MoveRules.loopFor(nil, entry.Character:GetAttribute(MoveConfig.LoopAttribute)) else nil
+	entry.ServerLoop = server
+	setLoop(entry, server or holdFor(entry))
 end
 
 ---------------------------------------------------------------- the emote slot
@@ -410,14 +450,19 @@ local function emoting(entry: Entry): boolean
 	return entry.Slots[EMOTE].Move ~= nil or entry.Holding
 end
 
--- With PlayerMoves off: the loop runs only while an emote plays near you, on screen.
+-- Does this character need the loop (moves off): an emote, or a blaster in hand to hold?
+local function posing(entry: Entry): boolean
+	return emoting(entry) or (blasterHold and holdsBlaster(entry))
+end
+
+-- With PlayerMoves off: the loop runs only while an emote plays (or a blaster is held) near you, on screen.
 local function wake()
 	if playerMoves or not started then
 		return
 	end
 	local any, near = false, false
 	for _, entry in list do
-		if emoting(entry) then
+		if posing(entry) then
 			any = true
 			if entry.Active then
 				near = true
@@ -464,23 +509,6 @@ local function removeEntry(entry: Entry)
 	if rig and entry.Holding then
 		MoveRig.release(rig)
 	end
-end
-
--- Is this character's blaster firing? (yours: the trigger; the others': a recent BlastHit)
-local function firingOf(entry: Entry, now: number): boolean
-	if entry.Local then
-		return isFiring()
-	end
-	return now - entry.FiredAt < MoveConfig.FiringHold
-end
-
-local function holdsTool(entry: Entry): boolean
-	return entry.Character:FindFirstChildOfClass("Tool") ~= nil
-end
-
-local function holdsBlaster(entry: Entry): boolean
-	local tool = entry.Character:FindFirstChild(EmoteRules.BlasterTool)
-	return tool ~= nil and tool:IsA("Tool")
 end
 
 local function onMoveAttribute(entry: Entry)
@@ -555,6 +583,7 @@ local function addEntry(player: Player, character: Model)
 		Seq = nil,
 		EmoteSeq = nil,
 		LoopName = nil,
+		ServerLoop = nil,
 		Pending = nil,
 		PendingAt = 0,
 		KickAt = -math.huge,
@@ -587,6 +616,24 @@ local function addEntry(player: Player, character: Model)
 			end)
 		)
 		updateLoop(entry)
+	end
+	if blasterHold then
+		-- a blaster equipped or put away: the hold starts or ends (and the loop wakes for it)
+		local function toolChanged(child: Instance)
+			if child:IsA("Tool") then
+				updateLoop(entry)
+				check(clockNow())
+				wake()
+			end
+		end
+		local added, removed = (character :: any).ChildAdded, (character :: any).ChildRemoved
+		if added and removed then -- (the Lune tests' stand-in characters have no signals)
+			table.insert(entry.Connections, added:Connect(toolChanged))
+			table.insert(entry.Connections, removed:Connect(toolChanged))
+		end
+		if not playerMoves then
+			updateLoop(entry)
+		end
 	end
 	if emotesOn then
 		-- an emote already on when this character reached you plays from now
@@ -682,8 +729,8 @@ check = function(now: number)
 			removeEntry(entry)
 			continue
 		end
-		if not playerMoves and not emoting(entry) then
-			continue -- (moves off: only emoting characters need a look)
+		if not playerMoves and not posing(entry) then
+			continue -- (moves off: only emoting characters and blaster holders need a look)
 		end
 		refreshParts(entry)
 		local humanoid, root, rig = entry.Humanoid, entry.Root, entry.Rig
@@ -806,7 +853,9 @@ local function stepEntry(entry: Entry, now: number)
 	for i = 1, SLOTS do
 		local slot = entry.Slots[i]
 		local layer = slot.Layer
-		layer.Mask = if MoveRules.maskArms(SLOT_NAMES[i], firing) then MoveRules.ArmJoints else nil
+		-- (the arms stay with the gun while it fires; the blaster hold is the gun's own pose)
+		local masked = MoveRules.maskArms(SLOT_NAMES[i], firing) and not (i == 1 and isHold(slot.Move))
+		layer.Mask = if masked then MoveRules.ArmJoints else nil
 		local move = slot.Move
 		if move then
 			local t, stop = slotTime(slot, now)
@@ -829,11 +878,15 @@ local function stepEntry(entry: Entry, now: number)
 			layer.Weight = 0
 		end
 	end
-	-- the Blaster Spin twirls the blaster (the grip goes back when it ends)
+	-- the Blaster Spin twirls the blaster, the blaster hold turns it level (the grip goes back when
+	-- they end)
 	local emoteSlot = entry.Slots[EMOTE]
 	local emoteMove = emoteSlot.Move
+	local loopLayer = entry.Slots[1].Layer
 	if emoteMove and emoteMove.NeedsTool and emoteSlot.Layer.Weight > 0 then
 		setGrip(entry, emoteSlot.Layer.Pose.RightGrip)
+	elseif isHold(entry.Slots[1].Move) and loopLayer.Weight > 0 and loopLayer.Pose.RightGrip then
+		setGrip(entry, loopLayer.Pose.RightGrip)
 	elseif entry.Grip then
 		setGrip(entry, nil)
 	end
@@ -1048,8 +1101,9 @@ function MoveController.start()
 	local env = MoveController.Env
 	playerMoves = AnimConfig.PlayerMoves == true
 	emotesOn = AnimConfig.Emotes == true
-	if not playerMoves and not emotesOn then
-		return -- both off: nothing at all
+	blasterHold = AnimConfig.BlasterHold == true
+	if not playerMoves and not emotesOn and not blasterHold then
+		return -- all off: nothing at all
 	end
 	started = true
 	localPlayer = env.Players.LocalPlayer
@@ -1097,7 +1151,7 @@ function MoveController.start()
 	end)
 
 	if not playerMoves then
-		return -- emotes only: the loop connects while one plays near you (wake)
+		return -- emotes and the blaster hold: the loop connects while one plays near you (wake)
 	end
 
 	-- Reduce Motion: Roblox's own setting and the game's SETTINGS toggle
@@ -1191,6 +1245,7 @@ MoveController._test = {
 		started = false
 		playerMoves = false
 		emotesOn = false
+		blasterHold = false
 		slowQueued = false
 		gemFolder = nil
 		gemPool = EmoteProps.newPool(EmoteProps.makeGem)

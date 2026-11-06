@@ -322,6 +322,8 @@ export type Anchors = {
 	BarrelY: number,
 	BarrelZ: number,
 	BarrelR: number,
+	Spin: { BasePart }?, -- the parts that turn while the gun fires (Builders/MinigunBlaster's barrels)
+	SpinAxis: CFrame?, -- their axis: its Z along the barrels
 }
 
 --[[

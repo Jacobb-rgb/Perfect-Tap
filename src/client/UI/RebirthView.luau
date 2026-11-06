@@ -38,7 +38,6 @@ local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local BlasterData = require(Shared.Config.BlasterData)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
-local KenneyBlaster = require(Shared.Builders.KenneyBlaster)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local Geo = require(Shared.Builders.Geo)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
@@ -394,7 +393,7 @@ end
 --[[
 	Builds the live gun into a weapon card's ViewportFrame (once; the
 	controller calls it when the BLASTERS page first shows): the game's own
-	star blaster parts (BlasterBuilder.starSkin, KenneyBlaster.parts), seen
+	star blaster parts (BlasterBuilder.starSkin, BlasterBuilder.parts), seen
 	from the side with the barrel to the left, a little from above.
 ]]
 function RebirthView.fillPicture(card: WeaponCard)
@@ -408,7 +407,7 @@ function RebirthView.fillPicture(card: WeaponCard)
 	local lo = Vector3.new(math.huge, math.huge, math.huge)
 	local hi = -lo
 	local level, ore, skin = BlasterBuilder.starSkin(star)
-	KenneyBlaster.parts(level, ore, skin, function(name, cf, size, color, material, className)
+	BlasterBuilder.parts(level, ore, skin, function(name, cf, size, color, material, className)
 		local part = Geo.make(className or "Part", {
 			Name = name,
 			CFrame = cf,

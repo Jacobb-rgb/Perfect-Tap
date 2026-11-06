@@ -36,6 +36,7 @@ local BlasterFeel = require(Shared.Config.BlasterFeel)
 local Vfx = require(script.Parent.Vfx)
 local Sfx = require(script.Parent.Sfx)
 local CameraShake = require(script.Parent.CameraShake)
+local BarrelSpin = require(script.Parent.BarrelSpin)
 
 local BlasterFx = {}
 
@@ -311,6 +312,7 @@ function BlasterFx.start(tool: Tool)
 	end
 	kick(2)
 	CameraShake.kick(BlasterFeel.Recoil.StartKick * feel.CameraKick)
+	BarrelSpin.set(tool, true) -- the minigun's barrels spin up
 end
 
 function BlasterFx.stop()
@@ -319,6 +321,7 @@ function BlasterFx.stop()
 		return
 	end
 	current = nil
+	BarrelSpin.set(tool, false) -- ... and run down
 	local fx = toolFx[tool]
 	if fx then
 		fx.Flash.Enabled = false

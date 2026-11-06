@@ -339,7 +339,7 @@ return function(T, Loader)
 			T.truthy(parts > 10 and parts <= BlasterBuilder.MaxParts, `{star.Id}: {parts} parts`)
 			local handle = tool:FindFirstChild("Handle")
 			T.truthy(handle and handle:FindFirstChild("Muzzle"), "a muzzle for the beam")
-			T.truthy(tool:FindFirstChild("Effects", true), "sparks or flames")
+			T.truthy(tool:FindFirstChild(BlasterBuilder.SpinHub), star.Id .. ": a minigun, its barrels spin")
 		end
 	end)
 

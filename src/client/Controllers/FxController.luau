@@ -23,6 +23,7 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local RockFx = require(script.Parent.Parent.Effects.RockFx)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
+local BarrelSpin = require(script.Parent.Parent.Effects.BarrelSpin)
 
 local FxController = {}
 
@@ -93,6 +94,9 @@ handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any
 		local tool = muzzle and muzzle.Parent and muzzle.Parent.Parent
 		local level = if tool then BlasterFx.levelOf(tool) else nil
 		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD, BlasterFx.styleFor(level))
+		if tool and tool:IsA("Tool") then
+			BarrelSpin.poke(tool) -- their minigun's barrels turn while they fire
+		end
 	end
 	Vfx.impact(position, color, if from then from - position else nil, if mine then 2 else 5)
 	if not mine then

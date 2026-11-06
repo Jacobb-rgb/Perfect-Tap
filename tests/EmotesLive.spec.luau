@@ -46,13 +46,16 @@ return function(T, Loader)
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local Players = Loader.game:GetService("Players")
 
-	local function withAnim(moves: boolean, emotes: boolean, fn: () -> ())
-		local was = { AnimConfig.PlayerMoves, AnimConfig.Emotes }
+	-- (the blaster hold, AnimConfig.BlasterHold, is off unless `hold`: its own test below)
+	local function withAnim(moves: boolean, emotes: boolean, fn: () -> (), hold: boolean?)
+		local was = { AnimConfig.PlayerMoves, AnimConfig.Emotes, AnimConfig.BlasterHold }
 		AnimConfig.PlayerMoves = moves
 		AnimConfig.Emotes = emotes
+		AnimConfig.BlasterHold = hold == true
 		local ok, err = pcall(fn)
 		AnimConfig.PlayerMoves = was[1]
 		AnimConfig.Emotes = was[2]
+		AnimConfig.BlasterHold = was[3]
 		if not ok then
 			error(err, 0)
 		end
@@ -503,7 +506,7 @@ return function(T, Loader)
 	end
 
 	-- runs `fn` with MoveController on fake services; returns nothing
-	local function withController(moves: boolean, emotes: boolean, fn: (w: any) -> (), title: string?)
+	local function withController(moves: boolean, emotes: boolean, fn: (w: any) -> (), title: string?, hold: boolean?)
 		T.test(title or `emotes live: MoveController with PlayerMoves {moves} and Emotes {emotes}`, function()
 			local w: any = { now = 1000, sends = {}, listens = {} }
 			local meChar, meHum, meParts = fakeCharacter("Me", Vector3.new(0, 3, 0))
@@ -577,7 +580,7 @@ return function(T, Loader)
 					MoveController.init()
 					MoveController.start()
 					fn(w)
-				end)
+				end, hold)
 			end)
 			MoveController._test.reset()
 			for k in env do
@@ -846,6 +849,41 @@ return function(T, Loader)
 		w.step(1)
 		T.eq(w.stepped.count(), 1, "still one loop")
 	end)
+
+	-- the blaster hold (AnimConfig.BlasterHold, owner 2026-10-31): a blaster in hand is held low with
+	-- both hands, its grip turned level; the Blaster Spin over it wins; put away, all goes back
+	withController(false, true, function(w)
+		local entryOf = MoveController._test.entryOf
+		local grip = gripWeld(w.meParts.RightHand)
+		T.eq(w.stepped.count(), 0, "no blaster in hand: no loop")
+		w.meChar.tool = blasterTool()
+		-- (the game: the character's ChildAdded; the stand-in has no signals)
+		MoveController._test.check()
+		MoveController._test.wake()
+		T.eq(w.stepped.count(), 1, "a blaster in hand near you connects the loop")
+		w.step(0.6)
+		local entry = entryOf(w.meChar)
+		local loop = entry.Slots[1].Move
+		T.eq(loop and loop.Name, MoveConfig.Hold, "the hold plays in the loop slot")
+		T.truthy(changed(w.meParts), "the arms hold the gun")
+		local held = turned(grip)
+		T.truthy(held > 0.1, "the gun turned level on the grip: " .. held)
+		T.near((grip.C0.Position - GRIP_BASE.Position).Magnitude, 0, 1e-6, "about the grip (the hand holds it)")
+		T.truthy((MoveController.playEmote("BlasterSpin")), "the Blaster Spin over the hold")
+		w.step(0.47)
+		T.truthy(math.abs(turned(grip) - held) > 0.2, "the emote's twirl takes the grip")
+		MoveController.playEmote("BlasterSpin")
+		w.step(3)
+		T.near(turned(grip), held, 0.05, "then the hold has it again")
+		w.meChar.tool = nil
+		MoveController._test.check()
+		w.step(1)
+		T.eq(grip.C0, GRIP_BASE, "put away: the grip is back as it was")
+		T.eq(entry.Slots[1].Move, nil, "the hold is over")
+		MoveController._test.check()
+		MoveController._test.wake()
+		T.eq(w.stepped.count(), 0, "and the loop sleeps")
+	end, "emotes live: the blaster hold: both hands low with the blaster in hand", true)
 
 	withController(false, false, function(w)
 		T.eq(w.stepped.count(), 0, "both off: no loop")
