@@ -3,8 +3,10 @@
 	nich musime udelat nejake cool animace ... inspiruj se pet simulatorem";
 	his answers to the concept: the jackpot plays when the player CLEANS the
 	sparkly dirty ore, "udělej to ještě mnohem mnohem víc cool"). Pure
-	builder + pose (SecretRevealController plays it when the cleaning's dirt
-	bursts, the Lune previews pose the same frames); nothing runs on its own.
+	builder + pose; nothing runs on its own. Since 2026-10-30 the game plays
+	the cinematic instead (Effects/SecretCinematic via SecretOreReveal); this
+	first jackpot screen stays for the cleaning reel preview
+	(tools/lune/export_secret_clean.luau) and its specs.
 	The build-up happens in the world before it (the cleaning: light leaking
 	through the dirt, the shell shaking, heartbeats); this screen starts at
 	the BOOM.
