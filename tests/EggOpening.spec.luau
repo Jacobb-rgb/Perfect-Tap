@@ -720,22 +720,63 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("EggOpening V2: Mythic's rainbow letters turn evenly (one sequence, no jumps)", function()
+	T.test("EggOpening V2: MYTHIC! keeps the full rainbow: set once, never turned; a Legendary after it gets its gold", function()
 		local o, run = runOf("Crystal", { kindOf("Mythic") })
 		local tl = run.Timeline
 		local color = o.Banner.Paint.Color
-		local last: number? = nil
 		local t = tl.Banner
 		while t < tl.Fly do
 			HatchStage.pose(run, t)
-			local r = o.Banner.Paint.Rotation
-			if last then
-				local step = (r - last) % 360
-				T.truthy(step > 0 and step <= 2, `an even turn at {t} ({step} degrees a frame)`)
-			end
-			last = r
-			T.eq(o.Banner.Paint.Color, color, "the same ColorSequence: never rebuilt")
+			T.eq(o.Banner.Paint.Rotation, 90, "never turned: a turned gradient shows a slice of one hue")
+			T.eq(o.Banner.Paint.Color, color, "the same sequence: never rebuilt")
 			t += 1 / 60
+		end
+		T.eq(#color.Keypoints >= 6, true, "the whole rainbow")
+		CapsuleView.setBanner(o, "LEGENDARY!", nil, "Legendary")
+		T.eq(o.Banner.Paint.Rotation, 90)
+		T.truthy(o.Banner.Paint.Color ~= color, "a Legendary's gold replaces it")
+	end)
+
+	T.test("EggOpening V2: the pills never flicker: form and x decided once a run (4:3 tablets, touch, Auto), no AUTO overlap", function()
+		for _, screen in { { 1100, 825 }, { 916, 516 }, { 1361, 629 } } do
+			for _, count in { 3, 5 } do
+				local kinds = {}
+				for i = 1, count do
+					kinds[i] = kindOf(if i % 2 == 0 then "Rare" else "Common")
+				end
+				local o, run = runOf("Stone", kinds, { W = screen[1], H = screen[2], Phone = true, Auto = true })
+				local tl = run.Timeline
+				local label = `x{count} {screen[1]}x{screen[2]}`
+				local seen: { [number]: { Text: string, X: number } } = {}
+				local t = tl.Reveal
+				while t < tl.Fly do
+					HatchStage.pose(run, t)
+					for slot, badge in o.Badges do
+						if badge.Frame.Visible then
+							local now = { Text = badge.Bonus.Text, X = badge.Frame.Position.X.Offset, Size = badge.Frame.Size.X.Offset }
+							local before = seen[slot] :: any
+							if before then
+								T.eq(now.Text, before.Text, label .. ": the form never swaps")
+								T.eq(now.X, before.X, label .. ": the x never jumps")
+								T.eq(now.Size, before.Size, label .. ": the width never changes")
+							end
+							seen[slot] = now :: any
+							local x, y = now.X, badge.Frame.Position.Y.Offset
+							local w, h = now.Size, badge.Frame.Size.Y.Offset
+							for _, keep in o.AutoKeep do
+								local over = x - w / 2 < keep.Max.X and x + w / 2 > keep.Min.X and y - h < keep.Max.Y and y > keep.Min.Y
+								T.falsy(over, label .. ": no pill under the Auto button")
+							end
+						end
+					end
+					t += 1 / 60
+				end
+				-- the Auto button hides: decided again, the rarity and its bonus back where they fit
+				CapsuleView.setAuto(o, false, false, "", nil)
+				HatchStage.retag(run)
+				HatchStage.pose(run, tl.Reveal + tl.GolemPop + 0.2)
+				T.eq(next(run.BadgePlan) ~= nil, true, label .. ": planned again")
+			end
 		end
 	end)
 

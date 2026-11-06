@@ -2552,9 +2552,13 @@ end
 	Only the word shrinks, never under TagMin; the sub line keeps its size (TagMin at least): a run
 	fits it once (HatchStage), the UIScale is the slam's alone.
 ]]
+function CapsuleView.fittedWord(refs: OpenRefs, fit: number): number
+	return math.max(CapsuleView.TagMin, math.floor(refs.Banner.WordSize * math.clamp(fit, 0, 1) + 0.5))
+end
+
 function CapsuleView.fitBanner(refs: OpenRefs, fit: number)
 	local b = refs.Banner
-	local word = math.max(CapsuleView.TagMin, math.floor(b.WordSize * math.clamp(fit, 0, 1) + 0.5))
+	local word = CapsuleView.fittedWord(refs, fit)
 	b.Word.TextSize = word
 	b.Word.Size = UDim2.new(1, 0, 0, word + 8)
 	b.Edge.Thickness = math.clamp(word * 0.08, 2, 6)
@@ -2575,15 +2579,17 @@ function CapsuleView.bannerWidth(refs: OpenRefs): number
 	return math.max(word, sub)
 end
 
--- (V2) The banner's word (LEGENDARY! in gold; MYTHIC!: RevealKit's rainbow, HatchStage moves it) and its sub line.
+-- (V2) The banner's word (LEGENDARY! in gold; MYTHIC!: RevealKit's rainbow) and its sub line.
 function CapsuleView.setBanner(refs: OpenRefs, word: string, sub: string?, rarityId: string)
 	local b = refs.Banner
 	b.Word.Text = word
 	b.Sub.Text = sub or ""
 	b.Sub.Visible = sub ~= nil
-	b.Paint.Rotation = 90 -- (a Mythic's turns while it shows: HatchStage)
+	b.Paint.Rotation = 90
 	if rarityId == "Mythic" then
-		b.Paint.Color = RevealKit.rainbow(0)
+		-- (set once: the full rainbow the owner approved in the video, never a turning or moving one:
+		-- a turned gradient shows only a slice of the sequence across the wide label)
+		b.Paint.Color = RevealKit.rainbow(1)
 	else
 		local info = Rarity.ById[rarityId] or Rarity.ById.Common
 		b.Paint.Color = ColorSequence.new({

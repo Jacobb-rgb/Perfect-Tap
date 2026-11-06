@@ -74,6 +74,9 @@ export type Args = {
 
 type Standing = { Model: Model, Height: number, Root: number, Depth: number, Spot: Vector2, Turn: number }
 
+-- A rarity pill's plan for a run: its form ("Full" with the bonus, "Short" the rarity alone, nil none), its x.
+type PillPlan = { Form: string?, X: number, Text: number, Set: boolean }
+
 export type Run = {
 	Args: Args,
 	Refs: CapsuleView.OpenRefs,
@@ -101,13 +104,12 @@ export type Run = {
 	BestSlot: number, -- the slot of the best kept golem (its pulses, the banner's bonus; 0: none kept)
 	BestColor: Color3,
 	BannerFit: number?, -- the banner word's size share for this run (measured once at its first frame: no jumps)
-	BadgeForm: { [number]: string }, -- per slot: the pill's form now ("Full" with the bonus, "Short" the rarity alone)
+	BadgePlan: { [number]: PillPlan }, -- per slot: its pill's form and x, decided once (pillPlan)
 	Pieces: { Frame }, -- the confetti this run throws (its Tier's count)
 	Bonuses: { [number]: string }, -- per slot: its golem's bonus ("+10% Income"; none: no entry)
 	Badged: boolean, -- up to CapsuleView.BadgeSlots golems: a rarity pill over each head
 	MotesPer: number, -- motes per egg (fewer for many eggs: the pool is shared)
 	OrbitsPer: number, -- energy rings per egg (owner 2026-10-30: the full show on phones too)
-	BadgeSize: { [number]: number }, -- per slot: the text size its pill was measured at (measured once, placed each frame)
 	EggPoses: { [number]: HatchFx.EggPose }, -- each egg's pose this frame (its orbits and motes follow it)
 	Fired: { [string]: boolean },
 	FlashFrom: number?, -- t when the burst's flash went off (nil: not yet / none)
@@ -183,6 +185,7 @@ local function relayout(run: Run)
 	run.SafeBottom = run.Refs.SafeBottom
 	local aspect = size.X / math.max(1, size.Y)
 	run.BannerFit = nil -- (measured again for the new screen)
+	table.clear(run.BadgePlan) -- (and the pills)
 	run.Layout = HatchFx.layout(run.Count, aspect, run.Special, HatchStage.marks(run))
 	-- (a screen too short for the second row's marks even with the smallest golems: said, as setTag's
 	-- UnderAuto; the specs hold it never is)
@@ -245,14 +248,13 @@ function HatchStage.new(args: Args): Run
 		BestSlot = if showIndex then table.find(order, showIndex) or 0 else 0,
 		BestColor = BrightTheme.crackColour(bestRarity),
 		BannerFit = nil,
-		BadgeForm = {},
+		BadgePlan = {},
 		Pieces = table.move(o.Confetti, 1, math.clamp(timeline.Tier.Confetti, 0, #o.Confetti), 1, {}),
 		Bonuses = {},
 		Badged = n <= CapsuleView.BadgeSlots,
 		MotesPer = math.min(motes, math.floor(#o.Motes / n)),
 		OrbitsPer = HatchFx.OrbitCount,
 		EggPoses = {},
-		BadgeSize = {},
 		Fired = {},
 		FlashFrom = nil,
 		FlashRetry = nil,
@@ -747,6 +749,7 @@ end
 
 -- The names placed again (the Auto button showed or hid: they step aside for it only while it shows).
 function HatchStage.retag(run: Run)
+	table.clear(run.BadgePlan) -- (the pills decide again: the Auto button showed or hid)
 	if next(run.Standing) ~= nil then
 		placeTags(run, run.Size.X / math.max(1, run.Size.Y))
 	end
@@ -846,6 +849,45 @@ end
 	within its column); where it still would not clear it, the rarity
 	alone; where not even that, none.
 ]]
+--[[
+	A pill's plan for the run, decided ONCE (review 2026-11-06: never frame by frame from the bob: it
+	swapped forms and jumped): the form and x that clear the Auto button over the whole range its
+	bottom moves through (from the moment it shows in its pop, its overshoot, its bob), as one tall
+	row. Made again when the screen or the Auto button changes (relayout, retag).
+]]
+local function pillPlan(run: Run, slot: number, aspect: number): PillPlan
+	local o = run.Refs
+	local size = run.Size
+	local g = run.Standing[slot]
+	local s = run.Layout.Slots[slot]
+	local text = math.max(CapsuleView.TagMin, math.floor(s.Text * 0.62 + 0.5))
+	local rarity = run.Rarities[slot]
+	local pitch = run.Layout.Spacing * size.X * 0.96
+	local x, low, high = size.X / 2, math.huge, -math.huge
+	for _, scale in { 0.6, 1, 1.07 } do
+		for _, lift in { -0.025, 0.025 } do
+			local middle = HatchFx.at(g.Spot.X, g.Spot.Y, g.Depth / scale, aspect) + Vector3.new(0, g.Height * lift, 0)
+			local head = HatchFx.project(middle + Vector3.new(0, g.Height / 2, 0), aspect)
+			x = head.X * size.X
+			low = math.min(low, head.Y * size.Y - 6)
+			high = math.max(high, head.Y * size.Y - 6)
+		end
+	end
+	for _, form in { "Full", "Short" } do
+		local bonus = if form == "Full" then run.Bonuses[slot] else nil
+		if form == "Short" and run.Bonuses[slot] == nil then
+			break -- (no bonus: the short pill is the full one)
+		end
+		local w, h = CapsuleView.badgeSize(rarity, bonus, text)
+		local top = Vector2.new(x, low - h)
+		local rows = { { w, 0, high - low + h } }
+		if CapsuleView.clears(o, top, rows, pitch) then
+			return { Form = form, X = CapsuleView.stepAside(o, top, rows, pitch), Text = text, Set = false }
+		end
+	end
+	return { Form = nil, X = x, Text = text, Set = false }
+end
+
 local function poseBadges(run: Run, t: number, aspect: number)
 	local o = run.Refs
 	local tl = run.Timeline
@@ -853,46 +895,32 @@ local function poseBadges(run: Run, t: number, aspect: number)
 	for slot = 1, #o.Badges do
 		local badge = o.Badges[slot]
 		local g = run.Standing[slot]
-		local s = run.Layout.Slots[slot]
 		local pose = if g and run.Badged then HatchFx.golemPose(t, tl, slot) else nil
 		local banner = run.Tier.Banner ~= nil and slot == run.BestSlot
-		if not g or not s or not pose or not pose.Shown or pose.Name >= 1 or run.Deleted[slot] or banner then
+		if not g or not pose or not pose.Shown or pose.Name >= 1 or run.Deleted[slot] or banner then
 			badge.Frame.Visible = false
 			continue
 		end
-		-- (over its head as it stands now: its pop, its bob)
+		local plan = run.BadgePlan[slot]
+		if not plan then
+			plan = pillPlan(run, slot, aspect)
+			run.BadgePlan[slot] = plan
+		end
+		if not plan.Form then
+			badge.Frame.Visible = false
+			continue
+		end
+		-- (over its head as it stands now: its pop, its bob; its form and x are the plan's)
 		local depth = g.Depth / pose.Scale
 		local middle = HatchFx.at(g.Spot.X, g.Spot.Y, depth, aspect) + Vector3.new(0, g.Height * pose.Lift, 0)
 		local head = HatchFx.project(middle + Vector3.new(0, g.Height / 2, 0), aspect)
-		local bottom = Vector2.new(head.X * size.X, head.Y * size.Y - 6)
-		local text = math.max(CapsuleView.TagMin, math.floor(s.Text * 0.62 + 0.5))
-		local rarity = run.Rarities[slot]
-		local pitch = run.Layout.Spacing * size.X * 0.96
-		-- the full pill, else the rarity alone, whichever clears the Auto button (beside it: stepped aside)
-		local form, x = nil :: string?, bottom.X
-		for _, try in { "Full", "Short" } do
-			local bonus = if try == "Full" then run.Bonuses[slot] else nil
-			if try == "Short" and bonus == nil and run.Bonuses[slot] == nil then
-				break -- (no bonus: the short pill is the full one)
-			end
-			local w, h = CapsuleView.badgeSize(rarity, bonus, text)
-			local top = Vector2.new(bottom.X, bottom.Y - h)
-			local rows = { { w, 0, h } }
-			if CapsuleView.clears(o, top, rows, pitch) then
-				form, x = try, CapsuleView.stepAside(o, top, rows, pitch)
-				break
-			end
+		local y = head.Y * size.Y - 6
+		if not plan.Set then
+			plan.Set = true
+			local bonus = if plan.Form == "Full" then run.Bonuses[slot] else nil
+			CapsuleView.setBadge(o, slot, run.Rarities[slot], bonus, Vector2.new(plan.X, y), plan.Text)
 		end
-		if not form then
-			badge.Frame.Visible = false
-			continue
-		end
-		if run.BadgeSize[slot] ~= text or run.BadgeForm[slot] ~= form then
-			run.BadgeSize[slot] = text
-			run.BadgeForm[slot] = form
-			CapsuleView.setBadge(o, slot, rarity, if form == "Full" then run.Bonuses[slot] else nil, bottom, text)
-		end
-		badge.Frame.Position = UDim2.fromOffset(math.floor(x), math.floor(bottom.Y))
+		badge.Frame.Position = UDim2.fromOffset(math.floor(plan.X), math.floor(y))
 		badge.Frame.Visible = true
 		CapsuleView.fadeBadge(badge, pose.Name)
 	end
@@ -955,8 +983,8 @@ end
 --[[
 	(V2) The best rarity's show (Tier): LEGENDARY! / MYTHIC! slamming in
 	over the golems (in the band they leave free, under the top bar and
-	the chain's "2 / 5"; Mythic's rainbow letters turn slowly, no jumps),
-	and Mythic's stronger, rainbow-tinted stage light.
+	the chain's "2 / 5"; Mythic's letters the full rainbow, set once in
+	setBanner), and Mythic's stronger, rainbow-tinted stage light.
 ]]
 local function poseRarity(run: Run, t: number)
 	local o = run.Refs
@@ -965,10 +993,14 @@ local function poseRarity(run: Run, t: number)
 	local scale, alpha = HatchFx.bannerAt(t, tl)
 	b.Frame.Visible = run.Tier.Banner ~= nil and alpha < 1
 	if b.Frame.Visible then
-		if not run.BannerFit then
-			local fit = HatchStage.bannerFit(run)
+		local fit = run.BannerFit
+		if not fit then
+			fit = HatchStage.bannerFit(run)
 			run.BannerFit = fit
-			CapsuleView.fitBanner(o, fit)
+		end
+		-- (a new run, or layoutOpening reset the word: the run's fit again)
+		if b.Word.TextSize ~= CapsuleView.fittedWord(o, fit :: number) then
+			CapsuleView.fitBanner(o, fit :: number)
 		end
 		local height = b.Frame.Size.Y.Offset
 		b.Frame.Position = UDim2.fromOffset(run.Size.X / 2, bannerTop(o) + height / 2)
@@ -979,10 +1011,6 @@ local function poseRarity(run: Run, t: number)
 		local subEdge = b.Sub:FindFirstChild("Edge")
 		if subEdge and subEdge:IsA("UIStroke") then
 			subEdge.Transparency = alpha
-		end
-		if run.ShowRarity == "Mythic" and not tl.Reduced then
-			-- (the rainbow turns slowly and evenly: one ColorSequence, built once in setBanner)
-			b.Paint.Rotation = (90 + (t - tl.Banner) * 45) % 360
 		end
 	end
 	local light = HatchFx.lightAt(t, tl)

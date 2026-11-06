@@ -1161,7 +1161,7 @@ local function onEvents(run: HatchStage.Run, events: { string })
 		elseif event == "Banner" then
 			-- (V2: LEGENDARY! / MYTHIC!: its own chime, a Mythic's higher and with a boom under it)
 			Sfx.playOwn("LevelChime")
-			if run.BestOrder >= 6 then
+			if run.ShowOrder >= 6 then
 				Sfx.play("CaseBoom", nil, 0.8)
 				Sfx.play("LevelChime", nil, 1.25)
 			end
