@@ -6,7 +6,14 @@
 return function(T, Loader)
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+	local roblox = require("@lune/roblox") :: any
+	local Vector2 = roblox.Vector2
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
+	local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
+	local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+	local HatchStage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
 
 	local EPS = 1e-9
@@ -220,5 +227,47 @@ return function(T, Loader)
 		T.truthy(GolemConfig.score("CoalChomper") > GolemConfig.score("JadeGardener"), "same +10%: the Epic first")
 		T.truthy(GolemConfig.score("CloudColossus") > GolemConfig.score("SkyTitan"), "+160% over +140%")
 		T.eq(GolemConfig.score("NoSuchGolem"), -1)
+	end)
+
+	T.test("Golem stats v2: a v11 save loads as v12 with every golem it owns, retired ones and paid ones too", function()
+		T.eq(DataTemplate.Version, Migrations.Latest, "Version and Latest together")
+		T.eq(Migrations.Latest, 12)
+		local save: any = { Version = 11 }
+		save.Golems = {
+			Owned = {
+				{ Id = 1, Kind = "HeartstoneColossus", Paid = true, Locked = true },
+				{ Id = 2, Kind = "TinTumbler" },
+				{ Id = 3, Kind = "GildedPorter", Paid = true },
+				{ Id = 4, Kind = "EmberImp" },
+				{ Id = 5, Kind = "SkyTitan" },
+			},
+			Equipped = { 1, 5 },
+			NextId = 6,
+		}
+		Migrations.run(save)
+		T.eq(save.Version, 12)
+		T.eq(#save.Golems.Owned, 5, "none lost")
+		T.eq(save.Golems.Owned[1].Kind, "HeartstoneColossus")
+		T.truthy(save.Golems.Owned[1].Paid and save.Golems.Owned[1].Locked, "paid and locked stay")
+		T.eq(#save.Golems.Equipped, 2, "still equipped")
+		T.near(GolemConfig.stats(save.Golems).DamagePct, 0.4 + 1.2, EPS, "both give their bonus")
+	end)
+
+	T.test("Golem stats v2: the opening names both HUGE bonuses and shows a HUGE golem bigger, on the screen", function()
+		T.eq(HatchStage.bonusLine(GolemConfig.ById.SkyTitan), "+120% Mining speed, +20% Income")
+		T.eq(HatchStage.bonusLine(GolemConfig.ById.CloudColossus), "+60% Income, +100% Ore luck")
+		T.eq(HatchStage.bonusLine(GolemConfig.ById.AetherKing), "+100% Income")
+		-- (the rarest first, then the score: a HUGE golem is the show of any Sky egg batch it wakes in)
+		T.eq(CapsuleView.best({ "SkySprite", "AetherKing", "SkyTitan" }), "SkyTitan")
+		T.eq(CapsuleView.best({ "SkyTitan", "CloudColossus" }), "CloudColossus")
+		local middle = { Golem = Vector2.new(0.5, 0.46), GolemH = 0.5 } :: any
+		local plain = HatchStage.golemDepth("AetherKing", 10, middle)
+		local huge = HatchStage.golemDepth("SkyTitan", 10, middle)
+		T.near(plain, HatchFx.depthFor(10, 0.5), EPS, "the others fill their slot")
+		T.near(huge, HatchFx.depthFor(10, 0.5 * HatchStage.HugeShare), EPS, "a HUGE one more")
+		local top = { Golem = Vector2.new(0.5, 0.25), GolemH = 0.42 } :: any
+		T.near(HatchStage.golemDepth("SkyTitan", 10, top), HatchFx.depthFor(10, 0.46), EPS, "its head stays on the screen")
+		local tight = { Golem = Vector2.new(0.5, 0.2), GolemH = 0.42 } :: any
+		T.near(HatchStage.golemDepth("SkyTitan", 10, tight), HatchFx.depthFor(10, 0.42), EPS, "never smaller than its slot")
 	end)
 end

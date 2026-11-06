@@ -53,6 +53,29 @@ local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 
 local HatchStage = {}
 
+-- A HUGE golem stands this much bigger than its slot's other golems would (never off the screen).
+HatchStage.HugeShare = 1.25
+
+-- The words over a golem's head: its bonus, a HUGE golem's two on one line.
+function HatchStage.bonusLine(info: GolemConfig.Golem): string?
+	local words = {}
+	for _, bonus in GolemConfig.bonuses(info) do
+		table.insert(words, HatchFx.bonusText(bonus.Type, bonus.Value, GolemConfig.BonusTypes))
+	end
+	return if #words > 0 then table.concat(words, ", ") else nil
+end
+
+-- How far a golem stands: it fills its slot's height, a HUGE one HugeShare of it, its head and feet on the screen.
+function HatchStage.golemDepth(kind: string, height: number, s: HatchFx.Slot): number
+	local info = GolemConfig.ById[kind]
+	local share = s.GolemH
+	if info and info.Huge then
+		local room = 2 * math.min(s.Golem.Y - 0.02, 0.9 - s.Golem.Y)
+		share = math.max(s.GolemH, math.min(s.GolemH * HatchStage.HugeShare, room))
+	end
+	return HatchFx.depthFor(height, share)
+end
+
 HatchStage.SunSpin = 9 -- degrees a second (Reduce motion: still)
 
 export type Args = {
@@ -269,7 +292,7 @@ function HatchStage.new(args: Args): Run
 		run.Colors[slot] = BrightTheme.crackColour(run.Rarities[slot])
 		run.Deleted[slot] = args.Deleted ~= nil and args.Deleted[order[slot]] == true
 		run.Waiting[slot] = args.Waiting ~= nil and args.Waiting[order[slot]] == true
-		local bonus = if info then HatchFx.bonusText(info.Bonus.Type, info.Bonus.Value, GolemConfig.BonusTypes) else nil
+		local bonus = if info then HatchStage.bonusLine(info) else nil
 		if bonus then
 			run.Bonuses[slot] = bonus
 		end
@@ -765,7 +788,7 @@ local function reveal(run: Run, aspect: number)
 			Model = model,
 			Height = height,
 			Root = root,
-			Depth = HatchFx.depthFor(height, s.GolemH),
+			Depth = HatchStage.golemDepth(kind, height, s),
 			Spot = s.Golem,
 			Turn = turnOf(s.Golem),
 		}
@@ -1087,7 +1110,7 @@ function HatchStage.pose(run: Run, t: number): { string }
 			-- (the golems out already: where they stand and their names follow the new layout)
 			for slot, standing in run.Standing do
 				local s = run.Layout.Slots[slot]
-				standing.Depth = HatchFx.depthFor(standing.Height, s.GolemH)
+				standing.Depth = HatchStage.golemDepth(run.Kinds[slot], standing.Height, s)
 				standing.Spot = s.Golem
 				standing.Turn = turnOf(s.Golem)
 			end
