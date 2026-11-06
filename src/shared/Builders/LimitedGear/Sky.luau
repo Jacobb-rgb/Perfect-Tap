@@ -15,19 +15,24 @@
 	                its feet, embers and its own light
 
 	The two HUGE golems (owner 2026-10-30, his Sky egg concept; GolemConfig
-	Huge: Scale 2.2, HugeMaxParts):
+	Huge: Scale 3.2, HugeMaxParts; owner 2026-11-06: more lightning on both,
+	clouds on the Titan too):
 	  TitanArmor    Sky Titan: white and gold armour, a crowned white helm
 	                with glowing ice eyes, big gold pauldrons with ice gems,
 	                crystal wings of two-tone ice shards, a great golden
 	                halo, a gold staff topped with an ice crystal, a chest
-	                crystal, ice crystals floating round its legs, sparkles
-	                and its own light
+	                crystal, ice crystals floating round its legs, clouds on
+	                its shoulders, arms, waist, feet and halo, ice lightning
+	                from the halo and the staff to the ground, sparkles and
+	                its own light
 	  CloudStorm    Cloud Colossus: dark storm rock, a rock helm with glowing
 	                blue eyes and a crown of rock spikes, huge cloud
 	                shoulders, clouds wrapped round its arms, waist and feet,
-	                blue lightning veins in the rock, rocks floating round
-	                it, a storm ring over its head with a cloud and a
-	                floating stone, storm motes and its own light
+	                blue lightning veins in the rock, great bolts from the
+	                ring through the clouds and the fists to the ground and
+	                out to the rocks floating round it, a storm ring over its
+	                head with a cloud and a floating stone, storm motes and
+	                its own light
 ]]
 
 local Types = require(script.Parent.Parent.LimitedGearTypes)
@@ -75,6 +80,7 @@ local STORM_ROCK = rgb(35, 48, 72)
 local STORM_ROCK_DARK = rgb(20, 29, 48)
 local STORM_BLUE = rgb(0, 125, 255)
 local LIGHTNING = rgb(110, 205, 255)
+local BOLT_HOT = rgb(226, 248, 255) -- the great bolts' white-hot blue
 local THUNDERHEAD = rgb(238, 245, 255)
 local THUNDERHEAD_SHADE = rgb(196, 214, 240)
 local ICE_SKY = rgb(150, 222, 255)
@@ -508,6 +514,17 @@ local function zigzag(c: Ctx, name: string, points: { { number } }, z: number, w
 	end
 end
 
+-- a bolt of glowing segments through the points { x, y, z } (unscaled), square so it reads from every side
+local function bolt(c: Ctx, name: string, points: { { number } }, width: number, color: Color3)
+	for i = 1, #points - 1 do
+		if c.Room() < 1 then
+			return
+		end
+		local a, b = points[i], points[i + 1]
+		T.seg(c.Model, name .. i, T.P(c, a[1], a[2], a[3]), T.P(c, b[1], b[2], b[3]), width * c.S, width * c.S, color, NEON)
+	end
+end
+
 -- a plate (unscaled box) when there is room
 local function plate(c: Ctx, name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material): Part?
 	if c.Room() < 1 then
@@ -742,6 +759,80 @@ local function skyTitan(c: Ctx): number
 			if glow then NEON else M.SmoothPlastic
 		)
 	end
+	-- clouds like the Colossus's (owner 2026-11-06): behind the pauldrons and round the forearms
+	-- (Pauldron*: they swing with that arm), the waist and the feet (Body*), on the halo's back
+	for i, side in { -1, 1 } do
+		puffs(c, `Pauldron{i}_Cloud`, {
+			{ side * 1.5, 1.48, 0.12, 0.74 },
+			{ side * 1.2, 1.18, 0.46, 0.66 },
+			{ side * 1.66, 1.84, 0.36, 0.62 },
+			{ side * 0.98, 1.92, 0.58, 0.64 },
+		}, THUNDERHEAD, THUNDERHEAD_SHADE)
+		puffs(c, `Pauldron{i}_Wrap`, {
+			{ side * 1.2, 0.94, 0.14, 0.5 },
+			{ side * 0.62, 0.98, 0.26, 0.42 },
+			{ side * 1.04, 1.02, -0.36, 0.42 },
+		}, THUNDERHEAD, THUNDERHEAD_SHADE)
+	end
+	puffs(c, "BodyCloud", {
+		{ -0.8, 0.55, 0.05, 0.56 },
+		{ 0.8, 0.55, 0.05, 0.56 },
+		{ -0.42, 0.52, 0.45, 0.52 },
+		{ 0.42, 0.52, 0.45, 0.52 },
+	}, THUNDERHEAD, THUNDERHEAD_SHADE)
+	puffs(c, "BodyMist", {
+		{ -0.72, 0.12, -0.05, 0.58 },
+		{ 0.72, 0.12, -0.05, 0.58 },
+		{ -0.35, 0.1, -0.5, 0.46 },
+		{ 0.35, 0.1, -0.5, 0.46 },
+		{ 0, 0.12, 0.5, 0.6 },
+	}, THUNDERHEAD, THUNDERHEAD_SHADE)
+	puffs(c, "HaloCloud", {
+		{ -0.72, 3.95, 0.5, 0.5 },
+		{ 0.72, 3.95, 0.5, 0.5 },
+		{ 0, 4.05, 0.75, 0.56 },
+	}, THUNDERHEAD, THUNDERHEAD_SHADE)
+	-- ice lightning: from the halo down both sides, round the staff, through the chest, down the
+	-- arms to the ground (BodyStorm*: on the torso; Pauldron*: with that arm)
+	bolt(
+		c,
+		"BodyStorm1_",
+		{ { -0.95, 3.72, -0.05 }, { -1.32, 3.36, -0.2 }, { -1.06, 3.0, -0.3 }, { -1.46, 2.64, -0.4 }, { -1.26, 2.3, -0.5 } },
+		0.07,
+		BOLT_HOT
+	)
+	bolt(c, "BodyStorm2_", { { 0.9, 3.7, -0.05 }, { 0.72, 3.4, -0.3 }, { 0.98, 3.1, -0.42 }, { 0.82, 2.78, -0.66 } }, 0.06, ICE)
+	bolt(
+		c,
+		"Pauldron2_StaffBolt",
+		{ { 1.24, 3.72, -0.54 }, { 1.56, 3.36, -0.6 }, { 1.32, 3.0, -0.64 }, { 1.62, 2.62, -0.6 }, { 1.38, 2.26, -0.62 } },
+		0.06,
+		BOLT_HOT
+	)
+	for i, side in { -1, 1 } do
+		zigzag(
+			c,
+			`BodyBolt{i}_`,
+			{ { side * 0.62, 1.27 }, { side * 0.42, 1.12 }, { side * 0.54, 0.96 }, { side * 0.36, 0.78 } },
+			-0.56,
+			0.05,
+			ICE
+		)
+		bolt(
+			c,
+			`Pauldron{i}_Arc`,
+			{ { side * 1.62, 1.5, -0.32 }, { side * 1.42, 1.24, -0.46 }, { side * 1.56, 1.0, -0.44 }, { side * 1.24, 0.72, -0.5 } },
+			0.05,
+			ICE
+		)
+		bolt(
+			c,
+			`Pauldron{i}_Strike`,
+			{ { side * 1.0, 0.36, -0.42 }, { side * 1.22, 0.2, -0.62 }, { side * 1.06, 0.04, -0.76 } },
+			0.05,
+			BOLT_HOT
+		)
+	end
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, ICE, 5, 0.4)
@@ -859,8 +950,8 @@ local function cloudColossus(c: Ctx): number
 	end
 	plate(c, "BodyWaist", c.At(0, 0.52, 0), Vector3.new(1.38, 0.2, 0.94), STORM_ROCK_DARK, M.Slate)
 	-- blue lightning cracking the rock: the chest, the arms, the legs, the fists, the brow
-	zigzag(c, "Bolt", { { -0.52, 1.36 }, { -0.3, 1.2 }, { -0.42, 1.02 }, { -0.16, 0.86 }, { -0.24, 0.66 } }, -0.575, 0.06, LIGHTNING)
-	zigzag(c, "BoltR", { { 0.5, 1.34 }, { 0.3, 1.16 }, { 0.4, 0.96 }, { 0.18, 0.78 } }, -0.575, 0.06, LIGHTNING)
+	zigzag(c, "Bolt", { { -0.52, 1.36 }, { -0.3, 1.2 }, { -0.42, 1.02 }, { -0.16, 0.86 }, { -0.24, 0.66 } }, -0.575, 0.08, BOLT_HOT)
+	zigzag(c, "BoltR", { { 0.5, 1.34 }, { 0.3, 1.16 }, { 0.4, 0.96 }, { 0.18, 0.78 } }, -0.575, 0.08, BOLT_HOT)
 	for i, side in { -1, 1 } do
 		zigzag(c, `ArmBolt{i}_`, { { side * 0.8, 1.38 }, { side * 0.92, 1.16 }, { side * 0.78, 0.96 } }, -0.3, 0.05, LIGHTNING)
 		zigzag(
@@ -885,6 +976,7 @@ local function cloudColossus(c: Ctx): number
 		end
 	end
 	zigzag(c, "BrowBolt", { { 0.42, 2.66 }, { 0.26, 2.5 }, { 0.38, 2.44 }, { 0.22, 2.3 } }, -0.72, 0.05, LIGHTNING)
+	zigzag(c, "BrowBoltL", { { -0.42, 2.66 }, { -0.26, 2.5 }, { -0.38, 2.44 }, { -0.22, 2.3 } }, -0.72, 0.05, LIGHTNING)
 	-- big rocks orbiting it, some cracked with lightning (the low ones closer in: the
 	-- follower walks no further aside than it must, GolemFit)
 	local rocks = {
@@ -946,6 +1038,62 @@ local function cloudColossus(c: Ctx): number
 		{ 0.7, 0.14, 0.1, 0.54 },
 		{ 0, 0.12, 0.48, 0.58 },
 	}, THUNDERHEAD, THUNDERHEAD_SHADE)
+	-- the storm (owner 2026-11-06: more lightning): great forked bolts from the ring to the cloud
+	-- shoulders (BodyStorm*, BodyFork*: on the torso), through the clouds, on to the fists and from
+	-- the fists to the ground (Pauldron*: with that arm), arcs out to the rocks (Boulder*: on the torso)
+	for i, side in { -1, 1 } do
+		bolt(
+			c,
+			`BodyStorm{i}_`,
+			{
+				{ side * 0.95, 3.8, -0.1 },
+				{ side * 1.32, 3.42, -0.28 },
+				{ side * 1.06, 3.04, -0.38 },
+				{ side * 1.46, 2.64, -0.48 },
+				{ side * 1.24, 2.28, -0.62 },
+			},
+			0.08,
+			BOLT_HOT
+		)
+		bolt(
+			c,
+			`BodyFork{i}_`,
+			{ { side * 1.06, 3.04, -0.38 }, { side * 0.86, 2.86, -0.62 }, { side * 0.96, 2.62, -0.74 } },
+			0.05,
+			LIGHTNING
+		)
+		bolt(
+			c,
+			`Pauldron{i}_CloudBolt`,
+			{ { side * 0.92, 2.1, -0.46 }, { side * 1.2, 1.92, -0.66 }, { side * 1.04, 1.72, -0.76 }, { side * 1.36, 1.5, -0.86 } },
+			0.06,
+			BOLT_HOT
+		)
+		bolt(
+			c,
+			`Pauldron{i}_Arc`,
+			{ { side * 1.74, 1.68, -0.38 }, { side * 1.5, 1.34, -0.62 }, { side * 1.68, 1.04, -0.58 }, { side * 1.3, 0.72, -0.6 } },
+			0.06,
+			LIGHTNING
+		)
+		bolt(
+			c,
+			`Pauldron{i}_Strike`,
+			{ { side * 1.02, 0.34, -0.46 }, { side * 1.26, 0.2, -0.66 }, { side * 1.08, 0.04, -0.8 } },
+			0.06,
+			BOLT_HOT
+		)
+	end
+	for i, arc in
+		{
+			{ { -1.85, 2.35, 0.2 }, { -1.72, 2.2, 0.02 }, { -1.62, 1.98, 0.1 } },
+			{ { 1.8, 2.55, -0.1 }, { 1.92, 2.3, 0.06 }, { 1.66, 2.02, 0.1 } },
+			{ { -1.78, 1.26, -0.42 }, { -1.86, 1.44, -0.3 }, { -1.6, 1.52, -0.2 } },
+			{ { 1.78, 1.46, 0.4 }, { 1.92, 1.62, 0.28 }, { 1.62, 1.72, 0.1 } },
+		}
+	do
+		bolt(c, `BoulderArc{i}_`, arc, 0.05, LIGHTNING)
+	end
 	local body = c.Model:FindFirstChild("Body")
 	if body and body:IsA("BasePart") then
 		T.embers(body, LIGHTNING, 6, 0.4)

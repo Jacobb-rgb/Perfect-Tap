@@ -109,7 +109,7 @@ GolemConfig.LimitedMaxParts = { Rare = 66, Epic = 72, Legendary = 80, Mythic = 9
 GolemConfig.EggMaxParts = { Common = 42, Uncommon = 46, Rare = 52, Epic = 58, Legendary = 66, Mythic = 74 } :: { [string]: number }
 -- a HUGE golem's budget (0.5 % / 0.3 % of a Sky egg: almost never three in
 -- one server; past FollowerHideDistance it is hidden like every follower)
-GolemConfig.HugeMaxParts = 170
+GolemConfig.HugeMaxParts = 210
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
 GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
 GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
