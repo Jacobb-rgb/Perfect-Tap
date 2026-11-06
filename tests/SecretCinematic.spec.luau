@@ -564,6 +564,28 @@ return function(T, Loader)
 		T.truthy(first ~= nil and first > tm.Explosion and first <= tm.Explosion + tm.FlashWindow, "late, in its window")
 	end)
 
+	T.test("secret cinematic player: a long frame never leaves the burst silent, nor piles the sounds up", function()
+		-- one long frame across the burst: the boom still plays, once
+		RevealKit.resetFlash()
+		local env, s = fakeEnv()
+		local runner = SecretOreReveal.new(env)
+		runner.play(request("HollowEye", "Hollow Eye", 1))
+		s.tick(tm.Explosion - 0.01, 1 / 60)
+		table.clear(s.Sounds)
+		s.tick(0.6, 0.6)
+		T.eq(s.count("SecretBoom"), 1, "the boom plays")
+		T.truthy(#s.Sounds <= 3, `no pile-up ({#s.Sounds} sounds)`)
+		runner.cancel()
+		-- a long first frame: the opening tone still plays
+		RevealKit.resetFlash()
+		local env2, s2 = fakeEnv()
+		local runner2 = SecretOreReveal.new(env2)
+		runner2.play(request("HollowEye", "Hollow Eye", 1))
+		s2.tick(0.5, 0.5)
+		T.eq(s2.count("SecretMystery"), 1, "the first sound plays")
+		runner2.cancel()
+	end)
+
 	T.test("secret cinematic player (review 1): cancel and reset silence the hum and hide the gui; OnReveal once", function()
 		for _, how in { "cancel", "reset" } do
 			RevealKit.resetFlash()
@@ -615,7 +637,9 @@ return function(T, Loader)
 				T.eq(letter.Label.TextTransparency, 0, "S E C R E T in")
 			end
 			T.eq(view.Name.TextTransparency, 0, "the name in")
+			T.eq(view.Chance.TextTransparency, 0, "the chance in")
 			T.truthy(view.ValueHolder.Visible, "the value in")
+			T.eq(view.ValueAmount.TextTransparency, 0, "its amount in")
 			SecretCinematic.pose(view, tm.Settle, opts())
 			T.truthy(view.NewTag.BackgroundTransparency < 0.01, "NEW!'s gold body shows")
 			SecretCinematic.pose(

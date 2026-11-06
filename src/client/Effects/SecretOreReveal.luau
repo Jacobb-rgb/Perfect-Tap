@@ -236,11 +236,22 @@ function SecretOreReveal.new(env: Env): Runner
 				show.Opts.FlashAt = tm.Explosion + since
 			end
 		end
-		-- the sounds the clock passed (a long frame plays only the last quarter second's: never a pile-up)
+		-- the sounds the clock passed; after a long frame (a hitch) never a pile-up and never silence: the
+		-- last quarter second's and the boom (OnSkip: the jump lands), else the newest one it passed
+		local played = false
+		local newest: SecretCinematic.Cue? = nil
 		for _, cue in show.Cues do
-			if cue.At > before and cue.At <= t and t - cue.At <= 0.25 then
-				env.Sound(cue.Sound)
+			if cue.At > before and cue.At <= t then
+				if t - cue.At <= 0.25 or cue.OnSkip then
+					env.Sound(cue.Sound)
+					played = true
+				elseif not newest or cue.At > newest.At then
+					newest = cue
+				end
 			end
+		end
+		if newest and not played then
+			env.Sound(newest.Sound)
 		end
 		-- the reveal: the caller's hook (the finder's own chat line waits for it)
 		if before < tm.Reveal and t >= tm.Reveal then
