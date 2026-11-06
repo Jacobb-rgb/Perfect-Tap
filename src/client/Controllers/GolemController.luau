@@ -38,7 +38,8 @@
 	  most every RebuildSeconds (Equip / Unequip spam), keeping every model
 	  whose kind stays (GolemView.matchFollowers: one Equip builds one).
 	  Models: GolemBuilder.build(kind, start, { Welded = true, Size =
-	  FollowerSize }) in a local folder, every part created in place at the
+	  FollowerSize, a HUGE golem GolemFit.HugeFollowerSize }) in a local
+	  folder, every part created in place at the
 	  start CFrame (so the welds hold the shape whenever they switch on):
 	  one anchored Body per golem moves the whole golem (one CFrame write
 	  per golem per frame), no part collides, touches or is queried.
@@ -87,7 +88,7 @@ local GolemController = {}
 
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
-GolemController.FollowerSize = 0.85 -- followers a little smaller than the capsule reveal
+GolemController.FollowerSize = 0.85 -- followers a little smaller than the capsule reveal (HUGE ones: GolemFit.HugeFollowerSize)
 GolemController.HopStride = 1.7 -- studs per hop
 GolemController.GroundSeconds = 0.3
 GolemController.CatchUpDistance = 45 -- further behind: jump to the slot
@@ -866,11 +867,14 @@ local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
 	local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
 	-- every part is created in place (the welds then hold this shape)
 	local start = CFrame.new(feet.X, ground, feet.Z) * CFrame.Angles(0, yaw, 0)
-	local model = GolemBuilder.build(kind, start, { Welded = true, Size = GolemController.FollowerSize })
+	-- (a HUGE golem follows smaller than its reveal: GolemFit.HugeFollowerSize)
+	local look = GolemConfig.ById[kind]
+	local huge = look ~= nil and look.Huge == true
+	local size = if huge then GolemFit.HugeFollowerSize else GolemController.FollowerSize
+	local model = GolemBuilder.build(kind, start, { Welded = true, Size = size })
 	local body = model.PrimaryPart :: BasePart
 	local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
 	local hover = (model:GetAttribute("Hover") :: number?) or 0
-	local look = GolemConfig.ById[kind]
 	model.Name = `{f.Player.Name}_{kind}`
 	model.Parent = followersFolder()
 	return {
@@ -890,7 +894,7 @@ local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
 		Floats = hover > 0,
 		Radius = GolemFit.radius(model, start),
 		Low = GolemFit.radius(model, start, GolemFit.PlayerHeight),
-		Huge = look ~= nil and look.Huge == true,
+		Huge = huge,
 	}
 end
 

@@ -17,6 +17,10 @@ return function(T, Loader)
 
 	local HUGE = { "SkyTitan", "CloudColossus" }
 	local FOLLOWER = 0.85 -- GolemController.FollowerSize
+	-- a follower's size: a HUGE golem follows smaller than its reveal (GolemFit.HugeFollowerSize)
+	local function followerSize(kind: string): number
+		return if GolemConfig.ById[kind].Huge then GolemFit.HugeFollowerSize else FOLLOWER
+	end
 	local PLAYER_HEIGHT = 5.2 -- studs: a Roblox avatar
 	local CAMERA_ZOOM = 12.5 -- studs: Roblox's default camera distance behind the player
 
@@ -93,7 +97,7 @@ return function(T, Loader)
 	end)
 
 	T.test("HugeGolems: on their base, RootHeight, Height and Hover right; they tower over the other golems", function()
-		for _, size in { 1, FOLLOWER } do
+		for _, size in { 1, FOLLOWER, GolemFit.HugeFollowerSize } do
 			for _, kind in HUGE do
 				local base = CFrame.new(10, 4, -6) * CFrame.Angles(0, 1.1, 0)
 				local model = GolemBuilder.build(kind, base, { Size = size })
@@ -112,20 +116,28 @@ return function(T, Loader)
 				T.near(body.Y, model:GetAttribute("RootHeight"), 1e-3, kind .. " RootHeight")
 			end
 		end
-		local king = GolemBuilder.build("AetherKing", nil, { Size = FOLLOWER }):GetAttribute("Height")
-		for _, kind in HUGE do
-			local height = GolemBuilder.build(kind, nil, { Size = FOLLOWER }):GetAttribute("Height")
-			local tallest = 0
-			for _, golem in GolemConfig.List do
-				if not golem.Huge then
-					tallest = math.max(tallest, GolemBuilder.build(golem.Id, nil, { Size = FOLLOWER }):GetAttribute("Height"))
-				end
+		-- the reveal (its own size): two to three Aether Kings tall
+		local king = GolemBuilder.build("AetherKing"):GetAttribute("Height")
+		local tallest = 0 -- the tallest ordinary follower
+		for _, golem in GolemConfig.List do
+			if not golem.Huge then
+				tallest = math.max(tallest, GolemBuilder.build(golem.Id, nil, { Size = FOLLOWER }):GetAttribute("Height"))
 			end
-			T.truthy(height >= tallest * 1.4, `{kind}: towers over every other golem ({height} vs {tallest})`)
+		end
+		for _, kind in HUGE do
+			local height = GolemBuilder.build(kind):GetAttribute("Height")
 			T.truthy(height / king >= 2 and height / king <= 3.2, `{kind}: two to three Aether Kings tall ({height} vs {king})`)
+			-- as a follower: its helm top about 1.2 players tall, still far bigger than any other follower
+			local follower = GolemBuilder.build(kind, nil, { Size = GolemFit.HugeFollowerSize })
+			local _, helmTop = yExtent(follower:FindFirstChild("Helm"))
 			T.truthy(
-				height >= PLAYER_HEIGHT * 1.8 and height <= PLAYER_HEIGHT * 2.8,
-				`{kind}: a giant next to its player, not a building ({height})`
+				helmTop >= PLAYER_HEIGHT * 1.15 and helmTop <= PLAYER_HEIGHT * 1.25,
+				`{kind} follower: helm top about 1.2 players tall ({helmTop})`
+			)
+			local followerHeight = follower:GetAttribute("Height")
+			T.truthy(
+				followerHeight >= tallest * 1.5,
+				`{kind} follower: clearly bigger than every other follower ({followerHeight} vs {tallest})`
 			)
 		end
 	end)
@@ -137,7 +149,7 @@ return function(T, Loader)
 			T.eq(#lights, 1, kind .. ": its one light in the reveal and the pictures")
 			T.falsy(lights[1].Shadows, kind .. ": a light without shadows")
 			local start = CFrame.new(3, 0, -2) * CFrame.Angles(0, 0.4, 0)
-			local follower = GolemBuilder.build(kind, start, { Welded = true, Size = FOLLOWER })
+			local follower = GolemBuilder.build(kind, start, { Welded = true, Size = followerSize(kind) })
 			T.eq(#ofClass(follower, "PointLight"), 0, kind .. " follower: no PointLight")
 			local emitters = ofClass(follower, "ParticleEmitter")
 			T.eq(#emitters, 1, kind .. ": one emitter")
@@ -156,10 +168,16 @@ return function(T, Loader)
 
 	T.test("HugeGolems: running limbs: wings and floating rocks on the body, halo and storm ring on the head", function()
 		for _, kind in HUGE do
-			local model = GolemBuilder.build(kind, CFrame.new(5, 0, 3) * CFrame.Angles(0, 0.7, 0), { Welded = true, Size = FOLLOWER })
+			local model =
+				GolemBuilder.build(kind, CFrame.new(5, 0, 3) * CFrame.Angles(0, 0.7, 0), { Welded = true, Size = followerSize(kind) })
 			local rig = Gait.classify(model)
 			T.truthy(rig, kind .. " rig")
-			T.near(rig.Scale, GolemConfig.ById[kind].Scale * FOLLOWER, 1e-4, kind .. ": studs per golem unit (its Body is not resized)")
+			T.near(
+				rig.Scale,
+				GolemConfig.ById[kind].Scale * followerSize(kind),
+				1e-4,
+				kind .. ": studs per golem unit (its Body is not resized)"
+			)
 			local where: { [string]: string } = {}
 			for _, key in { "LegL", "LegR", "ArmL", "ArmR", "Head" } do
 				for _, p in rig[key].Parts do
@@ -182,7 +200,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		local titan = GolemBuilder.build("SkyTitan", CFrame.new(), { Welded = true, Size = FOLLOWER })
+		local titan = GolemBuilder.build("SkyTitan", CFrame.new(), { Welded = true, Size = followerSize("SkyTitan") })
 		local rig = Gait.classify(titan)
 		local inHand = false
 		for _, p in rig.ArmR.Parts do
@@ -194,7 +212,7 @@ return function(T, Loader)
 	-- the followers' sizes as GolemController measures them (its welded models at their start)
 	local function sizeOf(kind: string): any
 		local start = CFrame.new(2, 0, -1) * CFrame.Angles(0, 0.6, 0)
-		local model = GolemBuilder.build(kind, start, { Welded = true, Size = FOLLOWER })
+		local model = GolemBuilder.build(kind, start, { Welded = true, Size = followerSize(kind) })
 		return {
 			Radius = GolemFit.radius(model, start),
 			Low = GolemFit.radius(model, start, GolemFit.PlayerHeight),
@@ -205,7 +223,7 @@ return function(T, Loader)
 	T.test("GolemFit: the reach of a golem covers all its parts, whichever way it turns (Low: those under a player's head)", function()
 		for _, kind in { "PebbleGolem", "AetherKing", "SkyTitan", "CloudColossus" } do
 			local start = CFrame.new(4, 1, -3) * CFrame.Angles(0, 0.9, 0)
-			local model = GolemBuilder.build(kind, start, { Welded = true, Size = FOLLOWER })
+			local model = GolemBuilder.build(kind, start, { Welded = true, Size = followerSize(kind) })
 			local r = GolemFit.radius(model, start)
 			local low = GolemFit.radius(model, start, GolemFit.PlayerHeight)
 			T.le(low, r, kind .. ": the low reach is part of the whole one")
@@ -318,6 +336,77 @@ return function(T, Loader)
 		T.eq(out[1], GolemFit.Base[1], "the first golem keeps the left")
 		T.truthy(out[3].X > 0, "the huge third golem walks on the right")
 		T.eq(out[2].X, 0, "the ordinary second golem walks behind")
+	end)
+
+	T.test("GolemFit: at the default camera huge followers keep out of the middle third (the player and the path ahead)", function()
+		-- Roblox's default camera behind a player at the origin who faces -Z (owner space: +Z behind),
+		-- looking at the head; a 16:9 screen (the narrowest: a phone in landscape is wider)
+		local pitch = GolemFit.CameraPitch
+		local head = Vector3.new(0, 4.5, 0)
+		local cam = CFrame.lookAt(head + Vector3.new(0, math.sin(pitch), math.cos(pitch)) * GolemFit.CameraDistance, head)
+		local tanY = math.tan(math.rad(70) / 2)
+		local tanX = tanY * 16 / 9
+		local corridor = tanX / 3 -- the middle third of the screen's width
+		-- every follower's part corners, its feet at the origin, at its follower size
+		local kinds = { "AetherKing", "SkyTitan", "CloudColossus" }
+		local corners: { [string]: { any } } = {}
+		local sizes: { [string]: any } = {}
+		for _, kind in kinds do
+			sizes[kind] = sizeOf(kind)
+			local list = {}
+			for _, p in parts(GolemBuilder.build(kind, CFrame.new(), { Size = followerSize(kind) })) do
+				local h = p.Size / 2
+				for _, sx in { -1, 1 } do
+					for _, sy in { -1, 1 } do
+						for _, sz in { -1, 1 } do
+							table.insert(list, (p.CFrame * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
+						end
+					end
+				end
+			end
+			corners[kind] = list
+		end
+		local lineups = {}
+		for _, a in kinds do
+			table.insert(lineups, { a })
+			for _, b in kinds do
+				table.insert(lineups, { a, b })
+				for _, c in kinds do
+					table.insert(lineups, { a, b, c })
+				end
+			end
+		end
+		local checked = 0
+		for _, lineup in lineups do
+			local list = {}
+			for slot, kind in lineup do
+				list[slot] = sizes[kind]
+			end
+			local out = GolemFit.slots(list)
+			local label = table.concat(lineup, "+")
+			for slot, kind in lineup do
+				if sizes[kind].Huge then
+					-- standing or looking round (GolemController.LookAround)
+					for _, yaw in { -1.3, 0, 1.3 } do
+						local turn = CFrame.new(out[slot]) * CFrame.Angles(0, yaw, 0)
+						local nearest = math.huge
+						for _, corner in corners[kind] do
+							local v = cam:PointToObjectSpace(turn * corner)
+							local depth = -v.Z
+							if depth > 0.05 and math.abs(v.Y / depth) <= tanY then
+								nearest = math.min(nearest, math.abs(v.X) / depth)
+							end
+						end
+						checked += 1
+						T.truthy(
+							nearest >= corridor,
+							`{label}: slot {slot} ({kind}) keeps out of the middle third ({nearest} vs {corridor})`
+						)
+					end
+				end
+			end
+		end
+		T.truthy(checked > 50, "huge followers checked in many line-ups")
 	end)
 
 	T.test("GolemFit: the inventory portrait frames a huge golem whole as it turns; others keep their framing", function()
