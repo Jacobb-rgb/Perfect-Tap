@@ -141,12 +141,13 @@ end
 	until the reveal (OnReveal), the show's end, or HoldChat seconds at most; never dropped.
 ]]
 SecretRevealController.HoldChat = 25
-local held: { string } = {}
+local held: { { Line: string, Id: number } } = {}
+local heldId = 0
 local function releaseChat()
-	local lines = table.clone(held)
-	table.clear(held)
-	for _, line in lines do
-		sayLine(line)
+	local lines = held
+	held = {}
+	for _, entry in lines do
+		sayLine(entry.Line)
 	end
 end
 
@@ -162,10 +163,17 @@ local function showChat(data: any)
 	end
 	local me = Players.LocalPlayer
 	if me and SecretRevealController.isOwnLine(data, me.UserId) then
-		table.insert(held, line)
+		heldId += 1
+		local id = heldId
+		table.insert(held, { Line = line, Id = id })
+		-- (no cinematic came for it: this line alone, never dropped, never a newer one before its reveal)
 		task.delay(SecretRevealController.HoldChat, function()
-			if table.find(held, line) then
-				releaseChat() -- (no cinematic came: never dropped)
+			for i, entry in held do
+				if entry.Id == id then
+					table.remove(held, i)
+					sayLine(entry.Line)
+					return
+				end
 			end
 		end)
 		return

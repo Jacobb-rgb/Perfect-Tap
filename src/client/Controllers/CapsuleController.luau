@@ -1151,7 +1151,9 @@ local function onEvents(run: HatchStage.Run, events: { string })
 			if run.BestOrder >= 5 and not reduced then
 				CameraShake.add(if run.BestOrder >= 6 then 0.5 else 0.38)
 			end
-			setMood(run.ShowOrder, run.ShowColor, reduced) -- (the best KEPT golem's: a deleted one isn't celebrated)
+			-- (the world's tint: the best KEPT golem's; the boom, the kick and the flash's colour above
+			-- belong to the eggs breaking, whatever is inside)
+			setMood(run.ShowOrder, run.ShowColor, reduced)
 		elseif event == "Reveal" then
 			if run.BestOrder >= 5 then
 				Sfx.play("Discovery")
