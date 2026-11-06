@@ -233,9 +233,9 @@ return function(T, Loader)
 		T.eq(GolemConfig.score("NoSuchGolem"), -1)
 	end)
 
-	T.test("Golem stats v2: a v11 save loads as v12 with every golem it owns, retired ones and paid ones too", function()
+	T.test("Golem stats v2: a v11 save loads with every golem it owns, retired ones and paid ones too", function()
 		T.eq(DataTemplate.Version, Migrations.Latest, "Version and Latest together")
-		T.eq(Migrations.Latest, 12)
+		T.eq(Migrations.Latest, 13)
 		local save: any = { Version = 11 }
 		save.Golems = {
 			Owned = {
@@ -249,7 +249,7 @@ return function(T, Loader)
 			NextId = 6,
 		}
 		Migrations.run(save)
-		T.eq(save.Version, 12)
+		T.eq(save.Version, 13)
 		T.eq(#save.Golems.Owned, 5, "none lost")
 		T.eq(save.Golems.Owned[1].Kind, "HeartstoneColossus")
 		T.truthy(save.Golems.Owned[1].Paid and save.Golems.Owned[1].Locked, "paid and locked stay")

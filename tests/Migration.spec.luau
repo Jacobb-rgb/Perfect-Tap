@@ -44,9 +44,9 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 12", function()
-		T.eq(DataTemplate.Version, 12)
-		T.eq(Migrations.Latest, 12)
+	T.test("Migration: template is version 13", function()
+		T.eq(DataTemplate.Version, 13)
+		T.eq(Migrations.Latest, 13)
 		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
 	end)
 
@@ -55,7 +55,7 @@ return function(T, Loader)
 		data.Version = 6
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "Clean|Tin|Clean|" }
 		Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(#data.Podiums, 5, "the 5th slot added")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
@@ -74,7 +74,7 @@ return function(T, Loader)
 		data.Foundry = { Stock = { { K = "Ingot", O = "Gold", G = "Pristine" }, 42, { K = "Ingot", O = "Iron" } } }
 		data.Stats.RunIncome = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(data.Foundry, nil, "the Foundry record goes")
 		T.eq(#data.Storage, 3, "both ingots in the pen")
 		T.eq(data.Storage[2].O, "Gold")
@@ -104,7 +104,7 @@ return function(T, Loader)
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -241,13 +241,67 @@ return function(T, Loader)
 		T.eq(type(data.Golems.AutoDelete), "table", "junk becomes an empty set")
 	end)
 
+	T.test("Migration v13: the auto-delete flags of the golems that got rarer go once, nothing else", function()
+		local now = 1_800_000_000
+		local raised = { "CopperTinker", "CoalChomper", "QuartzSprite", "DiamondDuke" }
+		-- a v12 save as a v12 server left it: every raised kind flagged, plus a same-rarity kind,
+		-- one that got more common, a retired one, an old name and a newer build's kind
+		local v12 = ProfileStore.deepCopy(DataTemplate)
+		Migrations.run(v12, now)
+		v12.Version = 12
+		v12.Golems.AutoDelete = { PebbleGolem = true, JadeGardener = true, TinTumbler = true, RubyKnight = true, VoidGolem = true }
+		for _, kind in raised do
+			v12.Golems.AutoDelete[kind] = true
+		end
+		v12.Golems.Owned = { { Id = 1, Kind = "CoalChomper" }, { Id = 2, Kind = "DiamondDuke", Paid = true, Locked = true } }
+		v12.Golems.Equipped = { 2 }
+		v12.Golems.NextId = 3
+		local before = ProfileStore.deepCopy(v12)
+		local report = Migrations.run(v12, now)
+		T.eq(v12.Version, 13)
+		for _, kind in raised do
+			T.eq(v12.Golems.AutoDelete[kind], nil, `{kind}: the flag goes`)
+		end
+		for _, kind in { "PebbleGolem", "JadeGardener", "TinTumbler", "RoseKnight", "VoidGolem" } do
+			T.eq(v12.Golems.AutoDelete[kind], true, `{kind}: the flag stays`)
+		end
+		T.eq(report.Moved + report.Dropped, 0, "not a repair")
+		-- nothing else in the save moved, the golems of those kinds included
+		v12.Version = 12
+		v12.Golems.AutoDelete = before.Golems.AutoDelete
+		T.truthy(deepEqual(before, v12), "everything else unchanged")
+
+		-- once: a flag the player sets again stays on every later load
+		local later = ProfileStore.deepCopy(before)
+		Migrations.run(later, now)
+		later.Golems.AutoDelete.CoalChomper = true
+		Migrations.run(later, now)
+		T.eq(later.Golems.AutoDelete.CoalChomper, true, "set again: kept")
+		-- an older save goes through the step too; a save with no set or a junk one is fine
+		for _, version in { 10, 11 } do
+			local old = ProfileStore.deepCopy(before)
+			old.Version = version
+			Migrations.run(old, now)
+			T.eq(old.Golems.AutoDelete.CoalChomper, nil, `v{version}: the flag goes`)
+			T.eq(old.Golems.AutoDelete.PebbleGolem, true, `v{version}: the others stay`)
+		end
+		local none = ProfileStore.deepCopy(before)
+		none.Golems.AutoDelete = nil
+		Migrations.run(none, now)
+		T.eq(none.Golems.AutoDelete, nil, "no set: none made here")
+		none.Version = 12
+		none.Golems.AutoDelete = "junk"
+		Migrations.run(none, now)
+		T.eq(next(none.Golems.AutoDelete), nil, "junk: an empty set")
+	end)
+
 	T.test("Migration: broken top-level fields become empty tables", function()
 		local data = { Version = "one", PlacedMachines = "x", MachineInventory = 5, Storage = false }
 		Migrations.run(data)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		local newer = { Version = Migrations.Latest + 1, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, Migrations.Latest + 1, "a newer save's version is not lowered")
@@ -288,7 +342,7 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -390,7 +444,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 12)
+			T.eq(data.Version, 13)
 		end
 	end)
 
@@ -439,7 +493,7 @@ return function(T, Loader)
 		}
 		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -513,7 +567,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 12)
+		T.eq(data.Version, 13)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")

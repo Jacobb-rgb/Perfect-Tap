@@ -216,6 +216,12 @@
 	bump keeps an older server from loading a save that names it. Every
 	load, when present: short string kinds -> true (renamed kinds renamed,
 	a newer build's kinds kept), at most MAX_AUTO_DELETE; junk dropped.
+
+	Version 13 (owner 2026-11-06: "Ano, vypnout"): once (loaded Version below
+	13), Golems.AutoDelete loses the kinds whose rarity rose with the v12
+	golem stats (V13_RAISED_KINDS). A trash icon set while CoalChomper was
+	Common would otherwise delete the 1 % Epic it is now. The player can set
+	it again; later loads leave it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -238,7 +244,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 12 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save)
+Migrations.Latest = 13 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -265,6 +271,8 @@ local MAX_FIELD_TEXT_LENGTH = 64
 local MAX_EQUIPPED_LENGTH = 64
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local MAX_AUTO_DELETE = 64 -- Golems.AutoDelete kinds kept (CapsuleService.MaxAutoDelete)
+-- Version 13: the kinds whose rarity rose from save v11 to v12 (frozen)
+local V13_RAISED_KINDS = { "CopperTinker", "CoalChomper", "QuartzSprite", "DiamondDuke" }
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 -- Version 9: what the Gear shop's retired Ore Backpack held at each level 0..5 (frozen)
 local OLD_BACKPACK_CAPACITY = { 1, 2, 3, 5, 8, 12 }
@@ -927,6 +935,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local v8Step = not (isFinite(loadedVersion) and loadedVersion >= 8)
 	-- a save from before the backpack: the Gear shop's Ore Backpack becomes a pack once (Version 9)
 	local v9Step = not (isFinite(loadedVersion) and loadedVersion >= 9)
+	-- a save from before the golems' new rarities: their auto-delete flags go once (Version 13)
+	local v13Step = not (isFinite(loadedVersion) and loadedVersion >= 13)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -1391,6 +1401,13 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local gearBefore = if type(data.Gear) == "table" then wholeIn(data.Gear.Backpack, 0, MAX_LEVEL_KEPT) else nil
 	migrateSteps67(data, clock, report)
 	migrateStep8(data, report)
+
+	-- Version 13, once (after the repair in steps 6-7: renamed kinds have their new ids, a junk set is empty)
+	if v13Step and type(data.Golems.AutoDelete) == "table" then
+		for _, kind in V13_RAISED_KINDS do
+			data.Golems.AutoDelete[kind] = nil
+		end
+	end
 
 	-- Version 9: the backpack (after steps 6-7: they fold the old CarryLevel into Gear.Backpack)
 	local items = record(data, "BackpackItems", report)
