@@ -338,6 +338,12 @@ local function refreshChips()
 	if not chips then
 		return
 	end
+	-- (an egg opening hides the HUD at scale 0: its frames measure as nothing then, so the
+	-- chips wait; CapsuleController lets go of its hold when the HUD is back: placed at once)
+	local guiScale = chips.Gui:FindFirstChild("Scale")
+	if guiScale and guiScale:IsA("UIScale") and guiScale.Scale == 0 then
+		return
+	end
 	local running = BoostView.chips(StateController.get(), serverNow())
 	local covering = false
 	if chips.Row:GetAttribute("Corner") == true then

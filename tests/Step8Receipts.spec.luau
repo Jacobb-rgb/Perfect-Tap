@@ -545,6 +545,23 @@ return function(T, Loader)
 		T.eq(#w.data.Golems.Pending, 102 - GolemConfig.MaxSaved, "the rest as the pending credit, never coins")
 	end)
 
+	withWorld("Step 8: a x50 at MaxSaved: its CapsuleResult holds all 50 as Pending, the credit's own order", function(w)
+		for _ = 1, GolemConfig.MaxSaved do
+			GolemConfig.add(w.data.Golems, "PebbleGolem", true)
+		end
+		T.eq(w.decide("all", "DragonforgeCapsule50"), GRANTED)
+		local results = w.notesOf("CapsuleResult")
+		T.eq(#results, 1, "one CapsuleResult")
+		local result = results[1].A
+		T.eq(#result.Golems, 0, "nothing woke: the inventory is at its hard cap")
+		T.eq(type(result.Pending), "table")
+		T.eq(#result.Pending, 50, "all 50 ride along: the opening shows every one")
+		T.eq(#w.data.Golems.Pending, 50, "and wait in the credit")
+		for i, entry in w.data.Golems.Pending do
+			T.eq(result.Pending[i], entry.Kind, `golem {i}: the credit's order`)
+		end
+	end)
+
 	withWorld("Step 8: a paid random product for a restricted player is granted and logged", function(w)
 		Policy._test.reset()
 		w.restricted = true

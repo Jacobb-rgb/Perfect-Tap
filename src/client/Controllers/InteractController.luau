@@ -73,6 +73,35 @@ function InteractController.resume()
 	bindGrab()
 end
 
+local holds: { [string]: boolean } = {}
+local step: () -> () -- (below: the render loop's look for a pickup target)
+--[[
+	Another view needs the Grab touch button's place for a while (`name`
+	holds it, `on` false lets go): the button (and F / X) rest meanwhile.
+	The EGGS temple's floating egg panel on the smallest phones (568 x 320):
+	there the button would cover two of its odds; nothing to grab at an egg.
+]]
+function InteractController.hold(name: string, on: boolean)
+	if on then
+		holds[name] = true
+		ContextActionService:UnbindAction("TerraForgeGrab")
+		-- (no pickup target meanwhile: the item's highlight and its "[F] Pick up" hint go too)
+		target = nil
+		if highlight then
+			highlight.Adornee = nil
+		end
+		if hint then
+			clearHint()
+			hint.Enabled = false
+		end
+	else
+		holds[name] = nil
+		if next(holds) == nil and enabled then
+			bindGrab()
+		end
+	end
+end
+
 local function itemFromPart(part: Instance?): Model?
 	local node = part
 	while node and node ~= Workspace do
@@ -244,8 +273,28 @@ function InteractController.init()
 	})
 end
 
+local chooser: (root: BasePart) -> Model? = chooseTarget -- (the specs: a target of their own, _test.setChooser)
+
+-- One look for a pickup target (the render loop's, ten times a second): none while held or disabled.
+function step()
+	if not enabled or next(holds) ~= nil then
+		return -- (held: hold() cleared the target and the hint)
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	-- a full backpack takes nothing: no pickup target (F / Grab pass)
+	local newTarget = if root and not BackpackState.isFull() then chooser(root) else nil
+	if newTarget ~= target then
+		target = newTarget
+	end
+	updateHint()
+end
+
 function InteractController.start()
 	bindGrab = function()
+		if next(holds) ~= nil then
+			return -- (held: hold() binds it again when let go)
+		end
 		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
 		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
 		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
@@ -259,18 +308,39 @@ function InteractController.start()
 			return
 		end
 		accumulator = 0
-		if not enabled then
-			return
-		end
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		-- a full backpack takes nothing: no pickup target (F / Grab pass)
-		local newTarget = if root and not BackpackState.isFull() then chooseTarget(root) else nil
-		if newTarget ~= target then
-			target = newTarget
-		end
-		updateHint()
+		step()
 	end)
 end
+
+-- (the Lune specs: a pickup target shown, a hold, the loop's next look)
+InteractController._test = {
+	parts = function(): (any, any, () -> ()) -- (stand-ins for the highlight and the hint: Lune's instances can't hold a nil Adornee)
+		local wasHighlight, wasHint, wasName, wasAction = highlight, hint, hintName, hintAction
+		local fakeHighlight: any = { Adornee = nil }
+		local fakeHint: any = { Adornee = nil, Enabled = false }
+		local fakeName: any, fakeAction: any = { Text = "" }, { Text = "" }
+		highlight = fakeHighlight
+		hint = fakeHint
+		hintName, hintAction = fakeName, fakeAction
+		-- (the hint's two lines: the item's name, "[F] Pick up ..."; and the parts as they were, back)
+		return fakeName, fakeAction, function()
+			highlight, hint, hintName, hintAction = wasHighlight, wasHint, wasName, wasAction
+		end
+	end,
+	show = function(model: Model)
+		target = model
+		highlight.Adornee = model
+		hint.Enabled = true
+	end,
+	view = function(): (Model?, Instance?, boolean)
+		return target, highlight.Adornee, hint.Enabled
+	end,
+	step = function()
+		step()
+	end,
+	setChooser = function(fn: ((root: BasePart) -> Model?)?)
+		chooser = fn or chooseTarget
+	end,
+}
 
 return InteractController

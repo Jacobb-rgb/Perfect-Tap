@@ -1,53 +1,64 @@
 --[[
-	EggPanel: the clean panel over the egg you stand at in the EGGS temple
-	(owner 2026-10-28, two pictures of other egg games: "what we have now I
-	almost don't like at all; I want it like this, it feels cleaner"). We
-	copy the look and the flow, never their pictures: our golems, our coin.
+	EggPanel: the clean panel over the egg you stand at in the EGGS temple,
+	in the bright look of the owner's clicker-sim video (2026-10-29,
+	docs/plans/CLICKER_VIDEO_2026-10-29.md; BrightTheme): a white card with a
+	thin dark navy edge, BIG golem cards in their rarity's paint. We copy the
+	look and the flow, never their pictures: our golems, our coin.
 
-	         Stone Egg                    the egg's name, big, white, a dark edge
-	  +----------------------------+
-	  | (coin) 2,500     [Auto  G] |      the price chip, Auto (coin eggs only)
-	  | [pic ] [pic ] [pic ] ...   |      a card per golem: its rarity's paint,
-	  | [ 45%] [ 30%] [ 20%]       |      its live 3D picture, its exact chance
-	  | Pebble Copper Coal  ...    |      and its NAME (a silhouette's too)
-	  | [Open 1 E][Open 3 R][Open 10 X] | the opens with their prices (owner
-	  +----------------------------+      round 2: "add opening by 10 etc.")
+	          Stone Egg                    the egg's name, big, FredokaOne, white, a dark edge
+	  +-------------------------------+
+	  | (coin) 2,500         [Auto G] |    the price chip (R$ on a Robux egg), Auto (coin eggs)
+	  | +-----+ +-----+ +-----+       |    a BIG card per golem in its rarity's paint:
+	  | | pic | | pic | | pic |  ...  |    its live 3D picture, its NAME (a silhouette's
+	  | |Name | |Name | |Name |       |    too), its chance big and outlined at the foot
+	  | | 45% | | 30% | | 1 in| (bin) |    ("46.33%", "1 in 3,333"), a trash icon top right
+	  | +-----+ +-----+ +-----+       |    (auto-delete that golem: red while on)
+	  +-------------------------------+
+	       [Open 1 E] (E) [Open 10 X]      PC and gamepads: the opens stand round the big E
+	             [Open 3 R]                (UI/EggPrompt), not in the panel
 
 	- A BillboardGui (PlayerGui, AlwaysOnTop) its bottom edge at the egg's
 	  top; one alive at a time (EggPanelController moves it to the nearest
-	  egg). Laid out in design units (720 high, like every window) and scaled
-	  by the HUD's scale: at the phone floor (0.62) the touch layout's Auto
-	  and opens are 72 units, 44 pt. On touch the layout is compact (no head
-	  row: the opens show the price; Auto as a fourth button in the opens'
-	  row) and the panel FLOATS beside the egg on the screen (floatAt): its
-	  opens' row out of the thumbstick's start zone and off the touch
-	  buttons, the HUD's buttons, the boost corner and the tutorial bubble
-	  (Hard), its cards visible (Odds), inside the notch-safe frame, so a
-	  thumb that starts a walk never lands on a buy and no odd hides under
-	  the HUD. On the smallest phones (568 x 320) the narrow layout puts
-	  the row on top, right-aligned.
-	- Cards: CapsuleConfig.odds order (the server's roll table, rarer last),
-	  the chance in at most three significant digits and three decimals
-	  ("45%", "20.5%", "0.28%"); with Triple Lucky on, its odds and an "x3"
-	  on every golem it triples. Every card names its golem: the eggs are
-	  paid random items (coins can be bought), so each chance belongs to a
-	  golem the player can tell before buying. A golem the player has none
-	  of is a black silhouette on a coin egg, its name under it all the same
-	  (silhouettes: the inventory, State Golems Owned + Pending, is what we
-	  know; a Robux egg always shows its golems in colour).
+	  egg). Laid out in design units (720 high, like every window) and
+	  scaled by the HUD's scale. PC: 100 x 122 cards, 7 a row for 14 golems
+	  (two rows), the head row with the chip and Auto. A TV: bigger cards,
+	  names and marks (18 px and more at 1080p). Touch (phones, tablets):
+	  80 x 76 cards, no head row, the opens and Auto in a row of 72-unit
+	  pills (44 pt at the phone floor 0.62) and the panel FLOATS beside the
+	  egg on the screen (floatAt): its row out of the thumbstick's start
+	  zone and off the touch buttons, the HUD's buttons, the boost corner
+	  and the tutorial bubble (Hard), its cards visible (Odds), inside the
+	  notch-safe frame. On the smallest phones (568 x 320) the narrow
+	  layout puts the row on top, right-aligned.
+	- Cards: CapsuleConfig.odds order (the server's roll table, rarer
+	  last), the chance as BrightTheme.chanceText; with Triple Lucky on, its
+	  odds and an "x3" on every golem it triples. Every card names its
+	  golem: the eggs are paid random items (coins can be bought), so each
+	  chance belongs to a golem the player can tell before buying. A golem
+	  the player has none of is a black silhouette on a coin egg, its name
+	  under it all the same (EggPanel.known: Owned, Pending and the
+	  auto-deleted kinds; a Robux egg always shows its golems in colour).
+	- The trash (coin eggs only, never a paid golem; only on a golem the
+	  player found): the first click asks ("AUTO-DELETE?" over the picture),
+	  a second one turns it on (red); one click turns it off. The server
+	  keeps the set (State Golems.AutoDelete, CapsuleTrash):
+	  such a golem still opens, counts and stays discovered, it is just not
+	  kept. On touch the whole card is its tap area (44 pt).
 	- The pictures: ViewportFrames, one per card slot, made once; the
 	  controller lends each slot a cached golem model (setLines' `modelFor`).
 	  In the Lune previews the "Picture" ImageLabel's Icon attribute stands in.
 	- Fade: every transparency in the panel is listed once at build
 	  (refs.Fades); setFade(alpha) lerps them all toward 1 (no allocation).
-	- Open 1 / 3 / 10 (CapsuleConfig.Counts): the capsule window's own buys
-	  (opens(): CapsuleView.cards' Buys), green with the coin price, lime
-	  with the Robux price, grey when they can't be bought (no coins, no
-	  room, a Robux product not live yet: the click still says why); a key
-	  badge on each (E / R / X on a keyboard, the main prompt's glyph on
-	  Open 1 and the focus button's on Open 3 / 10 for a gamepad, none on
-	  touch), shown only where the keys work: within the "Buy Egg!"
-	  prompt's reach (inReach).
+	- Open 1 / 3 / 10 (CapsuleConfig.Counts; buildOpen, paintOpens): the
+	  capsule window's own buys (opens(): CapsuleView.cards' Buys), Open 1
+	  green, Open 3 orange, Open 10 purple, the coin or Robux price, grey
+	  when they can't be bought (no coins, no room, a Robux product not live
+	  yet: the click still says why); a key badge on each (E / R / X on a
+	  keyboard; a gamepad: the main prompt's glyph on Open 1, the focus
+	  button's on Open 3 / 10; none on touch), shown only where the keys
+	  work: within the "Buy Egg!" prompt's reach (inReach). A gamepad walks
+	  the trash icons, Auto and the opens round the E with the D-pad
+	  (linkPad).
 	- The "even cooler" parts the controller animates (never with Reduce
 	  motion): each card's PopScale (they pop in one after another), a ray
 	  burst behind Epic+ golems (Rays), a soft glow behind Legendary+ cards
@@ -59,14 +70,15 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BrightTheme = require(Shared.Config.BrightTheme)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
-local PopTheme = require(Shared.Config.PopTheme)
 local Rarity = require(Shared.Config.Rarity)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
 local BoostView = require(script.Parent.BoostView)
+local TrashIcon = require(script.Parent.TrashIcon)
 
 local EggPanel = {}
 
@@ -109,46 +121,14 @@ end
 
 local rgb = Color3.fromRGB
 local WHITE = Color3.new(1, 1, 1)
-local INK = PopTheme.Outline
--- the panel's white face and the price chip's (a clean white, a soft cool shade at the foot)
-local PANEL_PAINT: Pop.Paint = { Top = rgb(255, 255, 255), Bottom = rgb(236, 240, 247), Edge = INK }
-local CHIP_PAINT: Pop.Paint = { Top = rgb(250, 251, 254), Bottom = rgb(226, 232, 242), Edge = INK }
-local LUCKY_GOLD = rgb(255, 214, 64)
-local SHORT = rgb(255, 120, 120) -- a price the player can't pay yet
-local CARD_CORNER = 10
-local PANEL_CORNER = 16
+-- the trash's round face: a soft slate while off, BrightTheme.Bad while on (opaque both: the fade lerps from these)
+EggPanel.TrashOff = rgb(92, 98, 114)
+local CARD_CORNER = BrightTheme.CardCorner
 
 ---------------------------------------------------------------- pure helpers
 
 local function num(v: any): number
 	return if type(v) == "number" and v == v and v > -math.huge and v < math.huge then v else 0
-end
-
-local function trim(text: string): string
-	if text:find("%.") then
-		text = text:gsub("0+$", "")
-		text = text:gsub("%.$", "")
-	end
-	return text
-end
-
---[[
-	A card's chance: three significant digits at most and three decimals at
-	most, trailing zeros cut: 0.45 -> "45%", 0.205 -> "20.5%", 0.0255 ->
-	"2.55%", 0.0028 -> "0.28%", 0.0003 -> "0.03%". Never "0%" for a golem
-	that can come out.
-]]
-function EggPanel.chanceText(chance: number): string
-	local p = num(chance) * 100
-	if p <= 0 then
-		return "0%"
-	end
-	local decimals = if p >= 10 then 1 elseif p >= 1 then 2 else 3
-	local text = trim(string.format(`%.{decimals}f`, p))
-	if text == "0" then
-		return "<0.001%"
-	end
-	return text .. "%"
 end
 
 -- The price on the chip: "2,500", "750K", "1.13B" (the coin beside it says it is money).
@@ -170,7 +150,12 @@ function EggPanel.silhouettes(capsuleId: string): boolean
 	return EggPanel.Silhouettes and capsule ~= nil and capsule.Currency == "Coins"
 end
 
--- The golem kinds the player has (State Golems: Owned, and Pending paid golems waiting for room).
+--[[
+	The golem kinds the player knows (State Golems: Owned, Pending paid golems
+	waiting for room, and the kinds they auto-delete: the trash shows only on
+	a golem already found, so an auto-deleted golem stays discovered even
+	though none is kept).
+]]
 function EggPanel.known(state: any): { [string]: boolean }
 	local out: { [string]: boolean } = {}
 	local golems = if type(state) == "table" then state.Golems else nil
@@ -187,17 +172,43 @@ function EggPanel.known(state: any): { [string]: boolean }
 			end
 		end
 	end
+	for kind, on in EggPanel.deleting(state) do
+		out[kind] = on
+	end
 	return out
+end
+
+-- The golem kinds the player auto-deletes (State Golems.AutoDelete: the cards' trash icons).
+function EggPanel.deleting(state: any): { [string]: boolean }
+	local out: { [string]: boolean } = {}
+	local golems = if type(state) == "table" then state.Golems else nil
+	local set = if type(golems) == "table" then golems.AutoDelete else nil
+	if type(set) == "table" then
+		for kind, on in set do
+			if type(kind) == "string" and on == true then
+				out[kind] = true
+			end
+		end
+	end
+	return out
+end
+
+-- May this egg's golems be auto-deleted (a trash icon on its cards)? Coin eggs only: never a paid golem.
+function EggPanel.trashAllowed(capsuleId: string): boolean
+	local capsule = CapsuleConfig.ById[capsuleId]
+	return capsule ~= nil and capsule.Currency == "Coins"
 end
 
 export type Line = {
 	Golem: string,
-	Name: string, -- the golem's name (on its card under the picture: a silhouette names its golem)
+	Name: string, -- the golem's name (on its card over the chance: a silhouette names its golem)
 	Rarity: string,
 	Chance: number,
-	Text: string,
+	Text: string, -- BrightTheme.chanceText: "25%", "2.5%", "1 in 3,333"
 	Lucky: boolean, -- tripled by Triple Lucky (only while it runs)
 	Silhouette: boolean,
+	Trash: boolean, -- its trash icon shows (a coin egg, a golem the player found)
+	Deleting: boolean, -- the player auto-deletes it (the trash red)
 }
 
 --[[
@@ -206,7 +217,7 @@ export type Line = {
 	whether Triple Lucky triples it and whether it shows as a silhouette
 	(`known`: EggPanel.known).
 ]]
-function EggPanel.lines(capsuleId: string, lucky: boolean, known: { [string]: boolean }): { Line }
+function EggPanel.lines(capsuleId: string, lucky: boolean, known: { [string]: boolean }, deleting: { [string]: boolean }?): { Line }
 	local capsule = CapsuleConfig.ById[capsuleId]
 	local lines: { Line } = {}
 	if not capsule then
@@ -214,17 +225,22 @@ function EggPanel.lines(capsuleId: string, lucky: boolean, known: { [string]: bo
 	end
 	local from = Rarity.ById[capsule.LuckyFrom].Order
 	local shadows = EggPanel.silhouettes(capsuleId)
+	local trash = EggPanel.trashAllowed(capsuleId)
+	local deleted = deleting or {}
 	for _, line in CapsuleConfig.odds(capsuleId, lucky) do
 		local golem = GolemConfig.ById[line.Golem]
 		if golem then
+			local silhouette = shadows and not known[line.Golem]
 			table.insert(lines, {
 				Golem = line.Golem,
 				Name = golem.Name,
 				Rarity = golem.Rarity,
 				Chance = line.Chance,
-				Text = EggPanel.chanceText(line.Chance),
+				Text = BrightTheme.chanceText(line.Chance),
 				Lucky = lucky and GolemConfig.order(line.Golem) >= from,
-				Silhouette = shadows and not known[line.Golem],
+				Silhouette = silhouette,
+				Trash = trash and not silhouette,
+				Deleting = trash and deleted[line.Golem] == true,
 			})
 		end
 	end
@@ -404,7 +420,16 @@ export type Layout = {
 	Width: number,
 	Body: number, -- the white panel's height
 	Height: number, -- Title + Body (the billboard, in design units)
+	Picture: number, -- the golem's picture on a card (its square's side)
+	Trash: number, -- a card's trash icon (its round face)
+	TrashCard: boolean, -- touch: the whole card is the trash's tap area (44 pt); else the icon itself
 }
+
+-- The smallest the Auto toggle's word may get (design units): over 10 pt on a phone (17 at the HUD's
+-- 0.62 floor: 10.5 pt), 18 px on a TV.
+function EggPanel.ToggleFloor(l: Layout): number
+	return if l.Touch then 17 elseif l.TenFoot then 15 else 12
+end
 
 -- Columns for `count` cards: one row up to 5, two rows up to 10, then MaxColumns a row.
 function EggPanel.columns(count: number): number
@@ -423,21 +448,21 @@ export type LayoutOptions = {
 }
 
 --[[
-	The panel's sizes for `count` cards (design units). Every card names its
-	golem under the picture (two lines; the longest name, "Heartstone
-	Colossus", wraps after its first word; its longest word, "Moonstone",
-	is 77 units at 13 in the round font: the cards are 80 wide). `touch`:
-	phones and tablets: compact, so it fits right of the thumbstick between
-	the top bar and the touch buttons (floatAt): no head row (the opens
-	show the price), a low title, the opens (and Auto, the row's last
-	button when the egg has it: `auto`, default true) 72 units tall, 44 pt
-	at the phone scale (0.62), the names 13 units (8 pt). PC: the price
-	chip and Auto in a head row, the panel over the egg. `opts.TenFoot`: a
-	TV, names 15 units and a bigger "x3" (18 px and more at 1080p, the
-	HUD's 1.25), the cards wider for them. `opts.Narrow` (touch, a phone
-	too narrow for the panel right of the thumbstick, 568 x 320): the opens'
-	row on top, right-aligned and as short as the buttons allow, so it
-	stays out of the zone and over the touch buttons; the cards under it.
+	The panel's sizes for `count` cards (design units), the clean look of the
+	owner's clicker video (2026-10-29): BIG cards (PC 100 x 122: the golem's
+	picture, its name in two lines at most, its chance big at the foot), 7
+	a row for an egg of 14 golems (two rows), 5 for 10. PC: the price chip
+	and Auto in a head row; the opens are round the big E (EggPrompt), not
+	in the panel. `touch`: phones and tablets: smaller cards (80 x 76, the
+	names 13 units: 8 pt at the phone scale, over the picture's lower half;
+	the whole card is its trash's tap area), no head row, the opens (and
+	Auto, the row's last button when the egg has it: `auto`, default true)
+	in a row of 72-unit pills, 44 pt at the phone scale (0.62): the panel
+	floats beside the egg (floatAt), its row out of the thumbstick's zone.
+	`opts.TenFoot`: a TV, bigger cards, names and marks (18 px and more at
+	1080p, the HUD's 1.25). `opts.Narrow` (touch, a phone too narrow for the
+	panel right of the thumbstick's zone, 568 x 320): the opens' row on top,
+	right-aligned, the cards under it.
 ]]
 function EggPanel.layout(count: number, touch: boolean, auto: boolean?, opts: LayoutOptions?): Layout
 	local tenFoot = not touch and opts ~= nil and opts.TenFoot == true
@@ -445,36 +470,44 @@ function EggPanel.layout(count: number, touch: boolean, auto: boolean?, opts: La
 	local columns = EggPanel.columns(count)
 	local rows = math.max(1, math.ceil(math.max(1, count) / columns))
 	local nameSize = if tenFoot then 15 else 13 -- (8 pt at the phone scale; 18.75 px on a 1080p TV)
-	local card = if tenFoot then 92 else 80 -- ("Moonstone" is 89 units at 15)
-	local cardH = if tenFoot then 92 elseif touch then 70 else 80
-	local gap = if touch then 4 else 6
-	local pad = if touch then 8 else 12
-	local head = if touch then 0 else 40
+	local card = if tenFoot then 112 elseif touch then 80 else 100 -- ("Heartstone" is 72 units at 13)
+	local cardH = if tenFoot then 136 elseif touch then 76 else 122
+	local chanceSize = if tenFoot then 28 elseif touch then 20 else 26
+	local chanceH = chanceSize + 6
+	local nameH = nameSize * 2 + 2
+	-- the picture: big over the name (PC); on a phone the name lies over its lower half (the panel stays short)
+	local picture = if touch then math.min(card - 8, cardH - chanceH) else math.min(card - 8, cardH - chanceH - nameH + 14)
+	local gap = if touch then 4 else 8
+	local pad = if touch then 8 else 14
+	local head = if touch then 0 else 44
 	local headGap = if touch then 0 else 10
-	local chip = if touch then 40 else 34
-	local openH = if touch then 72 else 56 -- (72 units: 44 pt at the phone scale)
-	local openGap = if touch then 6 else 8
+	local chip = if touch then 40 else 36
+	local openH = 72 -- (touch only: 44 pt at the phone scale)
+	local openGap = 6
 	local inRow = touch and auto ~= false
 	local slots = #CapsuleConfig.Counts + (if inRow then 1 else 0)
 	local grid = pad * 2 + columns * card + (columns - 1) * gap
-	-- the head row needs the chip and Auto (PC); the opens 110 (touch) / 136 (PC: the key badge too) units each
-	local headMin = if touch then 0 else pad * 2 + 160 + (if inRow then 0 else 12 + 112)
-	local openMin = if touch then 110 else 136
-	local rowMin = slots * openMin + (slots - 1) * openGap
-	local width = math.max(grid, headMin, pad * 2 + rowMin)
+	-- the head row needs the chip, the lucky tag and Auto (PC); the opens 110 units each (touch)
+	local headMin = if touch then 0 else pad * 2 + 170 + 12 + 150 + 12 + 124
+	local openMin = 110
+	local rowMin = if touch then pad * 2 + slots * openMin + (slots - 1) * openGap else 0
+	local width = math.max(grid, headMin, rowMin)
 	local openW = if narrow then openMin else math.floor((width - pad * 2 - (slots - 1) * openGap) / slots)
 	local rowWidth = slots * openW + (slots - 1) * openGap
-	local toggle = if inRow then Vector2.new(openW, openH) else Vector2.new(112, 36)
+	local toggle = if inRow then Vector2.new(openW, openH) else Vector2.new(124, 40)
 	local cardsH = rows * cardH + (rows - 1) * gap
 	local openY, body
-	if narrow then
+	if not touch then
+		openY = pad + head + headGap + cardsH -- (no opens in the panel on PC: round the big E)
+		body = openY + pad
+	elseif narrow then
 		openY = pad
 		body = pad + openH + openGap + cardsH + pad
 	else
-		openY = pad + head + headGap + cardsH + openGap + (if touch then 0 else 2)
+		openY = pad + cardsH + openGap
 		body = openY + openH + pad
 	end
-	local title = if touch then 30 else 50
+	local title = if touch then 30 else 52
 	return {
 		Touch = touch,
 		Count = count,
@@ -487,11 +520,11 @@ function EggPanel.layout(count: number, touch: boolean, auto: boolean?, opts: La
 		Head = head,
 		HeadGap = headGap,
 		Title = title,
-		TitleSize = if touch then 30 else 40,
-		ChanceSize = if touch then 19 else 21,
+		TitleSize = if touch then 30 else 42,
+		ChanceSize = chanceSize,
 		NameSize = nameSize,
-		NameH = nameSize * 2 + 2,
-		LuckySize = if tenFoot then 20 else 14,
+		NameH = nameH,
+		LuckySize = if tenFoot then 20 else 15,
 		Chip = chip,
 		Toggle = toggle,
 		Open = Vector2.new(openW, openH),
@@ -505,6 +538,9 @@ function EggPanel.layout(count: number, touch: boolean, auto: boolean?, opts: La
 		Width = width,
 		Body = body,
 		Height = title + body,
+		Picture = picture,
+		Trash = if touch then 26 elseif tenFoot then 32 else 28,
+		TrashCard = touch, -- (a phone's card is 80 x 76 units: 50 x 47 pt, past 44)
 	}
 end
 
@@ -557,14 +593,17 @@ export type Card = {
 	Camera: Camera,
 	Rays: Frame, -- a ray burst behind the golem (Epic and up)
 	Glow: Frame, -- a soft glow under the card (Legendary and up; not in the fade list)
-	Chance: TextLabel,
-	Name: TextLabel, -- the golem's name at the card's foot (under the picture, a silhouette's too)
+	Chance: TextLabel, -- big, at the card's foot ("25%", "1 in 3,333")
+	Name: TextLabel, -- the golem's name over the chance (a silhouette's too)
 	Lucky: TextLabel,
+	Trash: TextButton, -- the auto-delete toggle (its tap area: on touch the card's top, 44 pt)
+	TrashDisc: Frame, -- its round face (red while on)
+	Confirm: Frame, -- "AUTO-DELETE?" over the picture: the second click turns it on
 	Kind: string?, -- the golem whose model the card's view holds (nil: none, setLines lends one)
 	Order: number, -- the golem's Rarity Order (0: none)
 }
 
--- One Open 1 / 3 / 10 button.
+-- One Open 1 / 3 / 10 pill (the touch panel's row; round the big E on PC: EggPrompt).
 export type Open = {
 	Count: number,
 	Button: TextButton,
@@ -608,6 +647,66 @@ export type Refs = {
 	Egg: string?,
 }
 
+-- The opens' paints (owner's clicker video: Open 1 green, Open 3 orange, Open 10 purple).
+EggPanel.OpenPaints = { [1] = "Green", [3] = "Orange", [10] = "Purple" } :: { [number]: string }
+
+-- A face in the bright look: a top-to-bottom paint and a dark rim.
+local function brightFace(frame: GuiObject, paint: BrightTheme.Paint, corner: number, edge: number?)
+	frame.BackgroundColor3 = WHITE
+	frame.BorderSizePixel = 0
+	UIKit.corner(frame, corner)
+	UIKit.new("UIGradient", { Name = "Paint", Rotation = 90, Color = ColorSequence.new(paint.Top, paint.Bottom) }, frame)
+	UIKit.new("UIStroke", {
+		Name = "Rim",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = paint.Edge,
+		Thickness = edge or BrightTheme.EdgeThickness,
+	}, frame)
+end
+
+local function repaint(frame: GuiObject, paint: BrightTheme.Paint)
+	local gradient = frame:FindFirstChild("Paint")
+	if gradient and gradient:IsA("UIGradient") then
+		gradient.Color = ColorSequence.new(paint.Top, paint.Bottom)
+	end
+	local rim = frame:FindFirstChild("Rim")
+	if rim and rim:IsA("UIStroke") then
+		rim.Color = paint.Edge
+	end
+end
+EggPanel.repaint = repaint
+
+-- A word in the bright look: FredokaOne, white (or `color`), a dark edge.
+local function brightText(parent: Instance, name: string, text: string, size: number, z: number, color: Color3?): TextLabel
+	local label = UIKit.new("TextLabel", {
+		Name = name,
+		BackgroundTransparency = 1,
+		FontFace = BrightTheme.Font,
+		Size = UDim2.new(1, 0, 0, size + 6),
+		Text = text,
+		TextColor3 = color or BrightTheme.TextOnColour,
+		TextSize = size,
+		TextWrapped = false,
+		ZIndex = z,
+	}, parent) :: TextLabel
+	UIKit.new("UIStroke", {
+		Name = "Edge",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = BrightTheme.Outline,
+		LineJoinMode = Enum.LineJoinMode.Round,
+		Thickness = math.clamp(size * 0.11, 1.6, 4),
+	}, label)
+	return label
+end
+
+-- A text's edge for its size (setters change sizes: the edge follows).
+local function fitEdge(label: TextLabel)
+	local edge = label:FindFirstChild("Edge")
+	if edge and edge:IsA("UIStroke") then
+		edge.Thickness = math.clamp(label.TextSize * 0.11, 1.6, 4)
+	end
+end
+
 local function newCard(body: Frame, i: number): Card
 	-- (the glow first: a sibling under the card, it rides along in apply())
 	local glow = UIKit.new("Frame", {
@@ -628,9 +727,9 @@ local function newCard(body: Frame, i: number): Card
 		Size = UDim2.fromOffset(66, 66),
 		ZIndex = 3,
 	}, body) :: Frame
-	Pop.face(frame, Pop.rarityPaint("Common"), CARD_CORNER)
+	brightFace(frame, BrightTheme.rarityPaint("Common"), BrightTheme.CardCorner, 3)
 	local popScale = UIKit.new("UIScale", { Name = "PopScale", Scale = 1 }, frame) :: UIScale
-	local rays = Pop.rays(frame, UDim2.fromScale(0.5, 0.44), 8, 60, 0.45, 3)
+	local rays = Pop.rays(frame, UDim2.fromScale(0.5, 0.4), 8, 60, 0.45, 3)
 	rays:SetAttribute("PixelFx", nil) -- (turned here, EggPanelController; PixelFx leaves world guis alone anyway)
 	rays.Visible = false
 	local picture = UIKit.new("ImageLabel", {
@@ -638,7 +737,7 @@ local function newCard(body: Frame, i: number): Card
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Image = "",
-		Position = UDim2.fromScale(0.5, 0.44),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromScale(0.86, 0.86),
 		ZIndex = 4,
 	}, frame) :: ImageLabel
@@ -657,33 +756,70 @@ local function newCard(body: Frame, i: number): Card
 	pcall(function()
 		view.CurrentCamera = camera
 	end)
-	local chance = Pop.text(frame, "", 21, {
-		Name = "Chance",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -3, 1, -30),
-		Size = UDim2.new(1, -4, 0, 25),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 6,
-	})
-	-- (wrapped: the round font, two lines at most; apply() sizes it)
-	local name = Pop.text(frame, "", 14, {
-		Name = "GolemName",
-		AnchorPoint = Vector2.new(0.5, 1),
-		LineHeight = 0.9,
-		Position = UDim2.new(0.5, 0, 1, -1),
-		Size = UDim2.new(1, -2, 0, 30),
-		TextWrapped = true,
-		ZIndex = 6,
-	})
-	local lucky = Pop.text(frame, "x3", 14, {
-		Name = "Lucky",
-		Position = UDim2.fromOffset(4, 2),
-		Size = UDim2.fromOffset(30, 18),
-		TextColor3 = LUCKY_GOLD,
-		TextXAlignment = Enum.TextXAlignment.Left,
+	-- the name over the chance (two lines at most), the chance big at the foot
+	local name = brightText(frame, "GolemName", "", 13, 6)
+	name.AnchorPoint = Vector2.new(0.5, 0)
+	name.LineHeight = 0.9
+	name.TextWrapped = true
+	local chance = brightText(frame, "Chance", "", 26, 6)
+	chance.AnchorPoint = Vector2.new(0.5, 1)
+	chance.Position = UDim2.new(0.5, 0, 1, -3)
+	-- (a long one, "1 in 3,333", shrinks to the card's width: scaled, at most the layout's size)
+	chance.TextScaled = true
+	UIKit.new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 26, MinTextSize = 9 }, chance)
+	local lucky = brightText(frame, "Lucky", "x3", 15, 6, BrightTheme.Paints.Gold.Top)
+	lucky.Position = UDim2.fromOffset(4, 2)
+	lucky.Size = UDim2.fromOffset(32, 19)
+	lucky.TextXAlignment = Enum.TextXAlignment.Left
+	lucky.Visible = false
+	-- the trash: a round dark button with a white can (red while the golem is auto-deleted)
+	local trash = UIKit.new("TextButton", {
+		Name = "Trash",
+		AnchorPoint = Vector2.new(1, 0),
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -3, 0, 3),
+		Selectable = true,
+		Size = UDim2.fromOffset(28, 28),
+		Text = "",
 		Visible = false,
-		ZIndex = 6,
-	})
+		ZIndex = 7,
+	}, frame) :: TextButton
+	local trashDisc = UIKit.new("Frame", {
+		Name = "Disc",
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = EggPanel.TrashOff,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromOffset(28, 28),
+		ZIndex = 7,
+	}, trash) :: Frame
+	UIKit.corner(trashDisc, 999)
+	local can = TrashIcon.build(trashDisc, 20, WHITE, 8)
+	can.AnchorPoint = Vector2.new(0.5, 0.5)
+	can.Position = UDim2.fromScale(0.5, 0.5)
+	can.Size = UDim2.fromScale(0.72, 0.72)
+	-- the first click asks (an irreversible kind of thing): "AUTO-DELETE?" over the picture
+	local confirm = UIKit.new("Frame", {
+		Name = "Confirm",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = BrightTheme.Bad,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.38),
+		Size = UDim2.new(1, -8, 0, 44),
+		Visible = false,
+		ZIndex = 8,
+	}, frame) :: Frame
+	UIKit.corner(confirm, 10)
+	UIKit.new(
+		"UIStroke",
+		{ Name = "Rim", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = BrightTheme.Outline, Thickness = 2 },
+		confirm
+	)
+	local ask = brightText(confirm, "Ask", "AUTO-\nDELETE?", 15, 9)
+	ask.Size = UDim2.fromScale(1, 1)
+	ask.LineHeight = 0.9
 	return {
 		Frame = frame,
 		PopScale = popScale,
@@ -695,13 +831,20 @@ local function newCard(body: Frame, i: number): Card
 		Chance = chance,
 		Name = name,
 		Lucky = lucky,
+		Trash = trash,
+		TrashDisc = trashDisc,
+		Confirm = confirm,
 		Kind = nil,
 		Order = 0,
 	}
 end
 
--- An Open button: "Open 3" over the price (a coin, or "R$"), a key badge on its corner.
-local function newOpen(body: Frame, count: number): Open
+--[[
+	An Open pill: "Open 3" over the price (a coin, or "R$"), its paint
+	(OpenPaints), a key badge on its corner. The touch panel's row has them;
+	on PC they stand round the big E (EggPrompt builds its own with this).
+]]
+function EggPanel.buildOpen(parent: Instance, count: number): Open
 	local button = UIKit.new("TextButton", {
 		Name = "Open" .. count,
 		AutoButtonColor = true,
@@ -709,28 +852,22 @@ local function newOpen(body: Frame, count: number): Open
 		Size = UDim2.fromOffset(120, 56),
 		Text = "",
 		ZIndex = 3,
-	}, body) :: TextButton
-	Pop.face(button, "Green", 10)
+	}, parent) :: TextButton
+	brightFace(button, BrightTheme.Paints[EggPanel.OpenPaints[count] or "Green"], BrightTheme.PillCorner, 3)
 	Pop.fxTag(button, "Press")
-	local label = Pop.text(button, `Open {count}`, 22, {
-		Name = "Label",
-		Position = UDim2.fromScale(0, 0.04),
-		Size = UDim2.fromScale(1, 0.46),
-		ZIndex = 5,
-	})
+	local label = brightText(button, "Label", `Open {count}`, 22, 5)
+	label.Position = UDim2.fromScale(0, 0.04)
+	label.Size = UDim2.fromScale(1, 0.46)
 	local coin = Pop.coin(button, 18, {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(0.5, -20, 0.7, 0),
+		Position = UDim2.new(0.5, -20, 0.72, 0),
 		ZIndex = 6,
 	})
-	local amount = Pop.text(button, "0", 18, {
-		Name = "Amount",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0.5, -16, 0.7, 0),
-		Size = UDim2.new(0.5, 10, 0.34, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 6,
-	})
+	local amount = brightText(button, "Amount", "0", 18, 6)
+	amount.AnchorPoint = Vector2.new(0, 0.5)
+	amount.Position = UDim2.new(0.5, -16, 0.72, 0)
+	amount.Size = UDim2.new(0.5, 10, 0.34, 0)
+	amount.TextXAlignment = Enum.TextXAlignment.Left
 	local key = UIKit.new("Frame", {
 		Name = "Key",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -741,14 +878,14 @@ local function newOpen(body: Frame, count: number): Open
 		ZIndex = 7,
 	}, button) :: Frame
 	UIKit.corner(key, 6)
-	Pop.border(key, 2)
+	UIKit.new("UIStroke", { Name = "Rim", Color = BrightTheme.Outline, Thickness = 2 }, key)
 	local keyText = UIKit.new("TextLabel", {
 		Name = "Letter",
 		BackgroundTransparency = 1,
-		FontFace = PopTheme.Pixel,
+		FontFace = BrightTheme.Font,
 		Size = UDim2.fromScale(1, 1),
 		Text = EggPanel.OpenKeys[count] or "",
-		TextColor3 = INK,
+		TextColor3 = BrightTheme.Text,
 		TextSize = 16,
 		ZIndex = 8,
 	}, key) :: TextLabel
@@ -770,6 +907,19 @@ local function newOpen(body: Frame, count: number): Open
 		KeyText = keyText,
 		Glyph = glyph,
 	}
+end
+
+-- An open pill's inside for its size (`h` its height: the label, the price, the badge).
+function EggPanel.fitOpen(open: Open, w: number, h: number)
+	open.Button.Size = UDim2.fromOffset(w, h)
+	local badge = math.floor(math.clamp(h * 0.42, 22, 30))
+	open.Key.Size = UDim2.fromOffset(badge, badge)
+	open.KeyText.TextSize = math.floor(badge * 0.66)
+	open.Label.TextSize = math.floor(h * 0.38)
+	open.Amount.TextSize = math.floor(h * 0.3)
+	fitEdge(open.Label)
+	fitEdge(open.Amount)
+	open.Coin.Size = UDim2.fromOffset(math.floor(h * 0.32), math.floor(h * 0.32))
 end
 
 -- Every transparency inside `root` as it is now (setFade lerps them toward 1).
@@ -802,6 +952,10 @@ local function collectFades(root: Instance): { Fade }
 	return list
 end
 
+-- The panel's white face (a soft cool shade at the foot) and the price chip's light blue.
+local PANEL: BrightTheme.Paint = { Top = BrightTheme.Panel, Bottom = rgb(240, 245, 252), Edge = BrightTheme.PanelEdge }
+local CHIP: BrightTheme.Paint = { Top = BrightTheme.Inset, Bottom = rgb(206, 226, 250), Edge = BrightTheme.InsetEdge }
+
 -- Builds the one panel (with MaxCards card slots; apply() lays it out for an egg).
 function EggPanel.build(): Refs
 	local gui = UIKit.new("BillboardGui", {
@@ -825,11 +979,10 @@ function EggPanel.build(): Refs
 		Size = UDim2.fromOffset(560, 300),
 	}, gui) :: Frame
 	local scale = UIKit.new("UIScale", { Name = "Fit", Scale = 1 }, root) :: UIScale
-	local title = Pop.text(root, "Egg", 40, {
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 50),
-		ZIndex = 6,
-	})
+	-- the egg's name above the card: big, white, a dark edge
+	local title = brightText(root, "Title", "Egg", 42, 6)
+	title.Size = UDim2.new(1, 0, 0, 52)
+	-- the white card, a thin dark navy edge
 	local body = UIKit.new("Frame", {
 		Name = "Body",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -837,28 +990,33 @@ function EggPanel.build(): Refs
 		Size = UDim2.new(1, 0, 0, 250),
 		ZIndex = 2,
 	}, root) :: Frame
-	Pop.face(body, PANEL_PAINT, PANEL_CORNER, false, false)
-	-- the price chip: a coin and the amount (a Robux egg: "R$ 49" on lime, no coin)
+	brightFace(body, PANEL, BrightTheme.Corner, 3)
+	-- the price chip: a coin and the amount (a Robux egg: "R$ 49" on green, no coin)
 	local chip = UIKit.new("Frame", {
 		Name = "Chip",
 		Position = UDim2.fromOffset(12, 15),
-		Size = UDim2.fromOffset(150, 34),
+		Size = UDim2.fromOffset(150, 36),
 		ZIndex = 3,
 	}, body) :: Frame
-	Pop.face(chip, CHIP_PAINT, 17, false, false)
+	brightFace(chip, CHIP, 18, 2)
 	local coin = Pop.coin(chip, 26, {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 5, 0.5, 0),
 		ZIndex = 5,
 	})
-	local price = Pop.text(chip, "0", 22, {
+	local price = UIKit.new("TextLabel", {
 		Name = "Amount",
 		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		FontFace = BrightTheme.Font,
 		Position = UDim2.new(0, 36, 0.5, 0),
 		Size = UDim2.new(1, -42, 1, -4),
+		Text = "0",
+		TextColor3 = BrightTheme.Text,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
-	})
+	}, chip) :: TextLabel
 	-- the red flash over the chip when the player can't pay (under the amount)
 	local alert = UIKit.new("Frame", {
 		Name = "Alert",
@@ -870,50 +1028,54 @@ function EggPanel.build(): Refs
 	}, chip) :: Frame
 	alert:SetAttribute("NoFade", true)
 	UIKit.corner(alert, 999)
-	-- "Triple Lucky" while its odds show
-	local luckyTag = Pop.chip(body, "Triple Lucky", "Yellow", Vector2.new(140, 28), {
+	-- "Triple Lucky" while its odds show: a gold pill
+	local luckyTag = UIKit.new("Frame", {
 		Name = "LuckyTag",
 		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(150, 30),
 		Visible = false,
 		ZIndex = 3,
-	})
-	-- Auto: a painted toggle (grey off, green on) with its key on a white badge
+	}, body) :: Frame
+	brightFace(luckyTag, BrightTheme.Paints.Gold, BrightTheme.PillCorner, 2)
+	local luckyText = brightText(luckyTag, "Text", "Triple Lucky", 18, 4)
+	luckyText.Size = UDim2.fromScale(1, 1)
+	-- Auto: a pill (grey off, green on) with its key on a white badge
 	local toggle = UIKit.new("TextButton", {
 		Name = "Auto",
 		AnchorPoint = Vector2.new(1, 0),
 		AutoButtonColor = true,
 		Position = UDim2.new(1, -12, 0, 14),
 		Selectable = true,
-		Size = UDim2.fromOffset(112, 36),
+		Size = UDim2.fromOffset(124, 40),
 		Text = "",
 		ZIndex = 3,
 	}, body) :: TextButton
-	Pop.face(toggle, PopTheme.Gray, 10)
+	brightFace(toggle, BrightTheme.Paints.Grey, BrightTheme.PillCorner, 3)
 	Pop.fxTag(toggle, "Press")
-	local toggleLabel = Pop.text(toggle, "Auto", 22, {
-		Name = "Label",
-		Position = UDim2.fromOffset(8, 0),
-		Size = UDim2.new(1, -44, 0.9, 0),
-		ZIndex = 5,
-	})
+	local toggleLabel = brightText(toggle, "Label", "Auto", 22, 5)
+	toggleLabel.Position = UDim2.fromOffset(8, 0)
+	toggleLabel.Size = UDim2.new(1, -44, 0.9, 0)
+	-- (a longer word, "Waiting", shrinks to the pill: at most the layout's size, never under its floor)
+	toggleLabel.TextScaled = true
+	UIKit.new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 22, MinTextSize = 10 }, toggleLabel)
 	local key = UIKit.new("Frame", {
 		Name = "Key",
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
-		Position = UDim2.new(1, -6, 0.45, 0),
+		Position = UDim2.new(1, -6, 0.5, 0),
 		Size = UDim2.fromOffset(26, 26),
 		ZIndex = 5,
 	}, toggle) :: Frame
 	UIKit.corner(key, 6)
-	Pop.border(key, 2)
+	UIKit.new("UIStroke", { Name = "Rim", Color = BrightTheme.Outline, Thickness = 2 }, key)
 	local keyText = UIKit.new("TextLabel", {
 		Name = "Letter",
 		BackgroundTransparency = 1,
-		FontFace = PopTheme.Pixel,
+		FontFace = BrightTheme.Font,
 		Size = UDim2.fromScale(1, 1),
 		Text = "G",
-		TextColor3 = INK,
+		TextColor3 = BrightTheme.Text,
 		TextSize = 18,
 		ZIndex = 6,
 	}, key) :: TextLabel
@@ -931,7 +1093,7 @@ function EggPanel.build(): Refs
 	end
 	local opens: { Open } = {}
 	for _, count in CapsuleConfig.Counts do
-		table.insert(opens, newOpen(body, count))
+		table.insert(opens, EggPanel.buildOpen(body, count))
 	end
 	for i, open in opens do
 		-- (Roblox's gamepad UI navigation walks the row left / right)
@@ -980,6 +1142,8 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 	refs.Scale.Scale = scale
 	refs.Title.Text = if capsule then capsule.Name else capsuleId
 	refs.Title.Size = UDim2.new(1, 0, 0, l.Title)
+	refs.Title.TextSize = l.TitleSize
+	fitEdge(refs.Title)
 	refs.Body.Size = UDim2.new(1, 0, 0, l.Body)
 	-- the head row: the chip on the left, Auto on the right, the lucky tag between
 	local headY = l.Pad + l.Head / 2
@@ -1007,11 +1171,18 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 	refs.Gui.SizeOffset = Vector2.new(0, 0.5)
 	-- (touch: no head row, the chip only says "Not available" in the opens' row: setPrice)
 	refs.Chip.Visible = l.Head > 0
-	local keySize = math.floor(l.Toggle.Y * 0.7)
+	local keySize = math.floor(l.Toggle.Y * 0.62)
 	refs.Key.Size = UDim2.fromOffset(keySize, keySize)
 	refs.ToggleLabel.Size = UDim2.new(1, -(keySize + 16), 0.9, 0)
-	Pop.limit(refs.ToggleLabel, math.floor(l.Toggle.Y * 0.56))
-	Pop.limit(refs.Price, math.floor(l.Chip * 0.62))
+	refs.ToggleLabel.TextSize = math.floor(l.Toggle.Y * 0.5)
+	local toggleFit = refs.ToggleLabel:FindFirstChildOfClass("UITextSizeConstraint")
+	if toggleFit then
+		toggleFit.MaxTextSize = refs.ToggleLabel.TextSize
+		-- (the floors: 10 pt on a phone, 18 px on a 1080p TV)
+		toggleFit.MinTextSize = math.min(refs.ToggleLabel.TextSize, EggPanel.ToggleFloor(l))
+	end
+	fitEdge(refs.ToggleLabel)
+	refs.Price.TextSize = math.floor(l.Chip * 0.6)
 	refs.KeyText.TextSize = math.floor(keySize * 0.66)
 	if l.Head > 0 then
 		refs.LuckyTag.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1021,8 +1192,9 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 		refs.LuckyTag.AnchorPoint = Vector2.new(1, 0.5)
 		refs.LuckyTag.Position = UDim2.fromOffset(l.Width - l.Pad, 0)
 	end
-	-- a card: the golem's picture, its chance over the picture's foot, its name under it
-	local picture = l.CardH - l.NameH + 10
+	-- a card: the golem's picture, its name over its chance, the chance big at the foot
+	local chanceH = l.ChanceSize + 6
+	local picture = l.Picture
 	for i, card in refs.Cards do
 		local shown = i <= l.Count
 		card.Frame.Visible = shown
@@ -1033,29 +1205,43 @@ function EggPanel.apply(refs: Refs, capsuleId: string, l: Layout, scale: number)
 			card.Glow.Position = UDim2.fromOffset(at.X + l.Card / 2, at.Y + l.CardH / 2)
 			card.Glow.Size = UDim2.fromOffset(l.Card + 12, l.CardH + 12)
 		end
-		card.Picture.Position = UDim2.fromOffset(l.Card / 2, picture / 2)
+		card.Picture.Position = UDim2.fromOffset(l.Card / 2, 4 + picture / 2)
 		card.Picture.Size = UDim2.fromOffset(picture, picture)
-		card.Picture:SetAttribute("Rest", picture / 2) -- (EggPanelController's bob starts from here)
-		card.Rays.Position = UDim2.fromOffset(l.Card / 2, picture / 2)
-		card.Chance.Position = UDim2.new(1, -3, 0, l.CardH - l.NameH + 2)
-		card.Chance.Size = UDim2.new(1, -4, 0, l.ChanceSize + 4)
-		Pop.limit(card.Chance, l.ChanceSize)
-		card.Name.Size = UDim2.new(1, -2, 0, l.NameH)
+		card.Picture:SetAttribute("Rest", 4 + picture / 2) -- (EggPanelController's bob starts from here)
+		card.Rays.Position = UDim2.fromOffset(l.Card / 2, 4 + picture / 2)
+		card.Chance.Size = UDim2.new(1, -6, 0, chanceH)
+		card.Chance.TextSize = l.ChanceSize
+		local fit = card.Chance:FindFirstChildOfClass("UITextSizeConstraint")
+		if fit then
+			fit.MaxTextSize = l.ChanceSize
+		end
+		fitEdge(card.Chance)
+		card.Name.Position = UDim2.new(0.5, 0, 0, l.CardH - chanceH - l.NameH + 2)
+		card.Name.Size = UDim2.new(1, -6, 0, l.NameH)
 		card.Name.TextSize = l.NameSize
+		fitEdge(card.Name)
 		card.Lucky.Size = UDim2.fromOffset(l.LuckySize * 2 + 4, l.LuckySize + 4)
-		Pop.limit(card.Lucky, l.LuckySize)
+		card.Lucky.TextSize = l.LuckySize
+		-- the trash: its round face top right; on touch the whole card is its tap area (44 pt)
+		if l.TrashCard then
+			card.Trash.Position = UDim2.fromScale(1, 0)
+			card.Trash.Size = UDim2.fromOffset(l.Card, l.CardH)
+			card.TrashDisc.Position = UDim2.new(1, -3, 0, 3)
+		else
+			card.Trash.Position = UDim2.new(1, -3, 0, 3)
+			card.Trash.Size = UDim2.fromOffset(l.Trash, l.Trash)
+			card.TrashDisc.Position = UDim2.fromScale(1, 0)
+		end
+		card.TrashDisc.Size = UDim2.fromOffset(l.Trash, l.Trash)
+		card.Confirm.Position = UDim2.fromOffset(l.Card / 2, 4 + picture / 2)
 		card.Glow.Visible = false
 	end
+	-- the opens: the touch panel's row (on PC they stand round the big E: EggPrompt)
 	for i, open in refs.Opens do
 		local at = EggPanel.openAt(l, i)
 		open.Button.Position = UDim2.fromOffset(at.X, at.Y)
-		open.Button.Size = UDim2.fromOffset(l.Open.X, l.Open.Y)
-		local badge = math.floor(math.clamp(l.Open.Y * 0.42, 22, 30))
-		open.Key.Size = UDim2.fromOffset(badge, badge)
-		open.KeyText.TextSize = math.floor(badge * 0.66)
-		Pop.limit(open.Label, math.floor(l.Open.Y * 0.4))
-		Pop.limit(open.Amount, math.floor(l.Open.Y * 0.32))
-		open.Coin.Size = UDim2.fromOffset(math.floor(l.Open.Y * 0.32), math.floor(l.Open.Y * 0.32))
+		open.Button.Visible = l.Touch
+		EggPanel.fitOpen(open, l.Open.X, l.Open.Y)
 	end
 end
 
@@ -1093,6 +1279,7 @@ export type ScreenInput = {
 	Hud: { Box }?, -- the HUD's buttons the panel could meet: the teleport bar, the left tiles, the TRAIN chip
 	Corner: Box?, -- the boost corner's tiles (BoostView.cornerSpot, live)
 	Bubble: Box?, -- the touch tutorial bubble (live)
+	Held: { [string]: boolean }?, -- touch buttons stepped aside for the panel (BoostView.TouchButtons' names: Grab, Fire)
 }
 
 EggPanel.Margin = 8 -- px between the floating panel and what it keeps clear of
@@ -1160,7 +1347,11 @@ function EggPanel.screen(input: ScreenInput): Screen
 	local edges: { Box } = {}
 	local small = math.min(view.X, view.Y) <= 500
 	local buttons: Box? = nil
+	local held = input.Held or {}
 	for _, b in BoostView.TouchButtons[if small then "Small" else "Large"] do
+		if held[b.Name] then
+			continue -- (hidden while the panel floats)
+		end
 		local box = {
 			Min = Vector2.new(safe.Max.X - b.Left, safe.Max.Y - b.Top),
 			Max = Vector2.new(safe.Max.X - b.Right, safe.Max.Y - b.Bottom),
@@ -1354,6 +1545,28 @@ function EggPanel.floatOffset(anchor: Vector2, at: Vector2, size: Vector2): Vect
 	return Vector2.new((center.X - anchor.X) / math.max(size.X, 1), (anchor.Y - center.Y) / math.max(size.Y, 1))
 end
 
+--[[
+	Touch: the cards whose tap area (the whole card: its trash) would lie in
+	the thumbstick's start zone with the floating panel at `at` (its
+	top-left, px, at `scale`): their trash rests there, hidden, so a thumb
+	that starts a walk never lands on one. Only the narrow layout of the
+	smallest phones (568 x 320) puts a card there.
+]]
+function EggPanel.trashInZone(l: Layout, at: Vector2, scale: number, zone: Box): { [number]: boolean }
+	local out: { [number]: boolean } = {}
+	if not l.TrashCard then
+		return out
+	end
+	for i = 1, l.Count do
+		local c = EggPanel.cardAt(l, i)
+		local min = at + Vector2.new(c.X, l.Title + c.Y) * scale
+		if area({ Min = min, Max = min + Vector2.new(l.Card, l.CardH) * scale }, zone) > 0 then
+			out[i] = true
+		end
+	end
+	return out
+end
+
 -- A golem model's framing for a card (centre, radius of its parts' box).
 function EggPanel.bounds(model: Instance): (Vector3, number)
 	local lo, hi = box(model)
@@ -1379,9 +1592,20 @@ local function emptyView(card: Card)
 end
 
 --[[
+	A card's trash: "Off" (a dark round face), "Ask" (the first click:
+	"AUTO-DELETE?" over the picture, the face red; a second click turns it
+	on) or "On" (red: the player auto-deletes this golem).
+]]
+function EggPanel.setTrash(card: Card, state: string)
+	card.TrashDisc.BackgroundColor3 = if state == "Off" then EggPanel.TrashOff else BrightTheme.Bad
+	card.Confirm.Visible = state == "Ask"
+end
+
+--[[
 	Fills the cards: each line's rarity paint, chance, "x3" when Triple
 	Lucky triples it, the golem's name and its picture (a silhouette:
-	black, its name under it all the same). `modelFor` lends each card its
+	black, its name over the chance all the same), its trash (a coin egg's
+	golems the player found; red while auto-deleted). `modelFor` lends each card its
 	golem's cached model (moved into the card's own viewport, the card's
 	camera framed on it); nil in the previews. A model is in one view at a
 	time and a view holds one model at most: first every card lets go of a
@@ -1403,10 +1627,12 @@ function EggPanel.setLines(refs: Refs, lines: { Line }, modelFor: ModelFor?)
 			continue
 		end
 		card.Frame.Visible = true
-		Pop.repaint(card.Frame, Pop.rarityPaint(line.Rarity))
+		repaint(card.Frame, BrightTheme.rarityPaint(line.Rarity))
 		card.Chance.Text = line.Text
 		card.Name.Text = line.Name
 		card.Lucky.Visible = line.Lucky
+		card.Trash.Visible = line.Trash
+		EggPanel.setTrash(card, if line.Deleting then "On" else "Off")
 		local info = Rarity.ById[line.Rarity]
 		card.Order = if info then info.Order else 0
 		card.Rays.Visible = card.Order >= EggPanel.RaysFrom
@@ -1442,7 +1668,7 @@ function EggPanel.setPrice(refs: Refs, kind: string, text: string, affordable: b
 	local coin = kind == "Coins"
 	refs.Coin.Visible = coin
 	refs.Price.Text = text
-	refs.Price.TextColor3 = if coin and not affordable then SHORT else WHITE
+	refs.Price.TextColor3 = if coin and not affordable then BrightTheme.Bad elseif coin then BrightTheme.Text else WHITE
 	local textSize = math.floor(h * 0.6)
 	local left = if coin then h + 2 else 14
 	refs.Price.Position = UDim2.new(0, left, 0.5, 0)
@@ -1450,7 +1676,7 @@ function EggPanel.setPrice(refs: Refs, kind: string, text: string, affordable: b
 	refs.Price.TextXAlignment = if coin then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
 	local width = left + Pop.textWidth(text, textSize) + 12
 	refs.Chip.Size = UDim2.fromOffset(math.clamp(math.ceil(width), h + 40, 220), h)
-	Pop.repaint(refs.Chip, if kind == "Robux" then "Lime" elseif kind == "Off" then PopTheme.Gray else CHIP_PAINT, false)
+	repaint(refs.Chip, if kind == "Robux" then BrightTheme.Paints.Green elseif kind == "Off" then BrightTheme.Paints.Grey else CHIP)
 	if l and l.Head <= 0 then
 		-- touch (no head row: the opens show the price): only "Not available" / "Coming
 		-- soon" shows, where the opens' row would be
@@ -1483,9 +1709,10 @@ end
 	keyboard key's letter, a gamepad glyph (`image`), or nothing on touch
 	(`text` "" and no image: the badge hides).
 ]]
-function EggPanel.setAuto(refs: Refs, visible: boolean, on: boolean, text: string, image: string?)
+function EggPanel.setAuto(refs: Refs, visible: boolean, on: boolean, text: string, image: string?, label: string?)
 	refs.Toggle.Visible = visible
-	Pop.repaint(refs.Toggle, if on then "Green" else PopTheme.Gray)
+	refs.ToggleLabel.Text = label or "Auto" -- ("Waiting" while its egg's odds are off the screen)
+	repaint(refs.Toggle, if on then BrightTheme.Paints.Green else BrightTheme.Paints.Grey)
 	local hasImage = image ~= nil and image ~= ""
 	refs.Key.Visible = hasImage or text ~= ""
 	refs.KeyText.Text = text
@@ -1541,29 +1768,31 @@ function EggPanel.opens(buys: { any }, robux: boolean): { OpenSpec }
 end
 
 --[[
-	Paints the Open buttons (`specs`: opens()): green with the coin price,
-	lime with the Robux price, grey when they can't be bought. `keys` gives
-	each count's key badge text (nil / "": no badge); `glyphs` each count's
-	badge image instead (a gamepad: the main prompt's button on Open 1, the
-	panel's focus button on Open 3 and Open 10).
+	Paints Open pills (`opens`; `specs`: opens()): their paint (OpenPaints:
+	Open 1 green, Open 3 orange, Open 10 purple) with the coin or Robux
+	price, grey when they can't be bought. `keys` gives each count's key
+	badge text (nil / "": no badge); `glyphs` each count's badge image
+	instead (a gamepad: the main prompt's button on Open 1, the panel's
+	focus button on Open 3 and Open 10). The panel's own pills (setOpens)
+	and the big E's (EggPrompt.setOpens) both go through this.
 ]]
-function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: string }?, glyphs: { [number]: string }?)
-	for _, open in refs.Opens do
+function EggPanel.paintOpens(opens: { Open }, specs: { OpenSpec }, keys: { [number]: string }?, glyphs: { [number]: string }?)
+	for _, open in opens do
 		local spec: OpenSpec? = nil
 		for _, s in specs do
 			if s.Count == open.Count then
 				spec = s
 			end
 		end
-		open.Button.Visible = spec ~= nil
+		open.Button:SetAttribute("Spec", spec ~= nil)
 		if spec then
 			open.Amount.Text = spec.Price
 			open.Coin.Visible = not spec.Robux
-			open.Amount.Position = if spec.Robux then UDim2.new(0, 6, 0.7, 0) else UDim2.new(0.5, -16, 0.7, 0)
+			open.Amount.Position = if spec.Robux then UDim2.new(0, 6, 0.72, 0) else UDim2.new(0.5, -16, 0.72, 0)
 			open.Amount.Size = if spec.Robux then UDim2.new(1, -12, 0.34, 0) else UDim2.new(0.5, 10, 0.34, 0)
 			open.Amount.TextXAlignment = if spec.Robux then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left
-			local paint: string | Pop.Paint = if not spec.Enabled then PopTheme.Gray elseif spec.Robux then "Lime" else "Green"
-			Pop.repaint(open.Button, paint)
+			local paint = if not spec.Enabled then "Grey" else (EggPanel.OpenPaints[open.Count] or "Green")
+			repaint(open.Button, BrightTheme.Paints[paint])
 		end
 		local text = if keys then keys[open.Count] else nil
 		local image = if glyphs then glyphs[open.Count] else nil
@@ -1576,11 +1805,151 @@ function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: st
 	end
 end
 
--- The touch targets on the panel (the specs check 44 pt on phones).
+-- The panel's own Open pills (touch: its row; on PC they stay hidden: the big E has them).
+function EggPanel.setOpens(refs: Refs, specs: { OpenSpec }, keys: { [number]: string }?, glyphs: { [number]: string }?)
+	EggPanel.paintOpens(refs.Opens, specs, keys, glyphs)
+	local touch = refs.Layout == nil or refs.Layout.Touch
+	for _, open in refs.Opens do
+		open.Button.Visible = touch and open.Button:GetAttribute("Spec") == true
+	end
+end
+
+type PadSpot = { Button: GuiObject, X: number, Row: number }
+
+--[[
+	A gamepad's walk over the panel and the big E's opens (NextSelection
+	links: the D-pad, after the focus button selected Open 1; nothing is
+	ever selected for the player, B lets go). The shown cards' trash icons
+	in their grid (left / right in a row, up / down to the nearest in the
+	next row that has one), Auto over them (the head row's right), and
+	under them the opens round the disc (`cluster`: EggPrompt's, Open 1
+	left, Open 10 right, Open 3 under the disc: down from the panel's left
+	half goes to Open 1, from its right half to Open 10). Only shown buttons
+	are linked. `cluster` nil (touch: the panel's own row): only the grid
+	and Auto over it; the row keeps its own links (build).
+]]
+function EggPanel.linkPad(refs: Refs, cluster: { Open }?)
+	local l = refs.Layout
+	if not l then
+		return
+	end
+	-- (a link may be nil: no button that way; set only when it changes)
+	local function link(from: GuiObject, side: string, to: GuiObject?)
+		local button: any = from
+		if button[side] == to then
+			return
+		elseif to == nil then
+			pcall(function()
+				button[side] = nil -- (the game's buttons let go of a link; the Lune specs' can't hold a nil one)
+			end)
+		else
+			button[side] = to
+		end
+	end
+	local spots: { PadSpot } = {}
+	local rows: { number } = {}
+	for i, card in refs.Cards do
+		if i <= l.Count and card.Frame.Visible and card.Trash.Visible then
+			local row = (i - 1) // l.Columns
+			table.insert(spots, { Button = card.Trash :: GuiObject, X = EggPanel.cardAt(l, i).X, Row = row })
+			if not table.find(rows, row) then
+				table.insert(rows, row)
+			end
+		end
+	end
+	table.sort(rows)
+	local opens: { [number]: GuiObject } = {}
+	local list: { Open } = cluster or {}
+	for _, open in list do
+		if open.Button.Visible then
+			opens[open.Count] = open.Button
+		end
+	end
+	local auto: GuiObject? = if refs.Toggle.Visible and not l.AutoInRow then refs.Toggle else nil
+	-- the nearest trash by x in `row`; `side` -1 / 1: that row's leftmost / rightmost
+	local function pick(row: number?, x: number, side: number?): GuiObject?
+		local best: PadSpot? = nil
+		for _, s in spots do
+			if s.Row == row then
+				local b = best
+				local better = b == nil
+					or (if side == -1 then s.X < b.X elseif side == 1 then s.X > b.X else math.abs(s.X - x) < math.abs(b.X - x))
+				if better then
+					best = s
+				end
+			end
+		end
+		return if best then best.Button else nil
+	end
+	local mid = l.Width / 2
+	for _, s in spots do
+		local k = table.find(rows, s.Row) or 1
+		local left: PadSpot? = nil
+		local right: PadSpot? = nil
+		for _, o in spots do
+			if o.Row == s.Row then
+				local a, b = left, right
+				if o.X < s.X and (a == nil or o.X > a.X) then
+					left = o
+				elseif o.X > s.X and (b == nil or o.X < b.X) then
+					right = o
+				end
+			end
+		end
+		local down: GuiObject? = nil
+		if k < #rows then
+			down = pick(rows[k + 1], s.X)
+		elseif s.X + l.Card / 2 < mid then
+			down = opens[1] or opens[10] or opens[3]
+		else
+			down = opens[10] or opens[1] or opens[3]
+		end
+		link(s.Button, "NextSelectionLeft", if left then left.Button else nil)
+		link(s.Button, "NextSelectionRight", if right then right.Button elseif k == 1 then auto else nil)
+		link(s.Button, "NextSelectionUp", if k > 1 then pick(rows[k - 1], s.X) else auto)
+		link(s.Button, "NextSelectionDown", down)
+	end
+	if auto then
+		link(auto, "NextSelectionDown", pick(rows[1], 0, 1) or opens[10] or opens[1] or opens[3])
+		link(auto, "NextSelectionLeft", nil)
+		link(auto, "NextSelectionUp", nil)
+		link(auto, "NextSelectionRight", nil)
+	end
+	if cluster then
+		local last = rows[#rows]
+		local one, three, ten = opens[1], opens[3], opens[10]
+		if one then
+			link(one, "NextSelectionUp", pick(last, 0, -1) or auto)
+			link(one, "NextSelectionRight", ten or three)
+			link(one, "NextSelectionDown", three)
+			link(one, "NextSelectionLeft", nil)
+		end
+		if ten then
+			link(ten, "NextSelectionUp", pick(last, 0, 1) or auto)
+			link(ten, "NextSelectionLeft", one or three)
+			link(ten, "NextSelectionDown", three)
+			link(ten, "NextSelectionRight", nil)
+		end
+		if three then
+			link(three, "NextSelectionUp", one or ten)
+			link(three, "NextSelectionLeft", one)
+			link(three, "NextSelectionRight", ten)
+			link(three, "NextSelectionDown", nil)
+		end
+	end
+end
+
+-- The touch targets on the panel (the specs check 44 pt on phones): Auto, the opens, the trash icons' tap areas.
 function EggPanel.touchTargets(refs: Refs): { GuiObject }
 	local list: { GuiObject } = { refs.Toggle }
 	for _, open in refs.Opens do
 		table.insert(list, open.Button)
+	end
+	local l = refs.Layout
+	for i, card in refs.Cards do
+		if l and i <= l.Count then
+			table.insert(list, card.Trash)
+		end
 	end
 	return list
 end

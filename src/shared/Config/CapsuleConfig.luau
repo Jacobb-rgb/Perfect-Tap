@@ -74,6 +74,20 @@ export type OddsLine = { Golem: string, Chance: number }
 local CapsuleConfig = {}
 
 CapsuleConfig.Counts = { 1, 3, 10 }
+
+-- The rarities a golem can have, Common .. Mythic (the stall's board rows, the
+-- opening's colours). Rarity.List may hold more (feat/secret-ores adds "Secret",
+-- Order 7, for ores only): golems never roll those, so the egg screens list these.
+CapsuleConfig.TopOrder = 6
+function CapsuleConfig.rarities(): { Rarity.RarityInfo }
+	local out: { Rarity.RarityInfo } = {}
+	for _, info in Rarity.List do
+		if info.Order <= CapsuleConfig.TopOrder then
+			table.insert(out, info)
+		end
+	end
+	return out
+end
 CapsuleConfig.MaxCount = 50 -- the biggest pack (a limited capsule x50; Robux only)
 -- A Robux pack is prompted while the inventory has room for this many of it
 -- (all of a small one): paid golems may pass InventoryCap up to MaxSaved and

@@ -44,9 +44,9 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 9", function()
-		T.eq(DataTemplate.Version, 10)
-		T.eq(Migrations.Latest, 10)
+	T.test("Migration: template is version 11", function()
+		T.eq(DataTemplate.Version, 11)
+		T.eq(Migrations.Latest, 11)
 		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
 	end)
 
@@ -55,7 +55,7 @@ return function(T, Loader)
 		data.Version = 6
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "Clean|Tin|Clean|" }
 		Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(#data.Podiums, 5, "the 5th slot added")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
@@ -74,7 +74,7 @@ return function(T, Loader)
 		data.Foundry = { Stock = { { K = "Ingot", O = "Gold", G = "Pristine" }, 42, { K = "Ingot", O = "Iron" } } }
 		data.Stats.RunIncome = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(data.Foundry, nil, "the Foundry record goes")
 		T.eq(#data.Storage, 3, "both ingots in the pen")
 		T.eq(data.Storage[2].O, "Gold")
@@ -104,7 +104,7 @@ return function(T, Loader)
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -204,16 +204,53 @@ return function(T, Loader)
 		T.eq(report.Moved + report.Dropped, 0)
 	end)
 
+	T.test("Migration v11: a v10 save migrates unchanged apart from the reconciled Golems.AutoDelete", function()
+		local now = 1_800_000_000
+		-- a v10 save as a v10 server left it (its template had no AutoDelete)
+		local v10 = ProfileStore.deepCopy(DataTemplate)
+		Migrations.run(v10, now)
+		v10.Version = 10
+		v10.Golems.AutoDelete = nil
+		v10.Golems.Owned = { { Id = 1, Kind = "PebbleGolem" }, { Id = 2, Kind = "RoseKnight", Paid = true, Locked = true } }
+		v10.Golems.Equipped = { 2 }
+		v10.Golems.NextId = 3
+		local before = ProfileStore.deepCopy(v10)
+		-- the load: the template reconciled in, then the chain
+		ProfileStore.reconcile(v10, DataTemplate)
+		local report = Migrations.run(v10, now)
+		T.eq(v10.Version, 11)
+		T.eq(type(v10.Golems.AutoDelete), "table", "AutoDelete reconciled in")
+		T.eq(next(v10.Golems.AutoDelete), nil, "empty: nothing auto-deleted")
+		T.eq(report.Moved, 0, "nothing moved")
+		T.eq(report.Dropped, 0, "nothing dropped")
+		v10.Golems.AutoDelete = nil
+		v10.Version = 10
+		T.truthy(deepEqual(before, v10), "everything else unchanged")
+		-- junk in it is repaired, a renamed kind takes its new id, known and newer kinds stay
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Golems.AutoDelete = { PebbleGolem = true, VoidGolem = true, [5] = true, Bad = "yes", RubyKnight = true }
+		Migrations.run(data, now)
+		T.eq(data.Golems.AutoDelete.PebbleGolem, true)
+		T.eq(data.Golems.AutoDelete.VoidGolem, true, "a newer build's kind kept")
+		T.eq(data.Golems.AutoDelete.Bad, nil, "junk dropped")
+		T.eq(data.Golems.AutoDelete[5], nil)
+		local renamed = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig").Renamed.RubyKnight
+		T.eq(data.Golems.AutoDelete[renamed], true, "a renamed kind takes its new id")
+		data.Golems.AutoDelete = "junk"
+		Migrations.run(data, now)
+		T.eq(type(data.Golems.AutoDelete), "table", "junk becomes an empty set")
+	end)
+
 	T.test("Migration: broken top-level fields become empty tables", function()
 		local data = { Version = "one", PlacedMachines = "x", MachineInventory = 5, Storage = false }
 		Migrations.run(data)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 10)
-		local newer = { Version = 10, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
+		T.eq(data.Version, 11)
+		local newer = { Version = Migrations.Latest + 1, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
-		T.eq(newer.Version, 10, "a newer save's version is not lowered")
+		T.eq(newer.Version, Migrations.Latest + 1, "a newer save's version is not lowered")
 	end)
 
 	---------------------------------------------------------------- version 4: the 16-cell grid
@@ -251,7 +288,7 @@ return function(T, Loader)
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -353,7 +390,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 10)
+			T.eq(data.Version, 11)
 		end
 	end)
 
@@ -402,7 +439,7 @@ return function(T, Loader)
 		}
 		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -476,7 +513,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 10)
+		T.eq(data.Version, 11)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")

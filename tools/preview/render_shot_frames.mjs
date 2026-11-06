@@ -1,8 +1,9 @@
 // Renders a video whose frames are shots on one world (the camera fixed): each frame only
 // swaps its "extra" parts and its UI overlay (viewer.js window.__frame), then encodes an MP4.
 //   node tools/preview/render_shot_frames.mjs <shots.json> <out name> [fps=20] [stills=name,name]
-// e.g. node tools/preview/render_shot_frames.mjs build/preview/egg_video_shots.json vejce_e 20
-// (tools/lune/export_egg_panel.luau writes that file). The world loads once from the first
+// e.g. node tools/preview/render_shot_frames.mjs build/preview/egg_redo_video_shots.json egg_redo_open3 15
+// (tools/lune/export_egg_panel.luau writes the egg_redo_*_shots.json files: its header lists them).
+// One batch takes its size from its first shot (phone shots go in their own file). The world loads once from the first
 // shot. Frames: build/preview/<out>_frames/, video: build/preview/<out>.mp4 (macOS
 // AVFoundation, tools/preview/encode_mp4.swift). With stills: only those frames, copied to
 // build/preview/shots/<name>.jpg.

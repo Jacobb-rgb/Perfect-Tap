@@ -274,7 +274,7 @@ return function(T, Loader)
 			Stats = { OresMined = 3 },
 		}
 		Migrations.run(save)
-		T.eq(save.Version, 10, "v10")
+		T.eq(save.Version, 11, "v11 (10: the secret ores, 11: the golems' auto-delete)")
 		T.eq(Migrations.Latest, DataTemplate.Version, "Latest = the template's Version")
 		T.eq(#save.Storage, 2, "both pen items kept")
 		T.eq(save.Storage[1].O, "HollowEye")
