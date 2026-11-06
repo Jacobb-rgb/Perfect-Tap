@@ -10,12 +10,14 @@
 	  bands     the wide glowing bands on a dark round section
 	  drum      the big dark drum with metal edges and small glowing lights;
 	            the crystals grow out of it, top, bottom and sides
-	  cage      six thin barrels round a glowing core between dark clamps,
-	            with two glowing hoops, then a dark round back
+	  cage      six thin barrels round a glowing core (rainbow bands from level
+	            RainbowCoreFrom) between dark clamps, with two glowing hoops
+	  back      a dark round back with a band of six rainbow rings
 	  grip      a round grip under the cage, a ball at its end, at the hand
 
-	Everything is round but the crystals and the hexagon, which are cut like his
-	picture's. The colours are Palettes (his, by level and STAR blaster) for a gun
+	A lightning bolt glows on each side of the drum (the owner: "přidej duhové
+	čáry ... nějaké blesky", kept 2026-11-06). Everything is round but the
+	crystals, the hexagon and the bolts, which are cut like his picture's. The colours are Palettes (his, by level and STAR blaster) for a gun
 	in its case's ore; an older save's gun in another ore keeps that ore's colours
 	(the skin, KenneyBlaster.skin, made vivid).
 
@@ -35,9 +37,10 @@ local KenneyBlaster = require(script.Parent.KenneyBlaster)
 
 local MinigunBlaster = {}
 
-MinigunBlaster.MaxParts = 90 -- per gun (phones: every player holds one)
+MinigunBlaster.MaxParts = 96 -- per gun (phones: every player holds one)
 MinigunBlaster.StartLength = 2.6 -- level 1's length (studs): a small one, it grows with the level
 MinigunBlaster.EndLength = 5.6 -- level 10's length (the STAR blasters too)
+MinigunBlaster.RainbowCoreFrom = 5 -- the core glows in rainbow bands from this level (the STAR blasters too)
 
 local NEON = Enum.Material.Neon
 local PLASTIC = Enum.Material.SmoothPlastic
@@ -50,6 +53,16 @@ local DARKER = Color3.fromRGB(10, 12, 17)
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
+
+-- the rainbow (red .. violet), a little deep so Neon shows each colour
+local RAINBOW = {
+	rgb(225, 28, 58),
+	rgb(235, 105, 10),
+	rgb(225, 190, 0),
+	rgb(25, 190, 75),
+	rgb(25, 115, 235),
+	rgb(125, 45, 225),
+}
 
 export type Palette = {
 	Color: Color3, -- the wide bands, the hoops
@@ -89,8 +102,8 @@ local CLUSTERS = {
 	{ 0, AXIS_Y + 1.15, -1.75, 0, 1, -0.2 }, -- on top, the front of the drum
 	{ 0, AXIS_Y - 1.15, -1.5, 0, -1, 0.15 }, -- underneath
 	{ 0, AXIS_Y + 1.15, -0.95, 0, 1, 0.5 }, -- on top, the back of the drum
-	{ 1.15, AXIS_Y + 0.1, -1.4, 1, 0.3, -0.1 }, -- the right side
-	{ -1.15, AXIS_Y + 0.1, -1.4, -1, 0.3, -0.1 }, -- the left side
+	{ 1.05, AXIS_Y + 0.65, -1.35, 1, 0.6, -0.1 }, -- the right side, high (the bolt is below it)
+	{ -1.05, AXIS_Y + 0.65, -1.35, -1, 0.6, -0.1 }, -- the left side
 }
 -- the crystals in the order they appear with the level: { cluster, its n-th crystal (1 the biggest,
 -- 2 and 3 fanned out along the gun and shorter) }
@@ -259,8 +272,38 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 		local t = i / 4 * math.pi * 2 + math.pi / 4
 		spinning(ball("Light", math.cos(t) * 1.24, AXIS_Y + math.sin(t) * 1.24, -1.45, 0.2, colors.Accent, NEON))
 	end
+	-- a lightning bolt on each side of the drum: a zigzag of thin bars
+	local boltColor = colors.Color:Lerp(WHITE, 0.45)
+	for side = -1, 1, 2 do
+		local x = side * 1.27
+		local points = {
+			at(x, AXIS_Y + 0.5, -0.85),
+			at(x, AXIS_Y + 0.02, -1.62),
+			at(x, AXIS_Y + 0.08, -1.3),
+			at(x, AXIS_Y - 0.5, -2.08),
+		}
+		for i = 1, #points - 1 do
+			local a, b = points[i], points[i + 1]
+			local along = (b - a).Unit
+			local across = Vector3.xAxis:Cross(along).Unit
+			piece(
+				"Bolt",
+				CFrame.fromMatrix((a + b) / 2, Vector3.xAxis, across),
+				Vector3.new(0.05 * S, 0.15 * S, (b - a).Magnitude + 0.09 * S),
+				boltColor,
+				NEON
+			)
+		end
+	end
 	-- the cage: the glowing core, six barrels, the hoops and clamps, the round back
-	round("Core", -0.6, 2.95, 0.5, colors.Accent, NEON)
+	if level >= MinigunBlaster.RainbowCoreFrom then
+		for i, color in RAINBOW do
+			local z0 = -0.6 + (i - 1) * (3.55 / #RAINBOW)
+			round("Core", z0, z0 + 3.55 / #RAINBOW, 0.5, color, NEON)
+		end
+	else
+		round("Core", -0.6, 2.95, 0.5, colors.Accent, NEON)
+	end
 	for i = 0, 5 do
 		local t = i / 6 * math.pi * 2 + math.pi / 6
 		spinning(cylinder("Barrel", at(math.cos(t) * BARREL_R, AXIS_Y + math.sin(t) * BARREL_R, 1.2), Vector3.zAxis, 3.6, 0.3, MID))
@@ -269,7 +312,11 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 	round("Body", 0.95, 1.3, 1.95, DARK)
 	round("Rim", 1.65, 1.9, 1.75, colors.Color, NEON)
 	round("Body", 2.1, 2.5, 1.95, DARK)
-	round("Body", 2.95, 3.6, 2.1, DARK)
+	round("Body", 2.7, 3.72, 2.1, DARK)
+	for i, color in RAINBOW do
+		local z = 2.78 + (i - 1) * 0.15
+		round("Rainbow", z, z + 0.11, 2.17, color, NEON)
+	end
 	ball("Body", 0, AXIS_Y, 3.6, 1.3, DARKER)
 	-- the round grip under the hand, leaning back a little, a ball at its end
 	local gripTop, gripEnd = at(0, -0.05, HAND_Z), at(0, -1.55, HAND_Z + 0.35)

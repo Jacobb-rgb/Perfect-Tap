@@ -1,8 +1,8 @@
 --[[
 	The round blasters (Builders/MinigunBlaster, the owner's pictures of 2026-10-31
 	and 2026-11-06): every level in every ore and every STAR blaster stays inside
-	its budget, every piece is round (only the crystals and the hexagonal muzzle
-	are cut), the crystals grow with the level, each level has his colours in its
+	its budget, every piece is round (only the crystals, the hexagonal muzzle and
+	the bolts are cut), the rainbow and the bolts are there, the crystals grow with the level, each level has his colours in its
 	case's ore and an older save's other ore keeps its own, the spinning parts hang
 	on the spin hub's Motor6D about the gun's axis, the two-handed hip hold fits,
 	and the client's spin speed ramps up and runs down (Effects/BarrelSpin).
@@ -57,8 +57,8 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("MinigunBlaster: all round but the crystals and the hexagonal muzzle", function()
-		local cut = { Crystal = true, CrystalTip = true, MuzzleGlow = true }
+	T.test("MinigunBlaster: all round but the crystals, the hexagonal muzzle and the bolts", function()
+		local cut = { Crystal = true, CrystalTip = true, MuzzleGlow = true, Bolt = true }
 		for _, tool in
 			{
 				BlasterBuilder.build(1, ""),
@@ -94,6 +94,9 @@ return function(T, Loader)
 			T.eq(n.Barrel, 6, `level {level}: six barrels`)
 			T.eq(n.MuzzleGlow, 3, `level {level}: the hexagonal muzzle`)
 			T.truthy((n.Rim or 0) >= 5, `level {level}: the glowing bands and hoops`)
+			T.eq(n.Rainbow, 6, `level {level}: the rainbow band`)
+			T.eq(n.Bolt, 6, `level {level}: a bolt on each side`)
+			T.eq((n.Core or 0) > 1, level >= MinigunBlaster.RainbowCoreFrom, `level {level}: the rainbow core`)
 			T.eq(
 				neonOf(tool, "Rim"),
 				MinigunBlaster.palette(level, BlasterData.vaultOre(level), {} :: any).Color,
@@ -115,6 +118,8 @@ return function(T, Loader)
 		for _, star in StarBlasterData.List do
 			local tool = BlasterBuilder.buildStar(star, 3, "Copper")
 			T.eq(named(tool).Crystal, 12, star.Id .. ": all twelve crystals")
+			T.eq(named(tool).Rainbow, 6, star.Id .. ": the rainbow band")
+			T.truthy((named(tool).Core or 0) > 1, star.Id .. ": the rainbow core")
 			T.eq(tool:GetAttribute("Star"), star.Id, star.Id .. ": its star id")
 		end
 		T.eq(named(BlasterBuilder.buildStar(StarBlasterData.ById.Singularity, 3, "Copper")).Bore, 1, "the ring muzzle's dark bore")
