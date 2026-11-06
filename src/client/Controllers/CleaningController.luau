@@ -66,6 +66,7 @@ local Cleaning = script.Parent.Parent.Cleaning
 local PointerInput = require(Cleaning.PointerInput)
 local CameraFit = require(Cleaning.CameraFit)
 local DefaultLook = require(Cleaning.DefaultLook)
+local RawItemHide = require(Cleaning.RawItemHide)
 local SecretCleanFx = require(Cleaning.SecretCleanFx)
 local CleanFlash = require(Cleaning.CleanFlash)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
@@ -189,6 +190,7 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		Camera = camera,
 		CamPoint = camPoint,
 		OrePoint = orePoint,
+		RawHide = RawItemHide.new(orePoint.Position),
 		Folder = folder,
 		View = view,
 		Streak = streak,
@@ -292,20 +294,6 @@ local function updateButtonLabels(ctx: any)
 	view.Collect.Text = if gamepad then "Collect (A)" else "Collect"
 end
 
-local function setRawItemHidden(ctx: any, hidden: boolean)
-	for _, item in CollectionService:GetTagged("Item") do
-		if item:IsA("Model") and item.PrimaryPart and item:GetAttribute("State") == "Machine" then
-			if (item.PrimaryPart.Position - ctx.OrePoint.Position).Magnitude < 3 then
-				for _, d in item:GetDescendants() do
-					if d:IsA("BasePart") then
-						d.LocalTransparencyModifier = if hidden then 1 else 0
-					end
-				end
-			end
-		end
-	end
-end
-
 local function playerControls(enabled: boolean)
 	local ok, module = pcall(function()
 		local playerModule = player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 5)
@@ -375,7 +363,7 @@ local function enter(ctx: any)
 	if dof then
 		dof.Enabled = false
 	end
-	setRawItemHidden(ctx, true)
+	RawItemHide.scan(ctx.RawHide, CollectionService:GetTagged("Item"))
 	local camera = ctx.Camera
 	-- a quick restart keeps the camera from before the first session (see restoreCF)
 	ctx.savedCameraCF = restoreCF or camera.CFrame
@@ -405,7 +393,7 @@ local function exit(ctx: any)
 	ContextActionService:UnbindAction("TerraForgeCleanBack")
 	ContextActionService:UnbindAction("TerraForgeCleanCollect")
 	ctx.pointer:stop()
-	setRawItemHidden(ctx, false)
+	RawItemHide.restore(ctx.RawHide)
 	local camera = ctx.Camera
 	local back = TweenService:Create(camera, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
 		CFrame = ctx.savedCameraCF,
@@ -622,6 +610,10 @@ local function run(ctx: any)
 				view.Cursor.Visible = false
 			end
 			if not ctx.submitted then
+				-- the vise's item may arrive after CleanBegin (an ore out of the backpack)
+				if RawItemHide.due(ctx.RawHide, os.clock()) then
+					RawItemHide.scan(ctx.RawHide, CollectionService:GetTagged("Item"))
+				end
 				local ok, err = pcall(function(): any
 					sprayFrame(ctx)
 					return nil
