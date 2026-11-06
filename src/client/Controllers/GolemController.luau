@@ -38,12 +38,16 @@
 	  most every RebuildSeconds (Equip / Unequip spam), keeping every model
 	  whose kind stays (GolemView.matchFollowers: one Equip builds one).
 	  Models: GolemBuilder.build(kind, start, { Welded = true, Size =
-	  FollowerSize }) in a local folder, every part created in place at the
+	  FollowerSize, a HUGE golem GolemFit.HugeFollowerSize }) in a local
+	  folder, every part created in place at the
 	  start CFrame (so the welds hold the shape whenever they switch on):
 	  one anchored Body per golem moves the whole golem (one CFrame write
 	  per golem per frame), no part collides, touches or is queried.
 	- Movement: each golem eases toward its slot behind its owner (left,
-	  right, back), hopping as it walks (one hop per HopStride studs, a
+	  right, back; a HUGE golem walks beside and further back, never
+	  overlapping its player or the others and never straight behind the
+	  player: Util/GolemFit.slots, by the models' reach), hopping as it
+	  walks (one hop per HopStride studs, a
 	  little forward tilt and side roll; a Premium golem, Legendary or
 	  Mythic, glides on its aura instead, bobbing), faces where it walks,
 	  turns to its owner's facing when it stops, bobs gently while idle
@@ -70,6 +74,7 @@ local Net = require(Shared.Net)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemView = require(script.Parent.Parent.UI.GolemView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
+local GolemFit = require(script.Parent.Parent.Util.GolemFit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
@@ -83,14 +88,14 @@ local GolemController = {}
 
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
-GolemController.FollowerSize = 0.85 -- followers a little smaller than the capsule reveal
+GolemController.FollowerSize = 0.85 -- followers a little smaller than the capsule reveal (HUGE ones: GolemFit.HugeFollowerSize)
 GolemController.HopStride = 1.7 -- studs per hop
 GolemController.GroundSeconds = 0.3
 GolemController.CatchUpDistance = 45 -- further behind: jump to the slot
 GolemController.LookAround = 1.3 -- radians an idle golem may turn away from its owner's facing
 GolemController.LookSeconds = { 2.5, 6 } -- how long it looks one way
--- slots behind the owner (owner space: +X right, +Z behind)
-GolemController.Slots = { Vector3.new(-3.1, 0, 3.0), Vector3.new(3.1, 0, 3.0), Vector3.new(0, 0, 5.2) }
+-- slots behind the owner (owner space: +X right, +Z behind; huge golems: GolemFit.slots)
+GolemController.Slots = GolemFit.Base
 GolemController.VisibilityTick = 0.2 -- seconds between two follower passes (each builds at most one player's golems)
 GolemController.RebuildSeconds = 0.4 -- a player's followers change at most this often
 -- open / close the inventory from anywhere (D-pad: Up BUILD, Down teleports,
@@ -288,16 +293,18 @@ local function showModel(view: GolemView.Refs, card: GolemView.Card?)
 	local camera = view.Viewport.CurrentCamera
 	if not camera then
 		local made = Instance.new("Camera")
-		made.FieldOfView = 30
+		made.FieldOfView = GolemFit.ViewFov
 		made.Parent = view.Viewport
 		view.Viewport.CurrentCamera = made
 		camera = made
 	end
 	local height = (model:GetAttribute("Height") :: number?) or 3
-	local target = Vector3.new(0, height * 0.48, 0)
-	local distance = height * 2.6 + 1
+	-- (framed by its height, or by its reach when that is wider: a huge golem's wings and rocks)
+	local frame = view.Viewport.Size
+	local aspect = if frame.Y.Offset > 0 then frame.X.Offset / frame.Y.Offset else 1
 	local cam = camera :: Camera
-	cam.CFrame = CFrame.lookAt(target + Vector3.new(math.sin(0.35) * distance, distance * 0.15, -math.cos(0.35) * distance), target)
+	cam.FieldOfView = GolemFit.ViewFov
+	cam.CFrame = GolemFit.view(height, GolemFit.radius(model, CFrame.new()), aspect)
 end
 
 local onCard: (id: number) -> () -- (defined below)
@@ -648,7 +655,7 @@ local function watch(view: GolemView.Refs)
 		if model and model.Parent then
 			-- (the pivot is the Body: RootHeight above the feet)
 			local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
-			model:PivotTo(CFrame.new(0, rootHeight, 0) * CFrame.Angles(0, math.sin(spin * 0.8) * 0.7, 0))
+			model:PivotTo(CFrame.new(0, rootHeight, 0) * CFrame.Angles(0, math.sin(spin * 0.8) * GolemFit.ViewSpin, 0))
 		end
 		elapsed += dt
 		if elapsed < 0.25 then
@@ -792,6 +799,9 @@ type Pet = {
 	Look: number, -- idle: the turn away from the owner's facing (looking around)
 	NextLook: number,
 	Floats: boolean, -- a Premium golem (GolemBuilder "Hover"): glides, never hops
+	Radius: number, -- its reach from its axis (studs, GolemFit.radius)
+	Low: number, -- its reach under a player's height (a huge golem's wings pass over the player's head)
+	Huge: boolean, -- a HUGE golem (GolemConfig): walks beside, further back (GolemFit.slots)
 }
 type Follower = {
 	Player: Player,
@@ -800,6 +810,7 @@ type Follower = {
 	Shown: boolean, -- its golems are built (near the camera)
 	Dirty: boolean, -- Kinds changed since they were built
 	NextSync: number, -- os.clock(): the next change allowed
+	Offsets: { [number]: Vector3 }, -- slot -> where it walks (owner space, GolemFit.slots)
 }
 
 local followers: { [Player]: Follower } = {}
@@ -856,7 +867,11 @@ local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
 	local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
 	-- every part is created in place (the welds then hold this shape)
 	local start = CFrame.new(feet.X, ground, feet.Z) * CFrame.Angles(0, yaw, 0)
-	local model = GolemBuilder.build(kind, start, { Welded = true, Size = GolemController.FollowerSize })
+	-- (a HUGE golem follows smaller than its reveal: GolemFit.HugeFollowerSize)
+	local look = GolemConfig.ById[kind]
+	local huge = look ~= nil and look.Huge == true
+	local size = if huge then GolemFit.HugeFollowerSize else GolemController.FollowerSize
+	local model = GolemBuilder.build(kind, start, { Welded = true, Size = size })
 	local body = model.PrimaryPart :: BasePart
 	local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
 	local hover = (model:GetAttribute("Hover") :: number?) or 0
@@ -877,6 +892,9 @@ local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
 		Look = 0,
 		NextLook = 0,
 		Floats = hover > 0,
+		Radius = GolemFit.radius(model, start),
+		Low = GolemFit.radius(model, start, GolemFit.PlayerHeight),
+		Huge = huge,
 	}
 end
 
@@ -908,6 +926,22 @@ local function syncPets(f: Follower, root: BasePart): number
 	for _, slot in build do
 		pets[slot] = newPet(f, root, slot, want[slot])
 	end
+	-- where each walks now (a huge golem moves the others aside); new ones start there
+	local sizes: { [number]: GolemFit.Size } = {}
+	for slot, pet in pets do
+		sizes[slot] = { Radius = pet.Radius, Low = pet.Low, Huge = pet.Huge }
+	end
+	f.Offsets = GolemFit.slots(sizes)
+	local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
+	local flat = CFrame.new(root.Position) * CFrame.Angles(0, yaw, 0)
+	for _, slot in build do
+		local pet = pets[slot]
+		local offset = f.Offsets[slot]
+		if offset then
+			local at = (flat * CFrame.new(offset)).Position
+			pet.Pos = Vector3.new(at.X, pet.Pos.Y, at.Z)
+		end
+	end
 	f.Pets = pets
 	f.Shown = true
 	f.Dirty = false
@@ -930,7 +964,7 @@ local function track(owner: Player)
 	if followers[owner] then
 		return
 	end
-	local f: Follower = { Player = owner, Kinds = "", Pets = {}, Shown = false, Dirty = false, NextSync = 0 }
+	local f: Follower = { Player = owner, Kinds = "", Pets = {}, Shown = false, Dirty = false, NextSync = 0, Offsets = {} }
 	followers[owner] = f
 	owner.CharacterAdded:Connect(function()
 		task.defer(refreshFilter)
@@ -1007,7 +1041,7 @@ local function stepPets(dt: number): boolean
 			local _, ownerYaw, _ = ownerCF:ToEulerAnglesYXZ()
 			local near = (root.Position - eye).Magnitude <= GolemConfig.FollowerLodDistance
 			for _, pet in f.Pets do
-				local slot = GolemController.Slots[pet.Slot] or Vector3.zero
+				local slot = f.Offsets[pet.Slot] or GolemController.Slots[pet.Slot] or Vector3.zero
 				local flatYaw = CFrame.new(ownerCF.Position) * CFrame.Angles(0, ownerYaw, 0)
 				local target = (flatYaw * CFrame.new(slot)).Position
 				-- the ground under the slot (raycast now and then), else the owner's feet
