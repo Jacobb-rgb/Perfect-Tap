@@ -391,11 +391,15 @@ async function main() {
           gl_FragColor = vec4(min(c.rgb, vec3(40.0)), c.a); }`,
     }),
   );
-  const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.55, 0.42, 0.9);
+  // (a reel may ask for its own bloom: data.bloom = [strength, radius, threshold])
+  const B = Array.isArray(data.bloom) ? data.bloom : [];
+  const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), B[0] ?? 0.55, B[1] ?? 0.42, B[2] ?? 0.9);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
   // ---------------------------------------------------------------- overlays
+  // (a reel may set its own corner caption: data.caption)
+  if (typeof data.caption === "string") document.getElementById("caption").textContent = data.caption;
   const titleBox = document.querySelector("#title .box");
   const titleMain = document.querySelector("#title .main");
   const titleSub = document.querySelector("#title .sub");

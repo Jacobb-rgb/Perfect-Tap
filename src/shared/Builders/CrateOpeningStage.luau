@@ -154,7 +154,7 @@ function Stage.blasterModel(level: number, oreId: string?): Model
 	local k = math.min(Stage.BlasterLength / length, Stage.BlasterHeight / height)
 	for _, p in parts do
 		for _, c in p:GetChildren() do
-			if c:IsA("WeldConstraint") or c:IsA("Weld") then
+			if c:IsA("WeldConstraint") or c:IsA("Weld") or c:IsA("Motor6D") then
 				c:Destroy()
 			end
 		end

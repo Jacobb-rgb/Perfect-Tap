@@ -7,8 +7,8 @@
 	  Gamepad  hold R2 (aim assist: the nearest rock in front of the camera)
 
 	Fires only while the Blaster is in hand; starting to fire near a rock
-	equips it. The local beam is drawn every frame from the tool's Muzzle to
-	the hit point; the server only hears about target changes (MineBlast,
+	equips it. The local shots fly from the tool's Muzzle to the hit point
+	(Effects/BlasterShots); the server only hears about target changes (MineBlast,
 	at most every BlasterData.Beam.ClientRetarget seconds, nil = stop) and
 	decides all damage. Every rock near you wears a name + HP label
 	(UI/RockLabels); the one you aim at gets a note there ("Needs Lv N",
@@ -37,6 +37,7 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local RockFx = require(script.Parent.Parent.Effects.RockFx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
+local BlasterShots = require(script.Parent.Parent.Effects.BlasterShots)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local StateController = require(script.Parent.StateController)
 
@@ -48,7 +49,6 @@ local AIM_DISTANCE = 300 -- mouse / touch ray length
 local ASSIST_FACING = 0.35 -- aim assist only looks this far to the sides (dot product)
 local ASSIST_REFRESH = 0.1 -- seconds between aim assist searches
 local NEAR_EXTRA = 6 -- studs past the range that still count as "near a rock" (FIRE button, hint)
-local SPARK_GAP = 0.07
 local DUST_GAP = 0.3
 local TURN_SPEED = 14
 local DEFAULT_GLOW = Color3.fromRGB(255, 150, 70)
@@ -65,7 +65,7 @@ local touchRockPos: Vector2? = nil
 local fireButtonInput: InputObject? = nil
 
 local firing = false
-local target: Model? = nil -- the rock the beam hits (in range), nil = none
+local target: Model? = nil -- the rock the shots hit (in range), nil = none
 local lastSent: Model? = nil
 local lastSendAt = -math.huge
 local assistAt = -math.huge
@@ -73,7 +73,7 @@ local assistTarget: Model? = nil
 local aimRock: Model? = nil -- the rock the player aims at (also when not firing)
 local aimTooFar = false
 local seenStage = 0
-local sparkAt, dustAt = 0, 0
+local dustAt = 0
 local savedAutoRotate: boolean? = nil
 local device: Device = "Mouse"
 
@@ -374,7 +374,7 @@ local function rockNear(root: BasePart, range: number): boolean
 	return false
 end
 
--- Where the beam from `from` hits `rock` (its surface facing the shooter).
+-- Where a shot from `from` hits `rock` (its surface facing the shooter).
 local function surfacePoint(from: Vector3, rock: Model): Vector3
 	local center = (rock.PrimaryPart :: BasePart).Position
 	local result = cast(from, (center - from) * 1.2)
@@ -386,7 +386,7 @@ end
 
 --[[
 	Aims the blaster. Returns the rock to damage (in range, else nil), the
-	beam's end point and whether that point is on something solid.
+	shots' end point and whether that point is on something solid.
 ]]
 local function aim(root: BasePart, tool: Tool, now: number): (Model?, Vector3, boolean)
 	local range = rangeOf(tool)
@@ -406,7 +406,7 @@ local function aim(root: BasePart, tool: Tool, now: number): (Model?, Vector3, b
 		if (point - root.Position).Magnitude <= range + 1 then
 			return rock, point, result ~= nil
 		end
-		-- too far: the beam fizzles out at its range
+		-- too far: the shots fizzle out at its range
 		local direction = if offset.Magnitude > 0.01 then offset.Unit else root.CFrame.LookVector
 		return nil, origin + direction * range, false
 	end
@@ -480,9 +480,18 @@ local function restoreRotate()
 	end
 end
 
+-- Your gun's shots: their sounds and recoil as they leave, the impacts where they land.
+local shotGlow, shotGated, shotCrust = Color3.new(1, 1, 1), false, nil :: Color3?
+local shotHooks: BlasterShots.Hooks = {
+	Shot = BlasterFx.fired,
+	Hit = function(point: Vector3, back: Vector3)
+		BlasterFx.hit(point, shotGlow, back, shotGated, shotCrust)
+	end,
+}
+
 local function startFiring(tool: Tool)
 	firing = true
-	BlasterFx.start(tool) -- the flash, the zap, the hum, the kick (Config/BlasterFeel)
+	BlasterFx.start(tool) -- the zap, the hum, the kick (Config/BlasterFeel)
 	rumble(Enum.VibrationMotor.Small, 0.18)
 end
 
@@ -492,7 +501,7 @@ local function stopFiring()
 	end
 	firing = false
 	target = nil
-	Vfx.hideBeam("local")
+	BlasterShots.stop("local")
 	BlasterFx.stop()
 	stopRumble()
 	restoreRotate()
@@ -747,16 +756,12 @@ local function update(dt: number)
 		end
 		local muzzle = muzzleOf(tool)
 		local from = if muzzle then muzzle.WorldPosition else root.Position
-		local glow = glowOf(tool)
-		Vfx.setBeam("local", muzzle, from, point, glow, nil, BlasterFx.beamStyle())
-		faceTowards(humanoid, root, point, dt)
 		local gated = rock ~= nil and gateText(rock, tool) ~= ""
-		if solid and now - sparkAt >= SPARK_GAP then
-			sparkAt = now
-			-- sparks; on a rock you can mine also the hit pulses (chips, sounds, recoil)
-			local primary = rock and rock.PrimaryPart
-			BlasterFx.hit(point, glow, from - point, gated, if primary then primary.Color else nil)
-		end
+		local crust = rock and rock.PrimaryPart
+		-- what the shots land on (shotHooks: small impacts; on a rock you can mine also the hit pulses)
+		shotGlow, shotGated, shotCrust = glowOf(tool), gated, if crust then crust.Color else nil
+		BlasterShots.aim("local", muzzle, from, point, solid, shotGlow, BlasterFx.levelOf(tool), nil, shotHooks)
+		faceTowards(humanoid, root, point, dt)
 		if rock and not gated then
 			-- the rock trembles right away (other players' hits arrive as Health drops, RockLabels)
 			RockFx.markShooter(rock)

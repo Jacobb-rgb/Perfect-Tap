@@ -51,6 +51,8 @@ return function(T, Loader)
 					T.lt(tip.Z, hand.Position.Z - 1.2, label .. " muzzle ahead of the hand (-Z)")
 					reach[level] = hand.Position.Z - tip.Z
 					local parts = 0
+					-- (a minigun's barrels are welded to its SpinHub, which a Motor6D holds on the Handle)
+					local hub = tool:FindFirstChild(BlasterBuilder.SpinHub)
 					for _, d in tool:GetDescendants() do
 						if d:IsA("BasePart") then
 							parts += 1
@@ -58,18 +60,32 @@ return function(T, Loader)
 							T.falsy(d.CanCollide, label .. " " .. d.Name .. " CanCollide")
 							T.truthy(d.Massless, label .. " " .. d.Name .. " Massless")
 							T.falsy(d.Anchored, label .. " " .. d.Name .. " Anchored")
-							if d ~= handle then
+							if d ~= handle and d ~= hub then
 								local weld = d:FindFirstChildOfClass("WeldConstraint")
-								T.truthy(weld and weld.Part0 == handle and weld.Part1 == d, label .. " " .. d.Name .. " welded")
+								local held = weld and weld.Part1 == d and (weld.Part0 == handle or (hub ~= nil and weld.Part0 == hub))
+								T.truthy(held, label .. " " .. d.Name .. " welded")
 							end
 						end
 					end
+					if hub then
+						local motor = handle:FindFirstChild(BlasterBuilder.SpinMotor)
+						T.truthy(
+							motor and motor:IsA("Motor6D") and motor.Part0 == handle and motor.Part1 == hub,
+							label .. " the barrels' spin motor"
+						)
+					end
 					T.le(parts, budget, label .. " part budget")
-					-- the Ore Glow skin: a glowing rim on the main panel; crystals from level 4; effects from 7
+					-- the Ore Glow skin: a glowing rim on the main panel
 					T.truthy(tool:FindFirstChild("Rim"), label .. " glowing rim")
-					T.eq(tool:FindFirstChild("Crystal") ~= nil, level >= 4, label .. " crystals from 4")
-					T.eq(tool:FindFirstChild("Effects") ~= nil, level >= 7, label .. " flames / sparks from 7")
-					T.eq(tool:FindFirstChild("CrownCrystal") ~= nil, level >= 10, label .. " a crown at 10")
+					if BlasterBuilder.Shape == "Minigun" then
+						-- the round gun (the owner's pictures): crystals, spinning barrels
+						T.truthy(tool:FindFirstChild("Crystal"), label .. " crystals at every level")
+						T.truthy(hub, label .. " the barrels on their spin hub")
+					else
+						T.eq(tool:FindFirstChild("Crystal") ~= nil, level >= 4, label .. " crystals from 4")
+						T.eq(tool:FindFirstChild("Effects") ~= nil, level >= 7, label .. " flames / sparks from 7")
+						T.eq(tool:FindFirstChild("CrownCrystal") ~= nil, level >= 10, label .. " a crown at 10")
+					end
 					T.truthy(handle.Transparency == 1, label .. " the handle is the invisible hand point")
 					T.truthy(tool:FindFirstChild("MuzzleGlow"), label .. " glowing muzzle")
 					counts[level] = parts

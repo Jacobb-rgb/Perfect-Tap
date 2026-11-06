@@ -11,6 +11,9 @@ return function(T, Loader)
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+	-- (these are the Kenney shapes: BlasterBuilder.Shape "Kenney", put back at the end)
+	local wasShape = BlasterBuilder.Shape
+	BlasterBuilder.Shape = "Kenney"
 	local KenneyBlaster = Loader.requirePath("ReplicatedStorage.Shared.Builders.KenneyBlaster")
 	local Shapes = Loader.requirePath("ReplicatedStorage.Shared.Builders.KenneyShapes")
 	local CaseBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CaseBuilder")
@@ -228,4 +231,5 @@ return function(T, Loader)
 			T.truthy(muzzle.Position.Z < -1.5, `{star.Id}: the barrel reaches {string.format("%.2f", -muzzle.Position.Z)} ahead`)
 		end
 	end)
+	BlasterBuilder.Shape = wasShape
 end

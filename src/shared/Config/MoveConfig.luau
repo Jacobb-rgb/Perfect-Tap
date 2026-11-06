@@ -647,7 +647,70 @@ MoveConfig.Moves = {
 			{ T = 0.8, Ease = "InOut", Pose = {} },
 		},
 	},
+	-- the blaster in hand (owner 2026-10-31: "ať se ten blaster drží dole u pasu, když to bude
+	-- střílet, a ať ho drží oběma rukama"): both hands on it low in front of the hip, ready or
+	-- firing, the torso turned a little, the right hand on the grip, the left one on the gun's top
+	-- (the minigun's carry handle), the RightGrip turned so the barrel points ahead (fitted on the
+	-- R15 rig with the arms kept out of the body).
+	-- AnimConfig.BlasterHold plays it on everyone holding a blaster
+	BlasterHold = {
+		Name = "BlasterHold",
+		Duration = 1.95,
+		Loop = true,
+		LoopFrom = 0.15,
+		Slot = "Loop",
+		BlendIn = 0.1,
+		BlendOut = 0.2,
+		Override = ARMS,
+		MinGap = 0,
+		Priority = 0,
+		Keys = {
+			-- (the intro: both arms come up in front first, so no forearm sweeps through the chest)
+			{
+				T = 0,
+				Ease = "Out",
+				Pose = {
+					Waist = { 10, -25, 0 },
+					Neck = { -5, 15, 0 },
+					RightShoulder = { 60, 30, -10 },
+					RightElbow = { 70, 0, 0 },
+					LeftShoulder = { 60, 0, 0 },
+					LeftElbow = { 80, 0, 0 },
+					RightGrip = { 12, -29, 0 },
+				},
+			},
+			{
+				T = 0.15,
+				Ease = "Sine",
+				Pose = {
+					Waist = { 10, -25, 0 },
+					Neck = { -5, 15, 0 },
+					RightShoulder = { 20, 60, -23 },
+					RightElbow = { 61, 0, 0 },
+					LeftShoulder = { 67, -72, 40 },
+					LeftElbow = { 64, 0, 0 },
+					RightGrip = { 12, -29, 0 },
+				},
+			},
+			{
+				T = 1.05,
+				Ease = "Sine",
+				Pose = {
+					Waist = { 11, -26, 0 },
+					Neck = { -5, 15, 0 },
+					RightShoulder = { 21, 60, -23 },
+					RightElbow = { 61, 0, 0 },
+					LeftShoulder = { 68, -72, 40 },
+					LeftElbow = { 64, 0, 0 },
+					RightGrip = { 11, -29, 0 },
+				},
+			},
+		},
+	},
 } :: { [string]: Move }
+
+-- the blaster hold (AnimConfig.BlasterHold): the loop a character with a blaster in hand plays
+MoveConfig.Hold = "BlasterHold"
 
 -- the order of the preview showreel and the tests
 MoveConfig.List = {
@@ -662,6 +725,7 @@ MoveConfig.List = {
 	"Shrug",
 	"CelebrateCalm",
 	"CashTossCalm",
+	"BlasterHold",
 }
 
 return MoveConfig

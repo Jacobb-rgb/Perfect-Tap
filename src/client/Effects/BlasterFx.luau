@@ -1,20 +1,19 @@
 --[[
 	BlasterFx: how firing your blaster feels (client only, tuned in
-	Config/BlasterFeel). MiningController calls:
+	Config/BlasterFeel; the shots themselves are Effects/BlasterShots).
+	MiningController calls:
 
-	  BlasterFx.start(tool)     the trigger goes down: a muzzle flash burst,
-	                            the zap sound, the hum and beam loops, a
-	                            camera and gun kick; the muzzle flash (and on
-	                            Lv7+ the sparkle swirl) runs while firing
-	  BlasterFx.beamStyle()     the beam's thickness, light, the Lv7+ energy
-	                            stream and the hit swell, for Vfx.setBeam
+	  BlasterFx.start(tool)     the trigger goes down: the zap sound, the hum
+	                            loop, a camera and gun kick; on Lv7+ the
+	                            sparkle swirl runs while firing
+	  BlasterFx.fired(spin)     a shot leaves (spin 0..1): its sound, the hum
+	                            climbing with the spin, recoil
 	  BlasterFx.hit(point, glow, back, gated, rockColor)
-	                            where the beam touches something: sparks in
-	                            the beam's glow; on a rock you can mine also
-	                            the hit pulses (crackle, chips in the rock's
-	                            crust colour, a thud, recoil, Lv10 shock
-	                            rings); a rock you can't mine yet only gets
-	                            dull grey sparks
+	                            a shot lands: a small impact in its glow; on a
+	                            rock you can mine also the hit pulses (crackle,
+	                            chips in the rock's crust colour, a thud, Lv10
+	                            shock rings); a rock you can't mine yet only
+	                            gets dull grey sparks
 	  BlasterFx.stop()          the trigger comes up: everything off, the gun
 	                            settles back
 
@@ -36,18 +35,17 @@ local BlasterFeel = require(Shared.Config.BlasterFeel)
 local Vfx = require(script.Parent.Vfx)
 local Sfx = require(script.Parent.Sfx)
 local CameraShake = require(script.Parent.CameraShake)
+local BarrelSpin = require(script.Parent.BarrelSpin)
+local Motion = require(script.Parent.Parent.UI.Motion)
 
 local BlasterFx = {}
 
 local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
-local GLOW = "rbxasset://textures/particles/forcefield_glow_main.dds"
 local RING = "rbxasset://textures/particles/explosion01_shockwave_main.dds"
 local DULL = Color3.fromRGB(200, 200, 220)
 local RING_POOL = 3
 
-type ToolFx = { Flash: ParticleEmitter, Swirl: ParticleEmitter }
-
-local toolFx: { [Tool]: ToolFx } = setmetatable({}, { __mode = "k" }) :: any
+local toolFx: { [Tool]: ParticleEmitter } = setmetatable({}, { __mode = "k" }) :: any
 local current: Tool? = nil
 local feel: BlasterFeel.Feel = BlasterFeel.resolve(1, false)
 local glow = Color3.fromRGB(255, 150, 70)
@@ -60,8 +58,7 @@ local gripBase: CFrame? = nil -- its C1 before we touched it
 local stepBound = false
 local ringHolders: { BasePart } = {}
 local nextRing = 1
-local style: { Width: number, Core: number, Light: number, Energy: boolean, Pulse: number } =
-	{ Width = 0.5, Core = 0.16, Light = 1.6, Energy = false, Pulse = 0 }
+local shotSoundAt = -math.huge
 
 -- Phones and tablets (touch, no mouse): the light version.
 function BlasterFx.isPhone(): boolean
@@ -91,29 +88,16 @@ end
 
 ---------------------------------------------------------------- emitters
 
--- The muzzle flash and the Lv7+ swirl on a tool's Muzzle (made once, local only).
-local function emittersFor(tool: Tool): ToolFx?
+-- The Lv7+ swirl on a tool's Muzzle (made once, local only; the shots bring their own flash).
+local function swirlFor(tool: Tool): ParticleEmitter?
 	local existing = toolFx[tool]
-	if existing and existing.Flash.Parent then
+	if existing and existing.Parent then
 		return existing
 	end
 	local muzzle = muzzleOf(tool)
 	if not muzzle then
 		return nil
 	end
-	local flash = Instance.new("ParticleEmitter")
-	flash.Name = "BlasterFlash"
-	flash.Texture = GLOW
-	flash.LightEmission = 1
-	flash.LightInfluence = 0
-	flash.LockedToPart = true
-	flash.Lifetime = NumberRange.new(0.05, 0.09)
-	flash.Speed = NumberRange.new(0)
-	flash.Rotation = NumberRange.new(0, 360)
-	flash.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
-	flash.ZOffset = 0.5
-	flash.Enabled = false
-	flash.Parent = muzzle
 	local swirl = Instance.new("ParticleEmitter")
 	swirl.Name = "BlasterSwirl"
 	swirl.Texture = SPARKLE
@@ -128,29 +112,21 @@ local function emittersFor(tool: Tool): ToolFx?
 	swirl.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.28), NumberSequenceKeypoint.new(1, 0) })
 	swirl.Enabled = false
 	swirl.Parent = muzzle
-	local made: ToolFx = { Flash = flash, Swirl = swirl }
-	toolFx[tool] = made
-	return made
+	toolFx[tool] = swirl
+	return swirl
 end
 
-local function setEmitters(tool: Tool, on: boolean)
-	local fx = emittersFor(tool)
-	if not fx then
+local function setSwirl(tool: Tool, on: boolean)
+	if on and feel.Swirl <= 0 then
 		return
 	end
-	local flashColor = glow:Lerp(Color3.new(1, 1, 1), 0.45)
-	local size = feel.Tier.Flash
-	fx.Flash.Color = ColorSequence.new(flashColor)
-	fx.Flash.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size), NumberSequenceKeypoint.new(1, size * 0.4) })
-	fx.Flash.Rate = feel.FlashRate
-	fx.Flash.Enabled = on
-	fx.Swirl.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(glow, 0.5))
-	fx.Swirl.Rate = feel.Swirl
-	fx.Swirl.Enabled = on and feel.Swirl > 0
-	if on then
-		-- the opening flash
-		fx.Flash:Emit(math.max(2, math.floor(4 * (if BlasterFx.isPhone() then BlasterFeel.Phone.Particles else 1))))
+	local swirl = if on then swirlFor(tool) else toolFx[tool]
+	if not swirl then
+		return
 	end
+	swirl.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(glow, 0.5))
+	swirl.Rate = feel.Swirl
+	swirl.Enabled = on
 end
 
 -- A small pool of anchored holders for the Lv10 shock rings at the hit.
@@ -254,8 +230,6 @@ end
 
 local function step()
 	local now = os.clock()
-	-- the beam swells for a moment on each pulse
-	style.Pulse = BlasterFeel.settle((now - lastPulse) * 0.8)
 	local weld, base = grip, gripBase
 	if weld and base then
 		if not weld.Parent then
@@ -295,15 +269,12 @@ function BlasterFx.start(tool: Tool)
 	current = tool
 	glow = glowOf(tool)
 	feel = BlasterFeel.resolve(levelOf(tool), BlasterFx.isPhone())
-	local tier = feel.Tier
-	style.Width, style.Core, style.Light, style.Energy = tier.BeamWidth, tier.CoreWidth, tier.Light, tier.Energy
 	pulses = 0
 	lastPulse = -math.huge
-	setEmitters(tool, true)
+	setSwirl(tool, true)
 	Sfx.play("BlasterStart")
 	Sfx.play("BlasterZap")
 	Sfx.loop("BlasterHum", true)
-	Sfx.loop("BlasterBeam", true)
 	restoreGrip()
 	local weld = findGrip(tool)
 	if weld then
@@ -311,6 +282,7 @@ function BlasterFx.start(tool: Tool)
 	end
 	kick(2)
 	CameraShake.kick(BlasterFeel.Recoil.StartKick * feel.CameraKick)
+	BarrelSpin.set(tool, true) -- the minigun's barrels spin up
 end
 
 function BlasterFx.stop()
@@ -319,41 +291,40 @@ function BlasterFx.stop()
 		return
 	end
 	current = nil
-	local fx = toolFx[tool]
-	if fx then
-		fx.Flash.Enabled = false
-		fx.Swirl.Enabled = false
-	end
+	BarrelSpin.set(tool, false) -- ... and run down
+	setSwirl(tool, false)
 	Sfx.loop("BlasterHum", false)
-	Sfx.loop("BlasterBeam", false)
 	Sfx.play("BlasterStop")
-	style.Pulse = 0
 	-- the gun settles back on its own (step), then the grip is restored
 	bindStep()
 end
 
--- The beam's look for Vfx.setBeam (one table, updated in place).
-function BlasterFx.beamStyle(): Vfx.BeamStyle
-	return style
-end
-
--- A beam style for another player's blaster level (their beams get the tier look too).
-function BlasterFx.styleFor(level: any): Vfx.BeamStyle
-	local tier = BlasterFeel.tier(level)
-	return { Width = tier.BeamWidth, Core = tier.CoreWidth, Light = tier.Light, Energy = tier.Energy, Pulse = 0 }
+-- A shot leaves your gun: its sound (higher with the spin), the hum climbing, recoil at most every Pulse.
+function BlasterFx.fired(spin: number)
+	local now = os.clock()
+	local shots = BlasterFeel.Shots
+	if now - shotSoundAt >= shots.SoundGap then
+		shotSoundAt = now
+		Sfx.play("BlasterShot", nil, 1 + 0.2 * spin)
+	end
+	Sfx.loopPitch("BlasterHum", 0.8 + 0.4 * spin)
+	if now - kickAt >= BlasterFeel.Pulse then
+		kick(1)
+		CameraShake.kick(BlasterFeel.Recoil.PulseKick * feel.CameraKick)
+	end
 end
 
 --[[
-	The beam touches something at `point` (`back` points to the shooter).
-	gated = a rock you can't mine yet: dull sparks only. rockColor = the
-	rock's crust colour (nil = not a rock: sparks only, no hit pulses).
+	A shot lands at `point` (`back` points to the shooter). gated = a rock you
+	can't mine yet: dull sparks only. rockColor = the rock's crust colour (nil =
+	not a rock: the impact only, no hit pulses).
 ]]
-function BlasterFx.hit(point: Vector3, beamGlow: Color3, back: Vector3?, gated: boolean, rockColor: Color3?)
+function BlasterFx.hit(point: Vector3, shotGlow: Color3, back: Vector3?, gated: boolean, rockColor: Color3?)
 	if gated then
-		Vfx.burst("Sparks", point, 2, DULL, back)
+		Vfx.burst("Sparks", point, 1, DULL, back)
 		return
 	end
-	Vfx.impact(point, beamGlow, back, feel.Sparks)
+	Vfx.impact(point, shotGlow, back, feel.Sparks)
 	if not current or not rockColor then
 		return
 	end
@@ -363,18 +334,16 @@ function BlasterFx.hit(point: Vector3, beamGlow: Color3, back: Vector3?, gated: 
 	end
 	lastPulse = now
 	pulses += 1
-	kick(1)
-	CameraShake.kick(BlasterFeel.Recoil.PulseKick * feel.CameraKick)
 	if pulses % BlasterFeel.TickEvery == 0 then
 		Sfx.play("BlastHit", point)
 	end
 	if pulses % BlasterFeel.ChipEvery == 0 then
 		local out = if back and back.Magnitude > 0.01 then back.Unit * 0.6 else Vector3.zero
 		Vfx.chips(point + out, feel.Chips, rockColor, 0.8)
-		Vfx.burst("Glint", point + out, math.max(1, feel.Sparks // 2), beamGlow:Lerp(Color3.new(1, 1, 1), 0.5))
+		Vfx.burst("Glint", point + out, math.max(1, feel.Sparks), shotGlow:Lerp(Color3.new(1, 1, 1), 0.5))
 		Sfx.play("BlastThud", point)
-		if feel.Rings > 0 then
-			ringAt(point + out * 0.5, beamGlow)
+		if feel.Rings > 0 and not Motion.reduced() then
+			ringAt(point + out * 0.5, shotGlow)
 		end
 	end
 end

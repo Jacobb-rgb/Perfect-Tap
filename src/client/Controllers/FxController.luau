@@ -1,11 +1,11 @@
 --[[
-	FxController: plays effects the server announces (other players' laser
-	beams, rock cracks and shatters, pickups, throws). Your own beam is drawn
-	locally by MiningController every frame so it feels instant.
+	FxController: plays effects the server announces (other players' shots,
+	rock cracks and shatters, pickups, throws). Your own shots are fired
+	locally by MiningController so they feel instant.
 	Feature controllers add their own Fx kinds with FxController.register.
 
 	Rock effects never name the ores inside (they stay secret until cleaned):
-	they carry the rock's crust color and the beam's / dropped ore's glow
+	they carry the rock's crust color and the shots' / dropped ore's glow
 	color instead. Cracks and shatters play the breaking animation of
 	Effects/RockFx (debris, flash, ring, sound, camera shake); the newer
 	payloads add the stage count and the rock's floor, kind and radius, the
@@ -23,12 +23,14 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local RockFx = require(script.Parent.Parent.Effects.RockFx)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
+local BarrelSpin = require(script.Parent.Parent.Effects.BarrelSpin)
+local BlasterShots = require(script.Parent.Parent.Effects.BlasterShots)
 
 local FxController = {}
 
 local DEFAULT_CRUST = Color3.fromRGB(150, 130, 110)
 local DEFAULT_GLOW = Color3.fromRGB(255, 150, 70)
-local OTHER_BEAM_HOLD = 0.35 -- seconds an other player's beam stays without a new BlastHit
+local OTHER_SHOTS_HOLD = 0.35 -- seconds an other player's gun keeps firing without a new BlastHit
 
 local function isVector(value: any): boolean
 	return typeof(value) == "Vector3" and value.X == value.X and value.Y == value.Y and value.Z == value.Z
@@ -80,7 +82,7 @@ end
 
 local handlers: { [string]: (...any) -> () } = {}
 
--- Another player's beam hits a rock: (position, glowColor, stage, shooter)
+-- Another player's shots hit a rock: (position, glowColor, stage, shooter)
 handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any)
 	if not isVector(position) then
 		return
@@ -89,10 +91,13 @@ handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any
 	local muzzle, from = muzzleOf(shooter)
 	local mine = shooter == Players.LocalPlayer
 	if from and not mine then
-		-- their blaster's tier look (thickness, the Lv7+ energy stream)
+		-- their shots in their blaster's tier look
 		local tool = muzzle and muzzle.Parent and muzzle.Parent.Parent
 		local level = if tool then BlasterFx.levelOf(tool) else nil
-		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD, BlasterFx.styleFor(level))
+		BlasterShots.aim(shooter, muzzle, from, position, true, color, level, OTHER_SHOTS_HOLD)
+		if tool and tool:IsA("Tool") then
+			BarrelSpin.poke(tool) -- their minigun's barrels turn while they fire
+		end
 	end
 	Vfx.impact(position, color, if from then from - position else nil, if mine then 2 else 5)
 	if not mine then
@@ -100,7 +105,7 @@ handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any
 	end
 end
 
--- Your beam bounced off a rock you can't mine yet: (position)
+-- Your shots bounced off a rock you can't mine yet: (position)
 handlers.MineBounce = function(position: any)
 	if not isVector(position) then
 		return
@@ -171,7 +176,7 @@ function FxController.init()
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		Vfx.releaseBeam(player)
+		BlasterShots.release(player)
 	end)
 end
 

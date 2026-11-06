@@ -13,7 +13,10 @@
 	  build       the held Tool (at most MaxParts parts): an invisible Handle
 	              at the hand (Tool.Grip = identity: the barrel straight along
 	              the arm), every part welded to it, the Muzzle attachment at
-	              the barrel's tip (the client beam starts there)
+	              the barrel's tip (the client beam starts there). Shape
+	              "Minigun" (today): Builders/MinigunBlaster, its barrels on
+	              the SpinHub, a Motor6D (BarrelSpin) on the Handle the client
+	              turns while it fires; "Kenney": Builders/KenneyBlaster
 	  buildStar   a STAR blaster (StarBlasterData) in the player's hand:
 	              its own Kenney shape (KenneyBlaster.Models 11-15) and sky
 	              skin (starSkin, the previews use it too), the forged
@@ -26,14 +29,22 @@
 
 local Geo = require(script.Parent.Geo)
 local KenneyBlaster = require(script.Parent.KenneyBlaster)
+local MinigunBlaster = require(script.Parent.MinigunBlaster)
 local BlasterData = require(script.Parent.Parent.Config.BlasterData)
 local StarBlasterData = require(script.Parent.Parent.Config.StarBlasterData)
 
 local BlasterBuilder = {}
 
 BlasterBuilder.ToolName = "Blaster"
-BlasterBuilder.MaxParts = KenneyBlaster.MaxParts
+-- (the Kenney gun, or the minigun with its Handle and spin hub)
+BlasterBuilder.MaxParts = math.max(KenneyBlaster.MaxParts, MinigunBlaster.MaxParts + 2)
 BlasterBuilder.StarLightRange = 8 -- studs: a STAR blaster's own glow
+-- Every blaster's shape (the Vault levels and the STAR blasters): "Minigun" (Builders/MinigunBlaster,
+-- the owner's pictures of 2026-10-31 and 2026-11-06: all round, crystals, his colours)
+-- or "Kenney" (the Kenney Blaster Kit shapes before it)
+BlasterBuilder.Shape = "Minigun"
+BlasterBuilder.SpinHub = "SpinHub" -- the minigun's barrels hang on this part ...
+BlasterBuilder.SpinMotor = "BarrelSpin" -- ... a Motor6D on the Handle the client turns (Effects/BarrelSpin)
 
 local IRON = Color3.fromRGB(58, 60, 68)
 local IRON_LIGHT = Color3.fromRGB(96, 100, 110)
@@ -160,7 +171,15 @@ local function newTool(tip: string, level: number, oreId: string?, glow: Color3)
 	return tool
 end
 
--- The gun's parts on an invisible Handle (model = KenneyBlaster's shape 1-15).
+-- Builds a gun's parts in the shape in use (BlasterBuilder.Shape) through `part`; returns its anchors.
+function BlasterBuilder.parts(model: number, ore: string, skin: KenneyBlaster.Skin, part: KenneyBlaster.PartFn): KenneyBlaster.Anchors
+	if BlasterBuilder.Shape == "Minigun" then
+		return MinigunBlaster.parts(model, ore, skin, part)
+	end
+	return KenneyBlaster.parts(model, ore, skin, part)
+end
+
+-- The gun's parts on an invisible Handle (model = the shape's level 1-10, or 11-15 a STAR blaster).
 local function assemble(tool: Tool, model: number, ore: string, skin: KenneyBlaster.Skin): Tool
 	local lv = model
 	local handle = Geo.make("Part", {
@@ -198,10 +217,10 @@ local function assemble(tool: Tool, model: number, ore: string, skin: KenneyBlas
 		weld.Parent = p
 		return p
 	end
-	local anchors = KenneyBlaster.parts(lv, ore, skin, part)
-	-- flames (hot ores) or sparks around the gun from level 7: slow, short-lived (phones)
+	local anchors = BlasterBuilder.parts(lv, ore, skin, part)
+	-- the Kenney guns: flames (hot ores) or sparks around the gun from level 7: slow, short-lived (phones)
 	local fxCf, fxSize = KenneyBlaster.effects(lv)
-	if fxCf and fxSize then
+	if BlasterBuilder.Shape ~= "Minigun" and fxCf and fxSize then
 		local holder = part("Effects", fxCf, fxSize, skin.Glow)
 		holder.Transparency = 1
 		local emitter = Instance.new("ParticleEmitter")
@@ -222,6 +241,37 @@ local function assemble(tool: Tool, model: number, ore: string, skin: KenneyBlas
 		emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
 		emitter.Parent = holder
 	end
+	-- the minigun's barrels turn while it fires: they hang on the SpinHub, which a Motor6D holds
+	-- on the Handle about the barrels' axis; the client turns its Transform (Effects/BarrelSpin)
+	local spin, axis = anchors.Spin, anchors.SpinAxis
+	if spin and axis and #spin > 0 then
+		local hub = Geo.make("Part", {
+			Name = BlasterBuilder.SpinHub,
+			Size = Vector3.new(0.2, 0.2, 0.2),
+			Transparency = 1,
+			Anchored = false,
+			CanCollide = false,
+			CanTouch = false,
+			CanQuery = false,
+			Massless = true,
+			CastShadow = false,
+			CFrame = axis,
+		})
+		hub.Parent = tool
+		local motor = Instance.new("Motor6D")
+		motor.Name = BlasterBuilder.SpinMotor
+		motor.Part0 = handle
+		motor.Part1 = hub
+		motor.C0 = axis -- (the Handle sits at the origin while the gun is built)
+		motor.C1 = CFrame.identity
+		motor.Parent = handle
+		for _, p in spin do
+			local weld = p:FindFirstChildOfClass("WeldConstraint")
+			if weld then
+				weld.Part0 = hub
+			end
+		end
+	end
 	-- where the beam leaves the barrel
 	local muzzle = Instance.new("Attachment")
 	muzzle.Name = "Muzzle"
@@ -231,12 +281,11 @@ local function assemble(tool: Tool, model: number, ore: string, skin: KenneyBlas
 end
 
 --[[
-	The blaster tool of a level in an ore's look: the owner-approved Kenney
-	Blaster Kit shapes with the Ore Glow skins (Builders/KenneyBlaster, at
-	most BlasterBuilder.MaxParts parts). The Handle is an invisible block at
-	the hand (Tool.Grip = identity: the barrel straight along the arm), every
+	The blaster tool of a level in an ore's look: the shape in use
+	(BlasterBuilder.parts) with the Ore Glow skin, at most
+	BlasterBuilder.MaxParts parts. The Handle is an invisible block at the
+	hand (Tool.Grip = identity: the barrel straight along the arm), every
 	part is welded to it, the Muzzle attachment sits at the barrel's tip.
-	From level 7 a slow GunFlame / GunSpark emitter rides along the gun.
 ]]
 function BlasterBuilder.build(level: any, oreId: string?): Tool
 	local lv = BlasterData.get(level).Level

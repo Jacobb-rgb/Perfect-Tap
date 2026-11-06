@@ -1,12 +1,15 @@
 --[[
-	The blaster shooting feel (Config/BlasterFeel, Effects/BlasterFx) and the
-	sound ids: the tiers grow with the level (Lv7+ energy, Lv10 rings),
-	phones get the light version within the mobile caps, the recoil settles
-	quickly, and every SoundConfig id plays in today's Roblox clients (a file
+	The blaster shooting feel (Config/BlasterFeel, Effects/BlasterFx,
+	Effects/BlasterShots) and the sound ids: separate shots that get faster as
+	the barrels spin up, never a beam (owner 2026-11-06), the tiers grow with
+	the level (Lv7+ swirl, Lv10 rings), phones get the light version within the
+	mobile caps, the recoil settles quickly, and every SoundConfig id plays in today's Roblox clients (a file
 	still shipped in content/sounds, or an uploaded asset id) with no key of
 	the shared list lost.
 ]]
 return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local Instance, Enum, Vector3, Color3 = roblox.Instance, roblox.Enum, roblox.Vector3, roblox.Color3
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local BlasterFeel = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterFeel")
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
@@ -17,18 +20,17 @@ return function(T, Loader)
 		for i = 2, #tiers do
 			local a, b = tiers[i - 1], tiers[i]
 			T.lt(a.MinLevel, b.MinLevel, "tiers in order")
-			for _, key in { "BeamWidth", "CoreWidth", "Light", "Flash", "FlashRate", "Sparks", "Chips", "Swirl" } do
+			for _, key in { "ShotWidth", "ShotCore", "Light", "Flash", "Sparks", "Chips", "Swirl" } do
 				T.le(a[key], b[key], key .. " never shrinks")
 			end
-			T.lt(a.BeamWidth, b.BeamWidth, "each tier's beam is thicker")
+			T.lt(a.ShotWidth, b.ShotWidth, "each tier's shot is thicker")
 		end
 		for level = 1, BlasterData.MaxLevel do
 			local tier = BlasterFeel.tier(level)
 			T.le(tier.MinLevel, level, "level " .. level .. " tier")
-			T.eq(tier.Energy, level >= 7, "level " .. level .. " energy stream from 7")
+			T.eq(tier.Swirl > 0, level >= 7, "level " .. level .. " swirl from 7")
 			T.eq(tier.Rings, level >= 10, "level " .. level .. " rings at 10")
-			T.eq(tier.Swirl > 0, tier.Energy, "the swirl comes with the energy stream")
-			T.lt(tier.CoreWidth, tier.BeamWidth, "the core is inside the glow")
+			T.lt(tier.ShotCore, tier.ShotWidth, "the core is inside the glow")
 		end
 		T.eq(BlasterFeel.tier(0), tiers[1], "below 1")
 		T.eq(BlasterFeel.tier(0 / 0), tiers[1], "NaN")
@@ -41,13 +43,14 @@ return function(T, Loader)
 		for level = 1, BlasterData.MaxLevel do
 			local pc = BlasterFeel.resolve(level, false)
 			local phone = BlasterFeel.resolve(level, true)
-			for _, key in { "Sparks", "Chips", "FlashRate", "Swirl", "Rings" } do
+			for _, key in { "Sparks", "Chips", "Swirl", "Rings" } do
 				T.le(phone[key], pc[key], "level " .. level .. " phone " .. key)
 				T.truthy(pc[key] == 0 or phone[key] >= 1, "level " .. level .. " phone keeps some " .. key)
 			end
-			T.le(pc.Sparks, lim.SparksPerPulse, "sparks cap")
+			T.le(pc.Sparks, lim.SparksPerShot, "sparks cap")
 			T.le(pc.Chips, lim.ChipsPerPulse, "chips cap")
-			T.le(pc.FlashRate, lim.FlashRate, "flash cap")
+			T.eq(pc.FlashEvery, 1, "a flash on every shot")
+			T.lt(1, phone.FlashEvery, "fewer flashes on phones")
 			T.le(pc.Swirl, lim.SwirlRate, "swirl cap")
 			T.le(pc.Rings, lim.Rings, "rings cap")
 			T.eq(pc.CameraKick, 1, "PC camera kick")
@@ -55,17 +58,17 @@ return function(T, Loader)
 			T.lt(phone.GunKick, 1, "a smaller gun kick on phones")
 			T.eq(pc.Level, level, "level")
 		end
-		-- particles per second while firing at a rock, worst case (Lv10 PC): flash + swirl +
-		-- sparks per spark tick (MiningController: every 0.07 s) + chips and glints per chip pulse
+		-- particles per second while firing at a rock at full spin, worst case (Lv10 PC): each shot's
+		-- flash, impact and sparks + the swirl + chips and glints per chip pulse
+		local rate = BlasterFeel.Shots.FastRate
 		local top = BlasterFeel.resolve(BlasterData.MaxLevel, false)
-		local perSecond = top.FlashRate
+		local perSecond = rate * (1 / top.FlashEvery + 1 + top.Sparks)
 			+ top.Swirl
-			+ top.Sparks / 0.07
 			+ (top.Chips + top.Sparks) / (BlasterFeel.Pulse * BlasterFeel.ChipEvery)
 		T.le(perSecond, 200, "Lv10 on PC stays light")
 		local phoneTop = BlasterFeel.resolve(BlasterData.MaxLevel, true)
-		local phoneRate = phoneTop.FlashRate + phoneTop.Swirl + phoneTop.Sparks / 0.07
-		T.le(phoneRate, perSecond * 0.6, "phones about half")
+		local phoneRate = rate * (1 / phoneTop.FlashEvery + 1 + phoneTop.Sparks) + phoneTop.Swirl
+		T.le(phoneRate, perSecond * 0.7, "phones lighter")
 	end)
 
 	T.test("BlasterFeel: the recoil is small and settles quickly", function()
@@ -83,15 +86,240 @@ return function(T, Loader)
 		T.lt(BlasterFeel.settle(BlasterFeel.Pulse), 0.25, "settles between pulses")
 	end)
 
-	T.test("BlasterFeel: other players' beams get their tier look", function()
-		local BlasterFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterFx")
-		for level = 1, BlasterData.MaxLevel do
-			local style = BlasterFx.styleFor(level)
-			local tier = BlasterFeel.tier(level)
-			T.eq(style.Width, tier.BeamWidth, "width")
-			T.eq(style.Energy, level >= 7, "energy stream")
+	T.test("Shots: the fire rate climbs with the spin, slow to a very fast minigun", function()
+		local shots = BlasterFeel.Shots
+		T.eq(BlasterFeel.shotRate(0), shots.SlowRate, "slow when the barrels start")
+		T.eq(BlasterFeel.shotRate(1), shots.FastRate, "fast at full spin")
+		T.eq(BlasterFeel.shotRate(2), shots.FastRate, "never past it")
+		T.le(20, shots.FastRate, "a very fast minigun")
+		T.le(shots.SlowRate, 5, "each first shot on its own")
+		T.eq(BlasterFeel.shotRate(1, shots.OtherRate), shots.OtherRate, "the others' top")
+		-- a run at 60 fps: the first shot at once, the gaps shrinking down to the top rate
+		local spin, due, times = 0, 1, {}
+		for frame = 1, 60 * 4 do
+			local count
+			spin, due, count = BlasterFeel.shotStep(spin, due, 1 / 60, true)
+			for _ = 1, count do
+				table.insert(times, frame / 60)
+			end
 		end
-		T.eq(BlasterFx.styleFor(nil).Width, BlasterFeel.Tiers[1].BeamWidth, "unknown level: the plain beam")
+		T.near(times[1], 1 / 60, 1e-6, "the trigger fires at once")
+		T.eq(spin, 1, "full spin")
+		local function gap(from: number, to: number): number
+			local a = 0
+			for i = from, to do
+				a += times[i + 1] - times[i]
+			end
+			return a / (to - from + 1)
+		end
+		T.lt(1 / 8, gap(1, 2), "slow at the start: under 8 shots a second")
+		T.near(gap(#times - 12, #times - 1), 1 / shots.FastRate, 0.002, "fast at the end")
+		local before = math.huge
+		for from = 1, #times - 7, 6 do
+			local now = gap(from, from + 5)
+			T.le(now, before + 1e-3, "faster and faster")
+			before = now
+		end
+		-- let go: no more shots, the spin runs down, the next press fires at once
+		local count
+		spin, due, count = BlasterFeel.shotStep(1, 0.5, 1 / 60, false)
+		T.eq(count, 0, "no shots")
+		T.lt(spin, 1, "runs down")
+		T.eq(due, 1, "due again")
+		-- a slow frame fires only so many
+		local _, _, many = BlasterFeel.shotStep(1, 0, 1, true)
+		T.eq(many, shots.MaxPerFrame, "the slow frame's cap")
+	end)
+
+	T.test("Shots: separate shots, never a beam", function()
+		local shots = BlasterFeel.Shots
+		-- at the top rate the next shot's head is a clear gap behind the last one's tail
+		local spacing = shots.Speed / shots.FastRate
+		T.lt(shots.Trail + 1, spacing, "a gap between two shots at full spin")
+		T.eq(shots.Pool >= shots.PhonePool, true, "phones fly fewer")
+		-- the longest shot's flight (the top range) at the top rate fits the pool
+		local range = BlasterData.Levels[BlasterData.MaxLevel].Range
+		T.le(range / shots.Speed * shots.FastRate, shots.PhonePool, "your stream fits the smallest pool")
+		-- one barrel goes by for every shot at full spin
+		T.near(BlasterFeel.barrelSpeed() / (math.pi * 2) * shots.Barrels, shots.FastRate, 1e-6, "barrels and shots in step")
+		local Vfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Vfx")
+		T.eq((Vfx :: any).setBeam, nil, "the beam is gone")
+		local BlasterFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterFx")
+		T.eq(BlasterFx.beamStyle, nil, "and its style")
+		T.truthy(Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterShots").aim, "the shots are there")
+	end)
+
+	T.test("Shots: the hit light holds steady while shots land, it never strobes", function()
+		local shots = BlasterFeel.Shots
+		for _, rate in { 4, 8, 12, 24 } do
+			local dt, glare, nextLand, lastLand = 1 / 60, 0, 0, -math.huge
+			local low, high = math.huge, 0
+			for frame = 1, 60 * 4 do
+				local t = frame * dt
+				if t >= nextLand then
+					lastLand, nextLand = t, nextLand + 1 / rate
+				end
+				glare = BlasterFeel.glareStep(glare, dt, t - lastLand < shots.LightHold, shots.LightLevel)
+				if t > shots.LightUp + dt then
+					low, high = math.min(low, glare), math.max(high, glare)
+				end
+			end
+			T.near(high - low, 0, 1e-6, rate .. " shots a second: no pulse at all")
+			T.near(high, shots.LightLevel, 1e-6, rate .. " shots a second: at its level")
+			-- the last shot: it fades, no jump
+			local frames = 0
+			while glare > 0 do
+				local was = glare
+				glare = BlasterFeel.glareStep(glare, dt, false, shots.LightLevel)
+				T.le(was - glare, dt / shots.LightDown + 1e-9, "a soft fade")
+				frames += 1
+			end
+			T.le(frames * dt, shots.LightDown + 2 * dt, "out in LightDown")
+		end
+		T.lt(1 / shots.SlowRate, shots.LightHold, "the slowest gap between shots keeps it on")
+	end)
+
+	-- a gun firing for real in BlasterShots: Env and Vfx stood in; returns what it flashed and its light
+	local function firing(own: boolean, reduced: boolean): any
+		local Vfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Vfx")
+		local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
+		local BlasterShots = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterShots")
+		local out = { Muzzle = 0, Impact = 0, Sparks = 0, Shot = 0, Hit = 0, Bright = {} }
+		local env = BlasterShots.Env
+		local savedEnv, savedBurst, savedFolder = table.clone(env), Vfx.burst, Vfx.folder
+		local fx = Instance.new("Folder")
+		Vfx.folder = function()
+			return fx
+		end
+		env.inWorld = function()
+			return true
+		end
+		env.isPhone = function()
+			return false
+		end
+		env.worldOf = function()
+			return Vector3.zero
+		end
+		local stepFn: any = nil
+		env.connect = function(fn)
+			stepFn = fn
+			return {
+				Disconnect = function()
+					stepFn = nil
+				end,
+			}
+		end
+		env.move = function(parts, frames)
+			for i, p in parts do
+				p.CFrame = frames[i]
+			end
+		end
+		env.emit = function()
+			out.Muzzle += 1
+		end
+		Vfx.burst = function(kind: string)
+			if kind == "Impact" then
+				out.Impact += 1
+			elseif kind == "Sparks" then
+				out.Sparks += 1
+			end
+		end
+		Motion.setReduced(reduced)
+		local holder = Instance.new("Part")
+		holder.Parent = fx
+		local muzzle = Instance.new("Attachment")
+		muzzle.Parent = holder
+		local key = {}
+		local hooks = if own
+			then {
+				Shot = function()
+					out.Shot += 1
+				end,
+				Hit = function(point: Vector3, back: Vector3)
+					out.Hit += 1
+					Vfx.impact(point, Color3.new(1, 0, 1), back, 1)
+				end,
+			}
+			else nil
+		local to = Vector3.new(0, 0, -24)
+		local ok, err = pcall(function()
+			local dt = 1 / 30
+			for frame = 1, 30 * 3 do
+				BlasterShots.aim(key, muzzle, Vector3.zero, to, true, Color3.new(1, 0, 1), 10, if own then nil else 0.35, hooks)
+				stepFn(dt)
+				local lamp = out.Lamp
+				if not lamp then
+					for _, d in Vfx.folder():GetChildren() do
+						if d.Name == "ShotLamp" then
+							lamp = d
+						end
+					end
+					out.Lamp = lamp
+				end
+				local light = lamp and lamp:FindFirstChildOfClass("PointLight")
+				if light and frame * dt > 1 then
+					table.insert(out.Bright, light.Brightness)
+				end
+			end
+			BlasterShots.release(key)
+		end)
+		Motion.setReduced(false)
+		-- let the shots in the air land and the module go back to sleep
+		for _ = 1, 90 do
+			if stepFn then
+				stepFn(1 / 30)
+			end
+		end
+		Vfx.burst, Vfx.folder = savedBurst, savedFolder
+		for k, v in savedEnv do
+			env[k] = v
+		end
+		if not ok then
+			error(err)
+		end
+		return out
+	end
+
+	local function spread(list: { number }): number
+		local low, high = math.huge, -math.huge
+		for _, v in list do
+			low, high = math.min(low, v), math.max(high, v)
+		end
+		return high - low
+	end
+
+	T.test("Shots: firing for real: separate shots, a steady light, your own hooks", function()
+		local mine = firing(true, false)
+		T.truthy(mine.Muzzle > 20, "muzzle flashes: " .. mine.Muzzle)
+		T.truthy(mine.Impact > 20, "small impacts: " .. mine.Impact)
+		T.eq(mine.Shot, mine.Muzzle, "your sound and recoil with each shot")
+		T.truthy(mine.Hit > 20, "your hit pulses")
+		T.truthy(#mine.Bright > 0, "the light was sampled")
+		T.near(spread(mine.Bright), 0, 1e-6, "your gun's light never pulses")
+		local theirs = firing(false, false)
+		T.truthy(theirs.Impact > 10, "their small impacts: " .. theirs.Impact)
+		T.near(spread(theirs.Bright), 0, 1e-6, "their gun's light never pulses")
+		T.lt(theirs.Muzzle, mine.Muzzle, "their guns fire slower")
+	end)
+
+	T.test("Shots: Reduce motion: no muzzle or impact flashes, a dim steady light", function()
+		local shots = BlasterFeel.Shots
+		for _, own in { true, false } do
+			local out = firing(own, true)
+			local label = if own then "your gun: " else "their gun: "
+			T.eq(out.Muzzle, 0, label .. "no muzzle flashes")
+			T.eq(out.Impact, 0, label .. "no impact flashes")
+			T.near(spread(out.Bright), 0, 1e-6, label .. "a constant light")
+			T.near(out.Bright[1], BlasterFeel.tier(10).Light * shots.ReducedLight, 1e-6, label .. "a dim one")
+		end
+		T.lt(shots.ReducedLight, shots.LightLevel, "dimmer than the normal one")
+	end)
+
+	T.test("Shots: other players' guns leave room for yours", function()
+		local shots = BlasterFeel.Shots
+		local range = BlasterData.Levels[BlasterData.MaxLevel].Range
+		T.le(math.ceil(range / shots.Speed * shots.FastRate), shots.Reserve, "your longest stream fits the reserve")
+		T.lt(shots.Reserve, shots.PhonePool, "others still fly on phones")
 	end)
 
 	T.test("Sounds: every id plays in today's clients, no key lost", function()
@@ -158,7 +386,7 @@ return function(T, Loader)
 			"CaseBurst",
 			"CaseBoom",
 			"CaseRise",
-			"BlasterBeam",
+			"BlasterShot",
 			"BlasterZap",
 			"BlastThud",
 			"RockBreak",
@@ -168,10 +396,10 @@ return function(T, Loader)
 		for _, key in keys do
 			T.truthy(SoundConfig[key], "key " .. key)
 		end
-		for _, key in { "BlasterHum", "BlasterBeam", "Scrape", "MachineHum", "TrainChuff", "TrainWhistle", "CaseCharge" } do
+		for _, key in { "BlasterHum", "Scrape", "MachineHum", "TrainChuff", "TrainWhistle", "CaseCharge" } do
 			T.truthy(SoundConfig[key].Looped, key .. " loops")
 		end
-		for _, key in { "BlasterZap", "BlastHit", "BlastThud", "NodeShatter", "RockBreak" } do
+		for _, key in { "BlasterShot", "BlasterZap", "BlastHit", "BlastThud", "NodeShatter", "RockBreak" } do
 			T.falsy(SoundConfig[key].Looped, key .. " plays once")
 		end
 	end)

@@ -12,6 +12,9 @@
 	  PixelFx       the pixel reels (owner 2026-10-22): rays turn behind      ON
 	                pictures, a gleam sweeps across buttons, pictures lean
 	                on hover (Controllers/PixelFxController)
+	  BlasterHold   the blaster in hand held low at the hip with both hands   ON
+	                (owner 2026-10-31; MoveConfig.Moves.BlasterHold through
+	                MoveController)
 	  RoundMotion   the UI pack reel's motions in the round look (owner OK     ON
 	                2026-10-28, round_motion.mp4):
 	                windows pop 0.5 -> 1.1 -> 1 in about 0.2 s, buttons grow
@@ -27,6 +30,7 @@ local AnimConfig = {
 	WorldFx = false,
 	PixelFx = true,
 	RoundMotion = true,
+	BlasterHold = true,
 }
 
 return AnimConfig

@@ -197,6 +197,15 @@ function Sfx.playIn(lane: string, name: string, position: Vector3, pitchScale: n
 end
 
 -- Looping sound on/off (e.g. scraping while dragging).
+-- A running loop's pitch: `scale` x its middle pitch in SoundConfig (the blaster's hum climbs with the spin).
+function Sfx.loopPitch(name: string, scale: number)
+	local def = SoundConfig[name]
+	local sound = loops[name]
+	if def and sound then
+		sound.PlaybackSpeed = (def.Pitch[1] + def.Pitch[2]) / 2 * scale
+	end
+end
+
 function Sfx.loop(name: string, on: boolean)
 	local def = SoundConfig[name]
 	if not def then

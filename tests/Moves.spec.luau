@@ -75,7 +75,8 @@ return function(T, Loader)
 				last = key.T
 				T.truthy(key.Ease == nil or MoveMath.Eases[key.Ease] ~= nil, `{name} key {i}: ease {tostring(key.Ease)}`)
 				for joint, euler in key.Pose or {} do
-					T.truthy(JOINTS[joint], `{name} key {i}: {joint} is an R15 joint`)
+					-- (the RightGrip: the held tool's turn on its weld, the blaster hold)
+					T.truthy(JOINTS[joint] or table.find(MoveConfig.ToolJoints, joint), `{name} key {i}: {joint} is an R15 joint`)
 					T.eq(#euler, 3, `{name} key {i} {joint}: x, y, z`)
 					for _, v in euler do
 						T.truthy(type(v) == "number" and v == v and math.abs(v) <= 400, `{name} key {i} {joint}: a sane angle`)
@@ -109,7 +110,8 @@ return function(T, Loader)
 	T.test("moves: one-shots start and end at rest, loops wrap seamlessly", function()
 		for name, move in MoveConfig.Moves do
 			if move.Loop then
-				local a = MoveMath.evaluate(move, 0, 1, {})
+				-- (a loop with an intro wraps back to its LoopFrom key: the blaster hold)
+				local a = MoveMath.evaluate(move, move.LoopFrom or 0, 1, {})
 				local b = MoveMath.evaluate(move, move.Duration - 1e-4, 1, {})
 				for joint, cf in a do
 					T.truthy(near(cf, b[joint], 0.5, 0.01), `{name} {joint} wraps without a jump`)
@@ -374,7 +376,9 @@ return function(T, Loader)
 				local overrides = MoveMath.overrides(move)
 				local transforms = {}
 				for _, joint in MoveConfig.Joints do
-					local base = if name == "Recoil" and joint == "RightShoulder" then CFrame.Angles(90 * DEG, 0, 0) else CFrame.identity
+					-- (a held tool: the Animator's tool hold raises the right arm under the Recoil and the blaster hold)
+					local held = name == "Recoil" or name == MoveConfig.Hold
+					local base = if held and joint == "RightShoulder" then CFrame.Angles(90 * DEG, 0, 0) else CFrame.identity
 					local cf = pose[joint]
 					transforms[joint] = if cf then MoveMath.layer(base, cf, w, overrides[joint] == true) else base
 				end
