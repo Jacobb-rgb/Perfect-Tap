@@ -787,7 +787,7 @@ local function skyTitan(c: Ctx): number
 		{ 0.35, 0.1, -0.5, 0.46 },
 		{ 0, 0.12, 0.5, 0.6 },
 	}, THUNDERHEAD, THUNDERHEAD_SHADE)
-	puffs(c, "HaloCloud", {
+	puffs(c, "RingCloud", {
 		{ -0.72, 3.95, 0.5, 0.5 },
 		{ 0.72, 3.95, 0.5, 0.5 },
 		{ 0, 4.05, 0.75, 0.56 },

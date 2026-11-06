@@ -97,7 +97,7 @@ return function(T, Loader)
 		-- (owner 2026-11-06: more lightning on both, the clouds on the Titan too)
 		T.truthy(count(colossus, "BodyStorm") >= 8 and count(colossus, "BoulderArc") >= 8, "the Colossus's great bolts and arcs")
 		T.truthy(count(titan, "BodyStorm") >= 7 and count(titan, "Pauldron2_StaffBolt") >= 4, "the Titan's lightning")
-		T.truthy(count(titan, "BodyCloud") + count(titan, "BodyMist") + count(titan, "HaloCloud") >= 12, "the Titan's clouds")
+		T.truthy(count(titan, "BodyCloud") + count(titan, "BodyMist") + count(titan, "RingCloud") >= 12, "the Titan's clouds")
 		T.truthy(count(titan, "Pauldron1_Cloud") >= 4 and count(titan, "Pauldron2_Wrap") >= 3, "clouds on its shoulders and arms")
 	end)
 

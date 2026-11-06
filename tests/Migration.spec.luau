@@ -218,7 +218,7 @@ return function(T, Loader)
 		-- the load: the template reconciled in, then the chain
 		ProfileStore.reconcile(v10, DataTemplate)
 		local report = Migrations.run(v10, now)
-		T.eq(v10.Version, 11)
+		T.eq(v10.Version, Migrations.Latest)
 		T.eq(type(v10.Golems.AutoDelete), "table", "AutoDelete reconciled in")
 		T.eq(next(v10.Golems.AutoDelete), nil, "empty: nothing auto-deleted")
 		T.eq(report.Moved, 0, "nothing moved")

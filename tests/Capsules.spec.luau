@@ -651,8 +651,8 @@ return function(T, Loader)
 
 	withWorld("Capsules: an auto-deleted golem still opens, counts and shows (Deleted) but is not kept", function(w)
 		w.data.Golems.AutoDelete = { PebbleGolem = true }
-		-- Stone x3 rolling PebbleGolem (0.1), CopperTinker (0.3), PebbleGolem (0.2)
-		w.values = { 0.1, 0.3, 0.2 }
+		-- Stone x3 rolling PebbleGolem (0.1), CopperTinker (0.8), PebbleGolem (0.2)
+		w.values = { 0.1, 0.8, 0.2 }
 		local name, result = act(w, "Open", { Capsule = "Stone", Count = 3 })
 		T.eq(name, "CapsuleResult")
 		T.eq(#result.Golems, 3, "every golem of the open is in the result")
@@ -685,7 +685,7 @@ return function(T, Loader)
 		T.truthy(w.data.Coins < coins, "paid")
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "the inventory doesn't grow")
 		-- the room counts only the golems that are kept: a kept one doesn't fit, nothing is spent
-		w.values = { 0.3 }
+		w.values = { 0.8 }
 		refused(w, { Capsule = "Stone", Count = 1 }, "InventoryFull", "a kept golem with no room")
 		-- without auto-delete a full inventory refuses before the roll, as always
 		w.data.Golems.AutoDelete = {}

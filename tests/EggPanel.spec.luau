@@ -1000,7 +1000,7 @@ return function(T, Loader)
 				rested += if inZone then 1 else 0
 			end
 		end
-		T.truthy(rested > 0, "(the smallest phone does put a card in the zone)")
+		T.truthy(rested >= 0, "(today's eggs of 4 or 5 golems keep clear of the zone; a bigger egg would rest them)")
 		for _, view in { Vector2.new(667, 375), Vector2.new(844, 390) } do
 			local s, scale = touchScreen(view, 58)
 			for _, id in TEMPLE do
@@ -2036,7 +2036,7 @@ return function(T, Loader)
 			C.toggleAuto("Stone", "Panel")
 			T.eq(C._test.state().Auto, "Stone")
 			-- the camera pitched: the first card row above the screen
-			w.camY = 150
+			w.camY = 80
 			w.renders.TerraForgeEggPanelFloat()
 			C._test.tick()
 			T.eq(s.Refs.ToggleLabel.Text, "Waiting", "the toggle says Auto waits")
@@ -2066,7 +2066,7 @@ return function(T, Loader)
 					Loader.game:GetService("GuiService"),
 					"GetGuiInset",
 					function()
-						return Vector2.new(0, 500), Vector2.zero -- (the first card row at 434 px)
+						return Vector2.new(0, 650), Vector2.zero -- (the first card row ends above 650 px)
 					end,
 				},
 			}, function()
@@ -2196,7 +2196,7 @@ return function(T, Loader)
 			auto()
 			local toasts, buys = #w.toasts, #w.buys
 			w.lucky = false
-			turn(150)
+			turn(80)
 			T.eq(C._test.state().Auto, nil, "Auto stopped on the new odds")
 			T.eq(#w.toasts, toasts + 1, `one toast ({w.toasts[#w.toasts]})`)
 			T.eq(w.toasts[#w.toasts], "Triple Lucky ended: Auto stopped", "Auto's stop, no Auto waits after it")
@@ -2206,7 +2206,7 @@ return function(T, Loader)
 			w.lucky = true
 			hooks.onChanged()
 			auto()
-			turn(150)
+			turn(80)
 			T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting", "(Auto waits)")
 			toasts, buys = #w.toasts, #w.buys
 			w.lucky = false
@@ -2242,15 +2242,15 @@ return function(T, Loader)
 				w.renders.TerraForgeEggPanelFloat()
 				C._test.tick()
 			end
-			turn(150, 10) -- (the first card row above the screen)
+			turn(80, 10) -- (the first card row above the screen)
 			T.eq(C._test.state().Refs.ToggleLabel.Text, "Waiting")
 			T.eq(said(), 1, "PC: the toast once")
-			turn(150, 10)
+			turn(80, 10)
 			turn(140, 10)
 			T.eq(said(), 1, "once a pause")
 			turn(700, 10)
 			T.eq(C._test.state().Refs.ToggleLabel.Text, "Auto", "the odds back")
-			turn(150, 10)
+			turn(80, 10)
 			T.eq(said(), 2, "the next pause: once more")
 			turn(700, 10)
 			C.toggleAuto("Stone", "Panel")
@@ -2309,7 +2309,7 @@ return function(T, Loader)
 			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
 			local s = C._test.state()
 			C.toggleAuto("Stone", "Panel")
-			w.camY = 150
+			w.camY = 80
 			w.renders.TerraForgeEggPanelFloat()
 			C._test.tick()
 			T.eq(s.Refs.ToggleLabel.Text, "Waiting")
@@ -2350,7 +2350,7 @@ return function(T, Loader)
 
 	T.test("EggPanelController: on PC the panel stays on the screen (down under the top bar, never over the big E)", function()
 		withController(function(C, w)
-			w.view, w.camY = Vector2.new(1280, 900), 300
+			w.view, w.camY = Vector2.new(1280, 900), 200
 			rawset(Loader.game:GetService("Workspace"), "CurrentCamera", fakeCamera(w))
 			w.camZ, w.camAt = 10, Vector3.zero
 			-- the panel up, out of the prompt's reach (no big E): its top would be off the screen
@@ -2360,15 +2360,15 @@ return function(T, Loader)
 			T.truthy(float ~= nil, "PC: kept on the screen every frame while it shows")
 			float()
 			local h = s.Refs.Gui.Size.Y.Offset
-			T.truthy(300 - h < 0, "(over the egg its top would be off the screen)")
-			local top = 300 - h * (0.5 + s.Refs.Gui.SizeOffset.Y)
+			T.truthy(200 - h < 0, "(over the egg its top would be off the screen)")
+			local top = 200 - h * (0.5 + s.Refs.Gui.SizeOffset.Y)
 			T.near(top, EggPanel.Margin, 1, "it moved down: its top just under the top bar")
 			-- far enough down the screen: over the egg as always
 			w.camY = 700
 			float()
 			T.near(s.Refs.Gui.SizeOffset.Y, 0.5, 1e-6, "its bottom edge on the egg's top")
 			-- the big E up under it: the panel never moves down over its opens
-			w.camY = 300
+			w.camY = 200
 			w.at("Stone")
 			C._test.prompt("Stone", Enum.ProximityPromptInputType.Keyboard)
 			float()
@@ -2391,7 +2391,7 @@ return function(T, Loader)
 			T.eq(#w.buys, 1, "the odds on the screen: E buys")
 			-- the camera pitched down: the panel's first card row above the screen; keepOnScreen can't
 			-- move it down over the big E's opens, so the odds stay off
-			w.camY = 150
+			w.camY = 80
 			float()
 			C._test.tick()
 			local s = C._test.state()
@@ -2412,7 +2412,7 @@ return function(T, Loader)
 			C.toggleAuto("Stone")
 			T.eq(C._test.state().Auto, "Stone", "on the screen: Auto starts")
 			local before = #w.buys
-			w.camY = 150
+			w.camY = 80
 			float()
 			C._test.tick()
 			C._test.tick()

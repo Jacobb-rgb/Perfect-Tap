@@ -921,7 +921,7 @@ return function(T, Loader)
 	end)
 
 	T.test("EggOpening: an Open 3 posed whole: ONE flash, every golem out SOLID with its name and 1 in N, then gone", function()
-		local kinds = { "RoseKnight", "QuartzSprite", "CopperTinker" }
+		local kinds = { "CoalChomper", "PebbleGolem", "CopperTinker" }
 		local o, run, claims = runOf("Stone", kinds)
 		local tl = run.Timeline
 		local seen: { string } = {}
@@ -965,7 +965,7 @@ return function(T, Loader)
 			local chance = HatchStage.chance("Stone", false, kind)
 			T.eq(named[name], BrightTheme.oneInText(chance), name .. ": named, its 1 in N")
 		end
-		T.eq(named["Rose Knight"], "1 in 500")
+		T.eq(named["Coal Chomper"], "1 in 100")
 		-- the end: the golems gone, nothing left on the screen
 		for _, tag in o.Tags do
 			T.falsy(tag.Frame.Visible, "the names gone")
@@ -1371,22 +1371,22 @@ return function(T, Loader)
 				"Crystal",
 				{
 					"QuartzSprite",
-					"SilverSquire",
-					"EmberImp",
 					"JadeGardener",
-					"CobaltDiver",
 					"AmethystAcolyte",
-					"MoonstoneOracle",
+					"JadeGardener",
+					"SapphireSage",
+					"AmethystAcolyte",
+					"DiamondDuke",
 					"QuartzSprite",
-					"RoseKnight",
-					"SilverSquire",
+					"SapphireSage",
+					"JadeGardener",
 				},
 				{},
 			},
 			{ "Crystal", { "HeartstoneColossus" }, {} },
-			{ "Stone", { "RoseKnight", "QuartzSprite", "CopperTinker" }, { Reduced = true } },
-			{ "Stone", { "PebbleGolem", "SilverSquire", "CoalChomper" }, { Fast = true } },
-			{ "Stone", { "PebbleGolem", "SilverSquire", "CoalChomper" }, { Phone = true, W = 1361, H = 629 } },
+			{ "Stone", { "CoalChomper", "CobaltDiver", "CopperTinker" }, { Reduced = true } },
+			{ "Stone", { "PebbleGolem", "CopperTinker", "CoalChomper" }, { Fast = true } },
+			{ "Stone", { "PebbleGolem", "CopperTinker", "CoalChomper" }, { Phone = true, W = 1361, H = 629 } },
 		}
 		for _, case in cases do
 			local o, run, claims = runOf(case[1], case[2], case[3])
@@ -1405,7 +1405,7 @@ return function(T, Loader)
 			T.eq(shown, #case[2], label .. ": every golem named")
 			if #case[2] == 10 then
 				T.eq(run.Special, 3, "the Legendary in the top row's middle")
-				T.eq(run.Kinds[3], "MoonstoneOracle")
+				T.eq(run.Kinds[3], "DiamondDuke")
 			end
 			HatchStage.pose(run, tl.Total)
 			T.eq(claims[1], if case[3].Reduced then 0 else 1, label .. ": the flash (none with Reduce motion)")
