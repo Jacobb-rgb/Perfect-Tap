@@ -5,8 +5,10 @@
 	out of the portal and slams onto the platform, hovers while the camera orbits,
 	charges (it shakes, energy pours in, small portals open) and blows open (the
 	lid halves fly up, the walls fold out, a huge beam, a flash); the new blaster
-	flies out, circled by energy, over a platform of light, the camera zooms in on
-	it for the reveal, it turns once more and is collected.
+	flies out, circled by energy, over a platform of light; the camera rushes in
+	close, it turns slowly and fires a burst before a wheel of rays, then it glides
+	to the left of the screen (like the secret ore's reveal) for the words on the
+	right; it turns once more, shrinks away and is collected.
 
 	  0.0-0.3  the scene: the platform starts to glow, the first particles
 	  0.3-1.0  the portal opens and spins, the crate shoots out (T_LAND)
@@ -15,8 +17,11 @@
 	  2.0-2.8  charging: it shakes, rays pour in, small portals, the light grows
 	  2.8-3.3  the explosive opening (T_BURST)
 	  3.3-4.0  the blaster flies in (T_RISE_END)
-	  4.0-4.8  the reveal: the zoom, the glow (T_HOLD: waits for AWESOME!)
-	  4.8-5.3  collected: one more turn, the camera pulls out, the effects fade
+	  4.0-5.2  the hero (owner 2026-11-06: slower, closer, more): the camera rushes
+	           in, a flare and a ring, crystals burst out, its barrels spin, a burst of
+	           shots, the wheel of rays, NEW BLASTER! (T_SETTLE)
+	  5.2-6.3  it glides to the left, the words come in (T_HOLD: waits for AWESOME!)
+	  6.3-7.3  collected: one more turn, it shrinks away, the effects fade
 
 	Pure and deterministic: build() creates every part once, update(t, idle) poses
 	everything for time t and camera(t, idle) gives the camera frame and field of
@@ -43,6 +48,8 @@ export type Stage = {
 	Duration: number,
 	Burst: number, -- the moment the crate bursts open
 	Reveal: number, -- the blaster is out: the title comes in
+	ShotTimes: { number }, -- the seconds its burst of shots leaves (the client plays their sound)
+	aspect: number, -- the screen's width / height (the client sets it): a narrow one pulls the camera back
 	Hold: number, -- the reveal is done: time stops here until AWESOME!
 	SkipTo: number, -- a skip before the burst jumps here (the burst still plays)
 	Glow: Color3,
@@ -54,7 +61,7 @@ export type Stage = {
 	burstParts: { BasePart }, -- emit particle bursts from these at Burst (client)
 }
 
-Stage.Duration = 5.3
+Stage.Duration = 7.3
 Stage.T_PREP = 0.3
 Stage.T_LAND = 1.0
 Stage.T_IMPACT = 1.4
@@ -62,7 +69,8 @@ Stage.T_ORBIT = 2.0
 Stage.T_BURST = 2.8
 Stage.T_OPEN = 3.3
 Stage.T_RISE_END = 4.0
-Stage.T_HOLD = 4.8
+Stage.T_SETTLE = 5.2
+Stage.T_HOLD = 6.3
 Stage.SkipTo = Stage.T_BURST - 0.2
 Stage.GunRest = 7.4 -- how high the blaster floats
 Stage.PortalHeight = 14
@@ -162,7 +170,21 @@ function Stage.blasterModel(level: number, oreId: string?): Model
 	local length = math.max(hi[3] - lo[3], 0.5)
 	local height = math.max(hi[2] - lo[2], 0.2)
 	local k = math.min(Stage.BlasterLength / length, Stage.BlasterHeight / height)
+	-- what the barrels turn about and where the shots leave (kept on the model for build)
+	local hub = tool:FindFirstChild(BlasterBuilder.SpinHub)
+	local handle = tool:FindFirstChild("Handle")
+	local muzzle = handle and handle:FindFirstChild("Muzzle")
+	if hub and hub:IsA("BasePart") then
+		model:SetAttribute("SpinAxis", (hub.CFrame.Position - center) * k)
+	end
+	if handle and handle:IsA("BasePart") and muzzle and muzzle:IsA("Attachment") then
+		model:SetAttribute("Muzzle", ((handle.CFrame * muzzle.Position) - center) * k)
+	end
 	for _, p in parts do
+		local weld = p:FindFirstChildOfClass("WeldConstraint")
+		if hub and weld and weld.Part0 == hub then
+			p:SetAttribute("Spins", true)
+		end
 		for _, c in p:GetChildren() do
 			if c:IsA("WeldConstraint") or c:IsA("Weld") or c:IsA("Motor6D") then
 				c:Destroy()
@@ -227,7 +249,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		glowFloor.CFrame = at(0, -0.6 + i * 0.002, 0) * CFrame.Angles(0, 0, math.pi / 2)
 	end
 	-- the round wall in rows: a soft glow along the horizon, dark overhead
-	local wallN = 14
+	local wallN = 12
 	local rows = 9
 	for r = 1, rows do
 		-- (y, height, how much it glows: the lowest row most, each one less)
@@ -244,7 +266,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local ceiling = part(room, Vector3.new(140, 1, 140), night)
 	ceiling.CFrame = at(0, 64, 0)
 	local stars = rng(7)
-	for _ = 1, 20 do
+	for _ = 1, 14 do
 		local a, h = stars() * math.pi * 2, 8 + stars() * 50
 		local d = 0.2 + stars() * 0.35
 		local s = part(room, Vector3.new(d, d, d), hot, NEON)
@@ -253,7 +275,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	-- jagged dark rocks along the edge of the floor
 	local rockColor = Color3.fromRGB(44, 34, 62):Lerp(void, 0.12)
 	local edge = rng(53)
-	for _ = 1, 22 do
+	for _ = 1, 16 do
 		local a, r = edge() * math.pi * 2, 20 + edge() * 22
 		local h = 2 + edge() * 8
 		local w = 2 + edge() * 4
@@ -265,17 +287,17 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	for _, c in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
 		local from = Vector3.new(c[1] * 24, 34, c[2] * 26)
 		local to = Vector3.new(c[1] * 9.5, -0.3, c[2] * 10.5)
-		local n = 14
+		local n = 10
 		for i = 1, n do
 			local p = from:Lerp(to, (i - 0.5) / n)
-			local link = part(room, Vector3.new(0.6, 0.3, 3.1), chainColor, METAL)
+			local link = part(room, Vector3.new(0.7, 0.34, 4.3), chainColor, METAL)
 			link.CFrame = origin * CFrame.lookAt(p, to) * CFrame.Angles(0, 0, if i % 2 == 0 then math.pi / 4 else -math.pi / 4)
 		end
 	end
 	-- glowing cracks in the floor, out from the platform
 	local cracks = rng(77)
 	local crackColor = glowColor:Lerp(BLACK, 0.25)
-	for _ = 1, 14 do
+	for _ = 1, 10 do
 		local a = cracks() * math.pi * 2
 		local x, z = math.cos(a) * 8.8, math.sin(a) * 8.8
 		for _ = 1, 3 do
@@ -315,8 +337,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	---------------------------------------------------------------- the effects (all hidden when not in use)
 
 	-- the portal: two rings, three spiral arms, a glowing heart; the shaft of light under it
-	local portalOuter = newRing(root, 40, hot)
-	local portalInner = newRing(root, 28, glowColor)
+	local portalOuter = newRing(root, 32, hot)
+	local portalInner = newRing(root, 22, glowColor)
 	local portalArms: { Part } = {}
 	for _ = 1, 24 do
 		table.insert(portalArms, part(root, Vector3.new(0.3, 0.1, 1), glowColor, NEON))
@@ -341,17 +363,17 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	end
 	-- the energy wave: a ball that grows out of the crate; the shockwaves on the floor
 	local wave = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Ball)
-	local waves = { newRing(root, 32, hot), newRing(root, 28, glowColor), newRing(root, 32, hot), newRing(root, 28, glowColor) }
-	local burstRing = newRing(root, 28, hot)
+	local waves = { newRing(root, 26, hot), newRing(root, 24, glowColor), newRing(root, 26, hot), newRing(root, 24, glowColor) }
+	local burstRing = newRing(root, 22, hot)
 	-- two neon rings turning under the hovering crate
-	local underA, underB = newRing(root, 26, glowColor), newRing(root, 26, hot)
+	local underA, underB = newRing(root, 20, glowColor), newRing(root, 22, hot)
 	-- the swirling comet arcs round the crate and later round the blaster
-	local arcA, arcB = newRing(root, 34, hot, true), newRing(root, 34, glowColor, true)
+	local arcA, arcB = newRing(root, 26, hot, true), newRing(root, 26, glowColor, true)
 	-- small portals round the crate while it charges, each with a ray into the crate
 	local mini: { { ring: Ring, heart: Part, ray: Part, at: Vector3, t0: number } } = {}
 	for i, spot in { Vector3.new(4, 6.5, -8), Vector3.new(4, 7, 8), Vector3.new(-6, 5, -6.5), Vector3.new(-6, 6, 6.5) } do
 		table.insert(mini, {
-			ring = newRing(root, 14, hot),
+			ring = newRing(root, 10, hot),
 			heart = part(root, Vector3.new(0.15, 1, 1), glowColor, NEON, Enum.PartType.Cylinder),
 			ray = part(root, Vector3.new(1, 0.2, 0.2), hot, NEON, Enum.PartType.Cylinder),
 			at = spot,
@@ -365,8 +387,72 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	for _ = 1, 10 do
 		table.insert(rays, part(root, Vector3.new(0.6, 1, 0.1), glowColor, NEON))
 	end
+	-- the reveal: a wheel of wide rays turning behind the blaster, two thin circles, soft discs
+	local wheelColors = { glowColor, void, hot, glowColor:Lerp(void, 0.5) }
+	type WheelRay = { a: BasePart, b: BasePart, len: number, width: number, alpha: number }
+	local wheelRand = rng(83)
+	local wheel: { WheelRay } = {}
+	for i = 1, 14 do
+		local function wedge(): BasePart
+			local w = Instance.new("WedgePart")
+			w.Anchored = true
+			w.CanCollide = false
+			w.CanQuery = false
+			w.CanTouch = false
+			w.CastShadow = false
+			w.Material = NEON
+			w.Color = wheelColors[i % #wheelColors + 1]
+			w.Transparency = 1
+			w.Parent = root
+			return w
+		end
+		table.insert(wheel, {
+			a = wedge(),
+			b = wedge(),
+			len = 18 + wheelRand() * 12,
+			width = 1 + wheelRand() * 1.1,
+			alpha = 0.04 + wheelRand() * 0.05,
+		})
+	end
+	local haloA, haloB = newRing(root, 28, hot), newRing(root, 34, glowColor)
+	local function backDisc(): Part
+		return part(root, Vector3.new(0.05, 1, 1), void, NEON, Enum.PartType.Cylinder)
+	end
+	local discA, discB = backDisc(), backDisc()
+	-- the reveal's flare (a thin cross) and the rings that run out at the hero and at the settle
+	local flareA = part(root, Vector3.new(1, 0.2, 0.05), hot, NEON)
+	local flareB = part(root, Vector3.new(0.2, 1, 0.05), hot, NEON)
+	local revealRing = newRing(root, 24, hot)
+	-- crystals bursting out of the blaster and floating round it
+	type Floater = { p: Part, a: number, r: number, depth: number, speed: number, spin: Vector3 }
+	local floatCrystal = rng(97)
+	local floaters: { Floater } = {}
+	for i = 1, 14 do
+		local d = 0.12 + floatCrystal() * 0.2
+		table.insert(floaters, {
+			p = part(root, Vector3.new(d, d * 1.7, d), if i % 3 == 0 then hot else glowColor, NEON),
+			a = i / 14 * math.pi * 2 + floatCrystal() * 0.3,
+			r = 3.4 + floatCrystal() * 1.8,
+			depth = -0.5 - floatCrystal() * 1.5,
+			speed = 0.12 + floatCrystal() * 0.14,
+			spin = Vector3.new(floatCrystal(), floatCrystal(), floatCrystal()) * 1.8,
+		})
+	end
+	-- its burst of shots: a head and a trail each, a flash on the muzzle
+	type GunShot = { head: Part, trail: Part, t0: number, from: Vector3?, dir: Vector3? }
+	local gunShots: { GunShot } = {}
+	for i = 1, 12 do
+		table.insert(gunShots, {
+			head = part(root, Vector3.new(0.24, 0.24, 0.24), hot, NEON, Enum.PartType.Ball),
+			trail = part(root, Vector3.new(2.2, 0.26, 0.26), glowColor, NEON, Enum.PartType.Cylinder),
+			t0 = Stage.T_RISE_END + 0.32 + (i - 1) * 0.07,
+			from = nil,
+			dir = nil,
+		})
+	end
+	local gunFlash = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Ball)
 	-- the platform of light under the blaster
-	local lightRing, lightInner = newRing(root, 30, hot), newRing(root, 22, glowColor)
+	local lightRing, lightInner = newRing(root, 24, hot), newRing(root, 16, glowColor)
 	-- energy particles circling the blaster
 	local orbitRand = rng(61)
 	local orbiters: { { p: Part, r: number, speed: number, phase: number, tilt: number, size: number } } = {}
@@ -384,7 +470,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local shardRand = rng(11)
 	type Flyer = { p: Part, dir: Vector3, speed: number, spin: Vector3, size: number, delay: number }
 	local shards: { Flyer } = {}
-	for i = 1, 16 do
+	for i = 1, 12 do
 		local a, up = shardRand() * math.pi * 2, 0.3 + shardRand() * 0.9
 		table.insert(shards, {
 			p = part(
@@ -403,9 +489,9 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	type Spark = { p: Part, dir: Vector3, speed: number, life: number, delay: number, t0: number, y: number }
 	local sparkRand = rng(44)
 	local sparks: { Spark } = {}
-	for i = 1, 52 do
+	for i = 1, 44 do
 		-- the first ones fly out flat at the impact, the others at the burst
-		local flat = i <= 16
+		local flat = i <= 14
 		local a, up = sparkRand() * math.pi * 2, if flat then 0.1 + sparkRand() * 0.2 else sparkRand() * 1.3 + 0.15
 		table.insert(sparks, {
 			p = part(root, Vector3.new(0.1, 0.1, 1), if i % 4 == 0 then WHITE else hot, NEON),
@@ -421,8 +507,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	type Streak = { p: Part, t0: number, dur: number, th: number, ph: number, r: number }
 	local streakRand = rng(33)
 	local streaks: { Streak } = {}
-	for i = 1, 32 do
-		local early = i <= 6
+	for i = 1, 26 do
+		local early = i <= 5
 		table.insert(streaks, {
 			p = part(root, Vector3.new(0.09, 0.09, 1), if i % 3 == 0 then WHITE else hot, NEON),
 			t0 = if early then 0.05 + streakRand() * 0.3 else Stage.T_ORBIT + streakRand() * (Stage.T_BURST - Stage.T_ORBIT - 0.3),
@@ -436,7 +522,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local floatRand = rng(29)
 	type Rock = { p: Part, a: number, r: number, y: number, speed: number, spin: Vector3 }
 	local rocks: { Rock } = {}
-	for _ = 1, 16 do
+	for _ = 1, 12 do
 		local d = 0.9 + floatRand() * 1.6
 		table.insert(rocks, {
 			p = part(root, Vector3.new(d, d * (0.7 + floatRand() * 0.5), d * (0.7 + floatRand() * 0.5)), rockColor),
@@ -528,12 +614,19 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 	end
 	local gunBase: { [BasePart]: Vector3 } = {}
+	local gunSpins: { [BasePart]: boolean } = {}
 	for _, r in gunParts do
 		gunBase[r.p] = r.p.Size
+		gunSpins[r.p] = r.p:GetAttribute("Spins") == true
 	end
+	local axisAttr = blaster and blaster:GetAttribute("SpinAxis")
+	local muzzleAttr = blaster and blaster:GetAttribute("Muzzle")
+	local spinAxis: Vector3 = if typeof(axisAttr) == "Vector3" then axisAttr else Vector3.zero
+	local muzzleAt: Vector3 = if typeof(muzzleAttr) == "Vector3" then muzzleAttr else Vector3.new(0, 0, -Stage.BlasterLength / 2)
 
 	local T_LAND, T_IMPACT, T_ORBIT = Stage.T_LAND, Stage.T_IMPACT, Stage.T_ORBIT
 	local T_BURST, T_OPEN, T_RISE, T_HOLD = Stage.T_BURST, Stage.T_OPEN, Stage.T_RISE_END, Stage.T_HOLD
+	local T_SETTLE = Stage.T_SETTLE
 	local T_FALL = 0.62 -- the crate comes out of the portal
 	local PORTAL_Y = Stage.PortalHeight
 	local caseTop = case.Height
@@ -548,7 +641,12 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		SkipTo = Stage.SkipTo,
 		Glow = glowColor,
 		burstParts = { coreHolder },
+		ShotTimes = {},
+		aspect = 16 / 9,
 	} :: any
+	for _, shot in gunShots do
+		table.insert(self.ShotTimes, shot.t0)
+	end
 
 	---------------------------------------------------------------- moving parts
 
@@ -607,7 +705,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local noise = if calm then 0 else 1
 	function self.shake(t: number): Vector3
 		local a = 0
-		for _, k in { { T_LAND, 0.65, 8 }, { T_BURST, 0.8, 6 }, { T_BURST - 0.2, 0.12, 12 } } do
+		for _, k in { { T_LAND, 0.65, 8 }, { T_BURST, 0.8, 6 }, { T_BURST - 0.2, 0.12, 12 }, { T_RISE + 0.14, 0.32, 9 } } do
 			if t >= k[1] then
 				a += k[2] * math.exp(-(t - k[1]) * k[3])
 			end
@@ -630,7 +728,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	end
 
 	-- the camera path round the stage: radius, angle from the crate's front (degrees), height, what it looks at, zoom
-	type Key = { t: number, r: number, a: number, h: number, look: number, fov: number }
+	-- (side: how far right of the blaster it looks, so the blaster sits on the screen's left)
+	type Key = { t: number, r: number, a: number, h: number, look: number, fov: number, side: number? }
 	local keys: { Key } = {
 		{ t = 0, r = 22, a = 10, h = 5.5, look = 4.5, fov = 50 },
 		{ t = Stage.T_PREP, r = 21, a = 10, h = 2.6, look = 8, fov = 58 },
@@ -642,10 +741,14 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		{ t = T_BURST, r = 12.5, a = -16, h = 3.6, look = 2.9, fov = 40 },
 		{ t = T_BURST + 0.2, r = 17, a = -8, h = 4.6, look = 4.6, fov = 52 },
 		{ t = T_OPEN, r = 18, a = 2, h = 5, look = 6.2, fov = 52 },
-		{ t = T_RISE, r = 14, a = 12, h = 8, look = 7.2, fov = 46 },
-		{ t = T_RISE + 0.18, r = 11.4, a = 15, h = 8.6, look = 7.2, fov = if calm then 46 else 38 },
-		{ t = T_HOLD, r = 11, a = 18, h = 8.8, look = 7.1, fov = 38 },
-		{ t = Stage.Duration, r = 20, a = 14, h = 7, look = 6, fov = 48 },
+		{ t = T_RISE, r = 14, a = 10, h = 8, look = 7.2, fov = 46 },
+		-- the rush in, close, then a slow push and drift round it
+		{ t = T_RISE + 0.22, r = 7.4, a = 16, h = 7.9, look = 7.4, fov = if calm then 46 else 40 },
+		{ t = T_SETTLE - 0.05, r = 6.6, a = -6, h = 7.8, look = 7.4, fov = 40 },
+		-- beside the words
+		{ t = T_SETTLE + 0.55, r = 9, a = 8, h = 7.9, look = 7.4, fov = 38, side = 2.5 },
+		{ t = T_HOLD, r = 8.8, a = 10, h = 7.9, look = 7.4, fov = 38, side = 2.5 },
+		{ t = Stage.Duration, r = 15, a = 12, h = 7.5, look = 6, fov = 46 },
 	}
 	function self.camera(t: number, idle: number?): (CFrame, number)
 		local i = 1
@@ -655,18 +758,50 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		local k0, k1 = keys[i], keys[i + 1]
 		local u = easeInOut(prog(t, k0.t, k1.t))
 		local a = math.rad(lerp(k0.a, k1.a, u) + 1.2 * math.sin((idle or 0) * 0.8))
-		local r = lerp(k0.r, k1.r, u)
+		local r = lerp(k0.r, k1.r, u) * math.max(1, 1.7 / self.aspect)
 		local pos = Vector3.new(math.cos(a) * r, lerp(k0.h, k1.h, u), math.sin(a) * r)
-		local look = Vector3.new(0, lerp(k0.look, k1.look, u), 0)
+		local side = lerp(k0.side or 0, k1.side or 0, u)
+		local look = Vector3.new(math.sin(a) * side, lerp(k0.look, k1.look, u), -math.cos(a) * side)
 		local shake = self.shake(t)
 		return origin * CFrame.lookAt(pos + shake, look + shake * 0.4), lerp(k0.fov, k1.fov, u)
+	end
+
+	-- The blaster's frame and scale at time t: flies out turning, one slow turn at the hero, to its
+	-- angle beside the words, one more turn when collected, then it shrinks away.
+	local function gunAt(t: number, clock: number): (CFrame, number)
+		local rise = prog(t, T_BURST + 0.08, T_RISE)
+		local bob = math.sin(clock * 2.1) * 0.14 * prog(t, T_RISE - 0.3, T_RISE + 0.3)
+		local turning = (1 - easeOutCubic(rise)) * math.pi * 2 * 1.4
+		local hero = easeInOut(prog(t, T_RISE + 0.05, T_SETTLE + 0.2)) * math.pi * 2
+		local settle = easeInOut(prog(t, T_SETTLE, T_SETTLE + 0.5))
+		local last = easeInOut(prog(t, T_HOLD, T_HOLD + 0.65)) * math.pi * 2
+		local away = easeInCubic(prog(t, T_HOLD + 0.45, Stage.Duration - 0.05))
+		local scale = lerp(0.35, 1, easeOutCubic(prog(t, T_BURST, T_BURST + 0.7))) * (1 - away)
+		local yaw = lerp(-0.2, -0.55, settle) + turning + hero + last + 0.09 * math.sin(clock * 0.9)
+		local pitch = lerp(0.22, 0.34, settle) + 0.04 * math.sin(clock * 1.3)
+		return origin
+			* CFrame.new(0, lerp(caseTop - 1.2, gunRest, easeOutCubic(rise)) + bob - away * 4, 0)
+			* CFrame.Angles(0, yaw, 0)
+			* CFrame.Angles(pitch, 0, 0.04 * math.sin(clock * 1.7)),
+			math.max(scale, 0.01)
+	end
+	-- where the shots of its burst leave and fly (their moment's gun)
+	for _, shot in gunShots do
+		local cf = gunAt(shot.t0, shot.t0)
+		shot.from = cf * muzzleAt
+		shot.dir = cf.LookVector
+	end
+	-- How far the barrels have turned: fast out of the crate, then a slow idle.
+	local function spinAngle(clock: number): number
+		local since = math.max(0, clock - T_BURST)
+		return 3 * since + 24 / 1.1 * (1 - math.exp(-1.1 * since))
 	end
 
 	---------------------------------------------------------------- every frame
 
 	function self.update(t: number, idle: number?)
 		local clock = t + (idle or 0) -- what keeps moving while the reveal waits
-		local fadeOut = prog(t, T_HOLD + 0.05, Stage.Duration) -- the effects fade at the end
+		local fadeOut = prog(t, T_HOLD + 0.25, Stage.Duration) -- the effects fade at the end
 		local camCf = self.camera(t, idle)
 		local charge = prog(t, T_ORBIT, T_BURST)
 
@@ -713,7 +848,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 			end
 			hide(portalHeart)
 			-- (at the end the shaft comes back: the column of light under the blaster)
-			local column = prog(t, T_RISE, T_RISE + 0.4) * (1 - prog(t, T_HOLD + 0.2, Stage.Duration))
+			local column = prog(t, T_RISE, T_RISE + 0.4) * (1 - prog(t, T_SETTLE - 0.3, T_SETTLE))
 			if column > 0.01 then
 				poseColumn(shaft, 0, 0, 0, gunRest - 2.4, 1.6, 1 - column * 0.1)
 			else
@@ -871,21 +1006,14 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 			hideRing(underB)
 		end
 
-		-- the blaster: flies out of the light, turning slowly, then floats at its hero angle
-		local rise = prog(t, T_BURST + 0.08, T_RISE)
-		local out = t > T_BURST + 0.06
-		local bob = math.sin(clock * 2.1) * 0.14 * prog(t, T_RISE - 0.3, T_RISE + 0.3)
-		local turning = (1 - easeOutCubic(rise)) * math.pi * 2 * 1.4
-		-- "se ještě jednou otočí": one more turn when it is collected
-		local last = easeInOut(prog(t, T_HOLD, Stage.Duration)) * math.pi * 2
-		local gunScale = lerp(0.35, 1, easeOutCubic(prog(t, T_BURST, T_BURST + 0.7)))
-		local gunCf = origin
-			* CFrame.new(0, lerp(caseTop - 1.2, gunRest, easeOutCubic(rise)) + bob, 0)
-			* CFrame.Angles(0, -0.2 + turning + last + 0.09 * math.sin(clock * 0.9), 0)
-			* CFrame.Angles(0.22 + 0.04 * math.sin(clock * 1.3), 0, 0.04 * math.sin(clock * 1.7))
+		-- the blaster, its barrels turning
+		local out = t > T_BURST + 0.06 and t < Stage.Duration - 0.02
+		local gunCf, gunScale = gunAt(t, clock)
+		local barrels = CFrame.new(spinAxis) * CFrame.Angles(0, 0, spinAngle(clock)) * CFrame.new(-spinAxis)
 		for _, r in gunParts do
 			if out then
-				place(r.p, gunCf * CFrame.new(r.rel.Position * gunScale) * r.rel.Rotation)
+				local rel = if gunSpins[r.p] then barrels * r.rel else r.rel
+				place(r.p, gunCf * CFrame.new(rel.Position * gunScale) * rel.Rotation)
 				if gunScale < 1 or r.p.Size ~= gunBase[r.p] then
 					r.p.Size = gunBase[r.p] * gunScale
 				end
@@ -895,7 +1023,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 		-- its glow: white-hot out of the crate, a strong pulse at the reveal
 		local gunGlow = if t > T_BURST then 0.7 * math.exp(-math.max(0, t - T_BURST - 0.25) * 2.2) else 0
-		gunGlow += if t >= T_RISE then 0.45 * math.exp(-(t - T_RISE) * 3.5) else 0
+		gunGlow += if t >= T_RISE then 0.5 * math.exp(-(t - T_RISE) * 3) else 0
 		for _, n in gunNeon do
 			n.p.Color = n.color:Lerp(WHITE, gunGlow * 0.45)
 		end
@@ -924,15 +1052,123 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 			end
 		end
 
+		-- the reveal, all facing the camera behind the blaster: the wheel of rays, soft discs, thin circles
+		local wheelIn = easeOutCubic(prog(t, T_RISE - 0.05, T_RISE + 0.35)) * (1 - fadeOut)
+		if wheelIn > 0.01 then
+			local c = gunCf.Position - toCam * 5
+			local base = CFrame.lookAt(c, c + toCam) * CFrame.Angles(0, math.pi / 2, 0)
+			local kick = 1 + 0.9 * math.exp(-math.max(0, t - T_RISE) * 2.2)
+			for i, ray in wheel do
+				local frame = base * CFrame.Angles((i - 1) / #wheel * math.pi * 2 + clock * 0.22, 0, 0)
+				local len, w = ray.len * wheelIn, ray.width * wheelIn
+				local size = Vector3.new(0.05, w, len)
+				ray.a.Size = size
+				ray.b.Size = size
+				local alpha = 1 - math.min(0.5, ray.alpha * kick * wheelIn)
+				ray.a.Transparency = alpha
+				ray.b.Transparency = alpha
+				place(ray.a, frame * CFrame.new(0, w / 2, len / 2))
+				place(ray.b, frame * CFrame.new(0, -w / 2, len / 2) * CFrame.Angles(0, 0, math.pi))
+			end
+			local face = CFrame.lookAt(gunCf.Position - toCam * 4, gunCf.Position - toCam * 4 + toCam)
+			local d1, d2 = 15 * wheelIn, 9 * wheelIn
+			discA.Size = Vector3.new(0.05, d1, d1)
+			discB.Size = Vector3.new(0.05, d2, d2)
+			discA.Transparency = 1 - 0.035 * wheelIn
+			discB.Transparency = 1 - 0.06 * wheelIn
+			place(discA, face * CFrame.new(0, 0, 0.3) * CFrame.Angles(0, math.pi / 2, 0))
+			place(discB, face * CFrame.Angles(0, math.pi / 2, 0))
+			local flat = face * CFrame.Angles(math.pi / 2, 0, 0)
+			poseRing(haloA, flat, 5.4 * wheelIn, 0.05, 0.45, clock * 0.25)
+			poseRing(haloB, flat, 7 * wheelIn, 0.04, 0.6, -clock * 0.18)
+		else
+			for _, ray in wheel do
+				hide(ray.a)
+				hide(ray.b)
+			end
+			hide(discA)
+			hide(discB)
+			hideRing(haloA)
+			hideRing(haloB)
+		end
+		-- the flare and the ring at the hero, the ring again as it settles beside the words
+		local flareT = prog(t, T_RISE, T_RISE + 0.5)
+		if t >= T_RISE and flareT < 1 then
+			local f = 1 - flareT
+			local len = lerp(4, 34, easeOutCubic(flareT))
+			local frame = CFrame.lookAt(gunCf.Position + toCam * 1.5, gunCf.Position + toCam * 2.5) * CFrame.Angles(0, 0, 0.4)
+			flareA.Size = Vector3.new(len, 0.34 * f + 0.02, 0.05)
+			flareB.Size = Vector3.new(0.34 * f + 0.02, len, 0.05)
+			flareA.Transparency = flareT
+			flareB.Transparency = flareT
+			place(flareA, frame)
+			place(flareB, frame)
+		else
+			hide(flareA)
+			hide(flareB)
+		end
+		do
+			local run = if t < T_SETTLE then prog(t, T_RISE, T_RISE + 0.65) else prog(t, T_SETTLE + 0.25, T_SETTLE + 0.9)
+			local on = (t >= T_RISE and t < T_RISE + 0.65) or (t >= T_SETTLE + 0.25 and t < T_SETTLE + 0.9)
+			if on then
+				local c = gunCf.Position - toCam
+				local flat = CFrame.lookAt(c, c + toCam) * CFrame.Angles(math.pi / 2, 0, 0)
+				poseRing(revealRing, flat, lerp(1, 15, easeOutCubic(run)), lerp(0.35, 0.05, run), run, 0)
+			else
+				hideRing(revealRing)
+			end
+		end
+		-- the crystals burst out at the hero and float round it
+		local burstOut = if t >= T_RISE then easeOutBack(prog(t, T_RISE, T_RISE + 0.55)) else 0
+		for _, f in floaters do
+			if burstOut > 0.01 and fadeOut < 1 then
+				local c = gunCf.Position
+				local base = CFrame.lookAt(c, c + toCam) * CFrame.Angles(0, math.pi / 2, 0)
+				local a = f.a + clock * f.speed
+				local pos = base * CFrame.Angles(a, 0, 0) * CFrame.new(f.depth, 0, f.r * burstOut)
+				f.p.Transparency = fadeOut
+				place(f.p, pos * CFrame.Angles(f.spin.X * clock, f.spin.Y * clock, f.spin.Z * clock))
+			else
+				hide(f.p)
+			end
+		end
+		-- its burst of shots while it turns, a steady glow on the muzzle meanwhile (no strobe)
+		for _, shot in gunShots do
+			local age = t - shot.t0
+			local from, dir = shot.from :: Vector3, shot.dir :: Vector3
+			if age >= 0 and age < 0.6 then
+				local go = age * 42
+				local head = from + dir * go
+				local back = math.min(go, 2.4)
+				place(shot.head, CFrame.new(head))
+				shot.trail.Size = Vector3.new(math.max(back, 0.05), 0.14, 0.14)
+				shot.trail.Transparency = 0.1 + age
+				place(shot.trail, CFrame.lookAt(head - dir * (back / 2), head) * CFrame.Angles(0, math.pi / 2, 0))
+			else
+				hide(shot.head)
+				hide(shot.trail)
+			end
+		end
+		local burstFrom, burstTo = gunShots[1].t0, gunShots[#gunShots].t0
+		local glowing = prog(t, burstFrom - 0.05, burstFrom + 0.1) * (1 - prog(t, burstTo, burstTo + 0.2))
+		if glowing > 0.01 and not calm then
+			gunFlash.Size = Vector3.new(0.7, 0.7, 0.7)
+			gunFlash.Transparency = 1 - 0.55 * glowing
+			place(gunFlash, CFrame.new(gunCf * (muzzleAt * gunScale)))
+		else
+			hide(gunFlash)
+		end
+
 		-- the comet arcs: round the crate from the hover on, round the blaster after the burst
 		local arcsIn = (
 			if t < T_BURST then easeOutCubic(prog(t, T_IMPACT, T_IMPACT + 0.3)) else easeOutCubic(prog(t, T_OPEN - 0.1, T_OPEN + 0.25))
-		) * (1 - fadeOut)
+		) * (1 - prog(t, T_SETTLE, T_SETTLE + 0.35))
 		if arcsIn > 0.01 then
 			local center = CFrame.new(if t < T_BURST then at(0, 2.2 + hover, 0).Position else gunCf.Position)
 			local r0 = if t < T_BURST then 6.6 else 4.8
-			poseRing(arcA, center * CFrame.Angles(0.5, 0, 0.42), r0 * arcsIn, 0.16, 0.08, clock * 3.4)
-			poseRing(arcB, center * CFrame.Angles(-0.42, 0, -0.5), (r0 + 1.1) * arcsIn, 0.12, 0.15, -clock * 2.6)
+			local thick = if t < T_BURST then 1 else 0.5 -- (the camera is close to the blaster)
+			poseRing(arcA, center * CFrame.Angles(0.5, 0, 0.42), r0 * arcsIn, 0.16 * thick, 0.08, clock * 3.4)
+			poseRing(arcB, center * CFrame.Angles(-0.42, 0, -0.5), (r0 + 1.1) * arcsIn, 0.12 * thick, 0.15, -clock * 2.6)
 		else
 			hideRing(arcA)
 			hideRing(arcB)
@@ -981,11 +1217,11 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 
 		-- the platform of light under the blaster
 		local floorIn = easeOutBack(prog(t, T_OPEN + 0.05, T_OPEN + 0.4))
-		local floorOut = 1 - prog(t, T_HOLD + 0.1, Stage.Duration)
+		local floorOut = 1 - fadeOut
 		if t >= T_OPEN + 0.05 and floorOut > 0.01 then
 			local y0 = gunRest - 2.5
-			poseRing(lightRing, at(0, y0, 0), 3.8 * floorIn, 0.16, 1 - floorOut, clock)
-			poseRing(lightInner, at(0, y0, 0), 2.6 * floorIn, 0.1, 1 - floorOut * 0.8, -clock * 1.6)
+			poseRing(lightRing, at(0, y0, 0), 3.8 * floorIn, 0.09, 1 - floorOut, clock)
+			poseRing(lightInner, at(0, y0, 0), 2.6 * floorIn, 0.06, 1 - floorOut * 0.8, -clock * 1.6)
 		else
 			hideRing(lightRing)
 			hideRing(lightInner)

@@ -492,6 +492,9 @@ local function advance(s: any)
 		s.started = os.clock() - s.stage.SkipTo
 	elseif t >= s.stage.Reveal + CrateOpeningView.ButtonAfter then
 		collect(s)
+	elseif t >= s.stage.Reveal then
+		-- the hero moment again and again: on to the words
+		s.started = os.clock() - (s.stage.Reveal + CrateOpeningView.ButtonAfter)
 	end
 end
 
@@ -559,6 +562,21 @@ local function step(s: any)
 	end
 	if once("reveal", stage.Reveal) then
 		Sfx.play("Reveal")
+		Sfx.play("CaseBoom")
+		local hero = (STAGE_ORIGIN * CFrame.new(0, Stage.GunRest, 0)).Position
+		Vfx.burst("Burst", hero, 30, stage.Glow)
+		Vfx.burst("Glint", hero, 20, Color3.new(1, 1, 1))
+	end
+	for i, at in stage.ShotTimes do
+		if once("shot" .. i, at) then
+			Sfx.play("BlasterShot")
+		end
+	end
+	if once("settle", Stage.T_SETTLE) then
+		Sfx.play("CaseRise")
+	end
+	if once("words", stage.Reveal + CrateOpeningView.ValueAt) then
+		Sfx.play("BlastThud")
 	end
 	if once("button", stage.Reveal + CrateOpeningView.ButtonAfter) and usingGamepad() then
 		GuiService.SelectedObject = s.view.Continue
@@ -606,6 +624,8 @@ function VaultController.play(level: number, oreId: string): boolean
 	stage.bulk = function(parts: { BasePart }, frames: { CFrame })
 		Workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	local viewport = camera.ViewportSize
+	stage.aspect = viewport.X / math.max(viewport.Y, 1)
 	-- (the stand-in for motion blur: Stage.blur; removed at the end)
 	local blur = Instance.new("BlurEffect")
 	blur.Name = "CrateOpeningBlur"
@@ -613,6 +633,10 @@ function VaultController.play(level: number, oreId: string): boolean
 	blur.Parent = Lighting
 	local view = CrateOpeningView.build()
 	view.Calm = calm
+	local uiScale = HudController.uiScale()
+	local guiScale = view.Gui:FindFirstChild("Scale") :: UIScale
+	guiScale.Scale = uiScale
+	CrateOpeningView.fit(view, viewport.X / uiScale, viewport.Y / uiScale)
 	CrateOpeningView.setBlaster(view, level, oreId)
 	CrateOpeningView.setSkipText(view, skipText())
 	view.Gui.Parent = player:WaitForChild("PlayerGui")

@@ -39,7 +39,7 @@ local CF = Loader.CFrame
 local mode = process.args[1]
 local level = tonumber(if mode == "reel" then process.args[2] else mode) or 10
 local times = {}
-for t in string.gmatch((mode ~= "reel" and process.args[2]) or "0.25,0.8,1.1,1.8,2.6,3.0,3.6,4.2,4.7,5.1", "[^,]+") do
+for t in string.gmatch((mode ~= "reel" and process.args[2]) or "0.25,0.8,1.1,1.8,2.6,3.0,3.6,4.2,4.8,5.8,6.3,7", "[^,]+") do
 	table.insert(times, tonumber(t))
 end
 
@@ -125,6 +125,7 @@ local stage = Stage.build(workspace, ORIGIN, level, ore, Stage.blasterModel(leve
 -- the overlay ("NEW BLASTER!", the flash, AWESOME!) at the render's 1.25 UI scale
 local view = CrateOpeningView.build()
 view.Gui.Scale.Scale = 1.25
+CrateOpeningView.fit(view, 1280, 720)
 CrateOpeningView.setBlaster(view, level, ore)
 
 fs.writeDir(root .. "/build/preview")
@@ -132,7 +133,7 @@ fs.writeDir(root .. "/build/preview")
 if mode == "reel" then
 	local fps = tonumber(process.args[3]) or 60
 	local tag = "voidcrate_" .. level
-	local WAIT = 1.1 -- how long the reveal waits for AWESOME! here
+	local WAIT = 1.2 -- how long the reveal waits for AWESOME! here
 	local W, H = 1600, 900
 	-- the room never moves: the base scene; everything else per frame
 	local room = stage.Root:FindFirstChild("Room")
@@ -186,16 +187,16 @@ if mode == "reel" then
 	local cells = {}
 	for k, cell in
 		{
-			{ 0.2, "1 Příprava: platforma se rozsvěcí" },
-			{ 0.85, "2 Portál se otevře, bedna letí dolů" },
-			{ 1.1, "3 Dopad: otřes, vlna energie" },
-			{ 1.85, "4 Kamera obíhá, bedna se vznáší" },
-			{ 2.65, "5 Nabíjení: paprsky, malé portály" },
-			{ 2.95, "6 Výbuch: víko letí nahoru, paprsek" },
-			{ 3.7, "7 Blaster vyletí z bedny" },
-			{ 4.2, "8 NEW BLASTER! přiletí ze strany" },
-			{ 4.8, "8 Vzácnost, jméno, statistiky, AWESOME!" },
-			{ 5.15, "9 COLLECTED! Kamera se oddálí" },
+			{ 0.85, "Portál se otevře, bedna letí dolů" },
+			{ 1.85, "Kamera obíhá, bedna se vznáší" },
+			{ 2.65, "Nabíjení: paprsky, malé portály" },
+			{ 2.95, "Výbuch: víko letí nahoru, paprsek" },
+			{ 4.12, "Záblesk: kamera letí těsně k blasteru" },
+			{ 4.5, "NEW BLASTER! a dávka střel" },
+			{ 5.0, "Blaster se pomalu otáčí, kotouč se točí" },
+			{ 6.0, "Blaster vlevo, nápisy přilétají" },
+			{ 6.3, "Čeká na AWESOME! jako secret ruda" },
+			{ 7.0, "COLLECTED! Blaster letí do inventáře" },
 		}
 	do
 		cells[k] = { frame = frameAt(cell[1]), caption = cell[2] }

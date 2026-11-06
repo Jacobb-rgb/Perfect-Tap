@@ -138,8 +138,9 @@ return function(T, Loader)
 		T.eq(Stage.T_BURST, 2.8, "charging")
 		T.eq(Stage.T_OPEN, 3.3, "the explosive opening")
 		T.eq(Stage.T_RISE_END, 4.0, "the blaster flies in")
-		T.eq(Stage.T_HOLD, 4.8, "the reveal")
-		T.eq(Stage.Duration, 5.3, "collected")
+		T.eq(Stage.T_SETTLE, 5.2, "the hero moment (slower: owner 2026-11-06)")
+		T.eq(Stage.T_HOLD, 6.3, "the words")
+		T.eq(Stage.Duration, 7.3, "collected")
 	end)
 
 	T.test("CrateOpening: the portal opens, the crate lands, the lid flies, the walls fold", function()
@@ -193,6 +194,58 @@ return function(T, Loader)
 		T.lt(high(Stage.T_ORBIT + 0.1), 20, "and closed again")
 	end)
 
+	T.test("CrateOpening: the end: close, the blaster on the left like the secret ore, its barrels turning", function()
+		local stage, holder = build(10)
+		local blaster = holder:FindFirstChild("Blaster", true)
+		local gun = parts(blaster)
+		local function middle(): any
+			local sum = Vector3.zero
+			for _, p in gun do
+				sum += p.CFrame.Position
+			end
+			return sum / #gun
+		end
+		stage.update(stage.Hold, 1)
+		local cf = stage.camera(stage.Hold, 1)
+		local seen = cf:PointToObjectSpace(middle())
+		T.lt(seen.X, -1, "on the left of the screen: " .. seen.X)
+		T.lt(-seen.Z, 10, "close: " .. -seen.Z)
+		local hero = stage.camera(stage.Reveal + 0.6)
+		stage.update(stage.Reveal + 0.6)
+		T.lt(math.abs(hero:PointToObjectSpace(middle()).X), 0.6, "in the middle at the hero moment")
+		-- the barrels turn while it waits, the rest of the gun holds still
+		local spinning, still = nil, nil
+		for _, p in gun do
+			if p:GetAttribute("Spins") == true then
+				spinning = p
+			else
+				still = p
+			end
+		end
+		T.truthy(spinning and still, "barrels and body")
+		local function local_(p: any, t: number, idle: number): any
+			stage.update(t, idle)
+			return blaster:IsA("Model") and p.CFrame.Position
+		end
+		local a = local_(spinning, stage.Hold, 1)
+		local b = local_(spinning, stage.Hold, 1.2)
+		T.lt(0.01, (a - b).Magnitude, "the barrels turn")
+		-- its burst of shots has its moments in the hero part, the sound follows them
+		T.lt(stage.Reveal, stage.ShotTimes[1], "the burst after the reveal")
+		T.lt(stage.ShotTimes[#stage.ShotTimes], Stage.T_SETTLE, "and before it settles")
+		-- gone at the end
+		stage.update(stage.Duration)
+		T.lt(gun[1].CFrame.Position.Y - ORIGIN.Position.Y, -1000, "collected")
+	end)
+
+	T.test("CrateOpening: a narrow screen pulls the camera back", function()
+		local stage = build(10)
+		local wide = (stage.camera(stage.Hold).Position - ORIGIN.Position).Magnitude
+		stage.aspect = 4 / 3
+		local narrow = (stage.camera(stage.Hold).Position - ORIGIN.Position).Magnitude
+		T.lt(wide, narrow, "further back")
+	end)
+
 	T.test("CrateOpening: moves few parts per frame; waiting at the reveal keeps it alive", function()
 		local stage = build(10)
 		local most = 0
@@ -207,7 +260,7 @@ return function(T, Loader)
 			stage.update(t)
 			t += 1 / 30
 		end
-		T.le(most, 520, "parts moved in a frame at the most")
+		T.le(most, 560, "parts moved in a frame at the most")
 		local cf0 = stage.camera(stage.Hold, 0)
 		local cf1 = stage.camera(stage.Hold, 1.5)
 		T.lt(0.01, (cf0.Position - cf1.Position).Magnitude, "the camera drifts while it waits")
@@ -232,7 +285,7 @@ return function(T, Loader)
 			return y / #gun - ORIGIN.Position.Y
 		end
 		T.lt(gunY(stage.Burst - 0.2), -1000, "hidden before the burst")
-		local shown = gunY(stage.Duration)
+		local shown = gunY(stage.Hold)
 		T.truthy(shown > 3 and shown < 12, "floats above the case at the end")
 		T.lt(gunY(stage.Burst + 0.2), shown, "rises")
 		-- the case drops in from above and rests on the disc
@@ -258,8 +311,10 @@ return function(T, Loader)
 			local local_ = ORIGIN:PointToObjectSpace(cf.Position)
 			T.truthy(math.sqrt(local_.X ^ 2 + local_.Z ^ 2) < 50, "inside the round wall at " .. t)
 			T.truthy(local_.Y > 1 and local_.Y < 60, "under the ceiling at " .. t)
-			local toStage = (ORIGIN.Position + Vector3.new(0, 3, 0) - cf.Position).Unit
-			T.truthy(cf.LookVector:Dot(toStage) > 0.9, "looks at the stage at " .. t)
+			-- the crate, then the blaster up there
+			local focus = if t > stage.Burst + 0.6 then Stage.GunRest else 3
+			local toStage = (ORIGIN.Position + Vector3.new(0, focus, 0) - cf.Position).Unit
+			T.truthy(cf.LookVector:Dot(toStage) > 0.85, "looks at the stage at " .. t)
 			t += 0.25
 		end
 	end)
@@ -267,7 +322,7 @@ return function(T, Loader)
 	T.test("CrateOpening: deterministic (two builds pose the same)", function()
 		local a, ha = build(9)
 		local b, hb = build(9)
-		for _, t in { 0.3, 2.0, 3.1, 4.0, 5.2 } do
+		for _, t in { 0.3, 2.0, 3.1, 4.0, 5.2, 7.0 } do
 			a.update(t)
 			b.update(t)
 			local pa, pb = parts(ha), parts(hb)

@@ -1,11 +1,13 @@
 --[[
 	The screen over the void crate opening (VaultController plays the 3D stage,
-	Builders/CrateOpeningStage; owner 2026-11-06, his storyboard): a fade in, the
-	white flash at the burst, "NEW BLASTER!" with its crown flying in from the
-	side and out again, then the rarity with its stars, the blaster's name, its
-	level and damage one after the other and the AWESOME! button; after that
-	COLLECTED! with its tick. In the colours of the crate's rarity. Before the
-	burst a small hint says how to skip ahead.
+	Builders/CrateOpeningStage; owner 2026-11-06, his storyboard, then "slower, more
+	wow, the blaster placed like the secret ore"): a fade in, the white flash at the
+	burst, "NEW BLASTER!" with its crown flying in from the side and holding a
+	moment; then, the blaster on the left, the words on the right one after the
+	other like the secret ore's reveal: the ribbon, the rarity big, a line, the
+	blaster's name, its level with the stars of its crate, its damage counting up,
+	AWESOME!; after that the words slide away and COLLECTED! with its tick shows. In
+	the colours of the crate's rarity. Before the burst a small hint how to skip.
 
 	Pure and time-driven: update(refs, t, burst, reveal, leaving) poses everything
 	for time t, so the Lune preview exports any moment with the same code. Stars,
@@ -30,12 +32,21 @@ local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
 
 -- seconds after the reveal
-CrateOpeningView.TitleOut = 0.42 -- "NEW BLASTER!" starts to leave
-CrateOpeningView.RarityAt = 0.42
-CrateOpeningView.NameAt = 0.5
-CrateOpeningView.StatsAt = 0.58
-CrateOpeningView.ButtonAfter = 0.68 -- AWESOME! shows
-CrateOpeningView.CollectAt = 0.8 -- past this (the stage's Hold) it is being collected
+CrateOpeningView.TitleOut = 1.0 -- "NEW BLASTER!" starts to leave (the blaster's hero moment)
+CrateOpeningView.RibbonAt = 1.3
+CrateOpeningView.RarityAt = 1.42
+CrateOpeningView.NameAt = 1.58
+CrateOpeningView.RowAt = 1.72
+CrateOpeningView.ValueAt = 1.86
+CrateOpeningView.CountFor = 0.4 -- the damage counts up
+CrateOpeningView.ButtonAfter = 2.2 -- AWESOME! shows
+CrateOpeningView.CollectAt = 2.3 -- past this (the stage's Hold) it is being collected
+
+local PANEL = Vector2.new(660, 480)
+local PANEL_X = 0.725 -- the words' middle, the screen's width
+
+-- The crate tiers' stars.
+local STARS = { COMMON = 1, RARE = 2, EPIC = 3, MYTHIC = 4 }
 
 export type Refs = {
 	Gui: ScreenGui,
@@ -43,18 +54,25 @@ export type Refs = {
 	Flash: Frame,
 	Catcher: TextButton, -- the whole screen: a click / tap skips ahead or ends
 	Title: Frame,
+	TitleScale: UIScale,
 	TitleNew: TextLabel,
 	TitleBlaster: TextLabel,
 	Crown: Frame,
-	Reveal: Frame,
-	RevealScale: UIScale,
-	RarityPill: Frame,
-	RarityScale: UIScale,
-	RarityRing: Frame,
-	RarityRingStroke: UIStroke,
+	NewTag: Frame,
+	NewTagScale: UIScale,
+	Reveal: Frame, -- the words on the right
+	RevealScale: UIScale, -- fits them to the screen (fit)
+	Steps: { { Item: GuiObject, Scale: UIScale, At: number } },
+	Ribbon: Frame,
 	RarityText: TextLabel,
+	Line: Frame,
 	Name: TextLabel,
+	Row: Frame,
 	Stats: TextLabel,
+	Stars: { Frame },
+	Value: Frame,
+	Damage: TextLabel,
+	DamageValue: number,
 	Continue: TextButton,
 	ContinueHolder: Frame,
 	Collected: Frame,
@@ -132,12 +150,13 @@ function CrateOpeningView.build(): Refs
 		Name = "Title",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.74),
 		Rotation = -6,
 		Size = UDim2.fromOffset(820, 300),
 		Visible = false,
 		ZIndex = 12,
 	}, gui)
+	local titleScale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, title)
 	local new = UIKit.new("TextLabel", {
 		Name = "New",
 		AnchorPoint = Vector2.new(0, 0),
@@ -200,97 +219,186 @@ function CrateOpeningView.build(): Refs
 		outlined(spike, 2)
 	end
 
-	-- the reveal: the rarity at the top, the name and stats at the bottom (the blaster floats between)
+	-- the NEW! tag by the blaster
+	local newTag = UIKit.new("Frame", {
+		Name = "NewTag",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(24, 12, 38),
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.43, 0.2),
+		Rotation = 12,
+		Size = UDim2.fromOffset(120, 46),
+		Visible = false,
+		ZIndex = 11,
+	}, gui)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 14) }, newTag)
+	UIKit.new("UIStroke", { Thickness = 4, Color = WHITE }, newTag)
+	local newTagScale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, newTag)
+	local tagText = UIKit.new("TextLabel", {
+		Name = "Text",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = "NEW!",
+		TextColor3 = WHITE,
+		TextSize = 30,
+		FontFace = S.TitleFont,
+		ZIndex = 12,
+	}, newTag)
+	outlined(tagText, 2)
+
+	-- the words on the right, each popping in on its own moment
 	local reveal = UIKit.new("Frame", {
 		Name = "Reveal",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(PANEL_X, 0.5),
+		Size = UDim2.fromOffset(PANEL.X, PANEL.Y),
 		Visible = false,
 		ZIndex = 10,
 	}, gui)
-	local revealScale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, reveal)
-	local pill = UIKit.new("Frame", {
-		Name = "RarityPill",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.fromRGB(24, 12, 38),
-		BackgroundTransparency = 0.1,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0, 92),
-		Size = UDim2.fromOffset(250, 54),
-		ZIndex = 12,
-	}, reveal)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 27) }, pill)
-	UIKit.new("UIStroke", { Name = "Edge", Thickness = 4, Color = WHITE }, pill)
-	local rarityScale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, pill)
-	-- the strong effect: a ring that runs out from the pill as it lands
-	local ring = UIKit.new("Frame", {
-		Name = "Ring",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 11,
-	}, pill)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 40) }, ring)
-	local ringStroke = UIKit.new("UIStroke", { Thickness = 4, Color = WHITE }, ring)
-	for i, x in { -96, 96 } do
-		star(pill, "StarIn" .. i, x, 13, 13)
-		star(pill, "StarOut" .. i, x * 1.5, 16, 13)
+	local revealScale = UIKit.new("UIScale", { Name = "Fit", Scale = 1 }, reveal)
+	local steps = {}
+	local function step(item: GuiObject, at: number)
+		table.insert(steps, { Item = item, Scale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, item), At = at })
 	end
-	local rarityText = UIKit.new("TextLabel", {
+	local function holder(name: string, y: number, w: number, h: number): Frame
+		return UIKit.new("Frame", {
+			Name = name,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0.5, 0, 0, y),
+			Size = UDim2.fromOffset(w, h),
+			ZIndex = 12,
+		}, reveal)
+	end
+	local ribbon = holder("Ribbon", 28, 320, 46)
+	ribbon.BackgroundTransparency = 0
+	ribbon.BackgroundColor3 = WHITE
+	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 12) }, ribbon)
+	UIKit.new("UIStroke", { Thickness = 3, Color = S.Outline }, ribbon)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(255, 236, 130), S.Gold),
+		Rotation = 90,
+	}, ribbon)
+	local ribbonText = UIKit.new("TextLabel", {
 		Name = "Text",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
-		Text = "EPIC",
+		Text = "NEW BLASTER!",
 		TextColor3 = WHITE,
-		TextSize = 34,
+		TextSize = 30,
 		FontFace = S.TitleFont,
 		ZIndex = 13,
-	}, pill)
-	outlined(rarityText, 2.5)
+	}, ribbon)
+	outlined(ribbonText, 2.5)
+	step(ribbon, CrateOpeningView.RibbonAt)
+	local rarityText = UIKit.new("TextLabel", {
+		Name = "RarityText",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0, 108),
+		Size = UDim2.fromOffset(PANEL.X, 112),
+		Text = "EPIC",
+		TextColor3 = WHITE,
+		TextSize = 124,
+		FontFace = S.TitleFont,
+		ZIndex = 13,
+	}, reveal)
+	outlined(rarityText, 6)
+	UIKit.new("UIGradient", { Name = "Colour", Rotation = 90 }, rarityText)
+	step(rarityText, CrateOpeningView.RarityAt)
+	local line = holder("Line", 172, 480, 5)
+	line.BackgroundTransparency = 0
+	line.BackgroundColor3 = WHITE
+	step(line, CrateOpeningView.RarityAt + 0.08)
 	local name = UIKit.new("TextLabel", {
 		Name = "BlasterName",
-		AnchorPoint = Vector2.new(0.5, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 1, -146),
-		Size = UDim2.fromOffset(900, 62),
+		Position = UDim2.new(0.5, 0, 0, 218),
+		Size = UDim2.fromOffset(PANEL.X - 20, 66),
 		Text = "",
 		TextColor3 = WHITE,
-		TextSize = 54,
+		TextScaled = true,
 		FontFace = S.TitleFont,
 		ZIndex = 12,
 	}, reveal)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = 54, MinTextSize = 18 }, name)
 	outlined(name, 4)
 	UIKit.new("UIGradient", {
-		Color = ColorSequence.new(WHITE, Color3.fromRGB(186, 180, 206)),
+		Color = ColorSequence.new(WHITE, Color3.fromRGB(226, 216, 240)),
 		Rotation = 90,
 	}, name)
+	step(name, CrateOpeningView.NameAt)
+	local function chip(chipName: string, y: number): Frame
+		local c = holder(chipName, y, 390, 54)
+		c.BackgroundTransparency = 0.08
+		c.BackgroundColor3 = Color3.fromRGB(24, 12, 38)
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0, 27) }, c)
+		UIKit.new("UIStroke", { Name = "Edge", Thickness = 3, Color = WHITE }, c)
+		return c
+	end
+	local row = chip("Row", 282)
 	local stats = UIKit.new("TextLabel", {
 		Name = "Stats",
-		AnchorPoint = Vector2.new(0.5, 1),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 1, -110),
-		Size = UDim2.fromOffset(700, 34),
+		Position = UDim2.fromOffset(24, 0),
+		Size = UDim2.new(0.5, -24, 1, 0),
 		Text = "",
 		TextColor3 = WHITE,
-		TextSize = 28,
-		FontFace = S.Font,
-		ZIndex = 12,
-	}, reveal)
-	outlined(stats, 3)
+		TextSize = 38,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = S.TitleFont,
+		ZIndex = 13,
+	}, row)
+	outlined(stats, 2.5)
+	local stars = {}
+	for i = 1, 4 do
+		local st = star(row, "Star" .. i, 30 + (i - 1) * 36, 22, 13)
+		table.insert(stars, st)
+	end
+	step(row, CrateOpeningView.RowAt)
+	local value = chip("Value", 346)
+	local valueLabel = UIKit.new("TextLabel", {
+		Name = "Label",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(24, 0),
+		Size = UDim2.new(0.45, -24, 1, 0),
+		Text = "DMG/s",
+		TextColor3 = WHITE,
+		TextSize = 30,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = S.TitleFont,
+		ZIndex = 13,
+	}, value)
+	outlined(valueLabel, 2)
+	local damage = UIKit.new("TextLabel", {
+		Name = "Damage",
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -24, 0, 0),
+		Size = UDim2.new(0.55, -24, 1, 0),
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 226, 92),
+		TextSize = 44,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		FontFace = S.TitleFont,
+		ZIndex = 13,
+	}, value)
+	outlined(damage, 2.5)
+	step(value, CrateOpeningView.ValueAt)
 
 	-- AWESOME!: a glowing button in the rarity's colour
-	local holder = UIKit.new("Frame", {
+	local holderBtn = UIKit.new("Frame", {
 		Name = "Continue",
-		AnchorPoint = Vector2.new(0.5, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 1, -22),
+		Position = UDim2.new(0.5, 0, 0, 432),
 		Size = UDim2.fromOffset(280, 72 + S.Lip),
 		Visible = false,
 		ZIndex = 20,
-	}, gui)
+	}, reveal)
+	local btnScale = UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, holderBtn)
 	local lip = UIKit.new("Frame", {
 		Name = "Lip",
 		BackgroundColor3 = BLACK,
@@ -298,7 +406,7 @@ function CrateOpeningView.build(): Refs
 		Position = UDim2.fromOffset(0, S.Lip),
 		Size = UDim2.new(1, 0, 1, -S.Lip),
 		ZIndex = 20,
-	}, holder)
+	}, holderBtn)
 	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 18) }, lip)
 	local button = UIKit.new("TextButton", {
 		Name = "Face",
@@ -308,7 +416,7 @@ function CrateOpeningView.build(): Refs
 		Size = UDim2.new(1, 0, 1, -S.Lip),
 		Text = "",
 		ZIndex = 21,
-	}, holder)
+	}, holderBtn)
 	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 18) }, button)
 	UIKit.new("UIStroke", { Name = "Edge", Thickness = 3, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, button)
 	UIKit.new("UIGradient", { Name = "Colour", Rotation = 90 }, button)
@@ -323,6 +431,7 @@ function CrateOpeningView.build(): Refs
 		ZIndex = 22,
 	}, button)
 	outlined(label, 3)
+	table.insert(steps, { Item = holderBtn, Scale = btnScale, At = CrateOpeningView.ButtonAfter })
 
 	-- COLLECTED! with its tick in a round badge
 	local collected = UIKit.new("Frame", {
@@ -393,20 +502,27 @@ function CrateOpeningView.build(): Refs
 		Flash = flash,
 		Catcher = catcher,
 		Title = title,
+		TitleScale = titleScale,
 		TitleNew = new,
 		TitleBlaster = blasterText,
 		Crown = crown,
+		NewTag = newTag,
+		NewTagScale = newTagScale,
 		Reveal = reveal,
 		RevealScale = revealScale,
-		RarityPill = pill,
-		RarityScale = rarityScale,
-		RarityRing = ring,
-		RarityRingStroke = ringStroke,
+		Steps = steps,
+		Ribbon = ribbon,
 		RarityText = rarityText,
+		Line = line,
 		Name = name,
+		Row = row,
 		Stats = stats,
+		Stars = stars,
+		Value = value,
+		Damage = damage,
+		DamageValue = 0,
 		Continue = button,
-		ContinueHolder = holder,
+		ContinueHolder = holderBtn,
 		Collected = collected,
 		CollectedScale = collectedScale,
 		Skip = skip,
@@ -414,37 +530,48 @@ function CrateOpeningView.build(): Refs
 	}
 end
 
--- The new blaster's texts: rarity (of its ore), name, "LV 7 · 187 DMG/s", all in the crate's colours.
+-- The words fit the half of the screen beside the blaster (x, y in the gui's design units).
+function CrateOpeningView.fit(refs: Refs, x: number, y: number)
+	refs.RevealScale.Scale = math.min(1.15, x * 0.5 / PANEL.X, y * 0.94 / PANEL.Y)
+end
+
+-- The new blaster's texts: rarity (of its ore), name, level, damage, all in the crate's colours.
 function CrateOpeningView.setBlaster(refs: Refs, level: number, oreId: string)
 	local ore = if oreId ~= "" then OreData.ById[oreId] else nil
 	local rarity = if ore then Rarity.ById[ore.Rarity] else Rarity.ById.Common
 	local tier = CaseBuilder.tier(oreId)
 	local glow, color = tier.Glow, tier.Color
 	refs.RarityText.Text = string.upper(rarity.Name)
-	refs.RarityText.TextColor3 = WHITE:Lerp(glow, 0.55)
-	local pill = refs.RarityPill
-	local edge = pill:FindFirstChild("Edge") :: UIStroke
-	edge.Color = glow
-	refs.RarityRingStroke.Color = glow
-	for _, child in pill:GetChildren() do
-		if child:IsA("Frame") and string.find(child.Name, "Star", 1, true) then
-			child.BackgroundColor3 = WHITE:Lerp(glow, 0.45)
-		end
-	end
 	refs.Name.Text = string.upper(BlasterData.displayName(level, oreId))
-	refs.Stats.Text = string.format("LV %d%s%s DMG/s", level, VaultView.Separator, Format.big(BlasterData.damage(level, oreId)))
+	refs.Stats.Text = string.format("LV %d", level)
+	refs.DamageValue = BlasterData.damage(level, oreId)
+	refs.Damage.Text = Format.big(refs.DamageValue)
 	local dark = color:Lerp(BLACK, 0.72)
-	local gradient = refs.TitleBlaster:FindFirstChild("Colour") :: UIGradient
-	gradient.Color = ColorSequence.new({
+	local bright = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, WHITE:Lerp(glow, 0.55)),
 		ColorSequenceKeypoint.new(0.55, glow),
 		ColorSequenceKeypoint.new(1, color),
 	})
-	for _, label in { refs.TitleBlaster, refs.TitleNew, refs.Name } do
+	for _, label in { refs.TitleBlaster, refs.RarityText } do
+		local gradient = label:FindFirstChild("Colour") :: UIGradient
+		gradient.Color = bright
+	end
+	for _, label in { refs.TitleBlaster, refs.TitleNew, refs.Name, refs.RarityText } do
 		local stroke = label:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			stroke.Color = dark
 		end
+	end
+	refs.Line.BackgroundColor3 = glow
+	for _, c in { refs.Row, refs.Value } do
+		local edge = c:FindFirstChild("Edge") :: UIStroke
+		edge.Color = glow
+	end
+	-- the crate's stars after the level
+	local count = STARS[tier.Name] or 1
+	for i, st in refs.Stars do
+		st.Visible = i <= count
+		st.BackgroundColor3 = WHITE:Lerp(glow, 0.3)
 	end
 	-- the button and its lip
 	local holder = refs.ContinueHolder
@@ -455,6 +582,10 @@ function CrateOpeningView.setBlaster(refs: Refs, level: number, oreId: string)
 	faceEdge.Color = WHITE:Lerp(glow, 0.5)
 	local faceColour = face:FindFirstChild("Colour") :: UIGradient
 	faceColour.Color = ColorSequence.new(glow, color:Lerp(BLACK, 0.3))
+	local tagStroke = refs.NewTag:FindFirstChildOfClass("UIStroke")
+	if tagStroke then
+		tagStroke.Color = WHITE:Lerp(glow, 0.3)
+	end
 	local badge = refs.Collected:FindFirstChild("Badge") :: Frame
 	badge.BackgroundColor3 = color:Lerp(BLACK, 0.6)
 	local badgeEdge = badge:FindFirstChild("Edge") :: UIStroke
@@ -472,9 +603,9 @@ end
 
 --[[
 	Poses the overlay for time t: the fade in, the flash at `burst`, the title
-	flying through from `reveal`, the rarity, name, stats and AWESOME! one after
-	the other, COLLECTED! past reveal + CollectAt (time waits there for the
-	button). `leaving` (0..1) fades out to black at the end.
+	flying in at `reveal`, holding and flying on; the words one after the other;
+	past reveal + CollectAt (time waits there for AWESOME!) they slide away and
+	COLLECTED! shows. `leaving` (0..1) fades out to black at the end.
 ]]
 function CrateOpeningView.update(refs: Refs, t: number, burst: number, reveal: number, leaving: number?)
 	local fadeIn = prog(t, 0, 0.3)
@@ -485,48 +616,42 @@ function CrateOpeningView.update(refs: Refs, t: number, burst: number, reveal: n
 	refs.Flash.BackgroundTransparency = 1 - flash * (if refs.Calm then 0.3 else 0.95)
 	refs.Flash.Visible = flash > 0.001
 
-	-- the title flies in from the left and on out to the right
+	-- the title flies in from the left, lands with a kick, grows slowly, flies on to the right
 	local since = t - reveal
-	local titleIn = prog(since, 0, 0.2)
-	local titleOut = prog(since, CrateOpeningView.TitleOut, CrateOpeningView.TitleOut + 0.16)
+	local titleIn = prog(since, 0, 0.22)
+	local titleOut = prog(since, CrateOpeningView.TitleOut, CrateOpeningView.TitleOut + 0.2)
 	refs.Title.Visible = since >= 0 and titleOut < 1
 	if refs.Title.Visible then
 		local x = -0.7 + 1.2 * easeOutBack(titleIn) + 1.3 * titleOut * titleOut
-		refs.Title.Position = UDim2.fromScale(x, 0.5)
+		refs.Title.Position = UDim2.fromScale(x, 0.74)
+		local land = prog(since, 0.2, 0.42)
+		refs.TitleScale.Scale = 0.98 - 0.14 * easeOutBack(land) + 0.05 * prog(since, 0.42, CrateOpeningView.TitleOut)
 	end
 
-	-- then the rarity (a strong pop and a ring), the name, the stats
-	local collecting = prog(since, CrateOpeningView.CollectAt, CrateOpeningView.CollectAt + 0.12)
-	local shown = since >= CrateOpeningView.RarityAt and collecting < 1
-	refs.Reveal.Visible = shown
-	if shown then
-		refs.RevealScale.Scale = 1
-		local pop = prog(since, CrateOpeningView.RarityAt, CrateOpeningView.RarityAt + 0.16)
-		refs.RarityScale.Scale = math.max(0.01, easeOutBack(pop) * (1 + 0.5 * (1 - pop)))
-		refs.RarityPill.BackgroundTransparency = 0.1 + collecting * 0.9
-		local ring = prog(since, CrateOpeningView.RarityAt + 0.05, CrateOpeningView.RarityAt + 0.4)
-		refs.RarityRing.Size = UDim2.new(1, 90 * ring, 1, 70 * ring)
-		refs.RarityRingStroke.Transparency = if ring > 0 and ring < 1 then ring else 1
-		local nameIn = prog(since, CrateOpeningView.NameAt, CrateOpeningView.NameAt + 0.08)
-		refs.Name.TextTransparency = 1 - nameIn + collecting
-		local nameStroke = refs.Name:FindFirstChildOfClass("UIStroke")
-		if nameStroke then
-			nameStroke.Transparency = 1 - nameIn + collecting
-		end
-		local statsIn = prog(since, CrateOpeningView.StatsAt, CrateOpeningView.StatsAt + 0.08)
-		refs.Stats.TextTransparency = 1 - statsIn + collecting
-		local statsStroke = refs.Stats:FindFirstChildOfClass("UIStroke")
-		if statsStroke then
-			statsStroke.Transparency = 1 - statsIn + collecting
-		end
+	-- the words, each popping in on its moment; they slide away when it is being collected
+	local collecting = prog(since, CrateOpeningView.CollectAt, CrateOpeningView.CollectAt + 0.25)
+	refs.Reveal.Visible = since >= CrateOpeningView.RibbonAt and collecting < 1
+	refs.NewTag.Visible = since >= CrateOpeningView.RarityAt and collecting < 1
+	if refs.NewTag.Visible then
+		refs.NewTagScale.Scale = math.max(0.01, easeOutBack(prog(since, CrateOpeningView.RarityAt, CrateOpeningView.RarityAt + 0.2)))
 	end
-	refs.ContinueHolder.Visible = since >= CrateOpeningView.ButtonAfter and since < CrateOpeningView.CollectAt
+	if refs.Reveal.Visible then
+		refs.Reveal.Position = UDim2.fromScale(PANEL_X + collecting * collecting * 0.8, 0.5)
+		for _, s in refs.Steps do
+			s.Item.Visible = since >= s.At
+			if s.Item.Visible then
+				s.Scale.Scale = math.max(0.01, easeOutBack(prog(since, s.At, s.At + 0.2)))
+			end
+		end
+		local count = prog(since, CrateOpeningView.ValueAt, CrateOpeningView.ValueAt + CrateOpeningView.CountFor)
+		refs.Damage.Text = Format.big(refs.DamageValue * (1 - (1 - count) ^ 3))
+	end
 
 	-- COLLECTED!
 	local done = since - CrateOpeningView.CollectAt
 	refs.Collected.Visible = done > 0
 	if done > 0 then
-		refs.CollectedScale.Scale = math.max(0.01, easeOutBack(prog(done, 0, 0.18)))
+		refs.CollectedScale.Scale = math.max(0.01, easeOutBack(prog(done, 0.08, 0.3)))
 	end
 	refs.Skip.Visible = t > 0.5 and t < burst - 0.25
 end
