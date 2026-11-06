@@ -310,7 +310,7 @@ elseif mode == "minigun" then
 		},
 		sheetTitle = "minigun blastery v pohybu",
 		picks = { 3.5, 10.2, 15.5 },
-		caption = "náhled z herního kódu · Deep Terra",
+		caption = "náhled z herního kódu · Terra Forge",
 		bloom = { 0.6, 0.45, 0.72 },
 	}
 	-- a gun as two groups: the body (handle frame) and the barrels (hub frame)

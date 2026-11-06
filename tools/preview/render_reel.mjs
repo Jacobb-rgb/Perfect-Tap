@@ -103,7 +103,7 @@ if (stills) {
     const cellH = Math.round((cell * H) / W);
     const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#151924;font-family:'Avenir Next','Helvetica Neue',sans-serif">
-      <div style="color:#fff;font-weight:800;font-size:32px;padding:18px 24px 4px">DEEP TERRA · ${esc(board.title || tag)}</div>
+      <div style="color:#fff;font-weight:800;font-size:32px;padding:18px 24px 4px">TERRA FORGE · ${esc(board.title || tag)}</div>
       <div style="color:#b9c6da;font-weight:600;font-size:17px;padding:0 24px 8px">náhled z herního kódu (three.js, přibližně jako v Robloxu) · ${cells.length} okamžiků z videa ${tag}.mp4</div>
       <div style="display:grid;grid-template-columns:repeat(${cols},${cell}px);gap:14px;padding:12px 24px 24px">
       ${cells
