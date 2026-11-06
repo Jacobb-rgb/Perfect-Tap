@@ -16,7 +16,8 @@
 	    ui_capsules_royal       PC: ROYAL tab as it will look once two of its
 	                            products are live (preview-only ids) and step 8
 	                            takes receipts: OPEN 10 still "Coming soon"
-	    ui_capsules_grid        PC: an x10 opening's result grid
+	    ui_capsules_grid        PC: an x10 opening, its golems out (UI/HatchStage,
+	                            the stage drawn live: PreviewLive)
 	    ui_capsules_grid_phone  phone: the same
 	    ui_golems               PC: the golem inventory, a golem selected
 	    ui_golems_phone         phone: the inventory
@@ -28,14 +29,12 @@
 	    ui_capsule_board        the stall's odds board as the game fills it: an
 	                            ENLARGED 2D overlay of the 1.9 x 3.9 stud board
 	                            (labelled so on the picture)
-	  scene "capsule_reveal"  the world dimmed (a dark see-through plane in
-	                          front of the camera stands in for the overlay's
-	                          dim) with a Mythic golem where the opening's hero
-	                          viewport is (the renderer draws no ViewportFrames)
-	    ui_capsule_reveal       PC: the name plate, rays, OK / OPEN AGAIN
+	  scene "capsule_reveal"  the world (the opening shows it: nothing dims it)
+	    ui_capsule_reveal       PC: a Mythic out of a Crystal egg, its name and
+	                            1 in N (the opening's stage drawn live)
 	    ui_capsule_reveal_phone phone: the same
-	  scene "capsule_crack"   the same with the capsule shaking, cracks lit
-	    ui_capsule_crack        PC: SKIP and the hint
+	  scene "capsule_crack"   the same world
+	    ui_capsule_crack        PC: the egg's cracks at their last step
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -57,9 +56,7 @@ Preview.PhoneScale = 0.62 * 900 / 375 -- a 667 x 375 pt phone at the 0.62 floor
 Preview.SmallScale = 0.62 * 900 / 320 -- a 568 x 320 pt phone
 Preview.PhoneInset = 58
 
--- The hero camera of the reveal shots (scene "capsule_reveal" / "capsule_crack"),
--- far enough from the stall that the dim plane fits between the hero and the world.
-Preview.HeroCamera = { Position = { -11.8, 8.7, 42.2 }, Target = { -40, 4.5, 14 } }
+-- The reveal shots' golem (scene "capsule_reveal": out of a Crystal egg)
 Preview.HeroGolem = "HeartstoneColossus"
 
 -- A mid-game player (State snapshot shape).
@@ -117,7 +114,6 @@ function Preview.buildGallery(Loader: any, workspace: any)
 	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
-	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local Dummy = require("./dummy")
 
 	local gallery = roblox.Instance.new("Model")
@@ -132,7 +128,7 @@ function Preview.buildGallery(Loader: any, workspace: any)
 		table.insert(rows[golem.Rarity], golem.Id)
 	end
 	local SPACING = 4.2
-	for r, info in Rarity.List do
+	for r, info in CapsuleConfig.rarities() do -- (the golems' six: a "Secret" Rarity is for ores)
 		local ids = rows[info.Id] or {}
 		local z = (r - 1) * 5.2
 		local y = (r - 1) * 0.6 -- a step per row so the back rows show
@@ -191,17 +187,6 @@ local function stallFrame(stall: any): (any, any)
 	return front, stall.PrimaryPart.CFrame.Position
 end
 
--- A ray from the render camera through a screen pixel.
-local function pixelRay(Loader: any, cameraPos: any, target: any, px: number, py: number): any
-	local CF = Loader.CFrame
-	local cam = CF.lookAt(cameraPos, target)
-	local tanY = math.tan(math.rad(Preview.Fov) / 2)
-	local tanX = tanY * Preview.Width / Preview.Height
-	local nx = px / Preview.Width * 2 - 1
-	local ny = 1 - py / Preview.Height * 2
-	return (cam.LookVector + cam.RightVector * (nx * tanX) + cam.UpVector * (ny * tanY)).Unit
-end
-
 -- The forgekeepers and their followers by the stall (scene "capsules").
 function Preview.buildWorld(Loader: any, workspace: any)
 	local CF = Loader.CFrame
@@ -239,68 +224,6 @@ function Preview.buildWorld(Loader: any, workspace: any)
 		local golemFeet = walkFeet * CF.new(slot.X, hop, slot.Z) * CF.Angles(-0.12, 0, (if i == 1 then 0.07 else -0.06))
 		GolemBuilder.build(kind, golemFeet, { Size = Preview.FollowerSize }).Parent = folder
 	end
-end
-
--- The reveal / crack scenes: a dim plane in front of the hero camera and a
--- golem (or the shaking capsule) where the hero viewport shows it.
-function Preview.buildHero(Loader: any, workspace: any, crack: boolean)
-	local CF = Loader.CFrame
-	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
-	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
-	local cam = Preview.HeroCamera
-	local cameraPos = Vector3.new(cam.Position[1], cam.Position[2], cam.Position[3])
-	local target = Vector3.new(cam.Target[1], cam.Target[2], cam.Target[3])
-	local folder = roblox.Instance.new("Folder")
-	folder.Name = "CapsuleHero"
-	folder.Parent = workspace
-	local look = (target - cameraPos).Unit
-	-- the overlay's dim (rgb 12, 8, 16 at 30 % see-through), as a plane behind the hero
-	local dimAt = cameraPos + look * 18
-	local dim = roblox.Instance.new("Part")
-	dim.Anchored = true
-	dim.CanCollide = false
-	dim.CastShadow = false
-	dim.Size = Vector3.new(80, 50, 0.1)
-	dim.CFrame = CF.lookAt(dimAt, dimAt + look)
-	dim.Color = Color3.fromRGB(12, 8, 16)
-	dim.Material = roblox.Enum.Material.SmoothPlastic
-	dim.Transparency = 0.3
-	dim.Parent = folder
-	-- the hero viewport's center on screen (CapsuleView.layoutOpening at this UI scale)
-	local designH = (Preview.Height - Preview.Inset) / Preview.Scale
-	local hero = math.clamp(math.floor(designH * 0.5), 220, 460)
-	local heroY = math.max(hero / 2 + 40, designH * 0.36)
-	local px, py = Preview.Width / 2, Preview.Inset + heroY * Preview.Scale
-	local ray = pixelRay(Loader, cameraPos, target, px, py)
-	if crack then
-		-- the capsule at its biggest shake, the cracks lit in the rarest golem's color
-		local capsule = GolemBuilder.capsule("Crystal")
-		local legendary = Rarity.ById.Legendary.Color
-		for _, d in capsule:GetDescendants() do
-			if d:IsA("BasePart") and (d.Name:sub(1, 5) == "Crack" or d.Name == "Band") then
-				d.Transparency = 0
-				d.Color = if d.Name == "Band" then legendary else legendary:Lerp(Color3.new(1, 1, 1), 0.3)
-			end
-		end
-		local center = cameraPos + ray * 15.5
-		local toward = Vector3.new(-look.X, 0, -look.Z).Unit
-		-- its window (-Z) faces the camera; tipped by the shake
-		capsule:PivotTo(CF.lookAt(center, center + toward) * CF.Angles(0, 0.4, 0.22))
-		capsule.Parent = folder
-		return
-	end
-	local golem = GolemBuilder.build(Preview.HeroGolem)
-	local height = golem:GetAttribute("Height")
-	-- the viewport camera frames the golem at 2.9 x its height + 1 with a 30 degree FOV:
-	-- it fills 0.6 of the hero square, so stand it where it is that tall on screen
-	local screenH = hero * Preview.Scale * height / (2 * (2.9 * height + 1) * math.tan(math.rad(15)))
-	local distance = height * Preview.Height / (screenH * 2 * math.tan(math.rad(Preview.Fov) / 2))
-	local center = cameraPos + ray * distance
-	local flat = Vector3.new(-look.X, 0, -look.Z).Unit
-	local feet = center - Vector3.new(0, height / 2, 0)
-	-- facing the camera, turned a little (the viewport camera stands 0.32 rad aside)
-	golem:PivotTo(CF.lookAt(feet, feet + flat) * CF.Angles(0, -0.32, 0) * CF.new(0, golem:GetAttribute("RootHeight"), 0))
-	golem.Parent = folder
 end
 
 ---------------------------------------------------------------- UI overlays
@@ -362,31 +285,62 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		return refs
 	end
 
-	local function opening(uiScale: number, compact: boolean, w: number, h: number, dim: boolean): any
+	-- The opening (CapsuleView.buildOpening) posed by the game's own HatchStage `at` seconds into an
+	-- opening of `kinds` from `egg`; its full-screen stage drawn live by the preview (PreviewLive).
+	local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+	local HatchStage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
+	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+	local function opening(uiScale: number, compact: boolean, egg: string, kinds: { string }, at: (any) -> number): any
 		local o = CapsuleView.buildOpening(compact)
 		o.Gui.Scale.Scale = uiScale
+		o.Controls.Scale.Scale = uiScale
+		local inset = if compact then Preview.PhoneInset else Preview.Inset
+		CapsuleView.layoutOpening(
+			o,
+			compact,
+			Preview.Width / uiScale,
+			Preview.Height / uiScale,
+			{ Touch = compact, Inset = inset / uiScale }
+		)
 		o.Gui.Enabled = true
-		CapsuleView.layoutOpening(o, compact, w, h)
-		if not dim then
-			o.Dim.BackgroundTransparency = 1 -- the scene's dim plane stands in for it
+		o.Controls.Enabled = true
+		CapsuleView.setAuto(o, true, false, if compact then "" else "G", nil)
+		o.Stage:SetAttribute("PreviewLive", true)
+		local eggs = {}
+		for _ = 1, #kinds do
+			local model = GolemBuilder.capsule(egg)
+			HatchFx.addCracks(model, if compact and #kinds > 3 then 2 else 3)
+			model:SetAttribute("Pooled", true)
+			table.insert(eggs, HatchFx.record(model))
 		end
-		-- (the renderer draws the rays' gradient transparency as the game does;
-		-- the hero is a scene model under the overlay here, so the soft glow
-		-- discs that sit behind the game's hero viewport would cover it)
-		for _, glow in o.Rays:GetChildren() do
-			if glow:IsA("Frame") and string.sub(glow.Name, 1, 4) == "Glow" then
-				glow.Visible = false
-			end
+		local run = HatchStage.new({
+			Refs = o,
+			Capsule = egg,
+			Lucky = false,
+			Kinds = kinds,
+			Eggs = eggs,
+			Fast = false,
+			Reduced = false,
+			Phone = compact,
+			Target = Vector2.new(0.5, 0.86),
+			Golem = function(kind: string): (any, number, number)
+				local model = GolemBuilder.build(kind)
+				return model, model:GetAttribute("Height") or 3, model:GetAttribute("RootHeight") or 1
+			end,
+			Claim = function(): boolean
+				return true
+			end,
+		})
+		local stop = at(run.Timeline)
+		local t = 0
+		while t < stop do
+			t = math.min(stop, t + 1 / 30)
+			HatchStage.pose(run, t)
 		end
 		return o
 	end
-
-	local function endButtons(o: any, again: string)
-		o.Skip.Parent.Visible = false
-		o.Ok.Parent.Visible = true
-		o.Again.Parent.Visible = true
-		o.Again.Text = again
-		o.Hint.Text = ""
+	local function revealed(tl: any): number
+		return tl.Reveal + tl.Times.GolemPop + 0.35
 	end
 
 	local function inventory(uiScale: number, compact: boolean, w: number, h: number, deleting: boolean, confirm: boolean?): any
@@ -427,7 +381,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		exports.ui_capsules_royal = UiExport.export({ hud(scale, 48250).Gui, shop(scale, false, pcW, pcH, false, "Royal", true).Gui })
 		p1.Id, p3.Id = old1, old3
 
-		-- an x10 Stone opening's grid (the rarest card framed white)
+		-- an x10 Stone opening, its golems out
 		local kinds = {
 			"PebbleGolem",
 			"CopperTinker",
@@ -440,22 +394,13 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 			"CopperTinker",
 			"JadeGardener",
 		}
-		local function grid(uiScale: number, compact: boolean, w: number, h: number): any
-			local o = opening(uiScale, compact, w, h, true)
-			local best = CapsuleView.best(kinds)
-			local bestIndex = table.find(kinds, best)
-			CapsuleView.setGrid(o, kinds, { [3] = true, [5] = true, [10] = true }, bestIndex)
-			for _, cell in o.Cells do
-				cell.Frame.Visible = true
-			end
-			o.Grid.Visible = true
-			o.Rays.Visible = false
-			o.Counter.Text = "10 GOLEMS WOKE UP!"
-			endButtons(o, `OPEN 10 AGAIN  {Format.money(22500)}`)
-			return o
+		local function grid(uiScale: number, compact: boolean): any
+			return opening(uiScale, compact, "Stone", kinds, revealed)
 		end
-		exports.ui_capsules_grid = UiExport.export({ grid(scale, false, pcW, pcH).Gui })
-		exports.ui_capsules_grid_phone = UiExport.export({ grid(phone, true, phW, phH).Gui })
+		local pcGrid = grid(scale, false)
+		exports.ui_capsules_grid = UiExport.export({ pcGrid.Gui, pcGrid.Controls })
+		local phoneGrid = grid(phone, true)
+		exports.ui_capsules_grid_phone = UiExport.export({ phoneGrid.Gui, phoneGrid.Controls })
 
 		exports.ui_golems = UiExport.export({ hud(scale, 48250).Gui, sideMenu(scale).Gui, inventory(scale, false, pcW, pcH, false).Gui })
 		exports.ui_golems_phone =
@@ -486,21 +431,18 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		})
 		exports.ui_capsule_board = UiExport.export({ gui })
 	elseif which == "capsule_reveal" then
-		local function reveal(uiScale: number, compact: boolean, w: number, h: number): any
-			local o = opening(uiScale, compact, w, h, false)
-			CapsuleView.setPlate(o, Preview.HeroGolem, true)
-			CapsuleView.setRayColor(o, CapsuleView.rarityColor(Preview.HeroGolem))
-			o.Note.Text = "TRIPLE LUCKY ODDS"
-			endButtons(o, `OPEN 1 AGAIN  {Format.money(750000 * 2)}`)
-			return o
+		local function reveal(uiScale: number, compact: boolean): any
+			return opening(uiScale, compact, "Crystal", { Preview.HeroGolem }, revealed)
 		end
-		exports.ui_capsule_reveal = UiExport.export({ reveal(scale, false, pcW, pcH).Gui })
-		exports.ui_capsule_reveal_phone = UiExport.export({ reveal(phone, true, phW, phH).Gui })
+		local pc = reveal(scale, false)
+		exports.ui_capsule_reveal = UiExport.export({ pc.Gui, pc.Controls })
+		local ph = reveal(phone, true)
+		exports.ui_capsule_reveal_phone = UiExport.export({ ph.Gui, ph.Controls })
 	elseif which == "capsule_crack" then
-		local o = opening(scale, false, pcW, pcH, false)
-		o.Rays.Visible = false
-		o.Hint.Text = `Click or Space to skip{CapsuleView.Separator}Backspace: skip all`
-		exports.ui_capsule_crack = UiExport.export({ o.Gui })
+		local o = opening(scale, false, "Crystal", { Preview.HeroGolem }, function(tl: any): number
+			return tl.Steps[3] + 0.1
+		end)
+		exports.ui_capsule_crack = UiExport.export({ o.Gui, o.Controls })
 	end
 	local _ = GolemConfig
 	return exports
@@ -516,9 +458,8 @@ function Preview.build(Loader: any, workspace: any, scene: string): { [string]: 
 	Loader.requirePath("ServerScriptService.Server.World.WorldBuilder").build(workspace)
 	if scene == "capsules" then
 		Preview.buildWorld(Loader, workspace)
-	else
-		Preview.buildHero(Loader, workspace, scene == "capsule_crack")
 	end
+	-- (capsule_reveal / capsule_crack: the world as it is; the opening draws its own stage)
 	return Preview.buildUi(Loader, scene)
 end
 

@@ -12,31 +12,35 @@
 	      station where someone near found a secret (everyone within
 	      SecretService.PillarRadius sees it): six turning shafts round a
 	      white core, rings climbing it, PillarSeconds, then it fades.
-	  play(oreId, onDone?)   the jackpot screen (Effects/SecretReveal) from
-	      the BOOM: posed every frame, a tap / click / A skips to the flight
-	      after SecretReveal.SkipAfter, Reduce motion (Motion.reduced()), a
-	      phone gets fewer rays and pieces, one flash at most
-	      (RevealKit.takeFlash: one too soon after another flash waits its
-	      turn once, flashPlan / retryFlash), the world camera kicks (CameraShake), the
-	      sounds play in layers. onDone runs when it is over.
+	  play(oreId, onDone?, result?)   the cinematic reveal (owner 2026-10-30:
+	      Effects/SecretOreReveal plays Effects/SecretCinematic: discovery,
+	      charging, the burst, SECRET + its name, rarity, chance and value,
+	      CONTINUE) from the moment the dirt bursts. `result` is the server's
+	      CleanResult: its Value (the graded value) and Into (a clean ore that
+	      went into the backpack flies into the bag button at the close, one
+	      that went to the pen or the tray fades). Skip, CONTINUE, Reduce
+	      motion, phones, its one flash (RevealKit's gap), the camera's kick and
+	      the sounds: see SecretOreReveal. onDone runs once when it is over
+	      (or cut short: a reset, another play).
+	  flashPlan / retryFlash   the burst's one-flash rule (SecretCinematic.boomFlash /
+	      retryBoomFlash: relative to the burst)
 ]]
 
-local ContextActionService = game:GetService("ContextActionService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
+local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local SecretOreConfig = require(Shared.Config.SecretOreConfig)
-local SecretReveal = require(script.Parent.Parent.Effects.SecretReveal)
-local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
-local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
-local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local SecretCinematic = require(script.Parent.Parent.Effects.SecretCinematic)
+local SecretOreReveal = require(script.Parent.Parent.Effects.SecretOreReveal)
 local Motion = require(script.Parent.Parent.UI.Motion)
+local StateController = require(script.Parent.StateController)
 
 local SecretRevealController = {}
 
@@ -67,34 +71,49 @@ function SecretRevealController.chatLine(data: any): string?
 	return `<font color="{SecretRevealController.Color}"><b>{text}</b></font>`
 end
 
--- When the jackpot's one flash starts (RevealKit's gap): FlashAt 0 (the BOOM) if it may flash
--- `now`; else math.huge and the clock time to try once more (a flash too soon after another, a
--- crystal's crack just before: it plays then, where the show is). Reduce motion: none, no slot taken.
+-- The burst's one flash (RevealKit's gap): 0 (at the burst) if it may flash `now`; else math.huge
+-- and the clock to try once more. Reduce motion: none, no slot taken. (SecretCinematic.boomFlash)
 function SecretRevealController.flashPlan(now: number, reduced: boolean): (number, number?)
-	if reduced then
-		return math.huge, nil
-	end
-	if RevealKit.takeFlash(now) then
-		return 0, nil
-	end
-	return math.huge, RevealKit.nextFlashAt()
+	return SecretCinematic.boomFlash(now, reduced)
 end
 
--- The flash that waited (flashPlan's retry) at clock `now`, `t` into the show: its FlashAt if it
--- may flash now, nil if not: the slot is taken again, or the show is past SkipAfter (a hitch, a
--- skip: no full-screen flash on the flight into the bag), and then it takes no slot.
+-- The flash that waited, `t` seconds after the burst: `t` if it may flash now, nil when the slot is
+-- taken again or it is too late (SecretCinematic.Timing.FlashWindow: a hitch, a skip; then no slot).
 function SecretRevealController.retryFlash(t: number, now: number): number?
-	if t < SecretReveal.SkipAfter and RevealKit.takeFlash(now) then
-		return t
+	return SecretCinematic.retryBoomFlash(t, now)
+end
+
+-- The value the cinematic shows: the server's graded value of the clean ore (CleanResult.Value),
+-- else what a Flawless one is worth (ItemData.value, the grade the cleaning gives a secret).
+function SecretRevealController.valueOf(oreId: string, result: any?, sellMult: number?): number
+	-- (review 2026-10-30: the same number the Flawless card says a moment later: the value times the
+	-- player's sell bonus, rounded like DefaultLook's "Worth")
+	local mult = sellMult or StateController.sellMult()
+	local value = if type(result) == "table" then result.Value else nil
+	if type(value) == "number" and value == value and value > 0 and value < math.huge then
+		return math.floor(value * mult + 0.5)
 	end
-	return nil
+	local grade = if type(result) == "table"
+			and type(result.Grade) == "string"
+			and ItemData.GradeById[result.Grade]
+		then result.Grade
+		else SecretOreConfig.Grade
+	return math.floor(ItemData.value("Clean", oreId, grade) * mult + 0.5)
+end
+
+-- Where the ore flies at the close (px on the cinematic's full screen): into the bag when the clean
+-- ore went into the backpack (`into` "Backpack" or unknown): the HUD's backpack button when it is
+-- shown (`bag`: its middle), else the bottom middle where it sits; nil (it fades) for the pen or the tray.
+function SecretRevealController.flyTo(into: any, screen: Vector2, bag: Vector2?): Vector2?
+	if into ~= nil and into ~= "Backpack" then
+		return nil
+	end
+	return bag or Vector2.new(screen.X / 2, screen.Y - 64)
 end
 
 ---------------------------------------------------------------- the client
 
 local found: { [string]: { New: boolean, At: number } } = {}
-local view: SecretReveal.View? = nil
-local playing = false
 
 -- The SecretFound of `oreId` if it came in the last KeepFound seconds (and forgets it).
 function SecretRevealController.takeFound(oreId: string): { New: boolean }?
@@ -106,11 +125,7 @@ function SecretRevealController.takeFound(oreId: string): { New: boolean }?
 	return nil
 end
 
-local function showChat(data: any)
-	local line = SecretRevealController.chatLine(data)
-	if not line then
-		return
-	end
+local function sayLine(line: string)
 	pcall(function()
 		local channels = game:GetService("TextChatService"):FindFirstChild("TextChannels")
 		local general = channels and channels:FindFirstChild("RBXGeneral")
@@ -120,84 +135,92 @@ local function showChat(data: any)
 	end)
 end
 
-local function sounds(stars: number)
-	Sfx.play("SecretBoom")
-	Sfx.play("SecretChime")
-	task.delay(0.25, Sfx.play, "SecretFanfare")
-	for k = 1, 2 + stars do
-		task.delay(0.15 * k, Sfx.play, "SecretSparkle")
+--[[
+	The finder's own line waits for the cinematic's reveal (review 2026-10-30: the server announces
+	before the cleaning's result, so it would name the ore while the cinematic still hides it): held
+	until the reveal (OnReveal), the show's end, or HoldChat seconds at most; never dropped.
+]]
+SecretRevealController.HoldChat = 25
+local held: { string } = {}
+local function releaseChat()
+	local lines = table.clone(held)
+	table.clear(held)
+	for _, line in lines do
+		sayLine(line)
 	end
 end
 
-function SecretRevealController.play(oreId: string, onDone: (() -> ())?)
-	if playing or not SecretOreConfig.isSecret(oreId) then
+-- Whether a SecretChat is the local finder's own (held until the reveal) (pure: the specs).
+function SecretRevealController.isOwnLine(data: any, userId: number): boolean
+	return type(data) == "table" and data.UserId == userId and data.Global ~= true
+end
+
+local function showChat(data: any)
+	local line = SecretRevealController.chatLine(data)
+	if not line then
+		return
+	end
+	local me = Players.LocalPlayer
+	if me and SecretRevealController.isOwnLine(data, me.UserId) then
+		table.insert(held, line)
+		task.delay(SecretRevealController.HoldChat, function()
+			if table.find(held, line) then
+				releaseChat() -- (no cinematic came: never dropped)
+			end
+		end)
+		return
+	end
+	sayLine(line)
+end
+
+-- The HUD's backpack button's middle on the cinematic's full screen (nil when the HUD is hidden:
+-- the cleaning hides it).
+local function bagPoint(): Vector2?
+	local gui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local hud = gui and gui:FindFirstChild("TerraForgeHud")
+	if not hud or not hud:IsA("ScreenGui") or not hud.Enabled then
+		return nil
+	end
+	local pack = hud:FindFirstChild("Backpack", true)
+	if not pack or not pack:IsA("GuiObject") or not pack.Visible or pack.AbsoluteSize.X <= 0 then
+		return nil
+	end
+	local inset = Vector2.zero
+	if not hud.IgnoreGuiInset then
+		local ok, top = pcall(function()
+			return GuiService:GetGuiInset()
+		end)
+		inset = if ok then Vector2.new(0, top.Y) else Vector2.zero
+	end
+	return pack.AbsolutePosition + pack.AbsoluteSize / 2 + inset
+end
+
+function SecretRevealController.play(oreId: string, onDone: (() -> ())?, result: any?)
+	if not SecretOreConfig.isSecret(oreId) then
 		if onDone then
 			onDone()
 		end
 		return
 	end
-	playing = true
-	local player = Players.LocalPlayer
-	local v = view or SecretReveal.build()
-	view = v
-	v.Gui.Parent = player:WaitForChild("PlayerGui")
 	local info = SecretRevealController.takeFound(oreId)
 	local secret = SecretOreConfig.ByOre[oreId]
-	SecretReveal.setOre(v, oreId, { Chance = SecretOreConfig.chanceText(secret.OneIn), New = info ~= nil and info.New })
-	local reduced = Motion.reduced()
-	local camera = Workspace.CurrentCamera
-	local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-	local phone = UserInputService.TouchEnabled and math.min(screen.X, screen.Y) < 600
-	local flashAt, retry = SecretRevealController.flashPlan(os.clock(), reduced)
-	local scale = 1
-	pcall(function()
-		scale = require(script.Parent.HudController).uiScale()
-	end)
-	local last = UserInputService:GetLastInputType()
-	local input = if last == Enum.UserInputType.Touch then "Touch" elseif last.Name:find("Gamepad") then "Gamepad" else "Mouse"
-	local topInset = 58
-	pcall(function()
-		local inset = game:GetService("GuiService"):GetGuiInset()
-		topInset = math.max(inset.Y, 36)
-	end)
-	local opts: SecretReveal.Opts = {
-		Screen = screen,
-		Scale = scale,
-		Reduced = reduced,
-		Phone = phone,
-		FlashAt = flashAt,
-		Input = input,
-		TopInset = topInset,
-	}
-	if not reduced then
-		CameraShake.add(SecretReveal.tierOf(secret.Stars).Shake)
-	end
-	sounds(secret.Stars)
-	local t = 0
-	local hold = SecretReveal.tierOf(secret.Stars).Hold
-	ContextActionService:BindAction("TerraForgeSecretSkip", function(_, state)
-		if state == Enum.UserInputState.Begin and t >= SecretReveal.SkipAfter and t < hold then
-			t = hold
-			retry = nil
-		end
-		return Enum.ContextActionResult.Sink
-	end, false, Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch, Enum.KeyCode.ButtonA, Enum.KeyCode.Space)
-	local connection: RBXScriptConnection
-	connection = RunService.RenderStepped:Connect(function(dt)
-		t += dt
-		if retry and os.clock() >= retry then
-			retry = nil
-			opts.FlashAt = SecretRevealController.retryFlash(t, os.clock()) or math.huge
-		end
-		if SecretReveal.pose(v, t, opts) then
-			connection:Disconnect()
-			ContextActionService:UnbindAction("TerraForgeSecretSkip")
-			playing = false
+	local into = if type(result) == "table" then result.Into else nil
+	SecretOreReveal.Play(oreId, OreData.get(oreId).Name, secret.Stars, SecretRevealController.valueOf(oreId, result), {
+		Chance = SecretOreConfig.chanceText(secret.OneIn),
+		New = info ~= nil and info.New,
+		OnReveal = releaseChat, -- (the finder's own chat line: now, with the name on screen)
+		OnDone = function()
+			releaseChat() -- (a skip, a cancel or a reset: never dropped)
 			if onDone then
 				onDone()
 			end
-		end
-	end)
+		end,
+		Target = function()
+			local camera = Workspace.CurrentCamera
+			local screen = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+			return SecretRevealController.flyTo(into, screen, bagPoint())
+		end,
+	})
 end
 
 -- The column of light over a station (Fx "SecretPillar").

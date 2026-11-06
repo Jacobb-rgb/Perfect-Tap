@@ -1,8 +1,8 @@
 --[[
 	RevealKit: the drawing parts every "you got it" reveal shares (owner
-	2026-10-29: the secret ores' jackpot now, the egg opening once both are on
-	main: the second to land moves Animace's RevealFx onto this, keeping its
-	API). Pure: a parent + opts in, instances out, poses set transforms and
+	2026-10-29: the secret ores' jackpot, and the egg opening's rings and its
+	one flash, HatchStage / CapsuleController, straight from here: the old
+	Effects/RevealFx is gone). Pure: a parent + opts in, instances out, poses set transforms and
 	colours; the one global thing is the flash gap tracker, so two flashes
 	anywhere in the game are never closer than FlashGap (2.5 a second at most).
 	Reduce motion is the caller's opts flag (Reduced).
@@ -14,9 +14,12 @@
 	  RevealKit.rays(parent, z) -> Rays     three layers of two-tone bars
 	  RevealKit.poseRays(rays, t, grow, leave, opts)
 	  RevealKit.rings(parent, count, z) -> { Frame }   shockwave rings
-	  RevealKit.poseRing(ring, u, color)   u = 0..1 through its flight
+	  RevealKit.poseRing(ring, u, color, opts?)   u = 0..1 through its flight; opts
+	                                       From / Grow / Thickness: a thinner, smaller ring
+	                                       (the egg opening's white rings)
 	  RevealKit.flash(parent, z) -> Frame  a full-screen flash frame
-	  RevealKit.poseFlash(frame, f)        f = 0..1 through its fade (>= 1: gone)
+	  RevealKit.poseFlash(frame, f, peak?) f = 0..1 through its fade (>= 1: gone); peak:
+	                                       its strongest (default Style.FlashPeak)
 	  RevealKit.fade(root, alpha), rainbow(shift) -> ColorSequence, hue(x) -> Color3
 	Style "Secret" values (the egg hatch v2's RevealFx "Secret" tier): rays
 	alternating near-black (14,10,22) and a rainbow drifting 0.25 turn/s, layers
@@ -232,18 +235,26 @@ function RevealKit.rings(parent: Instance, count: number, z: number): { Frame }
 	return list
 end
 
+export type RingOpts = {
+	From: number?, -- its first scale (default 0.35)
+	Grow: number?, -- how much it grows (default Style.Ring.Grow)
+	Thickness: number?, -- its line at the start (default Style.Ring.Thickness)
+}
+
 -- A ring `u` (0..1) through its flight: it grows fast, thins and fades (u outside 0..1: hidden).
-function RevealKit.poseRing(ring: Frame, u: number, color: Color3)
+-- `opts` (additive): a smaller, thinner ring (the egg opening's, round each egg).
+function RevealKit.poseRing(ring: Frame, u: number, color: Color3, opts: RingOpts?)
 	local on = u >= 0 and u < 1
 	ring.Visible = on
 	if not on then
 		return
 	end
 	local style = RevealKit.Style.Ring
+	local o: RingOpts = opts or {}
 	local scale = ring:FindFirstChildOfClass("UIScale") :: UIScale
 	local stroke = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
-	scale.Scale = 0.35 + style.Grow * (1 - (1 - u) ^ 3)
-	stroke.Thickness = style.Thickness * (1 - u) + 2
+	scale.Scale = (o.From or 0.35) + (o.Grow or style.Grow) * (1 - (1 - u) ^ 3)
+	stroke.Thickness = (o.Thickness or style.Thickness) * (1 - u) + 2
 	stroke.Color = color
 	stroke.Transparency = u ^ 1.5
 end
@@ -261,10 +272,11 @@ function RevealKit.flash(parent: Instance, z: number): Frame
 	}, parent)
 end
 
--- The flash `f` (0..1) through its fade; f >= 1 or < 0: gone.
-function RevealKit.poseFlash(frame: Frame, f: number)
+-- The flash `f` (0..1) through its fade; f >= 1 or < 0: gone. `peak` (additive): its strongest, never past Style.FlashPeak.
+function RevealKit.poseFlash(frame: Frame, f: number, peak: number?)
 	local style = RevealKit.Style
-	frame.BackgroundTransparency = if f >= 0 and f < 1 then 1 - style.FlashPeak * (1 - f) ^ 3 else 1
+	local top = math.min(style.FlashPeak, peak or style.FlashPeak)
+	frame.BackgroundTransparency = if f >= 0 and f < 1 then 1 - top * (1 - f) ^ 3 else 1
 end
 
 return RevealKit

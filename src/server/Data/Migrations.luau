@@ -209,6 +209,13 @@
 	  Gear levels bought, OLD_CARRY_PRICES for an old CarryLevel folded in the
 	  same load: the larger), less that pack's own price, go back into
 	  data.Coins (review 2026-10-27).
+
+	Version 11 (owner 2026-10-29: the egg panel's trash icon): a no-op step.
+	data.Golems.AutoDelete = { [kind] = true } (the golem kinds the player
+	auto-deletes from coin eggs: CapsuleService) comes in by reconcile; the
+	bump keeps an older server from loading a save that names it. Every
+	load, when present: short string kinds -> true (renamed kinds renamed,
+	a newer build's kinds kept), at most MAX_AUTO_DELETE; junk dropped.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -231,7 +238,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 12 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (anim/egg-v2); 12: the HUGE golems (no step: new golem kinds a save can name)
+Migrations.Latest = 12 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save)
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -257,6 +264,7 @@ local MAX_FIELD_TEXT_LENGTH = 64
 -- data.Artifacts.Equipped: a collection id (or "" = none) is never longer
 local MAX_EQUIPPED_LENGTH = 64
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
+local MAX_AUTO_DELETE = 64 -- Golems.AutoDelete kinds kept (CapsuleService.MaxAutoDelete)
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 -- Version 9: what the Gear shop's retired Ore Backpack held at each level 0..5 (frozen)
 local OLD_BACKPACK_CAPACITY = { 1, 2, 3, 5, 8, 12 }
@@ -703,6 +711,36 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		else
 			golems.Pending = waiting
 			report.Dropped += 1
+		end
+	end
+
+	-- Version 11 (the egg panel's trash, owner 2026-10-29): Golems.AutoDelete, the golem kinds
+	-- the player auto-deletes from coin eggs (CapsuleService), comes in by reconcile: a no-op step
+	-- (nothing moves; the version says a save may name it, so an older server refuses the save).
+	-- Every load, when present: short string kinds -> true (renamed kinds renamed, a newer
+	-- build's kinds kept: CapsuleService reads known ones), at most MAX_AUTO_DELETE; junk dropped.
+	local autoDelete = golems.AutoDelete
+	if autoDelete ~= nil then
+		if type(autoDelete) ~= "table" then
+			golems.AutoDelete = {}
+			report.Dropped += 1
+		else
+			local count = 0
+			for _, kind in keysOf(autoDelete) do
+				local renamed = if type(kind) == "string" then GolemConfig.Renamed[kind] else nil
+				if renamed and autoDelete[kind] == true then
+					autoDelete[kind] = nil
+					autoDelete[renamed] = true
+				end
+			end
+			for _, kind in keysOf(autoDelete) do
+				if not idLike(kind) or autoDelete[kind] ~= true or count >= MAX_AUTO_DELETE then
+					autoDelete[kind] = nil
+					report.Dropped += 1
+				else
+					count += 1
+				end
+			end
 		end
 	end
 

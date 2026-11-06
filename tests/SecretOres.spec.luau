@@ -269,7 +269,14 @@ return function(T, Loader)
 		RevealKit.resetFlash()
 		T.eq(Controller.retryFlash(0.3, 20), 0.3, "the retry in time: it flashes where the show is")
 		RevealKit.resetFlash()
-		T.eq(Controller.retryFlash(SecretReveal.SkipAfter + 0.5, 20), nil, "a late retry (a hitch, a skip): no flash")
+		T.eq(
+			Controller.retryFlash(
+				Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.SecretCinematic").Timing.FlashWindow + 0.5,
+				20
+			),
+			nil,
+			"a late retry (past the cinematic's FlashWindow): no flash"
+		)
 		T.truthy(RevealKit.takeFlash(20), "and no slot")
 		T.eq(Controller.retryFlash(0.3, 20.1), nil, "the slot taken again: none")
 		RevealKit.resetFlash()

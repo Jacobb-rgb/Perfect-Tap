@@ -28,8 +28,9 @@
 	  light column behind the Royal egg. The eggs turn slowly on the client
 	  (tagged "Spin": DecorController, no bob, streams atomically)
 	- in front, two navy lantern posts with warm lanterns; the right one
-	  carries the odds board (part "OddsBoard": RARITIES and the rarity
-	  names from Shared.Config.Rarity on one SurfaceGui with a rarity-
+	  carries the odds board (part "OddsBoard": RARITIES and the golem
+	  rarities' names, CapsuleConfig.rarities(): never a rarity no egg
+	  holds, like the secret ores' Secret, on one SurfaceGui with a rarity-
 	  coloured RarityChip per row; the client fills it with the real odds,
 	  CapsuleController / CapsuleView.fillBoard)
 
@@ -51,7 +52,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
-local Rarity = require(Shared.Config.Rarity)
+local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
@@ -470,7 +471,9 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	gui.LightInfluence = 0
 	gui.MaxDistance = 120
 	gui.Parent = odds
-	local rows = #Rarity.List
+	-- (the golems' rarities only: CapsuleConfig.rarities, never Rarity.List's whole list)
+	local rarities = CapsuleConfig.rarities()
+	local rows = #rarities
 	local function label(name: string, text: string, ly: number, h: number, lx: number, w: number, color: Color3)
 		local l = Instance.new("TextLabel")
 		l.Name = name
@@ -488,7 +491,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	end
 	label("Title", "RARITIES", 0.03, 0.12, 0.08, 0.84, Color3.new(1, 1, 1))
 	local rowH = 0.8 / rows
-	for i, info in Rarity.List do
+	for i, info in rarities do
 		local ry = 0.17 + (i - 1) * rowH
 		local marker = Instance.new("Frame")
 		marker.Name = "Marker" .. i

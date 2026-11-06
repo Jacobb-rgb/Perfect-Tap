@@ -136,6 +136,11 @@ local SoundConfig: { [string]: SoundDef } = {
 	SecretChime = { Id = "rbxassetid://15675043410", Volume = 0.6, Pitch = { 1.2, 1.2 } },
 	SecretFanfare = { Id = "rbxassetid://16480570986", Volume = 0.55, Pitch = { 1.0, 1.0 } },
 	SecretSparkle = { Id = "rbxassetid://12222005", Volume = 0.18, Pitch = { 2.6, 3.0 } },
+	-- the SECRET cinematic (Effects/SecretCinematic, 2026-10-30), from the ids above: a low mysterious
+	-- tone as the world darkens (the tonal stinger slowed down), the charging hum (the UFO beam loop,
+	-- slow and low; SecretOreReveal bends its volume and pitch up as it charges)
+	SecretMystery = { Id = "rbxassetid://15675043410", Volume = 0.4, Pitch = { 0.6, 0.62 } },
+	SecretHum = { Id = "rbxassetid://162670130", Volume = 0.2, Pitch = { 0.5, 0.5 }, Looped = true },
 }
 
 return SoundConfig

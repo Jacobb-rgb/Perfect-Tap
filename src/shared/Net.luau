@@ -155,6 +155,10 @@ Net.Events = {
 	--   rate limit drops gets NO answer: the client waits CapsuleConfig.ClientCooldown between
 	--   opens and gives the buttons back after CapsuleConfig.ResultTimeout, but still shows a
 	--   CapsuleResult that arrives later (same for WheelAction / WheelResult).
+	CapsuleTrash = { Rate = 4, Burst = 8 }, -- ({ Kind: GolemConfig id, On: boolean }): the egg panel's
+	--   trash icon (CapsuleService.setAutoDelete): auto-delete that golem kind from the eggs the
+	--   player opens with coins, or not; its own bucket (quick toggles never take an Open's
+	--   token). Answer: ActionResult { Action = "Capsule", Op = "AutoDelete", Ok, Kind, On, Reason? }.
 	GolemAction = { Rate = 4, Burst = 8 }, -- (action, arg):
 	--   "Equip" { Id } | "Unequip" { Id } | "EquipBest" (no arg) |
 	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |

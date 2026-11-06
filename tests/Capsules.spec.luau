@@ -180,6 +180,21 @@ return function(T, Loader)
 		return answers[1].Name, answers[1].A
 	end
 
+	-- Sends one CapsuleTrash (the egg panel's trash icon) and returns the one answer it got.
+	local function trash(w: any, arg: any): (string, any)
+		local before = #w.notes
+		caps.trash(w.player, arg)
+		local answers = {}
+		for i = before + 1, #w.notes do
+			local note = w.notes[i]
+			if note.Player == w.player and note.Name == "ActionResult" then
+				table.insert(answers, note)
+			end
+		end
+		T.eq(#answers, 1, "exactly one answer per toggle")
+		return answers[1].Name, answers[1].A
+	end
+
 	local function refused(w: any, arg: any, reason: string, label: string, action: any?)
 		local coins = w.data.Coins
 		local count = GolemConfig.count(w.data.Golems)
@@ -558,6 +573,178 @@ return function(T, Loader)
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap)
 	end)
 
+	withWorld("Capsules: AutoDelete (the egg panel's trash) is set through CapsuleTrash, validated and capped", function(w)
+		-- its own remote and bucket: quick toggles never take an Open's token
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		T.truthy(Net.Events.CapsuleTrash and Net.Events.CapsuleTrash.Rate >= 4, "CapsuleTrash: its own rate limit")
+		local _, other = act(w, "AutoDelete", { Kind = "PebbleGolem", On = true })
+		T.eq(other.Ok, false, "not an op of CapsuleAction any more")
+		local name, answer = trash(w, { Kind = "PebbleGolem", On = true })
+		T.eq(name, "ActionResult")
+		T.eq(answer.Action, "Capsule")
+		T.eq(answer.Op, "AutoDelete")
+		T.eq(answer.Ok, true)
+		T.eq(answer.Kind, "PebbleGolem")
+		T.eq(answer.On, true)
+		T.eq(w.data.Golems.AutoDelete.PebbleGolem, true, "saved")
+		local changed = w.changed
+		_, answer = trash(w, { Kind = "PebbleGolem", On = false })
+		T.eq(answer.Ok, true)
+		T.eq(w.data.Golems.AutoDelete.PebbleGolem, nil, "off: the kind leaves the set (no false kept)")
+		T.truthy(w.changed > changed, "DataService.changed")
+		-- junk: refused with a reason that has a text, nothing set
+		local junk = {
+			{ Kind = "NoSuchGolem", On = true },
+			{ Kind = 5, On = true },
+			{ Kind = string.rep("P", 100), On = true },
+			{ Kind = "PebbleGolem", On = "yes" },
+			{ Kind = "PebbleGolem" },
+			"PebbleGolem",
+			false,
+		}
+		for i, arg in junk do
+			_, answer = trash(w, arg)
+			T.eq(answer.Ok, false, `junk {i}: refused`)
+			T.eq(answer.Reason, "BadGolem", `junk {i}`)
+			T.truthy(CapsuleView.ExtraReasons[answer.Reason], "the reason has a text")
+			T.eq(next(w.data.Golems.AutoDelete), nil, `junk {i}: nothing set`)
+		end
+		_, answer = trash(w, nil)
+		T.eq(answer.Reason, "BadGolem", "nothing")
+		-- the cap: at most MaxAutoDelete kinds (turning one off always works); room for every coin egg's golem
+		local coinGolems: { [string]: boolean } = {}
+		local distinct = 0
+		for _, capsule in CapsuleConfig.Stall do
+			if capsule.Currency == "Coins" then
+				for _, line in CapsuleConfig.odds(capsule.Id, false) do
+					if not coinGolems[line.Golem] then
+						coinGolems[line.Golem] = true
+						distinct += 1
+					end
+				end
+			end
+		end
+		T.truthy(
+			CapsuleService.MaxAutoDelete >= distinct,
+			`the cap ({CapsuleService.MaxAutoDelete}) fits every coin egg's golem ({distinct})`
+		)
+		local cap = CapsuleService.MaxAutoDelete
+		CapsuleService.MaxAutoDelete = 3
+		local ok, err = pcall(function()
+			for i = 1, 3 do
+				T.eq(CapsuleService.setAutoDelete(w.player, GolemConfig.List[i].Id, true), nil)
+			end
+			T.eq(CapsuleService.setAutoDelete(w.player, GolemConfig.List[4].Id, true), "TooMany", "past the cap")
+			T.eq(w.data.Golems.AutoDelete[GolemConfig.List[4].Id], nil, "not set")
+			T.eq(CapsuleService.setAutoDelete(w.player, GolemConfig.List[1].Id, true), nil, "one already in: fine")
+			T.eq(CapsuleService.setAutoDelete(w.player, GolemConfig.List[1].Id, false), nil, "off at the cap")
+		end)
+		CapsuleService.MaxAutoDelete = cap
+		if not ok then
+			error(err, 0)
+		end
+		T.truthy(CapsuleView.ExtraReasons.TooMany, "TooMany has a text")
+		-- the save not loaded: refused
+		w.loaded = false
+		T.eq(CapsuleService.setAutoDelete(w.player, "PebbleGolem", true), "BadGolem")
+	end)
+
+	withWorld("Capsules: an auto-deleted golem still opens, counts and shows (Deleted) but is not kept", function(w)
+		w.data.Golems.AutoDelete = { PebbleGolem = true }
+		-- Stone x3 rolling PebbleGolem (0.1), CopperTinker (0.3), PebbleGolem (0.2)
+		w.values = { 0.1, 0.3, 0.2 }
+		local name, result = act(w, "Open", { Capsule = "Stone", Count = 3 })
+		T.eq(name, "CapsuleResult")
+		T.eq(#result.Golems, 3, "every golem of the open is in the result")
+		local deleted, kept = 0, 0
+		for _, g in result.Golems do
+			if g.Kind == "PebbleGolem" then
+				T.eq(g.Deleted, true, "the auto-deleted one says so")
+				T.eq(g.Id, 0, "no id used")
+				deleted += 1
+			else
+				T.falsy(g.Deleted)
+				T.truthy(g.Id > 0)
+				kept += 1
+			end
+		end
+		T.eq(deleted, 2)
+		T.eq(kept, 1)
+		T.eq(GolemConfig.count(w.data.Golems), 1, "only the kept golem is saved")
+		T.eq(w.data.Golems.NextId, 2)
+		T.eq(w.data.Stats.CapsulesOpened, 3, "all three count (quests, levels)")
+		T.eq(#w.opened[1].Info.Kinds, 3, "onOpened (quests, celebrations) hears all three")
+		-- a full inventory: an open whose golems are all auto-deleted still works and adds nothing
+		fill(w.data, GolemConfig.InventoryCap - GolemConfig.count(w.data.Golems))
+		T.eq(GolemConfig.room(w.data.Golems), 0, "full")
+		local coins = w.data.Coins
+		w.values = { 0.05 }
+		name, result = act(w, "Open", { Capsule = "Stone", Count = 1 })
+		T.eq(name, "CapsuleResult", "all auto-deleted: opens with a full inventory")
+		T.eq(result.Golems[1].Deleted, true)
+		T.truthy(w.data.Coins < coins, "paid")
+		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "the inventory doesn't grow")
+		-- the room counts only the golems that are kept: a kept one doesn't fit, nothing is spent
+		w.values = { 0.3 }
+		refused(w, { Capsule = "Stone", Count = 1 }, "InventoryFull", "a kept golem with no room")
+		-- without auto-delete a full inventory refuses before the roll, as always
+		w.data.Golems.AutoDelete = {}
+		w.values = { 0.05 }
+		refused(w, { Capsule = "Stone", Count = 1 }, "InventoryFull", "auto-delete off")
+	end)
+
+	withWorld("Capsules: auto-delete is for coin opens only: never a free capsule (wheel, quest) or a paid golem", function(w)
+		local kind = CapsuleConfig.odds("Royal", false)[1].Golem
+		w.data.Golems.AutoDelete = { [kind] = true }
+		-- a free capsule (the wheel's, a quest's): kept whatever the set says
+		w.values = { 0.001 }
+		local free = CapsuleService.grantFree(w.player, "Royal", 1, true)
+		T.truthy(free and free.Golems[1].Kind == kind, "the trashed kind rolled")
+		T.falsy(free.Golems[1].Deleted, "a free capsule is never auto-deleted")
+		T.truthy(GolemConfig.find(w.data.Golems, free.Golems[1].Id), "the golem is kept")
+		-- a full inventory: a free capsule is refused as before (the wheel pays its coins instead)
+		local beforeFull = GolemConfig.count(w.data.Golems)
+		fill(w.data, GolemConfig.InventoryCap - beforeFull)
+		w.values = { 0.001 }
+		local none, reason = CapsuleService.grantFree(w.player, "Royal", 1, true)
+		T.eq(none, nil, "full: refused, although the roll would be trashed")
+		T.eq(reason, "InventoryFull")
+		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap, "nothing added")
+		table.clear(w.data.Golems.Owned)
+		w.data.Golems.Equipped = {}
+		-- a bought spin's capsule (paid): kept whatever the set says
+		local before = GolemConfig.count(w.data.Golems)
+		w.values = nil
+		for _ = 1, 5 do
+			local result = CapsuleService.grantFree(w.player, "Royal", 1, true, true)
+			T.truthy(result, "a bought spin's golem")
+			for _, g in result.Golems do
+				T.falsy(g.Deleted, "paid: never auto-deleted")
+				T.truthy(g.Id > 0)
+			end
+		end
+		T.eq(GolemConfig.count(w.data.Golems), before + 5, "every paid golem kept")
+		T.eq(CapsuleService.kept(w.data, { kind, kind }, true), 0, "a coin open's room check drops the trashed")
+		T.eq(CapsuleService.kept(w.data, { kind, kind }, false), 2, "every other grant keeps them")
+		-- a Robux receipt (grantProduct): kept
+		local product = MonetizationConfig.Products.RoyalCapsule10
+		local oldId = product.Id
+		product.Id = 777
+		CapsuleService.setReceiptsReady(true)
+		local ok, err = pcall(function()
+			local result = CapsuleService.grantProduct(w.player, "RoyalCapsule10")
+			T.truthy(result, "granted")
+			for _, g in result.Golems do
+				T.falsy(g.Deleted, "a Robux golem: never auto-deleted")
+			end
+		end)
+		product.Id = oldId
+		CapsuleService.setReceiptsReady(false)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Capsules: grantProduct (step 8 receipts) never rolls worse than shown and may pass the cap", function(w)
 		local product = MonetizationConfig.Products.RoyalCapsule10
 		local oldId = product.Id
@@ -611,6 +798,44 @@ return function(T, Loader)
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule10", NOW + MonetizationConfig.PromptMemorySeconds + 1), nil)
 		end)
 		product.Id = oldId
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	withWorld("Capsules: a pack past the hard cap sends its waiting golems too (Pending: every one is shown)", function(w)
+		-- a x50 limited pack with room for 3 (paid golems may pass InventoryCap up to MaxSaved)
+		local product = MonetizationConfig.Products.DragonforgeCapsule50
+		local oldId = product.Id
+		product.Id = 778
+		CapsuleService.setReceiptsReady(true)
+		local ok, err = pcall(function()
+			fill(w.data, GolemConfig.MaxSaved - 3, nil, true)
+			local before = #notes(w, "CapsuleResult")
+			local result, missing, left = CapsuleService.grantProduct(w.player, "DragonforgeCapsule50")
+			T.truthy(result, "granted")
+			T.eq(#result.Golems, 3, "three woke (up to MaxSaved)")
+			T.eq(missing, 47)
+			T.eq(#left, 47)
+			T.eq(type(result.Pending), "table", "the rest rides along in the result")
+			T.eq(#result.Pending, 47, "all 47 waiting golems")
+			for i, kind in result.Pending do
+				T.eq(kind, left[i], "the kinds the credit keeps, in order")
+				T.truthy(GolemConfig.ById[kind], kind .. ": a golem")
+			end
+			T.eq(#result.Golems + #result.Pending, 50, "the result holds all 50: the opening shows every one")
+			local sent = notes(w, "CapsuleResult")
+			T.eq(#sent, before + 1, "one CapsuleResult")
+			T.eq(sent[#sent].A, result, "the result sent is this one (Pending in it)")
+			-- room for all: no Pending at all
+			table.clear(w.data.Golems.Owned)
+			w.data.Golems.Equipped = {}
+			local roomy = CapsuleService.grantProduct(w.player, "DragonforgeCapsule50")
+			T.eq(#roomy.Golems, 50)
+			T.eq(roomy.Pending, nil, "nothing waits: no Pending")
+		end)
+		product.Id = oldId
+		CapsuleService.setReceiptsReady(false)
 		if not ok then
 			error(err, 0)
 		end
@@ -1062,6 +1287,10 @@ return function(T, Loader)
 				end
 			end
 			T.eq(CapsuleView.firstButton(refs), refs.Buttons[1], "gamepad: the first OPEN button")
+			-- after an opening a gamepad rests on a control that never buys (A mashed to skip it)
+			local rest = CapsuleView.restButton(refs)
+			T.falsy(table.find(refs.Buttons, rest), "never an OPEN button")
+			T.eq(rest, refs.Tabs.Stone, "the shown tab")
 			-- Royal (allowed, not live): the note instead of the buttons
 			refs.Tab = "Royal"
 			CapsuleView.setCards(refs, CapsuleView.cards(state(), 1e9, false, NOW))
@@ -1135,60 +1364,34 @@ return function(T, Loader)
 		CapsuleView.setCards(pc, cardsNow)
 		CapsuleView.setCards(fresh, cardsNow)
 		sameLook(pc.Gui, fresh.Gui, "shop back to PC")
-		-- the opening overlay
+		-- the opening (both of its guis)
 		local o1 = CapsuleView.buildOpening(false)
-		CapsuleView.layoutOpening(o1, true, w, h)
+		CapsuleView.layoutOpening(o1, true, w, h, { Touch = true, Inset = 58 / 0.62 })
 		local o2 = CapsuleView.buildOpening(true)
-		CapsuleView.layoutOpening(o2, true, w, h)
+		CapsuleView.layoutOpening(o2, true, w, h, { Touch = true, Inset = 58 / 0.62 })
 		sameLook(o1.Gui, o2.Gui, "opening")
-		T.truthy(o2.Hint.TextSize >= 20 and o2.Note.TextSize >= 20 and o2.Counter.TextSize >= 28, "opening texts on a phone")
+		sameLook(o1.Controls, o2.Controls, "opening's Auto")
+		T.truthy(o2.Note.TextSize >= 20 and o2.AutoLabel.TextSize >= 20, "opening texts on a phone")
 	end)
 
-	T.test("Capsules view: the opening overlay lays out on PC and phones", function()
+	T.test("Capsules view: the opening lays out on PC and phones (the whole screen, the Auto button 44 pt)", function()
 		for _, compact in { false, true } do
 			local o = CapsuleView.buildOpening(compact)
-			local w, h = if compact then 916 else 1280, if compact then 423 else 684
-			CapsuleView.layoutOpening(o, compact, w, h)
-			CapsuleView.setPlate(o, "CelestialSovereign", true)
-			T.truthy(o.Plate.Visible)
-			T.eq(o.PlateRarity.Text, "MYTHIC")
-			T.truthy(o.PlateNew.Visible)
-			local kinds = {
-				"PebbleGolem",
-				"RoseKnight",
-				"EmberImp",
-				"TinTumbler",
-				"QuartzSprite",
-				"CoalChomper",
-				"GildedPorter",
-				"SilverSquire",
-				"JadeGardener",
-				"MoonstoneOracle",
-			}
-			CapsuleView.setGrid(o, kinds, { [2] = true }, 10)
-			T.eq(#o.Cells, 10)
-			local cell = o.GridLayout.CellSize
-			local perRow = math.floor((o.Grid.Size.X.Offset + 12) / (cell.X.Offset + 12))
-			T.truthy(perRow >= 5, "5 per row")
-			local rowsH = 2 * cell.Y.Offset + 12
-			T.le(rowsH, o.Grid.Size.Y.Offset, "two rows fit")
-			T.eq(CapsuleView.best(kinds), "MoonstoneOracle", "the rarest")
+			local w, h = if compact then 1361 else 1280, if compact then 629 else 720
+			CapsuleView.layoutOpening(o, compact, w, h, { Touch = compact, Inset = if compact then 58 / 0.62 else 29 })
+			T.eq(o.Stage.Size.X.Offset, w, "the stage: the whole screen")
+			T.eq(o.Stage.Size.Y.Offset, h)
+			T.eq(o.Flash.Size.X.Offset, w)
+			T.eq(#o.Tags, CapsuleView.StageTags, "a name for every golem of an Open 10")
 			if compact then
 				for _, target in CapsuleView.openTargets(o) do
 					T.truthy(target.Size.Y.Offset * CapsuleView.PhoneScale >= CapsuleView.MinTouch - 0.5, target.Name .. " 44 pt")
 				end
 			end
 			for _, target in CapsuleView.openTargets(o) do
-				T.le(target.Position.Y.Offset, h, target.Name .. " on screen")
-				T.truthy(target:IsDescendantOf(o.Controls), target.Name .. " in the overlay's selection group")
+				T.truthy(target:IsDescendantOf(o.Controls), target.Name .. " in the opening's own gui")
 			end
-			-- a gamepad can't leave the overlay for the shop behind it
-			T.eq(o.Controls.SelectionGroup, true)
-			for _, side in { "Up", "Down", "Left", "Right" } do
-				T.eq(o.Controls["SelectionBehavior" .. side], roblox.Enum.SelectionBehavior.Stop, side .. " stops")
-			end
-			T.eq(o.Controls.Size.X.Offset, w, "the group covers the screen (button positions unchanged)")
-			T.eq(o.Controls.Size.Y.Offset, h)
+			T.eq(CapsuleView.best({ "PebbleGolem", "MoonstoneOracle", "RoseKnight" }), "MoonstoneOracle", "the rarest")
 		end
 	end)
 
@@ -1227,7 +1430,7 @@ return function(T, Loader)
 				T.eq(title.Text, string.upper(capsule.Name), "the old labels are gone")
 				local odds = CapsuleConfig.rarityOdds(capsule.Id, lucky)
 				local sum = 0
-				for i, info in Rarity.List do
+				for i, info in CapsuleConfig.rarities() do -- (the golems' six: a "Secret" Rarity is for ores)
 					local total = gui:FindFirstChild("Total" .. i)
 					T.truthy(total, "row " .. i)
 					if odds[info.Id] then
@@ -1242,7 +1445,7 @@ return function(T, Loader)
 				end
 				T.near(sum, 1, 1e-9, "the totals add up")
 				-- no row label or total under the stall's neon RarityChip parts
-				for i = 1, #Rarity.List do
+				for i = 1, #CapsuleConfig.rarities() do
 					for _, name in { "Row" .. i, "Total" .. i } do
 						local l = gui:FindFirstChild(name)
 						T.truthy(l.Position.X.Scale >= chipEnd - 1e-6, `{name} starts right of the stall's chips ({l.Position.X.Scale} >= {chipEnd})`)

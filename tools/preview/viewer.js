@@ -807,6 +807,9 @@ async function main() {
     composer.render();
     const uiLayer = document.getElementById("ui");
     uiLayer.innerHTML = "";
+    // (the frames' own size: a phone batch is wider than the page's default 1600 x 900 layer)
+    uiLayer.style.width = `${WIDTH}px`;
+    uiLayer.style.height = `${HEIGHT}px`;
     if (uiName) {
       const guis = await fetch(`/scenes/${uiName}.json`).then((r) => r.json());
       renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
