@@ -268,8 +268,9 @@ elseif mode == "minigun" then
 	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
 	local MoveConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MoveConfig")
 	local BarrelSpin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BarrelSpin")
+	local BlasterFeel = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterFeel")
 	local rad = math.rad
-	local fps = 30
+	local fps = 60 -- (the shots are too quick for 30: they would seem to crawl backward)
 	local game = Instance.new("DataModel")
 	local workspace = game:GetService("Workspace")
 	local room = Instance.new("Model")
@@ -300,15 +301,15 @@ elseif mode == "minigun" then
 		frames = {},
 		segments = {
 			{
-				title = "MINIGUN: KOTOUČ SE TOČÍ PŘI STŘELBĚ",
-				sub = "roztočí se, střílí na krystaly, po puštění doběhne",
+				title = "MINIGUN: STŘELY SE ZRYCHLUJÍ S KOTOUČEM",
+				sub = "4 střely za sekundu na začátku, 24 při plných otáčkách, po puštění kotouč doběhne",
 				cut = true,
 			},
 			{ title = "DRŽENÍ U PASU OBĚMA RUKAMA", sub = "pravá ruka na rukojeti, levá na horním držadle", cut = true },
 			{ title = "NOVÉ VZHLEDY", sub = "kulaté miniguny, krystaly, duhové kroužky a blesky", cut = true },
 		},
 		sheetTitle = "minigun blastery v pohybu",
-		picks = { 2.5, 8.2, 13.5 },
+		picks = { 3.5, 10.2, 15.5 },
 		caption = "náhled z herního kódu · Deep Terra",
 		bloom = { 0.6, 0.45, 0.72 },
 	}
@@ -334,7 +335,6 @@ elseif mode == "minigun" then
 	local function cf(gi: number, at: any)
 		return { gi, table.unpack(H.cfList(at)) }
 	end
-	-- the beam and its sparks (stand-ins for Vfx: a white core in a glow, sparks flying off the rock)
 	local glowColor = BlasterBuilder.look(10, BlasterData.vaultOre(10)).Glow
 	local scratch = Instance.new("Part")
 	scratch.Anchored = true
@@ -353,31 +353,66 @@ elseif mode == "minigun" then
 		local right = look:Cross(hint).Unit
 		return CF.fromMatrix((from + to) / 2, right, right:Cross(look))
 	end
-	local function beam(list, from: any, to: any, t: number, k: number)
-		local length = (to - from).Magnitude
-		local pulse = 1 + 0.12 * math.sin(t * 40)
-		local along = lookAt(from, to) * CF.Angles(0, math.pi / 2, 0) -- (a cylinder runs along X)
-		addPart(list, roblox.Enum.PartType.Cylinder, along, V3.new(length, 0.16 * pulse * k, 0.16 * pulse * k), rgb(255, 250, 255), 0)
-		addPart(list, roblox.Enum.PartType.Cylinder, along, V3.new(length, 0.42 * pulse * k, 0.42 * pulse * k), glowColor, 0.45)
-		addPart(list, roblox.Enum.PartType.Ball, CF.new(from), V3.new(0.55, 0.55, 0.55) * pulse * k, glowColor, 0.2)
-		addPart(list, roblox.Enum.PartType.Ball, CF.new(to), V3.new(0.9, 0.9, 0.9) * pulse * k, glowColor, 0.25)
-		-- sparks: born every frame, 0.4 s of flight under gravity
-		for n = 0, 11 do
-			local born = math.floor(t * fps) - n
-			local age = (t * fps - born) / fps
-			local h1 = math.sin(born * 12.9898 + n * 3.1) * 43758.5453
-			local h2 = math.sin(born * 78.233 + n * 1.7) * 12345.678
-			local a, b = (h1 - math.floor(h1)) * math.pi * 2, h2 - math.floor(h2)
-			local v = V3.new(math.cos(a) * 3, 2 + b * 3, math.sin(a) * 3 + 2)
-			local p = to + v * age + V3.new(0, -9, 0) * (0.5 * age * age)
-			addPart(
-				list,
-				roblox.Enum.PartType.Block,
-				CF.new(p) * CF.Angles(a, b * 3, 0),
-				V3.new(0.12, 0.12, 0.12),
-				glowColor:Lerp(rgb(255, 255, 255), 0.4),
-				age / 0.45
-			)
+	-- the shots (a stand-in for Effects/BlasterShots: the game's fire rate, a head, a fading trail) with
+	-- their small impacts, for a run firing from t0 to t1
+	local Shots = BlasterFeel.Shots
+	local function shotTimes(t0: number, t1: number): { number }
+		local times, spin, due, at = {}, 0, 1, t0
+		while at < t1 do
+			local count
+			spin, due, count = BlasterFeel.shotStep(spin, due, 1 / 120, true)
+			for _ = 1, count do
+				table.insert(times, at)
+			end
+			at += 1 / 120
+		end
+		return times
+	end
+	local function shots(list, times: { number }, from: any, to: any, t: number)
+		local hot = glowColor:Lerp(rgb(255, 255, 255), 0.35)
+		local line = to - from
+		local dir, length = line.Unit, line.Magnitude
+		for k, at in times do
+			local age = t - at
+			if age >= 0 then
+				local travelled = age * Shots.Speed
+				if travelled < length then
+					local head = from + dir * travelled
+					addPart(list, roblox.Enum.PartType.Ball, CF.new(head), V3.new(0.42, 0.42, 0.42), hot, 0)
+					for i = 1, 4 do
+						local a = head - dir * math.min(travelled, Shots.Trail * (i - 1) / 4)
+						local b = head - dir * math.min(travelled, Shots.Trail * i / 4)
+						if (a - b).Magnitude > 0.01 then
+							local width = 0.5 * (1 - 0.2 * (i - 1))
+							local along = lookAt(a, b) * CF.Angles(0, math.pi / 2, 0) -- (a cylinder runs along X)
+							addPart(
+								list,
+								roblox.Enum.PartType.Cylinder,
+								along,
+								V3.new((a - b).Magnitude, width, width),
+								glowColor:Lerp(hot, 1 - i / 4),
+								0.15 + 0.2 * i
+							)
+						end
+					end
+				else
+					local since = age - length / Shots.Speed
+					if since < 0.14 then
+						local f = 1 - since / 0.14
+						addPart(list, roblox.Enum.PartType.Ball, CF.new(to), V3.new(1, 1, 1) * (0.2 + 0.7 * f), hot, 1 - f * 0.75)
+					end
+					if since < 0.4 then
+						-- a spark
+						local h = math.sin(k * 12.9898) * 43758.5453
+						local a = (h - math.floor(h)) * math.pi * 2
+						local p = to
+							+ V3.new(math.cos(a) * 4, 3, math.sin(a) * 4) * since
+							+ V3.new(0, -9, 0) * (0.5 * since * since)
+							- dir * since * 4
+						addPart(list, roblox.Enum.PartType.Ball, CF.new(p), V3.new(0.12, 0.12, 0.12), hot, since / 0.45)
+					end
+				end
+			end
 		end
 	end
 	local function spinState(state, firing: boolean, dt: number)
@@ -391,19 +426,18 @@ elseif mode == "minigun" then
 		local tool = BlasterBuilder.build(10, BlasterData.vaultOre(10))
 		local bodyG, spinG, axis, muzzle = gunGroups(tool)
 		local state = { speed = 0, angle = 0 }
-		local DUR = 5.4
+		local DUR = 6.4
+		local times = shotTimes(0.9, 4.9)
 		for f = 0, math.floor(DUR * fps) - 1 do
 			local t = f / fps
-			local firing = t >= 0.9 and t < 3.9
+			local firing = t >= 0.9 and t < 4.9
 			spinState(state, firing, dt)
 			local yaw = 0.18 * math.sin(t * 0.7)
 			local gunCF = CF.lookAt(V3.new(0.6, 3.6, 0), HIT) * CF.Angles(0, yaw * 0.2, 0)
 			local frame = { s = 0, seg = 0, cam = { 9.5, 5.6, 2.6, -0.4, 3.0, -4.6, 42 }, g = {}, p = {}, o = {} }
 			table.insert(frame.g, cf(bodyG, gunCF))
 			table.insert(frame.g, cf(spinG, gunCF * axis * CF.Angles(0, 0, state.angle)))
-			if firing and t > 1.0 then
-				beam(frame.p, gunCF * muzzle, HIT, t, math.min(1, (t - 1.0) / 0.12))
-			end
+			shots(frame.p, times, gunCF * muzzle, HIT, t)
 			table.insert(data.frames, frame)
 		end
 	end
@@ -437,12 +471,13 @@ elseif mode == "minigun" then
 		local bodyG, spinG, axis, muzzle = gunGroups(tool)
 		local state = { speed = 0, angle = 0 }
 		local start = #data.frames
-		local DUR = 5.6
+		local DUR = 6.6
+		local times = shotTimes(1.1, 5.4)
 		-- the character stands 7 studs from the rock, facing it, turned so the hip gun points at it
 		local stand = CF.lookAt(V3.new(1.4, 0, -2.6), V3.new(ROCK_AT.X + 1.4, 0, ROCK_AT.Z)) * CF.Angles(0, rad(-8), 0)
 		for f = 0, math.floor(DUR * fps) - 1 do
 			local t = f / fps
-			local firing = t >= 1.1 and t < 4.4
+			local firing = t >= 1.1 and t < 5.4
 			spinState(state, firing, dt)
 			local parts, pose = MovePose.solve(Loader, move, 0.2 + t, nil, function(joint)
 				return if joint == "RightShoulder" then CF.Angles(rad(90), 0, 0) else CF.identity
@@ -456,9 +491,7 @@ elseif mode == "minigun" then
 			local handleCF = stand * parts.RightHand * GRIP * (pose.RightGrip or CF.identity)
 			table.insert(frame.g, cf(bodyG, handleCF))
 			table.insert(frame.g, cf(spinG, handleCF * axis * CF.Angles(0, 0, state.angle)))
-			if firing and t > 1.2 then
-				beam(frame.p, handleCF * muzzle, HIT, t, math.min(1, (t - 1.2) / 0.12))
-			end
+			shots(frame.p, times, handleCF * muzzle, HIT, t)
 			table.insert(data.frames, frame)
 		end
 		local _ = start

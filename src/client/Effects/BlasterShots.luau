@@ -97,8 +97,8 @@ local connection: RBXScriptConnection? = nil
 local moveParts: { BasePart } = {}
 local moveFrames: { CFrame } = {}
 
-local function poolSize(): number
-	return if UserInputService.TouchEnabled and not UserInputService.MouseEnabled then SHOTS.PhonePool else SHOTS.Pool
+local function isPhone(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
 ---------------------------------------------------------------- the pool
@@ -169,7 +169,7 @@ local function take(): Shot?
 		end
 		made -= 1
 	end
-	return if made < poolSize() then newShot() else nil
+	return if made < (if isPhone() then SHOTS.PhonePool else SHOTS.Pool) then newShot() else nil
 end
 
 local function put(shot: Shot)
@@ -425,8 +425,8 @@ function BlasterShots.aim(
 		gun.Tier = tier
 		gun.Light.Color = color
 		gun.FlashColor = nil
+		gun.FlashEvery = BlasterFeel.resolve(level, isPhone()).FlashEvery
 	end
-	gun.FlashEvery = if poolSize() < SHOTS.Pool then 2 else 1
 	local top = if hooks then SHOTS.FastRate else SHOTS.OtherRate
 	gun.Top = if Motion.reduced() then math.min(top, SHOTS.ReducedRate) else top
 	if hold then
