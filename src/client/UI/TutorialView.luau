@@ -173,6 +173,34 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	}
 end
 
+--[[
+	Do the offers (HudBubble.offers, at the right edge) keep off the mouse card's buttons on this
+	screen? In a small window the lowest offer sits on SKIP and GOT IT, and the click meant for SKIP
+	opens the Store on a paid card (review 2026-11-07). `screen`: the HUD gui's size in pixels.
+]]
+function TutorialView.clearOfOffers(offers: GuiObject, uiScale: number, screen: Vector2, tenFoot: boolean?): boolean
+	local scale = if uiScale > 0 then uiScale else 1
+	local w, h = screen.X / scale, screen.Y / scale
+	local card = TutorialView.layout(scale, screen, false, tenFoot)
+	local rowBottom = card.Position.Y - TutorialView.Foot
+	local rowTop = rowBottom - card.RowHeight
+	local cardLeft = card.Position.X - card.Width
+	local width, height = offers.Size.X.Offset, offers.Size.Y.Offset
+	local right = w * offers.Position.X.Scale + offers.Position.X.Offset + width * (1 - offers.AnchorPoint.X)
+	local bottom = h * offers.Position.Y.Scale + offers.Position.Y.Offset + height * (1 - offers.AnchorPoint.Y)
+	-- (the buttons: each offer's name under its button takes no click)
+	local lowest = bottom
+	for _, holder in offers:GetChildren() do
+		local button = holder:FindFirstChild("Offer")
+		if holder:IsA("GuiObject") and button and button:IsA("GuiObject") then
+			lowest = bottom - (holder.Size.Y.Offset - button.Size.Y.Offset)
+			break
+		end
+	end
+	local apart = right - width >= card.Position.X or right <= cardLeft
+	return apart or lowest <= rowTop or bottom - height >= rowBottom
+end
+
 local function sizeLimit(label: TextLabel, max: number, min: number)
 	label.TextScaled = true
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = max, MinTextSize = min }, label)

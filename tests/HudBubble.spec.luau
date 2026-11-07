@@ -128,13 +128,14 @@ return function(T, Loader)
 	end)
 
 	T.test("HudBubble: HudController waits for the screen before it builds the HUD", function()
-		-- (the controller needs a real client: its source says what init does, in which order)
+		-- (HudController reads Players.LocalPlayer when it loads: its source is checked, the very
+		-- lines at init's own indent, so a comment or a dead branch doesn't count)
 		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/HudController.luau")
 		local init = string.find(source, "function HudController.init()", 1, true)
 		T.truthy(init, "init")
-		local wait = string.find(source, "HudBubble.waitForScreen()", init, true)
-		local build = string.find(source, "HudView.build()", init, true)
+		local wait = string.find(source, "\n\tlocal ready, first, final = HudBubble.waitForScreen()", init, true)
+		local build = string.find(source, "\n\trefs = HudView.build()", init, true)
 		T.truthy(wait, "init waits for the screen")
 		T.truthy(build, "init builds the HUD")
 		T.truthy(wait < build, "first the wait, then the build")
@@ -214,6 +215,57 @@ return function(T, Loader)
 			T.truthy(IconAssets.topRowShows(name), name .. " shows")
 		end
 		T.falsy(IconAssets.topRowHas("wheel"), "only the four buttons")
+	end)
+
+	-- review 2026-11-07: in a small mouse window the lowest offer sat on the tutorial card's SKIP and
+	-- took its click; there the offers stay away. Without their icon sheets they show live models.
+	T.test("HudBubble: the offers show a picture and keep off the tutorial card's buttons", function()
+		local roblox = require("@lune/roblox") :: any
+		local Vector2 = roblox.Vector2
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+		local before, previewing = UIConfig.LightUI, IconAssets.Previewing
+		UIConfig.LightUI = true
+		IconAssets.Previewing = false
+		local ok, err = pcall(function()
+			-- { width, height, the top bar's inset, should they show }
+			local screens = {
+				{ 995, 485, 58, true }, -- the owner's Studio window
+				{ 1280, 720, 36, true },
+				{ 1920, 1080, 58, true },
+				{ 700, 400, 36, false },
+				{ 682, 360, 36, false },
+			}
+			for _, size in screens do
+				local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
+				local gui = Vector2.new(size[1], size[2] - size[3])
+				local at = `{size[1]} x {size[2]}`
+				local refs = HudBubble.buildGame(scale, size[1], false, false, gui.Y)
+				local offers = refs.Gui:FindFirstChild("Offers") :: any
+				T.truthy(offers, "the offers at " .. at)
+				local clear = TutorialView.clearOfOffers(offers, scale, gui, false)
+				T.eq(clear, size[4], "shown or kept away at " .. at)
+				for _, offer in HudBubble.Offers do
+					local button = (offers:FindFirstChild(offer.Card) :: any):FindFirstChild("Offer") :: any
+					local picture = button:FindFirstChild("Picture") :: any
+					T.truthy(picture, offer.Card .. ": a picture at " .. at)
+					T.truthy(#(picture:FindFirstChild("View") :: any):GetChildren() > 0, offer.Card .. ": a live model")
+				end
+				-- when they show, the lowest button really is above SKIP and GOT IT
+				if clear then
+					local h = gui.Y / scale
+					local card = TutorialView.layout(scale, gui, false, false)
+					local rowTop = card.Position.Y - TutorialView.Foot - card.RowHeight
+					local lowest = h / 2 + offers.Size.Y.Offset / 2 - 24
+					T.truthy(lowest <= rowTop, "above the card's buttons at " .. at)
+				end
+				refs.Gui:Destroy()
+			end
+		end)
+		UIConfig.LightUI, IconAssets.Previewing = before, previewing
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	-- the owner's own pictures on the left (2026-11-07, hud_dlazdice.png): each listed tile shows its

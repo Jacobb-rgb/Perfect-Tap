@@ -48,6 +48,7 @@ local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
+local TutorialView = require(script.Parent.Parent.UI.TutorialView)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Motion = require(script.Parent.Parent.UI.Motion)
@@ -146,6 +147,20 @@ local function topBarFree(): Vector2?
 	return nil
 end
 
+-- The round look's offers at the right edge: hidden while the last input is touch (a touch screen
+-- with a mouse or a keyboard got the PC layout: the touch tutorial's SKIP and Roblox's jump button
+-- take that edge as soon as it is touched), and in a window too small for them and the mouse
+-- tutorial card's buttons (TutorialView.clearOfOffers).
+local function refreshOffers()
+	local offers = if refs then refs.Gui:FindFirstChild("Offers") else nil
+	if not (offers and offers:IsA("GuiObject")) then
+		return
+	end
+	local size = refs.Gui.AbsoluteSize
+	local room = size.Y <= 0 or TutorialView.clearOfOffers(offers, HudController.uiScale(), size, GuiService:IsTenFootInterface())
+	offers.Visible = room and UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
+end
+
 local function updateScale()
 	local camera = Workspace.CurrentCamera
 	if not camera then
@@ -195,6 +210,7 @@ local function updateScale()
 		end
 		BoostView.HudChipsRight = HudBubble.chipsRight(refs.Gui, width / scale)
 	end
+	refreshOffers()
 end
 
 -- The backpack button: "n / cap", red with the FULL tag when full.
@@ -459,7 +475,9 @@ function HudController.init()
 	if not ready then
 		warn("[HudController] the camera has no real screen size yet: the HUD may get the phone's layout")
 	end
-	print(`[HudController] screen when the HUD was built: first {first}, then {final}`)
+	print(
+		`[HudController] screen when the HUD was built: first {first}, then {final}, touch {UserInputService.TouchEnabled}, mouse {UserInputService.MouseEnabled}, tv {GuiService:IsTenFootInterface()}`
+	)
 	refs = HudView.build()
 	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles (the
 	-- round look: as wide as them, stacked on a mouse or a TV)
@@ -528,17 +546,8 @@ function HudController.start()
 	-- (the HUD's size lands a frame after the viewport's: the chips' limit follows it)
 	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
-	-- the round look's offers at the right edge: hidden while the last input is touch (a touch
-	-- screen with a mouse or a keyboard got the PC layout: the touch tutorial's SKIP and Roblox's
-	-- jump button take that edge as soon as it is touched)
-	local offers = refs.Gui:FindFirstChild("Offers")
-	if offers and offers:IsA("GuiObject") then
-		local function showOffers()
-			offers.Visible = UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
-		end
-		showOffers()
-		UserInputService.LastInputTypeChanged:Connect(showOffers)
-	end
+	refreshOffers()
+	UserInputService.LastInputTypeChanged:Connect(refreshOffers)
 
 	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
 	BackpackState.onChanged(refreshBackpack)

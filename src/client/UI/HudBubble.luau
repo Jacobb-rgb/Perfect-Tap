@@ -1328,9 +1328,15 @@ function HudBubble.offers(gui: Instance, layout: Layout): Frame
 			Size = UDim2.fromOffset(size, size),
 			ZIndex = 3,
 		}, holder)
-		IconAssets.apply(button, offer.Icon)
-		button:SetAttribute("Icon", offer.Icon)
 		button:SetAttribute("Card", offer.Card)
+		if IconAssets.find(offer.Icon) ~= "" then
+			IconAssets.apply(button, offer.Icon)
+			button:SetAttribute("Icon", offer.Icon)
+		else
+			-- (its icon sheet isn't uploaded: the live model, so the offer never stands empty)
+			local model, from = PictureModels.build(offer.Icon)
+			Pop.model(button, offer.Icon, size, model, { Active = false, ZIndex = 3 }, from)
+		end
 		Pop.fxTag(button, "Lean")
 		if product and product.Robux then
 			-- (the reel: lime letters with a dark edge, no box, tilted up over the corner)
