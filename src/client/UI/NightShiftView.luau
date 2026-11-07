@@ -6,10 +6,12 @@
 	buttons are 72 units tall (44 pt on a phone).
 
 	  fill(refs, payload)   OpenUI "Offline" { Amount, Seconds, Hours, Rate,
-	                        Made?, Crate? } (PodiumService, NightShiftService)
+	                        Made?, Crate?, Why?, PenFull? } (PodiumService,
+	                        NightShiftService)
 	  setPrize(refs, result) the opened crate (NightCrateResult)
 	  setOpening(refs, on)  Open Crate waits for the server
-	The texts are pure functions (specced).
+	The texts are pure functions (specced). The coin and the chest need no
+	upload (Pop.coin, a little chest of parts in a ViewportFrame).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,12 +30,24 @@ NightShiftView.Size = Vector2.new(700, 500)
 NightShiftView.Band = 64
 NightShiftView.ButtonHeight = 72
 NightShiftView.MaxRows = 5
+NightShiftView.CloseHit = 72 -- units: what the X takes (44 pt on a phone; it draws smaller)
+NightShiftView.OddsSize = 17 -- units: at least 10 pt on a phone
+
+-- Why the machines made nothing (the server's Why, NightShiftService).
+NightShiftView.Why = {
+	NoBillboard = "Buy the sorting billboard: then your machines finish ore from the pen.",
+	BillboardOff = "Switch the sorting billboard on: then your machines finish ore from the pen.",
+	NoBelt = "Put a belt on the PEN chute: then your machines finish ore from the pen.",
+	NoMachines = "Place your machines: then they finish ore from the pen.",
+	Nothing = "Nothing for your machines in the pen: rare dirty ore waits for your own cleaning.",
+}
+NightShiftView.WhyDefault = "Your machines finish ore from the pen when the sorting billboard is on."
 
 export type Refs = {
 	Gui: ScreenGui,
 	Dim: Frame,
 	Panel: Frame,
-	Close: GuiButton,
+	Close: TextButton,
 	Time: TextLabel,
 	Bar: GuiObject,
 	Coins: TextLabel,
@@ -66,18 +80,37 @@ end
 function NightShiftView.machinesText(made: any): string
 	local total = if type(made) == "table" then tonumber(made.Total) or 0 else 0
 	local bars = if type(made) == "table" then tonumber(made.Bars) or 0 else 0
-	return if total > 0 and bars < total then `+{total} items` else `+{bars} bars`
+	if total > 0 and bars < total then
+		return if total == 1 then "+1 item" else `+{total} items`
+	end
+	return if bars == 1 then "+1 bar" else `+{bars} bars`
+end
+
+function NightShiftView.whyText(why: any): string
+	return NightShiftView.Why[why] or NightShiftView.WhyDefault
+end
+
+-- The crate's small line before it is opened.
+function NightShiftView.crateText(waiting: boolean, penFull: boolean): string
+	if not waiting then
+		return "Once a day, after 1 h away"
+	end
+	return if penFull then "Pen full: ores pay coins" else "Free once a day"
 end
 
 -- What the opened crate says: its big line and the small one.
 function NightShiftView.prizeText(result: any): (string, string)
 	if type(result) ~= "table" or not result.Ok then
-		return "NIGHT CRATE", "Try again next time"
+		return "NIGHT CRATE", "No crate waits right now"
 	end
 	if result.Prize == "Ores" then
 		local ores = tonumber(result.Ores) or 0
 		local amount = tonumber(result.Amount) or 0
-		return `{ores} dirty ores`, if amount > 0 then `In your pen, and +{Format.money(amount)}: it is full` else "In your pen"
+		if ores == 0 then
+			return `+{Format.money(amount)}`, "Your pen was full: the ores in coins"
+		end
+		local big = if ores == 1 then "1 dirty ore" else `{ores} dirty ores`
+		return big, if amount > 0 then `In your pen, full now: +{Format.money(amount)}` else "In your pen"
 	elseif result.Prize == "Relic" then
 		local artifact = ArtifactConfig.ById[result.Artifact]
 		return "A relic!", if artifact then artifact.Name else ""
@@ -122,6 +155,37 @@ local function picture(parent: Instance, desc: any, size: UDim2, position: UDim2
 	}, Vector3.new(-0.5, 0.55, -1))
 end
 
+-- The little chest on the crate card (needs no upload): a dozen parts, shown in a ViewportFrame.
+local function chestModel(): Model
+	local model = Instance.new("Model")
+	model.Name = "NightChest"
+	local function part(cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CFrame = cf
+		p.Size = size
+		p.Color = color
+		p.Material = material or Enum.Material.SmoothPlastic
+		p.Parent = model
+		return p
+	end
+	local wood = Color3.fromRGB(150, 84, 40)
+	local dark = Color3.fromRGB(104, 56, 28)
+	local gold = Color3.fromRGB(255, 200, 60)
+	part(CFrame.new(0, 0.6, 0), Vector3.new(3, 1.2, 2), wood)
+	part(CFrame.new(0, 1.22, 0), Vector3.new(3.1, 0.14, 2.1), dark)
+	part(CFrame.new(0, 1.45, 1.05) * CFrame.Angles(math.rad(50), 0, 0), Vector3.new(3, 1.1, 0.26), wood)
+	part(CFrame.new(0, 1.4, 0), Vector3.new(2.7, 0.3, 1.7), gold, Enum.Material.SmoothPlastic)
+	for _, x in { -1, 1 } do
+		part(CFrame.new(x, 0.62, -0.03), Vector3.new(0.3, 1.3, 2.1), gold)
+	end
+	part(CFrame.new(0, 0.95, -1.05), Vector3.new(0.5, 0.6, 0.14), gold)
+	for k, at in { Vector3.new(-0.7, 1.62, -0.3), Vector3.new(0.1, 1.68, 0.2), Vector3.new(0.7, 1.6, -0.25) } do
+		part(CFrame.new(at) * CFrame.Angles(0.3 * k, 0.5 * k, 0), Vector3.new(0.6, 0.16, 0.6), Color3.fromRGB(255, 226, 110))
+	end
+	return model
+end
+
 function NightShiftView.build(): Refs
 	local gui = UIKit.screen(NightShiftView.GuiName, 30)
 	gui.Enabled = false
@@ -164,7 +228,7 @@ function NightShiftView.build(): Refs
 	})
 
 	local coinTile, coins = tile(inner, "Podiums", "Podiums", Color3.fromRGB(110, 230, 90), UDim.new(0, 0), UDim.new(0.5, -6))
-	Pop.bandIcon(coinTile, "coins", 72, {
+	Pop.coin(coinTile, 64, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0, 50, 0.5, 0),
 		ZIndex = 7,
@@ -192,7 +256,7 @@ function NightShiftView.build(): Refs
 		Size = UDim2.new(1, -20, 0, 86),
 		ZIndex = 5,
 	}, collected)
-	local empty = Pop.text(collected, "Your machines finish ore from the pen when the sorting billboard is on.", 19, {
+	local empty = Pop.text(collected, NightShiftView.WhyDefault, 19, {
 		Name = "Empty",
 		Position = UDim2.fromOffset(14, 38),
 		Size = UDim2.new(1, -28, 0, 84),
@@ -209,18 +273,19 @@ function NightShiftView.build(): Refs
 	})
 	Pop.face(card, "Violet", 8, false)
 	Pop.rays(card, UDim2.fromScale(0.2, 0.5), 10, 320, 0.88, 3)
-	Pop.bandIcon(card, "coin_chest", 84, {
+	Pop.model(card, "night_chest", 10, chestModel(), {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0, 50, 0, 50),
+		Size = UDim2.fromOffset(90, 90),
 		ZIndex = 7,
-	})
+	}, Vector3.new(-0.7, 0.6, -1))
 	local crateTitle = Pop.text(card, "NIGHT CRATE", 23, {
 		Name = "Title",
 		Position = UDim2.fromOffset(98, 6),
 		Size = UDim2.new(1, -104, 0, 28),
 		ZIndex = 7,
 	})
-	local crateText = Pop.text(card, "Free every night", 18, {
+	local crateText = Pop.text(card, NightShiftView.crateText(true, false), 18, {
 		Name = "Text",
 		Position = UDim2.fromOffset(98, 34),
 		Size = UDim2.new(1, -104, 0, 40),
@@ -234,7 +299,7 @@ function NightShiftView.build(): Refs
 		Position = UDim2.new(0, 50, 0, 90),
 		ZIndex = 7,
 	})
-	local odds = Pop.text(card, NightShiftConfig.oddsText(), 15, {
+	local odds = Pop.text(card, NightShiftConfig.oddsText(), NightShiftView.OddsSize, {
 		Name = "Odds",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 98, 1, -6),
@@ -254,11 +319,30 @@ function NightShiftView.build(): Refs
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0.5, 8, 1, 0),
 	})
+	-- the X keeps its size; what a thumb hits is bigger
+	local x = window.Close :: GuiObject
+	local closeHit = UIKit.new("TextButton", {
+		Name = "CloseHit",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Selectable = false,
+		Size = UDim2.fromOffset(NightShiftView.CloseHit, NightShiftView.CloseHit),
+		Text = "",
+		ZIndex = x.ZIndex + 2,
+	}, x)
+	-- a gamepad stays in the window
+	local root = window.Root
+	root.SelectionGroup = true
+	root.SelectionBehaviorUp = Enum.SelectionBehavior.Stop
+	root.SelectionBehaviorDown = Enum.SelectionBehavior.Stop
+	root.SelectionBehaviorLeft = Enum.SelectionBehavior.Stop
+	root.SelectionBehaviorRight = Enum.SelectionBehavior.Stop
 	return {
 		Gui = gui,
 		Dim = dim,
 		Panel = window.Root,
-		Close = window.Close :: any,
+		Close = closeHit,
 		Time = time,
 		Bar = bar,
 		Coins = coins,
@@ -276,12 +360,13 @@ function NightShiftView.build(): Refs
 	}
 end
 
-local function fillRows(refs: Refs, made: any)
+local function fillRows(refs: Refs, made: any, why: any)
 	for _, child in refs.Rows:GetChildren() do
 		child:Destroy()
 	end
 	local list = if type(made) == "table" and type(made.List) == "table" then made.List else {}
 	refs.Empty.Visible = #list == 0
+	refs.Empty.Text = NightShiftView.whyText(why)
 	for k = 1, math.min(#list, NightShiftView.MaxRows) do
 		local row = list[k]
 		local cell = Pop.well(refs.Rows, {
@@ -303,14 +388,14 @@ local function fillRows(refs: Refs, made: any)
 end
 
 -- Open Crate only while one waits; Collect alone stands in the middle.
-local function setCrate(refs: Refs, waiting: boolean)
+local function setCrate(refs: Refs, waiting: boolean, penFull: boolean)
 	refs.Open.Visible = waiting
 	refs.Collect.AnchorPoint = if waiting then Vector2.new(1, 1) else Vector2.new(0.5, 1)
 	refs.Collect.Position = if waiting then UDim2.new(0.5, -8, 1, 0) else UDim2.new(0.5, 0, 1, 0)
 	refs.CrateCount.Visible = waiting
 	refs.CrateOdds.Visible = true
 	refs.CrateTitle.Text = "NIGHT CRATE"
-	refs.CrateText.Text = if waiting then "Free every night" else "After a night away"
+	refs.CrateText.Text = NightShiftView.crateText(waiting, penFull)
 end
 
 function NightShiftView.fill(refs: Refs, payload: { [string]: any })
@@ -322,8 +407,8 @@ function NightShiftView.fill(refs: Refs, payload: { [string]: any })
 	refs.Coins.Text = "+" .. Format.money(tonumber(payload.Amount) or 0)
 	refs.Machines.Text = NightShiftView.machinesText(payload.Made)
 	refs.MachinesTitle.Text = `Machines {math.floor(rate * 100 + 0.5)}%`
-	fillRows(refs, payload.Made)
-	setCrate(refs, payload.Crate == true)
+	fillRows(refs, payload.Made, payload.Why)
+	setCrate(refs, payload.Crate == true, payload.PenFull == true)
 end
 
 function NightShiftView.setOpening(refs: Refs, on: boolean)
@@ -337,7 +422,7 @@ end
 
 function NightShiftView.setPrize(refs: Refs, result: any)
 	local big, small = NightShiftView.prizeText(result)
-	setCrate(refs, false)
+	setCrate(refs, false, false)
 	refs.CrateTitle.Text = big
 	refs.CrateText.Text = small
 	refs.CrateOdds.Visible = false

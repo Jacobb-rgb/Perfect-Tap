@@ -357,16 +357,18 @@ Every case stays under the 10 % limit the integrator set, so the +1 %/level shar
 
 ## Night Shift (2026-11-07)
 
-The owner's Night Shift: free 25 % for 8 h, the pass stays at 50 % for 12 h, plus a free crate a night. The sim
+The owner's Night Shift: free 25 % for 8 h, the pass stays at 50 % for 12 h, plus a free crate once a day. The sim
 plays in sessions now: `SessionSeconds` of play, then `AwaySeconds` away, the podiums paying `OfflineRate` for at most
-`OfflineHours`, the crate paying `CrateMinutes` of income (always coins here: on the high side). Pass them per scenario
-in an `override=` file. Scenario keys stay in `A` for the next scenario, so run a baseline without sessions first or alone.
+`OfflineHours`, the crate paying 70 % x `CrateMinutes` of podium income (what the code pays on average: its coins prize).
+Pass them per scenario in an `override=` file. Scenario keys stay in `A` for the next scenario, so run a baseline
+without sessions first or alone.
 
 Played time to Blaster 10 (12 simulated players, money arrives at session ends, so these are rough):
 
-| Player | No breaks | Before (50 %, 5 h) | Night Shift (25 %, 8 h, crate) | Pass before (50 %, 12 h) |
-|---|---|---|---|---|
-| Typical, 1 h a day | 5h 31m | 4h 09m | 4h 00m | 3h 20m |
-| Casual, 30 min a day | 8h 18m | 4h 15m | 4h 03m | - |
+| Player | No breaks | Before (50 %, 5 h) | Night Shift (25 %, 8 h, crate) | Pass before (50 %, 12 h) | Pass now (+ crate) |
+|---|---|---|---|---|---|
+| Typical, 1 h a day | 5h 31m | 4h 09m | 4h 24m | 3h 20m | 3h 27m |
+| Casual, 30 min a day | 8h 18m | 4h 15m | 4h 33m | - | - |
 
-The pace stays. The machines add no ore (they finish the pen's, `Machines/NightShiftLine`), so the sim leaves them out.
+Slightly slower than before for a free player, as the owner's picture asks for (he was told, 2026-11-07). The machines
+add no ore (they finish the pen's, `Machines/NightShiftLine`), so the sim leaves them out.

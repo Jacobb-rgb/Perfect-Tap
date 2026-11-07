@@ -570,6 +570,31 @@ return function(T, Loader)
 		w.data.LastSeen = NOW - 7200
 		podium.loaded(w.player, w.data)
 		T.truthy(podium.payOffline(w.player, true) > 0, "a broken hook never costs the coins")
+		-- no window (leaving in the first seconds): the hook still runs, a crate stays earned
+		local quiet = 0
+		PodiumService.onReturn(function(): any
+			quiet += 1
+			return { Crate = true }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		podium.payOffline(w.player, false)
+		T.eq(quiet, 1, "the hook ran without a window")
+		-- the crate alone opens the window; a reason alone doesn't
+		w.data.Podiums = {}
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		w.notes = {}
+		T.eq(podium.payOffline(w.player, true), 0, "no coins")
+		T.eq(lastNote(w, "OpenUI").B.Crate, true, "the crate alone opens it")
+		PodiumService.onReturn(function(): any
+			return { Why = "NoBelt", Crate = false }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		w.notes = {}
+		podium.payOffline(w.player, true)
+		T.eq(lastNote(w, "OpenUI"), nil, "a reason alone doesn't")
 		PodiumService.onReturn(function(): any
 			return nil
 		end)

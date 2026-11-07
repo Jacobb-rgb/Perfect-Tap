@@ -32,9 +32,9 @@
 	  a check kept failing: a later check that says the player owned the
 	  pass pays the difference (topUpOffline, a toast). The client
 	  shows "While you were away"
-	  (OpenUI "Offline" { Amount, Seconds, Hours, Rate, Made?, Crate? }, the
-	  last two from the onReturn hook, NightShiftService: the window opens for
-	  those alone too). LastSeen is written on
+	  (OpenUI "Offline" { Amount, Seconds, Hours, Rate, Made?, Crate?, Why?,
+	  PenFull? }, those from the onReturn hook, NightShiftService: the window
+	  opens for Made or Crate alone too). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
 	- StateService gets Income (per second), PodiumSlots (3 or 5) and
@@ -757,8 +757,9 @@ end
 
 local returnHook: ((Player, { [string]: any }, number, boolean) -> { [string]: any }?)? = nil
 
--- What else the base did while the player was away (NightShiftService): runs when the
--- welcome-back window would open; what it returns goes into that window (nil: nothing).
+-- What else the base did while the player was away (NightShiftService): runs with every
+-- payout of an absence; what it returns goes into the window, which also opens for its
+-- Made or Crate alone.
 function PodiumService.onReturn(hook: (Player, { [string]: any }, number, boolean) -> { [string]: any }?)
 	returnHook = hook
 end
@@ -791,7 +792,7 @@ local function payOffline(player: Player, popup: boolean): number
 		}
 	end
 	local extra = nil
-	if popup and player.Parent and returnHook and seconds >= EconomyConfig.Offline.MinSeconds then
+	if returnHook and seconds >= EconomyConfig.Offline.MinSeconds then
 		-- (a broken hook never costs the player the coins below)
 		local ok, answer = pcall(returnHook, player, data, seconds, extended)
 		if ok then
@@ -809,7 +810,7 @@ local function payOffline(player: Player, popup: boolean): number
 			stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
 		end
 	end
-	if popup and player.Parent and (amount > 0 or extra) then
+	if popup and player.Parent and (amount > 0 or (extra and (extra.Made or extra.Crate))) then
 		Net.fire("OpenUI", player, "Offline", {
 			Amount = amount,
 			Seconds = seconds,
@@ -817,6 +818,8 @@ local function payOffline(player: Player, popup: boolean): number
 			Rate = EconomyConfig.offlineRate(extended),
 			Made = extra and extra.Made,
 			Crate = extra and extra.Crate,
+			Why = extra and extra.Why,
+			PenFull = extra and extra.PenFull,
 		})
 	end
 	return amount
@@ -1025,6 +1028,7 @@ PodiumService._test = {
 		clock = fn or os.time
 	end,
 	reset = function()
+		returnHook = nil
 		for _, perPlot in shown do
 			for _, entry in perPlot do
 				clearShown(entry)

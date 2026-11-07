@@ -3,7 +3,8 @@
 	obrazky/napady_obrazky_2026-10-30/05_nocni_smena.jpg, no golems) for the
 	owner, rendered without Studio. tools/preview is a three.js approximation
 	of Roblox: fonts and lighting are close, not exact. Built with the game's
-	own code (UI/NightShiftView, UI/HudView) from made-up numbers.
+	own code (UI/NightShiftView, UI/HudView) from made-up numbers. Icons that
+	aren't uploaded yet stay away, as in the game (no IconAssets.Previewing).
 
 	  lune run tools/lune/export_scene.luau world     (once: the town behind it)
 	  lune run tools/lune/export_night_shift.luau
@@ -19,7 +20,6 @@ local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
-Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 
 local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")

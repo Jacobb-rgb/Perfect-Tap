@@ -5,7 +5,8 @@
 
 	No ore from nothing: the machines finish ore that already lies in the pen
 	and that the sorting billboard would send them anyway (what
-	MachineData.keeps doesn't keep; never a SECRET ore). Each item walks the
+	MachineData.keeps doesn't keep; never a SECRET ore; dirty ore only if it
+	wouldn't be kept once clean, NightShiftConfig.CleansKept). Each item walks the
 	line as far as the base has a machine for its kind (dirty -> Auto Cleaner
 	-> clean -> Crusher -> crushed x2 -> furnace -> ingot), through
 	MachineLogic.outputs with the owner's own grade odds. Every stage can do
@@ -19,18 +20,25 @@
 
 local EconomyConfig = require(script.Parent.Parent.Config.EconomyConfig)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
+local NightShiftConfig = require(script.Parent.Parent.Config.NightShiftConfig)
 local MachineLogic = require(script.Parent.MachineLogic)
 
 local NightShiftLine = {}
 
-export type Stage = { Machine: string, PerSecond: number }
+export type Stage = { Machine: string, PerSecond: number, Best: number }
 export type Line = { [string]: Stage }
-export type Report = { Total: number, Bars: number, Made: { [string]: { K: string, O: string, G: string?, N: number } } }
+export type Report = {
+	Total: number,
+	Bars: number,
+	Made: { [string]: { K: string, O: string, G: string?, N: number } },
+	Cleaned: { [string]: boolean }, -- ores that came out of the dirt (the codex finds them)
+}
 
 -- The kinds a line takes (the Anvil's and the Alloy Furnace's ingots are the player's own choice).
 local KINDS = { "Raw", "Clean", "Crushed" }
 
--- This base's line: per item kind the fastest machine for it and the jobs per second of all of them.
+-- This base's line: per item kind the fastest machine that moves it on (a Polisher's or an
+-- Extractor's output is what it took: no stage) and the jobs per second of all of those.
 function NightShiftLine.line(data: { [string]: any }): Line
 	local line: Line = {}
 	local placed = data.PlacedMachines
@@ -47,12 +55,16 @@ function NightShiftLine.line(data: { [string]: any }): Line
 			if seconds > 0 then
 				local perSecond = (info.Batch or 1) / seconds
 				for _, kind in KINDS do
-					if machine.Accepts[kind] then
+					if machine.Accepts[kind] and machine.Output ~= kind then
 						local stage = line[kind]
 						if not stage then
-							line[kind] = { Machine = id, PerSecond = perSecond }
+							line[kind] = { Machine = id, PerSecond = perSecond, Best = perSecond }
 						else
 							stage.PerSecond += perSecond
+							if perSecond > stage.Best then
+								stage.Machine = id
+								stage.Best = perSecond
+							end
 						end
 					end
 				end
@@ -78,7 +90,7 @@ function NightShiftLine.run(
 	odds: (string) -> { [string]: number }?,
 	random: () -> number
 ): Report
-	local report: Report = { Total = 0, Bars = 0, Made = {} }
+	local report: Report = { Total = 0, Bars = 0, Made = {}, Cleaned = {} }
 	local jobs: { [string]: number } = {}
 	for kind, stage in line do
 		jobs[kind] = math.floor(stage.PerSecond * math.max(work, 0))
@@ -93,12 +105,16 @@ function NightShiftLine.run(
 				local item: any = table.remove(walking)
 				local stage = line[item.K]
 				local outputs = nil
-				if stage and jobs[item.K] >= 1 and not MachineData.keeps(keepMode, keepList, item) then
+				local leftDirty = item.K == "Raw" and not NightShiftConfig.CleansKept and MachineData.keepsOre(keepMode, keepList, item.O)
+				if stage and jobs[item.K] >= 1 and not leftDirty and not MachineData.keeps(keepMode, keepList, item) then
 					outputs = MachineLogic.outputs(stage.Machine, item, random(), odds(stage.Machine))
 				end
 				if outputs and #outputs > 0 and (#outputs == 1 or #outputs - 1 <= room) then
 					jobs[item.K] -= 1
 					room -= #outputs - 1
+					if item.K == "Raw" then
+						report.Cleaned[item.O] = true
+					end
 					for _, output in outputs do
 						table.insert(walking, output)
 					end

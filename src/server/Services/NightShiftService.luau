@@ -5,11 +5,14 @@
 	- onReturn (PodiumService's hook, when the welcome-back window would open):
 	    the machines finish ore from the pen for (seconds away, capped) x the
 	    offline rate (Machines/NightShiftLine). Only with the sorting billboard
-	    on and a belt on the PEN chute: that is the ore they would have got.
-	    A long enough absence earns the crate (NightShiftConfig.earnsCrate,
-	    data.NightShift). Returns { Made?, Crate? } for the window, nil if
-	    neither. Made = { Total, Bars, List = up to ListMax rows, best first }.
-	    No yields: the pen's list changes in one step.
+	    on and a belt feeding from the PEN chute: that is the ore they would have
+	    got. Ore that comes out of the dirt is discovered, quietly. A long enough
+	    absence earns the crate (NightShiftConfig.earnsCrate, data.NightShift).
+	    Returns { Made?, Why?, Crate, PenFull } for the window: Made = { Total,
+	    Bars, List = up to ListMax rows, best first }; Why = why the machines made
+	    nothing ("NoBillboard" | "BillboardOff" | "NoBelt" | "NoMachines" | "Nothing").
+	    It also runs when no window opens (a player leaving during the first
+	    seconds): the crate stays earned. No yields: the pen's list changes in one step.
 	- NightCrate (the window's Open Crate): if one waits, rolls NightShiftConfig
 	  .pick and pays: coins, dirty ores into the pen (no room: what Tobin would
 	  pay for them dirty) or a relic (a zone with none left: the coins). Answer
@@ -28,6 +31,7 @@ local NightShiftConfig = require(Shared.Config.NightShiftConfig)
 local NightShiftLine = require(Shared.Machines.NightShiftLine)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
+local Discovery = require(script.Parent.Parent.Discovery)
 local ArtifactService = require(script.Parent.ArtifactService)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -51,41 +55,57 @@ local function recordOf(data: { [string]: any }): { [string]: any }
 	return night
 end
 
--- Would the sorting billboard send the pen's ore? (it needs a belt on the PEN chute)
-local function lineOn(data: { [string]: any }): boolean
+-- Why the sorting billboard wouldn't send the pen's ore (it needs a belt feeding from the PEN
+-- chute, on the ground, not facing the yard); nil if it would.
+local function lineOff(data: { [string]: any }): string?
 	local upgrades = data.Upgrades
 	local automation = if type(upgrades) == "table" then tonumber(upgrades.PenAutomation) else nil
-	if not automation or automation < EconomyConfig.PenAutomation.Billboard or not PenService.autoSortOn(data) then
-		return false
+	if not automation or automation < EconomyConfig.PenAutomation.Billboard then
+		return "NoBillboard"
 	end
-	local chute = BaseLayout.Chutes.Pen
+	if not PenService.autoSortOn(data) then
+		return "BillboardOff"
+	end
+	local x, z = BaseLayout.chuteCell("Pen")
 	local placed = data.PlacedMachines
 	if type(placed) == "table" then
 		for _, entry in placed do
 			local info = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
-			if info and info.IsConveyor and entry.X == chute.X and entry.Z == chute.Z then
-				return true
+			if info and info.IsConveyor and entry.X == x and entry.Z == z and entry.L ~= 1 and BaseLayout.sourceFeeds(entry.R) then
+				return nil
 			end
 		end
 	end
-	return false
+	return "NoBelt"
 end
 
-local function runMachines(data: { [string]: any }, work: number): { [string]: any }?
+-- What the machines made (nil: nothing) and why not.
+local function runMachines(player: Player, data: { [string]: any }, work: number): ({ [string]: any }?, string?)
+	local off = lineOff(data)
+	if off then
+		return nil, off
+	end
 	local storage = data.Storage
-	if type(storage) ~= "table" or not lineOn(data) then
-		return nil
+	local line = NightShiftLine.line(data)
+	if next(line) == nil then
+		return nil, "NoMachines"
+	end
+	if type(storage) ~= "table" then
+		return nil, "Nothing"
 	end
 	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
 	local capacity = EconomyConfig.penCapacity(upgrades.PenLevel, GameConfig.MaxStoredItems)
-	local report = NightShiftLine.run(storage, NightShiftLine.line(data), work, capacity, data.KeepMode, data.KeepList, function(machineId)
+	local report = NightShiftLine.run(storage, line, work, capacity, data.KeepMode, data.KeepList, function(machineId)
 		local machine = MachineData.ById[machineId]
 		return if machine and machine.QualityLevels
 			then MachineData.gradeOdds(EconomyConfig.upgradeLevel(data, machineId, "Quality"))
 			else nil
 	end, NightShiftService.random)
 	if report.Total == 0 then
-		return nil
+		return nil, "Nothing"
+	end
+	for oreId in report.Cleaned do
+		Discovery.mark(player, data, oreId, true)
 	end
 	local rows = {}
 	for _, row in report.Made do
@@ -105,13 +125,25 @@ local function runMachines(data: { [string]: any }, work: number): { [string]: a
 	for k = 1, math.min(NightShiftService.ListMax, #rows) do
 		list[k] = rows[k]
 	end
-	return { Total = report.Total, Bars = report.Bars, List = list }
+	return { Total = report.Total, Bars = report.Bars, List = list }, nil
+end
+
+-- Is there no room in the pen for the crate's ores?
+local function penFull(data: { [string]: any }): boolean
+	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
+	local count = if type(data.Storage) == "table" then #data.Storage else 0
+	return count + NightShiftConfig.Crate.OreCount > EconomyConfig.penCapacity(upgrades.PenLevel, GameConfig.MaxStoredItems)
+end
+
+local function floorOf(data: { [string]: any }): any
+	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
+	return NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1, upgrades.Elevator == true)
 end
 
 -- See the header. `seconds` away, `extended`: the OfflineExtension perk.
-function NightShiftService.onReturn(player: Player, data: { [string]: any }, seconds: number, extended: boolean): { [string]: any }?
+function NightShiftService.onReturn(player: Player, data: { [string]: any }, seconds: number, extended: boolean): { [string]: any }
 	local work = math.min(seconds, EconomyConfig.offlineHours(extended) * 3600) * EconomyConfig.offlineRate(extended)
-	local made = runMachines(data, work)
+	local made, why = runMachines(player, data, work)
 	local night = recordOf(data)
 	local now = NightShiftService.clock()
 	local earned = NightShiftConfig.earnsCrate(night, seconds, now)
@@ -122,10 +154,7 @@ function NightShiftService.onReturn(player: Player, data: { [string]: any }, sec
 	if made or earned then
 		DataService.changed(player)
 	end
-	if not made and night.Ready ~= true then
-		return nil
-	end
-	return { Made = made, Crate = night.Ready == true }
+	return { Made = made, Why = why, Crate = night.Ready == true, PenFull = penFull(data) }
 end
 
 local function payCoins(player: Player, data: { [string]: any }, result: { [string]: any })
@@ -136,7 +165,7 @@ local function payCoins(player: Player, data: { [string]: any }, result: { [stri
 end
 
 local function payOres(player: Player, data: { [string]: any }, result: { [string]: any })
-	local floor = NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1)
+	local floor = floorOf(data)
 	local stored, coins = 0, 0
 	for _ = 1, NightShiftConfig.Crate.OreCount do
 		local oreId = NightShiftConfig.pickOre(floor, NightShiftService.random())
@@ -160,7 +189,7 @@ local function payOres(player: Player, data: { [string]: any }, result: { [strin
 end
 
 local function payRelic(player: Player, data: { [string]: any }, result: { [string]: any })
-	local floor = NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1)
+	local floor = floorOf(data)
 	local id = ArtifactConfig.pick(floor.ZoneId, NightShiftService.random())
 	if id and ArtifactService.find(player, floor.ZoneId, nil, id) then
 		result.Prize = "Relic"

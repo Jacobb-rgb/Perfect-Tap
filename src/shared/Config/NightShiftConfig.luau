@@ -8,24 +8,30 @@
 
 	The crate is a random reward: its chances (Odds) are shown on it in the
 	window. It can't be bought and no luck changes it.
+
+	CleansKept (owner's call, 2026-11-07): the machines leave dirty ore alone
+	that the player's keep setting would keep once clean (Rare and up by
+	default): cleaning it by hand is worth more, and it can't be undone.
 ]]
 
 local MineFloors = require(script.Parent.MineFloors)
 
 local NightShiftConfig = {}
 
+NightShiftConfig.CleansKept = false
+
 NightShiftConfig.Crate = {
 	MinAway = 3600, -- seconds away that earn one
-	Every = 20 * 3600, -- seconds between two earned crates ("free every night": a little under a day)
+	Every = 20 * 3600, -- seconds between two earned crates ("once a day": the same evening hour works)
 	CoinSeconds = 600, -- Coins: seconds of the player's podium income...
 	CoinMin = 2500, -- ...at least this many coins
-	OreCount = 3, -- Ores: this many dirty ores from the player's deepest floor
+	OreCount = 3, -- Ores: this many dirty ores from the deepest floor the player can reach
 }
 
 NightShiftConfig.Odds = {
 	{ Id = "Coins", Chance = 0.7, Text = "Coins" },
-	{ Id = "Ores", Chance = 0.25, Text = "3 dirty ores" },
-	{ Id = "Relic", Chance = 0.05, Text = "A relic" },
+	{ Id = "Ores", Chance = 0.25, Text = "Ores" },
+	{ Id = "Relic", Chance = 0.05, Text = "Relic" },
 }
 
 -- The prize of a roll in [0, 1).
@@ -40,7 +46,7 @@ function NightShiftConfig.pick(roll: number): string
 	return NightShiftConfig.Odds[1].Id
 end
 
--- "Coins 70% · 3 dirty ores 25% · A relic 5%"
+-- "Coins 70% · Ores 25% · Relic 5%"
 function NightShiftConfig.oddsText(): string
 	local parts = {}
 	for _, line in NightShiftConfig.Odds do
@@ -52,7 +58,11 @@ end
 -- Does this absence earn a crate? (`record` = data.NightShift)
 function NightShiftConfig.earnsCrate(record: { [string]: any }, away: number, now: number): boolean
 	local crate = NightShiftConfig.Crate
-	return record.Ready ~= true and away >= crate.MinAway and now - (tonumber(record.CrateAt) or 0) >= crate.Every
+	local at = tonumber(record.CrateAt) or 0
+	if at > now then
+		at = 0 -- (a clock that ran ahead never locks the crate)
+	end
+	return record.Ready ~= true and away >= crate.MinAway and now - at >= crate.Every
 end
 
 function NightShiftConfig.coins(income: number): number
@@ -61,11 +71,11 @@ function NightShiftConfig.coins(income: number): number
 	return math.floor(math.max(safe * crate.CoinSeconds, crate.CoinMin))
 end
 
--- The deepest floor a blaster of this level can mine.
-function NightShiftConfig.floorFor(level: number): MineFloors.Floor
+-- The deepest floor a blaster of this level can mine and the player can get to.
+function NightShiftConfig.floorFor(level: number, elevator: boolean): MineFloors.Floor
 	local best = MineFloors.List[1]
 	for _, floor in MineFloors.List do
-		if floor.MinBlaster <= level and floor.Index > best.Index then
+		if floor.MinBlaster <= level and (elevator or not floor.ViaElevator) and floor.Index > best.Index then
 			best = floor
 		end
 	end

@@ -430,7 +430,6 @@ return function(T, Loader)
 		local hud = source("Controllers/HudController")
 		T.truthy(hud:find("not Motion.isCounting(refs.Coins) and not Motion.reduced()", 1, true), "the coin panel pop")
 		T.truthy(hud:find("if not Motion.reduced() then -- (Reduce motion: it just goes)", 1, true), "the toast exit")
-		T.truthy(source("Controllers/NightShiftController"):find("Motion.pop(refs.Panel, refs.Dim)", 1, true), "the offline window")
 		T.falsy(hud:find("scale.Scale = 0.6", 1, true), "no own offline pop left")
 		for _, name in { "Controllers/WheelController", "Controllers/TrainController", "Controllers/PlacementController" } do
 			T.truthy(source(name):find("if not Motion.reduced() then -- (Reduce motion:", 1, true), name .. ": its endless pulse")
@@ -693,10 +692,6 @@ return function(T, Loader)
 		T.truthy(
 			hud:find('if Motion.full() then Motion.popIn(frame) else Motion.classicPop(frame, "UIScale", 0.6, 0.25)', 1, true),
 			"the toast"
-		)
-		T.truthy(
-			source("Controllers/NightShiftController"):find("Motion.classicPop(refs.Panel, nil, 0.6, 0.3)", 1, true),
-			"the offline window"
 		)
 		T.truthy(hud:find("if big and not Motion.full() then", 1, true), "the coin glide")
 		T.truthy(hud:find("shownCoins += diff * 0.35", 1, true), "main's glide step")

@@ -105,7 +105,7 @@ Violence and resubmit.**
   Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
-  **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, at most one a night after an hour
+  **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, one earned per 20 h after an hour
   away, never sold, no luck changes it; its chances stand on it in the window.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
   floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
