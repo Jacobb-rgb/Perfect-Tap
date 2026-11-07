@@ -576,7 +576,7 @@ return function(T, Loader)
 		T.eq(p1.Id, old, "put back")
 	end)
 
-	T.test("EggPanel: the opens' keys (E is the prompt's; R and X are free at the temple)", function()
+	T.test("EggPanel: the opens' keys (E is the prompt's; R and X go to the eggs at the temple)", function()
 		T.eq(EggPanel.OpenKeys[1], PromptConfig.Keys.Main.Keyboard.Name, "Open 1 is the prompt's key")
 		T.eq(EggPanel.OpenKeys[3], "R")
 		T.eq(EggPanel.OpenKeys[10], "X")
@@ -601,7 +601,11 @@ return function(T, Loader)
 				local _, n = string.gsub(code, key, "")
 				uses += n
 			end
-			if rel ~= "src/client/Controllers/PlacementController.luau" and rel ~= "src/client/Controllers/EggPanelController.luau" then
+			if rel == "src/client/Controllers/HoverboardController.luau" then
+				-- (R opens the hoverboards' window, owner 2026-11-07: bound once at start, so an egg
+				-- panel's own R, bound later while it shows, goes first)
+				T.eq(uses, 1, "the hoverboards' window key")
+			elseif rel ~= "src/client/Controllers/PlacementController.luau" and rel ~= "src/client/Controllers/EggPanelController.luau" then
 				T.eq(uses, 0, rel .. ": R / X are the eggs' (and build mode's)")
 			end
 		end

@@ -116,14 +116,14 @@ HudBubble.RoundMain = {
 	Settings = true,
 } :: { [string]: boolean }
 
--- Does this screen show the "coming soon" tiles? A touch phone keeps the room.
-function HudBubble.showsSoon(touch: boolean?, compact: boolean?): boolean
-	return not (touch == true and compact == true)
+-- Does this screen show the "coming soon" tiles? Touch screens keep the room (above the thumbstick).
+function HudBubble.showsSoon(touch: boolean?): boolean
+	return touch ~= true
 end
 
 -- How many tiles the round look's grid holds on this layout.
 function HudBubble.roundCount(layout: Layout): number
-	local soon = if HudBubble.showsSoon(layout.Touch, layout.Compact) then 0 else #HudBubble.RoundSoon
+	local soon = if HudBubble.showsSoon(layout.Touch) then 0 else #HudBubble.RoundSoon
 	return #HudBubble.RoundMenu - soon
 end
 
@@ -573,7 +573,7 @@ HudBubble.StackChipHeightTv = 158 -- the stacked chip on a TV (the name and the 
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
-HudBubble.RoundTouchColumns = { 5, 4 } -- touch: the tries, the first that fits wins
+HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
 -- BoostView's corner column beside the touch tutorial bubble: CornerGap + CornerWidth + CornerGap

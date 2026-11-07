@@ -78,20 +78,26 @@ return function(T, Loader)
 				local bar = refs.TopBar
 				T.truthy(flyout.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, where .. ": the flyout under the top row")
 				T.truthy(flyout.ZIndex > refs.Toasts.ZIndex, where .. ": the flyout over the toasts")
-				-- (owner 2026-10-28: the chip under the tiles, as wide as them)
-				T.eq(refs.Gui:GetAttribute("ChipLeft"), menu.Position.X.Offset, where .. ": the chip under the tiles' left edge")
-				TrainView.useHud(refs.Gui)
-				T.eq(TrainView.chipSize(true).X, menu.Size.X.Offset, where .. ": the chip as wide as the tiles")
-				TrainView.useHud(nil)
+				-- (owner 2026-10-28: the chip under the tiles, as wide as them; with the 12 tiles of
+				-- 2026-11-07 a smaller tablet has no room above the zone: beside them, as on a phone)
+				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
+				if chipLeft == menu.Position.X.Offset then
+					TrainView.useHud(refs.Gui)
+					T.eq(TrainView.chipSize(true).X, menu.Size.X.Offset, where .. ": the chip as wide as the tiles")
+					TrainView.useHud(nil)
+				else
+					T.truthy(chipLeft >= right, where .. ": the chip beside the tiles")
+					T.truthy(chipTop >= bar.Position.Y.Offset + bar.Size.Y.Offset, where .. ": under the top row")
+				end
 				-- the BLASTER slot + backpack pair out of the thumbstick's zone on a tablet too
 				local pairLeft = width / 2 + refs.CarryPanel.Position.X.Offset
 				T.truthy(pairLeft >= HudBubble.ThumbZone * width - 1e-6, `{where}: the bottom pair from {pairLeft} of {width}`)
 				refs.Gui:Destroy()
 			end
-			-- a PC keeps the offers and the tall block of tiles, two a row (owner 2026-10-28)
+			-- a PC keeps the offers and the tall block of tiles (owner 2026-10-28; 14 tiles since 2026-11-07)
 			local pc = HudBubble.buildGame(1, 1280, false, false, 720 - 58) :: any
 			T.truthy(pc.Gui:FindFirstChild("Offers"), "PC: the offers")
-			T.eq(pc.Menu:GetAttribute("Columns"), 2, "PC: two a row")
+			T.eq(pc.Menu:GetAttribute("Columns"), 3, "PC: three a row")
 			local big = HudBubble.buildGame(1.25, 1920, false, false, 1080 - 58) :: any
 			T.eq(big.Menu:GetAttribute("Columns"), 2, "1920 x 1080: two a row")
 			T.truthy(big.Menu.Position.Y.Offset > HudBubble.MenuTop, "1920 x 1080: lower, like the reel's, where there is room")
@@ -154,7 +160,8 @@ return function(T, Loader)
 				TrainView.useHud(nil)
 				T.eq(chip.X, refs.Menu.Size.X.Offset, where .. ": as wide as the tiles")
 				T.eq(chip.Y, HudBubble.StackChipHeight, where .. ": the HUD knows the stacked chip's height")
-				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": two a row")
+				-- (14 tiles since the owner's left menu, 2026-11-07: three a row on a 720 screen)
+				T.truthy(refs.Menu:GetAttribute("Columns") <= 3, where .. ": a tall block")
 				local chipRect = { chipLeft, chipTop, chipLeft + chip.X, chipTop + chip.Y }
 				local function rectOf(object: any): { number }
 					local x = width * object.Position.X.Scale + object.Position.X.Offset - object.AnchorPoint.X * object.Size.X.Offset

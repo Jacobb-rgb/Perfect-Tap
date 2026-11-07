@@ -77,7 +77,7 @@ function Preview.build(Loader: any): { [string]: any }
 			end
 		end
 		if round then
-			if HudBubble.showsSoon(touch, compact) then
+			if HudBubble.showsSoon(touch) then
 				for _, id in HudBubble.RoundSoon do
 					HudBubble.setSticker(HudBubble.claimTile(refs.Menu, id), "Soon!")
 				end
