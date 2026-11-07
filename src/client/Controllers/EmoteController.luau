@@ -34,6 +34,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local AnimConfig = require(Shared.Config.AnimConfig)
+local PopTheme = require(Shared.Config.PopTheme)
 local EmoteConfig = require(Shared.Config.EmoteConfig)
 local EmoteRules = require(Shared.Moves.EmoteRules)
 local EmoteView = require(script.Parent.Parent.UI.EmoteView)
@@ -267,7 +268,8 @@ function EmoteController.start()
 	-- the EMOTES tile behind MORE (the light UI; touch and gamepad open the menu here;
 	-- owner 2026-10-28: the SPIN tile took its place next to MORE, the menu keeps two rows)
 	local hud = HudController.refs()
-	if hud and hud.Menu and hud.Menu:GetAttribute("Bubble") then
+	-- (the round look has no tile without a picture, owner 2026-11-07: the N key opens the menu)
+	if hud and hud.Menu and hud.Menu:GetAttribute("Bubble") and not PopTheme.round() then
 		local face = HudBubble.addMore(hud.Menu, EmoteController.TileId, EmoteController.TileSpec)
 		face.Activated:Connect(function()
 			Sfx.play("UIClick")

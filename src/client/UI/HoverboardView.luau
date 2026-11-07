@@ -25,7 +25,7 @@
 	           description and the perks (when there is room), and ONE
 	           action button from cardState: BUY with the coin price (yellow,
 	           the coin button; grey with a lock when you can't afford it),
-	           EQUIP (blue), EQUIPPED (gold, a check, not a gamepad stop),
+	           EQUIP (blue), RIDE / STOP on the equipped board (green),
 	           the green Robux price (the robux mark and "49"), COMING SOON
 	           (grey, a clock: the pass id is still 0)
 	  footer   the control hint (PC, gamepad: its glyph) or the pitch
@@ -159,6 +159,7 @@ local TEXT = rgb(255, 255, 255)
 local INK = rgb(10, 12, 26)
 
 HoverboardView.Title = "HOVERBOARDS"
+HoverboardView.WindowKeyCap = "R" -- the keycap beside H on the Hoverboard tile
 HoverboardView.Pitch = "Ride anywhere, faster. Bought once, yours forever."
 HoverboardView.Paint = "Blue" -- the header band (the side menu's Hover colour)
 HoverboardView.OpenTime = 0.42
@@ -296,7 +297,7 @@ function HoverboardView.buttonText(state: CardState, board: HoverboardData.Board
 	elseif state == "Equip" then
 		return "EQUIP"
 	elseif state == "Equipped" then
-		return "EQUIPPED"
+		return "RIDE" -- (the window is the way to ride on a phone: setRideWord says STOP while riding)
 	elseif state == "Robux" then
 		return tostring(board.Robux or HoverboardData.RobuxPrice)
 	end
@@ -898,7 +899,7 @@ local STYLES: { [string]: ActionStyle } = {
 	Buy = actionStyle(Pop.paint("Yellow"), nil, true), -- the coin button (Pop.coinButton's yellow)
 	BuyLocked = actionStyle(PopTheme.Gray, "Lock", true),
 	Equip = actionStyle(Pop.paint("Blue")),
-	Equipped = actionStyle(Pop.paint("Yellow"), "Check"),
+	Equipped = actionStyle(Pop.paint("Green")),
 	Robux = actionStyle(PopTheme.Price, "Mark"), -- the green Pop.price: the robux mark and "49"
 	Soon = actionStyle(PopTheme.Gray, "Clock"),
 }
@@ -1467,8 +1468,6 @@ local function styleAction(refs: Refs, state: CardState, board: HoverboardData.B
 	local dim = state == "BuyLocked" or state == "Soon"
 	refs.ActionWord.TextColor3 = if dim then PopTheme.Ink:Lerp(PopTheme.Gray.Bottom, 0.25) else PopTheme.Ink
 	refs.ActionAmount.TextColor3 = refs.ActionWord.TextColor3
-	-- EQUIPPED has nothing to do: not a gamepad stop
-	refs.Action.Selectable = state ~= "Equipped"
 	refs.Action:SetAttribute("State", state)
 	fitAction(refs)
 end
@@ -1909,6 +1908,13 @@ function HoverboardView.rideTile(menu: Instance): RideButton?
 	return ride
 end
 
+-- The equipped board's button in the window: RIDE, or STOP while you ride.
+function HoverboardView.setRideWord(refs: Refs, riding: boolean)
+	if refs.ActionStyle == "Equipped" then
+		refs.ActionWord.Text = if riding then "STOP" else "RIDE"
+	end
+end
+
 -- RIDE (violet) while walking, STOP (red) while riding; `hint` = the key chip
 -- text ("H"), "" hides it (touch); `glyph` = a gamepad image shown instead.
 function HoverboardView.setRiding(ride: RideButton, riding: boolean, hint: string?, glyph: string?)
@@ -1922,6 +1928,9 @@ function HoverboardView.setRiding(ride: RideButton, riding: boolean, hint: strin
 			ride.Label.Visible = riding
 		end
 		HudBubble.setKeyCap(ride.Button, if glyph and glyph ~= "" then nil else hint or "H", glyph)
+		-- (a keyboard's second key: R opens the window, HoverboardController.WindowKey)
+		local keyboard = not (glyph and glyph ~= "") and (hint == nil or hint ~= "")
+		HudBubble.setKeyCap2(ride.Button, if keyboard then HoverboardView.WindowKeyCap else nil)
 		return
 	end
 	if riding then

@@ -40,9 +40,9 @@ return function(T, Loader)
 		local layout = HudBubble.layout(1.25)
 		local m = HudBubble.menuMetrics(layout)
 		local first = HudBubble.tilePosition(layout, 1)
-		local fifth = HudBubble.tilePosition(layout, 5)
+		local third = HudBubble.tilePosition(layout, 2 * layout.Columns + 1)
 		T.eq(first.X.Offset, m.Origin.X.Offset, "first tile at the origin")
-		T.eq(fifth.Y.Offset - first.Y.Offset, 2 * (m.CellHeight + m.RowGap), "row 3 on PC (2 columns)")
+		T.eq(third.Y.Offset - first.Y.Offset, 2 * (m.CellHeight + m.RowGap), "row 3")
 		-- (a 667-point touch phone: four a row in the round look, three in the others)
 		local phone = HudBubble.layout(0.62, 667, true)
 		local p5 = HudBubble.tilePosition(phone, phone.Columns + 1)
@@ -297,7 +297,8 @@ return function(T, Loader)
 		for tile, name in expect do
 			T.eq(IconAssets.tileArt(tile), name, tile)
 		end
-		T.eq(IconAssets.tileArt("Shop"), nil, "the boosts' tile is not his Shop picture")
+		T.falsy(IconAssets.tileArt("Shop") == "shop", "the boosts' tile is not his Shop picture")
+		T.eq(IconAssets.TileArt.Tiles.Shop, "boosts", "it waits for its own")
 		T.eq(IconAssets.tileArt("Settings"), nil, "no picture: keeps its face and word")
 
 		local before, previewing = UIConfig.LightUI, IconAssets.Previewing

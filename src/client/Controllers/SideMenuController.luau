@@ -338,6 +338,9 @@ end
 -- Golems and Daily on the left (HudBubble.RoundMain), the rest behind More.
 local function groupOf(entry: SideMenuView.Entry): string
 	if PopTheme.round() then
+		if HudBubble.RoundHidden[entry.Id] then
+			return "Hidden"
+		end
 		return if HudBubble.RoundMain[entry.Id] then "Main" else "More"
 	end
 	return entry.Group
@@ -391,18 +394,32 @@ local function buildLight(view: SideMenuView.Refs)
 	view.Gui.Enabled = false
 	local tiles: { [string]: TextButton } = {}
 	for _, entry in SideMenuView.sorted() do
-		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
-		local face = if groupOf(entry) == "Main"
-			then HudBubble.claimTile(hud.Menu, entry.Id, spec)
-			else HudBubble.addMore(hud.Menu, entry.Id, spec)
-		face.Activated:Connect(function()
-			Sfx.play("UIClick")
-			if groupOf(entry) == "More" then
-				HudBubble.toggleMore(hud.Menu, false)
-			end
-			SideMenuController.press(entry.Id)
-		end)
-		tiles[entry.Id] = face
+		if groupOf(entry) ~= "Hidden" then
+			local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+			local face = if groupOf(entry) == "Main"
+				then HudBubble.claimTile(hud.Menu, entry.Id, spec)
+				else HudBubble.addMore(hud.Menu, entry.Id, spec)
+			face.Activated:Connect(function()
+				Sfx.play("UIClick")
+				if groupOf(entry) == "More" then
+					HudBubble.toggleMore(hud.Menu, false)
+				end
+				SideMenuController.press(entry.Id)
+			end)
+			tiles[entry.Id] = face
+		end
+	end
+	-- the round look: what isn't there yet says so (owner 2026-11-07: "coming soon"); a touch phone keeps the room
+	local compact = hud.Gui:GetAttribute("CompactHud") == true
+	if PopTheme.round() and HudBubble.showsSoon(HudBubble.isTouch(), compact) then
+		for _, id in HudBubble.RoundSoon do
+			local face = HudBubble.claimTile(hud.Menu, id)
+			HudBubble.setSticker(face, "Soon!")
+			face.Activated:Connect(function()
+				Sfx.play("UIClick")
+				HudController.toast(`{id} is coming soon!`, "Info")
+			end)
+		end
 	end
 	light = tiles
 	mirrorLight()

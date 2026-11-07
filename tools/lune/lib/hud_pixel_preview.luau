@@ -72,11 +72,16 @@ function Preview.build(Loader: any): { [string]: any }
 			local main = if round then HudBubble.RoundMain[entry.Id] == true else entry.Group == "Main"
 			if main then
 				HudBubble.claimTile(refs.Menu, entry.Id, spec)
-			else
+			elseif not (round and HudBubble.RoundHidden[entry.Id]) then
 				HudBubble.addMore(refs.Menu, entry.Id, spec)
 			end
 		end
 		if round then
+			if HudBubble.showsSoon(touch, compact) then
+				for _, id in HudBubble.RoundSoon do
+					HudBubble.setSticker(HudBubble.claimTile(refs.Menu, id), "Soon!")
+				end
+			end
 			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it;
 			-- HoverboardController: the Ride tile with its H key on a keyboard)
 			HudBubble.claimTile(refs.Menu, "Backpack")

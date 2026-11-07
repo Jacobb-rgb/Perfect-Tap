@@ -66,10 +66,11 @@ HudBubble.Menu = {
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
--- The round look's game menu (the reel's tiles, in its order, and Ride): every tile hidden
--- until a controller claims it (StoreController Store, SideMenuController Rebirth / Golems /
--- Quests, BackpackController Inventory, WheelController Spin (ui/boost-corner), HoverboardView
--- Ride (owner 2026-10-28: a grey tile like the others, not the round violet button), BuildView Build).
+-- The round look's game menu (owner 2026-11-07: everything with a picture stands here, IconAssets.
+-- TileArt; More only says "coming soon"): every tile hidden until a controller claims it
+-- (StoreController Store, SideMenuController Rebirth / Golems / Quests / Codex / Elevator / Shop /
+-- Settings and More, BackpackController Inventory, WheelController Spin, HoverboardView Ride,
+-- BuildView Build). Shop is the luck boosts; Boosts and Settings keep their word until their pictures come.
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
 	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
@@ -79,8 +80,16 @@ HudBubble.RoundMenu = {
 	{ Id = "Ride", Label = "Ride", Icon = "hoverboard", Role = "Ride" },
 	{ Id = "Quests", Label = "Daily", Icon = "medal", Role = "Quests" },
 	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
+	{ Id = "Codex", Label = "Codex", Icon = "book", Role = "Codex" },
+	{ Id = "Elevator", Label = "Elevator", Icon = "lift", Role = "Base" },
+	{ Id = "Shop", Label = "Boosts", Icon = "clover", Role = "Boosts" },
+	{ Id = "Settings", Label = "Settings", Icon = "cog", Role = "Settings" },
+	{ Id = "Trade", Label = "Trade", Icon = "more", Role = "More" }, -- coming soon (HudBubble.RoundSoon)
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
 } :: { MenuEntry }
+
+-- The tiles that only say "coming soon" for now (a sticker and a toast: SideMenuController).
+HudBubble.RoundSoon = { "Trade", "More" }
 
 -- The round look's tile accents (the reel: every dark tile its own colour on the edge and the lip).
 HudBubble.RoundPaints = {
@@ -96,7 +105,32 @@ HudBubble.RoundPaints = {
 } :: { [string]: string }
 
 -- The side menu entries that are tiles on the left in the round look (the rest go behind More).
-HudBubble.RoundMain = { Store = true, Rebirth = true, Golems = true, Quests = true } :: { [string]: boolean }
+HudBubble.RoundMain = {
+	Store = true,
+	Rebirth = true,
+	Golems = true,
+	Quests = true,
+	Codex = true,
+	Elevator = true,
+	Shop = true,
+	Settings = true,
+} :: { [string]: boolean }
+
+-- Does this screen show the "coming soon" tiles? A touch phone keeps the room.
+function HudBubble.showsSoon(touch: boolean?, compact: boolean?): boolean
+	return not (touch == true and compact == true)
+end
+
+-- How many tiles the round look's grid holds on this layout.
+function HudBubble.roundCount(layout: Layout): number
+	local soon = if HudBubble.showsSoon(layout.Touch, layout.Compact) then 0 else #HudBubble.RoundSoon
+	return #HudBubble.RoundMenu - soon
+end
+
+-- The side menu entries with no tile in the round look (owner 2026-11-07, no picture: "only things
+-- with pictures"): the artifacts have their stand in town, the boards the Hall of Fame, and the
+-- hoverboards' window opens from the Hoverboard tile and its R key.
+HudBubble.RoundHidden = { Collection = true, Boards = true, Hoverboards = true } :: { [string]: boolean }
 
 --[[
 	The round look's offers mid-right (the reel's three potions with "R$49"):
@@ -525,6 +559,7 @@ function HudBubble.setSticker(face: GuiObject, text: string?)
 end
 
 HudBubble.MenuTop = 8 -- the tiles' top under Roblox's top bar (CoreUISafeInsets)
+HudBubble.MoneyBottom = 22 -- the money's panel over the gui's bottom edge
 HudBubble.ChipGap = 12
 HudBubble.TabletChipGap = 6 -- a touch tablet's tiles and its TRAIN chip
 HudBubble.TouchChipHeight = 84 -- TrainView's compact chip (touch screens: TrainController)
@@ -622,7 +657,7 @@ end
 	               ChipY; TutorialView.layout, BoostView.cornerSpot)
 ]]
 function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
-	local count = #HudBubble.RoundMenu
+	local count = HudBubble.roundCount(layout)
 	local left = HudBubble.RoundMenuLeft + layout.Inset
 	local tabsLeft = layout.Width / 2 - HudBubble.topBarSize(layout).X / 2 - 8
 	local floor = HudBubble.roundFloor(layout, height)
@@ -679,6 +714,17 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	layout.Columns, layout.Tile, layout.Top = columns, tile, HudBubble.MenuTop
 	layout.Chip, layout.ChipStack = "Beside", false
 	if not layout.Touch then
+		-- (a very small mouse window: the grid keeps above the money, the tiles as small as it takes)
+		local _, _, moneyPanel = HudBubble.moneySize(layout)
+		local room = height - moneyPanel - HudBubble.MoneyBottom - 1 - HudBubble.MenuTop
+		local best = 0
+		for _, try in { 5, 4, 3, 2 } do
+			local rows = math.ceil(count / try)
+			local fit = math.min(tile, math.floor((room - (rows - 1) * gap) / rows))
+			if fit > best and left + wide(try, fit) <= tabsLeft then
+				best, layout.Columns, layout.Tile = fit, try, fit
+			end
+		end
 		return
 	end
 	local rows = math.ceil(count / columns)
@@ -729,7 +775,7 @@ function HudBubble.chipLeft(layout: Layout): number?
 	if layout.Chip == nil then
 		return nil
 	end
-	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local m = HudBubble.menuMetrics(layout, if PopTheme.round() then HudBubble.roundCount(layout) else #HudBubble.gameMenu())
 	if layout.Chip == "Under" then
 		return m.Origin.X.Offset
 	end
@@ -747,12 +793,12 @@ function HudBubble.chipWidth(layout: Layout): number?
 	if layout.Chip ~= "Under" then
 		return nil
 	end
-	return HudBubble.menuMetrics(layout, #HudBubble.gameMenu()).Width
+	return HudBubble.menuMetrics(layout, if PopTheme.round() then HudBubble.roundCount(layout) else #HudBubble.gameMenu()).Width
 end
 
 -- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
 function HudBubble.chipTop(layout: Layout): number
-	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local m = HudBubble.menuMetrics(layout, if PopTheme.round() then HudBubble.roundCount(layout) else #HudBubble.gameMenu())
 	local top = HudBubble.menuTop(layout)
 	if layout.Chip == "Beside" then
 		if layout.ChipY then
@@ -1455,7 +1501,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	end
 
 	-- the left menu: every tile hidden until a controller claims it
-	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local m = HudBubble.menuMetrics(layout, if PopTheme.round() then HudBubble.roundCount(layout) else #HudBubble.gameMenu())
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
@@ -1556,7 +1602,7 @@ end
 	screen changes size (the round look's grid is fitted to it: fitRound).
 ]]
 function HudBubble.placeMenu(gui: Instance, menu: Frame, layout: Layout)
-	local m = HudBubble.menuMetrics(layout, #HudBubble.gameMenu())
+	local m = HudBubble.menuMetrics(layout, if PopTheme.round() then HudBubble.roundCount(layout) else #HudBubble.gameMenu())
 	menu.Position = m.Origin
 	menu.Size = UDim2.fromOffset(m.Width, m.Height)
 	menu:SetAttribute("Columns", layout.Columns)
@@ -1674,16 +1720,17 @@ end
 
 -- A tile's key hint: a white keycap on its top left corner ("B" on Build, "H" on Ride), made once,
 -- hidden until setKeyCap.
-function HudBubble.keyCap(face: GuiObject): Frame
-	local existing = face:FindFirstChild("KeyCap")
+function HudBubble.keyCap(face: GuiObject, second: boolean?): Frame
+	local name = if second then "KeyCap2" else "KeyCap"
+	local existing = face:FindFirstChild(name)
 	if existing and existing:IsA("Frame") then
 		return existing
 	end
 	-- (inside the tile's corner: the left neighbour's count badge pokes over its edge)
 	local cap = UIKit.new("Frame", {
-		Name = "KeyCap",
+		Name = name,
 		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.fromOffset(3, 3),
+		Position = UDim2.fromOffset(if second then 32 else 3, 3),
 		Size = UDim2.fromOffset(26, 26),
 		BackgroundColor3 = Theme.White,
 		BorderSizePixel = 0,
@@ -1726,6 +1773,15 @@ function HudBubble.setKeyCap(face: GuiObject, cap: string?, image: string?)
 		stroke.Enabled = not hasImage
 	end
 	frame.Visible = hasImage or (cap ~= nil and cap ~= "")
+end
+
+-- A tile's second key, beside the first (the Hoverboard tile: H rides, R opens the window; owner
+-- 2026-11-07); nil or "" hides it.
+function HudBubble.setKeyCap2(face: GuiObject, cap: string?)
+	local frame = HudBubble.keyCap(face, true)
+	local text = frame:FindFirstChild("Text") :: TextLabel
+	text.Text = cap or ""
+	frame.Visible = cap ~= nil and cap ~= ""
 end
 
 -- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
