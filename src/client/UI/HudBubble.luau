@@ -1188,11 +1188,14 @@ end
 	once, when it is built: a PC window got the smallest phone's top row for the whole session
 	(owner's Studio photos, 2026-11-07: Lobby / Base / Vault small, no Shop, no offers). Waits a few
 	frames, at most `timeout` seconds, until the viewport is a real screen; false if it never was.
-	Also returns the first and the last size read (HudController logs them: the cause above is read
-	off his photos, a run in Studio confirms it). `size` and `step` are for the specs.
+	Also returns the first and the last size read. `size` and `step` are for the specs.
+	The wait stays short: every controller after HudController waits with it, and a client still at
+	1 x 1 past it is fine (his Studio log, 2026-11-07: "first 1, 1, then 1, 1"): HudBubble.layout
+	takes a width under ScreenReady as unknown, so a mouse keeps the big row and the offers, and
+	HudController refits the tiles when the real size comes.
 ]]
 HudBubble.ScreenReady = 200 -- points: no real screen is narrower or lower than this
-HudBubble.ScreenWait = 15 -- seconds (his Studio log, 2026-11-07: 3 s ran out under load, "first 1, 1, then 1, 1")
+HudBubble.ScreenWait = 3 -- seconds
 
 function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): (boolean, Vector2?, Vector2?)
 	local function read(): Vector2?

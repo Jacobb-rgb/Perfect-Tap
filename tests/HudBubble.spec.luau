@@ -141,7 +141,7 @@ return function(T, Loader)
 		T.truthy(wait < build, "first the wait, then the build")
 	end)
 
-	-- his window as it really is: 995 x 485 pt at scale 0.67 (his photos are 2 px a point), a mouse.
+	-- a window like his, a mouse, 995 x 485 pt at scale 0.67 (his logged 1402 x 490 / 368 are further down).
 	-- Compact by its scale, but the big top row and the offers he picked on 2026-11-07 ("navrh tri").
 	-- A touch phone of the same size keeps its short row and no offers.
 	T.test("HudBubble: a mouse window like the owner's gets the big top row, its pictures and the offers", function()
@@ -201,10 +201,15 @@ return function(T, Loader)
 			local tiny = HudBubble.layout(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, guiH)
 			T.falsy(tiny.Narrow, "a mouse window is never the smallest phone")
 			T.truthy(HudBubble.bigTopRow(tiny), "the big row with no real size")
-			local unknown = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, guiH)
+			-- (the gui is as small as the camera then; a touch client keeps its short row and no offers)
+			local unknown = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, 1)
 			T.truthy(unknown.TopBar:FindFirstChild("ShopPill"), "the Shop in the row")
 			T.truthy(unknown.Gui:FindFirstChild("Offers"), "and the offers")
 			unknown.Gui:Destroy()
+			local unknownTouch = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, true, false, 1)
+			T.falsy(unknownTouch.Gui:FindFirstChild("Offers"), "no offers on touch")
+			unknownTouch.Gui:Destroy()
+			T.truthy(HudBubble.ScreenWait <= 3, "the wait holds up every controller after the HUD: keep it short")
 			-- his window in the same log: 1402 x 368 and 1402 x 490 points (the Output panel open or shut)
 			for _, h in { 368, 490 } do
 				local real = Vector2.new(1402, h)

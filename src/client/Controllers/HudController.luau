@@ -476,11 +476,8 @@ function HudController.init()
 	-- (the layout is decided here, once: not on the camera's first 1 x 1 viewport)
 	local ready, first, final = HudBubble.waitForScreen()
 	if not ready then
-		warn("[HudController] the camera has no real screen size yet: the HUD may get the phone's layout")
+		warn(`[HudController] no real screen size yet (first {first}, then {final}): built for an unknown size, refits when it comes`)
 	end
-	print(
-		`[HudController] screen when the HUD was built: first {first}, then {final}, touch {UserInputService.TouchEnabled}, mouse {UserInputService.MouseEnabled}, tv {GuiService:IsTenFootInterface()}`
-	)
 	refs = HudView.build()
 	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles (the
 	-- round look: as wide as them, stacked on a mouse or a TV)
