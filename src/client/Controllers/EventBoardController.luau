@@ -23,6 +23,7 @@ local running = false
 local function find(): FindOfDay.Entry?
 	return FindOfDay.read({
 		Day = Workspace:GetAttribute("FindOfDayDay"),
+		UserId = Workspace:GetAttribute("FindOfDayUser"),
 		Name = Workspace:GetAttribute("FindOfDayName"),
 		Ore = Workspace:GetAttribute("FindOfDayOre"),
 		Grade = Workspace:GetAttribute("FindOfDayGrade"),
@@ -38,10 +39,16 @@ local function refresh()
 	end
 end
 
+-- (one error never freezes the board for the session: the next second tries again)
 local function loop()
 	running = true
 	while next(screens) do
-		refresh()
+		local ok, err = pcall(function()
+			refresh()
+		end)
+		if not ok then
+			warn(`[EventBoardController] {err}`)
+		end
 		task.wait(1)
 	end
 	running = false

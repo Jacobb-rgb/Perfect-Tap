@@ -68,22 +68,19 @@ function EventBoardLogic.findPage(find: FindOfDay.Entry?, now: number): Page
 			Id = "Find",
 			Title = "FIND OF THE DAY",
 			Big = "Nobody yet",
-			Small = "Clean a rare ore and your name goes up here",
+			Small = "Clean an ore: the day's best goes up here",
 			Color = GOLD,
 		}
 	end
+	-- (review 11-07: readable from the spawn on a phone) the ore big in its rarity's colour,
+	-- the finder and the grade on a second big line
 	local rarity = Rarity.ById[ore.Rarity]
 	local grade = ItemData.GradeById[find.Grade]
-	local parts = { ore.Name }
-	if rarity then
-		table.insert(parts, rarity.Name)
-	end
-	table.insert(parts, if grade then grade.Name else find.Grade)
 	return {
 		Id = "Find",
 		Title = "FIND OF THE DAY",
-		Big = find.Name,
-		Small = table.concat(parts, " · "),
+		Big = ore.Name,
+		Small = `{find.Name} · {if grade then grade.Name else find.Grade}`,
 		Color = GOLD,
 		BigColor = if rarity then rarity.Color else nil,
 	}

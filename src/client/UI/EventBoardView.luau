@@ -12,6 +12,8 @@ local EventBoardView = {}
 
 EventBoardView.MaxDistance = 320 -- studs: past this the screen doesn't draw
 EventBoardView.PixelsPerStud = 28
+-- each line's top and height (shares of the screen)
+EventBoardView.Lines = { Title = { 0.05, 0.15 }, Big = { 0.24, 0.36 }, Small = { 0.64, 0.28 } }
 
 export type Refs = { Gui: SurfaceGui, Title: TextLabel, Big: TextLabel, Small: TextLabel }
 
@@ -41,9 +43,10 @@ function EventBoardView.build(screen: BasePart): Refs
 	gui.Parent = screen
 	return {
 		Gui = gui,
-		Title = line(gui, "Title", 0.08, 0.2),
-		Big = line(gui, "Big", 0.34, 0.32),
-		Small = line(gui, "Small", 0.72, 0.16),
+		-- (review 11-07: the second line big too, readable from the spawn on a phone)
+		Title = line(gui, "Title", EventBoardView.Lines.Title[1], EventBoardView.Lines.Title[2]),
+		Big = line(gui, "Big", EventBoardView.Lines.Big[1], EventBoardView.Lines.Big[2]),
+		Small = line(gui, "Small", EventBoardView.Lines.Small[1], EventBoardView.Lines.Small[2]),
 	}
 end
 

@@ -15,8 +15,12 @@ return function(T, Loader)
 	local NOW = 1_794_000_000
 	local TODAY = FindOfDay.day(NOW)
 
+	local USERS = { Mia = 41, Leo = 42, Far = 43, Nova = 44, EmberQueen = 45, Old = 46, A = 47, B = 48 }
 	local function entry(name: string, ore: string, grade: string, day: number?): any
-		return { Day = day or TODAY, Name = name, Ore = ore, Grade = grade }
+		return { Day = day or TODAY, UserId = USERS[name] or 99, Name = name, Ore = ore, Grade = grade }
+	end
+	local function player(name: string): any
+		return { DisplayName = name, UserId = USERS[name] or 99 }
 	end
 
 	T.test("find of the day: the rarest ore wins, then the grade, the first keeps a tie", function()
@@ -50,7 +54,11 @@ return function(T, Loader)
 				{ Day = 0 / 0, Name = "Mia", Ore = "Gold", Grade = "Clean" },
 				{ Day = 1.5, Name = "Mia", Ore = "Gold", Grade = "Clean" },
 				{ Day = TODAY, Name = 7, Ore = "Gold", Grade = "Clean" },
-				{ Day = TODAY, Name = "Mia", Ore = "Gold" },
+				{ Day = TODAY, UserId = 41, Name = "Mia", Ore = "Gold" },
+				{ Day = TODAY, Name = "Mia", Ore = "Gold", Grade = "Clean" }, -- no UserId: the hidden list couldn't reach it
+				{ Day = TODAY, UserId = 0, Name = "Mia", Ore = "Gold", Grade = "Clean" },
+				{ Day = TODAY, UserId = 4.5, Name = "Mia", Ore = "Gold", Grade = "Clean" },
+				{ Day = TODAY, UserId = "41", Name = "Mia", Ore = "Gold", Grade = "Clean" },
 			}
 		do
 			T.eq(FindOfDay.read(junk), nil)
@@ -59,14 +67,19 @@ return function(T, Loader)
 	end)
 
 	local function service(): any
-		local w: any = { published = {}, stored = nil, now = NOW, attrs = {} }
+		local w: any = { published = {}, stored = nil, now = NOW, attrs = {}, writes = 0, hidden = {} }
 		local saved = {
 			clock = FindOfDayService.clock,
 			publish = FindOfDayService.publish,
 			update = FindOfDayService.update,
 			read = FindOfDayService.read,
 			setAttribute = FindOfDayService.setAttribute,
+			isHidden = FindOfDayService.isHidden,
+			wait = FindOfDayService.wait,
 		}
+		FindOfDayService.isHidden = function(userId)
+			return w.hidden[userId] == true
+		end
 		FindOfDayService.setAttribute = function(name, value)
 			w.attrs[name] = value
 		end
@@ -76,9 +89,16 @@ return function(T, Loader)
 		FindOfDayService.publish = function(e)
 			table.insert(w.published, e)
 		end
+		-- (the MemoryStore's UpdateAsync: nil from the merge keeps what is stored, no write)
 		FindOfDayService.update = function(_, merge)
-			w.stored = merge(w.stored)
-			return w.stored
+			if w.failUpdate then
+				error("MemoryStore down")
+			end
+			local new = merge(w.stored)
+			if new ~= nil then
+				w.stored = new
+				w.writes += 1
+			end
 		end
 		FindOfDayService.read = function()
 			return w.stored
@@ -104,8 +124,8 @@ return function(T, Loader)
 	T.test("find of the day service: a better find shows at once, goes out once, the better of two stays", function()
 		local w = service()
 		guarded(w, function()
-			local mia = { DisplayName = "Mia" }
-			local leo = { DisplayName = "Leo" }
+			local mia = player("Mia")
+			local leo = player("Leo")
 			FindOfDayService.report(mia, "Gold", "Clean")
 			T.eq(FindOfDayService.current().Name, "Mia")
 			T.eq(w.attrs.FindOfDayName, "Mia", "the clients see it")
@@ -141,7 +161,7 @@ return function(T, Loader)
 	T.test("find of the day service: a new day starts empty, a late server reads the store", function()
 		local w = service()
 		guarded(w, function()
-			FindOfDayService.report({ DisplayName = "Mia" }, "Gold", "Clean")
+			FindOfDayService.report(player("Mia"), "Gold", "Clean")
 			T.falsy(FindOfDayService.rollOver(), "same day")
 			w.now = NOW + 86400
 			T.eq(FindOfDayService.current(), nil, "not yesterday's")
@@ -156,7 +176,127 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("find of the day service: another's find stops ours going out; the stored one wins a tie (review 11-07)", function()
+		local w = service()
+		guarded(w, function()
+			-- ours (worse) waits, a better one arrives: nothing of ours is written or sent
+			FindOfDayService.report(player("Leo"), "Copper", "Clean")
+			T.truthy(FindOfDayService.isDirty())
+			FindOfDayService.receive({ Data = entry("Nova", "RainbowNova", "Flawless") })
+			T.falsy(FindOfDayService.isDirty(), "the better one isn't ours")
+			FindOfDayService.save()
+			T.eq(w.writes, 0, "no write")
+			T.eq(#w.published, 0, "no message (N servers x N at midnight before)")
+			-- a tie: the stored one stays and every server shows it
+			FindOfDayService.reset()
+			w.stored = entry("Far", "Heartstone", "Flawless")
+			FindOfDayService.report(player("Mia"), "Heartstone", "Flawless")
+			T.eq(FindOfDayService.current().Name, "Mia", "ours first on this server")
+			FindOfDayService.save()
+			T.eq(w.stored.Name, "Far", "the store keeps its own on a tie")
+			T.eq(w.writes, 0, "and isn't rewritten")
+			T.eq(#w.published, 0)
+			T.eq(FindOfDayService.current().Name, "Far", "this server shows the stored finder")
+			FindOfDayService.report(player("Leo"), "Heartstone", "Flawless")
+			T.eq(FindOfDayService.current().Name, "Far", "a later tie of ours: the first keeps it")
+			FindOfDayService.receive({ Data = entry("Nova", "Heartstone", "Flawless") })
+			T.eq(FindOfDayService.current().Name, "Nova", "a stored one from another server: same wins")
+			T.eq(w.attrs.FindOfDayUser, USERS.Nova, "the clients get the UserId with it")
+		end)
+	end)
+
+	T.test("find of the day service: hidden users never go up, from anywhere (COMPLIANCE 2.10)", function()
+		local w = service()
+		guarded(w, function()
+			w.hidden[USERS.Mia] = true
+			FindOfDayService.report(player("Mia"), "RainbowNova", "Flawless")
+			T.eq(FindOfDayService.current(), nil, "not from here")
+			FindOfDayService.receive({ Data = entry("Mia", "RainbowNova", "Flawless") })
+			T.eq(FindOfDayService.current(), nil, "not from another server")
+			w.stored = entry("Mia", "RainbowNova", "Flawless")
+			FindOfDayService.refresh()
+			T.eq(FindOfDayService.current(), nil, "not from the store")
+			FindOfDayService.report(player("Leo"), "Coal", "Rough")
+			T.eq(FindOfDayService.current().Name, "Leo")
+			T.eq(FindOfDayService.Expiry, 2 * 86400, "the store forgets it in 2 days")
+			T.eq(FindOfDayService.MapName, "TerraForgeFindOfDay")
+		end)
+	end)
+
+	T.test("find of the day service: a round saves every 30 s, a failed save is tried again, reads every 5 min", function()
+		local w = service()
+		guarded(w, function()
+			T.eq(FindOfDayService.SaveEvery, 30)
+			T.eq(FindOfDayService.RefreshEvery, 300)
+			T.eq(FindOfDay.day(86399), 0, "a UTC day")
+			T.eq(FindOfDay.day(86400), 1)
+			T.eq(FindOfDay.day(NOW), math.floor(NOW / 86400))
+			local reads = 0
+			FindOfDayService.read = function()
+				reads += 1
+				return w.stored
+			end
+			FindOfDayService.report(player("Mia"), "Gold", "Clean")
+			w.failUpdate = true
+			local since = FindOfDayService.round(0)
+			T.eq(since, 30)
+			T.truthy(FindOfDayService.isDirty(), "the failed save waits for the next round")
+			T.eq(#w.published, 0)
+			w.failUpdate = false
+			since = FindOfDayService.round(since)
+			T.eq(#w.published, 1, "saved and sent the round after")
+			T.eq(w.stored.Name, "Mia")
+			T.eq(reads, 0, "no read before 5 minutes")
+			for _ = 3, 10 do
+				since = FindOfDayService.round(since)
+			end
+			T.eq(reads, 1, "one read at 300 s")
+			T.eq(since, 0)
+			-- a new day in a round: yesterday's best goes
+			w.now = NOW + 86400
+			FindOfDayService.round(0)
+			T.eq(FindOfDayService.current(), nil)
+			T.eq(w.attrs.FindOfDayName, nil)
+			-- the loop (offline: Studio) rolls over every round and stops when the wait says so
+			local saveOnline = FindOfDayService.online
+			FindOfDayService.online = function()
+				return false
+			end
+			w.now = NOW
+			FindOfDayService.report(player("Leo"), "Gold", "Clean")
+			local waits = 0
+			FindOfDayService.wait = function(seconds: number): boolean
+				T.eq(seconds, FindOfDayService.SaveEvery)
+				waits += 1
+				w.now = NOW + 86400 * waits
+				return waits <= 2
+			end
+			FindOfDayService.start()
+			FindOfDayService.online = saveOnline
+			T.eq(waits, 3, "two rounds, then it stopped")
+			T.eq(FindOfDayService.current(), nil, "rolled over in the loop")
+		end)
+	end)
+
+	T.test("find of the day: the cleaning and the machines report every clean ore (the two hooks)", function()
+		local fs = require("@lune/fs")
+		local cleaning = fs.readFile("src/server/Services/CleaningService.luau")
+		T.truthy(cleaning:find("FindOfDayService.report(player, session.OreId, result.Grade)", 1, true), "a player's own cleaning")
+		local processing = fs.readFile("src/server/Services/ProcessingService.luau")
+		T.truthy(processing:find("FindOfDayService.report(player, desc.O, desc.G)", 1, true), "a machine's clean ore")
+		-- report never yields and never throws: a bad player or ore changes nothing
+		local w = service()
+		guarded(w, function()
+			FindOfDayService.report({ DisplayName = 5, UserId = 41 } :: any, "Gold", "Clean")
+			FindOfDayService.report({ DisplayName = "Mia" } :: any, "Gold", "Clean")
+			FindOfDayService.report(player("Mia"), "Nope", "Clean")
+			FindOfDayService.report(player("Mia"), "Gold", nil)
+			T.eq(FindOfDayService.current(), nil)
+		end)
+	end)
+
 	T.test("event board: its pages rotate with the server's time, the weather counts down", function()
+		T.eq(EventBoardLogic.PageSeconds, 8, "each page 8 s")
 		T.eq(EventBoardLogic.clock(252), "4:12")
 		T.eq(EventBoardLogic.clock(3700), "1:01:40")
 		T.eq(EventBoardLogic.clock(-5), "0:00")
@@ -180,8 +320,10 @@ return function(T, Loader)
 	T.test("event board: the find's page names the finder and the ore, an old one is gone", function()
 		local page = EventBoardLogic.findPage(entry("EmberQueen", "PhoenixFeather", "Flawless"), NOW)
 		T.eq(page.Title, "FIND OF THE DAY")
-		T.eq(page.Big, "EmberQueen")
-		T.eq(page.Small, "Phoenix Feather · Mythic · Flawless")
+		-- (review 11-07: readable on a phone) the ore big in its rarity's colour, the finder on a second big line
+		T.eq(page.Big, "Phoenix Feather")
+		T.eq(page.BigColor, Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity").ById.Mythic.Color)
+		T.eq(page.Small, "EmberQueen · Flawless")
 		T.eq(EventBoardLogic.findPage(nil, NOW).Big, "Nobody yet")
 		T.eq(EventBoardLogic.findPage(entry("Old", "Gold", "Clean", TODAY - 1), NOW).Big, "Nobody yet")
 	end)
@@ -244,7 +386,10 @@ return function(T, Loader)
 		T.truthy(screens[1].CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
 		local refs = EventBoardView.build(screens[1])
 		EventBoardView.fill(refs, EventBoardLogic.findPage(entry("Mia", "Gold", "Clean"), NOW))
-		T.eq(refs.Big.Text, "Mia")
+		T.eq(refs.Big.Text, "Gold")
+		T.eq(refs.Small.Text, "Mia · Clean")
+		T.truthy(refs.Small.Size.Y.Scale >= 0.25, "the second line is big too")
+		T.truthy(refs.Big.Size.Y.Scale >= 0.3)
 		T.eq(refs.Gui.LightInfluence, 0, "readable at night")
 		T.truthy(refs.Gui.MaxDistance > 0, "far away it doesn't draw")
 		folder:Destroy()

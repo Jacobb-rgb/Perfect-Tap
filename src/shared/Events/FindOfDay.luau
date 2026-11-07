@@ -3,9 +3,12 @@
 	shown ONLY on the big iron billboard, never on the player's screen). The
 	best ore cleaned today on any server: the rarest ore (OreData's order, a
 	secret ore above all others), then the better grade; the first to find it
-	keeps it. A day is a UTC day. FindOfDayService keeps it, EventBoard shows it.
+	keeps it (on a server: better; the stored one: same or better, so every
+	server shows the same finder). A day is a UTC day. FindOfDayService keeps
+	it, EventBoard shows it.
 
-	  Entry = { Day, Name, Ore, Grade } (Name: a DisplayName)
+	  Entry = { Day, UserId, Name, Ore, Grade } (Name: a DisplayName; UserId so
+	  the hidden-user list reaches it, never shown)
 ]]
 
 local ItemData = require(script.Parent.Parent.Config.ItemData)
@@ -15,7 +18,7 @@ local FindOfDay = {}
 
 FindOfDay.MaxName = 20 -- characters: a DisplayName is at most 20
 
-export type Entry = { Day: number, Name: string, Ore: string, Grade: string }
+export type Entry = { Day: number, UserId: number, Name: string, Ore: string, Grade: string }
 
 function FindOfDay.day(now: number): number
 	return math.floor(now / 86400)
@@ -41,13 +44,27 @@ function FindOfDay.better(find: Entry, best: Entry?, day: number): boolean
 	return FindOfDay.rank(find.Ore, find.Grade) > FindOfDay.rank(best.Ore, best.Grade)
 end
 
+-- Is `find` as good as `best` or better for `day`? (the stored entry wins a tie: every server agrees)
+function FindOfDay.atLeast(find: Entry, best: Entry?, day: number): boolean
+	if find.Day ~= day then
+		return false
+	end
+	if not best or best.Day ~= day then
+		return true
+	end
+	return FindOfDay.rank(find.Ore, find.Grade) >= FindOfDay.rank(best.Ore, best.Grade)
+end
+
 -- A stored or received entry, checked; nil if anything is wrong with it.
 function FindOfDay.read(data: any): Entry?
 	if type(data) ~= "table" then
 		return nil
 	end
-	local day, name, ore, grade = data.Day, data.Name, data.Ore, data.Grade
+	local day, userId, name, ore, grade = data.Day, data.UserId, data.Name, data.Ore, data.Grade
 	if type(day) ~= "number" or day ~= day or day % 1 ~= 0 then
+		return nil
+	end
+	if type(userId) ~= "number" or userId ~= userId or userId % 1 ~= 0 or userId <= 0 or userId > 2 ^ 53 then
 		return nil
 	end
 	local length = if type(name) == "string" then utf8.len(name) else nil
@@ -57,7 +74,7 @@ function FindOfDay.read(data: any): Entry?
 	if FindOfDay.rank(ore, grade) == 0 or type(grade) ~= "string" then
 		return nil
 	end
-	return { Day = day, Name = name, Ore = ore, Grade = grade }
+	return { Day = day, UserId = userId, Name = name, Ore = ore, Grade = grade }
 end
 
 return FindOfDay
