@@ -1129,6 +1129,45 @@ function HudBubble.guiHeight(): number?
 	return if ok and type(height) == "number" and height > 0 then height else nil
 end
 
+--[[
+	In a client's first moments the camera's viewport is not the real screen yet (a 1 x 1 one),
+	but the HUD's layout (phone or PC, the Shop in the top row and its size, the offers) is decided
+	once, when it is built: a PC window got the smallest phone's top row for the whole session
+	(owner's Studio photos, 2026-11-07: Lobby / Base / Vault small, no Shop, no offers). Waits a few
+	frames, at most `timeout` seconds, until the viewport is a real screen; false if it never was.
+	`size` and `step` are for the specs.
+]]
+HudBubble.ScreenReady = 200 -- points: no real screen is narrower or lower than this
+HudBubble.ScreenWait = 3 -- seconds
+
+function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): boolean
+	local function read(): Vector2?
+		if size then
+			return size()
+		end
+		local ok, viewport = pcall(function()
+			local camera = game:GetService("Workspace").CurrentCamera
+			return if camera then camera.ViewportSize else nil
+		end)
+		return if ok and typeof(viewport) == "Vector2" then viewport else nil
+	end
+	local deadline = os.clock() + (timeout or HudBubble.ScreenWait)
+	while true do
+		local viewport = read()
+		if viewport and viewport.X >= HudBubble.ScreenReady and viewport.Y >= HudBubble.ScreenReady then
+			return true
+		end
+		if os.clock() >= deadline then
+			return false
+		end
+		if step then
+			step()
+		else
+			task.wait()
+		end
+	end
+end
+
 -- The teleport bar (owner 2026-10-20: BASE / MINE / SPAWN in his photo, text
 -- only, at the very top): button sizes per layout, design units.
 HudBubble.TopBarPad = 5

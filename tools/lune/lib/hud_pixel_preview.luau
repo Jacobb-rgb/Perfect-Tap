@@ -192,6 +192,15 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
 	TrainView.useHud(nil)
+	-- the owner's Studio window (2000 x 970 px, 2026-11-07): the top row after the screen-size fix,
+	-- as the game shows it before the icon images are uploaded, and after
+	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+	local window = roblox.Vector2.new(2000, 970 - 58)
+	local previewing = IconAssets.Previewing
+	IconAssets.Previewing = false
+	exports.ui_hud_window_no_uploads = UiExport.export(hud(1.25, 1.25, window))
+	IconAssets.Previewing = previewing
+	exports.ui_hud_window_uploaded = UiExport.export(hud(1.25, 1.25, window))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do

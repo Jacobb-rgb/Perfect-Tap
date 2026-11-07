@@ -91,4 +91,55 @@ return function(T, Loader)
 		T.eq(offset.X, IconAssets.Cell, "cell 7 = column 1")
 		T.eq(offset.Y, IconAssets.Cell, "cell 7 = row 1")
 	end)
+
+	-- the owner's Studio photos (2026-11-07): the HUD was built on the camera's first tiny viewport,
+	-- so a PC window kept the smallest phone's top row (Lobby / Base / Vault small, no Shop, no offers)
+	T.test("HudBubble: the HUD waits for the real screen before it picks its layout", function()
+		local roblox = require("@lune/roblox") :: any
+		local Vector2 = roblox.Vector2
+		local sizes = { Vector2.new(1, 1), Vector2.new(1, 1), Vector2.new(2000, 970) }
+		local reads, steps = 0, 0
+		local ready = HudBubble.waitForScreen(5, function()
+			reads = math.min(reads + 1, #sizes)
+			return sizes[reads]
+		end, function()
+			steps += 1
+		end)
+		T.truthy(ready, "the real size came")
+		T.eq(steps, 2, "two frames waited")
+		T.falsy(
+			HudBubble.waitForScreen(0, function()
+				return Vector2.new(1, 1)
+			end, function() end),
+			"never a real size: gives up, never hangs"
+		)
+		T.truthy(
+			HudBubble.waitForScreen(0, function()
+				return Vector2.new(568, 320) -- (the smallest phone is a real screen)
+			end),
+			"a phone needs no wait"
+		)
+
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local before = UIConfig.LightUI
+		UIConfig.LightUI = true
+		local ok, err = pcall(function()
+			-- the owner's window: the four big tabs with the Shop first, and the offers
+			local window = HudBubble.buildGame(1.25, 2000, false, false, 912)
+			T.truthy(window.TopBar:FindFirstChild("ShopPill"), "the Shop leads the top row")
+			T.eq(window.TopBar:GetAttribute("Narrow"), false, "not the phone's row")
+			T.eq((window.TopBar:GetAttribute("Button") :: any).X, HudBubble.TabMax, "the big tabs")
+			T.truthy(window.Gui:FindFirstChild("Offers"), "the offers")
+			window.Gui:Destroy()
+			-- what the 1 x 1 viewport gave him (why the wait matters)
+			local tiny = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, 912)
+			T.falsy(tiny.TopBar:FindFirstChild("ShopPill"), "the tiny viewport: no Shop")
+			T.falsy(tiny.Gui:FindFirstChild("Offers"), "the tiny viewport: no offers")
+			tiny.Gui:Destroy()
+		end)
+		UIConfig.LightUI = before
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end
