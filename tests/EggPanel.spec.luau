@@ -2864,8 +2864,36 @@ return function(T, Loader)
 			local Builder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 			local egg = Builder.themedEgg("Sky", Loader.CFrame.new(150, 83, 300))
 			local holder = Instance.new("Folder")
+			-- start() listens for the tag: with StreamingEnabled the Sky Egg comes after it, through the signal
+			local CollectionService = Loader.game:GetService("CollectionService")
+			local Run = Loader.game:GetService("RunService")
+			local added: { [string]: any } = {}
+			patched({
+				{
+					CollectionService,
+					"GetTagged",
+					function()
+						return {}
+					end,
+				},
+				{
+					CollectionService,
+					"GetInstanceAddedSignal",
+					function(_, tag: string)
+						local s = signal()
+						added[tag] = s
+						return s
+					end,
+				},
+				{ Run, "Heartbeat", signal() },
+			}, function()
+				C.start()
+			end)
+			T.eq(C._test.state().Spots.Sky, nil, "not there before it streams in")
+			local stream = added[EggPanel.FreeTag]
+			T.truthy(stream, "start() listens for the Sky Egg's tag")
 			egg.Parent = holder
-			C._test.watchFree(egg)
+			stream.fire(egg)
 			require("@lune/task").wait()
 			local spot = C._test.state().Spots.Sky
 			T.truthy(spot, "the panel has the egg")
@@ -2948,6 +2976,10 @@ return function(T, Loader)
 					table.insert(stops, reason)
 				end
 			end)
+			-- (seams put back in the clean-up, also when a check fails)
+			local stuckAfter = CC.StuckAfter
+			local refsOf = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.HudController")
+			local refsBefore = refsOf.refs
 			local ok, err = pcall(function()
 				local K = roblox.Enum.KeyCode
 				CC._test.setOwners({
@@ -2996,6 +3028,31 @@ return function(T, Loader)
 					string.find(w.toasts[#w.toasts], GolemConfig.ById.PebbleGolem.Name, 1, true),
 					"its golem named: " .. w.toasts[#w.toasts]
 				)
+				-- the auto-deleted ones are named too (every golem won is told, like the opening's grey ones)
+				local quartz = GolemConfig.ById.QuartzSprite.Name
+				CC._test.result({
+					Capsule = "Stone",
+					Count = 3,
+					Golems = {
+						{ Id = 1, Kind = "PebbleGolem" },
+						{ Id = 0, Kind = "QuartzSprite", Deleted = true },
+						{ Id = 0, Kind = "QuartzSprite", Deleted = true },
+					},
+					Lucky = false,
+				})
+				allBack("a failing opening with auto-deleted golems")
+				T.eq(
+					w.toasts[#w.toasts],
+					`Your golems are safe: {GolemConfig.ById.PebbleGolem.Name} (auto-deleted: 2x {quartz})`,
+					"kept and auto-deleted, both named"
+				)
+				CC._test.result({
+					Capsule = "Stone",
+					Count = 1,
+					Golems = { { Id = 0, Kind = "QuartzSprite", Deleted = true } },
+					Lucky = false,
+				})
+				T.eq(w.toasts[#w.toasts], `From your eggs, auto-deleted: {quartz}`, "only auto-deleted ones")
 				-- an opening that never ends: the watch stops it, what is queued still plays
 				local stuck, played = 0, 0
 				CC._test.setHatch(function(_o: any, result: any)
@@ -3021,7 +3078,6 @@ return function(T, Loader)
 				T.eq(stops[1], "Failed", "Auto stops")
 				T.truthy(string.find(w.toasts[toasts + 1], GolemConfig.ById.PebbleGolem.Name, 1, true), "the one that hung is named")
 				-- the watch really runs, by itself, for every chain
-				local stuckAfter = CC.StuckAfter
 				CC.StuckAfter = 0.2
 				CC._test.setHatch(function()
 					coroutine.yield() -- (never resumed; no timer that would keep the run alive)
@@ -3062,8 +3118,6 @@ return function(T, Loader)
 				guiScale.Name = "Scale"
 				guiScale.Scale = 1
 				guiScale.Parent = gui
-				local refsOf = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.HudController")
-				local refsBefore = refsOf.refs
 				refsOf.refs = function(): any
 					return { Gui = gui }
 				end
@@ -3093,6 +3147,8 @@ return function(T, Loader)
 			end)
 			listening = false
 			Stage.clear, View.setChain = clear, setChain
+			CC.StuckAfter = stuckAfter
+			refsOf.refs = refsBefore
 			CC._test.setHatch(nil)
 			CC._test.setOwners(nil)
 			CC._test.close()

@@ -1523,7 +1523,7 @@ end
 
 local chainThread: thread? = nil -- the thread that plays the chain
 local openingNow: Result? = nil -- the result it plays
-local untold: { string } = {} -- the golems of failed openings: named when the HUD is back (paid random items)
+local untold: { { Kind: string, Deleted: boolean } } = {} -- the golems of failed openings: named when the HUD is back (paid random items)
 
 -- A failed opening: Auto never buys through it; its golems are told when the HUD is back.
 local function openingFailed(result: Result?)
@@ -1531,33 +1531,46 @@ local function openingFailed(result: Result?)
 	if result and not result.Shown then
 		result.Shown = true
 		for _, golem in result.Golems do
-			if not golem.Deleted then
-				table.insert(untold, golem.Kind)
-			end
+			-- (the auto-deleted ones too: every golem won is named, like the opening's grey ones)
+			table.insert(untold, { Kind = golem.Kind, Deleted = golem.Deleted == true })
 		end
 	end
 end
 
-local function tellUntold()
-	if #untold == 0 then
-		return
-	end
+-- "4x Sky Sprite, Storm Sentinel": the kinds in the order they came, counted.
+local function golemList(kinds: { string }): string
 	local counts: { [string]: number } = {}
 	local names: { string } = {}
-	for _, kind in untold do
+	for _, kind in kinds do
 		if not counts[kind] then
 			table.insert(names, kind)
 		end
 		counts[kind] = (counts[kind] or 0) + 1
 	end
-	table.clear(untold)
 	local parts: { string } = {}
 	for _, kind in names do
 		local info = GolemConfig.ById[kind]
 		local name = if info then info.Name else kind
 		table.insert(parts, if counts[kind] > 1 then `{counts[kind]}x {name}` else name)
 	end
-	HudController.toast("Your golems are safe: " .. table.concat(parts, ", "), "Info")
+	return table.concat(parts, ", ")
+end
+
+local function tellUntold()
+	if #untold == 0 then
+		return
+	end
+	local kept: { string } = {}
+	local deleted: { string } = {}
+	for _, golem in untold do
+		table.insert(if golem.Deleted then deleted else kept, golem.Kind)
+	end
+	table.clear(untold)
+	local gone = if #deleted > 0 then `auto-deleted: {golemList(deleted)}` else nil
+	local text = if #kept == 0
+		then `From your eggs, {gone}`
+		else `Your golems are safe: {golemList(kept)}` .. (if gone then ` ({gone})` else "")
+	HudController.toast(text, "Info")
 end
 local chainCount = 0 -- which chain it is (a chain's watch ends with it)
 local openingSince = 0 -- os.clock() when the opening that plays began

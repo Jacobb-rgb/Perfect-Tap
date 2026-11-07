@@ -665,6 +665,39 @@ return function(T, Loader)
 		T.eq(plan.Eligible, MAX + 10, "view: eligible")
 	end)
 
+	withWorld("SellService: over the pen's cap Sell All takes what the confirm named (a Dirty Ore stored first too)", function(w)
+		-- the pen's own order: the Dirty Ore first; the view plans its keys alphabetically
+		pen(w, { { "Raw", "Heartstone", nil, 5 }, { "Clean", "Coal", "Rough", MAX + 10 } })
+		local plan = SellView.plan({ ["Raw|Heartstone||"] = 5, ["Clean|Coal|Rough|"] = MAX + 10 }, {}, "All", nil)
+		T.eq(plan.Count, MAX, "the view: capped")
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Stats.ItemsSold, plan.Count, "the count it named")
+		T.eq(w.data.Coins, plan.Total + plan.Dirty * price("Raw", "Heartstone"), "the price it named, and no unnamed Dirty Ore")
+		T.eq(#w.data.Storage, plan.PenLeft, "what it said stays")
+		T.eq(count(w.data.Storage, "Raw|Heartstone||"), 5 - plan.Dirty, "the Dirty Ore waits for the press that names it")
+		-- the next press names the Dirty Ore and sells it
+		local coins = w.data.Coins
+		local again = SellView.plan(
+			{ ["Raw|Heartstone||"] = 5 - plan.Dirty, ["Clean|Coal|Rough|"] = MAX + 10 - (plan.Count - plan.Dirty) },
+			{},
+			"All",
+			nil
+		)
+		T.eq(again.Dirty, 5, "the next confirm names all five")
+		T.truthy(string.find(SellView.confirmPlanText(again, "All"), "Dirty", 1, true) ~= nil, "and says Dirty Ore")
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Coins - coins, again.Total + again.Dirty * price("Raw", "Heartstone"), "paid as named")
+		T.eq(#w.data.Storage, 0, "the pen is empty")
+		-- clean ores of two prices over the cap: the same total as the confirm
+		w.data.Coins = 0
+		w.data.Stats.ItemsSold = 0
+		pen(w, { { "Clean", "Gold", "Flawless", 30 }, { "Clean", "Coal", "Rough", 30 } })
+		local mixed = SellView.plan({ ["Clean|Gold|Flawless|"] = 30, ["Clean|Coal|Rough|"] = 30 }, {}, "All", nil)
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Coins, mixed.Total, "the price the confirm named")
+		T.eq(#w.data.Storage, mixed.PenLeft, "the rest stays")
+	end)
+
 	withWorld("SellService: a whole full backpack sells in one press (the pen 50 at a time)", function(w)
 		local BIG = 1200
 		CarryService.add(w.player, { K = "Raw", O = "Coal" }, BIG, true)

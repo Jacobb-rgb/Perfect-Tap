@@ -427,6 +427,18 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 			secrets = true -- (a Dirty Ore never gives its secret away)
 		end
 	end
+	-- SellView.plan's order (the backpack, then each key alphabetically), so the confirm names
+	-- what the pen's cap really takes (the pen's own order put a Dirty Ore stored first in unseen)
+	local keyOf: { [Pick]: string } = {}
+	for _, pick in list do
+		keyOf[pick] = ItemData.storageKey(pick.Desc)
+	end
+	table.sort(list, function(a: Pick, b: Pick): boolean
+		if a.From ~= b.From then
+			return a.From == "Hands"
+		end
+		return keyOf[a] < keyOf[b]
+	end)
 	local picks: { Pick } = {}
 	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	local left = 0
