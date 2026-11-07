@@ -2823,6 +2823,104 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("CapsuleController: the HUD and the prompts always come back (owner 2026-11-07: everything vanished)", function()
+		withController(function(_C, _w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local Stage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
+			local View = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
+			local Players = Loader.game:GetService("Players")
+			local Prompts = Loader.game:GetService("ProximityPromptService")
+			local hud = Instance.new("ScreenGui")
+			hud.Name = "TerraForgeTestHud"
+			local scale = Instance.new("UIScale")
+			scale.Name = "Scale"
+			scale.Scale = 0.9
+			scale.Parent = hud
+			hud.Parent = Players.LocalPlayer.PlayerGui
+			local clear, setChain = Stage.clear, View.setChain
+			local one = { Capsule = "Stone", Count = 1, Golems = { { Id = 1, Kind = "PebbleGolem" } }, Lucky = false }
+			local function allBack(what: string)
+				T.falsy(CC._test.hudHidden(), what .. ": the HUD's hold ended")
+				T.falsy(CC._test.playing(), what .. ": no opening plays")
+				T.near(scale.Scale, 0.9, 0.001, what .. ": the HUD on the screen at its own size")
+				T.truthy(Prompts.Enabled, what .. ": the prompts work again")
+			end
+			local ok, err = pcall(function()
+				local K = roblox.Enum.KeyCode
+				CC._test.setOwners({
+					BackpackController = { Key = K.Q },
+					EmoteController = { Key = K.N },
+					GolemController = { ToggleKey = K.P },
+					HoverboardController = { Key = K.H },
+					ArtifactController = { BookKey = K.J },
+					BoostController = { OpenKeys = { K.L, K.DPadRight } },
+				})
+				local hidden = false
+				CC._test.setHatch(function()
+					hidden = scale.Scale == 0 and CC._test.hudHidden()
+				end)
+				-- the clean-up after the opening fails (the hole: it killed the chain, nothing ever came back)
+				Stage.clear = function()
+					error("a broken clean-up")
+				end
+				CC._test.result(one)
+				Stage.clear = clear
+				T.truthy(hidden, "the HUD was away during the opening")
+				allBack("a failing clean-up")
+				-- a step of the chain's own end fails
+				View.setChain = function()
+					error("a broken counter")
+				end
+				CC._test.result(one)
+				View.setChain = setChain
+				allBack("a failing end step")
+				-- the opening itself fails
+				CC._test.setHatch(function()
+					error("a broken opening")
+				end)
+				CC._test.result(one)
+				allBack("a failing opening")
+				-- an opening that never ends: the watch stops it, what is queued still plays
+				local stuck, played = 0, 0
+				CC._test.setHatch(function(_o: any, result: any)
+					if result.Capsule == "Stone" then
+						stuck += 1
+						task.wait(3600)
+						error("never here: the watch stopped this thread")
+					end
+					played += 1
+				end)
+				CC._test.result(one)
+				T.eq(stuck, 1)
+				T.truthy(CC._test.playing(), "it hangs")
+				T.falsy(CC._test.checkStuck(os.clock() + CC.StuckAfter - 1), "a real opening's time is left alone")
+				T.truthy(CC._test.hudHidden())
+				CC._test.result({ Capsule = "Crystal", Count = 1, Golems = { { Id = 2, Kind = "QuartzSprite" } }, Lucky = false })
+				T.eq(played, 0, "a new result waits for the one that hangs")
+				T.truthy(CC._test.checkStuck(os.clock() + CC.StuckAfter + 1), "stopped")
+				T.eq(played, 1, "the result that waited plays")
+				allBack("an opening that never ended")
+				T.falsy(CC._test.checkStuck(os.clock() + 1000), "nothing left to stop")
+				-- a gui already at 0 when the hold began gets the HUD's own scale, never a 0 again
+				CC._test.setHatch(function() end)
+				scale.Scale = 0
+				CC._test.result(one)
+				T.truthy(scale.Scale > 0, "a 0 never comes back")
+				scale.Scale = 0.9
+				allBack("a gui hidden before")
+			end)
+			Stage.clear, View.setChain = clear, setChain
+			CC._test.setHatch(nil)
+			CC._test.setOwners(nil)
+			CC._test.close()
+			CC._test.hideHud(false)
+			hud:Destroy()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
 	T.test("CapsuleController: a chain of openings is one HUD hold; a result that comes meanwhile waits after it", function()
 		withController(function(_C, w)
 			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
@@ -3138,7 +3236,10 @@ return function(T, Loader)
 		end)
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
 		local flat = string.gsub(source, "%s+", " ")
-		T.truthy(string.find(flat, "setBlur(false) setMood(0, Color3.new(1, 1, 1), true)", 1, true), "endChain clears it")
+		T.truthy(
+			string.find(flat, 'setBlur(false) end) safely("the world\'s tint", function() setMood(0, Color3.new(1, 1, 1), true)', 1, true),
+			"endChain clears it"
+		)
 		T.truthy(
 			string.find(flat, 'setMood(0, Color3.new(1, 1, 1), true) pcall(Sfx.loop, "CaseCharge", false)', 1, true),
 			"a failing opening clears it and the hum"

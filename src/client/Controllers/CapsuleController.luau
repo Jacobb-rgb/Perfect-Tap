@@ -896,10 +896,17 @@ local function hideHud(on: boolean)
 			addedConnection = nil
 		end
 		for _, entry in hiddenGuis do
-			entry.Connection:Disconnect()
-			-- (a scale written meanwhile wins: the watcher may not have seen the last write)
-			local now = entry.Scale.Scale
-			entry.Scale.Scale = if now ~= 0 then now else entry.Wanted
+			local ok, err = pcall(function()
+				entry.Connection:Disconnect()
+				-- (a scale written meanwhile wins: the watcher may not have seen the last write;
+				-- never a 0 again: one that was hidden already gets the HUD's own scale)
+				local now = entry.Scale.Scale
+				local wanted = if now ~= 0 then now else entry.Wanted
+				entry.Scale.Scale = if wanted ~= 0 then wanted else HudController.uiScale()
+			end)
+			if not ok then
+				warn("[CapsuleController] a gui's scale didn't come back: " .. tostring(err))
+			end
 		end
 		table.clear(hiddenGuis)
 	end
@@ -1437,24 +1444,64 @@ local function beginChain(o: CapsuleView.OpenRefs)
 	keepNoSelection(true)
 end
 
+--[[
+	The safety net (owner 2026-11-07: "everything vanished, I couldn't open or
+	click anything"): the HUD and the prompts go when a chain begins and come
+	back in one place, endChain. So each of its steps runs on its own (one that
+	fails never stops the next), a failing opening or clean-up never ends the
+	chain's thread, and a watch ends an opening that takes longer than
+	StuckAfter seconds. Each of these warns, so the console says what happened.
+]]
+CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is under 7
+
+local function safely(what: string, step: () -> ())
+	local ok, err = pcall(step)
+	if not ok then
+		warn(`[CapsuleController] {what} failed: {err}`)
+	end
+end
+
+local chainThread: thread? = nil -- the thread that plays the chain
+local chainWatch: RBXScriptConnection? = nil
+local openingSince = 0 -- os.clock() when the opening that plays began
+
 local function endChain()
-	ContextActionService:UnbindAction(SKIP_ACTION)
-	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
-	ContextActionService:UnbindAction(AUTO_ACTION)
-	ContextActionService:UnbindAction(SINK_ACTION)
-	keepNoSelection(false)
+	if chainWatch then
+		chainWatch:Disconnect()
+		chainWatch = nil
+	end
+	chainThread = nil
+	safely("unbinding the keys", function()
+		ContextActionService:UnbindAction(SKIP_ACTION)
+		ContextActionService:UnbindAction(SKIP_ALL_ACTION)
+		ContextActionService:UnbindAction(AUTO_ACTION)
+		ContextActionService:UnbindAction(SINK_ACTION)
+	end)
+	safely("the selection lock", function()
+		keepNoSelection(false)
+	end)
 	playing = false
 	autoNote = nil
 	local o = opening
 	if o then
-		o.Gui.Enabled = false
-		o.Controls.Enabled = false
-		CapsuleView.setChain(o, nil, nil)
+		safely("closing the opening's screen", function()
+			o.Gui.Enabled = false
+			o.Controls.Enabled = false
+			CapsuleView.setChain(o, nil, nil)
+		end)
 	end
-	setBlur(false)
-	setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
-	hideHud(false)
-	tellPlaying(false)
+	safely("the blur", function()
+		setBlur(false)
+	end)
+	safely("the world's tint", function()
+		setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
+	end)
+	safely("the HUD's return", function()
+		hideHud(false)
+	end)
+	safely("the playing listeners", function()
+		tellPlaying(false)
+	end)
 	PromptController.setSuppressed("CapsuleOpening", false)
 	chainEndedAt = os.clock()
 	local view = refs
@@ -1501,20 +1548,71 @@ local function play(result: Result)
 	table.clear(stageGolems)
 end
 
+-- The clean-up after an opening that failed or never ended: nothing of it stays on the screen.
+local function clearAfter(o: CapsuleView.OpenRefs?)
+	currentRun = nil
+	safely("the world's tint", function()
+		setMood(0, Color3.new(1, 1, 1), true)
+	end)
+	pcall(Sfx.loop, "CaseCharge", false)
+	if o then
+		safely("clearing the stage", function()
+			HatchStage.clear(o, stageGolems)
+		end)
+	end
+	table.clear(stageGolems)
+end
+
+-- Plays what is queued, one after another, then ends the chain; nothing that fails stops it.
+local function runChain()
+	chainThread = coroutine.running()
+	while #queue > 0 do
+		local result = table.remove(queue, 1) :: Result
+		openingSince = os.clock()
+		local ok, err = pcall(play, result)
+		if not ok then
+			warn("[CapsuleController] opening failed: " .. tostring(err))
+			clearAfter(opening)
+		end
+	end
+	endChain()
+end
+
+--[[
+	The watch's look (every frame while a chain plays): an opening older than
+	StuckAfter is stopped. The results still queued play on (paid random items
+	show each result); else the chain ends and everything comes back.
+]]
+local function checkStuck(now: number): boolean
+	if not playing or not chainThread or now - openingSince <= CapsuleController.StuckAfter then
+		return false
+	end
+	warn(`[CapsuleController] an opening took over {CapsuleController.StuckAfter} s: stopped, the HUD comes back`)
+	local stuck = chainThread
+	chainThread = nil
+	if stuck ~= coroutine.running() then
+		pcall(task.cancel, stuck)
+	end
+	clearAfter(opening)
+	task.spawn(runChain)
+	return true
+end
+
 local function pump()
 	if playing or #queue == 0 then
 		return -- (the chain that plays takes it, after the ones before it)
 	end
 	local o = ensureOpening()
 	fitOpening(o)
-	beginChain(o)
-	task.spawn(function()
-		while #queue > 0 do
-			local result = table.remove(queue, 1) :: Result
-			play(result)
-		end
-		endChain()
+	safely("the chain's begin", function()
+		beginChain(o)
 	end)
+	playing = true
+	openingSince = os.clock()
+	chainWatch = RunService.Heartbeat:Connect(function()
+		checkStuck(os.clock())
+	end)
+	task.spawn(runChain)
 end
 
 --[[
@@ -1791,6 +1889,7 @@ CapsuleController._test = {
 	hudHidden = function(): boolean
 		return hudHidden
 	end,
+	checkStuck = checkStuck,
 	queued = function(): number
 		return #queue
 	end,
