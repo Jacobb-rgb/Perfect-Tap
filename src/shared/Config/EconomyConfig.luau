@@ -146,7 +146,9 @@ local function addTech(entry: TechItem)
 end
 
 for _, machine in MachineData.Buildable do
-	addTech({ Item = machine.Id, Kind = "Machine", Section = "Machines", Machine = machine.Id })
+	if not machine.NotSold then
+		addTech({ Item = machine.Id, Kind = "Machine", Section = "Machines", Machine = machine.Id })
+	end
 end
 for _, machine in MachineData.Buildable do
 	for _, kind in MachineData.UpgradeKinds do

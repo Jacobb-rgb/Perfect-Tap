@@ -403,6 +403,7 @@ return function(T, Loader)
 			WindTurbine = true,
 			FusionReactor = true,
 			RestorationTable = true, -- cleans relics faster
+			Conveyor = true, -- the one belt's levels (owner 2026-11-07)
 		}
 		for _, machine in MachineData.List do
 			local upgrades = machine.Upgrades
@@ -424,7 +425,8 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(MachineData.upgradeMax("Conveyor", "Speed"), 0)
+		T.eq(MachineData.upgradeMax("Conveyor", "Speed"), 2, "the one belt: two levels")
+		T.eq(MachineData.upgradeMax("ExpressConveyor", "Speed"), 0)
 		T.eq(MachineData.upgradeMax("Nope", "Speed"), 0)
 		T.eq(MachineData.upgradeMax("AutoCleaner", "Nope"), 0)
 		T.eq(MachineData.upgradePrices("Crusher", "Quality"), nil)
@@ -622,6 +624,11 @@ return function(T, Loader)
 		end
 		for _, machine in MachineData.Buildable do
 			local item = items[machine.Id]
+			if machine.NotSold then
+				-- (the Express belt: no longer sold, the ones players have still work)
+				T.eq(item, nil, "doesn't sell " .. machine.Id)
+				item = { Kind = "Machine", Machine = machine.Id, Section = "Machines" }
+			end
 			T.truthy(item, "sells " .. machine.Id)
 			T.eq(item.Kind, "Machine")
 			T.eq(item.Machine, machine.Id)
@@ -658,7 +665,8 @@ return function(T, Loader)
 			end
 		end
 		-- junk Item strings
-		local junkItems = { "", "Nope", "Upgrade:Conveyor:Speed", "Upgrade:Crusher:Quality", "Upgrade:AutoCleaner:Luck" }
+		local junkItems =
+			{ "", "Nope", "Upgrade:ExpressConveyor:Speed", "ExpressConveyor", "Upgrade:Crusher:Quality", "Upgrade:AutoCleaner:Luck" }
 		table.insert(junkItems, "StorageCrate")
 		table.insert(junkItems, "Anvil")
 		table.insert(junkItems, string.rep("x", 200))

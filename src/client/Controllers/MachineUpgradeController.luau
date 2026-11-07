@@ -57,6 +57,7 @@ MachineUpgradeController.ActionText = "Upgrades"
 MachineUpgradeController.ResultTimeout = 5
 MachineUpgradeController.MessageTime = 2.5
 MachineUpgradeController.Tick = 0.5
+MachineUpgradeController.BeltDistance = 6 -- studs: a belt's Upgrades prompt (machines: 10)
 MachineUpgradeController.RebuildWait = 3 -- seconds the window waits for a rebuilt machine
 
 local CLOSE_ACTION = "TerraForgeMachineUpgradeClose"
@@ -167,11 +168,13 @@ local function tryPrompt(model: Model)
 	end
 	local spot = base:FindFirstChild("Prompt") or base
 	local tier = model:GetAttribute("Tier")
+	local belt = MachineData.ById[id].IsConveyor == true
 	local prompt = PromptConfig.make({
 		Name = MachineUpgradeController.PromptName,
 		ActionText = MachineUpgradeController.ActionText,
-		ObjectText = MachineData.info(id, tier).Name,
-		Distance = 10,
+		ObjectText = if belt then "Belt" else MachineData.info(id, tier).Name,
+		-- (a belt's is shorter: a line of belts beside a machine never takes its prompt)
+		Distance = if belt then MachineUpgradeController.BeltDistance else 10,
 	})
 	prompt.Triggered:Connect(function()
 		MachineUpgradeController.open(model)
@@ -233,7 +236,7 @@ local function watch(model: Instance)
 		m:GetAttributeChangedSignal("Tier"):Connect(function()
 			local prompt = prompts[m]
 			local id = machineIdOf(m)
-			if prompt and id then
+			if prompt and id and not MachineData.ById[id].IsConveyor then
 				prompt.ObjectText = MachineData.info(id, m:GetAttribute("Tier")).Name
 			end
 		end)
@@ -269,8 +272,7 @@ local function title(): string
 		return "Upgrades"
 	end
 	local state = StateController.get()
-	local tier = MachineData.tierOf(if state then state.MachineUpgrades else nil, id)
-	return `{MachineData.info(id, tier).Name} Upgrades`
+	return MachineUpgradeView.titleOf(id, MachineData.tierOf(if state then state.MachineUpgrades else nil, id))
 end
 
 local buy: (k: number) -> ()
@@ -292,7 +294,7 @@ local function refresh()
 	if not view or not id or not shown then
 		return
 	end
-	MachineUpgradeView.fill(view, title(), MachineUpgradeView.rows(id, StateController.get(), coins()))
+	MachineUpgradeView.fill(view, title(), MachineUpgradeView.rows(id, StateController.get(), coins()), MachineUpgradeView.noteOf(id))
 	local now = os.clock()
 	for _, r in view.Rows do
 		local item = r.Item

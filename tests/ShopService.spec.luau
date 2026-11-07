@@ -369,7 +369,8 @@ return function(T, Loader)
 		bad({ Shop = "Gear", Item = "Conveyor" }, "Conveyor", "another shop")
 		bad({ Item = "Conveyor" }, "Conveyor", "no shop")
 		bad(req("Pickaxe"), "Pickaxe", "unknown item")
-		bad(req("Upgrade:Conveyor:Speed"), "Upgrade:Conveyor:Speed", "belts have no upgrades")
+		bad(req("Upgrade:ExpressConveyor:Speed"), "Upgrade:ExpressConveyor:Speed", "the Express belt has no upgrades")
+		bad(req("ExpressConveyor"), "ExpressConveyor", "nor is it sold any more (the one belt)")
 		bad(req("Upgrade:Crusher:Quality"), "Upgrade:Crusher:Quality", "only the Cleaning Plant has Quality")
 		bad(req(string.rep("A", 200)), "", "too long")
 		bad({ Shop = "Tech", Item = 5 }, "", "a number item")
@@ -786,7 +787,13 @@ return function(T, Loader)
 		for _, row in refs.RowList do
 			tabs[row.Tab] = (tabs[row.Tab] or 0) + 1
 		end
-		T.eq(tabs.Machines, #MachineData.Buildable, "every buildable machine")
+		local sold = 0
+		for _, machine in MachineData.Buildable do
+			if not machine.NotSold then
+				sold += 1
+			end
+		end
+		T.eq(tabs.Machines, sold, "every buildable machine that is sold")
 		-- (a machine's upgrades and Bellows are bought at the machine, owner 2026-11-07)
 		T.eq(tabs.Upgrades, 1, "machine Slots only")
 		for _, entry in EconomyConfig.TechShop.Items do
@@ -798,7 +805,7 @@ return function(T, Loader)
 		T.eq(refs.Rows.Conveyor and #refs.Rows.Conveyor.Buttons, 2, "BUY 1 / BUY 5 on belts")
 		T.eq(#refs.Rows.Crusher.Buttons, 1, "one BUY on other machines")
 		for _, machine in MachineData.Buildable do
-			T.truthy(refs.Rows[machine.Id], "row " .. machine.Id)
+			T.eq(refs.Rows[machine.Id] ~= nil, not machine.NotSold, "row " .. machine.Id)
 		end
 		for id in MachineData.Retired do
 			T.eq(refs.Rows[id], nil, "retired " .. id .. " not sold")

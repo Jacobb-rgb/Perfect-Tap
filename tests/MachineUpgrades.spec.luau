@@ -79,7 +79,25 @@ return function(T, Loader)
 		do
 			T.truthy(View.has(id), id)
 		end
-		for _, id in { "Conveyor", "ExpressConveyor", "CleaningStation", "SellBox", "PowerPole", "Platform", "BasicDropper", "Nope" } do
+		-- every belt holds the one belt's levels (owner 2026-11-07)
+		for _, id in { "Conveyor", "ExpressConveyor", "BeltLift", "Slide" } do
+			T.truthy(View.has(id), id .. ": a belt")
+			T.eq(MachineData.upgradeHolder(id), "Conveyor")
+			local rows = View.rows(id, state(), 150000)
+			T.eq(#rows, 1, id .. ": one row")
+			T.eq(rows[1].Item, "Upgrade:Conveyor:Speed")
+			T.eq(rows[1].Title, "Belt Speed")
+			T.eq(rows[1].Change, "x1 → x1.5")
+			T.eq(rows[1].Price, 100000)
+			T.truthy(rows[1].Affordable)
+			T.eq(View.titleOf(id), "Belt Upgrades")
+			T.eq(View.noteOf(id), "All your belts get it")
+		end
+		local top = View.rows("Slide", state({ MachineUpgrades = { Conveyor = { Speed = 2 } } }), 0)[1]
+		T.eq(top.Level, "MAX")
+		T.eq(top.Change, "x2")
+		T.eq(View.titleOf("ClayFurnace", 2), "Blast Furnace Upgrades")
+		for _, id in { "CleaningStation", "SellBox", "PowerPole", "Platform", "BasicDropper", "Nope" } do
 			T.falsy(View.has(id), id)
 		end
 		-- every machine with a Speed / Quality / tier upgrade or a job time has rows
@@ -259,5 +277,39 @@ return function(T, Loader)
 			T.truthy(View.Reasons[key] or key == "BadItem" or key == "MaxOwned" or key == "BadCount", "a short text for " .. key)
 		end
 		local _ = Instance
+	end)
+	T.test("Machine step 2: steel + blue only for the Solar Panel and the belt (owner 2026-11-07)", function()
+		local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
+		local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+		local P = KitMachines.Palette
+		local before = table.clone(P)
+		local looks = {}
+		for id in KitMachines.SteelLook do
+			table.insert(looks, id)
+		end
+		table.sort(looks)
+		T.eq(table.concat(looks, ","), "Conveyor,SolarPanel", "his words: the machines, fences, pen and podiums keep their colours")
+		local function colorOf(model: any, role: string, name: string?): any
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") and d:GetAttribute("Kit") == role and (name == nil or d.Name == name) then
+					return d.Color
+				end
+			end
+			return nil
+		end
+		local solar = MachineBuilder.build("SolarPanel", 0, nil)
+		T.eq(colorOf(solar, "Frame"), KitMachines.Steel.Frame, "the Solar Panel's frame: steel")
+		T.eq(colorOf(solar, "Trim"), KitMachines.Steel.Trim, "its trim: blue")
+		local crusher = MachineBuilder.build("Crusher", 0, nil)
+		T.eq(colorOf(crusher, "Frame"), before.Frame, "the Crusher keeps today's colours")
+		T.truthy(colorOf(crusher, "Frame") ~= KitMachines.Steel.Frame)
+		local belt = MachineBuilder.build("Conveyor", 0, nil)
+		T.eq(colorOf(belt, "Trim", "RailCap"), KitMachines.Steel.Trim, "the one belt: blue rail tops")
+		T.eq(colorOf(belt, "Frame", "RailL"), KitMachines.Steel.Frame, "steel rails")
+		local express = MachineBuilder.build("ExpressConveyor", 0, nil)
+		T.truthy(colorOf(express, "Frame", "RailL") == before.Frame, "an old Express belt keeps its look")
+		for role, color in before do
+			T.eq(P[role], color, "the palette is back after every build: " .. role)
+		end
 	end)
 end

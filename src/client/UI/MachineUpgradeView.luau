@@ -60,6 +60,7 @@ MachineUpgradeView.Why = {
 	Power = "Powers more machines",
 	Quality = "Better grades pay more",
 	Bellows = "All machines work faster",
+	Belt = "All your belts run faster",
 } :: { [string]: string }
 
 export type Row = {
@@ -134,8 +135,15 @@ local function power(x: number): string
 	return tostring(math.floor(x + 0.5))
 end
 
--- Every upgrade of `machineId` for the player in `state` (the State snapshot) with `coins`.
-function MachineUpgradeView.rows(machineId: string, state: any, coins: number): { Row }
+-- A belt level's speed ("x1", "x1.5", "x2").
+local function beltText(level: number): string
+	return string.format("x%g", MachineData.beltMult(level))
+end
+
+-- Every upgrade of the machine placed as `placedId` (a belt: the one belt's, MachineData.upgradeHolder)
+-- for the player in `state` (the State snapshot) with `coins`.
+function MachineUpgradeView.rows(placedId: string, state: any, coins: number): { Row }
+	local machineId = MachineData.upgradeHolder(placedId)
 	local machine = MachineData.ById[machineId]
 	local list: { Row } = {}
 	if not machine then
@@ -151,7 +159,10 @@ function MachineUpgradeView.rows(machineId: string, state: any, coins: number): 
 			local level, max = EconomyConfig.techLevel(entry, safe)
 			local top = level >= max
 			local nextLevel = math.min(level + 1, max)
-			if kind == "Speed" and machine.PowerOut then
+			if kind == "Speed" and machine.IsConveyor then
+				local text = change(beltText(level), beltText(nextLevel), top)
+				table.insert(list, row(entry, safe, coins, "Belt Speed", text, MachineUpgradeView.Why.Belt))
+			elseif kind == "Speed" and machine.PowerOut then
 				local text = change(power(MachineData.powerOut(info, level)), power(MachineData.powerOut(info, nextLevel)), top) .. " power"
 				table.insert(list, row(entry, safe, coins, "Power", text, MachineUpgradeView.Why.Power))
 			elseif kind == "Speed" and not ((machine.Time or 0) > 0) then
@@ -222,8 +233,18 @@ function MachineUpgradeView.spotKey(owner: any, id: any, x: any, z: any, level: 
 	return `{part(owner)}|{part(id)}|{part(x)}|{part(z)}|{part(level or 0)}`
 end
 
--- Does this machine have anything to upgrade? (its prompt shows only then)
-function MachineUpgradeView.has(machineId: string): boolean
+-- The window's title for a machine placed as `placedId` at furnace tier `tier` (belts: "Belt Upgrades").
+function MachineUpgradeView.titleOf(placedId: string, tier: any?): string
+	local machine = MachineData.ById[placedId]
+	if machine and machine.IsConveyor then
+		return "Belt Upgrades"
+	end
+	return `{if machine then MachineData.info(placedId, tier).Name else "Machine"} Upgrades`
+end
+
+-- Does this machine have anything to upgrade? (its prompt shows only then; a belt: the one belt's)
+function MachineUpgradeView.has(placedId: string): boolean
+	local machineId = MachineData.upgradeHolder(placedId)
 	local machine = MachineData.ById[machineId]
 	if not machine then
 		return false
@@ -370,8 +391,14 @@ local function buildRow(refs: Refs, k: number): RowRefs
 	}
 end
 
--- Fills the window for `title` with `rows`.
-function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row })
+-- The line under the rows: who gets an upgrade bought here.
+function MachineUpgradeView.noteOf(placedId: string): string
+	local machine = MachineData.ById[placedId]
+	return if machine and machine.IsConveyor then "All your belts get it" else "Every machine of this kind gets the upgrade"
+end
+
+-- Fills the window for `title` with `rows` (`note`: the line under them, MachineUpgradeView.noteOf).
+function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row }, note: string?)
 	refs.Title.Text = title
 	local window = refs.Panel
 	window.Size = UDim2.fromOffset(MachineUpgradeView.Width, MachineUpgradeView.height(#rows))
@@ -397,7 +424,7 @@ function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row })
 			end
 		end
 	end
-	refs.Note.Text = "Every machine of this kind gets the upgrade"
+	refs.Note.Text = note or "Every machine of this kind gets the upgrade"
 end
 
 -- A row whose BUY waits for the server's answer.

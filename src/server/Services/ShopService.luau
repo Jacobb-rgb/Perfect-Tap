@@ -161,7 +161,8 @@ function ShopService.nearOwnMachine(player: Player, machineId: string?): boolean
 	end
 	local MachineService = require(script.Parent.MachineService)
 	for _, machine in MachineService.ofPlayer(player) do
-		local fits = if machineId then machine.Id == machineId else (machine.Info.Time or 0) > 0
+		-- (any belt holds the one belt's upgrade: MachineData.upgradeHolder)
+		local fits = if machineId then MachineData.upgradeHolder(machine.Id) == machineId else (machine.Info.Time or 0) > 0
 		local model = machine.Model :: Model?
 		if fits and not machine.Removed and model and (model:GetPivot().Position - root.Position).Magnitude <= ShopService.MachineRange then
 			return true

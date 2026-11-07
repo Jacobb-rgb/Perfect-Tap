@@ -66,6 +66,7 @@ export type Machine = {
 	QualityLevels: { { [string]: number } }?, -- grade odds per Quality level (index = level + 1, Cleaning Plant)
 	Upgrades: UpgradePrices?, -- Tech shop upgrades of this machine type (nil = none)
 	Retired: boolean?, -- design v2 removed it: not sold, migrations take it off plots
+	NotSold: boolean?, -- no longer sold, but the ones players have still work and can be placed
 	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
 	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
@@ -286,6 +287,9 @@ MachineData.List = {
 		Order = 1,
 		IsConveyor = true,
 		SlotFree = true,
+		-- the one belt (owner 2026-11-07): its levels speed up every belt of the
+		-- player (MachineData.beltMult), bought at a belt; never x2 (PriceKept)
+		Upgrades = { Speed = { 100000, 2000000 } },
 	},
 	-- the machine roster (owner 2026-10-17; prices, times and power are
 	-- Claude's proposals, docs/plans/MACHINES_GAME_PLAN.md)
@@ -300,6 +304,9 @@ MachineData.List = {
 		IsConveyor = true,
 		SlotFree = true,
 		SpeedMult = 2,
+		-- owner 2026-11-07: one belt with levels instead; the Express belts players
+		-- have keep their speed and can still be placed
+		NotSold = true,
 	},
 	{
 		Id = "Splitter",
@@ -749,6 +756,28 @@ function MachineData.upgradePrices(machineId: string, kind: string): { number }?
 		return upgrades.Tier
 	end
 	return nil
+end
+
+--[[
+	The one belt's levels (owner 2026-11-07: 1.5x for 100K, 2x for 2M, bought at
+	a belt). Every belt of the player (IsConveyor: the Conveyor, the Belt Lift,
+	the Slide, an old Express Conveyor) runs at the faster of its own SpeedMult
+	and this, so an Express belt keeps its 2x and the top level never passes it
+	(the movement check's fastest belt stays the Express's).
+]]
+MachineData.BeltLevels = { 1.5, 2 }
+
+-- A belt's speed multiplier at belt level `level` (0 or broken: 1).
+function MachineData.beltMult(level: any): number
+	local n = wholeLevel(level, #MachineData.BeltLevels)
+	return if n == 0 then 1 else MachineData.BeltLevels[n]
+end
+
+-- The machine type whose upgrades a placed machine shows and is near for (a
+-- belt: the Conveyor's, the one belt; else its own).
+function MachineData.upgradeHolder(machineId: string): string
+	local machine = MachineData.ById[machineId]
+	return if machine and machine.IsConveyor then "Conveyor" else machineId
 end
 
 -- Highest level of an upgrade for a machine type (0 = it has none).
