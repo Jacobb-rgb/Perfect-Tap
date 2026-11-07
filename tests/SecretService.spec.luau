@@ -225,8 +225,8 @@ return function(T, Loader)
 		local pen = { ["Raw|HollowEye||"] = 1, ["Raw|Coal||"] = 2, ["Clean|RainbowNova|Flawless|"] = 1 }
 		local dirty = SellView.plan(pen, {}, "Dirty", nil, 1) :: any
 		T.eq(dirty.Count, 2, "only the two Coal")
-		local rest = SellView.plan(pen, {}, "AllButBest", nil, 1) :: any
-		T.eq(rest.Count, 0, "the secret Nova is not sold")
+		local rest = SellView.plan(pen, {}, "All", nil, 1) :: any
+		T.eq(rest.Count, 2, "only the two Coal: the secret Nova is not sold")
 		-- the wheel's ore prize follows the player's best ore, not a jackpot
 		T.eq(WheelConfig.bestIncome({ Coal = true, RainbowNova = true }), OreData.get("Coal").Income, "no secret prize")
 	end)
