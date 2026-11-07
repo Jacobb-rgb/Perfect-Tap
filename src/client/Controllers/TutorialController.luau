@@ -570,7 +570,13 @@ local function updatePointer(r: TutorialView.Refs, def: TutorialConfig.Step?, sh
 	local id = if show and def then def.UiTarget else nil
 	local menu = if id then SideMenuController.refs() else nil
 	local button: GuiObject? = nil
-	if menu and id then
+	-- (the light HUD: the step's tile on the left, or MORE when it stands behind it)
+	local tiles = HudController.refs().Menu
+	if id and tiles and tiles:GetAttribute("Bubble") then
+		local holder = tiles:FindFirstChild(id) or tiles:FindFirstChild("More")
+		button = if holder then holder:FindFirstChild("Face") :: GuiObject? else nil
+		menu = nil
+	elseif menu and id then
 		local layout = menu.Layout
 		if layout and layout.Toggle and not menu.Expanded then
 			button = menu.Toggle

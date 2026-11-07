@@ -111,6 +111,13 @@ for id, model in eggs do
 	local center, top, prompt, bottom, half = EggPanel.spotOf(model, front)
 	spots[id] = { Center = center, Top = top, Prompt = prompt, Bottom = bottom, Half = half }
 end
+-- the SKY EGG, free in the world (EggPanel.freeEggId)
+for _, d in workspace:GetDescendants() do
+	if EggPanel.freeEggId(d) == "Sky" then
+		local center, top, prompt, bottom, half = EggPanel.spotOf(d, front)
+		spots.Sky = { Center = center, Top = top, Prompt = prompt, Bottom = bottom, Half = half }
+	end
+end
 
 if process.args[1] == "probe" then
 	print("front", front, "right", right, "ground", ground)
@@ -952,6 +959,22 @@ do
 			panelGui(PC, cam, { Egg = egg, Lucky = false, Auto = false, Known = knownSet(), Coins = 1e9, Since = 2.3, Walk = before })
 		still(`egg4_walk{i}_{string.lower(egg)}`, PC, cam, extra, { panel, promptGui(PC, cam, { Egg = egg, Since = 0.45 }) })
 	end
+end
+
+-- the SKY EGG on Sky Haven (owner 2026-11-07: "only the new one"): its panel over it, the big E on the player's side
+do
+	local s = spots.Sky
+	local away = V3.new(0.6, 0, -0.8)
+	s.Prompt = EggPanel.freePoint(s.Center, s.Bottom, s.Half, away)
+	local feet = V3.new(s.Center.X, s.Bottom + 0.2, s.Center.Z) + away * (s.Half + 2)
+	local cam = { Position = feet + away * 13 + up * 7, Target = V3.new(s.Center.X, s.Top - 1, s.Center.Z) }
+	local extra = Instance.new("Model")
+	miner(extra, feet, s.Center)
+	local known = knownSet({ "SkySprite", "StormSentinel", "AetherKing" })
+	local panel = panelGui(PC, cam, { Egg = "Sky", Lucky = false, Auto = false, Known = known, Coins = 1e9, Since = 2.3 })
+	still("egg7_sky_pc", PC, cam, extra, { panel, promptGui(PC, cam, { Egg = "Sky", Since = 0.45 }) })
+	local phone = panelGui(PHONE, cam, { Egg = "Sky", Lucky = false, Auto = false, Known = known, Coins = 1e9, Since = 2.3, Touch = {} })
+	still("egg7_sky_phone", PHONE, cam, extra, { phone })
 end
 
 fs.writeFile(root .. "/build/preview/egg_panel_shots.json", serde.encode("json", stills))

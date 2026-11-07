@@ -314,6 +314,14 @@ return function(T, Loader)
 		end
 		-- a ramp from the lawn (y 0) at the coast, then a solid bridge over the rim and the sea to the stone
 		local haven = map:FindFirstChild("SkyHaven", true)
+		-- the SKY EGG's route in the world: the podium the server checks, the egg the clients' panel finds
+		local EggPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EggPanel")
+		local podium = haven:FindFirstChild("SkyEggPodium", true)
+		T.truthy(podium and podium:HasTag("EggPodium"), "the podium has the tag CapsuleService.nearPodium looks for")
+		T.eq(podium:GetAttribute("Capsule"), "Sky", "it names the Sky egg")
+		local egg = haven:FindFirstChild("SkyEgg", true)
+		T.eq(EggPanel.freeEggId(egg), "Sky", "the clients' panel knows the egg")
+		T.truthy(egg:HasTag(EggPanel.FreeTag), "with the tag the panel watches")
 		local ramp = haven:FindFirstChild("Ramp")
 		T.truthy(ramp and ramp.CanCollide, "a ramp plank at the gate's mouth")
 		local rampMin, rampMax = bounds(ramp)
