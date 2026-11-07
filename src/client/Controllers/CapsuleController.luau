@@ -833,6 +833,18 @@ local hudHidden = false
 local addedConnection: RBXScriptConnection? = nil
 local HOLD_NAME = "CapsuleOpening"
 
+--[[
+	Roblox never keeps a UIScale at 0: Scale = 0 reads back as 1e-07 (the owner's
+	Studio trace 2026-11-07, Studio 0.746). So hidden is "below AwayBelow", never
+	"== 0". With == 0 the return took that 1e-07 for a scale written meanwhile and
+	put it back: the chain ended well, and the whole HUD and the egg panel stayed
+	invisible until the next HudController.updateScale (a new gui, a resize).
+]]
+CapsuleController.AwayBelow = 0.001
+local function isAway(scale: number): boolean
+	return scale >= 0 and scale < CapsuleController.AwayBelow
+end
+
 local function holdControllers(on: boolean)
 	for _, name in { "MiningController", "InteractController", "BoostController" } do
 		local module = script.Parent:FindFirstChild(name)
@@ -862,7 +874,7 @@ local function hideGui(gui: Instance)
 	hiddenGuis[gui] = entry
 	scale.Scale = 0
 	entry.Connection = scale:GetPropertyChangedSignal("Scale"):Connect(function()
-		if scale.Scale ~= 0 then
+		if not isAway(scale.Scale) then
 			entry.Wanted = scale.Scale -- (the HUD's scale changed: kept for later)
 			scale.Scale = 0
 		end
@@ -906,10 +918,10 @@ local function hideHud(on: boolean)
 			local ok, err = pcall(function()
 				entry.Connection:Disconnect()
 				-- (a scale written meanwhile wins: the watcher may not have seen the last write;
-				-- never a 0 again: one that was hidden already gets the HUD's own scale)
+				-- never hidden again: one that was hidden already gets the HUD's own scale)
 				local now = entry.Scale.Scale
-				local wanted = if now ~= 0 then now else entry.Wanted
-				entry.Scale.Scale = if wanted ~= 0 then wanted else HudController.uiScale()
+				local wanted = if not isAway(now) then now else entry.Wanted
+				entry.Scale.Scale = if not isAway(wanted) then wanted else HudController.uiScale()
 			end)
 			if not ok then
 				warn("[CapsuleController] a gui's scale didn't come back: " .. tostring(err))
@@ -1720,7 +1732,7 @@ local function checkHudTrace(now: number): string?
 	end
 	local scale = gui:FindFirstChild("Scale")
 	local size = if scale and scale:IsA("UIScale") then scale.Scale else -1
-	if playing or (gui.Enabled and size ~= 0) then
+	if playing or (gui.Enabled and not isAway(size)) then
 		hudAwaySince, hudTraced = nil, false
 		return nil
 	end

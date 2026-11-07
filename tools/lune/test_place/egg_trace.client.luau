@@ -165,7 +165,7 @@ local function look()
 	for _, g in player.PlayerGui:GetChildren() do
 		if g:IsA("ScreenGui") and string.sub(g.Name, 1, 10) == "TerraForge" then
 			local gs = g:FindFirstChild("Scale")
-			if gs and gs:IsA("UIScale") and gs.Scale == 0 then
+			if gs and gs:IsA("UIScale") and gs.Scale < 0.001 then -- (Roblox reads a 0 back as 1e-07)
 				zero += 1
 			end
 			if not g.Enabled then
