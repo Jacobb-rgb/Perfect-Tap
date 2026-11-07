@@ -61,6 +61,7 @@ BlasterShots.Env = {
 	worldOf = function(attachment: Attachment): Vector3
 		return attachment.WorldPosition
 	end,
+	clock = os.clock,
 	isPhone = function(): boolean
 		return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 	end,
@@ -322,7 +323,7 @@ local function land(shot: Shot)
 	else
 		Vfx.impact(shot.To, gun.Color, nil, 0)
 	end
-	gun.LandedAt = os.clock()
+	gun.LandedAt = BlasterShots.Env.clock()
 	if gun.Lamp.Parent then
 		gun.Lamp.CFrame = CFrame.new(shot.To + back * 0.8)
 	end
@@ -331,7 +332,7 @@ end
 ---------------------------------------------------------------- the frame
 
 local function step(dt: number)
-	local now = os.clock()
+	local now = BlasterShots.Env.clock()
 	local running = false
 	for _, gun in guns do
 		local on = gun.On or now < gun.Until
@@ -460,7 +461,7 @@ function BlasterShots.aim(
 	local top = if hooks then SHOTS.FastRate else SHOTS.OtherRate
 	gun.Top = if Motion.reduced() then math.min(top, SHOTS.ReducedRate) else top
 	if hold then
-		gun.Until = os.clock() + hold
+		gun.Until = BlasterShots.Env.clock() + hold
 	else
 		gun.On = true
 	end

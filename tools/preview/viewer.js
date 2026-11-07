@@ -724,6 +724,19 @@ async function main() {
     composer.addPass(new BokehPass(world, camera, { focus, aperture: shot.dof.aperture ?? 0.004, maxblur: shot.dof.maxblur ?? 0.008 }));
   }
   const B = preset.Bloom || {};
+  // guard: one NaN / infinite / huge pixel (a mirror highlight) would spread through the bloom blur:
+  // a white blob or a black square over a frame. By its bits: isnan() can be compiled away on Metal.
+  composer.addPass(
+    new ShaderPass({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+      fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+        bool bad(float x){ return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+        void main(){ vec4 c = texture2D(tDiffuse, vUv);
+          if (bad(c.r) || bad(c.g) || bad(c.b) || bad(c.a)) c = vec4(0.0, 0.0, 0.0, 1.0);
+          gl_FragColor = vec4(min(c.rgb, vec3(40.0)), c.a); }`,
+    }),
+  );
   if (!isCaveShot) {
     // sun glow: cap the low sun's mirror highlight on the sea before bloom, so it
     // blooms like Roblox's small sun glint instead of a screen-filling white blob

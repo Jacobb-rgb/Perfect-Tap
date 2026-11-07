@@ -37,6 +37,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -48,6 +49,7 @@ local Stage = require(Shared.Builders.CrateOpeningStage)
 local Net = require(Shared.Net)
 local VaultView = require(script.Parent.Parent.UI.VaultView)
 local CrateOpeningView = require(script.Parent.Parent.UI.CrateOpeningView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
@@ -74,7 +76,7 @@ local PENDING_TIMEOUT = 4 -- seconds a BUY waits for its VaultResult
 local MESSAGE_TIME = 3.5
 -- the cinematic's room: far above and away from the map (client-only parts)
 local STAGE_ORIGIN = CFrame.new(6000, 3000, 6000)
-local MAX_CINEMATIC = 40 -- seconds: it ends by itself
+local MAX_CINEMATIC = 20 -- seconds: waiting at the reveal it goes on by itself
 local LEAVE_TIME = 0.3 -- the fade to black at the end
 -- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
 -- the one list of every panel controller (a name that isn't in the game is skipped)
@@ -422,6 +424,7 @@ local function finish(s: any)
 		connection:Disconnect()
 	end
 	Sfx.loop("CaseCharge", false)
+	s.blur:Destroy()
 	local camera = s.camera :: Camera
 	camera.CameraType = Enum.CameraType.Custom
 	camera.FieldOfView = s.savedFov
@@ -461,13 +464,37 @@ local function leave(s: any)
 	end)
 end
 
--- A click / tap / button: before the burst skip ahead to it, after the reveal end.
+-- The cinematic's time and how long it has waited at the reveal (time stops at Hold until AWESOME!).
+local function timeOf(s: any, now: number): (number, number)
+	local hold = s.stage.Hold
+	local collected = s.collected
+	if collected then
+		return hold + (now - collected), s.idle
+	end
+	local t = now - s.started
+	s.idle = math.max(0, t - hold)
+	return math.min(t, hold), s.idle
+end
+
+-- AWESOME!: the last part plays (COLLECTED!, one more turn, the camera pulls out), then it ends.
+local function collect(s: any)
+	if s.collected or s.leaving or s.done then
+		return
+	end
+	s.collected = os.clock()
+	Sfx.play("UIClick")
+end
+
+-- A click / tap / button: before the burst skip ahead to it, after the reveal collect.
 local function advance(s: any)
-	local t = os.clock() - s.started
+	local t = timeOf(s, os.clock())
 	if t < s.stage.SkipTo then
 		s.started = os.clock() - s.stage.SkipTo
 	elseif t >= s.stage.Reveal + CrateOpeningView.ButtonAfter then
-		leave(s)
+		collect(s)
+	elseif t >= s.stage.Reveal then
+		-- the hero moment again and again: on to the words
+		s.started = os.clock() - (s.stage.Reveal + CrateOpeningView.ButtonAfter)
 	end
 end
 
@@ -484,14 +511,14 @@ local function step(s: any)
 		return
 	end
 	local now = os.clock()
-	local t = now - s.started
+	local t, idle = timeOf(s, now)
 	local stage = s.stage
-	stage.update(t)
-	local cf, fov = stage.camera(t)
+	stage.update(t, idle)
+	local cf, fov = stage.camera(t, idle)
 	s.camera.CFrame = cf
 	s.camera.FieldOfView = fov
+	s.blur.Size = stage.blur(t)
 	local leaving = if s.leaving then math.clamp((now - s.leaving) / LEAVE_TIME, 0, 1) else 0
-	CrateOpeningView.update(s.view, t, stage.Burst, stage.Reveal, leaving)
 	-- the sounds and particle bursts, once each
 	local fired = s.fired
 	local function once(key: string, at: number): boolean
@@ -501,33 +528,75 @@ local function step(s: any)
 		end
 		return false
 	end
+	if once("flash", stage.Burst) then
+		CrateOpeningView.claimFlash(s.view, now)
+	end
+	CrateOpeningView.update(s.view, t, stage.Burst, stage.Reveal, leaving)
+	local calm = s.view.Calm -- (Reduce motion: no particle bursts)
+	if once("prep", 0.02) then
+		Sfx.play("BlasterStart")
+	end
+	if once("portal", Stage.T_PREP) then
+		Sfx.play("CaseRise")
+	end
 	if once("land", Stage.T_LAND) then
 		Sfx.play("CaseLand")
+		Sfx.play("CaseBoom")
 	end
-	if once("charge", 1.0) and t < stage.Burst then
+	if once("charge", Stage.T_ORBIT) and t < stage.Burst then
 		Sfx.loop("CaseCharge", true)
+	end
+	if t >= Stage.T_ORBIT and t < stage.Burst then
+		-- it climbs and gets louder toward the burst
+		local charge = (t - Stage.T_ORBIT) / (stage.Burst - Stage.T_ORBIT)
+		Sfx.loopPitch("CaseCharge", 0.8 + 0.7 * charge, 0.5 + 1.1 * charge)
 	end
 	if once("burst", stage.Burst) then
 		Sfx.loop("CaseCharge", false)
 		Sfx.play("CaseBurst")
 		Sfx.play("CaseBoom")
 		Sfx.play("NodeShatter")
-		local core = (STAGE_ORIGIN * CFrame.new(0, 2.2, 0)).Position
-		Vfx.burst("Burst", core, 40, stage.Glow)
-		Vfx.burst("Sparks", core, 60, stage.Glow:Lerp(Color3.new(1, 1, 1), 0.4))
-		Vfx.burst("Glint", core, 24, Color3.new(1, 1, 1))
+		if not calm then
+			local core = (STAGE_ORIGIN * CFrame.new(0, 2.2, 0)).Position
+			Vfx.burst("Burst", core, 40, stage.Glow)
+			Vfx.burst("Sparks", core, 60, stage.Glow:Lerp(Color3.new(1, 1, 1), 0.4))
+			Vfx.burst("Glint", core, 24, Color3.new(1, 1, 1))
+		end
 	end
 	if once("rise", stage.Burst + 0.15) then
 		Sfx.play("CaseRise")
 	end
 	if once("reveal", stage.Reveal) then
 		Sfx.play("Reveal")
+		Sfx.play("CaseBoom")
+		if not calm then
+			local hero = (STAGE_ORIGIN * CFrame.new(0, Stage.GunRest, 0)).Position
+			Vfx.burst("Burst", hero, 30, stage.Glow)
+			Vfx.burst("Glint", hero, 20, Color3.new(1, 1, 1))
+		end
+	end
+	for i, at in stage.ShotTimes do
+		if once("shot" .. i, at) then
+			Sfx.play("BlasterShot")
+		end
+	end
+	if once("settle", Stage.T_SETTLE) then
+		Sfx.play("CaseRise")
+	end
+	if once("words", stage.Reveal + CrateOpeningView.ValueAt) then
+		Sfx.play("BlastThud")
 	end
 	if once("button", stage.Reveal + CrateOpeningView.ButtonAfter) and usingGamepad() then
 		GuiService.SelectedObject = s.view.Continue
 	end
-	if t > MAX_CINEMATIC then
+	if once("collected", stage.Hold + 0.03) then
+		Sfx.play("CoinBurst")
+		GuiService.SelectedObject = nil
+	end
+	if t >= stage.Duration then
 		leave(s)
+	elseif now - s.started > MAX_CINEMATIC then
+		collect(s)
 	end
 end
 
@@ -558,8 +627,24 @@ function VaultController.play(level: number, oreId: string): boolean
 	local folder = Instance.new("Folder")
 	folder.Name = "CrateOpening"
 	folder.Parent = Workspace
-	local stage = Stage.build(folder, STAGE_ORIGIN, level, oreId, Stage.blasterModel(level, oreId))
+	local calm = Motion.reduced()
+	local stage = Stage.build(folder, STAGE_ORIGIN, level, oreId, Stage.blasterModel(level, oreId), calm)
+	stage.bulk = function(parts: { BasePart }, frames: { CFrame })
+		Workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+	local viewport = camera.ViewportSize
+	stage.aspect = viewport.X / math.max(viewport.Y, 1)
+	-- (the stand-in for motion blur: Stage.blur; removed at the end)
+	local blur = Instance.new("BlurEffect")
+	blur.Name = "CrateOpeningBlur"
+	blur.Size = 0
+	blur.Parent = Lighting
 	local view = CrateOpeningView.build()
+	view.Calm = calm
+	local uiScale = HudController.uiScale()
+	local guiScale = view.Gui:FindFirstChild("Scale") :: UIScale
+	guiScale.Scale = uiScale
+	CrateOpeningView.fit(view, viewport.X / uiScale, viewport.Y / uiScale)
 	CrateOpeningView.setBlaster(view, level, oreId)
 	CrateOpeningView.setSkipText(view, skipText())
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
@@ -571,6 +656,8 @@ function VaultController.play(level: number, oreId: string): boolean
 		folder = folder,
 		camera = camera,
 		savedFov = camera.FieldOfView,
+		blur = blur,
+		idle = 0,
 		name = name,
 		fired = {},
 		connections = {},
@@ -617,7 +704,7 @@ function VaultController.play(level: number, oreId: string): boolean
 	table.insert(
 		s.connections,
 		view.Continue.Activated:Connect(function()
-			leave(s)
+			collect(s)
 		end)
 	)
 	return true

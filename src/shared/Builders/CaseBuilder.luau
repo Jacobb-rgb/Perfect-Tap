@@ -1,46 +1,61 @@
 --[[
-	The blaster weapon case (the Kenney Blaster Kit crate silhouette in a
-	blaster's Ore Glow look): the case the Blaster Vault sells and the one the
+	The blaster crate (owner 2026-11-06: his "futuristic mining crates" script
+	and the void crate picture): a dark armoured box with a metal lid, corner
+	posts, neon strips and a glowing diamond core on its front, all in the colour
+	of the blaster inside (owner 2026-11-06; the caller passes it,
+	BlasterBuilder.colors): the crate the Blaster Vault sells and the one the
 	crate-opening cinematic bursts open.
 
 	Built at the origin: bottom center, the long side along Z, the front (the
-	latches) facing +X, the lid hinged along its back (-X) edge. Two Models:
-	  Base   the body with an ore-coloured band, feet, corner caps, straps,
-	         handles, glowing latches, the ore pattern (lava cracks for hot
-	         ores, a galaxy of stars and neon outlines for the rest), the
-	         glowing seam ("Seam") and the glowing inside ("Inside", shows
-	         when the lid opens)
-	  Lid    the lid with a raised panel, straps, corner caps, the glowing
-	         diamond emblem and, from level 4, ore crystals (more with the level)
-	Sizes scale with `size` (1 = a 7 stud long case). About 60-90 parts.
+	core) facing +X. Models, so the cinematic can take it apart:
+	  Base    bottom armour, floor, corner posts with their caps and strips, the
+	          glowing inside ("Inside") and the glowing seam ("Seam")
+	  Panels  the four walls, each hinged at the floor (Hinge, Fold: they fold
+	          outward when the crate opens)
+	  Lid     two halves (LidA at -Z, LidB at +Z) that fly apart; from level 4
+	          the lid's corners glow, from level 7 a diamond on top
+	Sizes scale with `size` (1 = a 7 stud long crate). About 60-75 parts.
 	Pure: only Instance creation (Lune previews and the client both build it).
 ]]
 
 local Geo = require(script.Parent.Geo)
-local BlasterData = require(script.Parent.Parent.Config.BlasterData)
 
 local CaseBuilder = {}
+
+export type Panel = {
+	Model: Model,
+	Hinge: CFrame, -- the hinge's middle, in the crate's frame
+	Fold: Vector3, -- CFrame.Angles(Fold.X * a, 0, Fold.Z * a) folds it outward by a
+}
 
 export type Case = {
 	Base: Model,
 	Lid: Model,
+	LidA: Model,
+	LidB: Model,
+	Panels: { Panel },
 	Seam: BasePart,
 	Inside: BasePart,
-	HingeOffset: CFrame, -- the hinge line in the case's frame (rotate the lid about its local Z)
-	Height: number, -- the closed case's height
+	Core: BasePart, -- the diamond core on the front
+	Lights: { BasePart }, -- the neon strips (they pulse in the cinematic)
+	Height: number, -- the closed crate's height
 	BaseHeight: number,
+	Width: number,
+	Length: number,
 	Glow: Color3,
 	Body: Color3,
+	Plate: Color3,
 }
 
 local NEON = Enum.Material.Neon
-local SMOOTH = Enum.Material.SmoothPlastic
 local METAL = Enum.Material.Metal
-local GLASS = Enum.Material.Glass
+local SMOOTH = Enum.Material.SmoothPlastic
+
+local WHITE = Color3.new(1, 1, 1)
 
 local TINY = { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
 
--- Hot ores get the lava look, the rest the galaxy look.
+-- The hot ores (the guns' Magma skin in KenneyBlaster; the crates have one look).
 CaseBuilder.HotOres = {
 	[""] = true,
 	Coal = true,
@@ -54,225 +69,154 @@ CaseBuilder.HotOres = {
 	PhoenixFeather = true,
 }
 
+-- A crate's dark colours in the hue of its glow: (body, plate, steel). (A near-grey glow: near-greys.)
+function CaseBuilder.shades(glow: Color3): (Color3, Color3, Color3)
+	local h, sat = glow:ToHSV()
+	local k = if sat < 0.08 then 0.2 else 1
+	return Color3.fromHSV(h, 0.38 * k, 0.17), Color3.fromHSV(h, 0.3 * k, 0.36), Color3.fromHSV(h, 0.22 * k, 0.52)
+end
+
 local function block(parent: Instance, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?): Part
 	return Geo.block(parent, cf, size, color, material or SMOOTH, table.clone(TINY))
 end
 
-local function glow(parent: Instance, cf: CFrame, size: Vector3, color: Color3): Part
-	return Geo.block(parent, cf, size, color, NEON, table.clone(TINY))
-end
-
--- A small neon crystal (a column and a turned cube tip).
-local function shard(parent: Instance, base: Vector3, up: Vector3, s: number, length: number, color: Color3)
-	local hint = if math.abs(up.X) > 0.9 then Vector3.new(0, 0, 1) else Vector3.new(1, 0, 0)
-	local right = (hint - up * hint:Dot(up)).Unit
-	local cf = CFrame.fromMatrix(base, right, up) * CFrame.Angles(0, math.pi / 4, 0)
-	glow(parent, cf * CFrame.new(0, length * 0.35, 0), Vector3.new(s, length * 0.7, s), color)
-	glow(
-		parent,
-		cf * CFrame.new(0, length * 0.82, 0) * CFrame.Angles(math.pi / 4, 0, math.pi / 4),
-		Vector3.new(s * 0.7, s * 0.7, s * 0.7),
-		color
-	)
-end
-
--- The look of a case: (body, panel, glow, hot).
-function CaseBuilder.look(oreId: string?): (Color3, Color3, Color3, boolean)
-	local id = oreId or ""
-	local color, glowColor = BlasterData.skin(id)
-	local hot = CaseBuilder.HotOres[id] == true
-	local body, panel
-	if hot then
-		body = Color3.fromRGB(34, 28, 30):Lerp(color, 0.08)
-		panel = Color3.fromRGB(48, 42, 44)
-	else
-		local h, s = color:ToHSV()
-		body = Color3.fromHSV(h, math.max(s, 0.25) * 0.75 + 0.2, 0.26)
-		panel = Color3.fromHSV(h, math.max(s, 0.25) * 0.7 + 0.15, 0.4)
-	end
-	-- very bright glows (gold, white ores) keep their colour instead of blooming white
-	local luma = 0.299 * glowColor.R + 0.587 * glowColor.G + 0.114 * glowColor.B
-	if luma > 0.7 then
-		glowColor = glowColor:Lerp(color, 0.4)
-	end
-	return body, panel, glowColor, hot
-end
-
--- Lava cracks (hot) or a galaxy (stars + an outline) on one face; face = its center frame (Z out), hw x hh half size.
-local function pattern(parent: Instance, face: CFrame, hw: number, hh: number, hot: boolean, glowColor: Color3, seed: number, s: number)
-	local r = seed
-	local function rand(): number
-		r = (r * 16807) % 2147483647
-		return r / 2147483647
-	end
-	if hot then
-		for _ = 1, 3 do
-			local x, y = (rand() - 0.5) * hw * 1.4, (rand() - 0.5) * hh * 1.2
-			local a = rand() * math.pi * 2
-			for _ = 1, 3 do
-				a += (rand() - 0.5) * 1.5
-				local len = (0.35 + rand() * 0.3) * hh * 1.6
-				local nx = math.clamp(x + math.cos(a) * len, -hw * 0.9, hw * 0.9)
-				local ny = math.clamp(y + math.sin(a) * len, -hh * 0.85, hh * 0.85)
-				local dx, dy = nx - x, ny - y
-				local l = math.sqrt(dx * dx + dy * dy)
-				if l > 0.05 then
-					glow(
-						parent,
-						face * CFrame.new((x + nx) / 2, (y + ny) / 2, 0.02) * CFrame.Angles(0, 0, math.atan2(dy, dx)),
-						Vector3.new(l + 0.08 * s, 0.08 * s, 0.05),
-						glowColor
-					)
-				end
-				x, y = nx, ny
-			end
-		end
-	else
-		local t = 0.06 * s
-		for _, sy in { -1, 1 } do
-			glow(parent, face * CFrame.new(0, sy * (hh - 0.12 * s), 0.02), Vector3.new(hw * 2 - 0.24 * s, t, 0.05), glowColor)
-		end
-		for _, sx in { -1, 1 } do
-			glow(parent, face * CFrame.new(sx * (hw - 0.12 * s), 0, 0.02), Vector3.new(t, hh * 2 - 0.24 * s, 0.05), glowColor)
-		end
-		for _ = 1, 5 do
-			local d = (0.08 + rand() * 0.08) * s
-			glow(
-				parent,
-				face * CFrame.new((rand() - 0.5) * hw * 1.6, (rand() - 0.5) * hh * 1.4, 0.02) * CFrame.Angles(0, 0, math.pi / 4),
-				Vector3.new(d, d, 0.05),
-				glowColor:Lerp(Color3.new(1, 1, 1), 0.5)
-			)
-		end
-	end
-end
-
 --[[
-	Builds a case for blaster `level` in the look of `oreId` ("" = rusty),
-	`size` x a 7 stud long case, at `cf` (its bottom center). Returns Case.
+	Builds a crate for blaster `level` in `glowColor` (the blaster's colour),
+	`size` x a 7 stud long crate, at `cf` (its bottom center). Returns Case.
 ]]
-function CaseBuilder.build(parent: Instance, cf: CFrame, level: number, oreId: string?, size: number?): Case
-	local s = (size or 1)
-	local L, W = 7 * s, 3.85 * s
-	local hb, hl = 1.47 * s, 0.98 * s
-	local body, panel, glowColor, hot = CaseBuilder.look(oreId)
-	local STEEL = Color3.fromRGB(62, 66, 78)
-	local DARK = Color3.fromRGB(26, 27, 32)
-	local base = Instance.new("Model")
-	base.Name = "Base"
-	base.Parent = parent
-	local lid = Instance.new("Model")
-	lid.Name = "Lid"
-	lid.Parent = parent
+function CaseBuilder.build(parent: Instance, cf: CFrame, level: number, glowColor: Color3, size: number?): Case
+	local s = size or 1
+	local L, W = 7 * s, 5 * s
+	local foot = 0.3 * s -- the bottom armour
+	local bodyTop = foot + 2.5 * s
+	local lidH = 0.8 * s
+	local BLACK, PLATE, STEEL = CaseBuilder.shades(glowColor)
+	local hot = WHITE:Lerp(glowColor, 0.45)
+	local lights: { BasePart } = {}
+	local function model(name: string, into: Instance): Model
+		local m = Instance.new("Model")
+		m.Name = name
+		m.Parent = into
+		return m
+	end
+	local base = model("Base", parent)
+	local lid = model("Lid", parent)
+	local lidA = model("LidA", lid)
+	local lidB = model("LidB", lid)
 	local function at(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
 	end
-	-- the base: feet, a dark bottom band, the body, the ore band, the inside, the seam
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			block(base, at(sx * (W / 2 - 0.35 * s), 0.07 * s, sz * (L / 2 - 0.45 * s)), Vector3.new(0.6 * s, 0.14 * s, 0.7 * s), DARK)
-		end
+	local function strip(into: Instance, c: CFrame, sz: Vector3): Part
+		local p = block(into, c, sz, glowColor, NEON)
+		table.insert(lights, p)
+		return p
 	end
-	block(base, at(0, 0.24 * s, 0), Vector3.new(W, 0.2 * s, L), DARK)
-	block(base, at(0, 0.34 * s + (hb - 0.34 * s) / 2, 0), Vector3.new(W - 0.1 * s, hb - 0.34 * s, L - 0.1 * s), body)
-	local band = glow(base, at(0, hb * 0.5, 0), Vector3.new(W + 0.02, 0.12 * s, L + 0.02), glowColor:Lerp(body, 0.3))
-	band.Name = "Band"
-	local inside =
-		glow(base, at(0, hb - 0.03 * s, 0), Vector3.new(W - 0.5 * s, 0.06 * s, L - 0.5 * s), glowColor:Lerp(Color3.new(1, 1, 1), 0.35))
+
+	-- the base: armour, floor, the inside's glow and the seam
+	block(base, at(0, foot / 2, 0), Vector3.new(W + 0.3 * s, foot, L + 0.3 * s), PLATE, METAL)
+	block(base, at(0, foot + 0.05 * s, 0), Vector3.new(W - 0.2 * s, 0.1 * s, L - 0.2 * s), BLACK)
+	local inside = block(base, at(0, foot + 0.95 * s, 0), Vector3.new(W - 0.9 * s, 0.06 * s, L - 0.9 * s), hot, NEON)
 	inside.Name = "Inside"
-	local seam = glow(base, at(0, hb + 0.02 * s, 0), Vector3.new(W + 0.06 * s, 0.08 * s, L + 0.06 * s), glowColor)
+	local seam = block(base, at(0, bodyTop + 0.02 * s, 0), Vector3.new(W + 0.06 * s, 0.08 * s, L + 0.06 * s), glowColor, NEON)
 	seam.Name = "Seam"
-	-- the ore pattern on the front and the back
-	for i, sx in { 1, -1 } do
-		local face = at(sx * (W / 2 - 0.05 * s + 0.03), hb * 0.62, 0) * CFrame.Angles(0, sx * math.pi / 2, 0)
-		pattern(base, face, L * 0.36, hb * 0.26, hot, glowColor, level * 97 + i * 13 + 7, s)
-	end
-	-- corner caps, straps, latches, end handles
+	-- the corner posts with their caps and a strip on the long sides
 	for _, sx in { -1, 1 } do
 		for _, sz in { -1, 1 } do
-			block(
-				base,
-				at(sx * (W / 2 - 0.12 * s), (hb + 0.34 * s) / 2, sz * (L / 2 - 0.12 * s)),
-				Vector3.new(0.42 * s, hb - 0.3 * s, 0.42 * s),
-				STEEL,
-				METAL
-			)
+			local x, z = sx * (W / 2 - 0.1 * s), sz * (L / 2 - 0.1 * s)
+			block(base, at(x, foot + 1.25 * s, z), Vector3.new(0.62 * s, 2.5 * s, 0.62 * s), PLATE, METAL)
+			block(base, at(x, foot + 0.22 * s, z), Vector3.new(0.84 * s, 0.5 * s, 0.84 * s), STEEL, METAL)
+			block(base, at(x, bodyTop - 0.2 * s, z), Vector3.new(0.84 * s, 0.4 * s, 0.84 * s), STEEL, METAL)
+			strip(base, at(sx * (W / 2 + 0.22 * s), foot + 1.25 * s, z), Vector3.new(0.1 * s, 1.5 * s, 0.2 * s))
 		end
 	end
+
+	-- the walls: each its own model, hinged at the floor
+	local panels: { Panel } = {}
+	local function panel(name: string, hinge: CFrame, fold: Vector3): Model
+		local m = model(name, parent)
+		table.insert(panels, { Model = m, Hinge = hinge, Fold = fold })
+		return m
+	end
+	local T = 0.24 * s
+	local mid = foot + 1.25 * s
+	local height = 2.3 * s
+	local front = panel("Front", CFrame.new(W / 2 - T / 2, foot, 0), Vector3.new(0, 0, -1))
+	block(front, at(W / 2 - T / 2, mid, 0), Vector3.new(T, height, L - 1.2 * s), BLACK)
+	-- the frame and the core: a metal diamond, the neon diamond, its white-hot middle
+	local face = at(W / 2 + 0.02 * s, mid, 0) * CFrame.Angles(math.pi / 4, 0, 0)
+	block(front, face, Vector3.new(0.14 * s, 1.75 * s, 1.75 * s), STEEL, METAL)
+	local core = block(front, face * CFrame.new(0.08 * s, 0, 0), Vector3.new(0.1 * s, 1.25 * s, 1.25 * s), glowColor, NEON)
+	core.Name = "EnergyCore"
+	block(front, face * CFrame.new(0.14 * s, 0, 0), Vector3.new(0.06 * s, 0.6 * s, 0.6 * s), WHITE:Lerp(glowColor, 0.15), NEON)
 	for _, sz in { -1, 1 } do
-		block(base, at(0, (hb + 0.34 * s) / 2, sz * 2.3 * s), Vector3.new(W + 0.08 * s, hb - 0.3 * s, 0.36 * s), STEEL, METAL)
-		glow(base, at(W / 2 + 0.06 * s, hb * 0.72, sz * 1.5 * s), Vector3.new(0.12 * s, 0.32 * s, 0.6 * s), glowColor)
-		block(base, at(W / 2 + 0.05 * s, hb * 0.72, sz * 1.5 * s), Vector3.new(0.08 * s, 0.45 * s, 0.8 * s), DARK)
-		block(base, at(0, hb * 0.66, sz * (L / 2 + 0.12 * s)), Vector3.new(1.4 * s, 0.22 * s, 0.22 * s), DARK, METAL)
+		block(front, at(W / 2 + 0.03 * s, mid, sz * 1.42 * s), Vector3.new(0.16 * s, 1.7 * s, 0.16 * s), PLATE, METAL)
+		strip(front, at(W / 2 + 0.03 * s, mid, sz * 2.2 * s), Vector3.new(0.1 * s, 0.14 * s, 0.9 * s))
+	end
+	local back = panel("Back", CFrame.new(-W / 2 + T / 2, foot, 0), Vector3.new(0, 0, 1))
+	block(back, at(-W / 2 + T / 2, mid, 0), Vector3.new(T, height, L - 1.2 * s), BLACK)
+	strip(back, at(-W / 2 - 0.03 * s, mid, 0), Vector3.new(0.1 * s, 0.14 * s, L * 0.6))
+	local sideA = panel("EndA", CFrame.new(0, foot, -L / 2 + T / 2), Vector3.new(-1, 0, 0))
+	block(sideA, at(0, mid, -L / 2 + T / 2), Vector3.new(W - 1.2 * s, height, T), BLACK)
+	strip(sideA, at(0, mid, -L / 2 - 0.03 * s), Vector3.new(W * 0.5, 0.14 * s, 0.1 * s))
+	local sideB = panel("EndB", CFrame.new(0, foot, L / 2 - T / 2), Vector3.new(1, 0, 0))
+	block(sideB, at(0, mid, L / 2 - T / 2), Vector3.new(W - 1.2 * s, height, T), BLACK)
+	strip(sideB, at(0, mid, L / 2 + 0.03 * s), Vector3.new(W * 0.5, 0.14 * s, 0.1 * s))
+
+	-- the lid: two halves, each with its plate, top panel, strips and corner caps
+	local y0 = bodyTop + 0.06 * s
+	local halfL = (L + 0.3 * s) / 2
+	for i, half in { lidA, lidB } do
+		local sz = if i == 1 then -1 else 1
+		local zc = sz * halfL / 2
+		block(half, at(0, y0 + lidH / 2, zc), Vector3.new(W + 0.3 * s, lidH, halfL - 0.02 * s), PLATE, METAL)
+		block(half, at(0, y0 + lidH + 0.07 * s, zc - sz * 0.15 * s), Vector3.new(W - 1.3 * s, 0.14 * s, halfL - 1 * s), BLACK)
 		for _, sx in { -1, 1 } do
-			block(base, at(sx * 0.6 * s, hb * 0.66, sz * (L / 2 + 0.06 * s)), Vector3.new(0.18 * s, 0.4 * s, 0.14 * s), DARK, METAL)
-		end
-	end
-	-- the lid: body, raised panel, straps, corner caps, the emblem
-	local y0 = hb + 0.06 * s
-	block(lid, at(0, y0 + hl * 0.36, 0), Vector3.new(W, hl * 0.72, L), panel)
-	block(lid, at(0, y0 + hl * 0.72 + 0.1 * s, 0), Vector3.new(W - 1.1 * s, 0.24 * s, L - 2.2 * s), body)
-	for _, sz in { -1, 1 } do
-		block(lid, at(0, y0 + hl * 0.4, sz * 2.3 * s), Vector3.new(W + 0.08 * s, hl * 0.8 + 0.06 * s, 0.36 * s), STEEL, METAL)
-	end
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
+			strip(
+				half,
+				at(sx * (W / 2 - 0.25 * s), y0 + lidH + 0.05 * s, zc - sz * 0.1 * s),
+				Vector3.new(0.12 * s, 0.12 * s, halfL - 1.3 * s)
+			)
 			block(
-				lid,
-				at(sx * (W / 2 - 0.12 * s), y0 + hl * 0.36, sz * (L / 2 - 0.12 * s)),
-				Vector3.new(0.44 * s, hl * 0.72 + 0.04 * s, 0.44 * s),
+				half,
+				at(sx * (W / 2 - 0.1 * s), y0 + lidH / 2, sz * (L / 2 - 0.1 * s)),
+				Vector3.new(0.86 * s, lidH + 0.1 * s, 0.86 * s),
 				STEEL,
 				METAL
 			)
 			if level >= 4 then
-				glow(
-					lid,
-					at(sx * (W / 2 - 0.12 * s), y0 + hl * 0.74, sz * (L / 2 - 0.12 * s)),
-					Vector3.new(0.46 * s, 0.06 * s, 0.46 * s),
-					glowColor
+				strip(
+					half,
+					at(sx * (W / 2 - 0.1 * s), y0 + lidH + 0.08 * s, sz * (L / 2 - 0.1 * s)),
+					Vector3.new(0.9 * s, 0.06 * s, 0.9 * s)
 				)
 			end
 		end
-	end
-	local top = y0 + hl * 0.72 + 0.22 * s
-	local emblem = at(0, top + 0.02 * s, 0)
-	for i = 0, 3 do
-		local a = i * math.pi / 2
-		glow(
-			lid,
-			emblem * CFrame.Angles(0, math.pi / 4 + a, 0) * CFrame.new(0.55 * s, 0, 0),
-			Vector3.new(0.08 * s, 0.05 * s, 1.18 * s),
-			glowColor
-		)
-	end
-	block(lid, emblem * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.7 * s, 0.04 * s, 0.7 * s), body:Lerp(glowColor, 0.25), GLASS)
-	glow(lid, emblem * CFrame.new(0, 0.02 * s, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.3 * s, 0.04 * s, 0.3 * s), glowColor)
-	-- ore crystals on the emblem: more and bigger with the level
-	if level >= 4 then
-		local up = cf.UpVector
-		local p = emblem.Position
-		shard(lid, p, up, 0.3 * s, (0.7 + 0.1 * level) * s, glowColor)
+		strip(half, at(W / 2 + 0.18 * s, y0 + lidH / 2, zc - sz * 0.1 * s), Vector3.new(0.08 * s, 0.14 * s, halfL - 1.3 * s))
 		if level >= 7 then
-			local side = cf.LookVector
-			shard(lid, p + side * 0.3 * s, (up + side * 0.7).Unit, 0.22 * s, 0.6 * s, glowColor)
-			shard(lid, p - side * 0.3 * s, (up - side * 0.7).Unit, 0.22 * s, 0.55 * s, glowColor)
-		end
-		if level >= 10 then
-			local right = cf.RightVector
-			shard(lid, p + right * 0.3 * s, (up + right * 0.7).Unit, 0.2 * s, 0.5 * s, glowColor)
-			shard(lid, p - right * 0.3 * s, (up - right * 0.7).Unit, 0.2 * s, 0.45 * s, glowColor)
+			-- half of the diamond on top
+			for _, sx in { -1, 1 } do
+				local c = at(0, y0 + lidH + 0.16 * s, sz * 0.42 * s) * CFrame.Angles(0, sx * sz * math.pi / 4, 0)
+				strip(half, c * CFrame.new(sx * 0.3 * s, 0, 0), Vector3.new(0.72 * s, 0.05 * s, 0.1 * s))
+			end
 		end
 	end
 	return {
 		Base = base,
 		Lid = lid,
+		LidA = lidA,
+		LidB = lidB,
+		Panels = panels,
 		Seam = seam,
 		Inside = inside,
-		HingeOffset = CFrame.new(-W / 2, y0, 0),
-		Height = top + 0.05 * s,
-		BaseHeight = hb,
+		Core = core,
+		Lights = lights,
+		Height = y0 + lidH + 0.2 * s,
+		BaseHeight = bodyTop,
+		Width = W,
+		Length = L,
 		Glow = glowColor,
-		Body = body,
+		Body = BLACK,
+		Plate = PLATE,
 	}
 end
 
