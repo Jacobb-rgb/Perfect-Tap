@@ -108,6 +108,11 @@ Violence and resubmit.**
   **The weather's bonuses** (owner 2026-11-07, `Weather/WeatherBonus`): a storm's luck and a rainbow's
   secret chance are in the odds every paid boost shows (`BoostView.context`, `hexaOdds`, `secretRows`), with
   a note saying so while they run; the server rolls the same numbers (`Bonuses.oreLuck`, `secretMult`).
+  **The Find of the Day** (owner 2026-11-07, `Events/FindOfDay`, `FindOfDayService`): the best ore
+  cleaned today, on the iron billboard only. Between servers (DataStore + MessagingService, never from
+  Studio) go a DisplayName (at most 20 characters, checked on arrival) and an ore id; no player text.
+  **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, one earned per 20 h after an hour
+  away, never sold, no luck changes it; its chances stand on it in the window.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
   floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
   and ore luck raises that chance by its square root (at most x2.5), so every
@@ -282,9 +287,9 @@ What Terra Forge sells (design v2; the source of truth is
 
 | Product | Type | Key in code | What it does | Paid random? |
 |---|---|---|---|---|
-| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, 12 h offline earnings, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
+| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, podiums earn 50 % offline for 12 h, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
 | Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 4 and 5 (3 are free, owner 2026-10-24) | No |
-| Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
+| Night Shift (99 R$) | Game pass | `OfflineExtension` | The podiums earn 50 % for up to 12 h while away, instead of 25 % for 8 | No |
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |
 | Terra Forge Custom Hoverboard (49 R$) | Game pass | `HoverboardCustom` | The fastest hoverboard (speed 48), rainbow trail (the carry slowdown it skipped went with the backpack, 2026-10-24) | No |

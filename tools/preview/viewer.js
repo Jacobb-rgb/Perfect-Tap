@@ -338,7 +338,8 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex) {
     fogAway: { value: fogAway.clone() },
     sunDir: { value: sunDir },
     midSin: { value: Math.sin(((S.MidAngle ?? 25) * Math.PI) / 180) },
-    cloudCover: { value: S.CloudCover ?? 0.5 },
+    cloudCover: { value: shot.skyboxClouds ?? S.CloudCover ?? 0.5 },
+    sunShown: { value: shot.skyboxSun === false ? 0.0 : 1.0 }, // Sky.CelestialBodiesShown
     spaceTex: { value: spaceTex },
     spaceOn: { value: spaceTex ? 1.0 : 0.0 },
     spaceYaw: { value: ((shot.skyboxYaw ?? 0) * Math.PI) / 180 },
@@ -355,7 +356,7 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex) {
     fragmentShader: `
       uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 horizonAway;
       uniform vec3 sunColor; uniform vec3 fogColor; uniform vec3 fogAway; uniform vec3 sunDir;
-      uniform float midSin; uniform float cloudCover;
+      uniform float midSin; uniform float cloudCover; uniform float sunShown;
       uniform sampler2D spaceTex; uniform float spaceOn; uniform float spaceYaw; uniform float spaceTilt; uniform float spaceHaze; uniform float spaceGain;
       varying vec3 vPos;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -405,7 +406,7 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex) {
         float halo = exp(-pow(ang / 0.1745, 2.0));
         float glow = exp(-ang / 0.6);
         col = min(col, vec3(1.15));
-        col += sunColor * (disc * 3.5 + halo * 0.5 + glow * 0.1);
+        col += sunColor * (disc * 3.5 + halo * 0.5 + glow * 0.1) * sunShown;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -612,6 +613,9 @@ async function main() {
       spaceTex = await new THREE.TextureLoader().loadAsync(shot.skybox);
       spaceTex.colorSpace = THREE.SRGBColorSpace;
       spaceTex.wrapS = THREE.RepeatWrapping;
+      // no mipmaps: fract() in the shader would pick the tiniest one along the wrap line
+      spaceTex.generateMipmaps = false;
+      spaceTex.minFilter = THREE.LinearFilter;
     }
     const sky = sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex);
     world.add(sky);

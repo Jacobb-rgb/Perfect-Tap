@@ -368,7 +368,7 @@ return function(T, Loader)
 	end
 
 	T.test("CrateOpening: Reduce motion: no shake, no blur, nothing that only flashes", function()
-		local FLASHES = { "Flare", "RevealRing", "BurstRing", "EnergyWave", "ShotGlow" }
+		local FLASHES = { "Flare", "RevealRing", "BurstRing", "EnergyWave", "FloorRing", "ShotGlow" }
 		local function each(holder: any, fn: (name: string, list: { any }) -> ())
 			for _, name in FLASHES do
 				fn(name, named(holder, name))
@@ -430,6 +430,12 @@ return function(T, Loader)
 				end
 				if prev then
 					T.le(now.core - prev.core, 0.025, at .. "the pillar's core comes up slowly")
+					T.le(prev.core - now.core, 0.025, at .. "the pillar's core goes down slowly")
+					T.le(prev.wide - now.wide, 0.01, at .. "the pillar goes down slowly")
+					T.le(prev.ray - now.ray, 0.01, at .. "the god rays go down slowly")
+					if t < Stage.T_RISE_END then -- (then the crate has sunk into the platform)
+						T.le(prev.inside - now.inside, 0.025, at .. "the inside's glow goes down slowly")
+					end
 					T.le(now.wide - prev.wide, 0.01, at .. "the pillar comes up slowly")
 					T.le(now.inside - prev.inside, 0.025, at .. "the inside's glow comes up slowly")
 					T.le(now.ray - prev.ray, 0.005, at .. "the god rays come up slowly")
@@ -455,6 +461,80 @@ return function(T, Loader)
 		local a = shows(wide)
 		stage.update(Stage.T_BURST + 3 / 60)
 		T.lt(a + 0.1, shows(wide), "the normal pillar is fast")
+	end)
+
+	T.test("CrateOpening: Reduce motion: what the charge lit fades at the burst, no cut", function()
+		-- what it lit, with how much it may lose in a frame
+		local function chargeParts(holder: any): { { any } }
+			return {
+				{ named(holder, "MiniHeart")[1], 0.04 },
+				{ named(holder, "MiniRay")[1], 0.06 },
+				{ named(holder, "MiniRing")[1], 0.06 },
+				{ named(holder, "CometArc")[1], 0.06 },
+				{ named(holder, "CometArcB")[1], 0.06 },
+				{ named(holder, "Seam")[1], 0.06 },
+			}
+		end
+		local function alive(holder: any): { any }
+			local out = {}
+			for _, p in named(holder, "Streak") do
+				if shows(p) > 0 then
+					table.insert(out, p)
+				end
+			end
+			return out
+		end
+		for _, level in { 4, 9 } do
+			local stage, holder = build(level, true)
+			local label = "level " .. level .. " "
+			local watched = chargeParts(holder)
+			local before = {}
+			stage.update(Stage.T_BURST - 1 / 60)
+			for i, w in watched do
+				before[i] = shows(w[1])
+				T.lt(0.3, before[i], label .. w[1].Name .. " is lit before the burst")
+			end
+			local streaks = alive(holder)
+			T.lt(0, #streaks, label .. "streaks fly into it before the burst")
+			local streakWas = {}
+			for i, p in streaks do
+				streakWas[i] = shows(p)
+			end
+			posed(stage, Stage.T_BURST, Stage.T_BURST + Stage.CalmChargeOut - 1 / 60, function(t: number)
+				for i, w in watched do
+					local now = shows(w[1])
+					T.le(before[i] - now, w[2], string.format("%s%s fades at %.3f", label, w[1].Name, t))
+					before[i] = now
+				end
+				for i, p in streaks do
+					local now = shows(p)
+					T.le(streakWas[i] - now, 0.2, string.format("%sa streak fades at %.3f", label, t))
+					streakWas[i] = now
+				end
+			end)
+			stage.update(Stage.T_BURST + Stage.CalmChargeOut)
+			for _, w in watched do
+				T.eq(shows(w[1]), 0, label .. w[1].Name .. " is gone")
+			end
+			T.eq(#alive(holder), 0, label .. "the streaks are gone")
+			stage.update(Stage.T_OPEN + 0.3)
+			T.lt(0, shows(named(holder, "CometArc")[1]), label .. "the arcs come back round the blaster")
+		end
+		-- the normal burst cuts them all on its first frame (the check above can tell the two apart)
+		local stage, holder = build(10)
+		local watched = chargeParts(holder)
+		stage.update(Stage.T_BURST - 1 / 60)
+		for _, w in watched do
+			T.lt(0.3, shows(w[1]), w[1].Name .. " is lit before the burst")
+		end
+		T.lt(0, #alive(holder), "streaks fly into it")
+		stage.update(Stage.T_BURST)
+		for _, w in watched do
+			T.eq(shows(w[1]), 0, "the normal burst cuts " .. w[1].Name)
+		end
+		T.eq(#alive(holder), 0, "the normal burst cuts the streaks")
+		stage.update(Stage.T_OPEN + 0.3)
+		T.lt(0, shows(named(holder, "CometArc")[1]), "the arcs come back round the blaster")
 	end)
 
 	T.test("CrateOpening: Reduce motion: the crate's strips hold steady, the wheel of rays comes up slowly", function()

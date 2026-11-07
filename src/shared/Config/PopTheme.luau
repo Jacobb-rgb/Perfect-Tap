@@ -137,6 +137,7 @@ local PopTheme = {
 		TerraForgeIronBox = { Paint = "Concrete", Icon = "machine_IronBox" },
 		TerraForgeElevator = { Paint = "Violet", Icon = "lift" }, -- (reel: Teleport purple)
 		TerraForgeEmotes = { Paint = "Violet", Icon = "more" },
+		TerraForgeNightShift = { Paint = "Violet", Icon = "moon" }, -- (the owner's picture: purple, a moon)
 		TerraForgeRebirth = { Paint = "Magenta", Icon = "rebirth" }, -- the Star Forge (reel: Rebirth magenta)
 		TerraForgeSell = { Paint = "Green", Icon = "coins" }, -- (reel: Sell green)
 		TerraForgeTechShop = { Paint = "Green", Icon = "build" }, -- machines + upgrades (reel: Upgrade green)

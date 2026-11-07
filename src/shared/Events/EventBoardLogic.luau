@@ -1,0 +1,103 @@
+--[[
+	EventBoardLogic: what the big iron billboard shows (owner 2026-11-07: events
+	on a billboard in the world, never on the player's screen). Pure: the pages
+	for a moment, the page shown now. Clients compute it all from the server's
+	time, so no network but the Find of the Day's attributes.
+]]
+
+local ItemData = require(script.Parent.Parent.Config.ItemData)
+local OreData = require(script.Parent.Parent.Config.OreData)
+local Rarity = require(script.Parent.Parent.Config.Rarity)
+local WeatherConfig = require(script.Parent.Parent.Config.WeatherConfig)
+local WeatherLogic = require(script.Parent.Parent.Weather.WeatherLogic)
+local FindOfDay = require(script.Parent.FindOfDay)
+
+local EventBoardLogic = {}
+
+EventBoardLogic.PageSeconds = 8 -- each page stays this long
+EventBoardLogic.LookAhead = 48 -- weather slots searched for the next event
+
+export type Page = { Id: string, Title: string, Big: string, Small: string, Color: Color3, BigColor: Color3? }
+
+local GOLD = Color3.fromRGB(255, 196, 70)
+local SKY = Color3.fromRGB(120, 210, 255)
+
+-- 252 -> "4:12", 3700 -> "1:01:40"
+function EventBoardLogic.clock(seconds: number): string
+	local s = math.max(0, math.floor(seconds))
+	local h, m = math.floor(s / 3600), math.floor(s % 3600 / 60)
+	if h > 0 then
+		return string.format("%d:%02d:%02d", h, m, s % 60)
+	end
+	return string.format("%d:%02d", m, s % 60)
+end
+
+-- The next weather event after `now`, nil if none within LookAhead slots.
+function EventBoardLogic.nextWeather(now: number): WeatherLogic.Event?
+	local slot = math.floor(now / WeatherConfig.Schedule.Slot)
+	for k = slot, slot + EventBoardLogic.LookAhead do
+		local event = WeatherLogic.event(k)
+		if event and event.Start > now then
+			return event
+		end
+	end
+	return nil
+end
+
+function EventBoardLogic.weatherPage(now: number, force: any?): Page
+	local state = WeatherLogic.at(now, force)
+	local after = EventBoardLogic.nextWeather(now)
+	local small = if after then `Next: {after.Kind} in {EventBoardLogic.clock(after.Start - now)}` else ""
+	local event = state.Event
+	if event and state.Kind ~= "Clear" then
+		return {
+			Id = "Weather",
+			Title = "WEATHER",
+			Big = `{state.Kind} {EventBoardLogic.clock(event.Start + event.Length - now)}`,
+			Small = small,
+			Color = SKY,
+		}
+	end
+	return { Id = "Weather", Title = "WEATHER", Big = "Clear skies", Small = small, Color = SKY }
+end
+
+function EventBoardLogic.findPage(find: FindOfDay.Entry?, now: number): Page
+	local ore = if find and find.Day == FindOfDay.day(now) then OreData.ById[find.Ore] else nil
+	if not find or not ore then
+		return {
+			Id = "Find",
+			Title = "FIND OF THE DAY",
+			Big = "Nobody yet",
+			Small = "Clean a rare ore and your name goes up here",
+			Color = GOLD,
+		}
+	end
+	local rarity = Rarity.ById[ore.Rarity]
+	local grade = ItemData.GradeById[find.Grade]
+	local parts = { ore.Name }
+	if rarity then
+		table.insert(parts, rarity.Name)
+	end
+	table.insert(parts, if grade then grade.Name else find.Grade)
+	return {
+		Id = "Find",
+		Title = "FIND OF THE DAY",
+		Big = find.Name,
+		Small = table.concat(parts, " · "),
+		Color = GOLD,
+		BigColor = if rarity then rarity.Color else nil,
+	}
+end
+
+-- Every page, in the order they rotate.
+function EventBoardLogic.pages(now: number, force: any?, find: FindOfDay.Entry?): { Page }
+	return { EventBoardLogic.findPage(find, now), EventBoardLogic.weatherPage(now, force) }
+end
+
+-- The page to show at `now` (all clients together: it follows the server's time).
+function EventBoardLogic.pageAt(now: number, pages: { Page }): Page
+	local index = math.floor(now / EventBoardLogic.PageSeconds) % #pages + 1
+	return pages[index]
+end
+
+return EventBoardLogic

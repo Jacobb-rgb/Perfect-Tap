@@ -48,6 +48,7 @@ MenuPanels.Names = {
 	"LeaderboardController",
 	"ElevatorController",
 	"HoverboardController",
+	"NightShiftController", -- the "While you were away" window
 	"RebirthController",
 	"QuestController",
 	"EmoteController", -- the EMOTES menu

@@ -100,7 +100,7 @@ LobbyLayout.Budget = {
 	-- (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, the
 	-- lawn behind the Vault's pieces on top of it, Meadow.Max: +231 parts; the map 33,450 + nodes 294
 	-- + museums 352 = 34,096 measured, + 200 for the podium and pen ores = 34,296, + ~30: 34,100 -> 34,330)
-	MapParts = 34330, -- (+50 owner 2026-10-23: the DROPPERS shop's boulders, round roof, crystal logo, vines and trees; 33,873 + 200 measured; asked via the integrator)  23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
+	MapParts = 34370, -- (2026-11-07: + the big iron billboard: 34,166 measured + 200)  (+50 owner 2026-10-23: the DROPPERS shop's boulders, round roof, crystal logo, vines and trees; 33,873 + 200 measured; asked via the integrator)  23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the more floating islands and SKY HAVEN
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -134,7 +134,8 @@ LobbyLayout.Budget = {
 	-- the inside ones lite, inside too) + decor 90 + the DROPPERS showroom 512 + the shopkeeper
 	-- golems still built there 264 (within HideDistance) = 25,577 (its counter 25,566),
 	-- tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,610)
-	StreamParts = 25610,
+	-- (2026-11-07, the big iron billboard: that gateway measures 25,691, + ~10: 25,610 -> 25,700)
+	StreamParts = 25700,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -144,9 +145,9 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 2100, LobbyParts = 200, Lights = 6, LobbyLights = 2 }, -- (2026-10-22: SKY HAVEN's premium SKY EGG with its orbit rings, columns and clouds, and the lit path with three sky gates, ~190, outside the lobby area; then its parkour stones as little islets, the mossy spire and the vines under the island, +136: 2,041)
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 3500, LobbyParts = 3500, Lights = 30, LobbyLights = 30 }, -- (2026-10-25, owner: the golden dragon statue holding the TERRA FORGE sign in place of the fire crystal: 3,213 -> 3,459 measured, +1 light) (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
+		Plaza = { Parts = 3510, LobbyParts = 3510, Lights = 30, LobbyLights = 30 }, -- (2026-11-07, owner: the big iron billboard, +42: 3,501 measured) (2026-10-25, owner: the golden dragon statue holding the TERRA FORGE sign in place of the fire crystal: 3,213 -> 3,459 measured, +1 light) (2026-10-20, owner: the street lamps along every road, ~35 lamps of 12-14 parts, every other one lit, in place of the 9 road lanterns, and every road a neon walkway without kerbs and studs) (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700, and the two stone kings at its steps, ~390, no lights) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2500, LobbyParts = 2500, Lights = 11, LobbyLights = 11 }, -- (2026-10-23: + the DROPPERS shop's grounds and round roof, 2,469 measured) + v2 stalls, concept v2 look (~2,080 parts after perf pass 1) + the walk-in DROPPERS shop (owner 2026-10-23, ~2,425; the map total stays inside MapParts / LobbyParts)
-		Flora = { Parts = 4150, LobbyParts = 3260, Lights = 8, LobbyLights = 8 }, -- (owner 2026-10-25: three trees round the BACKPACKS shop; 3,229 measured in the lobby area on main ebbb9c5f, + ~30) the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area) (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, tufts 58 -> 100, flower beds 34 -> 48, patches 52 -> 60, bushes 30 -> 36, rocks 20 -> 24, the lawn behind the Vault keeping its own share on top, Meadow.Max / Meadow.SouthLawnMax: 4,046 measured, 3,173 of them in the lobby area, + ~30: LobbyParts 3,100 -> 3,205; Parts unchanged)
+		Flora = { Parts = 4160, LobbyParts = 3260, Lights = 8, LobbyLights = 8 }, -- (owner 2026-10-25: three trees round the BACKPACKS shop; 3,229 measured in the lobby area on main ebbb9c5f, + ~30) the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18) + the Wilds (owner 2026-10-21, ~790: pebble, grass, flower, bush and stump groups on the lawns and the near mountains' green tops, five secrets; ~410 of them in the lobby area, a few of the Meadow lawn's tufts make way) + the bigger plots (2026-10-21, 16x16 grid: the meadow, ponds and wilds on the new south lawns, the town belt's road-side row on along the longer plot roads; 3,880 measured, 3,004 of them in the lobby area) + the lawn behind the Vault where the sea bay was (owner 2026-10-22: a koi pond, 8 voxel trees, a butterfly and its share of the meadow's capped lawn pieces: the town's lawn ~26% thinner, tufts 100 -> 58, flower beds 47 -> 34, Meadow.Max; 3,956 measured, 3,047 of them in the lobby area) (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, tufts 58 -> 100, flower beds 34 -> 48, patches 52 -> 60, bushes 30 -> 36, rocks 20 -> 24, the lawn behind the Vault keeping its own share on top, Meadow.Max / Meadow.SouthLawnMax: 4,046 measured, 3,173 of them in the lobby area, + ~30: LobbyParts 3,100 -> 3,205; Parts unchanged)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -268,6 +269,17 @@ LobbyLayout.Pieces = {
 		Facing = v(0, 0, -1),
 		Walkable = true,
 		Note = "Keep clear: only flat paving. Town.luau builds the TownSpawn SpawnLocation here.",
+	},
+	{
+		Id = "EventBoard",
+		Package = "Plaza",
+		-- a gantry over the east road: far enough along it that the gas giant stays in view from the town
+		Center = v(53.5, 0, 2),
+		Size = v(4, 30, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its feet)
+		Radius = 2,
+		Facing = v(-1, 0, 0), -- toward the plaza and the spawn
+		Walkable = true, -- (under it: only its two feet stand on the ground, beside the road)
+		Note = "The big iron billboard (owner 2026-11-07): the events, so nothing sits on the player's screen.",
 	},
 	{
 		Id = "GreatForge",

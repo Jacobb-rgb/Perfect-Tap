@@ -62,6 +62,7 @@ local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Bonuses = require(script.Parent.Parent.Bonuses)
 local Discovery = require(script.Parent.Parent.Discovery)
+local FindOfDayService = require(script.Parent.FindOfDayService)
 local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local ItemService = require(script.Parent.ItemService)
@@ -409,6 +410,9 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		SecretService.found(player, session.OreId)
 		local at = (MachineService.point(machine, "Output") or machine.Model:GetPivot()).Position
 		Net.fireNear("Fx", at, SecretService.PillarRadius, nil, "SecretPillar", at, session.OreId)
+	end
+	if session.Relic == nil then
+		FindOfDayService.report(player, session.OreId, result.Grade)
 	end
 	if data then
 		isNew = Discovery.mark(player, data, session.OreId, secret)

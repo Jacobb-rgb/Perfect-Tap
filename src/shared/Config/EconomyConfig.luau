@@ -24,9 +24,11 @@ EconomyConfig.Podiums = {
 }
 
 EconomyConfig.Offline = {
-	Rate = 0.5, -- share of the normal income while offline
-	BaseHours = 5,
-	ExtendedHours = 12, -- with the OfflineExtension perk (big pass or 99 R$)
+	-- Night Shift (owner 2026-11-07: free as in his picture; the pass stays as strong as it was)
+	Rate = 0.25, -- share of the normal income while offline
+	PassRate = 0.5, -- with the OfflineExtension perk (big pass or 99 R$)
+	BaseHours = 8,
+	ExtendedHours = 12, -- with the OfflineExtension perk
 	MinSeconds = 60, -- shorter absences pay nothing (and show no popup)
 }
 
@@ -246,6 +248,18 @@ function EconomyConfig.techQuote(entry: TechItem, data: { [string]: any }, count
 	return price, nil
 end
 
+-- The share of the normal income while offline.
+function EconomyConfig.offlineRate(extended: boolean): number
+	local o = EconomyConfig.Offline
+	return if extended then o.PassRate else o.Rate
+end
+
+-- The hours an absence counts for.
+function EconomyConfig.offlineHours(extended: boolean): number
+	local o = EconomyConfig.Offline
+	return if extended then o.ExtendedHours else o.BaseHours
+end
+
 -- Coins earned offline: `seconds` away at `incomePerSecond`, capped by hours.
 function EconomyConfig.offlineEarnings(incomePerSecond: number, seconds: number, extended: boolean): number
 	local o = EconomyConfig.Offline
@@ -255,8 +269,7 @@ function EconomyConfig.offlineEarnings(incomePerSecond: number, seconds: number,
 	if type(incomePerSecond) ~= "number" or incomePerSecond ~= incomePerSecond or incomePerSecond <= 0 then
 		return 0
 	end
-	local cap = (if extended then o.ExtendedHours else o.BaseHours) * 3600
-	return incomePerSecond * o.Rate * math.min(seconds, cap)
+	return incomePerSecond * EconomyConfig.offlineRate(extended) * math.min(seconds, EconomyConfig.offlineHours(extended) * 3600)
 end
 
 return EconomyConfig

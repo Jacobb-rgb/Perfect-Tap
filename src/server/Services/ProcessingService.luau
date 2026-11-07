@@ -98,6 +98,7 @@ local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local Bonuses = require(script.Parent.Parent.Bonuses)
 local Discovery = require(script.Parent.Parent.Discovery)
+local FindOfDayService = require(script.Parent.FindOfDayService)
 local Shards = require(script.Parent.Parent.Shards)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
@@ -598,6 +599,7 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 					for _, desc in result.Outputs do
 						if desc.K == "Clean" then
 							Discovery.mark(player, data, desc.O)
+							FindOfDayService.report(player, desc.O, desc.G)
 						end
 					end
 				end

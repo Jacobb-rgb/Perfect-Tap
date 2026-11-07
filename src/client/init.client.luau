@@ -13,6 +13,9 @@ local ORDER = {
 	"DecorController",
 	"StudStyleController", -- the studded style: Roblox studs on the parts that stream in (StudStyleConfig)
 	"HudController",
+	-- (must stay before every other OpenUI listener: a remote's queued events go to its first
+	-- connection only, and "Offline" fires early on a slow load)
+	"NightShiftController", -- the "While you were away" window (owner 2026-11-07)
 	"FxController",
 	"MiningController",
 	"InteractController",
@@ -52,6 +55,7 @@ local ORDER = {
 	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
 	"WeatherController", -- the weather on the surface: rain, storms, hail, snow, wind, heatwave, rainbow (WeatherConfig)
 	"WeatherBonusController", -- a short word when the weather's bonus starts (owner 2026-11-07)
+	"EventBoardController", -- the big iron billboard (owner 2026-11-07)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
 	"DropperShopController", -- the DROPPERS shop's showroom, built near the camera (DropperShopBuilder)

@@ -6,7 +6,6 @@
 	  hud_base       the HUD: coins, "+$X/s" income, a "+$X" popup, carry slots
 	  ui_pen         HUD + the Ore Pen panel (PC layout)
 	  ui_pen_phone   HUD + the Ore Pen panel at the phone scale (compact)
-	  ui_offline     HUD + the "While you were away" popup
 	Called by tools/lune/export_scene.luau (`lune run tools/lune/export_scene.luau world yard`).
 	Shots: tools/preview/yard_shots.json (scene "yard").
 ]]
@@ -196,12 +195,6 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	local phoneOnly = hud(0.62, 667)
 	phoneOnly.Gui.Scale.Scale = phoneScale
 	exports.hud_phone = UiExport.export({ phoneOnly.Gui })
-	local offline = HudView.buildOffline()
-	offline.Gui.Scale.Scale = scale
-	offline.Gui.Enabled = true
-	offline.Amount.Text = "+" .. Format.money(income * 0.5 * 3 * 3600)
-	offline.Detail.Text = "Away 3h 05m. Podiums pay 50% while you're offline, for up to 5 hours."
-	exports.ui_offline = UiExport.export({ hud().Gui, offline.Gui })
 	UIConfig.LightUI = UIConfig.Default
 	if require("@lune/process").env.LIGHT_UI == "1" then -- (the "_light" names: export_scene LIGHT_UI=1 only)
 		local renamed = {}
