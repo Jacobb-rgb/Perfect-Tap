@@ -386,14 +386,37 @@ function BoostView.weatherLeft(now: number): number
 	return if ok then left else 0
 end
 
-local function weatherLuck(): number
+-- A storm's ore luck multiplier now (1 = none); the server: Bonuses.oreLuck.
+function BoostView.weatherLuck(): number
 	local weather = BoostView.weather()
 	return if weather and weather.Luck then weather.Luck else 1
 end
+local weatherLuck = BoostView.weatherLuck
 
-local function secretExtra(): number
+-- A rainbow's secret-ore chance multiplier now (1 = none); the server: SecretOreConfig's extra.
+function BoostView.secretExtra(): number
 	local weather = BoostView.weather()
 	return if weather and weather.Secret then weather.Secret else 1
+end
+local secretExtra = BoostView.secretExtra
+
+--[[
+	The line every paid odds view adds while the weather changes its numbers
+	(" Storm now: its luck x1.5 is in these numbers ..."), "" otherwise. A
+	storm's luck never goes past the luck cap, so with Hexa Lucky or Server
+	Luck it adds nothing; the line says so.
+]]
+function BoostView.weatherNote(): string
+	local weather = BoostView.weather()
+	if not weather then
+		return ""
+	end
+	if weatherLuck() > 1 then
+		return ` {weather.Kind} now: its luck x{weatherLuck()} is in these numbers (never past the luck cap).`
+	elseif secretExtra() > 1 then
+		return ` {weather.Kind} now: its secret chance x{secretExtra()} is in these numbers.`
+	end
+	return ""
 end
 
 function BoostView.context(rawState: any, now: number?): BoostConfig.LuckContext
@@ -591,7 +614,8 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		end
 		local keyLine: string
 		if kind.Target == "Mining" then
-			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
+			-- (a storm's luck is in both numbers, as the server rolls it)
+			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck() * weatherLuck())
 			keyLine = `Your ore luck: {BoostView.mult(without)} → {BoostView.mult(with)}`
 			if not effect then
 				keyLine = BoostConfig.Reasons.NoEffect
@@ -693,7 +717,9 @@ function BoostView.secretLines(luckBefore: number, luckAfter: number): { string 
 	for _, secret in SecretOreConfig.List do
 		local floor = if secret.Floor then MineFloors.ById[secret.Floor] else nil
 		local where = if floor then floor.Name else "every floor"
-		table.insert(lines, `{where}:  {SecretOreConfig.oddsText(secret, luckBefore)}  →  {SecretOreConfig.oddsText(secret, luckAfter)}`)
+		local before = SecretOreConfig.oddsText(secret, luckBefore, secretExtra())
+		local after = SecretOreConfig.oddsText(secret, luckAfter, secretExtra())
+		table.insert(lines, `{where}:  {before}  →  {after}`)
 	end
 	return lines
 end
@@ -710,12 +736,7 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local zone = if zoneId then WorldLayout.ZoneById[zoneId] else nil
 	local rows: { OddsRow } = {}
 	local summary: OddsRow? = nil
-	local weatherNote = ""
-	if weatherLuck() > 1 then
-		weatherNote = ` {(BoostView.weather() :: any).Kind} now: its luck x{weatherLuck()} is in these numbers.`
-	elseif secretExtra() > 1 then
-		weatherNote = ` {(BoostView.weather() :: any).Kind} now: its secret chance x{secretExtra()} is in these numbers.`
-	end
+	local weatherNote = BoostView.weatherNote()
 	local note =
 		`Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with Hexa Lucky.{weatherNote} Chance per ore in a rock you break.`
 	if zone then

@@ -44,6 +44,7 @@ export type Pattern = {
 	Cells: { Cell },
 	CellAt: { [number]: number }, -- Gx * Grid + Gy -> cell index (cells inside the outline only)
 	Crystals: { Crystal },
+	ParAmount: number?, -- the dirt par is timed by (thin: the amount before the snow thinned it)
 	TotalAmount: number,
 	Required: number, -- clean cells that finish the job
 }
@@ -74,6 +75,8 @@ function CleaningPatterns.thin(pattern: Pattern, factor: number): Pattern
 		cell.Amount /= factor
 		total += cell.Amount
 	end
+	-- par stays the clump's (review 11-07: thinner dirt must never make the score harder)
+	pattern.ParAmount = pattern.ParAmount or pattern.TotalAmount
 	pattern.TotalAmount = total
 	return pattern
 end

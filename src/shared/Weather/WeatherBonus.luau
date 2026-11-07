@@ -7,11 +7,15 @@
 	luck ones in the odds a paid boost shows.
 
 	  Rain      Twin    a dropped ore has this much more chance of a twin
-	  Storm     Luck    x ore luck (and so the secret ores' chance, under its cap)
+	  Storm     Luck    x ore luck (and so the secret ores' chance), under the luck
+	                    cap: nothing on top of Hexa Lucky or Server Luck
 	  Hail      Damage  x blaster damage
-	  Snow      Clean   the dirt is this many times thinner (CleaningPatterns.thin)
-	  Wind      Reach   x how far ore flies to you
-	  Heatwave  Machine x machine speed
+	  Snow      Clean   the dirt is this many times thinner (CleaningPatterns.thin;
+	                    par stays the clump's, so the score never gets harder)
+	  Wind      Reach   x an Ore Magnet's pull (owners only, within the radius cap)
+	  Heatwave  Machine x the processing machines' speed (ProcessingService jobs:
+	                    furnaces, crushers, the Cleaning Plant, Polisher, Extractor;
+	                    belts, droppers, the train and the Iron Box unchanged)
 	  Rainbow   Secret  x the secret ores' chance
 ]]
 
@@ -35,20 +39,32 @@ export type Entry = {
 
 WeatherBonus.List = {
 	Rain = { Kind = "Rain", Tag = "RAIN", Text = "Rain: +20% double ore", Color = Color3.fromRGB(90, 170, 255), Twin = 0.2 },
-	Storm = { Kind = "Storm", Tag = "STORM", Text = "Storm: ore luck x1.5", Color = Color3.fromRGB(170, 120, 255), Luck = 1.5 },
+	Storm = {
+		Kind = "Storm",
+		Tag = "STORM",
+		Text = "Storm: ore luck x1.5 (not on top of Hexa or Server Luck)",
+		Color = Color3.fromRGB(170, 120, 255),
+		Luck = 1.5,
+	},
 	Hail = { Kind = "Hail", Tag = "HAIL", Text = "Hail: rocks break 25% faster", Color = Color3.fromRGB(170, 220, 240), Damage = 1.25 },
-	Snow = { Kind = "Snow", Tag = "SNOW", Text = "Snow: cleaning 30% faster", Color = Color3.fromRGB(210, 235, 255), Clean = 1.3 },
+	Snow = {
+		Kind = "Snow",
+		Tag = "SNOW",
+		Text = "Snow: the dirt on your ore is thinner",
+		Color = Color3.fromRGB(210, 235, 255),
+		Clean = 1.3,
+	},
 	Wind = {
 		Kind = "Wind",
 		Tag = "WIND",
-		Text = "Wind: ore flies to you from twice as far",
+		Text = "Wind: your Ore Magnet pulls from up to twice as far",
 		Color = Color3.fromRGB(130, 230, 170),
 		Reach = 2,
 	},
 	Heatwave = {
 		Kind = "Heatwave",
 		Tag = "HEAT",
-		Text = "Heatwave: machines 25% faster",
+		Text = "Heatwave: furnaces, crushers and plants 25% faster",
 		Color = Color3.fromRGB(255, 160, 70),
 		Machine = 1.25,
 	},

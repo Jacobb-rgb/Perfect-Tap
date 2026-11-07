@@ -106,8 +106,12 @@ Violence and resubmit.**
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
   **The weather's bonuses** (owner 2026-11-07, `Weather/WeatherBonus`): a storm's luck and a rainbow's
-  secret chance are in the odds every paid boost shows (`BoostView.context`, `hexaOdds`, `secretRows`), with
-  a note saying so while they run; the server rolls the same numbers (`Bonuses.oreLuck`, `secretMult`).
+  secret chance are in every paid odds view, each with the same note while they run (`BoostView.weatherNote`):
+  the boost window's Hexa Lucky table and card line (`BoostView.hexaOdds`, `cards`, `context`, `secretRows`),
+  the Store's Hexa Lucky and Server Luck cards (`StoreController.luckLines`, `BoostView.secretLines`) and the
+  enchant odds (`EnchantView.odds`: the storm in NOW and AFTER BUY, a running Hexa Lucky or Server Luck
+  left out and said so). The server rolls the same numbers (`Bonuses.oreLuck`, `secretMult`); a storm's luck
+  never goes past the luck cap, so it adds nothing on top of Hexa Lucky or Server Luck, and its text says so.
   **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, one earned per 20 h after an hour
   away, never sold, no luck changes it; its chances stand on it in the window.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine

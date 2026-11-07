@@ -305,9 +305,14 @@ local function luckLines(delta: { [string]: number }): { string }
 			table.insert(lines, `{if info then info.Name else zone.Zone}:  {percent(zone.Before)}  →  {percent(zone.After)}`)
 		end
 	end
-	-- luck raises the SECRET ores' chance too: always shown (BoostView.secretLines)
+	-- luck raises the SECRET ores' chance too: always shown (BoostView.secretLines, a rainbow's x2 in them)
 	for _, line in BoostView.secretLines(preview.LuckBefore, preview.LuckAfter) do
 		table.insert(lines, line)
+	end
+	-- the weather in these numbers (a storm's luck, a rainbow's secret chance), as the server rolls them
+	local weather = BoostView.weatherNote()
+	if weather ~= "" then
+		table.insert(lines, (string.gsub(weather, "^ ", "")))
 	end
 	return lines
 end
