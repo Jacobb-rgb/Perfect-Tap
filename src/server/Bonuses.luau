@@ -399,20 +399,20 @@ end
 
 -- Studs in which your own loose items fly to you (0 = no magnet). The
 -- Magnetism enchant's MagnetBonus only adds to a real Ore Magnet (gear).
--- Wind (WeatherBonus Reach) multiplies a magnet's pull, within the cap;
+-- Wind (WeatherBonus Reach, owner 2026-11-07 23:20Z "i bez magnetu"): a
+-- magnet pulls Reach times as far within the cap, and without a magnet
+-- your ore flies to you from Reach times your pick-up reach.
 -- `withWeather` false: the magnet's own radius (the shop, the buy toast).
 function Bonuses.magnetRadius(stats: Stats, withWeather: boolean?): number
 	local base = math.max(0, stats.MagnetRadius or 0)
+	local weather = if withWeather == false then nil else Bonuses.weather()
+	local reach = if weather and weather.Reach then weather.Reach else nil
 	if base <= 0 then
-		return 0
+		return if reach then Bonuses.pickupRange(stats) * reach else 0
 	end
 	local max = StatConfig.ById.MagnetRadius.Max or math.huge
 	local radius = math.min(max, base + math.max(0, stats.MagnetBonus or 0))
-	local weather = if withWeather == false then nil else Bonuses.weather()
-	if weather and weather.Reach then
-		radius = math.min(max, radius * weather.Reach)
-	end
-	return radius
+	return if reach then math.min(max, radius * reach) else radius
 end
 
 -- Studs you can grab an item from.

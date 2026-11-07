@@ -12,7 +12,8 @@
 	  Hail      Damage  x blaster damage
 	  Snow      Clean   the dirt is this many times thinner (CleaningPatterns.thin;
 	                    par stays the clump's, so the score never gets harder)
-	  Wind      Reach   x an Ore Magnet's pull (owners only, within the radius cap)
+	  Wind      Reach   x an Ore Magnet's pull (within the radius cap); without a
+	                    magnet, x your pick-up reach (owner: "i bez magnetu")
 	  Heatwave  Machine x the processing machines' speed (ProcessingService jobs:
 	                    furnaces, crushers, the Cleaning Plant, Polisher, Extractor;
 	                    belts, droppers, the train and the Iron Box unchanged)
@@ -57,7 +58,7 @@ WeatherBonus.List = {
 	Wind = {
 		Kind = "Wind",
 		Tag = "WIND",
-		Text = "Wind: your Ore Magnet pulls from up to twice as far",
+		Text = "Wind: ore flies to you from further away, even without a magnet",
 		Color = Color3.fromRGB(130, 230, 170),
 		Reach = 2,
 	},
