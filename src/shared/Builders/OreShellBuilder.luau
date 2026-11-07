@@ -39,6 +39,8 @@ OreShellBuilder.BodyFront = -0.7 -- the clump's dark body behind the treasure
 OreShellBuilder.TreasureSize = 1.85 -- studs across: the ore (or relic) under the dirt
 OreShellBuilder.TreasureTurn = CFrame.Angles(-0.22, math.pi - 0.55, 0) -- three-quarters toward the camera
 OreShellBuilder.SecretTurn = CFrame.Angles(-0.12, 0.3, 0) -- a secret ore shows its face (the eye looks at you)
+-- the soft glow round a secret ore's rainbow specks: light coming through the dirt (still: no flash, no pulse)
+OreShellBuilder.SpeckGlow = { { Size = 0.13, Transparency = 0.72 }, { Size = 0.2, Transparency = 0.88 } }
 OreShellBuilder.CrystalBaseSize = 0.2 -- face units; the pale base under a crystal
 OreShellBuilder.CrystalLean = 45 -- degrees out of the face, toward the camera
 OreShellBuilder.DirtColors = { Color3.fromRGB(104, 78, 54), Color3.fromRGB(90, 68, 50), Color3.fromRGB(116, 88, 60) }
@@ -255,22 +257,34 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?, 
 		block:SetAttribute("FullSize", block.Size)
 		dirt[cell.Index] = block
 	end
-	-- a secret ore's dirt sparkles: rainbow specks in every fifth cell (they wash off with it)
+	-- a secret ore's dirt sparkles: rainbow specks in every fifth cell (they wash off with it), each
+	-- with a soft glow round it (owner 2026-11-07: "it already glows a little through the dirt")
 	if secret then
 		local rainbow = SecretOreConfig.Rainbow
 		for index, block in dirt do
 			if index % 5 == 2 then
 				local half = block.Size / 2
-				Geo.block(
+				local color = rainbow[index % #rainbow + 1]
+				local speck = Geo.block(
 					block,
 					block.CFrame
 						* CFrame.new(rng:range(-0.5, 0.5) * half.X, rng:range(-0.5, 0.5) * half.Y, half.Z)
 						* CFrame.Angles(0.6, 0.8, 0),
 					Vector3.one * 0.09,
-					rainbow[index % #rainbow + 1],
+					color,
 					Enum.Material.Neon,
 					props({ Name = "Speck", CastShadow = false })
 				)
+				for _, layer in OreShellBuilder.SpeckGlow do
+					Geo.ball(
+						block,
+						speck.CFrame.Position,
+						layer.Size,
+						color,
+						Enum.Material.Neon,
+						props({ Name = "SpeckGlow", CastShadow = false, Transparency = layer.Transparency })
+					)
+				end
 			end
 		end
 	end

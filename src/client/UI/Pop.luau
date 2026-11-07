@@ -549,10 +549,10 @@ function Pop.tabMark(button: GuiObject, icon: string, height: number): ImageLabe
 		Rotation = -10,
 		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromOffset(pic, pic),
-		Visible = IconAssets.shows(icon),
+		Visible = IconAssets.topRowShows(icon),
 		ZIndex = holder.ZIndex,
 	}, holder)
-	IconAssets.apply(mark, icon)
+	IconAssets.applyTopRow(mark, icon)
 	mark:SetAttribute("Icon", icon)
 	return mark
 end

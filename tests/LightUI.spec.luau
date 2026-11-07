@@ -527,7 +527,7 @@ return function(T, Loader)
 					-- the round look: the Shop leads the top row (not on the smallest phones: the
 					-- Store tile), the Server Luck line over the money
 					local inRow = refs.TopBar:FindFirstChild("ShopPill")
-					T.eq(inRow ~= nil, screen[1] >= 600, `the Shop in the top row at {screen[1]} x {screen[2]}`)
+					T.eq(inRow ~= nil, screen[1] >= 600 or touch ~= true, `the Shop in the top row at {screen[1]} x {screen[2]}`)
 					T.eq(pill, nil, "no pill bottom-left")
 					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
 					local luckBottom = height + luck.Position.Y.Offset
@@ -858,7 +858,7 @@ return function(T, Loader)
 			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
 				local screen = Vector2.new(size[1], size[2])
 				local scale = HudBubble.scaleFor(screen)
-				local refs = HudBubble.buildGame(scale, size[1])
+				local refs = HudBubble.buildGame(scale, size[1], true)
 				local width = size[1] / scale
 				local hudHeight = (size[2] - 58) / scale -- (CoreUISafeInsets: under Roblox's top bar)
 				local function rect(gui: any): (any, any)
@@ -889,7 +889,7 @@ return function(T, Loader)
 		withLight(function()
 			for _, screen in { Vector2.new(667, 375), Vector2.new(568, 320), Vector2.new(932, 430) } do
 				local scale = HudBubble.scaleFor(screen)
-				local refs = HudBubble.buildGame(scale, screen.X)
+				local refs = HudBubble.buildGame(scale, screen.X, true)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
@@ -918,7 +918,7 @@ return function(T, Loader)
 			for _, screen in { Vector2.new(568, 320), Vector2.new(667, 375), Vector2.new(932, 430), Vector2.new(1024, 768) } do
 				local scale = HudBubble.scaleFor(screen)
 				local layout = TutorialView.layout(scale, screen, true, false, nil)
-				local hud = HudBubble.buildGame(scale, screen.X)
+				local hud = HudBubble.buildGame(scale, screen.X, true)
 				local w = screen.X / scale
 				local tabsRight = w / 2 + hud.TopBar.Size.X.Offset / 2
 				local bubbleLeft = layout.Position.X - layout.Width

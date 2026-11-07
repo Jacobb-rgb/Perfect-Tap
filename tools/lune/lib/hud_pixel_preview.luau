@@ -126,7 +126,7 @@ function Preview.build(Loader: any): { [string]: any }
 					Screen = screen,
 					Gui = screen,
 					Scale = uiScale,
-					Touch = compact,
+					Touch = touch,
 					Count = boosts,
 					Pill = rect,
 				})
@@ -192,6 +192,16 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
 	TrainView.useHud(nil)
+	-- the owner's Studio window (995 x 485 pt, a mouse, 2026-11-07), drawn at 2 px a point like his
+	-- photos: as the game shows it before the left tiles' icon images are uploaded (his top row
+	-- image is), and after them. The renderer's top bar is 58 px: 29 pt here.
+	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+	local window = roblox.Vector2.new(995, 485 - 29)
+	local previewing = IconAssets.Previewing
+	IconAssets.Previewing = false
+	exports.ui_hud_studio_top_row_only = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
+	IconAssets.Previewing = previewing
+	exports.ui_hud_studio_all_icons = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do
