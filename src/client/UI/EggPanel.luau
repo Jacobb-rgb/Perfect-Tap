@@ -343,6 +343,7 @@ end
 	player walks a little). Returns the new side, or nil to stay.
 ]]
 EggPanel.FreeTurn = 0.7 -- the cosine of the turn (about 45 degrees)
+EggPanel.FreeOut = 6 -- studs from the egg's axis at most (the SKY EGG's clouds reach far: the E stays by its shell)
 function EggPanel.freeSide(center: Vector3, position: Vector3, front: Vector3?): Vector3?
 	local flat = Vector3.new(position.X - center.X, 0, position.Z - center.Z)
 	if flat.Magnitude < 0.5 then

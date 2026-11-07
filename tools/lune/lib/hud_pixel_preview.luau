@@ -12,9 +12,10 @@
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
 	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (the reel's eight: Inventory by
-	BackpackController, Spin with its FREE! sticker by WheelController's badge,
-	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
+	are claimed as the controllers do (owner 2026-11-07: Store, Hoverboard,
+	Inventory, Codex and More on the left; Build, Spin with its FREE! sticker
+	and the side menu's others behind More).
+	  ui_hud_round_more_*   the MORE flyout open, PC and a phone
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv

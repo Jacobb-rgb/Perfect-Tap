@@ -1701,8 +1701,6 @@ function HudBubble.setKeyCap(face: GuiObject, cap: string?, image: string?)
 	frame.Visible = hasImage or (cap ~= nil and cap ~= "")
 end
 
-local moreMenus: { [Instance]: Instance } = setmetatable({}, { __mode = "k" }) :: any -- flyout -> its menu
-
 local function paintBadge(face: GuiObject, count: number)
 	local badge = face:FindFirstChild("Badge")
 	if count <= 0 then
@@ -1724,7 +1722,8 @@ end
 
 -- The More tile tells what its flyout holds: the counts added up (not MoreQuiet's) and a FREE! sticker.
 local function syncMore(flyout: Instance)
-	local menu = moreMenus[flyout]
+	local gui = flyout.Parent
+	local menu = gui and gui:FindFirstChild("Menu")
 	local more = menu and menu:FindFirstChild("More")
 	local moreFace = more and more:FindFirstChild("Face") :: GuiObject?
 	if not moreFace then
@@ -1768,8 +1767,12 @@ end
 function HudBubble.pulseHolder(face: GuiObject): Instance?
 	local holder = face.Parent
 	local flyout = holder and holder.Parent
-	local menu = if flyout then moreMenus[flyout] else nil
-	return (if menu then menu:FindFirstChild("More") else nil) or holder
+	if flyout and flyout.Name == "MoreFlyout" then
+		local gui = flyout.Parent
+		local menu = gui and gui:FindFirstChild("Menu")
+		return (menu and menu:FindFirstChild("More")) or holder
+	end
+	return holder
 end
 
 --[[
@@ -1810,7 +1813,6 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}, created)
 		flyout = created
-		moreMenus[created] = menu
 		local more = HudBubble.claimTile(menu, "More")
 		more.Activated:Connect(function()
 			HudBubble.toggleMore(menu)

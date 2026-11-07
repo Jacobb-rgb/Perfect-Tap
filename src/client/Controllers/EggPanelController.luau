@@ -1741,6 +1741,10 @@ local function addEgg(id: string, model: Model, free: boolean?)
 		return
 	end
 	local center, top, promptAt, bottom, half = EggPanel.spotOf(model, front)
+	if free then
+		local flat = Vector3.new(front.X, 0, front.Z)
+		promptAt = center + (if flat.Magnitude > 1e-3 then flat.Unit else Vector3.new(0, 0, -1)) * math.min(half + 0.5, EggPanel.FreeOut)
+	end
 	local terrain = Workspace.Terrain
 	local point = Instance.new("Attachment")
 	point.Name = "EggPrompts" .. id
@@ -1880,7 +1884,7 @@ local function tick()
 		local side = EggPanel.freeSide(spot.Center, position, spot.Free)
 		if side then
 			spot.Free = side
-			spot.PromptAt = spot.Center + side * (spot.Half + 0.5)
+			spot.PromptAt = spot.Center + side * math.min(spot.Half + 0.5, EggPanel.FreeOut)
 			spot.Point.Position = spot.PromptAt
 		end
 	end
