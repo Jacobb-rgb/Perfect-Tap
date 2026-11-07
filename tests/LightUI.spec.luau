@@ -101,15 +101,12 @@ return function(T, Loader)
 					T.falsy(child.Visible, "tile hidden until claimed: " .. child.Name)
 				end
 			end
-			-- the backpack button, floaters, toasts, offline popup
+			-- the backpack button, floaters, toasts
 			HudView.setBackpack(refs, 4, 5)
 			T.eq(refs.CarryLabel.Text, "4 / 5", "the backpack's n / cap")
 			T.truthy(refs.Backpack:FindFirstChild("Pack"), "the pack's picture")
 			T.truthy(HudView.floater(refs.Floaters, "+$5"):IsA("TextLabel"), "floater")
 			T.truthy(HudView.toast(refs.Toasts, "Hi", Color3.new(0, 1, 0)):FindFirstChild("Dot", true), "toast")
-			local offline = HudView.buildOffline()
-			T.truthy(offline.Collect and offline.Amount and offline.Detail and offline.Panel, "offline popup")
-			T.falsy(offline.Gui.Enabled, "offline starts hidden")
 		end)
 	end)
 
@@ -530,7 +527,7 @@ return function(T, Loader)
 					-- the round look: the Shop leads the top row (not on the smallest phones: the
 					-- Store tile), the Server Luck line over the money
 					local inRow = refs.TopBar:FindFirstChild("ShopPill")
-					T.eq(inRow ~= nil, screen[1] >= 600, `the Shop in the top row at {screen[1]} x {screen[2]}`)
+					T.eq(inRow ~= nil, screen[1] >= 600 or touch ~= true, `the Shop in the top row at {screen[1]} x {screen[2]}`)
 					T.eq(pill, nil, "no pill bottom-left")
 					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
 					local luckBottom = height + luck.Position.Y.Offset
@@ -861,7 +858,7 @@ return function(T, Loader)
 			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
 				local screen = Vector2.new(size[1], size[2])
 				local scale = HudBubble.scaleFor(screen)
-				local refs = HudBubble.buildGame(scale, size[1])
+				local refs = HudBubble.buildGame(scale, size[1], true)
 				local width = size[1] / scale
 				local hudHeight = (size[2] - 58) / scale -- (CoreUISafeInsets: under Roblox's top bar)
 				local function rect(gui: any): (any, any)
@@ -892,7 +889,7 @@ return function(T, Loader)
 		withLight(function()
 			for _, screen in { Vector2.new(667, 375), Vector2.new(568, 320), Vector2.new(932, 430) } do
 				local scale = HudBubble.scaleFor(screen)
-				local refs = HudBubble.buildGame(scale, screen.X)
+				local refs = HudBubble.buildGame(scale, screen.X, true)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
@@ -921,7 +918,7 @@ return function(T, Loader)
 			for _, screen in { Vector2.new(568, 320), Vector2.new(667, 375), Vector2.new(932, 430), Vector2.new(1024, 768) } do
 				local scale = HudBubble.scaleFor(screen)
 				local layout = TutorialView.layout(scale, screen, true, false, nil)
-				local hud = HudBubble.buildGame(scale, screen.X)
+				local hud = HudBubble.buildGame(scale, screen.X, true)
 				local w = screen.X / scale
 				local tabsRight = w / 2 + hud.TopBar.Size.X.Offset / 2
 				local bubbleLeft = layout.Position.X - layout.Width

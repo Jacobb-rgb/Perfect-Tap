@@ -119,6 +119,7 @@ HudBubble.Spots = {
 
 export type Layout = {
 	Compact: boolean,
+	Mouse: boolean, -- known not to be a touch screen (HudBubble.bigTopRow)
 	Tile: number,
 	TileGap: number,
 	Columns: number,
@@ -171,10 +172,11 @@ end
 function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?, guiHeight: number?): Layout
 	local width = if screenWidth and screenWidth > 0 and uiScale > 0 then screenWidth / uiScale else 1280
 	local isTouch, isTen = touch == true, tenFoot == true
+	local mouse = touch == false -- (known not to be a touch screen; nil: not said)
 	local inset = if isTen then math.ceil(width * HudBubble.TenFootSafe) else 0
 	local layout: Layout
 	if uiScale <= HudBubble.CompactScale then
-		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
+		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth and not mouse
 		-- (the round look: 72 units = 44.6 pt; fitRound picks the columns)
 		local round = PopTheme.round()
 		layout = {
@@ -190,6 +192,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 			Slots = 5,
 			Width = width,
 			Touch = isTouch,
+			Mouse = mouse,
 			TenFoot = isTen,
 			Inset = inset,
 		}
@@ -210,6 +213,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 			Slots = 6,
 			Width = width,
 			Touch = isTouch,
+			Mouse = mouse,
 			TenFoot = isTen,
 			Inset = inset,
 		}
@@ -1042,7 +1046,7 @@ end
 
 ---------------------------------------------------------------- the game HUD (UIConfig.LightUI)
 --[[
-	buildGame / slot / floater / toast / buildOffline have the same shape as
+	buildGame / slot / floater / toast have the same shape as
 	HudView's, so HudController, TeleportView, BuildView and the other
 	controllers use the light HUD unchanged (HudView forwards to these while
 	UIConfig.lightUI() is on). Differences:
@@ -1129,11 +1133,65 @@ function HudBubble.guiHeight(): number?
 	return if ok and type(height) == "number" and height > 0 then height else nil
 end
 
+--[[
+	In a client's first moments the camera's viewport is not the real screen yet (a 1 x 1 one),
+	but the HUD's layout (phone or PC, the Shop in the top row and its size, the offers) is decided
+	once, when it is built: a PC window got the smallest phone's top row for the whole session
+	(owner's Studio photos, 2026-11-07: Lobby / Base / Vault small, no Shop, no offers). Waits a few
+	frames, at most `timeout` seconds, until the viewport is a real screen; false if it never was.
+	Also returns the first and the last size read (HudController logs them: the cause above is read
+	off his photos, a run in Studio confirms it). `size` and `step` are for the specs.
+]]
+HudBubble.ScreenReady = 200 -- points: no real screen is narrower or lower than this
+HudBubble.ScreenWait = 3 -- seconds
+
+function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): (boolean, Vector2?, Vector2?)
+	local function read(): Vector2?
+		if size then
+			return size()
+		end
+		local ok, viewport = pcall(function()
+			local camera = game:GetService("Workspace").CurrentCamera
+			return if camera then camera.ViewportSize else nil
+		end)
+		return if ok and typeof(viewport) == "Vector2" then viewport else nil
+	end
+	local deadline = os.clock() + (timeout or HudBubble.ScreenWait)
+	local first: Vector2? = nil
+	while true do
+		local viewport = read()
+		first = first or viewport
+		if viewport and viewport.X >= HudBubble.ScreenReady and viewport.Y >= HudBubble.ScreenReady then
+			return true, first, viewport
+		end
+		if os.clock() >= deadline then
+			return false, first, viewport
+		end
+		if step then
+			step()
+		else
+			task.wait()
+		end
+	end
+end
+
 -- The teleport bar (owner 2026-10-20: BASE / MINE / SPAWN in his photo, text
 -- only, at the very top): button sizes per layout, design units.
 HudBubble.TopBarPad = 5
 HudBubble.TopBarGap = 8
 HudBubble.PreviewInset = 36 -- the preview renderer's top bar inset (px)
+
+--[[
+	The big top row (the Shop, Lobby, Base and Vault with their pictures) and the offers: everywhere
+	but on a touch phone, whose thumbs and buttons need the room, and a very narrow window, where the
+	row would meet the left tiles. The owner's Studio window is 995 x 485 pt, scale 0.67 (Compact,
+	1476 units wide), a mouse, and he picked them for it.
+]]
+HudBubble.BigRowWidth = 1100 -- design units: a Compact mouse window this wide gets the big row
+
+function HudBubble.bigTopRow(layout: Layout): boolean
+	return not layout.Compact or (layout.Mouse == true and layout.Width >= HudBubble.BigRowWidth)
+end
 
 function HudBubble.topBarButton(layout: Layout): Vector2
 	-- (the round look: four buttons in the row, the Shop first; a little narrower on phones so
@@ -1141,7 +1199,7 @@ function HudBubble.topBarButton(layout: Layout): Vector2
 	local round = PopTheme.round()
 	if layout.Narrow then
 		return Vector2.new(if round then 80 else 88, 72) -- (the smallest phones: as wide as the old icon tabs)
-	elseif layout.Compact then
+	elseif not HudBubble.bigTopRow(layout) then
 		return Vector2.new(if round then 94 else 128, 72)
 	end
 	if round then
@@ -1204,7 +1262,8 @@ end
 function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): TextButton
 	local button = Pop.button(topBar, "Shop", "Crimson", size, { Name = "ShopPill", LayoutOrder = 0 })
 	local label = button:FindFirstChild("Label") :: TextLabel?
-	if not layout.Compact and IconAssets.shows("cart") then
+	local big = HudBubble.bigTopRow(layout)
+	if big and IconAssets.topRowShows("cart") then
 		Pop.tabMark(button, "cart", size.Y) -- (the reel's faded picture over the left end)
 	end
 	if label then
@@ -1212,7 +1271,7 @@ function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): 
 		label.AnchorPoint = Vector2.new(0.5, 0.5)
 		label.Position = UDim2.new(0.5, 0, 0.5, -math.floor(lip / 2))
 		label.Size = UDim2.new(1, -16, 0, math.floor(size.Y * 0.62))
-		Pop.fit(label, if layout.Compact then 30 else 34)
+		Pop.fit(label, if big then 34 else 30)
 		Pop.shadow(label, 3)
 	end
 	return button
@@ -1349,7 +1408,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	UIKit.padding(topBar, HudBubble.TopBarPad)
 	topBar:SetAttribute("Pop", true)
 	topBar:SetAttribute("Bubble", true)
-	topBar:SetAttribute("Compact", layout.Compact)
+	topBar:SetAttribute("Compact", not HudBubble.bigTopRow(layout)) -- (a mouse window: the big row)
 	topBar:SetAttribute("Narrow", layout.Narrow)
 	topBar:SetAttribute("Button", HudBubble.topBarButton(layout)) -- (TeleportView sizes its buttons alike)
 	UIKit.list(topBar, Enum.FillDirection.Horizontal, HudBubble.TopBarGap, {
@@ -1462,7 +1521,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	local carryPanel, backpack, carryLabel, blaster = HudBubble.carryGroup(gui, layout)
 	-- (phones and touch tablets: no offers: the right edge holds the tutorial bubble's SKIP and
 	-- Roblox's jump button; the Store tile and the Shop button are a tap away)
-	if round and not layout.Compact and not layout.Touch then
+	if round and HudBubble.bigTopRow(layout) and not layout.Touch then
 		HudBubble.offers(gui, layout)
 	end
 
@@ -2345,63 +2404,6 @@ function HudBubble.toastColor(parent: Instance, text: string, color: Color3): Fr
 		ZIndex = 4,
 	})
 	return holder
-end
-
-export type OfflineRefs = {
-	Gui: ScreenGui,
-	Dim: Frame,
-	Panel: Frame,
-	Amount: TextLabel,
-	Detail: TextLabel,
-	Collect: TextButton,
-}
-
--- "WELCOME BACK!": what the podiums earned while away, and COLLECT.
-function HudBubble.buildOffline(): OfflineRefs
-	local gui = UIKit.screen("TerraForgeOffline", 30)
-	gui.Enabled = false
-	gui.IgnoreGuiInset = true
-	local dim = UIKit.new("Frame", {
-		Name = "Dim",
-		BackgroundColor3 = Theme.Shadow,
-		BackgroundTransparency = 0.5,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-	}, gui)
-	local window = Bubble.window(gui, {
-		Name = "Offline",
-		Title = "WELCOME BACK!",
-		Icon = "coins",
-		Role = "Shop",
-		Size = Vector2.new(560, 340),
-	})
-	local close = window.Close.Parent :: Frame
-	close.Visible = false -- COLLECT (and B / Backspace) close it
-	local body = window.Body
-	Bubble.ink(body, "While you were away you earned", 22, {
-		Name = "Lead",
-		Size = UDim2.new(1, 0, 0, 28),
-		TextColor3 = Theme.InkSoft,
-	})
-	local row = Bubble.iconText(body, "coin", "+$0", 46, {
-		Name = "AmountRow",
-		Position = UDim2.fromOffset(0, 34),
-	}, true)
-	local amount = row:FindFirstChild("Text") :: TextLabel
-	amount.FontFace = Theme.TitleFont
-	amount.Size = UDim2.fromOffset(300, 52)
-	local detail = Bubble.ink(body, "", 18, {
-		Name = "Detail",
-		Position = UDim2.fromOffset(0, 98),
-		Size = UDim2.new(1, 0, 0, 52),
-		TextColor3 = Theme.InkSoft,
-		TextWrapped = true,
-	})
-	local collect, collectHolder =
-		Bubble.button(body, { Name = "Collect", Text = "COLLECT", Role = "Go", Size = Vector2.new(240, 62), TextSize = 30 })
-	collectHolder.AnchorPoint = Vector2.new(0.5, 1)
-	collectHolder.Position = UDim2.fromScale(0.5, 1)
-	return { Gui = gui, Dim = dim, Panel = window.Holder, Amount = amount, Detail = detail, Collect = collect }
 end
 
 return HudBubble

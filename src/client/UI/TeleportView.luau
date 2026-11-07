@@ -208,7 +208,7 @@ end
 function TeleportView.roundIcon(button: TextButton, size: Vector2, id: string, kind: string)
 	local icon = TeleportView.Icons[id]
 	-- (phones: words only, the four buttons are narrow)
-	if not icon or kind ~= "Normal" or not IconAssets.shows(icon) then
+	if not icon or kind ~= "Normal" or not IconAssets.topRowShows(icon) then
 		return
 	end
 	Pop.tabMark(button, icon, size.Y)

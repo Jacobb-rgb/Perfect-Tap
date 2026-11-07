@@ -3086,6 +3086,21 @@ return function(T, Loader)
 				CC._test.hideHud(false)
 				T.near(hudScale.Scale, 0.9, 1e-6, "back at the scale written meanwhile")
 				T.eq(shopScale.Scale, 1.25, "back")
+				-- Roblox reads a UIScale's 0 back as 1e-07 (the owner's Studio trace 2026-11-07: the HUD
+				-- stayed away; Lune keeps the 0, so this writes what Roblox reads): that's hidden, not a
+				-- scale written meanwhile
+				CC._test.hideHud(true)
+				hudScale.Scale = 1e-7
+				shopScale.Scale = 1e-7
+				CC._test.hideHud(false)
+				T.near(hudScale.Scale, 0.9, 1e-6, "the HUD comes back from Roblox's 1e-07")
+				T.eq(shopScale.Scale, 1.25, "a window too")
+				-- (and one already at 1e-07 when the hold began gets the HUD's own scale)
+				hudScale.Scale = 1e-7
+				CC._test.hideHud(true)
+				hudScale.Scale = 1e-7
+				CC._test.hideHud(false)
+				T.truthy(hudScale.Scale >= 0.5, "a 1e-07 never comes back: " .. hudScale.Scale)
 				for _, g in { hud, shop, quest, fade } do
 					g:Destroy()
 				end
