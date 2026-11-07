@@ -29,7 +29,7 @@ NightShiftView.Size = Vector2.new(700, 400)
 NightShiftView.Band = 64
 NightShiftView.ButtonHeight = 72
 NightShiftView.CloseHit = 72 -- units: what the X takes (44 pt on a phone; it draws smaller)
-NightShiftView.OddsSize = 17 -- units: at least 10 pt on a phone
+NightShiftView.OddsSize = 18 -- units: at least 10 pt on a phone
 
 export type Refs = {
 	Gui: ScreenGui,

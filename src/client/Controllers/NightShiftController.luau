@@ -6,8 +6,9 @@
 	Open Crate asks the server (NightCrate); a request the rate limit dropped gets
 	no answer, so the button comes back after ResultTimeout. A late prize opens the
 	window again. A panel like the others (MenuPanels: isOpen, close): popups wait
-	while it is up, and it waits while another panel is up (the login streak popup
-	stays). It must stay before every other OpenUI listener in the ORDER
+	while it is up, and it waits for a free screen (screenFree: no other panel, no
+	tutorial card, no cleaning close-up, build mode or other control lock, no egg
+	opening), so the login streak popup stays. It must stay before every other OpenUI listener in the ORDER
 	(init.client): a remote's queued events go to its first connection only.
 ]]
 
@@ -53,6 +54,26 @@ function NightShiftController.close()
 	if selected and selected:IsDescendantOf(refs.Gui) then
 		GuiService.SelectedObject = nil
 	end
+end
+
+-- Does something hold the player's controls (build mode, a close-up)? (Util/PlayerControls, read on use)
+function NightShiftController.controlsHeld(): boolean
+	local ok, controls = pcall(require, script.Parent.Parent.Util.PlayerControls)
+	return ok and type(controls) == "table" and controls.owner() ~= nil
+end
+
+-- Nothing else holds the screen (QuestController's rule, and an egg opening).
+function NightShiftController.screenFree(): boolean
+	for name, method in { TutorialController = "isShown", CleaningController = "isActive", CapsuleController = "showing" } do
+		local controller = MenuPanels.controller(name)
+		if controller and type(controller[method]) == "function" then
+			local ok, busy = pcall(controller[method])
+			if ok and busy then
+				return false
+			end
+		end
+	end
+	return not NightShiftController.controlsHeld() and not MenuPanels.otherOpen("NightShiftController")
 end
 
 -- The window's own ways out: not while the crate's answer is on its way.
@@ -114,11 +135,11 @@ local function raise(refs: NightShiftView.Refs)
 end
 
 local function show(payload: { [string]: any })
-	-- never under the loading screen (Util/Loading, at most MaxWait), nor over another panel
-	if not Loading.isDone() or MenuPanels.otherOpen("NightShiftController") then
+	-- never under the loading screen (Util/Loading, at most MaxWait), nor over anything else
+	if not Loading.isDone() or not NightShiftController.screenFree() then
 		task.spawn(function()
 			Loading.wait()
-			while MenuPanels.otherOpen("NightShiftController") do
+			while not NightShiftController.screenFree() do
 				task.wait(NightShiftController.PanelWait)
 			end
 			show(payload)

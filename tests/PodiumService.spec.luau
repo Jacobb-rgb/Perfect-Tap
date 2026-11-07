@@ -557,13 +557,14 @@ return function(T, Loader)
 		local answers = 0
 		PodiumService.onReturn(function()
 			answers += 1
-			return { Crate = true }
+			return { Crate = true, PenFull = true }
 		end)
 		w.data.LastSeen = NOW - 7200
 		podium.loaded(w.player, w.data)
 		T.truthy(podium.payOffline(w.player, true) > 0, "paid with the hook")
 		T.eq(answers, 1, "the hook ran")
 		T.eq(lastNote(w, "OpenUI").B.Crate, true, "its answer in the window")
+		T.eq(lastNote(w, "OpenUI").B.PenFull, true, "the full pen too")
 		PodiumService.onReturn(function(): any
 			error("broken")
 		end)

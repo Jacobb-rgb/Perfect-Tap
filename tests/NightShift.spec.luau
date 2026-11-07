@@ -17,6 +17,23 @@ return function(T, Loader)
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local NightShiftView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.NightShiftView")
 
+	T.test("night shift: the pass says what it does, in the game's own numbers", function()
+		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+		local o = EconomyConfig.Offline
+		local entry: any = nil
+		for _, e in MonetizationConfig.List do
+			if e.Key == "OfflineExtension" then
+				entry = e
+			end
+		end
+		T.truthy(entry, "the Night Shift pass")
+		local text =
+			`Your podiums keep earning at {math.floor(o.PassRate * 100)}% for up to {o.ExtendedHours} hours while you are away, instead of {math.floor(
+				o.Rate * 100
+			)}% for {o.BaseHours}.`
+		T.eq(entry.Description, text)
+	end)
+
 	T.test("night shift: free 25 % for 8 h, the pass 50 % for 12 h", function()
 		local o = EconomyConfig.Offline
 		T.eq(o.Rate, 0.25)
@@ -132,13 +149,17 @@ return function(T, Loader)
 		local w = world()
 		local ok, err = pcall(function()
 			local night = w.data.NightShift
+			local before = w.changed
 			local first = NightShiftService.onReturn(w.player, w.data, 7200, false)
 			T.eq(first.Crate, true, "earned")
+			T.eq(w.changed, before + 1, "saved when earned")
 			T.eq(night.Ready, true)
 			T.eq(night.CrateAt, 2e9)
 			local again = NightShiftService.onReturn(w.player, w.data, 7200, false)
 			T.eq(again.Crate, true, "not opened: it still waits")
+			before = w.changed
 			T.eq(NightShiftService.open(w.player).Ok, true, "opens")
+			T.eq(w.changed, before + 1, "saved when opened")
 			T.eq(NightShiftService.open(w.player).Ok, false, "never twice")
 			local tonight = NightShiftService.onReturn(w.player, w.data, 7200, false)
 			T.eq(tonight.Crate, false, "nothing new tonight")
@@ -266,7 +287,8 @@ return function(T, Loader)
 		local GS = Loader.game:GetService("GuiService")
 		local UIS = Loader.game:GetService("UserInputService")
 		local listeners, sent, prizes, bound = {}, {}, {}, {}
-		local panelUp = false
+		local panelUp, eggUp, controlled, loadingDone = false, false, false, true
+		local closedOthers, closedAll = 0, 0
 		local saved = {}
 		local function patch(t: any, key: string, value: any)
 			table.insert(saved, { t, key, rawget(t, key) })
@@ -321,9 +343,13 @@ return function(T, Loader)
 			table.insert(sent, name)
 		end)
 		patch(Loading, "isDone", function()
-			return true
+			return loadingDone
 		end)
-		patch(Loading, "wait", function() end)
+		patch(Loading, "wait", function()
+			while not loadingDone do
+				task.wait(0.005)
+			end
+		end)
 		patch(Motion, "enabled", function()
 			return false
 		end)
@@ -332,6 +358,22 @@ return function(T, Loader)
 		patch(Sfx, "play", function() end)
 		patch(MenuPanels, "otherOpen", function()
 			return panelUp
+		end)
+		patch(MenuPanels, "controller", function(name)
+			if name == "CapsuleController" then
+				return {
+					showing = function()
+						return eggUp
+					end,
+				}
+			end
+			return nil
+		end)
+		patch(MenuPanels, "closeOthers", function()
+			closedOthers += 1
+		end)
+		patch(MenuPanels, "closeAll", function()
+			closedAll += 1
 		end)
 		patch(Players, "LocalPlayer", {
 			WaitForChild = function()
@@ -348,6 +390,9 @@ return function(T, Loader)
 		patch(GS, "SelectedObject", nil)
 		local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.NightShiftController")
 		local timeout, panelWait = Controller.ResultTimeout, Controller.PanelWait
+		patch(Controller, "controlsHeld", function()
+			return controlled
+		end)
 		local ok, err = pcall(function()
 			Controller.ResultTimeout = 0.02
 			Controller.PanelWait = 0.01
@@ -427,6 +472,30 @@ return function(T, Loader)
 			task.wait(0.03)
 			T.truthy(Controller.isOpen(), "opens when it is gone")
 			refs.Collect.press()
+			-- an egg opening, then build mode: it waits for both
+			eggUp = true
+			listeners.OpenUI("Offline", { Crate = false })
+			task.wait(0.03)
+			T.falsy(Controller.isOpen(), "not over an egg opening")
+			eggUp = false
+			controlled = true
+			task.wait(0.03)
+			T.falsy(Controller.isOpen(), "nor over build mode or a close-up")
+			controlled = false
+			task.wait(0.03)
+			T.truthy(Controller.isOpen(), "a free screen")
+			refs.Collect.press()
+			-- the loading screen first
+			loadingDone = false
+			listeners.OpenUI("Offline", { Crate = false })
+			task.wait(0.03)
+			T.falsy(Controller.isOpen(), "never under the loading screen")
+			loadingDone = true
+			task.wait(0.03)
+			T.truthy(Controller.isOpen(), "after it")
+			refs.Collect.press()
+			T.eq(closedOthers, 0, "it never closes another panel")
+			T.eq(closedAll, 0)
 		end)
 		Controller.ResultTimeout, Controller.PanelWait = timeout, panelWait
 		for k = #saved, 1, -1 do
@@ -463,6 +532,11 @@ return function(T, Loader)
 		T.eq(big, "3 dirty ores")
 		T.eq(small, "In your pen")
 		T.eq(NightShiftView.prizeText({ Ok = false }), "NIGHT CRATE")
+		local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+		local artifactId, artifact = next(ArtifactConfig.ById)
+		local relicBig, relicSmall = NightShiftView.prizeText({ Ok = true, Prize = "Relic", Artifact = artifactId })
+		T.eq(relicBig, "A relic!")
+		T.eq(relicSmall, artifact.Name, "its name")
 		T.truthy(NightShiftView.Size.Y * 0.62 <= 320, "a 320 pt tall phone at the HUD's smallest scale")
 		T.truthy(NightShiftView.ButtonHeight * 0.62 >= 44, "44 pt buttons on a phone")
 		T.truthy(NightShiftView.CloseHit * 0.62 >= 44, "and the X")
@@ -480,7 +554,9 @@ return function(T, Loader)
 		T.truthy(refs.Open.Visible, "a crate waits")
 		NightShiftView.fill(refs, { Amount = 5000, Seconds = 3600, Hours = 8, Rate = 0.25, Crate = false })
 		T.falsy(refs.Open.Visible, "no crate: no button")
-		T.truthy(refs.CrateOdds.Text:find("70%", 1, true) ~= nil, "the chances are on the crate")
+		T.eq(refs.CrateOdds.Text, NightShiftConfig.oddsText(), "the chances are on the crate")
+		NightShiftView.fill(refs, { Amount = 5000, Seconds = 3600, Hours = 12, Rate = 0.5, Crate = true })
+		T.eq((refs.Bar:FindFirstChild("Label") :: any).Text, NightShiftView.barText(0.5, 12), "the pass's bar")
 		NightShiftView.setPrize(refs, { Ok = true, Prize = "Coins", Amount = 2500 })
 		T.falsy(refs.Open.Visible, "opened")
 		T.truthy(refs.CrateTitle.Text:find("2.5K", 1, true) ~= nil, refs.CrateTitle.Text)

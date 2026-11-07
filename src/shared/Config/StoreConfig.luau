@@ -145,7 +145,13 @@ StoreConfig.Cards = {
 		Row = 1,
 		Title = "FORGEMASTER'S PASS",
 		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
-		Lines = { "Podiums 4 and 5", "Night Shift: 50% for 12 h", "Double backpack space", "The Glimmer Grotto", "Extra machine slots" },
+		Lines = {
+			"Podiums 4 and 5",
+			"Podiums earn 50% offline for 12 h",
+			"Double backpack space",
+			"The Glimmer Grotto",
+			"Extra machine slots",
+		},
 	}),
 	-- the Starter Pack (one per player, in the first hour of play: StarterPackService;
 	-- StoreController hides it once bought or when the offer is over)
@@ -347,6 +353,7 @@ StoreConfig.Cards = {
 	card({
 		Id = "NightShift",
 		Keys = { "OfflineExtension" },
+		Short = "Podiums earn 50% while away, up to 12 h (free: 25%, 8 h).",
 		Look = "Item",
 		Paint = "Blue",
 		Icon = "moon",
