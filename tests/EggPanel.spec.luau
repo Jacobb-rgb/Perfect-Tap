@@ -1130,7 +1130,7 @@ return function(T, Loader)
 				end,
 			}
 			local humanoid = { Health = 100 }
-			local playerGui = Instance.new("Folder")
+			local playerGui = Instance.new("PlayerGui") -- (a client's own: HudController sets its SelectionImageObject)
 			me = {
 				Name = "Me",
 				UserId = 1,

@@ -1005,7 +1005,7 @@ return function(T, Loader)
 			end
 			return count
 		end
-		local playerGui = Instance.new("Folder")
+		local playerGui = Instance.new("PlayerGui") -- (a client's own: HudController sets its SelectionImageObject)
 		playerGui.Name = "PlayerGui"
 		local folder = Instance.new("ScreenGui")
 		folder.Name = LightWorldController.StockPromptFolder

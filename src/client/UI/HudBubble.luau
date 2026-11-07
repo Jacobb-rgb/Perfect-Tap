@@ -585,12 +585,12 @@ HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
 -- his picture tiles, two a row (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"):
--- the biggest on a big screen and in a small mouse window. The TRAIN chip stays under them (owner
--- 2026-10-28) unless that leaves them under RoundBigTile (his short Studio window, 1402 x 490):
--- then it goes beside their last row and they grow
+-- the biggest on a big screen and in a small mouse window. The TRAIN chip stays under them on a
+-- PC (owner 2026-10-28); in a small mouse window (Compact: his Studio, 1402 x 490) it goes beside
+-- their last row where that makes them bigger (RoundChipBeside; false: under there too)
 HudBubble.RoundBigMax = 88
 HudBubble.RoundMouseTile = 80
-HudBubble.RoundBigTile = 64
+HudBubble.RoundChipBeside = true
 HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
@@ -709,7 +709,7 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			local tile = math.min(layout.Tile, math.floor(room / rows))
 			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
 				local besideTile = math.min(layout.Tile, math.floor((floor - HudBubble.MenuTop - (rows - 1) * gap) / rows))
-				if columns == 2 and tile < HudBubble.RoundBigTile and besideTile > tile then
+				if HudBubble.RoundChipBeside and columns == 2 and layout.Compact and layout.Mouse and besideTile > tile then
 					layout.Columns, layout.Tile, layout.Top = columns, besideTile, HudBubble.MenuTop
 					layout.Chip, layout.ChipStack = "Beside", false
 					return
