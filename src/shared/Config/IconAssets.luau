@@ -300,6 +300,23 @@ function IconAssets.find(name: string): (string, Vector2, Vector2)
 	return "", Vector2.zero, Vector2.zero
 end
 
+--[[
+	The four top-row buttons' pictures in one image of their own (owner 2026-11-07: "one picture is
+	enough"; ../NAHRAJ_DO_ROBLOXU/ikony_ui/horni_lista.png, cut from the sheets): a row of Cell px
+	squares. Only the top row reads it (Pop.tabMark), so the left tiles keep waiting for their own
+	sheets. Not in Sheets: the sheets' tools and specs want every icon listed once.
+]]
+IconAssets.TopRow = {
+	File = "horni_lista.png",
+	Id = 78546060222076,
+	Cells = { cart = 0, lobby = 1, base = 2, vault = 3 } :: { [string]: number },
+}
+
+-- Does the top row's own image hold icon `name`?
+function IconAssets.topRowHas(name: string): boolean
+	return IconAssets.TopRow.Id > 0 and IconAssets.TopRow.Cells[name] ~= nil
+end
+
 -- The preview tools set this: they draw every icon from build/preview/icons,
 -- so layouts that differ without an uploaded picture use the uploaded look.
 IconAssets.Previewing = false
@@ -311,6 +328,23 @@ function IconAssets.shows(name: string): boolean
 	end
 	local image = IconAssets.find(name)
 	return image ~= ""
+end
+
+-- Will a top-row button show icon `name` (its own image, or its sheet)?
+function IconAssets.topRowShows(name: string): boolean
+	return IconAssets.topRowHas(name) or IconAssets.shows(name)
+end
+
+-- Shows a top-row button's icon `name`: from the top row's own image, else its sheet.
+function IconAssets.applyTopRow(label: ImageLabel, name: string)
+	if IconAssets.topRowHas(name) then
+		local cell = IconAssets.TopRow.Cells[name]
+		label.Image = "rbxassetid://" .. tostring(IconAssets.TopRow.Id)
+		label.ImageRectOffset = Vector2.new(cell * IconAssets.Cell, 0)
+		label.ImageRectSize = Vector2.new(IconAssets.Cell, IconAssets.Cell)
+		return
+	end
+	IconAssets.apply(label, name)
 end
 
 -- Shows icon `name` on an ImageLabel.

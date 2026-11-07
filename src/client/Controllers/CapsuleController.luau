@@ -97,6 +97,7 @@ local PromptConfig = require(Shared.Config.PromptConfig)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
+local HiddenScale = require(script.Parent.Parent.Util.HiddenScale)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
@@ -833,18 +834,6 @@ local hudHidden = false
 local addedConnection: RBXScriptConnection? = nil
 local HOLD_NAME = "CapsuleOpening"
 
---[[
-	Roblox never keeps a UIScale at 0: Scale = 0 reads back as 1e-07 (the owner's
-	Studio trace 2026-11-07, Studio 0.746). So hidden is "below AwayBelow", never
-	"== 0". With == 0 the return took that 1e-07 for a scale written meanwhile and
-	put it back: the chain ended well, and the whole HUD and the egg panel stayed
-	invisible until the next HudController.updateScale (a new gui, a resize).
-]]
-CapsuleController.AwayBelow = 0.001
-local function isAway(scale: number): boolean
-	return scale >= 0 and scale < CapsuleController.AwayBelow
-end
-
 local function holdControllers(on: boolean)
 	for _, name in { "MiningController", "InteractController", "BoostController" } do
 		local module = script.Parent:FindFirstChild(name)
@@ -874,7 +863,7 @@ local function hideGui(gui: Instance)
 	hiddenGuis[gui] = entry
 	scale.Scale = 0
 	entry.Connection = scale:GetPropertyChangedSignal("Scale"):Connect(function()
-		if not isAway(scale.Scale) then
+		if not HiddenScale.is(scale.Scale) then
 			entry.Wanted = scale.Scale -- (the HUD's scale changed: kept for later)
 			scale.Scale = 0
 		end
@@ -920,8 +909,8 @@ local function hideHud(on: boolean)
 				-- (a scale written meanwhile wins: the watcher may not have seen the last write;
 				-- never hidden again: one that was hidden already gets the HUD's own scale)
 				local now = entry.Scale.Scale
-				local wanted = if not isAway(now) then now else entry.Wanted
-				entry.Scale.Scale = if not isAway(wanted) then wanted else HudController.uiScale()
+				local wanted = if not HiddenScale.is(now) then now else entry.Wanted
+				entry.Scale.Scale = if not HiddenScale.is(wanted) then wanted else HudController.uiScale()
 			end)
 			if not ok then
 				warn("[CapsuleController] a gui's scale didn't come back: " .. tostring(err))
@@ -1732,7 +1721,7 @@ local function checkHudTrace(now: number): string?
 	end
 	local scale = gui:FindFirstChild("Scale")
 	local size = if scale and scale:IsA("UIScale") then scale.Scale else -1
-	if playing or (gui.Enabled and not isAway(size)) then
+	if playing or (gui.Enabled and not HiddenScale.is(size)) then
 		hudAwaySince, hudTraced = nil, false
 		return nil
 	end

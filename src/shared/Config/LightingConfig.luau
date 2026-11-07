@@ -48,31 +48,49 @@ LightingConfig.Sky = {
 }
 
 --[[
-	Space skybox (owner 2026-10-17): Kenney Skyboxes Space "band" (CC0, a
-	Milky Way band over violet space), cut into Roblox's six faces by
-	tools/kenney/skybox.mjs with Yaw 97 and Tilt 18 so the band's bright core
-	arches over the northern sky (~33 degrees up, above the massif) and the
-	sunset haze stays on the horizon. Roblox can only show uploaded images:
-	the owner uploads the six PNGs (NAHRAJ_DO_ROBLOXU/obloha_mlecna_draha) and
-	pastes each asset id here. Until all six are set the place keeps
-	Roblox's default sky (LightingController.applySkybox).
+	The picture sky (owner 2026-11-07, "the whole sky from this"): his picture
+	of a vortex with star constellations (docs/art/sky_vortex_source.png,
+	asset 139626403902185) wrapped round the sky by
+	tools/kenney/sky_from_picture.mjs and cut into Roblox's six faces by
+	tools/kenney/skybox.mjs with Yaw 117, so the vortex stands ~43 degrees up
+	in the north, over the plaza as you walk in from the spawn, and again in
+	the south. One picture on all six faces would show the corners of a box.
+	Roblox can only show uploaded images: the owner uploaded the six PNGs
+	(NAHRAJ_DO_ROBLOXU/obloha_vir) and each asset id is here. If any were
+	blank the place would keep Roblox's default sky (LightingController.applySkybox).
+	The sun's disc and Terrain.Clouds would cover the picture, so they only
+	show if these switches say so; the sun's light and shadows stay either way.
 ]]
 LightingConfig.Skybox = {
-	Bk = "",
-	Dn = "",
-	Ft = "",
-	Lf = "",
-	Rt = "",
-	Up = "",
+	Bk = "115867546012828",
+	Dn = "103917192316298",
+	Ft = "97684371727455",
+	Lf = "114624486233479",
+	Rt = "126673125136294",
+	Up = "75221912188878",
 	-- how the faces were cut (the preview renderer's shot.skyboxYaw / skyboxTilt)
-	Yaw = 97,
-	Tilt = 18,
+	Yaw = 117,
+	Tilt = 0,
+	-- with all six faces on: Sky.CelestialBodiesShown and Workspace.Terrain.Clouds
+	ShowSun = false,
+	TerrainClouds = false,
 }
 
 -- "123456", "rbxassetid://123456" or "" -> the content id or nil.
 function LightingConfig.skyboxId(value: string): string?
 	local digits = string.match(value, "^%s*(%d+)%s*$") or string.match(value, "rbxassetid://(%d+)")
 	return if digits then "rbxassetid://" .. digits else nil
+end
+
+-- All six faces have an asset id, so the picture sky is on.
+function LightingConfig.skyboxReady(): boolean
+	local cfg = LightingConfig.Skybox
+	return LightingConfig.skyboxId(cfg.Bk) ~= nil
+		and LightingConfig.skyboxId(cfg.Dn) ~= nil
+		and LightingConfig.skyboxId(cfg.Ft) ~= nil
+		and LightingConfig.skyboxId(cfg.Lf) ~= nil
+		and LightingConfig.skyboxId(cfg.Rt) ~= nil
+		and LightingConfig.skyboxId(cfg.Up) ~= nil
 end
 
 -- Workspace.Terrain.Clouds (created by the client if the place has none).
