@@ -103,6 +103,8 @@ local CRUSH_HINT = "The Furnace melts CRUSHED ore. Put clean ore through your Cr
 -- Quality I ~45 min, II ~1h20, III ~2h35, IV ~3h20-5h; Quality V and the top
 -- Speed levels of the big machines are goals past blaster 10. Each machine
 -- keeps its factor on these base curves (scaled).
+-- (owner 2026-11-07: machines and their upgrades cost twice as much: MachineData.PriceMult
+-- below, on the machines you can buy; the curves stay, so refunds of retired machines don't change)
 local SPEED_CURVE = { 20000, 400000, 8e6, 150e6, 2.5e9 }
 local QUALITY_CURVE = { 50000, 2e6, 50e6, 600e6, 6e9 }
 
@@ -603,6 +605,43 @@ table.insert(MachineData.List, {
 	WrongHint = "The Money Laser only doubles ore from a dropper.",
 })
 
+--[[
+	Owner 2026-11-07: machines and their upgrades (Speed, Quality, the Furnace's
+	tiers) cost twice as much. Not the line's pieces (the belts, which become one
+	belt with levels, the lift, the slide, the deck, the power pole), not the
+	droppers (their own shop, their own prices) and not retired machines (old
+	saves are refunded what those cost).
+]]
+MachineData.PriceMult = 2
+MachineData.PriceKept = {
+	Conveyor = true,
+	ExpressConveyor = true,
+	BeltLift = true,
+	Slide = true,
+	Platform = true,
+	PowerPole = true,
+} :: { [string]: boolean }
+local function doubled(list: { number }?)
+	if list then
+		for k, price in list do
+			list[k] = price * MachineData.PriceMult
+		end
+	end
+end
+for _, machine in MachineData.List do
+	if machine.Category ~= "Droppers" and not machine.Retired and not MachineData.PriceKept[machine.Id] then
+		if machine.Price then
+			machine.Price *= MachineData.PriceMult
+		end
+		local upgrades = machine.Upgrades
+		if upgrades then
+			doubled(upgrades.Speed)
+			doubled(upgrades.Quality)
+			doubled(upgrades.Tier)
+		end
+	end
+end
+
 MachineData.ById = {} :: { [string]: Machine }
 -- Machines design v2 removed (the Ore Pen replaced the Storage Crate, Tobin's
 -- Sell stall the Sell Chute, the Foundry the Anvil). Kept here so old saves
@@ -671,7 +710,7 @@ function MachineData.conveyorSlots(workshop: boolean): number
 end
 
 -- Bellows upgrade: each level makes machines 10% faster.
-MachineData.Bellows = { Prices = { 500, 1500, 4000, 10000, 25000 }, SpeedPerLevel = 0.1 }
+MachineData.Bellows = { Prices = { 1000, 3000, 8000, 20000, 50000 }, SpeedPerLevel = 0.1 }
 
 -- Footprint in cells after rotation.
 function MachineData.footprint(machine: Machine, rotation: number): (number, number)

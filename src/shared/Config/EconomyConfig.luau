@@ -4,8 +4,9 @@
 	holds your ore (data.Storage). Unwanted ore is sold at the Sell stall in
 	town (Tobin the miner).
 	Income formula: ItemData.income(desc) * EconomyConfig.multiplier(...).
-	The Tech shop (step 3) sells machines, machine upgrades, Bellows, slot
-	upgrades and pen automation (TechShop, techItem, techPrice below).
+	The Tech shop (step 3) sells machines, slot upgrades and pen automation;
+	a machine's upgrades and Bellows are the same catalog, bought at the
+	machine (owner 2026-11-07) (TechShop, techItem, techPrice below).
 ]]
 
 local MachineData = require(script.Parent.MachineData)
@@ -133,6 +134,7 @@ EconomyConfig.TechShop = {
 		Stale = "The card was out of date, try again",
 		NoCoins = "Not enough coins",
 		TooFar = "Go to the UPGRADES stall to buy",
+		AtMachine = "Upgrade it at the machine on your base: press E there",
 	} :: { [string]: string },
 }
 

@@ -436,7 +436,11 @@ return function(T, Loader)
 		for i, price in { 50000, 2e6, 50e6, 600e6, 6e9 } do
 			T.eq(curves.Quality[i], price, "Quality curve " .. i)
 		end
-		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 50000)
+		-- (owner 2026-11-07: a machine you can buy pays twice the curve, MachineData.PriceMult)
+		T.eq(MachineData.PriceMult, 2)
+		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 100000)
+		T.eq(MachineData.ById.Crusher.Upgrades.Speed[1], 40000)
+		T.eq(MachineData.ById.BlastFurnace.Upgrades.Speed[1], 80000, "a retired look keeps its old price (refunds)")
 		-- every level costs a lot more than the one before (goals across the journey)
 		for _, curve in { curves.Speed, curves.Quality } do
 			for i = 2, #curve do
