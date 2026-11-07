@@ -9,10 +9,11 @@
 	  luckyShown(), openingState(), onStop() and setAuto() are for it.
 	- The shop panel (CapsuleView, every egg with x1 / x3 / x10 and every
 	  golem's name) opens from the golem inventory's EGGS button
-	  (CapsuleController.open) and on OpenUI "Capsules" (an egg's own podium
-	  out in the world, the SKY EGG's; the temple's old "Capsules" prompt is
-	  off: CapsuleService.StallPrompt). Opening works anywhere, so the panel
-	  doesn't close when you walk away.
+	  (CapsuleController.open) and on OpenUI "Capsules" (the temple's old
+	  "Capsules" prompt is off: CapsuleService.StallPrompt; a podium-only egg,
+	  the SKY EGG, isn't in this window: its panel over the egg sells it, owner
+	  2026-11-07). Opening works anywhere, so the panel doesn't close when you
+	  walk away.
 	  Tabs (click / tap, LB / RB): the capsules this player may open. The
 	  cards come from the State snapshot and update live (coins count up,
 	  the Triple Lucky banner counts down).
@@ -126,6 +127,7 @@ export type Result = {
 	Batch: number?,
 	Batches: number?,
 	Arrived: number?, -- os.clock() its result came (its first opening)
+	Shown: boolean?, -- its opening played to the end, or its golems were told another way
 	Note: string?, -- a notice that came with it (a receipt's own "inventory full"): shown with its opening
 }
 
@@ -142,7 +144,6 @@ local SKIP_ACTION = "TerraForgeCapsuleSkip"
 local SKIP_ALL_ACTION = "TerraForgeCapsuleSkipAll"
 local AUTO_ACTION = "TerraForgeCapsuleAuto"
 local STALL_TAG = "CapsuleStall"
-local PODIUM_TAG = "EggPodium" -- an egg on its own podium (CapsuleService.PodiumTag)
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local OPEN_PRIORITY = Enum.ContextActionPriority.High.Value + 30 -- the overlay is above every panel
 local TICK = 0.25
@@ -299,17 +300,16 @@ local function receiptsReady(): boolean
 	return ReplicatedStorage:GetAttribute(CapsuleView.ReceiptsAttribute) == true
 end
 
--- Every card as the player sees it now.
--- the podium-only egg the panel was opened at (OpenUI payload.Capsule), or nil:
--- a podium-only egg (CapsuleConfig Podium) shows its tab only then
-local atPodium: string? = nil
-
-local function currentCards(coins: number): { CapsuleView.Card }
+-- Every card as the player sees it now. A podium-only egg (CapsuleConfig Podium, the SKY EGG) is
+-- sold by its panel over the egg only (`panel`: the egg panel asks; the server checks the reach).
+local function currentCards(coins: number, panel: boolean?): { CapsuleView.Card }
 	local list = CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt, receiptsReady())
-	for _, card in list do
-		local capsule = CapsuleConfig.ById[card.Id]
-		if capsule and capsule.Podium and atPodium ~= card.Id then
-			card.Visible = false
+	if not panel then
+		for _, card in list do
+			local capsule = CapsuleConfig.ById[card.Id]
+			if capsule and capsule.Podium then
+				card.Visible = false
+			end
 		end
 	end
 	return list
@@ -329,7 +329,7 @@ end
 -- player's level, whether it can be bought and why not, its odds): the egg
 -- panel's quote. nil when it isn't sold to this player here.
 function CapsuleController.quote(capsuleId: string): CapsuleView.Card?
-	for _, card in currentCards(HudController.predictedCoins(os.clock())) do
+	for _, card in currentCards(HudController.predictedCoins(os.clock()), true) do
 		if card.Id == capsuleId then
 			return card
 		end
@@ -398,7 +398,7 @@ local function request(capsuleId: string, count: number, button: TextButton?, ex
 		return false, "Cooldown"
 	end
 	local coins = HudController.predictedCoins(now)
-	cards = currentCards(coins)
+	cards = currentCards(coins, button == nil) -- (no button: the egg panel's buy)
 	local card = cardOf(capsuleId)
 	local buy: CapsuleView.Buy? = nil
 	if card then
@@ -478,7 +478,6 @@ function CapsuleController.close()
 		return
 	end
 	shown = false
-	atPodium = nil
 	if tickConnection then
 		tickConnection:Disconnect()
 		tickConnection = nil
@@ -778,19 +777,27 @@ end
 	crack network: HatchFx.addCracks; put back whole: HatchFx.reset).
 	`cracks`: the last crack step built (a phone opening many eggs: 2).
 ]]
-local function takeEggs(capsuleId: string, count: number, cracks: number): { HatchFx.Record }
+local function poolOf(capsuleId: string, cracks: number): { HatchFx.Record }
 	local key = `{capsuleId}|{cracks}`
 	local list = eggPool[key]
 	if not list then
 		list = {}
 		eggPool[key] = list
 	end
-	local pool = list :: { HatchFx.Record }
+	return list :: { HatchFx.Record }
+end
+
+local function makeEgg(pool: { HatchFx.Record }, capsuleId: string, cracks: number)
+	local model = GolemBuilder.capsule(capsuleId)
+	HatchFx.addCracks(model, cracks)
+	model:SetAttribute("Pooled", true)
+	table.insert(pool, HatchFx.record(model))
+end
+
+local function takeEggs(capsuleId: string, count: number, cracks: number): { HatchFx.Record }
+	local pool = poolOf(capsuleId, cracks)
 	while #pool < count do
-		local model = GolemBuilder.capsule(capsuleId)
-		HatchFx.addCracks(model, cracks)
-		model:SetAttribute("Pooled", true)
-		table.insert(pool, HatchFx.record(model))
+		makeEgg(pool, capsuleId, cracks)
 	end
 	local out: { HatchFx.Record } = {}
 	for i = 1, count do
@@ -897,12 +904,17 @@ local function hideHud(on: boolean)
 			addedConnection = nil
 		end
 		for _, entry in hiddenGuis do
-			entry.Connection:Disconnect()
-			-- (a scale written meanwhile wins: the watcher may not have seen the last write;
-			-- never hidden again: one that was hidden already gets the HUD's own scale)
-			local now = entry.Scale.Scale
-			local wanted = if not HiddenScale.is(now) then now else entry.Wanted
-			entry.Scale.Scale = if not HiddenScale.is(wanted) then wanted else HudController.uiScale()
+			local ok, err = pcall(function()
+				entry.Connection:Disconnect()
+				-- (a scale written meanwhile wins: the watcher may not have seen the last write;
+				-- never hidden again: one that was hidden already gets the HUD's own scale)
+				local now = entry.Scale.Scale
+				local wanted = if not HiddenScale.is(now) then now else entry.Wanted
+				entry.Scale.Scale = if not HiddenScale.is(wanted) then wanted else HudController.uiScale()
+			end)
+			if not ok then
+				warn("[CapsuleController] a gui's scale didn't come back: " .. tostring(err))
+			end
 		end
 		table.clear(hiddenGuis)
 	end
@@ -1117,6 +1129,7 @@ end
 	plays the fast timings, Reduce motion the calm ones.
 ]]
 local stageGolems: { Model } = {} -- the golems of the opening that plays (freed when it ends)
+CapsuleController.LongFrame = 0.25 -- seconds: a frame this long says so in the console (the stutter's trace)
 
 -- The player's character on the screen (shares), where the golems fly; the bottom middle if it isn't seen.
 local function playerOnScreen(): Vector2
@@ -1246,8 +1259,11 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local offset = 0 -- (skips move the clock on)
 	local revealedAt: number? = nil -- (os.clock() when the golems came out: MinShow counts from it)
 	local wantFly = false -- (a skip asked for the flight: it waits for MinShow)
+	local last, longest = start, 0
 	while true do
 		local now = os.clock()
+		longest = math.max(longest, now - last)
+		last = now
 		local shownFor = if revealedAt then now - revealedAt else 0
 		if skipStep or skipAll then
 			local t0 = now - start + offset
@@ -1281,6 +1297,9 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	end
 	currentRun = nil
 	Sfx.loop("CaseCharge", false)
+	if longest >= CapsuleController.LongFrame then
+		warn(`[CapsuleController] opening of {#kinds} {result.Capsule}: its longest frame took {math.floor(longest * 1000)} ms`)
+	end
 end
 
 local function onSkip(_: string, state: Enum.UserInputState): Enum.ContextActionResult
@@ -1398,6 +1417,48 @@ local function ensureOpening(): CapsuleView.OpenRefs
 end
 
 --[[
+	The egg panel showed (EggPanelController): the opening's pieces and this
+	egg's models are made ahead, one egg a frame, so the first Open 10 doesn't
+	make them all in one frame. A phone's Open 10 uses eggs with fewer cracks
+	(hatchArgs), so a phone makes both kinds.
+]]
+CapsuleController.WarmEggs = 10
+CapsuleController.WarmEggsPhone = 3
+local warming: { [string]: boolean } = {}
+function CapsuleController.warm(capsuleId: string)
+	local phone = compactNow()
+	local key = `{capsuleId}|{phone}`
+	if warming[key] or not CapsuleConfig.ById[capsuleId] then
+		return
+	end
+	warming[key] = true
+	task.spawn(function()
+		local ok, err = pcall(function()
+			task.wait()
+			if not playing then
+				ensureOpening()
+			end
+			local kinds: { { number } } = { { 3, if phone then CapsuleController.WarmEggsPhone else CapsuleController.WarmEggs } }
+			if phone then
+				table.insert(kinds, { 2, CapsuleController.WarmEggs })
+			end
+			for _, kind in kinds do
+				local pool = poolOf(capsuleId, kind[1])
+				while #pool < kind[2] do
+					task.wait()
+					if not playing then -- (an opening takes them from the same pool)
+						makeEgg(pool, capsuleId, kind[1])
+					end
+				end
+			end
+		end)
+		if not ok then
+			warn("[CapsuleController] getting an egg ready failed: " .. tostring(err))
+		end
+	end)
+end
+
+--[[
 	The chain: every opening queued plays one after another under ONE hold
 	(beginChain .. endChain): the prompts suppressed, the HUD away, the
 	blur, the keys and the selection lock carry across them (a x50 pack's 5
@@ -1440,30 +1501,120 @@ local function beginChain(o: CapsuleView.OpenRefs)
 	keepNoSelection(true)
 end
 
+--[[
+	The safety net (owner 2026-11-07: "everything vanished, I couldn't open or
+	click anything"): the HUD and the prompts go when a chain begins and come
+	back in one place, endChain. So each of its steps runs on its own (one that
+	fails never stops the next), a failing opening or clean-up never ends the
+	chain's thread, and a watch ends an opening that takes longer than
+	StuckAfter seconds. Each of these warns, so the console says what happened.
+]]
+CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is about 7
+
+local function safely(what: string, step: () -> ())
+	local ok, err = pcall(function(): any
+		step()
+		return nil
+	end)
+	if not ok then
+		warn(`[CapsuleController] {what} failed: {err}`)
+	end
+end
+
+local chainThread: thread? = nil -- the thread that plays the chain
+local openingNow: Result? = nil -- the result it plays
+local untold: { { Kind: string, Deleted: boolean } } = {} -- the golems of failed openings: named when the HUD is back (paid random items)
+
+-- A failed opening: Auto never buys through it; its golems are told when the HUD is back.
+local function openingFailed(result: Result?)
+	stopped("Failed")
+	if result and not result.Shown then
+		result.Shown = true
+		for _, golem in result.Golems do
+			-- (the auto-deleted ones too: every golem won is named, like the opening's grey ones)
+			table.insert(untold, { Kind = golem.Kind, Deleted = golem.Deleted == true })
+		end
+	end
+end
+
+-- "4x Sky Sprite, Storm Sentinel": the kinds in the order they came, counted.
+local function golemList(kinds: { string }): string
+	local counts: { [string]: number } = {}
+	local names: { string } = {}
+	for _, kind in kinds do
+		if not counts[kind] then
+			table.insert(names, kind)
+		end
+		counts[kind] = (counts[kind] or 0) + 1
+	end
+	local parts: { string } = {}
+	for _, kind in names do
+		local info = GolemConfig.ById[kind]
+		local name = if info then info.Name else kind
+		table.insert(parts, if counts[kind] > 1 then `{counts[kind]}x {name}` else name)
+	end
+	return table.concat(parts, ", ")
+end
+
+local function tellUntold()
+	if #untold == 0 then
+		return
+	end
+	local kept: { string } = {}
+	local deleted: { string } = {}
+	for _, golem in untold do
+		table.insert(if golem.Deleted then deleted else kept, golem.Kind)
+	end
+	table.clear(untold)
+	local gone = if #deleted > 0 then `auto-deleted: {golemList(deleted)}` else nil
+	local text = if #kept == 0
+		then `From your eggs, {gone}`
+		else `Your golems are safe: {golemList(kept)}` .. (if gone then ` ({gone})` else "")
+	HudController.toast(text, "Info")
+end
+local chainCount = 0 -- which chain it is (a chain's watch ends with it)
+local openingSince = 0 -- os.clock() when the opening that plays began
+
 local function endChain()
-	ContextActionService:UnbindAction(SKIP_ACTION)
-	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
-	ContextActionService:UnbindAction(AUTO_ACTION)
-	ContextActionService:UnbindAction(SINK_ACTION)
-	keepNoSelection(false)
+	chainThread = nil
+	safely("unbinding the keys", function()
+		ContextActionService:UnbindAction(SKIP_ACTION)
+		ContextActionService:UnbindAction(SKIP_ALL_ACTION)
+		ContextActionService:UnbindAction(AUTO_ACTION)
+		ContextActionService:UnbindAction(SINK_ACTION)
+	end)
+	safely("the selection lock", function()
+		keepNoSelection(false)
+	end)
 	playing = false
 	autoNote = nil
 	local o = opening
 	if o then
-		o.Gui.Enabled = false
-		o.Controls.Enabled = false
-		CapsuleView.setChain(o, nil, nil)
+		safely("closing the opening's screen", function()
+			o.Gui.Enabled = false
+			o.Controls.Enabled = false
+			CapsuleView.setChain(o, nil, nil)
+		end)
 	end
-	setBlur(false)
-	setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
-	hideHud(false)
-	tellPlaying(false)
+	safely("the blur", function()
+		setBlur(false)
+	end)
+	safely("the world's tint", function()
+		setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
+	end)
+	safely("the HUD's return", function()
+		hideHud(false)
+	end)
+	safely("the playing listeners", function()
+		tellPlaying(false)
+	end)
 	PromptController.setSuppressed("CapsuleOpening", false)
 	chainEndedAt = os.clock()
 	local view = refs
 	if view and shown and usingGamepad() then
 		GuiService.SelectedObject = CapsuleView.restButton(view) -- (never an OPEN button: A to skip must not buy)
 	end
+	safely("telling the golems", tellUntold)
 	pcall(Sfx.loop, "CaseCharge", false) -- (last: the HUD and the prompts never wait on a sound)
 end
 
@@ -1493,9 +1644,13 @@ local function play(result: Result)
 	local ok, err = pcall(function()
 		hatchOne(o, result, kinds)
 	end)
+	if ok then
+		result.Shown = true
+	end
 	currentRun = nil -- (also after a failing one)
 	if not ok then
 		warn("[CapsuleController] opening failed: " .. tostring(err))
+		openingFailed(result)
 		-- (V2: a step failing after the burst leaves no world tint and no charge hum to the next opening)
 		setMood(0, Color3.new(1, 1, 1), true)
 		pcall(Sfx.loop, "CaseCharge", false)
@@ -1504,20 +1659,124 @@ local function play(result: Result)
 	table.clear(stageGolems)
 end
 
+-- The clean-up after an opening that failed or never ended: nothing of it stays on the screen.
+local function clearAfter(o: CapsuleView.OpenRefs?)
+	currentRun = nil
+	safely("the world's tint", function()
+		setMood(0, Color3.new(1, 1, 1), true)
+	end)
+	pcall(Sfx.loop, "CaseCharge", false)
+	if o then
+		safely("clearing the stage", function()
+			HatchStage.clear(o, stageGolems)
+		end)
+	end
+	table.clear(stageGolems)
+end
+
+-- Plays what is queued, one after another, then ends the chain; nothing that fails stops it.
+local function runChain()
+	chainThread = coroutine.running()
+	while #queue > 0 do
+		local result = table.remove(queue, 1) :: Result
+		openingSince = os.clock()
+		openingNow = result
+		local ok, err = pcall(function(): any
+			play(result)
+			return nil
+		end)
+		if not ok then
+			warn("[CapsuleController] opening failed: " .. tostring(err))
+			openingFailed(result)
+			clearAfter(opening)
+		end
+	end
+	openingNow = nil
+	endChain()
+end
+
+--[[
+	The watch's look (every second while a chain plays): an opening older than
+	StuckAfter is stopped. The results still queued play on (paid random items
+	show each result); else the chain ends and everything comes back.
+]]
+local function checkStuck(now: number): boolean
+	if not playing or not chainThread or now - openingSince <= CapsuleController.StuckAfter then
+		return false
+	end
+	warn(`[CapsuleController] an opening took over {CapsuleController.StuckAfter} s: stopped, the HUD comes back`)
+	local stuck = chainThread
+	chainThread = nil
+	if stuck ~= coroutine.running() then
+		pcall(task.cancel, stuck)
+	end
+	openingFailed(openingNow)
+	clearAfter(opening)
+	task.spawn(runChain)
+	return true
+end
+
+--[[
+	The trace for the owner's test (2026-11-07: the HUD gone, nothing clickable,
+	no cause in the code): the HUD hidden for HudTraceAfter seconds with no
+	opening playing says once, in the console, everything that can hide it.
+	Silent when all of this looks fine: then something outside the game's
+	scripts hid it (Roblox's own Ctrl+Shift+G hides every gui).
+]]
+CapsuleController.HudTraceAfter = 20
+local hudAwaySince: number? = nil
+local hudTraced = false
+local function checkHudTrace(now: number): string?
+	local hud = HudController.refs()
+	local gui = if hud then hud.Gui else nil
+	if not gui then
+		return nil
+	end
+	local scale = gui:FindFirstChild("Scale")
+	local size = if scale and scale:IsA("UIScale") then scale.Scale else -1
+	if playing or (gui.Enabled and not HiddenScale.is(size)) then
+		hudAwaySince, hudTraced = nil, false
+		return nil
+	end
+	local since = hudAwaySince or now
+	hudAwaySince = since
+	if hudTraced or now - since < CapsuleController.HudTraceAfter then
+		return nil
+	end
+	hudTraced = true
+	local text =
+		`[CapsuleController] the HUD is hidden and no opening plays: Enabled={gui.Enabled} Scale={size} hudHidden={hudHidden} playing={playing} queue={#queue} prompts off for: {table.concat(
+			PromptController.suppressedReasons(),
+			","
+		)}`
+	warn(text)
+	return text
+end
+
 local function pump()
 	if playing or #queue == 0 then
 		return -- (the chain that plays takes it, after the ones before it)
 	end
 	local o = ensureOpening()
 	fitOpening(o)
-	beginChain(o)
-	task.spawn(function()
-		while #queue > 0 do
-			local result = table.remove(queue, 1) :: Result
-			play(result)
-		end
-		endChain()
+	safely("the chain's begin", function()
+		beginChain(o)
 	end)
+	playing = true
+	openingSince = os.clock()
+	chainCount += 1
+	local chain = chainCount
+	task.spawn(function()
+		while playing and chain == chainCount do
+			task.wait(1)
+			if chain == chainCount then
+				safely("the opening's watch", function()
+					checkStuck(os.clock())
+				end)
+			end
+		end
+	end)
+	task.spawn(runChain)
 end
 
 --[[
@@ -1690,21 +1949,6 @@ local function updateBoards(): boolean
 	end
 	local lucky = luckyShown()
 	local key = `{capsuleId}|{lucky}`
-	-- an egg's own podium board always shows that egg (CapsuleService.hookPodium)
-	for _, podium in CollectionService:GetTagged(PODIUM_TAG) do
-		local holder = podium.Parent
-		for _, board in if holder then holder:GetChildren() else {} do
-			local own = board:GetAttribute("Capsule")
-			local gui = if board.Name == "OddsBoard" then board:FindFirstChildWhichIsA("SurfaceGui") else nil
-			if gui and type(own) == "string" and CapsuleConfig.ById[own] then
-				local ownKey = `{own}|{lucky}`
-				if boardSeen[gui] ~= ownKey then
-					boardSeen[gui] = ownKey
-					CapsuleView.fillBoard(gui, own, lucky)
-				end
-			end
-		end
-	end
 	for _, stall in CollectionService:GetTagged(STALL_TAG) do
 		local board = stall:FindFirstChild("OddsBoard", true)
 		local gui = if board then board:FindFirstChildWhichIsA("SurfaceGui") else nil
@@ -1794,6 +2038,16 @@ CapsuleController._test = {
 	hudHidden = function(): boolean
 		return hudHidden
 	end,
+	checkStuck = checkStuck,
+	checkHudTrace = checkHudTrace,
+	openingSince = function(): number
+		return openingSince
+	end,
+	quote = CapsuleController.quote, -- (the real one: the egg panel's specs swap the module's)
+	buy = CapsuleController.buy,
+	pooled = function(capsuleId: string): number
+		return #poolOf(capsuleId, 3)
+	end,
 	queued = function(): number
 		return #queue
 	end,
@@ -1816,19 +2070,12 @@ CapsuleController._test = {
 		return selectionWatch ~= nil
 	end,
 	onPlaying = CapsuleController.onPlaying, -- (the real one: the egg panel's specs swap the module's)
+	onStop = CapsuleController.onStop,
 }
 
 function CapsuleController.init()
-	Net.listen("OpenUI", function(kind, payload)
+	Net.listen("OpenUI", function(kind)
 		if kind == "Capsules" then
-			-- an egg's own podium opens the panel on that egg's tab
-			local capsuleId = if type(payload) == "table" then payload.Capsule else nil
-			if type(capsuleId) == "string" and CapsuleConfig.ById[capsuleId] then
-				ensureView().Tab = capsuleId
-				atPodium = capsuleId
-			else
-				atPodium = nil
-			end
 			CapsuleController.open()
 		end
 	end)
@@ -1904,6 +2151,7 @@ function CapsuleController.start()
 		if not ok then
 			warn("[CapsuleController] odds board: " .. tostring(err))
 		end
+		pcall(checkHudTrace, os.clock())
 		task.wait(CapsuleController.BoardTick)
 		if os.clock() - pageAt >= CapsuleController.BoardSeconds then
 			pageAt = os.clock()

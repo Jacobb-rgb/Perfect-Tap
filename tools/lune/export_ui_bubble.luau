@@ -666,7 +666,7 @@ for _, light in { false, true } do
 		SellView.layout(view, spec[4], spec[5], spec[6])
 		SellView.setEntries(view, "Pen", SellView.entries(penSummary, "Pen"))
 		SellView.setEntries(view, "Hands", SellView.entries(handsSummary, "Hands"))
-		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "Dirty"), SellView.plan(penSummary, handsSummary, "AllButBest"))
+		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "All"))
 		-- (the Pop look: the window is no longer re-skinned)
 		local name = "ui_sell_" .. spec[1] .. (if light then "_light" else "")
 		fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))

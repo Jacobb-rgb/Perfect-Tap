@@ -90,6 +90,11 @@ return function(T, Loader)
 		T.eq(TOTAL, 11, "eight task steps, the two steps 6-7 hints and the platform hint")
 		T.truthy(TutorialConfig.ById.Golems.Optional and TutorialConfig.ById.Wheel.Optional, "the hints are info steps (GOT IT)")
 		T.eq(TutorialConfig.ById.Golems.UiTarget, "Golems", "the golem hint points at the side menu's GOLEMS")
+		local tutorialSource = require("@lune/fs").readFile(Loader.root .. "/src/client/Controllers/TutorialController.luau")
+		T.truthy(
+			string.find(tutorialSource, 'tiles:FindFirstChild(id) or tiles:FindFirstChild("More")', 1, true),
+			"on the light HUD the arrow points at the tile, or at MORE when it stands behind it"
+		)
 		local seen = {}
 		for index, step in TutorialConfig.Steps do
 			T.falsy(seen[step.Id], "unique id " .. step.Id)
