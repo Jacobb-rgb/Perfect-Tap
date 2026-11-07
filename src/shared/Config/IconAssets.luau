@@ -343,11 +343,11 @@ IconAssets.TileArt = {
 		spin = 9,
 		elevator = 10,
 	} :: { [string]: number },
-	-- the second image (hud_dlazdice_2.png, 3 x 3 cells; 0: not uploaded yet, its tiles keep their
-	-- word): Boosts, Settings and Trade, and the potions without a background for the Boosts window
+	-- the second image (hud_dlazdice_2.png, 3 x 3 cells; 0 would mean not uploaded: its tiles keep
+	-- their word): Boosts, Settings and Trade, and the potions without a background, for later
 	Second = {
 		File = "hud_dlazdice_2.png",
-		Id = 0,
+		Id = 79789902813222,
 		Columns = 3,
 		Cells = {
 			boosts = 0,

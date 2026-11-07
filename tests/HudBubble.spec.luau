@@ -298,8 +298,35 @@ return function(T, Loader)
 			T.eq(IconAssets.tileArt(tile), name, tile)
 		end
 		T.falsy(IconAssets.tileArt("Shop") == "shop", "the boosts' tile is not his Shop picture")
-		T.eq(IconAssets.TileArt.Tiles.Shop, "boosts", "it waits for its own")
-		T.eq(IconAssets.tileArt("Settings"), nil, "no picture: keeps its face and word")
+		T.eq(IconAssets.tileArt("Shop"), "boosts", "it has its own")
+		T.eq(IconAssets.tileArt("Settings"), "settings", "Settings")
+		T.eq(IconAssets.tileArt("Trade"), "trade", "Trade")
+		T.eq(IconAssets.tileArt("Gear"), nil, "no picture: keeps its face and word")
+		-- the second image, in the order of hud_dlazdice_2.png
+		local second = art.Second
+		T.truthy(second.Id > 0, "the second image is uploaded")
+		local order2 = {
+			"boosts",
+			"settings",
+			"trade",
+			"potion_lucky",
+			"potion_coins",
+			"potion_mining",
+			"potion_speed",
+			"potion_strength",
+			"potion_mythic",
+		}
+		for i, name in order2 do
+			T.eq(second.Cells[name], i - 1, name .. "'s cell")
+		end
+		local two = roblox.Instance.new("ImageLabel")
+		IconAssets.applyTileArt(two, "trade")
+		T.eq(two.Image, "rbxassetid://" .. tostring(second.Id), "Trade: the second image")
+		T.eq(two.ImageRectOffset.X, 2 * art.Cell, "Trade: column 2")
+		T.eq(two.ImageRectOffset.Y, 0, "Trade: row 0")
+		IconAssets.applyTileArt(two, "potion_mythic")
+		T.eq(two.ImageRectOffset.X, 2 * art.Cell, "Mythic: column 2")
+		T.eq(two.ImageRectOffset.Y, 2 * art.Cell, "Mythic: row 2")
 
 		local before, previewing = UIConfig.LightUI, IconAssets.Previewing
 		UIConfig.LightUI = true
@@ -329,8 +356,8 @@ return function(T, Loader)
 			Bubble.select(face, false)
 			T.falsy(outline.Enabled, "and away again")
 
-			local plain = HudBubble.tile(holder, { Name = "Settings", Label = "Settings", Icon = "cog", Role = "Settings", Size = 77 })
-			T.eq(plain:GetAttribute("TileArt"), nil, "no picture for Settings")
+			local plain = HudBubble.tile(holder, { Name = "Gear", Label = "Gear", Icon = "helmet", Role = "Gear", Size = 77 })
+			T.eq(plain:GetAttribute("TileArt"), nil, "no picture for Gear")
 			T.eq(plain:GetAttribute("DarkTile"), true, "its dark tile")
 			T.truthy((plain:FindFirstChild("Label") :: any).Visible, "its word")
 
