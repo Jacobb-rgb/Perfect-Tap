@@ -113,9 +113,10 @@ local ground = 0
 print(`rock Big at {center}, size {size}, {stages} stages`)
 
 -- the player 16 studs off, firing at it (the shots need room to be seen)
-local LEVEL = 10
+local LEVEL = tonumber(process.args[2]) or 10
 local away = V3.new(-6.5, 0, 5).Unit
-local feet = V3.new(center.X, ground, center.Z) + away * 16
+local feet = V3.new(center.X, ground, center.Z) + away * (tonumber(process.args[3]) or 16)
+print(`rock radius {radius}, the player {(feet - V3.new(center.X, ground, center.Z)).Magnitude} from its middle`)
 local aimPoint = Gallery.surface(pristine, feet, 0.6)
 local shotGlow = BlasterBuilder.look(LEVEL, BlasterData.vaultOre(LEVEL)).Glow
 local tier = BlasterFeel.tier(LEVEL)
@@ -460,7 +461,8 @@ local function handleAt(t: number): any
 end
 -- where a shot starts: the muzzle at that moment, a little off the axis (the next barrel)
 for _, shot in shotList do
-	local origin = handleAt(shot.At) * muzzleAt
+	local handAt = handleAt(shot.At)
+	local origin = BlasterFeel.shotStart(handAt.Position, handAt * muzzleAt, aimPoint)
 	local line = CF.lookAt(origin, aimPoint)
 	local a = shot.Barrel / Shots.Barrels * math.pi * 2
 	local start = origin + line.RightVector * (math.cos(a) * Shots.Spiral) + line.UpVector * (math.sin(a) * Shots.Spiral)
