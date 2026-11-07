@@ -32,7 +32,9 @@
 	  a check kept failing: a later check that says the player owned the
 	  pass pays the difference (topUpOffline, a toast). The client
 	  shows "While you were away"
-	  (OpenUI "Offline" { Amount, Seconds, Hours }). LastSeen is written on
+	  (OpenUI "Offline" { Amount, Seconds, Hours, Rate, Crate?, PenFull? }, those
+	  from the onReturn hook, NightShiftService: the window opens for a Crate
+	  alone too). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
 	- StateService gets Income (per second), PodiumSlots (3 or 5) and
@@ -753,6 +755,15 @@ local function offlineKnown(player: Player): boolean
 	return true
 end
 
+local returnHook: ((Player, { [string]: any }, number, boolean) -> { [string]: any }?)? = nil
+
+-- What else the base did while the player was away (NightShiftService): runs with every
+-- payout of an absence; what it returns goes into the window, which also opens for its
+-- Crate alone.
+function PodiumService.onReturn(hook: (Player, { [string]: any }, number, boolean) -> { [string]: any }?)
+	returnHook = hook
+end
+
 -- Pays the offline earnings that were waiting for this player. Returns the amount.
 local function payOffline(player: Player, popup: boolean): number
 	local seconds = pendingOffline[player]
@@ -780,20 +791,33 @@ local function payOffline(player: Player, popup: boolean): number
 			Money = Perks.has(player, MonetizationConfig.MoneyPassPerk),
 		}
 	end
+	local extra = nil
+	if returnHook and seconds >= EconomyConfig.Offline.MinSeconds then
+		-- (a broken hook never costs the player the coins below)
+		local ok, answer = pcall(returnHook, player, data, seconds, extended)
+		if ok then
+			extra = answer
+		else
+			warn(`[PodiumService] the return hook failed for {player.Name}: {answer}`)
+		end
+	end
 	if amount < 0.001 then
-		return 0
+		amount = 0
+	else
+		EconomyService.award(player, amount, "Offline")
+		local stats = data.Stats
+		if type(stats) == "table" then
+			stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
+		end
 	end
-	EconomyService.award(player, amount, "Offline")
-	local stats = data.Stats
-	if type(stats) == "table" then
-		stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
-	end
-	if popup and player.Parent then
-		local o = EconomyConfig.Offline
+	if popup and player.Parent and (amount > 0 or (extra and extra.Crate)) then
 		Net.fire("OpenUI", player, "Offline", {
 			Amount = amount,
 			Seconds = seconds,
-			Hours = if extended then o.ExtendedHours else o.BaseHours,
+			Hours = EconomyConfig.offlineHours(extended),
+			Rate = EconomyConfig.offlineRate(extended),
+			Crate = extra and extra.Crate,
+			PenFull = extra and extra.PenFull,
 		})
 	end
 	return amount
@@ -1002,6 +1026,7 @@ PodiumService._test = {
 		clock = fn or os.time
 	end,
 	reset = function()
+		returnHook = nil
 		for _, perPlot in shown do
 			for _, entry in perPlot do
 				clearShown(entry)

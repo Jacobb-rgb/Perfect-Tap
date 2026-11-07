@@ -26,8 +26,9 @@
 	(SpinAxis): BlasterBuilder hangs them on a Motor6D the client turns while the
 	gun fires (Effects/BarrelSpin).
 
-	Every level has the same shape, longer with the level (StartLength to
-	EndLength studs). Frame: the barrel along -Z, +Y up, the hand at the origin
+	Every level and STAR blaster has the same shape and the same size (owner
+	2026-11-07: "všechny stejně velký, budou se lišit jenom stylem": Length studs;
+	the best one is the coolest, not the biggest). Frame: the barrel along -Z, +Y up, the hand at the origin
 	(on top of the grip). Parts through `part` (BlasterBuilder welds them), at
 	most MaxParts; no lights. Pure: Instance creation only.
 ]]
@@ -38,8 +39,7 @@ local KenneyBlaster = require(script.Parent.KenneyBlaster)
 local MinigunBlaster = {}
 
 MinigunBlaster.MaxParts = 96 -- per gun (phones: every player holds one)
-MinigunBlaster.StartLength = 2.6 -- level 1's length (studs): a small one, it grows with the level
-MinigunBlaster.EndLength = 5.6 -- level 10's length (the STAR blasters too)
+MinigunBlaster.Length = 5.6 -- every gun's length (studs)
 MinigunBlaster.RainbowCoreFrom = 5 -- the core glows in rainbow bands from this level (the STAR blasters too)
 
 local NEON = Enum.Material.Neon
@@ -147,12 +147,6 @@ local function vivid(c: Color3, saturation: number): Color3
 	return tame(Color3.fromHSV(h, math.max(sat, saturation), math.clamp(v, 0.78, 0.9)))
 end
 
--- A level's scale: studs per design unit (the gun is StartLength .. EndLength long).
-function MinigunBlaster.scale(level: number): number
-	local t = (math.clamp(level, 1, 10) - 1) / 9
-	return (MinigunBlaster.StartLength + (MinigunBlaster.EndLength - MinigunBlaster.StartLength) * t) / DESIGN_LENGTH
-end
-
 -- How many crystals a level grows (2 at level 1 ... 12 at level 10; the STAR blasters all 12).
 function MinigunBlaster.crystals(level: number): number
 	local lv = math.clamp(math.floor(level), 1, 10)
@@ -174,7 +168,7 @@ end
 	the barrel's line, and what spins about which axis).
 ]]
 function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.Skin, part: KenneyBlaster.PartFn): KenneyBlaster.Anchors
-	local S = MinigunBlaster.scale(level)
+	local S = MinigunBlaster.Length / DESIGN_LENGTH
 	local made = 0
 	local spin: { BasePart } = {} -- the barrels, the rim dots and the drum's lights
 	local colors = MinigunBlaster.palette(level, oreId, skin)

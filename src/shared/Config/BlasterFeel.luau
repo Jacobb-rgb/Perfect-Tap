@@ -98,6 +98,7 @@ BlasterFeel.Shots = {
 	Spiral = 0.32, -- how far off the barrels' axis a shot starts (studs)
 	Speed = 80, -- studs a second
 	Trail = 2, -- how long a shot's trail is (studs)
+	MinPath = 2.5, -- a shot flies this far at least (shotStart: the muzzle at or past the rock)
 	Pool = 48, -- shots in the air at most, every gun together
 	PhonePool = 24,
 	Reserve = 12, -- ... other players' guns leave this many for yours (your longest stream)
@@ -233,6 +234,31 @@ function BlasterFeel.glareStep(glare: number, dt: number, lit: boolean, level: n
 		return math.min(level, glare + dt / shots.LightUp)
 	end
 	return math.max(0, glare - dt / shots.LightDown)
+end
+
+--[[
+	Where a shot starts: the muzzle; when the target is closer than MinPath ahead of
+	it (every gun is long, owner 2026-11-07: close to a rock the muzzle is at or past
+	its surface) back along the barrels toward the hand, so it still flies forward and
+	lands. A target beside or behind the hand: from the hand, never a point on it.
+]]
+function BlasterFeel.shotStart(hand: Vector3, muzzle: Vector3, to: Vector3): Vector3
+	local axis = muzzle - hand
+	local reach = axis.Magnitude
+	if reach < 0.01 then
+		return muzzle
+	end
+	local unit = axis / reach
+	local minPath = BlasterFeel.Shots.MinPath
+	local ahead = (to - muzzle):Dot(unit)
+	if ahead >= minPath then
+		return muzzle
+	end
+	local start = muzzle - unit * math.min(minPath - ahead, reach)
+	if (to - start).Magnitude < minPath then
+		return to - unit * minPath
+	end
+	return start
 end
 
 -- The barrels' full speed (radians a second): one barrel goes by for every shot at FastRate.

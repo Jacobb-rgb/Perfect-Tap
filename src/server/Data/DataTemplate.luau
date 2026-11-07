@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 13, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once)
+	Version = 14, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -104,6 +104,8 @@ local DataTemplate = {
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
 	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
 	Wheel = { NextSpinAt = 0, Spins = 0 },
+	-- Night Shift's crate (NightShiftService): CrateAt = os.time() it was earned, Ready = one waits to be opened
+	NightShift = { CrateAt = 0, Ready = false },
 	-- daily / weekly quests (QuestService, QuestLogic): Day / Week = the UTC day / week number
 	-- the lists are for; Daily / Weekly = { { Id, Base (the Stat when given), Goal, Claimed } }
 	-- (QuestLogic.refresh rerolls a stale or broken list, so no migration is needed)
