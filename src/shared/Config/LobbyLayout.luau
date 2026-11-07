@@ -134,7 +134,8 @@ LobbyLayout.Budget = {
 	-- the inside ones lite, inside too) + decor 90 + the DROPPERS showroom 512 + the shopkeeper
 	-- golems still built there 264 (within HideDistance) = 25,577 (its counter 25,566),
 	-- tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,610)
-	StreamParts = 25610,
+	-- (2026-11-07, the big iron billboard: that gateway measures 25,691, + ~10: 25,610 -> 25,700)
+	StreamParts = 25700,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -273,10 +274,10 @@ LobbyLayout.Pieces = {
 		Id = "EventBoard",
 		Package = "Plaza",
 		-- a gantry over the east road: far enough along it that the gas giant stays in view from the town
-		Center = v(53, 0, 2),
+		Center = v(53.5, 0, 2),
 		Size = v(4, 30, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its feet)
 		Radius = 2,
-		Facing = v(-1, 0, 0.12), -- toward the plaza and the spawn
+		Facing = v(-1, 0, 0), -- toward the plaza and the spawn
 		Walkable = true, -- (under it: only its two feet stand on the ground, beside the road)
 		Note = "The big iron billboard (owner 2026-11-07): the events, so nothing sits on the player's screen.",
 	},

@@ -105,6 +105,9 @@ Violence and resubmit.**
   Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
+  **The Find of the Day** (owner 2026-11-07, `Events/FindOfDay`, `FindOfDayService`): the best ore
+  cleaned today, on the iron billboard only. Between servers (DataStore + MessagingService, never from
+  Studio) go a DisplayName (at most 20 characters, checked on arrival) and an ore id; no player text.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
   floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
   and ore luck raises that chance by its square root (at most x2.5), so every
