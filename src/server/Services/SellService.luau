@@ -423,8 +423,8 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 		-- a SECRET ore is never sold in a batch (owner 2026-10-29): only on its own, by choice
 		if not SecretOreConfig.isSecret(pick.Desc.O) then
 			table.insert(list, pick)
-		else
-			secrets = true
+		elseif not isDirty(pick.Desc) then
+			secrets = true -- (a Dirty Ore never gives its secret away)
 		end
 	end
 	local picks: { Pick } = {}
@@ -447,7 +447,7 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 			player,
 			if filter == "Dirty"
 				then "You have no Dirty Ore to sell."
-				elseif secrets then "Nothing to sell in one go: a secret ore sells one by one."
+				elseif secrets then "Nothing to sell: Sell All leaves secret ores alone."
 				else "You have nothing to sell."
 		)
 		return

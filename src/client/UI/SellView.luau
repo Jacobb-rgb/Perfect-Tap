@@ -107,7 +107,7 @@ export type Plan = {
 	Eligible: number, -- items the filter matches in total
 	Total: number, -- coins for the known items in Count
 	Dirty: number, -- Dirty Ore among Count (price unknown)
-	Secret: number, -- SECRET ores left out (never in a batch; they sell one by one)
+	Secret: number, -- cleaned SECRET ores left out (never in a batch; they sell one by one)
 	PenLeft: number, -- items of the Ore Pen past its cap: a next press sells them
 	BestOrder: number, -- rarest known item sold (Rarity order, 0 = none)
 }
@@ -358,7 +358,8 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 				else 0
 			-- (a SECRET ore is never sold in a batch: SellService skips it the same way)
 			if desc and SecretOreConfig.isSecret(desc.O) then
-				secret += if from == nil or from == section then count else 0
+				-- (a cleaned one is told; a Dirty Ore never gives its secret away)
+				secret += if desc.K ~= "Raw" and (from == nil or from == section) then count else 0
 			elseif desc then
 				for _ = 1, count do
 					table.insert(units, {
@@ -405,6 +406,12 @@ function SellView.needsConfirm(count: number, rarityOrder: number): boolean
 	return count > SellView.ConfirmCount or rarityOrder >= SellView.ConfirmRarity
 end
 
+-- Does Sell All ask first? Also whenever Dirty Ore is in it: it may be a rare ore sold at the raw price
+-- (any Dirty Ore asks, so the question gives no secret away).
+function SellView.planNeedsConfirm(plan: Plan): boolean
+	return plan.Dirty > 0 or SellView.needsConfirm(plan.Count, plan.BestOrder)
+end
+
 local function itemsText(count: number): string
 	return if count == 1 then "1 item" else `{Format.commas(count)} items`
 end
@@ -425,21 +432,23 @@ end
 
 -- Text for a Sell-all button's confirm step.
 function SellView.confirmPlanText(plan: Plan, filter: string): string
-	local capped = if plan.PenLeft > 0
-		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen ({Format.commas(plan.PenLeft)} more left after this).`
-		else ""
+	local capped = if plan.PenLeft > 0 then ` {Format.commas(plan.PenLeft)} more stay in your Ore Pen: press again.` else ""
 	if filter == "Dirty" then
 		return `Sell {Format.commas(plan.Count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.{capped}`
 	end
-	local price = if capped == "" and plan.Total > 0 then ` for {Format.money(plan.Total)}` else ""
-	local dirty = if plan.Dirty > 0 then ` {Format.commas(plan.Dirty)} of them are {ItemData.DirtyName}: Tobin pays the raw price.` else ""
-	local secret = if plan.Secret > 0 then " Secret ores stay: they sell one by one." else ""
-	return `Sell everything: {itemsText(plan.Count)}{price}?{dirty}{secret}{capped}`
+	local secret = if plan.Secret > 0 then " Secret ores stay." else ""
+	local clean = plan.Count - plan.Dirty
+	if plan.Dirty > 0 then
+		-- (the clean ones' price is known; a Dirty Ore's isn't, and it pays more than it looks)
+		local known = if clean > 0 then `{itemsText(clean)} for {Format.money(plan.Total)} and ` else ""
+		return `Sell {known}{Format.commas(plan.Dirty)} {ItemData.DirtyName} at the raw price?{secret}{capped}`
+	end
+	return `Sell {itemsText(clean)} for {Format.money(plan.Total)}?{secret}{capped}`
 end
 
--- Why Sell All has nothing to do (only SECRET ores left, or nothing at all).
+-- Why Sell All has nothing to do (only cleaned SECRET ores left, or nothing at all).
 function SellView.nothingText(plan: Plan): string
-	return if plan.Secret > 0 then "Nothing to sell in one go: a secret ore sells one by one." else "You have nothing to sell."
+	return if plan.Secret > 0 then "Nothing to sell: Sell All leaves secret ores alone." else "You have nothing to sell."
 end
 
 ---------------------------------------------------------------- the Pop look (the kit pieces this window needs)

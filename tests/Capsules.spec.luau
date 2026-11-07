@@ -930,6 +930,51 @@ return function(T, Loader)
 		local source = require("@lune/fs").readFile(Loader.root .. "/src/server/Services/CapsuleService.luau")
 		T.eq(string.find(source, '"Capsules", { Capsule', 1, true), nil, "no OpenUI on an egg's tab")
 		T.truthy(string.find(source, 'refuse(player, "Podium", capsuleId)', 1, true), "the server still checks the reach")
+		-- the reach: near its own podium only, past the panel's whole range
+		local CollectionService = Loader.game:GetService("CollectionService")
+		local had = rawget(CollectionService, "GetTagged")
+		local at = Vector3.new(100, 10, 50)
+		local function podium(capsule: string): any
+			return {
+				Position = at,
+				IsA = function(_, class: string)
+					return class == "BasePart"
+				end,
+				GetAttribute = function()
+					return capsule
+				end,
+			}
+		end
+		local list = { podium("Sky") }
+		rawset(CollectionService, "GetTagged", function()
+			return list
+		end)
+		local root: any = {
+			IsA = function(_, class: string)
+				return class == "BasePart"
+			end,
+		}
+		local who: any = {
+			Character = {
+				FindFirstChild = function()
+					return root
+				end,
+			},
+		}
+		local ok, err = pcall(function()
+			local reach = CapsuleService.PromptDistance + CapsuleService.PodiumSlack
+			T.truthy(reach >= 13, "reaches past the panel's whole range (EggPanel.ShowRange)")
+			root.Position = at + Vector3.new(reach - 0.1, 0, 0)
+			T.truthy(CapsuleService.nearPodium(who, "Sky"), "near it")
+			root.Position = at + Vector3.new(reach + 0.1, 0, 0)
+			T.falsy(CapsuleService.nearPodium(who, "Sky"), "too far")
+			root.Position = at
+			T.falsy(CapsuleService.nearPodium(who, "Royal"), "another egg's podium doesn't count")
+		end)
+		rawset(CollectionService, "GetTagged", had)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withWorld("Capsules: the EGGS temple has no Capsules prompt (its eggs have the clients' Buy Egg! prompts)", function(_w)

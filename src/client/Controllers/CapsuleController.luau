@@ -126,6 +126,7 @@ export type Result = {
 	Batch: number?,
 	Batches: number?,
 	Arrived: number?, -- os.clock() its result came (its first opening)
+	Shown: boolean?, -- its opening played to the end, or its golems were told another way
 	Note: string?, -- a notice that came with it (a receipt's own "inventory full"): shown with its opening
 }
 
@@ -1507,7 +1508,7 @@ end
 	chain's thread, and a watch ends an opening that takes longer than
 	StuckAfter seconds. Each of these warns, so the console says what happened.
 ]]
-CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is under 7
+CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is about 7
 
 local function safely(what: string, step: () -> ())
 	local ok, err = pcall(function(): any
@@ -1520,6 +1521,43 @@ local function safely(what: string, step: () -> ())
 end
 
 local chainThread: thread? = nil -- the thread that plays the chain
+local openingNow: Result? = nil -- the result it plays
+local untold: { string } = {} -- the golems of failed openings: named when the HUD is back (paid random items)
+
+-- A failed opening: Auto never buys through it; its golems are told when the HUD is back.
+local function openingFailed(result: Result?)
+	stopped("Failed")
+	if result and not result.Shown then
+		result.Shown = true
+		for _, golem in result.Golems do
+			if not golem.Deleted then
+				table.insert(untold, golem.Kind)
+			end
+		end
+	end
+end
+
+local function tellUntold()
+	if #untold == 0 then
+		return
+	end
+	local counts: { [string]: number } = {}
+	local names: { string } = {}
+	for _, kind in untold do
+		if not counts[kind] then
+			table.insert(names, kind)
+		end
+		counts[kind] = (counts[kind] or 0) + 1
+	end
+	table.clear(untold)
+	local parts: { string } = {}
+	for _, kind in names do
+		local info = GolemConfig.ById[kind]
+		local name = if info then info.Name else kind
+		table.insert(parts, if counts[kind] > 1 then `{counts[kind]}x {name}` else name)
+	end
+	HudController.toast("Your golems are safe: " .. table.concat(parts, ", "), "Info")
+end
 local chainCount = 0 -- which chain it is (a chain's watch ends with it)
 local openingSince = 0 -- os.clock() when the opening that plays began
 
@@ -1562,6 +1600,7 @@ local function endChain()
 	if view and shown and usingGamepad() then
 		GuiService.SelectedObject = CapsuleView.restButton(view) -- (never an OPEN button: A to skip must not buy)
 	end
+	safely("telling the golems", tellUntold)
 	pcall(Sfx.loop, "CaseCharge", false) -- (last: the HUD and the prompts never wait on a sound)
 end
 
@@ -1591,9 +1630,13 @@ local function play(result: Result)
 	local ok, err = pcall(function()
 		hatchOne(o, result, kinds)
 	end)
+	if ok then
+		result.Shown = true
+	end
 	currentRun = nil -- (also after a failing one)
 	if not ok then
 		warn("[CapsuleController] opening failed: " .. tostring(err))
+		openingFailed(result)
 		-- (V2: a step failing after the burst leaves no world tint and no charge hum to the next opening)
 		setMood(0, Color3.new(1, 1, 1), true)
 		pcall(Sfx.loop, "CaseCharge", false)
@@ -1623,15 +1666,18 @@ local function runChain()
 	while #queue > 0 do
 		local result = table.remove(queue, 1) :: Result
 		openingSince = os.clock()
+		openingNow = result
 		local ok, err = pcall(function(): any
 			play(result)
 			return nil
 		end)
 		if not ok then
 			warn("[CapsuleController] opening failed: " .. tostring(err))
+			openingFailed(result)
 			clearAfter(opening)
 		end
 	end
+	openingNow = nil
 	endChain()
 end
 
@@ -1650,9 +1696,47 @@ local function checkStuck(now: number): boolean
 	if stuck ~= coroutine.running() then
 		pcall(task.cancel, stuck)
 	end
+	openingFailed(openingNow)
 	clearAfter(opening)
 	task.spawn(runChain)
 	return true
+end
+
+--[[
+	The trace for the owner's test (2026-11-07: the HUD gone, nothing clickable,
+	no cause in the code): the HUD hidden for HudTraceAfter seconds with no
+	opening playing says once, in the console, everything that can hide it.
+	Silent when all of this looks fine: then something outside the game's
+	scripts hid it (Roblox's own Ctrl+Shift+G hides every gui).
+]]
+CapsuleController.HudTraceAfter = 20
+local hudAwaySince: number? = nil
+local hudTraced = false
+local function checkHudTrace(now: number): string?
+	local hud = HudController.refs()
+	local gui = if hud then hud.Gui else nil
+	if not gui then
+		return nil
+	end
+	local scale = gui:FindFirstChild("Scale")
+	local size = if scale and scale:IsA("UIScale") then scale.Scale else -1
+	if playing or (gui.Enabled and size ~= 0) then
+		hudAwaySince, hudTraced = nil, false
+		return nil
+	end
+	local since = hudAwaySince or now
+	hudAwaySince = since
+	if hudTraced or now - since < CapsuleController.HudTraceAfter then
+		return nil
+	end
+	hudTraced = true
+	local text =
+		`[CapsuleController] the HUD is hidden and no opening plays: Enabled={gui.Enabled} Scale={size} hudHidden={hudHidden} playing={playing} queue={#queue} prompts off for: {table.concat(
+			PromptController.suppressedReasons(),
+			","
+		)}`
+	warn(text)
+	return text
 end
 
 local function pump()
@@ -1941,6 +2025,12 @@ CapsuleController._test = {
 		return hudHidden
 	end,
 	checkStuck = checkStuck,
+	checkHudTrace = checkHudTrace,
+	openingSince = function(): number
+		return openingSince
+	end,
+	quote = CapsuleController.quote, -- (the real one: the egg panel's specs swap the module's)
+	buy = CapsuleController.buy,
 	pooled = function(capsuleId: string): number
 		return #poolOf(capsuleId, 3)
 	end,
@@ -1966,6 +2056,7 @@ CapsuleController._test = {
 		return selectionWatch ~= nil
 	end,
 	onPlaying = CapsuleController.onPlaying, -- (the real one: the egg panel's specs swap the module's)
+	onStop = CapsuleController.onStop,
 }
 
 function CapsuleController.init()
@@ -2046,6 +2137,7 @@ function CapsuleController.start()
 		if not ok then
 			warn("[CapsuleController] odds board: " .. tostring(err))
 		end
+		pcall(checkHudTrace, os.clock())
 		task.wait(CapsuleController.BoardTick)
 		if os.clock() - pageAt >= CapsuleController.BoardSeconds then
 			pageAt = os.clock()

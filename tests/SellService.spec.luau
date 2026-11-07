@@ -552,18 +552,104 @@ return function(T, Loader)
 		local plan = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1 }, {}, "All", nil)
 		T.eq(plan.Count, 0)
 		T.eq(plan.Secret, 1, "the view knows why")
-		T.truthy(string.find(SellView.nothingText(plan), "one by one", 1, true) ~= nil, "says why nothing sold")
+		T.truthy(string.find(SellView.nothingText(plan), "secret ores", 1, true) ~= nil, "says why nothing sold")
 		w.notes = {}
 		act(w, "SellAll", { Filter = "All" })
-		T.truthy(string.find(notes(w, "Notify", w.player)[1].A.Text, "one by one", 1, true) ~= nil, "the server says it too")
+		T.truthy(string.find(notes(w, "Notify", w.player)[1].A.Text, "secret ores", 1, true) ~= nil, "the server says it too")
+		-- a dirty secret never gives itself away
+		T.eq(SellView.plan({ ["Raw|HollowEye||"] = 1 }, {}, "All", nil).Secret, 0, "its Dirty Ore isn't named a secret")
+		T.eq(SellView.nothingText(SellView.plan({ ["Raw|HollowEye||"] = 1 }, {}, "All", nil)), "You have nothing to sell.")
 		local mixed = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1, ["Clean|Coal|Rough|"] = 12 }, {}, "All", nil)
 		T.truthy(string.find(SellView.confirmPlanText(mixed, "All"), "Secret ores stay", 1, true) ~= nil, "the confirm tells")
 		local big = SellView.plan({ ["Raw|Coal||"] = MAX + 10 }, { ["Raw|Coal||"] = 7 }, "All", nil)
 		T.eq(big.PenLeft, 10, "only the pen's own rest")
 		T.truthy(
-			string.find(SellView.confirmPlanText(big, "All"), "10 more left", 1, true) ~= nil,
+			string.find(SellView.confirmPlanText(big, "All"), "10 more stay", 1, true) ~= nil,
 			"the rest, not the total with the backpack"
 		)
+		-- Dirty Ore always asks (it may be a rare ore at the raw price), and the price never hides it
+		local few = SellView.plan({ ["Raw|Heartstone||"] = 2, ["Clean|Gold|Pristine|"] = 1 }, {}, "All", nil)
+		T.eq(few.Count, 3)
+		T.falsy(SellView.needsConfirm(few.Count, 0), "few, and no known rare one")
+		T.truthy(SellView.planNeedsConfirm(few), "Dirty Ore asks first")
+		local words = SellView.confirmPlanText(few, "All")
+		T.truthy(string.find(words, "1 item for ", 1, true) and string.find(words, "2 Dirty Ore at the raw price", 1, true), words)
+		T.eq(string.find(words, "Heartstone", 1, true), nil, "never its secret")
+		T.truthy(
+			string.find(SellView.confirmPlanText(SellView.plan({ ["Clean|Coal|Rough|"] = 300 }, {}, "All", nil), "All"), "$", 1, true),
+			"the price shows when capped too"
+		)
+	end)
+
+	T.test("SellController: the one Sell All sends All, asking first when it must", function()
+		-- (the client's controllers read the local player when they load)
+		local Players = Loader.game:GetService("Players")
+		local hadLocal = rawget(Players, "LocalPlayer")
+		rawset(Players, "LocalPlayer", hadLocal or {
+			Name = "Me",
+			UserId = 1,
+			WaitForChild = function()
+				return Instance.new("Folder")
+			end,
+			GetAttribute = function() end,
+			GetAttributeChangedSignal = function()
+				return { Connect = function() end }
+			end,
+		})
+		local Sell = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.SellController")
+		rawset(Players, "LocalPlayer", hadLocal)
+		local State = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.StateController")
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local sent: { { any } } = {}
+		local Sounds = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Sfx")
+		local send, get, mult, play = Net.send, State.get, State.sellMult, Sounds.play
+		Sounds.play = function() end
+		local Input = Loader.game:GetService("UserInputService")
+		local hadInput = rawget(Input, "GetLastInputType")
+		rawset(Input, "GetLastInputType", function()
+			return roblox.Enum.UserInputType.Keyboard
+		end)
+		local storage: { [string]: number } = {}
+		local view = SellView.build(false)
+		Net.send = function(...)
+			table.insert(sent, { ... })
+		end
+		State.get = function(): any
+			return { Storage = storage }
+		end
+		State.sellMult = function(): number
+			return 1
+		end
+		Sell._test.setView(view)
+		local ok, err = pcall(function()
+			storage = {}
+			Sell._test.setHands({})
+			Sell._test.press()
+			T.eq(#sent, 0, "nothing to sell: nothing sent")
+			-- a few clean ores: no question
+			storage = { ["Clean|Coal|Rough|"] = 2 }
+			Sell._test.press()
+			T.eq(#sent, 1, "sent at once")
+			T.eq(sent[1][1], "SellAction")
+			T.eq(sent[1][2], "SellAll")
+			T.eq(sent[1][3].Filter, "All", "the filter the server knows")
+			-- with Dirty Ore: the confirm first, sent on its yes
+			Sell._test.unlock()
+			storage = { ["Raw|Coal||"] = 1 }
+			Sell._test.press()
+			T.eq(#sent, 1, "asks first")
+			T.truthy(view.Confirm.Visible, "the confirm shows")
+			T.truthy(Sell._test.confirm(), "its yes")
+			T.eq(#sent, 2, "then sent")
+			T.eq(sent[2][3].Filter, "All")
+		end)
+		Net.send, State.get, State.sellMult, Sounds.play = send, get, mult, play
+		rawset(Input, "GetLastInputType", hadInput)
+		Sell._test.setView(nil)
+		Sell._test.unlock()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withWorld("SellService: at most MaxPerRequest items per request", function(w)

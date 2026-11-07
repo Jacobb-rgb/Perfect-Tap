@@ -3,7 +3,9 @@
 	unlocks everything for every player (blaster 10, the elevator, all
 	hoverboards, lots of coins). Used for HRA_K_TESTOVANI/*_TEST_vse_odemceno_*.rbxl.
 
-	lune run tools/lune/make_test_place.luau build/TerraForge.rbxl <out.rbxl>
+	lune run tools/lune/make_test_place.luau build/TerraForge.rbxl <out.rbxl> [trace]
+
+	"trace" also adds tools/lune/test_place/egg_trace.client.luau: a Studio-only panel that says what blocks the next egg.
 ]]
 
 local fs = require("@lune/fs")
@@ -56,5 +58,11 @@ for _, player in Players:GetPlayers() do
 end
 ]]
 script.Parent = sss
+if process.args[3] == "trace" then
+	local trace = roblox.Instance.new("LocalScript")
+	trace.Name = "TEST_VejceStopa"
+	trace.Source = fs.readFile("tools/lune/test_place/egg_trace.client.luau")
+	trace.Parent = game:GetService("StarterPlayer"):FindFirstChildOfClass("StarterPlayerScripts")
+end
 fs.writeFile(dst, roblox.serializePlace(game))
 print("wrote " .. dst)

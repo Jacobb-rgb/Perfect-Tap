@@ -257,7 +257,7 @@ local function sellEverything()
 		Sfx.play("UIDeny")
 		return
 	end
-	confirmThen(SellView.needsConfirm(plan.Count, plan.BestOrder), SellView.confirmPlanText(plan, "All"), function()
+	confirmThen(SellView.planNeedsConfirm(plan), SellView.confirmPlanText(plan, "All"), function()
 		send("SellAll", { Filter = "All" }, true)
 	end)
 end
@@ -608,6 +608,28 @@ local function onEarned(payload: any)
 end
 
 ---------------------------------------------------------------- lifecycle
+
+-- For the Lune specs (tests/SellService.spec.luau): the Sell All button's press and the confirm's yes.
+SellController._test = {
+	press = sellEverything,
+	setView = function(view: SellView.Refs?)
+		refs = view
+	end,
+	setHands = function(summary: { [string]: number })
+		hands = summary
+	end,
+	unlock = function()
+		lockedUntil = 0
+	end,
+	confirm = function()
+		local waiting = pending
+		pending = nil
+		if waiting then
+			waiting.Run()
+		end
+		return waiting ~= nil
+	end,
+}
 
 function SellController.init()
 	Net.listen("OpenUI", function(kind, payload)

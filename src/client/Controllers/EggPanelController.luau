@@ -1918,6 +1918,7 @@ EggPanelController._test = {
 		return handler ~= nil
 	end,
 	watch = watchStall,
+	watchFree = watchFree,
 	state = function(): { [string]: any }
 		return {
 			Current = current,

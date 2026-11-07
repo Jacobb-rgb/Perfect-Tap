@@ -25,7 +25,7 @@
 
 	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
 	"Round"): the game menu is the reel's grid of dark tiles (RoundMenu:
-	Store, Hoverboard, Inventory, Codex, More; owner 2026-11-07: "the only
+	Store, Hover, Inventory, Codex, More; owner 2026-11-07: "the only
 	ones I ever used", the rest behind More: RoundBehindMore), two a
 	row in a tall block with the TRAIN chip under it as wide as it (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
@@ -72,7 +72,7 @@ HudBubble.Menu = {
 -- Inventory, SideMenuController Codex).
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
-	{ Id = "Ride", Label = "Hoverboard", Icon = "hoverboard", Role = "Ride" },
+	{ Id = "Ride", Label = "Hover", Icon = "hoverboard", Role = "Ride" }, -- ("Hoverboard" is 6 pt on a phone)
 	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
 	{ Id = "Codex", Label = "Codex", Icon = "book", Role = "Codex" },
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
@@ -99,7 +99,9 @@ HudBubble.RoundMoreOrder = {
 	Settings = 11,
 } :: { [string]: number }
 
-HudBubble.RoundMoreLabels = { Quests = "Daily" } :: { [string]: string }
+-- (Garage: the boards' window; the left tile, Hover, rides)
+-- (Boosts: the luck boosts; the top row's Shop is the Robux store)
+HudBubble.RoundMoreLabels = { Quests = "Daily", Hoverboards = "Garage", Shop = "Boosts" } :: { [string]: string }
 
 -- Their counts don't add up on More: Build's counts the machines waiting to be placed, always there, not news.
 HudBubble.MoreQuiet = { Build = true } :: { [string]: boolean }

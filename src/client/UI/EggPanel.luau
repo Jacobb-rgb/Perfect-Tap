@@ -305,8 +305,8 @@ end
 --[[
 	The capsule id of a temple egg (a Model whose Capsule attribute names a
 	capsule of the stall: GolemBuilder.capsule sets it), or nil: not a
-	limited edition's capsule and not a podium-only egg (the SKY EGG keeps
-	its own podium prompt and board, display-only here until the owner says).
+	limited edition's capsule and not a podium-only egg (the SKY EGG stands
+	free in the world: freeEggId).
 ]]
 function EggPanel.eggId(instance: Instance): string?
 	if not instance:IsA("Model") then
@@ -344,7 +344,7 @@ end
 ]]
 EggPanel.FreeTurn = 0.7 -- the cosine of the turn (about 45 degrees)
 EggPanel.FreeOut = 6 -- studs from the egg's axis at most (the SKY EGG's clouds reach far: the E stays by its shell)
-EggPanel.FreeRise = 4 -- studs over the egg's foot: by the player's chest (at the egg's middle the panel over it left the screen)
+EggPanel.FreeRise = 1 -- studs over the egg's foot, the podium's lowest step: higher, and on PC the panel over the egg leaves the screen from the outer steps
 
 -- The prompts' point of a free-standing egg, on its `side`.
 function EggPanel.freePoint(center: Vector3, bottom: number, half: number, side: Vector3): Vector3
