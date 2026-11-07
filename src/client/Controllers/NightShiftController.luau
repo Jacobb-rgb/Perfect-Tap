@@ -64,7 +64,8 @@ end
 
 -- Nothing else holds the screen (QuestController's rule, and an egg opening).
 function NightShiftController.screenFree(): boolean
-	for name, method in { TutorialController = "isShown", CleaningController = "isActive", CapsuleController = "showing" } do
+	for _, pair in { { "TutorialController", "isShown" }, { "CleaningController", "isActive" }, { "CapsuleController", "showing" } } do
+		local name, method = pair[1], pair[2]
 		local controller = MenuPanels.controller(name)
 		if controller and type(controller[method]) == "function" then
 			local ok, busy = pcall(controller[method])
