@@ -9,6 +9,7 @@ local ItemData = require(script.Parent.Parent.Config.ItemData)
 local OreData = require(script.Parent.Parent.Config.OreData)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 local WeatherConfig = require(script.Parent.Parent.Config.WeatherConfig)
+local WeatherBonus = require(script.Parent.Parent.Weather.WeatherBonus)
 local WeatherLogic = require(script.Parent.Parent.Weather.WeatherLogic)
 local FindOfDay = require(script.Parent.FindOfDay)
 
@@ -44,20 +45,23 @@ function EventBoardLogic.nextWeather(now: number): WeatherLogic.Event?
 	return nil
 end
 
+-- The weather now and how long it lasts, with its bonus (WeatherBonus: a rainbow's after the
+-- rain too); in clear weather when the next one comes.
 function EventBoardLogic.weatherPage(now: number, force: any?): Page
-	local state = WeatherLogic.at(now, force)
-	local after = EventBoardLogic.nextWeather(now)
-	local small = if after then `Next: {after.Kind} in {EventBoardLogic.clock(after.Start - now)}` else ""
-	local event = state.Event
-	if event and state.Kind ~= "Clear" then
+	local bonus = WeatherBonus.at(now, force)
+	if bonus then
+		local left = WeatherBonus.left(now, force)
 		return {
 			Id = "Weather",
 			Title = "WEATHER",
-			Big = `{state.Kind} {EventBoardLogic.clock(event.Start + event.Length - now)}`,
-			Small = small,
+			Big = if left > 0 then `{bonus.Kind} {EventBoardLogic.clock(left)}` else bonus.Kind,
+			Small = bonus.Text,
 			Color = SKY,
+			BigColor = bonus.Color,
 		}
 	end
+	local after = EventBoardLogic.nextWeather(now)
+	local small = if after then `Next: {after.Kind} in {EventBoardLogic.clock(after.Start - now)}` else ""
 	return { Id = "Weather", Title = "WEATHER", Big = "Clear skies", Small = small, Color = SKY }
 end
 
