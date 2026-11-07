@@ -354,3 +354,21 @@ Median of 120 players per profile:
 Levels reached (Typical): 10 at 48 min, 20 at 2h 25m, 30 at 6h. Skilled: 40 at 7h.
 Every case stays under the 10 % limit the integrator set, so the +1 %/level share and the
 +50 % cap stay as they are.
+
+## Night Shift (2026-11-07)
+
+The owner's Night Shift: free 25 % for 8 h, the pass stays at 50 % for 12 h, plus a free crate once a day. The sim
+plays in sessions now: `SessionSeconds` of play, then `AwaySeconds` away, the podiums paying `OfflineRate` for at most
+`OfflineHours`, the crate paying 70 % x `CrateMinutes` of podium income (what the code pays on average: its coins prize).
+Pass them per scenario in an `override=` file. Scenario keys stay in `A` for the next scenario, so run a baseline
+without sessions first or alone.
+
+Played time to Blaster 10 (12 simulated players, money arrives at session ends, so these are rough):
+
+| Player | No breaks | Before (50 %, 5 h) | Night Shift (25 %, 8 h, crate) | Pass before (50 %, 12 h) | Pass now (+ crate) |
+|---|---|---|---|---|---|
+| Typical, 1 h a day | 5h 31m | 4h 09m | 4h 24m | 3h 20m | 3h 27m |
+| Casual, 30 min a day | 8h 18m | 4h 15m | 4h 33m | - | - |
+
+Slightly slower than before for a free player, as the owner's picture asks for (he was told, 2026-11-07). Machines
+working offline come later with the feeder, and only on ore the player put in it.

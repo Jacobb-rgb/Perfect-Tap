@@ -96,6 +96,7 @@ local PromptConfig = require(Shared.Config.PromptConfig)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
+local HiddenScale = require(script.Parent.Parent.Util.HiddenScale)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
@@ -855,7 +856,7 @@ local function hideGui(gui: Instance)
 	hiddenGuis[gui] = entry
 	scale.Scale = 0
 	entry.Connection = scale:GetPropertyChangedSignal("Scale"):Connect(function()
-		if scale.Scale ~= 0 then
+		if not HiddenScale.is(scale.Scale) then
 			entry.Wanted = scale.Scale -- (the HUD's scale changed: kept for later)
 			scale.Scale = 0
 		end
@@ -897,9 +898,11 @@ local function hideHud(on: boolean)
 		end
 		for _, entry in hiddenGuis do
 			entry.Connection:Disconnect()
-			-- (a scale written meanwhile wins: the watcher may not have seen the last write)
+			-- (a scale written meanwhile wins: the watcher may not have seen the last write;
+			-- never hidden again: one that was hidden already gets the HUD's own scale)
 			local now = entry.Scale.Scale
-			entry.Scale.Scale = if now ~= 0 then now else entry.Wanted
+			local wanted = if not HiddenScale.is(now) then now else entry.Wanted
+			entry.Scale.Scale = if not HiddenScale.is(wanted) then wanted else HudController.uiScale()
 		end
 		table.clear(hiddenGuis)
 	end

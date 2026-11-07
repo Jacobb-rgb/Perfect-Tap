@@ -523,7 +523,7 @@ return function(T, Loader)
 		T.eq(w.data.LastSeen, NOW, "LastSeen = now on load")
 		T.eq(podium.pending(w.player), 3600, "one hour waiting")
 		local amount = podium.payOffline(w.player, true)
-		T.near(amount, perSecond * EconomyConfig.Offline.Rate * 3600, 1e-6, "50 % of an hour")
+		T.near(amount, perSecond * EconomyConfig.Offline.Rate * 3600, 1e-6, "the free rate for an hour")
 		T.near(w.data.Coins, amount, 1e-6, "paid")
 		T.near(w.data.Stats.PodiumEarned, amount, 1e-6, "counted as podium money")
 		local popup = lastNote(w, "OpenUI")
@@ -540,18 +540,65 @@ return function(T, Loader)
 		local perSecond = income(GOLD)
 		local base = EconomyConfig.Offline.BaseHours * 3600
 		local extended = EconomyConfig.Offline.ExtendedHours * 3600
-		-- 10 hours away: capped at 5 h, or 10 h with the extension
+		-- 10 hours away: capped at 8 h at 25 %, or 10 h at 50 % with the extension
 		w.data.LastSeen = NOW - 36000
 		podium.loaded(w.player, w.data)
-		T.near(podium.payOffline(w.player, true), perSecond * 0.5 * base, 1e-6, "base cap")
+		T.near(podium.payOffline(w.player, true), perSecond * EconomyConfig.Offline.Rate * base, 1e-6, "base cap")
 		w.player.attributes.Perk_OfflineExtension = true
 		w.data.LastSeen = NOW - 36000
 		podium.loaded(w.player, w.data)
-		T.near(podium.payOffline(w.player, true), perSecond * 0.5 * 36000, 1e-6, "extension: all 10 h")
+		T.near(podium.payOffline(w.player, true), perSecond * EconomyConfig.Offline.PassRate * 36000, 1e-6, "extension: all 10 h")
 		w.data.LastSeen = NOW - 3 * 24 * 3600
 		podium.loaded(w.player, w.data)
-		T.near(podium.payOffline(w.player, true), perSecond * 0.5 * extended, 1e-6, "extension cap")
+		T.near(podium.payOffline(w.player, true), perSecond * EconomyConfig.Offline.PassRate * extended, 1e-6, "extension cap")
 		T.eq(lastNote(w, "OpenUI").B.Hours, EconomyConfig.Offline.ExtendedHours, "popup says 12 h")
+		T.eq(lastNote(w, "OpenUI").B.Rate, EconomyConfig.Offline.PassRate, "and 50 %")
+		-- the return hook: its answer goes into the window, a broken one never costs the coins
+		local answers = 0
+		PodiumService.onReturn(function()
+			answers += 1
+			return { Crate = true, PenFull = true }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		T.truthy(podium.payOffline(w.player, true) > 0, "paid with the hook")
+		T.eq(answers, 1, "the hook ran")
+		T.eq(lastNote(w, "OpenUI").B.Crate, true, "its answer in the window")
+		T.eq(lastNote(w, "OpenUI").B.PenFull, true, "the full pen too")
+		PodiumService.onReturn(function(): any
+			error("broken")
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		T.truthy(podium.payOffline(w.player, true) > 0, "a broken hook never costs the coins")
+		-- no window (leaving in the first seconds): the hook still runs, a crate stays earned
+		local quiet = 0
+		PodiumService.onReturn(function(): any
+			quiet += 1
+			return { Crate = true }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		podium.payOffline(w.player, false)
+		T.eq(quiet, 1, "the hook ran without a window")
+		-- the crate alone opens the window; without a crate or coins nothing does
+		w.data.Podiums = {}
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		w.notes = {}
+		T.eq(podium.payOffline(w.player, true), 0, "no coins")
+		T.eq(lastNote(w, "OpenUI").B.Crate, true, "the crate alone opens it")
+		PodiumService.onReturn(function(): any
+			return { Crate = false, PenFull = true }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		w.notes = {}
+		podium.payOffline(w.player, true)
+		T.eq(lastNote(w, "OpenUI"), nil, "nothing to show, no window")
+		PodiumService.onReturn(function(): any
+			return nil
+		end)
 		-- nothing for: short breaks, a clock in the future, broken or ancient values
 		local coins = w.data.Coins
 		for _, last in { NOW - 30, NOW + 600, 0, -5, 0 / 0, math.huge, "1700000000", 1000, NOW - 10 * 365 * 24 * 3600 } do
@@ -576,7 +623,7 @@ return function(T, Loader)
 		podium.loaded(w.player, w.data)
 		w.now = NOW + 2
 		podium.release(w.player, w.data)
-		T.near(w.data.Coins, income(GOLD) * 0.5 * 7200, 1e-6, "paid on leave")
+		T.near(w.data.Coins, income(GOLD) * EconomyConfig.Offline.Rate * 7200, 1e-6, "paid on leave")
 		T.eq(lastNote(w, "OpenUI"), nil, "no popup for a player who left")
 		T.eq(w.data.LastSeen, NOW + 2, "LastSeen at leave")
 		T.eq(podium.pending(w.player), nil, "nothing pending")

@@ -114,7 +114,7 @@ function LightingController.currentZone(): string
 	return currentZonePreset
 end
 
--- The space skybox (LightingConfig.Skybox) once all six faces are uploaded.
+-- The picture sky (LightingConfig.Skybox) once all six faces are uploaded.
 function LightingController.applySkybox(sky: Sky): boolean
 	local cfg = LightingConfig.Skybox
 	local ids = {
@@ -134,11 +134,12 @@ function LightingController.applySkybox(sky: Sky): boolean
 	sky.SkyboxLf = ids.Lf
 	sky.SkyboxRt = ids.Rt
 	sky.SkyboxUp = ids.Up
+	sky.CelestialBodiesShown = cfg.ShowSun
 	return true
 end
 
 -- The Sky object (default skybox, big low sun, no stars) if the place has
--- none, with the space skybox when it is uploaded.
+-- none, with the picture sky when it is uploaded.
 function LightingController.ensureSky(): Sky
 	local sky = Lighting:FindFirstChildOfClass("Sky")
 	if sky then
@@ -156,13 +157,20 @@ function LightingController.ensureSky(): Sky
 	return created
 end
 
--- Soft pink sunset clouds (Workspace.Terrain.Clouds) if the place has none.
+-- Soft pink sunset clouds (Workspace.Terrain.Clouds) if the place has none;
+-- none at all over the picture sky, which has its own.
 function LightingController.ensureClouds(): Clouds?
 	local terrain = Workspace:FindFirstChildOfClass("Terrain")
 	if not terrain then
 		return nil
 	end
 	local clouds = terrain:FindFirstChildOfClass("Clouds")
+	if LightingConfig.skyboxReady() and not LightingConfig.Skybox.TerrainClouds then
+		if clouds then
+			clouds.Enabled = false
+		end
+		return nil
+	end
 	if clouds then
 		return clouds
 	end
