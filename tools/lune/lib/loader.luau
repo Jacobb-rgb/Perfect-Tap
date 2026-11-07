@@ -17,6 +17,7 @@ local serde = require("@lune/serde")
 local task = require("@lune/task")
 
 local Loader = {}
+Loader.recordingPresses = false -- specs: true while they build buttons whose presses they fire (Loader.press)
 
 local patched = false
 
@@ -72,9 +73,41 @@ local function applyPatches()
 			Wait = function() end,
 		}
 	end
+	-- A button's Activated keeps its handlers while a spec records presses (Loader.recordPresses), so
+	-- Loader.press can fire them; otherwise it is a fake signal like the rest (bakes and previews
+	-- get no attribute from it).
+	local pressHandlers: { [number]: { (...any) -> () } } = {}
+	local pressIds = 0
+	pcall(roblox.implementProperty, "GuiButton", "Activated", function(self: any)
+		if not Loader.recordingPresses then
+			return fakeSignal()
+		end
+		local id = self:GetAttribute("__press")
+		if id == nil then
+			pressIds += 1
+			id = pressIds
+			self:SetAttribute("__press", id)
+		end
+		local signal = fakeSignal()
+		signal.Connect = function(_, fn: (...any) -> ())
+			local list = pressHandlers[id] or {}
+			pressHandlers[id] = list
+			table.insert(list, fn)
+			return { Disconnect = function() end, Connected = true }
+		end
+		return signal
+	end)
+	-- Fires the Activated handlers a button got while presses were recorded; false if it got none.
+	function Loader.press(button: any): boolean
+		local id = button:GetAttribute("__press")
+		local list = if id ~= nil then pressHandlers[id] else nil
+		for _, fn in list or {} do
+			fn()
+		end
+		return list ~= nil and #list > 0
+	end
 	for _, pair in
 		{
-			{ "GuiButton", "Activated" },
 			{ "GuiButton", "MouseButton1Click" },
 			{ "GuiButton", "MouseButton1Down" },
 			{ "GuiButton", "MouseButton1Up" },

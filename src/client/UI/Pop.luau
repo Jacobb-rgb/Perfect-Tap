@@ -1712,6 +1712,8 @@ export type TileSpec = {
 	Art: string?, -- a whole-tile picture (IconAssets.TileArt) instead of the face and the word
 }
 
+Pop.ArtWordShare = 0.3 -- a picture tile's word (Label) as a share of the tile
+
 --[[
 	A left HUD tile (the owner's tile photo): a painted rounded square, the
 	icon inside it, the word in white with a black edge at the bottom. With no
@@ -1749,13 +1751,15 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		IconAssets.applyTileArt(art, o.Art)
 		art:SetAttribute("Icon", "tile_" .. o.Art)
 		Pop.fxTag(face, "Press")
-		local word = Pop.text(face, o.Label, math.floor(s * 0.2), {
+		-- (the one live word on a picture: "Stop" while riding tells a touch rider a tap stops the
+		-- ride; Pop.ArtWordShare of the tile, 13 pt on a phone's 44 pt tile)
+		local word = Pop.text(face, o.Label, math.floor(s * Pop.ArtWordShare), {
 			Name = "Label",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = PopTheme.Outline,
 			BackgroundTransparency = 0,
-			Position = UDim2.fromScale(0.5, 0.84),
-			Size = UDim2.fromScale(0.88, 0.24),
+			Position = UDim2.fromScale(0.5, 0.8),
+			Size = UDim2.fromScale(0.92, Pop.ArtWordShare + 0.06),
 			TextScaled = true,
 			Visible = false,
 			ZIndex = 4,

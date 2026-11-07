@@ -895,6 +895,11 @@ updateRideButton = function()
 	button.Holder.Visible = button.Tile or equipped ~= "" or riding
 	local hint, glyph = rideHint()
 	HoverboardView.setRiding(button, riding, hint, glyph)
+	-- (the open window's RIDE / STOP follows too: knocked off a board, it says RIDE again)
+	local view = refs
+	if view and isOpen then
+		HoverboardView.setRideWord(view, riding)
+	end
 end
 
 local function showMessage(text: string, kind: string?)
@@ -1031,6 +1036,7 @@ local function onCard(card: HoverboardView.Card)
 	end
 	if view.Selected ~= card.Board.Id then
 		HoverboardView.select(view, card.Board.Id)
+		HoverboardView.setRideWord(view, HoverboardController.isRiding())
 	end
 	Sfx.play("UIClick")
 end

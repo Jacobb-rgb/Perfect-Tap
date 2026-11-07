@@ -1044,6 +1044,7 @@ local OWNED_KEYS = {
 	{ "EmoteController", "Key" },
 	{ "GolemController", "ToggleKey" },
 	{ "HoverboardController", "Key" },
+	{ "HoverboardController", "WindowKey" }, -- R: the hoverboards' window (never opened unseen under a hatch)
 	{ "ArtifactController", "BookKey" },
 	{ "BoostController", "OpenKeys" },
 }

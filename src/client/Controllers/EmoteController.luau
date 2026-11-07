@@ -264,12 +264,15 @@ function EmoteController.start()
 	if not AnimConfig.Emotes then
 		return
 	end
+	-- (the round look: no emotes at all, owner 2026-11-07: "odstranit i klávesu N"; the code stays for later)
+	if PopTheme.round() then
+		return
+	end
 	ContextActionService:BindAction(KEY_ACTION, onKey, false, EmoteController.Key)
 	-- the EMOTES tile behind MORE (the light UI; touch and gamepad open the menu here;
 	-- owner 2026-10-28: the SPIN tile took its place next to MORE, the menu keeps two rows)
 	local hud = HudController.refs()
-	-- (the round look has no tile without a picture, owner 2026-11-07: the N key opens the menu)
-	if hud and hud.Menu and hud.Menu:GetAttribute("Bubble") and not PopTheme.round() then
+	if hud and hud.Menu and hud.Menu:GetAttribute("Bubble") then
 		local face = HudBubble.addMore(hud.Menu, EmoteController.TileId, EmoteController.TileSpec)
 		face.Activated:Connect(function()
 			Sfx.play("UIClick")

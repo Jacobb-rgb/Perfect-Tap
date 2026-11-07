@@ -24,8 +24,9 @@
 	Designed for 720 design units of screen height.
 
 	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
-	"Round"): the game menu is the reel's grid of dark tiles (RoundMenu:
-	Store, Rebirth, Golems, Inventory, Spin, Ride, Daily, Build, More), two a
+	"Round"): the game menu is the owner's picture tiles (RoundMenu: Store,
+	Rebirth, Golems, Inventory, Ride, Build, Elevator, Trade, More; behind
+	More: Index, Settings, Daily, Spin, Boosts, RoundMoreOrder), two a
 	row in a tall block with the TRAIN chip under it as wide as it (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
 	screen; touch screens keep it wide at the top, out of the thumbstick's
@@ -66,30 +67,40 @@ HudBubble.Menu = {
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
--- The round look's game menu (owner 2026-11-07: everything with a picture stands here, IconAssets.
--- TileArt; More only says "coming soon"): every tile hidden until a controller claims it
--- (StoreController Store, SideMenuController Rebirth / Golems / Quests / Codex / Elevator / Shop /
--- Settings and More, BackpackController Inventory, WheelController Spin, HoverboardView Ride,
--- BuildView Build). Shop is the luck boosts; Boosts and Settings keep their word until their pictures come.
+-- The round look's game menu (owner 2026-11-07: his picture tiles, IconAssets.TileArt; then "dej do
+-- More index, settings, daily, spin, boosts", two a row): every tile hidden until a controller
+-- claims it (StoreController Store, SideMenuController Rebirth / Golems / Elevator, BackpackController
+-- Inventory, HoverboardView Ride, BuildView Build, SideMenuController Trade; More by the first tile
+-- behind it, HudBubble.addMore).
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
 	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
 	{ Id = "Golems", Label = "Golems", Icon = "golem_GildedPorter", Role = "Golems" },
 	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
-	{ Id = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel" },
 	{ Id = "Ride", Label = "Ride", Icon = "hoverboard", Role = "Ride" },
-	{ Id = "Quests", Label = "Daily", Icon = "medal", Role = "Quests" },
 	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
-	{ Id = "Codex", Label = "Codex", Icon = "book", Role = "Codex" },
 	{ Id = "Elevator", Label = "Elevator", Icon = "lift", Role = "Base" },
-	{ Id = "Shop", Label = "Boosts", Icon = "clover", Role = "Boosts" },
-	{ Id = "Settings", Label = "Settings", Icon = "cog", Role = "Settings" },
 	{ Id = "Trade", Label = "Trade", Icon = "more", Role = "More" }, -- coming soon (HudBubble.RoundSoon)
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
 -- The tiles that only say "coming soon" for now (a sticker and a toast: SideMenuController).
-HudBubble.RoundSoon = { "Trade", "More" }
+HudBubble.RoundSoon = { "Trade" }
+
+-- Tiles their own controllers claim (claimTile) that stand behind More in the round look.
+HudBubble.RoundBehindMore = {
+	Wheel = { Label = "Spin", IconName = "Wheel" }, -- WheelController; its FREE! shows on More too
+} :: { [string]: { Label: string, IconName: string } }
+
+-- Behind More in the round look, in the owner's order (side menu entries and RoundBehindMore).
+HudBubble.RoundMoreOrder = { Codex = 1, Settings = 2, Quests = 3, Wheel = 4, Shop = 5 } :: { [string]: number }
+
+-- Their words behind More (the pictures carry them; the word shows if a picture is missing). Shop
+-- is the luck boosts: the top row's Shop is the Robux store.
+HudBubble.RoundMoreLabels = { Codex = "Index", Quests = "Daily", Shop = "Boosts" } :: { [string]: string }
+
+-- The More flyout's tiles a row in the round look (the owner's two a row).
+HudBubble.RoundMoreColumns = 2
 
 -- The round look's tile accents (the reel: every dark tile its own colour on the edge and the lip).
 HudBubble.RoundPaints = {
@@ -109,11 +120,7 @@ HudBubble.RoundMain = {
 	Store = true,
 	Rebirth = true,
 	Golems = true,
-	Quests = true,
-	Codex = true,
 	Elevator = true,
-	Shop = true,
-	Settings = true,
 } :: { [string]: boolean }
 
 -- Does this screen show the "coming soon" tiles? Touch screens keep the room (above the thumbstick).
@@ -128,8 +135,9 @@ function HudBubble.roundCount(layout: Layout): number
 end
 
 -- The side menu entries with no tile in the round look (owner 2026-11-07, no picture: "only things
--- with pictures"): the artifacts have their stand in town, the boards the Hall of Fame, and the
--- hoverboards' window opens from the Hoverboard tile and its R key.
+-- with pictures"): the artifacts have their stand in town, the hoverboards' window opens from the
+-- Hoverboard tile and its R key, and the HALL OF FAME panel has no way in ("jen tabule v lobby":
+-- the lobby's boards show the leaderboards).
 HudBubble.RoundHidden = { Collection = true, Boards = true, Hoverboards = true } :: { [string]: boolean }
 
 --[[
@@ -218,7 +226,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 		layout = {
 			Compact = true,
 			Narrow = narrow,
-			Tile = if round then 72 else 78,
+			Tile = if round then (if mouse then HudBubble.RoundMouseTile else 72) else 78,
 			TileGap = if round then 6 else 12,
 			Columns = if round then 4 else 3,
 			TabWidth = if narrow then 74 else 118,
@@ -239,7 +247,8 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 		layout = {
 			Compact = false,
 			Narrow = false,
-			Tile = if tablet then 58 elseif PopTheme.round() then 77 else 82, -- (the reel's tiles: 116 px of 1080 with 8..12 px gaps)
+			-- (the round look: the reel's 77, a little bigger for his pictures, owner 2026-11-07)
+			Tile = if tablet then 58 elseif PopTheme.round() then HudBubble.RoundBigMax else 82,
 			TileGap = if tablet then 6 elseif PopTheme.round() then 7 else 12,
 			Columns = if tablet then 4 else 2,
 			TabWidth = 140,
@@ -575,6 +584,13 @@ HudBubble.StackChipHeightTv = 158 -- the stacked chip on a TV (the name and the 
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
+-- his picture tiles, two a row (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"):
+-- the biggest on a big screen and in a small mouse window. The TRAIN chip stays under them (owner
+-- 2026-10-28) unless that leaves them under RoundBigTile (his short Studio window, 1402 x 490):
+-- then it goes beside their last row and they grow
+HudBubble.RoundBigMax = 88
+HudBubble.RoundMouseTile = 80
+HudBubble.RoundBigTile = 64
 HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
@@ -692,6 +708,12 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - stackH - (rows - 1) * gap
 			local tile = math.min(layout.Tile, math.floor(room / rows))
 			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
+				local besideTile = math.min(layout.Tile, math.floor((floor - HudBubble.MenuTop - (rows - 1) * gap) / rows))
+				if columns == 2 and tile < HudBubble.RoundBigTile and besideTile > tile then
+					layout.Columns, layout.Tile, layout.Top = columns, besideTile, HudBubble.MenuTop
+					layout.Chip, layout.ChipStack = "Beside", false
+					return
+				end
 				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + stackH
 				layout.Columns, layout.Tile = columns, tile
 				layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
@@ -717,8 +739,10 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 	layout.Chip, layout.ChipStack = "Beside", false
 	if not layout.Touch then
 		-- (a very small mouse window: the grid keeps above the money, the tiles as small as it takes)
+		-- (a TV: the money stands in the title-safe band, TenFootSafe of the height over the edge)
 		local _, _, moneyPanel = HudBubble.moneySize(layout)
-		local room = height - moneyPanel - HudBubble.MoneyBottom - 1 - HudBubble.MenuTop
+		local band = if layout.TenFoot then math.ceil(height * HudBubble.TenFootSafe) else 0
+		local room = height - band - moneyPanel - HudBubble.MoneyBottom - 1 - HudBubble.MenuTop
 		local best = 0
 		for _, try in { 5, 4, 3, 2 } do
 			local rows = math.ceil(count / try)
@@ -1236,8 +1260,8 @@ HudBubble.PreviewInset = 36 -- the preview renderer's top bar inset (px)
 --[[
 	The big top row (the Shop, Lobby, Base and Vault with their pictures) and the offers: everywhere
 	but on a touch phone, whose thumbs and buttons need the room, and a very narrow window, where the
-	row would meet the left tiles. The owner's Studio window is 995 x 485 pt, scale 0.67 (Compact,
-	1476 units wide), a mouse, and he picked them for it.
+	row would meet the left tiles. The owner's Studio window is 1402 x 490 pt in his log (1402 x 368
+	with a tall Output panel): Compact by its scale, a mouse, and he picked them for it.
 ]]
 HudBubble.BigRowWidth = 1100 -- design units: a Compact mouse window this wide gets the big row
 
@@ -1616,10 +1640,16 @@ function HudBubble.placeMenu(gui: Instance, menu: Frame, layout: Layout)
 		grid.CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight)
 		grid.CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap)
 	end
-	-- (the MORE flyout opens right of the tiles)
+	-- (the MORE flyout opens right of the tiles, its tiles as big as theirs)
 	local flyout = gui:FindFirstChild("MoreFlyout")
 	if flyout and flyout:IsA("GuiObject") then
 		flyout.Position = UDim2.new(m.Origin.X.Scale, m.Origin.X.Offset + m.Width + 20, flyout.Position.Y.Scale, flyout.Position.Y.Offset)
+		local cells = flyout:FindFirstChildOfClass("UIGridLayout")
+		local columns = (flyout:GetAttribute("Columns") :: number?) or 3
+		if cells then
+			cells.CellSize = UDim2.fromOffset(layout.Tile, layout.Tile)
+			flyout.Size = UDim2.fromOffset(columns * layout.Tile + (columns - 1) * cells.CellPadding.X.Offset + 32, 0)
+		end
 	end
 	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
 	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
@@ -1660,6 +1690,21 @@ end
 -- `spec` (label, IconName -> EntryLooks, order after the known tiles).
 function HudBubble.claimTile(menu: Instance, id: string, spec: TileSpec?): TextButton
 	local holder = menu:FindFirstChild(id)
+	local behind = if PopTheme.round() then HudBubble.RoundBehindMore[id] else nil
+	if behind and not holder then
+		-- (the round look: this tile stands behind More; a second claim gets the same tile, and
+		-- pressing it shuts the flyout, the caller's own action still runs)
+		local flyout = (menu.Parent :: Instance):FindFirstChild("MoreFlyout")
+		local there = flyout and flyout:FindFirstChild(id)
+		if there then
+			return there:FindFirstChild("Face") :: TextButton
+		end
+		local face = HudBubble.addMore(menu, id, behind :: any)
+		face.Activated:Connect(function()
+			HudBubble.toggleMore(menu, false)
+		end)
+		return face
+	end
 	if not holder then
 		local look = if spec and spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
 		local _, created = HudBubble.tile(menu, {
@@ -1725,6 +1770,8 @@ end
 
 -- A tile's key hint: a white keycap on its top left corner ("B" on Build, "H" on Ride), made once,
 -- hidden until setKeyCap.
+HudBubble.KeyCapSize = 20 -- design units (owner 2026-11-07: "menší klávesy", the picture shows more)
+
 function HudBubble.keyCap(face: GuiObject, second: boolean?): Frame
 	local name = if second then "KeyCap2" else "KeyCap"
 	local existing = face:FindFirstChild(name)
@@ -1735,16 +1782,16 @@ function HudBubble.keyCap(face: GuiObject, second: boolean?): Frame
 	local cap = UIKit.new("Frame", {
 		Name = name,
 		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.fromOffset(if second then 32 else 3, 3),
-		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.fromOffset(if second then 3 + HudBubble.KeyCapSize + 2 else 3, 3),
+		Size = UDim2.fromOffset(HudBubble.KeyCapSize, HudBubble.KeyCapSize),
 		BackgroundColor3 = Theme.White,
 		BorderSizePixel = 0,
 		ZIndex = 5,
 		Visible = false,
 	}, face)
-	Bubble.corner(cap, 8)
-	Bubble.stroke(cap, 2.5)
-	Bubble.ink(cap, "", 17, {
+	Bubble.corner(cap, 6)
+	Bubble.stroke(cap, 2)
+	Bubble.ink(cap, "", 14, {
 		Name = "Text",
 		Size = UDim2.fromScale(1, 1),
 		TextColor3 = Theme.DarkInk,
@@ -1789,18 +1836,7 @@ function HudBubble.setKeyCap2(face: GuiObject, cap: string?)
 	frame.Visible = cap ~= nil and cap ~= ""
 end
 
--- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
--- tilted "FREE!" sticker while the free spin is ready (`free`: WheelController; nil: any count),
--- else the count of the bought spins held as a badge.
-function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
-	local holder = face.Parent
-	if PopTheme.round() and holder and holder.Name == "Wheel" then
-		local sticker = if free == nil then count > 0 else free
-		HudBubble.setSticker(face, if sticker then "FREE!" else nil)
-		if sticker then
-			count = 0 -- (the sticker says it: no count badge with it)
-		end
-	end
+local function paintBadge(face: GuiObject, count: number)
 	local badge = face:FindFirstChild("Badge")
 	if count <= 0 then
 		if badge then
@@ -1819,6 +1855,50 @@ function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
 	end
 end
 
+-- The More tile tells what its flyout holds: the counts added up and a FREE! sticker. (The flyout
+-- is the gui's MoreFlyout, More the tile "More" of the gui's "Menu": found by those names.)
+local function syncMore(flyout: Instance)
+	local gui = flyout.Parent
+	local menu = gui and gui:FindFirstChild("Menu")
+	local more = menu and menu:FindFirstChild("More")
+	local moreFace = more and more:FindFirstChild("Face") :: GuiObject?
+	if not moreFace then
+		return
+	end
+	local total, free = 0, false
+	for _, holder in flyout:GetChildren() do
+		local face = holder:FindFirstChild("Face")
+		if face and holder:IsA("GuiObject") and holder.Visible then
+			total += (face:GetAttribute("BadgeCount") :: number?) or 0
+			free = free or face:GetAttribute("BadgeFree") == true
+		end
+	end
+	paintBadge(moreFace, total)
+	HudBubble.setSticker(moreFace, if free then "FREE!" else nil)
+end
+
+-- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
+-- tilted "FREE!" sticker while the free spin is ready (`free`: WheelController; nil: any count),
+-- else the count of the bought spins held as a badge. A tile behind More: More shows it too.
+function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
+	local holder = face.Parent
+	local sticker = false
+	if PopTheme.round() and holder and holder.Name == "Wheel" then
+		sticker = if free == nil then count > 0 else free
+		HudBubble.setSticker(face, if sticker then "FREE!" else nil)
+		if sticker then
+			count = 0 -- (the sticker says it: no count badge with it)
+		end
+	end
+	paintBadge(face, count)
+	local flyout = holder and holder.Parent
+	if flyout and flyout.Name == "MoreFlyout" then
+		face:SetAttribute("BadgeCount", count)
+		face:SetAttribute("BadgeFree", sticker)
+		syncMore(flyout)
+	end
+end
+
 --[[
 	The MORE flyout of the game HUD: a white bubble right of the left menu
 	with a tile per "More" entry (addMore). The MORE tile opens and shuts it
@@ -1827,8 +1907,9 @@ end
 function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButton
 	local gui = menu.Parent :: Instance
 	local flyout = gui:FindFirstChild("MoreFlyout") :: Frame?
+	local round = PopTheme.round()
 	if not flyout then
-		local columns = 3
+		local columns = if round then HudBubble.RoundMoreColumns else 3
 		local size = tileSize(menu)
 		local created = UIKit.new("Frame", {
 			Name = "MoreFlyout",
@@ -1865,11 +1946,11 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 	local look = if spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
 	local face = HudBubble.tile(flyout :: Frame, {
 		Name = id,
-		Label = spec.Label or string.upper(id),
+		Label = (if round then HudBubble.RoundMoreLabels[id] else nil) or spec.Label or string.upper(id),
 		Icon = if look then look.Icon else "more",
 		Role = if look then look.Role else "Plain",
 		Size = tileSize(menu),
-		LayoutOrder = spec.Order or 50,
+		LayoutOrder = (if round then HudBubble.RoundMoreOrder[id] else nil) or spec.Order or 50,
 	})
 	HudBubble.linkMenu(flyout :: Frame)
 	return face
@@ -1887,6 +1968,20 @@ function HudBubble.toggleMore(menu: Instance, open: boolean?): boolean
 	end
 	local on = if open == nil then not flyout.Visible else open
 	if on then
+		-- (as tall as its shown tiles: AutomaticSize grows it in the game, the previews have none)
+		local cells = flyout:FindFirstChildOfClass("UIGridLayout")
+		if cells then
+			local shown = 0
+			for _, holder in flyout:GetChildren() do
+				if holder:IsA("GuiObject") and holder.Visible and holder:FindFirstChild("Face") then
+					shown += 1
+				end
+			end
+			local columns = (flyout:GetAttribute("Columns") :: number?) or 3
+			local rows = math.max(1, math.ceil(shown / columns))
+			local cell, pad = cells.CellSize.Y.Offset, cells.CellPadding.Y.Offset
+			flyout.Size = UDim2.fromOffset(flyout.Size.X.Offset, rows * cell + (rows - 1) * pad + 32)
+		end
 		-- (under the top row's buttons, which may reach below the tiles' top on a tablet; over the
 		-- toasts, the HUD's other pieces)
 		local bar = gui:FindFirstChild("TopBar")

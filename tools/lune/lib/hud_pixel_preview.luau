@@ -7,14 +7,15 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
-	  ui_hud_round_studio   the owner's Studio window (995 x 485 pt, a mouse: the
-	                        tall block of tiles, owner 2026-10-28)
+	  ui_hud_round_studio   a 995 x 485 pt mouse window (the tall block of tiles,
+	                        owner 2026-10-28; his logged window: ui_hud_studio_*)
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
 	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (the reel's eight: Inventory by
-	BackpackController, Spin with its FREE! sticker by WheelController's badge,
-	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
+	are claimed as the controllers do (his picture tiles, 2026-11-07: Inventory
+	by BackpackController, the side menu's Store / Rebirth / Golems / Elevator,
+	Build, Ride, Trade; behind More Index, Settings, Daily, Boosts and Spin
+	with its FREE! sticker by WheelController's badge, on More too).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
@@ -164,8 +165,9 @@ function Preview.build(Loader: any): { [string]: any }
 			pad.Enabled = true
 			table.insert(list, pad)
 		end
-		if refs.Menu:FindFirstChild("Wheel") then
-			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
+		if round or refs.Menu:FindFirstChild("Wheel") then
+			-- the SPIN tile (WheelController claims it on the light HUD; the round look: behind More;
+			-- badge: a free spin ready)
 			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
 		else
 			-- the FREE SPIN chip right of the top bar

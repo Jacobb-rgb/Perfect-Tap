@@ -151,18 +151,21 @@ end
 -- with a mouse or a keyboard got the PC layout: the touch tutorial's SKIP and Roblox's jump button
 -- take that edge as soon as it is touched), and in a window too small for them and the mouse
 -- tutorial card's buttons (TutorialView.clearOfOffers).
-local function refreshOffers()
+-- (`given`: the gui's size for the specs; the game reads it)
+local function refreshOffers(given: Vector2?)
 	local offers = if refs then refs.Gui:FindFirstChild("Offers") else nil
 	if not (offers and offers:IsA("GuiObject")) then
 		return
 	end
-	local size = refs.Gui.AbsoluteSize
+	local size = given or refs.Gui.AbsoluteSize
 	local scale = HudController.uiScale()
 	local room = size.Y <= 0
 		or TutorialView.clearOfOffers(offers, scale, size, GuiService:IsTenFootInterface())
 			and BoostView.clearOfOffers(offers, scale, size)
 	offers.Visible = room and UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
 end
+
+HudController.refreshOffers = refreshOffers
 
 local function updateScale()
 	local camera = Workspace.CurrentCamera
@@ -547,7 +550,9 @@ function HudController.start()
 	refs.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
 	refreshOffers()
-	UserInputService.LastInputTypeChanged:Connect(refreshOffers)
+	UserInputService.LastInputTypeChanged:Connect(function()
+		refreshOffers()
+	end)
 
 	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
 	BackpackState.onChanged(refreshBackpack)

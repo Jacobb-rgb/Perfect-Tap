@@ -2840,7 +2840,7 @@ return function(T, Loader)
 					BackpackController = { Key = K.Q },
 					EmoteController = { Key = K.N },
 					GolemController = { ToggleKey = K.P },
-					HoverboardController = { Key = K.H },
+					HoverboardController = { Key = K.H, WindowKey = K.R },
 					ArtifactController = { BookKey = K.J },
 					BoostController = { OpenKeys = { K.L, K.DPadRight } },
 				})
@@ -2925,7 +2925,7 @@ return function(T, Loader)
 				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it);
 				-- the keys other controllers own are read from their exports (stand-ins here)
 				local sunk = CC.sinkKeys()
-				for _, key in { K.ButtonL3, K.ButtonR3, K.T, K.B, K.Q, K.N, K.P, K.H, K.J, K.L, K.DPadRight } do
+				for _, key in { K.ButtonL3, K.ButtonR3, K.T, K.B, K.Q, K.N, K.P, K.H, K.R, K.J, K.L, K.DPadRight } do
 					T.truthy(table.find(sunk, key), key.Name .. " sunk while an egg opens")
 				end
 				for _, key in { K.Space, K.Return, K.Backspace, K.G, K.ButtonA, K.ButtonB } do
