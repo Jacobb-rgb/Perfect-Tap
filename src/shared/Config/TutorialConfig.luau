@@ -286,7 +286,7 @@ TutorialConfig.Steps = {
 		Id = "Golems",
 		Title = "Golem helpers",
 		Text = "Golems follow you and help you earn. Wake one from a capsule: GOLEMS is behind MORE.",
-		Hint = { Mouse = "MORE, then GOLEMS", Touch = "Tap MORE, then GOLEMS", Gamepad = "D-pad left, then GOLEMS" },
+		Hint = { Mouse = "MORE, then GOLEMS", Touch = "Tap MORE, then GOLEMS", Gamepad = "D-pad left, MORE, then GOLEMS" },
 		Target = "Capsules",
 		UiTarget = "Golems",
 		Optional = true,

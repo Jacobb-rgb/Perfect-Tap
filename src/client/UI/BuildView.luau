@@ -1530,6 +1530,11 @@ function BuildView.setMenuKey(button: TextButton, cap: string?, image: string?)
 end
 
 -- The BUILD tile's badge: how many machines wait to be placed (0 hides it).
+-- Where the BUILD tile's "new machine" pulse goes (behind More: More pulses).
+function BuildView.pulseHolder(button: TextButton): Instance?
+	return HudBubble.pulseHolder(button)
+end
+
 function BuildView.setMenuBadge(button: TextButton, count: number)
 	HudBubble.setTileBadge(button, math.max(0, math.floor(count)))
 end

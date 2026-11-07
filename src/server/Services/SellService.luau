@@ -223,7 +223,7 @@ function SellService.revealText(descs: { Desc }): (string, string?)
 	if total == 0 then
 		return "", nil
 	end
-	if total == 1 then
+	if total == 1 and #descs == 1 then
 		return ` It was {oreName(order[1])}!`, best
 	end
 	-- rarest first, then most
@@ -418,10 +418,13 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 		return
 	end
 	local list = {}
+	local secrets = false
 	for _, pick in candidates(player, data) do
 		-- a SECRET ore is never sold in a batch (owner 2026-10-29): only on its own, by choice
 		if not SecretOreConfig.isSecret(pick.Desc.O) then
 			table.insert(list, pick)
+		else
+			secrets = true
 		end
 	end
 	local picks: { Pick } = {}
@@ -440,7 +443,13 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 		end
 	end
 	if #picks == 0 then
-		deny(player, if filter == "Dirty" then "You have no Dirty Ore to sell." else "You have nothing to sell.")
+		deny(
+			player,
+			if filter == "Dirty"
+				then "You have no Dirty Ore to sell."
+				elseif secrets then "Nothing to sell in one go: a secret ore sells one by one."
+				else "You have nothing to sell."
+		)
 		return
 	end
 	local taken, total = takePicks(player, data, picks)

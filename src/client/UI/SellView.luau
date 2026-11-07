@@ -107,6 +107,8 @@ export type Plan = {
 	Eligible: number, -- items the filter matches in total
 	Total: number, -- coins for the known items in Count
 	Dirty: number, -- Dirty Ore among Count (price unknown)
+	Secret: number, -- SECRET ores left out (never in a batch; they sell one by one)
+	PenLeft: number, -- items of the Ore Pen past its cap: a next press sells them
 	BestOrder: number, -- rarest known item sold (Rarity order, 0 = none)
 }
 
@@ -335,6 +337,7 @@ end
 	bonus `sellMult` (nil = 1), rounded once like SellService.
 ]]
 function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sellMult: number?): Plan
+	local secret = 0
 	local units: { Unit } = {}
 	local function add(summary: any, section: Section)
 		if type(summary) ~= "table" then
@@ -354,7 +357,9 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 				then math.floor(math.min(raw, EconomyConfig.Sell.MaxBackpackPerRequest))
 				else 0
 			-- (a SECRET ore is never sold in a batch: SellService skips it the same way)
-			if desc and not SecretOreConfig.isSecret(desc.O) then
+			if desc and SecretOreConfig.isSecret(desc.O) then
+				secret += if from == nil or from == section then count else 0
+			elseif desc then
 				for _ = 1, count do
 					table.insert(units, {
 						Section = section,
@@ -369,7 +374,7 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 	add(hands, "Hands")
 	add(pen, "Pen")
 
-	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0 }
+	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0, Secret = secret, PenLeft = 0 }
 	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	for _, unit in units do
 		local dirty = unit.Desc.K == "Raw"
@@ -386,6 +391,8 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 					plan.Total += unit.Price
 					plan.BestOrder = math.max(plan.BestOrder, (rarityOf(unit.Desc.O)))
 				end
+			elseif unit.Section == "Pen" then
+				plan.PenLeft += 1
 			end
 		end
 	end
@@ -418,15 +425,21 @@ end
 
 -- Text for a Sell-all button's confirm step.
 function SellView.confirmPlanText(plan: Plan, filter: string): string
-	local capped = if plan.Eligible > plan.Count
-		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen ({Format.commas(plan.Eligible)} in total).`
+	local capped = if plan.PenLeft > 0
+		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen ({Format.commas(plan.PenLeft)} more left after this).`
 		else ""
 	if filter == "Dirty" then
 		return `Sell {Format.commas(plan.Count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.{capped}`
 	end
 	local price = if capped == "" and plan.Total > 0 then ` for {Format.money(plan.Total)}` else ""
 	local dirty = if plan.Dirty > 0 then ` {Format.commas(plan.Dirty)} of them are {ItemData.DirtyName}: Tobin pays the raw price.` else ""
-	return `Sell everything: {itemsText(plan.Count)}{price}?{dirty}{capped}`
+	local secret = if plan.Secret > 0 then " Secret ores stay: they sell one by one." else ""
+	return `Sell everything: {itemsText(plan.Count)}{price}?{dirty}{secret}{capped}`
+end
+
+-- Why Sell All has nothing to do (only SECRET ores left, or nothing at all).
+function SellView.nothingText(plan: Plan): string
+	return if plan.Secret > 0 then "Nothing to sell in one go: a secret ore sells one by one." else "You have nothing to sell."
 end
 
 ---------------------------------------------------------------- the Pop look (the kit pieces this window needs)

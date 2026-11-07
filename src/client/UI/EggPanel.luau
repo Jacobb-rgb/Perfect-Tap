@@ -344,6 +344,13 @@ end
 ]]
 EggPanel.FreeTurn = 0.7 -- the cosine of the turn (about 45 degrees)
 EggPanel.FreeOut = 6 -- studs from the egg's axis at most (the SKY EGG's clouds reach far: the E stays by its shell)
+EggPanel.FreeRise = 4 -- studs over the egg's foot: by the player's chest (at the egg's middle the panel over it left the screen)
+
+-- The prompts' point of a free-standing egg, on its `side`.
+function EggPanel.freePoint(center: Vector3, bottom: number, half: number, side: Vector3): Vector3
+	local out = side * math.min(half + 0.5, EggPanel.FreeOut)
+	return Vector3.new(center.X + out.X, bottom + EggPanel.FreeRise, center.Z + out.Z)
+end
 function EggPanel.freeSide(center: Vector3, position: Vector3, front: Vector3?): Vector3?
 	local flat = Vector3.new(position.X - center.X, 0, position.Z - center.Z)
 	if flat.Magnitude < 0.5 then

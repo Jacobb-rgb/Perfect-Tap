@@ -82,7 +82,7 @@ HudBubble.RoundMenu = {
 HudBubble.RoundBehindMore = {
 	Build = { Label = "Build", IconName = "Build" }, -- BuildView; the B key stays
 	Wheel = { Label = "Spin", IconName = "Wheel" }, -- WheelController; FREE! shows on More too
-} :: { [string]: TileSpec }
+} :: { [string]: { Label: string, IconName: string } }
 
 -- Behind More, in this order (the most used first); anything else after them.
 HudBubble.RoundMoreOrder = {
@@ -1576,7 +1576,7 @@ function HudBubble.claimTile(menu: Instance, id: string, spec: TileSpec?): TextB
 		if there then
 			return there:FindFirstChild("Face") :: TextButton
 		end
-		local face = HudBubble.addMore(menu, id, behind)
+		local face = HudBubble.addMore(menu, id, behind :: any)
 		face.Activated:Connect(function()
 			HudBubble.toggleMore(menu, false)
 		end)

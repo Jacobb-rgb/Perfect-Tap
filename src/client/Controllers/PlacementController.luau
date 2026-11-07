@@ -2632,7 +2632,7 @@ end
 function PlacementController.refreshButton()
 	local button = buildButton
 	-- (the round look: BUILD stands behind More, so More pulses)
-	local holder = if button then HudBubble.pulseHolder(button) else nil
+	local holder = if button then BuildView.pulseHolder(button) else nil
 	if not button or not holder then
 		return
 	end

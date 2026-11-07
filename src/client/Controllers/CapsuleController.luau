@@ -1417,8 +1417,8 @@ end
 --[[
 	The egg panel showed (EggPanelController): the opening's pieces and this
 	egg's models are made ahead, one egg a frame, so the first Open 10 doesn't
-	make them all in one frame. Phones keep three ready (their memory): a
-	bigger open makes the rest then.
+	make them all in one frame. A phone's Open 10 uses eggs with fewer cracks
+	(hatchArgs), so a phone makes both kinds.
 ]]
 CapsuleController.WarmEggs = 10
 CapsuleController.WarmEggsPhone = 3
@@ -1436,12 +1436,17 @@ function CapsuleController.warm(capsuleId: string)
 			if not playing then
 				ensureOpening()
 			end
-			local most = if phone then CapsuleController.WarmEggsPhone else CapsuleController.WarmEggs
-			local pool = poolOf(capsuleId, 3) -- (the cracks of every open a warm covers: hatchArgs)
-			while #pool < most do
-				task.wait()
-				if not playing then -- (an opening takes them from the same pool)
-					makeEgg(pool, capsuleId, 3)
+			local kinds: { { number } } = { { 3, if phone then CapsuleController.WarmEggsPhone else CapsuleController.WarmEggs } }
+			if phone then
+				table.insert(kinds, { 2, CapsuleController.WarmEggs })
+			end
+			for _, kind in kinds do
+				local pool = poolOf(capsuleId, kind[1])
+				while #pool < kind[2] do
+					task.wait()
+					if not playing then -- (an opening takes them from the same pool)
+						makeEgg(pool, capsuleId, kind[1])
+					end
 				end
 			end
 		end)
@@ -1505,7 +1510,10 @@ end
 CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is under 7
 
 local function safely(what: string, step: () -> ())
-	local ok, err = pcall(step)
+	local ok, err = pcall(function(): any
+		step()
+		return nil
+	end)
 	if not ok then
 		warn(`[CapsuleController] {what} failed: {err}`)
 	end
@@ -1615,7 +1623,10 @@ local function runChain()
 	while #queue > 0 do
 		local result = table.remove(queue, 1) :: Result
 		openingSince = os.clock()
-		local ok, err = pcall(play, result)
+		local ok, err = pcall(function(): any
+			play(result)
+			return nil
+		end)
 		if not ok then
 			warn("[CapsuleController] opening failed: " .. tostring(err))
 			clearAfter(opening)

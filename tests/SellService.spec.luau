@@ -549,6 +549,21 @@ return function(T, Loader)
 		act(w, "SellAll", { Filter = "All" })
 		T.eq(count(w.data.Storage, "Clean|RainbowNova|Flawless|"), 1, "the secret ore stays")
 		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 0, "the coal is sold")
+		local plan = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1 }, {}, "All", nil)
+		T.eq(plan.Count, 0)
+		T.eq(plan.Secret, 1, "the view knows why")
+		T.truthy(string.find(SellView.nothingText(plan), "one by one", 1, true) ~= nil, "says why nothing sold")
+		w.notes = {}
+		act(w, "SellAll", { Filter = "All" })
+		T.truthy(string.find(notes(w, "Notify", w.player)[1].A.Text, "one by one", 1, true) ~= nil, "the server says it too")
+		local mixed = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1, ["Clean|Coal|Rough|"] = 12 }, {}, "All", nil)
+		T.truthy(string.find(SellView.confirmPlanText(mixed, "All"), "Secret ores stay", 1, true) ~= nil, "the confirm tells")
+		local big = SellView.plan({ ["Raw|Coal||"] = MAX + 10 }, { ["Raw|Coal||"] = 7 }, "All", nil)
+		T.eq(big.PenLeft, 10, "only the pen's own rest")
+		T.truthy(
+			string.find(SellView.confirmPlanText(big, "All"), "10 more left", 1, true) ~= nil,
+			"the rest, not the total with the backpack"
+		)
 	end)
 
 	withWorld("SellService: at most MaxPerRequest items per request", function(w)

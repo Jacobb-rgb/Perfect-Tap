@@ -965,7 +965,7 @@ end
 do
 	local s = spots.Sky
 	local away = V3.new(0.6, 0, -0.8)
-	s.Prompt = s.Center + away * math.min(s.Half + 0.5, EggPanel.FreeOut)
+	s.Prompt = EggPanel.freePoint(s.Center, s.Bottom, s.Half, away)
 	local feet = V3.new(s.Center.X, s.Bottom + 0.2, s.Center.Z) + away * (s.Half + 2)
 	local cam = { Position = feet + away * 13 + up * 7, Target = V3.new(s.Center.X, s.Top - 1, s.Center.Z) }
 	local extra = Instance.new("Model")

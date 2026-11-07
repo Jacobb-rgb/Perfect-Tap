@@ -479,6 +479,10 @@ local function placeRing(spot: Spot)
 		light = made
 	end
 	local part = light :: Part
+	if spot.Free then
+		part.Size = Vector3.zero -- (the SKY EGG's foot lies inside its podium, which has its own glowing ring)
+		return
+	end
 	local d = math.clamp(spot.Half * 1.15, 2.6, 5)
 	part.Size = Vector3.new(0.08, d, d)
 	part.CFrame = CFrame.new(spot.Center.X, spot.Bottom + 0.06, spot.Center.Z) * CFrame.Angles(0, 0, math.pi / 2)
@@ -1743,7 +1747,7 @@ local function addEgg(id: string, model: Model, free: boolean?)
 	local center, top, promptAt, bottom, half = EggPanel.spotOf(model, front)
 	if free then
 		local flat = Vector3.new(front.X, 0, front.Z)
-		promptAt = center + (if flat.Magnitude > 1e-3 then flat.Unit else Vector3.new(0, 0, -1)) * math.min(half + 0.5, EggPanel.FreeOut)
+		promptAt = EggPanel.freePoint(center, bottom, half, if flat.Magnitude > 1e-3 then flat.Unit else Vector3.new(0, 0, -1))
 	end
 	local terrain = Workspace.Terrain
 	local point = Instance.new("Attachment")
@@ -1880,11 +1884,11 @@ local function tick()
 	-- within the "Buy Egg!" prompt's reach the keys work and their badges show (EggPanel.inReach)
 	local spot = if current then spots[current] else nil
 	if spot and spot.Free and position then
-		-- (a free-standing egg: the big E on the player's side of it)
-		local side = EggPanel.freeSide(spot.Center, position, spot.Free)
+		-- (a free-standing egg: the big E on the player's side of it, at once when it is out of reach)
+		local side = EggPanel.freeSide(spot.Center, position, if EggPanel.inReach(position, spot.PromptAt) then spot.Free else nil)
 		if side then
 			spot.Free = side
-			spot.PromptAt = spot.Center + side * math.min(spot.Half + 0.5, EggPanel.FreeOut)
+			spot.PromptAt = EggPanel.freePoint(spot.Center, spot.Bottom, spot.Half, side)
 			spot.Point.Position = spot.PromptAt
 		end
 	end

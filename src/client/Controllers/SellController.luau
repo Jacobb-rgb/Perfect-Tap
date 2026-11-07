@@ -253,7 +253,7 @@ local function sellEverything()
 	end
 	local plan = SellView.plan(penSummary(), hands, "All", nil, sellMult())
 	if plan.Count == 0 then
-		receipt("You have nothing to sell.", "Deny", nil)
+		receipt(SellView.nothingText(plan), "Deny", nil)
 		Sfx.play("UIDeny")
 		return
 	end
