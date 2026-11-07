@@ -74,6 +74,40 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("MinigunBlaster: every blaster is the same size, from the starter to the STAR blasters", function()
+		-- along the gun, seen from the hand: { nearest, furthest, the largest piece }
+		local function extent(tool: any, name: string): { number }
+			local handle = tool:FindFirstChild("Handle")
+			local box = { math.huge, -math.huge, 0 }
+			for _, d in tool:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == name then
+					local z = handle.CFrame:PointToObjectSpace(d.CFrame.Position).Z
+					box = { math.min(box[1], z), math.max(box[2], z), math.max(box[3], d.Size.Magnitude) }
+				end
+			end
+			return box
+		end
+		local first = BlasterBuilder.build(1, "")
+		local function same(tool: any, label: string)
+			for _, name in { "Barrel", "Rainbow" } do
+				local a, b = extent(first, name), extent(tool, name)
+				for i = 1, 3 do
+					T.near(b[i], a[i], 1e-3, `{label} {name} {i}`)
+				end
+			end
+			-- (the muzzle's cut differs a little: the Singularity Rail has a ring)
+			T.near(extent(tool, "MuzzleGlow")[1], extent(first, "MuzzleGlow")[1], 0.15, label .. " the muzzle")
+		end
+		local span = extent(first, "Rainbow")[2] - extent(first, "MuzzleGlow")[1]
+		T.lt(MinigunBlaster.Length * 0.7, span, "muzzle to back: it spans the gun")
+		for level = 1, BlasterData.MaxLevel do
+			same(BlasterBuilder.build(level, BlasterData.vaultOre(level)), "level " .. level)
+		end
+		for _, star in StarBlasterData.List do
+			same(BlasterBuilder.buildStar(star, 10, BlasterData.vaultOre(10)), star.Id)
+		end
+	end)
+
 	T.test("MinigunBlaster: crystals grow with the level, his colours in the case's ore", function()
 		local last = 0
 		local neonOf = function(tool: any, name: string): any

@@ -92,7 +92,7 @@ return function(T, Loader)
 				end
 			end
 			T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
-			T.lt(reach[1] * 2, reach[BlasterData.MaxLevel], "the level 10 rifle is much longer than the starter pistol")
+			T.near(reach[1], reach[BlasterData.MaxLevel], 1e-3, "the same size at every level (owner 2026-11-07)")
 			-- level 1 is always the rusty starter, later levels take the ore's colors
 			T.eq(build(1, "Gold"):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty level 1")
 			T.eq(build(5, ""):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty without an ore")
