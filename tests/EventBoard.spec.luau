@@ -200,8 +200,8 @@ return function(T, Loader)
 			end
 		end
 		for _, side in { -EventBoard.PostAt, EventBoard.PostAt } do
-			for _, y in { 1, 3, 6, 10 } do
-				local half = if y < 1.2 then EventBoard.FootSize / 2 else 1.2 -- the concrete foot, then the beam
+			for _, y in { 0.45, 1, 3, 6, 10 } do
+				local half = if y < 0.5 then EventBoard.FootSize / 2 else 1.4 -- the low concrete foot, then the beam
 				for _, dx in { -half, 0, half } do
 					for _, dz in { -half, 0, half } do
 						local at = (frame * roblox.CFrame.new(side + dx, y, 0.6 + dz)).Position

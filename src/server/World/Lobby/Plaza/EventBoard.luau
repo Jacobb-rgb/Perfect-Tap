@@ -51,8 +51,8 @@ function EventBoard.build(parent: Instance): Model
 		box(x, beam / 2, 0.6, Vector3.new(0.6, beam, 1.8), IRON_DARK)
 		box(x - 0.9, beam / 2, 0.6, Vector3.new(0.5, beam, 2.4), IRON)
 		box(x + 0.9, beam / 2, 0.6, Vector3.new(0.5, beam, 2.4), IRON)
-		box(x, 0.6, 0.6, Vector3.new(EventBoard.FootSize, 1.2, EventBoard.FootSize), Color3.fromRGB(96, 98, 104), Enum.Material.Concrete)
-		box(x, 1.45, 0.6, Vector3.new(3.4, 0.5, 3.4), RUST)
+		box(x, 0.25, 0.6, Vector3.new(EventBoard.FootSize, 0.5, EventBoard.FootSize), Color3.fromRGB(96, 98, 104), Enum.Material.Concrete)
+		box(x, 0.6, 0.6, Vector3.new(2.8, 0.2, 2.8), RUST)
 	end
 	-- a girder under the panel, between the beams
 	box(0, bottom - 0.5, 0.6, Vector3.new(EventBoard.PostAt * 2, 1, 1), IRON_DARK)
