@@ -33,6 +33,12 @@
 	Roblox has no motion blur: the falling crate draws see-through copies behind
 	it and speed lines, and blur(t) gives the client a short BlurEffect.
 
+	Reduce motion (calm): nothing flashes. No shake, blur or zoom kick; the pillar,
+	the god rays, the inside's glow and the blaster's light fade in over CalmBurstIn,
+	the wheel of rays over CalmRevealIn (no kick); no white on the rim or the blaster,
+	the crate's strips hold steady, the core light never jumps; no energy wave, no
+	flare, no rings running out at the burst and the reveal, no muzzle glow.
+
 	Stage frame: `origin` = the platform's top center; the crate's long side along
 	Z, its front (+X) and the camera on the +X side.
 ]]
@@ -74,6 +80,8 @@ Stage.T_HOLD = 6.3
 Stage.SkipTo = Stage.T_BURST - 0.2
 Stage.GunRest = 7.4 -- how high the blaster floats
 Stage.PortalHeight = 14
+Stage.CalmBurstIn = 0.7 -- Reduce motion: the seconds what the burst lights takes to come up
+Stage.CalmRevealIn = 1 -- ... what the reveal lights
 
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -214,13 +222,13 @@ end
 --[[
 	Builds the stage into `parent` at `origin`. `blaster` (optional) is a Model
 	of the new blaster in its own frame (barrel along -Z, centered); it is moved
-	and turned by update. level / oreId pick the crate. calm = Reduce motion: no
-	shake, no blur, no zoom kick.
+	and turned by update. level / oreId pick the crate. calm = Reduce motion (see
+	the top): nothing flashes, no shake, no blur, no zoom kick.
 ]]
 function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: string, blaster: Model?, calm: boolean?): Stage
 	local root = Instance.new("Model")
 	root.Name = "CrateOpening"
-	root.Parent = parent
+	-- (root goes into `parent` last: over a thousand parts must not go in live one by one)
 	local caseModel = Instance.new("Model")
 	caseModel.Name = "Case"
 	caseModel.Parent = root
@@ -366,8 +374,12 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	end
 	-- the energy wave: a ball that grows out of the crate; the shockwaves on the floor
 	local wave = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Ball)
+	wave.Name = "EnergyWave"
 	local waves = { newRing(root, 26, hot), newRing(root, 24, glowColor), newRing(root, 26, hot), newRing(root, 24, glowColor) }
 	local burstRing = newRing(root, 22, hot)
+	for _, p in burstRing.Parts do
+		p.Name = "BurstRing"
+	end
 	-- two neon rings turning under the hovering crate
 	local underA, underB = newRing(root, 20, glowColor), newRing(root, 22, hot)
 	-- the swirling comet arcs round the crate and later round the blaster
@@ -386,9 +398,13 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	-- the light pillar out of the open crate, the god rays behind the blaster
 	local pillarCore = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Cylinder)
 	local pillarWide = part(root, Vector3.new(1, 1, 1), glowColor, NEON, Enum.PartType.Cylinder)
+	pillarCore.Name = "PillarCore"
+	pillarWide.Name = "PillarWide"
 	local rays: { Part } = {}
 	for _ = 1, 10 do
-		table.insert(rays, part(root, Vector3.new(0.6, 1, 0.1), glowColor, NEON))
+		local ray = part(root, Vector3.new(0.6, 1, 0.1), glowColor, NEON)
+		ray.Name = "GodRay"
+		table.insert(rays, ray)
 	end
 	-- the reveal: a wheel of wide rays turning behind the blaster, two thin circles, soft discs
 	local wheelColors = { glowColor, void, hot, glowColor:Lerp(void, 0.5) }
@@ -425,7 +441,12 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	-- the reveal's flare (a thin cross) and the rings that run out at the hero and at the settle
 	local flareA = part(root, Vector3.new(1, 0.2, 0.05), hot, NEON)
 	local flareB = part(root, Vector3.new(0.2, 1, 0.05), hot, NEON)
+	flareA.Name = "Flare"
+	flareB.Name = "Flare"
 	local revealRing = newRing(root, 24, hot)
+	for _, p in revealRing.Parts do
+		p.Name = "RevealRing"
+	end
 	-- crystals bursting out of the blaster and floating round it
 	type Floater = { p: Part, a: number, r: number, depth: number, speed: number, spin: Vector3 }
 	local floatCrystal = rng(97)
@@ -454,6 +475,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		})
 	end
 	local gunFlash = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Ball)
+	gunFlash.Name = "ShotGlow"
 	-- the platform of light under the blaster
 	local lightRing, lightInner = newRing(root, 24, hot), newRing(root, 16, glowColor)
 	-- energy particles circling the blaster
@@ -556,6 +578,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	coreHolder.Transparency = 1
 	coreHolder.CFrame = at(0, 2.2, 0)
 	local coreLight = Instance.new("PointLight")
+	coreLight.Name = "CoreLight"
 	coreLight.Color = glowColor
 	coreLight.Range = 26
 	coreLight.Brightness = 0
@@ -564,6 +587,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local gunHolder = part(root, Vector3.new(0.2, 0.2, 0.2), glowColor)
 	gunHolder.Transparency = 1
 	local gunLight = Instance.new("PointLight")
+	gunLight.Name = "GunLight"
 	gunLight.Color = glowColor
 	gunLight.Range = 14
 	gunLight.Brightness = 0
@@ -629,6 +653,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local PORTAL_Y = Stage.PortalHeight
 	local caseTop = case.Height
 	local gunRest = Stage.GunRest
+	local CALM_BURST, CALM_REVEAL = Stage.CalmBurstIn, Stage.CalmRevealIn
 
 	local self = {
 		Root = root,
@@ -812,7 +837,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 				seg.Transparency = 1 - prog(t, (i - 1) * 0.03, (i - 1) * 0.03 + 0.15) * (0.7 + 0.3 * charge)
 			end
 		end
-		outerRing.Color = deep:Lerp(glowColor, lit):Lerp(WHITE, clamp01(0.5 * flareLand + 0.6 * flareBurst + charge * 0.2))
+		local rimFlare = if calm then 0 else 0.5 * flareLand + 0.6 * flareBurst
+		outerRing.Color = deep:Lerp(glowColor, lit):Lerp(WHITE, clamp01(rimFlare + charge * 0.2))
 		poseRing(innerRing, at(0, 0.03, 0), 5.2, 0.14, lerp(0.75, 0.15, math.max(lit * 0.5, charge)), 0)
 
 		-- the portal: opens fast, spins fast, closes after the crate has landed
@@ -867,7 +893,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		local hover = easeInOut(prog(t, T_IMPACT, T_ORBIT)) * (1 - easeOutCubic(prog(t, T_BURST, T_BURST + 0.2)))
 		y += hover * (0.7 + 0.12 * math.sin(t * 5))
 		y -= easeInCubic(prog(t, T_RISE - 0.45, T_RISE)) * (caseTop + 1) -- at the end it sinks into the platform
-		local rumble = if t > T_ORBIT and t < T_BURST then charge ^ 1.5 else 0
+		local rumble = if t > T_ORBIT and t < T_BURST and not calm then charge ^ 1.5 else 0
 		local caseCf = origin
 			* CFrame.new(math.sin(t * 61) * 0.06 * rumble, y, math.cos(t * 67) * 0.06 * rumble)
 			* CFrame.Angles(math.sin(t * 47) * 0.05 * rumble + 0.04 * hover * math.sin(t * 3), 0, math.sin(t * 53 + 1) * 0.06 * rumble)
@@ -929,15 +955,21 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		-- its lights: pulse from the hover on, brighter and whiter with the charge
 		local pulsing = t >= T_IMPACT and t < T_BURST
 		if pulsing or (t >= T_BURST and t < T_BURST + 0.1) then
-			local pulse = 0.5 + 0.5 * math.sin(t * (6 + 10 * charge)) -- (under 3 a second)
+			-- (the phase is its rising rate added up: from 1 to under 2.5 a second)
+			local pulse = 0.5 + 0.5 * math.sin(6 * t + 3.75 * charge * charge)
 			for _, l in lightColors do
 				l.p.Color = l.color:Lerp(WHITE, charge * 0.6)
-				l.p.Transparency = if pulsing then 0.35 * (1 - charge) * pulse else 0
+				l.p.Transparency = if pulsing and not calm then 0.35 * (1 - charge) * pulse else 0
 			end
 		end
 		case.Seam.Transparency = if t < T_BURST then 1 - (0.1 + 0.9 * charge) else 1
-		case.Inside.Transparency = if t >= T_BURST then 0.1 + prog(t, T_BURST + 0.5, T_RISE) * 0.6 else 1
-		coreLight.Brightness = if t < T_BURST then 0.6 * lit + charge * 5 else (9 * math.exp(-(t - T_BURST) * 3) + 1.5) * (1 - fadeOut)
+		local burstLit = if t < T_BURST then 0 elseif calm then prog(t, T_BURST, T_BURST + CALM_BURST) else 1
+		case.Inside.Transparency = 1 - burstLit * (0.9 - prog(t, T_BURST + 0.5, T_RISE) * 0.6)
+		-- (Reduce motion: on from where the charge left it, 5.6, no jump)
+		local coreFlare = if calm then 4.1 else 9
+		coreLight.Brightness = if t < T_BURST
+			then 0.6 * lit + charge * 5
+			else (coreFlare * math.exp(-(t - T_BURST) * 3) + 1.5) * (1 - fadeOut)
 		coreHolder.CFrame = at(0, 2.2 + hover * 0.7, 0)
 
 		-- the fall's motion blur: see-through copies behind the crate, speed lines
@@ -964,7 +996,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 
 		-- the impact: the energy wave, the shockwaves on the floor
 		local waveT = prog(t, T_LAND, T_LAND + 0.24)
-		if t >= T_LAND and waveT < 1 then
+		if t >= T_LAND and waveT < 1 and not calm then
 			local d = lerp(5, 21, easeOutCubic(waveT))
 			wave.Size = Vector3.new(d, d, d)
 			wave.Transparency = lerp(0.93, 1, waveT)
@@ -985,7 +1017,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 		do
 			local u = prog(t, T_BURST, T_BURST + 0.5)
-			if t >= T_BURST and u < 1 then
+			if t >= T_BURST and u < 1 and not calm then
 				local center = CFrame.lookAt((origin * CFrame.new(0, caseTop + 0.5, 0)).Position, camCf.Position)
 					* CFrame.Angles(math.pi / 2, 0, 0)
 				poseRing(burstRing, center, lerp(0.5, 13, easeOutCubic(u)), lerp(0.6, 0.15, u), u, 0)
@@ -1020,18 +1052,18 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 			end
 		end
 		-- its glow: white-hot out of the crate, a strong pulse at the reveal
-		local gunGlow = if t > T_BURST then 0.7 * math.exp(-math.max(0, t - T_BURST - 0.25) * 2.2) else 0
-		gunGlow += if t >= T_RISE then 0.5 * math.exp(-(t - T_RISE) * 3) else 0
+		local gunGlow = if t > T_BURST and not calm then 0.7 * math.exp(-math.max(0, t - T_BURST - 0.25) * 2.2) else 0
+		gunGlow += if t >= T_RISE and not calm then 0.5 * math.exp(-(t - T_RISE) * 3) else 0
 		for _, n in gunNeon do
 			n.p.Color = n.color:Lerp(WHITE, gunGlow * 0.45)
 		end
 		gunHolder.CFrame = gunCf * CFrame.new(3.5, 2.5, 3)
-		gunLight.Brightness = if out then (1.2 + 0.3 * math.sin(clock * 4) + 2 * gunGlow) * (1 - fadeOut * 0.6) else 0
+		gunLight.Brightness = if out then (1.2 + 0.3 * math.sin(clock * 4) + 2 * gunGlow) * (1 - fadeOut * 0.6) * burstLit else 0
 
 		-- behind the blaster, facing the camera: the god rays
 		local toCam = (camCf.Position - gunCf.Position).Unit
 		local behind = gunCf.Position - toCam * 4
-		local raysIn = easeOutCubic(prog(t, T_BURST, T_BURST + 0.35))
+		local raysIn = if calm then prog(t, T_BURST, T_BURST + CALM_BURST) else easeOutCubic(prog(t, T_BURST, T_BURST + 0.35))
 		if raysIn > 0.01 and t < T_RISE + 0.05 then
 			local frame = CFrame.lookAt(behind - toCam * 2, behind - toCam * 3) * CFrame.Angles(0, 0, clock * 0.35)
 			local len = lerp(2, 15, raysIn)
@@ -1051,11 +1083,14 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 
 		-- the reveal, all facing the camera behind the blaster: the wheel of rays, soft discs, thin circles
-		local wheelIn = easeOutCubic(prog(t, T_RISE - 0.05, T_RISE + 0.35)) * (1 - fadeOut)
+		local wheelGrow = if calm
+			then prog(t, T_RISE - 0.05, T_RISE - 0.05 + CALM_REVEAL)
+			else easeOutCubic(prog(t, T_RISE - 0.05, T_RISE + 0.35))
+		local wheelIn = wheelGrow * (1 - fadeOut)
 		if wheelIn > 0.01 then
 			local c = gunCf.Position - toCam * 5
 			local base = CFrame.lookAt(c, c + toCam) * CFrame.Angles(0, math.pi / 2, 0)
-			local kick = 1 + 0.9 * math.exp(-math.max(0, t - T_RISE) * 2.2)
+			local kick = if calm then 1 else 1 + 0.9 * math.exp(-math.max(0, t - T_RISE) * 2.2)
 			for i, ray in wheel do
 				local frame = base * CFrame.Angles((i - 1) / #wheel * math.pi * 2 + clock * 0.22, 0, 0)
 				local len, w = ray.len * wheelIn, ray.width * wheelIn
@@ -1091,7 +1126,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 		-- the flare and the ring at the hero, the ring again as it settles beside the words
 		local flareT = prog(t, T_RISE, T_RISE + 0.5)
-		if t >= T_RISE and flareT < 1 then
+		if t >= T_RISE and flareT < 1 and not calm then
 			local f = 1 - flareT
 			local len = lerp(4, 34, easeOutCubic(flareT))
 			local frame = CFrame.lookAt(gunCf.Position + toCam * 1.5, gunCf.Position + toCam * 2.5) * CFrame.Angles(0, 0, 0.4)
@@ -1107,7 +1142,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 		do
 			local run = if t < T_SETTLE then prog(t, T_RISE, T_RISE + 0.65) else prog(t, T_SETTLE + 0.25, T_SETTLE + 0.9)
-			local on = (t >= T_RISE and t < T_RISE + 0.65) or (t >= T_SETTLE + 0.25 and t < T_SETTLE + 0.9)
+			local on = not calm and ((t >= T_RISE and t < T_RISE + 0.65) or (t >= T_SETTLE + 0.25 and t < T_SETTLE + 0.9))
 			if on then
 				local c = gunCf.Position - toCam
 				local flat = CFrame.lookAt(c, c + toCam) * CFrame.Angles(math.pi / 2, 0, 0)
@@ -1201,9 +1236,9 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 
 		-- the light pillar out of the open crate
-		local pIn = easeOutCubic(prog(t, T_BURST, T_BURST + 0.14))
+		local pIn = if calm then prog(t, T_BURST, T_BURST + CALM_BURST) else easeOutCubic(prog(t, T_BURST, T_BURST + 0.14))
 		local pOut = 1 - prog(t, T_BURST + 0.3, T_RISE - 0.1)
-		local swell = 1 + 0.7 * math.exp(-(t - T_BURST) * 5)
+		local swell = if calm then 1 else 1 + 0.7 * math.exp(-(t - T_BURST) * 5)
 		if t >= T_BURST and pIn * pOut > 0.01 then
 			local h = 40 * pIn
 			poseColumn(pillarCore, 0, caseTop - 1, 0, h, 1.5 * swell, 1 - pIn * pOut * 0.8)
@@ -1321,6 +1356,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	end
 
 	self.update(0)
+	root.Parent = parent
 	return self :: Stage
 end
 

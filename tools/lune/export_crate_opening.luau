@@ -8,8 +8,8 @@
 	  SHOTS_EXTRA=build/preview/crate_open_shots.json node tools/preview/render.mjs crate_open_10_1 crate_open_10_1
 	(tools/preview/render_crate_opening.sh renders them all)
 
-	  lune run tools/lune/export_crate_opening.luau reel [level] [fps=60]   the whole opening as a video,
-	      waiting a moment at the reveal as if AWESOME! was pressed then:
+	  lune run tools/lune/export_crate_opening.luau reel [level] [fps=60] [calm]   the whole opening as a video,
+	      waiting a moment at the reveal as if AWESOME! was pressed then (calm: with Reduce motion, voidcrate_<level>_calm):
 	-> build/preview/voidcrate_<level>_base.json, voidcrate_<level>/fx_NNNN.json + ui_NNNN.json,
 	   voidcrate_<level>_shots.json, voidcrate_<level>_board.json
 	then: node tools/preview/render_reel.mjs voidcrate_<level> 60 9000000
@@ -126,18 +126,20 @@ if mode == "tiers" then
 	process.exit(0)
 end
 
-local stage = Stage.build(workspace, ORIGIN, level, ore, Stage.blasterModel(level, ore))
+local calm = mode == "reel" and process.args[4] == "calm"
+local stage = Stage.build(workspace, ORIGIN, level, ore, Stage.blasterModel(level, ore), calm)
 -- the overlay ("NEW BLASTER!", the flash, AWESOME!) at the render's 1.25 UI scale
 local view = CrateOpeningView.build()
 view.Gui.Scale.Scale = 1.25
 CrateOpeningView.fit(view, 1280, 720)
 CrateOpeningView.setBlaster(view, level, ore)
+view.Calm = calm
 
 fs.writeDir(root .. "/build/preview")
 
 if mode == "reel" then
 	local fps = tonumber(process.args[3]) or 60
-	local tag = "voidcrate_" .. level
+	local tag = "voidcrate_" .. level .. (if calm then "_calm" else "")
 	local WAIT = 1.2 -- how long the reveal waits for AWESOME! here
 	local W, H = 1600, 900
 	-- the room never moves: the base scene; everything else per frame

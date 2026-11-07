@@ -2,7 +2,7 @@
 	The screen over the void crate opening (VaultController plays the 3D stage,
 	Builders/CrateOpeningStage; owner 2026-11-06, his storyboard, then "slower, more
 	wow, the blaster placed like the secret ore"): a fade in, the white flash at the
-	burst, "NEW BLASTER!" with its crown flying in from the side and holding a
+	burst (Reduce motion: none), "NEW BLASTER!" with its crown flying in from the side and holding a
 	moment; then, the blaster on the left, the words on the right one after the
 	other like the secret ore's reveal: the ribbon, the rarity big, a line, the
 	blaster's name, its level with the stars of its rarity, its damage counting up,
@@ -22,6 +22,7 @@ local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local Format = require(Shared.Util.Format)
+local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 local UIKit = require(script.Parent.UIKit)
 local VaultView = require(script.Parent.VaultView)
 
@@ -75,7 +76,8 @@ export type Refs = {
 	Collected: Frame,
 	CollectedScale: UIScale,
 	Skip: TextLabel,
-	Calm: boolean, -- Reduce motion: a dimmer flash
+	Calm: boolean, -- Reduce motion: no flash at all
+	FlashOk: boolean, -- the burst's flash may show (claimFlash: the game's one flash gap)
 }
 
 local function clamp01(x: number): number
@@ -521,6 +523,7 @@ function CrateOpeningView.build(): Refs
 		CollectedScale = collectedScale,
 		Skip = skip,
 		Calm = false,
+		FlashOk = true,
 	}
 end
 
@@ -602,6 +605,11 @@ function CrateOpeningView.setSkipText(refs: Refs, text: string)
 	refs.Skip.Text = text
 end
 
+-- At the burst: its one flash takes the game's flash slot (RevealKit: too soon after another reveal's: none). Reduce motion: none, no slot taken.
+function CrateOpeningView.claimFlash(refs: Refs, now: number)
+	refs.FlashOk = not refs.Calm and RevealKit.takeFlash(now)
+end
+
 --[[
 	Poses the overlay for time t: the fade in, the flash at `burst`, the title
 	flying in at `reveal`, holding and flying on; the words one after the other;
@@ -613,8 +621,8 @@ function CrateOpeningView.update(refs: Refs, t: number, burst: number, reveal: n
 	local out = leaving or 0
 	refs.Fade.BackgroundTransparency = math.min(fadeIn, 1 - out)
 	refs.Fade.Visible = refs.Fade.BackgroundTransparency < 0.999
-	local flash = if t >= burst then 1 - prog(t, burst, burst + 0.32) else 0
-	refs.Flash.BackgroundTransparency = 1 - flash * (if refs.Calm then 0.3 else 0.95)
+	local flash = if t >= burst and refs.FlashOk and not refs.Calm then 1 - prog(t, burst, burst + 0.32) else 0
+	refs.Flash.BackgroundTransparency = 1 - flash * 0.95
 	refs.Flash.Visible = flash > 0.001
 
 	-- the title flies in from the left, lands with a kick, grows slowly, flies on to the right

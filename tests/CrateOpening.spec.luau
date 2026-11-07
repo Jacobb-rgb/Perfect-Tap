@@ -4,7 +4,8 @@
 	budget with mobile-safe parts, the blaster is shown at its hero size, the
 	whole 10 seconds pose without errors or NaN, the timeline (case lands,
 	bursts, the blaster appears only after the burst), the camera stays in the
-	room, and two builds pose the same (deterministic).
+	room, two builds pose the same (deterministic), and with Reduce motion nothing
+	flashes, frame by frame through the burst and the reveal.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -19,7 +20,9 @@ return function(T, Loader)
 
 	local ORIGIN = CFrame.new(0, 3000, 0)
 	local CASE_BUDGET = 260
-	local STAGE_BUDGET = 1100
+	-- raised on purpose (owner 2026-11-06: "more animations, a bigger wow"; main had about 500): LV 10 is 1110.
+	-- A Studio check on a phone still has to back it (budget-policy: measured, phones still smooth).
+	local STAGE_BUDGET = 1120
 
 	local function parts(root: any): { any }
 		local out = {}
@@ -35,11 +38,28 @@ return function(T, Loader)
 		return v.X == v.X and v.Y == v.Y and v.Z == v.Z and math.abs(v.X) < 1e7 and math.abs(v.Y) < 1e7 and math.abs(v.Z) < 1e7
 	end
 
-	local function build(level: number): (any, any)
+	local function build(level: number, calm: boolean?): (any, any)
 		local holder = Instance.new("Model")
 		local ore = BlasterData.vaultOre(level)
-		local stage = Stage.build(holder, ORIGIN, level, ore, Stage.blasterModel(level, ore))
+		local stage = Stage.build(holder, ORIGIN, level, ore, Stage.blasterModel(level, ore), calm)
 		return stage, holder
+	end
+
+	-- The named parts and lights of a stage.
+	local function named(holder: any, name: string): { any }
+		local out = {}
+		for _, d in holder:GetDescendants() do
+			if d.Name == name then
+				table.insert(out, d)
+			end
+		end
+		T.truthy(#out > 0, "the stage has " .. name)
+		return out
+	end
+
+	-- How much a part shows now: 0 when hidden (parked far below) or see-through.
+	local function shows(p: any): number
+		return if p.CFrame.Position.Y < -1000 then 0 else 1 - p.Transparency
 	end
 
 	T.test("CrateOpening: every level's case builds, mobile-safe, within budget", function()
@@ -142,17 +162,45 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("CrateOpening: every level's stage stays within its budgets", function()
+		for level = 1, BlasterData.MaxLevel do
+			local _, holder = build(level)
+			T.le(#parts(holder), STAGE_BUDGET, "level " .. level .. " stage parts")
+			local lights = 0
+			for _, d in holder:GetDescendants() do
+				if d:IsA("Light") then
+					lights += 1
+				end
+			end
+			T.le(lights, 4, "level " .. level .. ": at most 4 lights")
+		end
+	end)
+
+	T.test("CrateOpening: the stage goes into the world only when it is whole", function()
+		local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+		local holder = Instance.new("Model")
+		local block = Geo.block
+		local calls, early = 0, 0
+		Geo.block = function(...)
+			calls += 1
+			if #holder:GetChildren() > 0 then
+				early += 1
+			end
+			return block(...)
+		end
+		local ore = BlasterData.vaultOre(5)
+		local ok, stage = pcall(Stage.build, holder, ORIGIN, 5, ore, Stage.blasterModel(5, ore))
+		Geo.block = block
+		T.truthy(ok, tostring(stage))
+		T.lt(100, calls, "the parts go through Geo.block")
+		T.eq(early, 0, "none of them is made inside the world")
+		T.eq(stage.Root.Parent, holder, "then it goes in")
+		T.lt(stage.Hold, stage.Duration, "it is posed")
+	end)
+
 	T.test("CrateOpening: the stage poses the whole opening without errors or NaN", function()
 		local stage, holder = build(7)
 		local list = parts(holder)
-		T.le(#list, STAGE_BUDGET, "stage parts")
-		local lights = 0
-		for _, d in holder:GetDescendants() do
-			if d:IsA("Light") then
-				lights += 1
-			end
-		end
-		T.le(lights, 4, "at most 4 lights")
 		local t = 0
 		while t <= stage.Duration + 0.5 do
 			stage.update(t)
@@ -274,6 +322,178 @@ return function(T, Loader)
 		-- gone at the end
 		stage.update(stage.Duration)
 		T.lt(gun[1].CFrame.Position.Y - ORIGIN.Position.Y, -1000, "collected")
+	end)
+
+	T.test("CrateOpening: the crate's strips pulse under 3 times a second", function()
+		local stage, holder = build(7)
+		local strip = holder:FindFirstChild("Case", true):FindFirstChild("Base", true)
+		local lit = nil
+		for _, p in parts(strip) do
+			if p.Material == Enum.Material.Neon and p.Name ~= "Inside" and p.Name ~= "Seam" then
+				lit = p
+				break
+			end
+		end
+		T.truthy(lit, "a strip")
+		local times = {}
+		local last, rising = nil, nil
+		local t = Stage.T_IMPACT
+		while t < Stage.T_BURST do
+			stage.update(t)
+			local a = lit.Transparency
+			if last and a ~= last then
+				local up = a > last
+				if rising ~= nil and up ~= rising then
+					table.insert(times, t)
+				end
+				rising = up
+			end
+			last = a
+			t += 1 / 240
+		end
+		T.lt(1, #times, "it does pulse")
+		for i = 3, #times do
+			-- (two turning points = one whole pulse)
+			T.le(1 / (times[i] - times[i - 2]), 3, string.format("pulses a second at %.2f", times[i]))
+		end
+	end)
+
+	-- Every frame from `from` to `to` at 60 frames a second.
+	local function posed(stage: any, from: number, to: number, each: (t: number) -> ())
+		for frame = math.floor(from * 60), math.ceil(to * 60) do
+			local t = frame / 60
+			stage.update(t)
+			each(t)
+		end
+	end
+
+	T.test("CrateOpening: Reduce motion: no shake, no blur, nothing that only flashes", function()
+		local FLASHES = { "Flare", "RevealRing", "BurstRing", "EnergyWave", "ShotGlow" }
+		local function each(holder: any, fn: (name: string, list: { any }) -> ())
+			for _, name in FLASHES do
+				fn(name, named(holder, name))
+			end
+		end
+		for _, level in { 5, 10 } do
+			local stage, holder = build(level, true)
+			local label = "level " .. level .. " "
+			posed(stage, Stage.T_LAND - 0.02, Stage.T_SETTLE + 1, function(t: number)
+				T.eq(stage.blur(t), 0, label .. "blur")
+				T.eq(stage.shake(t), Vector3.zero, label .. "shake")
+				each(holder, function(name: string, list: { any })
+					for _, p in list do
+						T.eq(shows(p), 0, string.format("%s%s at %.3f", label, name, t))
+					end
+				end)
+			end)
+		end
+		-- (the normal opening has them all: what this looks for is really there)
+		local stage, holder = build(10)
+		local seen = {}
+		posed(stage, Stage.T_LAND - 0.02, Stage.T_SETTLE + 1, function()
+			each(holder, function(name: string, list: { any })
+				seen[name] = seen[name] or shows(list[1]) > 0
+			end)
+		end)
+		for _, name in FLASHES do
+			T.truthy(seen[name], "the normal opening shows " .. name)
+		end
+		T.lt(0, stage.blur(stage.Burst + 0.02), "the normal opening's blur")
+		T.truthy(stage.shake(stage.Burst + 0.02).Magnitude > 0, "the normal opening's shake")
+	end)
+
+	T.test("CrateOpening: Reduce motion: the pillar and every light come up slowly and never jump", function()
+		for _, level in { 5, 10 } do
+			local stage, holder = build(level, true)
+			local label = "level " .. level .. " "
+			local core, wide = named(holder, "PillarCore")[1], named(holder, "PillarWide")[1]
+			local rim = named(holder, "PlatformRim")[1]
+			local inside = named(holder, "Inside")[1]
+			local coreLight, gunLight = named(holder, "CoreLight")[1], named(holder, "GunLight")[1]
+			local ray = named(holder, "GodRay")[1]
+			local prev: any = nil
+			local fullAt = nil
+			posed(stage, Stage.T_LAND - 0.02, Stage.T_RISE_END + 0.5, function(t: number)
+				local now = {
+					core = shows(core),
+					wide = shows(wide),
+					rim = rim.Color,
+					inside = shows(inside),
+					ray = shows(ray),
+					coreLight = coreLight.Brightness,
+					gunLight = gunLight.Brightness,
+				}
+				local at = label .. string.format("at %.3f: ", t)
+				if now.core > 0 then
+					T.le(core.Size.Y, 1.5 + 1e-3, at .. "no swell")
+					T.le(wide.Size.Y, 4.4 + 1e-3, at .. "no swell")
+				end
+				if prev then
+					T.le(now.core - prev.core, 0.025, at .. "the pillar's core comes up slowly")
+					T.le(now.wide - prev.wide, 0.01, at .. "the pillar comes up slowly")
+					T.le(now.inside - prev.inside, 0.025, at .. "the inside's glow comes up slowly")
+					T.le(now.ray - prev.ray, 0.005, at .. "the god rays come up slowly")
+					T.le(now.coreLight - prev.coreLight, 0.12, at .. "the core light")
+					T.le(prev.coreLight - now.coreLight, 0.25, at .. "the core light falls gently")
+					T.le(now.gunLight - prev.gunLight, 0.12, at .. "the blaster's light")
+					T.le(math.abs(now.rim.R - prev.rim.R), 0.015, at .. "no white jump on the rim")
+					T.le(math.abs(now.rim.G - prev.rim.G), 0.015, at .. "no white jump on the rim")
+					T.le(math.abs(now.rim.B - prev.rim.B), 0.015, at .. "no white jump on the rim")
+				end
+				if not fullAt and now.core >= 0.25 then
+					fullAt = t
+				end
+				prev = now
+			end)
+			T.truthy(fullAt, label .. "the pillar does show")
+			T.lt(Stage.T_BURST + 0.15, fullAt, label .. "a slow fade, not a pop")
+		end
+		-- (the normal burst does jump: the check above can tell the two apart)
+		local stage, holder = build(10)
+		local wide = named(holder, "PillarWide")[1]
+		stage.update(Stage.T_BURST)
+		local a = shows(wide)
+		stage.update(Stage.T_BURST + 3 / 60)
+		T.lt(a + 0.1, shows(wide), "the normal pillar is fast")
+	end)
+
+	T.test("CrateOpening: Reduce motion: the crate's strips hold steady, the wheel of rays comes up slowly", function()
+		local stage, holder = build(10, true)
+		local strips = {}
+		for _, p in parts(holder:FindFirstChild("Case", true)) do
+			if p.Material == Enum.Material.Neon and p.Name ~= "Inside" and p.Name ~= "Seam" then
+				table.insert(strips, p)
+			end
+		end
+		T.lt(4, #strips, "strips")
+		local base = named(holder, "Inside")[1]
+		local t = Stage.T_IMPACT
+		while t < Stage.T_BURST do
+			stage.update(t)
+			T.eq(strips[1].Transparency, 0, string.format("steady at %.3f", t))
+			T.near(base.CFrame.Position.X, 0, 1e-3, string.format("the crate does not rattle at %.3f", t))
+			t += 1 / 60
+		end
+		local wedges = {}
+		for _, d in holder:GetDescendants() do
+			if d:IsA("WedgePart") and d.Parent == stage.Root then
+				table.insert(wedges, d)
+			end
+		end
+		T.lt(10, #wedges, "the wheel of rays")
+		local prev, prevLen = 0, 0
+		posed(stage, Stage.T_RISE_END - 0.1, Stage.T_SETTLE + 1, function(time: number)
+			local w = wedges[1]
+			local now = shows(w)
+			T.le(now - prev, 0.003, string.format("it comes up slowly at %.3f", time))
+			T.le(prev - now, 1e-6, string.format("no kick that falls back at %.3f", time))
+			if now > 0 then
+				T.le(w.Size.Z - prevLen, 0.6, string.format("it grows slowly at %.3f", time))
+				prevLen = w.Size.Z
+			end
+			prev = now
+		end)
+		T.lt(0, prev, "and it does come")
 	end)
 
 	T.test("CrateOpening: a narrow screen pulls the camera back", function()

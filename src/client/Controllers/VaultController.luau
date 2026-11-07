@@ -519,7 +519,6 @@ local function step(s: any)
 	s.camera.FieldOfView = fov
 	s.blur.Size = stage.blur(t)
 	local leaving = if s.leaving then math.clamp((now - s.leaving) / LEAVE_TIME, 0, 1) else 0
-	CrateOpeningView.update(s.view, t, stage.Burst, stage.Reveal, leaving)
 	-- the sounds and particle bursts, once each
 	local fired = s.fired
 	local function once(key: string, at: number): boolean
@@ -529,6 +528,11 @@ local function step(s: any)
 		end
 		return false
 	end
+	if once("flash", stage.Burst) then
+		CrateOpeningView.claimFlash(s.view, now)
+	end
+	CrateOpeningView.update(s.view, t, stage.Burst, stage.Reveal, leaving)
+	local calm = s.view.Calm -- (Reduce motion: no particle bursts)
 	if once("prep", 0.02) then
 		Sfx.play("BlasterStart")
 	end
@@ -552,10 +556,12 @@ local function step(s: any)
 		Sfx.play("CaseBurst")
 		Sfx.play("CaseBoom")
 		Sfx.play("NodeShatter")
-		local core = (STAGE_ORIGIN * CFrame.new(0, 2.2, 0)).Position
-		Vfx.burst("Burst", core, 40, stage.Glow)
-		Vfx.burst("Sparks", core, 60, stage.Glow:Lerp(Color3.new(1, 1, 1), 0.4))
-		Vfx.burst("Glint", core, 24, Color3.new(1, 1, 1))
+		if not calm then
+			local core = (STAGE_ORIGIN * CFrame.new(0, 2.2, 0)).Position
+			Vfx.burst("Burst", core, 40, stage.Glow)
+			Vfx.burst("Sparks", core, 60, stage.Glow:Lerp(Color3.new(1, 1, 1), 0.4))
+			Vfx.burst("Glint", core, 24, Color3.new(1, 1, 1))
+		end
 	end
 	if once("rise", stage.Burst + 0.15) then
 		Sfx.play("CaseRise")
@@ -563,9 +569,11 @@ local function step(s: any)
 	if once("reveal", stage.Reveal) then
 		Sfx.play("Reveal")
 		Sfx.play("CaseBoom")
-		local hero = (STAGE_ORIGIN * CFrame.new(0, Stage.GunRest, 0)).Position
-		Vfx.burst("Burst", hero, 30, stage.Glow)
-		Vfx.burst("Glint", hero, 20, Color3.new(1, 1, 1))
+		if not calm then
+			local hero = (STAGE_ORIGIN * CFrame.new(0, Stage.GunRest, 0)).Position
+			Vfx.burst("Burst", hero, 30, stage.Glow)
+			Vfx.burst("Glint", hero, 20, Color3.new(1, 1, 1))
+		end
 	end
 	for i, at in stage.ShotTimes do
 		if once("shot" .. i, at) then
