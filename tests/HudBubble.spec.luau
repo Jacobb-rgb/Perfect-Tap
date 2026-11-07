@@ -142,4 +142,26 @@ return function(T, Loader)
 			error(err, 0)
 		end
 	end)
+
+	-- the owner's one uploaded image for the top row (2026-11-07): the four buttons read it, cell by
+	-- cell in the order of horni_lista.png; the left tiles' icons are not touched by it
+	T.test("HudBubble: the top row's own image gives the four buttons their pictures", function()
+		local roblox = require("@lune/roblox") :: any
+		local Instance = roblox.Instance
+		T.truthy(IconAssets.TopRow.Id > 0, "uploaded")
+		for name, cell in { cart = 0, lobby = 1, base = 2, vault = 3 } do
+			T.truthy(IconAssets.topRowShows(name), name .. " shows")
+			local label = Instance.new("ImageLabel")
+			IconAssets.applyTopRow(label, name)
+			T.eq(label.Image, "rbxassetid://" .. tostring(IconAssets.TopRow.Id), name .. ": the top row's image")
+			T.eq(label.ImageRectOffset.X, cell * IconAssets.Cell, name .. ": its cell")
+			T.eq(label.ImageRectOffset.Y, 0, name .. ": one row")
+			T.eq(label.ImageRectSize.X, IconAssets.Cell, name .. ": a cell wide")
+		end
+		T.falsy(IconAssets.topRowHas("wheel"), "only the four buttons")
+		local before = IconAssets.Previewing
+		IconAssets.Previewing = false
+		T.falsy(IconAssets.shows("cart"), "the left Store tile still waits for its own sheet")
+		IconAssets.Previewing = before
+	end)
 end

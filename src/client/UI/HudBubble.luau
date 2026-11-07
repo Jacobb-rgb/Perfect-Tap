@@ -1243,7 +1243,7 @@ end
 function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): TextButton
 	local button = Pop.button(topBar, "Shop", "Crimson", size, { Name = "ShopPill", LayoutOrder = 0 })
 	local label = button:FindFirstChild("Label") :: TextLabel?
-	if not layout.Compact and IconAssets.shows("cart") then
+	if not layout.Compact and IconAssets.topRowShows("cart") then
 		Pop.tabMark(button, "cart", size.Y) -- (the reel's faded picture over the left end)
 	end
 	if label then
