@@ -201,17 +201,22 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
 	TrainView.useHud(nil)
-	-- the owner's Studio window (995 x 485 pt, a mouse, 2026-11-07), drawn at 2 px a point like his
-	-- photos: as the game shows it (his top row and tile images are uploaded, the icon sheets aren't,
-	-- with More shut and open), and with every icon. The renderer's top bar is 58 px: 29 pt here.
+	-- the owner's Studio window from his log (2026-11-07): 1402 x 490 points on a mouse, 1402 x 368 with
+	-- a taller Output panel, drawn 1990 px wide: as the game shows it (his top row and tile images are
+	-- uploaded, the icon sheets aren't), with More shut and open, and with every icon. The renderer's
+	-- 58 px top bar is 41 points at that size.
 	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
-	local window = roblox.Vector2.new(995, 485 - 29)
+	local pixels = 1990 / 1402
+	local real = HudBubble.scaleFor(roblox.Vector2.new(1402, 490))
+	local window = roblox.Vector2.new(1402, 490 - 41)
+	local short = HudBubble.scaleFor(roblox.Vector2.new(1402, 368))
 	local previewing = IconAssets.Previewing
 	IconAssets.Previewing = false
-	exports.ui_hud_studio_game = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
-	exports.ui_hud_studio_game_more = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse", true))
+	exports.ui_hud_studio_game = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
+	exports.ui_hud_studio_game_more = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse", true))
+	exports.ui_hud_studio_short = UiExport.export(hud(short * pixels, short, roblox.Vector2.new(1402, 368 - 41), 1, false, false, "Mouse"))
 	IconAssets.Previewing = previewing
-	exports.ui_hud_studio_all_icons = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
+	exports.ui_hud_studio_all_icons = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do

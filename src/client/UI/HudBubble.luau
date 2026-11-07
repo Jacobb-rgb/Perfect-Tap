@@ -204,7 +204,9 @@ end
 	`uiScale`). The round look's grid is fitted to it (fitRound).
 ]]
 function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?, guiHeight: number?): Layout
-	local width = if screenWidth and screenWidth > 0 and uiScale > 0 then screenWidth / uiScale else 1280
+	-- (a camera that never gave a real size even after waitForScreen: not a tiny screen)
+	local known = screenWidth ~= nil and screenWidth >= HudBubble.ScreenReady and uiScale > 0
+	local width = if known then (screenWidth :: number) / uiScale else 1280
 	local isTouch, isTen = touch == true, tenFoot == true
 	local mouse = touch == false -- (known not to be a touch screen; nil: not said)
 	local inset = if isTen then math.ceil(width * HudBubble.TenFootSafe) else 0
@@ -1190,7 +1192,7 @@ end
 	off his photos, a run in Studio confirms it). `size` and `step` are for the specs.
 ]]
 HudBubble.ScreenReady = 200 -- points: no real screen is narrower or lower than this
-HudBubble.ScreenWait = 3 -- seconds
+HudBubble.ScreenWait = 15 -- seconds (his Studio log, 2026-11-07: 3 s ran out under load, "first 1, 1, then 1, 1")
 
 function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): (boolean, Vector2?, Vector2?)
 	local function read(): Vector2?

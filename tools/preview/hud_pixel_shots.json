@@ -24,7 +24,8 @@
   "blaster_slot_568_on": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_blaster_slot_568_on_light", "uiInset": 163, "width": 1598, "height": 900},
   "blaster_slot_667_on": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_blaster_slot_667_on_light", "uiInset": 139, "width": 1601, "height": 900},
   "blaster_slot_844_on": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_blaster_slot_844_on_light", "uiInset": 134, "width": 1948, "height": 900},
-  "hud_studio_game": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_game_light", "uiInset": 58, "width": 1990, "height": 970},
-  "hud_studio_game_more": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_game_more_light", "uiInset": 58, "width": 1990, "height": 970},
-  "hud_studio_all_icons": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_all_icons_light", "uiInset": 58, "width": 1990, "height": 970}
+  "hud_studio_game": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_game_light", "uiInset": 58, "width": 1990, "height": 696},
+  "hud_studio_short": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_short_light", "uiInset": 58, "width": 1990, "height": 522},
+  "hud_studio_game_more": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_game_more_light", "uiInset": 58, "width": 1990, "height": 696},
+  "hud_studio_all_icons": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_studio_all_icons_light", "uiInset": 58, "width": 1990, "height": 696}
 }

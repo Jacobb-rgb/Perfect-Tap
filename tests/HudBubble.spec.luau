@@ -196,9 +196,29 @@ return function(T, Loader)
 			T.falsy(phone.Gui:FindFirstChild("Offers"), "no offers")
 			phone.Gui:Destroy()
 
-			-- what the first tiny viewport gave him on a mouse before the wait: a mouse never gets Narrow now
+			-- his Studio log (2026-11-07): "first 1, 1, then 1, 1" when the wait ran out: a mouse still
+			-- gets the big row and the offers, not the row of a 1-point screen
 			local tiny = HudBubble.layout(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, guiH)
 			T.falsy(tiny.Narrow, "a mouse window is never the smallest phone")
+			T.truthy(HudBubble.bigTopRow(tiny), "the big row with no real size")
+			local unknown = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, guiH)
+			T.truthy(unknown.TopBar:FindFirstChild("ShopPill"), "the Shop in the row")
+			T.truthy(unknown.Gui:FindFirstChild("Offers"), "and the offers")
+			unknown.Gui:Destroy()
+			-- his window in the same log: 1402 x 368 and 1402 x 490 points (the Output panel open or shut)
+			for _, h in { 368, 490 } do
+				local real = Vector2.new(1402, h)
+				local s = HudBubble.scaleFor(real)
+				local big = HudBubble.buildGame(s, 1402, false, false, h - 58)
+				T.truthy(big.TopBar:FindFirstChild("ShopPill"), `the Shop at 1402 x {h}`)
+				T.truthy(HudBubble.bigTopRow(HudBubble.layout(s, 1402, false, false, h - 58)), `the big row at 1402 x {h}`)
+				-- the offers end above the boost corner at 490; at 368 they'd reach it, so they hide
+				local column = big.Gui:FindFirstChild("Offers") :: GuiObject
+				local gui = Vector2.new(1402, h - 58)
+				local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+				T.eq(BoostView.clearOfOffers(column, s, gui), h == 490, `offers and clover at 1402 x {h}`)
+				big.Gui:Destroy()
+			end
 		end)
 		UIConfig.LightUI, IconAssets.Previewing = before, previewing
 		if not ok then

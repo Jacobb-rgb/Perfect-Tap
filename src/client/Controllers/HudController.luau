@@ -157,7 +157,10 @@ local function refreshOffers()
 		return
 	end
 	local size = refs.Gui.AbsoluteSize
-	local room = size.Y <= 0 or TutorialView.clearOfOffers(offers, HudController.uiScale(), size, GuiService:IsTenFootInterface())
+	local scale = HudController.uiScale()
+	local room = size.Y <= 0
+		or TutorialView.clearOfOffers(offers, scale, size, GuiService:IsTenFootInterface())
+			and BoostView.clearOfOffers(offers, scale, size)
 	offers.Visible = room and UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch
 end
 
