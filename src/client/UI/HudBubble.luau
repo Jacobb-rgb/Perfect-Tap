@@ -119,6 +119,7 @@ HudBubble.Spots = {
 
 export type Layout = {
 	Compact: boolean,
+	Mouse: boolean, -- known not to be a touch screen (HudBubble.bigTopRow)
 	Tile: number,
 	TileGap: number,
 	Columns: number,
@@ -171,10 +172,11 @@ end
 function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?, tenFoot: boolean?, guiHeight: number?): Layout
 	local width = if screenWidth and screenWidth > 0 and uiScale > 0 then screenWidth / uiScale else 1280
 	local isTouch, isTen = touch == true, tenFoot == true
+	local mouse = touch == false -- (known not to be a touch screen; nil: not said)
 	local inset = if isTen then math.ceil(width * HudBubble.TenFootSafe) else 0
 	local layout: Layout
 	if uiScale <= HudBubble.CompactScale then
-		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
+		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth and not mouse
 		-- (the round look: 72 units = 44.6 pt; fitRound picks the columns)
 		local round = PopTheme.round()
 		layout = {
@@ -190,6 +192,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 			Slots = 5,
 			Width = width,
 			Touch = isTouch,
+			Mouse = mouse,
 			TenFoot = isTen,
 			Inset = inset,
 		}
@@ -210,6 +213,7 @@ function HudBubble.layout(uiScale: number, screenWidth: number?, touch: boolean?
 			Slots = 6,
 			Width = width,
 			Touch = isTouch,
+			Mouse = mouse,
 			TenFoot = isTen,
 			Inset = inset,
 		}
@@ -1135,12 +1139,13 @@ end
 	once, when it is built: a PC window got the smallest phone's top row for the whole session
 	(owner's Studio photos, 2026-11-07: Lobby / Base / Vault small, no Shop, no offers). Waits a few
 	frames, at most `timeout` seconds, until the viewport is a real screen; false if it never was.
-	`size` and `step` are for the specs.
+	Also returns the first and the last size read (HudController logs them: the cause above is read
+	off his photos, a run in Studio confirms it). `size` and `step` are for the specs.
 ]]
 HudBubble.ScreenReady = 200 -- points: no real screen is narrower or lower than this
 HudBubble.ScreenWait = 3 -- seconds
 
-function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): boolean
+function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step: (() -> ())?): (boolean, Vector2?, Vector2?)
 	local function read(): Vector2?
 		if size then
 			return size()
@@ -1152,13 +1157,15 @@ function HudBubble.waitForScreen(timeout: number?, size: (() -> Vector2?)?, step
 		return if ok and typeof(viewport) == "Vector2" then viewport else nil
 	end
 	local deadline = os.clock() + (timeout or HudBubble.ScreenWait)
+	local first: Vector2? = nil
 	while true do
 		local viewport = read()
+		first = first or viewport
 		if viewport and viewport.X >= HudBubble.ScreenReady and viewport.Y >= HudBubble.ScreenReady then
-			return true
+			return true, first, viewport
 		end
 		if os.clock() >= deadline then
-			return false
+			return false, first, viewport
 		end
 		if step then
 			step()
@@ -1174,13 +1181,25 @@ HudBubble.TopBarPad = 5
 HudBubble.TopBarGap = 8
 HudBubble.PreviewInset = 36 -- the preview renderer's top bar inset (px)
 
+--[[
+	The big top row (the Shop, Lobby, Base and Vault with their pictures) and the offers: everywhere
+	but on a touch phone, whose thumbs and buttons need the room, and a very narrow window, where the
+	row would meet the left tiles. The owner's Studio window is 995 x 485 pt, scale 0.67 (Compact,
+	1476 units wide), a mouse, and he picked them for it.
+]]
+HudBubble.BigRowWidth = 1100 -- design units: a Compact mouse window this wide gets the big row
+
+function HudBubble.bigTopRow(layout: Layout): boolean
+	return not layout.Compact or (layout.Mouse == true and layout.Width >= HudBubble.BigRowWidth)
+end
+
 function HudBubble.topBarButton(layout: Layout): Vector2
 	-- (the round look: four buttons in the row, the Shop first; a little narrower on phones so
 	-- the row stays clear of the left tiles)
 	local round = PopTheme.round()
 	if layout.Narrow then
 		return Vector2.new(if round then 80 else 88, 72) -- (the smallest phones: as wide as the old icon tabs)
-	elseif layout.Compact then
+	elseif not HudBubble.bigTopRow(layout) then
 		return Vector2.new(if round then 94 else 128, 72)
 	end
 	if round then
@@ -1243,7 +1262,8 @@ end
 function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): TextButton
 	local button = Pop.button(topBar, "Shop", "Crimson", size, { Name = "ShopPill", LayoutOrder = 0 })
 	local label = button:FindFirstChild("Label") :: TextLabel?
-	if not layout.Compact and IconAssets.topRowShows("cart") then
+	local big = HudBubble.bigTopRow(layout)
+	if big and IconAssets.topRowShows("cart") then
 		Pop.tabMark(button, "cart", size.Y) -- (the reel's faded picture over the left end)
 	end
 	if label then
@@ -1251,7 +1271,7 @@ function HudBubble.shopButton(topBar: Instance, size: Vector2, layout: Layout): 
 		label.AnchorPoint = Vector2.new(0.5, 0.5)
 		label.Position = UDim2.new(0.5, 0, 0.5, -math.floor(lip / 2))
 		label.Size = UDim2.new(1, -16, 0, math.floor(size.Y * 0.62))
-		Pop.fit(label, if layout.Compact then 30 else 34)
+		Pop.fit(label, if big then 34 else 30)
 		Pop.shadow(label, 3)
 	end
 	return button
@@ -1388,7 +1408,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	UIKit.padding(topBar, HudBubble.TopBarPad)
 	topBar:SetAttribute("Pop", true)
 	topBar:SetAttribute("Bubble", true)
-	topBar:SetAttribute("Compact", layout.Compact)
+	topBar:SetAttribute("Compact", not HudBubble.bigTopRow(layout)) -- (a mouse window: the big row)
 	topBar:SetAttribute("Narrow", layout.Narrow)
 	topBar:SetAttribute("Button", HudBubble.topBarButton(layout)) -- (TeleportView sizes its buttons alike)
 	UIKit.list(topBar, Enum.FillDirection.Horizontal, HudBubble.TopBarGap, {
@@ -1501,7 +1521,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 	local carryPanel, backpack, carryLabel, blaster = HudBubble.carryGroup(gui, layout)
 	-- (phones and touch tablets: no offers: the right edge holds the tutorial bubble's SKIP and
 	-- Roblox's jump button; the Store tile and the Shop button are a tap away)
-	if round and not layout.Compact and not layout.Touch then
+	if round and HudBubble.bigTopRow(layout) and not layout.Touch then
 		HudBubble.offers(gui, layout)
 	end
 
