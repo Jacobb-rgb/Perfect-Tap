@@ -22,8 +22,19 @@ function Preview.dress(Loader: any, map: any, page: string)
 	end
 	assert(screen, "no EventBoardScreen")
 	local find = { Day = FindOfDay.day(NOW), Name = "EmberQueen", Ore = "PhoenixFeather", Grade = "Flawless" }
+	-- a real storm of the schedule, a minute in
+	local WeatherLogic = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherLogic")
+	local WeatherConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WeatherConfig")
+	local storm = NOW
+	for slot = math.floor(NOW / WeatherConfig.Schedule.Slot), math.floor(NOW / WeatherConfig.Schedule.Slot) + 500 do
+		local event = WeatherLogic.event(slot)
+		if event and event.Kind == "Storm" then
+			storm = event.Start + 60
+			break
+		end
+	end
 	local shown = if page == "weather"
-		then EventBoardLogic.weatherPage(NOW, "Storm")
+		then EventBoardLogic.weatherPage(storm, nil)
 		elseif page == "nobody" then EventBoardLogic.findPage(nil, NOW)
 		else EventBoardLogic.findPage(find, NOW)
 	local function line(y: number, height: number, text: string, color: any, widthShare: number)
