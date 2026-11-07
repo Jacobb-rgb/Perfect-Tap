@@ -874,7 +874,7 @@ function BoostController.init()
 	end)
 	for kindId, button in chips.Chips do
 		button.Activated:Connect(function()
-			BoostController.open(kindId)
+			BoostController.open(if kindId == BoostView.WeatherChip then nil else kindId)
 		end)
 	end
 	chipRefs = chips

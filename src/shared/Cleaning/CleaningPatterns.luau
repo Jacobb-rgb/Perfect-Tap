@@ -63,6 +63,21 @@ function CleaningPatterns.key(grid: number, gx: number, gy: number): number
 	return gx * grid + gy
 end
 
+-- The same pattern with its dirt `factor` times thinner (snow, WeatherBonus): the server decides
+-- when a cleaning starts and both sides apply it, so the check stays exact.
+function CleaningPatterns.thin(pattern: Pattern, factor: number): Pattern
+	if type(factor) ~= "number" or factor ~= factor or factor <= 1 or factor > 2 then
+		return pattern
+	end
+	local total = 0
+	for _, cell in pattern.Cells do
+		cell.Amount /= factor
+		total += cell.Amount
+	end
+	pattern.TotalAmount = total
+	return pattern
+end
+
 function CleaningPatterns.generate(oreId: string, seed: number): Pattern
 	local ore = OreData.get(oreId)
 	local rarity = Rarity.get(ore.Rarity)

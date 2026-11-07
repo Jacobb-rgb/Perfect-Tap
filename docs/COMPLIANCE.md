@@ -105,6 +105,9 @@ Violence and resubmit.**
   Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
+  **The weather's bonuses** (owner 2026-11-07, `Weather/WeatherBonus`): a storm's luck and a rainbow's
+  secret chance are in the odds every paid boost shows (`BoostView.context`, `hexaOdds`, `secretRows`), with
+  a note saying so while they run; the server rolls the same numbers (`Bonuses.oreLuck`, `secretMult`).
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
   floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
   and ore luck raises that chance by its square root (at most x2.5), so every

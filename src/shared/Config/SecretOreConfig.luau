@@ -67,13 +67,14 @@ function SecretOreConfig.luckMult(luck: any): number
 end
 
 -- The chance (0..1) that a dropped ore turns into this secret at ore luck `luck`.
-function SecretOreConfig.chance(secret: Secret, luck: any): number
-	return SecretOreConfig.luckMult(luck) / secret.OneIn
+-- `extra`: a multiplier on top of the luck (a rainbow, WeatherBonus); default none.
+function SecretOreConfig.chance(secret: Secret, luck: any, extra: number?): number
+	return SecretOreConfig.luckMult(luck) * (extra or 1) / secret.OneIn
 end
 
 -- "1 in N" with luck applied (what the odds panels show; N rounded to a whole number).
-function SecretOreConfig.oddsText(secret: Secret, luck: any): string
-	return SecretOreConfig.chanceText(math.max(1, math.floor(secret.OneIn / SecretOreConfig.luckMult(luck) + 0.5)))
+function SecretOreConfig.oddsText(secret: Secret, luck: any, extra: number?): string
+	return SecretOreConfig.chanceText(math.max(1, math.floor(secret.OneIn / (extra or 1) / SecretOreConfig.luckMult(luck) + 0.5)))
 end
 
 --[[
@@ -81,13 +82,13 @@ end
 	turns into, or nil. The rarest is rolled first (Rainbow Nova, then the
 	floor's own), one draw each from `random` (0..1).
 ]]
-function SecretOreConfig.roll(floorId: string?, luck: any, random: () -> number): string?
+function SecretOreConfig.roll(floorId: string?, luck: any, random: () -> number, extra: number?): string?
 	local list = SecretOreConfig.forFloor(floorId)
 	table.sort(list, function(a, b)
 		return a.OneIn > b.OneIn
 	end)
 	for _, secret in list do
-		if random() < SecretOreConfig.chance(secret, luck) then
+		if random() < SecretOreConfig.chance(secret, luck, extra) then
 			return secret.Ore
 		end
 	end

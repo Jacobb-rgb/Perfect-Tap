@@ -96,6 +96,7 @@ local MachineLogic = require(Shared.Machines.MachineLogic)
 local Rng = require(Shared.Util.Rng)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Discovery = require(script.Parent.Parent.Discovery)
 local Shards = require(script.Parent.Parent.Shards)
 local MachineService = require(script.Parent.MachineService)
@@ -271,7 +272,7 @@ local function jobTime(machine: PlacedMachine): number
 	if seconds ~= seconds or seconds == math.huge then
 		seconds = machine.Info.Time or GameConfig.MinProcessTime
 	end
-	return math.max(GameConfig.MinProcessTime, seconds / speedOf(machine))
+	return math.max(GameConfig.MinProcessTime, seconds / speedOf(machine) / Bonuses.machineMult())
 end
 
 -- Grade odds for the next job (machines with QualityLevels), else nil.
