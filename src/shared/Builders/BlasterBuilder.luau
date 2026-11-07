@@ -171,6 +171,15 @@ local function newTool(tip: string, level: number, oreId: string?, glow: Color3)
 	return tool
 end
 
+-- A gun's colours: Color (its wide bands) is "the blaster's colour", what the crate it comes in,
+-- the whole opening and its words follow (owner 2026-11-06).
+function BlasterBuilder.colors(level: any, oreId: string?): MinigunBlaster.Palette
+	local lv = BlasterData.get(level).Level
+	local look = BlasterBuilder.look(lv, oreId)
+	local ore = if look.Rusty or not oreId then "" else oreId
+	return MinigunBlaster.palette(lv, ore, KenneyBlaster.skin(lv, ore, look))
+end
+
 -- Builds a gun's parts in the shape in use (BlasterBuilder.Shape) through `part`; returns its anchors.
 function BlasterBuilder.parts(model: number, ore: string, skin: KenneyBlaster.Skin, part: KenneyBlaster.PartFn): KenneyBlaster.Anchors
 	if BlasterBuilder.Shape == "Minigun" then

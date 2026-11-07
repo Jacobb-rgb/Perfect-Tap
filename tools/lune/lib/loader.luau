@@ -54,6 +54,11 @@ local function applyPatches()
 	roblox.implementMethod("BasePart", "PivotTo", function(self, target)
 		self.CFrame = target
 	end)
+	roblox.implementMethod("Workspace", "BulkMoveTo", function(_, parts, frames)
+		for i, p in parts do
+			p.CFrame = frames[i]
+		end
+	end)
 
 	-- Fake RBXScriptSignal so UI builders can :Connect() without failing.
 	local function fakeSignal()

@@ -200,6 +200,10 @@ return function(T, Loader)
 		env.worldOf = function()
 			return Vector3.zero
 		end
+		local now = 1000
+		env.clock = function()
+			return now
+		end
 		local stepFn: any = nil
 		env.connect = function(fn)
 			stepFn = fn
@@ -245,6 +249,7 @@ return function(T, Loader)
 		local ok, err = pcall(function()
 			local dt = 1 / 30
 			for frame = 1, 30 * 3 do
+				now += dt
 				BlasterShots.aim(key, muzzle, Vector3.zero, to, true, Color3.new(1, 0, 1), 10, if own then nil else 0.35, hooks)
 				stepFn(dt)
 				local lamp = out.Lamp
@@ -266,6 +271,7 @@ return function(T, Loader)
 		Motion.setReduced(false)
 		-- let the shots in the air land and the module go back to sleep
 		for _ = 1, 90 do
+			now += 1 / 30
 			if stepFn then
 				stepFn(1 / 30)
 			end

@@ -29,6 +29,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
@@ -491,14 +492,16 @@ end
 ---------------------------------------------------------------- the case icon
 
 --[[
-	A weapon case drawn with frames in its ore look (CaseBuilder.look): the
-	body, the lid with its raised panel, the glowing band, straps, the latch
-	and the glowing diamond; lava cracks on hot ores, stars on the others.
-	`w` = width in design units (height ~0.62 w).
+	A void crate drawn with frames in the colour of the blaster inside: the
+	bottom armour, the black body, the metal lid, corner posts, the glowing seam
+	and strips and the diamond core on the front; the lid's corners glow from level
+	4, a diamond on the lid from level 7. `w` = width in design units (height ~0.62 w).
 ]]
 function VaultView.caseIcon(parent: Instance, level: number, oreId: string, w: number): Frame
-	local bodyColor, panelColor, glowColor, hot = CaseBuilder.look(oreId)
+	local glowColor = BlasterBuilder.colors(level, oreId).Color
+	local bodyColor, panelColor = CaseBuilder.shades(glowColor)
 	local h = math.floor(w * 0.62)
+	local steel = panelColor:Lerp(Color3.new(1, 1, 1), 0.14)
 	local root = UIKit.new("Frame", {
 		Name = "CaseIcon",
 		BackgroundTransparency = 1,
@@ -519,72 +522,54 @@ function VaultView.caseIcon(parent: Instance, level: number, oreId: string, w: n
 		end
 		return f
 	end
-	-- a soft glow under the case
-	local glow = box("Glow", 0.06, 0.78, 0.88, 0.2, glowColor, 3, 40)
-	glow.BackgroundTransparency = 0.55
-	-- feet, body and lid
-	box("FootL", 0.12, 0.86, 0.12, 0.1, S.Outline, 3, 3)
-	box("FootR", 0.76, 0.86, 0.12, 0.1, S.Outline, 3, 3)
-	local base = box("Base", 0.04, 0.42, 0.92, 0.48, bodyColor, 4, 8)
+	local function diamond(name: string, y: number, size: number, color: Color3, z: number): Frame
+		return UIKit.new("Frame", {
+			Name = name,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(math.floor(w * 0.5), math.floor(h * y)),
+			Size = UDim2.fromOffset(size, size),
+			Rotation = 45,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = z,
+		}, root)
+	end
+	-- a soft glow under the crate
+	local glow = box("Glow", 0.04, 0.84, 0.92, 0.14, glowColor, 3, 40)
+	glow.BackgroundTransparency = 0.5
+	-- the bottom armour, the body, the lid
+	local armour = box("Armour", 0.03, 0.82, 0.94, 0.1, panelColor, 4, 3)
+	stroke(armour, 2)
+	local base = box("Base", 0.06, 0.4, 0.88, 0.44, bodyColor, 4, 4)
 	stroke(base, 3)
-	gradient(base, bodyColor:Lerp(Color3.new(1, 1, 1), 0.18), bodyColor)
-	local lid = box("Lid", 0.02, 0.14, 0.96, 0.34, bodyColor:Lerp(panelColor, 0.6), 5, 10)
+	local lid = box("Lid", 0.03, 0.17, 0.94, 0.25, panelColor, 5, 5)
 	stroke(lid, 3)
-	gradient(lid, panelColor:Lerp(Color3.new(1, 1, 1), 0.25), bodyColor:Lerp(panelColor, 0.4))
-	local inset = box("LidPanel", 0.2, 0.2, 0.6, 0.2, panelColor, 6, 5)
-	inset.BackgroundTransparency = 0.1
-	-- the glowing band where the lid meets the base, the straps, the latch
-	local band = box("Band", 0.05, 0.47, 0.9, 0.07, glowColor, 6, 3)
+	gradient(lid, panelColor:Lerp(Color3.new(1, 1, 1), 0.2), panelColor)
+	box("LidPanel", 0.2, 0.13, 0.6, 0.06, bodyColor, 4, 2)
+	-- the seam and the strips
+	local band = box("Band", 0.05, 0.41, 0.9, 0.035, glowColor, 6)
 	gradient(band, Color3.new(1, 1, 1):Lerp(glowColor, 0.45), glowColor)
-	box("StrapL", 0.2, 0.14, 0.07, 0.76, S.Outline:Lerp(bodyColor, 0.4), 7, 2)
-	box("StrapR", 0.73, 0.14, 0.07, 0.76, S.Outline:Lerp(bodyColor, 0.4), 7, 2)
-	local latch = box("Latch", 0.44, 0.42, 0.12, 0.16, S.Gold, 8, 3)
-	stroke(latch, 2)
-	-- the emblem: a glowing diamond on the lid
-	local d = math.floor(h * 0.2)
-	local gem = UIKit.new("Frame", {
-		Name = "Emblem",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(math.floor(w * 0.5), math.floor(h * 0.3)),
-		Size = UDim2.fromOffset(d, d),
-		Rotation = 45,
-		BackgroundColor3 = glowColor,
-		BorderSizePixel = 0,
-		ZIndex = 9,
-	}, root)
-	corner(gem, 3)
-	stroke(gem, 2.5)
-	gradient(gem, Color3.new(1, 1, 1):Lerp(glowColor, 0.35), glowColor)
-	-- lava cracks (hot ores) or stars (cool ores) on the base
-	if hot then
-		for i, c in { { 0.1, 0.66, 0.14, -18 }, { 0.3, 0.72, 0.1, 24 }, { 0.6, 0.64, 0.12, -30 }, { 0.8, 0.74, 0.08, 12 } } do
-			local crack = box("Crack" .. i, c[1], c[2], c[3], 0.035, glowColor, 6)
-			crack.Rotation = c[4]
-		end
-	else
-		for i, c in { { 0.1, 0.62 }, { 0.32, 0.76 }, { 0.62, 0.66 }, { 0.84, 0.78 }, { 0.5, 0.82 } } do
-			local star = box("Star" .. i, c[1], c[2], 0.025, 0.04, Color3.new(1, 1, 1):Lerp(glowColor, 0.4), 6, 2)
-			star.BackgroundTransparency = 0.15
+	box("LidStrip", 0.14, 0.27, 0.72, 0.03, glowColor, 6)
+	box("StripL", 0.19, 0.6, 0.13, 0.03, glowColor, 6)
+	box("StripR", 0.68, 0.6, 0.13, 0.03, glowColor, 6)
+	-- the corner posts with their caps
+	for i, x in { 0.04, 0.84 } do
+		local post = box("Post" .. i, x, 0.15, 0.12, 0.74, steel, 7, 2)
+		stroke(post, 2)
+		box("PostStrip" .. i, x + 0.05, 0.5, 0.02, 0.26, glowColor, 8)
+		if level >= 4 then
+			box("Cap" .. i, x, 0.13, 0.12, 0.035, glowColor, 8)
 		end
 	end
-	-- crystal shards from level 4 (more at 7 and 10), like the 3D case
-	local shards = if level >= 10 then 3 elseif level >= 7 then 2 elseif level >= 4 then 1 else 0
-	for i = 1, shards do
-		local x = ({ 0.86, 0.1, 0.5 })[i]
-		local tall = ({ 0.34, 0.26, 0.22 })[i]
-		local shard = UIKit.new("Frame", {
-			Name = "Shard" .. i,
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromOffset(math.floor(x * w), math.floor(h * (if i == 3 then 0.12 else 0.16))),
-			Size = UDim2.fromOffset(math.floor(w * 0.07), math.floor(h * tall)),
-			Rotation = ({ 14, -12, 0 })[i],
-			BackgroundColor3 = glowColor,
-			BorderSizePixel = 0,
-			ZIndex = 4,
-		}, root)
-		corner(shard, 3)
-		stroke(shard, 2)
-		gradient(shard, Color3.new(1, 1, 1):Lerp(glowColor, 0.4), glowColor)
+	-- the energy core: a metal diamond, the neon diamond, its white-hot middle
+	local d = math.floor(h * 0.34)
+	local frame = diamond("CoreFrame", 0.61, d, steel, 8)
+	stroke(frame, 2.5)
+	local gem = diamond("Emblem", 0.61, math.floor(d * 0.68), glowColor, 9)
+	gradient(gem, Color3.new(1, 1, 1):Lerp(glowColor, 0.4), glowColor)
+	diamond("CoreHot", 0.61, math.floor(d * 0.28), Color3.new(1, 1, 1):Lerp(glowColor, 0.1), 10)
+	if level >= 7 then
+		diamond("LidDiamond", 0.12, math.floor(h * 0.1), glowColor, 3)
 	end
 	return root
 end
@@ -1182,7 +1167,7 @@ VaultView.PopPaints = {
 	Heartstone = "Pink",
 } :: { [string]: string }
 
--- A case card's paint: its ore's (PopPaints), else the nearest by the case's glow colour.
+-- A case card's paint: its ore's (PopPaints), else the nearest by the ore's glow colour.
 function VaultView.popPaint(oreId: string): string
 	local named = VaultView.PopPaints[oreId]
 	if named then
@@ -1191,7 +1176,7 @@ function VaultView.popPaint(oreId: string): string
 	if oreId == "" then
 		return "Night"
 	end
-	local _, _, glow = CaseBuilder.look(oreId)
+	local _, glow = BlasterData.skin(oreId)
 	local h, s = glow:ToHSV()
 	local deg = h * 360
 	if s < 0.25 then
