@@ -21,8 +21,9 @@
 
 	Hooks (your own gun): Shot(spin) as a shot leaves, Hit(point, back) when it
 	lands. Without hooks: only the small flash at the hit. Close to a rock, with the
-	muzzle at or past the target, a shot starts back along the barrels
-	(BlasterFeel.shotStart): it always flies and lands.
+	muzzle at or past the target, a shot starts back along the barrels, never behind
+	the hand (BlasterFeel.shotStart): it flies forward and lands. Under Shots.MinShot
+	(the hand in the rock) nothing is drawn; the sound and recoil still play.
 
 	A shot = one anchored Neon ball (the head) and two Beams (the glow trail and
 	its white core), made once and reused: Shots.Pool at most in the air, other
@@ -270,7 +271,7 @@ local function fire(gun: Gun, late: number)
 		origin = BlasterFeel.shotStart(handle.CFrame.Position, origin, gun.To)
 	end
 	local line = gun.To - origin
-	if line.Magnitude < 0.5 then
+	if line.Magnitude < SHOTS.MinShot then
 		return
 	end
 	local shot = take(hooks ~= nil)
