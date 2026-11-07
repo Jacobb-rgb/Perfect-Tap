@@ -1917,6 +1917,10 @@ function HoverboardView.setRiding(ride: RideButton, riding: boolean, hint: strin
 	if ride.Tile or not (gradient and ringStroke and key and glyphLabel) then
 		-- the tile: only its word and its keycap change
 		ride.Label.Text = Pop.caption(if riding then "Stop" else "Ride")
+		-- (a tile with the owner's picture has "Hoverboard" drawn in it: Stop shows over it while riding)
+		if ride.Button:GetAttribute("TileArt") then
+			ride.Label.Visible = riding
+		end
 		HudBubble.setKeyCap(ride.Button, if glyph and glyph ~= "" then nil else hint or "H", glyph)
 		return
 	end

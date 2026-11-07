@@ -478,6 +478,7 @@ function HudBubble.tile(
 		Paint = (if round then HudBubble.RoundPaints[o.Role] else nil) or HudBubble.RolePaints[o.Role] or "Slate",
 		Size = o.Size,
 		LayoutOrder = o.LayoutOrder,
+		Art = if round then IconAssets.tileArt(o.Name) else nil, -- (owner 2026-11-07: his pictures)
 	})
 end
 

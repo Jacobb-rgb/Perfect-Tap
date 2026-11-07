@@ -215,4 +215,107 @@ return function(T, Loader)
 		end
 		T.falsy(IconAssets.topRowHas("wheel"), "only the four buttons")
 	end)
+
+	-- the owner's own pictures on the left (2026-11-07, hud_dlazdice.png): each listed tile shows its
+	-- cell as the whole tile, the word drawn in it; "Shop" in the menu is the boosts, not his Shop picture
+	T.test("HudBubble: the left tiles wear the owner's pictures, cell by cell", function()
+		local roblox = require("@lune/roblox") :: any
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local art = IconAssets.TileArt
+		T.truthy(art.Id > 0, "uploaded")
+		-- the order of the uploaded sheet, tools/preview/make_tile_sheet.py
+		local order = { "shop", "build", "golems", "hoverboard", "index", "daily", "inventory", "rebirth", "more", "spin", "elevator" }
+		for i, name in order do
+			T.eq(art.Cells[name], i - 1, name .. "'s cell")
+		end
+		local expect = {
+			Store = "shop",
+			Build = "build",
+			Golems = "golems",
+			Ride = "hoverboard",
+			Codex = "index",
+			Quests = "daily",
+			Backpack = "inventory",
+			Rebirth = "rebirth",
+			More = "more",
+			Wheel = "spin",
+			Elevator = "elevator",
+		}
+		for tile, name in expect do
+			T.eq(IconAssets.tileArt(tile), name, tile)
+		end
+		T.eq(IconAssets.tileArt("Shop"), nil, "the boosts' tile is not his Shop picture")
+		T.eq(IconAssets.tileArt("Settings"), nil, "no picture: keeps its face and word")
+
+		local before, previewing = UIConfig.LightUI, IconAssets.Previewing
+		UIConfig.LightUI = true
+		IconAssets.Previewing = false -- (what the game shows)
+		local ok, err = pcall(function()
+			local holder = roblox.Instance.new("Frame")
+			local spec = { Name = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel", Size = 77 }
+			local face = HudBubble.tile(holder, spec)
+			T.eq(face:GetAttribute("TileArt"), "spin", "the Spin tile")
+			T.eq(face.BackgroundTransparency, 1, "no dark face behind the picture")
+			T.eq(face:GetAttribute("DarkTile"), nil, "not a dark tile")
+			local icon = face:FindFirstChild("Icon") :: any
+			T.eq(icon.Image, "rbxassetid://" .. tostring(art.Id), "his image")
+			T.eq(icon.ImageRectOffset.X, 1 * art.Cell, "cell 9: column 1")
+			T.eq(icon.ImageRectOffset.Y, 2 * art.Cell, "cell 9: row 2")
+			T.eq(icon.ImageRectSize.X, art.Cell, "a cell wide")
+			T.eq(icon.ImageRectSize.Y, art.Cell, "a cell tall")
+			T.eq(icon.Size.X.Scale, 1, "the whole tile")
+			T.eq(icon.Size.Y.Scale, 1, "the whole tile")
+			local label = face:FindFirstChild("Label") :: any
+			T.falsy(label.Visible, "the word is in the picture")
+			local outline = face:FindFirstChildOfClass("UIStroke") :: any
+			T.falsy(outline.Enabled, "no outline over the picture's own edge")
+			local Bubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Bubble")
+			Bubble.select(face, true)
+			T.truthy(outline.Enabled, "selected: the outline")
+			Bubble.select(face, false)
+			T.falsy(outline.Enabled, "and away again")
+
+			local plain = HudBubble.tile(holder, { Name = "Settings", Label = "Settings", Icon = "cog", Role = "Settings", Size = 77 })
+			T.eq(plain:GetAttribute("TileArt"), nil, "no picture for Settings")
+			T.eq(plain:GetAttribute("DarkTile"), true, "its dark tile")
+			T.truthy((plain:FindFirstChild("Label") :: any).Visible, "its word")
+
+			-- the old pixel look keeps its own tiles
+			PopTheme.setLook("Pixel")
+			local pixel = HudBubble.tile(holder, spec)
+			PopTheme.setLook("Round")
+			T.eq(pixel:GetAttribute("TileArt"), nil, "the pixel look")
+		end)
+		UIConfig.LightUI, IconAssets.Previewing = before, previewing
+		PopTheme.setLook("Round")
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- the hoverboard tile's picture says Hoverboard: while riding, Stop shows over the drawn word
+	T.test("HudBubble: the Ride tile with the owner's picture says Stop while riding", function()
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local HoverboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HoverboardView")
+		local before = UIConfig.LightUI
+		UIConfig.LightUI = true
+		local ok, err = pcall(function()
+			local refs = HudBubble.buildGame(1, 1280, false, false, 684)
+			local ride = HoverboardView.rideTile(refs.Menu) :: any
+			T.truthy(ride, "the tile")
+			T.eq(ride.Button:GetAttribute("TileArt"), "hoverboard", "his picture")
+			T.falsy(ride.Label.Visible, "walking: only the picture")
+			HoverboardView.setRiding(ride, true)
+			T.truthy(ride.Label.Visible, "riding: the word shows")
+			T.eq(ride.Label.Text, "Stop", "says Stop")
+			HoverboardView.setRiding(ride, false)
+			T.falsy(ride.Label.Visible, "back to the picture")
+			refs.Gui:Destroy()
+		end)
+		UIConfig.LightUI = before
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end

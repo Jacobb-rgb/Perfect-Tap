@@ -301,7 +301,8 @@ function styleElement(el, node, w, h) {
       el.appendChild(tint);
     } else {
       const img = document.createElement("img");
-      img.src = `/scenes/icons/${node.icon}.png`;
+      // (the owner's whole-tile pictures live in the repo: tools/preview/tile_art)
+      img.src = node.icon.startsWith("tile_") ? `/tile_art/${node.icon}.png` : `/scenes/icons/${node.icon}.png`;
       img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
       img.style.opacity = String(1 - (node.it || 0));
       el.appendChild(img);
