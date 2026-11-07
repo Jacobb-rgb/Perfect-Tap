@@ -9,10 +9,10 @@
 	  every State snapshot by this service).
 	- SellAction (Net, rate limited), only within SELL_RANGE of a counter:
 	    ("Sell", { Key, Count, From = "Pen" | "Hands" })
-	    ("SellAll", { Filter = "Dirty" | "AllButBest", From = "Pen" | "Hands" | nil })
-	  "Dirty" sells Dirty Ore (raw ore). "AllButBest" sells everything that
-	  is not Dirty Ore, but keeps the KEEP_BEST cleaned ores with the highest
-	  podium income. At most EconomyConfig.sellCap(From) items per request (the pen
+	    ("SellAll", { Filter = "Dirty" | "All", From = "Pen" | "Hands" | nil })
+	  "Dirty" sells Dirty Ore (raw ore). "All" sells everything (owner 2026-11-07:
+	  one Sell All instead of "all but best 4", which confused); a SECRET ore is
+	  never in a batch. At most EconomyConfig.sellCap(From) items per request (the pen
 	  50, the backpack 3000: a whole backpack in one press).
 	- SellBin (tag, a Model with a child part "Intake"): items thrown or
 	  dropped in are sold (an IntakeService zone). The item's OWNER is paid,
@@ -69,8 +69,6 @@ type Pick = { From: From, Desc: Desc, Entry: Desc?, Key: string? }
 
 -- studs from a SellCounter's surface the server accepts (the prompt itself reaches less)
 SellService.Range = 20
--- "Sell all except the best N"
-SellService.KeepBest = 4
 SellService.NpcName = "Tobin the Miner"
 
 local PROMPT_DISTANCE = 12
@@ -373,35 +371,6 @@ local function candidates(player: Player, data: { [string]: any }): { Pick }
 end
 
 -- The KEEP_BEST cleaned ores with the highest income, by identity.
-local function bestKept(list: { Pick }): { [Pick]: boolean }
-	local clean: { Pick } = {}
-	for _, pick in list do
-		if ItemData.income(pick.Desc) > 0 then
-			table.insert(clean, pick)
-		end
-	end
-	local position: { [Pick]: number } = {}
-	for i, pick in clean do
-		position[pick] = i
-	end
-	table.sort(clean, function(a, b)
-		local ia, ib = ItemData.income(a.Desc), ItemData.income(b.Desc)
-		if ia ~= ib then
-			return ia > ib
-		end
-		-- equal income: keep what is in the pen, then the older entry
-		if a.From ~= b.From then
-			return a.From == "Pen"
-		end
-		return position[a] < position[b]
-	end)
-	local kept: { [Pick]: boolean } = {}
-	for i = 1, math.min(SellService.KeepBest, #clean) do
-		kept[clean[i]] = true
-	end
-	return kept
-end
-
 ---------------------------------------------------------------- requests
 
 local function deny(player: Player, text: string)
@@ -442,7 +411,7 @@ end
 local function sellAll(player: Player, data: { [string]: any }, counter: BasePart, arg: { [any]: any })
 	local filter = arg.Filter
 	local from = arg.From
-	if filter ~= "Dirty" and filter ~= "AllButBest" then
+	if filter ~= "Dirty" and filter ~= "All" then
 		return
 	end
 	if from ~= nil and from ~= "Pen" and from ~= "Hands" then
@@ -455,13 +424,11 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 			table.insert(list, pick)
 		end
 	end
-	local kept = if filter == "AllButBest" then bestKept(list) else {}
 	local picks: { Pick } = {}
 	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	local left = 0
 	for _, pick in list do
-		local wanted = (from == nil or pick.From == from)
-			and (if filter == "Dirty" then isDirty(pick.Desc) else not isDirty(pick.Desc) and not kept[pick])
+		local wanted = (from == nil or pick.From == from) and (filter == "All" or isDirty(pick.Desc))
 		if wanted then
 			-- each section to its own cap (a whole backpack at once, the pen 50 at a time)
 			if counted[pick.From] < EconomyConfig.sellCap(pick.From) then
@@ -473,7 +440,7 @@ local function sellAll(player: Player, data: { [string]: any }, counter: BasePar
 		end
 	end
 	if #picks == 0 then
-		deny(player, if filter == "Dirty" then "You have no Dirty Ore to sell." else "Nothing to sell: Tobin leaves your best ores to you.")
+		deny(player, if filter == "Dirty" then "You have no Dirty Ore to sell." else "You have nothing to sell.")
 		return
 	end
 	local taken, total = takePicks(player, data, picks)

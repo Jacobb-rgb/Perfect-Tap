@@ -334,8 +334,8 @@ local function updateGlyph()
 	view.PadGlyph.Image = image
 end
 
--- An entry's group on the light HUD: the round look's reel grid holds Store, Rebirth,
--- Golems and Daily on the left (HudBubble.RoundMain), the rest behind More.
+-- An entry's group on the light HUD: the round look's grid holds Store and Codex of the
+-- entries on the left (HudBubble.RoundMain), the rest behind More.
 local function groupOf(entry: SideMenuView.Entry): string
 	if PopTheme.round() then
 		return if HudBubble.RoundMain[entry.Id] then "Main" else "More"
@@ -345,14 +345,13 @@ end
 SideMenuController.groupOf = groupOf
 
 -- The light tiles follow the side menu's state: hidden entries hide, the
--- badge counts show on the tiles (and the MORE tile adds up its flyout's).
+-- badge counts show on the tiles (HudBubble: the MORE tile adds up its flyout's).
 local function mirrorLight()
 	local view, tiles = refs, light
 	local hud = HudController.refs()
 	if not view or not tiles or not hud then
 		return
 	end
-	local more = 0
 	for _, entry in SideMenuView.Entries do
 		local face = tiles[entry.Id]
 		if face then
@@ -365,15 +364,7 @@ local function mirrorLight()
 			end
 			local count = if hidden then 0 else (view.Counts[entry.Id] or 0)
 			HudBubble.setTileBadge(face, count)
-			if groupOf(entry) == "More" then
-				more += count
-			end
 		end
-	end
-	local moreTile = hud.Menu:FindFirstChild("More")
-	local moreFace = moreTile and moreTile:FindFirstChild("Face") :: GuiObject?
-	if moreFace then
-		HudBubble.setTileBadge(moreFace, more)
 	end
 end
 

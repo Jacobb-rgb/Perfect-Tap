@@ -2631,7 +2631,8 @@ end
 -- got its own station, 2026-10-25.)
 function PlacementController.refreshButton()
 	local button = buildButton
-	local holder = button and button.Parent
+	-- (the round look: BUILD stands behind More, so More pulses)
+	local holder = if button then HudBubble.pulseHolder(button) else nil
 	if not button or not holder then
 		return
 	end

@@ -247,22 +247,18 @@ local function sellRow(row: SellView.Row, all: boolean)
 	confirmThen(SellView.needsConfirm(count, entry.RarityOrder), SellView.confirmRowText(entry, count), run)
 end
 
-local function sellFiltered(filter: string)
+local function sellEverything()
 	if locked() then
 		return
 	end
-	local plan = SellView.plan(penSummary(), hands, filter, nil, sellMult())
+	local plan = SellView.plan(penSummary(), hands, "All", nil, sellMult())
 	if plan.Count == 0 then
-		receipt(
-			if filter == "Dirty" then "You have no Dirty Ore to sell." else "Nothing to sell: Tobin leaves your best ores to you.",
-			"Deny",
-			nil
-		)
+		receipt("You have nothing to sell.", "Deny", nil)
 		Sfx.play("UIDeny")
 		return
 	end
-	confirmThen(SellView.needsConfirm(plan.Count, plan.BestOrder), SellView.confirmPlanText(plan, filter), function()
-		send("SellAll", { Filter = filter }, true)
+	confirmThen(SellView.needsConfirm(plan.Count, plan.BestOrder), SellView.confirmPlanText(plan, "All"), function()
+		send("SellAll", { Filter = "All" }, true)
 	end)
 end
 
@@ -288,7 +284,7 @@ local function refresh()
 	local mult = sellMult()
 	wire(SellView.setEntries(view, "Pen", SellView.entries(pen, "Pen", mult)))
 	wire(SellView.setEntries(view, "Hands", SellView.entries(hands, "Hands", mult)))
-	SellView.setFooter(view, SellView.plan(pen, hands, "Dirty", nil, mult), SellView.plan(pen, hands, "AllButBest", nil, mult))
+	SellView.setFooter(view, SellView.plan(pen, hands, "All", nil, mult))
 	if not view.Confirm.Visible then
 		selectDefault(view)
 	end
@@ -363,12 +359,7 @@ local function ensureView(): SellView.Refs
 		SellController.close()
 		Sfx.play("UIClick")
 	end)
-	view.SellDirty.Activated:Connect(function()
-		sellFiltered("Dirty")
-	end)
-	view.SellRest.Activated:Connect(function()
-		sellFiltered("AllButBest")
-	end)
+	view.SellEverything.Activated:Connect(sellEverything)
 	view.ConfirmYes.Activated:Connect(function()
 		local job = pending
 		cancelConfirm()

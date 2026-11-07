@@ -2823,6 +2823,47 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("EggPanel: the SKY EGG (free in the world) has the panel; its big E stands on the player's side", function()
+		local sky = Instance.new("Model")
+		sky:SetAttribute("Egg", "Sky")
+		T.eq(EggPanel.freeEggId(sky), "Sky", "the world's Sky egg")
+		local stone = Instance.new("Model")
+		stone:SetAttribute("Egg", "Stone")
+		T.eq(EggPanel.freeEggId(stone), nil, "an egg that isn't podium-only stays the temple's")
+		T.eq(EggPanel.freeEggId(Instance.new("Model")), nil, "any other spinning model")
+		T.eq(EggPanel.freeEggId(Instance.new("Part")), nil)
+		-- a Sky capsule model inside the temple's stall still isn't sold there
+		local capsule = Instance.new("Model")
+		capsule:SetAttribute("Capsule", "Sky")
+		T.eq(EggPanel.eggId(capsule), nil, "the temple never sells it")
+		local center = Vector3.new(10, 20, 30)
+		local side = EggPanel.freeSide(center, Vector3.new(20, 14, 30), nil)
+		T.near(side.X, 1, 1e-6, "towards the player")
+		T.near(side.Y, 0, 1e-6, "level")
+		T.eq(EggPanel.freeSide(center, Vector3.new(20, 14, 33), side), nil, "a few steps round: it stays")
+		local behind = EggPanel.freeSide(center, Vector3.new(0, 14, 30), side)
+		T.near(behind.X, -1, 1e-6, "behind the egg: it comes round")
+		T.eq(EggPanel.freeSide(center, Vector3.new(10.1, 14, 30.1), side), nil, "standing on its axis: it stays")
+	end)
+
+	T.test("CapsuleController: the egg's models are ready before its Open 10 (made ahead, one a frame)", function()
+		withController(function(_C, _w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local before = CC._test.pooled("Royal")
+			CC.warm("NoSuchEgg")
+			CC.warm("Royal")
+			CC.warm("Royal") -- (twice: one job)
+			T.eq(CC._test.pooled("Royal"), before, "nothing in this frame")
+			local task = require("@lune/task")
+			local waited = 0
+			while CC._test.pooled("Royal") < CC.WarmEggsPhone and waited < 60 do
+				task.wait(0.05)
+				waited += 1
+			end
+			T.truthy(CC._test.pooled("Royal") >= CC.WarmEggsPhone, "they come")
+		end)
+	end)
+
 	T.test("CapsuleController: the HUD and the prompts always come back (owner 2026-11-07: everything vanished)", function()
 		withController(function(_C, _w)
 			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
@@ -2860,7 +2901,12 @@ return function(T, Loader)
 					hidden = scale.Scale == 0 and CC._test.hudHidden()
 				end)
 				-- the clean-up after the opening fails (the hole: it killed the chain, nothing ever came back)
-				Stage.clear = function()
+				local clears = 0
+				Stage.clear = function(...)
+					clears += 1
+					if clears == 1 then
+						return clear(...) -- (the one before the opening)
+					end
 					error("a broken clean-up")
 				end
 				CC._test.result(one)
@@ -2885,7 +2931,7 @@ return function(T, Loader)
 				CC._test.setHatch(function(_o: any, result: any)
 					if result.Capsule == "Stone" then
 						stuck += 1
-						task.wait(3600)
+						require("@lune/task").wait(3600)
 						error("never here: the watch stopped this thread")
 					end
 					played += 1

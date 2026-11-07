@@ -95,7 +95,11 @@
 	  it TweenService tweens made when the panel shows (nothing per frame),
 	  cancelled when it hides; flashes stay under 3 a second.
 	The capsule window (CapsuleView: every egg, x3 / x10, the golems' names)
-	stays one button away: the golem inventory's EGGS.
+	stays one button away: the golem inventory's EGGS. The SKY EGG, on its
+	podium out in the world, has this panel too (owner 2026-11-07: "only the
+	new one"), not the window: EggPanel.freeEggId; its big E stands on the
+	player's side of it (EggPanel.freeSide); the server opens it only near
+	its podium (CapsuleService.nearPodium).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -164,6 +168,7 @@ type Spot = {
 	Anchor: Attachment, -- the panel (over the egg's top)
 	Buy: ProximityPrompt,
 	Auto: ProximityPrompt?,
+	Free: Vector3?, -- a free-standing egg (the SKY EGG): the side of it its prompts are on
 }
 type Picture = { Model: Model?, Center: Vector3, Radius: number }
 
@@ -1426,6 +1431,7 @@ local function show(id: string)
 	setFloating(l ~= nil) -- (touch: beside the egg; PC: over it, kept on the screen)
 	r.Gui.Adornee = spot.Anchor
 	r.Gui.Enabled = not veiled
+	CapsuleController.warm(id) -- (its Open 10 is ready before it is pressed)
 	chipPrice = nil -- (a new egg: its price shows at once)
 	placeRing(spot)
 	linesEgg = nil
@@ -1730,7 +1736,7 @@ local function onTriggered(prompt: ProximityPrompt, handler: () -> ())
 	prompt.Triggered:Connect(handler)
 end
 
-local function addEgg(id: string, model: Model)
+local function addEgg(id: string, model: Model, free: boolean?)
 	if spots[id] then
 		return
 	end
@@ -1765,6 +1771,7 @@ local function addEgg(id: string, model: Model)
 		Anchor = anchor,
 		Buy = buy,
 		Auto = nil,
+		Free = if free then front else nil,
 	}
 	onTriggered(buy, function()
 		local from = if os.clock() - discAt < 0.5 then "Pointer" else nil -- (the disc tapped, or E / a pad's Y)
@@ -1811,6 +1818,18 @@ end
 
 local watched: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
+-- A podium-only egg free in the world (the SKY EGG): taken as it streams in, whole (an atomic model).
+local function watchFree(instance: Instance)
+	local id = EggPanel.freeEggId(instance)
+	if id and not spots[id] then
+		task.defer(function()
+			if instance.Parent then
+				addEgg(id, instance :: Model, true)
+			end
+		end)
+	end
+end
+
 -- A stall streams in part by part (the eggs are atomic models): take each egg as it comes.
 local function watchStall(stall: Instance)
 	for id, model in EggPanel.eggsIn(stall) do
@@ -1856,6 +1875,15 @@ local function tick()
 	end
 	-- within the "Buy Egg!" prompt's reach the keys work and their badges show (EggPanel.inReach)
 	local spot = if current then spots[current] else nil
+	if spot and spot.Free and position then
+		-- (a free-standing egg: the big E on the player's side of it)
+		local side = EggPanel.freeSide(spot.Center, position, spot.Free)
+		if side then
+			spot.Free = side
+			spot.PromptAt = spot.Center + side * (spot.Half + 0.5)
+			spot.Point.Position = spot.PromptAt
+		end
+	end
 	local near = position ~= nil and spot ~= nil and EggPanel.inReach(position, spot.PromptAt) and onScreen(spot)
 	if near ~= reach then
 		reach = near
@@ -1999,6 +2027,10 @@ function EggPanelController.start()
 		watchStall(stall)
 	end
 	CollectionService:GetInstanceAddedSignal(STALL_TAG):Connect(watchStall)
+	for _, instance in CollectionService:GetTagged(EggPanel.FreeTag) do
+		watchFree(instance)
+	end
+	CollectionService:GetInstanceAddedSignal(EggPanel.FreeTag):Connect(watchFree)
 	local elapsed, sinceRefresh = 0, 0
 	RunService.Heartbeat:Connect(function(dt: number)
 		elapsed += dt

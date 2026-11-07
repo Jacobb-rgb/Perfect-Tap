@@ -320,6 +320,41 @@ function EggPanel.eggId(instance: Instance): string?
 	return capsule.Id
 end
 
+--[[
+	A podium-only egg standing free in the world (owner 2026-11-07: the SKY EGG
+	gets this panel, "only the new one"): its atomic, spinning model
+	(GolemBuilder.themedEgg's attribute Egg = its capsule id; CapsuleConfig
+	Podium), or nil. The server still opens it only near its podium.
+]]
+EggPanel.FreeTag = "Spin" -- (the tag such an egg's model has: SkyHaven's spinner)
+function EggPanel.freeEggId(instance: Instance): string?
+	if not instance:IsA("Model") then
+		return nil
+	end
+	local id = instance:GetAttribute("Egg")
+	local capsule = if type(id) == "string" then CapsuleConfig.ById[id] else nil
+	return if capsule and capsule.Podium then capsule.Id else nil
+end
+
+--[[
+	Where the prompts of a free-standing egg go for a player at `position`: on
+	the player's side of the egg, so the big E is reachable from all round it.
+	`front` = its side now; it moves only past FreeTurn (no jitter while the
+	player walks a little). Returns the new side, or nil to stay.
+]]
+EggPanel.FreeTurn = 0.7 -- the cosine of the turn (about 45 degrees)
+function EggPanel.freeSide(center: Vector3, position: Vector3, front: Vector3?): Vector3?
+	local flat = Vector3.new(position.X - center.X, 0, position.Z - center.Z)
+	if flat.Magnitude < 0.5 then
+		return nil
+	end
+	local side = flat.Unit
+	if front and front:Dot(side) > EggPanel.FreeTurn then
+		return nil
+	end
+	return side
+end
+
 -- The temple's eggs in `stall` (the CapsuleStall model), one per capsule id.
 function EggPanel.eggsIn(stall: Instance): { [string]: Model }
 	local out: { [string]: Model } = {}

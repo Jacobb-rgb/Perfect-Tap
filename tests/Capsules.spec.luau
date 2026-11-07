@@ -925,37 +925,11 @@ return function(T, Loader)
 		T.falsy(CapsuleService.nearPodium(w.player, "Sky"), "not near")
 	end)
 
-	withWorld("Capsules: an egg's own podium (EggPodium) gets an Open prompt and an odds board", function(_w)
-		local model = Instance.new("Model")
-		local hook = Instance.new("Part")
-		hook.Name = "SkyEggPodium"
-		hook.Size = Vector3.new(7, 1, 7)
-		hook.CFrame = CFrame.new(100, 10, 50)
-		hook:SetAttribute("Capsule", "Sky")
-		hook.Parent = model
-		caps.hookPodium(hook)
-		caps.hookPodium(hook)
-		local point = hook:FindFirstChild(CapsuleService.PointName)
-		local prompt = point and point:FindFirstChild(CapsuleService.PromptName)
-		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "the prompt")
-		T.eq(prompt.ActionText, "Open")
-		T.eq(prompt.ObjectText, "Sky Egg")
-		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E, like every prompt")
-		local boards = 0
-		for _, child in model:GetChildren() do
-			if child.Name == "OddsBoard" then
-				boards += 1
-				T.eq(child:GetAttribute("Capsule"), "Sky", "the board shows the Sky egg")
-				T.truthy(child:FindFirstChildWhichIsA("SurfaceGui"), "its SurfaceGui")
-				T.falsy(child.CanCollide)
-			end
-		end
-		T.eq(boards, 1, "one board, hooked once")
-		-- a podium without a known egg gets nothing
-		local stray = Instance.new("Part")
-		stray:SetAttribute("Capsule", "NoSuchEgg")
-		caps.hookPodium(stray)
-		T.falsy(stray:FindFirstChild(CapsuleService.PointName), "no prompt for an unknown egg")
+	withWorld("Capsules: an egg's own podium (EggPodium) has no prompt or board: the egg panel sells it, near it only", function(_w)
+		T.eq(caps.hookPodium, nil, "owner 2026-11-07: only the new panel, no way to the old window")
+		local source = require("@lune/fs").readFile(Loader.root .. "/src/server/Services/CapsuleService.luau")
+		T.eq(string.find(source, '"Capsules", { Capsule', 1, true), nil, "no OpenUI on an egg's tab")
+		T.truthy(string.find(source, 'refuse(player, "Podium", capsuleId)', 1, true), "the server still checks the reach")
 	end)
 
 	withWorld("Capsules: the EGGS temple has no Capsules prompt (its eggs have the clients' Buy Egg! prompts)", function(_w)
@@ -1266,12 +1240,20 @@ return function(T, Loader)
 						if row.Rarity.Visible then
 							T.truthy(row.Rarity.Size.X.Offset >= CapsuleView.RarityMinWidth, label .. ": a readable RARITY column")
 							T.le(nameEnd, row.Rarity.Position.X.Offset + 0.5, label .. ": name before rarity")
-							T.le(row.Rarity.Position.X.Offset + row.Rarity.Size.X.Offset, bonusStart + 0.5, label .. ": rarity before bonus")
+							T.le(
+								row.Rarity.Position.X.Offset + row.Rarity.Size.X.Offset,
+								bonusStart + 0.5,
+								label .. ": rarity before bonus"
+							)
 						else
 							T.le(nameEnd, bonusStart + 0.5, label .. ": name before bonus")
 						end
 						for _, cell in { row.Name, row.Rarity, row.Bonus } do
-							T.eq(cell.TextTruncate, roblox.Enum.TextTruncate.AtEnd, label .. ": " .. cell.Name .. " is cut, never overlapped")
+							T.eq(
+								cell.TextTruncate,
+								roblox.Enum.TextTruncate.AtEnd,
+								label .. ": " .. cell.Name .. " is cut, never overlapped"
+							)
 						end
 						T.eq(heads.HeadRarity.Visible, row.Rarity.Visible, label .. ": the RARITY header follows its column")
 					end
@@ -1448,7 +1430,10 @@ return function(T, Loader)
 				for i = 1, #CapsuleConfig.rarities() do
 					for _, name in { "Row" .. i, "Total" .. i } do
 						local l = gui:FindFirstChild(name)
-						T.truthy(l.Position.X.Scale >= chipEnd - 1e-6, `{name} starts right of the stall's chips ({l.Position.X.Scale} >= {chipEnd})`)
+						T.truthy(
+							l.Position.X.Scale >= chipEnd - 1e-6,
+							`{name} starts right of the stall's chips ({l.Position.X.Scale} >= {chipEnd})`
+						)
 					end
 				end
 				T.eq(gui:FindFirstChild("Subtitle").Text, if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER RARITY")
