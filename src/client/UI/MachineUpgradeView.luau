@@ -364,6 +364,12 @@ local function buildRow(refs: Refs, k: number): RowRefs
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
 	})
+	-- (owner 2026-11-07: dollars, not the coin: "$400K" like the money on the HUD)
+	local row = buy:FindFirstChild("Row")
+	local coin = if row then row:FindFirstChild("Coin") else nil
+	if coin then
+		coin:Destroy()
+	end
 	return {
 		Frame = card,
 		Title = label(
@@ -416,7 +422,7 @@ function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row }, note:
 			r.Change.Text = data.Change
 			r.Why.Text = data.Why
 			if data.Price then
-				Pop.setCoinButton(r.Buy, Format.big(data.Price), data.Affordable)
+				Pop.setCoinButton(r.Buy, Format.money(data.Price), data.Affordable)
 				r.Buy.Visible = true
 				r.Buy.Active = data.Affordable
 			else

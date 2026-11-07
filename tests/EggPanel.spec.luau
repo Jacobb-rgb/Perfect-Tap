@@ -2823,6 +2823,343 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("EggPanel: the SKY EGG (free in the world) has the panel; its big E stands on the player's side", function()
+		local sky = Instance.new("Model")
+		sky:SetAttribute("Egg", "Sky")
+		T.eq(EggPanel.freeEggId(sky), "Sky", "the world's Sky egg")
+		local stone = Instance.new("Model")
+		stone:SetAttribute("Egg", "Stone")
+		T.eq(EggPanel.freeEggId(stone), nil, "an egg that isn't podium-only stays the temple's")
+		T.eq(EggPanel.freeEggId(Instance.new("Model")), nil, "any other spinning model")
+		T.eq(EggPanel.freeEggId(Instance.new("Part")), nil)
+		-- a Sky capsule model inside the temple's stall still isn't sold there
+		local capsule = Instance.new("Model")
+		capsule:SetAttribute("Capsule", "Sky")
+		T.eq(EggPanel.eggId(capsule), nil, "the temple never sells it")
+		local center = Vector3.new(10, 20, 30)
+		local side = EggPanel.freeSide(center, Vector3.new(20, 14, 30), nil)
+		T.near(side.X, 1, 1e-6, "towards the player")
+		T.near(side.Y, 0, 1e-6, "level")
+		T.eq(EggPanel.freeSide(center, Vector3.new(20, 14, 33), side), nil, "a few steps round: it stays")
+		local behind = EggPanel.freeSide(center, Vector3.new(0, 14, 30), side)
+		T.near(behind.X, -1, 1e-6, "behind the egg: it comes round")
+		T.eq(EggPanel.freeSide(center, Vector3.new(10.1, 14, 30.1), side), nil, "standing on its axis: it stays")
+		-- the point: by the shell at most, by the player's chest, within the server's reach and the E's
+		local real = Vector3.new(150, 83.24, 300)
+		local point = EggPanel.freePoint(real, 75.66, 8.51, Vector3.new(1, 0, 0))
+		T.near(point.X, 150 + EggPanel.FreeOut, 1e-3, "by the shell, not out at the clouds")
+		T.near(point.Y, 75.66 + EggPanel.FreeRise, 1e-3, "low: the panel over the egg stays on the screen")
+		-- (the podium's steps: the root at y 78.5 on the top one, 76.1 on the outer ones, radius 11 to 12)
+		T.truthy(EggPanel.inReach(Vector3.new(150 + 12, 76.1, 300), point), "E from the outer steps, the panel's whole range")
+		T.truthy(EggPanel.inReach(Vector3.new(150 + 8, 78.5, 300), point), "E from the top step")
+		T.truthy(point.Y <= 77, "low: over the outer step, so the panel over the egg stays on a PC's screen")
+		T.falsy(EggPanel.inReach(Vector3.new(150, 76.1, 300 + 12), point), "round the egg: out of reach")
+		T.truthy(EggPanel.freeSide(real, Vector3.new(150, 76.1, 300 + 12), nil), "out of reach: it comes round at once")
+	end)
+
+	T.test("EggPanel: the SKY EGG is taken as it streams in, sold by its panel only, never by the old window", function()
+		withController(function(C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+			local Builder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+			local egg = Builder.themedEgg("Sky", Loader.CFrame.new(150, 83, 300))
+			local holder = Instance.new("Folder")
+			-- start() listens for the tag: with StreamingEnabled the Sky Egg comes after it, through the signal
+			local CollectionService = Loader.game:GetService("CollectionService")
+			local Run = Loader.game:GetService("RunService")
+			local added: { [string]: any } = {}
+			patched({
+				{
+					CollectionService,
+					"GetTagged",
+					function()
+						return {}
+					end,
+				},
+				{
+					CollectionService,
+					"GetInstanceAddedSignal",
+					function(_, tag: string)
+						local s = signal()
+						added[tag] = s
+						return s
+					end,
+				},
+				{ Run, "Heartbeat", signal() },
+			}, function()
+				C.start()
+			end)
+			T.eq(C._test.state().Spots.Sky, nil, "not there before it streams in")
+			local stream = added[EggPanel.FreeTag]
+			T.truthy(stream, "start() listens for the Sky Egg's tag")
+			egg.Parent = holder
+			stream.fire(egg)
+			require("@lune/task").wait()
+			local spot = C._test.state().Spots.Sky
+			T.truthy(spot, "the panel has the egg")
+			T.truthy(spot.Free, "a free-standing one")
+			T.truthy(spot.Half > 0 and spot.Top > spot.Bottom, "its size from its parts")
+			w.coins = 1e12
+			w.state.Coins = 1e12
+			local quote = CC._test.quote("Sky")
+			T.truthy(quote and quote.Visible, "the panel's quote sells it")
+			local sent = 0
+			local send = Net.send
+			Net.send = function(name: string)
+				if name == "CapsuleAction" then
+					sent += 1
+				end
+			end
+			local ok, err = pcall(function()
+				CC._test.close()
+				local went = CC._test.request("Sky", 1, nil, false)
+				T.truthy(went, "the panel's buy goes to the server")
+				T.eq(sent, 1)
+				CC._test.close()
+				local again, why = CC._test.request("Sky", 1, Instance.new("TextButton"))
+				T.falsy(again, "the window's button doesn't")
+				T.eq(why, "Hidden", "the window has no Sky egg")
+			end)
+			Net.send = send
+			CC._test.close()
+			C._test.state().Spots.Sky = nil
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
+	T.test("CapsuleController: the egg's models are ready before its Open 10 (made ahead, one a frame)", function()
+		withController(function(_C, _w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local before = CC._test.pooled("Royal")
+			CC.warm("NoSuchEgg")
+			CC.warm("Royal")
+			CC.warm("Royal") -- (twice: one job)
+			T.eq(CC._test.pooled("Royal"), before, "nothing in this frame")
+			local task = require("@lune/task")
+			local waited = 0
+			while CC._test.pooled("Royal") < CC.WarmEggsPhone and waited < 60 do
+				task.wait(0.05)
+				waited += 1
+			end
+			T.truthy(CC._test.pooled("Royal") >= CC.WarmEggsPhone, "they come")
+		end)
+	end)
+
+	T.test("CapsuleController: the HUD and the prompts always come back (owner 2026-11-07: everything vanished)", function()
+		withController(function(_C, w)
+			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local Stage = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchStage")
+			local View = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
+			local Players = Loader.game:GetService("Players")
+			local Prompts = Loader.game:GetService("ProximityPromptService")
+			local hud = Instance.new("ScreenGui")
+			hud.Name = "TerraForgeTestHud"
+			local scale = Instance.new("UIScale")
+			scale.Name = "Scale"
+			scale.Scale = 0.9
+			scale.Parent = hud
+			hud.Parent = Players.LocalPlayer.PlayerGui
+			local clear, setChain = Stage.clear, View.setChain
+			local one = { Capsule = "Stone", Count = 1, Golems = { { Id = 1, Kind = "PebbleGolem" } }, Lucky = false }
+			local function allBack(what: string)
+				T.falsy(CC._test.hudHidden(), what .. ": the HUD's hold ended")
+				T.falsy(CC._test.playing(), what .. ": no opening plays")
+				T.near(scale.Scale, 0.9, 0.001, what .. ": the HUD on the screen at its own size")
+				T.truthy(Prompts.Enabled, what .. ": the prompts work again")
+			end
+			local stops: { string } = {}
+			local listening = true
+			CC._test.onStop(function(reason: string)
+				if listening then
+					table.insert(stops, reason)
+				end
+			end)
+			-- (seams put back in the clean-up, also when a check fails)
+			local stuckAfter = CC.StuckAfter
+			local refsOf = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.HudController")
+			local refsBefore = refsOf.refs
+			local ok, err = pcall(function()
+				local K = roblox.Enum.KeyCode
+				CC._test.setOwners({
+					BackpackController = { Key = K.Q },
+					EmoteController = { Key = K.N },
+					GolemController = { ToggleKey = K.P },
+					HoverboardController = { Key = K.H },
+					ArtifactController = { BookKey = K.J },
+					BoostController = { OpenKeys = { K.L, K.DPadRight } },
+				})
+				local hidden = false
+				CC._test.setHatch(function()
+					hidden = scale.Scale == 0 and CC._test.hudHidden()
+				end)
+				-- the clean-up after the opening fails (the hole: it killed the chain, nothing ever came back)
+				local clears = 0
+				Stage.clear = function(...)
+					clears += 1
+					if clears == 1 then
+						return clear(...) -- (the one before the opening)
+					end
+					error("a broken clean-up")
+				end
+				CC._test.result(one)
+				Stage.clear = clear
+				T.truthy(hidden, "the HUD was away during the opening")
+				allBack("a failing clean-up")
+				-- a step of the chain's own end fails
+				View.setChain = function()
+					error("a broken counter")
+				end
+				CC._test.result(one)
+				View.setChain = setChain
+				allBack("a failing end step")
+				-- the opening itself fails
+				CC._test.setHatch(function()
+					error("a broken opening")
+				end)
+				local toasts = #w.toasts
+				table.clear(stops)
+				CC._test.result(one)
+				allBack("a failing opening")
+				T.eq(stops[1], "Failed", "Auto never buys through a broken opening")
+				T.eq(#w.toasts, toasts + 1, "the player is told")
+				T.truthy(
+					string.find(w.toasts[#w.toasts], GolemConfig.ById.PebbleGolem.Name, 1, true),
+					"its golem named: " .. w.toasts[#w.toasts]
+				)
+				-- the auto-deleted ones are named too (every golem won is told, like the opening's grey ones)
+				local quartz = GolemConfig.ById.QuartzSprite.Name
+				CC._test.result({
+					Capsule = "Stone",
+					Count = 3,
+					Golems = {
+						{ Id = 1, Kind = "PebbleGolem" },
+						{ Id = 0, Kind = "QuartzSprite", Deleted = true },
+						{ Id = 0, Kind = "QuartzSprite", Deleted = true },
+					},
+					Lucky = false,
+				})
+				allBack("a failing opening with auto-deleted golems")
+				T.eq(
+					w.toasts[#w.toasts],
+					`Your golems are safe: {GolemConfig.ById.PebbleGolem.Name} (auto-deleted: 2x {quartz})`,
+					"kept and auto-deleted, both named"
+				)
+				CC._test.result({
+					Capsule = "Stone",
+					Count = 1,
+					Golems = { { Id = 0, Kind = "QuartzSprite", Deleted = true } },
+					Lucky = false,
+				})
+				T.eq(w.toasts[#w.toasts], `From your eggs, auto-deleted: {quartz}`, "only auto-deleted ones")
+				-- an opening that never ends: the watch stops it, what is queued still plays
+				local stuck, played = 0, 0
+				CC._test.setHatch(function(_o: any, result: any)
+					if result.Capsule == "Stone" then
+						stuck += 1
+						coroutine.yield() -- (never resumed; no timer that would keep the run alive)
+						error("never here: the watch stopped this thread")
+					end
+					played += 1
+				end)
+				CC._test.result(one)
+				T.eq(stuck, 1)
+				T.truthy(CC._test.playing(), "it hangs")
+				T.falsy(CC._test.checkStuck(os.clock() + CC.StuckAfter - 1), "a real opening's time is left alone")
+				T.truthy(CC._test.hudHidden())
+				CC._test.result({ Capsule = "Crystal", Count = 1, Golems = { { Id = 2, Kind = "QuartzSprite" } }, Lucky = false })
+				T.eq(played, 0, "a new result waits for the one that hangs")
+				table.clear(stops)
+				toasts = #w.toasts
+				T.truthy(CC._test.checkStuck(os.clock() + CC.StuckAfter + 1), "stopped")
+				T.eq(played, 1, "the result that waited plays")
+				allBack("an opening that never ended")
+				T.eq(stops[1], "Failed", "Auto stops")
+				T.truthy(string.find(w.toasts[toasts + 1], GolemConfig.ById.PebbleGolem.Name, 1, true), "the one that hung is named")
+				-- the watch really runs, by itself, for every chain
+				CC.StuckAfter = 0.2
+				CC._test.setHatch(function()
+					coroutine.yield() -- (never resumed; no timer that would keep the run alive)
+				end)
+				CC._test.result(one)
+				T.truthy(CC._test.playing(), "it hangs")
+				local waited = 0
+				while CC._test.playing() and waited < 60 do
+					require("@lune/task").wait(0.05)
+					waited += 1
+				end
+				CC.StuckAfter = stuckAfter
+				allBack("the watch's own second")
+				-- it never cuts a real opening: longer than the longest, and each opening's clock starts anew
+				local HatchFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HatchFx")
+				local longest = HatchFx.timeline(6, 10, false, false).Total
+				T.truthy(CC.StuckAfter >= longest * 2, `the limit {CC.StuckAfter} s against a Mythic's {longest} s`)
+				local starts: { number } = {}
+				CC._test.setHatch(function()
+					table.insert(starts, CC._test.openingSince())
+					require("@lune/task").wait(0.02)
+				end)
+				local pack = {}
+				for i = 1, 20 do
+					pack[i] = { Id = i, Kind = "PebbleGolem" }
+				end
+				CC._test.result({ Capsule = "Stone", Count = 20, Golems = pack, Lucky = false })
+				waited = 0
+				while CC._test.playing() and waited < 60 do
+					require("@lune/task").wait(0.02)
+					waited += 1
+				end
+				T.eq(#starts, 2, "a pack's two openings")
+				T.truthy(starts[2] > starts[1], "each opening's clock starts anew: a x50 pack isn't cut at 15 s")
+				-- the trace for the owner's test: the HUD hidden with no opening says everything, once
+				local gui = Instance.new("ScreenGui")
+				local guiScale = Instance.new("UIScale")
+				guiScale.Name = "Scale"
+				guiScale.Scale = 1
+				guiScale.Parent = gui
+				refsOf.refs = function(): any
+					return { Gui = gui }
+				end
+				local now = os.clock()
+				T.eq(CC._test.checkHudTrace(now), nil, "shown: silent")
+				guiScale.Scale = 0
+				T.eq(CC._test.checkHudTrace(now), nil, "hidden just now: waits")
+				local text = CC._test.checkHudTrace(now + CC.HudTraceAfter + 1)
+				-- (Roblox reads a 0 back as 1e-07: hidden just the same)
+				guiScale.Scale = 1
+				CC._test.checkHudTrace(now)
+				guiScale.Scale = 1e-7
+				CC._test.checkHudTrace(now)
+				local tiny = CC._test.checkHudTrace(now + CC.HudTraceAfter + 1)
+				refsOf.refs = refsBefore
+				T.truthy(tiny, "1e-07 counts as hidden")
+				T.truthy(text and string.find(text, "Scale=0", 1, true) and string.find(text, "hudHidden=false", 1, true), tostring(text))
+				T.truthy(string.find(text, "prompts off for", 1, true), "and the prompts' reasons")
+				T.falsy(CC._test.checkStuck(os.clock() + 1000), "nothing left to stop")
+				-- a gui already at 0 when the hold began gets the HUD's own scale, never a 0 again
+				CC._test.setHatch(function() end)
+				scale.Scale = 0
+				CC._test.result(one)
+				T.truthy(scale.Scale > 0, "a 0 never comes back")
+				scale.Scale = 0.9
+				allBack("a gui hidden before")
+			end)
+			listening = false
+			Stage.clear, View.setChain = clear, setChain
+			CC.StuckAfter = stuckAfter
+			refsOf.refs = refsBefore
+			CC._test.setHatch(nil)
+			CC._test.setOwners(nil)
+			CC._test.close()
+			CC._test.hideHud(false)
+			hud:Destroy()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end)
+
 	T.test("CapsuleController: a chain of openings is one HUD hold; a result that comes meanwhile waits after it", function()
 		withController(function(_C, w)
 			local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
@@ -3153,7 +3490,10 @@ return function(T, Loader)
 		end)
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
 		local flat = string.gsub(source, "%s+", " ")
-		T.truthy(string.find(flat, "setBlur(false) setMood(0, Color3.new(1, 1, 1), true)", 1, true), "endChain clears it")
+		T.truthy(
+			string.find(flat, 'setBlur(false) end) safely("the world\'s tint", function() setMood(0, Color3.new(1, 1, 1), true)', 1, true),
+			"endChain clears it"
+		)
 		T.truthy(
 			string.find(flat, 'setMood(0, Color3.new(1, 1, 1), true) pcall(Sfx.loop, "CaseCharge", false)', 1, true),
 			"a failing opening clears it and the hum"

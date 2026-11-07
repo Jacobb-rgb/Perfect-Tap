@@ -230,9 +230,15 @@ return function(T, Loader)
 		View.fill(refs, "Furnace Upgrades", View.rows("ClayFurnace", s, 1e9))
 		T.eq(#refs.Rows, 3)
 		T.truthy(View.height(3) * PHONE <= 390 - 24, "three rows fit a phone held sideways")
-		for _, r in refs.Rows do
+		local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+		local rows = View.rows("ClayFurnace", s, 1e9)
+		for k, r in refs.Rows do
 			T.truthy(r.Frame.Visible)
 			T.truthy(r.Buy.Visible and r.Buy.Active, "affordable")
+			-- (owner 2026-11-07: dollars in the price, no coin icon)
+			T.eq(r.Buy.Row.Amount.Text, Format.money(rows[k].Price :: number))
+			T.eq(string.sub(r.Buy.Row.Amount.Text, 1, 1), "$")
+			T.eq(r.Buy.Row:FindFirstChild("Coin"), nil, "no coin icon")
 			T.truthy(r.Buy.Size.Y.Offset * PHONE >= 44, "BUY 44 pt")
 		end
 		for _, d in refs.Gui:GetDescendants() do

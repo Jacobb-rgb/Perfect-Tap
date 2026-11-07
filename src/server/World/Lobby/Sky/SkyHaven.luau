@@ -396,11 +396,11 @@ local function eggPodium(m: Model, decor: Model, base: CFrame, rng: Rng.Rng)
 		end
 	end
 	local top = base * CFrame.new(0, 3.3, 0)
-	-- the egg's stall hook for the capsule side (CapsuleConfig "Sky": prompt, odds board)
+	-- the egg's stall hook for the capsule side (CapsuleConfig "Sky": CapsuleService.nearPodium's reach)
 	local hook = Style.block(m, top * CFrame.new(0, 0.5, 0), Vector3.new(7, 1, 7), C.StoneLight, nil, Style.tiny({ Transparency = 1 }))
 	hook.Name = "SkyEggPodium"
 	hook:SetAttribute("Capsule", "Sky")
-	hook:AddTag("EggPodium") -- CapsuleService: the Open prompt and the odds board
+	hook:AddTag("EggPodium") -- CapsuleService.nearPodium; the clients' egg panel sells it (EggPanel.freeEggId)
 	-- a thin glowing ring round the egg's plinth (four strips, not a glowing slab)
 	for k = 0, 3 do
 		Style.block(

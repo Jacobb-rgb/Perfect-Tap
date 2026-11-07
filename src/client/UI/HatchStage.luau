@@ -126,6 +126,7 @@ export type Run = {
 	Layout: HatchFx.Layout,
 	EggDepth: { number },
 	Standing: { [number]: Standing },
+	Ready: { { Model: Model, Height: number, Root: number } }, -- the golems made ahead, by slot
 	Tier: HatchFx.Tier, -- the best KEPT golem's rarity cinematic (its Timeline's): an auto-deleted one is never celebrated
 	ShowOrder: number, -- that golem's Rarity order (1: none kept)
 	ShowRarity: string,
@@ -270,6 +271,7 @@ function HatchStage.new(args: Args): Run
 		Layout = HatchFx.layout(n, 16 / 9, special),
 		EggDepth = {},
 		Standing = {},
+		Ready = {},
 		Tier = timeline.Tier,
 		ShowOrder = showOrder,
 		ShowRarity = showRarity,
@@ -784,12 +786,24 @@ function HatchStage.retag(run: Run)
 	end
 end
 
+-- The golems are made ahead, one a frame while the eggs charge: ten at the reveal would all fall on one frame.
+local function makeAhead(run: Run)
+	local slot = #run.Ready + 1
+	if slot <= run.Count then
+		local model, height, root = run.Args.Golem(run.Kinds[slot])
+		run.Ready[slot] = { Model = model, Height = height, Root = root }
+	end
+end
+
 local function reveal(run: Run, aspect: number)
-	local args = run.Args
+	while #run.Ready < run.Count do -- (a skip came before they were all ready)
+		makeAhead(run)
+	end
 	for slot = 1, run.Count do
 		local kind = run.Kinds[slot]
 		local s = run.Layout.Slots[slot]
-		local model, height, root = args.Golem(kind)
+		local ready = run.Ready[slot]
+		local model, height, root = ready.Model, ready.Height, ready.Root
 		run.Standing[slot] = {
 			Model = model,
 			Height = height,
@@ -1126,6 +1140,9 @@ function HatchStage.pose(run: Run, t: number): { string }
 	local aspect = run.Size.X / math.max(1, run.Size.Y)
 	if t >= tl.Charge then
 		once("Charge") -- (V2: the energy starts)
+		if t < tl.Reveal then
+			makeAhead(run)
+		end
 	end
 	local level = HatchFx.levelAt(t, tl)
 	for step = 1, level do
