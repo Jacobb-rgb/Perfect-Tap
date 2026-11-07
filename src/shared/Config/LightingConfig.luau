@@ -55,19 +55,19 @@ LightingConfig.Sky = {
 	tools/kenney/skybox.mjs with Yaw 117, so the vortex stands ~43 degrees up
 	in the north, over the plaza as you walk in from the spawn, and again in
 	the south. One picture on all six faces would show the corners of a box.
-	Roblox can only show uploaded images: the owner uploads the six PNGs
-	(NAHRAJ_DO_ROBLOXU/obloha_vir) and each asset id goes here. Until all six
-	are set the place keeps Roblox's default sky (LightingController.applySkybox).
+	Roblox can only show uploaded images: the owner uploaded the six PNGs
+	(NAHRAJ_DO_ROBLOXU/obloha_vir) and each asset id is here. If any were
+	blank the place would keep Roblox's default sky (LightingController.applySkybox).
 	The sun's disc and Terrain.Clouds would cover the picture, so they only
 	show if these switches say so; the sun's light and shadows stay either way.
 ]]
 LightingConfig.Skybox = {
-	Bk = "",
-	Dn = "",
-	Ft = "",
-	Lf = "",
-	Rt = "",
-	Up = "",
+	Bk = "115867546012828",
+	Dn = "103917192316298",
+	Ft = "97684371727455",
+	Lf = "114624486233479",
+	Rt = "126673125136294",
+	Up = "75221912188878",
 	-- how the faces were cut (the preview renderer's shot.skyboxYaw / skyboxTilt)
 	Yaw = 117,
 	Tilt = 0,
