@@ -213,6 +213,15 @@ function MachineUpgradeView.placement(loadShown: boolean, hasSecond: boolean): (
 	return "Panel", if hasSecond then 2 else 1
 end
 
+-- A placed machine's spot from its model's attributes (Owner, MachineId, GridX, GridZ, GridL):
+-- a model the server rebuilds keeps it. Broken values make a key no real machine has.
+function MachineUpgradeView.spotKey(owner: any, id: any, x: any, z: any, level: any): string
+	local function part(v: any): string
+		return if type(v) == "number" or type(v) == "string" then tostring(v) else "?"
+	end
+	return `{part(owner)}|{part(id)}|{part(x)}|{part(z)}|{part(level or 0)}`
+end
+
 -- Does this machine have anything to upgrade? (its prompt shows only then)
 function MachineUpgradeView.has(machineId: string): boolean
 	local machine = MachineData.ById[machineId]

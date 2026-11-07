@@ -19,6 +19,9 @@
 	  "BOUGHT!" or the reason (EconomyConfig.TechShop.Reasons). One BUY per
 	  item waits at a time; with no answer the row is freed after
 	  ResultTimeout. A greyed-out BUY (not enough coins) answers locally.
+	- A Speed level or a tier rebuilds your machines of that type (the new
+	  look): the window follows the new model on the same spot (Owner,
+	  MachineId, GridX / GridZ / GridL) for RebuildWait seconds.
 	- Closes with the X, B (gamepad), Backspace, walking away from the
 	  machine (past CloseRange, under the server's ShopService.MachineRange,
 	  so lag never refuses a BUY), the machine going away, respawning or
@@ -54,6 +57,7 @@ MachineUpgradeController.ActionText = "Upgrades"
 MachineUpgradeController.ResultTimeout = 5
 MachineUpgradeController.MessageTime = 2.5
 MachineUpgradeController.Tick = 0.5
+MachineUpgradeController.RebuildWait = 3 -- seconds the window waits for a rebuilt machine
 
 local CLOSE_ACTION = "TerraForgeMachineUpgradeClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
@@ -70,6 +74,9 @@ local machineId: string? = nil
 local pending: { [string]: number } = {} -- item -> give up at (os.clock)
 local messages: { [string]: Message } = {}
 local tickConnection: RBXScriptConnection? = nil
+-- the open machine's spot while the server rebuilds it (a Speed level or a tier changes its look)
+local lostSpot: string? = nil
+local lostUntil = 0
 local nextTick = 0
 -- weak keys: machines that stream out drop out by themselves
 local prompts: { [Model]: ProximityPrompt } = setmetatable({}, { __mode = "k" }) :: any
@@ -88,6 +95,25 @@ end
 
 local function own(model: Instance): boolean
 	return model:GetAttribute("Owner") == userId()
+end
+
+-- Where a machine model stands (MachineUpgradeView.spotKey of its attributes).
+local function spotOf(model: Instance): string
+	return MachineUpgradeView.spotKey(
+		model:GetAttribute("Owner"),
+		model:GetAttribute("MachineId"),
+		model:GetAttribute("GridX"),
+		model:GetAttribute("GridZ"),
+		model:GetAttribute("GridL")
+	)
+end
+
+-- The open machine came back rebuilt (same owner, type and spot): the window follows it.
+local function follow(model: Model)
+	if shown and lostSpot and spotOf(model) == lostSpot then
+		machine = model
+		lostSpot = nil
+	end
 end
 
 -- "Put In" visible, and a G prompt ("Keep List", "Change Sort") on the same spot.
@@ -150,8 +176,8 @@ local function tryPrompt(model: Model)
 	prompt.Triggered:Connect(function()
 		MachineUpgradeController.open(model)
 	end)
+	prompts[model] = prompt -- before parenting: its own DescendantAdded must never make a second one
 	prompt.Parent = spot
-	prompts[model] = prompt
 	place(prompt)
 	local list = watching[model]
 	if list then
@@ -176,6 +202,7 @@ local function watch(model: Instance)
 		return
 	end
 	local m = model :: Model
+	follow(m)
 	watching[m] = {}
 	tryPrompt(m)
 	table.insert(
@@ -362,6 +389,7 @@ function MachineUpgradeController.close()
 	shown = false
 	machine = nil
 	machineId = nil
+	lostSpot = nil
 	pending = {}
 	messages = {}
 	if tickConnection then
@@ -418,11 +446,17 @@ local function tick()
 	nextTick = now + MachineUpgradeController.Tick
 	local model = machine
 	local root = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not model or not model.Parent or not root then
+	if not root then
 		MachineUpgradeController.close()
 		return
 	end
-	if (model:GetPivot().Position - root.Position).Magnitude > MachineUpgradeView.CloseRange then
+	if not model or not model.Parent then
+		-- being rebuilt: wait a moment for the new model at the same spot
+		if not (lostSpot and now < lostUntil) then
+			MachineUpgradeController.close()
+			return
+		end
+	elseif (model:GetPivot().Position - root.Position).Magnitude > MachineUpgradeView.CloseRange then
 		MachineUpgradeController.close()
 		return
 	end
@@ -495,7 +529,15 @@ function MachineUpgradeController.start()
 		if gone:IsA("Model") then
 			local model = gone :: Model
 			if machine == model then
-				MachineUpgradeController.close()
+				-- a rebuild (a Speed level, a tier) puts a new model on the same spot: follow it
+				machine = nil
+				lostSpot = spotOf(model)
+				lostUntil = os.clock() + MachineUpgradeController.RebuildWait
+				for _, other in CollectionService:GetTagged("Machine") do
+					if other ~= model and other:IsA("Model") then
+						follow(other)
+					end
+				end
 			end
 			unwatch(model)
 		end
