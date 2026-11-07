@@ -73,7 +73,7 @@ return function(T, Loader)
 			T.eq(halo.Material, roblox.Enum.Material.Neon)
 			T.truthy(halo.Transparency >= 0.6, secret.Ore .. ": a little: see-through, the dirt shows")
 			T.falsy(halo.CanCollide or halo.CanQuery or halo.CanTouch or halo.CastShadow, secret.Ore .. ": light only, the spray passes")
-			T.truthy(halo.Size.X <= 0.6, secret.Ore .. ": small, never a bubble over the ore")
+			T.truthy(halo.Size.X <= 0.25, secret.Ore .. ": small round its speck, never a bubble over the dirt")
 			-- it washes off with its cell: inside the block that goes
 			T.truthy(halo.Parent ~= nil and halo.Parent.Name == "Dirt", secret.Ore .. ": a child of its dirt block")
 		end

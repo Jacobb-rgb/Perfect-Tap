@@ -40,7 +40,7 @@ OreShellBuilder.TreasureSize = 1.85 -- studs across: the ore (or relic) under th
 OreShellBuilder.TreasureTurn = CFrame.Angles(-0.22, math.pi - 0.55, 0) -- three-quarters toward the camera
 OreShellBuilder.SecretTurn = CFrame.Angles(-0.12, 0.3, 0) -- a secret ore shows its face (the eye looks at you)
 -- the soft glow round a secret ore's rainbow specks: light coming through the dirt (still: no flash, no pulse)
-OreShellBuilder.SpeckGlow = { { Size = 0.26, Transparency = 0.68 }, { Size = 0.56, Transparency = 0.88 } }
+OreShellBuilder.SpeckGlow = { { Size = 0.13, Transparency = 0.72 }, { Size = 0.2, Transparency = 0.88 } }
 OreShellBuilder.CrystalBaseSize = 0.2 -- face units; the pale base under a crystal
 OreShellBuilder.CrystalLean = 45 -- degrees out of the face, toward the camera
 OreShellBuilder.DirtColors = { Color3.fromRGB(104, 78, 54), Color3.fromRGB(90, 68, 50), Color3.fromRGB(116, 88, 60) }
