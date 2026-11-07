@@ -13,6 +13,9 @@ local ORDER = {
 	"DecorController",
 	"StudStyleController", -- the studded style: Roblox studs on the parts that stream in (StudStyleConfig)
 	"HudController",
+	-- (must stay before every other OpenUI listener: a remote's queued events go to its first
+	-- connection only, and "Offline" fires early on a slow load)
+	"NightShiftController", -- the "While you were away" window (owner 2026-11-07)
 	"FxController",
 	"MiningController",
 	"InteractController",

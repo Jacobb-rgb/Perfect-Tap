@@ -305,8 +305,8 @@ end
 --[[
 	The capsule id of a temple egg (a Model whose Capsule attribute names a
 	capsule of the stall: GolemBuilder.capsule sets it), or nil: not a
-	limited edition's capsule and not a podium-only egg (the SKY EGG keeps
-	its own podium prompt and board, display-only here until the owner says).
+	limited edition's capsule and not a podium-only egg (the SKY EGG stands
+	free in the world: freeEggId).
 ]]
 function EggPanel.eggId(instance: Instance): string?
 	if not instance:IsA("Model") then
@@ -318,6 +318,49 @@ function EggPanel.eggId(instance: Instance): string?
 		return nil
 	end
 	return capsule.Id
+end
+
+--[[
+	A podium-only egg standing free in the world (owner 2026-11-07: the SKY EGG
+	gets this panel, "only the new one"): its atomic, spinning model
+	(GolemBuilder.themedEgg's attribute Egg = its capsule id; CapsuleConfig
+	Podium), or nil. The server still opens it only near its podium.
+]]
+EggPanel.FreeTag = "Spin" -- (the tag such an egg's model has: SkyHaven's spinner)
+function EggPanel.freeEggId(instance: Instance): string?
+	if not instance:IsA("Model") then
+		return nil
+	end
+	local id = instance:GetAttribute("Egg")
+	local capsule = if type(id) == "string" then CapsuleConfig.ById[id] else nil
+	return if capsule and capsule.Podium then capsule.Id else nil
+end
+
+--[[
+	Where the prompts of a free-standing egg go for a player at `position`: on
+	the player's side of the egg, so the big E is reachable from all round it.
+	`front` = its side now; it moves only past FreeTurn (no jitter while the
+	player walks a little). Returns the new side, or nil to stay.
+]]
+EggPanel.FreeTurn = 0.7 -- the cosine of the turn (about 45 degrees)
+EggPanel.FreeOut = 6 -- studs from the egg's axis at most (the SKY EGG's clouds reach far: the E stays by its shell)
+EggPanel.FreeRise = 1 -- studs over the egg's foot, the podium's lowest step: higher, and on PC the panel over the egg leaves the screen from the outer steps
+
+-- The prompts' point of a free-standing egg, on its `side`.
+function EggPanel.freePoint(center: Vector3, bottom: number, half: number, side: Vector3): Vector3
+	local out = side * math.min(half + 0.5, EggPanel.FreeOut)
+	return Vector3.new(center.X + out.X, bottom + EggPanel.FreeRise, center.Z + out.Z)
+end
+function EggPanel.freeSide(center: Vector3, position: Vector3, front: Vector3?): Vector3?
+	local flat = Vector3.new(position.X - center.X, 0, position.Z - center.Z)
+	if flat.Magnitude < 0.5 then
+		return nil
+	end
+	local side = flat.Unit
+	if front and front:Dot(side) > EggPanel.FreeTurn then
+		return nil
+	end
+	return side
 end
 
 -- The temple's eggs in `stall` (the CapsuleStall model), one per capsule id.

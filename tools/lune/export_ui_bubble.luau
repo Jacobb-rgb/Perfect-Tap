@@ -205,11 +205,11 @@ local shopData = {
 		Icon = "medal",
 		Price = "560",
 		Tag = "BEST VALUE",
-		Perks = { "Podiums 4 and 5", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
+		Perks = { "Podiums 4 and 5", "Podiums earn 50% offline for 12 h", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
 	},
 	Offers = {
 		{ Id = "Podiums", Name = "Two More Podiums", Description = "Unlocks podiums 4 and 5 on your base.", Icon = "podium", Price = "100" },
-		{ Id = "OfflineExtension", Name = "Night Shift", Description = "Your podiums keep earning while you are away for up to 12 hours instead of 5.", Icon = "moon", Price = "99", Owned = true },
+		{ Id = "OfflineExtension", Name = "Night Shift", Description = "Your podiums keep earning at 50% for up to 12 hours while you are away, instead of 25% for 8.", Icon = "moon", Price = "99", Owned = true },
 		{ Id = "TrainExpress", Name = "Express Train", Description = "Your ore train runs twice as fast and carries half as much again.", Icon = "train", Price = "199" },
 	},
 }
@@ -666,7 +666,7 @@ for _, light in { false, true } do
 		SellView.layout(view, spec[4], spec[5], spec[6])
 		SellView.setEntries(view, "Pen", SellView.entries(penSummary, "Pen"))
 		SellView.setEntries(view, "Hands", SellView.entries(handsSummary, "Hands"))
-		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "Dirty"), SellView.plan(penSummary, handsSummary, "AllButBest"))
+		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "All"))
 		-- (the Pop look: the window is no longer re-skinned)
 		local name = "ui_sell_" .. spec[1] .. (if light then "_light" else "")
 		fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))

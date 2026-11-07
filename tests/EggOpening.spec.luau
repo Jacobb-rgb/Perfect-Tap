@@ -1366,6 +1366,37 @@ return function(T, Loader)
 		HatchStage.clear(o, HatchStage.golems(run))
 	end)
 
+	T.test("EggOpening: the golems are made ahead, one a frame, so the reveal of ten doesn't stall (owner 2026-11-07)", function()
+		local kinds = table.create(10, "SkySprite")
+		local _, run = runOf("Sky", kinds)
+		local tl = run.Timeline
+		local made = 0
+		local golem = run.Args.Golem
+		run.Args.Golem = function(kind: string)
+			made += 1
+			return golem(kind)
+		end
+		HatchStage.pose(run, tl.Charge / 2)
+		T.eq(made, 0, "none before the charge")
+		local frames = 0
+		local t = tl.Charge
+		while frames < 3 do
+			local before = made
+			HatchStage.pose(run, t)
+			T.eq(made, before + 1, "one golem a frame")
+			frames += 1
+			t += 1 / 60
+		end
+		HatchStage.pose(run, tl.Reveal)
+		T.eq(made, 10, "the rest with the reveal (a skip came early), never twice")
+		for slot = 1, 10 do
+			T.truthy(run.Standing[slot] and run.Standing[slot].Model, `slot {slot} stands`)
+			T.eq(run.Standing[slot].Model, run.Ready[slot].Model, "the one made ahead")
+		end
+		HatchStage.pose(run, tl.Reveal + 0.1)
+		T.eq(made, 10, "nothing more after it")
+	end)
+
 	T.test("EggOpening: Open 10 with a Legendary (centred, bigger), a Mythic, Reduce motion and Auto all end, named", function()
 		local cases = {
 			{

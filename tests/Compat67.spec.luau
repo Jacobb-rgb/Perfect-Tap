@@ -33,8 +33,8 @@ return function(T, Loader)
 		local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 		T.truthy(text:find(Format.money(Bonuses.sellAmount(stats, base * 3)), 1, true), "the batch price: " .. text)
 		-- sell-all: the plan's total is the server's payout for the same items
-		local plan = SellView.plan(summary, {}, "AllButBest", nil, mult)
-		local plain = SellView.plan(summary, {}, "AllButBest", nil)
+		local plan = SellView.plan(summary, {}, "All", nil, mult)
+		local plain = SellView.plan(summary, {}, "All", nil)
 		T.eq(plan.Count, plain.Count)
 		T.eq(plan.Total, Bonuses.sellAmount(stats, plain.Total), "total with the bonus, rounded once")
 		-- no bonus or a broken one: the plain prices

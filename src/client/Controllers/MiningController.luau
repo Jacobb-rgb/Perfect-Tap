@@ -374,7 +374,8 @@ local function rockNear(root: BasePart, range: number): boolean
 	return false
 end
 
--- Where a shot from `from` hits `rock` (its surface facing the shooter).
+-- Where a shot from `from` hits `rock` (its surface facing the shooter). `from`: the body, never the
+-- muzzle: close to a rock a long gun's muzzle is inside it and a ray from there finds no surface.
 local function surfacePoint(from: Vector3, rock: Model): Vector3
 	local center = (rock.PrimaryPart :: BasePart).Position
 	local result = cast(from, (center - from) * 1.2)
@@ -417,7 +418,7 @@ local function aim(root: BasePart, tool: Tool, now: number): (Model?, Vector3, b
 	end
 	local rock = assistTarget
 	if rock and rock.PrimaryPart then
-		return rock, surfacePoint(origin, rock), true
+		return rock, surfacePoint(root.Position, rock), true
 	end
 	local camera = Workspace.CurrentCamera
 	local look = if camera then camera.CFrame.LookVector else root.CFrame.LookVector

@@ -920,11 +920,11 @@ return function(T, Loader)
 			local o = EconomyConfig.Offline
 			local r = lateNightShift(w, true)
 			local base = r.income * o.Rate * o.BaseHours * 3600
-			local full = r.incomeAll * o.Rate * o.ExtendedHours * 3600
-			T.near(r.base, base, base * 1e-9, "the base: 5 h, podiums 1-3")
+			local full = r.incomeAll * o.PassRate * o.ExtendedHours * 3600
+			T.near(r.base, base, base * 1e-9, "the base: 8 h, podiums 1-3")
 			T.eq(w.player.attrs.Perk_OfflineExtension, true, "the re-check granted Night Shift")
 			T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), true, "owned at join")
-			T.near(r.total, full, full * 1e-9, "the absence counted with 12 h and podiums 4-5")
+			T.near(r.total, full, full * 1e-9, "the absence counted with 50 %, 12 h and podiums 4-5")
 			T.falsy(podium.hasTopUp(w.player), "done")
 			T.near(w.data.Stats.PodiumEarned, full, full * 1e-9, "counted as podium money")
 			local toasts = 0

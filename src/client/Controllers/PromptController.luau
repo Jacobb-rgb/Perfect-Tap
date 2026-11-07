@@ -127,6 +127,16 @@ function PromptController.setSuppressed(reason: string, on: boolean)
 	ProximityPromptService.Enabled = next(suppressed) == nil
 end
 
+-- Why the prompts are off now (the HUD trace: CapsuleController).
+function PromptController.suppressedReasons(): { string }
+	local reasons: { string } = {}
+	for reason in suppressed do
+		table.insert(reasons, reason)
+	end
+	table.sort(reasons)
+	return reasons
+end
+
 function PromptController.start()
 	ProximityPromptService.PromptShown:Connect(function(prompt)
 		if prompt.Name == "LoadPrompt" then
