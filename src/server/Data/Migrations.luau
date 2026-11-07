@@ -244,7 +244,7 @@ local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 13 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once
+Migrations.Latest = 14 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once; 14: Night Shift's crate (no step: a new field, so an older server refuses the save; data.NightShift is repaired below on every load)
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -1212,6 +1212,16 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 			data[field] = 0
 		end
 	end
+	-- Night Shift's crate: a table, a finite time, a true / false
+	local night = data.NightShift
+	if type(night) ~= "table" then
+		night = {}
+		data.NightShift = night
+	end
+	if not isFinite(night.CrateAt) or night.CrateAt < 0 then
+		night.CrateAt = 0
+	end
+	night.Ready = night.Ready == true
 	-- Robux-bought coins not spent yet: finite, 0..Coins
 	if not isFinite(data.PaidCoins) or data.PaidCoins < 0 then
 		data.PaidCoins = 0

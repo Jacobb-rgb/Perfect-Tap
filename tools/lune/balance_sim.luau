@@ -1276,6 +1276,15 @@ local function simulate(seed: number, start: any?): any
 		end
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
+		-- Night Shift: A.SessionSeconds of play, then A.AwaySeconds away: the podiums pay
+		-- A.OfflineRate for at most A.OfflineHours, the free crate A.CrateMinutes of income
+		if A.SessionSeconds and t - (p.LastSession or 0) >= A.SessionSeconds then
+			p.LastSession = t
+			local away = math.min(A.AwaySeconds or 0, (A.OfflineHours or 0) * 3600)
+			local paid = podiumIncome(p) * (A.OfflineRate or 0) * away + income * 60 * (A.CrateMinutes or 0)
+			p.Coins += paid
+			p.Earned += paid
+		end
 		levelStep(p, rocks, cleaned, raw, t)
 		findAndSpendShards(p, rng, rocks, cleaned, floor, t)
 		t += A.Step

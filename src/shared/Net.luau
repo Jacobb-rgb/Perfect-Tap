@@ -172,6 +172,8 @@ Net.Events = {
 	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise) |
 	--   ("Buy", { Count = 1 | 5 | 10 }): the BUY SPINS row's product (WheelConfig.Packs) is
 	--   prompted; answer PurchasePrompt { Product, Status } (never granted here)
+	NightCrate = { Rate = 1, Burst = 3 }, -- (no args): opens the Night Shift crate if one waits
+	--   (data.NightShift.Ready, NightShiftService); answer NightCrateResult
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
 	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
 	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
@@ -261,6 +263,7 @@ Net.Events = {
 	--   Lucky?: Triple Lucky counted for the capsule, NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
 	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
 	WheelResult = false,
+	NightCrateResult = false, -- { Ok, Prize?: "Coins" | "Ores" | "Relic", Amount?, Ores?, Artifact? } (NightShiftService)
 	-- an artifact turned up: { Artifact: id, Count: copies now, New: boolean,
 	--   Collection: id, Completed: boolean (this find completed it), Shards?: a duplicate's
 	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with

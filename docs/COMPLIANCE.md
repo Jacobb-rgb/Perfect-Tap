@@ -105,6 +105,8 @@ Violence and resubmit.**
   Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
   rare rarity now and after, plus the artifact chance per rock). The cards
   must show those numbers before every coin, shard or Robux buy.
+  **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, at most one a night after an hour
+  away, never sold, no luck changes it; its chances stand on it in the window.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
   floor's rock drops may turn into one ("1 in 2,000" .. "1 in 1,000,000"),
   and ore luck raises that chance by its square root (at most x2.5), so every
@@ -279,9 +281,9 @@ What Terra Forge sells (design v2; the source of truth is
 
 | Product | Type | Key in code | What it does | Paid random? |
 |---|---|---|---|---|
-| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, 12 h offline earnings, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
+| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, Night Shift at 50 % for 12 h, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
 | Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 4 and 5 (3 are free, owner 2026-10-24) | No |
-| Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
+| Night Shift (99 R$) | Game pass | `OfflineExtension` | The base works at 50 % for up to 12 h while away, instead of 25 % for 8 | No |
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |
 | Terra Forge Custom Hoverboard (49 R$) | Game pass | `HoverboardCustom` | The fastest hoverboard (speed 48), rainbow trail (the carry slowdown it skipped went with the backpack, 2026-10-24) | No |

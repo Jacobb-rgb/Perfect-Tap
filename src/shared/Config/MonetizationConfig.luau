@@ -201,7 +201,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 560,
 		Name = "Forgemaster's Pass",
-		Description = "Podiums 4 and 5, offline earnings for 12 hours, double backpack space, the Glimmer Grotto and extra machine slots. "
+		Description = "Podiums 4 and 5, Night Shift at 50% for 12 hours, double backpack space, the Glimmer Grotto and extra machine slots. "
 			.. MonetizationConfig.grottoOddsText(),
 		Perks = { "Podiums", "OfflineExtension", "StrongBack", "ForgeVip", "Workshop" },
 	},
@@ -222,7 +222,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 99,
 		Name = "Night Shift",
-		Description = "Your podiums keep earning while you are away for up to 12 hours instead of 5.",
+		Description = "Your base keeps working at 50% for up to 12 hours while you are away, instead of 25% for 8.",
 		Perks = { "OfflineExtension" },
 	},
 	{

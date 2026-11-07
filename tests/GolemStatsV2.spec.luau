@@ -235,7 +235,7 @@ return function(T, Loader)
 
 	T.test("Golem stats v2: a v11 save loads with every golem it owns, retired ones and paid ones too", function()
 		T.eq(DataTemplate.Version, Migrations.Latest, "Version and Latest together")
-		T.eq(Migrations.Latest, 13)
+		T.eq(Migrations.Latest, 14)
 		local save: any = { Version = 11 }
 		save.Golems = {
 			Owned = {

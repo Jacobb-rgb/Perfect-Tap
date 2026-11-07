@@ -101,15 +101,12 @@ return function(T, Loader)
 					T.falsy(child.Visible, "tile hidden until claimed: " .. child.Name)
 				end
 			end
-			-- the backpack button, floaters, toasts, offline popup
+			-- the backpack button, floaters, toasts
 			HudView.setBackpack(refs, 4, 5)
 			T.eq(refs.CarryLabel.Text, "4 / 5", "the backpack's n / cap")
 			T.truthy(refs.Backpack:FindFirstChild("Pack"), "the pack's picture")
 			T.truthy(HudView.floater(refs.Floaters, "+$5"):IsA("TextLabel"), "floater")
 			T.truthy(HudView.toast(refs.Toasts, "Hi", Color3.new(0, 1, 0)):FindFirstChild("Dot", true), "toast")
-			local offline = HudView.buildOffline()
-			T.truthy(offline.Collect and offline.Amount and offline.Detail and offline.Panel, "offline popup")
-			T.falsy(offline.Gui.Enabled, "offline starts hidden")
 		end)
 	end)
 

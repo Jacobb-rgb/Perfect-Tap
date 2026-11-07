@@ -1042,7 +1042,7 @@ end
 
 ---------------------------------------------------------------- the game HUD (UIConfig.LightUI)
 --[[
-	buildGame / slot / floater / toast / buildOffline have the same shape as
+	buildGame / slot / floater / toast have the same shape as
 	HudView's, so HudController, TeleportView, BuildView and the other
 	controllers use the light HUD unchanged (HudView forwards to these while
 	UIConfig.lightUI() is on). Differences:
@@ -2345,63 +2345,6 @@ function HudBubble.toastColor(parent: Instance, text: string, color: Color3): Fr
 		ZIndex = 4,
 	})
 	return holder
-end
-
-export type OfflineRefs = {
-	Gui: ScreenGui,
-	Dim: Frame,
-	Panel: Frame,
-	Amount: TextLabel,
-	Detail: TextLabel,
-	Collect: TextButton,
-}
-
--- "WELCOME BACK!": what the podiums earned while away, and COLLECT.
-function HudBubble.buildOffline(): OfflineRefs
-	local gui = UIKit.screen("TerraForgeOffline", 30)
-	gui.Enabled = false
-	gui.IgnoreGuiInset = true
-	local dim = UIKit.new("Frame", {
-		Name = "Dim",
-		BackgroundColor3 = Theme.Shadow,
-		BackgroundTransparency = 0.5,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-	}, gui)
-	local window = Bubble.window(gui, {
-		Name = "Offline",
-		Title = "WELCOME BACK!",
-		Icon = "coins",
-		Role = "Shop",
-		Size = Vector2.new(560, 340),
-	})
-	local close = window.Close.Parent :: Frame
-	close.Visible = false -- COLLECT (and B / Backspace) close it
-	local body = window.Body
-	Bubble.ink(body, "While you were away you earned", 22, {
-		Name = "Lead",
-		Size = UDim2.new(1, 0, 0, 28),
-		TextColor3 = Theme.InkSoft,
-	})
-	local row = Bubble.iconText(body, "coin", "+$0", 46, {
-		Name = "AmountRow",
-		Position = UDim2.fromOffset(0, 34),
-	}, true)
-	local amount = row:FindFirstChild("Text") :: TextLabel
-	amount.FontFace = Theme.TitleFont
-	amount.Size = UDim2.fromOffset(300, 52)
-	local detail = Bubble.ink(body, "", 18, {
-		Name = "Detail",
-		Position = UDim2.fromOffset(0, 98),
-		Size = UDim2.new(1, 0, 0, 52),
-		TextColor3 = Theme.InkSoft,
-		TextWrapped = true,
-	})
-	local collect, collectHolder =
-		Bubble.button(body, { Name = "Collect", Text = "COLLECT", Role = "Go", Size = Vector2.new(240, 62), TextSize = 30 })
-	collectHolder.AnchorPoint = Vector2.new(0.5, 1)
-	collectHolder.Position = UDim2.fromScale(0.5, 1)
-	return { Gui = gui, Dim = dim, Panel = window.Holder, Amount = amount, Detail = detail, Collect = collect }
 end
 
 return HudBubble

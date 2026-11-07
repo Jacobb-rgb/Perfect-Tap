@@ -44,9 +44,9 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 13", function()
-		T.eq(DataTemplate.Version, 13)
-		T.eq(Migrations.Latest, 13)
+	T.test("Migration: template is version 14", function()
+		T.eq(DataTemplate.Version, 14)
+		T.eq(Migrations.Latest, 14)
 		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
 	end)
 
