@@ -368,7 +368,7 @@ return function(T, Loader)
 	end
 
 	T.test("CrateOpening: Reduce motion: no shake, no blur, nothing that only flashes", function()
-		local FLASHES = { "Flare", "RevealRing", "BurstRing", "EnergyWave", "ShotGlow" }
+		local FLASHES = { "Flare", "RevealRing", "BurstRing", "EnergyWave", "FloorRing", "ShotGlow" }
 		local function each(holder: any, fn: (name: string, list: { any }) -> ())
 			for _, name in FLASHES do
 				fn(name, named(holder, name))
@@ -430,6 +430,12 @@ return function(T, Loader)
 				end
 				if prev then
 					T.le(now.core - prev.core, 0.025, at .. "the pillar's core comes up slowly")
+					T.le(prev.core - now.core, 0.025, at .. "the pillar's core goes down slowly")
+					T.le(prev.wide - now.wide, 0.01, at .. "the pillar goes down slowly")
+					T.le(prev.ray - now.ray, 0.01, at .. "the god rays go down slowly")
+					if t < Stage.T_RISE_END then -- (then the crate has sunk into the platform)
+						T.le(prev.inside - now.inside, 0.025, at .. "the inside's glow goes down slowly")
+					end
 					T.le(now.wide - prev.wide, 0.01, at .. "the pillar comes up slowly")
 					T.le(now.inside - prev.inside, 0.025, at .. "the inside's glow comes up slowly")
 					T.le(now.ray - prev.ray, 0.005, at .. "the god rays come up slowly")
@@ -455,6 +461,41 @@ return function(T, Loader)
 		local a = shows(wide)
 		stage.update(Stage.T_BURST + 3 / 60)
 		T.lt(a + 0.1, shows(wide), "the normal pillar is fast")
+	end)
+
+	T.test("CrateOpening: Reduce motion: what the charge lit fades at the burst, no cut", function()
+		for _, level in { 4, 9 } do
+			local stage, holder = build(level, true)
+			local label = "level " .. level .. " "
+			local watched = {
+				{ named(holder, "MiniHeart")[1], 0.04 },
+				{ named(holder, "MiniRay")[1], 0.06 },
+				{ named(holder, "CometArc")[1], 0.06 },
+			}
+			local before = {}
+			stage.update(Stage.T_BURST - 1 / 60)
+			for i, w in watched do
+				before[i] = shows(w[1])
+				T.lt(0.3, before[i], label .. w[1].Name .. " is lit before the burst")
+			end
+			posed(stage, Stage.T_BURST, Stage.T_BURST + Stage.CalmChargeOut - 1 / 60, function(t: number)
+				for i, w in watched do
+					local now = shows(w[1])
+					T.le(before[i] - now, w[2], string.format("%s%s fades at %.3f", label, w[1].Name, t))
+					before[i] = now
+				end
+			end)
+			stage.update(Stage.T_BURST + Stage.CalmChargeOut)
+			T.eq(shows(watched[1][1]), 0, label .. "and it is gone")
+			T.eq(shows(watched[2][1]), 0, label .. "and it is gone")
+		end
+		-- the normal burst cuts them (the check above can tell the two apart)
+		local stage, holder = build(10)
+		local heart = named(holder, "MiniHeart")[1]
+		stage.update(Stage.T_BURST - 1 / 60)
+		T.lt(0.3, shows(heart), "lit before the burst")
+		stage.update(Stage.T_BURST)
+		T.eq(shows(heart), 0, "the normal burst cuts it")
 	end)
 
 	T.test("CrateOpening: Reduce motion: the crate's strips hold steady, the wheel of rays comes up slowly", function()

@@ -36,8 +36,9 @@
 	Reduce motion (calm): nothing flashes. No shake, blur or zoom kick; the pillar,
 	the god rays, the inside's glow and the blaster's light fade in over CalmBurstIn,
 	the wheel of rays over CalmRevealIn (no kick); no white on the rim or the blaster,
-	the crate's strips hold steady, the core light never jumps; no energy wave, no
-	flare, no rings running out at the burst and the reveal, no muzzle glow.
+	the crate's strips hold steady, the core light never jumps, what the charge lit
+	fades over CalmChargeOut; no energy wave, no flare, no rings running out at the
+	impact, the burst or the reveal, no muzzle glow.
 
 	Stage frame: `origin` = the platform's top center; the crate's long side along
 	Z, its front (+X) and the camera on the +X side.
@@ -82,6 +83,7 @@ Stage.GunRest = 7.4 -- how high the blaster floats
 Stage.PortalHeight = 14
 Stage.CalmBurstIn = 0.7 -- Reduce motion: the seconds what the burst lights takes to come up
 Stage.CalmRevealIn = 1 -- ... what the reveal lights
+Stage.CalmChargeOut = 0.3 -- ... what the charge lit takes to go out at the burst
 
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -376,6 +378,11 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local wave = part(root, Vector3.new(1, 1, 1), hot, NEON, Enum.PartType.Ball)
 	wave.Name = "EnergyWave"
 	local waves = { newRing(root, 26, hot), newRing(root, 24, glowColor), newRing(root, 26, hot), newRing(root, 24, glowColor) }
+	for _, w in waves do
+		for _, p in w.Parts do
+			p.Name = "FloorRing"
+		end
+	end
 	local burstRing = newRing(root, 22, hot)
 	for _, p in burstRing.Parts do
 		p.Name = "BurstRing"
@@ -384,13 +391,18 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local underA, underB = newRing(root, 20, glowColor), newRing(root, 22, hot)
 	-- the swirling comet arcs round the crate and later round the blaster
 	local arcA, arcB = newRing(root, 26, hot, true), newRing(root, 26, glowColor, true)
+	arcA.Parts[1].Name = "CometArc"
 	-- small portals round the crate while it charges, each with a ray into the crate
 	local mini: { { ring: Ring, heart: Part, ray: Part, at: Vector3, t0: number } } = {}
 	for i, spot in { Vector3.new(4, 6.5, -8), Vector3.new(4, 7, 8), Vector3.new(-6, 5, -6.5), Vector3.new(-6, 6, 6.5) } do
+		local heart = part(root, Vector3.new(0.15, 1, 1), glowColor, NEON, Enum.PartType.Cylinder)
+		heart.Name = "MiniHeart"
+		local miniRay = part(root, Vector3.new(1, 0.2, 0.2), hot, NEON, Enum.PartType.Cylinder)
+		miniRay.Name = "MiniRay"
 		table.insert(mini, {
 			ring = newRing(root, 10, hot),
-			heart = part(root, Vector3.new(0.15, 1, 1), glowColor, NEON, Enum.PartType.Cylinder),
-			ray = part(root, Vector3.new(1, 0.2, 0.2), hot, NEON, Enum.PartType.Cylinder),
+			heart = heart,
+			ray = miniRay,
 			at = spot,
 			t0 = Stage.T_ORBIT + 0.08 * i,
 		})
@@ -653,7 +665,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local PORTAL_Y = Stage.PortalHeight
 	local caseTop = case.Height
 	local gunRest = Stage.GunRest
-	local CALM_BURST, CALM_REVEAL = Stage.CalmBurstIn, Stage.CalmRevealIn
+	local CALM_BURST, CALM_REVEAL, CALM_OUT = Stage.CalmBurstIn, Stage.CalmRevealIn, Stage.CalmChargeOut
 
 	local self = {
 		Root = root,
@@ -827,6 +839,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		local fadeOut = prog(t, T_HOLD + 0.25, Stage.Duration) -- the effects fade at the end
 		local camCf = self.camera(t, idle)
 		local charge = prog(t, T_ORBIT, T_BURST)
+		-- what the charge lit goes out at the burst (Reduce motion: a short fade, no cut)
+		local chargeOut = if calm then prog(t, T_BURST, T_BURST + CALM_OUT) elseif t >= T_BURST then 1 else 0
 
 		-- the platform lights up in the first moments, its segments one by one; flares at the impact
 		local lit = prog(t, 0, Stage.T_PREP + 0.2)
@@ -962,7 +976,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 				l.p.Transparency = if pulsing and not calm then 0.35 * (1 - charge) * pulse else 0
 			end
 		end
-		case.Seam.Transparency = if t < T_BURST then 1 - (0.1 + 0.9 * charge) else 1
+		case.Seam.Transparency = if t < T_BURST then 1 - (0.1 + 0.9 * charge) else chargeOut
 		local burstLit = if t < T_BURST then 0 elseif calm then prog(t, T_BURST, T_BURST + CALM_BURST) else 1
 		case.Inside.Transparency = 1 - burstLit * (0.9 - prog(t, T_BURST + 0.5, T_RISE) * 0.6)
 		-- (Reduce motion: on from where the charge left it, 5.6, no jump)
@@ -1009,7 +1023,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 			local dur = if i <= 2 then 0.55 else 0.9
 			local size = if i <= 2 then 9 + i * 2 else 15
 			local u = prog(t, t0, t0 + dur)
-			if t >= t0 and u < 1 then
+			if t >= t0 and u < 1 and not calm then
 				poseRing(w, at(0, 0.08, 0), lerp(0.75, size, easeOutCubic(u)), lerp(0.7, 0.18, u), u, 0)
 			else
 				hideRing(w)
@@ -1193,15 +1207,17 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		end
 
 		-- the comet arcs: round the crate from the hover on, round the blaster after the burst
+		local onCrate = chargeOut < 1
 		local arcsIn = (
-			if t < T_BURST then easeOutCubic(prog(t, T_IMPACT, T_IMPACT + 0.3)) else easeOutCubic(prog(t, T_OPEN - 0.1, T_OPEN + 0.25))
+			if onCrate then easeOutCubic(prog(t, T_IMPACT, T_IMPACT + 0.3)) else easeOutCubic(prog(t, T_OPEN - 0.1, T_OPEN + 0.25))
 		) * (1 - prog(t, T_SETTLE, T_SETTLE + 0.35))
 		if arcsIn > 0.01 then
-			local center = CFrame.new(if t < T_BURST then at(0, 2.2 + hover, 0).Position else gunCf.Position)
-			local r0 = if t < T_BURST then 6.6 else 4.8
-			local thick = if t < T_BURST then 1 else 0.5 -- (the camera is close to the blaster)
-			poseRing(arcA, center * CFrame.Angles(0.5, 0, 0.42), r0 * arcsIn, 0.16 * thick, 0.08, clock * 3.4)
-			poseRing(arcB, center * CFrame.Angles(-0.42, 0, -0.5), (r0 + 1.1) * arcsIn, 0.12 * thick, 0.15, -clock * 2.6)
+			local center = CFrame.new(if onCrate then at(0, 2.2 + hover, 0).Position else gunCf.Position)
+			local r0 = if onCrate then 6.6 else 4.8
+			local thick = if onCrate then 1 else 0.5 -- (the camera is close to the blaster)
+			local gone = if onCrate then chargeOut else 0
+			poseRing(arcA, center * CFrame.Angles(0.5, 0, 0.42), r0 * arcsIn, 0.16 * thick, lerp(0.08, 1, gone), clock * 3.4)
+			poseRing(arcB, center * CFrame.Angles(-0.42, 0, -0.5), (r0 + 1.1) * arcsIn, 0.12 * thick, lerp(0.15, 1, gone), -clock * 2.6)
 		else
 			hideRing(arcA)
 			hideRing(arcB)
@@ -1210,20 +1226,20 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		-- charging: rays pour in, small portals open round the crate
 		for _, m in mini do
 			local u = easeOutBack(prog(t, m.t0, m.t0 + 0.2))
-			if t >= m.t0 and t < T_BURST then
+			if t >= m.t0 and chargeOut < 1 then
 				local p = at(m.at.X, m.at.Y, m.at.Z)
 				local target = (origin * CFrame.new(0, 2.2 + hover, 0)).Position
 				local face = CFrame.lookAt(p.Position, target) * CFrame.Angles(math.pi / 2, 0, 0)
-				poseRing(m.ring, face, 1.3 * u, 0.2, 0, clock * 7)
+				poseRing(m.ring, face, 1.3 * u, 0.2, chargeOut, clock * 7)
 				m.heart.Size = Vector3.new(0.1, 2.4 * u, 2.4 * u)
-				m.heart.Transparency = 0.45
+				m.heart.Transparency = lerp(0.45, 1, chargeOut)
 				place(m.heart, CFrame.lookAt(p.Position, target) * CFrame.Angles(0, math.pi / 2, 0))
 				local line = target - p.Position
 				local len = line.Magnitude * prog(t, m.t0 + 0.1, m.t0 + 0.3)
 				if len > 0.05 then
 					local d = 0.1 + 0.14 * charge
 					m.ray.Size = Vector3.new(len, d, d)
-					m.ray.Transparency = 0.35 - 0.25 * charge
+					m.ray.Transparency = lerp(0.35 - 0.25 * charge, 1, chargeOut)
 					place(m.ray, CFrame.lookAt(p.Position + line.Unit * (len / 2), target) * CFrame.Angles(0, math.pi / 2, 0))
 				else
 					hide(m.ray)
@@ -1311,7 +1327,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		-- energy pulled toward the crate (at the very start toward the platform)
 		for _, st in streaks do
 			local u = (t - st.t0) / st.dur
-			if u > 0 and u < 1 and t < T_BURST then
+			if u > 0 and u < 1 and chargeOut < 1 then
 				local function where(v: number): Vector3
 					local k = (1 - v) ^ 1.7
 					local th = st.th + v * 2.4
@@ -1324,7 +1340,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 				local head, tail = where(u), where(math.max(0, u - 0.06))
 				local len = math.max(0.1, (head - tail).Magnitude)
 				st.p.Size = Vector3.new(0.1, 0.1, len)
-				st.p.Transparency = 1 - math.sin(u * math.pi)
+				st.p.Transparency = 1 - math.sin(u * math.pi) * (1 - chargeOut)
 				place(st.p, origin * CFrame.lookAt((head + tail) / 2, head))
 			else
 				hide(st.p)
