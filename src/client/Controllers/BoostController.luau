@@ -57,6 +57,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local HiddenScale = require(script.Parent.Parent.Util.HiddenScale)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local CleaningController = require(script.Parent.CleaningController)
@@ -341,7 +342,7 @@ local function refreshChips()
 	-- (an egg opening hides the HUD at scale 0: its frames measure as nothing then, so the
 	-- chips wait; CapsuleController lets go of its hold when the HUD is back: placed at once)
 	local guiScale = chips.Gui:FindFirstChild("Scale")
-	if guiScale and guiScale:IsA("UIScale") and guiScale.Scale == 0 then
+	if guiScale and guiScale:IsA("UIScale") and HiddenScale.is(guiScale.Scale) then
 		return
 	end
 	local running = BoostView.chips(StateController.get(), serverNow())
