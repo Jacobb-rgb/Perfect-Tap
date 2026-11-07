@@ -10,7 +10,6 @@ return function(T, Loader)
 	local NightShiftConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.NightShiftConfig")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local NightShiftLine = Loader.requirePath("ReplicatedStorage.Shared.Machines.NightShiftLine")
-	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
 	local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
@@ -328,7 +327,17 @@ return function(T, Loader)
 		T.eq(DataTemplate.Version, Migrations.Latest)
 		T.eq(DataTemplate.NightShift.CrateAt, 0)
 		T.eq(DataTemplate.NightShift.Ready, false)
-		T.truthy(Net ~= nil)
+		for _, junk in { "junk", { CrateAt = 0 / 0, Ready = "yes" }, { CrateAt = -5 } } do
+			local save: any = { Version = 13, NightShift = junk }
+			Migrations.run(save)
+			T.eq(save.Version, Migrations.Latest)
+			T.eq(save.NightShift.CrateAt, 0, "a clean time")
+			T.eq(save.NightShift.Ready, false, "no crate from a broken save")
+		end
+		local kept: any = { Version = 13, NightShift = { CrateAt = 2e9, Ready = true } }
+		Migrations.run(kept)
+		T.eq(kept.NightShift.CrateAt, 2e9, "a good record stays")
+		T.eq(kept.NightShift.Ready, true)
 	end)
 
 	T.test("night shift window: its texts, it fits a small phone, Open Crate only with a crate", function()
@@ -351,6 +360,7 @@ return function(T, Loader)
 		T.truthy(refs.Open.Visible, "a crate waits")
 		T.truthy(refs.Empty.Visible, "nothing collected: the hint")
 		T.eq(refs.Machines.Text, "+0 bars")
+		T.eq(refs.MachinesTitle.Text, "Machines 25%")
 		NightShiftView.fill(refs, {
 			Amount = 5000,
 			Seconds = 3600,

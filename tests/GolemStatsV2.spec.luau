@@ -249,7 +249,7 @@ return function(T, Loader)
 			NextId = 6,
 		}
 		Migrations.run(save)
-		T.eq(save.Version, 13)
+		T.eq(save.Version, 14)
 		T.eq(#save.Golems.Owned, 5, "none lost")
 		T.eq(save.Golems.Owned[1].Kind, "HeartstoneColossus")
 		T.truthy(save.Golems.Owned[1].Paid and save.Golems.Owned[1].Locked, "paid and locked stay")

@@ -38,6 +38,7 @@ export type Refs = {
 	Bar: GuiObject,
 	Coins: TextLabel,
 	Machines: TextLabel,
+	MachinesTitle: TextLabel,
 	Rows: Frame,
 	Empty: TextLabel,
 	CrateCard: Frame,
@@ -46,9 +47,7 @@ export type Refs = {
 	CrateCount: GuiObject,
 	CrateOdds: TextLabel,
 	Collect: GuiButton,
-	CollectHolder: GuiObject,
 	Open: GuiButton,
-	OpenHolder: GuiObject,
 }
 
 ---------------------------------------------------------------- texts
@@ -264,6 +263,7 @@ function NightShiftView.build(): Refs
 		Bar = bar,
 		Coins = coins,
 		Machines = machines,
+		MachinesTitle = barTile:FindFirstChild("Title") :: TextLabel,
 		Rows = rows,
 		Empty = empty,
 		CrateCard = card,
@@ -272,9 +272,7 @@ function NightShiftView.build(): Refs
 		CrateCount = count,
 		CrateOdds = odds,
 		Collect = collect,
-		CollectHolder = collect,
 		Open = open,
-		OpenHolder = open,
 	}
 end
 
@@ -323,6 +321,7 @@ function NightShiftView.fill(refs: Refs, payload: { [string]: any })
 	Pop.setBar(refs.Bar, NightShiftView.barFraction(seconds, hours), NightShiftView.barText(rate, hours))
 	refs.Coins.Text = "+" .. Format.money(tonumber(payload.Amount) or 0)
 	refs.Machines.Text = NightShiftView.machinesText(payload.Made)
+	refs.MachinesTitle.Text = `Machines {math.floor(rate * 100 + 0.5)}%`
 	fillRows(refs, payload.Made)
 	setCrate(refs, payload.Crate == true)
 end

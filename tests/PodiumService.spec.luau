@@ -553,6 +553,26 @@ return function(T, Loader)
 		T.near(podium.payOffline(w.player, true), perSecond * EconomyConfig.Offline.PassRate * extended, 1e-6, "extension cap")
 		T.eq(lastNote(w, "OpenUI").B.Hours, EconomyConfig.Offline.ExtendedHours, "popup says 12 h")
 		T.eq(lastNote(w, "OpenUI").B.Rate, EconomyConfig.Offline.PassRate, "and 50 %")
+		-- the return hook: its answer goes into the window, a broken one never costs the coins
+		local answers = 0
+		PodiumService.onReturn(function()
+			answers += 1
+			return { Crate = true }
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		T.truthy(podium.payOffline(w.player, true) > 0, "paid with the hook")
+		T.eq(answers, 1, "the hook ran")
+		T.eq(lastNote(w, "OpenUI").B.Crate, true, "its answer in the window")
+		PodiumService.onReturn(function(): any
+			error("broken")
+		end)
+		w.data.LastSeen = NOW - 7200
+		podium.loaded(w.player, w.data)
+		T.truthy(podium.payOffline(w.player, true) > 0, "a broken hook never costs the coins")
+		PodiumService.onReturn(function(): any
+			return nil
+		end)
 		-- nothing for: short breaks, a clock in the future, broken or ancient values
 		local coins = w.data.Coins
 		for _, last in { NOW - 30, NOW + 600, 0, -5, 0 / 0, math.huge, "1700000000", 1000, NOW - 10 * 365 * 24 * 3600 } do

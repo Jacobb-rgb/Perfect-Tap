@@ -790,12 +790,16 @@ local function payOffline(player: Player, popup: boolean): number
 			Money = Perks.has(player, MonetizationConfig.MoneyPassPerk),
 		}
 	end
-	local extra = if popup
-			and player.Parent
-			and returnHook
-			and seconds >= EconomyConfig.Offline.MinSeconds
-		then returnHook(player, data, seconds, extended)
-		else nil
+	local extra = nil
+	if popup and player.Parent and returnHook and seconds >= EconomyConfig.Offline.MinSeconds then
+		-- (a broken hook never costs the player the coins below)
+		local ok, answer = pcall(returnHook, player, data, seconds, extended)
+		if ok then
+			extra = answer
+		else
+			warn(`[PodiumService] the return hook failed for {player.Name}: {answer}`)
+		end
+	end
 	if amount < 0.001 then
 		amount = 0
 	else
