@@ -60,7 +60,7 @@ SprayScoring.SubstepSlack = 200
 SprayScoring.CrystalRadius = 0.1 -- face units: the nozzle point this close heats a crystal
 SprayScoring.CrystalHeat = 0.35 -- seconds point-blank before a crystal cracks (a slow pass over it is fine)
 SprayScoring.CrystalCool = 1.5 -- heat lost per second away from it
--- Par = (Base + PerAmount * the clump's dirt) / the input's leniency (a wider spray is quicker,
+-- Par = (Base + PerAmount * the clump's dirt, before any snow thinned it) / the input's leniency (a wider spray is quicker,
 -- so it helps the aim, not the score). Lune: a steady sweep at 2 face units per second takes
 -- about 1.2 x par; the strong jet washes even Mythic dirt in one pass, so par hardly grows.
 SprayScoring.Par = { Base = 3.5, PerAmount = 0.02 }
@@ -264,7 +264,7 @@ end
 
 function SprayScoring.par(pattern: CleaningPatterns.Pattern, input: any): number
 	local leniency = SprayScoring.InputLeniency[input] or 1
-	return (SprayScoring.Par.Base + SprayScoring.Par.PerAmount * pattern.TotalAmount) / leniency
+	return (SprayScoring.Par.Base + SprayScoring.Par.PerAmount * (pattern.ParAmount or pattern.TotalAmount)) / leniency
 end
 
 -- 0..1 of the slow penalty for a washing time of `ratio` times par.
@@ -282,7 +282,8 @@ function SprayTracker.parts(self: Tracker, now: number?): Parts
 	local w = SprayScoring.Weights
 	local finish = self.doneT or now or self.lastT or 0
 	local time = if self.firstT then math.max(0, finish - self.firstT) else 0
-	local par = (SprayScoring.Par.Base + SprayScoring.Par.PerAmount * self.pattern.TotalAmount) / self.leniency
+	local amount = self.pattern.ParAmount or self.pattern.TotalAmount
+	local par = (SprayScoring.Par.Base + SprayScoring.Par.PerAmount * amount) / self.leniency
 	local over = SprayScoring.slowness(time / par)
 	local wasted = if self.sprayTime > 0 then self.wasteTime / self.sprayTime else 0
 	local waste = math.clamp((wasted - SprayScoring.WasteFree) / (SprayScoring.WasteFull - SprayScoring.WasteFree), 0, 1)

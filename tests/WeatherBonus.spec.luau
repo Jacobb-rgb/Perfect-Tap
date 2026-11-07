@@ -10,6 +10,8 @@ return function(T, Loader)
 	local SecretOreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SecretOreConfig")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
 	local CleaningPatterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
+	local SprayScoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.SprayScoring")
+	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.WeatherBonusController")
@@ -108,8 +110,13 @@ return function(T, Loader)
 			T.near(Bonuses.twinDrop({ TwinDropChance = 2 }), 0.7, 1e-9, "on top of the enchant's cap")
 		end)
 		withWeather(List.Wind, function()
-			T.eq(Bonuses.magnetRadius(stats), Bonuses.pickupRange(stats) * 2, "wind: everyone's ore flies")
-			T.eq(Bonuses.magnetRadius({ MagnetRadius = 20 }), 40, "twice as far")
+			-- (review 11-07: "magnet reach x2", magnet owners only, within the cap)
+			T.eq(Bonuses.magnetRadius(stats), 0, "no magnet: nothing flies, wind or not")
+			T.eq(Bonuses.magnetRadius({ MagnetRadius = 20 }), 40, "a magnet pulls from twice as far")
+			T.eq(Bonuses.magnetRadius({ MagnetRadius = 20, MagnetBonus = 5 }), 50, "Magnetism counts, then doubled")
+			local max = StatConfig.ById.MagnetRadius.Max
+			T.eq(Bonuses.magnetRadius({ MagnetRadius = max - 2 }), max, "never past the cap")
+			T.eq(Bonuses.magnetRadius({ MagnetRadius = 20 }, false), 20, "the magnet's own radius: the shop, the buy toast")
 		end)
 		withWeather(List.Rainbow, function()
 			T.eq(Bonuses.secretMult(), 2)
@@ -146,6 +153,10 @@ return function(T, Loader)
 		local thin = CleaningPatterns.thin(CleaningPatterns.generate("Gold", 7), 1.3)
 		T.near(thin.TotalAmount, total / 1.3, 1e-6)
 		T.near(thin.Cells[1].Amount, plain.Cells[1].Amount / 1.3, 1e-9)
+		-- par stays the clump's: thinner dirt never makes the score harder (review 11-07)
+		T.near(thin.ParAmount :: number, total, 1e-9)
+		T.near(SprayScoring.par(thin, "Mouse"), SprayScoring.par(plain, "Mouse"), 1e-9, "the same par")
+		T.eq(CleaningPatterns.thin(thin, 1.3).ParAmount, thin.ParAmount, "a second thinning keeps the first par")
 		for _, bad in { 1, 0.5, 3, 0 / 0, "x", nil } do
 			local same = CleaningPatterns.thin(CleaningPatterns.generate("Gold", 7), bad :: any)
 			T.near(same.TotalAmount, total, 1e-9, "a broken factor changes nothing")
@@ -163,16 +174,39 @@ return function(T, Loader)
 			T.eq(BoostView.context(state, nil).OreLuckMult, 1.5, "in the context of every card")
 			local storm = BoostView.hexaOdds(state, "DeepHollow")
 			T.truthy(storm.Note:find("Storm now", 1, true) ~= nil, storm.Note)
+			-- the numbers: the storm's luck without Hexa, the cap with it (review 11-07)
+			local without, with = BoostConfig.hexaLuck(0, 1.5)
+			T.truthy(storm.Note:find(`Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with`, 1, true) ~= nil, storm.Note)
+			T.truthy(math.abs(without - StatConfig.oreLuck(0, 1.5)) < 1e-9, "x1.5 without")
+			-- the Hexa Lucky card's key line (a Robux card): the storm in its "now"
+			for _, card in BoostView.cards(state, 0, 1000, false, {}) do
+				if card.Kind == "HexaLucky" then
+					T.eq(card.KeyLine, `Your ore luck: {BoostView.mult(without)} → {BoostView.mult(with)}`)
+				end
+			end
+			T.truthy(BoostView.weatherNote():find("luck cap", 1, true) ~= nil, "a storm adds nothing on top of Hexa: said")
 			local rows = BoostView.secretRows("DeepHollow", 1, 1)
 			entry = List.Rainbow
 			local doubled = BoostView.secretRows("DeepHollow", 1, 1)
 			T.eq(rows[#rows].Before, "1 in 4,000", "Deep Hollow's own, in a storm's luck of 1")
 			T.eq(doubled[#doubled].Before, "1 in 2,000", "doubled by the rainbow")
+			-- the Store's luck card lines too (StoreController.luckLines: BoostView.secretLines)
+			local function hollowLine(lines: { string }): string
+				for _, line in lines do
+					if line:find("Deep Hollow", 1, true) == 1 then
+						return line
+					end
+				end
+				return ""
+			end
+			T.truthy(hollowLine(BoostView.secretLines(1, 1)):find("1 in 2,000", 1, true) ~= nil, "the Store: x2 in a rainbow")
 			T.truthy(BoostView.hexaOdds(state, "DeepHollow").Note:find("Rainbow now", 1, true) ~= nil)
 			local chips = BoostView.chips(state, 1000)
 			T.eq(chips[#chips].Kind, BoostView.WeatherChip)
 			T.eq(chips[#chips].Tag, "RAINBOW")
 			entry = nil
+			T.truthy(hollowLine(BoostView.secretLines(1, 1)):find("1 in 4,000", 1, true) ~= nil, "the Store: clear")
+			T.eq(BoostView.weatherNote(), "", "no note in clear weather")
 			T.eq(#BoostView.chips(state, 1000), 0, "clear weather: no chip")
 			T.eq(BoostView.context(state, nil).OreLuckMult, 1)
 			local refs = BoostView.buildChips()

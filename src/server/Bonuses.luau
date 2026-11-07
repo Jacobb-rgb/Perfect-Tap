@@ -399,18 +399,20 @@ end
 
 -- Studs in which your own loose items fly to you (0 = no magnet). The
 -- Magnetism enchant's MagnetBonus only adds to a real Ore Magnet (gear).
-function Bonuses.magnetRadius(stats: Stats): number
+-- Wind (WeatherBonus Reach) multiplies a magnet's pull, within the cap;
+-- `withWeather` false: the magnet's own radius (the shop, the buy toast).
+function Bonuses.magnetRadius(stats: Stats, withWeather: boolean?): number
 	local base = math.max(0, stats.MagnetRadius or 0)
-	local weather = Bonuses.weather()
-	if weather and weather.Reach then
-		-- (wind: everyone's ore flies, from twice as far as they could otherwise reach it)
-		return math.max(base, Bonuses.pickupRange(stats)) * weather.Reach
-	end
 	if base <= 0 then
 		return 0
 	end
 	local max = StatConfig.ById.MagnetRadius.Max or math.huge
-	return math.min(max, base + math.max(0, stats.MagnetBonus or 0))
+	local radius = math.min(max, base + math.max(0, stats.MagnetBonus or 0))
+	local weather = if withWeather == false then nil else Bonuses.weather()
+	if weather and weather.Reach then
+		radius = math.min(max, radius * weather.Reach)
+	end
+	return radius
 end
 
 -- Studs you can grab an item from.
@@ -476,7 +478,7 @@ function Bonuses.summary(player: Player): { [string]: any }
 		MoneyMult = stats.MoneyMult or 1, -- the 2x Money pass (income and sales)
 		GolemBond = math.max(0, stats.GolemBondPct or 0),
 		WalkSpeed = Bonuses.walkSpeed(stats),
-		MagnetRadius = Bonuses.magnetRadius(stats),
+		MagnetRadius = Bonuses.magnetRadius(stats, false), -- (the item's own: no wind)
 		PickupRange = Bonuses.pickupRange(stats),
 		ThrowMult = Bonuses.throwMult(stats),
 		CarryCapacity = Bonuses.carryCapacity(stats, player),

@@ -562,6 +562,63 @@ return function(T, Loader)
 		return s
 	end
 
+	T.test("EnchantView: odds in a storm hold its luck in both columns, Hexa is told by its boost (review 11-07)", function()
+		local WeatherBonus = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherBonus")
+		local saved = BoostView.weather
+		local entry: any = nil
+		BoostView.weather = function()
+			return entry
+		end
+		local ok, err = pcall(function()
+			local s = state()
+			local delta = EnchantConfig.nextDelta(s.Enchants, 5, "Lucky")
+			-- what the server rolls now (BoostView.context: the storm's luck in it) for every zone
+			local function expected(zoneId: string): any
+				for _, effect in BoostConfig.preview(BoostView.context(s, NOW), delta).Zones do
+					if effect.Zone == zoneId then
+						return effect
+					end
+				end
+				return nil
+			end
+			-- a zone where Rare or better is a chance, not a sure thing
+			local zoneId = ""
+			for _, zone in BoostView.zones(s) do
+				local effect = expected(zone.Id)
+				if zoneId == "" and effect and not effect.NoEffect and effect.Before < 0.5 then
+					zoneId = zone.Id
+				end
+			end
+			T.truthy(zoneId ~= "", "a zone with rare odds")
+			local clear = EnchantView.odds(s, "Lucky", zoneId, NOW) :: any
+			T.eq(clear.Summary.Before, BoostView.pct(expected(zoneId).Before), "clear: what the server rolls")
+			entry = WeatherBonus.List.Storm
+			local storm = EnchantView.odds(s, "Lucky", zoneId, NOW) :: any
+			T.truthy(storm.Note:find("Storm now", 1, true) ~= nil, storm.Note)
+			T.eq(storm.Note:find("Hexa Lucky isn't counted", 1, true), nil, "a storm is no Hexa Lucky")
+			local stormy = expected(zoneId)
+			T.eq(storm.Summary.Before, BoostView.pct(stormy.Before), "NOW: the storm's luck, as the server rolls it")
+			T.eq(storm.Summary.After, BoostView.pct(stormy.After), "AFTER BUY: the storm's luck too")
+			T.truthy(storm.Summary.Before ~= clear.Summary.Before, "the storm shows")
+			-- a running Hexa Lucky: told, and left out (it runs out)
+			entry = nil
+			local hexa = state({
+				Boosts = { TripleLuckyUntil = 0, HexaLuckyUntil = NOW + 600 },
+				Bonuses = { OreLuckPct = 0.15, OreLuckMult = 2.5, ArtifactPct = 0 },
+			})
+			local withHexa = EnchantView.odds(hexa, "Lucky", zoneId, NOW) :: any
+			T.truthy(withHexa.Note:find("Hexa Lucky isn't counted", 1, true) ~= nil, withHexa.Note)
+			T.eq(withHexa.Summary.Before, clear.Summary.Before, "the lasting odds")
+			entry = WeatherBonus.List.Rainbow
+			local rainbow = EnchantView.odds(s, "Lucky", zoneId, NOW) :: any
+			T.truthy(rainbow.Note:find("Rainbow now", 1, true) ~= nil, rainbow.Note)
+		end)
+		BoostView.weather = saved
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("EnchantView: the cards offer exactly what the server quotes", function()
 		for _, coins in { 0, 1e5, 1e13 } do
 			for _, shards in { 0, 200, 5000 } do

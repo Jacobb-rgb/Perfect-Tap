@@ -596,10 +596,11 @@ function EnchantView.odds(
 		return nil, false
 	end
 	local artifactsSoon = soon ~= nil and soon[EnchantView.ArtifactsWith] == true
-	-- the lasting odds: without a running Hexa Lucky
+	-- the lasting odds: without a running Hexa Lucky (or Server Luck); a storm's luck
+	-- is in both columns, as the server rolls it now (the note says so)
 	local ctx = BoostView.context(state, now)
-	local hexa = ctx.OreLuckMult > 1
-	ctx.OreLuckMult = 1
+	local hexa = BoostConfig.active(state.Boosts, "HexaLucky", now or os.time())
+	ctx.OreLuckMult = math.min(BoostView.weatherLuck(), StatConfig.ById.OreLuckMult.Max or math.huge)
 	-- does the buy's effect count right away (in a slot)?
 	local tier = EnchantConfig.tierOf(state.Enchants, id)
 	local slotted = EnchantView.slotOf(state.Enchants, level, id) ~= nil
@@ -616,7 +617,10 @@ function EnchantView.odds(
 			then " It isn't in a slot: equip it to get these odds."
 			else " Every open slot is full: put it in a slot to get these odds."
 	end
-	local hexaNote = if hexa then " Hexa Lucky isn't counted (it runs out)." else ""
+	local hexaNote = if hexa
+		then " Hexa Lucky isn't counted (it runs out)."
+		elseif BoostView.serverLuck() > 1 then " Server Luck isn't counted (it runs out)."
+		else ""
 	local preview = BoostConfig.preview(ctx, delta)
 	if replaced then
 		local replacedTier = EnchantConfig.tierOf(state.Enchants, replaced)
@@ -712,7 +716,7 @@ function EnchantView.odds(
 		AfterHeader = afterHeader,
 		Summary = summary,
 		Rows = rows,
-		Note = note .. slotNote .. hexaNote .. soonNote,
+		Note = note .. slotNote .. hexaNote .. BoostView.weatherNote() .. soonNote,
 	},
 		true
 end
