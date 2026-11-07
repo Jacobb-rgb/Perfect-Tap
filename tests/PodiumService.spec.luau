@@ -580,7 +580,7 @@ return function(T, Loader)
 		podium.loaded(w.player, w.data)
 		podium.payOffline(w.player, false)
 		T.eq(quiet, 1, "the hook ran without a window")
-		-- the crate alone opens the window; a reason alone doesn't
+		-- the crate alone opens the window; without a crate or coins nothing does
 		w.data.Podiums = {}
 		w.data.LastSeen = NOW - 7200
 		podium.loaded(w.player, w.data)
@@ -588,13 +588,13 @@ return function(T, Loader)
 		T.eq(podium.payOffline(w.player, true), 0, "no coins")
 		T.eq(lastNote(w, "OpenUI").B.Crate, true, "the crate alone opens it")
 		PodiumService.onReturn(function(): any
-			return { Why = "NoBelt", Crate = false }
+			return { Crate = false, PenFull = true }
 		end)
 		w.data.LastSeen = NOW - 7200
 		podium.loaded(w.player, w.data)
 		w.notes = {}
 		podium.payOffline(w.player, true)
-		T.eq(lastNote(w, "OpenUI"), nil, "a reason alone doesn't")
+		T.eq(lastNote(w, "OpenUI"), nil, "nothing to show, no window")
 		PodiumService.onReturn(function(): any
 			return nil
 		end)

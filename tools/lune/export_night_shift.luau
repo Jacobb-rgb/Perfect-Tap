@@ -25,22 +25,6 @@ local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 local NightShiftView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.NightShiftView")
 
-local function row(kind: string, ore: string, grade: string?, count: number): any
-	return { K = kind, O = ore, G = grade, N = count }
-end
-
-local MADE = {
-	Total = 46,
-	Bars = 46,
-	List = {
-		row("Ingot", "Sapphire", "Pristine", 4),
-		row("Ingot", "Gold", "Clean", 9),
-		row("Ingot", "Silver", "Clean", 12),
-		row("Ingot", "Bronze", "Rough", 18),
-		row("Ingot", "Cobalt", "Rough", 3),
-	},
-}
-
 local function screen(payload: any, scale: number, prize: any?): any
 	local hud = HudView.build()
 	hud.Gui.Scale.Scale = scale
@@ -75,8 +59,8 @@ local function screen(payload: any, scale: number, prize: any?): any
 	return UiExport.export({ hud.Gui, refs.Gui })
 end
 
-local FULL = { Amount = 1240000, Seconds = 7 * 3600 + 42 * 60, Hours = 8, Rate = 0.25, Made = MADE, Crate = true }
-local PASS = { Amount = 3970000, Seconds = 11 * 3600 + 5 * 60, Hours = 12, Rate = 0.5, Made = MADE, Crate = true }
+local FULL = { Amount = 1240000, Seconds = 7 * 3600 + 42 * 60, Hours = 8, Rate = 0.25, Crate = true }
+local PASS = { Amount = 3970000, Seconds = 11 * 3600 + 5 * 60, Hours = 12, Rate = 0.5, Crate = true }
 local EMPTY = { Amount = 18400, Seconds = 3 * 3600 + 12 * 60, Hours = 8, Rate = 0.25, Crate = false }
 
 local files = {

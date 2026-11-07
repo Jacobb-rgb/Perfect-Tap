@@ -32,9 +32,9 @@
 	  a check kept failing: a later check that says the player owned the
 	  pass pays the difference (topUpOffline, a toast). The client
 	  shows "While you were away"
-	  (OpenUI "Offline" { Amount, Seconds, Hours, Rate, Made?, Crate?, Why?,
-	  PenFull? }, those from the onReturn hook, NightShiftService: the window
-	  opens for Made or Crate alone too). LastSeen is written on
+	  (OpenUI "Offline" { Amount, Seconds, Hours, Rate, Crate?, PenFull? }, those
+	  from the onReturn hook, NightShiftService: the window opens for a Crate
+	  alone too). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
 	- StateService gets Income (per second), PodiumSlots (3 or 5) and
@@ -759,7 +759,7 @@ local returnHook: ((Player, { [string]: any }, number, boolean) -> { [string]: a
 
 -- What else the base did while the player was away (NightShiftService): runs with every
 -- payout of an absence; what it returns goes into the window, which also opens for its
--- Made or Crate alone.
+-- Crate alone.
 function PodiumService.onReturn(hook: (Player, { [string]: any }, number, boolean) -> { [string]: any }?)
 	returnHook = hook
 end
@@ -810,15 +810,13 @@ local function payOffline(player: Player, popup: boolean): number
 			stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
 		end
 	end
-	if popup and player.Parent and (amount > 0 or (extra and (extra.Made or extra.Crate))) then
+	if popup and player.Parent and (amount > 0 or (extra and extra.Crate)) then
 		Net.fire("OpenUI", player, "Offline", {
 			Amount = amount,
 			Seconds = seconds,
 			Hours = EconomyConfig.offlineHours(extended),
 			Rate = EconomyConfig.offlineRate(extended),
-			Made = extra and extra.Made,
 			Crate = extra and extra.Crate,
-			Why = extra and extra.Why,
 			PenFull = extra and extra.PenFull,
 		})
 	end

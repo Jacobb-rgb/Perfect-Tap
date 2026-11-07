@@ -370,5 +370,5 @@ Played time to Blaster 10 (12 simulated players, money arrives at session ends, 
 | Typical, 1 h a day | 5h 31m | 4h 09m | 4h 24m | 3h 20m | 3h 27m |
 | Casual, 30 min a day | 8h 18m | 4h 15m | 4h 33m | - | - |
 
-Slightly slower than before for a free player, as the owner's picture asks for (he was told, 2026-11-07). The machines
-add no ore (they finish the pen's, `Machines/NightShiftLine`), so the sim leaves them out.
+Slightly slower than before for a free player, as the owner's picture asks for (he was told, 2026-11-07). Machines
+working offline come later with the feeder, and only on ore the player put in it.

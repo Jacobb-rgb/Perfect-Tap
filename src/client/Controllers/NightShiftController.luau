@@ -6,7 +6,8 @@
 	Open Crate asks the server (NightCrate); a request the rate limit dropped gets
 	no answer, so the button comes back after ResultTimeout. A late prize opens the
 	window again. A panel like the others (MenuPanels: isOpen, close): popups wait
-	while it is up. It must stay before every other OpenUI listener in the ORDER
+	while it is up, and it waits while another panel is up (the login streak popup
+	stays). It must stay before every other OpenUI listener in the ORDER
 	(init.client): a remote's queued events go to its first connection only.
 ]]
 
@@ -28,6 +29,7 @@ local NightShiftView = require(script.Parent.Parent.UI.NightShiftView)
 local NightShiftController = {}
 
 NightShiftController.ResultTimeout = 6
+NightShiftController.PanelWait = 0.5 -- seconds between looks while another panel is up
 
 local CLOSE_ACTION = "TerraForgeNightShiftClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 20
@@ -98,7 +100,6 @@ end
 
 -- The window up, with its keys.
 local function raise(refs: NightShiftView.Refs)
-	MenuPanels.closeOthers("NightShiftController")
 	refs.Gui.Enabled = true
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, function(_, state)
 		if state == Enum.UserInputState.Begin then
@@ -113,10 +114,13 @@ local function raise(refs: NightShiftView.Refs)
 end
 
 local function show(payload: { [string]: any })
-	-- never under the loading screen (Util/Loading, at most MaxWait)
-	if not Loading.isDone() then
+	-- never under the loading screen (Util/Loading, at most MaxWait), nor over another panel
+	if not Loading.isDone() or MenuPanels.otherOpen("NightShiftController") then
 		task.spawn(function()
 			Loading.wait()
+			while MenuPanels.otherOpen("NightShiftController") do
+				task.wait(NightShiftController.PanelWait)
+			end
 			show(payload)
 		end)
 		return

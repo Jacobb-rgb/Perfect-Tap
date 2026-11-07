@@ -1,24 +1,19 @@
 --[[
 	NightShiftConfig: Night Shift (owner 2026-11-07, his picture
 	obrazky/napady_obrazky_2026-10-30/05_nocni_smena.jpg, golems later). While
-	the player is away the base keeps working at EconomyConfig.Offline's rate:
-	the podiums earn (PodiumService), the machines finish ore from the pen
-	(Machines/NightShiftLine), and a long enough absence earns a free crate.
-	NightShiftService runs it, UI/NightShiftView shows it on return.
+	the player is away the podiums earn at EconomyConfig.Offline's rate
+	(PodiumService), and a long enough absence earns a free crate. Machines
+	working offline come with the feeder (owner 2026-11-07: only what the player
+	put in it, never the pen by itself). NightShiftService runs it,
+	UI/NightShiftView shows it on return.
 
 	The crate is a random reward: its chances (Odds) are shown on it in the
 	window. It can't be bought and no luck changes it.
-
-	CleansKept (owner's call, 2026-11-07): the machines leave dirty ore alone
-	that the player's keep setting would keep once clean (Rare and up by
-	default): cleaning it by hand is worth more, and it can't be undone.
 ]]
 
 local MineFloors = require(script.Parent.MineFloors)
 
 local NightShiftConfig = {}
-
-NightShiftConfig.CleansKept = false
 
 NightShiftConfig.Crate = {
 	MinAway = 3600, -- seconds away that earn one

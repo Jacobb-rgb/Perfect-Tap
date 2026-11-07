@@ -1,15 +1,12 @@
 --[[
 	Night Shift (owner 2026-11-07): the offline rates, the crate's rules and
-	chances, the machines finishing the pen's ore (no ore from nothing, kept
-	and secret ores untouched, the pen's room), the service, the window.
+	chances, the service, the window, the controller.
 ]]
 
 return function(T, Loader)
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
-	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local NightShiftConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.NightShiftConfig")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
-	local NightShiftLine = Loader.requirePath("ReplicatedStorage.Shared.Machines.NightShiftLine")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
 	local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
@@ -19,26 +16,6 @@ return function(T, Loader)
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local NightShiftView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.NightShiftView")
-
-	local function machines(...: string): { any }
-		local list = {}
-		for k, id in { ... } do
-			list[k] = { Id = id, X = k, Z = 1, R = 0 }
-		end
-		return list
-	end
-
-	local function line(...: string): any
-		return NightShiftLine.line({ PlacedMachines = machines(...), Upgrades = {} })
-	end
-
-	local function roll(): number
-		return 0.5
-	end
-
-	local function noOdds(): any
-		return nil
-	end
 
 	T.test("night shift: free 25 % for 8 h, the pass 50 % for 12 h", function()
 		local o = EconomyConfig.Offline
@@ -95,121 +72,6 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("night shift line: clean ore becomes two bars, nothing appears from nothing", function()
-		local storage: { any } = { { K = "Clean", O = "Coal", G = "Clean" } }
-		local report = NightShiftLine.run(storage, line("Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(#storage, 2, "the Crusher makes two")
-		T.eq(storage[1].K, "Ingot")
-		T.eq(storage[2].K, "Ingot")
-		T.eq(storage[1].O, "Coal")
-		T.eq(storage[1].G, "Clean", "the grade stays")
-		T.eq(report.Total, 2)
-		T.eq(report.Bars, 2)
-		T.eq(report.Made["Ingot|Coal|Clean"].N, 2)
-		local empty: { any } = {}
-		T.eq(NightShiftLine.run(empty, line("Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll).Total, 0, "an empty pen")
-		T.eq(#empty, 0)
-	end)
-
-	T.test("night shift line: walks as far as the base has machines, never past the work", function()
-		local raw: { any } = { { K = "Raw", O = "Coal" } }
-		NightShiftLine.run(raw, line("Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(raw[1].K, "Raw", "no cleaner: dirty stays dirty")
-		local cleaned: { any } = { { K = "Raw", O = "Coal" } }
-		local report = NightShiftLine.run(cleaned, line("AutoCleaner"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(cleaned[1].K, "Clean", "only a cleaner: clean")
-		T.eq(report.Total, 1)
-		T.eq(report.Bars, 0)
-		local none: { any } = { { K = "Clean", O = "Coal", G = "Rough" } }
-		T.eq(NightShiftLine.run(none, line(), 3600, 40, "RarePlus", {}, noOdds, roll).Total, 0, "no machines")
-		T.eq(none[1].K, "Clean")
-		local many: { any } = {}
-		for _ = 1, 10 do
-			table.insert(many, { K = "Crushed", O = "Coal", G = "Rough" })
-		end
-		local stage = line("ClayFurnace").Crushed
-		local work = 3 / stage.PerSecond + 0.01 -- three jobs
-		T.eq(NightShiftLine.run(many, line("ClayFurnace"), work, 40, "RarePlus", {}, noOdds, roll).Total, 3, "the work's jobs only")
-		T.eq(many[4].K, "Crushed", "the rest waits")
-		T.eq(#many, 10, "nothing lost")
-		local two = line("ClayFurnace", "ClayFurnace").Crushed.PerSecond
-		T.near(two, 2 * stage.PerSecond, 1e-9, "two furnaces, twice the jobs")
-	end)
-
-	T.test("night shift line: a Polisher or Extractor is no stage, whatever stands first", function()
-		for _, ids in { { "Polisher", "Crusher", "ClayFurnace" }, { "Crusher", "CrystalExtractor", "ClayFurnace" } } do
-			local storage: { any } = {}
-			for _ = 1, 4 do
-				table.insert(storage, { K = "Clean", O = "Coal", G = "Clean" })
-			end
-			local report = NightShiftLine.run(storage, line(table.unpack(ids)), 3600, 40, "RarePlus", {}, noOdds, roll)
-			T.eq(report.Bars, 8, table.concat(ids, " + ") .. ": every piece a bar")
-		end
-		local fast = line("ClayFurnace", "BlastFurnace").Crushed
-		T.eq(fast.Machine, "BlastFurnace", "the fastest does the work")
-	end)
-
-	T.test("night shift line: rare dirty ore waits for the player's own cleaning", function()
-		local storage: { any } = { { K = "Raw", O = "Diamond" }, { K = "Raw", O = "Coal" } }
-		local report = NightShiftLine.run(storage, line("AutoCleaner"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(storage[1].K, "Raw", "a rare one stays dirty")
-		T.eq(storage[2].K, "Clean", "a common one is cleaned")
-		T.truthy(report.Cleaned.Coal, "what came out of the dirt")
-		T.falsy(report.Cleaned.Diamond)
-		local listed: { any } = { { K = "Raw", O = "Coal" } }
-		NightShiftLine.run(listed, line("AutoCleaner"), 3600, 40, "List", { Coal = true }, noOdds, roll)
-		T.eq(listed[1].K, "Raw", "the player's keep list counts")
-	end)
-
-	T.test("night shift line: kept and secret ore stay, the pen's room holds", function()
-		local kept: { any } = { { K = "Clean", O = "Gold", G = "Clean" } }
-		NightShiftLine.run(kept, line("Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(kept[1].K, "Clean", "a rare ore the player keeps for a podium")
-		local cleanedKept: { any } = { { K = "Raw", O = "Gold" } }
-		NightShiftLine.run(cleanedKept, line("AutoCleaner", "Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(cleanedKept[1].K, "Raw", "a rare dirty one waits for the player")
-		NightShiftConfig.CleansKept = true
-		local ok, err = pcall(function()
-			local cleaned: { any } = { { K = "Raw", O = "Gold" } }
-			NightShiftLine.run(cleaned, line("AutoCleaner", "Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-			T.eq(cleaned[1].K, "Clean", "the other way (CleansKept): cleaned, then kept")
-		end)
-		NightShiftConfig.CleansKept = false
-		if not ok then
-			error(err, 0)
-		end
-		local secret: { any } = { { K = "Clean", O = "HollowEye", G = "Flawless" }, { K = "Raw", O = "RainbowNova" } }
-		local report = NightShiftLine.run(secret, line("AutoCleaner", "Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll)
-		T.eq(report.Total, 0, "a secret ore never")
-		T.eq(secret[1].K, "Clean")
-		T.eq(secret[2].K, "Raw")
-		local full: { any } = { { K = "Clean", O = "Coal", G = "Rough" } }
-		local tight = NightShiftLine.run(full, line("Crusher", "ClayFurnace"), 3600, 1, "RarePlus", {}, noOdds, roll)
-		T.eq(tight.Total, 0, "no room for the second piece: it stays clean")
-		T.eq(#full, 1)
-		T.eq(full[1].K, "Clean")
-		local two: { any } = { { K = "Clean", O = "Coal", G = "Rough" } }
-		T.eq(NightShiftLine.run(two, line("Crusher", "ClayFurnace"), 3600, 2, "RarePlus", {}, noOdds, roll).Bars, 2, "room for exactly two")
-		T.eq(#two, 2)
-		local over: { any } = { { K = "Crushed", O = "Coal", G = "Rough" }, { K = "Crushed", O = "Coal", G = "Rough" } }
-		T.eq(
-			NightShiftLine.run(over, line("ClayFurnace"), 3600, 1, "RarePlus", {}, noOdds, roll).Bars,
-			2,
-			"one piece for one: an over-full pen still works"
-		)
-		local broken: { any } = { "junk", { K = "Clean" }, { K = "Crushed", O = "Coal", G = "Rough", R = "x" } }
-		T.eq(
-			NightShiftLine.run(broken, line("Crusher", "ClayFurnace"), 3600, 40, "RarePlus", {}, noOdds, roll).Total,
-			0,
-			"a broken entry stays"
-		)
-		T.eq(broken[1], "junk")
-		T.eq(broken[3].K, "Crushed")
-	end)
-
-	-- a belt's rotation that feeds away from the yard
-	local FEEDS = if BaseLayout.sourceFeeds(0) then 0 else 1
-
 	-- the service with its neighbours replaced
 	local function world(): any
 		local w: any = { changed = 0, stored = {}, coins = {}, found = {}, income = 100, room = true, relic = true }
@@ -220,17 +82,12 @@ return function(T, Loader)
 		end
 		w.player = { Name = "Mia", UserId = 7, Parent = true }
 		w.data = {
-			Upgrades = { PenAutomation = 1 },
-			PlacedMachines = machines("Crusher", "ClayFurnace"),
-			Storage = { { K = "Clean", O = "Coal", G = "Clean" } },
-			KeepMode = "RarePlus",
-			KeepList = {},
+			Upgrades = {},
+			Storage = {},
 			NightShift = { CrateAt = 0, Ready = false },
 			Stats = {},
 			BlasterLevel = 1,
 		}
-		local chute = BaseLayout.Chutes.Pen
-		table.insert(w.data.PlacedMachines, { Id = "Conveyor", X = chute.X, Z = chute.Z, R = FEEDS })
 		patch(DataService, "get", function()
 			return w.data
 		end)
@@ -271,79 +128,6 @@ return function(T, Loader)
 		return w
 	end
 
-	T.test("night shift service: the line needs the billboard on and a belt on the PEN chute", function()
-		local w = world()
-		local ok, err = pcall(function()
-			local function run(): any
-				w.data.Storage = { { K = "Clean", O = "Coal", G = "Clean" } }
-				w.data.NightShift = { CrateAt = 2e9, Ready = false } -- no crate here
-				return NightShiftService.onReturn(w.player, w.data, 3600, false)
-			end
-			local full = run()
-			T.eq(full.Made.Total, 2, "billboard + belt")
-			T.eq(full.Made.Bars, 2)
-			T.eq(#full.Made.List, 1)
-			T.eq(full.Made.List[1].N, 2)
-			T.eq(full.Crate, false)
-			T.eq(full.Why, nil)
-			T.truthy(w.changed > 0, "saved")
-			w.data.AutoSort = false
-			T.eq(run().Why, "BillboardOff")
-			w.data.AutoSort = nil
-			w.data.Upgrades.PenAutomation = 0
-			T.eq(run().Why, "NoBillboard")
-			w.data.Upgrades.PenAutomation = 1
-			local belt = table.remove(w.data.PlacedMachines)
-			T.eq(run().Why, "NoBelt")
-			T.eq(w.data.Storage[1].K, "Clean", "the ore stays")
-			belt.R = BaseLayout.SinkRotation
-			table.insert(w.data.PlacedMachines, belt)
-			T.eq(run().Why, "NoBelt", "a belt facing the yard doesn't feed")
-			belt.R = FEEDS
-			belt.L = 1
-			T.eq(run().Why, "NoBelt", "nor one on a platform's deck")
-			belt.L = nil
-			local placed = w.data.PlacedMachines
-			w.data.PlacedMachines = { belt }
-			T.eq(run().Why, "NoMachines")
-			w.data.PlacedMachines = placed
-			w.data.NightShift = { CrateAt = 2e9, Ready = false }
-			w.data.Storage = { { K = "Clean", O = "Gold", G = "Clean" } }
-			T.eq(NightShiftService.onReturn(w.player, w.data, 3600, false).Why, "Nothing", "only kept ore")
-		end)
-		w.done()
-		if not ok then
-			error(err, 0)
-		end
-	end)
-
-	T.test("night shift service: the work follows the capped absence and the rate", function()
-		local w = world()
-		local ok, err = pcall(function()
-			w.data.PlacedMachines = machines("ClayFurnace")
-			local chute = BaseLayout.Chutes.Pen
-			table.insert(w.data.PlacedMachines, { Id = "Conveyor", X = chute.X, Z = chute.Z, R = FEEDS })
-			local perSecond = NightShiftLine.line(w.data).Crushed.PerSecond
-			local function count(seconds: number, extended: boolean): number
-				w.data.Storage = {}
-				for _ = 1, 280 do
-					table.insert(w.data.Storage, { K = "Crushed", O = "Coal", G = "Rough" })
-				end
-				w.data.NightShift = { CrateAt = 2e9, Ready = false }
-				local result = NightShiftService.onReturn(w.player, w.data, seconds, extended)
-				return if result.Made then result.Made.Total else 0
-			end
-			T.eq(count(100 / perSecond / 0.25, false), 100, "the free rate")
-			T.eq(count(100 / perSecond / 0.5, true), 100, "the pass's rate")
-			local cap = math.floor(perSecond * 0.25 * 8 * 3600)
-			T.eq(count(100 * 3600, false), math.min(cap, 280), "never past the 8 h")
-		end)
-		w.done()
-		if not ok then
-			error(err, 0)
-		end
-	end)
-
 	T.test("night shift service: one crate, kept until opened, pays each prize, never twice", function()
 		local w = world()
 		local ok, err = pcall(function()
@@ -352,14 +136,12 @@ return function(T, Loader)
 			T.eq(first.Crate, true, "earned")
 			T.eq(night.Ready, true)
 			T.eq(night.CrateAt, 2e9)
-			w.data.Storage = {}
 			local again = NightShiftService.onReturn(w.player, w.data, 7200, false)
 			T.eq(again.Crate, true, "not opened: it still waits")
 			T.eq(NightShiftService.open(w.player).Ok, true, "opens")
 			T.eq(NightShiftService.open(w.player).Ok, false, "never twice")
 			local tonight = NightShiftService.onReturn(w.player, w.data, 7200, false)
 			T.eq(tonight.Crate, false, "nothing new tonight")
-			T.eq(tonight.Made, nil)
 			-- each prize
 			w.coins = {}
 			night.Ready = true
@@ -419,30 +201,6 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("night shift service: ore out of the dirt is discovered, quietly", function()
-		local w = world()
-		local Discovery = Loader.requirePath("ServerScriptService.Server.Discovery")
-		local saved = Discovery.mark
-		local marks = {}
-		Discovery.mark = function(_, _, oreId, quiet)
-			table.insert(marks, { oreId, quiet })
-			return true
-		end
-		local ok, err = pcall(function()
-			table.insert(w.data.PlacedMachines, { Id = "AutoCleaner", X = 9, Z = 9, R = 0 })
-			w.data.Storage = { { K = "Raw", O = "Coal" } }
-			NightShiftService.onReturn(w.player, w.data, 3600, false)
-			T.eq(#marks, 1)
-			T.eq(marks[1][1], "Coal")
-			T.eq(marks[1][2], true, "no toast: the window tells it")
-		end)
-		Discovery.mark = saved
-		w.done()
-		if not ok then
-			error(err, 0)
-		end
-	end)
-
 	T.test("night shift flow: a prize is never lost", function()
 		local Flow = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.NightShiftFlow")
 		local s = Flow.new()
@@ -495,6 +253,190 @@ return function(T, Loader)
 		T.truthy(Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.NightShiftController"), "it loads")
 	end)
 
+	T.test("night shift controller: the real glue, a fake Net: a prize is never lost, other panels stay", function()
+		local task = require("@lune/task")
+		local Enum = require("@lune/roblox").Enum
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local Loading = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.Loading")
+		local MenuPanels = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.MenuPanels")
+		local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
+		local Sfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Sfx")
+		local Players = Loader.game:GetService("Players")
+		local CAS = Loader.game:GetService("ContextActionService")
+		local GS = Loader.game:GetService("GuiService")
+		local UIS = Loader.game:GetService("UserInputService")
+		local listeners, sent, prizes, bound = {}, {}, {}, {}
+		local panelUp = false
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		local function button(name: string): any
+			local b: any = { Name = name, handlers = {}, Visible = true, Active = true }
+			b.Activated = {
+				Connect = function(_, fn)
+					table.insert(b.handlers, fn)
+				end,
+			}
+			b.press = function()
+				for _, fn in b.handlers do
+					fn()
+				end
+			end
+			b.IsDescendantOf = function()
+				return true
+			end
+			return b
+		end
+		local refs: any = {
+			Gui = {
+				Enabled = false,
+				SetAttribute = function() end,
+				FindFirstChild = function()
+					return nil
+				end,
+			},
+			Dim = {},
+			Panel = {},
+			CrateCard = {},
+			Collect = button("Collect"),
+			Close = button("CloseHit"),
+			Open = button("Open"),
+		}
+		local builds = 0
+		patch(NightShiftView, "build", function()
+			builds += 1
+			return refs
+		end)
+		patch(NightShiftView, "fill", function() end)
+		patch(NightShiftView, "setOpening", function() end)
+		patch(NightShiftView, "setPrize", function(_, result)
+			table.insert(prizes, result)
+		end)
+		patch(Net, "listen", function(name, fn)
+			listeners[name] = fn
+		end)
+		patch(Net, "send", function(name)
+			table.insert(sent, name)
+		end)
+		patch(Loading, "isDone", function()
+			return true
+		end)
+		patch(Loading, "wait", function() end)
+		patch(Motion, "enabled", function()
+			return false
+		end)
+		patch(Motion, "classicPop", function() end)
+		patch(Motion, "pop", function() end)
+		patch(Sfx, "play", function() end)
+		patch(MenuPanels, "otherOpen", function()
+			return panelUp
+		end)
+		patch(Players, "LocalPlayer", {
+			WaitForChild = function()
+				return {}
+			end,
+		})
+		patch(CAS, "BindActionAtPriority", function(_, name, fn, _, priority)
+			bound[name] = { fn = fn, priority = priority }
+		end)
+		patch(CAS, "UnbindAction", function(_, name)
+			bound[name] = nil
+		end)
+		patch(UIS, "GamepadEnabled", true)
+		patch(GS, "SelectedObject", nil)
+		local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.NightShiftController")
+		local timeout, panelWait = Controller.ResultTimeout, Controller.PanelWait
+		local ok, err = pcall(function()
+			Controller.ResultTimeout = 0.02
+			Controller.PanelWait = 0.01
+			Controller.init()
+			local KEY = "TerraForgeNightShiftClose"
+			local function back(): any
+				return bound[KEY].fn("x", Enum.UserInputState.Begin)
+			end
+			-- an answer with no window yet, another kind of OpenUI
+			listeners.NightCrateResult({ Ok = true, Prize = "Coins", Amount = 1 })
+			listeners.OpenUI("Pen", {})
+			T.falsy(Controller.isOpen(), "another kind opens nothing")
+			T.eq(builds, 0)
+			-- open, close with B
+			listeners.OpenUI("Offline", { Crate = true })
+			T.truthy(Controller.isOpen(), "opens")
+			T.eq(builds, 1)
+			T.eq(rawget(GS, "SelectedObject"), refs.Collect, "a gamepad starts on Collect")
+			T.eq(bound[KEY].priority, Enum.ContextActionPriority.High.Value + 20, "B before the others")
+			T.eq(back(), Enum.ContextActionResult.Sink)
+			T.falsy(Controller.isOpen(), "B closes")
+			T.eq(bound[KEY], nil, "and lets go of the key")
+			-- opening: one request, no way out, the prize shows, a refusal after it changes nothing
+			listeners.OpenUI("Offline", { Crate = true })
+			T.eq(builds, 1, "built once")
+			refs.Open.press()
+			refs.Open.press()
+			T.eq(#sent, 1, "one request")
+			refs.Collect.press()
+			refs.Close.press()
+			back()
+			T.truthy(Controller.isOpen(), "no way out while the answer is on its way")
+			table.clear(prizes)
+			listeners.NightCrateResult({ Ok = true, Prize = "Coins", Amount = 5 })
+			T.eq(#prizes, 1, "the prize shows")
+			listeners.NightCrateResult({ Ok = false })
+			T.eq(#prizes, 1, "a refusal never overwrites it")
+			refs.Open.press()
+			T.eq(#sent, 1, "no second request after a prize")
+			refs.Collect.press()
+			T.falsy(Controller.isOpen(), "Collect closes")
+			-- a dropped request: the way out comes back, a late prize opens the window again
+			listeners.OpenUI("Offline", { Crate = true })
+			refs.Open.press()
+			task.wait(0.06)
+			refs.Close.press()
+			T.falsy(Controller.isOpen(), "X closes after the timeout")
+			table.clear(prizes)
+			listeners.NightCrateResult({ Ok = true, Prize = "Relic", Artifact = "x" })
+			T.eq(#prizes, 1)
+			T.truthy(Controller.isOpen(), "a late prize opens the window")
+			T.truthy(bound[KEY], "with its key")
+			refs.Collect.press()
+			-- another panel took the screen while it waited: the prize still shows
+			listeners.OpenUI("Offline", { Crate = true })
+			refs.Open.press()
+			Controller.close()
+			T.falsy(Controller.isOpen())
+			listeners.NightCrateResult({ Ok = true, Prize = "Coins", Amount = 1 })
+			T.truthy(Controller.isOpen(), "shown after the panel closed it")
+			refs.Collect.press()
+			-- refused with nothing shown: the window can close
+			listeners.OpenUI("Offline", { Crate = true })
+			refs.Open.press()
+			table.clear(prizes)
+			listeners.NightCrateResult({ Ok = false })
+			T.eq(#prizes, 1, "it says so")
+			refs.Collect.press()
+			T.falsy(Controller.isOpen())
+			-- the streak popup is up: the window waits, the popup stays
+			panelUp = true
+			listeners.OpenUI("Offline", { Crate = false })
+			T.falsy(Controller.isOpen(), "waits while another panel is up")
+			task.wait(0.03)
+			T.falsy(Controller.isOpen(), "still waits")
+			panelUp = false
+			task.wait(0.03)
+			T.truthy(Controller.isOpen(), "opens when it is gone")
+			refs.Collect.press()
+		end)
+		Controller.ResultTimeout, Controller.PanelWait = timeout, panelWait
+		for k = #saved, 1, -1 do
+			rawset(saved[k][1], saved[k][2], saved[k][3])
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("night shift: an old or broken save gets a clean record", function()
 		T.eq(DataTemplate.Version, Migrations.Latest)
 		T.eq(DataTemplate.NightShift.CrateAt, 0)
@@ -513,13 +455,10 @@ return function(T, Loader)
 	end)
 
 	T.test("night shift window: its texts, it fits a small phone, Open Crate only with a crate", function()
-		T.eq(NightShiftView.barText(0.25, 8), "Your base kept working at 25% · max 8 h")
-		T.eq(NightShiftView.barText(0.5, 12), "Your base kept working at 50% · max 12 h")
+		T.eq(NightShiftView.barText(0.25, 8), "Your podiums kept earning at 25% · max 8 h")
+		T.eq(NightShiftView.barText(0.5, 12), "Your podiums kept earning at 50% · max 12 h")
 		T.eq(NightShiftView.barFraction(4 * 3600, 8), 0.5)
 		T.eq(NightShiftView.barFraction(20 * 3600, 8), 1, "capped")
-		T.eq(NightShiftView.machinesText({ Total = 46, Bars = 46 }), "+46 bars")
-		T.eq(NightShiftView.machinesText({ Total = 12, Bars = 3 }), "+12 items", "some aren't bars yet")
-		T.eq(NightShiftView.machinesText(nil), "+0 bars")
 		local big, small = NightShiftView.prizeText({ Ok = true, Prize = "Ores", Ores = 3 })
 		T.eq(big, "3 dirty ores")
 		T.eq(small, "In your pen")
@@ -528,12 +467,6 @@ return function(T, Loader)
 		T.truthy(NightShiftView.ButtonHeight * 0.62 >= 44, "44 pt buttons on a phone")
 		T.truthy(NightShiftView.CloseHit * 0.62 >= 44, "and the X")
 		T.truthy(NightShiftView.OddsSize * 0.62 >= 10, "the chances readable on a phone")
-		T.eq(NightShiftView.machinesText({ Total = 1, Bars = 1 }), "+1 bar")
-		T.eq(NightShiftView.machinesText({ Total = 1, Bars = 0 }), "+1 item")
-		for _, why in { "NoBillboard", "BillboardOff", "NoBelt", "NoMachines", "Nothing" } do
-			T.truthy(NightShiftView.Why[why], why .. " has its own line")
-		end
-		T.truthy(NightShiftView.whyText("NoBelt"):find("PEN", 1, true) ~= nil, "it names the chute")
 		T.eq(NightShiftView.crateText(true, false), "Free once a day")
 		T.eq(NightShiftView.crateText(true, true), "Pen full: ores pay coins")
 		T.eq(NightShiftView.crateText(false, false), "Once a day, after 1 h away")
@@ -541,25 +474,12 @@ return function(T, Loader)
 		T.eq((NightShiftView.prizeText({ Ok = true, Prize = "Ores", Ores = 0, Amount = 9000 })), "+$9K", "a full pen")
 		local refs = NightShiftView.build()
 		T.falsy(refs.Gui.Enabled, "starts hidden")
+		T.falsy(refs.Close.Selectable, "a gamepad closes with B")
+		T.falsy((refs.Close.Parent :: any).Selectable, "the drawn X is no dead stop for a gamepad")
 		NightShiftView.fill(refs, { Amount = 5000, Seconds = 3600, Hours = 8, Rate = 0.25, Crate = true })
 		T.truthy(refs.Open.Visible, "a crate waits")
-		T.truthy(refs.Empty.Visible, "nothing collected: the hint")
-		NightShiftView.fill(refs, { Amount = 5000, Seconds = 3600, Hours = 8, Rate = 0.25, Crate = true, Why = "NoBelt" })
-		T.eq(refs.Empty.Text, NightShiftView.Why.NoBelt, "the true reason")
-		T.eq(refs.Machines.Text, "+0 bars")
-		T.eq(refs.MachinesTitle.Text, "Machines 25%")
-		NightShiftView.fill(refs, {
-			Amount = 5000,
-			Seconds = 3600,
-			Hours = 8,
-			Rate = 0.25,
-			Crate = false,
-			Made = { Total = 2, Bars = 2, List = { { K = "Ingot", O = "Gold", G = "Clean", N = 2 } } },
-		})
+		NightShiftView.fill(refs, { Amount = 5000, Seconds = 3600, Hours = 8, Rate = 0.25, Crate = false })
 		T.falsy(refs.Open.Visible, "no crate: no button")
-		T.falsy(refs.Empty.Visible)
-		T.eq(#refs.Rows:GetChildren(), 1, "one row")
-		T.eq(refs.Machines.Text, "+2 bars")
 		T.truthy(refs.CrateOdds.Text:find("70%", 1, true) ~= nil, "the chances are on the crate")
 		NightShiftView.setPrize(refs, { Ok = true, Prize = "Coins", Amount = 2500 })
 		T.falsy(refs.Open.Visible, "opened")

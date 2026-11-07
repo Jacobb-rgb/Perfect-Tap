@@ -1,18 +1,11 @@
 --[[
-	NightShiftService: Night Shift (owner 2026-11-07), what the base does while
-	the player is away besides the podiums' coins (PodiumService).
+	NightShiftService: Night Shift (owner 2026-11-07), what comes with an absence
+	besides the podiums' coins (PodiumService).
 
-	- onReturn (PodiumService's hook, when the welcome-back window would open):
-	    the machines finish ore from the pen for (seconds away, capped) x the
-	    offline rate (Machines/NightShiftLine). Only with the sorting billboard
-	    on and a belt feeding from the PEN chute: that is the ore they would have
-	    got. Ore that comes out of the dirt is discovered, quietly. A long enough
-	    absence earns the crate (NightShiftConfig.earnsCrate, data.NightShift).
-	    Returns { Made?, Why?, Crate, PenFull } for the window: Made = { Total,
-	    Bars, List = up to ListMax rows, best first }; Why = why the machines made
-	    nothing ("NoBillboard" | "BillboardOff" | "NoBelt" | "NoMachines" | "Nothing").
-	    It also runs when no window opens (a player leaving during the first
-	    seconds): the crate stays earned. No yields: the pen's list changes in one step.
+	- onReturn (PodiumService's hook, with every payout of an absence): a long
+	  enough one earns the crate (NightShiftConfig.earnsCrate, data.NightShift).
+	  Returns { Crate, PenFull } for the window. It also runs when no window opens
+	  (a player leaving during the first seconds): the crate stays earned.
 	- NightCrate (the window's Open Crate): if one waits, rolls NightShiftConfig
 	  .pick and pays: coins, dirty ores into the pen (no room: what Tobin would
 	  pay for them dirty) or a relic (a zone with none left: the coins). Answer
@@ -22,16 +15,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
-local BaseLayout = require(Shared.Config.BaseLayout)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
-local MachineData = require(Shared.Config.MachineData)
 local NightShiftConfig = require(Shared.Config.NightShiftConfig)
-local NightShiftLine = require(Shared.Machines.NightShiftLine)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
-local Discovery = require(script.Parent.Parent.Discovery)
 local ArtifactService = require(script.Parent.ArtifactService)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -39,8 +28,6 @@ local PenService = require(script.Parent.PenService)
 local PodiumService = require(script.Parent.PodiumService)
 
 local NightShiftService = {}
-
-NightShiftService.ListMax = 5 -- rows of "Collected for you"
 
 -- (tests) rolls and the wall clock
 NightShiftService.random = math.random
@@ -53,79 +40,6 @@ local function recordOf(data: { [string]: any }): { [string]: any }
 		data.NightShift = night
 	end
 	return night
-end
-
--- Why the sorting billboard wouldn't send the pen's ore (it needs a belt feeding from the PEN
--- chute, on the ground, not facing the yard); nil if it would.
-local function lineOff(data: { [string]: any }): string?
-	local upgrades = data.Upgrades
-	local automation = if type(upgrades) == "table" then tonumber(upgrades.PenAutomation) else nil
-	if not automation or automation < EconomyConfig.PenAutomation.Billboard then
-		return "NoBillboard"
-	end
-	if not PenService.autoSortOn(data) then
-		return "BillboardOff"
-	end
-	local x, z = BaseLayout.chuteCell("Pen")
-	local placed = data.PlacedMachines
-	if type(placed) == "table" then
-		for _, entry in placed do
-			local info = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
-			if info and info.IsConveyor and entry.X == x and entry.Z == z and entry.L ~= 1 and BaseLayout.sourceFeeds(entry.R) then
-				return nil
-			end
-		end
-	end
-	return "NoBelt"
-end
-
--- What the machines made (nil: nothing) and why not.
-local function runMachines(player: Player, data: { [string]: any }, work: number): ({ [string]: any }?, string?)
-	local off = lineOff(data)
-	if off then
-		return nil, off
-	end
-	local storage = data.Storage
-	local line = NightShiftLine.line(data)
-	if next(line) == nil then
-		return nil, "NoMachines"
-	end
-	if type(storage) ~= "table" then
-		return nil, "Nothing"
-	end
-	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
-	local capacity = EconomyConfig.penCapacity(upgrades.PenLevel, GameConfig.MaxStoredItems)
-	local report = NightShiftLine.run(storage, line, work, capacity, data.KeepMode, data.KeepList, function(machineId)
-		local machine = MachineData.ById[machineId]
-		return if machine and machine.QualityLevels
-			then MachineData.gradeOdds(EconomyConfig.upgradeLevel(data, machineId, "Quality"))
-			else nil
-	end, NightShiftService.random)
-	if report.Total == 0 then
-		return nil, "Nothing"
-	end
-	for oreId in report.Cleaned do
-		Discovery.mark(player, data, oreId, true)
-	end
-	local rows = {}
-	for _, row in report.Made do
-		table.insert(rows, row)
-	end
-	local function worth(row: any): number
-		return ItemData.value(row.K, row.O, row.G)
-	end
-	table.sort(rows, function(a, b)
-		local va, vb = worth(a), worth(b)
-		if va ~= vb then
-			return va > vb
-		end
-		return `{a.K}{a.O}{a.G}` < `{b.K}{b.O}{b.G}`
-	end)
-	local list = {}
-	for k = 1, math.min(NightShiftService.ListMax, #rows) do
-		list[k] = rows[k]
-	end
-	return { Total = report.Total, Bars = report.Bars, List = list }, nil
 end
 
 -- Is there no room in the pen for the crate's ores?
@@ -141,20 +55,15 @@ local function floorOf(data: { [string]: any }): any
 end
 
 -- See the header. `seconds` away, `extended`: the OfflineExtension perk.
-function NightShiftService.onReturn(player: Player, data: { [string]: any }, seconds: number, extended: boolean): { [string]: any }
-	local work = math.min(seconds, EconomyConfig.offlineHours(extended) * 3600) * EconomyConfig.offlineRate(extended)
-	local made, why = runMachines(player, data, work)
+function NightShiftService.onReturn(player: Player, data: { [string]: any }, seconds: number, _extended: boolean): { [string]: any }
 	local night = recordOf(data)
 	local now = NightShiftService.clock()
-	local earned = NightShiftConfig.earnsCrate(night, seconds, now)
-	if earned then
+	if NightShiftConfig.earnsCrate(night, seconds, now) then
 		night.Ready = true
 		night.CrateAt = now
-	end
-	if made or earned then
 		DataService.changed(player)
 	end
-	return { Made = made, Why = why, Crate = night.Ready == true, PenFull = penFull(data) }
+	return { Crate = night.Ready == true, PenFull = penFull(data) }
 end
 
 local function payCoins(player: Player, data: { [string]: any }, result: { [string]: any })
