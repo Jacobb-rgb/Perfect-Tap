@@ -75,36 +75,55 @@ return function(T, Loader)
 	end)
 
 	T.test("MinigunBlaster: every blaster is the same size, from the starter to the STAR blasters", function()
-		-- along the gun, seen from the hand: { nearest, furthest, the largest piece }
-		local function extent(tool: any, name: string): { number }
+		-- every piece but what differs on purpose (crystals, the rainbow core), in the hand's frame
+		local STYLE = { Crystal = true, CrystalTip = true, Core = true }
+		local function pieces(tool: any, ring: boolean): { [string]: { string } }
 			local handle = tool:FindFirstChild("Handle")
-			local box = { math.huge, -math.huge, 0 }
+			local out = {}
 			for _, d in tool:GetDescendants() do
-				if d:IsA("BasePart") and d.Name == name then
-					local z = handle.CFrame:PointToObjectSpace(d.CFrame.Position).Z
-					box = { math.min(box[1], z), math.max(box[2], z), math.max(box[3], d.Size.Magnitude) }
+				if d:IsA("BasePart") and not STYLE[d.Name] and not (ring and (d.Name == "MuzzleGlow" or d.Name == "Bore")) then
+					local at = handle.CFrame:PointToObjectSpace(d.CFrame.Position)
+					local list = out[d.Name] or {}
+					table.insert(list, string.format("%.3f %.3f %.3f / %.3f %.3f %.3f", at.X, at.Y, at.Z, d.Size.X, d.Size.Y, d.Size.Z))
+					out[d.Name] = list
 				end
 			end
-			return box
+			for _, list in out do
+				table.sort(list)
+			end
+			return out
+		end
+		local function points(tool: any): (any, any)
+			local handle = tool:FindFirstChild("Handle")
+			local hub = tool:FindFirstChild(BlasterBuilder.SpinHub)
+			return handle:FindFirstChild("Muzzle").Position, handle.CFrame:PointToObjectSpace(hub.CFrame.Position)
 		end
 		local first = BlasterBuilder.build(1, "")
-		local function same(tool: any, label: string)
-			for _, name in { "Barrel", "Rainbow" } do
-				local a, b = extent(first, name), extent(tool, name)
-				for i = 1, 3 do
-					T.near(b[i], a[i], 1e-3, `{label} {name} {i}`)
+		local muzzle, hub = points(first)
+		local function same(tool: any, label: string, ring: boolean)
+			local want, got = pieces(first, ring), pieces(tool, ring)
+			for name, list in want do
+				T.truthy(got[name], label .. " has " .. name)
+				T.eq(#got[name], #list, label .. " " .. name .. " count")
+				for i, line in list do
+					T.eq(got[name][i], line, `{label} {name} {i}`)
 				end
 			end
-			-- (the muzzle's cut differs a little: the Singularity Rail has a ring)
-			T.near(extent(tool, "MuzzleGlow")[1], extent(first, "MuzzleGlow")[1], 0.15, label .. " the muzzle")
+			for name in got do
+				T.truthy(want[name], label .. " nothing extra: " .. name)
+			end
+			local m, h = points(tool)
+			T.truthy((m - muzzle).Magnitude < 1e-3, label .. " the muzzle")
+			T.truthy((h - hub).Magnitude < 1e-3, label .. " the spin hub")
 		end
-		local span = extent(first, "Rainbow")[2] - extent(first, "MuzzleGlow")[1]
-		T.lt(MinigunBlaster.Length * 0.7, span, "muzzle to back: it spans the gun")
+		T.lt(MinigunBlaster.Length * 0.7, (muzzle :: any).Magnitude, "the muzzle is at the gun's far end")
 		for level = 1, BlasterData.MaxLevel do
-			same(BlasterBuilder.build(level, BlasterData.vaultOre(level)), "level " .. level)
+			same(BlasterBuilder.build(level, BlasterData.vaultOre(level)), "level " .. level, false)
 		end
-		for _, star in StarBlasterData.List do
-			same(BlasterBuilder.buildStar(star, 10, BlasterData.vaultOre(10)), star.Id)
+		for i, star in StarBlasterData.List do
+			-- (the Singularity Rail's muzzle is a ring round a dark bore)
+			local ring = i + BlasterData.MaxLevel == MinigunBlaster.RingMuzzle
+			same(BlasterBuilder.buildStar(star, 10, BlasterData.vaultOre(10)), star.Id, ring)
 		end
 	end)
 

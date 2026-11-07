@@ -392,6 +392,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	-- the swirling comet arcs round the crate and later round the blaster
 	local arcA, arcB = newRing(root, 26, hot, true), newRing(root, 26, glowColor, true)
 	arcA.Parts[1].Name = "CometArc"
+	arcB.Parts[1].Name = "CometArcB"
 	-- small portals round the crate while it charges, each with a ray into the crate
 	local mini: { { ring: Ring, heart: Part, ray: Part, at: Vector3, t0: number } } = {}
 	for i, spot in { Vector3.new(4, 6.5, -8), Vector3.new(4, 7, 8), Vector3.new(-6, 5, -6.5), Vector3.new(-6, 6, 6.5) } do
@@ -399,8 +400,10 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		heart.Name = "MiniHeart"
 		local miniRay = part(root, Vector3.new(1, 0.2, 0.2), hot, NEON, Enum.PartType.Cylinder)
 		miniRay.Name = "MiniRay"
+		local miniRing = newRing(root, 10, hot)
+		miniRing.Parts[1].Name = "MiniRing"
 		table.insert(mini, {
-			ring = newRing(root, 10, hot),
+			ring = miniRing,
 			heart = heart,
 			ray = miniRay,
 			at = spot,
@@ -541,8 +544,10 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local streaks: { Streak } = {}
 	for i = 1, 26 do
 		local early = i <= 5
+		local streak = part(root, Vector3.new(0.09, 0.09, 1), if i % 3 == 0 then WHITE else hot, NEON)
+		streak.Name = "Streak"
 		table.insert(streaks, {
-			p = part(root, Vector3.new(0.09, 0.09, 1), if i % 3 == 0 then WHITE else hot, NEON),
+			p = streak,
 			t0 = if early then 0.05 + streakRand() * 0.3 else Stage.T_ORBIT + streakRand() * (Stage.T_BURST - Stage.T_ORBIT - 0.3),
 			dur = 0.4 + streakRand() * 0.3,
 			th = streakRand() * math.pi * 2,

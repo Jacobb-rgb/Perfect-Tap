@@ -296,7 +296,9 @@ return function(T, Loader)
 			w.run(Stage.Duration - Stage.T_HOLD + 0.6)
 			T.truthy(string.find(w.toasts[1], BlasterData.displayName(level, ore), 1, true), label .. "the toast: " .. w.toasts[1])
 		end
-		paid(7, "Amethyst", "Amethyst") -- what the server sends
+		-- what the server can send: a level in its case's ore
+		paid(7, BlasterData.vaultOre(7), BlasterData.vaultOre(7))
+		-- the rest are the controller's defensive branches, the server sends none of them today
 		paid(5, "Sapphire", "Sapphire") -- another ore than its case's
 		paid(3, "", "") -- no ore
 		paid(4, "NotAnOre", BlasterData.vaultOre(4)) -- a bad name: its case's ore
