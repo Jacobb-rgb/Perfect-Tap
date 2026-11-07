@@ -176,6 +176,9 @@ return function(T, Loader)
 			T.eq(icon.Size.X.Offset, 120, "icon width")
 			T.truthy(#icon:GetChildren() > 10, "level " .. level .. " has detail")
 			T.truthy(icon:FindFirstChild("Emblem"), "level " .. level .. " has its core")
+			local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+			local color = BlasterBuilder.colors(level, BlasterData.vaultOre(level)).Color
+			T.eq((icon:FindFirstChild("Band") :: any).BackgroundColor3, color, "level " .. level .. ": its blaster's colour")
 		end
 	end)
 
@@ -187,6 +190,8 @@ return function(T, Loader)
 			T.truthy(#refs.Name.Text > 0, "name")
 			T.truthy(string.find(refs.Stats.Text, "LV " .. level, 1, true), "level")
 			T.truthy(#refs.RarityText.Text > 0, "rarity")
+			local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+			T.eq(refs.Line.BackgroundColor3, BlasterBuilder.colors(level, BlasterData.vaultOre(level)).Color, "the words in its colour")
 		end
 		CrateOpeningView.update(refs, 0, burst, reveal)
 		T.eq(refs.Fade.BackgroundTransparency, 0, "starts black")

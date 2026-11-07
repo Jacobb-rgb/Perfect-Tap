@@ -224,8 +224,11 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local caseModel = Instance.new("Model")
 	caseModel.Name = "Case"
 	caseModel.Parent = root
-	local case = CaseBuilder.build(caseModel, CFrame.identity, level, oreId, 1)
+	-- everything here follows the blaster's colour (owner 2026-11-06): the crate, the void, the effects, the light
+	local case = CaseBuilder.build(caseModel, CFrame.identity, level, BlasterBuilder.colors(level, oreId).Color, 1)
 	local glowColor = case.Glow
+	local hue, hueSat = glowColor:ToHSV()
+	local satK = if hueSat < 0.08 then 0.15 else 1 -- (a near-grey blaster: a near-grey void)
 	local hot = WHITE:Lerp(glowColor, 0.55)
 	local deep = glowColor:Lerp(BLACK, 0.6)
 	local function at(x: number, y: number, z: number): CFrame
@@ -237,9 +240,9 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	local room = Instance.new("Model")
 	room.Name = "Room"
 	room.Parent = root
-	-- the void's colour: the crate's glow leaning to violet, brightest round the platform and low on the wall
-	local void = glowColor:Lerp(Color3.fromRGB(96, 40, 210), 0.55)
-	local night = Color3.fromRGB(10, 8, 18)
+	-- the void's colour: the blaster's hue, brightest round the platform and low on the wall
+	local void = Color3.fromHSV(hue, math.max(hueSat, 0.72) * satK, 0.82)
+	local night = Color3.fromHSV(hue, 0.6 * satK, 0.07)
 	local floor = part(room, Vector3.new(140, 1, 140), night)
 	floor.CFrame = at(0, -1.1, 0)
 	floor.Reflectance = 0.2
@@ -273,7 +276,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		s.CFrame = at(math.cos(a) * 58.5, h, math.sin(a) * 58.5)
 	end
 	-- jagged dark rocks along the edge of the floor
-	local rockColor = Color3.fromRGB(44, 34, 62):Lerp(void, 0.12)
+	local rockColor = Color3.fromHSV(hue, 0.45 * satK, 0.24)
 	local edge = rng(53)
 	for _ = 1, 16 do
 		local a, r = edge() * math.pi * 2, 20 + edge() * 22
@@ -283,7 +286,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		rock.CFrame = at(math.cos(a) * r, h * 0.3 - 1, math.sin(a) * r) * CFrame.Angles(edge() * 0.5, edge() * 6, edge() * 0.5)
 	end
 	-- the chains from above down to the platform's edge
-	local chainColor = Color3.fromRGB(58, 50, 78)
+	local chainColor = Color3.fromHSV(hue, 0.3 * satK, 0.3)
 	for _, c in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
 		local from = Vector3.new(c[1] * 24, 34, c[2] * 26)
 		local to = Vector3.new(c[1] * 9.5, -0.3, c[2] * 10.5)
@@ -312,7 +315,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 
 	---------------------------------------------------------------- the platform
 
-	local disc = part(root, Vector3.new(0.6, 17, 17), Color3.fromRGB(46, 42, 62), SMOOTH, Enum.PartType.Cylinder)
+	local disc = part(root, Vector3.new(0.6, 17, 17), Color3.fromHSV(hue, 0.3 * satK, 0.24), SMOOTH, Enum.PartType.Cylinder)
 	disc.CFrame = at(0, -0.3, 0) * CFrame.Angles(0, 0, math.pi / 2)
 	disc.Name = "Platform"
 	local outerRing = part(root, Vector3.new(0.5, 17.3, 17.3), glowColor, NEON, Enum.PartType.Cylinder)
@@ -473,12 +476,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	for i = 1, 12 do
 		local a, up = shardRand() * math.pi * 2, 0.3 + shardRand() * 0.9
 		table.insert(shards, {
-			p = part(
-				root,
-				Vector3.new(0.5, 0.5, 0.5),
-				if i % 2 == 0 then Color3.fromRGB(46, 43, 58) else glowColor,
-				if i % 2 == 0 then METAL else NEON
-			),
+			p = part(root, Vector3.new(0.5, 0.5, 0.5), if i % 2 == 0 then case.Plate else glowColor, if i % 2 == 0 then METAL else NEON),
 			dir = Vector3.new(math.cos(a), up, math.sin(a)).Unit,
 			speed = 10 + shardRand() * 12,
 			spin = Vector3.new(shardRand() * 10, shardRand() * 10, shardRand() * 10),

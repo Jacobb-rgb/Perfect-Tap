@@ -5,9 +5,9 @@
 	burst, "NEW BLASTER!" with its crown flying in from the side and holding a
 	moment; then, the blaster on the left, the words on the right one after the
 	other like the secret ore's reveal: the ribbon, the rarity big, a line, the
-	blaster's name, its level with the stars of its crate, its damage counting up,
-	AWESOME!; after that the words slide away and COLLECTED! with its tick shows. In
-	the colours of the crate's rarity. Before the burst a small hint how to skip.
+	blaster's name, its level with the stars of its rarity, its damage counting up,
+	AWESOME!; after that the words slide away and COLLECTED! with its tick shows. All
+	in the blaster's colour (BlasterBuilder.colors). Before the burst a small hint how to skip.
 
 	Pure and time-driven: update(refs, t, burst, reveal, leaving) poses everything
 	for time t, so the Lune preview exports any moment with the same code. Stars,
@@ -20,7 +20,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
-local CaseBuilder = require(Shared.Builders.CaseBuilder)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local VaultView = require(script.Parent.VaultView)
@@ -44,9 +44,6 @@ CrateOpeningView.CollectAt = 2.3 -- past this (the stage's Hold) it is being col
 
 local PANEL = Vector2.new(660, 480)
 local PANEL_X = 0.725 -- the words' middle, the screen's width
-
--- The crate tiers' stars.
-local STARS = { COMMON = 1, RARE = 2, EPIC = 3, MYTHIC = 4 }
 
 export type Refs = {
 	Gui: ScreenGui,
@@ -172,7 +169,7 @@ function CrateOpeningView.build(): Refs
 	}, title)
 	outlined(new, 6)
 	UIKit.new("UIGradient", {
-		Color = ColorSequence.new(WHITE, Color3.fromRGB(176, 170, 196)),
+		Color = ColorSequence.new(WHITE, Color3.fromRGB(186, 186, 196)),
 		Rotation = 90,
 	}, new)
 	local blasterText = UIKit.new("TextLabel", {
@@ -276,10 +273,7 @@ function CrateOpeningView.build(): Refs
 	ribbon.BackgroundColor3 = WHITE
 	UIKit.new("UICorner", { CornerRadius = UDim.new(0, 12) }, ribbon)
 	UIKit.new("UIStroke", { Thickness = 3, Color = S.Outline }, ribbon)
-	UIKit.new("UIGradient", {
-		Color = ColorSequence.new(Color3.fromRGB(255, 236, 130), S.Gold),
-		Rotation = 90,
-	}, ribbon)
+	UIKit.new("UIGradient", { Name = "Colour", Rotation = 90 }, ribbon)
 	local ribbonText = UIKit.new("TextLabel", {
 		Name = "Text",
 		BackgroundTransparency = 1,
@@ -326,7 +320,7 @@ function CrateOpeningView.build(): Refs
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = 54, MinTextSize = 18 }, name)
 	outlined(name, 4)
 	UIKit.new("UIGradient", {
-		Color = ColorSequence.new(WHITE, Color3.fromRGB(226, 216, 240)),
+		Color = ColorSequence.new(WHITE, Color3.fromRGB(224, 224, 232)),
 		Rotation = 90,
 	}, name)
 	step(name, CrateOpeningView.NameAt)
@@ -353,8 +347,8 @@ function CrateOpeningView.build(): Refs
 	}, row)
 	outlined(stats, 2.5)
 	local stars = {}
-	for i = 1, 4 do
-		local st = star(row, "Star" .. i, 30 + (i - 1) * 36, 22, 13)
+	for i = 1, 6 do
+		local st = star(row, "Star" .. i, 14 + (i - 1) * 30, 19, 13)
 		table.insert(stars, st)
 	end
 	step(row, CrateOpeningView.RowAt)
@@ -535,12 +529,14 @@ function CrateOpeningView.fit(refs: Refs, x: number, y: number)
 	refs.RevealScale.Scale = math.min(1.15, x * 0.5 / PANEL.X, y * 0.94 / PANEL.Y)
 end
 
--- The new blaster's texts: rarity (of its ore), name, level, damage, all in the crate's colours.
+-- The new blaster's texts: rarity (of its ore), name, level, damage, all in the blaster's colour.
 function CrateOpeningView.setBlaster(refs: Refs, level: number, oreId: string)
 	local ore = if oreId ~= "" then OreData.ById[oreId] else nil
 	local rarity = if ore then Rarity.ById[ore.Rarity] else Rarity.ById.Common
-	local tier = CaseBuilder.tier(oreId)
-	local glow, color = tier.Glow, tier.Color
+	local glow = BlasterBuilder.colors(level, oreId).Color
+	local color = glow:Lerp(BLACK, 0.18)
+	local h, sat = glow:ToHSV()
+	local panel = Color3.fromHSV(h, if sat < 0.08 then 0.1 else 0.62, 0.14)
 	refs.RarityText.Text = string.upper(rarity.Name)
 	refs.Name.Text = string.upper(BlasterData.displayName(level, oreId))
 	refs.Stats.Text = string.format("LV %d", level)
@@ -564,11 +560,16 @@ function CrateOpeningView.setBlaster(refs: Refs, level: number, oreId: string)
 	end
 	refs.Line.BackgroundColor3 = glow
 	for _, c in { refs.Row, refs.Value } do
+		c.BackgroundColor3 = panel
 		local edge = c:FindFirstChild("Edge") :: UIStroke
 		edge.Color = glow
 	end
-	-- the crate's stars after the level
-	local count = STARS[tier.Name] or 1
+	refs.NewTag.BackgroundColor3 = panel
+	local ribbonColour = refs.Ribbon:FindFirstChild("Colour") :: UIGradient
+	ribbonColour.Color = ColorSequence.new(WHITE:Lerp(glow, 0.25), glow)
+	refs.Damage.TextColor3 = WHITE:Lerp(glow, 0.3)
+	-- a star for each step of its rarity after the level
+	local count = rarity.Order
 	for i, st in refs.Stars do
 		st.Visible = i <= count
 		st.BackgroundColor3 = WHITE:Lerp(glow, 0.3)

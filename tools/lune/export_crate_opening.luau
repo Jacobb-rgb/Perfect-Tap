@@ -14,7 +14,7 @@
 	   voidcrate_<level>_shots.json, voidcrate_<level>_board.json
 	then: node tools/preview/render_reel.mjs voidcrate_<level> 60 9000000
 
-	  lune run tools/lune/export_crate_opening.luau tiers   his four crates side by side
+	  lune run tools/lune/export_crate_opening.luau tiers   crates in the blasters' colours side by side
 	-> build/preview/crate_tiers.json + crate_tiers_shots.json
 ]]
 
@@ -64,7 +64,7 @@ local game = roblox.Instance.new("DataModel")
 local workspace = game:GetService("Workspace")
 
 if mode == "tiers" then
-	-- his four crates in a row on their platforms (CaseBuilder at the levels of each colour)
+	-- crates in a row on their platforms, each in the colour of the blaster inside
 	local CaseBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CaseBuilder")
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local V3, C3 = roblox.Vector3, roblox.Color3
@@ -72,15 +72,20 @@ if mode == "tiers" then
 	stage.Name = "Tiers"
 	stage.Parent = workspace
 	local neon = roblox.Enum.Material.Neon
-	Geo.block(stage, CF.new(21, -0.6, 0), V3.new(120, 1, 70), C3.fromRGB(12, 6, 26), neon)
-	Geo.block(stage, CF.new(21, 15, -14), V3.new(120, 32, 1), C3.fromRGB(18, 8, 40), neon)
-	for i, pick in { 1, 5, 7, 10 } do
+	Geo.block(stage, CF.new(28, -0.6, 0), V3.new(140, 1, 70), C3.fromRGB(12, 6, 26), neon)
+	Geo.block(stage, CF.new(28, 15, -14), V3.new(140, 32, 1), C3.fromRGB(18, 8, 40), neon)
+	for i, pick in { 2, 5, 6, 8, 10 } do
 		local x = (i - 1) * 14
 		local model = roblox.Instance.new("Model")
 		model.Parent = stage
 		-- turned so the core on the front (+X) looks at the camera
 		local at = CF.new(x, 0.3, 0) * CF.Angles(0, -math.pi / 2 + 0.28, 0)
-		local case = CaseBuilder.build(model, at, pick, BlasterData.vaultOre(pick))
+		local case = CaseBuilder.build(
+			model,
+			at,
+			pick,
+			Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder").colors(pick, BlasterData.vaultOre(pick)).Color
+		)
 		Geo.block(stage, CF.new(x, 0.15, 0), V3.new(9.6, 0.3, 7.6), C3.fromRGB(26, 24, 36))
 		for k = 1, 12 do
 			local a = math.rad(k * 30)
@@ -108,8 +113,8 @@ if mode == "tiers" then
 		serde.encode("json", {
 			crate_tiers = {
 				scene = "crate_tiers",
-				position = { 21, 12, 62 },
-				target = { 21, 2.2, 0 },
+				position = { 28, 12, 76 },
+				target = { 28, 2.2, 0 },
 				fov = 28,
 				preset = "CrateOpening",
 				maxLights = 6,

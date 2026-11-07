@@ -10,6 +10,7 @@ return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
 	local Enum = roblox.Enum
+	local Color3 = roblox.Color3
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
@@ -44,7 +45,7 @@ return function(T, Loader)
 	T.test("CrateOpening: every level's case builds, mobile-safe, within budget", function()
 		for level = 1, BlasterData.MaxLevel do
 			local m = Instance.new("Model")
-			local case = CaseBuilder.build(m, CFrame.new(), level, BlasterData.vaultOre(level))
+			local case = CaseBuilder.build(m, CFrame.new(), level, Color3.fromRGB(255, 80, 170))
 			T.truthy(case.Base and case.Lid and case.Seam and case.Inside, "level " .. level .. " parts")
 			T.truthy(case.Height > case.BaseHeight, "the lid sits on the base")
 			local list = parts(m)
@@ -57,28 +58,65 @@ return function(T, Loader)
 		end
 		-- higher levels get more detail
 		local low, high = Instance.new("Model"), Instance.new("Model")
-		CaseBuilder.build(low, CFrame.new(), 2, BlasterData.vaultOre(2))
-		CaseBuilder.build(high, CFrame.new(), 10, BlasterData.vaultOre(10))
+		CaseBuilder.build(low, CFrame.new(), 2, Color3.fromRGB(255, 80, 170))
+		CaseBuilder.build(high, CFrame.new(), 10, Color3.fromRGB(255, 80, 170))
 		T.lt(#parts(low), #parts(high), "level 10 has more detail than level 2")
 	end)
 
-	T.test("CrateOpening: his four crates: the colours follow the rarity", function()
-		local expected = { "Common", "Common", "Rare", "Rare", "Rare", "Rare", "Epic", "Epic", "Mythic", "Mythic" }
+	T.test("CrateOpening: the whole opening follows the blaster's colour", function()
+		local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+		local function hueGap(a: number, b: number): number
+			local gap = math.abs(a - b)
+			return math.min(gap, 1 - gap)
+		end
+		local seen = {}
 		for level = 1, BlasterData.MaxLevel do
 			local ore = BlasterData.vaultOre(level)
+			local color = BlasterBuilder.colors(level, ore).Color
 			local m = Instance.new("Model")
-			local case = CaseBuilder.build(m, CFrame.new(), level, ore)
-			T.eq(case.Glow, CaseBuilder.Tiers[expected[level]].Glow, "level " .. level .. " crate colour")
-			T.eq(case.Glow, CaseBuilder.tier(ore).Glow, "the tier of its ore")
+			local case = CaseBuilder.build(m, CFrame.new(), level, color)
+			T.eq(case.Glow, color, "level " .. level .. ": the crate in its blaster's colour")
 			T.truthy(case.Core and case.LidA and case.LidB and #case.Panels == 4, "a core, two lid halves, four walls")
+			seen[string.format("%.2f", color:ToHSV())] = true
+			-- the stage: every coloured part but the blaster's own, at every moment, is in its hue
+			local stage, holder = build(level)
+			local hue = color:ToHSV()
+			local blaster = holder:FindFirstChild("Blaster", true)
+			for _, t in { 0.1, 1.1, 2.5, 3, 4.3, stage.Hold } do
+				stage.update(t)
+				for _, p in parts(holder) do
+					if not p:IsDescendantOf(blaster) then
+						local h, s = p.Color:ToHSV()
+						if s > 0.1 then
+							T.le(
+								hueGap(h, hue),
+								0.015,
+								string.format("level %d %s at %.1f: hue %.3f, its blaster %.3f", level, p.Name, t, h, hue)
+							)
+						end
+					end
+				end
+			end
+			-- the lights too
+			for _, d in holder:GetDescendants() do
+				if d:IsA("Light") then
+					local h, s = d.Color:ToHSV()
+					if s > 0.1 then
+						T.le(hueGap(h, hue), 0.015, "level " .. level .. " light")
+					end
+				end
+			end
 		end
-		T.eq(CaseBuilder.tier("").Name, "COMMON", "the rusty starter")
-		T.eq(CaseBuilder.tier("NoSuchOre").Name, "COMMON", "an unknown ore")
-		-- every rarity of the game lands in one of his crates
-		local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
-		for _, rarity in Rarity.List do
-			T.truthy(CaseBuilder.Tiers[CaseBuilder.TierOfRarity[rarity.Id]], rarity.Id .. " has a crate")
+		local kinds = 0
+		for _ in seen do
+			kinds += 1
 		end
+		T.truthy(kinds >= 5, "really different colours: " .. kinds)
+		-- a blaster in another ore than its case's (an older save): its own colour, the shades its hue
+		local other = BlasterBuilder.colors(5, "Sapphire").Color
+		T.truthy(other ~= BlasterBuilder.colors(5, BlasterData.vaultOre(5)).Color, "another ore, another colour")
+		local body = CaseBuilder.shades(Color3.fromRGB(70, 160, 255))
+		T.lt(hueGap((body:ToHSV()), (Color3.fromRGB(70, 160, 255):ToHSV())), 0.01, "the dark body in the same hue")
 	end)
 
 	T.test("CrateOpening: the blaster is shown centered at its hero size", function()

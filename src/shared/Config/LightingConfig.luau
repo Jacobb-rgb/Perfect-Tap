@@ -404,12 +404,13 @@ LightingConfig.Presets = {
 	},
 	-- The crate-opening cinematic's dark round room (VaultController,
 	-- Builders/CrateOpeningStage): almost no sun or sky light, so the case's
-	-- glow, the light pillar and the blaster carry the scene; strong bloom.
+	-- glow, the light pillar and the blaster carry the scene; strong bloom. Neutral
+	-- light: the stage takes every colour from the blaster.
 	CrateOpening = {
 		Lighting = {
 			Brightness = 0.2,
-			Ambient = Color3.new(0.34, 0.28, 0.46),
-			OutdoorAmbient = Color3.new(0.14, 0.12, 0.22),
+			Ambient = Color3.new(0.36, 0.36, 0.38),
+			OutdoorAmbient = Color3.new(0.15, 0.15, 0.16),
 			ExposureCompensation = 0.47,
 			EnvironmentDiffuseScale = 0.1,
 			EnvironmentSpecularScale = 0.8,
@@ -417,8 +418,8 @@ LightingConfig.Presets = {
 		Atmosphere = {
 			Density = 0.3,
 			Offset = 0,
-			Color = Color3.new(0.1, 0.08, 0.18),
-			Decay = Color3.new(0.05, 0.04, 0.1),
+			Color = Color3.new(0.1, 0.1, 0.11),
+			Decay = Color3.new(0.05, 0.05, 0.055),
 			Glare = 0,
 			Haze = 1.5,
 		},
@@ -426,7 +427,7 @@ LightingConfig.Presets = {
 			Brightness = 0.02,
 			Contrast = 0.24,
 			Saturation = 0.3,
-			TintColor = Color3.new(0.96, 0.95, 1),
+			TintColor = Color3.new(1, 1, 1),
 		},
 		Bloom = { Intensity = 0.9, Size = 32, Threshold = 1.0 },
 		SunRays = { Intensity = 0, Spread = 0.6 },

@@ -29,6 +29,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
@@ -491,13 +492,14 @@ end
 ---------------------------------------------------------------- the case icon
 
 --[[
-	A void crate drawn with frames in its rarity's colour (CaseBuilder.look): the
+	A void crate drawn with frames in the colour of the blaster inside: the
 	bottom armour, the black body, the metal lid, corner posts, the glowing seam
 	and strips and the diamond core on the front; the lid's corners glow from level
 	4, a diamond on the lid from level 7. `w` = width in design units (height ~0.62 w).
 ]]
 function VaultView.caseIcon(parent: Instance, level: number, oreId: string, w: number): Frame
-	local bodyColor, panelColor, glowColor = CaseBuilder.look(oreId)
+	local glowColor = BlasterBuilder.colors(level, oreId).Color
+	local bodyColor, panelColor = CaseBuilder.shades(glowColor)
 	local h = math.floor(w * 0.62)
 	local steel = panelColor:Lerp(Color3.new(1, 1, 1), 0.14)
 	local root = UIKit.new("Frame", {
@@ -1165,7 +1167,7 @@ VaultView.PopPaints = {
 	Heartstone = "Pink",
 } :: { [string]: string }
 
--- A case card's paint: its ore's (PopPaints), else the nearest by the case's glow colour.
+-- A case card's paint: its ore's (PopPaints), else the nearest by the ore's glow colour.
 function VaultView.popPaint(oreId: string): string
 	local named = VaultView.PopPaints[oreId]
 	if named then
@@ -1174,7 +1176,7 @@ function VaultView.popPaint(oreId: string): string
 	if oreId == "" then
 		return "Night"
 	end
-	local _, _, glow = CaseBuilder.look(oreId)
+	local _, glow = BlasterData.skin(oreId)
 	local h, s = glow:ToHSV()
 	local deg = h * 360
 	if s < 0.25 then

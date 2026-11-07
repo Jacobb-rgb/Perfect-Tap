@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local BlasterData = require(Shared.Config.BlasterData)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Geo = require(Shared.Builders.Geo)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
@@ -94,15 +95,14 @@ export type LevelLook = { Body: Color3, Glow: Color3 }
 
 --[[
 	The looks of the ten blaster levels for the display crates and rims: the
-	crates the shop sells (BlasterData.Vault.Ores in CaseBuilder's colours),
-	so the crates behind the counter match the shop window and the opening.
+	crates the shop sells (BlasterData.Vault.Ores) glow in the colour of the
+	blaster inside, so the crates behind the counter match the shop window and the opening.
 ]]
 Kit.Levels = {} :: { LevelLook }
 for level = 1, BlasterData.MaxLevel do
 	local ore = BlasterData.vaultOre(level)
 	local color = BlasterData.skin(ore)
-	local _, _, glow = CaseBuilder.look(ore)
-	table.insert(Kit.Levels, { Body = color, Glow = glow })
+	table.insert(Kit.Levels, { Body = color, Glow = BlasterBuilder.colors(level, ore).Color })
 end
 
 ---------------------------------------------------------------- frames
@@ -464,7 +464,7 @@ function Kit.case(parent: Instance, cf: CFrame, length: number, level: number)
 	local look = Kit.Levels[math.clamp(level, 1, #Kit.Levels)]
 	local L = length
 	local w, hb, hl = L * 0.7, L * 0.38, L * 0.12
-	local black, plate, steel = rgb(18, 17, 27), rgb(46, 43, 58), rgb(70, 68, 84)
+	local black, plate, steel = CaseBuilder.shades(look.Glow)
 	Kit.bit(parent, cf * CFrame.new(0, L * 0.02, 0), Vector3.new(L + 0.08, L * 0.04, w + 0.08), plate, Kit.METAL)
 	Kit.bit(parent, cf * CFrame.new(0, hb / 2, 0), Vector3.new(L - 0.1, hb, w - 0.1), black)
 	Kit.bit(parent, cf * CFrame.new(0, hb + hl / 2 + 0.02, 0), Vector3.new(L + 0.08, hl, w + 0.08), plate, Kit.METAL)

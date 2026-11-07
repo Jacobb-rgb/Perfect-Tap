@@ -1,9 +1,10 @@
 --[[
 	The blaster crate (owner 2026-11-06: his "futuristic mining crates" script
-	and the void crate picture): a black armoured box with a metal lid, corner
-	posts, neon strips and a glowing diamond core on its front, in the colour of
-	its rarity (Tiers, his four colours): the crate the Blaster Vault sells and
-	the one the crate-opening cinematic bursts open.
+	and the void crate picture): a dark armoured box with a metal lid, corner
+	posts, neon strips and a glowing diamond core on its front, all in the colour
+	of the blaster inside (owner 2026-11-06; the caller passes it,
+	BlasterBuilder.colors): the crate the Blaster Vault sells and the one the
+	crate-opening cinematic bursts open.
 
 	Built at the origin: bottom center, the long side along Z, the front (the
 	core) facing +X. Models, so the cinematic can take it apart:
@@ -18,7 +19,6 @@
 ]]
 
 local Geo = require(script.Parent.Geo)
-local OreData = require(script.Parent.Parent.Config.OreData)
 
 local CaseBuilder = {}
 
@@ -44,15 +44,13 @@ export type Case = {
 	Length: number,
 	Glow: Color3,
 	Body: Color3,
+	Plate: Color3,
 }
 
 local NEON = Enum.Material.Neon
 local METAL = Enum.Material.Metal
 local SMOOTH = Enum.Material.SmoothPlastic
 
-local BLACK = Color3.fromRGB(30, 28, 42)
-local PLATE = Color3.fromRGB(72, 68, 92)
-local STEEL = Color3.fromRGB(108, 104, 130)
 local WHITE = Color3.new(1, 1, 1)
 
 local TINY = { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
@@ -71,35 +69,11 @@ CaseBuilder.HotOres = {
 	PhoenixFeather = true,
 }
 
--- The owner's four crates: { Name, Color (his main colour), Glow }.
-CaseBuilder.Tiers = {
-	Common = { Name = "COMMON", Color = Color3.fromRGB(220, 230, 240), Glow = Color3.fromRGB(180, 200, 220) },
-	Rare = { Name = "RARE", Color = Color3.fromRGB(0, 140, 255), Glow = Color3.fromRGB(0, 190, 255) },
-	Epic = { Name = "EPIC", Color = Color3.fromRGB(155, 40, 255), Glow = Color3.fromRGB(210, 50, 255) },
-	Mythic = { Name = "MYTHIC", Color = Color3.fromRGB(255, 0, 200), Glow = Color3.fromRGB(255, 50, 230) },
-}
-
--- The game's six rarities in his four crates.
-CaseBuilder.TierOfRarity = {
-	Common = "Common",
-	Uncommon = "Rare",
-	Rare = "Rare",
-	Epic = "Epic",
-	Legendary = "Mythic",
-	Mythic = "Mythic",
-	Secret = "Mythic",
-}
-
--- The crate tier of an ore (its rarity; "" and unknown ores are Common).
-function CaseBuilder.tier(oreId: string?): { Name: string, Color: Color3, Glow: Color3 }
-	local ore = OreData.ById[oreId or ""]
-	local id = if ore then CaseBuilder.TierOfRarity[ore.Rarity] else nil
-	return CaseBuilder.Tiers[id or "Common"]
-end
-
--- The look of a crate: (body, plate, glow, hot). (hot: always false, the lava look went with the old cases.)
-function CaseBuilder.look(oreId: string?): (Color3, Color3, Color3, boolean)
-	return BLACK, PLATE, CaseBuilder.tier(oreId).Glow, false
+-- A crate's dark colours in the hue of its glow: (body, plate, steel). (A near-grey glow: near-greys.)
+function CaseBuilder.shades(glow: Color3): (Color3, Color3, Color3)
+	local h, sat = glow:ToHSV()
+	local k = if sat < 0.08 then 0.2 else 1
+	return Color3.fromHSV(h, 0.38 * k, 0.17), Color3.fromHSV(h, 0.3 * k, 0.36), Color3.fromHSV(h, 0.22 * k, 0.52)
 end
 
 local function block(parent: Instance, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?): Part
@@ -107,16 +81,16 @@ local function block(parent: Instance, cf: CFrame, size: Vector3, color: Color3,
 end
 
 --[[
-	Builds a crate for blaster `level` in the look of `oreId` ("" = Common),
+	Builds a crate for blaster `level` in `glowColor` (the blaster's colour),
 	`size` x a 7 stud long crate, at `cf` (its bottom center). Returns Case.
 ]]
-function CaseBuilder.build(parent: Instance, cf: CFrame, level: number, oreId: string?, size: number?): Case
+function CaseBuilder.build(parent: Instance, cf: CFrame, level: number, glowColor: Color3, size: number?): Case
 	local s = size or 1
 	local L, W = 7 * s, 5 * s
 	local foot = 0.3 * s -- the bottom armour
 	local bodyTop = foot + 2.5 * s
 	local lidH = 0.8 * s
-	local _, _, glowColor = CaseBuilder.look(oreId)
+	local BLACK, PLATE, STEEL = CaseBuilder.shades(glowColor)
 	local hot = WHITE:Lerp(glowColor, 0.45)
 	local lights: { BasePart } = {}
 	local function model(name: string, into: Instance): Model
@@ -242,6 +216,7 @@ function CaseBuilder.build(parent: Instance, cf: CFrame, level: number, oreId: s
 		Length = L,
 		Glow = glowColor,
 		Body = BLACK,
+		Plate = PLATE,
 	}
 end
 
