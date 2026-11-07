@@ -25,8 +25,7 @@
 
 	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
 	"Round"): the game menu is the reel's grid of dark tiles (RoundMenu:
-	Store, Hover, Inventory, Codex, More; owner 2026-11-07: "the only
-	ones I ever used", the rest behind More: RoundBehindMore), two a
+	Store, Rebirth, Golems, Inventory, Spin, Ride, Daily, Build, More), two a
 	row in a tall block with the TRAIN chip under it as wide as it (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
 	screen; touch screens keep it wide at the top, out of the thumbstick's
@@ -67,44 +66,21 @@ HudBubble.Menu = {
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
--- The round look's game menu (owner 2026-11-07: only these on the left, the rest behind More): every
--- tile hidden until a controller claims it (StoreController Store, HoverboardView Ride, BackpackController
--- Inventory, SideMenuController Codex).
+-- The round look's game menu (the reel's tiles, in its order, and Ride): every tile hidden
+-- until a controller claims it (StoreController Store, SideMenuController Rebirth / Golems /
+-- Quests, BackpackController Inventory, WheelController Spin (ui/boost-corner), HoverboardView
+-- Ride (owner 2026-10-28: a grey tile like the others, not the round violet button), BuildView Build).
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
-	{ Id = "Ride", Label = "Hover", Icon = "hoverboard", Role = "Ride" }, -- ("Hoverboard" is 6 pt on a phone)
+	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
+	{ Id = "Golems", Label = "Golems", Icon = "golem_GildedPorter", Role = "Golems" },
 	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
-	{ Id = "Codex", Label = "Codex", Icon = "book", Role = "Codex" },
+	{ Id = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel" },
+	{ Id = "Ride", Label = "Ride", Icon = "hoverboard", Role = "Ride" },
+	{ Id = "Quests", Label = "Daily", Icon = "medal", Role = "Quests" },
+	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
 } :: { MenuEntry }
-
--- Tiles their own controllers claim (claimTile) that stand behind More in the round look.
-HudBubble.RoundBehindMore = {
-	Build = { Label = "Build", IconName = "Build" }, -- BuildView; the B key stays
-	Wheel = { Label = "Spin", IconName = "Wheel" }, -- WheelController; FREE! shows on More too
-} :: { [string]: { Label: string, IconName: string } }
-
--- Behind More, in this order (the most used first); anything else after them.
-HudBubble.RoundMoreOrder = {
-	Golems = 1,
-	Build = 2,
-	Wheel = 3,
-	Quests = 4,
-	Rebirth = 5,
-	Hoverboards = 6,
-	Shop = 7,
-	Elevator = 8,
-	Collection = 9,
-	Boards = 10,
-	Settings = 11,
-} :: { [string]: number }
-
--- (Garage: the boards' window; the left tile, Hover, rides)
--- (Boosts: the luck boosts; the top row's Shop is the Robux store)
-HudBubble.RoundMoreLabels = { Quests = "Daily", Hoverboards = "Garage", Shop = "Boosts" } :: { [string]: string }
-
--- Their counts don't add up on More: Build's counts the machines waiting to be placed, always there, not news.
-HudBubble.MoreQuiet = { Build = true } :: { [string]: boolean }
 
 -- The round look's tile accents (the reel: every dark tile its own colour on the edge and the lip).
 HudBubble.RoundPaints = {
@@ -116,12 +92,11 @@ HudBubble.RoundPaints = {
 	Ride = "Teal",
 	Quests = "Pink",
 	Build = "Lime",
-	Codex = "Blue",
 	More = "Steel",
 } :: { [string]: string }
 
 -- The side menu entries that are tiles on the left in the round look (the rest go behind More).
-HudBubble.RoundMain = { Store = true, Codex = true } :: { [string]: boolean }
+HudBubble.RoundMain = { Store = true, Rebirth = true, Golems = true, Quests = true } :: { [string]: boolean }
 
 --[[
 	The round look's offers mid-right (the reel's three potions with "R$49"):
@@ -1550,7 +1525,6 @@ HudBubble.EntryLooks = {
 	Elevator = { Icon = "lift", Role = "Base" },
 	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: empty until uploaded, the label shows)
 	Wheel = { Icon = "wheel", Role = "Wheel" },
-	Build = { Icon = "build", Role = "Build" },
 	Gear = { Icon = "helmet", Role = "Gear" },
 	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE
 	Quests = { Icon = "medal", Role = "Quests" }, -- daily / weekly quests + the login streak
@@ -1569,21 +1543,6 @@ end
 -- `spec` (label, IconName -> EntryLooks, order after the known tiles).
 function HudBubble.claimTile(menu: Instance, id: string, spec: TileSpec?): TextButton
 	local holder = menu:FindFirstChild(id)
-	local behind = if PopTheme.round() then HudBubble.RoundBehindMore[id] else nil
-	if behind and not holder then
-		-- (the round look: this tile stands behind More; pressing it shuts the flyout)
-		local gui = menu.Parent :: Instance
-		local flyout = gui:FindFirstChild("MoreFlyout")
-		local there = flyout and flyout:FindFirstChild(id)
-		if there then
-			return there:FindFirstChild("Face") :: TextButton
-		end
-		local face = HudBubble.addMore(menu, id, behind :: any)
-		face.Activated:Connect(function()
-			HudBubble.toggleMore(menu, false)
-		end)
-		return face
-	end
 	if not holder then
 		local look = if spec and spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
 		local _, created = HudBubble.tile(menu, {
@@ -1703,7 +1662,18 @@ function HudBubble.setKeyCap(face: GuiObject, cap: string?, image: string?)
 	frame.Visible = hasImage or (cap ~= nil and cap ~= "")
 end
 
-local function paintBadge(face: GuiObject, count: number)
+-- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
+-- tilted "FREE!" sticker while the free spin is ready (`free`: WheelController; nil: any count),
+-- else the count of the bought spins held as a badge.
+function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
+	local holder = face.Parent
+	if PopTheme.round() and holder and holder.Name == "Wheel" then
+		local sticker = if free == nil then count > 0 else free
+		HudBubble.setSticker(face, if sticker then "FREE!" else nil)
+		if sticker then
+			count = 0 -- (the sticker says it: no count badge with it)
+		end
+	end
 	local badge = face:FindFirstChild("Badge")
 	if count <= 0 then
 		if badge then
@@ -1720,61 +1690,6 @@ local function paintBadge(face: GuiObject, count: number)
 	else
 		Bubble.badge(face, text)
 	end
-end
-
--- The More tile tells what its flyout holds: the counts added up (not MoreQuiet's) and a FREE! sticker.
-local function syncMore(flyout: Instance)
-	local gui = flyout.Parent
-	local menu = gui and gui:FindFirstChild("Menu")
-	local more = menu and menu:FindFirstChild("More")
-	local moreFace = more and more:FindFirstChild("Face") :: GuiObject?
-	if not moreFace then
-		return
-	end
-	local total, free = 0, false
-	for _, holder in flyout:GetChildren() do
-		local face = holder:FindFirstChild("Face")
-		if face and not HudBubble.MoreQuiet[holder.Name] then
-			total += (face:GetAttribute("BadgeCount") :: number?) or 0
-			free = free or face:GetAttribute("BadgeFree") == true
-		end
-	end
-	paintBadge(moreFace, total)
-	HudBubble.setSticker(moreFace, if free then "FREE!" else nil)
-end
-
--- A count badge on a tile's face (0 hides it). The round look's Spin tile wears the reel's
--- tilted "FREE!" sticker while the free spin is ready (`free`: WheelController; nil: any count),
--- else the count of the bought spins held as a badge. A tile behind More: More shows it too.
-function HudBubble.setTileBadge(face: GuiObject, count: number, free: boolean?)
-	local holder = face.Parent
-	local sticker = false
-	if PopTheme.round() and holder and holder.Name == "Wheel" then
-		sticker = if free == nil then count > 0 else free
-		HudBubble.setSticker(face, if sticker then "FREE!" else nil)
-		if sticker then
-			count = 0 -- (the sticker says it: no count badge with it)
-		end
-	end
-	paintBadge(face, count)
-	local flyout = holder and holder.Parent
-	if flyout and flyout.Name == "MoreFlyout" then
-		face:SetAttribute("BadgeCount", count)
-		face:SetAttribute("BadgeFree", sticker)
-		syncMore(flyout)
-	end
-end
-
--- Where a tile's "something new" pulse goes: More's holder while the tile stands closed behind it.
-function HudBubble.pulseHolder(face: GuiObject): Instance?
-	local holder = face.Parent
-	local flyout = holder and holder.Parent
-	if flyout and flyout.Name == "MoreFlyout" then
-		local gui = flyout.Parent
-		local menu = gui and gui:FindFirstChild("Menu")
-		return (menu and menu:FindFirstChild("More")) or holder
-	end
-	return holder
 end
 
 --[[
@@ -1821,14 +1736,13 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 		end)
 	end
 	local look = if spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
-	local round = PopTheme.round()
 	local face = HudBubble.tile(flyout :: Frame, {
 		Name = id,
-		Label = (if round then HudBubble.RoundMoreLabels[id] else nil) or spec.Label or string.upper(id),
+		Label = spec.Label or string.upper(id),
 		Icon = if look then look.Icon else "more",
 		Role = if look then look.Role else "Plain",
 		Size = tileSize(menu),
-		LayoutOrder = (if round then HudBubble.RoundMoreOrder[id] else nil) or spec.Order or 50,
+		LayoutOrder = spec.Order or 50,
 	})
 	HudBubble.linkMenu(flyout :: Frame)
 	return face

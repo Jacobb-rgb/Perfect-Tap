@@ -285,8 +285,8 @@ TutorialConfig.Steps = {
 	{
 		Id = "Golems",
 		Title = "Golem helpers",
-		Text = "Golems follow you and help you earn. Wake one from a capsule: GOLEMS is behind MORE.",
-		Hint = { Mouse = "MORE, then GOLEMS", Touch = "Tap MORE, then GOLEMS", Gamepad = "D-pad left, MORE, then GOLEMS" },
+		Text = "Golems follow you and help you earn. Wake one from a capsule: GOLEMS in the side menu.",
+		Hint = { Mouse = "GOLEMS is on the left", Touch = "Tap MENU, then GOLEMS", Gamepad = "D-pad left, then GOLEMS" },
 		Target = "Capsules",
 		UiTarget = "Golems",
 		Optional = true,
@@ -316,7 +316,7 @@ TutorialConfig.Steps = {
 		Text = "Out of room? Build a Platform: a Belt Lift carries ore up, a Slide brings it down.",
 		Hint = {
 			Mouse = "B builds · V: deck or ground",
-			Touch = "MORE, BUILD, then the DECK button",
+			Touch = "BUILD, then the DECK button",
 			Gamepad = "D-pad up: build, then deck/ground",
 		},
 		Optional = true,

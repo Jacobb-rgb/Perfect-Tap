@@ -2631,8 +2631,7 @@ end
 -- got its own station, 2026-10-25.)
 function PlacementController.refreshButton()
 	local button = buildButton
-	-- (the round look: BUILD stands behind More, so More pulses)
-	local holder = if button then BuildView.pulseHolder(button) else nil
+	local holder = button and button.Parent
 	if not button or not holder then
 		return
 	end

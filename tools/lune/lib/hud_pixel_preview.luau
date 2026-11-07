@@ -12,10 +12,9 @@
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
 	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (owner 2026-11-07: Store, Hoverboard,
-	Inventory, Codex and More on the left; Build, Spin with its FREE! sticker
-	and the side menu's others behind More).
-	  ui_hud_round_more_*   the MORE flyout open, PC and a phone
+	are claimed as the controllers do (the reel's eight: Inventory by
+	BackpackController, Spin with its FREE! sticker by WheelController's badge,
+	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
@@ -42,7 +41,6 @@ function Preview.build(Loader: any): { [string]: any }
 	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 	local NOW = 1.7e9
 
-	local moreOpen = false -- the next hud() opens its MORE flyout
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
 	local function hud(
 		renderScale: number,
@@ -160,9 +158,8 @@ function Preview.build(Loader: any): { [string]: any }
 			pad.Enabled = true
 			table.insert(list, pad)
 		end
-		if round or refs.Menu:FindFirstChild("Wheel") then
-			-- the SPIN tile (WheelController claims it on the light HUD: behind MORE in the round look;
-			-- badge: a free spin ready, FREE! on MORE too)
+		if refs.Menu:FindFirstChild("Wheel") then
+			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
 			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
 		else
 			-- the FREE SPIN chip right of the top bar
@@ -170,9 +167,6 @@ function Preview.build(Loader: any): { [string]: any }
 			spin.Gui.Scale.Scale = renderScale
 			spin.Gui.Enabled = true
 			table.insert(list, spin.Gui)
-		end
-		if moreOpen then
-			HudBubble.toggleMore(refs.Menu, true)
 		end
 		return list
 	end
@@ -187,12 +181,6 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_studio =
 		UiExport.export(hud(studioScale * 900 / 485, studioScale, roblox.Vector2.new(995, 485 - 58 * 485 / 900), 1, false, false, "Mouse"))
 	exports.ui_hud_round_pc720 = UiExport.export(hud(900 / 720, 1, roblox.Vector2.new(1280, 720 - 58 * 720 / 900)))
-	-- the MORE flyout open (owner 2026-11-07: Store, Hoverboard, Inventory, Codex on the left, the rest here)
-	moreOpen = true
-	exports.ui_hud_round_more_pc720 = UiExport.export(hud(900 / 720, 1, roblox.Vector2.new(1280, 720 - 58 * 720 / 900)))
-	exports.ui_hud_round_more_phone640 =
-		UiExport.export(hud(0.62 * 900 / 360, 0.62, roblox.Vector2.new(640, 360 - 58 * 360 / 900), 1, true, false, "Touch"))
-	moreOpen = false
 	local tabletScale = HudBubble.scaleFor(roblox.Vector2.new(1024, 768))
 	exports.ui_hud_round_tablet =
 		UiExport.export(hud(tabletScale * 900 / 768, tabletScale, roblox.Vector2.new(1024, 768 - 58 * 768 / 900), 1, true, false, "Touch"))

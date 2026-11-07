@@ -1,6 +1,4 @@
 {
-  "hud_round_more_pc720": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_more_pc720", "uiInset": 58, "width": 1600, "height": 900 },
-  "hud_round_more_phone640": { "scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_more_phone640", "uiInset": 58, "width": 1600, "height": 900 },
   "hud_round_phone640": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_phone640", "uiInset": 58, "width": 1600, "height": 900},
   "hud_round_phone568": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_phone568", "uiInset": 58, "width": 1598, "height": 900},
   "hud_round_tv": {"scene": "hud_quick", "position": [0, 10, 40], "target": [0, 6, 0], "fov": 60, "preset": "Surface", "ui": "ui_hud_round_tv", "uiInset": 58, "width": 1600, "height": 900},

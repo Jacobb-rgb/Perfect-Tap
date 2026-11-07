@@ -1891,7 +1891,7 @@ function HoverboardView.rideButton(parent: Instance): RideButton
 end
 
 -- The round look's Ride tile in the HUD's grid (HudBubble.RoundMenu "Ride"): a dark tile like
--- Store or Codex, its word Hover / Stop, the H keycap; nil when the grid has no Ride tile.
+-- Spin or Build, its word Ride / Stop, the H keycap; nil when the grid has no Ride tile.
 function HoverboardView.rideTile(menu: Instance): RideButton?
 	if not (menu:GetAttribute("Bubble") and menu:FindFirstChild("Ride")) then
 		return nil
@@ -1916,7 +1916,7 @@ function HoverboardView.setRiding(ride: RideButton, riding: boolean, hint: strin
 	local gradient, ringStroke, key, glyphLabel = ride.Gradient, ride.Ring, ride.Key, ride.Glyph
 	if ride.Tile or not (gradient and ringStroke and key and glyphLabel) then
 		-- the tile: only its word and its keycap change
-		ride.Label.Text = Pop.caption(if riding then "Stop" else "Hover")
+		ride.Label.Text = Pop.caption(if riding then "Stop" else "Ride")
 		HudBubble.setKeyCap(ride.Button, if glyph and glyph ~= "" then nil else hint or "H", glyph)
 		return
 	end
