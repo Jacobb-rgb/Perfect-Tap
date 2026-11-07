@@ -1723,7 +1723,7 @@ return function(T, Loader)
 		-- bigger plots' grid move (Migrations)
 		T.eq(
 			DataTemplate.Version,
-			13,
+			14,
 			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack, 10 secret ores, 11 the golems' auto-delete, 12 the HUGE golems, 13 the rarer golems' auto-delete flags"
 		)
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")

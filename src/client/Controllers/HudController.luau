@@ -17,9 +17,8 @@
 	  daily wheel's disc turning); releaseCoins shows it.
 	- Earned { Amount, Source } shows a floating "+$X" under the coins;
 	  payouts closer together than EconomyConfig.Sell.ComboWindow add up
-	  into one popup. Offline earnings get the "While you were away" popup
-	  instead (OpenUI "Offline" { Amount, Seconds, Hours }): COLLECT, B or
-	  Backspace closes it; gamepads start on COLLECT.
+	  into one popup. Offline earnings get the "While you were away" window
+	  instead (NightShiftController).
 	- The backpack button (HudView.setBackpack; the light HUD: right of its
 	  own BLASTER slot, the pair centred at the bottom; the dark HUD: right of
 	  the blaster's slot in Roblox's hotbar) says "n / cap" and turns red with
@@ -29,7 +28,6 @@
 	  BlasterSlotController equips the Blaster from the slot.
 ]]
 
-local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,7 +42,6 @@ local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
 local BackpackState = require(script.Parent.Parent.Util.BackpackState)
-local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
@@ -58,11 +55,8 @@ local HudController = {}
 
 local player = Players.LocalPlayer
 local refs: HudView.Refs
-local offline: HudView.OfflineRefs? = nil
 local MAX_TOASTS = 3
-local OFFLINE_CLOSE = "TerraForgeOfflineClose"
 -- above the default controls, so B / Backspace close the popup first
-local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 20
 local FLOAT_TIME = 1.4
 -- player attributes written by StateService (CoinsAttribute / IncomeAttribute)
 local COINS_ATTRIBUTE = "Coins"
@@ -381,76 +375,6 @@ function HudController.earned(amount: number)
 	end)
 end
 
----------------------------------------------------------------- offline popup
-
-local function closeOffline()
-	local view = offline
-	if not view or not view.Gui.Enabled then
-		return
-	end
-	view.Gui.Enabled = false
-	ContextActionService:UnbindAction(OFFLINE_CLOSE)
-	local selected = GuiService.SelectedObject
-	if selected and selected:IsDescendantOf(view.Gui) then
-		GuiService.SelectedObject = nil
-	end
-end
-
--- "Away 7h 12m. Podiums pay 50% while you're offline, for up to 5 hours."
-function HudController.offlineDetail(seconds: number, hours: number): string
-	local o = EconomyConfig.Offline
-	local rate = math.floor(o.Rate * 100 + 0.5)
-	local text = `Away {Format.seconds(seconds)}. Podiums pay {rate}% while you're offline, for up to {hours} hours.`
-	if seconds > hours * 3600 and hours < o.ExtendedHours then
-		text ..= ` The Offline Extension makes it {o.ExtendedHours} hours.`
-	end
-	return text
-end
-
-function HudController.showOffline(amount: number, seconds: number, hours: number)
-	-- never under the loading screen: wait for it (Util/Loading, at most MaxWait)
-	if not Loading.isDone() then
-		task.spawn(function()
-			Loading.wait()
-			HudController.showOffline(amount, seconds, hours)
-		end)
-		return
-	end
-	local view = offline
-	if not view then
-		local built = HudView.buildOffline()
-		built.Gui:SetAttribute("TerraForge", true)
-		built.Gui.Parent = player:WaitForChild("PlayerGui")
-		built.Collect.Activated:Connect(function()
-			Sfx.play("UIClick")
-			closeOffline()
-		end)
-		offline = built
-		view = built
-		updateScale()
-	end
-	local shown = view :: HudView.OfflineRefs
-	shown.Amount.Text = "+" .. Format.money(amount)
-	shown.Detail.Text = HudController.offlineDetail(seconds, hours)
-	shown.Gui.Enabled = true
-	if Motion.enabled() then
-		Motion.pop(shown.Panel, shown.Dim) -- (UI/Motion: none with Reduce motion)
-	else
-		Motion.classicPop(shown.Panel, nil, 0.6, 0.3) -- (UI motion off: the pop main has)
-	end
-	Sfx.play("CoinBurst")
-	ContextActionService:BindActionAtPriority(OFFLINE_CLOSE, function(_, state)
-		if state == Enum.UserInputState.Begin then
-			closeOffline()
-			return Enum.ContextActionResult.Sink
-		end
-		return Enum.ContextActionResult.Pass
-	end, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
-	if UserInputService.GamepadEnabled then
-		GuiService.SelectedObject = shown.Collect
-	end
-end
-
 ---------------------------------------------------------------- lifecycle
 
 function HudController.init()
@@ -491,18 +415,6 @@ function HudController.init()
 			return
 		end
 		HudController.earned(tonumber(payload.Amount) or 0)
-	end)
-
-	Net.listen("OpenUI", function(kind, payload)
-		if kind ~= "Offline" or type(payload) ~= "table" then
-			return
-		end
-		local amount = tonumber(payload.Amount) or 0
-		local seconds = tonumber(payload.Seconds) or 0
-		local hours = tonumber(payload.Hours) or EconomyConfig.Offline.BaseHours
-		if amount > 0 and amount == amount and amount < math.huge then
-			HudController.showOffline(amount, seconds, hours)
-		end
 	end)
 
 	StateController.onChanged(onState)
