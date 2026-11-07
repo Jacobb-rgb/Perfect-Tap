@@ -412,7 +412,7 @@ function BoostView.weatherNote(): string
 		return ""
 	end
 	if weatherLuck() > 1 then
-		return ` {weather.Kind} now: its luck x{weatherLuck()} is in these numbers (never past the luck cap).`
+		return ` {weather.Kind} now: its luck x{weatherLuck()} is in these numbers (up to the luck cap: nothing extra with Hexa Lucky).`
 	elseif secretExtra() > 1 then
 		return ` {weather.Kind} now: its secret chance x{secretExtra()} is in these numbers.`
 	end
@@ -711,6 +711,36 @@ function BoostView.secretRows(zoneId: string?, luckBefore: number, luckAfter: nu
 	return rows
 end
 
+--[[
+	A luck card's odds as text lines (the Store's Hexa Lucky and Server Luck,
+	StoreController): "Rare or better" per zone the player can mine now ->
+	with `delta`, every secret's chance (a rainbow's x2 in them) and the
+	weather note, as the server rolls them now.
+]]
+function BoostView.luckLines(rawState: any, delta: { [string]: number }, now: number): { string }
+	local function percent(chance: number): string
+		local text = string.format("%.2f", chance * 100)
+		text = text:gsub("0+$", ""):gsub("%.$", "")
+		return text .. "%"
+	end
+	local preview = BoostConfig.preview(BoostView.context(rawState, now), delta)
+	local lines: { string } = { "Chance a chunk is Rare or better:" }
+	for _, zone in preview.Zones do
+		if not zone.NoEffect then
+			local info = WorldLayout.ZoneById[zone.Zone]
+			table.insert(lines, `{if info then info.Name else zone.Zone}:  {percent(zone.Before)}  →  {percent(zone.After)}`)
+		end
+	end
+	for _, line in BoostView.secretLines(preview.LuckBefore, preview.LuckAfter) do
+		table.insert(lines, line)
+	end
+	local weather = BoostView.weatherNote()
+	if weather ~= "" then
+		table.insert(lines, (string.gsub(weather, "^ ", "")))
+	end
+	return lines
+end
+
 -- The same as text lines for a luck card (StoreController): every secret, its floor, before -> after.
 function BoostView.secretLines(luckBefore: number, luckAfter: number): { string }
 	local lines = { "??? Secret ore chance, per ore a mine-floor rock drops (a Twin Drop never is one):" }
@@ -776,8 +806,8 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 		elseif crystalBefore <= 0 then
 			-- (luck still raises the ??? Secret chance in the rows above: SecretOreConfig)
 			note = if #BoostView.secretRows(zone.Id, without, with) > 0
-				then "No Rare ores in this zone: Hexa Lucky only raises the ??? Secret chance here."
-				else "No Rare ores in this zone: Hexa Lucky changes nothing here."
+				then "No Rare ores in this zone: Hexa Lucky only raises the ??? Secret chance here." .. weatherNote
+				else "No Rare ores in this zone: Hexa Lucky changes nothing here." .. weatherNote
 		end
 	end
 	return {

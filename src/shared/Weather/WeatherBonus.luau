@@ -8,15 +8,16 @@
 
 	  Rain      Twin    a dropped ore has this much more chance of a twin
 	  Storm     Luck    x ore luck (and so the secret ores' chance), under the luck
-	                    cap: nothing on top of Hexa Lucky or Server Luck
+	                    cap: nothing on top of Hexa Lucky, up to the cap with Server Luck
 	  Hail      Damage  x blaster damage
 	  Snow      Clean   the dirt is this many times thinner (CleaningPatterns.thin;
 	                    par stays the clump's, so the score never gets harder)
 	  Wind      Reach   x an Ore Magnet's pull (within the radius cap); without a
 	                    magnet, x your pick-up reach (owner: "i bez magnetu")
-	  Heatwave  Machine x the processing machines' speed (ProcessingService jobs:
-	                    furnaces, crushers, the Cleaning Plant, Polisher, Extractor;
-	                    belts, droppers, the train and the Iron Box unchanged)
+	  Heatwave  Machine x the machines' job speed (ProcessingService jobs: furnaces,
+	                    crushers, the Cleaning Plant, Polisher, Extractor; the sorters too:
+	                    Iron Box, Restoration Table), never under the job time floor;
+	                    belts, droppers and the train unchanged
 	  Rainbow   Secret  x the secret ores' chance
 ]]
 
@@ -43,7 +44,7 @@ WeatherBonus.List = {
 	Storm = {
 		Kind = "Storm",
 		Tag = "STORM",
-		Text = "Storm: ore luck x1.5 (not on top of Hexa or Server Luck)",
+		Text = "Storm: ore luck x1.5 (up to the boost cap: nothing extra with Hexa)",
 		Color = Color3.fromRGB(170, 120, 255),
 		Luck = 1.5,
 	},
@@ -65,7 +66,7 @@ WeatherBonus.List = {
 	Heatwave = {
 		Kind = "Heatwave",
 		Tag = "HEAT",
-		Text = "Heatwave: furnaces, crushers and plants 25% faster",
+		Text = "Heatwave: furnaces, crushers and plants up to 25% faster",
 		Color = Color3.fromRGB(255, 160, 70),
 		Machine = 1.25,
 	},

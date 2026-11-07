@@ -617,9 +617,11 @@ function EnchantView.odds(
 			then " It isn't in a slot: equip it to get these odds."
 			else " Every open slot is full: put it in a slot to get these odds."
 	end
-	local hexaNote = if hexa
-		then " Hexa Lucky isn't counted (it runs out)."
-		elseif BoostView.serverLuck() > 1 then " Server Luck isn't counted (it runs out)."
+	local serverLuck = BoostView.serverLuck() > 1
+	local hexaNote = if hexa and serverLuck
+		then " Hexa Lucky and Server Luck aren't counted (they run out)."
+		elseif hexa then " Hexa Lucky isn't counted (it runs out)."
+		elseif serverLuck then " Server Luck isn't counted (it runs out)."
 		else ""
 	local preview = BoostConfig.preview(ctx, delta)
 	if replaced then

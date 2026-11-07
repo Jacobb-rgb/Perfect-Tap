@@ -612,6 +612,23 @@ return function(T, Loader)
 			entry = WeatherBonus.List.Rainbow
 			local rainbow = EnchantView.odds(s, "Lucky", zoneId, NOW) :: any
 			T.truthy(rainbow.Note:find("Rainbow now", 1, true) ~= nil, rainbow.Note)
+			-- Server Luck running: said too, alone or with Hexa (review 11-08)
+			entry = nil
+			local serverLuck = BoostView.serverLuck
+			BoostView.serverLuck = function()
+				return 2
+			end
+			local okSl, errSl = pcall(function()
+				local both = EnchantView.odds(hexa, "Lucky", zoneId, NOW) :: any
+				T.truthy(both.Note:find("Hexa Lucky and Server Luck aren't counted", 1, true) ~= nil, both.Note)
+				local alone = EnchantView.odds(s, "Lucky", zoneId, NOW) :: any
+				T.truthy(alone.Note:find("Server Luck isn't counted", 1, true) ~= nil, alone.Note)
+				T.eq(alone.Note:find("Hexa Lucky", 1, true), nil, "no Hexa without its boost")
+			end)
+			BoostView.serverLuck = serverLuck
+			if not okSl then
+				error(errSl, 0)
+			end
 		end)
 		BoostView.weather = saved
 		if not ok then

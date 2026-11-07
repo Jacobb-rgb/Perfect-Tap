@@ -99,6 +99,11 @@ return function(T, Loader)
 		end)
 		withWeather(List.Storm, function()
 			T.eq(Bonuses.oreLuck(stats), StatConfig.oreLuck(0, 1.5))
+			-- with Server Luck (x2) up to the cap: x1.25 more; with Hexa Lucky (at the cap) nothing (review 11-08)
+			local cap = StatConfig.ById.OreLuckMult.Max
+			T.eq(Bonuses.oreLuck({ OreLuckPct = 0, OreLuckMult = 2 }), StatConfig.oreLuck(0, math.min(3, cap)))
+			T.truthy(Bonuses.oreLuck({ OreLuckPct = 0, OreLuckMult = 2 }) > StatConfig.oreLuck(0, 2), "Server Luck gains")
+			T.eq(List.Storm.Text, "Storm: ore luck x1.5 (up to the boost cap: nothing extra with Hexa)")
 			local max = StatConfig.ById.OreLuckMult.Max
 			T.eq(Bonuses.oreLuck({ OreLuckPct = 0, OreLuckMult = max }), StatConfig.oreLuck(0, max), "the cap holds")
 		end)
@@ -127,6 +132,7 @@ return function(T, Loader)
 		end)
 		withWeather(List.Heatwave, function()
 			T.eq(Bonuses.machineMult(), 1.25)
+			T.eq(List.Heatwave.Text, "Heatwave: furnaces, crushers and plants up to 25% faster", "up to: the job time floor")
 		end)
 	end)
 
@@ -194,7 +200,7 @@ return function(T, Loader)
 			-- the Store's luck card lines too (StoreController.luckLines: BoostView.secretLines)
 			local function hollowLine(lines: { string }): string
 				for _, line in lines do
-					if line:find("Deep Hollow", 1, true) == 1 then
+					if line:find("Deep Hollow", 1, true) == 1 and line:find("1 in", 1, true) then
 						return line
 					end
 				end
@@ -205,7 +211,18 @@ return function(T, Loader)
 			local chips = BoostView.chips(state, 1000)
 			T.eq(chips[#chips].Kind, BoostView.WeatherChip)
 			T.eq(chips[#chips].Tag, "RAINBOW")
+			-- the Store's whole luck card (BoostView.luckLines): the rainbow in the secret lines and the note
+			local hexaDelta = { OreLuckMult = BoostConfig.Kinds.HexaLucky.Mult }
+			local rainbowLines = BoostView.luckLines(state, hexaDelta, 1000)
+			T.truthy(hollowLine(rainbowLines):find("1 in 2,000", 1, true) ~= nil, "Store card: x2 in a rainbow")
+			T.truthy(rainbowLines[#rainbowLines]:find("Rainbow now", 1, true) == 1, rainbowLines[#rainbowLines])
+			entry = List.Storm
+			local stormLines = BoostView.luckLines(state, hexaDelta, 1000)
+			T.truthy(stormLines[#stormLines]:find("Storm now", 1, true) == 1, "Store card: the storm's note")
 			entry = nil
+			local clearLines = BoostView.luckLines(state, hexaDelta, 1000)
+			T.truthy(stormLines[2] ~= clearLines[2], "the storm's luck in the Store numbers: " .. stormLines[2] .. " / " .. clearLines[2])
+			T.eq(clearLines[#clearLines]:find("now:", 1, true), nil, "no note in clear weather")
 			T.truthy(hollowLine(BoostView.secretLines(1, 1)):find("1 in 4,000", 1, true) ~= nil, "the Store: clear")
 			T.eq(BoostView.weatherNote(), "", "no note in clear weather")
 			T.eq(#BoostView.chips(state, 1000), 0, "clear weather: no chip")
