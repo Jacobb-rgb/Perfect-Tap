@@ -21,7 +21,7 @@ function Preview.dress(Loader: any, map: any, page: string)
 		end
 	end
 	assert(screen, "no EventBoardScreen")
-	local find = { Day = FindOfDay.day(NOW), Name = "EmberQueen", Ore = "PhoenixFeather", Grade = "Flawless" }
+	local find = { Day = FindOfDay.day(NOW), UserId = 45, Name = "EmberQueen", Ore = "RainbowNova", Grade = "Flawless" } -- (a secret: owner "Ano, ukazovat")
 	-- a real storm of the schedule, a minute in
 	local WeatherLogic = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherLogic")
 	local WeatherConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WeatherConfig")

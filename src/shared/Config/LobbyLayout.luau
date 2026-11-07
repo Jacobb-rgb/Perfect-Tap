@@ -273,9 +273,10 @@ LobbyLayout.Pieces = {
 	{
 		Id = "EventBoard",
 		Package = "Plaza",
-		-- a gantry over the east road: far enough along it that the gas giant stays in view from the town
+		-- hanging from a hot-air balloon high over the east road (owner 2026-11-07), tethered to two
+		-- anchors beside it: far enough along it that the gas giant stays in view from the town
 		Center = v(53.5, 0, 2),
-		Size = v(4, 30, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its feet)
+		Size = v(4, 106, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its anchors)
 		Radius = 2,
 		Facing = v(-1, 0, 0), -- toward the plaza and the spawn
 		Walkable = true, -- (under it: only its two feet stand on the ground, beside the road)
