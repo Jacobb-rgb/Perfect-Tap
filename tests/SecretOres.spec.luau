@@ -47,6 +47,40 @@ return function(T, Loader)
 		T.eq(SecretOreConfig.ByOre.RainbowNova.Floor, nil, "Rainbow Nova: every floor")
 	end)
 
+	T.test("secret ores: the dirt glows a little at the cleaning (owner 2026-11-07), only theirs, and goes with its cell", function()
+		local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
+		local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
+		local work = Loader.CFrame.new(0, 5, 0)
+		local function glows(shell: any): (number, number, any)
+			local specks, halos, sample = 0, 0, nil
+			for _, block in shell.Dirt do
+				for _, d in block:GetChildren() do
+					if d.Name == "Speck" then
+						specks += 1
+					elseif d.Name == "SpeckGlow" then
+						halos += 1
+						sample = sample or d
+					end
+				end
+			end
+			return specks, halos, sample
+		end
+		for _, secret in SecretOreConfig.List do
+			local shell = OreShellBuilder.build(Patterns.generate(secret.Ore, 7), work)
+			local specks, halos, halo = glows(shell)
+			T.truthy(specks > 0, secret.Ore .. ": rainbow specks in the dirt")
+			T.eq(halos, specks * #OreShellBuilder.SpeckGlow, secret.Ore .. ": each with its soft glow")
+			T.eq(halo.Material, roblox.Enum.Material.Neon)
+			T.truthy(halo.Transparency >= 0.6, secret.Ore .. ": a little: see-through, the dirt shows")
+			T.falsy(halo.CanCollide or halo.CanQuery or halo.CanTouch or halo.CastShadow, secret.Ore .. ": light only, the spray passes")
+			T.truthy(halo.Size.X <= 0.6, secret.Ore .. ": small, never a bubble over the ore")
+			-- it washes off with its cell: inside the block that goes
+			T.truthy(halo.Parent ~= nil and halo.Parent.Name == "Dirt", secret.Ore .. ": a child of its dirt block")
+		end
+		local _, plain = glows(OreShellBuilder.build(Patterns.generate("Coal", 7), work))
+		T.eq(plain, 0, "an ordinary ore's dirt never glows")
+	end)
+
 	T.test("secret ores: never in the lists everything iterates (36 ores, 6 rarities)", function()
 		T.eq(#Rarity.List, 6, "six rarities in Rarity.List")
 		T.eq(Rarity.get("Secret").Order, 7, "Rarity.get knows Secret")
