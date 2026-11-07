@@ -186,6 +186,39 @@ return function(T, Loader)
 		T.eq(EventBoardLogic.findPage(entry("Old", "Gold", "Clean", TODAY - 1), NOW).Big, "Nobody yet")
 	end)
 
+	T.test("event board: its two feet stand clear of everything and beside the road", function()
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+		local game = roblox.Instance.new("DataModel")
+		local map = WorldBuilder.build(game:GetService("Workspace"))
+		local board = map:FindFirstChild("EventBoard", true)
+		local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+		local parts = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(board) and d.Size.Magnitude < 400 then
+				table.insert(parts, d)
+			end
+		end
+		local half = EventBoard.FootSize / 2
+		for _, side in { -EventBoard.PostAt, EventBoard.PostAt } do
+			for _, y in { 1.5, 3, 6, 10 } do
+				for _, dx in { -half, 0, half } do
+					for _, dz in { -half, 0, half } do
+						local at = (frame * roblox.CFrame.new(side + dx, y, 0.6 + dz)).Position
+						for _, d in parts do
+							local l = d.CFrame:PointToObjectSpace(at)
+							local inside = math.abs(l.X) <= d.Size.X / 2 and math.abs(l.Y) <= d.Size.Y / 2 and math.abs(l.Z) <= d.Size.Z / 2
+							T.falsy(inside, `the foot at {side} stands in {d:GetFullName()}`)
+						end
+						for _, road in WorldLayout.Roads do
+							T.truthy(LobbyLayout.distanceToStrip(road.From, road.To, road.Width, at) > 0, "off the road")
+						end
+					end
+				end
+			end
+		end
+	end)
+
 	T.test("event board: the iron stays in budget, its one screen faces the plaza, players walk under it", function()
 		local folder = roblox.Instance.new("Folder")
 		local model = EventBoard.build(folder)

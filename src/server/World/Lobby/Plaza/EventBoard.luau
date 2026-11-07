@@ -19,7 +19,8 @@ EventBoard.Width = 28 -- the iron panel
 EventBoard.Height = 15.5
 EventBoard.Bottom = 13 -- its lower edge above the road
 EventBoard.Screen = Vector2.new(24.5, 12.5)
-EventBoard.PostAt = 8.5 -- the two beams, left and right of the middle (clear of the road)
+EventBoard.PostAt = 9.5 -- the two beams, left and right of the middle (clear of the road)
+EventBoard.FootSize = 4.2
 EventBoard.MaxParts = 60
 
 local IRON = Color3.fromRGB(58, 62, 70)
@@ -50,7 +51,7 @@ function EventBoard.build(parent: Instance): Model
 		box(x, beam / 2, 0.6, Vector3.new(0.6, beam, 1.8), IRON_DARK)
 		box(x - 0.9, beam / 2, 0.6, Vector3.new(0.5, beam, 2.4), IRON)
 		box(x + 0.9, beam / 2, 0.6, Vector3.new(0.5, beam, 2.4), IRON)
-		box(x, 0.6, 0.6, Vector3.new(5, 1.2, 5), Color3.fromRGB(96, 98, 104), Enum.Material.Concrete)
+		box(x, 0.6, 0.6, Vector3.new(EventBoard.FootSize, 1.2, EventBoard.FootSize), Color3.fromRGB(96, 98, 104), Enum.Material.Concrete)
 		box(x, 1.45, 0.6, Vector3.new(3.4, 0.5, 3.4), RUST)
 	end
 	-- a girder under the panel, between the beams

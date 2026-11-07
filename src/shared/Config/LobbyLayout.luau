@@ -273,7 +273,7 @@ LobbyLayout.Pieces = {
 		Id = "EventBoard",
 		Package = "Plaza",
 		-- a gantry over the east road: far enough along it that the gas giant stays in view from the town
-		Center = v(54, 0, 0),
+		Center = v(54, 0, 2),
 		Size = v(30, 30, 6),
 		Radius = 8,
 		Facing = v(-1, 0, 0.12), -- toward the plaza and the spawn
