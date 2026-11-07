@@ -19,8 +19,8 @@ EventBoard.Width = 28 -- the iron panel
 EventBoard.Height = 15.5
 EventBoard.Bottom = 13 -- its lower edge above the road
 EventBoard.Screen = Vector2.new(24.5, 12.5)
-EventBoard.PostAt = 9.5 -- the two beams, left and right of the middle (clear of the road)
-EventBoard.FootSize = 4.2
+EventBoard.PostAt = 9 -- the two beams, left and right of the middle (clear of the road)
+EventBoard.FootSize = 3.6
 EventBoard.MaxParts = 60
 
 local IRON = Color3.fromRGB(58, 62, 70)

@@ -199,16 +199,16 @@ return function(T, Loader)
 				table.insert(parts, d)
 			end
 		end
-		local half = EventBoard.FootSize / 2
 		for _, side in { -EventBoard.PostAt, EventBoard.PostAt } do
-			for _, y in { 1.5, 3, 6, 10 } do
+			for _, y in { 1, 3, 6, 10 } do
+				local half = if y < 1.2 then EventBoard.FootSize / 2 else 1.2 -- the concrete foot, then the beam
 				for _, dx in { -half, 0, half } do
 					for _, dz in { -half, 0, half } do
 						local at = (frame * roblox.CFrame.new(side + dx, y, 0.6 + dz)).Position
 						for _, d in parts do
 							local l = d.CFrame:PointToObjectSpace(at)
 							local inside = math.abs(l.X) <= d.Size.X / 2 and math.abs(l.Y) <= d.Size.Y / 2 and math.abs(l.Z) <= d.Size.Z / 2
-							T.falsy(inside, `the foot at {side} stands in {d:GetFullName()}`)
+							T.falsy(inside, `the foot at {side} stands in {d:GetFullName()} at {d.CFrame.Position} size {d.Size}`)
 						end
 						for _, road in WorldLayout.Roads do
 							T.truthy(LobbyLayout.distanceToStrip(road.From, road.To, road.Width, at) > 0, "off the road")

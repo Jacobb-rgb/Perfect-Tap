@@ -273,9 +273,9 @@ LobbyLayout.Pieces = {
 		Id = "EventBoard",
 		Package = "Plaza",
 		-- a gantry over the east road: far enough along it that the gas giant stays in view from the town
-		Center = v(54, 0, 2),
-		Size = v(30, 30, 6),
-		Radius = 8,
+		Center = v(53, 0, 2),
+		Size = v(4, 30, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its feet)
+		Radius = 2,
 		Facing = v(-1, 0, 0.12), -- toward the plaza and the spawn
 		Walkable = true, -- (under it: only its two feet stand on the ground, beside the road)
 		Note = "The big iron billboard (owner 2026-11-07): the events, so nothing sits on the player's screen.",
