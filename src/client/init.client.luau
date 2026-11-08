@@ -33,6 +33,7 @@ local ORDER = {
 	"BlasterSlotController", -- the light HUD's BLASTER slot left of the backpack (Roblox's hotbar off): click, tap, 1
 	"TrainController",
 	"TechShopController",
+	"MachineUpgradeController", -- a machine's upgrades at the machine (owner 2026-11-07)
 	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
 	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board
@@ -54,6 +55,7 @@ local ORDER = {
 	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)
 	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
 	"WeatherController", -- the weather on the surface: rain, storms, hail, snow, wind, heatwave, rainbow (WeatherConfig)
+	"WeatherBonusController", -- a short word when the weather's bonus starts (owner 2026-11-07)
 	"EventBoardController", -- the big iron billboard (owner 2026-11-07)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal

@@ -424,6 +424,22 @@ return function(T, Loader)
 		T.near(processing.jobTime(furnace), math.max(GameConfig.MinProcessTime, 6 * 0.5 * MachineData.speedMult(5)), 1e-9, "both")
 		w.data.MachineUpgrades = { ClayFurnace = "broken" }
 		T.near(processing.jobTime(furnace), 3, 1e-9, "a broken record counts as level 0")
+		-- a heatwave (WeatherBonus Machine x1.25): the job takes 1 / 1.25 of it
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		local WeatherBonus = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherBonus")
+		local saved = rawget(Bonuses, "weatherNow")
+		Bonuses.weatherNow = function()
+			return WeatherBonus.List.Heatwave
+		end
+		Bonuses.forgetWeather()
+		local ok, err = pcall(function()
+			T.near(processing.jobTime(furnace), 3 / 1.25, 1e-9, "a heatwave: 25% faster")
+		end)
+		Bonuses.weatherNow = saved
+		Bonuses.forgetWeather()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	T.test("ProcessingService: grade odds as text", function()

@@ -319,6 +319,51 @@ return function(T, Loader)
 		end
 	end)
 
+	withWorld("Weather: a rainbow doubles a mine floor rock's secret chance on the server", function(w)
+		local p = w.player
+		local SecretOreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SecretOreConfig")
+		local WeatherBonus = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherBonus")
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local dice = SecretService.random
+		local saved = rawget(Bonuses, "weatherNow")
+		local function weather(entry: any)
+			Bonuses.weatherNow = function()
+				return entry
+			end
+			Bonuses.forgetWeather()
+		end
+		local ok, err = pcall(function()
+			weather(nil)
+			-- a roll between the Deep Hollow secret's chance and twice it (the rarer ones stay far below)
+			local luck = Bonuses.oreLuck(Bonuses.stats(p))
+			local roll = 1.5 * SecretOreConfig.chance(SecretOreConfig.ByOre.HollowEye, luck)
+			SecretService.random = function()
+				return roll
+			end
+			local function mine(): string
+				w.spawned = {}
+				local rock = w.rock("Outcrops", { "Tin" }, 0.01)
+				rock.Floor = 3
+				rock.Zone = WorldLayout.ZoneById.DeepHollow
+				w.rolls = { 0.5, 0.5, 0.5, 0.5, 0.9 }
+				mining.blast(p, rock.Model)
+				w.step()
+				return w.spawned[1].Info.OreId
+			end
+			T.eq(mine(), "Tin", "clear weather: 1.5 x the chance misses")
+			weather(WeatherBonus.List.Rainbow)
+			T.eq(mine(), "HollowEye", "a rainbow: twice the chance hits")
+			weather(WeatherBonus.List.Storm)
+			T.eq(Bonuses.secretMult(), 1, "only the rainbow doubles it")
+		end)
+		SecretService.random = dice
+		Bonuses.weatherNow = saved
+		Bonuses.forgetWeather()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Step67 Mining: the artifact roll calls its listeners, Prospector raises the chance", function(w)
 		local p = w.player
 		-- no listener: no artifact roll at all

@@ -141,6 +141,7 @@ local PopTheme = {
 		TerraForgeRebirth = { Paint = "Magenta", Icon = "rebirth" }, -- the Star Forge (reel: Rebirth magenta)
 		TerraForgeSell = { Paint = "Green", Icon = "coins" }, -- (reel: Sell green)
 		TerraForgeTechShop = { Paint = "Green", Icon = "build" }, -- machines + upgrades (reel: Upgrade green)
+		TerraForgeMachineUpgrade = { Paint = "Sky", Icon = "build" }, -- (owner 2026-11-07: upgrades at the machine)
 		TerraForgeDroppers = { Paint = "Green", Icon = "shop" },
 		TerraForgeEnchants = { Paint = "Purple", Icon = "enchant" },
 		TerraForgeGearShop = { Paint = "Sky", Icon = "helmet" }, -- (reel: Item Shop blue)

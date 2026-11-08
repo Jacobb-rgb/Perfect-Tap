@@ -294,6 +294,13 @@ return function(T, Loader)
 					return lo + 41
 				end,
 			})
+			-- (in a snow: the server thins the pattern it checks and tells the client to do the same)
+			local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+			local WeatherBonus = Loader.requirePath("ReplicatedStorage.Shared.Weather.WeatherBonus")
+			patch(Bonuses, "weatherNow", function()
+				return WeatherBonus.List.Snow
+			end)
+			Bonuses.forgetWeather()
 			local relic = ItemService.spawnDesc({ K = "Relic", O = RELIC }, USER, CFrame.new(0, 3, 0))
 			relic.Model.Parent = Instance.new("Folder")
 			T.truthy(cleaning.mount(machine, relic), "the relic goes into the vise")
@@ -308,6 +315,9 @@ return function(T, Loader)
 			T.eq(begin.Relic, RELIC, "the client learns it is a relic")
 			T.eq(begin.OreId, CleaningService.relicOre(RELIC), "the pattern of an ore of its rarity")
 			local session = cleaning.session(w.player)
+			T.eq(begin.Thin, WeatherBonus.List.Snow.Clean, "snow: the client thins its pattern the same")
+			T.eq(session.Thin, WeatherBonus.List.Snow.Clean)
+			T.truthy(session.Pattern.ParAmount and session.Pattern.TotalAmount < session.Pattern.ParAmount, "thinner dirt, the same par")
 			cleaning.submit(w.player, session.Id, { Strokes = {} })
 			local result: any = nil
 			for _, r in w.replies do
@@ -329,6 +339,7 @@ return function(T, Loader)
 		for i = #saved, 1, -1 do
 			rawset(saved[i][1], saved[i][2], saved[i][3])
 		end
+		Loader.requirePath("ServerScriptService.Server.Bonuses").forgetWeather()
 		if not ok then
 			error(err, 0)
 		end

@@ -7,8 +7,11 @@
 	Slide)
 	- A belt's Belt part is an anchored conveyor surface: its
 	  AssemblyLinearVelocity = LookVector * beltSpeed(belt), set when it
-	  spawns and after every move. beltSpeed = GameConfig.ConveyorSpeed *
-	  the belt's SpeedMult (MachineData; the Express Conveyor runs at 2x).
+	  spawns, after every move and when its owner buys a belt level.
+	  beltSpeed = GameConfig.ConveyorSpeed * the faster of the belt's
+	  SpeedMult (MachineData; an old Express Conveyor runs at 2x) and the
+	  owner's belt level (MachineData.beltMult: the one belt, owner
+	  2026-11-07, MachineUpgrades.Conveyor.Speed).
 	  The Belt Lift's and the Slide's Belt part is tilted (KitMachines.slope),
 	  so the same LookVector carries items up the lift and down the slide.
 	  Anchored-part velocity replicates, so there is no client code and
@@ -79,6 +82,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -90,6 +94,8 @@ local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
+local DataService = require(script.Parent.DataService)
+local ShopService = require(script.Parent.ShopService)
 local PlotBuilder = require(script.Parent.Parent.World.PlotBuilder)
 
 local ConveyorService = {}
@@ -208,20 +214,27 @@ local function beltPart(machine: PlacedMachine): BasePart?
 	return if belt and belt:IsA("BasePart") then belt else nil
 end
 
--- Studs per second a belt of this type moves items: GameConfig.ConveyorSpeed
--- times its MachineData SpeedMult (the Express Conveyor: 2). A broken
--- multiplier counts as 1.
-function ConveyorService.speedOf(info: MachineData.Machine): number
+-- Studs per second a belt of this type moves items at belt level `level`:
+-- GameConfig.ConveyorSpeed times the faster of its MachineData SpeedMult (the
+-- Express Conveyor: 2) and MachineData.beltMult(level). A broken multiplier
+-- counts as 1.
+function ConveyorService.speedOf(info: MachineData.Machine, level: number?): number
 	local mult = info.SpeedMult
 	if type(mult) ~= "number" or mult ~= mult or mult <= 0 or mult == math.huge then
 		mult = 1
 	end
-	return GameConfig.ConveyorSpeed * (mult :: number)
+	return GameConfig.ConveyorSpeed * math.max(mult :: number, MachineData.beltMult(level))
 end
 
--- How fast this belt moves items (speedOf its type).
+-- The owner's belt level (0 without a save).
+local function beltLevel(machine: PlacedMachine): number
+	local data = DataService.get(machine.Owner)
+	return if data then EconomyConfig.upgradeLevel(data, "Conveyor", "Speed") else 0
+end
+
+-- How fast this belt moves items (speedOf its type at its owner's belt level).
 function ConveyorService.beltSpeed(machine: PlacedMachine): number
-	return ConveyorService.speedOf(machine.Info)
+	return ConveyorService.speedOf(machine.Info, beltLevel(machine))
 end
 
 -- The belt surface moves items toward the front, and players walk through every part.
@@ -875,6 +888,16 @@ function ConveyorService.beltIds(): { string }
 	return list
 end
 
+-- Every belt of the player at its speed now (after a belt level).
+function ConveyorService.speedUp(player: Player)
+	for _, machine in MachineService.ofPlayer(player) do
+		local belt = if machine.Info.IsConveyor and not machine.Removed then beltPart(machine) else nil
+		if belt then
+			belt.AssemblyLinearVelocity = belt.CFrame.LookVector * ConveyorService.beltSpeed(machine)
+		end
+	end
+end
+
 function ConveyorService.init()
 	setupCollisionGroup()
 	for _, id in ConveyorService.beltIds() do
@@ -885,6 +908,12 @@ function ConveyorService.init()
 	end
 	MachineService.onLayoutChanged(onLayout)
 	IntakeService.setBeltHandler(onBelt)
+	-- a belt level (bought at a belt): every belt of the player runs at the new speed now
+	ShopService.onBought(function(player, bought)
+		if bought.Kind == "Upgrade" and bought.Machine == "Conveyor" then
+			ConveyorService.speedUp(player)
+		end
+	end)
 end
 
 function ConveyorService.start()

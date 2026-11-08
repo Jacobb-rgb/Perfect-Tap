@@ -98,6 +98,45 @@ KitMachines.Palette = {
 }
 local P = KitMachines.Palette
 
+--[[
+	Steel + blue (owner 2026-11-07, look B of obrazky/ocel_a_modra_2026-11-07):
+	only the Ore Feeder, the Solar Panel and the one belt; every other machine,
+	the fences, the pen and the podiums keep their colours (his words). A model
+	in SteelLook is built with these colours in place of the palette's (inSteel),
+	so its painted faces follow too; its upgrade crystals and their glow come on
+	top as on every machine.
+]]
+KitMachines.Steel = {
+	Body = rgb(80, 98, 128),
+	Frame = rgb(34, 44, 64),
+	Pipe = rgb(44, 58, 84),
+	Dark = rgb(16, 20, 32),
+	Trim = rgb(60, 170, 255),
+	Neon = rgb(70, 220, 255),
+	Metal = rgb(150, 164, 186),
+	Bolt = rgb(150, 164, 186),
+	Floor = rgb(24, 30, 44),
+} :: { [string]: Color3 }
+KitMachines.SteelLook = { SolarPanel = true, Conveyor = true } :: { [string]: boolean }
+
+-- Runs `build` with the steel colours in the palette, then puts the palette back (even on an error).
+local function inSteel<T>(build: () -> T): T
+	local palette: any = P
+	local saved: { [string]: Color3 } = {}
+	for role, color in KitMachines.Steel do
+		saved[role] = palette[role]
+		palette[role] = color
+	end
+	local ok, result = pcall(build)
+	for role, color in saved do
+		palette[role] = color
+	end
+	if not ok then
+		error(result, 0)
+	end
+	return result
+end
+
 KitMachines.Themes = {
 	Aqua = { Main = rgb(90, 214, 255), Deep = rgb(36, 120, 226), Pale = rgb(204, 246, 255) },
 	Amethyst = { Main = rgb(178, 122, 255), Deep = rgb(98, 52, 206), Pale = rgb(232, 212, 255) },
@@ -1399,7 +1438,7 @@ end
 	`caps` = { start = CapOpts?, finish = CapOpts? } adds end caps (back /
 	front end of the cell).
 ]]
-function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
+local function conveyorModel(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
 	local model = Instance.new("Model")
 	model.Name = if express then "ExpressConveyor" else "Conveyor"
 	model:SetAttribute("MachineId", model.Name)
@@ -1493,6 +1532,16 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 	end
 	attach(base, "Prompt", CFrame.new(0, 1.5, 0))
 	return model
+end
+
+-- (the one belt in steel + blue, KitMachines.SteelLook; an old Express belt keeps its cyan look)
+function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
+	if not express and KitMachines.SteelLook.Conveyor then
+		return inSteel(function()
+			return conveyorModel(caps, express)
+		end)
+	end
+	return conveyorModel(caps, express)
 end
 
 --[[
@@ -2686,7 +2735,7 @@ end
 function KitMachines.build(id: string, level: number?, themeName: string?): Model
 	local builder = BUILDERS[id]
 	assert(builder, "No kit model for machine " .. tostring(id))
-	local ctx = builder()
+	local ctx = if KitMachines.SteelLook[id] then inSteel(builder) else builder()
 	local lvl = math.clamp(math.floor(level or 0), 0, KitMachines.MaxLevel)
 	local theme = KitMachines.Themes[themeName or KitMachines.DefaultTheme] or KitMachines.Themes[KitMachines.DefaultTheme]
 	crystalize(ctx, lvl, theme)

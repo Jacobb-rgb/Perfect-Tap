@@ -12,9 +12,8 @@
 	    MACHINES    every MachineData.Buildable machine: price each, how many
 	                wait in your Build menu and how many are placed, BUY
 	                (conveyors: BUY 1 and BUY 5)
-	    UPGRADES    every machine type's Speed (and the Cleaning Plant's
-	                Quality) level with the next price, then Bellows and
-	                machine Slots (they work on all machines)
+	    UPGRADES    machine Slots (a machine's own upgrades and Bellows are
+	                bought at the machine: MachineUpgradeView, owner 2026-11-07)
 	    AUTOMATION  pen automation level 1 "Auto-Sort Billboard" and level 2
 	                "Train Direct Unload" (level 2 needs level 1)
 	  footer   the control hint (not on phones); with a gamepad the
@@ -287,19 +286,20 @@ TechShopView.BuildKey = {
 -- (TechShopView.setWhere; nil: no note; "{build}": TechShopView.BuildKey).
 TechShopView.WhereText = {
 	Counter = {
-		Subtitle = "Machines and upgrades for your base. Machines you buy wait in your Build menu.",
+		Subtitle = "Machines and slots for your base. Machines you buy wait in your Build menu.",
 		Machines = "Machines you buy go to your BUILD menu. Go to your BASE and {build} to place them.",
+		Upgrades = "A machine's upgrades are at the machine itself, on your base.",
 	},
 	Base = {
-		Subtitle = "Machines for your base. Upgrades are sold at the UPGRADES stall in the lobby.",
+		Subtitle = "Machines for your base. Upgrade a machine at the machine itself.",
 		Machines = "Machines you buy go to your BUILD menu. At your BASE, {build} to place them.",
-		Upgrades = "Upgrades are sold at the UPGRADES stall in the lobby.",
+		Upgrades = "A machine's upgrades are at the machine itself. Slots at the UPGRADES stall.",
 		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
 	},
 	Build = {
-		Subtitle = "Machines for your base. Upgrades are sold at the UPGRADES stall in the lobby.",
+		Subtitle = "Machines for your base. Upgrade a machine at the machine itself.",
 		Machines = "Machines you buy go straight to your BUILD menu. Close the shop to place them.",
-		Upgrades = "Upgrades are sold at the UPGRADES stall in the lobby.",
+		Upgrades = "A machine's upgrades are at the machine itself. Slots at the UPGRADES stall.",
 		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
 	},
 } :: { [string]: { [string]: string } }
@@ -568,10 +568,6 @@ function TechShopView.seconds(t: number): string
 	return text .. " s"
 end
 
-local function percent(share: number?): string
-	return `{math.floor((share or 0) * 100 + 0.5)}%`
-end
-
 -- The tab after (dir = 1) or before (dir = -1) `tab`, wrapping around.
 function TechShopView.nextTab(tab: string, dir: number): Tab
 	local index = 1
@@ -608,11 +604,6 @@ end
 local function workshop(state: { [string]: any }): boolean
 	local perks = state.Perks
 	return type(perks) == "table" and perks.Workshop == true
-end
-
-local function bellowsLevel(state: { [string]: any }): number
-	local bought = state.Upgrades
-	return if type(bought) == "table" then num(bought.Bellows) else 0
 end
 
 local function inventoryOf(state: { [string]: any }): { [string]: any }
@@ -801,103 +792,16 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 	}
 end
 
--- What the current level has and the next one gives (Detail line).
-local function levelDetail(entry: EconomyConfig.TechItem, state: { [string]: any }, level: number, max: number): string
-	local done = level >= max
-	if entry.Kind == "Upgrade" then
-		local machine = MachineData.ById[entry.Machine :: string]
-		if entry.Upgrade == "Quality" then
-			local now = MachineData.gradeOdds(level)
-			if done then
-				return `Pristine {percent(now.Pristine)}{SEP}Flawless {percent(now.Flawless)}  (top level)`
-			end
-			-- only the grades that change: the better ones, and fewer Rough while
-			-- just one better grade moves (level 1: Rough 60% -> 50%, Pristine 0% -> 5%)
-			local nextOdds = MachineData.gradeOdds(level + 1)
-			local parts: { string } = {}
-			for _, grade in { "Pristine", "Flawless" } do
-				if (now[grade] or 0) ~= (nextOdds[grade] or 0) then
-					table.insert(parts, `{grade} {percent(now[grade])} → {percent(nextOdds[grade])}`)
-				end
-			end
-			if #parts < 2 and (now.Rough or 0) ~= (nextOdds.Rough or 0) then
-				table.insert(parts, 1, `Rough {percent(now.Rough)} → {percent(nextOdds.Rough)}`)
-			end
-			return table.concat(parts, SEP)
-		elseif entry.Upgrade == "Tier" then
-			-- the Furnace's tiers: what it turns into next, and how fast that is
-			local id = entry.Machine :: string
-			local speed = EconomyConfig.upgradeLevel(state, id, "Speed")
-			local bellows = bellowsLevel(state)
-			local current = MachineData.info(id, level)
-			local nowText = `{current.Name}: {TechShopView.seconds(MachineData.processTime(current, bellows, speed))}`
-			if done then
-				return `{nowText} (top tier)`
-			end
-			local nextTier = MachineData.info(id, level + 1)
-			local text = `{nowText} → {nextTier.Name}: {TechShopView.seconds(MachineData.processTime(nextTier, bellows, speed))}`
-			if (nextTier.Batch or 1) > 1 then
-				text ..= ` ({nextTier.Batch} at once)`
-			end
-			return text
-		end
-		local bellows = bellowsLevel(state)
-		-- a machine with tiers (the Furnace) at the player's tier
-		machine = MachineData.info(machine.Id, MachineData.tierOf(state.MachineUpgrades, machine.Id))
-		local now = TechShopView.seconds(MachineData.processTime(machine, bellows, level))
-		if done then
-			return `Per item: {now} (top level)`
-		end
-		return `Per item: {now} → {TechShopView.seconds(MachineData.processTime(machine, bellows, level + 1))}`
-	elseif entry.Kind == "Bellows" then
-		local step = MachineData.Bellows.SpeedPerLevel
-		local now = percent(1 - step * level)
-		if done then
-			return `Job time {now} (top level)`
-		end
-		return `Job time {now} → {percent(1 - step * (level + 1))}`
-	end
+-- What the current level has and the next one gives (Detail line). The shop's
+-- only levelled card is machine Slots now (a machine's upgrades and Bellows are
+-- at the machine, owner 2026-11-07: MachineUpgradeView).
+local function levelDetail(state: { [string]: any }, level: number, max: number): string
 	local shop = workshop(state)
 	local now = MachineData.machineSlots(level, shop)
-	if done then
+	if level >= max then
 		return `Machine slots: {now} (top level)`
 	end
 	return `Machine slots: {now} → {MachineData.machineSlots(level + 1, shop)}`
-end
-
-local function levelDescription(entry: EconomyConfig.TechItem): string
-	if entry.Kind == "Upgrade" then
-		local machine = MachineData.ById[entry.Machine :: string]
-		if entry.Upgrade == "Quality" then
-			return `Every {machine.Name} cleans better: more Pristine and Flawless ore, which earns more on your podiums.`
-		elseif entry.Upgrade == "Tier" then
-			return `Every {machine.Name} you have turns into the next furnace: Brick, Blast, then Plasma. Faster, but it needs power.`
-		end
-		return `Every {machine.Name} you place works faster: each level takes {percent(MachineData.SpeedPerLevel)} off the time per item.`
-	elseif entry.Kind == "Bellows" then
-		return `Pumps air into every machine on your plot: each level takes {percent(MachineData.Bellows.SpeedPerLevel)} off every job.`
-	end
-	return `Room for {MachineData.SlotUpgrade.Amount} more machines on your plot. Belts don't use machine slots.`
-end
-
-local function levelTitle(entry: EconomyConfig.TechItem): string
-	if entry.Kind == "Upgrade" then
-		if entry.Upgrade == "Tier" then
-			return `{MachineData.ById[entry.Machine :: string].Name} Upgrade`
-		end
-		return `{MachineData.ById[entry.Machine :: string].Name} {entry.Upgrade}`
-	elseif entry.Kind == "Bellows" then
-		return "Bellows"
-	end
-	return "Machine Slots"
-end
-
--- The Furnace's tier card shows the furnace it turns into next (the top tier when done).
-local function tierIcon(entry: EconomyConfig.TechItem, level: number, max: number): string?
-	if entry.Kind ~= "Upgrade" or entry.Upgrade ~= "Tier" then
-		return nil
-	end
-	return MachineData.info(entry.Machine :: string, math.min(level + 1, max)).Look
 end
 
 local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }, coins: number, order: number): Card
@@ -905,21 +809,15 @@ local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }
 	local done = level >= max
 	local price = if done then nil else (entry.Prices :: { number })[level + 1]
 	local buys = if done then { doneBuy("MAX") } else { buyOf("BUY", price, nil, coins, nil, level + 1) }
-	local detail = levelDetail(entry, state, level, max)
-	-- a machine upgrade for a type you have none of: say so (a warning: buying still works)
-	local missing = not done and entry.Kind == "Upgrade" and TechShopView.haveCount(state, entry.Machine :: string) == 0
-	if missing then
-		detail = `No {MachineData.ById[entry.Machine :: string].Name} yet{SEP}{detail}`
-	end
 	return {
 		Id = entry.Item,
 		Item = entry.Item,
 		Tab = "Upgrades",
 		Order = order,
-		Title = levelTitle(entry),
-		Description = levelDescription(entry),
-		Detail = detail,
-		DetailColor = if done then Theme.Good elseif missing then Theme.Bad else Theme.Accent,
+		Title = "Machine Slots",
+		Description = `Room for {MachineData.SlotUpgrade.Amount} more machines on your plot. Belts don't use machine slots.`,
+		Detail = levelDetail(state, level, max),
+		DetailColor = if done then Theme.Good else Theme.Accent,
 		Chip = `LV {level}/{max}`,
 		ChipColor = if done then Theme.GoodDark else Theme.PanelDark,
 		PriceText = if price then Format.money(price) else "",
@@ -928,8 +826,8 @@ local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }
 		PriceSubColor = Theme.TextDim,
 		Done = done,
 		Buys = buys,
-		Icon = tierIcon(entry, level, max) or (if entry.Kind == "Upgrade" then entry.Machine :: string else entry.Kind),
-		Badge = if entry.Kind == "Upgrade" and entry.Upgrade ~= "Tier" then entry.Upgrade else nil,
+		Icon = entry.Kind,
+		Badge = nil,
 		Note = nil,
 	}
 end
@@ -977,8 +875,7 @@ end
 
 --[[
 	Every card of the shop from a State snapshot and your coins, in catalog
-	order: the machines, the machine upgrades (by machine, Speed then
-	Quality), Bellows, Slots, then the two pen automation steps. `where`
+	order: the machines, Slots, then the two pen automation steps. `where`
 	(nil = "Counter"): in a shop opened at your base only machines are
 	sold, so every other BUY not yet done is greyed out ("Locked", with
 	StatusText.CounterOnly as its note); the server would refuse it as
@@ -1000,22 +897,17 @@ function TechShopView.cards(rawState: any, coins: number, where: Where?): { Card
 		end
 		table.insert(list, card)
 	end
-	-- machines first, then the per-machine upgrades, then Bellows and Slots
+	-- machines first, then Slots
 	for _, entry in EconomyConfig.TechShop.Items do
 		order += 1
 		if entry.Kind == "Machine" then
 			add(machineCard(entry, state, cash, order))
 		end
 	end
+	-- (a machine's upgrades and Bellows: at the machine, owner 2026-11-07: MachineUpgradeView)
 	for _, entry in EconomyConfig.TechShop.Items do
 		order += 1
-		if entry.Kind == "Upgrade" then
-			add(levelCard(entry, state, cash, order))
-		end
-	end
-	for _, entry in EconomyConfig.TechShop.Items do
-		order += 1
-		if entry.Kind == "Bellows" or entry.Kind == "Slots" then
+		if entry.Kind == "Slots" then
 			-- after the "FOR ALL MACHINES" header
 			add(levelCard(entry, state, cash, order + TechShopView.AllMachinesOrder))
 		end
@@ -2031,7 +1923,6 @@ function TechShopView.build(compact: boolean?): Refs
 		notes[tab] = listNote(lists[tab])
 	end
 	local groups = {
-		groupHeader(lists.Upgrades, "MACHINE UPGRADES", 0),
 		groupHeader(lists.Upgrades, "FOR ALL MACHINES", TechShopView.AllMachinesOrder),
 	}
 

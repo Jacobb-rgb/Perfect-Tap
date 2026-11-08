@@ -53,6 +53,7 @@ MenuPanels.Names = {
 	"QuestController",
 	"EmoteController", -- the EMOTES menu
 	"BackpackController", -- the backpack inventory (the HUD's backpack button)
+	"MachineUpgradeController", -- a machine's upgrades, at the machine (its "Upgrades" prompt)
 }
 
 local cache: { [string]: any } = {}

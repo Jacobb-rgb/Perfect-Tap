@@ -172,7 +172,7 @@ local function lineValues(lineId: string, stats: Bonuses.Stats, player: Player):
 		-- (no throw power any more: nothing is thrown since the backpacks came)
 		return Bonuses.pickupRange(stats), nil
 	elseif lineId == "Magnet" then
-		return Bonuses.magnetRadius(stats), nil
+		return Bonuses.magnetRadius(stats, false), nil
 	end
 	return 0, nil
 end
