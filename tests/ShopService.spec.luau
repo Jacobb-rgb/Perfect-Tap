@@ -531,7 +531,14 @@ return function(T, Loader)
 		gone.Removed = true
 		w.machines = { gone }
 		T.eq(ShopService.placeFor(w.player, speed), nil, "a removed machine doesn't count")
+		-- the one belt: bought standing at any belt, a lift or a slide too
+		local beltSpeed = EconomyConfig.techItem("Upgrade:Conveyor:Speed")
+		for _, id in { "Conveyor", "BeltLift", "Slide", "ExpressConveyor" } do
+			w.machines = { w.machineAt(id, 1) }
+			T.eq(ShopService.placeFor(w.player, beltSpeed), "Machine", "the belt level at a " .. id)
+		end
 		w.machines = { w.machineAt("Splitter", 1) }
+		T.eq(ShopService.placeFor(w.player, beltSpeed), nil, "a Splitter is no belt")
 		T.eq(ShopService.placeFor(w.player, bellows), nil, "Bellows needs a machine that works jobs")
 		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Upgrade:Splitter:Speed")), "Machine")
 		-- no character: nowhere
@@ -547,6 +554,12 @@ return function(T, Loader)
 		T.eq(ShopService.boughtText(nil, one, "Base"), "Bought a Cleaning Plant! Open BUILD to place it.")
 		T.eq(ShopService.boughtText(nil, five, "Base"), "Bought 5 Conveyors! Open BUILD to place them.")
 		T.eq(ShopService.boughtText(nil, box, "Base"), "Bought an Iron Box! Open BUILD to place it.")
+		-- the one belt's level: the same name as the panel's "Belt Speed" (review 11-08)
+		local belt =
+			{ Item = "Upgrade:Conveyor:Speed", Kind = "Upgrade", Machine = "Conveyor", Upgrade = "Speed", Level = 1, Price = 100000 }
+		T.eq(ShopService.boughtText(nil, belt, "Machine"), "Belt Speed level 1: all your belts run faster!")
+		local crusher = { Item = "Upgrade:Crusher:Speed", Kind = "Upgrade", Machine = "Crusher", Upgrade = "Speed", Level = 2, Price = 1 }
+		T.eq(ShopService.boughtText(nil, crusher, "Machine"), "Crusher Speed level 2: every Crusher works faster!")
 		T.eq(ShopService.boughtText(nil, one, "Counter"), "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
 		T.eq(ShopService.boughtText(nil, five, "Counter"), "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
 		T.eq(

@@ -300,6 +300,18 @@ return function(T, Loader)
 		T.truthy(ShopService.buy(w.player, entry, nil, 2), "level 2 bought")
 		T.near(surface(normal), speed * 2, 1e-4, "x2")
 		T.near(surface(belt(w, 6, 3, 0)), speed * 2, 1e-4, "a belt placed later runs at it")
+		-- a lift and a slide are belts too: they speed up with it (review 11-08)
+		w.data.MachineUpgrades = { Conveyor = { Speed = 0 } }
+		w.data.MachineInventory.BeltLift = 1
+		w.data.MachineInventory.Platform = 1
+		T.truthy(MachineService.place(w.player, "Platform", 10, 10, 0), "a deck")
+		local lift = MachineService.place(w.player, "BeltLift", 10, 12, 0) -- (its front cell on the deck)
+		T.truthy(lift, "a lift placed")
+		T.near(surface(lift), speed, 1e-4, "a lift at level 0")
+		w.data.MachineUpgrades = { Conveyor = { Speed = 1 } }
+		ConveyorService.speedUp(w.player)
+		T.near(surface(lift), speed * 1.5, 1e-4, "the lift speeds up")
+		T.near(ConveyorService.speedOf(MachineData.ById.Slide, 1), speed * 1.5, 1e-9, "a slide runs at it too")
 		ShopService._test.reset()
 	end)
 

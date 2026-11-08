@@ -216,9 +216,15 @@ end
 	Where the machine's "Upgrades" prompt goes (MachineUpgradeController):
 	E in slot 0 while "Put In" is hidden; while it shows, the Panel keys
 	(T / L3) in the slot after it (and after a second prompt on G, "Keep
-	List" / "Change Sort", in slot 1).
+	List" / "Change Sort", in slot 1). A belt's: always the Panel keys, so
+	it never takes E from the machine a belt feeds.
 ]]
-function MachineUpgradeView.placement(loadShown: boolean, hasSecond: boolean): ("Main" | "Panel", number)
+function MachineUpgradeView.placement(loadShown: boolean, hasSecond: boolean, belt: boolean?): ("Main" | "Panel", number)
+	if belt then
+		-- (review 11-08) a belt's Upgrades never takes E: walking up a feed belt to a machine,
+		-- E stays the machine's (Roblox shows one prompt per key)
+		return "Panel", 0
+	end
 	if not loadShown then
 		return "Main", 0
 	end

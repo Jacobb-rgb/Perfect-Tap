@@ -9,6 +9,8 @@
 	  hands hold nothing it takes: PromptController); while "Put In" shows,
 	  "Put In" keeps E and "Upgrades" steps to the Panel keys (T / L3) in
 	  the next free slot (under a "Keep List" / "Change Sort" on G).
+	  A belt's is always on the Panel keys (T / L3) and reaches BeltDistance:
+	  a feed belt never takes E from the machine it runs into.
 	  Other players' machines get none. Made by PromptConfig, so the keys
 	  come from there (PromptKeys.spec).
 	- Window (MachineUpgradeView): one row per upgrade from the State
@@ -144,7 +146,8 @@ end
 
 local function place(prompt: ProximityPrompt)
 	local loadShown, second = neighbours(prompt)
-	local role: PromptConfig.Role, slot = MachineUpgradeView.placement(loadShown, second)
+	local belt = prompt:GetAttribute("Belt") == true
+	local role: PromptConfig.Role, slot = MachineUpgradeView.placement(loadShown, second, belt)
 	PromptConfig.setRole(prompt, role, slot)
 end
 
@@ -186,6 +189,7 @@ local function tryPrompt(model: Model)
 	prompt.Triggered:Connect(function()
 		MachineUpgradeController.open(model)
 	end)
+	prompt:SetAttribute("Belt", belt) -- (a belt's is on the Panel keys: place)
 	prompts[model] = prompt -- before parenting: its own DescendantAdded must never make a second one
 	prompt.Parent = spot
 	place(prompt)

@@ -198,6 +198,12 @@ return function(T, Loader)
 		T.eq(role, "Panel", "T / L3 while Put In has E")
 		T.eq(slot, 1)
 		T.eq(select(2, View.placement(true, true)), 2, "under a Keep List / Change Sort")
+		-- a belt's never takes E (a feed belt beside a machine: E stays the machine's, review 11-08)
+		for _, args in { { false, false }, { true, false }, { true, true } } do
+			local beltRole, beltSlot = View.placement(args[1], args[2], true)
+			T.eq(beltRole, "Panel", "a belt: the Panel keys")
+			T.eq(beltSlot, 0)
+		end
 		-- a rebuilt machine (a Speed level, a tier) is found again by its spot
 		T.eq(View.spotKey(501, "Crusher", 3, 4, nil), View.spotKey(501, "Crusher", 3, 4, 0), "the ground is level 0")
 		T.truthy(View.spotKey(501, "Crusher", 3, 4, 0) ~= View.spotKey(501, "Crusher", 3, 4, 1), "a deck above is another spot")

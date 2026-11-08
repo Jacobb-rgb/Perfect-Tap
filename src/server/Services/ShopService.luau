@@ -237,6 +237,10 @@ function ShopService.boughtText(player: Player?, bought: Bought, place: Place?):
 			local tier = MachineData.info(bought.Machine, level)
 			return `Every {name} is a {tier.Name} now: it smelts faster!`
 		end
+		if bought.Machine == "Conveyor" then
+			-- the one belt (owner 2026-11-07): the panel calls it Belt Speed
+			return `Belt Speed level {level}: all your belts run faster!`
+		end
 		return `{name} Speed level {level}: every {name} works faster!`
 	elseif bought.Kind == "Bellows" then
 		return `Bellows level {level}: all your machines work faster!`
