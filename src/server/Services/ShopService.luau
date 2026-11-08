@@ -163,8 +163,14 @@ function ShopService.nearOwnMachine(player: Player, machineId: string?): boolean
 	for _, machine in MachineService.ofPlayer(player) do
 		local fits = if machineId then machine.Id == machineId else (machine.Info.Time or 0) > 0
 		local model = machine.Model :: Model?
-		if fits and not machine.Removed and model and (model:GetPivot().Position - root.Position).Magnitude <= ShopService.MachineRange then
-			return true
+		if fits and not machine.Removed and model then
+			-- (from its prompt, where the window opens; the client closes 5 studs nearer)
+			local base = model.PrimaryPart
+			local spot = if base then base:FindFirstChild("Prompt") else nil
+			local point = if spot and spot:IsA("Attachment") then spot.WorldPosition else model:GetPivot().Position
+			if (point - root.Position).Magnitude <= ShopService.MachineRange then
+				return true
+			end
 		end
 	end
 	return false

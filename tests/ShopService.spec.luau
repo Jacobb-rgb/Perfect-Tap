@@ -515,8 +515,10 @@ return function(T, Loader)
 		T.eq(ShopService.placeFor(w.player, quality), nil, "the Cleaning Plant's Quality needs a Cleaning Plant")
 		refused(w, req("Upgrade:AutoCleaner:Quality", nil, 1), "AtMachine", "another type's upgrade")
 		local coins = w.data.Coins
+		local changed = w.changed
 		local result = buy(w, req("Upgrade:Crusher:Speed", nil, 1))
 		T.eq(result.Ok, true, "bought at the machine")
+		T.truthy(w.changed > changed, "the level is saved (DataService.changed)")
 		T.eq(w.data.MachineUpgrades.Crusher.Speed, 1)
 		T.eq(w.data.Coins, coins - speed.Prices[1], "paid the doubled price")
 		T.eq(speed.Prices[1], 40000, "owner 2026-11-07: twice the old 20,000")

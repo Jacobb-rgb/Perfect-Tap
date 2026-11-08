@@ -93,6 +93,13 @@ local function machineIdOf(model: Instance): string?
 	return if type(id) == "string" then id else nil
 end
 
+-- Where a machine's prompt is (its Prompt attachment; else its pivot): the range counts from here, as the server's.
+local function promptPoint(model: Model): Vector3
+	local base = model.PrimaryPart
+	local spot = if base then base:FindFirstChild("Prompt") else nil
+	return if spot and spot:IsA("Attachment") then spot.WorldPosition else model:GetPivot().Position
+end
+
 local function own(model: Instance): boolean
 	return model:GetAttribute("Owner") == userId()
 end
@@ -328,7 +335,7 @@ function buy(k: number)
 	if not item or not level or pending[item] then
 		return
 	end
-	if not r.Buy.Active then
+	if not r.Affordable then
 		Sfx.play("UIDeny")
 		tell(item, MachineUpgradeView.reasonText("NoCoins"), BAD)
 		return
@@ -456,7 +463,7 @@ local function tick()
 			MachineUpgradeController.close()
 			return
 		end
-	elseif (model:GetPivot().Position - root.Position).Magnitude > MachineUpgradeView.CloseRange then
+	elseif (promptPoint(model) - root.Position).Magnitude > MachineUpgradeView.CloseRange then
 		MachineUpgradeController.close()
 		return
 	end
