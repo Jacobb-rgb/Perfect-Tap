@@ -136,7 +136,7 @@ EconomyConfig.TechShop = {
 		Stale = "The card was out of date, try again",
 		NoCoins = "Not enough coins",
 		TooFar = "Go to the UPGRADES stall to buy",
-		AtMachine = "Upgrade it at the machine on your base: press E there",
+		AtMachine = "Upgrade it at the machine on your base",
 	} :: { [string]: string },
 }
 

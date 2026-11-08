@@ -214,7 +214,7 @@ return function(T, Loader)
 		T.eq(prompt.KeyboardKeyCode, Enum.KeyCode.E)
 		T.eq(prompt.UIOffset, Vector2.new(0, 0))
 		T.truthy(
-			View.CloseRange + 2 <= Loader.requirePath("ServerScriptService.Server.Services.ShopService").MachineRange,
+			View.CloseRange + 5 <= Loader.requirePath("ServerScriptService.Server.Services.ShopService").MachineRange,
 			"the server is the lenient side"
 		)
 		T.truthy(table.find(MenuPanels.Names, "MachineUpgradeController"), "a MenuPanels panel")
@@ -247,6 +247,14 @@ return function(T, Loader)
 			end
 		end
 		-- a MAX row hides its BUY; fewer rows hide the rest
+		-- a grey BUY (not enough coins) stays pressable: the press says why (review 11-08)
+		View.fill(refs, "Furnace Upgrades", View.rows("ClayFurnace", s, 0))
+		T.truthy(refs.Rows[1].Buy.Active, "grey, but its press still answers")
+		T.eq(refs.Rows[1].Affordable, false)
+		View.busy(refs.Rows[1])
+		T.truthy(refs.Rows[1].Buy.Active, "busy too")
+		T.eq(refs.Rows[1].Buy.Row.Amount.Text, "...")
+		T.eq(View.CloseRange, 13, "the prompt's reach (10) + 3, from the prompt")
 		View.fill(refs, "Solar Panel Upgrades", View.rows("SolarPanel", state({ MachineUpgrades = { SolarPanel = { Speed = 5 } } }), 0))
 		T.falsy(refs.Rows[1].Buy.Visible, "MAX: no BUY")
 		T.falsy(refs.Rows[2].Frame.Visible or refs.Rows[3].Frame.Visible, "one row only")

@@ -41,7 +41,8 @@ MachineUpgradeView.Reasons = {
 	NoAnswer = "No answer, try again",
 	Bought = "BOUGHT!",
 } :: { [string]: string }
-MachineUpgradeView.CloseRange = 14 -- studs from the machine; the server sells within ShopService.MachineRange (18)
+-- studs from the machine's prompt (its reach 10 + 3); the server sells within ShopService.MachineRange (18) of it
+MachineUpgradeView.CloseRange = 13
 
 -- Why a Speed level pays off, per machine (else Generic).
 MachineUpgradeView.Why = {
@@ -271,6 +272,7 @@ export type RowRefs = {
 	Buy: TextButton,
 	Item: string?,
 	Next: number?,
+	Affordable: boolean?, -- (the BUY stays Active when grey: its press says why)
 }
 
 export type Refs = {
@@ -424,7 +426,7 @@ function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row }, note:
 			if data.Price then
 				Pop.setCoinButton(r.Buy, Format.money(data.Price), data.Affordable)
 				r.Buy.Visible = true
-				r.Buy.Active = data.Affordable
+				r.Affordable = data.Affordable
 			else
 				r.Buy.Visible = false
 			end
@@ -433,10 +435,9 @@ function MachineUpgradeView.fill(refs: Refs, title: string, rows: { Row }, note:
 	refs.Note.Text = note or "Every machine of this kind gets the upgrade"
 end
 
--- A row whose BUY waits for the server's answer.
+-- A row whose BUY waits for the server's answer (grey; a press does nothing while it waits).
 function MachineUpgradeView.busy(r: RowRefs)
 	Pop.setCoinButton(r.Buy, "...", false)
-	r.Buy.Active = false
 end
 
 -- What a ShopResult reason says on a row (MachineUpgradeView.Reasons).

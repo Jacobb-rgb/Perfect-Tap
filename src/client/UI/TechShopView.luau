@@ -288,18 +288,18 @@ TechShopView.WhereText = {
 	Counter = {
 		Subtitle = "Machines and slots for your base. Machines you buy wait in your Build menu.",
 		Machines = "Machines you buy go to your BUILD menu. Go to your BASE and {build} to place them.",
-		Upgrades = "A machine's upgrades are at the machine: press E there.",
+		Upgrades = "A machine's upgrades are at the machine itself, on your base.",
 	},
 	Base = {
-		Subtitle = "Machines for your base. Upgrade a machine at the machine: press E there.",
+		Subtitle = "Machines for your base. Upgrade a machine at the machine itself.",
 		Machines = "Machines you buy go to your BUILD menu. At your BASE, {build} to place them.",
-		Upgrades = "A machine's upgrades are at the machine: press E there. Slots at the UPGRADES stall.",
+		Upgrades = "A machine's upgrades are at the machine itself. Slots at the UPGRADES stall.",
 		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
 	},
 	Build = {
-		Subtitle = "Machines for your base. Upgrade a machine at the machine: press E there.",
+		Subtitle = "Machines for your base. Upgrade a machine at the machine itself.",
 		Machines = "Machines you buy go straight to your BUILD menu. Close the shop to place them.",
-		Upgrades = "A machine's upgrades are at the machine: press E there. Slots at the UPGRADES stall.",
+		Upgrades = "A machine's upgrades are at the machine itself. Slots at the UPGRADES stall.",
 		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
 	},
 } :: { [string]: { [string]: string } }
