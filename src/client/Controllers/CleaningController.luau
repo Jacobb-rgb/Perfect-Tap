@@ -162,7 +162,7 @@ local function makeContext(data: { [string]: any }, station: Model): any
 	local base = station.PrimaryPart :: BasePart
 	local orePoint = (base:FindFirstChild("OrePoint") :: Attachment).WorldCFrame
 	local camPoint = (base:FindFirstChild("CamPoint") :: Attachment).WorldCFrame
-	local pattern = CleaningPatterns.generate(data.OreId, data.Seed)
+	local pattern = CleaningPatterns.thin(CleaningPatterns.generate(data.OreId, data.Seed), data.Thin)
 	local ore = OreData.get(data.OreId)
 	local pointer = PointerInput.new()
 	local folder = Instance.new("Folder")
