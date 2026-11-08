@@ -33,6 +33,7 @@ local ORDER = {
 	"BlasterSlotController", -- the light HUD's BLASTER slot left of the backpack (Roblox's hotbar off): click, tap, 1
 	"TrainController",
 	"TechShopController",
+	"MachineUpgradeController", -- a machine's upgrades at the machine (owner 2026-11-07)
 	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
 	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board

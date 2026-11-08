@@ -264,6 +264,57 @@ return function(T, Loader)
 		T.eq(belts, 4, "every belt respawned (3 express, 1 normal)")
 	end)
 
+	withWorld("ConveyorService: the one belt's level speeds up every belt of the owner at once (owner 2026-11-07)", function(w)
+		local ShopService = Loader.requirePath("ServerScriptService.Server.Services.ShopService")
+		local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
+		local MovementService = Loader.requirePath("ServerScriptService.Server.Services.MovementService")
+		local speed = GameConfig.ConveyorSpeed
+		-- the levels: x1.5, x2, never past the Express belt's own 2x (the movement check's fastest belt)
+		T.eq(MachineData.beltMult(0), 1)
+		T.eq(MachineData.beltMult(1), 1.5)
+		T.eq(MachineData.beltMult(2), 2)
+		T.eq(MachineData.beltMult(9), 2, "clamped")
+		T.eq(MachineData.beltMult(0 / 0), 1, "broken: level 0")
+		T.near(ConveyorService.speedOf(MachineData.ById.Conveyor, 1), speed * 1.5, 1e-9)
+		T.near(ConveyorService.speedOf(MachineData.ById.ExpressConveyor, 1), speed * 2, 1e-9, "an Express belt keeps its 2x")
+		T.near(ConveyorService.speedOf(MachineData.ById.BeltLift, 2), speed * 2, 1e-9, "the lift is a belt too")
+		T.truthy(speed * MachineData.beltMult(#MachineData.BeltLevels) <= MovementService.FastestBelt + 1e-9, "the movement check holds")
+		-- bought (ShopService.onBought -> ConveyorService.speedUp): every belt runs at it right away
+		ShopService._test.reset()
+		MachineService._test.reset()
+		IntakeService._test.reset()
+		ConveyorService.init()
+		local normal = belt(w, 2, 3, 0)
+		local express = MachineService.place(w.player, "ExpressConveyor", 4, 3, 0)
+		local function surface(m: any): number
+			return m.Model:FindFirstChild("Belt").AssemblyLinearVelocity.Magnitude
+		end
+		T.near(surface(normal), speed, 1e-4, "level 0")
+		w.data.Coins = 1e7
+		local entry = EconomyConfig.techItem("Upgrade:Conveyor:Speed")
+		T.eq(entry.Prices[1], 100000)
+		T.eq(entry.Prices[2], 2000000)
+		T.truthy(ShopService.buy(w.player, entry, nil, 1), "level 1 bought")
+		T.near(surface(normal), speed * 1.5, 1e-4, "x1.5 at once")
+		T.near(surface(express), speed * 2, 1e-4, "the Express keeps 2x")
+		T.truthy(ShopService.buy(w.player, entry, nil, 2), "level 2 bought")
+		T.near(surface(normal), speed * 2, 1e-4, "x2")
+		T.near(surface(belt(w, 6, 3, 0)), speed * 2, 1e-4, "a belt placed later runs at it")
+		-- a lift and a slide are belts too: they speed up with it (review 11-08)
+		w.data.MachineUpgrades = { Conveyor = { Speed = 0 } }
+		w.data.MachineInventory.BeltLift = 1
+		w.data.MachineInventory.Platform = 1
+		T.truthy(MachineService.place(w.player, "Platform", 10, 10, 0), "a deck")
+		local lift = MachineService.place(w.player, "BeltLift", 10, 12, 0) -- (its front cell on the deck)
+		T.truthy(lift, "a lift placed")
+		T.near(surface(lift), speed, 1e-4, "a lift at level 0")
+		w.data.MachineUpgrades = { Conveyor = { Speed = 1 } }
+		ConveyorService.speedUp(w.player)
+		T.near(surface(lift), speed * 1.5, 1e-4, "the lift speeds up")
+		T.near(ConveyorService.speedOf(MachineData.ById.Slide, 1), speed * 1.5, 1e-9, "a slide runs at it too")
+		ShopService._test.reset()
+	end)
+
 	withWorld("ConveyorService: a belt feeding in from the side opens that rail, and only that one", function(w)
 		local target = belt(w, 6, 5, 0) -- toward the road
 		local side = belt(w, 5, 5, 1) -- runs +X into the target's side

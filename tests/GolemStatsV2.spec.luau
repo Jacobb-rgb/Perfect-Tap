@@ -235,7 +235,7 @@ return function(T, Loader)
 
 	T.test("Golem stats v2: a v11 save loads with every golem it owns, retired ones and paid ones too", function()
 		T.eq(DataTemplate.Version, Migrations.Latest, "Version and Latest together")
-		T.eq(Migrations.Latest, 14)
+		T.eq(Migrations.Latest, 15)
 		local save: any = { Version = 11 }
 		save.Golems = {
 			Owned = {
@@ -249,7 +249,7 @@ return function(T, Loader)
 			NextId = 6,
 		}
 		Migrations.run(save)
-		T.eq(save.Version, 14)
+		T.eq(save.Version, 15)
 		T.eq(#save.Golems.Owned, 5, "none lost")
 		T.eq(save.Golems.Owned[1].Kind, "HeartstoneColossus")
 		T.truthy(save.Golems.Owned[1].Paid and save.Golems.Owned[1].Locked, "paid and locked stay")

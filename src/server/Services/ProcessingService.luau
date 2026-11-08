@@ -330,6 +330,9 @@ local function onBought(player: Player, bought: Bought)
 	if bought.Kind ~= "Upgrade" or type(machineId) ~= "string" or not MachineData.ById[machineId] then
 		return
 	end
+	if MachineData.ById[machineId].IsConveyor then
+		return -- the belt level: ConveyorService speeds the belts up, nothing is rebuilt
+	end
 	if bought.Upgrade == "Quality" then
 		-- the plants show their new odds now (an idle one doesn't tick)
 		for _, machine in MachineService.ofPlayer(player) do

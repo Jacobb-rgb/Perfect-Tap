@@ -1,8 +1,9 @@
 --[[
 	ShopService: the Tech shop at the UPGRADES stall in town (design v2,
-	step 3, docs/plans/STEP3_PLAN.md "WP-TechShop"). Machines, machine
-	upgrades, Bellows, machine slots and pen automation are bought here for
-	coins; the Robux items (big pass, podiums, offline extension, Express
+	step 3, docs/plans/STEP3_PLAN.md "WP-TechShop"). Machines, machine slots
+	and pen automation are bought here for coins, a machine's upgrades and
+	Bellows at the machine (MachineUpgradeController's window, the same
+	ShopBuy); the Robux items (big pass, podiums, offline extension, Express
 	train) are not sold here. Machines can also be bought at your own base
 	(build mode's SHOP button opens the same window there:
 	TechShopController.openMachines).
@@ -24,8 +25,11 @@
 	  Where (ShopService.placeFor): within ShopService.Range of an
 	  UpgradeCounter, or (machines only, owner 2026-10-21: the SHOP button
 	  in build mode) within GameConfig.BuildRange of your OWN plot, the
-	  same PlotService.isNear test build mode uses (BuildService). Upgrades,
-	  Bellows, Slots and pen automation still need the counter. Anywhere
+	  same PlotService.isNear test build mode uses (BuildService). A machine's
+	  upgrades and Bellows only at the machine (owner 2026-11-07: never in a
+	  shop; MachineUpgradeController's window): within MachineRange of one of
+	  your OWN placed machines of that type (Bellows: any that works jobs),
+	  else "AtMachine". Slots and pen automation still need the counter. Anywhere
 	  else "TooFar" (the client closes a counter shop nearer than Range and
 	  a base shop nearer than BuildRange, so lag never refuses a BUY).
 	- Every ShopBuy the server reads gets a ShopResult { Item, Ok, Reason?,
@@ -81,12 +85,13 @@ export type Bought = {
 }
 export type BoughtCallback = (Player, Bought) -> ...any
 -- Where a buy happened: at an UpgradeCounter in the lobby, or at your own plot (machines only).
-export type Place = "Counter" | "Base"
+export type Place = "Counter" | "Base" | "Machine"
 
 -- studs from an UpgradeCounter's surface the server accepts: the prompt reaches
 -- 12, the client closes the shop past 24 (TechShopController), so the server is
 -- the lenient side and lag never refuses a BUY from an open shop
 ShopService.Range = 30
+ShopService.MachineRange = 18 -- studs from one of your own machines (its upgrades, Bellows)
 ShopService.Tag = "UpgradeCounter"
 -- the DROPPERS house's porch counter (lobby Districts/Droppers): the same Tech shop, its own prompt words
 ShopService.DropperTag = "DropperCounter"
@@ -146,9 +151,44 @@ function ShopService.nearOwnPlot(player: Player): boolean
 	return plotId ~= nil and PlotService.isNear(player, plotId, GameConfig.BuildRange)
 end
 
+-- Is the player near one of their own placed machines (of type `machineId`; nil: any that
+-- works jobs, the ones Bellows speeds up)?
+function ShopService.nearOwnMachine(player: Player, machineId: string?): boolean
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return false
+	end
+	local MachineService = require(script.Parent.MachineService)
+	for _, machine in MachineService.ofPlayer(player) do
+		-- (any belt holds the one belt's upgrade: MachineData.upgradeHolder)
+		local fits = if machineId then MachineData.upgradeHolder(machine.Id) == machineId else (machine.Info.Time or 0) > 0
+		local model = machine.Model :: Model?
+		if fits and not machine.Removed and model then
+			-- (from its prompt, where the window opens; the client closes 5 studs nearer)
+			local base = model.PrimaryPart
+			local spot = if base then base:FindFirstChild("Prompt") else nil
+			local point = if spot and spot:IsA("Attachment") then spot.WorldPosition else model:GetPivot().Position
+			if (point - root.Position).Magnitude <= ShopService.MachineRange then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Is `entry` bought at the machine (its upgrades, Bellows)?
+function ShopService.atMachine(entry: TechItem): boolean
+	return entry.Kind == "Upgrade" or entry.Kind == "Bellows"
+end
+
 -- Where the player may buy `entry` right now: "Base" (a machine, at their
--- own plot), "Counter" (anything, at an UpgradeCounter), or nil (too far).
+-- own plot), "Machine" (its upgrades and Bellows, at one of their own machines),
+-- "Counter" (the rest, at an UpgradeCounter), or nil (too far).
 function ShopService.placeFor(player: Player, entry: TechItem): Place?
+	if ShopService.atMachine(entry) then
+		return if ShopService.nearOwnMachine(player, if entry.Kind == "Upgrade" then entry.Machine else nil) then "Machine" else nil
+	end
 	if entry.Kind == "Machine" and ShopService.nearOwnPlot(player) then
 		return "Base"
 	end
@@ -196,6 +236,10 @@ function ShopService.boughtText(player: Player?, bought: Bought, place: Place?):
 			-- the Furnace's tiers: every furnace of the player turns into the new one
 			local tier = MachineData.info(bought.Machine, level)
 			return `Every {name} is a {tier.Name} now: it smelts faster!`
+		end
+		if bought.Machine == "Conveyor" then
+			-- the one belt (owner 2026-11-07): the panel calls it Belt Speed
+			return `Belt Speed level {level}: all your belts run faster!`
 		end
 		return `{name} Speed level {level}: every {name} works faster!`
 	elseif bought.Kind == "Bellows" then
@@ -320,7 +364,7 @@ local function onShopBuy(player: Player, payload: any)
 	end
 	local place: Place? = ShopService.placeFor(player, entry)
 	if not place then
-		answer(player, echo, false, "TooFar")
+		answer(player, echo, false, if ShopService.atMachine(entry) then "AtMachine" else "TooFar")
 		return
 	end
 	local ok, reason, bought = ShopService.buy(player, entry, args.Count, args.Level)

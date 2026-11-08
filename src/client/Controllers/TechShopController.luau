@@ -418,6 +418,10 @@ local function onResult(payload: any)
 	end
 	local item = payload.Item :: string
 	local wait = pending[item]
+	local bought = EconomyConfig.techItem(item)
+	if not wait and bought and (bought.Kind == "Upgrade" or bought.Kind == "Bellows") then
+		return -- bought at the machine (MachineUpgradeController answers it)
+	end
 	pending[item] = nil
 	local row = rowFor(item, wait)
 	local button = if row and wait then row.Buttons[wait.Button] else nil

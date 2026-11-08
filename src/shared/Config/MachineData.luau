@@ -66,6 +66,7 @@ export type Machine = {
 	QualityLevels: { { [string]: number } }?, -- grade odds per Quality level (index = level + 1, Cleaning Plant)
 	Upgrades: UpgradePrices?, -- Tech shop upgrades of this machine type (nil = none)
 	Retired: boolean?, -- design v2 removed it: not sold, migrations take it off plots
+	NotSold: boolean?, -- no longer sold, but the ones players have still work and can be placed
 	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
 	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
@@ -103,6 +104,8 @@ local CRUSH_HINT = "The Furnace melts CRUSHED ore. Put clean ore through your Cr
 -- Quality I ~45 min, II ~1h20, III ~2h35, IV ~3h20-5h; Quality V and the top
 -- Speed levels of the big machines are goals past blaster 10. Each machine
 -- keeps its factor on these base curves (scaled).
+-- (owner 2026-11-07: machines and their upgrades cost twice as much: MachineData.PriceMult
+-- below, on the machines you can buy; the curves stay, so refunds of retired machines don't change)
 local SPEED_CURVE = { 20000, 400000, 8e6, 150e6, 2.5e9 }
 local QUALITY_CURVE = { 50000, 2e6, 50e6, 600e6, 6e9 }
 
@@ -284,6 +287,9 @@ MachineData.List = {
 		Order = 1,
 		IsConveyor = true,
 		SlotFree = true,
+		-- the one belt (owner 2026-11-07): its levels speed up every belt of the
+		-- player (MachineData.beltMult), bought at a belt; never x2 (PriceKept)
+		Upgrades = { Speed = { 100000, 2000000 } },
 	},
 	-- the machine roster (owner 2026-10-17; prices, times and power are
 	-- Claude's proposals, docs/plans/MACHINES_GAME_PLAN.md)
@@ -298,6 +304,9 @@ MachineData.List = {
 		IsConveyor = true,
 		SlotFree = true,
 		SpeedMult = 2,
+		-- owner 2026-11-07: one belt with levels instead; the Express belts players
+		-- have keep their speed and can still be placed
+		NotSold = true,
 	},
 	{
 		Id = "Splitter",
@@ -603,6 +612,43 @@ table.insert(MachineData.List, {
 	WrongHint = "The Money Laser only doubles ore from a dropper.",
 })
 
+--[[
+	Owner 2026-11-07: machines and their upgrades (Speed, Quality, the Furnace's
+	tiers) cost twice as much. Not the line's pieces (the belts, which become one
+	belt with levels, the lift, the slide, the deck, the power pole), not the
+	droppers (their own shop, their own prices) and not retired machines (old
+	saves are refunded what those cost).
+]]
+MachineData.PriceMult = 2
+MachineData.PriceKept = {
+	Conveyor = true,
+	ExpressConveyor = true,
+	BeltLift = true,
+	Slide = true,
+	Platform = true,
+	PowerPole = true,
+} :: { [string]: boolean }
+local function doubled(list: { number }?)
+	if list then
+		for k, price in list do
+			list[k] = price * MachineData.PriceMult
+		end
+	end
+end
+for _, machine in MachineData.List do
+	if machine.Category ~= "Droppers" and not machine.Retired and not MachineData.PriceKept[machine.Id] then
+		if machine.Price then
+			machine.Price *= MachineData.PriceMult
+		end
+		local upgrades = machine.Upgrades
+		if upgrades then
+			doubled(upgrades.Speed)
+			doubled(upgrades.Quality)
+			doubled(upgrades.Tier)
+		end
+	end
+end
+
 MachineData.ById = {} :: { [string]: Machine }
 -- Machines design v2 removed (the Ore Pen replaced the Storage Crate, Tobin's
 -- Sell stall the Sell Chute, the Foundry the Anvil). Kept here so old saves
@@ -671,7 +717,7 @@ function MachineData.conveyorSlots(workshop: boolean): number
 end
 
 -- Bellows upgrade: each level makes machines 10% faster.
-MachineData.Bellows = { Prices = { 500, 1500, 4000, 10000, 25000 }, SpeedPerLevel = 0.1 }
+MachineData.Bellows = { Prices = { 1000, 3000, 8000, 20000, 50000 }, SpeedPerLevel = 0.1 }
 
 -- Footprint in cells after rotation.
 function MachineData.footprint(machine: Machine, rotation: number): (number, number)
@@ -710,6 +756,28 @@ function MachineData.upgradePrices(machineId: string, kind: string): { number }?
 		return upgrades.Tier
 	end
 	return nil
+end
+
+--[[
+	The one belt's levels (owner 2026-11-07: 1.5x for 100K, 2x for 2M, bought at
+	a belt). Every belt of the player (IsConveyor: the Conveyor, the Belt Lift,
+	the Slide, an old Express Conveyor) runs at the faster of its own SpeedMult
+	and this, so an Express belt keeps its 2x and the top level never passes it
+	(the movement check's fastest belt stays the Express's).
+]]
+MachineData.BeltLevels = { 1.5, 2 }
+
+-- A belt's speed multiplier at belt level `level` (0 or broken: 1).
+function MachineData.beltMult(level: any): number
+	local n = wholeLevel(level, #MachineData.BeltLevels)
+	return if n == 0 then 1 else MachineData.BeltLevels[n]
+end
+
+-- The machine type whose upgrades a placed machine shows and is near for (a
+-- belt: the Conveyor's, the one belt; else its own).
+function MachineData.upgradeHolder(machineId: string): string
+	local machine = MachineData.ById[machineId]
+	return if machine and machine.IsConveyor then "Conveyor" else machineId
 end
 
 -- Highest level of an upgrade for a machine type (0 = it has none).
