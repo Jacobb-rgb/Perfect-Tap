@@ -434,9 +434,10 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 	local function fits(desc: Desc): boolean
 		return (MachineService.canAccept(machine, desc, player.UserId, "Hand"))
 	end
-	-- from the backpack, one at a time while the machine takes them (its queue may fill)
+	-- from the backpack, one at a time while the machine takes them (its queue may fill;
+	-- the Ore Feeder takes a whole backpack: MachineData LoadMax)
 	local loaded = 0
-	for _ = 1, MAX_LOAD do
+	for _ = 1, machine.Info.LoadMax or MAX_LOAD do
 		local desc = CarryService.take(player, fits, 1)[1]
 		if not desc then
 			break

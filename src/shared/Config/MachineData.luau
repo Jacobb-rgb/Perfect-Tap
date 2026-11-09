@@ -31,7 +31,7 @@ local Format = require(script.Parent.Parent.Util.Format)
 local Rarity = require(script.Parent.Rarity)
 
 -- Machine upgrade prices, level 1 first (index = the level you buy).
-export type UpgradePrices = { Speed: { number }?, Quality: { number }?, Tier: { number }? }
+export type UpgradePrices = { Speed: { number }?, Quality: { number }?, Tier: { number }?, Capacity: { number }? }
 
 -- A tier of a machine (the Furnace's Brick / Blast / Plasma): what changes from the machine as listed.
 export type Tier = {
@@ -59,6 +59,7 @@ export type Machine = {
 	IsConveyor: boolean?,
 	SlotFree: boolean?, -- doesn't use a machine slot (conveyors use conveyor slots)
 	LoadText: string?, -- ActionText of the "Put In" prompt (shown while you carry something)
+	LoadMax: number?, -- items one "Put In" press loads (nil: IntakeService's 64)
 	WrongHint: string?, -- toast when the machine refuses an item
 	ConveyorFaces: ("All" | "NoFront")?, -- sides a belt can feed (nil = belts never feed it)
 	AcceptsForeign: boolean?, -- takes items owned by other players
@@ -71,6 +72,7 @@ export type Machine = {
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
 	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
 	-- | "Dropper" | "Laser" (Drops on the belts, DropperConfig / DropperService)
+	-- | "Feeder" (the Ore Feeder: holds the ore you put in, feeds it out of its front: FeederService)
 	NoIntake: boolean?, -- no hopper / intake (generators, poles, the robot arm)
 	SideOutputs: boolean?, -- results leave the left / right side (OutputL / OutputR), not the front
 	Inputs: number?, -- items one job takes (Alloy Furnace: 2 ingots of different ores)
@@ -290,6 +292,24 @@ MachineData.List = {
 		-- the one belt (owner 2026-11-07): its levels speed up every belt of the
 		-- player (MachineData.beltMult), bought at a belt; never x2 (PriceKept)
 		Upgrades = { Speed = { 100000, 2000000 } },
+	},
+	{
+		-- the Ore Feeder (owner 2026-11-07: "podavač", the same shape as the picture, steel +
+		-- blue, automation): holds the ore you put in and feeds it to the belt in front, one
+		-- every FeederSeconds; its Capacity levels hold more (MachineData.FeederCapacity)
+		Id = "OreFeeder",
+		Name = "Ore Feeder",
+		Description = "Holds the ore you put in and feeds it to the belt in front of it, one by one, so your line runs on its own.",
+		Size = { 2, 2 },
+		Price = 50000000,
+		Category = "Logistics",
+		Order = 1.5, -- (right after the belt: it starts a line)
+		Accepts = { Raw = true, Clean = true, Crushed = true },
+		Behaviour = "Feeder",
+		LoadText = "Put In Ore",
+		LoadMax = 1000,
+		WrongHint = "The Ore Feeder takes ore: dirty, clean or crushed. A SECRET ore you clean yourself.",
+		Upgrades = { Capacity = { 500000000, 5000000000, 50000000000 } },
 	},
 	-- the machine roster (owner 2026-10-17; prices, times and power are
 	-- Claude's proposals, docs/plans/MACHINES_GAME_PLAN.md)
@@ -621,6 +641,7 @@ table.insert(MachineData.List, {
 ]]
 MachineData.PriceMult = 2
 MachineData.PriceKept = {
+	OreFeeder = true, -- (his own prices, owner 2026-11-07 21:10Z: 50M, then 500M / 5B / 50B)
 	Conveyor = true,
 	ExpressConveyor = true,
 	BeltLift = true,
@@ -729,7 +750,7 @@ end
 
 ---------------------------------------------------------------- upgrades
 
-MachineData.UpgradeKinds = { "Speed", "Quality", "Tier" }
+MachineData.UpgradeKinds = { "Speed", "Quality", "Tier", "Capacity" }
 -- The base curves the machines scale (level 1 first).
 MachineData.UpgradeCurves = { Speed = SPEED_CURVE, Quality = QUALITY_CURVE }
 -- Each Speed level takes this share of the base job time off (level 5: 60%).
@@ -754,6 +775,8 @@ function MachineData.upgradePrices(machineId: string, kind: string): { number }?
 		return upgrades.Quality
 	elseif kind == "Tier" then
 		return upgrades.Tier
+	elseif kind == "Capacity" then
+		return upgrades.Capacity
 	end
 	return nil
 end
@@ -778,6 +801,17 @@ end
 function MachineData.upgradeHolder(machineId: string): string
 	local machine = MachineData.ById[machineId]
 	return if machine and machine.IsConveyor then "Conveyor" else machineId
+end
+
+-- The Ore Feeder (owner 2026-11-07): ores it holds per Capacity level (0..3), and one ore out every
+-- FeederSeconds while the belt in front takes it.
+MachineData.FeederCapacity = { 200, 500, 700, 1000 }
+MachineData.FeederSeconds = 1
+
+-- Ores an Ore Feeder holds at Capacity level `level` (broken: level 0).
+function MachineData.feederCapacity(level: any): number
+	local list = MachineData.FeederCapacity
+	return list[wholeLevel(level, #list - 1) + 1]
 end
 
 -- Highest level of an upgrade for a machine type (0 = it has none).

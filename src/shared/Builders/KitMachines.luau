@@ -117,7 +117,7 @@ KitMachines.Steel = {
 	Bolt = rgb(150, 164, 186),
 	Floor = rgb(24, 30, 44),
 } :: { [string]: Color3 }
-KitMachines.SteelLook = { SolarPanel = true, Conveyor = true } :: { [string]: boolean }
+KitMachines.SteelLook = { OreFeeder = true, SolarPanel = true, Conveyor = true } :: { [string]: boolean }
 
 -- Runs `build` with the steel colours in the palette, then puts the palette back (even on an error).
 local function inSteel<T>(build: () -> T): T
@@ -2673,7 +2673,73 @@ function KitMachines.cable(parent: Instance, a: Vector3, b: Vector3, sag: number
 	end
 end
 
+--[[
+	Ore Feeder (2x2, owner 2026-11-07: the shape of his picture, look B in
+	steel + blue: KitMachines.SteelLook): a soft body on a glowing plinth, a
+	big four-walled funnel with a glowing rim (the Intake: ore you drop in),
+	a pile of ore inside, the outlet over the front cell with its lamp (the
+	Output), and a counter screen on its right side (tag FeederScreen: the
+	clients write "stored / capacity" on it).
+]]
+local function oreFeeder(): Ctx
+	local ctx = newModel("OreFeeder")
+	local m = ctx.model
+	local bodyY = plinth(m, Vector3.new(0, FLOOR, 0), 7.2, 7.2, 0.6, 0.8)
+	softBox(m, Vector3.new(0, bodyY, 0), 6.4, 3, 6.4, 0.7, "Body", "Body")
+	local top = bodyY + 3
+	block(m, CFrame.new(0, top + 0.2, 0), Vector3.new(6.8, 0.4, 6.8), "Frame", SOLID, "Rim")
+	-- the funnel: four walls leaning out, a rim and a glowing line round its mouth
+	for k = 0, 3 do
+		local turn = CFrame.Angles(0, k * math.pi / 2, 0)
+		block(
+			m,
+			turn * CFrame.new(0, top + 1.9, 3.15) * CFrame.Angles(math.rad(14), 0, 0),
+			Vector3.new(7.2, 3.2, 0.35),
+			"Metal",
+			SOLID,
+			"Funnel"
+		)
+		block(m, turn * CFrame.new(0, top + 3.5, 3.55), Vector3.new(7.8, 0.45, 0.5), "Frame", PROP, "FunnelRim")
+		block(m, turn * CFrame.new(0, top + 3.5, 3.82), Vector3.new(6.4, 0.12, 0.06), "Neon", TINY, "FunnelGlow")
+	end
+	-- the ore inside (decor: the real ore is in the save)
+	local pile = { rgb(255, 196, 60), rgb(70, 130, 255), rgb(60, 62, 70), rgb(200, 206, 220), rgb(160, 110, 255), rgb(205, 127, 50) }
+	for k, color in pile do
+		local a = k * 1.05
+		local r = 0.6 + (k % 3) * 0.8
+		local chunk = block(
+			m,
+			CFrame.new(math.cos(a) * r, top + 0.9 + (k % 2) * 0.35, math.sin(a) * r) * CFrame.Angles(a, a * 0.7, 0),
+			Vector3.new(1.1, 0.9, 1.0),
+			"Dark",
+			TINY,
+			"Ore"
+		)
+		chunk.Color = color
+		chunk.Material = Enum.Material.Slate
+	end
+	-- the outlet over the front cell's middle (Grid.outputLocal) and its lamp
+	local outPos = Grid.outputLocal("OreFeeder") :: Vector3
+	local front = -3.2
+	block(m, CFrame.new(outPos.X, bodyY + 1.1, front - 0.3), Vector3.new(2.6, 2.0, 0.8), "Frame", SOLID, "Outlet")
+	block(m, CFrame.new(outPos.X, bodyY + 0.9, front - 0.72), Vector3.new(2.0, 1.2, 0.1), "Dark", TINY, "OutletMouth")
+	block(m, CFrame.new(outPos.X, bodyY + 1.85, front - 0.72), Vector3.new(2.0, 0.16, 0.12), "Neon", TINY, "OutletLamp")
+	-- the counter on its right side
+	local screen =
+		block(m, CFrame.new(3.26, bodyY + 1.6, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(3.6, 1.6, 0.1), "Screen", TINY, "Counter")
+	screen:AddTag("FeederScreen")
+	socket(ctx, Vector3.new(-3.0, top + 0.4, -3.0), out(-1, -1, 0.8), 1.0)
+	socket(ctx, Vector3.new(3.0, top + 0.4, 3.0), out(1, 1, 0.8), 1.0)
+	socket(ctx, Vector3.new(-3.0, top + 0.4, 3.0), out(-1, 1, 0.8), 1.0, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(-1.6, 2.5, -3.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, top + 2.4, 0))
+	intake:SetAttribute("IntakeSize", Vector3.new(6.8, 4, 6.8))
+	return ctx
+end
+
 local BUILDERS: { [string]: () -> Ctx } = {
+	OreFeeder = oreFeeder,
 	ClayFurnace = clayFurnace,
 	Crusher = crusher,
 	AutoCleaner = autoCleaner,
@@ -2712,6 +2778,7 @@ KitMachines.Catalog = {
 	{ Id = "CrystalExtractor", Name = "Crystal Extractor", Group = "Special", Upgrades = true },
 	{ Id = "RestorationTable", Name = "Restoration Table", Group = "Special", Upgrades = true },
 	{ Id = "SellBox", Name = "Sell Box", Group = "Special", Upgrades = true },
+	{ Id = "OreFeeder", Name = "Ore Feeder", Group = "Transport", Upgrades = false },
 	{ Id = "Conveyor", Name = "Conveyor", Group = "Transport", Upgrades = false },
 	{ Id = "ExpressConveyor", Name = "Express Conveyor", Group = "Transport", Upgrades = false },
 	{ Id = "Splitter", Name = "Splitter", Group = "Transport", Upgrades = true },
