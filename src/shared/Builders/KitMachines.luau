@@ -2725,8 +2725,15 @@ local function oreFeeder(): Ctx
 	block(m, CFrame.new(outPos.X, bodyY + 0.9, front - 0.72), Vector3.new(2.0, 1.2, 0.1), "Dark", TINY, "OutletMouth")
 	block(m, CFrame.new(outPos.X, bodyY + 1.85, front - 0.72), Vector3.new(2.0, 0.16, 0.12), "Neon", TINY, "OutletLamp")
 	-- the counter on its right side
-	local screen =
-		block(m, CFrame.new(3.26, bodyY + 1.6, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(3.6, 1.6, 0.1), "Screen", TINY, "Counter")
+	-- (turned so its Front face, where the clients draw, looks out to the right: +X)
+	local screen = block(
+		m,
+		CFrame.new(3.26, bodyY + 1.6, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+		Vector3.new(3.6, 1.6, 0.1),
+		"Screen",
+		TINY,
+		"Counter"
+	)
 	screen:AddTag("FeederScreen")
 	socket(ctx, Vector3.new(-3.0, top + 0.4, -3.0), out(-1, -1, 0.8), 1.0)
 	socket(ctx, Vector3.new(3.0, top + 0.4, 3.0), out(1, 1, 0.8), 1.0)

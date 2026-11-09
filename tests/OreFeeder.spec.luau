@@ -192,6 +192,7 @@ return function(T, Loader)
 				parts += 1
 				if d:HasTag("FeederScreen") then
 					screens += 1
+					T.truthy(d.CFrame.LookVector.X > 0.99, "the counter's Front face looks out of the side, not into the body")
 				end
 				if d.Name == "Rim" then
 					frame = d.Color
