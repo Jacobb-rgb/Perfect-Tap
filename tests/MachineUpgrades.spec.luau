@@ -308,7 +308,7 @@ return function(T, Loader)
 			table.insert(looks, id)
 		end
 		table.sort(looks)
-		T.eq(table.concat(looks, ","), "Conveyor,SolarPanel", "his words: the machines, fences, pen and podiums keep their colours")
+		T.eq(table.concat(looks, ","), "Conveyor,OreFeeder,SolarPanel", "his words: the machines, fences, pen and podiums keep their colours")
 		local function colorOf(model: any, role: string, name: string?): any
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") and d:GetAttribute("Kit") == role and (name == nil or d.Name == name) then

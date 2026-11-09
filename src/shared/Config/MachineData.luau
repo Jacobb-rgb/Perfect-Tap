@@ -303,7 +303,7 @@ MachineData.List = {
 		Size = { 2, 2 },
 		Price = 50000000,
 		Category = "Logistics",
-		Order = 1.5, -- (right after the belt: it starts a line)
+		Order = 7, -- (a free whole number: the build tray's LayoutOrder)
 		Accepts = { Raw = true, Clean = true, Crushed = true },
 		Behaviour = "Feeder",
 		LoadText = "Put In Ore",
