@@ -41,6 +41,7 @@ FindOfDayService.SubscribeRetry = { First = 5, Max = 300 }
 
 local best: FindOfDay.Entry? = nil
 local dirty = false
+local refreshed = false -- the store was read once with the hidden list known
 
 -- (tests) the wall clock, the cross-server calls, the hidden list
 FindOfDayService.clock = os.time
@@ -82,12 +83,28 @@ function FindOfDayService.isHidden(userId: number): boolean
 	return ok and hidden == true
 end
 
+-- Has the hidden list been read (LeaderboardService.hiddenKnown; true when there is none)? Another
+-- server's or the store's find waits for it, so a server started later never shows a hidden user.
+function FindOfDayService.hiddenKnown(): boolean
+	local ok, known = pcall(function()
+		local LeaderboardService = require(script.Parent.LeaderboardService) :: any
+		return LeaderboardService.hiddenKnown()
+	end)
+	return not ok or known ~= false
+end
+
 function FindOfDayService.setAttribute(name: string, value: any)
 	Workspace:SetAttribute(name, value)
 end
 
+-- (a user hidden after their find went up comes off the board here: every round and every show)
 local function show()
 	local entry = best
+	if entry and FindOfDayService.isHidden(entry.UserId) then
+		best = nil
+		dirty = false
+		entry = nil
+	end
 	FindOfDayService.setAttribute("FindOfDayDay", if entry then entry.Day else nil)
 	FindOfDayService.setAttribute("FindOfDayUser", if entry then entry.UserId else nil)
 	FindOfDayService.setAttribute("FindOfDayName", if entry then entry.Name else nil)
@@ -104,6 +121,9 @@ end
 local function offer(entry: FindOfDay.Entry?, own: boolean): boolean
 	if not entry or FindOfDayService.isHidden(entry.UserId) then
 		return false
+	end
+	if not own and not FindOfDayService.hiddenKnown() then
+		return false -- (the store is read again once the hidden list is in: round)
 	end
 	local today = FindOfDay.day(FindOfDayService.clock())
 	local takes = if own then FindOfDay.better(entry, best, today) else FindOfDay.atLeast(entry, best, today)
@@ -167,6 +187,10 @@ end
 
 -- One read round. Yields. (pcall'd by round)
 function FindOfDayService.refresh()
+	if not FindOfDayService.hiddenKnown() then
+		return -- not yet: the next round tries again
+	end
+	refreshed = true
 	offer(FindOfDay.read(FindOfDayService.read(FindOfDay.day(FindOfDayService.clock()))), false)
 end
 
@@ -190,6 +214,9 @@ end
 function FindOfDayService.round(sinceRefresh: number): number
 	local since = sinceRefresh + FindOfDayService.SaveEvery
 	FindOfDayService.rollOver()
+	if best and FindOfDayService.isHidden((best :: FindOfDay.Entry).UserId) then
+		show() -- (it drops the hidden user)
+	end
 	local saved, saveErr = pcall(function()
 		FindOfDayService.save()
 	end)
@@ -197,7 +224,7 @@ function FindOfDayService.round(sinceRefresh: number): number
 		dirty = FindOfDayService.current() ~= nil -- again next round
 		warn(`[FindOfDayService] saving today's best failed: {saveErr}`)
 	end
-	if since >= FindOfDayService.RefreshEvery then
+	if since >= FindOfDayService.RefreshEvery or not refreshed then
 		since = 0
 		local read, readErr = pcall(function()
 			FindOfDayService.refresh()
@@ -213,6 +240,7 @@ end
 function FindOfDayService.reset()
 	best = nil
 	dirty = false
+	refreshed = false
 	show()
 end
 

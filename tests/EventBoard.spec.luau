@@ -75,10 +75,15 @@ return function(T, Loader)
 			read = FindOfDayService.read,
 			setAttribute = FindOfDayService.setAttribute,
 			isHidden = FindOfDayService.isHidden,
+			hiddenKnown = FindOfDayService.hiddenKnown,
 			wait = FindOfDayService.wait,
 		}
 		FindOfDayService.isHidden = function(userId)
 			return w.hidden[userId] == true
+		end
+		w.known = true
+		FindOfDayService.hiddenKnown = function()
+			return w.known
 		end
 		FindOfDayService.setAttribute = function(name, value)
 			w.attrs[name] = value
@@ -223,6 +228,38 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("find of the day service: a user hidden after going up comes off at the next round; later servers wait for the list", function()
+		local w = service()
+		guarded(w, function()
+			FindOfDayService.report(player("Mia"), "RainbowNova", "Flawless")
+			T.eq(FindOfDayService.current().Name, "Mia")
+			w.hidden[USERS.Mia] = true -- (LeaderboardService.removeUser, after it went up)
+			FindOfDayService.round(0)
+			T.eq(FindOfDayService.current(), nil, "off the board within one round")
+			T.eq(w.attrs.FindOfDayName, nil, "the clients see it go")
+			T.falsy(FindOfDayService.isDirty(), "nothing of it is sent")
+			-- a server started later: the hidden list isn't read yet
+			FindOfDayService.reset()
+			w.known = false
+			local reads = 0
+			FindOfDayService.read = function()
+				reads += 1
+				return entry("Mia", "RainbowNova", "Flawless")
+			end
+			FindOfDayService.refresh()
+			T.eq(reads, 0, "no read before the hidden list")
+			FindOfDayService.receive({ Data = entry("Mia", "RainbowNova", "Flawless") })
+			T.eq(FindOfDayService.current(), nil, "a message waits too")
+			w.known = true
+			FindOfDayService.round(0)
+			T.eq(reads, 1, "the round after the list came in reads the store at once")
+			T.eq(FindOfDayService.current(), nil, "and the hidden user stays off")
+			w.hidden[USERS.Mia] = nil
+			FindOfDayService.round(30)
+			T.eq(reads, 1, "then every RefreshEvery again")
+		end)
+	end)
+
 	T.test("find of the day service: a round saves every 30 s, a failed save is tried again, reads every 5 min", function()
 		local w = service()
 		guarded(w, function()
@@ -231,6 +268,7 @@ return function(T, Loader)
 			T.eq(FindOfDay.day(86399), 0, "a UTC day")
 			T.eq(FindOfDay.day(86400), 1)
 			T.eq(FindOfDay.day(NOW), math.floor(NOW / 86400))
+			FindOfDayService.refresh() -- (start()'s first read, the hidden list known)
 			local reads = 0
 			FindOfDayService.read = function()
 				reads += 1
