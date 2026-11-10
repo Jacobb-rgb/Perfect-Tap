@@ -203,13 +203,19 @@ elseif mode == "held" then
 	local parts0, pose = MovePose.solve(Loader, MoveConfig.Moves[MoveConfig.Hold], 0.8, nil, function(joint)
 		return if joint == "RightShoulder" then CF.Angles(rad(90), 0, 0) else CF.identity
 	end)
-	local picks = {
-		BlasterBuilder.build(9, BlasterData.vaultOre(9)),
-		BlasterBuilder.build(10, BlasterData.vaultOre(10)),
-		BlasterBuilder.buildStar(StarBlasterData.ById.Comet, 10, "Heartstone"),
-	}
+	-- HELD=10,Supernova,Singularity: levels and STAR blaster ids (default LV 9, LV 10, the Comet)
+	local picks = {}
+	for key in string.gmatch(process.env.HELD or "9,10,Comet", "[^,]+") do
+		local star = StarBlasterData.ById[key]
+		local level = tonumber(key)
+		table.insert(
+			picks,
+			if star then BlasterBuilder.buildStar(star, 10, "Heartstone") else BlasterBuilder.build(level, BlasterData.vaultOre(level))
+		)
+	end
+	local aims = {}
 	for i, tool in picks do
-		local at = CF.new((i - 2) * 9 - 2.5, 0, 0) * CF.Angles(0, -3 * math.pi / 4 + 0.3, 0)
+		local at = CF.new((i - (#picks + 1) / 2) * 9 - 2.5, 0, 0) * CF.Angles(0, -3 * math.pi / 4 + 0.3, 0)
 		for partName, cf in parts0 do
 			for _, piece in R15.pieces(partName) do
 				local p = Instance.new("Part")
@@ -228,6 +234,11 @@ elseif mode == "held" then
 		end
 		move(tool, at * parts0.RightHand * GRIP * (pose.RightGrip or CF.identity))
 		tool.Parent = stage
+		local handle = tool:FindFirstChild("Handle")
+		local muzzleAt = handle.CFrame * handle:FindFirstChild("Muzzle").Position
+		local hand = handle.CFrame.Position
+		local aim = (muzzleAt - hand) * V3.new(1, 0, 1)
+		aims[i] = { Hand = hand, Ahead = aim.Unit }
 	end
 	for _, x in { -10, 0, 10 } do
 		local lamp = Geo.make(
@@ -247,9 +258,9 @@ elseif mode == "held" then
 	local shots = {
 		be_held = {
 			scene = "blaster_energy_held",
-			position = { 5, 6.6, 21 },
-			target = { 1.5, 3.8, 0 },
-			fov = 50,
+			position = { 5, 6.2, 21 + math.max(0, #picks - 3) * 6 },
+			target = { 1, 3.4, 0 },
+			fov = if #picks > 3 then 38 else 50,
 			preset = "Surface",
 			sunDir = { 0.3, 0.8, 0.5 },
 			exposure = 1.45,
@@ -257,6 +268,21 @@ elseif mode == "held" then
 			maxLights = 8,
 		},
 	}
+	-- over each one's shoulder: what the player sees while playing (be_held_back_<n>)
+	for i, aim in aims do
+		local feet, facing = aim.Hand * V3.new(1, 0, 1), aim.Ahead
+		shots["be_held_back_" .. i] = {
+			scene = "blaster_energy_held",
+			position = v3(feet - facing * 7 + V3.new(0, 10, 0) + facing:Cross(V3.yAxis) * 4),
+			target = v3(feet + facing * 3 + V3.new(0, 2.2, 0)),
+			fov = 50,
+			preset = "Surface",
+			sunDir = { 0.3, 0.8, 0.5 },
+			exposure = 1.45,
+			shadowExtent = 40,
+			maxLights = 8,
+		}
+	end
 	fs.writeFile(root .. "/build/preview/blaster_energy_held_shots.json", serde.encode("json", shots))
 	print(string.format("blaster_energy_held: %d parts, %d lights", #held.parts, #held.lights))
 elseif mode == "minigun" then

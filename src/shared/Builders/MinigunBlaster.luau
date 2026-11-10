@@ -21,6 +21,14 @@
 	in its case's ore; an older save's gun in another ore keeps that ore's colours
 	(the skin, KenneyBlaster.skin, made vivid).
 
+	A STAR blaster (paid: Robux or Forge Stars; owner 2026-11-10: "vylepšit ty
+	blastery za robuxy") wears jewellery on the same body, never bigger than
+	LV 10: gold barrels and drum edges, a body in its own deep colour, its gem
+	in six gold settings round the flange (the rim dots), gold rings at the
+	muzzle's neck and round the rainbow band, a big gem in a gold cup on the
+	back (what the player sees), its smaller crystals in its gem's colour (the
+	best one, RainbowCrystals: the rainbow) and a gold end on the grip.
+
 	The spin ("když minigun střílí, ať se točí ten kotouč"): the barrels, the rim
 	dots and the drum's lights are listed in the anchors (Spin) with their axis
 	(SpinAxis): BlasterBuilder hangs them on a Motor6D the client turns while the
@@ -38,7 +46,7 @@ local KenneyBlaster = require(script.Parent.KenneyBlaster)
 
 local MinigunBlaster = {}
 
-MinigunBlaster.MaxParts = 96 -- per gun (phones: every player holds one)
+MinigunBlaster.MaxParts = 112 -- per gun (phones: every player holds one; a STAR blaster's jewellery is the most)
 MinigunBlaster.Length = 5.6 -- every gun's length (studs)
 MinigunBlaster.RainbowCoreFrom = 5 -- the core glows in rainbow bands from this level (the STAR blasters too)
 
@@ -49,6 +57,7 @@ local WHITE = Color3.new(1, 1, 1)
 local MID = Color3.fromRGB(62, 67, 76)
 local DARK = Color3.fromRGB(24, 27, 34)
 local DARKER = Color3.fromRGB(10, 12, 17)
+local GOLD = Color3.fromRGB(255, 190, 60) -- a STAR blaster's metal, settings and rings
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -89,6 +98,7 @@ MinigunBlaster.Palettes = {
 	{ Color = rgb(175, 70, 255), Accent = rgb(255, 90, 190), Crystal = rgb(190, 100, 255) }, -- Singularity Rail
 } :: { Palette }
 MinigunBlaster.RingMuzzle = 15 -- this model's muzzle is a glowing ring round a dark bore (the Singularity Rail)
+MinigunBlaster.RainbowCrystals = 15 -- the best one's smaller crystals are the rainbow (the Singularity Rail)
 
 -- the design: a gun 10 units long (z: the back at +4, the muzzle at -6), the hand on the grip
 local DESIGN_LENGTH = 10
@@ -172,6 +182,13 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 	local made = 0
 	local spin: { BasePart } = {} -- the barrels, the rim dots and the drum's lights
 	local colors = MinigunBlaster.palette(level, oreId, skin)
+	-- a STAR blaster (paid, owner 2026-11-10: "vylepšit ty blastery za robuxy"): gold metal, a body
+	-- in its own deep colour, gems in gold settings round the flange, gold rings, a jewel on the back
+	local star = level > BlasterData.MaxLevel
+	local metal = if star then GOLD else MID
+	local dark = if star then skin.Base:Lerp(BLACK, 0.35) else DARK
+	local darker = if star then skin.Base:Lerp(BLACK, 0.62) else DARKER
+	local gem = if star then deep(skin.Gem or colors.Accent) else colors.Accent
 	local function at(x: number, y: number, z: number): Vector3
 		return Vector3.new(x * S, (y - HAND_Y) * S, (z - HAND_Z) * S)
 	end
@@ -245,23 +262,31 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 			)
 		end
 	end
-	round("Body", -5.3, -4.9, 1.2, DARKER)
+	round("Body", -5.3, -4.9, 1.2, darker)
 	-- the flange and its rim dots
-	round("Body", -4.95, -4.4, 2.55, DARK)
-	round("Body", -4.4, -4.2, 2.15, DARKER)
+	round("Body", -4.95, -4.4, 2.55, dark)
+	round("Body", -4.4, -4.2, 2.15, darker)
 	for i = 0, 5 do
 		local t = i / 6 * math.pi * 2
-		spinning(ball("Dot", math.cos(t) * 1.22, AXIS_Y + math.sin(t) * 1.22, -4.67, 0.24, colors.Accent, NEON))
+		local c, sn = math.cos(t), math.sin(t)
+		if star then
+			-- a gem in a gold setting
+			local out = Vector3.new(c, sn, 0)
+			spinning(cylinder("Setting", at(c * 1.25, AXIS_Y + sn * 1.25, -4.67), out, 0.1, 0.42, GOLD))
+			spinning(ball("Dot", c * 1.3, AXIS_Y + sn * 1.3, -4.67, 0.3, gem, NEON))
+		else
+			spinning(ball("Dot", c * 1.22, AXIS_Y + sn * 1.22, -4.67, 0.24, colors.Accent, NEON))
+		end
 	end
 	-- the wide glowing bands
-	round("Body", -4.25, -2.3, 2.2, DARK)
+	round("Body", -4.25, -2.3, 2.2, dark)
 	round("Rim", -4.15, -3.62, 2.3, colors.Color, NEON)
 	round("Rim", -3.52, -3.0, 2.3, colors.Color, NEON)
 	round("Rim", -2.9, -2.42, 2.3, colors.Color, NEON)
 	-- the big drum, its metal edges and lights
-	round("Body", -2.35, -0.55, 2.5, DARK)
-	round("Trim", -2.35, -2.2, 2.6, MID)
-	round("Trim", -0.7, -0.55, 2.6, MID)
+	round("Body", -2.35, -0.55, 2.5, dark)
+	round("Trim", -2.35, -2.2, 2.6, metal)
+	round("Trim", -0.7, -0.55, 2.6, metal)
 	for i = 0, 3 do
 		local t = i / 4 * math.pi * 2 + math.pi / 4
 		spinning(ball("Light", math.cos(t) * 1.24, AXIS_Y + math.sin(t) * 1.24, -1.45, 0.2, colors.Accent, NEON))
@@ -300,25 +325,37 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 	end
 	for i = 0, 5 do
 		local t = i / 6 * math.pi * 2 + math.pi / 6
-		spinning(cylinder("Barrel", at(math.cos(t) * BARREL_R, AXIS_Y + math.sin(t) * BARREL_R, 1.2), Vector3.zAxis, 3.6, 0.3, MID))
+		spinning(cylinder("Barrel", at(math.cos(t) * BARREL_R, AXIS_Y + math.sin(t) * BARREL_R, 1.2), Vector3.zAxis, 3.6, 0.3, metal))
 	end
 	round("Rim", 0.25, 0.5, 1.75, colors.Color, NEON)
-	round("Body", 0.95, 1.3, 1.95, DARK)
+	round("Body", 0.95, 1.3, 1.95, dark)
 	round("Rim", 1.65, 1.9, 1.75, colors.Color, NEON)
-	round("Body", 2.1, 2.5, 1.95, DARK)
-	round("Body", 2.7, 3.72, 2.1, DARK)
+	round("Body", 2.1, 2.5, 1.95, dark)
+	round("Body", 2.7, 3.72, 2.1, dark)
 	for i, color in RAINBOW do
 		local z = 2.78 + (i - 1) * 0.15
 		round("Rainbow", z, z + 0.11, 2.17, color, NEON)
 	end
-	ball("Body", 0, AXIS_Y, 3.6, 1.3, DARKER)
+	ball("Body", 0, AXIS_Y, 3.6, 1.3, darker)
 	-- the round grip under the hand, leaning back a little, a ball at its end
 	local gripTop, gripEnd = at(0, -0.05, HAND_Z), at(0, -1.55, HAND_Z + 0.35)
-	cylinder("Grip", (gripTop + gripEnd) / 2, (gripTop - gripEnd).Unit, (gripTop - gripEnd).Magnitude / S, 0.6, DARKER)
-	piece("Grip", CFrame.new(gripEnd), Vector3.new(0.68, 0.68, 0.68) * S, DARKER, PLASTIC, Enum.PartType.Ball)
+	cylinder("Grip", (gripTop + gripEnd) / 2, (gripTop - gripEnd).Unit, (gripTop - gripEnd).Magnitude / S, 0.6, darker)
+	piece("Grip", CFrame.new(gripEnd), Vector3.new(0.68, 0.68, 0.68) * S, if star then GOLD else DARKER, PLASTIC, Enum.PartType.Ball)
+	if star then
+		-- gold rings: the muzzle's neck and both edges of the rainbow band
+		round("Gold", -5.06, -4.96, 1.34, GOLD)
+		round("Gold", 2.62, 2.72, 2.24, GOLD)
+		round("Gold", 3.68, 3.78, 2.24, GOLD)
+		-- the jewel on the back, where the player sees it: a big round gem in a gold cup
+		cylinder("JewelCup", at(0, AXIS_Y + 1.12, 3.2), Vector3.yAxis, 0.2, 0.92, GOLD)
+		ball("Jewel", 0, AXIS_Y + 1.36, 3.2, 0.66, gem, NEON)
+	end
 
 	-- the crystals, cut like the picture's: a square column on its corner and a pointed tip
 	local tip = colors.Crystal:Lerp(WHITE, 0.18)
+	-- (a STAR blaster's smaller crystals are its gem: two colours, each gun its own pair)
+	local gemTip = gem:Lerp(WHITE, 0.18)
+	local small = 0
 	local n = MinigunBlaster.crystals(level)
 	local size = 1.0 + 0.13 * (math.clamp(level, 1, 10) - 1)
 	for i = 1, math.min(n, #CRYSTAL_ORDER) do
@@ -337,9 +374,16 @@ function MinigunBlaster.parts(level: number, oreId: string, skin: KenneyBlaster.
 		local column = length * 0.62
 		local top = cf * CFrame.new(0, column + (length - column) / 2, 0)
 		local tipSize = Vector3.new(width, length - column, width / 2)
-		piece("Crystal", cf * CFrame.new(0, column / 2, 0), Vector3.new(width, column, width), colors.Crystal, NEON)
-		piece("CrystalTip", top * CFrame.new(0, 0, -width / 4), tipSize, tip, NEON, nil, "WedgePart")
-		piece("CrystalTip", top * CFrame.new(0, 0, width / 4) * CFrame.Angles(0, math.pi, 0), tipSize, tip, NEON, nil, "WedgePart")
+		local two = star and k > 1
+		local body, point = if two then gem else colors.Crystal, if two then gemTip else tip
+		if two and level == MinigunBlaster.RainbowCrystals then
+			small += 1
+			body = RAINBOW[(small - 1) % #RAINBOW + 1]
+			point = body:Lerp(WHITE, 0.25)
+		end
+		piece("Crystal", cf * CFrame.new(0, column / 2, 0), Vector3.new(width, column, width), body, NEON)
+		piece("CrystalTip", top * CFrame.new(0, 0, -width / 4), tipSize, point, NEON, nil, "WedgePart")
+		piece("CrystalTip", top * CFrame.new(0, 0, width / 4) * CFrame.Angles(0, math.pi, 0), tipSize, point, NEON, nil, "WedgePart")
 	end
 
 	local muzzle = at(0, AXIS_Y, FRONT)

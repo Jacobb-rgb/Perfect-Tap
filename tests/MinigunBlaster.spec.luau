@@ -9,7 +9,7 @@
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
-	local Enum, Vector3 = roblox.Enum, roblox.Vector3
+	local Enum, Vector3, Color3 = roblox.Enum, roblox.Vector3, roblox.Color3
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
@@ -77,11 +77,19 @@ return function(T, Loader)
 	T.test("MinigunBlaster: every blaster is the same size, from the starter to the STAR blasters", function()
 		-- every piece but what differs on purpose (crystals, the rainbow core), in the hand's frame
 		local STYLE = { Crystal = true, CrystalTip = true, Core = true }
-		local function pieces(tool: any, ring: boolean): { [string]: { string } }
+		-- (a STAR blaster's jewellery: its gems in gold settings take the rim dots' place; checked below
+		-- against the LV 10 gun's outline instead)
+		local JEWELLERY = { Dot = true, Setting = true, Gold = true, JewelCup = true, Jewel = true }
+		local function pieces(tool: any, ring: boolean, star: boolean?): { [string]: { string } }
 			local handle = tool:FindFirstChild("Handle")
 			local out = {}
 			for _, d in tool:GetDescendants() do
-				if d:IsA("BasePart") and not STYLE[d.Name] and not (ring and (d.Name == "MuzzleGlow" or d.Name == "Bore")) then
+				if
+					d:IsA("BasePart")
+					and not STYLE[d.Name]
+					and not (star and JEWELLERY[d.Name])
+					and not (ring and (d.Name == "MuzzleGlow" or d.Name == "Bore"))
+				then
 					local at = handle.CFrame:PointToObjectSpace(d.CFrame.Position)
 					local list = out[d.Name] or {}
 					table.insert(list, string.format("%.3f %.3f %.3f / %.3f %.3f %.3f", at.X, at.Y, at.Z, d.Size.X, d.Size.Y, d.Size.Z))
@@ -100,8 +108,8 @@ return function(T, Loader)
 		end
 		local first = BlasterBuilder.build(1, "")
 		local muzzle, hub = points(first)
-		local function same(tool: any, label: string, ring: boolean)
-			local want, got = pieces(first, ring), pieces(tool, ring)
+		local function same(tool: any, label: string, ring: boolean, star: boolean?)
+			local want, got = pieces(first, ring, star), pieces(tool, ring, star)
 			for name, list in want do
 				T.truthy(got[name], label .. " has " .. name)
 				T.eq(#got[name], #list, label .. " " .. name .. " count")
@@ -120,10 +128,35 @@ return function(T, Loader)
 		for level = 1, BlasterData.MaxLevel do
 			same(BlasterBuilder.build(level, BlasterData.vaultOre(level)), "level " .. level, false)
 		end
+		-- the outline (every corner of every visible piece, in the hand's frame)
+		local function outline(tool: any): (any, any)
+			local handle = tool:FindFirstChild("Handle")
+			local lo, hi = Vector3.one * math.huge, -Vector3.one * math.huge
+			for _, d in tool:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 1 then
+					local cf = handle.CFrame:ToObjectSpace(d.CFrame)
+					local h = d.Size / 2
+					for _, c in { Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(1, -1, -1) } do
+						for _, sign in { 1, -1 } do
+							local at = cf * (h * c * sign)
+							lo, hi = lo:Min(at), hi:Max(at)
+						end
+					end
+				end
+			end
+			return lo, hi
+		end
+		local top = BlasterBuilder.build(10, BlasterData.vaultOre(10))
+		local lo10, hi10 = outline(top)
 		for i, star in StarBlasterData.List do
 			-- (the Singularity Rail's muzzle is a ring round a dark bore)
 			local ring = i + BlasterData.MaxLevel == MinigunBlaster.RingMuzzle
-			same(BlasterBuilder.buildStar(star, 10, BlasterData.vaultOre(10)), star.Id, ring)
+			local tool = BlasterBuilder.buildStar(star, 10, BlasterData.vaultOre(10))
+			same(tool, star.Id, ring, true)
+			-- the jewellery makes it no bigger: the LV 10 gun's outline, to a hundredth of a stud
+			local lo, hi = outline(tool)
+			T.lt((lo - lo10).Magnitude, 0.01, star.Id .. ": no bigger than LV 10 (low corner)")
+			T.lt((hi - hi10).Magnitude, 0.01, star.Id .. ": no bigger than LV 10 (high corner)")
 		end
 	end)
 
@@ -178,6 +211,90 @@ return function(T, Loader)
 		T.eq(named(BlasterBuilder.buildStar(StarBlasterData.ById.Singularity, 3, "Copper")).Bore, 1, "the ring muzzle's dark bore")
 	end)
 
+	T.test("MinigunBlaster: the STAR blasters look paid: gold, gems, a jewel, crystals in two colours", function()
+		local function list(tool: any, name: string): { BasePart }
+			local out = {}
+			for _, d in tool:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == name then
+					table.insert(out, d)
+				end
+			end
+			return out
+		end
+		local function colours(parts: { BasePart }): { [string]: number }
+			local out = {}
+			for _, p in parts do
+				local key = p.Color:ToHex()
+				out[key] = (out[key] or 0) + 1
+			end
+			return out
+		end
+		local function count(set: { [string]: number }): number
+			local n = 0
+			for _ in set do
+				n += 1
+			end
+			return n
+		end
+		local GOLD = Color3.fromRGB(255, 190, 60)
+		-- the levels: grey metal, one crystal colour, no jewellery
+		for level = 1, BlasterData.MaxLevel do
+			local tool = BlasterBuilder.build(level, BlasterData.vaultOre(level))
+			local label = `level {level}: `
+			T.truthy(list(tool, "Barrel")[1].Color ~= GOLD, label .. "grey barrels")
+			T.eq(count(colours(list(tool, "Crystal"))), 1, label .. "one crystal colour")
+			for _, name in { "Setting", "Gold", "JewelCup", "Jewel" } do
+				T.eq(#list(tool, name), 0, label .. "no " .. name)
+			end
+		end
+		local seen = {}
+		for i, star in StarBlasterData.List do
+			local tool = BlasterBuilder.buildStar(star, 10, "Heartstone")
+			local label = star.Id .. ": "
+			for _, b in list(tool, "Barrel") do
+				T.eq(b.Color, GOLD, label .. "gold barrels")
+			end
+			for _, t in list(tool, "Trim") do
+				T.eq(t.Color, GOLD, label .. "gold edges on the drum")
+			end
+			T.eq(#list(tool, "Setting"), 6, label .. "six gold settings")
+			T.eq(#list(tool, "Dot"), 6, label .. "six gems in them")
+			T.eq(#list(tool, "Gold"), 3, label .. "three gold rings")
+			T.eq(#list(tool, "JewelCup"), 1, label .. "the jewel's gold cup")
+			T.eq(#list(tool, "Jewel"), 1, label .. "the jewel on the back")
+			local jewel = list(tool, "Jewel")[1]
+			T.eq(jewel.Material, Enum.Material.Neon, label .. "the jewel glows")
+			T.eq(list(tool, "Dot")[1].Color, jewel.Color, label .. "the rim gems and the jewel are one gem")
+			local body = list(tool, "Body")[1].Color
+			T.truthy(body ~= Color3.fromRGB(24, 27, 34) and body ~= Color3.fromRGB(10, 12, 17), label .. "a body in its own deep colour")
+			local crystals = colours(list(tool, "Crystal"))
+			local model = i + BlasterData.MaxLevel
+			if model == MinigunBlaster.RainbowCrystals then
+				T.le(7, count(crystals), label .. "the best one: its own colour and the rainbow")
+			else
+				T.eq(count(crystals), 2, label .. "crystals in two colours")
+				local big, gem = 0, 0
+				for key, n in crystals do
+					if key == jewel.Color:ToHex() then
+						gem += n
+					else
+						big += n
+					end
+				end
+				T.eq(big, 5, label .. "the five big ones in its colour")
+				T.eq(gem, 7, label .. "the seven small ones its gem")
+			end
+			local keys = {}
+			for key in crystals do
+				table.insert(keys, key)
+			end
+			table.sort(keys)
+			local pair = table.concat(keys, " ")
+			T.falsy(seen[pair], label .. "its own crystal colours")
+			seen[pair] = true
+		end
+	end)
+
 	T.test("MinigunBlaster: the barrels, dots and lights hang on the spin motor about the gun's axis", function()
 		for _, tool in { BlasterBuilder.build(3, BlasterData.vaultOre(3)), BlasterBuilder.buildStar(StarBlasterData.ById.Nebula, 10, "") } do
 			local handle = tool:FindFirstChild("Handle")
@@ -195,10 +312,13 @@ return function(T, Loader)
 				local weld = if d:IsA("BasePart") then d:FindFirstChildOfClass("WeldConstraint") else nil
 				if weld and weld.Part0 == hub then
 					spinning += 1
-					T.truthy(d.Name == "Barrel" or d.Name == "Dot" or d.Name == "Light", d.Name .. " turns with the barrels")
+					local name = d.Name
+					T.truthy(name == "Barrel" or name == "Dot" or name == "Light" or name == "Setting", name .. " turns with the barrels")
 				end
 			end
-			T.eq(spinning, 16, "six barrels, six rim dots and four lights turn")
+			-- (a STAR blaster's rim dots are gems: their gold settings turn with them)
+			local star = tool:GetAttribute("Star") ~= nil
+			T.eq(spinning, if star then 22 else 16, "six barrels, six rim dots (in settings), four lights turn")
 			T.eq(BarrelSpin.motorOf(tool), motor, "the client finds the motor")
 		end
 		T.eq(BarrelSpin.motorOf(BlasterBuilder.silhouette(5)), nil, "no motor, no spin")
