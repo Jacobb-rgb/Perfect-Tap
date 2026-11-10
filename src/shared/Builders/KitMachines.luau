@@ -100,7 +100,8 @@ local P = KitMachines.Palette
 
 --[[
 	Steel + blue (owner 2026-11-07, look B of obrazky/ocel_a_modra_2026-11-07):
-	only the Ore Feeder, the Solar Panel and the one belt; every other machine,
+	only the Ore Feeder, the Solar Panel, the one belt and its Belt Lift and Slide
+	(owner 2026-11-10); every other machine,
 	the fences, the pen and the podiums keep their colours (his words). A model
 	in SteelLook is built with these colours in place of the palette's (inSteel),
 	so its painted faces follow too; its upgrade crystals and their glow come on
@@ -117,7 +118,7 @@ KitMachines.Steel = {
 	Bolt = rgb(150, 164, 186),
 	Floor = rgb(24, 30, 44),
 } :: { [string]: Color3 }
-KitMachines.SteelLook = { OreFeeder = true, SolarPanel = true, Conveyor = true } :: { [string]: boolean }
+KitMachines.SteelLook = { OreFeeder = true, SolarPanel = true, Conveyor = true, BeltLift = true, Slide = true } :: { [string]: boolean }
 
 -- Runs `build` with the steel colours in the palette, then puts the palette back (even on an error).
 local function inSteel<T>(build: () -> T): T
@@ -1558,7 +1559,7 @@ end
 	leg brace at the high end (its arrow facing down the slope) instead of
 	beside the belt, the feet are slimmer and the drum hubs plain.
 ]]
-function KitMachines.slope(up: boolean, length: number?, rise: number?, fit: boolean?): Model
+local function slopeModel(up: boolean, length: number?, rise: number?, fit: boolean?): Model
 	local L = length or 12
 	local H = rise or 5
 	local model = Instance.new("Model")
@@ -1625,6 +1626,17 @@ function KitMachines.slope(up: boolean, length: number?, rise: number?, fit: boo
 	model:SetAttribute("MachineId", model.Name)
 	attach(base, "Prompt", CFrame.new(0, 1.5, startZ))
 	return model
+end
+
+-- (the Belt Lift and the Slide in steel + blue like the one belt: owner 2026-11-10 20:11Z,
+-- "ne ty budou ocelove modre", KitMachines.SteelLook)
+function KitMachines.slope(up: boolean, length: number?, rise: number?, fit: boolean?): Model
+	if KitMachines.SteelLook[if up then "BeltLift" else "Slide"] then
+		return inSteel(function()
+			return slopeModel(up, length, rise, fit)
+		end)
+	end
+	return slopeModel(up, length, rise, fit)
 end
 
 --[[

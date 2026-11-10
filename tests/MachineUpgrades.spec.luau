@@ -308,7 +308,11 @@ return function(T, Loader)
 			table.insert(looks, id)
 		end
 		table.sort(looks)
-		T.eq(table.concat(looks, ","), "Conveyor,OreFeeder,SolarPanel", "his words: the machines, fences, pen and podiums keep their colours")
+		T.eq(
+			table.concat(looks, ","),
+			"BeltLift,Conveyor,OreFeeder,Slide,SolarPanel",
+			"his words: the machines, fences, pen and podiums keep their colours (the lift and slide: 2026-11-10)"
+		)
 		local function colorOf(model: any, role: string, name: string?): any
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") and d:GetAttribute("Kit") == role and (name == nil or d.Name == name) then
@@ -326,6 +330,12 @@ return function(T, Loader)
 		local belt = MachineBuilder.build("Conveyor", 0, nil)
 		T.eq(colorOf(belt, "Trim", "RailCap"), KitMachines.Steel.Trim, "the one belt: blue rail tops")
 		T.eq(colorOf(belt, "Frame", "RailL"), KitMachines.Steel.Frame, "steel rails")
+		-- the Belt Lift and the Slide like the belt (owner 2026-11-10 20:11Z: "ne ty budou ocelove modre")
+		for _, id in { "BeltLift", "Slide" } do
+			local slope = MachineBuilder.build(id, 0, nil)
+			T.eq(colorOf(slope, "Frame"), KitMachines.Steel.Frame, id .. ": steel")
+			T.eq(colorOf(slope, "Trim"), KitMachines.Steel.Trim, id .. ": blue trim")
+		end
 		local express = MachineBuilder.build("ExpressConveyor", 0, nil)
 		T.truthy(colorOf(express, "Frame", "RailL") == before.Frame, "an old Express belt keeps its look")
 		for role, color in before do
