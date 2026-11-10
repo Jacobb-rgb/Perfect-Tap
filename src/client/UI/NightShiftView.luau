@@ -34,7 +34,7 @@ NightShiftView.MaxRows = 5
 NightShiftView.Why = {
 	NoFeeder = "Get an Ore Feeder: your machines work its ore while you're away.",
 	Empty = "Your Ore Feeder was empty: fill it before you go.",
-	NoMachines = "Put machines after your Ore Feeder: they work its ore while you're away.",
+	NoMachines = "None of your machines takes the feeder's ore: put a Cleaning Plant, a Crusher or a Furnace.",
 	PenFull = "Your Ore Pen was full: make room so your machines can work at night.",
 	Nothing = "Your machines had nothing to do with the feeder's ore.",
 } :: { [string]: string }

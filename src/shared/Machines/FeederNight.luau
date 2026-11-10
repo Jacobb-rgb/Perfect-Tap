@@ -5,9 +5,9 @@
 	12 h with the pass: EconomyConfig.Offline). Pure: a save's tables in, the
 	feeders' queues and the pen's list changed in place, a report out; no yields.
 
-	- The feeders feed one ore every MachineData.FeederSeconds of `work`
+	- Every feeder feeds one ore every MachineData.FeederSeconds of `work`
 	  (seconds away, capped, x the offline rate), front first, feeder by
-	  feeder in saved order.
+	  feeder in saved order (review 11-10: each its own count, as online).
 	- Each ore walks the line as far as the base has a machine for its kind
 	  (dirty -> Cleaning Plant -> clean -> Crusher -> crushed x2 -> Furnace ->
 	  ingot), through MachineLogic.outputs with the owner's grade odds. Every
@@ -15,8 +15,12 @@
 	- What comes out goes into the pen (data.Storage) while it has room; an
 	  ore whose outputs don't fit stays in the feeder, and so does an ore no
 	  machine takes, and a SECRET ore (that one is the player's own moment).
+	- With an Iron Box on the plot (review 11-10), a piece the player keeps
+	  (MachineData.keeps: a clean Rare+ ore by default) stops there and goes
+	  into the pen as it is, never crushed or smelted by surprise.
 	- The line isn't walked belt by belt: a machine that stands on the plot
-	  counts (the power it needs doesn't).
+	  counts (the power it needs doesn't; a Sorter, a Splitter or a Sell Box
+	  doesn't route anything).
 ]]
 
 local EconomyConfig = require(script.Parent.Parent.Config.EconomyConfig)
@@ -34,6 +38,7 @@ export type Report = {
 	Bars: number,
 	Made: { [string]: { K: string, O: string, G: string?, N: number } },
 	Cleaned: { [string]: boolean }, -- ores that came out of the dirt (the codex finds them)
+	RoomStopped: boolean, -- an ore stayed in a feeder because the pen had no room for it
 }
 
 -- The kinds a line takes (the Alloy Furnace's ingots are the player's own choice).
@@ -102,13 +107,20 @@ local function walk(
 	jobs: { [string]: number },
 	odds: (string) -> { [string]: number }?,
 	random: () -> number,
-	cleaned: { [string]: boolean }
+	cleaned: { [string]: boolean },
+	keep: ((any) -> boolean)?
 ): { any }?
 	local walking = { first }
 	local done = {}
 	local moved = false
 	while #walking > 0 do
 		local item: any = table.remove(walking)
+		if keep and keep(item) then
+			-- (the Iron Box: kept, into the pen as it is)
+			moved = true
+			table.insert(done, item)
+			continue
+		end
 		local stage = line[item.K]
 		local outputs = nil
 		if stage and (jobs[item.K] or 0) >= 1 then
@@ -134,7 +146,7 @@ end
 	Runs `line` for `work` seconds over the feeders' `queues` (changed in place),
 	putting what comes out into `storage` (data.Storage, changed in place) up to
 	`capacity`. `odds(machineId)`: a machine's grade odds, or nil. `random`:
-	rolls in [0, 1).
+	rolls in [0, 1). `keep(desc)`: the Iron Box's keep test (nil: no box).
 ]]
 function FeederNight.run(
 	queues: { { any } },
@@ -143,35 +155,37 @@ function FeederNight.run(
 	work: number,
 	capacity: number,
 	odds: (string) -> { [string]: number }?,
-	random: () -> number
+	random: () -> number,
+	keep: ((any) -> boolean)?
 ): Report
-	local report: Report = { Fed = 0, Total = 0, Bars = 0, Made = {}, Cleaned = {} }
-	local feeds = math.floor(math.max(work, 0) / MachineData.FeederSeconds)
+	local report: Report = { Fed = 0, Total = 0, Bars = 0, Made = {}, Cleaned = {}, RoomStopped = false }
+	local perFeeder = math.floor(math.max(work, 0) / MachineData.FeederSeconds)
 	local jobs: { [string]: number } = {}
 	for kind, stage in line do
 		jobs[kind] = math.floor(stage.PerSecond * math.max(work, 0))
 	end
 	for _, queue in queues do
 		local kept = {}
+		local feeds = perFeeder
 		for index, ore in queue do
 			local done: { any }? = nil
 			local room = capacity - #storage
-			if
-				feeds > 0
-				and room > 0
-				and type(ore) == "table"
-				and MachineLogic.isValidDesc(ore)
-				and not SecretOreConfig.isSecret(ore.O)
-			then
-				-- (a try on copies: an ore that can't finish here stays in the feeder as it was)
-				local trialJobs = table.clone(jobs)
-				local cleaned = {}
-				local pieces = walk(table.clone(ore), line, trialJobs, odds, random, cleaned)
-				if pieces and #pieces <= room then
-					done = pieces
-					jobs = trialJobs
-					for oreId in cleaned do
-						report.Cleaned[oreId] = true
+			if feeds > 0 and type(ore) == "table" and MachineLogic.isValidDesc(ore) and not SecretOreConfig.isSecret(ore.O) then
+				if room <= 0 then
+					report.RoomStopped = true
+				else
+					-- (a try on copies: an ore that can't finish here stays in the feeder as it was)
+					local trialJobs = table.clone(jobs)
+					local cleaned = {}
+					local pieces = walk(table.clone(ore), line, trialJobs, odds, random, cleaned, keep)
+					if pieces and #pieces <= room then
+						done = pieces
+						jobs = trialJobs
+						for oreId in cleaned do
+							report.Cleaned[oreId] = true
+						end
+					elseif pieces then
+						report.RoomStopped = true
 					end
 				end
 			end

@@ -10,7 +10,8 @@
 	    long enough absence earns the crate (NightShiftConfig.earnsCrate,
 	    data.NightShift). Returns { Made?, Why?, Crate, PenFull } for the
 	    window: Made = { Fed, Total, Bars, List = up to ListMax rows, best
-	    first }; Why = why the machines made nothing ("NoFeeder" | "Empty" |
+	    first, Left = ores still in the feeders, PenStopped }; an Iron Box
+	    on the plot keeps what the player keeps (MachineData.keeps); Why = why the machines made nothing ("NoFeeder" | "Empty" |
 	    "NoMachines" | "PenFull" | "Nothing"). It also runs when no window opens
 	    (a player leaving during the first seconds). No yields: the feeders'
 	    queues and the pen's list change in one step.
@@ -67,19 +68,27 @@ local function floorOf(data: { [string]: any }): any
 	return NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1, upgrades.Elevator == true)
 end
 
--- Has the player placed an Ore Feeder?
-local function hasFeeder(data: { [string]: any }): boolean
+-- Has the player placed a machine that passes `test`?
+local function hasPlaced(data: { [string]: any }, test: (any) -> boolean): boolean
 	local placed = data.PlacedMachines
 	if type(placed) ~= "table" then
 		return false
 	end
 	for _, entry in placed do
 		local info = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
-		if info and info.Behaviour == "Feeder" then
+		if info and test(info) then
 			return true
 		end
 	end
 	return false
+end
+
+local function isFeeder(info: any): boolean
+	return info.Behaviour == "Feeder"
+end
+
+local function isIronBox(info: any): boolean
+	return info.Id == "IronBox"
 end
 
 -- The live feeders show their new counts (FeederService, looked up on use).
@@ -92,7 +101,7 @@ end
 
 -- What the machines made from the feeders' ore (nil: nothing) and why not.
 local function runFeeders(player: Player, data: { [string]: any }, work: number): ({ [string]: any }?, string?)
-	if not hasFeeder(data) then
+	if not hasPlaced(data, isFeeder) then
 		return nil, "NoFeeder"
 	end
 	local queues = FeederNight.queues(data)
@@ -100,7 +109,13 @@ local function runFeeders(player: Player, data: { [string]: any }, work: number)
 		return nil, "Empty"
 	end
 	local line = FeederNight.line(data)
-	if next(line) == nil then
+	-- (review 11-10: the Iron Box keeps what the player keeps, at night too)
+	local keep = if hasPlaced(data, isIronBox)
+		then function(desc: any): boolean
+			return MachineData.keeps(data.KeepMode, data.KeepList, desc)
+		end
+		else nil
+	if next(line) == nil and not keep then
 		return nil, "NoMachines"
 	end
 	if type(data.Storage) ~= "table" then
@@ -116,9 +131,13 @@ local function runFeeders(player: Player, data: { [string]: any }, work: number)
 		return if machine and machine.QualityLevels
 			then MachineData.gradeOdds(EconomyConfig.upgradeLevel(data, machineId, "Quality"))
 			else nil
-	end, NightShiftService.random)
+	end, NightShiftService.random, keep)
 	if report.Fed == 0 then
-		return nil, "Nothing"
+		return nil, if report.RoomStopped then "PenFull" else "Nothing"
+	end
+	local left = 0
+	for _, queue in queues do
+		left += #queue
 	end
 	for oreId in report.Cleaned do
 		Discovery.mark(player, data, oreId, true)
@@ -141,7 +160,15 @@ local function runFeeders(player: Player, data: { [string]: any }, work: number)
 	for k = 1, math.min(NightShiftService.ListMax, #rows) do
 		list[k] = rows[k]
 	end
-	return { Fed = report.Fed, Total = report.Total, Bars = report.Bars, List = list }, nil
+	return {
+		Fed = report.Fed,
+		Total = report.Total,
+		Bars = report.Bars,
+		List = list,
+		Left = left, -- ores still in the feeders
+		PenStopped = report.RoomStopped, -- the pen had no room for more
+	},
+		nil
 end
 
 -- See the header. `seconds` away, `extended`: the OfflineExtension perk.
