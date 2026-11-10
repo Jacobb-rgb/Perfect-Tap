@@ -382,6 +382,12 @@ local function baseEnvironment()
 		Ray = roblox.Ray,
 		Faces = roblox.Faces,
 		Axes = roblox.Axes,
+		-- (no raycasts run in Lune: a RaycastParams is its fields, for client effects loaded by a controller spec)
+		RaycastParams = {
+			new = function()
+				return { FilterType = nil, FilterDescendantsInstances = {}, IgnoreWater = false, RespectCanCollide = false }
+			end,
+		},
 		-- (no tweens run in Lune: a TweenInfo is its numbers, for the specs that drive a controller on fakes)
 		TweenInfo = {
 			new = function(time: number?, style: any?, direction: any?, repeats: number?, reverses: boolean?, delay: number?)
@@ -457,6 +463,26 @@ end
 
 function Loader.requirePath(path: string): any
 	return Loader.require(Loader.find(path))
+end
+
+-- Runs `body` with fresh copies of the modules at `paths`: a require inside it loads them anew
+-- (each module requiring them gets the fresh copy too), and their cached copies are put back
+-- afterwards. For specs whose modules read the LocalPlayer when they load, so the copy one spec
+-- loaded under its stand-in player is not the one another spec runs.
+function Loader.withFresh(paths: { string }, body: () -> ())
+	local saved = {}
+	for i, path in paths do
+		local node = Loader.find(path)
+		saved[i] = { node, moduleCache[node] }
+		moduleCache[node] = nil
+	end
+	local ok, err = pcall(body)
+	for _, entry in saved do
+		moduleCache[entry[1]] = entry[2]
+	end
+	if not ok then
+		error(err, 0)
+	end
 end
 
 -- Every ModuleScript under a path (used by tests to at least compile+run all of them).

@@ -585,12 +585,14 @@ HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
 -- his picture tiles, two a row (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"):
--- the biggest on a big screen and in a small mouse window. The TRAIN chip stays under them on a
--- PC (owner 2026-10-28); in a small mouse window (Compact: his Studio, 1402 x 490) it goes beside
--- their last row where that makes them bigger (RoundChipBeside; false: under there too)
+-- the biggest on a big screen and in a small mouse window, the TRAIN chip always under them
+-- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
+-- dlazdice"). A small mouse window (Compact: his Studio, 1402 x 490) is too short for nine big
+-- tiles two a row with the chip under them: three a row there, where that makes them at least
+-- RoundThreeGain bigger
 HudBubble.RoundBigMax = 88
 HudBubble.RoundMouseTile = 80
-HudBubble.RoundChipBeside = true
+HudBubble.RoundThreeGain = 8
 HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
@@ -657,9 +659,11 @@ end
 	it"): sets layout.Columns, Tile, Top, Chip and ChipStack.
 	  mouse / TV   two a row (the reel's column), the tiles smaller on a short
 	               screen (never under RoundMinTile); three, four, five a row
-	               when two can't fit; the stacked chip (StackChipHeight) under
-	               them as wide as them, all above the floaters (roundFloor). As
-	               low as the reel's tiles (RoundMenuTop) where there is room.
+	               when two can't fit, and three in a small mouse window where
+	               that keeps them big (RoundThreeGain); the stacked chip
+	               (StackChipHeight) under them as wide as them, all above the
+	               floaters (roundFloor). As low as the reel's tiles
+	               (RoundMenuTop) where there is room.
 	  touch        at the top, wide: the thumbstick's start zone (the left 40 %
 	               under the top third) stays free on tablets; five a row where
 	               they stay left of the top row, else four; the touch chip
@@ -703,19 +707,25 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			end
 		end
 	else
+		-- (the biggest tile `across` a row with the stacked chip under them, above the floaters; its rows)
+		local function fit(across: number): (number, number)
+			local down = math.ceil(count / across)
+			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - stackH - (down - 1) * gap
+			return math.min(layout.Tile, math.floor(room / down)), down
+		end
 		for _, columns in HudBubble.RoundColumns do
-			local rows = math.ceil(count / columns)
-			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - stackH - (rows - 1) * gap
-			local tile = math.min(layout.Tile, math.floor(room / rows))
+			local tile, rows = fit(columns)
 			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
-				local besideTile = math.min(layout.Tile, math.floor((floor - HudBubble.MenuTop - (rows - 1) * gap) / rows))
-				if HudBubble.RoundChipBeside and columns == 2 and layout.Compact and layout.Mouse and besideTile > tile then
-					layout.Columns, layout.Tile, layout.Top = columns, besideTile, HudBubble.MenuTop
-					layout.Chip, layout.ChipStack = "Beside", false
-					return
+				local across = columns
+				if columns == 2 and layout.Compact and layout.Mouse then
+					-- (a small mouse window: three a row where that keeps the tiles big)
+					local three, threeRows = fit(3)
+					if three - tile >= HudBubble.RoundThreeGain and left + wide(3, three) <= tabsLeft then
+						across, tile, rows = 3, three, threeRows
+					end
 				end
 				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + stackH
-				layout.Columns, layout.Tile = columns, tile
+				layout.Columns, layout.Tile = across, tile
 				layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
 				layout.Chip, layout.ChipStack = "Under", true
 				return

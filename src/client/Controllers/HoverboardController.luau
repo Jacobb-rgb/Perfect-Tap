@@ -1296,6 +1296,9 @@ local function buildRide()
 	updateRideButton()
 end
 
+-- (specs: start() spawns the endless LOD loop, so the Ride tile's wiring is built through this)
+HoverboardController._test = { buildRide = buildRide }
+
 ---------------------------------------------------------------- lifecycle
 
 function HoverboardController.init()

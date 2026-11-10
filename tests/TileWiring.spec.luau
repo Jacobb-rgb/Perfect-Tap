@@ -15,6 +15,13 @@ return function(T, Loader)
 
 	local C = "StarterPlayer.StarterPlayerScripts.Client."
 	local game = Loader.game
+	-- the controllers that read the LocalPlayer when they load: loaded anew in every asClient
+	local FRESH = {
+		C .. "Controllers.HudController",
+		C .. "Controllers.SideMenuController",
+		C .. "Controllers.EmoteController",
+		C .. "Controllers.HoverboardController",
+	}
 
 	local function signal()
 		local s = {}
@@ -78,8 +85,13 @@ return function(T, Loader)
 				return signal()
 			end,
 		}
-		local w: any =
-			{ binds = {}, toasts = {}, calls = {}, last = if touch then Enum.UserInputType.Touch else Enum.UserInputType.MouseButton1 }
+		local w: any = {
+			binds = {},
+			toasts = {},
+			calls = {},
+			last = if touch then Enum.UserInputType.Touch else Enum.UserInputType.MouseButton1,
+			playerGui = playerGui,
+		}
 		local camera = { ViewportSize = size, GetPropertyChangedSignal = signal }
 		local function bind(_, name: string, _fn: any, _button: any, ...: any)
 			for _, key in { ... } do
@@ -176,12 +188,15 @@ return function(T, Loader)
 				end,
 			},
 		}, function()
-			Loader.recordingPresses = true
-			local ok, err = pcall(body, w)
-			Loader.recordingPresses = false
-			if not ok then
-				error(err, 0)
-			end
+			-- (fresh controllers: the cached ones read another spec's stand-in LocalPlayer when they loaded)
+			Loader.withFresh(FRESH, function()
+				Loader.recordingPresses = true
+				local ok, err = pcall(body, w)
+				Loader.recordingPresses = false
+				if not ok then
+					error(err, 0)
+				end
+			end)
 		end)
 	end
 
@@ -193,10 +208,13 @@ return function(T, Loader)
 		local MenuPanels = Loader.requirePath(C .. "Util.MenuPanels")
 		local Sfx = Loader.requirePath(C .. "Effects.Sfx")
 		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
 		local saved = { HudController.toast, MenuPanels.controller, MenuPanels.isOpen, MenuPanels.call, Sfx.play, Net.listen, Net.send }
+		local hook = HudBubble.onMoreToggled
 		w.restore = function()
 			HudController.toast, MenuPanels.controller, MenuPanels.isOpen, MenuPanels.call, Sfx.play, Net.listen, Net.send =
 				table.unpack(saved)
+			HudBubble.onMoreToggled = hook -- (SideMenuController's, set by its init)
 		end
 		Net.listen = function() end
 		Net.send = function() end
@@ -234,10 +252,17 @@ return function(T, Loader)
 	end
 
 	T.test("TileWiring: every left tile and every tile behind More does what it says (his 1402 x 490 window)", function()
+		-- (review 2026-11-08: the run order mattered) a cached HudController that another spec's
+		-- stand-in, with a Folder for its PlayerGui, loaded first: asClient runs its own fresh copy
+		local Players = game:GetService("Players")
+		patched({ { Players, "LocalPlayer", { Name = "Other", PlayerGui = Instance.new("Folder") } } }, function()
+			Loader.requirePath(C .. "Controllers.HudController")
+		end)
 		inRound(function()
 			asClient(Vector2.new(1402, 490), false, function(w)
 				local ok, err = pcall(function()
 					local hud = startMenu(w)
+					T.eq(hud.Gui.Parent, w.playerGui, "the HUD is built in this client's own PlayerGui")
 					local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
 					local menu = hud.Menu
 					local flyout = hud.Gui:FindFirstChild("MoreFlyout")
@@ -383,12 +408,120 @@ return function(T, Loader)
 		end)
 	end)
 
+	-- (owner 2026-11-07: "odstranit i klávesu N") the round look binds no emote key and adds no Emotes tile
+	T.test("TileWiring: the round look has no emotes: no N key, no Emotes tile behind More", function()
+		inRound(function()
+			asClient(Vector2.new(1402, 490), false, function(w)
+				local ok, err = pcall(function()
+					local hud = startMenu(w)
+					local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+					local EmoteController = Loader.requirePath(C .. "Controllers.EmoteController")
+					-- (with the emotes switched on, so only the round look keeps them out)
+					patched({ { AnimConfig, "Emotes", true } }, function()
+						EmoteController.start()
+					end)
+					for key, name in w.binds do
+						T.truthy(key ~= EmoteController.Key, `no emote key ({name})`)
+					end
+					local flyout = hud.Gui:FindFirstChild("MoreFlyout") :: any
+					T.falsy(flyout:FindFirstChild(EmoteController.TileId), "no Emotes tile behind More")
+				end)
+				w.restore()
+				if not ok then
+					error(err, 0)
+				end
+			end)
+		end)
+	end)
+
+	-- (owner 2026-11-07) the Hoverboard tile opens the window; while riding it stops the ride at once
+	T.test("TileWiring: the Hoverboard tile opens the window, and stops a ride while riding", function()
+		inRound(function()
+			asClient(Vector2.new(1402, 490), false, function(w)
+				local ok, err = pcall(function()
+					local hud = startMenu(w)
+					local HoverboardController = Loader.requirePath(C .. "Controllers.HoverboardController")
+					HoverboardController._test.buildRide()
+					local holder = hud.Menu:FindFirstChild("Ride") :: any
+					T.truthy(holder and holder.Visible, "the Hoverboard tile")
+					local said = {}
+					for _, riding in { false, true } do
+						table.clear(said)
+						patched({
+							{
+								HoverboardController,
+								"isRiding",
+								function()
+									return riding
+								end,
+							},
+							{
+								HoverboardController,
+								"toggleRide",
+								function()
+									table.insert(said, "toggleRide")
+								end,
+							},
+							{
+								HoverboardController,
+								"toggle",
+								function()
+									table.insert(said, "toggle")
+								end,
+							},
+						}, function()
+							T.truthy(Loader.press(holder:FindFirstChild("Face")), "the tile is wired")
+						end)
+						local want = if riding then "toggleRide" else "toggle"
+						T.eq(table.concat(said, ","), want, if riding then "riding: it stops the ride" else "walking: it opens the window")
+					end
+				end)
+				w.restore()
+				if not ok then
+					error(err, 0)
+				end
+			end)
+		end)
+	end)
+
+	-- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
+	-- dlazdice") the TRAIN chip under the tiles in every mouse window; his small Studio window
+	-- keeps the big tiles three a row, a PC two a row
+	T.test("TileWiring: the TRAIN chip is under the tiles in every mouse window; his window keeps them big", function()
+		inRound(function()
+			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
+			for _, case in { { 1402, 490, 3 }, { 995, 485 }, { 1402, 368 }, { 1280, 720, 2 }, { 1280, 600, 2 }, { 1920, 1080, 2 } } do
+				local where = `{case[1]} x {case[2]}`
+				local scale = HudBubble.scaleFor(Vector2.new(case[1], case[2]))
+				local layout = HudBubble.layout(scale, case[1], false, false, case[2] - 58)
+				T.eq(layout.Chip, "Under", where .. ": the chip under the tiles")
+				T.eq(layout.ChipStack, true, where .. ": the stacked chip, as wide as them")
+				if case[3] then
+					T.eq(layout.Columns, case[3], `{where}: {case[3]} a row`)
+				end
+			end
+			-- his window: the big tiles (variant A's size), the chip under them above the floaters
+			local scale = HudBubble.scaleFor(Vector2.new(1402, 490))
+			local height = (490 - 58) / scale
+			local his = HudBubble.layout(scale, 1402, false, false, 490 - 58)
+			T.eq(his.Tile, HudBubble.RoundMouseTile, "1402 x 490: the big tiles")
+			local rows = math.ceil(HudBubble.roundCount(his) / his.Columns)
+			local bottom = HudBubble.menuTop(his)
+				+ rows * his.Tile
+				+ (rows - 1) * his.TileGap
+				+ HudBubble.StackGap
+				+ HudBubble.stackChipHeight(his)
+			T.truthy(bottom <= HudBubble.roundFloor(his, height) + 1e-6, `1402 x 490: the chip ends at {bottom}, above the floaters`)
+		end)
+	end)
+
 	-- (review 2026-11-07: a second R at the temple opened the Hoverboards window unseen under the hatch)
 	T.test("TileWiring: every key HoverboardController exports is sunk while an egg opens", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/HoverboardController.luau")
 		-- (CapsuleController reads the LocalPlayer when it loads: its OWNED_KEYS table is read as text)
 		local capsule = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		capsule = capsule:gsub("%-%-%[(=*)%[.-%]%1%]", ""):gsub("%-%-[^\n]*", "") -- (a commented-out entry doesn't count)
 		local list = capsule:match("\nlocal OWNED_KEYS = (%b{})")
 		T.truthy(list, "CapsuleController's OWNED_KEYS")
 		local owned = {}
@@ -424,8 +557,8 @@ return function(T, Loader)
 	end)
 
 	-- (HoverboardController.start spawns its endless LOD loop, which would keep the spec run alive: its
-	-- wiring is read as text) the Hoverboard tile opens the window and stops a ride, H rides, R opens
-	-- the window, and the window's RIDE / STOP follows a knock-off and a picked card
+	-- key wiring is read as text; the tile's press runs above, through _test.buildRide) H rides, R
+	-- opens the window, and the window's RIDE / STOP follows a knock-off and a picked card
 	T.test("TileWiring: the Hoverboard tile, H and R, and the window's RIDE / STOP are wired", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/HoverboardController.luau")
