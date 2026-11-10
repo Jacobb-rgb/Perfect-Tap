@@ -216,6 +216,11 @@ Game passes: Roblox is the source of truth (UserOwnsGamePassAsync on join and Pr
 
 **Test idea:** a SaveSize.spec that builds this maxed save from the real configs and checks it stays under 1 MB. Each new feature adds its maxed record there.
 
+**Ore Feeder (2026-11-09, save v16):** a feeder keeps its queue through every join up to its biggest
+capacity, 1000 ores (Placement.queueLimit), so 22 full feeders (the most machine slots a plot has)
+add about 55 KB each, ≈ 1.3 MB in all. SaveSize.spec now puts them in the maxed save and allows
+3 MB (still under Roblox's 4 MB per key).
+
 ### 12 · Low · Up to 2 minutes of rollback after a crash
 
 **Why it matters:** a crash loses at most 2 minutes of progress. Purchases save at once with saveNow.

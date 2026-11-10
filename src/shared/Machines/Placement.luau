@@ -67,6 +67,7 @@ Placement.Reasons = {
 	NoneOwned = "You don't have one to place",
 	Busy = "Finish using it first",
 	PenFull = "Make room in your Ore Pen for what's inside it first",
+	FeederFull = "Your Ore Feeder holds more than your Ore Pen has room for: let it feed some out first",
 	TooFar = "Go to your forge to build",
 	NoPlot = "You don't have a plot yet",
 	NotYours = "That's not your machine",
@@ -571,6 +572,17 @@ local function spill(data: { [string]: any }, desc: any)
 end
 
 -- Keeps the first `max` items of a queue and spills the rest. Empty -> nil.
+-- The most a machine's saved queue (Entry.In) keeps through sanitize: the Ore Feeder its
+-- biggest capacity (review 11-09: it was cut to 4 on every join), every other machine
+-- GameConfig.MachineIntakeQueue.
+function Placement.queueLimit(id: any): number
+	local machine = if type(id) == "string" then MachineData.ById[id] else nil
+	if machine and machine.Behaviour == "Feeder" then
+		return MachineData.FeederCapacity[#MachineData.FeederCapacity]
+	end
+	return GameConfig.MachineIntakeQueue
+end
+
 local function trim(data: { [string]: any }, list: any, max: number): { Desc }?
 	if type(list) ~= "table" then
 		return nil
@@ -698,7 +710,7 @@ function Placement.sanitize(data: { [string]: any }): ({ string }, { string })
 		local reason = if type(entry) == "table" then verdict[entry] else nil
 		if reason == nil then
 			if type(entry) == "table" and known(entry.Id) then
-				entry.In = trim(data, entry.In, GameConfig.MachineIntakeQueue)
+				entry.In = trim(data, entry.In, Placement.queueLimit(entry.Id))
 				entry.Out = trim(data, entry.Out, MachineData.MaxOutBuffer)
 			end
 			table.insert(kept, entry)

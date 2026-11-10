@@ -156,7 +156,7 @@ return function(T, Loader)
 			T.eq(#w.pushed, 3)
 			T.eq(w.pushed[3].O, "Coal")
 			T.falsy(behaviour.busy(m, 22), "empty: it rests")
-			T.eq(m.Model:GetAttribute("Stored"), 1, "the one at the outlet still counts")
+			T.eq(m.Model:GetAttribute("Stored"), 0, "the counter shows what waits inside: an empty feeder reads 0 (review 11-09)")
 		end)
 	end)
 
@@ -203,5 +203,94 @@ return function(T, Loader)
 		T.eq(frame, KitMachines.Steel.Frame, "steel")
 		T.truthy(parts <= 60, `{parts} parts`)
 		T.eq(model:GetAttribute("MachineId"), "OreFeeder")
+	end)
+	T.test("Ore Feeder: its ore survives every join (sanitize keeps up to its biggest capacity)", function()
+		local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		T.eq(Placement.queueLimit("OreFeeder"), 1000)
+		T.eq(Placement.queueLimit("Crusher"), GameConfig.MachineIntakeQueue, "every other machine as before")
+		for _, n in { 200, 1000 } do
+			local queue = {}
+			for _ = 1, n do
+				table.insert(queue, ore("Clean"))
+			end
+			local crusherIn = { ore("Clean"), ore("Clean"), ore("Clean"), ore("Clean"), ore("Clean"), ore("Clean") }
+			local data: any = {
+				Coins = 0,
+				Storage = {},
+				MachineInventory = {},
+				PlacedMachines = {
+					{ Id = "OreFeeder", X = 0, Z = 0, R = 0, In = queue },
+					{ Id = "Crusher", X = 4, Z = 0, R = 0, In = crusherIn },
+				},
+			}
+			Placement.sanitize(data)
+			T.eq(#data.PlacedMachines[1].In, n, `{n} ores kept`)
+			T.eq(data.Coins, 0, "nothing sold")
+			T.eq(#data.PlacedMachines[2].In, GameConfig.MachineIntakeQueue, "a Crusher still keeps its 4")
+		end
+	end)
+
+	T.test("Ore Feeder: Put In takes a whole backpack in one pass, up to the room left", function()
+		local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+		local w = world()
+		guarded(w, function()
+			w.data.BackpackItems = {}
+			w.data.Backpacks = { Owned = {}, Equipped = nil }
+			local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+			w.data.BackpackItems[ItemData.storageKey({ K = "Raw", O = "Gold" })] = 150
+			w.data.BackpackItems[ItemData.storageKey({ K = "Clean", O = "Coal", G = "Clean" })] = 90
+			w.data.BackpackItems[ItemData.storageKey({ K = "Ingot", O = "Gold", G = "Clean" })] = 5
+			local attrs = {}
+			w.player.SetAttribute = function(_, k, v)
+				attrs[k] = v
+			end
+			local changed = w.changed
+			local loaded = FeederService.loadAll(w.player, w.machine)
+			T.eq(loaded, 200, "the room of a level-0 feeder")
+			T.eq(#w.machine.Entry.In, 200)
+			T.eq(w.machine.Model:GetAttribute("Stored"), 200)
+			T.eq(w.changed - changed, 2, "one save mark for the feeder (and the backpack's own)")
+			T.eq(FeederService.loadAll(w.player, w.machine), 0, "full: nothing more")
+			local left = CarryService.countOf(w.data)
+			T.eq(left, 45, "the rest stays in the backpack (40 ores + 5 ingots)")
+		end)
+	end)
+
+	T.test("Ore Feeder: a Capacity buy grows every feeder at once; its toast; a full feeder's pickup", function()
+		local ShopService = Loader.requirePath("ServerScriptService.Server.Services.ShopService")
+		local Placement = Loader.requirePath("ReplicatedStorage.Shared.Machines.Placement")
+		T.eq(
+			ShopService.boughtText(
+				nil,
+				{ Item = "Upgrade:OreFeeder:Capacity", Kind = "Upgrade", Machine = "OreFeeder", Upgrade = "Capacity", Level = 2, Price = 1 } :: any,
+				"Machine"
+			),
+			"Ore Feeder Capacity level 2: it holds 700 ores!"
+		)
+		T.truthy(Placement.Reasons.FeederFull, "its own pickup refusal")
+		local machineSource = fs.readFile("src/server/Services/MachineService.luau")
+		T.truthy(machineSource:find('if machine.Info.Behaviour == "Feeder" then "FeederFull" else "PenFull"', 1, true), "said for a feeder")
+		local w = world()
+		guarded(w, function()
+			local ofPlayer = rawget(MachineService, "ofPlayer")
+			rawset(MachineService, "ofPlayer", function()
+				return { w.machine }
+			end)
+			local ok, err = pcall(function()
+				ShopService._test.reset()
+				FeederService.init()
+				w.data.Coins = 1e12
+				w.data.Upgrades = {}
+				w.data.MachineInventory = {}
+				T.truthy(ShopService.buy(w.player, EconomyConfig.techItem("Upgrade:OreFeeder:Capacity"), nil, 1), "level 1 bought")
+				T.eq(w.machine.Model:GetAttribute("Capacity"), 500, "the counter shows the new size at once")
+			end)
+			rawset(MachineService, "ofPlayer", ofPlayer)
+			ShopService._test.reset()
+			if not ok then
+				error(err, 0)
+			end
+		end)
 	end)
 end

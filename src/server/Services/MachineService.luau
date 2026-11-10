@@ -888,7 +888,8 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 		end
 	end
 	if contents > 0 and #data.Storage + contents > ItemService.penCapacity(data) then
-		return false, "PenFull"
+		-- (an Ore Feeder holds up to 1000: the way out is to let it feed them onto its belt)
+		return false, if machine.Info.Behaviour == "Feeder" then "FeederFull" else "PenFull"
 	end
 	-- hooks first (sessions end, the vise item is stashed), then the contents
 	detach(machine, "Pickup")

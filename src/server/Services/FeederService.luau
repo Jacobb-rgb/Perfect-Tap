@@ -23,6 +23,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MachineData = require(Shared.Config.MachineData)
 local SecretOreConfig = require(Shared.Config.SecretOreConfig)
 local MachineLogic = require(Shared.Machines.MachineLogic)
+local CarryService = require(script.Parent.CarryService)
 local DataService = require(script.Parent.DataService)
 local IntakeService = require(script.Parent.IntakeService)
 local MachineService = require(script.Parent.MachineService)
@@ -48,8 +49,10 @@ local function held(machine: PlacedMachine): number
 	return (if entry.In then #entry.In else 0) + (if entry.Out then #entry.Out else 0)
 end
 
+-- (the counter shows the ore waiting inside: the one at the outlet is on its way out)
 local function show(machine: PlacedMachine)
-	MachineService.setAttrs(machine, { Stored = held(machine), Capacity = FeederService.capacityOf(machine.Owner) })
+	local queue = machine.Entry.In
+	MachineService.setAttrs(machine, { Stored = if queue then #queue else 0, Capacity = FeederService.capacityOf(machine.Owner) })
 end
 
 -- What it takes (see the header). Pure but for the owner's capacity.
@@ -79,6 +82,36 @@ local function insert(machine: PlacedMachine, desc: Desc, _ownerUserId: number, 
 	table.insert(queue, desc)
 	show(machine)
 	DataService.changed(machine.Owner)
+end
+
+--[[
+	Put In with a whole backpack in one pass (review 11-09: 1000 one-by-one
+	inserts were one long server frame): the room left, every fitting stack
+	taken at once, appended to the queue, one save mark. Returns how many.
+]]
+function FeederService.loadAll(player: Player, machine: PlacedMachine): number
+	if machine.Removed or machine.Owner ~= player then
+		return 0
+	end
+	local room = FeederService.capacityOf(player) - held(machine)
+	if room <= 0 then
+		return 0
+	end
+	local taken = CarryService.take(player, function(desc: Desc): boolean
+		return (FeederService.accepts(machine, desc, player.UserId, "Hand"))
+	end, room)
+	if #taken == 0 then
+		return 0
+	end
+	local queue = machine.Entry.In or {}
+	machine.Entry.In = queue
+	for _, desc in taken do
+		table.insert(queue, desc)
+	end
+	show(machine)
+	MachineService.wake(machine)
+	DataService.changed(player)
+	return #taken
 end
 
 -- One ore to the outlet every FeederSeconds while the outlet is empty.
@@ -119,6 +152,7 @@ local behaviour: MachineService.Behaviour = {
 
 function FeederService.init()
 	MachineService.register(FeederService.Id, behaviour)
+	IntakeService.setBulkLoader(FeederService.Id, FeederService.loadAll)
 	-- a Capacity level: every feeder of the owner shows (and takes) the new size at once
 	ShopService.onBought(function(player, bought)
 		if bought.Kind == "Upgrade" and bought.Machine == FeederService.Id then
