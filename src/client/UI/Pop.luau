@@ -1709,7 +1709,10 @@ export type TileSpec = {
 	Paint: string | Paint,
 	Size: number,
 	LayoutOrder: number?,
+	Art: string?, -- a whole-tile picture (IconAssets.TileArt) instead of the face and the word
 }
+
+Pop.ArtWordShare = 0.3 -- a picture tile's word (Label) as a share of the tile
 
 --[[
 	A left HUD tile (the owner's tile photo): a painted rounded square, the
@@ -1733,6 +1736,41 @@ function Pop.tile(parent: Instance, o: TileSpec): (TextButton, Frame)
 		Selectable = true,
 		ZIndex = 2,
 	}, holder)
+	if o.Art then
+		-- the owner's own tile (2026-11-07): the picture is the whole tile, its word drawn in it. The
+		-- Label stays for what a tile has to say over it (the hoverboard's Stop), hidden until then.
+		face.BackgroundTransparency = 1
+		face:SetAttribute("TileArt", o.Art)
+		local art = UIKit.new("ImageLabel", {
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 3,
+		}, face)
+		IconAssets.applyTileArt(art, o.Art)
+		art:SetAttribute("Icon", "tile_" .. o.Art)
+		Pop.fxTag(face, "Press")
+		-- (the one live word on a picture: "Stop" while riding tells a touch rider a tap stops the
+		-- ride; Pop.ArtWordShare of the tile, 13 pt on a phone's 44 pt tile)
+		local word = Pop.text(face, o.Label, math.floor(s * Pop.ArtWordShare), {
+			Name = "Label",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = PopTheme.Outline,
+			BackgroundTransparency = 0,
+			Position = UDim2.fromScale(0.5, 0.8),
+			Size = UDim2.fromScale(0.92, Pop.ArtWordShare + 0.06),
+			TextScaled = true,
+			Visible = false,
+			ZIndex = 4,
+		})
+		UIKit.corner(word, math.max(3, math.floor(s * 0.08)))
+		-- (the gold outline of an open More: Bubble.select; the picture has its own edge otherwise)
+		UIKit.corner(face, math.floor(s * 0.2))
+		Pop.border(face).Enabled = false
+		face:SetAttribute("NoPicture", false)
+		return face :: TextButton, holder
+	end
 	-- (the pixel reels' square buttons: radius 10 of 100, the lattice, a
 	-- sunburst turning behind the picture, the picture leaning on hover;
 	-- the round look: Pop.darkTile, the reel's dark tiles)

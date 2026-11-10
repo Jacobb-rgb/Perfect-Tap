@@ -317,6 +317,92 @@ function IconAssets.topRowHas(name: string): boolean
 	return IconAssets.TopRow.Id > 0 and IconAssets.TopRow.Cells[name] ~= nil
 end
 
+--[[
+	The left menu's whole tiles in one image of their own (owner 2026-11-07: "exactly like this, in
+	pictures"; ../NAHRAJ_DO_ROBLOXU/ikony_ui/hud_dlazdice.png, from tools/preview/tile_art by
+	make_tile_sheet.py): 4 x 3 cells of 256 px, each a finished tile with its word drawn in it; later
+	pictures in the second image. Tiles lists which menu tile (HudBubble.tile's Name) shows
+	which picture; without one a tile keeps its dark face and word. "Shop" in the menu is the luck
+	boosts, so his Shop picture is on Store.
+]]
+IconAssets.TileArt = {
+	File = "hud_dlazdice.png",
+	Id = 137469404437333,
+	Cell = 256,
+	Columns = 4,
+	Cells = {
+		shop = 0,
+		build = 1,
+		golems = 2,
+		hoverboard = 3,
+		index = 4,
+		daily = 5,
+		inventory = 6,
+		rebirth = 7,
+		more = 8,
+		spin = 9,
+		elevator = 10,
+	} :: { [string]: number },
+	-- the second image (hud_dlazdice_2.png, 3 x 3 cells; 0 would mean not uploaded: its tiles keep
+	-- their word): Boosts, Settings and Trade, and the potions without a background, for later
+	Second = {
+		File = "hud_dlazdice_2.png",
+		Id = 79789902813222,
+		Columns = 3,
+		Cells = {
+			boosts = 0,
+			settings = 1,
+			trade = 2,
+			potion_lucky = 3,
+			potion_coins = 4,
+			potion_mining = 5,
+			potion_speed = 6,
+			potion_strength = 7,
+			potion_mythic = 8,
+		} :: { [string]: number },
+	},
+	Tiles = {
+		Shop = "boosts", -- (the menu's Shop is the luck boosts)
+		Settings = "settings",
+		Trade = "trade",
+		Store = "shop",
+		Build = "build",
+		Golems = "golems",
+		Ride = "hoverboard",
+		Codex = "index",
+		Quests = "daily",
+		Backpack = "inventory",
+		Rebirth = "rebirth",
+		More = "more",
+		Wheel = "spin",
+		Elevator = "elevator",
+	} :: { [string]: string },
+}
+
+-- The picture of menu tile `tile` (nil: it has none, or the image isn't uploaded).
+function IconAssets.tileArt(tile: string): string?
+	local t = IconAssets.TileArt
+	local art = t.Tiles[tile]
+	if not art then
+		return nil
+	end
+	local there = if t.Cells[art] ~= nil then t.Id > 0 else t.Second.Id > 0
+	return if there then art else nil
+end
+
+-- Shows the whole-tile picture `art` on an ImageLabel.
+function IconAssets.applyTileArt(label: ImageLabel, art: string)
+	local t = IconAssets.TileArt
+	local cell = t.Cells[art]
+	local id, columns = t.Id, t.Columns
+	if cell == nil then
+		cell, id, columns = t.Second.Cells[art], t.Second.Id, t.Second.Columns
+	end
+	label.Image = "rbxassetid://" .. tostring(id)
+	label.ImageRectOffset = Vector2.new((cell % columns) * t.Cell, (cell // columns) * t.Cell)
+	label.ImageRectSize = Vector2.new(t.Cell, t.Cell)
+end
+
 -- The preview tools set this: they draw every icon from build/preview/icons,
 -- so layouts that differ without an uploaded picture use the uploaded look.
 IconAssets.Previewing = false

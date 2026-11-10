@@ -567,6 +567,9 @@ function Bubble.select(face: GuiObject, selected: boolean)
 		local glow = face:GetAttribute("Glow")
 		stroke.Color = if selected then Theme.Gold elseif typeof(glow) == "Color3" then glow else Theme.Outline
 		stroke.Thickness = if selected then 5 else Theme.Stroke
+		if face:GetAttribute("TileArt") then
+			stroke.Enabled = selected -- (a tile that is the owner's picture: only while selected)
+		end
 	end
 end
 

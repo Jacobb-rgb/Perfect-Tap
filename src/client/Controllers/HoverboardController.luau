@@ -110,6 +110,7 @@ local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 
 local HoverboardController = {}
 
+HoverboardController.WindowKey = Enum.KeyCode.R -- the hoverboards' window (the tile's second keycap)
 HoverboardController.ShowRange = 150 -- studs: farther boards aren't built
 HoverboardController.FxRange = 80 -- studs: farther boards get no particles / trails
 HoverboardController.LodInterval = 0.3
@@ -129,6 +130,7 @@ HoverboardController.Key = Enum.KeyCode.H
 HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
 local RIDE_ACTION = "TerraForgeHoverRide"
+local WINDOW_ACTION = "TerraForgeHoverboardWindow"
 local CLOSE_ACTION = "TerraForgeHoverClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local SEND_LOCK = 1
@@ -893,6 +895,11 @@ updateRideButton = function()
 	button.Holder.Visible = button.Tile or equipped ~= "" or riding
 	local hint, glyph = rideHint()
 	HoverboardView.setRiding(button, riding, hint, glyph)
+	-- (the open window's RIDE / STOP follows too: knocked off a board, it says RIDE again)
+	local view = refs
+	if view and isOpen then
+		HoverboardView.setRideWord(view, riding)
+	end
 end
 
 local function showMessage(text: string, kind: string?)
@@ -943,6 +950,18 @@ local function onRideKey(_: string, state: Enum.UserInputState, input: InputObje
 	return Enum.ContextActionResult.Sink
 end
 
+-- R: the hoverboards' window (a build or an egg's own R is bound over this one).
+local function onWindowKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin then
+		return Enum.ContextActionResult.Pass
+	end
+	if PlayerControls.owner() ~= nil or CleaningController.isActive() then
+		return Enum.ContextActionResult.Pass
+	end
+	HoverboardController.toggle()
+	return Enum.ContextActionResult.Sink
+end
+
 ---------------------------------------------------------------- the panel
 
 local function locked(): boolean
@@ -975,6 +994,7 @@ local function refresh()
 	local owned, equipped, coins = snapshotBoards()
 	-- (the cards, the count and the detail of the picked board)
 	HoverboardView.setCards(view, owned, equipped, coins)
+	HoverboardView.setRideWord(view, HoverboardController.isRiding())
 	keepSelection(view)
 end
 
@@ -1016,6 +1036,7 @@ local function onCard(card: HoverboardView.Card)
 	end
 	if view.Selected ~= card.Board.Id then
 		HoverboardView.select(view, card.Board.Id)
+		HoverboardView.setRideWord(view, HoverboardController.isRiding())
 	end
 	Sfx.play("UIClick")
 end
@@ -1052,7 +1073,9 @@ local function onAction()
 	elseif state == "Soon" then
 		showMessage(`The {board.Name} is coming soon!`, "Info")
 	else
-		showMessage(`The {board.Name} is your board. Press RIDE to hover.`, "Info")
+		-- (the equipped board: RIDE / STOP)
+		HoverboardController.close()
+		HoverboardController.toggleRide()
 	end
 end
 
@@ -1257,9 +1280,24 @@ local function buildRide()
 	if scale then
 		hookBounce(button.Button, scale)
 	end
-	button.Button.Activated:Connect(HoverboardController.toggleRide)
+	if button.Tile then
+		-- (owner 2026-11-07: the tile opens the window, its button rides; while riding it stops at once)
+		button.Button.Activated:Connect(function()
+			if HoverboardController.isRiding() then
+				HoverboardController.toggleRide()
+			else
+				Sfx.play("UIClick")
+				HoverboardController.toggle()
+			end
+		end)
+	else
+		button.Button.Activated:Connect(HoverboardController.toggleRide)
+	end
 	updateRideButton()
 end
+
+-- (specs: start() spawns the endless LOD loop, so the Ride tile's wiring is built through this)
+HoverboardController._test = { buildRide = buildRide }
 
 ---------------------------------------------------------------- lifecycle
 
@@ -1305,6 +1343,7 @@ end
 
 function HoverboardController.start()
 	buildRide()
+	ContextActionService:BindAction(WINDOW_ACTION, onWindowKey, false, HoverboardController.WindowKey)
 	ContextActionService:BindAction(RIDE_ACTION, onRideKey, false, HoverboardController.Key, HoverboardController.GamepadKey)
 	Players.PlayerAdded:Connect(watchPlayer)
 	for _, p in Players:GetPlayers() do
