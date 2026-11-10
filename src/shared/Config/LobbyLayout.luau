@@ -273,15 +273,15 @@ LobbyLayout.Pieces = {
 	{
 		Id = "EventBoard",
 		Package = "Plaza",
-		-- hanging from a hot-air balloon high over the east road (owner 2026-11-07), tethered to two
-		-- anchors beside it: far enough along it that the gas giant stays in view from the town
-		Center = v(53.5, 0, 2),
-		Size = v(4, 106, 4), -- (the lamps and the plants along the road stay: tests/EventBoard.spec.luau checks its anchors)
-		Radius = 2,
-		Facing = v(-1, 0, 0), -- toward the plaza and the spawn
-		Walkable = true, -- (under it: only its two feet stand on the ground, beside the road)
-		Note = "The big iron billboard (owner 2026-11-07): the events, so nothing sits on the player's screen.",
+		-- planted on the forge mountain's east shoulder (owner 2026-11-10: "zapichlej v tech
+		-- horach"), facing the town: right of the Great Forge and clear of the planets from the spawn
+		Center = v(195, 0, -272),
+		Size = v(14, 200, 14), -- (only the round leg stands on the ground; the board is 130 wide up top)
+		Radius = 7,
+		Facing = v(-0.55, 0, 0.84), -- toward the spawn and the town
+		Note = "The big billboard of the events on its round leg (owner 2026-11-10): nothing sits on the player's screen.",
 	},
+
 	{
 		Id = "GreatForge",
 		Package = "Plaza",

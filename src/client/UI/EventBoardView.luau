@@ -10,8 +10,8 @@ local Theme = require(Shared.Config.UITheme)
 
 local EventBoardView = {}
 
-EventBoardView.MaxDistance = 320 -- studs: past this the screen doesn't draw
-EventBoardView.PixelsPerStud = 28
+EventBoardView.MaxDistance = 900 -- studs: it stands in the mountains, read from the whole town
+EventBoardView.PixelsPerStud = 8 -- (a 120-stud screen: ~960 px wide)
 -- each line's top and height (shares of the screen)
 EventBoardView.Lines = { Title = { 0.05, 0.15 }, Big = { 0.24, 0.36 }, Small = { 0.64, 0.28 } }
 
