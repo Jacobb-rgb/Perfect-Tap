@@ -810,7 +810,7 @@ local function payOffline(player: Player, popup: boolean): number
 			stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
 		end
 	end
-	if popup and player.Parent and (amount > 0 or (extra and extra.Crate)) then
+	if popup and player.Parent and (amount > 0 or (extra and (extra.Crate or extra.Made))) then
 		Net.fire("OpenUI", player, "Offline", {
 			Amount = amount,
 			Seconds = seconds,
@@ -818,6 +818,8 @@ local function payOffline(player: Player, popup: boolean): number
 			Rate = EconomyConfig.offlineRate(extended),
 			Crate = extra and extra.Crate,
 			PenFull = extra and extra.PenFull,
+			Made = extra and extra.Made, -- the machines' night on the Ore Feeder's ore (NightShiftService)
+			Why = extra and extra.Why,
 		})
 	end
 	return amount

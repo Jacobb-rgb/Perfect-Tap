@@ -1,13 +1,15 @@
 --[[
 	NightShiftView: the "While you were away" window (Night Shift, owner
-	2026-11-07, his picture without the golems; the machines' tile comes with
-	the feeder). Built once, filled per return; NightShiftController shows it and
+	2026-11-07, his picture without the golems; the Machines tile: what the
+	machines made from the Ore Feeder's ore, NightShiftService). Built once,
+	filled per return; NightShiftController shows it and
 	talks to the server. Designed for 720 units of height like every window
 	(Gui.Scale = HudController.uiScale); the buttons are 72 units tall (44 pt on a
 	phone).
 
 	  fill(refs, payload)   OpenUI "Offline" { Amount, Seconds, Hours, Rate,
-	                        Crate?, PenFull? } (PodiumService, NightShiftService)
+	                        Made?, Why?, Crate?, PenFull? } (PodiumService,
+	                        NightShiftService)
 	  setPrize(refs, result) the opened crate (NightCrateResult)
 	  setOpening(refs, on)  Open Crate waits for the server
 	The texts are pure functions (specced). The coin and the chest need no
@@ -19,13 +21,24 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local NightShiftConfig = require(Shared.Config.NightShiftConfig)
 local Format = require(Shared.Util.Format)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Pop = require(script.Parent.Pop)
 local UIKit = require(script.Parent.UIKit)
 
 local NightShiftView = {}
 
 NightShiftView.GuiName = "TerraForgeNightShift"
-NightShiftView.Size = Vector2.new(700, 400)
+NightShiftView.Size = Vector2.new(700, 516)
+NightShiftView.MaxRows = 5
+-- why the machines made nothing (NightShiftService's Why)
+NightShiftView.Why = {
+	NoFeeder = "Get an Ore Feeder: your machines work its ore while you're away.",
+	Empty = "Your Ore Feeder was empty: fill it before you go.",
+	NoMachines = "Put machines after your Ore Feeder: they work its ore while you're away.",
+	PenFull = "Your Ore Pen was full: make room so your machines can work at night.",
+	Nothing = "Your machines had nothing to do with the feeder's ore.",
+} :: { [string]: string }
+NightShiftView.WhyDefault = "Your machines work the Ore Feeder's ore while you're away."
 NightShiftView.Band = 64
 NightShiftView.ButtonHeight = 72
 NightShiftView.CloseHit = 72 -- units: what the X takes (44 pt on a phone; it draws smaller)
@@ -40,6 +53,9 @@ export type Refs = {
 	Bar: GuiObject,
 	Coins: TextLabel,
 	CrateCard: Frame,
+	Machines: TextLabel,
+	Rows: Frame,
+	Empty: TextLabel,
 	CrateTitle: TextLabel,
 	CrateText: TextLabel,
 	CrateCount: GuiObject,
@@ -53,6 +69,20 @@ export type Refs = {
 -- "Your podiums kept earning at 25% · max 8 h"
 function NightShiftView.barText(rate: number, hours: number): string
 	return `Your podiums kept earning at {math.floor(rate * 100 + 0.5)}% · max {hours} h`
+end
+
+-- "+12 bars" / "+5 items" (what went into the pen)
+function NightShiftView.machinesText(made: any): string
+	local total = if type(made) == "table" then tonumber(made.Total) or 0 else 0
+	local bars = if type(made) == "table" then tonumber(made.Bars) or 0 else 0
+	if total > 0 and bars < total then
+		return if total == 1 then "+1 item" else `+{total} items`
+	end
+	return if bars == 1 then "+1 bar" else `+{bars} bars`
+end
+
+function NightShiftView.whyText(why: any): string
+	return if type(why) == "string" and NightShiftView.Why[why] then NightShiftView.Why[why] else NightShiftView.WhyDefault
 end
 
 -- How much of the longest absence that counts was used.
@@ -119,6 +149,46 @@ local function chestModel(): Model
 		part(CFrame.new(at) * CFrame.Angles(0.3 * k, 0.5 * k, 0), Vector3.new(0.6, 0.16, 0.6), Color3.fromRGB(255, 226, 110))
 	end
 	return model
+end
+
+-- An item's picture (a live 3D model, as the backpack shows it).
+local function picture(parent: Instance, desc: any, size: UDim2, position: UDim2)
+	local name = `item_{desc.K}_{desc.O}`
+	local ok, model = pcall(ItemBuilder.display, desc, CFrame.new(), name)
+	Pop.model(parent, name, 10, if ok then model else nil, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = position,
+		Size = size,
+		ZIndex = 7,
+	}, Vector3.new(-0.5, 0.55, -1))
+end
+
+-- The pieces the machines made (best first), or why there are none.
+local function fillRows(refs: Refs, made: any, why: any)
+	for _, child in refs.Rows:GetChildren() do
+		child:Destroy()
+	end
+	local list = if type(made) == "table" and type(made.List) == "table" then made.List else {}
+	refs.Empty.Visible = #list == 0
+	refs.Empty.Text = NightShiftView.whyText(why)
+	refs.Machines.Text = NightShiftView.machinesText(made)
+	for k = 1, math.min(#list, NightShiftView.MaxRows) do
+		local row = list[k]
+		local cell = Pop.well(refs.Rows, {
+			Name = `Row{k}`,
+			Position = UDim2.fromOffset((k - 1) * 78, 4),
+			Size = UDim2.fromOffset(72, 78),
+		})
+		picture(cell, { K = row.K, O = row.O, G = row.G }, UDim2.fromOffset(60, 60), UDim2.new(0.5, 0, 0.5, -6))
+		Pop.text(cell, `x{tonumber(row.N) or 0}`, 20, {
+			Name = "Count",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -4, 1, -2),
+			Size = UDim2.new(1, -8, 0, 24),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 8,
+		})
+	end
 end
 
 function NightShiftView.build(): Refs
@@ -232,6 +302,44 @@ function NightShiftView.build(): Refs
 		ZIndex = 7,
 	})
 
+	-- the machines: what they made from the Ore Feeder's ore
+	local gold = Color3.fromRGB(255, 196, 70)
+	local machinesTile = Pop.well(inner, {
+		Name = "MachinesTile",
+		Position = UDim2.fromOffset(0, 236),
+		Size = UDim2.new(1, 0, 0, 108),
+	})
+	Pop.border(machinesTile, 3, gold)
+	picture(machinesTile, { K = "Ingot", O = "Gold", G = "Clean" }, UDim2.fromOffset(74, 74), UDim2.new(0, 52, 0.5, 0))
+	Pop.text(machinesTile, "Machines", 24, {
+		Name = "Title",
+		Position = UDim2.fromOffset(100, 12),
+		Size = UDim2.new(0.34, -100, 0, 30),
+		ZIndex = 6,
+	})
+	local machines = Pop.text(machinesTile, "", 36, {
+		Name = "Value",
+		Position = UDim2.fromOffset(100, 46),
+		Size = UDim2.new(0.34, -100, 0, 46),
+		TextColor3 = gold,
+		ZIndex = 6,
+	})
+	local rows = UIKit.new("Frame", {
+		Name = "Rows",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.36, 0, 0, 11),
+		Size = UDim2.new(0.64, -12, 0, 86),
+		ZIndex = 5,
+	}, machinesTile)
+	local empty = Pop.text(machinesTile, NightShiftView.WhyDefault, 19, {
+		Name = "Empty",
+		Position = UDim2.new(0.36, 0, 0, 8),
+		Size = UDim2.new(0.64, -16, 0, 92),
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	})
+
 	local buttonSize = Vector2.new(300, NightShiftView.ButtonHeight)
 	local collect = Pop.button(inner, "Collect", "Green", buttonSize, {
 		Name = "Collect",
@@ -272,6 +380,9 @@ function NightShiftView.build(): Refs
 		Bar = bar,
 		Coins = coins,
 		CrateCard = card,
+		Machines = machines,
+		Rows = rows,
+		Empty = empty,
 		CrateTitle = crateTitle,
 		CrateText = crateText,
 		CrateCount = count,
@@ -300,6 +411,7 @@ function NightShiftView.fill(refs: Refs, payload: { [string]: any })
 	Pop.setBar(refs.Bar, NightShiftView.barFraction(seconds, hours), NightShiftView.barText(rate, hours))
 	refs.Coins.Text = "+" .. Format.money(tonumber(payload.Amount) or 0)
 	setCrate(refs, payload.Crate == true, payload.PenFull == true)
+	fillRows(refs, payload.Made, payload.Why)
 end
 
 function NightShiftView.setOpening(refs: Refs, on: boolean)
