@@ -113,6 +113,10 @@ Violence and resubmit.**
   left out and said so). The server rolls the same numbers (`Bonuses.oreLuck`, `secretMult`); a storm's luck
   never goes past the luck cap: with Hexa Lucky it adds nothing, with Server Luck only up to the cap (x1.25),
   and its text and the note say so. The card's key line holds the storm in its numbers.
+  **The Find of the Day** (owner 2026-11-07, `Events/FindOfDay`, `FindOfDayService`): the best ore
+  cleaned today, on the iron billboard only. Between servers (a MemoryStore sorted map with a 2-day
+  expiry + MessagingService, never from Studio) go a DisplayName (at most 20 characters, checked on
+  arrival), the UserId, an ore id and a grade; no player text. Hidden users never go up (2.10).
   **The Night Crate** (owner 2026-11-07, `NightShiftConfig`): free, one earned per 20 h after an hour
   away, never sold, no luck changes it; its chances stand on it in the window.
   **SECRET ores** (owner 2026-10-29, `SecretOreConfig`): any ore a mine
@@ -740,6 +744,12 @@ short, friendly tutorial.
   tried again within 10-30 seconds), so a server started later can't
   bring a removed user back either.
   `LeaderboardConfig.Hidden` is the same list in code (optional).
+  **The Find of the Day** (`FindOfDayService`) keeps no player data in a
+  data store: the day's best (DisplayName, UserId, ore, grade) lives in the
+  MemoryStore sorted map `TerraForgeFindOfDay` (key `Day<n>`) and expires
+  after 2 days by itself, so it needs no deletion template; a user on the
+  hidden list above never goes up on the board (`isHidden`, checked for a
+  find from this server, another server and the store).
   (Studio play sessions read the live boards but never write them.)
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
   dangerous for live games. Once the game is live, test in a **separate test

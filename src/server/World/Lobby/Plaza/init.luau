@@ -28,6 +28,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
 local BridgeGarden = require(script.BridgeGarden)
+local EventBoard = require(script.EventBoard)
 local FireCrystal = require(script.FireCrystal)
 local GreatForge = require(script.GreatForge)
 local Paving = require(script.Paving)
@@ -42,6 +43,7 @@ function Plaza.build(parent: Model, rng: Rng.Rng)
 	Paving.build(parent, rng)
 	FireCrystal.build(parent, rng)
 	GreatForge.build(parent, rng)
+	EventBoard.build(parent)
 	if GreatForge.Passage then
 		-- (owner 2026-10-20) under THE GREAT FORGE's roof: the bridge garden to the DEPTHS
 		BridgeGarden.build(parent, Rng.new("Plaza/BridgeGarden"), "A", "Passage")
