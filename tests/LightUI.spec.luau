@@ -464,12 +464,15 @@ return function(T, Loader)
 			local lift = HudBubble.claimTile(refs.Menu, "Elevator")
 			local faces = HudBubble.linkMenu(refs.Menu)
 			T.eq(#faces, 3, "only the claimed tiles")
+			-- (the grid's order: Build, Elevator, Boosts)
 			T.eq(faces[1], build, "grid order")
-			T.eq(build.NextSelectionRight, shop, "right along the row")
-			T.eq(shop.NextSelectionLeft, build, "left along the row")
-			T.eq(build.NextSelectionDown, lift, "down the column")
-			T.eq(lift.NextSelectionUp, build, "up the column")
-			T.truthy(shop.NextSelectionRight ~= lift, "the row ends at SHOP")
+			T.eq(faces[2], lift, "grid order")
+			T.eq(faces[3], shop, "grid order")
+			local columns = refs.Menu:GetAttribute("Columns")
+			T.eq(build.NextSelectionRight, lift, "right along the row")
+			T.eq(lift.NextSelectionLeft, build, "left along the row")
+			T.eq(if columns == 2 then build.NextSelectionDown else lift.NextSelectionRight, shop, "the next one")
+			T.truthy(shop.NextSelectionRight ~= lift, "no way back along the row")
 			local teleport = TeleportView.build(refs.TopBar, 1.25)
 			if PopTheme.round() then
 				-- the reel's row: Shop, Lobby, Base, Vault
@@ -1002,7 +1005,7 @@ return function(T, Loader)
 			end
 			return count
 		end
-		local playerGui = Instance.new("Folder")
+		local playerGui = Instance.new("PlayerGui") -- (a client's own: HudController sets its SelectionImageObject)
 		playerGui.Name = "PlayerGui"
 		local folder = Instance.new("ScreenGui")
 		folder.Name = LightWorldController.StockPromptFolder

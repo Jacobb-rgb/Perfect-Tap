@@ -34,6 +34,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local AnimConfig = require(Shared.Config.AnimConfig)
+local PopTheme = require(Shared.Config.PopTheme)
 local EmoteConfig = require(Shared.Config.EmoteConfig)
 local EmoteRules = require(Shared.Moves.EmoteRules)
 local EmoteView = require(script.Parent.Parent.UI.EmoteView)
@@ -261,6 +262,10 @@ end
 
 function EmoteController.start()
 	if not AnimConfig.Emotes then
+		return
+	end
+	-- (the round look: no emotes at all, owner 2026-11-07: "odstranit i klávesu N"; the code stays for later)
+	if PopTheme.round() then
 		return
 	end
 	ContextActionService:BindAction(KEY_ACTION, onKey, false, EmoteController.Key)

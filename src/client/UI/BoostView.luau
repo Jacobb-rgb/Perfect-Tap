@@ -3508,6 +3508,17 @@ function BoostView.cornerSpot(input: CornerInput): (number, number, boolean, str
 	return right, bottom, stacked, spot
 end
 
+-- Whether the round look's offers (HudBubble.offers, mid-right) end above the boost corner: a short
+-- window (his Studio with a tall Output panel, 1402 x 368 points) would put the last offer's name
+-- under the clover, so HudController hides the column there. Every window a player has fits.
+function BoostView.clearOfOffers(offers: GuiObject, uiScale: number, gui: Vector2): boolean
+	local scale = if uiScale > 0 then uiScale else 1
+	local h = gui.Y / scale
+	local height = offers.Size.Y.Offset
+	local bottom = h * offers.Position.Y.Scale + offers.Position.Y.Offset + height * (1 - offers.AnchorPoint.Y)
+	return bottom <= h - BoostView.CornerBottom - BoostView.cornerHeight() - BoostView.CornerGap
+end
+
 -- Moves the corner row (a light build's chips) to `right`, `bottom` (BoostView.cornerSpot),
 -- side by side or `stacked` in a column.
 function BoostView.placeCorner(refs: ChipRefs, right: number, bottom: number, stacked: boolean?)

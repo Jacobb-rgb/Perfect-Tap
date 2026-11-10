@@ -43,6 +43,7 @@ local ORDER = {
 	"IronBoxService",
 	"SellService",
 	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
+	"FeederService", -- the Ore Feeder: holds the ore you put in, feeds it to the line (owner 2026-11-07)
 	"DropperService", -- the droppers push Drops onto the belts, the Money Laser doubles them (after LogisticsService)
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",

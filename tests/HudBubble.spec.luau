@@ -40,9 +40,9 @@ return function(T, Loader)
 		local layout = HudBubble.layout(1.25)
 		local m = HudBubble.menuMetrics(layout)
 		local first = HudBubble.tilePosition(layout, 1)
-		local fifth = HudBubble.tilePosition(layout, 5)
+		local third = HudBubble.tilePosition(layout, 2 * layout.Columns + 1)
 		T.eq(first.X.Offset, m.Origin.X.Offset, "first tile at the origin")
-		T.eq(fifth.Y.Offset - first.Y.Offset, 2 * (m.CellHeight + m.RowGap), "row 3 on PC (2 columns)")
+		T.eq(third.Y.Offset - first.Y.Offset, 2 * (m.CellHeight + m.RowGap), "row 3")
 		-- (a 667-point touch phone: four a row in the round look, three in the others)
 		local phone = HudBubble.layout(0.62, 667, true)
 		local p5 = HudBubble.tilePosition(phone, phone.Columns + 1)
@@ -128,19 +128,20 @@ return function(T, Loader)
 	end)
 
 	T.test("HudBubble: HudController waits for the screen before it builds the HUD", function()
-		-- (the controller needs a real client: its source says what init does, in which order)
+		-- (HudController reads Players.LocalPlayer when it loads: its source is checked, the very
+		-- lines at init's own indent, so a comment or a dead branch doesn't count)
 		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/HudController.luau")
 		local init = string.find(source, "function HudController.init()", 1, true)
 		T.truthy(init, "init")
-		local wait = string.find(source, "HudBubble.waitForScreen()", init, true)
-		local build = string.find(source, "HudView.build()", init, true)
+		local wait = string.find(source, "\n\tlocal ready, first, final = HudBubble.waitForScreen()", init, true)
+		local build = string.find(source, "\n\trefs = HudView.build()", init, true)
 		T.truthy(wait, "init waits for the screen")
 		T.truthy(build, "init builds the HUD")
 		T.truthy(wait < build, "first the wait, then the build")
 	end)
 
-	-- his window as it really is: 995 x 485 pt at scale 0.67 (his photos are 2 px a point), a mouse.
+	-- a window like his, a mouse, 995 x 485 pt at scale 0.67 (his logged 1402 x 490 / 368 are further down).
 	-- Compact by its scale, but the big top row and the offers he picked on 2026-11-07 ("navrh tri").
 	-- A touch phone of the same size keeps its short row and no offers.
 	T.test("HudBubble: a mouse window like the owner's gets the big top row, its pictures and the offers", function()
@@ -195,9 +196,34 @@ return function(T, Loader)
 			T.falsy(phone.Gui:FindFirstChild("Offers"), "no offers")
 			phone.Gui:Destroy()
 
-			-- what the first tiny viewport gave him on a mouse before the wait: a mouse never gets Narrow now
+			-- his Studio log (2026-11-07): "first 1, 1, then 1, 1" when the wait ran out: a mouse still
+			-- gets the big row and the offers, not the row of a 1-point screen
 			local tiny = HudBubble.layout(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, guiH)
 			T.falsy(tiny.Narrow, "a mouse window is never the smallest phone")
+			T.truthy(HudBubble.bigTopRow(tiny), "the big row with no real size")
+			-- (the gui is as small as the camera then; a touch client keeps its short row and no offers)
+			local unknown = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, false, false, 1)
+			T.truthy(unknown.TopBar:FindFirstChild("ShopPill"), "the Shop in the row")
+			T.truthy(unknown.Gui:FindFirstChild("Offers"), "and the offers")
+			unknown.Gui:Destroy()
+			local unknownTouch = HudBubble.buildGame(HudBubble.scaleFor(Vector2.new(1, 1)), 1, true, false, 1)
+			T.falsy(unknownTouch.Gui:FindFirstChild("Offers"), "no offers on touch")
+			unknownTouch.Gui:Destroy()
+			T.truthy(HudBubble.ScreenWait <= 3, "the wait holds up every controller after the HUD: keep it short")
+			-- his window in the same log: 1402 x 368 and 1402 x 490 points (the Output panel open or shut)
+			for _, h in { 368, 490 } do
+				local real = Vector2.new(1402, h)
+				local s = HudBubble.scaleFor(real)
+				local big = HudBubble.buildGame(s, 1402, false, false, h - 58)
+				T.truthy(big.TopBar:FindFirstChild("ShopPill"), `the Shop at 1402 x {h}`)
+				T.truthy(HudBubble.bigTopRow(HudBubble.layout(s, 1402, false, false, h - 58)), `the big row at 1402 x {h}`)
+				-- the offers end above the boost corner at 490; at 368 they'd reach it, so they hide
+				local column = big.Gui:FindFirstChild("Offers") :: GuiObject
+				local gui = Vector2.new(1402, h - 58)
+				local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+				T.eq(BoostView.clearOfOffers(column, s, gui), h == 490, `offers and clover at 1402 x {h}`)
+				big.Gui:Destroy()
+			end
 		end)
 		UIConfig.LightUI, IconAssets.Previewing = before, previewing
 		if not ok then
@@ -214,5 +240,187 @@ return function(T, Loader)
 			T.truthy(IconAssets.topRowShows(name), name .. " shows")
 		end
 		T.falsy(IconAssets.topRowHas("wheel"), "only the four buttons")
+	end)
+
+	-- review 2026-11-07: in a small mouse window the lowest offer sat on the tutorial card's SKIP and
+	-- took its click; there the offers stay away. Without their icon sheets they show live models.
+	T.test("HudBubble: the offers show a picture and keep off the tutorial card's buttons", function()
+		local roblox = require("@lune/roblox") :: any
+		local Vector2 = roblox.Vector2
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+		local before, previewing = UIConfig.LightUI, IconAssets.Previewing
+		UIConfig.LightUI = true
+		IconAssets.Previewing = false
+		local ok, err = pcall(function()
+			-- { width, height, the top bar's inset, should they show }
+			local screens = {
+				{ 995, 485, 58, true }, -- the owner's Studio window
+				{ 1280, 720, 36, true },
+				{ 1920, 1080, 58, true },
+				{ 700, 400, 36, false },
+				{ 682, 360, 36, false },
+			}
+			for _, size in screens do
+				local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
+				local gui = Vector2.new(size[1], size[2] - size[3])
+				local at = `{size[1]} x {size[2]}`
+				local refs = HudBubble.buildGame(scale, size[1], false, false, gui.Y)
+				local offers = refs.Gui:FindFirstChild("Offers") :: any
+				T.truthy(offers, "the offers at " .. at)
+				local clear = TutorialView.clearOfOffers(offers, scale, gui, false)
+				T.eq(clear, size[4], "shown or kept away at " .. at)
+				for _, offer in HudBubble.Offers do
+					local button = (offers:FindFirstChild(offer.Card) :: any):FindFirstChild("Offer") :: any
+					local picture = button:FindFirstChild("Picture") :: any
+					T.truthy(picture, offer.Card .. ": a picture at " .. at)
+					T.truthy(#(picture:FindFirstChild("View") :: any):GetChildren() > 0, offer.Card .. ": a live model")
+				end
+				-- when they show, the lowest button really is above SKIP and GOT IT
+				if clear then
+					local h = gui.Y / scale
+					local card = TutorialView.layout(scale, gui, false, false)
+					local rowTop = card.Position.Y - TutorialView.Foot - card.RowHeight
+					local lowest = h / 2 + offers.Size.Y.Offset / 2 - 24
+					T.truthy(lowest <= rowTop, "above the card's buttons at " .. at)
+				end
+				refs.Gui:Destroy()
+			end
+		end)
+		UIConfig.LightUI, IconAssets.Previewing = before, previewing
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- the owner's own pictures on the left (2026-11-07, hud_dlazdice.png): each listed tile shows its
+	-- cell as the whole tile, the word drawn in it; "Shop" in the menu is the boosts, not his Shop picture
+	T.test("HudBubble: the left tiles wear the owner's pictures, cell by cell", function()
+		local roblox = require("@lune/roblox") :: any
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+		local art = IconAssets.TileArt
+		T.truthy(art.Id > 0, "uploaded")
+		-- the order of the uploaded sheet, tools/preview/make_tile_sheet.py
+		local order = { "shop", "build", "golems", "hoverboard", "index", "daily", "inventory", "rebirth", "more", "spin", "elevator" }
+		for i, name in order do
+			T.eq(art.Cells[name], i - 1, name .. "'s cell")
+		end
+		local expect = {
+			Store = "shop",
+			Build = "build",
+			Golems = "golems",
+			Ride = "hoverboard",
+			Codex = "index",
+			Quests = "daily",
+			Backpack = "inventory",
+			Rebirth = "rebirth",
+			More = "more",
+			Wheel = "spin",
+			Elevator = "elevator",
+		}
+		for tile, name in expect do
+			T.eq(IconAssets.tileArt(tile), name, tile)
+		end
+		T.falsy(IconAssets.tileArt("Shop") == "shop", "the boosts' tile is not his Shop picture")
+		T.eq(IconAssets.tileArt("Shop"), "boosts", "it has its own")
+		T.eq(IconAssets.tileArt("Settings"), "settings", "Settings")
+		T.eq(IconAssets.tileArt("Trade"), "trade", "Trade")
+		T.eq(IconAssets.tileArt("Gear"), nil, "no picture: keeps its face and word")
+		-- the second image, in the order of hud_dlazdice_2.png
+		local second = art.Second
+		T.truthy(second.Id > 0, "the second image is uploaded")
+		local order2 = {
+			"boosts",
+			"settings",
+			"trade",
+			"potion_lucky",
+			"potion_coins",
+			"potion_mining",
+			"potion_speed",
+			"potion_strength",
+			"potion_mythic",
+		}
+		for i, name in order2 do
+			T.eq(second.Cells[name], i - 1, name .. "'s cell")
+		end
+		local two = roblox.Instance.new("ImageLabel")
+		IconAssets.applyTileArt(two, "trade")
+		T.eq(two.Image, "rbxassetid://" .. tostring(second.Id), "Trade: the second image")
+		T.eq(two.ImageRectOffset.X, 2 * art.Cell, "Trade: column 2")
+		T.eq(two.ImageRectOffset.Y, 0, "Trade: row 0")
+		IconAssets.applyTileArt(two, "potion_mythic")
+		T.eq(two.ImageRectOffset.X, 2 * art.Cell, "Mythic: column 2")
+		T.eq(two.ImageRectOffset.Y, 2 * art.Cell, "Mythic: row 2")
+
+		local before, previewing = UIConfig.LightUI, IconAssets.Previewing
+		UIConfig.LightUI = true
+		IconAssets.Previewing = false -- (what the game shows)
+		local ok, err = pcall(function()
+			local holder = roblox.Instance.new("Frame")
+			local spec = { Name = "Wheel", Label = "Spin", Icon = "wheel", Role = "Wheel", Size = 77 }
+			local face = HudBubble.tile(holder, spec)
+			T.eq(face:GetAttribute("TileArt"), "spin", "the Spin tile")
+			T.eq(face.BackgroundTransparency, 1, "no dark face behind the picture")
+			T.eq(face:GetAttribute("DarkTile"), nil, "not a dark tile")
+			local icon = face:FindFirstChild("Icon") :: any
+			T.eq(icon.Image, "rbxassetid://" .. tostring(art.Id), "his image")
+			T.eq(icon.ImageRectOffset.X, 1 * art.Cell, "cell 9: column 1")
+			T.eq(icon.ImageRectOffset.Y, 2 * art.Cell, "cell 9: row 2")
+			T.eq(icon.ImageRectSize.X, art.Cell, "a cell wide")
+			T.eq(icon.ImageRectSize.Y, art.Cell, "a cell tall")
+			T.eq(icon.Size.X.Scale, 1, "the whole tile")
+			T.eq(icon.Size.Y.Scale, 1, "the whole tile")
+			local label = face:FindFirstChild("Label") :: any
+			T.falsy(label.Visible, "the word is in the picture")
+			local outline = face:FindFirstChildOfClass("UIStroke") :: any
+			T.falsy(outline.Enabled, "no outline over the picture's own edge")
+			local Bubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Bubble")
+			Bubble.select(face, true)
+			T.truthy(outline.Enabled, "selected: the outline")
+			Bubble.select(face, false)
+			T.falsy(outline.Enabled, "and away again")
+
+			local plain = HudBubble.tile(holder, { Name = "Gear", Label = "Gear", Icon = "helmet", Role = "Gear", Size = 77 })
+			T.eq(plain:GetAttribute("TileArt"), nil, "no picture for Gear")
+			T.eq(plain:GetAttribute("DarkTile"), true, "its dark tile")
+			T.truthy((plain:FindFirstChild("Label") :: any).Visible, "its word")
+
+			-- the old pixel look keeps its own tiles
+			PopTheme.setLook("Pixel")
+			local pixel = HudBubble.tile(holder, spec)
+			PopTheme.setLook("Round")
+			T.eq(pixel:GetAttribute("TileArt"), nil, "the pixel look")
+		end)
+		UIConfig.LightUI, IconAssets.Previewing = before, previewing
+		PopTheme.setLook("Round")
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- the hoverboard tile's picture says Hoverboard: while riding, Stop shows over the drawn word
+	T.test("HudBubble: the Ride tile with the owner's picture says Stop while riding", function()
+		local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+		local HoverboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HoverboardView")
+		local before = UIConfig.LightUI
+		UIConfig.LightUI = true
+		local ok, err = pcall(function()
+			local refs = HudBubble.buildGame(1, 1280, false, false, 684)
+			local ride = HoverboardView.rideTile(refs.Menu) :: any
+			T.truthy(ride, "the tile")
+			T.eq(ride.Button:GetAttribute("TileArt"), "hoverboard", "his picture")
+			T.falsy(ride.Label.Visible, "walking: only the picture")
+			HoverboardView.setRiding(ride, true)
+			T.truthy(ride.Label.Visible, "riding: the word shows")
+			T.eq(ride.Label.Text, "Stop", "says Stop")
+			HoverboardView.setRiding(ride, false)
+			T.falsy(ride.Label.Visible, "back to the picture")
+			refs.Gui:Destroy()
+		end)
+		UIConfig.LightUI = before
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end

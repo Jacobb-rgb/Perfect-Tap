@@ -7,14 +7,15 @@
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
-	  ui_hud_round_studio   the owner's Studio window (995 x 485 pt, a mouse: the
-	                        tall block of tiles, owner 2026-10-28)
+	  ui_hud_round_studio   a 995 x 485 pt mouse window (the tall block of tiles,
+	                        owner 2026-10-28; his logged window: ui_hud_studio_*)
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
 	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (the reel's eight: Inventory by
-	BackpackController, Spin with its FREE! sticker by WheelController's badge,
-	the side menu's Store / Rebirth / Golems / Daily; the rest behind More).
+	are claimed as the controllers do (his picture tiles, 2026-11-07: Inventory
+	by BackpackController, the side menu's Store / Rebirth / Golems / Elevator,
+	Build, Ride, Trade; behind More Index, Settings, Daily, Boosts and Spin
+	with its FREE! sticker by WheelController's badge, on More too).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
@@ -49,7 +50,8 @@ function Preview.build(Loader: any): { [string]: any }
 		boostCount: number?,
 		touchButtons: boolean?,
 		equipped: boolean?,
-		input: ("Mouse" | "Touch" | "TV")?
+		input: ("Mouse" | "Touch" | "TV")?,
+		openMore: boolean?
 	): { any }
 		local boosts = boostCount or 1
 		local compact = uiScale <= 0.75
@@ -71,11 +73,16 @@ function Preview.build(Loader: any): { [string]: any }
 			local main = if round then HudBubble.RoundMain[entry.Id] == true else entry.Group == "Main"
 			if main then
 				HudBubble.claimTile(refs.Menu, entry.Id, spec)
-			else
+			elseif not (round and HudBubble.RoundHidden[entry.Id]) then
 				HudBubble.addMore(refs.Menu, entry.Id, spec)
 			end
 		end
 		if round then
+			if HudBubble.showsSoon(touch) then
+				for _, id in HudBubble.RoundSoon do
+					HudBubble.setSticker(HudBubble.claimTile(refs.Menu, id), "Soon!")
+				end
+			end
 			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it;
 			-- HoverboardController: the Ride tile with its H key on a keyboard)
 			HudBubble.claimTile(refs.Menu, "Backpack")
@@ -158,8 +165,9 @@ function Preview.build(Loader: any): { [string]: any }
 			pad.Enabled = true
 			table.insert(list, pad)
 		end
-		if refs.Menu:FindFirstChild("Wheel") then
-			-- the SPIN tile next to MORE (WheelController claims it on the light HUD; badge: a free spin ready)
+		if round or refs.Menu:FindFirstChild("Wheel") then
+			-- the SPIN tile (WheelController claims it on the light HUD; the round look: behind More;
+			-- badge: a free spin ready)
 			HudBubble.setTileBadge(HudBubble.claimTile(refs.Menu, "Wheel"), 1)
 		else
 			-- the FREE SPIN chip right of the top bar
@@ -167,6 +175,9 @@ function Preview.build(Loader: any): { [string]: any }
 			spin.Gui.Scale.Scale = renderScale
 			spin.Gui.Enabled = true
 			table.insert(list, spin.Gui)
+		end
+		if openMore then
+			HudBubble.toggleMore(refs.Menu, true)
 		end
 		return list
 	end
@@ -192,16 +203,22 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
 	TrainView.useHud(nil)
-	-- the owner's Studio window (995 x 485 pt, a mouse, 2026-11-07), drawn at 2 px a point like his
-	-- photos: as the game shows it before the left tiles' icon images are uploaded (his top row
-	-- image is), and after them. The renderer's top bar is 58 px: 29 pt here.
+	-- the owner's Studio window from his log (2026-11-07): 1402 x 490 points on a mouse, 1402 x 368 with
+	-- a taller Output panel, drawn 1990 px wide: as the game shows it (his top row and tile images are
+	-- uploaded, the icon sheets aren't), with More shut and open, and with every icon. The renderer's
+	-- 58 px top bar is 41 points at that size.
 	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
-	local window = roblox.Vector2.new(995, 485 - 29)
+	local pixels = 1990 / 1402
+	local real = HudBubble.scaleFor(roblox.Vector2.new(1402, 490))
+	local window = roblox.Vector2.new(1402, 490 - 41)
+	local short = HudBubble.scaleFor(roblox.Vector2.new(1402, 368))
 	local previewing = IconAssets.Previewing
 	IconAssets.Previewing = false
-	exports.ui_hud_studio_top_row_only = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
+	exports.ui_hud_studio_game = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
+	exports.ui_hud_studio_game_more = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse", true))
+	exports.ui_hud_studio_short = UiExport.export(hud(short * pixels, short, roblox.Vector2.new(1402, 368 - 41), 1, false, false, "Mouse"))
 	IconAssets.Previewing = previewing
-	exports.ui_hud_studio_all_icons = UiExport.export(hud(studioScale * 2, studioScale, window, 1, false, false, "Mouse"))
+	exports.ui_hud_studio_all_icons = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
 	for _, phone in { { 568, 320 }, { 800, 360 }, { 844, 390 } } do
 		for _, count in { 1, 2 } do

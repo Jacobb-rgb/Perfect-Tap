@@ -576,7 +576,7 @@ return function(T, Loader)
 		T.eq(p1.Id, old, "put back")
 	end)
 
-	T.test("EggPanel: the opens' keys (E is the prompt's; R and X are free at the temple)", function()
+	T.test("EggPanel: the opens' keys (E is the prompt's; R and X go to the eggs at the temple)", function()
 		T.eq(EggPanel.OpenKeys[1], PromptConfig.Keys.Main.Keyboard.Name, "Open 1 is the prompt's key")
 		T.eq(EggPanel.OpenKeys[3], "R")
 		T.eq(EggPanel.OpenKeys[10], "X")
@@ -601,7 +601,11 @@ return function(T, Loader)
 				local _, n = string.gsub(code, key, "")
 				uses += n
 			end
-			if rel ~= "src/client/Controllers/PlacementController.luau" and rel ~= "src/client/Controllers/EggPanelController.luau" then
+			if rel == "src/client/Controllers/HoverboardController.luau" then
+				-- (R opens the hoverboards' window, owner 2026-11-07: bound once at start, so an egg
+				-- panel's own R, bound later while it shows, goes first)
+				T.eq(uses, 1, "the hoverboards' window key")
+			elseif rel ~= "src/client/Controllers/PlacementController.luau" and rel ~= "src/client/Controllers/EggPanelController.luau" then
 				T.eq(uses, 0, rel .. ": R / X are the eggs' (and build mode's)")
 			end
 		end
@@ -1126,7 +1130,7 @@ return function(T, Loader)
 				end,
 			}
 			local humanoid = { Health = 100 }
-			local playerGui = Instance.new("Folder")
+			local playerGui = Instance.new("PlayerGui") -- (a client's own: HudController sets its SelectionImageObject)
 			me = {
 				Name = "Me",
 				UserId = 1,
@@ -3173,7 +3177,7 @@ return function(T, Loader)
 					BackpackController = { Key = K.Q },
 					EmoteController = { Key = K.N },
 					GolemController = { ToggleKey = K.P },
-					HoverboardController = { Key = K.H },
+					HoverboardController = { Key = K.H, WindowKey = K.R },
 					ArtifactController = { BookKey = K.J },
 					BoostController = { OpenKeys = { K.L, K.DPadRight } },
 				})
@@ -3258,7 +3262,7 @@ return function(T, Loader)
 				-- the window keys it sank: a gamepad's and their keyboard twins (none acts unseen under it);
 				-- the keys other controllers own are read from their exports (stand-ins here)
 				local sunk = CC.sinkKeys()
-				for _, key in { K.ButtonL3, K.ButtonR3, K.T, K.B, K.Q, K.N, K.P, K.H, K.J, K.L, K.DPadRight } do
+				for _, key in { K.ButtonL3, K.ButtonR3, K.T, K.B, K.Q, K.N, K.P, K.H, K.R, K.J, K.L, K.DPadRight } do
 					T.truthy(table.find(sunk, key), key.Name .. " sunk while an egg opens")
 				end
 				for _, key in { K.Space, K.Return, K.Backspace, K.G, K.ButtonA, K.ButtonB } do

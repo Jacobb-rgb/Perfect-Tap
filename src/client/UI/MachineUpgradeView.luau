@@ -62,6 +62,7 @@ MachineUpgradeView.Why = {
 	Quality = "Better grades pay more",
 	Bellows = "All machines work faster",
 	Belt = "All your belts run faster",
+	Capacity = "Holds more ore at once",
 } :: { [string]: string }
 
 export type Row = {
@@ -183,6 +184,11 @@ function MachineUpgradeView.rows(placedId: string, state: any, coins: number): {
 					then change(`{grade} {pct(now)}`, pct(after), top)
 					else `{grade} {pct(now)} → {nextGrade} {pct(after)}`
 				table.insert(list, row(entry, safe, coins, "Quality", text, MachineUpgradeView.Why.Quality))
+			elseif kind == "Capacity" then
+				-- the Ore Feeder: ores it holds
+				local now, after = MachineData.feederCapacity(level), MachineData.feederCapacity(nextLevel)
+				local text = change(`{now}`, `{after}`, top) .. " ores"
+				table.insert(list, row(entry, safe, coins, "Capacity", text, MachineUpgradeView.Why.Capacity))
 			elseif kind == "Tier" then
 				local speed = EconomyConfig.upgradeLevel(safe, machineId, "Speed")
 				local nextInfo = MachineData.info(machineId, nextLevel)

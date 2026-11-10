@@ -208,7 +208,11 @@ return function(T, Loader)
 	end)
 
 	T.test("KitMachines: every roster machine builds, stays in its footprint and within budget", function()
-		T.eq(#KitMachines.Catalog, 21, "the roster has 21 machines (one Furnace: Brick / Blast / Plasma are its tiers)")
+		T.eq(
+			#KitMachines.Catalog,
+			22,
+			"the roster has 22 machines (one Furnace: Brick / Blast / Plasma are its tiers; the Ore Feeder, owner 2026-11-07)"
+		)
 		local skip = { Chute = true, ChuteLip = true, Molten = true, Blade = true, Cable = true }
 		for _, entry in KitMachines.Catalog do
 			local id = entry.Id
