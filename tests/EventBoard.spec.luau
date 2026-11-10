@@ -376,63 +376,123 @@ return function(T, Loader)
 		T.eq(EventBoardLogic.findPage(entry("Old", "Gold", "Clean", TODAY - 1), NOW).Big, "Nobody yet")
 	end)
 
-	T.test("event board: its two feet stand clear of everything and beside the road", function()
+	T.test("event board: planted in the mountains, off the roads, nothing in front of its face, seen from the spawn", function()
 		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 		local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
 		local board = map:FindFirstChild("EventBoard", true)
+		T.truthy(board, "the board is in the map")
+		local screen = board and board:FindFirstChild("Screen")
+		T.truthy(screen, "its screen")
 		local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+		-- the opaque parts that aren't the board
 		local parts = {}
 		for _, d in map:GetDescendants() do
-			if d:IsA("BasePart") and not d:IsDescendantOf(board) and d.Size.Magnitude < 400 then
+			if d:IsA("BasePart") and d.Transparency < 1 and not d:IsDescendantOf(board) then
 				table.insert(parts, d)
 			end
 		end
-		for _, side in { -EventBoard.PostAt, EventBoard.PostAt } do
-			for _, y in { 0.45, 1, 3, 6, 10 } do
-				local half = if y < 0.5 then EventBoard.FootSize / 2 else 1.4 -- the low concrete foot, then the beam
-				for _, dx in { -half, 0, half } do
-					for _, dz in { -half, 0, half } do
-						local at = (frame * roblox.CFrame.new(side + dx, y, 0.6 + dz)).Position
-						for _, d in parts do
-							local l = d.CFrame:PointToObjectSpace(at)
-							local inside = math.abs(l.X) <= d.Size.X / 2 and math.abs(l.Y) <= d.Size.Y / 2 and math.abs(l.Z) <= d.Size.Z / 2
-							T.falsy(inside, `the foot at {side} stands in {d:GetFullName()} at {d.CFrame.Position} size {d.Size}`)
-						end
-						for _, road in WorldLayout.Roads do
-							T.truthy(LobbyLayout.distanceToStrip(road.From, road.To, road.Width, at) > 0, "off the road")
-						end
-					end
+		local function inside(d: any, at: any): boolean
+			local l = d.CFrame:PointToObjectSpace(at)
+			return math.abs(l.X) <= d.Size.X / 2 and math.abs(l.Y) <= d.Size.Y / 2 and math.abs(l.Z) <= d.Size.Z / 2
+		end
+		-- the leg's foot stands on the ground or in the mountain, never on a road
+		local legZ = 2.2 + EventBoard.Leg / 2 + 1
+		local under = (frame * roblox.CFrame.new(0, -0.5, legZ)).Position
+		local standing = false
+		for _, d in parts do
+			if inside(d, under) then
+				standing = true
+				break
+			end
+		end
+		T.truthy(standing, "the leg stands on something")
+		for _, dx in { -EventBoard.Leg, 0, EventBoard.Leg } do
+			for _, dz in { -EventBoard.Leg, 0, EventBoard.Leg } do
+				local at = (frame * roblox.CFrame.new(dx, 1, legZ + dz)).Position
+				for _, road in WorldLayout.Roads do
+					T.truthy(LobbyLayout.distanceToStrip(road.From, road.To, road.Width, at) > 0, "the foot is off the road")
 				end
+			end
+		end
+		-- nothing pokes through the screen: points just in front of its face are in the air
+		for _, fx in { -0.45, 0, 0.45 } do
+			for _, fy in { -0.4, 0, 0.4 } do
+				local at = (screen.CFrame * roblox.CFrame.new(fx * EventBoard.Screen.X, fy * EventBoard.Screen.Y, -1)).Position
+				for _, d in parts do
+					T.falsy(inside(d, at), `{d:GetFullName()} stands in front of the screen`)
+				end
+			end
+		end
+		-- from the spawn (eye height) to the screen's middle: nothing opaque in the way
+		local eye = WorldLayout.SpawnPoint + roblox.Vector3.new(0, 5, 0)
+		local target = screen.CFrame.Position
+		local span = target - eye
+		local length = span.Magnitude
+		T.truthy(length < EventBoardView.MaxDistance - 100, `its words draw from the spawn ({math.floor(length)} studs)`)
+		local near = {}
+		for _, d in parts do
+			local t = math.clamp((d.CFrame.Position - eye):Dot(span) / (length * length), 0, 1)
+			if (eye + span * t - d.CFrame.Position).Magnitude <= d.Size.Magnitude / 2 + 1 then
+				table.insert(near, d)
+			end
+		end
+		for k = 1, 59 do
+			local at = eye + span * (k / 60)
+			for _, d in near do
+				T.falsy(inside(d, at), `{d:GetFullName()} hides the board from the spawn`)
 			end
 		end
 	end)
 
-	T.test("event board: the iron stays in budget, its one screen faces the plaza, players walk under it", function()
+	T.test("event board: the iron stays in budget, one screen faces the town, three lamps light it, it streams in", function()
 		local folder = roblox.Instance.new("Folder")
 		local model = EventBoard.build(folder)
-		local screens, parts = {}, 0
+		local screens, parts, lights = {}, 0, {}
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") then
 				parts += 1
 				if d:HasTag("EventBoardScreen") then
 					table.insert(screens, d)
 				end
-				local top = d.CFrame.Position.Y + d.Size.Y / 2
-				local bottom = d.CFrame.Position.Y - d.Size.Y / 2
-				local z = LobbyLayout.frame(LobbyLayout.get("EventBoard")):PointToObjectSpace(d.CFrame.Position).X
-				if math.abs(z) < 4 and d.Size.X < 12 then
-					T.truthy(bottom >= 3 or top <= 0.01, d.Name .. ": nothing to walk into over the road")
-				end
+			elseif d:IsA("SpotLight") or d:IsA("PointLight") or d:IsA("SurfaceLight") then
+				table.insert(lights, d)
 			end
 		end
 		T.truthy(parts <= EventBoard.MaxParts, `{parts} parts`)
 		T.eq(#screens, 1, "one screen")
 		T.truthy(model:HasTag("NoStuds"), "iron, no studs")
+		local screen = screens[1]
 		local facing = LobbyLayout.get("EventBoard").Facing.Unit
-		T.truthy(screens[1].CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
-		local refs = EventBoardView.build(screens[1])
+		T.truthy(screen.CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
+		-- the lamps: one SpotLight each, no shadows, aimed at the face and reaching it
+		T.eq(#lights, EventBoard.Lamps, "one light a lamp")
+		for _, light in lights do
+			T.truthy(light:IsA("SpotLight"), "a spotlight")
+			T.falsy(light.Shadows, "no shadows")
+			-- its beam (the head's front) meets the screen's face inside the screen
+			local head = light.Parent
+			local from = screen.CFrame:PointToObjectSpace(head.CFrame.Position)
+			local along = screen.CFrame:VectorToObjectSpace(head.CFrame.LookVector)
+			T.truthy(from.Z < 0 and along.Z > 0, "in front, shining back at the face")
+			local hit = from + along * (-from.Z / along.Z)
+			T.truthy(math.abs(hit.X) <= EventBoard.Screen.X / 2 and math.abs(hit.Y) <= EventBoard.Screen.Y / 2, "aimed at the screen")
+			T.truthy(light.Range >= (hit - from).Magnitude, "its light reaches the face")
+		end
+		-- the leg and the beams are behind the screen; in front of it only the lamps, above its top edge
+		local top = EventBoard.Screen.Y / 2
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d ~= screen then
+				local l = screen.CFrame:PointToObjectSpace(d.CFrame.Position)
+				if l.Z < -0.5 and math.abs(l.X) < EventBoard.Screen.X / 2 then
+					T.truthy(l.Y > top, d.Name .. ": nothing hangs in front of the screen")
+				end
+			end
+		end
+		local mode = (model :: any).ModelStreamingMode
+		T.truthy(mode == nil or mode == roblox.Enum.ModelStreamingMode.Persistent, "always streamed in")
+		local refs = EventBoardView.build(screen)
 		EventBoardView.fill(refs, EventBoardLogic.findPage(entry("Mia", "Gold", "Clean"), NOW))
 		T.eq(refs.Big.Text, "Gold")
 		T.eq(refs.Small.Text, "Mia · Clean")
