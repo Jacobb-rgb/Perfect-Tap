@@ -11,9 +11,12 @@ local Theme = require(Shared.Config.UITheme)
 local EventBoardView = {}
 
 EventBoardView.MaxDistance = 900 -- studs: it stands in the mountains, read from the whole town
-EventBoardView.PixelsPerStud = 8 -- (a 120-stud screen: ~960 px wide)
+-- (a 120 x 54-stud screen: 600 x 270 px; review 11-10: TextScaled stops at 100 px, so
+-- at 5 px a stud the big line's letters can be 20 studs tall, read from the spawn)
+EventBoardView.PixelsPerStud = 5
+EventBoardView.TextCap = 100 -- px: Roblox's TextScaled limit
 -- each line's top and height (shares of the screen)
-EventBoardView.Lines = { Title = { 0.05, 0.15 }, Big = { 0.24, 0.36 }, Small = { 0.64, 0.28 } }
+EventBoardView.Lines = { Title = { 0.04, 0.14 }, Big = { 0.2, 0.37 }, Small = { 0.6, 0.34 } }
 
 export type Refs = { Gui: SurfaceGui, Title: TextLabel, Big: TextLabel, Small: TextLabel }
 
@@ -56,6 +59,7 @@ function EventBoardView.fill(refs: Refs, page: EventBoardLogic.Page)
 	refs.Big.Text = page.Big
 	refs.Big.TextColor3 = page.BigColor or Color3.new(1, 1, 1)
 	refs.Small.Text = page.Small
+	refs.Small.TextColor3 = page.SmallColor or Color3.new(1, 1, 1)
 end
 
 return EventBoardView

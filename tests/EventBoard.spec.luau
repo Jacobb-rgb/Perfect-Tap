@@ -367,11 +367,14 @@ return function(T, Loader)
 
 	T.test("event board: the find's page names the finder and the ore, an old one is gone", function()
 		local page = EventBoardLogic.findPage(entry("EmberQueen", "PhoenixFeather", "Flawless"), NOW)
-		T.eq(page.Title, "FIND OF THE DAY")
-		-- (review 11-07: readable on a phone) the ore big in its rarity's colour, the finder on a second big line
+		-- (reviews 11-07, 11-10: readable on a phone) the ore big in its rarity's colour, only the
+		-- finder on the second big line in the grade's colour, the grade in the title
+		T.eq(page.Title, "FIND OF THE DAY · FLAWLESS")
 		T.eq(page.Big, "Phoenix Feather")
 		T.eq(page.BigColor, Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity").ById.Mythic.Color)
-		T.eq(page.Small, "EmberQueen · Flawless")
+		T.eq(page.Small, "EmberQueen")
+		T.eq(page.SmallColor, Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData").GradeById.Flawless.Color)
+		T.eq(EventBoardLogic.findPage(nil, NOW).Title, "FIND OF THE DAY")
 		T.eq(EventBoardLogic.findPage(nil, NOW).Big, "Nobody yet")
 		T.eq(EventBoardLogic.findPage(entry("Old", "Gold", "Clean", TODAY - 1), NOW).Big, "Nobody yet")
 	end)
@@ -397,17 +400,31 @@ return function(T, Loader)
 			local l = d.CFrame:PointToObjectSpace(at)
 			return math.abs(l.X) <= d.Size.X / 2 and math.abs(l.Y) <= d.Size.Y / 2 and math.abs(l.Z) <= d.Size.Z / 2
 		end
-		-- the leg's foot stands on the ground or in the mountain, never on a road
-		local legZ = 2.2 + EventBoard.Leg / 2 + 1
-		local under = (frame * roblox.CFrame.new(0, -0.5, legZ)).Position
-		local standing = false
-		for _, d in parts do
-			if inside(d, under) then
-				standing = true
-				break
+		-- planted (review 11-10): the leg's lowest 2 studs and the foot's lowest one, at the
+		-- middle and round the rim, are inside the mountain or the ground, never over the sea
+		-- (Geo's upright cylinders: their length along the part's X, down = -X)
+		local legZ = EventBoard.LegZ
+		local function planted(at: any): boolean
+			for _, d in parts do
+				if inside(d, at) then
+					return true
+				end
+			end
+			return false
+		end
+		for name, heights in { Leg = { 0.5, 1.5 }, Foot = { 0.5 } } do
+			local part = board:FindFirstChild(name)
+			T.truthy(part, name)
+			local rim = part.Size.Y / 2 - 0.2
+			for k = 0, 8 do
+				local angle = k * math.pi / 4
+				local r = if k == 8 then 0 else rim
+				for _, y in heights do
+					local at = (part.CFrame * roblox.CFrame.new(-part.Size.X / 2 + y, r * math.cos(angle), r * math.sin(angle))).Position
+					T.truthy(planted(at), `the {name} is planted at {at}`)
+				end
 			end
 		end
-		T.truthy(standing, "the leg stands on something")
 		for _, dx in { -EventBoard.Leg, 0, EventBoard.Leg } do
 			for _, dz in { -EventBoard.Leg, 0, EventBoard.Leg } do
 				local at = (frame * roblox.CFrame.new(dx, 1, legZ + dz)).Position
@@ -431,6 +448,19 @@ return function(T, Loader)
 		local span = target - eye
 		local length = span.Magnitude
 		T.truthy(length < EventBoardView.MaxDistance - 100, `its words draw from the spawn ({math.floor(length)} studs)`)
+		-- it faces the spawn (review 11-10: not the piece's own Facing, which could turn to the sea)
+		local look = screen.CFrame.LookVector
+		local flatLook = roblox.Vector3.new(look.X, 0, look.Z).Unit
+		local toSpawn = roblox.Vector3.new(-span.X, 0, -span.Z).Unit
+		T.truthy(flatLook:Dot(toSpawn) > 0.9, "its face turned to the spawn")
+		-- its two big lines readable from the spawn on a phone (390 pt tall, 70 degree view):
+		-- a line's letters are its height or TextScaled's 100 px cap, whichever is less
+		local function points(share: number): number
+			local studs = math.min(share * EventBoard.Screen.Y, EventBoardView.TextCap / EventBoardView.PixelsPerStud)
+			return studs / length / (2 * math.tan(math.rad(35))) * 390
+		end
+		T.truthy(points(EventBoardView.Lines.Big[2]) >= 12, `the ore line {points(EventBoardView.Lines.Big[2])} pt`)
+		T.truthy(points(EventBoardView.Lines.Small[2]) >= 10, `the finder line {points(EventBoardView.Lines.Small[2])} pt`)
 		local near = {}
 		for _, d in parts do
 			local t = math.clamp((d.CFrame.Position - eye):Dot(span) / (length * length), 0, 1)
@@ -495,7 +525,12 @@ return function(T, Loader)
 		local refs = EventBoardView.build(screen)
 		EventBoardView.fill(refs, EventBoardLogic.findPage(entry("Mia", "Gold", "Clean"), NOW))
 		T.eq(refs.Big.Text, "Gold")
-		T.eq(refs.Small.Text, "Mia · Clean")
+		T.eq(refs.Small.Text, "Mia")
+		T.eq(
+			refs.Small.TextColor3,
+			Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData").GradeById.Clean.Color,
+			"in the grade's colour"
+		)
 		T.truthy(refs.Small.Size.Y.Scale >= 0.25, "the second line is big too")
 		T.truthy(refs.Big.Size.Y.Scale >= 0.3)
 		T.eq(refs.Gui.LightInfluence, 0, "readable at night")

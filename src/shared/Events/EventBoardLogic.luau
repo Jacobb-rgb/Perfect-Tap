@@ -18,7 +18,7 @@ local EventBoardLogic = {}
 EventBoardLogic.PageSeconds = 8 -- each page stays this long
 EventBoardLogic.LookAhead = 48 -- weather slots searched for the next event
 
-export type Page = { Id: string, Title: string, Big: string, Small: string, Color: Color3, BigColor: Color3? }
+export type Page = { Id: string, Title: string, Big: string, Small: string, Color: Color3, BigColor: Color3?, SmallColor: Color3? }
 
 local GOLD = Color3.fromRGB(255, 196, 70)
 local SKY = Color3.fromRGB(120, 210, 255)
@@ -76,17 +76,20 @@ function EventBoardLogic.findPage(find: FindOfDay.Entry?, now: number): Page
 			Color = GOLD,
 		}
 	end
-	-- (review 11-07: readable from the spawn on a phone) the ore big in its rarity's colour,
-	-- the finder and the grade on a second big line
+	-- (reviews 11-07 and 11-10: readable from the spawn on a phone) the ore big in its
+	-- rarity's colour, only the finder on the second big line, in the grade's colour,
+	-- the grade in the title
 	local rarity = Rarity.ById[ore.Rarity]
 	local grade = ItemData.GradeById[find.Grade]
+	local gradeName = if grade then grade.Name else tostring(find.Grade)
 	return {
 		Id = "Find",
-		Title = "FIND OF THE DAY",
+		Title = `FIND OF THE DAY · {string.upper(gradeName)}`,
 		Big = ore.Name,
-		Small = `{find.Name} · {if grade then grade.Name else find.Grade}`,
+		Small = find.Name,
 		Color = GOLD,
 		BigColor = if rarity then rarity.Color else nil,
+		SmallColor = if grade then grade.Color else nil,
 	}
 end
 

@@ -9,8 +9,9 @@
 
 	From the spawn and the town it stands right of the Great Forge, above
 	the mountain, clear of the golden dragon's sign in front and of the
-	planets (LobbySky specs). It is far (about 330 studs from the spawn), so
-	the model streams Persistent and its screen draws out to
+	planets (LobbySky specs); from the town it stands in front of the airship
+	(review 11-10: the owner's call). It is far (about 390 studs from the
+	spawn), so the model streams Persistent and its screen draws out to
 	EventBoardView.MaxDistance.
 
 	Pure builder. The screen is one part, tag EventBoardScreen; the clients
@@ -31,6 +32,7 @@ EventBoard.Height = 64
 EventBoard.Bottom = 132 -- its lower edge, over the mountain's shoulder and the sky islets in front
 EventBoard.Screen = Vector2.new(120, 54)
 EventBoard.Leg = 12 -- the round leg's diameter
+EventBoard.LegZ = 2.2 + EventBoard.Leg / 2 + 1 -- behind the board: its front face stays clear of the leg
 EventBoard.Lamps = 3
 EventBoard.MaxParts = 60
 
@@ -65,14 +67,13 @@ function EventBoard.build(parent: Instance): Model
 	end
 
 	-- the very thick round leg, from deep in the mountain up behind the board, its collars and foot
-	-- (behind the board: its front face stays clear of the leg)
-	local legZ = 2.2 + EventBoard.Leg / 2 + 1
+	local legZ = EventBoard.LegZ
 	local legTop = mid
-	column(0, legTop / 2, legZ, legTop, EventBoard.Leg, IRON_DARK)
+	column(0, legTop / 2, legZ, legTop, EventBoard.Leg, IRON_DARK).Name = "Leg"
 	for _, y in { 20, 60, 100 } do
 		column(0, y, legZ, 2.2, EventBoard.Leg + 2, IRON)
 	end
-	column(0, 2, legZ, 4, EventBoard.Leg + 10, Color3.fromRGB(96, 98, 104))
+	column(0, 2, legZ, 4, EventBoard.Leg + 10, Color3.fromRGB(96, 98, 104)).Name = "Foot"
 	-- the cross beam behind the board and two struts up to it
 	box(0, mid, 3.8, Vector3.new(w - 8, 4, 3), IRON_DARK)
 	for _, side in { -1, 1 } do
@@ -111,7 +112,8 @@ function EventBoard.build(parent: Instance): Model
 		local aim = at(x, mid - 6, -1.7)
 		local head = Geo.block(model, CFrame.lookAt(lampAt, aim), Vector3.new(4, 3, 3), IRON, METAL)
 		head.Name = "Lamp"
-		local face = Geo.block(model, CFrame.lookAt(lampAt, aim) * CFrame.new(0, 0, -1.55), Vector3.new(3.2, 2.2, 0.2), LAMP, Enum.Material.Neon)
+		local face =
+			Geo.block(model, CFrame.lookAt(lampAt, aim) * CFrame.new(0, 0, -1.55), Vector3.new(3.2, 2.2, 0.2), LAMP, Enum.Material.Neon)
 		face.Name = "LampFace"
 		face.CastShadow = false
 		local light = Instance.new("SpotLight")
