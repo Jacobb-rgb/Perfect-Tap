@@ -59,6 +59,7 @@ return function(T, Loader)
 			flash = 0,
 			blur = 0,
 			removing = signal(),
+			net = {},
 		}
 		local gui = { TouchControlsEnabled = true, SelectedObject = nil }
 		local function always(value: any): any
@@ -140,7 +141,11 @@ return function(T, Loader)
 			StateController = { onChanged = function() end },
 			InteractController = { suspend = tally("suspends"), resume = tally("resumes") },
 			MiningController = { setBusy = keep("busy") },
-			Net = { listen = function() end },
+			Net = {
+				listen = function(name, fn)
+					w.net[name] = fn
+				end,
+			},
 			Motion = { reduced = always(reduced) },
 		}
 		local env: any = {
@@ -200,6 +205,9 @@ return function(T, Loader)
 				end
 			end
 		end
+		function w.stage(): any
+			return workspace:FindFirstChild("CrateOpening"):FindFirstChild("CrateOpening")
+		end
 		function w.press()
 			w.actions[SKIP]("Skip", Enum.UserInputState.Begin)
 		end
@@ -258,6 +266,43 @@ return function(T, Loader)
 		w.isBack("reset at the burst")
 		w.run(1)
 		w.isBack("a moment later")
+	end)
+
+	T.test("CrateOpening controller: the item paid for is the one on the stage and in the words", function()
+		local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+		local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+		local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+		local function paid(level: number, sent: any, ore: string)
+			local label = string.format("level %d, %s: ", level, tostring(sent))
+			local C, w = controller(true) -- (Reduce motion: the gun's colours stay exact)
+			w.net.VaultResult({ Ok = true, Level = level, Ore = sent })
+			T.truthy(C.isPlaying(), label .. "it plays")
+			w.run(Stage.T_HOLD + 0.1)
+			T.eq(w.overlay("BlasterName").Text, string.upper(BlasterData.displayName(level, ore)), label .. "name")
+			T.eq(w.overlay("Stats").Text, "LV " .. level, label .. "level")
+			T.eq(w.overlay("Damage").Text, Format.big(BlasterData.damage(level, ore)), label .. "damage")
+			local stage = w.stage()
+			T.eq(stage:FindFirstChild("Seam", true).Color, BlasterBuilder.colors(level, ore).Color, label .. "the crate's colour")
+			-- the blaster on the stage, piece by piece
+			local want, got = Stage.blasterModel(level, ore):GetDescendants(), stage:FindFirstChild("Blaster"):GetDescendants()
+			T.eq(#got, #want, label .. "its pieces")
+			for i, d in want do
+				if d:IsA("BasePart") then
+					T.eq(got[i].Name, d.Name, label .. "piece " .. i)
+					T.eq(got[i].Color, d.Color, label .. d.Name .. " " .. i)
+				end
+			end
+			w.press()
+			w.run(Stage.Duration - Stage.T_HOLD + 0.6)
+			T.truthy(string.find(w.toasts[1], BlasterData.displayName(level, ore), 1, true), label .. "the toast: " .. w.toasts[1])
+		end
+		-- what the server can send: a level in its case's ore
+		paid(7, BlasterData.vaultOre(7), BlasterData.vaultOre(7))
+		-- the rest are the controller's defensive branches, the server sends none of them today
+		paid(5, "Sapphire", "Sapphire") -- another ore than its case's
+		paid(3, "", "") -- no ore
+		paid(4, "NotAnOre", BlasterData.vaultOre(4)) -- a bad name: its case's ore
+		paid(6, nil, BlasterData.vaultOre(6))
 	end)
 
 	T.test("CrateOpening controller: the burst has its one flash, through the game's flash gap", function()

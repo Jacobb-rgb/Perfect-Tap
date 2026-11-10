@@ -10,7 +10,8 @@
 	  Second  G         B        the second prompt on the same spot: "Open
 	                             Pen", "Send Train", "Take Ore
 	                             Back", "Keep List", "Change Sort"
-	  Panel   T         L3       the client's "Train" panel prompt at a station
+	  Panel   T         L3       the client's "Train" panel prompt at a station;
+	                             a machine's "Upgrades" while "Put In" has E
 
 	Taken elsewhere: F / gamepad X is Grab / Drop (InteractController), Q /
 	RB Throw. Gamepad Y stays the main prompt button because Roblox's own
@@ -60,9 +61,17 @@ function PromptConfig.keys(role: Role?): Keys
 	return PromptConfig.Keys.Main
 end
 
+-- Puts a prompt on a role's keys and in a slot (make does it; a client prompt
+-- that steps aside for another one on its spot calls it again).
+function PromptConfig.setRole(prompt: ProximityPrompt, role: Role?, slot: number?)
+	local keys = PromptConfig.keys(role)
+	prompt.KeyboardKeyCode = keys.Keyboard
+	prompt.GamepadKeyCode = keys.Gamepad
+	prompt.UIOffset = Vector2.new(0, (slot or 0) * PromptConfig.SlotHeight)
+end
+
 -- A new ProximityPrompt in the stock Roblox look with the role's keys.
 function PromptConfig.make(spec: Spec): ProximityPrompt
-	local keys = PromptConfig.keys(spec.Role)
 	local prompt = Instance.new("ProximityPrompt")
 	if spec.Name then
 		prompt.Name = spec.Name
@@ -74,12 +83,10 @@ function PromptConfig.make(spec: Spec): ProximityPrompt
 		prompt.ObjectText = spec.ObjectText
 	end
 	prompt.Style = Enum.ProximityPromptStyle.Default
-	prompt.KeyboardKeyCode = keys.Keyboard
-	prompt.GamepadKeyCode = keys.Gamepad
+	PromptConfig.setRole(prompt, spec.Role, spec.Slot)
 	prompt.HoldDuration = spec.Hold or 0
 	prompt.MaxActivationDistance = spec.Distance or PromptConfig.Distance
 	prompt.RequiresLineOfSight = spec.Sight == true
-	prompt.UIOffset = Vector2.new(0, (spec.Slot or 0) * PromptConfig.SlotHeight)
 	if spec.Exclusivity then
 		prompt.Exclusivity = spec.Exclusivity
 	end

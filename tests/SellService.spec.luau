@@ -355,13 +355,12 @@ return function(T, Loader)
 		T.eq(w.data.Coins, 0, "nothing paid for podium ore")
 		act(w, "Sell", { Key = "Clean|Silver|Rough|", Count = 2, From = "Pen" })
 		T.eq(w.data.Coins, price("Clean", "Silver", "Rough"), "only the pen's silver")
-		act(w, "SellAll", { Filter = "AllButBest" })
+		act(w, "SellAll", { Filter = "All" })
 		act(w, "SellAll", { Filter = "Dirty" })
 		T.eq(w.data.Podiums[1], "Clean|Gold|Flawless|", "podium 1 untouched")
 		T.eq(w.data.Podiums[2], "Clean|Silver|Rough|", "podium 2 untouched")
 		T.eq(#w.data.Podiums, 4, "four slots")
-		-- the best 4 coal stay; one is sold
-		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 4, "best four kept")
+		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 0, "the pen's coal is sold")
 	end)
 
 	---------------------------------------------------------------- bad input
@@ -516,26 +515,141 @@ return function(T, Loader)
 			["Clean|Silver|Clean|"] = 2,
 			["Ingot|Iron|Clean|"] = 1,
 			["Raw|Diamond||"] = 1,
-		}, { ["Clean|Amethyst|Pristine|"] = 1, ["Crushed|Tin|Rough|"] = 1 }, "AllButBest", nil)
-		act(w, "SellAll", { Filter = "AllButBest" })
-		local expected = price("Clean", "Coal", "Rough") * 3 + price("Ingot", "Iron", "Clean") + price("Crushed", "Tin", "Rough")
-		T.eq(w.data.Coins, expected, "coal, ingot and crushed tin sold")
-		T.eq(plan.Count, 5, "the view plans 5")
-		T.eq(plan.Total, expected, "the view knows the total")
-		T.eq(plan.Kept, 4, "four kept")
-		T.eq(plan.Dirty, 0, "dirty ore not in it")
-		T.eq(w.data.Stats.ItemsSold, 5, "stats")
-		T.eq(count(w.data.Storage, "Clean|Gold|Flawless|"), 1, "gold kept")
-		T.eq(count(w.data.Storage, "Clean|Silver|Clean|"), 2, "silver kept")
-		T.eq(count(w.data.Storage, "Raw|Diamond||"), 1, "dirty ore kept")
-		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 0, "coal sold")
-		T.eq(inPack(w, amethyst), 1, "amethyst kept")
+		}, { ["Clean|Amethyst|Pristine|"] = 1, ["Crushed|Tin|Rough|"] = 1 }, "All", nil)
+		act(w, "SellAll", { Filter = "All" })
+		local expected = price("Clean", "Coal", "Rough") * 3
+			+ price("Clean", "Gold", "Flawless")
+			+ price("Clean", "Silver", "Clean") * 2
+			+ price("Ingot", "Iron", "Clean")
+			+ price("Clean", "Amethyst", "Pristine")
+			+ price("Crushed", "Tin", "Rough")
+			+ price("Raw", "Diamond")
+		T.eq(w.data.Coins, expected, "everything sold, the best ores and the Dirty Ore too")
+		T.eq(plan.Count, 10, "the view plans all 10")
+		T.eq(plan.Total, expected - price("Raw", "Diamond"), "the view knows the clean ones' total (a Dirty Ore's price stays hidden)")
+		T.eq(plan.Dirty, 1, "the Dirty Ore is in it")
+		T.eq(w.data.Stats.ItemsSold, 10, "stats")
+		T.eq(#w.data.Storage, 0, "the pen is empty")
+		T.eq(inPack(w, amethyst), 0, "amethyst sold")
 		T.eq(inPack(w, crushed), 0, "crushed tin sold")
-		-- now only the best four (and dirty ore) are left: nothing to sell
+		T.truthy(string.find(SellView.confirmPlanText(plan, "All"), "Dirty", 1, true) ~= nil, "the confirm tells about the Dirty Ore")
+		-- nothing left: told why
 		w.notes = {}
-		act(w, "SellAll", { Filter = "AllButBest" })
+		act(w, "SellAll", { Filter = "All" })
 		T.eq(w.data.Coins, expected, "nothing more")
 		T.eq(notes(w, "Notify", w.player)[1].A.Kind, "Deny", "told why")
+		-- the old filter is gone (owner 2026-11-07: only Sell All)
+		pen(w, { { "Clean", "Coal", "Rough" } })
+		act(w, "SellAll", { Filter = "AllButBest" })
+		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 1, "an unknown filter sells nothing")
+	end)
+
+	withWorld("SellService: Sell All never sells a SECRET ore (owner 2026-10-29: only on its own, by choice)", function(w)
+		pen(w, { { "Clean", "RainbowNova", "Flawless" }, { "Clean", "Coal", "Rough" } })
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(count(w.data.Storage, "Clean|RainbowNova|Flawless|"), 1, "the secret ore stays")
+		T.eq(count(w.data.Storage, "Clean|Coal|Rough|"), 0, "the coal is sold")
+		local plan = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1 }, {}, "All", nil)
+		T.eq(plan.Count, 0)
+		T.eq(plan.Secret, 1, "the view knows why")
+		T.truthy(string.find(SellView.nothingText(plan), "secret ores", 1, true) ~= nil, "says why nothing sold")
+		w.notes = {}
+		act(w, "SellAll", { Filter = "All" })
+		T.truthy(string.find(notes(w, "Notify", w.player)[1].A.Text, "secret ores", 1, true) ~= nil, "the server says it too")
+		-- a dirty secret never gives itself away
+		T.eq(SellView.plan({ ["Raw|HollowEye||"] = 1 }, {}, "All", nil).Secret, 0, "its Dirty Ore isn't named a secret")
+		T.eq(SellView.nothingText(SellView.plan({ ["Raw|HollowEye||"] = 1 }, {}, "All", nil)), "You have nothing to sell.")
+		local mixed = SellView.plan({ ["Clean|RainbowNova|Flawless|"] = 1, ["Clean|Coal|Rough|"] = 12 }, {}, "All", nil)
+		T.truthy(string.find(SellView.confirmPlanText(mixed, "All"), "Secret ores stay", 1, true) ~= nil, "the confirm tells")
+		local big = SellView.plan({ ["Raw|Coal||"] = MAX + 10 }, { ["Raw|Coal||"] = 7 }, "All", nil)
+		T.eq(big.PenLeft, 10, "only the pen's own rest")
+		T.truthy(
+			string.find(SellView.confirmPlanText(big, "All"), "10 more stay", 1, true) ~= nil,
+			"the rest, not the total with the backpack"
+		)
+		-- Dirty Ore always asks (it may be a rare ore at the raw price), and the price never hides it
+		local few = SellView.plan({ ["Raw|Heartstone||"] = 2, ["Clean|Gold|Pristine|"] = 1 }, {}, "All", nil)
+		T.eq(few.Count, 3)
+		T.falsy(SellView.needsConfirm(few.Count, 0), "few, and no known rare one")
+		T.truthy(SellView.planNeedsConfirm(few), "Dirty Ore asks first")
+		local words = SellView.confirmPlanText(few, "All")
+		T.truthy(string.find(words, "1 item for ", 1, true) and string.find(words, "2 Dirty Ore at the raw price", 1, true), words)
+		T.eq(string.find(words, "Heartstone", 1, true), nil, "never its secret")
+		T.truthy(
+			string.find(SellView.confirmPlanText(SellView.plan({ ["Clean|Coal|Rough|"] = 300 }, {}, "All", nil), "All"), "$", 1, true),
+			"the price shows when capped too"
+		)
+	end)
+
+	T.test("SellController: the one Sell All sends All, asking first when it must", function()
+		-- (the client's controllers read the local player when they load)
+		local Players = Loader.game:GetService("Players")
+		local hadLocal = rawget(Players, "LocalPlayer")
+		rawset(Players, "LocalPlayer", hadLocal or {
+			Name = "Me",
+			UserId = 1,
+			WaitForChild = function()
+				return Instance.new("Folder")
+			end,
+			GetAttribute = function() end,
+			GetAttributeChangedSignal = function()
+				return { Connect = function() end }
+			end,
+		})
+		local Sell = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.SellController")
+		rawset(Players, "LocalPlayer", hadLocal)
+		local State = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.StateController")
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local sent: { { any } } = {}
+		local Sounds = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Sfx")
+		local send, get, mult, play = Net.send, State.get, State.sellMult, Sounds.play
+		Sounds.play = function() end
+		local Input = Loader.game:GetService("UserInputService")
+		local hadInput = rawget(Input, "GetLastInputType")
+		rawset(Input, "GetLastInputType", function()
+			return roblox.Enum.UserInputType.Keyboard
+		end)
+		local storage: { [string]: number } = {}
+		local view = SellView.build(false)
+		Net.send = function(...)
+			table.insert(sent, { ... })
+		end
+		State.get = function(): any
+			return { Storage = storage }
+		end
+		State.sellMult = function(): number
+			return 1
+		end
+		Sell._test.setView(view)
+		local ok, err = pcall(function()
+			storage = {}
+			Sell._test.setHands({})
+			Sell._test.press()
+			T.eq(#sent, 0, "nothing to sell: nothing sent")
+			-- a few clean ores: no question
+			storage = { ["Clean|Coal|Rough|"] = 2 }
+			Sell._test.press()
+			T.eq(#sent, 1, "sent at once")
+			T.eq(sent[1][1], "SellAction")
+			T.eq(sent[1][2], "SellAll")
+			T.eq(sent[1][3].Filter, "All", "the filter the server knows")
+			-- with Dirty Ore: the confirm first, sent on its yes
+			Sell._test.unlock()
+			storage = { ["Raw|Coal||"] = 1 }
+			Sell._test.press()
+			T.eq(#sent, 1, "asks first")
+			T.truthy(view.Confirm.Visible, "the confirm shows")
+			T.truthy(Sell._test.confirm(), "its yes")
+			T.eq(#sent, 2, "then sent")
+			T.eq(sent[2][3].Filter, "All")
+		end)
+		Net.send, State.get, State.sellMult, Sounds.play = send, get, mult, play
+		rawset(Input, "GetLastInputType", hadInput)
+		Sell._test.setView(nil)
+		Sell._test.unlock()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withWorld("SellService: at most MaxPerRequest items per request", function(w)
@@ -549,6 +663,39 @@ return function(T, Loader)
 		local plan = SellView.plan({ ["Raw|Coal||"] = MAX + 10 }, {}, "Dirty", nil)
 		T.eq(plan.Count, MAX, "view: capped")
 		T.eq(plan.Eligible, MAX + 10, "view: eligible")
+	end)
+
+	withWorld("SellService: over the pen's cap Sell All takes what the confirm named (a Dirty Ore stored first too)", function(w)
+		-- the pen's own order: the Dirty Ore first; the view plans its keys alphabetically
+		pen(w, { { "Raw", "Heartstone", nil, 5 }, { "Clean", "Coal", "Rough", MAX + 10 } })
+		local plan = SellView.plan({ ["Raw|Heartstone||"] = 5, ["Clean|Coal|Rough|"] = MAX + 10 }, {}, "All", nil)
+		T.eq(plan.Count, MAX, "the view: capped")
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Stats.ItemsSold, plan.Count, "the count it named")
+		T.eq(w.data.Coins, plan.Total + plan.Dirty * price("Raw", "Heartstone"), "the price it named, and no unnamed Dirty Ore")
+		T.eq(#w.data.Storage, plan.PenLeft, "what it said stays")
+		T.eq(count(w.data.Storage, "Raw|Heartstone||"), 5 - plan.Dirty, "the Dirty Ore waits for the press that names it")
+		-- the next press names the Dirty Ore and sells it
+		local coins = w.data.Coins
+		local again = SellView.plan(
+			{ ["Raw|Heartstone||"] = 5 - plan.Dirty, ["Clean|Coal|Rough|"] = MAX + 10 - (plan.Count - plan.Dirty) },
+			{},
+			"All",
+			nil
+		)
+		T.eq(again.Dirty, 5, "the next confirm names all five")
+		T.truthy(string.find(SellView.confirmPlanText(again, "All"), "Dirty", 1, true) ~= nil, "and says Dirty Ore")
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Coins - coins, again.Total + again.Dirty * price("Raw", "Heartstone"), "paid as named")
+		T.eq(#w.data.Storage, 0, "the pen is empty")
+		-- clean ores of two prices over the cap: the same total as the confirm
+		w.data.Coins = 0
+		w.data.Stats.ItemsSold = 0
+		pen(w, { { "Clean", "Gold", "Flawless", 30 }, { "Clean", "Coal", "Rough", 30 } })
+		local mixed = SellView.plan({ ["Clean|Gold|Flawless|"] = 30, ["Clean|Coal|Rough|"] = 30 }, {}, "All", nil)
+		act(w, "SellAll", { Filter = "All" })
+		T.eq(w.data.Coins, mixed.Total, "the price the confirm named")
+		T.eq(#w.data.Storage, mixed.PenLeft, "the rest stays")
 	end)
 
 	withWorld("SellService: a whole full backpack sells in one press (the pen 50 at a time)", function(w)
@@ -583,7 +730,7 @@ return function(T, Loader)
 			coroutine.create(act),
 			coroutine.create(act),
 		}
-		local args = { { "Sell", penArg }, { "Sell", penArg }, { "Sell", handArg }, { "SellAll", { Filter = "AllButBest" } } }
+		local args = { { "Sell", penArg }, { "Sell", penArg }, { "Sell", handArg }, { "SellAll", { Filter = "All" } } }
 		for i, thread in threads do
 			local ok, err = coroutine.resume(thread, w, args[i][1], args[i][2])
 			T.truthy(ok, `request {i} ran: {err}`)
@@ -727,9 +874,9 @@ return function(T, Loader)
 		T.truthy(SellView.needsConfirm(1, mythic.RarityOrder), "a clean mythic asks")
 		T.truthy(string.find(SellView.confirmRowText(mythic, 1), "(Mythic)", 1, true) ~= nil, "names the rarity")
 		T.truthy(string.find(SellView.confirmRowText(dirty, 1), "Heartstone", 1, true) == nil, "dirty text hides the ore")
-		local plan = SellView.plan({ ["Clean|Coal|Rough|"] = 20 }, {}, "AllButBest", nil)
-		T.eq(plan.Count, 16, "keeps 4")
-		T.truthy(string.find(SellView.confirmPlanText(plan, "AllButBest"), Format.money(plan.Total), 1, true) ~= nil, "total shown")
+		local plan = SellView.plan({ ["Clean|Coal|Rough|"] = 20 }, {}, "All", nil)
+		T.eq(plan.Count, 20, "all of them")
+		T.truthy(string.find(SellView.confirmPlanText(plan, "All"), Format.money(plan.Total), 1, true) ~= nil, "total shown")
 	end)
 
 	T.test("SellView: builds, fills and fits phones", function()
@@ -755,8 +902,9 @@ return function(T, Loader)
 		local holder = refs.Rows["Pen/Dirty"].SellOne.Parent
 		T.truthy(holder.Size.Y.Offset * 0.62 >= 44, "touch target")
 		T.truthy(refs.Panel.Size.X.Offset <= 390 / 0.62 - 24 or refs.Panel.Size.X.Offset == 560, "fits a narrow screen")
-		SellView.setFooter(refs, SellView.plan({}, {}, "Dirty", nil), SellView.plan({}, {}, "AllButBest", nil))
-		T.eq(refs.SellDirty.Text, "Sell all Dirty Ore", "footer label")
+		SellView.setFooter(refs, SellView.plan({}, {}, "All", nil))
+		T.eq(refs.SellEverything.Text, "Sell All", "one button, its word")
+		T.falsy(refs.Footer:FindFirstChild("SellDirty", true) or refs.Footer:FindFirstChild("SellRest", true), "nothing else")
 		SellView.showConfirm(refs, "Sell?")
 		T.truthy(refs.Confirm.Visible, "confirm shown")
 		SellView.hideConfirm(refs)

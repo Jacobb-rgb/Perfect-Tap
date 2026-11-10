@@ -44,6 +44,7 @@ export type Pattern = {
 	Cells: { Cell },
 	CellAt: { [number]: number }, -- Gx * Grid + Gy -> cell index (cells inside the outline only)
 	Crystals: { Crystal },
+	ParAmount: number?, -- the dirt par is timed by (thin: the amount before the snow thinned it)
 	TotalAmount: number,
 	Required: number, -- clean cells that finish the job
 }
@@ -61,6 +62,23 @@ end
 
 function CleaningPatterns.key(grid: number, gx: number, gy: number): number
 	return gx * grid + gy
+end
+
+-- The same pattern with its dirt `factor` times thinner (snow, WeatherBonus): the server decides
+-- when a cleaning starts and both sides apply it, so the check stays exact.
+function CleaningPatterns.thin(pattern: Pattern, factor: number): Pattern
+	if type(factor) ~= "number" or factor ~= factor or factor <= 1 or factor > 2 then
+		return pattern
+	end
+	local total = 0
+	for _, cell in pattern.Cells do
+		cell.Amount /= factor
+		total += cell.Amount
+	end
+	-- par stays the clump's (review 11-07: thinner dirt must never make the score harder)
+	pattern.ParAmount = pattern.ParAmount or pattern.TotalAmount
+	pattern.TotalAmount = total
+	return pattern
 end
 
 function CleaningPatterns.generate(oreId: string, seed: number): Pattern

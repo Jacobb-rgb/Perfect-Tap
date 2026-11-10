@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 14, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate)
+	Version = 16, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate; 15: the one belt's level; 16: the Ore Feeder)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent

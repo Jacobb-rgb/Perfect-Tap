@@ -174,8 +174,8 @@ SecretService.random = function(): number
 	return math.random()
 end
 
-function SecretService.rollDrop(luck: number, floorId: string?): string?
-	return SecretOreConfig.roll(floorId, luck, SecretService.random)
+function SecretService.rollDrop(luck: number, floorId: string?, extra: number?): string?
+	return SecretOreConfig.roll(floorId, luck, SecretService.random, extra)
 end
 
 function SecretService.announce(player: Player, oreId: string)

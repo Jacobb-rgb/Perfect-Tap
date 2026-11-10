@@ -180,7 +180,7 @@ return function(T, Loader)
 	end)
 
 	-- a gun firing for real in BlasterShots: Env and Vfx stood in; returns what it flashed and its light
-	local function firing(own: boolean, reduced: boolean): any
+	local function firing(own: boolean, reduced: boolean, place: any?): any
 		local Vfx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.Vfx")
 		local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
 		local BlasterShots = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.BlasterShots")
@@ -198,7 +198,7 @@ return function(T, Loader)
 			return false
 		end
 		env.worldOf = function()
-			return Vector3.zero
+			return if place then place.Muzzle else Vector3.zero
 		end
 		local now = 1000
 		env.clock = function()
@@ -231,6 +231,9 @@ return function(T, Loader)
 		Motion.setReduced(reduced)
 		local holder = Instance.new("Part")
 		holder.Parent = fx
+		if place then
+			holder.CFrame = holder.CFrame + place.Hand
+		end
 		local muzzle = Instance.new("Attachment")
 		muzzle.Parent = holder
 		local key = {}
@@ -241,11 +244,12 @@ return function(T, Loader)
 				end,
 				Hit = function(point: Vector3, back: Vector3)
 					out.Hit += 1
+					out.Back = back
 					Vfx.impact(point, Color3.new(1, 0, 1), back, 1)
 				end,
 			}
 			else nil
-		local to = Vector3.new(0, 0, -24)
+		local to = if place then place.To else Vector3.new(0, 0, -24)
 		local ok, err = pcall(function()
 			local dt = 1 / 30
 			for frame = 1, 30 * 3 do
@@ -306,6 +310,54 @@ return function(T, Loader)
 		T.truthy(theirs.Impact > 10, "their small impacts: " .. theirs.Impact)
 		T.near(spread(theirs.Bright), 0, 1e-6, "their gun's light never pulses")
 		T.lt(theirs.Muzzle, mine.Muzzle, "their guns fire slower")
+	end)
+
+	T.test("Shots: close to a rock a shot still flies forward and lands (every gun is long)", function()
+		local Shots = BlasterFeel.Shots
+		local hand, muzzle = Vector3.new(0, 3, 0), Vector3.new(0, 3, -5.25) -- the gun's real reach, barrel along -Z
+		local forward = Vector3.new(0, 0, -1)
+		-- far enough: from the muzzle, as ever
+		T.eq(BlasterFeel.shotStart(hand, muzzle, Vector3.new(0, 3, -24)), muzzle, "far: the muzzle")
+		T.eq(BlasterFeel.shotStart(hand, muzzle, muzzle + forward * Shots.MinPath), muzzle, "just far enough: the muzzle")
+		T.eq(BlasterFeel.shotStart(muzzle, muzzle, Vector3.new(0, 3, -24)), muzzle, "no gun length: the muzzle")
+		T.eq(Shots.MinPath, 2.5, "a shot flies 2.5 studs when it can")
+		T.eq(Shots.MinShot, 0.5, "a shorter one than half a stud is not drawn")
+		-- right against a rock: from the hand, a shorter shot, never from behind the player's back
+		T.eq(BlasterFeel.shotStart(hand, muzzle, hand + forward * 1.2), hand, "a rock 1.2 ahead: from the hand")
+		T.eq(BlasterFeel.shotStart(hand, muzzle, hand + forward * 0.2), hand, "the hand in the rock: still the hand")
+		-- every target from past the hand to beyond the muzzle, straight ahead and off to the sides
+		for z = 0, 12, 0.25 do
+			for _, side in { Vector3.zero, Vector3.new(1.5, 0, 0), Vector3.new(-3, -1, 0), Vector3.new(0, 2, 0) } do
+				local to = hand + forward * z + side
+				local start = BlasterFeel.shotStart(hand, muzzle, to)
+				local path = to - start
+				local label = string.format(" (a target %.2f ahead, %.1f aside)", z, side.Magnitude)
+				-- as far as it can: MinPath, or all the way from the hand
+				local can = math.min(Shots.MinPath, (to - hand).Magnitude)
+				T.le(can - 1e-3, path.Magnitude, "it flies" .. label)
+				T.le(0, path:Dot(forward), "forward" .. label)
+				local along = (start - hand):Dot(forward)
+				T.le(-1e-3, along, "never behind the hand" .. label)
+				T.le(along, 5.25 + 1e-3, "never past the muzzle" .. label)
+			end
+		end
+		-- the FIRE button's aim finds the rock's surface from the body (a ray from a muzzle inside the rock finds none)
+		local mining = require("@lune/fs").readFile(Loader.root .. "/src/client/Controllers/MiningController.luau")
+		T.truthy(string.find(mining, "surfacePoint(root.Position, rock)", 1, true), "aim assist from the body")
+		-- a rock 2-6 studs ahead of the hand, firing for real: the shots, the flashes, the hits, all there
+		for _, ahead in { 1, 2, 4, 5.25, 5.5, 6, 7 } do
+			local out = firing(true, false, { Hand = hand, Muzzle = muzzle, To = hand + forward * ahead })
+			local label = ahead .. " studs ahead: "
+			T.lt(20, out.Muzzle, label .. "muzzle flashes: " .. out.Muzzle)
+			T.lt(20, out.Hit, label .. "hit pulses: " .. out.Hit)
+			T.lt(20, out.Impact, label .. "small impacts: " .. out.Impact)
+			T.lt((out.Back :: any):Dot(forward), 0, label .. "the last shot flew forward")
+		end
+		-- the hand in the rock: no shots drawn, your sound and recoil still play
+		local inside = firing(true, false, { Hand = hand, Muzzle = muzzle, To = hand + forward * 0.3 })
+		T.eq(inside.Impact, 0, "the hand in the rock: nothing drawn")
+		T.eq(inside.Muzzle, 0, "the hand in the rock: no muzzle flashes")
+		T.lt(20, inside.Shot, "the hand in the rock: the sound and recoil still play: " .. inside.Shot)
 	end)
 
 	T.test("Shots: Reduce motion: no muzzle or impact flashes, a dim steady light", function()

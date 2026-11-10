@@ -423,6 +423,13 @@ function IntakeService.react(machine: PlacedMachine, record: ItemRecord, reason:
 end
 
 -- Loads carried items that the machine takes, top of the stack first.
+-- Machines that load a whole backpack in one pass (the Ore Feeder): (player, machine) -> loaded.
+local bulkLoaders: { [string]: (Player, PlacedMachine) -> number } = {}
+
+function IntakeService.setBulkLoader(machineId: string, loader: (Player, PlacedMachine) -> number)
+	bulkLoaders[machineId] = loader
+end
+
 local function loadFromHands(player: Player, machine: PlacedMachine)
 	if machine.Removed then
 		return
@@ -431,12 +438,17 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 		Net.fire("Notify", player, { Text = "That's not your machine.", Kind = "Deny" })
 		return
 	end
+	local bulk = bulkLoaders[machine.Id]
+	if bulk and bulk(player, machine) > 0 then
+		return
+	end
 	local function fits(desc: Desc): boolean
 		return (MachineService.canAccept(machine, desc, player.UserId, "Hand"))
 	end
-	-- from the backpack, one at a time while the machine takes them (its queue may fill)
+	-- from the backpack, one at a time while the machine takes them (its queue may fill;
+	-- the Ore Feeder takes a whole backpack: MachineData LoadMax)
 	local loaded = 0
-	for _ = 1, MAX_LOAD do
+	for _ = 1, machine.Info.LoadMax or MAX_LOAD do
 		local desc = CarryService.take(player, fits, 1)[1]
 		if not desc then
 			break

@@ -8,7 +8,7 @@
 	            (all Dirty Ore of a section merged into one row, grey "?"
 	            icon, price "?"): ore-colour icon, name, grade chip, count,
 	            Tobin's price each, "Sell 1" and "Sell all"
-	  footer    "Sell all Dirty Ore", "Sell all but best 4", control hint
+	  footer    "Sell All" (owner 2026-11-07: one button, nothing else), control hint
 	  confirm   a dim layer with "Sell N items for $X?" and Sell / Cancel
 
 	Designed for 720 design units of height (HudController.uiScale); the
@@ -92,8 +92,7 @@ export type Refs = {
 	Empty: { [Section]: TextLabel },
 	Rows: { [string]: Row },
 	Footer: Frame,
-	SellDirty: TextButton,
-	SellRest: TextButton,
+	SellEverything: TextButton,
 	Hint: TextLabel,
 	Confirm: TextButton, -- the dim layer (clicking it cancels)
 	ConfirmBox: Frame,
@@ -108,8 +107,9 @@ export type Plan = {
 	Eligible: number, -- items the filter matches in total
 	Total: number, -- coins for the known items in Count
 	Dirty: number, -- Dirty Ore among Count (price unknown)
+	Secret: number, -- cleaned SECRET ores left out (never in a batch; they sell one by one)
+	PenLeft: number, -- items of the Ore Pen past its cap: a next press sells them
 	BestOrder: number, -- rarest known item sold (Rarity order, 0 = none)
-	Kept: number, -- clean ores kept by "AllButBest"
 }
 
 -- one item in a plan
@@ -129,7 +129,6 @@ end
 SellView.MaxRows = 120 -- per section
 SellView.ConfirmCount = 10 -- selling more than this asks first
 SellView.ConfirmRarity = 4 -- ...and so does anything Epic or rarer
-SellView.KeepBest = 4 -- must match SellService.KeepBest
 SellView.DirtyColor = Color3.fromRGB(120, 112, 106)
 
 type Metrics = {
@@ -332,12 +331,13 @@ end
 
 --[[
 	What SellAll { Filter, From? } would sell from these summaries, with the
-	server's rules: "Dirty" = all Dirty Ore; "AllButBest" = everything else
-	except the KeepBest cleaned ores with the highest income. Hands first,
+	server's rules: "Dirty" = all Dirty Ore; "All" = everything (a SECRET ore
+	is never in a batch). Hands first,
 	at most EconomyConfig.sellCap items of each section. Total includes the sell
 	bonus `sellMult` (nil = 1), rounded once like SellService.
 ]]
 function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sellMult: number?): Plan
+	local secret = 0
 	local units: { Unit } = {}
 	local function add(summary: any, section: Section)
 		if type(summary) ~= "table" then
@@ -357,7 +357,10 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 				then math.floor(math.min(raw, EconomyConfig.Sell.MaxBackpackPerRequest))
 				else 0
 			-- (a SECRET ore is never sold in a batch: SellService skips it the same way)
-			if desc and not SecretOreConfig.isSecret(desc.O) then
+			if desc and SecretOreConfig.isSecret(desc.O) then
+				-- (a cleaned one is told; a Dirty Ore never gives its secret away)
+				secret += if desc.K ~= "Raw" and (from == nil or from == section) then count else 0
+			elseif desc then
 				for _ = 1, count do
 					table.insert(units, {
 						Section = section,
@@ -372,33 +375,11 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 	add(hands, "Hands")
 	add(pen, "Pen")
 
-	local kept: { [Unit]: boolean } = {}
-	local keptCount = 0
-	if filter == "AllButBest" then
-		local clean: { Unit } = {}
-		for _, unit in units do
-			if unit.Income > 0 then
-				table.insert(clean, unit)
-			end
-		end
-		table.sort(clean, function(a, b)
-			if a.Income ~= b.Income then
-				return a.Income > b.Income
-			end
-			return a.Section == "Pen" and b.Section ~= "Pen"
-		end)
-		for i = 1, math.min(SellView.KeepBest, #clean) do
-			kept[clean[i]] = true
-			keptCount += 1
-		end
-	end
-
-	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0, Kept = keptCount }
+	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0, Secret = secret, PenLeft = 0 }
 	local counted: { [string]: number } = { Pen = 0, Hands = 0 }
 	for _, unit in units do
 		local dirty = unit.Desc.K == "Raw"
-		local wanted = (from == nil or unit.Section == from)
-			and (if filter == "Dirty" then dirty elseif filter == "AllButBest" then not dirty and not kept[unit] else false)
+		local wanted = (from == nil or unit.Section == from) and (filter == "All" or (filter == "Dirty" and dirty))
 		if wanted then
 			plan.Eligible += 1
 			-- each section to its own cap, like SellService (EconomyConfig.sellCap)
@@ -411,6 +392,8 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sel
 					plan.Total += unit.Price
 					plan.BestOrder = math.max(plan.BestOrder, (rarityOf(unit.Desc.O)))
 				end
+			elseif unit.Section == "Pen" then
+				plan.PenLeft += 1
 			end
 		end
 	end
@@ -421,6 +404,12 @@ end
 -- Selling this many items (rarest known one: `rarityOrder`) asks first.
 function SellView.needsConfirm(count: number, rarityOrder: number): boolean
 	return count > SellView.ConfirmCount or rarityOrder >= SellView.ConfirmRarity
+end
+
+-- Does Sell All ask first? Also whenever Dirty Ore is in it: it may be a rare ore sold at the raw price
+-- (any Dirty Ore asks, so the question gives no secret away).
+function SellView.planNeedsConfirm(plan: Plan): boolean
+	return plan.Dirty > 0 or SellView.needsConfirm(plan.Count, plan.BestOrder)
 end
 
 local function itemsText(count: number): string
@@ -443,14 +432,23 @@ end
 
 -- Text for a Sell-all button's confirm step.
 function SellView.confirmPlanText(plan: Plan, filter: string): string
-	local capped = if plan.Eligible > plan.Count
-		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time from your Ore Pen ({Format.commas(plan.Eligible)} in total).`
-		else ""
+	local capped = if plan.PenLeft > 0 then ` {Format.commas(plan.PenLeft)} more stay in your Ore Pen: press again.` else ""
 	if filter == "Dirty" then
 		return `Sell {Format.commas(plan.Count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.{capped}`
 	end
-	local price = if capped == "" then ` for {Format.money(plan.Total)}` else ""
-	return `Sell {itemsText(plan.Count)}{price}? You keep your {SellView.KeepBest} best clean ores and your {ItemData.DirtyName}.{capped}`
+	local secret = if plan.Secret > 0 then " Secret ores stay." else ""
+	local clean = plan.Count - plan.Dirty
+	if plan.Dirty > 0 then
+		-- (the clean ones' price is known; a Dirty Ore's isn't, and it pays more than it looks)
+		local known = if clean > 0 then `{itemsText(clean)} for {Format.money(plan.Total)} and ` else ""
+		return `Sell {known}{Format.commas(plan.Dirty)} {ItemData.DirtyName} at the raw price?{secret}{capped}`
+	end
+	return `Sell {itemsText(clean)} for {Format.money(plan.Total)}?{secret}{capped}`
+end
+
+-- Why Sell All has nothing to do (only cleaned SECRET ores left, or nothing at all).
+function SellView.nothingText(plan: Plan): string
+	return if plan.Secret > 0 then "Nothing to sell: Sell All leaves secret ores alone." else "You have nothing to sell."
 end
 
 ---------------------------------------------------------------- the Pop look (the kit pieces this window needs)
@@ -810,12 +808,8 @@ function SellView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 	}, panel)
-	local sellDirty = popButton(footer, "Sell all Dirty Ore", "Orange", {
-		Name = "SellDirty",
-		TextSize = 20,
-	})
-	local sellRest = popButton(footer, `Sell all but best {SellView.KeepBest}`, "Green", {
-		Name = "SellRest",
+	local sellEverything = popButton(footer, "Sell All", "Green", {
+		Name = "SellEverything",
 		TextSize = 20,
 	})
 	local hint = UIKit.label(footer, "", 15, {
@@ -898,8 +892,7 @@ function SellView.build(compact: boolean?): Refs
 		Empty = { Pen = emptyLabel(list, "Pen"), Hands = emptyLabel(list, "Hands") },
 		Rows = {},
 		Footer = footer,
-		SellDirty = sellDirty,
-		SellRest = sellRest,
+		SellEverything = sellEverything,
 		Hint = hint,
 		Confirm = confirm,
 		ConfirmBox = box,
@@ -1107,16 +1100,11 @@ function SellView.setEntries(refs: Refs, section: Section, list: { Entry }): { R
 	return created
 end
 
--- The footer buttons: their labels, greyed out when they'd sell nothing.
-function SellView.setFooter(refs: Refs, dirty: Plan, rest: Plan)
-	local function style(button: TextButton, enabled: boolean, paint: string)
-		paintButton(button, if enabled then paint else PopTheme.Gray)
-		button.TextTransparency = if enabled then 0 else 0.3
-	end
-	refs.SellDirty.Text = if dirty.Eligible > 0 then `Sell all Dirty Ore ({Format.commas(dirty.Eligible)})` else "Sell all Dirty Ore"
-	style(refs.SellDirty, dirty.Eligible > 0, "Orange")
-	refs.SellRest.Text = `Sell all but best {SellView.KeepBest}`
-	style(refs.SellRest, rest.Eligible > 0, "Green")
+-- The footer's Sell All: greyed out when it would sell nothing.
+function SellView.setFooter(refs: Refs, plan: Plan)
+	local enabled = plan.Eligible > 0
+	paintButton(refs.SellEverything, if enabled then "Green" else PopTheme.Gray)
+	refs.SellEverything.TextTransparency = if enabled then 0 else 0.3
 end
 
 --[[
@@ -1166,12 +1154,10 @@ function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeig
 	refs.Footer.Position = UDim2.new(0, PAD, 1, -8)
 	refs.Footer.Size = UDim2.new(1, -PAD * 2, 0, m.Footer - 10)
 	local buttonTop = 10
-	for i, button in { refs.SellDirty, refs.SellRest } do
-		local holder = holderOf(button)
-		holder.Size = UDim2.new(0.5, -6, 0, m.Button)
-		holder.Position = UDim2.new(if i == 1 then 0 else 0.5, if i == 1 then 0 else 6, 0, buttonTop)
-		button.TextSize = if compact then 24 else 22
-	end
+	local everything = holderOf(refs.SellEverything)
+	everything.Size = UDim2.new(if compact then 1 else 0.5, 0, 0, m.Button)
+	everything.Position = UDim2.new(if compact then 0 else 0.25, 0, 0, buttonTop)
+	refs.SellEverything.TextSize = if compact then 26 else 24
 	refs.Hint.Visible = not compact
 	refs.ConfirmText.TextSize = if compact then 24 else 22
 	refs.ConfirmBox.Size = UDim2.fromOffset(math.min(width - 40, if compact then 620 else 520), if compact then 260 else 230)

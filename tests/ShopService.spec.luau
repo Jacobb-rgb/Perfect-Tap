@@ -30,6 +30,7 @@ return function(T, Loader)
 	local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
 	local ShopService = Loader.requirePath("ServerScriptService.Server.Services.ShopService")
 	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
+	local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
 
 	local USER = 501
@@ -93,6 +94,36 @@ return function(T, Loader)
 		patch(PlotService, "plotOf", function(p)
 			return if p == w.player then w.plot else nil
 		end)
+		-- the player's placed machines (MachineService.ofPlayer): nil = one of every type right
+		-- where the player stands, so a machine's upgrades and Bellows sell (they only sell at
+		-- the machine, owner 2026-11-07); a list = just those
+		w.machines = nil
+		patch(MachineService, "ofPlayer", function(p)
+			if p ~= w.player then
+				return {}
+			end
+			if w.machines then
+				return w.machines
+			end
+			local list = {}
+			for _, machine in MachineData.Buildable do
+				table.insert(list, w.machineAt(machine.Id, 0))
+			end
+			return list
+		end)
+		-- a placed machine of the player `away` studs east of where they stand (when asked)
+		w.machineAt = function(id: string, away: number): any
+			return {
+				Id = id,
+				Info = MachineData.ById[id],
+				Removed = false,
+				Model = {
+					GetPivot = function()
+						return { Position = w.player.root.Position + Vector3.new(away, 0, 0) }
+					end,
+				},
+			}
+		end
 		shop.reset()
 		ShopService.onBought(function(p, bought)
 			table.insert(w.bought, { Player = p, Bought = bought })
@@ -338,7 +369,8 @@ return function(T, Loader)
 		bad({ Shop = "Gear", Item = "Conveyor" }, "Conveyor", "another shop")
 		bad({ Item = "Conveyor" }, "Conveyor", "no shop")
 		bad(req("Pickaxe"), "Pickaxe", "unknown item")
-		bad(req("Upgrade:Conveyor:Speed"), "Upgrade:Conveyor:Speed", "belts have no upgrades")
+		bad(req("Upgrade:ExpressConveyor:Speed"), "Upgrade:ExpressConveyor:Speed", "the Express belt has no upgrades")
+		bad(req("ExpressConveyor"), "ExpressConveyor", "nor is it sold any more (the one belt)")
 		bad(req("Upgrade:Crusher:Quality"), "Upgrade:Crusher:Quality", "only the Cleaning Plant has Quality")
 		bad(req(string.rep("A", 200)), "", "too long")
 		bad({ Shop = "Tech", Item = 5 }, "", "a number item")
@@ -433,17 +465,11 @@ return function(T, Loader)
 		T.eq(#notes(w, "Notify"), 0, "no toasts for refusals")
 	end)
 
-	withWorld("ShopService: upgrades, Bellows, Slots and pen automation still need the counter", function(w)
+	withWorld("ShopService: Slots and pen automation still need the counter", function(w)
 		w.data.Coins = 1e12
 		w.plot = 1
 		standAtPlot(w, 1, 0)
-		local others = {
-			{ "Upgrade:Crusher:Speed", 1 },
-			{ "Upgrade:AutoCleaner:Quality", 1 },
-			{ "Bellows", 1 },
-			{ "Slots", 1 },
-			{ "PenAutomation", 1 },
-		}
+		local others = { { "Slots", 1 }, { "PenAutomation", 1 } }
 		for _, other in others do
 			local entry = EconomyConfig.techItem(other[1])
 			T.truthy(entry and entry.Kind ~= "Machine", other[1] .. " is not a machine")
@@ -465,6 +491,62 @@ return function(T, Loader)
 		T.eq(toasts[#toasts].A.Text, "Bought a Conveyor! Go to your BASE and open BUILD to place it.", "the lobby toast")
 	end)
 
+	withWorld("ShopService: a machine's upgrades and Bellows sell only at one of your own machines", function(w)
+		w.data.Coins = 1e12
+		local speed = EconomyConfig.techItem("Upgrade:Crusher:Speed")
+		local quality = EconomyConfig.techItem("Upgrade:AutoCleaner:Quality")
+		local bellows = EconomyConfig.techItem("Bellows")
+		T.truthy(ShopService.atMachine(speed) and ShopService.atMachine(quality) and ShopService.atMachine(bellows))
+		T.falsy(ShopService.atMachine(EconomyConfig.techItem("Slots")), "Slots: at the counter")
+		T.falsy(ShopService.atMachine(EconomyConfig.techItem("Crusher")), "machines: counter or base")
+		T.truthy(Reasons.AtMachine, "the refusal has a text")
+		-- no machines: never at the counter, never at the base
+		w.machines = {}
+		for _, item in { "Upgrade:Crusher:Speed", "Upgrade:AutoCleaner:Quality", "Bellows" } do
+			T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem(item)), nil, item .. ": not at the counter")
+			refused(w, req(item, nil, 1), "AtMachine", item .. " at the counter")
+		end
+		w.plot = 1
+		standAtPlot(w, 1, 0)
+		refused(w, req("Upgrade:Crusher:Speed", nil, 1), "AtMachine", "at the base, no machine near")
+		-- by your Crusher: its upgrades and Bellows (it works jobs), not another type's upgrades
+		w.machines = { w.machineAt("Crusher", ShopService.MachineRange - 1) }
+		T.eq(ShopService.placeFor(w.player, speed), "Machine")
+		T.eq(ShopService.placeFor(w.player, bellows), "Machine", "Bellows at any machine that works jobs")
+		T.eq(ShopService.placeFor(w.player, quality), nil, "the Cleaning Plant's Quality needs a Cleaning Plant")
+		refused(w, req("Upgrade:AutoCleaner:Quality", nil, 1), "AtMachine", "another type's upgrade")
+		local coins = w.data.Coins
+		local changed = w.changed
+		local result = buy(w, req("Upgrade:Crusher:Speed", nil, 1))
+		T.eq(result.Ok, true, "bought at the machine")
+		T.truthy(w.changed > changed, "the level is saved (DataService.changed)")
+		T.eq(w.data.MachineUpgrades.Crusher.Speed, 1)
+		T.eq(w.data.Coins, coins - speed.Prices[1], "paid the doubled price")
+		T.eq(speed.Prices[1], 40000, "owner 2026-11-07: twice the old 20,000")
+		T.eq(buy(w, req("Bellows", nil, 1)).Ok, true, "Bellows at the Crusher")
+		-- too far, gone, or a machine that works no jobs
+		w.machines = { w.machineAt("Crusher", ShopService.MachineRange + 0.5) }
+		T.eq(ShopService.placeFor(w.player, speed), nil, "past MachineRange")
+		local gone = w.machineAt("Crusher", 1)
+		gone.Removed = true
+		w.machines = { gone }
+		T.eq(ShopService.placeFor(w.player, speed), nil, "a removed machine doesn't count")
+		-- the one belt: bought standing at any belt, a lift or a slide too
+		local beltSpeed = EconomyConfig.techItem("Upgrade:Conveyor:Speed")
+		for _, id in { "Conveyor", "BeltLift", "Slide", "ExpressConveyor" } do
+			w.machines = { w.machineAt(id, 1) }
+			T.eq(ShopService.placeFor(w.player, beltSpeed), "Machine", "the belt level at a " .. id)
+		end
+		w.machines = { w.machineAt("Splitter", 1) }
+		T.eq(ShopService.placeFor(w.player, beltSpeed), nil, "a Splitter is no belt")
+		T.eq(ShopService.placeFor(w.player, bellows), nil, "Bellows needs a machine that works jobs")
+		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Upgrade:Splitter:Speed")), "Machine")
+		-- no character: nowhere
+		w.machines = { w.machineAt("Crusher", 0) }
+		w.player.Character = nil
+		T.eq(ShopService.placeFor(w.player, speed), nil, "no character")
+	end)
+
 	T.test("ShopService: the buy toast says how to place a machine from where it was bought", function()
 		local one = { Item = "AutoCleaner", Kind = "Machine", Machine = "AutoCleaner", Count = 1, Price = 1 }
 		local five = { Item = "Conveyor", Kind = "Machine", Machine = "Conveyor", Count = 5, Price = 5 }
@@ -472,6 +554,12 @@ return function(T, Loader)
 		T.eq(ShopService.boughtText(nil, one, "Base"), "Bought a Cleaning Plant! Open BUILD to place it.")
 		T.eq(ShopService.boughtText(nil, five, "Base"), "Bought 5 Conveyors! Open BUILD to place them.")
 		T.eq(ShopService.boughtText(nil, box, "Base"), "Bought an Iron Box! Open BUILD to place it.")
+		-- the one belt's level: the same name as the panel's "Belt Speed" (review 11-08)
+		local belt =
+			{ Item = "Upgrade:Conveyor:Speed", Kind = "Upgrade", Machine = "Conveyor", Upgrade = "Speed", Level = 1, Price = 100000 }
+		T.eq(ShopService.boughtText(nil, belt, "Machine"), "Belt Speed level 1: all your belts run faster!")
+		local crusher = { Item = "Upgrade:Crusher:Speed", Kind = "Upgrade", Machine = "Crusher", Upgrade = "Speed", Level = 2, Price = 1 }
+		T.eq(ShopService.boughtText(nil, crusher, "Machine"), "Crusher Speed level 2: every Crusher works faster!")
 		T.eq(ShopService.boughtText(nil, one, "Counter"), "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
 		T.eq(ShopService.boughtText(nil, five, "Counter"), "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
 		T.eq(
@@ -714,19 +802,25 @@ return function(T, Loader)
 		for _, row in refs.RowList do
 			tabs[row.Tab] = (tabs[row.Tab] or 0) + 1
 		end
-		T.eq(tabs.Machines, #MachineData.Buildable, "every buildable machine")
-		local upgrades = 2 -- Bellows, Slots
-		for _, entry in EconomyConfig.TechShop.Items do
-			if entry.Kind == "Upgrade" then
-				upgrades += 1
+		local sold = 0
+		for _, machine in MachineData.Buildable do
+			if not machine.NotSold then
+				sold += 1
 			end
 		end
-		T.eq(tabs.Upgrades, upgrades, "every upgrade + Bellows + Slots")
+		T.eq(tabs.Machines, sold, "every buildable machine that is sold")
+		-- (a machine's upgrades and Bellows are bought at the machine, owner 2026-11-07)
+		T.eq(tabs.Upgrades, 1, "machine Slots only")
+		for _, entry in EconomyConfig.TechShop.Items do
+			if entry.Kind == "Upgrade" or entry.Kind == "Bellows" then
+				T.eq(refs.Rows[entry.Item], nil, entry.Item .. ": at the machine, not in the shop")
+			end
+		end
 		T.eq(tabs.Automation, #EconomyConfig.PenAutomation.Prices, "one row per pen automation level")
 		T.eq(refs.Rows.Conveyor and #refs.Rows.Conveyor.Buttons, 2, "BUY 1 / BUY 5 on belts")
 		T.eq(#refs.Rows.Crusher.Buttons, 1, "one BUY on other machines")
 		for _, machine in MachineData.Buildable do
-			T.truthy(refs.Rows[machine.Id], "row " .. machine.Id)
+			T.eq(refs.Rows[machine.Id] ~= nil, not machine.NotSold, "row " .. machine.Id)
 		end
 		for id in MachineData.Retired do
 			T.eq(refs.Rows[id], nil, "retired " .. id .. " not sold")
@@ -741,9 +835,9 @@ return function(T, Loader)
 		T.eq(TechShopView.nextTab("Machines", -1), "Automation", "wraps back")
 		T.eq(TechShopView.toTab("Upgrades"), "Upgrades")
 		T.eq(TechShopView.toTab("Gear"), nil)
-		-- Bellows and Slots sit under the "FOR ALL MACHINES" header
-		T.truthy(refs.Rows.Bellows.Frame.LayoutOrder > TechShopView.AllMachinesOrder, "Bellows after the header")
-		T.truthy(refs.Rows["Upgrade:AutoCleaner:Speed"].Frame.LayoutOrder < TechShopView.AllMachinesOrder, "machine upgrades first")
+		-- Slots sit under the "FOR ALL MACHINES" header
+		T.truthy(refs.Rows.Slots.Frame.LayoutOrder > TechShopView.AllMachinesOrder, "Slots after the header")
+		T.eq(#refs.Groups, 1, "one header")
 	end)
 
 	T.test("TechShopView: cards show owned / placed counts and what you can afford", function()
@@ -887,68 +981,28 @@ return function(T, Loader)
 		local s = state({
 			MachineInventory = { AutoCleaner = 1 },
 			MachineUpgrades = { AutoCleaner = { Speed = 2, Quality = 5 } },
-			Upgrades = { Bellows = 1, ExtraSlots = 2, PenLevel = 0, PenAutomation = 0 },
+			Upgrades = { Bellows = 1, ExtraSlots = 1, PenLevel = 0, PenAutomation = 0 },
 		})
 		local cards = TechShopView.cards(s, 1e12)
-		local speed = cardById(cards, "Upgrade:AutoCleaner:Speed")
-		T.eq(speed.Tab, "Upgrades")
-		T.eq(speed.Title, "Cleaning Plant Speed")
-		T.eq(speed.Chip, "LV 2/5")
-		T.eq(speed.Buys[1].Level, 3, "buys level 3")
-		T.eq(speed.Buys[1].Price, EconomyConfig.techItem("Upgrade:AutoCleaner:Speed").Prices[3])
-		local plant = MachineData.ById.AutoCleaner
-		local now = TechShopView.seconds(MachineData.processTime(plant, 1, 2))
-		local after = TechShopView.seconds(MachineData.processTime(plant, 1, 3))
-		T.eq(speed.Detail, `Per item: {now} → {after}`)
-		T.eq(speed.DetailColor, Theme.Accent)
-		T.eq(speed.Badge, "Speed")
-		local quality = cardById(cards, "Upgrade:AutoCleaner:Quality")
-		T.truthy(quality.Done, "Quality at the top")
-		T.eq(quality.Buys[1].Text, "MAX")
-		T.falsy(quality.Buys[1].CanBuy)
-		T.eq(quality.Buys[1].Reason, "Max")
-		T.eq(quality.Detail, "Pristine 50%  •  Flawless 30%  (top level)")
-		-- Quality: only the grades that change (level 1: fewer Rough, a few Pristine)
-		local function qualityAt(level: number): string
-			local placed = state({ Placed = { { Id = "AutoCleaner" } }, MachineUpgrades = { AutoCleaner = { Quality = level } } })
-			return cardById(TechShopView.cards(placed, 1e12), "Upgrade:AutoCleaner:Quality").Detail
+		-- a machine's upgrades and Bellows: at the machine (MachineUpgradeView), never a card here
+		for _, card in cards do
+			local entry = EconomyConfig.techItem(card.Item)
+			T.truthy(entry and entry.Kind ~= "Upgrade" and entry.Kind ~= "Bellows", card.Id .. ": not a machine upgrade")
 		end
-		T.eq(qualityAt(0), "Rough 60% → 50%  •  Pristine 0% → 5%")
-		T.eq(qualityAt(1), "Rough 50% → 30%  •  Pristine 5% → 20%")
-		T.eq(qualityAt(2), "Pristine 20% → 35%  •  Flawless 0% → 5%")
-		T.eq(qualityAt(4), "Pristine 45% → 50%  •  Flawless 15% → 30%")
-		-- an upgrade for a machine type you have none of says so (still for sale)
-		local q0 = cardById(TechShopView.cards(state(), 1e12), "Upgrade:AutoCleaner:Quality")
-		T.eq(q0.Detail, "No Cleaning Plant yet  •  Rough 60% → 50%  •  Pristine 0% → 5%")
-		T.eq(q0.DetailColor, Theme.Bad)
-		T.truthy(q0.Buys[1].CanBuy, "a warning only")
-		local polisher = cardById(TechShopView.cards(state(), 1e12), "Upgrade:Polisher:Speed")
-		T.truthy(string.find(polisher.Detail, "No Polisher yet  •  Per item: ", 1, true) == 1, polisher.Detail)
-		local placedPolisher = state({ Placed = { { Id = "Polisher" } } })
-		T.eq(
-			string.find(cardById(TechShopView.cards(placedPolisher, 0), "Upgrade:Polisher:Speed").Detail, "No ", 1, true),
-			nil,
-			"placed counts"
-		)
-		-- the Furnace Upgrade card: the next tier and its time, the tier's picture
-		local furnace = state({ Placed = { { Id = "ClayFurnace" } } })
-		local tier = cardById(TechShopView.cards(furnace, 1e12), "Upgrade:ClayFurnace:Tier")
-		T.eq(tier.Title, "Furnace Upgrade")
-		T.eq(tier.Detail, "Furnace: 6 s → Brick Furnace: 4 s")
-		T.eq(tier.Icon, "BrickFurnace", "shows the furnace it turns into")
-		local top = cardById(
-			TechShopView.cards(state({ Placed = { { Id = "ClayFurnace" } }, MachineUpgrades = { ClayFurnace = { Tier = 2 } } }), 1e12),
-			"Upgrade:ClayFurnace:Tier"
-		)
-		T.eq(top.Detail, "Blast Furnace: 2.5 s → Plasma Furnace: 2.5 s (2 at once)")
-		T.eq(top.Icon, "PlasmaFurnace")
-		T.eq(string.find(cardById(TechShopView.cards(state(), 0), "Bellows").Detail, "No ", 1, true), nil, "Bellows: for all machines")
-		local bellows = cardById(cards, "Bellows")
-		T.eq(bellows.Detail, "Job time 90% → 80%")
-		T.eq(bellows.Buys[1].Level, 2)
 		local slots = cardById(cards, "Slots")
-		T.truthy(slots.Done, "both slot upgrades bought")
-		T.eq(slots.Detail, "Machine slots: 16 (top level)")
+		T.eq(slots.Tab, "Upgrades")
+		T.eq(slots.Title, "Machine Slots")
+		T.eq(slots.Chip, "LV 1/2")
+		T.eq(slots.Buys[1].Level, 2, "buys level 2")
+		T.eq(slots.Buys[1].Price, EconomyConfig.techItem("Slots").Prices[2])
+		T.eq(slots.Detail, "Machine slots: 13 → 16")
+		T.eq(slots.DetailColor, Theme.Accent)
+		local top = cardById(TechShopView.cards(state({ Upgrades = { ExtraSlots = 2 } }), 1e12), "Slots")
+		T.truthy(top.Done, "both slot upgrades bought")
+		T.eq(top.Detail, "Machine slots: 16 (top level)")
+		T.eq(top.Buys[1].Text, "MAX")
+		T.falsy(top.Buys[1].CanBuy)
+		T.eq(top.Buys[1].Reason, "Max")
 		local withPass = cardById(TechShopView.cards(state({ Perks = { Workshop = true } }), 0), "Slots")
 		T.eq(withPass.Detail, "Machine slots: 16 → 19", "the Workshop pass counts")
 		T.eq(TechShopView.seconds(8), "8 s")
@@ -1291,7 +1345,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.truthy(cardById(TechShopView.cards(s, 1e9, "Base"), "Upgrade:AutoCleaner:Quality").Done, "a done card")
+		T.truthy(cardById(TechShopView.cards(s, 1e9, "Base"), "PenAutomation:1").Done, "a done card")
 		T.eq(TechShopView.toWhere("Base"), "Base")
 		T.eq(TechShopView.toWhere("Build"), "Build")
 		T.eq(TechShopView.toWhere("Nope"), "Counter")
@@ -1302,7 +1356,9 @@ return function(T, Loader)
 		local refs = TechShopView.build(false)
 		T.eq(refs.Where, "Counter", "starts at the counter")
 		T.truthy(refs.Notes.Machines.Visible, "the MACHINES note shows at the counter")
-		T.falsy(refs.Notes.Upgrades.Visible or refs.Notes.Automation.Visible, "the counter sells everything")
+		T.falsy(refs.Notes.Automation.Visible, "the counter sells the automation")
+		T.truthy(refs.Notes.Upgrades.Visible, "the UPGRADES note: a machine's upgrades are at the machine")
+		T.truthy(string.find(refs.Notes.Upgrades.Text, "at the machine", 1, true), refs.Notes.Upgrades.Text)
 		T.truthy(string.find(refs.Notes.Machines.Text, "BUILD menu", 1, true), "the Build menu")
 		T.truthy(string.find(refs.Notes.Machines.Text, "BASE", 1, true), "go to your base")
 		for _, tab in TechShopView.Tabs do
@@ -1312,7 +1368,7 @@ return function(T, Loader)
 				T.truthy(note.LayoutOrder < row.Frame.LayoutOrder, tab .. ": above the rows")
 			end
 		end
-		T.truthy(refs.Notes.Upgrades.LayoutOrder < refs.Groups[1].LayoutOrder, "above the MACHINE UPGRADES header")
+		T.truthy(refs.Notes.Upgrades.LayoutOrder < refs.Groups[1].LayoutOrder, "above the FOR ALL MACHINES header")
 		TechShopView.setWhere(refs, "Build")
 		T.eq(refs.Where, "Build")
 		T.truthy(refs.Notes.Upgrades.Visible and refs.Notes.Automation.Visible, "the other tabs say where they are sold")
@@ -1336,7 +1392,8 @@ return function(T, Loader)
 			end
 		end
 		TechShopView.setWhere(refs, "Counter")
-		T.falsy(refs.Notes.Upgrades.Visible, "back at the counter")
+		T.falsy(refs.Notes.Automation.Visible, "back at the counter")
+		T.eq(refs.Notes.Upgrades.Text, TechShopView.WhereText.Counter.Upgrades, "the counter's UPGRADES note")
 		T.eq(refs.Subtitle.Text, TechShopView.WhereText.Counter.Subtitle)
 		-- a shop at your plot closes before the server would refuse a BUY as "TooFar"
 		T.truthy(TechShopView.BaseCloseRange + 4 <= GameConfig.BuildRange, "the server is the lenient side at the base too")
@@ -1430,11 +1487,11 @@ return function(T, Loader)
 
 	T.test("TechShopView: setCards fills rows; status lines and busy buttons", function()
 		local refs = TechShopView.build(false)
-		local s = state({ MachineUpgrades = { Crusher = { Speed = 5 } } })
+		local s = state({ Upgrades = { ExtraSlots = 2 } })
 		TechShopView.setCards(refs, TechShopView.cards(s, 100))
-		local crusherSpeed = refs.Rows["Upgrade:Crusher:Speed"]
-		T.eq(crusherSpeed.Buttons[1].Text, "MAX")
-		T.eq(crusherSpeed.Price.Text, "", "no price at the top")
+		local slots = refs.Rows.Slots
+		T.eq(slots.Buttons[1].Text, "MAX")
+		T.eq(slots.Price.Text, "", "no price at the top")
 		local belt = refs.Rows.Conveyor
 		T.eq(belt.Buttons[1].Text, "BUY 1")
 		T.eq(belt.Buttons[2].Text, "BUY 5")
@@ -1505,6 +1562,10 @@ return function(T, Loader)
 		TechShopView.setTab(refs, "Machines")
 		TechShopView.setCards(refs, TechShopView.cards(s, 100))
 		T.truthy(refs.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "the open tab's pictures")
-		T.falsy(refs.Rows["Upgrade:Crusher:Speed"].Icon.Picture.View:FindFirstChildOfClass("Model"), "not the hidden tabs'")
+		local other = TechShopView.build(false)
+		other.Gui.Enabled = true
+		TechShopView.setTab(other, "Upgrades")
+		TechShopView.setCards(other, TechShopView.cards(s, 100))
+		T.falsy(other.Rows.Crusher.Icon.Picture.View:FindFirstChildOfClass("Model"), "not the hidden tabs'")
 	end)
 end

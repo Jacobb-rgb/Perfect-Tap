@@ -60,6 +60,7 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StatConfig = require(Shared.Config.StatConfig)
+local WeatherBonus = require(Shared.Weather.WeatherBonus)
 local Perks = require(script.Parent.Perks)
 local DataService = require(script.Parent.Services.DataService)
 local EconomyService = require(script.Parent.Services.EconomyService)
@@ -67,6 +68,31 @@ local EconomyService = require(script.Parent.Services.EconomyService)
 local Bonuses = {}
 
 export type Stats = { [string]: number }
+
+-- The weather's bonus now (Weather/WeatherBonus), read at most once a second. (tests: weatherNow, forgetWeather)
+function Bonuses.weatherNow(): WeatherBonus.Entry?
+	return WeatherBonus.at(workspace:GetServerTimeNow(), workspace:GetAttribute("WeatherForce"))
+end
+
+local weatherSecond: number? = nil
+local weatherEntry: WeatherBonus.Entry? = nil
+
+function Bonuses.forgetWeather()
+	weatherSecond = nil
+	weatherEntry = nil
+end
+
+function Bonuses.weather(): WeatherBonus.Entry?
+	local second = math.floor(os.clock())
+	if second ~= weatherSecond then
+		weatherSecond = second
+		local ok, entry = pcall(function()
+			return Bonuses.weatherNow()
+		end)
+		weatherEntry = if ok then entry else nil
+	end
+	return weatherEntry
+end
 export type Provider = (player: Player?, data: { [string]: any }, now: number) -> ...any
 
 type Entry = { Name: string, Provider: Provider }
@@ -276,6 +302,10 @@ function Bonuses.damageMult(stats: Stats, lastStage: boolean): number
 	if lastStage then
 		mult *= 1 + math.max(0, stats.OverchargePct or 0)
 	end
+	local weather = Bonuses.weather()
+	if weather and weather.Damage then
+		mult *= weather.Damage
+	end
 	return mult
 end
 
@@ -287,7 +317,31 @@ end
 -- The ore luck (1 = no luck, at most StatConfig.MaxOreLuck); each rarity's
 -- weight multiplier is BoostConfig.rarityMult(rarity, oreLuck).
 function Bonuses.oreLuck(stats: Stats): number
+	local weather = Bonuses.weather()
+	if weather and weather.Luck then
+		-- (the multiplier's cap holds: BoostView shows the same)
+		local mult = math.max(1, tonumber(stats.OreLuckMult) or 1) * weather.Luck
+		return StatConfig.oreLuck(stats.OreLuckPct, math.min(mult, StatConfig.ById.OreLuckMult.Max or math.huge))
+	end
 	return StatConfig.oreLuck(stats.OreLuckPct, stats.OreLuckMult)
+end
+
+-- The secret ores' extra chance (a rainbow).
+function Bonuses.secretMult(): number
+	local weather = Bonuses.weather()
+	return if weather and weather.Secret then weather.Secret else 1
+end
+
+-- How many times thinner a cleaning started now has its dirt (snow).
+function Bonuses.cleanMult(): number
+	local weather = Bonuses.weather()
+	return if weather and weather.Clean then weather.Clean else 1
+end
+
+-- How much faster machines work now (a heatwave).
+function Bonuses.machineMult(): number
+	local weather = Bonuses.weather()
+	return if weather and weather.Machine then weather.Machine else 1
 end
 
 -- Is Triple Lucky on (golem capsules)?
@@ -297,7 +351,9 @@ end
 
 -- Chance that a dropped ore drops a twin (0..0.5).
 function Bonuses.twinDrop(stats: Stats): number
-	return math.clamp(stats.TwinDropChance or 0, 0, 0.5)
+	local weather = Bonuses.weather()
+	local extra = if weather and weather.Twin then weather.Twin else 0
+	return math.clamp(stats.TwinDropChance or 0, 0, 0.5) + extra
 end
 
 -- Chance that breaking a rock in `zoneId` turns up an artifact.
@@ -343,13 +399,20 @@ end
 
 -- Studs in which your own loose items fly to you (0 = no magnet). The
 -- Magnetism enchant's MagnetBonus only adds to a real Ore Magnet (gear).
-function Bonuses.magnetRadius(stats: Stats): number
+-- Wind (WeatherBonus Reach, owner 2026-11-07 23:20Z "i bez magnetu"): a
+-- magnet pulls Reach times as far within the cap, and without a magnet
+-- your ore flies to you from Reach times your pick-up reach.
+-- `withWeather` false: the magnet's own radius (the shop, the buy toast).
+function Bonuses.magnetRadius(stats: Stats, withWeather: boolean?): number
 	local base = math.max(0, stats.MagnetRadius or 0)
+	local weather = if withWeather == false then nil else Bonuses.weather()
+	local reach = if weather and weather.Reach then weather.Reach else nil
 	if base <= 0 then
-		return 0
+		return if reach then Bonuses.pickupRange(stats) * reach else 0
 	end
 	local max = StatConfig.ById.MagnetRadius.Max or math.huge
-	return math.min(max, base + math.max(0, stats.MagnetBonus or 0))
+	local radius = math.min(max, base + math.max(0, stats.MagnetBonus or 0))
+	return if reach then math.min(max, radius * reach) else radius
 end
 
 -- Studs you can grab an item from.
@@ -415,7 +478,7 @@ function Bonuses.summary(player: Player): { [string]: any }
 		MoneyMult = stats.MoneyMult or 1, -- the 2x Money pass (income and sales)
 		GolemBond = math.max(0, stats.GolemBondPct or 0),
 		WalkSpeed = Bonuses.walkSpeed(stats),
-		MagnetRadius = Bonuses.magnetRadius(stats),
+		MagnetRadius = Bonuses.magnetRadius(stats, false), -- (the item's own: no wind)
 		PickupRange = Bonuses.pickupRange(stats),
 		ThrowMult = Bonuses.throwMult(stats),
 		CarryCapacity = Bonuses.carryCapacity(stats, player),

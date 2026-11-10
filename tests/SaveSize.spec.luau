@@ -12,7 +12,9 @@ return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 
-	T.Limit = 448 * 1024 -- ~2x headroom over today's maxed save; Roblox's hard limit is 4 MB
+	-- ~2x headroom over today's maxed save; Roblox's hard limit is 4 MB. (11-09: 22 full Ore
+	-- Feeders, 1000 ores each, add ~1.3 MB: docs/SAVE_AUDIT.md)
+	T.Limit = 3 * 1024 * 1024
 
 	-- The longest strings a save can hold for an item (the longest ore id and grade, a recipe).
 	local function longestOre(): string
@@ -48,6 +50,16 @@ return function(T, Loader)
 				d.PlacedMachines,
 				{ Id = "CrystalExtractor", X = i % side, Z = i // side, R = 3, In = queueIn, Out = queueOut, C = "Legendary" }
 			)
+		end
+		-- the Ore Feeder's queue keeps up to its biggest capacity (Placement.queueLimit): 22 full
+		-- feeders in place of as many machines (the most machine slots a plot has)
+		local fullFeeder = MachineData.FeederCapacity[#MachineData.FeederCapacity]
+		for k = 1, 22 do
+			local queue = {}
+			for _ = 1, fullFeeder do
+				table.insert(queue, item())
+			end
+			d.PlacedMachines[k] = { Id = "OreFeeder", X = 0, Z = 0, R = 0, In = queue }
 		end
 		for id in MachineData.ById do
 			d.MachineInventory[id] = MachineData.MaxInventory

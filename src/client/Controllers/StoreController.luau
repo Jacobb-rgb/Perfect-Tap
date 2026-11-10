@@ -37,7 +37,6 @@ local StarBlasterData = require(Shared.Config.StarBlasterData)
 local LimitedGolems = require(Shared.Config.LimitedGolems)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local BlasterData = require(Shared.Config.BlasterData)
-local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
@@ -294,22 +293,9 @@ local function capsuleLines(capsuleId: string, lucky: boolean, compareLucky: boo
 	return lines
 end
 
--- Ore luck per zone the player can mine: "Rare or better" now -> with `delta`.
+-- Ore luck per zone the player can mine: "Rare or better" now -> with `delta` (BoostView.luckLines).
 local function luckLines(delta: { [string]: number }): { string }
-	local ctx = BoostView.context(state(), os.time())
-	local preview = BoostConfig.preview(ctx, delta)
-	local lines: { string } = { "Chance a chunk is Rare or better:" }
-	for _, zone in preview.Zones do
-		if not zone.NoEffect then
-			local info = WorldLayout.ZoneById[zone.Zone]
-			table.insert(lines, `{if info then info.Name else zone.Zone}:  {percent(zone.Before)}  →  {percent(zone.After)}`)
-		end
-	end
-	-- luck raises the SECRET ores' chance too: always shown (BoostView.secretLines)
-	for _, line in BoostView.secretLines(preview.LuckBefore, preview.LuckAfter) do
-		table.insert(lines, line)
-	end
-	return lines
+	return BoostView.luckLines(state(), delta, os.time())
 end
 
 local tableLines = CardOdds.tableLines

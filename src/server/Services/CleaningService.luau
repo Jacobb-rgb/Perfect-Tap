@@ -60,6 +60,7 @@ local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
 local SprayScoring = require(Shared.Cleaning.SprayScoring)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Discovery = require(script.Parent.Parent.Discovery)
 local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
@@ -80,6 +81,7 @@ type Session = {
 	OreId: string, -- the ore cleaned (a relic: the stand-in ore its pattern uses)
 	Relic: string?, -- a dusty relic's artifact id (nil: ore)
 	Seed: number,
+	Thin: number,
 	Pattern: CleaningPatterns.Pattern,
 	StartedAt: number,
 }
@@ -196,7 +198,8 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 		OreId = oreId,
 		Relic = relic,
 		Seed = seed,
-		Pattern = CleaningPatterns.generate(oreId, seed),
+		Pattern = CleaningPatterns.thin(CleaningPatterns.generate(oreId, seed), Bonuses.cleanMult()),
+		Thin = Bonuses.cleanMult(), -- (snow: the client thins its pattern the same)
 		StartedAt = os.clock(),
 	}
 	sessions[player] = session
@@ -210,6 +213,7 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 		OreId = session.OreId,
 		Relic = relic, -- the relic shows in the vise (its shape: no secret left to keep)
 		Seed = seed,
+		Thin = session.Thin,
 		Station = machine.Model,
 	})
 end

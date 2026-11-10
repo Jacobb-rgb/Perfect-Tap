@@ -200,6 +200,15 @@ function WeatherLogic.event(slot: number, cfg: Config?): Event?
 	}
 end
 
+-- When an event's rainbow is gone (server time), nil if it has none.
+function WeatherLogic.rainbowEnd(event: Event, cfg: Config?): number?
+	if not event.Rainbow then
+		return nil
+	end
+	local r = (cfg or WeatherConfig).Rainbow
+	return event.Start + event.Length - r.Lead + r.Seconds
+end
+
 -- A WeatherForce attribute's value -> a kind, "Rainbow", or nil (no force / unknown).
 function WeatherLogic.parseForce(value: any, cfg: Config?): string?
 	if type(value) ~= "string" then

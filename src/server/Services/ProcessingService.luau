@@ -96,6 +96,7 @@ local MachineLogic = require(Shared.Machines.MachineLogic)
 local Rng = require(Shared.Util.Rng)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Discovery = require(script.Parent.Parent.Discovery)
 local Shards = require(script.Parent.Parent.Shards)
 local MachineService = require(script.Parent.MachineService)
@@ -271,7 +272,7 @@ local function jobTime(machine: PlacedMachine): number
 	if seconds ~= seconds or seconds == math.huge then
 		seconds = machine.Info.Time or GameConfig.MinProcessTime
 	end
-	return math.max(GameConfig.MinProcessTime, seconds / speedOf(machine))
+	return math.max(GameConfig.MinProcessTime, seconds / speedOf(machine) / Bonuses.machineMult())
 end
 
 -- Grade odds for the next job (machines with QualityLevels), else nil.
@@ -328,6 +329,9 @@ local function onBought(player: Player, bought: Bought)
 	local machineId = bought.Machine
 	if bought.Kind ~= "Upgrade" or type(machineId) ~= "string" or not MachineData.ById[machineId] then
 		return
+	end
+	if MachineData.ById[machineId].IsConveyor then
+		return -- the belt level: ConveyorService speeds the belts up, nothing is rebuilt
 	end
 	if bought.Upgrade == "Quality" then
 		-- the plants show their new odds now (an idle one doesn't tick)

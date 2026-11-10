@@ -98,6 +98,45 @@ KitMachines.Palette = {
 }
 local P = KitMachines.Palette
 
+--[[
+	Steel + blue (owner 2026-11-07, look B of obrazky/ocel_a_modra_2026-11-07):
+	only the Ore Feeder, the Solar Panel and the one belt; every other machine,
+	the fences, the pen and the podiums keep their colours (his words). A model
+	in SteelLook is built with these colours in place of the palette's (inSteel),
+	so its painted faces follow too; its upgrade crystals and their glow come on
+	top as on every machine.
+]]
+KitMachines.Steel = {
+	Body = rgb(80, 98, 128),
+	Frame = rgb(34, 44, 64),
+	Pipe = rgb(44, 58, 84),
+	Dark = rgb(16, 20, 32),
+	Trim = rgb(60, 170, 255),
+	Neon = rgb(70, 220, 255),
+	Metal = rgb(150, 164, 186),
+	Bolt = rgb(150, 164, 186),
+	Floor = rgb(24, 30, 44),
+} :: { [string]: Color3 }
+KitMachines.SteelLook = { OreFeeder = true, SolarPanel = true, Conveyor = true } :: { [string]: boolean }
+
+-- Runs `build` with the steel colours in the palette, then puts the palette back (even on an error).
+local function inSteel<T>(build: () -> T): T
+	local palette: any = P
+	local saved: { [string]: Color3 } = {}
+	for role, color in KitMachines.Steel do
+		saved[role] = palette[role]
+		palette[role] = color
+	end
+	local ok, result = pcall(build)
+	for role, color in saved do
+		palette[role] = color
+	end
+	if not ok then
+		error(result, 0)
+	end
+	return result
+end
+
 KitMachines.Themes = {
 	Aqua = { Main = rgb(90, 214, 255), Deep = rgb(36, 120, 226), Pale = rgb(204, 246, 255) },
 	Amethyst = { Main = rgb(178, 122, 255), Deep = rgb(98, 52, 206), Pale = rgb(232, 212, 255) },
@@ -1399,7 +1438,7 @@ end
 	`caps` = { start = CapOpts?, finish = CapOpts? } adds end caps (back /
 	front end of the cell).
 ]]
-function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
+local function conveyorModel(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
 	local model = Instance.new("Model")
 	model.Name = if express then "ExpressConveyor" else "Conveyor"
 	model:SetAttribute("MachineId", model.Name)
@@ -1493,6 +1532,16 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 	end
 	attach(base, "Prompt", CFrame.new(0, 1.5, 0))
 	return model
+end
+
+-- (the one belt in steel + blue, KitMachines.SteelLook; an old Express belt keeps its cyan look)
+function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
+	if not express and KitMachines.SteelLook.Conveyor then
+		return inSteel(function()
+			return conveyorModel(caps, express)
+		end)
+	end
+	return conveyorModel(caps, express)
 end
 
 --[[
@@ -2624,7 +2673,80 @@ function KitMachines.cable(parent: Instance, a: Vector3, b: Vector3, sag: number
 	end
 end
 
+--[[
+	Ore Feeder (2x2, owner 2026-11-07: the shape of his picture, look B in
+	steel + blue: KitMachines.SteelLook): a soft body on a glowing plinth, a
+	big four-walled funnel with a glowing rim (the Intake: ore you drop in),
+	a pile of ore inside, the outlet over the front cell with its lamp (the
+	Output), and a counter screen on its right side (tag FeederScreen: the
+	clients write "stored / capacity" on it).
+]]
+local function oreFeeder(): Ctx
+	local ctx = newModel("OreFeeder")
+	local m = ctx.model
+	local bodyY = plinth(m, Vector3.new(0, FLOOR, 0), 7.2, 7.2, 0.6, 0.8)
+	softBox(m, Vector3.new(0, bodyY, 0), 6.4, 3, 6.4, 0.7, "Body", "Body")
+	local top = bodyY + 3
+	block(m, CFrame.new(0, top + 0.2, 0), Vector3.new(6.8, 0.4, 6.8), "Frame", SOLID, "Rim")
+	-- the funnel: four walls leaning out, a rim and a glowing line round its mouth
+	for k = 0, 3 do
+		local turn = CFrame.Angles(0, k * math.pi / 2, 0)
+		block(
+			m,
+			turn * CFrame.new(0, top + 1.9, 3.15) * CFrame.Angles(math.rad(14), 0, 0),
+			Vector3.new(7.2, 3.2, 0.35),
+			"Metal",
+			SOLID,
+			"Funnel"
+		)
+		block(m, turn * CFrame.new(0, top + 3.5, 3.55), Vector3.new(7.8, 0.45, 0.5), "Frame", PROP, "FunnelRim")
+		block(m, turn * CFrame.new(0, top + 3.5, 3.82), Vector3.new(6.4, 0.12, 0.06), "Neon", TINY, "FunnelGlow")
+	end
+	-- the ore inside (decor: the real ore is in the save)
+	local pile = { rgb(255, 196, 60), rgb(70, 130, 255), rgb(60, 62, 70), rgb(200, 206, 220), rgb(160, 110, 255), rgb(205, 127, 50) }
+	for k, color in pile do
+		local a = k * 1.05
+		local r = 0.6 + (k % 3) * 0.8
+		local chunk = block(
+			m,
+			CFrame.new(math.cos(a) * r, top + 0.9 + (k % 2) * 0.35, math.sin(a) * r) * CFrame.Angles(a, a * 0.7, 0),
+			Vector3.new(1.1, 0.9, 1.0),
+			"Dark",
+			TINY,
+			"Ore"
+		)
+		chunk.Color = color
+		chunk.Material = Enum.Material.Slate
+	end
+	-- the outlet over the front cell's middle (Grid.outputLocal) and its lamp
+	local outPos = Grid.outputLocal("OreFeeder") :: Vector3
+	local front = -3.2
+	block(m, CFrame.new(outPos.X, bodyY + 1.1, front - 0.3), Vector3.new(2.6, 2.0, 0.8), "Frame", SOLID, "Outlet")
+	block(m, CFrame.new(outPos.X, bodyY + 0.9, front - 0.72), Vector3.new(2.0, 1.2, 0.1), "Dark", TINY, "OutletMouth")
+	block(m, CFrame.new(outPos.X, bodyY + 1.85, front - 0.72), Vector3.new(2.0, 0.16, 0.12), "Neon", TINY, "OutletLamp")
+	-- the counter on its right side
+	-- (turned so its Front face, where the clients draw, looks out to the right: +X)
+	local screen = block(
+		m,
+		CFrame.new(3.26, bodyY + 1.6, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+		Vector3.new(3.6, 1.6, 0.1),
+		"Screen",
+		TINY,
+		"Counter"
+	)
+	screen:AddTag("FeederScreen")
+	socket(ctx, Vector3.new(-3.0, top + 0.4, -3.0), out(-1, -1, 0.8), 1.0)
+	socket(ctx, Vector3.new(3.0, top + 0.4, 3.0), out(1, 1, 0.8), 1.0)
+	socket(ctx, Vector3.new(-3.0, top + 0.4, 3.0), out(-1, 1, 0.8), 1.0, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(-1.6, 2.5, -3.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, top + 2.4, 0))
+	intake:SetAttribute("IntakeSize", Vector3.new(6.8, 4, 6.8))
+	return ctx
+end
+
 local BUILDERS: { [string]: () -> Ctx } = {
+	OreFeeder = oreFeeder,
 	ClayFurnace = clayFurnace,
 	Crusher = crusher,
 	AutoCleaner = autoCleaner,
@@ -2663,6 +2785,7 @@ KitMachines.Catalog = {
 	{ Id = "CrystalExtractor", Name = "Crystal Extractor", Group = "Special", Upgrades = true },
 	{ Id = "RestorationTable", Name = "Restoration Table", Group = "Special", Upgrades = true },
 	{ Id = "SellBox", Name = "Sell Box", Group = "Special", Upgrades = true },
+	{ Id = "OreFeeder", Name = "Ore Feeder", Group = "Transport", Upgrades = false },
 	{ Id = "Conveyor", Name = "Conveyor", Group = "Transport", Upgrades = false },
 	{ Id = "ExpressConveyor", Name = "Express Conveyor", Group = "Transport", Upgrades = false },
 	{ Id = "Splitter", Name = "Splitter", Group = "Transport", Upgrades = true },
@@ -2686,7 +2809,7 @@ end
 function KitMachines.build(id: string, level: number?, themeName: string?): Model
 	local builder = BUILDERS[id]
 	assert(builder, "No kit model for machine " .. tostring(id))
-	local ctx = builder()
+	local ctx = if KitMachines.SteelLook[id] then inSteel(builder) else builder()
 	local lvl = math.clamp(math.floor(level or 0), 0, KitMachines.MaxLevel)
 	local theme = KitMachines.Themes[themeName or KitMachines.DefaultTheme] or KitMachines.Themes[KitMachines.DefaultTheme]
 	crystalize(ctx, lvl, theme)

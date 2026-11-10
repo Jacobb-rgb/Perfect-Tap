@@ -403,6 +403,7 @@ return function(T, Loader)
 			WindTurbine = true,
 			FusionReactor = true,
 			RestorationTable = true, -- cleans relics faster
+			Conveyor = true, -- the one belt's levels (owner 2026-11-07)
 		}
 		for _, machine in MachineData.List do
 			local upgrades = machine.Upgrades
@@ -424,7 +425,8 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(MachineData.upgradeMax("Conveyor", "Speed"), 0)
+		T.eq(MachineData.upgradeMax("Conveyor", "Speed"), 2, "the one belt: two levels")
+		T.eq(MachineData.upgradeMax("ExpressConveyor", "Speed"), 0)
 		T.eq(MachineData.upgradeMax("Nope", "Speed"), 0)
 		T.eq(MachineData.upgradeMax("AutoCleaner", "Nope"), 0)
 		T.eq(MachineData.upgradePrices("Crusher", "Quality"), nil)
@@ -436,7 +438,11 @@ return function(T, Loader)
 		for i, price in { 50000, 2e6, 50e6, 600e6, 6e9 } do
 			T.eq(curves.Quality[i], price, "Quality curve " .. i)
 		end
-		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 50000)
+		-- (owner 2026-11-07: a machine you can buy pays twice the curve, MachineData.PriceMult)
+		T.eq(MachineData.PriceMult, 2)
+		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 100000)
+		T.eq(MachineData.ById.Crusher.Upgrades.Speed[1], 40000)
+		T.eq(MachineData.ById.BlastFurnace.Upgrades.Speed[1], 80000, "a retired look keeps its old price (refunds)")
 		-- every level costs a lot more than the one before (goals across the journey)
 		for _, curve in { curves.Speed, curves.Quality } do
 			for i = 2, #curve do
@@ -618,6 +624,11 @@ return function(T, Loader)
 		end
 		for _, machine in MachineData.Buildable do
 			local item = items[machine.Id]
+			if machine.NotSold then
+				-- (the Express belt: no longer sold, the ones players have still work)
+				T.eq(item, nil, "doesn't sell " .. machine.Id)
+				item = { Kind = "Machine", Machine = machine.Id, Section = "Machines" }
+			end
 			T.truthy(item, "sells " .. machine.Id)
 			T.eq(item.Kind, "Machine")
 			T.eq(item.Machine, machine.Id)
@@ -654,7 +665,8 @@ return function(T, Loader)
 			end
 		end
 		-- junk Item strings
-		local junkItems = { "", "Nope", "Upgrade:Conveyor:Speed", "Upgrade:Crusher:Quality", "Upgrade:AutoCleaner:Luck" }
+		local junkItems =
+			{ "", "Nope", "Upgrade:ExpressConveyor:Speed", "ExpressConveyor", "Upgrade:Crusher:Quality", "Upgrade:AutoCleaner:Luck" }
 		table.insert(junkItems, "StorageCrate")
 		table.insert(junkItems, "Anvil")
 		table.insert(junkItems, string.rep("x", 200))
@@ -800,8 +812,8 @@ return function(T, Loader)
 		-- plots' grid move (Migrations), which an old save needs once
 		T.eq(
 			DataTemplate.Version,
-			14,
-			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry, 9: the backpack, 10: secret ores, 11: the golems' auto-delete, 12: the HUGE golems, 13: the rarer golems' auto-delete flags)"
+			16,
+			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry, 9: the backpack, 10: secret ores, 11: the golems' auto-delete, 12: the HUGE golems, 13: the rarer golems' auto-delete flags, 14: Night Shift, 15: the one belt's level, 16: the Ore Feeder)"
 		)
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")

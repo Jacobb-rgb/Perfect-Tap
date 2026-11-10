@@ -66,6 +66,8 @@ local LimitedGolems = require(Shared.Config.LimitedGolems)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local OreData = require(Shared.Config.OreData)
 local SecretOreConfig = require(Shared.Config.SecretOreConfig)
+local StatConfig = require(Shared.Config.StatConfig)
+local WeatherBonus = require(Shared.Weather.WeatherBonus)
 local MineFloors = require(Shared.Config.MineFloors)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
@@ -227,6 +229,7 @@ BoostView.ShortText = {
 	HexaLucky = "Mining: ore luck x2.5. Rarer ores in every rock.",
 } :: { [string]: string }
 -- the HUD chips' tag before the timer (with the boost's picture: not told apart by colour alone)
+BoostView.WeatherChip = "Weather" -- the weather's bonus chip (no boost kind)
 BoostView.ChipTags = { TripleLucky = "TRIPLE", HexaLucky = "HEXA" } :: { [string]: string }
 -- the gamepad hint row on phones and TVs: bigger, with a footer of its own
 BoostView.PadHintScale = 1.25
@@ -368,6 +371,54 @@ function BoostView.serverLuck(): number
 	return if ok and on then BoostView.ServerLuckMult else 1
 end
 
+-- The weather's bonus right now (Weather/WeatherBonus: server time, no network), nil in clear weather.
+function BoostView.weather(): WeatherBonus.Entry?
+	local ok, entry = pcall(function()
+		return WeatherBonus.at(workspace:GetServerTimeNow(), workspace:GetAttribute("WeatherForce"))
+	end)
+	return if ok then entry else nil
+end
+
+function BoostView.weatherLeft(now: number): number
+	local ok, left = pcall(function()
+		return WeatherBonus.left(now, workspace:GetAttribute("WeatherForce"))
+	end)
+	return if ok then left else 0
+end
+
+-- A storm's ore luck multiplier now (1 = none); the server: Bonuses.oreLuck.
+function BoostView.weatherLuck(): number
+	local weather = BoostView.weather()
+	return if weather and weather.Luck then weather.Luck else 1
+end
+local weatherLuck = BoostView.weatherLuck
+
+-- A rainbow's secret-ore chance multiplier now (1 = none); the server: SecretOreConfig's extra.
+function BoostView.secretExtra(): number
+	local weather = BoostView.weather()
+	return if weather and weather.Secret then weather.Secret else 1
+end
+local secretExtra = BoostView.secretExtra
+
+--[[
+	The line every paid odds view adds while the weather changes its numbers
+	(" Storm now: its luck x1.5 is in these numbers ..."), "" otherwise. A
+	storm's luck never goes past the luck cap, so with Hexa Lucky or Server
+	Luck it adds nothing; the line says so.
+]]
+function BoostView.weatherNote(): string
+	local weather = BoostView.weather()
+	if not weather then
+		return ""
+	end
+	if weatherLuck() > 1 then
+		return ` {weather.Kind} now: its luck x{weatherLuck()} is in these numbers (up to the luck cap: nothing extra with Hexa Lucky).`
+	elseif secretExtra() > 1 then
+		return ` {weather.Kind} now: its secret chance x{secretExtra()} is in these numbers.`
+	end
+	return ""
+end
+
 function BoostView.context(rawState: any, now: number?): BoostConfig.LuckContext
 	local state = safeState(rawState)
 	local bonuses = bonusesOf(state)
@@ -376,6 +427,8 @@ function BoostView.context(rawState: any, now: number?): BoostConfig.LuckContext
 		-- the multiplier without Hexa Lucky: Server Luck's while it runs (the State can lag)
 		mult = math.min(mult, BoostView.serverLuck())
 	end
+	-- a storm's luck is in every number a paid boost shows (the server: Bonuses.oreLuck)
+	mult = math.min(mult * weatherLuck(), StatConfig.ById.OreLuckMult.Max or math.huge)
 	return {
 		BlasterLevel = levelOf(state),
 		Vip = vipOf(state),
@@ -561,7 +614,8 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		end
 		local keyLine: string
 		if kind.Target == "Mining" then
-			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
+			-- (a storm's luck is in both numbers, as the server rolls it)
+			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck() * weatherLuck())
 			keyLine = `Your ore luck: {BoostView.mult(without)} → {BoostView.mult(with)}`
 			if not effect then
 				keyLine = BoostConfig.Reasons.NoEffect
@@ -647,14 +701,44 @@ function BoostView.secretRows(zoneId: string?, luckBefore: number, luckAfter: nu
 		local row = BoostView.row(
 			"??? Secret " .. string.rep("★", secret.Stars),
 			Rarity.get("Secret").Color,
-			SecretOreConfig.chance(secret, luckBefore),
-			SecretOreConfig.chance(secret, luckAfter)
+			SecretOreConfig.chance(secret, luckBefore, secretExtra()),
+			SecretOreConfig.chance(secret, luckAfter, secretExtra())
 		)
-		row.Before = SecretOreConfig.oddsText(secret, luckBefore)
-		row.After = SecretOreConfig.oddsText(secret, luckAfter)
+		row.Before = SecretOreConfig.oddsText(secret, luckBefore, secretExtra())
+		row.After = SecretOreConfig.oddsText(secret, luckAfter, secretExtra())
 		table.insert(rows, row)
 	end
 	return rows
+end
+
+--[[
+	A luck card's odds as text lines (the Store's Hexa Lucky and Server Luck,
+	StoreController): "Rare or better" per zone the player can mine now ->
+	with `delta`, every secret's chance (a rainbow's x2 in them) and the
+	weather note, as the server rolls them now.
+]]
+function BoostView.luckLines(rawState: any, delta: { [string]: number }, now: number): { string }
+	local function percent(chance: number): string
+		local text = string.format("%.2f", chance * 100)
+		text = text:gsub("0+$", ""):gsub("%.$", "")
+		return text .. "%"
+	end
+	local preview = BoostConfig.preview(BoostView.context(rawState, now), delta)
+	local lines: { string } = { "Chance a chunk is Rare or better:" }
+	for _, zone in preview.Zones do
+		if not zone.NoEffect then
+			local info = WorldLayout.ZoneById[zone.Zone]
+			table.insert(lines, `{if info then info.Name else zone.Zone}:  {percent(zone.Before)}  →  {percent(zone.After)}`)
+		end
+	end
+	for _, line in BoostView.secretLines(preview.LuckBefore, preview.LuckAfter) do
+		table.insert(lines, line)
+	end
+	local weather = BoostView.weatherNote()
+	if weather ~= "" then
+		table.insert(lines, (string.gsub(weather, "^ ", "")))
+	end
+	return lines
 end
 
 -- The same as text lines for a luck card (StoreController): every secret, its floor, before -> after.
@@ -663,7 +747,9 @@ function BoostView.secretLines(luckBefore: number, luckAfter: number): { string 
 	for _, secret in SecretOreConfig.List do
 		local floor = if secret.Floor then MineFloors.ById[secret.Floor] else nil
 		local where = if floor then floor.Name else "every floor"
-		table.insert(lines, `{where}:  {SecretOreConfig.oddsText(secret, luckBefore)}  →  {SecretOreConfig.oddsText(secret, luckAfter)}`)
+		local before = SecretOreConfig.oddsText(secret, luckBefore, secretExtra())
+		local after = SecretOreConfig.oddsText(secret, luckAfter, secretExtra())
+		table.insert(lines, `{where}:  {before}  →  {after}`)
 	end
 	return lines
 end
@@ -676,11 +762,13 @@ end
 ]]
 function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local ctx = BoostView.context(rawState, nil)
-	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
+	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck() * weatherLuck())
 	local zone = if zoneId then WorldLayout.ZoneById[zoneId] else nil
 	local rows: { OddsRow } = {}
 	local summary: OddsRow? = nil
-	local note = `Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with Hexa Lucky. Chance per ore in a rock you break.`
+	local weatherNote = BoostView.weatherNote()
+	local note =
+		`Ore luck {BoostView.mult(without)} without, {BoostView.mult(with)} with Hexa Lucky.{weatherNote} Chance per ore in a rock you break.`
 	if zone then
 		-- one block of rows per table the server rolls from (BoostConfig.zoneWeights; a mine
 		-- floor's crystal rocks roll their own richer table, labelled as such)
@@ -718,8 +806,8 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 		elseif crystalBefore <= 0 then
 			-- (luck still raises the ??? Secret chance in the rows above: SecretOreConfig)
 			note = if #BoostView.secretRows(zone.Id, without, with) > 0
-				then "No Rare ores in this zone: Hexa Lucky only raises the ??? Secret chance here."
-				else "No Rare ores in this zone: Hexa Lucky changes nothing here."
+				then "No Rare ores in this zone: Hexa Lucky only raises the ??? Secret chance here." .. weatherNote
+				else "No Rare ores in this zone: Hexa Lucky changes nothing here." .. weatherNote
 		end
 	end
 	return {
@@ -794,6 +882,17 @@ function BoostView.chips(rawState: any, now: number): { Chip }
 				Color = kind.Color,
 			})
 		end
+	end
+	-- the weather's bonus, only while it runs (owner 2026-11-07: nothing stays on the screen)
+	local weather = BoostView.weather()
+	if weather then
+		table.insert(list, {
+			Kind = BoostView.WeatherChip,
+			Mult = "",
+			Tag = weather.Tag,
+			Text = BoostView.timer(BoostView.weatherLeft(now)),
+			Color = weather.Color,
+		})
 	end
 	return list
 end
@@ -2930,6 +3029,11 @@ function BoostView.buildChips(): ChipRefs
 		button.Visible = false
 		chips[kindId] = button
 	end
+	local weatherChip = chipButton("ChipWeather", #BoostConfig.KindIds + 1)
+	chipPill(weatherChip, rgb(120, 200, 255), nil)
+	BoostView.setChipText(weatherChip, "", "0:00")
+	weatherChip.Visible = false
+	chips[BoostView.WeatherChip] = weatherChip
 	local launcher = chipButton("Launcher", 0)
 	chipPill(launcher, rgb(90, 220, 120), nil)
 	BoostView.setChipText(launcher, "", "BOOSTS")
@@ -2989,6 +3093,12 @@ function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
 			if button then
 				shown[chip.Kind] = true
 				BoostView.setChipText(button, if short then "" else chip.Tag, chip.Text, small)
+				if chip.Kind == BoostView.WeatherChip then
+					local word = button:FindFirstChild("Word", true)
+					if word and word:IsA("TextLabel") then
+						word.Text = chip.Tag
+					end
+				end
 				button.Visible = true
 			end
 		end
@@ -3040,6 +3150,7 @@ BoostView.ChipPaints = {
 	TripleLucky = { Face = "Green", Dot = "Yellow" },
 	HexaLucky = { Face = "Purple", Dot = "Blue" },
 	Launcher = { Face = "Teal", Dot = "Green" },
+	Weather = { Face = "Sky", Dot = "Blue" },
 } :: { [string]: { Face: string, Dot: string } }
 
 local function pixelPill(button: TextButton, look: { Face: string, Dot: string })
@@ -3413,7 +3524,7 @@ end
 function BoostView.placeCorner(refs: ChipRefs, right: number, bottom: number, stacked: boolean?)
 	local row = refs.Row
 	row.Position = UDim2.new(1, -right, 1, -bottom)
-	local count = #BoostConfig.KindIds
+	local count = #BoostConfig.KindIds + 1 -- (+ the weather's chip)
 	local list = row:FindFirstChildOfClass("UIListLayout")
 	if list then
 		list.FillDirection = if stacked then Enum.FillDirection.Vertical else Enum.FillDirection.Horizontal
@@ -3431,6 +3542,21 @@ BoostView.buildChips = function(): ChipRefs
 		refs.Gui:SetAttribute("PopSkin", true)
 		for kindId, button in refs.Chips do
 			cornerTile(button, kindId)
+		end
+		-- the weather's tile says its word (setChips): no picture to upload
+		local dot = refs.Chips[BoostView.WeatherChip]:FindFirstChild("Dot", true)
+		if dot then
+			dot:ClearAllChildren()
+			local word = UIKit.label(dot, "", BoostView.CornerText, {
+				Name = "Word",
+				Size = UDim2.fromScale(1, 1),
+				FontFace = PopTheme.Pixel,
+				TextColor3 = PopTheme.Ink,
+				TextWrapped = false,
+				ZIndex = 5,
+			})
+			Pop.edge(word, 2)
+			Pop.fit(word, BoostView.CornerText)
 		end
 		pixelPill(refs.Launcher, BoostView.ChipPaints.Launcher)
 		BoostView.setChipText(refs.Launcher, "", "BOOSTS")
