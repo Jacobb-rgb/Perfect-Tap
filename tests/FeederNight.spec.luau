@@ -11,6 +11,9 @@ return function(T, Loader)
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local NightShiftService = Loader.requirePath("ServerScriptService.Server.Services.NightShiftService")
 	local NightShiftView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.NightShiftView")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+	local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
 
 	local function ore(kind: string, oreId: string?): any
 		return { K = kind, O = oreId or "Gold", G = if kind == "Raw" then nil else "Clean" }
@@ -233,18 +236,56 @@ return function(T, Loader)
 			local d2 = data({ "AutoCleaner", "Crusher", "ClayFurnace" }, feeder2)
 			local withPass = NightShiftService.onReturn(player, d2, seconds, true).Made
 			T.truthy(withPass.Fed > made.Fed, "the pass's 50%")
-			-- a full pen
+			-- a pen full to the night's cap
 			local d3 = data({ "Crusher" }, { ore("Clean") })
-			for _ = 1, EconomyConfig.penCapacity(nil, 10000) do
+			for _ = 1, NightShiftService.NightCap do
 				table.insert(d3.Storage, ore("Clean", "Coal"))
 			end
 			T.eq(NightShiftService.onReturn(player, d3, seconds, false).Why, "PenFull")
 			-- (review 11-10) one place left and every ore needs two: the pen, not "nothing to do"
 			local d4 = data({ "AutoCleaner", "Crusher", "ClayFurnace" }, { ore("Raw", "Gold") })
-			for _ = 1, EconomyConfig.penCapacity(nil, 10000) - 1 do
+			for _ = 1, NightShiftService.NightCap - 1 do
 				table.insert(d4.Storage, ore("Clean", "Coal"))
 			end
 			T.eq(NightShiftService.onReturn(player, d4, seconds, false).Why, "PenFull")
+			-- (owner 2026-11-10 22:06Z "Ohrada až na 300") a pen at its paid capacity overflows
+			-- at night up to 300 and no further; the rest waits in the feeder
+			T.eq(NightShiftService.NightCap, 300)
+			T.eq(GameConfig.MaxStoredItems, 300)
+			local paid = EconomyConfig.penCapacity(nil, GameConfig.MaxStoredItems)
+			T.truthy(paid < 300, "a new pen holds less")
+			local f5 = {}
+			for _ = 1, 400 do
+				table.insert(f5, ore("Raw", "Gold"))
+			end
+			local d5 = data({ "AutoCleaner", "Crusher", "ClayFurnace" }, f5)
+			for _ = 1, paid do
+				table.insert(d5.Storage, ore("Clean", "Coal"))
+			end
+			local night = NightShiftService.onReturn(player, d5, 8 * 3600, false).Made
+			T.truthy(night, "made")
+			T.truthy(#d5.Storage <= 300 and #d5.Storage >= 299, `the pen to 300, not more ({#d5.Storage})`)
+			T.truthy(night.PenStopped, "the pen stopped it")
+			T.eq(night.PenMax, 300)
+			T.eq(night.Left, #f5)
+			T.eq(#f5, 400 - night.Fed, "the rest waits in the feeder")
+			-- over its capacity the pen behaves as after a rescue move: nothing new goes in
+			-- (Put In, the Iron Box: PenService.store), taking out still works
+			patch(DataService, "get", function()
+				return d5
+			end)
+			T.truthy(PenService.isOver(d5))
+			T.eq(PenService.refusal(d5), PenService.OverReason)
+			local stored, why = PenService.store(player, ore("Clean", "Coal"))
+			T.falsy(stored, "the Iron Box and Put In refuse")
+			T.eq(why, PenService.OverReason)
+			local count = #d5.Storage
+			T.truthy(PenService.takeOne(player, ItemData.storageKey(d5.Storage[1])), "taking out works")
+			T.eq(#d5.Storage, count - 1)
+			-- the next night: no room for an ore's two bars, the pen says so
+			if #d5.Storage == 299 then
+				T.eq(NightShiftService.onReturn(player, d5, 8 * 3600, false).Why, "PenFull")
+			end
 			-- the hours and the rate (owner: 25 % for 8 h, 50 % for 12 h with the pass)
 			local works = {}
 			patch(FeederNight, "run", function(_q, _s, _l, work: number)
@@ -279,15 +320,39 @@ return function(T, Loader)
 			Seconds = 3600,
 			Hours = 8,
 			Rate = 0.25,
-			Made = { Fed = 6, Total = 12, Bars = 12, List = { { K = "Ingot", O = "Gold", G = "Clean", N = 12 } } },
+			Made = { Fed = 6, Total = 12, Bars = 12, Left = 0, List = { { K = "Ingot", O = "Gold", G = "Clean", N = 12 } } },
 		})
 		T.eq(refs.Machines.Text, "+12 bars")
 		T.falsy(refs.Empty.Visible, "rows, not the hint")
 		T.truthy(refs.Rows:FindFirstChild("Row1"), "one row")
 		T.eq(refs.Rows.Row1.Count.Text, "x12", "its count")
+		T.truthy(refs.Note.Visible, "how far it went")
+		T.eq(refs.Note.Text, "The feeder's ore is all done")
+		-- (owner 2026-11-10: the pen to 300) the note says the pen stopped it and what waits
+		T.eq(NightShiftView.noteText({ Left = 120, PenStopped = true, PenMax = 300 }), "Pen full at 300: 120 ores wait")
+		T.eq(NightShiftView.noteText({ Left = 1 }), "1 ore still in the feeder")
+		T.eq(NightShiftView.noteText({ Left = 0 }), "The feeder's ore is all done")
+		T.eq(NightShiftView.noteText(nil), nil)
+		NightShiftView.fill(refs, {
+			Amount = 1000,
+			Seconds = 3600,
+			Hours = 8,
+			Rate = 0.25,
+			Made = {
+				Fed = 130,
+				Total = 260,
+				Bars = 260,
+				Left = 120,
+				PenStopped = true,
+				PenMax = 300,
+				List = { { K = "Ingot", O = "Gold", G = "Clean", N = 260 } },
+			},
+		})
+		T.eq(refs.Note.Text, "Pen full at 300: 120 ores wait")
 		NightShiftView.fill(refs, { Amount = 1000, Seconds = 3600, Hours = 8, Rate = 0.25, Why = "Empty" })
 		T.truthy(refs.Empty.Visible)
 		T.eq(refs.Empty.Text, NightShiftView.Why.Empty)
+		T.falsy(refs.Note.Visible, "no note without rows")
 		T.eq(refs.Rows:FindFirstChild("Row1"), nil, "old rows cleared")
 		T.truthy(NightShiftView.Size.Y * 0.62 <= 390 - 24, "fits a phone held sideways")
 		for _, d in refs.Gui:GetDescendants() do

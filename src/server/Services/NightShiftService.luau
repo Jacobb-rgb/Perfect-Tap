@@ -10,7 +10,8 @@
 	    long enough absence earns the crate (NightShiftConfig.earnsCrate,
 	    data.NightShift). Returns { Made?, Why?, Crate, PenFull } for the
 	    window: Made = { Fed, Total, Bars, List = up to ListMax rows, best
-	    first, Left = ores still in the feeders, PenStopped }; an Iron Box
+	    first, Left = ores still in the feeders, PenStopped, PenMax }; the
+	    pen may fill past its capacity up to NightCap (300); an Iron Box
 	    on the plot keeps what the player keeps (MachineData.keeps); Why = why the machines made nothing ("NoFeeder" | "Empty" |
 	    "NoMachines" | "PenFull" | "Nothing"). It also runs when no window opens
 	    (a player leaving during the first seconds). No yields: the feeders'
@@ -42,6 +43,11 @@ local PodiumService = require(script.Parent.PodiumService)
 local NightShiftService = {}
 
 NightShiftService.ListMax = 5 -- rows of "Collected for you"
+-- What the night may fill the pen to (owner 2026-11-10 22:06Z, "Ohrada až na 300"): past
+-- what the pen holds, up to the DataStore cap, like a rescue move; then the line stops and
+-- the rest waits in the feeder. Over its capacity the pen takes nothing new until the player
+-- takes, sells or sends some (PenService "PenOver").
+NightShiftService.NightCap = GameConfig.MaxStoredItems
 
 -- (tests) rolls and the wall clock
 NightShiftService.random = math.random
@@ -121,8 +127,7 @@ local function runFeeders(player: Player, data: { [string]: any }, work: number)
 	if type(data.Storage) ~= "table" then
 		data.Storage = {}
 	end
-	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
-	local capacity = EconomyConfig.penCapacity(upgrades.PenLevel, GameConfig.MaxStoredItems)
+	local capacity = NightShiftService.NightCap
 	if #data.Storage >= capacity then
 		return nil, "PenFull"
 	end
@@ -166,7 +171,8 @@ local function runFeeders(player: Player, data: { [string]: any }, work: number)
 		Bars = report.Bars,
 		List = list,
 		Left = left, -- ores still in the feeders
-		PenStopped = report.RoomStopped, -- the pen had no room for more
+		PenStopped = report.RoomStopped, -- the pen reached NightCap
+		PenMax = capacity,
 	},
 		nil
 end

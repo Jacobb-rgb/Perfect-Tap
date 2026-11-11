@@ -56,6 +56,7 @@ export type Refs = {
 	Machines: TextLabel,
 	Rows: Frame,
 	Empty: TextLabel,
+	Note: TextLabel,
 	CrateTitle: TextLabel,
 	CrateText: TextLabel,
 	CrateCount: GuiObject,
@@ -164,22 +165,41 @@ local function picture(parent: Instance, desc: any, size: UDim2, position: UDim2
 end
 
 -- The pieces the machines made (best first), or why there are none.
+-- How far the night went, under the rows: the pen reached the night's cap, ore still in
+-- the feeder, or all of it done (nil: nothing made).
+function NightShiftView.noteText(made: any): string?
+	if type(made) ~= "table" then
+		return nil
+	end
+	local left = tonumber(made.Left) or 0
+	local ores = if left == 1 then "ore" else "ores"
+	if made.PenStopped then
+		return `Pen full at {tonumber(made.PenMax) or 300}: {left} {ores} wait`
+	elseif left > 0 then
+		return `{left} {ores} still in the feeder`
+	end
+	return "The feeder's ore is all done"
+end
+
 local function fillRows(refs: Refs, made: any, why: any)
 	for _, child in refs.Rows:GetChildren() do
 		child:Destroy()
 	end
 	local list = if type(made) == "table" and type(made.List) == "table" then made.List else {}
 	refs.Empty.Visible = #list == 0
+	local note = NightShiftView.noteText(made)
+	refs.Note.Text = note or ""
+	refs.Note.Visible = note ~= nil and #list > 0
 	refs.Empty.Text = NightShiftView.whyText(why)
 	refs.Machines.Text = NightShiftView.machinesText(made)
 	for k = 1, math.min(#list, NightShiftView.MaxRows) do
 		local row = list[k]
 		local cell = Pop.well(refs.Rows, {
 			Name = `Row{k}`,
-			Position = UDim2.fromOffset((k - 1) * 78, 4),
-			Size = UDim2.fromOffset(72, 78),
+			Position = UDim2.fromOffset((k - 1) * 78, 0),
+			Size = UDim2.fromOffset(72, 68),
 		})
-		picture(cell, { K = row.K, O = row.O, G = row.G }, UDim2.fromOffset(60, 60), UDim2.new(0.5, 0, 0.5, -6))
+		picture(cell, { K = row.K, O = row.O, G = row.G }, UDim2.fromOffset(52, 52), UDim2.new(0.5, 0, 0.5, -7))
 		Pop.text(cell, `x{tonumber(row.N) or 0}`, 20, {
 			Name = "Count",
 			AnchorPoint = Vector2.new(1, 1),
@@ -327,10 +347,20 @@ function NightShiftView.build(): Refs
 	local rows = UIKit.new("Frame", {
 		Name = "Rows",
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.36, 0, 0, 11),
-		Size = UDim2.new(0.64, -12, 0, 86),
+		Position = UDim2.new(0.36, 0, 0, 6),
+		Size = UDim2.new(0.64, -12, 0, 68),
 		ZIndex = 5,
 	}, machinesTile)
+	-- how far the night went (owner 2026-11-10: the pen up to 300, the rest waits in the feeder)
+	local note = Pop.text(machinesTile, "", 17, {
+		Name = "Note",
+		Position = UDim2.new(0.36, 0, 0, 78),
+		Size = UDim2.new(0.64, -16, 0, 24),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.fromRGB(225, 230, 240),
+		Visible = false,
+		ZIndex = 6,
+	})
 	local empty = Pop.text(machinesTile, NightShiftView.WhyDefault, 19, {
 		Name = "Empty",
 		Position = UDim2.new(0.36, 0, 0, 8),
@@ -383,6 +413,7 @@ function NightShiftView.build(): Refs
 		Machines = machines,
 		Rows = rows,
 		Empty = empty,
+		Note = note,
 		CrateTitle = crateTitle,
 		CrateText = crateText,
 		CrateCount = count,
