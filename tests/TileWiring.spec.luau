@@ -486,11 +486,22 @@ return function(T, Loader)
 
 	-- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
 	-- dlazdice") the TRAIN chip under the tiles in every mouse window; his small Studio window
-	-- keeps the big tiles three a row, a PC two a row
+	-- keeps the big tiles three a row; since 2026-11-11 (bigger tiles) so does a PC up to
+	-- 1920 x 1080, where two a row can't be big, and a taller screen keeps two a row
 	T.test("TileWiring: the TRAIN chip is under the tiles in every mouse window; his window keeps them big", function()
 		inRound(function()
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
-			for _, case in { { 1402, 490, 3 }, { 995, 485 }, { 1402, 368 }, { 1280, 720, 2 }, { 1280, 600, 2 }, { 1920, 1080, 2 } } do
+			for _, case in
+				{
+					{ 1402, 490, 3 },
+					{ 995, 485, 3 },
+					{ 1402, 368 },
+					{ 1280, 720, 3 },
+					{ 1280, 600, 3 },
+					{ 1920, 1080, 3 },
+					{ 1920, 1200, 2 },
+				}
+			do
 				local where = `{case[1]} x {case[2]}`
 				local scale = HudBubble.scaleFor(Vector2.new(case[1], case[2]))
 				local layout = HudBubble.layout(scale, case[1], false, false, case[2] - 58)
@@ -512,6 +523,56 @@ return function(T, Loader)
 				+ HudBubble.StackGap
 				+ HudBubble.stackChipHeight(his)
 			T.truthy(bottom <= HudBubble.roundFloor(his, height) + 1e-6, `1402 x 490: the chip ends at {bottom}, above the floaters`)
+		end)
+	end)
+
+	-- (owner 2026-11-11: "the UI we have on the left, other creators have it too, just a bit bigger, and
+	-- that looks good": the Studs UI pack's tiles are ~8 % of a 1280 x 720 frame's width) the left tiles
+	-- grew by a quarter to a third on a PC, in his Studio windows and on a TV: as big as the screen lets
+	-- them, three a row where two a row can't be big with the TRAIN chip under them above the floaters,
+	-- never past the top row's left end; phones and tablets keep theirs (44 pt, out of the thumbstick's zone)
+	T.test("TileWiring: the left tiles are a quarter bigger on a PC, in his window and on a TV; touch keeps its own", function()
+		inRound(function()
+			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
+			-- { width, height, touch, TV, a row, the tile (design units), the tile on 2026-11-10 }
+			local cases = {
+				{ 1920, 1080, false, false, 3, 116, 88 },
+				{ 1600, 900, false, false, 3, 87, 69 },
+				{ 1366, 768, false, false, 3, 87, 68 },
+				{ 1280, 720, false, false, 3, 87, 67 },
+				{ 1402, 490, false, false, 3, 108, 80 }, -- his Studio window
+				{ 995, 485, false, false, 3, 108, 80 },
+				{ 1920, 1200, false, false, 2, 116, 88 }, -- (tall enough for big tiles two a row)
+				{ 1920, 1080, false, true, 3, 104, 79 }, -- a TV
+				{ 844, 390, true, false, 6, 71, 71 }, -- a phone: as it was
+				{ 1024, 768, true, false, 5, 49, 49 }, -- a tablet: as it was
+			}
+			for _, case in cases do
+				local touch, tv = case[3] == true, case[4] == true
+				local kind = if touch then " (touch)" elseif tv then " (TV)" else ""
+				local where = `{case[1]} x {case[2]}{kind}`
+				local scale = HudBubble.scaleFor(Vector2.new(case[1], case[2]))
+				local height = (case[2] - 58) / scale
+				local layout = HudBubble.layout(scale, case[1], touch, tv, case[2] - 58)
+				T.eq(layout.Columns, case[5], `{where}: {case[5]} a row`)
+				T.eq(layout.Tile, case[6], `{where}: {case[6]} units`)
+				if touch then
+					T.truthy(layout.Tile * scale >= 44 - 0.5, `{where}: 44 pt tiles`)
+				else
+					T.truthy(case[6] >= 1.25 * case[7], `{where}: at least a quarter bigger than {case[7]} units`)
+					-- left of the top row; the stacked chip under them as wide as them, above the floaters
+					local m = HudBubble.menuMetrics(layout, HudBubble.roundCount(layout))
+					local right = m.Origin.X.Offset + m.Width
+					T.truthy(right <= layout.Width / 2 - HudBubble.topBarSize(layout).X / 2, `{where}: left of the top row ({right})`)
+					T.eq(layout.Chip, "Under", where .. ": the chip under them")
+					T.eq(HudBubble.chipWidth(layout), m.Width, where .. ": as wide as them")
+					local bottom = HudBubble.chipTop(layout) + HudBubble.stackChipHeight(layout)
+					T.truthy(bottom <= HudBubble.roundFloor(layout, height) + 1e-6, `{where}: above the floaters ({bottom})`)
+					if tv then
+						T.truthy(m.Origin.X.Offset >= layout.Width * HudBubble.TenFootSafe, where .. ": out of the title-safe band")
+					end
+				end
+			end
 		end)
 	end)
 

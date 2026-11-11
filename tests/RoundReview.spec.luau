@@ -94,14 +94,20 @@ return function(T, Loader)
 				T.truthy(pairLeft >= HudBubble.ThumbZone * width - 1e-6, `{where}: the bottom pair from {pairLeft} of {width}`)
 				refs.Gui:Destroy()
 			end
-			-- a PC keeps the offers and the tall block of tiles (owner 2026-10-28; nine tiles two a row
-			-- since 2026-11-07: "na kazdy radek jenom 2")
+			-- a PC keeps the offers and the block of tiles (owner 2026-10-28; nine tiles two a row
+			-- since 2026-11-07: "na kazdy radek jenom 2"; three a row since 2026-11-11, bigger, where two
+			-- a row can't be big: up to 1920 x 1080; a taller screen keeps two a row)
 			local pc = HudBubble.buildGame(1, 1280, false, false, 720 - 58) :: any
 			T.truthy(pc.Gui:FindFirstChild("Offers"), "PC: the offers")
-			T.eq(pc.Menu:GetAttribute("Columns"), 2, "PC: two a row")
+			T.eq(pc.Menu:GetAttribute("Columns"), 3, "PC: three a row")
 			local big = HudBubble.buildGame(1.25, 1920, false, false, 1080 - 58) :: any
-			T.eq(big.Menu:GetAttribute("Columns"), 2, "1920 x 1080: two a row")
+			T.eq(big.Menu:GetAttribute("Columns"), 3, "1920 x 1080: three a row")
 			T.truthy(big.Menu.Position.Y.Offset > HudBubble.MenuTop, "1920 x 1080: lower, like the reel's, where there is room")
+			local tall = HudBubble.buildGame(1.25, 1920, false, false, 1200 - 58) :: any
+			T.eq(tall.Menu:GetAttribute("Columns"), 2, "1920 x 1200: two a row")
+			pc.Gui:Destroy()
+			big.Gui:Destroy()
+			tall.Gui:Destroy()
 		end)
 	end)
 
@@ -148,7 +154,10 @@ return function(T, Loader)
 
 	T.test("RoundReview: the PC TRAIN chip under the tiles as wide as them, clear of the Server Luck line and the floaters", function()
 		inRound(function()
-			for _, size in { { 1280, 720, 58 }, { 1366, 768, 58 }, { 1280, 800, 36 }, { 1920, 1080, 58 } } do
+			-- { width, height, the top inset, tiles a row }
+			for _, size in
+				{ { 1280, 720, 58, 3 }, { 1366, 768, 58, 3 }, { 1280, 800, 36, 3 }, { 1920, 1080, 58, 3 }, { 1920, 1200, 58, 2 } }
+			do
 				local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
 				local width, height = size[1] / scale, (size[2] - size[3]) / scale
 				local refs = HudBubble.buildGame(scale, size[1], false, false, size[2] - size[3]) :: any
@@ -161,8 +170,9 @@ return function(T, Loader)
 				TrainView.useHud(nil)
 				T.eq(chip.X, refs.Menu.Size.X.Offset, where .. ": as wide as the tiles")
 				T.eq(chip.Y, HudBubble.StackChipHeight, where .. ": the HUD knows the stacked chip's height")
-				-- (nine tiles two a row since the owner's left menu, 2026-11-07)
-				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": a tall block, two a row")
+				-- (nine tiles two a row since the owner's left menu, 2026-11-07; three a row where two a row
+				-- can't be big since 2026-11-11, bigger tiles)
+				T.eq(refs.Menu:GetAttribute("Columns"), size[4], `{where}: {size[4]} a row`)
 				local chipRect = { chipLeft, chipTop, chipLeft + chip.X, chipTop + chip.Y }
 				local function rectOf(object: any): { number }
 					local x = width * object.Position.X.Scale + object.Position.X.Offset - object.AnchorPoint.X * object.Size.X.Offset
