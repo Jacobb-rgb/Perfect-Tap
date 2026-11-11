@@ -415,7 +415,7 @@ end
 ]]
 IconAssets.Shop = {
 	File = "obchod_ikony.png",
-	Id = 0,
+	Id = 137705934014876, -- uploaded by the owner 2026-11-11 (Studio Asset Manager)
 	Cell = 170,
 	Columns = 6,
 	Preview = true, -- (a preview of the shop before the upload sets it false)

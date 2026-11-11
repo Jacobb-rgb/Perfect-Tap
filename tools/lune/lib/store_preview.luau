@@ -75,7 +75,11 @@ function Preview.store(Loader: any, uiScale: number, w: number, h: number, tab: 
 	StoreView.setBig(refs, "Blaster", "LV 4 > LV 5")
 	StoreView.setCard(refs, "Podiums", "Podiums", "Owned")
 	for id, note in
-		{ StarComet = "Kept forever, every rebirth", StarNebula = "Kept forever, every rebirth", StarPulsar = "Kept forever, every rebirth" }
+		{
+			StarComet = "Kept forever, every rebirth",
+			StarNebula = "Kept forever, every rebirth",
+			StarPulsar = "Kept forever, every rebirth",
+		}
 	do
 		StoreView.setCard(refs, id, id, "Buy")
 		StoreView.setNote(refs, id, note)
@@ -148,12 +152,14 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
 
 	-- before the icon sheet is uploaded (what Studio shows now): the live models and drawn pictures
-	local before = IconAssets.Shop.Preview
+	local before, beforeId = IconAssets.Shop.Preview, IconAssets.Shop.Id
 	IconAssets.Shop.Preview = false
+	IconAssets.Shop.Id = 0
 	exports.ui_store_pc_bare = pc("Featured")
 	exports.ui_store_pc_bare_boosts = pc("Boosts")
 	exports.ui_store_pc_bare_cash = pc("Cash")
 	IconAssets.Shop.Preview = before
+	IconAssets.Shop.Id = beforeId
 
 	-- phones: the 44 pt sizes, the page scrolls
 	local phoneW, phoneH = 1600 / phoneScale, (900 - 58) / phoneScale

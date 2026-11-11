@@ -139,14 +139,19 @@ return function(T, Loader)
 		for _, name in { "basket", "lock", "clock", "bolt" } do
 			T.truthy(IconAssets.shopCell(name) ~= nil, name)
 		end
-		-- not uploaded: nothing shows in the game; a preview shows them unless told not to
-		local before, preview = IconAssets.Previewing, sheet.Preview
+		-- not uploaded (Id 0): nothing shows in the game; a preview shows them unless told not to
+		local before, preview, id = IconAssets.Previewing, sheet.Preview, sheet.Id
+		sheet.Id = 0
 		IconAssets.Previewing = false
 		T.falsy(IconAssets.shopShows("crown"), "the game before the upload")
 		IconAssets.Previewing = true
 		T.truthy(IconAssets.shopShows("crown"), "a preview")
 		sheet.Preview = false
 		T.falsy(IconAssets.shopShows("crown"), "a preview of Studio before the upload")
+		-- uploaded (owner 2026-11-11): the game shows them
+		sheet.Id = id
+		IconAssets.Previewing = false
+		T.truthy(id > 0 and IconAssets.shopShows("crown"), "the game after the owner's upload")
 		IconAssets.Previewing, sheet.Preview = before, preview
 		T.falsy(IconAssets.shopShows("nope"), "an unknown name")
 		-- once uploaded: its cell of the image

@@ -325,10 +325,10 @@ return function(T, Loader)
 	T.test("Store: no blank picture areas before the icon sheets are uploaded", function()
 		local StoreView = ui("StoreView")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
-		local before = IconAssets.Previewing
+		local before, beforeId = IconAssets.Previewing, IconAssets.Shop.Id
 		IconAssets.Previewing = false
+		IconAssets.Shop.Id = 0 -- (as before the owner's upload, or if it ever fails to load)
 		local ok, err = pcall(function()
-			T.eq(IconAssets.Shop.Id, 0, "the shop sheet waits for the owner's upload")
 			for _, spec in StoreConfig.Cards do
 				T.truthy(StoreView.hasPicture(spec), spec.Id .. " shows a picture in the game")
 			end
@@ -345,9 +345,17 @@ return function(T, Loader)
 			end
 		end)
 		IconAssets.Previewing = before
+		IconAssets.Shop.Id = beforeId
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	-- (owner 2026-11-11) his upload of the shop icon sheet is in: every tab and card picture shows from it
+	T.test("Store: the uploaded shop icon sheet shows its pictures", function()
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		T.truthy(IconAssets.Shop.Id > 0, "the owner's upload is set")
+		T.truthy(IconAssets.shopShows("clover"), "the clover (Lucky) shows from the sheet")
 	end)
 
 	-- (owner rule 2026-11-11) the stickers only say what the prices back up
