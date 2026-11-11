@@ -8,7 +8,7 @@
 
 	  lune run tools/lune/export_scene.luau world     (once: the town behind it)
 	  lune run tools/lune/export_night_shift.luau
-	  SHOTS_EXTRA=build/preview/night_shift_shots.json node tools/preview/render.mjs world night_full night_prize night_pass night_empty night_phone night_small
+	  SHOTS_EXTRA=build/preview/night_shift_shots.json node tools/preview/render.mjs world night_full night_prize night_pass night_empty night_nofeeder night_phone night_small
 ]]
 
 local fs = require("@lune/fs")
@@ -59,15 +59,40 @@ local function screen(payload: any, scale: number, prize: any?): any
 	return UiExport.export({ hud.Gui, refs.Gui })
 end
 
-local FULL = { Amount = 1240000, Seconds = 7 * 3600 + 42 * 60, Hours = 8, Rate = 0.25, Crate = true }
-local PASS = { Amount = 3970000, Seconds = 11 * 3600 + 5 * 60, Hours = 12, Rate = 0.5, Crate = true }
-local EMPTY = { Amount = 18400, Seconds = 3 * 3600 + 12 * 60, Hours = 8, Rate = 0.25, Crate = false }
+-- (machine step 4: what the machines made of the Ore Feeder's ore, or why nothing)
+local MADE = {
+	Fed = 412,
+	Total = 824,
+	Bars = 824,
+	List = {
+		{ K = "Ingot", O = "Iron", G = "Clean", N = 380 },
+		{ K = "Ingot", O = "Copper", G = "Clean", N = 236 },
+		{ K = "Ingot", O = "Cobalt", G = "Pristine", N = 128 },
+		{ K = "Ingot", O = "Emberite", G = "Clean", N = 54 },
+		{ K = "Ingot", O = "Amber", G = "Pristine", N = 26 },
+	},
+}
+local MADE_PASS = {
+	Fed = 1000,
+	Total = 2000,
+	Bars = 1640,
+	List = {
+		{ K = "Ingot", O = "Iron", G = "Clean", N = 900 },
+		{ K = "Ingot", O = "Cobalt", G = "Pristine", N = 740 },
+		{ K = "Crushed", O = "Frostbite", G = "Clean", N = 360 },
+	},
+}
+local FULL = { Amount = 1240000, Seconds = 7 * 3600 + 42 * 60, Hours = 8, Rate = 0.25, Crate = true, Made = MADE }
+local PASS = { Amount = 3970000, Seconds = 11 * 3600 + 5 * 60, Hours = 12, Rate = 0.5, Crate = true, Made = MADE_PASS }
+local EMPTY = { Amount = 18400, Seconds = 3 * 3600 + 12 * 60, Hours = 8, Rate = 0.25, Crate = false, Why = "Empty" }
+local NOFEEDER = { Amount = 640000, Seconds = 6 * 3600, Hours = 8, Rate = 0.25, Crate = true, Why = "NoFeeder" }
 
 local files = {
 	ui_night_full = screen(FULL, 1.25),
 	ui_night_prize = screen(FULL, 1.25, { Ok = true, Prize = "Coins", Amount = 2190000 }),
 	ui_night_pass = screen(PASS, 1.25, { Ok = true, Prize = "Ores", Ores = 3 }),
 	ui_night_empty = screen(EMPTY, 1.25),
+	ui_night_nofeeder = screen(NOFEEDER, 1.25),
 	ui_night_phone = screen(FULL, 0.62),
 	ui_night_small = screen(FULL, 0.62),
 }
@@ -95,8 +120,9 @@ fs.writeFile(
 		night_prize = shot("ui_night_prize"),
 		night_pass = shot("ui_night_pass"),
 		night_empty = shot("ui_night_empty"),
+		night_nofeeder = shot("ui_night_nofeeder"),
 		night_phone = shot("ui_night_phone", 844, 390),
 		night_small = shot("ui_night_small", 568, 320),
 	})
 )
-print("night shift: 6 screens")
+print("night shift: 7 screens")

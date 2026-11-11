@@ -165,6 +165,15 @@ function FeederService.init()
 	end)
 end
 
+-- Every live feeder of the player shows its count again (after Night Shift's machines took ore).
+function FeederService.refresh(player: Player)
+	for _, machine in MachineService.ofPlayer(player) do
+		if machine.Id == FeederService.Id and not machine.Removed then
+			show(machine)
+		end
+	end
+end
+
 function FeederService.start() end
 
 -- (tests)
