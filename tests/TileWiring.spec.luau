@@ -486,20 +486,20 @@ return function(T, Loader)
 
 	-- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
 	-- dlazdice") the TRAIN chip under the tiles in every mouse window; his small Studio window
-	-- keeps the big tiles three a row; since 2026-11-11 (bigger tiles) so does a PC up to
-	-- 1920 x 1080, where two a row can't be big, and a taller screen keeps two a row
+	-- keeps the big tiles three a row; since 2026-11-11 (his pick B) every PC shows that block
 	T.test("TileWiring: the TRAIN chip is under the tiles in every mouse window; his window keeps them big", function()
 		inRound(function()
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
 			for _, case in
 				{
+					{ 1402, 683, 3 }, -- his window on 2026-11-11
 					{ 1402, 490, 3 },
 					{ 995, 485, 3 },
 					{ 1402, 368 },
 					{ 1280, 720, 3 },
 					{ 1280, 600, 3 },
 					{ 1920, 1080, 3 },
-					{ 1920, 1200, 2 },
+					{ 1920, 1200, 3 },
 				}
 			do
 				local where = `{case[1]} x {case[2]}`
@@ -526,26 +526,27 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- (owner 2026-11-11: "the UI we have on the left, other creators have it too, just a bit bigger, and
-	-- that looks good": the Studs UI pack's tiles are ~8 % of a 1280 x 720 frame's width) the left tiles
-	-- grew by a quarter to a third on a PC, in his Studio windows and on a TV: as big as the screen lets
-	-- them, three a row where two a row can't be big with the TRAIN chip under them above the floaters,
-	-- never past the top row's left end; phones and tablets keep theirs (44 pt, out of the thumbstick's zone)
-	T.test("TileWiring: the left tiles are a quarter bigger on a PC, in his window and on a TV; touch keeps its own", function()
+	-- (owner 2026-11-11, the left tiles "a bit bigger" like other creators'; then in his Studio window,
+	-- 1402 x 683 pt: 116-unit tiles were "terribly big, a lot smaller", he picked B) the block three a
+	-- row at RoundBigMax on every PC and a TV, RoundMouseTile in his small Compact window; never past the
+	-- top row's left end, the TRAIN chip under them above the floaters, a TV's title-safe band; phones
+	-- and tablets keep theirs (44 pt, out of the thumbstick's zone)
+	T.test("TileWiring: his pick B: three a row at 78 units on every PC and a TV, 80 in his small window; touch keeps its own", function()
 		inRound(function()
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
-			-- { width, height, touch, TV, a row, the tile (design units), the tile on 2026-11-10 }
+			-- { width, height, touch, TV, a row, the tile (design units) }
 			local cases = {
-				{ 1920, 1080, false, false, 3, 116, 88 },
-				{ 1600, 900, false, false, 3, 87, 69 },
-				{ 1366, 768, false, false, 3, 87, 68 },
-				{ 1280, 720, false, false, 3, 87, 67 },
-				{ 1402, 490, false, false, 3, 108, 80 }, -- his Studio window
-				{ 995, 485, false, false, 3, 108, 80 },
-				{ 1920, 1200, false, false, 2, 116, 88 }, -- (tall enough for big tiles two a row)
-				{ 1920, 1080, false, true, 3, 104, 79 }, -- a TV
-				{ 844, 390, true, false, 6, 71, 71 }, -- a phone: as it was
-				{ 1024, 768, true, false, 5, 49, 49 }, -- a tablet: as it was
+				{ 1402, 683, false, false, 3, 78 }, -- his window, where he picked B
+				{ 1920, 1080, false, false, 3, 78 },
+				{ 1600, 900, false, false, 3, 78 },
+				{ 1366, 768, false, false, 3, 78 },
+				{ 1280, 720, false, false, 3, 78 },
+				{ 1920, 1200, false, false, 3, 78 },
+				{ 1402, 490, false, false, 3, 80 }, -- his window with the Output open (Compact)
+				{ 995, 485, false, false, 3, 80 },
+				{ 1920, 1080, false, true, 3, 78 }, -- a TV
+				{ 844, 390, true, false, 6, 71 }, -- a phone: as it was
+				{ 1024, 768, true, false, 5, 49 }, -- a tablet: as it was
 			}
 			for _, case in cases do
 				local touch, tv = case[3] == true, case[4] == true
@@ -559,7 +560,6 @@ return function(T, Loader)
 				if touch then
 					T.truthy(layout.Tile * scale >= 44 - 0.5, `{where}: 44 pt tiles`)
 				else
-					T.truthy(case[6] >= 1.25 * case[7], `{where}: at least a quarter bigger than {case[7]} units`)
 					-- left of the top row; the stacked chip under them as wide as them, above the floaters
 					local m = HudBubble.menuMetrics(layout, HudBubble.roundCount(layout))
 					local right = m.Origin.X.Offset + m.Width

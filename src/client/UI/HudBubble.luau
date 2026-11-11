@@ -29,7 +29,7 @@
 	More: Index, Settings, Daily, Spin, Boosts, RoundMoreOrder), two a
 	row in a tall block with the TRAIN chip under it as wide as it (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
-	screen, three a row where it is too short for big tiles two a row;
+	screen, three a row on a mouse or a TV since 2026-11-11, his pick B;
 	touch screens keep it wide at the top, out of the thumbstick's zone),
 	Title Case words, a tilted sticker ("FREE!" on Spin while
 	WheelController's badge counts a ready spin, setTileBadge); the top centre is a row of separate buttons
@@ -585,17 +585,15 @@ HudBubble.StackChipHeightTv = 158 -- the stacked chip on a TV (the name and the 
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
--- his picture tiles, two a row (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"),
--- the TRAIN chip always under them (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej
--- prosim pod to ale udelj ty velke dlazdice"), as big as other creators' (owner 2026-11-11, the Studs
--- UI pack: ~8 % of the screen's width): as big as the screen lets them, up to RoundBigMax
--- (RoundMouseTile in a small mouse window: Compact, his Studio 1402 x 490). A mouse or TV screen too
--- short for nine big tiles two a row with the chip under them (his Studio window, a 1280 x 720 and
--- a 1920 x 1080 PC: two a row stop at 67 and 98 units) goes three a row where that makes them at
--- least RoundThreeGain bigger; a taller one (1920 x 1200 and up) keeps two a row at RoundBigMax
-HudBubble.RoundBigMax = 116
-HudBubble.RoundMouseTile = 108
-HudBubble.RoundThreeGain = 8
+-- his picture tiles (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"), the TRAIN
+-- chip always under them (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to
+-- ale udelj ty velke dlazdice"). Owner 2026-11-11, in his Studio window (1402 x 683 pt): 116-unit
+-- tiles were "terribly big, a lot smaller"; he picked B: on a mouse or a TV three a row wherever
+-- they are at least as big as two a row (RoundThreeGain 0: every PC shows the same block), up to
+-- RoundBigMax; RoundMouseTile in a small mouse window (Compact: his 1402 x 490 with the Output open)
+HudBubble.RoundBigMax = 78
+HudBubble.RoundMouseTile = 80
+HudBubble.RoundThreeGain = 0
 HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
@@ -660,16 +658,16 @@ end
 	The round look's grid for a gui `height` design units tall at `uiScale` (owner
 	2026-10-28: "the block tall, not wide", the TRAIN chip under it, "ending like
 	it"): sets layout.Columns, Tile, Top, Chip and ChipStack.
-	  mouse / TV   two a row (the reel's column), the tiles smaller on a short
-	               screen (never under RoundMinTile); three, four, five a row
-	               when two can't fit, and three where that makes them at
-	               least RoundThreeGain bigger (a screen too short for big
-	               tiles two a row: his Studio window, a 1280 x 720 or a
-	               1920 x 1080 PC); never wider than the room left of the top
-	               row (narrower tiles there, not fewer a row); the stacked
-	               chip (StackChipHeight) under them as wide as them, all
-	               above the floaters (roundFloor). As low as the reel's
-	               tiles (RoundMenuTop) where there is room.
+	  mouse / TV   three a row wherever they are at least as big as two a row
+	               (RoundThreeGain 0: the owner's pick B, 2026-11-11, the same
+	               block on every PC), else two a row (the reel's column); the
+	               tiles smaller on a short screen (never under RoundMinTile);
+	               three, four, five a row when two can't fit; never wider
+	               than the room left of the top row (narrower tiles there,
+	               not fewer a row); the stacked chip (StackChipHeight) under
+	               them as wide as them, all above the floaters (roundFloor).
+	               As low as the reel's tiles (RoundMenuTop) where there is
+	               room.
 	  touch        at the top, wide: the thumbstick's start zone (the left 40 %
 	               under the top third) stays free on tablets; five a row where
 	               they stay left of the top row, else four; the touch chip
@@ -726,8 +724,7 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			if tile >= HudBubble.RoundMinTile then
 				local across = columns
 				if columns == 2 and layout.Mouse then
-					-- (a screen too short for big tiles two a row: three a row where that makes them much
-					-- bigger; once two a row reach the cap, three can't)
+					-- (the owner's block: three a row where they are at least RoundThreeGain bigger than two)
 					local three, threeRows = fit(3)
 					if three - tile >= HudBubble.RoundThreeGain then
 						across, tile, rows = 3, three, threeRows

@@ -8,7 +8,8 @@
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
 	  ui_hud_round_studio   a 995 x 485 pt mouse window (the tall block of tiles,
-	                        owner 2026-10-28; his logged window: ui_hud_studio_*)
+	                        owner 2026-10-28; his logged window: ui_hud_studio_*;
+	                        his 1402 x 683 window of 2026-11-11: ui_hud_owner_now)
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
 	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv;
 	                        _pc1080 / _pc768 (a mouse), _phone844 (touch, the
@@ -228,6 +229,11 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_studio_game = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	exports.ui_hud_studio_game_more = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse", true))
 	exports.ui_hud_studio_short = UiExport.export(hud(short * pixels, short, roblox.Vector2.new(1402, 368 - 41), 1, false, false, "Mouse"))
+	-- his window on 2026-11-11 (his screenshot: a 1990 x 970 px viewport, 1402 x 683 pt, not Compact),
+	-- where he picked B: the block three a row at RoundBigMax
+	local nowScale = HudBubble.scaleFor(roblox.Vector2.new(1402, 683))
+	exports.ui_hud_owner_now =
+		UiExport.export(hud(nowScale * pixels, nowScale, roblox.Vector2.new(1402, 683 - 41), 1, false, false, "Mouse"))
 	IconAssets.Previewing = previewing
 	exports.ui_hud_studio_all_icons = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
