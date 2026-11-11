@@ -977,13 +977,30 @@ What to test in Studio:
   Starbreaker) opens the odds panel first; the Forgemaster's Pass shows the Grotto odds. Wheel spins buy through
   WheelAction "Buy" (WheelService: its Full rules); StoreService answers "Unknown" for them like capsules and boosts.
 - No uploads needed: 3D models in ViewportFrames, a drawn wheel and x2 badge; the sticker icons (one sheet,
-  NAHRAJ_DO_ROBLOXU/ikony_obchod, IconAssets.Shop Id 0) replace the models once uploaded. A tab's 3D models are
-  built the first time it shows.
-- Motion (UI/ShopFx.start): one Heartbeat connection at 30 steps a second while the shop is open (rays turn, bolts
-  flash, the buy buttons' shine sweeps, the open tab bobs, the Mythic rims run, sparkles pulse); none with Reduce
-  motion or Config/AnimConfig.PixelFx off; stopped on close.
+  NAHRAJ_DO_ROBLOXU/ikony_obchod, IconAssets.Shop, uploaded 2026-11-11) replace the models where it has one.
+- Smooth pass (owner 2026-11-11 in Studio: "laggy"; must be clean and smooth, with cool animations):
+  - No per-frame Lua any more: every motion is a TweenService tween (UI/ShopFx.play: one endless tween per
+    mark; the old 30 Hz Heartbeat stepper is gone). The window's own loops run while it is open, the open tab's
+    (its page and its bob) while that tab shows; a tab change stops the old tab's, a close cancels them all.
+    Reduce motion or Config/AnimConfig.PixelFx off: nothing plays (ShopFx.quiet).
+  - Effects are images: one white sprite picture tinted per tab (NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,
+    tools/preview/shop_effects_sheet.mjs, IconAssets.ShopFx, Id 0 until uploaded): the sunburst, a glow, a
+    sparkle, dots, a flame, a patch of 12 x 12 studs, three bolts. Before the upload: plain gradients, no rays or
+    studs, the icon sheet's bolt and sparkle (never the old wedges, segments or stud frames).
+  - Pages are built lazily: the open tab's at once, each other on its first visit (StoreView.selectTab, the
+    controller wires it: StoreView.takeBuilt); its 3D models one a frame after (StoreView.SpreadModels) so a
+    first visit never stalls. Instances at the first open: 6,674 -> about 1,450 (every tab visited: about 4,770).
+  - 3D: static (nothing turns); an egg pack's three eggs are one view (Golems 16 -> 10 views); the shop frames
+    its models like the previews' pictures (StoreView.ModelFill, Pop.show framed them smaller).
+  - Motion: it opens with a pop from 0.82 (Back out), the dim fading in and a burst of rays behind it; it
+    closes shrinking to 0.86 as the dim fades. A tab: the header and body fade to its colours, the page slides
+    in, its cards pop in one after another. Hover 1.04 / press 0.94 on every card, tab, price button and the X
+    (mouse and gamepad selection). Ambient: card rays turn slowly, the buy buttons' shine sweeps every 3 s, bolts
+    flash now and then, sparkles twinkle, a tab's hero floats, BEST VALUE buttons breathe, the open tab bobs, the
+    Mythic rims run. A phone has no ambient bolts round the window or frame sparkles. About 30 tweens a tab.
 - Tests: tests/Store.spec.luau, tests/ShopFx.spec.luau (+ PixelKit, RoundReview, UIMotion). Pictures:
-  obrazky/obchod_ve_hre_2026-11-11 (tools/lune/lib/store_preview.luau, scene store_quick).
+  obrazky/obchod_ve_hre_2026-11-11 and obrazky/obchod_plynuly_2026-11-11 (tools/lune/lib/store_preview.luau,
+  scene store_quick; the motion: tools/lune/export_shop_motion.luau).
 What to test in Studio:
 1. Open the shop (the Shop button, the side menu, an offer on the right): FEATURED shows the Dragonforge banner with
    its end date, the Forgemaster's Pass and the Starter Pack (first hour of play only). Click every tab: its page and
@@ -995,8 +1012,12 @@ What to test in Studio:
    scroll, the odds panel fits.
 5. Gamepad only: the selection starts on the open page, LB / RB switch tabs, A buys, B closes the odds panel and
    then the shop; the selection never leaves the window.
-6. SETTINGS Reduce motion on: nothing in the shop moves. Watch FPS on a low-end phone emulator with the shop open.
+6. SETTINGS Reduce motion on: nothing in the shop moves. Watch FPS on a low-end phone emulator with the shop open
+   (MicroProfiler: no Lua work per frame from the shop), and switch every tab once: no hitch on a first visit.
 7. A player where paid random items are restricted: the Golems tab is gone, no eggs, spins, luck or banner.
+8. Smooth pass: open and close a few times (pop, burst, shrink), switch tabs (colours fade, cards pop in), hover
+   and press cards with the mouse and move the gamepad selection (1.04 / 0.94). Before obchod_efekty.png is
+   uploaded the shop has no rays or studs (plain gradients); after the upload (send its id) they show.
 
 ## One Inventory at the bottom, the GOLD hotbar, stickers on the right (owner 2026-11-11, branch ui/hud-inventory)
 - The right side wears the shop's sticker icons (IconAssets.Shop, the same picture the shop shows for the same

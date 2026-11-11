@@ -12,10 +12,11 @@
 	  ui_store_pc_boosts     PC: BOOSTS (Server Luck, spins, luck, the Mythic enchants)
 	  ui_store_pc_cash       PC: CASH (the coins at $1.84K/s)
 	  ui_store_pc_odds       PC: the odds panel before a Royal Egg x5 buy
-	  ui_store_pc_bare       PC: FEATURED as Studio shows it before the icon sheet is uploaded
-	  ui_store_pc_bare_boosts PC: BOOSTS before the upload (the drawn wheel, the live models)
+	  ui_store_pc_bare       PC: FEATURED as Studio shows it before the effects picture is
+	                         uploaded (IconAssets.ShopFx: no rays, no studs, plain gradients)
+	  ui_store_pc_bare_boosts / _bare_cash  BOOSTS / CASH before that upload
 	  ui_store_phone         667 x 375 pt phone: FEATURED (44 pt buttons, the page scrolls)
-	  ui_store_phone_golems  the phone: GOLEMS
+	  ui_store_phone_golems  the phone: GOLEMS (and _blasters, _passes, _boosts; _cash scrolled down)
 	  ui_store_phone_odds    the phone: the odds panel
 	  ui_store_phone_small_limited  568 x 320 pt: FEATURED
 	  ui_store_hud_pc / ui_store_hud_phone / ui_store_hud_phone_busy  the HUD without the window
@@ -24,6 +25,7 @@
 	aliases of the matching tabs.
 ]]
 
+local process = require("@lune/process")
 local UiExport = require("./uiexport")
 
 local Preview = {}
@@ -57,6 +59,26 @@ function Preview.hud(Loader: any, uiScale: number): any
 		end
 	end
 	return refs
+end
+
+--[[
+	An egg pack's pile is one 3D view of three eggs: the preview draws its
+	parts (PreviewLive), not one egg's picture, and every Royal egg so for
+	the same look. LIVE=1 draws every built 3D view so, with the game's
+	viewport light (no special meshes). Again after a page is built later.
+]]
+function Preview.liveEggs(refs: any)
+	local live = process.env.LIVE == "1"
+	for _, d in refs.Gui:GetDescendants() do
+		local egg = d:GetAttribute("Copies") == 3 or d:GetAttribute("Icon") == "capsule_Royal"
+		if egg or (live and d:IsA("ImageLabel") and d:FindFirstChild("View")) then
+			local view = d:FindFirstChild("View")
+			if view and view:IsA("ViewportFrame") and #view:GetChildren() > 0 then
+				d:SetAttribute("Icon", nil)
+				view:SetAttribute("PreviewLive", true)
+			end
+		end
+	end
 end
 
 -- The shop window as StoreController fills it for a player at LV 4 with three rebirths, tab `tab` open.
@@ -103,6 +125,7 @@ function Preview.store(Loader: any, uiScale: number, w: number, h: number, tab: 
 	end
 	StoreView.setRoyalOdds(refs, royal, false)
 	StoreView.selectTab(refs, tab or "Featured")
+	Preview.liveEggs(refs)
 	return refs
 end
 
@@ -151,20 +174,25 @@ function Preview.build(Loader: any): { [string]: any }
 	StoreView.showDetail(odds, { Title = "Royal Egg x5", Lines = lines, Robux = 229, Paint = "Pink" })
 	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
 
-	-- before the icon sheet is uploaded (what Studio shows now): the live models and drawn pictures
-	local before, beforeId = IconAssets.Shop.Preview, IconAssets.Shop.Id
-	IconAssets.Shop.Preview = false
-	IconAssets.Shop.Id = 0
+	-- before the effects picture is uploaded (what Studio shows now): plain gradients, the icon
+	-- sheet's bolt and sparkle (the icon sheet itself is uploaded)
+	local before, beforeId = IconAssets.ShopFx.Preview, IconAssets.ShopFx.Id
+	IconAssets.ShopFx.Preview = false
+	IconAssets.ShopFx.Id = 0
 	exports.ui_store_pc_bare = pc("Featured")
 	exports.ui_store_pc_bare_boosts = pc("Boosts")
 	exports.ui_store_pc_bare_cash = pc("Cash")
-	IconAssets.Shop.Preview = before
-	IconAssets.Shop.Id = beforeId
+	IconAssets.ShopFx.Preview = before
+	IconAssets.ShopFx.Id = beforeId
 
 	-- phones: the 44 pt sizes, the page scrolls
 	local phoneW, phoneH = 1600 / phoneScale, (900 - 58) / phoneScale
 	exports.ui_store_phone = UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, "Featured", true).Gui })
 	exports.ui_store_phone_golems = UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, "Golems", true).Gui })
+	for _, tab in { "Blasters", "Passes", "Boosts" } do
+		exports["ui_store_phone_" .. string.lower(tab)] =
+			UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, tab, true).Gui })
+	end
 	do
 		local scrolled = store(phoneScale, phoneW, phoneH, "Cash", true)
 		scrolled.Scroller.CanvasPosition = roblox.Vector2.new(0, 160)

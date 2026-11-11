@@ -342,20 +342,30 @@ return function(T, Loader)
 
 	T.test("UIMotion: the shop's own motion marks (ShopFx: rays, bolts, shines, the Mythic rims)", function()
 		local ShopFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ShopFx")
-		local refs = StoreView.build()
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		-- (the effects picture uploaded: its rays turn too)
+		local fxId = IconAssets.ShopFx.Id
+		IconAssets.ShopFx.Id = 1
+		local ok, refs = pcall(StoreView.build)
+		IconAssets.ShopFx.Id = fxId
+		if not ok then
+			error(refs, 0)
+		end
+		T.truthy(refs.Gui:GetAttribute("MotionSkip"), "the watcher leaves the shop's window alone (ShopFx.open pops it)")
 		local kinds: { [string]: number } = {}
 		for _, d in refs.Gui:GetDescendants() do
 			local kind = d:GetAttribute("ShopFx")
 			if type(kind) == "string" then
 				kinds[kind] = (kinds[kind] or 0) + 1
 			end
-			-- (the shop moves itself: no UIMotionController loop marks, no PixelFx spins on its own rays)
-			T.eq(d:GetAttribute("Motion"), nil, "no Motion loop mark: " .. d:GetFullName())
+			-- (the shop moves itself: no UIMotionController loop marks, its buttons opted out; no PixelFx spins)
+			local motion = d:GetAttribute("Motion")
+			T.truthy(motion == nil or motion == "None", "no Motion loop mark: " .. d:GetFullName())
 			if kind == "Rays" then
 				T.eq(d:GetAttribute("PixelFx"), nil, "its rays turn with the shop's motion only")
 			end
 		end
-		for _, kind in { "Rays", "Bolt", "Shine", "Rim", "Sparkle" } do
+		for _, kind in { "Rays", "Bolt", "Shine", "Rim", "Sparkle", "Bob", "Float", "Pulse" } do
 			T.truthy((kinds[kind] or 0) > 0, "the shop has " .. kind)
 		end
 		-- every buy button shines (the OWNED tag and BACK don't)
@@ -365,10 +375,21 @@ return function(T, Loader)
 				local sweep = if shine then shine:FindFirstChild("Sweep") else nil
 				T.truthy(sweep and sweep:GetAttribute("ShopFx") == "Shine", card.Spec.Id .. " " .. key .. " shines")
 			end
-			T.eq((card.Owned :: any):FindFirstChild("Shine", true), nil, card.Spec.Id .. ": OWNED doesn't shine")
+			local owned = card.Owned
+			if owned then
+				T.eq(owned:FindFirstChild("Shine", true), nil, card.Spec.Id .. ": OWNED doesn't shine")
+			end
 		end
 		T.eq(refs.DetailBack:FindFirstChild("Shine"), nil, "BACK doesn't shine")
-		T.truthy(ShopFx.boltOn(0.05, 0), "a bolt flashes at the start of its second")
+		-- a bolt's loop: dark at its start, lit at its peak
+		local bolt: any = nil
+		for _, loop in ShopFx.loopsUnder(refs.Fx) do
+			if loop.Kind == "Bolt" then
+				bolt = loop
+				break
+			end
+		end
+		T.truthy(bolt and ShopFx.sample(bolt, 0) > 1 and ShopFx.sample(bolt, bolt.Time) < 0.1, "a bolt flashes at its peak")
 	end)
 
 	---------------------------------------------------------------- the setting

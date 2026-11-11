@@ -1,33 +1,45 @@
 --[[
-	ShopFx: the shop v3 "WOW" look's effects (owner 2026-11-11, the concept
-	docs/art/shop_v3_concept/shop_wow.html: "add styles, colours, glows,
-	lightning in the background, make it mega cool"), built from plain
-	frames so the shop looks good before any picture is uploaded:
+	ShopFx: the shop v3 "WOW" look (owner 2026-11-11, the concept
+	docs/art/shop_v3_concept/shop_wow.html), made smooth and light the same
+	evening (owner: "cool and smooth, with cool animations, not laggy"):
 
 	  Themes      one colour world per tab (header band, body, glow, bolts)
 	  Cards       the card paints (light -> mid -> deep, the concept's c-*)
 	  face        a painted face: gradient, round corners, the thick dark outline
 	  drop        the dark slab under a face (the "lip" the concept draws 6-8 px down)
 	  gloss / rim the light half-moon over a card's top, the light edge inside its outline
-	  text        white chunky text (Fredoka One) with a dark edge and a dark copy under it
-	  rays        light rays turning behind a picture (thin bars, gradient-faded ends)
-	  bolt        a jagged lightning bolt from rotated frame segments (it flashes)
-	  sparkle     a four-point star (it pulses), dots (particles), glow (soft discs)
-	  studs       classic Roblox top studs from small round frames (header and tabs)
-	  priceButton the 3D green Robux button (gold / red / purple / grey), a shine sweeps it
+	  text        white chunky text (Fredoka One) with a dark edge (a dark copy under the big ones)
+	  priceButton the 3D Robux button (green / gold / red / purple / grey), a shine sweeps it
 	  sticker     "BEST VALUE!" on a card's top edge; chip: a dark label pill
 	  mythicRim   a rainbow outline that runs round a Mythic card
-	  icon        a picture from the shop icon sheet (IconAssets.Shop), nil until uploaded
+	  icon        a picture from the shop icon sheet (IconAssets.Shop)
 	  wheel / x2  a spin wheel and the "x2" badge drawn from frames
 
-	Motion (one Heartbeat connection while the shop is open, 30 steps a
-	second; start / focus / stop): the rays turn, the bolts flash, a shine
-	sweeps the buy buttons, the open tab bobs, the Mythic rims run, the
-	sparkles pulse: a 2 s loop like the concept's frame(t). Things mark
-	themselves with the attribute ShopFx ("Rays", "Bolt", "Shine", "Rim",
-	"Sparkle"); start() finds them under the roots it is given. The pure
-	timing functions (rayAngle, boltOn, shineOffset, bob, rimAngle,
-	sparkleScale) and boltPoints have Lune tests (tests/ShopFx.spec.luau).
+	Effects are ONE ImageLabel each, cut from the effects picture
+	(IconAssets.ShopFx: sunburst rays, glow, sparkle, dots, flame, a patch
+	of studs, three bolts), tinted with ImageColor3. Until that picture is
+	uploaded: plain gradients (no rays, no studs), one soft disc for a glow,
+	and the icon sheet's bolt and sparkle.
+
+	Motion: TweenService only, the engine moves everything every frame; no
+	Lua runs per frame. Things carry the attribute ShopFx (a mark):
+	  Rays     the sunburst turns (Rotation, linear, endless)
+	  Shine    a buy button's light band sweeps across (UIGradient Offset)
+	  Rim      the Mythic rainbow outline runs (UIGradient Rotation)
+	  Bolt     a lightning bolt flashes now and then (ImageTransparency)
+	  Sparkle  a sparkle twinkles (its UIScale "Pulse")
+	  Pulse    a BEST VALUE button breathes (its UIScale "Pulse")
+	  Float    a tab's hero picture floats up and down (Position)
+	  Bob      the open tab bobs (its Lift's Position)
+	loopsUnder(roots) reads the marks into Loop specs (none under a hidden
+	gui; a phone skips the Ambient ones), play(loops) starts one endless
+	tween each, stop(playing) cancels them and puts everything at rest;
+	sample(loop, t) is the same curve in Lua (the previews' video and the
+	tests). open / close / fadeOut / recolor / slideIn / popIn / bindPress
+	are the window's one-shot tweens (open pop with a ray burst, close shrink,
+	a tab's colours fading over, its page sliding in, its cards popping in
+	one after another, hover 1.04 and press 0.94). Reduce motion: nothing
+	plays (ShopFx.quiet), the static look stays.
 
 	Pure builders (only Instance creation): the Lune previews run them too.
 	No emoji anywhere.
@@ -36,7 +48,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local IconAssets = require(Shared.Config.IconAssets)
+local AnimConfig = require(Shared.Config.AnimConfig)
 local UIKit = require(script.Parent.UIKit)
+local Motion = require(script.Parent.Motion)
 
 local ShopFx = {}
 
@@ -263,24 +277,17 @@ function ShopFx.repaint(frame: GuiObject, colors: { Color3 })
 	end
 end
 
--- The dark slab under a face (`size` and `at` its face's; `down` units lower).
+-- The dark slab under a face, `down` units lower (as wide as the face with its 4-unit outline).
 function ShopFx.drop(parent: Instance, corner: number, down: number, z: number, props: Props?): Frame
 	local drop = UIKit.new("Frame", {
 		Name = "Drop",
 		BackgroundColor3 = ShopFx.DropColor,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, down),
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromOffset(-4, down - 4),
+		Size = UDim2.new(1, 8, 1, 8),
 		ZIndex = z,
 	}, parent)
-	UIKit.corner(drop, corner)
-	UIKit.new("UIStroke", {
-		Name = "Border",
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Color = ShopFx.DropColor,
-		Thickness = 4,
-		LineJoinMode = Enum.LineJoinMode.Round,
-	}, drop)
+	UIKit.corner(drop, corner + 4)
 	apply(drop, props)
 	return drop
 end
@@ -332,11 +339,13 @@ end
 export type TextProps = Props
 
 --[[
-	White chunky text with a dark edge (UIStroke) and a dark copy `drop`
-	units under it (the concept's text-shadow). `size` is the text size; the
+	White chunky text with a dark edge (UIStroke) and, from ShadowMin up, a
+	dark copy `drop` units under it (the concept's text-shadow; small words
+	keep only their edge: fewer instances). `size` is the text size; the
 	edge is about a ninth of it. Returns the label; the copy is its sibling
 	"<Name>Shadow" (ShopFx.setText changes both).
 ]]
+ShopFx.ShadowMin = 20
 function ShopFx.text(parent: Instance, text: string, size: number, props: Props?, ink: Color3?, drop: number?): TextLabel
 	local edge = math.clamp(size / 9, 1.5, 6)
 	local label = UIKit.new("TextLabel", {
@@ -358,7 +367,7 @@ function ShopFx.text(parent: Instance, text: string, size: number, props: Props?
 	}, label)
 	apply(label, props)
 	local down = drop or math.clamp(math.floor(size / 9 + 0.5), 1, 6)
-	if down > 0 then
+	if down > 0 and size >= ShopFx.ShadowMin then
 		local shadow = UIKit.new("TextLabel", {
 			Name = label.Name .. "Shadow",
 			AnchorPoint = label.AnchorPoint,
@@ -467,7 +476,7 @@ function ShopFx.textWidth(text: string, size: number): number
 	return math.ceil((utf8.len(text) or #text) * size * 0.56 + size * 0.3)
 end
 
----------------------------------------------------------------- light
+---------------------------------------------------------------- light (one sprite each)
 
 -- A random number source in [0, 1) from a seed (the concept's: the same picture every time).
 function ShopFx.random(seed: number): () -> number
@@ -478,357 +487,255 @@ function ShopFx.random(seed: number): () -> number
 	end
 end
 
+-- An effect sprite (IconAssets.ShopFx: white, tinted with ImageColor3), nil until the picture shows.
+function ShopFx.sprite(parent: Instance, name: string, props: Props?): ImageLabel?
+	if not IconAssets.shopFxShows(name) then
+		return nil
+	end
+	local image = UIKit.new("ImageLabel", {
+		Name = name,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ZIndex = 2,
+	}, parent)
+	IconAssets.applyShopFx(image, name)
+	apply(image, props)
+	return image
+end
+
 --[[
-	Light rays from `center` (in the parent): `count` bars through the
-	middle, faded at both ends and a little at the centre, `length` from the
-	centre to a tip. Rainbow rays when `colors` has several colours. A
-	holder the motion turns (ShopFx "Rays"). The parent should clip.
+	The sunburst behind a picture (`size` across, its middle at `center`; the
+	parent clips), tinted `color`; it turns (mark "Rays", one turn in
+	`period` seconds). Nil before the effects picture is uploaded: no
+	wedges, the plain paint stays.
 ]]
 function ShopFx.rays(
 	parent: Instance,
 	center: UDim2,
-	count: number,
-	length: number,
+	size: number,
 	transparency: number,
 	z: number,
-	colors: { Color3 }?
-): Frame
-	local holder = UIKit.new("Frame", {
+	color: Color3?,
+	period: number?
+): ImageLabel?
+	local rays = ShopFx.sprite(parent, "rays", {
 		Name = "Rays",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
+		ImageColor3 = color or WHITE,
+		ImageTransparency = transparency,
 		Position = center,
-		Size = UDim2.fromOffset(length * 2, length * 2),
+		Size = UDim2.fromOffset(size, size),
 		ZIndex = z,
-	}, parent)
-	holder:SetAttribute("ShopFx", "Rays")
-	local fade = math.clamp(transparency, 0, 1)
-	local middle = math.min(1, fade + (1 - fade) * 0.35)
-	local width = math.max(6, math.floor(length * 0.2))
-	for i = 1, count do
-		local color = if colors and #colors > 0 then colors[(i - 1) % #colors + 1] else WHITE
-		local ray = UIKit.new("Frame", {
-			Name = "Ray",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = color,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Rotation = (i - 1) * (180 / count),
-			Size = UDim2.fromOffset(length * 2, width),
-			ZIndex = z,
-		}, holder)
-		UIKit.new("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 1),
-				NumberSequenceKeypoint.new(0.16, math.min(1, fade + (1 - fade) * 0.6)),
-				NumberSequenceKeypoint.new(0.4, fade),
-				NumberSequenceKeypoint.new(0.5, middle),
-				NumberSequenceKeypoint.new(0.6, fade),
-				NumberSequenceKeypoint.new(0.84, math.min(1, fade + (1 - fade) * 0.6)),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-		}, ray)
+	})
+	if rays then
+		rays:SetAttribute("ShopFx", "Rays")
+		rays:SetAttribute("Period", period or 24)
 	end
-	return holder
+	return rays
 end
 
--- A soft glow: three discs fading out from the middle (the concept's .glowdisc).
-function ShopFx.glow(parent: Instance, center: UDim2, radius: number, color: Color3, z: number, strength: number?): Frame
-	local holder = UIKit.new("Frame", {
+-- A soft glow `radius` round (the glow sprite; before the upload one soft disc).
+function ShopFx.glow(parent: Instance, center: UDim2, radius: number, color: Color3, z: number, strength: number?): GuiObject
+	local s = math.clamp(strength or 1, 0, 1)
+	local sprite = ShopFx.sprite(parent, "glow", {
 		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
+		ImageColor3 = color,
+		ImageTransparency = 1 - 0.85 * s,
 		Position = center,
 		Size = UDim2.fromOffset(radius * 2, radius * 2),
 		ZIndex = z,
-	}, parent)
-	local s = math.clamp(strength or 1, 0, 1)
-	for i, k in { 1, 0.68, 0.38 } do
-		local disc = UIKit.new("Frame", {
-			Name = "Disc" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = color,
-			BackgroundTransparency = 1 - (0.16 + 0.1 * i) * s,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(k, k),
-			ZIndex = z,
-		}, holder)
-		UIKit.corner(disc, 999)
+	})
+	if sprite then
+		return sprite
 	end
-	return holder
-end
-
---[[
-	The jagged line of a bolt from `a` to `b` (the concept's midpoint
-	displacement): 2^depth segments, each middle point pushed up to `disp`
-	/ 2 sideways (halved every level). Pure: the same `rand` gives the same bolt.
-]]
-function ShopFx.boltPoints(a: Vector2, b: Vector2, disp: number, depth: number, rand: () -> number): { Vector2 }
-	if depth <= 0 then
-		return { a, b }
-	end
-	local mid = (a + b) / 2 + Vector2.new((rand() - 0.5) * disp, (rand() - 0.5) * disp)
-	local left = ShopFx.boltPoints(a, mid, disp / 2, depth - 1, rand)
-	local right = ShopFx.boltPoints(mid, b, disp / 2, depth - 1, rand)
-	for i = 2, #right do
-		table.insert(left, right[i])
-	end
-	return left
-end
-
--- One segment of a bolt: a white core with a coloured edge, round ends.
-local function segment(parent: Instance, p: Vector2, q: Vector2, width: number, color: Color3, z: number, glow: boolean)
-	local d = q - p
-	local length = d.Magnitude
-	if length < 0.5 then
-		return
-	end
-	local mid = (p + q) / 2
-	local angle = math.deg(math.atan2(d.Y, d.X))
-	if glow then
-		local haze = UIKit.new("Frame", {
-			Name = "Haze",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = color,
-			BackgroundTransparency = 0.72,
-			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(mid.X, mid.Y),
-			Rotation = angle,
-			Size = UDim2.fromOffset(length + width * 3, width * 3.2),
-			ZIndex = z,
-		}, parent)
-		UIKit.corner(haze, 999)
-	end
-	local core = UIKit.new("Frame", {
-		Name = "Seg",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(mid.X, mid.Y),
-		Rotation = angle,
-		Size = UDim2.fromOffset(length + width * 0.6, math.max(1.5, width * 0.45)),
-		ZIndex = z,
-	}, parent)
-	UIKit.corner(core, 999)
-	UIKit.new("UIStroke", {
-		Name = "Edge",
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Color = color,
-		Thickness = math.max(1, width * 0.45),
-		LineJoinMode = Enum.LineJoinMode.Round,
-	}, core)
-end
-
---[[
-	A lightning bolt from `a` to `b` (in the parent's units): the main
-	jagged line (2^depth segments, glowing unless `haze` is false),
-	`branches` short forks, `width` units thick. A holder over the whole
-	parent that the motion flashes (ShopFx "Bolt", attribute Phase: when in
-	the second it flashes). A segment is 3 to 5 instances: the long bolts
-	behind the window take depth 4, the ones on cards 3 and no haze.
-]]
-function ShopFx.bolt(
-	parent: Instance,
-	a: Vector2,
-	b: Vector2,
-	color: Color3,
-	width: number,
-	seed: number,
-	branches: number,
-	z: number,
-	phase: number?,
-	depth: number?,
-	haze: boolean?
-): Frame
-	local holder = UIKit.new("Frame", {
-		Name = "Bolt",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = z,
-	}, parent)
-	holder:SetAttribute("ShopFx", "Bolt")
-	holder:SetAttribute("Phase", phase or 0)
-	local rand = ShopFx.random(seed)
-	local length = (b - a).Magnitude
-	local points = ShopFx.boltPoints(a, b, length * 0.42, depth or 4, rand)
-	for i = 1, #points - 1 do
-		segment(holder, points[i], points[i + 1], width, color, z, haze ~= false)
-	end
-	local dir = math.atan2(b.Y - a.Y, b.X - a.X)
-	for _ = 1, branches do
-		local k = math.clamp(math.floor(#points * (0.2 + rand() * 0.6)), 1, #points)
-		local from = points[k]
-		local angle = dir + (if rand() < 0.5 then -1 else 1) * (0.5 + rand() * 0.6)
-		local reach = length * (0.18 + rand() * 0.22)
-		local to = from + Vector2.new(math.cos(angle), math.sin(angle)) * reach
-		local fork = ShopFx.boltPoints(from, to, reach * 0.4, 2, rand)
-		for i = 1, #fork - 1 do
-			segment(holder, fork[i], fork[i + 1], width * 0.55, color, z, false)
-		end
-	end
-	return holder
-end
-
--- Recolours a bolt (a tab's other world).
-function ShopFx.tintBolt(holder: Instance, color: Color3)
-	for _, part in holder:GetChildren() do
-		if part.Name == "Haze" and part:IsA("Frame") then
-			part.BackgroundColor3 = color
-		elseif part.Name == "Seg" then
-			local edge = part:FindFirstChild("Edge")
-			if edge and edge:IsA("UIStroke") then
-				edge.Color = color
-			end
-		end
-	end
-end
-
---[[
-	A four-point sparkle at `at` (`size` across): two bars that fade to sharp
-	tips, a bright middle and a soft glow. Its UIScale pulses (ShopFx
-	"Sparkle", attribute Phase).
-]]
-function ShopFx.sparkle(parent: Instance, at: UDim2, size: number, color: Color3, z: number, phase: number?): Frame
-	local holder = UIKit.new("Frame", {
-		Name = "Sparkle",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Position = at,
-		Size = UDim2.fromOffset(size, size),
-		ZIndex = z,
-	}, parent)
-	holder:SetAttribute("ShopFx", "Sparkle")
-	holder:SetAttribute("Phase", phase or 0)
-	UIKit.new("UIScale", { Name = "Pulse", Scale = 1 }, holder)
-	local halo = UIKit.new("Frame", {
-		Name = "Halo",
+	local disc = UIKit.new("Frame", {
+		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = color,
-		BackgroundTransparency = 0.72,
+		BackgroundTransparency = 1 - 0.32 * s,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.55, 0.55),
-		ZIndex = z,
-	}, holder)
-	UIKit.corner(halo, 999)
-	for i, rot in { 0, 90 } do
-		local bar = UIKit.new("Frame", {
-			Name = "Bar" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = color,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Rotation = rot,
-			Size = UDim2.new(1, 0, 0.16, 0),
-			ZIndex = z,
-		}, holder)
-		UIKit.corner(bar, 999)
-		UIKit.new("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 1),
-				NumberSequenceKeypoint.new(0.35, 0.35),
-				NumberSequenceKeypoint.new(0.5, 0),
-				NumberSequenceKeypoint.new(0.65, 0.35),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-		}, bar)
-	end
-	local core = UIKit.new("Frame", {
-		Name = "Core",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.18, 0.18),
-		ZIndex = z,
-	}, holder)
-	UIKit.corner(core, 999)
-	return holder
-end
-
--- `count` small dots scattered over a w x h area (the concept's particles).
-function ShopFx.dots(
-	parent: Instance,
-	count: number,
-	w: number,
-	h: number,
-	colors: { Color3 },
-	seed: number,
-	z: number,
-	max: number?
-): Frame
-	local holder = UIKit.new("Frame", {
-		Name = "Dots",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Position = center,
+		Size = UDim2.fromOffset(math.floor(radius * 1.3), math.floor(radius * 1.3)),
 		ZIndex = z,
 	}, parent)
-	local rand = ShopFx.random(seed)
-	for i = 1, count do
-		local size = 2 + math.floor(rand() * (max or 5))
-		local dot = UIKit.new("Frame", {
-			Name = "Dot",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = colors[(i - 1) % #colors + 1],
-			BackgroundTransparency = 0.25 + rand() * 0.5,
-			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(math.floor(rand() * w), math.floor(rand() * h)),
-			Size = UDim2.fromOffset(size, size),
-			ZIndex = z,
-		}, holder)
-		UIKit.corner(dot, 999)
-	end
-	return holder
+	UIKit.corner(disc, 999)
+	return disc
 end
 
 --[[
-	Classic Roblox top studs over a w x h face (the Studs UI pack look): a
-	grid of round frames `spacing` apart, each lit top-left and shaded
-	bottom-right. Only for the header band and the tabs: a few hundred
-	frames, never the cards.
+	Classic Roblox top studs over a w x h face (the Studs UI pack look): the
+	studs patch (12 x 12) in squares `stud` x 12 across, side by side; the
+	parent clips them. A handful of images instead of hundreds of frames.
+	Nil before the effects picture is uploaded (a plain band).
 ]]
-function ShopFx.studs(parent: Instance, w: number, h: number, spacing: number, transparency: number, z: number): Frame
+function ShopFx.studs(parent: Instance, w: number, h: number, stud: number, transparency: number, z: number): Frame?
+	if not IconAssets.shopFxShows("studs") then
+		return nil
+	end
 	local holder = UIKit.new("Frame", {
 		Name = "Studs",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = z,
 	}, parent)
-	local d = math.floor(spacing * 0.62)
-	local cols = math.max(1, math.floor(w / spacing))
-	local rows = math.max(1, math.floor(h / spacing))
-	local x0 = (w - (cols - 1) * spacing) / 2
-	local y0 = (h - (rows - 1) * spacing) / 2
+	local patch = stud * 12
+	local cols = math.max(1, math.ceil(w / patch))
+	local rows = math.max(1, math.ceil(h / patch))
 	for r = 0, rows - 1 do
 		for c = 0, cols - 1 do
-			local stud = UIKit.new("Frame", {
-				Name = "Stud",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = WHITE,
-				BackgroundTransparency = transparency,
-				BorderSizePixel = 0,
-				Position = UDim2.fromOffset(math.floor(x0 + c * spacing), math.floor(y0 + r * spacing)),
-				Size = UDim2.fromOffset(d, d),
+			ShopFx.sprite(holder, "studs", {
+				Name = "Patch",
+				ImageTransparency = transparency,
+				Position = UDim2.fromOffset(c * patch, r * patch),
+				Size = UDim2.fromOffset(patch, patch),
 				ZIndex = z,
-			}, holder)
-			UIKit.corner(stud, 999)
-			UIKit.new("UIGradient", {
-				Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, WHITE),
-					ColorSequenceKeypoint.new(0.5, WHITE),
-					ColorSequenceKeypoint.new(1, BLACK),
-				}),
-				Rotation = 45,
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 0),
-					NumberSequenceKeypoint.new(0.45, 0.6),
-					NumberSequenceKeypoint.new(1, 0.15),
-				}),
-			}, stud)
+			})
 		end
 	end
 	return holder
+end
+
+--[[
+	A lightning bolt `height` tall with its middle at `at`, turned `rotation`,
+	tinted `color` (variant 1..3 of the effects picture). It flashes now and
+	then (mark "Bolt": dark most of the time, a quick flash every `period`
+	seconds). Before the upload the icon sheet's bolt stands in, smaller
+	(`fallback` false: nothing, for the bolts on cards).
+]]
+function ShopFx.bolt(
+	parent: Instance,
+	at: UDim2,
+	height: number,
+	rotation: number,
+	color: Color3,
+	variant: number,
+	z: number,
+	period: number?,
+	fallback: boolean?
+): ImageLabel?
+	local name = "bolt" .. tostring(math.clamp(math.floor(variant), 1, 3))
+	local image = ShopFx.sprite(parent, name, {
+		Name = "Bolt",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = color,
+		Position = at,
+		Rotation = rotation,
+		Size = UDim2.fromOffset(math.floor(height * 0.375), height),
+		ZIndex = z,
+	})
+	if not image and fallback ~= false then
+		image = ShopFx.icon(parent, "bolt", math.floor(math.min(height * 0.32, 74)), {
+			Name = "Bolt",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = at,
+			Rotation = rotation * 0.4 + 12,
+			ZIndex = z,
+		})
+	end
+	if image then
+		image:SetAttribute("ShopFx", "Bolt")
+		image:SetAttribute("Period", period or 5)
+		image:SetAttribute("Rest", ShopFx.BoltRest)
+		image.ImageTransparency = ShopFx.BoltRest
+	end
+	return image
+end
+ShopFx.BoltRest = 0.35 -- a bolt at rest (Reduce motion, a still preview): softly lit
+
+--[[
+	A sparkle at `at`, `size` across, tinted `color`: the effects picture's
+	soft one, else the icon sheet's (already uploaded), else two thin bars.
+	It twinkles (mark "Sparkle": its UIScale "Pulse").
+]]
+function ShopFx.sparkle(parent: Instance, at: UDim2, size: number, color: Color3, z: number, phase: number?): GuiObject
+	local props: Props = {
+		Name = "Sparkle",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = at,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	}
+	-- (the effects one takes the tint; the icon sheet's keeps its own colours)
+	local image: GuiObject?
+	if IconAssets.shopFxShows("sparkle") then
+		props.ImageColor3 = color
+		image = ShopFx.sprite(parent, "sparkle", props)
+	else
+		image = ShopFx.icon(parent, "sparkle", size, props)
+	end
+	local sparkle: GuiObject
+	if image then
+		sparkle = image
+	else
+		local holder = UIKit.new("Frame", {
+			Name = "Sparkle",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Position = at,
+			Size = UDim2.fromOffset(size, size),
+			ZIndex = z,
+		}, parent)
+		for i, rot in { 0, 90 } do
+			local bar = UIKit.new("Frame", {
+				Name = "Bar" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = color,
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Rotation = rot,
+				Size = UDim2.new(1, 0, 0.14, 0),
+				ZIndex = z,
+			}, holder)
+			UIKit.corner(bar, 999)
+		end
+		sparkle = holder
+	end
+	UIKit.new("UIScale", { Name = "Pulse", Scale = 1 }, sparkle)
+	sparkle:SetAttribute("ShopFx", "Sparkle")
+	sparkle:SetAttribute("Phase", phase or 0)
+	return sparkle
+end
+
+-- The bodies' drifting dots: one dots sprite `size` square (nil before the upload).
+function ShopFx.dots(parent: Instance, center: UDim2, size: number, color: Color3, transparency: number, z: number): ImageLabel?
+	return ShopFx.sprite(parent, "dots", {
+		Name = "Dots",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = color,
+		ImageTransparency = transparency,
+		Position = center,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	})
+end
+
+-- A flame tongue standing on `at` (its bottom middle), w x h, tinted `color` (a rounded frame before the upload).
+function ShopFx.flame(parent: Instance, at: UDim2, w: number, h: number, color: Color3, transparency: number, z: number): GuiObject
+	local image = ShopFx.sprite(parent, "flame", {
+		Name = "Flame",
+		AnchorPoint = Vector2.new(0.5, 1),
+		ImageColor3 = color,
+		ImageTransparency = transparency,
+		Position = at,
+		Size = UDim2.fromOffset(w, h),
+		ZIndex = z,
+	})
+	if image then
+		return image
+	end
+	local frame = UIKit.new("Frame", {
+		Name = "Flame",
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = color,
+		BackgroundTransparency = math.max(transparency, 0.45),
+		BorderSizePixel = 0,
+		Position = at + UDim2.fromOffset(0, math.floor(h * 0.2)),
+		Size = UDim2.fromOffset(w, h),
+		ZIndex = z,
+	}, parent)
+	UIKit.corner(frame, math.floor(w / 2))
+	return frame
 end
 
 -- Two broad light diagonal stripes across a band (the concept's header .shards).
@@ -884,18 +791,6 @@ local function dressButton(
 	local paint = face:FindFirstChild("Paint") :: UIGradient
 	paint.Color = ShopFx.faceSequence({ s.Top, s.Mid, s.Low }, size.Y, math.max(4, math.floor(size.Y * 0.11)))
 	face:SetAttribute("Style", style)
-	-- the light line along the top (inset 0 3px 0 rgba(255,255,255,0.6))
-	local top = UIKit.new("Frame", {
-		Name = "Top",
-		AnchorPoint = Vector2.new(0.5, 0),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.45,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0, 3),
-		Size = UDim2.new(1, -16, 0, 3),
-		ZIndex = z + 1,
-	}, face)
-	UIKit.corner(top, 999)
 	if shines then
 		-- the shine: a tilted light band the motion slides across
 		local shine = UIKit.new("Frame", {
@@ -909,7 +804,7 @@ local function dressButton(
 		local sweep = UIKit.new("UIGradient", {
 			Name = "Sweep",
 			Rotation = 18,
-			Offset = Vector2.new(ShopFx.shineOffset(0), 0),
+			Offset = Vector2.new(ShopFx.ShineFrom, 0),
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1),
 				NumberSequenceKeypoint.new(0.42, 1),
@@ -984,15 +879,19 @@ function ShopFx.priceButton(
 	apply(holder, props)
 	local z = holder.ZIndex
 	ShopFx.drop(holder, ShopFx.ButtonCorner, ShopFx.ButtonDrop, z)
+	-- (held by its middle: hover and press scale it about its centre, over its slab)
 	local face = UIKit.new("TextButton", {
 		Name = "Face",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		AutoButtonColor = false,
+		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(1, 1),
 		Text = "",
 		Selectable = true,
 		ZIndex = z + 1,
 	}, holder)
 	local amount, small = dressButton(face, robux, size, style, z, label, text, true)
+	ShopFx.bindPress(face, face)
 	return { Holder = holder, Face = face, Amount = amount, Label = small }
 end
 
@@ -1283,223 +1182,462 @@ function ShopFx.x2(parent: Instance, size: number, props: Props?): Frame
 	return badge
 end
 
----------------------------------------------------------------- motion (pure timing)
+---------------------------------------------------------------- motion (TweenService only)
 
-ShopFx.Loop = 2 -- seconds: the concept's loop
-ShopFx.RaySpeed = 20 -- degrees a second (the rays repeat every 20 degrees in the concept)
-ShopFx.StepRate = 1 / 30
+ShopFx.ShineFrom = -1.6 -- a buy button's light band at rest (left of the face)
+ShopFx.ShineTo = 2.4
+ShopFx.ShineTime = 3 -- one sweep every 3 s (across the face in about 0.9 s)
+ShopFx.ShineStagger = 0.5 -- (the next button's starts that much further off: the sweeps drift apart)
+ShopFx.RimTime = 2.4 -- the Mythic rim: one turn
+ShopFx.RimRest = 30
+ShopFx.BoltDark = 6 -- (a transparency over 1 shows nothing: a bolt flashes in the last sixth of each half)
+ShopFx.BoltPeak = 0.04
+ShopFx.SparkleTime = 1.1
+ShopFx.PulsePeak = 1.05
+ShopFx.PulseTime = 0.8
+ShopFx.FloatRise = 6
+ShopFx.FloatTime = 1.7
+ShopFx.BobRise = 3
+ShopFx.BobTime = 0.9
+ShopFx.Hover = 1.04
+ShopFx.Press = 0.94
+ShopFx.PressTime = 0.1
 
--- The rays' turn at `t` seconds (from `base`).
-function ShopFx.rayAngle(t: number, base: number?): number
-	return ((base or 0) + t * ShopFx.RaySpeed) % 360
-end
-
--- Is a bolt with `phase` lit at `t`? Two quick flashes a second (the concept's frame(t)).
-function ShopFx.boltOn(t: number, phase: number?): boolean
-	local p = (t + (phase or 0)) % 1
-	return p < 0.09 or (p > 0.15 and p < 0.22)
-end
-
--- The shine's UIGradient offset at `t`: from left of the button to right of it once every Loop
--- (it crosses the face in about 0.85 s, then rests off it).
-function ShopFx.shineOffset(t: number): number
-	local u = (t % ShopFx.Loop) / ShopFx.Loop
-	return -1.1 + 2.8 * u
-end
-
--- The open tab's bob at `t` (design units, up and down 3).
-function ShopFx.bob(t: number): number
-	return math.sin(t * math.pi) * 3
-end
-
--- The Mythic rim's gradient turn at `t` (a full turn every 2 s).
-function ShopFx.rimAngle(t: number): number
-	return (30 + t * 180) % 360
-end
-
--- A sparkle's size at `t` (0.45 .. 1).
-function ShopFx.sparkleScale(t: number, phase: number?): number
-	return 0.45 + 0.55 * math.abs(math.sin(t * math.pi + (phase or 0) * 1.3))
-end
-
----------------------------------------------------------------- motion (the driver)
-
-export type Driver = {
-	focus: (page: Instance?, bob: GuiObject?) -> (),
-	stop: () -> (),
-	step: (t: number) -> (), -- (tests and previews: one frame at t)
-	running: () -> boolean,
+export type Loop = {
+	Kind: string, -- the mark it came from
+	Target: Instance,
+	Property: string,
+	From: any,
+	To: any,
+	Rest: any, -- its value when nothing plays
+	Time: number, -- seconds one way
+	Style: string, -- Enum.EasingStyle's name
+	Direction: string, -- Enum.EasingDirection's name
+	Reverses: boolean,
 }
 
-type Lists = {
-	Rays: { GuiObject },
-	RayBase: { [GuiObject]: number },
-	Bolts: { GuiObject },
-	BoltPhase: { [GuiObject]: number },
-	Shines: { UIGradient },
-	Rims: { UIGradient },
-	Sparkles: { GuiObject },
-	SparklePhase: { [GuiObject]: number },
-}
+export type Playing = { Tweens: { any }, Loops: { Loop } }
 
-local function emptyLists(): Lists
-	return { Rays = {}, RayBase = {}, Bolts = {}, BoltPhase = {}, Shines = {}, Rims = {}, Sparkles = {}, SparklePhase = {} }
+-- Is the shop's motion off now (Reduce motion, or Config/AnimConfig.PixelFx off)?
+function ShopFx.quiet(): boolean
+	return Motion.reduced() or AnimConfig.PixelFx ~= true
 end
 
-local function collect(roots: { Instance }): Lists
-	local lists = emptyLists()
+export type TweenMaker = (
+	instance: Instance,
+	time: number,
+	style: string,
+	direction: string,
+	goal: { [string]: any },
+	repeats: number,
+	reverses: boolean,
+	delay: number
+) -> any
+local fakeTweens: TweenMaker? = nil
+
+-- (tests and previews) every tween ShopFx makes goes to `maker` instead (nil: TweenService).
+function ShopFx.useTweens(maker: TweenMaker?)
+	fakeTweens = maker
+end
+
+-- The one place ShopFx makes a tween; it plays at once. Nil when TweenService can't (Lune).
+local function tween(
+	instance: Instance,
+	time: number,
+	style: string,
+	direction: string,
+	goal: { [string]: any },
+	repeats: number?,
+	reverses: boolean?,
+	delay: number?
+): any
+	local fake = fakeTweens
+	if fake then
+		local made = fake(instance, time, style, direction, goal, repeats or 0, reverses == true, delay or 0)
+		if made and made.Play then
+			made:Play()
+		end
+		return made
+	end
+	local ok, made = pcall(function()
+		local TweenService = game:GetService("TweenService")
+		local info = TweenInfo.new(
+			time,
+			(Enum.EasingStyle :: any)[style],
+			(Enum.EasingDirection :: any)[direction],
+			repeats or 0,
+			reverses == true,
+			delay or 0
+		)
+		local t = TweenService:Create(instance, info, goal)
+		t:Play()
+		return t
+	end)
+	return if ok then made else nil
+end
+
+local function set(target: Instance, property: string, value: any)
+	(target :: any)[property] = value
+end
+
+-- A mark's base value, read once (a restart never drifts: Rays from its first Rotation, Float / Bob from its Position).
+local function base(target: GuiObject, property: string): any
+	local stored = target:GetAttribute("Base")
+	if stored ~= nil then
+		return stored
+	end
+	local value = (target :: any)[property]
+	target:SetAttribute("Base", value)
+	return value
+end
+
+-- One Loop (typed: the marks' literals stay plain strings and instances).
+local function newLoop(
+	kind: string,
+	target: Instance,
+	property: string,
+	from: any,
+	to: any,
+	rest: any,
+	time: number,
+	style: string,
+	direction: string,
+	reverses: boolean
+): Loop
+	return {
+		Kind = kind,
+		Target = target,
+		Property = property,
+		From = from,
+		To = to,
+		Rest = rest,
+		Time = time,
+		Style = style,
+		Direction = direction,
+		Reverses = reverses,
+	}
+end
+
+local function scaleOf(target: Instance): UIScale?
+	local found = target:FindFirstChild("Pulse")
+	return if found and found:IsA("UIScale") then found else nil
+end
+
+--[[
+	The endless loops of everything marked under `roots` (and the roots
+	themselves): one Loop per mark. `compact` (a phone): no ambient marks
+	(attribute Ambient: the bolts round the window, the frame's sparkles).
+	A hidden gui and everything in it gets none (a hidden card, an owned
+	pass's price, a banner that isn't shown).
+]]
+function ShopFx.loopsUnder(roots: { Instance }, compact: boolean?): { Loop }
+	local loops: { Loop } = {}
+	local shines = 0
+	local function take(d: Instance)
+		local kind = d:GetAttribute("ShopFx")
+		if type(kind) ~= "string" then
+			return
+		end
+		if compact and d:GetAttribute("Ambient") == true then
+			return
+		end
+		local phase = d:GetAttribute("Phase")
+		local p = if type(phase) == "number" then phase else 0
+		local period = d:GetAttribute("Period")
+		if kind == "Rays" and d:IsA("GuiObject") then
+			local from = base(d, "Rotation") :: number
+			local time = if type(period) == "number" then period else 24
+			table.insert(loops, newLoop(kind, d, "Rotation", from, from + 360, from, time, "Linear", "In", false))
+		elseif kind == "Shine" and d:IsA("UIGradient") then
+			-- (each button's band starts a little further off than the last, at the same speed: the
+			-- buttons shine one after another, never all at once)
+			local rest = Vector2.new(ShopFx.ShineFrom, 0)
+			local from = rest - Vector2.new((shines % 4) * ShopFx.ShineStagger, 0)
+			local time = ShopFx.ShineTime * (ShopFx.ShineTo - from.X) / (ShopFx.ShineTo - ShopFx.ShineFrom)
+			shines += 1
+			table.insert(loops, newLoop(kind, d, "Offset", from, Vector2.new(ShopFx.ShineTo, 0), rest, time, "Linear", "In", false))
+		elseif kind == "Rim" and d:IsA("UIGradient") then
+			table.insert(loops, newLoop(kind, d, "Rotation", 0, 360, ShopFx.RimRest, ShopFx.RimTime, "Linear", "In", false))
+		elseif kind == "Bolt" and (d:IsA("ImageLabel") or d:IsA("ImageButton")) then
+			local rest = d:GetAttribute("Rest")
+			local half = (if type(period) == "number" then period else 5) / 2
+			local still = if type(rest) == "number" then rest else ShopFx.BoltRest
+			table.insert(loops, newLoop(kind, d, "ImageTransparency", ShopFx.BoltDark, ShopFx.BoltPeak, still, half, "Quad", "In", true))
+		elseif kind == "Sparkle" or kind == "Pulse" then
+			local scale = scaleOf(d)
+			if scale then
+				if kind == "Sparkle" then
+					table.insert(loops, newLoop(kind, scale, "Scale", 0.35, 1.1, 1, ShopFx.SparkleTime + p * 0.17, "Sine", "InOut", true))
+				else
+					table.insert(loops, newLoop(kind, scale, "Scale", 1, ShopFx.PulsePeak, 1, ShopFx.PulseTime, "Sine", "InOut", true))
+				end
+			end
+		elseif (kind == "Float" or kind == "Bob") and d:IsA("GuiObject") then
+			local from = base(d, "Position") :: UDim2
+			local rise = if kind == "Float" then ShopFx.FloatRise else ShopFx.BobRise
+			local time = if kind == "Float" then ShopFx.FloatTime else ShopFx.BobTime
+			table.insert(loops, newLoop(kind, d, "Position", from, from + UDim2.fromOffset(0, -rise), from, time, "Sine", "InOut", true))
+		end
+	end
+	local function walk(d: Instance)
+		if d:IsA("GuiObject") and not d.Visible then
+			return
+		end
+		take(d)
+		for _, child in d:GetChildren() do
+			walk(child)
+		end
+	end
 	for _, root in roots do
-		for _, d in root:GetDescendants() do
-			local kind = d:GetAttribute("ShopFx")
-			if kind == nil then
-				continue
-			end
-			if kind == "Rays" and d:IsA("GuiObject") then
-				table.insert(lists.Rays, d)
-				lists.RayBase[d] = d.Rotation
-			elseif kind == "Bolt" and d:IsA("GuiObject") then
-				table.insert(lists.Bolts, d)
-				local phase = d:GetAttribute("Phase")
-				lists.BoltPhase[d] = if type(phase) == "number" then phase else 0
-			elseif kind == "Shine" and d:IsA("UIGradient") then
-				table.insert(lists.Shines, d)
-			elseif kind == "Rim" and d:IsA("UIGradient") then
-				table.insert(lists.Rims, d)
-			elseif kind == "Sparkle" and d:IsA("GuiObject") then
-				table.insert(lists.Sparkles, d)
-				local phase = d:GetAttribute("Phase")
-				lists.SparklePhase[d] = if type(phase) == "number" then phase else 0
-			end
-		end
+		walk(root)
 	end
-	return lists
+	return loops
 end
 
-local function stepLists(lists: Lists, t: number)
-	for _, ray in lists.Rays do
-		ray.Rotation = ShopFx.rayAngle(t, lists.RayBase[ray])
+-- Starts one endless tween per loop (from its From). Nothing when the shop is quiet.
+function ShopFx.play(loops: { Loop }): Playing
+	local playing: Playing = { Tweens = {}, Loops = loops }
+	if ShopFx.quiet() then
+		playing.Loops = {}
+		return playing
 	end
-	for _, bolt in lists.Bolts do
-		local on = ShopFx.boltOn(t, lists.BoltPhase[bolt])
-		if bolt.Visible ~= on then
-			bolt.Visible = on
+	for _, loop in loops do
+		set(loop.Target, loop.Property, loop.From)
+		local made = tween(loop.Target, loop.Time, loop.Style, loop.Direction, { [loop.Property] = loop.To }, -1, loop.Reverses, 0)
+		if made then
+			table.insert(playing.Tweens, made)
 		end
 	end
-	if #lists.Shines > 0 then
-		local offset = Vector2.new(ShopFx.shineOffset(t), 0)
-		for _, shine in lists.Shines do
-			shine.Offset = offset
+	return playing
+end
+
+-- Cancels a play() and puts its things at rest.
+function ShopFx.stop(playing: Playing?)
+	if not playing then
+		return
+	end
+	for _, made in playing.Tweens do
+		pcall(function()
+			made:Cancel()
+		end)
+	end
+	for _, loop in playing.Loops do
+		if loop.Target.Parent then
+			set(loop.Target, loop.Property, loop.Rest)
 		end
 	end
-	if #lists.Rims > 0 then
-		local angle = ShopFx.rimAngle(t)
-		for _, rim in lists.Rims do
-			rim.Rotation = angle
-		end
+	table.clear(playing.Tweens)
+	table.clear(playing.Loops)
+end
+
+-- A loop's value `t` seconds after it started (the same curve the tween runs: the previews' video, the tests).
+function ShopFx.sample(loop: Loop, t: number): any
+	local period = math.max(loop.Time, 1e-6)
+	local k: number
+	if loop.Reverses then
+		local cycle = (t % (2 * period)) / period
+		k = if cycle <= 1 then cycle else 2 - cycle
+	else
+		k = (t % period) / period
 	end
-	for _, sparkle in lists.Sparkles do
-		local phase = lists.SparklePhase[sparkle]
-		local pulse = sparkle:FindFirstChild("Pulse")
-		if pulse and pulse:IsA("UIScale") then
-			pulse.Scale = ShopFx.sparkleScale(t, phase)
+	local u = Motion.ease(loop.Style, loop.Direction, k)
+	local from, to = loop.From, loop.To
+	if type(from) == "number" then
+		return from + (to - from) * u
+	elseif typeof(from) == "Vector2" then
+		return (from :: Vector2):Lerp(to :: Vector2, u)
+	elseif typeof(from) == "UDim2" then
+		return (from :: UDim2):Lerp(to :: UDim2, u)
+	end
+	return if u < 0.5 then from else to
+end
+
+---------------------------------------------------------------- one-shot motion (open, close, tabs, cards, buttons)
+
+-- A UIScale named `name` on `gui` (made once).
+local function scaleOn(gui: Instance, name: string): UIScale
+	local found = gui:FindFirstChild(name)
+	if found and found:IsA("UIScale") then
+		return found
+	end
+	return UIKit.new("UIScale", { Name = name, Scale = 1 }, gui)
+end
+
+--[[
+	The window opens: it pops from 0.82 (Back out), the dim fades in, a burst
+	of rays (`burst`: an image behind the window) flashes out and fades.
+	Quiet: it just shows.
+]]
+function ShopFx.open(group: GuiObject, dim: GuiObject?, dimTo: number, burst: GuiObject?)
+	local pop = scaleOn(group, "OpenPop")
+	if ShopFx.quiet() then
+		pop.Scale = 1
+		if dim then
+			dim.BackgroundTransparency = dimTo
 		end
-		sparkle.Rotation = (t * 45 + phase * 30) % 360
+		if burst then
+			burst.Visible = false
+		end
+		return
+	end
+	pop.Scale = 0.82
+	tween(pop, 0.34, "Back", "Out", { Scale = 1 })
+	if dim then
+		dim.BackgroundTransparency = 1
+		tween(dim, 0.2, "Quad", "Out", { BackgroundTransparency = dimTo })
+	end
+	if burst then
+		-- (it grows out past the window's edges, bright at first, fading as it goes)
+		local grow = scaleOn(burst, "Burst")
+		burst.Visible = true
+		grow.Scale = 0.6
+		burst.Rotation = 0
+		if burst:IsA("ImageLabel") then
+			burst.ImageTransparency = 0.05
+			tween(burst, 0.6, "Quad", "In", { ImageTransparency = 1 })
+			tween(burst, 0.6, "Quad", "Out", { Rotation = 30 })
+		else
+			burst.BackgroundTransparency = 0.5
+			tween(burst, 0.6, "Quad", "Out", { BackgroundTransparency = 1 })
+		end
+		tween(grow, 0.6, "Quad", "Out", { Scale = 2 })
+		-- (gone once it has faded: a later open's burst keeps its own)
+		local shot = (tonumber(burst:GetAttribute("Shot")) or 0) + 1
+		burst:SetAttribute("Shot", shot)
+		task.delay(0.65, function()
+			if burst:GetAttribute("Shot") == shot then
+				burst.Visible = false
+			end
+		end)
 	end
 end
 
--- Puts everything a driver moved back at rest (bolts lit, shines off the buttons).
-local function rest(lists: Lists)
-	for _, bolt in lists.Bolts do
-		bolt.Visible = true
+-- The window at rest, open (a close's shrink and the dim's fade put back).
+function ShopFx.rest(group: GuiObject, dim: GuiObject?, dimTo: number)
+	local pop = group:FindFirstChild("OpenPop")
+	if pop and pop:IsA("UIScale") then
+		pop.Scale = 1
 	end
-	local off = Vector2.new(ShopFx.shineOffset(0), 0)
-	for _, shine in lists.Shines do
-		shine.Offset = off
+	if dim then
+		dim.BackgroundTransparency = dimTo
 	end
-	for _, sparkle in lists.Sparkles do
-		local pulse = sparkle:FindFirstChild("Pulse")
-		if pulse and pulse:IsA("UIScale") then
-			pulse.Scale = 1
+end
+
+-- The window closes: it shrinks to 0.86 as the dim fades, then `done`. Quiet: `done` at once.
+function ShopFx.close(group: GuiObject, dim: GuiObject?, done: () -> ())
+	local pop = scaleOn(group, "OpenPop")
+	if ShopFx.quiet() then
+		pop.Scale = 1
+		done()
+		return
+	end
+	tween(pop, 0.14, "Quad", "In", { Scale = 0.86 })
+	if dim then
+		tween(dim, 0.14, "Quad", "In", { BackgroundTransparency = 1 })
+	end
+	task.delay(0.15, done)
+end
+
+-- A layer fades out over what is under it (a tab's old colours over its new ones).
+function ShopFx.fadeOut(layer: GuiObject, time: number?)
+	if ShopFx.quiet() then
+		layer.BackgroundTransparency = 1
+		return
+	end
+	layer.BackgroundTransparency = 0
+	tween(layer, time or 0.28, "Quad", "Out", { BackgroundTransparency = 1 })
+end
+
+-- A colour moves to `color` (a glow's BackgroundColor3, a bolt's ImageColor3).
+function ShopFx.recolor(gui: GuiObject, property: string, color: Color3)
+	if ShopFx.quiet() then
+		set(gui, property, color)
+		return
+	end
+	tween(gui, 0.3, "Quad", "Out", { [property] = color })
+end
+
+-- A page slides in from `dx` units to the right of where it rests.
+function ShopFx.slideIn(page: GuiObject, rest: UDim2, dx: number)
+	if ShopFx.quiet() then
+		page.Position = rest
+		return
+	end
+	page.Position = rest + UDim2.fromOffset(dx, 0)
+	tween(page, 0.26, "Quad", "Out", { Position = rest })
+end
+
+-- Cards pop in one after another (each holder's UIScale "Scale": 0.85 -> 1, Back out).
+function ShopFx.popIn(holders: { GuiObject })
+	for i, holder in holders do
+		local scale = scaleOn(holder, "Scale")
+		if ShopFx.quiet() then
+			scale.Scale = 1
+		else
+			scale.Scale = 0.85
+			tween(scale, 0.3, "Back", "Out", { Scale = 1 }, 0, false, math.min(0.35, (i - 1) * 0.035))
 		end
 	end
 end
 
 --[[
-	Starts the shop's motion: everything marked under `fixed` (the window's
-	own effects) and under `page` (the open tab's cards), and the open tab
-	`bob`. `quiet()` true (Reduce motion) puts it at rest and ends it.
-	One Heartbeat connection, 30 steps a second; stop() disconnects it.
+	Hover 1.04 (the mouse, or a gamepad's selection) and press 0.94 on
+	`button`, scaling `target` (a UIScale "Scale" on it; held by its middle).
+	The motion watcher leaves it alone (attribute Motion = "None"). Quiet:
+	nothing scales. (Connections need the game: Lune skips them.)
 ]]
-function ShopFx.start(fixed: { Instance }, page: Instance?, bob: GuiObject?, quiet: (() -> boolean)?): Driver
-	local base = collect(fixed)
-	local current = collect(if page then { page } else {})
-	local bobbing: GuiObject? = bob
-	local bobAt: UDim2? = if bob then bob.Position else nil
-	local connection: RBXScriptConnection? = nil
-	local started = os.clock()
-	local acc = 0
-
-	local function step(t: number)
-		stepLists(base, t)
-		stepLists(current, t)
-		local b = bobbing
-		if b and bobAt then
-			b.Position = bobAt + UDim2.fromOffset(0, math.floor(ShopFx.bob(t) + 0.5)) -- (offsets are whole units)
+function ShopFx.bindPress(button: GuiButton, target: GuiObject)
+	button:SetAttribute("Motion", "None")
+	local scale = scaleOn(target, "Scale")
+	local hovered, held = false, false
+	local function go()
+		if ShopFx.quiet() then
+			scale.Scale = 1
+			return
 		end
+		local goal = if held then ShopFx.Press elseif hovered then ShopFx.Hover else 1
+		tween(scale, ShopFx.PressTime, "Quad", "Out", { Scale = goal })
 	end
-
-	local function stop()
-		local c = connection
-		connection = nil
-		if c then
-			c:Disconnect()
+	pcall(function()
+		local UserInputService = game:GetService("UserInputService")
+		local function mouse(): boolean
+			local last = UserInputService:GetLastInputType()
+			return last == Enum.UserInputType.MouseMovement or last.Name:sub(1, 11) == "MouseButton"
 		end
-		rest(base)
-		rest(current)
-		local b = bobbing
-		if b and bobAt then
-			b.Position = bobAt
-		end
-	end
-
-	local function focus(newPage: Instance?, newBob: GuiObject?)
-		rest(current)
-		local b = bobbing
-		if b and bobAt then
-			b.Position = bobAt
-		end
-		current = collect(if newPage then { newPage } else {})
-		bobbing = newBob
-		bobAt = if newBob then newBob.Position else nil
-	end
-
-	local ok = pcall(function()
-		local RunService = game:GetService("RunService")
-		connection = RunService.Heartbeat:Connect(function(dt: number)
-			acc += dt
-			if acc < ShopFx.StepRate then
-				return
+		button.MouseEnter:Connect(function()
+			if mouse() then
+				hovered = true
+				go()
 			end
-			acc = 0
-			if quiet and quiet() then
-				stop()
-				return
+		end)
+		button.MouseLeave:Connect(function()
+			hovered, held = false, false
+			go()
+		end)
+		button.SelectionGained:Connect(function()
+			hovered = true
+			go()
+		end)
+		button.SelectionLost:Connect(function()
+			hovered, held = false, false
+			go()
+		end)
+		button.InputBegan:Connect(function(input: InputObject)
+			local kind = input.UserInputType
+			if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.ButtonA then
+				held = true
+				go()
 			end
-			step(os.clock() - started)
+		end)
+		button.InputEnded:Connect(function(input: InputObject)
+			local kind = input.UserInputType
+			if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.ButtonA then
+				held = false
+				hovered = hovered and kind ~= Enum.UserInputType.Touch
+				go()
+			end
 		end)
 	end)
-	if not ok then
-		connection = nil
-	end
-
-	return {
-		focus = focus,
-		stop = stop,
-		step = step,
-		running = function(): boolean
-			return connection ~= nil
-		end,
-	}
 end
 
 return ShopFx

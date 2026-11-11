@@ -236,7 +236,9 @@ return function(T, Loader)
 		T.eq(fitTall, 1, "a PC screen: full size")
 		T.lt(fitPhone, 1, "a short screen: fitted")
 		-- a hidden card closes its row up; a tab with nothing to show hides (the open one moves)
-		T.eq(refs.Cards.StarComet.Holder.Position.X.Offset, 0, "the next card moves to the row's start")
+		-- (a card is held by its middle: it pops in and squashes about its centre)
+		local comet = refs.Cards.StarComet.Holder
+		T.eq(comet.Position.X.Offset - math.floor(comet.Size.X.Offset / 2), 0, "the next card moves to the row's start")
 		StoreView.selectTab(refs, "Golems")
 		for _, id in { "Royal1", "Royal3", "Royal5", "Royal10" } do
 			StoreView.setCard(refs, id, refs.Cards[id].Key, "Hidden")
