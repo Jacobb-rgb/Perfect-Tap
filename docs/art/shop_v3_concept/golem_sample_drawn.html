@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body { margin: 0; width: 1350px; height: 560px; background: #5c3ad0; display: flex; align-items: center; justify-content: space-around; }
+.ico { overflow: visible; }
+.drop * { fill: #221a3d !important; stroke: #221a3d !important; opacity: 1 !important; }
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <radialGradient id="c-steel" cx="0.36" cy="0.3" r="0.82"><stop offset="0.68" stop-color="#d9e2f2"/><stop offset="0.68" stop-color="#97a4bf"/></radialGradient>
+  <radialGradient id="c-steel2" cx="0.36" cy="0.3" r="0.82"><stop offset="0.68" stop-color="#b9c4da"/><stop offset="0.68" stop-color="#7e8aa6"/></radialGradient>
+  <radialGradient id="c-gold" cx="0.36" cy="0.3" r="0.82"><stop offset="0.68" stop-color="#ffe05a"/><stop offset="0.68" stop-color="#f2a21c"/></radialGradient>
+  <radialGradient id="c-red" cx="0.36" cy="0.3" r="0.82"><stop offset="0.68" stop-color="#ff6262"/><stop offset="0.68" stop-color="#cf2a3a"/></radialGradient>
+  <radialGradient id="c-dark" cx="0.36" cy="0.3" r="0.82"><stop offset="0.7" stop-color="#3a3560"/><stop offset="0.7" stop-color="#26223f"/></radialGradient>
+  <radialGradient id="c-white" cx="0.36" cy="0.3" r="0.82"><stop offset="0.7" stop-color="#ffffff"/><stop offset="0.7" stop-color="#dfe3f2"/></radialGradient>
+  <radialGradient id="c-blade" cx="0.3" cy="0.3" r="0.9"><stop offset="0.6" stop-color="#eef3ff"/><stop offset="0.6" stop-color="#b6c2dc"/></radialGradient>
+  <radialGradient id="c-pink" cx="0.36" cy="0.3" r="0.82"><stop offset="0.68" stop-color="#ff86c2"/><stop offset="0.68" stop-color="#e2408e"/></radialGradient>
+</defs></svg>
+<script>
+const O = "#221a3d";
+const P = (d, f, x = "") => `<path d="${d}" fill="${f}" stroke="${O}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" ${x}/>`;
+const R = (x, y, w, h, r, f, extra = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${f}" stroke="${O}" stroke-width="5" paint-order="stroke" ${extra}/>`;
+const shine = (x, y, w, h, r = -30, o = 0.9) => `<ellipse cx="${x}" cy="${y}" rx="${w}" ry="${h}" fill="#fff" opacity="${o}" transform="rotate(${r} ${x} ${y})"/>`;
+function sticker(inner, size = 300) {
+  return `<svg class="ico" viewBox="-10 -10 140 150" width="${size}" height="${size * 150 / 140}"><g class="drop" transform="translate(0 5)">${inner}</g>${inner}</svg>`;
+}
+// Silver Squire: a chunky grey knight, red plume, gold trims, sword and round shield
+const squire = [
+  // sword behind (left hand)
+  P("M14 30 L 20 30 L 21 80 L 13 80 Z", "url(#c-blade)"), R(8, 78, 18, 6, 2, "url(#c-gold)"), R(12, 83, 10, 12, 2, "url(#c-dark)"),
+  // legs and feet
+  R(38, 104, 16, 18, 3, "url(#c-steel2)"), R(64, 104, 16, 18, 3, "url(#c-steel2)"),
+  R(35, 116, 22, 10, 3, "url(#c-dark)"), R(61, 116, 22, 10, 3, "url(#c-dark)"),
+  // body
+  R(30, 66, 58, 44, 8, "url(#c-steel)"), R(30, 66, 58, 9, 4, "url(#c-gold)"),
+  P("M59 80 L 68 89 L 59 98 L 50 89 Z", "url(#c-gold)"), P("M59 84 L 63 89 L 59 94 L 55 89 Z", "url(#c-red)", 'stroke-width="3"'),
+  // arms
+  R(16, 70, 16, 26, 6, "url(#c-steel2)"), R(86, 70, 16, 26, 6, "url(#c-steel2)"),
+  // head
+  R(26, 18, 66, 52, 12, "url(#c-steel)"), R(26, 18, 66, 10, 6, "url(#c-gold)"),
+  R(34, 36, 50, 18, 5, "url(#c-dark)"), R(40, 40, 12, 9, 2, "#ffffff", 'stroke-width="0"'), R(66, 40, 12, 9, 2, "#ffffff", 'stroke-width="0"'),
+  `<path d="M59 30 L 59 56" stroke="${O}" stroke-width="4"/>`, R(55, 28, 8, 30, 3, "url(#c-gold)", 'stroke-width="3"'),
+  // plume
+  P("M59 18 C 52 4 62 -6 70 2 C 74 8 70 14 64 18 Z", "url(#c-red)"),
+  // shield (right hand)
+  P("M96 66 C 120 66 122 92 108 104 C 100 110 92 108 88 100 C 84 90 84 70 96 66 Z", "url(#c-white)"),
+  `<circle cx="104" cy="86" r="9" fill="url(#c-gold)" stroke="${O}" stroke-width="4" paint-order="stroke"/>`,
+  // shines
+  shine(38, 26, 7, 3, -10), shine(36, 76, 3, 7, 0), shine(64, 6, 3, 5, 20), shine(100, 74, 4, 6, 20),
+].join("");
+// Royal Egg: a white egg with gold bands, a red gem, little gold wings and a halo
+const egg = [
+  P("M10 64 C -6 50 2 34 22 48 C 30 54 28 66 22 70 Z", "url(#c-gold)"), P("M110 64 C 126 50 118 34 98 48 C 90 54 92 66 98 70 Z", "url(#c-gold)"),
+  P("M60 14 C 90 14 104 58 104 80 C 104 106 84 124 60 124 C 36 124 16 106 16 80 C 16 58 30 14 60 14 Z", "url(#c-white)"),
+  `<path d="M22 96 C 40 106 80 106 98 96 L 102 110 C 84 128 36 128 18 110 Z" fill="url(#c-gold)" stroke="${O}" stroke-width="5" paint-order="stroke"/>`,
+  `<path d="M30 40 C 46 48 74 48 90 40" fill="none" stroke="${O}" stroke-width="10" stroke-linecap="round"/><path d="M30 40 C 46 48 74 48 90 40" fill="none" stroke="#ffd23a" stroke-width="5" stroke-linecap="round"/>`,
+  P("M60 58 L 74 74 L 60 90 L 46 74 Z", "url(#c-red)"), shine(55, 68, 3, 5, 30),
+  `<ellipse cx="60" cy="6" rx="24" ry="6" fill="none" stroke="${O}" stroke-width="9"/><ellipse cx="60" cy="6" rx="24" ry="6" fill="none" stroke="#ffe05a" stroke-width="4"/>`,
+  shine(38, 40, 5, 12, 25), `<circle cx="44" cy="62" r="3" fill="#fff"/>`,
+].join("");
+document.body.insertAdjacentHTML("beforeend", sticker(squire) + sticker(egg));
+</script></body></html>
