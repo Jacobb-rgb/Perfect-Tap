@@ -108,7 +108,7 @@ StoreView.setCard(store, "Podiums", "Podiums", "Owned")
 local dim = store.Gui:FindFirstChild("Dim")
 local dimBase = dim.BackgroundTransparency
 local groupScale = UIKit.new("UIScale", { Name = "MotionPop", Scale = 1 }, store.Group)
-local tabs = store.Group:FindFirstChild("Tabs")
+local tabs = store.Window.Root:FindFirstChild("Tabs") -- (shop v3: the tabs sit in the header)
 local tabsAnchor = tabs.AnchorPoint
 
 -- the settings panel (the new Reduce motion row)
@@ -272,7 +272,7 @@ local T_GAIN1, T_GAIN2 = 6.2, 7.6
 local T_SETTINGS = 8.6
 local T_TOGGLE_HOVER = 9.8
 
-local moneyTab = store.Tabs.Money
+local moneyTab = store.Tabs.Cash
 local megaCard = store.Cards.CoinsMega
 local megaPrice = megaCard.Price
 local megaAnchor = megaPrice.AnchorPoint -- (bottom right: Motion moves the anchor so it squashes about its middle)
@@ -285,7 +285,7 @@ local function megaPoint(): any
 	return point
 end
 local toggle = settings.Toggles.ReduceMotion.Button
-local scrollTarget = StoreView.sectionTop(store, "Money")
+local scrollTarget = 0 -- (shop v3: the CASH tab shows its own page, nothing scrolls)
 
 -- the gains: coins before / after, where the money starts
 local START = 4.82e6
@@ -395,10 +395,17 @@ local function frameAt(t: number): ({ any }, string?)
 		-- scrolled to MONEY by the tab (StoreController: 0.3 s, Quad out)
 		local s = if t < T_SCROLL then 0 else ease("Quad", "Out", (t - T_SCROLL) / 0.3)
 		store.Scroller.CanvasPosition = Vector2.new(0, scrollTarget * s)
+		StoreView.selectTab(store, if t < T_SCROLL then "Featured" else "Cash")
 		-- buttons
-		moneyTab:FindFirstChildOfClass("UIScale").Scale = pressScale(t, T_TAB_HOVER, T_TAB_PRESS, 3.6)
+		local tabScale = moneyTab:FindFirstChildOfClass("UIScale")
+		if tabScale then
+			tabScale.Scale = pressScale(t, T_TAB_HOVER, T_TAB_PRESS, 3.6)
+		end
 		local megaScale = pressScale(t, T_CARD_HOVER, T_CARD_PRESS)
-		megaPrice:FindFirstChildOfClass("UIScale").Scale = megaScale
+		local priceScale = megaPrice:FindFirstChildOfClass("UIScale")
+		if priceScale then
+			priceScale.Scale = megaScale
+		end
 		megaPrice.AnchorPoint = Motion.pivotAnchor(megaAnchor, megaScale)
 		-- the loops (from the moment the store shows)
 		for _, b in breathers do

@@ -961,3 +961,39 @@ What to test in Studio:
    ground. A Rthro / layered-clothing avatar: check the mantle and clasps sit on the shoulders.
 6. SETTINGS Reduce motion on: the cape only lifts a little when running, no sparkles.
 7. Phone emulator and a gamepad: nothing to press; FPS unchanged with 3 caped players near.
+
+## Shop v3 "WOW" (owner 2026-11-11, branch ui/shop-v3)
+- UI/StoreView: the concept docs/art/shop_v3_concept/shop_wow.html in the game: a studded header band with the
+  basket over its corner, a big outlined SHOP, six tabs (Featured, Golems, Blasters, Passes, Boosts, Cash; the
+  open one bigger, white rim, glow) and a red X; each tab its own page and colour world (UI/ShopFx.Themes) with
+  rays, flashing bolts and sparkles behind thick-outlined cards (dark lip, gloss, rays behind the picture, 3D
+  price buttons with the Robux mark), the STRONGEST STAR blaster and the Mythic enchants with a running rainbow rim.
+- Real data only: prices, odds (Dragonforge and Royal tiles: the odds a buy rolls now, Triple Lucky included),
+  the edition's real end ("ENDS NOV 30 · 19d 11h left"), coin amounts and the Starter Pack's coins at the player's
+  income, STAR rebirth locks, the blaster's levels. "BEST VALUE!" only where the price per item is the lowest
+  (StoreView.bestValue); the concept's POPULAR / "x10 = 2 FREE!" / "FOR EVERYONE!" / placeholder Starter Pack
+  contents are gone.
+- Every paid random buy (eggs, Dragonforge, wheel spins, Triple / Hexa Lucky 15 min and 1 h, Server Luck,
+  Starbreaker) opens the odds panel first; the Forgemaster's Pass shows the Grotto odds. Wheel spins buy through
+  WheelAction "Buy" (WheelService: its Full rules); StoreService answers "Unknown" for them like capsules and boosts.
+- No uploads needed: 3D models in ViewportFrames, a drawn wheel and x2 badge; the sticker icons (one sheet,
+  NAHRAJ_DO_ROBLOXU/ikony_obchod, IconAssets.Shop Id 0) replace the models once uploaded. A tab's 3D models are
+  built the first time it shows.
+- Motion (UI/ShopFx.start): one Heartbeat connection at 30 steps a second while the shop is open (rays turn, bolts
+  flash, the buy buttons' shine sweeps, the open tab bobs, the Mythic rims run, sparkles pulse); none with Reduce
+  motion or Config/AnimConfig.PixelFx off; stopped on close.
+- Tests: tests/Store.spec.luau, tests/ShopFx.spec.luau (+ PixelKit, RoundReview, UIMotion). Pictures:
+  obrazky/obchod_ve_hre_2026-11-11 (tools/lune/lib/store_preview.luau, scene store_quick).
+What to test in Studio:
+1. Open the shop (the Shop button, the side menu, an offer on the right): FEATURED shows the Dragonforge banner with
+   its end date, the Forgemaster's Pass and the Starter Pack (first hour of play only). Click every tab: its page and
+   colours change, nothing overlaps, the open tab bobs.
+2. Buy flow on each tab: a pass prompts at once (Coming soon while its id is 0); an egg, a Dragonforge button, a
+   wheel spin, Triple / Hexa Lucky, Server Luck and Starbreaker show the odds panel first, BACK returns, BUY prompts.
+3. Owned passes show OWNED; a STAR blaster before its rebirth shows the lock, "Opens at rebirth N" and a grey price.
+4. Phone emulator (iPhone SE and a 667 x 375 phone): the tabs fit, every button is big enough to tap, the pages
+   scroll, the odds panel fits.
+5. Gamepad only: the selection starts on the open page, LB / RB switch tabs, A buys, B closes the odds panel and
+   then the shop; the selection never leaves the window.
+6. SETTINGS Reduce motion on: nothing in the shop moves. Watch FPS on a low-end phone emulator with the shop open.
+7. A player where paid random items are restricted: the Golems tab is gone, no eggs, spins, luck or banner.

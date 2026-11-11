@@ -66,7 +66,7 @@ local store = StoreView.build()
 store.Gui.Scale.Scale = SCALE
 StoreView.layout(store, DW, DH)
 StoreView.setCoins(store, 1840)
-store.Scroller.CanvasPosition = Vector2.new(0, StoreView.sectionTop(store, "Money"))
+StoreView.selectTab(store, "Cash") -- (shop v3: the coin packs' own tab)
 local dim = store.Gui:FindFirstChild("Dim") :: any
 local dimBase = dim.BackgroundTransparency
 local groupScale = UIKit.new("UIScale", { Name = "MotionPop", Scale = 1 }, store.Group)

@@ -1,22 +1,30 @@
 --[[
-	The Robux Shop window (owner 2026-10-20; the bright egg-game look the same
-	evening): opened by the side menu's STORE entry, the HUD's green Shop
-	button and OpenUI "Store". A section tab scrolls the list to its section.
+	The Robux Shop window (owner 2026-10-20; shop v3 "WOW" 2026-11-11: six
+	tabs, each its own colour world): opened by the side menu's STORE entry,
+	the HUD's Shop button and OpenUI "Store". A tab (or LB / RB on a
+	gamepad) shows its page.
 
-	- A card buys its product (StoreView.setCard picks which: the blaster
-	  shows the price band of the player's next level, hidden at the top).
-	  By the product's Grant:
-	    Capsule  CapsuleAction "Open" { Capsule, Count, Lucky } (the
-	             capsule service remembers the odds the player saw)
-	    Boost    BoostAction "BuyRobux" { Id }
-	    others   StoreAction "Buy" { Key } (StoreService)
+	- A card's price button buys its product (StoreView.setCard picks which:
+	  the blaster shows the price band of the player's next level, hidden at
+	  the top); a one-price card's face buys too. By the product's Grant:
+	    Capsule     CapsuleAction "Open" { Capsule, Count, Lucky } (the
+	                capsule service remembers the odds the player saw)
+	    Boost       BoostAction "BuyRobux" { Id }
+	    WheelSpins  WheelAction "Buy" { Count } (WheelService: "Full" past the
+	                spins it holds or with no golem room)
+	    others      StoreAction "Buy" { Key } (StoreService)
 	  Every buy is answered with PurchasePrompt { Product, Status }; the card
 	  greys out until then (PROMPT_MEMORY seconds at most).
 	- Paid random products (MonetizationConfig PaidRandom) show their exact
-	  odds first (the odds panel: capsule odds, or the ore luck per zone
-	  now and with the buy); they are hidden where the player's policy
-	  restricts paid random items (the PaidRandomRestricted attribute).
-	- Coin cards show the coins at the player's podium income now.
+	  odds first (the odds panel: capsule odds, the wheel's segments, or the
+	  ore luck per zone now and with the buy); they are hidden where the
+	  player's policy restricts paid random items (PaidRandomRestricted).
+	- Coin cards and the Starter Pack show the coins at the player's podium
+	  income now; the Royal Egg and the limited edition show the odds a buy
+	  rolls now (Triple Lucky included).
+	- The motion (UI/ShopFx: rays, bolts, the buttons' shine, the open tab's
+	  bob, the Mythic rims) runs only while the window is open, with
+	  Config/AnimConfig.PixelFx on and Reduce motion off.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -24,9 +32,9 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local AnimConfig = require(Shared.Config.AnimConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
@@ -37,12 +45,15 @@ local StarBlasterData = require(Shared.Config.StarBlasterData)
 local LimitedGolems = require(Shared.Config.LimitedGolems)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local BlasterData = require(Shared.Config.BlasterData)
+local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
+local ShopFx = require(script.Parent.Parent.UI.ShopFx)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local RebirthView = require(script.Parent.Parent.UI.RebirthView)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
+local WheelView = require(script.Parent.Parent.UI.WheelView)
 local CardOdds = require(script.Parent.Parent.UI.CardOdds)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -57,6 +68,7 @@ local StoreController = {}
 
 local NAME = "StoreController"
 local CLOSE_ACTION = "TerraForgeStoreClose"
+local TABS_ACTION = "TerraForgeStoreTabs"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local PROMPT_MEMORY = 10 -- seconds a buy waits for its PurchasePrompt answer
 local BLASTER_WAIT = 30 -- seconds the blaster card stays greyed after its prompt (until the level changes)
@@ -66,11 +78,13 @@ local refs: StoreView.Refs? = nil
 local isOpen = false
 local pending: { [string]: number } = {} -- product key -> os.clock() of the buy
 local detailKey: string? = nil
-local detailFrom: GuiObject? = nil -- the card that opened the odds panel (BACK selects it again)
+local detailFrom: GuiObject? = nil -- the button that opened the odds panel (BACK selects it again)
 local stateAt: number? = nil -- server time of the last State (CapsuleView.luckyNow)
 -- a blaster level bought: its card stays greyed until the level changes (or BLASTER_WAIT)
 local blasterWait: { Key: string, Level: number, Until: number }? = nil
 local bannerFrame: Frame? = nil -- the limited banner whose buttons are wired
+local driver: ShopFx.Driver? = nil -- the motion while the window is open
+local focused: string? = nil -- the tab the motion moves
 
 function StoreController.isOpen(): boolean
 	return isOpen
@@ -85,9 +99,7 @@ local function state(): { [string]: any }
 end
 
 local function percent(chance: number): string
-	local text = string.format("%.2f", chance * 100)
-	text = text:gsub("0+$", ""):gsub("%.$", "")
-	return text .. "%"
+	return StoreView.percent(chance)
 end
 
 -- Does the player have the pass behind `key` (perks / the enchant)?
@@ -128,6 +140,15 @@ end
 local function serverLuckLeft(): number
 	local untilTime = ReplicatedStorage:GetAttribute("ServerLuckUntil")
 	return if type(untilTime) == "number" then math.max(0, untilTime - serverNow()) else 0
+end
+
+-- Is the golem inventory full (a bought spin's egg prize couldn't be kept)? The wheel's own rule.
+local function inventoryBlocks(): boolean
+	local s = StateController.get()
+	if not s or type(s.Golems) ~= "table" or CapsuleConfig.allRestricted(false) then
+		return false
+	end
+	return GolemConfig.room(s.Golems) < 1
 end
 
 -- The STAR blasters' save fields as StarBlasterData reads them (from the State's Rebirth snapshot).
@@ -174,7 +195,7 @@ local onLimited: (count: number) -> ()
 --[[
 	The limited edition banner at the top of FEATURED (LimitedGolems.current):
 	shown while it runs and the player may buy paid random items; its buttons
-	open the odds panel first (onLimited), its countdown follows the server clock.
+	open the odds panel first (onLimited), its time left follows the server clock.
 ]]
 local function refreshBanner(view: StoreView.Refs)
 	local edition = if restricted() then nil else LimitedGolems.current(serverNow())
@@ -198,6 +219,27 @@ local function refreshBanner(view: StoreView.Refs)
 			odds[line.Golem] = line.Chance
 		end
 		StoreView.setBannerOdds(view, odds, lucky)
+	end
+end
+
+-- The Royal Egg banner (GOLEMS): its golems' chances now; hidden where paid random items are restricted.
+local function refreshRoyal(view: StoreView.Refs)
+	StoreView.setRoyalShown(view, not restricted())
+	local lucky = tripleLuckyNow()
+	local odds: { [string]: number } = {}
+	for _, line in CapsuleConfig.odds("Royal", lucky) do
+		odds[line.Golem] = line.Chance
+	end
+	StoreView.setRoyalOdds(view, odds, lucky)
+end
+
+-- The motion follows the open tab (also when a tab hid and another opened by itself).
+local function focusMotion(view: StoreView.Refs)
+	local d = driver
+	if d and focused ~= view.Current then
+		focused = view.Current
+		local tab = view.TabRefs[view.Current]
+		d.focus(view.Pages[view.Current], if tab then tab.Lift else nil)
 	end
 end
 
@@ -226,7 +268,7 @@ local function refresh()
 			if fits then
 				key = fits
 				local current = if type(level) == "number" then math.floor(level) else 1
-				StoreView.setBig(view, id, `LV {current + 1}`)
+				StoreView.setBig(view, id, `LV {current} > LV {current + 1}`)
 				-- LV 10 waits for one level bought with coins this run (a rebirth needs it)
 				local rebirth = state().Rebirth
 				local reached = if type(rebirth) == "table" and type(rebirth.Reached) == "number" then rebirth.Reached else 0
@@ -257,38 +299,43 @@ local function refresh()
 				cardState = "Pending"
 			end
 		elseif cardState ~= "Hidden" then
+			local anyPending = false
+			for _, option in StoreConfig.keysOf(spec) do
+				if pending[option] and now - pending[option] < PROMPT_MEMORY then
+					anyPending = true
+				end
+			end
 			if cardState == "Pending" or cardState == "Locked" then
 				-- (the blaster: waiting for its level, or LV 10 before a forged level)
 			elseif product.PaidRandom and restricted() then
 				cardState = "Hidden"
 			elseif owns(product) then
 				cardState = "Owned"
-			elseif pending[key] and now - pending[key] < PROMPT_MEMORY then
+			elseif anyPending then
 				cardState = "Pending"
 			end
 		end
 		StoreView.setCard(view, id, key, cardState)
 	end
+	-- Server Luck running: how long is left (a buy adds 15 minutes)
+	local left = serverLuckLeft()
+	StoreView.setNote(view, "ServerLuck", if left > 0 then `On now: {math.ceil(left / 60)} min left` else "")
 	local income = player:GetAttribute("IncomePerSec")
 	StoreView.setCoins(view, if type(income) == "number" then income else 0)
 	refreshBanner(view)
+	refreshRoyal(view)
+	focusMotion(view)
 end
 
 ---------------------------------------------------------------- odds (paid random)
 
 -- Capsule odds lines ("Name  12.5%"), with Triple Lucky when it runs.
-local function capsuleLines(capsuleId: string, lucky: boolean, compareLucky: boolean?): { string }
+local function capsuleLines(capsuleId: string, lucky: boolean): { string }
 	local lines: { string } = {}
-	local now = CapsuleConfig.odds(capsuleId, lucky)
-	local after = if compareLucky then CapsuleConfig.odds(capsuleId, true) else nil
-	for i, line in now do
+	for _, line in CapsuleConfig.odds(capsuleId, lucky) do
 		local golem = GolemConfig.ById[line.Golem]
 		local name = if golem then golem.Name else line.Golem
-		if after and after[i] then
-			table.insert(lines, `{name}:  {percent(line.Chance)}  →  {percent(after[i].Chance)}`)
-		else
-			table.insert(lines, `{name}:  {percent(line.Chance)}`)
-		end
+		table.insert(lines, `{name}:  {percent(line.Chance)}`)
 	end
 	return lines
 end
@@ -296,6 +343,25 @@ end
 -- Ore luck per zone the player can mine: "Rare or better" now -> with `delta` (BoostView.luckLines).
 local function luckLines(delta: { [string]: number }): { string }
 	return BoostView.luckLines(state(), delta, os.time())
+end
+
+-- Every segment of the Spin & Win wheel with its chance and what it gives this player (the wheel's own list).
+local function wheelLines(): { string }
+	local info = WheelView.info(StateController.get(), restricted())
+	local lines = { "Every spin stops on one of these:" }
+	for _, row in WheelView.rows(info) do
+		table.insert(lines, `{row.Label}:  {row.Chance}`)
+		if row.Detail ~= "" then
+			table.insert(lines, "   " .. row.Detail)
+		end
+		local golems = row.Lines
+		if golems then
+			for _, golem in golems do
+				table.insert(lines, `      {golem.Name}  {golem.Chance}`)
+			end
+		end
+	end
+	return lines
 end
 
 local tableLines = CardOdds.tableLines
@@ -322,6 +388,9 @@ local function oddsFor(product: MonetizationConfig.Product): { string }
 		end
 		return lines
 	end
+	if product.Grant == "WheelSpins" then
+		return wheelLines()
+	end
 	if product.Boost == "TripleLucky" then
 		-- every capsule it changes (coin capsules too: coins can be bought with Robux)
 		local lines: { string } = {}
@@ -345,7 +414,7 @@ local function oddsFor(product: MonetizationConfig.Product): { string }
 			end
 			return lines
 		end
-		return luckLines({ OreLuckMult = 2 })
+		return luckLines({ OreLuckMult = BoostView.ServerLuckMult })
 	end
 	if product.Enchant then
 		return CardOdds.enchantLines(state(), product.Enchant, os.time(), soonNow())
@@ -369,6 +438,8 @@ local function buy(key: string)
 		Net.send("CapsuleAction", "Open", { Capsule = product.Capsule, Count = product.Count, Lucky = tripleLuckyNow() })
 	elseif product.Grant == "Boost" then
 		Net.send("BoostAction", "BuyRobux", { Id = key })
+	elseif product.Grant == "WheelSpins" then
+		Net.send("WheelAction", "Buy", { Count = product.Spins })
 	else
 		Net.send("StoreAction", "Buy", { Key = key })
 	end
@@ -377,8 +448,8 @@ local function buy(key: string)
 	task.delay(PROMPT_MEMORY + 0.1, refresh)
 end
 
--- Hides the odds panel; a gamepad selection goes back to the card that opened it
--- (or the first card), never to the HUD behind the dim.
+-- Hides the odds panel; a gamepad selection goes back to the button that opened it
+-- (or the page's first), never to the HUD behind the dim.
 local function hideDetail()
 	local view = refs
 	detailKey = nil
@@ -387,23 +458,26 @@ local function hideDetail()
 	end
 	StoreView.showDetail(view, nil)
 	if MenuPanels.usingGamepad() then
-		local first = view.Cards[view.Order[1]]
-		GuiService.SelectedObject = detailFrom or (if first then first.Button else nil)
+		GuiService.SelectedObject = detailFrom or StoreView.firstSelectable(view)
 	end
 end
 
-local function onCard(id: string)
+-- Buying `key` from card `id` (its face or one of its price buttons): the odds first where they apply.
+local function onBuy(id: string, key: string, from: GuiObject)
 	local view = refs
 	local card = if view then view.Cards[id] else nil
-	if not isOpen or not view or not card or not card.Button.Active then
+	if not isOpen or not view or not card or card.State ~= "Buy" then
 		return
 	end
-	local product = MonetizationConfig.Products[card.Key]
-	if product.PaidRandom or card.Spec.Odds then
-		detailKey = card.Key
-		detailFrom = card.Button
+	local product = MonetizationConfig.Products[key]
+	if not product then
+		return
+	end
+	if StoreView.needsOdds(card.Spec, key) then
+		detailKey = key
+		detailFrom = from
 		StoreView.showDetail(view, {
-			Title = card.Spec.Title or product.Name,
+			Title = if card.Spec.Options then product.Name else (card.Spec.Title or product.Name),
 			Lines = oddsFor(product),
 			Robux = product.Robux,
 			Paint = card.Spec.Paint,
@@ -412,7 +486,7 @@ local function onCard(id: string)
 		Sfx.play("UIClick")
 		return
 	end
-	buy(card.Key)
+	buy(key)
 end
 
 -- A limited banner button: its odds first (a paid random capsule), then BUY.
@@ -456,6 +530,11 @@ local function onPurchasePrompt(payload: any)
 	local view = refs
 	if view and payload.Status ~= "Prompted" then
 		local text = MonetizationConfig.StatusText[payload.Status] or MonetizationConfig.StatusText.Unknown
+		local product = MonetizationConfig.Products[key]
+		if payload.Status == "Full" and product and product.Grant == "WheelSpins" then
+			-- the wheel's two "Full"s: no golem room for a bought spin's prize, or the most spins held
+			text = if inventoryBlocks() then WheelConfig.Reasons.InventoryFull else WheelConfig.Reasons.MaxSpins
+		end
 		if isOpen then
 			StoreView.setStatus(view, text)
 		end
@@ -465,40 +544,98 @@ end
 
 ---------------------------------------------------------------- the window
 
-local function fit(view: StoreView.Refs)
+-- The motion may run now (PixelFx on, Reduce motion off).
+local function quiet(): boolean
+	return Motion.reduced() or AnimConfig.PixelFx ~= true
+end
+
+local function startMotion(view: StoreView.Refs)
+	local old = driver
+	if old then
+		old.stop()
+	end
+	driver = nil
+	if quiet() then
+		return
+	end
+	local tab = view.TabRefs[view.Current]
+	focused = view.Current
+	driver = ShopFx.start(view.Fx, view.Pages[view.Current], if tab then tab.Lift else nil, quiet)
+end
+
+local function stopMotion()
+	local old = driver
+	driver = nil
+	if old then
+		old.stop()
+	end
+end
+
+-- Shows tab `id`; the gamepad selection moves to its page (an odds panel open closes first).
+local function showTab(view: StoreView.Refs, id: string, select: boolean?)
+	if view.Detail.Visible and view.Current ~= id then
+		detailKey = nil
+		StoreView.showDetail(view, nil)
+	end
+	local changed = StoreView.selectTab(view, id)
+	if not changed then
+		return
+	end
+	focusMotion(view)
+	if select and MenuPanels.usingGamepad() then
+		GuiService.SelectedObject = StoreView.firstSelectable(view)
+	end
+end
+
+-- LB / RB: the tab left or right of the open one.
+local function onTabs(_: string, inputState: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	local view = refs
+	if inputState ~= Enum.UserInputState.Begin or not isOpen or not view or view.Detail.Visible then
+		return Enum.ContextActionResult.Pass
+	end
+	local tabs = StoreView.visibleTabs(view)
+	local at = table.find(tabs, view.Current) or 1
+	local step = if input.KeyCode == Enum.KeyCode.ButtonL1 then -1 else 1
+	local nextId = tabs[(at - 1 + step) % #tabs + 1]
+	if nextId then
+		showTab(view, nextId, true)
+		Sfx.play("UIClick")
+	end
+	return Enum.ContextActionResult.Sink
+end
+
+-- The screen's size in design units and whether it wants the phone / TV sizes.
+local function screen(): (number, number, boolean)
 	local camera = workspace.CurrentCamera
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
 	local compact = TechShopView.compactFor(MenuPanels.isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
-	StoreView.layout(view, size.X / scale, (size.Y - inset.Y) / scale, compact)
+	return size.X / scale, (size.Y - inset.Y) / scale, compact
 end
 
-local function ensureView(): StoreView.Refs
-	if refs then
-		return refs :: StoreView.Refs
-	end
-	local view = StoreView.build()
-	view.Gui.Parent = player:WaitForChild("PlayerGui")
+-- Connects the window's buttons (once each: a rebuilt window is wired again).
+local function wire(view: StoreView.Refs)
 	view.Window.Close.Activated:Connect(function()
 		StoreController.close()
 		Sfx.play("UIClick")
 	end)
 	for id, card in view.Cards do
 		card.Button.Activated:Connect(function()
-			onCard(id)
+			if card.Button.Selectable then
+				onBuy(id, card.Key, card.Button)
+			end
 		end)
-		card.Price.Activated:Connect(function()
-			onCard(id)
-		end)
+		for _, face in card.Buys do
+			face.Activated:Connect(function()
+				local key = face:GetAttribute("Key")
+				onBuy(id, if type(key) == "string" then key else card.Key, face)
+			end)
+		end
 	end
-	-- a section tab scrolls the list to its section
 	for sectionId, tab in view.Tabs do
 		tab.Activated:Connect(function()
-			local target = Vector2.new(0, StoreView.sectionTop(view, sectionId))
-			TweenService
-				:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target })
-				:Play()
+			showTab(view, sectionId, false)
 			Sfx.play("UIClick")
 		end)
 	end
@@ -517,14 +654,50 @@ local function ensureView(): StoreView.Refs
 	-- the STAR blasters' live guns (the Star Forge's own builder)
 	for _, card in view.Cards do
 		local star = card.Spec.Star
-		local picture = if star then card.Button:FindFirstChild("Picture") else nil
+		local picture = if star then card.Picture else nil
 		local viewport = if picture then picture:FindFirstChild("View") else nil
 		if star and viewport then
 			pcall(RebirthView.fillPicture, { Id = star, View = viewport } :: any)
 		end
 	end
+end
+
+-- Builds the window for this screen's sizes (or again when they changed).
+local function build(w: number, h: number, compact: boolean): StoreView.Refs
+	local _, fit = StoreView.windowSize(w, h)
+	local current = if refs then (refs :: StoreView.Refs).Current else nil
+	local old = refs
+	if old then
+		old.Gui:Destroy()
+	end
+	bannerFrame = nil
+	local view = StoreView.build(StoreView.metricsFor(compact, fit))
+	view.Gui.Parent = player:WaitForChild("PlayerGui")
+	wire(view)
 	refs = view
+	if current then
+		StoreView.selectTab(view, current)
+	end
 	return view
+end
+
+local function fit(view: StoreView.Refs): StoreView.Refs
+	local w, h, compact = screen()
+	local current = view
+	if StoreView.needsRebuild(view, w, h, compact) then
+		current = build(w, h, compact)
+		current.Gui.Enabled = isOpen
+	end
+	StoreView.layout(current, w, h, compact)
+	return current
+end
+
+local function ensureView(): StoreView.Refs
+	if refs then
+		return refs :: StoreView.Refs
+	end
+	local w, h, compact = screen()
+	return build(w, h, compact)
 end
 
 function StoreController.close()
@@ -533,6 +706,8 @@ function StoreController.close()
 	end
 	isOpen = false
 	ContextActionService:UnbindAction(CLOSE_ACTION)
+	ContextActionService:UnbindAction(TABS_ACTION)
+	stopMotion()
 	local view = refs
 	if view then
 		local selected = GuiService.SelectedObject
@@ -589,33 +764,28 @@ function StoreController.open()
 		return
 	end
 	MenuPanels.closeOthers(NAME)
-	local view = ensureView()
+	local view = fit(ensureView())
 	isOpen = true
-	fit(view)
 	StoreView.setStatus(view, nil)
 	refresh()
 	view.Gui.Enabled = true
 	tickBanner()
 	PromptController.setSuppressed("Store", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
-	local first = view.Cards[view.Order[1]]
-	GuiService.SelectedObject = if MenuPanels.usingGamepad() and first then first.Button else nil
+	ContextActionService:BindActionAtPriority(TABS_ACTION, onTabs, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
+	GuiService.SelectedObject = if MenuPanels.usingGamepad() then StoreView.firstSelectable(view) else nil
 	Sfx.play("UIClick")
+	startMotion(view)
 	if not Motion.enabled() then
 		-- (UI motion off, Config/AnimConfig: the window's own pop, as on main)
 		Motion.classicPop(view.Window.Root, "OpenPop", 0.85, 0.18)
 		return
 	end
-	-- UI/Motion: the window and its tabs pop from the middle (the Group is centred),
-	-- the dim fades in, the tab column slides in from the right
+	-- UI/Motion: the window pops from the middle, the dim fades in
 	Motion.pop(view.Group, view.Gui:FindFirstChild("Dim") :: GuiObject?)
-	local tabs = view.Group:FindFirstChild("Tabs") :: GuiObject?
-	if tabs then
-		Motion.slide(tabs, "Right", 36)
-	end
 end
 
--- Opens the Store at a card (the round look's HUD offers): the list scrolls to it.
+-- Opens the Store at a card (the round look's HUD offers): its tab shows.
 function StoreController.openAt(cardId: string)
 	StoreController.open()
 	local view = refs
@@ -623,12 +793,18 @@ function StoreController.openAt(cardId: string)
 	if not view or not card then
 		return
 	end
-	local section = card.Button.Parent
-	local top = if section then StoreView.sectionTop(view, section.Name) else 0
-	view.Scroller.CanvasPosition = Vector2.new(0, math.max(0, top + card.Button.Position.Y.Offset - 8))
+	if StoreView.tabShown(view, card.Spec.Section) then
+		showTab(view, card.Spec.Section, false)
+	end
 	-- (a gamepad: the selection on the offered card, so A buys what the player picked)
-	if MenuPanels.usingGamepad() and card.Button.Visible then
-		GuiService.SelectedObject = card.Button
+	if MenuPanels.usingGamepad() and card.Holder.Visible then
+		if card.Button.Selectable then
+			GuiService.SelectedObject = card.Button
+		else
+			-- (a card with options: its first price button)
+			local keys = card.Spec.Options or card.Spec.Keys
+			GuiService.SelectedObject = card.Buys[keys[1]]
+		end
 	end
 end
 
@@ -805,7 +981,11 @@ function StoreController.start()
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
 		local view = refs
 		if view and isOpen then
-			fit(view)
+			local now = fit(view)
+			if now ~= view then
+				refresh()
+				startMotion(now)
+			end
 		end
 	end)
 end

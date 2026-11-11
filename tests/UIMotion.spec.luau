@@ -340,43 +340,35 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the shop's marks
 
-	T.test("UIMotion: the shop's prices shine, BEST VALUE and the x50 breathe from their middle", function()
+	T.test("UIMotion: the shop's own motion marks (ShopFx: rays, bolts, shines, the Mythic rims)", function()
+		local ShopFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ShopFx")
 		local refs = StoreView.build()
-		local ribbons = 0
+		local kinds: { [string]: number } = {}
+		for _, d in refs.Gui:GetDescendants() do
+			local kind = d:GetAttribute("ShopFx")
+			if type(kind) == "string" then
+				kinds[kind] = (kinds[kind] or 0) + 1
+			end
+			-- (the shop moves itself: no UIMotionController loop marks, no PixelFx spins on its own rays)
+			T.eq(d:GetAttribute("Motion"), nil, "no Motion loop mark: " .. d:GetFullName())
+			if kind == "Rays" then
+				T.eq(d:GetAttribute("PixelFx"), nil, "its rays turn with the shop's motion only")
+			end
+		end
+		for _, kind in { "Rays", "Bolt", "Shine", "Rim", "Sparkle" } do
+			T.truthy((kinds[kind] or 0) > 0, "the shop has " .. kind)
+		end
+		-- every buy button shines (the OWNED tag and BACK don't)
 		for _, card in refs.Cards do
-			-- (an Item card's price is the pixel reels' tilted tag: no face, no shine)
-			if card.Spec.Look ~= "Item" then
-				T.eq(card.Price:GetAttribute("Motion"), "Shine", card.Spec.Id .. " price shines")
+			for key, face in card.Buys do
+				local shine = face:FindFirstChild("Shine")
+				local sweep = if shine then shine:FindFirstChild("Sweep") else nil
+				T.truthy(sweep and sweep:GetAttribute("ShopFx") == "Shine", card.Spec.Id .. " " .. key .. " shines")
 			end
-			local ribbon = card.Button:FindFirstChild("Ribbon")
-			if ribbon then
-				ribbons += 1
-				T.eq(ribbon:GetAttribute("Motion"), "Breathe")
-				T.eq(ribbon.AnchorPoint, Vector2.new(0.5, 0.5))
-				if PopTheme.round() then
-					-- (the round look: the left edge 8 in, the title holds the top-right)
-					T.near(ribbon.Position.X.Offset - ribbon.Size.X.Offset / 2, 8, 1e-9)
-				else
-					-- the same corner as Pop.ribbon puts it: right edge 8 in, top 12 down
-					T.near(ribbon.Position.X.Offset + ribbon.Size.X.Offset / 2, -8, 1e-9)
-					T.near(ribbon.Position.Y.Offset - ribbon.Size.Y.Offset / 2, 12, 1e-9)
-				end
-			end
+			T.eq((card.Owned :: any):FindFirstChild("Shine", true), nil, card.Spec.Id .. ": OWNED doesn't shine")
 		end
-		T.truthy(ribbons >= 1, "a BEST VALUE ribbon")
-		T.eq(refs.DetailBuy:GetAttribute("Motion"), "Shine")
-		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
-		local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
-		if edition then
-			local banner = StoreView.setEdition(refs, edition) :: any
-			local first = StoreView.BannerCounts[1]
-			for count, button in banner.Buys do
-				T.eq(button:GetAttribute("Motion"), if count == first then "Breathe" else "Shine", `x{count}`)
-				T.eq(button.AnchorPoint, Vector2.new(0.5, 0.5))
-				-- its bottom edge stays 30 over the banner's bottom
-				T.near(button.Position.Y.Offset + button.Size.Y.Offset / 2, StoreView.BannerHeight - 30, 1e-9)
-			end
-		end
+		T.eq(refs.DetailBack:FindFirstChild("Shine"), nil, "BACK doesn't shine")
+		T.truthy(ShopFx.boltOn(0.05, 0), "a bolt flashes at the start of its second")
 	end)
 
 	---------------------------------------------------------------- the setting
@@ -610,7 +602,7 @@ return function(T, Loader)
 			end
 			local dim = store.Gui:FindFirstChild("Dim")
 			Motion.pop(store.Group, dim)
-			Motion.slide(store.Group:FindFirstChild("Tabs"), "Right")
+			Motion.slide(store.Window.Root:FindFirstChild("Tabs") :: any, "Right")
 			local closed = false
 			Motion.close(store.Group, function()
 				closed = true
@@ -634,7 +626,7 @@ return function(T, Loader)
 				end
 			end
 			T.eq(kit.AnchorPoint, kitAnchor, "a kit button keeps its anchor (not re-centred)")
-			T.eq(dim.BackgroundTransparency, 0.5, "the dim as built")
+			T.near(dim.BackgroundTransparency, 0.45, 1e-6, "the dim as built")
 			T.eq(#made, 0, "no tween made")
 			-- the store's own pop, as main has it: OpenPop on the window, 0.85 -> 1, Back out, 0.18 s
 			local pop = Motion.classicPop(store.Window.Root, "OpenPop", 0.85, 0.18)

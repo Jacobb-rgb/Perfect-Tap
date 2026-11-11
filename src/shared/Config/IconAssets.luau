@@ -403,9 +403,98 @@ function IconAssets.applyTileArt(label: ImageLabel, art: string)
 	label.ImageRectSize = Vector2.new(t.Cell, t.Cell)
 end
 
+--[[
+	The shop v3 icons (owner 2026-11-11: the "WOW" shop concept's own sticker
+	icons, docs/art/shop_v3_concept/icons.js) in one image:
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_ikony.png, made by
+	tools/preview/shop_icon_sheet.mjs (6 x 6 cells of Cell px, the order of
+	Icons below; 1020 px square, under Roblox's 1024). Id 0 = not uploaded:
+	the shop shows its live 3D models, drawn pictures or words instead
+	(UI/ShopFx.icon returns nil). The previews draw build/preview/icons/shop_<name>.png
+	(the same tool writes them) while Previewing and Preview are on.
+]]
+IconAssets.Shop = {
+	File = "obchod_ikony.png",
+	Id = 0,
+	Cell = 170,
+	Columns = 6,
+	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Icons = {
+		"clover",
+		"clover_rainbow",
+		"clover_gold",
+		"cash",
+		"coin",
+		"coins",
+		"bag",
+		"chest",
+		"gift",
+		"basket",
+		"ticket",
+		"crown",
+		"bolt",
+		"bolt_cyan",
+		"star",
+		"egg",
+		"wheel",
+		"potion",
+		"clock",
+		"rebirth",
+		"book",
+		"backpack",
+		"hammer",
+		"moon",
+		"gem",
+		"fire",
+		"lock",
+		"trophy",
+		"sparkle",
+		"x2",
+		"blaster",
+		"heart_fire",
+		"star_break",
+		"globe",
+		"users",
+	},
+}
+local shopCell: { [string]: number } = {}
+for i, name in IconAssets.Shop.Icons do
+	shopCell[name] = i - 1
+end
+
+-- The cell of shop icon `name` in its image (0-based; nil: not in the sheet).
+function IconAssets.shopCell(name: string): number?
+	return shopCell[name]
+end
+
 -- The preview tools set this: they draw every icon from build/preview/icons,
 -- so layouts that differ without an uploaded picture use the uploaded look.
 IconAssets.Previewing = false
+
+-- Will shop icon `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.shopShows(name: string): boolean
+	if shopCell[name] == nil then
+		return false
+	end
+	if IconAssets.Shop.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and IconAssets.Shop.Preview
+end
+
+-- Shows shop icon `name` on an ImageLabel (its cell of the uploaded image; the previews: its own picture).
+function IconAssets.applyShop(label: ImageLabel, name: string)
+	local cell = shopCell[name]
+	label:SetAttribute("Icon", "shop_" .. name)
+	local sheet = IconAssets.Shop
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell)
+	label.ImageRectSize = Vector2.new(sheet.Cell, sheet.Cell)
+end
 
 -- Will icon `name` show a picture (its sheet is uploaded, or a preview)?
 function IconAssets.shows(name: string): boolean

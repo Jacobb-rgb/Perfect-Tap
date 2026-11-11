@@ -237,23 +237,25 @@ return function(T, Loader)
 				{ "TV 1920 x 1080", 1920 / 1.25, (1080 - 58) / 1.25, true, 1.25 },
 				{ "PC 1280 x 720", 1280, 684, false, 1 },
 			}
-			local k = StoreView.CardsWidth / StoreView.BannerWidth
 			for _, screen in screens do
-				local refs = StoreView.build()
+				local _, fit = StoreView.windowSize(screen[2], screen[3])
+				local refs = StoreView.build(StoreView.metricsFor(screen[4], fit))
 				StoreView.setEdition(refs, edition)
 				StoreView.layout(refs, screen[2], screen[3], screen[4])
 				local banner = refs.Banner :: any
 				local where = screen[1]
 				local height = banner.Frame.Size.Y.Offset
+				local width = banner.Frame.Size.X.Offset
 				local boxes = {}
-				for count, button in banner.Buys do
-					local w, h = button.Size.X.Offset, button.Size.Y.Offset
-					local x, y = button.Position.X.Offset - w / 2, button.Position.Y.Offset - h / 2
+				for count, face in banner.Buys do
+					local holder = face.Parent :: any
+					local w, h = holder.Size.X.Offset, holder.Size.Y.Offset
+					local x, y = holder.Position.X.Offset, holder.Position.Y.Offset
 					table.insert(boxes, { x, y, x + w, y + h })
-					T.truthy(y + h <= height, `{where}: x{count} inside the banner`)
+					T.truthy(y + h <= height and x + w <= width, `{where}: x{count} inside the banner`)
 					if screen[4] and screen[5] <= 0.75 then
-						T.truthy(h * k * refs.Fit * screen[5] >= 44 - 1e-6, `{where}: x{count} {h * k * refs.Fit * screen[5]} pt tall`)
-						T.truthy(w * k * refs.Fit * screen[5] >= 44, `{where}: x{count} wide enough`)
+						T.truthy(h * refs.Fit * screen[5] >= 44 - 1e-6, `{where}: x{count} {h * refs.Fit * screen[5]} pt tall`)
+						T.truthy(w * refs.Fit * screen[5] >= 44, `{where}: x{count} wide enough`)
 					end
 				end
 				-- every golem's chance % (the tile's bottom-right label) clear of every button
@@ -266,9 +268,13 @@ return function(T, Loader)
 						T.falsy(overlap(rect, box), `{where}: {id}'s chance shows`)
 					end
 				end
-				-- the list leaves the banner its whole (shrunk) height
-				local section = banner.Frame.Parent :: any
-				T.truthy(section.Size.Y.Offset >= banner.Frame.Position.Y.Offset + height * k - 1, `{where}: the section holds the banner`)
+				-- the page leaves the banner its whole height (it scrolls on a phone)
+				local page = banner.Frame.Parent :: any
+				T.truthy(page.Size.Y.Offset >= banner.Frame.Position.Y.Offset + height - 1, `{where}: the page holds the banner`)
+				T.truthy(
+					refs.Scroller.CanvasSize.Y.Offset >= page.Size.Y.Offset,
+					`{where}: the page can be scrolled to its end ({refs.Scroller.CanvasSize.Y.Offset})`
+				)
 			end
 		end)
 	end)
