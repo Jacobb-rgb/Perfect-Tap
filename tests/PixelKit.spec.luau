@@ -50,7 +50,11 @@ return function(T, Loader)
 							T.truthy(wired(d), card.Spec.Id .. ": " .. d:GetFullName() .. " is wired")
 						end
 					end
-					T.falsy(card.Owned:IsA("GuiButton"), card.Spec.Id .. ": OWNED is a tag, not a button")
+					-- (a game pass's card only: nothing else can be owned)
+					local owned = card.Owned
+					if owned then
+						T.falsy(owned:IsA("GuiButton"), card.Spec.Id .. ": OWNED is a tag, not a button")
+					end
 				end
 			end)
 		end

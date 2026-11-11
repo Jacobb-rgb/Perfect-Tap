@@ -557,5 +557,77 @@
     "maxLights": 24,
     "uiInset": 58,
     "ui": "ui_store_phone_cash"
+  },
+  "store_phone_blasters": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "uiInset": 58,
+    "ui": "ui_store_phone_blasters"
+  },
+  "store_phone_passes": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "uiInset": 58,
+    "ui": "ui_store_phone_passes"
+  },
+  "store_phone_boosts": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "uiInset": 58,
+    "ui": "ui_store_phone_boosts"
   }
 }

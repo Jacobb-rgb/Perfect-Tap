@@ -76,6 +76,7 @@ StoreView.ButtonH = 46 -- a price button on a PC
 StoreView.MinTouch = 44 -- points: the smallest tap target (all-platforms rule)
 StoreView.PhoneScale = 0.62 -- HudController's UI scale on phones
 StoreView.HudRoom = 200 -- the left HUD column the window keeps clear when the screen is wide enough
+StoreView.DimTransparency = 0.45 -- the backdrop over the world while the window is open
 
 export type Metrics = {
 	Compact: boolean,
@@ -159,7 +160,7 @@ export type CardRefs = {
 	Price: TextButton, -- the (first) price button's face
 	PriceAmount: TextLabel,
 	Buys: { [string]: TextButton }, -- product key -> its price button's face
-	Owned: Frame,
+	Owned: Frame?, -- the OWNED tag (a game pass's card only: nothing else can be owned)
 	Shade: Frame,
 	Sticker: Frame?, -- BEST VALUE! (setCoins moves it to the best pack)
 	Key: string, -- the product it shows now
@@ -238,14 +239,34 @@ export type Refs = {
 	DetailLines: TextLabel,
 	DetailBuy: TextButton,
 	DetailBack: TextButton,
-	Banner: BannerRefs?, -- the limited edition (FEATURED), nil when none runs
-	Royal: RoyalRefs?, -- the Royal Egg's golems (GOLEMS)
+	Banner: BannerRefs?, -- the limited edition (FEATURED), nil when none runs or FEATURED isn't built
+	Royal: RoyalRefs?, -- the Royal Egg's golems (GOLEMS, once built)
 	Fx: { Instance }, -- the window's own effects (the motion's fixed roots)
+	Burst: GuiObject, -- the rays that flash out behind the window as it opens
 	Current: string, -- the open tab
 	Fit: number, -- the last layout's fit scale
 	Compact: boolean,
 	Metrics: Metrics,
+	-- (pages are built lazily: the open one, the others on their first visit; what the
+	-- controller says is kept here and shown when a page is built)
+	Built: { [string]: boolean },
+	Fresh: { string }, -- pages built since the controller last asked (takeBuilt)
+	States: { [string]: CardState }, -- every card's product, state and lines, built or not
+	Edition: Edition?,
+	EditionLeft: number?,
+	EditionOdds: { [string]: number }?,
+	EditionLucky: boolean,
+	RoyalShown: boolean,
+	RoyalOdds: { [string]: number }?,
+	RoyalLucky: boolean,
+	Income: number?,
+	-- bumped when what moves on a page changes (a card shown or hidden, the BEST VALUE moved,
+	-- a banner came or went): the controller starts the open page's loops again
+	Marks: number,
 }
+
+-- What the controller said about a card (kept for a page that isn't built yet).
+export type CardState = { Key: string, State: string, Note: string?, Big: string? }
 
 ---------------------------------------------------------------- data (pure)
 
@@ -405,21 +426,167 @@ local function modelPicture(
 	})
 end
 
--- Builds the 3D models of every picture under `root` that waits for one (livePicture).
-function StoreView.fillModels(root: Instance)
-	for _, d in root:GetDescendants() do
-		if d:IsA("ImageLabel") then
-			local name = d:GetAttribute("Model")
-			if type(name) == "string" then
-				d:SetAttribute("Model", nil)
-				local view = d:FindFirstChild("View")
-				local model, from = PictureModels.build(name)
-				if model and view and view:IsA("ViewportFrame") then
-					Pop.show(view, model, from)
+-- The box round every part of a model (min and max corners; a turned part by its corners).
+local function boxOf(model: Instance): (Vector3, Vector3)
+	local lo = Vector3.new(math.huge, math.huge, math.huge)
+	local hi = -lo
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			local cf = part.CFrame
+			local half = part.Size / 2
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local at = cf * Vector3.new(half.X * sx, half.Y * sy, half.Z * sz)
+						lo = Vector3.new(math.min(lo.X, at.X), math.min(lo.Y, at.Y), math.min(lo.Z, at.Z))
+						hi = Vector3.new(math.max(hi.X, at.X), math.max(hi.Y, at.Y), math.max(hi.Z, at.Z))
+					end
 				end
 			end
 		end
 	end
+	if lo.X > hi.X then
+		return Vector3.zero, Vector3.zero
+	end
+	return lo, hi
+end
+
+StoreView.ModelView = Vector3.new(-0.55, 0.42, -1) -- (Pop.show's default way in)
+StoreView.ModelFill = 0.94 -- how much of its picture a model fills (the previews' pictures: 0.96)
+
+--[[
+	Puts `model` in `view` with a camera from `from` (Pop.show's way in)
+	that backs off until every part's corners fit the picture (`size`: its
+	30 degree height and its width), the model filling ModelFill of it.
+	(Pop.show frames a model's whole sphere: it shows smaller than the
+	previews' pictures of it; the shop's models fill theirs like those.)
+]]
+local function frame(view: ViewportFrame, model: Model, from: Vector3?, size: Vector2)
+	for _, old in view:GetChildren() do
+		if old:IsA("Model") or old:IsA("Camera") then
+			old:Destroy()
+		end
+	end
+	model.Parent = view
+	local dir = (from or StoreView.ModelView).Unit
+	local cross = Vector3.yAxis:Cross(dir)
+	local right = if cross.Magnitude > 1e-3 then cross.Unit else Vector3.xAxis
+	local up = dir:Cross(right).Unit
+	local lo, hi = boxOf(model)
+	local center = (lo + hi) / 2
+	local tall = math.tan(math.rad(15)) * StoreView.ModelFill
+	local wide = tall * (if size.X > 0 and size.Y > 0 then size.X / size.Y else 1)
+	local distance = 0.1
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			local cf = part.CFrame
+			local h = part.Size / 2
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local at = cf * Vector3.new(h.X * sx, h.Y * sy, h.Z * sz) - center
+						local need = at:Dot(dir) + math.max(math.abs(at:Dot(up)) / tall, math.abs(at:Dot(right)) / wide)
+						distance = math.max(distance, need)
+					end
+				end
+			end
+		end
+	end
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 30
+	camera.CFrame = CFrame.lookAt(center + dir * distance, center)
+	camera.Parent = view
+	pcall(function()
+		view.CurrentCamera = camera
+	end)
+end
+
+--[[
+	Three of model `name` in ONE view (an egg pack's pile: one ViewportFrame
+	instead of three), the middle one in front, the two others a little back
+	and down at its sides, framed to the picture's shape (wider than tall).
+]]
+local function pile(view: ViewportFrame, name: string, first: Model, from: Vector3?, size: Vector2)
+	local dir = (from or StoreView.ModelView).Unit
+	local cross = Vector3.yAxis:Cross(dir)
+	local right = if cross.Magnitude > 1e-3 then cross.Unit else Vector3.xAxis
+	local lo, hi = boxOf(first)
+	local radius = math.max((hi - lo).Magnitude / 2, 0.1)
+	local group = Instance.new("Model")
+	group.Name = name .. "Pile"
+	-- (across, up, toward the camera: in radii of one)
+	local places = { { -0.72, -0.1, -0.45 }, { 0.72, -0.1, -0.45 }, { 0, 0, 0.35 } }
+	for i, p in places do
+		local copy = if i == 1 then first else PictureModels.build(name)
+		if copy then
+			local offset = right * (p[1] * radius) + Vector3.yAxis * (p[2] * radius) + dir * (p[3] * radius)
+			for _, part in copy:GetDescendants() do
+				if part:IsA("BasePart") then
+					part.CFrame = part.CFrame + offset
+				end
+			end
+			copy.Parent = group
+		end
+	end
+	frame(view, group, from, size)
+end
+
+-- Builds one waiting picture's model (attribute Copies 3: a pile of three in its one view).
+local function fillOne(picture: ImageLabel)
+	local name = picture:GetAttribute("Model")
+	if type(name) ~= "string" then
+		return
+	end
+	picture:SetAttribute("Model", nil)
+	local view = picture:FindFirstChild("View")
+	if not view or not view:IsA("ViewportFrame") then
+		return
+	end
+	local model, from = PictureModels.build(name)
+	if not model then
+		return
+	end
+	local size = Vector2.new(picture.Size.X.Offset, picture.Size.Y.Offset)
+	if picture:GetAttribute("Copies") == 3 then
+		pile(view, name, model, from, size)
+	else
+		frame(view, model, from, size)
+	end
+end
+
+-- Builds the 3D models of every picture under `root` that waits for one (livePicture).
+function StoreView.fillModels(root: Instance)
+	for _, d in root:GetDescendants() do
+		if d:IsA("ImageLabel") then
+			fillOne(d)
+		end
+	end
+end
+
+-- (the game sets it, StoreController) a page's models are built one a frame after it shows, so a
+-- tab's first visit never stalls its slide and pop; off: all at once (the specs, the previews)
+StoreView.SpreadModels = false
+
+-- The models under `root`: all now, or one a frame (SpreadModels).
+local function fill(root: Instance)
+	if not StoreView.SpreadModels then
+		StoreView.fillModels(root)
+		return
+	end
+	local waiting: { ImageLabel } = {}
+	for _, d in root:GetDescendants() do
+		if d:IsA("ImageLabel") and type(d:GetAttribute("Model")) == "string" then
+			table.insert(waiting, d)
+		end
+	end
+	task.spawn(function()
+		for _, picture in waiting do
+			if picture.Parent then
+				fillOne(picture)
+				task.wait()
+			end
+		end
+	end)
 end
 
 -- A card's picture: the shop sheet's once uploaded, else its live model (nil when neither shows).
@@ -487,9 +654,10 @@ type ShellOptions = {
 
 --[[
 	A card's body in its holder: the dark slab under it, the face (the click
-	target; it clips its light), rays and a glow behind where the picture
-	goes, the gloss, the light edge, a darker band along the bottom; the
-	Mythic rim when asked. Returns the face.
+	target; it clips its light), the sunburst (one sprite, it turns) and a
+	glow behind where the picture goes, the gloss, the light edge; the
+	Mythic rim when asked. A one-price card's face grows under the mouse and
+	squashes on a press (ShopFx.bindPress on its holder). Returns the face.
 ]]
 local function shell(holder: Frame, colors: { Color3 }, h: number, o: ShellOptions): TextButton
 	ShopFx.drop(holder, CORNER, 7, 1)
@@ -512,34 +680,22 @@ local function shell(holder: Frame, colors: { Color3 }, h: number, o: ShellOptio
 		end
 	end
 	if o.Rays then
-		ShopFx.rays(face, o.Rays, 6, o.RayLength or 180, o.RayFade or 0.62, 2, if o.Rainbow then ShopFx.Cards.Rainbow else nil)
+		-- (a rainbow card's rays run warm gold; the paint itself carries the rainbow)
+		local tint = if o.Rainbow then Color3.fromRGB(255, 236, 170) else WHITE
+		ShopFx.rays(face, o.Rays, (o.RayLength or 180) * 2, o.RayFade or 0.62, 2, tint, 30)
 	end
 	if o.Glow then
 		ShopFx.glow(face, o.Glow, o.GlowRadius or 80, o.GlowColor or WHITE, 2)
 	end
 	ShopFx.gloss(face, CORNER, 3)
 	ShopFx.rim(face, CORNER, 3)
-	-- the darker band along the bottom (inset 0 -8px 0): its corners follow the face's
-	local band = UIKit.new("Frame", {
-		Name = "Band",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 3,
-	}, face)
-	UIKit.corner(band, CORNER)
-	local cut = 1 - 7 / math.max(h, 40)
-	UIKit.new("UIGradient", {
-		Rotation = 90,
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(cut - 0.002, 1),
-			NumberSequenceKeypoint.new(cut, 0.8),
-			NumberSequenceKeypoint.new(1, 0.8),
-		}),
-	}, band)
 	if o.Mythic then
 		ShopFx.mythicRim(face, 5)
+	end
+	if selectable then
+		ShopFx.bindPress(face, holder)
+	else
+		face:SetAttribute("Motion", "None")
 	end
 	return face
 end
@@ -567,6 +723,13 @@ local function ownedTag(holder: Frame, size: Vector2, props: { [string]: any }):
 	return owned
 end
 
+-- The tab's hero picture floats up and down (mark "Float": one per tab, a slow bob).
+local function float(picture: GuiObject?)
+	if picture then
+		picture:SetAttribute("ShopFx", "Float")
+	end
+end
+
 -- A card's bare refs (the looks fill them in).
 local function newRefs(spec: StoreConfig.CardSpec, holder: Frame, face: TextButton): CardRefs
 	return {
@@ -582,7 +745,7 @@ local function newRefs(spec: StoreConfig.CardSpec, holder: Frame, face: TextButt
 		Price = face, -- (set by addPrice)
 		PriceAmount = (nil :: any) :: TextLabel,
 		Buys = {},
-		Owned = (nil :: any) :: Frame,
+		Owned = nil,
 		Shade = shade(holder),
 		Sticker = nil,
 		Key = spec.Keys[1],
@@ -615,9 +778,26 @@ local function addPrice(
 	if first then
 		refs.Price = button.Face
 		refs.PriceAmount = button.Amount
-		refs.Owned = ownedTag(refs.Holder, size, props)
+		if product.Kind == "GamePass" then
+			refs.Owned = ownedTag(refs.Holder, size, props)
+		end
 	end
 	return button
+end
+
+-- A BEST VALUE button breathes (mark "Pulse": a UIScale on its holder; `on` false keeps it still).
+-- Returns whether the mark changed.
+local function pulse(face: GuiObject, on: boolean): boolean
+	local holder = face.Parent
+	if not holder or not holder:IsA("GuiObject") then
+		return false
+	end
+	if not holder:FindFirstChild("Pulse") then
+		UIKit.new("UIScale", { Name = "Pulse", Scale = 1 }, holder)
+	end
+	local was = holder:GetAttribute("ShopFx") == "Pulse"
+	holder:SetAttribute("ShopFx", if on then "Pulse" else nil)
+	return was ~= on
 end
 
 -- A sticker over the card's top edge (`x` its middle as a share of the width).
@@ -861,7 +1041,7 @@ Looks.Pass = function(holder, spec, w, h, m)
 	})
 	local refs = newRefs(spec, holder, face)
 	if spec.Paint == "Night" then
-		ShopFx.dots(face, 16, w, h - 60, { WHITE, hex("#fff27a") }, 41, 3, 3)
+		ShopFx.dots(face, UDim2.fromScale(0.5, 0.42), math.floor(w * 1.3), hex("#fff6c0"), 0.2, 3)
 	end
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	cardTitle(refs, spec.Title or product.Name, 21, 10, 2)
@@ -897,7 +1077,7 @@ Looks.Blaster = function(holder, spec, w, h, m)
 		GlowColor = hex("#ffe68c"),
 	})
 	local refs = newRefs(spec, holder, face)
-	ShopFx.bolt(face, Vector2.new(-8, h - 50), Vector2.new(math.floor(w * 0.5), h - 110), hex("#ffd84a"), 3.4, 71, 1, 3, 0.31, 3, false)
+	ShopFx.bolt(face, UDim2.fromOffset(math.floor(w * 0.3), h - 70), 210, 68, hex("#ffd84a"), 1, 3, 6.4, false)
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	local title = ShopFx.title(holder, spec.Title or product.Name, 36, { WHITE, WHITE, hex("#ffe07a") }, {
 		Name = "Title",
@@ -921,6 +1101,7 @@ Looks.Blaster = function(holder, spec, w, h, m)
 	}, { hex("#3a0a1a"), hex("#1a0410") })
 	refs.Big = ShopFx.chipLabel(chip)
 	refs.Picture = picture(holder, spec, 150, UDim2.new(1, -96, 0, math.floor(h * 0.48)), 5, -10)
+	float(refs.Picture)
 	refs.Note = ShopFx.text(holder, spec.Note or "", 13, {
 		Name = "Note",
 		Position = UDim2.fromOffset(20, 146),
@@ -954,19 +1135,7 @@ Looks.Star = function(holder, spec, w, h, m)
 	})
 	local refs = newRefs(spec, holder, face)
 	if strongest then
-		ShopFx.bolt(
-			face,
-			Vector2.new(math.floor(w * 0.12), -8),
-			Vector2.new(math.floor(w * 0.72), h - 70),
-			hex("#ff8ab0"),
-			2.6,
-			90,
-			1,
-			3,
-			0.57,
-			3,
-			false
-		)
+		ShopFx.bolt(face, UDim2.fromOffset(math.floor(w * 0.42), math.floor(h * 0.42)), 260, -22, hex("#ff8ab0"), 2, 3, 5.6, false)
 	end
 	cardTitle(refs, spec.Title or spec.Id, 22, 8)
 	local chip = ShopFx.chip(holder, spec.Big or "", 150, 28, 17, {
@@ -1034,20 +1203,13 @@ Looks.Egg = function(holder, spec, w, h, m)
 	if count == 1 then
 		refs.Picture = modelPicture(holder, spec.Model, spec.Icon, 112, UDim2.fromOffset(mid, y), 5)
 	else
-		for k, dx in { -56, 56, 0 } do
-			local big = dx == 0
-			local pic = modelPicture(
-				holder,
-				spec.Model,
-				spec.Icon,
-				if big then 106 else 88,
-				UDim2.fromOffset(mid + dx, y + (if big then -4 else 10)),
-				if big then 6 else 5
-			)
-			if k == 3 then
-				refs.Picture = pic
-			end
+		-- a pile of three in one picture (one 3D view, not three: StoreView.fillModels)
+		local pic = modelPicture(holder, spec.Model, spec.Icon, 112, UDim2.fromOffset(mid, y + 2), 5)
+		if pic then
+			pic.Size = UDim2.fromOffset(math.min(w - 36, 232), 116)
+			pic:SetAttribute("Copies", 3)
 		end
+		refs.Picture = pic
 	end
 	ShopFx.title(holder, spec.Big or `x{count}`, 43, { WHITE, WHITE, hex("#ffe07a") }, {
 		Name = "Big",
@@ -1077,20 +1239,8 @@ Looks.ServerLuck = function(holder, spec, w, h, m)
 		GlowRadius = 112,
 	})
 	local refs = newRefs(spec, holder, face)
-	ShopFx.bolt(
-		face,
-		Vector2.new(math.floor(w * 0.5), -10),
-		Vector2.new(math.floor(w * 0.62), h + 4),
-		hex("#fff27a"),
-		3.4,
-		53,
-		2,
-		3,
-		0.11,
-		3,
-		false
-	)
-	ShopFx.dots(face, 14, w, h, { WHITE, hex("#fff27a") }, 77, 3, 3)
+	ShopFx.bolt(face, UDim2.fromOffset(math.floor(w * 0.56), math.floor(h * 0.5)), h + 30, 12, hex("#fff27a"), 3, 3, 4.6, false)
+	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, hex("#fff6a0"), 0.3, 3)
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	cardTitle(refs, spec.Title or product.Name, 35, 8)
 	local minutes = math.floor((product.Seconds or 0) / 60 + 0.5)
@@ -1102,6 +1252,7 @@ Looks.ServerLuck = function(holder, spec, w, h, m)
 		ZIndex = 7,
 	})
 	refs.Picture = picture(holder, spec, math.min(h - 80, 176), UDim2.fromOffset(120, math.floor(h * 0.6)), 5)
+	float(refs.Picture)
 	local y = math.floor(h * 0.6)
 	ShopFx.title(holder, "x1", 70, { WHITE, hex("#d8ffc0") }, {
 		Name = "From",
@@ -1169,6 +1320,7 @@ local function options(refs: CardRefs, w: number, m: Metrics, sticker: boolean)
 		local x = (12 + (index - 1) * (bw + gap) + bw / 2) / w
 		local tag = ShopFx.sticker(refs.Holder, "BEST VALUE!", "Gold", UDim2.new(x, 0, 1, -(13 + m.Button + 14 + 13)), 11, 5, 12)
 		tag.Name = "Best"
+		pulse(refs.Buys[best], true)
 	end
 end
 
@@ -1272,7 +1424,7 @@ Looks.MoneyWide = function(holder, spec, w, h, m)
 		GlowRadius = 80,
 	})
 	local refs = newRefs(spec, holder, face)
-	ShopFx.bolt(face, Vector2.new(w + 6, 8), Vector2.new(w - 300, h - 10), WHITE, 2.6, 67, 1, 3, 0.83, 3, false)
+	ShopFx.bolt(face, UDim2.fromOffset(w - 150, math.floor(h / 2)), 260, 64, WHITE, 2, 3, 7, false)
 	refs.Picture = picture(holder, spec, h - 30, UDim2.fromOffset(16 + math.floor((h - 30) / 2), math.floor(h / 2) + 2), 5)
 	ShopFx.x2(holder, 58, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(h - 4, 30), ZIndex = 9 })
 	local product = MonetizationConfig.Products[spec.Keys[1]]
@@ -1340,11 +1492,11 @@ local function golemTile(
 	ShopFx.rays(
 		face,
 		UDim2.new(0.5, 0, 0.45, 0),
-		6,
-		math.floor(size.X * 0.9),
-		if rare then 0.5 else 0.7,
+		math.floor(size.X * 1.8),
+		if rare then 0.45 else 0.68,
 		z + 1,
-		if mythic then ShopFx.Cards.Rainbow else nil
+		if mythic then Color3.fromRGB(255, 200, 230) else WHITE,
+		40
 	)
 	ShopFx.gloss(face, 14, z + 2, 0.3)
 	ShopFx.rim(face, 14, z + 2)
@@ -1429,26 +1581,24 @@ local function buildBanner(page: Frame, edition: Edition, m: Metrics): BannerRef
 		ZIndex = 2,
 	}, frame)
 	ShopFx.face(face, ShopFx.Cards.Fire, CORNER, 4, 90)
-	ShopFx.rays(face, UDim2.fromOffset(560, 70), 10, 300, 0.62, 2, { hex("#ffe68c") })
+	ShopFx.rays(face, UDim2.fromOffset(510, 110), 640, 0.55, 2, hex("#ffe68c"), 36)
 	-- the flames along the bottom and the embers rising
 	local rand = ShopFx.random(11)
-	for i = 0, 13 do
-		local fw = 70 + math.floor(rand() * 40)
-		local fh = 50 + math.floor(rand() * 70)
-		local flame = UIKit.new("Frame", {
-			Name = "Flame",
-			AnchorPoint = Vector2.new(0.5, 1),
-			BackgroundColor3 = if i % 2 == 0 then hex("#ff7a1e") else hex("#ff4a1a"),
-			BackgroundTransparency = 0.45,
-			BorderSizePixel = 0,
-			Position = UDim2.new(0, i * 76 + math.floor(rand() * 20), 1, 20),
-			Size = UDim2.fromOffset(fw, fh + 20),
-			ZIndex = 2,
-		}, face)
-		UIKit.corner(flame, math.floor(fw / 2))
+	for i = 0, 7 do
+		local fw = 120 + math.floor(rand() * 50)
+		local fh = 90 + math.floor(rand() * 70)
+		ShopFx.flame(
+			face,
+			UDim2.new(0, i * 146 + math.floor(rand() * 30), 1, 6),
+			fw,
+			fh,
+			if i % 2 == 0 then hex("#ff8a2e") else hex("#ff5a1a"),
+			0.35,
+			2
+		)
 	end
-	ShopFx.dots(face, 30, w, h, { hex("#ffd84a"), hex("#ff9a3a"), WHITE }, 12, 2, 3)
-	ShopFx.bolt(face, Vector2.new(470, -10), Vector2.new(540, 170), hex("#ffd84a"), 3.8, 23, 2, 3, 0.07, 3, false)
+	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, hex("#ffe08a"), 0.15, 2)
+	ShopFx.bolt(face, UDim2.fromOffset(500, 70), 230, 18, hex("#ffd84a"), 1, 3, 5.2, false)
 	ShopFx.gloss(face, CORNER, 3, 0.22)
 	ShopFx.rim(face, CORNER, 3)
 	-- the set's painted background over the drawn one, once the owner has uploaded it
@@ -1546,6 +1696,7 @@ local function buildBanner(page: Frame, edition: Edition, m: Metrics): BannerRef
 			if key == best then
 				-- (in the gap over its button: the count on the button stays clear)
 				ShopFx.sticker(frame, "BEST VALUE!", "Gold", UDim2.fromOffset(x + math.floor(bw / 2), y - 13), 12, -3, 13)
+				pulse(button.Face, true)
 			end
 		end
 	end
@@ -1554,12 +1705,13 @@ local function buildBanner(page: Frame, edition: Edition, m: Metrics): BannerRef
 	local hero = edition.Golems[count]
 	ShopFx.glow(face, UDim2.fromOffset(512, math.floor(h * 0.5)), 150, hex("#ffdc78"), 2, 1)
 	if hero then
-		livePicture(frame, "golem_" .. hero.Id, "golem_" .. hero.Id, 226, {
+		local heroPicture = livePicture(frame, "golem_" .. hero.Id, "golem_" .. hero.Id, 226, {
 			Name = "Hero",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromOffset(510, math.floor(h * 0.44)),
 			ZIndex = 6,
 		})
+		float(heroPicture)
 	end
 	if edition.CapsuleId then
 		local shardName = "capsule_" .. edition.CapsuleId
@@ -1637,7 +1789,7 @@ local function buildRoyal(page: Frame): RoyalRefs?
 		ZIndex = 2,
 	}, frame)
 	ShopFx.face(face, ShopFx.Cards.Rainbow, CORNER, 4, 20)
-	ShopFx.rays(face, UDim2.fromOffset(190, 170), 10, 320, 0.5, 2, ShopFx.Cards.Rainbow)
+	ShopFx.rays(face, UDim2.fromOffset(150, 196), 700, 0.45, 2, WHITE, 32)
 	-- the dark veil behind the tiles (linear-gradient 90deg: clear -> 0.55 at 30% -> 0.75)
 	local veil = UIKit.new("Frame", {
 		Name = "Veil",
@@ -1653,8 +1805,8 @@ local function buildRoyal(page: Frame): RoyalRefs?
 			NumberSequenceKeypoint.new(1, 0.25),
 		}),
 	}, veil)
-	ShopFx.bolt(face, Vector2.new(264, -10), Vector2.new(330, h + 6), WHITE, 3.2, 37, 3, 3, 0.47, 4, false)
-	ShopFx.dots(face, 24, w, h, { WHITE, hex("#ffe07a"), hex("#7ff4ff") }, 29, 3, 3)
+	ShopFx.bolt(face, UDim2.fromOffset(300, math.floor(h / 2)), h + 40, 8, WHITE, 3, 3, 4.8, false)
+	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, WHITE, 0.2, 2)
 	ShopFx.gloss(face, CORNER, 3, 0.22)
 	ShopFx.rim(face, CORNER, 3)
 	local title = ShopFx.title(frame, capsule.Name, 50, { WHITE, WHITE, hex("#ffe07a") }, {
@@ -1684,12 +1836,13 @@ local function buildRoyal(page: Frame): RoyalRefs?
 		ZIndex = 8,
 	}, nil, 2)
 	ShopFx.glow(face, UDim2.fromOffset(150, 200), 110, WHITE, 2, 1)
-	livePicture(frame, "capsule_Royal", "capsule_Royal", 160, {
+	local egg = livePicture(frame, "capsule_Royal", "capsule_Royal", 160, {
 		Name = "Egg",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset(150, 196),
 		ZIndex = 6,
 	})
+	float(egg)
 	ShopFx.text(frame, "=", 72, {
 		Name = "Equals",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1713,6 +1866,9 @@ local function buildRoyal(page: Frame): RoyalRefs?
 end
 
 ---------------------------------------------------------------- the window
+
+-- (forward: StoreView.selectTab builds a page the first time it opens)
+local buildPage: (refs: Refs, id: string) -> boolean
 
 -- A row's height on a page (a PC's, plus the taller buttons of a phone).
 local function rowHeight(section: StoreConfig.Section, row: number, m: Metrics): number
@@ -1777,7 +1933,8 @@ local function placePage(refs: Refs, section: StoreConfig.Section): (number, boo
 			local widths = rowWidths(specs)
 			local x = 0
 			for i, card in shown do
-				card.Holder.Position = UDim2.fromOffset(x, y)
+				-- (held by its middle: it pops in, grows and squashes about its centre)
+				card.Holder.Position = UDim2.fromOffset(x + math.floor(widths[i] / 2), y + math.floor(h / 2))
 				card.Holder.Size = UDim2.fromOffset(widths[i], h)
 				x += widths[i] + StoreView.Gap
 			end
@@ -1787,6 +1944,23 @@ local function placePage(refs: Refs, section: StoreConfig.Section): (number, boo
 	local height = math.max(0, y - StoreView.RowGap)
 	page.Size = UDim2.fromOffset(StoreView.ContentWidth, height)
 	return height, any
+end
+
+-- Does a tab have anything to show (a banner, a card not hidden)? From what the controller said: built or not.
+function StoreView.hasContent(refs: Refs, section: StoreConfig.Section): boolean
+	if section.Banner == "Limited" and refs.Edition ~= nil then
+		return true
+	end
+	if section.Banner == "Royal" and refs.RoyalShown and CapsuleConfig.ById.Royal ~= nil then
+		return true
+	end
+	for _, spec in StoreConfig.Cards do
+		local state = refs.States[spec.Id]
+		if spec.Section == section.Id and (state == nil or state.State ~= "Hidden") then
+			return true
+		end
+	end
+	return false
 end
 
 -- The ids of the tabs that show, in order.
@@ -1873,10 +2047,12 @@ end
 ]]
 function StoreView.relayout(refs: Refs)
 	for _, section in StoreConfig.Sections do
-		local _, any = placePage(refs, section)
+		if refs.Built[section.Id] then
+			placePage(refs, section)
+		end
 		local tab = refs.TabRefs[section.Id]
 		if tab then
-			tab.Holder.Visible = any
+			tab.Holder.Visible = StoreView.hasContent(refs, section)
 		end
 	end
 	if not StoreView.tabShown(refs, refs.Current) then
@@ -1890,39 +2066,84 @@ function StoreView.relayout(refs: Refs)
 	sizeCanvas(refs)
 end
 
--- Paints the header, the body and the window's light in tab `id`'s colour world.
-local function paintWorld(refs: Refs, id: string)
+-- A face's gradient colours (its "Paint").
+local function paintOn(frame: Instance): UIGradient?
+	local paint = frame:FindFirstChild("Paint")
+	return if paint and paint:IsA("UIGradient") then paint else nil
+end
+
+--[[
+	Paints the header, the body and the window's light in tab `id`'s colour
+	world. `animate`: the old colours stay on a layer over the new ones and
+	fade out, the glow and the bolts change colour smoothly (ShopFx.fadeOut,
+	ShopFx.recolor); else at once.
+]]
+local function paintWorld(refs: Refs, id: string, animate: boolean)
 	local theme = ShopFx.Themes[id] or ShopFx.Themes.Featured
-	ShopFx.repaint(refs.Window.Header, theme.Head)
-	local fill = refs.Window.Root:FindFirstChild("HeaderFill")
-	if fill and fill:IsA("GuiObject") then
-		local paint = fill:FindFirstChild("Paint")
-		if paint and paint:IsA("UIGradient") then
-			-- (the band's lower half: its gradient from the middle down)
-			paint.Color = ShopFx.sequence({ theme.Head[1]:Lerp(theme.Head[2], 0.9), theme.Head[2], theme.Head[3] }, { 0, 0.1, 1 })
+	local root = refs.Window.Root
+	local header, body = refs.Window.Header, refs.Window.Body
+	local fill = root:FindFirstChild("HeaderFill")
+	local layers: { { GuiObject } } = {}
+	local overHeader = root:FindFirstChild("HeaderOver")
+	local overFill = root:FindFirstChild("HeaderOverFill")
+	local overBody = body:FindFirstChild("BodyOver")
+	for _, pair in { { overHeader, header }, { overFill, fill }, { overBody, body } } do
+		local over, under = pair[1], pair[2]
+		if over and over:IsA("GuiObject") and under and under:IsA("GuiObject") then
+			table.insert(layers, { over, under })
 		end
 	end
-	ShopFx.repaint(refs.Window.Body, theme.Body)
+	if animate then
+		-- the look as it is now goes on the layers over, which then fade out
+		for _, pair in layers do
+			local overPaint, underPaint = paintOn(pair[1]), paintOn(pair[2])
+			if overPaint and underPaint then
+				overPaint.Color = underPaint.Color
+			end
+		end
+	end
+	ShopFx.repaint(header, theme.Head)
+	-- (the band's lower half: its gradient from the middle down)
+	local lower = ShopFx.sequence({ theme.Head[1]:Lerp(theme.Head[2], 0.9), theme.Head[2], theme.Head[3] }, { 0, 0.1, 1 })
+	local fillPaint = if fill then paintOn(fill) else nil
+	if fillPaint then
+		fillPaint.Color = lower
+	end
+	ShopFx.repaint(body, theme.Body)
+	for _, pair in layers do
+		if animate then
+			ShopFx.fadeOut(pair[1])
+		else
+			pair[1].BackgroundTransparency = 1
+		end
+	end
 	local title = refs.Window.Title
 	local fillGradient = title:FindFirstChild("Fill")
 	if fillGradient and fillGradient:IsA("UIGradient") then
 		fillGradient.Color = ShopFx.sequence({ WHITE, WHITE, theme.Title }, { 0, 0.4, 1 })
 	end
 	for _, fxRoot in refs.Fx do
-		for _, bolt in fxRoot:GetDescendants() do
-			if bolt:IsA("Frame") and bolt:GetAttribute("WorldGlow") then
-				bolt.BackgroundColor3 = theme.Glow
-			elseif bolt.Name == "Bolt" then
-				local second = bolt:GetAttribute("Second") == true
-				ShopFx.tintBolt(bolt, if second then theme.Bolt2 else theme.Bolt)
-			elseif bolt.Name == "Dot" and bolt:IsA("Frame") and bolt:GetAttribute("Tint") then
-				local which = bolt:GetAttribute("Tint")
-				bolt.BackgroundColor3 = if which == 1 then theme.Bolt elseif which == 2 then theme.Bolt2 else WHITE
-			elseif bolt.Name == "Sparkle" then
-				local tint = if bolt:GetAttribute("Second") then theme.Bolt2 else WHITE
-				for _, part in bolt:GetChildren() do
-					if part:IsA("Frame") and part.Name ~= "Core" then
-						part.BackgroundColor3 = tint
+		for _, d in fxRoot:GetDescendants() do
+			if d:IsA("GuiObject") then
+				local color: Color3? = nil
+				local property = "ImageColor3"
+				if d:GetAttribute("WorldGlow") then
+					color, property = theme.Glow, "BackgroundColor3"
+				elseif d.Name == "Bolt" and d:IsA("ImageLabel") and d:GetAttribute("Icon") ~= "shop_bolt" then
+					color = if d:GetAttribute("Second") == true then theme.Bolt2 else theme.Bolt
+				elseif d.Name == "Dots" or d.Name == "Burst" then
+					color = theme.Bolt2
+					if d:IsA("Frame") then
+						color = nil
+					end
+				elseif d.Name == "Sparkle" and d:IsA("ImageLabel") and d:GetAttribute("Icon") == "shopfx_sparkle" then
+					color = if d:GetAttribute("Second") then theme.Bolt2 else WHITE
+				end
+				if color then
+					if animate then
+						ShopFx.recolor(d, property, color)
+					else
+						(d :: any)[property] = color
 					end
 				end
 			end
@@ -1930,11 +2151,17 @@ local function paintWorld(refs: Refs, id: string)
 	end
 end
 
--- Shows tab `id`'s page (and its colours). Returns true when the open tab changed.
-function StoreView.selectTab(refs: Refs, id: string): boolean
+--[[
+	Shows tab `id`'s page and its colours, building the page the first time
+	(lazy). `animate`: the colours fade over, the page slides in, its cards
+	pop in one after another. Returns whether the open tab changed and
+	whether its page was built just now (the controller wires it).
+]]
+function StoreView.selectTab(refs: Refs, id: string, animate: boolean?): (boolean, boolean)
 	if not refs.Pages[id] then
-		return false
+		return false, false
 	end
+	local built = buildPage(refs, id)
 	local changed = refs.Current ~= id
 	refs.Current = id
 	for pageId, page in refs.Pages do
@@ -1944,15 +2171,40 @@ function StoreView.selectTab(refs: Refs, id: string): boolean
 	local page = refs.Pages[id]
 	if page:GetAttribute("Filled") ~= true then
 		page:SetAttribute("Filled", true)
-		StoreView.fillModels(page)
+		fill(page)
 	end
-	paintWorld(refs, id)
+	if built then
+		StoreView.relayout(refs)
+		if refs.Current ~= id then
+			return true, true -- (its page had nothing to show: relayout opened the first that has)
+		end
+	end
+	local moving = animate == true and changed
+	paintWorld(refs, id, moving)
 	placeTabs(refs)
 	sizeCanvas(refs)
 	if changed then
 		refs.Scroller.CanvasPosition = Vector2.new(0, 0)
 	end
-	return changed
+	if moving then
+		ShopFx.slideIn(page, UDim2.fromOffset(StoreView.Pad, StoreView.PadTop), 40)
+		local holders: { GuiObject } = {}
+		for _, specId in refs.Order do
+			local card = refs.Cards[specId]
+			if card and card.Spec.Section == id and card.Holder.Visible then
+				table.insert(holders, card.Holder)
+			end
+		end
+		ShopFx.popIn(holders)
+	end
+	return changed, built
+end
+
+-- The pages built since the last call (the controller wires their buttons).
+function StoreView.takeBuilt(refs: Refs): { string }
+	local fresh = refs.Fresh
+	refs.Fresh = {}
+	return fresh
 end
 
 -- The first thing a gamepad lands on in the open page (a card or an option button).
@@ -1993,32 +2245,28 @@ local function buildTab(parent: Instance, section: StoreConfig.Section, m: Metri
 		ZIndex = 6,
 	}, parent)
 	local scale = UIKit.new("UIScale", { Name = "Size", Scale = 1 }, holder)
+	-- (held by its middle: the open tab bobs it, a press squashes it about its centre)
 	local lift = UIKit.new("Frame", {
 		Name = "Lift",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 6,
 	}, holder)
+	lift:SetAttribute("ShopFx", "Bob")
 	local glow = UIKit.new("Frame", {
 		Name = "Glow",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = theme.TabGlow,
+		BackgroundTransparency = 0.62,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 18, 1, 18),
 		Visible = false,
 		ZIndex = 6,
 	}, lift)
-	for i, grow in { 26, 14 } do
-		local disc = UIKit.new("Frame", {
-			Name = "Glow" .. i,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = theme.TabGlow,
-			BackgroundTransparency = if i == 1 then 0.78 else 0.6,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(1, grow, 1, grow),
-			ZIndex = 6,
-		}, glow)
-		UIKit.corner(disc, 16 + math.floor(grow / 2))
-	end
+	UIKit.corner(glow, 25)
 	ShopFx.drop(lift, 16, 5, 6)
 	local ring = UIKit.new("Frame", {
 		Name = "Ring",
@@ -2041,18 +2289,8 @@ local function buildTab(parent: Instance, section: StoreConfig.Section, m: Metri
 		ZIndex = 7,
 	}, lift)
 	ShopFx.face(face, theme.Tab, 16, 4, 90)
-	ShopFx.studs(face, width, h, 17, 0.6, 7)
-	local top = UIKit.new("Frame", {
-		Name = "Top",
-		AnchorPoint = Vector2.new(0.5, 0),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.5,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0, 3),
-		Size = UDim2.new(1, -14, 0, 3),
-		ZIndex = 7,
-	}, face)
-	UIKit.corner(top, 999)
+	ShopFx.studs(face, width, h, 17, 0.25, 7)
+	ShopFx.bindPress(face, lift)
 	-- the picture: the sheet's once uploaded, else the live model
 	local pictureAt = UDim2.fromOffset(math.floor(icon * 0.32), math.floor(h * 0.42))
 	local image = ShopFx.icon(lift, section.TabIcon, icon, {
@@ -2076,18 +2314,23 @@ local function buildTab(parent: Instance, section: StoreConfig.Section, m: Metri
 	return { Holder = holder, Lift = lift, Face = face, Scale = scale, Ring = ring, Glow = glow, Width = width }
 end
 
--- A lightning bolt's place in the window's world (Second: the theme's second bolt colour).
-type BoltSpec = { From: Vector2, To: Vector2, Width: number, Forks: number, Second: boolean, Phase: number }
+-- A lightning bolt in the window's world: its middle, length and turn (Second: the theme's second colour).
+type BoltSpec = { At: Vector2, Length: number, Rotation: number, Variant: number, Second: boolean, Period: number }
 
--- The window's world: the glow round it, bolts striking past its edges, sparkles on its frame.
-local function buildWorld(group: Frame, size: Vector2): ({ Instance }, Frame, Frame)
+--[[
+	The window's world: the glow round it, the open burst (hidden until the
+	window opens), bolts striking past its edges and sparkles on its frame
+	(a phone: neither, the ambient effects stay off small screens).
+	Returns the effects' roots and the burst.
+]]
+local function buildWorld(group: Frame, size: Vector2, m: Metrics): ({ Instance }, GuiObject)
 	local back = UIKit.new("Frame", {
 		Name = "Back",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 0,
 	}, group)
-	for i, s in { { 70, 0.93 }, { 40, 0.88 }, { 18, 0.8 } } do
+	for i, s in { { 56, 0.9 }, { 20, 0.8 } } do
 		local glow = UIKit.new("Frame", {
 			Name = "Glow" .. i,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2101,53 +2344,333 @@ local function buildWorld(group: Frame, size: Vector2): ({ Instance }, Frame, Fr
 		glow:SetAttribute("WorldGlow", true)
 		UIKit.corner(glow, StoreView.Corner + s[1])
 	end
-	local w, h = size.X, size.Y
-	local bolts: { BoltSpec } = {
-		{ From = Vector2.new(27, -30), To = Vector2.new(-60, 250), Width = 6.2, Forks = 4, Second = false, Phase = 0 },
-		{ From = Vector2.new(w - 25, -24), To = Vector2.new(w + 66, 310), Width = 5.8, Forks = 3, Second = false, Phase = 0.43 },
-		{ From = Vector2.new(w - 70, h + 30), To = Vector2.new(w + 60, h - 250), Width = 4.8, Forks = 3, Second = true, Phase = 0.86 },
-		{ From = Vector2.new(50, h + 30), To = Vector2.new(-70, h - 170), Width = 4.4, Forks = 2, Second = true, Phase = 0.29 },
-	}
-	for i, b in bolts do
-		local bolt = ShopFx.bolt(back, b.From, b.To, ShopFx.Themes.Featured.Bolt, b.Width, 100 + i * 17, b.Forks, 0, b.Phase)
-		bolt:SetAttribute("Second", b.Second)
+	-- the burst of rays behind the window as it opens (ShopFx.open); a soft flash before the upload
+	local burst: GuiObject? = ShopFx.sprite(back, "rays", {
+		Name = "Burst",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageColor3 = ShopFx.Themes.Featured.Bolt,
+		ImageTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(1500, 1500),
+		Visible = false,
+		ZIndex = 0,
+	})
+	if not burst then
+		local flash = UIKit.new("Frame", {
+			Name = "Burst",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(1, 60, 1, 60),
+			Visible = false,
+			ZIndex = 0,
+		}, back)
+		UIKit.corner(flash, StoreView.Corner + 30)
+		burst = flash
 	end
+	local w, h = size.X, size.Y
 	local front = UIKit.new("Frame", {
 		Name = "Front",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 20,
 	}, group)
-	local sparkles: { { X: number, Y: number, Size: number, Second: boolean } } = {
-		{ X = w - 14, Y = 11, Size = 40, Second = false },
-		{ X = w - 34, Y = 44, Size = 18, Second = true },
-		{ X = 8, Y = h - 14, Size = 34, Second = false },
-		{ X = 36, Y = h - 26, Size = 14, Second = true },
-		{ X = math.floor(w * 0.38), Y = 2, Size = 24, Second = false },
-		{ X = math.floor(w * 0.78), Y = h - 2, Size = 20, Second = true },
-	}
-	for i, s in sparkles do
-		local sparkle = ShopFx.sparkle(front, UDim2.fromOffset(s.X, s.Y), s.Size, WHITE, 20, i)
-		sparkle:SetAttribute("Second", s.Second)
+	if not m.Compact then
+		local bolts: { BoltSpec } = {
+			{ At = Vector2.new(-16, 110), Length = 300, Rotation = 17, Variant = 1, Second = false, Period = 5 },
+			{ At = Vector2.new(w + 20, 143), Length = 346, Rotation = -15, Variant = 2, Second = false, Period = 6.2 },
+			{ At = Vector2.new(w - 5, h - 110), Length = 309, Rotation = -155, Variant = 3, Second = true, Period = 7 },
+			{ At = Vector2.new(-10, h - 70), Length = 233, Rotation = 149, Variant = 1, Second = true, Period = 5.6 },
+		}
+		for _, b in bolts do
+			local bolt = ShopFx.bolt(
+				back,
+				UDim2.fromOffset(b.At.X, b.At.Y),
+				b.Length,
+				b.Rotation,
+				ShopFx.Themes.Featured.Bolt,
+				b.Variant,
+				0,
+				b.Period
+			)
+			if bolt then
+				bolt:SetAttribute("Second", b.Second)
+				bolt:SetAttribute("Ambient", true)
+			end
+		end
+		local sparkles: { { X: number, Y: number, Size: number, Second: boolean } } = {
+			{ X = w - 14, Y = 11, Size = 40, Second = false },
+			{ X = w - 34, Y = 44, Size = 18, Second = true },
+			{ X = 8, Y = h - 14, Size = 34, Second = false },
+			{ X = 36, Y = h - 26, Size = 14, Second = true },
+			{ X = math.floor(w * 0.38), Y = 2, Size = 24, Second = false },
+			{ X = math.floor(w * 0.78), Y = h - 2, Size = 20, Second = true },
+		}
+		for i, sp in sparkles do
+			local sparkle = ShopFx.sparkle(front, UDim2.fromOffset(sp.X, sp.Y), sp.Size, WHITE, 20, i)
+			sparkle:SetAttribute("Second", sp.Second)
+			sparkle:SetAttribute("Ambient", true)
+		end
 	end
-	return { back, front }, back, front
+	return { back, front }, burst :: GuiObject
+end
+
+---------------------------------------------------------------- what the cards show (kept, shown once built)
+
+-- A card shows what the controller said about it: its product (the blaster's band), its state, its lines.
+local function applyCard(refs: Refs, id: string)
+	local card = refs.Cards[id]
+	local record = refs.States[id]
+	if not card or not record then
+		return
+	end
+	local key, state = record.Key, record.State
+	local product = MonetizationConfig.Products[key]
+	if not product then
+		return
+	end
+	card.State = state
+	if card.Key ~= key then
+		-- (the blaster's band: one price button, the product it buys changes)
+		local old = card.Buys[card.Key]
+		card.Buys[card.Key] = nil
+		if old then
+			card.Buys[key] = old
+			old:SetAttribute("Key", key)
+			old:SetAttribute("Odds", StoreView.needsOdds(card.Spec, key))
+		end
+		card.Key = key
+	end
+	if not (card.Spec.Options and #(card.Spec.Options :: { string }) > 1) then
+		ShopFx.setPrice(card.Price, product.Robux)
+	end
+	local moved = card.Holder.Visible ~= (state ~= "Hidden")
+	card.Holder.Visible = state ~= "Hidden"
+	local shows = state == "Buy" or state == "Pending" or state == "Locked"
+	for _, face in card.Buys do
+		local priceHolder = face.Parent
+		if priceHolder and priceHolder:IsA("GuiObject") then
+			moved = moved or priceHolder.Visible ~= shows
+			priceHolder.Visible = shows
+		end
+		face.Active = state == "Buy"
+	end
+	if moved then
+		refs.Marks += 1 -- (its shine and rays stop or start with it)
+	end
+	if card.Spec.Look == "Star" then
+		ShopFx.setStyle(card.Price, if state == "Locked" then "Grey" else "Green")
+		local lock = card.Holder:FindFirstChild("Lock")
+		if lock and lock:IsA("GuiObject") then
+			lock.Visible = state == "Locked"
+		end
+		-- (a locked one's gun dims under its lock; the card stays bright)
+		local pic = card.Picture
+		if pic and pic:IsA("ImageLabel") then
+			pic.ImageTransparency = if state == "Locked" then 0.45 else 0
+			local view = pic:FindFirstChild("View")
+			if view and view:IsA("ViewportFrame") then
+				view.ImageColor3 = if state == "Locked" then Color3.fromRGB(96, 96, 116) else WHITE
+			end
+		end
+	end
+	local owned = card.Owned
+	if owned then
+		owned.Visible = state == "Owned"
+	end
+	card.Button.Active = state == "Buy" and card.Button.Selectable
+	card.Shade.Visible = state == "Pending" or (state == "Locked" and card.Spec.Look ~= "Star")
+	if record.Note and card.Note then
+		ShopFx.setText(card.Note, record.Note)
+	end
+	if record.Big and card.Big then
+		ShopFx.setText(card.Big, record.Big)
+	end
+end
+
+-- The coin amounts at the income the controller gave; the best pack gold with its sticker, breathing.
+local function applyCoins(refs: Refs)
+	local income = refs.Income
+	if income == nil then
+		return
+	end
+	local packs: { string } = {}
+	for _, card in refs.Cards do
+		local amount = card.Amount
+		if amount then
+			local coins = MonetizationConfig.coinPackAmount(card.Key, income) or 0
+			ShopFx.setText(amount, "$" .. Format.big(coins))
+		end
+		if card.Spec.Look == "Coins" then
+			table.insert(packs, card.Key)
+		end
+	end
+	local best = StoreView.bestValue(packs, income)
+	for _, card in refs.Cards do
+		if card.Spec.Look == "Coins" then
+			local isBest = card.Key == best
+			if card.Sticker then
+				card.Sticker.Visible = isBest
+			end
+			ShopFx.repaint(card.Button, if isBest then ShopFx.Cards.Gold else ShopFx.Cards.Green)
+			ShopFx.setStyle(card.Price, if isBest then "Gold" else "Green")
+			if pulse(card.Price, isBest) then
+				refs.Marks += 1
+			end
+		end
+	end
+end
+
+-- The Royal Egg banner as the controller set it (shown or not, the chances, Triple Lucky).
+local function applyRoyal(refs: Refs)
+	local royal = refs.Royal
+	if not royal then
+		return
+	end
+	if royal.Frame.Visible ~= refs.RoyalShown then
+		refs.Marks += 1
+	end
+	royal.Frame.Visible = refs.RoyalShown
+	local odds = refs.RoyalOdds
+	if odds then
+		for id, label in royal.Chances do
+			ShopFx.setText(label, StoreView.percent(odds[id] or 0))
+		end
+	end
+	local chip = royal.Lucky.Parent
+	if chip and chip:IsA("GuiObject") then
+		chip.Visible = refs.RoyalLucky
+	end
+end
+
+-- The limited banner's chances, the big one's chip, Triple Lucky and the time left.
+local function applyBanner(refs: Refs)
+	local banner = refs.Banner
+	if not banner then
+		return
+	end
+	local odds = refs.EditionOdds
+	if odds then
+		for id, label in banner.Chances do
+			ShopFx.setText(label, StoreView.percent(odds[id] or 0))
+		end
+		local golems = banner.Edition.Golems
+		local hero = golems[#golems]
+		if hero then
+			ShopFx.setText(banner.Hero, `{hero.Name} {StoreView.percent(odds[hero.Id] or 0)}`)
+		end
+	end
+	local tag = banner.Lucky.Parent
+	if tag and tag:IsA("GuiObject") then
+		tag.Visible = refs.EditionLucky
+	end
+	local left = refs.EditionLeft
+	if left then
+		ShopFx.setText(banner.Timer, `{StoreView.endsOn(banner.Edition.EndsAt)} · {StoreView.countdown(left)}`)
+	end
+end
+
+-- The limited banner as the controller set it, once FEATURED is built: made, replaced or removed.
+local function makeBanner(refs: Refs)
+	local edition = refs.Edition
+	local old = refs.Banner
+	if old and (not edition or old.Edition.Id ~= edition.Id) then
+		old.Frame:Destroy()
+		refs.Banner = nil
+		refs.Marks += 1
+	end
+	if edition and not refs.Banner and refs.Built.Featured then
+		local banner = buildBanner(refs.Pages.Featured, edition, refs.Metrics)
+		refs.Banner = banner
+		refs.Marks += 1
+		if refs.Pages.Featured:GetAttribute("Filled") == true then
+			fill(banner.Frame)
+		end
+	end
+	applyBanner(refs)
+end
+
+-- Builds a tab's page (once): its banner, its cards, then what the controller already said about them.
+buildPage = function(refs: Refs, sectionId: string): boolean
+	local section = StoreConfig.SectionById[sectionId]
+	local page = refs.Pages[sectionId]
+	if refs.Built[sectionId] or not section or not page then
+		return false
+	end
+	refs.Built[sectionId] = true
+	table.insert(refs.Fresh, sectionId)
+	local m = refs.Metrics
+	if section.Banner == "Royal" then
+		refs.Royal = buildRoyal(page)
+		applyRoyal(refs)
+	end
+	for r, row in StoreConfig.rows(sectionId) do
+		local h = rowHeight(section, r, m)
+		local widths = rowWidths(row)
+		for i, spec in row do
+			local cardHolder = UIKit.new("Frame", {
+				Name = spec.Id,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(widths[i], h),
+				ZIndex = 4,
+			}, page)
+			UIKit.new("UIScale", { Name = "Scale", Scale = 1 }, cardHolder)
+			local build = Looks[spec.Look] or Looks.Pass
+			refs.Cards[spec.Id] = build(cardHolder, spec, widths[i], h, m)
+		end
+	end
+	-- the Royal eggs' BEST VALUE (prices only: they never change)
+	local royal: { string } = {}
+	for _, spec in StoreConfig.Cards do
+		if spec.Look == "Egg" then
+			table.insert(royal, spec.Keys[1])
+		end
+	end
+	local bestEgg = StoreView.bestValue(royal)
+	for _, card in refs.Cards do
+		if card.Spec.Look == "Egg" and card.Spec.Section == sectionId and card.Sticker then
+			local best = card.Spec.Keys[1] == bestEgg
+			card.Sticker.Visible = best
+			if best then
+				ShopFx.setStyle(card.Price, "Gold")
+				pulse(card.Price, true)
+			end
+		end
+	end
+	for _, spec in StoreConfig.Cards do
+		if spec.Section == sectionId then
+			applyCard(refs, spec.Id)
+		end
+	end
+	applyCoins(refs)
+	if section.Banner == "Limited" then
+		makeBanner(refs)
+	end
+	return true
 end
 
 --[[
 	Builds the window for `metrics` (a PC's when nil; StoreController
 	rebuilds it when the screen asks for other sizes: needsRebuild).
+	`lazy` (the game): only the open tab's page now, every other page the
+	first time it opens (selectTab); else every page at once (the specs,
+	the previews).
 ]]
-function StoreView.build(metrics: Metrics?): Refs
+function StoreView.build(metrics: Metrics?, lazy: boolean?): Refs
 	local m = metrics or StoreView.metricsFor(false, 1)
 	local gui = UIKit.screen("TerraForgeStore", 16)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("MotionSkip", true) -- (the shop pops itself: ShopFx.open; the motion watcher leaves it)
 	gui:SetAttribute("Metrics", StoreView.metricsKey(m))
 	-- a dim backdrop over the world
 	UIKit.new("Frame", {
 		Name = "Dim",
 		BackgroundColor3 = hex("#08041e"),
-		BackgroundTransparency = 0.45,
+		BackgroundTransparency = StoreView.DimTransparency,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 0,
@@ -2175,7 +2698,7 @@ function StoreView.build(metrics: Metrics?): Refs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, holder)
-	local fx, _, _ = buildWorld(group, size)
+	local fx, burst = buildWorld(group, size, m)
 	ShopFx.drop(group, StoreView.Corner, 9, 1, { Name = "WindowDrop" })
 	-- the window: a dark frame round the header band and the body
 	local rim = StoreView.Rim
@@ -2205,6 +2728,15 @@ function StoreView.build(metrics: Metrics?): Refs
 		ZIndex = 2,
 	}, root)
 	ShopFx.face(body, theme.Body, StoreView.Corner - rim, 0, 90)
+	-- (a tab's old colours fade out over its new ones: ShopFx.fadeOut)
+	local bodyOver = UIKit.new("Frame", {
+		Name = "BodyOver",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 1,
+	}, body)
+	ShopFx.face(bodyOver, theme.Body, StoreView.Corner - rim, 0, 90)
+	bodyOver.BackgroundTransparency = 1
 	local bodyFx = UIKit.new("Frame", {
 		Name = "Fx",
 		BackgroundTransparency = 1,
@@ -2213,49 +2745,21 @@ function StoreView.build(metrics: Metrics?): Refs
 	}, body)
 	table.insert(fx, bodyFx)
 	local bw = size.X - 2 * rim
-	ShopFx.rays(bodyFx, UDim2.new(0.5, 0, 0, m.Header - 90), 14, 430, 0.86, 2)
+	ShopFx.rays(bodyFx, UDim2.new(0.5, 0, 0, m.Header - 90), 900, 0.86, 2, WHITE, 60)
+	local H = m.Header
 	local inner: { BoltSpec } = {
-		{
-			From = Vector2.new(-16, m.Header + 16),
-			To = Vector2.new(208, m.Header - 30),
-			Width = 3.8,
-			Forks = 2,
-			Second = false,
-			Phase = 0.13,
-		},
-		{
-			From = Vector2.new(bw + 10, m.Header + 330),
-			To = Vector2.new(bw - 216, m.Header + 490),
-			Width = 3.8,
-			Forks = 2,
-			Second = false,
-			Phase = 0.61,
-		},
-		{
-			From = Vector2.new(bw + 4, m.Header - 10),
-			To = Vector2.new(bw - 160, m.Header + 150),
-			Width = 2.9,
-			Forks = 2,
-			Second = true,
-			Phase = 0.37,
-		},
-		{
-			From = Vector2.new(-8, m.Header + 474),
-			To = Vector2.new(240, m.Header + 400),
-			Width = 2.9,
-			Forks = 2,
-			Second = true,
-			Phase = 0.79,
-		},
+		{ At = Vector2.new(96, H - 7), Length = 229, Rotation = -102, Variant = 2, Second = false, Period = 5.4 },
+		{ At = Vector2.new(bw - 103, H + 410), Length = 277, Rotation = 55, Variant = 3, Second = false, Period = 6.6 },
+		{ At = Vector2.new(bw - 78, H + 70), Length = 229, Rotation = 46, Variant = 1, Second = true, Period = 7.4 },
+		{ At = Vector2.new(116, H + 437), Length = 259, Rotation = -107, Variant = 2, Second = true, Period = 6 },
 	}
-	for i, b in inner do
-		local bolt = ShopFx.bolt(bodyFx, b.From, b.To, theme.Bolt, b.Width, 200 + i * 13, b.Forks, 2, b.Phase, 3)
-		bolt:SetAttribute("Second", b.Second)
+	for _, b in inner do
+		local bolt = ShopFx.bolt(bodyFx, UDim2.fromOffset(b.At.X, b.At.Y), b.Length, b.Rotation, theme.Bolt, b.Variant, 2, b.Period, false)
+		if bolt then
+			bolt:SetAttribute("Second", b.Second)
+		end
 	end
-	local dots = ShopFx.dots(bodyFx, 32, bw, size.Y, { WHITE, theme.Bolt, theme.Bolt2 }, 61, 2, 3)
-	for i, dot in dots:GetChildren() do
-		dot:SetAttribute("Tint", (i - 1) % 3)
-	end
+	ShopFx.dots(bodyFx, UDim2.fromScale(0.5, 0.5), math.max(bw, size.Y), theme.Bolt2, 0.35, 2)
 	-- the header band (its lower half square: the body meets it straight)
 	local header = UIKit.new("Frame", {
 		Name = "Header",
@@ -2271,16 +2775,33 @@ function StoreView.build(metrics: Metrics?): Refs
 		ZIndex = 3,
 	}, root)
 	ShopFx.face(fill, theme.Head, 0, 0, 90)
+	-- the old colours' layers (they fade out when a tab changes)
+	local headerOver = UIKit.new("Frame", {
+		Name = "HeaderOver",
+		Position = UDim2.fromOffset(rim, rim),
+		Size = UDim2.new(1, -2 * rim, 0, m.Header - rim),
+		ZIndex = 4,
+	}, root)
+	ShopFx.face(headerOver, theme.Head, StoreView.Corner - rim, 0, 90)
+	headerOver.BackgroundTransparency = 1
+	local fillOver = UIKit.new("Frame", {
+		Name = "HeaderOverFill",
+		Position = UDim2.fromOffset(rim, rim + math.floor((m.Header - rim) / 2)),
+		Size = UDim2.new(1, -2 * rim, 0, math.ceil((m.Header - rim) / 2)),
+		ZIndex = 4,
+	}, root)
+	ShopFx.face(fillOver, theme.Head, 0, 0, 90)
+	fillOver.BackgroundTransparency = 1
 	local band = UIKit.new("Frame", {
 		Name = "Band",
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 		Position = UDim2.fromOffset(rim, rim),
 		Size = UDim2.new(1, -2 * rim, 0, m.Header - rim),
-		ZIndex = 4,
+		ZIndex = 5,
 	}, root)
-	ShopFx.studs(band, bw, m.Header - rim, 28, 0.55, 4)
-	ShopFx.shards(band, 4)
+	ShopFx.studs(band, bw, m.Header - rim, 28, 0.15, 5)
+	ShopFx.shards(band, 5)
 	UIKit.new("Frame", {
 		Name = "HeaderLine",
 		BackgroundColor3 = ShopFx.Outline,
@@ -2360,7 +2881,8 @@ function StoreView.build(metrics: Metrics?): Refs
 		ZIndex = 9,
 	}, closeHolder)
 	ShopFx.face(close, { hex("#ff7a7a"), hex("#e0262f"), hex("#b4141e") }, 15, 4, 90)
-	ShopFx.studs(close, m.Close, m.Close, 18, 0.62, 9)
+	ShopFx.studs(close, m.Close, m.Close, 18, 0.2, 9)
+	ShopFx.bindPress(close, closeHolder)
 	ShopFx.text(close, "X", math.floor(m.Close * 0.72), {
 		Name = "Label",
 		Size = UDim2.fromScale(1, 1),
@@ -2402,10 +2924,23 @@ function StoreView.build(metrics: Metrics?): Refs
 		Banner = nil,
 		Royal = nil,
 		Fx = fx,
+		Burst = burst,
 		Current = StoreConfig.Sections[1].Id,
 		Fit = 1,
 		Compact = m.Compact,
 		Metrics = m,
+		Built = {},
+		Fresh = {},
+		States = {},
+		Edition = nil,
+		EditionLeft = nil,
+		EditionOdds = nil,
+		EditionLucky = false,
+		RoyalShown = true,
+		RoyalOdds = nil,
+		RoyalLucky = false,
+		Income = nil,
+		Marks = 0,
 	}
 	for _, section in StoreConfig.Sections do
 		local page = UIKit.new("Frame", {
@@ -2418,42 +2953,16 @@ function StoreView.build(metrics: Metrics?): Refs
 		}, scroller)
 		refs.Pages[section.Id] = page
 		refs.Sections[section.Id] = page
-		if section.Banner == "Royal" then
-			refs.Royal = buildRoyal(page)
-		end
-		for r, row in StoreConfig.rows(section.Id) do
-			local h = rowHeight(section, r, m)
-			local widths = rowWidths(row)
-			for i, spec in row do
-				local cardHolder = UIKit.new("Frame", {
-					Name = spec.Id,
-					BackgroundTransparency = 1,
-					Size = UDim2.fromOffset(widths[i], h),
-					ZIndex = 4,
-				}, page)
-				local build = Looks[spec.Look] or Looks.Pass
-				refs.Cards[spec.Id] = build(cardHolder, spec, widths[i], h, m)
-			end
-		end
 	end
 	for _, spec in StoreConfig.Cards do
 		table.insert(refs.Order, spec.Id)
+		refs.States[spec.Id] = { Key = spec.Keys[1], State = "Buy", Note = nil, Big = nil }
 	end
-	-- the Royal eggs' and the wheel's BEST VALUE (prices only: they never change)
-	local royal: { string } = {}
-	for _, spec in StoreConfig.Cards do
-		if spec.Look == "Egg" then
-			table.insert(royal, spec.Keys[1])
-		end
-	end
-	local bestEgg = StoreView.bestValue(royal)
-	for _, card in refs.Cards do
-		if card.Spec.Look == "Egg" and card.Sticker then
-			local best = card.Spec.Keys[1] == bestEgg
-			card.Sticker.Visible = best
-			if best then
-				ShopFx.setStyle(card.Price, "Gold")
-			end
+	if lazy then
+		buildPage(refs, refs.Current)
+	else
+		for _, section in StoreConfig.Sections do
+			buildPage(refs, section.Id)
 		end
 	end
 
@@ -2633,56 +3142,16 @@ end
 -- player has: the OWNED tag), "Pending" (a purchase on its way: shaded),
 -- "Locked" (not yet: a STAR blaster before its rebirth; a grey price),
 -- "Hidden" (nothing to sell: the blaster at the top level; its row closes up).
+-- Kept for a page that isn't built yet (it shows it when it is).
 function StoreView.setCard(refs: Refs, id: string, key: string, state: string)
-	local card = refs.Cards[id]
-	local product = MonetizationConfig.Products[key]
-	if not card or not product then
+	local record = refs.States[id]
+	if not record or not MonetizationConfig.Products[key] then
 		return
 	end
-	local wasHidden = card.State == "Hidden"
-	card.State = state
-	if card.Key ~= key then
-		-- (the blaster's band: one price button, the product it buys changes)
-		local old = card.Buys[card.Key]
-		card.Buys[card.Key] = nil
-		if old then
-			card.Buys[key] = old
-			old:SetAttribute("Key", key)
-			old:SetAttribute("Odds", StoreView.needsOdds(card.Spec, key))
-		end
-		card.Key = key
-	end
-	if not (card.Spec.Options and #(card.Spec.Options :: { string }) > 1) then
-		ShopFx.setPrice(card.Price, product.Robux)
-	end
-	card.Holder.Visible = state ~= "Hidden"
-	local shows = state == "Buy" or state == "Pending" or state == "Locked"
-	for _, face in card.Buys do
-		local priceHolder = face.Parent
-		if priceHolder and priceHolder:IsA("GuiObject") then
-			priceHolder.Visible = shows
-		end
-		face.Active = state == "Buy"
-	end
-	if card.Spec.Look == "Star" then
-		ShopFx.setStyle(card.Price, if state == "Locked" then "Grey" else "Green")
-		local lock = card.Holder:FindFirstChild("Lock")
-		if lock and lock:IsA("GuiObject") then
-			lock.Visible = state == "Locked"
-		end
-		-- (a locked one's gun dims under its lock; the card stays bright)
-		local pic = card.Picture
-		if pic and pic:IsA("ImageLabel") then
-			pic.ImageTransparency = if state == "Locked" then 0.45 else 0
-			local view = pic:FindFirstChild("View")
-			if view and view:IsA("ViewportFrame") then
-				view.ImageColor3 = if state == "Locked" then Color3.fromRGB(96, 96, 116) else WHITE
-			end
-		end
-	end
-	card.Owned.Visible = state == "Owned"
-	card.Button.Active = state == "Buy" and card.Button.Selectable
-	card.Shade.Visible = state == "Pending" or (state == "Locked" and card.Spec.Look ~= "Star")
+	local wasHidden = record.State == "Hidden"
+	record.Key = key
+	record.State = state
+	applyCard(refs, id)
 	if wasHidden ~= (state == "Hidden") then
 		StoreView.relayout(refs)
 	end
@@ -2690,6 +3159,10 @@ end
 
 -- A card's note ("Opens at rebirth 3", the blaster's rebirth rule, Server Luck running).
 function StoreView.setNote(refs: Refs, id: string, text: string)
+	local record = refs.States[id]
+	if record then
+		record.Note = text
+	end
 	local card = refs.Cards[id]
 	local note = if card then card.Note else nil
 	if note then
@@ -2699,6 +3172,10 @@ end
 
 -- A card's big line ("LV 4 > LV 5" on the blaster card).
 function StoreView.setBig(refs: Refs, id: string, text: string)
+	local record = refs.States[id]
+	if record then
+		record.Big = text
+	end
 	local card = refs.Cards[id]
 	local big = if card then card.Big else nil
 	if big then
@@ -2708,105 +3185,55 @@ end
 
 -- The coin amounts at a podium income of `income` coins per second (and the best pack's sticker).
 function StoreView.setCoins(refs: Refs, income: number)
-	local packs: { string } = {}
-	for _, card in refs.Cards do
-		local amount = card.Amount
-		if amount then
-			local coins = MonetizationConfig.coinPackAmount(card.Key, income) or 0
-			ShopFx.setText(amount, "$" .. Format.big(coins))
-		end
-		if card.Spec.Look == "Coins" then
-			table.insert(packs, card.Key)
-		end
-	end
-	local best = StoreView.bestValue(packs, income)
-	for _, card in refs.Cards do
-		if card.Spec.Look == "Coins" then
-			local isBest = card.Key == best
-			if card.Sticker then
-				card.Sticker.Visible = isBest
-			end
-			ShopFx.repaint(card.Button, if isBest then ShopFx.Cards.Gold else ShopFx.Cards.Green)
-			ShopFx.setStyle(card.Price, if isBest then "Gold" else "Green")
-		end
-	end
+	refs.Income = income
+	applyCoins(refs)
 end
 
 -- The Royal Egg's tiles: the chances a buy rolls now (with Triple Lucky while it runs).
 function StoreView.setRoyalOdds(refs: Refs, odds: { [string]: number }, lucky: boolean)
-	local royal = refs.Royal
-	if not royal then
-		return
-	end
-	for id, label in royal.Chances do
-		ShopFx.setText(label, StoreView.percent(odds[id] or 0))
-	end
-	local chip = royal.Lucky.Parent
-	if chip and chip:IsA("GuiObject") then
-		chip.Visible = lucky
-	end
+	refs.RoyalOdds = odds
+	refs.RoyalLucky = lucky
+	applyRoyal(refs)
 end
 
 -- Shows or hides the Royal Egg banner (paid random: hidden where restricted).
 function StoreView.setRoyalShown(refs: Refs, shown: boolean)
-	local royal = refs.Royal
-	if royal and royal.Frame.Visible ~= shown then
-		royal.Frame.Visible = shown
+	if refs.RoyalShown ~= shown then
+		refs.RoyalShown = shown
+		applyRoyal(refs)
 		StoreView.relayout(refs)
 	end
 end
 
 --[[
 	Shows the limited edition at the top of FEATURED (nil removes it).
-	Returns its refs (the controller wires the buttons and the timer).
+	Returns its refs once FEATURED is built (the controller wires the
+	buttons and the timer); nil before.
 ]]
 function StoreView.setEdition(refs: Refs, edition: Edition?): BannerRefs?
-	local old = refs.Banner
-	if old and edition and old.Edition.Id == edition.Id then
-		return old
+	local before = refs.Edition
+	local same = before ~= nil and edition ~= nil and before.Id == edition.Id
+	local had = refs.Banner
+	refs.Edition = edition
+	makeBanner(refs)
+	if not same or refs.Banner ~= had then
+		StoreView.relayout(refs)
 	end
-	if old then
-		old.Frame:Destroy()
-		refs.Banner = nil
-	end
-	if edition then
-		local banner = buildBanner(refs.Pages.Featured, edition, refs.Metrics)
-		refs.Banner = banner
-		if refs.Pages.Featured:GetAttribute("Filled") == true then
-			StoreView.fillModels(banner.Frame)
-		end
-	end
-	StoreView.relayout(refs)
 	return refs.Banner
 end
 
 -- The chances on the banner's tiles (the capsule's odds now: with Triple
 -- Lucky while it runs, so they match the odds panel and what a buy rolls).
 function StoreView.setBannerOdds(refs: Refs, odds: { [string]: number }, lucky: boolean)
-	local banner = refs.Banner
-	if not banner then
-		return
-	end
-	for id, label in banner.Chances do
-		ShopFx.setText(label, StoreView.percent(odds[id] or 0))
-	end
-	local golems = banner.Edition.Golems
-	local hero = golems[#golems]
-	if hero then
-		ShopFx.setText(banner.Hero, `{hero.Name} {StoreView.percent(odds[hero.Id] or 0)}`)
-	end
-	local tag = banner.Lucky.Parent
-	if tag and tag:IsA("GuiObject") then
-		tag.Visible = lucky
-	end
+	refs.EditionOdds = odds
+	refs.EditionLucky = lucky
+	applyBanner(refs)
 end
 
 -- The banner's end date and time left (seconds; 0 = ended).
 function StoreView.setTimer(refs: Refs, secondsLeft: number)
-	local banner = refs.Banner
-	if banner then
-		ShopFx.setText(banner.Timer, `{StoreView.endsOn(banner.Edition.EndsAt)} · {StoreView.countdown(secondsLeft)}`)
-	end
+	refs.EditionLeft = secondsLeft
+	applyBanner(refs)
 end
 
 -- The odds panel before a paid random buy (nil hides it).

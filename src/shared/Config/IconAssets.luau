@@ -467,9 +467,64 @@ function IconAssets.shopCell(name: string): number?
 	return shopCell[name]
 end
 
+--[[
+	The shop v3 effects (owner 2026-11-11: "cool and smooth, not laggy"):
+	one picture of white sprites the game tints (ImageColor3), cut by Cells
+	{ x, y, w, h } in px: ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,
+	made by tools/preview/shop_effects_sheet.mjs (1024 px square). One
+	ImageLabel each instead of hundreds of frames: the sunburst behind
+	pictures, a soft glow, a sparkle, the bodies' dots, a flame, a patch of
+	studs (12 x 12) and three lightning bolts. Id 0 = not uploaded: the shop
+	keeps plain gradients (no rays, no studs) and the icon sheet's bolt and
+	sparkle (UI/ShopFx.sprite returns nil). The previews draw
+	build/preview/icons/shopfx_<name>.png while Previewing and Preview are on.
+]]
+IconAssets.ShopFx = {
+	File = "obchod_efekty.png",
+	Id = 0,
+	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Cells = {
+		rays = { 0, 0, 512, 512 },
+		glow = { 512, 0, 256, 256 },
+		sparkle = { 768, 0, 256, 256 },
+		dots = { 512, 256, 256, 256 },
+		flame = { 768, 256, 128, 256 },
+		studs = { 0, 512, 384, 384 },
+		bolt1 = { 384, 512, 192, 512 },
+		bolt2 = { 576, 512, 192, 512 },
+		bolt3 = { 768, 512, 192, 512 },
+	} :: { [string]: { number } },
+}
+
 -- The preview tools set this: they draw every icon from build/preview/icons,
 -- so layouts that differ without an uploaded picture use the uploaded look.
 IconAssets.Previewing = false
+
+-- Will effect sprite `name` show (the effects picture is uploaded, or a preview that shows it)?
+function IconAssets.shopFxShows(name: string): boolean
+	local sheet = IconAssets.ShopFx
+	if sheet.Cells[name] == nil then
+		return false
+	end
+	if sheet.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and sheet.Preview
+end
+
+-- Shows effect sprite `name` on an ImageLabel (its cell of the uploaded picture; the previews: its own).
+function IconAssets.applyShopFx(label: ImageLabel, name: string)
+	local sheet = IconAssets.ShopFx
+	local cell = sheet.Cells[name]
+	label:SetAttribute("Icon", "shopfx_" .. name)
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new(cell[1], cell[2])
+	label.ImageRectSize = Vector2.new(cell[3], cell[4])
+end
 
 -- Will shop icon `name` show (its image is uploaded, or a preview that shows it)?
 function IconAssets.shopShows(name: string): boolean

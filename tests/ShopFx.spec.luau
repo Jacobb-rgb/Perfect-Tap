@@ -1,112 +1,506 @@
--- The shop v3 "WOW" look (owner 2026-11-11) under Lune: ShopFx's pure timing (the 2 s loop:
--- rays turn, bolts flash, the shine sweeps, the open tab bobs, the Mythic rim runs), its
--- seeded bolts, the motion driver's steps and rest, the shop icon sheet against the concept's
--- icons.js, the 3D models built only for the page that shows, and a sane instance count.
+-- The shop v3 "WOW" look under Lune (owner 2026-11-11: "cool and smooth, not laggy"): the effects
+-- picture's cells, what shows before and after its upload (no wedges), the TweenService loops
+-- (one endless tween per mark, Roblox's curves, nothing when quiet, no per-frame Lua), the
+-- one-shot motions (open, close, a tab's fade, slide and pop), the lazy pages, the egg piles, the
+-- instance and tween budgets, and the shop icon sheet against the concept's icons.js.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local fs = require("@lune/fs")
 	local Vector2 = roblox.Vector2
+	local UDim2 = roblox.UDim2
+	local Color3 = roblox.Color3
 	local Instance = roblox.Instance
 	local function ui(name: string): any
 		return Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI." .. name)
 	end
 	local ShopFx = ui("ShopFx")
+	local Motion = ui("Motion")
 	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 	local StoreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoreConfig")
+	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+	local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+	local WHITE = Color3.new(1, 1, 1)
 
-	T.test("ShopFx: the 2 s loop's timing (rays, bolts, shine, bob, rim, sparkles)", function()
-		T.near(ShopFx.rayAngle(0, 10), 10, 1e-9, "the rays start where they were built")
-		T.near(ShopFx.rayAngle(1, 10), 10 + ShopFx.RaySpeed, 1e-9, "and turn RaySpeed a second")
-		T.truthy(ShopFx.rayAngle(100, 0) >= 0 and ShopFx.rayAngle(100, 0) < 360, "a turn wraps")
-		-- two quick flashes a second, then dark
-		T.truthy(ShopFx.boltOn(0.05))
-		T.falsy(ShopFx.boltOn(0.12))
-		T.truthy(ShopFx.boltOn(0.18))
-		T.falsy(ShopFx.boltOn(0.5))
-		T.truthy(ShopFx.boltOn(1.05), "every second")
-		T.truthy(ShopFx.boltOn(0.6, 0.43), "a phase moves its flash")
-		-- the shine: off the button at the loop's start and end, across it in between
-		T.truthy(ShopFx.shineOffset(0) < -0.6, "off the left")
-		T.truthy(math.abs(ShopFx.shineOffset(0.75)) < 0.6, "on the button")
-		T.truthy(ShopFx.shineOffset(1.99) > 0.6, "off the right")
-		T.near(ShopFx.shineOffset(0.4), ShopFx.shineOffset(0.4 + ShopFx.Loop), 1e-9, "a 2 s loop")
-		for t = 0, 4, 0.1 do
-			T.truthy(math.abs(ShopFx.bob(t)) <= 3 + 1e-9, "the tab bobs 3 units at most")
-			local s = ShopFx.sparkleScale(t, 2)
-			T.truthy(s >= 0.45 - 1e-9 and s <= 1 + 1e-9, "a sparkle pulses 0.45 .. 1")
-			local r = ShopFx.rimAngle(t)
-			T.truthy(r >= 0 and r < 360, "the rim's turn wraps")
+	-- Runs `fn` with the effects picture uploaded (`id` > 0) or not, then puts it back.
+	local function withEffects(id: number, fn: () -> ())
+		local sheet = IconAssets.ShopFx
+		local before, preview, previewing = sheet.Id, sheet.Preview, IconAssets.Previewing
+		sheet.Id = id
+		IconAssets.Previewing = false
+		local ok, err = pcall(fn)
+		sheet.Id, sheet.Preview, IconAssets.Previewing = before, preview, previewing
+		if not ok then
+			error(err, 0)
 		end
-		T.near(ShopFx.rimAngle(2) - ShopFx.rimAngle(0), 0, 1e-9, "the rim runs a full turn every 2 s")
-	end)
+	end
 
-	T.test("ShopFx: bolts are seeded (the same bolt every time) and end where they're aimed", function()
-		local a, b = Vector2.new(0, 0), Vector2.new(300, 100)
-		local p1 = ShopFx.boltPoints(a, b, 120, 4, ShopFx.random(7))
-		local p2 = ShopFx.boltPoints(a, b, 120, 4, ShopFx.random(7))
-		T.eq(#p1, 2 ^ 4 + 1, "2^depth segments")
-		T.eq(p1[1], a)
-		T.eq(p1[#p1], b)
-		for i, p in p1 do
-			T.near(p.X, p2[i].X, 1e-9)
-			T.near(p.Y, p2[i].Y, 1e-9)
+	-- Records every tween ShopFx makes while `fn` runs (nothing plays).
+	type Made = {
+		Instance: any,
+		Time: number,
+		Style: string,
+		Direction: string,
+		Goal: { [string]: any },
+		Repeats: number,
+		Reverses: boolean,
+		Delay: number,
+		Cancelled: boolean,
+	}
+	local function recording(fn: (made: { Made }) -> ())
+		local made: { Made } = {}
+		ShopFx.useTweens(function(instance, time, style, direction, goal, repeats, reverses, delay)
+			local record: Made = {
+				Instance = instance,
+				Time = time,
+				Style = style,
+				Direction = direction,
+				Goal = goal,
+				Repeats = repeats,
+				Reverses = reverses,
+				Delay = delay,
+				Cancelled = false,
+			}
+			table.insert(made, record)
+			return {
+				Play = function() end,
+				Cancel = function()
+					record.Cancelled = true
+				end,
+			}
+		end)
+		local ok, err = pcall(fn, made)
+		ShopFx.useTweens(nil)
+		if not ok then
+			error(err, 0)
 		end
-		local rand = ShopFx.random(3)
-		for _ = 1, 200 do
-			local x = rand()
-			T.truthy(x >= 0 and x < 1, "random in [0, 1)")
-		end
-		-- a bolt's frames: the main line's segments and its forks
-		local parent = Instance.new("Frame")
-		local bolt = ShopFx.bolt(parent, a, b, roblox.Color3.new(1, 1, 0), 4, 5, 2, 3, 0.3, 3, false)
-		T.eq(bolt:GetAttribute("ShopFx"), "Bolt")
-		T.eq(bolt:GetAttribute("Phase"), 0.3)
-		local segs = 0
-		for _, d in bolt:GetChildren() do
-			if d.Name == "Seg" then
-				segs += 1
+	end
+
+	local function count(root: any, predicate: (d: any) -> boolean): number
+		local n = 0
+		for _, d in root:GetDescendants() do
+			if predicate(d) then
+				n += 1
 			end
-			T.truthy(d.Name ~= "Haze", "no haze when asked for none")
 		end
-		T.eq(segs, 2 ^ 3 + 2 * 2 ^ 2, "8 main segments and two forks of 4")
+		return n
+	end
+
+	---------------------------------------------------------------- the effects picture
+
+	T.test("ShopFx: the effects picture's cells fit 1024 px, never overlap, and its tool draws them", function()
+		local sheet = IconAssets.ShopFx
+		T.eq(sheet.File, "obchod_efekty.png")
+		local cells: { { number } } = {}
+		local names: { string } = {}
+		for name, cell in sheet.Cells do
+			T.eq(#cell, 4, name)
+			T.truthy(cell[1] >= 0 and cell[2] >= 0 and cell[3] > 0 and cell[4] > 0, name .. " has a size")
+			T.truthy(cell[1] + cell[3] <= 1024 and cell[2] + cell[4] <= 1024, name .. " is inside 1024 px")
+			table.insert(cells, cell)
+			table.insert(names, name)
+		end
+		for i = 1, #cells do
+			for j = i + 1, #cells do
+				local a, b = cells[i], cells[j]
+				local apart = a[1] + a[3] <= b[1] or b[1] + b[3] <= a[1] or a[2] + a[4] <= b[2] or b[2] + b[4] <= a[2]
+				T.truthy(apart, names[i] .. " and " .. names[j] .. " don't overlap")
+			end
+		end
+		for _, name in { "rays", "glow", "sparkle", "dots", "flame", "studs", "bolt1", "bolt2", "bolt3" } do
+			T.truthy(sheet.Cells[name] ~= nil, name)
+		end
+		-- the tool reads the same cells and writes the file the NAVOD names
+		local tool = fs.readFile(Loader.root .. "/tools/preview/shop_effects_sheet.mjs")
+		T.truthy(tool:find("IconAssets.ShopFx", 1, true) and tool:find("obchod_efekty.png", 1, true), "shop_effects_sheet.mjs")
+		-- not uploaded: nothing in the game; a preview draws it unless told not to; uploaded: its cell
+		withEffects(0, function()
+			T.falsy(IconAssets.shopFxShows("rays"), "the game before the upload")
+			IconAssets.Previewing = true
+			T.truthy(IconAssets.shopFxShows("rays"), "a preview")
+			sheet.Preview = false
+			T.falsy(IconAssets.shopFxShows("rays"), "a preview of Studio before the upload")
+		end)
+		withEffects(123, function()
+			T.truthy(IconAssets.shopFxShows("bolt2"))
+			T.falsy(IconAssets.shopFxShows("nope"), "an unknown name")
+			local label = Instance.new("ImageLabel")
+			IconAssets.applyShopFx(label, "bolt2")
+			local cell = sheet.Cells.bolt2
+			T.eq(label.Image, "rbxassetid://123")
+			T.eq(label.ImageRectOffset, Vector2.new(cell[1], cell[2]))
+			T.eq(label.ImageRectSize, Vector2.new(cell[3], cell[4]))
+			T.eq(label:GetAttribute("Icon"), "shopfx_bolt2", "the previews' picture")
+		end)
 	end)
 
-	T.test("ShopFx: the motion driver moves its marks and puts them at rest", function()
-		local window = Instance.new("Frame")
-		local page = Instance.new("Frame")
-		local rays = ShopFx.rays(window, roblox.UDim2.fromScale(0.5, 0.5), 6, 100, 0.6, 2)
-		local bolt = ShopFx.bolt(window, Vector2.new(0, 0), Vector2.new(100, 100), roblox.Color3.new(1, 1, 1), 3, 1, 0, 2, 0, 3, false)
-		local price = ShopFx.priceButton(page, 99, Vector2.new(160, 50), "Green")
-		local sweep = (price.Face :: any).Shine.Sweep
-		local sparkle = ShopFx.sparkle(window, roblox.UDim2.fromOffset(10, 10), 20, roblox.Color3.new(1, 1, 1), 3, 1)
-		local tab = Instance.new("Frame")
-		local driver = ShopFx.start({ window }, page, tab, nil)
-		driver.step(0.12)
-		T.near(rays.Rotation, ShopFx.rayAngle(0.12, 0), 1e-6, "the rays turned")
-		T.falsy(bolt.Visible, "the bolt is dark between its flashes")
-		T.near(sweep.Offset.X, ShopFx.shineOffset(0.12), 1e-6, "the shine moved")
-		T.eq(tab.Position.Y.Offset, math.floor(ShopFx.bob(0.12) + 0.5), "the open tab bobbed")
-		T.near((sparkle :: any).Pulse.Scale, ShopFx.sparkleScale(0.12, 1), 1e-6, "the sparkle pulsed")
-		driver.step(0.5)
-		T.eq(tab.Position.Y.Offset, 3, "up to 3 units")
-		-- another page: the old one's shine rests, the new one's moves
-		local other = Instance.new("Frame")
-		local second = ShopFx.priceButton(other, 49, Vector2.new(160, 50), "Gold")
-		local secondSweep = (second.Face :: any).Shine.Sweep
-		driver.focus(other, nil)
-		T.near(sweep.Offset.X, ShopFx.shineOffset(0), 1e-6, "the old page's shine rests")
-		T.near(tab.Position.Y.Offset, 0, 1e-6, "the old tab is back")
-		driver.step(0.8)
-		T.near(secondSweep.Offset.X, ShopFx.shineOffset(0.8), 1e-6, "the new page's shine moves")
-		T.near(sweep.Offset.X, ShopFx.shineOffset(0), 1e-6, "the old one stays")
-		driver.stop()
-		T.truthy(bolt.Visible, "stopped: the bolts stay lit")
-		T.near(secondSweep.Offset.X, ShopFx.shineOffset(0), 1e-6, "stopped: the shine is off the button")
-		T.near((sparkle :: any).Pulse.Scale, 1, 1e-6)
-		T.falsy(driver.running(), "no connection after stop")
+	T.test("ShopFx: one image per effect; before the upload plain gradients, no wedges (the icon sheet's bolt and sparkle)", function()
+		withEffects(0, function()
+			local parent = Instance.new("Frame")
+			T.eq(ShopFx.rays(parent, UDim2.fromScale(0.5, 0.5), 300, 0.5, 2), nil, "no rays")
+			T.eq(ShopFx.studs(parent, 300, 60, 17, 0.2, 3), nil, "no studs")
+			T.eq(ShopFx.dots(parent, UDim2.fromScale(0.5, 0.5), 300, WHITE, 0.3, 2), nil, "no dots")
+			local glow = ShopFx.glow(parent, UDim2.fromScale(0.5, 0.5), 80, WHITE, 2)
+			T.eq(glow.ClassName, "Frame", "the glow: one soft disc")
+			T.truthy(#glow:GetDescendants() <= 1, "(and its corner)")
+			T.eq(ShopFx.bolt(parent, UDim2.fromOffset(10, 10), 200, 20, WHITE, 1, 2, 5, false), nil, "a card's bolt waits for the upload")
+			local bolt = ShopFx.bolt(parent, UDim2.fromOffset(10, 10), 200, 20, WHITE, 1, 2, 5)
+			T.truthy(bolt and bolt:GetAttribute("Icon") == "shop_bolt", "the window's bolts: the icon sheet's (uploaded)")
+			local sparkle = ShopFx.sparkle(parent, UDim2.fromOffset(4, 4), 20, WHITE, 3, 1)
+			T.eq(sparkle:GetAttribute("Icon"), "shop_sparkle")
+			T.truthy(sparkle:FindFirstChild("Pulse"), "it twinkles by its UIScale")
+			T.eq(
+				count(parent, function(d)
+					return d.Name == "Ray" or d.Name == "Seg" or d.Name == "Stud" or d.Name == "Dot"
+				end),
+				0,
+				"no wedge, segment, stud or dot frames"
+			)
+		end)
+		withEffects(1, function()
+			local parent = Instance.new("Frame")
+			local rays = ShopFx.rays(parent, UDim2.fromScale(0.5, 0.5), 300, 0.5, 2, WHITE, 30)
+			T.truthy(rays and rays.ClassName == "ImageLabel", "the rays: one image")
+			T.eq(rays:GetAttribute("ShopFx"), "Rays")
+			T.eq(rays:GetAttribute("Period"), 30)
+			local studs = ShopFx.studs(parent, 300, 60, 17, 0.2, 3) :: any
+			T.eq(#studs:GetChildren(), math.ceil(300 / (17 * 12)) * math.ceil(60 / (17 * 12)), "a few patches of 12 x 12 studs")
+			local bolt = ShopFx.bolt(parent, UDim2.fromOffset(10, 10), 200, 20, WHITE, 3, 2, 6, false) :: any
+			T.eq(bolt:GetAttribute("Icon"), "shopfx_bolt3")
+			T.eq(bolt.Size, UDim2.fromOffset(math.floor(200 * 0.375), 200))
+			T.near(bolt.ImageTransparency, ShopFx.BoltRest, 1e-6, "softly lit at rest")
+		end)
 	end)
+
+	---------------------------------------------------------------- the loops
+
+	-- A small window with one of every mark (the effects picture uploaded).
+	local function marked(): any
+		local root = Instance.new("Frame")
+		local rays = ShopFx.rays(root, UDim2.fromScale(0.5, 0.5), 300, 0.5, 2, WHITE, 30)
+		rays.Rotation = 10
+		local bolt = ShopFx.bolt(root, UDim2.fromOffset(10, 10), 200, 20, WHITE, 1, 2, 6)
+		local price = ShopFx.priceButton(root, 99, Vector2.new(160, 50), "Green")
+		local sparkle = ShopFx.sparkle(root, UDim2.fromOffset(4, 4), 20, WHITE, 3, 2)
+		local card = Instance.new("TextButton")
+		card.Parent = root
+		ShopFx.mythicRim(card, 5)
+		local best = Instance.new("Frame")
+		best.Parent = root
+		local pulse = Instance.new("UIScale")
+		pulse.Name = "Pulse"
+		pulse.Parent = best
+		best:SetAttribute("ShopFx", "Pulse")
+		local hero = Instance.new("Frame")
+		hero.Position = UDim2.fromOffset(50, 40)
+		hero.Parent = root
+		hero:SetAttribute("ShopFx", "Float")
+		local lift = Instance.new("Frame")
+		lift.Position = UDim2.fromScale(0.5, 0.5)
+		lift.Parent = root
+		lift:SetAttribute("ShopFx", "Bob")
+		-- a hidden card's rays, an ambient bolt (a phone shows neither)
+		local hidden = Instance.new("Frame")
+		hidden.Visible = false
+		hidden.Parent = root
+		ShopFx.rays(hidden, UDim2.fromScale(0.5, 0.5), 300, 0.5, 2)
+		local ambient = ShopFx.bolt(root, UDim2.fromOffset(10, 10), 200, 20, WHITE, 2, 2, 5)
+		ambient:SetAttribute("Ambient", true)
+		return {
+			Root = root,
+			Rays = rays,
+			Bolt = bolt,
+			Sweep = (price.Face :: any).Shine.Sweep,
+			Sparkle = sparkle,
+			Rim = (card :: any).Border.Rainbow,
+			Pulse = pulse,
+			Hero = hero,
+			Lift = lift,
+		}
+	end
+
+	local function byKind(loops: { any }): { [string]: { any } }
+		local out: { [string]: { any } } = {}
+		for _, loop in loops do
+			out[loop.Kind] = out[loop.Kind] or {}
+			table.insert(out[loop.Kind], loop)
+		end
+		return out
+	end
+
+	T.test("ShopFx: one endless loop per mark on Roblox's curves (rays, shine, bolts, sparkles, rim, pulse, float, bob)", function()
+		withEffects(1, function()
+			local m = marked()
+			local loops = ShopFx.loopsUnder({ m.Root })
+			local kinds = byKind(loops)
+			T.eq(#kinds.Rays, 1, "the hidden card's rays don't turn")
+			T.eq(#kinds.Bolt, 2, "two bolts")
+			T.eq(#byKind(ShopFx.loopsUnder({ m.Root }, true)).Bolt, 1, "a phone: no ambient bolt")
+			for _, kind in { "Shine", "Sparkle", "Rim", "Pulse", "Float", "Bob" } do
+				T.eq(#kinds[kind], 1, kind)
+			end
+			-- the rays: one slow turn a period, from where they were built
+			local rays = kinds.Rays[1]
+			T.eq(rays.Property, "Rotation")
+			T.eq(rays.Style, "Linear")
+			T.falsy(rays.Reverses)
+			T.near(ShopFx.sample(rays, 0), 10, 1e-9)
+			T.near(ShopFx.sample(rays, 7.5), 100, 1e-9, "a quarter turn in a quarter period")
+			T.near(ShopFx.sample(rays, 30), 10, 1e-9, "round again")
+			-- the shine: a sweep every ShineTime, off the button at the start
+			local shine = kinds.Shine[1]
+			T.eq(shine.Target, m.Sweep)
+			T.near(ShopFx.sample(shine, 0).X, ShopFx.ShineFrom, 1e-6)
+			T.near(ShopFx.sample(shine, ShopFx.ShineTime / 2).X, (ShopFx.ShineFrom + ShopFx.ShineTo) / 2, 1e-6)
+			-- the next button's band starts further off at the same speed: the buttons shine one after another
+			local more = Instance.new("Frame")
+			ShopFx.priceButton(more, 49, Vector2.new(160, 50), "Gold")
+			ShopFx.priceButton(more, 99, Vector2.new(160, 50), "Green")
+			local two = byKind(ShopFx.loopsUnder({ more })).Shine
+			T.eq(#two, 2)
+			T.truthy(two[2].From.X < two[1].From.X, "the second starts further off")
+			local speed1 = (two[1].To.X - two[1].From.X) / two[1].Time
+			local speed2 = (two[2].To.X - two[2].From.X) / two[2].Time
+			T.near(speed1, speed2, 1e-6, "at the same speed")
+			T.eq(two[2].Rest, two[1].Rest, "both rest off the button")
+			-- a bolt: dark most of the time (a transparency over 1), lit for a moment each period
+			local bolt = kinds.Bolt[1]
+			T.eq(bolt.Property, "ImageTransparency")
+			T.truthy(bolt.Reverses)
+			T.near(bolt.Time, 3, 1e-9, "half its 6 s period")
+			T.truthy(ShopFx.sample(bolt, 0) > 1, "dark")
+			T.near(ShopFx.sample(bolt, 3), ShopFx.BoltPeak, 1e-9, "lit at its peak")
+			local lit = 0
+			for i = 0, 599 do
+				if ShopFx.sample(bolt, i * 0.01) < 1 then
+					lit += 1
+				end
+			end
+			T.truthy(lit > 0 and lit < 120, `a quick flash: lit {lit / 100} s of 6`)
+			-- the sparkle twinkles, the pulse breathes, the hero floats, the tab bobs
+			for t = 0, 3, 0.05 do
+				local s = ShopFx.sample(kinds.Sparkle[1], t)
+				T.truthy(s >= 0.35 - 1e-9 and s <= 1.1 + 1e-9, "a sparkle 0.35 .. 1.1")
+				local p = ShopFx.sample(kinds.Pulse[1], t)
+				T.truthy(p >= 1 - 1e-9 and p <= ShopFx.PulsePeak + 1e-9, "a gentle pulse")
+				local f = ShopFx.sample(kinds.Float[1], t)
+				T.truthy(f.Y.Offset <= 40 + 1e-9 and f.Y.Offset >= 40 - ShopFx.FloatRise - 1e-9, "the hero floats up to FloatRise")
+				local b = ShopFx.sample(kinds.Bob[1], t)
+				T.truthy(b.Y.Scale == 0.5 and b.Y.Offset >= -ShopFx.BobRise - 1e-9 and b.Y.Offset <= 1e-9, "the tab bobs BobRise")
+			end
+			T.eq(kinds.Sparkle[1].Target, m.Sparkle:FindFirstChild("Pulse"), "a sparkle's UIScale")
+			T.eq(kinds.Rim[1].Target, m.Rim)
+			T.near(ShopFx.sample(kinds.Rim[1], ShopFx.RimTime / 4), 90, 1e-9, "the rim runs round")
+		end)
+	end)
+
+	T.test("ShopFx: play makes one endless tween per loop, stop cancels them and puts all at rest, quiet makes none", function()
+		withEffects(1, function()
+			local m = marked()
+			local loops = ShopFx.loopsUnder({ m.Root })
+			recording(function(made)
+				local playing = ShopFx.play(loops)
+				T.eq(#made, #loops, "one tween a loop")
+				for _, record in made do
+					T.eq(record.Repeats, -1, "endless")
+				end
+				T.near(m.Bolt.ImageTransparency, ShopFx.BoltDark, 1e-6, "a bolt starts dark")
+				ShopFx.stop(playing)
+				for _, record in made do
+					T.truthy(record.Cancelled, "cancelled")
+				end
+				T.near(m.Bolt.ImageTransparency, ShopFx.BoltRest, 1e-6, "a bolt rests softly lit")
+				T.near(m.Sweep.Offset.X, ShopFx.ShineFrom, 1e-6, "the shine off the button")
+				T.near(m.Rays.Rotation, 10, 1e-6, "the rays where they were built")
+				T.eq(m.Lift.Position, UDim2.fromScale(0.5, 0.5), "the tab back")
+				T.eq((m.Sparkle :: any).Pulse.Scale, 1)
+				-- Reduce motion / PixelFx off: the shop stands still
+				table.clear(made)
+				Motion.setReduced(true)
+				local ok, err = pcall(function()
+					T.truthy(ShopFx.quiet())
+					local still = ShopFx.play(loops)
+					T.eq(#made, 0, "no tween")
+					T.eq(#still.Loops, 0)
+					local group = Instance.new("Frame")
+					local dim = Instance.new("Frame")
+					ShopFx.open(group, dim, 0.45)
+					T.eq(#made, 0, "the window just shows")
+					T.eq((group :: any).OpenPop.Scale, 1)
+					T.near(dim.BackgroundTransparency, 0.45, 1e-6)
+					local closed = false
+					ShopFx.close(group, dim, function()
+						closed = true
+					end)
+					T.truthy(closed, "and just goes")
+				end)
+				Motion.setReduced(false)
+				if not ok then
+					error(err, 0)
+				end
+				local pixel = AnimConfig.PixelFx
+				AnimConfig.PixelFx = false
+				T.truthy(ShopFx.quiet(), "PixelFx off: quiet")
+				AnimConfig.PixelFx = pixel
+			end)
+		end)
+		-- no per-frame Lua anywhere in the shop: TweenService only
+		for _, file in { "UI/ShopFx", "UI/StoreView", "Controllers/StoreController" } do
+			local source = fs.readFile(Loader.root .. "/src/client/" .. file .. ".luau")
+			for _, hook in { "Heartbeat", "RenderStepped", "Stepped", "BindToRenderStep" } do
+				T.falsy(source:find(hook, 1, true), file .. " has no " .. hook)
+			end
+		end
+	end)
+
+	T.test("ShopFx: it opens with a Back pop, a dim fade and a burst; closes small and faded; a tab fades, slides and pops", function()
+		local StoreView = ui("StoreView")
+		withEffects(1, function()
+			recording(function(made)
+				local group = Instance.new("Frame")
+				local dim = Instance.new("Frame")
+				local burst = Instance.new("ImageLabel")
+				burst.Visible = false
+				ShopFx.open(group, dim, 0.45, burst)
+				local pop = (group :: any).OpenPop
+				T.near(pop.Scale, 0.82, 1e-6, "from 0.82")
+				T.eq(made[1].Instance, pop)
+				T.eq(made[1].Style, "Back")
+				T.eq(made[1].Direction, "Out")
+				T.eq(made[1].Goal.Scale, 1)
+				T.eq(dim.BackgroundTransparency, 1, "the dim from clear")
+				T.eq(made[2].Goal.BackgroundTransparency, 0.45)
+				T.truthy(burst.Visible, "the burst flashes")
+				T.eq(made[3].Goal.ImageTransparency, 1, "and fades")
+				table.clear(made)
+				ShopFx.close(group, dim, function() end)
+				T.eq(made[1].Goal.Scale, 0.86, "it shrinks a little")
+				T.truthy(made[1].Time <= 0.15, "quickly")
+				T.eq(made[2].Goal.BackgroundTransparency, 1, "the dim fades")
+				-- a tab: the old colours fade over the new, the page slides in, the cards pop in one by one
+				local refs = StoreView.build()
+				table.clear(made)
+				StoreView.selectTab(refs, "Golems", true)
+				local fades, slides, pops, delays = 0, 0, 0, {}
+				for _, record in made do
+					if record.Goal.BackgroundTransparency == 1 and record.Instance.Name:find("Over") then
+						fades += 1
+					elseif record.Instance == refs.Pages.Golems then
+						slides += 1
+					elseif record.Instance.Name == "Scale" and record.Style == "Back" then
+						pops += 1
+						table.insert(delays, record.Delay)
+					end
+				end
+				T.eq(fades, 3, "the header, its band and the body fade over")
+				T.eq(slides, 1, "the page slides in")
+				T.truthy(pops >= 4, "the cards pop in")
+				T.eq(delays[1], 0)
+				T.truthy(delays[#delays] > delays[1], "one after another")
+				-- the same tab again: nothing moves
+				table.clear(made)
+				StoreView.selectTab(refs, "Golems", true)
+				T.eq(#made, 0)
+			end)
+		end)
+	end)
+
+	---------------------------------------------------------------- the pages
+
+	T.test("ShopFx: the shop builds only the open tab; a tab's first visit builds it with what it was told", function()
+		local StoreView = ui("StoreView")
+		local refs = StoreView.build(nil, true)
+		T.truthy(refs.Built.Featured, "the open tab")
+		T.eq(#refs.Pages.Golems:GetChildren(), 0, "the others wait")
+		T.eq(refs.Cards.Royal5, nil)
+		T.eq(table.concat(StoreView.takeBuilt(refs), ","), "Featured", "the controller wires it")
+		T.eq(#StoreView.takeBuilt(refs), 0, "once")
+		-- told before it is built: kept
+		StoreView.setCard(refs, "Royal5", "RoyalCapsule5", "Pending")
+		StoreView.setCoins(refs, 1000)
+		T.eq(refs.States.Royal5.State, "Pending")
+		local changed, built = StoreView.selectTab(refs, "Golems")
+		T.truthy(changed and built, "built on its first visit")
+		T.eq(refs.Cards.Royal5.State, "Pending", "shows what it was told")
+		T.truthy(refs.Cards.Royal5.Shade.Visible)
+		T.eq(table.concat(StoreView.takeBuilt(refs), ","), "Golems")
+		local _, again = StoreView.selectTab(refs, "Golems")
+		T.falsy(again, "built once")
+		StoreView.selectTab(refs, "Cash")
+		T.eq((refs.Cards.CoinsMega.Amount :: any).Text, "$18M", "the coins at the income it was told")
+		-- a tab with nothing to show hides from what it was told (built or not)
+		local fresh = StoreView.build(nil, true)
+		for _, id in { "Royal1", "Royal3", "Royal5", "Royal10" } do
+			StoreView.setCard(fresh, id, StoreConfig.ById[id].Keys[1], "Hidden")
+		end
+		StoreView.setRoyalShown(fresh, false)
+		T.falsy(StoreView.tabShown(fresh, "Golems"), "no eggs: the tab hides unbuilt")
+		T.falsy(fresh.Built.Golems)
+	end)
+
+	T.test("ShopFx: first open well under half of the old 6,674 instances; few tweens and few 3D views a tab", function()
+		local StoreView = ui("StoreView")
+		withEffects(1, function()
+			local refs = StoreView.build(nil, true)
+			StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
+			local first = #refs.Gui:GetDescendants()
+			T.truthy(first < 6674 / 2, `instances at the first open: {first}`)
+			local windowLoops = #ShopFx.loopsUnder(refs.Fx, false)
+			T.truthy(windowLoops <= 16, `the window's tweens: {windowLoops}`)
+			for _, section in StoreConfig.Sections do
+				StoreView.selectTab(refs, section.Id)
+				local loops = #ShopFx.loopsUnder({ refs.Pages[section.Id], refs.TabRefs[section.Id].Lift })
+				T.truthy(loops <= 30, `{section.Id}: {loops} tweens`)
+				local views = count(refs.Pages[section.Id], function(d)
+					return d.ClassName == "ViewportFrame"
+				end)
+				T.truthy(views <= 12, `{section.Id}: {views} 3D views`)
+			end
+			local all = #refs.Gui:GetDescendants()
+			T.truthy(all < 6674 * 0.8, `every tab visited: {all}`)
+			-- a phone: none of the ambient ones
+			local phone = StoreView.build(StoreView.metricsFor(true, 1), true)
+			for _, loop in ShopFx.loopsUnder(phone.Fx, true) do
+				T.falsy(loop.Target:GetAttribute("Ambient"), "no ambient " .. loop.Kind .. " on a phone")
+			end
+		end)
+	end)
+
+	T.test("ShopFx: an egg pack's three eggs are one 3D view; the open tab's models are built, the others wait", function()
+		local StoreView = ui("StoreView")
+		local refs = StoreView.build()
+		local function waiting(page: any): number
+			return count(page, function(d)
+				return d:GetAttribute("Model") ~= nil
+			end)
+		end
+		T.eq(waiting(refs.Pages[refs.Current]), 0, "the open tab's models are built")
+		T.truthy(waiting(refs.Pages.Golems) > 0, "the Golems tab's wait for it")
+		StoreView.selectTab(refs, "Golems")
+		T.eq(waiting(refs.Pages.Golems), 0, "shown: built")
+		for _, id in { "Royal3", "Royal5", "Royal10" } do
+			local card = refs.Cards[id]
+			local views = count(card.Holder, function(d)
+				return d.ClassName == "ViewportFrame"
+			end)
+			T.eq(views, 1, id .. ": one view")
+			local view = (card.Picture :: any).View
+			T.eq(#view:GetChildren(), 2, id .. ": the pile and its camera")
+			local pile = view:FindFirstChildOfClass("Model")
+			T.eq(#pile:GetChildren(), 3, id .. ": three eggs")
+			T.truthy(view:FindFirstChildOfClass("Camera") ~= nil, id .. " framed")
+		end
+		T.eq(
+			count(refs.Cards.Royal1.Holder, function(d)
+				return d.ClassName == "ViewportFrame"
+			end),
+			1,
+			"x1: one egg"
+		)
+	end)
+
+	---------------------------------------------------------------- the icon sheet
 
 	T.test("ShopFx: the shop icon sheet matches the concept's icons, one cell each, under 1024 px", function()
-		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/docs/art/shop_v3_concept/icons.js")
 		local block = string.match(source, "const I = {(.-)\n  };") or ""
 		local names: { string } = {}
@@ -136,7 +530,7 @@ return function(T, Loader)
 				T.truthy(IconAssets.shopCell(icon) ~= nil, spec.Id .. "'s line picture " .. icon)
 			end
 		end
-		for _, name in { "basket", "lock", "clock", "bolt" } do
+		for _, name in { "basket", "lock", "clock", "bolt", "sparkle" } do
 			T.truthy(IconAssets.shopCell(name) ~= nil, name)
 		end
 		-- not uploaded (Id 0): nothing shows in the game; a preview shows them unless told not to
@@ -156,7 +550,6 @@ return function(T, Loader)
 		T.falsy(IconAssets.shopShows("nope"), "an unknown name")
 		-- once uploaded: its cell of the image
 		local label = Instance.new("ImageLabel")
-		local id = sheet.Id
 		sheet.Id = 123
 		IconAssets.applyShop(label, "egg")
 		sheet.Id = id
@@ -164,34 +557,5 @@ return function(T, Loader)
 		T.eq(label.Image, "rbxassetid://123")
 		T.eq(label.ImageRectOffset, Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell))
 		T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
-	end)
-
-	T.test("ShopFx: the shop builds only the open tab's 3D models, and stays a sane size", function()
-		local StoreView = ui("StoreView")
-		local refs = StoreView.build()
-		local function waiting(page: any): number
-			local n = 0
-			for _, d in page:GetDescendants() do
-				if d:GetAttribute("Model") ~= nil then
-					n += 1
-				end
-			end
-			return n
-		end
-		T.eq(waiting(refs.Pages[refs.Current]), 0, "the open tab's models are built")
-		T.truthy(waiting(refs.Pages.Golems) > 0, "the Golems tab's wait for it")
-		StoreView.selectTab(refs, "Golems")
-		T.eq(waiting(refs.Pages.Golems), 0, "shown: built")
-		local parts = 0
-		for _, d in refs.Pages.Golems:GetDescendants() do
-			if d:IsA("BasePart") then
-				parts += 1
-			end
-		end
-		T.truthy(parts > 0, "the golems and eggs are live models")
-		-- (shop v3 is about twice the old window; its effects never grow without a look at this)
-		local fresh = StoreView.build()
-		local count = #fresh.Gui:GetDescendants()
-		T.truthy(count < 8000, `instances at the first open: {count}`)
 	end)
 end

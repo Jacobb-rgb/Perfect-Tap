@@ -22,9 +22,14 @@
 	- Coin cards and the Starter Pack show the coins at the player's podium
 	  income now; the Royal Egg and the limited edition show the odds a buy
 	  rolls now (Triple Lucky included).
-	- The motion (UI/ShopFx: rays, bolts, the buttons' shine, the open tab's
-	  bob, the Mythic rims) runs only while the window is open, with
-	  Config/AnimConfig.PixelFx on and Reduce motion off.
+	- The pages are built lazily (StoreView.build): the open tab's at once,
+	  each other the first time it opens; its buttons are wired then.
+	- The motion (UI/ShopFx) is TweenService loops only, no per-frame Lua:
+	  the window's own (rays, bolts, sparkles: none of the ambient ones on a
+	  phone) and the open tab's (its page's shine, rims, floats, pulses and
+	  rays, the tab's bob) while the window is open; a tab change stops the
+	  old tab's, a close stops all. Config/AnimConfig.PixelFx on and Reduce
+	  motion off; else the shop stands still.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -34,7 +39,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local AnimConfig = require(Shared.Config.AnimConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
@@ -83,8 +87,9 @@ local stateAt: number? = nil -- server time of the last State (CapsuleView.lucky
 -- a blaster level bought: its card stays greyed until the level changes (or BLASTER_WAIT)
 local blasterWait: { Key: string, Level: number, Until: number }? = nil
 local bannerFrame: Frame? = nil -- the limited banner whose buttons are wired
-local driver: ShopFx.Driver? = nil -- the motion while the window is open
-local focused: string? = nil -- the tab the motion moves
+local windowLoops: ShopFx.Playing? = nil -- the window's own loops while it is open
+local tabLoops: ShopFx.Playing? = nil -- the open tab's loops (its page and its bob)
+local tabPlayed: { Tab: string, Marks: number }? = nil -- what tabLoops runs for
 
 function StoreController.isOpen(): boolean
 	return isOpen
@@ -189,8 +194,9 @@ local function starCard(view: StoreView.Refs, id: string, spec: StoreConfig.Card
 	return "Buy"
 end
 
--- (defined below: the banner's buttons open the odds panel)
+-- (defined below: the banner's buttons open the odds panel; a page built late is wired)
 local onLimited: (count: number) -> ()
+local wirePages: (view: StoreView.Refs) -> ()
 
 --[[
 	The limited edition banner at the top of FEATURED (LimitedGolems.current):
@@ -233,13 +239,25 @@ local function refreshRoyal(view: StoreView.Refs)
 	StoreView.setRoyalOdds(view, odds, lucky)
 end
 
--- The motion follows the open tab (also when a tab hid and another opened by itself).
-local function focusMotion(view: StoreView.Refs)
-	local d = driver
-	if d and focused ~= view.Current then
-		focused = view.Current
-		local tab = view.TabRefs[view.Current]
-		d.focus(view.Pages[view.Current], if tab then tab.Lift else nil)
+-- The open tab's loops: its page's and its bob (the old tab's stop and settle first).
+local function playTab(view: StoreView.Refs)
+	ShopFx.stop(tabLoops)
+	tabLoops = nil
+	tabPlayed = { Tab = view.Current, Marks = view.Marks }
+	local roots: { Instance } = { view.Pages[view.Current] }
+	local tab = view.TabRefs[view.Current]
+	if tab then
+		table.insert(roots, tab.Lift)
+	end
+	tabLoops = ShopFx.play(ShopFx.loopsUnder(roots, view.Compact))
+end
+
+-- The motion follows the open tab (also when a tab hid and another opened by itself) and what
+-- shows on it (a card came or went, the BEST VALUE moved): only while the window's motion runs.
+local function followTab(view: StoreView.Refs)
+	local played = tabPlayed
+	if windowLoops and (not played or played.Tab ~= view.Current or played.Marks ~= view.Marks) then
+		playTab(view)
 	end
 end
 
@@ -251,8 +269,9 @@ local function refresh()
 	end
 	local now = os.clock()
 	local level = state().BlasterLevel
-	for id, card in view.Cards do
-		local spec = card.Spec
+	-- (every card, its page built or not: StoreView keeps what it is told until the page is built)
+	for _, spec in StoreConfig.Cards do
+		local id = spec.Id
 		local key = spec.Keys[1]
 		local cardState = "Buy"
 		if #spec.Keys > 1 then
@@ -324,7 +343,7 @@ local function refresh()
 	StoreView.setCoins(view, if type(income) == "number" then income else 0)
 	refreshBanner(view)
 	refreshRoyal(view)
-	focusMotion(view)
+	followTab(view)
 end
 
 ---------------------------------------------------------------- odds (paid random)
@@ -544,31 +563,18 @@ end
 
 ---------------------------------------------------------------- the window
 
--- The motion may run now (PixelFx on, Reduce motion off).
-local function quiet(): boolean
-	return Motion.reduced() or AnimConfig.PixelFx ~= true
-end
-
-local function startMotion(view: StoreView.Refs)
-	local old = driver
-	if old then
-		old.stop()
-	end
-	driver = nil
-	if quiet() then
-		return
-	end
-	local tab = view.TabRefs[view.Current]
-	focused = view.Current
-	driver = ShopFx.start(view.Fx, view.Pages[view.Current], if tab then tab.Lift else nil, quiet)
-end
-
+-- Every loop stops; everything goes back to rest.
 local function stopMotion()
-	local old = driver
-	driver = nil
-	if old then
-		old.stop()
-	end
+	ShopFx.stop(windowLoops)
+	ShopFx.stop(tabLoops)
+	windowLoops, tabLoops, tabPlayed = nil, nil, nil
+end
+
+-- The window's loops and the open tab's (none while the shop is quiet: ShopFx.play).
+local function startMotion(view: StoreView.Refs)
+	stopMotion()
+	windowLoops = ShopFx.play(ShopFx.loopsUnder(view.Fx, view.Compact))
+	playTab(view)
 end
 
 -- Shows tab `id`; the gamepad selection moves to its page (an odds panel open closes first).
@@ -577,11 +583,16 @@ local function showTab(view: StoreView.Refs, id: string, select: boolean?)
 		detailKey = nil
 		StoreView.showDetail(view, nil)
 	end
-	local changed = StoreView.selectTab(view, id)
+	-- (open: the colours fade over, the page slides in, its cards pop in; ShopFx keeps it still when quiet)
+	local changed, built = StoreView.selectTab(view, id, isOpen)
+	if built then
+		wirePages(view)
+		refresh() -- (the new page's live lines: the banner's buttons, the coins at this income)
+	end
 	if not changed then
 		return
 	end
-	focusMotion(view)
+	followTab(view)
 	if select and MenuPanels.usingGamepad() then
 		GuiService.SelectedObject = StoreView.firstSelectable(view)
 	end
@@ -614,25 +625,54 @@ local function screen(): (number, number, boolean)
 	return size.X / scale, (size.Y - inset.Y) / scale, compact
 end
 
--- Connects the window's buttons (once each: a rebuilt window is wired again).
+-- Connects the buttons of the pages built since the last call (once each) and fills the STAR guns
+-- (one a frame, like the page's other models: StoreView.SpreadModels).
+wirePages = function(view: StoreView.Refs)
+	local guns: { { Id: string, View: Instance } } = {}
+	for _, sectionId in StoreView.takeBuilt(view) do
+		for _, spec in StoreConfig.Cards do
+			local card = view.Cards[spec.Id]
+			if spec.Section == sectionId and card then
+				local id = spec.Id
+				card.Button.Activated:Connect(function()
+					if card.Button.Selectable then
+						onBuy(id, card.Key, card.Button)
+					end
+				end)
+				for _, face in card.Buys do
+					face.Activated:Connect(function()
+						local key = face:GetAttribute("Key")
+						onBuy(id, if type(key) == "string" then key else card.Key, face)
+					end)
+				end
+				-- the STAR blasters' live guns (the Star Forge's own builder)
+				local star = spec.Star
+				local picture = if star then card.Picture else nil
+				local viewport = if picture then picture:FindFirstChild("View") else nil
+				if star and viewport then
+					table.insert(guns, { Id = star, View = viewport })
+				end
+			end
+		end
+	end
+	if #guns > 0 then
+		task.spawn(function()
+			for _, gun in guns do
+				if gun.View.Parent then
+					pcall(RebirthView.fillPicture, gun :: any)
+					task.wait()
+				end
+			end
+		end)
+	end
+end
+
+-- Connects the window's own buttons (once each: a rebuilt window is wired again) and its first page's.
 local function wire(view: StoreView.Refs)
 	view.Window.Close.Activated:Connect(function()
 		StoreController.close()
 		Sfx.play("UIClick")
 	end)
-	for id, card in view.Cards do
-		card.Button.Activated:Connect(function()
-			if card.Button.Selectable then
-				onBuy(id, card.Key, card.Button)
-			end
-		end)
-		for _, face in card.Buys do
-			face.Activated:Connect(function()
-				local key = face:GetAttribute("Key")
-				onBuy(id, if type(key) == "string" then key else card.Key, face)
-			end)
-		end
-	end
 	for sectionId, tab in view.Tabs do
 		tab.Activated:Connect(function()
 			showTab(view, sectionId, false)
@@ -651,15 +691,7 @@ local function wire(view: StoreView.Refs)
 		end
 	end)
 	TouchControls.follow(view.Gui)
-	-- the STAR blasters' live guns (the Star Forge's own builder)
-	for _, card in view.Cards do
-		local star = card.Spec.Star
-		local picture = if star then card.Picture else nil
-		local viewport = if picture then picture:FindFirstChild("View") else nil
-		if star and viewport then
-			pcall(RebirthView.fillPicture, { Id = star, View = viewport } :: any)
-		end
-	end
+	wirePages(view)
 end
 
 -- Builds the window for this screen's sizes (or again when they changed).
@@ -671,13 +703,15 @@ local function build(w: number, h: number, compact: boolean): StoreView.Refs
 		old.Gui:Destroy()
 	end
 	bannerFrame = nil
-	local view = StoreView.build(StoreView.metricsFor(compact, fit))
+	stopMotion()
+	-- (lazy: the open tab's page now, the others on their first visit)
+	local view = StoreView.build(StoreView.metricsFor(compact, fit), true)
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
-	wire(view)
 	refs = view
 	if current then
 		StoreView.selectTab(view, current)
 	end
+	wire(view)
 	return view
 end
 
@@ -707,22 +741,29 @@ function StoreController.close()
 	isOpen = false
 	ContextActionService:UnbindAction(CLOSE_ACTION)
 	ContextActionService:UnbindAction(TABS_ACTION)
-	stopMotion()
 	local view = refs
-	if view then
+	if not view then
+		stopMotion()
+	else
 		local selected = GuiService.SelectedObject
 		if selected and selected:IsDescendantOf(view.Gui) then
 			GuiService.SelectedObject = nil
 		end
 		StoreView.showDetail(view, nil)
-		-- (UI/Motion: it shrinks away first, an open() before the end cancels that;
-		-- with UI motion off it just goes, as on main)
 		local gui = view.Gui
-		Motion.close(view.Group, function()
+		-- (the loops run on through the shrink, then stop: their rest look never flashes up)
+		local function hide()
 			if not isOpen then
 				gui.Enabled = false
+				stopMotion()
 			end
-		end, gui:FindFirstChild("Dim") :: GuiObject?)
+		end
+		if Motion.enabled() then
+			-- (UI/ShopFx: it shrinks a little as the dim fades, then goes; an open() before the end keeps it)
+			ShopFx.close(view.Group, gui:FindFirstChild("Dim") :: GuiObject?, hide)
+		else
+			hide() -- (UI motion off: it just goes, as on main)
+		end
 	end
 	PromptController.setSuppressed("Store", false)
 end
@@ -776,25 +817,32 @@ function StoreController.open()
 	GuiService.SelectedObject = if MenuPanels.usingGamepad() then StoreView.firstSelectable(view) else nil
 	Sfx.play("UIClick")
 	startMotion(view)
+	local dim = view.Gui:FindFirstChild("Dim") :: GuiObject?
+	ShopFx.rest(view.Group, dim, StoreView.DimTransparency)
 	if not Motion.enabled() then
 		-- (UI motion off, Config/AnimConfig: the window's own pop, as on main)
 		Motion.classicPop(view.Window.Root, "OpenPop", 0.85, 0.18)
 		return
 	end
-	-- UI/Motion: the window pops from the middle, the dim fades in
-	Motion.pop(view.Group, view.Gui:FindFirstChild("Dim") :: GuiObject?)
+	-- UI/ShopFx: the window pops from 0.82 with a Back ease, the dim fades in, a burst of rays
+	-- flashes out behind it (Reduce motion: it just shows)
+	ShopFx.open(view.Group, dim, StoreView.DimTransparency, view.Burst)
 end
 
 -- Opens the Store at a card (the round look's HUD offers): its tab shows.
 function StoreController.openAt(cardId: string)
 	StoreController.open()
 	local view = refs
-	local card = if view then view.Cards[cardId] else nil
-	if not view or not card then
+	local section = StoreConfig.sectionOf(cardId)
+	if not view or not section then
 		return
 	end
-	if StoreView.tabShown(view, card.Spec.Section) then
-		showTab(view, card.Spec.Section, false)
+	if StoreView.tabShown(view, section) then
+		showTab(view, section, false) -- (it builds the page the first time)
+	end
+	local card = view.Cards[cardId]
+	if not card then
+		return
 	end
 	-- (a gamepad: the selection on the offered card, so A buys what the player picked)
 	if MenuPanels.usingGamepad() and card.Holder.Visible then
@@ -853,6 +901,8 @@ function StoreController.toggle()
 end
 
 function StoreController.init()
+	-- (a page's 3D models are built one a frame after it shows: a tab's first visit never stalls)
+	StoreView.SpreadModels = true
 	Net.listen("PurchasePrompt", onPurchasePrompt)
 	-- a capsule / boost buy refused before its prompt (the odds changed, a full inventory...)
 	Net.listen("ActionResult", function(result: any)
