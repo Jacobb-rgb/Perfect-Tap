@@ -6,18 +6,19 @@
 	osvetlenej reflektory"): planted on the east shoulder of the forge
 	mountain, one very thick round leg, a big iron board on top facing the
 	town, three spotlights on arms over it shining down on its face.
-	2026-11-11 06:11Z: 30 studs higher ("Ano, o 30 výš": the east islet no
-	longer hides the finder's line from plots 7-8), the airship up over it
-	("Ano, výš"), and the leg stays 12 thick but "trochu do výšky a pak to
-	zahni do předu": it rises behind the board, then bends forward over
-	its top like a neck, and the board hangs under the bend on two rods.
+	2026-11-11: higher ("Ano, o 30 výš": the east islet no longer hides the
+	finder's line from plots 7-8), the airship up over it ("Ano, výš"), the
+	leg stays 12 thick and rises straight, then at the board's lower edge it
+	kinks 30 degrees forward and the whole board leans with it, its face
+	down toward the town (owner's pick "A, nakloněná tabule" in the evening;
+	the quarter-circle neck of the morning was not what he meant).
 
 	From the spawn and the town it stands right of the Great Forge, above
 	the mountain, clear of the golden dragon's sign in front and of the
 	planets (LobbySky specs); the airship flies over it (Sky/Airship). It is
-	far (about 380 studs from the
-	spawn), so the model streams Persistent and its screen draws out to
-	EventBoardView.MaxDistance.
+	far (about 390 studs from the spawn, seen about 27 degrees up, so the
+	30 degree lean turns its face almost straight at the town), so the model
+	streams Persistent and its screen draws out to EventBoardView.MaxDistance.
 
 	Pure builder. The screen is one part, tag EventBoardScreen; the clients
 	draw on it (Controllers/EventBoardController, UI/EventBoardView).
@@ -34,16 +35,14 @@ local EventBoard = {}
 
 EventBoard.Width = 130 -- the iron board
 EventBoard.Height = 64
-EventBoard.Bottom = 162 -- its lower edge, over the mountain's shoulder and the sky islets in front (owner 11-11: +30)
+-- its lower edge before the lean, over the mountain's shoulder and the sky islets in front
+-- (owner 11-11: up; the lean lowers the edge about 3.5 studs, still clear from plots 7-8)
+EventBoard.Bottom = 178
 EventBoard.Screen = Vector2.new(120, 54)
 EventBoard.Leg = 12 -- the round leg's diameter (owner 11-11: keep 12)
--- the neck: the leg rises behind the board, then bends forward a quarter circle of this
--- radius and ends over the board's middle, Over studs above its top; the board hangs under it
-EventBoard.Bend = 22
-EventBoard.Over = 14
-EventBoard.Mid = 1.2 -- the board's plate, its middle plane (z)
-EventBoard.LegZ = EventBoard.Mid + EventBoard.Bend -- where the upright part stands behind the board
-EventBoard.Hangers = 42 -- the two hanger rods, this far left and right of the middle
+EventBoard.LegZ = 2.2 + EventBoard.Leg / 2 + 1 -- behind the board: its front face stays clear of the leg
+EventBoard.Kink = 4 -- the leg kinks this far above the board's lower edge, in the board's back
+EventBoard.Tilt = math.rad(30) -- the lean: the leg's top part and the whole board, forward
 EventBoard.Lamps = 3
 EventBoard.MaxParts = 60
 
@@ -57,7 +56,7 @@ local PLATE = Enum.Material.DiamondPlate
 local SMOOTH = Enum.Material.SmoothPlastic
 
 function EventBoard.build(parent: Instance): Model
-	local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+	local legFrame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
 	local model = Instance.new("Model")
 	model.Name = "EventBoard"
 	model:AddTag("NoStuds") -- iron plate, no studs
@@ -65,6 +64,11 @@ function EventBoard.build(parent: Instance): Model
 	local w, h, bottom = EventBoard.Width, EventBoard.Height, EventBoard.Bottom
 	local top = bottom + h
 	local mid = bottom + h / 2
+	local legZ, leg = EventBoard.LegZ, EventBoard.Leg
+	local kinkY = bottom + EventBoard.Kink
+	-- the board's frame: the upright one turned forward round the kink (the top toward -Z)
+	local pivot = CFrame.new(0, kinkY, legZ)
+	local frame = legFrame * pivot * CFrame.Angles(-EventBoard.Tilt, 0, 0) * pivot:Inverse()
 
 	local function at(x: number, y: number, z: number): Vector3
 		return (frame * CFrame.new(x, y, z)).Position
@@ -72,11 +76,10 @@ function EventBoard.build(parent: Instance): Model
 	local function box(x: number, y: number, z: number, size: Vector3, color: Color3, material: Enum.Material?): BasePart
 		return Geo.block(model, frame * CFrame.new(x, y, z), size, color, material or METAL)
 	end
-	-- an upright cylinder (Geo stands it up) centred at (x, y, z)
+	-- an upright cylinder (Geo stands it up) centred at (x, y, z) of the leg's frame
 	local function column(x: number, y: number, z: number, height: number, diameter: number, color: Color3): BasePart
-		return Geo.cylinder(model, at(x, y, z), height, diameter, color, METAL)
+		return Geo.cylinder(model, (legFrame * CFrame.new(x, y, z)).Position, height, diameter, color, METAL)
 	end
-
 	-- a round rod from a to b (a Cylinder part's length runs along its X)
 	local function rod(a: Vector3, b: Vector3, diameter: number, color: Color3, name: string): BasePart
 		local cf = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.pi / 2, 0)
@@ -86,43 +89,19 @@ function EventBoard.build(parent: Instance): Model
 		return part
 	end
 
-	-- the leg (owner 11-11): upright from deep in the mountain behind the board, its collars and
-	-- foot, then the neck bending forward a quarter circle over the board's top
-	local legZ, bend, leg = EventBoard.LegZ, EventBoard.Bend, EventBoard.Leg
-	local neckY = top + EventBoard.Over -- the neck's end, over the board's middle
-	local upright = neckY - bend
-	column(0, upright / 2, legZ, upright, leg, IRON_DARK).Name = "Leg"
-	for y = 20, upright - 20, 40 do
+	-- the leg (owner 11-11): upright from deep in the mountain to the kink, its collars and
+	-- foot, then the leaning top up the board's back with its cap
+	column(0, kinkY / 2, legZ, kinkY, leg, IRON_DARK).Name = "Leg"
+	for y = 20, kinkY - 20, 40 do
 		column(0, y, legZ, 2.2, leg + 2, IRON)
 	end
 	column(0, 2, legZ, 4, leg + 10, Color3.fromRGB(96, 98, 104)).Name = "Foot"
-	local steps = 6
-	local last = at(0, upright, legZ)
-	for k = 1, steps do
-		local angle = k / steps * math.pi / 2
-		local point = at(0, upright + bend * math.sin(angle), EventBoard.Mid + bend * math.cos(angle))
-		rod(last, point, leg, IRON_DARK, "Neck")
-		if k < steps then
-			Geo.ball(model, point, leg, IRON_DARK, METAL).Name = "NeckJoint"
-		end
-		last = point
-	end
-	-- its end cap, the cross bar under it and the two rods the board hangs on
-	rod(at(0, neckY, EventBoard.Mid + 0.8), at(0, neckY, EventBoard.Mid - 0.8), leg + 2, IRON, "NeckCap")
-	local barY = neckY - leg / 2 - 1.5
-	rod(at(-EventBoard.Hangers - 4, barY, EventBoard.Mid), at(EventBoard.Hangers + 4, barY, EventBoard.Mid), 3, IRON, "HangerBar")
-	for _, side in { -1, 1 } do
-		rod(
-			at(side * EventBoard.Hangers, barY, EventBoard.Mid),
-			at(side * EventBoard.Hangers, top - 1, EventBoard.Mid),
-			1.8,
-			IRON,
-			"Hanger"
-		)
-	end
-	-- the cross beam behind the board and a stay back to the leg
+	Geo.ball(model, at(0, kinkY, legZ), leg + 1, IRON_DARK, METAL).Name = "Kink"
+	rod(at(0, kinkY, legZ), at(0, top + 3, legZ), leg, IRON_DARK, "Neck")
+	rod(at(0, top + 2.2, legZ), at(0, top + 3.8, legZ), leg + 2, IRON, "NeckCap")
+	-- the cross beams behind the board, on the leaning top
 	box(0, mid, 3.8, Vector3.new(w - 8, 4, 3), IRON_DARK)
-	rod(at(0, mid, 5.3), at(0, mid, legZ - leg / 2 + 0.5), 2.4, IRON, "Stay")
+	box(0, top - 10, 3.8, Vector3.new(w - 8, 4, 3), IRON_DARK)
 	-- the board, its heavy frame, the corner plates
 	box(0, mid, 1.2, Vector3.new(w, h, 2), IRON_DARK, PLATE)
 	box(0, top - 1.5, -0.6, Vector3.new(w + 3, 4, 2), IRON)

@@ -275,9 +275,9 @@ LobbyLayout.Pieces = {
 		Package = "Plaza",
 		-- planted on the forge mountain's east shoulder (owner 2026-11-10: "zapichlej v tech
 		-- horach"), facing the town: right of the Great Forge and clear of the planets from the spawn
-		-- (review 11-10: the foot on the rim, not over the sea; owner 11-11: the neck bends the
-		-- board 14 studs forward toward the spawn, the leg's foot stays where it stood)
-		Center = v(179.3, 0, -260.3),
+		-- (review 11-10: 8 studs west, the whole foot on the rim, not over the sea; owner 11-11:
+		-- the leg stands here and the board leans 30 degrees forward off its top, toward the town)
+		Center = v(187, 0, -272),
 		Size = v(14, 200, 14), -- (only the round leg stands on the ground; the board is 130 wide up top)
 		Radius = 7,
 		Facing = v(-0.55, 0, 0.84), -- toward the spawn and the town

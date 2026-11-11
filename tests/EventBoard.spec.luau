@@ -461,8 +461,15 @@ return function(T, Loader)
 		end
 		T.truthy(points(EventBoardView.Lines.Big[2]) >= 12, `the ore line {points(EventBoardView.Lines.Big[2])} pt`)
 		T.truthy(points(EventBoardView.Lines.Small[2]) >= 10, `the finder line {points(EventBoardView.Lines.Small[2])} pt`)
+		-- (the board's own iron counts too: the leaning board's leg and lamps mustn't hide it)
 		local near = {}
-		for _, d in parts do
+		local sight = table.clone(parts)
+		for _, d in board:GetDescendants() do
+			if d:IsA("BasePart") and d ~= screen then
+				table.insert(sight, d)
+			end
+		end
+		for _, d in sight do
 			local t = math.clamp((d.CFrame.Position - eye):Dot(span) / (length * length), 0, 1)
 			if (eye + span * t - d.CFrame.Position).Magnitude <= d.Size.Magnitude / 2 + 1 then
 				table.insert(near, d)
@@ -494,29 +501,28 @@ return function(T, Loader)
 		T.eq(#screens, 1, "one screen")
 		T.truthy(model:HasTag("NoStuds"), "iron, no studs")
 		local screen = screens[1]
-		-- (owner 2026-11-11) the leg rises behind the board, then bends forward over its top like a
-		-- neck; the board hangs under the bend on two rods
-		local top = EventBoard.Bottom + EventBoard.Height
-		local neck, hangers, highest, front = 0, 0, -math.huge, math.huge
+		-- (owner 2026-11-11) the leg rises straight, kinks 30 degrees forward at the board's lower
+		-- edge and the whole board leans with it, its face down toward the town
 		local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
-		for _, d in model:GetDescendants() do
-			if d:IsA("BasePart") and d.Name == "Neck" then
-				neck += 1
-				local l = frame:PointToObjectSpace(d.CFrame.Position)
-				highest = math.max(highest, l.Y)
-				front = math.min(front, l.Z)
-			elseif d:IsA("BasePart") and d.Name == "Hanger" then
-				hangers += 1
-			end
-		end
-		T.truthy(neck >= 4, `a bent neck ({neck} pieces)`)
-		T.truthy(highest > top, "it bends over the board's top")
-		T.truthy(front < EventBoard.LegZ - EventBoard.Bend / 2, "forward, toward the town")
-		T.eq(hangers, 2, "the board hangs on two rods")
 		local leg = model:FindFirstChild("Leg")
 		T.near(leg.Size.Y, 12, 1e-6, "the leg stays 12 thick (owner 11-11)")
+		T.near(math.abs(leg.CFrame.RightVector.Y), 1, 1e-6, "the leg stands upright")
+		local neck = model:FindFirstChild("Neck")
+		T.truthy(neck, "the leaning top")
+		local axis = frame:VectorToObjectSpace(neck.CFrame.RightVector)
+		if axis.Y < 0 then
+			axis = -axis
+		end
+		T.near(axis.Y, math.cos(EventBoard.Tilt), 1e-3, "it leans 30 degrees")
+		T.truthy(axis.Z < 0, "forward, toward the town")
+		T.falsy(model:FindFirstChild("Hanger"), "no hook, no hanging rods")
+		local look = frame:VectorToObjectSpace(screen.CFrame.LookVector)
+		T.near(look.Y, -math.sin(EventBoard.Tilt), 1e-3, "the face looks down toward the town")
+		local up = frame:VectorToObjectSpace(screen.CFrame.UpVector)
+		T.truthy(up.Z < 0, "the board's top leans forward")
 		local facing = LobbyLayout.get("EventBoard").Facing.Unit
-		T.truthy(screen.CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
+		local flat = roblox.Vector3.new(screen.CFrame.LookVector.X, 0, screen.CFrame.LookVector.Z).Unit
+		T.truthy(flat:Dot(facing) > 0.99, "its Front face looks where the piece faces")
 		-- the lamps: one SpotLight each, no shadows, aimed at the face and reaching it
 		T.eq(#lights, EventBoard.Lamps, "one light a lamp")
 		for _, light in lights do
@@ -531,13 +537,21 @@ return function(T, Loader)
 			T.truthy(math.abs(hit.X) <= EventBoard.Screen.X / 2 and math.abs(hit.Y) <= EventBoard.Screen.Y / 2, "aimed at the screen")
 			T.truthy(light.Range >= (hit - from).Magnitude, "its light reaches the face")
 		end
-		-- the leg and the beams are behind the screen; in front of it only the lamps, above its top edge
+		-- the beams are behind the screen; in front of its face only the lamps, above its top edge,
+		-- and (the board leans forward off the kink) the leg far under its lower edge
 		local top = EventBoard.Screen.Y / 2
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") and d ~= screen then
-				local l = screen.CFrame:PointToObjectSpace(d.CFrame.Position)
-				if l.Z < -0.5 and math.abs(l.X) < EventBoard.Screen.X / 2 then
-					T.truthy(l.Y > top, d.Name .. ": nothing hangs in front of the screen")
+				for k = 0, 7 do
+					local corner = roblox.Vector3.new(
+						(if k % 2 == 0 then -0.5 else 0.5) * d.Size.X,
+						(if k % 4 < 2 then -0.5 else 0.5) * d.Size.Y,
+						(if k < 4 then -0.5 else 0.5) * d.Size.Z
+					)
+					local l = screen.CFrame:PointToObjectSpace((d.CFrame * roblox.CFrame.new(corner)).Position)
+					if l.Z < -0.5 and math.abs(l.X) < EventBoard.Screen.X / 2 then
+						T.truthy(l.Y > top or l.Y < -top, d.Name .. ": nothing hangs in front of the screen")
+					end
 				end
 			end
 		end
