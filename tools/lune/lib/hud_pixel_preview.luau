@@ -8,9 +8,12 @@
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
 	  ui_hud_round_studio   a 995 x 485 pt mouse window (the tall block of tiles,
-	                        owner 2026-10-28; his logged window: ui_hud_studio_*)
+	                        owner 2026-10-28; his logged window: ui_hud_studio_*;
+	                        his 1402 x 683 window of 2026-11-11: ui_hud_owner_now)
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
-	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
+	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv;
+	                        _pc1080 / _pc768 (a mouse), _phone844 (touch, the
+	                        touch buttons' stand-ins)
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
 	are claimed as the controllers do (his picture tiles, 2026-11-07: Inventory
 	by BackpackController, the side menu's Store / Rebirth / Golems / Elevator,
@@ -202,6 +205,15 @@ function Preview.build(Loader: any): { [string]: any }
 	end
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
+	-- (owner 2026-11-11, the left tiles "a bit bigger") the common screens: a 1920 x 1080 and a
+	-- 1366 x 768 PC with a mouse, an 844 x 390 touch phone under its 58 pt top bar with the touch
+	-- buttons' stand-ins
+	exports.ui_hud_round_pc1080 =
+		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "Mouse"))
+	local laptop = HudBubble.scaleFor(roblox.Vector2.new(1366, 768))
+	exports.ui_hud_round_pc768 =
+		UiExport.export(hud(laptop * 900 / 768, laptop, roblox.Vector2.new(1366, 768 - 58 * 768 / 900), 1, false, false, "Mouse"))
+	exports.ui_hud_round_phone844 = UiExport.export(hud(0.62 * 900 / 390, 0.62, roblox.Vector2.new(844, 390 - 58), 1, true, false, "Touch"))
 	TrainView.useHud(nil)
 	-- the owner's Studio window from his log (2026-11-07): 1402 x 490 points on a mouse, 1402 x 368 with
 	-- a taller Output panel, drawn 1990 px wide: as the game shows it (his top row and tile images are
@@ -217,6 +229,11 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_studio_game = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	exports.ui_hud_studio_game_more = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse", true))
 	exports.ui_hud_studio_short = UiExport.export(hud(short * pixels, short, roblox.Vector2.new(1402, 368 - 41), 1, false, false, "Mouse"))
+	-- his window on 2026-11-11 (his screenshot: a 1990 x 970 px viewport, 1402 x 683 pt, not Compact),
+	-- where he picked B: the block three a row at RoundBigMax
+	local nowScale = HudBubble.scaleFor(roblox.Vector2.new(1402, 683))
+	exports.ui_hud_owner_now =
+		UiExport.export(hud(nowScale * pixels, nowScale, roblox.Vector2.new(1402, 683 - 41), 1, false, false, "Mouse"))
 	IconAssets.Previewing = previewing
 	exports.ui_hud_studio_all_icons = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts
