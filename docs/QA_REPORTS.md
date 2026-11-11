@@ -997,3 +997,33 @@ What to test in Studio:
    then the shop; the selection never leaves the window.
 6. SETTINGS Reduce motion on: nothing in the shop moves. Watch FPS on a low-end phone emulator with the shop open.
 7. A player where paid random items are restricted: the Golems tab is gone, no eggs, spins, luck or banner.
+
+## One Inventory at the bottom, the GOLD hotbar, stickers on the right (owner 2026-11-11, branch ui/hud-inventory)
+- The right side wears the shop's sticker icons (IconAssets.Shop, the same picture the shop shows for the same
+  product): Starter Pack the gift, 2x Money the cash with the x2 badge on its top-left corner (the price keeps the
+  top-right), Triple Lucky the gold clover; the running boosts' corner tiles Triple Lucky the gold clover, Hexa
+  Lucky the rainbow clover (BoostView.Stickers). Without the sheet (Id 0) the old pictures stay.
+- No Inventory tile on the left ("so we don't have two inventories"): eight tiles, a full block with no hole (his
+  pick A: two a row and four rows at 78 units on a PC and a TV, 80 in his small Studio window; four a row on
+  touch screens, where Trade's Soon! tile now stands too). HudBubble.fullRows / columnOrder / pickColumns.
+- The bottom pair in his GOLD pick (obrazky/hud_inventar_2026-11-11/06_spodni_lista_GOLD_batoh_vys.jpg): the
+  Inventory button (210 x 64; phones 240 x 76) in a dark outline, a blue and a gold rim, a green striped face with
+  a gloss and a lip; the sticker backpack a touch above the middle, the count in gold letters, a bar of the load
+  (red with FULL and a red count while full), the white Q keycap, a gold star, two sparkles, a soft gold glow and a
+  dark slab under it; the BLASTER slot in gold with the same stripes. Motion (tweens only, none with Reduce
+  motion): the gleam sweeps across (PixelFx), the bar's stripes drift (HudController, Motion.onReducedChanged),
+  the backpack and the count bounce when ore comes in.
+- Tests: tests/HudInventory.spec.luau (+ TileWiring, RoundReview, PixelKit, HudBubble, BlasterSlot,
+  BackpackClient). Pictures: obrazky/hud_inventar_2026-11-11/navrh_*.jpg (scene hud_quick).
+What to test in Studio:
+1. The right side: the gift, the cash with x2 and the gold clover with their R$ tags; a click opens the shop at
+   that card. Buy Triple Lucky (or start one in Studio): the corner tile shows the gold clover and its time.
+2. The left block: Shop, Rebirth / Golems, Hoverboard / Build, Elevator / Trade, More, the TRAIN chip under it;
+   no Inventory tile; More opens its flyout beside the block.
+3. The Inventory button: a click, Q, a gamepad's R1 and A on it (the UI selection) open the inventory window;
+   pick up ore: the count goes up with a small bounce and the bar fills; a full backpack shows FULL, a red count
+   and a red bar. The tutorial card (bottom right on a PC) and the level bar never cover it.
+4. Phone emulator (iPhone SE, 844 x 390): four tiles a row, Trade there too; the bottom pair clear of the
+   thumbstick, FIRE, Grab and Jump; the Q cap hidden on touch.
+5. SETTINGS Reduce motion on: the bar's stripes stop, no bounce, no gleam. A TV (1080p, console emulator): the
+   pair inside the safe area.

@@ -210,9 +210,9 @@ return function(T, Loader)
 			for _, entry in HudBubble.gameMenu() do
 				table.insert(ids, entry.Id)
 			end
-			-- (the owner's picture tiles, 2026-11-07: nine on the left, Index / Settings / Daily / Spin /
-			-- Boosts behind More)
-			T.eq(table.concat(ids, ","), "Store,Rebirth,Golems,Backpack,Ride,Build,Elevator,Trade,More", "the menu's order")
+			-- (the owner's picture tiles, 2026-11-07: Index / Settings / Daily / Spin / Boosts behind More;
+			-- 2026-11-11: eight on the left, the Inventory is the GOLD button at the bottom)
+			T.eq(table.concat(ids, ","), "Store,Rebirth,Golems,Ride,Build,Elevator,Trade,More", "the menu's order")
 			for _, spec in { { 1280, 720, false }, { 1920, 1080, true }, { 1024, 768, false } } do
 				local screen = Vector2.new(spec[1], spec[2])
 				local scale = HudBubble.scaleFor(screen)

@@ -380,9 +380,6 @@ local function hudGuis(screen: Screen, touch: Touch?): { any }
 			HudBubble.addMore(refs.Menu, entry.Id, spec)
 		end
 	end
-	if round then
-		HudBubble.claimTile(refs.Menu, "Backpack")
-	end
 	HudView.setBackpack(refs, 12, 30)
 	local list = { refs.Gui }
 	local boosts = t.Boosts or 0

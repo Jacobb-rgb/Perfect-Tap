@@ -213,9 +213,66 @@ local function updateScale()
 	refreshOffers()
 end
 
--- The backpack button: "n / cap", red with the FULL tag when full.
+--[[
+	The GOLD hotbar's motion (owner 2026-11-11, the round look; tweens only, none with Reduce
+	motion): the backpack and the count bounce when ore comes in, and the progress bar's stripes
+	drift along, one stripe and again (an endless tween, stopped while motion is reduced).
+]]
+HudController.Bounce = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
+HudController.BounceScale = 1.16
+
+local function bounceBackpack()
+	local button = refs and refs.Backpack
+	if not button or Motion.reduced() then
+		return
+	end
+	for _, name in { "Pack", "Count", "CountShadow" } do
+		local part = button:FindFirstChild(name)
+		local scale = if part then part:FindFirstChild("Bounce") else nil
+		if scale and scale:IsA("UIScale") then
+			scale.Scale = 1
+			TweenService:Create(scale, HudController.Bounce, { Scale = HudController.BounceScale }):Play()
+		end
+	end
+end
+
+local drift: Tween? = nil
+local function syncDrift()
+	local button = refs and refs.Backpack
+	local bar = if button then button:FindFirstChild("Bar") else nil
+	local fill = if bar then bar:FindFirstChild("Fill") else nil
+	local stripes = if fill then fill:FindFirstChild("Drift") else nil
+	if not (stripes and stripes:IsA("GuiObject")) then
+		return
+	end
+	local step = stripes:GetAttribute("Step")
+	local want = not Motion.reduced() and type(step) == "number"
+	if want and not drift then
+		stripes.Position = UDim2.fromOffset(0, 0)
+		local tween = TweenService:Create(
+			stripes,
+			TweenInfo.new(HudBubble.BarDrift, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1),
+			{ Position = UDim2.fromOffset(-(step :: number), 0) }
+		)
+		drift = tween
+		tween:Play()
+	elseif not want and drift then
+		drift:Cancel()
+		drift = nil
+		stripes.Position = UDim2.fromOffset(0, 0)
+	end
+end
+
+-- The backpack button: "n / cap", red with the FULL tag when full (the GOLD hotbar: its bar too, and
+-- a bounce when the count goes up).
+local shownCount: number? = nil
 local function refreshBackpack()
-	HudView.setBackpack(refs, BackpackState.count(), BackpackState.capacity())
+	local count = BackpackState.count()
+	HudView.setBackpack(refs, count, BackpackState.capacity())
+	if shownCount and count > shownCount then
+		bounceBackpack()
+	end
+	shownCount = count
 end
 
 local currentZone = ""
@@ -469,6 +526,11 @@ function HudController.start()
 	-- the backpack button: the CarryCount / CarryCapacity attributes and every State push
 	BackpackState.onChanged(refreshBackpack)
 	refreshBackpack()
+	-- (the GOLD bar's stripes drift unless motion is reduced; they follow the setting)
+	syncDrift()
+	Motion.onReducedChanged(function()
+		syncDrift()
+	end)
 
 	task.spawn(zoneLoop)
 
