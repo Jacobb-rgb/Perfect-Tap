@@ -494,6 +494,27 @@ return function(T, Loader)
 		T.eq(#screens, 1, "one screen")
 		T.truthy(model:HasTag("NoStuds"), "iron, no studs")
 		local screen = screens[1]
+		-- (owner 2026-11-11) the leg rises behind the board, then bends forward over its top like a
+		-- neck; the board hangs under the bend on two rods
+		local top = EventBoard.Bottom + EventBoard.Height
+		local neck, hangers, highest, front = 0, 0, -math.huge, math.huge
+		local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "Neck" then
+				neck += 1
+				local l = frame:PointToObjectSpace(d.CFrame.Position)
+				highest = math.max(highest, l.Y)
+				front = math.min(front, l.Z)
+			elseif d:IsA("BasePart") and d.Name == "Hanger" then
+				hangers += 1
+			end
+		end
+		T.truthy(neck >= 4, `a bent neck ({neck} pieces)`)
+		T.truthy(highest > top, "it bends over the board's top")
+		T.truthy(front < EventBoard.LegZ - EventBoard.Bend / 2, "forward, toward the town")
+		T.eq(hangers, 2, "the board hangs on two rods")
+		local leg = model:FindFirstChild("Leg")
+		T.near(leg.Size.Y, 12, 1e-6, "the leg stays 12 thick (owner 11-11)")
 		local facing = LobbyLayout.get("EventBoard").Facing.Unit
 		T.truthy(screen.CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
 		-- the lamps: one SpotLight each, no shadows, aimed at the face and reaching it

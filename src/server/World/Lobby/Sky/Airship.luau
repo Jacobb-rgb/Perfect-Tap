@@ -61,7 +61,8 @@ local Airship = {}
 -- between the peak and the east floating island in the hero and spawn shots
 -- (not a LobbyLayout piece: it hangs outside the lobby area box).
 -- (lobby fix round 3: 13 studs higher, its gondola well clear of the east island)
-Airship.Center = Vector3.new(232, 199, -336) -- the spawn view's top right
+-- (owner 2026-11-11 06:11Z "Ano, výš": up over the event board, which hid it from the town)
+Airship.Center = Vector3.new(232, 322, -336) -- the spawn view's top right
 -- the nose points west-south-west: the town sees it three-quarter from the
 -- front-left like concept v2 (nose to the left, tail and exhaust to the right)
 Airship.Heading = 252
