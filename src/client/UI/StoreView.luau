@@ -213,6 +213,7 @@ export type TabRefs = {
 	Scale: UIScale,
 	Ring: Frame,
 	Glow: Frame,
+	Icon: GuiObject?, -- its picture (it pops when the tab is picked and wiggles while it is open)
 	Width: number,
 }
 
@@ -243,11 +244,15 @@ export type Refs = {
 	DetailBack: TextButton,
 	Banner: BannerRefs?, -- the limited edition (FEATURED), nil when none runs or FEATURED isn't built
 	Royal: RoyalRefs?, -- the Royal Egg's golems (GOLEMS, once built)
-	Fx: { Instance }, -- the window's own effects (the motion's fixed roots)
+	Fx: { Instance }, -- the window's own effects (the motion's fixed roots; the title's light band too)
+	Front: Frame, -- the layer over the window (its sparkles; a purchase's stars fly in it)
 	Burst: GuiObject, -- the rays that flash out behind the window as it opens
 	Current: string, -- the open tab
 	Fit: number, -- the last layout's fit scale
 	Compact: boolean,
+	-- the motion skips the ambient marks (the pages' particles, the cards' gloss, the small pictures'
+	-- idling): a phone or a tablet; StoreController keeps them for a TV (compact, but not lean)
+	Lean: boolean,
 	Metrics: Metrics,
 	-- (pages are built lazily: the open one, the others on their first visit; what the
 	-- controller says is kept here and shown when a page is built)
@@ -670,9 +675,12 @@ type ShellOptions = {
 	A card's body in its holder: the dark slab under it, the face (the click
 	target; it clips its light), the sunburst (one sprite, it turns) and a
 	glow behind where the picture goes, the gloss, the light edge; the
-	Mythic rim when asked. A one-price card's face grows under the mouse and
-	squashes on a press (ShopFx.bindPress on its holder). Returns the face.
+	Mythic rim when asked; a gloss band over the whole card that sweeps
+	across now and then (ShopFx.sheen). A one-price card's face grows, rises
+	and brightens under the mouse or the gamepad's selection and squashes
+	on a press (ShopFx.bindPress on its holder). Returns the face.
 ]]
+StoreView.SheenZ = 11 -- the cards' gloss band: over the picture, the words and the price, under the stickers
 local function shell(holder: Frame, colors: { Color3 }, h: number, o: ShellOptions): TextButton
 	ShopFx.drop(holder, CORNER, 7, 1)
 	local selectable = o.Selectable ~= false
@@ -698,16 +706,23 @@ local function shell(holder: Frame, colors: { Color3 }, h: number, o: ShellOptio
 		local tint = if o.Rainbow then Color3.fromRGB(255, 236, 170) else WHITE
 		ShopFx.rays(face, o.Rays, (o.RayLength or 180) * 2, o.RayFade or 0.62, 2, tint, 30)
 	end
+	local glow: GuiObject? = nil
 	if o.Glow then
-		ShopFx.glow(face, o.Glow, o.GlowRadius or 80, o.GlowColor or WHITE, 2)
+		glow = ShopFx.glow(face, o.Glow, o.GlowRadius or 80, o.GlowColor or WHITE, 2)
 	end
 	ShopFx.gloss(face, CORNER, 3)
-	ShopFx.rim(face, CORNER, 3)
+	local rim = ShopFx.rim(face, CORNER, 3)
 	if o.Mythic then
 		ShopFx.mythicRim(face, 5)
 	end
+	ShopFx.sheen(holder, CORNER, StoreView.SheenZ)
 	if selectable then
-		ShopFx.bindPress(face, holder)
+		local light = rim:FindFirstChild("Light")
+		ShopFx.bindPress(face, holder, {
+			Lift = ShopFx.Lift,
+			Light = if light and light:IsA("UIStroke") then light else nil,
+			Glow = glow,
+		})
 	else
 		face:SetAttribute("Motion", "None")
 	end
@@ -741,6 +756,69 @@ end
 local function float(picture: GuiObject?)
 	if picture then
 		picture:SetAttribute("ShopFx", "Float")
+	end
+end
+
+-- A golem's or an egg's picture idles: a soft bob and a small sway (mark "Idle"; `ambient`: a phone keeps it still).
+local function idle(picture: GuiObject?, ambient: boolean?)
+	if picture then
+		picture:SetAttribute("ShopFx", "Idle")
+		if ambient then
+			picture:SetAttribute("Ambient", true)
+		end
+	end
+end
+
+-- A hero egg floats and now and then wobbles as if about to hatch (Float with Wobble).
+local function hatch(picture: GuiObject?, rise: number?)
+	if picture then
+		picture:SetAttribute("ShopFx", "Float")
+		picture:SetAttribute("Wobble", ShopFx.WobbleSwing)
+		if rise then
+			picture:SetAttribute("Rise", rise)
+		end
+	end
+end
+
+-- A gentle wiggle about its tilt (mark "Wiggle"; `swing` degrees each way, `ambient`: a phone keeps it still).
+local function wiggle(gui: GuiObject?, swing: number?, ambient: boolean?)
+	if gui then
+		gui:SetAttribute("ShopFx", "Wiggle")
+		if swing then
+			gui:SetAttribute("Swing", swing)
+		end
+		if ambient then
+			gui:SetAttribute("Ambient", true)
+		end
+	end
+end
+
+-- A drifting particle of a page's theme: where it starts (x, y), its drift (dx, dy), its size and seconds a round.
+type Mote = { number }
+
+--[[
+	A tab's theme particles in `parent` (ShopFx.particle: PC and TV only,
+	at most StoreView.MaxMotes, invisible at rest): rising embers over the
+	Dragonforge, gold sparkles round the Royal Egg, sparks off the next
+	blaster, coins down the gaps of the Cash page.
+]]
+StoreView.MaxMotes = 8
+local function motes(parent: Instance, list: { Mote }, picture: string, colors: { Color3 }, peak: number, z: number)
+	for i, m in list do
+		if i > StoreView.MaxMotes then
+			break
+		end
+		ShopFx.particle(
+			parent,
+			picture,
+			UDim2.fromOffset(m[1], m[2]),
+			m[5],
+			Vector2.new(m[3], m[4]),
+			m[6],
+			colors[(i - 1) % #colors + 1],
+			peak,
+			z
+		)
 	end
 end
 
@@ -947,7 +1025,10 @@ Looks.Starter = function(holder, spec, w, h, m)
 			ZIndex = 5,
 		}, holder)
 		ShopFx.face(slot, { hex("#3a2a6a"), hex("#1e1440") }, 12, 3)
-		modelPicture(slot, models[i], models[i], 62, UDim2.new(0.5, 0, 0, 40), 6)
+		local pic = modelPicture(slot, models[i], models[i], 62, UDim2.new(0.5, 0, 0, 40), 6)
+		if i == 1 then
+			idle(pic, true) -- (its golem lives a little)
+		end
 		ShopFx.text(slot, "x1", 14, {
 			Name = "Count",
 			Position = UDim2.fromOffset(0, -3),
@@ -1113,6 +1194,15 @@ Looks.Blaster = function(holder, spec, w, h, m)
 	refs.Big = ShopFx.chipLabel(chip)
 	refs.Picture = picture(holder, spec, 150, UDim2.new(1, -96, 0, math.floor(h * 0.48)), 5, -10)
 	float(refs.Picture)
+	-- sparks fly off the gun now and then (the Blasters tab's particles: PC and TV)
+	local gx, gy = w - 96, math.floor(h * 0.48)
+	motes(holder, {
+		{ gx + 46, gy - 20, 40, -78, 16, 1.5 },
+		{ gx + 30, gy + 8, 58, -60, 12, 1.25 },
+		{ gx + 52, gy - 4, 22, -92, 14, 1.75 },
+		{ gx + 12, gy - 30, 50, -70, 11, 1.4 },
+		{ gx + 40, gy + 14, 34, -84, 13, 1.6 },
+	}, "sparkle", { hex("#bff6ff"), WHITE, hex("#ffe27a") }, 0.1, 6)
 	refs.Note = ShopFx.text(holder, spec.Note or "", 13, {
 		Name = "Note",
 		Position = UDim2.fromOffset(20, 146),
@@ -1242,14 +1332,25 @@ Looks.Egg = function(holder, spec, w, h, m)
 		end
 		refs.Picture = pic
 	end
-	ShopFx.title(holder, spec.Big or `x{count}`, 43, { WHITE, WHITE, hex("#ffe07a") }, {
-		Name = "Big",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0, y + 26),
+	idle(refs.Picture, true) -- (the egg, or the pile of three as one)
+	-- the count in a box held by its middle (it and its dark copy wiggle as one)
+	local countBox = UIKit.new("Frame", {
+		Name = "Count",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -67, 0, y + 26),
 		Size = UDim2.fromOffset(110, 50),
+		ZIndex = 9,
+	}, holder)
+	ShopFx.title(countBox, spec.Big or `x{count}`, 43, { WHITE, WHITE, hex("#ffe07a") }, {
+		Name = "Big",
+		Size = UDim2.fromScale(1, 1),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 9,
 	})
+	if count > 1 then
+		wiggle(countBox, 4, true)
+	end
 	addPrice(refs, spec.Keys[1], Vector2.new(w - 26, m.Button + 4), "Green", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -13),
@@ -1519,7 +1620,7 @@ local function golemTile(
 	}, holder)
 	ShopFx.face(face, paints[golem.Rarity] or { rarity.Color, rarity.DarkColor }, 14, 4, 70)
 	local rare = mythic or golem.Rarity == "Legendary"
-	ShopFx.rays(
+	local rays = ShopFx.rays(
 		face,
 		UDim2.new(0.5, 0, 0.45, 0),
 		math.floor(size.X * 1.8),
@@ -1528,17 +1629,45 @@ local function golemTile(
 		if mythic then Color3.fromRGB(255, 200, 230) else WHITE,
 		40
 	)
+	if rays and not rare then
+		rays:SetAttribute("ShopFx", nil) -- (only the Legendary and the Mythic's turn: the rarest stand out)
+	end
+	local picY = if named then math.floor(size.Y * 0.42) else math.floor(size.Y * 0.46)
+	local pic = math.floor(math.min(size.X - 12, size.Y * (if named then 0.52 else 0.7)))
+	if named and golem.Rarity == "Epic" then
+		-- (the Royal Egg's Epic: a soft glow breathes behind it)
+		local glow = ShopFx.glow(face, UDim2.new(0.5, 0, 0, picY), math.floor(pic * 0.62), hex("#f4d8ff"), z + 1, 0.85)
+		glow:SetAttribute("ShopFx", "Glow")
+	end
 	ShopFx.gloss(face, 14, z + 2, 0.3)
 	ShopFx.rim(face, 14, z + 2)
 	if mythic then
 		ShopFx.mythicRim(face, 4)
 	end
-	local pic = math.floor(math.min(size.X - 12, size.Y * (if named then 0.52 else 0.7)))
-	livePicture(holder, "golem_" .. golem.Id, "golem_" .. golem.Id, pic, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, if named then math.floor(size.Y * 0.42) else math.floor(size.Y * 0.46)),
-		ZIndex = z + 3,
-	})
+	-- the golem bobs and rocks (the Royal Egg's always; the small Dragonforge tiles' not on a phone)
+	idle(
+		livePicture(holder, "golem_" .. golem.Id, "golem_" .. golem.Id, pic, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, picY),
+			ZIndex = z + 3,
+		}),
+		not named
+	)
+	if named and rare then
+		-- (the Royal Egg's Legendary and Mythic: two sparkles twinkle by the golem)
+		local tint = if mythic then hex("#ffd0f0") else hex("#fff4b0")
+		for k, place in { { 0.2, -0.36, 22 }, { 0.82, 0.02, 15 } } do
+			local sparkle = ShopFx.sparkle(
+				holder,
+				UDim2.new(place[1], 0, 0, picY + math.floor(place[2] * pic)),
+				place[3],
+				tint,
+				z + 4,
+				k + (if mythic then 2 else 0)
+			)
+			sparkle:SetAttribute("Ambient", true)
+		end
+	end
 	local chance: TextLabel
 	if named then
 		-- (the Royal Egg's tiles: the chance on top, the name and the rarity under the golem)
@@ -1557,7 +1686,7 @@ local function golemTile(
 			ZIndex = z + 5,
 		}, nil, 1)
 		ShopFx.limit(name, 15, 9)
-		ShopFx.text(holder, string.upper(golem.Rarity), 14, {
+		local word = ShopFx.text(holder, string.upper(golem.Rarity), 14, {
 			Name = "Rarity",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -8),
@@ -1565,6 +1694,16 @@ local function golemTile(
 			TextColor3 = if mythic then hex("#ff8ab0") else hex("#fff3a0"),
 			ZIndex = z + 5,
 		}, nil, 1)
+		if mythic then
+			-- MYTHIC in a rainbow that runs (the rim's own colours and motion)
+			word.TextColor3 = WHITE
+			local rainbow = UIKit.new("UIGradient", {
+				Name = "Rainbow",
+				Color = ShopFx.sequence(ShopFx.RainbowRim),
+				Rotation = ShopFx.RimRest,
+			}, word)
+			rainbow:SetAttribute("ShopFx", "Rim")
+		end
 	else
 		ShopFx.text(holder, golem.Rarity, 12, {
 			Name = "Rarity",
@@ -1741,23 +1880,42 @@ local function buildBanner(page: Frame, edition: Edition, m: Metrics): BannerRef
 			ZIndex = 6,
 		})
 		float(heroPicture)
+		if heroPicture then
+			heroPicture:SetAttribute("Swing", 2.5) -- (it rocks a little as it floats)
+		end
 	end
 	if edition.CapsuleId then
+		-- the shard egg glows and now and then wobbles as if about to hatch
+		local glow = ShopFx.glow(face, UDim2.fromOffset(430, h - 70), 78, hex("#ffeaa0"), 2, 1)
+		glow:SetAttribute("ShopFx", "Glow")
 		local shardName = "capsule_" .. edition.CapsuleId
-		livePicture(frame, shardName, shardName, 100, {
-			Name = "Shard",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(430, h - 70),
-			Rotation = -12,
-			ZIndex = 7,
-		})
+		hatch(
+			livePicture(frame, shardName, shardName, 100, {
+				Name = "Shard",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(430, h - 70),
+				Rotation = -12,
+				ZIndex = 7,
+			}),
+			4
+		)
 	end
 	local heroChip = ShopFx.chip(frame, "", 190, 30, 16, {
 		Name = "HeroChance",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromOffset(560, h - 44),
 	}, { hex("#ff3a6a"), hex("#8a0a3a") })
+	wiggle(heroChip, 2)
 	local heroLabel = ShopFx.chipLabel(heroChip) :: TextLabel
+	-- embers rise from the flames in front of the dragon king (PC and TV)
+	motes(frame, {
+		{ 412, h - 6, 14, -196, 24, 3.1 },
+		{ 462, h - 12, -10, -224, 18, 3.7 },
+		{ 520, h - 4, 18, -176, 28, 2.8 },
+		{ 574, h - 10, -16, -232, 20, 3.9 },
+		{ 616, h - 6, 10, -204, 23, 3.4 },
+		{ 448, h - 2, 22, -160, 17, 2.5 },
+	}, "glow", { hex("#fff1a8"), hex("#ffd36a"), WHITE }, 0, 7)
 	-- a tile per golem: three a row, two rows, with its chance
 	local chances: { [string]: TextLabel } = {}
 	local tileW, gap = 112, 10
@@ -1863,14 +2021,24 @@ local function buildRoyal(page: Frame): RoyalRefs?
 		TextYAlignment = Enum.TextYAlignment.Top,
 		ZIndex = 8,
 	}, nil, 2)
-	ShopFx.glow(face, UDim2.fromOffset(150, 200), 110, WHITE, 2, 1)
+	-- the egg floats, its glow breathes, and now and then it wobbles as if about to hatch
+	local glow = ShopFx.glow(face, UDim2.fromOffset(150, 200), 110, WHITE, 2, 1)
+	glow:SetAttribute("ShopFx", "Glow")
 	local egg = livePicture(frame, "capsule_Royal", "capsule_Royal", 160, {
 		Name = "Egg",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset(150, 196),
 		ZIndex = 6,
 	})
-	float(egg)
+	hatch(egg)
+	-- gold sparkles rise round it (PC and TV)
+	motes(frame, {
+		{ 76, h - 16, 10, -150, 20, 3.4 },
+		{ 118, h - 6, -8, -122, 14, 2.8 },
+		{ 182, h - 12, 12, -168, 23, 3.9 },
+		{ 226, h - 22, -14, -132, 16, 3.1 },
+		{ 254, h - 8, 6, -150, 13, 2.6 },
+	}, "sparkle", { hex("#ffe27a"), hex("#fff6c2"), hex("#ffd04a") }, 0.1, 7)
 	ShopFx.text(frame, "=", 72, {
 		Name = "Equals",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2224,8 +2392,92 @@ function StoreView.selectTab(refs: Refs, id: string, animate: boolean?): (boolea
 			end
 		end
 		ShopFx.popIn(holders)
+		-- the picked tab's picture pops
+		local tab = refs.TabRefs[id]
+		local icon = if tab then tab.Icon else nil
+		if icon then
+			ShopFx.popIcon(icon)
+		end
 	end
 	return changed, built
+end
+
+--[[
+	The header comes in as the window opens (ShopFx.cascade): the SHOP title
+	(its dark copy and its light band) drops into place, the basket and the
+	shown tabs pop in left to right, the X spins in.
+]]
+function StoreView.cascade(refs: Refs)
+	local root = refs.Window.Root
+	local drops: { GuiObject } = {}
+	local title = refs.Window.Title
+	if title.Visible then
+		table.insert(drops, title)
+		for _, suffix in { "Shadow", "Glint" } do
+			local copy = root:FindFirstChild(title.Name .. suffix)
+			if copy and copy:IsA("GuiObject") then
+				table.insert(drops, copy)
+			end
+		end
+	end
+	local pops: { GuiObject } = {}
+	local basket = root:FindFirstChild("Basket")
+	if basket and basket:IsA("GuiObject") then
+		table.insert(pops, basket)
+	end
+	for _, id in StoreView.visibleTabs(refs) do
+		table.insert(pops, refs.TabRefs[id].Lift)
+	end
+	local close = refs.Window.Close.Parent
+	ShopFx.cascade({ Drops = drops, Pops = pops, Spin = if close and close:IsA("GuiObject") then close else nil })
+end
+
+-- Where `gui`'s middle is in the window group's units (its front layer's): a card on the open page
+-- or a banner's buy button, from the layout's own numbers (the page's scroll included).
+local function inFront(refs: Refs, gui: GuiObject): UDim2
+	local page = refs.Pages[refs.Current]
+	local x = gui.Position.X.Offset + (0.5 - gui.AnchorPoint.X) * gui.Size.X.Offset
+	local y = gui.Position.Y.Offset + (0.5 - gui.AnchorPoint.Y) * gui.Size.Y.Offset
+	local parent = gui.Parent
+	-- (a banner's button: the banner sits at the page's top-left)
+	if parent and parent ~= page and parent:IsA("GuiObject") and parent.Parent == page then
+		x += parent.Position.X.Offset
+		y += parent.Position.Y.Offset
+	end
+	local rim = StoreView.Rim
+	local scroll = refs.Scroller.CanvasPosition
+	return UDim2.fromOffset(rim + StoreView.Pad + x - scroll.X, rim + (refs.Metrics.Header - rim) + StoreView.PadTop + y - scroll.Y)
+end
+
+--[[
+	A purchase of `key` went through (StoreController: Roblox's prompt
+	finished with a purchase the shop asked for): the card that sells it
+	(or the limited banner's button) flashes and pops, stars fly out of it
+	(coins for a coin pack) over the window (ShopFx.celebrate). Returns
+	whether it showed (its page is open and built). Quiet: nothing moves.
+]]
+function StoreView.celebrate(refs: Refs, key: string): boolean
+	local front = refs.Front
+	local product = MonetizationConfig.Products[key]
+	local picture = if product and product.CoinPack then "coin" else "star"
+	for _, id in refs.Order do
+		local card = refs.Cards[id]
+		if card and card.Spec.Section == refs.Current and card.Holder.Visible and card.Buys[key] then
+			ShopFx.celebrate(card.Holder, CORNER, front, inFront(refs, card.Holder), picture, #id)
+			return true
+		end
+	end
+	local banner = refs.Banner
+	if banner and refs.Current == "Featured" then
+		for _, face in banner.Buys do
+			local holder = face.Parent
+			if face:GetAttribute("Key") == key and holder and holder:IsA("GuiObject") then
+				ShopFx.celebrate(face, ShopFx.ButtonCorner, front, inFront(refs, holder), picture, 3)
+				return true
+			end
+		end
+	end
+	return false
 end
 
 -- The pages built since the last call (the controller wires their buttons).
@@ -2319,17 +2571,18 @@ local function buildTab(parent: Instance, section: StoreConfig.Section, m: Metri
 	ShopFx.face(face, theme.Tab, 16, 4, 90)
 	ShopFx.studs(face, width, h, 17, 0.25, 7)
 	ShopFx.bindPress(face, lift)
-	-- the picture: the sheet's once uploaded, else the live model
+	-- the picture: the sheet's once uploaded, else the live model (the open tab's wiggles)
 	local pictureAt = UDim2.fromOffset(math.floor(icon * 0.32), math.floor(h * 0.42))
-	local image = ShopFx.icon(lift, section.TabIcon, icon, {
+	local image: GuiObject? = ShopFx.icon(lift, section.TabIcon, icon, {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = pictureAt,
 		ZIndex = 9,
 	})
 	if not image and section.TabModel then
-		modelPicture(lift, section.TabModel, section.TabModel, icon, pictureAt, 9)
+		image = modelPicture(lift, section.TabModel, section.TabModel, icon, pictureAt, 9)
 	end
+	wiggle(image, 6)
 	local label = ShopFx.text(lift, section.Tab, word, {
 		Name = "Word",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -2339,7 +2592,7 @@ local function buildTab(parent: Instance, section: StoreConfig.Section, m: Metri
 		ZIndex = 10,
 	}, nil, 2)
 	ShopFx.limit(label, word, 10)
-	return { Holder = holder, Lift = lift, Face = face, Scale = scale, Ring = ring, Glow = glow, Width = width }
+	return { Holder = holder, Lift = lift, Face = face, Scale = scale, Ring = ring, Glow = glow, Icon = image, Width = width }
 end
 
 -- A lightning bolt in the window's world: its middle, length and turn (Second: the theme's second colour).
@@ -2650,6 +2903,22 @@ buildPage = function(refs: Refs, sectionId: string): boolean
 			refs.Cards[spec.Id] = build(cardHolder, spec, widths[i], h, m)
 		end
 	end
+	if sectionId == "Cash" then
+		-- coins drift down the gaps between the first row's packs, over the cards (PC and TV)
+		local row = StoreConfig.rows(sectionId)[1]
+		if row and #row > 1 then
+			local widths = rowWidths(row)
+			local fall = rowHeight(section, 1, m) - 70
+			local list: { Mote } = {}
+			local x = 0
+			for i = 1, #widths - 1 do
+				x += widths[i]
+				local gap = x + (i - 1) * StoreView.Gap + StoreView.Gap / 2
+				table.insert(list, { math.floor(gap), 18 + (i % 2) * 26, (if i % 2 == 0 then 8 else -8), fall, 24, 3.6 + 0.35 * i })
+			end
+			motes(page, list, "shop_coin", { WHITE }, 0.05, 13)
+		end
+	end
 	-- the Royal eggs' BEST VALUE (prices only: they never change)
 	local royal: { string } = {}
 	for _, spec in StoreConfig.Cards do
@@ -2852,6 +3121,9 @@ function StoreView.build(metrics: Metrics?, lazy: boolean?): Refs
 	if titleEdge and titleEdge:IsA("UIStroke") then
 		titleEdge.Thickness = 5
 	end
+	-- a warm light band slides across it now and then (its copy's mark "Glint": a window loop)
+	local glint = ShopFx.glint(title)
+	table.insert(fx, glint)
 	-- the basket over the top-left corner: the sheet's once uploaded, else the live cart
 	local basket = if m.Compact then math.floor(m.Header * 0.95) else 112
 	local basketAt = UDim2.fromOffset(math.floor(basket * 0.2), math.floor(basket * 0.2))
@@ -2951,10 +3223,12 @@ function StoreView.build(metrics: Metrics?, lazy: boolean?): Refs
 		Banner = nil,
 		Royal = nil,
 		Fx = fx,
+		Front = fx[2] :: Frame,
 		Burst = burst,
 		Current = StoreConfig.Sections[1].Id,
 		Fit = 1,
 		Compact = m.Compact,
+		Lean = m.Compact,
 		Metrics = m,
 		Built = {},
 		Fresh = {},

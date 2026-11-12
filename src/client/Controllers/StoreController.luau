@@ -25,11 +25,16 @@
 	- The pages are built lazily (StoreView.build): the open tab's at once,
 	  each other the first time it opens; its buttons are wired then.
 	- The motion (UI/ShopFx) is TweenService loops only, no per-frame Lua:
-	  the window's own (rays, bolts, sparkles: none of the ambient ones on a
-	  phone) and the open tab's (its page's shine, rims, floats, pulses and
-	  rays, the tab's bob) while the window is open; a tab change stops the
-	  old tab's, a close stops all. Config/AnimConfig.PixelFx on and Reduce
-	  motion off; else the shop stands still.
+	  the window's own (rays, bolts, sparkles, the title's light band: none
+	  of the ambient ones on a phone) and the open tab's (its page's shine,
+	  gloss, rims, floats, idling golems and eggs, wiggles, pulses, rays and
+	  particles, the tab's bob and its icon's wiggle) while the window is
+	  open; a tab change stops the old tab's, a close stops all. A phone or
+	  a tablet skips the ambient marks (view.Lean); a TV keeps them. As it
+	  opens the header cascades in (StoreView.cascade). A purchase the shop
+	  asked for that Roblox's prompt reports done: its card flashes, pops
+	  and throws stars (StoreView.celebrate). Config/AnimConfig.PixelFx on
+	  and Reduce motion off; else the shop stands still.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -76,11 +81,13 @@ local TABS_ACTION = "TerraForgeStoreTabs"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local PROMPT_MEMORY = 10 -- seconds a buy waits for its PurchasePrompt answer
 local BLASTER_WAIT = 30 -- seconds the blaster card stays greyed after its prompt (until the level changes)
+local ASK_MEMORY = 300 -- seconds a buy from the shop may sit in Roblox's purchase prompt (its card celebrates after)
 
 local player = Players.LocalPlayer
 local refs: StoreView.Refs? = nil
 local isOpen = false
 local pending: { [string]: number } = {} -- product key -> os.clock() of the buy
+local asked: { [string]: number } = {} -- product key -> os.clock() of a buy from the shop (until Roblox's prompt ends)
 local detailKey: string? = nil
 local detailFrom: GuiObject? = nil -- the button that opened the odds panel (BACK selects it again)
 local stateAt: number? = nil -- server time of the last State (CapsuleView.luckyNow)
@@ -249,7 +256,7 @@ local function playTab(view: StoreView.Refs)
 	if tab then
 		table.insert(roots, tab.Lift)
 	end
-	tabLoops = ShopFx.play(ShopFx.loopsUnder(roots, view.Compact))
+	tabLoops = ShopFx.play(ShopFx.loopsUnder(roots, view.Lean))
 end
 
 -- The motion follows the open tab (also when a tab hid and another opened by itself) and what
@@ -449,6 +456,7 @@ local function buy(key: string)
 		return
 	end
 	pending[key] = os.clock()
+	asked[key] = os.clock()
 	if product.Grant == "BlasterLevel" then
 		local level = state().BlasterLevel
 		blasterWait = { Key = key, Level = if type(level) == "number" then level else 1, Until = os.clock() + BLASTER_WAIT }
@@ -573,8 +581,26 @@ end
 -- The window's loops and the open tab's (none while the shop is quiet: ShopFx.play).
 local function startMotion(view: StoreView.Refs)
 	stopMotion()
-	windowLoops = ShopFx.play(ShopFx.loopsUnder(view.Fx, view.Compact))
+	windowLoops = ShopFx.play(ShopFx.loopsUnder(view.Fx, view.Lean))
 	playTab(view)
+end
+
+--[[
+	Roblox's purchase prompt for `product` ended: bought, and the shop asked
+	for it (a buy from a card or the banner, ASK_MEMORY) while the window is
+	open: its card flashes, pops and throws stars (the server still grants
+	it). Either way the shop's ask is over.
+]]
+local function promptEnded(product: MonetizationConfig.Product?, purchased: boolean)
+	local view = refs
+	if not product then
+		return
+	end
+	local at = asked[product.Key]
+	asked[product.Key] = nil
+	if purchased and view and isOpen and at and os.clock() - at <= ASK_MEMORY then
+		StoreView.celebrate(view, product.Key)
+	end
 end
 
 -- Shows tab `id`; the gamepad selection moves to its page (an odds panel open closes first).
@@ -706,6 +732,8 @@ local function build(w: number, h: number, compact: boolean): StoreView.Refs
 	stopMotion()
 	-- (lazy: the open tab's page now, the others on their first visit)
 	local view = StoreView.build(StoreView.metricsFor(compact, fit), true)
+	-- (a TV gets the compact sizes but keeps the particles, the gloss and the small pictures' idling)
+	view.Lean = compact and not GuiService:IsTenFootInterface()
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
 	refs = view
 	if current then
@@ -825,8 +853,9 @@ function StoreController.open()
 		return
 	end
 	-- UI/ShopFx: the window pops from 0.82 with a Back ease, the dim fades in, a burst of rays
-	-- flashes out behind it (Reduce motion: it just shows)
+	-- flashes out behind it, the header cascades in (Reduce motion: it just shows)
 	ShopFx.open(view.Group, dim, StoreView.DimTransparency, view.Burst)
+	StoreView.cascade(view)
 end
 
 -- Opens the Store at a card (the round look's HUD offers): its tab shows.
@@ -945,16 +974,19 @@ function StoreController.start()
 		stateAt = serverNow()
 	end
 	-- a finished purchase (any Robux prompt in the game): a confetti burst over the screen
-	-- (the owner's UI pack reel, 2026-10-27); the grant itself still comes from the server
-	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, _, purchased)
+	-- (the owner's UI pack reel, 2026-10-27); the grant itself still comes from the server.
+	-- One the shop asked for: its card flashes, pops and throws stars too (promptEnded).
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, productId, purchased)
 		if purchased then
 			Confetti.burst(nil, Motion.reduced())
 		end
+		promptEnded(MonetizationConfig.byId(productId, "Product"), purchased)
 	end)
-	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(_, _, purchased)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(_, passId, purchased)
 		if purchased then
 			Confetti.burst(nil, Motion.reduced())
 		end
+		promptEnded(MonetizationConfig.byId(passId, "GamePass"), purchased)
 	end)
 	-- a blaster prompt closed without a purchase: its card is buyable again
 	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, productId, purchased)

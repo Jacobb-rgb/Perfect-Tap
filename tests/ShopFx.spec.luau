@@ -468,11 +468,11 @@ return function(T, Loader)
 			local first = #refs.Gui:GetDescendants()
 			T.truthy(first < 6674 / 2, `instances at the first open: {first}`)
 			local windowLoops = #ShopFx.loopsUnder(refs.Fx, false)
-			T.truthy(windowLoops <= 16, `the window's tweens: {windowLoops}`)
+			T.truthy(windowLoops <= 17, `the window's tweens: {windowLoops}`)
 			for _, section in StoreConfig.Sections do
 				StoreView.selectTab(refs, section.Id)
 				local loops = #ShopFx.loopsUnder({ refs.Pages[section.Id], refs.TabRefs[section.Id].Lift })
-				T.truthy(loops <= 30, `{section.Id}: {loops} tweens`)
+				T.truthy(loops <= 56, `{section.Id}: {loops} tweens (the budgets per tab: the motion v2 spec)`)
 				local views = count(refs.Pages[section.Id], function(d)
 					return d.ClassName == "ViewportFrame"
 				end)
@@ -728,6 +728,520 @@ return function(T, Loader)
 				0,
 				"no golem model waits to be built"
 			)
+		end)
+	end)
+
+	---------------------------------------------------------------- the motion v2 (owner 2026-11-12: "add more things")
+
+	-- One of every new mark under a frame (the effects picture uploaded).
+	local function markedV2(): any
+		local root = Instance.new("Frame")
+		local function picture(name: string, at: any): any
+			local p = Instance.new("ImageLabel")
+			p.Name = name
+			p.Position = at
+			p.Rotation = 0
+			p.Parent = root
+			return p
+		end
+		local idle1 = picture("Idle1", UDim2.fromOffset(100, 80))
+		idle1:SetAttribute("ShopFx", "Idle")
+		local idle2 = picture("Idle2", UDim2.fromOffset(200, 80))
+		idle2:SetAttribute("ShopFx", "Idle")
+		local hero = picture("Hero", UDim2.fromOffset(300, 90))
+		hero:SetAttribute("ShopFx", "Float")
+		hero:SetAttribute("Swing", 2.5)
+		local egg = picture("Egg", UDim2.fromOffset(400, 90))
+		egg.Rotation = -12
+		egg:SetAttribute("ShopFx", "Float")
+		egg:SetAttribute("Wobble", ShopFx.WobbleSwing)
+		local glow = ShopFx.glow(root, UDim2.fromOffset(400, 90), 60, WHITE, 2, 0.9)
+		glow:SetAttribute("ShopFx", "Glow")
+		local sticker = ShopFx.sticker(root, "BEST VALUE!", "Gold", UDim2.fromOffset(50, 10), 14, -4)
+		local cards = {}
+		for i = 1, 4 do
+			local holder = Instance.new("Frame")
+			holder.Name = "Card" .. i
+			holder.Parent = root
+			table.insert(cards, ShopFx.sheen(holder, 18, 11))
+		end
+		local title = ShopFx.title(root, "SHOP", 56, { WHITE, WHITE, WHITE })
+		local glint = ShopFx.glint(title)
+		local mote = ShopFx.particle(root, "glow", UDim2.fromOffset(500, 300), 14, Vector2.new(10, -200), 3, WHITE, 0.1, 7)
+		return {
+			Root = root,
+			Idle1 = idle1,
+			Idle2 = idle2,
+			Hero = hero,
+			Egg = egg,
+			Glow = glow,
+			Sticker = sticker,
+			Cards = cards,
+			Glint = glint,
+			Mote = mote,
+		}
+	end
+
+	T.test("ShopFx v2: every new mark samples Roblox's curves (idle, rock, wobble, glow, wiggle, sheen, glint, rise)", function()
+		withEffects(1, function()
+			local m = markedV2()
+			local kinds = byKind(ShopFx.loopsUnder({ m.Root }))
+			-- idle: ONE tween moves the bob and the sway; the second one is slower and starts at the top
+			T.eq(#kinds.Idle, 2, "two idle pictures")
+			local a, b = kinds.Idle[1], kinds.Idle[2]
+			T.eq(a.Property, "Position")
+			T.truthy(a.Reverses and a.Style == "Sine")
+			T.eq(#a.Also, 1, "its sway rides the same tween")
+			T.eq(a.Also[1].Property, "Rotation")
+			T.truthy(b.Time > a.Time, "never in step: the next one a little slower")
+			T.eq(ShopFx.sample(a, 0), UDim2.fromOffset(100, 80), "the first from its place")
+			T.eq(ShopFx.sample(b, 0), UDim2.fromOffset(200, 80 - ShopFx.IdleRise), "the second from the top")
+			for t = 0, 6, 0.05 do
+				local p = ShopFx.sample(a, t)
+				T.truthy(p.Y.Offset <= 80 + 1e-9 and p.Y.Offset >= 80 - ShopFx.IdleRise - 1e-9, "a soft bob")
+				local r = ShopFx.sample(a, t, "Rotation")
+				T.truthy(math.abs(r) <= ShopFx.IdleSwing + 1e-9, `a small sway ({r})`)
+			end
+			T.near(ShopFx.sample(a, 0, "Rotation"), -ShopFx.IdleSwing, 1e-9)
+			T.near(ShopFx.sample(a, a.Time, "Rotation"), ShopFx.IdleSwing, 1e-9, "it rocks as it bobs")
+			T.eq(ShopFx.sample(a, 0, "Nope"), nil, "no such track")
+			-- the dragon king floats and rocks (one tween); the egg floats, and wobbles now and then (two)
+			local floats = kinds.Float
+			T.eq(#floats, 2)
+			local heroFloat = if floats[1].Target == m.Hero then floats[1] else floats[2]
+			T.eq(heroFloat.Also[1].Property, "Rotation", "the hero rocks as it floats")
+			T.near(ShopFx.sample(heroFloat, heroFloat.Time, "Rotation"), 2.5, 1e-9)
+			T.eq(#kinds.Wobble, 1, "the egg's wobble")
+			local wobble = kinds.Wobble[1]
+			T.eq(wobble.Target, m.Egg)
+			T.eq(wobble.Style, "Elastic")
+			T.truthy(wobble.Reverses)
+			T.near(ShopFx.sample(wobble, 0), -12, 1e-9, "from its tilt")
+			T.near(ShopFx.sample(wobble, wobble.Time), -12 + ShopFx.WobbleSwing, 1e-9, "its peak")
+			local still = 0
+			local steps = 400
+			for i = 0, steps - 1 do
+				if math.abs(ShopFx.sample(wobble, i * 2 * wobble.Time / steps) + 12) < 0.5 then
+					still += 1
+				end
+			end
+			T.truthy(still / steps > 0.45 and still / steps < 0.8, `now and then: still {still / steps} of the time`)
+			-- the glow breathes fainter and back
+			local glow = kinds.Glow[1]
+			T.eq(glow.Property, "ImageTransparency")
+			T.near(ShopFx.sample(glow, 0), glow.Rest, 1e-9)
+			T.near(ShopFx.sample(glow, glow.Time), math.min(1, glow.Rest + ShopFx.GlowFade), 1e-9)
+			-- the sticker wiggles about its tilt
+			local wiggle = kinds.Wiggle[1]
+			T.eq(wiggle.Target, m.Sticker)
+			T.eq(wiggle.Rest, -4)
+			for t = 0, 3, 0.05 do
+				T.truthy(math.abs(ShopFx.sample(wiggle, t) + 4) <= ShopFx.WiggleSwing + 1e-9, "a gentle wiggle")
+			end
+			-- the cards' gloss: the same round for all, each one later, always in that order (no drift)
+			local sheens = kinds.Sheen
+			T.eq(#sheens, 4)
+			local function showing(loop: any, t: number): boolean
+				local x = ShopFx.sample(loop, t).X
+				return x > ShopFx.SweepFrom and x < ShopFx.SweepTo
+			end
+			local first: { number } = {}
+			for i, loop in sheens do
+				T.eq(loop.Time, ShopFx.SheenEvery, "one round for all")
+				T.falsy(loop.Reverses)
+				T.truthy(loop.From.X <= ShopFx.SweepFrom + 1e-5 and loop.To.X >= ShopFx.SweepTo - 1e-5, "the jump back is off the card")
+				T.near(loop.Rest.X, ShopFx.SweepFrom, 1e-5, "at rest off the card (a Vector2: 32-bit)")
+				for k = 0, 599 do
+					if showing(loop, k * 0.01) then
+						first[i] = k * 0.01
+						break
+					end
+				end
+				T.truthy(first[i] ~= nil, `card {i}'s band shows`)
+				-- (every round the same: the band shows at the same moment of each)
+				T.eq(showing(loop, first[i] + 0.02), showing(loop, first[i] + 0.02 + 3 * ShopFx.SheenEvery))
+			end
+			for i = 2, #sheens do
+				T.near(first[i] - first[i - 1], ShopFx.SheenGap, 0.02, "one after another")
+			end
+			for k = 0, 599 do
+				local at = 0
+				for _, loop in sheens do
+					if showing(loop, k * 0.01) then
+						at += 1
+					end
+				end
+				T.truthy(at < #sheens, "never all at once")
+			end
+			T.near(first[1], ShopFx.SheenLead, 0.02, "the first after the cards' pop-in")
+			-- the title's light band: across in GlintCross every GlintEvery
+			local glint = kinds.Glint[1]
+			T.eq(glint.Target, m.Glint:FindFirstChild("Glint"))
+			T.eq(glint.Time, ShopFx.GlintEvery)
+			local lit = 0
+			for k = 0, 449 do
+				if showing(glint, k * 0.01) then
+					lit += 1
+				end
+			end
+			T.near(lit * 0.01, ShopFx.GlintCross, 0.03, "a quick sweep")
+			-- a particle: a linear drift, clear at both ends (the jump back unseen), brightest half way
+			local rise = kinds.Rise
+			T.eq(#rise, 2, "its drift and its fade")
+			local drift = if rise[1].Property == "Position" then rise[1] else rise[2]
+			local fade = if rise[1].Property == "Position" then rise[2] else rise[1]
+			T.eq(drift.Style, "Linear")
+			T.falsy(drift.Reverses)
+			T.eq(drift.Time, 3)
+			T.eq(ShopFx.sample(drift, 1.5), UDim2.fromOffset(505, 200), "half way")
+			T.near(fade.Time * 2, drift.Time, 1e-9, "the fade keeps step with the drift")
+			for _, t in { 0, 3, 6, 2.97, 3.03, 5.97 } do
+				T.truthy(ShopFx.sample(fade, t) > 0.99, `clear at the drift's ends ({t} s: {ShopFx.sample(fade, t)})`)
+			end
+			T.near(ShopFx.sample(fade, 1.5), 0.1, 1e-9, "brightest half way")
+			-- a phone: no ambient ones (the particle, the cards' gloss)
+			local lean = byKind(ShopFx.loopsUnder({ m.Root }, true))
+			T.eq(lean.Rise, nil, "a phone: no particle")
+			T.eq(lean.Sheen, nil, "a phone: no card gloss")
+			T.eq(#lean.Idle, 2, "(the idles here are not ambient)")
+		end)
+	end)
+
+	T.test("ShopFx v2: quiet keeps it all static at rest; stop puts the riding tracks back too", function()
+		withEffects(1, function()
+			local m = markedV2()
+			local loops = ShopFx.loopsUnder({ m.Root })
+			-- the built look is the rest look: nothing waits half way
+			for _, loop in loops do
+				local now = (loop.Target :: any)[loop.Property]
+				T.truthy(
+					now == loop.Rest or (type(now) == "number" and math.abs(now - loop.Rest) < 1e-6),
+					`{loop.Kind} {loop.Property} built at rest`
+				)
+				for _, more in loop.Also or {} do
+					T.eq((loop.Target :: any)[more.Property], more.Rest, loop.Kind .. " " .. more.Property .. " at rest")
+				end
+			end
+			T.eq(m.Mote.ImageTransparency, 1, "a particle at rest: unseen")
+			recording(function(made)
+				local playing = ShopFx.play(loops)
+				T.eq(#made, #loops, "one tween a loop")
+				for _, record in made do
+					if record.Instance == m.Idle1 then
+						T.truthy(record.Goal.Position ~= nil and record.Goal.Rotation ~= nil, "the idle's one tween moves both")
+					end
+				end
+				ShopFx.stop(playing)
+				T.eq(m.Idle1.Position, UDim2.fromOffset(100, 80))
+				T.eq(m.Idle1.Rotation, 0, "its sway back too")
+				T.eq(m.Hero.Rotation, 0)
+				T.eq(m.Egg.Rotation, -12)
+				T.eq(m.Mote.ImageTransparency, 1)
+				-- Reduce motion: no tween anywhere, the one-shots put everything at rest at once
+				table.clear(made)
+				Motion.setReduced(true)
+				local ok, err = pcall(function()
+					T.truthy(ShopFx.quiet())
+					T.eq(#ShopFx.play(loops).Loops, 0)
+					local holder = Instance.new("Frame")
+					holder.AnchorPoint = Vector2.new(0.5, 0.5)
+					holder.Size = UDim2.fromOffset(200, 250)
+					local light = Instance.new("UIStroke")
+					light.Transparency = 0.62
+					light.Parent = holder
+					ShopFx.hover(holder, true, false, { Lift = ShopFx.Lift, Light = light })
+					T.eq(holder.AnchorPoint, Vector2.new(0.5, 0.5), "no lift")
+					T.near(light.Transparency, 0.62, 1e-6, "no light")
+					local title = Instance.new("TextLabel")
+					title.Position = UDim2.fromOffset(84, 40)
+					local tab = Instance.new("Frame")
+					local x = Instance.new("Frame")
+					x.Rotation = 4
+					ShopFx.cascade({ Drops = { title }, Pops = { tab }, Spin = x })
+					T.eq(title.Position, UDim2.fromOffset(84, 40))
+					T.eq((tab :: any).Scale.Scale, 1)
+					T.eq(x.Rotation, 4)
+					ShopFx.popIcon(tab)
+					T.eq((tab :: any).Pop.Scale, 1)
+					T.eq(#ShopFx.celebrate(holder, 18, Instance.new("Frame"), UDim2.fromOffset(0, 0), "star"), 0, "no celebration")
+					T.eq(#made, 0, "no tween at all")
+				end)
+				Motion.setReduced(false)
+				if not ok then
+					error(err, 0)
+				end
+			end)
+		end)
+	end)
+
+	T.test("ShopFx v2: the header cascades in (under 0.3 s), the picked tab's icon pops, a hovered card rises and brightens", function()
+		local StoreView = ui("StoreView")
+		withEffects(1, function()
+			recording(function(made)
+				local refs = StoreView.build(nil, true)
+				table.clear(made)
+				StoreView.cascade(refs)
+				local title = refs.Window.Title
+				local drops, pops, spins = 0, {}, 0
+				for _, record in made do
+					T.truthy(record.Time + record.Delay <= 0.3 + 1e-9, "over by 0.3 s: " .. record.Instance.Name)
+					T.eq(record.Style, "Back")
+					if record.Goal.Position then
+						drops += 1
+						T.eq(record.Goal.Position, record.Instance:GetAttribute("BasePosition"), "it drops into its place")
+					elseif record.Goal.Rotation then
+						spins += 1
+						T.eq(record.Goal.Rotation, 4, "the X spins back to its tilt")
+					elseif record.Instance.Name == "Scale" then
+						table.insert(pops, record.Delay)
+					end
+				end
+				T.eq(drops, 3, "the title, its dark copy and its light band")
+				T.eq(title.Position, (title :: any):GetAttribute("BasePosition") + UDim2.fromOffset(0, -ShopFx.CascadeDrop), "from above")
+				T.eq(spins, 1, "the X spins in")
+				T.eq(#pops, 1 + 6 + 1, "the basket, the six tabs, the X's scale")
+				for i = 2, 7 do
+					T.truthy(pops[i] > pops[i - 1], "the tabs one after another")
+				end
+				-- the picked tab's picture pops; the open tab's wiggles
+				table.clear(made)
+				StoreView.selectTab(refs, "Golems", true)
+				local icon = refs.TabRefs.Golems.Icon
+				local popped = false
+				for _, record in made do
+					if record.Instance.Name == "Pop" and record.Instance.Parent == icon then
+						popped = record.Style == "Back" and record.Goal.Scale == 1
+					end
+				end
+				T.truthy(popped, "the Golems icon pops")
+				T.near((icon :: any).Pop.Scale, ShopFx.IconPopFrom, 1e-6)
+				local wiggles = 0
+				for _, loop in ShopFx.loopsUnder({ refs.TabRefs.Golems.Lift }) do
+					if loop.Kind == "Wiggle" and loop.Target == icon then
+						wiggles += 1
+					end
+				end
+				T.eq(wiggles, 1, "the open tab's icon wiggles")
+				-- a card under the mouse (or the gamepad's selection): 1.04, it rises, its light edge and glow brighten
+				local card = refs.Cards.Royal5
+				local holder = card.Holder
+				local face = holder:FindFirstChild("Face") :: any
+				local look = { Lift = ShopFx.Lift, Light = face.Rim.Light, Glow = face:FindFirstChild("Glow") }
+				table.clear(made)
+				ShopFx.hover(holder, true, false, look)
+				local goals: { [string]: any } = {}
+				for _, record in made do
+					for property, value in record.Goal do
+						goals[record.Instance.Name .. "." .. property] = value
+					end
+				end
+				T.eq(goals["Scale.Scale"], ShopFx.Hover)
+				local h = holder.Size.Y.Offset
+				T.near(goals[holder.Name .. ".AnchorPoint"].Y, 0.5 + ShopFx.Lift / h, 1e-6, "it rises")
+				T.eq(goals["Light.Transparency"], ShopFx.LightOn, "its light edge")
+				T.truthy(goals["Glow.ImageTransparency"] < look.Glow.ImageTransparency, "its glow")
+				-- away: all back; a touch (held, never hovered) only presses
+				table.clear(made)
+				ShopFx.hover(holder, false, false, look)
+				for _, record in made do
+					if record.Goal.AnchorPoint then
+						T.eq(record.Goal.AnchorPoint, Vector2.new(0.5, 0.5), "down again")
+					end
+				end
+				table.clear(made)
+				ShopFx.hover(holder, false, true, look)
+				for _, record in made do
+					if record.Goal.Scale then
+						T.eq(record.Goal.Scale, ShopFx.Press, "a touch presses")
+					elseif record.Goal.AnchorPoint then
+						T.eq(record.Goal.AnchorPoint, Vector2.new(0.5, 0.5), "a touch never lifts")
+					end
+				end
+			end)
+		end)
+	end)
+
+	T.test("ShopFx v2: a purchase from the shop flashes and pops its card and throws at most 12 stars, then clears them", function()
+		local StoreView = ui("StoreView")
+		withEffects(1, function()
+			recording(function(made)
+				local refs = StoreView.build(nil, true)
+				StoreView.selectTab(refs, "Golems")
+				local timers: { () -> () } = {}
+				ShopFx.useDelays(function(_, fn)
+					table.insert(timers, fn)
+				end)
+				table.clear(made)
+				local ok, err = pcall(function()
+					T.truthy(StoreView.celebrate(refs, "RoyalCapsule10"), "the x10 pack celebrates")
+					local holder = refs.Cards.Royal10.Holder
+					local scale = holder:FindFirstChild("Scale") :: any
+					T.near(scale.Scale, ShopFx.CelebratePop, 1e-6, "it pops from 1.12")
+					local pop, flash, prizes, fades = false, false, 0, 0
+					for _, record in made do
+						if record.Instance == scale and record.Goal.Scale == 1 then
+							pop = true
+						elseif record.Instance.Name == "Flash" and record.Goal.BackgroundTransparency == 1 then
+							flash = true
+						elseif record.Instance.Name == "Prize" then
+							if record.Goal.ImageTransparency == 1 then
+								fades += 1
+							else
+								prizes += 1
+							end
+						end
+					end
+					T.truthy(pop and flash, "a pop back to 1 and a flash")
+					T.truthy(prizes > 0 and prizes <= 12, `stars fly out ({prizes})`)
+					T.eq(fades, prizes, "and fade")
+					local inFront = 0
+					for _, d in refs.Front:GetChildren() do
+						if d.Name == "Prize" then
+							inFront += 1
+							T.eq(d:GetAttribute("Icon"), "shop_star", "stars (coins for a coin pack)")
+						end
+					end
+					T.eq(inFront, prizes, "over the window")
+					T.eq(#timers, 1, "one clean-up")
+					timers[1]()
+					for _, d in refs.Front:GetChildren() do
+						T.truthy(d.Name ~= "Prize", "the stars are gone")
+					end
+					T.eq(holder:FindFirstChild("Flash"), nil, "and the flash")
+					-- a product not on the open page: nothing
+					T.falsy(StoreView.celebrate(refs, "CoinsMega"), "the Cash tab isn't open")
+				end)
+				ShopFx.useDelays(nil)
+				if not ok then
+					error(err, 0)
+				end
+			end)
+		end)
+	end)
+
+	-- (the budgets: PC at most about twice the motion it had, a phone a little more; the first open light)
+	T.test("ShopFx v2: loop budgets per tab (PC <= 2x before, phone modest), first open <= 1,700, <= 8 particles a page", function()
+		local StoreView = ui("StoreView")
+		-- the window's and the open tab's loops before the motion v2 (2026-11-12, 9cb7536a)
+		local before = {
+			PC = { Featured = 35, Golems = 34, Blasters = 32, Passes = 28, Boosts = 37, Cash = 29 },
+			Phone = { Featured = 25, Golems = 24, Blasters = 22, Passes = 18, Boosts = 27, Cash = 19 },
+		}
+		withEffects(IconAssets.ShopFx.Id, function()
+			for _, lean in { false, true } do
+				local refs = StoreView.build(if lean then StoreView.metricsFor(true, 1) else nil, true)
+				StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
+				if not lean then
+					local first = #refs.Gui:GetDescendants()
+					T.truthy(first <= 1700, `first open: {first} instances`)
+				end
+				local window = #ShopFx.loopsUnder(refs.Fx, lean)
+				for _, section in StoreConfig.Sections do
+					StoreView.selectTab(refs, section.Id)
+					local page = refs.Pages[section.Id]
+					local tab = #ShopFx.loopsUnder({ page, refs.TabRefs[section.Id].Lift }, lean)
+					local was = (if lean then before.Phone else before.PC)[section.Id]
+					local now = window + tab
+					if lean then
+						T.truthy(now <= was + 10, `phone {section.Id}: {now} loops (was {was})`)
+					else
+						T.truthy(now <= 2 * was, `PC {section.Id}: {now} loops (was {was})`)
+						T.truthy(now > was, `PC {section.Id}: more life than before ({now} > {was})`)
+					end
+					T.truthy(count(page, function(d)
+						return d.Name == "Mote"
+					end) <= StoreView.MaxMotes, section.Id .. ": a few particles")
+				end
+			end
+		end)
+		-- the particles: Featured's embers, the Royal Egg's sparkles, the blaster's sparks, the coins; unseen at rest
+		withEffects(1, function()
+			local refs = StoreView.build()
+			StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
+			for _, section in { "Featured", "Golems", "Blasters", "Cash" } do
+				local motes = 0
+				for _, d in refs.Pages[section]:GetDescendants() do
+					if d.Name == "Mote" then
+						motes += 1
+						T.eq(d:GetAttribute("ShopFx"), "Rise")
+						T.truthy(d:GetAttribute("Ambient"), "a phone skips it")
+						T.eq(d.ImageTransparency, 1, "unseen at rest")
+					end
+				end
+				T.truthy(motes >= 4 and motes <= StoreView.MaxMotes, `{section}: {motes} particles`)
+			end
+		end)
+	end)
+
+	T.test("ShopFx v2: every golem and egg picture idles; the rare tiles shine, the Epic glows, MYTHIC runs a rainbow", function()
+		local StoreView = ui("StoreView")
+		withEffects(1, function()
+			local refs = StoreView.build()
+			StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
+			-- (the stickers or the live 3D models: the same pictures carry the marks)
+			for _, d in refs.Gui:GetDescendants() do
+				local icon = d:GetAttribute("Icon")
+				local golem = type(icon) == "string"
+					and (string.find(icon, "golem_", 1, true) ~= nil or string.find(icon, "capsule_", 1, true) ~= nil)
+				if golem and d:IsA("ImageLabel") and not d:IsDescendantOf(refs.Window.Root:FindFirstChild("Tabs")) then
+					local holder = d.Parent
+					local mark = d:GetAttribute("ShopFx") or (holder and holder:GetAttribute("ShopFx"))
+					T.truthy(mark == "Idle" or mark == "Float", "it lives: " .. d:GetFullName())
+				end
+			end
+			local royal = refs.Royal :: any
+			local egg = royal.Frame:FindFirstChild("Egg")
+			T.eq(egg:GetAttribute("Wobble"), ShopFx.WobbleSwing, "the Royal Egg wobbles now and then")
+			local shard = refs.Banner.Frame:FindFirstChild("Shard")
+			T.truthy(shard:GetAttribute("Wobble"), "so does the Dragonforge shard")
+			local glows = 0
+			for _, d in royal.Frame:GetDescendants() do
+				if d:GetAttribute("ShopFx") == "Glow" then
+					glows += 1
+				end
+			end
+			T.eq(glows, 2, "the egg's glow and the Epic's")
+			local function tile(id: string): any
+				return royal.Frame:FindFirstChild("Golem" .. id)
+			end
+			local turning = {}
+			for _, d in royal.Frame:GetDescendants() do
+				if
+					d.Name == "Rays"
+					and d:GetAttribute("ShopFx") == "Rays"
+					and d.Parent
+					and d.Parent.Parent
+					and d.Parent.Parent ~= royal.Frame
+				then
+					turning[d.Parent.Parent.Name] = true
+				end
+			end
+			T.truthy(turning.GolemStormTitan and turning.GolemCelestialSovereign, "the Legendary's and the Mythic's rays turn")
+			T.falsy(turning.GolemSilverSquire or turning.GolemRoseKnight or turning.GolemMoonstoneOracle, "the others' stay still")
+			for _, id in { "StormTitan", "CelestialSovereign" } do
+				local sparkles = 0
+				for _, d in tile(id):GetChildren() do
+					if d.Name == "Sparkle" and d:GetAttribute("ShopFx") == "Sparkle" then
+						sparkles += 1
+					end
+				end
+				T.eq(sparkles, 2, id .. ": two sparkles")
+			end
+			local word = tile("CelestialSovereign"):FindFirstChild("Rarity")
+			local rainbow = word:FindFirstChild("Rainbow")
+			T.truthy(rainbow and rainbow:GetAttribute("ShopFx") == "Rim", "MYTHIC in a running rainbow")
+			-- the counts x3 / x5 / x10 and the stickers wiggle; x1 stays
+			for _, id in { "Royal3", "Royal5", "Royal10" } do
+				T.eq(refs.Cards[id].Holder:FindFirstChild("Count"):GetAttribute("ShopFx"), "Wiggle", id)
+			end
+			T.eq(refs.Cards.Royal1.Holder:FindFirstChild("Count"):GetAttribute("ShopFx"), nil, "x1")
+			T.eq(refs.Cards.Royal10.Sticker:GetAttribute("ShopFx"), "Wiggle", "BEST VALUE!")
+			-- every card wears a gloss band (off the card at rest)
+			for _, card in refs.Cards do
+				local sheen = card.Holder:FindFirstChild("Sheen") :: any
+				T.truthy(sheen and sheen.Sweep:GetAttribute("ShopFx") == "Sheen", card.Spec.Id .. "'s gloss")
+				T.near(sheen.Sweep.Offset.X, ShopFx.SweepFrom, 1e-5)
+			end
 		end)
 	end)
 end

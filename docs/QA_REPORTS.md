@@ -1019,6 +1019,44 @@ What to test in Studio:
    and press cards with the mouse and move the gamepad selection (1.04 / 0.94). Before obchod_efekty.png is
    uploaded the shop has no rays or studs (plain gradients); after the upload (send its id) they show.
 
+## Shop motion v2 (owner 2026-11-12 "improve the animations, add more things", branch ui/shop-anim-v2)
+- Still TweenService only (ShopFx marks -> ShopFx.loopsUnder / play / stop; no Heartbeat, RenderStepped or
+  while-wait in the shop), Reduce motion or PixelFx off: all static at rest. New marks: Idle (every golem and
+  egg picture bobs and rocks, one tween each, each a little slower than the one before), Float + Swing (the
+  dragon king rocks as it floats), Float + Wobble (the Royal Egg and the Dragonforge shard wobble now and then,
+  Elastic), Glow (their glows and the Royal Egg's Epic breathe), Wiggle (every sticker, the x2 badges, the egg
+  counts x3 / x5 / x10, the Dragon King chip, the open tab's icon), Sheen (a gloss band over each card, the
+  page's cards one after another in a fixed order), Glint (a gold band across the SHOP title every 4.5 s), Rise
+  (theme particles: embers over the Dragonforge, gold sparkles round the Royal Egg, sparks off the next blaster,
+  coins down the Cash gaps; at most 8 a page). Only the Legendary and Mythic tiles' rays turn now (two sparkles
+  each); MYTHIC runs a rainbow.
+- One-shots: the header cascades in as the window opens (the title drops in, the basket and the tabs pop in
+  left to right, the X spins in: over by 0.3 s); the picked tab's icon pops; a hovered or gamepad-selected card
+  also rises 5 units and its light edge and glow brighten (a touch only presses); a purchase the shop asked for
+  that Roblox's prompt reports bought: its card (or the banner's button) flashes and pops 1.12 -> 1 and 12 stars
+  (coins for a coin pack) fly out over the window, cleared after 0.8 s.
+- A phone or tablet (StoreView Refs.Lean) skips the ambient marks: particles, card gloss, the small pictures'
+  idling (Dragonforge tiles, egg cards, the Starter Pack's golem), the counts' wiggle, the rare tiles' sparkles.
+  A TV keeps them (compact sizes, not lean).
+- Loops per tab, window + page, before -> after. PC: Featured 35 -> 60, Golems 34 -> 68, Blasters 32 -> 51,
+  Passes 28 -> 37, Boosts 37 -> 48, Cash 29 -> 46. Phone: 25 -> 28, 24 -> 32, 22 -> 24, 18 -> 20, 27 -> 31,
+  19 -> 21. First open 1,446 -> 1,461 instances (tests/ShopFx.spec.luau holds these budgets).
+- Dropped: a tilt on hovered cards (Roblox ignores ClipsDescendants under a turned frame: the card's rays would
+  spill out); pulsing every odds % label (too busy next to the rocking golems: the Dragon King chip wiggles).
+What to test in Studio:
+1. Open the shop a few times: the title drops in, the tabs pop in one after another, the X spins in; nothing
+   ends up out of place (also after a quick close and reopen).
+2. GOLEMS: the five golems rock and bob out of step, the egg wobbles now and then over its breathing glow,
+   Legendary / Mythic rays turn with two sparkles, MYTHIC's rainbow runs, gold sparkles rise round the egg, a
+   gloss band runs over the four egg cards one after another. FEATURED: embers rise over the dragon king, the
+   shard wobbles. BLASTERS: sparks off the gun. CASH: coins drift down between the packs.
+3. Mouse over a card: it grows, rises and its edge lights up; move the gamepad selection: the same; on a phone a
+   tap only squashes it.
+4. Buy something cheap in a test server (or Studio's test purchase): its card flashes, pops and throws stars;
+   the stars vanish after a moment.
+5. Phone emulator: no particles or card gloss, the window stays smooth (MicroProfiler: no Lua per frame).
+   SETTINGS Reduce motion on: nothing moves, nothing half way (no particle stuck on screen).
+
 ## One Inventory at the bottom, the GOLD hotbar, stickers on the right (owner 2026-11-11, branch ui/hud-inventory)
 - The right side wears the shop's sticker icons (IconAssets.Shop, the same picture the shop shows for the same
   product): Starter Pack the gift, 2x Money the cash with the x2 badge on its top-left corner (the price keeps the

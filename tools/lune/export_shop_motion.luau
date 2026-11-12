@@ -1,21 +1,35 @@
 --[[
 	The shop v3's motion as frames (owner 2026-11-11: "cool and smooth, not
-	laggy"): the window as StoreController moves it, every tween UI/ShopFx
-	makes played back here (ShopFx.useTweens: the same calls, times and
-	easings as TweenService in the game; no per-frame Lua in the game):
+	laggy"; 2026-11-12: "improve the animations, add more things"): the
+	window as StoreController moves it, every tween UI/ShopFx makes played
+	back here (ShopFx.useTweens: the same calls, times and easings as
+	TweenService in the game; no per-frame Lua in the game).
 
-	  0.0 s  it opens: the pop (0.82 -> 1, Back out), the dim fades in, a
-	         burst of rays flashes out behind the window
-	  ...    FEATURED: the rays turn slowly, the buy buttons' shine sweeps,
-	         the bolts flash now and then, the sparkles twinkle, the hero
-	         floats, the BEST VALUE button breathes, the open tab bobs
-	  3.0 s  the GOLEMS tab: the header and body fade to its colours, the
-	         page slides in, its cards pop in one after another
-	  4.7 s  the mouse over the x10 pack (1.04), a press (0.94), let go
-	  6.2 s  it closes: it shrinks a little as the dim fades, then goes
+	  lune run tools/lune/export_shop_motion.luau [phone] [tour|open|golems|featured|blasters|passes|boosts|cash]
+	  node tools/preview/render_ui_frames.mjs shop_motion[_<scenario>] shots/q_sky.jpg <out.mp4> <strip.jpg>
 
-	  lune run tools/lune/export_shop_motion.luau [phone]
-	  node tools/preview/render_ui_frames.mjs shop_motion shots/q_sky.jpg <out.mp4> <strip.jpg>
+	Scenarios (frames in build/preview/shop_motion[_phone][_<scenario>]):
+	  tour      (default) 0.0 s it opens: the pop (0.82 -> 1, Back out), the dim
+	            fades in, a burst of rays flashes out, the header cascades in;
+	            FEATURED's loops; 3.0 s the GOLEMS tab: its colours fade over,
+	            its page slides in, its cards pop in; 4.7 s the mouse over the
+	            x10 pack (1.04, it rises and brightens), a press (0.94), let go;
+	            6.2 s it closes: it shrinks a little as the dim fades, then goes
+	  open      the window opening (pop, burst, the title drops in, the tabs pop
+	            in one after another, the X spins in), FEATURED for a moment,
+	            then the GOLEMS tab picked (its icon pops)
+	  golems    GOLEMS, already open (its loops running a while): the golems
+	            bob and rock, the egg wobbles now and then, the rare tiles'
+	            rays and sparkles, MYTHIC's rainbow, the Epic glow, the
+	            sparkles rising round the egg, the cards' gloss one after
+	            another, the counts and BEST VALUE wiggle, the title's light
+	            band; the mouse over the x5 pack, then the x10 pack bought
+	            (it flashes, pops, stars fly out)
+	  featured  FEATURED the same way: embers over the Dragonforge, the dragon
+	            king rocking, the shard wobbling over its breathing glow, the
+	            tiles' golems, the stickers; the mouse over the pass, then the
+	            Starter Pack bought
+	  blasters / passes / boosts / cash  that tab open a while (4 s)
 ]]
 
 local fs = require("@lune/fs")
@@ -33,10 +47,17 @@ local ShopFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.
 local StoreView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoreView")
 local Motion = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.Motion")
 
-local phone = process.args[1] == "phone"
+local phone = false
+local scenario = "tour"
+for _, arg in process.args do
+	if arg == "phone" then
+		phone = true
+	else
+		scenario = arg
+	end
+end
 local W, H, FPS = 1600, 900, 30
 local SCALE = if phone then 0.62 * 900 / 375 else H / 720
-local TAB_AT, HOVER_AT, PRESS_AT, RELEASE_AT, LEAVE_AT, CLOSE_AT, LENGTH = 3, 4.7, 5.3, 5.45, 5.95, 6.2, 6.6
 
 ---------------------------------------------------------------- a small TweenService
 
@@ -144,7 +165,13 @@ local function maker(
 end
 ShopFx.useTweens(maker)
 
--- Every running tween's value at the clock.
+-- ShopFx's one-off timers (the open burst hidden, a celebration cleared) on this clock
+local timers: { { At: number, Fn: () -> () } } = {}
+ShopFx.useDelays(function(seconds: number, fn: () -> ())
+	table.insert(timers, { At = clock + seconds, Fn = fn })
+end)
+
+-- Every running tween's value at the clock (a run whose thing is gone stops), then the timers due.
 local function apply()
 	for _, run in runs do
 		if run.Stopped == nil then
@@ -159,90 +186,206 @@ local function apply()
 			end
 		end
 	end
+	local due = {}
+	for i = #timers, 1, -1 do
+		if timers[i].At <= clock + 1e-9 then
+			table.insert(due, timers[i].Fn)
+			table.remove(timers, i)
+		end
+	end
+	for _, fn in due do
+		fn()
+		-- (a celebration's prizes are destroyed: their runs end with them)
+		for _, run in runs do
+			local alive, parent = pcall(function()
+				return run.Target.Parent
+			end)
+			if run.Stopped == nil and (not alive or parent == nil) then
+				run.Stopped = clock
+			end
+		end
+	end
 end
 
 ---------------------------------------------------------------- the window as the controller drives it
 
+-- (a tab's own name: that tab open, its loops running a while: a quick look at its motion)
+local TABS = { featured = "Featured", golems = "Golems", blasters = "Blasters", passes = "Passes", boosts = "Boosts", cash = "Cash" }
+local start = TABS[scenario] or "Featured"
 local hud = Preview.hud(Loader, SCALE)
 local w, h = W / SCALE, (H - (if phone then 58 else 36)) / SCALE
-local store = Preview.store(Loader, SCALE, w, h, "Featured", phone)
+local store = Preview.store(Loader, SCALE, w, h, start, phone)
 local dim = store.Gui:FindFirstChild("Dim")
 local windowLoops, tabLoops
 local function playTab()
 	ShopFx.stop(tabLoops)
-	tabLoops = ShopFx.play(ShopFx.loopsUnder({ store.Pages[store.Current], store.TabRefs[store.Current].Lift }, store.Compact))
+	tabLoops = ShopFx.play(ShopFx.loopsUnder({ store.Pages[store.Current], store.TabRefs[store.Current].Lift }, store.Lean))
 end
-local hovered = store.Cards.Royal10.Holder:FindFirstChild("Scale")
-
--- ShopFx.bindPress's tween: the mouse over a card (1.04), a press (0.94), let go, away
-local function press(goal: number)
-	maker(hovered, ShopFx.PressTime, "Quad", "Out", { Scale = goal }, 0, false, 0)
+local function startLoops()
+	windowLoops = ShopFx.play(ShopFx.loopsUnder(store.Fx, store.Lean))
+	playTab()
 end
 
-local events: { { At: number, Do: () -> () } } = {
-	{
-		At = 0,
-		Do = function()
-			-- StoreController.open: the loops, then ShopFx.open
-			windowLoops = ShopFx.play(ShopFx.loopsUnder(store.Fx, store.Compact))
-			playTab()
-			ShopFx.open(store.Group, dim, StoreView.DimTransparency, store.Burst)
-		end,
-	},
-	{
-		At = TAB_AT,
-		Do = function()
-			-- StoreController.showTab: the colours, the slide, the cards' pop; the new tab's loops
-			StoreView.selectTab(store, "Golems", true)
-			Preview.liveEggs(store) -- (its egg piles, built just now)
-			playTab()
-		end,
-	},
-	{
-		At = HOVER_AT,
-		Do = function()
-			press(ShopFx.Hover)
-		end,
-	},
-	{
-		At = PRESS_AT,
-		Do = function()
-			press(ShopFx.Press)
-		end,
-	},
-	{
-		At = RELEASE_AT,
-		Do = function()
-			press(ShopFx.Hover)
-		end,
-	},
-	{
-		At = LEAVE_AT,
-		Do = function()
-			press(1)
-		end,
-	},
-	{
-		At = CLOSE_AT,
-		Do = function()
-			-- StoreController.close: the window shrinks as the dim fades
-			ShopFx.close(store.Group, dim, function() end)
-		end,
-	},
-	{
-		At = CLOSE_AT + 0.15,
-		Do = function()
-			-- (ShopFx.close's done: the window goes, then its loops stop)
-			store.Gui.Enabled = false
-			ShopFx.stop(windowLoops)
-			ShopFx.stop(tabLoops)
-		end,
-	},
-}
+-- A card's hover look as StoreView's shell binds it (ShopFx.bindPress): its light edge and glow.
+local function lookOf(holder: any): any
+	local face = holder:FindFirstChild("Face")
+	local rim = if face then face:FindFirstChild("Rim") else nil
+	return {
+		Lift = ShopFx.Lift,
+		Light = if rim then rim:FindFirstChild("Light") else nil,
+		Glow = if face then face:FindFirstChild("Glow") else nil,
+	}
+end
+
+-- ShopFx.bindPress: the mouse over a card (1.04, it rises and brightens), a press (0.94), let go, away
+local function hover(cardId: string, hovered: boolean, held: boolean)
+	local holder = store.Cards[cardId].Holder
+	ShopFx.hover(holder, hovered, held, lookOf(holder))
+end
+
+type Event = { At: number, Do: () -> () }
+local events: { Event }
+local LENGTH: number
+local WARM = 0 -- seconds the loops run before the first frame (an already open window)
+local stripTimes: { number }
+
+if scenario == "open" then
+	LENGTH = 3.6
+	stripTimes = { 0.03, 0.1, 0.17, 0.27, 1.2, 1.9, 2.05, 3.0 }
+	events = {
+		{
+			At = 0,
+			Do = function()
+				-- StoreController.open: the loops, then ShopFx.open and the header's cascade
+				startLoops()
+				ShopFx.open(store.Group, dim, StoreView.DimTransparency, store.Burst)
+				StoreView.cascade(store)
+			end,
+		},
+		{
+			At = 1.8,
+			Do = function()
+				-- StoreController.showTab: the colours, the slide, the cards' pop, the icon's pop; the new loops
+				StoreView.selectTab(store, "Golems", true)
+				Preview.liveEggs(store)
+				playTab()
+			end,
+		},
+	}
+elseif scenario == "golems" or scenario == "featured" then
+	LENGTH = 9
+	WARM = 1.6
+	local hovered = if scenario == "golems" then "Royal5" else "BigPass"
+	local bought = if scenario == "golems" then "Royal10" else "StarterPack"
+	stripTimes = { 0.4, 1.4, 2.4, 3.4, 4.2, 5.75, 6.0, 7.6 }
+	events = {
+		{
+			At = -WARM,
+			Do = function()
+				startLoops()
+			end,
+		},
+		{
+			At = 3.3,
+			Do = function()
+				hover(hovered, true, false)
+			end,
+		},
+		{
+			At = 4.6,
+			Do = function()
+				hover(hovered, false, false)
+			end,
+		},
+		{
+			At = 5.6,
+			Do = function()
+				-- Roblox's prompt ended with a purchase: StoreController -> StoreView.celebrate
+				StoreView.celebrate(store, store.Cards[bought].Key)
+			end,
+		},
+	}
+elseif TABS[scenario] then
+	LENGTH = 4
+	WARM = 1.6
+	stripTimes = { 0.5, 1.5, 2.5, 3.5 }
+	events = {
+		{
+			At = -WARM,
+			Do = function()
+				startLoops()
+			end,
+		},
+	}
+else
+	-- (the tour: open, FEATURED, GOLEMS, a hover and a press, close)
+	local TAB_AT, HOVER_AT, PRESS_AT, RELEASE_AT, LEAVE_AT, CLOSE_AT = 3, 4.7, 5.3, 5.45, 5.95, 6.2
+	LENGTH = 6.6
+	stripTimes = { 0.1, 0.25, 1.5, 3.1, 3.3, 4.4, 5.35, 6.3 }
+	events = {
+		{
+			At = 0,
+			Do = function()
+				startLoops()
+				ShopFx.open(store.Group, dim, StoreView.DimTransparency, store.Burst)
+				StoreView.cascade(store)
+			end,
+		},
+		{
+			At = TAB_AT,
+			Do = function()
+				StoreView.selectTab(store, "Golems", true)
+				Preview.liveEggs(store) -- (its egg piles, built just now)
+				playTab()
+			end,
+		},
+		{
+			At = HOVER_AT,
+			Do = function()
+				hover("Royal10", true, false)
+			end,
+		},
+		{
+			At = PRESS_AT,
+			Do = function()
+				hover("Royal10", true, true)
+			end,
+		},
+		{
+			At = RELEASE_AT,
+			Do = function()
+				hover("Royal10", true, false)
+			end,
+		},
+		{
+			At = LEAVE_AT,
+			Do = function()
+				hover("Royal10", false, false)
+			end,
+		},
+		{
+			At = CLOSE_AT,
+			Do = function()
+				-- StoreController.close: the window shrinks as the dim fades
+				ShopFx.close(store.Group, dim, function() end)
+			end,
+		},
+		{
+			At = CLOSE_AT + 0.15,
+			Do = function()
+				-- (ShopFx.close's done: the window goes, then its loops stop)
+				store.Gui.Enabled = false
+				ShopFx.stop(windowLoops)
+				ShopFx.stop(tabLoops)
+			end,
+		},
+	}
+end
 
 ---------------------------------------------------------------- frames
 
-local outDir = root .. "/build/preview/shop_motion"
+local dirName = (if phone then "shop_motion_phone" else "shop_motion") .. (if scenario == "tour" then "" else "_" .. scenario)
+local outDir = root .. "/build/preview/" .. dirName
 if fs.isDir(outDir) then
 	fs.removeDir(outDir)
 end
@@ -250,8 +393,8 @@ fs.writeDir(outDir)
 local frames = {}
 local total = math.floor(LENGTH * FPS)
 local fired: { [number]: boolean } = {}
-for i = 0, total - 1 do
-	clock = i / FPS
+local function step(t: number)
+	clock = t
 	for k, event in events do
 		if not fired[k] and clock >= event.At - 1e-9 then
 			fired[k] = true
@@ -259,16 +402,23 @@ for i = 0, total - 1 do
 		end
 	end
 	apply()
+end
+-- (an already open window: its loops ran a while before the first frame)
+for i = math.floor(-WARM * FPS), -1 do
+	step(i / FPS)
+end
+for i = 0, total - 1 do
+	step(i / FPS)
 	local name = string.format("frame_%04d.json", i)
 	fs.writeFile(outDir .. "/" .. name, serde.encode("json", UiExport.export({ hud.Gui, store.Gui })))
 	table.insert(frames, { file = name })
 end
 local strip = {}
-for k, t in { 0.1, 0.25, 1.5, 3.1, 3.3, 4.4, 5.35, 6.3 } do
-	table.insert(strip, { index = math.floor(t * FPS + 0.5), caption = string.format("%d  %.2f s", k, t) })
+for k, t in stripTimes do
+	table.insert(strip, { index = math.min(total - 1, math.floor(t * FPS + 0.5)), caption = string.format("%d  %.2f s", k, t) })
 end
 fs.writeFile(
 	outDir .. "/manifest.json",
 	serde.encode("json", { fps = FPS, width = W, height = H, frames = frames, strip = strip, columns = 4 })
 )
-print(`exported {total} frames -> build/preview/shop_motion`)
+print(`exported {total} frames -> build/preview/{dirName}`)

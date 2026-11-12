@@ -28,12 +28,28 @@
 	Lua runs per frame. Things carry the attribute ShopFx (a mark):
 	  Rays     the sunburst turns (Rotation, linear, endless)
 	  Shine    a buy button's light band sweeps across (UIGradient Offset)
-	  Rim      the Mythic rainbow outline runs (UIGradient Rotation)
+	  Rim      the Mythic rainbow outline runs (UIGradient Rotation; a Mythic
+	           tile's rarity word too)
 	  Bolt     a lightning bolt flashes now and then (ImageTransparency)
 	  Sparkle  a sparkle twinkles (its UIScale "Pulse")
 	  Pulse    a BEST VALUE button breathes (its UIScale "Pulse")
-	  Float    a tab's hero picture floats up and down (Position)
+	  Float    a tab's hero picture floats up and down (Position); with the
+	           attribute Swing it rocks as it floats (Rotation, the same
+	           tween), with Wobble it wobbles now and then like an egg about
+	           to hatch (Rotation, Elastic: still most of the time)
 	  Bob      the open tab bobs (its Lift's Position)
+	  Idle     a golem's or an egg's picture bobs and rocks (Position and
+	           Rotation in one tween; each one on a page a little slower than
+	           the one before, half of them the other way round: never in step)
+	  Glow     a glow breathes (its transparency)
+	  Wiggle   a sticker, a badge, a count or the open tab's icon rocks
+	           gently about its tilt (Rotation)
+	  Sheen    a card's diagonal gloss band (UIGradient Offset): the cards of
+	           a page one after another, in the same order every round
+	  Glint    the SHOP title's light band (UIGradient Offset)
+	  Rise     a theme particle drifts along its Path and fades in and out
+	           (Position, linear and repeating, and ImageTransparency: the
+	           jump back happens while it is invisible)
 	loopsUnder(roots) reads the marks into Loop specs (none under a hidden
 	gui; a phone skips the Ambient ones), play(loops) starts one endless
 	tween each, stop(playing) cancels them and puts everything at rest;
@@ -41,8 +57,11 @@
 	tests). open / close / fadeOut / recolor / slideIn / popIn / bindPress
 	are the window's one-shot tweens (open pop with a ray burst, close shrink,
 	a tab's colours fading over, its page sliding in, its cards popping in
-	one after another, hover 1.04 and press 0.94). Reduce motion: nothing
-	plays (ShopFx.quiet), the static look stays.
+	one after another, hover 1.04 and press 0.94; a card also rises and its
+	light edge brightens); cascade (the title drops in, the tabs pop in one
+	after another, the X spins in), popIcon (the picked tab's icon) and
+	celebrate (a bought card flashes and pops, stars fly out of it) too.
+	Reduce motion: nothing plays (ShopFx.quiet), the static look stays.
 
 	Pure builders (only Instance creation): the Lune previews run them too.
 	No emoji anywhere.
@@ -1003,6 +1022,7 @@ function ShopFx.sticker(parent: Instance, text: string, style: string, at: UDim2
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = zz + 3,
 	}, s[3], 1)
+	holder:SetAttribute("ShopFx", "Wiggle") -- (it rocks gently about its tilt)
 	return holder
 end
 
@@ -1205,7 +1225,131 @@ function ShopFx.x2(parent: Instance, size: number, props: Props?): Frame
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = badge.ZIndex + 2,
 	}, nil, 1)
+	badge:SetAttribute("ShopFx", "Wiggle")
 	return badge
+end
+
+---------------------------------------------------------------- living things (marks only: the motion moves them)
+
+--[[
+	A card's gloss: a white band over the whole card (its corners, over its
+	picture and words) that the motion sweeps across now and then (mark
+	"Sheen": the page's cards one after another). Ambient: a phone keeps its
+	cards still. At rest the band waits off the card (nothing shows).
+]]
+function ShopFx.sheen(holder: Instance, corner: number, z: number): Frame
+	local sheen = UIKit.new("Frame", {
+		Name = "Sheen",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = z,
+	}, holder)
+	UIKit.corner(sheen, corner)
+	local band = UIKit.new("UIGradient", {
+		Name = "Sweep",
+		Rotation = 22,
+		Offset = Vector2.new(ShopFx.SweepFrom, 0),
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.38, 1),
+			NumberSequenceKeypoint.new(0.47, 0.72),
+			NumberSequenceKeypoint.new(0.5, 0.6),
+			NumberSequenceKeypoint.new(0.53, 0.72),
+			NumberSequenceKeypoint.new(0.62, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, sheen)
+	band:SetAttribute("ShopFx", "Sheen")
+	band:SetAttribute("Ambient", true)
+	return sheen
+end
+
+--[[
+	The SHOP title's light band: a copy of `label`'s words over it in warm
+	white, all clear but a slanted band (mark "Glint": it slides across now
+	and then; at rest it waits off the word). Returns the copy ("<Name>Glint").
+]]
+ShopFx.GlintColor = hex("#ffd84a")
+function ShopFx.glint(label: TextLabel): TextLabel
+	local copy = UIKit.new("TextLabel", {
+		Name = label.Name .. "Glint",
+		AnchorPoint = label.AnchorPoint,
+		BackgroundTransparency = 1,
+		FontFace = label.FontFace,
+		Position = label.Position,
+		Rotation = label.Rotation,
+		Size = label.Size,
+		Text = label.Text,
+		TextColor3 = ShopFx.GlintColor,
+		TextSize = label.TextSize,
+		TextXAlignment = label.TextXAlignment,
+		TextYAlignment = label.TextYAlignment,
+		Visible = label.Visible,
+		ZIndex = label.ZIndex + 1,
+	}, label.Parent)
+	local band = UIKit.new("UIGradient", {
+		Name = "Glint",
+		Rotation = 20,
+		Offset = Vector2.new(ShopFx.SweepFrom, 0),
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.4, 1),
+			NumberSequenceKeypoint.new(0.47, 0.35),
+			NumberSequenceKeypoint.new(0.5, 0.05),
+			NumberSequenceKeypoint.new(0.53, 0.35),
+			NumberSequenceKeypoint.new(0.6, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, copy)
+	band:SetAttribute("ShopFx", "Glint")
+	return copy
+end
+
+--[[
+	A theme particle for a tab's page (an ember, a gold sparkle, a spark, a
+	coin): one picture with its middle at `at`, `size` across, that runs
+	`path` (design units) every `period` seconds, fading in and out on the
+	way (mark "Rise", brightest at `peak` transparency); invisible at rest.
+	`picture` "shop_<name>" is a shop sheet icon (its own colours), else an
+	effect sprite tinted `color`. Ambient: a phone skips it. Nil when its
+	picture won't show.
+]]
+function ShopFx.particle(
+	parent: Instance,
+	picture: string,
+	at: UDim2,
+	size: number,
+	path: Vector2,
+	period: number,
+	color: Color3,
+	peak: number,
+	z: number
+): ImageLabel?
+	local props: Props = {
+		Name = "Mote",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		ImageTransparency = 1,
+		Position = at,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	}
+	local image: ImageLabel?
+	if string.sub(picture, 1, 5) == "shop_" then
+		image = ShopFx.icon(parent, string.sub(picture, 6), size, props)
+	else
+		props.ImageColor3 = color
+		image = ShopFx.sprite(parent, picture, props)
+	end
+	if image then
+		image:SetAttribute("ShopFx", "Rise")
+		image:SetAttribute("Path", path)
+		image:SetAttribute("Period", period)
+		image:SetAttribute("Peak", peak)
+		image:SetAttribute("Ambient", true)
+	end
+	return image
 end
 
 ---------------------------------------------------------------- motion (TweenService only)
@@ -1228,6 +1372,32 @@ ShopFx.BobTime = 0.9
 ShopFx.Hover = 1.04
 ShopFx.Press = 0.94
 ShopFx.PressTime = 0.1
+-- (the shop's motion v2, owner 2026-11-12: "improve the animations, add more things"; still clean and smooth)
+ShopFx.IdleRise = 4 -- a golem's or an egg's soft bob (design units)
+ShopFx.IdleSwing = 3 -- and its sway, degrees each way (the same tween: it rocks as it bobs)
+ShopFx.IdleTime = 1.5 -- one way; each picture on a page IdleSpread slower than the one before
+ShopFx.IdleSpread = 0.09
+ShopFx.WobbleSwing = 8 -- a hero egg's hatch wobble (degrees at its peak)
+ShopFx.WobbleTime = 1.8 -- one way (Elastic in, reversing: still about 2 s, then a quick rock)
+ShopFx.GlowFade = 0.35 -- a glow breathes this much fainter
+ShopFx.GlowTime = 1.3
+ShopFx.WiggleSwing = 3 -- a sticker's, a badge's, a count's wiggle (degrees each way)
+ShopFx.WiggleTime = 0.95
+ShopFx.SweepFrom = -1.2 -- a gloss band at rest: off its face (UIGradient Offset X)
+ShopFx.SweepTo = 1.2 -- (past the face's other side)
+ShopFx.SheenEvery = 6 -- the cards' gloss: a round across the page every 6 s
+ShopFx.SheenCross = 0.8 -- over one card in 0.8 s
+ShopFx.SheenGap = 0.3 -- the next card's 0.3 s later (always the same order)
+ShopFx.SheenLead = 0.9 -- (the first one after the cards' pop-in)
+ShopFx.GlintEvery = 4.5 -- the SHOP title's light band
+ShopFx.GlintCross = 0.85
+ShopFx.GlintLead = 0.7
+ShopFx.RisePeak = 0.2 -- a particle at its brightest
+ShopFx.Lift = 5 -- a card under the mouse or the gamepad's selection rises this much
+ShopFx.LightOn = 0.1 -- and its light edge brightens to this
+ShopFx.GlowOn = 0.2 -- and its glow by this
+
+export type Track = { Property: string, From: any, To: any, Rest: any }
 
 export type Loop = {
 	Kind: string, -- the mark it came from
@@ -1240,6 +1410,7 @@ export type Loop = {
 	Style: string, -- Enum.EasingStyle's name
 	Direction: string, -- Enum.EasingDirection's name
 	Reverses: boolean,
+	Also: { Track }?, -- more properties the same tween moves (an idle golem's sway with its bob)
 }
 
 export type Playing = { Tweens: { any }, Loops: { Loop } }
@@ -1260,10 +1431,27 @@ export type TweenMaker = (
 	delay: number
 ) -> any
 local fakeTweens: TweenMaker? = nil
+local fakeDelays: ((seconds: number, fn: () -> ()) -> ())? = nil
 
 -- (tests and previews) every tween ShopFx makes goes to `maker` instead (nil: TweenService).
 function ShopFx.useTweens(maker: TweenMaker?)
 	fakeTweens = maker
+end
+
+-- (previews) ShopFx's few one-off timers (a burst hidden, a celebration cleared) go to `delayer`
+-- instead of task.delay (nil: task.delay): the motion video runs them on its own clock.
+function ShopFx.useDelays(delayer: ((seconds: number, fn: () -> ()) -> ())?)
+	fakeDelays = delayer
+end
+
+-- Runs `fn` once after `seconds` (task.delay; a preview's own clock).
+local function later(seconds: number, fn: () -> ())
+	local fake = fakeDelays
+	if fake then
+		fake(seconds, fn)
+	else
+		task.delay(seconds, fn)
+	end
 end
 
 -- The one place ShopFx makes a tween; it plays at once. Nil when TweenService can't (Lune).
@@ -1341,6 +1529,7 @@ local function newLoop(
 		Style = style,
 		Direction = direction,
 		Reverses = reverses,
+		Also = nil,
 	}
 end
 
@@ -1349,16 +1538,55 @@ local function scaleOf(target: Instance): UIScale?
 	return if found and found:IsA("UIScale") then found else nil
 end
 
+-- A base value of one property, read once (attribute "Base<Property>": a restart never drifts;
+-- the newer marks keep one per property, an idle picture has two).
+local function baseOf(target: Instance, property: string): any
+	local name = "Base" .. property
+	local stored = target:GetAttribute(name)
+	if stored ~= nil then
+		return stored
+	end
+	local value = (target :: any)[property]
+	target:SetAttribute(name, value)
+	return value
+end
+
+local function numberAttr(target: Instance, name: string, default: number): number
+	local value = target:GetAttribute(name)
+	return if type(value) == "number" then value else default
+end
+
+local function track(property: string, from: any, to: any, rest: any): Track
+	return { Property = property, From = from, To = to, Rest = rest }
+end
+
+--[[
+	A light band across a face (a card's Sheen, the title's Glint): its
+	UIGradient Offset runs from far left to past the right in `every`
+	seconds at one speed, so the band crosses the face (SweepFrom ..
+	SweepTo) in `cross` seconds, `start` seconds into each round; the jump
+	back happens far off the face. Same `every` for all: the bands keep their
+	order forever (no drift).
+]]
+local function sweepLoop(kind: string, gradient: Instance, every: number, cross: number, start: number): Loop
+	local speed = (ShopFx.SweepTo - ShopFx.SweepFrom) / cross
+	local from = ShopFx.SweepFrom - speed * start
+	local rest = Vector2.new(ShopFx.SweepFrom, 0)
+	return newLoop(kind, gradient, "Offset", Vector2.new(from, 0), Vector2.new(from + speed * every, 0), rest, every, "Linear", "In", false)
+end
+
 --[[
 	The endless loops of everything marked under `roots` (and the roots
-	themselves): one Loop per mark. `compact` (a phone): no ambient marks
-	(attribute Ambient: the bolts round the window, the frame's sparkles).
-	A hidden gui and everything in it gets none (a hidden card, an owned
-	pass's price, a banner that isn't shown).
+	themselves): one Loop per mark (two for a particle, its drift and its
+	fade; two for a hero egg, its float and its wobble). `compact` (a
+	phone): no ambient marks (attribute Ambient: the bolts round the window,
+	the frame's sparkles, the pages' particles, the cards' gloss, the small
+	pictures' idling). A hidden gui and everything in it gets none (a hidden
+	card, an owned pass's price, a banner that isn't shown).
 ]]
 function ShopFx.loopsUnder(roots: { Instance }, compact: boolean?): { Loop }
 	local loops: { Loop } = {}
-	local shines = 0
+	local shines, sheens, idles, wiggles = 0, 0, 0, 0
 	local function take(d: Instance)
 		local kind = d:GetAttribute("ShopFx")
 		if type(kind) ~= "string" then
@@ -1400,9 +1628,67 @@ function ShopFx.loopsUnder(roots: { Instance }, compact: boolean?): { Loop }
 			end
 		elseif (kind == "Float" or kind == "Bob") and d:IsA("GuiObject") then
 			local from = base(d, "Position") :: UDim2
-			local rise = if kind == "Float" then ShopFx.FloatRise else ShopFx.BobRise
+			local rise = if kind == "Float" then numberAttr(d, "Rise", ShopFx.FloatRise) else ShopFx.BobRise
 			local time = if kind == "Float" then ShopFx.FloatTime else ShopFx.BobTime
-			table.insert(loops, newLoop(kind, d, "Position", from, from + UDim2.fromOffset(0, -rise), from, time, "Sine", "InOut", true))
+			local loop = newLoop(kind, d, "Position", from, from + UDim2.fromOffset(0, -rise), from, time, "Sine", "InOut", true)
+			table.insert(loops, loop)
+			local wobble, swing = d:GetAttribute("Wobble"), d:GetAttribute("Swing")
+			if kind == "Float" and type(wobble) == "number" then
+				-- an egg about to hatch: still most of the time, then a quick rock (Elastic in, reversing)
+				local rot = baseOf(d, "Rotation") :: number
+				table.insert(loops, newLoop("Wobble", d, "Rotation", rot, rot + wobble, rot, ShopFx.WobbleTime, "Elastic", "In", true))
+			elseif kind == "Float" and type(swing) == "number" then
+				-- (it rocks as it floats: the same tween)
+				local rot = baseOf(d, "Rotation") :: number
+				loop.Also = { track("Rotation", rot - swing, rot + swing, rot) }
+			end
+		elseif kind == "Idle" and d:IsA("GuiObject") then
+			-- (each one a little slower than the one before, every second one from the top and every
+			-- other pair leaning the other way: a row of golems never moves in step)
+			local i = idles
+			idles += 1
+			local pos = baseOf(d, "Position") :: UDim2
+			local rot = baseOf(d, "Rotation") :: number
+			local up = pos + UDim2.fromOffset(0, -numberAttr(d, "Rise", ShopFx.IdleRise))
+			local swing = numberAttr(d, "Swing", ShopFx.IdleSwing)
+			local lean = if (i // 2) % 2 == 0 then swing else -swing
+			local time = ShopFx.IdleTime * (1 + ShopFx.IdleSpread * (i % 5))
+			local loop = if i % 2 == 0
+				then newLoop(kind, d, "Position", pos, up, pos, time, "Sine", "InOut", true)
+				else newLoop(kind, d, "Position", up, pos, pos, time, "Sine", "InOut", true)
+			loop.Also = { track("Rotation", rot - lean, rot + lean, rot) }
+			table.insert(loops, loop)
+		elseif kind == "Glow" and d:IsA("GuiObject") then
+			local property = if d:IsA("ImageLabel") or d:IsA("ImageButton") then "ImageTransparency" else "BackgroundTransparency"
+			local rest = baseOf(d, property) :: number
+			local faint = math.min(1, rest + numberAttr(d, "Fade", ShopFx.GlowFade))
+			table.insert(loops, newLoop(kind, d, property, rest, faint, rest, ShopFx.GlowTime, "Sine", "InOut", true))
+		elseif kind == "Wiggle" and d:IsA("GuiObject") then
+			local i = wiggles
+			wiggles += 1
+			local rot = baseOf(d, "Rotation") :: number
+			local swing = numberAttr(d, "Swing", ShopFx.WiggleSwing)
+			local lean = if i % 2 == 0 then swing else -swing
+			local time = ShopFx.WiggleTime * (1 + 0.14 * (i % 4))
+			table.insert(loops, newLoop(kind, d, "Rotation", rot - lean, rot + lean, rot, time, "Sine", "InOut", true))
+		elseif kind == "Sheen" and d:IsA("UIGradient") then
+			local room = ShopFx.SheenEvery - ShopFx.SheenCross
+			local start = (ShopFx.SheenLead + sheens * ShopFx.SheenGap) % room
+			sheens += 1
+			table.insert(loops, sweepLoop(kind, d, ShopFx.SheenEvery, ShopFx.SheenCross, start))
+		elseif kind == "Glint" and d:IsA("UIGradient") then
+			table.insert(loops, sweepLoop(kind, d, ShopFx.GlintEvery, ShopFx.GlintCross, ShopFx.GlintLead))
+		elseif kind == "Rise" and (d:IsA("ImageLabel") or d:IsA("ImageButton")) then
+			local path = d:GetAttribute("Path")
+			if typeof(path) == "Vector2" then
+				local pos = baseOf(d, "Position") :: UDim2
+				local round = numberAttr(d, "Period", 3)
+				local peak = numberAttr(d, "Peak", ShopFx.RisePeak)
+				local to = pos + UDim2.fromOffset((path :: Vector2).X, (path :: Vector2).Y)
+				table.insert(loops, newLoop(kind, d, "Position", pos, to, pos, round, "Linear", "In", false))
+				-- (clear at both ends of the drift, brightest half way: the jump back is never seen)
+				table.insert(loops, newLoop(kind, d, "ImageTransparency", 1, peak, 1, round / 2, "Sine", "InOut", true))
+			end
 		end
 	end
 	local function walk(d: Instance)
@@ -1429,7 +1715,13 @@ function ShopFx.play(loops: { Loop }): Playing
 	end
 	for _, loop in loops do
 		set(loop.Target, loop.Property, loop.From)
-		local made = tween(loop.Target, loop.Time, loop.Style, loop.Direction, { [loop.Property] = loop.To }, -1, loop.Reverses, 0)
+		local goal = { [loop.Property] = loop.To }
+		local also: { Track } = loop.Also or {}
+		for _, more in also do
+			set(loop.Target, more.Property, more.From)
+			goal[more.Property] = more.To
+		end
+		local made = tween(loop.Target, loop.Time, loop.Style, loop.Direction, goal, -1, loop.Reverses, 0)
 		if made then
 			table.insert(playing.Tweens, made)
 		end
@@ -1450,14 +1742,33 @@ function ShopFx.stop(playing: Playing?)
 	for _, loop in playing.Loops do
 		if loop.Target.Parent then
 			set(loop.Target, loop.Property, loop.Rest)
+			local also: { Track } = loop.Also or {}
+			for _, more in also do
+				set(loop.Target, more.Property, more.Rest)
+			end
 		end
 	end
 	table.clear(playing.Tweens)
 	table.clear(playing.Loops)
 end
 
--- A loop's value `t` seconds after it started (the same curve the tween runs: the previews' video, the tests).
-function ShopFx.sample(loop: Loop, t: number): any
+local function lerpValue(from: any, to: any, u: number): any
+	if type(from) == "number" then
+		return from + (to - from) * u
+	elseif typeof(from) == "Vector2" then
+		return (from :: Vector2):Lerp(to :: Vector2, u)
+	elseif typeof(from) == "UDim2" then
+		return (from :: UDim2):Lerp(to :: UDim2, u)
+	end
+	return if u < 0.5 then from else to
+end
+
+--[[
+	A loop's value `t` seconds after it started (the same curve the tween
+	runs: the previews' video, the tests); `property` one of its Also tracks
+	(an idle picture's Rotation) instead of its own.
+]]
+function ShopFx.sample(loop: Loop, t: number, property: string?): any
 	local period = math.max(loop.Time, 1e-6)
 	local k: number
 	if loop.Reverses then
@@ -1467,15 +1778,16 @@ function ShopFx.sample(loop: Loop, t: number): any
 		k = (t % period) / period
 	end
 	local u = Motion.ease(loop.Style, loop.Direction, k)
-	local from, to = loop.From, loop.To
-	if type(from) == "number" then
-		return from + (to - from) * u
-	elseif typeof(from) == "Vector2" then
-		return (from :: Vector2):Lerp(to :: Vector2, u)
-	elseif typeof(from) == "UDim2" then
-		return (from :: UDim2):Lerp(to :: UDim2, u)
+	if property and property ~= loop.Property then
+		local also: { Track } = loop.Also or {}
+		for _, more in also do
+			if more.Property == property then
+				return lerpValue(more.From, more.To, u)
+			end
+		end
+		return nil
 	end
-	return if u < 0.5 then from else to
+	return lerpValue(loop.From, loop.To, u)
 end
 
 ---------------------------------------------------------------- one-shot motion (open, close, tabs, cards, buttons)
@@ -1530,7 +1842,7 @@ function ShopFx.open(group: GuiObject, dim: GuiObject?, dimTo: number, burst: Gu
 		-- (gone once it has faded: a later open's burst keeps its own)
 		local shot = (tonumber(burst:GetAttribute("Shot")) or 0) + 1
 		burst:SetAttribute("Shot", shot)
-		task.delay(0.65, function()
+		later(0.65, function()
 			if burst:GetAttribute("Shot") == shot then
 				burst.Visible = false
 			end
@@ -1561,7 +1873,7 @@ function ShopFx.close(group: GuiObject, dim: GuiObject?, done: () -> ())
 	if dim then
 		tween(dim, 0.14, "Quad", "In", { BackgroundTransparency = 1 })
 	end
-	task.delay(0.15, done)
+	later(0.15, done)
 end
 
 -- A layer fades out over what is under it (a tab's old colours over its new ones).
@@ -1606,23 +1918,210 @@ function ShopFx.popIn(holders: { GuiObject })
 	end
 end
 
+-- The picked tab's picture pops (its UIScale "Pop": from small, Back out). Quiet: it just shows.
+ShopFx.IconPopFrom = 0.45
+function ShopFx.popIcon(icon: GuiObject)
+	local pop = scaleOn(icon, "Pop")
+	if ShopFx.quiet() then
+		pop.Scale = 1
+		return
+	end
+	pop.Scale = ShopFx.IconPopFrom
+	tween(pop, 0.36, "Back", "Out", { Scale = 1 })
+end
+
+export type Cascade = {
+	Drops: { GuiObject }, -- the title (and its copies): they drop into place
+	Pops: { GuiObject }, -- the basket and the tabs, left to right: they pop in one after another
+	Spin: GuiObject?, -- the X: it spins in
+}
+
+ShopFx.CascadeDrop = 26 -- the title drops this far
+ShopFx.DropTime = 0.2
+ShopFx.PopTime = 0.16
+ShopFx.PopStart = 0.02
+ShopFx.PopStep = 0.018 -- (seven pops: the last one starts at 0.13 s)
+ShopFx.SpinDelay = 0.04
+ShopFx.SpinTime = 0.24 -- (the whole cascade is over by 0.3 s)
+
+--[[
+	As the window opens its header comes in: the title drops into place, the
+	basket and the tabs pop in one after another (their UIScale "Scale"),
+	the X spins in (Rotation, from half a turn back, and its "Scale"); all
+	Back out, over by 0.3 s. Quiet: all at rest at once.
+]]
+function ShopFx.cascade(parts: Cascade)
+	local quiet = ShopFx.quiet()
+	for _, gui in parts.Drops do
+		local rest = baseOf(gui, "Position") :: UDim2
+		if quiet then
+			gui.Position = rest
+		else
+			gui.Position = rest + UDim2.fromOffset(0, -ShopFx.CascadeDrop)
+			tween(gui, ShopFx.DropTime, "Back", "Out", { Position = rest })
+		end
+	end
+	for i, gui in parts.Pops do
+		local scale = scaleOn(gui, "Scale")
+		if quiet then
+			scale.Scale = 1
+		else
+			scale.Scale = 0.3
+			tween(scale, ShopFx.PopTime, "Back", "Out", { Scale = 1 }, 0, false, ShopFx.PopStart + (i - 1) * ShopFx.PopStep)
+		end
+	end
+	local spin = parts.Spin
+	if spin then
+		local rest = baseOf(spin, "Rotation") :: number
+		local scale = scaleOn(spin, "Scale")
+		if quiet then
+			spin.Rotation = rest
+			scale.Scale = 1
+		else
+			spin.Rotation = rest - 180
+			scale.Scale = 0.3
+			tween(spin, ShopFx.SpinTime, "Back", "Out", { Rotation = rest }, 0, false, ShopFx.SpinDelay)
+			tween(scale, ShopFx.SpinTime, "Back", "Out", { Scale = 1 }, 0, false, ShopFx.SpinDelay)
+		end
+	end
+end
+
+ShopFx.CelebratePop = 1.12 -- a bought card pops from this
+ShopFx.PrizeCount = 12 -- stars (or coins) out of it, at most
+ShopFx.PrizeTime = 0.75
+
+--[[
+	A purchase from the shop went through: `target` (a card, or a banner's
+	buy button) flashes white and pops from CelebratePop back to 1 (its
+	UIScale "Scale"), and PrizeCount `picture`s (a shop sheet icon: "star",
+	"coin"; else the effects sparkle in gold) fly out of its middle (`at`,
+	in `layer`, the window's front) in a ring, spinning and fading; all gone
+	after PrizeTime. Quiet: nothing. Returns the flash and the prizes (the
+	specs).
+]]
+function ShopFx.celebrate(target: GuiObject, corner: number, layer: Instance, at: UDim2, picture: string, seed: number?): { GuiObject }
+	local made: { GuiObject } = {}
+	if ShopFx.quiet() then
+		return made
+	end
+	local pop = scaleOn(target, "Scale")
+	pop.Scale = ShopFx.CelebratePop
+	tween(pop, 0.42, "Back", "Out", { Scale = 1 })
+	local flash = UIKit.new("Frame", {
+		Name = "Flash",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 16,
+	}, target)
+	UIKit.corner(flash, corner)
+	tween(flash, 0.45, "Quad", "Out", { BackgroundTransparency = 1 })
+	table.insert(made, flash)
+	local rand = ShopFx.random(seed or 7)
+	local count = ShopFx.PrizeCount
+	for i = 1, count do
+		local angle = (i - 1) / count * 2 * math.pi + (rand() - 0.5) * 0.4
+		local far = 110 + rand() * 90
+		local size = math.floor(26 + rand() * 16)
+		local props: Props = {
+			Name = "Prize",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = at,
+			Rotation = math.floor(rand() * 60 - 30),
+			Size = UDim2.fromOffset(math.floor(size * 0.4), math.floor(size * 0.4)),
+			ZIndex = 30,
+		}
+		local image = ShopFx.icon(layer, picture, size, props)
+		if not image then
+			props.ImageColor3 = hex("#ffe27a")
+			image = ShopFx.sprite(layer, "sparkle", props)
+		end
+		if image then
+			local goal = {
+				Position = at + UDim2.fromOffset(math.floor(math.cos(angle) * far), math.floor(math.sin(angle) * far * 0.8)),
+				Rotation = image.Rotation + (if i % 2 == 0 then 140 else -140),
+				Size = UDim2.fromOffset(size, size),
+			}
+			tween(image, ShopFx.PrizeTime, "Quad", "Out", goal)
+			tween(image, ShopFx.PrizeTime, "Quad", "In", { ImageTransparency = 1 })
+			table.insert(made, image)
+		end
+	end
+	later(ShopFx.PrizeTime + 0.05, function()
+		for _, gui in made do
+			gui:Destroy()
+		end
+	end)
+	return made
+end
+
+export type PressLook = {
+	Lift: number?, -- a card rises this much under the mouse or the gamepad's selection
+	Light: UIStroke?, -- its light edge brightens (ShopFx.LightOn)
+	Glow: GuiObject?, -- its glow too (by ShopFx.GlowOn)
+}
+
+--[[
+	`target` hovered (the mouse, or a gamepad's selection) or held (a press,
+	a touch): 1.04 / 0.94 (its UIScale "Scale"); with `look` a hovered card
+	also rises (its AnchorPoint: the layout's Position stays its own) and
+	its light edge and glow brighten. Quiet: all at rest at once.
+]]
+function ShopFx.hover(target: GuiObject, hovered: boolean, held: boolean, look: PressLook?)
+	local scale = scaleOn(target, "Scale")
+	local quiet = ShopFx.quiet()
+	local raised = hovered and not quiet
+	local goal = if quiet then 1 elseif held then ShopFx.Press elseif hovered then ShopFx.Hover else 1
+	if quiet then
+		scale.Scale = 1
+	else
+		tween(scale, ShopFx.PressTime, "Quad", "Out", { Scale = goal })
+	end
+	if not look then
+		return
+	end
+	local function move(gui: Instance, property: string, value: any)
+		if quiet then
+			set(gui, property, value)
+		else
+			tween(gui, ShopFx.PressTime + 0.04, "Quad", "Out", { [property] = value })
+		end
+	end
+	local lift = look.Lift or 0
+	if lift > 0 then
+		local anchor = baseOf(target, "AnchorPoint") :: Vector2
+		local h = target.Size.Y.Offset
+		local up = if raised and h > 0 then lift / h else 0
+		move(target, "AnchorPoint", Vector2.new(anchor.X, anchor.Y + up))
+	end
+	local light = look.Light
+	if light then
+		local rest = baseOf(light, "Transparency") :: number
+		move(light, "Transparency", if raised then ShopFx.LightOn else rest)
+	end
+	local glow = look.Glow
+	if glow then
+		local property = if glow:IsA("ImageLabel") then "ImageTransparency" else "BackgroundTransparency"
+		local rest = baseOf(glow, property) :: number
+		move(glow, property, if raised then math.max(0, rest - ShopFx.GlowOn) else rest)
+	end
+end
+
 --[[
 	Hover 1.04 (the mouse, or a gamepad's selection) and press 0.94 on
-	`button`, scaling `target` (a UIScale "Scale" on it; held by its middle).
-	The motion watcher leaves it alone (attribute Motion = "None"). Quiet:
-	nothing scales. (Connections need the game: Lune skips them.)
+	`button`, scaling `target` (a UIScale "Scale" on it; held by its middle);
+	`look`: a card also rises and brightens while hovered (ShopFx.hover). A
+	touch only presses. The motion watcher leaves it alone (attribute
+	Motion = "None"). Quiet: nothing moves. (Connections need the game: Lune
+	skips them.)
 ]]
-function ShopFx.bindPress(button: GuiButton, target: GuiObject)
+function ShopFx.bindPress(button: GuiButton, target: GuiObject, look: PressLook?)
 	button:SetAttribute("Motion", "None")
-	local scale = scaleOn(target, "Scale")
+	scaleOn(target, "Scale")
 	local hovered, held = false, false
 	local function go()
-		if ShopFx.quiet() then
-			scale.Scale = 1
-			return
-		end
-		local goal = if held then ShopFx.Press elseif hovered then ShopFx.Hover else 1
-		tween(scale, ShopFx.PressTime, "Quad", "Out", { Scale = goal })
+		ShopFx.hover(target, hovered, held, look)
 	end
 	pcall(function()
 		local UserInputService = game:GetService("UserInputService")
