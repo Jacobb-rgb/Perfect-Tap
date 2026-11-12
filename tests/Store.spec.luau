@@ -328,11 +328,14 @@ return function(T, Loader)
 		local StoreView = ui("StoreView")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 		local before, beforeId, beforeFx = IconAssets.Previewing, IconAssets.Shop.Id, IconAssets.ShopFx.Id
-		local beforeGolems = IconAssets.ShopGolems.Id
+		local beforeStickers: { number } = {}
+		for i, sheet in IconAssets.StickerSheets do
+			beforeStickers[i] = sheet.Id
+			sheet.Id = 0 -- (and the drawn stickers: their live 3D models)
+		end
 		IconAssets.Previewing = false
 		IconAssets.Shop.Id = 0 -- (as before the owner's upload, or if it ever fails to load)
 		IconAssets.ShopFx.Id = 0 -- (the effects picture too: owner's upload 2026-11-12)
-		IconAssets.ShopGolems.Id = 0 -- (and the golem stickers: their live 3D models)
 		local ok, err = pcall(function()
 			for _, spec in StoreConfig.Cards do
 				T.truthy(StoreView.hasPicture(spec), spec.Id .. " shows a picture in the game")
@@ -352,7 +355,9 @@ return function(T, Loader)
 		IconAssets.Previewing = before
 		IconAssets.Shop.Id = beforeId
 		IconAssets.ShopFx.Id = beforeFx
-		IconAssets.ShopGolems.Id = beforeGolems
+		for i, sheet in IconAssets.StickerSheets do
+			sheet.Id = beforeStickers[i]
+		end
 		if not ok then
 			error(err, 0)
 		end

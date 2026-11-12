@@ -478,17 +478,26 @@ end
 	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_golemove.png (Columns x rows of
 	Cell px in the order of Icons, 1024 px square). Icons are the shop's picture
 	names (golem_<Kind>, capsule_<Id>: the live models UI/StoreView shows). Id
-	0 = not uploaded: the shop keeps its live 3D models (UI/ShopFx.golemPicture
+	0 = not uploaded: the shop keeps its live 3D models (UI/ShopFx.stickerPicture
 	returns nil), and so does a golem or egg with no sticker (a later
 	edition's). The previews draw build/preview/icons/sticker_<name>.png while
 	Previewing and Preview are on.
 ]]
+export type StickerSheet = {
+	File: string,
+	Id: number,
+	Cell: number,
+	Columns: number,
+	Preview: boolean, -- (a preview of the shop before the upload sets it false)
+	Icons: { string },
+}
+
 IconAssets.ShopGolems = {
 	File = "obchod_golemove.png",
-	Id = 0,
+	Id = 78687800602987, -- (the owner's upload, 2026-11-12)
 	Cell = 256,
 	Columns = 4,
-	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Preview = true,
 	Icons = {
 		-- the Royal Egg's golems (rarest last) and the egg
 		"golem_SilverSquire",
@@ -508,34 +517,68 @@ IconAssets.ShopGolems = {
 		"golem_DragonKing",
 		"capsule_Dragonforge",
 	},
-}
-local golemCell: { [string]: number } = {}
-for i, name in IconAssets.ShopGolems.Icons do
-	golemCell[name] = i - 1
+} :: StickerSheet
+
+--[[
+	The shop's other live 3D pictures drawn the same way, from the same game
+	models (owner 2026-11-12, once the golem stickers were in: "the hoverboard
+	etc. doesn't have the drawn style yet, and one more thing on the same
+	page"): the PASSES tab's podium (Two More Podiums; the Starter Pack's
+	podium skin is the same one), Express Train and Custom Hoverboard (its deck
+	doodles as the game builds them while the painted deck,
+	Textures.board_custom_deck, isn't uploaded). One image,
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_predmety.png (Columns x rows of
+	Cell px in the order of Icons), by the same tool. Id 0 = not uploaded:
+	their live 3D models.
+]]
+IconAssets.ShopItems = {
+	File = "obchod_predmety.png",
+	Id = 0,
+	Cell = 256,
+	Columns = 3,
+	Preview = true,
+	Icons = { "podium", "train", "board_TerraForgeCustom" },
+} :: StickerSheet
+
+-- Every image of drawn shop stickers (a picture name is in one of them at most).
+IconAssets.StickerSheets = { IconAssets.ShopGolems, IconAssets.ShopItems } :: { StickerSheet }
+local stickerSheet: { [string]: StickerSheet } = {}
+local stickerCell: { [string]: number } = {}
+for _, sheet in IconAssets.StickerSheets do
+	for i, name in sheet.Icons do
+		assert(stickerSheet[name] == nil, "IconAssets: the sticker " .. name .. " is in two images")
+		stickerSheet[name] = sheet
+		stickerCell[name] = i - 1
+	end
 end
 
--- The cell of golem sticker `name` in its image (0-based; nil: no sticker).
-function IconAssets.shopGolemCell(name: string): number?
-	return golemCell[name]
+-- The image holding the drawn sticker `name` (nil: no sticker).
+function IconAssets.shopStickerSheet(name: string): StickerSheet?
+	return stickerSheet[name]
 end
 
--- Will the golem or egg sticker `name` show (its image is uploaded, or a preview that shows it)?
-function IconAssets.shopGolemShows(name: string): boolean
-	if golemCell[name] == nil then
+-- The cell of the drawn sticker `name` in its image (0-based; nil: no sticker).
+function IconAssets.shopStickerCell(name: string): number?
+	return stickerCell[name]
+end
+
+-- Will the drawn sticker `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.shopStickerShows(name: string): boolean
+	local sheet = stickerSheet[name]
+	if sheet == nil then
 		return false
 	end
-	if IconAssets.ShopGolems.Id > 0 then
+	if sheet.Id > 0 then
 		return true
 	end
-	return IconAssets.Previewing and IconAssets.ShopGolems.Preview
+	return IconAssets.Previewing and sheet.Preview
 end
 
--- Shows golem or egg sticker `name` on an ImageLabel (its cell of the uploaded image; the previews: its own picture).
-function IconAssets.applyShopGolem(label: ImageLabel, name: string)
-	local cell = golemCell[name]
+-- Shows the drawn sticker `name` on an ImageLabel (its cell of its uploaded image; the previews: its own picture).
+function IconAssets.applyShopSticker(label: ImageLabel, name: string)
+	local sheet, cell = stickerSheet[name], stickerCell[name]
 	label:SetAttribute("Icon", "sticker_" .. name)
-	local sheet = IconAssets.ShopGolems
-	if cell == nil or sheet.Id <= 0 then
+	if sheet == nil or cell == nil or sheet.Id <= 0 then
 		label.Image = ""
 		return
 	end

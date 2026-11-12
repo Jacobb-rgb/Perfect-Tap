@@ -1,17 +1,22 @@
-// The shop's golem and egg stickers (owner 2026-11-12: "make it in the drawn version but more
-// cool, and it has to look like it is in the game, so people don't say it's cap"): every name
-// in IconAssets.ShopGolems.Icons (golem_<Kind>, capsule_<Id>) drawn FROM THE GAME'S OWN MODEL,
-// the one the shop's 3D picture shows (PictureModels.build: the golem in its egg costume or
-// limited gear, the egg, the shard) from that picture's camera direction, by the toon renderer
-// tools/preview/golem_toon/toon.js (flat cel tones in each part's game colour, a bold navy
-// outline, navy lines between parts, white shines, a drop; see its header). Writes the ONE
-// picture the owner uploads (IconAssets.ShopGolems): Columns x rows of Cell px, transparent, in
-// the order of IconAssets.ShopGolems.Icons (at most 1024 px a side), and every sticker alone as
-// build/preview/icons/sticker_<name>.png for the previews.
+// The shop's drawn stickers (owner 2026-11-12: "make it in the drawn version but more cool, and
+// it has to look like it is in the game, so people don't say it's cap"; then "the hoverboard
+// etc. doesn't have the drawn style yet"): every name in every image of IconAssets.StickerSheets
+// (IconAssets.ShopGolems: golem_<Kind>, capsule_<Id> -> obchod_golemove.png; IconAssets.ShopItems:
+// podium, train, board_<Id> -> obchod_predmety.png) drawn FROM THE GAME'S OWN MODEL, the one the
+// shop's 3D picture shows (PictureModels.build: the golem in its egg costume or limited gear, the
+// egg, the shard, the podium, the locomotive, the hoverboard) from that picture's camera
+// direction, by the toon renderer tools/preview/golem_toon/toon.js (flat cel tones in each part's
+// game colour, a bold navy outline, navy lines between parts, white shines, a drop; see its
+// header). Writes the pictures the owner uploads, one per image: Columns x rows of Cell px,
+// transparent, in the order of its Icons (at most 1024 px a side), and every sticker alone as
+// build/preview/icons/sticker_<name>.png for the previews. An image already uploaded (its Id > 0)
+// is not written again (the file stays the one the game shows) unless SHEETS names it.
 //   node tools/preview/shop_golem_sheet.mjs [sheetOutDir]
-//     first runs `lune run tools/lune/export_golem_stickers.luau` (the models ->
+//     first runs `lune run tools/lune/export_golem_stickers.luau` (the models and the images ->
 //     build/preview/golem_stickers.json); sheetOutDir defaults to ../NAHRAJ_DO_ROBLOXU/ikony_obchod
-//     next to the project (obchod_golemove.png)
+//     next to the project
+//   SHEETS=ShopGolems node tools/preview/shop_golem_sheet.mjs <dir>
+//     writes these images (IconAssets names) whether uploaded or not (a check against the upload)
 //   STICKERS=golem_RoseKnight,capsule_Royal node tools/preview/shop_golem_sheet.mjs
 //     only these previews (no sheet); TOON_DEBUG=1 also writes build/preview/golem_debug/
 //     <name>_4x.png (before the filter down) and <name>_lines.png (parts in false colour, the lines)
@@ -56,24 +61,23 @@ const sheetDir = path.resolve(outArg || path.join(kitRoot(), "NAHRAJ_DO_ROBLOXU/
 const previewDir = lit ? path.resolve(outArg || path.join(repo, "build/preview/golem_3d")) : path.join(repo, "build/preview/icons");
 fs.mkdirSync(previewDir, { recursive: true });
 
-// the sheet's order and cells: IconAssets.ShopGolems (the game cuts its cells by them)
-const luau = fs.readFileSync(path.join(repo, "src/shared/Config/IconAssets.luau"), "utf8");
-const block = luau.match(/IconAssets\.ShopGolems = \{([\s\S]*?)\n\}/);
-if (!block) throw new Error("IconAssets.ShopGolems not found");
-const icons = block[1].match(/Icons = \{([\s\S]*?)\}/);
-const order = [...icons[1].matchAll(/"([A-Za-z0-9_]+)"/g)].map((m) => m[1]);
-const CELL = Number((block[1].match(/Cell = (\d+)/) || [0, 256])[1]);
-const COLUMNS = Number((block[1].match(/Columns = (\d+)/) || [0, 4])[1]);
-const ROWS = Math.ceil(order.length / COLUMNS);
-const W = COLUMNS * CELL, H = ROWS * CELL;
-if (W > 1024 || H > 1024) throw new Error(`the sheet would be ${W} x ${H} px: Roblox shrinks pictures over 1024`);
+const wantSheets = (process.env.SHEETS || "").split(",").filter(Boolean);
 
-// the models, exactly as the game builds them
+// the models, exactly as the game builds them, and the images' order and cells
+// (IconAssets.StickerSheets: the game cuts its cells by them)
 const exported = spawnSync("lune", ["run", "tools/lune/export_golem_stickers.luau"], { cwd: repo, encoding: "utf8" });
 if (exported.status !== 0) {
   throw new Error("lune run tools/lune/export_golem_stickers.luau failed:\n" + (exported.stderr || exported.stdout || exported.error));
 }
 const data = JSON.parse(fs.readFileSync(path.join(repo, "build/preview/golem_stickers.json"), "utf8"));
+for (const sheet of data.sheets) {
+  sheet.W = sheet.columns * sheet.cell;
+  sheet.H = Math.ceil(sheet.order.length / sheet.columns) * sheet.cell;
+  if (sheet.W > 1024 || sheet.H > 1024) throw new Error(`${sheet.file} would be ${sheet.W} x ${sheet.H} px: Roblox shrinks pictures over 1024`);
+}
+const unknown = wantSheets.filter((n) => !data.sheets.some((s) => s.name === n));
+if (unknown.length) throw new Error("SHEETS: no image " + unknown.join(", ") + " (IconAssets.StickerSheets: " + data.sheets.map((s) => s.name).join(", ") + ")");
+const order = data.sheets.flatMap((s) => s.order);
 const missing = order.filter((name) => !data.models[name]);
 if (missing.length) throw new Error("no model for " + missing.join(", "));
 
@@ -101,11 +105,12 @@ page.on("pageerror", (e) => console.error("[page]", e.message));
 await page.goto(`http://127.0.0.1:${port}/golem_toon/toon.html`);
 await page.waitForFunction(() => window.__ready, null, { timeout: 60000 });
 
+const cellOf = Object.fromEntries(data.sheets.flatMap((s) => s.order.map((n) => [n, s.cell])));
 const names = only.length ? order.filter((n) => only.includes(n)) : order;
 const pictures = {};
 for (const name of names) {
   const t0 = Date.now();
-  const url = await page.evaluate(([name, cell, mode, debug]) => window.TOON.render(name, { cell, mode, debug }), [name, CELL, lit ? "lit" : "toon", debug]);
+  const url = await page.evaluate(([name, cell, mode, debug]) => window.TOON.render(name, { cell, mode, debug }), [name, cellOf[name], lit ? "lit" : "toon", debug]);
   pictures[name] = url;
   if (debug && !lit) {
     // TOON_DEBUG=1: the 4x picture before it is filtered down
@@ -121,27 +126,34 @@ for (const name of names) {
 }
 
 if (!lit && !only.length) {
-  // the sheet: every sticker in its cell, transparent round them
-  const sheet = await page.evaluate(
-    async ([order, pictures, CELL, COLUMNS, W, H]) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      for (let i = 0; i < order.length; i++) {
-        const img = new Image();
-        img.src = pictures[order[i]];
-        await img.decode();
-        ctx.drawImage(img, (i % COLUMNS) * CELL, Math.floor(i / COLUMNS) * CELL);
-      }
-      return canvas.toDataURL("image/png");
-    },
-    [order, pictures, CELL, COLUMNS, W, H],
-  );
-  fs.mkdirSync(sheetDir, { recursive: true });
-  const sheetFile = path.join(sheetDir, "obchod_golemove.png");
-  fs.writeFileSync(sheetFile, Buffer.from(sheet.split(",")[1], "base64"));
-  console.log("sheet", path.relative(process.cwd(), sheetFile), `${W} x ${H}`, `${order.length} stickers`);
+  for (const sheet of data.sheets) {
+    const write = wantSheets.length ? wantSheets.includes(sheet.name) : sheet.id === 0;
+    if (!write) {
+      console.log(`sheet ${sheet.file}: uploaded (id ${sheet.id}), kept as it is (SHEETS=${sheet.name} writes it again)`);
+      continue;
+    }
+    // the image: every sticker in its cell, transparent round them
+    const png = await page.evaluate(
+      async ([order, pictures, CELL, COLUMNS, W, H]) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        for (let i = 0; i < order.length; i++) {
+          const img = new Image();
+          img.src = pictures[order[i]];
+          await img.decode();
+          ctx.drawImage(img, (i % COLUMNS) * CELL, Math.floor(i / COLUMNS) * CELL);
+        }
+        return canvas.toDataURL("image/png");
+      },
+      [sheet.order, pictures, sheet.cell, sheet.columns, sheet.W, sheet.H],
+    );
+    fs.mkdirSync(sheetDir, { recursive: true });
+    const sheetFile = path.join(sheetDir, sheet.file);
+    fs.writeFileSync(sheetFile, Buffer.from(png.split(",")[1], "base64"));
+    console.log("sheet", path.relative(process.cwd(), sheetFile), `${sheet.W} x ${sheet.H}`, `${sheet.order.length} stickers`);
+  }
 }
 await browser.close();
 server.close();

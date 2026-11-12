@@ -488,37 +488,59 @@ return function(T, Loader)
 		end)
 	end)
 
+	-- Runs `fn` with every sticker image uploaded (`id` > 0) or none, then puts them back.
+	local function withStickers(id: number, fn: () -> ())
+		local before: { { Id: number, Preview: boolean } } = {}
+		for i, sheet in IconAssets.StickerSheets do
+			before[i] = { Id = sheet.Id, Preview = sheet.Preview }
+			sheet.Id = id
+		end
+		local previewing = IconAssets.Previewing
+		IconAssets.Previewing = false
+		local ok, err = pcall(fn)
+		for i, sheet in IconAssets.StickerSheets do
+			sheet.Id, sheet.Preview = before[i].Id, before[i].Preview
+		end
+		IconAssets.Previewing = previewing
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	-- (the live 3D models: as before the sticker images were uploaded, or if one fails to load)
 	T.test("ShopFx: an egg pack's three eggs are one 3D view; the open tab's models are built, the others wait", function()
-		local StoreView = ui("StoreView")
-		local refs = StoreView.build()
-		local function waiting(page: any): number
-			return count(page, function(d)
-				return d:GetAttribute("Model") ~= nil
-			end)
-		end
-		T.eq(waiting(refs.Pages[refs.Current]), 0, "the open tab's models are built")
-		T.truthy(waiting(refs.Pages.Golems) > 0, "the Golems tab's wait for it")
-		StoreView.selectTab(refs, "Golems")
-		T.eq(waiting(refs.Pages.Golems), 0, "shown: built")
-		for _, id in { "Royal3", "Royal5", "Royal10" } do
-			local card = refs.Cards[id]
-			local views = count(card.Holder, function(d)
-				return d.ClassName == "ViewportFrame"
-			end)
-			T.eq(views, 1, id .. ": one view")
-			local view = (card.Picture :: any).View
-			T.eq(#view:GetChildren(), 2, id .. ": the pile and its camera")
-			local pile = view:FindFirstChildOfClass("Model")
-			T.eq(#pile:GetChildren(), 3, id .. ": three eggs")
-			T.truthy(view:FindFirstChildOfClass("Camera") ~= nil, id .. " framed")
-		end
-		T.eq(
-			count(refs.Cards.Royal1.Holder, function(d)
-				return d.ClassName == "ViewportFrame"
-			end),
-			1,
-			"x1: one egg"
-		)
+		withStickers(0, function()
+			local StoreView = ui("StoreView")
+			local refs = StoreView.build()
+			local function waiting(page: any): number
+				return count(page, function(d)
+					return d:GetAttribute("Model") ~= nil
+				end)
+			end
+			T.eq(waiting(refs.Pages[refs.Current]), 0, "the open tab's models are built")
+			T.truthy(waiting(refs.Pages.Golems) > 0, "the Golems tab's wait for it")
+			StoreView.selectTab(refs, "Golems")
+			T.eq(waiting(refs.Pages.Golems), 0, "shown: built")
+			for _, id in { "Royal3", "Royal5", "Royal10" } do
+				local card = refs.Cards[id]
+				local views = count(card.Holder, function(d)
+					return d.ClassName == "ViewportFrame"
+				end)
+				T.eq(views, 1, id .. ": one view")
+				local view = (card.Picture :: any).View
+				T.eq(#view:GetChildren(), 2, id .. ": the pile and its camera")
+				local pile = view:FindFirstChildOfClass("Model")
+				T.eq(#pile:GetChildren(), 3, id .. ": three eggs")
+				T.truthy(view:FindFirstChildOfClass("Camera") ~= nil, id .. " framed")
+			end
+			T.eq(
+				count(refs.Cards.Royal1.Holder, function(d)
+					return d.ClassName == "ViewportFrame"
+				end),
+				1,
+				"x1: one egg"
+			)
+		end)
 	end)
 
 	---------------------------------------------------------------- the icon sheet
@@ -582,20 +604,7 @@ return function(T, Loader)
 		T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
 	end)
 
-	---------------------------------------------------------------- the golem stickers
-
-	-- Runs `fn` with the golem stickers' image uploaded (`id` > 0) or not, then puts it back.
-	local function withStickers(id: number, fn: () -> ())
-		local sheet = IconAssets.ShopGolems
-		local before, preview, previewing = sheet.Id, sheet.Preview, IconAssets.Previewing
-		sheet.Id = id
-		IconAssets.Previewing = false
-		local ok, err = pcall(fn)
-		sheet.Id, sheet.Preview, IconAssets.Previewing = before, preview, previewing
-		if not ok then
-			error(err, 0)
-		end
-	end
+	---------------------------------------------------------------- the drawn stickers (golems, eggs, pass items)
 
 	-- The golems and eggs the shop shows: the Royal Egg's, the cards' (the Starter Pack's golem, the
 	-- Royal eggs) and the limited edition on sale's (its golems and its shard).
@@ -622,66 +631,93 @@ return function(T, Loader)
 	end
 
 	-- (owner 2026-11-11 pick B, drawn like the shop's icons; 2026-11-12 "it has to look like it is in
-	-- the game": every sticker is drawn from the model the shop's 3D picture shows)
-	T.test("ShopFx: golem stickers are drawn from the game's models, one cell each under 1024 px; every shop golem has one", function()
-		local PictureModels = Loader.requirePath("ReplicatedStorage.Shared.Builders.PictureModels")
-		local sheet = IconAssets.ShopGolems
-		T.eq(sheet.File, "obchod_golemove.png")
-		local rows = math.ceil(#sheet.Icons / sheet.Columns)
-		T.truthy(sheet.Columns * sheet.Cell <= 1024 and rows * sheet.Cell <= 1024, "under Roblox's 1024 px")
-		local seen: { [number]: boolean } = {}
-		for i, name in sheet.Icons do
-			-- the model its 3D picture builds (the renderer draws exactly this one, from this side)
-			local model, from = PictureModels.build(name)
-			T.truthy(model ~= nil, name .. " is a game model (PictureModels)")
-			local parts = 0
-			for _, d in (model :: any):GetDescendants() do
-				if d:IsA("BasePart") and d.Transparency < 0.99 then
-					parts += 1
+	-- the game": every sticker is drawn from the model the shop's 3D picture shows; then "the
+	-- hoverboard etc. doesn't have the drawn style yet": the PASSES tab's podium, train, hoverboard)
+	T.test(
+		"ShopFx: stickers are drawn from the game's models, one cell each under 1024 px; every shop golem and pass item has one",
+		function()
+			local PictureModels = Loader.requirePath("ReplicatedStorage.Shared.Builders.PictureModels")
+			T.eq(IconAssets.ShopGolems.File, "obchod_golemove.png")
+			T.eq(IconAssets.ShopItems.File, "obchod_predmety.png")
+			T.truthy(IconAssets.ShopGolems.Id > 0, "the golem stickers are uploaded (owner 2026-11-12)")
+			local files: { [string]: boolean } = {}
+			for _, sheet in IconAssets.StickerSheets do
+				T.falsy(files[sheet.File], sheet.File .. ": one image each")
+				files[sheet.File] = true
+				local rows = math.ceil(#sheet.Icons / sheet.Columns)
+				T.truthy(sheet.Columns * sheet.Cell <= 1024 and rows * sheet.Cell <= 1024, sheet.File .. " under Roblox's 1024 px")
+				local seen: { [number]: boolean } = {}
+				for i, name in sheet.Icons do
+					-- the model its 3D picture builds (the renderer draws exactly this one, from this side)
+					local model, from = PictureModels.build(name)
+					T.truthy(model ~= nil, name .. " is a game model (PictureModels)")
+					local parts = 0
+					for _, d in (model :: any):GetDescendants() do
+						if d:IsA("BasePart") and d.Transparency < 0.99 then
+							parts += 1
+						end
+					end
+					T.truthy(parts >= 5, name .. ": the model's parts")
+					T.truthy(from.Z < 0, name .. ": seen from its front (-Z)")
+					T.eq(IconAssets.shopStickerSheet(name), sheet, name .. ": its image")
+					local cell = IconAssets.shopStickerCell(name) :: number
+					T.eq(cell, i - 1, name .. ": the image's order")
+					T.falsy(seen[cell], name .. " has its own cell")
+					seen[cell] = true
 				end
 			end
-			T.truthy(parts >= 10, name .. ": the model's parts")
-			T.truthy(from.Z < 0, name .. ": seen from its front (-Z)")
-			local cell = IconAssets.shopGolemCell(name) :: number
-			T.eq(cell, i - 1, name .. ": the sheet's order")
-			T.falsy(seen[cell], name .. " has its own cell")
-			seen[cell] = true
+			for _, name in shopGolems() do
+				T.truthy(IconAssets.shopStickerCell(name) ~= nil, name .. " (in the shop) has a sticker")
+			end
+			-- every picture of the PASSES tab is drawn once the images are in (an icon or a sticker)
+			for _, spec in StoreConfig.Cards do
+				if spec.Section == "Passes" then
+					local drawn = spec.Sheet ~= nil or (spec.Model ~= nil and IconAssets.shopStickerCell(spec.Model :: string) ~= nil)
+					T.truthy(drawn, spec.Id .. " (PASSES) is drawn")
+				end
+			end
+			-- the tools: the export walks every image's names through PictureModels.build; the renderer
+			-- runs it, reads the same order and cells and writes each image the NAVOD names
+			local export = fs.readFile(Loader.root .. "/tools/lune/export_golem_stickers.luau")
+			local exports = export:find("IconAssets.StickerSheets", 1, true) and export:find("PictureModels.build", 1, true)
+			T.truthy(exports, "export_golem_stickers.luau")
+			local tool = fs.readFile(Loader.root .. "/tools/preview/shop_golem_sheet.mjs")
+			T.truthy(tool:find("golem_stickers.json", 1, true) and tool:find("sheet.file", 1, true), "shop_golem_sheet.mjs")
+			T.truthy(tool:find("sheet.id === 0", 1, true), "an uploaded image is not written again")
+			local draws = tool:find("export_golem_stickers.luau", 1, true) and tool:find("golem_toon/toon.html", 1, true)
+			T.truthy(draws, "it draws the exported models")
+			T.truthy(fs.isFile(Loader.root .. "/tools/preview/golem_toon/toon.js"), "the toon renderer")
+			T.falsy(fs.isFile(Loader.root .. "/docs/art/shop_v3_concept/golems.js"), "no hand-drawn stickers left")
+			-- not uploaded (Id 0): nothing in the game; a preview shows them unless told not to
+			withStickers(0, function()
+				for _, name in { "golem_DragonKing", "board_TerraForgeCustom" } do
+					T.falsy(IconAssets.shopStickerShows(name), name .. ": the game before the upload")
+					IconAssets.Previewing = true
+					T.truthy(IconAssets.shopStickerShows(name), name .. ": a preview")
+					local sheet = IconAssets.shopStickerSheet(name) :: any
+					sheet.Preview = false
+					T.falsy(IconAssets.shopStickerShows(name), name .. ": a preview of Studio before the upload")
+					IconAssets.Previewing = false
+				end
+			end)
+			-- uploaded: its cell of its image; a golem without a sticker never shows one
+			withStickers(123, function()
+				T.truthy(IconAssets.shopStickerShows("capsule_Dragonforge"))
+				T.truthy(IconAssets.shopStickerShows("train"))
+				T.falsy(IconAssets.shopStickerShows("golem_PebbleGolem"), "no sticker: never")
+				for _, name in { "capsule_Dragonforge", "board_TerraForgeCustom" } do
+					local sheet = IconAssets.shopStickerSheet(name) :: any
+					local label = Instance.new("ImageLabel")
+					IconAssets.applyShopSticker(label, name)
+					local cell = IconAssets.shopStickerCell(name) :: number
+					T.eq(label.Image, "rbxassetid://123")
+					T.eq(label.ImageRectOffset, Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell))
+					T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
+					T.eq(label:GetAttribute("Icon"), "sticker_" .. name, "the previews' picture")
+				end
+			end)
 		end
-		for _, name in shopGolems() do
-			T.truthy(IconAssets.shopGolemCell(name) ~= nil, name .. " (in the shop) has a sticker")
-		end
-		-- the tools: the export walks the sheet's names through PictureModels.build; the renderer
-		-- runs it, reads the same order and cells and writes the file the NAVOD names
-		local export = fs.readFile(Loader.root .. "/tools/lune/export_golem_stickers.luau")
-		local exports = export:find("IconAssets.ShopGolems", 1, true) and export:find("PictureModels.build", 1, true)
-		T.truthy(exports, "export_golem_stickers.luau")
-		local tool = fs.readFile(Loader.root .. "/tools/preview/shop_golem_sheet.mjs")
-		T.truthy(tool:find("IconAssets.ShopGolems", 1, true) and tool:find("obchod_golemove.png", 1, true), "shop_golem_sheet.mjs")
-		local draws = tool:find("export_golem_stickers.luau", 1, true) and tool:find("golem_toon/toon.html", 1, true)
-		T.truthy(draws, "it draws the exported models")
-		T.truthy(fs.isFile(Loader.root .. "/tools/preview/golem_toon/toon.js"), "the toon renderer")
-		T.falsy(fs.isFile(Loader.root .. "/docs/art/shop_v3_concept/golems.js"), "no hand-drawn stickers left")
-		-- not uploaded (Id 0): nothing in the game; a preview shows them unless told not to
-		withStickers(0, function()
-			T.falsy(IconAssets.shopGolemShows("golem_DragonKing"), "the game before the upload")
-			IconAssets.Previewing = true
-			T.truthy(IconAssets.shopGolemShows("golem_DragonKing"), "a preview")
-			sheet.Preview = false
-			T.falsy(IconAssets.shopGolemShows("golem_DragonKing"), "a preview of Studio before the upload")
-		end)
-		-- uploaded: its cell of the image; a golem without a sticker never shows one
-		withStickers(123, function()
-			T.truthy(IconAssets.shopGolemShows("capsule_Dragonforge"))
-			T.falsy(IconAssets.shopGolemShows("golem_PebbleGolem"), "no sticker: never")
-			local label = Instance.new("ImageLabel")
-			IconAssets.applyShopGolem(label, "capsule_Dragonforge")
-			local cell = IconAssets.shopGolemCell("capsule_Dragonforge") :: number
-			T.eq(label.Image, "rbxassetid://123")
-			T.eq(label.ImageRectOffset, Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell))
-			T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
-			T.eq(label:GetAttribute("Icon"), "sticker_capsule_Dragonforge", "the previews' picture")
-		end)
-	end)
+	)
 
 	T.test("ShopFx: before the sticker upload the shop's golems and eggs stay live 3D; after it they are images, no 3D view", function()
 		local StoreView = ui("StoreView")
@@ -689,6 +725,7 @@ return function(T, Loader)
 			local refs = StoreView.build()
 			StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
 			StoreView.selectTab(refs, "Golems")
+			StoreView.selectTab(refs, "Passes")
 			StoreView.selectTab(refs, "Featured")
 			return refs
 		end
@@ -722,8 +759,14 @@ return function(T, Loader)
 			end
 			T.eq(views(refs.Pages.Golems), 0, "no 3D view left on the Golems tab")
 			T.eq(stickers(refs.Pages.Golems).sticker_capsule_Royal, 1 + 1 + 3 * 3, "the banner's egg, x1, three in each pile")
-			local featured = views(refs.Pages.Featured)
-			T.truthy(featured <= 2, `the Featured tab: only the Starter Pack's coins and podium stay 3D ({featured})`)
+			T.eq(views(refs.Pages.Featured), 0, "the Featured tab: no 3D view (the Starter Pack's coins: an icon, its podium: a sticker)")
+			T.eq(views(refs.Pages.Passes), 0, "the PASSES tab: no 3D view (the podium, the train, the hoverboard: stickers)")
+			for _, id in { "Podiums", "Train", "CustomBoard" } do
+				local picture = refs.Cards[id].Picture :: any
+				T.truthy(picture:IsA("ImageLabel") and string.sub(picture:GetAttribute("Icon"), 1, 8) == "sticker_", id .. ": its sticker")
+				T.eq(picture:GetAttribute("ShopFx"), "Idle", id .. ": it lives a little")
+			end
+			T.eq((refs.Cards.CustomBoard.Picture :: any):GetAttribute("Rise"), StoreView.HoverRise, "the hoverboard hovers higher")
 			local hero = refs.Banner.Frame:FindFirstChild("Hero")
 			T.truthy(hero and hero:IsA("ImageLabel") and hero:GetAttribute("Icon") == "sticker_golem_DragonKing", "the hero")
 			T.eq(hero:GetAttribute("ShopFx"), "Float", "it still floats")

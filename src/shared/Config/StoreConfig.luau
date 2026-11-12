@@ -46,6 +46,7 @@ export type CardSpec = {
 	Icon: string, -- the preview picture of its Model (tools/preview/icons: the same model rendered)
 	Model: string?, -- a live 3D model picture (see the header)
 	Sheet: string?, -- the shop icon sheet's picture (IconAssets.Shop), once uploaded
+	PictureScale: number?, -- Pass: a wide picture (the train, the hoverboard) this much bigger
 	Section: string, -- its tab
 	Row: number,
 	Span: number?, -- share of the row's width (default 1)
@@ -289,6 +290,7 @@ StoreConfig.Cards = {
 		Paint = "Red",
 		Icon = "train",
 		Model = "train",
+		PictureScale = 1.2,
 		Section = "Passes",
 		Row = 1,
 		Title = "Express Train",
@@ -301,6 +303,7 @@ StoreConfig.Cards = {
 		Paint = "Rainbow",
 		Icon = "board_TerraForgeCustom",
 		Model = "board_TerraForgeCustom",
+		PictureScale = 1.3,
 		Section = "Passes",
 		Row = 1,
 		Title = "Custom Hoverboard",

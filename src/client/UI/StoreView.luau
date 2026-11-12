@@ -30,9 +30,10 @@
 	amount and date comes from the configs and the player's live data;
 	"BEST VALUE!" only on the option whose price per item really is the
 	lowest (bestValue). Pictures are live 3D models (PictureModels) or,
-	once uploaded, the shop icon sheet (IconAssets.Shop); the golems and
-	eggs their drawn stickers once that image is uploaded
-	(IconAssets.ShopGolems: an image instead of a 3D view); drawn pictures
+	once uploaded, the shop icon sheet (IconAssets.Shop); the golems, the
+	eggs and the pass items (podium, train, hoverboard) their drawn stickers
+	once those images are uploaded (IconAssets.StickerSheets: an image
+	instead of a 3D view); drawn pictures
 	(the wheel, the x2 badge) or words otherwise, never an emoji.
 
 	Pure builder + layout, no services: the Lune previews build it too.
@@ -398,22 +399,24 @@ end
 
 ---------------------------------------------------------------- pictures
 
--- How big a golem's or an egg's drawn sticker shows, as a share of the 3D picture it stands in for.
+-- How big a drawn sticker shows, as a share of the 3D picture it stands in for.
 StoreView.StickerFill = 1.04
+-- How far the Custom Hoverboard's picture bobs (design units: it hovers; the others ShopFx.IdleRise).
+StoreView.HoverRise = 9
 
 --[[
 	A live 3D picture `size` square with its middle at `at` (nil: no model).
 	The model itself is built when its page first shows (fillModels): the
 	shop opens with only the open tab's models built (cheap on phones).
-	`props` adds to the picture's. A golem or an egg shows its drawn sticker
-	instead once that image is uploaded (IconAssets.ShopGolems: one image, no
-	3D view, nothing to build).
+	`props` adds to the picture's. A golem, an egg, the podium, the train or
+	the hoverboard shows its drawn sticker instead once its image is uploaded
+	(IconAssets.StickerSheets: one image, no 3D view, nothing to build).
 ]]
 local function livePicture(parent: Instance, model: string?, icon: string, size: number, props: { [string]: any }): ImageLabel?
 	if not model then
 		return nil
 	end
-	local sticker = ShopFx.golemPicture(parent, model, math.floor(size * StoreView.StickerFill + 0.5), props)
+	local sticker = ShopFx.stickerPicture(parent, model, math.floor(size * StoreView.StickerFill + 0.5), props)
 	if sticker then
 		return sticker
 	end
@@ -632,7 +635,7 @@ function StoreView.hasPicture(spec: StoreConfig.CardSpec): boolean
 	if spec.Sheet and IconAssets.shopShows(spec.Sheet) then
 		return true
 	end
-	if spec.Model and IconAssets.shopGolemShows(spec.Model) then
+	if spec.Model and IconAssets.shopStickerShows(spec.Model) then
 		return true
 	end
 	if spec.Look == "Wheel" then
@@ -1017,6 +1020,8 @@ Looks.Starter = function(holder, spec, w, h, m)
 		"Podium skin",
 	}
 	local models = { "golem_" .. (product.Golem or "GildedPorter"), "cash_stack", "podium" }
+	-- (the coins: the icon sheet's, like the Cash tab's coin stack; the golem and the podium: their stickers)
+	local sheets: { [number]: string } = { [2] = "coins" }
 	for i = 1, 3 do
 		local slot = UIKit.new("Frame", {
 			Name = "Slot" .. i,
@@ -1025,7 +1030,11 @@ Looks.Starter = function(holder, spec, w, h, m)
 			ZIndex = 5,
 		}, holder)
 		ShopFx.face(slot, { hex("#3a2a6a"), hex("#1e1440") }, 12, 3)
-		local pic = modelPicture(slot, models[i], models[i], 62, UDim2.new(0.5, 0, 0, 40), 6)
+		local at = UDim2.new(0.5, 0, 0, 40)
+		local pic: GuiObject? = if sheets[i]
+			then ShopFx.icon(slot, sheets[i], 62, { Name = "Picture", AnchorPoint = Vector2.new(0.5, 0.5), Position = at, ZIndex = 6 })
+			else nil
+		pic = pic or modelPicture(slot, models[i], models[i], 62, at, 6)
 		if i == 1 then
 			idle(pic, true) -- (its golem lives a little)
 		end
@@ -1137,10 +1146,20 @@ Looks.Pass = function(holder, spec, w, h, m)
 	local refs = newRefs(spec, holder, face)
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	cardTitle(refs, spec.Title or product.Name, 21, 10, 2)
-	local size = math.min(w - 40, 140)
-	refs.Picture = picture(holder, spec, size, UDim2.new(0.5, 0, 0, picY), 5)
+	local size = math.min(math.floor(math.min(w - 40, 140) * (spec.PictureScale or 1)), w - 24)
+	local pic = picture(holder, spec, size, UDim2.new(0.5, 0, 0, picY), 5)
+	refs.Picture = pic
+	-- (owner 2026-11-12 "add more things": the picture lives a little like the golems, the
+	-- hoverboard hovers higher)
+	idle(pic, true)
+	if pic and string.sub(spec.Model or "", 1, 6) == "board_" then
+		pic:SetAttribute("Rise", StoreView.HoverRise)
+	end
 	if spec.Id == "DoubleMoney" then
-		ShopFx.x2(holder, 62, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 44, 0, picY - 48), ZIndex = 9 })
+		-- (on the picture: it bobs with it)
+		local on: Instance = pic or holder
+		local at = if pic then UDim2.new(0.5, 44, 0.5, -48) else UDim2.new(0.5, 44, 0, picY - 48)
+		ShopFx.x2(on, 62, { AnchorPoint = Vector2.new(0.5, 0.5), Position = at, ZIndex = 9 })
 	end
 	local priceH = m.Button + 4
 	refs.Description = cardLine(refs, spec.Short or product.Description, 14, {
@@ -1303,7 +1322,7 @@ Looks.Egg = function(holder, spec, w, h, m)
 	local y = math.floor(h * 0.46)
 	if count == 1 then
 		refs.Picture = modelPicture(holder, spec.Model, spec.Icon, 112, UDim2.fromOffset(mid, y), 5)
-	elseif spec.Model and IconAssets.shopGolemShows(spec.Model) then
+	elseif spec.Model and IconAssets.shopStickerShows(spec.Model) then
 		-- a pile of three drawn eggs: the two behind a little smaller and lower at the sides
 		local pile = UIKit.new("Frame", {
 			Name = "Picture",
@@ -1315,7 +1334,7 @@ Looks.Egg = function(holder, spec, w, h, m)
 		}, holder)
 		local size = math.floor(112 * StoreView.StickerFill + 0.5)
 		for i, place in { { 0.21, 0.58 }, { 0.79, 0.58 }, { 0.5, 0.5 } } do
-			ShopFx.golemPicture(pile, spec.Model, if i == 3 then size else math.floor(size * 0.84), {
+			ShopFx.stickerPicture(pile, spec.Model, if i == 3 then size else math.floor(size * 0.84), {
 				Name = "Egg" .. i,
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(place[1], place[2]),

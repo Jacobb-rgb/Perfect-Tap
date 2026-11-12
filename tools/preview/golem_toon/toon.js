@@ -16,6 +16,8 @@
 //     silver fronts only, glints on big curved metal and glass
 //   - neon flat and bright with a small glow; a thin light rim on the shaded side; small
 //     sparkles on gems and crowns; the outline colour as a drop under it all
+//   - paint (a part under 0.01 studs thick: the Custom Hoverboard's deck doodles) keeps its own
+//     colour on top and gets no lines (the model draws its own marker lines)
 //   - light, not solid (as the game shows it): see-through parts (Transparency >= 0.25: the aura
 //     discs) and the streams of light or lava and glowing seams on the egg shells are a soft glow
 //     at their alpha (1 - transparency, at most 0.95), a light soft edge, a faint halo, no lines,
@@ -51,6 +53,10 @@ const FOV = 18; // a narrow lens: close to a flat drawing, the proportions the s
 const STEP = 0.1;
 // nearer than this (studs) two touching parts are side by side: a seam, not one in front
 const EPS = 0.012;
+// a part this thin (studs) is paint on a surface (the Custom Hoverboard's deck doodles, drawn
+// with their own marker lines): its own colour on top, no lines of its own (no golem part is
+// thinner than 0.02)
+const PAINT = 0.01;
 
 // ------------------------------------------------------------------ colour (sRGB <-> OKLab)
 const lin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -312,7 +318,9 @@ function buildParts(model) {
       const [L, C, h] = lch(rgb);
       rgb = fromLch(L + (1 - L) * 0.05, C * 1.02, h);
     }
-    const [lit, base, shade, deep] = tones(rgb, kind);
+    const paint = !glow && Math.min(sx, sy, sz) <= PAINT;
+    const [toneLit, base, shade, deep] = tones(rgb, kind);
+    const lit = paint ? base : toneLit; // (paint lies flat on a top: its colour as painted)
     const size = shape === SHAPE_CYLINDER ? [sx, Math.min(sy, sz), Math.min(sy, sz)] : [sx, sy, sz];
     const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = cf;
     m4.set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
@@ -354,7 +362,7 @@ function buildParts(model) {
     mesh.matrix.copy(world);
     mesh.matrixWorld.copy(world);
     group.add(mesh);
-    infos.push({ id, name, shape, kind, color, base, lit, mesh, glow });
+    infos.push({ id, name, shape, kind, color, base, lit, mesh, glow, paint });
   });
   return { group, infos };
 }
@@ -795,7 +803,7 @@ async function renderToon(name, cell, debug) {
       let d = differCache.get(key);
       if (d === undefined) {
         const pa = infos[a - 1], pb = infos[b - 1];
-        d = colourGap(pa, pb) >= 0.06 && !closeColours(pa, pb);
+        d = !pa.paint && !pb.paint && colourGap(pa, pb) >= 0.06 && !closeColours(pa, pb);
         differCache.set(key, d);
       }
       return d;
