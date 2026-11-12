@@ -470,15 +470,18 @@ end
 --[[
 	The shop's golems and eggs as drawn stickers (owner 2026-11-11: "the eggs,
 	all the golems are terribly basic ... make them like the icons"; he picked
-	B, 2D stickers of the skins in the game): docs/art/shop_v3_concept/golems.js
-	in one image, ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_golemove.png, made by
-	tools/preview/shop_golem_sheet.mjs (Columns x rows of Cell px in the order
-	of Icons, 1024 px square). Icons are the shop's picture names (golem_<Kind>,
-	capsule_<Id>: the live models UI/StoreView shows). Id 0 = not uploaded:
-	the shop keeps its live 3D models (UI/ShopFx.golemPicture returns nil), and
-	so does a golem or egg with no sticker (a later edition's). The previews
-	draw build/preview/icons/sticker_<name>.png while Previewing and Preview
-	are on.
+	B, 2D stickers of the skins in the game; 2026-11-12: "more cool, and it has
+	to look like it is in the game"): each one drawn from the game's own model,
+	the one its 3D picture shows (PictureModels.build), in the shop icons' style
+	by tools/preview/shop_golem_sheet.mjs (the toon renderer
+	tools/preview/golem_toon), all in one image,
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_golemove.png (Columns x rows of
+	Cell px in the order of Icons, 1024 px square). Icons are the shop's picture
+	names (golem_<Kind>, capsule_<Id>: the live models UI/StoreView shows). Id
+	0 = not uploaded: the shop keeps its live 3D models (UI/ShopFx.golemPicture
+	returns nil), and so does a golem or egg with no sticker (a later
+	edition's). The previews draw build/preview/icons/sticker_<name>.png while
+	Previewing and Preview are on.
 ]]
 IconAssets.ShopGolems = {
 	File = "obchod_golemove.png",

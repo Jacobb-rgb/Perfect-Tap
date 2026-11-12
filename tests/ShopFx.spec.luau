@@ -621,23 +621,27 @@ return function(T, Loader)
 		return names
 	end
 
-	-- (owner 2026-11-11, pick B: the game's own golems and eggs drawn like the shop's icons)
-	T.test("ShopFx: golems.js draws every golem sticker, one cell each under 1024 px; every shop golem and egg has one", function()
-		local source = fs.readFile(Loader.root .. "/docs/art/shop_v3_concept/golems.js")
-		local drawn: { [string]: boolean } = {}
-		local count = 0
-		for name in string.gmatch(source, "\n  D%.([%w_]+) = %(%) =>") do
-			drawn[name] = true
-			count += 1
-		end
+	-- (owner 2026-11-11 pick B, drawn like the shop's icons; 2026-11-12 "it has to look like it is in
+	-- the game": every sticker is drawn from the model the shop's 3D picture shows)
+	T.test("ShopFx: golem stickers are drawn from the game's models, one cell each under 1024 px; every shop golem has one", function()
+		local PictureModels = Loader.requirePath("ReplicatedStorage.Shared.Builders.PictureModels")
 		local sheet = IconAssets.ShopGolems
 		T.eq(sheet.File, "obchod_golemove.png")
-		T.eq(count, #sheet.Icons, "golems.js draws exactly the sheet's stickers")
 		local rows = math.ceil(#sheet.Icons / sheet.Columns)
 		T.truthy(sheet.Columns * sheet.Cell <= 1024 and rows * sheet.Cell <= 1024, "under Roblox's 1024 px")
 		local seen: { [number]: boolean } = {}
 		for i, name in sheet.Icons do
-			T.truthy(drawn[name], name .. " is drawn in golems.js")
+			-- the model its 3D picture builds (the renderer draws exactly this one, from this side)
+			local model, from = PictureModels.build(name)
+			T.truthy(model ~= nil, name .. " is a game model (PictureModels)")
+			local parts = 0
+			for _, d in (model :: any):GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 0.99 then
+					parts += 1
+				end
+			end
+			T.truthy(parts >= 10, name .. ": the model's parts")
+			T.truthy(from.Z < 0, name .. ": seen from its front (-Z)")
 			local cell = IconAssets.shopGolemCell(name) :: number
 			T.eq(cell, i - 1, name .. ": the sheet's order")
 			T.falsy(seen[cell], name .. " has its own cell")
@@ -646,9 +650,17 @@ return function(T, Loader)
 		for _, name in shopGolems() do
 			T.truthy(IconAssets.shopGolemCell(name) ~= nil, name .. " (in the shop) has a sticker")
 		end
-		-- the tool reads the same order and cells and writes the file the NAVOD names
+		-- the tools: the export walks the sheet's names through PictureModels.build; the renderer
+		-- runs it, reads the same order and cells and writes the file the NAVOD names
+		local export = fs.readFile(Loader.root .. "/tools/lune/export_golem_stickers.luau")
+		local exports = export:find("IconAssets.ShopGolems", 1, true) and export:find("PictureModels.build", 1, true)
+		T.truthy(exports, "export_golem_stickers.luau")
 		local tool = fs.readFile(Loader.root .. "/tools/preview/shop_golem_sheet.mjs")
 		T.truthy(tool:find("IconAssets.ShopGolems", 1, true) and tool:find("obchod_golemove.png", 1, true), "shop_golem_sheet.mjs")
+		local draws = tool:find("export_golem_stickers.luau", 1, true) and tool:find("golem_toon/toon.html", 1, true)
+		T.truthy(draws, "it draws the exported models")
+		T.truthy(fs.isFile(Loader.root .. "/tools/preview/golem_toon/toon.js"), "the toon renderer")
+		T.falsy(fs.isFile(Loader.root .. "/docs/art/shop_v3_concept/golems.js"), "no hand-drawn stickers left")
 		-- not uploaded (Id 0): nothing in the game; a preview shows them unless told not to
 		withStickers(0, function()
 			T.falsy(IconAssets.shopGolemShows("golem_DragonKing"), "the game before the upload")
