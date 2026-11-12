@@ -12,8 +12,11 @@
 	  ui_store_pc_boosts     PC: BOOSTS (Server Luck, spins, luck, the Mythic enchants)
 	  ui_store_pc_cash       PC: CASH (the coins at $1.84K/s)
 	  ui_store_pc_odds       PC: the odds panel before a Royal Egg x5 buy
-	  ui_store_pc_bare       PC: FEATURED as Studio shows it before the effects picture is
-	                         uploaded (IconAssets.ShopFx: no rays, no studs, plain gradients)
+	  ui_store_pc_golems_3d / ui_store_pc_3d  PC: GOLEMS / FEATURED as Studio shows them before
+	                         the golem stickers are uploaded (IconAssets.ShopGolems: the live 3D models)
+	  ui_store_pc_bare       PC: FEATURED as Studio showed it before the effects picture was
+	                         uploaded (IconAssets.ShopFx: no rays, no studs, plain gradients; the
+	                         golems live 3D)
 	  ui_store_pc_bare_boosts / _bare_cash  BOOSTS / CASH before that upload
 	  ui_store_phone         667 x 375 pt phone: FEATURED (44 pt buttons, the page scrolls)
 	  ui_store_phone_golems  the phone: GOLEMS (and _blasters, _passes, _boosts; _cash scrolled down)
@@ -176,6 +179,12 @@ function Preview.build(Loader: any): { [string]: any }
 
 	-- before the effects picture is uploaded (what Studio shows now): plain gradients, the icon
 	-- sheet's bolt and sparkle (the icon sheet itself is uploaded)
+	-- before the golem stickers are uploaded (what Studio shows until then): their live 3D models
+	local golemsBefore, golemsId = IconAssets.ShopGolems.Preview, IconAssets.ShopGolems.Id
+	IconAssets.ShopGolems.Preview = false
+	IconAssets.ShopGolems.Id = 0
+	exports.ui_store_pc_golems_3d = pc("Golems")
+	exports.ui_store_pc_3d = pc("Featured")
 	local before, beforeId = IconAssets.ShopFx.Preview, IconAssets.ShopFx.Id
 	IconAssets.ShopFx.Preview = false
 	IconAssets.ShopFx.Id = 0
@@ -184,6 +193,8 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_store_pc_bare_cash = pc("Cash")
 	IconAssets.ShopFx.Preview = before
 	IconAssets.ShopFx.Id = beforeId
+	IconAssets.ShopGolems.Preview = golemsBefore
+	IconAssets.ShopGolems.Id = golemsId
 
 	-- phones: the 44 pt sizes, the page scrolls
 	local phoneW, phoneH = 1600 / phoneScale, (900 - 58) / phoneScale

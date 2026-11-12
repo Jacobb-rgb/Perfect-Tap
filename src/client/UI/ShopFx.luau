@@ -13,6 +13,7 @@
 	  sticker     "BEST VALUE!" on a card's top edge; chip: a dark label pill
 	  mythicRim   a rainbow outline that runs round a Mythic card
 	  icon        a picture from the shop icon sheet (IconAssets.Shop)
+	  golemPicture a golem's or an egg's drawn sticker (IconAssets.ShopGolems)
 	  wheel / x2  a spin wheel and the "x2" badge drawn from frames
 
 	Effects are ONE ImageLabel each, cut from the effects picture
@@ -1074,6 +1075,28 @@ function ShopFx.icon(parent: Instance, name: string, size: number, props: Props?
 		ZIndex = 7,
 	}, parent)
 	IconAssets.applyShop(image, name)
+	apply(image, props)
+	return image
+end
+
+--[[
+	A golem or an egg as its drawn sticker (IconAssets.ShopGolems: `name` is
+	the shop's picture name, golem_<Kind> / capsule_<Id>) `size` square, or nil
+	when it won't show (the sticker image isn't uploaded, or that golem has no
+	sticker: the callers keep the live 3D model). One image, no 3D view.
+]]
+function ShopFx.golemPicture(parent: Instance, name: string, size: number, props: Props?): ImageLabel?
+	if not IconAssets.shopGolemShows(name) then
+		return nil
+	end
+	local image = UIKit.new("ImageLabel", {
+		Name = "Picture",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 4,
+	}, parent)
+	IconAssets.applyShopGolem(image, name)
 	apply(image, props)
 	return image
 end

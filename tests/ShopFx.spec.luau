@@ -581,4 +581,153 @@ return function(T, Loader)
 		T.eq(label.ImageRectOffset, Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell))
 		T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
 	end)
+
+	---------------------------------------------------------------- the golem stickers
+
+	-- Runs `fn` with the golem stickers' image uploaded (`id` > 0) or not, then puts it back.
+	local function withStickers(id: number, fn: () -> ())
+		local sheet = IconAssets.ShopGolems
+		local before, preview, previewing = sheet.Id, sheet.Preview, IconAssets.Previewing
+		sheet.Id = id
+		IconAssets.Previewing = false
+		local ok, err = pcall(fn)
+		sheet.Id, sheet.Preview, IconAssets.Previewing = before, preview, previewing
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	-- The golems and eggs the shop shows: the Royal Egg's, the cards' (the Starter Pack's golem, the
+	-- Royal eggs) and the limited edition on sale's (its golems and its shard).
+	local function shopGolems(): { string }
+		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+		local names = { "capsule_Royal" }
+		for _, line in CapsuleConfig.odds("Royal", false) do
+			table.insert(names, "golem_" .. line.Golem)
+		end
+		for _, spec in StoreConfig.Cards do
+			local model = spec.Model
+			if model and (string.sub(model, 1, 6) == "golem_" or string.sub(model, 1, 8) == "capsule_") then
+				table.insert(names, model)
+			end
+		end
+		local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
+		if edition then
+			table.insert(names, "capsule_" .. edition.CapsuleId)
+			for _, golem in edition.Golems do
+				table.insert(names, "golem_" .. golem.Id)
+			end
+		end
+		return names
+	end
+
+	-- (owner 2026-11-11, pick B: the game's own golems and eggs drawn like the shop's icons)
+	T.test("ShopFx: golems.js draws every golem sticker, one cell each under 1024 px; every shop golem and egg has one", function()
+		local source = fs.readFile(Loader.root .. "/docs/art/shop_v3_concept/golems.js")
+		local drawn: { [string]: boolean } = {}
+		local count = 0
+		for name in string.gmatch(source, "\n  D%.([%w_]+) = %(%) =>") do
+			drawn[name] = true
+			count += 1
+		end
+		local sheet = IconAssets.ShopGolems
+		T.eq(sheet.File, "obchod_golemove.png")
+		T.eq(count, #sheet.Icons, "golems.js draws exactly the sheet's stickers")
+		local rows = math.ceil(#sheet.Icons / sheet.Columns)
+		T.truthy(sheet.Columns * sheet.Cell <= 1024 and rows * sheet.Cell <= 1024, "under Roblox's 1024 px")
+		local seen: { [number]: boolean } = {}
+		for i, name in sheet.Icons do
+			T.truthy(drawn[name], name .. " is drawn in golems.js")
+			local cell = IconAssets.shopGolemCell(name) :: number
+			T.eq(cell, i - 1, name .. ": the sheet's order")
+			T.falsy(seen[cell], name .. " has its own cell")
+			seen[cell] = true
+		end
+		for _, name in shopGolems() do
+			T.truthy(IconAssets.shopGolemCell(name) ~= nil, name .. " (in the shop) has a sticker")
+		end
+		-- the tool reads the same order and cells and writes the file the NAVOD names
+		local tool = fs.readFile(Loader.root .. "/tools/preview/shop_golem_sheet.mjs")
+		T.truthy(tool:find("IconAssets.ShopGolems", 1, true) and tool:find("obchod_golemove.png", 1, true), "shop_golem_sheet.mjs")
+		-- not uploaded (Id 0): nothing in the game; a preview shows them unless told not to
+		withStickers(0, function()
+			T.falsy(IconAssets.shopGolemShows("golem_DragonKing"), "the game before the upload")
+			IconAssets.Previewing = true
+			T.truthy(IconAssets.shopGolemShows("golem_DragonKing"), "a preview")
+			sheet.Preview = false
+			T.falsy(IconAssets.shopGolemShows("golem_DragonKing"), "a preview of Studio before the upload")
+		end)
+		-- uploaded: its cell of the image; a golem without a sticker never shows one
+		withStickers(123, function()
+			T.truthy(IconAssets.shopGolemShows("capsule_Dragonforge"))
+			T.falsy(IconAssets.shopGolemShows("golem_PebbleGolem"), "no sticker: never")
+			local label = Instance.new("ImageLabel")
+			IconAssets.applyShopGolem(label, "capsule_Dragonforge")
+			local cell = IconAssets.shopGolemCell("capsule_Dragonforge") :: number
+			T.eq(label.Image, "rbxassetid://123")
+			T.eq(label.ImageRectOffset, Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell))
+			T.eq(label.ImageRectSize, Vector2.new(sheet.Cell, sheet.Cell))
+			T.eq(label:GetAttribute("Icon"), "sticker_capsule_Dragonforge", "the previews' picture")
+		end)
+	end)
+
+	T.test("ShopFx: before the sticker upload the shop's golems and eggs stay live 3D; after it they are images, no 3D view", function()
+		local StoreView = ui("StoreView")
+		local function build(): any
+			local refs = StoreView.build()
+			StoreView.setEdition(refs, LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400) :: any)
+			StoreView.selectTab(refs, "Golems")
+			StoreView.selectTab(refs, "Featured")
+			return refs
+		end
+		local function stickers(root: any): { [string]: number }
+			local out: { [string]: number } = {}
+			for _, d in root:GetDescendants() do
+				local icon = d:GetAttribute("Icon")
+				if d:IsA("ImageLabel") and type(icon) == "string" and string.sub(icon, 1, 8) == "sticker_" then
+					out[icon] = (out[icon] or 0) + 1
+				end
+			end
+			return out
+		end
+		local function views(root: any): number
+			return count(root, function(d)
+				return d.ClassName == "ViewportFrame"
+			end)
+		end
+		withStickers(0, function()
+			local refs = build()
+			T.eq(next(stickers(refs.Gui)), nil, "no sticker before the upload")
+			T.truthy(views(refs.Pages.Golems) >= 10, "the Golems tab's live golems and eggs")
+			local hero = refs.Banner.Frame:FindFirstChild("Hero")
+			T.truthy(hero and hero:FindFirstChild("View"), "the hero is a live model")
+		end)
+		withStickers(123, function()
+			local refs = build()
+			local shown = stickers(refs.Gui)
+			for _, name in shopGolems() do
+				T.truthy((shown["sticker_" .. name] or 0) > 0, name .. " shows its sticker")
+			end
+			T.eq(views(refs.Pages.Golems), 0, "no 3D view left on the Golems tab")
+			T.eq(stickers(refs.Pages.Golems).sticker_capsule_Royal, 1 + 1 + 3 * 3, "the banner's egg, x1, three in each pile")
+			local featured = views(refs.Pages.Featured)
+			T.truthy(featured <= 2, `the Featured tab: only the Starter Pack's coins and podium stay 3D ({featured})`)
+			local hero = refs.Banner.Frame:FindFirstChild("Hero")
+			T.truthy(hero and hero:IsA("ImageLabel") and hero:GetAttribute("Icon") == "sticker_golem_DragonKing", "the hero")
+			T.eq(hero:GetAttribute("ShopFx"), "Float", "it still floats")
+			T.eq(hero.Image, "rbxassetid://123")
+			for _, id in { "Royal3", "Royal5", "Royal10" } do
+				local pile = refs.Cards[id].Picture :: any
+				T.eq(#pile:GetChildren(), 3, id .. ": three eggs")
+				T.eq(pile:GetAttribute("Copies"), nil, id .. ": no 3D pile to build")
+			end
+			T.eq(
+				count(refs.Gui, function(d)
+					return d:GetAttribute("Model") ~= nil and string.match(tostring(d:GetAttribute("Model")), "^golem_") ~= nil
+				end),
+				0,
+				"no golem model waits to be built"
+			)
+		end)
+	end)
 end

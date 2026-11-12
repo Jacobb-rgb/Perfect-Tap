@@ -468,6 +468,80 @@ function IconAssets.shopCell(name: string): number?
 end
 
 --[[
+	The shop's golems and eggs as drawn stickers (owner 2026-11-11: "the eggs,
+	all the golems are terribly basic ... make them like the icons"; he picked
+	B, 2D stickers of the skins in the game): docs/art/shop_v3_concept/golems.js
+	in one image, ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_golemove.png, made by
+	tools/preview/shop_golem_sheet.mjs (Columns x rows of Cell px in the order
+	of Icons, 1024 px square). Icons are the shop's picture names (golem_<Kind>,
+	capsule_<Id>: the live models UI/StoreView shows). Id 0 = not uploaded:
+	the shop keeps its live 3D models (UI/ShopFx.golemPicture returns nil), and
+	so does a golem or egg with no sticker (a later edition's). The previews
+	draw build/preview/icons/sticker_<name>.png while Previewing and Preview
+	are on.
+]]
+IconAssets.ShopGolems = {
+	File = "obchod_golemove.png",
+	Id = 0,
+	Cell = 256,
+	Columns = 4,
+	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Icons = {
+		-- the Royal Egg's golems (rarest last) and the egg
+		"golem_SilverSquire",
+		"golem_RoseKnight",
+		"golem_MoonstoneOracle",
+		"golem_StormTitan",
+		"golem_CelestialSovereign",
+		"capsule_Royal",
+		-- the Starter Pack's golem
+		"golem_GildedPorter",
+		-- the Dragonforge limited edition (Config/LimitedGolems, rarest last) and its shard
+		"golem_CinderWhelp",
+		"golem_EmberHatchling",
+		"golem_ScaleKnight",
+		"golem_Flamewing",
+		"golem_MagmaWyvern",
+		"golem_DragonKing",
+		"capsule_Dragonforge",
+	},
+}
+local golemCell: { [string]: number } = {}
+for i, name in IconAssets.ShopGolems.Icons do
+	golemCell[name] = i - 1
+end
+
+-- The cell of golem sticker `name` in its image (0-based; nil: no sticker).
+function IconAssets.shopGolemCell(name: string): number?
+	return golemCell[name]
+end
+
+-- Will the golem or egg sticker `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.shopGolemShows(name: string): boolean
+	if golemCell[name] == nil then
+		return false
+	end
+	if IconAssets.ShopGolems.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and IconAssets.ShopGolems.Preview
+end
+
+-- Shows golem or egg sticker `name` on an ImageLabel (its cell of the uploaded image; the previews: its own picture).
+function IconAssets.applyShopGolem(label: ImageLabel, name: string)
+	local cell = golemCell[name]
+	label:SetAttribute("Icon", "sticker_" .. name)
+	local sheet = IconAssets.ShopGolems
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell)
+	label.ImageRectSize = Vector2.new(sheet.Cell, sheet.Cell)
+end
+
+--[[
 	The shop v3 effects (owner 2026-11-11: "cool and smooth, not laggy"):
 	one picture of white sprites the game tints (ImageColor3), cut by Cells
 	{ x, y, w, h } in px: ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,

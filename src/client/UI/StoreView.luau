@@ -30,7 +30,9 @@
 	amount and date comes from the configs and the player's live data;
 	"BEST VALUE!" only on the option whose price per item really is the
 	lowest (bestValue). Pictures are live 3D models (PictureModels) or,
-	once uploaded, the shop icon sheet (IconAssets.Shop); drawn pictures
+	once uploaded, the shop icon sheet (IconAssets.Shop); the golems and
+	eggs their drawn stickers once that image is uploaded
+	(IconAssets.ShopGolems: an image instead of a 3D view); drawn pictures
 	(the wheel, the x2 badge) or words otherwise, never an emoji.
 
 	Pure builder + layout, no services: the Lune previews build it too.
@@ -391,15 +393,24 @@ end
 
 ---------------------------------------------------------------- pictures
 
+-- How big a golem's or an egg's drawn sticker shows, as a share of the 3D picture it stands in for.
+StoreView.StickerFill = 1.04
+
 --[[
 	A live 3D picture `size` square with its middle at `at` (nil: no model).
 	The model itself is built when its page first shows (fillModels): the
 	shop opens with only the open tab's models built (cheap on phones).
-	`props` adds to the picture's.
+	`props` adds to the picture's. A golem or an egg shows its drawn sticker
+	instead once that image is uploaded (IconAssets.ShopGolems: one image, no
+	3D view, nothing to build).
 ]]
 local function livePicture(parent: Instance, model: string?, icon: string, size: number, props: { [string]: any }): ImageLabel?
 	if not model then
 		return nil
+	end
+	local sticker = ShopFx.golemPicture(parent, model, math.floor(size * StoreView.StickerFill + 0.5), props)
+	if sticker then
+		return sticker
 	end
 	local picture = Pop.model(parent, icon, size, nil, props)
 	if string.sub(model, 1, 5) ~= "star_" then
@@ -611,9 +622,12 @@ local function picture(parent: Instance, spec: StoreConfig.CardSpec, size: numbe
 	return modelPicture(parent, spec.Model, spec.Icon, size, at, z, rotation)
 end
 
--- Will this card show a picture in the game (a live model, a STAR gun, a drawn wheel, an uploaded icon)?
+-- Will this card show a picture in the game (a live model, a STAR gun, a drawn wheel, an uploaded icon or sticker)?
 function StoreView.hasPicture(spec: StoreConfig.CardSpec): boolean
 	if spec.Sheet and IconAssets.shopShows(spec.Sheet) then
+		return true
+	end
+	if spec.Model and IconAssets.shopGolemShows(spec.Model) then
 		return true
 	end
 	if spec.Look == "Wheel" then
@@ -1199,6 +1213,26 @@ Looks.Egg = function(holder, spec, w, h, m)
 	local y = math.floor(h * 0.46)
 	if count == 1 then
 		refs.Picture = modelPicture(holder, spec.Model, spec.Icon, 112, UDim2.fromOffset(mid, y), 5)
+	elseif spec.Model and IconAssets.shopGolemShows(spec.Model) then
+		-- a pile of three drawn eggs: the two behind a little smaller and lower at the sides
+		local pile = UIKit.new("Frame", {
+			Name = "Picture",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(mid, y + 2),
+			Size = UDim2.fromOffset(math.min(w - 36, 232), 116),
+			ZIndex = 5,
+		}, holder)
+		local size = math.floor(112 * StoreView.StickerFill + 0.5)
+		for i, place in { { 0.21, 0.58 }, { 0.79, 0.58 }, { 0.5, 0.5 } } do
+			ShopFx.golemPicture(pile, spec.Model, if i == 3 then size else math.floor(size * 0.84), {
+				Name = "Egg" .. i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(place[1], place[2]),
+				ZIndex = if i == 3 then 6 else 5,
+			})
+		end
+		refs.Picture = pile
 	else
 		-- a pile of three in one picture (one 3D view, not three: StoreView.fillModels)
 		local pic = modelPicture(holder, spec.Model, spec.Icon, 112, UDim2.fromOffset(mid, y + 2), 5)
