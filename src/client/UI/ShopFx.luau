@@ -16,10 +16,12 @@
 	  wheel / x2  a spin wheel and the "x2" badge drawn from frames
 
 	Effects are ONE ImageLabel each, cut from the effects picture
-	(IconAssets.ShopFx: sunburst rays, glow, sparkle, dots, flame, a patch
-	of studs, three bolts), tinted with ImageColor3. Until that picture is
+	(IconAssets.ShopFx: sunburst rays, glow, sparkle, flame, a patch of
+	studs, three bolts), tinted with ImageColor3. Until that picture is
 	uploaded: plain gradients (no rays, no studs), one soft disc for a glow,
-	and the icon sheet's bolt and sparkle.
+	and the icon sheet's bolt and sparkle. (Its drifting dots are not used
+	since the owner's look in Studio, 2026-11-12: "take the dotted square
+	away".)
 
 	Motion: TweenService only, the engine moves everything every frame; no
 	Lua runs per frame. Things carry the attribute ShopFx (a mark):
@@ -565,9 +567,15 @@ end
 
 --[[
 	Classic Roblox top studs over a w x h face (the Studs UI pack look): the
-	studs patch (12 x 12) in squares `stud` x 12 across, side by side; the
-	parent clips them. A handful of images instead of hundreds of frames.
-	Nil before the effects picture is uploaded (a plain band).
+	studs patch (12 x 12) in squares `stud` x 12 across, side by side. The
+	last column and row are CUT to the face (a smaller image showing that
+	share of the patch, ImageRectSize), so nothing draws past w x h even
+	where the parent can't clip: Roblox ignores ClipsDescendants under a
+	turned GuiObject (the tilted X drew a whole patch past the window's
+	edge, owner's Studio 2026-11-12). The previews read the cut from the
+	attribute "Crop" (the share shown, x and y). A handful of images
+	instead of hundreds of frames. Nil before the effects picture is
+	uploaded (a plain band).
 ]]
 function ShopFx.studs(parent: Instance, w: number, h: number, stud: number, transparency: number, z: number): Frame?
 	if not IconAssets.shopFxShows("studs") then
@@ -582,15 +590,23 @@ function ShopFx.studs(parent: Instance, w: number, h: number, stud: number, tran
 	local patch = stud * 12
 	local cols = math.max(1, math.ceil(w / patch))
 	local rows = math.max(1, math.ceil(h / patch))
+	local cell = IconAssets.ShopFx.Cells.studs
 	for r = 0, rows - 1 do
 		for c = 0, cols - 1 do
-			ShopFx.sprite(holder, "studs", {
+			local pw = math.min(patch, w - c * patch)
+			local ph = math.min(patch, h - r * patch)
+			local image = ShopFx.sprite(holder, "studs", {
 				Name = "Patch",
 				ImageTransparency = transparency,
 				Position = UDim2.fromOffset(c * patch, r * patch),
-				Size = UDim2.fromOffset(patch, patch),
+				Size = UDim2.fromOffset(pw, ph),
 				ZIndex = z,
 			})
+			if image and (pw < patch or ph < patch) then
+				local sx, sy = pw / patch, ph / patch
+				image.ImageRectSize = Vector2.new(cell[3] * sx, cell[4] * sy)
+				image:SetAttribute("Crop", Vector2.new(sx, sy))
+			end
 		end
 	end
 	return holder
@@ -695,19 +711,6 @@ function ShopFx.sparkle(parent: Instance, at: UDim2, size: number, color: Color3
 	sparkle:SetAttribute("ShopFx", "Sparkle")
 	sparkle:SetAttribute("Phase", phase or 0)
 	return sparkle
-end
-
--- The bodies' drifting dots: one dots sprite `size` square (nil before the upload).
-function ShopFx.dots(parent: Instance, center: UDim2, size: number, color: Color3, transparency: number, z: number): ImageLabel?
-	return ShopFx.sprite(parent, "dots", {
-		Name = "Dots",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		ImageColor3 = color,
-		ImageTransparency = transparency,
-		Position = center,
-		Size = UDim2.fromOffset(size, size),
-		ZIndex = z,
-	})
 end
 
 -- A flame tongue standing on `at` (its bottom middle), w x h, tinted `color` (a rounded frame before the upload).

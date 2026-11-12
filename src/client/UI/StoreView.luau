@@ -1040,9 +1040,6 @@ Looks.Pass = function(holder, spec, w, h, m)
 		Rotation = if rainbow then 30 else nil,
 	})
 	local refs = newRefs(spec, holder, face)
-	if spec.Paint == "Night" then
-		ShopFx.dots(face, UDim2.fromScale(0.5, 0.42), math.floor(w * 1.3), hex("#fff6c0"), 0.2, 3)
-	end
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	cardTitle(refs, spec.Title or product.Name, 21, 10, 2)
 	local size = math.min(w - 40, 140)
@@ -1240,7 +1237,6 @@ Looks.ServerLuck = function(holder, spec, w, h, m)
 	})
 	local refs = newRefs(spec, holder, face)
 	ShopFx.bolt(face, UDim2.fromOffset(math.floor(w * 0.56), math.floor(h * 0.5)), h + 30, 12, hex("#fff27a"), 3, 3, 4.6, false)
-	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, hex("#fff6a0"), 0.3, 3)
 	local product = MonetizationConfig.Products[spec.Keys[1]]
 	cardTitle(refs, spec.Title or product.Name, 35, 8)
 	local minutes = math.floor((product.Seconds or 0) / 60 + 0.5)
@@ -1597,7 +1593,6 @@ local function buildBanner(page: Frame, edition: Edition, m: Metrics): BannerRef
 			2
 		)
 	end
-	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, hex("#ffe08a"), 0.15, 2)
 	ShopFx.bolt(face, UDim2.fromOffset(500, 70), 230, 18, hex("#ffd84a"), 1, 3, 5.2, false)
 	ShopFx.gloss(face, CORNER, 3, 0.22)
 	ShopFx.rim(face, CORNER, 3)
@@ -1806,7 +1801,6 @@ local function buildRoyal(page: Frame): RoyalRefs?
 		}),
 	}, veil)
 	ShopFx.bolt(face, UDim2.fromOffset(300, math.floor(h / 2)), h + 40, 8, WHITE, 3, 3, 4.8, false)
-	ShopFx.dots(face, UDim2.fromScale(0.5, 0.5), w, WHITE, 0.2, 2)
 	ShopFx.gloss(face, CORNER, 3, 0.22)
 	ShopFx.rim(face, CORNER, 3)
 	local title = ShopFx.title(frame, capsule.Name, 50, { WHITE, WHITE, hex("#ffe07a") }, {
@@ -2719,7 +2713,7 @@ function StoreView.build(metrics: Metrics?, lazy: boolean?): Refs
 		Transparency = 0.8,
 	}, root)
 	local theme = ShopFx.Themes.Featured
-	-- the body: the tab's colour world, its rays, bolts and dots behind the cards
+	-- the body: the tab's colour world, its rays and bolts behind the cards
 	local body = UIKit.new("Frame", {
 		Name = "Body",
 		ClipsDescendants = true,
@@ -2759,7 +2753,6 @@ function StoreView.build(metrics: Metrics?, lazy: boolean?): Refs
 			bolt:SetAttribute("Second", b.Second)
 		end
 	end
-	ShopFx.dots(bodyFx, UDim2.fromScale(0.5, 0.5), math.max(bw, size.Y), theme.Bolt2, 0.35, 2)
 	-- the header band (its lower half square: the body meets it straight)
 	local header = UIKit.new("Frame", {
 		Name = "Header",

@@ -105,6 +105,10 @@ local function exportNode(instance): any?
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
 			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
+			local crop = instance:GetAttribute("Crop")
+			if typeof(crop) == "Vector2" then
+				node.crop = { crop.X, crop.Y } -- only this share of the picture shows, from its top-left (ShopFx.studs)
+			end
 			if instance.ScaleType.Name == "Tile" then
 				node.tile = instance.TileSize.X.Offset -- a repeating texture (the Pop studs)
 			end

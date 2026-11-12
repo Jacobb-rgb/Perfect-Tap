@@ -473,21 +473,22 @@ end
 	{ x, y, w, h } in px: ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,
 	made by tools/preview/shop_effects_sheet.mjs (1024 px square). One
 	ImageLabel each instead of hundreds of frames: the sunburst behind
-	pictures, a soft glow, a sparkle, the bodies' dots, a flame, a patch of
-	studs (12 x 12) and three lightning bolts. Id 0 = not uploaded: the shop
+	pictures, a soft glow, a sparkle, a flame, a patch of studs (12 x 12)
+	and three lightning bolts (the drifting dots stay in the picture,
+	unused: owner 2026-11-12 "take the dotted square away"). Id 0 = not uploaded: the shop
 	keeps plain gradients (no rays, no studs) and the icon sheet's bolt and
 	sparkle (UI/ShopFx.sprite returns nil). The previews draw
 	build/preview/icons/shopfx_<name>.png while Previewing and Preview are on.
 ]]
 IconAssets.ShopFx = {
 	File = "obchod_efekty.png",
-	Id = 0,
+	Id = 137388038264514, -- uploaded by the owner 2026-11-12 (Studio Asset Manager)
 	Preview = true, -- (a preview of the shop before the upload sets it false)
 	Cells = {
 		rays = { 0, 0, 512, 512 },
 		glow = { 512, 0, 256, 256 },
 		sparkle = { 768, 0, 256, 256 },
-		dots = { 512, 256, 256, 256 },
+		dots = { 512, 256, 256, 256 }, -- (unused since 2026-11-12; the uploaded picture keeps it)
 		flame = { 768, 256, 128, 256 },
 		studs = { 0, 512, 384, 384 },
 		bolt1 = { 384, 512, 192, 512 },

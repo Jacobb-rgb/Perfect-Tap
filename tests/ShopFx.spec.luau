@@ -120,6 +120,11 @@ return function(T, Loader)
 			sheet.Preview = false
 			T.falsy(IconAssets.shopFxShows("rays"), "a preview of Studio before the upload")
 		end)
+		-- uploaded (owner 2026-11-12): the game shows them
+		withEffects(sheet.Id, function()
+			T.truthy(sheet.Id > 0, "the owner's upload is set")
+			T.truthy(IconAssets.shopFxShows("rays"), "the game after the owner's upload")
+		end)
 		withEffects(123, function()
 			T.truthy(IconAssets.shopFxShows("bolt2"))
 			T.falsy(IconAssets.shopFxShows("nope"), "an unknown name")
@@ -138,7 +143,6 @@ return function(T, Loader)
 			local parent = Instance.new("Frame")
 			T.eq(ShopFx.rays(parent, UDim2.fromScale(0.5, 0.5), 300, 0.5, 2), nil, "no rays")
 			T.eq(ShopFx.studs(parent, 300, 60, 17, 0.2, 3), nil, "no studs")
-			T.eq(ShopFx.dots(parent, UDim2.fromScale(0.5, 0.5), 300, WHITE, 0.3, 2), nil, "no dots")
 			local glow = ShopFx.glow(parent, UDim2.fromScale(0.5, 0.5), 80, WHITE, 2)
 			T.eq(glow.ClassName, "Frame", "the glow: one soft disc")
 			T.truthy(#glow:GetDescendants() <= 1, "(and its corner)")
@@ -164,6 +168,25 @@ return function(T, Loader)
 			T.eq(rays:GetAttribute("Period"), 30)
 			local studs = ShopFx.studs(parent, 300, 60, 17, 0.2, 3) :: any
 			T.eq(#studs:GetChildren(), math.ceil(300 / (17 * 12)) * math.ceil(60 / (17 * 12)), "a few patches of 12 x 12 studs")
+			-- (owner's Studio 2026-11-12: the tilted X drew a whole patch past the window, Roblox doesn't
+			-- clip under a turned frame) every patch is cut to the face: nothing past w x h, same stud size
+			local cell = IconAssets.ShopFx.Cells.studs
+			for _, case in { { 300, 60, 17 }, { 58, 58, 18 }, { 1050, 81, 28 }, { 140, 50, 17 } } do
+				local w, h, stud = case[1], case[2], case[3]
+				local holder = ShopFx.studs(Instance.new("Frame"), w, h, stud, 0.2, 3) :: any
+				local patch = stud * 12
+				for _, image in holder:GetChildren() do
+					local x, y = image.Position.X.Offset, image.Position.Y.Offset
+					local iw, ih = image.Size.X.Offset, image.Size.Y.Offset
+					T.truthy(x + iw <= w + 1e-6 and y + ih <= h + 1e-6, `{w} x {h}: a patch ends inside ({x + iw}, {y + ih})`)
+					local rect = if iw < patch or ih < patch then image.ImageRectSize else Vector2.new(cell[3], cell[4])
+					T.near(rect.X / iw, cell[3] / patch, 1e-6, `{w} x {h}: the studs keep their size across`)
+					T.near(rect.Y / ih, cell[4] / patch, 1e-6, `{w} x {h}: the studs keep their size down`)
+					if iw < patch or ih < patch then
+						T.eq(image:GetAttribute("Crop"), Vector2.new(iw / patch, ih / patch), "the previews' cut")
+					end
+				end
+			end
 			local bolt = ShopFx.bolt(parent, UDim2.fromOffset(10, 10), 200, 20, WHITE, 3, 2, 6, false) :: any
 			T.eq(bolt:GetAttribute("Icon"), "shopfx_bolt3")
 			T.eq(bolt.Size, UDim2.fromOffset(math.floor(200 * 0.375), 200))

@@ -327,9 +327,10 @@ return function(T, Loader)
 	T.test("Store: no blank picture areas before the icon sheets are uploaded", function()
 		local StoreView = ui("StoreView")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
-		local before, beforeId = IconAssets.Previewing, IconAssets.Shop.Id
+		local before, beforeId, beforeFx = IconAssets.Previewing, IconAssets.Shop.Id, IconAssets.ShopFx.Id
 		IconAssets.Previewing = false
 		IconAssets.Shop.Id = 0 -- (as before the owner's upload, or if it ever fails to load)
+		IconAssets.ShopFx.Id = 0 -- (the effects picture too: owner's upload 2026-11-12)
 		local ok, err = pcall(function()
 			for _, spec in StoreConfig.Cards do
 				T.truthy(StoreView.hasPicture(spec), spec.Id .. " shows a picture in the game")
@@ -348,6 +349,7 @@ return function(T, Loader)
 		end)
 		IconAssets.Previewing = before
 		IconAssets.Shop.Id = beforeId
+		IconAssets.ShopFx.Id = beforeFx
 		if not ok then
 			error(err, 0)
 		end
