@@ -7,13 +7,20 @@
 //   - every part keeps its exact game colour: flat cel tones by face direction (tops lit and a
 //     touch warm, fronts the colour itself, sides in a darker shade turned toward purple), balls
 //     and cylinders in hard bands; no textures, studs or noise
-//   - a bold navy outline round the silhouette, thinner navy lines where parts of different
-//     colours meet or one stands in front of another (drawn on the far part, like a drawn
-//     shape's own outline), none inside a flat face
+//   - a bold navy outline round the silhouette, thinner navy lines where parts of clearly
+//     different colours meet or one stands clearly in front of another (drawn on the far part,
+//     like a drawn shape's own outline); none inside a flat face, none between parts of close
+//     colours (one hue family, a small light step): big flat areas stay calm at card size
 //   - white shines: a light band on the big blocks' top-front edges, a shine mark on the head,
-//     the body and the egg shells, hard stripes on gold and silver, glints on glass
+//     the body and the egg shells, hard diagonal streaks on the two or three biggest gold or
+//     silver fronts only, glints on big curved metal and glass
 //   - neon flat and bright with a small glow; a thin light rim on the shaded side; small
 //     sparkles on gems and crowns; the outline colour as a drop under it all
+//   - light, not solid (as the game shows it): see-through parts (Transparency >= 0.25: the aura
+//     discs) and the streams of light or lava and glowing seams on the egg shells are a soft glow
+//     at their alpha (1 - transparency, at most 0.95), a light soft edge, a faint halo, no lines,
+//     kept out of the outline
+//     (nothing behind them is cut; outside the body they glow under its outline)
 // Nothing is added to the model (no props, no background, no rarity glow). Rendered at 4x and
 // box-filtered down. window.TOON.render(name, { cell, mode, debug }) returns a PNG data URL of
 // one cell; mode "lit" draws the shop's own 3D picture instead (StoreView's camera and the
@@ -36,6 +43,8 @@ const SIZE = {
   rim: 2.4, // the light rim on the shaded side
   bevel: 1.7, // the light band on the big blocks' top-front edges
   glow: 2.6, // how far the neon glows
+  glowEdge: 1.0, // a see-through part's (or a stream of light's) soft edge
+  glowHalo: 3.2, // and its faint halo
 };
 const FOV = 18; // a narrow lens: close to a flat drawing, the proportions the same
 // a depth step this big (studs) is an edge even between parts of one colour
@@ -173,7 +182,7 @@ void main() {
 }`;
 
 const FRAGMENT = /* glsl */ `
-uniform int uPass;          // 0 colour, 1 id, 2 depth + tone class
+uniform int uPass;          // 0 colour, 1 id, 2 depth + tone class, 3 glow (colour, alpha)
 uniform vec3 uId;
 uniform vec3 uLit;
 uniform vec3 uBase;
@@ -182,6 +191,9 @@ uniform vec3 uDeep;
 uniform int uKind;          // 0 matte, 1 metal, 2 neon, 3 glass
 uniform int uShape;         // 0 block, 1 ball, 2 cylinder, 3 wedge
 uniform float uMetal;       // the white stripes' strength
+uniform float uStripe;      // 1: this part's front gets the diagonal streaks (the sticker's biggest shiny faces)
+uniform float uSpec;        // 1: this curved part gets a hard highlight (big enough to read)
+uniform float uGlowAlpha;   // a glow part's alpha (1 - its transparency)
 uniform vec3 uSize;
 uniform mat3 uAxes;         // the part's local axes in the world (unit)
 uniform vec3 uLight;        // the tone light (world)
@@ -210,6 +222,10 @@ void main() {
     gl_FragColor = vec4(uId, 1.0);
     return;
   }
+  if (uPass == 3) {
+    gl_FragColor = vec4(uBase, uGlowAlpha);
+    return;
+  }
   if (uPass == 2) {
     float d = clamp((vDepth - uDepthRange.x) / (uDepthRange.y - uDepthRange.x), 0.0, 1.0) * 65535.0;
     float hi = floor(d / 256.0);
@@ -221,7 +237,7 @@ void main() {
   if (uKind == 2) col = uBase;
   // flat faces (blocks, cylinder caps): white stripes on metal and glass fronts
   bool isFlat = uShape == 0 || (uShape == 2 && abs(vNormalO.x) > 0.5);
-  if (isFlat && cls == 2 && (uKind == 1 || uKind == 3)) {
+  if (isFlat && cls == 2 && uStripe > 0.5 && (uKind == 1 || uKind == 3)) {
     vec3 an = abs(vNormalO);
     int axis = an.x > an.y ? (an.x > an.z ? 0 : 2) : (an.y > an.z ? 1 : 2);
     int ta = axis == 0 ? 1 : 0;
@@ -256,7 +272,7 @@ void main() {
   }
   // curved metal and glass: a hard white highlight
   bool curved = uShape == 1 || (uShape == 2 && abs(vNormalO.x) < 0.5);
-  if (curved && (uKind == 1 || uKind == 3)) {
+  if (curved && uSpec > 0.5 && (uKind == 1 || uKind == 3)) {
     vec3 v = normalize(uCamPos - vWorld);
     vec3 r = reflect(-v, n);
     float s = dot(r, uSpecLight);
@@ -287,6 +303,9 @@ function buildParts(model) {
     if (transparency > 0.95 || Math.min(sx, sy, sz) < 1e-4) return;
     const name = model.names[i] || "";
     const kind = kindOf(material);
+    // light, not a solid shape: see-through parts (an aura disc) and the streams of light or lava
+    // running down an egg's shell (glowing streaks in the game): a soft glow, no outline, no lines
+    const glow = transparency >= 0.25 || (kind === "neon" && STREAM.test(name));
     let rgb = hexRgb(color);
     if (kind === "neon") {
       // neon glows: a little brighter than its colour, flat
@@ -309,6 +328,9 @@ function buildParts(model) {
       uKind: { value: { matte: 0, metal: 1, neon: 2, glass: 3 }[kind] },
       uShape: { value: shape },
       uMetal: { value: kind === "metal" ? metalStrength(material, rgb) : kind === "glass" ? 1 : 0 },
+      uStripe: { value: 0 },
+      uSpec: { value: 0 },
+      uGlowAlpha: { value: glow ? Math.min(0.95, 1 - transparency) : 1 },
       uSize: { value: new THREE.Vector3(...size) },
       uAxes: { value: new THREE.Matrix3().set(r00, r01, r02, r10, r11, r12, r20, r21, r22) },
       uNormalWorld: { value: new THREE.Matrix3().getNormalMatrix(world) },
@@ -320,12 +342,19 @@ function buildParts(model) {
       uPx: { value: 0.01 },
       uDepthRange: { value: new THREE.Vector2(0, 1) },
     };
-    const mesh = new THREE.Mesh(GEOMETRY[shape] || GEOMETRY[SHAPE_BLOCK], new THREE.ShaderMaterial({ uniforms, vertexShader: VERTEX, fragmentShader: FRAGMENT }));
+    const material3 = new THREE.ShaderMaterial({ uniforms, vertexShader: VERTEX, fragmentShader: FRAGMENT });
+    if (glow) {
+      // (drawn after the solid parts, tested against their depth, writing none)
+      material3.transparent = true;
+      material3.depthWrite = false;
+      material3.blending = THREE.NoBlending;
+    }
+    const mesh = new THREE.Mesh(GEOMETRY[shape] || GEOMETRY[SHAPE_BLOCK], material3);
     mesh.matrixAutoUpdate = false;
     mesh.matrix.copy(world);
     mesh.matrixWorld.copy(world);
     group.add(mesh);
-    infos.push({ id, name, shape, kind, color, base, lit, mesh });
+    infos.push({ id, name, shape, kind, color, base, lit, mesh, glow });
   });
   return { group, infos };
 }
@@ -469,10 +498,22 @@ function colourGap(a, b) {
   const p = oklab(a.base), q = oklab(b.base);
   return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
 }
+// Are two parts' colours close (one hue family, a small light step)? Their seam stays calm: no line.
+function closeColours(a, b) {
+  const [La, Ca, ha] = lch(a.base), [Lb, Cb, hb] = lch(b.base);
+  if (Math.abs(La - Lb) >= 0.09) return false;
+  if (Ca < 0.04 && Cb < 0.04) return true;
+  let dh = Math.abs(ha - hb);
+  if (dh > Math.PI) dh = 2 * Math.PI - dh;
+  return Math.min(Ca, Cb) >= 0.03 && dh < 30 * DEG && Math.abs(Ca - Cb) < 0.09;
+}
 
 // ------------------------------------------------------------------ the toon sticker
 const HEAD = /^(Head|HeadFill|HeadEdge\d|Helm|HelmFill|HelmEdge\d)$/;
 const SHELL = /^Shell$/;
+// the streams of light (the Royal Egg) and lava (the Dragonforge Shard) running down a shell and
+// the glowing seams running up it
+const STREAM = /^(Stream\d+_\d+|Drip\d+|LavaFlow\d+_\d+|LavaDrip\d+|Seam\d+)$/;
 const SPARKLE = /(Gem\d?$|Emblem$|Moonstone$|^Orb$|Jewel|CrownCore$|^Star\d$|^Rune$|Buckle$|CrownPoint1$|CrownPiece3$|^Rose2$|ClaspGem)/;
 
 async function renderToon(name, cell, debug) {
@@ -517,8 +558,13 @@ async function renderToon(name, cell, debug) {
   }
   renderer.setSize(S, S, false);
   const rt = new THREE.WebGLRenderTarget(S, S, { depthBuffer: true, samples: 0 });
+  // passes 0-2 draw the solid parts only; pass 3 the glow parts over the solid parts' depth
   const pass = (n) => {
-    for (const info of infos) info.mesh.material.uniforms.uPass.value = n;
+    for (const info of infos) {
+      info.mesh.material.uniforms.uPass.value = n;
+      info.mesh.visible = n === 3 || !info.glow;
+      info.mesh.material.colorWrite = n !== 3 || info.glow;
+    }
     renderer.setRenderTarget(rt);
     renderer.setClearColor(0x000000, 0);
     renderer.clear();
@@ -526,11 +572,8 @@ async function renderToon(name, cell, debug) {
     renderer.setRenderTarget(null);
     return readTarget(rt, S);
   };
-  const colour = pass(0);
   const idRaw = pass(1);
   const depthRaw = pass(2);
-  rt.dispose();
-  for (const info of infos) info.mesh.material.dispose();
 
   const N = S * S;
   const id = new Int32Array(N), depth = new Float32Array(N), cls = new Uint8Array(N);
@@ -541,6 +584,27 @@ async function renderToon(name, cell, debug) {
     cls[p] = depthRaw[p * 4 + 3];
   }
   const part = (p) => infos[id[p] - 1];
+  // less noise at card size: the diagonal streaks only on the sticker's two or three biggest shiny
+  // fronts (a head, a body, a big shield), the hard highlights only on curved parts big enough
+  {
+    const seen = new Float64Array(infos.length + 1), fronts = new Float64Array(infos.length + 1);
+    for (let p = 0; p < N; p++)
+      if (id[p]) {
+        seen[id[p]]++;
+        if (cls[p] === 2) fronts[id[p]]++;
+      }
+    const shiny = (info) => info.kind === "metal" || info.kind === "glass";
+    const faces = infos.filter((i) => shiny(i) && i.shape === SHAPE_BLOCK).sort((a, b) => fronts[b.id] - fronts[a.id]);
+    const biggest = faces.length ? fronts[faces[0].id] : 0;
+    faces.slice(0, 3).forEach((info) => {
+      if (fronts[info.id] >= biggest * 0.25 && fronts[info.id] >= 900 * k * k * SS * SS) info.mesh.material.uniforms.uStripe.value = 1;
+    });
+    for (const info of infos) if (shiny(info) && info.shape !== SHAPE_BLOCK && seen[info.id] >= 90 * k * k * SS * SS) info.mesh.material.uniforms.uSpec.value = 1;
+  }
+  const colour = pass(0);
+  const glowRaw = infos.some((i) => i.glow) ? pass(3) : null;
+  rt.dispose();
+  for (const info of infos) info.mesh.material.dispose();
   // the colour, as floats 0..1
   const R = new Float32Array(N), G = new Float32Array(N), B = new Float32Array(N);
   for (let p = 0; p < N; p++) {
@@ -711,8 +775,9 @@ async function renderToon(name, cell, debug) {
     }
   }
 
-  // 5. the inner lines: where a part stands in front of a part of another colour (or one
-  // clearly further back), a navy line on the far part along the near part's edge
+  // 5. the inner lines: where a part stands in front of a part of a clearly different colour (or
+  // one clearly further back), a navy line on the far part along the near part's edge; parts of
+  // close colours (one hue family, a small light step) meet without one
   const lineCov = new Float32Array(N);
   {
     const w = SIZE.line * k * SS;
@@ -723,15 +788,17 @@ async function renderToon(name, cell, debug) {
         const d = Math.hypot(dx, dy);
         if (d <= w + 0.5) disc.push([dx, dy, d]);
       }
-    const gapCache = new Map();
-    const gap = (a, b) => {
+    const differCache = new Map();
+    // do parts a and b differ enough in colour for a line between them?
+    const differ = (a, b) => {
       const key = a < b ? a * 4096 + b : b * 4096 + a;
-      let g = gapCache.get(key);
-      if (g === undefined) {
-        g = colourGap(infos[a - 1], infos[b - 1]);
-        gapCache.set(key, g);
+      let d = differCache.get(key);
+      if (d === undefined) {
+        const pa = infos[a - 1], pb = infos[b - 1];
+        d = colourGap(pa, pb) >= 0.06 && !closeColours(pa, pb);
+        differCache.set(key, d);
       }
-      return g;
+      return d;
     };
     // a line of `radius` round pixel `src` onto the parts behind it (`back`: the part it stands in
     // front of there, always; any other part only where it is clearly further away)
@@ -744,7 +811,7 @@ async function renderToon(name, cell, debug) {
         const q = yy * S + xx;
         const other = id[q];
         if (!other || other === front) continue;
-        if (other !== back && (depth[q] <= dz + EPS || (gap(front, other) < 0.06 && depth[q] - dz < STEP))) continue;
+        if (other !== back && (depth[q] <= dz + EPS || (!differ(front, other) && depth[q] - dz < STEP))) continue;
         const cov = Math.min(1, radius + 0.5 - d);
         if (cov > lineCov[q]) lineCov[q] = cov;
       }
@@ -801,11 +868,11 @@ async function renderToon(name, cell, debug) {
       const v = votes.get(keyOf(a, b));
       const lo = Math.min(a, b), hi = Math.max(a, b);
       const front = v[0] >= 0.25 * v[2] && v[0] >= v[1] ? lo : v[1] >= 0.25 * v[2] ? hi : 0;
-      const differ = gap(a, b) >= 0.06;
-      if (front && (differ || v[3] >= 0.3 * v[2])) {
+      const apart = differ(a, b);
+      if (front && (apart || v[3] >= 0.3 * v[2])) {
         if (front === a) stampFront(p, w, a, b);
         else stampFront(q, w, b, a);
-      } else if (!front && differ) {
+      } else if (!front && apart) {
         stampSide(p, w / 2);
         stampSide(q, w / 2);
       }
@@ -839,7 +906,42 @@ async function renderToon(name, cell, debug) {
     if (id[p]) ring[p] = 1;
     else ring[p] = Math.max(0, Math.min(1, outW + 0.5 - Math.sqrt(outer.dist[p])));
   }
-  // compose: drop (ring moved down) under the ring under the picture
+  // the glow layer (see-through parts and the streams of light): each part's colour at its alpha
+  // (1 - transparency) with a light soft edge and a faint halo, in linear light, premultiplied
+  let glowC = null, glowA = null;
+  if (glowRaw) {
+    const cr = new Float32Array(N), cg = new Float32Array(N), cb = new Float32Array(N), ca = new Float32Array(N);
+    for (let p = 0; p < N; p++) {
+      const a = glowRaw[p * 4 + 3] / 255;
+      if (a <= 0) continue;
+      ca[p] = a;
+      cr[p] = lin(glowRaw[p * 4] / 255) * a;
+      cg[p] = lin(glowRaw[p * 4 + 1] / 255) * a;
+      cb[p] = lin(glowRaw[p * 4 + 2] / 255) * a;
+    }
+    const soft = Math.max(1, Math.round(SIZE.glowEdge * k * SS)), wide = Math.max(1, Math.round(SIZE.glowHalo * k * SS));
+    const sr = blur(cr, S, S, soft, 2), sg = blur(cg, S, S, soft, 2), sb = blur(cb, S, S, soft, 2), sa = blur(ca, S, S, soft, 2);
+    const hr = blur(cr, S, S, wide, 3), hg = blur(cg, S, S, wide, 3), hb = blur(cb, S, S, wide, 3), ha = blur(ca, S, S, wide, 3);
+    glowC = new Float32Array(N * 3);
+    glowA = new Float32Array(N);
+    for (let p = 0; p < N; p++) {
+      const core = Math.min(1, sa[p] * 1.3), halo = ha[p] * 0.45;
+      const a = Math.min(1, core + halo * (1 - core));
+      if (a <= 1e-4) continue;
+      // the colour: the core's own, a little hotter (toward white) where the glow is strongest
+      const kc = sa[p] > 1e-6 ? 1 / sa[p] : 0, kh = ha[p] > 1e-6 ? 1 / ha[p] : 0;
+      const w = core / (core + halo * (1 - core) + 1e-9);
+      const hot = 0.08 * core;
+      for (let c = 0; c < 3; c++) {
+        const own = w * [sr, sg, sb][c][p] * kc + (1 - w) * [hr, hg, hb][c][p] * kh;
+        glowC[p * 3 + c] = (own + (1 - own) * hot) * a;
+      }
+      glowA[p] = a;
+    }
+  }
+
+  // compose: the glow at the bottom, the drop (ring moved down) and the ring over it, the picture
+  // over them, and the glow again over the picture where it stands in front
   const img = new Float32Array(N * 4); // premultiplied linear RGB + alpha
   const O = OUTLINE_RGB.map((c) => lin(c / 255));
   for (let p = 0; p < N; p++) {
@@ -847,11 +949,23 @@ async function renderToon(name, cell, debug) {
     const dropA = y >= dropPx ? ring[p - dropPx * S] : 0;
     let a = Math.max(ring[p], dropA);
     let r = O[0] * a, g = O[1] * a, b = O[2] * a;
+    const ga = glowA ? glowA[p] : 0;
     if (id[p]) {
       r = lin(Math.min(1, Math.max(0, R[p])));
       g = lin(Math.min(1, Math.max(0, G[p])));
       b = lin(Math.min(1, Math.max(0, B[p])));
       a = 1;
+      if (ga > 0) {
+        r = glowC[p * 3] + r * (1 - ga);
+        g = glowC[p * 3 + 1] + g * (1 - ga);
+        b = glowC[p * 3 + 2] + b * (1 - ga);
+      }
+    } else if (ga > 0) {
+      // (under the outline: a glow outside the body never cuts its sticker edge)
+      r += glowC[p * 3] * (1 - a);
+      g += glowC[p * 3 + 1] * (1 - a);
+      b += glowC[p * 3 + 2] * (1 - a);
+      a += ga * (1 - a);
     }
     img[p * 4] = r;
     img[p * 4 + 1] = g;
