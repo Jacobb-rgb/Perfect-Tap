@@ -1,8 +1,8 @@
 --[[
 	Sky package: the airship of concept v2 (docs/art/lobby_concept_v2.webp,
-	top right): a long copper cigar cruising over the mountain's right
-	shoulder, between the peak and the east floating island, pitched a
-	little nose-down like the concept.
+	top right): a long copper cigar cruising high over the mountain's east
+	shoulder, right of the event board (seen from the spawn, the plaza and
+	every plot), pitched a little nose-down like the concept.
 
 	The envelope tapers continuously from a bulbous nose to the finned tail:
 	a full-width copper nose ball (one dark band around it) with a smaller
@@ -57,12 +57,14 @@ local Trail = rgb(255, 110, 30)
 
 local Airship = {}
 
--- Where it flies: over the mountain's right shoulder, behind its back edge,
--- between the peak and the east floating island in the hero and spawn shots
+-- Where it flies: high over the mountain's east shoulder, right of the event board
 -- (not a LobbyLayout piece: it hangs outside the lobby area box).
 -- (lobby fix round 3: 13 studs higher, its gondola well clear of the east island)
--- (owner 2026-11-11 06:11Z "Ano, výš": up over the event board, which hid it from the town)
-Airship.Center = Vector3.new(232, 322, -336) -- the spawn view's top right
+-- (owner 2026-11-11 06:11Z "Ano, výš": up over the event board, which hid it from the town;
+-- 2026-11-12 "Ano, posunout": the leaning board still hid it from plots 7-8 and the plaza,
+-- so it moved right, out of the board's sight lines: from the spawn ~48 degrees bearing,
+-- ~37 degrees up; EventBoard spec: the board hides at most a tenth of it from any town spot)
+Airship.Center = Vector3.new(315, 322, -255)
 -- the nose points west-south-west: the town sees it three-quarter from the
 -- front-left like concept v2 (nose to the left, tail and exhaust to the right)
 Airship.Heading = 252
