@@ -34,6 +34,8 @@ local Diorama = {}
 -- Heartstone Core has its own void enclosure), the light colour and strength.
 -- (the dioramas' painted colours need near-white light to read; their caves are dark otherwise)
 Diorama.Floors = {
+	EmberCaves = { Ceiling = true, Light = Color3.fromRGB(255, 222, 196), Brightness = 1.4 },
+	DeepHollow = { Ceiling = true, Light = Color3.fromRGB(220, 240, 255), Brightness = 1.8 },
 	SunkenPalace = { Ceiling = true, Light = Color3.fromRGB(255, 232, 210), Brightness = 1.6 },
 	StormglassRift = { Ceiling = true, Light = Color3.fromRGB(230, 236, 255), Brightness = 2.4 },
 	HeartstoneCore = { Ceiling = false, Light = Color3.fromRGB(255, 226, 246), Brightness = 2.4 },

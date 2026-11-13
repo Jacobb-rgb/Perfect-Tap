@@ -16,6 +16,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local MineFloors = require(Shared.Config.MineFloors)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Palette = require(script.Parent.Palette)
 local PlotBuilder = require(script.Parent.PlotBuilder)
@@ -564,7 +565,9 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	local ember = caves.EmberCaves
 	local hollow = caves.DeepHollow
 	tunnel(land, Vector3.new(-12, hollow.Min.Y, hollow.Max.Z), Vector3.new(12, 4, ember.Min.Z), true, Palette.HollowRock)
-	ramp(land, hollow.RampFrom, hollow.RampTo, 22, Palette.HollowRockDark)
+	-- (the Ember Caves diorama, the owner's model: its floor runs to its back edge, so the ramp starts there)
+	local rampFrom = if MineFloors.usesDiorama(2) then Vector3.new(hollow.RampFrom.X, hollow.RampFrom.Y, ember.Min.Z) else hollow.RampFrom
+	ramp(land, rampFrom, hollow.RampTo, 22, Palette.HollowRockDark)
 
 	-- glowing crystal clusters (the VIP grotto)
 	local function crystalCluster(parent: Instance, p: Vector3, color: Color3, size: number)

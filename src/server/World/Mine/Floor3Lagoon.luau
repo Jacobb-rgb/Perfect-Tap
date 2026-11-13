@@ -29,6 +29,7 @@ local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloor
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
+local Diorama = require(World:WaitForChild("Mine"):WaitForChild("Diorama"))
 
 local Floor = {}
 
@@ -395,6 +396,10 @@ end
 ---------------------------------------------------------------- build
 
 function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
+	-- the owner's diorama of this floor (Mine/Diorama) when it is uploaded
+	if Diorama.has(Floor.Index) then
+		return Diorama.build(Floor.Index, parent, origin, opts)
+	end
 	local o: BuildOpts = opts or {}
 	local cutaway = o.Cutaway == true
 	local model = Instance.new("Model")

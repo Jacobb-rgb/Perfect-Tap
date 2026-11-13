@@ -149,66 +149,118 @@
      43
     ],
     "size": 11,
-    "radius": 18
+    "radius": 10
    },
    "lift": {
-    "at": [
-     46,
+    "near": [
+     40,
      40
     ],
-    "size": 8
+    "size": 8,
+    "radius": 12
    },
    "entrance": {
     "near": [
      0,
-     48
+     50
     ],
     "size": 6
    },
    "gate": {
-    "near": [
+    "at": [
      0,
-     40
+     44
     ],
     "size": 6
    }
   },
-  "deep_z": -18
+  "giant": [
+   -20,
+   -30
+  ],
+  "deep_z": -20,
+  "zone": [
+   [
+    -60,
+    -60,
+    60,
+    40
+   ]
+  ],
+  "keep": [
+   [
+    0,
+    -54,
+    12
+   ],
+   [
+    0,
+    56,
+    9
+   ]
+  ],
+  "lights": 12
  },
  "DeepHollow": {
   "anchors": {
    "elevator": {
     "near": [
-     -32,
+     -30,
      42
     ],
     "size": 11,
-    "radius": 18
+    "radius": 12,
+    "bump": 1.8
    },
    "lift": {
-    "at": [
-     50,
-     2
+    "near": [
+     36,
+     6
     ],
-    "size": 8
+    "size": 8,
+    "radius": 14,
+    "bump": 1.8
    },
    "entrance": {
     "near": [
      0,
      46
     ],
-    "size": 6
+    "size": 6,
+    "bump": 1.8
    },
    "gate": {
-    "near": [
+    "at": [
      0,
-     40
+     49
     ],
     "size": 6
    }
   },
+  "giant": [
+   0,
+   18
+  ],
   "deep_z": -18,
-  "snap": 1.0
+  "snap": 1.0,
+  "bump": 1.6,
+  "zone": [
+   [
+    -60,
+    -60,
+    60,
+    38
+   ]
+  ],
+  "keep": [
+   [
+    0,
+    54,
+    10
+   ]
+  ],
+  "lights": 12,
+  "block": 3
  },
  "Quarry": {
   "anchors": {

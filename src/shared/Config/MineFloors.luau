@@ -277,6 +277,8 @@ MineFloors.LiftSpots = {
 -- The floors built from the owner's dioramas (World/Mine/Diorama, DioramaData) when every tile is
 -- uploaded (MeshKit): their lifts stand on the diorama's flat ground instead.
 MineFloors.Dioramas = {
+	[2] = { Lift = Vector3.new(39, 0, 40) },
+	[3] = { Lift = Vector3.new(33, 2.6, 7) },
 	[4] = { Lift = Vector3.new(30, 2.4, 32) },
 	[5] = { Lift = Vector3.new(34, 2.4, 49) },
 	[6] = { Lift = Vector3.new(6, 0, 6) },
