@@ -191,14 +191,6 @@ function MeshNature.tree(m: Model, kind: string, trunk: BasePart, reach: number?
 	local room = reach or math.min(foot.X - lo.X, hi.X - foot.X, foot.Z - lo.Z, hi.Z - foot.Z)
 	local scale = math.min(height / own.Y, 2 * room / math.max(own.X, own.Z))
 	local size = own * scale
-	local collides, canQuery = trunk.CanCollide, trunk.CanQuery
-	local trunkWidth = math.min(trunk.Size.X, trunk.Size.Z)
-	MeshNature.clear(m)
-	if collides then
-		local w = math.min(trunkWidth, size.X * MeshNature.TrunkWidth)
-		local h = size.Y * MeshNature.TrunkHeight
-		MeshNature.collider(m, CFrame.new(foot.X, foot.Y + h / 2, foot.Z), Vector3.new(w, h, w), "Trunk", canQuery)
-	end
 	local cf = CFrame.new(foot.X, foot.Y + size.Y * (0.5 - MeshNature.TreeSink), foot.Z) * turnAt(foot)
 	local mesh = MeshKit.part(asset, size, cf, { Name = "Leaves" })
 	if not mesh then
@@ -207,6 +199,14 @@ function MeshNature.tree(m: Model, kind: string, trunk: BasePart, reach: number?
 	local color = MeshNature.TreeTints[kind]
 	if color then
 		tint(mesh, color)
+	end
+	local collides, canQuery = trunk.CanCollide, trunk.CanQuery
+	local trunkWidth = math.min(trunk.Size.X, trunk.Size.Z)
+	MeshNature.clear(m)
+	if collides then
+		local w = math.min(trunkWidth, size.X * MeshNature.TrunkWidth)
+		local h = size.Y * MeshNature.TrunkHeight
+		MeshNature.collider(m, CFrame.new(foot.X, foot.Y + h / 2, foot.Z), Vector3.new(w, h, w), "Trunk", canQuery)
 	end
 	mesh.Parent = m
 	return mesh
@@ -278,11 +278,11 @@ function MeshNature.pond(m: Model, center: Vector3, sizeX: number, sizeZ: number
 		yaw += math.pi
 	end
 	local frame = CFrame.new(center) * CFrame.Angles(0, yaw, 0)
-	MeshNature.clear(m)
 	local mesh = MeshKit.part(asset, size, frame * CFrame.new(0, size.Y * 0.49, 0), { Name = "PondMesh" })
 	if not mesh then
 		return nil
 	end
+	MeshNature.clear(m)
 	mesh.Parent = m
 	local w = MeshNature.PondWater
 	local water = Instance.new("Part")
@@ -340,9 +340,9 @@ function MeshNature.swapInto(m: Model, asset: string, frame: CFrame, opts: MeshK
 	end
 	local box = Vector3.new(x1 - x0, y1 - y0, z1 - z0)
 	local size = own * math.min(box.X / own.X, box.Y / own.Y, box.Z / own.Z)
-	MeshNature.clear(m)
 	local mesh = MeshKit.part(asset, size, frame * CFrame.new((x0 + x1) / 2, y0 + size.Y / 2, (z0 + z1) / 2), opts)
 	if mesh then
+		MeshNature.clear(m)
 		mesh.Parent = m
 	end
 	return mesh
