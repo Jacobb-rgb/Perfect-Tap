@@ -117,27 +117,36 @@ local ROOF_Y = 5.6
 local ROOF_FRONT = CASE_Z - CASE_DEPTH / 2 - 1.2 -- the roof's open edge (pen side)
 
 --[[
-	The owner's museum model (MeshKit "Prop_Museum", 2026-11-13, docs/plans/
-	MESHY_MODELS_PLAN.md): a white sci-fi booth (side walls, a back glass
-	wall, a roof slab) with three white display cases of its own. The game
-	has a case per collection (four), so the booth holds this museum's own
-	glass cases on their spots (cases() and the relic spots do not change:
-	the clients place the relics without knowing about the model) and the
-	model's cases stay out of sight: the case pedestals meet as one dark
-	counter reaching forward to COUNTER_FRONT (the walkway keeps 4 studs to
-	the pen) and the booth stands sunk into the ground, its cases' tops just
-	under the counter's top, its ceiling at Mesh.CeilingY over the cases'
-	caps, its side walls' inner faces Mesh.Clearance clear of the outer
-	cases (it reaches about a stud past the spot on the lane side). What
-	stays of the parts: Floor (the PrimaryPart with the prompt, dark now),
-	Border, the Case models and the Sign (on the booth's roof); `Wall` and two
-	`Column`s are invisible colliders (the model takes no collisions) and the
-	`Roof` a slab hidden inside the model's roof (the weather's roof test).
-	Nil while there is no upload: the brick and slate lean-to.
+	The owner's museum model (2026-11-13, docs/plans/MESHY_MODELS_PLAN.md): a
+	white sci-fi booth (side walls, a back glass wall, a roof slab) with three
+	white display cases of its own. The game has three collections (owner
+	2026-11-13: the Royal Railway went, so his three cases hold them), one per
+	case, in collection order from the visitors' left. His cases' glass is
+	painted on (a Meshy texture can't be see-through), so the booth is
+	MeshKit "Prop_MuseumOpen": his model with the three glass boxes cut away
+	(tools/meshy/jobs_*.json "cut"), his pedestals and their display floors
+	kept, and the game puts real glass and a lid on each. The booth stands on the museum's floor (its platform's
+	top on FloorTop), as wide as before (its side walls' inner faces
+	Mesh.Clearance clear of the lean-to's outer case lines; it reaches about
+	a stud past the spot on the lane side), as deep as the spot and squeezed
+	to Mesh.HeightScale studs per model unit (about 7.9 studs high). Its
+	cases' fronts keep the walkway: 4 studs and more from the pen's back
+	fence. What the game adds to each of its cases (buildCase): the plaque on
+	the pedestal's front, a strip in the collection's colour, the raised back
+	shelf for the second row, the glass, a white lid where his was and a soft
+	light panel under it; the relics stand on the case's own floor and on the
+	shelf at Mesh.RelicScale.
+	Parts kept: Floor (the PrimaryPart with the prompt: an invisible walking
+	floor, the booth shows its own) and the Sign (on the booth's roof);
+	`Wall`, two `Column`s and the `Counter` (round the three cases) are
+	invisible colliders (the model takes no collisions) and the `Roof` a slab
+	hidden inside the model's roof (the weather's roof test). The lean-to
+	(parts) while there is no upload or there are more collections than cases.
 ]]
-MuseumBuilder.Mesh = { Name = "Prop_Museum", Clearance = 0.15, CeilingY = 4.8 }
--- Measured on the processed model (its own units; ray probes in Blender), its open front
--- toward its +Z (it is built turned round, open toward the yard).
+MuseumBuilder.Mesh = { Name = "Prop_MuseumOpen", Clearance = 0.15, HeightScale = 3.5, RelicScale = 0.6 }
+-- Measured on the processed model (its own units: x across, y up from its bottom, z toward its
+-- open front; glTF vertices and ray probes in Blender). It is built turned round, open toward
+-- the yard.
 local BOOTH = {
 	Box = Vector3.new(4.0, 2.4595, 2.0418),
 	InnerLeft = 1.70, -- the left side wall's inner face, at -X (seen from the front)
@@ -146,46 +155,78 @@ local BOOTH = {
 	LeftFront = 0.5, -- the left side wall runs from SideBack to here
 	RightFront = 0.03, -- the right one, shorter
 	SideBack = -0.65,
-	CaseTop = 1.53, -- its own three cases' tops (their fronts at Z <= +0.21)
+	Floor = 0.30, -- its platform's top
 	Ceiling = 2.04, -- the roof's underside
 	RoofFront = 0.75, -- the roof slab's front (a thin lip reaches on to the box's front)
+	-- its three cases, from its -X side (the visitors' left once turned round): centre x and
+	-- width, the pedestal's front and the display floor's front and back (z) (measured on
+	-- Prop_Museum, the same model with its glass boxes: Prop_MuseumOpen cut those away)
+	Cases = {
+		{ X = -1.037, Width = 0.62, PedestalFront = 0.210, Front = 0.185, Back = -0.346 },
+		{ X = -0.025, Width = 0.59, PedestalFront = 0.120, Front = 0.096, Back = -0.416 },
+		{ X = 0.963, Width = 0.62, PedestalFront = 0.067, Front = 0.051, Back = -0.465 },
+	},
+	PedestalTop = 0.80, -- the cases' pedestals
+	CaseFloor = 0.88, -- their display floors
+	CaseInner = 1.45, -- under their lids (the game's lids now)
+	CaseTop = 1.53, -- their lids' tops
 }
-local PEN_BACK = BaseLayout.Pen.Area.Center.Z + BaseLayout.Pen.Area.Size.Z / 2
-local COUNTER_FRONT = PEN_BACK + 4 -- (the booth) the counter's front, 4 studs from the pen's back fence
-local BOOTH_FLOOR = rgb(62, 68, 90) -- (the booth) the floor in its dark slate
+local CASE_WHITE = rgb(222, 226, 234) -- (the booth) the back shelf in its cases' white
 
-type Booth = { X: number, Scale: Vector3, Top: number }
+-- The owner's booth stands in the museum while it is uploaded and holds every collection.
+local function useBooth(): boolean
+	return MeshKit.has(MuseumBuilder.Mesh.Name) and #ArtifactConfig.Collections <= #BOOTH.Cases
+end
 
--- The booth model, placed (see Mesh); nil without an upload.
-local function boothMesh(m: Model, plotCF: CFrame): Booth?
+type Booth = { X: number, Scale: Vector3, Bottom: number, Top: number }
+
+-- Where the booth model stands (plot-local x of its centre, its scale, bottom and top).
+local function boothFrame(): Booth
 	local spec = MuseumBuilder.Mesh
 	local k = BOOTH
-	-- the outer cases' caps reach 0.05 past their cases; the visitors' left is +X
+	-- the lean-to's outer cases' caps reach 0.05 past their cases; the visitors' left is +X
 	local left = X1 - SIDE_PAD + 0.05 + spec.Clearance
 	local right = X0 + SIDE_PAD - 0.05 - spec.Clearance
 	local sx = (left - right) / (k.InnerLeft + k.InnerRight)
-	local x = left - k.InnerLeft * sx -- turned round: the model's -X is the plot's +X
-	local sz = RECT.Size.Z / k.Box.Z
-	local caseTop = FLOOR + PEDESTAL - 0.05 -- its cases end just under the counter's top
-	local sy = (spec.CeilingY - caseTop) / (k.Ceiling - k.CaseTop)
-	local size = Vector3.new(k.Box.X * sx, k.Box.Y * sy, k.Box.Z * sz)
-	local at = plotCF * CFrame.new(x, caseTop + (k.Box.Y / 2 - k.CaseTop) * sy, RECT.Center.Z) * CFrame.Angles(0, math.pi, 0)
-	local look = MeshKit.part(spec.Name, size, at, { Name = "Booth" })
+	local sy = spec.HeightScale
+	local bottom = FLOOR - k.Floor * sy
+	return {
+		X = left - k.InnerLeft * sx, -- turned round: the model's -X is the plot's +X
+		Scale = Vector3.new(sx, sy, RECT.Size.Z / k.Box.Z),
+		Bottom = bottom,
+		Top = bottom + k.Box.Y * sy,
+	}
+end
+
+-- Plot-local point of a point of the model (turned round).
+local function boothPoint(booth: Booth, x: number, y: number, z: number): Vector3
+	return Vector3.new(booth.X - x * booth.Scale.X, booth.Bottom + y * booth.Scale.Y, RECT.Center.Z - z * booth.Scale.Z)
+end
+
+-- The booth model, placed (see Mesh); nil while the lean-to stands.
+local function boothMesh(m: Model, plotCF: CFrame): Booth?
+	if not useBooth() then
+		return nil
+	end
+	local booth = boothFrame()
+	local s = booth.Scale
+	local size = Vector3.new(BOOTH.Box.X * s.X, BOOTH.Box.Y * s.Y, BOOTH.Box.Z * s.Z)
+	local at = plotCF * CFrame.new(booth.X, (booth.Bottom + booth.Top) / 2, RECT.Center.Z) * CFrame.Angles(0, math.pi, 0)
+	local look = MeshKit.part(MuseumBuilder.Mesh.Name, size, at, { Name = "Booth" })
 	if not look then
 		return nil
 	end
 	look.Parent = m
-	return { X = x, Scale = Vector3.new(sx, sy, sz), Top = caseTop + (k.Box.Y - k.CaseTop) * sy }
+	return booth
 end
 
 -- The booth's colliders and the roof the weather sees; returns the sign's CFrame (on its roof).
 local function boothParts(m: Model, plotCF: CFrame, booth: Booth): CFrame
 	local k, s = BOOTH, booth.Scale
-	local ceiling = MuseumBuilder.Mesh.CeilingY
+	local ceiling = booth.Bottom + k.Ceiling * s.Y
 	local function at(x: number, y: number, z: number): CFrame
 		return plotCF * CFrame.new(x, y, z)
 	end
-	-- plot-local x / z of a point of the model (turned round)
 	local function px(x: number): number
 		return booth.X - x * s.X
 	end
@@ -194,7 +235,7 @@ local function boothParts(m: Model, plotCF: CFrame, booth: Booth): CFrame
 	end
 	local wallH = ceiling - FLOOR
 	-- invisible colliders: the back wall where the brick wall stood (behind the model's
-	-- glass) and its side walls (left, right as seen from the front)
+	-- glass), its side walls (left, right as seen from the front) and its three cases
 	local function collider(name: string, cf: CFrame, size: Vector3)
 		local part = Geo.block(m, cf, size, PILLAR, nil, SOLID)
 		part.Name = name
@@ -207,37 +248,90 @@ local function boothParts(m: Model, plotCF: CFrame, booth: Booth): CFrame
 		local x0, x1, z0, z1 = px(side[1]), px(side[2]), pz(side[3]), pz(k.SideBack)
 		collider("Column", at((x0 + x1) / 2, FLOOR + wallH / 2, (z0 + z1) / 2), Vector3.new(math.abs(x1 - x0), wallH, math.abs(z1 - z0)))
 	end
+	local first, last = k.Cases[1], k.Cases[#k.Cases]
+	local caseLeft, caseRight = px(first.X - first.Width / 2), px(last.X + last.Width / 2)
+	local front = math.huge
+	for _, c in k.Cases do
+		front = math.min(front, pz(c.PedestalFront))
+	end
+	local back = WALL_Z - 1.0
+	local caseTop = booth.Bottom + k.CaseTop * s.Y
+	collider(
+		"Counter",
+		at((caseLeft + caseRight) / 2, (FLOOR + caseTop) / 2, (front + back) / 2),
+		Vector3.new(caseLeft - caseRight, caseTop - FLOOR, back - front)
+	)
 	-- inside the model's roof slab (over the walkway too, not into its thin front lip)
-	local front, back = pz(k.RoofFront) + 0.3, WALL_Z - 0.3
-	local roofY = (ceiling + booth.Top) / 2
+	local roofFront, roofBack = pz(k.RoofFront) + 0.3, WALL_Z - 0.3
 	local roof = Geo.block(
 		m,
-		at(booth.X, roofY, (front + back) / 2),
-		Vector3.new(2 * 1.9 * s.X, 0.35, back - front),
+		at(booth.X, (ceiling + booth.Top) / 2, (roofFront + roofBack) / 2),
+		Vector3.new(2 * 1.9 * s.X, 0.35, roofBack - roofFront),
 		SLATE,
 		Enum.Material.Slate,
 		{ CanTouch = false, CanQuery = false }
 	)
 	roof.Name = "Roof"
-	return at(booth.X, booth.Top + 0.95, (front + back) / 2)
+	return at(booth.X, booth.Top + 0.95, (roofFront + roofBack) / 2)
 end
 
-export type CaseInfo = { Center: Vector3, Width: number, Collection: string }
+export type CaseInfo = {
+	Center: Vector3, -- the display floor's centre (plot-local)
+	Width: number,
+	Depth: number,
+	Top: number, -- plot-local y the relics stay under (the glass top / the case's lid)
+	LidTop: number, -- plot-local y of the top of the cap or lid
+	PedestalTop: number, -- plot-local y of the pedestal's top
+	Front: number, -- plot-local z of the pedestal's front (the plaque's face)
+	Collection: string,
+}
 
--- Plot-local centre of each case (pedestal top centre) and its width, in
+-- Plot-local centre of each case (its display floor's centre) and its size, in
 -- collection order from the visitors' left to right (they face +Z, so their
--- left is +X).
+-- left is +X): the booth's own cases, else the lean-to's glass cases.
 function MuseumBuilder.cases(): { CaseInfo }
 	local list = ArtifactConfig.Collections
+	local out: { CaseInfo } = {}
+	if useBooth() then
+		local booth = boothFrame()
+		local s = booth.Scale
+		for i, collection in list do
+			local c = BOOTH.Cases[i]
+			table.insert(out, {
+				Center = boothPoint(booth, c.X, BOOTH.CaseFloor, (c.Front + c.Back) / 2),
+				Width = c.Width * s.X,
+				Depth = (c.Front - c.Back) * s.Z,
+				Top = booth.Bottom + BOOTH.CaseInner * s.Y,
+				LidTop = booth.Bottom + BOOTH.CaseTop * s.Y,
+				PedestalTop = booth.Bottom + BOOTH.PedestalTop * s.Y,
+				Front = boothPoint(booth, c.X, 0, c.PedestalFront).Z,
+				Collection = collection.Id,
+			})
+		end
+		return out
+	end
 	local n = math.max(1, #list)
 	local usable = (X1 - X0) - 2 * SIDE_PAD
 	local width = (usable - (n - 1) * CASE_GAP) / n
-	local out: { CaseInfo } = {}
 	for i, collection in list do
 		local x = X1 - SIDE_PAD - (i - 1) * (width + CASE_GAP) - width / 2
-		table.insert(out, { Center = Vector3.new(x, FLOOR + PEDESTAL, CASE_Z), Width = width, Collection = collection.Id })
+		table.insert(out, {
+			Center = Vector3.new(x, FLOOR + PEDESTAL, CASE_Z),
+			Width = width,
+			Depth = CASE_DEPTH,
+			Top = FLOOR + PEDESTAL + GLASS_H,
+			LidTop = FLOOR + PEDESTAL + GLASS_H + 0.2,
+			PedestalTop = FLOOR + PEDESTAL,
+			Front = CASE_Z - CASE_DEPTH / 2,
+			Collection = collection.Id,
+		})
 	end
 	return out
+end
+
+-- The relics' scale: smaller in the booth's own cases.
+function MuseumBuilder.relicScale(): number
+	return if useBooth() then MuseumBuilder.Mesh.RelicScale else MuseumBuilder.ArtifactScale
 end
 
 -- Plot-local spot of the `slot`-th artifact (1-based) of a case with `count`
@@ -250,7 +344,7 @@ function MuseumBuilder.spotLocal(case: CaseInfo, slot: number, count: number): V
 	local rowCount = if front then perRow else count - perRow
 	local step = case.Width / (perRow + 0.2)
 	local x = case.Center.X - (index - (rowCount + 1) / 2) * step
-	local z = case.Center.Z + (if front then -0.22 else 0.22) * CASE_DEPTH
+	local z = case.Center.Z + (if front then -0.22 else 0.22) * case.Depth
 	local y = case.Center.Y + (if front then 0 else SHELF_H)
 	return Vector3.new(x, y, z)
 end
@@ -328,9 +422,10 @@ function MuseumBuilder.plaqueText(collectionId: string, artifacts: any): string
 	return `{name}\n{found} / {#list}`
 end
 
--- `counter` (the booth model's look, see Mesh): the pedestal is as wide as the case's
--- step (the four meet as one counter) and reaches forward to COUNTER_FRONT.
-local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index: number, counter: boolean)
+-- One case: the lean-to's glass case (pedestal, strip, plaque, shelf, glass, cap and light), or
+-- in the booth (`inBooth`) what the game adds to the model's own case: the plaque on its
+-- pedestal, the strip, the back shelf and the light under its lid.
+local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index: number, inBooth: boolean)
 	local collection = ArtifactConfig.CollectionById[case.Collection]
 	local m = Instance.new("Model")
 	m.Name = "Case" .. index
@@ -338,28 +433,23 @@ local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index
 	m.Parent = parent
 	local c = case.Center
 	local w = case.Width
+	local d = case.Depth
 	local function at(x: number, y: number, z: number): CFrame
 		return plotCF * CFrame.new(x, y, z)
 	end
-	local pedestalCF, pedestalSize = at(c.X, FLOOR + PEDESTAL / 2, c.Z), Vector3.new(w, PEDESTAL, CASE_DEPTH)
-	local frontZ = c.Z - CASE_DEPTH / 2
-	if counter then
-		local back = c.Z + CASE_DEPTH / 2
-		pedestalCF = at(c.X, FLOOR + PEDESTAL / 2, (COUNTER_FRONT + back) / 2)
-		pedestalSize = Vector3.new(w + CASE_GAP, PEDESTAL, back - COUNTER_FRONT)
-		frontZ = COUNTER_FRONT
+	if not inBooth then
+		local pedestal = Geo.block(m, at(c.X, FLOOR + PEDESTAL / 2, c.Z), Vector3.new(w, PEDESTAL, d), SHELL, nil, SOLID)
+		pedestal.Name = "Pedestal"
+		m.PrimaryPart = pedestal
 	end
-	local pedestal = Geo.block(m, pedestalCF, pedestalSize, SHELL, nil, SOLID)
-	pedestal.Name = "Pedestal"
-	m.PrimaryPart = pedestal
 	-- the collection's color at 60 %: a saturated glow, no white bloom
 	local glow = collection.Color:Lerp(Color3.new(0, 0, 0), 0.4)
-	local strip = Geo.block(m, at(c.X, FLOOR + PEDESTAL - 0.16, frontZ - 0.03), Vector3.new(w, 0.1, 0.05), glow, NEON, GHOST)
+	local strip = Geo.block(m, at(c.X, case.PedestalTop - 0.16, case.Front - 0.03), Vector3.new(w, 0.1, 0.05), glow, NEON, GHOST)
 	strip.Name = "Strip"
 	-- the plaque faces the visitors (its Front is -Z, toward the pen)
 	local plaque = textPart(
 		m,
-		at(c.X, FLOOR + PEDESTAL * 0.5, frontZ - 0.04),
+		at(c.X, (FLOOR + case.PedestalTop) / 2, case.Front - 0.04),
 		Vector3.new(w * 0.78, 0.7, 0.06),
 		SIGN_BOARD,
 		MuseumBuilder.plaqueText(case.Collection, nil),
@@ -367,27 +457,39 @@ local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index
 		false
 	)
 	plaque.Name = "Plaque"
+	if inBooth then
+		m.PrimaryPart = plaque
+	end
 	local shelf = Geo.block(
 		m,
-		at(c.X, c.Y + SHELF_H / 2, c.Z + CASE_DEPTH * 0.25),
-		Vector3.new(w - 0.3, SHELF_H, CASE_DEPTH * 0.45),
-		SHELF,
+		at(c.X, c.Y + SHELF_H / 2, c.Z + d * 0.25),
+		Vector3.new(w - 0.3, SHELF_H, d * 0.45),
+		if inBooth then CASE_WHITE else SHELF,
 		nil,
 		GHOST
 	)
 	shelf.Name = "Shelf"
-	local glass =
-		Geo.block(m, at(c.X, c.Y + GLASS_H / 2, c.Z), Vector3.new(w - 0.1, GLASS_H, CASE_DEPTH - 0.1), rgb(200, 230, 255), GLASS, {
-			CanTouch = false,
-			CanQuery = false,
-			CastShadow = false,
-			Transparency = 0.8,
-		})
+	-- the glass up to the cap (the lean-to) or to the lid on the booth's pedestal (his glass box's place)
+	local glassH = case.Top - c.Y
+	local glass = Geo.block(m, at(c.X, c.Y + glassH / 2, c.Z), Vector3.new(w - 0.1, glassH, d - 0.1), rgb(200, 230, 255), GLASS, {
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+		Transparency = 0.8,
+	})
 	glass.Name = "Glass"
-	local cap = Geo.block(m, at(c.X, c.Y + GLASS_H + 0.1, c.Z), Vector3.new(w + 0.1, 0.2, CASE_DEPTH + 0.1), SHELL, nil, GHOST)
+	local capH = case.LidTop - case.Top
+	local cap = Geo.block(
+		m,
+		at(c.X, case.Top + capH / 2, c.Z),
+		Vector3.new(w + 0.1, capH, d + 0.1),
+		if inBooth then CASE_WHITE else SHELL,
+		nil,
+		GHOST
+	)
 	cap.Name = "Cap"
-	-- the case's light: a soft warm panel just under the cap (half see-through: no white bloom)
-	local light = Geo.block(m, at(c.X, c.Y + GLASS_H - 0.06, c.Z), Vector3.new(w - 0.5, 0.05, CASE_DEPTH - 0.6), CASE_LIGHT, NEON, GHOST)
+	-- the case's light: a soft warm panel just under the cap or the lid (half see-through: no white bloom)
+	local light = Geo.block(m, at(c.X, case.Top - 0.06, c.Z), Vector3.new(w - 0.5, 0.05, d - 0.6), CASE_LIGHT, NEON, GHOST)
 	light.Transparency = 0.35
 	light.Name = "CaseLight"
 end
@@ -408,21 +510,27 @@ function MuseumBuilder.build(plotCF: CFrame): Model
 		m,
 		at(cx, FLOOR / 2, (OPEN_Z + WALL_Z) / 2 - 0.05),
 		Vector3.new(width - 0.6, FLOOR, WALL_Z - OPEN_Z - 0.5),
-		if booth then BOOTH_FLOOR else STONE,
+		STONE,
 		Enum.Material.Slate,
 		SOLID
 	)
 	floor.Name = "Floor"
 	m.PrimaryPart = floor
-	Geo.block(
-		m,
-		at(cx, FLOOR / 2 - 0.05, (OPEN_Z + WALL_Z) / 2),
-		Vector3.new(width - 0.2, FLOOR - 0.1, WALL_Z - OPEN_Z - 0.2),
-		if booth then SLATE else STONE_DARK,
-		nil,
-		GHOST
-	).Name =
-		"Border"
+	if booth then
+		-- the booth shows its own platform: the floor only carries the visitors and the prompt
+		floor.Transparency = 1
+		floor.CastShadow = false
+	else
+		Geo.block(
+			m,
+			at(cx, FLOOR / 2 - 0.05, (OPEN_Z + WALL_Z) / 2),
+			Vector3.new(width - 0.2, FLOOR - 0.1, WALL_Z - OPEN_Z - 0.2),
+			STONE_DARK,
+			nil,
+			GHOST
+		).Name =
+			"Border"
+	end
 	local signCF: CFrame
 	if booth then
 		signCF = boothParts(m, plotCF, booth)
@@ -540,7 +648,7 @@ function MuseumBuilder.show(museum: Model, plotCF: CFrame, artifacts: any): numb
 			if not piece then
 				local spot = MuseumBuilder.spot(plotCF, art.Id)
 				-- no light on any relic here (a plot keeps its one light)
-				local model = spot and ArtifactBuilder.build(art.Id, spot, MuseumBuilder.ArtifactScale, true)
+				local model = spot and ArtifactBuilder.build(art.Id, spot, MuseumBuilder.relicScale(), true)
 				if model then
 					model.Parent = pieces
 				end

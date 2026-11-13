@@ -17,6 +17,19 @@ local root = process.cwd
 Loader.init(root)
 local filter = process.args[1]
 
+-- The owner's uploaded models (Shared/Assets/MeshAssets.rbxm) are set aside before anything loads:
+-- the specs build the parts looks (the fallback) unless they mount stand-ins themselves
+-- (tools/lune/lib/mesh_fakes: same names and boxes), so no spec depends on the order the
+-- stand-ins come and go in, nor on a module that cached a mesh-dependent value when it loaded.
+-- tests/MeshAssets.spec.luau checks the real templates themselves (Loader.RealMeshAssets).
+do
+	local assets = Loader.find("ReplicatedStorage.Shared"):FindFirstChild("Assets")
+	Loader.RealMeshAssets = assets and assets:FindFirstChild("MeshAssets")
+	if Loader.RealMeshAssets then
+		Loader.mount("ReplicatedStorage.Shared.Assets.MeshAssets", nil)
+	end
+end
+
 local passed, failed = 0, 0
 local failures = {}
 

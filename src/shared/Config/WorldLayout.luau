@@ -414,6 +414,13 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(18, -230, -763), Max = Vector3.new(34, -205, -747) }, -- SunkenPalace lift (MineFloors.LiftSpots[4])
 	{ Min = Vector3.new(20, -310, -761), Max = Vector3.new(36, -285, -745) }, -- StormglassRift lift (MineFloors.LiftSpots[5])
 	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[6])
+	-- the Mine Lifts on the owner's diorama floors (MineFloors.Dioramas[i].Lift, 2026-11-13; the boxes
+	-- stay under the surface, so nothing up there moves)
+	{ Min = Vector3.new(31, -25, -268), Max = Vector3.new(47, -4, -252) }, -- EmberCaves (39, -12, -260)
+	{ Min = Vector3.new(25, -50, -445), Max = Vector3.new(41, -29, -429) }, -- DeepHollow (33, -37.4, -437)
+	{ Min = Vector3.new(22, -230, -776), Max = Vector3.new(38, -205, -760) }, -- SunkenPalace (30, -217.6, -768)
+	{ Min = Vector3.new(26, -310, -759), Max = Vector3.new(42, -285, -743) }, -- StormglassRift (34, -297.6, -751)
+	{ Min = Vector3.new(-2, -410, -802), Max = Vector3.new(14, -385, -786) }, -- HeartstoneCore (6, -400, -794)
 	-- the walk up to SKY HAVEN's gate in the south wall (SouthGate): no secrets, trees or flowers in the way
 	{
 		Min = Vector3.new(WorldLayout.SouthGate.X - 6, -50, WorldLayout.Island.Max.Z - WorldLayout.SouthGate.Approach),

@@ -9,7 +9,8 @@
 	  { Collection }) marks it read (data.Artifacts.Chapters[collection] = true),
 	  so the "new chapter" badge goes away.
 	- Later updates add a region, a collection and its chapter here (Number
-	  keeps counting up).
+	  keeps counting up). The Royal Railway's chapter went with its collection
+	  (2026-11-13), the chapters after it moved up one.
 ]]
 
 export type Page = { Title: string, Text: string }
@@ -65,36 +66,13 @@ StoryConfig.Chapters = {
 		},
 	},
 	{
-		Collection = "RoyalRailway",
-		Number = 2,
-		Title = "Rails Under the Mountain",
-		Pages = {
-			{
-				Title = "The Second Wonder",
-				Text = "Kaldrum's smiths built three wonders. The second was the Royal Railway: tunnels and bridges that carried ore from every mine to the capital's forges.",
-			},
-			{
-				Title = "Golden Spikes",
-				Text = "The king hammered the first golden spike himself. Within a hundred years the rails reached every corner of the kingdom, and no miner walked home alone.",
-			},
-			{
-				Title = "The Ember Express",
-				Text = "The royal train, the Ember Express, ran on a single Heartstone spark. Children waved at it from the cliffs; golem porters loaded it in silence.",
-			},
-			{
-				Title = "The Night Train",
-				Text = "On the night of the Shattering the last train left the capital full of families. The Guild still searches for where it stopped.",
-			},
-		},
-	},
-	{
 		Collection = "Golemworks",
-		Number = 3,
+		Number = 2,
 		Title = "The Sleeping Helpers",
 		Pages = {
 			{
 				Title = "Stone That Walks",
-				Text = "The third wonder was the golem: a helper of stone and ore, with a Heartstone spark for a heart. Golems carried, dug, guarded and, some say, told jokes.",
+				Text = "The greatest wonder of Kaldrum's smiths was the golem: a helper of stone and ore, with a Heartstone spark for a heart. Golems carried, dug, guarded and, some say, told jokes.",
 			},
 			{
 				Title = "Master Orvald",
@@ -112,7 +90,7 @@ StoryConfig.Chapters = {
 	},
 	{
 		Collection = "HeartstoneLore",
-		Number = 4,
+		Number = 3,
 		Title = "The Shattering",
 		Pages = {
 			{

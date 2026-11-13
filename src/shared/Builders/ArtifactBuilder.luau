@@ -11,7 +11,7 @@
 	  `cf` is the spot the relic stands on: the model's origin is the bottom
 	  centre, its front faces cf.LookVector (-Z). At scale 1 a relic is about
 	  Height studs tall and fits a Footprint x Footprint square.
-	- Budgets (ArtifactConfig, mobile: 8 museums x 24 relics): at most
+	- Budgets (ArtifactConfig, mobile: 8 museums x 18 relics): at most
 	  ArtifactConfig.MaxParts parts, all anchored, CanCollide / CanTouch /
 	  CanQuery and CastShadow off; the glow is a Neon part; only the
 	  ArtifactConfig.LightRarity (Mythic) relics carry one small PointLight.

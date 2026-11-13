@@ -22,17 +22,27 @@ through the integrator.
 - The owner imports the whole folder once with Studio's 3D Importer (uploads under his account) and saves
   `hotovo.rbxl` there; `lune run tools/lune/import_meshes.luau <hotovo.rbxl> 3D_modely_2026-11-13` writes
   `src/shared/Assets/MeshAssets.rbxm` (templates) + `Config/MeshUpload.luau` (Uploaded = true).
+  A place a current Studio saved (zstd chunks, Content properties) is rewritten first by
+  `tools/meshy/unpack_place.mjs` (Node 22+; the import tool calls it when Lune 0.8.9 can't read the file).
+  An asset imported twice takes the later copy (a fixed file imported next to the old one).
+- Done 2026-11-13: his `Documents/d.rbxl` gave 212 templates (everything but the 6 files of the three
+  epic ores; his own imports of their raw Meshy files are ignored). Still to import, all in
+  `NAHRAJ_DO_ROBLOXU/3D_doplnit_7_souboru_2026-11-13` (8 files): the 3 epic ores x2, the fixed
+  `Prop_PlotBase` (no hidden layers) and `Prop_MuseumOpen`. tests/MeshAssets.spec.luau checks the
+  real templates (the test runner sets them aside: the other specs build the parts looks or mount
+  stand-ins).
 
 ## Names (MeshCatalog)
 
 | Template | What |
 |---|---|
-| `Ore_<OreId>`, `Ore_<OreId>_Low` | 28 ores: Coal Copper Tin Iron Quartz Oakwood Honeycomb LeafOre Frostbite Emberite Cobalt Bronze Silver Gold Jade Sapphire DragonEgg Amethyst RoyalAurum Sunstone Moonstone StormGem VolcanicCore Aetherium PhoenixFeather DragonScale CelestialCore Heartstone. No model (keep the part look): Bogwood Amber Diamond Obsidian CrystalRose StormPearl GalaxyStone LeafGem + the 6 secret ores |
+| `Ore_<OreId>`, `Ore_<OreId>_Low` | 31 ores: Coal Copper Tin Iron Quartz Oakwood Honeycomb LeafOre Frostbite Emberite Cobalt Bronze Silver Gold Jade Sapphire DragonEgg Amethyst RoyalAurum Sunstone Moonstone StormGem VolcanicCore Aetherium PhoenixFeather DragonScale CelestialCore Heartstone CrystalRose StormPearl GalaxyStone. No model (keep the part look): Diamond LeafGem + the 6 secret ores (Bogwood Amber Obsidian left the game) |
 | `Rock_<FloorId>_<Kind>` | FloorId = MineFloors Id (Quarry EmberCaves DeepHollow SunkenPalace StormglassRift HeartstoneCore), Kind = Small Big Crystal Golden Geode Artifact Giant |
 | `Prop_PlotBase` | the plot's floor (square base with a raised frame and corner posts) |
 | `Prop_CleaningStation` | the cleaning station (long sci-fi bench, ore trays) |
 | `Prop_DisplayPedestal` | the yard podiums |
-| `Prop_Museum` | the base museum (sci-fi booth with 3 glass cases) |
+| `Prop_Museum` | the base museum (sci-fi booth with 3 glass cases): uploaded, not used (its glass is painted on) |
+| `Prop_MuseumOpen` | the same booth with its 3 glass boxes cut away (jobs "cut"): MuseumBuilder puts real glass, a lid, a light and the relics of one collection on each of his pedestals (3 collections since 2026-11-13) |
 | `Prop_TreeGreen`, `Prop_TreeOrange`, `Prop_TreeYellow` | trees |
 | `Prop_GardenPond` | lily pond with stones and flowers |
 | `Prop_MossyCliff` | grey-purple cliff with moss and vines |
@@ -107,4 +117,8 @@ floors as before.
   160k-triangle floors 1-3 near the town).
 - The meteor (feat/meteor, Návrhy strojů chat): use `MeshKit.fit("Prop_Meteor", ...)` for the stone once
   both are on main.
-- Ores without a model keep their part look (8 ores + the 6 secret ores); the owner may make more.
+- Ores without a model keep their part look (Diamond, Leaf Gem + the 6 secret ores); the owner may make
+  more. (Bogwood, Amber and Obsidian left the game 2026-11-13; the Royal Railway collection too: three
+  collections for the museum's three cases, its artifacts paid out as coins once, Migrations.)
+- The plot frame question (owner: "jak to myslíš stojí na něm"): a picture went to him
+  (obrazky/pozemek_okraj_2026-11-13); his answer decides whether the frame stays.

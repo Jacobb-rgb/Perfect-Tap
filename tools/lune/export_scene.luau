@@ -23,6 +23,10 @@ Loader.init(root)
 -- previews draw the processed .glb of every Asset, so the new 3D models show before the upload.
 if process.env.MESHY == "1" then
 	require("./lib/mesh_fakes")(Loader)
+elseif process.env.MESHY == "force" then
+	-- stand-ins for every catalog model even where the owner's upload is in (a model he hasn't
+	-- uploaded yet shows in the previews too: they draw the processed .glb by name)
+	require("./lib/mesh_fakes")(Loader, true)
 end
 -- previews draw every icon (IconAssets.shows: the uploaded look)
 Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true

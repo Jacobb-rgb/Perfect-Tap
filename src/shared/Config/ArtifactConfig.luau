@@ -4,8 +4,11 @@
 	artifact bonus and calls its onArtifactRoll listeners; the Artifacts
 	service then picks the artifact with pick(zone, roll)).
 
-	- 24 artifacts in 4 collections of 6. Each has a rarity, look hints for a
-	  parts-built model (Shape family + colors) and a lore line.
+	- 18 artifacts in 3 collections of 6 (The Royal Railway went on 2026-11-13,
+	  owner: three collections for the three cases of his museum model; saves
+	  that held its artifacts got coins, Migrations retireRailway). Each has a
+	  rarity, look hints for a parts-built model (Shape family + colors) and a
+	  lore line.
 	- Rarer artifacts turn up deeper: every zone has a weight for EACH
 	  artifact of a rarity (ZoneRarity; per artifact, not per rarity, so a
 	  rarity with fewer artifacts never makes each of them easier to find:
@@ -29,7 +32,7 @@
 	- New collections come with later updates: add a collection, its 6
 	  artifacts and a StoryConfig chapter. Saves keep artifact and chapter
 	  ids this server doesn't know (Migrations); every reader here ignores them.
-	- Budgets (mobile, 8 base museums x 24 artifacts): an artifact model has
+	- Budgets (mobile, 8 base museums x 18 artifacts): an artifact model has
 	  at most MaxParts (8) parts, all anchored, CanCollide/CanTouch/CanQuery
 	  off, no lights except the Mythic ones (one small PointLight,
 	  LightRarity); the Glow is a Neon part. A museum shows ONLY the
@@ -38,7 +41,7 @@
 	  StreamingEnabled streams it in only within the streaming radius; the
 	  pieces are built once (and when a new artifact is found), no per-frame
 	  animation on the server; a slow spin, if any, runs on clients within
-	  MuseumAnimateDistance studs. Worst case: 8 bases x 24 x 8 = 1,536
+	  MuseumAnimateDistance studs. Worst case: 8 bases x 18 x 8 = 1,152
 	  parts, and only the bases near a player are streamed in.
 
 	Saved as data.Artifacts = {
@@ -136,23 +139,16 @@ ArtifactConfig.Collections = {
 		Reward = { Title = "Heir of Kaldrum", PodiumSkin = "Royal", Bonus = { Stat = "IncomePct", Value = 0.05 } },
 	},
 	{
-		Id = "RoyalRailway",
-		Name = "The Royal Railway",
-		Order = 2,
-		Color = rgb(200, 140, 70),
-		Reward = { Title = "Royal Conductor", PodiumSkin = "Railway", Bonus = { Stat = "SellPct", Value = 0.1 } },
-	},
-	{
 		Id = "Golemworks",
 		Name = "The Golemworks",
-		Order = 3,
+		Order = 2,
 		Color = rgb(130, 200, 220),
 		Reward = { Title = "Golemsmith", PodiumSkin = "Golemworks", Bonus = { Stat = "GolemBondPct", Value = 0.1 } },
 	},
 	{
 		Id = "HeartstoneLore",
 		Name = "The Heartstone Lore",
-		Order = 4,
+		Order = 3,
 		Color = rgb(255, 80, 60),
 		Reward = { Title = "Keeper of the Heartstone", PodiumSkin = "Heartstone", Bonus = { Stat = "IncomePct", Value = 0.1 } },
 	},
@@ -161,7 +157,6 @@ ArtifactConfig.Collections = {
 -- Podium skins (a collection reward; the podium builder colors the podium).
 ArtifactConfig.PodiumSkins = {
 	Royal = { Name = "Royal Velvet", Base = rgb(120, 30, 50), Trim = rgb(255, 196, 60), Glow = rgb(255, 220, 120) },
-	Railway = { Name = "Brass Rails", Base = rgb(70, 60, 56), Trim = rgb(200, 150, 70), Glow = rgb(255, 170, 80) },
 	Golemworks = { Name = "Golem Core", Base = rgb(90, 96, 110), Trim = rgb(150, 210, 230), Glow = rgb(120, 230, 255) },
 	Heartstone = { Name = "Heartstone Ember", Base = rgb(60, 24, 24), Trim = rgb(255, 90, 60), Glow = rgb(255, 120, 60) },
 	-- the Starter Pack's (Robux, MonetizationConfig "StarterPack"): shows while no collection reward is equipped
@@ -232,69 +227,6 @@ ArtifactConfig.List = {
 		Accent = rgb(200, 40, 50),
 		Glow = rgb(255, 140, 60),
 		Lore = "The crown of the last Ember King. A tiny flame still dances in its ruby.",
-	},
-	---------------------------------------------------------------- The Royal Railway
-	{
-		Id = "GoldenSpike",
-		Name = "Golden Rail Spike",
-		Collection = "RoyalRailway",
-		Rarity = "Common",
-		Shape = "Spike",
-		Primary = rgb(230, 180, 70),
-		Accent = rgb(90, 80, 70),
-		Lore = "Hammered in by the king himself to open the first line of the Royal Railway.",
-	},
-	{
-		Id = "ConductorWhistle",
-		Name = "Conductor's Whistle",
-		Collection = "RoyalRailway",
-		Rarity = "Common",
-		Shape = "Whistle",
-		Primary = rgb(200, 200, 210),
-		Accent = rgb(150, 100, 50),
-		Lore = "One blow and every golem porter on the platform stood up straight.",
-	},
-	{
-		Id = "RailLantern",
-		Name = "Rail Lantern",
-		Collection = "RoyalRailway",
-		Rarity = "Uncommon",
-		Shape = "Lantern",
-		Primary = rgb(60, 70, 80),
-		Accent = rgb(220, 160, 70),
-		Glow = rgb(255, 200, 110),
-		Lore = "It hung on the last car of the night trains so the tunnels never felt empty.",
-	},
-	{
-		Id = "LastTicket",
-		Name = "Last Train Ticket",
-		Collection = "RoyalRailway",
-		Rarity = "Uncommon",
-		Shape = "Tablet",
-		Primary = rgb(235, 220, 180),
-		Accent = rgb(170, 60, 50),
-		Lore = "A brass ticket for the train that left the capital the night of the Shattering.",
-	},
-	{
-		Id = "RoyalTimetable",
-		Name = "Royal Timetable",
-		Collection = "RoyalRailway",
-		Rarity = "Rare",
-		Shape = "Book",
-		Primary = rgb(70, 90, 140),
-		Accent = rgb(230, 190, 90),
-		Lore = "Every station of the kingdom, every train, to the minute. Kaldrum loved order.",
-	},
-	{
-		Id = "LocomotiveCrest",
-		Name = "Locomotive Crest",
-		Collection = "RoyalRailway",
-		Rarity = "Epic",
-		Shape = "Crest",
-		Primary = rgb(150, 30, 40),
-		Accent = rgb(255, 200, 80),
-		Glow = rgb(255, 170, 80),
-		Lore = "The crest from the front of the royal train, the Ember Express.",
 	},
 	---------------------------------------------------------------- The Golemworks
 	{
@@ -440,8 +372,8 @@ ArtifactConfig.ZoneChance = {
 
 -- The weight of EACH artifact of a rarity once one turns up in a zone
 -- (rarer deeper; per artifact, so in every zone one artifact's chance falls
--- with its rarity: DeepHollow, 24 artifacts: one Common 5.5 %, Uncommon
--- 4.9 %, Rare 4.4 %, Epic 3.3 %, Legendary 1.6 %, the Mythic 0.66 %).
+-- with its rarity: DeepHollow, 18 artifacts: one Common 7.6 %, Uncommon
+-- 6.9 %, Rare 6.1 %, Epic 4.6 %, Legendary 2.3 %, the Mythic 0.91 %).
 ArtifactConfig.ZoneRarity = {
 	Outcrops = { Common = 14, Uncommon = 6, Rare = 1.5 },
 	Quarry = { Common = 11, Uncommon = 6, Rare = 2.5, Epic = 0.8 },
@@ -468,8 +400,9 @@ ArtifactConfig.DuplicateShards = {
 	the others found) can be restored with crystal shards (ArtifactAction
 	"Restore"), at this price by its rarity; only once the player's blaster
 	opens a zone where that rarity turns up (rarer stays deeper). About
-	half the shards the duplicates of an average chase pay (Deep Hollow:
-	~3.75 shards per duplicate; the Mythic's ~150 finds pay ~560), and the
+	two thirds of the shards the duplicates of an average chase pay (Deep
+	Hollow, 18 artifacts: ~4.2 shards per duplicate; the Mythic's ~110
+	finds pay ~460), and the
 	Enchant shop wants the same shards: a real choice, never a shortcut
 	past the zones.
 ]]

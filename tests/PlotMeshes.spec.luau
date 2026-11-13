@@ -242,7 +242,7 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the museum
 
-	meshTest("PlotMeshes: the museum is the booth model holding the four glass cases", function()
+	meshTest("PlotMeshes: the museum is the open booth model, its own three cases hold the three collections", function()
 		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[3])
 		local museum = MuseumBuilder.build(plotCF)
 		T.eq(museum.Name, MuseumBuilder.Name)
@@ -250,13 +250,17 @@ return function(T, Loader)
 		T.eq(museum:GetAttribute(MuseumBuilder.FoundAttribute), "", "Found")
 		local floor = museum.PrimaryPart
 		T.truthy(floor and floor.Name == "Floor" and floor:FindFirstChild(MuseumBuilder.PromptName), "Floor with the Prompt")
+		T.truthy(floor.CanCollide and floor.Transparency == 1, "an invisible walking floor: the booth shows its own")
+		T.eq(museum:FindFirstChild("Border"), nil, "no border slab round the booth")
 		local booth = museum:FindFirstChild("Booth")
 		T.truthy(booth and isLook(booth, MuseumBuilder.Mesh.Name), "the booth model")
 		lookOnly(booth, "booth")
-		for _, name in { "Wall", "Roof", "Sign" } do
+		for _, name in { "Wall", "Counter", "Roof", "Sign" } do
 			T.truthy(museum:FindFirstChild(name), name)
 		end
-		T.truthy(museum.Wall.CanCollide and museum.Wall.Transparency == 1, "the back wall is an invisible collider")
+		for _, name in { "Wall", "Counter" } do
+			T.truthy(museum[name].CanCollide and museum[name].Transparency == 1, name .. " is an invisible collider")
+		end
 		local columns = 0
 		for _, d in museum:GetChildren() do
 			if d.Name == "Column" then
@@ -279,60 +283,94 @@ return function(T, Loader)
 			T.truthy(a.Z >= rect.Center.Z - rect.Size.Z / 2 - 0.5 and b.Z <= rect.Center.Z + rect.Size.Z / 2 + 0.5, part.Name .. " z")
 			T.truthy(b.Y <= rect.Size.Y, part.Name .. " height")
 		end
-		-- the Roof hides inside the booth's roof, the Sign stands on it
+		-- it stands on the museum's floor: its platform's top (0.30 of its 2.4595 units) at FloorTop
+		local unit = (boothMax.Y - boothMin.Y) / 2.4595
+		T.near(boothMin.Y + 0.30 * unit, MuseumBuilder.FloorTop, 0.01, "the booth's platform on the floor")
+		T.near(unit, MuseumBuilder.Mesh.HeightScale, 1e-3, "its height scale")
+		-- the Roof hides inside the booth's roof (its underside at 2.04 units), the Sign stands on it
 		local roofMin, roofMax = bounds(plotCF, museum.Roof)
-		T.lt(MuseumBuilder.Mesh.CeilingY, roofMin.Y, "the roof slab over the ceiling")
+		T.lt(boothMin.Y + 2.04 * unit, roofMin.Y, "the roof slab over the ceiling")
 		T.lt(roofMax.Y, boothMax.Y, "inside the booth's roof")
 		local signMin = bounds(plotCF, museum.Sign)
 		T.near(signMin.Y, boothMax.Y + 0.15, 0.01, "the sign on the booth's roof")
-		-- the four cases: one per collection, in collection order, their pedestals one counter
+		-- its three cases, one per collection, in collection order from the visitors' left (+X)
 		local cases = MuseumBuilder.cases()
 		T.eq(#cases, #ArtifactConfig.Collections, "a case per collection")
+		T.eq(#cases, 3, "the booth's three cases")
 		local penBack = BaseLayout.Pen.Area.Center.Z + BaseLayout.Pen.Area.Size.Z / 2
-		local counterTop = -math.huge
-		local edges = {}
+		local counterMin, counterMax = bounds(plotCF, museum.Counter)
 		for i, info in cases do
 			local case = museum:FindFirstChild("Case" .. i)
 			T.truthy(case, "Case" .. i)
 			T.eq(case:GetAttribute("Collection"), info.Collection, "Collection")
-			local pedestal = case.PrimaryPart
-			T.truthy(pedestal and pedestal.Name == "Pedestal" and pedestal.CanCollide, "Pedestal")
-			for _, name in { "Strip", "Shelf", "Glass", "Cap" } do
+			T.eq(case.PrimaryPart, case:FindFirstChild("Plaque"), "the plaque leads the case")
+			for _, name in { "Strip", "Shelf", "Glass", "Cap", "CaseLight" } do
 				T.truthy(case:FindFirstChild(name), name)
 			end
+			T.eq(case:FindFirstChild("Pedestal"), nil, "the booth's case stands on its own pedestal")
+			-- the game's glass and lid where his (painted) glass box was cut away
+			local ga, gb = bounds(plotCF, case.Glass)
+			T.near(ga.Y, info.Center.Y, 1e-3, "the glass from the case's floor")
+			T.near(gb.Y, info.Top, 1e-3, "up to the lid")
+			local ca, cb = bounds(plotCF, case.Cap)
+			T.near(ca.Y, info.Top, 1e-3, "the lid on the glass")
+			T.near(cb.Y, boothMin.Y + 1.53 * unit, 1e-3, "the lid's top where his was")
+			T.truthy(case.Glass.Transparency > 0.5, "see-through glass")
 			local label = case.Plaque.FaceFront.Text
 			T.truthy(label:IsA("TextLabel") and label.Text:find("0 / 6", 1, true), "the plaque")
-			local a, b = bounds(plotCF, pedestal)
-			counterTop = math.max(counterTop, b.Y)
-			table.insert(edges, { a.X, b.X })
-			T.near(a.Z - penBack, 4, 1e-3, "the walkway: 4 studs from the pen to the counter")
-			T.near(b.Y, info.Center.Y, 1e-3, "the case stands on its pedestal")
-			-- the cases' glass and caps stay inside the booth's side walls and under its ceiling
-			local ga, gb = bounds(plotCF, case.Cap)
-			T.lt(gb.Y, MuseumBuilder.Mesh.CeilingY, "the cap under the ceiling")
-			T.truthy(ga.X > boothMin.X and gb.X < boothMax.X, "inside the booth")
+			T.truthy(info.Front - penBack >= 4, "the walkway: 4 studs or more from the pen to the case")
+			local pa, pb = bounds(plotCF, case.Plaque)
+			T.truthy(pb.Z <= info.Front + 1e-3, "the plaque in front of the pedestal")
+			T.truthy(pa.Y >= MuseumBuilder.FloorTop and pb.Y <= info.PedestalTop, "the plaque on the pedestal")
+			local la, lb = bounds(plotCF, case.CaseLight)
+			T.truthy(lb.Y <= info.Top and la.Y > info.Center.Y, "the light under the case's lid")
+			T.lt(info.Center.Y, info.Top, "the case's floor under its lid")
+			T.truthy(info.Center.X - info.Width / 2 > boothMin.X and info.Center.X + info.Width / 2 < boothMax.X, "inside the booth")
+			T.truthy(
+				info.Center.X - info.Width / 2 >= counterMin.X - 1e-3 and info.Center.X + info.Width / 2 <= counterMax.X + 1e-3,
+				"the counter collider round it"
+			)
+			T.truthy(counterMin.Z <= info.Front + 1e-3, "the counter from the cases' fronts")
+			if i > 1 then
+				T.truthy(info.Center.X < cases[i - 1].Center.X, "left to right for the visitors")
+			end
 		end
-		for i = 2, #edges do
-			T.near(edges[i][2], edges[i - 1][1], 1e-3, "the pedestals meet as one counter")
-		end
-		-- the booth's own three cases (their tops at 1.53 of 2.4595 of its height) hide in the counter
-		local caseTop = boothMin.Y + 1.53 / 2.4595 * (boothMax.Y - boothMin.Y)
-		T.lt(caseTop, counterTop, "the booth's cases end under the counter's top")
-		-- the relics on their spots, inside their glass, facing the visitors
+		-- the relics on the cases' floors and shelves, inside the cases (MuseumBuilder.spot faces them
+		-- toward the visitors: tests/Artifacts.spec.luau)
 		local all = { Found = {}, Chapters = {} }
 		for _, art in ArtifactConfig.List do
 			all.Found[art.Id] = 1
 		end
 		T.eq(MuseumBuilder.show(museum, plotCF, all), #ArtifactConfig.List, "every relic shows")
+		local scale = MuseumBuilder.relicScale()
+		T.eq(scale, MuseumBuilder.Mesh.RelicScale, "the booth's relics are smaller")
 		for _, piece in museum.Pieces:GetChildren() do
-			local p = plotCF:PointToObjectSpace(piece:GetPivot().Position)
-			T.truthy(p.Y >= counterTop - 1e-3, piece.Name .. " on the counter")
-			T.truthy(p.X > boothMin.X and p.X < boothMax.X, piece.Name .. " inside the booth")
+			local art = ArtifactConfig.ById[piece:GetAttribute("ArtifactId")]
+			local info = nil
+			for _, c in cases do
+				if c.Collection == art.Collection then
+					info = c
+				end
+			end
+			local low, high = math.huge, -math.huge
+			local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+			for _, d in piece:GetDescendants() do
+				if d:IsA("BasePart") then
+					local a, b = bounds(plotCF, d)
+					low, high = math.min(low, a.Y), math.max(high, b.Y)
+					x0, x1 = math.min(x0, a.X), math.max(x1, b.X)
+					z0, z1 = math.min(z0, a.Z), math.max(z1, b.Z)
+				end
+			end
+			T.truthy(low >= info.Center.Y - 1e-3, art.Id .. " on its case's floor or shelf")
+			T.truthy(high <= info.Top, art.Id .. " under the lid")
+			T.truthy(x0 >= info.Center.X - info.Width / 2 and x1 <= info.Center.X + info.Width / 2, art.Id .. " inside the case")
+			T.truthy(z0 >= info.Center.Z - info.Depth / 2 - 0.05 and z1 <= info.Center.Z + info.Depth / 2 + 0.05, art.Id .. " inside the case's depth")
 		end
-		-- the prompt on the walkway, in front of the counter
+		-- the prompt on the walkway, in front of the cases
 		local point = floor:FindFirstChild(MuseumBuilder.PromptName)
 		local prompt = plotCF:PointToObjectSpace((floor.CFrame * point.CFrame).Position)
-		T.truthy(prompt.Z > penBack and prompt.Z < penBack + 4, "the prompt on the walkway")
+		T.truthy(prompt.Z > penBack and prompt.Z < cases[1].Front, "the prompt on the walkway")
 	end)
 
 	---------------------------------------------------------------- the cleaning station

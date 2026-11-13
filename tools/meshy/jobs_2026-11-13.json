@@ -675,6 +675,41 @@
   },
   {
    "mode": "plain",
+   "name": "Prop_MuseumOpen",
+   "src": "Meshy_AI_Roblox_Mini_Museum_Em_1113171756_texture.glb",
+   "out": "Prop_MuseumOpen.glb",
+   "tris": 19000,
+   "tex": 1024,
+   "unit": 4.0,
+   "cut": [
+    [
+     -1.37,
+     0.895,
+     -0.37,
+     -0.7,
+     1.57,
+     0.21
+    ],
+    [
+     -0.34,
+     0.895,
+     -0.44,
+     0.29,
+     1.57,
+     0.13
+    ],
+    [
+     0.63,
+     0.895,
+     -0.49,
+     1.3,
+     1.57,
+     0.08
+    ]
+   ]
+  },
+  {
+   "mode": "plain",
    "name": "Prop_CleaningStation",
    "src": "Meshy_AI_Roblox_Ore_Cleaning_W_1113171746_texture.glb",
    "out": "Prop_CleaningStation.glb",

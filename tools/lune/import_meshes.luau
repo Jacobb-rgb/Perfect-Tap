@@ -11,6 +11,9 @@
 	  src/shared/Config/MeshUpload.luau   Uploaded = true, Set = <set>
 
 	Templates already in MeshAssets.rbxm stay for assets the new file lacks (a later set adds to it).
+	An asset imported twice (a fixed file imported next to the old one) takes the later copy. A place
+	saved by a current Studio is first rewritten by tools/meshy/unpack_place.mjs (Node 22+), since
+	Lune 0.8.9 can't read its zstd chunks and Content properties.
 
 	  lune run tools/lune/import_meshes.luau <hotovo.rbxl | .rbxm> [set name]
 ]]
@@ -35,7 +38,16 @@ local UPLOAD = root .. "/src/shared/Config/MeshUpload.luau"
 local bytes = fs.readFile(path)
 local tops: { any }
 if path:lower():match("%.rbxlx?$") then
-	local game = roblox.deserializePlace(bytes)
+	local ok, game = pcall(roblox.deserializePlace, bytes)
+	if not ok then
+		-- a place from a current Studio (zstd chunks, Content properties): Lune 0.8.9 can't read it as
+		-- it is, tools/meshy/unpack_place.mjs (Node 22+) rewrites it the way old rbx-dom reads
+		local unpacked = root .. "/build/import_unpacked.rbxl"
+		local result = process.spawn("node", { root .. "/tools/meshy/unpack_place.mjs", path, unpacked })
+		assert(result.ok, "Lune can't read " .. path .. " (" .. tostring(game) .. ") and unpack_place.mjs failed: " .. result.stderr)
+		print((string.gsub(result.stdout, "%s+$", "")))
+		game = roblox.deserializePlace(fs.readFile(unpacked))
+	end
 	tops = game:GetChildren()
 else
 	tops = roblox.deserializeModel(bytes)
@@ -86,26 +98,29 @@ for _, top in tops do
 			strays += 1
 			continue
 		end
-		if found[name] then
-			table.insert(doubled, name)
-			continue
-		end
 		if not meshIdOk(d.MeshId) then
 			table.insert(notUploaded, name .. " (" .. tostring(d.MeshId) .. ")")
 			continue
 		end
-		if textureOf(d) == "" then
-			table.insert(noTexture, name)
-		end
-		local box = Catalog.Assets[name].Box
-		local s = d.Size
-		local function off(a: number, b: number): boolean
-			return math.abs(a - b) > math.max(0.03 * b, 0.02)
-		end
-		if off(s.X, box.X) or off(s.Y, box.Y) or off(s.Z, box.Z) then
-			table.insert(sizeOff, string.format("%s %.3f,%.3f,%.3f vs %.3f,%.3f,%.3f", name, s.X, s.Y, s.Z, box.X, box.Y, box.Z))
+		if found[name] then
+			-- imported again later (a fixed file next to the old one): the later copy wins
+			table.insert(doubled, name)
 		end
 		found[name] = d
+	end
+end
+
+for name, d in found do
+	if textureOf(d) == "" then
+		table.insert(noTexture, name)
+	end
+	local box = Catalog.Assets[name].Box
+	local s = d.Size
+	local function off(a: number, b: number): boolean
+		return math.abs(a - b) > math.max(0.03 * b, 0.02)
+	end
+	if off(s.X, box.X) or off(s.Y, box.Y) or off(s.Z, box.Z) then
+		table.insert(sizeOff, string.format("%s %.3f,%.3f,%.3f vs %.3f,%.3f,%.3f", name, s.X, s.Y, s.Z, box.X, box.Y, box.Z))
 	end
 end
 
@@ -178,7 +193,7 @@ end
 list("MISSING", missing)
 list("NOT UPLOADED (skipped)", notUploaded)
 list("NO TEXTURE", noTexture)
-list("DOUBLED (first kept)", doubled)
+list("DOUBLED (the later import kept)", doubled)
 list("SIZE NOT AS PROCESSED", sizeOff)
 if strays > 0 then
 	print(strays .. " other MeshParts in the file ignored")

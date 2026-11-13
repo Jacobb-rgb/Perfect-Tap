@@ -1406,9 +1406,9 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- artifacts + story
 
-	T.test("Step67: 24 artifacts in 4 collections, rarer deeper, odds sum to 1", function()
-		T.eq(#ArtifactConfig.List, 24)
-		T.eq(#ArtifactConfig.Collections, 4)
+	T.test("Step67: 18 artifacts in 3 collections (the Royal Railway went 2026-11-13), rarer deeper, odds sum to 1", function()
+		T.eq(#ArtifactConfig.List, 18)
+		T.eq(#ArtifactConfig.Collections, 3)
 		local names = {}
 		for _, collection in ArtifactConfig.Collections do
 			T.eq(#ArtifactConfig.ByCollection[collection.Id], 6, collection.Id .. " has 6")
@@ -1828,7 +1828,7 @@ return function(T, Loader)
 		data.Wheel = { NextSpinAt = NOW + 10 ^ 9 }
 		data.Artifacts = {
 			Found = { CrownCoin = 2.9, RoyalSeal = 0, Fake = 3, EmberCrown = 1e9 },
-			Chapters = { CrownOfKaldrum = true, RoyalRailway = "yes", Nope = true },
+			Chapters = { CrownOfKaldrum = true, Golemworks = "yes", Nope = true },
 		}
 		data.Stats.ArtifactsFound = -3
 		data.Stats.CapsulesOpened = 4.6
@@ -1836,6 +1836,42 @@ return function(T, Loader)
 		data.Stats.WheelOres = "two"
 		return data
 	end
+
+	T.test("Migration: the Royal Railway's artifacts become coins, once (the collection went 2026-11-13)", function()
+		T.eq(ArtifactConfig.CollectionById.RoyalRailway, nil, "the collection is gone")
+		T.eq(#ArtifactConfig.Collections, 3, "three collections: the museum model's three cases")
+		T.eq(#ArtifactConfig.List, 18, "18 artifacts")
+		local save = fresh()
+		save.Coins = 100
+		save.Artifacts = {
+			Found = { GoldenSpike = 3, RailLantern = 1, LocomotiveCrest = 2, RoyalTimetable = 0, CrownCoin = 1 },
+			Chapters = { RoyalRailway = true, CrownOfKaldrum = true },
+			Equipped = "RoyalRailway",
+		}
+		Migrations.run(save, NOW)
+		-- one payment per artifact found (Common 1,000, Uncommon 2,500, Epic 15,000; a count of 0 pays nothing)
+		T.eq(save.Coins, 100 + 1000 + 2500 + 15000, "paid by rarity")
+		for _, id in { "GoldenSpike", "ConductorWhistle", "RailLantern", "LastTicket", "RoyalTimetable", "LocomotiveCrest" } do
+			T.eq(ArtifactConfig.ById[id], nil, id .. " is no artifact any more")
+			T.eq(save.Artifacts.Found[id], nil, id .. " leaves the save")
+		end
+		T.eq(save.Artifacts.Found.CrownCoin, 1, "the other collections stay")
+		T.eq(save.Artifacts.Chapters.RoyalRailway, nil, "its chapter flag goes")
+		T.eq(save.Artifacts.Chapters.CrownOfKaldrum, true)
+		T.eq(save.Artifacts.Equipped, nil, "its title and skin fall back to the last completed collection")
+		-- every load runs it: nothing is paid twice
+		Migrations.run(save, NOW)
+		T.eq(save.Coins, 100 + 18500, "paid once")
+		-- a save without artifacts or with junk coins
+		local bare = fresh()
+		bare.Artifacts = nil
+		Migrations.run(bare, NOW)
+		local junk = fresh()
+		junk.Coins = 0 / 0
+		junk.Artifacts = { Found = { ConductorWhistle = 1 }, Chapters = {} }
+		Migrations.run(junk, NOW)
+		T.eq(junk.Coins, 1000, "junk coins start from 0")
+	end)
 
 	T.test("Step67 migration: junk is repaired (known ids, caps, whole levels, finite times)", function()
 		local data = junkSave()
@@ -1895,7 +1931,7 @@ return function(T, Loader)
 		T.eq(data.Artifacts.Found.Fake, 3, "a newer server's artifact is kept")
 		T.eq(data.Artifacts.Found.EmberCrown, ArtifactConfig.MaxCount)
 		T.eq(data.Artifacts.Chapters.CrownOfKaldrum, true)
-		T.eq(data.Artifacts.Chapters.RoyalRailway, nil)
+		T.eq(data.Artifacts.Chapters.Golemworks, nil, "a chapter flag is true or nothing")
 		T.eq(data.Artifacts.Chapters.Nope, true, "a newer server's chapter is kept")
 		-- stats
 		T.eq(data.Stats.ArtifactsFound, 0)

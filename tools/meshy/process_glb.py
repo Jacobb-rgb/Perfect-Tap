@@ -191,7 +191,12 @@ def smooth(ob, deg):
         bpy.ops.object.shade_smooth()
 
 def info(ob):
-    lo, hi = bbox(ob)
+    # the bounds of the vertices faces use: loose ones (cut_boxes leaves some) never reach the .glb, so
+    # Roblox's mesh is only that big (Floor_QuarryB_15 was 37 % too deep in the catalog without this)
+    used = {i for p in ob.data.polygons for i in p.vertices}
+    xs = [ob.data.vertices[i].co for i in used] or [v.co for v in ob.data.vertices]
+    lo = Vector((min(v.x for v in xs), min(v.y for v in xs), min(v.z for v in xs)))
+    hi = Vector((max(v.x for v in xs), max(v.y for v in xs), max(v.z for v in xs)))
     # Roblox / glTF axes: X, Y(up) = Blender Z, Z = -Blender Y
     c = (lo + hi) / 2
     return {"tris": tri_count(ob), "center": [round(c.x, 5), round(c.z, 5), round(-c.y, 5)],
@@ -236,6 +241,10 @@ def unlayer(ob, gap):
 def job_plain(j):
     ob = import_glb(j["src"])
     normalize(ob, j.get("anchor", "bottom"), j.get("unit", 4.0))
+    if j.get("cut"):
+        # boxes [x0, y0, z0, x1, y1, z1] in the output's axes (glTF: y up, +z its front) and
+        # normalized units -> Blender (x, -z, y): e.g. the museum's glass boxes (Prop_MuseumOpen)
+        cut_boxes(ob, [[b[0], -b[5], b[1], b[3], -b[2], b[4]] for b in j["cut"]])
     if j.get("unlayer"):
         unlayer(ob, j["unlayer"])
     if tri_count(ob) > j["tris"]:

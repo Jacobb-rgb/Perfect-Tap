@@ -10,6 +10,7 @@ return function(T, Loader)
 	local Diorama = Loader.requirePath("ServerScriptService.Server.World.Mine.Diorama")
 	local DioramaData = Loader.requirePath("ServerScriptService.Server.World.Mine.DioramaData")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local MeshCatalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog")
 	local MineAmbience = Loader.requirePath("ReplicatedStorage.Shared.Config.MineAmbience")
 	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
@@ -106,6 +107,8 @@ return function(T, Loader)
 				T.eq(spot, MineFloors.Dioramas[index].Lift, label .. " the diorama's lift spot")
 				T.truthy(liftSpot, label .. " lift spot marked")
 				T.near((liftSpot.PrimaryPart.CFrame.Position - origin:PointToWorldSpace(spot)).Magnitude, 0.5, 0.01, label .. " lift spot at liftSpot")
+				-- nothing big may be placed on it (WorldLayout.KeepOut, as for the parts floors' lifts)
+				T.truthy(WorldLayout.isKeepOut(MineFloors.liftPosition(index)), label .. " the lift is a keep-out")
 			end
 			-- budgets
 			local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget

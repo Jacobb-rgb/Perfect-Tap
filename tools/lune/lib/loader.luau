@@ -182,7 +182,14 @@ function nodeMethods.GetDescendants(self)
 	local function walk(n)
 		for _, c in rawget(n, "ChildList") do
 			table.insert(out, c)
-			walk(c)
+			if type(c) == "table" then
+				walk(c)
+			else
+				-- a real instance hung in by Loader.attach (a mounted .rbxm): its own descendants
+				for _, d in c:GetDescendants() do
+					table.insert(out, d)
+				end
+			end
 		end
 	end
 	walk(self)
@@ -548,7 +555,7 @@ end
 function Loader.listModules(path: string): { any }
 	local out = {}
 	for _, d in nodeMethods.GetDescendants(Loader.find(path)) do
-		if rawget(d, "ClassName") == "ModuleScript" then
+		if type(d) == "table" and rawget(d, "ClassName") == "ModuleScript" then
 			table.insert(out, d)
 		end
 	end

@@ -3745,12 +3745,12 @@
     "center": [
      2.81505,
      0.94101,
-     -0.58876
+     -1.08046
     ],
     "size": [
      2.31066,
      1.85536,
-     3.65082
+     2.66741
     ]
    },
    {
@@ -3897,5 +3897,26 @@
   "file": "Ore_CrystalRose_Low.glb",
   "src": "Meshy_AI_Roblox_Crystal_Rose_O_1113195523_texture.glb",
   "mode": "bake"
+ },
+ "Prop_MuseumOpen": {
+  "parts": [
+   {
+    "name": "Prop_MuseumOpen",
+    "tris": 11175,
+    "center": [
+     0.0,
+     1.22975,
+     -0.0
+    ],
+    "size": [
+     4.0,
+     2.4595,
+     2.04177
+    ]
+   }
+  ],
+  "file": "Prop_MuseumOpen.glb",
+  "src": "Meshy_AI_Roblox_Mini_Museum_Em_1113171756_texture.glb",
+  "mode": "plain"
  }
 }

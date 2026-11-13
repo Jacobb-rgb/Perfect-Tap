@@ -80,6 +80,15 @@
 	records included) already sees the new ids. Golem kinds named after
 	replaced ores are renamed by migrateSteps67 (GolemConfig.Renamed).
 
+	The Royal Railway collection went (owner 2026-11-13: three collections
+	for the three cases of his museum model; same Version, no new names):
+	right after renameOres, on every load, each of its six artifacts a save
+	still holds leaves Artifacts.Found and pays its coins once
+	(RETIRED_ARTIFACT_COINS by rarity: Common 1,000, Uncommon 2,500, Rare
+	6,000, Epic 15,000; one payment per artifact found, its duplicates paid
+	their shards when found), its chapter flag goes and Equipped =
+	"RoyalRailway" falls back to the last completed collection (nil).
+
 	Steps 6-7 (same Version 3; DataTemplate fills the records in; `now` =
 	os.time() unless the caller passes one, for the time caps). As with
 	MachineInventory and MachineUpgrades, well-formed entries this server
@@ -269,6 +278,17 @@ local MAX_FIELD_KEY_LENGTH = 32
 local MAX_FIELD_TEXT_LENGTH = 64
 -- data.Artifacts.Equipped: a collection id (or "" = none) is never longer
 local MAX_EQUIPPED_LENGTH = 64
+-- The Royal Railway collection's artifacts (gone 2026-11-13) -> the coins each one found pays
+-- once, by its rarity (frozen: retireRailway)
+local RETIRED_ARTIFACT_COINS: { [string]: number } = {
+	GoldenSpike = 1000, -- Common
+	ConductorWhistle = 1000, -- Common
+	RailLantern = 2500, -- Uncommon
+	LastTicket = 2500, -- Uncommon
+	RoyalTimetable = 6000, -- Rare
+	LocomotiveCrest = 15000, -- Epic
+}
+local RETIRED_COLLECTION = "RoyalRailway"
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local MAX_AUTO_DELETE = 64 -- Golems.AutoDelete kinds kept (CapsuleService.MaxAutoDelete)
 -- Version 13: the kinds whose rarity rose from save v11 to v12 (frozen)
@@ -924,6 +944,40 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	return if #kept > 0 then kept else nil
 end
 
+-- The Royal Railway collection went (owner 2026-11-13): each of its artifacts a save still holds
+-- leaves Artifacts.Found and pays its coins once (RETIRED_ARTIFACT_COINS); its chapter flag goes
+-- and an Equipped pick of it falls back to the last completed collection. Idempotent: what paid
+-- is gone. Returns the coins paid.
+local function retireRailway(data: { [string]: any }): number
+	local artifacts = data.Artifacts
+	if type(artifacts) ~= "table" then
+		return 0
+	end
+	local paid = 0
+	local found = artifacts.Found
+	if type(found) == "table" then
+		for id, coins in RETIRED_ARTIFACT_COINS do
+			local count = found[id]
+			if count ~= nil then
+				found[id] = nil
+				if isFinite(count) and count >= 1 then
+					paid += coins
+				end
+			end
+		end
+	end
+	if type(artifacts.Chapters) == "table" then
+		artifacts.Chapters[RETIRED_COLLECTION] = nil
+	end
+	if artifacts.Equipped == RETIRED_COLLECTION then
+		artifacts.Equipped = nil
+	end
+	if paid > 0 then
+		data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + paid
+	end
+	return paid
+end
+
 function Migrations.run(data: { [string]: any }, now: number?): Report
 	-- read FIRST: the end of run() sets data.Version to Latest
 	local loadedVersion = data.Version
@@ -942,6 +996,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 
 	-- replaced ores take their new ids first, so nothing below drops them
 	renameOres(data)
+	-- the Royal Railway's artifacts become coins once (the collection went)
+	retireRailway(data)
 
 	-- MachineInventory first, so machines sent back below add to clean counts
 	local inventory = data.MachineInventory

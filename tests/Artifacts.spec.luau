@@ -262,10 +262,11 @@ return function(T, Loader)
 			for slot = 1, #list do
 				local spot = MuseumBuilder.spotLocal(case, slot, #list)
 				T.truthy(
-					math.abs(spot.X - case.Center.X) + ArtifactBuilder.Footprint * MuseumBuilder.ArtifactScale / 2 <= case.Width / 2,
+					math.abs(spot.X - case.Center.X) + ArtifactBuilder.Footprint * MuseumBuilder.relicScale() / 2 <= case.Width / 2,
 					"inside the case width"
 				)
-				T.truthy(spot.Y + ArtifactBuilder.Height * MuseumBuilder.ArtifactScale <= case.Center.Y + 2.4, "under the glass top")
+				T.truthy(spot.Y + ArtifactBuilder.Height * MuseumBuilder.relicScale() <= case.Top, "under the glass top")
+				T.truthy(math.abs(spot.Z - case.Center.Z) <= case.Depth / 2, "inside the case's depth")
 			end
 		end
 		T.truthy(plotCF)
@@ -284,7 +285,7 @@ return function(T, Loader)
 		T.truthy(math.abs(wall.Z - (stop.Center.Z - stop.Size.Z / 2)) < 2, "the wall backs onto the train stop")
 		local caseFront = math.huge
 		for _, case in MuseumBuilder.cases() do
-			caseFront = math.min(caseFront, case.Center.Z - 2.3 / 2)
+			caseFront = math.min(caseFront, case.Front)
 			T.truthy(case.Center.Z < wall.Z, "the cases stand in front of the wall")
 		end
 		-- a walkway between the pen fence and the cases, open at the lane's end
@@ -415,18 +416,18 @@ return function(T, Loader)
 	end)
 
 	withFinds("Artifacts: the last missing one completes the collection: chapter + reward", function(w)
-		local list = ArtifactConfig.ByCollection.RoyalRailway
+		local list = ArtifactConfig.ByCollection.Golemworks
 		for i = 1, #list - 1 do
 			local found = ArtifactService.find(w.player, "Quarry", nil, list[i].Id)
 			T.eq(found.Completed, false)
 		end
 		local last = ArtifactService.find(w.player, "Quarry", nil, list[#list].Id)
 		T.eq(last.Completed, true)
-		T.truthy(ArtifactConfig.isComplete(w.data.Artifacts, "RoyalRailway"))
+		T.truthy(ArtifactConfig.isComplete(w.data.Artifacts, "Golemworks"))
 		local note = w.last("Notify")
 		T.truthy(note, "a toast")
 		T.eq(note.A.Kind, "Reward")
-		T.truthy(note.A.Text:find("Royal Conductor", 1, true), "the title")
+		T.truthy(note.A.Text:find("Golemsmith", 1, true), "the title")
 		T.truthy(note.A.Text:find("Chapter 2", 1, true), "the chapter")
 		-- a later copy completes nothing again
 		local copy = ArtifactService.find(w.player, "Quarry", nil, list[1].Id)
@@ -637,23 +638,23 @@ return function(T, Loader)
 	end)
 
 	withFinds("Artifacts: a completed collection's title and podium skin show (Equip picks one)", function(w)
-		local railway = ArtifactConfig.CollectionById.RoyalRailway
+		local works = ArtifactConfig.CollectionById.Golemworks
 		T.eq(ArtifactService.applyRewards(w.player), nil, "nothing completed: nothing shows")
 		T.eq(w.player:GetAttribute("Title"), nil)
 		-- not complete yet: refused
-		local ok, reason = ArtifactService.equip(w.player, "RoyalRailway")
+		local ok, reason = ArtifactService.equip(w.player, "Golemworks")
 		T.eq(ok, false)
 		T.eq(reason, "NotComplete")
 		T.eq(select(2, ArtifactService.equip(w.player, "Nope")), "BadCollection")
 		T.eq(select(2, ArtifactService.equip(w.player, 5)), "BadCollection")
 		-- completing it puts its title and skin on at once (the last completed one)
-		for _, art in ArtifactConfig.ByCollection.RoyalRailway do
+		for _, art in ArtifactConfig.ByCollection.Golemworks do
 			ArtifactService.find(w.player, "Quarry", nil, art.Id)
 		end
-		T.eq(w.player:GetAttribute("Title"), railway.Reward.Title)
-		T.eq(w.player:GetAttribute("PodiumSkin"), railway.Reward.PodiumSkin)
-		T.eq(w.plotModel:GetAttribute("PodiumSkin"), railway.Reward.PodiumSkin)
-		local skin = ArtifactConfig.PodiumSkins[railway.Reward.PodiumSkin]
+		T.eq(w.player:GetAttribute("Title"), works.Reward.Title)
+		T.eq(w.player:GetAttribute("PodiumSkin"), works.Reward.PodiumSkin)
+		T.eq(w.plotModel:GetAttribute("PodiumSkin"), works.Reward.PodiumSkin)
+		local skin = ArtifactConfig.PodiumSkins[works.Reward.PodiumSkin]
 		local podium = w.plotModel.Yard.Podium1
 		T.eq(podium.Base.Color, skin.Base, "the podium in the skin's colors")
 		T.eq(podium.Top.Color, skin.Trim)
@@ -679,7 +680,7 @@ return function(T, Loader)
 			ArtifactService.find(w.player, "Quarry", nil, art.Id)
 		end
 		local crown = ArtifactConfig.CollectionById.CrownOfKaldrum
-		T.eq(w.player:GetAttribute("Title"), railway.Reward.Title, "the last completed in collection order is the Railway")
+		T.eq(w.player:GetAttribute("Title"), works.Reward.Title, "the last completed in collection order is the Golemworks")
 		ArtifactService._test.action(w.player, "Equip", { Collection = "CrownOfKaldrum" })
 		local reply = w.last("ActionResult")
 		T.eq(reply.A.Op, "Equip")
@@ -710,12 +711,12 @@ return function(T, Loader)
 		T.eq(podium.Column:GetAttribute("SkinFrom"), nil)
 		T.eq(ArtifactConfig.equipped(w.data.Artifacts), nil)
 		-- a freed plot gets its own colors back too
-		ArtifactService._test.action(w.player, "Equip", { Collection = "RoyalRailway" })
+		ArtifactService._test.action(w.player, "Equip", { Collection = "Golemworks" })
 		T.truthy(ArtifactService.paintPodiums(PLOT, nil) > -1)
 		T.eq(podium.Column.Color, before)
 		-- the reward toast promises only what the game gives
-		local text = ArtifactService.completedText("RoyalRailway")
-		T.truthy(text:find(railway.Reward.Title, 1, true) and text:find(skin.Name, 1, true), "title and skin")
+		local text = ArtifactService.completedText("Golemworks")
+		T.truthy(text:find(works.Reward.Title, 1, true) and text:find(skin.Name, 1, true), "title and skin")
 	end)
 
 	withFinds("Artifacts: the FOSSIL DIG and the Guild board get their prompts", function(w)
@@ -787,12 +788,12 @@ return function(T, Loader)
 	end)
 
 	T.test("Artifacts: the found card's texts", function()
-		local fresh = { Found = { RailLantern = 1 }, Chapters = {} }
-		local title, progress, extra = CollectionView.revealText({ Artifact = "RailLantern", New = true }, fresh)
+		local fresh = { Found = { SparkVial = 1 }, Chapters = {} }
+		local title, progress, extra = CollectionView.revealText({ Artifact = "SparkVial", New = true }, fresh)
 		T.eq(title, "NEW ARTIFACT!")
 		T.truthy(progress:find("1 / 6", 1, true))
 		T.eq(extra, "")
-		local title2, _, extra2 = CollectionView.revealText({ Artifact = "RailLantern", New = false, Shards = 2 }, fresh)
+		local title2, _, extra2 = CollectionView.revealText({ Artifact = "SparkVial", New = false, Shards = 2 }, fresh)
 		T.eq(title2, "ARTIFACT FOUND!")
 		T.truthy(extra2:find("+2 Shards", 1, true))
 		local title3, _, extra3 = CollectionView.revealText({ Artifact = "EmberCrown", New = true, Completed = true }, allFound())
@@ -803,7 +804,7 @@ return function(T, Loader)
 		stale.Found.EmberCrown = nil
 		local _, progress4 = CollectionView.revealText({ Artifact = "EmberCrown", New = true, Completed = true }, stale)
 		T.truthy(progress4:find("6 / 6", 1, true), "not 5 / 6 under COLLECTION COMPLETE")
-		local _, progress5 = CollectionView.revealText({ Artifact = "RailLantern", New = true }, { Found = {}, Chapters = {} })
+		local _, progress5 = CollectionView.revealText({ Artifact = "SparkVial", New = true }, { Found = {}, Chapters = {} })
 		T.truthy(progress5:find("1 / 6", 1, true))
 		-- a copy is a toast
 		T.eq(CollectionView.copyText({ Artifact = "GolemCog", Shards = 1 }), "Golem Cog (copy) +1 Shard")
@@ -1042,11 +1043,11 @@ return function(T, Loader)
 			T.falsy(entries[i].New)
 		end
 		local all = allFound()
-		all.Chapters.RoyalRailway = true
+		all.Chapters.Golemworks = true
 		local open = StoryView.entries(all)
 		for i = 2, #open do
 			T.truthy(open[i].Unlocked)
-			T.eq(open[i].New, open[i].Key ~= "RoyalRailway", "NEW until read")
+			T.eq(open[i].New, open[i].Key ~= "Golemworks", "NEW until read")
 		end
 		-- pages clamp, PREV / NEXT only where there is a page
 		local refs = StoryView.build(false)
