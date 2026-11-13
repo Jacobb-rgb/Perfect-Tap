@@ -506,7 +506,7 @@ elseif sceneName == "cleaning" then
 	-- tools/preview/shots.json frame that spot; the yard has its own station since 2026-10-24)
 	local plot = WorldLayout.Plots[1]
 	local plotCf = WorldLayout.plotCFrame(plot)
-	local stationCf
+	local stationBase -- the station's Base: its OrePoint / CamPoint, as the game reads them (MeshKit look or not)
 	local kitShiftX, kitShiftZ = (GameConfig.PlotCells - 12) / 2, GameConfig.PlotCells - 12
 	local layout = { { Id = "CleaningStation", X = 4 + kitShiftX, Z = 4 + kitShiftZ, R = 0 } }
 	for _, entry in MachineData.StarterKit do
@@ -523,12 +523,11 @@ elseif sceneName == "cleaning" then
 		model:PivotTo(cf)
 		model.Parent = workspace
 		if entry.Id == "CleaningStation" then
-			stationCf = cf
+			stationBase = model.PrimaryPart
 		end
 	end
-	local base = stationCf
-	local orePoint = base * CF.new(0, 3.4 + 1.95, 0.3)
-	local camPos = (base * CF.new(0, 3.4 + 5.4, -4.6)).Position
+	local orePoint = stationBase.CFrame * stationBase.OrePoint.CFrame
+	local camPos = (stationBase.CFrame * stationBase.CamPoint.CFrame).Position
 	local oreId = process.args[2] or "Gold"
 	local pattern = Patterns.generate(oreId, 4242)
 	local workCf = CF.lookAt(orePoint.Position, orePoint.Position - (camPos - orePoint.Position).Unit)

@@ -1,0 +1,9 @@
+{
+  "mp_pozemek": {"scene": "yard_ingame", "position": [80, 50, 152], "target": [117, 0, 139], "fov": 58, "preset": "Surface", "shadowExtent": 100},
+  "mp_pozemek_zblizka": {"scene": "yard_ingame", "position": [70, 26, 116], "target": [96, 0, 132], "fov": 55, "preset": "Surface", "shadowExtent": 90},
+  "mp_dvorek": {"scene": "yard_ingame", "position": [146.5, 9.5, 147], "target": [152, 3.2, 125], "fov": 58, "preset": "Surface", "shadowExtent": 70},
+  "mp_podium": {"scene": "yard_ingame", "position": [146.8, 6.2, 140.5], "target": [151, 4.2, 134.5], "fov": 52, "preset": "Surface", "shadowExtent": 40},
+  "mp_muzeum": {"scene": "yard_ingame", "position": [154, 8, 160], "target": [171, 3.6, 160], "fov": 62, "preset": "Surface", "shadowExtent": 60},
+  "mp_cisticka": {"scene": "yard_ingame", "position": [151, 8.5, 122], "target": [164, 2.8, 127], "fov": 55, "preset": "Surface", "shadowExtent": 60},
+  "mp_muzeum_bok": {"scene": "yard_ingame", "position": [158, 13, 143], "target": [171, 3.5, 159], "fov": 60, "preset": "Surface", "shadowExtent": 60}
+}

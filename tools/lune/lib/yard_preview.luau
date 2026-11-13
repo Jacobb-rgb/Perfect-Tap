@@ -63,10 +63,11 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 		local Old = require("./machines_gallery")
 		local folder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Plots", true)
 		local parent = folder or workspace
-		-- paint the metal floor's tile seams (SurfaceGui) on every plot plate for the renderer
-		for _, plate in workspace:GetDescendants() do
-			if plate:IsA("BasePart") and plate.Name == "Plate" and plate:FindFirstChild("Tiles") then
-				Old.paintGuis(Loader, workspace, plate.Parent)
+		-- paint every plot's SurfaceGuis (the metal floor's and the yard's tile seams) for the
+		-- renderer (by plot model: with the owner's floor model there is no Plate)
+		for _, plot in parent:GetChildren() do
+			if plot:IsA("Model") and string.match(plot.Name, "^Plot_%d+$") then
+				Old.paintGuis(Loader, workspace, plot)
 			end
 		end
 		for _, entry in YardPreview.Machines do

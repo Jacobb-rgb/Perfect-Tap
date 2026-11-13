@@ -59,6 +59,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
+local MeshKit = require(Shared.Builders.MeshKit)
 local ArtifactBuilder = require(Shared.Builders.ArtifactBuilder)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local BaseLayout = require(Shared.Config.BaseLayout)
@@ -114,6 +115,112 @@ local GLASS_H = 2.4
 local SHELF_H = 0.45
 local ROOF_Y = 5.6
 local ROOF_FRONT = CASE_Z - CASE_DEPTH / 2 - 1.2 -- the roof's open edge (pen side)
+
+--[[
+	The owner's museum model (MeshKit "Prop_Museum", 2026-11-13, docs/plans/
+	MESHY_MODELS_PLAN.md): a white sci-fi booth (side walls, a back glass
+	wall, a roof slab) with three white display cases of its own. The game
+	has a case per collection (four), so the booth holds this museum's own
+	glass cases on their spots (cases() and the relic spots do not change:
+	the clients place the relics without knowing about the model) and the
+	model's cases stay out of sight: the case pedestals meet as one dark
+	counter reaching forward to COUNTER_FRONT (the walkway keeps 4 studs to
+	the pen) and the booth stands sunk into the ground, its cases' tops just
+	under the counter's top, its ceiling at Mesh.CeilingY over the cases'
+	caps, its side walls' inner faces Mesh.Clearance clear of the outer
+	cases (it reaches about a stud past the spot on the lane side). What
+	stays of the parts: Floor (the PrimaryPart with the prompt, dark now),
+	Border, the Case models and the Sign (on the booth's roof); `Wall` and two
+	`Column`s are invisible colliders (the model takes no collisions) and the
+	`Roof` a slab hidden inside the model's roof (the weather's roof test).
+	Nil while there is no upload: the brick and slate lean-to.
+]]
+MuseumBuilder.Mesh = { Name = "Prop_Museum", Clearance = 0.15, CeilingY = 4.8 }
+-- Measured on the processed model (its own units; ray probes in Blender), its open front
+-- toward its +Z (it is built turned round, open toward the yard).
+local BOOTH = {
+	Box = Vector3.new(4.0, 2.4595, 2.0418),
+	InnerLeft = 1.70, -- the left side wall's inner face, at -X (seen from the front)
+	InnerRight = 1.80, -- the right one, +X
+	Outer = 1.98, -- the side walls' outer faces
+	LeftFront = 0.5, -- the left side wall runs from SideBack to here
+	RightFront = 0.03, -- the right one, shorter
+	SideBack = -0.65,
+	CaseTop = 1.53, -- its own three cases' tops (their fronts at Z <= +0.21)
+	Ceiling = 2.04, -- the roof's underside
+	RoofFront = 0.75, -- the roof slab's front (a thin lip reaches on to the box's front)
+}
+local PEN_BACK = BaseLayout.Pen.Area.Center.Z + BaseLayout.Pen.Area.Size.Z / 2
+local COUNTER_FRONT = PEN_BACK + 4 -- (the booth) the counter's front, 4 studs from the pen's back fence
+local BOOTH_FLOOR = rgb(62, 68, 90) -- (the booth) the floor in its dark slate
+
+type Booth = { X: number, Scale: Vector3, Top: number }
+
+-- The booth model, placed (see Mesh); nil without an upload.
+local function boothMesh(m: Model, plotCF: CFrame): Booth?
+	local spec = MuseumBuilder.Mesh
+	local k = BOOTH
+	-- the outer cases' caps reach 0.05 past their cases; the visitors' left is +X
+	local left = X1 - SIDE_PAD + 0.05 + spec.Clearance
+	local right = X0 + SIDE_PAD - 0.05 - spec.Clearance
+	local sx = (left - right) / (k.InnerLeft + k.InnerRight)
+	local x = left - k.InnerLeft * sx -- turned round: the model's -X is the plot's +X
+	local sz = RECT.Size.Z / k.Box.Z
+	local caseTop = FLOOR + PEDESTAL - 0.05 -- its cases end just under the counter's top
+	local sy = (spec.CeilingY - caseTop) / (k.Ceiling - k.CaseTop)
+	local size = Vector3.new(k.Box.X * sx, k.Box.Y * sy, k.Box.Z * sz)
+	local at = plotCF * CFrame.new(x, caseTop + (k.Box.Y / 2 - k.CaseTop) * sy, RECT.Center.Z) * CFrame.Angles(0, math.pi, 0)
+	local look = MeshKit.part(spec.Name, size, at, { Name = "Booth" })
+	if not look then
+		return nil
+	end
+	look.Parent = m
+	return { X = x, Scale = Vector3.new(sx, sy, sz), Top = caseTop + (k.Box.Y - k.CaseTop) * sy }
+end
+
+-- The booth's colliders and the roof the weather sees; returns the sign's CFrame (on its roof).
+local function boothParts(m: Model, plotCF: CFrame, booth: Booth): CFrame
+	local k, s = BOOTH, booth.Scale
+	local ceiling = MuseumBuilder.Mesh.CeilingY
+	local function at(x: number, y: number, z: number): CFrame
+		return plotCF * CFrame.new(x, y, z)
+	end
+	-- plot-local x / z of a point of the model (turned round)
+	local function px(x: number): number
+		return booth.X - x * s.X
+	end
+	local function pz(z: number): number
+		return RECT.Center.Z - z * s.Z
+	end
+	local wallH = ceiling - FLOOR
+	-- invisible colliders: the back wall where the brick wall stood (behind the model's
+	-- glass) and its side walls (left, right as seen from the front)
+	local function collider(name: string, cf: CFrame, size: Vector3)
+		local part = Geo.block(m, cf, size, PILLAR, nil, SOLID)
+		part.Name = name
+		part.Transparency = 1
+		part.CastShadow = false
+	end
+	collider("Wall", at(RECT.Center.X, FLOOR + wallH / 2, WALL_Z - 0.65), Vector3.new(X1 - X0 - 0.6, wallH, 0.7))
+	local sides = { { -k.Outer, -k.InnerLeft, k.LeftFront }, { k.InnerRight, k.Outer, k.RightFront } }
+	for _, side in sides do
+		local x0, x1, z0, z1 = px(side[1]), px(side[2]), pz(side[3]), pz(k.SideBack)
+		collider("Column", at((x0 + x1) / 2, FLOOR + wallH / 2, (z0 + z1) / 2), Vector3.new(math.abs(x1 - x0), wallH, math.abs(z1 - z0)))
+	end
+	-- inside the model's roof slab (over the walkway too, not into its thin front lip)
+	local front, back = pz(k.RoofFront) + 0.3, WALL_Z - 0.3
+	local roofY = (ceiling + booth.Top) / 2
+	local roof = Geo.block(
+		m,
+		at(booth.X, roofY, (front + back) / 2),
+		Vector3.new(2 * 1.9 * s.X, 0.35, back - front),
+		SLATE,
+		Enum.Material.Slate,
+		{ CanTouch = false, CanQuery = false }
+	)
+	roof.Name = "Roof"
+	return at(booth.X, booth.Top + 0.95, (front + back) / 2)
+end
 
 export type CaseInfo = { Center: Vector3, Width: number, Collection: string }
 
@@ -221,7 +328,9 @@ function MuseumBuilder.plaqueText(collectionId: string, artifacts: any): string
 	return `{name}\n{found} / {#list}`
 end
 
-local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index: number)
+-- `counter` (the booth model's look, see Mesh): the pedestal is as wide as the case's
+-- step (the four meet as one counter) and reaches forward to COUNTER_FRONT.
+local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index: number, counter: boolean)
 	local collection = ArtifactConfig.CollectionById[case.Collection]
 	local m = Instance.new("Model")
 	m.Name = "Case" .. index
@@ -232,10 +341,17 @@ local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index
 	local function at(x: number, y: number, z: number): CFrame
 		return plotCF * CFrame.new(x, y, z)
 	end
-	local pedestal = Geo.block(m, at(c.X, FLOOR + PEDESTAL / 2, c.Z), Vector3.new(w, PEDESTAL, CASE_DEPTH), SHELL, nil, SOLID)
+	local pedestalCF, pedestalSize = at(c.X, FLOOR + PEDESTAL / 2, c.Z), Vector3.new(w, PEDESTAL, CASE_DEPTH)
+	local frontZ = c.Z - CASE_DEPTH / 2
+	if counter then
+		local back = c.Z + CASE_DEPTH / 2
+		pedestalCF = at(c.X, FLOOR + PEDESTAL / 2, (COUNTER_FRONT + back) / 2)
+		pedestalSize = Vector3.new(w + CASE_GAP, PEDESTAL, back - COUNTER_FRONT)
+		frontZ = COUNTER_FRONT
+	end
+	local pedestal = Geo.block(m, pedestalCF, pedestalSize, SHELL, nil, SOLID)
 	pedestal.Name = "Pedestal"
 	m.PrimaryPart = pedestal
-	local frontZ = c.Z - CASE_DEPTH / 2
 	-- the collection's color at 60 %: a saturated glow, no white bloom
 	local glow = collection.Color:Lerp(Color3.new(0, 0, 0), 0.4)
 	local strip = Geo.block(m, at(c.X, FLOOR + PEDESTAL - 0.16, frontZ - 0.03), Vector3.new(w, 0.1, 0.05), glow, NEON, GHOST)
@@ -285,12 +401,14 @@ function MuseumBuilder.build(plotCF: CFrame): Model
 	end
 	local cx = RECT.Center.X
 	local width = X1 - X0
+	-- the owner's booth model (see Mesh), else the lean-to below
+	local booth = boothMesh(m, plotCF)
 	-- floor: a darker border slab under a stone platform, one low step up
 	local floor = Geo.block(
 		m,
 		at(cx, FLOOR / 2, (OPEN_Z + WALL_Z) / 2 - 0.05),
 		Vector3.new(width - 0.6, FLOOR, WALL_Z - OPEN_Z - 0.5),
-		STONE,
+		if booth then BOOTH_FLOOR else STONE,
 		Enum.Material.Slate,
 		SOLID
 	)
@@ -300,65 +418,64 @@ function MuseumBuilder.build(plotCF: CFrame): Model
 		m,
 		at(cx, FLOOR / 2 - 0.05, (OPEN_Z + WALL_Z) / 2),
 		Vector3.new(width - 0.2, FLOOR - 0.1, WALL_Z - OPEN_Z - 0.2),
-		STONE_DARK,
+		if booth then SLATE else STONE_DARK,
 		nil,
 		GHOST
 	).Name =
 		"Border"
-	-- the back wall on the train stop side, up to the roof
-	local wallZ = WALL_Z - 0.65
-	local wallH = ROOF_Y - 0.2 - FLOOR
-	Geo.block(m, at(cx, FLOOR + wallH / 2, wallZ), Vector3.new(width - 0.6, wallH, 0.7), BRICK, Enum.Material.Brick, SOLID).Name = "Wall"
-	Geo.block(m, at(cx, FLOOR + 0.5, wallZ), Vector3.new(width - 0.5, 1.0, 1.0), PILLAR, nil, GHOST).Name = "Plinth"
-	-- the pale plaster panel on the wall's gallery side, above the plinth
-	local plasterBottom = FLOOR + 1.0
-	local plasterTop = ROOF_Y - 0.85
-	Geo.block(
-		m,
-		at(cx, (plasterBottom + plasterTop) / 2, wallZ - 0.37),
-		Vector3.new(width - 1.4, plasterTop - plasterBottom, 0.06),
-		PLASTER,
-		Enum.Material.Plaster,
-		GHOST
-	).Name =
-		"Backdrop"
-	Geo.block(m, at(cx, ROOF_Y - 0.55, wallZ), Vector3.new(width - 0.5, 0.5, 0.95), PILLAR_CAP, nil, GHOST).Name = "WallCap"
-	-- three stone columns carry the roof's front edge
-	local columnZ = ROOF_FRONT + 0.6
-	for _, x in { X0 + 0.75, cx, X1 - 0.75 } do
-		Geo.block(m, at(x, FLOOR + (ROOF_Y - FLOOR) / 2, columnZ), Vector3.new(0.6, ROOF_Y - FLOOR, 0.6), PILLAR, nil, SOLID).Name =
-			"Column"
-		Geo.block(m, at(x, ROOF_Y - 0.35, columnZ), Vector3.new(0.9, 0.3, 0.9), PILLAR_CAP, nil, GHOST).Name = "ColumnCap"
+	local signCF: CFrame
+	if booth then
+		signCF = boothParts(m, plotCF, booth)
+	else
+		-- the back wall on the train stop side, up to the roof
+		local wallZ = WALL_Z - 0.65
+		local wallH = ROOF_Y - 0.2 - FLOOR
+		Geo.block(m, at(cx, FLOOR + wallH / 2, wallZ), Vector3.new(width - 0.6, wallH, 0.7), BRICK, Enum.Material.Brick, SOLID).Name =
+			"Wall"
+		Geo.block(m, at(cx, FLOOR + 0.5, wallZ), Vector3.new(width - 0.5, 1.0, 1.0), PILLAR, nil, GHOST).Name = "Plinth"
+		-- the pale plaster panel on the wall's gallery side, above the plinth
+		local plasterBottom = FLOOR + 1.0
+		local plasterTop = ROOF_Y - 0.85
+		Geo.block(
+			m,
+			at(cx, (plasterBottom + plasterTop) / 2, wallZ - 0.37),
+			Vector3.new(width - 1.4, plasterTop - plasterBottom, 0.06),
+			PLASTER,
+			Enum.Material.Plaster,
+			GHOST
+		).Name =
+			"Backdrop"
+		Geo.block(m, at(cx, ROOF_Y - 0.55, wallZ), Vector3.new(width - 0.5, 0.5, 0.95), PILLAR_CAP, nil, GHOST).Name = "WallCap"
+		-- three stone columns carry the roof's front edge
+		local columnZ = ROOF_FRONT + 0.6
+		for _, x in { X0 + 0.75, cx, X1 - 0.75 } do
+			Geo.block(m, at(x, FLOOR + (ROOF_Y - FLOOR) / 2, columnZ), Vector3.new(0.6, ROOF_Y - FLOOR, 0.6), PILLAR, nil, SOLID).Name =
+				"Column"
+			Geo.block(m, at(x, ROOF_Y - 0.35, columnZ), Vector3.new(0.9, 0.3, 0.9), PILLAR_CAP, nil, GHOST).Name = "ColumnCap"
+		end
+		-- the slate roof (resting on the back wall, rising to the open front), its gold fascia and the gallery lights
+		local roofDepth = (WALL_Z + 0.2) - ROOF_FRONT
+		local roofZ = (ROOF_FRONT + WALL_Z + 0.2) / 2
+		local roof = Geo.block(
+			m,
+			at(cx, ROOF_Y + 0.2, roofZ) * CFrame.Angles(math.rad(6), 0, 0),
+			Vector3.new(width + 0.4, 0.35, roofDepth + 0.4),
+			SLATE,
+			Enum.Material.Slate,
+			{ CanTouch = false, CanQuery = false }
+		)
+		roof.Name = "Roof"
+		Geo.block(m, at(cx, ROOF_Y - 0.05, ROOF_FRONT - 0.15), Vector3.new(width + 0.4, 0.45, 0.2), GOLD, Enum.Material.Metal, GHOST).Name =
+			"Fascia"
+		Geo.block(m, at(cx, ROOF_Y - 0.31, ROOF_FRONT), Vector3.new(width - 0.4, 0.06, 0.08), WARM, NEON, GHOST).Name = "Lights"
+		signCF = at(cx, ROOF_Y + 1.35, roofZ - 0.6)
 	end
-	-- the slate roof (resting on the back wall, rising to the open front), its gold fascia and the gallery lights
-	local roofDepth = (WALL_Z + 0.2) - ROOF_FRONT
-	local roofZ = (ROOF_FRONT + WALL_Z + 0.2) / 2
-	local roof = Geo.block(
-		m,
-		at(cx, ROOF_Y + 0.2, roofZ) * CFrame.Angles(math.rad(6), 0, 0),
-		Vector3.new(width + 0.4, 0.35, roofDepth + 0.4),
-		SLATE,
-		Enum.Material.Slate,
-		{ CanTouch = false, CanQuery = false }
-	)
-	roof.Name = "Roof"
-	Geo.block(m, at(cx, ROOF_Y - 0.05, ROOF_FRONT - 0.15), Vector3.new(width + 0.4, 0.45, 0.2), GOLD, Enum.Material.Metal, GHOST).Name =
-		"Fascia"
-	Geo.block(m, at(cx, ROOF_Y - 0.31, ROOF_FRONT), Vector3.new(width - 0.4, 0.06, 0.08), WARM, NEON, GHOST).Name = "Lights"
 	-- the sign on the roof, readable from both sides (Front faces the yard: -Z)
-	local sign = textPart(
-		m,
-		at(cx, ROOF_Y + 1.35, roofZ - 0.6),
-		Vector3.new(7.4, 1.6, 0.25),
-		SIGN_BOARD,
-		"MUSEUM",
-		SIGN_TEXT,
-		true
-	)
+	local sign = textPart(m, signCF, Vector3.new(7.4, 1.6, 0.25), SIGN_BOARD, "MUSEUM", SIGN_TEXT, true)
 	sign.Name = "Sign"
 	-- the cases
 	for i, case in MuseumBuilder.cases() do
-		buildCase(m, plotCF, case, i)
+		buildCase(m, plotCF, case, i, booth ~= nil)
 	end
 	-- the "Collection Book" prompt spot, in front of the middle of the cases
 	local point = Instance.new("Attachment")

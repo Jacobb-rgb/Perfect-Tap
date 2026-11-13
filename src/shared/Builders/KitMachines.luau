@@ -41,6 +41,7 @@ local Rng = require(script.Parent.Parent.Util.Rng)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local Grid = require(script.Parent.Parent.Machines.Grid)
+local MeshKit = require(script.Parent.MeshKit)
 
 local KitMachines = {}
 
@@ -1220,15 +1221,123 @@ local function blastFurnace(): Ctx
 end
 
 --[[
+	The owner's cleaning station model (MeshKit "Prop_CleaningStation",
+	2026-11-13, docs/plans/MESHY_MODELS_PLAN.md): a long sci-fi cleaning line
+	on a bench (a hopper of raw ore, a press, a washer with nozzles over the
+	conveyor, a screen, trays of clean gems), turned round so its open
+	conveyor side faces the station's front (-Z), StationMesh.Size on the Base
+	plate (the footprint's length, half its depth, Z = its middle). The
+	minigame: the ore sits on the conveyor's open strip right in front of the
+	washer (OrePoint, the vise's Intake round it), the close-up camera
+	(CamPoint) out in front of it as on the part-built station (3.45 up, 4.9
+	out); the washer's shower sprays onto the belt behind the ore (WaterOut /
+	WaterIn with Spray: never between the camera and the ore) and a clean ore
+	the station keeps drops into the trays (Output). The model is a look only:
+	an invisible `Bench` (up to the conveyor) and `Tray` collide. Upgrades: the
+	crystal clusters grow on its tops and round its foot (sockets) and the
+	glowing strip at its foot (Neon) turns crystal from level 2 with the
+	light and sparkles; the textured model keeps its own colours at every
+	level. False while there is no upload (the part-built station below).
+]]
+KitMachines.StationMesh = { Name = "Prop_CleaningStation", Size = Vector3.new(11.6, 4.45, 4.4), Z = 0.6 }
+-- Measured on the processed model (its own units, box 4 x 1.11 x 1, its front toward its +Z;
+-- tools/meshy/heightfield.py and Blender ray probes).
+local STATION = {
+	Box = Vector3.new(4.0, 1.1122, 1.0),
+	Belt = 0.53, -- the conveyor's top
+	StripZ = 0.2, -- the middle of the conveyor's open strip (0.075-0.30) in front of the washer
+	Washer = 0.15, -- the washer's middle (X, from -0.2 to 0.5)
+	Tunnel = 0.82, -- under the washer's cover: its nozzles (over the belt at Z 0)
+	Front = 0.45, -- the bench's front face (Z)
+	Tray = { X0 = 1.15, X1 = 1.95, Z0 = -0.2, Z1 = 0.35, Floor = 0.62, Rim = 0.79 },
+	Hopper = Vector3.new(-1.9, 0.9, 0.3), -- its rim's front corner (far left)
+	Press = Vector3.new(-0.8, 0.97, -0.25), -- the press's top
+	Screen = Vector3.new(0.78, 1.11, -0.04), -- the screen's top
+}
+
+local function stationMesh(ctx: Ctx): boolean
+	local spec = KitMachines.StationMesh
+	local look = MeshKit.part(spec.Name, spec.Size, CFrame.new(0, FLOOR + spec.Size.Y / 2, spec.Z) * CFrame.Angles(0, math.pi, 0), {
+		Name = "Station",
+	})
+	if not look then
+		return false
+	end
+	local m = ctx.model
+	look:SetAttribute("Kit", "Mesh")
+	look.Parent = m
+	local k = STATION
+	-- a point of the model (its own units) in the station's frame (turned round)
+	local s = Vector3.new(spec.Size.X / k.Box.X, spec.Size.Y / k.Box.Y, spec.Size.Z / k.Box.Z)
+	local function at(x: number, y: number, z: number): Vector3
+		return Vector3.new(-x * s.X, FLOOR + y * s.Y, spec.Z - z * s.Z)
+	end
+	local belt = at(0, k.Belt, 0).Y
+	-- invisible colliders: the bench up to the conveyor, the trays' floor (a kept clean ore lands there)
+	local function collider(name: string, a: Vector3, b: Vector3)
+		local min, max = a:Min(b), a:Max(b)
+		local part = block(m, CFrame.new((min + max) / 2), max - min, "Floor", SOLID, name)
+		part.Transparency = 1
+		part.CastShadow = false
+	end
+	local front, back = at(0, 0, k.Front).Z, at(0, 0, -k.Front).Z
+	local length = spec.Size.X - 0.4
+	collider("Bench", Vector3.new(-length / 2, FLOOR, front), Vector3.new(length / 2, belt, back))
+	local t = k.Tray
+	collider("Tray", at(t.X0, k.Belt, t.Z1), at(t.X1, t.Floor, t.Z0))
+	-- the glowing strip at its foot (crystal coloured from level 2)
+	block(m, CFrame.new(0, FLOOR + 0.05, front - 0.12), Vector3.new(length, 0.1, 0.14), "Neon", TINY, "FootGlow")
+	-- the machine's points (attachments on the Base, from the model's frame)
+	local function point(name: string, cf: CFrame): Attachment
+		return attach(ctx.base, name, ctx.base.CFrame:ToObjectSpace(cf))
+	end
+	-- the minigame: the ore on the conveyor in front of the washer, the camera out in front
+	local orePoint = CFrame.new(at(k.Washer, k.Belt, k.StripZ) + Vector3.new(0, 1.3, -0.15))
+	point("OrePoint", orePoint)
+	local cam = orePoint.Position + Vector3.new(0, 3.45, -4.9)
+	point("CamPoint", CFrame.lookAt(cam, orePoint.Position + Vector3.new(0, 0.1, 0)))
+	point("Intake", orePoint):SetAttribute("IntakeSize", Vector3.new(3.4, 2.6, 3.4))
+	point("Prompt", CFrame.new(0, belt + 0.6, front - 0.8))
+	point("Output", CFrame.new(at((t.X0 + t.X1) / 2, t.Rim + 0.15, (t.Z0 + t.Z1) / 2)))
+	-- the washer's shower onto the belt behind the ore
+	local outlet = at(k.Washer, k.Tunnel, 0)
+	local wo = point("WaterOut", CFrame.lookAt(outlet, outlet - UP))
+	wo.Axis = -UP
+	wo:SetAttribute("Curve", 0.3)
+	wo:SetAttribute("Spray", true)
+	local wi = point("WaterIn", CFrame.new(at(k.Washer, k.Belt + 0.01, 0)))
+	wi.Axis = -UP
+	wi:SetAttribute("Curve", 0.15)
+	-- crystal sockets: its tops and round its foot, the hero on the screen
+	local hopper, press, screen =
+		at(k.Hopper.X, k.Hopper.Y, k.Hopper.Z), at(k.Press.X, k.Press.Y, k.Press.Z), at(k.Screen.X, k.Screen.Y, k.Screen.Z)
+	local trays = at(t.X1 - 0.05, t.Rim, t.Z1 - 0.05)
+	local hx, hz = spec.Size.X / 2 - 0.3, 3.5
+	socket(ctx, hopper, out(1, -1), 1.1)
+	socket(ctx, trays, out(-1, -1), 1.0)
+	socket(ctx, Vector3.new(hx, FLOOR, front - 0.7), out(1, -1, 0.8), 1.1)
+	socket(ctx, Vector3.new(-hx, FLOOR, front - 0.7), out(-1, -1, 0.8), 1.1)
+	socket(ctx, press, out(0.5, 1, 0.6), 0.9)
+	socket(ctx, Vector3.new(hx, FLOOR, hz), out(1, 1, 0.8), 1.0)
+	socket(ctx, Vector3.new(-hx, FLOOR, hz), out(-1, 1, 0.8), 1.0)
+	socket(ctx, screen, UP, 0.8, true)
+	return true
+end
+
+--[[
 	Cleaning Station (3x2): a soft cream workbench on a glowing plinth
 	(painted drawers, an arched knee recess), a slate pill work top, the vise
 	in the middle, a round tub of glowing blue water on the left fed by a
 	slate pipe (glass section with a coil, valve, open end), an orange robot
 	arm over the output tray, a round screen panel, a lever and a tool
-	board. Same minigame points as MachineBuilder.
+	board. Same minigame points as MachineBuilder. The owner's model instead
+	when it is uploaded (stationMesh).
 ]]
 local function cleaningStation(): Ctx
 	local ctx = newModel("CleaningStation")
+	if stationMesh(ctx) then
+		return ctx
+	end
 	local m = ctx.model
 	local top = 3.4
 	local benchZ = 0.4
