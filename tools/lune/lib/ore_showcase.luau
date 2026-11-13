@@ -14,7 +14,7 @@ local Showcase = {}
 Showcase.Column = 3.1 -- studs between two ores on a step
 Showcase.Depth = 3.9 -- studs per step
 Showcase.Rise = 2.5 -- studs each step is higher than the one in front
-Showcase.Pedestal = Vector3.new(2.4, 0.7, 2.2) -- the dark box under each ore (its name plate on the front)
+Showcase.Pedestal = roblox.Vector3.new(2.4, 0.7, 2.2) -- the dark box under each ore (its name plate on the front)
 
 function Showcase.build(Loader: any, parent: any)
 	local CF = Loader.CFrame

@@ -1,0 +1,114 @@
+{
+ "ores_clean_low": {
+  "scene": "ores",
+  "position": [
+   -1.75,
+   9.5,
+   12
+  ],
+  "target": [
+   -1.75,
+   0.6,
+   -4.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_clean_high": {
+  "scene": "ores",
+  "position": [
+   -1.75,
+   12,
+   -4
+  ],
+  "target": [
+   -1.75,
+   0.6,
+   -18.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_display_low": {
+  "scene": "ores",
+  "position": [
+   68.25,
+   15,
+   10.5
+  ],
+  "target": [
+   68.25,
+   1.2,
+   -6.6
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_display_high": {
+  "scene": "ores",
+  "position": [
+   98.25,
+   15,
+   10.5
+  ],
+  "target": [
+   98.25,
+   1.2,
+   -6.6
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ore_showcase": {
+  "scene": "ore_showcase",
+  "preset": "Surface",
+  "position": [
+   1.1,
+   30,
+   66
+  ],
+  "target": [
+   1.1,
+   6.6,
+   -9.3
+  ],
+  "fov": 18,
+  "shadowExtent": 50
+ },
+ "meshy_podiums": {
+  "scene": "yard",
+  "position": [
+   139,
+   10.5,
+   144
+  ],
+  "target": [
+   151,
+   5.0,
+   133
+  ],
+  "fov": 36,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "meshy_pen": {
+  "scene": "yard",
+  "position": [
+   145,
+   12.5,
+   172
+  ],
+  "target": [
+   157,
+   0.6,
+   156
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 50
+ }
+}
