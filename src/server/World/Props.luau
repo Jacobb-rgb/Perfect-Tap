@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Palette = require(script.Parent.Palette)
+local MeshNature = require(script.Parent.MeshNature)
 
 local Props = {}
 
@@ -105,12 +106,13 @@ function Props.pointLight(parent: Instance, color: Color3, range: number, bright
 	return light
 end
 
--- Stylized tree: chunky trunk + stacked rotated leaf blocks.
+-- Stylized tree: chunky trunk + stacked rotated leaf blocks (or, with the
+-- owner's tree uploaded, that mesh inside the old tree's box: MeshNature.tree).
 function Props.tree(parent: Instance, base: CFrame, rng: Rng.Rng, style: string?): Model
 	local m = model("Tree", parent)
 	local height = rng:range(7, 11)
 	local trunkWidth = rng:range(1.4, 2)
-	Geo.block(
+	local trunk = Geo.block(
 		m,
 		base * CFrame.new(0, height / 2, 0) * CFrame.Angles(0, rng:range(0, 6.28), rng:range(-0.06, 0.06)),
 		Vector3.new(trunkWidth, height, trunkWidth),
@@ -139,6 +141,7 @@ function Props.tree(parent: Instance, base: CFrame, rng: Rng.Rng, style: string?
 		y += s.Y * 0.6
 		size *= 0.72
 	end
+	MeshNature.tree(m, MeshNature.kindOf(leafColor), trunk)
 	return m
 end
 

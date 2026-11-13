@@ -14,6 +14,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 local Kit = require(script.Parent.Kit)
 
 local C = Style.C
@@ -25,6 +26,7 @@ local Islands = {}
 -- Tree with only no-collide, shadowless parts (it floats far away).
 local function tree(parent: Instance, frame: CFrame, at: Vector3, kind: string, rng: Rng.Rng, scale: number): Model
 	local t = Style.tree(parent, frame * CFrame.new(at), kind, rng, scale)
+	MeshNature.dropColliders(t)
 	for _, d in t:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CanCollide = false

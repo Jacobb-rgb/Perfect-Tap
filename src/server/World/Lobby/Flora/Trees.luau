@@ -236,7 +236,7 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 			while z <= zEnd do
 				local p = Vector3.new(side * row.X, 0, z + rng:range(-0.8, 0.8))
 				local scale = rng:range(row.Scale[1], row.Scale[2])
-				local reach = 3.6 * scale
+				local reach = Kit.BeltReach * scale
 				local lampGap = not row.Lean and StreetLampPlan.near(p, Trees.LampGap)
 				if not lampGap and beltClear(p, 0.5 * scale, if row.Lean then 0.6 else reach, sites) then
 					local kind = rng:weighted(if row.Inner then INNER_KINDS else BELT_KINDS)

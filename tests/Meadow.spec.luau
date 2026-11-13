@@ -133,8 +133,8 @@ return function(T, Loader)
 			if d:IsA("BasePart") and inside(d.CFrame.Position) then
 				parts += 1
 			elseif d:IsA("Model") then
-				-- (a tree stands on its trunk, a pond holds water)
-				local trunk = if d.Name == "Tree" then d:FindFirstChild("Trunk") else nil
+				-- (a tree stands on its trunk, or the owner's mesh tree on its foot: MeshNature; a pond holds water)
+				local trunk = if d.Name == "Tree" then d:FindFirstChild("Trunk") or d:FindFirstChild("Leaves") else nil
 				local water = if d.Name == "Pond" then d:FindFirstChild("Water") else nil
 				if trunk and inside(trunk.CFrame.Position) then
 					trees += 1

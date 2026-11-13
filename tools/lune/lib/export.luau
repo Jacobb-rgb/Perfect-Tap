@@ -83,6 +83,8 @@ function Export.collect(root: any, scene: any?)
 			-- build/preview/meshes and fits it into the part's box
 			if d.Transparency < 0.99 then
 				local size = d.Size
+				-- a tint (the attribute Tint: a SurfaceAppearance.Color the builder set) multiplies the look
+				local tint = d:GetAttribute("Tint")
 				scene.meshes = scene.meshes or {}
 				table.insert(scene.meshes, {
 					asset,
@@ -92,6 +94,7 @@ function Export.collect(root: any, scene: any?)
 					cframeList(d.CFrame),
 					round(d.Transparency),
 					if d.CastShadow then 1 else 0,
+					if typeof(tint) == "Color3" then { round(tint.R), round(tint.G), round(tint.B) } else 0,
 				})
 			end
 		elseif d:IsA("BasePart") then
