@@ -32,11 +32,30 @@
 
 local Geo = require(script.Parent.Geo)
 local ItemBuilder = require(script.Parent.ItemBuilder)
+local MeshKit = require(script.Parent.MeshKit)
 local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
 local MineFloors = require(script.Parent.Parent.Config.MineFloors)
+local MeshCatalog = require(script.Parent.Parent.Config.MeshCatalog)
 
 local RockBuilder = {}
+
+-- The owner's own rock models (Meshy, 2026-11-13; MeshKit "Rock_<FloorId>_<Kind>"): when the
+-- upload is there a rock is that one mesh (Rock1) plus a glint per ore on its upper surface
+-- (MeshCatalog.Surface spots); without it the part rocks below are built as before.
+-- Longest side in studs per kind (about the box of the part rocks), deeper floors a bit bigger.
+RockBuilder.MeshSize = {
+	Small = 7,
+	Big = 9,
+	Crystal = 8,
+	Golden = 8.5,
+	Geode = 7,
+	Artifact = 7.5,
+	Giant = 22,
+} :: { [string]: number }
+RockBuilder.MeshFloorScale = { SunkenPalace = 1.05, StormglassRift = 1.05, HeartstoneCore = 1.15 } :: { [string]: number }
+-- Each crack stage shrinks a mesh rock by this much (a chunk broke off), keeping its foot on the ground.
+RockBuilder.MeshStageShrink = 0.93
 
 -- Part budgets per kind (a floor streams in on its own; ~26 rocks per floor).
 RockBuilder.Budget = {
@@ -791,11 +810,78 @@ function RockBuilder.decorCluster(parent: Instance, root: CFrame, count: number,
 	return model
 end
 
+---------------------------------------------------------------- mesh rocks
+
+-- A spot of MeshCatalog.Surface on a placed mesh: world point and outward normal (the mesh is
+-- scaled evenly, so the normal only turns with the part).
+local function spotOn(part: BasePart, spot: MeshCatalog.Spot): (Vector3, Vector3)
+	local size = part.Size
+	local p = part.CFrame:PointToWorldSpace(Vector3.new(spot.P.X * size.X, spot.P.Y * size.Y, spot.P.Z * size.Z))
+	return p, part.CFrame:VectorToWorldSpace(spot.N).Unit
+end
+
+local function spotsOf(part: BasePart): { MeshCatalog.Spot }
+	local asset = part:GetAttribute("Asset")
+	local surface = if type(asset) == "string" then MeshCatalog.Surface[asset] else nil
+	return if surface then surface.Spots else {}
+end
+
+-- The rock as the owner's mesh: Rock1 (the PrimaryPart, solid, hit by the blaster ray) and one
+-- glint per ore on its upper surface. nil when the model is not uploaded.
+local function meshRock(floor: MineFloors.Floor, kind: string, oreIds: { string }, base: CFrame, rng: Rng.Rng): Model?
+	local name = "Rock_" .. floor.Id .. "_" .. kind
+	local own = MeshKit.box(name)
+	if not own or not MeshKit.has(name) then
+		return nil
+	end
+	local longest = (RockBuilder.MeshSize[kind] or 7) * (RockBuilder.MeshFloorScale[floor.Id] or 1) * rng:range(0.92, 1.08)
+	local size = own * (longest / math.max(own.X, own.Y, own.Z))
+	local foot = base * CFrame.Angles(0, rng:range(0, math.pi * 2), 0)
+	local rock1 = MeshKit.part(name, size, foot * CFrame.new(0, size.Y / 2, 0), { Name = "Rock1", CanCollide = true, CanQuery = true })
+	if not rock1 then
+		return nil
+	end
+	local model = Instance.new("Model")
+	model.Name = "Rock"
+	local surface = MeshCatalog.Surface[name]
+	rock1.Color = if surface then surface.Tint else floor.Palette.Mid
+	rock1.Parent = model
+	-- one glint per ore, spread over the spots (the ores stay secret: only their glow colour shows)
+	local spots = if surface then surface.Spots else {}
+	local glintSize = 0.55 * math.clamp(longest / 7, 0.8, 1.6)
+	for i, oreId in oreIds do
+		local spot = spots[(i - 1) % math.max(#spots, 1) + 1]
+		if not spot then
+			break
+		end
+		local p, n = spotOn(rock1, spot)
+		local ore = OreData.ById[oreId]
+		local color = glow(if ore then ore.Glow else floor.Palette.Accent)
+		local cf = CFrame.lookAt(p + n * (glintSize * 0.2), p + n * 2) * VERTEX_UP
+		local g = Geo.block(model, cf, Vector3.new(glintSize, glintSize, glintSize), color, NEON, GLOW)
+		g.Name = "Glint"
+	end
+	model.PrimaryPart = rock1
+	return model
+end
+
 ---------------------------------------------------------------- build
 
 function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind, oreIds: { string }, base: CFrame, seed: number | string): Model
 	local floor = MineFloors.get(floorKey)
 	local rng = Rng.new(seed)
+	local meshModel = meshRock(floor, kind, oreIds, base, rng)
+	if meshModel then
+		meshModel:SetAttribute("Floor", floor.Index)
+		meshModel:SetAttribute("Kind", kind)
+		meshModel:SetAttribute("Zone", floor.ZoneId)
+		meshModel:SetAttribute("OreCount", #oreIds)
+		meshModel:SetAttribute("Stage", 0)
+		if kind == "Artifact" then
+			meshModel:SetAttribute("Artifact", true)
+		end
+		return meshModel
+	end
 	local model = Instance.new("Model")
 	model.Name = "Rock"
 	local c: Ctx = {
@@ -881,6 +967,58 @@ local function crackOn(model: Model, part: BasePart, outward: Vector3, color: Co
 	branch.Name = "Crack"
 end
 
+-- A glowing crack lying on a mesh rock's surface at point p (outward normal n).
+local function crackAt(model: Model, p: Vector3, n: Vector3, length: number, color: Color3, rng: Rng.Rng)
+	local up = if math.abs(n.Y) > 0.9 then Vector3.new(1, 0, 0) else Vector3.new(0, 1, 0)
+	-- X axis = the normal; the crack runs along Y, spun inside the surface
+	local frame = CFrame.lookAt(p, p + n, up) * CFrame.Angles(0, -math.pi / 2, 0) * CFrame.Angles(rng:range(-0.8, 0.8), 0, 0)
+	local dark = Geo.block(model, frame, Vector3.new(0.16, length, 0.38), CRACK, SMOOTH, GLOW)
+	dark.Name = "Crack"
+	local line = Geo.block(model, frame * CFrame.new(0.04, 0, 0), Vector3.new(0.18, length * 0.82, 0.15), color, NEON, GLOW)
+	line.Name = "Crack"
+	local turn = rng:range(0.6, 1.0) * (if rng:chance(0.5) then 1 else -1)
+	local branchLen = length * rng:range(0.4, 0.55)
+	local branch = Geo.block(model, frame * CFrame.new(0.04, length * 0.38, 0) * CFrame.Angles(turn, 0, 0) * CFrame.new(0, branchLen / 2, 0), Vector3.new(0.18, branchLen, 0.12), color, NEON, GLOW)
+	branch.Name = "Crack"
+end
+
+-- applyStage for a mesh rock: cracks in the stage ore's colour on its surface spots, the rock
+-- shrinks a little (a chunk broke off; everything on it follows) and 2-3 rock bits fly off.
+local function meshStage(model: Model, rock1: BasePart, stage: number, seed: number | string, color: Color3): { BasePart }
+	local broken: { BasePart } = {}
+	local rng = Rng.new(tostring(seed) .. ":" .. stage)
+	local spots = spotsOf(rock1)
+	local longest = math.max(rock1.Size.X, rock1.Size.Y, rock1.Size.Z)
+	-- shrink around the foot; the glints and older cracks move with the surface
+	local k = RockBuilder.MeshStageShrink
+	local foot = rock1.CFrame * CFrame.new(0, -rock1.Size.Y / 2, 0)
+	for _, child in model:GetChildren() do
+		if child:IsA("BasePart") and child ~= rock1 then
+			local rel = foot:PointToObjectSpace(child.CFrame.Position)
+			child.CFrame = (child.CFrame - child.CFrame.Position) + foot:PointToWorldSpace(rel * k)
+		end
+	end
+	rock1.Size *= k
+	rock1.CFrame = foot * CFrame.new(0, rock1.Size.Y / 2, 0)
+	if #spots > 0 then
+		local cracks = math.clamp(stage + 1, 2, 4)
+		for i = 1, cracks do
+			local p, n = spotOn(rock1, spots[(stage * 3 + i * 2) % #spots + 1])
+			crackAt(model, p + n * 0.05, n, longest * rng:range(0.16, 0.24), color, rng)
+		end
+		-- bits of rock that break off (the caller flings and removes them)
+		for i = 1, if longest > 10 then 3 else 2 do
+			local p, n = spotOn(rock1, spots[(stage * 5 + i * 3) % #spots + 1])
+			local s = longest * rng:range(0.07, 0.11)
+			local bit = Geo.block(model, CFrame.new(p + n * (s * 0.5)) * CFrame.Angles(rng:range(0, 3), rng:range(0, 3), 0), Vector3.new(s, s * 0.8, s * 0.9), rock1.Color, Enum.Material.Slate, GLOW)
+			bit.Name = "Bit"
+			table.insert(broken, bit)
+		end
+	end
+	model:SetAttribute("Stage", stage)
+	return broken
+end
+
 --[[
 	Cracks a rock open one ore at a time: stage s (1 .. OreCount - 1) puts
 	glowing cracks in the color of the s-th ore on the outer chunks, and breaks
@@ -892,6 +1030,17 @@ function RockBuilder.applyStage(model: Model, stage: number, seed: number | stri
 	local rock1 = model:FindFirstChild("Rock1")
 	if not rock1 or not rock1:IsA("BasePart") then
 		return broken
+	end
+	if rock1:IsA("MeshPart") then
+		local glintColors: { Color3 } = {}
+		for _, child in model:GetChildren() do
+			if child:IsA("BasePart") and child.Name == "Glint" then
+				table.insert(glintColors, child.Color)
+			end
+		end
+		local floorIndex = model:GetAttribute("Floor")
+		local fallback = glow(MineFloors.get(if type(floorIndex) == "number" then floorIndex else 1).Palette.Accent)
+		return meshStage(model, rock1, stage, seed, glintColors[stage] or glintColors[1] or fallback)
 	end
 	local rng = Rng.new(tostring(seed) .. ":" .. stage)
 	local glintColors: { Color3 } = {}

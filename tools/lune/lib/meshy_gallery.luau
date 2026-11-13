@@ -56,7 +56,19 @@ function Gallery.build(Loader: any, workspace: any)
 		end
 	end
 	-- props on the right
-	local props = { "PlotBase", "CleaningStation", "DisplayPedestal", "Museum", "TreeGreen", "TreeOrange", "TreeYellow", "GardenPond", "MossyCliff", "MineElevator", "Meteor" }
+	local props = {
+		"PlotBase",
+		"CleaningStation",
+		"DisplayPedestal",
+		"Museum",
+		"TreeGreen",
+		"TreeOrange",
+		"TreeYellow",
+		"GardenPond",
+		"MossyCliff",
+		"MineElevator",
+		"Meteor",
+	}
 	for i, name in props do
 		local col = (i - 1) % 4
 		local row = (i - 1) // 4

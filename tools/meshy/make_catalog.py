@@ -1,11 +1,13 @@
 """Writes src/shared/Config/MeshCatalog.luau from a processing manifest (tools/meshy/process_glb.py).
 
-python3 -I tools/meshy/make_catalog.py tools/meshy/manifest_2026-11-13.json src/shared/Config/MeshCatalog.luau
+python3 -I tools/meshy/make_catalog.py tools/meshy/manifest_2026-11-13.json src/shared/Config/MeshCatalog.luau [spots.json]
+(spots.json from tools/meshy/surface_spots.py: Surface = Tint + Spots per mesh)
 """
 import json, re, sys
 
 src, out = sys.argv[1], sys.argv[2]
 m = json.load(open(src))
+spots = json.load(open(sys.argv[3])) if len(sys.argv) > 3 else {}
 parts = sorted((p for v in m.values() for p in v["parts"]), key=lambda p: p["name"])
 
 def v3(a):
@@ -59,6 +61,22 @@ L.append("MeshCatalog.Props = {")
 for r in props:
     L.append('\t%s = true,' % r)
 L.append("} :: { [string]: boolean }")
+L.append("")
+L.append("-- Surface of a mesh: Tint = its average colour, Spots = upper/outer surface points as fractions")
+L.append("-- of its box from the box centre (P, -0.5..0.5 per axis) with the outward normal N (glints, cracks).")
+L.append("export type Spot = { P: Vector3, N: Vector3 }")
+L.append("MeshCatalog.Surface = {")
+for name in sorted(spots):
+    e = spots[name]
+    t = e["tint"]
+    L.append("\t%s = {" % name)
+    L.append("\t\tTint = Color3.new(%s, %s, %s)," % (repr(round(t[0], 3)), repr(round(t[1], 3)), repr(round(t[2], 3))))
+    L.append("\t\tSpots = {")
+    for sp in e["spots"]:
+        L.append("\t\t\t{ P = %s, N = %s }," % (v3(sp[0:3]), v3(sp[3:6])))
+    L.append("\t\t},")
+    L.append("\t},")
+L.append("} :: { [string]: { Tint: Color3, Spots: { Spot } } }")
 L.append("")
 L.append("-- Floor dioramas: their tiles (Floor_<FloorId>_<NN>), in order.")
 L.append("MeshCatalog.Floors = {")
