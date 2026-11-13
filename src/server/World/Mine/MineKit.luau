@@ -345,7 +345,8 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Mod
 		Style.sign(m, cf * CFrame.new(0, MineKit.ElevatorTowerHeight - 2.6, front), "FLOOR " .. floorIndex, 4.8, 1.1, { Kind = "Stone", Depth = 0.3 })
 	end
 	-- girder posts with cross braces (the part-built frame)
-	for _, sx in if tower then {} else { -1, 1 } do
+	local sides: { number } = if tower then {} else { -1, 1 }
+	for _, sx in sides do
 		for _, sz in { -1, 1 } do
 			local post = cf * CFrame.new(sx * half, height / 2 + 0.6, sz * half)
 			Geo.block(m, post, Vector3.new(0.7, height, 0.7), STEEL, METAL, SOLID)

@@ -80,7 +80,7 @@ function MeshKit.template(name: string): MeshPart?
 end
 
 function MeshKit.has(name: string): boolean
-	return load()[name] ~= nil
+	return MeshKit.template(name) ~= nil
 end
 
 -- The mesh's own size: the template's, else the processed file's (MeshCatalog).
