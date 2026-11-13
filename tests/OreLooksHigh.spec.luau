@@ -8,6 +8,9 @@ return function(T, Loader)
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local OreShapesHigh = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShapesHigh")
+	-- the part recipes, even once the owner's models are uploaded (the models: OreMeshes.spec)
+	local meshesWere = ItemBuilder.Meshes
+	ItemBuilder.Meshes = false
 
 	local function parts(model)
 		local list = {}
@@ -83,4 +86,6 @@ return function(T, Loader)
 			T.truthy(showParts >= #parts(clean) - 1, id .. " display is at least as detailed as the clean ore")
 		end
 	end)
+
+	ItemBuilder.Meshes = meshesWere
 end

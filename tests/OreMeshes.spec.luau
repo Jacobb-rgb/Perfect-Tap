@@ -184,11 +184,13 @@ return function(T, Loader)
 		return sizes
 	end
 
+	-- the references in the part look (also once the owner's templates are uploaded), then the models
 	local meshesWere = ItemBuilder.Meshes
-	ItemBuilder.Meshes = true
+	ItemBuilder.Meshes = false
 	local before = plainLooks()
 	local cleanBefore = signature(ItemBuilder.build({ Kind = "Clean", OreId = "Gold", Grade = "Flawless" }, CF_ITEM, 5))
 	local sizes = oldSizes()
+	ItemBuilder.Meshes = true
 	-- the stand-ins replace whatever is mounted (the owner's templates once uploaded); put back at the end
 	local hadTemplates, templates = pcall(Loader.find, MESH_PATH)
 	Fakes(Loader, true)

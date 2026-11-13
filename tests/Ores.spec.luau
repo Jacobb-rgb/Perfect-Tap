@@ -8,6 +8,9 @@ return function(T, Loader)
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
+	-- the part recipes, even once the owner's models are uploaded (the models: OreMeshes.spec)
+	local meshesWere = ItemBuilder.Meshes
+	ItemBuilder.Meshes = false
 
 	local BUDGET = ItemBuilder.Budget
 	local NEON = roblox.Enum.Material.Neon
@@ -343,4 +346,6 @@ return function(T, Loader)
 		T.truthy(rock.PrimaryPart, "primary part")
 		T.eq(rock:GetAttribute("OreCount"), 2)
 	end)
+
+	ItemBuilder.Meshes = meshesWere
 end
