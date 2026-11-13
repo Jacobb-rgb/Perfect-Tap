@@ -148,13 +148,6 @@ function OreShapesHigh.register(shapes: { [string]: (any) -> () }, kit: any)
 		return wedge(c, frame * P(0, h / 2, 0) * A(0, dir * PI / 2, 0), V(t, h, d), tone)
 	end
 
-	-- A glowing line along a shard's slope, on its front face.
-	local function shardEdge(c: Ctx, frame: CFrame, h: number, d: number, t: number, dir: number, w: number, tone: Tone): Spec
-		local a = (frame * P(-dir * (d / 2 - 0.04), 0.06, t / 2)).Position
-		local b = (frame * P(dir * (d / 2 - 0.02), h - 0.04, t / 2)).Position
-		return beam(c, a, b, w, tone)
-	end
-
 	-- Two shards back to back: a symmetric pointed fin `half` wide on each side.
 	local function fin(c: Ctx, frame: CFrame, h: number, half: number, t: number, left: Tone, right: Tone)
 		shard(c, frame * P(-half / 2, 0, 0), h, half, t, 1, left)

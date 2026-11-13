@@ -3,7 +3,7 @@
   "fps": 20, "width": 1280, "height": 720, "bitrate": 7000000,
   "segments": [
     { "scene": "world", "preset": "Surface", "title": "Město Emberfall", "seconds": 8, "fov": 60, "shadowExtent": 280,
-      "keys": [ { "position": [150, 90, 200], "target": [0, 0, -20] }, { "position": [60, 70, 170], "target": [0, 5, -40] }, { "position": [-40, 60, 160], "target": [0, 10, -60] } ] },
+      "keys": [ { "position": [95, 75, 150], "target": [0, 0, -30] }, { "position": [25, 72, 158], "target": [5, 10, -40] }, { "position": [-75, 70, 142], "target": [0, 8, -40] } ] },
     { "scene": "world", "preset": "Surface", "title": "Náměstí a Velká kovárna", "seconds": 7, "fov": 65, "shadowExtent": 120,
       "keys": [ { "position": [-30, 12, 40], "target": [5, 6, -10] }, { "position": [0, 14, 20], "target": [0, 9, -45] }, { "position": [25, 12, -2], "target": [0, 10, -50] } ] },
     { "scene": "world", "preset": "Surface", "title": "Pozemky", "seconds": 7, "fov": 60, "shadowExtent": 160,
