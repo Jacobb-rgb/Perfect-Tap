@@ -369,6 +369,20 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("ore meshes: the Ore Pen's pile (display with crowd) wears the light model at the same size", function()
+		for _, id in modelOres do
+			local label = `{id} pile copy`
+			local hero = meshesOf(ItemBuilder.display({ K = "Clean", O = id, G = "Clean" }, CF_SHOW, 9))[1]
+			local model = ItemBuilder.display({ K = "Clean", O = id, G = "Clean" }, CF_SHOW, 9, true)
+			local meshes = meshesOf(model)
+			T.eq(#meshes, 1, label .. " one model")
+			T.eq(meshes[1]:GetAttribute("Asset"), "Ore_" .. id .. "_Low", label .. " the light model")
+			T.eq(model.PrimaryPart, meshes[1], label .. " PrimaryPart = the model")
+			local a, b = math.max(hero.Size.X, hero.Size.Y, hero.Size.Z), math.max(meshes[1].Size.X, meshes[1].Size.Y, meshes[1].Size.Z)
+			T.near(b, a, a * 0.25, label .. " about the hero's size")
+		end
+	end)
+
 	T.test("ore meshes: close-ups wear the hero model, the world never does", function()
 		for _, id in modelOres do
 			local close = ItemBuilder.build({ Kind = "Clean", OreId = id, Grade = "Pristine" }, CF.new(), id, true)

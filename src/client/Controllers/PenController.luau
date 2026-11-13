@@ -469,7 +469,7 @@ local function pileModel(key: string, spot: CFrame, seed: string): Model?
 	if not desc then
 		return nil
 	end
-	local ok, built = pcall(ItemBuilder.display, desc, spot, seed)
+	local ok, built = pcall(ItemBuilder.display, desc, spot, seed, true) -- (the pile: the light models)
 	if not ok or typeof(built) ~= "Instance" then
 		return nil
 	end

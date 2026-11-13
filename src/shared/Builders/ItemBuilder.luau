@@ -1976,9 +1976,9 @@ local function dressDisplay(
 	end
 end
 
-local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: string?, seed: number | string)
-	-- the owner's hero model, the old display's size, standing on cf
-	local name = oreMesh(ore.Id, true)
+local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: string?, seed: number | string, crowd: boolean?)
+	-- the owner's hero model (crowd: the light one, e.g. the Ore Pen pile), the old display's size, standing on cf
+	local name = oreMesh(ore.Id, not crowd)
 	local size = if name then meshSize(ore.Id, name, recipeExtent(ore, true) * ItemBuilder.DisplayScale) else nil
 	local mesh = if name and size then MeshKit.part(name, size, MeshKit.ground(cf, size), MESH_DISPLAY) else nil
 	if mesh and size then
@@ -2012,15 +2012,15 @@ end
 	podiums and the Ore Pen pile. No collisions, no welds, no physics.
 	`cf` is the bottom center of where it should stand. Budget: <= 14 parts
 	and at most 1 light (Legendary and Mythic only). Clean ores get their
-	rich display look (the owner's hero model when uploaded); other kinds are
-	the physical item, anchored.
+	rich display look (the owner's hero model when uploaded; `crowd`: its light
+	model, for the Ore Pen's pile of up to 24); other kinds are the physical item, anchored.
 	Attribute Center = the middle of the ore (for spinning/bobbing on the client).
 ]]
-function ItemBuilder.display(desc: { K: string, O: string, G: string?, R: string? }, cf: CFrame, seed: number | string?): Model
+function ItemBuilder.display(desc: { K: string, O: string, G: string?, R: string? }, cf: CFrame, seed: number | string?, crowd: boolean?): Model
 	local model = Instance.new("Model")
 	model.Name = "Display_" .. desc.K .. "_" .. desc.O
 	if desc.K == "Clean" then
-		displayOre(model, cf, OreData.get(desc.O), desc.G, seed or 1)
+		displayOre(model, cf, OreData.get(desc.O), desc.G, seed or 1, crowd)
 		return model
 	end
 	local built = ItemBuilder.build({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, CFrame.new(), seed or 1, true)
