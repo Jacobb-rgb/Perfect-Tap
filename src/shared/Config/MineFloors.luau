@@ -26,6 +26,8 @@
 ]]
 
 local BlasterData = require(script.Parent.BlasterData)
+local MeshCatalog = require(script.Parent.MeshCatalog)
+local MeshKit = require(script.Parent.Parent.Builders.MeshKit)
 
 export type RockKind = "Small" | "Big" | "Crystal" | "Golden" | "Geode" | "Artifact" | "Giant"
 
@@ -272,9 +274,42 @@ MineFloors.LiftSpots = {
 	[6] = Vector3.new(12, 0, 25),
 } :: { [number]: Vector3 }
 
+-- The floors built from the owner's dioramas (World/Mine/Diorama, DioramaData) when every tile is
+-- uploaded (MeshKit): their lifts stand on the diorama's flat ground instead.
+MineFloors.Dioramas = {
+	[4] = { Lift = Vector3.new(30, 2.4, 32) },
+	[5] = { Lift = Vector3.new(34, 2.4, 49) },
+	[6] = { Lift = Vector3.new(6, 0, 6) },
+} :: { [number]: { Lift: Vector3? } }
+
+-- Whether floor `index` is built from its diorama (its layout exists and every tile is uploaded).
+function MineFloors.usesDiorama(index: number): boolean
+	local floor = MineFloors.ByIndex[index]
+	local tiles = if floor and MineFloors.Dioramas[index] then MeshCatalog.Floors[floor.Id] else nil
+	if not tiles then
+		return false
+	end
+	for _, name in tiles do
+		if not MeshKit.has(name) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Where floor `index`'s Mine Lift stands (floor-local): the diorama's spot when the floor is its
+-- diorama, else MineFloors.LiftSpots (nil for floor 1).
+function MineFloors.liftSpot(index: number): Vector3?
+	local diorama = MineFloors.Dioramas[index]
+	if diorama and diorama.Lift and MineFloors.usesDiorama(index) then
+		return diorama.Lift
+	end
+	return MineFloors.LiftSpots[index]
+end
+
 -- The world position of a floor's Mine Lift (nil for floor 1).
 function MineFloors.liftPosition(index: number): Vector3?
-	local spot = MineFloors.LiftSpots[index]
+	local spot = MineFloors.liftSpot(index)
 	local placement = MineFloors.Placement[index]
 	if not spot or not placement then
 		return nil

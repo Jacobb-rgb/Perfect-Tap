@@ -40,6 +40,7 @@ local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloor
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
+local Diorama = require(World:WaitForChild("Mine"):WaitForChild("Diorama"))
 
 local Floor = {}
 
@@ -1037,6 +1038,25 @@ end
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	O = origin
+	-- the owner's diorama of this floor (Mine/Diorama) when it is uploaded, in the same void
+	-- enclosure, with the catcher under its islands
+	if Diorama.has(Floor.Index) then
+		local dm = Diorama.build(Floor.Index, parent, origin, opts)
+		if not (opts ~= nil and opts.Cutaway == true) then
+			voidEnclosure(dm)
+		end
+		local catcher = blk(dm, CFrame.new(0, CATCH_Y, 0), Vector3.new(VOID_HALF.X * 2, 4, VOID_HALF.Z * 2), ROCK_DARK, SMOOTH, {
+			CanTouch = true,
+			CanQuery = false,
+			CanCollide = false,
+			CastShadow = false,
+			Transparency = 1,
+		})
+		catcher.Name = "VoidCatcher"
+		catcher:AddTag("VoidCatcher")
+		catcher:SetAttribute("Floor", Floor.Index)
+		return dm
+	end
 	-- opts.Cutaway (preview pictures): no void enclosure around the floor
 	local cutaway = opts ~= nil and opts.Cutaway == true
 	local rng = Rng.new("Floor5Core")
