@@ -72,3 +72,39 @@ through the integrator.
 | B lobby | art/meshy-lobby | trees (Style.tree, Flora Kit trees, Meadow, Props.tree, Vault jungle trees if fitting), ponds, mossy cliffs, lobby budget specs |
 | C plot | art/meshy-plot | PlotBuilder pad/podiums, MuseumBuilder, KitMachines.cleaningStation, their specs |
 | D mine | art/meshy-models | RockBuilder + MiningService stages, MineKit.elevator, the 6 floors from the dioramas, meteor hand-off |
+
+## Mine floors from the dioramas (done on art/meshy-models)
+
+`src/server/World/Mine/Diorama.luau` builds a floor from its tiles when `MineFloors.usesDiorama(index)`
+(layout in `MineFloors.Dioramas`, every tile uploaded); otherwise the Floor<N> modules build their part
+floors as before.
+
+- `tools/meshy/floor_heights.py` (Blender): per cell the lowest ground with headroom (paths under arches
+  count, lava under a bridge deck does not), its colour; `tools/meshy/floor_layout.py`: the diorama scaled
+  evenly into Floor.Size (depth fits), usual ground at y 0; collision boxes (greedy, walls in 4-stud steps),
+  spawns on flat open ground (keep circles, zones), anchors on flat squares, lights;
+  `tools/meshy/make_diorama_data.py` -> `src/server/World/Mine/DioramaData.luau`. Config:
+  `tools/meshy/floors/config.json`.
+- Tiles are looks only; players walk on invisible `Ground` boxes; RockSpawns/GiantSpawn/Entrance/elevator
+  tower/blaster gate/ore lift (steel deck where the lift's spot stands above the ground) on flat ground;
+  near-white lights; ambience on the boxes; a dark ceiling over the caves; floor 6 keeps its void
+  enclosure + VoidCatcher.
+- Lifts move with the dioramas: `MineFloors.liftSpot` / `liftPosition` (TrainConfig) follow
+  `MineFloors.Dioramas[i].Lift`.
+- Floor 2's back opening is the diorama's own; Land's ramp to floor 3 starts at floor 2's back edge when
+  floor 2 is a diorama. Floor 3's front is open for the ramp.
+- Floor 1 (the quarry in the town): the diorama is re-cut (`Floor_QuarryB`, `process_glb.py` cut boxes:
+  DEPTHS portal, train band both sides, grotto door); its painted rails lie on the real track (z +24). The
+  part-built pit stays only outside the diorama (Floor1Quarry.DioramaKeep: terraces up to the town, band
+  walls, grotto lintel, back wall under the massif); dirt fills the openings.
+- Specs: tests/DioramaFloors.spec.luau (contract with stand-ins), tests/RockMeshes.spec.luau,
+  tests/MineMeshes.spec.luau.
+
+## Open
+
+- The owner's Studio import -> `import_meshes.luau` -> real templates; then the test place and Studio
+  checks (walking the floors, the train through the quarry, the ramp 2 -> 3, phones' frame rate with
+  160k-triangle floors 1-3 near the town).
+- The meteor (feat/meteor, Návrhy strojů chat): use `MeshKit.fit("Prop_Meteor", ...)` for the stone once
+  both are on main.
+- Ores without a model keep their part look (8 ores + the 6 secret ores); the owner may make more.
