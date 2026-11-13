@@ -7,6 +7,8 @@
 // the segment's middle target. Scenes come from export_scene.luau (MESHY=1 for the owner's models: the
 // processed .glb files are served like render.mjs does). Frames: build/preview/<tag>_frames/,
 // video: build/preview/<tag>.mp4 (encode_mp4.swift), storyboard: build/preview/<tag>_board.jpg.
+// TOUR_ONLY=2,5 renders just those segments again (1-based, as the log counts them) over the frames of
+// the last run (keep each segment's seconds and the fps), then encodes the whole video again.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -100,7 +102,8 @@ function along(points, t) {
   });
 }
 
-fs.rmSync(framesDir, { recursive: true, force: true });
+const only = process.env.TOUR_ONLY ? new Set(process.env.TOUR_ONLY.split(",").map(Number)) : null;
+if (!only) fs.rmSync(framesDir, { recursive: true, force: true });
 fs.mkdirSync(framesDir, { recursive: true });
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const pad = (i) => String(i).padStart(5, "0");
@@ -108,6 +111,13 @@ let frame = 0;
 const board = { title: tour.title || "Celý svět", fps, cells: [] };
 const t0 = Date.now();
 for (const [si, seg] of tour.segments.entries()) {
+  const count = Math.max(2, Math.round((seg.seconds || 6) * fps));
+  if (only && !only.has(si + 1)) {
+    // kept from the last run
+    board.cells.push({ frame: frame + Math.floor(count / 2), caption: seg.title });
+    frame += count;
+    continue;
+  }
   const keys = seg.keys;
   const mid = keys[Math.floor(keys.length / 2)];
   const shotName = `tour_${si}`;
@@ -141,7 +151,6 @@ for (const [si, seg] of tour.segments.entries()) {
       "position:fixed;left:28px;top:22px;z-index:99;padding:8px 18px;border-radius:12px;background:rgba(10,12,24,0.62);color:#fff;font:800 30px 'Avenir Next','Helvetica Neue',sans-serif;letter-spacing:0.5px;text-shadow:0 2px 6px rgba(0,0,0,0.6)";
     document.body.appendChild(tagEl);
   }, seg.title);
-  const count = Math.max(2, Math.round((seg.seconds || 6) * fps));
   const positions = keys.map((k) => k.position);
   const targets = keys.map((k) => k.target);
   for (let f = 0; f < count; f++) {

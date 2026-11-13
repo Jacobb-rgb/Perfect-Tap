@@ -5,20 +5,20 @@
     { "scene": "world", "preset": "Surface", "title": "Město Emberfall", "seconds": 8, "fov": 60, "shadowExtent": 280,
       "keys": [ { "position": [95, 75, 150], "target": [0, 0, -30] }, { "position": [25, 72, 158], "target": [5, 10, -40] }, { "position": [-75, 70, 142], "target": [0, 8, -40] } ] },
     { "scene": "world", "preset": "Surface", "title": "Náměstí a Velká kovárna", "seconds": 7, "fov": 65, "shadowExtent": 120,
-      "keys": [ { "position": [-30, 12, 40], "target": [5, 6, -10] }, { "position": [0, 14, 20], "target": [0, 9, -45] }, { "position": [25, 12, -2], "target": [0, 10, -50] } ] },
+      "keys": [ { "position": [-30, 13, 42], "target": [2, 9, -6] }, { "position": [-4, 16, 46], "target": [0, 12, -10] }, { "position": [24, 15, 40], "target": [-4, 12, -20] } ] },
     { "scene": "world", "preset": "Surface", "title": "Pozemky", "seconds": 7, "fov": 60, "shadowExtent": 160,
       "keys": [ { "position": [60, 30, 110], "target": [112, 0, 68] }, { "position": [70, 26, 40], "target": [112, 0, -4] }, { "position": [80, 30, -40], "target": [112, 0, -76] } ] },
     { "scene": "world", "preset": "Quarry", "title": "Patro 1: Greystone Quarry (lom)", "seconds": 8, "fov": 60, "shadowExtent": 200, "sunDir": [-0.5, 0.72, 0.48],
       "keys": [ { "position": [0, 45, -90], "target": [0, -10, -190] }, { "position": [0, 25, -130], "target": [0, -8, -200] }, { "position": [0, 2, -165], "target": [0, -5, -235] } ] },
     { "scene": "mine_floor_2", "preset": "EmberCaves", "title": "Patro 2: Ember Caves", "seconds": 7, "fov": 60, "shadowExtent": 160, "maxLights": 24,
-      "keys": [ { "position": [0, 30, 85], "target": [0, 0, -10] }, { "position": [-25, 14, 40], "target": [0, 4, -30] }, { "position": [20, 10, 0], "target": [-10, 5, -45] } ] },
+      "keys": [ { "position": [-30, 46, 85], "target": [0, 0, 0] }, { "position": [0, 25, 45], "target": [0, 3, -25] }, { "position": [22, 15.6, 8], "target": [-6, 4, -50] } ] },
     { "scene": "mine_floor_3", "preset": "Lagoon", "title": "Patro 3: Deep Hollow", "seconds": 7, "fov": 60, "shadowExtent": 160, "maxLights": 24,
-      "keys": [ { "position": [0, 30, 85], "target": [0, 0, -10] }, { "position": [25, 14, 35], "target": [0, 4, -25] }, { "position": [-20, 10, 0], "target": [5, 6, -40] } ] },
+      "keys": [ { "position": [30, 48, 85], "target": [0, 0, 0] }, { "position": [0, 40.1, 45], "target": [0, 3, -25] }, { "position": [-22, 16.4, 8], "target": [6, 4, -50] } ] },
     { "scene": "mine_floor_4", "preset": "Palace", "title": "Patro 4: Sunken Palace", "seconds": 7, "fov": 60, "shadowExtent": 160, "maxLights": 24,
-      "keys": [ { "position": [0, 35, 80], "target": [0, 5, -10] }, { "position": [0, 12, 40], "target": [0, 8, -30] }, { "position": [20, 10, 0], "target": [0, 12, -48] } ] },
+      "keys": [ { "position": [-30, 48, 85], "target": [0, 2, 0] }, { "position": [0, 20, 45], "target": [0, 6, -25] }, { "position": [22, 31, 8], "target": [-6, 8, -50] } ] },
     { "scene": "mine_floor_5", "preset": "Storm", "title": "Patro 5: Stormglass Rift", "seconds": 7, "fov": 60, "shadowExtent": 180, "maxLights": 40,
-      "keys": [ { "position": [0, 35, 85], "target": [0, 3, -10] }, { "position": [-20, 12, 40], "target": [0, 6, -25] }, { "position": [15, 10, 5], "target": [0, 10, -45] } ] },
+      "keys": [ { "position": [30, 50, 85], "target": [0, 0, 0] }, { "position": [0, 22.6, 45], "target": [0, 3, -25] }, { "position": [-22, 15.3, 8], "target": [6, 4, -50] } ] },
     { "scene": "mine_floor_6", "preset": "Core", "title": "Patro 6: Heartstone Core", "seconds": 8, "fov": 60, "shadowExtent": 180, "maxLights": 40,
-      "keys": [ { "position": [0, 50, 128], "target": [0, 10, -16] }, { "position": [30, 25, 60], "target": [0, 8, -10] }, { "position": [-30, 25, -14], "target": [0, 30, -50] } ] }
+      "keys": [ { "position": [-35, 62, 105], "target": [0, 4, 0] }, { "position": [0, 31.7, 58], "target": [0, 6, -30] }, { "position": [25, 15.2, 12], "target": [-6, 8, -60] } ] }
   ]
 }
