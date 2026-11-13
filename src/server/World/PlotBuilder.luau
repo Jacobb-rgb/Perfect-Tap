@@ -642,7 +642,8 @@ local function pedestalMesh(m: Model, base: CFrame, locked: boolean): PedestalPa
 	local rimColor = if locked then RIM_LOCKED else RIM_GOLD
 	local rim = SoftKit.cylUp(m, base * CFrame.new(0, (collar0 + collar1) / 2, 0), collar1 - collar0, rimD, rimColor, TINY, "Rim")
 	rim.Material = if locked then Enum.Material.SmoothPlastic else NEON
-	local top = hide(SoftKit.cylUp(m, base * CFrame.new(0, (dishBottom + lip) / 2, 0), lip - dishBottom, 2 * k.DishR * r, "Pipe", SOLID, "Top"))
+	local top =
+		hide(SoftKit.cylUp(m, base * CFrame.new(0, (dishBottom + lip) / 2, 0), lip - dishBottom, 2 * k.DishR * r, "Pipe", SOLID, "Top"))
 	-- the price label stands on the base disc in front of the lower drum
 	local plateCF = base * CFrame.new(0, baseTop + 0.45, -(k.DrumR * r + 0.15)) * CFrame.Angles(0.12, 0, 0)
 	return { Base = plinth, Top = top, PlateCF = plateCF }
@@ -669,8 +670,15 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 		SoftKit.cylUp(m, base * CFrame.new(0, (drumBottom + drumTop) / 2, 0), drumTop - drumBottom, 2.5, "Body", SOLID, "Column")
 		SoftKit.cylUp(m, base * CFrame.new(0, drumBottom + 0.5, 0), 0.34, 2.62, "Trim", TRIM, "Band")
 		-- the Rim keeps its colours: PodiumService repaints it (RimGold / RimLocked)
-		local rim =
-			SoftKit.cylUp(m, base * CFrame.new(0, rimTop - rimH / 2, 0), rimH, topW + 0.4, if locked then RIM_LOCKED else RIM_GOLD, TINY, "Rim")
+		local rim = SoftKit.cylUp(
+			m,
+			base * CFrame.new(0, rimTop - rimH / 2, 0),
+			rimH,
+			topW + 0.4,
+			if locked then RIM_LOCKED else RIM_GOLD,
+			TINY,
+			"Rim"
+		)
 		rim.Material = if locked then Enum.Material.SmoothPlastic else NEON
 		top = SoftKit.cylUp(m, base * CFrame.new(0, topY, 0), topH, topW, "Pipe", SOLID, "Top")
 		-- the price label stands almost upright on the base in front of the drum (faces the yard gate)
