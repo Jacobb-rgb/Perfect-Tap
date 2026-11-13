@@ -17,6 +17,9 @@
 	  for podiums and the Ore Pen pile.
 	- buildLight(): the light belt look (<= LightBudget parts, the same Body
 	  as build()), for items riding the belts (ItemService switches looks).
+	- The owner's models (MeshKit): a cleaned ore with an uploaded model wears
+	  it instead of its recipe (Ore_<Id>_Low on items and belts, Ore_<Id> on
+	  display copies and close-ups); see "the owner's ore models" below.
 	Rarity readability (ore-design skill): Common no glow, Uncommon faint
 	veins, Rare glowing veins/tips, Epic + sparkles, Legendary + light,
 	Mythic + pulse and orbiting motes. Neon only on veins and tips.
@@ -32,6 +35,7 @@ local OreShapesHigh = require(script.Parent.OreShapesHigh)
 local SecretOreShapes = require(script.Parent.SecretOreShapes)
 local SecretOreFx = require(script.Parent.SecretOreFx)
 local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
+local MeshKit = require(script.Parent.MeshKit)
 
 local ItemBuilder = {}
 
@@ -1064,6 +1068,97 @@ local function body(model: Model, cf: CFrame, size: Vector3, color: Color3, mate
 	return part
 end
 
+---------------------------------------------------------------- the owner's ore models
+
+--[[
+	The owner's Meshy models (MeshKit, docs/plans/MESHY_MODELS_PLAN.md): a
+	cleaned ore with an uploaded model wears it instead of its recipe.
+	Ore_<Id>_Low (~1.4k tris) on physical items and the belt look (the same
+	Body in both, so ItemService can switch them), Ore_<Id> (~10k tris, PBR)
+	on display copies and close-ups (build with closeUp: UI pictures).
+	Physics stays on the invisible primitive Body round the model; the model
+	is decor (welded, massless, no collisions, CanQuery for clicks).
+	Size: the old look's box (its recipe's extents, measured once per ore):
+	the same sum of the three sides, never longer than its longest side, in
+	the model's own proportions.
+	No template (before the upload, an ore without a model, Meshes off):
+	every look is the part recipe, exactly as before. The Dirty Ore, crushed,
+	ingots, gear, alloys and relics always keep their parts.
+]]
+ItemBuilder.Meshes = true -- false: the part recipes even where a model is uploaded (the recipe specs)
+ItemBuilder.MeshBodyMin = 0.3 -- studs: a model's Body is at least this thick (thin models lie close to the floor)
+
+-- The template an ore wears: the hero model (`high`) or the crowd one; the other one when only it was uploaded.
+local function oreMesh(oreId: string, high: boolean): string?
+	if not ItemBuilder.Meshes then
+		return nil
+	end
+	local hero = "Ore_" .. oreId
+	local crowd = hero .. "_Low"
+	local first = if high then hero else crowd
+	if MeshKit.has(first) then
+		return first
+	end
+	local other = if high then crowd else hero
+	return if MeshKit.has(other) then other else nil
+end
+
+-- The old part look's extents per ore (unit space, measured once: the recipes' sizes never depend on the seed).
+local extents: { [string]: Vector3 } = {}
+
+local function recipeExtent(ore: OreData.Ore, full: boolean): Vector3
+	local key = if full then ore.Id .. "/Display" else ore.Id
+	local known = extents[key]
+	if known then
+		return known
+	end
+	local mn, mx = bounds(recipe(ore, 1, full).Specs)
+	local extent = mx - mn
+	extents[key] = extent
+	return extent
+end
+
+-- A model's size that keeps the old look's `extent` (studs); the scale comes from the hero model,
+-- so Ore_<Id>_Low and Ore_<Id> are the same size.
+local function meshSize(oreId: string, name: string, extent: Vector3): Vector3?
+	local own = MeshKit.box(name)
+	local hero = MeshKit.box("Ore_" .. oreId) or own
+	if not own or not hero then
+		return nil
+	end
+	local sum = (extent.X + extent.Y + extent.Z) / (hero.X + hero.Y + hero.Z)
+	local longest = math.max(extent.X, extent.Y, extent.Z) / math.max(hero.X, hero.Y, hero.Z)
+	return own * math.min(sum, longest)
+end
+
+local MESH_DECOR: MeshKit.Opts = { Name = "OreMesh", Anchored = false, CanQuery = true, Massless = true }
+local MESH_DISPLAY: MeshKit.Opts = { Name = "OreMesh" }
+
+--[[
+	A clean ore in its model (build and buildLight): the invisible Body a
+	little inside the model's box (like the recipes' box) and the model
+	welded to it. nil when the model can't be made (the caller builds the
+	recipe).
+]]
+local function meshItem(model: Model, cf: CFrame, ore: OreData.Ore, name: string): Part?
+	local size = meshSize(ore.Id, name, recipeExtent(ore, false) * ItemBuilder.CleanScale)
+	local mesh = if size then MeshKit.part(name, size, cf, MESH_DECOR) else nil
+	if not size or not mesh then
+		return nil
+	end
+	local min = ItemBuilder.MeshBodyMin
+	local boxSize = Vector3.new(math.max(size.X - 0.08, min), math.max(size.Y - 0.08, min), math.max(size.Z - 0.08, min))
+	local b = body(model, cf, boxSize, ore.Color)
+	b.Transparency = 1
+	b.CastShadow = false
+	local volume = boxSize.X * boxSize.Y * boxSize.Z
+	b.CustomPhysicalProperties = PhysicalProperties.new(math.clamp(2.2 / volume, 0.3, 1.5), 0.5, 0.25, 1, 1)
+	-- (the texture covers it; the ore's colour shows only if the texture is missing)
+	mesh.Color = ore.Color
+	addDecor(model, b, mesh)
+	return b
+end
+
 --[[
 	Dirty Ore: one crust chunk for every ore. Sizes are constants and the
 	random details only depend on the seed, so two chunks with the same seed
@@ -1140,8 +1235,34 @@ local function rawChunk(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	end
 end
 
-local function cleanOre(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+-- One sparkle emitter at most on a clean ore's Body: grade (Pristine/Flawless) and rarity (Epic+) share it.
+local function gradeSparkle(b: BasePart, c: Ctx, grade: string?)
+	local rate = 0
+	local color = c.Pal.Glow
+	if grade == "Flawless" then
+		rate += 3
+		color = Color3.fromRGB(255, 236, 140)
+	elseif grade == "Pristine" then
+		rate += 1.2
+		color = Color3.fromRGB(200, 255, 210)
+	end
+	if c.Order >= 4 then
+		rate += 0.6 + (c.Order - 4) * 0.6
+	end
+	if rate > 0 then
+		sparkle(b, "GradeSparkle", color, rate, 0.35)
+	end
+end
+
+-- A clean ore: its model (`high`: the hero one, for close-ups) when uploaded, else its recipe.
+local function cleanLook(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng, high: boolean)
 	local ore = OreData.get(info.OreId)
+	local name = oreMesh(ore.Id, high)
+	local meshBody = if name then meshItem(model, cf, ore, name) else nil
+	if meshBody then
+		gradeSparkle(meshBody, makeCtx(ore, 1, false), info.Grade)
+		return
+	end
 	local c = recipe(ore, rng:nextU32(), false)
 	local k = ItemBuilder.CleanScale
 	local mn, mx = bounds(c.Specs)
@@ -1159,22 +1280,11 @@ local function cleanOre(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 		local part = makePart(spec, root, k, decorProps())
 		addDecor(model, b, part)
 	end
-	-- one sparkle emitter at most: grade (Pristine/Flawless) and rarity (Epic+) share it
-	local rate = 0
-	local color = c.Pal.Glow
-	if info.Grade == "Flawless" then
-		rate += 3
-		color = Color3.fromRGB(255, 236, 140)
-	elseif info.Grade == "Pristine" then
-		rate += 1.2
-		color = Color3.fromRGB(200, 255, 210)
-	end
-	if c.Order >= 4 then
-		rate += 0.6 + (c.Order - 4) * 0.6
-	end
-	if rate > 0 then
-		sparkle(b, "GradeSparkle", color, rate, 0.35)
-	end
+	gradeSparkle(b, c, info.Grade)
+end
+
+local function cleanOre(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	cleanLook(model, cf, info, rng, false)
 end
 
 local function crushed(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
@@ -1517,12 +1627,31 @@ local BUILDERS = {
 	Relic = relic,
 }
 
--- Returns a Model (not parented). `seed` only changes the random details.
-function ItemBuilder.build(info: ItemInfo, cf: CFrame, seed: number | string): Model
+-- close-ups: a clean ore (a Drop's ore) in its hero model
+local CLOSE_UP: { [string]: (Model, CFrame, ItemInfo, Rng.Rng) -> () } = {
+	Clean = function(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+		cleanLook(model, cf, info, rng, true)
+	end,
+	Drop = function(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+		cleanLook(model, cf, dropInfo(info, rng), rng, true)
+	end,
+}
+
+--[[
+	Returns a Model (not parented). `seed` only changes the random details.
+	`closeUp`: a picture seen up close (UI ViewportFrames, BagFly): a clean
+	ore wears its hero model (Ore_<Id>) instead of the crowd one, never for
+	items in the world. Without the ore's models it changes nothing.
+]]
+function ItemBuilder.build(info: ItemInfo, cf: CFrame, seed: number | string, closeUp: boolean?): Model
 	local model = Instance.new("Model")
 	model.Name = info.Kind .. "_" .. info.OreId
 	local builder = BUILDERS[info.Kind]
 	assert(builder, "Unknown item kind " .. tostring(info.Kind))
+	local close = if closeUp then CLOSE_UP[info.Kind] else nil
+	if close then
+		builder = close
+	end
 	builder(model, cf, info, Rng.new(seed))
 	return model
 end
@@ -1567,6 +1696,11 @@ end
 
 local function cleanLight(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	local ore = OreData.get(info.OreId)
+	-- the owner's model: the same Body and model as cleanOre (no sparkle on belts)
+	local name = oreMesh(ore.Id, false)
+	if name and meshItem(model, cf, ore, name) then
+		return
+	end
 	-- the same recipe draw as cleanOre: the same box, so the physics never change
 	local c = recipe(ore, rng:nextU32(), false)
 	local k = ItemBuilder.CleanScale
@@ -1759,24 +1893,29 @@ local DISPLAY: { [string]: any } = {
 	CastShadow = false,
 }
 
-local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: string?, seed: number | string)
-	local c = recipe(ore, seed, true)
-	local k = ItemBuilder.DisplayScale
-	local mn, mx = bounds(c.Specs)
-	local root = cf * CFrame.new(-(mn.X + mx.X) / 2 * k, -mn.Y * k, -(mn.Z + mx.Z) / 2 * k)
-	local parts: { BasePart } = {}
-	for _, spec in c.Specs do
-		local part = makePart(spec, root, k, table.clone(DISPLAY))
-		part.Parent = model
-		table.insert(parts, part)
-	end
-	local main = parts[1]
-	model.PrimaryPart = main
+--[[
+	A display copy's extras round its `main` part (the model, or the first
+	recipe part): Mythic motes on a tilted orbit and the pulse, the sparkle
+	(Epic+, grade), the light (Legendary+), the Center attribute and a secret
+	ore's halo, aura and floor. In studs: `half` = half the ore's height,
+	`across` = half its wider side across, `reach` = half its longest side.
+]]
+local function dressDisplay(
+	model: Model,
+	cf: CFrame,
+	ore: OreData.Ore,
+	c: Ctx,
+	grade: string?,
+	main: BasePart,
+	half: number,
+	across: number,
+	reach: number
+)
 	local glow = c.Pal.Glow
-	local center = cf.Position + cf.UpVector * ((mx.Y - mn.Y) / 2 * k)
+	local center = cf.Position + cf.UpVector * half
 	-- Mythic: motes on a tilted orbit (a client may spin parts named "Mote" around Center)
 	if c.Order >= 6 then
-		local radius = math.max(mx.X - mn.X, mx.Z - mn.Z) / 2 * k + 0.35
+		local radius = across + 0.35
 		local orbit = CFrame.new(center) * cf.Rotation * CFrame.Angles(0.35, 0, 0.2)
 		for i = 1, 3 do
 			local a = i * math.pi * 2 / 3 + 0.5
@@ -1833,9 +1972,39 @@ local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: str
 	model:SetAttribute("Center", center)
 	-- Secret: the halo, the aura and the glowing floor (SecretOreFx moves them)
 	if c.Order >= 7 then
-		local reach = math.max(mx.X - mn.X, mx.Y - mn.Y, mx.Z - mn.Z) / 2 * k
 		SecretOreFx.dress(model, ore.Id, CFrame.new(center) * cf.Rotation, reach, cf.Position.Y)
 	end
+end
+
+local function displayOre(model: Model, cf: CFrame, ore: OreData.Ore, grade: string?, seed: number | string)
+	-- the owner's hero model, the old display's size, standing on cf
+	local name = oreMesh(ore.Id, true)
+	local size = if name then meshSize(ore.Id, name, recipeExtent(ore, true) * ItemBuilder.DisplayScale) else nil
+	local mesh = if name and size then MeshKit.part(name, size, MeshKit.ground(cf, size), MESH_DISPLAY) else nil
+	if mesh and size then
+		mesh.Color = ore.Color
+		mesh.Parent = model
+		model.PrimaryPart = mesh
+		local h = size / 2
+		dressDisplay(model, cf, ore, makeCtx(ore, seed, true), grade, mesh, h.Y, math.max(h.X, h.Z), math.max(h.X, h.Y, h.Z))
+		return
+	end
+	local c = recipe(ore, seed, true)
+	local k = ItemBuilder.DisplayScale
+	local mn, mx = bounds(c.Specs)
+	local root = cf * CFrame.new(-(mn.X + mx.X) / 2 * k, -mn.Y * k, -(mn.Z + mx.Z) / 2 * k)
+	local parts: { BasePart } = {}
+	for _, spec in c.Specs do
+		local part = makePart(spec, root, k, table.clone(DISPLAY))
+		part.Parent = model
+		table.insert(parts, part)
+	end
+	local main = parts[1]
+	model.PrimaryPart = main
+	local half = (mx.Y - mn.Y) / 2 * k
+	local across = math.max(mx.X - mn.X, mx.Z - mn.Z) / 2 * k
+	local reach = math.max(mx.X - mn.X, mx.Y - mn.Y, mx.Z - mn.Z) / 2 * k
+	dressDisplay(model, cf, ore, c, grade, main, half, across, reach)
 end
 
 --[[
@@ -1843,7 +2012,8 @@ end
 	podiums and the Ore Pen pile. No collisions, no welds, no physics.
 	`cf` is the bottom center of where it should stand. Budget: <= 14 parts
 	and at most 1 light (Legendary and Mythic only). Clean ores get their
-	rich display look; other kinds are the physical item, anchored.
+	rich display look (the owner's hero model when uploaded); other kinds are
+	the physical item, anchored.
 	Attribute Center = the middle of the ore (for spinning/bobbing on the client).
 ]]
 function ItemBuilder.display(desc: { K: string, O: string, G: string?, R: string? }, cf: CFrame, seed: number | string?): Model
@@ -1853,7 +2023,7 @@ function ItemBuilder.display(desc: { K: string, O: string, G: string?, R: string
 		displayOre(model, cf, OreData.get(desc.O), desc.G, seed or 1)
 		return model
 	end
-	local built = ItemBuilder.build({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, CFrame.new(), seed or 1)
+	local built = ItemBuilder.build({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, CFrame.new(), seed or 1, true)
 	local primary = built.PrimaryPart
 	local lowest = math.huge
 	local parts: { BasePart } = {}

@@ -387,9 +387,9 @@ local function paintOf(ore: OreData.Ore?): Pop.Paint
 	return if ore then rarityPaint(ore.Rarity) else CodexView.HiddenPaint
 end
 
--- A cleaned ore for a picture (nil when the builder fails).
+-- A cleaned ore for a picture (a close-up: the owner's hero model when uploaded; nil when the builder fails).
 local function oreModel(oreId: string): Model?
-	local ok, made = pcall(ItemBuilder.build, { Kind = "Clean", OreId = oreId, Grade = "Clean" }, CFrame.new(), "codex_" .. oreId)
+	local ok, made = pcall(ItemBuilder.build, { Kind = "Clean", OreId = oreId, Grade = "Clean" }, CFrame.new(), "codex_" .. oreId, true)
 	return if ok then made else nil
 end
 

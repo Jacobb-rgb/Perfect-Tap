@@ -150,10 +150,13 @@ local function still(model: Model): number
 		end
 	end
 	-- every part sits straight in the model now: the rest (welds, sparkles, lights) goes
+	-- (an uploaded model's SurfaceAppearance is its look: it stays)
 	for _, d in model:GetChildren() do
 		if d:IsA("BasePart") then
 			for _, extra in d:GetChildren() do
-				extra:Destroy()
+				if not extra:IsA("SurfaceAppearance") then
+					extra:Destroy()
+				end
 			end
 		else
 			d:Destroy()
@@ -344,14 +347,15 @@ function BagFly.build(): View
 end
 
 -- A cleaned item's model for this flyer: built the first time, then kept (the last CleanCache
--- items); nil when the builder can't make it (it flies as a dirty chunk then).
+-- items); nil when the builder can't make it (it flies as a dirty chunk then). A close-up: a
+-- cleaned ore flies as the owner's hero model when it is uploaded.
 local function cleanModel(f: Flyer, oreId: string, kind: string, recipe: string?): Model?
 	local key = `{kind}|{oreId}|{recipe or ""}`
 	local kept: Model? = f.Clean[key]
 	if kept then
 		return kept
 	end
-	local ok, built = pcall(ItemBuilder.build, { Kind = kind, OreId = oreId, Recipe = recipe }, CFrame.new(), oreId)
+	local ok, built = pcall(ItemBuilder.build, { Kind = kind, OreId = oreId, Recipe = recipe }, CFrame.new(), oreId, true)
 	if not ok or typeof(built) ~= "Instance" then
 		return nil
 	end

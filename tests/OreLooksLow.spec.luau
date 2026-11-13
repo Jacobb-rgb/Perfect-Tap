@@ -9,6 +9,9 @@ return function(T, Loader)
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local OreShapesLow = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShapesLow")
 	local NEON = roblox.Enum.Material.Neon
+	-- the part recipes, even once the owner's models are uploaded (the models: OreMeshes.spec)
+	local meshesWere = ItemBuilder.Meshes
+	ItemBuilder.Meshes = false
 
 	local function partsOf(model)
 		local list = {}
@@ -160,4 +163,6 @@ return function(T, Loader)
 		end
 		T.lt(biggest("Copper") * 2, biggest("Bronze"), "Bronze lumps are much bigger than Copper nuggets")
 	end)
+
+	ItemBuilder.Meshes = meshesWere
 end
