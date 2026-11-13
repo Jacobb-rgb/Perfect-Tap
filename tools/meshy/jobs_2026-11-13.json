@@ -1281,6 +1281,75 @@
      5
     ]
    ]
+  },
+  {
+   "mode": "plain",
+   "name": "Ore_GalaxyStone",
+   "src": "Meshy_AI_Roblox_Galaxy_Stone_O_1113195543_texture.glb",
+   "out": "Ore_GalaxyStone.glb",
+   "tris": 6000,
+   "tex": 1024,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
+  },
+  {
+   "mode": "bake",
+   "name": "Ore_GalaxyStone_Low",
+   "src": "Meshy_AI_Roblox_Galaxy_Stone_O_1113195543_texture.glb",
+   "out": "Ore_GalaxyStone_Low.glb",
+   "tris": 700,
+   "tex": 256,
+   "normal": false,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
+  },
+  {
+   "mode": "plain",
+   "name": "Ore_StormPearl",
+   "src": "Meshy_AI_Roblox_Storm_Pearl_Or_1113195533_texture.glb",
+   "out": "Ore_StormPearl.glb",
+   "tris": 6000,
+   "tex": 1024,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
+  },
+  {
+   "mode": "bake",
+   "name": "Ore_StormPearl_Low",
+   "src": "Meshy_AI_Roblox_Storm_Pearl_Or_1113195533_texture.glb",
+   "out": "Ore_StormPearl_Low.glb",
+   "tris": 700,
+   "tex": 256,
+   "normal": false,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
+  },
+  {
+   "mode": "plain",
+   "name": "Ore_CrystalRose",
+   "src": "Meshy_AI_Roblox_Crystal_Rose_O_1113195523_texture.glb",
+   "out": "Ore_CrystalRose.glb",
+   "tris": 6000,
+   "tex": 1024,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
+  },
+  {
+   "mode": "bake",
+   "name": "Ore_CrystalRose_Low",
+   "src": "Meshy_AI_Roblox_Crystal_Rose_O_1113195523_texture.glb",
+   "out": "Ore_CrystalRose_Low.glb",
+   "tris": 700,
+   "tex": 256,
+   "normal": false,
+   "anchor": "center",
+   "unit": 2.0,
+   "double": true
   }
  ]
 }

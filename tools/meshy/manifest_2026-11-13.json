@@ -3771,5 +3771,131 @@
   "file": "Floor_QuarryB.glb",
   "src": "Meshy_AI_GreystoneQuarryDioram_1113171838_image-to-3d-texture.glb",
   "mode": "tiles"
+ },
+ "Ore_GalaxyStone": {
+  "parts": [
+   {
+    "name": "Ore_GalaxyStone",
+    "tris": 10432,
+    "center": [
+     0.0,
+     0.0,
+     -0.0
+    ],
+    "size": [
+     1.96434,
+     1.3082,
+     2.0
+    ]
+   }
+  ],
+  "file": "Ore_GalaxyStone.glb",
+  "src": "Meshy_AI_Roblox_Galaxy_Stone_O_1113195543_texture.glb",
+  "mode": "plain"
+ },
+ "Ore_GalaxyStone_Low": {
+  "parts": [
+   {
+    "name": "Ore_GalaxyStone_Low",
+    "tris": 1386,
+    "center": [
+     -0.00151,
+     0.00056,
+     0.00015
+    ],
+    "size": [
+     1.97335,
+     1.30532,
+     2.00052
+    ]
+   }
+  ],
+  "file": "Ore_GalaxyStone_Low.glb",
+  "src": "Meshy_AI_Roblox_Galaxy_Stone_O_1113195543_texture.glb",
+  "mode": "bake"
+ },
+ "Ore_StormPearl": {
+  "parts": [
+   {
+    "name": "Ore_StormPearl",
+    "tris": 7920,
+    "center": [
+     0.0,
+     0.0,
+     -0.0
+    ],
+    "size": [
+     1.99385,
+     1.21579,
+     2.0
+    ]
+   }
+  ],
+  "file": "Ore_StormPearl.glb",
+  "src": "Meshy_AI_Roblox_Storm_Pearl_Or_1113195533_texture.glb",
+  "mode": "plain"
+ },
+ "Ore_StormPearl_Low": {
+  "parts": [
+   {
+    "name": "Ore_StormPearl_Low",
+    "tris": 1340,
+    "center": [
+     -0.00133,
+     -0.00449,
+     0.01826
+    ],
+    "size": [
+     1.99583,
+     1.21173,
+     1.97699
+    ]
+   }
+  ],
+  "file": "Ore_StormPearl_Low.glb",
+  "src": "Meshy_AI_Roblox_Storm_Pearl_Or_1113195533_texture.glb",
+  "mode": "bake"
+ },
+ "Ore_CrystalRose": {
+  "parts": [
+   {
+    "name": "Ore_CrystalRose",
+    "tris": 10290,
+    "center": [
+     0.0,
+     0.0,
+     -0.0
+    ],
+    "size": [
+     1.95375,
+     1.45735,
+     2.0
+    ]
+   }
+  ],
+  "file": "Ore_CrystalRose.glb",
+  "src": "Meshy_AI_Roblox_Crystal_Rose_O_1113195523_texture.glb",
+  "mode": "plain"
+ },
+ "Ore_CrystalRose_Low": {
+  "parts": [
+   {
+    "name": "Ore_CrystalRose_Low",
+    "tris": 1396,
+    "center": [
+     0.00705,
+     -0.01768,
+     0.04552
+    ],
+    "size": [
+     1.88333,
+     1.45949,
+     1.91885
+    ]
+   }
+  ],
+  "file": "Ore_CrystalRose_Low.glb",
+  "src": "Meshy_AI_Roblox_Crystal_Rose_O_1113195523_texture.glb",
+  "mode": "bake"
  }
 }
