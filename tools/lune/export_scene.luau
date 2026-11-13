@@ -181,6 +181,8 @@ elseif sceneName == "shopkeeper_golems" then -- candidate golems for the shops, 
 		table.insert(kinds, process.args[i])
 	end
 	require("./lib/shopkeeper_preview").buildGolemLineup(Loader, workspace, kinds)
+elseif sceneName == "meshy_gallery" then -- every uploaded-mesh template in rows (tools/lune/lib/meshy_gallery.luau; MESHY=1)
+	require("./lib/meshy_gallery").build(Loader, workspace)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)

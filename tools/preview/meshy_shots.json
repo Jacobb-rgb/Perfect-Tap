@@ -1,0 +1,5 @@
+{
+  "meshy_ores": { "scene": "meshy_gallery", "position": [24, 22, 18], "target": [24, 0, -18], "fov": 60, "preset": "Workbench", "shadowExtent": 80 },
+  "meshy_rocks": { "scene": "meshy_gallery", "position": [-3, 46, 72], "target": [-3, 0, 18], "fov": 60, "preset": "Workbench", "shadowExtent": 90 },
+  "meshy_props": { "scene": "meshy_gallery", "position": [74, 40, 62], "target": [74, 2, 8], "fov": 60, "preset": "Workbench", "shadowExtent": 90 }
+}
