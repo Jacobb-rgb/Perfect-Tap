@@ -63,6 +63,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
+local MeshKit = require(Shared.Builders.MeshKit)
 local SoftKit = require(Shared.Builders.SoftKit)
 local Rng = require(Shared.Util.Rng)
 local BaseLayout = require(Shared.Config.BaseLayout)
@@ -581,26 +582,100 @@ end
 	ArtifactService tells the skin roles of Base, Column and Top apart by
 	their own colours.
 ]]
+--[[
+	The owner's podium model (MeshKit "Prop_DisplayPedestal", 2026-11-13,
+	docs/plans/MESHY_MODELS_PLAN.md): a round sci-fi pedestal (a dark base
+	disc with a glowing ring, drums with cyan strips, an orange collar, a cyan
+	dish under the floating ore), Width across like the old Base, its dish's
+	lip a stud under the ore (BaseLayout.PodiumOreHeight), as the old top
+	plate was. The mesh is a look only (no collision, no queries): the round
+	`Base` (the PrimaryPart), the `Column` and the `Top` stay as invisible
+	colliders, the Top still holding OrePoint and Prompt; `BaseGlow` lies on
+	the model's own glowing base ring and the `Rim` on its orange collar
+	(PodiumService lights and dulls it; a podium skin paints the glow and the
+	holo-ring: the textured model takes no colour); the holo-ring, the hover
+	box, the lock and the price plate (on the base disc, in front of the lower
+	drum) as before. No Band (the model has its own). Nil while there is no
+	upload: the part-built podium below.
+]]
+PlotBuilder.PodiumMesh = { Name = "Prop_DisplayPedestal", Width = 3.8, Height = 3.55 }
+-- Measured on the processed model (tools/meshy/heightfield.py and ray probes): heights as shares
+-- of its height (3.186 own units), radii as shares of its half width (2.0).
+local PEDESTAL = {
+	BaseTop = 0.1538, -- the base disc's top (0.49)
+	GlowY = 0.1114, -- the glowing ring round the base disc (0.31-0.40)
+	GlowH = 0.028,
+	DrumR = 0.84, -- the lower drum (radius 1.68, up to 1.06)
+	CollarY0 = 0.6528, -- the orange collar under the dish's neck (2.08-2.29, radius 1.36)
+	CollarY1 = 0.7187,
+	CollarR = 0.6805,
+	DishY0 = 0.8223, -- the dish: its bowl's bottom (2.62), its lip (3.16), radius 1.2
+	LipY = 0.9918,
+	DishR = 0.6025,
+}
+type PedestalParts = { Base: Part, Top: Part, PlateCF: CFrame }
+
+-- A part kept for collisions or attachments under a mesh look: invisible, no shadow.
+local function hide(p: Part): Part
+	p.Transparency = 1
+	p.CastShadow = false
+	return p
+end
+
+local function pedestalMesh(m: Model, base: CFrame, locked: boolean): PedestalParts?
+	local spec = PlotBuilder.PodiumMesh
+	local w, h = spec.Width, spec.Height
+	local look = MeshKit.part(spec.Name, Vector3.new(w, h, w), base * CFrame.new(0, h / 2, 0), { Name = "Pedestal" })
+	if not look then
+		return nil
+	end
+	look.Parent = m
+	local k = PEDESTAL
+	local r = w / 2
+	local baseTop, dishBottom, lip = k.BaseTop * h, k.DishY0 * h, k.LipY * h
+	local plinth = hide(SoftKit.cylUp(m, base * CFrame.new(0, baseTop / 2, 0), baseTop, w, "Frame", SOLID, "Base"))
+	SoftKit.cylUp(m, base * CFrame.new(0, k.GlowY * h, 0), k.GlowH * h, w + 0.06, "Neon", TINY, "BaseGlow")
+	hide(SoftKit.cylUp(m, base * CFrame.new(0, (baseTop + dishBottom) / 2, 0), dishBottom - baseTop, 2.4, "Body", SOLID, "Column"))
+	-- the Rim keeps its colours: PodiumService repaints it (RimGold / RimLocked)
+	local collar0, collar1 = k.CollarY0 * h, k.CollarY1 * h
+	local rimD = 2 * k.CollarR * r + 0.06
+	local rimColor = if locked then RIM_LOCKED else RIM_GOLD
+	local rim = SoftKit.cylUp(m, base * CFrame.new(0, (collar0 + collar1) / 2, 0), collar1 - collar0, rimD, rimColor, TINY, "Rim")
+	rim.Material = if locked then Enum.Material.SmoothPlastic else NEON
+	local top = hide(SoftKit.cylUp(m, base * CFrame.new(0, (dishBottom + lip) / 2, 0), lip - dishBottom, 2 * k.DishR * r, "Pipe", SOLID, "Top"))
+	-- the price label stands on the base disc in front of the lower drum
+	local plateCF = base * CFrame.new(0, baseTop + 0.45, -(k.DrumR * r + 0.15)) * CFrame.Angles(0.12, 0, 0)
+	return { Base = plinth, Top = top, PlateCF = plateCF }
+end
+
 local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.Rect)
 	local m = model("Podium" .. index, yard)
 	m:SetAttribute("Slot", index)
 	local locked = index > EconomyConfig.Podiums.Free
 	local base = cf * CFrame.new(rect.Center.X, 0, rect.Center.Z)
-	local baseH = 0.6
-	local plinth = SoftKit.cylUp(m, base * CFrame.new(0, baseH / 2, 0), baseH, 3.8, "Frame", SOLID, "Base")
-	SoftKit.cylUp(m, base * CFrame.new(0, baseH * 0.5, 0), 0.09, 3.86, "Neon", TINY, "BaseGlow")
-	local topH, topW = 0.35, 3.5 -- (the holo-ring is about 1.2 x the top)
-	local topY = 3.35 -- top plate centre
-	local rimH = 0.24
-	local rimTop = topY - topH / 2 + 0.02
-	local drumBottom, drumTop = baseH, rimTop - rimH
-	SoftKit.cylUp(m, base * CFrame.new(0, (drumBottom + drumTop) / 2, 0), drumTop - drumBottom, 2.5, "Body", SOLID, "Column")
-	SoftKit.cylUp(m, base * CFrame.new(0, drumBottom + 0.5, 0), 0.34, 2.62, "Trim", TRIM, "Band")
-	-- the Rim keeps its colours: PodiumService repaints it (RimGold / RimLocked)
-	local rim =
-		SoftKit.cylUp(m, base * CFrame.new(0, rimTop - rimH / 2, 0), rimH, topW + 0.4, if locked then RIM_LOCKED else RIM_GOLD, TINY, "Rim")
-	rim.Material = if locked then Enum.Material.SmoothPlastic else NEON
-	local top = SoftKit.cylUp(m, base * CFrame.new(0, topY, 0), topH, topW, "Pipe", SOLID, "Top")
+	local plinth: Part, top: Part, plateCF: CFrame
+	local mesh = pedestalMesh(m, base, locked)
+	if mesh then
+		plinth, top, plateCF = mesh.Base, mesh.Top, mesh.PlateCF
+	else
+		local baseH = 0.6
+		plinth = SoftKit.cylUp(m, base * CFrame.new(0, baseH / 2, 0), baseH, 3.8, "Frame", SOLID, "Base")
+		SoftKit.cylUp(m, base * CFrame.new(0, baseH * 0.5, 0), 0.09, 3.86, "Neon", TINY, "BaseGlow")
+		local topH, topW = 0.35, 3.5 -- (the holo-ring is about 1.2 x the top)
+		local topY = 3.35 -- top plate centre
+		local rimH = 0.24
+		local rimTop = topY - topH / 2 + 0.02
+		local drumBottom, drumTop = baseH, rimTop - rimH
+		SoftKit.cylUp(m, base * CFrame.new(0, (drumBottom + drumTop) / 2, 0), drumTop - drumBottom, 2.5, "Body", SOLID, "Column")
+		SoftKit.cylUp(m, base * CFrame.new(0, drumBottom + 0.5, 0), 0.34, 2.62, "Trim", TRIM, "Band")
+		-- the Rim keeps its colours: PodiumService repaints it (RimGold / RimLocked)
+		local rim =
+			SoftKit.cylUp(m, base * CFrame.new(0, rimTop - rimH / 2, 0), rimH, topW + 0.4, if locked then RIM_LOCKED else RIM_GOLD, TINY, "Rim")
+		rim.Material = if locked then Enum.Material.SmoothPlastic else NEON
+		top = SoftKit.cylUp(m, base * CFrame.new(0, topY, 0), topH, topW, "Pipe", SOLID, "Top")
+		-- the price label stands almost upright on the base in front of the drum (faces the yard gate)
+		plateCF = base * CFrame.new(0, baseH + 0.47, -1.45) * CFrame.Angles(0.12, 0, 0)
+	end
 	attachment(top, "OrePoint", top.CFrame:ToObjectSpace(base * CFrame.new(0, BaseLayout.PodiumOreHeight, 0)))
 	attachment(top, "Prompt", top.CFrame:ToObjectSpace(base * CFrame.new(0, 2.6, -rect.Size.Z / 2 - 0.3)))
 	-- the holo-ring around the floating ore (a paid slot shows the padlock there, and its gold rim once open)
@@ -623,10 +698,8 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	hover.Name = "Hover"
 	if locked then
 		local padlock = lock(m, base * CFrame.new(0, BaseLayout.PodiumOreHeight + 0.8, 0))
-		-- the price label stands almost upright on the base in front of the drum
-		-- (faces the yard gate); its green neon frame is part of the lock, so
-		-- PodiumService hides it with the lock
-		local plateCF = base * CFrame.new(0, baseH + 0.47, -1.45) * CFrame.Angles(0.12, 0, 0)
+		-- the price label (plateCF) faces the yard gate; its green neon frame is
+		-- part of the lock, so PodiumService hides it with the lock
 		local plate = SoftKit.part(m, plateCF, Vector3.new(2.2, 0.9, 0.1), "Screen", TINY, "PricePlate")
 		local gui = SoftKit.label(plate, Enum.NormalId.Front, "100 R$", ROBUX_GREEN, 0)
 		local label = gui:FindFirstChildOfClass("TextLabel")
@@ -804,6 +877,35 @@ end
 
 ---------------------------------------------------------------- plots
 
+--[[
+	The owner's plot model (MeshKit "Prop_PlotBase", 2026-11-13, docs/plans/
+	MESHY_MODELS_PLAN.md): a grey tiled floor in a raised dark frame with
+	glowing strips and four corner posts. It covers the pad exactly (its
+	1-stud border included, so it never reaches the alley, the road side or
+	the yard's tiles), its inner floor level with the pad's top: the pad stays
+	the collider (invisible under it) and the flat metal floor (PlotTile,
+	Plate, FloorGlow) is not built. Measured on the processed model
+	(tools/meshy/heightfield.py, own units, box 3.98 x 0.71 x 4): the inner
+	floor and the outer plinth at 0.229 (FloorAt of the height), the frame's
+	top 0.57 (0.13 wide, 0.21-0.34 in from the edge), the corner posts' 0.71
+	(0.33 square). At the pad's size the frame runs over the build grid's
+	outer cells (about 27.5-29.7 studs out from the centre), so it stands low
+	(Height): a machine's base plate (0.3) about covers the frame, the posts
+	reach 0.43. No shadow (a floor; phones). Nil while there is no upload.
+]]
+PlotBuilder.FloorMesh = { Name = "Prop_PlotBase", Height = 0.64, FloorAt = 0.3213 }
+
+local function floorMesh(m: Model, cf: CFrame, size: number): MeshPart?
+	local spec = PlotBuilder.FloorMesh
+	local h = spec.Height
+	local at = cf * CFrame.new(0, h / 2 - spec.FloorAt * h, 0)
+	local look = MeshKit.part(spec.Name, Vector3.new(size, h, size), at, { Name = "PlotFloor", CastShadow = false })
+	if look then
+		look.Parent = m
+	end
+	return look
+end
+
 function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng): Model
 	local size = GameConfig.PlotCells * GameConfig.CellSize
 	local half = size / 2
@@ -816,65 +918,72 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	-- the pad has a 1-stud cobble border around the grid for the walls
 	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size + 2, 1.2, size + 2), PLOT_EDGE, nil, { CanTouch = false })
 	pad.Name = "Pad"
-	-- the build grid (owner 2026-10-17: a metal floor like the machine
-	-- pictures): a dark gunmetal band exactly the grid's size shows round a
-	-- light metal plate with painted tile seams and a soft checker, glowing
-	-- orange strips lie on the band (all flat: tops at y <= 0.05, no
-	-- collision, not raycast, so building and placement see the pad only)
-	local flat = {
-		CanTouch = false,
-		CanQuery = false,
-		CanCollide = false,
-		CastShadow = false,
-	}
-	local band = 1.6
-	local tile = Geo.block(m, cf * CFrame.new(0, -0.025, 0), Vector3.new(size, 0.07, size), PLOT_FRAME, nil, flat)
-	tile.Name = "PlotTile"
-	local inner = half - band
-	local plate = Geo.block(m, cf * CFrame.new(0, 0.0, 0), Vector3.new(inner * 2, 0.06, inner * 2), PLOT_PLATE, nil, flat)
-	plate.Name = "Plate"
-	plate.Reflectance = 0.04
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "Tiles"
-	gui.Face = Enum.NormalId.Top
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 12
-	gui.LightInfluence = 1
-	gui.MaxDistance = 260
-	gui.Parent = plate
-	local cell = GameConfig.CellSize
-	local n = GameConfig.PlotCells
-	local function frame(x: number, y: number, w: number, h: number, color: Color3)
-		local f = Instance.new("Frame")
-		f.BorderSizePixel = 0
-		f.BackgroundColor3 = color
-		f.Position = UDim2.fromScale(x, y)
-		f.Size = UDim2.fromScale(w, h)
-		f.Parent = gui
-	end
-	-- cell edges in the plate's 0..1 space (the plate is the grid minus the band)
-	local function at(k: number): number
-		return math.clamp((-half + k * cell + inner) / (inner * 2), 0, 1)
-	end
-	for row = 0, n - 1 do
-		for col = 0, n - 1 do
-			if (row + col) % 2 == 0 then
-				frame(at(col), at(row), at(col + 1) - at(col), at(row + 1) - at(row), PLOT_PLATE_ALT)
+	-- the owner's plot model as the floor (MeshKit, see FloorMesh): the pad stays the
+	-- collider, invisible under it; else the metal floor
+	local floorLook = floorMesh(m, cf, size + 2)
+	if floorLook then
+		pad.Transparency = 1
+	else
+		-- the build grid (owner 2026-10-17: a metal floor like the machine
+		-- pictures): a dark gunmetal band exactly the grid's size shows round a
+		-- light metal plate with painted tile seams and a soft checker, glowing
+		-- orange strips lie on the band (all flat: tops at y <= 0.05, no
+		-- collision, not raycast, so building and placement see the pad only)
+		local flat = {
+			CanTouch = false,
+			CanQuery = false,
+			CanCollide = false,
+			CastShadow = false,
+		}
+		local band = 1.6
+		local tile = Geo.block(m, cf * CFrame.new(0, -0.025, 0), Vector3.new(size, 0.07, size), PLOT_FRAME, nil, flat)
+		tile.Name = "PlotTile"
+		local inner = half - band
+		local plate = Geo.block(m, cf * CFrame.new(0, 0.0, 0), Vector3.new(inner * 2, 0.06, inner * 2), PLOT_PLATE, nil, flat)
+		plate.Name = "Plate"
+		plate.Reflectance = 0.04
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "Tiles"
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 12
+		gui.LightInfluence = 1
+		gui.MaxDistance = 260
+		gui.Parent = plate
+		local cell = GameConfig.CellSize
+		local n = GameConfig.PlotCells
+		local function frame(x: number, y: number, w: number, h: number, color: Color3)
+			local f = Instance.new("Frame")
+			f.BorderSizePixel = 0
+			f.BackgroundColor3 = color
+			f.Position = UDim2.fromScale(x, y)
+			f.Size = UDim2.fromScale(w, h)
+			f.Parent = gui
+		end
+		-- cell edges in the plate's 0..1 space (the plate is the grid minus the band)
+		local function at(k: number): number
+			return math.clamp((-half + k * cell + inner) / (inner * 2), 0, 1)
+		end
+		for row = 0, n - 1 do
+			for col = 0, n - 1 do
+				if (row + col) % 2 == 0 then
+					frame(at(col), at(row), at(col + 1) - at(col), at(row + 1) - at(row), PLOT_PLATE_ALT)
+				end
 			end
 		end
-	end
-	for k = 1, n - 1 do
-		local u = at(k)
-		frame(u - 0.0015, 0, 0.003, 1, PLOT_SEAM)
-		frame(0, u - 0.0015, 1, 0.003, PLOT_SEAM)
-	end
-	-- glowing strips on the band, a little in from the walls
-	local edge = half - band / 2
-	for _, s in { -1, 1 } do
-		local strip = Geo.block(m, cf * CFrame.new(0, 0.02, s * edge), Vector3.new(size - 6, 0.04, 0.22), PLOT_GLOW, NEON, flat)
-		strip.Name = "FloorGlow"
-		strip = Geo.block(m, cf * CFrame.new(s * edge, 0.02, 0), Vector3.new(0.22, 0.04, size - 6), PLOT_GLOW, NEON, flat)
-		strip.Name = "FloorGlow"
+		for k = 1, n - 1 do
+			local u = at(k)
+			frame(u - 0.0015, 0, 0.003, 1, PLOT_SEAM)
+			frame(0, u - 0.0015, 1, 0.003, PLOT_SEAM)
+		end
+		-- glowing strips on the band, a little in from the walls
+		local edge = half - band / 2
+		for _, s in { -1, 1 } do
+			local strip = Geo.block(m, cf * CFrame.new(0, 0.02, s * edge), Vector3.new(size - 6, 0.04, 0.22), PLOT_GLOW, NEON, flat)
+			strip.Name = "FloorGlow"
+			strip = Geo.block(m, cf * CFrame.new(s * edge, 0.02, 0), Vector3.new(0.22, 0.04, size - 6), PLOT_GLOW, NEON, flat)
+			strip.Name = "FloorGlow"
+		end
 	end
 
 	-- soft walls on the border: the road entrance at the front (-Z local)
