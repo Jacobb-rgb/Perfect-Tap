@@ -10,7 +10,7 @@
 	  train             TrainBuilder.locomotive (the shop's Express Train pass)
 	  board_<BoardId>   HoverboardBuilder.build
 	  backpack_<Id>     BackpackBuilder.build for display (no shoulder straps), seen from behind
-	  item_<Ore>        ItemBuilder.build: a pristine clean ore (luck, night, enchant cards)
+	  item_<Ore>        ItemBuilder.build: a pristine clean ore (luck, night, enchant cards), a close-up
 	  blaster           BlasterBuilder.build (the Next Blaster card)
 	  pass_crown        a gold crown with gems (the Forgemaster's Pass)
 	  luck_server / clover   a four / three leaf clover (the luck cards)
@@ -89,7 +89,7 @@ function PictureModels.podium(): Model
 	local m = model("Podium")
 	Geo.cylinder(m, Vector3.new(0, 0.4, 0), 0.8, 3.6, rgb(70, 76, 92), nil, decor())
 	Geo.cylinder(m, Vector3.new(0, 0.9, 0), 0.25, 3.0, rgb(255, 196, 46), Enum.Material.Metal, decor())
-	local ok, ore = pcall(ItemBuilder.build, { Kind = "Clean", OreId = "Gold", Grade = "Pristine" }, CFrame.new(0, 1.8, 0), "podium")
+	local ok, ore = pcall(ItemBuilder.build, { Kind = "Clean", OreId = "Gold", Grade = "Pristine" }, CFrame.new(0, 1.8, 0), "podium", true)
 	if ok then
 		for _, part in (ore :: Model):GetChildren() do
 			part.Parent = m
@@ -166,7 +166,8 @@ function PictureModels.build(name: string): (Model?, Vector3)
 		-- (the packs face +Z: the side the wearer's camera sees)
 		return if ok then made else nil, Vector3.new(0.5, 0.35, 1)
 	elseif string.sub(name, 1, 5) == "item_" then
-		local ok, made = pcall(ItemBuilder.build, { Kind = "Clean", OreId = string.sub(name, 6), Grade = "Pristine" }, CFrame.new(), name)
+		local ok, made =
+			pcall(ItemBuilder.build, { Kind = "Clean", OreId = string.sub(name, 6), Grade = "Pristine" }, CFrame.new(), name, true)
 		return if ok then made else nil, Vector3.new(-0.5, 0.5, -1)
 	elseif name == "blaster" then
 		local ok, tool = pcall(BlasterBuilder.build, 5)
