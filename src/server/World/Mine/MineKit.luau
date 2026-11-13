@@ -46,8 +46,13 @@ local MovementConfig = require(Shared:WaitForChild("Config"):WaitForChild("Movem
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local Railway = require(World:WaitForChild("Railway"))
+local MeshKit = require(Shared:WaitForChild("Builders"):WaitForChild("MeshKit"))
 
 local MineKit = {}
+
+-- The owner's elevator model (Prop_MineElevator, a tall wooden shaft with blue crystals): when it is
+-- uploaded the stop is that tower on the steel platform instead of the girder frame and cage.
+MineKit.ElevatorTowerHeight = 24
 
 MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-6 stream on their own, far from the town)
 MineKit.NearPartBudget = 1250 -- floors 1-3 stream in with the town (the quarry rim on phones): keep them light
@@ -255,41 +260,9 @@ end
 
 ---------------------------------------------------------------- the elevator stop
 
---[[
-	The elevator stop: a steel platform with hazard edges, four girder posts up to
-	a machine head with a pulley wheel and cables, an open cage on the platform,
-	a neon "ELEVATOR" sign and a "FLOOR N" plate, and a call panel with a glowing
-	button (the prompt goes on its "PromptPoint" attachment). About 60 parts, one
-	PointLight. Tagged "MineElevator", attribute Floor.
-]]
-function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Model
-	local m = Instance.new("Model")
-	m.Name = "Elevator"
-	m.Parent = parent
-	m:AddTag("MineElevator")
-	m:AddTag(MovementConfig.BeamIgnoreTag) -- never blocks the mining beam
-	m:SetAttribute("Floor", floorIndex)
-	local half = 4.2
-	local height = 16
-	local plate = Geo.block(m, cf * CFrame.new(0, 0.3, 0), Vector3.new(half * 2 + 1.2, 0.6, half * 2 + 1.2), STEEL_DARK, METAL, SOLID)
-	plate.Name = "Base"
-	-- hazard stripes along the front edge
-	for i = -3, 3 do
-		local color = if i % 2 == 0 then HAZARD else Color3.fromRGB(30, 30, 34)
-		Geo.block(m, cf * CFrame.new(i * 1.3, 0.62, -half - 0.35), Vector3.new(1.3, 0.06, 0.5), color, nil, GLOW)
-	end
-	-- girder posts with cross braces
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			local post = cf * CFrame.new(sx * half, height / 2 + 0.6, sz * half)
-			Geo.block(m, post, Vector3.new(0.7, height, 0.7), STEEL, METAL, SOLID)
-			Geo.block(m, post * CFrame.new(-sx * 0.3, 0, 0), Vector3.new(0.18, height, 1.0), STEEL_DARK, METAL, DECOR)
-		end
-		for k = 1, 3 do
-			local y = 0.6 + k * (height / 4)
-			Geo.block(m, cf * CFrame.new(sx * half, y, 0) * CFrame.Angles(math.rad(if k % 2 == 0 then 38 else -38), 0, 0), Vector3.new(0.25, 0.3, half * 2.5), STEEL_DARK, METAL, DECOR)
-		end
-	end
+-- The part-built elevator frame (no uploaded tower): the top beams, the machine head with the pulley
+-- wheel and cables, the open cage with its lamp, and the signs.
+local function elevatorFrame(m: Model, cf: CFrame, floorIndex: number, half: number, height: number)
 	for _, sz in { -1, 1 } do
 		Geo.block(m, cf * CFrame.new(0, height + 0.6, sz * half), Vector3.new(half * 2 + 0.7, 0.7, 0.7), STEEL, METAL, SOLID)
 	end
@@ -328,6 +301,64 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Mod
 	-- signs: ELEVATOR over the front, FLOOR N on the head
 	Style.sign(m, cf * CFrame.new(0, 9.4, -half - 0.6), "ELEVATOR", 7.5, 1.6, { Kind = "Glow", DoubleSided = true })
 	Style.sign(m, cf * CFrame.new(0, height + 1.6, -half * 0.6 - 0.05), "FLOOR " .. floorIndex, 4.8, 1.1, { Kind = "Stone", Depth = 0.3 })
+end
+
+--[[
+	The elevator stop: a steel platform with hazard edges, four girder posts up to
+	a machine head with a pulley wheel and cables, an open cage on the platform,
+	a neon "ELEVATOR" sign and a "FLOOR N" plate, and a call panel with a glowing
+	button (the prompt goes on its "PromptPoint" attachment). About 60 parts, one
+	PointLight. Tagged "MineElevator", attribute Floor.
+]]
+function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Model
+	local m = Instance.new("Model")
+	m.Name = "Elevator"
+	m.Parent = parent
+	m:AddTag("MineElevator")
+	m:AddTag(MovementConfig.BeamIgnoreTag) -- never blocks the mining beam
+	m:SetAttribute("Floor", floorIndex)
+	local half = 4.2
+	local height = 16
+	local plate = Geo.block(m, cf * CFrame.new(0, 0.3, 0), Vector3.new(half * 2 + 1.2, 0.6, half * 2 + 1.2), STEEL_DARK, METAL, SOLID)
+	plate.Name = "Base"
+	-- hazard stripes along the front edge
+	for i = -3, 3 do
+		local color = if i % 2 == 0 then HAZARD else Color3.fromRGB(30, 30, 34)
+		Geo.block(m, cf * CFrame.new(i * 1.3, 0.62, -half - 0.35), Vector3.new(1.3, 0.06, 0.5), color, nil, GLOW)
+	end
+	local own = MeshKit.box("Prop_MineElevator")
+	local tower = if own then MeshKit.scaled("Prop_MineElevator", MineKit.ElevatorTowerHeight / own.Y, cf * CFrame.new(0, 0.6 + MineKit.ElevatorTowerHeight / 2, 0)) else nil
+	if tower then
+		tower.Name = "Tower"
+		tower.Parent = m
+		-- a warm lamp in the cabin, the signs over the front and near the top
+		local cabinLamp = Geo.block(m, cf * CFrame.new(0, 7.4, 0), Vector3.new(1.6, 0.2, 1.6), Color3.fromRGB(255, 240, 210), NEON, GLOW)
+		cabinLamp.Name = "CageLamp"
+		local towerLight = Instance.new("PointLight")
+		towerLight.Color = Color3.fromRGB(255, 236, 200)
+		towerLight.Range = 18
+		towerLight.Brightness = 1.4
+		towerLight.Shadows = false
+		towerLight.Parent = cabinLamp
+		local front = -tower.Size.Z / 2 - 0.5
+		Style.sign(m, cf * CFrame.new(0, 9.4, front), "ELEVATOR", 7.5, 1.6, { Kind = "Glow", DoubleSided = true })
+		Style.sign(m, cf * CFrame.new(0, MineKit.ElevatorTowerHeight - 2.6, front), "FLOOR " .. floorIndex, 4.8, 1.1, { Kind = "Stone", Depth = 0.3 })
+	end
+	-- girder posts with cross braces (the part-built frame)
+	for _, sx in if tower then {} else { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local post = cf * CFrame.new(sx * half, height / 2 + 0.6, sz * half)
+			Geo.block(m, post, Vector3.new(0.7, height, 0.7), STEEL, METAL, SOLID)
+			Geo.block(m, post * CFrame.new(-sx * 0.3, 0, 0), Vector3.new(0.18, height, 1.0), STEEL_DARK, METAL, DECOR)
+		end
+		for k = 1, 3 do
+			local y = 0.6 + k * (height / 4)
+			Geo.block(m, cf * CFrame.new(sx * half, y, 0) * CFrame.Angles(math.rad(if k % 2 == 0 then 38 else -38), 0, 0), Vector3.new(0.25, 0.3, half * 2.5), STEEL_DARK, METAL, DECOR)
+		end
+	end
+	if not tower then
+		elevatorFrame(m, cf, floorIndex, half, height)
+	end
 	-- call panel with the glowing button and the prompt point
 	local panel = Geo.block(m, cf * CFrame.new(half + 1.4, 2.2, -half + 0.6), Vector3.new(1.2, 3.2, 0.6), STEEL_DARK, METAL, SOLID)
 	panel.Name = "CallPanel"
