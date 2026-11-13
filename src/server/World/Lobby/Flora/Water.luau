@@ -13,6 +13,7 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 
@@ -77,10 +78,21 @@ function Water.lilyPond(parent: Instance, rng: Rng.Rng)
 	local pond = Style.pond(m, c, piece.Size.X, piece.Size.Z, rng, { LilyPads = 4, Rim = false })
 	pond.Name = "Pond"
 	dress(pond, c, piece.Size.X, piece.Size.Z, 3, rng)
-	Kit.rim(m, c, piece.Size.X, piece.Size.Z, rng, {})
+	local rim = Kit.rim(m, c, piece.Size.X, piece.Size.Z, rng, {})
 	-- cattails in the shallow corners
-	Kit.cattails(m, c + Vector3.new(-hx + 2.6, 0, -hz + 2.4), rng, 3)
-	Kit.cattails(m, c + Vector3.new(hx - 2.8, 0, hz - 2.2), rng, 2)
+	local reeds = Kit.cattails(m, c + Vector3.new(-hx + 2.6, 0, -hz + 2.4), rng, 3)
+	for _, part in Kit.cattails(m, c + Vector3.new(hx - 2.8, 0, hz - 2.2), rng, 2) do
+		table.insert(reeds, part)
+	end
+	-- the owner's lily pond (its own stones, reeds and flowers), its low rim toward the hero camera
+	if MeshNature.pond(pond, c, piece.Size.X, piece.Size.Z, { Front = Vector3.new(0, 0, 1) }) then
+		for _, part in rim do
+			part:Destroy()
+		end
+		for _, part in reeds do
+			part:Destroy()
+		end
+	end
 	-- a small purple crystal cluster on the west bank (no light)
 	Kit.smallCrystals(m, CFrame.new(c + Vector3.new(-hx - 0.2, 0, -hz + 2.6)) * CFrame.Angles(0, 0.4, 0), C.CrystalPurpleDeep, rng, 2.4)
 	-- pink flowers on the south-west bank corner

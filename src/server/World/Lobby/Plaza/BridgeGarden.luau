@@ -31,6 +31,7 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
 local VaultStatue = require(script.Parent.Parent.Vault.Statue)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -143,11 +144,16 @@ local function reeds(parent: Instance, at: Vector3, rng: Rng.Rng)
 	end
 end
 
-local function pond(parent: Instance, center: Vector3, size: Vector2, lilyCount: number, rng: Rng.Rng): Model
+-- `mesh`: the owner's lily pond replaces it (MeshNature.pond: the side ponds; the pond under
+-- the bridge stays), its low rim toward the path (x 0).
+local function pond(parent: Instance, center: Vector3, size: Vector2, lilyCount: number, rng: Rng.Rng, mesh: boolean?): Model
 	local m = Style.pond(parent, center, size.X, size.Y, rng)
 	lilies(m, center, size.X, size.Y, lilyCount, rng)
 	reeds(m, center + Vector3.new(size.X * 0.36, 0, size.Y * 0.32), rng)
 	reeds(m, center + Vector3.new(-size.X * 0.34, 0, -size.Y * 0.3), rng)
+	if mesh then
+		MeshNature.pond(m, center, size.X, size.Y, { Front = Vector3.new(-math.sign(center.X), 0, 0) })
+	end
 	return m
 end
 
@@ -466,8 +472,9 @@ end
 
 local function finish(m: Model)
 	-- water and leaves are decoration; the deck, the steps and the path stay walkable
+	-- (and the invisible trunks of the owner's trees: MeshNature)
 	for _, d in m:GetDescendants() do
-		if d:IsA("BasePart") and d.Transparency > 0 then
+		if d:IsA("BasePart") and d.Transparency > 0 and not MeshNature.isCollider(d) then
 			d.CanCollide = false
 		end
 	end
@@ -493,7 +500,7 @@ local function passage(m: Model, look: Look, rng: Rng.Rng)
 		end
 	end
 	for _, p in P.SidePonds do
-		pond(m, p.Center, p.Size, 4, rng)
+		pond(m, p.Center, p.Size, 4, rng, true)
 	end
 	for _, side in { -1, 1 } do
 		for _, z in P.BambooZ do
@@ -691,7 +698,7 @@ function BridgeGarden.build(parent: Instance, rng: Rng.Rng, styleId: string?, la
 	bridge(m, look, rng)
 	path(m, look, rng, BridgeGarden.BridgeTo.Z - 0.5, BridgeGarden.PathEnd)
 	for _, p in BridgeGarden.SidePonds do
-		pond(m, p.Center, p.Size, 5, rng)
+		pond(m, p.Center, p.Size, 5, rng, true)
 	end
 	for _, side in { -1, 1 } do
 		for _, z in { -73, -81, -97, -105 } do

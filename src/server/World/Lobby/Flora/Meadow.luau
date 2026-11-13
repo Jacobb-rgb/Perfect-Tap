@@ -46,6 +46,7 @@ local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
 local Railway = require(script.Parent.Parent.Parent.Railway)
 local Planets = require(script.Parent.Parent.Sky.Planets)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 
@@ -190,7 +191,11 @@ function Meadow.index(map: Instance, skip: Instance?): Index
 						else box
 				end
 			elseif box.Max.Y > -0.5 and box.Min.Y < 160 and box.Max.X - box.Min.X < 600 and not isLawn(d, box) then
-				add(index, box)
+				-- (the owner's trees: their trunk and crown, not one box from the ground up)
+				local boxes: { Box } = MeshNature.treeBoxes(d) or { box }
+				for _, b in boxes do
+					add(index, b)
+				end
 			end
 		end
 	end
@@ -295,7 +300,10 @@ end
 local function track(index: Index, model: Instance)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
-			add(index, bounds(d))
+			local boxes: { Box } = MeshNature.treeBoxes(d) or { bounds(d) }
+			for _, b in boxes do
+				add(index, b)
+			end
 		end
 	end
 end
@@ -305,6 +313,8 @@ end
 Meadow.track = track
 
 local function decorate(model: Instance)
+	-- (the owner's meshes: their colliders would collide with nothing here)
+	MeshNature.dropColliders(model)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CanCollide = false
@@ -432,7 +442,9 @@ end
 
 -- A light jungle tree in the Vault's blocky Minecraft-jungle style: a root
 -- flare and a thick trunk, three octagonal canopy layers, two branches with
--- leaf clumps, two hanging vines. 14 parts.
+-- leaf clumps, two hanging vines. 14 parts; with the owner's tree uploaded
+-- (MeshNature.tree) one mesh in the leaves' colour, its crown as wide as the
+-- old canopy (so it stands lower), and an invisible trunk collider.
 local function jungleTree(parent: Instance, base: Vector3, h: number, R: number, rng: Rng.Rng, tint: { Color3 }?): Model
 	local m = Style.model("JungleTree", parent)
 	-- leaf, lit leaf (an autumn tree takes a Style.TreeKinds palette, like the concept's colourful crowns)
@@ -445,7 +457,7 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 		Vector3.new(T * 1.6, 1.6, T * 1.6),
 		JUNGLE.BarkDark
 	)
-	Style.block(m, CFrame.new(base + Vector3.new(0, h / 2, 0)), Vector3.new(T, h, T), Style.vary(JUNGLE.Bark, rng, 0.04))
+	local trunk = Style.block(m, CFrame.new(base + Vector3.new(0, h / 2, 0)), Vector3.new(T, h, T), Style.vary(JUNGLE.Bark, rng, 0.04))
 	local y = h
 	for i, k in { 1, 0.78, 0.48 } do
 		local w = 2 * R * k
@@ -480,10 +492,12 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 			JUNGLE.Vine
 		)
 	end
+	MeshNature.tree(m, MeshNature.kindOf(leaf), trunk, R + 0.5)
 	return m
 end
 
--- A pond: Style.pond (deep water, water, a rim of stones) with lily pads and reeds.
+-- A pond: Style.pond (deep water, water, a rim of stones) with lily pads and reeds
+-- (or the owner's lily pond: MeshNature.pond).
 -- A small turning group around an invisible hub (tag Spin: the client's
 -- DecorController turns and bobs it; Atomic so its parts stream together).
 local function spinner(parent: Instance, name: string, hub: Vector3, speed: number, bob: number, bobSpeed: number): (Model, Part)
@@ -538,6 +552,8 @@ local function pond(parent: Instance, center: Vector3, sx: number, sz: number, r
 			end
 		end
 	end
+	-- (the owner's lily pond, its long side the pond's: the placement keeps room round it)
+	MeshNature.pond(m, center, sx, sz, { Cover = true })
 	return m
 end
 

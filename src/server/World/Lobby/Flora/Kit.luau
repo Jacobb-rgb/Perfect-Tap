@@ -15,6 +15,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -278,9 +279,27 @@ end
 
 ---------------------------------------------------------------- trees
 
+--[[
+	Room round `p` before a crown's box reaches a planned street lamp's spot (its pole, arm and
+	head): the street lamps come after the trees and leave out a spot a crown hangs into
+	(Plaza/StreetLamps), so the owner's hero trees (MeshNature.tree) keep this far off them.
+]]
+function Kit.lampRoom(p: Vector3): number
+	local room = math.huge
+	for _, spot in StreetLampPlan.spots() do
+		local arm = StreetLampPlan.Sizes[spot.Size].Arm
+		for _, f in { 0, 0.45, 0.9, 1.25 } do
+			local q = spot.Position + spot.Facing * (arm * f)
+			local half = if f == 0 then StreetLampPlan.BaseHalf else 0.7
+			room = math.min(room, math.max(math.abs(q.X - p.X), math.abs(q.Z - p.Z)) - half - 0.3)
+		end
+	end
+	return room
+end
+
 -- Rough sizes of Style.tree at a scale (crown reach from the trunk, top height).
 function Kit.treeReach(scale: number): number
-	return 5.6 * scale
+	return Style.TreeReach * scale
 end
 function Kit.treeHeight(scale: number): number
 	return 14.8 * scale
@@ -311,13 +330,19 @@ local function cluster(parent: Instance, cf: CFrame, k: number, shades: { Color3
 	Style.block(parent, cf * CFrame.new(0, -k * 0.42, 0), Vector3.new(k * 0.86, k * 0.16, k * 0.86), shades[3], nil, Style.tiny())
 end
 
+-- Crown reach of Kit.bigTree from its trunk at scale 1 (its four clusters' mean reach).
+Kit.BigTreeReach = 4.2
+
 --[[
 	Hero tree (concept v1 voxel trees): a visible trunk with a root and two
 	branch stubs carrying four offset canopy clusters of smaller voxels (the
 	top one over the trunk, two lower ones out to the sides, one to the
 	back), each light on top and dark underneath. `scale` 1-1.6; `sideX`
 	(+1 / -1, optional) puts the big side cluster toward world +X / -X.
-	~16 parts.
+	~16 parts; with the owner's tree uploaded one mesh, its crown
+	Kit.BigTreeReach * scale round (the clusters' mean reach; less where a
+	planned street lamp stands: Kit.lampRoom), and an invisible trunk
+	collider (MeshNature.tree).
 ]]
 function Kit.bigTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, sideX: number?): Model
 	local s = scale
@@ -367,8 +392,12 @@ function Kit.bigTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng,
 		local k = c.K * s * rng:range(0.94, 1.06)
 		cluster(m, frame * CFrame.new(c.X * s, h + c.Y * s, c.Z * s), k, shades, rng)
 	end
+	MeshNature.tree(m, kind, trunk, math.min(Kit.BigTreeReach * s, Kit.lampRoom(base.Position)))
 	return m
 end
+
+-- Crown reach Trees.belt plans round a town-side belt tree at scale 1.
+Kit.BeltReach = 3.6
 
 --[[
 	Low-part voxel tree for the town-edge belts: a slim trunk and a crown of
@@ -376,6 +405,10 @@ end
 	and a mid lump to one side). `lean` (a world XZ unit vector, optional)
 	puts the lumps on that side only (the belt's plot-side row keeps its
 	crown off the bases). 5-6 parts; every crown part stands over 5 studs.
+	With the owner's tree uploaded (MeshNature.tree) one mesh and an
+	invisible trunk collider: its crown Kit.BeltReach * scale round (the
+	room Trees.belt plans), a leaning one's inside the old crown's box (off
+	the bases).
 ]]
 function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, lean: Vector3?, lift: number?): Model
 	local s = scale
@@ -426,13 +459,15 @@ function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng
 		nil,
 		p
 	)
+	MeshNature.tree(m, kind, trunk, if lean then nil else Kit.BeltReach * s)
 	return m
 end
 
 --[[
 	Lean voxel tree for the scatter (~8 parts): trunk, root, a crown core
 	with a light cap, three side lumps and a dark underside. Reads like
-	Style.tree from a distance at a third of the cost.
+	Style.tree from a distance at a third of the cost. With the owner's tree
+	uploaded the same mesh as Style.tree (MeshNature.tree).
 ]]
 function Kit.leanTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number?): Model
 	local s = scale or 1
@@ -469,6 +504,7 @@ function Kit.leanTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng
 		Style.block(m, cf * CFrame.new(offset), Vector3.new(k, k * 0.9, k), Style.vary(color, rng, 0.04), nil, p)
 	end
 	Style.block(m, cf * CFrame.new(0, -size * 0.37, 0), Vector3.new(size * 0.84, size * 0.1, size * 0.84), dark, nil, Style.tiny())
+	MeshNature.tree(m, kind, trunk, Style.TreeReach * s)
 	return m
 end
 
@@ -518,17 +554,20 @@ function Kit.rim(parent: Instance, center: Vector3, sizeX: number, sizeZ: number
 end
 
 -- A clump of 2-3 cattails (dark green stalks with brown heads) standing in shallow water.
-function Kit.cattails(parent: Instance, at: Vector3, rng: Rng.Rng, count: number?)
+-- Returns its parts.
+function Kit.cattails(parent: Instance, at: Vector3, rng: Rng.Rng, count: number?): { Part }
+	local parts = {}
 	for i = 1, count or 3 do
 		local q = at + Vector3.new(rng:range(-0.8, 0.8), 0, rng:range(-0.8, 0.8))
 		local h = rng:range(2.2, 3.2)
 		local tilt = CFrame.Angles(rng:range(-0.12, 0.12), 0, rng:range(-0.12, 0.12))
 		local foot = CFrame.new(q) * tilt
-		Style.block(parent, foot * CFrame.new(0, h / 2, 0), Vector3.new(0.25, h, 0.25), C.LeafGreenDark, nil, Style.tiny())
+		table.insert(parts, Style.block(parent, foot * CFrame.new(0, h / 2, 0), Vector3.new(0.25, h, 0.25), C.LeafGreenDark, nil, Style.tiny()))
 		if i <= 2 then
-			Style.block(parent, foot * CFrame.new(0, h - 0.3, 0), Vector3.new(0.45, 0.8, 0.45), C.Trunk, nil, Style.tiny())
+			table.insert(parts, Style.block(parent, foot * CFrame.new(0, h - 0.3, 0), Vector3.new(0.45, 0.8, 0.45), C.Trunk, nil, Style.tiny()))
 		end
 	end
+	return parts
 end
 
 -- Small crystal cluster without a light: a dark rock and 2 neon crystals

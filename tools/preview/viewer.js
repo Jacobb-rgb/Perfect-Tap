@@ -537,7 +537,7 @@ async function main() {
       return files.get(file);
     };
     const boxOf = new Map();
-    for (const [asset, sx, sy, sz, cf, transparency, castShadow] of scene.meshes) {
+    for (const [asset, sx, sy, sz, cf, transparency, castShadow, tint] of scene.meshes) {
       const tile = /^(Floor_[A-Za-z]+)_\d+$/.exec(asset);
       const gltf = await loadFile((tile ? tile[1] : asset) + ".glb");
       if (!gltf) continue;
@@ -562,6 +562,11 @@ async function main() {
         material = material.clone();
         material.transparent = true;
         material.opacity = 1 - transparency;
+      }
+      // a tint (SurfaceAppearance.Color in the game) multiplies the colour map
+      if (Array.isArray(tint)) {
+        material = material.clone();
+        material.color = material.color.clone().multiply(new THREE.Color().setRGB(tint[0], tint[1], tint[2], THREE.SRGBColorSpace));
       }
       const obj = new THREE.Mesh(src.geometry, material);
       obj.matrixAutoUpdate = false;

@@ -25,6 +25,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Meadow = require(script.Parent.Meadow)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -91,7 +92,8 @@ local function pebbles(parent: Instance, p: Vector3, rng: Rng.Rng): Model
 	return m
 end
 
--- A boulder of two chunks with a light top, a moss blanket and a moss drip.
+-- A boulder of two chunks with a light top, a moss blanket and a moss drip (or the owner's
+-- mossy cliff in its box: MeshNature.swapInto).
 local function mossRock(parent: Instance, p: Vector3, rng: Rng.Rng): Model
 	local m = Style.model("MossRock", parent)
 	local s = rng:range(2.4, 3.2)
@@ -114,6 +116,7 @@ local function mossRock(parent: Instance, p: Vector3, rng: Rng.Rng): Model
 	)
 	bit(m, base * CFrame.new(-s * 0.12, h + s * 0.37, -s * 0.05), Vector3.new(s * 0.84, 0.18, s * 0.74), W.Moss, rng)
 	bit(m, base * CFrame.new(-s * 0.35, h * 0.62, -s * 0.5 - 0.06), Vector3.new(s * 0.45, h * 0.75, 0.16), W.MossDark, rng)
+	MeshNature.swapInto(m, MeshNature.Cliff, base, { Name = "MossRock", CastShadow = false })
 	return m
 end
 

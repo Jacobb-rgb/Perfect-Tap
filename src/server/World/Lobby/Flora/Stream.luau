@@ -24,6 +24,7 @@ local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 
@@ -129,6 +130,8 @@ function Stream.build(map: Instance, rng: Rng.Rng): Model
 			)
 		Geo.cylinder(pond, q, 0.12, rng:range(1.6, 2.6), C.LeafGreen, nil, Style.tiny())
 	end
+	-- (the owner's lily pond: its low rim toward the stream that leaves it south)
+	MeshNature.pond(pond, Stream.Pond.Center, Stream.Pond.Size.X, Stream.Pond.Size.Y, { Front = Vector3.new(0, 0, 1) })
 
 	-- the channel, leg by leg; the last leg runs out over the rim to its lip
 	local channel = Style.model("Channel", m)

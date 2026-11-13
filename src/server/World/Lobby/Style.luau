@@ -20,6 +20,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Props = require(script.Parent.Parent.Props)
+local MeshNature = require(script.Parent.Parent.MeshNature)
 
 local Style = {}
 
@@ -317,10 +318,15 @@ function Style.canopy(parent: Instance, cf: CFrame, size: number, shades: { Colo
 	return parts
 end
 
+-- Crown reach of Style.tree from its trunk at scale 1 (Flora/Kit.treeReach plans the room).
+Style.TreeReach = 5.6
+
 --[[
 	Voxel tree. kind = "Green" | "Pink" | "Red" | "Yellow" | "Orange".
 	scale 1 = ~13 studs tall. Quarter-turn yaw only, so trees share the
-	world's voxel grid. About 9-14 parts.
+	world's voxel grid. About 9-14 parts; with the owner's tree uploaded
+	(MeshNature.tree) one mesh, its crown Style.TreeReach * scale round, and
+	an invisible trunk collider.
 ]]
 function Style.tree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number?): Model
 	local s = scale or 1
@@ -329,7 +335,7 @@ function Style.tree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, 
 	local frame = base * CFrame.Angles(0, rng:int(0, 3) * math.pi / 2, 0)
 	local h = rng:range(6, 7.5) * s
 	local tw = 1.7 * s
-	Style.block(m, frame * CFrame.new(0, h / 2, 0), Vector3.new(tw, h, tw), Style.vary(C.Trunk, rng, 0.04))
+	local trunk = Style.block(m, frame * CFrame.new(0, h / 2, 0), Vector3.new(tw, h, tw), Style.vary(C.Trunk, rng, 0.04))
 	-- roots and a stub branch
 	Style.block(m, frame * CFrame.new(tw * 0.55, 0.4 * s, 0), Vector3.new(tw * 0.6, 0.8 * s, tw * 0.6), C.TrunkDark, nil, Style.tiny())
 	Style.block(m, frame * CFrame.new(0, 0.3 * s, -tw * 0.55), Vector3.new(tw * 0.5, 0.6 * s, tw * 0.5), C.TrunkDark, nil, Style.tiny())
@@ -341,6 +347,7 @@ function Style.tree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, 
 		local side = if rng:chance(0.5) then 1 else -1
 		Style.canopy(m, frame * CFrame.new(side * size * 0.55, h + size * 0.02, size * 0.2), size * 0.55, shades, rng)
 	end
+	MeshNature.tree(m, kind, trunk, Style.TreeReach * s)
 	return m
 end
 
@@ -1077,7 +1084,9 @@ end
 	Blocky pond on flat ground: dark bottom, water surface 0.65 above the
 	ground, a rim of stone cubes around a rounded rectangle, lily pads and
 	koi. opts: LilyPads (count), Koi (count), Rim (default true), RimColor.
-	The water is non-collide over solid ground (wading, never a hole).
+	The water is non-collide over solid ground (wading, never a hole). The
+	owner's lily pond (MeshNature.pond) replaces it where its builder asks,
+	after its own dressing (oval ponds without a bridge over them).
 ]]
 function Style.pond(parent: Instance, center: Vector3, sizeX: number, sizeZ: number, rng: Rng.Rng, opts: Opts?): Model
 	local o: Opts = opts or {}
@@ -1414,7 +1423,9 @@ end
 	Voxel cliff chunk: stepped stone columns with a grass cap and a dirt
 	band, plus protruding accent stones on the front. `base` = bottom
 	center, front = LookVector, size = (width, height, depth). opts: Color,
-	Grass (default true), Columns.
+	Grass (default true), Columns. With the owner's mossy cliff uploaded
+	its pieces fill the box and one invisible box keeps the cliff solid
+	(MeshNature.cliff).
 ]]
 function Style.voxelCliff(parent: Instance, base: CFrame, size: Vector3, rng: Rng.Rng, opts: Opts?): Model
 	local o: Opts = opts or {}
@@ -1461,6 +1472,7 @@ function Style.voxelCliff(parent: Instance, base: CFrame, size: Vector3, rng: Rn
 			)
 		end
 	end
+	MeshNature.cliff(m, base, size, true)
 	return m
 end
 

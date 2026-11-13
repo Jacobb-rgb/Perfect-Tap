@@ -26,6 +26,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
+local MeshNature = require(script.Parent.Parent.Parent.MeshNature)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -55,6 +56,7 @@ local function frameAt(at: Vector3): CFrame
 end
 
 local function far(m: Model)
+	MeshNature.dropColliders(m)
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CanCollide = false
