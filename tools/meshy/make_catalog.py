@@ -18,7 +18,9 @@ for p in parts:
     n = p["name"]
     t = re.match(r"^Floor_([A-Za-z]+)_(\d+)$", n)
     if t:
-        floors.setdefault(t.group(1), []).append(n)
+        # a re-cut diorama keeps its floor: Floor_QuarryB_* are the Quarry's tiles
+        fid = {"QuarryB": "Quarry"}.get(t.group(1), t.group(1))
+        floors.setdefault(fid, []).append(n)
     elif n.startswith("Ore_") and not n.endswith("_Low"):
         ores.append(n[4:])
     elif n.startswith("Rock_"):

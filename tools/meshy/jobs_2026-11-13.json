@@ -1160,18 +1160,6 @@
   },
   {
    "mode": "tiles",
-   "name": "Floor_Quarry",
-   "src": "Meshy_AI_GreystoneQuarryDioram_1113171838_image-to-3d-texture.glb",
-   "out": "Floor_Quarry.glb",
-   "tris": 160000,
-   "cap": 19000,
-   "grid": 4,
-   "tex": 1024,
-   "normal": false,
-   "unit": 8.0
-  },
-  {
-   "mode": "tiles",
    "name": "Floor_EmberCaves",
    "src": "Meshy_AI_EmberCavesDiorama_1113171833_image-to-3d-texture.glb",
    "out": "Floor_EmberCaves.glb",
@@ -1239,6 +1227,60 @@
    "tex": 1024,
    "normal": true,
    "unit": 4.0
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_QuarryB",
+   "src": "Meshy_AI_GreystoneQuarryDioram_1113171838_image-to-3d-texture.glb",
+   "out": "Floor_QuarryB.glb",
+   "tris": 160000,
+   "cap": 19000,
+   "grid": 4,
+   "tex": 1024,
+   "normal": false,
+   "unit": 8.0,
+   "layout": {
+    "scale": 14.9063,
+    "ground_n": 0.04,
+    "center_n": [
+     0.0008,
+     0.0002
+    ]
+   },
+   "cuts": [
+    [
+     -24,
+     0.6,
+     -62,
+     24,
+     40,
+     -44
+    ],
+    [
+     -62,
+     0.6,
+     13,
+     -45,
+     40,
+     40
+    ],
+    [
+     45,
+     0.6,
+     13,
+     62,
+     40,
+     40
+    ],
+    [
+     45,
+     0.6,
+     -9,
+     62,
+     40,
+     5
+    ]
+   ]
   }
  ]
 }

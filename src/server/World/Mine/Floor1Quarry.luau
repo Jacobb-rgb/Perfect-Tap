@@ -37,6 +37,8 @@ local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloor
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
+local Diorama = require(World:WaitForChild("Mine"):WaitForChild("Diorama"))
+local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmbience"))
 
 local Floor = {}
 
@@ -425,7 +427,7 @@ end
 
 ---------------------------------------------------------------- the build
 
-function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
+local function buildParts(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	local cutaway = opts ~= nil and opts.Cutaway == true
 	local model = Instance.new("Model")
 	model.Name = "MineFloor" .. Floor.Index
@@ -784,6 +786,60 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	MineKit.ambience(ground, "CrystalHum", pt(c, GIANT.X, 3, GIANT.Z))
 
 	model.Parent = parent
+	return model
+end
+
+---------------------------------------------------------------- the owner's diorama
+
+--[[
+	The quarry from the owner's diorama (Mine/Diorama; the re-cut Floor_QuarryB has openings for the
+	DEPTHS portal at the back, the train band in both side walls and the grotto door in the east wall).
+	The part-built pit stays only where the diorama does not reach: its terraces up to the town
+	between the diorama's walls and the quarry's edge, the band walls behind the train portals, the
+	grotto lintel and the back wall under the massif (parts above DioramaKeep.Y). The diorama's walls
+	stood on nothing in the openings: flat dirt fills them at the ground.
+]]
+Floor.DioramaKeep = { X = 58.5, Z0 = -57.5, Z1 = 57.5, Y = 20 }
+Floor.DioramaFills = {
+	{ Min = Vector3.new(-24, -2, -59), Max = Vector3.new(24, 0, -44) }, -- under the DEPTHS portal
+	{ Min = Vector3.new(-59.5, -2, 13), Max = Vector3.new(-45, 0, 40) }, -- the train band, west
+	{ Min = Vector3.new(45, -2, 13), Max = Vector3.new(59.5, 0, 40) }, -- the train band, east
+	{ Min = Vector3.new(45, -2, -9), Max = Vector3.new(59.5, 0, 5) }, -- the grotto door
+}
+
+function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
+	if not Diorama.has(Floor.Index) then
+		return buildParts(parent, origin, opts)
+	end
+	local model = Diorama.build(Floor.Index, parent, origin, opts)
+	local rim = buildParts(model, origin, opts)
+	rim.Name = "QuarryRim"
+	rim:SetAttribute("Floor", nil)
+	local keep = Floor.DioramaKeep
+	local doomed: { Instance } = {}
+	for _, d in rim:GetDescendants() do
+		local name = d.Name
+		if d:IsA("Attachment") and d:HasTag(MineAmbience.Tag) then
+			table.insert(doomed, d) -- (the diorama brings the floor's ambience)
+		elseif name == "RockSpawns" or name == "GiantSpawn" or name == "Entrance" or name == "Elevator" or name == "BlasterGate" then
+			table.insert(doomed, d) -- (and its own gameplay pieces)
+		elseif d:IsA("BasePart") then
+			local p = origin:PointToObjectSpace(d.CFrame.Position)
+			if math.abs(p.X) < keep.X and p.Z > keep.Z0 and p.Z < keep.Z1 and p.Y < keep.Y then
+				table.insert(doomed, d)
+			end
+		end
+	end
+	for _, d in doomed do
+		pcall(function()
+			d:Destroy()
+		end)
+	end
+	for _, fill in Floor.DioramaFills do
+		local size = fill.Max - fill.Min
+		local part = Geo.block(model, origin * CFrame.new((fill.Min + fill.Max) / 2), size, C.Dirt, Enum.Material.Ground, SOLID)
+		part.Name = "Fill"
+	end
 	return model
 end
 

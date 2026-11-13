@@ -248,10 +248,42 @@ def job_bake(j):
     export([low], j["out"])
     return {"parts": [dict(name=j["name"], **info(low))]}
 
+def cut_boxes(ob, boxes):
+    # delete the faces whose centre lies in any box (Blender axes, normalized units): openings
+    # carved into a diorama (passages the game needs); the floor surface under them stays
+    if not boxes:
+        return
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    kill = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        for b in boxes:
+            if b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] <= c.z <= b[5]:
+                kill.append(f)
+                break
+    bmesh.ops.delete(bm, geom=kill, context='FACES')
+    bm.to_mesh(ob.data); bm.free()
+    log("  cut", len(kill), "faces")
+
+def local_boxes_to_blender(j):
+    # j["cuts"]: [[x0, y0, z0, x1, y1, z1], ...] in floor-local studs (Roblox axes) with
+    # j["layout"] = {"scale", "ground_n", "center_n": [cx, cz]} of that floor
+    out = []
+    lay = j.get("layout")
+    for c in j.get("cuts", []):
+        s, g = lay["scale"], lay["ground_n"]; cx, cz = lay["center_n"]
+        rx0, rx1 = c[0] / s + cx, c[3] / s + cx
+        ry0, ry1 = c[1] / s + g, c[4] / s + g
+        rz0, rz1 = c[2] / s + cz, c[5] / s + cz
+        # Roblox (x, y, z) -> Blender (x, -z, y)
+        out.append((rx0, -rz1, ry0, rx1, -rz0, ry1))
+    return out
+
 def job_tiles(j):
     # big diorama: decimate whole, split into a grid of tiles (<= cap tris each), bake one texture per tile
     high = import_glb(j["src"])
     normalize(high, "bottom", j.get("unit", 4.0))
+    cut_boxes(high, local_boxes_to_blender(j))
     make_emit(high)
     low = high.copy(); low.data = high.data.copy(); bpy.context.collection.objects.link(low)
     weld(low, 1e-5)
