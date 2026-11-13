@@ -4,6 +4,7 @@
 	lobby area, against the budgets in LobbyLayout.Budget.
 
 	  lune run tools/lune/lobby_stats.luau
+	  MESHY=1 lune run tools/lune/lobby_stats.luau   (the owner's Meshy models: stand-ins)
 
 	(tests/Lobby.spec.luau enforces the same budgets; this tool shows where
 	the parts go.)
@@ -14,6 +15,9 @@ local roblox = require("@lune/roblox") :: any
 
 local Loader = require("./lib/loader")
 Loader.init(process.cwd)
+if process.env.MESHY == "1" then
+	require("./lib/mesh_fakes")(Loader)
+end
 
 local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
