@@ -186,10 +186,18 @@ return function(T, Loader)
 			-- the layout: the station's footprint in the yard, off the grid, where the Foundry stood
 			local spot = BaseLayout.CleaningStation
 			local w, d = Grid.footprint("CleaningStation", spot.R)
-			T.near(spot.Area.Size.X, w * GameConfig.CellSize, 1e-9, "the area is the footprint (x)")
-			T.near(spot.Area.Size.Z, d * GameConfig.CellSize, 1e-9, "the area is the footprint (z)")
+			-- (bigger than a placed station, owner 2026-11-13: its footprint times spot.Scale)
+			T.truthy(spot.Scale >= 1.5, "the yard's station is much bigger")
+			T.near(spot.Area.Size.X, w * GameConfig.CellSize * spot.Scale, 1e-6, "the area is the footprint (x)")
+			T.near(spot.Area.Size.Z, d * GameConfig.CellSize * spot.Scale, 1e-6, "the area is the footprint (z)")
 			T.eq(spot.Area.Center, spot.Center, "centred on the pivot")
-			T.lt(GameConfig.PlotCells * GameConfig.CellSize / 2, spot.Center.Z - d * GameConfig.CellSize / 2, "off the grid, in the yard")
+			T.lt(GameConfig.PlotCells * GameConfig.CellSize / 2, spot.Center.Z - spot.Area.Size.Z / 2, "off the grid, in the yard")
+			-- it keeps the podiums' row and the train stop clear, with room to stand in front
+			local front = spot.Center.Z - spot.Area.Size.Z / 2
+			for _, podium in BaseLayout.Podiums do
+				T.truthy(front - (podium.Center.Z + podium.Size.Z / 2) >= 3, "room between the podiums and the station")
+			end
+			T.lt(spot.Center.Z + spot.Area.Size.Z / 2, BaseLayout.TrainStop.Center.Z - BaseLayout.TrainStop.Size.Z / 2, "clear of the train stop")
 			T.falsy(MachineData.StarterKit[1].Id == "CleaningStation", "new players get no station on the grid")
 			for _, entry in MachineData.StarterKit do
 				T.falsy(entry.Id == "CleaningStation", "no station in the starter kit")

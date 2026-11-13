@@ -4,15 +4,16 @@
 	name) and Placeholder = true. Mounted at ReplicatedStorage.Shared.Assets.MeshAssets unless the
 	owner's real templates are already there (force = true replaces them).
 
-	  require("./lib/mesh_fakes")(Loader, force?)
+	  require("./lib/mesh_fakes")(Loader, force?, importYaw?)
 	  require("./lib/mesh_fakes").unmount(Loader)
+	importYaw: the stand-ins carry ImportYaw like a real upload (MeshKit turns their clones back).
 ]]
 
 local roblox = require("@lune/roblox") :: any
 
 local Fakes = {}
 
-local function make(Loader: any, force: boolean?)
+local function make(Loader: any, force: boolean?, importYaw: number?)
 	local MeshKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.MeshKit")
 	local Catalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog")
 	local shared = Loader.find("ReplicatedStorage.Shared")
@@ -32,6 +33,9 @@ local function make(Loader: any, force: boolean?)
 		p.CanTouch = false
 		p:SetAttribute("Asset", name)
 		p:SetAttribute("Placeholder", true)
+		if importYaw then
+			p:SetAttribute("ImportYaw", importYaw)
+		end
 		p.Parent = folder
 	end
 	Loader.mount("ReplicatedStorage.Shared.Assets.MeshAssets", folder)
@@ -44,7 +48,7 @@ function Fakes.unmount(Loader: any)
 end
 
 return setmetatable(Fakes, {
-	__call = function(_, Loader: any, force: boolean?)
-		make(Loader, force)
+	__call = function(_, Loader: any, force: boolean?, importYaw: number?)
+		make(Loader, force, importYaw)
 	end,
 })

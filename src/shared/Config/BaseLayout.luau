@@ -85,11 +85,15 @@ BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 -- the Foundry was"): CleaningService builds the station there for the plot's owner (no grid
 -- cell, no save entry). Center = the footprint's centre on the ground (the machine model's
 -- pivot), R = its rotation like a placed machine's (0: the front, with the prompt and the
--- camera, faces the podiums and the grid); Area = its footprint (3 x 2 cells) for overlap tests.
+-- camera, faces the podiums and the grid); Scale = how much bigger than a placed one it stands
+-- (owner 2026-11-13: "strasne malinkej, zvets ho o dost"; it still keeps the podiums' row and the
+-- train stop clear, with room to stand in front); Area = its footprint (3 x 2 cells, scaled) for
+-- overlap tests.
 BaseLayout.CleaningStation = {
 	Center = Vector3.new(13, 0, YARD_Z0 + 19),
 	R = 0,
-	Area = rect(13, YARD_Z0 + 19, 12, 10, 8),
+	Scale = 1.6,
+	Area = rect(13, YARD_Z0 + 19, 12 * 1.6, 10, 8 * 1.6),
 }
 
 -- Train stop on the coastal railway (step 2). Its rail-side edge (z 59 at 12

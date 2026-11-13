@@ -65,6 +65,7 @@ local Discovery = require(script.Parent.Parent.Discovery)
 local FindOfDayService = require(script.Parent.FindOfDayService)
 local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
+local Geo = require(Shared.Builders.Geo)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local PenService = require(script.Parent.PenService)
@@ -613,6 +614,8 @@ local function buildYardStation(player: Player, plotId: number)
 	end
 	local model = MachineBuilder.build("CleaningStation", 0, 0)
 	model.Name = "YardStation"
+	-- bigger than a placed station (BaseLayout.CleaningStation.Scale), scaled about its pivot
+	Geo.scaleModel(model, BaseLayout.CleaningStation.Scale)
 	model:PivotTo(CleaningService.yardCFrame(plotId))
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Owner", player.UserId)

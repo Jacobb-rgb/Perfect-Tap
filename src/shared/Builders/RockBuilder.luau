@@ -815,9 +815,11 @@ end
 -- A spot of MeshCatalog.Surface on a placed mesh: world point and outward normal (the mesh is
 -- scaled evenly, so the normal only turns with the part).
 local function spotOn(part: BasePart, spot: MeshCatalog.Spot): (Vector3, Vector3)
+	-- (the spots are the processed model's: its frame, with the upload's turn)
 	local size = part.Size
-	local p = part.CFrame:PointToWorldSpace(Vector3.new(spot.P.X * size.X, spot.P.Y * size.Y, spot.P.Z * size.Z))
-	return p, part.CFrame:VectorToWorldSpace(spot.N).Unit
+	local frame = MeshKit.frame(part)
+	local p = frame:PointToWorldSpace(Vector3.new(spot.P.X * size.X, spot.P.Y * size.Y, spot.P.Z * size.Z))
+	return p, frame:VectorToWorldSpace(spot.N).Unit
 end
 
 local function spotsOf(part: BasePart): { MeshCatalog.Spot }

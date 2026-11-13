@@ -40,6 +40,8 @@ return function(T, Loader)
 			T.truthy(data, floor.Id .. " data")
 			T.truthy(MeshCatalog.Floors[floor.Id] and #MeshCatalog.Floors[floor.Id] >= 8, floor.Id .. " tiles")
 			T.eq(#data.Boxes % 5, 0, floor.Id .. " boxes come in fives")
+			T.eq(#data.Ramps % 7, 0, floor.Id .. " ramps come in sevens")
+			T.le(#data.Ramps / 7, 40, floor.Id .. " at most 40 path ramps")
 		end
 	end)
 
@@ -110,6 +112,20 @@ return function(T, Loader)
 				-- nothing big may be placed on it (WorldLayout.KeepOut, as for the parts floors' lifts)
 				T.truthy(WorldLayout.isKeepOut(MineFloors.liftPosition(index)), label .. " the lift is a keep-out")
 			end
+			-- the path ramps (owner 2026-11-13: walk from the elevator without a jump at every edge):
+			-- invisible solid wedges, one per DioramaData ramp, their high edge on the higher ground
+			local data = DioramaData[MineFloors.ByIndex[index].Id]
+			local ramps = 0
+			for _, d in model.Ground:GetChildren() do
+				if d.Name == "Ramp" then
+					ramps += 1
+					T.truthy(d:IsA("WedgePart") and d.CanCollide and d.Transparency == 1 and d.Anchored, label .. " a ramp is an invisible solid wedge")
+					local high = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(roblox.Vector3.new(0, d.Size.Y / 2, d.Size.Z / 2)))
+					local low = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(roblox.Vector3.new(0, -d.Size.Y / 2, -d.Size.Z / 2)))
+					T.truthy(high.Y > low.Y + 0.9, label .. " a ramp rises")
+				end
+			end
+			T.eq(ramps, #data.Ramps / 7, label .. " every path ramp")
 			-- budgets
 			local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
 			T.le(count(model, "BasePart"), budget, label .. " parts")

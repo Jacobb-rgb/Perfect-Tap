@@ -217,4 +217,22 @@ function Geo.rock(
 	return parts
 end
 
+-- Scales a static model built at the origin by `k` about the origin (its pivot on the ground): the
+-- parts' sizes and places, the attachments' places, the lights' ranges (Model:ScaleTo is not in
+-- Lune; the builders' models are anchored and unwelded).
+function Geo.scaleModel(model: Instance, k: number)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local cf = d.CFrame
+			d.Size *= k
+			d.CFrame = cf - cf.Position + cf.Position * k
+		elseif d:IsA("Attachment") then
+			local cf = d.CFrame
+			d.CFrame = cf - cf.Position + cf.Position * k
+		elseif d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+			d.Range *= k
+		end
+	end
+end
+
 return Geo

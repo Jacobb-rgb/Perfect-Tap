@@ -47,6 +47,8 @@ Diorama.LightRange = 48
 Diorama.BoxDepth = 6 -- collision boxes reach this far under their top (and below the lowest ground)
 
 local GROUND = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false, Transparency = 1 }
+-- a path ramp's turn by its DioramaData dir (rising toward +X, -X, +Z, -Z; a wedge rises toward +Z)
+local RAMP_TURN = { math.pi / 2, -math.pi / 2, 0, math.pi }
 local GLOW = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
 local STEEL = Color3.fromRGB(70, 74, 88)
@@ -98,6 +100,18 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 		local bottom = math.min(top - Diorama.BoxDepth, data.Bottom - Diorama.BoxDepth)
 		local box = Geo.block(groundFolder, at(origin, Vector3.new((x0 + x1) / 2, (top + bottom) / 2, (z0 + z1) / 2)), Vector3.new(x1 - x0, top - bottom, z1 - z0), floor.Palette.Ground, nil, GROUND)
 		box.Name = "Ground"
+	end
+	-- the path ramps: invisible wedges where a terrace's edge would need a jump from the
+	-- elevator's level (DioramaData.Ramps); a WedgePart's high side is its +Z, turned the way it rises
+	local ramps = data.Ramps
+	for i = 1, #ramps, 7 do
+		local x0, z0, x1, z1, y, rise, dir = ramps[i], ramps[i + 1], ramps[i + 2], ramps[i + 3], ramps[i + 4], ramps[i + 5], ramps[i + 6]
+		local alongX = dir <= 2
+		local across = if alongX then z1 - z0 else x1 - x0
+		local along = if alongX then x1 - x0 else z1 - z0
+		local cf = at(origin, Vector3.new((x0 + x1) / 2, y + rise / 2, (z0 + z1) / 2)) * CFrame.Angles(0, RAMP_TURN[dir], 0)
+		local ramp = Geo.wedge(groundFolder, cf, Vector3.new(across, rise, along), floor.Palette.Ground, nil, GROUND)
+		ramp.Name = "Ramp"
 	end
 
 	-- the rock spawns and the Giant Crystal's spot

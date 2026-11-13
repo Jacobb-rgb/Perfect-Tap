@@ -16,9 +16,18 @@
 	  MeshKit.fit(name, box, cf, opts?)       a clone scaled evenly to fit inside `box`
 	  MeshKit.scaled(name, scale, cf, opts?)  a clone at `scale` times its own size
 	  MeshKit.ground(cf, size)                cf of a box of `size` standing on `cf` (its bottom centre)
+	  MeshKit.frame(p)                        the frame a clone's model stands in (cf of part())
+	  MeshKit.place(p, cf)                    moves a clone so its model stands in cf
 	  MeshKit.waitReady(timeout)              clients: wait for the templates to replicate (init)
 	opts: Name, Anchored (true), CanCollide, CanQuery, CanTouch (false each), CastShadow (true),
 	Massless, Transparency. Every clone keeps the attribute Asset = name (previews load the .glb).
+
+	The import's turn: Studio's 3D Importer turns every model half round about Y (glTF's +Z front
+	becomes Roblox's -Z front; seen on 2026-11-13 in how it laid out a floor's tiles), so an
+	uploaded template carries the attribute ImportYaw (degrees, 180; tools/lune/import_meshes.luau)
+	and every clone turns back by it: its PivotOffset holds the turn, so the clone's pivot is the
+	processed model's frame. PivotTo / GetPivot (and a Model whose PrimaryPart it is) keep it; code
+	that moves a clone by its CFrame uses MeshKit.place / MeshKit.frame instead.
 ]]
 
 local MeshCatalog = require(script.Parent.Parent.Config.MeshCatalog)
@@ -127,6 +136,16 @@ local function apply(p: MeshPart, opts: Opts?)
 	end
 end
 
+-- The frame the clone's model stands in: its CFrame with the import's turn (its pivot).
+function MeshKit.frame(p: BasePart): CFrame
+	return p.CFrame * p.PivotOffset
+end
+
+-- Moves a clone so its model stands in `cf` (keeps the import's turn).
+function MeshKit.place(p: BasePart, cf: CFrame)
+	p.CFrame = cf * p.PivotOffset:Inverse()
+end
+
 function MeshKit.part(name: string, size: Vector3, cf: CFrame, opts: Opts?): MeshPart?
 	local t = load()[name]
 	if not t then
@@ -135,7 +154,9 @@ function MeshKit.part(name: string, size: Vector3, cf: CFrame, opts: Opts?): Mes
 	local p = t:Clone()
 	apply(p, opts)
 	p.Size = size
-	p.CFrame = cf
+	local yaw = t:GetAttribute("ImportYaw")
+	p.PivotOffset = if type(yaw) == "number" and yaw ~= 0 then CFrame.Angles(0, math.rad(yaw), 0) else CFrame.identity
+	MeshKit.place(p, cf)
 	p:SetAttribute("Asset", name)
 	return p
 end

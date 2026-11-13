@@ -2,7 +2,99 @@
 
 python3 -I tools/meshy/make_diorama_data.py src/server/World/Mine/DioramaData.luau <layout.json> [...]
 """
-import json, sys
+import collections, json, sys
+
+# Path ramps (owner 2026-11-13: "se vubec neda chodit"): the ground boxes step in half studs and the
+# terraces' edges are often 1.5-4 studs high, so from the elevator one jumped at every edge (floor 6:
+# 7.5 % of its ground without a jump). The region walked from the elevator with steps of at most STEP
+# grows over its edges up to MAXDH higher where a run of >= 3 studs has flat room in front: there an
+# invisible wedge (Diorama.build) joins the two levels; up to MAXRAMPS per floor (the part budgets).
+STEP, MAXDH, MAXRAMPS, KEEP_CLEAR = 1.0, 4.5, 40, 2.5
+DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))  # Ramps' dir 1..4: the way the ramp rises (+X, -X, +Z, -Z)
+
+
+def ramps(d):
+    H = {}
+    for b in d["boxes"]:
+        for x in range(int(b[0]) - 1, int(b[2]) + 2):
+            for z in range(int(b[1]) - 1, int(b[3]) + 2):
+                if b[0] <= x + 0.5 <= b[2] and b[1] <= z + 0.5 <= b[3]:
+                    H[(x, z)] = max(H.get((x, z), -1e9), b[4])
+    if not H:
+        return []
+    anchors = d.get("anchors", {})
+    e = anchors.get("elevator") or anchors.get("entrance")
+    start = (int(e[0] // 1), int(e[2] // 1))
+    if start not in H:
+        start = min(H, key=lambda c: (c[0] - start[0]) ** 2 + (c[1] - start[1]) ** 2)
+    # spots no ramp may cover: the rock spawns, the giant and the anchors
+    spots = [(sp[0], sp[2]) for sp in d["spawns"]] + [(d["giant"][0], d["giant"][2])]
+    spots += [(v[0], v[2]) for v in anchors.values() if v]
+    bridges = set()
+
+    def region():
+        seen = {start}
+        q = collections.deque([start])
+        while q:
+            c = q.popleft()
+            for dx, dz in DIRS:
+                n = (c[0] + dx, c[1] + dz)
+                if n in H and n not in seen and (H[n] - H[c] <= STEP or (c, n) in bridges):
+                    seen.add(n)
+                    q.append(n)
+        return seen
+
+    R = region()
+    out = []
+    while len(out) < MAXRAMPS:
+        cand = collections.defaultdict(list)
+        for c in R:
+            for dd in DIRS:
+                n = (c[0] + dd[0], c[1] + dd[1])
+                if n in H and n not in R and STEP < H[n] - H[c] <= MAXDH:
+                    cand[(dd, round((H[n] - H[c]) * 2) / 2)].append(c)
+        best = None
+        for (dd, dh), cells in sorted(cand.items()):
+            perp = (dd[1], dd[0])
+            cs = set(cells)
+            for c in sorted(cells):
+                if (c[0] - perp[0], c[1] - perp[1]) in cs:
+                    continue
+                length = 1
+                while (c[0] + perp[0] * length, c[1] + perp[1] * length) in cs:
+                    length += 1
+                if length < 3:
+                    continue
+                run = min(length, 6)
+                L = int(min(max(round(dh * 1.8), 2), 7))
+                covered = [(c[0] + perp[0] * i - dd[0] * k, c[1] + perp[1] * i - dd[1] * k) for i in range(run) for k in range(L)]
+                if any(cc not in H or abs(H[cc] - H[c]) > 0.5 for cc in covered):
+                    continue
+                x0 = min(cc[0] for cc in covered); x1 = max(cc[0] for cc in covered) + 1
+                z0 = min(cc[1] for cc in covered); z1 = max(cc[1] for cc in covered) + 1
+                if any(x0 - KEEP_CLEAR <= sx <= x1 + KEEP_CLEAR and z0 - KEEP_CLEAR <= sz <= z1 + KEEP_CLEAR for sx, sz in spots):
+                    continue
+                score = run * 10 + dh
+                if best is None or score > best[0]:
+                    best = (score, c, dd, dh, run, (x0, z0, x1, z1))
+        if not best:
+            break
+        _, c, dd, dh, run, rect = best
+        perp = (dd[1], dd[0])
+        for i in range(run):
+            cc = (c[0] + perp[0] * i, c[1] + perp[1] * i)
+            bridges.add((cc, (cc[0] + dd[0], cc[1] + dd[1])))
+        grown = region()
+        if len(grown) == len(R):
+            for i in range(run):
+                cc = (c[0] + perp[0] * i, c[1] + perp[1] * i)
+                bridges.discard((cc, (cc[0] + dd[0], cc[1] + dd[1])))
+            break
+        R = grown
+        out.append((rect[0], rect[1], rect[2], rect[3], H[c], dh, DIRS.index(dd) + 1))
+    print("  %s: %d path ramps" % (d["id"], len(out)), file=sys.stderr)
+    return out
+
 
 out = sys.argv[1]
 L = ["--!strict", "--[[",
@@ -10,10 +102,11 @@ L = ["--!strict", "--[[",
      "\tThe owner's floor dioramas (Meshy, 2026-11-13) placed into their floors (Mine/Diorama.luau): Scale = studs",
      "\tper diorama unit, GroundN / CenterN = the diorama's usual ground height and its centre (units) that land on",
      "\tthe floor's origin, Boxes = invisible collision boxes as x0, z0, x1, z1, top (local studs, 5 numbers each),",
-     "\tSpawns = rock spawns { x, y, z, deep }, Giant, Lights (local studs), the anchors found on flat ground.",
+     "\tSpawns = rock spawns { x, y, z, deep }, Giant, Lights (local studs), the anchors found on flat ground,",
+     "\tRamps = invisible path ramps as x0, z0, x1, z1, y, rise, dir (1..4: rising toward +X -X +Z -Z; 7 numbers each).",
      "]]", "",
      "export type Floor = {", "\tScale: number,", "\tGroundN: number,", "\tCenterN: Vector2,", "\tTop: number,", "\tBottom: number,",
-     "\tBoxes: { number },", "\tSpawns: { { any } },", "\tGiant: Vector3,", "\tLights: { Vector3 },", "\tAnchors: { [string]: Vector3 },", "}", "",
+     "\tBoxes: { number },", "\tSpawns: { { any } },", "\tGiant: Vector3,", "\tLights: { Vector3 },", "\tAnchors: { [string]: Vector3 },", "\tRamps: { number },", "}", "",
      "local DioramaData: { [string]: Floor } = {}", ""]
 def r(v): return repr(round(v, 2))
 for path in sys.argv[2:]:
@@ -42,6 +135,10 @@ for path in sys.argv[2:]:
     for k, v in sorted(d.get("anchors", {}).items()):
         if v:
             L.append("\t\t%s = Vector3.new(%s, %s, %s)," % (k[0].upper() + k[1:], r(v[0]), r(v[1]), r(v[2])))
+    L.append("\t},")
+    L.append("\tRamps = {")
+    for rp in ramps(d):
+        L.append("\t\t%s, %s, %s, %s, %s, %s, %d," % (r(rp[0]), r(rp[1]), r(rp[2]), r(rp[3]), r(rp[4]), r(rp[5]), rp[6]))
     L.append("\t},")
     L.append("}")
     L.append("")

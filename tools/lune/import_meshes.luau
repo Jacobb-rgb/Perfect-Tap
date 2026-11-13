@@ -124,10 +124,57 @@ for name, d in found do
 	end
 end
 
+--[[
+	The importer's turn about Y (MeshKit: the template's attribute ImportYaw). Studio's 3D Importer
+	turned every model half round on 2026-11-13 (glTF's +Z front -> Roblox's -Z front): the vertices
+	and the parts' places alike. A floor's tiles show it: their places relative to each other are
+	the catalog centres' turned by it. Without a floor in the file: the turn the kept templates
+	carry, else Studio's usual 180.
+]]
+local function yawFromTiles(): (number?, number)
+	local votes: { [number]: number } = {}
+	local pairsSeen = 0
+	for _, tiles in Catalog.Floors do
+		local list = {}
+		for _, name in tiles do
+			if found[name] then
+				table.insert(list, name)
+			end
+		end
+		for i = 2, #list do
+			local a, b = list[1], list[i]
+			local dc = Catalog.Assets[b].Center - Catalog.Assets[a].Center
+			local di = found[b].CFrame.Position - found[a].CFrame.Position
+			if roblox.Vector3.new(dc.X, 0, dc.Z).Magnitude > 0.5 then
+				local best, bestErr = 0, math.huge
+				for _, yaw in { 0, 90, 180, 270 } do
+					local turned = roblox.CFrame.Angles(0, math.rad(yaw), 0):VectorToWorldSpace(dc)
+					local err = (turned - di).Magnitude
+					if err < bestErr then
+						best, bestErr = yaw, err
+					end
+				end
+				if bestErr < 0.05 * dc.Magnitude + 0.01 then
+					votes[best] = (votes[best] or 0) + 1
+					pairsSeen += 1
+				end
+			end
+		end
+	end
+	local yaw, most = nil, 0
+	for value, n in votes do
+		if n > most then
+			yaw, most = value, n
+		end
+	end
+	return yaw, pairsSeen
+end
+
 -- the templates: clean clones at the origin, anchored, nothing else inside but the SurfaceAppearance
 local folder = roblox.Instance.new("Folder")
 folder.Name = "MeshAssets"
 local kept = 0
+local keptYaw: number? = nil
 if fs.isFile(OUT) then
 	local old = roblox.deserializeModel(fs.readFile(OUT))[1]
 	if old then
@@ -135,9 +182,20 @@ if fs.isFile(OUT) then
 			if child.ClassName == "MeshPart" and not found[child.Name] and Catalog.Assets[child.Name] then
 				child.Parent = folder
 				kept += 1
+				local yaw = child:GetAttribute("ImportYaw")
+				if type(yaw) == "number" then
+					keptYaw = yaw
+				end
 			end
 		end
 	end
+end
+local importYaw, yawPairs = yawFromTiles()
+if importYaw then
+	print(string.format("the importer turned the models by %d degrees (from %d floor tile pairs)", importYaw, yawPairs))
+else
+	importYaw = keptYaw or 180
+	print(string.format("no floor tiles in the file: the models take a turn of %d degrees (%s)", importYaw, if keptYaw then "the kept templates'" else "Studio's usual"))
 end
 local count = 0
 for name, part in found do
@@ -159,6 +217,7 @@ for name, part in found do
 	t.CastShadow = true
 	t.Locked = false
 	t:SetAttribute("Asset", name)
+	t:SetAttribute("ImportYaw", importYaw)
 	t.Parent = folder
 	count += 1
 end

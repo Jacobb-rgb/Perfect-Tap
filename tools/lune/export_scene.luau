@@ -992,8 +992,10 @@ if sceneName == "world" and process.args[2] == "yard_ingame" then
 	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local spot = BaseLayout.CleaningStation
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	for _, plot in WorldLayout.Plots do
 		local station = MachineBuilder.build("CleaningStation", 0, 0)
+		Geo.scaleModel(station, spot.Scale) -- as CleaningService builds it
 		station:PivotTo(
 			WorldLayout.plotCFrame(plot)
 				* Loader.CFrame.new(spot.Center.X, 0, spot.Center.Z)

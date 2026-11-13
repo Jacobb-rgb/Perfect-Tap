@@ -91,7 +91,9 @@ function Export.collect(root: any, scene: any?)
 					round(size.X),
 					round(size.Y),
 					round(size.Z),
-					cframeList(d.CFrame),
+					-- the processed model's frame (MeshKit.frame: an upload's clone is turned by the
+					-- importer's turn, its PivotOffset turns it back)
+					cframeList(d.CFrame * d.PivotOffset),
 					round(d.Transparency),
 					if d.CastShadow then 1 else 0,
 					if typeof(tint) == "Color3" then { round(tint.R), round(tint.G), round(tint.B) } else 0,
