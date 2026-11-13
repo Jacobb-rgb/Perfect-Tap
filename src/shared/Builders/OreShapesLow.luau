@@ -37,8 +37,6 @@ OreShapesLow.Ores = {
 	"Frostbite",
 	"Emberite",
 	"Cobalt",
-	"Bogwood",
-	"Amber",
 	"Bronze",
 	"Silver",
 	"Gold",
@@ -55,8 +53,6 @@ OreShapesLow.Scale = {
 	Frostbite = 1.05,
 	Emberite = 1.12,
 	Cobalt = 1.05,
-	Bogwood = 1.05,
-	Amber = 1.12,
 	Silver = 1.2,
 	Gold = 1.08,
 	Jade = 1.05,
@@ -469,61 +465,6 @@ function OreShapesLow.register(shapes: { [string]: (any) -> () }, kit: any)
 			local root = roots[i]
 			beam(c, root[1], root[2], 0.12, "Vein")
 			beam(c, root[2], root[3], 0.09, "Vein")
-		end
-	end
-
-	-- Bogwood: a dark swamp log standing steep, thick moss, a glowing vine and drips.
-	shapes.Bogwood = function(c)
-		-- the log's axis rises steeply to the right and back; its local -X is "up"
-		local log = P(0, 0.78, 0) * A(0, 0.5, 0) * A(0, 0, -0.78)
-		log8(c, log, 1.6, 0.76, "Main", BOG_EDGE, BOG_RINGS)
-		ball(c, (log * P(-0.2, 0.72, 0.04)).Position, 0.56, BOG_MOSS)
-		local R = 0.5
-		local vine = {
-			(log * P(R * math.cos(0.4), -0.62, R * math.sin(0.4))).Position,
-			(log * P(R * math.cos(1.2), -0.32, R * math.sin(1.2))).Position,
-			(log * P(R * math.cos(2.0), -0.02, R * math.sin(2.0))).Position,
-			(log * P(R * math.cos(2.8), 0.3, R * math.sin(2.8))).Position,
-		}
-		for i = 1, if c.Full then 3 else 1 do
-			beam(c, vine[i], vine[i + 1], 0.12, "Vein")
-		end
-		local leaves = {
-			lump(P(0.66, 1.5, -0.3) * A(0.6, 0.3, -0.8), V(0.44, 0, 0), BOG_LEAF),
-			lump(P(-0.68, 0.12, 0.34) * A(0.4, 0.6, 0.4), V(0.44, 0, 0), BOG_LEAF),
-			-- display only
-			lump(P(0.34, 1.62, -0.16) * A(-0.6, 1.2, 0.9), V(0.38, 0, 0), BOG_LEAF),
-			lump(P(0.46, 0.12, 0.5) * A(0.4, -0.6, -0.35), V(0.4, 0, 0), BOG_MOSS),
-		}
-		for i = 1, if c.Full then 4 else 2 do
-			local l = leaves[i]
-			leaf(c, l.cf, l.size.X, l.tone)
-		end
-		if c.Full then
-			ball(c, (log * P(-0.3, 0.16, -0.08)).Position, 0.42, BOG_MOSS)
-			local drip = (log * P(0.42, 0.12, 0.14)).Position
-			beam(c, drip, drip - V(0, 0.38, 0), 0.07, BOG_MOSS)
-			local drip2 = (log * P(0.42, -0.3, -0.16)).Position
-			beam(c, drip2, drip2 - V(0, 0.28, 0), 0.06, BOG_MOSS)
-		end
-	end
-
-	-- Amber: a fat six-sided golden drop with a pointed top, light leaking out of it, a bee resting on it.
-	shapes.Amber = function(c)
-		local base = P(-0.1, 0, 0) * A(0, 0.25, 0)
-		if c.Full then
-			hexCrystal(c, base * P(0, 0.46, 0), 0.56, 0.92, { "Main", "Light", "Main" }, "Light")
-			-- a glowing heart that shows as a seam down the front and back facets
-			block(c, base * P(0, 0.46, 0), V(0.34, 0.84, 1.02), "Vein")
-			point(c, P(-0.76, 0.1, 0.42) * A(0.3, 0.5, 0.2), 0.22, "Light")
-			point(c, P(-0.34, 0.08, 0.7) * A(0.2, 1.2, 0.4), 0.16, "Main")
-			point(c, P(0.38, 0.08, 0.7) * A(0.4, 0.3, 0.6), 0.14, "Light")
-			bee(c, P(0.54, 0.72, 0.38) * A(0, -0.7, 0.1), 6)
-		else
-			crystal(c, base, 0.74, 0.84, "Main", "Light", 0.7)
-			block(c, base * P(0, 0.42, 0), V(0.4, 0.8, 0.86), "Vein")
-			bee(c, P(0.46, 0.66, 0.36) * A(0, -0.7, 0.1), 3)
-			point(c, P(-0.62, 0.1, 0.4) * A(0.3, 0.5, 0.2), 0.18, "Light")
 		end
 	end
 

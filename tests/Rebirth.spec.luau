@@ -67,7 +67,7 @@ return function(T, Loader)
 		data.ShardRolls = 5
 		data.TotalEarned = 9e9
 		data.BlasterLevel = 8
-		data.BlasterOre = "Obsidian"
+		data.BlasterOre = "CrystalRose"
 		data.Upgrades = { Bellows = 3, ExtraSlots = 2, PenLevel = 4, PenAutomation = 2, Elevator = true }
 		data.MachineUpgrades = { Crusher = { Speed = 3, Quality = 2 } }
 		data.MachineInventory = { Conveyor = 12 }

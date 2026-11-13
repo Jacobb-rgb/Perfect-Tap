@@ -146,8 +146,8 @@ MineFloors.List = {
 		MinBlaster = 3,
 		ViaElevator = false,
 		Lighting = "EmberCaves",
-		Ores = { Frostbite = 28, Emberite = 22, Cobalt = 17, Bogwood = 13, Amber = 9, Bronze = 7, Silver = 4 },
-		CrystalOres = { Amber = 20, Bronze = 30, Silver = 30, Gold = 15, Jade = 5 },
+		Ores = { Frostbite = 28, Emberite = 22, Cobalt = 39, Bronze = 7, Silver = 4 }, -- (Bogwood 13 + Amber 9 -> Cobalt, removed 2026-11-13)
+		CrystalOres = { Cobalt = 20, Bronze = 30, Silver = 30, Gold = 15, Jade = 5 }, -- (Amber's place)
 		Palette = {
 			Mid = rgb(86, 58, 54),
 			Light = rgb(124, 88, 76),
@@ -168,8 +168,8 @@ MineFloors.List = {
 		MinBlaster = 5,
 		ViaElevator = false,
 		Lighting = "Lagoon",
-		Ores = { Gold = 22, Jade = 20, Sapphire = 18, DragonEgg = 16, Diamond = 13, Amethyst = 11 },
-		CrystalOres = { Diamond = 20, Amethyst = 30, Obsidian = 30, CrystalRose = 20 },
+		Ores = { Gold = 22, Jade = 20, Sapphire = 18, DragonEgg = 16, Diamond = 13 }, -- (Amethyst moved home to the Sunken Palace 2026-11-13)
+		CrystalOres = { Diamond = 20, Amethyst = 30, CrystalRose = 50 }, -- (Obsidian 30 -> Crystal Rose, removed 2026-11-13)
 		Palette = {
 			Mid = rgb(52, 86, 110),
 			Light = rgb(82, 126, 152),
@@ -190,7 +190,7 @@ MineFloors.List = {
 		MinBlaster = 7,
 		ViaElevator = true,
 		Lighting = "Palace",
-		Ores = { Obsidian = 12, CrystalRose = 18, StormPearl = 22, GalaxyStone = 24, RoyalAurum = 24 },
+		Ores = { Amethyst = 12, CrystalRose = 18, StormPearl = 22, GalaxyStone = 24, RoyalAurum = 24 }, -- (Amethyst in Obsidian's place, 2026-11-13)
 		CrystalOres = { RoyalAurum = 30, Sunstone = 35, Moonstone = 35 },
 		Palette = {
 			Mid = rgb(112, 98, 134),

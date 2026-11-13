@@ -94,7 +94,7 @@ BlasterData.Vault = {
 	-- the ore look of each level's case (ores kept in the 36-ore roster too); the
 	-- ores' rarity never falls as the level rises (owner 2026-10-20: LV 4 Emberite,
 	-- LV 6 Sapphire, LV 7 Amethyst, so the case colours follow the rarity)
-	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "Obsidian", "RoyalAurum", "Heartstone" },
+	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "CrystalRose", "RoyalAurum", "Heartstone" }, -- (LV 8 was Obsidian until the owner removed it, 2026-11-13)
 }
 
 --[[

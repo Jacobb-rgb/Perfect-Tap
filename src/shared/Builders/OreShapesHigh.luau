@@ -30,7 +30,6 @@ local OreShapesHigh = {}
 OreShapesHigh.Ores = {
 	"Diamond",
 	"Amethyst",
-	"Obsidian",
 	"CrystalRose",
 	"StormPearl",
 	"GalaxyStone",
@@ -253,28 +252,6 @@ function OreShapesHigh.register(shapes: { [string]: (any) -> () }, kit: any)
 			crystalCut(c, P(0.44, 0, -0.04) * A(0, -0.65, -0.44), 0.4, 0.34, 0.62, 0.34, 1, "Dark", "Light")
 			crystal(c, P(-0.08, 0, -0.3) * A(-0.3, 0.5, 0.18), 0.4, 0.34, 0.78, 0.3, "Dark", "Main", "Dark")
 			crystalCut(c, P(0.28, 0, 0.36) * A(0.45, -0.3, -0.35), 0.3, 0.26, 0.3, 0.24, 1, "Light", "Light")
-		end
-	end
-
-	-- Obsidian: black glass shards, sharp as knives, glowing violet edges.
-	shapes.Obsidian = function(c: Ctx)
-		local f = A(0, FACE, 0)
-		block(c, f * P(0, 0.12, 0.05) * A(0, 0.3, 0), V(1.1, 0.24, 0.7), "Dark")
-		local mid = f * P(0.02, 0.1, 0) * A(0, 0, -0.06)
-		fin(c, mid, 1.7, 0.36, 0.5, "Main", "Light")
-		local left = f * P(-0.38, 0.1, -0.08) * A(0, 0, 0.32)
-		shard(c, left, 1.25, 0.4, 0.42, -1, "Light")
-		shardEdge(c, left, 1.25, 0.4, 0.42, -1, 0.05, "Neon")
-		local right = f * P(0.4, 0.1, 0.04) * A(0, 0, -0.36)
-		shard(c, right, 1.15, 0.4, 0.44, 1, "Main")
-		shardEdge(c, right, 1.15, 0.4, 0.44, 1, 0.05, "Neon")
-		if c.Full then
-			shardEdge(c, mid * P(-0.18, 0, 0), 1.7, 0.36, 0.5, 1, 0.05, "Neon")
-			shardEdge(c, mid * P(0.18, 0, 0), 1.7, 0.36, 0.5, -1, 0.05, "Neon")
-			fin(c, f * P(0.05, 0.1, -0.24) * A(0, PI / 2, 0) * A(0, 0, 0.1), 1.3, 0.3, 0.4, "Dark", "Main")
-			shard(c, f * P(-0.64, 0.05, 0.25) * A(0, 0.5, 0.5), 0.55, 0.3, 0.3, -1, "Main")
-			shard(c, f * P(0.68, 0.05, 0.22) * A(0, -0.4, -0.5), 0.5, 0.28, 0.3, 1, "Light")
-			block(c, f * P(0.1, 0.24, 0.4) * A(0, 0.3, 0), V(0.6, 0.03, 0.05), "Neon")
 		end
 	end
 

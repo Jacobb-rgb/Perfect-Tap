@@ -514,11 +514,11 @@ return function(T, Loader)
 			{ Gold = true, Coal = false }
 		)
 		T.eq(#entries, #OreData.List)
-		T.eq(#entries, 36, "the 36-ore roster")
+		T.eq(#entries, 33, "the 33-ore roster (Obsidian, Bogwood, Amber removed 2026-11-13)")
 		local found, total = CodexView.count(entries)
 		T.eq(found, 2)
 		T.eq(total, #OreData.List)
-		T.eq(CodexView.countText(found, total), "2 / 36 FOUND")
+		T.eq(CodexView.countText(found, total), "2 / 33 FOUND")
 		for i, entry in entries do
 			T.eq(entry.Ore, OreData.List[i], "OreData order")
 			if entry.Ore.Id == "Gold" then

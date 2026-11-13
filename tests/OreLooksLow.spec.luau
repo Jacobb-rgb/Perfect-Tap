@@ -145,13 +145,9 @@ return function(T, Loader)
 			T.falsy(seen[signature], id .. " looks like " .. tostring(seen[signature]))
 			seen[signature] = id
 		end
-		-- Honeycomb and Amber: both golden with a bee, only Amber glows (its light leaks out)
+		-- Honeycomb: golden with a bee, no glow (Amber, its glowing twin, was removed 2026-11-13)
 		local _, honeyBright = glow(shown("Honeycomb"))
-		local amberFaint = glow(shown("Amber"))
 		T.eq(honeyBright, 0, "Honeycomb does not glow")
-		T.truthy(amberFaint > 0, "Amber glows")
-		-- Oakwood and Bogwood: the swamp log is the darker one
-		T.lt(brightness(shown("Bogwood")), brightness(shown("Oakwood")) - 0.03, "Bogwood is darker than Oakwood")
 		-- Copper and Bronze: bronze is the darker, bigger lumps
 		T.lt(brightness(shown("Bronze")), brightness(shown("Copper")) - 0.05, "Bronze is darker than Copper")
 		local function biggest(id)

@@ -1,5 +1,6 @@
 --[[
-	All 36 ores in Terra Forge (the owner's ore picture, 2026-10-18). Add a new ore by adding one entry
+	All 33 ores in Terra Forge (the owner's ore picture, 2026-10-18; Obsidian, Bogwood and Amber
+	removed by the owner 2026-11-13, their saves' ores become OreData.Renamed's). Add a new ore by adding one entry
 	to the list and giving it a weight in WorldLayout.Zones so rocks in that
 	zone can contain it.
 
@@ -197,34 +198,6 @@ local LIST: { any } = {
 		Material = M.Glass,
 		Lore = "Deep blue-violet crystals with black roots. The old railway painted its lamps with it.",
 	},
-	{
-		Id = "Bogwood",
-		Name = "Bogwood",
-		Rarity = "Uncommon",
-		Tier = 3,
-		Income = 55,
-		Hardness = 3.4,
-		Color = rgb(92, 66, 42),
-		Glow = rgb(96, 176, 70),
-		Crust = rgb(64, 58, 46),
-		Shape = "Bogwood",
-		Material = M.Wood,
-		Lore = "A dark, mossy swamp log as hard as iron. It smells of rain.",
-	},
-	{
-		Id = "Amber",
-		Name = "Amber",
-		Rarity = "Uncommon",
-		Tier = 3,
-		Income = 80,
-		Hardness = 3.7,
-		Color = rgb(255, 168, 28),
-		Glow = rgb(255, 204, 80),
-		Crust = rgb(104, 80, 50),
-		Shape = "Amber",
-		Material = M.Glass,
-		Lore = "A drop of old sunlight with a sleeping bee inside it.",
-	},
 	---------------------------------------------------------------- Rare
 	{
 		Id = "Bronze",
@@ -329,7 +302,7 @@ local LIST: { any } = {
 		Id = "Amethyst",
 		Name = "Amethyst",
 		Rarity = "Epic",
-		Tier = 5,
+		Tier = 7, -- (its home moved to the Sunken Palace in Obsidian's place, 2026-11-13)
 		Income = 2000,
 		Hardness = 9,
 		Color = rgb(128, 70, 236),
@@ -338,20 +311,6 @@ local LIST: { any } = {
 		Shape = "Amethyst",
 		Material = M.Glass,
 		Lore = "Tall violet points. Kaldrum's queens wore them on their way to the throne.",
-	},
-	{
-		Id = "Obsidian",
-		Name = "Obsidian",
-		Rarity = "Epic",
-		Tier = 7,
-		Income = 3200,
-		Hardness = 10,
-		Color = rgb(42, 30, 62),
-		Glow = rgb(110, 60, 240),
-		Crust = rgb(60, 50, 66),
-		Shape = "Obsidian",
-		Material = M.Glass,
-		Lore = "Black volcano glass that breaks into blades. A purple light lives under the black.",
 	},
 	{
 		Id = "CrystalRose",
@@ -694,6 +653,11 @@ OreData.Renamed = {
 	Skyglass = "StormGem",
 	Prismite = "PhoenixFeather",
 	Starmetal = "CelestialCore",
+	-- removed by the owner 2026-11-13 (no model of his own): Obsidian's place on blaster 8 and in old
+	-- saves goes to the next Epic up, Bogwood and Amber to the best Uncommon left
+	Obsidian = "CrystalRose",
+	Bogwood = "Cobalt",
+	Amber = "Cobalt",
 } :: { [string]: string }
 
 -- An ore id from a save: itself when it exists, its replacement when it was renamed, else nil.

@@ -69,7 +69,7 @@ local MADE = {
 		{ K = "Ingot", O = "Copper", G = "Clean", N = 236 },
 		{ K = "Ingot", O = "Cobalt", G = "Pristine", N = 128 },
 		{ K = "Ingot", O = "Emberite", G = "Clean", N = 54 },
-		{ K = "Ingot", O = "Amber", G = "Pristine", N = 26 },
+		{ K = "Ingot", O = "Cobalt", G = "Pristine", N = 26 },
 	},
 }
 local MADE_PASS = {

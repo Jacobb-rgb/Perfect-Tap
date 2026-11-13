@@ -21,7 +21,7 @@ Gallery.Skins = { "", "Copper", "DragonEgg", "Amethyst", "Gold", "Bronze", "Sapp
 -- A few levels in many skins (the skins wall).
 Gallery.SkinRows = {
 	{ Level = 4, Spacing = 5.4, Ores = { "Iron", "Jade", "Cobalt", "Emberite" } },
-	{ Level = 7, Spacing = 6.4, Ores = { "Obsidian", "Moonstone", "CrystalRose" } },
+	{ Level = 7, Spacing = 6.4, Ores = { "GalaxyStone", "Moonstone", "CrystalRose" } },
 	{ Level = 10, Spacing = 7.4, Ores = { "Diamond", "VolcanicCore", "PhoenixFeather" } },
 }
 

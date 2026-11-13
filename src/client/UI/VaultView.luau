@@ -1162,7 +1162,7 @@ VaultView.PopPaints = {
 	Gold = "Yellow",
 	Sapphire = "Teal",
 	Amethyst = "Purple",
-	Obsidian = "Night",
+	CrystalRose = "Night", -- (blaster 8's case keeps Obsidian's night paint, 2026-11-13)
 	RoyalAurum = "Yellow",
 	Heartstone = "Pink",
 } :: { [string]: string }

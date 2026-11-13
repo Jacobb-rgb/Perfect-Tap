@@ -398,7 +398,7 @@ local oreRows = {
 	{ "Coal", "Common" }, { "Copper", "Common" }, { "Tin", "Common" }, { "Iron", "Common" }, { "Quartz", "Common" },
 	{ "Silver", "Uncommon" }, { "Amethyst", "Uncommon" }, { "Jade", "Uncommon" }, { "Emberite", "Uncommon" }, { "Cobalt", "Uncommon" },
 	{ "Gold", "Rare" }, { "Ruby", "Rare" }, { "Azurium", "Rare" }, { "Sapphire", "Rare" }, { "Emerald", "Rare" },
-	{ "Diamond", "Epic" }, { "Verdantine", "Epic" }, { "Obsidian", "Epic" }, { "Stormcore", "Epic" }, { "Moonstone", "Epic" },
+	{ "Diamond", "Epic" }, { "Verdantine", "Epic" }, { "GalaxyStone", "Epic" }, { "Stormcore", "Epic" }, { "Moonstone", "Epic" },
 	{ "Bloodstone", "Epic" }, { "Solarite", "Legendary" }, { "Voidstone", "Legendary" }, { "Magmacore", "Legendary" },
 	{ "Skyglass", "Legendary" }, { "RoyalAurum", "Legendary" }, { "Prismite", "Mythic" }, { "Aetherium", "Mythic" },
 	{ "Starmetal", "Mythic" }, { "Heartstone", "Mythic" },

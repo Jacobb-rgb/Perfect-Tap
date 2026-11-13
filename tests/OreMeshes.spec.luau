@@ -196,7 +196,7 @@ return function(T, Loader)
 	Fakes(Loader, true)
 
 	T.test("ore meshes: a stand-in template for both looks of every ore with a model, none for the others", function()
-		T.eq(#modelOres, 28, "28 ores with a model")
+		T.eq(#modelOres, 31, "31 ores with a model (the owner's 28 + Crystal Rose, Storm Pearl, Galaxy Stone)")
 		for _, id in modelOres do
 			T.truthy(OreData.get(id), id .. " is an ore")
 			T.truthy(MeshKit.has("Ore_" .. id), id .. " hero model")
