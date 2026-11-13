@@ -215,9 +215,29 @@ def clear_custom_normals(ob):
         log("  no custom normals clear", e)
 
 # ---------------------------------------------------------------- modes
+def unlayer(ob, gap):
+    # up-facing faces with another up-facing face just above them (within `gap` units) are hidden
+    # layers (a flattened copy of the top under it): they flicker when the mesh is squashed flat
+    from mathutils.bvhtree import BVHTree
+    bm = bmesh.new(); bm.from_mesh(ob.data); bm.faces.ensure_lookup_table()
+    bvh = BVHTree.FromBMesh(bm)
+    kill = []
+    for f in bm.faces:
+        if f.normal.z < 0.9:
+            continue
+        c = f.calc_center_median()
+        loc, nrm, idx, dist = bvh.ray_cast(c + Vector((0, 0, 1e-5)), Vector((0, 0, 1)), gap)
+        if loc is not None and idx != f.index and nrm.z > 0.9:
+            kill.append(f)
+    bmesh.ops.delete(bm, geom=kill, context='FACES')
+    bm.to_mesh(ob.data); bm.free()
+    log("  unlayer", len(kill), "faces")
+
 def job_plain(j):
     ob = import_glb(j["src"])
     normalize(ob, j.get("anchor", "bottom"), j.get("unit", 4.0))
+    if j.get("unlayer"):
+        unlayer(ob, j["unlayer"])
     if tri_count(ob) > j["tris"]:
         decimate_to(ob, j["tris"])
     resize_textures(ob, j.get("tex", 1024))

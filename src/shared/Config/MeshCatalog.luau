@@ -183,7 +183,7 @@ MeshCatalog.Assets = {
 	Prop_MineElevator = { Box = Vector3.new(1.1197, 4.0, 0.8998), Center = Vector3.new(0.0, 2.0, -0.0), Tris = 14265 },
 	Prop_MossyCliff = { Box = Vector3.new(3.9872, 2.2186, 1.7739), Center = Vector3.new(-0.0053, 1.1073, -0.0001), Tris = 12000 },
 	Prop_Museum = { Box = Vector3.new(4.0, 2.4595, 2.0418), Center = Vector3.new(0.0, 1.2297, -0.0), Tris = 13279 },
-	Prop_PlotBase = { Box = Vector3.new(3.9836, 0.7127, 4.0), Center = Vector3.new(0.0, 0.3564, -0.0), Tris = 9620 },
+	Prop_PlotBase = { Box = Vector3.new(3.9836, 0.7127, 4.0), Center = Vector3.new(0.0, 0.3564, -0.0), Tris = 9010 },
 	Prop_TreeGreen = { Box = Vector3.new(3.7517, 3.9991, 3.7518), Center = Vector3.new(-0.0001, 1.9979, 0.0053), Tris = 2999 },
 	Prop_TreeOrange = { Box = Vector3.new(3.7517, 3.9991, 3.7518), Center = Vector3.new(-0.0001, 1.9979, 0.0053), Tris = 2999 },
 	Prop_TreeYellow = { Box = Vector3.new(3.7517, 3.9991, 3.7518), Center = Vector3.new(-0.0001, 1.9979, 0.0053), Tris = 2999 },

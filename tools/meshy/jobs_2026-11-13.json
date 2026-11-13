@@ -652,7 +652,8 @@
    "out": "Prop_PlotBase.glb",
    "tris": 19000,
    "tex": 1024,
-   "unit": 4.0
+   "unit": 4.0,
+   "unlayer": 0.08
   },
   {
    "mode": "plain",
