@@ -32,11 +32,50 @@ function allShots() {
   return base;
 }
 
+// The processed .glb files of uploaded meshes (MeshKit) live outside the repository, in the
+// KIT folder's NAHRAJ_DO_ROBLOXU/3D_modely_<date> sets (newest set first), or MESH_DIR.
+function meshSets() {
+  const sets = [];
+  if (process.env.MESH_DIR) sets.push(process.env.MESH_DIR);
+  let dir = repo;
+  for (let i = 0; i < 6; i++) {
+    const up = path.join(dir, "NAHRAJ_DO_ROBLOXU");
+    if (fs.existsSync(up)) {
+      for (const name of fs.readdirSync(up).filter((n) => n.startsWith("3D_modely_")).sort().reverse()) sets.push(path.join(up, name));
+      break;
+    }
+    dir = path.dirname(dir);
+  }
+  return sets;
+}
+const MESH_SETS = meshSets();
+function meshFile(name) {
+  if (name.includes("/") || name.includes("..")) return null;
+  for (const set of MESH_SETS) {
+    const file = path.join(set, name);
+    if (fs.existsSync(file)) return file;
+  }
+  return null;
+}
+
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split("?")[0]);
   if (url === "/shots.json") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(allShots()));
+    return;
+  }
+  if (url.startsWith("/scenes/meshes/")) {
+    const glb = meshFile(url.slice("/scenes/meshes/".length));
+    if (!glb) {
+      res.writeHead(404).end();
+      return;
+    }
+    fs.readFile(glb, (err, data) => {
+      if (err) return res.writeHead(404).end();
+      res.writeHead(200, { "Content-Type": "model/gltf-binary" });
+      res.end(data);
+    });
     return;
   }
   let file;

@@ -19,6 +19,11 @@ local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
+-- MESHY=1: stand-in MeshKit templates while the owner's upload is not in the repo yet; the
+-- previews draw the processed .glb of every Asset, so the new 3D models show before the upload.
+if process.env.MESHY == "1" then
+	require("./lib/mesh_fakes")(Loader)
+end
 -- previews draw every icon (IconAssets.shows: the uploaded look)
 Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 

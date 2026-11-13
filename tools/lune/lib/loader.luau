@@ -294,13 +294,40 @@ local function mountDirectory(dirPath: string, node: VNode)
 			rawset(child, "Source", initSource)
 			mountDirectory(full, child)
 		else
-			local name, kind = scriptKind(entry)
-			if name and kind and name ~= "init" and not name:find("%.spec$") then
-				local child = Loader._newNode(name, kind, node)
-				rawset(child, "Source", full)
+			local stem = entry:match("^(.+)%.rbxmx?$")
+			if stem then
+				-- a model file (Rojo syncs it as its one root instance): the real instances, so
+				-- builders can clone them (Shared/Assets/MeshAssets.rbxm, the uploaded meshes)
+				local roots = roblox.deserializeModel(fs.readFile(full))
+				if #roots == 1 then
+					Loader.attach(node, stem, roots[1])
+				end
+			else
+				local name, kind = scriptKind(entry)
+				if name and kind and name ~= "init" and not name:find("%.spec$") then
+					local child = Loader._newNode(name, kind, node)
+					rawset(child, "Source", full)
+				end
 			end
 		end
 	end
+end
+
+-- Hangs a real Instance into the virtual tree as `name` under the virtual node `node` (replacing a
+-- child of that name).
+function Loader.attach(node: VNode, name: string, inst: any)
+	local children = rawget(node, "Children")
+	local list = rawget(node, "ChildList")
+	local old = children[name]
+	if old ~= nil then
+		local i = table.find(list, old)
+		if i then
+			table.remove(list, i)
+		end
+	end
+	inst.Name = name
+	children[name] = inst
+	table.insert(list, inst)
 end
 
 local function mountProjectNode(projectNode: any, name: string, parent: VNode?, root: string): VNode
@@ -463,6 +490,38 @@ end
 
 function Loader.requirePath(path: string): any
 	return Loader.require(Loader.find(path))
+end
+
+-- Puts a real Instance at "ReplicatedStorage.Shared.Assets.MeshAssets" (missing virtual folders on
+-- the way are made), e.g. stand-in mesh templates for specs and previews; nil removes it.
+function Loader.mount(path: string, inst: any?)
+	local node = Loader.game
+	local segments = {}
+	for segment in path:gmatch("[^%.]+") do
+		table.insert(segments, segment)
+	end
+	for i = 1, #segments - 1 do
+		local child = rawget(node, "Children")[segments[i]]
+		if not child then
+			child = Loader._newNode(segments[i], "Folder", node)
+		end
+		node = child
+	end
+	local name = segments[#segments]
+	if inst then
+		Loader.attach(node, name, inst)
+	else
+		local children = rawget(node, "Children")
+		local old = children[name]
+		if old ~= nil then
+			children[name] = nil
+			local list = rawget(node, "ChildList")
+			local i = table.find(list, old)
+			if i then
+				table.remove(list, i)
+			end
+		end
+	end
 end
 
 -- Runs `body` with fresh copies of the modules at `paths`: a require inside it loads them anew

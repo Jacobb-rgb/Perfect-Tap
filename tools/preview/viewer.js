@@ -8,6 +8,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { renderUI } from "./ui.js";
 
@@ -523,6 +524,52 @@ async function main() {
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     world.add(mesh);
+  }
+
+  // ---- uploaded meshes (MeshParts with an Asset attribute): the processed .glb files ----
+  // Floor tiles "Floor_<Id>_<NN>" are nodes of Floor_<Id>.glb, everything else is <Asset>.glb.
+  // The geometry's own box is fitted into the part's box (Size), then placed at its CFrame.
+  if (Array.isArray(scene.meshes) && scene.meshes.length) {
+    const gltfLoader = new GLTFLoader();
+    const files = new Map();
+    const loadFile = (file) => {
+      if (!files.has(file)) files.set(file, gltfLoader.loadAsync(`/scenes/meshes/${file}`).catch(() => null));
+      return files.get(file);
+    };
+    const boxOf = new Map();
+    for (const [asset, sx, sy, sz, cf, transparency, castShadow] of scene.meshes) {
+      const tile = /^(Floor_[A-Za-z]+)_\d+$/.exec(asset);
+      const gltf = await loadFile((tile ? tile[1] : asset) + ".glb");
+      if (!gltf) continue;
+      let src = null;
+      gltf.scene.traverse((o) => {
+        if (!src && o.isMesh && (!tile || o.name === asset || (o.parent && o.parent.name === asset))) src = o;
+      });
+      if (!src) continue;
+      if (!boxOf.has(src)) {
+        src.geometry.computeBoundingBox();
+        const bb = src.geometry.boundingBox;
+        boxOf.set(src, [bb.getSize(new THREE.Vector3()), bb.getCenter(new THREE.Vector3())]);
+      }
+      const [gs, gc] = boxOf.get(src);
+      const [x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22] = cf;
+      const place = new THREE.Matrix4().set(r00, r01, r02, x, r10, r11, r12, y, r20, r21, r22, z, 0, 0, 0, 1);
+      const fit = new THREE.Matrix4()
+        .makeScale(sx / Math.max(gs.x, 1e-6), sy / Math.max(gs.y, 1e-6), sz / Math.max(gs.z, 1e-6))
+        .multiply(new THREE.Matrix4().makeTranslation(-gc.x, -gc.y, -gc.z));
+      let material = src.material;
+      if (transparency > 0.01) {
+        material = material.clone();
+        material.transparent = true;
+        material.opacity = 1 - transparency;
+      }
+      const obj = new THREE.Mesh(src.geometry, material);
+      obj.matrixAutoUpdate = false;
+      obj.matrix.copy(place.multiply(fit));
+      obj.castShadow = castShadow !== 0 && transparency < 0.3;
+      obj.receiveShadow = true;
+      world.add(obj);
+    }
   }
 
   // ---- sign text (SurfaceGui on Front/Back faces) ----

@@ -77,7 +77,24 @@ end
 function Export.collect(root: any, scene: any?)
 	scene = scene or { parts = {}, lights = {}, emitters = {}, texts = {} }
 	for _, d in root:GetDescendants() do
-		if d:IsA("BasePart") then
+		local asset = if d.ClassName == "MeshPart" then d:GetAttribute("Asset") else nil
+		if type(asset) == "string" and asset ~= "" then
+			-- an uploaded mesh (MeshKit): the viewer loads the processed .glb of that name from
+			-- build/preview/meshes and fits it into the part's box
+			if d.Transparency < 0.99 then
+				local size = d.Size
+				scene.meshes = scene.meshes or {}
+				table.insert(scene.meshes, {
+					asset,
+					round(size.X),
+					round(size.Y),
+					round(size.Z),
+					cframeList(d.CFrame),
+					round(d.Transparency),
+					if d.CastShadow then 1 else 0,
+				})
+			end
+		elseif d:IsA("BasePart") then
 			if d.Transparency < 0.99 then
 				local shape = SHAPES.Block
 				if d.ClassName == "WedgePart" then
