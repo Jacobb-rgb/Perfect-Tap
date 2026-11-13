@@ -12,7 +12,6 @@ return function(T, Loader)
 	local Fakes = require("../tools/lune/lib/mesh_fakes")
 	local Enum = roblox.Enum
 	local Vector3 = roblox.Vector3
-	local Color3 = roblox.Color3
 	local CFrame = Loader.CFrame
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -450,7 +449,6 @@ return function(T, Loader)
 				T.eq(glow.Color, KitMachines.Palette.Neon, "L" .. level .. " the orange glow")
 			end
 		end
-		T.truthy(Color3)
 	end)
 
 	---------------------------------------------------------------- no upload: the old looks
