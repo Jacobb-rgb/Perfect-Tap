@@ -35,8 +35,9 @@ local Diorama = {}
 
 -- A way through a floor's room wall that Land keeps open: on side Side ("N" = local -Z, "S" = +Z,
 -- "E" = +X, "W" = -X), From..To along the wall (local X for N/S, Z for E/W), up to Top (local Y;
--- nil = the ceiling).
-export type Opening = { Side: string, From: number, To: number, Top: number? }
+-- nil = the ceiling). Veil: a glowing curtain of that colour fills it, walked through but never
+-- seen through (a cave's way out, where its dark lighting turned the sky beyond black).
+export type Opening = { Side: string, From: number, To: number, Top: number?, Veil: Color3? }
 export type Look = {
 	Walls: { string }?,
 	Thin: { string }?,
@@ -51,6 +52,9 @@ export type Look = {
 	WallGlow: boolean?,
 	WallColors: { Color3 }?,
 	WallCap: Color3?,
+	-- the rock walls on these sides faced with this uploaded model (MeshKit) instead of part shards
+	WallMesh: string?,
+	WallMeshSides: { string }?,
 	Light: Color3,
 	Brightness: number,
 }
@@ -81,7 +85,12 @@ Diorama.Floors = {
 		-- the town side stands in front of the town ground's edge at local z 58 (its flat face
 		-- showed once Land's cliff went) and stays thin, clear of the rim road
 		WallGaps = { S = -1.4 },
+		-- (owner 2026-11-14, his mossy cliff picture: "board it up with walls like these, so it
+		-- looks the same, only you can't see behind it") the side walls are faced with his mossy
+		-- cliff model (WallMesh, Diorama.MeshDepth deep chunks); the town side stays thin
 		WallDepths = { S = 2 },
+		WallMesh = "Prop_MossyCliff",
+		WallMeshSides = { "E", "W" },
 		WallGlow = false,
 		-- the diorama's lavender stone and its moss
 		WallColors = { Color3.fromRGB(150, 146, 184), Color3.fromRGB(184, 178, 214), Color3.fromRGB(128, 124, 160) },
@@ -114,7 +123,13 @@ Diorama.Floors = {
 	EmberCaves = {
 		Walls = { "N", "E", "W" },
 		Thin = { "S" },
-		Openings = { { Side = "N", From = -12.3, To = 12.3, Top = 16.3 }, { Side = "S", From = -10, To = 10, Top = 17 } },
+		-- (owner 2026-11-14: "when I go through to the next location I see through the walls": from
+		-- inside, under the caves' dark lighting, the town and the sky out through the DEPTHS
+		-- portal showed as black holes) a glowing ember curtain fills the way in from the quarry
+		Openings = {
+			{ Side = "N", From = -12.3, To = 12.3, Top = 16.3 },
+			{ Side = "S", From = -10, To = 10, Top = 17, Veil = Color3.fromRGB(80, 22, 10) },
+		},
 		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
 		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the
 		-- central wooden bridge over the lava (four boxes: a flat path across it stays; their 7th value 1
@@ -204,6 +219,15 @@ Diorama.CeilingThickness = 0.5 -- its top at local 34: world 22 on the Ember Cav
 Diorama.WallBottom = -6 -- the walls reach this far under the usual ground
 Diorama.CapHeight = 1.4 -- an open-air wall's grassy top
 Diorama.OpeningPad = 2.5 -- rock shards keep this far off an opening (theirs overhang a piece's ends)
+-- a mesh-faced wall (look.WallMesh): its chunks' size and depth (back past its slab, into the
+-- rim), how far their fronts stand out of the wall's line, how far they keep off an opening, and
+-- where its slab starts behind the line (in the chunks' hollows the slab would show as flat patches)
+Diorama.MeshChunk = Vector2.new(30, 17)
+Diorama.MeshDepth = 7
+Diorama.MeshOut = 0.8
+Diorama.MeshPad = 0.4
+Diorama.MeshSlabGap = 4
+Diorama.VeilThickness = 0.3
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -284,6 +308,65 @@ function Diorama.footprint(index: number): (Vector2, Vector2)
 		z1 = math.max(z1, (c.Z + half.Z - data.CenterN.Y) * s)
 	end
 	return Vector2.new(x0, z0), Vector2.new(x1, z1)
+end
+
+-- Whether look's rock walls (on side `side`, else on any) are faced with its uploaded model
+-- (look.WallMesh on look.WallMeshSides).
+function Diorama.meshWalls(look: Look, side: string?): boolean
+	if look.WallMesh == nil or not MeshKit.has(look.WallMesh) then
+		return false
+	end
+	return side == nil or table.find(look.WallMeshSides or {}, side) ~= nil
+end
+
+--[[
+	A box of wall faced with chunks of an uploaded model (the owner's mossy cliff): `front` = the
+	bottom centre of the box's front face, its LookVector out of the wall; size = (width, height,
+	depth), the box running `depth` back from the front. The chunks (opts.Chunk, about
+	Diorama.MeshChunk) stand side by side and in rows, overlapping a little to fill it, never
+	past its sides or top (a box a little taller than a chunk takes one stretched row); a narrow
+	box takes narrower chunks (at most 2.2 times as tall as wide). Each chunk is turned a hair and set a hair forward or back from its neighbours, so
+	the same model never repeats as one flat sheet. Returns the chunks (none without the template).
+]]
+function Diorama.meshFill(
+	parent: Instance,
+	asset: string,
+	front: CFrame,
+	size: Vector3,
+	rng: Rng.Rng,
+	opts: { Chunk: Vector2?, Name: string? }?
+): { MeshPart }
+	local out: { MeshPart } = {}
+	if not MeshKit.has(asset) or size.X < 0.5 or size.Y < 0.5 then
+		return out
+	end
+	local chunk = if opts and opts.Chunk then opts.Chunk else Diorama.MeshChunk
+	local w = math.min(chunk.X, size.X)
+	local h = math.min(size.Y, w * 2.2)
+	if h > chunk.Y * 1.1 then
+		h = chunk.Y
+	end
+	local cols = if size.X <= w + 0.01 then 1 else math.ceil((size.X - w) / (w * 0.75)) + 1
+	local rows = if size.Y <= h + 0.01 then 1 else math.ceil((size.Y - h) / (h * 0.8)) + 1
+	local colStep = if cols > 1 then (size.X - w) / (cols - 1) else 0
+	local rowStep = if rows > 1 then (size.Y - h) / (rows - 1) else 0
+	-- (the model's front with the vines is its +Z side: turned round, out of the wall)
+	local turned = front * CFrame.Angles(0, math.pi, 0)
+	for row = 0, rows - 1 do
+		for col = 0, cols - 1 do
+			local k = (row + col) % 2
+			local x = -size.X / 2 + w / 2 + col * colStep
+			local cf = turned
+				* CFrame.new(x, h / 2 + row * rowStep, -size.Z / 2 + (if k == 0 then 0.08 else -0.08))
+				* CFrame.Angles(0, rng:range(-0.04, 0.04), 0)
+			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, { Name = if opts and opts.Name then opts.Name else "MeshWall" })
+			if p then
+				p.Parent = parent
+				table.insert(out, p)
+			end
+		end
+	end
+	return out
 end
 
 --[[
@@ -374,8 +457,27 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 			else Vector3.new(-1, 0, 0)
 		local from, to = point(a, y0), point(b, y0)
 		local rock = kind[side] == "rock"
+		-- (look.WallMesh uploaded: this side's rock wall is its chunks, the slab further back)
+		local meshWall = rock and Diorama.meshWalls(look, side)
 		local sa, sb = a + (padA or 0), b - (padB or 0)
-		if rock and y0 <= bottom and sb - sa > 2 then
+		if meshWall then
+			-- the owner's model over the whole piece, a lintel too (from just under the ground: no
+			-- seam at its foot), a hair off an opening; a lintel's chunks reach over its jambs
+			local lintel = y0 > bottom
+			local ma = a + (if lintel then -2 elseif (padA or 0) > 0 then Diorama.MeshPad else 0)
+			local mb = b - (if lintel then -2 elseif (padB or 0) > 0 then Diorama.MeshPad else 0)
+			local yb = if lintel then y0 else -1
+			if mb - ma > 1 then
+				local mid = (point(ma, yb) + point(mb, yb)) / 2 + face * Diorama.MeshOut
+				Diorama.meshFill(
+					folder,
+					look.WallMesh :: string,
+					origin * CFrame.lookAt(mid, mid + face),
+					Vector3.new(mb - ma, y1 - yb, Diorama.MeshDepth),
+					rng
+				)
+			end
+		elseif rock and y0 <= bottom and sb - sa > 2 then
 			-- the shards from under the ground up to the ceiling (no solid facets in front of
 			-- them: the diorama's walkable edge and its path ramps stay clear)
 			MineKit.wall(
@@ -397,7 +499,7 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		-- the slab right behind the shards' faces (whatever stands beyond the wall, Land's
 		-- mountains between the caves, stays hidden where the shards are low), a thin wall's slab,
 		-- a lintel over an opening
-		local gap = if rock then 0.3 else 0
+		local gap = if meshWall then Diorama.MeshSlabGap elseif rock then 0.3 else 0
 		local thick = behind(side) - gap
 		local mid = (from + to) / 2 - face * (gap + thick / 2)
 		local along = (to - from).Magnitude
@@ -455,6 +557,31 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 			t, pad = o.To, Diorama.OpeningPad
 		end
 		piece(side, t, a1, bottom, top, pad, if endLow then Diorama.OpeningPad else 0)
+	end
+
+	-- the veils: a glowing curtain in an opening (look.Openings[*].Veil), just behind the wall's
+	-- line, tucked a little behind its edges and lintel; walked through, never seen through
+	for _, o in openings do
+		local color = o.Veil
+		if not color or not kind[o.Side] or (cutaway and o.Side == "S") then
+			continue
+		end
+		local alongX = o.Side == "N" or o.Side == "S"
+		local line = if o.Side == "N" then lo.Y elseif o.Side == "S" then hi.Y elseif o.Side == "W" then lo.X else hi.X
+		local outward = if o.Side == "N" or o.Side == "W" then -1 else 1
+		local c = line + outward * (Diorama.ThinWall + 0.01 + Diorama.VeilThickness / 2)
+		local vy0, vy1 = -0.5, (o.Top or wallTop(o.Side)) + 0.2
+		local width = o.To - o.From + 0.4
+		local mid = (o.From + o.To) / 2
+		local veil = Geo.block(
+			folder,
+			at(origin, if alongX then Vector3.new(mid, (vy0 + vy1) / 2, c) else Vector3.new(c, (vy0 + vy1) / 2, mid)),
+			if alongX then Vector3.new(width, vy1 - vy0, Diorama.VeilThickness) else Vector3.new(Diorama.VeilThickness, vy1 - vy0, width),
+			color,
+			Enum.Material.Neon,
+			{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
+		)
+		veil.Name = "Veil"
 	end
 
 	if cutaway or not closed then

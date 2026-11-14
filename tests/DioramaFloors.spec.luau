@@ -230,6 +230,63 @@ return function(T, Loader)
 					end
 				end
 				T.eq(ramps, #data.Ramps / 7 - skipped, label .. " every path ramp")
+				-- the quarry's VIP door (owner 2026-11-14: "frame it with mega shards, walls round it so you
+				-- can't see behind the 3D models"): shards round it, its slot lined with his mossy cliff,
+				-- looks only and clear of the way in; no rim part left in front of the side walls' slab
+				if index == 1 then
+					local function box(d)
+						local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+						for _, sx in { -1, 1 } do
+							for _, sy in { -1, 1 } do
+								for _, sz in { -1, 1 } do
+									local c = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(V3.new(sx, sy, sz) * d.Size / 2))
+									mn, mx = mn:Min(c), mx:Max(c)
+								end
+							end
+						end
+						return mn, mx
+					end
+					local frame = model:FindFirstChild("VipFrame")
+					T.truthy(frame ~= nil, label .. " the VIP door's frame")
+					if frame then
+						local slot = Floor.VipSlot
+						local shards, slotWalls, inWay = 0, 0, 0
+						for _, d in frame:GetDescendants() do
+							if d:IsA("BasePart") then
+								T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
+								if d.Name == "Shard" then
+									shards += 1
+								elseif d.Name == "SlotWall" then
+									slotWalls += 1
+								end
+								-- (the way in: the door's width, the ground to over head height, the wall to the tunnel)
+								local mn, mx = box(d)
+								if mx.Z > slot.Z0 + 0.6 and mn.Z < slot.Z1 - 0.6 and mn.Y < 6.5 and mx.X > 50 then
+									inWay += 1
+								end
+							end
+						end
+						T.le(20, shards, label .. " mega shards round the VIP door")
+						T.eq(slotWalls, 2, label .. " the door's slot lined on both sides")
+						T.eq(inWay, 0, label .. " nothing of the frame in the VIP way in")
+					end
+					local keep = Floor.DioramaKeep
+					local fpLo, fpHi = Diorama.footprint(1)
+					local lineE = fpHi.X + Diorama.WallGap + Diorama.MeshSlabGap
+					local lineW = fpLo.X - Diorama.WallGap - Diorama.MeshSlabGap
+					local standing = 0
+					for _, d in model:FindFirstChild("QuarryRim"):GetDescendants() do
+						if d:IsA("BasePart") then
+							local mn, mx = box(d)
+							if mn.Z >= keep.Z0 and mx.Z <= keep.Z1 and mn.Y < 28 then
+								if (mx.X > keep.X and mn.X < lineE - 0.05) or (mn.X < -keep.X and mx.X > lineW + 0.05) then
+									standing += 1
+								end
+							end
+						end
+					end
+					T.eq(standing, 0, label .. " no rim part in front of the side walls' slab")
+				end
 				-- budgets
 				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
 				T.le(count(model, "BasePart"), budget, label .. " parts")
@@ -325,7 +382,8 @@ return function(T, Loader)
 					local sides = {}
 					for _, side in look.Walls or {} do
 						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.WallGap
-						sides[side] = lineGap[side] + 0.35
+						-- (a wall faced with the owner's model has its slab further back)
+						sides[side] = lineGap[side] + (if Diorama.meshWalls(look, side) then Diorama.MeshSlabGap else 0) + 0.35
 					end
 					for _, side in look.Thin or {} do
 						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.ThinGap
@@ -398,7 +456,8 @@ return function(T, Loader)
 							else V3.new(across1, math.min(o.Top or 30, 30) - 0.5, o.To - 1)
 						local blocked = 0
 						for _, d in room:GetDescendants() do
-							if d:IsA("BasePart") then
+							-- (a veil is walked through: checked below)
+							if d:IsA("BasePart") and d.Name ~= "Veil" then
 								local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
 								for _, sx in { -1, 1 } do
 									for _, sy in { -1, 1 } do
@@ -415,6 +474,47 @@ return function(T, Loader)
 						end
 						T.eq(blocked, 0, label .. " the " .. o.Side .. " way through stays open")
 						T.truthy(out ~= nil, label .. " an opening on a walled side")
+						-- a veiled opening: one glowing curtain over all of it, walked through, never seen through
+						if o.Veil then
+							local veils = 0
+							for _, d in room:GetChildren() do
+								if d.Name == "Veil" then
+									veils += 1
+									T.eq(d.CanCollide, false, label .. " the veil is walked through")
+									T.eq(d.CanQuery, false, label .. " the veil takes no clicks or shots")
+									T.eq(d.Transparency, 0, label .. " the veil is never seen through")
+									local q0 = origin:PointToObjectSpace(d.CFrame.Position - d.Size / 2)
+									local q1 = origin:PointToObjectSpace(d.CFrame.Position + d.Size / 2)
+									local a0 = if alongX then q0.X else q0.Z
+									local a1 = if alongX then q1.X else q1.Z
+									T.truthy(a0 <= o.From and a1 >= o.To, label .. " the veil spans the opening")
+									T.truthy(q0.Y <= 0 and q1.Y >= (o.Top or 30), label .. " the veil from the ground to the opening's top")
+								end
+							end
+							T.eq(veils, 1, label .. " one veil in the " .. o.Side .. " way through")
+						end
+					end
+					-- the walls faced with the owner's model: its chunks on those sides only
+					if look.WallMesh then
+						local faced: { [string]: number } = {}
+						for _, d in room:GetChildren() do
+							if d.Name == "MeshWall" then
+								T.eq(d:GetAttribute("Asset"), look.WallMesh, label .. " the wall chunks are the owner's model")
+								T.eq(d.CanCollide, false, label .. " the slab behind is the wall, not the chunks")
+								local p = origin:PointToObjectSpace(d.CFrame.Position)
+								local side = if math.abs(p.X) > math.abs(p.Z)
+									then (if p.X > 0 then "E" else "W")
+									else (if p.Z > 0 then "S" else "N")
+								faced[side] = (faced[side] or 0) + 1
+							end
+						end
+						for _, side in look.Walls or {} do
+							T.eq(
+								(faced[side] or 0) > 0,
+								Diorama.meshWalls(look, side),
+								label .. " " .. side .. " wall faced with the owner's model"
+							)
+						end
 					end
 				end
 			end

@@ -818,6 +818,122 @@ Floor.DioramaFills = {
 	{ Min = Vector3.new(-72.5, -3, -59), Max = Vector3.new(72.5, -0.45, 66) }, -- the underlay (out under the town-side wall)
 }
 
+--[[
+	The VIP Grotto's door from the quarry (owner 2026-11-14: "frame that VIP mine with mega shards,
+	and build more walls round it so you can't see behind the 3D models"): the slot through the rim
+	to Land's tunnel lined with the owner's mossy cliff (Diorama.meshFill; the part terraces
+	either side of it stand hidden behind) and giant shards in the grotto's colours, glassy with a
+	glowing heart (all neon read as white blobs): a cluster either side of the door leaning away
+	from it, a fan over the wall's top (the town sees it) and small ones round the doorway. Looks
+	only: nothing to bump into, the way in stays clear.
+]]
+-- the shards' glass (two shades) and their glowing hearts
+Floor.VipColors = { Color3.fromRGB(70, 214, 224), Color3.fromRGB(44, 168, 204), Color3.fromRGB(16, 160, 182) }
+-- the slot's sides (local z), how far it runs (to Land's tunnel), its top (under the old lintel)
+Floor.VipSlot = { Z0 = DOOR_Z0 - 0.6, Z1 = DOOR_Z1 + 0.6, X1 = 72.5, Top = DOOR_H + 0.2 }
+-- a cluster's shards: along x (toward the pit: -), along z (away from the door), height, width,
+-- the way it leans (x, away from the door) and how far
+local VIP_CLUSTER: { { number } } = {
+	{ 0, 0, 22, 4.4, -0.3, 1, 0.18 },
+	{ -2.6, 2.4, 15, 3.2, -0.6, 1, 0.42 },
+	{ -3.2, -0.4, 10, 2.5, -1, 0.2, 0.5 },
+	{ 0.8, 3.6, 12, 2.8, -0.2, 1, 0.55 },
+	{ -1.4, 4.8, 7, 2, -0.7, 1, 0.7 },
+	{ -4.6, 1.8, 6, 1.8, -1, 0.5, 0.6 },
+}
+
+-- A crystal shard: a square glass body turned 45 degrees standing on `base`, its UpVector leaning
+-- `tilt` toward `out`, a ridged tip of two wedges and a glowing heart through both.
+local CRYSTAL = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 0.3, Reflectance = 0.15 }
+local function shard(m: Instance, base: Vector3, out: Vector3, tilt: number, h: number, w: number, color: Color3, heart: Color3): Part
+	local cf = leaning(base, out, tilt) * CFrame.Angles(0, math.pi / 4, 0)
+	local glass = Enum.Material.Glass
+	local body = Geo.block(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(w, h, w), color, glass, CRYSTAL)
+	body.Name = "Shard"
+	local tip = w * 1.5
+	Geo.wedge(m, cf * CFrame.new(0, h + tip / 2, -w / 4), Vector3.new(w, tip, w / 2), color, glass, CRYSTAL)
+	Geo.wedge(m, cf * CFrame.new(0, h + tip / 2, w / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, tip, w / 2), color, glass, CRYSTAL)
+	local core = h + tip * 0.45
+	Geo.block(m, cf * CFrame.new(0, core / 2, 0), Vector3.new(w * 0.42, core, w * 0.42), heart, NEON, TINY)
+	return body
+end
+
+local function vipFrame(model: Model, origin: CFrame, lineE: number)
+	local m = Instance.new("Model")
+	m.Name = "VipFrame"
+	m.Parent = model
+	local rng = Rng.new("QuarryVipFrame")
+	local cols = Floor.VipColors
+	local slot = Floor.VipSlot
+	local function p(x: number, y: number, z: number): Vector3
+		return origin * Vector3.new(x, y, z)
+	end
+	local function dir(x: number, z: number): Vector3
+		return origin:VectorToWorldSpace(Vector3.new(x, 0, z).Unit)
+	end
+	-- the slot's sides: the mossy cliff from in front of the wall to the tunnel
+	local x0 = lineE - 1.5
+	local xm = (x0 + slot.X1) / 2
+	for _, side in { { slot.Z0, 1 }, { slot.Z1, -1 } } do
+		local z, f = side[1], side[2]
+		local front = origin * CFrame.lookAt(Vector3.new(xm, -1, z), Vector3.new(xm, -1, z + f))
+		Diorama.meshFill(
+			m,
+			Diorama.Floors.Quarry.WallMesh :: string,
+			front,
+			Vector3.new(slot.X1 - x0, slot.Top + 1, 4),
+			rng,
+			{ Name = "SlotWall" }
+		)
+	end
+	-- a cluster either side of the door, leaning away from it
+	for _, s in { -1, 1 } do
+		local zc = if s < 0 then slot.Z0 - 3.8 else slot.Z1 + 3.8
+		for i, v in VIP_CLUSTER do
+			local body = shard(
+				m,
+				p(lineE - 1.2 + v[1], -1, zc + v[2] * s),
+				dir(v[5], v[6] * s),
+				v[7],
+				v[3],
+				v[4],
+				Geo.vary(cols[if i % 2 == 0 then 2 else 1], rng, 0.04),
+				cols[3]
+			)
+			if i == 1 then
+				local l = Instance.new("PointLight")
+				l.Color = cols[1]
+				l.Range = 26
+				l.Brightness = 1.8
+				l.Shadows = false
+				l.Parent = body
+			end
+		end
+	end
+	-- a fan over the wall's top, the middle one tallest
+	local zMid = (slot.Z0 + slot.Z1) / 2
+	for i = -3, 3 do
+		local a = math.abs(i)
+		shard(
+			m,
+			p(lineE + 1.5, 25.5, zMid + i * 2.6),
+			dir(-0.25, i * 0.18),
+			0.08 + a * 0.12,
+			15 - a * 2.2 + rng:range(-0.8, 0.8),
+			3.6 - a * 0.3,
+			cols[if i % 2 == 0 then 1 else 2],
+			cols[3]
+		)
+	end
+	-- small ones round the doorway, leaning out of it
+	for _, s in { -1, 1 } do
+		local zEdge = if s < 0 then slot.Z0 - 1.5 else slot.Z1 + 1.5
+		for j, v in { { 0, 6.5, 1.7, 0.5 }, { 3.5, 4.8, 1.4, 0.75 }, { 7, 4, 1.2, 0.95 } } do
+			shard(m, p(lineE - 0.6, v[1], zEdge), dir(-0.6, s), v[4], v[2], v[3], cols[j % 2 + 1], cols[3])
+		end
+	end
+end
+
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	if not Diorama.has(Floor.Index) then
 		return buildParts(parent, origin, opts)
@@ -845,6 +961,68 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		pcall(function()
 			d:Destroy()
 		end)
+	end
+	-- (owner 2026-11-14: "build more walls so you can't see behind the 3D models") the rim's parts
+	-- that stood out in front of the side walls' slab (the grey blocks either side of the grotto
+	-- door; flat faces among the mossy cliff's chunks showed in their hollows) go: a block reaching
+	-- back past the slab's front is cut to it (it still closes what lies behind, the grotto door's
+	-- old lintel over the slot), anything else goes
+	local look = Diorama.Floors.Quarry
+	local fpLo, fpHi = Diorama.footprint(Floor.Index)
+	local gaps: { [string]: number } = look.WallGaps or {}
+	local lineE, lineW = fpHi.X + (gaps.E or Diorama.WallGap), fpLo.X - (gaps.W or Diorama.WallGap)
+	if Diorama.meshWalls(look) then
+		local tops: { [string]: number } = look.WallTops or {}
+		local top = tops.E or 28
+		local clipE, clipW = lineE + Diorama.MeshSlabGap, lineW - Diorama.MeshSlabGap
+		local inFront: { Instance } = {}
+		for _, d in rim:GetDescendants() do
+			if not d:IsA("BasePart") then
+				continue
+			end
+			local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local q = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(Vector3.new(sx, sy, sz) * d.Size / 2))
+						mn, mx = mn:Min(q), mx:Max(q)
+					end
+				end
+			end
+			local within = mn.Z >= keep.Z0 and mx.Z <= keep.Z1 and mn.Y < top
+			local east = mx.X > keep.X and mn.X < clipE - 0.05
+			local west = mn.X < -keep.X and mx.X > clipW + 0.05
+			if not within or not (east or west) then
+				continue
+			end
+			local rel = origin:ToObjectSpace(d.CFrame)
+			local axis = 0 -- the block's own axis along local X
+			if d:IsA("Part") and d.Shape == Enum.PartType.Block then
+				for i, v in { rel.XVector, rel.YVector, rel.ZVector } do
+					if math.abs(math.abs(v.X) - 1) < 1e-3 then
+						axis = i
+					end
+				end
+			end
+			local x0, x1 = if east then clipE else mn.X, if east then mx.X else clipW
+			if axis > 0 and x1 - x0 > 0.3 then
+				local len = x1 - x0
+				local size = d.Size
+				d.Size = if axis == 1
+					then Vector3.new(len, size.Y, size.Z)
+					elseif axis == 2 then Vector3.new(size.X, len, size.Z)
+					else Vector3.new(size.X, size.Y, len)
+				d.CFrame = origin
+					* CFrame.new((x0 + x1) / 2, rel.Position.Y, rel.Position.Z)
+					* CFrame.fromMatrix(Vector3.zero, rel.XVector, rel.YVector, rel.ZVector)
+			else
+				table.insert(inFront, d)
+			end
+		end
+		for _, d in inFront do
+			d:Destroy()
+		end
+		vipFrame(model, origin, lineE)
 	end
 	for _, fill in Floor.DioramaFills do
 		local size = fill.Max - fill.Min
