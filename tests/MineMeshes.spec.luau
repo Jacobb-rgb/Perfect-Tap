@@ -53,6 +53,12 @@ return function(T, Loader)
 		local lp = stopCF:PointToObjectSpace(arrival.Position)
 		T.near(lp.Z, arrivalZ, 1e-3, "the service puts riders there")
 		T.lt(lp.Z, -tallTower.Size.Z / 2 - 0.5, "in front of the tower's face")
+		-- the call panel on the plate, beside the tower and in front of it
+		local panel = tall:FindFirstChild("CallPanel")
+		local pp = base.CFrame:PointToObjectSpace(panel.CFrame.Position)
+		T.lt(math.abs(pp.X) + panel.Size.X / 2, base.Size.X / 2 + 0.01, "the panel on the plate")
+		T.lt(tallTower.Size.X / 2, math.abs(pp.X) - panel.Size.X / 2 + 0.01, "beside the tower")
+		T.lt(pp.Z + panel.Size.Z / 2, -tallTower.Size.Z / 2, "in front of the tower")
 		Fakes.unmount(Loader)
 	end)
 end

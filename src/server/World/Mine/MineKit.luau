@@ -393,8 +393,10 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number, opts
 	if not tower then
 		elevatorFrame(m, cf, floorIndex, half, height)
 	end
-	-- call panel with the glowing button and the prompt point
-	local panel = Geo.block(m, cf * CFrame.new(plateX / 2 + 0.8, 2.2, -plateZ / 2 + 1.0), Vector3.new(1.2, 3.2, 0.6), STEEL_DARK, METAL, SOLID)
+	-- call panel with the glowing button and the prompt point (beside the owner's wide tower it
+	-- stands on the plate's front corner: off the plate it met the floor's terraces)
+	local panelX = if tower then plateX / 2 - 0.8 else plateX / 2 + 0.8
+	local panel = Geo.block(m, cf * CFrame.new(panelX, 2.2, -plateZ / 2 + 1.0), Vector3.new(1.2, 3.2, 0.6), STEEL_DARK, METAL, SOLID)
 	panel.Name = "CallPanel"
 	local button = Geo.block(m, panel.CFrame * CFrame.new(0, 0.6, -0.34), Vector3.new(0.6, 0.6, 0.12), SIGN_GLOW, NEON, GLOW)
 	button.Name = "CallButton"
