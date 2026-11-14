@@ -326,38 +326,83 @@ def cut_boxes(ob, boxes):
     bm.to_mesh(ob.data); bm.free()
     log("  cut", len(kill), "faces")
 
-def flatten_boxes(ob, boxes, torn=None):
+def flatten_boxes(ob, boxes, stud=None):
     # squash what stands in a box down to its floor (Blender axes, normalized units): a thing in
     # the way goes (the quarry's blue sign gate, the floors' gates and bridges, owner 2026-11-14)
-    # and leaves a flat patch of its own texture where it stood, never a hole in the ground the
-    # way a cut would. Heights are pressed to 1 % rather than collapsed, so the thing's top stays
-    # on top (one plane of deck, underside and posts baked to a mottled patch). Faces stretched
-    # between a squashed part and one left standing, taller than `torn` (a rail running into a
-    # kept post), would be torn sheets: they go.
+    # and leaves a flat patch where it stood, never a hole in the ground the way a cut would.
+    # Heights are pressed to 1 % rather than collapsed, so the thing's top stays on top (one plane
+    # of deck, underside and posts baked to a mottled patch). Faces stretched between a squashed
+    # part and one left standing, taller than 1.5 studs (a rail running into a kept post), would be
+    # torn sheets: they go. The patch then takes the ground's colour: each squashed face samples
+    # the texture where the nearest ground face round the box does (the gate's dark beams lay on
+    # the path as black jagged stains), and faces left facing down turn up (their normals baked dark).
+    # A box with a 7th value 1 keeps the thing's own look: a bridge deck over lava stays a flat
+    # wooden deck, not a strip of lava to walk on.
     if not boxes:
         return
     bm = bmesh.new(); bm.from_mesh(ob.data)
-    bm.verts.ensure_lookup_table()
-    moved = set()
+    moved = {}
     for v in bm.verts:
         c = v.co
         for b in boxes:
             if b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] < c.z <= b[5]:
                 c.z = b[2] + (c.z - b[2]) * 0.01
-                moved.add(v.index)
+                moved[v] = len(b) > 6 and b[6] == 1
                 break
     kill = []
-    if torn:
+    if stud:
         for f in bm.faces:
-            inside = [v.index in moved for v in f.verts]
+            inside = [v in moved for v in f.verts]
             if any(inside) and not all(inside):
                 zs = [v.co.z for v in f.verts]
-                if max(zs) - min(zs) > torn:
+                if max(zs) - min(zs) > 1.5 * stud:
                     kill.append(f)
         bmesh.ops.delete(bm, geom=kill, context='FACES')
+    reskinned = 0
+    uv = bm.loops.layers.uv.active
+    if stud and moved and uv:
+        from mathutils import kdtree
+        bm.normal_update()
+        squashed = [f for f in bm.faces if all(v in moved for v in f.verts)]
+        own = [f for f in squashed if any(moved[v] for v in f.verts)]
+        squashed = [f for f in squashed if not any(moved[v] for v in f.verts)]
+        down = [f for f in squashed if f.normal.z < 0]
+        down += [f for f in own if f.normal.z < 0]
+        if down:
+            bmesh.ops.reverse_faces(bm, faces=down)
+        # the ground round the boxes: kept faces facing up, within 4 studs of a box and 2 of its floor
+        reach, rise = 4 * stud, 2 * stud
+        ground = []
+        for f in bm.faces:
+            if f.normal.z < 0.6 or any(v in moved for v in f.verts):
+                continue
+            c = f.calc_center_median()
+            for b in boxes:
+                if b[0] - reach <= c.x <= b[3] + reach and b[1] - reach <= c.y <= b[4] + reach and abs(c.z - b[2]) < rise:
+                    ground.append((f, c))
+                    break
+        if ground:
+            tree = kdtree.KDTree(len(ground))
+            for i, (f, c) in enumerate(ground):
+                tree.insert((c.x, c.y, 0.0), i)
+            tree.balance()
+            for f in squashed:
+                c = f.calc_center_median()
+                _, i, _ = tree.find((c.x, c.y, 0.0))
+                src = ground[i][0]
+                target = sum((l[uv].uv for l in src.loops), Vector((0.0, 0.0))) / len(src.loops)
+                # (a tiny copy of the face's own UV shape there, not one point: its tangents stay
+                # sound for the normal bake)
+                mid = sum((l[uv].uv for l in f.loops), Vector((0.0, 0.0))) / len(f.loops)
+                ext = max(max(abs(l[uv].uv.x - mid.x), abs(l[uv].uv.y - mid.y)) for l in f.loops)
+                k = min(1.0, 0.0005 / ext) if ext > 0 else 1.0
+                for l in f.loops:
+                    l[uv].uv = target + (l[uv].uv - mid) * k
+                f.material_index = src.material_index
+                reskinned += 1
     bm.to_mesh(ob.data); bm.free()
     ob.data.update()
-    log("  flattened", len(moved), "vertices,", len(kill), "torn faces removed")
+    log("  flattened", len(moved), "vertices,", len(kill), "torn faces removed,", reskinned, "faces given the ground's colour")
 
 def facet(ob, angle):
     # crisp flat facets (2026-11-14, the owner: "everything still looks melted"): merge the decimated
@@ -423,7 +468,7 @@ def post_color(mats, j):
     log("  post colour", "sharpen", sharpen, "poster", poster)
 
 def local_boxes_to_blender(j, key="cuts"):
-    # j[key]: [[x0, y0, z0, x1, y1, z1], ...] in floor-local studs (Roblox axes) with
+    # j[key]: [[x0, y0, z0, x1, y1, z1, (keep)], ...] in floor-local studs (Roblox axes) with
     # j["layout"] = {"scale", "ground_n", "center_n": [cx, cz]} of that floor
     out = []
     lay = j.get("layout")
@@ -433,7 +478,7 @@ def local_boxes_to_blender(j, key="cuts"):
         ry0, ry1 = c[1] / s + g, c[4] / s + g
         rz0, rz1 = c[2] / s + cz, c[5] / s + cz
         # Roblox (x, y, z) -> Blender (x, -z, y)
-        out.append((rx0, -rz1, ry0, rx1, -rz0, ry1))
+        out.append((rx0, -rz1, ry0, rx1, -rz0, ry1) + tuple(c[6:7]))
     return out
 
 def job_tiles(j):
@@ -441,7 +486,7 @@ def job_tiles(j):
     high = import_glb(j["src"])
     normalize(high, "bottom", j.get("unit", 4.0))
     cut_boxes(high, local_boxes_to_blender(j))
-    flatten_boxes(high, local_boxes_to_blender(j, "flatten"), 1.5 / j["layout"]["scale"] if j.get("layout") else None)
+    flatten_boxes(high, local_boxes_to_blender(j, "flatten"), 1.0 / j["layout"]["scale"] if j.get("layout") else None)
     make_emit(high)
     low = high.copy(); low.data = high.data.copy(); bpy.context.collection.objects.link(low)
     weld(low, 1e-5)

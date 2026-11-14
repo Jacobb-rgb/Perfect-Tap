@@ -42,6 +42,8 @@ export type Look = {
 	Thin: { string }?,
 	Openings: { Opening }?,
 	ElevatorWidth: number?,
+	-- [x0, y0, z0, x1, y1, z1] floor-local, an optional 7th 1: the squashed thing keeps its own
+	-- look in the sharper tiles (tools/meshy/process_glb.py flatten_boxes) rather than the ground's
 	Flatten: { { number } }?,
 	WallTops: { [string]: number }?,
 	WallGaps: { [string]: number }?,
@@ -115,13 +117,14 @@ Diorama.Floors = {
 		Openings = { { Side = "N", From = -12.3, To = 12.3, Top = 16.3 }, { Side = "S", From = -10, To = 10, Top = 17 } },
 		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
 		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the
-		-- central wooden bridge over the lava (four boxes: a flat path across it stays), the wooden
-		-- beam gate at z 26 and the sign gate at z 40 on the main path
+		-- central wooden bridge over the lava (four boxes: a flat path across it stays; their 7th value 1
+		-- keeps the deck's own wood, not the ground's colour), the wooden beam gate at z 26 and the
+		-- sign gate at z 40 on the main path
 		Flatten = {
-			{ -9.5, 0.1, -10, 8.5, 20, 13 },
-			{ -7.5, 0.1, -20.5, 5.7, 12, -10 },
-			{ -6, 0.1, -21.9, 5.1, 12, -20.5 },
-			{ -5.9, 0.8, -26.5, 4.9, 12, -21.9 },
+			{ -9.5, 0.1, -10, 8.5, 20, 13, 1 },
+			{ -7.5, 0.1, -20.5, 5.7, 12, -10, 1 },
+			{ -6, 0.1, -21.9, 5.1, 12, -20.5, 1 },
+			{ -5.9, 0.8, -26.5, 4.9, 12, -21.9, 1 },
 			{ -9.5, 0.1, 23.5, 8.5, 15, 29 },
 			{ -11, 0.1, 37, 10, 16, 44 },
 		},
