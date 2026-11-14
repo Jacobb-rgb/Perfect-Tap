@@ -417,9 +417,9 @@ WorldLayout.KeepOut = {
 	-- the Mine Lifts on the owner's diorama floors (MineFloors.Dioramas[i].Lift beside the elevators,
 	-- 2026-11-14; the boxes stay under the surface, so nothing up there moves)
 	{ Min = Vector3.new(-42.4, -25, -254), Max = Vector3.new(-26.4, -4, -238) }, -- EmberCaves (-34.4, -11.9, -246)
-	{ Min = Vector3.new(-23.8, -51, -401.1), Max = Vector3.new(-7.8, -30, -385.1) }, -- DeepHollow (-15.8, -37.6, -393.1)
+	{ Min = Vector3.new(-42.4, -52, -428.6), Max = Vector3.new(-26.4, -31, -412.6) }, -- DeepHollow (-34.4, -38.7, -420.6)
 	{ Min = Vector3.new(-47.2, -232, -785.6), Max = Vector3.new(-31.2, -211, -769.6) }, -- SunkenPalace (-39.2, -219.2, -777.6)
-	{ Min = Vector3.new(-25, -313, -774.4), Max = Vector3.new(-9, -292, -758.4) }, -- StormglassRift (-17, -299.7, -766.4)
+	{ Min = Vector3.new(-31.1, -313, -789.3), Max = Vector3.new(-15.1, -292, -773.3) }, -- StormglassRift (-23.1, -300.0, -781.3)
 	{ Min = Vector3.new(3.7, -413, -753.3), Max = Vector3.new(19.7, -392, -737.3) }, -- HeartstoneCore (11.7, -399.8, -745.3)
 	-- the walk up to SKY HAVEN's gate in the south wall (SouthGate): no secrets, trees or flowers in the way
 	{

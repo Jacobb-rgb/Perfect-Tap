@@ -41,6 +41,7 @@ export type Look = {
 	Thin: { string }?,
 	Openings: { Opening }?,
 	ElevatorWidth: number?,
+	Flatten: { number }?,
 	Light: Color3,
 	Brightness: number,
 }
@@ -54,21 +55,29 @@ export type Look = {
 	enclosure (Floor6Core). The Ember Caves' south side meets the quarry's back 1.7 studs away: a
 	thin wall there round the DEPTHS portal's 18 x 16 way in (Lobby/Backdrop, its frame hides the
 	wall's edges); its north wall keeps Land's tunnel down to the Deep Hollow open, and the
-	Hollow's south wall the tunnel's other end.
+	Hollow's south wall the tunnel's other end (both openings a little wider than the tunnel's
+	x -12..12 and its roof at world 4: no faces shared with Land's, nothing flickers).
 	(the dioramas' painted colours need near-white light to read; their caves are dark otherwise)
 ]]
 Diorama.Floors = {
-	Quarry = { ElevatorWidth = 8, Light = Color3.fromRGB(255, 236, 214), Brightness = 0.8 },
+	Quarry = {
+		ElevatorWidth = 8,
+		-- the blue sign gate in the middle of the quarry (owner 2026-11-14: in the way), squashed in
+		-- the sharper tiles: tools/meshy/jobs_2026-11-14.json "flatten" x -9..9, z 7..17
+		Flatten = { -9, 7, 9, 17 },
+		Light = Color3.fromRGB(255, 236, 214),
+		Brightness = 0.8,
+	},
 	EmberCaves = {
 		Walls = { "N", "E", "W" },
 		Thin = { "S" },
-		Openings = { { Side = "N", From = -12, To = 12, Top = 16 }, { Side = "S", From = -10, To = 10, Top = 17 } },
+		Openings = { { Side = "N", From = -12.3, To = 12.3, Top = 16.3 }, { Side = "S", From = -10, To = 10, Top = 17 } },
 		Light = Color3.fromRGB(255, 222, 196),
 		Brightness = 1.4,
 	},
 	DeepHollow = {
 		Walls = { "N", "E", "W", "S" },
-		Openings = { { Side = "S", From = -12, To = 12 } },
+		Openings = { { Side = "S", From = -12.3, To = 12.3 } },
 		Light = Color3.fromRGB(220, 240, 255),
 		Brightness = 1.8,
 	},
@@ -81,9 +90,11 @@ Diorama.ElevatorWidth = 12 -- the tower's width on a 16-stud elevator spot (tool
 Diorama.WallGap = 0.6 -- the room's walls stand this far outside the diorama's own outline
 Diorama.WallDepth = 4 -- rock shards' depth
 Diorama.ThinWall = 0.12 -- a thin wall's slab (look.Thin) ...
-Diorama.ThinGap = 0.1 -- ... this far out of the diorama's outline
-Diorama.CeilingThickness = 3
+Diorama.ThinGap = -0.1 -- ... its line this far out of the diorama's outline (just inside: the portal's back is 0.3 behind)
+Diorama.CeilingThickness = 0.5 -- its top at local 34: world 22 on the Ember Caves, the massif's foot
 Diorama.WallBottom = -6 -- the walls reach this far under the usual ground
+Diorama.OpeningPad = 2.5 -- rock shards keep this far off an opening (theirs overhang a piece's ends)
+Diorama.FlattenTop = 0.1 -- the walk height of a squashed thing's patch (the flatten box's floor)
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -130,7 +141,8 @@ end
 	ceiling, on each side of look.Thin only a thin dark slab (where the room meets the quarry: the
 	town never sees it), both split round look.Openings (a lintel over an opening with a Top); one
 	ceiling slab over the whole room at MineFloors.CeilingHeight, out over the walls (never past a
-	side without one). Solid: nobody walks off the diorama's open front.
+	side without one). Solid: nobody walks off the diorama's open front. Cutaway (the preview
+	pictures) leaves out the ceiling and the front (+Z) wall.
 ]]
 local function room(model: Model, index: number, origin: CFrame, look: Look, cutaway: boolean)
 	local floor = MineFloors.ByIndex[index]
@@ -171,7 +183,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	local hi = Vector2.new(fpHi.X + gapOf("E"), fpHi.Y + gapOf("S"))
 
 	-- one wall piece from a to b along the side's line, from y0 up to y1
-	local function piece(side: string, a: number, b: number, y0: number, y1: number)
+	-- (padA / padB: the shards keep this far off a piece's end at an opening; theirs overhang it)
+	local function piece(side: string, a: number, b: number, y0: number, y1: number, padA: number?, padB: number?)
 		if b - a < 0.5 then
 			return
 		end
@@ -190,13 +203,15 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 			else Vector3.new(-1, 0, 0)
 		local from, to = point(a, y0), point(b, y0)
 		local rock = kind[side] == "rock"
-		if rock and y0 <= bottom then
-			-- the shards from under the ground up to the ceiling
+		local sa, sb = a + (padA or 0), b - (padB or 0)
+		if rock and y0 <= bottom and sb - sa > 2 then
+			-- the shards from under the ground up to the ceiling (no solid facets in front of
+			-- them: the diorama's walkable edge and its path ramps stay clear)
 			MineKit.wall(
 				folder,
-				origin:PointToWorldSpace(from),
-				origin:PointToWorldSpace(to),
-				ceilingY + 1 - y0,
+				origin:PointToWorldSpace(point(sa, y0)),
+				origin:PointToWorldSpace(point(sb, y0)),
+				ceilingY + Diorama.CeilingThickness * 0.8 - y0,
 				origin:VectorToWorldSpace(face),
 				colors,
 				rng,
@@ -204,6 +219,7 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 					Depth = depth,
 					Step = 9,
 					Glow = pal.Crystal,
+					Facets = false,
 				}
 			)
 		end
@@ -220,7 +236,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	end
 
 	for _, side in { "N", "E", "S", "W" } do
-		if not kind[side] then
+		-- (Cutaway, the preview pictures: no front wall, as MineKit's floor contract has it)
+		if not kind[side] or (cutaway and side == "S") then
 			continue
 		end
 		local alongX = side == "N" or side == "S"
@@ -235,15 +252,15 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		table.sort(cuts, function(p, q)
 			return p.From < q.From
 		end)
-		local t = a0
+		local t, pad = a0, 0
 		for _, o in cuts do
-			piece(side, t, o.From, bottom, slabTop)
+			piece(side, t, o.From, bottom, slabTop, pad, Diorama.OpeningPad)
 			if o.Top and o.Top < ceilingY then
 				piece(side, o.From, o.To, o.Top, slabTop)
 			end
-			t = o.To
+			t, pad = o.To, Diorama.OpeningPad
 		end
-		piece(side, t, a1, bottom, slabTop)
+		piece(side, t, a1, bottom, slabTop, pad, 0)
 	end
 
 	if cutaway then
@@ -294,9 +311,18 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 	local groundFolder = Instance.new("Folder")
 	groundFolder.Name = "Ground"
 	groundFolder.Parent = model
+	-- (the sharper tiles squash what stood in look.Flatten flat: its walk heights, measured on the
+	-- first tiles, go down to the patch it left, and no path ramp leads up onto it)
+	local flat = if look.Flatten and MineFloors.floorTiles(index) == MeshCatalog.FloorsHD[floor.Id] then look.Flatten else nil
+	local function flattened(x: number, z: number): boolean
+		return flat ~= nil and x > flat[1] and x < flat[3] and z > flat[2] and z < flat[4]
+	end
 	local boxes = data.Boxes
 	for i = 1, #boxes, 5 do
 		local x0, z0, x1, z1, top = boxes[i], boxes[i + 1], boxes[i + 2], boxes[i + 3], boxes[i + 4]
+		if flattened((x0 + x1) / 2, (z0 + z1) / 2) then
+			top = math.min(top, Diorama.FlattenTop)
+		end
 		local bottom = math.min(top - Diorama.BoxDepth, data.Bottom - Diorama.BoxDepth)
 		local box = Geo.block(
 			groundFolder,
@@ -313,6 +339,9 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 	local ramps = data.Ramps
 	for i = 1, #ramps, 7 do
 		local x0, z0, x1, z1, y, rise, dir = ramps[i], ramps[i + 1], ramps[i + 2], ramps[i + 3], ramps[i + 4], ramps[i + 5], ramps[i + 6]
+		if flattened((x0 + x1) / 2, (z0 + z1) / 2) then
+			continue
+		end
 		local alongX = dir <= 2
 		local across = if alongX then z1 - z0 else x1 - x0
 		local along = if alongX then x1 - x0 else z1 - z0

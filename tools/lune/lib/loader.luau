@@ -465,19 +465,21 @@ function Loader.require(node: any): any
 		end
 		error("[loader] circular require: " .. nodeMethods.GetFullName(node) .. "\n  via " .. table.concat(names, "\n   -> "), 2)
 	end
-	loading[node] = true
-	table.insert(loadingChain, node)
 	local env = baseEnvironment()
 	env.script = node
 	env.game = Loader.game
 	env.workspace = Loader.game and nodeMethods.GetService(Loader.game, "Workspace")
 	env.require = Loader.require
-	local code = fs.readFile(source)
-	local bytecode = luau.compile(code)
-	local fn = luau.load(bytecode, { debugName = nodeMethods.GetFullName(node), environment = env })
-	-- (a module that errors is not left "loading": the next require of it reports its own error
-	-- again, never a false circle)
-	local ok, result = pcall(fn)
+	loading[node] = true
+	table.insert(loadingChain, node)
+	-- (a module that fails, its file, its syntax or its body, is not left "loading": the next
+	-- require of it reports its own error again, never a false circle)
+	local ok, result = pcall(function()
+		local code = fs.readFile(source)
+		local bytecode = luau.compile(code)
+		local fn = luau.load(bytecode, { debugName = nodeMethods.GetFullName(node), environment = env })
+		return fn()
+	end)
 	loading[node] = nil
 	table.remove(loadingChain)
 	if not ok then

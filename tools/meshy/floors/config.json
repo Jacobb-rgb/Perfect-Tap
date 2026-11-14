@@ -105,7 +105,8 @@
     "size": 10,
     "ring": 15,
     "radius": 10,
-    "bump": 1.0
+    "bump": 1.0,
+    "door_angle": 0
    },
    "entrance": {
     "near": [
@@ -236,7 +237,7 @@
    0,
    18
   ],
-  "deep_z": -18,
+  "deep_z": -16,
   "snap": 1.0,
   "bump": 1.6,
   "zone": [

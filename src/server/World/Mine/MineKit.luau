@@ -139,14 +139,15 @@ end
 
 ---------------------------------------------------------------- rock walls
 
-export type WallOpts = { Depth: number?, Lean: number?, Glow: Color3?, Step: number? }
+export type WallOpts = { Depth: number?, Lean: number?, Glow: Color3?, Step: number?, Facets: boolean? }
 
 --[[
 	A jagged rock wall from `from` to `to` (ground points) of tall stacked shards
 	in `colors` (Mid, Light, Dark), facing the side `face` (unit vector toward the
 	floor's open space). opts.Glow adds thin glowing veins across the wall;
 	opts.Step is the shard spacing (default 5 studs; wider = fewer parts, for rock
-	high up or far away).
+	high up or far away); opts.Facets = false leaves out the solid facet shards
+	in front of the wall's line (a wall round walkable ground that must stay clear).
 ]]
 function MineKit.wall(parent: Instance, from: Vector3, to: Vector3, height: number, face: Vector3, colors: { Color3 }, rng: Rng.Rng, opts: WallOpts?): Model
 	local o: WallOpts = opts or {}
@@ -167,7 +168,10 @@ function MineKit.wall(parent: Instance, from: Vector3, to: Vector3, height: numb
 		Geo.block(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(w, h, depth), Geo.vary(colors[1], rng, 0.05), nil, SOLID)
 		-- a facet shard in front and a lighter ledge make the wall read as broken rock
 		local fh = h * rng:range(0.35, 0.7)
-		Geo.block(m, cf * CFrame.new(rng:range(-w * 0.25, w * 0.25), fh / 2, -depth * 0.5 - 0.4) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.45, fh, w * 0.45), Geo.vary(colors[3], rng, 0.05), nil, SOLID)
+		local fx = rng:range(-w * 0.25, w * 0.25)
+		if o.Facets ~= false then
+			Geo.block(m, cf * CFrame.new(fx, fh / 2, -depth * 0.5 - 0.4) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.45, fh, w * 0.45), Geo.vary(colors[3], rng, 0.05), nil, SOLID)
+		end
 		if rng:chance(0.6) then
 			Geo.block(m, cf * CFrame.new(0, h * rng:range(0.3, 0.7), -depth * 0.5 - 0.2), Vector3.new(w * 0.9, 0.5, 1.2), Geo.vary(colors[2], rng, 0.05), nil, DECOR)
 		end
@@ -349,6 +353,8 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number, opts
 	if tower and towerSize then
 		tower.Name = "Tower"
 		tower.Parent = m
+		-- riders arrive on the plate in front of the tower (ElevatorService.arrivalCFrame)
+		m:SetAttribute("ArrivalZ", -(towerSize.Z / 2 + 1))
 		-- warm lamp bars up the tower's front (the first by the cabin door), glowing strips up its
 		-- front edges, the signs over the front and near the top
 		local lampColor = Color3.fromRGB(255, 240, 210)

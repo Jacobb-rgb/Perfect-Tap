@@ -34,7 +34,30 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("diorama floors: the squashed spots are the processing job's", function()
+		local fs = require("@lune/fs")
+		local serde = require("@lune/serde")
+		local jobs = serde.decode("json", fs.readFile("tools/meshy/jobs_2026-11-14.json"))
+		for _, job in jobs.jobs do
+			local id = string.match(job.name, "^Floor_(%a+)HD$")
+			local floorId = if id == "QuarryB" then "Quarry" else id
+			local flat = Diorama.Floors[floorId] and Diorama.Floors[floorId].Flatten
+			if job.flatten then
+				T.truthy(flat, floorId .. " knows its squashed spot")
+				local b = job.flatten[1]
+				T.truthy(
+					flat[1] == b[1] and flat[2] == b[3] and flat[3] == b[4] and flat[4] == b[6],
+					floorId .. " the same box (x0, z0, x1, z1)"
+				)
+			else
+				T.eq(flat, nil, floorId .. " nothing squashed")
+			end
+		end
+	end)
+
 	T.test("diorama floors: every floor has data and tiles in the catalog", function()
+		local fs = require("@lune/fs")
+		local serde = require("@lune/serde")
 		for _, floor in MineFloors.List do
 			local data = DioramaData[floor.Id]
 			T.truthy(data, floor.Id .. " data")
@@ -46,7 +69,15 @@ return function(T, Loader)
 			local lift = MineFloors.Dioramas[floor.Index] and MineFloors.Dioramas[floor.Index].Lift
 			if lift then
 				T.truthy((lift - data.Anchors.Lift).Magnitude < 0.02, floor.Id .. " lift = the layout's lift anchor")
-				T.truthy((lift - data.Anchors.Elevator).Magnitude < 22, floor.Id .. " lift beside the elevator")
+				local e = data.Anchors.Elevator
+				T.truthy((lift - e).Magnitude < 26, floor.Id .. " lift beside the elevator")
+				-- never in front of the elevator's door (it faces the floor's middle along x), but where
+				-- the layout config lets it (floor_layout.py "door_angle")
+				local cfg = serde.decode("json", fs.readFile("tools/meshy/floors/config.json"))
+				local doorAngle = cfg[floor.Id].anchors.lift.door_angle or 55
+				local door = if e.X <= 0 then 0 else math.pi
+				local off = math.abs((math.atan2(lift.Z - e.Z, lift.X - e.X) - door + math.pi) % (2 * math.pi) - math.pi)
+				T.le(doorAngle - 0.5, math.deg(off), floor.Id .. " lift out of the elevator's doorway")
 			end
 			T.eq(#data.Boxes % 5, 0, floor.Id .. " boxes come in fives")
 			T.eq(#data.Ramps % 7, 0, floor.Id .. " ramps come in sevens")
@@ -169,7 +200,24 @@ return function(T, Loader)
 						T.truthy(high.Y > low.Y + 0.9, label .. " a ramp rises")
 					end
 				end
-				T.eq(ramps, #data.Ramps / 7, label .. " every path ramp")
+				-- (the sharper quarry squashed its blue sign gate: no walk box or ramp stands there any more)
+				local flat = Diorama.Floors[MineFloors.ByIndex[index].Id].Flatten
+				local skipped = 0
+				if flat then
+					for i = 1, #data.Ramps, 7 do
+						local cx, cz = (data.Ramps[i] + data.Ramps[i + 2]) / 2, (data.Ramps[i + 1] + data.Ramps[i + 3]) / 2
+						if cx > flat[1] and cx < flat[3] and cz > flat[2] and cz < flat[4] then
+							skipped += 1
+						end
+					end
+					for _, d in model.Ground:GetChildren() do
+						local p = origin:PointToObjectSpace(d.CFrame.Position)
+						if p.X > flat[1] and p.X < flat[3] and p.Z > flat[2] and p.Z < flat[4] then
+							T.le(p.Y + d.Size.Y / 2, Diorama.FlattenTop + 0.01, label .. " nothing to bump into where the gate stood")
+						end
+					end
+				end
+				T.eq(ramps, #data.Ramps / 7 - skipped, label .. " every path ramp")
 				-- budgets
 				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
 				T.le(count(model, "BasePart"), budget, label .. " parts")
@@ -262,6 +310,41 @@ return function(T, Loader)
 						end
 					end
 					T.eq(holes, 0, label .. " the room's walls have no holes")
+					-- and Land's passages stay open: no part of the room in an opening's lane (its width
+					-- less a stud each side, from the ground up to its top, through the wall)
+					for _, o in look.Openings or {} do
+						local out = sides[o.Side]
+						local alongX = o.Side == "N" or o.Side == "S"
+						local line = if o.Side == "N"
+							then fpLo.Y
+							elseif o.Side == "S" then fpHi.Y
+							elseif o.Side == "W" then fpLo.X
+							else fpHi.X
+						local across0, across1 = line - (Diorama.WallDepth + 3), line + (Diorama.WallDepth + 3)
+						local lo3 = if alongX then V3.new(o.From + 1, 0.5, across0) else V3.new(across0, 0.5, o.From + 1)
+						local hi3 = if alongX
+							then V3.new(o.To - 1, math.min(o.Top or 30, 30) - 0.5, across1)
+							else V3.new(across1, math.min(o.Top or 30, 30) - 0.5, o.To - 1)
+						local blocked = 0
+						for _, d in room:GetDescendants() do
+							if d:IsA("BasePart") then
+								local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+								for _, sx in { -1, 1 } do
+									for _, sy in { -1, 1 } do
+										for _, sz in { -1, 1 } do
+											local c = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(V3.new(sx, sy, sz) * d.Size / 2))
+											mn, mx = mn:Min(c), mx:Max(c)
+										end
+									end
+								end
+								if mn.X < hi3.X and mx.X > lo3.X and mn.Y < hi3.Y and mx.Y > lo3.Y and mn.Z < hi3.Z and mx.Z > lo3.Z then
+									blocked += 1
+								end
+							end
+						end
+						T.eq(blocked, 0, label .. " the " .. o.Side .. " way through stays open")
+						T.truthy(out ~= nil, label .. " an opening on a walled side")
+					end
 				end
 			end
 		end)

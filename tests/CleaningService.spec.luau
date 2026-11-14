@@ -198,6 +198,10 @@ return function(T, Loader)
 				T.truthy(front - (podium.Center.Z + podium.Size.Z / 2) >= 3, "room between the podiums and the station")
 			end
 			T.lt(spot.Center.Z + spot.Area.Size.Z / 2, BaseLayout.TrainStop.Center.Z - BaseLayout.TrainStop.Size.Z / 2, "clear of the train stop")
+			-- (owner 2026-11-14: right in the corner) but clear of the fence's 45-degree corner wall
+			local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
+			local cornerSum = spot.Center.X + spot.Area.Size.X / 2 + spot.Center.Z + spot.Area.Size.Z / 2
+			T.le(cornerSum, PlotBuilder.WallLine + PlotBuilder.BackWallZ - PlotBuilder.YardChamfer - 1, "a stud inside the fence's corner wall")
 			T.falsy(MachineData.StarterKit[1].Id == "CleaningStation", "new players get no station on the grid")
 			for _, entry in MachineData.StarterKit do
 				T.falsy(entry.Id == "CleaningStation", "no station in the starter kit")

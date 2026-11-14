@@ -278,12 +278,14 @@ MineFloors.LiftSpots = {
 -- uploaded (MeshKit): their lifts stand on the diorama's flat ground instead.
 MineFloors.Dioramas = {
 	[1] = {}, -- (no lift: the Mine Station's hopper in the quarry)
-	-- (owner 2026-11-14: the ore lift right beside the elevator, out of the field; the layout's lift
-	-- anchor, tools/meshy/floors/config.json "beside": tests/DioramaFloors.spec keeps them equal)
+	-- (owner 2026-11-14: the ore lift right beside the elevator, out of the field and never in front
+	-- of its door; the layout's lift anchor, tools/meshy/floors/config.json "beside":
+	-- tests/DioramaFloors.spec keeps them equal. The Core's island has no room beside it: its lift
+	-- stands 15 studs out along the island, clear of the way north.)
 	[2] = { Lift = Vector3.new(-34.38, 0.1, 54.01) },
-	[3] = { Lift = Vector3.new(-15.76, 2.4, 50.87) },
+	[3] = { Lift = Vector3.new(-34.42, 1.29, 23.35) },
 	[4] = { Lift = Vector3.new(-39.24, 0.76, 22.43) },
-	[5] = { Lift = Vector3.new(-16.98, 0.3, 33.6) },
+	[5] = { Lift = Vector3.new(-23.15, 0.03, 18.71) },
 	[6] = { Lift = Vector3.new(11.71, 0.25, 54.69) },
 } :: { [number]: { Lift: Vector3? } }
 

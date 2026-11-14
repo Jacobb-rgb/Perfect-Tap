@@ -187,13 +187,19 @@ local function facing(position: Vector3, look: Vector3): CFrame
 	return CFrame.lookAt(position, position + flat.Unit)
 end
 
--- Where a rider arrives at a stop: on its plate in front of the cage, facing out.
+-- Where a rider arrives at a stop: on its plate in front of the cage, facing out (a stop with the
+-- owner's wide tower says how far in front: its attribute ArrivalZ, MineKit.elevator).
 function ElevatorService.arrivalCFrame(model: Model): CFrame?
 	local cf = ElevatorService.stopCFrame(model)
 	if not cf then
 		return nil
 	end
-	return facing((cf * ElevatorService.ArrivalOffset).Position, cf.LookVector)
+	local offset = ElevatorService.ArrivalOffset
+	local z = model:GetAttribute("ArrivalZ")
+	if type(z) == "number" and z < offset.Position.Z then
+		offset = CFrame.new(offset.Position.X, offset.Position.Y, z)
+	end
+	return facing((cf * offset).Position, cf.LookVector)
 end
 
 -- Distance from a point to the surface of a part's box (0 inside).
