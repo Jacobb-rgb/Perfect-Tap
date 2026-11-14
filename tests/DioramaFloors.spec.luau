@@ -205,9 +205,9 @@ return function(T, Loader)
 				local flats = Diorama.Floors[MineFloors.ByIndex[index].Id].Flatten or {}
 				local skipped = 0
 				for i = 1, #data.Ramps, 7 do
-					local cx, cz = (data.Ramps[i] + data.Ramps[i + 2]) / 2, (data.Ramps[i + 1] + data.Ramps[i + 3]) / 2
+					local x0, z0, x1, z1 = data.Ramps[i], data.Ramps[i + 1], data.Ramps[i + 2], data.Ramps[i + 3]
 					for _, f in flats do
-						if cx > f[1] and cx < f[4] and cz > f[3] and cz < f[6] then
+						if math.min(x1, f[4]) - math.max(x0, f[1]) > 0.05 and math.min(z1, f[6]) - math.max(z0, f[3]) > 0.05 then
 							skipped += 1
 							break
 						end
@@ -292,6 +292,18 @@ return function(T, Loader)
 							T.near(p.Y + d.Size.Y / 2, topOf(side), 0.01, label .. " " .. side .. " wall's straight top")
 						end
 					end
+					-- (the quarry's town-side wall stands in front of the town ground's edge at local
+					-- z 58, whose flat face showed once Land's cliff went)
+					if index == 1 then
+						for _, d in room:GetChildren() do
+							if d.Name == "WallSlab" then
+								local p = origin:PointToObjectSpace(d.CFrame.Position)
+								if p.Z > 50 and math.abs(p.X) < 55 then
+									T.lt(p.Z - d.Size.Z / 2, 57.9, label .. " the town-side wall in front of the town's edge")
+								end
+							end
+						end
+					end
 					local slabs = {}
 					for _, d in room:GetChildren() do
 						if d.Name == "WallSlab" or d.Name == "Lintel" then
@@ -308,12 +320,36 @@ return function(T, Loader)
 						end
 						return false
 					end
+					-- each side's line out of the outline (look.WallGaps) and the probe just behind it
+					local lineGap = {}
 					local sides = {}
 					for _, side in look.Walls or {} do
-						sides[side] = Diorama.WallGap + 0.35
+						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.WallGap
+						sides[side] = lineGap[side] + 0.35
 					end
 					for _, side in look.Thin or {} do
-						sides[side] = Diorama.ThinGap + 0.05
+						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.ThinGap
+						sides[side] = lineGap[side] + 0.05
+					end
+					-- (a taller wall ends on a lower one's line at a corner: past that line, over the
+					-- lower wall, stays open, the way the town shows over the quarry's low south wall)
+					local function overLower(side: string, t: number, y: number): boolean
+						local alongX = side == "N" or side == "S"
+						local startSide = if alongX then "W" else "N"
+						local endSide = if alongX then "E" else "S"
+						if sides[startSide] and topOf(startSide) < topOf(side) and y >= topOf(startSide) then
+							local line = (if alongX then fpLo.X else fpLo.Y) - lineGap[startSide]
+							if t < line then
+								return true
+							end
+						end
+						if sides[endSide] and topOf(endSide) < topOf(side) and y >= topOf(endSide) then
+							local line = (if alongX then fpHi.X else fpHi.Y) + lineGap[endSide]
+							if t > line then
+								return true
+							end
+						end
+						return false
 					end
 					local holes = 0
 					for side, out in sides do
@@ -325,7 +361,7 @@ return function(T, Loader)
 								if y >= topOf(side) then
 									continue
 								end
-								local open = false
+								local open = overLower(side, t, y)
 								for _, o in look.Openings or {} do
 									if o.Side == side and t > o.From and t < o.To and y < (o.Top or math.huge) then
 										open = true

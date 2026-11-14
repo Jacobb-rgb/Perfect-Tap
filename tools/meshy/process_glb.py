@@ -326,22 +326,38 @@ def cut_boxes(ob, boxes):
     bm.to_mesh(ob.data); bm.free()
     log("  cut", len(kill), "faces")
 
-def flatten_boxes(ob, boxes):
+def flatten_boxes(ob, boxes, torn=None):
     # squash what stands in a box down to its floor (Blender axes, normalized units): a thing in
-    # the way goes (the quarry's blue sign gate, owner 2026-11-14) and leaves a flat patch of its
-    # own texture where it stood, never a hole in the ground the way a cut would
+    # the way goes (the quarry's blue sign gate, the floors' gates and bridges, owner 2026-11-14)
+    # and leaves a flat patch of its own texture where it stood, never a hole in the ground the
+    # way a cut would. Heights are pressed to 1 % rather than collapsed, so the thing's top stays
+    # on top (one plane of deck, underside and posts baked to a mottled patch). Faces stretched
+    # between a squashed part and one left standing, taller than `torn` (a rail running into a
+    # kept post), would be torn sheets: they go.
     if not boxes:
         return
-    n = 0
-    for v in ob.data.vertices:
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    moved = set()
+    for v in bm.verts:
         c = v.co
         for b in boxes:
             if b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] < c.z <= b[5]:
-                c.z = b[2]
-                n += 1
+                c.z = b[2] + (c.z - b[2]) * 0.01
+                moved.add(v.index)
                 break
+    kill = []
+    if torn:
+        for f in bm.faces:
+            inside = [v.index in moved for v in f.verts]
+            if any(inside) and not all(inside):
+                zs = [v.co.z for v in f.verts]
+                if max(zs) - min(zs) > torn:
+                    kill.append(f)
+        bmesh.ops.delete(bm, geom=kill, context='FACES')
+    bm.to_mesh(ob.data); bm.free()
     ob.data.update()
-    log("  flattened", n, "vertices")
+    log("  flattened", len(moved), "vertices,", len(kill), "torn faces removed")
 
 def facet(ob, angle):
     # crisp flat facets (2026-11-14, the owner: "everything still looks melted"): merge the decimated
@@ -425,7 +441,7 @@ def job_tiles(j):
     high = import_glb(j["src"])
     normalize(high, "bottom", j.get("unit", 4.0))
     cut_boxes(high, local_boxes_to_blender(j))
-    flatten_boxes(high, local_boxes_to_blender(j, "flatten"))
+    flatten_boxes(high, local_boxes_to_blender(j, "flatten"), 1.5 / j["layout"]["scale"] if j.get("layout") else None)
     make_emit(high)
     low = high.copy(); low.data = high.data.copy(); bpy.context.collection.objects.link(low)
     weld(low, 1e-5)
