@@ -12,6 +12,8 @@ the base. Later (step 3) a pen upgrade lets the train dump raw ore straight into
 3. Your little locomotive (your plot's banner color) with an ore wagon rolls out of the station into a tunnel in the
    quarry wall, comes out of a tunnel at the south coast, runs along the **coastal railway** behind the bases and
    stops at your **Train Stop**; the wagon tips and the ore pours into your **Ore Pen**. Then it rolls back.
+   (2026-11-14: the owner took the Mine Lifts out of every floor: "it really bothers me there". The ore from the deep
+   floors goes up in the backpack to the Mine Station; see docs/plans/MESHY_MODELS_PLAN.md. Point 4 below is history.)
 4. Deep zones have **Mine Lifts** (Ember Caves, Deep Hollow): throw ore in there and it goes up into your train's
    cargo too, so nobody has to carry chunks all the way out of the caves.
 5. Upgrades: cargo (8 → 12 → 18 → 26 → 36 → 50) and speed (trip 30 s → 12 s) for coins at the station's

@@ -142,6 +142,27 @@ floors as before.
 - Yard cleaning station: 1.6x, in the back-right corner, a stud clear of the fence's corner wall
   (BaseLayout.CleaningStation).
 
+## Owner's morning list (2026-11-14 09:00, after testing the overnight test place)
+
+- "Take the ore lift out of every location, it really bothers me": the Mine Lifts are gone
+  (`TrainConfig.Lifts = {}`; Railway.buildLift, MineKit.oreLift, the diorama/part floors' calls, the
+  client's lift prompt, `MineFloors.liftSpot/liftPosition/ceilingY`, the diorama lift keep-outs).
+  Ore from floors 2-6 goes up in the backpack (elevator, BASE + the pen's Put In) to the Mine Station.
+  Nothing saved was per lift (`data.Train.Cargo` is one list); TrainService still takes any tagged
+  hook (its specs keep fixture lifts). The floor layouts still keep the old lift square clear, so
+  the rock spawns did not move; the part-built floors keep their lift beams as decoration.
+- "At the very side of floor 1 you still see into the void, and on the other side": the pit's band
+  floor between the diorama's walls and the train portals went with the parts under DioramaKeep;
+  `Floor1Quarry.DioramaFills` now reach the quarry's edge (x +-72.5) plus one sand underlay just
+  under the diorama's lowest ground, in the diorama's painted sand colour.
+- "The walls still look melted": the raw Meshy source renders just as soft (its shapes are soft), so
+  processing alone cannot make them hard; what made them look like melted chocolate in Studio is a
+  waxy sheen: the tiles came in as Plastic with only a TextureID. The sharper set is re-made matte:
+  every tile material gets a shared 8x8 metal/roughness map (G = 1, B = 0; `matte`), so the importer
+  gives each a SurfaceAppearance with Color + Normal + Roughness + Metalness maps, and the colour maps
+  get an unsharp mask (`sharpen` 0.7). Tried and dropped: flat facets (`facet`, dissolve_limited)
+  showed triangle seams on flat faces; a posterized palette (`poster`) turned the lava blotchy.
+
 ## Open
 
 - The owner's Studio import -> `import_meshes.luau` -> real templates; then the test place and Studio

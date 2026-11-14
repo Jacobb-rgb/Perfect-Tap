@@ -1257,8 +1257,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		MineFloors.get(4).MinBlaster,
 		{ MARBLE, GOLD, WALL_DARK }
 	)
-	-- the ore lift: in the game only its spot (Railway builds it from TrainConfig), the preview shows it
-	MineKit.oreLift(model, pt(c, LIFT_SPOT.X, LIFT_SPOT.Y, LIFT_SPOT.Z), "SunkenPalace")
+	-- (no ore lift: the owner took them out 2026-11-14; its crane beam stays as decoration)
 
 	-- markers and rock spawns
 	MineKit.marker(model, "Entrance", at(c, 0, TERRACE_Y, 46))

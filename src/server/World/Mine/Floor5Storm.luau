@@ -1006,11 +1006,10 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	lightAt(wash, Vector3.new(0, 26, 28), rgb(190, 200, 255), 60, 1.5)
 	lightAt(wash, Vector3.new(0, 24, -38), rgb(190, 200, 255), 60, 1.4)
 
-	-- gameplay pieces: the elevator (the only way in), the gate, the ore lift
+	-- gameplay pieces: the elevator (the only way in) and the gate (no ore lift: the owner took
+	-- them out 2026-11-14; its crane beam stays as decoration)
 	MineKit.elevator(m, O * CFrame.new(-28, DECK_Y, 48.5) * CFrame.Angles(0, -math.pi / 2, 0), Floor.Index)
 	MineKit.gate(m, O * CFrame.new(0, DECK_Y, DECK_Z + 0.9) * CFrame.Angles(0, math.pi, 0), 14, Floor.MinBlaster, { STEEL, COPPER, STEEL_DARK })
-	-- in the game only its spot (Railway builds the lift from TrainConfig), the preview shows it
-	MineKit.oreLift(m, O * LIFT_SPOT, Floor.Id)
 
 	-- markers and rock spawns
 	local entrance = MineKit.marker(m, "Entrance", O * CFrame.new(0, DECK_Y, 48.5))

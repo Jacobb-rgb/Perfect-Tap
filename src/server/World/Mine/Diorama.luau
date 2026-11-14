@@ -10,8 +10,9 @@
 	with its usual ground at local y = 0 and its centre at x = z = 0 (DioramaData, made by
 	tools/meshy/floor_heights.py + floor_layout.py from the processed tiles). Players walk on
 	invisible collision boxes made from the diorama's walk heights; the RockSpawns, the GiantSpawn,
-	the Entrance, the elevator stop, the ore lift spot (a steel deck where the lift stands higher
-	than the ground) and the blaster gate sit on flat ground found in the diorama. A few soft lights,
+	the Entrance, the elevator stop and the blaster gate sit on flat ground found in the diorama (no
+	ore lift: the owner took them out 2026-11-14; the layout still keeps its square beside the
+	elevator clear, so the rock spawns stay where they were). A few soft lights,
 	the floor's ambience spots and, for the cave floors, a closed room of rock walls round the diorama
 	under one ceiling height for every cave floor (MineFloors.CeilingHeight).
 	The floor module adds its own extras (floor 6: the void enclosure and the VoidCatcher).
@@ -104,8 +105,6 @@ local GROUND = { CanTouch = false, CanQuery = true, CanCollide = true, CastShado
 -- a path ramp's turn by its DioramaData dir (rising toward +X, -X, +Z, -Z; a wedge rises toward +Z)
 local RAMP_TURN = { math.pi / 2, -math.pi / 2, 0, math.pi }
 local GLOW = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
-local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
-local STEEL = Color3.fromRGB(70, 74, 88)
 
 -- Whether floor `index` is built from its diorama (MineFloors.usesDiorama, and its layout exists).
 function Diorama.has(index: number): boolean
@@ -372,26 +371,6 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 	-- (no gate where every blaster may go: floor 1's "BLASTER LV 1+" only stood in the way)
 	if floor.MinBlaster > 1 and anchors.Gate then
 		MineKit.gate(model, at(origin, anchors.Gate), 12, floor.MinBlaster, { pal.Mid, pal.Light, pal.Dark })
-	end
-
-	-- the ore lift (Railway builds it from TrainConfig at MineFloors.liftSpot): a steel deck under it
-	-- where it stands higher than the diorama's ground
-	local liftSpot = MineFloors.liftSpot(index)
-	if liftSpot then
-		local groundY = anchors.Lift and anchors.Lift.Y or 0
-		if liftSpot.Y - groundY > 0.3 then
-			local h = liftSpot.Y - groundY + 1
-			local deck = Geo.block(
-				model,
-				at(origin, Vector3.new(liftSpot.X, liftSpot.Y - h / 2, liftSpot.Z)),
-				Vector3.new(9, h, 9),
-				STEEL,
-				Enum.Material.DiamondPlate,
-				SOLID
-			)
-			deck.Name = "LiftDeck"
-		end
-		MineKit.oreLift(model, origin:PointToWorldSpace(liftSpot), floor.Id)
 	end
 
 	-- soft lights over the walkable ground

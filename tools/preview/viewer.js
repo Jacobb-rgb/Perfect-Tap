@@ -670,7 +670,8 @@ async function main() {
       spaceTex.minFilter = THREE.LinearFilter;
     }
     const sky = sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex);
-    world.add(sky);
+    // (shot.void: no sky either, so a hole under the horizon of an open-air place shows too)
+    if (!shot.void) world.add(sky);
     const envScene = new THREE.Scene();
     envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), sky.material));
     const env = new THREE.PMREMGenerator(renderer).fromScene(envScene, 0.02, 0.1, 200).texture;

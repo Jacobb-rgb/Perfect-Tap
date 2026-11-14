@@ -407,20 +407,14 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(-12, -50, -250), Max = Vector3.new(12, 10, -228) }, -- cave entrance
 	{ Min = Vector3.new(-12, -50, -404), Max = Vector3.new(12, 10, -346) }, -- hollow ramp
 	{ Min = Vector3.new(60, -50, -192), Max = Vector3.new(100, 10, -172) }, -- grotto door
-	-- ore trains (TrainConfig): the quarry track + Mine Station, and the two Mine Lifts
+	-- ore trains (TrainConfig): the quarry track + Mine Station; the spots where the Mine Lifts stood
+	-- (the owner took them out 2026-11-14: the part-built floors keep them clear, nothing up top moves)
 	{ Min = Vector3.new(-74, -50, -162), Max = Vector3.new(74, 10, -141) },
 	{ Min = Vector3.new(38, -50, -268), Max = Vector3.new(54, 10, -252) }, -- EmberCaves lift (MineFloors.LiftSpots[2])
 	{ Min = Vector3.new(42, -50, -450), Max = Vector3.new(58, 10, -434) }, -- DeepHollow lift (MineFloors.LiftSpots[3])
 	{ Min = Vector3.new(18, -230, -763), Max = Vector3.new(34, -205, -747) }, -- SunkenPalace lift (MineFloors.LiftSpots[4])
 	{ Min = Vector3.new(20, -310, -761), Max = Vector3.new(36, -285, -745) }, -- StormglassRift lift (MineFloors.LiftSpots[5])
 	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[6])
-	-- the Mine Lifts on the owner's diorama floors (MineFloors.Dioramas[i].Lift beside the elevators,
-	-- 2026-11-14; the boxes stay under the surface, so nothing up there moves)
-	{ Min = Vector3.new(-42.4, -25, -254), Max = Vector3.new(-26.4, -4, -238) }, -- EmberCaves (-34.4, -11.9, -246)
-	{ Min = Vector3.new(-42.4, -52, -428.6), Max = Vector3.new(-26.4, -31, -412.6) }, -- DeepHollow (-34.4, -38.7, -420.6)
-	{ Min = Vector3.new(-47.2, -232, -785.6), Max = Vector3.new(-31.2, -211, -769.6) }, -- SunkenPalace (-39.2, -219.2, -777.6)
-	{ Min = Vector3.new(-31.1, -313, -789.3), Max = Vector3.new(-15.1, -292, -773.3) }, -- StormglassRift (-23.1, -300.0, -781.3)
-	{ Min = Vector3.new(3.7, -413, -753.3), Max = Vector3.new(19.7, -392, -737.3) }, -- HeartstoneCore (11.7, -399.8, -745.3)
 	-- the walk up to SKY HAVEN's gate in the south wall (SouthGate): no secrets, trees or flowers in the way
 	{
 		Min = Vector3.new(WorldLayout.SouthGate.X - 6, -50, WorldLayout.Island.Max.Z - WorldLayout.SouthGate.Approach),

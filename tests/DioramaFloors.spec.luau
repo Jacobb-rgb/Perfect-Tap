@@ -30,7 +30,6 @@ return function(T, Loader)
 		for index = 1, 6 do
 			T.falsy(MineFloors.usesDiorama(index), "floor " .. index)
 			T.falsy(Diorama.has(index), "floor " .. index)
-			T.eq(MineFloors.liftSpot(index), MineFloors.LiftSpots[index], "floor " .. index .. " lift spot")
 		end
 	end)
 
@@ -65,20 +64,6 @@ return function(T, Loader)
 			-- the sharper set of the same diorama (2026-11-14), for the floor once it is uploaded
 			local hd = MeshCatalog.FloorsHD[floor.Id]
 			T.truthy(hd and #hd >= 8, floor.Id .. " sharper tiles")
-			-- the lift the owner wanted beside the elevator (MineFloors.Dioramas) is the layout's
-			local lift = MineFloors.Dioramas[floor.Index] and MineFloors.Dioramas[floor.Index].Lift
-			if lift then
-				T.truthy((lift - data.Anchors.Lift).Magnitude < 0.02, floor.Id .. " lift = the layout's lift anchor")
-				local e = data.Anchors.Elevator
-				T.truthy((lift - e).Magnitude < 26, floor.Id .. " lift beside the elevator")
-				-- never in front of the elevator's door (it faces the floor's middle along x), but where
-				-- the layout config lets it (floor_layout.py "door_angle")
-				local cfg = serde.decode("json", fs.readFile("tools/meshy/floors/config.json"))
-				local doorAngle = cfg[floor.Id].anchors.lift.door_angle or 55
-				local door = if e.X <= 0 then 0 else math.pi
-				local off = math.abs((math.atan2(lift.Z - e.Z, lift.X - e.X) - door + math.pi) % (2 * math.pi) - math.pi)
-				T.le(doorAngle - 0.5, math.deg(off), floor.Id .. " lift out of the elevator's doorway")
-			end
 			T.eq(#data.Boxes % 5, 0, floor.Id .. " boxes come in fives")
 			T.eq(#data.Ramps % 7, 0, floor.Id .. " ramps come in sevens")
 			T.le(#data.Ramps / 7, 40, floor.Id .. " at most 40 path ramps")
@@ -165,22 +150,13 @@ return function(T, Loader)
 					T.truthy(gate, label .. " blaster gate")
 					T.eq(gate:GetAttribute("MinBlaster"), MineFloors.ByIndex[index].MinBlaster, label .. " gate level")
 				end
-				-- the lift where the diorama put it (floor 1 has none)
-				local spot = MineFloors.liftSpot(index)
-				local liftSpot = model:FindFirstChild("OreLiftSpot")
-				if index == 1 then
-					T.falsy(spot, label .. " no lift")
-				else
-					T.eq(spot, MineFloors.Dioramas[index].Lift, label .. " the diorama's lift spot")
-					T.truthy(liftSpot, label .. " lift spot marked")
-					T.near(
-						(liftSpot.PrimaryPart.CFrame.Position - origin:PointToWorldSpace(spot)).Magnitude,
-						0.5,
-						0.01,
-						label .. " lift spot at liftSpot"
-					)
-					-- nothing big may be placed on it (WorldLayout.KeepOut, as for the parts floors' lifts)
-					T.truthy(WorldLayout.isKeepOut(MineFloors.liftPosition(index)), label .. " the lift is a keep-out")
+				-- no ore lift (owner 2026-11-14: "take it out of every location, it really bothers me")
+				T.eq(model:FindFirstChild("OreLiftSpot", true), nil, label .. " no ore lift spot")
+				T.eq(model:FindFirstChild("LiftDeck", true), nil, label .. " no lift deck")
+				for _, d in model:GetDescendants() do
+					if d:HasTag("MineLift") then
+						error(label .. " a Mine Lift " .. d:GetFullName())
+					end
 				end
 				-- the path ramps (owner 2026-11-13: walk from the elevator without a jump at every edge):
 				-- invisible solid wedges, one per DioramaData ramp, their high edge on the higher ground

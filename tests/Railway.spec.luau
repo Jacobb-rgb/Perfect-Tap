@@ -102,18 +102,7 @@ return function(T, Loader)
 
 	local rail = partsOf(railway)
 
-	-- The Mine Lift model of a TrainConfig lift (found by tag and LiftId, as
-	-- TrainService does).
-	local function liftModel(id: string): any
-		for _, d in railway:GetDescendants() do
-			if d:HasTag("MineLift") and d:GetAttribute("LiftId") == id then
-				return d
-			end
-		end
-		return nil
-	end
-
-	T.test("railway: Map.Railway holds the lines, the station, four portals and the lifts", function()
+	T.test("railway: Map.Railway holds the lines, the station and four portals", function()
 		T.truthy(railway, "Map.Railway exists")
 		for _, name in { "QuarryLine", "CoastWest", "CoastEast", "MineStation", "Portals" } do
 			T.truthy(railway:FindFirstChild(name), "Railway." .. name)
@@ -123,17 +112,8 @@ return function(T, Loader)
 			T.truthy(portal and portal:IsA("Model"), "portal " .. name)
 			T.truthy(portal:FindFirstChild("Mouth"), name .. " has a dark mouth")
 		end
-		for _, lift in TrainConfig.Lifts do
-			local m = liftModel(lift.Id)
-			T.truthy(m and m.Parent == railway, "lift " .. lift.Id .. " under Map.Railway")
-			T.eq(m.Name, "MineLift_" .. lift.Id, lift.Id .. " lift name")
-			-- (a search for the cave by name never finds the lift)
-			for _, d in map:GetDescendants() do
-				if d.Name == lift.Id then
-					T.falsy(d:IsDescendantOf(railway), d:GetFullName() .. " shares the cave's name")
-				end
-			end
-		end
+		-- (no Mine Lifts: the owner took them out of every floor 2026-11-14)
+		T.eq(#TrainConfig.Lifts, 0, "no Mine Lifts")
 		-- the visible line ends the client shares (TrainConfig)
 		T.eq(Railway.PortalInset, TrainConfig.PortalInset, "PortalInset from TrainConfig")
 		T.eq(Railway.BufferGap, TrainConfig.BufferGap, "BufferGap from TrainConfig")
@@ -215,45 +195,19 @@ return function(T, Loader)
 		T.truthy(look ~= nil, "the siding has rails")
 	end)
 
-	T.test("railway: Mine Lift hooks match the contract", function()
-		local tagged = {}
-		local hoppers = 0
+	T.test("railway: the Mine Station's hopper is the only train hook (no Mine Lifts)", function()
+		local tagged, hoppers = 0, 0
 		for _, d in map:GetDescendants() do
 			if d:HasTag("MineLift") then
-				table.insert(tagged, d)
+				tagged += 1
 			end
 			if d:HasTag("TrainHopper") then
 				hoppers += 1
 				T.truthy(d:IsDescendantOf(railway), d:GetFullName() .. " (TrainHopper) is under Map.Railway")
 			end
 		end
-		T.eq(#tagged, #TrainConfig.Lifts, "one MineLift per TrainConfig lift")
-		T.eq(hoppers, 1 + #TrainConfig.Lifts, "station + lift hoppers")
-		for _, cfg in TrainConfig.Lifts do
-			local lift = liftModel(cfg.Id)
-			T.truthy(lift and lift:IsA("Model") and lift:HasTag("MineLift"), cfg.Id .. " is a MineLift model")
-			T.eq(lift:GetAttribute("LiftId"), cfg.Id, cfg.Id .. " LiftId")
-			local intake = lift:FindFirstChild("Intake")
-			T.truthy(intake and intake:IsA("BasePart"), cfg.Id .. " Intake part")
-			T.truthy(intake:HasTag("TrainHopper"), cfg.Id .. " Intake tagged TrainHopper")
-			T.eq(intake:GetAttribute("LiftId"), cfg.Id, cfg.Id .. " Intake LiftId")
-			T.eq(intake.Transparency, 1, cfg.Id .. " Intake invisible")
-			T.falsy(intake.CanCollide or intake.CanTouch or intake.CanQuery, cfg.Id .. " Intake collides/touches/queries")
-			T.truthy(near(intake.Size, cfg.Size, 1e-4), cfg.Id .. " Intake size")
-			T.truthy(near(intake.CFrame.Position, cfg.Position + Vector3.new(0, cfg.Size.Y / 2, 0), 1e-4), cfg.Id .. " Intake position")
-			T.eq(intake:FindFirstAncestorWhichIsA("Model"), lift, cfg.Id .. " TrainService finds the lift from the Intake")
-			local prompt = lift:FindFirstChild("PromptPoint", true)
-			T.truthy(prompt and prompt:IsA("Attachment"), cfg.Id .. " PromptPoint")
-			local p = worldPoint(prompt)
-			local flat = Vector3.new(p.X - cfg.Position.X, 0, p.Z - cfg.Position.Z).Magnitude
-			T.truthy(flat > cfg.Size.X / 2 and flat < 10, cfg.Id .. " PromptPoint in front of the hopper")
-			T.truthy(hasText(lift, "LIFT"), cfg.Id .. " LIFT sign")
-			T.lt(lightsIn(lift), 2, cfg.Id .. " at most one PointLight")
-			local cable = lift:FindFirstChild("Cable", true)
-			local cave = WorldLayout.Caves[cfg.Id]
-			local _, top = bounds(cable)
-			T.truthy(cave and top.Y >= cave.Max.Y, cfg.Id .. " cable reaches the ceiling")
-		end
+		T.eq(tagged, 0, "no MineLift anywhere")
+		T.eq(hoppers, 1, "the station's hopper")
 	end)
 
 	T.test("railway: items can drop into every intake", function()
@@ -284,29 +238,6 @@ return function(T, Loader)
 				bandTop.Y >= lo.Y and bandTop.Y <= hi.Y - 1.0,
 				`{intake:GetFullName()}: tub floor {bandTop.Y} inside {lo.Y}..{hi.Y - 1}`
 			)
-		end
-		-- the lifts: a low rim (a soft throw from the cave floor clears it) and
-		-- nothing hanging over the opening down to head height (the cage is
-		-- parked up under the crossbeams)
-		for _, cfg in TrainConfig.Lifts do
-			local lift = liftModel(cfg.Id)
-			local rim = -math.huge
-			for _, part in partsOf(lift) do
-				if part.Name == "Tub" then
-					local _, top = bounds(part)
-					rim = math.max(rim, top.Y - cfg.Position.Y)
-				end
-			end
-			T.truthy(math.abs(rim - Railway.LiftRim) < 1e-3 and rim <= 3.5, `{cfg.Id}: tub rim {rim} above the floor`)
-			local half = cfg.Size / 2
-			local colMin = cfg.Position + Vector3.new(-half.X + 0.3, rim + 0.1, -half.Z + 0.3)
-			local colMax = cfg.Position + Vector3.new(half.X - 0.3, rim + 6.5, half.Z - 0.3)
-			for _, part in partsOf(lift) do
-				if part.Transparency < 1 then
-					local a, b = bounds(part)
-					T.falsy(overlaps(a, b, colMin, colMax, 0.01), part:GetFullName() .. " hangs over the lift's opening")
-				end
-			end
 		end
 	end)
 
@@ -660,7 +591,7 @@ return function(T, Loader)
 				T.falsy(LobbyLayout.inArea(d.Parent.CFrame.Position), d:GetFullName() .. " is a light in the lobby")
 			end
 		end
-		T.truthy(lights <= 1 + #TrainConfig.Lifts, "one light at the station and one per lift")
+		T.truthy(lights <= 1, "one light at the station")
 		for _, part in rail do
 			local name = part:GetFullName()
 			T.truthy(part.Anchored, name .. " anchored")
@@ -677,9 +608,6 @@ return function(T, Loader)
 			T.eq(portal.LevelOfDetail, roblox.Enum.ModelLevelOfDetail.StreamingMesh, portal.Name .. " keeps a far mesh")
 		end
 		T.eq(railway.MineStation.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, "station streams atomically")
-		for _, cfg in TrainConfig.Lifts do
-			T.eq(liftModel(cfg.Id).ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, cfg.Id .. " streams atomically")
-		end
 	end)
 
 	T.test("railway: the build is deterministic and replaces an old railway", function()

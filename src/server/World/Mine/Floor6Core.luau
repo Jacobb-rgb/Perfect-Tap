@@ -1181,10 +1181,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	end
 	glowSign(props, signAt * CFrame.new(0, 4.4, 0), "HEARTSTONE CORE", 12, 2.6, PINK, rgb(255, 236, 248))
 
-	-- the hub: the Mine Lift under a floating hoist rock, a rune circle around a crystal
-	-- (in the game this only marks the spot: Railway builds the lift from TrainConfig; the
-	-- preview lift gets its own id so its cable is not measured against the in-game cave)
-	MineKit.oreLift(m, O * Vector3.new(liftSpot.X, hub.Top + liftSpot.Y, liftSpot.Z), if MineKit.PreviewLifts then "Floor5Preview" else "HeartstoneCore")
+	-- the hub: a floating hoist rock (the Mine Lift stood under it until the owner took the lifts
+	-- out 2026-11-14), a rune circle around a crystal
 	local hoist = model("HoistRock", props)
 	local hrng = Rng.new("Floor5Hoist")
 	rockBody(hoist, liftAt, hub.Top + 33.5, outline(liftAt, 4.5, 4.5, 6, hrng), 10, hrng, { Band = 2, Ring = false, Debris = 1 })

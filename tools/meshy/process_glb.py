@@ -135,13 +135,31 @@ def new_image(name, size, data):
         img.colorspace_settings.name = 'Non-Color'
     return img
 
-def bake_material(name, size, want_normal):
+def matte_image():
+    # one tiny metal/roughness map for every tile (glTF: G = roughness 1, B = metal 0). Roblox's 3D
+    # importer only gives a SurfaceAppearance a RoughnessMap from a texture: without one the floors
+    # came in as Plastic with a waxy sheen on their soft shapes, "like melted chocolate" (2026-11-14)
+    img = bpy.data.images.get("matte_mr")
+    if img is None:
+        img = bpy.data.images.new("matte_mr", 8, 8, alpha=False, float_buffer=False)
+        img.colorspace_settings.name = 'Non-Color'
+        img.pixels.foreach_set([0.0, 1.0, 0.0, 1.0] * 64)
+        img.pack()
+    return img
+
+def bake_material(name, size, want_normal, matte=False):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
     bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
     bsdf.inputs['Metallic'].default_value = 0.0
     bsdf.inputs['Roughness'].default_value = 0.85
+    if matte:
+        tm = nt.nodes.new('ShaderNodeTexImage'); tm.image = matte_image(); tm.interpolation = 'Closest'
+        sep = nt.nodes.new('ShaderNodeSeparateColor')
+        nt.links.new(tm.outputs['Color'], sep.inputs['Color'])
+        nt.links.new(sep.outputs['Green'], bsdf.inputs['Roughness'])
+        nt.links.new(sep.outputs['Blue'], bsdf.inputs['Metallic'])
     tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = new_image(name + "_color", size, False)
     nt.links.new(tc.outputs['Color'], bsdf.inputs['Base Color'])
     tn = None
@@ -325,6 +343,69 @@ def flatten_boxes(ob, boxes):
     ob.data.update()
     log("  flattened", n, "vertices")
 
+def facet(ob, angle):
+    # crisp flat facets (2026-11-14, the owner: "everything still looks melted"): merge the decimated
+    # surface's nearly coplanar triangles into flat planes, then triangles again
+    select_only([ob], ob)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.dissolve_limited(angle_limit=math.radians(angle), delimit={'NORMAL'})
+    bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    log("  faceted", angle, "deg ->", tri_count(ob), "tris")
+
+def kmeans(x, k, iters=12):
+    import numpy as np
+    rng = np.random.default_rng(7)
+    cent = x[rng.choice(len(x), k, replace=False)].copy()
+    for _ in range(iters):
+        d = ((x[:, None, :] - cent[None, :, :]) ** 2).sum(-1)
+        lab = d.argmin(1)
+        for c in range(k):
+            m = lab == c
+            if m.any():
+                cent[c] = x[m].mean(0)
+    return cent
+
+def post_color(mats, j):
+    # the baked colour maps cleaner: "poster" = one palette of that many colours for the whole floor
+    # (k-means), every texel snapped to it; "sharpen" = an unsharp mask of that strength
+    import numpy as np
+    sharpen, poster = j.get("sharpen", 0), j.get("poster", 0)
+    if not sharpen and not poster:
+        return
+    imgs = [tc.image for (_, tc, _) in mats]
+    arrs = []
+    for im in imgs:
+        w, h = im.size
+        a = np.empty(w * h * 4, np.float32); im.pixels.foreach_get(a); arrs.append(a.reshape(h, w, 4))
+    cent = None
+    if poster:
+        samp = np.concatenate([a[::6, ::6, :3].reshape(-1, 3) for a in arrs])
+        cent = kmeans(samp, poster)
+    def blur(rgb, r):
+        out = rgb.copy()
+        for axis in (0, 1):
+            acc = np.zeros_like(out)
+            for d in range(-r, r + 1):
+                acc += np.roll(out, d, axis=axis)
+            out = acc / (2 * r + 1)
+        return out
+    for im, a in zip(imgs, arrs):
+        rgb = a[..., :3]
+        if cent is not None:
+            flat = rgb.reshape(-1, 3)
+            lab = np.empty(len(flat), np.int32)
+            for i in range(0, len(flat), 65536):
+                d = ((flat[i:i + 65536, None, :] - cent[None, :, :]) ** 2).sum(-1)
+                lab[i:i + 65536] = d.argmin(1)
+            rgb = cent[lab].reshape(rgb.shape)
+        if sharpen:
+            rgb = np.clip(rgb + sharpen * (rgb - blur(rgb, 2)), 0, 1)
+        a[..., :3] = rgb
+        im.pixels.foreach_set(a.ravel()); im.update(); im.pack()
+    log("  post colour", "sharpen", sharpen, "poster", poster)
+
 def local_boxes_to_blender(j, key="cuts"):
     # j[key]: [[x0, y0, z0, x1, y1, z1], ...] in floor-local studs (Roblox axes) with
     # j["layout"] = {"scale", "ground_n", "center_n": [cx, cz]} of that floor
@@ -349,9 +430,14 @@ def job_tiles(j):
     low = high.copy(); low.data = high.data.copy(); bpy.context.collection.objects.link(low)
     weld(low, 1e-5)
     decimate_to(low, j["tris"])
+    if j.get("facet"):
+        facet(low, j["facet"])
     smooth(low, j.get("smooth", 35))
     lo, hi = bbox(low)
     cap = j.get("cap", 19000)
+    if j.get("tiles_min"):
+        # at least this many tiles (each its own 1024 textures): a lighter mesh keeps its texel density
+        cap = min(cap, math.ceil(tri_count(low) / j["tiles_min"]))
     # assign faces to cells, split cells over the cap
     bm = bmesh.new(); bm.from_mesh(low.data)
     bm.faces.ensure_lookup_table()
@@ -399,7 +485,7 @@ def job_tiles(j):
     low.data.materials.clear()
     mats = []
     for ci in range(len(cells)):
-        m = bake_material("%s_%02d" % (j["name"], ci + 1), j.get("tex", 1024), j.get("normal", False))
+        m = bake_material("%s_%02d" % (j["name"], ci + 1), j.get("tex", 1024), j.get("normal", False), j.get("matte", False))
         low.data.materials.append(m[0]); mats.append(m)
     low.data.polygons.foreach_set("material_index", face_cell)
     low.data.update()
@@ -421,6 +507,7 @@ def job_tiles(j):
             bpy.ops.uv.pack_islands(rotate=True, margin=0.004)
     bpy.ops.object.mode_set(mode='OBJECT')
     bake(high, low, mats, max(hi - lo) * j.get("extr", 0.012), j.get("normal", False))
+    post_color(mats, j)
     # separate tiles
     select_only([low], low)
     bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')

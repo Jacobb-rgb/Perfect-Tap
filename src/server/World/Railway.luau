@@ -41,16 +41,6 @@
 	               each stop's platform (BaseLayout.TrainStop keeps 3 studs
 	               from the centerline), the sleeper ends on the platform side
 	               give way under it, so nothing cuts into a yard
-	  MineLift_*   the Mine Lifts (TrainConfig.Lifts: "MineLift_" .. Id,
-	               tagged "MineLift", attribute LiftId): a periwinkle headframe with orange
-	               collars on a steel base, a low funnel hopper (rim LiftRim)
-	               with a warm glowing floor over the invisible `Intake` (tag
-	               "TrainHopper", attribute LiftId), the cage parked under the
-	               crossbeams on a cable that runs up into the cave ceiling
-	               with a lamp under it (the lift's one PointLight), a "LIFT"
-	               sign (self-lit text) under a front header beam with a lamp
-	               strip, a warning lamp and the `PromptPoint` attachment in
-	               front
 
 	The yards' `RailwayPlaceholder` track pieces (PlotBuilder) are removed:
 	the through line replaces them (their buffer stops stood on the line).
@@ -66,7 +56,7 @@
 
 	Pure and deterministic (only Instance creation, a fixed-seed Rng for
 	stone shades), so Lune tests, the bake and previews can build it.
-	Streaming: the station, lifts and portals stream atomically; the portals
+	Streaming: the station and the portals stream atomically; the portals
 	keep a low-detail streaming mesh when far away.
 ]]
 
@@ -77,13 +67,12 @@ local Geo = require(Shared.Builders.Geo)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Rng = require(Shared.Util.Rng)
 local BaseLayout = require(Shared.Config.BaseLayout)
-local MineFloors = require(Shared.Config.MineFloors)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 
 local Railway = {}
 
-Railway.MaxParts = 660 -- the whole railway with its 5 Mine Lifts (tests/Railway.spec.luau)
+Railway.MaxParts = 660 -- the whole railway (tests/Railway.spec.luau; the Mine Lifts went 2026-11-14)
 Railway.RunLength = 24 -- longest rail part
 -- Quarry portals: the mouth stands this far in front of the line's end, and
 -- the coastal buffer stops' face this far past theirs (shared with the
@@ -94,10 +83,8 @@ Railway.BufferGap = TrainConfig.BufferGap
 -- +-3.43, chimney top 9.31 above the line point); only rails, sleepers and
 -- the portal mouths may enter it.
 Railway.Clearance = { HalfWidth = 3.6, Bottom = 1.5, Top = 9.6 }
-Railway.LiftRim = 3.2 -- the Mine Lifts' tub rim above the cave floor (the intake box reaches higher)
 Railway.StationTag = "TrainStation"
 Railway.HopperTag = "TrainHopper"
-Railway.LiftTag = "MineLift"
 
 export type Rect = { Min: Vector3, Max: Vector3 } -- world XZ (Y ignored)
 type Props = { [string]: any }
@@ -131,7 +118,6 @@ local C = {
 	Board = rgb(58, 60, 72),
 	Text = rgb(255, 210, 96),
 	Screen = rgb(40, 150, 110), -- deep, so the neon stays a screen and not a lamp
-	Glow = rgb(214, 110, 28), -- the lifts' hopper floor: a warm "drop it here" glow in the dark caves
 	Lever = rgb(214, 56, 50),
 }
 
@@ -1167,171 +1153,6 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	return m
 end
 
----------------------------------------------------------------- Mine Lifts
-
---[[
-	One Mine Lift: frame `F` on the floor at the lift's position looking at
-	its front (toward the cave's middle). The Intake's box is the lift's Size,
-	its bottom on the floor.
-]]
-local function buildLift(parent: Instance, info: { Id: string, Position: Vector3, Size: Vector3 }): Model
-	-- (find lifts by the MineLift tag and LiftId; tests/World.spec.luau lets a
-	-- lift stand in its own cave's walkable space by the same tag)
-	local m = model("MineLift_" .. info.Id, parent)
-	m:AddTag(Railway.LiftTag)
-	m:SetAttribute("LiftId", info.Id)
-	streaming(m, false)
-	local pos = info.Position
-	local size = info.Size
-	local front = if pos.X > 0 then Vector3.new(-1, 0, 0) else Vector3.new(1, 0, 0)
-	local F = CFrame.lookAt(pos, pos + front)
-	local cave = (WorldLayout.Caves :: any)[info.Id]
-	-- (a diorama cave floor's closed room has its own ceiling: the cable reaches into it)
-	local floor = MineFloors.ById[info.Id]
-	local roomCeiling = if floor then MineFloors.ceilingY(floor.Index) else nil
-	local top = if roomCeiling then roomCeiling + 0.5 elseif cave then cave.Max.Y else pos.Y + 30
-	local ceiling = top - pos.Y
-
-	local frameHalf = math.max(size.X, size.Z) / 2 + 1.2
-	local base = box(
-		m,
-		"Base",
-		F,
-		Vector3.new(-frameHalf - 0.4, 0, -frameHalf - 0.4),
-		Vector3.new(frameHalf + 0.4, 0.4, frameHalf + 0.4),
-		C.SteelDark,
-		nil,
-		SOLID
-	)
-	m.PrimaryPart = base
-	-- headframe: four posts with orange collars, two crossbeams, a spine
-	local postTop = 14.4
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			local x, z = sx * frameHalf, sz * frameHalf
-			box(m, "Post", F, Vector3.new(x - 0.4, 0.4, z - 0.4), Vector3.new(x + 0.4, postTop, z + 0.4), C.Steel, nil, BUMP)
-			box(
-				m,
-				"Collar",
-				F,
-				Vector3.new(x - 0.55, postTop - 2.2, z - 0.55),
-				Vector3.new(x + 0.55, postTop - 1.6, z + 0.55),
-				C.Orange,
-				nil,
-				GHOST
-			)
-		end
-	end
-	for _, sz in { -1, 1 } do
-		box(
-			m,
-			"Crossbeam",
-			F,
-			Vector3.new(-frameHalf - 0.6, postTop, sz * frameHalf - 0.4),
-			Vector3.new(frameHalf + 0.6, postTop + 0.8, sz * frameHalf + 0.4),
-			C.Steel,
-			nil,
-			DECOR
-		)
-	end
-	box(
-		m,
-		"Spine",
-		F,
-		Vector3.new(-0.4, postTop + 0.8, -frameHalf + 0.6),
-		Vector3.new(0.4, postTop + 1.6, frameHalf - 0.6),
-		C.SteelDark,
-		nil,
-		DECOR
-	)
-
-	-- the hopper: a low tub (its rim LiftRim above the floor, so a soft throw
-	-- from the floor clears it) inside the taller intake box
-	hopper(
-		m,
-		F * CFrame.new(0, 0.4, 0),
-		size.X / 2,
-		size.Z / 2,
-		Railway.LiftRim - 0.4,
-		{ Throat = 0.9, Tub = 1.2, Band = 0.4, Funnel = 0.8, Glow = C.Glow }
-	)
-	local intake = block(m, "Intake", CFrame.new(pos + Vector3.new(0, size.Y / 2, 0)), size, C.Steel, nil, GHOST)
-	intake.Transparency = 1
-	intake:AddTag(Railway.HopperTag)
-	intake:SetAttribute("LiftId", info.Id)
-
-	-- the cage parked up under the crossbeams (high above the throws into
-	-- the hopper), its cable up into the ceiling
-	local cage0, cage1 = 10.5, 14
-	local ch = 2.8
-	box(m, "CageFloor", F, Vector3.new(-ch, cage0, -ch), Vector3.new(ch, cage0 + 0.3, ch), C.Steel, nil, DECOR)
-	box(m, "CageRoof", F, Vector3.new(-ch - 0.2, cage1 - 0.4, -ch - 0.2), Vector3.new(ch + 0.2, cage1, ch + 0.2), C.Orange, nil, DECOR)
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			box(
-				m,
-				"CageBar",
-				F,
-				Vector3.new(sx * ch - 0.18, cage0 + 0.3, sz * ch - 0.18),
-				Vector3.new(sx * ch + 0.18, cage1 - 0.4, sz * ch + 0.18),
-				C.SteelLight,
-				nil,
-				GHOST
-			)
-		end
-	end
-	for _, y in { cage0 + 1.3, cage0 + 2.5 } do
-		box(m, "Gate", F, Vector3.new(-ch, y - 0.12, -ch - 0.12), Vector3.new(ch, y + 0.12, -ch + 0.12), C.Orange, nil, GHOST)
-	end
-	cyl(m, "Cable", F * CFrame.new(0, (cage1 + ceiling + 0.5) / 2, 0), ALONG_Y, ceiling + 0.5 - cage1, 0.45, C.SteelLight, nil, GHOST)
-	-- a lamp under the cage lights the hopper (the lift's one PointLight)
-	local cageLamp = box(m, "CageLamp", F, Vector3.new(-0.5, cage0 - 0.35, -0.5), Vector3.new(0.5, cage0, 0.5), C.Lamp, NEON, GHOST)
-	light(cageLamp, C.Lamp, 16, 1.4)
-	box(m, "Anchor", F, Vector3.new(-1.1, ceiling - 0.8, -1.1), Vector3.new(1.1, ceiling, 1.1), C.SteelDark, nil, GHOST)
-
-	-- a header beam across the front posts with the LIFT sign hanging under it
-	-- in view of a player at the hopper (both faces), a warning lamp on the
-	-- front crossbeam's end
-	local headerY = 11.6
-	box(
-		m,
-		"Header",
-		F,
-		Vector3.new(-frameHalf, headerY, -frameHalf - 0.3),
-		Vector3.new(frameHalf, headerY + 0.5, -frameHalf + 0.3),
-		C.Steel,
-		nil,
-		DECOR
-	)
-	-- (self-lit text: the caves' tinted ambient would turn it red or olive; a
-	-- warm lamp strip along the header's front edge over it)
-	sign(m, "Sign", F * CFrame.new(0, headerY - 0.85, -frameHalf - 0.05), Vector3.new(4.6, 1.6, 0.3), "LIFT", true, 0)
-	box(
-		m,
-		"SignLamp",
-		F,
-		Vector3.new(-1.9, headerY - 0.02, -frameHalf - 0.48),
-		Vector3.new(1.9, headerY + 0.16, -frameHalf - 0.3),
-		C.Lamp,
-		NEON,
-		GHOST
-	)
-	box(
-		m,
-		"LampBase",
-		F,
-		Vector3.new(frameHalf - 0.25, postTop + 0.8, -frameHalf - 0.25),
-		Vector3.new(frameHalf + 0.25, postTop + 1.6, -frameHalf + 0.25),
-		C.SteelDark,
-		nil,
-		GHOST
-	)
-	ball(m, "Lamp", F * CFrame.new(frameHalf, postTop + 2.0, -frameHalf), 0.9, C.Orange, NEON, GHOST)
-
-	attach(base, "PromptPoint", F:PointToWorldSpace(Vector3.new(0, 3, -frameHalf - 1.8)))
-	return m
-end
-
 ---------------------------------------------------------------- build
 
 -- World XZ rect of every plot's train stop platform (the coastal track gives way to it).
@@ -1426,16 +1247,8 @@ function Railway.build(map: Instance): Folder
 		southPortal(portals, coast.Portal, mouths[coast.Portal], rng)
 	end
 
-	-- the Mine Lifts down in the caves
-	for _, info in TrainConfig.Lifts do
-		buildLift(root, info)
-	end
-
 	root.Parent = map
 	return root
 end
-
--- The Mine Lift builder, also used by the mine floor areas (src/server/World/Mine).
-Railway.buildLift = buildLift
 
 return Railway

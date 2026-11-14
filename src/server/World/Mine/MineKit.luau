@@ -6,7 +6,6 @@
 	  MineKit.elevator(parent, cf, floorIndex)   the elevator stop (bought once, goes
 	                                             to every unlocked floor); cf = floor
 	                                             center of the stop, front = LookVector
-	  MineKit.oreLift(parent, position, id)      the train's Mine Lift (Railway.buildLift)
 	  MineKit.gate(parent, cf, width, level)     an arch with "BLASTER LV N+" over a way in
 	  MineKit.spawns(model)                      the RockSpawns folder + spawn helpers
 	  MineKit.crystals(parent, root, ...)        decoration crystal clusters that match
@@ -28,7 +27,7 @@
 	            the front half, so a camera at +Z sees in
 	  The model holds: Folder "RockSpawns" (parts named "RockSpawn", attribute Deep),
 	  a part "GiantSpawn", a part "Entrance" (where players arrive), the elevator
-	  stop, the ore lift and a blaster gate. Budgets in the game build: <= 2500
+	  stop and a blaster gate (no ore lift: the owner took them out 2026-11-14). Budgets in the game build: <= 2500
 	  parts without rocks (floors 1-3: <= 1250), <= 24 PointLights. In the game
 	  build too: 4-8 ambience spots of the floor's MineAmbience.Floors[Id] kinds, each
 	  an Attachment on an existing part inside the floor's box, never on a
@@ -45,7 +44,6 @@ local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmb
 local MovementConfig = require(Shared:WaitForChild("Config"):WaitForChild("MovementConfig"))
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
-local Railway = require(World:WaitForChild("Railway"))
 local MeshKit = require(Shared:WaitForChild("Builders"):WaitForChild("MeshKit"))
 
 local MineKit = {}
@@ -408,27 +406,7 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number, opts
 	return m
 end
 
----------------------------------------------------------------- ore lift and gate
-
--- In the game the Mine Lifts are built by Railway from TrainConfig.Lifts (their train hooks live
--- under Map.Railway); floor builders only mark the spot. Preview scenes set this to true so
--- the floor pictures show the lift.
-MineKit.PreviewLifts = false
-
--- The train's Mine Lift at `position` on the floor (it faces the floor's middle along X), or in
--- the game an "OreLiftSpot" marker model (attribute LiftId) where TrainConfig puts the lift.
-function MineKit.oreLift(parent: Instance, position: Vector3, id: string): Model
-	if MineKit.PreviewLifts then
-		return Railway.buildLift(parent, { Id = id, Position = position, Size = Vector3.new(6, 5, 6) })
-	end
-	local m = Instance.new("Model")
-	m.Name = "OreLiftSpot"
-	m:SetAttribute("LiftId", id)
-	m.Parent = parent
-	local spot = MineKit.marker(m, "Spot", CFrame.new(position + Vector3.new(0, 0.5, 0)))
-	m.PrimaryPart = spot
-	return m
-end
+---------------------------------------------------------------- gate
 
 -- An arch over a way in with "BLASTER LV N+" on it; cf = ground center, front = LookVector.
 function MineKit.gate(parent: Instance, cf: CFrame, width: number, level: number, colors: { Color3 }): Model

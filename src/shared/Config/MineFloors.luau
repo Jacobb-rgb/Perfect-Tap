@@ -12,7 +12,7 @@
 	  7 ???                 blaster 11   "Coming soon"
 
 	Floor logic keys on a floor's Id (RockBuilder looks, MineAmbience kinds,
-	TrainConfig lifts), never on its Index: a floor can go in between.
+	the floor layouts), never on its Index: a floor can go in between.
 
 	Every floor has 5-8 home ores (variant A2 of the balance sim; all 36 ores, OreData.Tier = the floor's MinBlaster). Rocks come in three kinds: Small (3 ores),
 	Big (4 ores) and Crystal (3 ores rolled from the floor's better table,
@@ -264,8 +264,9 @@ MineFloors.Placement = {
 	CFrame.new(0, -400, -800),
 } :: { CFrame }
 
--- Where each floor's Mine Lift stands (floor-local, on the ground; TrainConfig.Lifts builds them
--- through Railway). Floor 1 has none: players load the Mine Station's hopper in the quarry.
+-- Where each part-built floor's Mine Lift stood (floor-local, on the ground). The owner took the
+-- lifts out of every floor 2026-11-14 ("it really bothers me there"); the part-built floors (no
+-- upload) keep the spot clear and their lift's beams as decoration.
 MineFloors.LiftSpots = {
 	[2] = Vector3.new(46, 0, 40),
 	[3] = Vector3.new(50, 0, 2),
@@ -275,35 +276,23 @@ MineFloors.LiftSpots = {
 } :: { [number]: Vector3 }
 
 -- The floors built from the owner's dioramas (World/Mine/Diorama, DioramaData) when every tile is
--- uploaded (MeshKit): their lifts stand on the diorama's flat ground instead.
+-- uploaded (MeshKit). (An entry per floor: a floor without one is never its diorama.)
 MineFloors.Dioramas = {
-	[1] = {}, -- (no lift: the Mine Station's hopper in the quarry)
-	-- (owner 2026-11-14: the ore lift right beside the elevator, out of the field and never in front
-	-- of its door; the layout's lift anchor, tools/meshy/floors/config.json "beside":
-	-- tests/DioramaFloors.spec keeps them equal. The Core's island has no room beside it: its lift
-	-- stands 15 studs out along the island, clear of the way north.)
-	[2] = { Lift = Vector3.new(-34.38, 0.1, 54.01) },
-	[3] = { Lift = Vector3.new(-34.42, 1.29, 23.35) },
-	[4] = { Lift = Vector3.new(-39.24, 0.76, 22.43) },
-	[5] = { Lift = Vector3.new(-23.15, 0.03, 18.71) },
-	[6] = { Lift = Vector3.new(11.71, 0.25, 54.69) },
-} :: { [number]: { Lift: Vector3? } }
+	[1] = {},
+	[2] = {},
+	[3] = {},
+	[4] = {},
+	[5] = {},
+	[6] = {},
+} :: { [number]: {} }
 
 -- The underside of every diorama cave floor's ceiling, studs above its ground (owner 2026-11-14:
 -- "all ceilings the same, really important"): one closed room per cave floor (Mine/Diorama) up to
--- it, the elevator tower and the Mine Lift's cable reach it. Under the ForgeMountain massif that
+-- it, the elevator tower reaches it. Under the ForgeMountain massif that
 -- rests on the Ember Caves' roof (world y 22 = local 34) and over the tallest diorama (the Rift's
 -- 32.7); the Heartstone Core keeps its void.
 MineFloors.CeilingHeight = 33.5
 MineFloors.CeilingFloors = { [2] = true, [3] = true, [4] = true, [5] = true } :: { [number]: boolean }
-
--- The world height of floor `index`'s ceiling when it is its diorama's closed room (nil otherwise).
-function MineFloors.ceilingY(index: number): number?
-	if not MineFloors.CeilingFloors[index] or not MineFloors.usesDiorama(index) then
-		return nil
-	end
-	return MineFloors.Placement[index].Y + MineFloors.CeilingHeight
-end
 
 -- The tiles floor `index`'s diorama is built from: the sharper set (MeshCatalog.FloorsHD) once
 -- every one of its tiles is uploaded, else the first set once all of those are; nil without a
@@ -335,26 +324,6 @@ end
 -- Whether floor `index` is built from its diorama (its layout exists and its tiles are uploaded).
 function MineFloors.usesDiorama(index: number): boolean
 	return MineFloors.floorTiles(index) ~= nil
-end
-
--- Where floor `index`'s Mine Lift stands (floor-local): the diorama's spot when the floor is its
--- diorama, else MineFloors.LiftSpots (nil for floor 1).
-function MineFloors.liftSpot(index: number): Vector3?
-	local diorama = MineFloors.Dioramas[index]
-	if diorama and diorama.Lift and MineFloors.usesDiorama(index) then
-		return diorama.Lift
-	end
-	return MineFloors.LiftSpots[index]
-end
-
--- The world position of a floor's Mine Lift (nil for floor 1).
-function MineFloors.liftPosition(index: number): Vector3?
-	local spot = MineFloors.liftSpot(index)
-	local placement = MineFloors.Placement[index]
-	if not spot or not placement then
-		return nil
-	end
-	return placement:PointToWorldSpace(spot)
 end
 
 MineFloors.ByIndex = {} :: { [number]: Floor }
