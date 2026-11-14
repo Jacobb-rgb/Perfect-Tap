@@ -42,16 +42,40 @@ return function(T, Loader)
 			local floorId = if id == "QuarryB" then "Quarry" else id
 			local flat = Diorama.Floors[floorId] and Diorama.Floors[floorId].Flatten
 			if job.flatten then
-				T.truthy(flat, floorId .. " knows its squashed spot")
-				local b = job.flatten[1]
-				T.truthy(
-					flat[1] == b[1] and flat[2] == b[3] and flat[3] == b[4] and flat[4] == b[6],
-					floorId .. " the same box (x0, z0, x1, z1)"
-				)
+				T.truthy(flat and #flat == #job.flatten, floorId .. " knows every squashed spot")
+				for k, b in job.flatten do
+					local f = flat[k]
+					local same = true
+					for n = 1, 6 do
+						same = same and math.abs(f[n] - b[n]) < 1e-6
+					end
+					T.truthy(same, floorId .. " squashed box " .. k .. " as the job's")
+				end
 			else
 				T.eq(flat, nil, floorId .. " nothing squashed")
 			end
 		end
+	end)
+
+	T.test("diorama floors: a flatten box cuts the walk boxes down to its floor, the rest stays", function()
+		-- one box 0..10 x 0..10 at 5 high, a flatten box over its middle x 2..4 down to 1
+		local out = Diorama.flattenBoxes({ 0, 0, 10, 10, 5 }, { { 2, 1, -1, 4, 9, 11 } })
+		local area, cut = 0, false
+		for i = 1, #out, 5 do
+			local x0, z0, x1, z1, top = out[i], out[i + 1], out[i + 2], out[i + 3], out[i + 4]
+			area += (x1 - x0) * (z1 - z0)
+			if x0 >= 2 and x1 <= 4 then
+				T.eq(top, 1, "cut down inside")
+				cut = true
+			else
+				T.eq(top, 5, "as it was outside")
+			end
+		end
+		T.truthy(cut, "the overlap is there")
+		T.near(area, 100, 1e-6, "the same ground, no gaps, no overlaps")
+		-- lower ground under a flatten box keeps its own height
+		local low = Diorama.flattenBoxes({ 0, 0, 10, 10, 0.5 }, { { -1, 1, -1, 11, 9, 11 } })
+		T.eq(low[5], 0.5, "ground under the floor stays")
 	end)
 
 	T.test("diorama floors: every floor has data and tiles in the catalog", function()
@@ -176,20 +200,32 @@ return function(T, Loader)
 						T.truthy(high.Y > low.Y + 0.9, label .. " a ramp rises")
 					end
 				end
-				-- (the sharper quarry squashed its blue sign gate: no walk box or ramp stands there any more)
-				local flat = Diorama.Floors[MineFloors.ByIndex[index].Id].Flatten
+				-- (the sharper tiles squash what stood in the way: no walk box stands above a flatten
+				-- box's floor inside it, and no path ramp leads up there)
+				local flats = Diorama.Floors[MineFloors.ByIndex[index].Id].Flatten or {}
 				local skipped = 0
-				if flat then
-					for i = 1, #data.Ramps, 7 do
-						local cx, cz = (data.Ramps[i] + data.Ramps[i + 2]) / 2, (data.Ramps[i + 1] + data.Ramps[i + 3]) / 2
-						if cx > flat[1] and cx < flat[3] and cz > flat[2] and cz < flat[4] then
+				for i = 1, #data.Ramps, 7 do
+					local cx, cz = (data.Ramps[i] + data.Ramps[i + 2]) / 2, (data.Ramps[i + 1] + data.Ramps[i + 3]) / 2
+					for _, f in flats do
+						if cx > f[1] and cx < f[4] and cz > f[3] and cz < f[6] then
 							skipped += 1
+							break
 						end
 					end
-					for _, d in model.Ground:GetChildren() do
+				end
+				for _, d in model.Ground:GetChildren() do
+					if d.Name == "Ground" then
 						local p = origin:PointToObjectSpace(d.CFrame.Position)
-						if p.X > flat[1] and p.X < flat[3] and p.Z > flat[2] and p.Z < flat[4] then
-							T.le(p.Y + d.Size.Y / 2, Diorama.FlattenTop + 0.01, label .. " nothing to bump into where the gate stood")
+						local h = d.Size / 2
+						for _, f in flats do
+							if
+								p.X - h.X >= f[1] - 1e-6
+								and p.X + h.X <= f[4] + 1e-6
+								and p.Z - h.Z >= f[3] - 1e-6
+								and p.Z + h.Z <= f[6] + 1e-6
+							then
+								T.le(p.Y + h.Y, f[2] + 0.01, label .. " nothing to bump into where a squashed thing stood")
+							end
 						end
 					end
 				end
@@ -214,28 +250,48 @@ return function(T, Loader)
 				end
 				-- the cave floors' closed room (owner 2026-11-14: "no void behind the walls, all ceilings
 				-- the same"): one ceiling at CeilingHeight over the whole diorama, and every side the
-				-- floor's look walls is closed up to it but for Land's passages
+				-- floor's look walls is closed up to it but for Land's passages; the open quarry's walls
+				-- (owner: "you must not see behind them at all") up to their straight tops
 				local room = model:FindFirstChild("Room")
-				T.eq(room ~= nil, MineFloors.CeilingFloors[index] == true, label .. " a closed room on the cave floors")
+				local look = Diorama.Floors[MineFloors.ByIndex[index].Id]
+				local closed = MineFloors.CeilingFloors[index] == true
+				T.eq(room ~= nil, closed or look.Walls ~= nil, label .. " walls round the cave floors and the quarry")
 				if room then
-					local ceiling = room:FindFirstChild("Ceiling")
-					T.truthy(ceiling, label .. " ceiling")
-					T.near(
-						ceiling.CFrame.Position.Y - ceiling.Size.Y / 2,
-						origin.Y + MineFloors.CeilingHeight,
-						0.01,
-						label .. " ceiling height"
-					)
 					local fpLo, fpHi = Diorama.footprint(index)
-					local c0 = origin:PointToObjectSpace(ceiling.CFrame.Position - ceiling.Size / 2)
-					local c1 = origin:PointToObjectSpace(ceiling.CFrame.Position + ceiling.Size / 2)
-					T.truthy(
-						c0.X <= fpLo.X and c0.Z <= fpLo.Y and c1.X >= fpHi.X and c1.Z >= fpHi.Y,
-						label .. " the ceiling covers the diorama"
-					)
-					local data = DioramaData[MineFloors.ByIndex[index].Id]
-					T.le(data.Top, MineFloors.CeilingHeight, label .. " the diorama fits under the ceiling")
-					local look = Diorama.Floors[MineFloors.ByIndex[index].Id]
+					local ceiling = room:FindFirstChild("Ceiling")
+					T.eq(ceiling ~= nil, closed, label .. " a ceiling on the cave floors only")
+					if closed then
+						T.near(
+							ceiling.CFrame.Position.Y - ceiling.Size.Y / 2,
+							origin.Y + MineFloors.CeilingHeight,
+							0.01,
+							label .. " ceiling height"
+						)
+						local c0 = origin:PointToObjectSpace(ceiling.CFrame.Position - ceiling.Size / 2)
+						local c1 = origin:PointToObjectSpace(ceiling.CFrame.Position + ceiling.Size / 2)
+						T.truthy(
+							c0.X <= fpLo.X and c0.Z <= fpLo.Y and c1.X >= fpHi.X and c1.Z >= fpHi.Y,
+							label .. " the ceiling covers the diorama"
+						)
+						local data = DioramaData[MineFloors.ByIndex[index].Id]
+						T.le(data.Top, MineFloors.CeilingHeight, label .. " the diorama fits under the ceiling")
+					end
+					-- each side's wall top (open air: look.WallTops)
+					local function topOf(side: string): number
+						return if closed
+							then MineFloors.CeilingHeight
+							elseif look.WallTops and look.WallTops[side] then look.WallTops[side]
+							else MineFloors.CeilingHeight
+					end
+					for _, d in room:GetChildren() do
+						if d.Name == "WallSlab" and not closed then
+							local p = origin:PointToObjectSpace(d.CFrame.Position)
+							local side = if math.abs(p.X) > math.abs(p.Z)
+								then (if p.X > 0 then "E" else "W")
+								else (if p.Z > 0 then "S" else "N")
+							T.near(p.Y + d.Size.Y / 2, topOf(side), 0.01, label .. " " .. side .. " wall's straight top")
+						end
+					end
 					local slabs = {}
 					for _, d in room:GetChildren() do
 						if d.Name == "WallSlab" or d.Name == "Lintel" then
@@ -266,6 +322,9 @@ return function(T, Loader)
 						local a1 = if alongX then fpHi.X else fpHi.Y
 						for t = a0, a1, 3 do
 							for _, y in { 0.5, 8, 16.5, 25, 33 } do
+								if y >= topOf(side) then
+									continue
+								end
 								local open = false
 								for _, o in look.Openings or {} do
 									if o.Side == side and t > o.From and t < o.To and y < (o.Top or math.huge) then

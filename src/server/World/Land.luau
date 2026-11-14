@@ -543,8 +543,14 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	local q = Instance.new("Model")
 	q.Name = "Quarry"
 	q.Parent = land
+	-- (when the quarry is the owner's diorama, its own walls stand on this edge instead: Mine/Diorama,
+	-- owner 2026-11-14: "you must not see the blocks behind the walls". The cliff is still built and
+	-- then dropped, so the random draws after it, the whole town's, stay the same.)
+	local edge = Instance.new("Model")
+	edge.Name = "QuarryEdge"
+	edge.Parent = q
 	rockWall(
-		q,
+		edge,
 		Vector3.new(quarry.Min.X, 0, quarry.Max.Z),
 		Vector3.new(quarry.Max.X, 0, quarry.Max.Z),
 		Vector3.new(0, 0, -1),
@@ -555,6 +561,9 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		{ { -quarry.Min.X, 10 } },
 		{ aligned = true, colors = { C.Stone, C.StoneDark, C.StoneDark }, grass = true }
 	)
+	if MineFloors.usesDiorama(1) then
+		edge:Destroy()
+	end
 	ramp(q, Vector3.new(0, 0, quarry.Max.Z), Vector3.new(0, quarry.Min.Y, quarry.Max.Z - 26), quarry.RampWidth, Palette.Dirt)
 	-- (the DEPTHS portal of Lobby/Backdrop frames the cave entrance in the quarry's back wall)
 

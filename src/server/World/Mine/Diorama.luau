@@ -42,7 +42,11 @@ export type Look = {
 	Thin: { string }?,
 	Openings: { Opening }?,
 	ElevatorWidth: number?,
-	Flatten: { number }?,
+	Flatten: { { number } }?,
+	WallTops: { [string]: number }?,
+	WallGlow: boolean?,
+	WallColors: { Color3 }?,
+	WallCap: Color3?,
 	Light: Color3,
 	Brightness: number,
 }
@@ -62,10 +66,28 @@ export type Look = {
 ]]
 Diorama.Floors = {
 	Quarry = {
+		-- (owner 2026-11-14: "extend the walls and add them on top so it lines up: you must not see
+		-- behind them at all") rock walls round the open pit over its own cliffs and the part-built
+		-- rim behind them: the sides up to the diorama's tallest rocks, the town side just over the
+		-- rim (the town still looks in), the back is the DEPTHS portal and the massif. Openings: the
+		-- ramp down from the town, the train band (a lintel over the trains' clearance) and the
+		-- grotto door.
+		Walls = { "E", "W", "S" },
+		WallTops = { E = 28, W = 28, S = 14 },
+		WallGlow = false,
+		-- the diorama's lavender stone and its moss
+		WallColors = { Color3.fromRGB(150, 146, 184), Color3.fromRGB(184, 178, 214), Color3.fromRGB(128, 124, 160) },
+		WallCap = Color3.fromRGB(110, 170, 70),
+		Openings = {
+			{ Side = "S", From = -11, To = 11 },
+			{ Side = "E", From = 13, To = 40, Top = 12 },
+			{ Side = "W", From = 13, To = 40, Top = 12 },
+			{ Side = "E", From = -9.5, To = 5.5, Top = 11 },
+		},
 		ElevatorWidth = 8,
 		-- the blue sign gate in the middle of the quarry (owner 2026-11-14: in the way), squashed in
 		-- the sharper tiles: tools/meshy/jobs_2026-11-14.json "flatten" x -9..9, z 7..17
-		Flatten = { -9, 7, 9, 17 },
+		Flatten = { { -9, 0.1, 7, 9, 40, 17 } },
 		Light = Color3.fromRGB(255, 236, 214),
 		Brightness = 0.8,
 	},
@@ -94,8 +116,8 @@ Diorama.ThinWall = 0.12 -- a thin wall's slab (look.Thin) ...
 Diorama.ThinGap = -0.1 -- ... its line this far out of the diorama's outline (just inside: the portal's back is 0.3 behind)
 Diorama.CeilingThickness = 0.5 -- its top at local 34: world 22 on the Ember Caves, the massif's foot
 Diorama.WallBottom = -6 -- the walls reach this far under the usual ground
+Diorama.CapHeight = 1.4 -- an open-air wall's grassy top
 Diorama.OpeningPad = 2.5 -- rock shards keep this far off an opening (theirs overhang a piece's ends)
-Diorama.FlattenTop = 0.1 -- the walk height of a squashed thing's patch (the flatten box's floor)
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -115,6 +137,50 @@ end
 -- The world CFrame of a local point (x, y, z) of the floor.
 local function at(origin: CFrame, p: Vector3): CFrame
 	return origin * CFrame.new(p)
+end
+
+--[[
+	The walk boxes (quintuples x0, z0, x1, z1, top) with every flatten box [x0, y0, z0, x1, y1, z1]
+	(floor-local) applied: where a walk box overlaps one higher than its floor, the overlap's top is
+	cut down to that floor and the rest of the box stays as it was (split round the overlap).
+]]
+function Diorama.flattenBoxes(boxes: { number }, flats: { { number } }): { number }
+	local list: { { number } } = {}
+	for i = 1, #boxes, 5 do
+		table.insert(list, { boxes[i], boxes[i + 1], boxes[i + 2], boxes[i + 3], boxes[i + 4] })
+	end
+	for _, f in flats do
+		local nextList: { { number } } = {}
+		for _, r in list do
+			local ix0, ix1 = math.max(r[1], f[1]), math.min(r[3], f[4])
+			local iz0, iz1 = math.max(r[2], f[3]), math.min(r[4], f[6])
+			if ix0 >= ix1 or iz0 >= iz1 or r[5] <= f[2] then
+				table.insert(nextList, r)
+			else
+				table.insert(nextList, { ix0, iz0, ix1, iz1, f[2] })
+				if r[1] < ix0 then
+					table.insert(nextList, { r[1], r[2], ix0, r[4], r[5] })
+				end
+				if ix1 < r[3] then
+					table.insert(nextList, { ix1, r[2], r[3], r[4], r[5] })
+				end
+				if r[2] < iz0 then
+					table.insert(nextList, { ix0, r[2], ix1, iz0, r[5] })
+				end
+				if iz1 < r[4] then
+					table.insert(nextList, { ix0, iz1, ix1, r[4], r[5] })
+				end
+			end
+		end
+		list = nextList
+	end
+	local out: { number } = {}
+	for _, r in list do
+		for _, v in r do
+			table.insert(out, v)
+		end
+	end
+	return out
 end
 
 -- The diorama's outline on the ground (floor-local X and Z), from its tiles' boxes.
@@ -146,16 +212,25 @@ end
 local function room(model: Model, index: number, origin: CFrame, look: Look, cutaway: boolean)
 	local floor = MineFloors.ByIndex[index]
 	local pal = floor.Palette
-	local colors = { pal.Mid, pal.Light, pal.Dark }
+	-- (rock shards in these: Mid, Light, Dark; the slab behind in the last)
+	local colors: { Color3 } = look.WallColors or { pal.Mid, pal.Light, pal.Dark }
+	local slabColor = colors[3]
 	local rng = Rng.new("DioramaRoom" .. floor.Id)
 	local folder = Instance.new("Model")
 	folder.Name = "Room"
 	folder.Parent = model
+	local closed = MineFloors.CeilingFloors[index] == true
 	local ceilingY = MineFloors.CeilingHeight
 	local bottom = Diorama.WallBottom
 	local depth = Diorama.WallDepth
 	local reach = depth + 2 -- a rock wall's slab ends this far behind its line
-	local slabTop = ceilingY + Diorama.CeilingThickness
+	-- each side's wall top: up into the ceiling in a closed room, else look.WallTops (an open-air
+	-- floor's walls end in one straight line)
+	local function wallTop(side: string): number
+		local tops = look.WallTops
+		local top = if tops and tops[side] then tops[side] else ceilingY
+		return if closed then top + Diorama.CeilingThickness else top
+	end
 	local slabProps = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false }
 	local walls: { string } = look.Walls or {}
 	local thin: { string } = look.Thin or {}
@@ -210,14 +285,14 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 				folder,
 				origin:PointToWorldSpace(point(sa, y0)),
 				origin:PointToWorldSpace(point(sb, y0)),
-				ceilingY + Diorama.CeilingThickness * 0.8 - y0,
+				wallTop(side) - (if closed then Diorama.CeilingThickness * 0.2 else 0) - y0,
 				origin:VectorToWorldSpace(face),
 				colors,
 				rng,
 				{
 					Depth = depth,
 					Step = 9,
-					Glow = pal.Crystal,
+					Glow = if look.WallGlow == false then nil else pal.Crystal,
 					Facets = false,
 				}
 			)
@@ -230,8 +305,24 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		local mid = (from + to) / 2 - face * (gap + thick / 2)
 		local along = (to - from).Magnitude
 		local size = if side == "N" or side == "S" then Vector3.new(along, y1 - y0, thick) else Vector3.new(thick, y1 - y0, along)
-		local slab = Geo.block(folder, at(origin, Vector3.new(mid.X, (y0 + y1) / 2, mid.Z)), size, pal.Dark, Enum.Material.Slate, slabProps)
+		local slab =
+			Geo.block(folder, at(origin, Vector3.new(mid.X, (y0 + y1) / 2, mid.Z)), size, slabColor, Enum.Material.Slate, slabProps)
 		slab.Name = if y0 <= bottom then "WallSlab" else "Lintel"
+		-- an open-air wall's grassy top (the diorama's own cliffs end in grass)
+		if look.WallCap and not closed then
+			local capSize = if side == "N" or side == "S"
+				then Vector3.new(along + 0.4, Diorama.CapHeight, thick + 1)
+				else Vector3.new(thick + 1, Diorama.CapHeight, along + 0.4)
+			local cap = Geo.block(
+				folder,
+				at(origin, Vector3.new(mid.X - face.X * 0.5, y1 - Diorama.CapHeight / 2 + 0.2, mid.Z - face.Z * 0.5)),
+				capSize,
+				look.WallCap,
+				Enum.Material.Grass,
+				{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
+			)
+			cap.Name = "WallCap"
+		end
 	end
 
 	for _, side in { "N", "E", "S", "W" } do
@@ -251,18 +342,19 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		table.sort(cuts, function(p, q)
 			return p.From < q.From
 		end)
+		local top = wallTop(side)
 		local t, pad = a0, 0
 		for _, o in cuts do
-			piece(side, t, o.From, bottom, slabTop, pad, Diorama.OpeningPad)
-			if o.Top and o.Top < ceilingY then
-				piece(side, o.From, o.To, o.Top, slabTop)
+			piece(side, t, o.From, bottom, top, pad, Diorama.OpeningPad)
+			if o.Top and o.Top < top then
+				piece(side, o.From, o.To, o.Top, top)
 			end
 			t, pad = o.To, Diorama.OpeningPad
 		end
-		piece(side, t, a1, bottom, slabTop, pad, 0)
+		piece(side, t, a1, bottom, top, pad, 0)
 	end
 
-	if cutaway then
+	if cutaway or not closed then
 		return
 	end
 	-- the ceiling over the whole room and its walls
@@ -310,18 +402,23 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 	local groundFolder = Instance.new("Folder")
 	groundFolder.Name = "Ground"
 	groundFolder.Parent = model
-	-- (the sharper tiles squash what stood in look.Flatten flat: its walk heights, measured on the
-	-- first tiles, go down to the patch it left, and no path ramp leads up onto it)
-	local flat = if look.Flatten and MineFloors.floorTiles(index) == MeshCatalog.FloorsHD[floor.Id] then look.Flatten else nil
+	-- (the sharper tiles squash what stood in each look.Flatten box down to the box's floor: the walk
+	-- heights, measured on the first tiles, are cut to it inside the box, the boxes split round it,
+	-- and no path ramp leads up onto a squashed thing)
+	local flats: { { number } } = if look.Flatten and MineFloors.floorTiles(index) == MeshCatalog.FloorsHD[floor.Id]
+		then look.Flatten
+		else {}
 	local function flattened(x: number, z: number): boolean
-		return flat ~= nil and x > flat[1] and x < flat[3] and z > flat[2] and z < flat[4]
-	end
-	local boxes = data.Boxes
-	for i = 1, #boxes, 5 do
-		local x0, z0, x1, z1, top = boxes[i], boxes[i + 1], boxes[i + 2], boxes[i + 3], boxes[i + 4]
-		if flattened((x0 + x1) / 2, (z0 + z1) / 2) then
-			top = math.min(top, Diorama.FlattenTop)
+		for _, f in flats do
+			if x > f[1] and x < f[4] and z > f[3] and z < f[6] then
+				return true
+			end
 		end
+		return false
+	end
+	local walk = Diorama.flattenBoxes(data.Boxes, flats)
+	for i = 1, #walk, 5 do
+		local x0, z0, x1, z1, top = walk[i], walk[i + 1], walk[i + 2], walk[i + 3], walk[i + 4]
 		local bottom = math.min(top - Diorama.BoxDepth, data.Bottom - Diorama.BoxDepth)
 		local box = Geo.block(
 			groundFolder,
@@ -396,7 +493,7 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 	end
 
 	-- the cave floors' closed room up to the one ceiling height (the sky never shows in the caves)
-	if closed then
+	if closed or look.Walls then
 		room(model, index, origin, look, opts ~= nil and opts.Cutaway == true)
 	end
 

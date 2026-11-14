@@ -815,7 +815,7 @@ Floor.DioramaFills = {
 	{ Min = Vector3.new(-70, -2, 13), Max = Vector3.new(-59.5, -0.1, 40) }, -- the band's west end
 	{ Min = Vector3.new(59.5, -2, 13), Max = Vector3.new(70, -0.1, 40) }, -- the band's east end
 	{ Min = Vector3.new(59.5, -2, -9), Max = Vector3.new(70, -0.1, 5) }, -- out to the grotto tunnel
-	{ Min = Vector3.new(-72.5, -3, -59), Max = Vector3.new(72.5, -0.45, 59) }, -- the underlay
+	{ Min = Vector3.new(-72.5, -3, -59), Max = Vector3.new(72.5, -0.45, 66) }, -- the underlay (out under the town-side wall)
 }
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
