@@ -129,11 +129,18 @@ floors as before.
   `MineFloors.CeilingHeight` = 33.5 (the ForgeMountain massif rests on Ember's roof at local 34; the Rift
   diorama reaches 32.7). Floor 6 keeps its void (its heartstone crystal reaches local 41).
 - Elevator: the tower from its plate up to the ceiling (quarry: its cliffs' top 27.6), 12 studs wide
-  (8 in the quarry), three warm lamp bars up its front, glowing edge strips; the Mine Lift's cable
-  reaches the room's ceiling (`MineFloors.ceilingY`, Railway).
+  (8 in the quarry), three warm lamp bars up its front, glowing edge strips, the call panel on the
+  plate beside it; riders arrive in front of it (stop attribute `ArrivalZ`, ElevatorService); the Mine
+  Lift's cable reaches the room's ceiling (`MineFloors.ceilingY`, Railway).
 - Ore lift beside the elevator: layout anchors `"beside": "elevator"` (floor_layout.py) on 16-stud
-  elevator squares; `MineFloors.Dioramas[i].Lift` = the layout's Lift anchor (spec checks it).
-- Yard cleaning station: 1.6x, in the back-right corner (BaseLayout.CleaningStation).
+  elevator squares, never in the door's sector (`door_angle` 55; the Core's island has no room: 0);
+  `MineFloors.Dioramas[i].Lift` = the layout's Lift anchor (spec checks it).
+- Room details from the review: no solid facets (MineKit.wall `Facets = false`), shards 2.5 off
+  openings, openings 0.3 wider than Land's tunnel (no shared faces), the ceiling 0.5 thick (top at the
+  massif's foot), Cutaway = no ceiling and no front wall; the sharper quarry's squashed gate lowers
+  its walk boxes (`Diorama.Floors.Quarry.Flatten` = the job's box).
+- Yard cleaning station: 1.6x, in the back-right corner, a stud clear of the fence's corner wall
+  (BaseLayout.CleaningStation).
 
 ## Open
 
