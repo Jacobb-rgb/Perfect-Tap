@@ -187,6 +187,12 @@ local function fidelity(t: any)
 	if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
 		t.RenderFidelity = roblox.Enum.RenderFidelity.Precise
 	end
+	-- and matte: a tile with only a TextureID draws with its Material's roughness, and Plastic gave
+	-- the soft Meshy shapes a waxy sheen ("melted chocolate", 2026-11-14). (A tile with its own
+	-- SurfaceAppearance, the sharper set, takes its roughness from that instead.)
+	if string.match(t.Name, "^Floor_") then
+		t.Material = roblox.Enum.Material.Concrete
+	end
 end
 
 -- the templates: clean clones at the origin, anchored, nothing else inside but the SurfaceAppearance

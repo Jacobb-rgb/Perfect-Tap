@@ -48,6 +48,10 @@ return function(T, Loader)
 			if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
 				T.eq(t.RenderFidelity, roblox.Enum.RenderFidelity.Precise, t.Name .. " draws at full detail")
 			end
+			-- the floors matte (Plastic's sheen made them look melted)
+			if string.match(t.Name, "^Floor_") then
+				T.eq(t.Material, roblox.Enum.Material.Concrete, t.Name .. " matte")
+			end
 			for _, child in t:GetChildren() do
 				T.eq(child.ClassName, "SurfaceAppearance", t.Name .. " holds nothing but its SurfaceAppearance")
 			end
