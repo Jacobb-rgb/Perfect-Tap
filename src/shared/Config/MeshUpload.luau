@@ -3,5 +3,5 @@
 -- uploaded meshes (MeshKit), and which processed set (NAHRAJ_DO_ROBLOXU/3D_modely_<date>) they came from.
 return {
 	Uploaded = true,
-	Set = "3D_modely_2026-11-13",
+	Set = "3D_modely_2026-11-14_ostre_patra",
 }
