@@ -116,6 +116,19 @@ def make_emit(ob):
             em.inputs['Color'].default_value = bsdf.inputs['Base Color'].default_value
         nt.links.new(em.outputs['Emission'], out.inputs['Surface'])
 
+def bsdf_surface(ob):
+    # the source's own shading again (make_emit put an emission shader in front of it for the colour
+    # bake): the normal bake then takes the source's normal map along with its shape, so a decimated
+    # tile keeps the crisp edges and cracks (a diorama baked without it looked melted in Studio)
+    for mat in ob.data.materials:
+        if not mat or not mat.use_nodes:
+            continue
+        nt = mat.node_tree
+        out = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if out and bsdf:
+            nt.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+
 def new_image(name, size, data):
     img = bpy.data.images.new(name, size, size, alpha=False, float_buffer=False)
     if data:
@@ -154,6 +167,7 @@ def bake(high, low, mats, extrusion, want_normal):
     bpy.ops.object.bake(type='EMIT')
     log("  bake color", round(time.time() - t, 1), "s")
     if want_normal:
+        bsdf_surface(high)
         for (mat, tc, tn) in mats:
             mat.node_tree.nodes.active = tn
         t = time.time()
@@ -294,12 +308,29 @@ def cut_boxes(ob, boxes):
     bm.to_mesh(ob.data); bm.free()
     log("  cut", len(kill), "faces")
 
-def local_boxes_to_blender(j):
-    # j["cuts"]: [[x0, y0, z0, x1, y1, z1], ...] in floor-local studs (Roblox axes) with
+def flatten_boxes(ob, boxes):
+    # squash what stands in a box down to its floor (Blender axes, normalized units): a thing in
+    # the way goes (the quarry's blue sign gate, owner 2026-11-14) and leaves a flat patch of its
+    # own texture where it stood, never a hole in the ground the way a cut would
+    if not boxes:
+        return
+    n = 0
+    for v in ob.data.vertices:
+        c = v.co
+        for b in boxes:
+            if b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] < c.z <= b[5]:
+                c.z = b[2]
+                n += 1
+                break
+    ob.data.update()
+    log("  flattened", n, "vertices")
+
+def local_boxes_to_blender(j, key="cuts"):
+    # j[key]: [[x0, y0, z0, x1, y1, z1], ...] in floor-local studs (Roblox axes) with
     # j["layout"] = {"scale", "ground_n", "center_n": [cx, cz]} of that floor
     out = []
     lay = j.get("layout")
-    for c in j.get("cuts", []):
+    for c in j.get(key, []):
         s, g = lay["scale"], lay["ground_n"]; cx, cz = lay["center_n"]
         rx0, rx1 = c[0] / s + cx, c[3] / s + cx
         ry0, ry1 = c[1] / s + g, c[4] / s + g
@@ -313,6 +344,7 @@ def job_tiles(j):
     high = import_glb(j["src"])
     normalize(high, "bottom", j.get("unit", 4.0))
     cut_boxes(high, local_boxes_to_blender(j))
+    flatten_boxes(high, local_boxes_to_blender(j, "flatten"))
     make_emit(high)
     low = high.copy(); low.data = high.data.copy(); bpy.context.collection.objects.link(low)
     weld(low, 1e-5)
@@ -337,7 +369,22 @@ def job_tiles(j):
             q[(1 if c.x >= xm else 0) + (2 if c.y >= ym else 0)].append(i)
         split(q[0], x0, xm, y0, ym, depth + 1); split(q[1], xm, x1, y0, ym, depth + 1)
         split(q[2], x0, xm, ym, y1, depth + 1); split(q[3], xm, x1, ym, y1, depth + 1)
+    def kd(idx):
+        # balanced cells: halve along the longer side at the median until each fits the cap (the
+        # quad grid left dozens of tiny tiles at a high budget, each with its own textures)
+        if len(idx) <= cap:
+            if idx:
+                cells.append(idx)
+            return
+        xs = [cent[i].x for i in idx]; ys = [cent[i].y for i in idx]
+        axis = 0 if max(xs) - min(xs) >= max(ys) - min(ys) else 1
+        idx = sorted(idx, key=lambda i: cent[i][axis])
+        mid = len(idx) // 2
+        kd(idx[:mid]); kd(idx[mid:])
     g = j.get("grid", 4)
+    if j.get("split") == "kd":
+        kd(list(range(len(cent))))
+        g = 0
     for gx in range(g):
         for gy in range(g):
             x0 = lo.x + (hi.x - lo.x) * gx / g; x1 = lo.x + (hi.x - lo.x) * (gx + 1) / g

@@ -5,6 +5,7 @@ return function(T, Loader)
 	local Catalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog")
 	local MeshUpload = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshUpload")
 	local real = Loader.RealMeshAssets
+	local roblox = require("@lune/roblox") :: any
 
 	-- catalog assets not uploaded yet (owner 2026-11-13: the three epic ores he sent last and the open
 	-- museum; his next import of NAHRAJ_DO_ROBLOXU/3D_doplnit_7_souboru_2026-11-13 brings them):
@@ -43,6 +44,10 @@ return function(T, Loader)
 			local yaw = t:GetAttribute("ImportYaw")
 			T.truthy(type(yaw) == "number" and yaw % 90 == 0, t.Name .. " carries the import's turn")
 			T.truthy(t.Anchored and not t.CanCollide and not t.CanQuery and not t.CanTouch, t.Name .. " a clean template")
+			-- the floors and the elevator tower at full detail from afar (Automatic melted the walls)
+			if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
+				T.eq(t.RenderFidelity, roblox.Enum.RenderFidelity.Precise, t.Name .. " draws at full detail")
+			end
 			for _, child in t:GetChildren() do
 				T.eq(child.ClassName, "SurfaceAppearance", t.Name .. " holds nothing but its SurfaceAppearance")
 			end
@@ -55,7 +60,10 @@ return function(T, Loader)
 		end
 		T.truthy(count > 0, "templates")
 		for name in Catalog.Assets do
-			T.truthy(real:FindFirstChild(name) ~= nil or WAITING[name], name .. " is uploaded (or waits for his next import)")
+			-- (the sharper floors, NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra, wait for his import too:
+			-- MineFloors.floorTiles keeps the first set until every one of a floor's is in)
+			local waiting = WAITING[name] or string.match(name, "^Floor_%a+HD_%d+$") ~= nil
+			T.truthy(real:FindFirstChild(name) ~= nil or waiting, name .. " is uploaded (or waits for his next import)")
 		end
 	end)
 end

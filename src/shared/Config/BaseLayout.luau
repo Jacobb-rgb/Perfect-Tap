@@ -89,11 +89,13 @@ BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 -- (owner 2026-11-13: "strasne malinkej, zvets ho o dost"; it still keeps the podiums' row and the
 -- train stop clear, with room to stand in front); Area = its footprint (3 x 2 cells, scaled) for
 -- overlap tests.
+-- (owner 2026-11-14: "dej ji uplne do prava do rohu": the yard's free back corner, by the rail
+-- side and the podiums' far end, its back a stud short of the train stop's line)
 BaseLayout.CleaningStation = {
-	Center = Vector3.new(13, 0, YARD_Z0 + 19),
+	Center = Vector3.new(GRID_HALF + 1 - 1.6 * 6 - 0.8, 0, YARD_Z0 + 29.8 - 1.6 * 4),
 	R = 0,
 	Scale = 1.6,
-	Area = rect(13, YARD_Z0 + 19, 12 * 1.6, 10, 8 * 1.6),
+	Area = rect(GRID_HALF + 1 - 1.6 * 6 - 0.8, YARD_Z0 + 29.8 - 1.6 * 4, 12 * 1.6, 10, 8 * 1.6),
 }
 
 -- Train stop on the coastal railway (step 2). Its rail-side edge (z 59 at 12

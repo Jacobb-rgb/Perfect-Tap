@@ -167,7 +167,36 @@ def height_at(x, z):
     return None
 
 anchors = {}
-for name, a in cfg.get("anchors", {}).items():
+def by_order(item):
+    # anchors placed beside another one come after it
+    return 1 if "beside" in item[1] else 0
+for name, a in sorted(cfg.get("anchors", {}).items(), key=by_order):
+    if "beside" in a:
+        # (owner 2026-11-14: the ore lift next to the elevator, not out in the field) the flattest
+        # square of `size` on a ring round the other anchor: at its side first (the elevator's door
+        # faces the floor's middle along x), toward the nearer floor edge, then round, then further out
+        other = anchors.get(a["beside"])
+        best = None
+        if other:
+            ox, oz = other[0], other[2]
+            want = math.atan2(1.0 if oz >= 0 else -1.0, 0.0)
+            r = a.get("ring", 14.0)
+            while r <= a.get("ring", 14.0) + a.get("radius", 10) and best is None:
+                for t in range(0, 181, 5):
+                    for sgn in ((1,) if t in (0, 180) else (1, -1)):
+                        ang = want + sgn * math.radians(t)
+                        x, z = ox + r * math.cos(ang), oz + r * math.sin(ang)
+                        y = flat_square(x, z, a.get("size", 6), a.get("bump", 1.0))
+                        if y is not None and abs(y - other[1]) <= a.get("level", 2.0):
+                            best = [round(x, 2), round(y, 2), round(z, 2), True]
+                            break
+                    if best:
+                        break
+                r += 1.0
+        anchors[name] = best
+        if best:
+            keep.append([best[0], best[2], a.get("keep", a.get("size", 6) * 0.75 + 4)])
+        continue
     if "at" in a:
         ax, az = a["at"]
         y = height_at(ax, az)

@@ -278,26 +278,61 @@ MineFloors.LiftSpots = {
 -- uploaded (MeshKit): their lifts stand on the diorama's flat ground instead.
 MineFloors.Dioramas = {
 	[1] = {}, -- (no lift: the Mine Station's hopper in the quarry)
-	[2] = { Lift = Vector3.new(39, 0, 40) },
-	[3] = { Lift = Vector3.new(33, 2.6, 7) },
-	[4] = { Lift = Vector3.new(30, 2.4, 32) },
-	[5] = { Lift = Vector3.new(34, 2.4, 49) },
-	[6] = { Lift = Vector3.new(6, 0, 6) },
+	-- (owner 2026-11-14: the ore lift right beside the elevator, out of the field; the layout's lift
+	-- anchor, tools/meshy/floors/config.json "beside": tests/DioramaFloors.spec keeps them equal)
+	[2] = { Lift = Vector3.new(-34.38, 0.1, 54.01) },
+	[3] = { Lift = Vector3.new(-15.76, 2.4, 50.87) },
+	[4] = { Lift = Vector3.new(-39.24, 0.76, 22.43) },
+	[5] = { Lift = Vector3.new(-16.98, 0.3, 33.6) },
+	[6] = { Lift = Vector3.new(11.71, 0.25, 54.69) },
 } :: { [number]: { Lift: Vector3? } }
 
--- Whether floor `index` is built from its diorama (its layout exists and every tile is uploaded).
-function MineFloors.usesDiorama(index: number): boolean
-	local floor = MineFloors.ByIndex[index]
-	local tiles = if floor and MineFloors.Dioramas[index] then MeshCatalog.Floors[floor.Id] else nil
-	if not tiles then
-		return false
+-- The underside of every diorama cave floor's ceiling, studs above its ground (owner 2026-11-14:
+-- "all ceilings the same, really important"): one closed room per cave floor (Mine/Diorama) up to
+-- it, the elevator tower and the Mine Lift's cable reach it. Under the ForgeMountain massif that
+-- rests on the Ember Caves' roof (world y 22 = local 34) and over the tallest diorama (the Rift's
+-- 32.7); the Heartstone Core keeps its void.
+MineFloors.CeilingHeight = 33.5
+MineFloors.CeilingFloors = { [2] = true, [3] = true, [4] = true, [5] = true } :: { [number]: boolean }
+
+-- The world height of floor `index`'s ceiling when it is its diorama's closed room (nil otherwise).
+function MineFloors.ceilingY(index: number): number?
+	if not MineFloors.CeilingFloors[index] or not MineFloors.usesDiorama(index) then
+		return nil
 	end
-	for _, name in tiles do
-		if not MeshKit.has(name) then
+	return MineFloors.Placement[index].Y + MineFloors.CeilingHeight
+end
+
+-- The tiles floor `index`'s diorama is built from: the sharper set (MeshCatalog.FloorsHD) once
+-- every one of its tiles is uploaded, else the first set once all of those are; nil without a
+-- diorama or before the upload.
+function MineFloors.floorTiles(index: number): { string }?
+	local floor = MineFloors.ByIndex[index]
+	if not floor or not MineFloors.Dioramas[index] then
+		return nil
+	end
+	local function uploaded(tiles: { string }?): boolean
+		if not tiles or #tiles == 0 then
 			return false
 		end
+		for _, name in tiles do
+			if not MeshKit.has(name) then
+				return false
+			end
+		end
+		return true
 	end
-	return true
+	local hd = MeshCatalog.FloorsHD[floor.Id]
+	if uploaded(hd) then
+		return hd
+	end
+	local tiles = MeshCatalog.Floors[floor.Id]
+	return if uploaded(tiles) then tiles else nil
+end
+
+-- Whether floor `index` is built from its diorama (its layout exists and its tiles are uploaded).
+function MineFloors.usesDiorama(index: number): boolean
+	return MineFloors.floorTiles(index) ~= nil
 end
 
 -- Where floor `index`'s Mine Lift stands (floor-local): the diorama's spot when the floor is its

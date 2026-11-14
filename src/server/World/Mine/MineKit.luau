@@ -310,7 +310,15 @@ end
 	button (the prompt goes on its "PromptPoint" attachment). About 60 parts, one
 	PointLight. Tagged "MineElevator", attribute Floor.
 ]]
-function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Model
+--[[
+	The elevator stop. With the owner's tower model (Prop_MineElevator): the tower `opts.Height`
+	studs high (owner 2026-11-14: "vyssi, vzdy od zeme ke stropu, osvetlenej a velkej": the floor's
+	ceiling; MineKit.ElevatorTowerHeight when not given), `opts.Width` wide (he found it narrow:
+	wider than its own proportions; those when not given), on a steel plate round its foot, lit by
+	three warm lamps up its height and two glowing strips up its front edges; else the part-built
+	girder frame.
+]]
+function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number, opts: { Height: number?, Width: number? }?): Model
 	local m = Instance.new("Model")
 	m.Name = "Elevator"
 	m.Parent = parent
@@ -319,30 +327,49 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Mod
 	m:SetAttribute("Floor", floorIndex)
 	local half = 4.2
 	local height = 16
-	local plate = Geo.block(m, cf * CFrame.new(0, 0.3, 0), Vector3.new(half * 2 + 1.2, 0.6, half * 2 + 1.2), STEEL_DARK, METAL, SOLID)
+	local own = MeshKit.box("Prop_MineElevator")
+	local towerH = (opts and opts.Height) or MineKit.ElevatorTowerHeight
+	local towerSize = if own
+		then (function(): Vector3
+			local w = (opts and opts.Width) or towerH * own.X / own.Y
+			return Vector3.new(w, towerH, w * own.Z / own.X)
+		end)()
+		else nil
+	local plateX = if towerSize then math.max(half * 2 + 1.2, towerSize.X + 3) else half * 2 + 1.2
+	local plateZ = if towerSize then math.max(half * 2 + 1.2, towerSize.Z + 3) else half * 2 + 1.2
+	local plate = Geo.block(m, cf * CFrame.new(0, 0.3, 0), Vector3.new(plateX, 0.6, plateZ), STEEL_DARK, METAL, SOLID)
 	plate.Name = "Base"
 	-- hazard stripes along the front edge
-	for i = -3, 3 do
+	local stripes = math.max(1, math.floor((plateX / 1.3 - 1) / 2))
+	for i = -stripes, stripes do
 		local color = if i % 2 == 0 then HAZARD else Color3.fromRGB(30, 30, 34)
-		Geo.block(m, cf * CFrame.new(i * 1.3, 0.62, -half - 0.35), Vector3.new(1.3, 0.06, 0.5), color, nil, GLOW)
+		Geo.block(m, cf * CFrame.new(i * 1.3, 0.62, -plateZ / 2 + 0.25), Vector3.new(1.3, 0.06, 0.5), color, nil, GLOW)
 	end
-	local own = MeshKit.box("Prop_MineElevator")
-	local tower = if own then MeshKit.scaled("Prop_MineElevator", MineKit.ElevatorTowerHeight / own.Y, cf * CFrame.new(0, 0.6 + MineKit.ElevatorTowerHeight / 2, 0)) else nil
-	if tower then
+	local tower = if towerSize then MeshKit.part("Prop_MineElevator", towerSize, cf * CFrame.new(0, 0.6 + towerH / 2, 0)) else nil
+	if tower and towerSize then
 		tower.Name = "Tower"
 		tower.Parent = m
-		-- a warm lamp in the cabin, the signs over the front and near the top
-		local cabinLamp = Geo.block(m, cf * CFrame.new(0, 7.4, 0), Vector3.new(1.6, 0.2, 1.6), Color3.fromRGB(255, 240, 210), NEON, GLOW)
-		cabinLamp.Name = "CageLamp"
-		local towerLight = Instance.new("PointLight")
-		towerLight.Color = Color3.fromRGB(255, 236, 200)
-		towerLight.Range = 18
-		towerLight.Brightness = 1.4
-		towerLight.Shadows = false
-		towerLight.Parent = cabinLamp
-		local front = -tower.Size.Z / 2 - 0.5
-		Style.sign(m, cf * CFrame.new(0, 9.4, front), "ELEVATOR", 7.5, 1.6, { Kind = "Glow", DoubleSided = true })
-		Style.sign(m, cf * CFrame.new(0, MineKit.ElevatorTowerHeight - 2.6, front), "FLOOR " .. floorIndex, 4.8, 1.1, { Kind = "Stone", Depth = 0.3 })
+		-- warm lamp bars up the tower's front (the first by the cabin door), glowing strips up its
+		-- front edges, the signs over the front and near the top
+		local lampColor = Color3.fromRGB(255, 240, 210)
+		local front = -towerSize.Z / 2 - 0.35
+		for k, at in { 0.2, 0.55, 0.82 } do
+			local lamp = Geo.block(m, cf * CFrame.new(0, 0.6 + towerH * at, front - 0.15), Vector3.new(towerSize.X * 0.4, 0.45, 0.6), lampColor, NEON, GLOW)
+			lamp.Name = if k == 1 then "CageLamp" else "TowerLamp"
+			local light = Instance.new("PointLight")
+			light.Color = Color3.fromRGB(255, 236, 200)
+			light.Range = math.clamp(towerH * 0.55, 18, 26)
+			light.Brightness = if k == 1 then 1.8 else 1.4
+			light.Shadows = false
+			light.Parent = lamp
+		end
+		for _, sx in { -1, 1 } do
+			local strip = Geo.block(m, cf * CFrame.new(sx * (towerSize.X / 2 + 0.15), 0.6 + towerH / 2, front), Vector3.new(0.3, towerH - 1, 0.3), SIGN_GLOW, NEON, GLOW)
+			strip.Name = "EdgeGlow"
+		end
+		local k = towerH / MineKit.ElevatorTowerHeight
+		Style.sign(m, cf * CFrame.new(0, 0.6 + towerH * 0.36, front - 0.15), "ELEVATOR", 7.5 * math.min(k, 1.6), 1.6 * math.min(k, 1.6), { Kind = "Glow", DoubleSided = true })
+		Style.sign(m, cf * CFrame.new(0, towerH - 2.6, front - 0.15), "FLOOR " .. floorIndex, 4.8 * math.min(k, 1.5), 1.1 * math.min(k, 1.5), { Kind = "Stone", Depth = 0.3 })
 	end
 	-- girder posts with cross braces (the part-built frame)
 	local sides: { number } = if tower then {} else { -1, 1 }
@@ -361,7 +388,7 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Mod
 		elevatorFrame(m, cf, floorIndex, half, height)
 	end
 	-- call panel with the glowing button and the prompt point
-	local panel = Geo.block(m, cf * CFrame.new(half + 1.4, 2.2, -half + 0.6), Vector3.new(1.2, 3.2, 0.6), STEEL_DARK, METAL, SOLID)
+	local panel = Geo.block(m, cf * CFrame.new(plateX / 2 + 0.8, 2.2, -plateZ / 2 + 1.0), Vector3.new(1.2, 3.2, 0.6), STEEL_DARK, METAL, SOLID)
 	panel.Name = "CallPanel"
 	local button = Geo.block(m, panel.CFrame * CFrame.new(0, 0.6, -0.34), Vector3.new(0.6, 0.6, 0.12), SIGN_GLOW, NEON, GLOW)
 	button.Name = "CallButton"

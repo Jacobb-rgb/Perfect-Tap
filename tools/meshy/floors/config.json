@@ -6,15 +6,15 @@
      -27,
      36
     ],
-    "size": 11,
-    "radius": 10
+    "size": 16,
+    "radius": 18
    },
    "lift": {
-    "at": [
-     30,
-     32
-    ],
-    "size": 8
+    "beside": "elevator",
+    "size": 10,
+    "ring": 15,
+    "radius": 10,
+    "bump": 1.0
    },
    "entrance": {
     "near": [
@@ -53,17 +53,16 @@
      -32,
      49
     ],
-    "size": 10,
-    "radius": 16,
+    "size": 16,
+    "radius": 18,
     "bump": 1.6
    },
    "lift": {
-    "near": [
-     34,
-     49
-    ],
-    "size": 8,
-    "radius": 8
+    "beside": "elevator",
+    "size": 10,
+    "ring": 15,
+    "radius": 10,
+    "bump": 1.6
    },
    "entrance": {
     "near": [
@@ -98,16 +97,15 @@
      -12,
      58
     ],
-    "size": 11,
-    "radius": 10
+    "size": 16,
+    "radius": 18
    },
    "lift": {
-    "near": [
-     6,
-     6
-    ],
-    "size": 8,
-    "radius": 10
+    "beside": "elevator",
+    "size": 10,
+    "ring": 15,
+    "radius": 10,
+    "bump": 1.0
    },
    "entrance": {
     "near": [
@@ -148,16 +146,15 @@
      -26,
      43
     ],
-    "size": 11,
-    "radius": 10
+    "size": 16,
+    "radius": 18
    },
    "lift": {
-    "near": [
-     40,
-     40
-    ],
-    "size": 8,
-    "radius": 12
+    "beside": "elevator",
+    "size": 10,
+    "ring": 15,
+    "radius": 10,
+    "bump": 1.0
    },
    "entrance": {
     "near": [
@@ -208,17 +205,15 @@
      -30,
      42
     ],
-    "size": 11,
-    "radius": 12,
+    "size": 16,
+    "radius": 18,
     "bump": 1.8
    },
    "lift": {
-    "near": [
-     36,
-     6
-    ],
-    "size": 8,
-    "radius": 14,
+    "beside": "elevator",
+    "size": 10,
+    "ring": 15,
+    "radius": 10,
     "bump": 1.8
    },
    "entrance": {

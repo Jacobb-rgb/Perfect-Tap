@@ -13,14 +13,19 @@ parts = sorted((p for v in m.values() for p in v["parts"]), key=lambda p: p["nam
 def v3(a):
     return "Vector3.new(%s)" % ", ".join(repr(round(x, 4)) for x in a)
 
-floors, ores, rocks, props = {}, [], [], []
+floors, floors_hd, ores, rocks, props = {}, {}, [], [], []
 for p in parts:
     n = p["name"]
     t = re.match(r"^Floor_([A-Za-z]+)_(\d+)$", n)
     if t:
-        # a re-cut diorama keeps its floor: Floor_QuarryB_* are the Quarry's tiles
-        fid = {"QuarryB": "Quarry"}.get(t.group(1), t.group(1))
-        floors.setdefault(fid, []).append(n)
+        # a re-cut diorama keeps its floor: Floor_QuarryB_* are the Quarry's tiles; Floor_<Id>HD_*
+        # the same diorama re-processed sharper (2026-11-14: more triangles, baked normal maps)
+        fid = t.group(1)
+        hd = fid.endswith("HD")
+        if hd:
+            fid = fid[:-2]
+        fid = {"QuarryB": "Quarry"}.get(fid, fid)
+        (floors_hd if hd else floors).setdefault(fid, []).append(n)
     elif n.startswith("Ore_") and not n.endswith("_Low"):
         ores.append(n[4:])
     elif n.startswith("Rock_"):
@@ -89,6 +94,16 @@ for f in sorted(floors):
     L.append("\t},")
 L.append("} :: { [string]: { string } }")
 L.append("")
+L.append("-- The same dioramas re-processed sharper (Floor_<FloorId>HD_<NN>): a floor takes these once")
+L.append("-- every one is uploaded (MineFloors.floorTiles).")
+L.append("MeshCatalog.FloorsHD = {")
+for f in sorted(floors_hd):
+    L.append("\t%s = {" % f)
+    for n in floors_hd[f]:
+        L.append('\t\t"%s",' % n)
+    L.append("\t},")
+L.append("} :: { [string]: { string } }")
+L.append("")
 L.append("return MeshCatalog")
 open(out, "w").write("\n".join(L) + "\n")
-print("wrote", out, len(parts), "assets", len(ores), "ores", len(rocks), "rocks", len(props), "props", {k: len(v) for k, v in floors.items()})
+print("wrote", out, len(parts), "assets", len(ores), "ores", len(rocks), "rocks", len(props), "props", {k: len(v) for k, v in floors.items()}, "HD", {k: len(v) for k, v in floors_hd.items()})

@@ -110,6 +110,31 @@ floors as before.
 - Specs: tests/DioramaFloors.spec.luau (contract with stand-ins), tests/RockMeshes.spec.luau,
   tests/MineMeshes.spec.luau.
 
+## Owner's overnight list (2026-11-14, test mode: branch only, never landed without his yes)
+
+- Melted walls ("like warm marzipan"): the floor tiles and the elevator tower carry
+  `RenderFidelity = Precise` (import_meshes `fidelity`: Automatic swapped in coarse versions with
+  distance); the six dioramas re-processed sharper as `Floor_<Id>HD_<NN>` (jobs_2026-11-14.json:
+  240k triangles in 16 balanced tiles of 15k, `split: "kd"`; colour + normal map 1024 per tile, the
+  normal bake now through the source's own BSDF so its normal map comes along, `bsdf_surface`).
+  `MeshCatalog.FloorsHD`; `MineFloors.floorTiles` takes them once every HD tile is uploaded
+  (folder `NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra`), else the first set.
+- Things in the way on floor 1: no BlasterGate where every blaster may go (MinBlaster 1); the quarry's
+  blue sign gate is squashed flat in the HD tiles (`flatten` boxes: a patch of its own texture, no hole).
+- Void behind the walls / one ceiling height: floors 2-5 (`MineFloors.CeilingFloors`) get a closed
+  room (Diorama `room`): jagged rock walls tight round the diorama on the sides `Diorama.Floors[id].Walls`
+  lists, a dark slab right behind them (hides Land's mountains between the caves), Land's passages kept
+  open (`Openings`: Ember north tunnel, Hollow south tunnel end), Ember's south side a thin wall right at
+  the diorama's edge in front of the DEPTHS portal's back (`Thin`); one ceiling at
+  `MineFloors.CeilingHeight` = 33.5 (the ForgeMountain massif rests on Ember's roof at local 34; the Rift
+  diorama reaches 32.7). Floor 6 keeps its void (its heartstone crystal reaches local 41).
+- Elevator: the tower from its plate up to the ceiling (quarry: its cliffs' top 27.6), 12 studs wide
+  (8 in the quarry), three warm lamp bars up its front, glowing edge strips; the Mine Lift's cable
+  reaches the room's ceiling (`MineFloors.ceilingY`, Railway).
+- Ore lift beside the elevator: layout anchors `"beside": "elevator"` (floor_layout.py) on 16-stud
+  elevator squares; `MineFloors.Dioramas[i].Lift` = the layout's Lift anchor (spec checks it).
+- Yard cleaning station: 1.6x, in the back-right corner (BaseLayout.CleaningStation).
+
 ## Open
 
 - The owner's Studio import -> `import_meshes.luau` -> real templates; then the test place and Studio

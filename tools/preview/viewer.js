@@ -684,6 +684,12 @@ async function main() {
     world.background = fogColor.clone().multiplyScalar(0.25);
     world.fog = new THREE.FogExp2(fogColor.clone().multiplyScalar(0.5), (atm.Density ?? 0.4) * 0.012);
   }
+  // shot.void: a loud background and no fog, so a hole in a cave's walls or ceiling shows (in the
+  // game the sky shows there)
+  if (shot.void) {
+    world.background = new THREE.Color(shot.void);
+    world.fog = null;
+  }
 
   // ---- decals (pictures on a part's Front face; image right = the part's -X) ----
   for (const [cx, cy, cz, rx, ry, rz, ux, uy, uz, url] of scene.decals || []) {

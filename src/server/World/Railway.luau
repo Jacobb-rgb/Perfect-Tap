@@ -77,6 +77,7 @@ local Geo = require(Shared.Builders.Geo)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Rng = require(Shared.Util.Rng)
 local BaseLayout = require(Shared.Config.BaseLayout)
+local MineFloors = require(Shared.Config.MineFloors)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 
@@ -1185,7 +1186,11 @@ local function buildLift(parent: Instance, info: { Id: string, Position: Vector3
 	local front = if pos.X > 0 then Vector3.new(-1, 0, 0) else Vector3.new(1, 0, 0)
 	local F = CFrame.lookAt(pos, pos + front)
 	local cave = (WorldLayout.Caves :: any)[info.Id]
-	local ceiling = (if cave then cave.Max.Y else pos.Y + 30) - pos.Y
+	-- (a diorama cave floor's closed room has its own ceiling: the cable reaches into it)
+	local floor = MineFloors.ById[info.Id]
+	local roomCeiling = if floor then MineFloors.ceilingY(floor.Index) else nil
+	local top = if roomCeiling then roomCeiling + 0.5 elseif cave then cave.Max.Y else pos.Y + 30
+	local ceiling = top - pos.Y
 
 	local frameHalf = math.max(size.X, size.Z) / 2 + 1.2
 	local base = box(

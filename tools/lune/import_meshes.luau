@@ -134,7 +134,14 @@ end
 local function yawFromTiles(): (number?, number)
 	local votes: { [number]: number } = {}
 	local pairsSeen = 0
+	local sets = {}
 	for _, tiles in Catalog.Floors do
+		table.insert(sets, tiles)
+	end
+	for _, tiles in Catalog.FloorsHD or {} do
+		table.insert(sets, tiles)
+	end
+	for _, tiles in sets do
 		local list = {}
 		for _, name in tiles do
 			if found[name] then
@@ -170,6 +177,18 @@ local function yawFromTiles(): (number?, number)
 	return yaw, pairsSeen
 end
 
+--[[
+	How finely Roblox draws a template's clones. Automatic swaps in coarser versions of a mesh with
+	distance: across a mine floor the diorama tiles' rock walls melted into blobs ("like warm
+	marzipan", the owner 2026-11-14). The floors and the elevator tower always draw at full detail
+	(about 160-300k triangles a floor, only one floor around a player at a time).
+]]
+local function fidelity(t: any)
+	if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
+		t.RenderFidelity = roblox.Enum.RenderFidelity.Precise
+	end
+end
+
 -- the templates: clean clones at the origin, anchored, nothing else inside but the SurfaceAppearance
 local folder = roblox.Instance.new("Folder")
 folder.Name = "MeshAssets"
@@ -180,6 +199,7 @@ if fs.isFile(OUT) then
 	if old then
 		for _, child in old:GetChildren() do
 			if child.ClassName == "MeshPart" and not found[child.Name] and Catalog.Assets[child.Name] then
+				fidelity(child)
 				child.Parent = folder
 				kept += 1
 				local yaw = child:GetAttribute("ImportYaw")
@@ -218,6 +238,7 @@ for name, part in found do
 	t.Locked = false
 	t:SetAttribute("Asset", name)
 	t:SetAttribute("ImportYaw", importYaw)
+	fidelity(t)
 	t.Parent = folder
 	count += 1
 end

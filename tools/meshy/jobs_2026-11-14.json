@@ -1,0 +1,130 @@
+{
+ "set": "3D_modely_2026-11-14_ostre_patra",
+ "manifest": "tools/meshy/manifest_2026-11-14.json",
+ "jobs": [
+  {
+   "mode": "tiles",
+   "name": "Floor_EmberCavesHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_EmberCavesDiorama_1113171833_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_EmberCavesHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "split": "kd"
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_DeepHollowHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_DeepHollowDiorama_1113171847_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_DeepHollowHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "split": "kd"
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_SunkenPalaceHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_SunkenPalaceDiorama_1113171854_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_SunkenPalaceHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "split": "kd"
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_StormglassRiftHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_StormglassRiftDiorama_1113171850_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_StormglassRiftHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "split": "kd"
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_HeartstoneCoreHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_HeartstoneCoreDiorama_1113171842_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_HeartstoneCoreHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "split": "kd"
+  },
+  {
+   "mode": "tiles",
+   "name": "Floor_QuarryBHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_GreystoneQuarryDioram_1113171838_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_QuarryBHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "layout": {
+    "scale": 14.9063,
+    "ground_n": 0.04,
+    "center_n": [
+     0.0008,
+     0.0002
+    ]
+   },
+   "cuts": [
+    [
+     -24,
+     0.6,
+     -62,
+     24,
+     40,
+     -44
+    ],
+    [
+     -62,
+     0.6,
+     13,
+     -45,
+     40,
+     40
+    ],
+    [
+     45,
+     0.6,
+     13,
+     62,
+     40,
+     40
+    ],
+    [
+     45,
+     0.6,
+     -9,
+     62,
+     40,
+     5
+    ]
+   ],
+   "split": "kd",
+   "flatten": [
+    [
+     -9,
+     0.1,
+     7,
+     9,
+     40,
+     17
+    ]
+   ]
+  }
+ ]
+}

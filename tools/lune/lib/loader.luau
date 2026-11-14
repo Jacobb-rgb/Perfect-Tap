@@ -373,6 +373,7 @@ end
 
 local moduleCache: { [any]: any } = {}
 local loading: { [any]: boolean } = {}
+local loadingChain: { any } = {}
 
 Loader.root = "."
 Loader.game = nil :: any
@@ -457,9 +458,15 @@ function Loader.require(node: any): any
 		error("[loader] not a ModuleScript: " .. nodeMethods.GetFullName(node), 2)
 	end
 	if loading[node] then
-		error("[loader] circular require: " .. nodeMethods.GetFullName(node), 2)
+		-- (the chain of modules being loaded shows where the circle closes)
+		local names = {}
+		for _, n in loadingChain do
+			table.insert(names, (string.gsub(nodeMethods.GetFullName(n), "^game%.", "")))
+		end
+		error("[loader] circular require: " .. nodeMethods.GetFullName(node) .. "\n  via " .. table.concat(names, "\n   -> "), 2)
 	end
 	loading[node] = true
+	table.insert(loadingChain, node)
 	local env = baseEnvironment()
 	env.script = node
 	env.game = Loader.game
@@ -468,8 +475,14 @@ function Loader.require(node: any): any
 	local code = fs.readFile(source)
 	local bytecode = luau.compile(code)
 	local fn = luau.load(bytecode, { debugName = nodeMethods.GetFullName(node), environment = env })
-	local result = fn()
+	-- (a module that errors is not left "loading": the next require of it reports its own error
+	-- again, never a false circle)
+	local ok, result = pcall(fn)
 	loading[node] = nil
+	table.remove(loadingChain)
+	if not ok then
+		error(result, 0)
+	end
 	moduleCache[node] = if result == nil then false else result
 	return result
 end
