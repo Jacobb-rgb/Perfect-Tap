@@ -9,7 +9,5 @@
   "rail_portal_quarry": { "scene": "railway", "position": [-42, -3, -138], "target": [-66, -5, -156], "fov": 55, "preset": "Quarry", "shadowExtent": 70 },
   "rail_coast": { "scene": "railway", "position": [128, 30, 6], "target": [166, 0, 74], "fov": 55, "preset": "Surface", "shadowExtent": 130 },
   "rail_coast_low": { "scene": "railway", "position": [174, 14, 118], "target": [161, 1, 86], "fov": 50, "preset": "Surface", "shadowExtent": 80 },
-  "rail_coast_top": { "scene": "railway", "position": [152, 46, 84], "target": [166, 0, 84], "fov": 50, "preset": "Surface", "shadowExtent": 90 },
-  "rail_lift": { "scene": "railway", "position": [6, -4, -248], "target": [22, -2, -258], "fov": 60, "preset": "EmberCaves", "maxLights": 14 },
-  "rail_lift_deep": { "scene": "railway", "position": [0, -32, -392], "target": [16, -30, -402], "fov": 60, "preset": "DeepHollow", "maxLights": 14 }
+  "rail_coast_top": { "scene": "railway", "position": [152, 46, 84], "target": [166, 0, 84], "fov": 50, "preset": "Surface", "shadowExtent": 90 }
 }

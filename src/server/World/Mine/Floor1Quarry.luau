@@ -803,13 +803,18 @@ Floor.DioramaKeep = { X = 58.5, Z0 = -57.5, Z1 = 57.5, Y = 20 }
 Floor.FillSand = Color3.fromRGB(205, 142, 104) -- the diorama's painted sand (the fills meet it)
 -- (owner 2026-11-14: "at the very side you still see into the void, and on the other side too":
 -- the pit's band floor between the diorama's walls and the train portals went with the parts under
--- DioramaKeep, so the fills reach the quarry's edge, and one dirt underlay just under the
--- diorama's lowest ground closes every other gap at the foot of its cut walls)
+-- DioramaKeep. Edge fills close it out to x +-70, a hair under the ground (-0.1: where the kept rim
+-- strip at x 70..72 and Land's grotto tunnel floor from x 70 begin, at 0, nothing shares a plane),
+-- and one sand underlay just under the diorama's lowest ground closes every other gap at the foot
+-- of its cut walls.)
 Floor.DioramaFills = {
 	{ Min = Vector3.new(-24, -2, -59), Max = Vector3.new(24, 0, -44) }, -- under the DEPTHS portal
-	{ Min = Vector3.new(-72.5, -2, 13), Max = Vector3.new(-45, 0, 40) }, -- the train band, west
-	{ Min = Vector3.new(45, -2, 13), Max = Vector3.new(72.5, 0, 40) }, -- the train band, east
-	{ Min = Vector3.new(45, -2, -9), Max = Vector3.new(72.5, 0, 5) }, -- the grotto door
+	{ Min = Vector3.new(-59.5, -2, 13), Max = Vector3.new(-45, 0, 40) }, -- the train band, west
+	{ Min = Vector3.new(45, -2, 13), Max = Vector3.new(59.5, 0, 40) }, -- the train band, east
+	{ Min = Vector3.new(45, -2, -9), Max = Vector3.new(59.5, 0, 5) }, -- the grotto door
+	{ Min = Vector3.new(-70, -2, 13), Max = Vector3.new(-59.5, -0.1, 40) }, -- the band's west end
+	{ Min = Vector3.new(59.5, -2, 13), Max = Vector3.new(70, -0.1, 40) }, -- the band's east end
+	{ Min = Vector3.new(59.5, -2, -9), Max = Vector3.new(70, -0.1, 5) }, -- out to the grotto tunnel
 	{ Min = Vector3.new(-72.5, -3, -59), Max = Vector3.new(72.5, -0.45, 59) }, -- the underlay
 }
 
