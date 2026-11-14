@@ -175,3 +175,24 @@ floors as before.
   collections for the museum's three cases, its artifacts paid out as coins once, Migrations.)
 - The plot frame question (owner: "jak to myslíš stojí na něm"): a picture went to him
   (obrazky/pozemek_okraj_2026-11-13); his answer decides whether the frame stays.
+
+## Owner's noon list (2026-11-14, after the morning test place)
+
+- "Extend the walls and add them on top so it lines up: you must not see behind them": the open
+  quarry gets the rooms' rock walls too (Diorama.Floors.Quarry Walls E/W/S, `WallTops` E/W 28,
+  S 14 so the town still looks in, the diorama's lavender stone `WallColors`, a grass `WallCap`, no
+  ceiling), with openings for the ramp, the train band (a lintel at 12 over the trains' clearance)
+  and the grotto door; Land's voxel cliff on the town side is built and dropped when the quarry is
+  its diorama (the town's random draws stay the same).
+- "The bridges and things in the passages: to the sides, or remove them": a workflow walked every
+  floor's routes (entrances, elevator, tunnels, doors) on the walk boxes and rendered the HD tiles;
+  a second agent checked each box. Moving baked mesh parts is not possible, so they are squashed:
+  `Diorama.Floors[id].Flatten` lists [x0, y0, z0, x1, y1, z1] boxes (= the HD jobs' "flatten"; spec
+  keeps them equal), `Diorama.flattenBoxes` cuts the walk boxes to each box's floor and splits them
+  round it, ramps whose centre lies inside are skipped. Quarry: the blue sign gate (+ its two ramps),
+  the rock sheet in the VIP door, the rail spur in the DEPTHS tunnel, the railing + lamp across the
+  elevator's way; Ember: the central lava bridge (a flat path stays), the beam gate and the sign gate
+  on the main path; Hollow: the stone sign gate over the path from the tunnel (two ground heights),
+  lantern walk boxes; Palace: the velvet rope in the doorway; Rift: walk-only lanes through the two
+  coil gates (the gates stay); Core: the south bridge's gate beam and the pink rails across the glass
+  bridges' ends. Only with the sharper set uploaded (the first tiles still show them).

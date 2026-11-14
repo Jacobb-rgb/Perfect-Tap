@@ -85,9 +85,19 @@ Diorama.Floors = {
 			{ Side = "E", From = -9.5, To = 5.5, Top = 11 },
 		},
 		ElevatorWidth = 8,
-		-- the blue sign gate in the middle of the quarry (owner 2026-11-14: in the way), squashed in
-		-- the sharper tiles: tools/meshy/jobs_2026-11-14.json "flatten" x -9..9, z 7..17
-		Flatten = { { -9, 0.1, 7, 9, 40, 17 } },
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the blue
+		-- sign gate (out to z 19.5: its two path ramps go too), the thin rock sheet in the VIP grotto
+		-- door, the rail spur in the DEPTHS tunnel, the railing and lamp post across the elevator's
+		-- way north, and two walk-only fixes (the door approach, a ramp onto the railing)
+		Flatten = {
+			{ 42.7, 0.1, -8.9, 45, 24, 4.4 },
+			{ -3.5, 0.1, -45, 2.2, 3, -23 },
+			{ -18.3, 0.1, 39, -5.9, 13, 44 },
+			{ -9, 0.1, 7, 9, 40, 19.5 },
+			{ 37.5, 0.1, 1.45, 43.14, 4, 7.1 },
+			{ -15, 0.1, 44, -9, 0.5, 47 },
+		},
 		Light = Color3.fromRGB(255, 236, 214),
 		Brightness = 0.8,
 	},
@@ -95,18 +105,83 @@ Diorama.Floors = {
 		Walls = { "N", "E", "W" },
 		Thin = { "S" },
 		Openings = { { Side = "N", From = -12.3, To = 12.3, Top = 16.3 }, { Side = "S", From = -10, To = 10, Top = 17 } },
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the
+		-- central wooden bridge over the lava (three boxes: a flat path across it stays), the wooden
+		-- beam gate at z 26 and the sign gate at z 40 on the main path
+		Flatten = {
+			{ -9.5, 0.1, -10, 8.5, 20, 13 },
+			{ -6.7, 0.1, -21.9, 5.7, 12, -10 },
+			{ -5.9, 0.8, -26.5, 4.9, 12, -21.9 },
+			{ -9.5, 0.1, 23.5, 8.5, 15, 29 },
+			{ -11, 0.1, 37, 10, 16, 44 },
+		},
 		Light = Color3.fromRGB(255, 222, 196),
 		Brightness = 1.4,
 	},
 	DeepHollow = {
 		Walls = { "N", "E", "W", "S" },
 		Openings = { { Side = "S", From = -12.3, To = 12.3 } },
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the stone
+		-- gate with the blue sign over the path from the tunnel (five boxes: the plaza and the raised
+		-- path lie at two heights), the lantern posts' walk boxes on the path, a ramp onto the east
+		-- lantern, the sliver by the east pillar
+		Flatten = {
+			{ -8.9, 0.7, 36.6, -1.6, 9, 39 },
+			{ -8.9, 2.1, 39, -5.4, 9, 39.95 },
+			{ -5.4, 0.7, 39, -1.6, 9, 39.95 },
+			{ -1.6, 2.1, 36.6, 5, 9, 40.5 },
+			{ 5, 0.7, 36.6, 12.8, 9, 40.5 },
+			{ -1.9, 2.3, 23.4, 4.9, 9, 29.05 },
+			{ 5, 2.3, 16.9, 8.1, 9, 23.5 },
+			{ 12.8, 4.9, 37, 13.2, 9, 40 },
+		},
 		Light = Color3.fromRGB(220, 240, 255),
 		Brightness = 1.8,
 	},
-	SunkenPalace = { Walls = { "N", "E", "W", "S" }, Light = Color3.fromRGB(255, 232, 210), Brightness = 1.6 },
-	StormglassRift = { Walls = { "N", "E", "W", "S" }, Light = Color3.fromRGB(230, 236, 255), Brightness = 2.4 },
-	HeartstoneCore = { Light = Color3.fromRGB(255, 226, 246), Brightness = 2.4 },
+	SunkenPalace = {
+		Walls = { "N", "E", "W", "S" },
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the velvet
+		-- rope across the hall's only doorway and two path ramps that stood as walls in front of it
+		Flatten = {
+			{ -5, 1, 40, 4.85, 5, 44.4 },
+			{ -14, 1, 35, -8, 1.5, 40 },
+			{ 9, 1, 35, 13, 1.5, 40 },
+		},
+		Light = Color3.fromRGB(255, 232, 210),
+		Brightness = 1.6,
+	},
+	StormglassRift = {
+		Walls = { "N", "E", "W", "S" },
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": walk-only
+		-- lanes through the two Tesla-coil gates on the central path (the gates stay) and two ramps in
+		-- the gate passage
+		Flatten = {
+			{ -2.6, 1, 18.76, 2.5, 6.5, 20.63 },
+			{ -3.4, 1, 33.76, 3.9, 5.8, 37.51 },
+			{ 5.5, 1, 44, 6.5, 1.2, 45 },
+			{ 10.5, 1, 44, 11.5, 1.2, 45 },
+		},
+		Light = Color3.fromRGB(230, 236, 255),
+		Brightness = 2.4,
+	},
+	HeartstoneCore = {
+		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
+		-- them") squashed in the sharper tiles, tools/meshy/jobs_2026-11-14.json "flatten": the stone
+		-- beam over the south bridge's gate (two boxes) and the pink rim rail across the ends of the
+		-- two glass bridges
+		Flatten = {
+			{ -2.35, 0, 41, 5.1, 6, 44 },
+			{ -3.6, 0, 42.45, 6.6, 6, 43.2 },
+			{ -28.7, 4.2, -39.1, -25, 9, -35.2 },
+			{ 27.6, 4.2, -39.1, 31.2, 9, -35.1 },
+		},
+		Light = Color3.fromRGB(255, 226, 246),
+		Brightness = 2.4,
+	},
 } :: { [string]: Look }
 
 Diorama.ElevatorWidth = 12 -- the tower's width on a 16-stud elevator spot (tools/meshy/floors/config.json)
