@@ -29,8 +29,8 @@ Every mine (by `MineFloors` floor Id):
 | File | Roblox | Role |
 |---|---|---|
 | `src/shared/Config/ElevatorTravelConfig.luau` | ReplicatedStorage.Shared.Config | the shared timeline (`plan`, `hold`), shake amounts, the six arrival themes |
-| `src/shared/Builders/ElevatorCabinStage.luau` | ReplicatedStorage.Shared.Builders | the cabin + shaft set from parts (~220 parts, 6 lights, 9 pooled emitters), `pose`, `camera` (pure) |
-| `src/shared/Builders/ElevatorArrivalFx.luau` | ReplicatedStorage.Shared.Builders | the arrival effects (pooled: 1 light, 3 emitters, ~22 parts), `pose` (pure), `burst`/`rates` |
+| `src/shared/Builders/ElevatorCabinStage.luau` | ReplicatedStorage.Shared.Builders | the cabin + shaft set from parts (259 parts, about half in view; 9 soft lights, most off outside their moment; 9 pooled emitters), `pose`, `camera` (pure) |
+| `src/shared/Builders/ElevatorArrivalFx.luau` | ReplicatedStorage.Shared.Builders | the arrival effects (pooled: 1 light, 3 emitters, 25 parts), `pose` (pure), `burst`/`rates` |
 | `src/client/UI/ElevatorTravelView.luau` | StarterPlayerScripts.Client.UI | the words: PREPARING ELEVATOR..., dip, cinema bars, ARRIVED! |
 | `src/client/Controllers/ElevatorTravelController.luau` | StarterPlayerScripts.Client.Controllers (ORDER before ElevatorController) | drives the cinematic, takes and gives back the camera, controls, HUD, prompts |
 | `src/client/Controllers/ElevatorController.luau` | (existing) | its ride half hands "Depart"/"Arrive"/"Cancel" over; closes the floor window at phase "Enter" |
@@ -106,7 +106,14 @@ the cabin, the counter, Reduce motion, the camera, the arrival effects, the word
 6. Settings > Reduce motion on: no shake, flash or flicker; the ride still plays.
 7. Look at the cage after arriving: the real cage is back (no missing bars), the lamp lights.
 8. MicroProfiler on a phone emulator during the ride: frame time stays low (the set moves
-   with BulkMoveTo; ~220 parts, 6 lights, 9 emitters).
+   with BulkMoveTo; 259 parts, 9 soft lights, 9 emitters).
+
+## Light levels (the owner asked for less glare before)
+
+PointLights without shadows shine through walls, so the lights outside the cabin stay soft:
+the work lights 0.9 (range 7) only while riding, the ceiling light 2.0 (+1.6 at the stop's
+flash), the arrival light 3 at its peak (the spec keeps every mine at 3 or less). Tune in
+`ElevatorCabinStage` / `ElevatorArrivalFx` if Studio shows them too dim or too bright.
 
 ## Known limits / follow-ups
 
