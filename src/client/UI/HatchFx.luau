@@ -583,6 +583,11 @@ export type EggPose = {
 }
 
 HatchFx.Rise = 0.42 -- an egg rises this far into its place (a share of the screen's height)
+-- The anticipation (owner 2026-11-15: "improved anticipation before the egg opens"): over the last
+-- Gather seconds before its silhouette the egg draws in by GatherDepth of its size (gathering
+-- itself), then springs out of it through the silhouette's swell into the burst.
+HatchFx.Gather = 0.22
+HatchFx.GatherDepth = 0.07
 HatchFx.Bob = 0.012 -- the float's bob (a share of the screen's height)
 HatchFx.FloatTurn = 0.28 -- the float's slow turn (radians each way)
 
@@ -592,16 +597,34 @@ local function easeOut(x: number): number
 	return 1 - k * k * k
 end
 
+-- Ease in and out (smoothstep): starts and ends at rest.
+local function smooth(x: number): number
+	local k = clamp01(x)
+	return k * k * (3 - 2 * k)
+end
+
+-- How far the egg has drawn in at `t` (0..1 of HatchFx.GatherDepth): in over the last moment
+-- before the silhouette, out again through it (never a jump: both ends at rest).
+function HatchFx.gatherAt(t: number, tl: Timeline): number
+	local span = math.min(HatchFx.Gather, 0.5 * math.max(0.01, tl.Silhouette - tl.Charge))
+	local into = smooth((t - (tl.Silhouette - span)) / span)
+	local out = smooth((t - tl.Silhouette) / math.max(0.01, tl.Times.Silhouette))
+	return into * (1 - out)
+end
+
 --[[
 	A smooth sway (-1..1): two slow waves a golden ratio apart (it never
 	repeats in a way the eye catches, never buzzes). `hz` its main speed
 	(a few a second: smooth at 30 frames a second, at 60 too), `seed` its
-	egg's own start.
+	egg's own start. (2026-11-15: the second wave runs 0.618 times the main
+	speed, not 1.618 times: at 1.618 the suspense's ran at 7.1 a second,
+	over the owner's "no rock faster than 5 a second", and read as a jitter.)
 ]]
 HatchFx.SwayHz = { Cracks = 2.8, Charge = 3.4, Suspense = 4.4 }
+HatchFx.SwayRatio = 0.618 -- the second wave's speed against the main one's
 function HatchFx.sway(t: number, hz: number, seed: number): number
 	local w = 2 * math.pi * hz
-	return 0.62 * math.sin(t * w + seed) + 0.38 * math.sin(t * w * 1.618 + seed * 2.3)
+	return 0.62 * math.sin(t * w + seed) + 0.38 * math.sin(t * w * HatchFx.SwayRatio + seed * 2.3)
 end
 
 -- How cracked the eggs are at `t` (0..3): each crack step eases in over 0.15 s (the tremble grows, never jumps).
@@ -698,6 +721,10 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 		end
 	end
 	scale *= 1 + 0.06 * HatchFx.pulseAt(t, tl)
+	if not special then
+		-- (the special egg gathers by swelling with the suspense instead)
+		scale *= 1 - HatchFx.GatherDepth * HatchFx.gatherAt(t, tl)
+	end
 	local silhouette = clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette * 0.6))
 	if t >= tl.Silhouette then
 		scale *= 1 + 0.12 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette))

@@ -819,6 +819,18 @@ local function reveal(run: Run, aspect: number)
 	placeTags(run, aspect)
 end
 
+-- The golems' fade at the end of their flight (the stage's ImageTransparency, 0 seen .. 1 gone):
+-- from FlightFade of the way on, eased in and out, gone as they reach the player.
+HatchStage.FlightFade = 0.55
+function HatchStage.flightFade(t: number, tl: HatchFx.Timeline): number
+	if t < tl.Fly then
+		return 0
+	end
+	local k = math.clamp((t - tl.Fly) / math.max(0.01, tl.Times.Fly), 0, 1)
+	local x = math.clamp((k - HatchStage.FlightFade) / (1 - HatchStage.FlightFade), 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
 local function poseGolems(run: Run, t: number, aspect: number)
 	local tl = run.Timeline
 	local o = run.Refs
@@ -856,6 +868,10 @@ local function poseGolems(run: Run, t: number, aspect: number)
 	if tl.Reduced then
 		-- (Reduce motion: the golems fade in and out with the whole stage; the eggs fade part by part)
 		o.Stage.ImageTransparency = if t < tl.Burst then 0 else HatchFx.golemPose(t, tl, 1).Fade
+	else
+		-- (2026-11-15, owner: "no sudden transitions": the golems no longer vanish at a quarter of
+		-- their size when the flight ends; they melt into the player over its last part)
+		o.Stage.ImageTransparency = HatchStage.flightFade(t, tl)
 	end
 end
 

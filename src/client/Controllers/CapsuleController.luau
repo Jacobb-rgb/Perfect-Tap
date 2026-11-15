@@ -933,6 +933,9 @@ end
 
 -- The world behind softly blurred while an opening plays (a client BlurEffect on the camera).
 CapsuleController.BlurSize = 10
+-- (2026-11-15: sine eases, a little longer: the world melts away and comes back without a snap)
+CapsuleController.BlurIn = TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+CapsuleController.BlurOut = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 local blur: BlurEffect? = nil
 local function setBlur(on: boolean)
 	local camera = Workspace.CurrentCamera
@@ -952,11 +955,11 @@ local function setBlur(on: boolean)
 			blur = effect
 			made = effect
 		end
-		TweenService:Create(made :: BlurEffect, TweenInfo.new(0.2), { Size = CapsuleController.BlurSize }):Play()
+		TweenService:Create(made :: BlurEffect, CapsuleController.BlurIn, { Size = CapsuleController.BlurSize }):Play()
 	elseif blur then
 		local effect = blur :: BlurEffect
 		blur = nil
-		local tween = TweenService:Create(effect, TweenInfo.new(0.25), { Size = 0 })
+		local tween = TweenService:Create(effect, CapsuleController.BlurOut, { Size = 0 })
 		tween.Completed:Connect(function()
 			effect:Destroy()
 		end)
@@ -990,7 +993,7 @@ local function setMood(order: number, color: Color3, reduced: boolean, onCamera:
 			made = effect
 		end
 		local strong = order >= 6
-		TweenService:Create(made :: ColorCorrectionEffect, TweenInfo.new(0.25), {
+		TweenService:Create(made :: ColorCorrectionEffect, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
 			TintColor = Color3.new(1, 1, 1):Lerp(color, if strong then 0.35 else 0.25),
 			Brightness = if strong then 0.08 else 0.05,
 			Saturation = if strong then 0.2 else 0.1,
@@ -998,7 +1001,11 @@ local function setMood(order: number, color: Color3, reduced: boolean, onCamera:
 	elseif made then
 		mood = nil
 		local effect = made :: ColorCorrectionEffect
-		local tween = TweenService:Create(effect, TweenInfo.new(0.3), { TintColor = Color3.new(1, 1, 1), Brightness = 0, Saturation = 0 })
+		local tween = TweenService:Create(
+			effect,
+			TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+			{ TintColor = Color3.new(1, 1, 1), Brightness = 0, Saturation = 0 }
+		)
 		tween.Completed:Connect(function()
 			effect:Destroy()
 		end)
@@ -1291,6 +1298,12 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 			revealedAt = now
 		end
 		onEvents(run, events)
+		-- (2026-11-15: the charge's hum climbs and swells toward the burst, like the Vault's crate:
+		-- the tension builds with the energy instead of one flat tone)
+		if not tl.Reduced and t >= tl.Charge and t < tl.Burst then
+			local charge = HatchFx.chargeAt(t, tl)
+			Sfx.loopPitch("CaseCharge", 0.85 + 0.4 * charge, 0.65 + 0.6 * charge)
+		end
 		if t >= tl.Total then
 			break
 		end
