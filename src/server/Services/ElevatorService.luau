@@ -1,40 +1,53 @@
 --[[
 	ElevatorService: the mine elevator (docs/plans/MINE_STEP_PLAN.md, WP Elevator).
 
-	Owner's rules: the elevator is bought ONCE with coins
-	(MineFloors.Elevator.Price, saved as data.Upgrades.Elevator) and then rides
-	to any unlocked floor. Floors 1-3 can also be walked; floors 4-6 are
-	reachable only by elevator. A floor is unlocked when the player's blaster
-	level (data.BlasterLevel) is at least its MinBlaster.
+	Owner's rules (2026-11-15): every floor is bought one by one with COINS in
+	the elevator (never gems or Robux). Floors 1-3 can also be walked and need
+	no ticket (MineFloors.priceOf = 0); floors 4-6 are reachable only by
+	elevator, each once its ticket is bought (MineFloors.priceOf coins, saved
+	as data.Upgrades.Floors[floor Id] = true; a rebirth empties it, Version 17
+	turned an old one-time Upgrades.Elevator into every priced floor). A floor
+	is open to a player whose blaster level (data.BlasterLevel) is at least its
+	MinBlaster. The elevator rides to a floor that is open and free or bought
+	(ridable). The window shows every floor as "you are here", travel, "buy
+	for N coins" or "locked: blaster LV X" (the client draws it from State).
 
 	- Stops: every Model tagged "MineElevator" (MineKit.elevator: attribute
 	  Floor, a "Base" plate whose front is -Z, a "CallPanel" part with an
 	  Attachment "PromptPoint"), also the ones added later. Each gets one
-	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; the
-	  client turns the action into "Buy $3.3M" while the player doesn't own it).
-	  E / gamepad Y / tap. Triggering it opens the client's view:
-	  OpenUI "Elevator" { Stop, Floor, Owned }. This prompt is the only way in
-	  (owner 2026-10-18): the HUD's elevator button teleports you to a stop
-	  first (TeleportService "Elevator").
-	- ElevatorAction (Net, rate limited), only within Range studs of a stop:
-	    { Action = "Buy" }           spends the price (EconomyService), sets
-	                                 Upgrades.Elevator, saves, Notify
-	    { Action = "Go", Floor = n } owned, whole n in 1..#MineFloors.List,
-	                                 unlocked, a living character, not in a
-	                                 running cleaning session, at a stop but not
-	                                 that stop's own floor, not within Cooldown
-	                                 of the last ride. Then the ride:
-	                                 ElevatorRide "Depart" { Floor, From, Name,
-	                                 Duration, DoorsClose } starts the client's
-	                                 full-screen ride (doors slam shut, floor
-	                                 counter, ding, doors open); DoorsClose
-	                                 seconds later (the doors are shut by then)
-	                                 the area round the target is streamed in
-	                                 (StreamTimeout), the character moves to the
-	                                 target stop (on its plate in front of the
-	                                 cage, facing out) and ElevatorRide "Arrive"
-	                                 lets the client open the doors (after at
-	                                 least Duration seconds of ride).
+	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; its
+	  text is the client's business). E / gamepad Y / tap. Triggering it opens
+	  the client's view: OpenUI "Elevator" { Stop, Floor, Owned } (Owned: any
+	  floor bought, for the old client window only). This prompt is the only
+	  way in (owner 2026-10-18): the HUD's elevator button teleports you to a
+	  stop first (TeleportService "Elevator").
+	- ElevatorAction (Net, rate limited), only within Range studs of a stop;
+	  Floor is a whole n in 1..#MineFloors.List (anything else is ignored):
+	    { Action = "Buy", Floor = n }  buys floor n's ticket: an elevator-only
+	                                 floor (a free one is refused, "Free"),
+	                                 not bought yet ("Owned"), open to the
+	                                 blaster ("Locked"), enough coins
+	                                 ("NoCoins"). Spends priceOf(n) through
+	                                 EconomyService, sets Upgrades.Floors[Id],
+	                                 saves (DataService.changed), Notify
+	                                 "<Name> unlocked!". Never teleports.
+	    { Action = "Go", Floor = n }   open to the blaster ("Locked"), free or
+	                                 bought ("NotBought"), a living character,
+	                                 not in a running cleaning session, at a
+	                                 stop but not that stop's own floor, not
+	                                 within Cooldown of the last ride. Then
+	                                 the ride: ElevatorRide "Depart" { Floor,
+	                                 From, Name, Duration, DoorsClose } starts
+	                                 the client's full-screen ride (doors slam
+	                                 shut, floor counter, ding, doors open);
+	                                 DoorsClose seconds later (the doors are
+	                                 shut by then) the area round the target
+	                                 is streamed in (StreamTimeout), the
+	                                 character moves to the target stop (on
+	                                 its plate in front of the cage, facing
+	                                 out) and ElevatorRide "Arrive" lets the
+	                                 client open the doors (after at least
+	                                 Duration seconds of ride).
 	  Refusals answer with a "Deny" Notify (bad input is ignored silently).
 	  Buying never yields between the coin check and the flag, so a double tap
 	  buys once.
@@ -45,7 +58,8 @@
 	  found inside / below it by a 0.5 s check over the players, in case a
 	  fast fall skips the touch) goes back to that floor's target, at most once
 	  per CatchDebounce seconds.
-	- State: snapshot.ElevatorOwned.
+	- State: snapshot.ElevatorFloors = { [floor Id] = true } (the floors bought);
+	  snapshot.ElevatorOwned = any floor bought (old client window only).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -72,9 +86,10 @@ export type Reason =
 	| "NoData"
 	| "BadAction"
 	| "BadFloor"
+	| "Free"
 	| "Owned"
 	| "NoCoins"
-	| "NotOwned"
+	| "NotBought"
 	| "Locked"
 	| "NoCharacter"
 	| "Cleaning"
@@ -137,10 +152,18 @@ function ElevatorService.onDepart(callback: (Player) -> ...any)
 	table.insert(departCallbacks, callback)
 end
 
--- True when the save says the player owns the elevator.
-function ElevatorService.owns(data: { [string]: any }): boolean
+-- The save's set of elevator floors bought (data.Upgrades.Floors), nil when missing or junk.
+local function floorSet(data: { [string]: any }): { [any]: any }?
 	local upgrades = data.Upgrades
-	return type(upgrades) == "table" and upgrades.Elevator == true
+	local floors = if type(upgrades) == "table" then upgrades.Floors else nil
+	return if type(floors) == "table" then floors else nil
+end
+
+-- True when the save has bought floor `index`'s elevator ticket (an index of MineFloors.List).
+function ElevatorService.bought(data: { [string]: any }, index: number): boolean
+	local floor = MineFloors.ByIndex[index]
+	local floors = floorSet(data)
+	return floor ~= nil and floors ~= nil and floors[floor.Id] == true
 end
 
 -- The player's blaster level as the game reads it (1..BlasterData.MaxLevel).
@@ -148,10 +171,34 @@ function ElevatorService.blasterLevel(data: { [string]: any }): number
 	return BlasterData.get(data.BlasterLevel).Level
 end
 
--- True when a blaster of `level` may ride to floor `floorIndex` (an index of MineFloors.List).
+-- True when a blaster of `level` opens floor `floorIndex` (an index of MineFloors.List).
 function ElevatorService.isUnlocked(level: number, floorIndex: number): boolean
 	local floor = MineFloors.ByIndex[floorIndex]
 	return floor ~= nil and level >= floor.MinBlaster
+end
+
+-- True when the elevator may take the player to floor `index`: the blaster opens it, and it
+-- needs no ticket (a floor you can walk to) or its ticket is bought.
+function ElevatorService.ridable(data: { [string]: any }, index: number): boolean
+	return ElevatorService.isUnlocked(ElevatorService.blasterLevel(data), index)
+		and (MineFloors.priceOf(index) == 0 or ElevatorService.bought(data, index))
+end
+
+-- The floors bought, as the State carries them: { [floor Id] = true } (known floors only).
+function ElevatorService.boughtFloors(data: { [string]: any }): { [string]: boolean }
+	local out: { [string]: boolean } = {}
+	for _, floor in MineFloors.List do
+		if ElevatorService.bought(data, floor.Index) then
+			out[floor.Id] = true
+		end
+	end
+	return out
+end
+
+-- (old client window only) True when the player has bought any floor, so the elevator
+-- rides somewhere only it reaches: snapshot.ElevatorOwned, OpenUI's Owned.
+function ElevatorService.owns(data: { [string]: any }): boolean
+	return next(ElevatorService.boughtFloors(data)) ~= nil
 end
 
 ---------------------------------------------------------------- stops
@@ -345,30 +392,49 @@ end
 
 ---------------------------------------------------------------- requests
 
-local function buy(player: Player, data: { [string]: any }): (boolean, Reason)
-	if ElevatorService.owns(data) then
-		deny(player, "You already own the Elevator.")
+local function buy(player: Player, data: { [string]: any }, args: { [any]: any }): (boolean, Reason)
+	local floorIndex = Guard.integer(args.Floor, 1, #MineFloors.List)
+	if not floorIndex then
+		return false, "BadFloor"
+	end
+	local floor = MineFloors.ByIndex[floorIndex]
+	local price = MineFloors.priceOf(floorIndex)
+	if price <= 0 then
+		deny(player, `{floor.Name} needs no ticket.`)
+		return false, "Free"
+	end
+	if ElevatorService.bought(data, floorIndex) then
+		deny(player, `You already own {floor.Name}.`)
 		return false, "Owned"
 	end
+	if not ElevatorService.isUnlocked(ElevatorService.blasterLevel(data), floorIndex) then
+		deny(player, `{floor.Name} needs Blaster {floor.MinBlaster}+.`)
+		return false, "Locked"
+	end
 	if not ElevatorService.stopNear(player, ElevatorService.Range) then
-		deny(player, "Walk up to an elevator to buy it.")
+		deny(player, "Walk up to an elevator to buy a floor.")
 		return false, "TooFar"
 	end
-	local price = MineFloors.Elevator.Price
 	local upgrades = data.Upgrades
 	if type(upgrades) ~= "table" then
 		upgrades = {}
 		data.Upgrades = upgrades
 	end
+	local floors = upgrades.Floors
+	if type(floors) ~= "table" then
+		floors = {}
+		upgrades.Floors = floors
+	end
 	-- no yield from the coin check to the flag: a double tap buys once
 	if not EconomyService.spend(player, price, "Elevator") then
 		local missing = price - EconomyService.balance(player)
-		deny(player, `The Elevator costs {Format.money(price)}. You need {Format.money(math.max(missing, 1))} more.`)
+		deny(player, `{floor.Name} costs {Format.money(price)}. You need {Format.money(math.max(missing, 1))} more.`)
 		return false, "NoCoins"
 	end
-	upgrades.Elevator = true
+	floors[floor.Id] = true
 	DataService.changed(player)
-	Net.fire("Notify", player, { Text = "Elevator bought! Ride to every floor you have unlocked.", Kind = "Reward" })
+	-- (never a teleport: the player rides when they choose)
+	Net.fire("Notify", player, { Text = `{floor.Name} unlocked!`, Kind = "Reward" })
 	return true, "Ok"
 end
 
@@ -377,14 +443,14 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 	if not floorIndex then
 		return false, "BadFloor"
 	end
-	if not ElevatorService.owns(data) then
-		deny(player, `Buy the Elevator first ({Format.money(MineFloors.Elevator.Price)}).`)
-		return false, "NotOwned"
-	end
 	local floor = MineFloors.ByIndex[floorIndex]
 	if not ElevatorService.isUnlocked(ElevatorService.blasterLevel(data), floorIndex) then
 		deny(player, `{floor.Name} needs Blaster {floor.MinBlaster}+.`)
 		return false, "Locked"
+	end
+	if not ElevatorService.ridable(data, floorIndex) then
+		deny(player, `Buy {floor.Name} first ({Format.money(MineFloors.priceOf(floorIndex))}).`)
+		return false, "NotBought"
 	end
 	if not Guard.rootPart(player) then
 		return false, "NoCharacter"
@@ -427,7 +493,7 @@ local function onAction(player: Player, arg: any): (boolean, Reason)
 		return false, "BadAction"
 	end
 	if args.Action == "Buy" then
-		return buy(player, data)
+		return buy(player, data, args)
 	elseif args.Action == "Go" then
 		return go(player, data, args)
 	end
@@ -512,7 +578,7 @@ local function openView(player: Player, model: Model)
 	Net.fire("OpenUI", player, "Elevator", {
 		Stop = model,
 		Floor = ElevatorService.floorOf(model),
-		Owned = ElevatorService.owns(data),
+		Owned = ElevatorService.owns(data), -- (old client window only; the floors bought are in State)
 	})
 end
 
@@ -600,9 +666,18 @@ end
 
 ---------------------------------------------------------------- lifecycle
 
+-- The State snapshot's elevator fields.
+local function provide(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
+	local floors = ElevatorService.boughtFloors(data)
+	snapshot.ElevatorFloors = floors
+	-- (old client window only)
+	snapshot.ElevatorOwned = next(floors) ~= nil
+end
+
 -- Internals for the Lune tests only (tests/ElevatorService.spec.luau).
 ElevatorService._test = {
 	action = onAction,
+	provide = provide,
 	hookStop = hookStop,
 	hookCatcher = hookCatcher,
 	touched = onCatcherTouched,
@@ -630,9 +705,7 @@ ElevatorService._test = {
 
 function ElevatorService.init()
 	Net.on("ElevatorAction", onAction)
-	StateService.addProvider(function(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
-		snapshot.ElevatorOwned = ElevatorService.owns(data)
-	end)
+	StateService.addProvider(provide)
 	Players.PlayerRemoving:Connect(function(player: Player)
 		lastRide[player] = nil
 		riding[player] = nil

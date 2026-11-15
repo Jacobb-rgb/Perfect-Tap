@@ -66,11 +66,15 @@ function NightShiftConfig.coins(income: number): number
 	return math.floor(math.max(safe * crate.CoinSeconds, crate.CoinMin))
 end
 
--- The deepest floor a blaster of this level can mine and the player can get to.
-function NightShiftConfig.floorFor(level: number, elevator: boolean): MineFloors.Floor
+-- The deepest floor a blaster of this level can mine and the player can get to: a floor
+-- you can walk to by the blaster level alone, an elevator-only floor only when `bought`
+-- (data.Upgrades.Floors: { [floor Id] = true }, the elevator floors bought) has it too.
+function NightShiftConfig.floorFor(level: number, bought: { [string]: any }?): MineFloors.Floor
+	local floors: { [string]: any } = if type(bought) == "table" then bought else {}
 	local best = MineFloors.List[1]
 	for _, floor in MineFloors.List do
-		if floor.MinBlaster <= level and (elevator or not floor.ViaElevator) and floor.Index > best.Index then
+		local reachable = not floor.ViaElevator or floors[floor.Id] == true
+		if floor.MinBlaster <= level and reachable and floor.Index > best.Index then
 			best = floor
 		end
 	end

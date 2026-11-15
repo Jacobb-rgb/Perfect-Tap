@@ -19,7 +19,9 @@
 	about 10 % of the rocks). A rock's HP is set so the weakest blaster allowed
 	on the floor breaks it in `Seconds` (about 5 s, the owner's target).
 	Special rocks (golden, geode, artifact) and the server-wide Giant Crystal
-	are rare extras on every floor. The elevator is bought once with coins.
+	are rare extras on every floor. Floors 1-3 are free (walk there, or ride
+	the elevator); each elevator-only floor's ticket is bought once with coins
+	in the elevator (owner 2026-11-15: priceOf, ElevatorService).
 
 	Data only for now: WorldLayout.Zones still drive the live game until the
 	floors are wired in (see docs/plans/MINE_FLOORS_PLAN.md).
@@ -45,7 +47,7 @@ export type Floor = {
 	Name: string,
 	ZoneId: string, -- the WorldLayout zone of the floor's area (lighting, rocks)
 	MinBlaster: number,
-	ViaElevator: boolean, -- only reachable with the elevator
+	ViaElevator: boolean, -- only reachable with the elevator (its ticket costs priceOf coins)
 	Lighting: string, -- LightingConfig preset
 	Ores: { [string]: number }, -- weights for Small and Big rocks
 	CrystalOres: { [string]: number }, -- weights for Crystal rocks (better)
@@ -94,19 +96,6 @@ MineFloors.SpawnChance = {
 MineFloors.GiantCrystal = {
 	Interval = 600, -- seconds between Giant Crystals on a floor
 	MinDamageShare = 0.02, -- a player must deal this share of its HP to get the reward
-}
-
--- coins, bought once: about 2/3 of the blaster 7 price, a real goal before floor 4 (the
--- balance sim in docs/BALANCE_SIM.md); follows the blaster prices, rounded to 2 digits
-local function elevatorPrice(): number
-	local scale = BlasterData.coins(7)
-	local raw = (if scale > 0 then scale else 3e6) * 2 / 3
-	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
-	return math.floor(raw / step + 0.5) * step
-end
-
-MineFloors.Elevator = {
-	Price = elevatorPrice(),
 }
 
 MineFloors.ComingSoon = { Index = 7, MinBlaster = 11 }
@@ -288,6 +277,43 @@ for _, floor in MineFloors.List do
 	MineFloors.ByIndex[floor.Index] = floor
 	MineFloors.ById[floor.Id] = floor
 end
+
+--[[
+	Coins for a floor's elevator ticket (owner 2026-11-15: every floor is bought
+	one by one in the elevator, coins only, never gems or Robux; ElevatorService
+	sells it, saved in data.Upgrades.Floors). 0 for a floor you can walk to
+	(ViaElevator false: floors 1-3) and for an unknown index. An elevator-only
+	floor costs about 2/3 of the price of the blaster that opens it
+	(BlasterData.coins(MinBlaster)): a real goal before the floor (the balance
+	sim in docs/BALANCE_SIM.md), rounded to 2 significant digits. Floor 4
+	(blaster 7) costs what the whole elevator did: 87,000,000.
+]]
+function MineFloors.priceOf(index: number): number
+	local floor = MineFloors.ByIndex[index]
+	if not floor or not floor.ViaElevator then
+		return 0
+	end
+	local scale = BlasterData.coins(floor.MinBlaster)
+	local raw = (if scale > 0 then scale else 3e6) * 2 / 3
+	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+	return math.floor(raw / step + 0.5) * step
+end
+
+-- (old client window only; goes with the new window) the price of the first floor with a
+-- ticket, what the old one-time elevator cost. Deprecated: use priceOf.
+local function firstTicket(): number
+	for _, floor in MineFloors.List do
+		local price = MineFloors.priceOf(floor.Index)
+		if price > 0 then
+			return price
+		end
+	end
+	return 0
+end
+
+MineFloors.Elevator = {
+	Price = firstTicket(),
+}
 
 MineFloors.ByZone = {} :: { [string]: Floor }
 for _, floor in MineFloors.List do

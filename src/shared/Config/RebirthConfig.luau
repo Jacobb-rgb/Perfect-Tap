@@ -27,7 +27,8 @@
 	- Resets (reset(), one step on the save): the earned coins, the blaster (level 1, or
 	  Head Start's level, lifted one level per blaster level ever bought with
 	  Robux: startFor, in that level's Vault look), the mine floors with it
-	  (MineFloors opens them by blaster level) and the elevator, the machine
+	  (MineFloors opens them by blaster level) and the elevator floors bought
+	  (data.Upgrades.Floors), the machine
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
 	  capacity and speed, and every ore you own: the Ore Pen, the backpack's
 	  contents, the podiums (unless Podium Keeper), the train's cargo, the
@@ -532,10 +533,10 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	end
 	data.BlasterLevel = start
 	data.BlasterOre = if start > 1 then BlasterData.vaultOre(start) else ""
-	-- machine speed, the elevator, the train, the backpack
+	-- machine speed, the elevator floors bought (as the one-time elevator did), the train, the backpack
 	local upgrades = record(data, "Upgrades")
 	upgrades.Bellows = 0
-	upgrades.Elevator = false
+	upgrades.Floors = {}
 	data.MachineUpgrades = {}
 	local train = record(data, "Train")
 	train.CapacityLevel = 0
