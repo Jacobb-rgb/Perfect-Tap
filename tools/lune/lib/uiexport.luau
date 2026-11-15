@@ -105,6 +105,9 @@ local function exportNode(instance): any?
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
 			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
+			if instance:GetAttribute("Cover") == true then
+				node.cover = true -- it fills the label, cut at its sides (ScaleType Crop)
+			end
 			local crop = instance:GetAttribute("Crop")
 			if typeof(crop) == "Vector2" then
 				node.crop = { crop.X, crop.Y } -- only this share of the picture shows, from its top-left (ShopFx.studs)

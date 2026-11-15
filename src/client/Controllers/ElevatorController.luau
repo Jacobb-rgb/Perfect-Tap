@@ -3,6 +3,8 @@
 	everything: ElevatorService, TeleportService). Owner's flow (2026-10-18):
 	the elevator button takes you TO the elevator, E at the elevator opens
 	the floor picker, and the ride between floors is a short animation.
+	The picker is the ELEVATOR window (owner 2026-11-15, UI/ElevatorWindow):
+	a card per floor, bought one by one with coins.
 
 	- Side menu: the ELEVATOR button of main's left side menu
 	  (SideMenuView entry "Elevator", SideMenuController action) calls open()
@@ -14,24 +16,24 @@
 	  TeleportConfig.ElevatorAttribute): the side menu hides the button
 	  otherwise and is refreshed when that attribute changes. (D-pad Left is
 	  the side menu's: it jumps into the column.)
-	- Prompt: every "ElevatorPrompt" shows "Use" when you own the elevator and
-	  "Buy $500K" when you don't (a local text change; refreshed on every
-	  State). Triggering it is the only way to open the panel (OpenUI
-	  "Elevator" { Stop, Floor, Owned }; openAt): the Buy page or the floor
-	  cards; the other panels close (MenuPanels.closeOthers).
-	- Panel: BUY is greyed out while you can't afford it (pressing it says how
-	  much is missing); GO sends ElevatorAction { Action = "Go", Floor },
-	  LOCKED says which blaster the floor needs. Buying switches to the floor
-	  cards as soon as the next State says ElevatorOwned. "YOU ARE HERE" =
-	  the stop's floor.
-	- Opening: the doors slide apart, the panel pops, the cards drop in
-	  (ElevatorView.pose driven by one tween, about 0.56 s); any click, tap or
-	  key skips to the end. Closing plays it backwards (0.24 s).
+	- Prompt: every "ElevatorPrompt" says "Use". Triggering it is the only
+	  way to open the window (OpenUI "Elevator" { Stop, Floor }; openAt); the
+	  other panels close (MenuPanels.closeOthers).
+	- Window: the cards come from the State (BlasterLevel, Coins and
+	  ElevatorFloors, the floors bought): YOU ARE HERE = the stop's floor;
+	  TRAVEL sends ElevatorAction { Action = "Go", Floor } (its card lights
+	  up, the others dim; a refusal puts them back); PURCHASE sends
+	  { Action = "Buy", Floor } (without the coins it shakes and says how
+	  many are missing; a purchase never rides). When the next State has the
+	  floor bought, its card turns to TRAVEL with the gold unlock and the
+	  coins count down. LOCKED shakes and says which blaster the floor
+	  needs. The + opens the Robux Shop's coins. The window's loops (ShopFx
+	  marks) play while it is open and restart only when a card changes.
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
 	  stop, respawning or a ride starting. Other prompts are hidden while it
-	  is open; gamepads get a selected button on open and after every refresh.
+	  is open; gamepads get a selected button on open and after every change.
 	- The ride (ElevatorRideView): ElevatorRide "Depart" { Floor, From, Name,
-	  Duration, DoorsClose } closes the panel and plays the full-screen ride
+	  Duration, DoorsClose } closes the window and plays the full-screen ride
 	  (doors slam shut with a thud, the floor counter ticks with a click per
 	  floor, light sweeps, rumble and hum); the character's controls are
 	  frozen. "Arrive" (and at least Duration seconds of ride) ding, the doors
@@ -41,8 +43,8 @@
 	  themselves (ElevatorRideView.Timing.FailSafe). A void rescue ("Arrive"
 	  with Rescue) only dips the screen to black.
 	- Reduced motion (Roblox's setting, or ElevatorController.ReducedMotion):
-	  no opening animation, no idle pulse, and the ride shows the doors and
-	  the numbers without shake or sweeps.
+	  the window opens and changes without motion (ShopFx.quiet) and the ride
+	  shows the doors and the numbers without shake or sweeps.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -63,7 +65,9 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local ElevatorView = require(script.Parent.Parent.UI.ElevatorView)
+local ElevatorWindow = require(script.Parent.Parent.UI.ElevatorWindow)
 local ElevatorRideView = require(script.Parent.Parent.UI.ElevatorRideView)
+local ShopFx = require(script.Parent.Parent.UI.ShopFx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
@@ -76,7 +80,7 @@ local StateController = require(script.Parent.StateController)
 
 local ElevatorController = {}
 
--- true = no opening animation and no idle pulse, whatever Roblox's setting says
+-- true = no ride shake or sweeps, whatever Roblox's setting says
 ElevatorController.ReducedMotion = false
 
 local CLOSE_ACTION = "TerraForgeElevatorClose"
@@ -86,13 +90,15 @@ local PROMPT_NAME = "ElevatorPrompt"
 local RANGE_CHECK = 0.25
 -- a bit more than the server's ElevatorService.Range (16), so lag never closes it early
 local CLOSE_RANGE = 22
--- BUY / GO wait for the server's answer (at most this long) before they work again
+-- PURCHASE / TRAVEL wait for the server's answer (at most this long) before they work again
 local SEND_LOCK = 1
--- seconds a message stays in the header
+-- seconds a message stays over the cards
 local MESSAGE_TIME = 5
 -- the void rescue's dip to black
 local FADE_HOLD = 0.2
 local FADE_IN = 0.5
+-- the card the + opens in the Robux Shop (its coins)
+local COINS_CARD = "CoinsSmall"
 local MESSAGE_COLORS: { [string]: Color3 } = {
 	Reward = Theme.Good,
 	Deny = Theme.Bad,
@@ -101,7 +107,7 @@ local MESSAGE_COLORS: { [string]: Color3 } = {
 }
 
 local player = Players.LocalPlayer
-local refs: ElevatorView.Refs? = nil
+local refs: ElevatorWindow.Refs? = nil
 local fade: ElevatorView.Fade? = nil
 local stop: Model? = nil
 local stopFloor: number? = nil
@@ -110,11 +116,10 @@ local rangeConnection: RBXScriptConnection? = nil
 local lockedUntil = 0
 local messageToken = 0
 local rideToken = 0
-local progress: NumberValue? = nil
-local animTween: Tween? = nil
-local skipConnection: RBXScriptConnection? = nil
--- weak keys: prompts of stops that streamed out drop out by themselves
-local prompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local playing: ShopFx.Playing? = nil
+local playingKey = ""
+-- the floor a PURCHASE was sent for (its unlock plays when the State has it bought)
+local pendingBuy: number? = nil
 
 function ElevatorController.isOpen(): boolean
 	return isOpen
@@ -152,11 +157,6 @@ end
 
 ---------------------------------------------------------------- state
 
-local function owned(): boolean
-	local state = StateController.get()
-	return state ~= nil and state.ElevatorOwned == true
-end
-
 local function coins(): number
 	local state = StateController.get()
 	local value = state and state.Coins
@@ -169,45 +169,35 @@ local function blasterLevel(): number
 	return if type(value) == "number" and value == value then value else 1
 end
 
+-- The floors bought (State ElevatorFloors: Id -> true).
+local function bought(): { [string]: any }
+	local state = StateController.get()
+	local value = state and state.ElevatorFloors
+	return if type(value) == "table" then value else {}
+end
+
 ---------------------------------------------------------------- prompts
 
-local function promptText(): string
-	return if owned() then "Use" else "Buy " .. Format.money(MineFloors.Elevator.Price)
-end
-
+-- (an older build said "Buy $3.3M" here: every floor is bought in the window now)
 local function applyPrompt(prompt: ProximityPrompt)
-	prompt.ActionText = promptText()
+	prompt.ActionText = "Use"
 end
 
-local function refreshPrompts()
-	for prompt in prompts do
-		if prompt.Parent then
-			applyPrompt(prompt)
-		end
-	end
-end
+---------------------------------------------------------------- the window
 
----------------------------------------------------------------- the view
-
-local function applyHint(view: ElevatorView.Refs)
-	local buy = view.Mode == "Buy"
+local function applyHint(view: ElevatorWindow.Refs)
 	if usingGamepad() then
-		ElevatorView.setHint(view, "Gamepad", if buy then "Buy once, ride forever · B: close" else "Choose a floor · B: close")
-		view.HintGlyph.Image = UserInputService:GetImageForKeyCode(Enum.KeyCode.ButtonA)
+		ElevatorWindow.setHint(view, "Choose a floor  ·  B: close")
 	elseif isPhone() then
-		ElevatorView.setHint(view, "Touch", if buy then "Buy once, ride forever" else "Tap GO to ride")
+		ElevatorWindow.setHint(view, "")
 	else
-		ElevatorView.setHint(
-			view,
-			"Mouse",
-			if buy then "Buy once, ride forever · Backspace: close" else "Click GO to ride · Backspace: close"
-		)
+		ElevatorWindow.setHint(view, "Click a floor  ·  Backspace: close")
 	end
 end
 
 -- The platform's own B / Circle glyph on the close button while a gamepad is used.
-local function updateGlyph(view: ElevatorView.Refs)
-	local holder = view.CloseLook.Holder
+local function updateGlyph(view: ElevatorWindow.Refs)
+	local holder = view.CloseHolder
 	local glyph = holder:FindFirstChild("Glyph") :: ImageLabel?
 	if not glyph then
 		local image = Instance.new("ImageLabel")
@@ -216,7 +206,7 @@ local function updateGlyph(view: ElevatorView.Refs)
 		image.AnchorPoint = Vector2.new(0.5, 0.5)
 		image.Position = UDim2.new(0, 2, 1, -2)
 		image.Size = UDim2.fromOffset(30, 30)
-		image.ZIndex = 3
+		image.ZIndex = 12
 		image.Parent = holder
 		glyph = image
 	end
@@ -228,26 +218,15 @@ local function updateGlyph(view: ElevatorView.Refs)
 	end
 end
 
-local function defaultButton(view: ElevatorView.Refs): GuiObject
-	if view.Mode == "Buy" then
-		return if view.CanAfford then view.BuyButton else view.Close
-	end
-	return ElevatorView.firstGo(view) or view.Close
-end
-
-local function selectDefault(view: ElevatorView.Refs, force: boolean?)
+local function selectDefault(view: ElevatorWindow.Refs, force: boolean?)
 	if not usingGamepad() or not isOpen then
 		return
 	end
 	local selected = GuiService.SelectedObject
 	if not force and selected and selected:IsDescendantOf(view.Gui) and selected.Visible and selected.Selectable then
-		local holder = selected.Parent
-		local page = if view.Mode == "Buy" then view.BuyPage else view.FloorPage
-		if (not holder or not holder:IsA("GuiObject") or holder.Visible) and (selected == view.Close or selected:IsDescendantOf(page)) then
-			return
-		end
+		return
 	end
-	GuiService.SelectedObject = defaultButton(view)
+	GuiService.SelectedObject = ElevatorWindow.firstButton(view) or view.Close
 end
 
 local function showMessage(text: string, kind: any)
@@ -256,15 +235,35 @@ local function showMessage(text: string, kind: any)
 		return
 	end
 	local color = if type(kind) == "string" then MESSAGE_COLORS[kind] or Theme.Info else Theme.Info
-	ElevatorView.showMessage(view, text, color)
+	ElevatorWindow.showMessage(view, text, color)
 	messageToken += 1
 	local token = messageToken
 	task.delay(MESSAGE_TIME, function()
 		local current = refs
 		if messageToken == token and current then
-			ElevatorView.hideMessage(current)
+			ElevatorWindow.hideMessage(current)
 		end
 	end)
+end
+
+-- The window's loops: started on open, restarted only when a card's look changes.
+local function stopLoops()
+	ShopFx.stop(playing)
+	playing = nil
+	playingKey = ""
+end
+
+local function playLoops(view: ElevatorWindow.Refs)
+	local key = ""
+	for _, entry in view.Entries do
+		key ..= entry.State .. (if entry.Afford then "+" else "-")
+	end
+	if playing and key == playingKey then
+		return
+	end
+	ShopFx.stop(playing)
+	playing = ShopFx.play(ElevatorWindow.loops(view))
+	playingKey = key
 end
 
 local function refresh()
@@ -272,16 +271,30 @@ local function refresh()
 	if not view or not isOpen then
 		return
 	end
-	local mode: ElevatorView.Mode = if owned() then "Floors" else "Buy"
-	local switched = view.Mode ~= mode
-	if switched then
-		ElevatorView.setMode(view, mode)
-		applyHint(view)
-	end
 	local level = blasterLevel()
-	ElevatorView.setPurchase(view, coins(), MineFloors.Elevator.Price)
-	ElevatorView.setFloors(view, ElevatorView.entries(level, stopFloor), level)
-	selectDefault(view, switched)
+	local money = coins()
+	local owned = bought()
+	-- a purchase went through: its card turns to TRAVEL with the gold unlock, the coins count down
+	local unlocked: ElevatorWindow.Card? = nil
+	local pending = pendingBuy
+	if pending then
+		local floor = MineFloors.ByIndex[pending]
+		if floor and owned[floor.Id] == true then
+			unlocked = view.Cards[pending]
+			pendingBuy = nil
+		end
+	end
+	ElevatorWindow.setFloors(view, ElevatorWindow.entries(level, stopFloor, owned, money))
+	if unlocked then
+		ElevatorWindow.setStatus(view, level, view.Coins)
+		ElevatorWindow.countCoins(view, money)
+		ElevatorWindow.unlock(view, unlocked)
+		Sfx.play("CoinBurst")
+	else
+		ElevatorWindow.setStatus(view, level, money)
+	end
+	playLoops(view)
+	selectDefault(view)
 end
 
 local function locked(): boolean
@@ -294,144 +307,55 @@ local function send(arg: { [string]: any })
 	Net.send("ElevatorAction", arg)
 end
 
-local function onBuy()
-	local view = refs
-	if not view or not isOpen or locked() then
-		return
-	end
-	if not view.CanAfford then
-		local missing = MineFloors.Elevator.Price - coins()
-		showMessage(`You need {Format.money(math.max(missing, 1))} more for the Elevator.`, "Deny")
-		Sfx.play("UIDeny")
-		return
-	end
-	send({ Action = "Buy" })
+-- The travel cinematic (anim/elevator-travel: ElevatorTravelController, when it is in the game) is playing.
+local function traveling(): boolean
+	local travel = MenuPanels.controller("ElevatorTravelController")
+	local playing = travel and travel.isTraveling
+	return type(playing) == "function" and playing() == true
 end
 
-local function onCard(card: ElevatorView.Card)
-	if not isOpen then
+local function onCard(card: ElevatorWindow.Card)
+	local view = refs
+	local entry = card.Entry
+	if not isOpen or not view or not entry then
 		return
 	end
-	local entry = card.Entry
-	if entry.State == "Open" then
+	local state: string = entry.State
+	if (state == "Travel" or state == "Buy") and traveling() then
+		return -- (the ride is starting: the window goes in a moment)
+	end
+	if entry.State == "Travel" then
 		if not locked() then
+			ElevatorWindow.pick(view, entry.Index)
 			send({ Action = "Go", Floor = entry.Index })
 		end
+	elseif entry.State == "Buy" then
+		if not entry.Afford then
+			ElevatorWindow.refuse(card)
+			local missing = math.max(1, math.ceil(entry.Price - coins()))
+			showMessage(`You need {Format.short(missing)} more coins for {entry.Name}.`, "Deny")
+			Sfx.play("UIDeny")
+		elseif not locked() then
+			pendingBuy = entry.Index
+			send({ Action = "Buy", Floor = entry.Index })
+		end
 	elseif entry.State == "Locked" then
+		ElevatorWindow.shake(card)
 		showMessage(`{entry.Name} needs Blaster {entry.MinBlaster}+. Buy a better blaster at the Blaster Vault.`, "Deny")
 		Sfx.play("UIDeny")
-	elseif entry.State == "Here" then
-		showMessage("You are on this floor.", "Info")
 	else
-		showMessage("More floors are coming in an update!", "Info")
+		showMessage("You are on this floor.", "Info")
 	end
 end
 
--- Fits the panel to the screen (phones get the compact layout).
-local function fit(view: ElevatorView.Refs)
+-- The room the screen leaves for the window (design units) and whether it is a phone's.
+local function room(): (boolean, number, number)
 	local camera = Workspace.CurrentCamera
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
 	local compact = isPhone() or scale <= 0.75 or size.Y < 520
-	ElevatorView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
-end
-
----------------------------------------------------------------- opening / closing animation
-
-local function stopAnimation()
-	local tween = animTween
-	animTween = nil
-	if tween then
-		tween:Cancel()
-	end
-	if skipConnection then
-		skipConnection:Disconnect()
-		skipConnection = nil
-	end
-end
-
-local function ensureProgress(): NumberValue
-	local existing = progress
-	if existing then
-		return existing
-	end
-	local value = Instance.new("NumberValue")
-	value.Name = "ElevatorOpening"
-	value.Value = ElevatorView.OpenTime
-	value.Changed:Connect(function(seconds: number)
-		local view = refs
-		if view then
-			ElevatorView.pose(view, seconds)
-		end
-	end)
-	progress = value
-	return value
-end
-
-local function finishOpening()
-	stopAnimation()
-	local value = ensureProgress()
-	value.Value = ElevatorView.OpenTime
-	local view = refs
-	if view then
-		ElevatorView.pose(view, ElevatorView.OpenTime)
-	end
-end
-
-local function playOpen(view: ElevatorView.Refs)
-	stopAnimation()
-	local value = ensureProgress()
-	if reducedMotion() then
-		finishOpening()
-		return
-	end
-	value.Value = 0
-	ElevatorView.pose(view, 0)
-	local tween =
-		TweenService:Create(value, TweenInfo.new(ElevatorView.OpenTime, Enum.EasingStyle.Linear), { Value = ElevatorView.OpenTime })
-	animTween = tween
-	tween.Completed:Connect(function()
-		if animTween == tween then
-			animTween = nil
-			if skipConnection then
-				skipConnection:Disconnect()
-				skipConnection = nil
-			end
-		end
-	end)
-	-- any click, tap or key skips to the end
-	skipConnection = UserInputService.InputBegan:Connect(function(input: InputObject)
-		local kind = input.UserInputType
-		if
-			kind == Enum.UserInputType.MouseButton1
-			or kind == Enum.UserInputType.Touch
-			or kind == Enum.UserInputType.Keyboard
-			or kind.Name:sub(1, 7) == "Gamepad" and input.KeyCode.Name:sub(1, 6) == "Button"
-		then
-			finishOpening()
-		end
-	end)
-	tween:Play()
-end
-
-local function playClose(done: () -> ())
-	stopAnimation()
-	local value = ensureProgress()
-	if reducedMotion() or value.Value <= 0 then
-		done()
-		return
-	end
-	local seconds = ElevatorView.CloseTime * value.Value / ElevatorView.OpenTime
-	local tween = TweenService:Create(value, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Value = 0 })
-	animTween = tween
-	tween.Completed:Connect(function()
-		if animTween == tween then
-			animTween = nil
-			done()
-		end
-	end)
-	tween:Play()
+	return compact, size.X / scale, (size.Y - inset.Y) / scale
 end
 
 function ElevatorController.close(instant: boolean?)
@@ -441,24 +365,25 @@ function ElevatorController.close(instant: boolean?)
 	isOpen = false
 	stop = nil
 	stopFloor = nil
+	pendingBuy = nil
 	if rangeConnection then
 		rangeConnection:Disconnect()
 		rangeConnection = nil
 	end
 	ContextActionService:UnbindAction(CLOSE_ACTION)
+	stopLoops()
 	local view = refs
 	if view then
 		local selected = GuiService.SelectedObject
 		if selected and selected:IsDescendantOf(view.Gui) then
 			GuiService.SelectedObject = nil
 		end
-		ElevatorView.hideMessage(view)
+		ElevatorWindow.hideMessage(view)
 		local gui = view.Gui
 		if instant then
-			stopAnimation()
 			gui.Enabled = false
 		else
-			playClose(function()
+			ElevatorWindow.playClose(view, function()
 				if not isOpen then
 					gui.Enabled = false
 				end
@@ -477,22 +402,62 @@ local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActio
 	return Enum.ContextActionResult.Sink
 end
 
-local function ensureView(): ElevatorView.Refs
+-- A card's mouse hover and gamepad selection (its rise, its button's light, its picture's pan).
+local function bindCard(card: ElevatorWindow.Card)
+	card.Button.Activated:Connect(function()
+		onCard(card)
+	end)
+	card.Face.Activated:Connect(function()
+		onCard(card)
+	end)
+	ShopFx.bindPress(card.Button, card.ButtonHolder)
+	local mouseOver, selected = false, false
+	local function update()
+		ElevatorWindow.hover(card, mouseOver or selected)
+	end
+	card.Face.MouseEnter:Connect(function()
+		mouseOver = not usingGamepad() and not isPhone()
+		update()
+	end)
+	card.Face.MouseLeave:Connect(function()
+		mouseOver = false
+		update()
+	end)
+	card.Button.SelectionGained:Connect(function()
+		selected = true
+		update()
+	end)
+	card.Button.SelectionLost:Connect(function()
+		selected = false
+		update()
+	end)
+end
+
+-- The window for this screen (a phone's is built compact: rebuilt when that changes).
+local function ensureView(compact: boolean): ElevatorWindow.Refs
 	local existing = refs
-	if existing then
+	if existing and not ElevatorWindow.needsRebuild(existing, compact) then
 		return existing
 	end
-	local view = ElevatorView.build(false)
+	if existing then
+		existing.Gui:Destroy()
+		refs = nil
+	end
+	local view = ElevatorWindow.build(compact)
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
 	view.Close.Activated:Connect(function()
 		ElevatorController.close()
 		Sfx.play("UIClick")
 	end)
-	view.BuyButton.Activated:Connect(onBuy)
+	view.Plus.Activated:Connect(function()
+		Sfx.play("UIClick")
+		MenuPanels.call("StoreController", "openAt", COINS_CARD)
+	end)
+	view.BannerFace.Activated:Connect(function()
+		showMessage(`Floor {MineFloors.ComingSoon.Index} is coming in the next update!`, "Info")
+	end)
 	for _, card in view.Cards do
-		card.Button.Activated:Connect(function()
-			onCard(card)
-		end)
+		bindCard(card)
 	end
 	refs = view
 	return view
@@ -530,7 +495,7 @@ local function watchRange(model: Model)
 end
 
 --[[
-	Opens the panel at a stop (its prompt: OpenUI). `model` = the stop (nil =
+	Opens the window at a stop (its prompt: OpenUI). `model` = the stop (nil =
 	not streamed in: no range check), `floorIndex` = the floor shown as "YOU
 	ARE HERE". The other panels close.
 ]]
@@ -541,16 +506,17 @@ function ElevatorController.openAt(model: Model?, floorIndex: number?)
 	end
 	ElevatorController.close(true)
 	MenuPanels.closeOthers("ElevatorController")
-	local view = ensureView()
+	local compact, maxW, maxH = room()
+	local view = ensureView(compact)
 	isOpen = true
 	stop = model
 	stopFloor = floorIndex
-	fit(view)
-	local mode: ElevatorView.Mode = if owned() then "Floors" else "Buy"
-	ElevatorView.setMode(view, mode)
-	ElevatorView.hideMessage(view)
+	pendingBuy = nil
+	ElevatorWindow.layout(view, maxW, maxH)
+	ElevatorWindow.hideMessage(view)
 	applyHint(view)
 	updateGlyph(view)
+	view.Grid.CanvasPosition = Vector2.zero
 	view.Gui.Enabled = true
 	PromptController.setSuppressed("Elevator", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
@@ -558,10 +524,11 @@ function ElevatorController.openAt(model: Model?, floorIndex: number?)
 		watchRange(model)
 	end
 	GuiService.SelectedObject = nil
+	stopLoops()
 	refresh()
 	selectDefault(view, true)
 	Sfx.play("UIClick")
-	playOpen(view)
+	ElevatorWindow.playOpen(view)
 end
 
 -- The side menu's ELEVATOR button: a teleport to the elevator (the floor picker opens from its prompt).
@@ -782,7 +749,7 @@ end
 ---------------------------------------------------------------- lifecycle
 
 function ElevatorController.init()
-	-- exact text widths in the game (the view's tables are for tests and previews)
+	-- exact text widths in the game (the shared Pop pieces' tables are for tests and previews)
 	ElevatorView.Measure = function(text: string, size: number, title: boolean): number
 		local font = if title then Enum.Font.LuckiestGuy else Enum.Font.FredokaOne
 		return TextService:GetTextSize(text, size, font, Vector2.new(10000, 1000)).X
@@ -791,7 +758,7 @@ function ElevatorController.init()
 		if kind ~= "Elevator" or type(payload) ~= "table" then
 			return
 		end
-		-- only the stop's prompt opens the panel (the server checked the range)
+		-- only the stop's prompt opens the window (the server checked the range)
 		local model = payload.Stop
 		local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then payload.Floor else nil
 		if driving then
@@ -801,14 +768,22 @@ function ElevatorController.init()
 	end)
 	Net.listen("ElevatorRide", onRide)
 	Net.listen("Notify", function(message)
-		if isOpen and type(message) == "table" and type(message.Text) == "string" then
-			showMessage(message.Text, message.Kind)
+		if not isOpen or type(message) ~= "table" or type(message.Text) ~= "string" then
+			return
+		end
+		showMessage(message.Text, message.Kind)
+		if message.Kind == "Deny" then
+			-- refused: the purchase is off, the picked card lets go
+			pendingBuy = nil
+			local view = refs
+			if view and view.Picked then
+				ElevatorWindow.unpick(view)
+			end
 		end
 	end)
 	StateController.onChanged(function()
 		-- a new snapshot means the last request was answered
 		lockedUntil = 0
-		refreshPrompts()
 		refresh()
 	end)
 	player.CharacterRemoving:Connect(function()
@@ -828,7 +803,6 @@ end
 function ElevatorController.start()
 	ProximityPromptService.PromptShown:Connect(function(prompt: ProximityPrompt)
 		if prompt.Name == PROMPT_NAME then
-			prompts[prompt] = true
 			applyPrompt(prompt)
 		end
 	end)

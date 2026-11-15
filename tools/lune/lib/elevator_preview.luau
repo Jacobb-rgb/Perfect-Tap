@@ -1,20 +1,24 @@
 --[[
 	The mine elevator's UI over the Stormglass Rift (scene "elevator_ui" for
 	tools/lune/export_scene.luau, shots in tools/preview/mine_floor5_shots.json):
-	the floor list with its 7 cards and the ride to floor 5, drawn with the
-	game's own ElevatorView / ElevatorRideView. The floor area behind is the
-	mine_floor scene of floor 5 (MineFloorScene).
+	the ELEVATOR window (owner 2026-11-15, UI/ElevatorWindow) and the ride to
+	floor 5, drawn with the game's own ElevatorWindow / ElevatorRideView. The
+	floor area behind is the mine_floor scene of floor 5 (MineFloorScene).
 
 	UI overlays (build/preview/<name>.json), each rendered at 1600 x 900 px:
-	  ui_elevator_floors_pc     PC (1280 x 720 design units): 4 + 3 cards, blaster 8, at floor 5
-	  ui_elevator_floors_phone  667 x 375 pt phone (uiScale 0.62): 3 a row, the last row scrolls
-	  ui_elevator_floors_phone_small  a 568 x 320 pt phone
-	  ui_elevator_buy_pc        PC: the Buy page (enough coins: a green BUY)
-	  ui_elevator_buy_phone     the phone's Buy page (a third of the price: BUY greyed out with a lock)
-	  ui_elevator_ride_pc       the ride from floor 1 down to floor 5, passing floor 5's shaft
-	  ui_elevator_banner_pc     the arrival: "FLOOR 5 · STORMGLASS RIFT"
+	  ui_elevator_pc        PC (1280 x 720 design units), like the owner's picture: blaster 8 at
+	                        floor 1, floors 2-3 to walk or ride, floor 4 bought, floor 5 to buy
+	                        (enough coins), floor 6 locked (blaster 9)
+	  ui_elevator_pc_poor   the same short of floor 5's price: NOT ENOUGH COINS
+	  ui_elevator_pc_new    a new player (blaster 1, a few coins): floors 2-6 locked
+	  ui_elevator_pc_bare   the PC window before the owner uploads the pictures (painted backdrops)
+	  ui_elevator_phone     a 667 x 375 pt phone (uiScale 0.62): 2 columns, the top of the list
+	  ui_elevator_phone_end the phone scrolled to the end (floors 5-6 and COMING SOON)
+	  ui_elevator_ride_pc   the ride from floor 1 down to floor 5, passing floor 5's shaft
+	  ui_elevator_banner_pc the arrival: "FLOOR 5 · STORMGLASS RIFT"
 ]]
 
+local roblox = require("@lune/roblox") :: any
 local UiExport = require("./uiexport")
 
 local Preview = {}
@@ -22,58 +26,36 @@ local Preview = {}
 function Preview.build(Loader: any, workspace: any): { [string]: any }
 	require("./mine_floor_scene").build(Loader, workspace, 5)
 	local UI = "StarterPlayer.StarterPlayerScripts.Client.UI."
-	local ElevatorView = Loader.requirePath(UI .. "ElevatorView")
+	local ElevatorWindow = Loader.requirePath(UI .. "ElevatorWindow")
 	local RideView = Loader.requirePath(UI .. "ElevatorRideView")
 	local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 
 	local PC = 1.25 -- 900 px tall render / 720 design height
 	local PHONE = 0.62 * 900 / 375 -- a 667 x 375 pt phone at uiScale 0.62, scaled up to the render
+	local riftPrice = MineFloors.priceOf(5)
 
-	local function floors(compact: boolean): any
-		local refs = ElevatorView.build(compact)
+	-- the owner's picture: the Sunken Palace bought, the Rift to buy
+	local palace = { [MineFloors.get(4).Id] = true }
+
+	local function window(compact: boolean, level: number, here: number, bought: any, coins: number, scrolled: boolean?): any
+		local refs = ElevatorWindow.build(compact)
 		refs.Gui.Enabled = true
 		refs.Gui.Scale.Scale = if compact then PHONE else PC
-		ElevatorView.setMode(refs, "Floors")
 		if compact then
-			ElevatorView.layout(refs, true, 667 / 0.62, (375 - 36) / 0.62)
-			ElevatorView.setHint(refs, "Touch", "Tap GO to ride")
+			ElevatorWindow.layout(refs, 667 / 0.62, (375 - 36) / 0.62)
+			ElevatorWindow.setHint(refs, "")
 		else
-			ElevatorView.layout(refs, false, 1280, (900 - 36) / PC)
+			ElevatorWindow.layout(refs, 1280, (900 - 36) / PC)
+			ElevatorWindow.setHint(refs, "Click a floor  ·  Backspace: close")
 		end
-		ElevatorView.setFloors(refs, ElevatorView.entries(8, 5), 8)
-		ElevatorView.pose(refs, ElevatorView.OpenTime)
-		return UiExport.export({ refs.Gui })
-	end
-
-	-- a small 568 x 320 pt phone (the cards shrink: no mode line, a locked card's chips make room for its pill)
-	local function floorsSmall(): any
-		local refs = ElevatorView.build(true)
-		refs.Gui.Enabled = true
-		refs.Gui.Scale.Scale = 0.62 * 900 / 320
-		ElevatorView.setMode(refs, "Floors")
-		ElevatorView.layout(refs, true, 568 / 0.62, (320 - 36) / 0.62)
-		ElevatorView.setHint(refs, "Touch", "Tap GO to ride")
-		ElevatorView.setFloors(refs, ElevatorView.entries(8, 5), 8)
-		ElevatorView.pose(refs, ElevatorView.OpenTime)
-		return UiExport.export({ refs.Gui })
-	end
-
-	-- the Buy page (not owned yet): `coins` short of the price greys BUY out
-	local function buy(compact: boolean, coins: number): any
-		local refs = ElevatorView.build(compact)
-		refs.Gui.Enabled = true
-		refs.Gui.Scale.Scale = if compact then PHONE else PC
-		ElevatorView.setMode(refs, "Buy")
-		if compact then
-			ElevatorView.layout(refs, true, 667 / 0.62, (375 - 36) / 0.62)
-			ElevatorView.setHint(refs, "Touch", "Buy once, ride forever")
-		else
-			ElevatorView.layout(refs, false, 1280, (900 - 36) / PC)
-			ElevatorView.setHint(refs, "Mouse", "Buy once, ride forever · Backspace: close")
+		ElevatorWindow.setFloors(refs, ElevatorWindow.entries(level, here, bought, coins))
+		ElevatorWindow.setStatus(refs, level, coins)
+		if scrolled then
+			local grid = refs.Grid
+			grid.CanvasPosition = roblox.Vector2.new(0, math.max(0, grid.CanvasSize.Y.Offset - grid.Size.Y.Offset))
 		end
-		ElevatorView.setPurchase(refs, coins, MineFloors.Elevator.Price)
-		ElevatorView.pose(refs, ElevatorView.OpenTime)
 		return UiExport.export({ refs.Gui })
 	end
 
@@ -93,15 +75,21 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		return UiExport.export({ refs.Gui })
 	end
 
-	return {
-		ui_elevator_floors_pc = floors(false),
-		ui_elevator_floors_phone = floors(true),
-		ui_elevator_floors_phone_small = floorsSmall(),
-		ui_elevator_buy_pc = buy(false, MineFloors.Elevator.Price * 2),
-		ui_elevator_buy_phone = buy(true, MineFloors.Elevator.Price / 3),
+	local exports = {
+		ui_elevator_pc = window(false, 8, 1, palace, riftPrice + 1.25e6),
+		ui_elevator_pc_poor = window(false, 8, 1, palace, math.floor(riftPrice * 0.6)),
+		ui_elevator_pc_new = window(false, 1, 1, {}, 250),
+		ui_elevator_phone = window(true, 8, 1, palace, riftPrice + 1.25e6),
+		ui_elevator_phone_end = window(true, 8, 1, palace, riftPrice + 1.25e6, true),
 		ui_elevator_ride_pc = ride(false),
 		ui_elevator_banner_pc = ride(true),
 	}
+	-- before the owner's upload of the pictures: the painted backdrops
+	local preview = IconAssets.ElevatorArt.Preview
+	IconAssets.ElevatorArt.Preview = false
+	exports.ui_elevator_pc_bare = window(false, 8, 1, palace, riftPrice + 1.25e6)
+	IconAssets.ElevatorArt.Preview = preview
+	return exports
 end
 
 return Preview

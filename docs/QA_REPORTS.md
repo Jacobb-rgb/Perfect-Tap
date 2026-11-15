@@ -1086,3 +1086,42 @@ What to test in Studio:
    thumbstick, FIRE, Grab and Jump; the Q cap hidden on touch.
 5. SETTINGS Reduce motion on: the bar's stripes stop, no bounce, no gleam. A TV (1080p, console emulator): the
    pair inside the safe area.
+
+## The ELEVATOR window, floors bought with coins (owner 2026-11-15 "ELEVATOR UI (FINAL COINS VERSION)", branch ui/elevator-v2)
+- His two pictures as the game's window (UI/ElevatorWindow, ElevatorController's window half): a dark navy window in
+  the shop's look; the header (the elevator icon with doors and up/down arrows, ELEVATOR, "Choose your destination
+  and travel deeper into the mine.", the red X); the status line (YOUR BLASTER Lv. N, a bar of N of the top level
+  BlasterData.MaxLevel with the percent and "Upgrade your blaster to unlock deeper floors.", the coins with the
+  gold coin and a green + that opens the Robux Shop's coins); six floor cards, 3 x 2 on a PC (2 columns that scroll
+  on phones, 72-unit buttons); the COMING SOON banner with a big ?, NEXT UPDATE and a clock.
+- Every card: its picture edge to edge (the owner's upload IconAssets.ElevatorArt, vytah_patra.png, cut per floor;
+  painted backdrops until then), the number on a shield in the floor's colour, the name on two lines, the rarity
+  chips of its ores (real data), and one button: YOU ARE HERE (gold frame, halo, CURRENT LOCATION tag), TRAVEL and
+  an arrow (the floor's colour), PURCHASE <price> with a basket and the gold coin (gold/orange; without the coins
+  darker with NOT ENOUGH COINS over it), LOCKED (dark, a big lock, BLASTER LV. N REQUIRED). Coins only: no gem, no
+  Robux anywhere on it (a spec walks the window).
+- Real data: the floors, names, ore rarities and blaster gates are the game's (3/5/7/8/9; his picture's LV 12 does
+  not exist: the top blaster is 10, so the game's gates stay). Floors you can walk to (1-3) cost nothing; the
+  elevator-only floors cost 2/3 of their gate's blaster in coins (MineFloors.priceOf): 4 Sunken Palace $87M (the
+  old one-time elevator price), 5 Stormglass Rift $1.5B, 6 Heartstone Core $21B. Bought floors go on a rebirth like
+  the elevator did; a save that owned the elevator owns all three (save v17).
+- Motion (TweenService only; none with Reduce motion): it opens (dim, 0.94 -> 1, the header drops in, the X spins
+  in, the cards pop in one after another), a hovered card rises with its edge and button brighter and its picture
+  panning, a purchase flashes gold with coins flying out, the coin popping and the coins counting down (the card
+  turns to TRAVEL; it never rides by itself), a locked card shakes with its lock flashing and the requirement lit,
+  TRAVEL lights its card and dims the others until the ride starts, and it closes (shrink, veil, dim). Loops: the
+  buttons' shine, the gold halo, the title's glint, the ? floating, the clock's wiggle.
+- The travel cinematic is another chat's (anim/elevator-travel): while it plays, TRAVEL and PURCHASE wait.
+- Tests: tests/ElevatorWindow.spec.luau (states, words, coins only, status, pictures, both layouts, the motion's end
+  states, the loops), tests/ElevatorView.spec.luau (the shared bits), the server's in tests/ElevatorService.spec.luau.
+  Pictures: obrazky/vytah_okno_2026-11-15 (elevator_ui scene: elevator_pc, _poor, _new, _bare, _phone, _phone_end;
+  video tools/lune/export_elevator_motion.luau).
+What to test in Studio:
+1. Walk to an elevator stop, E: the window opens with its animation; your floor says YOU ARE HERE with the gold frame.
+2. With blaster 7+ and enough coins: PURCHASE on the Sunken Palace: the coins count down, the card turns to TRAVEL
+   with a gold flash; you stay where you are. TRAVEL then rides there.
+3. Too few coins: the button is darker with NOT ENOUGH COINS; pressing it shakes the card and says how many coins
+   are missing. A locked floor shakes and names the blaster it needs.
+4. The + opens the Robux Shop at the coins. Gamepad: A on the cards' buttons, B closes; the selection stays inside.
+5. Phone emulator (667 x 375): two columns, the list scrolls to COMING SOON, the buttons easy to tap.
+6. An old save that had bought the elevator: floors 4-6 show TRAVEL (no purchase again).

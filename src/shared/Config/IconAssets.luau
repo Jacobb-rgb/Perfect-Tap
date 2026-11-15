@@ -647,6 +647,58 @@ function IconAssets.applyShopFx(label: ImageLabel, name: string)
 	label.ImageRectSize = Vector2.new(cell[3], cell[4])
 end
 
+--[[
+	The elevator window's pictures (owner 2026-11-15: his reference with a
+	painted picture of every floor filling its card, and a dark COMING SOON
+	banner): one picture of the floors as the game shows them,
+	../NAHRAJ_DO_ROBLOXU/ikony_vytah/vytah_patra.png (1024 px square, made
+	from the game's floors, tools/preview/elevator_art), cut by Cells
+	{ x, y, w, h } in px: a 512 x 288 cell per floor (MineFloors Id) and the
+	1024 x 160 banner. Id 0 = not uploaded: the cards keep their painted
+	backdrops in the floor's colours (UI/ElevatorWindow). The previews draw
+	build/preview/icons/elevator_<name>.png while Previewing and Preview are on.
+]]
+IconAssets.ElevatorArt = {
+	File = "vytah_patra.png",
+	Id = 0,
+	Preview = true, -- (a preview of Studio before the upload sets it false)
+	Cells = {
+		Quarry = { 0, 0, 512, 288 },
+		EmberCaves = { 512, 0, 512, 288 },
+		DeepHollow = { 0, 288, 512, 288 },
+		SunkenPalace = { 512, 288, 512, 288 },
+		StormglassRift = { 0, 576, 512, 288 },
+		HeartstoneCore = { 512, 576, 512, 288 },
+		ComingSoon = { 0, 864, 1024, 160 },
+	} :: { [string]: { number } },
+}
+
+-- Will elevator picture `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.elevatorArtShows(name: string): boolean
+	local sheet = IconAssets.ElevatorArt
+	if sheet.Cells[name] == nil then
+		return false
+	end
+	if sheet.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and sheet.Preview
+end
+
+-- Shows elevator picture `name` on an ImageLabel (its cell of the uploaded picture; the previews: its own).
+function IconAssets.applyElevatorArt(label: ImageLabel, name: string)
+	local sheet = IconAssets.ElevatorArt
+	local cell = sheet.Cells[name]
+	label:SetAttribute("Icon", "elevator_" .. name)
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new(cell[1], cell[2])
+	label.ImageRectSize = Vector2.new(cell[3], cell[4])
+end
+
 -- Will shop icon `name` show (its image is uploaded, or a preview that shows it)?
 function IconAssets.shopShows(name: string): boolean
 	if shopCell[name] == nil then

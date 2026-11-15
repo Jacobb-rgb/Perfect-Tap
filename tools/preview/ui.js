@@ -303,7 +303,8 @@ function styleElement(el, node, w, h) {
       const img = document.createElement("img");
       // (the owner's whole-tile pictures live in the repo: tools/preview/tile_art)
       img.src = node.icon.startsWith("tile_") ? `/tile_art/${node.icon}.png` : `/scenes/icons/${node.icon}.png`;
-      img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
+      // (attribute Cover: the picture fills the label, cut at its sides, like ScaleType Crop)
+      img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:${node.cover ? "cover" : "contain"};border-radius:inherit;`;
       img.style.opacity = String(1 - (node.it || 0));
       if (node.crop) {
         // only a share of the picture shows (ImageRectSize, ShopFx.studs): the whole one drawn
