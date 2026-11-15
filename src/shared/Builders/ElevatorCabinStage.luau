@@ -452,7 +452,7 @@ local function buildCabin(stage: Stage, folder: Folder)
 		block(cabin, folder, CFrame.new(0, Stage.CeilingY - 0.04, midZ + 0.3), Vector3.new(3, 0.08, 2.4), WARM, Enum.Material.Neon)
 	panel.Name = "CeilingLight"
 	stage.CeilingPanel = panel
-	stage.CeilingLight = light(panel, WARM, 16, 2.6)
+	stage.CeilingLight = light(panel, WARM, 14, 2)
 	for _, sx in { -1, 1 } do
 		local strip =
 			block(cabin, folder, CFrame.new(sx * 2.55, Stage.CeilingY - 0.04, midZ), Vector3.new(0.12, 0.06, 4.6), WARM, Enum.Material.Neon)
@@ -474,12 +474,13 @@ local function buildCabin(stage: Stage, folder: Folder)
 		table.insert(stage.WarnLights, light(lamp, AMBER, 7, 0))
 	end
 	-- the cage's work lights outside, in the gaps to the shaft walls (front, left, right): the rock
-	-- lights up as it rushes past (on only while the cabin rides)
+	-- lights up as it rushes past (on only while the cabin rides; soft and short: a PointLight
+	-- without shadows shines through the cabin's walls too)
 	for _, spot in { Vector3.new(0, 6.4, -3.45), Vector3.new(-3.45, 5.2, 0.2), Vector3.new(3.45, 5.2, 0.2) } do
 		local holder =
 			block(cabin, folder, CFrame.new(spot), Vector3.new(0.2, 0.2, 0.2), WARM, Enum.Material.SmoothPlastic, { Transparency = 1 })
 		holder.Name = "WorkLight"
-		table.insert(stage.WorkLights, light(holder, WARM, 12, 0))
+		table.insert(stage.WorkLights, light(holder, WARM, 7, 0))
 	end
 	-- a button panel on the right
 	block(cabin, folder, CFrame.new(2.3, 4.2, Stage.FrontZ + 0.04), Vector3.new(0.5, 1.3, 0.06), STEEL_DARK, Enum.Material.Metal)
@@ -517,8 +518,8 @@ local function buildDoor(stage: Stage, folder: Folder, side: number): Group
 	block(
 		g,
 		folder,
-		CFrame.new(side * (w - 0.2), (winLow + winHigh) / 2, z),
-		Vector3.new(0.4, winHigh - winLow, 0.18),
+		CFrame.new(side * (w - 0.15), (winLow + winHigh) / 2, z),
+		Vector3.new(0.3, winHigh - winLow, 0.18),
 		STEEL_PALE,
 		Enum.Material.Metal,
 		SHELL
@@ -526,8 +527,8 @@ local function buildDoor(stage: Stage, folder: Folder, side: number): Group
 	block(
 		g,
 		folder,
-		CFrame.new(side * 0.125, (winLow + winHigh) / 2, z),
-		Vector3.new(0.25, winHigh - winLow, 0.18),
+		CFrame.new(side * 0.1, (winLow + winHigh) / 2, z),
+		Vector3.new(0.2, winHigh - winLow, 0.18),
 		STEEL_PALE,
 		Enum.Material.Metal,
 		SHELL
@@ -535,8 +536,8 @@ local function buildDoor(stage: Stage, folder: Folder, side: number): Group
 	local glass = block(
 		g,
 		folder,
-		CFrame.new(side * (0.25 + (w - 0.65) / 2), (winLow + winHigh) / 2, z),
-		Vector3.new(w - 0.65, winHigh - winLow, 0.06),
+		CFrame.new(side * (0.2 + (w - 0.5) / 2), (winLow + winHigh) / 2, z),
+		Vector3.new(w - 0.5, winHigh - winLow, 0.06),
 		GLASS,
 		Enum.Material.SmoothPlastic,
 		{
@@ -603,12 +604,12 @@ local function buildRing(folder: Folder, slot: number): Ring
 			table.insert(rocks, rock)
 		end
 		-- glowing veins in the rock (lava cracks, copper, gold ...): they streak past the windows
-		for _ = 1, 2 do
+		for _ = 1, 3 do
 			local len = rng:range(2.2, 4.2)
 			local cf = faceCf
 				* CFrame.new(rng:range(-spread / 2, spread / 2), rng:range(-h / 2 + 0.8, h / 2 - 0.8), 0.03)
 				* CFrame.Angles(0, 0, rng:range(-0.9, 0.9))
-			local vein = block(g, folder, cf, Vector3.new(len, 0.16, 0.08), WHITE, Enum.Material.Neon)
+			local vein = block(g, folder, cf, Vector3.new(len, 0.2, 0.08), WHITE, Enum.Material.Neon)
 			vein.Name = "Vein"
 			table.insert(veins, vein)
 		end
@@ -1140,7 +1141,7 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 	local flash = Stage.flashAt(plan, t, reduced)
 	local tint = if t >= plan.StopAt then smooth((t - plan.StopAt) / 0.3) else 0
 	local lightColor = WARM:Lerp(theme.Light:Lerp(WHITE, 0.35), tint)
-	stage.CeilingLight.Brightness = (2.6 * level + 2.4 * flash) * (1 - fade)
+	stage.CeilingLight.Brightness = (2 * level + 2.4 * flash) * (1 - fade)
 	stage.CeilingLight.Color = lightColor
 	setColor(stage.CeilingPanel, lightColor:Lerp(WHITE, math.min(flash, 1) * 0.5))
 	setTransparency(stage.CeilingPanel, if level < 0.5 then 0.6 else 0)
@@ -1148,7 +1149,7 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 		setColor(strip, lightColor)
 		setTransparency(strip, if level < 0.5 then 0.7 else 0)
 	end
-	local work = if t >= plan.DoorsShut and t < plan.StopAt then 3.4 * level else 0
+	local work = if t >= plan.DoorsShut and t < plan.StopAt then 0.9 * level else 0
 	for _, workLight in stage.WorkLights do
 		workLight.Brightness = work
 	end

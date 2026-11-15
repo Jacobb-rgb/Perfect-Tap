@@ -419,6 +419,53 @@ local function buildWorld(floors: { number }): (any, { [number]: any })
 	return workspace, models
 end
 
+-- The lights that stand still in one part of the reel, as invisible parts with PointLights (the
+-- preview's per-frame layer draws parts only, no lights): the cage lamp and the beacons at the stop,
+-- the cabin's ceiling light and work lights in the ride, the arrival light at the target.
+type LightSpec = { At: any, Color: any, Range: number, Brightness: number }
+
+local function lightSpecs(r: any, segment: string): { LightSpec }
+	local warm = C3.fromRGB(255, 236, 206)
+	local list: { LightSpec } = {}
+	local function cabin(at: any, color: any)
+		table.insert(list, { At = at * CF.new(0, 7.7, 0.5), Color = color, Range = 14, Brightness = 2 })
+	end
+	if segment == "a" then
+		table.insert(list, { At = r.FromAt * CF.new(0, 7.5, 0.2), Color = C3.fromRGB(255, 236, 200), Range = 18, Brightness = 2.6 })
+		table.insert(list, { At = r.FromAt * CF.new(-2.85, 7.15, -3.0), Color = C3.fromRGB(255, 170, 40), Range = 14, Brightness = 1.5 })
+	elseif segment == "b" then
+		cabin(r.FromAt, warm)
+		for _, spot in { V3.new(0, 6.4, -3.45), V3.new(-3.45, 5.2, 0.2), V3.new(3.45, 5.2, 0.2) } do
+			table.insert(list, { At = r.FromAt * CF.new(spot), Color = warm, Range = 7, Brightness = 0.9 })
+		end
+	else
+		cabin(r.StopAt, warm:Lerp(r.Theme.Light:Lerp(WHITE, 0.35), 1))
+		table.insert(list, { At = r.StopAt * Fx.Spot * CF.new(0, 4, 1.4), Color = r.Theme.Light, Range = 24, Brightness = 3 })
+		table.insert(list, { At = r.StopAt * CF.new(0, 7.5, 0.2), Color = C3.fromRGB(255, 236, 200), Range = 18, Brightness = 1.4 })
+	end
+	return list
+end
+
+local function lightRig(workspace: any, specs: { LightSpec }): any
+	local rig = Instance.new("Model")
+	rig.Name = "PreviewLights"
+	for _, spec in specs do
+		local holder = Instance.new("Part")
+		holder.Anchored = true
+		holder.Size = V3.new(0.2, 0.2, 0.2)
+		holder.Transparency = 1
+		holder.CFrame = spec.At
+		holder.Parent = rig
+		local l = Instance.new("PointLight")
+		l.Color = spec.Color
+		l.Range = spec.Range
+		l.Brightness = spec.Brightness
+		l.Parent = holder
+	end
+	rig.Parent = workspace
+	return rig
+end
+
 local function exportBase(workspace: any, name: string)
 	local scene = Export.collect(workspace)
 	scene.presets = presetsJson()
@@ -432,7 +479,11 @@ if mode == "reel" or mode == "phone" then
 	local tag = if phone then "elevphone" else "elevtravel"
 	local workspace, models = buildWorld({ FROM, TO })
 	local r = newRide(FROM, TO, models[FROM], models[TO], screen)
-	exportBase(workspace, tag .. "_base")
+	for _, segment in { "a", "b", "c" } do
+		local rig = lightRig(workspace, lightSpecs(r, segment))
+		exportBase(workspace, tag .. "_" .. segment .. "_base")
+		rig:Destroy()
+	end
 	fs.writeDir(OUT .. tag)
 	local plan = r.Plan
 	local info = {
@@ -474,7 +525,7 @@ if mode == "reel" or mode == "phone" then
 		local pos, lookAt, fov = cameraFor(r, t, info)
 		local segment = if t < plan.DipMid then "a" elseif t < plan.StopAt then "b" else "c"
 		local preset = if segment == "a" then fromPreset elseif segment == "b" then "ElevatorRide" else toPreset
-		local shot = shotOf(tag, tag .. "_base", name, screen, pos, lookAt, fov, preset)
+		local shot = shotOf(tag, tag .. "_" .. segment .. "_base", name, screen, pos, lookAt, fov, preset)
 		segments[segment][tag .. "_" .. segment .. "_" .. name] = shot
 		all[tag .. "_" .. name] = shot
 		if i % 20 == 0 then
@@ -516,7 +567,9 @@ elseif mode == "arrivals" then
 		local screen = screenOf(false)
 		local workspace, models = buildWorld({ from, to })
 		local r = newRide(from, to, models[from], models[to], screen)
+		local rig = lightRig(workspace, lightSpecs(r, "c"))
 		exportBase(workspace, tag .. "_base")
+		rig:Destroy()
 		fs.writeDir(OUT .. tag)
 		local plan = r.Plan
 		local t = plan.StopAt + (best[floor.Id] or 0.95)

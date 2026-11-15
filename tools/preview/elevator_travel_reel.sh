@@ -5,12 +5,13 @@
 # the cabin, the arrival), joined here into build/preview/elevtravel.mp4 with its storyboard
 # build/preview/elevtravel_board.jpg. A three.js approximation of Roblox: the game's own code
 # poses everything.
-#   bash tools/preview/elevator_travel_reel.sh [fps=20]
+#   bash tools/preview/elevator_travel_reel.sh [fps=20] [parts to render again, default "a b c"]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 fps=${1:-20}
+parts=${2:-a b c}
 out=build/preview
-for seg in a b c; do
+for seg in $parts; do
   node tools/preview/render_reel.mjs "elevtravel_${seg}" "$fps" 4000000 -
 done
 rm -rf "$out/elevtravel_frames"

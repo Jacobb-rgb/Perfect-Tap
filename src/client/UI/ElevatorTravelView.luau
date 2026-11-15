@@ -13,8 +13,9 @@
 	  bars                   cinema bars slide in at the top and the bottom for
 	                         the ride and out at the end; the bottom one names
 	                         the way: "DOWN TO FLOOR 4 · SUNKEN PALACE"
-	  ARRIVED!               pops in at the stop with the mine's name in its
-	                         colour and its floor under it, then fades
+	  ARRIVED!               pops in at the stop in the lower third with the
+	                         mine's name in its colour and its floor under it,
+	                         then fades
 	Reduce motion: fades instead of pops and slides, the dots stand still.
 
 	Text sizes are for the 720-unit design height; the pill and ARRIVED! carry
@@ -151,7 +152,7 @@ function View.build(): Refs
 	-- ARRIVED! with the mine's name and floor
 	local arrived = frame(scaled, "Arrived", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.3),
+		Position = UDim2.fromScale(0.5, 0.68), -- (the lower third: the doorway's view of the new mine stays clear)
 		Size = UDim2.fromOffset(760, 190),
 		BackgroundTransparency = 1,
 		Visible = false,
