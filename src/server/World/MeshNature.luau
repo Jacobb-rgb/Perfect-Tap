@@ -13,8 +13,9 @@
 	  MeshNature.kindOf(color)                    the tree kind of a leaf colour (by its hue)
 	  MeshNature.tree(m, kind, trunk, reach?)     the part tree `m` -> the owner's tree on the
 	                                              trunk's foot (see below)
-	  MeshNature.pond(m, center, sx, sz, opts?)   the part pond `m` -> the lily pond in its footprint
-	                                              and a thin invisible "Water" part at its surface
+	  MeshNature.pond(m, center, sx, sz, opts?)   the part pond `m` -> a pond mesh in its footprint and
+	                                              a thin invisible "Water" part at its surface (off:
+	                                              MeshNature.Pond is nil, no lake meshes)
 	  MeshNature.cliffWall(parent, base, size)    mossy cliff pieces filling a box (front = LookVector)
 	  MeshNature.cliff(m, base, size, solid?)     the part cliff `m` -> those pieces (+ a box collider)
 	  MeshNature.swapInto(m, asset, frame, opts?) the part look `m` -> one mesh in its box (moss rocks)
@@ -33,7 +34,11 @@ local MeshKit = require(Shared.Builders.MeshKit)
 
 local MeshNature = {}
 
-MeshNature.Pond = "Prop_GardenPond"
+-- No lake meshes (owner 2026-11-15: "remove every 3D mesh that represents a lake"): the lily pond
+-- model (Prop_GardenPond) is out of the game, so every pond keeps the part look it had before the
+-- owner's models came (Style.pond and its builder's dressing: water, lily pads, koi, reeds, rims).
+-- Name a template here to bring a pond mesh back.
+MeshNature.Pond = nil :: string?
 MeshNature.Cliff = "Prop_MossyCliff"
 
 -- The three trees the owner made (the same blobby tree in three crown colours); red and pink
@@ -259,6 +264,9 @@ export type PondOpts = {
 ]]
 function MeshNature.pond(m: Model, center: Vector3, sizeX: number, sizeZ: number, opts: PondOpts?): MeshPart?
 	local asset = MeshNature.Pond
+	if not asset then
+		return nil
+	end
 	local own = MeshKit.box(asset)
 	if not MeshKit.has(asset) or not own then
 		return nil

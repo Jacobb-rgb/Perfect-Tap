@@ -8,7 +8,11 @@ import json, re, sys
 src, out = sys.argv[1], sys.argv[2]
 m = json.load(open(src))
 spots = json.load(open(sys.argv[3])) if len(sys.argv) > 3 else {}
-parts = sorted((p for v in m.values() for p in v["parts"]), key=lambda p: p["name"])
+# models taken out of the game on the owner's word (they stay in the manifests as processed)
+REMOVED = {
+    "Prop_GardenPond",  # 2026-11-15: no lake meshes
+}
+parts = sorted((p for v in m.values() for p in v["parts"] if p["name"] not in REMOVED), key=lambda p: p["name"])
 
 def v3(a):
     return "Vector3.new(%s)" % ", ".join(repr(round(x, 4)) for x in a)

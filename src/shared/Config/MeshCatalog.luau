@@ -274,7 +274,6 @@ MeshCatalog.Assets = {
 	Ore_VolcanicCore_Low = { Box = Vector3.new(1.9669, 1.3078, 1.8597), Center = Vector3.new(0.0021, 0.0259, 0.006), Tris = 1224 },
 	Prop_CleaningStation = { Box = Vector3.new(4.0, 1.1122, 1.0), Center = Vector3.new(0.0, 0.5561, -0.0), Tris = 14995 },
 	Prop_DisplayPedestal = { Box = Vector3.new(3.998, 3.1861, 4.0), Center = Vector3.new(0.0, 1.5931, -0.0), Tris = 8233 },
-	Prop_GardenPond = { Box = Vector3.new(4.0, 1.179, 3.6206), Center = Vector3.new(0.0, 0.5895, -0.0), Tris = 13208 },
 	Prop_Meteor = { Box = Vector3.new(4.0, 3.5533, 3.8429), Center = Vector3.new(0.0, 1.7766, -0.0), Tris = 10454 },
 	Prop_MineElevator = { Box = Vector3.new(1.1197, 4.0, 0.8998), Center = Vector3.new(0.0, 2.0, -0.0), Tris = 14265 },
 	Prop_MossyCliff = { Box = Vector3.new(3.9872, 2.2186, 1.7739), Center = Vector3.new(-0.0053, 1.1073, -0.0001), Tris = 12000 },
@@ -413,7 +412,6 @@ MeshCatalog.Rocks = {
 MeshCatalog.Props = {
 	CleaningStation = true,
 	DisplayPedestal = true,
-	GardenPond = true,
 	Meteor = true,
 	MineElevator = true,
 	MossyCliff = true,

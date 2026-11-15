@@ -64,7 +64,6 @@ function Gallery.build(Loader: any, workspace: any)
 		"TreeGreen",
 		"TreeOrange",
 		"TreeYellow",
-		"GardenPond",
 		"MossyCliff",
 		"MineElevator",
 		"Meteor",

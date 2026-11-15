@@ -2,8 +2,7 @@
 	The owner's Meshy models in the lobby (docs/plans/MESHY_MODELS_PLAN.md, package B,
 	src/server/World/MeshNature.luau). With stand-in templates mounted (tools/lune/lib/mesh_fakes)
 	every tree builder makes the owner's tree (one mesh, an invisible trunk where the old trunk
-	collided), the oval ponds without a bridge are his lily pond (with a thin invisible Water part),
-	the moss rocks and voxel cliffs his mossy cliff, and the contracts the game reads still hold:
+	collided), the ponds keep their part look (owner 2026-11-15: no lake meshes), the moss rocks and voxel cliffs his mossy cliff, and the contracts the game reads still hold:
 	tree models keep their names and stay few-part and anchored (WeatherSway), the petals hang on
 	the mesh (Trees.crownPart), the ponds keep their names and a part for the ambience, no random
 	stream moves (the town keeps its layout) and the lobby keeps its budgets with far fewer parts.
@@ -191,41 +190,23 @@ return function(T, Loader)
 		)
 	end)
 
-	T.test("lobby meshes: the lily pond fills an oval pond's footprint, its water marked", function()
+	T.test("lobby meshes: no lake meshes, a pond keeps its part look with every model uploaded", function()
+		-- owner 2026-11-15: "remove every 3D mesh that represents a lake" (MeshNature.Pond is nil)
+		T.eq(MeshNature.Pond, nil, "no pond mesh")
 		for _, case in { { 12, 9, nil }, { 10, 12, Vector3.new(1, 0, 0) }, { 13, 7, Vector3.new(0, 0, -1) } } do
 			local sx, sz, front = case[1], case[2], case[3]
 			local center = Vector3.new(-20, 0, 30)
 			local plain, mesh, drawA, drawB = twice(`pond {sx}x{sz}`, function(p, rng)
 				local pond = Style.pond(p, center, sx, sz, rng, { LilyPads = 3, Koi = 2 })
-				MeshNature.pond(pond, center, sx, sz, { Front = front })
+				T.eq(MeshNature.pond(pond, center, sx, sz, { Front = front }), nil, "no mesh made")
 				return pond
 			end)
 			local label = `pond {sx} x {sz}`
-			T.eq(drawA, drawB, label .. ": the mesh draws nothing")
+			T.eq(drawA, drawB, label .. ": nothing drawn")
 			T.eq(mesh.Name, "Pond", label .. ": still a Pond")
-			T.truthy(#parts(plain) > 2, label .. ": the old pond is parts")
-			T.eq(#parts(mesh), 2, label .. ": the mesh and its water")
-			local m = mesh:FindFirstChild("PondMesh")
-			T.truthy(m and m:IsA("MeshPart") and m:GetAttribute("Asset") == "Prop_GardenPond", label .. ": the owner's pond")
-			T.truthy(not m.CanCollide and not m.CanQuery and m.Anchored, label .. ": a look you wade through")
-			local lo, hi = MeshNature.bounds(mesh)
-			T.truthy(hi.X - lo.X <= sx + 0.01 and hi.Z - lo.Z <= sz + 0.01, label .. ": inside the footprint")
-			T.truthy(hi.X - lo.X >= sx - 0.01 or hi.Z - lo.Z >= sz - 0.01, label .. ": scaled evenly to fill it")
-			T.eq(hi.X - lo.X > hi.Z - lo.Z, sx > sz, label .. ": its long side along the footprint's")
-			T.near(m.CFrame.Position.Y - m.Size.Y / 2, center.Y, m.Size.Y * 0.02, label .. ": on the ground")
-			local water = mesh:FindFirstChild("Water")
-			T.truthy(
-				water and water.Transparency == 1 and not water.CanCollide and not water.CanQuery,
-				label .. ": an invisible water mark"
-			)
-			T.truthy(
-				water.CFrame.Position.Y > center.Y and water.CFrame.Position.Y < center.Y + m.Size.Y * 0.15,
-				label .. ": at the surface"
-			)
-			if front then
-				-- the mesh's low front rim (its +Z side) faces `front`
-				T.truthy(m.CFrame.ZVector:Dot(front) > 0.99, label .. ": its low rim toward the front")
-			end
+			T.eq(#parts(mesh), #parts(plain), label .. ": the same parts as without models")
+			T.truthy(#parts(mesh) > 2, label .. ": the part pond")
+			T.eq(mesh:FindFirstChild("PondMesh"), nil, label .. ": no pond mesh")
 		end
 	end)
 
@@ -313,37 +294,33 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("lobby meshes: the oval ponds are the owner's lily pond and keep their ambience", function()
-		local meshPonds, partPonds = 0, 0
+	T.test("lobby meshes: every pond keeps its part look, its water and its ambience", function()
+		local ponds = 0
 		for _, d in lobby:GetDescendants() do
 			if d:IsA("Model") and (d.Name == "Pond" or d.Name == "StreamPond") then
+				ponds += 1
 				local water = d:FindFirstChild("Water")
 				T.truthy(water and water:IsA("BasePart"), d:GetFullName() .. " has its water")
-				if d:FindFirstChild("PondMesh") then
-					meshPonds += 1
-					T.eq(#parts(d), 2, d:GetFullName() .. " is the mesh and its water mark")
-				else
-					partPonds += 1
-				end
+				T.truthy(#parts(d) > 2, d:GetFullName() .. " is the part pond")
+			end
+			if d:IsA("MeshPart") then
+				T.truthy(d.Name ~= "PondMesh" and d:GetAttribute("Asset") ~= "Prop_GardenPond", d:GetFullName() .. " is no lake mesh")
 			end
 		end
-		-- the lily pond, the stream's, the garden's side ponds and the meadow's; the koi pond and
-		-- the garden's pond (bridges over them) and the cliff's splash pool keep their parts
-		T.truthy(meshPonds >= 7, `the owner's lily ponds ({meshPonds})`)
-		T.eq(partPonds, 3, "the long ponds under bridges and the splash pool stay")
-		T.truthy(lobby.Flora.Water.LilyPond.Pond:FindFirstChild("PondMesh"), "the lily pond")
-		T.truthy(lobby.Flora.Stream.StreamPond:FindFirstChild("PondMesh"), "the stream's pond")
-		T.falsy(lobby.Flora.Water.KoiPond.Pond:FindFirstChild("PondMesh"), "the koi pond under the bridge")
+		-- the lily pond, the stream's, the garden's ponds, the meadow's, the koi pond and the splash pool
+		T.truthy(ponds >= 10, `the ponds ({ponds})`)
+		T.truthy(lobby.Flora.Water.LilyPond.Pond:FindFirstChild("Water"), "the lily pond")
+		T.truthy(lobby.Flora.Stream.StreamPond:FindFirstChild("Water"), "the stream's pond")
 		-- the ambience (built last by WorldBuilder) still hangs its pond spots on the ponds
-		local ponds = 0
+		local spots = 0
 		for _, a in map:GetDescendants() do
 			if a:IsA("Attachment") and a.Name == "AmbiencePond" then
-				ponds += 1
+				spots += 1
 				local pond = a.Parent:FindFirstAncestorWhichIsA("Model")
 				T.truthy(pond and (pond.Name == "Pond" or pond.Name == "StreamPond"), "a pond spot rides on a pond")
 			end
 		end
-		T.truthy(ponds >= 1, `pond sound spots ({ponds})`)
+		T.truthy(spots >= 1, `pond sound spots ({spots})`)
 	end)
 
 	T.test("lobby meshes: the moss rocks are the owner's mossy cliff, still pure decoration", function()
@@ -379,7 +356,8 @@ return function(T, Loader)
 		local floraAll, floraLobby = count(lobby.Flora)
 		local b = LobbyLayout.Budget
 		T.truthy(plainAll - all >= 1500, `the map saves parts ({plainAll} -> {all})`)
-		T.truthy(plainLobby - inLobby >= 800, `the lobby area saves parts ({plainLobby} -> {inLobby})`)
+		-- (the ponds keep their parts since 2026-11-15, owner: no lake meshes; 691 saved then)
+		T.truthy(plainLobby - inLobby >= 600, `the lobby area saves parts ({plainLobby} -> {inLobby})`)
 		T.le(all, b.MapParts, "map parts")
 		T.le(inLobby, b.LobbyParts, "lobby parts")
 		T.le(floraAll, b.Packages.Flora.Parts, "Flora parts")
