@@ -23,8 +23,12 @@ local KICK_RECOVER = 14 -- per second
 local MAX_KICK = math.rad(3)
 local enabled = true
 
+-- How fast the shake wanders (noise samples a second). 22 read as a buzz, the jitter the owner
+-- turned down for the eggs ("no fast shakes: a slow sway, eased"); 2026-11-15: 10, a firm but
+-- smooth jolt that the trauma's decay eases out.
+CameraShake.Speed = 10
 local function noise(seed: number): number
-	return math.noise(t * 22, seed) * 2
+	return math.noise(t * CameraShake.Speed, seed) * 2
 end
 
 local function bind()

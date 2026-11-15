@@ -961,3 +961,39 @@ What to test in Studio:
    ground. A Rthro / layered-clothing avatar: check the mantle and clasps sit on the shoulders.
 6. SETTINGS Reduce motion on: the cape only lifts a little when running, no sparkles.
 7. Phone emulator and a gamepad: nothing to press; FPS unchanged with 3 caped players near.
+
+## Professional quality pass (owner 2026-11-15, branch fx/pro-polish on art/meshy-models)
+Owner's Studio screenshots (the egg opening, the quarry, every mine floor, the station): grey and white
+models, everything overexposed, eggs that look pixelated, lag. What changed:
+- Grey / white models (root cause in his Studio log of 2026-11-15: 137 "Failed to upload TexturePack ...
+  HTTP 429 ... PBR textures may not be visible in game" the moment the place ran). Studio's 3D Importer uploads
+  a texture pack per SurfaceAppearance (TexturePackContent); Rojo and Lune can't write Content properties, so
+  every place we built had none and Studio re-uploaded all of them at once (rate limit). Now:
+  tools/meshy/texture_packs.mjs puts the packs back into every finished place (build.sh, make_test_place.luau),
+  encoded byte for byte as Studio saves them, and fails the build if a SurfaceAppearance has none; the sharper
+  floors (their import was never saved: no packs) draw their colour maps as TextureIDs; every template's own
+  Color is its texture's average colour (tools/meshy/glb_albedo.py), so a texture that can't draw shows the right
+  colour, never the importer's grey.
+- No lake meshes: the lily pond model (Prop_GardenPond) is out; every pond keeps its part look (water, lily pads).
+- Lighting (LightingConfig): sun and exposure a step down on the surface and in the quarry, less haze and glare,
+  deeper shadows, a little more contrast; bloom only past white (neon keeps its glow, pale stone, sand, clouds
+  and crystals stop flaring); the caves keep most of their exposure (their floors now show their real, darker
+  textures, which was most of their glare).
+- Egg opening: smooth sway (no wave faster than the main one: the suspense's ran at 7.1 a second), an
+  anticipation beat (the egg draws in, then springs into the burst), the golems fade into the player at the end
+  of the flight (no hard cut), the charge hum climbs to the burst, softer blur and tint eases, smoother crown
+  streams. The eggs' jagged edges come from Roblox's ViewportFrame (no anti-aliasing there, half resolution on
+  Retina screens): the next step would be playing the opening in the 3D world (owner's call).
+- Performance: stud restyle reads its 2 ms budget every 12 parts (was 50), StreamOutBehavior Opportunistic, the
+  podium pedestal mesh casts no shadow, podium displays move in one BulkMoveTo, weather particles scale with
+  graphics quality, the BACKPACKS shop builds 2 display packs a tick and the DROPPERS showroom comes in 40 parts a
+  frame (no one-frame hitches), the camera shake is a smooth jolt instead of a 22-a-second buzz.
+What to test in Studio:
+1. Open the new test place and play: the Output must show NO "Failed to upload TexturePack" line (the log in
+   ~/Library/Logs/Roblox shows it too). Every mine floor shows its own textures (Ember: dark basalt with lava,
+   Deep Hollow, Palace, Storm, Core), the quarry walls grey rock with moss, the trees, ores and rocks coloured.
+2. Lobby, quarry and each floor: nothing white-hot; white and pale things keep their detail; neon still glows.
+   If a place looks too dark, tell which one (each preset is one line in LightingConfig).
+3. Open 1, 3 and 10 eggs: the rock is smooth, the egg draws in just before it bursts, the golems fade into you.
+4. Walk to the BACKPACKS and DROPPERS shops: no stutter as their displays come in.
+5. No pond is a 3D model any more; every pond still has its water.
