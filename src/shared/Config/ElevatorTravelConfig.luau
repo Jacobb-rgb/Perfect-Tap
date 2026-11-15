@@ -26,7 +26,7 @@
 	                     name, the doors open on the real floor with its own effects,
 	                     the camera pulls back to the player, the controls come back
 	The ride grows a little with the floors travelled (Travel + PerFloor for every
-	floor after the first, at most TravelMax): 5.4-5.8 s in all. The arrival
+	floor after the first, at most TravelMax): 5.55-5.95 s in all. The arrival
 	waits for the server's "Arrive" (the character stands at the target stop):
 	until then the shaft keeps rushing (at most FailSafe seconds, then the client
 	gives the game back).
@@ -52,8 +52,8 @@ ElevatorTravelConfig.Timing = {
 	Brake = 0.5, -- PHASE 4: the shaft slows to a stop
 	OpenDelay = 0.3, -- the doors start to open this long after the stop
 	DoorsOpen = 0.6, -- seconds the doors take to open
-	ExitDelay = 0.45, -- the camera starts back to the player this long after the doors start to open
-	Exit = 0.75, -- seconds the camera takes back to the player (the end)
+	ExitDelay = 0.65, -- the camera starts back to the player this long after the doors start to open (a moment with them open)
+	Exit = 0.7, -- seconds the camera takes back to the player (the end)
 	Prepare = { 0.05, 0.4 }, -- PHASE 1: the warning light's two flashes start here ...
 	FlashOn = 0.14, -- ... and stay lit this long (about 2.6 flashes a second at most)
 	Flicker = 0.08, -- a light flicker in the ride lasts this long

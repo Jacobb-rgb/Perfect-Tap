@@ -427,9 +427,9 @@ LightingConfig.Presets = {
 	ElevatorRide = {
 		Lighting = {
 			Brightness = 0.3,
-			Ambient = Color3.new(0.3, 0.3, 0.33),
-			OutdoorAmbient = Color3.new(0.14, 0.14, 0.16),
-			ExposureCompensation = 0.3,
+			Ambient = Color3.new(0.42, 0.42, 0.46),
+			OutdoorAmbient = Color3.new(0.28, 0.28, 0.32),
+			ExposureCompensation = 0.45,
 			EnvironmentDiffuseScale = 0.15,
 			EnvironmentSpecularScale = 0.7,
 		},

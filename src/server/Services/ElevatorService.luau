@@ -98,7 +98,7 @@ ElevatorService.Cooldown = ElevatorTravelConfig.hold(1, 2)
 -- (ElevatorTravelConfig.Timing.DoorsShut)
 ElevatorService.DoorsClose = ElevatorTravelConfig.Timing.DoorsShut + 0.1
 -- the cinematic's ride from the doors meeting to the brake: RideTime, + RidePerFloor for every floor
--- after the first, at most RideMax (ElevatorTravelConfig.travelTime; the whole cinematic 5.4-5.8 s)
+-- after the first, at most RideMax (ElevatorTravelConfig.travelTime; the whole cinematic 5.55-5.95 s)
 ElevatorService.RideTime = ElevatorTravelConfig.Timing.Travel
 ElevatorService.RidePerFloor = ElevatorTravelConfig.Timing.PerFloor
 ElevatorService.RideMax = ElevatorTravelConfig.Timing.TravelMax

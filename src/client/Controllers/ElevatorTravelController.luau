@@ -95,6 +95,7 @@ type Trip = {
 	Taken: boolean, -- the camera is scripted
 	SavedFov: number,
 	SavedZoom: number,
+	ExitZoom: number?, -- how far behind the player the camera ends (less where something stands behind)
 	Frozen: boolean, -- we hold the controls lock
 	Origin: Hidden,
 	Dest: Hidden,
@@ -288,6 +289,34 @@ local function setCharacter(list: { Instance }, modifier: number)
 	end
 end
 
+--[[
+	How far behind the player the camera can end on the way out: the player's
+	own zoom, or less where something stands behind them (a wall, the cage's
+	roof), as Roblox's camera would push in there anyway once it has the
+	camera back (no jump at the hand back). The cabin's parts never count
+	(CanQuery off).
+]]
+local function exitZoom(t: Trip): number
+	local target = t.Target
+	if not target then
+		return t.SavedZoom
+	end
+	local ok, distance = pcall(function(): number
+		local wanted = Stage.exitCamera(target, t.SavedZoom)
+		local focus = target.Position + Vector3.new(0, Stage.HeadLift, 0)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local character = player.Character
+		params.FilterDescendantsInstances = if character then { character } else {}
+		local hit = Workspace:Raycast(focus, wanted.Position - focus, params)
+		if hit then
+			return math.max(0.5, (hit.Position - focus).Magnitude - 0.6)
+		end
+		return t.SavedZoom
+	end)
+	return if ok and type(distance) == "number" then distance else t.SavedZoom
+end
+
 -- The camera's distance from the player before the ride (the hand back puts it there again).
 local function zoomNow(camera: Camera): number
 	local distance = (camera.CFrame.Position - camera.Focus.Position).Magnitude
@@ -362,7 +391,7 @@ local function giveCamera(t: Trip)
 	if camera then
 		local target = t.Target
 		if target and player.Character then
-			camera.CFrame = Stage.exitCamera(target, t.SavedZoom)
+			camera.CFrame = Stage.exitCamera(target, t.ExitZoom or t.SavedZoom)
 		end
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = t.SavedFov
@@ -453,7 +482,9 @@ local function finish(t: Trip, cut: boolean)
 	end
 	-- every step on its own: one that fails never keeps the others (the camera above all) from coming back
 	local function safely(label: string, fn: () -> ())
-		local ok, err = pcall(fn)
+		local ok, err = pcall(function()
+			fn()
+		end)
 		if not ok then
 			warn(`[ElevatorTravelController] giving back {label} failed: {err}`)
 		end
@@ -611,6 +642,7 @@ local function cues(t: Trip)
 		phase("Arrive", t.Floor)
 	end
 	if c >= plan.DoorsOpenAt and fire(t, "open") then
+		t.ExitZoom = exitZoom(t)
 		Sfx.play("ElevatorDoorOpen")
 		local effects = fx
 		if effects then
@@ -692,7 +724,7 @@ local function frame(t: Trip)
 			FromAt = t.FromAt,
 			StopAt = t.StopAt,
 			Target = t.Target,
-			Zoom = t.SavedZoom,
+			Zoom = t.ExitZoom or t.SavedZoom,
 			Fov = t.SavedFov,
 			Reduced = reduced,
 			Speed = speed,
@@ -700,11 +732,14 @@ local function frame(t: Trip)
 		})
 		if cf then
 			camera.CFrame = cf
+			-- (a scripted camera keeps its Focus: Roblox loads detail and lighting round it)
+			camera.Focus = cf * CFrame.new(0, 0, -6)
 			camera.FieldOfView = fov
 		end
+		-- (hidden while the doors open: nothing stands between the camera and the new mine)
 		local back = if t.CutAt
 			then (if c >= (t.CutAt :: number) + ElevatorTravelConfig.Timing.DipOut then 1 else 0)
-			else math.clamp((c - plan.DoorsOpenAt) / 0.4, 0, 1)
+			else math.clamp((c - plan.ExitAt) / 0.3, 0, 1)
 		local hiddenLevel = if t.SavedZoom < 1.2 then 1 else 1 - back
 		setCharacter(t.Character, hiddenLevel)
 		-- the real cage fades back in as the cabin fades out
@@ -810,6 +845,7 @@ function ElevatorTravelController.depart(payload: any)
 		Taken = false,
 		SavedFov = if camera then camera.FieldOfView else ElevatorTravelConfig.Fov,
 		SavedZoom = if camera then zoomNow(camera) else 12.5,
+		ExitZoom = nil,
 		Frozen = false,
 		Origin = newHidden(),
 		Dest = newHidden(),

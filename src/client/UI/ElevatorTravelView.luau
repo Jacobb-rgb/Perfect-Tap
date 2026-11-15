@@ -17,8 +17,9 @@
 	                         colour and its floor under it, then fades
 	Reduce motion: fades instead of pops and slides, the dots stand still.
 
-	Text sizes are for the 720-unit design height; Scale (a UIScale on the
-	gui's root) follows HudController.uiScale on phones.
+	Text sizes are for the 720-unit design height; the pill and ARRIVED! carry
+	their own UIScale (HudController.uiScale on phones, View.layout) about
+	their anchor points, so they stay where they are anchored.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,8 +38,8 @@ export type Refs = {
 	TopBar: Frame,
 	BottomBar: Frame,
 	Way: TextLabel, -- in the bottom bar
-	Scaled: Frame, -- holds what follows the HUD scale
-	Scale: UIScale,
+	Scaled: Frame, -- holds the pill and the words
+	UiScale: number, -- the HUD scale (View.layout)
 	Prepare: Frame,
 	PrepareScale: UIScale,
 	PrepareText: TextLabel,
@@ -125,7 +126,6 @@ function View.build(): Refs
 		BackgroundTransparency = 1,
 		ZIndex = 4,
 	})
-	local scale: UIScale = UIKit.new("UIScale", { Name = "Scale", Scale = 1 }, scaled)
 	-- PREPARING ELEVATOR... (an amber pill with a dark edge, the Pop look)
 	local prepare = frame(scaled, "Prepare", {
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -199,7 +199,7 @@ function View.build(): Refs
 		BottomBar = bottom,
 		Way = way,
 		Scaled = scaled,
-		Scale = scale,
+		UiScale = 1,
 		Prepare = prepare,
 		PrepareScale = prepareScale,
 		PrepareText = prepareText,
@@ -214,8 +214,10 @@ end
 
 -- The pill and the words follow the HUD scale (phones); `bottomInset` keeps the pill off the home bar.
 function View.layout(refs: Refs, uiScale: number, bottomInset: number)
-	refs.Scale.Scale = uiScale
-	refs.Prepare.Position = UDim2.new(0.5, 0, 1, -(28 + bottomInset / math.max(uiScale, 0.1)))
+	refs.UiScale = uiScale
+	refs.Prepare.Position = UDim2.new(0.5, 0, 1, -(28 * uiScale + bottomInset))
+	refs.PrepareScale.Scale = uiScale
+	refs.ArrivedScale.Scale = uiScale
 end
 
 -- "DOWN TO FLOOR 4 · SUNKEN PALACE"
@@ -312,7 +314,7 @@ function View.pose(refs: Refs, plan: Plan, t: number, info: Info)
 	refs.Prepare.Visible = prepareShown
 	if prepareShown then
 		refs.PrepareText.Text = View.prepareText(t, reduced)
-		refs.PrepareScale.Scale = if reduced then 1 else 0.85 + 0.15 * backOut(t / 0.22)
+		refs.PrepareScale.Scale = refs.UiScale * (if reduced then 1 else 0.85 + 0.15 * backOut(t / 0.22))
 		local out = clamp01((t - plan.Enter) / ElevatorTravelConfig.Timing.DipOut)
 		refs.Prepare.BackgroundTransparency = out
 		fadeText(refs.PrepareText, out)
@@ -351,13 +353,13 @@ function View.pose(refs: Refs, plan: Plan, t: number, info: Info)
 	if shown then
 		local out = clamp01((t - (plan.EndAt - 0.3)) / 0.3)
 		if reduced then
-			refs.ArrivedScale.Scale = 1
+			refs.ArrivedScale.Scale = refs.UiScale
 			local fade = math.max(1 - clamp01(since / 0.3), out)
 			fadeText(refs.Word, fade)
 			fadeText(refs.Name, fade)
 			fadeText(refs.Floor, fade)
 		else
-			refs.ArrivedScale.Scale = 0.55 + 0.45 * backOut(since / 0.32)
+			refs.ArrivedScale.Scale = refs.UiScale * (0.55 + 0.45 * backOut(since / 0.32))
 			local nameIn = 1 - clamp01((since - 0.12) / 0.2)
 			fadeText(refs.Word, out)
 			fadeText(refs.Name, math.max(nameIn, out))

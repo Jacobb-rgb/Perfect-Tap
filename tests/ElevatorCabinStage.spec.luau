@@ -60,7 +60,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.le(lights, 6, "a few lights")
+		T.le(lights, 10, "a few lights (cabin, work lights, warning lamps, two shaft lamps, a beacon)")
 		T.le(emitters, 9, "a few pooled emitters")
 		-- nothing is in the world until a ride
 		T.eq(stage.CabinFolder.Parent, nil, "cabin off")
@@ -91,7 +91,8 @@ return function(T, Loader)
 		pose(stage, plan, 0.1)
 		T.eq(stage.BeaconFolder.Parent, stage.Folder, "the beacon is out")
 		T.eq(stage.CabinFolder.Parent, nil, "no cabin yet (the real cage is seen)")
-		T.near((local_(FROM, stage.Beacon) - Vector3.new(0, 8.25, -2.75)).Magnitude, 0, 1e-4, "on the cage's roof")
+		T.near((local_(FROM, stage.Beacon) - Vector3.new(-2.85, 7.15, -3.0)).Magnitude, 0, 1e-4, "on the cage's front post")
+		T.eq(#stage.Beacons, 2, "one on each front post")
 		T.truthy(stage.BeaconLight.Brightness > 0, "lit in a flash")
 		pose(stage, plan, 0.3)
 		T.eq(stage.BeaconLight.Brightness, 0, "dark between the flashes")
@@ -145,7 +146,7 @@ return function(T, Loader)
 			for n = 0, 9 do
 				local match = true
 				for s = 1, 7 do
-					local lit = ones[s].Transparency < 0.5
+					local lit = ones[s].Material == roblox.Enum.Material.Neon
 					if lit ~= Stage.segmentOn(n, s) then
 						match = false
 					end
@@ -161,13 +162,14 @@ return function(T, Loader)
 		for _, tick in plan.Ticks do
 			pose(stage, plan, tick.Time + 0.3)
 			T.eq(shown(), tick.Floor, "floor " .. tick.Floor)
-			T.eq(stage.Digits[2][1].Color, Stage.floorGlow(tick.Floor), "in its colour")
+			-- (segment g, the middle bar, is lit for every floor from 2 to 9)
+			T.eq(stage.Digits[2][7].Color, Stage.floorGlow(tick.Floor), "in its colour")
 		end
 		pose(stage, plan, plan.StopAt + 0.5)
 		T.eq(shown(), 4, "the target")
 		-- a single-digit floor leaves the tens dark
 		for _, seg in stage.Digits[1] do
-			T.truthy(seg.Transparency > 0.9, "no tens digit")
+			T.truthy(seg.Material ~= roblox.Enum.Material.Neon, "no tens digit (its segments dark, no glow)")
 		end
 		-- every number has its segments (8 lights all, 1 two)
 		local all, one = 0, 0
@@ -318,6 +320,13 @@ return function(T, Loader)
 		T.eq(refs.Way.Text, "DOWN TO FLOOR 4 · SUNKEN PALACE")
 		T.eq(refs.Name.Text, "SUNKEN PALACE")
 		T.eq(refs.Floor.Text, "FLOOR 4")
+		View.layout(refs, 0.62, 0)
+		T.eq(refs.Scaled:FindFirstChildOfClass("UIScale"), nil, "no scale on the full-screen frame (it would move its children)")
+		T.eq(refs.Prepare.AnchorPoint, roblox.Vector2.new(0.5, 1), "the pill scales about its bottom centre")
+		T.eq(refs.Arrived.AnchorPoint, roblox.Vector2.new(0.5, 0.5), "the words scale about their centre")
+		View.pose(refs, plan, 1, info)
+		T.near(refs.PrepareScale.Scale, 0.62, 1e-6, "the pill at the phone's scale")
+		View.layout(refs, 1, 0)
 		View.pose(refs, plan, 0.3, info)
 		T.truthy(refs.Prepare.Visible, "PREPARING ELEVATOR... in the preparation")
 		T.eq(string.sub(refs.PrepareText.Text, 1, 18), "PREPARING ELEVATOR")

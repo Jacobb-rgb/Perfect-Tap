@@ -66,8 +66,8 @@ return function(T, Loader)
 				plan.BrakeAt,
 				plan.StopAt,
 				plan.DoorsOpenAt,
-				plan.ExitAt,
-				plan.OpenedAt,
+				plan.OpenedAt, -- (a moment with the doors open on the new mine ...)
+				plan.ExitAt, -- (... before the camera goes back to the player)
 				plan.EndAt,
 			}
 			for i = 2, #order do

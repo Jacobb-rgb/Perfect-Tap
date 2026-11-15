@@ -47,6 +47,7 @@ export type Ring = {
 	Slabs: { BasePart }, -- painted with the floor's rock
 	Rocks: { BasePart },
 	Crystals: { BasePart },
+	Veins: { BasePart }, -- glowing cracks / ore veins in the floor's accent colour
 	PaintKey: number, -- the floor it is painted for (0 = never painted)
 }
 
@@ -67,6 +68,7 @@ export type Stage = {
 	Emitters: { ParticleEmitter },
 	BeaconGroup: Group,
 	Beacon: BasePart,
+	Beacons: { BasePart },
 	BeaconLight: PointLight,
 	CeilingPanel: BasePart,
 	CeilingLight: PointLight,
@@ -78,6 +80,7 @@ export type Stage = {
 	Seams: { BasePart },
 	Trims: { BasePart },
 	ShaftLights: { PointLight },
+	WorkLights: { PointLight },
 	Fade: { { Part: BasePart, Base: number } }, -- every cabin part and its own transparency
 	Bulk: ((parts: { BasePart }, frames: { CFrame }) -> ())?,
 	-- what was posed last (only changes are written)
@@ -105,16 +108,23 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 local WHITE = Color3.new(1, 1, 1)
-local STEEL = rgb(112, 120, 138)
-local STEEL_DARK = rgb(64, 70, 84)
+local STEEL = rgb(138, 146, 164)
+local STEEL_DARK = rgb(78, 84, 100)
 local STEEL_PALE = rgb(168, 176, 192)
 local CHROME = rgb(206, 212, 222)
 local HAZARD = rgb(255, 196, 52)
 local INK = rgb(22, 24, 30)
 local AMBER = rgb(255, 170, 40)
 local WARM = rgb(255, 236, 206)
-local GLASS = rgb(176, 214, 236)
+local GLASS = rgb(196, 226, 244)
+local SEG_OFF = rgb(30, 32, 44) -- a screen segment that is off (no glow)
 local TIMBER = rgb(110, 76, 48)
+
+-- Veins in another colour than the palette's Accent, by floor Id: the Stormglass Rift's rock glows
+-- with electric yellow lightning (its Accent is the copper of its storm catchers).
+Stage.VeinColors = {
+	StormglassRift = Color3.fromRGB(255, 226, 90),
+} :: { [string]: Color3 }
 
 -- the cabin (stage frame): floor top, ceiling, inner half width, front and back inner faces
 Stage.FloorY = 0.9
@@ -136,10 +146,10 @@ Stage.RingHeight = 8
 Stage.RingCount = 5
 Stage.RingLow = -14 -- the lowest ring's bottom at rest (the column spans RingLow .. + RingHeight * RingCount)
 -- the camera in the cabin: the eye near the back wall, looking at the doors a little down
-Stage.Eye = Vector3.new(0, 5.15, 2.3)
-Stage.EyeStart = Vector3.new(0, 5.15, 2.55) -- right after the dip (a small push in while the doors close)
-Stage.EyeOpen = Vector3.new(0, 5.15, 2.0) -- a lean toward the doors as they open
-Stage.LookAt = Vector3.new(0, 4.55, -3.0)
+Stage.Eye = Vector3.new(0, 4.85, 2.6)
+Stage.EyeStart = Vector3.new(0, 4.85, 2.85) -- right after the dip (a small push in while the doors close)
+Stage.EyeOpen = Vector3.new(0, 4.9, 2.2) -- a lean toward the doors as they open
+Stage.LookAt = Vector3.new(0, 5.05, -3.0)
 -- the player's camera after the ride: behind the head, a little from above
 Stage.HeadLift = 1.5
 Stage.ExitPitch = math.rad(18)
@@ -334,9 +344,9 @@ local function buildCabin(stage: Stage, folder: Folder)
 			CFrame.new(sx * (Stage.HalfWidth + 0.1), (winLow + winHigh) / 2, (winFront + winBack) / 2),
 			Vector3.new(0.06, winHigh - winLow, winBack - winFront),
 			GLASS,
-			Enum.Material.Glass,
+			Enum.Material.SmoothPlastic,
 			{
-				Transparency = 0.6,
+				Transparency = 0.82,
 			}
 		)
 		glass.Name = "Window"
@@ -442,7 +452,7 @@ local function buildCabin(stage: Stage, folder: Folder)
 		block(cabin, folder, CFrame.new(0, Stage.CeilingY - 0.04, midZ + 0.3), Vector3.new(3, 0.08, 2.4), WARM, Enum.Material.Neon)
 	panel.Name = "CeilingLight"
 	stage.CeilingPanel = panel
-	stage.CeilingLight = light(panel, WARM, 14, 1.8)
+	stage.CeilingLight = light(panel, WARM, 16, 2.6)
 	for _, sx in { -1, 1 } do
 		local strip =
 			block(cabin, folder, CFrame.new(sx * 2.55, Stage.CeilingY - 0.04, midZ), Vector3.new(0.12, 0.06, 4.6), WARM, Enum.Material.Neon)
@@ -462,6 +472,14 @@ local function buildCabin(stage: Stage, folder: Folder)
 		lamp.Name = "WarnLamp"
 		table.insert(stage.WarnLamps, lamp)
 		table.insert(stage.WarnLights, light(lamp, AMBER, 7, 0))
+	end
+	-- the cage's work lights outside, in the gaps to the shaft walls (front, left, right): the rock
+	-- lights up as it rushes past (on only while the cabin rides)
+	for _, spot in { Vector3.new(0, 6.4, -3.45), Vector3.new(-3.45, 5.2, 0.2), Vector3.new(3.45, 5.2, 0.2) } do
+		local holder =
+			block(cabin, folder, CFrame.new(spot), Vector3.new(0.2, 0.2, 0.2), WARM, Enum.Material.SmoothPlastic, { Transparency = 1 })
+		holder.Name = "WorkLight"
+		table.insert(stage.WorkLights, light(holder, WARM, 12, 0))
 	end
 	-- a button panel on the right
 	block(cabin, folder, CFrame.new(2.3, 4.2, Stage.FrontZ + 0.04), Vector3.new(0.5, 1.3, 0.06), STEEL_DARK, Enum.Material.Metal)
@@ -492,7 +510,7 @@ local function buildDoor(stage: Stage, folder: Folder, side: number): Group
 	local w = Stage.DoorHalf
 	local cx = side * w / 2
 	local z = Stage.DoorZ
-	local low, winLow, winHigh, top = Stage.FloorY, 3.2, 5.7, Stage.DoorTop
+	local low, winLow, winHigh, top = Stage.FloorY, 2.5, 6.15, Stage.DoorTop
 	block(g, folder, CFrame.new(cx, (low + winLow) / 2, z), Vector3.new(w, winLow - low, 0.18), STEEL_PALE, Enum.Material.Metal, SHELL)
 	block(g, folder, CFrame.new(cx, (winHigh + top) / 2, z), Vector3.new(w, top - winHigh, 0.18), STEEL_PALE, Enum.Material.Metal, SHELL)
 	-- the stiles around the window (outer edge, seam edge)
@@ -520,9 +538,9 @@ local function buildDoor(stage: Stage, folder: Folder, side: number): Group
 		CFrame.new(side * (0.25 + (w - 0.65) / 2), (winLow + winHigh) / 2, z),
 		Vector3.new(w - 0.65, winHigh - winLow, 0.06),
 		GLASS,
-		Enum.Material.Glass,
+		Enum.Material.SmoothPlastic,
 		{
-			Transparency = 0.5,
+			Transparency = 0.8,
 		}
 	)
 	glass.Name = "Window"
@@ -549,6 +567,7 @@ local function buildRing(folder: Folder, slot: number): Ring
 	local slabs: { BasePart } = {}
 	local rocks: { BasePart } = {}
 	local crystals: { BasePart } = {}
+	local veins: { BasePart } = {}
 	local function slab(cf: CFrame, size: Vector3): BasePart
 		local part = block(g, folder, cf, size, STEEL, Enum.Material.Slate, SHELL)
 		part.Name = "Wall"
@@ -583,8 +602,18 @@ local function buildRing(folder: Folder, slot: number): Ring
 			rock.Name = "Rock"
 			table.insert(rocks, rock)
 		end
-		-- a crystal cluster on most rings (three shards fanning out of one root)
-		if rng:chance(0.75) then
+		-- glowing veins in the rock (lava cracks, copper, gold ...): they streak past the windows
+		for _ = 1, 2 do
+			local len = rng:range(2.2, 4.2)
+			local cf = faceCf
+				* CFrame.new(rng:range(-spread / 2, spread / 2), rng:range(-h / 2 + 0.8, h / 2 - 0.8), 0.03)
+				* CFrame.Angles(0, 0, rng:range(-0.9, 0.9))
+			local vein = block(g, folder, cf, Vector3.new(len, 0.16, 0.08), WHITE, Enum.Material.Neon)
+			vein.Name = "Vein"
+			table.insert(veins, vein)
+		end
+		-- a crystal cluster (three shards fanning out of one root)
+		do
 			local x = rng:range(-spread / 2.4, spread / 2.4)
 			local y = rng:range(-h / 2 + 1.4, h / 2 - 1.4)
 			for c = 1, 3 do
@@ -602,7 +631,7 @@ local function buildRing(folder: Folder, slot: number): Ring
 			block(g, folder, faceCf * CFrame.new(0, h / 2 - 0.3, 0.18), Vector3.new(beamLen, 0.36, 0.36), TIMBER, Enum.Material.Wood)
 		beam.Name = "Beam"
 	end
-	return { Slot = slot, Group = g, Slabs = slabs, Rocks = rocks, Crystals = crystals, PaintKey = 0 }
+	return { Slot = slot, Group = g, Slabs = slabs, Rocks = rocks, Crystals = crystals, Veins = veins, PaintKey = 0 }
 end
 
 local function emitter(parent: BasePart, name: string, texture: string, settings: { [string]: any }): ParticleEmitter
@@ -660,7 +689,7 @@ local function buildShaft(stage: Stage, folder: Folder)
 	end
 	-- light streaks in the gaps between the cabin and the walls
 	local streaks = stage.Streaks
-	local spots = { { -2.2, -3.4 }, { 1.4, -3.45 }, { -3.35, -0.8 }, { -3.4, 1.6 }, { 3.35, -0.4 }, { 3.4, 2.0 } }
+	local spots = { { -2.2, -3.4 }, { 1.4, -3.45 }, { 0.3, -3.5 }, { -3.4, -1.0 }, { 3.35, -0.6 }, { 3.4, 0.6 } }
 	for _, spot in spots do
 		local streak = block(streaks, folder, CFrame.new(spot[1], 0, spot[2]), Vector3.new(0.05, 2.6, 0.05), WHITE, Enum.Material.Neon, {
 			Transparency = 1,
@@ -743,6 +772,7 @@ function Stage.build(): Stage
 		Emitters = {},
 		BeaconGroup = newGroup(),
 		Beacon = nil :: any,
+		Beacons = {},
 		BeaconLight = nil :: any,
 		CeilingPanel = nil :: any,
 		CeilingLight = nil :: any,
@@ -754,6 +784,7 @@ function Stage.build(): Stage
 		Seams = {},
 		Trims = {},
 		ShaftLights = {},
+		WorkLights = {},
 		Fade = {},
 		Bulk = nil,
 		At = nil,
@@ -769,12 +800,23 @@ function Stage.build(): Stage
 	stage.DoorLeft = buildDoor(stage, cabinFolder, -1)
 	stage.DoorRight = buildDoor(stage, cabinFolder, 1)
 	buildShaft(stage, shaftFolder)
-	-- the warning beacon on the real cage's roof (front edge)
-	local beacon =
-		block(stage.BeaconGroup, beaconFolder, CFrame.new(0, 8.25, -2.75), Vector3.new(0.7, 0.4, 0.4), HAZARD, Enum.Material.Neon)
-	beacon.Name = "WarningBeacon"
-	stage.Beacon = beacon
-	stage.BeaconLight = light(beacon, AMBER, 14, 0)
+	-- the yellow warning beacons on the real cage's front corner posts (under its ELEVATOR sign)
+	for _, sx in { -1, 1 } do
+		local beacon = block(
+			stage.BeaconGroup,
+			beaconFolder,
+			CFrame.new(sx * 2.85, 7.15, -3.0),
+			Vector3.new(0.5, 0.5, 0.36),
+			HAZARD,
+			Enum.Material.Neon
+		)
+		beacon.Name = "WarningBeacon"
+		table.insert(stage.Beacons, beacon)
+		if sx < 0 then
+			stage.Beacon = beacon
+			stage.BeaconLight = light(beacon, AMBER, 14, 0)
+		end
+	end
 	for _, group in { stage.Cabin, stage.Chevrons, stage.DoorLeft, stage.DoorRight } do
 		for _, part in group.Parts do
 			table.insert(stage.Fade, { Part = part, Base = part.Transparency })
@@ -978,13 +1020,18 @@ local function paintRing(ring: Ring, floorIndex: number)
 	ring.PaintKey = floorIndex
 	local list = MineFloors.List
 	local palette = list[math.clamp(floorIndex, 1, #list)].Palette
+	-- (lighter than the floors' own rock: the work lights and the lamps carry the shaft)
 	local tone =
-		{ palette.Mid, palette.Mid:Lerp(palette.Dark, 0.35), palette.Dark:Lerp(palette.Mid, 0.3), palette.Mid:Lerp(palette.Light, 0.2) }
+		{ palette.Mid:Lerp(palette.Light, 0.3), palette.Mid, palette.Mid:Lerp(palette.Light, 0.5), palette.Mid:Lerp(palette.Dark, 0.2) }
 	for i, slab in ring.Slabs do
 		slab.Color = tone[(i + ring.Slot) % #tone + 1]
 	end
 	for i, rock in ring.Rocks do
 		rock.Color = if i % 2 == 0 then palette.Light:Lerp(palette.Mid, 0.35) else palette.Mid:Lerp(palette.Light, 0.25)
+	end
+	local vein = Stage.VeinColors[list[math.clamp(floorIndex, 1, #list)].Id] or palette.Accent
+	for _, part in ring.Veins do
+		part.Color = vein
 	end
 	for i, shard in ring.Crystals do
 		shard.Color = if i % 3 == 0 then palette.Crystal2 else palette.Crystal
@@ -1005,10 +1052,16 @@ end
 
 -- Paints one digit: lit segments in `color`, the others nearly gone (a faint ghost like a real screen).
 local function paintDigit(segments: { BasePart }, n: number?, color: Color3, glow: number)
+	for _, seg in segments do
+		setTransparency(seg, if n == nil then 1 else 0)
+	end
 	for s, seg in segments do
 		local on = n ~= nil and Stage.segmentOn(n, s)
-		setColor(seg, if on then color:Lerp(WHITE, glow * 0.6) else color)
-		setTransparency(seg, if on then 0 else 0.93)
+		setColor(seg, if on then color:Lerp(WHITE, glow * 0.6) else SEG_OFF)
+		local material = if on then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		if seg.Material ~= material then
+			seg.Material = material
+		end
 	end
 end
 
@@ -1047,8 +1100,13 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 			placeGroup(stage, stage.BeaconGroup, pose.FromAt)
 		end
 		local glow = Stage.warnAt(plan, t, reduced, true)
-		setTransparency(stage.Beacon, if glow > 0 then 0 else 0.55)
-		setColor(stage.Beacon, if glow > 0 then HAZARD else HAZARD:Lerp(INK, 0.5))
+		for _, beacon in stage.Beacons do
+			setColor(beacon, if glow > 0 then HAZARD else HAZARD:Lerp(INK, 0.55))
+			local material = if glow > 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			if beacon.Material ~= material then
+				beacon.Material = material
+			end
+		end
 		stage.BeaconLight.Brightness = 3 * glow
 	end
 	if not cabinShown then
@@ -1082,13 +1140,17 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 	local flash = Stage.flashAt(plan, t, reduced)
 	local tint = if t >= plan.StopAt then smooth((t - plan.StopAt) / 0.3) else 0
 	local lightColor = WARM:Lerp(theme.Light:Lerp(WHITE, 0.35), tint)
-	stage.CeilingLight.Brightness = (1.8 * level + 2.2 * flash) * (1 - fade)
+	stage.CeilingLight.Brightness = (2.6 * level + 2.4 * flash) * (1 - fade)
 	stage.CeilingLight.Color = lightColor
 	setColor(stage.CeilingPanel, lightColor:Lerp(WHITE, math.min(flash, 1) * 0.5))
 	setTransparency(stage.CeilingPanel, if level < 0.5 then 0.6 else 0)
 	for _, strip in stage.Strips do
 		setColor(strip, lightColor)
 		setTransparency(strip, if level < 0.5 then 0.7 else 0)
+	end
+	local work = if t >= plan.DoorsShut and t < plan.StopAt then 3.4 * level else 0
+	for _, workLight in stage.WorkLights do
+		workLight.Brightness = work
 	end
 	local warn = Stage.warnAt(plan, t, reduced, false)
 	for i, lamp in stage.WarnLamps do
