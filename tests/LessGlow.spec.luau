@@ -84,4 +84,62 @@ return function(T, Loader)
 		end
 		T.truthy(flames > 0, "the wing flames are there")
 	end)
+
+	-- (owner 2026-11-15 evening, floor 3 nearly white in his Studio test: "from Location 3 to the last,
+	-- slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast, the
+	-- original colours; keep Locations 1 and 2 unchanged")
+	T.test("less glow: mine floors 3-6 a step softer, near floor 2's light on their tiles; floors 1-2 as they were", function()
+		local fs = require("@lune/fs")
+		local serde = require("@lune/serde")
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local MeshCatalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog")
+		local Diorama = Loader.requirePath("ServerScriptService.Server.World.Mine.Diorama")
+		local presets = LightingConfig.Presets
+		-- Locations 1 and 2 as they were
+		local quarry, ember = presets.Quarry, presets.EmberCaves
+		T.eq(quarry.Lighting.ExposureCompensation, 0.1, "Quarry exposure")
+		T.eq(quarry.Lighting.EnvironmentSpecularScale, 0.4, "Quarry glints")
+		T.eq(quarry.Bloom.Intensity, 0.35, "Quarry bloom")
+		T.eq(quarry.Bloom.Size, 22, "Quarry bloom size")
+		T.eq(quarry.Bloom.Threshold, 1.3, "Quarry bloom threshold")
+		T.eq(ember.Lighting.ExposureCompensation, 0.32, "Ember Caves exposure")
+		T.eq(ember.Lighting.EnvironmentSpecularScale, 0.5, "Ember Caves glints")
+		T.eq(ember.Bloom.Intensity, 0.4, "Ember Caves bloom")
+		T.eq(ember.Bloom.Size, 20, "Ember Caves bloom size")
+		T.eq(ember.Bloom.Threshold, 1.25, "Ember Caves bloom threshold")
+		T.eq(Diorama.Floors.Quarry.Brightness, 0.8, "the quarry's diorama lights")
+		T.eq(Diorama.Floors.EmberCaves.Brightness, 1.4, "the Ember Caves' diorama lights")
+		-- Locations 3-6: a softer, smaller bloom over a higher threshold, fewer sky glints on the crystals
+		for index = 3, 6 do
+			local floor = MineFloors.ByIndex[index]
+			local preset = presets[floor.Lighting]
+			local label = `floor {index} ({floor.Lighting})`
+			T.truthy(preset.Bloom.Threshold >= 1.4, label .. ": crystals glow, never flare")
+			T.truthy(preset.Bloom.Intensity <= 0.3 and preset.Bloom.Size <= 16, label .. ": a soft, small bloom")
+			T.truthy(preset.Lighting.EnvironmentSpecularScale <= 0.3, label .. ": fewer white glints")
+			T.truthy(preset.Lighting.ExposureCompensation <= 0.24, label .. ": a step down")
+		end
+		-- the light on their pale painted tiles (diorama lights x exposure x the tiles' mean albedo):
+		-- about floor 2's, a little over it (they were 1.25-1.8x)
+		local albedo = serde.decode("json", fs.readFile(Loader.root .. "/tools/meshy/albedo.json"))
+		local function lit(index: number): number
+			local floor = MineFloors.ByIndex[index]
+			local sum, n = 0, 0
+			for _, name in MeshCatalog.FloorsHD[floor.Id] do
+				local c = albedo[name]
+				if c then
+					sum += 0.2126 * c[1] + 0.7152 * c[2] + 0.0722 * c[3]
+					n += 1
+				end
+			end
+			T.truthy(n > 0, floor.Id .. ": its tiles' albedo")
+			local exposure = presets[floor.Lighting].Lighting.ExposureCompensation
+			return Diorama.Floors[floor.Id].Brightness * 2 ^ exposure * sum / math.max(1, n)
+		end
+		local two = lit(2)
+		for index = 3, 6 do
+			local k = lit(index) / two
+			T.truthy(k >= 1 and k <= 1.25, `floor {index}: {string.format("%.2f", k)} of floor 2's light`)
+		end
+	end)
 end

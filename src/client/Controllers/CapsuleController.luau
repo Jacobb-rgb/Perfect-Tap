@@ -1094,6 +1094,115 @@ local function setFocus(on: boolean)
 end
 
 --[[
+	(owner 2026-11-15, his Studio test of the 3D stage: "the egg opening is too bright and
+	overexposed ... lower the intensity of Bloom") The opening's own softer bloom: the eggs and
+	golems stand right in front of the camera, their Neon a big share of the screen, and the zone's
+	bloom (LightingConfig: tuned for a town or a cave seen from afar) haloed them white. While
+	openings play, a BloomEffect of the opening's in the camera (out of LightingController's reach:
+	it tweens the zone's, never this one) stands in for the zone's: it takes over at the zone's own
+	values (the zone's switched off: no jump), eases to SoftBloom (never stronger than the zone's),
+	and after the last opening eases back to the zone's values as they are then (a zone change
+	meanwhile included) and hands back. Auto: it waits AutoWait, like the focus.
+]]
+CapsuleController.SoftBloom = { Intensity = 0.2, Size = 14, Threshold = 1.6 }
+CapsuleController.GlowIn = TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+CapsuleController.GlowOut = TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+type GlowHome = { Effect: BloomEffect, Enabled: boolean }
+local glowBloom: BloomEffect? = nil -- the opening's own (in the camera)
+local glowHome: GlowHome? = nil -- the zone's bloom it stands in for, and whether that was on
+local glowToken = 0
+local function setGlow(on: boolean)
+	if typeof(Lighting) ~= "Instance" then
+		return -- (the specs' stand-ins: nothing draws)
+	end
+	glowToken += 1
+	local token = glowToken
+	if on then
+		local camera = Workspace.CurrentCamera
+		if typeof(camera) ~= "Instance" then
+			return -- (no camera this moment: the chain's end still hands the zone's back)
+		end
+		local home = glowHome
+		if not home then
+			local found = Lighting:FindFirstChildOfClass("BloomEffect")
+			if not found then
+				return -- (no bloom in this world: nothing to soften)
+			end
+			home = { Effect = found, Enabled = found.Enabled }
+		end
+		local own = glowBloom
+		local fresh = home ~= glowHome
+		if not own or own.Parent == nil then
+			-- (the first opening, or its camera went with the last one and took it along)
+			local made = Instance.new("BloomEffect")
+			made.Name = "TerraForgeOpeningGlow"
+			made.Enabled = false
+			own = made
+			glowBloom = made
+			fresh = true
+		end
+		local bloom = own :: BloomEffect
+		if bloom.Parent ~= camera then
+			bloom.Parent = camera -- (a camera that came since the last opening gets it too)
+		end
+		local zone = (home :: GlowHome).Effect
+		if fresh then
+			-- (it takes over at the zone's own values: no jump; the zone's stays off until handed back)
+			glowHome = home
+			bloom.Intensity = zone.Intensity
+			bloom.Size = zone.Size
+			bloom.Threshold = zone.Threshold
+			bloom.Enabled = (home :: GlowHome).Enabled
+			zone.Enabled = false
+		end
+		local soft = CapsuleController.SoftBloom
+		TweenService:Create(bloom, CapsuleController.GlowIn, {
+			Intensity = math.min(zone.Intensity, soft.Intensity),
+			Size = math.min(zone.Size, soft.Size),
+			Threshold = math.max(zone.Threshold, soft.Threshold),
+		}):Play()
+	else
+		local bloom, home = glowBloom, glowHome
+		if not bloom or not home then
+			return
+		end
+		local function out()
+			if token ~= glowToken then
+				return -- (a new opening took it meanwhile)
+			end
+			local zone = home.Effect
+			local function handBack()
+				glowHome = nil
+				bloom.Enabled = false
+				if zone.Parent then
+					zone.Enabled = home.Enabled
+				end
+			end
+			if bloom.Parent == nil then
+				handBack() -- (its camera went, and it with it: nothing to ease)
+				return
+			end
+			local tween = TweenService:Create(bloom, CapsuleController.GlowOut, {
+				Intensity = zone.Intensity,
+				Size = zone.Size,
+				Threshold = zone.Threshold,
+			})
+			tween.Completed:Connect(function()
+				if token == glowToken then
+					handBack()
+				end
+			end)
+			tween:Play()
+		end
+		if autoOn then
+			task.delay(CapsuleController.AutoWait, out) -- (Auto: its next egg keeps it)
+		else
+			out()
+		end
+	end
+end
+
+--[[
 	(2026-11-15) The camera's view while openings play: it eases in to the
 	stage's own (HatchFx.Fov: the eggs keep the look they were made for, the
 	world behind draws in, out of focus) as the chain begins and back out to
@@ -1743,6 +1852,7 @@ local function beginChain(o: CapsuleView.OpenRefs)
 	end
 	hideHud(true)
 	setFocus(true)
+	setGlow(true)
 	-- (2026-11-15: the 3D stage in the world, the camera's view easing in to it)
 	HatchWorld.show(ensureWorld(), true)
 	zoomIn()
@@ -1871,6 +1981,9 @@ local function endChain()
 	safely("the world's tint", function()
 		setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the focus, whatever was skipped)
 	end)
+	safely("the opening's bloom", function()
+		setGlow(false) -- (the zone's own bloom back)
+	end)
 	safely("the 3D stage", function()
 		-- (2026-11-15: out of the world, the camera's view easing back to the player's own)
 		pcall(RunService.UnbindFromRenderStep, RunService, HATCH_STEP)
@@ -1903,6 +2016,7 @@ local function play(result: Result)
 	skipStep = false
 	skipAll = false
 	setFocus(true) -- (kept on: a camera that came since the last opening gets it too)
+	setGlow(true)
 	local stage = ensureWorld()
 	if not stage.Shown then
 		HatchWorld.show(stage, true)
@@ -2291,6 +2405,10 @@ CapsuleController._test = {
 	end,
 	zoom = function(): Zoom
 		return zoom
+	end,
+	-- the opening's own bloom (nil before the first opening) and the zone's it stands in for (nil: handed back)
+	glow = function(): (BloomEffect?, GlowHome?)
+		return glowBloom, glowHome
 	end,
 	close = function()
 		playing, autoOn, autoNote = false, false, nil

@@ -1058,3 +1058,46 @@ What to test in Studio:
    a quarter of their size; if they look too smooth, they can stand further when the camera is far).
 7. The glows behind the stage (sunburst, platforms, auras): soft but even, not blurred more over the sky than
    over the ground (the depth of field reads depth; see-through things may take the blur of what's behind).
+
+### Softer light: the egg opening and mine floors 3-6 (owner 2026-11-15 evening, branch fx/pro-polish)
+Owner's Studio test of the 3D stage (his self-test run: 4 PASS, 3 FAIL, the three FAILs were the self-test's own
+fixed 12-stud limit: a golem flying to a player 14 studs away; two runs shorter than their timeline were clicks,
+which skip): "the egg opening is too bright and overexposed ... lower the Bloom and glow, fewer bright flashes
+and particles; the eggs and pets clearly visible with all their details; the magic kept"; and "from Location 3
+to the last, slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast,
+the original colours; keep Locations 1 and 2 unchanged".
+Causes found:
+- The opening: the eggs and golems now stand right in front of the camera, their Neon a big share of the
+  screen, under the zone's bloom (tuned for a town or a cave seen from afar): white halos. Just before the
+  burst the whole egg turned Neon in its colour (white for a Common): flat in the old viewport, a white blaze
+  in the world (Neon draws at about twice its colour). The flat overlay pieces made for the viewport (the
+  orbiting rings and their sparks crossing the eggs, the shockwave rings, the puff, the platforms, the auras,
+  the blobs, the sunburst, a 0.55-0.85 full-view flash) washed the eggs out; the 3D motes were fully additive.
+- Floors 3-6: each floor is lit by its diorama's 10-12 PointLights (Range 48) over pale painted tiles; floors
+  3-6 got 1.25-1.8x the light of floor 2 (light x exposure x the tiles' mean albedo: 0.91 / 0.71 / 0.79 / 1.03
+  against 0.57). The 2026-10-27 dimming of floors 3, 5, 6 (MineKit.dimLights) never ran on the dioramas.
+What changed:
+- CapsuleController.SoftBloom: while openings play, the opening's own BloomEffect (in the camera: the
+  LightingController never tweens it) stands in for the zone's: it takes over at the zone's values (the zone's
+  switched off), eases to Intensity 0.2 / Size 14 / Threshold 1.6 (never stronger than the zone's), and after
+  the chain eases back to the zone's values as they are then and hands back (Auto: after AutoWait).
+- The silhouette on the stage: Neon at 0.55 of its colour (HatchFx.SilhouetteGlow): the colour, not a blaze.
+- HatchStage.Glow: each flat piece at 0.5-0.65 of its old strength, the orbit sparks and platform cores less
+  white; the 3D sparks 0.65 as many; RevealKit.poseRing's optional Alpha (other reveals unchanged).
+- HatchWorld: key light 0.9 -> 0.68, rim 0.75 -> 0.55 (Mythic's lift gentler), motes 46 -> 30 a second,
+  LightEmission 1 -> 0.45, at most 70 % opaque, nearer their colour; sparks start a soft white.
+- Floors 3-6 (Lagoon, Palace, Storm, Core): exposure 0.08-0.1 down, bloom 0.25-0.28 / Size 16 / Threshold 1.4,
+  EnvironmentSpecularScale 0.5 -> 0.3 (white sky glints on the crystals), contrast +0.03; diorama lights
+  1.8 -> 1.4, 1.6 -> 1.5, 2.4 -> 2.0, 2.4 -> 1.7 (map v75): each at 1.09-1.18x floor 2's light. Floors 1-2,
+  the Grotto and the town are unchanged (tests/LessGlow.spec.luau pins floors 1-2).
+- The Studio self-test also checks the soft bloom and its hand-back; a golem flying off may go 4-6x its
+  resting depth (it fades on the way), whatever the camera's distance.
+- The reveal's coloured pulse rings round the best golem at the rings' share too (they cross the golem).
+What to test in Studio:
+1. Open 1, 3 and 10 eggs in the lobby: the eggs and golems clearly visible with their details, the glow soft
+   (no white halos), the flash at the burst gentle; still magical (motes, rings, sparks, aura).
+2. A Legendary and a Mythic: the rays, the aura and the rainbow light soft, nothing washes out.
+3. After the opening the town's glow is back as before (neon signs, lamps): no step when it hands back.
+4. Floors 3, 4, 5 and 6: a little darker than before, the ground and walls show their colours and texture, the
+   crystals glow without flaring; floors 1 and 2 exactly as before.
+5. The self-test place again: every scenario PASS (hands off: a click skips).

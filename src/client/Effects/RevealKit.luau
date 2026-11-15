@@ -239,6 +239,7 @@ export type RingOpts = {
 	From: number?, -- its first scale (default 0.35)
 	Grow: number?, -- how much it grows (default Style.Ring.Grow)
 	Thickness: number?, -- its line at the start (default Style.Ring.Thickness)
+	Alpha: number?, -- its line's strength, 0..1 (default 1: the egg opening's softer rings)
 }
 
 -- A ring `u` (0..1) through its flight: it grows fast, thins and fades (u outside 0..1: hidden).
@@ -256,7 +257,7 @@ function RevealKit.poseRing(ring: Frame, u: number, color: Color3, opts: RingOpt
 	scale.Scale = (o.From or 0.35) + (o.Grow or style.Grow) * (1 - (1 - u) ^ 3)
 	stroke.Thickness = (o.Thickness or style.Thickness) * (1 - u) + 2
 	stroke.Color = color
-	stroke.Transparency = u ^ 1.5
+	stroke.Transparency = 1 - (1 - u ^ 1.5) * math.clamp(o.Alpha or 1, 0, 1)
 end
 
 ---------------------------------------------------------------- flash

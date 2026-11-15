@@ -71,6 +71,9 @@ local HatchFx = {}
 
 HatchFx.FlashTime = 0.3 -- the flash fades in this long (RevealKit.poseFlash)
 HatchFx.FlashPeak = 0.85 -- its strongest (1 - BackgroundTransparency; RevealKit caps it at its FlashPeak)
+-- (owner 2026-11-15: "too bright and overexposed") An egg's silhouette on the 3D stage: its Neon at this
+-- share of its colour (Neon draws at about twice its colour in the world and blooms; a viewport drew it flat)
+HatchFx.SilhouetteGlow = 0.55
 HatchFx.MinShow = 0.3 -- every golem shows at least this long, named, whatever is skipped (paid random items)
 HatchFx.Fov = 40 -- the stage viewport's camera
 HatchFx.Turn = 0.22 -- radians a golem turns from facing the camera (a 3/4 look)
@@ -1270,6 +1273,7 @@ export type Record = {
 	Chips: { ChipPart }, -- (2026-11-15) the shell chips that fly off at the crack steps
 	Rig: HatchRig.Rig, -- its parts as one rigid set (HatchStage poses it; the halves fly apart)
 	Scale: number, -- its size against the builder's (HatchWorld.Scale on the 3D stage; 1 in a viewport)
+	InWorld: boolean, -- made for the 3D stage (a StageScale): its Neon draws at about twice its colour there
 	Mid: number, -- its visual middle over its pivot (studs)
 	Height: number, -- top to bottom (studs)
 	Foot: number, -- its lowest point under the pivot (studs, negative)
@@ -1378,6 +1382,7 @@ function HatchFx.record(model: Model): Record
 		Chips = {},
 		Rig = HatchRig.new(model),
 		Scale = if type(scale) == "number" and scale > 0 then scale else 1,
+		InWorld = type(scale) == "number" and scale > 0,
 		Mid = 0.8,
 		Height = 4.4,
 		Foot = -1.3,
@@ -1534,12 +1539,15 @@ function HatchFx.paintEgg(rec: Record, pose: EggPose, rarity: string, t: number,
 		end
 	end
 	if pose.Silhouette > 0 then
-		-- (the whole egg one flat glowing colour: Neon takes no light in a viewport)
+		-- (the whole egg one flat glowing colour: Neon takes no light in a viewport; on the 3D stage
+		-- Neon draws at about twice its colour and blooms, so it glows at SilhouetteGlow of it there:
+		-- the same soft colour, not a white blaze)
 		local tint = HatchFx.crackColor(rarity, t, 0.5, 0)
 		if rec.Tint ~= tint then
+			local glow = if rec.InWorld then tint:Lerp(Color3.new(0, 0, 0), 1 - HatchFx.SilhouetteGlow) else tint
 			for i, part in rec.Parts do
 				if rec.Trans[i] < 1 then
-					part.Color = tint
+					part.Color = glow
 					part.Material = Enum.Material.Neon
 				end
 			end

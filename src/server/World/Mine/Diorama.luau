@@ -71,6 +71,13 @@ export type Look = {
 	Hollow's south wall the tunnel's other end (both openings a little wider than the tunnel's
 	x -12..12 and its roof at world 4: no faces shared with Land's, nothing flickers).
 	(the dioramas' painted colours need near-white light to read; their caves are dark otherwise)
+	Owner 2026-11-15 evening (floor 3 nearly white in his Studio test: "from Location 3 to the
+	last, slightly reduce the brightness ... keep Locations 1 and 2 unchanged"): floors 3-6 got
+	1.25-1.8x the light of floor 2 on their pale painted tiles (light x its exposure x the tiles'
+	mean albedo, tools/meshy/albedo.json: 0.91 / 0.71 / 0.79 / 1.03 against floor 2's 0.57); their
+	Brightness is cut so, with LightingConfig's exposure step, each lands at about 0.63-0.68, a
+	little over floor 2 (they stay the brighter, colourful deep floors). These lights are the
+	floors' own: MineKit.dimLights (the part-built floors' 60 %) never ran on a diorama.
 ]]
 Diorama.Floors = {
 	Quarry = {
@@ -165,7 +172,7 @@ Diorama.Floors = {
 			{ 12.8, 4.9, 37, 13.2, 9, 40 },
 		},
 		Light = Color3.fromRGB(220, 240, 255),
-		Brightness = 1.8,
+		Brightness = 1.4, -- (2026-11-15: was 1.8)
 	},
 	SunkenPalace = {
 		Walls = { "N", "E", "W", "S" },
@@ -178,7 +185,7 @@ Diorama.Floors = {
 			{ 9, 1, 35, 13, 1.5, 40 },
 		},
 		Light = Color3.fromRGB(255, 232, 210),
-		Brightness = 1.6,
+		Brightness = 1.5, -- (2026-11-15: was 1.6)
 	},
 	StormglassRift = {
 		Walls = { "N", "E", "W", "S" },
@@ -193,7 +200,7 @@ Diorama.Floors = {
 			{ 10.5, 1, 44, 11.5, 1.2, 45 },
 		},
 		Light = Color3.fromRGB(230, 236, 255),
-		Brightness = 2.4,
+		Brightness = 2.0, -- (2026-11-15: was 2.4)
 	},
 	HeartstoneCore = {
 		-- (owner 2026-11-14: "the bridges and things in the passages: to the sides, or just remove
@@ -206,7 +213,7 @@ Diorama.Floors = {
 			{ 27.6, 4.2, -39.1, 31.2, 9, -35.1 },
 		},
 		Light = Color3.fromRGB(255, 226, 246),
-		Brightness = 2.4,
+		Brightness = 1.7, -- (2026-11-15: was 2.4)
 	},
 } :: { [string]: Look }
 

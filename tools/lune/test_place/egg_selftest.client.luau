@@ -7,10 +7,13 @@
 	server is never asked): 1 egg, 3, 10, a Legendary, a Mythic, a pack of 20
 	(two openings in a row) and Auto's fast ones. After each it checks that
 	nothing stays behind (the 3D stage out of the world, its holder empty, the
-	camera's view and the depth of field back, the HUD back) and how smooth the
-	frames were; during each, that the stage stands right in front of the camera.
+	camera's view and the depth of field back, the zone's bloom back, the HUD
+	back) and how smooth the frames were; during each, that the stage stands
+	right in front of the camera (only the golems flying off go further, fading)
+	and that the opening's softer bloom stood in for the zone's.
 	Output (and the Studio log) says [EGG TEST] PASS / FAIL for each, then a
-	summary line.
+	summary line. A click in the game view skips an opening (as for a player):
+	hands off while it runs.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -25,6 +28,7 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local client = player:WaitForChild("PlayerScripts"):WaitForChild("Client")
 local CC = require(client:WaitForChild("Controllers"):WaitForChild("CapsuleController")) :: any
+local HatchWorld = require(client:WaitForChild("UI"):WaitForChild("HatchWorld")) :: any
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GolemConfig = require(Shared.Config.GolemConfig) :: any
 local CapsuleConfig = require(Shared.Config.CapsuleConfig) :: any
@@ -64,6 +68,15 @@ local function dofState(): string
 	return string.format("%s %.2f %.2f %.2f", tostring(dof.Enabled), dof.FarIntensity, dof.FocusDistance, dof.InFocusRadius)
 end
 
+-- the zone's bloom (LightingController tweens it; the opening switches it off while its own stands in)
+local function bloomState(): string
+	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+	if not bloom then
+		return "none"
+	end
+	return string.format("%s %.2f %.0f %.2f", tostring(bloom.Enabled), bloom.Intensity, bloom.Size, bloom.Threshold)
+end
+
 local character = player.Character or player.CharacterAdded:Wait()
 character:WaitForChild("HumanoidRootPart")
 task.wait(8) -- (the game's own start: the HUD, the controllers, the map streaming in)
@@ -72,7 +85,9 @@ local camera = Workspace.CurrentCamera
 local fovBefore = camera.FieldOfView
 -- (the stage keeps 1.6 times this far from the camera at least: HatchWorld.NearMargin)
 log(string.format("camera: near plane %.2f studs, view %.0f degrees", math.abs(camera.NearPlaneZ), camera.FieldOfView))
+log("zone bloom (on, intensity, size, threshold): " .. bloomState() .. " | hands off: a click skips an opening")
 local dofBefore = dofState()
+local bloomBefore = bloomState()
 local _, common = kindsOf("Common")
 local _, uncommon = kindsOf("Uncommon")
 local _, rare = kindsOf("Rare")
@@ -108,9 +123,10 @@ for _, scenario in scenarios do
 	if scenario.Auto then
 		pcall(CC.setAuto, true)
 	end
-	-- frame times and the stage's place while it plays
+	-- frame times and the stage's place while it plays (and how far the player is: the golems fly there)
 	local frames, longest, slow = 0, 0, 0
-	local farthest, behind, sawStage = 0, 0, false
+	local farthest, behind, sawStage, reach = 0, 0, false, 0
+	local softest, zoneOff = math.huge, true
 	local watch = RunService.RenderStepped:Connect(function(dt: number)
 		frames += 1
 		longest = math.max(longest, dt)
@@ -120,6 +136,16 @@ for _, scenario in scenarios do
 		local world = CC._test.world()
 		if world and world.Folder.Parent == Workspace then
 			local cam = Workspace.CurrentCamera
+			reach = math.max(reach, (cam.CFrame.Position - cam.Focus.Position).Magnitude)
+			-- (the opening's own bloom on, the zone's off)
+			local own, home = CC._test.glow()
+			if own and home and own.Enabled then
+				softest = math.min(softest, own.Intensity)
+			end
+			local zone = Lighting:FindFirstChildOfClass("BloomEffect")
+			if home and zone and zone.Enabled then
+				zoneOff = false
+			end
 			for _, model in world.Holder:GetChildren() do
 				for _, d in model:GetDescendants() do
 					if d:IsA("BasePart") and d.Transparency < 1 and d.LocalTransparencyModifier < 1 then
@@ -157,8 +183,27 @@ for _, scenario in scenarios do
 	if behind > 0 then
 		table.insert(problems, behind .. " stage part frames behind the camera")
 	end
-	if farthest > 12 then
-		table.insert(problems, string.format("a stage part %.1f studs away (golems fly toward the player, fading)", farthest))
+	-- (only the golems flying off go further than the stage's band, fading: toward the player, at most 4x
+	-- their resting depth (HatchFx.flyTo), an auto-deleted one 6x; never further, however near the player)
+	local limit = math.max(reach + 3, 6 * HatchWorld.GolemDepth + 1)
+	if farthest > limit then
+		table.insert(problems, string.format("a stage part %.1f studs away (at most %.1f)", farthest, limit))
+	end
+	local soft = CC.SoftBloom
+	if string.sub(bloomBefore, 1, 4) == "true" then
+		if softest > soft.Intensity + 0.02 then
+			table.insert(problems, string.format("the opening's bloom never got soft (%.2f)", softest))
+		end
+		if not zoneOff then
+			table.insert(problems, "the zone's bloom stayed on during the opening")
+		end
+	end
+	local own, home = CC._test.glow()
+	if home ~= nil or (own and own.Enabled) then
+		table.insert(problems, "the opening's bloom was not handed back")
+	end
+	if bloomState() ~= bloomBefore then
+		table.insert(problems, "the zone's bloom is " .. bloomState() .. ", was " .. bloomBefore)
 	end
 	local world = CC._test.world()
 	if world then
@@ -186,13 +231,15 @@ for _, scenario in scenarios do
 		table.insert(problems, "the HUD is still away")
 	end
 	local summary = string.format(
-		"%s: %.1f s, %d frames, longest %d ms, %d over 33 ms, stage within %.2f studs",
+		"%s: %.1f s, %d frames, longest %d ms, %d over 33 ms, stage within %.2f studs (player %.1f), bloom %s",
 		scenario.Name,
 		played,
 		frames,
 		math.floor(longest * 1000),
 		slow,
-		farthest
+		farthest,
+		reach,
+		if softest < math.huge then string.format("%.2f", softest) else "-"
 	)
 	if #problems == 0 then
 		passed += 1

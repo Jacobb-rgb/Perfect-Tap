@@ -597,4 +597,160 @@ return function(T, Loader)
 		T.truthy(string.find(code, "if Motion.reduced() then zoom.Home", 1, true), "Reduce motion keeps the player's view")
 		T.truthy(string.find(code, "HatchRig.scale(model, HatchWorld.Scale)", 1, true), "the pooled eggs made for the stage")
 	end)
+
+	-- (owner 2026-11-15 evening, his Studio test of the 3D stage: "the egg opening is too bright and
+	-- overexposed ... lower the Bloom and glow, fewer bright flashes and particles; the eggs and pets
+	-- clearly visible with all their details; the magic kept, softer and balanced")
+	T.test("EggWorld: the opening's light is soft: stage lights, motes, sparks, the silhouette, the flat pieces, the bloom", function()
+		local Color3 = roblox.Color3
+		local RevealKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Effects.RevealKit")
+		local white = Color3.new(1, 1, 1)
+		-- the stage's own light: a soft fill; its motes and sparks see-through, in their colour
+		T.truthy(HatchWorld.Key.Brightness <= 0.7 and HatchWorld.Rim.Brightness <= 0.6, "the key and rim lights a quarter down")
+		T.truthy(HatchWorld.MoteRate <= 32, "fewer motes")
+		T.truthy(HatchWorld.Glow <= 0.5 and HatchWorld.White <= 0.2 and HatchWorld.SparkWhite <= 0.5, "less additive, less white")
+		local world = HatchWorld.new({ Emit = function() end })
+		for _, list in { world.MoteFx, world.SparkFx } do
+			for _, e in list do
+				T.near(e.LightEmission, HatchWorld.Glow, 1e-6, e.Name .. ": LightEmission")
+				local least = 1
+				for _, k in e.Transparency.Keypoints do
+					least = math.min(least, k.Value)
+				end
+				T.truthy(least >= 0.25, e.Name .. ": never more than 3/4 opaque")
+			end
+		end
+		local teal = Color3.fromRGB(40, 200, 220)
+		HatchWorld.energy(world, 1, CFrame.new(0, 0, -1), 0.3, 20, teal)
+		local moteStart = world.MoteFx[1].Color.Keypoints[1].Value
+		T.near(moteStart.R, teal:Lerp(white, HatchWorld.White).R, 0.01, "a mote starts near its colour")
+		HatchWorld.burst(world, 1, CFrame.new(0, 0, -1), 0.2, teal, 10)
+		local sparkStart = world.SparkFx[1].Color.Keypoints[1].Value
+		T.truthy(sparkStart.R < 0.9, "a spark starts a soft white, not pure white")
+		HatchWorld.setLight(world, 1, 0.3)
+		T.truthy(world.KeyLight.Brightness <= HatchWorld.Key.Brightness * 1.25 + 1e-6, "a Mythic's key light lifts gently")
+		T.truthy(world.RimLight.Brightness <= HatchWorld.Rim.Brightness * 1.4 + 1e-6, "and its rim light")
+		HatchWorld.clear(world)
+		T.near(world.KeyLight.Brightness, HatchWorld.Key.Brightness, 1e-6, "back after it")
+
+		-- the silhouette on the stage: its Neon at SilhouetteGlow of the colour (Neon draws at about
+		-- twice its colour in the world); a viewport's egg as before (flat, the colour itself)
+		T.truthy(HatchFx.SilhouetteGlow >= 0.4 and HatchFx.SilhouetteGlow <= 0.7, "about half: the colour, not a white blaze")
+		local tl = HatchFx.timeline(4, 1, false, false)
+		local pose = HatchFx.eggPose(tl.Burst - 0.001, tl, 1, false)
+		local tint = HatchFx.crackColor("Epic", tl.Burst, 0.5, 0)
+		local onStage = stageEgg("Stone")
+		T.truthy(onStage.InWorld, "an egg made for the stage knows it")
+		HatchFx.paintEgg(onStage, pose, "Epic", tl.Burst)
+		local painted = 0
+		for i, part in onStage.Parts do
+			if onStage.Trans[i] < 1 then
+				painted += 1
+				T.eq(part.Material.Name, "Neon", part.Name .. ": glowing")
+				T.near(part.Color.R, tint.R * HatchFx.SilhouetteGlow, 0.01, part.Name .. ": R")
+				T.near(part.Color.G, tint.G * HatchFx.SilhouetteGlow, 0.01, part.Name .. ": G")
+				T.near(part.Color.B, tint.B * HatchFx.SilhouetteGlow, 0.01, part.Name .. ": B")
+			end
+		end
+		T.truthy(painted > 5, "the whole egg")
+		HatchFx.reset(onStage)
+		for i, part in onStage.Parts do
+			T.eq(part.Color, onStage.Colors[i], part.Name .. ": its own colour back")
+		end
+		local flat = GolemBuilder.capsule("Stone")
+		HatchFx.addCracks(flat, 3)
+		local inViewport = HatchFx.record(flat)
+		T.falsy(inViewport.InWorld, "a viewport's egg")
+		HatchFx.paintEgg(inViewport, pose, "Epic", tl.Burst)
+		for i, part in inViewport.Parts do
+			if inViewport.Trans[i] < 1 then
+				T.eq(part.Color, tint, part.Name .. ": the colour itself there")
+			end
+		end
+
+		-- the flat pieces: a share of their old strength (HatchStage.Glow), the rings too
+		for name, share in HatchStage.Glow do
+			T.truthy(share > 0 and share <= 0.7, `Glow.{name}: softer, still there ({share})`)
+		end
+		local o = CapsuleView.buildOpening(false)
+		CapsuleView.layoutOpening(o, false, 1280, 720, { Touch = false, Inset = 36 })
+		local ring = o.Rings[1][1]
+		local stroke = ring:FindFirstChildOfClass("UIStroke")
+		RevealKit.poseRing(ring, 0, white, { Alpha = 0.5 })
+		T.near(stroke.Transparency, 0.5, 1e-6, "a ring at half its strength")
+		RevealKit.poseRing(ring, 0, white)
+		T.near(stroke.Transparency, 0, 1e-6, "the other reveals' rings as before")
+		-- a whole opening of three with a Legendary on the stage (its rays, aura and flash): nothing
+		-- ever stronger than its share
+		local stage = HatchWorld.new()
+		CapsuleView.useBackdrop(o, stage.Surface)
+		local run = playOnStage(stage, o, "Stone", { "PebbleGolem", "DiamondDuke", "CopperTinker" })
+		local glow = HatchStage.Glow
+		local flashLeast = 1 - HatchFx.flashPeakOf(run.Timeline) * glow.Flash - 1e-6
+		local strongest = { Flash = 1, Orbit = 1, Aura = 1, Platform = 1, Sun = 1, Puff = 1 }
+		local t = 0
+		while t <= run.Timeline.Total + 0.1 do
+			HatchStage.pose(run, t, { Space = CAMERA, Fov = 40 })
+			if o.Flash.BackgroundTransparency < strongest.Flash then
+				strongest.Flash = o.Flash.BackgroundTransparency
+			end
+			for _, list in o.Orbits do
+				for _, orbit in list do
+					local line = orbit:FindFirstChild("Line")
+					if orbit.Visible and line then
+						strongest.Orbit = math.min(strongest.Orbit, line.Transparency)
+					end
+				end
+			end
+			for _, aura in o.Auras do
+				for _, disc in aura:GetChildren() do
+					if aura.Visible and disc:IsA("Frame") then
+						strongest.Aura = math.min(strongest.Aura, disc.BackgroundTransparency)
+					end
+				end
+			end
+			for _, platform in o.Platforms do
+				local outer = platform:FindFirstChild("Outer")
+				if platform.Visible and outer then
+					strongest.Platform = math.min(strongest.Platform, outer.BackgroundTransparency)
+				end
+			end
+			for _, piece in o.Sunburst:GetChildren() do
+				if o.Sunburst.Visible and piece:IsA("Frame") then
+					strongest.Sun = math.min(strongest.Sun, piece.BackgroundTransparency)
+				end
+			end
+			for _, puff in o.Puffs do
+				for _, disc in puff:GetChildren() do
+					if puff.Visible and disc:IsA("Frame") then
+						strongest.Puff = math.min(strongest.Puff, disc.BackgroundTransparency)
+					end
+				end
+			end
+			t += 0.02
+		end
+		T.truthy(strongest.Flash < 1 and strongest.Flash >= flashLeast, `one soft flash ({strongest.Flash})`)
+		T.truthy(strongest.Orbit >= 1 - glow.Orbits - 1e-6, `the orbits ({strongest.Orbit})`)
+		T.truthy(strongest.Aura >= 1 - 0.34 * glow.Auras - 1e-6, `the auras ({strongest.Aura})`)
+		T.truthy(strongest.Platform >= 1 - 0.9 * glow.Platforms - 1e-6, `the platforms ({strongest.Platform})`)
+		T.truthy(strongest.Sun >= 1 - 0.8 * glow.Sunburst - 1e-6, `the sunburst ({strongest.Sun})`)
+		T.truthy(strongest.Puff >= 1 - 0.38 * glow.Puffs - 1e-6, `the puffs ({strongest.Puff})`)
+		HatchStage.clear(o, nil, stage)
+
+		-- the opening's own softer bloom in the camera, the zone's handed back (CapsuleController)
+		local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+		local soft = CC.SoftBloom
+		T.truthy(soft.Intensity <= 0.25 and soft.Size <= 16 and soft.Threshold >= 1.5, "a soft, small bloom over a high threshold")
+		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		local code = string.gsub(source, "%-%-[^\n]*", "")
+		T.truthy(string.find(code, 'Lighting:FindFirstChildOfClass("BloomEffect")', 1, true), "the zone's bloom found")
+		T.truthy(string.find(code, "bloom.Parent = camera", 1, true), "its own in the camera (LightingController never tweens it)")
+		T.truthy(string.find(code, "zone.Enabled = false", 1, true), "the zone's off while it stands in")
+		T.truthy(string.find(code, "zone.Enabled = home.Enabled", 1, true), "and back as it was")
+		T.truthy(string.find(code, "Intensity = math.min(zone.Intensity, soft.Intensity)", 1, true), "never stronger than the zone's")
+		T.truthy(string.find(code, "Threshold = math.max(zone.Threshold, soft.Threshold)", 1, true), "never a lower threshold")
+		local _, ons = string.gsub(code, "setGlow%(true%)", "")
+		T.truthy(ons >= 2, "on as a chain begins and for each opening of it")
+		T.truthy(string.find(code, "setGlow(false)", 1, true), "off as the chain ends")
+	end)
 end
