@@ -390,7 +390,8 @@ return function(T, Loader)
 			-- streamed out / removed before its turn (Lune errors on reading a destroyed
 			-- part's Parent; Roblox gives nil, so unparenting stands in for Destroy)
 			gone.Parent = nil
-			for _ = 1, 20 do
+			-- (MinPerFrame parts a frame with no time budget: enough frames for all of them)
+			for _ = 1, math.ceil((#parts + 1) / StudStyleConfig.MinPerFrame) + 5 do
 				task.wait()
 			end
 			for i, part in parts do

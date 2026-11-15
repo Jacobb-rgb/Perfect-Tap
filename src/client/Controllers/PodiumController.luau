@@ -358,14 +358,24 @@ local function scanSpinners()
 	end
 end
 
+-- (2026-11-15 perf pass: every turning part of every near display in one BulkMoveTo a frame,
+-- not one CFrame write each: far less engine work per frame with several podiums in view)
+local moveParts: { BasePart } = {}
+local moveFrames: { CFrame } = {}
+
 local function spin(t: number)
+	local n = 0
 	for display, s in spinners do
 		if display.Parent then
 			local cf = s.Pivot * CFrame.new(0, math.sin(t * 1.4 + s.Phase) * BOB, 0) * CFrame.Angles(0, t * SPIN_SPEED + s.Phase, 0)
 			-- Mythic motes circle faster than the ore turns
 			local orbit = cf * CFrame.Angles(0, t * SPIN_SPEED * 2.5, 0)
 			for _, entry in s.Parts do
-				entry.Part.CFrame = (if entry.Mote then orbit else cf) * entry.Offset
+				if entry.Part.Parent then
+					n += 1
+					moveParts[n] = entry.Part
+					moveFrames[n] = (if entry.Mote then orbit else cf) * entry.Offset
+				end
 			end
 			local light = s.Light
 			if light then
@@ -377,6 +387,13 @@ local function spin(t: number)
 		else
 			spinners[display] = nil
 		end
+	end
+	for i = #moveParts, n + 1, -1 do
+		moveParts[i] = nil
+		moveFrames[i] = nil
+	end
+	if n > 0 then
+		Workspace:BulkMoveTo(moveParts, moveFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 end
 

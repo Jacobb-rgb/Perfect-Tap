@@ -72,6 +72,7 @@ BackpackWearController.DisplayRange = 70
 BackpackWearController.DisplayHysteresis = 20
 BackpackWearController.ShopHysteresis = BackpackShopDecor.Hysteresis -- for the shop's ranged plates and its decor
 BackpackWearController.LodInterval = 0.3
+BackpackWearController.BuildsPerTick = 2 -- new display packs built in one tick (the rest next tick)
 BackpackWearController.PoolPerPack = 2
 
 type Wearer = {
@@ -571,6 +572,10 @@ local function lodStep()
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local here = if root and root:IsA("BasePart") then root.Position else focus
 	local gone: { BasePart } = {}
+	-- (2026-11-15 perf pass: at most BuildsPerTick display packs are built in one tick: walking
+	-- up to the shop built every pack in range in the same frame, up to ~900 parts, a visible
+	-- hitch; the rest come over the next ticks, a few tenths of a second apart)
+	local builds = 0
 	for marker, display in displays do
 		if not marker:IsDescendantOf(Workspace) then
 			hideDisplay(display)
@@ -584,7 +589,12 @@ local function lodStep()
 			hideDisplay(display) -- (the other look: built again below)
 		end
 		if distance <= display.Range then
-			showDisplay(display, wantLite)
+			if display.Model or builds < BackpackWearController.BuildsPerTick then
+				if not display.Model then
+					builds += 1
+				end
+				showDisplay(display, wantLite)
+			end
 		elseif distance > display.Range + display.Hysteresis then
 			hideDisplay(display)
 		end

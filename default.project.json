@@ -49,6 +49,7 @@
         "StreamingEnabled": true,
         "StreamingMinRadius": 112,
         "StreamingTargetRadius": 384,
+        "StreamOutBehavior": "Opportunistic",
         "FallenPartsDestroyHeight": -700
       }
     },

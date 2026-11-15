@@ -156,8 +156,11 @@ StudStyleConfig.SkipParts = {
 -- Clients restyle new parts a little each frame (streaming brings thousands at
 -- once): until BudgetMs of the frame is used, looking at the clock every
 -- MinPerFrame parts (so at least that many per frame, it always goes on).
+-- (2026-11-15 perf pass: 50 parts between two looks at the clock took 3-6 ms on a phone, well
+-- over the 2 ms; the clock is cheap, so it is read every 12 parts and a stream-in no longer
+-- stalls frames.)
 StudStyleConfig.BudgetMs = 2
-StudStyleConfig.MinPerFrame = 50
+StudStyleConfig.MinPerFrame = 12
 
 -- The custom stud materials can be made (ids uploaded, or a preview).
 function StudStyleConfig.customReady(): boolean

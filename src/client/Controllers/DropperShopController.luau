@@ -23,6 +23,38 @@ local DropperShopController = {}
 -- house -> its showroom (built once; parented to the house while near)
 local built: { [Instance]: Model } = {}
 
+--[[
+	(2026-11-15 perf pass) A new showroom (~500 parts) goes into the scene a slice a frame, not all
+	in one frame (that frame hitched when you walked up to the shop): its pieces wait in a holder
+	and SliceSize of them move into it each frame. A showroom dropped meanwhile takes its
+	waiting pieces with it.
+]]
+DropperShopController.SliceSize = 40 -- parts (top-level pieces) a frame: the ~500-part room in ~13 frames
+local function addInSlices(model: Model, house: Instance)
+	local pieces = model:GetChildren()
+	if #pieces <= DropperShopController.SliceSize then
+		model.Parent = house
+		return
+	end
+	local holder = Instance.new("Folder")
+	for _, piece in pieces do
+		piece.Parent = holder
+	end
+	model.Parent = house
+	task.spawn(function()
+		for i, piece in pieces do
+			if built[house] ~= model then
+				break
+			end
+			piece.Parent = model
+			if i % DropperShopController.SliceSize == 0 then
+				task.wait()
+			end
+		end
+		holder:Destroy()
+	end)
+end
+
 local function drop(house: Instance)
 	local model = built[house]
 	if model then
@@ -49,10 +81,12 @@ local function update()
 			local model = built[house]
 			if distance <= DropperShopBuilder.ShowDistance then
 				if not model then
-					model = DropperShopBuilder.build(frame)
-					built[house] = model
+					local made = DropperShopBuilder.build(frame)
+					built[house] = made
+					addInSlices(made, house)
+					model = made
 				end
-				if model.Parent ~= house then
+				if model and model.Parent ~= house then
 					model.Parent = house
 				end
 			elseif model and distance > DropperShopBuilder.DropDistance then

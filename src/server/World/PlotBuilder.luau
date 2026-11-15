@@ -625,7 +625,9 @@ end
 local function pedestalMesh(m: Model, base: CFrame, locked: boolean): PedestalParts?
 	local spec = PlotBuilder.PodiumMesh
 	local w, h = spec.Width, spec.Height
-	local look = MeshKit.part(spec.Name, Vector3.new(w, h, w), base * CFrame.new(0, h / 2, 0), { Name = "Pedestal" })
+	-- (2026-11-15 perf pass: no shadow from the ~8k-triangle pedestal: forty of them drew 330k
+	-- triangles a second time in the shadow pass, for a short shadow on their own plinth)
+	local look = MeshKit.part(spec.Name, Vector3.new(w, h, w), base * CFrame.new(0, h / 2, 0), { Name = "Pedestal", CastShadow = false })
 	if not look then
 		return nil
 	end

@@ -348,7 +348,33 @@ end
 
 ---------------------------------------------------------------- rates
 
-local function setRate(e: ParticleEmitter, rate: number)
+--[[
+	The particle rates' scale for the player's graphics quality (2026-11-15 perf pass: snow and storm
+	rain kept ~2,000 particles alive on a phone): half on low quality (and on touch-only devices left
+	on automatic), 3/4 on medium, all of it on high (as MachineFxController.qualityScale). Read once
+	a second at most; outside a game client (the specs) it is 1.
+]]
+local qualityAt, qualityNow = -math.huge, 1
+function WeatherFx.qualityScale(): number
+	local now = os.clock()
+	if now - qualityAt < 1 then
+		return qualityNow
+	end
+	qualityAt = now
+	local ok, scale = pcall(function(): number
+		local level = UserSettings():GetService("UserGameSettings").SavedQualityLevel.Value
+		if level <= 0 then -- automatic
+			local input = game:GetService("UserInputService")
+			return if input.TouchEnabled and not input.KeyboardEnabled then 0.5 else 1
+		end
+		return if level <= 3 then 0.5 elseif level <= 6 then 0.75 else 1
+	end)
+	qualityNow = if ok and type(scale) == "number" then scale else 1
+	return qualityNow
+end
+
+local function setRate(e: ParticleEmitter, wanted: number)
+	local rate = wanted * WeatherFx.qualityScale()
 	local on = rate > 0.05
 	if e.Enabled ~= on then
 		e.Enabled = on
