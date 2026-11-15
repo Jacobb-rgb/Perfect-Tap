@@ -84,4 +84,36 @@ return function(T, Loader)
 		end
 		T.truthy(flames > 0, "the wing flames are there")
 	end)
+
+	-- (owner 2026-11-15 evening, floor 3 nearly white in his Studio test: "from Location 3 to the last,
+	-- slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast, the
+	-- original colours; keep Locations 1 and 2 unchanged")
+	T.test("less glow: mine floors 3-6 a step softer; floors 1-2 as they were", function()
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local presets = LightingConfig.Presets
+		-- Locations 1 and 2 as they were
+		local quarry, ember = presets.Quarry, presets.EmberCaves
+		T.eq(quarry.Lighting.ExposureCompensation, 0.27, "Quarry exposure")
+		T.eq(quarry.Lighting.EnvironmentSpecularScale, 0.55, "Quarry glints")
+		T.eq(quarry.Bloom.Intensity, 0.5, "Quarry bloom")
+		T.eq(quarry.Bloom.Size, 24, "Quarry bloom size")
+		T.eq(quarry.Bloom.Threshold, 1.15, "Quarry bloom threshold")
+		T.eq(ember.Lighting.ExposureCompensation, 0.45, "Ember Caves exposure")
+		T.eq(ember.Lighting.EnvironmentSpecularScale, 0.8, "Ember Caves glints")
+		T.eq(ember.Bloom.Intensity, 0.55, "Ember Caves bloom")
+		T.eq(ember.Bloom.Size, 24, "Ember Caves bloom size")
+		T.eq(ember.Bloom.Threshold, 1.1, "Ember Caves bloom threshold")
+		T.eq(MineFloors.ByIndex[1].Lighting, "Quarry", "floor 1 is the quarry")
+		T.eq(MineFloors.ByIndex[2].Lighting, "EmberCaves", "floor 2 is the Ember Caves")
+		-- Locations 3-6: a softer, smaller bloom over a higher threshold, fewer sky glints on the crystals
+		for index = 3, 6 do
+			local floor = MineFloors.ByIndex[index]
+			local preset = presets[floor.Lighting]
+			local label = `floor {index} ({floor.Lighting})`
+			T.truthy(preset.Bloom.Threshold >= 1.4, label .. ": crystals glow, never flare")
+			T.truthy(preset.Bloom.Intensity <= 0.3 and preset.Bloom.Size <= 16, label .. ": a soft, small bloom")
+			T.truthy(preset.Lighting.EnvironmentSpecularScale <= 0.3, label .. ": fewer white glints")
+			T.truthy(preset.Lighting.ExposureCompensation <= 0.24, label .. ": a step down")
+		end
+	end)
 end

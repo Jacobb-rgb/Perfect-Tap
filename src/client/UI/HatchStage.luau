@@ -89,6 +89,29 @@ HatchStage.SunSpin = 9 -- degrees a second (Reduce motion: still)
 -- pill and the banner make room for it.
 HatchStage.PopPeak = 1.1
 
+--[[
+	(owner 2026-11-15, his Studio test of the 3D stage: "too bright and overexposed ... reduce the
+	bright flashes and particle effects; the eggs and pets clearly visible with all their details")
+	How strongly the opening's flat light pieces draw, a share of what they were made with for the
+	flat viewport: on the 3D stage the eggs and golems light and glow for real, and the white rings
+	crossing them (the orbits, the shockwaves, the puff) and the discs, rays and flash behind them
+	only washed them out. Each keeps its moves and its colour, softer; the orbits' sparks and the
+	platforms' cores lean less to white. Sparks: the share of the burst's 3D sparks.
+]]
+HatchStage.Glow = {
+	Orbits = 0.55,
+	OrbitWhite = 0.3, -- (was 0.6)
+	Rings = 0.65,
+	Puffs = 0.5,
+	Platforms = 0.6,
+	PlatformWhite = 0.2, -- (was 0.35)
+	Auras = 0.6,
+	Blobs = 0.55,
+	Sunburst = 0.55,
+	Flash = 0.5,
+	Sparks = 0.65,
+}
+
 export type Args = {
 	Refs: CapsuleView.OpenRefs,
 	Capsule: string,
@@ -593,6 +616,7 @@ local function poseRings(run: Run, t: number)
 					From = 0.55,
 					Grow = 1.5,
 					Thickness = math.max(3, golemPx * 0.022),
+					Alpha = HatchStage.Glow.Rings, -- (they cross the golem too)
 				})
 				continue
 			end
@@ -602,6 +626,7 @@ local function poseRings(run: Run, t: number)
 				From = HatchFx.RingFrom,
 				Grow = HatchFx.RingGrow,
 				Thickness = math.max(3, eggPx * 0.016),
+				Alpha = HatchStage.Glow.Rings,
 			})
 		end
 		-- the puff: with the rings, and again (bigger) at the burst
@@ -620,7 +645,7 @@ local function poseRings(run: Run, t: number)
 			puff.Size = UDim2.fromOffset(eggPx * puffK, eggPx * puffK)
 			for _, disc in puff:GetChildren() do
 				if disc:IsA("Frame") then
-					disc.BackgroundTransparency = puffAlpha
+					disc.BackgroundTransparency = 1 - (1 - puffAlpha) * HatchStage.Glow.Puffs
 				end
 			end
 		end
@@ -674,19 +699,20 @@ local function posePlatforms(run: Run, t: number, aspect: number)
 		local color = energyOf(run, slot, t, 0.5)
 		local outer = platform:FindFirstChild("Outer")
 		local core = platform:FindFirstChild("Core")
+		local glow = strength * HatchStage.Glow.Platforms
 		if outer and outer:IsA("Frame") then
 			outer.BackgroundColor3 = color
-			outer.BackgroundTransparency = 1 - 0.9 * strength
+			outer.BackgroundTransparency = 1 - 0.9 * glow
 			local rim = outer:FindFirstChild("Rim")
 			if rim and rim:IsA("UIStroke") then
 				rim.Color = color
 				rim.Thickness = math.max(2, width * 0.012)
-				rim.Transparency = 1 - 0.75 * strength
+				rim.Transparency = 1 - 0.75 * glow
 			end
 		end
 		if core and core:IsA("Frame") then
-			core.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.35)
-			core.BackgroundTransparency = 1 - 0.85 * strength
+			core.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), HatchStage.Glow.PlatformWhite)
+			core.BackgroundTransparency = 1 - 0.85 * glow
 		end
 	end
 end
@@ -712,16 +738,17 @@ local function poseOrbits(run: Run, t: number)
 			ring.Position = UDim2.fromOffset(center.X, center.Y)
 			ring.Size = UDim2.fromOffset(d, d)
 			ring.Rotation = turn
+			local glow = strength * HatchStage.Glow.Orbits
 			local line = ring:FindFirstChild("Line")
 			if line and line:IsA("UIStroke") then
 				line.Color = color
 				line.Thickness = math.max(2, eggPx * (0.008 + 0.01 * charge))
-				line.Transparency = 1 - strength
+				line.Transparency = 1 - glow
 			end
 			local spark = ring:FindFirstChild("Spark")
 			if spark and spark:IsA("Frame") then
-				spark.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.6)
-				spark.BackgroundTransparency = 1 - strength
+				spark.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), HatchStage.Glow.OrbitWhite)
+				spark.BackgroundTransparency = 1 - glow
 			end
 		end
 	end
@@ -784,7 +811,7 @@ local function poseAuras(run: Run, t: number)
 			if disc:IsA("Frame") then
 				local j = tonumber(string.sub(disc.Name, 5)) or 1
 				disc.BackgroundColor3 = color
-				disc.BackgroundTransparency = 1 - (0.1 + 0.08 * j) * strength
+				disc.BackgroundTransparency = 1 - (0.1 + 0.08 * j) * strength * HatchStage.Glow.Auras
 			end
 		end
 	end
@@ -805,7 +832,7 @@ local function poseBlobs(run: Run, t: number)
 			for _, disc in blob:GetChildren() do
 				if disc:IsA("Frame") then
 					local j = tonumber(string.sub(disc.Name, 5)) or 1
-					disc.BackgroundTransparency = 1 - (0.14 + 0.07 * j) * strength
+					disc.BackgroundTransparency = 1 - (0.14 + 0.07 * j) * strength * HatchStage.Glow.Blobs
 					if run.BestRarity == "Mythic" then
 						disc.BackgroundColor3 = HatchFx.crackColor("Mythic", t, i / #o.Blobs, 0)
 					end
@@ -1000,7 +1027,7 @@ local function poseSunburst(run: Run, t: number, dt: number)
 	for i, piece in o.Sunburst:GetChildren() do
 		if piece:IsA("Frame") then
 			local base = if piece.Name == "Glow" then 0.55 elseif rays and piece.Name ~= "Core" then 0.2 else 0.35
-			piece.BackgroundTransparency = 1 - (1 - base) * sun
+			piece.BackgroundTransparency = 1 - (1 - base) * sun * HatchStage.Glow.Sunburst
 			if mythic and piece.Name ~= "Glow" and piece.Name ~= "Core" then
 				piece.BackgroundColor3 = Color3.fromHSV((i / 16 + t * 0.2) % 1, 0.55, 1)
 			end
@@ -1267,7 +1294,7 @@ local function burstSparks(run: Run, aspect: number)
 	local many = run.Count > 5
 	for slot, rec in run.Args.Eggs do
 		local order = math.clamp(GolemConfig.order(run.Kinds[slot]), 1, 6)
-		local count = if many then 8 + 2 * order else 18 + 6 * order
+		local count = (if many then 8 + 2 * order else 18 + 6 * order) * HatchStage.Glow.Sparks
 		local middle = eggMiddle(run, slot, aspect)
 		HatchWorld.burst(world, slot, CFrame.new(middle), rec.Height * 0.3, run.Colors[slot], count)
 	end
@@ -1356,8 +1383,8 @@ function HatchStage.pose(run: Run, t: number, view: View?): { string }
 		end
 	end
 	local from = run.FlashFrom
-	-- (V2: stronger for the rarer: the Tier's)
-	RevealKit.poseFlash(o.Flash, if from then HatchFx.flashU(t - from) else -1, HatchFx.flashPeakOf(tl))
+	-- (V2: stronger for the rarer: the Tier's; a soft one behind the stage, Glow.Flash)
+	RevealKit.poseFlash(o.Flash, if from then HatchFx.flashU(t - from) else -1, HatchFx.flashPeakOf(tl) * HatchStage.Glow.Flash)
 	if t >= tl.Reveal and once("Reveal") then
 		reveal(run, aspect)
 	end

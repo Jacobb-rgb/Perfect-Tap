@@ -131,6 +131,14 @@ local SUNSET_SKY = {
 -- Threshold / 2^Exposure: 1 / 2^0.27 = 0.83, the same as on 10-25
 -- (0.92 / 2^0.15). The neon and the brightest sunlit stone glow as they did
 -- then; the statue's gold blooms less, being shaded (GoldenStatue.shade).
+--
+-- Owner 2026-11-15 evening (his Studio test, floor 3 nearly white: "from Location 3 to the last,
+-- slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast,
+-- the original colours; keep Locations 1 and 2 unchanged"): the mine floors 3-6 (Lagoon, Palace,
+-- Storm, Core) take the values he tested: exposure 0.08-0.24 (0.16-0.21 lower than before), a
+-- softer, smaller bloom over a higher Threshold (crystals glow, they no longer flare), fewer white
+-- glints of the picture sky on the crystals (EnvironmentSpecularScale 1 -> 0.3) and a touch more
+-- contrast. Quarry and EmberCaves (Locations 1 and 2) stay as they are.
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
@@ -276,9 +284,9 @@ LightingConfig.Presets = {
 			Brightness = 0.4,
 			Ambient = Color3.new(0.16, 0.26, 0.32),
 			OutdoorAmbient = Color3.new(0.08, 0.14, 0.18),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.12,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.3,
 		},
 		Atmosphere = {
 			Density = 0.36,
@@ -290,11 +298,11 @@ LightingConfig.Presets = {
 		},
 		ColorCorrection = {
 			Brightness = 0,
-			Contrast = 0.2,
+			Contrast = 0.23,
 			Saturation = 0.34,
 			TintColor = Color3.new(0.9, 1, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.25, Size = 16, Threshold = 1.4 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Floor 4, Sunken Palace: dim violet halls, warm gold glints.
@@ -303,9 +311,9 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.22, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.12, 0.2),
-			ExposureCompensation = 0.45,
+			ExposureCompensation = 0.24,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.3,
 		},
 		Atmosphere = {
 			Density = 0.42,
@@ -316,12 +324,12 @@ LightingConfig.Presets = {
 			Haze = 2.2,
 		},
 		ColorCorrection = {
-			Brightness = 0.03,
-			Contrast = 0.2,
+			Brightness = 0.01,
+			Contrast = 0.23,
 			Saturation = 0.3,
 			TintColor = Color3.new(1, 0.96, 1),
 		},
-		Bloom = { Intensity = 0.55, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.28, Size = 16, Threshold = 1.4 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Floor 6, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
@@ -330,9 +338,9 @@ LightingConfig.Presets = {
 			Brightness = 0.3,
 			Ambient = Color3.new(0.24, 0.18, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.1, 0.22),
-			ExposureCompensation = 0.25,
+			ExposureCompensation = 0.08,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.3,
 		},
 		Atmosphere = {
 			Density = 0.3,
@@ -344,11 +352,11 @@ LightingConfig.Presets = {
 		},
 		ColorCorrection = {
 			Brightness = 0,
-			Contrast = 0.22,
+			Contrast = 0.25,
 			Saturation = 0.36,
 			TintColor = Color3.new(1, 0.94, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.25, Size = 16, Threshold = 1.4 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 		Sky = {
 			Top = Color3.fromRGB(14, 10, 34),
@@ -366,9 +374,9 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.28, 0.4),
 			OutdoorAmbient = Color3.new(0.12, 0.14, 0.22),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.14,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.3,
 		},
 		Atmosphere = {
 			Density = 0.38,
@@ -380,11 +388,11 @@ LightingConfig.Presets = {
 		},
 		ColorCorrection = {
 			Brightness = 0,
-			Contrast = 0.22,
+			Contrast = 0.25,
 			Saturation = 0.3,
 			TintColor = Color3.new(0.96, 0.98, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.25, Size = 16, Threshold = 1.4 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Close-up while cleaning ore: extra warmth (no blur: the owner wants it sharp).

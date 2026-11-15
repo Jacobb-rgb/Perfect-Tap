@@ -77,12 +77,23 @@ HatchWorld.BackdropDepth = 2.6
 HatchWorld.BackdropBehind = 1.15
 HatchWorld.BackShare = 0.78
 HatchWorld.BackdropMost = 5.0
-HatchWorld.Key = { Position = Vector3.new(-0.7, 0.85, 0.2), Aim = Vector3.new(0, -0.05, -1.3), Brightness = 0.9, Range = 4.5, Angle = 80 }
+--[[
+	(owner 2026-11-15, his Studio test of the 3D stage: "too bright and overexposed ... lower the
+	glow, fewer bright flashes and particles; the eggs and pets clearly visible with all their
+	details, the magic kept, the light softer") The stage's own light is a soft fill on top of the
+	world's: the key and rim lights a quarter down, the motes fewer, see-through and in their
+	colour more than white (Glow: their LightEmission; 1 adds every mote's colour onto the egg),
+	the sparks a softer white. The opening's bloom: CapsuleController.SoftBloom.
+]]
+HatchWorld.Key = { Position = Vector3.new(-0.7, 0.85, 0.2), Aim = Vector3.new(0, -0.05, -1.3), Brightness = 0.68, Range = 4.5, Angle = 80 }
 HatchWorld.KeyColor = Color3.fromRGB(255, 248, 238)
-HatchWorld.Rim = { Position = Vector3.new(0.75, 1.0, -2.8), Brightness = 0.75, Range = 3.0 }
+HatchWorld.Rim = { Position = Vector3.new(0.75, 1.0, -2.8), Brightness = 0.55, Range = 3.0 }
 HatchWorld.RimColor = Color3.fromRGB(214, 230, 255)
 HatchWorld.SparkTexture = "rbxasset://textures/particles/sparkles_main.dds" -- built in: no upload
-HatchWorld.MoteRate = 46 -- motes a second into one egg at the charge's peak
+HatchWorld.MoteRate = 30 -- motes a second into one egg at the charge's peak
+HatchWorld.Glow = 0.45 -- the motes' and sparks' LightEmission (1: fully additive, they whitened the eggs)
+HatchWorld.White = 0.15 -- how far a mote leans from its colour to white
+HatchWorld.SparkWhite = 0.45 -- how white a spark starts (it turns into its colour)
 HatchWorld.Slots = 10 -- CapsuleView.StageTags
 
 export type Opts = {
@@ -140,7 +151,7 @@ local function emitter(parent: Part, inward: boolean): ParticleEmitter
 	local e = Instance.new("ParticleEmitter")
 	e.Name = if inward then "Motes" else "Sparks"
 	e.Texture = HatchWorld.SparkTexture
-	e.LightEmission = 1
+	e.LightEmission = HatchWorld.Glow
 	e.LightInfluence = 0
 	e.LockedToPart = true -- (the stage rides with the camera: so do its particles)
 	e.Rate = 0
@@ -153,8 +164,8 @@ local function emitter(parent: Part, inward: boolean): ParticleEmitter
 	e.Drag = if inward then 0 else 5
 	e.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.18, 0.12),
-		NumberSequenceKeypoint.new(0.8, 0.25),
+		NumberSequenceKeypoint.new(0.18, 0.3),
+		NumberSequenceKeypoint.new(0.8, 0.45),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	e.Parent = parent
@@ -359,8 +370,8 @@ function HatchWorld.setLight(world: World, lift: number, hue: number)
 	world.Lift = k
 	world.KeyLight.Color = HatchWorld.KeyColor:Lerp(Color3.fromHSV(hue % 1, 0.3, 1), k * 0.8)
 	world.RimLight.Color = HatchWorld.RimColor:Lerp(Color3.fromHSV((hue + 0.5) % 1, 0.4, 1), k)
-	world.KeyLight.Brightness = HatchWorld.Key.Brightness * (1 + 0.35 * k)
-	world.RimLight.Brightness = HatchWorld.Rim.Brightness * (1 + 0.6 * k)
+	world.KeyLight.Brightness = HatchWorld.Key.Brightness * (1 + 0.25 * k)
+	world.RimLight.Brightness = HatchWorld.Rim.Brightness * (1 + 0.4 * k)
 end
 
 --[[
@@ -390,7 +401,7 @@ function HatchWorld.energy(world: World, slot: number, cf: CFrame, radius: numbe
 		NumberSequenceKeypoint.new(0.7, r * 0.04),
 		NumberSequenceKeypoint.new(1, 0),
 	})
-	e.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.35), color)
+	e.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), HatchWorld.White), color)
 end
 
 --[[
@@ -417,7 +428,7 @@ function HatchWorld.burst(world: World, slot: number, cf: CFrame, radius: number
 	})
 	e.Acceleration = Vector3.new(0, -r * 1.6, 0)
 	e.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1, 1, 1), HatchWorld.SparkWhite)),
 		ColorSequenceKeypoint.new(0.25, color),
 		ColorSequenceKeypoint.new(1, color),
 	})
