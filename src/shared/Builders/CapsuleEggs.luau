@@ -304,12 +304,14 @@ function CapsuleEggs.premium(kit: Kit, tools: Tools, s: Shard, th: Theme)
 			local a0 = onTop(az + (j - 1) * 0.06, heights[j], 0.02)
 			local a1 = onTop(az + j * 0.06, heights[j + 1], 0.02)
 			local dir = (a1 - a0).Unit
+			-- (2026-11-15: half the width steps between a stream's pieces, so its joints read as one
+			-- flowing stream, not stacked bricks; it still widens a little as it runs down)
 			T.seg(
 				s.Top,
 				`Stream{i}_{j}`,
 				a0 - dir * 0.08,
 				a1 + dir * 0.06,
-				w * (1 + 0.15 * j),
+				w * (1.08 + 0.075 * j),
 				0.08,
 				if j == 1 then th.Hot else th.Glow,
 				GLOW
