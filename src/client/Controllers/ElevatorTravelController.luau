@@ -382,7 +382,9 @@ local function takeCamera(t: Trip)
 	t.PopLighting = LightingController.push(LIGHTING, 0.1)
 end
 
-local function giveCamera(t: Trip)
+-- `atTarget` = the ride ended at the target (the camera stands behind the player there); a ride cut
+-- short leaves the camera to Roblox's own (it goes back to wherever the character is).
+local function giveCamera(t: Trip, atTarget: boolean)
 	local camera = Workspace.CurrentCamera
 	if not t.Taken then
 		return
@@ -390,7 +392,7 @@ local function giveCamera(t: Trip)
 	t.Taken = false
 	if camera then
 		local target = t.Target
-		if target and player.Character then
+		if atTarget and target and player.Character then
 			camera.CFrame = Stage.exitCamera(target, t.ExitZoom or t.SavedZoom)
 		end
 		camera.CameraType = Enum.CameraType.Custom
@@ -509,7 +511,7 @@ local function finish(t: Trip, cut: boolean)
 		popLighting(t)
 	end)
 	safely("the camera", function()
-		giveCamera(t)
+		giveCamera(t, not cut)
 	end)
 	if t.Taken then
 		-- (the hand back above failed: the camera at least is the player's again)
@@ -539,6 +541,9 @@ local function finish(t: Trip, cut: boolean)
 		if screen then
 			-- a short fade back from black over whatever the camera jumped to
 			screen.Abort = t.Clock
+			-- black at once (this frame may show wherever the camera jumped to), then a short fade back
+			screen.Dip.Visible = true
+			screen.Dip.BackgroundTransparency = 0
 			local started = os.clock()
 			local info: View.Info =
 				{ Name = t.Name, Floor = t.Floor, Glow = t.Theme.Glow, Down = t.Plan.Down, Reduced = t.Reduced, CutAt = nil }
