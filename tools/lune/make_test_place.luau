@@ -65,4 +65,8 @@ if process.args[3] == "trace" then
 	trace.Parent = game:GetService("StarterPlayer"):FindFirstChildOfClass("StarterPlayerScripts")
 end
 fs.writeFile(dst, roblox.serializePlace(game))
+-- Lune drops the texture packs it can't read: put them back (tools/meshy/texture_packs.mjs)
+local packs = process.spawn("node", { "tools/meshy/texture_packs.mjs", "inject", dst })
+print((string.gsub(packs.stdout .. packs.stderr, "%s+$", "")))
+assert(packs.ok, "texture_packs.mjs inject failed")
 print("wrote " .. dst)

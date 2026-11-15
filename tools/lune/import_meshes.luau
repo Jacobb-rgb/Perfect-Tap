@@ -16,6 +16,13 @@
 	Lune 0.8.9 can't read its zstd chunks and Content properties.
 
 	  lune run tools/lune/import_meshes.luau <hotovo.rbxl | .rbxm> [set name]
+
+	Before it: python3 tools/meshy/glb_albedo.py tools/meshy/albedo.json <the set's .glb files> (each
+	template's fallback colour). The tool itself adds the file's texture packs to
+	tools/meshy/texture_packs.json (tools/meshy/texture_packs.mjs extract) and applies
+	tools/lune/lib/mesh_looks.luau to every template: its fallback colour, and a TextureID in place of
+	a SurfaceAppearance whose pack isn't known. Every finished place gets the packs put back by
+	tools/meshy/texture_packs.mjs inject (tools/build.sh, make_test_place.luau).
 ]]
 
 local fs = require("@lune/fs")
@@ -23,6 +30,7 @@ local process = require("@lune/process")
 local roblox = require("@lune/roblox") :: any
 
 local Loader = require("./lib/loader")
+local MeshLooks = require("./lib/mesh_looks")
 
 local path = process.args[1]
 assert(path, "usage: lune run tools/lune/import_meshes.luau <hotovo.rbxl|.rbxm> [set name]")
@@ -36,6 +44,11 @@ local OUT = root .. "/src/shared/Assets/MeshAssets.rbxm"
 local UPLOAD = root .. "/src/shared/Config/MeshUpload.luau"
 
 local bytes = fs.readFile(path)
+-- the file's texture packs (a Studio save carries one per SurfaceAppearance) into the table first
+do
+	local packs = process.spawn("node", { root .. "/tools/meshy/texture_packs.mjs", "extract", path })
+	print((string.gsub(packs.stdout .. packs.stderr, "%s+$", "")))
+end
 local tops: { any }
 if path:lower():match("%.rbxlx?$") then
 	local ok, game = pcall(roblox.deserializePlace, bytes)
@@ -249,6 +262,20 @@ for name, part in found do
 	count += 1
 end
 
+-- every template: its fallback colour, and a TextureID where its SurfaceAppearance has no known pack
+local albedo, packTable = MeshLooks.load(root)
+local noAlbedo: { string } = {}
+local toTexture: { string } = {}
+for _, t in folder:GetChildren() do
+	local r = MeshLooks.apply(t, albedo, packTable)
+	if not r.Colour then
+		table.insert(noAlbedo, t.Name)
+	end
+	if r.ToTexture then
+		table.insert(toTexture, t.Name)
+	end
+end
+
 local missing: { string } = {}
 for name in Catalog.Assets do
 	if not folder:FindFirstChild(name) then
@@ -279,6 +306,10 @@ end
 list("MISSING", missing)
 list("NOT UPLOADED (skipped)", notUploaded)
 list("NO TEXTURE", noTexture)
+table.sort(noAlbedo)
+table.sort(toTexture)
+list("NO ALBEDO (grey while the texture loads: run tools/meshy/glb_albedo.py on its .glb)", noAlbedo)
+list("NO TEXTURE PACK (draws its colour map as a TextureID)", toTexture)
 list("DOUBLED (the later import kept)", doubled)
 list("SIZE NOT AS PROCESSED", sizeOff)
 if strays > 0 then

@@ -63,6 +63,26 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(count > 0, "templates")
+		-- (owner 2026-11-15: grey and white models) every template shows its texture's own colour while
+		-- the texture can't draw, never Studio's default grey; a SurfaceAppearance only ships with its
+		-- texture pack (tools/meshy/texture_packs.mjs puts it in every place file), else its colour map
+		-- draws as a TextureID (tools/lune/lib/mesh_looks.luau)
+		local fs = require("@lune/fs")
+		local serde = require("@lune/serde")
+		local packs = serde.decode("json", fs.readFile("tools/meshy/texture_packs.json"))
+		local function id(s: string): string
+			return string.match(s, "(%d+)%s*$") or ""
+		end
+		for _, t in real:GetChildren() do
+			local c = t.Color
+			local grey = math.floor(c.R * 255 + 0.5) == 163 and math.floor(c.G * 255 + 0.5) == 162 and math.floor(c.B * 255 + 0.5) == 165
+			T.truthy(not grey, t.Name .. " has its fallback colour (not the importer's grey)")
+			local look = t:FindFirstChildOfClass("SurfaceAppearance")
+			if look then
+				local key = table.concat({ id(look.ColorMap), id(look.NormalMap), id(look.RoughnessMap), id(look.MetalnessMap) }, "|")
+				T.truthy(packs[key] ~= nil, t.Name .. "'s SurfaceAppearance has a known texture pack")
+			end
+		end
 		for name in Catalog.Assets do
 			-- (the sharper floors, NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra, wait for his import too:
 			-- MineFloors.floorTiles keeps the first set until every one of a floor's is in)

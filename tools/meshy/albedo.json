@@ -1,0 +1,1577 @@
+{
+ "Floor_DeepHollowHD_01": [
+  0.3892,
+  0.3791,
+  0.4764
+ ],
+ "Floor_DeepHollowHD_02": [
+  0.4463,
+  0.3868,
+  0.4374
+ ],
+ "Floor_DeepHollowHD_03": [
+  0.396,
+  0.4037,
+  0.466
+ ],
+ "Floor_DeepHollowHD_04": [
+  0.4211,
+  0.4533,
+  0.5031
+ ],
+ "Floor_DeepHollowHD_05": [
+  0.4223,
+  0.3848,
+  0.472
+ ],
+ "Floor_DeepHollowHD_06": [
+  0.3843,
+  0.4205,
+  0.5037
+ ],
+ "Floor_DeepHollowHD_07": [
+  0.3882,
+  0.491,
+  0.5413
+ ],
+ "Floor_DeepHollowHD_08": [
+  0.3903,
+  0.3995,
+  0.4795
+ ],
+ "Floor_DeepHollowHD_09": [
+  0.4216,
+  0.4126,
+  0.4661
+ ],
+ "Floor_DeepHollowHD_10": [
+  0.3581,
+  0.4673,
+  0.5574
+ ],
+ "Floor_DeepHollowHD_11": [
+  0.3991,
+  0.4775,
+  0.4937
+ ],
+ "Floor_DeepHollowHD_12": [
+  0.3811,
+  0.5534,
+  0.6353
+ ],
+ "Floor_DeepHollowHD_13": [
+  0.3947,
+  0.5096,
+  0.5608
+ ],
+ "Floor_DeepHollowHD_14": [
+  0.3683,
+  0.3919,
+  0.436
+ ],
+ "Floor_DeepHollowHD_15": [
+  0.4004,
+  0.4074,
+  0.4304
+ ],
+ "Floor_DeepHollowHD_16": [
+  0.3864,
+  0.4364,
+  0.4984
+ ],
+ "Floor_DeepHollow_01": [
+  0.4113,
+  0.3816,
+  0.4724
+ ],
+ "Floor_DeepHollow_02": [
+  0.4186,
+  0.4122,
+  0.4686
+ ],
+ "Floor_DeepHollow_03": [
+  0.4052,
+  0.3908,
+  0.4538
+ ],
+ "Floor_DeepHollow_04": [
+  0.384,
+  0.4398,
+  0.5162
+ ],
+ "Floor_DeepHollow_05": [
+  0.4079,
+  0.3531,
+  0.4261
+ ],
+ "Floor_DeepHollow_06": [
+  0.4529,
+  0.4045,
+  0.4656
+ ],
+ "Floor_DeepHollow_07": [
+  0.3843,
+  0.5237,
+  0.5599
+ ],
+ "Floor_DeepHollow_08": [
+  0.3913,
+  0.4941,
+  0.5429
+ ],
+ "Floor_DeepHollow_09": [
+  0.4313,
+  0.3797,
+  0.4964
+ ],
+ "Floor_DeepHollow_10": [
+  0.4138,
+  0.4449,
+  0.5173
+ ],
+ "Floor_DeepHollow_11": [
+  0.3467,
+  0.5866,
+  0.6499
+ ],
+ "Floor_DeepHollow_12": [
+  0.3953,
+  0.6518,
+  0.7411
+ ],
+ "Floor_DeepHollow_13": [
+  0.3939,
+  0.4497,
+  0.4746
+ ],
+ "Floor_DeepHollow_14": [
+  0.3669,
+  0.4327,
+  0.4796
+ ],
+ "Floor_DeepHollow_15": [
+  0.3703,
+  0.3911,
+  0.4388
+ ],
+ "Floor_DeepHollow_16": [
+  0.4006,
+  0.3974,
+  0.4586
+ ],
+ "Floor_DeepHollow_17": [
+  0.3968,
+  0.4106,
+  0.4829
+ ],
+ "Floor_DeepHollow_18": [
+  0.4002,
+  0.3784,
+  0.4562
+ ],
+ "Floor_DeepHollow_19": [
+  0.3903,
+  0.424,
+  0.4722
+ ],
+ "Floor_EmberCavesHD_01": [
+  0.3027,
+  0.2693,
+  0.3373
+ ],
+ "Floor_EmberCavesHD_02": [
+  0.3262,
+  0.2894,
+  0.3513
+ ],
+ "Floor_EmberCavesHD_03": [
+  0.3508,
+  0.2941,
+  0.3584
+ ],
+ "Floor_EmberCavesHD_04": [
+  0.3367,
+  0.2943,
+  0.3577
+ ],
+ "Floor_EmberCavesHD_05": [
+  0.4514,
+  0.3343,
+  0.3502
+ ],
+ "Floor_EmberCavesHD_06": [
+  0.3425,
+  0.2871,
+  0.3456
+ ],
+ "Floor_EmberCavesHD_07": [
+  0.5263,
+  0.3618,
+  0.3531
+ ],
+ "Floor_EmberCavesHD_08": [
+  0.3765,
+  0.3061,
+  0.3566
+ ],
+ "Floor_EmberCavesHD_09": [
+  0.3403,
+  0.2721,
+  0.3408
+ ],
+ "Floor_EmberCavesHD_10": [
+  0.3055,
+  0.2731,
+  0.3509
+ ],
+ "Floor_EmberCavesHD_11": [
+  0.4393,
+  0.3566,
+  0.3534
+ ],
+ "Floor_EmberCavesHD_12": [
+  0.4126,
+  0.32,
+  0.3595
+ ],
+ "Floor_EmberCavesHD_13": [
+  0.5702,
+  0.3375,
+  0.3654
+ ],
+ "Floor_EmberCavesHD_14": [
+  0.393,
+  0.3132,
+  0.357
+ ],
+ "Floor_EmberCavesHD_15": [
+  0.3712,
+  0.3081,
+  0.3734
+ ],
+ "Floor_EmberCavesHD_16": [
+  0.3546,
+  0.2933,
+  0.34
+ ],
+ "Floor_EmberCaves_01": [
+  0.2999,
+  0.2685,
+  0.3394
+ ],
+ "Floor_EmberCaves_02": [
+  0.3384,
+  0.2908,
+  0.3603
+ ],
+ "Floor_EmberCaves_03": [
+  0.4384,
+  0.3277,
+  0.35
+ ],
+ "Floor_EmberCaves_04": [
+  0.3612,
+  0.2963,
+  0.3476
+ ],
+ "Floor_EmberCaves_05": [
+  0.3278,
+  0.2889,
+  0.3425
+ ],
+ "Floor_EmberCaves_06": [
+  0.3828,
+  0.308,
+  0.3455
+ ],
+ "Floor_EmberCaves_07": [
+  0.4725,
+  0.3525,
+  0.3524
+ ],
+ "Floor_EmberCaves_08": [
+  0.4497,
+  0.314,
+  0.3531
+ ],
+ "Floor_EmberCaves_09": [
+  0.3279,
+  0.2894,
+  0.3502
+ ],
+ "Floor_EmberCaves_10": [
+  0.3714,
+  0.3065,
+  0.3565
+ ],
+ "Floor_EmberCaves_11": [
+  0.4677,
+  0.3421,
+  0.3412
+ ],
+ "Floor_EmberCaves_12": [
+  0.4756,
+  0.3349,
+  0.3561
+ ],
+ "Floor_EmberCaves_13": [
+  0.2985,
+  0.2628,
+  0.3406
+ ],
+ "Floor_EmberCaves_14": [
+  0.3923,
+  0.3066,
+  0.3582
+ ],
+ "Floor_EmberCaves_15": [
+  0.4492,
+  0.3488,
+  0.3546
+ ],
+ "Floor_EmberCaves_16": [
+  0.3301,
+  0.283,
+  0.3536
+ ],
+ "Floor_HeartstoneCoreHD_01": [
+  0.4531,
+  0.3141,
+  0.5692
+ ],
+ "Floor_HeartstoneCoreHD_02": [
+  0.4136,
+  0.3324,
+  0.5501
+ ],
+ "Floor_HeartstoneCoreHD_03": [
+  0.3947,
+  0.2823,
+  0.5429
+ ],
+ "Floor_HeartstoneCoreHD_04": [
+  0.4175,
+  0.3206,
+  0.5606
+ ],
+ "Floor_HeartstoneCoreHD_05": [
+  0.4534,
+  0.3953,
+  0.6023
+ ],
+ "Floor_HeartstoneCoreHD_06": [
+  0.4696,
+  0.3047,
+  0.5946
+ ],
+ "Floor_HeartstoneCoreHD_07": [
+  0.6913,
+  0.3097,
+  0.7339
+ ],
+ "Floor_HeartstoneCoreHD_08": [
+  0.674,
+  0.3062,
+  0.7007
+ ],
+ "Floor_HeartstoneCoreHD_09": [
+  0.4424,
+  0.3385,
+  0.5334
+ ],
+ "Floor_HeartstoneCoreHD_10": [
+  0.449,
+  0.2949,
+  0.5688
+ ],
+ "Floor_HeartstoneCoreHD_11": [
+  0.4437,
+  0.3307,
+  0.5367
+ ],
+ "Floor_HeartstoneCoreHD_12": [
+  0.3893,
+  0.2862,
+  0.5343
+ ],
+ "Floor_HeartstoneCoreHD_13": [
+  0.5913,
+  0.2959,
+  0.682
+ ],
+ "Floor_HeartstoneCoreHD_14": [
+  0.4232,
+  0.3871,
+  0.5831
+ ],
+ "Floor_HeartstoneCoreHD_15": [
+  0.6999,
+  0.3455,
+  0.7381
+ ],
+ "Floor_HeartstoneCoreHD_16": [
+  0.4816,
+  0.274,
+  0.5773
+ ],
+ "Floor_HeartstoneCore_01": [
+  0.4143,
+  0.2839,
+  0.553
+ ],
+ "Floor_HeartstoneCore_02": [
+  0.4312,
+  0.3039,
+  0.5648
+ ],
+ "Floor_HeartstoneCore_03": [
+  0.4554,
+  0.2017,
+  0.6225
+ ],
+ "Floor_HeartstoneCore_04": [
+  0.4308,
+  0.3321,
+  0.5568
+ ],
+ "Floor_HeartstoneCore_05": [
+  0.4076,
+  0.3178,
+  0.5471
+ ],
+ "Floor_HeartstoneCore_06": [
+  0.4616,
+  0.3672,
+  0.6082
+ ],
+ "Floor_HeartstoneCore_07": [
+  0.4254,
+  0.3479,
+  0.5637
+ ],
+ "Floor_HeartstoneCore_08": [
+  0.7055,
+  0.2908,
+  0.7413
+ ],
+ "Floor_HeartstoneCore_09": [
+  0.4138,
+  0.3095,
+  0.5378
+ ],
+ "Floor_HeartstoneCore_10": [
+  0.5489,
+  0.2793,
+  0.6153
+ ],
+ "Floor_HeartstoneCore_11": [
+  0.4179,
+  0.3226,
+  0.5504
+ ],
+ "Floor_HeartstoneCore_12": [
+  0.4468,
+  0.3265,
+  0.5233
+ ],
+ "Floor_HeartstoneCore_13": [
+  0.4542,
+  0.3547,
+  0.5985
+ ],
+ "Floor_HeartstoneCore_14": [
+  0.7279,
+  0.3109,
+  0.7625
+ ],
+ "Floor_HeartstoneCore_15": [
+  0.4186,
+  0.3212,
+  0.5621
+ ],
+ "Floor_HeartstoneCore_16": [
+  0.6102,
+  0.2794,
+  0.6605
+ ],
+ "Floor_HeartstoneCore_17": [
+  0.4027,
+  0.307,
+  0.5279
+ ],
+ "Floor_HeartstoneCore_18": [
+  0.4077,
+  0.2813,
+  0.5433
+ ],
+ "Floor_HeartstoneCore_19": [
+  0.4133,
+  0.3144,
+  0.5638
+ ],
+ "Floor_HeartstoneCore_20": [
+  0.4074,
+  0.2187,
+  0.5747
+ ],
+ "Floor_QuarryBHD_01": [
+  0.543,
+  0.4987,
+  0.4768
+ ],
+ "Floor_QuarryBHD_02": [
+  0.5863,
+  0.4515,
+  0.4133
+ ],
+ "Floor_QuarryBHD_03": [
+  0.5233,
+  0.4807,
+  0.4558
+ ],
+ "Floor_QuarryBHD_04": [
+  0.6404,
+  0.4882,
+  0.47
+ ],
+ "Floor_QuarryBHD_05": [
+  0.553,
+  0.4911,
+  0.4586
+ ],
+ "Floor_QuarryBHD_06": [
+  0.4833,
+  0.4778,
+  0.5144
+ ],
+ "Floor_QuarryBHD_07": [
+  0.643,
+  0.5137,
+  0.4779
+ ],
+ "Floor_QuarryBHD_08": [
+  0.4995,
+  0.4819,
+  0.4973
+ ],
+ "Floor_QuarryBHD_09": [
+  0.6363,
+  0.4694,
+  0.4418
+ ],
+ "Floor_QuarryBHD_10": [
+  0.5186,
+  0.4987,
+  0.4988
+ ],
+ "Floor_QuarryBHD_11": [
+  0.6644,
+  0.5093,
+  0.4775
+ ],
+ "Floor_QuarryBHD_12": [
+  0.5231,
+  0.5067,
+  0.4512
+ ],
+ "Floor_QuarryBHD_13": [
+  0.6247,
+  0.5063,
+  0.4759
+ ],
+ "Floor_QuarryBHD_14": [
+  0.504,
+  0.4856,
+  0.4913
+ ],
+ "Floor_QuarryBHD_15": [
+  0.5841,
+  0.5293,
+  0.4364
+ ],
+ "Floor_QuarryBHD_16": [
+  0.5001,
+  0.4857,
+  0.5088
+ ],
+ "Floor_QuarryB_01": [
+  0.5609,
+  0.5001,
+  0.472
+ ],
+ "Floor_QuarryB_02": [
+  0.5266,
+  0.464,
+  0.4429
+ ],
+ "Floor_QuarryB_03": [
+  0.5628,
+  0.4888,
+  0.4542
+ ],
+ "Floor_QuarryB_04": [
+  0.494,
+  0.4824,
+  0.5135
+ ],
+ "Floor_QuarryB_05": [
+  0.6012,
+  0.4569,
+  0.426
+ ],
+ "Floor_QuarryB_06": [
+  0.6382,
+  0.4951,
+  0.4896
+ ],
+ "Floor_QuarryB_07": [
+  0.6671,
+  0.5104,
+  0.4804
+ ],
+ "Floor_QuarryB_08": [
+  0.5344,
+  0.4894,
+  0.4731
+ ],
+ "Floor_QuarryB_09": [
+  0.6189,
+  0.4515,
+  0.4318
+ ],
+ "Floor_QuarryB_10": [
+  0.6438,
+  0.4994,
+  0.4904
+ ],
+ "Floor_QuarryB_11": [
+  0.6835,
+  0.5163,
+  0.4797
+ ],
+ "Floor_QuarryB_12": [
+  0.5316,
+  0.4891,
+  0.4835
+ ],
+ "Floor_QuarryB_13": [
+  0.5463,
+  0.5028,
+  0.4932
+ ],
+ "Floor_QuarryB_14": [
+  0.5406,
+  0.5001,
+  0.4596
+ ],
+ "Floor_QuarryB_15": [
+  0.5944,
+  0.5311,
+  0.4481
+ ],
+ "Floor_QuarryB_16": [
+  0.5147,
+  0.489,
+  0.4856
+ ],
+ "Floor_StormglassRiftHD_01": [
+  0.2834,
+  0.2603,
+  0.4304
+ ],
+ "Floor_StormglassRiftHD_02": [
+  0.2439,
+  0.2351,
+  0.4269
+ ],
+ "Floor_StormglassRiftHD_03": [
+  0.2623,
+  0.2558,
+  0.4477
+ ],
+ "Floor_StormglassRiftHD_04": [
+  0.2577,
+  0.2603,
+  0.4432
+ ],
+ "Floor_StormglassRiftHD_05": [
+  0.2568,
+  0.2472,
+  0.4343
+ ],
+ "Floor_StormglassRiftHD_06": [
+  0.2483,
+  0.2517,
+  0.4533
+ ],
+ "Floor_StormglassRiftHD_07": [
+  0.3011,
+  0.3037,
+  0.4735
+ ],
+ "Floor_StormglassRiftHD_08": [
+  0.275,
+  0.2624,
+  0.4359
+ ],
+ "Floor_StormglassRiftHD_09": [
+  0.2394,
+  0.2464,
+  0.4405
+ ],
+ "Floor_StormglassRiftHD_10": [
+  0.2347,
+  0.2743,
+  0.5022
+ ],
+ "Floor_StormglassRiftHD_11": [
+  0.2953,
+  0.3193,
+  0.5118
+ ],
+ "Floor_StormglassRiftHD_12": [
+  0.3081,
+  0.306,
+  0.4875
+ ],
+ "Floor_StormglassRiftHD_13": [
+  0.2893,
+  0.2995,
+  0.4855
+ ],
+ "Floor_StormglassRiftHD_14": [
+  0.255,
+  0.2505,
+  0.4342
+ ],
+ "Floor_StormglassRiftHD_15": [
+  0.2528,
+  0.2737,
+  0.4481
+ ],
+ "Floor_StormglassRiftHD_16": [
+  0.2324,
+  0.2757,
+  0.4937
+ ],
+ "Floor_StormglassRift_01": [
+  0.2688,
+  0.2502,
+  0.4266
+ ],
+ "Floor_StormglassRift_02": [
+  0.2731,
+  0.2623,
+  0.4484
+ ],
+ "Floor_StormglassRift_03": [
+  0.2443,
+  0.2438,
+  0.4319
+ ],
+ "Floor_StormglassRift_04": [
+  0.2268,
+  0.2651,
+  0.497
+ ],
+ "Floor_StormglassRift_05": [
+  0.2605,
+  0.2533,
+  0.4392
+ ],
+ "Floor_StormglassRift_06": [
+  0.2342,
+  0.261,
+  0.4568
+ ],
+ "Floor_StormglassRift_07": [
+  0.3164,
+  0.3371,
+  0.5122
+ ],
+ "Floor_StormglassRift_08": [
+  0.2817,
+  0.2828,
+  0.4756
+ ],
+ "Floor_StormglassRift_09": [
+  0.2769,
+  0.2534,
+  0.4292
+ ],
+ "Floor_StormglassRift_10": [
+  0.2358,
+  0.2571,
+  0.4579
+ ],
+ "Floor_StormglassRift_11": [
+  0.2995,
+  0.327,
+  0.5042
+ ],
+ "Floor_StormglassRift_12": [
+  0.2747,
+  0.2701,
+  0.4635
+ ],
+ "Floor_StormglassRift_13": [
+  0.2216,
+  0.2324,
+  0.4389
+ ],
+ "Floor_StormglassRift_14": [
+  0.2803,
+  0.2712,
+  0.4488
+ ],
+ "Floor_StormglassRift_15": [
+  0.2522,
+  0.2642,
+  0.4394
+ ],
+ "Floor_StormglassRift_16": [
+  0.2306,
+  0.274,
+  0.4948
+ ],
+ "Floor_SunkenPalaceHD_01": [
+  0.3737,
+  0.3026,
+  0.4302
+ ],
+ "Floor_SunkenPalaceHD_02": [
+  0.4396,
+  0.3403,
+  0.4241
+ ],
+ "Floor_SunkenPalaceHD_03": [
+  0.399,
+  0.2955,
+  0.4099
+ ],
+ "Floor_SunkenPalaceHD_04": [
+  0.4762,
+  0.4016,
+  0.5125
+ ],
+ "Floor_SunkenPalaceHD_05": [
+  0.4621,
+  0.3409,
+  0.4325
+ ],
+ "Floor_SunkenPalaceHD_06": [
+  0.4944,
+  0.3913,
+  0.4909
+ ],
+ "Floor_SunkenPalaceHD_07": [
+  0.3864,
+  0.3144,
+  0.4353
+ ],
+ "Floor_SunkenPalaceHD_08": [
+  0.4051,
+  0.314,
+  0.4294
+ ],
+ "Floor_SunkenPalaceHD_09": [
+  0.3955,
+  0.3027,
+  0.4118
+ ],
+ "Floor_SunkenPalaceHD_10": [
+  0.3335,
+  0.2691,
+  0.4154
+ ],
+ "Floor_SunkenPalaceHD_11": [
+  0.4753,
+  0.3853,
+  0.4887
+ ],
+ "Floor_SunkenPalaceHD_12": [
+  0.392,
+  0.2947,
+  0.4172
+ ],
+ "Floor_SunkenPalaceHD_13": [
+  0.4688,
+  0.3623,
+  0.4579
+ ],
+ "Floor_SunkenPalaceHD_14": [
+  0.4441,
+  0.3196,
+  0.4
+ ],
+ "Floor_SunkenPalaceHD_15": [
+  0.4342,
+  0.3478,
+  0.4577
+ ],
+ "Floor_SunkenPalaceHD_16": [
+  0.35,
+  0.2871,
+  0.4316
+ ],
+ "Floor_SunkenPalace_01": [
+  0.3747,
+  0.3051,
+  0.4339
+ ],
+ "Floor_SunkenPalace_02": [
+  0.4054,
+  0.3084,
+  0.4216
+ ],
+ "Floor_SunkenPalace_03": [
+  0.3997,
+  0.3145,
+  0.4333
+ ],
+ "Floor_SunkenPalace_04": [
+  0.3531,
+  0.2846,
+  0.4223
+ ],
+ "Floor_SunkenPalace_05": [
+  0.4606,
+  0.3551,
+  0.4367
+ ],
+ "Floor_SunkenPalace_06": [
+  0.5229,
+  0.4253,
+  0.5287
+ ],
+ "Floor_SunkenPalace_07": [
+  0.5863,
+  0.4617,
+  0.5326
+ ],
+ "Floor_SunkenPalace_08": [
+  0.4359,
+  0.3269,
+  0.4213
+ ],
+ "Floor_SunkenPalace_09": [
+  0.4771,
+  0.3516,
+  0.4321
+ ],
+ "Floor_SunkenPalace_10": [
+  0.4411,
+  0.3572,
+  0.4891
+ ],
+ "Floor_SunkenPalace_11": [
+  0.4336,
+  0.3486,
+  0.4821
+ ],
+ "Floor_SunkenPalace_12": [
+  0.4318,
+  0.3256,
+  0.4198
+ ],
+ "Floor_SunkenPalace_13": [
+  0.3795,
+  0.309,
+  0.4326
+ ],
+ "Floor_SunkenPalace_14": [
+  0.4003,
+  0.3057,
+  0.4245
+ ],
+ "Floor_SunkenPalace_15": [
+  0.4265,
+  0.3372,
+  0.4443
+ ],
+ "Floor_SunkenPalace_16": [
+  0.3499,
+  0.2865,
+  0.4267
+ ],
+ "Ore_Aetherium": [
+  0.2872,
+  0.1421,
+  0.6727
+ ],
+ "Ore_Aetherium_Low": [
+  0.2856,
+  0.1477,
+  0.6681
+ ],
+ "Ore_Amethyst": [
+  0.4907,
+  0.1075,
+  0.7401
+ ],
+ "Ore_Amethyst_Low": [
+  0.4887,
+  0.1059,
+  0.7379
+ ],
+ "Ore_Bronze": [
+  0.484,
+  0.2101,
+  0.0443
+ ],
+ "Ore_Bronze_Low": [
+  0.4775,
+  0.206,
+  0.0416
+ ],
+ "Ore_CelestialCore": [
+  0.6344,
+  0.5244,
+  0.4172
+ ],
+ "Ore_CelestialCore_Low": [
+  0.632,
+  0.5267,
+  0.4209
+ ],
+ "Ore_Coal": [
+  0.1267,
+  0.1281,
+  0.1357
+ ],
+ "Ore_Coal_Low": [
+  0.1259,
+  0.1272,
+  0.1348
+ ],
+ "Ore_Cobalt": [
+  0.0872,
+  0.1751,
+  0.6407
+ ],
+ "Ore_Cobalt_Low": [
+  0.0835,
+  0.1696,
+  0.6194
+ ],
+ "Ore_Copper": [
+  0.7056,
+  0.2488,
+  0.0772
+ ],
+ "Ore_Copper_Low": [
+  0.7028,
+  0.246,
+  0.0744
+ ],
+ "Ore_CrystalRose": [
+  0.8068,
+  0.0533,
+  0.4491
+ ],
+ "Ore_CrystalRose_Low": [
+  0.8008,
+  0.041,
+  0.4386
+ ],
+ "Ore_DragonEgg": [
+  0.7419,
+  0.4658,
+  0.1623
+ ],
+ "Ore_DragonEgg_Low": [
+  0.7144,
+  0.4476,
+  0.164
+ ],
+ "Ore_DragonScale": [
+  0.4191,
+  0.1207,
+  0.2257
+ ],
+ "Ore_DragonScale_Low": [
+  0.379,
+  0.0962,
+  0.2137
+ ],
+ "Ore_Emberite": [
+  0.9274,
+  0.3191,
+  0.0371
+ ],
+ "Ore_Emberite_Low": [
+  0.9258,
+  0.313,
+  0.0375
+ ],
+ "Ore_Frostbite": [
+  0.3506,
+  0.7997,
+  0.9807
+ ],
+ "Ore_Frostbite_Low": [
+  0.3599,
+  0.8024,
+  0.9809
+ ],
+ "Ore_GalaxyStone": [
+  0.5329,
+  0.1595,
+  0.7053
+ ],
+ "Ore_GalaxyStone_Low": [
+  0.5328,
+  0.159,
+  0.6876
+ ],
+ "Ore_Gold": [
+  0.8425,
+  0.6321,
+  0.037
+ ],
+ "Ore_Gold_Low": [
+  0.8383,
+  0.625,
+  0.0356
+ ],
+ "Ore_Heartstone": [
+  0.8353,
+  0.4942,
+  0.3011
+ ],
+ "Ore_Heartstone_Low": [
+  0.8264,
+  0.4826,
+  0.2899
+ ],
+ "Ore_Honeycomb": [
+  0.8859,
+  0.618,
+  0.1479
+ ],
+ "Ore_Honeycomb_Low": [
+  0.8873,
+  0.6177,
+  0.1526
+ ],
+ "Ore_Iron": [
+  0.3163,
+  0.3214,
+  0.3417
+ ],
+ "Ore_Iron_Low": [
+  0.309,
+  0.3141,
+  0.3347
+ ],
+ "Ore_Jade": [
+  0.151,
+  0.512,
+  0.2699
+ ],
+ "Ore_Jade_Low": [
+  0.1492,
+  0.511,
+  0.2688
+ ],
+ "Ore_LeafOre": [
+  0.2098,
+  0.7822,
+  0.2849
+ ],
+ "Ore_LeafOre_Low": [
+  0.1917,
+  0.7745,
+  0.2749
+ ],
+ "Ore_Moonstone": [
+  0.7904,
+  0.8305,
+  0.9189
+ ],
+ "Ore_Moonstone_Low": [
+  0.7833,
+  0.8247,
+  0.9141
+ ],
+ "Ore_Oakwood": [
+  0.46,
+  0.3008,
+  0.1662
+ ],
+ "Ore_Oakwood_Low": [
+  0.4709,
+  0.3095,
+  0.1756
+ ],
+ "Ore_PhoenixFeather": [
+  0.9091,
+  0.6672,
+  0.2703
+ ],
+ "Ore_PhoenixFeather_Low": [
+  0.8904,
+  0.6127,
+  0.2496
+ ],
+ "Ore_Quartz": [
+  0.9,
+  0.9017,
+  0.9158
+ ],
+ "Ore_Quartz_Low": [
+  0.899,
+  0.9003,
+  0.9147
+ ],
+ "Ore_RoyalAurum": [
+  0.8613,
+  0.634,
+  0.0608
+ ],
+ "Ore_RoyalAurum_Low": [
+  0.8579,
+  0.6245,
+  0.0407
+ ],
+ "Ore_Sapphire": [
+  0.0953,
+  0.2493,
+  0.6653
+ ],
+ "Ore_Sapphire_Low": [
+  0.0944,
+  0.2491,
+  0.6663
+ ],
+ "Ore_Silver": [
+  0.689,
+  0.6864,
+  0.7042
+ ],
+ "Ore_Silver_Low": [
+  0.6854,
+  0.6825,
+  0.701
+ ],
+ "Ore_StormGem": [
+  0.1518,
+  0.6079,
+  0.887
+ ],
+ "Ore_StormGem_Low": [
+  0.1449,
+  0.598,
+  0.8848
+ ],
+ "Ore_StormPearl": [
+  0.7652,
+  0.7011,
+  0.9606
+ ],
+ "Ore_StormPearl_Low": [
+  0.7632,
+  0.7,
+  0.959
+ ],
+ "Ore_Sunstone": [
+  0.9886,
+  0.7748,
+  0.0794
+ ],
+ "Ore_Sunstone_Low": [
+  0.9893,
+  0.7884,
+  0.1277
+ ],
+ "Ore_Tin": [
+  0.5838,
+  0.6246,
+  0.6806
+ ],
+ "Ore_Tin_Low": [
+  0.5788,
+  0.6197,
+  0.6756
+ ],
+ "Ore_VolcanicCore": [
+  0.5524,
+  0.2826,
+  0.1118
+ ],
+ "Ore_VolcanicCore_Low": [
+  0.5834,
+  0.2714,
+  0.1062
+ ],
+ "Prop_CleaningStation": [
+  0.4229,
+  0.4306,
+  0.4687
+ ],
+ "Prop_DisplayPedestal": [
+  0.3323,
+  0.4071,
+  0.4613
+ ],
+ "Prop_GardenPond": [
+  0.5032,
+  0.5136,
+  0.3184
+ ],
+ "Prop_Meteor": [
+  0.7693,
+  0.423,
+  0.2042
+ ],
+ "Prop_MineElevator": [
+  0.398,
+  0.3478,
+  0.3324
+ ],
+ "Prop_MossyCliff": [
+  0.4924,
+  0.5558,
+  0.543
+ ],
+ "Prop_Museum": [
+  0.5573,
+  0.6027,
+  0.6451
+ ],
+ "Prop_MuseumOpen": [
+  0.551,
+  0.5941,
+  0.6358
+ ],
+ "Prop_PlotBase": [
+  0.5326,
+  0.5709,
+  0.6469
+ ],
+ "Prop_TreeGreen": [
+  0.5347,
+  0.7203,
+  0.0979
+ ],
+ "Prop_TreeOrange": [
+  0.9417,
+  0.4944,
+  0.1566
+ ],
+ "Prop_TreeYellow": [
+  0.8234,
+  0.6225,
+  0.0039
+ ],
+ "Rock_DeepHollow_Artifact": [
+  0.3559,
+  0.5464,
+  0.3821
+ ],
+ "Rock_DeepHollow_Big": [
+  0.138,
+  0.424,
+  0.5138
+ ],
+ "Rock_DeepHollow_Crystal": [
+  0.0163,
+  0.5498,
+  0.8607
+ ],
+ "Rock_DeepHollow_Geode": [
+  0.1406,
+  0.4569,
+  0.6045
+ ],
+ "Rock_DeepHollow_Giant": [
+  0.0559,
+  0.5617,
+  0.7378
+ ],
+ "Rock_DeepHollow_Golden": [
+  0.5145,
+  0.4471,
+  0.3441
+ ],
+ "Rock_DeepHollow_Small": [
+  0.1388,
+  0.2846,
+  0.3713
+ ],
+ "Rock_EmberCaves_Artifact": [
+  0.5369,
+  0.2357,
+  0.1563
+ ],
+ "Rock_EmberCaves_Big": [
+  0.5603,
+  0.2498,
+  0.2294
+ ],
+ "Rock_EmberCaves_Crystal": [
+  0.6365,
+  0.1492,
+  0.0032
+ ],
+ "Rock_EmberCaves_Geode": [
+  0.491,
+  0.1734,
+  0.1175
+ ],
+ "Rock_EmberCaves_Giant": [
+  0.8724,
+  0.3701,
+  0.0234
+ ],
+ "Rock_EmberCaves_Golden": [
+  0.5369,
+  0.2573,
+  0.2099
+ ],
+ "Rock_EmberCaves_Small": [
+  0.5743,
+  0.2229,
+  0.1974
+ ],
+ "Rock_HeartstoneCore_Artifact": [
+  0.7028,
+  0.4874,
+  0.4806
+ ],
+ "Rock_HeartstoneCore_Big": [
+  0.8134,
+  0.5656,
+  0.5916
+ ],
+ "Rock_HeartstoneCore_Crystal": [
+  0.8084,
+  0.1839,
+  0.2972
+ ],
+ "Rock_HeartstoneCore_Geode": [
+  0.8335,
+  0.4567,
+  0.5049
+ ],
+ "Rock_HeartstoneCore_Giant": [
+  0.7804,
+  0.2644,
+  0.4306
+ ],
+ "Rock_HeartstoneCore_Golden": [
+  0.8731,
+  0.6437,
+  0.4884
+ ],
+ "Rock_HeartstoneCore_Small": [
+  0.6925,
+  0.5116,
+  0.5155
+ ],
+ "Rock_Quarry_Artifact": [
+  0.3943,
+  0.5361,
+  0.5608
+ ],
+ "Rock_Quarry_Big": [
+  0.209,
+  0.2357,
+  0.3047
+ ],
+ "Rock_Quarry_Crystal": [
+  0.2313,
+  0.4882,
+  0.9405
+ ],
+ "Rock_Quarry_Geode": [
+  0.2735,
+  0.1468,
+  0.527
+ ],
+ "Rock_Quarry_Giant": [
+  0.5425,
+  0.2589,
+  0.8322
+ ],
+ "Rock_Quarry_Golden": [
+  0.327,
+  0.2119,
+  0.2185
+ ],
+ "Rock_Quarry_Small": [
+  0.2263,
+  0.2992,
+  0.4135
+ ],
+ "Rock_StormglassRift_Artifact": [
+  0.5808,
+  0.4545,
+  0.2909
+ ],
+ "Rock_StormglassRift_Big": [
+  0.5528,
+  0.4091,
+  0.2938
+ ],
+ "Rock_StormglassRift_Crystal": [
+  0.8151,
+  0.5329,
+  0.1536
+ ],
+ "Rock_StormglassRift_Geode": [
+  0.6093,
+  0.4447,
+  0.3024
+ ],
+ "Rock_StormglassRift_Giant": [
+  0.8101,
+  0.5607,
+  0.2509
+ ],
+ "Rock_StormglassRift_Golden": [
+  0.5754,
+  0.4448,
+  0.3155
+ ],
+ "Rock_StormglassRift_Small": [
+  0.4554,
+  0.3664,
+  0.3207
+ ],
+ "Rock_SunkenPalace_Artifact": [
+  0.4736,
+  0.3895,
+  0.3769
+ ],
+ "Rock_SunkenPalace_Big": [
+  0.4975,
+  0.3343,
+  0.4276
+ ],
+ "Rock_SunkenPalace_Crystal": [
+  0.8019,
+  0.4978,
+  0.1785
+ ],
+ "Rock_SunkenPalace_Geode": [
+  0.4909,
+  0.5321,
+  0.6425
+ ],
+ "Rock_SunkenPalace_Giant": [
+  0.82,
+  0.4927,
+  0.1525
+ ],
+ "Rock_SunkenPalace_Golden": [
+  0.6172,
+  0.4711,
+  0.3836
+ ],
+ "Rock_SunkenPalace_Small": [
+  0.3804,
+  0.3731,
+  0.4651
+ ]
+}
