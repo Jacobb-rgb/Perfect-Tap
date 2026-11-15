@@ -64,6 +64,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BrightTheme = require(Shared.Config.BrightTheme)
+local HatchRig = require(script.Parent.HatchRig)
+local Ease = require(script.Parent.Parent.Util.Ease)
 
 local HatchFx = {}
 
@@ -86,34 +88,55 @@ export type Times = {
 	GolemPop: number, -- a golem's pop (a Legendary / Mythic: its Tier's, slower)
 	Hold: number, -- the golems stay (after their pop)
 	Fly: number, -- they fly to the player
+	Break: number, -- (2026-11-15) the burst: the shell's halves fly apart and fade this long (0: gone at once)
+	Spin: number, -- (2026-11-15) full turns an egg makes from its entrance to the first crack (0: none)
 }
 
+--[[
+	(owner 2026-11-15: "the opening feels too basic, short and mechanical ...
+	a professional multi-stage animation") The normal opening in five stages:
+	  1 spawn      the egg rises in growing (Back), facing you; it floats and
+	               starts to turn, slowly; its aura and platform glow in
+	  2 energy     motes stream in, two rings orbit, the glow grows; the turn
+	               speeds up, then settles facing you as the shaking builds
+	  3 cracking   three crack steps, each line running out along the shell,
+	               chips of shell flying off; it gathers itself, turns into
+	               its glowing colour and breaks: the halves fly apart
+	  4 reveal     sparks, the flash; the golem grows out of it (Back) and
+	               turns into its 3/4 look; the camera's view breathes in
+	  5 completion it bobs, then flies to the player; the world comes back
+	Open 3 of Commons about 6.2 s (it was 4.6 s); Auto stays about 2 s.
+]]
 HatchFx.Times = {
-	-- (Open 3 of Commons about 4.6 s; a Legendary about 6.2 s, a Mythic about 6.8 s: Tiers)
+	-- (Open 3 of Commons about 6.2 s; a Legendary about 7.8 s, a Mythic about 8.4 s: Tiers)
 	Normal = {
-		Pop = 0.5,
-		Stagger = 0.09,
-		Float = 0.55,
+		Pop = 0.7,
+		Stagger = 0.1,
+		Float = 0.8,
 		Rings = 0,
-		Steps = { 0.3, 0.7, 1.1 },
-		Glow = 0.35,
-		Silhouette = 0.12,
-		GolemPop = 0.3,
-		Hold = 1.05,
-		Fly = 0.45,
+		Steps = { 0.95, 1.38, 1.78 },
+		Glow = 0.4,
+		Silhouette = 0.14,
+		GolemPop = 0.45,
+		Hold = 1.15,
+		Fly = 0.55,
+		Break = 0.42,
+		Spin = 1,
 	},
 	-- Auto (about 2 s an opening, every golem still shown, named)
 	Fast = {
-		Pop = 0.2,
+		Pop = 0.22,
 		Stagger = 0.03,
 		Float = 0.1,
 		Rings = 0,
-		Steps = { 0.12, 0.27, 0.42 },
-		Glow = 0.14,
+		Steps = { 0.13, 0.28, 0.43 },
+		Glow = 0.15,
 		Silhouette = 0.06,
-		GolemPop = 0.2,
+		GolemPop = 0.22,
 		Hold = 0.62,
 		Fly = 0.3,
+		Break = 0.24,
+		Spin = 0,
 	},
 	-- Reduce motion: the eggs fade in, crack, fade out; the golems fade in and out
 	Calm = {
@@ -127,6 +150,8 @@ HatchFx.Times = {
 		GolemPop = 0.25, -- (the golems' fade in)
 		Hold = 1.0,
 		Fly = 0.3, -- (their fade out)
+		Break = 0, -- (the eggs fade out instead)
+		Spin = 0,
 	},
 } :: { [string]: Times }
 
@@ -185,7 +210,7 @@ HatchFx.Tiers = {
 	{
 		Suspense = 0.8,
 		SuspenseFast = 0.4,
-		GolemPop = 0.55,
+		GolemPop = 0.7,
 		Hold = 0.5,
 		HoldFast = 0.35,
 		Flash = 0.85,
@@ -200,7 +225,7 @@ HatchFx.Tiers = {
 	{
 		Suspense = 1.0,
 		SuspenseFast = 0.4,
-		GolemPop = 0.65,
+		GolemPop = 0.8,
 		Hold = 0.8,
 		HoldFast = 0.35,
 		Flash = 0.85,
@@ -321,26 +346,27 @@ end
 
 ---------------------------------------------------------------- the stage's camera
 
-local function tanHalf(): number
-	return math.tan(math.rad(HatchFx.Fov / 2))
+local function tanHalf(fov: number?): number
+	return math.tan(math.rad((fov or HatchFx.Fov) / 2))
 end
 
--- The stage camera's point on the ray through the screen share (u right, v down) at depth z.
-function HatchFx.at(u: number, v: number, z: number, aspect: number): Vector3
-	local t = tanHalf()
+-- The stage camera's point on the ray through the screen share (u right, v down) at depth z
+-- (`fov`: another FieldOfView than the stage's, HatchFx.Fov).
+function HatchFx.at(u: number, v: number, z: number, aspect: number, fov: number?): Vector3
+	local t = tanHalf(fov)
 	return Vector3.new((2 * u - 1) * t * aspect * z, (1 - 2 * v) * t * z, -z)
 end
 
 -- A stage point's screen share (u right, v down) and its depth.
-function HatchFx.project(p: Vector3, aspect: number): (Vector2, number)
+function HatchFx.project(p: Vector3, aspect: number, fov: number?): (Vector2, number)
 	local z = math.max(1e-3, -p.Z)
-	local t = tanHalf()
+	local t = tanHalf(fov)
 	return Vector2.new(0.5 + p.X / (2 * z * t * aspect), 0.5 - p.Y / (2 * z * t)), z
 end
 
 -- How far a thing `height` studs tall stands to fill `share` of the screen's height.
-function HatchFx.depthFor(height: number, share: number): number
-	return height / (math.max(0.01, share) * 2 * tanHalf())
+function HatchFx.depthFor(height: number, share: number, fov: number?): number
+	return height / (math.max(0.01, share) * 2 * tanHalf(fov))
 end
 
 ---------------------------------------------------------------- the layout
@@ -580,9 +606,15 @@ export type EggPose = {
 	Bright: number, -- 0..1: the cracks whiten (the suspense)
 	Silhouette: number, -- 0..1: the egg turns into its colour
 	Charge: number, -- 0..1: the energy charge (its orbits, motes and glow)
+	Break: number, -- (2026-11-15) -1: whole; 0..1: through the burst, its halves flying apart
 }
 
 HatchFx.Rise = 0.42 -- an egg rises this far into its place (a share of the screen's height)
+HatchFx.PopFrom = 0.15 -- its size as it comes in (it grows to its own, past it a little, back: Back Out)
+-- (2026-11-15) The turn: from its entrance to the first crack the egg makes Times.Spin full turns,
+-- facing you at both ends: slowly at first, faster as the energy builds, settling before it cracks
+-- (Sine InOut on time skewed by SpinSkew: the fastest moment falls in the energy's build-up).
+HatchFx.SpinSkew = 1.7
 -- The anticipation (owner 2026-11-15: "improved anticipation before the egg opens"): over the last
 -- Gather seconds before its silhouette the egg draws in by GatherDepth of its size (gathering
 -- itself), then springs out of it through the silhouette's swell into the burst.
@@ -641,6 +673,46 @@ function HatchFx.chargeAt(t: number, tl: Timeline): number
 	return clamp01((t - tl.Charge) / math.max(0.01, tl.Silhouette - tl.Charge))
 end
 
+-- Egg `i`'s turn at `t` (radians, eased; 0 facing you): Times.Spin turns from its entrance to the first crack.
+function HatchFx.spinAt(t: number, tl: Timeline, i: number): number
+	local turns = tl.Times.Spin
+	if tl.Reduced or turns <= 0 then
+		return 0
+	end
+	local start = (i - 1) * tl.Stagger
+	local finish = tl.Steps[1]
+	if t <= start or t >= finish then
+		return 0
+	end
+	local u = (t - start) / math.max(0.01, finish - start)
+	local side = if i % 2 == 0 then -1 else 1
+	return side * 2 * math.pi * turns * (1 - Ease.get(u ^ HatchFx.SpinSkew, "Sine", "InOut"))
+end
+
+-- How far through its burst the egg is at `t` (0..1: the halves flying apart; -1: not breaking).
+function HatchFx.breakAt(t: number, tl: Timeline): number
+	local length = tl.Times.Break
+	if tl.Reduced or length <= 0 or t < tl.Burst then
+		return -1
+	end
+	local k = (t - tl.Burst) / length
+	return if k < 1 then k else -1
+end
+
+--[[
+	The halves of a breaking egg `k` (0..1) through its burst, `h` its
+	height and `side` (+-1) the way it leans: each half's move in the egg's
+	own frame (its front -Z, so +Z is away from the camera). The top flies
+	up and back, tumbling; the bottom drops a little, tipping the other way.
+	Fast at first, slowing (Quad Out), as a burst does.
+]]
+function HatchFx.halves(k: number, h: number, side: number): (CFrame, CFrame)
+	local e = Ease.get(k, "Quad", "Out")
+	local top = CFrame.new(side * 0.16 * h * e, 0.5 * h * e, 0.3 * h * e) * CFrame.Angles(0.95 * e, 0, -side * 0.45 * e)
+	local bottom = CFrame.new(-side * 0.1 * h * e, -0.32 * h * e, 0.16 * h * e) * CFrame.Angles(-0.55 * e, 0, side * 0.3 * e)
+	return top, bottom
+end
+
 --[[
 	Egg `i` (of the timeline `tl`) at `t`: its entrance (it rises into its
 	place from below, from 0.3 of its size, past it, back: Back, a half turn
@@ -656,7 +728,8 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 	local start = (i - 1) * tl.Stagger
 	local level = HatchFx.levelAt(t, tl)
 	local charge = HatchFx.chargeAt(t, tl)
-	if t < start or t >= tl.Burst then
+	local breaking = HatchFx.breakAt(t, tl)
+	if t < start or (t >= tl.Burst and breaking < 0) then
 		return {
 			Shown = false,
 			Scale = 1,
@@ -668,6 +741,7 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 			Bright = 0,
 			Silhouette = 0,
 			Charge = charge,
+			Break = -1,
 		}
 	end
 	if tl.Reduced then
@@ -684,19 +758,25 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 			Bright = 0,
 			Silhouette = 0,
 			Charge = charge,
+			Break = -1,
 		}
 	end
 	local u = t - start
 	local side = if i % 2 == 0 then -1 else 1
-	-- the entrance: up from below, growing (Back), a half turn settling
+	-- the entrance: up from below, growing past its size and back (TweenService's Back Out), the rise
+	-- settling softly (Quint Out); the normal opening's egg comes in facing you and starts its turn
+	-- (spinAt), Auto's makes a quick half turn settling
 	local e = u / times.Pop
-	local scale = if e < 1 then 0.3 + 0.7 * HatchFx.back(e) else 1
-	local drop = HatchFx.Rise * (1 - easeOut(e))
-	local yaw = side * math.pi * 0.6 * (1 - easeOut(e))
-	-- the float: a slow bob and a slow turn (they calm while the energy grows)
+	local scale = if e < 1 then HatchFx.PopFrom + (1 - HatchFx.PopFrom) * Ease.get(e, "Back", "Out") else 1
+	local drop = HatchFx.Rise * (1 - Ease.get(e, "Quint", "Out"))
+	local spinning = times.Spin > 0
+	local yaw = if spinning then HatchFx.spinAt(t, tl, i) else side * math.pi * 0.6 * (1 - easeOut(e))
+	-- the float: a slow bob (and Auto's slow sway) that calm while the energy grows
 	local floating = clamp01((t - tl.Float) / 0.25) * (1 - 0.7 * charge)
 	drop += HatchFx.Bob * math.sin((t - start) * 2 * math.pi * 0.7 + i * 0.9) * floating
-	yaw += HatchFx.FloatTurn * math.sin((t - start) * 2 * math.pi * 0.22 + i * 1.1) * floating
+	if not spinning then
+		yaw += HatchFx.FloatTurn * math.sin((t - start) * 2 * math.pi * 0.22 + i * 1.1) * floating
+	end
 	-- the charge: a pulse twice a second (its size only: never a flicker) and a rock growing with it.
 	-- (owner 2026-10-30: "the shaking stutters, not clean": every rock is a slow, smooth sway
 	-- (HatchFx.sway, a few times a second), its strength only ever ramps: never a buzz, never a jump)
@@ -730,17 +810,21 @@ function HatchFx.eggPose(t: number, tl: Timeline, i: number, special: boolean): 
 		scale *= 1 + 0.12 * clamp01((t - tl.Silhouette) / math.max(0.01, times.Silhouette))
 	end
 	local bright = if suspense > 0 then suspense else 0
+	-- (2026-11-15) the burst: the shell's halves fly apart (HatchStage moves them: halves) and fade,
+	-- faster toward the end (Quad In); the rock is long eased out by then
+	local fade = if breaking >= 0 then Ease.get(breaking, "Quad", "In") else 0
 	return {
 		Shown = true,
 		Scale = scale,
 		Roll = roll,
 		Yaw = yaw,
 		Drop = drop,
-		Fade = 0,
+		Fade = fade,
 		Level = level,
 		Bright = bright,
 		Silhouette = silhouette,
 		Charge = charge,
+		Break = breaking,
 	}
 end
 
@@ -833,6 +917,10 @@ function HatchFx.puffAt(u: number): (number, number)
 	return 0.4 + 0.6 * (1 - (1 - k) ^ 2), 0.62 + 0.38 * k
 end
 
+HatchFx.GolemFrom = 0.08 -- a golem's size as it comes out (it grows to its own: Back Out)
+HatchFx.GolemRise = 0.06 -- it rises this much of its height into its place
+HatchFx.GolemTurn = 0.6 -- radians it turns into its 3/4 look as it comes out
+
 export type GolemPose = {
 	Shown: boolean,
 	Scale: number, -- against its place's (the pop: Back)
@@ -860,11 +948,17 @@ function HatchFx.golemPose(t: number, tl: Timeline, i: number): GolemPose
 		local fade = math.max(1 - clamp01(u / tl.GolemPop), clamp01((t - tl.Fly) / times.Fly))
 		return { Shown = true, Scale = 1, Lift = 0, Spin = 0, Fly = 0, Fade = fade, Name = fade }
 	end
-	-- (0.3 of its size, past it, back: Back; a Legendary / Mythic's slower: the slow motion)
-	local scale = if u < tl.GolemPop then 0.3 + 0.7 * HatchFx.back(u / tl.GolemPop) else 1
-	local lift = 0.025 * math.sin(math.max(0, u - tl.GolemPop) * 2 * math.pi * 0.9)
+	-- (2026-11-15: a smooth scale-in) it grows out of the broken egg from GolemFrom of its size, past it
+	-- and back (TweenService's Back Out; a Legendary / Mythic's slower: the slow motion), rising into its
+	-- place (Quint Out) and turning into its 3/4 look (GolemTurn, Quint Out: the follow-through)
+	local k = u / math.max(0.01, tl.GolemPop)
+	local scale = if k < 1 then HatchFx.GolemFrom + (1 - HatchFx.GolemFrom) * Ease.get(k, "Back", "Out") else 1
+	local rise = if k < 1 then -HatchFx.GolemRise * (1 - Ease.get(k, "Quint", "Out")) else 0
+	local side = if i % 2 == 0 then -1 else 1
+	local settle = side * HatchFx.GolemTurn * (1 - Ease.span(u, 0, tl.GolemPop * 1.3, "Quint", "Out"))
+	local lift = rise + 0.025 * math.sin(math.max(0, u - tl.GolemPop) * 2 * math.pi * 0.9)
 	local fly = clamp01((t - tl.Fly) / times.Fly)
-	local spin = 0
+	local spin = settle
 	if fly > 0 then
 		spin = fly * fly * math.pi * 4 -- (two turns, speeding up)
 		lift = 0
@@ -917,6 +1011,8 @@ function HatchFx.flashPeakOf(tl: Timeline): number
 	return math.min(HatchFx.FlashPeak, tl.Tier.Flash)
 end
 
+HatchFx.EarlyAura = 0.22 -- the aura's strength from the egg's entrance to the charge
+
 --[[
 	The glow of slot `i` at `t` (0..1): behind its egg while it charges
 	(growing with it), then the aura behind its golem (the Tier's, breathing
@@ -925,7 +1021,9 @@ end
 ]]
 function HatchFx.auraAt(t: number, tl: Timeline, i: number): number
 	if t < tl.Charge then
-		return 0
+		-- (2026-11-15: "a subtle magical aura appears" with the egg: soft, before the energy grows it)
+		local start = (i - 1) * tl.Stagger
+		return HatchFx.EarlyAura * Ease.span(t, start + tl.Times.Pop * 0.5, 0.45, "Sine", "Out")
 	end
 	if t < tl.Reveal then
 		local glow = 0.25 + 0.6 * HatchFx.chargeAt(t, tl)
@@ -990,6 +1088,93 @@ function HatchFx.bonusText(bonusType: string, value: number, labels: { [string]:
 	local whole = math.floor(pct + 0.5)
 	local text = if math.abs(pct - whole) < 0.05 then tostring(whole) else string.format("%.1f", pct)
 	return `+{text}% {kind.Label}`
+end
+
+---------------------------------------------------------------- the 3D stage (2026-11-15)
+
+--[[
+	The camera's breath at the burst: degrees its view narrows (the world
+	behind swells toward you; the stage keeps its spot, HatchWorld): in
+	fast (Quad Out), back slowly (Sine InOut). Auto a little; Reduce motion
+	none.
+]]
+HatchFx.Breath = 3.5
+function HatchFx.breathAt(t: number, tl: Timeline): number
+	if tl.Reduced or t < tl.Burst then
+		return 0
+	end
+	local depth = if tl.Fast then 2 else HatchFx.Breath
+	local u = t - tl.Burst
+	return depth * Ease.span(u, 0, 0.14, "Quad", "Out") * (1 - Ease.span(u, 0.14, 0.75, "Sine", "InOut"))
+end
+
+-- The 3D motes streaming into the eggs (0..1): a few while they float, more and more with the charge, none from the burst.
+function HatchFx.energyAt(t: number, tl: Timeline): number
+	if tl.Reduced or t < tl.Float or t >= tl.Burst then
+		return 0
+	end
+	if t < tl.Charge then
+		return 0.15 * Ease.span(t, tl.Float, 0.3, "Sine", "Out")
+	end
+	return 0.15 + 0.85 * HatchFx.chargeAt(t, tl) ^ 1.3
+end
+
+-- How far a crack step's lines have run out along the shell at `t` (0..1; Reduce motion at once).
+HatchFx.CrackGrow = 0.18
+function HatchFx.crackGrowAt(t: number, tl: Timeline, level: number): number
+	local s = tl.Steps[level]
+	if not s or t < s then
+		return 0
+	end
+	if tl.Reduced then
+		return 1
+	end
+	return Ease.span(t, s, if tl.Fast then 0.09 else HatchFx.CrackGrow, "Quad", "Out")
+end
+
+--[[
+	The shell chips (thin pieces of the egg's front, HatchFx.addCracks):
+	three fly off at the second crack step, three at the third, from points
+	on the cracks (x, y on the front, studs of the unscaled egg), outward and
+	a little up, falling and tumbling, fading at the end of their flight.
+]]
+HatchFx.Chips = {
+	{ Step = 2, X = 0.08, Y = 1.56, Out = 2.4, Side = 0.9, Up = 1.6, Spin = Vector3.new(7, 3, 9) },
+	{ Step = 2, X = -0.5, Y = 0.62, Out = 2.1, Side = -1.1, Up = 1.2, Spin = Vector3.new(-6, 5, 4) },
+	{ Step = 2, X = 0.5, Y = 0.42, Out = 2.6, Side = 1.2, Up = 0.9, Spin = Vector3.new(5, -7, -6) },
+	{ Step = 3, X = -0.16, Y = 1.78, Out = 2.8, Side = -0.7, Up = 2.0, Spin = Vector3.new(-8, -4, 6) },
+	{ Step = 3, X = 0.1, Y = -0.2, Out = 2.3, Side = 1.0, Up = 1.4, Spin = Vector3.new(6, 6, -8) },
+	{ Step = 3, X = -0.56, Y = 0.0, Out = 2.5, Side = -1.3, Up = 1.1, Spin = Vector3.new(-5, 8, 5) },
+} :: { { Step: number, X: number, Y: number, Out: number, Side: number, Up: number, Spin: Vector3 } }
+HatchFx.ChipSize = Vector3.new(0.24, 0.17, 0.05) -- studs (the unscaled egg)
+HatchFx.ChipLife = 0.6 -- seconds of a chip's flight (Auto 0.38; Reduce motion none)
+HatchFx.ChipGravity = 9 -- studs a second squared (the unscaled egg)
+
+-- How far chip `j` is through its flight at `t` (0..1; -1: not flying).
+function HatchFx.chipAt(t: number, tl: Timeline, j: number): number
+	local chip = HatchFx.Chips[j]
+	if tl.Reduced or not chip then
+		return -1
+	end
+	local from = tl.Steps[chip.Step]
+	if not from or t < from then
+		return -1
+	end
+	local k = (t - from) / (if tl.Fast then 0.38 else HatchFx.ChipLife)
+	return if k < 1 then k else -1
+end
+
+-- Chip `j`'s place in the egg's frame `k` through its flight (unscaled studs) and its see-through.
+function HatchFx.chipPose(j: number, k: number, tl: Timeline): (CFrame, number)
+	local chip = HatchFx.Chips[j]
+	local life = if tl.Fast then 0.38 else HatchFx.ChipLife
+	local tau = k * life
+	local p0, n = HatchFx.eggFront(chip.X, chip.Y)
+	local v = n * chip.Out + Vector3.new(chip.Side, chip.Up, 0)
+	local p = p0 + n * 0.04 + v * tau + Vector3.new(0, -0.5 * HatchFx.ChipGravity * tau * tau, 0)
+	local turn = chip.Spin * tau
+	local face = CFrame.lookAt(Vector3.zero, n)
+	return CFrame.new(p) * face * CFrame.Angles(turn.X, turn.Y, turn.Z), Ease.span(k, 0.55, 0.45, "Quad", "In")
 end
 
 ---------------------------------------------------------------- colours
@@ -1060,7 +1245,20 @@ function HatchFx.eggFront(x: number, y: number): (Vector3, Vector3)
 	return Vector3.new(x, y, 0), Vector3.new(0, 0, -1)
 end
 
-export type CrackPart = { Part: BasePart, Level: number, Length: number, Along: number }
+export type CrackPart = {
+	Part: BasePart,
+	Level: number,
+	Length: number,
+	Along: number,
+	Line: number, -- (2026-11-15) its crack line and its place on it: a line runs out segment by segment
+	Seg: number,
+	Segs: number,
+	Base: CFrame, -- its place in the egg's frame, whole
+	Shown: number, -- how much of it shows now (0..1)
+	At: number, -- its place in the egg's rig (HatchRig.setOffsetAt)
+}
+
+export type ChipPart = { Part: BasePart, Index: number, Base: CFrame, Flying: boolean, At: number }
 
 export type Record = {
 	Model: Model,
@@ -1069,10 +1267,14 @@ export type Record = {
 	Materials: { Enum.Material },
 	Trans: { number },
 	Cracks: { CrackPart },
+	Chips: { ChipPart }, -- (2026-11-15) the shell chips that fly off at the crack steps
+	Rig: HatchRig.Rig, -- its parts as one rigid set (HatchStage poses it; the halves fly apart)
+	Scale: number, -- its size against the builder's (HatchWorld.Scale on the 3D stage; 1 in a viewport)
 	Mid: number, -- its visual middle over its pivot (studs)
 	Height: number, -- top to bottom (studs)
 	Foot: number, -- its lowest point under the pivot (studs, negative)
 	Lit: number, -- the crack level shown now
+	Growing: boolean, -- a crack line still running out (painted every frame until it's done)
 	Tint: Color3?, -- the silhouette's colour now (nil: as built)
 	Faded: number, -- the transparency added now (Reduce motion's fades)
 }
@@ -1095,7 +1297,8 @@ function HatchFx.addCracks(model: Model, maxLevel: number?)
 		if crack.Level > top then
 			continue
 		end
-		for j = 1, #crack.Points - 1 do
+		local segs = #crack.Points - 1
+		for j = 1, segs do
 			index += 1
 			local a, na = HatchFx.eggFront(crack.Points[j][1], crack.Points[j][2])
 			local b, nb = HatchFx.eggFront(crack.Points[j + 1][1], crack.Points[j + 1][2])
@@ -1119,10 +1322,42 @@ function HatchFx.addCracks(model: Model, maxLevel: number?)
 			part.CFrame = CFrame.fromMatrix(mid, xAxis, yAxis, normal)
 			part:SetAttribute("CrackLevel", crack.Level)
 			part:SetAttribute("CrackAlong", index / math.max(1, total))
+			part:SetAttribute("CrackLine", c)
+			part:SetAttribute("CrackSeg", j)
+			part:SetAttribute("CrackSegs", segs)
 			part.Parent = folder
 		end
 	end
 	folder.Parent = model
+	-- (2026-11-15) the shell chips: thin pieces of the front shell in its own colour, hidden until their
+	-- crack step throws them off (chipPose); the egg's upper shell gives the colour and material
+	local shell = model:FindFirstChild("Top")
+	local shellPart = if shell then shell:FindFirstChild("Shell") else nil
+	local color = if shellPart and shellPart:IsA("BasePart") then shellPart.Color else Color3.fromRGB(235, 228, 214)
+	local material = if shellPart and shellPart:IsA("BasePart") then shellPart.Material else Enum.Material.SmoothPlastic
+	local chips = Instance.new("Model")
+	chips.Name = "HatchChips"
+	for j, chip in HatchFx.Chips do
+		if chip.Step > top then
+			continue
+		end
+		local p0, n = HatchFx.eggFront(chip.X, chip.Y)
+		local part = Instance.new("Part")
+		part.Name = "Chip" .. j
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.Material = if material == Enum.Material.Neon then Enum.Material.SmoothPlastic else material
+		part.Color = color
+		part.Transparency = 1
+		part.Size = HatchFx.ChipSize
+		part.CFrame = CFrame.new(p0 + n * 0.04) * CFrame.lookAt(Vector3.zero, n)
+		part:SetAttribute("ChipIndex", j)
+		part.Parent = chips
+	end
+	chips.Parent = model
 end
 
 --[[
@@ -1132,6 +1367,7 @@ end
 ]]
 function HatchFx.record(model: Model): Record
 	local pivot = model:GetPivot()
+	local scale = model:GetAttribute("StageScale")
 	local rec: Record = {
 		Model = model,
 		Parts = {},
@@ -1139,29 +1375,44 @@ function HatchFx.record(model: Model): Record
 		Materials = {},
 		Trans = {},
 		Cracks = {},
+		Chips = {},
+		Rig = HatchRig.new(model),
+		Scale = if type(scale) == "number" and scale > 0 then scale else 1,
 		Mid = 0.8,
 		Height = 4.4,
 		Foot = -1.3,
 		Lit = 0,
+		Growing = false,
 		Tint = nil,
 		Faded = 0,
 	}
 	local low, high = math.huge, -math.huge
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
+	-- (the rig's own parts, in its order: a crack or a chip moves in the rig by its place there)
+	for at, d in rec.Rig.Parts do
+		do
 			table.insert(rec.Parts, d)
 			table.insert(rec.Colors, d.Color)
 			table.insert(rec.Materials, d.Material)
 			table.insert(rec.Trans, d.Transparency)
 			local level = d:GetAttribute("CrackLevel")
+			local chip = d:GetAttribute("ChipIndex")
 			if type(level) == "number" then
 				local along = d:GetAttribute("CrackAlong")
+				local line, seg, segs = d:GetAttribute("CrackLine"), d:GetAttribute("CrackSeg"), d:GetAttribute("CrackSegs")
 				table.insert(rec.Cracks, {
 					Part = d,
 					Level = level,
 					Length = d.Size.Y,
 					Along = if type(along) == "number" then along else 0,
+					Line = if type(line) == "number" then line else 0,
+					Seg = if type(seg) == "number" then seg else 1,
+					Segs = if type(segs) == "number" then segs else 1,
+					Base = pivot:ToObjectSpace(d.CFrame),
+					Shown = 0,
+					At = at,
 				})
+			elseif type(chip) == "number" then
+				table.insert(rec.Chips, { Part = d, Index = chip, Base = pivot:ToObjectSpace(d.CFrame), Flying = false, At = at })
 			elseif d.Transparency < 1 then
 				local y = pivot:PointToObjectSpace(d.CFrame.Position).Y
 				local half = math.max(d.Size.X, d.Size.Y, d.Size.Z) / 2
@@ -1187,8 +1438,18 @@ function HatchFx.reset(rec: Record)
 	end
 	for _, crack in rec.Cracks do
 		crack.Part.Transparency = 1
+		crack.Part.Size = Vector3.new(HatchFx.CrackWidth[1] * rec.Scale, crack.Length, HatchFx.CrackDepth * rec.Scale)
+		crack.Shown = 0
+		HatchRig.setOffsetAt(rec.Rig, crack.At, crack.Base)
 	end
+	for _, chip in rec.Chips do
+		chip.Part.Transparency = 1
+		chip.Flying = false
+		HatchRig.setOffsetAt(rec.Rig, chip.At, chip.Base)
+	end
+	HatchRig.fade(rec.Rig, 0)
 	rec.Lit = 0
+	rec.Growing = false
 	rec.Tint = nil
 	rec.Faded = 0
 end
@@ -1196,11 +1457,16 @@ end
 --[[
 	Paints an egg's cracks for `pose` (its lit level, each a step thicker,
 	in `rarity`'s colour at `t`) and its silhouette (the whole egg one solid
-	glowing colour, Neon: no light on it) and its fade (Reduce motion).
-	Writes only what changed.
+	glowing colour, Neon: no light on it) and its fade (Reduce motion, the
+	burst's halves). With the timeline `tl` (2026-11-15) each new step's
+	lines run out along the shell segment by segment (crackGrowAt) and the
+	shell chips fly (chipPose); without it every lit crack shows whole.
+	Writes only what changed. Sizes follow the egg's Scale (the 3D stage's
+	eggs are small, HatchWorld).
 ]]
-function HatchFx.paintEgg(rec: Record, pose: EggPose, rarity: string, t: number)
+function HatchFx.paintEgg(rec: Record, pose: EggPose, rarity: string, t: number, tl: Timeline?)
 	local level = math.clamp(pose.Level, 0, 3)
+	local breaking = pose.Break ~= nil and pose.Break >= 0
 	local fadeChanged = pose.Fade ~= rec.Faded
 	if fadeChanged then
 		for i, part in rec.Parts do
@@ -1210,19 +1476,62 @@ function HatchFx.paintEgg(rec: Record, pose: EggPose, rarity: string, t: number)
 		end
 		rec.Faded = pose.Fade
 	end
-	if level ~= rec.Lit or fadeChanged or rarity == "Mythic" or pose.Bright > 0 then
-		local width = HatchFx.CrackWidth[math.max(1, level)]
+	local k = rec.Scale
+	if breaking then
+		-- (the burst: the cracks went with the shell; the halves fly apart glowing)
+		if rec.Lit ~= -1 then
+			for _, crack in rec.Cracks do
+				crack.Part.Transparency = 1
+			end
+			for _, chip in rec.Chips do
+				chip.Part.Transparency = 1
+				chip.Flying = false
+			end
+			rec.Lit = -1
+		end
+	elseif level ~= rec.Lit or fadeChanged or rarity == "Mythic" or pose.Bright > 0 or rec.Growing then
+		local width = HatchFx.CrackWidth[math.max(1, level)] * k
+		local growing = false
 		for _, crack in rec.Cracks do
 			local on = crack.Level <= level
-			crack.Part.Transparency = if on then pose.Fade else 1
-			if on then
+			local shown = if on then 1 else 0
+			if on and tl then
+				-- (its line runs out from its start: this segment shows once the run reaches it)
+				local run = HatchFx.crackGrowAt(t, tl, crack.Level)
+				shown = math.clamp(run * crack.Segs - (crack.Seg - 1), 0, 1)
+				if run < 1 then
+					growing = true
+				end
+			end
+			crack.Part.Transparency = if shown > 0 then pose.Fade else 1
+			if shown > 0 then
 				crack.Part.Color = HatchFx.crackColor(rarity, t, crack.Along, pose.Bright)
 			end
-			if level ~= rec.Lit then
-				crack.Part.Size = Vector3.new(width, crack.Length, HatchFx.CrackDepth)
+			if level ~= rec.Lit or shown ~= crack.Shown then
+				local length = math.max(crack.Length * shown, 0.002 * k)
+				crack.Part.Size = Vector3.new(width, length, HatchFx.CrackDepth * k)
+				-- (it grows from its start: its middle moves back along it by what isn't out yet)
+				HatchRig.setOffsetAt(rec.Rig, crack.At, crack.Base * CFrame.new(0, -(crack.Length - length) / 2, 0))
+				crack.Shown = shown
 			end
 		end
+		rec.Growing = growing
 		rec.Lit = level
+	end
+	if tl and not breaking then
+		for _, chip in rec.Chips do
+			local u = HatchFx.chipAt(t, tl, chip.Index)
+			if u >= 0 then
+				local cf, see = HatchFx.chipPose(chip.Index, u, tl)
+				chip.Part.Transparency = math.max(see, pose.Fade)
+				HatchRig.setOffsetAt(rec.Rig, chip.At, CFrame.new(cf.Position * k) * cf.Rotation)
+				chip.Flying = true
+			elseif chip.Flying then
+				chip.Part.Transparency = 1
+				HatchRig.setOffsetAt(rec.Rig, chip.At, chip.Base)
+				chip.Flying = false
+			end
+		end
 	end
 	if pose.Silhouette > 0 then
 		-- (the whole egg one flat glowing colour: Neon takes no light in a viewport)

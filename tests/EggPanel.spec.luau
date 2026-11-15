@@ -3457,45 +3457,43 @@ return function(T, Loader)
 		local Color3 = roblox.Color3
 		withController(function(_C, w)
 			local CapsuleController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+			local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
 			local seam = CapsuleController._test
-			local camera = Instance.new("Camera")
-			local function count(): number
-				local n = 0
-				for _, child in camera:GetChildren() do
-					if child.Name == "TerraForgeOpeningMood" then
-						n += 1
-					end
-				end
-				return n
-			end
+			-- (2026-11-15: a soft veil of the colour on the opening's backdrop, behind the golems: it tints
+			-- the world, never them; a ColorCorrectionEffect tinted the golems too)
+			local o = CapsuleView.buildOpening(false)
+			local veil = o.Mood
+			T.truthy(table.find(o.Behind, veil) ~= nil, "the veil lies behind the stage (the backdrop takes it)")
 			local function finishTweens()
 				for _, made in w.tweens do
 					made.Completed.fire()
 				end
 				table.clear(w.tweens)
 			end
-			seam.setMood(5, Color3.new(1, 0.7, 0.1), false, camera)
-			T.eq(count(), 1, "one tint at an Epic+ burst")
-			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, camera)
-			T.eq(count(), 1, "never two (two Epic+ openings)")
-			seam.setMood(0, Color3.new(1, 1, 1), false, camera)
+			seam.setMood(5, Color3.new(1, 0.7, 0.1), false, o)
+			T.truthy(veil.Visible, "a tint at an Epic+ burst")
+			T.eq(veil.BackgroundColor3, Color3.new(1, 0.7, 0.1), "in its colour")
+			local goal = w.tweens[#w.tweens].Goal.BackgroundTransparency
+			T.truthy(goal >= 0.75 and goal < 1, "a soft veil, never a dark one")
+			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, o)
+			T.truthy(veil.Visible, "one veil (two Epic+ openings)")
+			seam.setMood(0, Color3.new(1, 1, 1), false, o)
 			finishTweens()
-			T.eq(count(), 0, "gone at the flight")
-			T.eq(seam.mood(), nil)
-			seam.setMood(5, Color3.new(1, 0.7, 0.1), true, camera)
-			T.eq(count(), 0, "none with Reduce motion")
-			seam.setMood(3, Color3.new(0, 0.5, 1), false, camera)
-			T.eq(count(), 0, "none below Epic")
+			T.falsy(veil.Visible, "gone at the flight")
+			seam.setMood(5, Color3.new(1, 0.7, 0.1), true, o)
+			T.falsy(veil.Visible, "none with Reduce motion")
+			seam.setMood(3, Color3.new(0, 0.5, 1), false, o)
+			T.falsy(veil.Visible, "none below Epic")
 			-- (left on by a skipped flight: the chain's end and a failing opening take it away)
-			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, camera)
-			seam.setMood(0, Color3.new(1, 1, 1), true)
+			seam.setMood(6, Color3.new(1, 0.2, 0.5), false, o)
+			seam.setMood(0, Color3.new(1, 1, 1), true, o)
 			finishTweens()
-			T.eq(count(), 0, "endChain's setMood(0, ..., true) clears it whatever was skipped")
+			T.falsy(veil.Visible, "endChain's setMood(0, ..., true) clears it whatever was skipped")
 		end)
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
 		local flat = string.gsub(source, "%s+", " ")
 		T.truthy(
-			string.find(flat, 'setBlur(false) end) safely("the world\'s tint", function() setMood(0, Color3.new(1, 1, 1), true)', 1, true),
+			string.find(flat, 'setFocus(false) end) safely("the world\'s tint", function() setMood(0, Color3.new(1, 1, 1), true)', 1, true),
 			"endChain clears it"
 		)
 		T.truthy(

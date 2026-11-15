@@ -242,6 +242,8 @@ export type OpenRefs = {
 	Badges: { Badge }, -- per golem slot (up to 5): its rarity and bonus over its head (V2)
 	Banner: Banner, -- LEGENDARY! / MYTHIC! (V2)
 	Blobs: { Frame }, -- soft blobs of the best colour drifting behind the eggs
+	Mood: Frame, -- (2026-11-15) the world's tint behind an Epic or rarer reveal (a soft veil of its colour)
+	Behind: { GuiObject }, -- the pieces under the eggs and golems (useBackdrop: on the 3D stage's backdrop)
 	Flash: Frame, -- ONE flash in the best colour, under the stage
 	Sunburst: Frame, -- the soft white sunburst behind the golems
 	Stage: ViewportFrame, -- the eggs, then the golems (the whole screen; HatchFx's camera maths)
@@ -1581,6 +1583,16 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 	end
 	local tap = tapper("Tap")
 	local tapTop = tapper("TapTop")
+	-- (2026-11-15) the world's tint behind an Epic or rarer reveal: a soft veil of its colour under
+	-- everything (on the 3D stage it lies on the backdrop: it tints the world, never the golems)
+	local mood = UIKit.new("Frame", {
+		Name = "Mood",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 1,
+	}, gui) :: Frame
 	-- soft blobs of the best colour drifting behind the eggs (three discs each: a soft edge)
 	local blobs: { Frame } = {}
 	for i = 1, CapsuleView.Blobs do
@@ -2042,6 +2054,8 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Badges = badges,
 		Banner = banner,
 		Blobs = blobs,
+		Mood = mood,
+		Behind = {},
 		Flash = flash,
 		Sunburst = sunburst,
 		Stage = stage,
@@ -2068,8 +2082,39 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		Touch = false,
 		Compact = isCompact,
 	}
+	-- (the pieces under the eggs and golems, in their drawing order: the 3D stage's backdrop takes them)
+	local behind: { GuiObject } = { mood }
+	for _, blob in blobs do
+		table.insert(behind, blob)
+	end
+	table.insert(behind, flash)
+	table.insert(behind, sunburst)
+	for i = 1, #auras do
+		table.insert(behind, auras[i])
+		table.insert(behind, platforms[i])
+	end
+	refs.Behind = behind
 	CapsuleView.layoutOpening(refs, isCompact, 1280, 720)
 	return refs
+end
+
+--[[
+	(2026-11-15) The pieces under the eggs and golems (Behind: the world's
+	tint, the soft blobs, the flash, the sunburst, the auras, the platforms)
+	on `surface`, the 3D stage's backdrop (UI/HatchWorld: a SurfaceGui
+	behind the eggs and golems that fills the view, its canvas the opening's
+	design units), or back on the opening's screen (nil). On the backdrop
+	the eggs and golems stand in the world in front of them, so the stage's
+	viewport stays empty and hidden.
+]]
+function CapsuleView.useBackdrop(refs: OpenRefs, surface: SurfaceGui?)
+	local host: Instance = surface or refs.Gui
+	for _, piece in refs.Behind do
+		if piece.Parent ~= host then
+			piece.Parent = host
+		end
+	end
+	refs.Stage.Visible = surface == nil
 end
 
 -- "2 / 5": opening `batch` of `batches` (a big pack shown 10 golems at a time); hidden for one opening.
@@ -2119,6 +2164,8 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	end
 	refs.Flash.Position = UDim2.fromOffset(0, 0)
 	refs.Flash.Size = UDim2.fromOffset(width, height)
+	refs.Mood.Position = UDim2.fromOffset(0, 0)
+	refs.Mood.Size = UDim2.fromOffset(width, height)
 	refs.Stage.Position = UDim2.fromOffset(0, 0)
 	refs.Stage.Size = UDim2.fromOffset(width, height)
 	refs.Bits.Position = UDim2.fromOffset(0, 0)

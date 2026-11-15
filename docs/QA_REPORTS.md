@@ -1126,3 +1126,64 @@ What to test in Studio:
 4. The + opens the Robux Shop at the coins. Gamepad: A on the cards' buttons, B closes; the selection stays inside.
 5. Phone emulator (667 x 375): two columns, the list scrolls to COMING SOON, the buttons easy to tap.
 6. An old save that had bought the elevator: floors 4-6 show TRAVEL (no purchase again).
+
+## Egg opening on a 3D stage (owner 2026-11-15, "critical task", branch fx/pro-polish)
+Owner: the eggs still look pixelated, blurry and not detailed; the opening is too basic, short and mechanical;
+keep every egg's design, colours and shape; fix the underlying cause, then test the whole sequence.
+Cause: the opening drew its eggs and golems in a full-screen ViewportFrame. A ViewportFrame has no
+anti-aliasing on its see-through edges (every outline against the world was jagged), renders at a lower
+resolution, and lights its models with a flat ambient and one light: no environment light, no specular, no
+Neon glow, no particles. The models themselves (parts, Sphere meshes, Neon) were never the problem.
+What changed:
+- UI/HatchWorld: the eggs and golems are real models in the world right in front of the camera, small (the eggs
+  at 0.08 of their size, a golem at most 0.25). The stage stands in a band worked out every frame: never nearer
+  than 0.8 studs nor 1.7 times the camera's near clipping plane (up to half a stud on some devices), never
+  further than 55 % of the way to the player (the camera's least zoom is 4 studs, but its popper pulls it in
+  close in a tunnel or against a wall: the stage comes in with it) nor 4 studs; what a pose would put outside it
+  is drawn that much smaller or bigger at its edge, on the same ray, so the screen shows exactly the same.
+  HatchStage poses exactly as before in its own camera space; each frame that is turned into the world through
+  the camera of that frame (bound after everything that moves the camera, RenderPriority.Last, so it never
+  trails it; during a camera shake it stays put on the screen with its names, as the viewport did), its depths
+  matched to the camera's real FieldOfView. They get the renderer's anti-aliasing, PBR light and real Neon glow.
+  A soft key light and a cool rim light ride with the camera: the same look in the lobby and in a dark cave.
+  Particles on the stage models ride with them (LockedToPart).
+- The pieces that sat under the viewport (soft blobs, the flash, the sunburst, auras, platforms) lie on a
+  SurfaceGui on a plane right behind the stage that fills the view (CapsuleView.useBackdrop): same layout,
+  depth-tested, so the eggs and golems stand in front of them as before. The world behind is out of focus (the
+  Lighting's DepthOfFieldEffect, borrowed and put back, its focus on the stage every frame; a blur would blur the
+  stage too). The Epic+ tint is a soft veil of the colour on that backdrop: it tints the world, never the golems.
+- UI/HatchRig: every stage model moves as one rigid set (one Workspace:BulkMoveTo a frame for the whole stage);
+  stage models are anchored, never collide, query, touch or cast shadows, no joints; fades are local
+  (LocalTransparencyModifier).
+- Five stages (HatchFx.Times.Normal; Open 3 of Commons about 6.2 s, was 4.6; Auto still about 2 s; Reduce motion
+  calm as before): 1 spawn: the egg rises in growing (TweenService's Back Out, rise Quint Out), facing you, a
+  soft aura with it, then a whole turn starts slowly; 2 energy: real 3D motes stream into it (a sphere emitting
+  inward), the rings orbit, the glow grows, the turn speeds up then settles facing you while the shaking builds;
+  3 cracking: each crack line runs out along the shell segment by segment, three shell chips fly off at the
+  second and third steps (falling, tumbling, fading), the gather, the glowing silhouette, then the shell's two
+  halves fly apart (Quad Out) and fade; 4 reveal: sparks out of every egg (more for the rarer), the golem grows
+  out of it from 8 % (Back Out) and turns into its 3/4 look (Quint Out), the camera's view breathes in a little;
+  5 completion: the bob, the flight to the player (the golems melt into you), the camera's view eases back to the
+  player's own and the world back into focus. Easing comes from TweenService itself (TweenService:GetValue in
+  the game, the same curves worked out for the specs: Util/Ease).
+- Camera: only the view (FieldOfView) changes: it eases to the stage's 40 degrees as a chain begins (Sine InOut
+  0.7 s) and back out after it (0.55 s; under Auto after 0.6 s, so it stays in between eggs); the player keeps
+  the camera and its controls. Reduce motion keeps the player's view.
+- Clean-up: the stage leaves the world when the chain ends, its holder empty, the particles cleared, the focus,
+  the view and the HUD back; a stuck opening's frame is unbound by the watch's clean-up.
+Studio self-test: HRA_K_TESTOVANI/TerraForge_TEST_vajicka_3D_AUTOTEST_2026-11-15.rbxl (make_test_place.luau
+... eggtest) plays 1, 3 and 10 eggs, a Legendary, a Mythic, a pack of 20 and Auto by itself after Play and prints
+"[EGG TEST] PASS / FAIL" for each (nothing left on the stage, view / focus / HUD back, the stage in front of the
+camera, frame times) and "[EGG TEST] DONE ...". The plain test place is TerraForge_TEST_vajicka_3D_2026-11-15.rbxl.
+What to test in Studio:
+1. Open eggs at the temple (1, 3, 10): edges clean, the shells smooth and lit, the cracks glowing for real; the
+   golems sharp. Nothing of the world in front of the eggs; the world behind soft.
+2. The five stages read clearly; nothing jumps (the turn, the shaking, the halves, the golem's scale-in).
+3. Walk and turn the camera during an opening: the eggs stay put on the screen, no jitter.
+4. After the last golem flies to you: the view, the focus and the HUD come back; open again right away (Auto too).
+5. In a mine (a Robux pack opens anywhere): the eggs look the same as in the lobby. Back against a wall (the
+   camera pushed in close): nothing of the player in front of the eggs.
+6. Look closely at a stone or metal golem: its texture should read like before (the stage draws golems at up to
+   a quarter of their size; if they look too smooth, they can stand further when the camera is far).
+7. The glows behind the stage (sunburst, platforms, auras): soft but even, not blurred more over the sky than
+   over the ground (the depth of field reads depth; see-through things may take the blur of what's behind).
