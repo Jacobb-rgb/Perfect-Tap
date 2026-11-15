@@ -131,62 +131,75 @@ local SUNSET_SKY = {
 -- Threshold / 2^Exposure: 1 / 2^0.27 = 0.83, the same as on 10-25
 -- (0.92 / 2^0.15). The neon and the brightest sunlit stone glow as they did
 -- then; the statue's gold blooms less, being shaded (GoldenStatue.shade).
+--
+-- Owner 2026-11-15 (Studio screenshots of the town, the quarry and every mine floor: "far too
+-- intense, overexposed, washed out ... controlled cinematic lighting, not dark or dull"): the sun
+-- and the exposure each a step down (sunlit stone gets ~25 % less light: white and pale things
+-- keep their detail), lighter haze and much less glare, deeper shadows (OutdoorAmbient) and a bit
+-- more contrast. The bloom catches only what is clearly brighter than white: neon keeps its glow
+-- (Roblox draws Neon at ~2x its colour, tools/preview/viewer.js) while pale sunlit stone, sand,
+-- clouds and crystals no longer flare. Cut-off in scene light (Threshold / 2^Exposure): Surface
+-- 1.10 (was 0.83), Quarry 1.21 (0.86), caves 1.0 (0.81), floors 3/5/6 1.12-1.15 (0.97-1.0), with
+-- smaller, softer halos. Reflections of the bright picture sky (EnvironmentSpecularScale) are
+-- halved in the caves, where they showed as white glints on crystals. Much of the mines' glare was
+-- also their floors drawing without textures (grey under bright lights, MeshAssets: texture packs);
+-- with their real, darker textures the caves keep most of their exposure.
 LightingConfig.Presets = {
 	-- Golden-hour town: low sun over the west sea, a light warm haze toward
 	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
 	Surface = {
 		Lighting = {
-			Brightness = 2.4,
+			Brightness = 2,
 			Ambient = Color3.new(0.27, 0.25, 0.35),
-			OutdoorAmbient = Color3.new(0.5, 0.48, 0.62),
-			ExposureCompensation = 0.27,
-			EnvironmentDiffuseScale = 0.5,
-			EnvironmentSpecularScale = 0.6,
+			OutdoorAmbient = Color3.new(0.42, 0.4, 0.54),
+			ExposureCompensation = 0.12,
+			EnvironmentDiffuseScale = 0.45,
+			EnvironmentSpecularScale = 0.45,
 		},
 		Atmosphere = {
-			Density = 0.26,
+			Density = 0.24,
 			Offset = 0.2,
 			Color = Color3.new(1, 0.74, 0.56),
 			Decay = Color3.new(0.52, 0.54, 0.8),
-			Glare = 0.5,
-			Haze = 0.9,
+			Glare = 0.2,
+			Haze = 0.55,
 		},
 		ColorCorrection = {
-			Brightness = 0.01,
-			Contrast = 0.2,
-			Saturation = 0.28,
+			Brightness = 0,
+			Contrast = 0.24,
+			Saturation = 0.26,
 			TintColor = Color3.new(1, 0.98, 0.97),
 		},
-		Bloom = { Intensity = 0.9, Size = 32, Threshold = 1 },
-		SunRays = { Intensity = 0.12, Spread = 0.7 },
+		Bloom = { Intensity = 0.55, Size = 26, Threshold = 1.2 },
+		SunRays = { Intensity = 0.06, Spread = 0.7 },
 		Sky = SUNSET_SKY,
 	},
 	-- Open quarry: the same sunset, a bit dustier.
 	Quarry = {
 		Lighting = {
-			Brightness = 2.4,
+			Brightness = 2,
 			Ambient = Color3.new(0.28, 0.25, 0.34),
-			OutdoorAmbient = Color3.new(0.5, 0.47, 0.6),
-			ExposureCompensation = 0.27,
-			EnvironmentDiffuseScale = 0.5,
-			EnvironmentSpecularScale = 0.55,
+			OutdoorAmbient = Color3.new(0.42, 0.4, 0.52),
+			ExposureCompensation = 0.1,
+			EnvironmentDiffuseScale = 0.45,
+			EnvironmentSpecularScale = 0.4,
 		},
 		Atmosphere = {
-			Density = 0.32,
+			Density = 0.28,
 			Offset = 0.2,
 			Color = Color3.new(0.98, 0.74, 0.58),
 			Decay = Color3.new(0.6, 0.5, 0.76),
-			Glare = 0.45,
-			Haze = 1.3,
+			Glare = 0.15,
+			Haze = 0.8,
 		},
 		ColorCorrection = {
-			Brightness = 0.01,
-			Contrast = 0.18,
-			Saturation = 0.26,
+			Brightness = 0,
+			Contrast = 0.24,
+			Saturation = 0.25,
 			TintColor = Color3.new(1, 0.97, 0.95),
 		},
-		Bloom = { Intensity = 0.5, Size = 24, Threshold = 1.15 },
-		SunRays = { Intensity = 0.1, Spread = 0.7 },
+		Bloom = { Intensity = 0.35, Size = 22, Threshold = 1.3 },
+		SunRays = { Intensity = 0.05, Spread = 0.7 },
 		Sky = SUNSET_SKY,
 	},
 	-- Ember Caves: dark, orange lava glow, ores pop.
@@ -195,9 +208,9 @@ LightingConfig.Presets = {
 			Brightness = 0.6,
 			Ambient = Color3.new(0.32, 0.19, 0.14),
 			OutdoorAmbient = Color3.new(0.2, 0.12, 0.09),
-			ExposureCompensation = 0.45,
+			ExposureCompensation = 0.32,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 0.8,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.45,
@@ -213,7 +226,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(1, 0.9, 0.82),
 		},
-		Bloom = { Intensity = 0.55, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.4, Size = 20, Threshold = 1.25 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Deep Hollow: cold and mysterious; rare ores glow in many colors.
@@ -222,9 +235,9 @@ LightingConfig.Presets = {
 			Brightness = 0.3,
 			Ambient = Color3.new(0.2, 0.2, 0.3),
 			OutdoorAmbient = Color3.new(0.12, 0.12, 0.18),
-			ExposureCompensation = 0.45,
+			ExposureCompensation = 0.32,
 			EnvironmentDiffuseScale = 0.15,
-			EnvironmentSpecularScale = 0.9,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.5,
@@ -240,7 +253,7 @@ LightingConfig.Presets = {
 			Saturation = 0.35,
 			TintColor = Color3.new(0.9, 0.92, 1),
 		},
-		Bloom = { Intensity = 0.55, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.4, Size = 20, Threshold = 1.25 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- VIP Glimmer Grotto: sparkly teal.
@@ -249,9 +262,9 @@ LightingConfig.Presets = {
 			Brightness = 0.5,
 			Ambient = Color3.new(0.18, 0.27, 0.28),
 			OutdoorAmbient = Color3.new(0.08, 0.12, 0.12),
-			ExposureCompensation = 0.45,
+			ExposureCompensation = 0.32,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.42,
@@ -267,7 +280,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(0.92, 1, 1),
 		},
-		Bloom = { Intensity = 0.55, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.4, Size = 20, Threshold = 1.25 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Floor 3 (Deep Hollow re-themed, MineFloors): a cool crystal lagoon, teal water glow.
@@ -276,9 +289,9 @@ LightingConfig.Presets = {
 			Brightness = 0.4,
 			Ambient = Color3.new(0.16, 0.26, 0.32),
 			OutdoorAmbient = Color3.new(0.08, 0.14, 0.18),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.22,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.36,
@@ -294,7 +307,7 @@ LightingConfig.Presets = {
 			Saturation = 0.34,
 			TintColor = Color3.new(0.9, 1, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.35, Size = 20, Threshold = 1.3 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Floor 4, Sunken Palace: dim violet halls, warm gold glints.
@@ -303,9 +316,9 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.22, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.12, 0.2),
-			ExposureCompensation = 0.45,
+			ExposureCompensation = 0.32,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.42,
@@ -321,7 +334,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(1, 0.96, 1),
 		},
-		Bloom = { Intensity = 0.55, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.4, Size = 20, Threshold = 1.25 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Floor 6, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
@@ -330,9 +343,9 @@ LightingConfig.Presets = {
 			Brightness = 0.3,
 			Ambient = Color3.new(0.24, 0.18, 0.34),
 			OutdoorAmbient = Color3.new(0.14, 0.1, 0.22),
-			ExposureCompensation = 0.25,
+			ExposureCompensation = 0.18,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.3,
@@ -348,7 +361,7 @@ LightingConfig.Presets = {
 			Saturation = 0.36,
 			TintColor = Color3.new(1, 0.94, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.35, Size = 20, Threshold = 1.3 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 		Sky = {
 			Top = Color3.fromRGB(14, 10, 34),
@@ -366,9 +379,9 @@ LightingConfig.Presets = {
 			Brightness = 0.35,
 			Ambient = Color3.new(0.26, 0.28, 0.4),
 			OutdoorAmbient = Color3.new(0.12, 0.14, 0.22),
-			ExposureCompensation = 0.3,
+			ExposureCompensation = 0.22,
 			EnvironmentDiffuseScale = 0.2,
-			EnvironmentSpecularScale = 1,
+			EnvironmentSpecularScale = 0.5,
 		},
 		Atmosphere = {
 			Density = 0.38,
@@ -384,7 +397,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(0.96, 0.98, 1),
 		},
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.2 },
+		Bloom = { Intensity = 0.35, Size = 20, Threshold = 1.3 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Close-up while cleaning ore: extra warmth (no blur: the owner wants it sharp).
@@ -392,12 +405,12 @@ LightingConfig.Presets = {
 		Lighting = {},
 		Atmosphere = {},
 		ColorCorrection = {
-			Brightness = 0.04,
+			Brightness = 0.02,
 			Contrast = 0.12,
 			Saturation = 0.12,
 			TintColor = Color3.new(1, 0.95, 0.88),
 		},
-		Bloom = { Intensity = 0.6, Size = 24, Threshold = 1.1 },
+		Bloom = { Intensity = 0.45, Size = 20, Threshold = 1.2 },
 		SunRays = {},
 	},
 	-- Inside the Blaster Vault (a part tagged LightingZone with Preset =
@@ -417,7 +430,7 @@ LightingConfig.Presets = {
 			Saturation = 0.34,
 			TintColor = Color3.new(1, 0.95, 0.9),
 		},
-		Bloom = { Intensity = 0.6, Size = 24, Threshold = 1.05 },
+		Bloom = { Intensity = 0.45, Size = 22, Threshold = 1.15 },
 		SunRays = {},
 	},
 	-- The crate-opening cinematic's dark round room (VaultController,
@@ -429,7 +442,7 @@ LightingConfig.Presets = {
 			Brightness = 0.2,
 			Ambient = Color3.new(0.36, 0.36, 0.38),
 			OutdoorAmbient = Color3.new(0.15, 0.15, 0.16),
-			ExposureCompensation = 0.47,
+			ExposureCompensation = 0.35,
 			EnvironmentDiffuseScale = 0.1,
 			EnvironmentSpecularScale = 0.8,
 		},
@@ -447,7 +460,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(1, 1, 1),
 		},
-		Bloom = { Intensity = 0.9, Size = 32, Threshold = 1.0 },
+		Bloom = { Intensity = 0.7, Size = 28, Threshold = 1.1 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 } :: { [string]: Preset }
