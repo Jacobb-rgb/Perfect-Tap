@@ -1,0 +1,215 @@
+{
+ "note": "owner 2026-11-15: remove the brown booth (and the yellow bench it stands in) from the Heartstone Core's hub; the right railing between the kept back post and the kept front post is the left one mirrored (the booth was fused with it); the floor under it takes the left side's floor",
+ "src": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_HeartstoneCoreHD.glb",
+ "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_patro6_bez_truhly_2026-11-15/Floor_HeartstoneCoreHD_bez_truhly.glb",
+ "report": "tools/meshy/remove_chest_2026-11-15_report.json",
+ "layout": {
+  "scale": 18.2756,
+  "ground_n": 1.74,
+  "center_n": [
+   0.0,
+   -0.0007
+  ]
+ },
+ "ground": -0.1,
+ "tiles": [
+  "Floor_HeartstoneCoreHD_09",
+  "Floor_HeartstoneCoreHD_10",
+  "Floor_HeartstoneCoreHD_11",
+  "Floor_HeartstoneCoreHD_01",
+  "Floor_HeartstoneCoreHD_02",
+  "Floor_HeartstoneCoreHD_04"
+ ],
+ "mirror_c": 1.385,
+ "zones": [
+  {
+   "poly": [
+    [
+     7.05,
+     12.8
+    ],
+    [
+     8.4,
+     12.8
+    ],
+    [
+     8.4,
+     11.3
+    ],
+    [
+     13.72,
+     11.3
+    ],
+    [
+     13.72,
+     12.97
+    ],
+    [
+     18.5,
+     12.97
+    ],
+    [
+     18.5,
+     24.6
+    ],
+    [
+     11.2,
+     29.1
+    ],
+    [
+     7.75,
+     29.1
+    ],
+    [
+     7.75,
+     26.1
+    ],
+    [
+     8.4,
+     24.25
+    ],
+    [
+     8.4,
+     20.3
+    ],
+    [
+     7.05,
+     20.3
+    ]
+   ],
+   "ymin": 0.15
+  },
+  {
+   "poly": [
+    [
+     13.7,
+     12.4
+    ],
+    [
+     16.3,
+     12.4
+    ],
+    [
+     16.3,
+     12.99
+    ],
+    [
+     13.7,
+     12.99
+    ]
+   ],
+   "ymin": 3.8
+  }
+ ],
+ "keep": [
+  [
+   13.7,
+   -1,
+   10.6,
+   16.2,
+   3.75,
+   12.99
+  ],
+  [
+   4.9,
+   -1,
+   26.1,
+   7.75,
+   4.8,
+   29.4
+  ]
+ ],
+ "add": {
+  "poly": [
+   [
+    13.3,
+    12.97
+   ],
+   [
+    18.5,
+    12.97
+   ],
+   [
+    18.5,
+    24.6
+   ],
+   [
+    11.2,
+    29.1
+   ],
+   [
+    7.75,
+    29.1
+   ],
+   [
+    7.75,
+    26.1
+   ],
+   [
+    12.0,
+    23.6
+   ],
+   [
+    13.6,
+    22.2
+   ],
+   [
+    13.6,
+    12.97
+   ]
+  ]
+ },
+ "underlay": [
+  [
+   13.4,
+   10.9,
+   16.6,
+   13.4,
+   -0.13
+  ]
+ ],
+ "mirror_shifts": [
+  [
+   0,
+   0
+  ],
+  [
+   0.75,
+   0
+  ],
+  [
+   1.5,
+   0
+  ],
+  [
+   0,
+   0.75
+  ],
+  [
+   0,
+   -0.75
+  ],
+  [
+   2.5,
+   0
+  ]
+ ],
+ "donors": [
+  [
+   -9,
+   0
+  ],
+  [
+   0,
+   -14
+  ],
+  [
+   -14,
+   0
+  ],
+  [
+   0,
+   14
+  ]
+ ]
+}

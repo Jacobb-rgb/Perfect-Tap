@@ -1,0 +1,92 @@
+{
+ "tiles": {
+  "Floor_HeartstoneCoreHD_10": {
+   "tris": 13496,
+   "center": [
+    2.31903,
+    2.09804,
+    2.22787
+   ],
+   "size": [
+    3.36263,
+    2.42785,
+    2.93489
+   ]
+  },
+  "Floor_HeartstoneCoreHD_09": {
+   "tris": 11940,
+   "center": [
+    0.3401,
+    1.30938,
+    2.36417
+   ],
+   "size": [
+    1.08595,
+    1.36439,
+    2.93067
+   ]
+  },
+  "Floor_HeartstoneCoreHD_02": {
+   "tris": 18675,
+   "center": [
+    0.08317,
+    1.24342,
+    2.1712
+   ],
+   "size": [
+    1.69299,
+    1.49618,
+    3.31662
+   ]
+  },
+  "Floor_HeartstoneCoreHD_11": {
+   "tris": 11389,
+   "center": [
+    0.80218,
+    1.27594,
+    0.51015
+   ],
+   "size": [
+    1.768,
+    1.44842,
+    2.1298
+   ]
+  },
+  "Floor_HeartstoneCoreHD_01": {
+   "tris": 15787,
+   "center": [
+    -1.29952,
+    1.72996,
+    2.01805
+   ],
+   "size": [
+    4.57073,
+    3.14344,
+    3.17129
+   ]
+  },
+  "Floor_HeartstoneCoreHD_04": {
+   "tris": 15068,
+   "center": [
+    -0.41169,
+    1.0077,
+    -0.04169
+   ],
+   "size": [
+    2.64001,
+    1.98137,
+    1.48914
+   ]
+  }
+ },
+ "mirror_src": 1560,
+ "moved": 6765,
+ "protected": 766,
+ "torn": 141,
+ "squashed": 8274,
+ "cloned": 6350,
+ "spotted": 1924,
+ "filled": 15,
+ "unlayered": 5306,
+ "open_edges": 1219
+}
