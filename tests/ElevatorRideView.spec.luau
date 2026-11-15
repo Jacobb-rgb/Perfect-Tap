@@ -9,24 +9,23 @@ return function(T, Loader)
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local ElevatorView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ElevatorView")
 	local RideView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ElevatorRideView")
-	local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
+	-- (the old 2D ride: the game plays ElevatorTravelController's cinematic since 2026-11-15; this
+	-- view stays for elevator_preview's pictures, so it keeps the server timing it was made for)
+	local LEGACY_DOORS_CLOSE = 0.5
+	local function legacyRideTime(from: number?, to: number): number
+		local floors = if from then math.abs(to - from) else 1
+		return math.min(2.5, 1.9 + 0.15 * floors)
+	end
 
 	local timing = RideView.Timing
 
 	local function ride(from: number, to: number, reduced: boolean?): any
-		return RideView.newRide(
-			from,
-			to,
-			MineFloors.get(to).Name,
-			ElevatorService.rideTime(from, to),
-			ElevatorService.DoorsClose,
-			reduced == true
-		)
+		return RideView.newRide(from, to, MineFloors.get(to).Name, legacyRideTime(from, to), LEGACY_DOORS_CLOSE, reduced == true)
 	end
 
 	T.test("ElevatorRide: the doors are shut before the server moves the character", function()
 		local r = ride(1, 4)
-		T.le(r.Close, ElevatorService.DoorsClose - 0.05 + 1e-9, "shut before DoorsClose")
+		T.le(r.Close, LEGACY_DOORS_CLOSE - 0.05 + 1e-9, "shut before DoorsClose")
 		T.truthy(r.Close >= 0.15, "a real slam, not a pop")
 		T.eq(RideView.closedness(r, 0), 0, "open at the start")
 		T.near(RideView.closedness(r, r.Close), 1, 1e-9, "shut at Close")

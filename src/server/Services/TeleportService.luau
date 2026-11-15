@@ -16,6 +16,7 @@
 	  Cooldown  within ServerCooldown of your last teleport
 	  Dead      no live character
 	  Cleaning  in the middle of the cleaning minigame
+	  Riding    in the elevator's travel cinematic (ElevatorService.isRiding)
 	  NoBase / NotHere  the destination doesn't exist (yet)
 	The area round the target is streamed in before the move (StreamingEnabled),
 	the character gets off any seat and lands on the ground there, a little
@@ -44,7 +45,7 @@ local PlotService = require(script.Parent.PlotService)
 local TeleportService = {}
 
 type Destination = TeleportConfig.Destination
-export type Reason = "Cooldown" | "Dead" | "Cleaning" | "NoBase" | "NotHere"
+export type Reason = "Cooldown" | "Dead" | "Cleaning" | "Riding" | "NoBase" | "NotHere"
 
 -- The Blaster Vault's podium reaches this far in front of its origin (design
 -- studs, Lobby/Vault/Building: podium z -34..48), scaled by Vault.Scale.
@@ -102,6 +103,12 @@ end
 function TeleportService.isCleaning(player: Player): boolean
 	local CleaningService = require(script.Parent.CleaningService) :: any
 	return CleaningService.isCleaning(player)
+end
+
+-- Is the player in the elevator's travel cinematic? (loaded on first use, like isCleaning)
+function TeleportService.isRiding(player: Player): boolean
+	local ElevatorService = require(script.Parent.ElevatorService) :: any
+	return ElevatorService.isRiding(player) == true
 end
 
 --[[
@@ -209,6 +216,11 @@ local function onTeleport(player: Player, destination: any)
 	end
 	if TeleportService.isCleaning(player) then
 		reply(player, id, false, "Cleaning")
+		return
+	end
+	-- (the travel cinematic owns the camera and the character until the doors are open)
+	if TeleportService.isRiding(player) then
+		reply(player, id, false, "Riding")
 		return
 	end
 	local target: CFrame?, reason: Reason? = TeleportService.targetOf(player, id)

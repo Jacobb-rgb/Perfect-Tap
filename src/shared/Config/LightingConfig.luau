@@ -420,6 +420,36 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 0.6, Size = 24, Threshold = 1.05 },
 		SunRays = {},
 	},
+	-- The elevator's travel cinematic (ElevatorTravelController, owner 2026-11-15): inside the
+	-- steel cabin in a dark shaft, from the dip into the cabin until it stops. Little sun or sky
+	-- light, so the cabin's own lamps, the shaft's lamps and the glowing crystals carry the scene;
+	-- the target floor's preset comes back as the doors open.
+	ElevatorRide = {
+		Lighting = {
+			Brightness = 0.3,
+			Ambient = Color3.new(0.3, 0.3, 0.33),
+			OutdoorAmbient = Color3.new(0.14, 0.14, 0.16),
+			ExposureCompensation = 0.3,
+			EnvironmentDiffuseScale = 0.15,
+			EnvironmentSpecularScale = 0.7,
+		},
+		Atmosphere = {
+			Density = 0.25,
+			Offset = 0,
+			Color = Color3.new(0.12, 0.12, 0.14),
+			Decay = Color3.new(0.06, 0.06, 0.07),
+			Glare = 0,
+			Haze = 1.2,
+		},
+		ColorCorrection = {
+			Brightness = 0.01,
+			Contrast = 0.16,
+			Saturation = 0.18,
+			TintColor = Color3.new(1, 1, 1),
+		},
+		Bloom = { Intensity = 0.7, Size = 26, Threshold = 1.05 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
+	},
 	-- The crate-opening cinematic's dark round room (VaultController,
 	-- Builders/CrateOpeningStage): almost no sun or sky light, so the case's
 	-- glow, the light pillar and the blaster carry the scene; strong bloom. Neutral

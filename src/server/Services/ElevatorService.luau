@@ -55,6 +55,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local ElevatorTravelConfig = require(Shared.Config.ElevatorTravelConfig)
 local MineFloors = require(Shared.Config.MineFloors)
 local PromptConfig = require(Shared.Config.PromptConfig)
 local Format = require(Shared.Util.Format)
@@ -90,16 +91,17 @@ ElevatorService.PromptName = "ElevatorPrompt"
 -- rider standing this close can't pick the stop's own floor (the prompt reaches less)
 ElevatorService.Range = 16
 ElevatorService.PromptDistance = 10
--- seconds between two rides of one player
-ElevatorService.Cooldown = 3
--- seconds from "Depart" until the character moves: the client's doors are shut by then
--- (ElevatorRideView closes them in DoorsClose - 0.05 at most)
-ElevatorService.DoorsClose = 0.5
--- the client's ride lasts at least RideTime + RidePerFloor per floor travelled (at most RideMax)
--- before the doors open again; about 2.5-3 s with the doors
-ElevatorService.RideTime = 1.9
-ElevatorService.RidePerFloor = 0.15
-ElevatorService.RideMax = 2.5
+-- seconds between two rides of one player: at least the shortest travel cinematic (a rider also
+-- counts as riding until their own cinematic is over, ElevatorTravelConfig.hold)
+ElevatorService.Cooldown = ElevatorTravelConfig.hold(1, 2)
+-- seconds from "Depart" until the character moves: the cinematic's doors are shut by then
+-- (ElevatorTravelConfig.Timing.DoorsShut)
+ElevatorService.DoorsClose = ElevatorTravelConfig.Timing.DoorsShut + 0.1
+-- the cinematic's ride from the doors meeting to the brake: RideTime, + RidePerFloor for every floor
+-- after the first, at most RideMax (ElevatorTravelConfig.travelTime; the whole cinematic 5.4-5.8 s)
+ElevatorService.RideTime = ElevatorTravelConfig.Timing.Travel
+ElevatorService.RidePerFloor = ElevatorTravelConfig.Timing.PerFloor
+ElevatorService.RideMax = ElevatorTravelConfig.Timing.TravelMax
 -- seconds the server waits at most for the target area to stream in
 ElevatorService.StreamTimeout = 3
 -- seconds between two void rescues of one player
@@ -119,7 +121,9 @@ local stops: { Model } = {}
 local catchers: { BasePart } = {}
 local hooked: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local lastRide: { [Player]: number } = {}
-local riding: { [Player]: boolean } = {}
+-- a rider is riding until this clock time (the travel cinematic), and their ride's number
+local rideUntil: { [Player]: number } = {}
+local rideTokens: { [Player]: number } = {}
 local lastCatch: { [Player]: number } = {}
 local clock: () -> number = os.clock
 local mapOverride: Instance? = nil
@@ -127,9 +131,11 @@ local departCallbacks: { (Player) -> ...any } = {}
 
 ---------------------------------------------------------------- rules
 
--- True while the player is riding the elevator (from "Depart" until the character arrives).
+-- True while the player is riding the elevator: from "Depart" until their travel cinematic is over
+-- (no second ride, teleport, rebirth or hoverboard meanwhile).
 function ElevatorService.isRiding(player: Player): boolean
-	return riding[player] == true
+	local untilTime = rideUntil[player]
+	return untilTime ~= nil and clock() < untilTime
 end
 
 -- Listeners for a ride departing (HoverboardService gets the rider off the board).
@@ -302,18 +308,47 @@ local function deny(player: Player, text: string)
 	StateService.push(player)
 end
 
--- Seconds of ride (doors shut) the client shows from one floor to another.
+-- Seconds of ride (doors shut, from the jolt to the brake) the client shows from one floor to another.
 function ElevatorService.rideTime(from: number?, to: number): number
 	local floors = if from then math.abs(to - from) else 1
-	return math.min(ElevatorService.RideMax, ElevatorService.RideTime + ElevatorService.RidePerFloor * floors)
+	return math.min(ElevatorService.RideMax, ElevatorService.RideTime + ElevatorService.RidePerFloor * math.max(0, floors - 1))
 end
 
-local function ride(player: Player, from: number?, floorIndex: number, target: CFrame)
+-- Still the same ride of the same living character? (left, died or respawned behind the shut doors = no)
+local function aboard(player: Player, token: number, character: Model?): boolean
+	return player.Parent ~= nil and rideTokens[player] == token and player.Character == character and Guard.rootPart(player) ~= nil
+end
+
+--[[
+	The ride (the travel cinematic, ElevatorTravelConfig; the client's
+	ElevatorTravelController plays it):
+	  "Depart" { Floor, From, Name, Duration, DoorsClose, FromAt, StopAt?, Target }
+	    at once: FromAt = the floor center of the stop the rider stands at (the
+	    cabin is built over its cage), StopAt = the target stop's (nil when the
+	    floor has none: the arrival fades instead), Target = where the character
+	    will stand (the camera ends behind it)
+	  DoorsClose seconds later the doors are shut: the target area streams in
+	  and the character moves, unless the rider left, died or respawned
+	  meanwhile (aboard): then nothing moves and "Cancel" { Floor, Name } lets
+	  the client give the game back
+	  "Arrive" { Floor, Name, Ok = true } once the character stands at the
+	    target: the client brakes and opens the doors
+	The rider counts as riding (isRiding) from "Depart" until their cinematic
+	is over: one ride at a time.
+]]
+local function ride(player: Player, here: Model, floorIndex: number, target: CFrame)
 	local floor = MineFloors.ByIndex[floorIndex]
-	riding[player] = true
+	local from = ElevatorService.floorOf(here)
+	local character = player.Character
+	local departed = clock()
+	local token = (rideTokens[player] or 0) + 1
+	rideTokens[player] = token
+	-- riding until the move (at the latest after the stream wait) and the client's arrival after it
+	rideUntil[player] = departed + ElevatorService.DoorsClose + ElevatorService.StreamTimeout + ElevatorTravelConfig.arriveTail()
 	for _, callback in departCallbacks do
 		task.spawn(callback, player)
 	end
+	local stop = ElevatorService.stopFor(floorIndex)
 	Net.fire("ElevatorRide", player, {
 		Phase = "Depart",
 		Floor = floorIndex,
@@ -321,24 +356,40 @@ local function ride(player: Player, from: number?, floorIndex: number, target: C
 		Name = floor.Name,
 		Duration = ElevatorService.rideTime(from, floorIndex),
 		DoorsClose = ElevatorService.DoorsClose,
+		FromAt = ElevatorService.stopCFrame(here),
+		StopAt = if stop then ElevatorService.stopCFrame(stop) else nil,
+		Target = target,
 	})
 	task.spawn(function()
 		-- only behind closed doors
 		if ElevatorService.DoorsClose > 0 then
 			task.wait(ElevatorService.DoorsClose)
 		end
-		-- StreamingEnabled: load the target area first so the rider never falls through it
-		pcall(function()
-			player:RequestStreamAroundAsync(target.Position, ElevatorService.StreamTimeout)
-		end)
 		local ok, arrived = false, false
-		if player.Parent then
-			ok, arrived = pcall(teleport, player, target)
+		if aboard(player, token, character) then
+			-- StreamingEnabled: load the target area first so the rider never falls through it
+			pcall(function()
+				player:RequestStreamAroundAsync(target.Position, ElevatorService.StreamTimeout)
+			end)
+			if aboard(player, token, character) then
+				ok, arrived = pcall(teleport, player, target)
+			end
 		end
-		-- always free the rider, even when the move failed
-		riding[player] = nil
-		if player.Parent then
-			Net.fire("ElevatorRide", player, { Phase = "Arrive", Floor = floorIndex, Name = floor.Name, Ok = ok and arrived == true })
+		if rideTokens[player] ~= token then
+			return -- (the player left: PlayerRemoving forgot them)
+		end
+		if ok and arrived == true then
+			-- riding until the client's cinematic is over (a late move pushes its end back)
+			rideUntil[player] =
+				math.max(departed + ElevatorTravelConfig.hold(from, floorIndex), clock() + ElevatorTravelConfig.arriveTail())
+			Net.fire("ElevatorRide", player, { Phase = "Arrive", Floor = floorIndex, Name = floor.Name, Ok = true })
+		else
+			-- always free the rider when the move did not happen (a ride that never went counts for nothing)
+			rideUntil[player] = nil
+			lastRide[player] = nil
+			if player.Parent then
+				Net.fire("ElevatorRide", player, { Phase = "Cancel", Floor = floorIndex, Name = floor.Name })
+			end
 		end
 	end)
 end
@@ -404,7 +455,7 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 	end
 	local now = clock()
 	local last = lastRide[player]
-	if riding[player] or (last and now - last < ElevatorService.Cooldown) then
+	if ElevatorService.isRiding(player) or (last and now - last < ElevatorService.Cooldown) then
 		return false, "Cooldown"
 	end
 	local target = ElevatorService.targetFor(floorIndex)
@@ -413,7 +464,7 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 		return false, "NoStop"
 	end
 	lastRide[player] = now
-	ride(player, ElevatorService.floorOf(here), floorIndex, target)
+	ride(player, here, floorIndex, target)
 	return true, "Ok"
 end
 
@@ -618,7 +669,8 @@ ElevatorService._test = {
 		table.clear(stops)
 		table.clear(catchers)
 		table.clear(lastRide)
-		table.clear(riding)
+		table.clear(rideUntil)
+		table.clear(rideTokens)
 		table.clear(lastCatch)
 		for instance in hooked do
 			hooked[instance] = nil
@@ -635,7 +687,8 @@ function ElevatorService.init()
 	end)
 	Players.PlayerRemoving:Connect(function(player: Player)
 		lastRide[player] = nil
-		riding[player] = nil
+		rideUntil[player] = nil
+		rideTokens[player] = nil
 		lastCatch[player] = nil
 	end)
 end

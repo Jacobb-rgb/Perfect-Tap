@@ -223,11 +223,14 @@ Net.Events = {
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
 	--   Count?: machines bought }; a State push follows a successful buy
 	ShopResult = false,
-	-- an elevator ride (ElevatorService): { Phase = "Depart", Floor, From?, Name, Duration, DoorsClose }
-	--   starts the client's full-screen ride (the doors shut within DoorsClose seconds, the
-	--   counter runs at least Duration seconds); { Phase = "Arrive", Floor, Name, Ok } once the
-	--   character stands at the target stop (the doors open); { Phase = "Arrive", Rescue = true }
-	--   after a VoidCatcher rescue (a short fade, no ride)
+	-- an elevator ride (ElevatorService; the client's travel cinematic, ElevatorTravelConfig):
+	--   { Phase = "Depart", Floor, From?, Name, Duration, DoorsClose, FromAt, StopAt?, Target }
+	--   starts it (the doors are shut by DoorsClose seconds, the ride runs Duration seconds;
+	--   FromAt / StopAt = the floor centers of the stop left and the target stop, Target = where
+	--   the character will stand); { Phase = "Arrive", Floor, Name, Ok = true } once the character
+	--   stands at the target stop (the doors open); { Phase = "Cancel", Floor, Name } when it never
+	--   moved (left, died or respawned behind the shut doors: the client gives the game back);
+	--   { Phase = "Arrive", Rescue = true } after a VoidCatcher rescue (a short fade, no ride)
 	ElevatorRide = false,
 	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
 	TeleportResult = false,

@@ -52,6 +52,26 @@ local SoundConfig: { [string]: SoundDef } = {
 	DoorThud = { Id = "rbxassetid://12221984", Volume = 0.6, Pitch = { 0.36, 0.42 } },
 	-- the arrival sting with the floor banner, 0.2 s after the ding (victory.wav a little brighter)
 	ElevatorArrive = { Id = "rbxassetid://12222253", Volume = 0.3, Pitch = { 1.2, 1.2 } },
+	-- the travel cinematic (ElevatorTravelController, owner 2026-11-15), from the ids above: the
+	-- machine clunks on (button.wav slowed right down), the warning beep (electronicpingshort.wav
+	-- lower), the doors slide (swoosh.wav low and soft), the shaft's rushing hum (the falling-wind
+	-- loop slowed; its pitch follows the speed), a click per floor passed (Roblox_UI_Bright_Click),
+	-- the brakes grind (unsheath.wav slowed to a scrape)
+	ElevatorStart = { Id = "rbxassetid://12221967", Volume = 0.55, Pitch = { 0.42, 0.46 } },
+	ElevatorWarn = { Id = "rbxassetid://12221990", Volume = 0.3, Pitch = { 0.78, 0.8 } },
+	ElevatorDoorClose = { Id = "rbxassetid://12222200", Volume = 0.35, Pitch = { 0.5, 0.54 } },
+	ElevatorDoorOpen = { Id = "rbxassetid://12222200", Volume = 0.32, Pitch = { 0.62, 0.66 } },
+	ElevatorHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.26, Pitch = { 0.5, 0.5 }, Looped = true },
+	ElevatorTick = { Id = "rbxassetid://15675059323", Volume = 0.32, Pitch = { 0.9, 0.95 } },
+	ElevatorBrake = { Id = "rbxassetid://12222225", Volume = 0.35, Pitch = { 0.32, 0.36 } },
+	-- each mine's own sound as the doors open: a far rumble (the quarry), the ember crackle, a
+	-- crystal's tinkle, a bright chime (the palace), an electric zap (the Rift), the core's deep hum
+	ElevatorArriveQuarry = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.3, Pitch = { 0.42, 0.46 } },
+	ElevatorArriveEmber = { Id = "rbxassetid://12222140", Volume = 0.22, Pitch = { 1.7, 2.0 } },
+	ElevatorArriveHollow = { Id = "rbxassetid://12222005", Volume = 0.2, Pitch = { 2.3, 2.6 } },
+	ElevatorArrivePalace = { Id = "rbxassetid://16480570986", Volume = 0.3, Pitch = { 1.25, 1.25 } },
+	ElevatorArriveStorm = { Id = "rbxassetid://12221996", Volume = 0.3, Pitch = { 1.5, 1.7 } },
+	ElevatorArriveCore = { Id = "rbxassetid://162670130", Volume = 0.25, Pitch = { 0.72, 0.76 } },
 	-- mine ambience (Config/MineAmbience; the lobby's AmbienceController plays them): quiet,
 	-- positional, only shipped / Roblox-made ids. impact_water pitched way up is a thin drip,
 	-- slowed down a thick lava blorp; the explosion slowed to a crawl a far rumble; the swim

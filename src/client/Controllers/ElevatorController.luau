@@ -30,19 +30,13 @@
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
 	  stop, respawning or a ride starting. Other prompts are hidden while it
 	  is open; gamepads get a selected button on open and after every refresh.
-	- The ride (ElevatorRideView): ElevatorRide "Depart" { Floor, From, Name,
-	  Duration, DoorsClose } closes the panel and plays the full-screen ride
-	  (doors slam shut with a thud, the floor counter ticks with a click per
-	  floor, light sweeps, rumble and hum); the character's controls are
-	  frozen. "Arrive" (and at least Duration seconds of ride) ding, the doors
-	  open on the new floor and the floor banner slides through with a short
-	  arrival sting (0.2 s after the ding); the controls
-	  come back when the doors are open. Without "Arrive" the doors open by
-	  themselves (ElevatorRideView.Timing.FailSafe). A void rescue ("Arrive"
-	  with Rescue) only dips the screen to black.
+	- The ride is the travel cinematic (ElevatorTravelController, owner
+	  2026-11-15): ElevatorRide "Depart" / "Arrive" / "Cancel" go to it; the
+	  panel stays up for its preparation and closes at its phase "Enter" (the
+	  camera steps into the cabin). A void rescue ("Arrive" with Rescue) only
+	  dips the screen to black.
 	- Reduced motion (Roblox's setting, or ElevatorController.ReducedMotion):
-	  no opening animation, no idle pulse, and the ride shows the doors and
-	  the numbers without shake or sweeps.
+	  no opening animation, no idle pulse (the cinematic reads UI/Motion).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -63,10 +57,9 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local ElevatorView = require(script.Parent.Parent.UI.ElevatorView)
-local ElevatorRideView = require(script.Parent.Parent.UI.ElevatorRideView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
-local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
+local ElevatorTravelController = require(script.Parent.ElevatorTravelController)
 local TeleportController = require(script.Parent.TeleportController)
 local SideMenuController = require(script.Parent.SideMenuController)
 local SideMenuView = require(script.Parent.Parent.UI.SideMenuView)
@@ -580,132 +573,17 @@ end
 
 ---------------------------------------------------------------- the ride
 
-type Driving = {
-	Ride: ElevatorRideView.Ride,
-	T: number, -- seconds since "Depart"
-	Arrived: boolean,
-	Number: number, -- the floor the indicator shows (a click when it changes)
-	Thud: boolean,
-	Sting: boolean, -- the arrival sting has played
-	Restored: boolean,
-	Frozen: boolean, -- we hold the controls lock
-	Connection: RBXScriptConnection?,
-}
-
-local RIDE_LOCK = "Elevator"
--- the arrival sting (SoundConfig.ElevatorArrive) plays this long after the doors start to open:
--- the ding plays at the open, the sting comes with the floor banner
-local ARRIVE_STING = 0.2
-local rideRefs: ElevatorRideView.Refs? = nil
-local driving: Driving? = nil
-
-local function ensureRide(): ElevatorRideView.Refs
-	local existing = rideRefs
-	if existing then
-		return existing
+--[[
+	The ride is the travel cinematic (ElevatorTravelController, owner
+	2026-11-15): "Depart" hands it over at once and the floor window stays up
+	for the preparation (the picked card stays lit) until the cinematic's
+	phase "Enter" closes it; "Arrive" and "Cancel" go to it too.
+]]
+ElevatorTravelController.onPhase(function(phaseName: string)
+	if phaseName == "Enter" or phaseName == "Cancel" then
+		ElevatorController.close(true)
 	end
-	local made = ElevatorRideView.build()
-	made.Gui.Parent = player:WaitForChild("PlayerGui")
-	rideRefs = made
-	return made
-end
-
-local function unfreeze(state: Driving)
-	if state.Frozen then
-		state.Frozen = false
-		task.spawn(PlayerControls.set, true)
-		PlayerControls.release(RIDE_LOCK)
-	end
-end
-
-local function endRide()
-	local state = driving
-	driving = nil
-	if not state then
-		return
-	end
-	local connection = state.Connection
-	if connection then
-		connection:Disconnect()
-	end
-	Sfx.loop("MachineHum", false)
-	unfreeze(state)
-	local view = rideRefs
-	if view then
-		view.Gui.Enabled = false
-	end
-end
-
-local function stepRide(dt: number)
-	local state = driving
-	local view = rideRefs
-	if not state or not view then
-		return
-	end
-	state.T += dt
-	local ride = state.Ride
-	local t = state.T
-	if not state.Thud and t >= ride.Close then
-		state.Thud = true
-		Sfx.play("DoorThud")
-		Sfx.loop("MachineHum", true)
-	end
-	if ElevatorRideView.shouldOpen(ride, t, state.Arrived) then
-		ride.OpenAt = t
-		Sfx.loop("MachineHum", false)
-		Sfx.play("ElevatorDing")
-	end
-	local openAt = ride.OpenAt
-	if not state.Sting and openAt and t >= openAt + ARRIVE_STING then
-		state.Sting = true
-		Sfx.play("ElevatorArrive")
-	end
-	local number = ElevatorRideView.numberAt(ride, t)
-	if number ~= state.Number then
-		state.Number = number
-		Sfx.play("BuildRotate")
-	end
-	ElevatorRideView.pose(view, ride, t)
-	if not state.Restored and t >= ElevatorRideView.openedAt(ride) then
-		state.Restored = true
-		unfreeze(state)
-	end
-	if t >= ElevatorRideView.doneAt(ride) then
-		endRide()
-	end
-end
-
-local function startRide(payload: { [string]: any })
-	ElevatorController.close(true)
-	endRide()
-	local to = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then math.floor(payload.Floor) else 1
-	local name = if type(payload.Name) == "string" then payload.Name else MineFloors.get(to).Name
-	local ride = ElevatorRideView.newRide(payload.From, to, name, payload.Duration, payload.DoorsClose, reducedMotion())
-	local view = ensureRide()
-	local inset = GuiService:GetGuiInset()
-	ElevatorRideView.layout(view, HudController.uiScale(), inset.Y)
-	ElevatorRideView.setRide(view, ride)
-	local state: Driving = {
-		Ride = ride,
-		T = 0,
-		Arrived = false,
-		Number = ride.From,
-		Thud = false,
-		Sting = false,
-		Restored = false,
-		Frozen = false,
-		Connection = nil,
-	}
-	-- the character stands still while the doors are shut
-	if PlayerControls.claim(RIDE_LOCK) then
-		state.Frozen = true
-		task.spawn(PlayerControls.set, false)
-	end
-	driving = state
-	ElevatorRideView.pose(view, ride, 0)
-	view.Gui.Enabled = true
-	state.Connection = RunService.Heartbeat:Connect(stepRide)
-end
+end)
 
 ---------------------------------------------------------------- the void rescue fade
 
@@ -766,16 +644,17 @@ local function onRide(payload: any)
 		return
 	end
 	if payload.Phase == "Depart" then
-		startRide(payload)
+		ElevatorTravelController.depart(payload)
 	elseif payload.Phase == "Arrive" then
-		local state = driving
 		if payload.Rescue == true then
 			local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then math.floor(payload.Floor) else 1
 			rescued(floorIndex)
-		elseif state then
-			-- the character stands at the target stop: the doors may open
-			state.Arrived = true
+		else
+			-- the character stands at the target stop: the cabin may brake and open
+			ElevatorTravelController.arrive(payload)
 		end
+	elseif payload.Phase == "Cancel" then
+		ElevatorTravelController.cancel(payload)
 	end
 end
 
@@ -794,7 +673,7 @@ function ElevatorController.init()
 		-- only the stop's prompt opens the panel (the server checked the range)
 		local model = payload.Stop
 		local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then payload.Floor else nil
-		if driving then
+		if ElevatorTravelController.isTraveling() then
 			return
 		end
 		ElevatorController.openAt(if typeof(model) == "Instance" and model:IsA("Model") then model else nil, floorIndex)
@@ -813,7 +692,6 @@ function ElevatorController.init()
 	end)
 	player.CharacterRemoving:Connect(function()
 		ElevatorController.close(true)
-		endRide()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs
