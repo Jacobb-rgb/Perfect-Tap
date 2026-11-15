@@ -105,7 +105,10 @@ return function(T, Loader)
 			end
 			local small = MineFloors.rockHealth(floor.Index, "Small")
 			T.truthy(small < MineFloors.rockHealth(floor.Index, "Big"), floor.Id .. " big rocks are harder")
-			T.truthy(MineFloors.rockHealth(floor.Index, "Big") < MineFloors.rockHealth(floor.Index, "Crystal"), floor.Id .. " crystals are a bit harder")
+			T.truthy(
+				MineFloors.rockHealth(floor.Index, "Big") < MineFloors.rockHealth(floor.Index, "Crystal"),
+				floor.Id .. " crystals are a bit harder"
+			)
 			T.truthy(small > lastSmall, floor.Id .. " rocks are harder than the floor above")
 			lastSmall = small
 		end
@@ -146,8 +149,6 @@ return function(T, Loader)
 		for _, bad in { 0, -1, #MineFloors.List + 1, MineFloors.ComingSoon.Index, 2.5, 0 / 0, math.huge } :: { number } do
 			T.eq(MineFloors.priceOf(bad), 0, "no floor at " .. tostring(bad))
 		end
-		-- the deprecated one-price alias the old client window still reads
-		T.eq(MineFloors.Elevator.Price, MineFloors.priceOf(4), "old alias = the first floor with a ticket")
 	end)
 
 	T.test("rock builder: every kind on every floor builds within its budget", function()

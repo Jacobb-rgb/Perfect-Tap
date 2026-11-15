@@ -299,22 +299,6 @@ function MineFloors.priceOf(index: number): number
 	return math.floor(raw / step + 0.5) * step
 end
 
--- (old client window only; goes with the new window) the price of the first floor with a
--- ticket, what the old one-time elevator cost. Deprecated: use priceOf.
-local function firstTicket(): number
-	for _, floor in MineFloors.List do
-		local price = MineFloors.priceOf(floor.Index)
-		if price > 0 then
-			return price
-		end
-	end
-	return 0
-end
-
-MineFloors.Elevator = {
-	Price = firstTicket(),
-}
-
 MineFloors.ByZone = {} :: { [string]: Floor }
 for _, floor in MineFloors.List do
 	MineFloors.ByZone[floor.ZoneId] = floor

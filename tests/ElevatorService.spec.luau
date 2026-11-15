@@ -360,9 +360,6 @@ return function(T, Loader)
 			"known floors bought only"
 		)
 		T.truthy(deepEqual(ElevatorService.boughtFloors({ Upgrades = "junk" }), {}), "junk: none")
-		-- (old client window) owns = any floor bought
-		T.falsy(ElevatorService.owns(save(10, {})), "nothing bought")
-		T.truthy(ElevatorService.owns(save(10, { HeartstoneCore = true })), "a floor bought")
 	end)
 
 	---------------------------------------------------------------- prompts
@@ -400,7 +397,7 @@ return function(T, Loader)
 		T.eq(opened[1].A, "Elevator", "kind")
 		T.eq(opened[1].B.Floor, 2, "floor of the stop")
 		T.eq(opened[1].B.Stop, w.stops[2], "the stop")
-		T.eq(opened[1].B.Owned, false, "not owned")
+		T.eq(opened[1].B.Owned, nil, "(the floors bought are in State)")
 		w.standAt(2, 40)
 		elevator.open(w.player, w.stops[2])
 		T.eq(#w.notesNamed("OpenUI"), 1, "too far: nothing")
@@ -549,7 +546,6 @@ return function(T, Loader)
 		local snapshot: any = {}
 		elevator.provide(w.player, w.data, snapshot)
 		T.truthy(deepEqual(snapshot.ElevatorFloors, {}), "nothing bought")
-		T.eq(snapshot.ElevatorOwned, false, "(old window) nothing bought")
 		w.hookAll()
 		w.standAt(1)
 		w.data.Coins = PRICE
@@ -558,11 +554,6 @@ return function(T, Loader)
 		elevator.provide(w.player, w.data, snapshot)
 		T.truthy(deepEqual(snapshot.ElevatorFloors, { SunkenPalace = true }), "the floor bought")
 		T.truthy(snapshot.ElevatorFloors ~= w.data.Upgrades.Floors, "a copy, not the save's own set")
-		T.eq(snapshot.ElevatorOwned, true, "(old window) a floor bought")
-		-- the view opens with the same answer (old window)
-		elevator.open(w.player, w.stops[1])
-		local opened = w.notesNamed("OpenUI")
-		T.eq(opened[#opened].B.Owned, true, "OpenUI Owned")
 	end)
 
 	---------------------------------------------------------------- Go validation

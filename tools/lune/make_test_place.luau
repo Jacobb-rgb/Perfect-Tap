@@ -1,7 +1,8 @@
 --[[
 	Owner test place: copies a baked place and adds a Studio-only script that
-	unlocks everything for every player (blaster 10, every elevator floor bought,
-	all hoverboards, lots of coins). Used for HRA_K_TESTOVANI/*_TEST_vse_odemceno_*.rbxl.
+	unlocks everything for every player (blaster 10, all hoverboards, lots of
+	coins; the elevator floors 4-6 are left to buy in its window). Used for
+	HRA_K_TESTOVANI/*_TEST_vse_odemceno_*.rbxl.
 
 	lune run tools/lune/make_test_place.luau build/TerraForge.rbxl <out.rbxl> [trace]
 
@@ -20,7 +21,7 @@ local script = roblox.Instance.new("Script")
 script.Name = "TEST_VseOdemceno"
 script.Source = [[
 -- TEST FILE ONLY: in Roblox Studio every player starts with everything unlocked
--- (blaster 10, every elevator floor bought, all hoverboards, lots of coins). Delete this script for the real game.
+-- (blaster 10, all hoverboards, lots of coins: buy the elevator floors in its window). Delete this script for the real game.
 local RunService = game:GetService("RunService")
 if not RunService:IsStudio() then
 	return
@@ -28,7 +29,6 @@ end
 local Players = game:GetService("Players")
 local Services = game:GetService("ServerScriptService"):WaitForChild("Server"):WaitForChild("Services")
 local DataService = require(Services:WaitForChild("DataService"))
-local MineFloors = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("MineFloors"))
 local BOARDS = { "TimberDrifter", "CartCruiser", "EmberglassGlider", "RoyalPhoenix", "TerraForgeCustom" }
 local function unlock(player)
 	for _ = 1, 150 do
@@ -36,13 +36,7 @@ local function unlock(player)
 		if data then
 			data.Coins = math.max(tonumber(data.Coins) or 0, 1e15)
 			data.BlasterLevel = 10
-			data.Upgrades = data.Upgrades or {}
-			data.Upgrades.Floors = data.Upgrades.Floors or {}
-			for _, floor in MineFloors.List do
-				if MineFloors.priceOf(floor.Index) > 0 then
-					data.Upgrades.Floors[floor.Id] = true
-				end
-			end
+			-- (floors 4-6 stay to buy in the ELEVATOR window: the coins above are plenty)
 			data.Hoverboards = data.Hoverboards or { Owned = {}, Equipped = "", Passes = {} }
 			data.Hoverboards.Owned = data.Hoverboards.Owned or {}
 			for _, id in BOARDS do

@@ -17,9 +17,8 @@
 	  Attachment "PromptPoint"), also the ones added later. Each gets one
 	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; its
 	  text is the client's business). E / gamepad Y / tap. Triggering it opens
-	  the client's view: OpenUI "Elevator" { Stop, Floor, Owned } (Owned: any
-	  floor bought, for the old client window only). This prompt is the only
-	  way in (owner 2026-10-18): the HUD's elevator button teleports you to a
+	  the client's view: OpenUI "Elevator" { Stop, Floor } (the floors bought
+	  are in State: ElevatorFloors). This prompt is the only way in (owner 2026-10-18): the HUD's elevator button teleports you to a
 	  stop first (TeleportService "Elevator").
 	- ElevatorAction (Net, rate limited), only within Range studs of a stop;
 	  Floor is a whole n in 1..#MineFloors.List (anything else is ignored):
@@ -58,8 +57,7 @@
 	  found inside / below it by a 0.5 s check over the players, in case a
 	  fast fall skips the touch) goes back to that floor's target, at most once
 	  per CatchDebounce seconds.
-	- State: snapshot.ElevatorFloors = { [floor Id] = true } (the floors bought);
-	  snapshot.ElevatorOwned = any floor bought (old client window only).
+	- State: snapshot.ElevatorFloors = { [floor Id] = true } (the floors bought).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -193,12 +191,6 @@ function ElevatorService.boughtFloors(data: { [string]: any }): { [string]: bool
 		end
 	end
 	return out
-end
-
--- (old client window only) True when the player has bought any floor, so the elevator
--- rides somewhere only it reaches: snapshot.ElevatorOwned, OpenUI's Owned.
-function ElevatorService.owns(data: { [string]: any }): boolean
-	return next(ElevatorService.boughtFloors(data)) ~= nil
 end
 
 ---------------------------------------------------------------- stops
@@ -578,7 +570,6 @@ local function openView(player: Player, model: Model)
 	Net.fire("OpenUI", player, "Elevator", {
 		Stop = model,
 		Floor = ElevatorService.floorOf(model),
-		Owned = ElevatorService.owns(data), -- (old client window only; the floors bought are in State)
 	})
 end
 
@@ -668,10 +659,7 @@ end
 
 -- The State snapshot's elevator fields.
 local function provide(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
-	local floors = ElevatorService.boughtFloors(data)
-	snapshot.ElevatorFloors = floors
-	-- (old client window only)
-	snapshot.ElevatorOwned = next(floors) ~= nil
+	snapshot.ElevatorFloors = ElevatorService.boughtFloors(data)
 end
 
 -- Internals for the Lune tests only (tests/ElevatorService.spec.luau).

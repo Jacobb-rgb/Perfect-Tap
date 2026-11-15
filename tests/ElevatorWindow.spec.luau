@@ -12,6 +12,8 @@ return function(T, Loader)
 	local ElevatorWindow = Loader.requirePath(UI .. "ElevatorWindow")
 	local ElevatorView = Loader.requirePath(UI .. "ElevatorView")
 	local ShopFx = Loader.requirePath(UI .. "ShopFx")
+	local roblox = require("@lune/roblox") :: any
+	local Vector2 = roblox.Vector2
 
 	local PALACE = MineFloors.get(4)
 	local RIFT = MineFloors.get(5)
@@ -170,7 +172,7 @@ return function(T, Loader)
 		ElevatorWindow.setStatus(refs, 8, 12500)
 		T.eq(refs.Level.Text, "Lv. 8")
 		T.eq(refs.Percent.Text, `{math.floor(8 / BlasterData.MaxLevel * 100 + 0.5)}%`)
-		T.eq(refs.Fill.Size.X.Scale, 8 / BlasterData.MaxLevel, "the bar")
+		T.near(refs.Fill.Size.X.Scale, 8 / BlasterData.MaxLevel, 1e-6, "the bar")
 		T.eq(refs.CoinAmount.Text, Format.short(12500))
 		T.eq(refs.ProgressHint.Text, "Upgrade your blaster to unlock deeper floors.")
 		ElevatorWindow.setStatus(refs, BlasterData.MaxLevel, 0 / 0)
@@ -199,7 +201,7 @@ return function(T, Loader)
 				T.eq(card.Art.Image, "rbxassetid://123")
 				T.eq(card.Art.ImageRectOffset, Vector2.new(cell[1], cell[2]))
 				T.eq(card.Art.ImageRectSize, Vector2.new(cell[3], cell[4]))
-				T.eq(card.Art.ScaleType, Enum.ScaleType.Crop, "it fills the card")
+				T.eq(card.Art.ScaleType, roblox.Enum.ScaleType.Crop, "it fills the card")
 			end
 			-- one picture under Roblox's 1024 px, the cells inside it and apart
 			local cells = {}
@@ -287,7 +289,7 @@ return function(T, Loader)
 			ElevatorWindow.setStatus(refs, 8, riftPrice + 1)
 			ElevatorWindow.playOpen(refs)
 			T.eq((refs.Group :: any).OpenPop.Scale, 1, "the window at full size")
-			T.eq(refs.Dim.BackgroundTransparency, ElevatorWindow.DimTo, "the dim")
+			T.near(refs.Dim.BackgroundTransparency, ElevatorWindow.DimTo, 1e-6, "the dim")
 			for _, card in refs.Cards do
 				T.eq((card.Holder :: any).Scale.Scale, 1, "the cards popped in")
 			end
@@ -308,7 +310,7 @@ return function(T, Loader)
 			ElevatorWindow.playClose(refs, function()
 				closed = true
 			end)
-			T.eq((refs.Group :: any).OpenPop.Scale, 0.94, "it shrinks away")
+			T.near((refs.Group :: any).OpenPop.Scale, 0.94, 1e-6, "it shrinks away")
 			T.eq(refs.Dim.BackgroundTransparency, 1, "the dim goes")
 			T.truthy(closed or true, "(done comes after the shrink)")
 		end)
