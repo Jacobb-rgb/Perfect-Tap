@@ -37,7 +37,7 @@
 	  BOARD 2     1,700,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
 	  blaster 5   2,100,000    floor 3 opens
 	  blaster 6   73,000,000
-	  elevator    87,000,000   (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
+	  floor 4     87,000,000   (its elevator ticket, MineFloors.priceOf) 2/3 of blaster 7: before floor 4
 	  BOARD 3     130,000,000  (Emberglass Glider) = blaster 7: a goal past the first hour
 	  blaster 7   130,000,000  floor 4 opens
 	  BOARD 4     390,000,000  (Royal Phoenix) 3 x BOARD 3: a long goal after it

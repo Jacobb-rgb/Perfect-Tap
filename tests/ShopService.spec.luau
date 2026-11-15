@@ -49,6 +49,26 @@ return function(T, Loader)
 		return out
 	end
 
+	local function deepEqual(a: any, b: any): boolean
+		if type(a) ~= type(b) then
+			return false
+		end
+		if type(a) ~= "table" then
+			return a == b
+		end
+		for k, x in a do
+			if not deepEqual(x, b[k]) then
+				return false
+			end
+		end
+		for k in b do
+			if a[k] == nil then
+				return false
+			end
+		end
+		return true
+	end
+
 	local function fakePlayer(userId: number, name: string): any
 		local p: any = { UserId = userId, Name = name, Parent = true, attrs = {} }
 		p.root = { Position = Vector3.new(0, 0, 0), CFrame = CFrame.new(0, 0, 0) }
@@ -203,7 +223,12 @@ return function(T, Loader)
 			T.eq(inventory[id], n, label .. ": nothing added " .. id)
 		end
 		for key, n in upgrades do
-			T.eq(w.data.Upgrades[key], n, label .. ": upgrade " .. key)
+			if type(n) == "table" then
+				-- (the elevator floors bought: a set)
+				T.truthy(deepEqual(w.data.Upgrades[key], n), label .. ": upgrade " .. key)
+			else
+				T.eq(w.data.Upgrades[key], n, label .. ": upgrade " .. key)
+			end
 		end
 		for id, record in w.data.MachineUpgrades do
 			for kind, n in record do

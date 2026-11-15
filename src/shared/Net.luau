@@ -82,11 +82,14 @@ Net.Events = {
 	--                                                          follows the Rare+ rule again
 	--   The client redraws from the next State snapshot, so a dropped event never
 	--   leaves it out of step with the save.
-	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop:
-	--   ({ Action = "Buy" }) buys it once for MineFloors.Elevator.Price coins (data.Upgrades.Elevator);
-	--   ({ Action = "Go", Floor }) rides to that floor's stop: owned, whole Floor 1..#MineFloors.List,
-	--   unlocked (BlasterLevel >= MinBlaster), not that stop's own floor, not while cleaning,
-	--   not right after the last ride. Refusals answer with a "Deny" Notify; a ride with ElevatorRide.
+	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop; Floor = a whole
+	-- index 1..#MineFloors.List:
+	--   ({ Action = "Buy", Floor }) buys that floor's ticket for MineFloors.priceOf(Floor) coins
+	--   (coins only) into data.Upgrades.Floors[floor Id]: only an elevator-only floor (floors 1-3
+	--   are free), not bought yet, unlocked (BlasterLevel >= MinBlaster). Never teleports.
+	--   ({ Action = "Go", Floor }) rides to that floor's stop: unlocked and free or bought, not
+	--   that stop's own floor, not while cleaning, not right after the last ride.
+	--   Refusals answer with a "Deny" Notify; a ride with ElevatorRide; State: ElevatorFloors.
 	ElevatorAction = { Rate = 3, Burst = 5 },
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number?, Level: number? }), Item:

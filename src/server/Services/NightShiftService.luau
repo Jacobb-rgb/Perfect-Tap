@@ -69,9 +69,12 @@ local function penFull(data: { [string]: any }): boolean
 	return count + NightShiftConfig.Crate.OreCount > EconomyConfig.penCapacity(upgrades.PenLevel, GameConfig.MaxStoredItems)
 end
 
+-- The deepest floor the player can reach: walkable floors by the blaster level, the
+-- elevator-only ones when bought too (data.Upgrades.Floors, ElevatorService).
 local function floorOf(data: { [string]: any }): any
 	local upgrades = if type(data.Upgrades) == "table" then data.Upgrades else {}
-	return NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1, upgrades.Elevator == true)
+	local bought = if type(upgrades.Floors) == "table" then upgrades.Floors else nil
+	return NightShiftConfig.floorFor(tonumber(data.BlasterLevel) or 1, bought)
 end
 
 -- Has the player placed a machine that passes `test`?

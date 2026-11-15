@@ -73,17 +73,32 @@ return function(T, Loader)
 		T.eq(NightShiftConfig.coins(0), crate.CoinMin, "no podiums: the minimum")
 		T.eq(NightShiftConfig.coins(100), 100 * crate.CoinSeconds, "10 minutes of income")
 		T.eq(NightShiftConfig.coins(0 / 0), crate.CoinMin, "broken income")
-		T.eq(NightShiftConfig.floorFor(1, false).Index, 1)
-		T.eq(NightShiftConfig.floorFor(4, false).Index, 2, "the deepest floor its blaster mines")
+		-- every elevator-only floor bought (data.Upgrades.Floors)
+		local all = {}
+		for _, floor in MineFloors.List do
+			if floor.ViaElevator then
+				all[floor.Id] = true
+			end
+		end
+		T.eq(NightShiftConfig.floorFor(1, nil).Index, 1)
+		T.eq(NightShiftConfig.floorFor(4, {}).Index, 2, "the deepest floor its blaster mines")
 		local last = MineFloors.List[#MineFloors.List]
-		T.eq(NightShiftConfig.floorFor(99, true).Index, last.Index)
+		T.eq(NightShiftConfig.floorFor(99, all).Index, last.Index)
 		for level = 5, 9 do
-			local floor = NightShiftConfig.floorFor(level, false)
-			T.falsy(floor.ViaElevator, `blaster {level} without the Elevator stays on the floors it can walk to`)
+			local floor = NightShiftConfig.floorFor(level, {})
+			T.falsy(floor.ViaElevator, `blaster {level} with no floor bought stays on the floors it can walk to`)
 			T.truthy(floor.MinBlaster <= level)
 		end
-		T.eq(NightShiftConfig.floorFor(9, false).Index, 3, "floor 3 is the deepest on foot")
-		T.eq(NightShiftConfig.floorFor(9, true).MinBlaster, 9, "with the Elevator: the floor of a blaster 9")
+		T.eq(NightShiftConfig.floorFor(9, {}).Index, 3, "floor 3 is the deepest on foot")
+		T.eq(NightShiftConfig.floorFor(9, nil).Index, 3, "no set: on foot")
+		T.eq(NightShiftConfig.floorFor(9, "junk" :: any).Index, 3, "a junk set: on foot")
+		T.eq(NightShiftConfig.floorFor(9, all).MinBlaster, 9, "every floor bought: the floor of a blaster 9")
+		-- only the floors bought count, each as far as the blaster allows
+		T.eq(NightShiftConfig.floorFor(9, { SunkenPalace = true }).Index, 4, "only floor 4 bought")
+		T.eq(NightShiftConfig.floorFor(9, { HeartstoneCore = true }).Index, 6, "floor 6 bought: the elevator goes straight there")
+		T.eq(NightShiftConfig.floorFor(8, { HeartstoneCore = true }).Index, 3, "floor 6 bought, blaster 8: not yet")
+		T.eq(NightShiftConfig.floorFor(8, all).Index, 5, "blaster 8: the Rift")
+		T.eq(NightShiftConfig.floorFor(9, { SunkenPalace = false, HeartstoneCore = "yes" }).Index, 3, "only true is bought")
 		for _, r in { 0, 0.3, 0.7, 0.999999 } do
 			T.truthy(last.Ores[NightShiftConfig.pickOre(last, r)], "an ore of the floor's table")
 		end
@@ -195,7 +210,7 @@ return function(T, Loader)
 			night.Ready = true
 			w.relic = false
 			T.eq(NightShiftService.open(w.player).Prize, "Coins", "no relic: the coins")
-			-- the floor: no Elevator, no ore of the floors only it reaches
+			-- the floor: no elevator floor bought, no ore of the floors only the elevator reaches
 			w.data.BlasterLevel = 9
 			w.stored = {}
 			w.room = true
@@ -204,10 +219,20 @@ return function(T, Loader)
 			NightShiftService.open(w.player)
 			T.truthy(MineFloors.List[3].Ores[w.stored[1].O], "floor 3's ore, not floor 6's")
 			w.stored = {}
-			w.data.Upgrades.Elevator = true
+			w.data.Upgrades.Floors = { SunkenPalace = true }
 			night.Ready = true
 			NightShiftService.open(w.player)
-			T.truthy(MineFloors.List[#MineFloors.List].Ores[w.stored[1].O], "with the Elevator: the deep floor's")
+			T.truthy(MineFloors.List[4].Ores[w.stored[1].O], "floor 4 bought: its ore")
+			w.stored = {}
+			w.data.Upgrades.Floors.HeartstoneCore = true
+			night.Ready = true
+			NightShiftService.open(w.player)
+			T.truthy(MineFloors.List[#MineFloors.List].Ores[w.stored[1].O], "floor 6 bought: the deep floor's")
+			w.stored = {}
+			w.data.Upgrades.Floors = "junk"
+			night.Ready = true
+			NightShiftService.open(w.player)
+			T.truthy(MineFloors.List[3].Ores[w.stored[1].O], "a junk set: on foot")
 			-- a full pen says so before the crate opens
 			w.data.Storage = {}
 			T.eq(NightShiftService.onReturn(w.player, w.data, 7200, false).PenFull, false)

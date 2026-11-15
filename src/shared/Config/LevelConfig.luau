@@ -74,7 +74,7 @@ LevelConfig.Sources = {
 	{ Id = "Discovered", Xp = 30 }, -- new ores in the codex
 	{ Id = "Machines", Xp = 10, High = true }, -- machines placed (the build slots cap them; droppers and the Money Laser left out)
 	{ Id = "Golems", Xp = 10, High = true }, -- golems owned
-	{ Id = "Upgrades", Xp = 15 }, -- Tech shop levels: Bellows, slots, pen, automation, elevator, machine upgrades
+	{ Id = "Upgrades", Xp = 15 }, -- Tech shop levels: Bellows, slots, pen, automation, elevator floors bought, machine upgrades
 	{ Id = "Gear", Xp = 20 }, -- gear levels
 	{ Id = "Train", Xp = 20 }, -- train capacity + speed levels
 	{ Id = "Enchants", Xp = 15, High = true }, -- enchant tiers owned (the most ever)
@@ -168,7 +168,8 @@ function LevelConfig.counters(data: { [string]: any }): { [string]: number }
 	out.Golems = count(golems)
 	local upgrades = 0
 	if type(data.Upgrades) == "table" then
-		upgrades = sumValues(data.Upgrades)
+		-- (every elevator floor bought counts one: Upgrades.Floors = { [floor Id] = true })
+		upgrades = sumValues(data.Upgrades) + sumValues(data.Upgrades.Floors)
 	end
 	if type(data.MachineUpgrades) == "table" then
 		for _, levels in data.MachineUpgrades do
