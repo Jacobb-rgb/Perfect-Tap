@@ -37,7 +37,14 @@ for _, t in folder:GetChildren() do
 end
 table.sort(textured)
 table.sort(noAlbedo)
-print(string.format("%d templates: %d take their texture's colour, %d draw their colour map as a TextureID", #folder:GetChildren(), coloured, #textured))
+print(
+	string.format(
+		"%d templates: %d take their texture's colour, %d draw their colour map as a TextureID",
+		#folder:GetChildren(),
+		coloured,
+		#textured
+	)
+)
 if #noAlbedo > 0 then
 	print("NO ALBEDO (run tools/meshy/glb_albedo.py on their .glb): " .. table.concat(noAlbedo, ", "))
 end
