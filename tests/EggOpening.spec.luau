@@ -79,78 +79,89 @@ return function(T, Loader)
 		return o, run, claims
 	end
 
-	T.test("EggOpening: the timings (V2: Open 3 of Commons about 4.6 s, Auto about 2 s, the rarer's Tier, Reduce motion calm)", function()
-		for order = 1, 6 do
-			for _, count in { 1, 3, 10 } do
-				for _, mode in { "normal", "fast", "calm" } do
-					local tl = HatchFx.timeline(order, count, mode == "fast", mode == "calm")
-					local label = `order {order} x{count} {mode}`
-					-- (V2) the entrance, the float, then the charge: every egg is in before it floats, it floats before it charges
-					T.truthy(tl.Float >= (count - 1) * tl.Stagger + tl.Times.Pop - 1e-9, label .. ": every egg in before the float")
-					T.truthy(tl.Charge > tl.Float and tl.Charge <= tl.Steps[1], label .. ": the float, then the charge, then the cracks")
-					T.eq(tl.Tier, HatchFx.Tiers[order], label .. ": the best rarity's Tier")
-					T.eq(tl.Banner < math.huge, HatchFx.Tiers[order].Banner ~= nil, label .. ": a banner only for a Tier with one")
-					-- the steps in order: pop, the cracks' three steps, the silhouette, the burst, the golems, the flight, the end
-					T.truthy(tl.Steps[1] < tl.Steps[2] and tl.Steps[2] < tl.Steps[3], label .. ": three crack steps")
-					T.truthy(
-						tl.Steps[3] < tl.Silhouette and tl.Silhouette < tl.Burst and tl.Burst <= tl.Reveal,
-						label .. ": the burst after the cracks"
-					)
-					T.truthy(tl.Reveal < tl.Fly and tl.Fly < tl.Total, label .. ": the golems, then their flight")
-					T.truthy(
-						tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow,
-						label .. ": the last golem's name shows MinShow at least"
-					)
-					-- the last egg is in before the first crack (Open 10's ripple)
-					T.truthy(tl.Steps[1] >= (count - 1) * tl.Stagger + tl.Times.Pop, label .. ": every egg in before it cracks")
-					T.eq(tl.Suspense > 0, order >= 5 and mode ~= "calm", label .. ": the suspense only for a Legendary / Mythic (not calm)")
-					if mode == "calm" then
-						T.eq(tl.Rings, math.huge, label .. ": no rings with Reduce motion")
+	T.test(
+		"EggOpening: the timings (2026-11-15: Open 3 of Commons about 6.2 s, Auto about 2 s, the rarer's Tier, Reduce motion calm)",
+		function()
+			for order = 1, 6 do
+				for _, count in { 1, 3, 10 } do
+					for _, mode in { "normal", "fast", "calm" } do
+						local tl = HatchFx.timeline(order, count, mode == "fast", mode == "calm")
+						local label = `order {order} x{count} {mode}`
+						-- (V2) the entrance, the float, then the charge: every egg is in before it floats, it floats before it charges
+						T.truthy(tl.Float >= (count - 1) * tl.Stagger + tl.Times.Pop - 1e-9, label .. ": every egg in before the float")
+						T.truthy(
+							tl.Charge > tl.Float and tl.Charge <= tl.Steps[1],
+							label .. ": the float, then the charge, then the cracks"
+						)
+						T.eq(tl.Tier, HatchFx.Tiers[order], label .. ": the best rarity's Tier")
+						T.eq(tl.Banner < math.huge, HatchFx.Tiers[order].Banner ~= nil, label .. ": a banner only for a Tier with one")
+						-- the steps in order: pop, the cracks' three steps, the silhouette, the burst, the golems, the flight, the end
+						T.truthy(tl.Steps[1] < tl.Steps[2] and tl.Steps[2] < tl.Steps[3], label .. ": three crack steps")
+						T.truthy(
+							tl.Steps[3] < tl.Silhouette and tl.Silhouette < tl.Burst and tl.Burst <= tl.Reveal,
+							label .. ": the burst after the cracks"
+						)
+						T.truthy(tl.Reveal < tl.Fly and tl.Fly < tl.Total, label .. ": the golems, then their flight")
+						T.truthy(
+							tl.Fly - tl.Reveal >= HatchFx.namedAt(tl) + HatchFx.MinShow,
+							label .. ": the last golem's name shows MinShow at least"
+						)
+						-- the last egg is in before the first crack (Open 10's ripple)
+						T.truthy(tl.Steps[1] >= (count - 1) * tl.Stagger + tl.Times.Pop, label .. ": every egg in before it cracks")
+						T.eq(
+							tl.Suspense > 0,
+							order >= 5 and mode ~= "calm",
+							label .. ": the suspense only for a Legendary / Mythic (not calm)"
+						)
+						if mode == "calm" then
+							T.eq(tl.Rings, math.huge, label .. ": no rings with Reduce motion")
+						end
 					end
 				end
 			end
+			-- (2026-11-15, the owner: "too basic, short and mechanical ... a professional multi-stage animation":
+			-- the spawn to about 0.9 s, the float and its first turn to about 1.7 s, the energy and the cracks
+			-- to about 4 s, the burst, the reveal; Open 3 of Commons about 6.2 s, it was 4.6 s)
+			local open3 = HatchFx.timeline(1, 3, false, false)
+			T.truthy(open3.Total >= 5.9 and open3.Total <= 6.5, `Open 3 of Commons about 6.2 s: {open3.Total}`)
+			T.truthy(open3.Float >= 0.8 and open3.Float <= 1.0, `the entrance ends about 0.9 s: {open3.Float}`)
+			T.truthy(open3.Charge >= 1.5 and open3.Charge <= 1.9, `the charge starts about 1.7 s: {open3.Charge}`)
+			T.truthy(open3.Burst >= 3.7 and open3.Burst <= 4.3, `the burst about 4 s: {open3.Burst}`)
+			local epic = HatchFx.timeline(4, 3, false, false)
+			T.truthy(epic.Total - open3.Total <= 0.3 + 1e-9, "an Epic only a little longer (its hold)")
+			local fast = HatchFx.timeline(4, 3, true, false)
+			T.truthy(fast.Total >= 1.7 and fast.Total <= 2.3, `Auto about 2 s: {fast.Total}`)
+			local fastCommon = HatchFx.timeline(1, 3, true, false)
+			T.truthy(fastCommon.Total <= fast.Total, "Auto: a Common never slower than an Epic")
+			-- a Legendary / Mythic: the suspense, the slow-motion pop and a longer hold on top (the banner is read)
+			for order = 5, 6 do
+				local tier = HatchFx.Tiers[order]
+				local tl = HatchFx.timeline(order, 3, false, false)
+				local extra = tier.Suspense + ((tier.GolemPop or open3.Times.GolemPop) - open3.Times.GolemPop) + tier.Hold
+				T.near(tl.Total - open3.Total, extra, 1e-9, `order {order}: its Tier on top`)
+				T.truthy(tl.GolemPop > open3.GolemPop, `order {order}: a slow-motion reveal`)
+				T.truthy(tl.Total <= 9, `order {order}: a cinematic, never a wait ({tl.Total} s)`)
+				T.near(
+					HatchFx.timeline(order, 3, true, false).Total - HatchFx.timeline(1, 3, true, false).Total,
+					tier.SuspenseFast + tier.HoldFast,
+					1e-9
+				)
+				local calm = HatchFx.timeline(order, 3, false, true)
+				T.eq(calm.Suspense, 0, "Reduce motion: no suspense")
+				T.eq(calm.GolemPop, calm.Times.GolemPop, "Reduce motion: no slow motion")
+			end
+			-- the Tiers grow with the rarity: the flash, the aura, the pulses, never smaller for the rarer
+			for order = 2, 6 do
+				local a, b = HatchFx.Tiers[order - 1], HatchFx.Tiers[order]
+				T.truthy(b.Flash >= a.Flash and b.Aura >= a.Aura and b.Pulses >= a.Pulses, `Tier {order} at least Tier {order - 1}`)
+				T.truthy(b.Flash <= HatchFx.FlashPeak, "never over the flash's cap")
+			end
+			T.eq(HatchFx.Tiers[5].Banner, "LEGENDARY!")
+			T.eq(HatchFx.Tiers[6].Banner, "MYTHIC!")
+			T.truthy(HatchFx.Tiers[5].Rays and HatchFx.Tiers[6].Rays and not HatchFx.Tiers[4].Rays, "golden / rainbow rays from Legendary")
+			T.truthy(HatchFx.Tiers[6].Light > 0 and HatchFx.Tiers[5].Light == 0, "only a Mythic lifts the stage's light")
 		end
-		-- (V2, the owner's brief 2026-10-30: the entrance to about 0.6 s, the float to about 1.5 s, the charge
-		-- to about 3 s, the burst, the reveal; a Common never unnecessarily slow)
-		local open3 = HatchFx.timeline(1, 3, false, false)
-		T.truthy(open3.Total >= 4.3 and open3.Total <= 4.9, `Open 3 of Commons about 4.6 s: {open3.Total}`)
-		T.truthy(open3.Float >= 0.5 and open3.Float <= 0.8, `the entrance ends about 0.6 s: {open3.Float}`)
-		T.truthy(open3.Charge >= 1.0 and open3.Charge <= 1.6, `the charge starts about 1.5 s: {open3.Charge}`)
-		T.truthy(open3.Burst >= 2.5 and open3.Burst <= 3.2, `the burst about 3 s: {open3.Burst}`)
-		local epic = HatchFx.timeline(4, 3, false, false)
-		T.truthy(epic.Total - open3.Total <= 0.3 + 1e-9, "an Epic only a little longer (its hold)")
-		local fast = HatchFx.timeline(4, 3, true, false)
-		T.truthy(fast.Total >= 1.7 and fast.Total <= 2.3, `Auto about 2 s: {fast.Total}`)
-		local fastCommon = HatchFx.timeline(1, 3, true, false)
-		T.truthy(fastCommon.Total <= fast.Total, "Auto: a Common never slower than an Epic")
-		-- a Legendary / Mythic: the suspense, the slow-motion pop and a longer hold on top (the banner is read)
-		for order = 5, 6 do
-			local tier = HatchFx.Tiers[order]
-			local tl = HatchFx.timeline(order, 3, false, false)
-			local extra = tier.Suspense + ((tier.GolemPop or open3.Times.GolemPop) - open3.Times.GolemPop) + tier.Hold
-			T.near(tl.Total - open3.Total, extra, 1e-9, `order {order}: its Tier on top`)
-			T.truthy(tl.GolemPop > open3.GolemPop, `order {order}: a slow-motion reveal`)
-			T.truthy(tl.Total <= 7.5, `order {order}: a cinematic, never a wait ({tl.Total} s)`)
-			T.near(
-				HatchFx.timeline(order, 3, true, false).Total - HatchFx.timeline(1, 3, true, false).Total,
-				tier.SuspenseFast + tier.HoldFast,
-				1e-9
-			)
-			local calm = HatchFx.timeline(order, 3, false, true)
-			T.eq(calm.Suspense, 0, "Reduce motion: no suspense")
-			T.eq(calm.GolemPop, calm.Times.GolemPop, "Reduce motion: no slow motion")
-		end
-		-- the Tiers grow with the rarity: the flash, the aura, the pulses, never smaller for the rarer
-		for order = 2, 6 do
-			local a, b = HatchFx.Tiers[order - 1], HatchFx.Tiers[order]
-			T.truthy(b.Flash >= a.Flash and b.Aura >= a.Aura and b.Pulses >= a.Pulses, `Tier {order} at least Tier {order - 1}`)
-			T.truthy(b.Flash <= HatchFx.FlashPeak, "never over the flash's cap")
-		end
-		T.eq(HatchFx.Tiers[5].Banner, "LEGENDARY!")
-		T.eq(HatchFx.Tiers[6].Banner, "MYTHIC!")
-		T.truthy(HatchFx.Tiers[5].Rays and HatchFx.Tiers[6].Rays and not HatchFx.Tiers[4].Rays, "golden / rainbow rays from Legendary")
-		T.truthy(HatchFx.Tiers[6].Light > 0 and HatchFx.Tiers[5].Light == 0, "only a Mythic lifts the stage's light")
-	end)
+	)
 
 	T.test("EggOpening: a skip never hides a golem (to the burst, then on only after MinShow)", function()
 		local tl = HatchFx.timeline(3, 3, false, false)
@@ -286,7 +297,7 @@ return function(T, Loader)
 						if pose.Shown then
 							maxRoll = math.max(maxRoll, math.abs(pose.Roll))
 							maxScale = math.max(maxScale, pose.Scale)
-							T.truthy(pose.Scale >= 0.25 and pose.Scale <= 1.4, "in bounds")
+							T.truthy(pose.Scale >= HatchFx.PopFrom - 1e-9 and pose.Scale <= 1.4, "in bounds")
 							T.truthy(pose.Drop >= -0.05 and pose.Drop <= HatchFx.Rise + 1e-9, "it rises from below, bobs a little")
 							T.truthy(pose.Charge >= 0 and pose.Charge <= 1, "the charge 0..1")
 							if t > tl.Float + 0.3 and t < tl.Charge and slot == 1 then
@@ -301,7 +312,12 @@ return function(T, Loader)
 				-- (V2: the video's +-12 degree wobble became the float and the charge's growing shake)
 				T.truthy(maxRoll >= math.rad(3) and maxRoll <= math.rad(20), `a real shake, never wild ({math.deg(maxRoll)} degrees)`)
 				T.truthy(maxScale > 1.05, "it pulses")
-				T.truthy(maxYaw > 0.05 and maxYaw <= HatchFx.FloatTurn + 1e-6, `a slow turn while it floats ({maxYaw})`)
+				if fast then
+					T.truthy(maxYaw > 0.05 and maxYaw <= HatchFx.FloatTurn + 1e-6, `Auto: a slow sway while it floats ({maxYaw})`)
+				else
+					-- (2026-11-15: a whole turn from its entrance to the first crack, tests/EggWorld.spec.luau)
+					T.truthy(maxYaw > 1 and maxYaw <= 2 * math.pi * tl.Times.Spin + 1e-6, `a turn while it floats and charges ({maxYaw})`)
+				end
 				if not fast then
 					local low, high = math.huge, -math.huge
 					for _, d in floatDrops do
@@ -309,11 +325,15 @@ return function(T, Loader)
 					end
 					T.truthy(high - low > HatchFx.Bob * 0.5, "it bobs while it floats")
 				end
-				local first = HatchFx.eggPose(0.01, tl, 1, false)
+				-- (2026-11-15: the rise settles with Quint Out: its first hundredth of the entrance)
+				local first = HatchFx.eggPose(tl.Times.Pop * 0.014, tl, 1, false)
 				T.truthy(first.Drop > HatchFx.Rise * 0.8 and first.Scale < 0.5, "it starts small, below its place")
 				T.truthy(HatchFx.eggPose(tl.Charge - 0.01, tl, 1, false).Charge == 0, "no charge while it floats")
 				T.truthy(HatchFx.eggPose(tl.Silhouette - 0.01, tl, 1, false).Charge > 0.95, "fully charged at the silhouette")
-				T.falsy(HatchFx.eggPose(tl.Burst, tl, 1, false).Shown, "gone at the burst")
+				-- (2026-11-15: at the burst its halves fly apart, fading; gone after)
+				local burst = HatchFx.eggPose(tl.Burst, tl, 1, false)
+				T.truthy(burst.Shown and burst.Break == 0, "breaking at the burst")
+				T.falsy(HatchFx.eggPose(tl.Burst + tl.Times.Break + 0.001, tl, 1, false).Shown, "gone after its burst")
 				T.eq(HatchFx.eggPose(tl.Silhouette - 0.01, tl, 1, false).Silhouette, 0)
 				T.near(HatchFx.eggPose(tl.Burst - 0.001, tl, 1, false).Silhouette, 1, 1e-9, "a solid silhouette before it bursts")
 				T.eq(HatchFx.eggPose(tl.Steps[2] + 0.01, tl, 1, false).Level, 2, "the second step")
@@ -408,7 +428,13 @@ return function(T, Loader)
 							end
 							if o.Auras[slot].Visible then
 								sawAura = true
-								T.truthy(slot <= count and t >= tl.Charge and t < tl.Total, label .. ": an aura only while it belongs")
+								-- (2026-11-15: a soft aura with its egg's entrance, the energy's glow from the charge)
+								local early = t < tl.Charge
+								T.truthy(slot <= count and t < tl.Total, label .. ": an aura only while it belongs")
+								T.truthy(
+									not early or HatchFx.auraAt(t, tl, slot) <= HatchFx.EarlyAura + 1e-9,
+									label .. ": soft before the charge"
+								)
 							end
 						end
 						for _, mote in o.Motes do
@@ -884,7 +910,12 @@ return function(T, Loader)
 			levels[crack.Level] += 1
 		end
 		T.truthy(levels[1] > 0 and levels[2] > 0 and levels[3] > 0, "three steps")
-		T.eq(#rec.Cracks, #rec.Parts - before, "every new part a crack")
+		-- (2026-11-15: and the shell chips that fly off at the second and third steps)
+		T.eq(#rec.Cracks + #rec.Chips, #rec.Parts - before, "every new part a crack or a chip")
+		T.eq(#rec.Chips, #HatchFx.Chips, "every chip built")
+		for _, chip in rec.Chips do
+			T.eq(chip.Part.Transparency, 1, chip.Part.Name .. ": hidden until its step")
+		end
 		T.truthy(rec.Height > 3 and rec.Height < 7, "the egg's height measured")
 		local fewer = GolemBuilder.capsule("Stone")
 		HatchFx.addCracks(fewer, 2)
@@ -1521,10 +1552,12 @@ return function(T, Loader)
 		T.truthy(pc.Gui:GetAttribute("PopSkin") and pc.Controls:GetAttribute("PopSkin"))
 	end)
 
-	T.test("EggOpening: the controller (blur, the HUD away, Reduce motion's calm, Auto fast, a phone's fewer cracks)", function()
+	T.test("EggOpening: the controller (focus, the HUD away, Reduce motion's calm, Auto fast, a phone's fewer cracks)", function()
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
 		local code = string.gsub(source, "%-%-[^\n]*", "")
-		T.truthy(string.find(code, 'Instance.new("BlurEffect")', 1, true), "the world softly blurred")
+		-- (2026-11-15: the eggs stand in the world now: the depth of field softens the world behind them,
+		-- a blur would blur them too; tests/EggWorld.spec.luau)
+		T.truthy(string.find(code, 'FindFirstChildOfClass("DepthOfFieldEffect")', 1, true), "the world softly out of focus")
 		T.falsy(string.find(code, "Dim", 1, true), "nothing dims it")
 		T.truthy(string.find(code, "hideHud(true)", 1, true) and string.find(code, "hideHud(false)", 1, true), "the HUD away and back")
 		T.truthy(string.find(code, "Reduced = Motion.reduced()", 1, true), "Reduce motion: the calm version")

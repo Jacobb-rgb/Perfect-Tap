@@ -37,9 +37,13 @@
 	  video: "open them exactly like there, this clean, glowing by rarity";
 	  docs/plans/CLICKER_VIDEO_2026-10-29.md section 1; UI/HatchFx holds the
 	  flow, the timings and the maths, CapsuleView the pieces): the world stays
-	  (softly blurred: a BlurEffect on the camera, nothing dims it), the HUD
-	  steps away but the opening's Auto button (hideHud: scale 0, the touch
-	  FIRE and Grab held), the eggs pop in HUGE in front of the camera (1 in
+	  (softly out of focus behind the stage: the depth of field, 2026-11-15,
+	  nothing darkens it; the camera's view eases in to the stage's and back
+	  out after), the HUD steps away but the opening's Auto button (hideHud:
+	  scale 0, the touch FIRE and Grab held), the eggs pop in HUGE in front of
+	  the camera as real 3D models in the world right in front of it
+	  (UI/HatchWorld, 2026-11-15: sharp, lit, glowing; a viewport drew them
+	  before) (1 in
 	  the middle, 3 side by side, the middle one bigger, 10 in two rows of 5),
 	  wobble, white rings and a puff, their cracks glow in the colour of the
 	  golem inside each (BrightTheme.crackColour, Mythic a moving rainbow) in
@@ -64,7 +68,7 @@
 	  opening it is in, never the next), including a pack's golems past the
 	  inventory's hard cap (the result's Pending: shown won, "Waiting:
 	  inventory full" under the name). The openings in a row are ONE chain:
-	  the HUD hold, the blur, the keys and the selection lock carry across
+	  the HUD hold, the focus, the keys and the selection lock carry across
 	  them and come back once, after the last; a result that arrives
 	  meanwhile (a new receipt) waits after the whole chain. While it plays
 	  every prompt is suppressed ("CapsuleOpening"). Refusals stop Auto
@@ -82,6 +86,7 @@
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -103,6 +108,9 @@ local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local HatchFx = require(script.Parent.Parent.UI.HatchFx)
 local HatchStage = require(script.Parent.Parent.UI.HatchStage)
+local HatchRig = require(script.Parent.Parent.UI.HatchRig)
+local HatchWorld = require(script.Parent.Parent.UI.HatchWorld)
+local Ease = require(script.Parent.Parent.Util.Ease)
 local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local Motion = require(script.Parent.Parent.UI.Motion)
@@ -167,6 +175,7 @@ local stateAt: number? = nil -- server time the last State snapshot came (Capsul
 -- the opening
 local opening: CapsuleView.OpenRefs? = nil
 local eggPool: { [string]: { HatchFx.Record } } = {} -- capsule id (and crack steps) -> its eggs, built once
+local world: HatchWorld.World? = nil -- (2026-11-15) the 3D stage in front of the camera (made once)
 local playing = false
 local queue: { Result } = {}
 local skipStep = false
@@ -790,6 +799,11 @@ end
 local function makeEgg(pool: { HatchFx.Record }, capsuleId: string, cracks: number)
 	local model = GolemBuilder.capsule(capsuleId)
 	HatchFx.addCracks(model, cracks)
+	-- (2026-11-15: a model of the 3D stage: anchored and out of the way, small: it stands right in front
+	-- of the camera, HatchWorld; the record measures it as it is now)
+	HatchRig.prepare(model)
+	HatchRig.scale(model, HatchWorld.Scale)
+	model:SetAttribute("StageScale", HatchWorld.Scale)
 	model:SetAttribute("Pooled", true)
 	table.insert(pool, HatchFx.record(model))
 end
@@ -931,83 +945,272 @@ local function hideHud(on: boolean)
 	end
 end
 
--- The world behind softly blurred while an opening plays (a client BlurEffect on the camera).
-CapsuleController.BlurSize = 10
--- (2026-11-15: sine eases, a little longer: the world melts away and comes back without a snap)
-CapsuleController.BlurIn = TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-CapsuleController.BlurOut = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-local blur: BlurEffect? = nil
-local function setBlur(on: boolean)
-	local camera = Workspace.CurrentCamera
-	if on then
-		if not camera then
-			return -- (no camera this moment: the next opening of the chain puts it on)
-		end
-		local made = blur
-		if not made or made.Parent ~= camera then
-			if made then
-				made:Destroy()
+--[[
+	(2026-11-15) The 3D stage (UI/HatchWorld): made once, the opening's
+	pieces under the eggs and golems on its backdrop (CapsuleView.useBackdrop),
+	in the world only while a chain of openings plays. In the specs the
+	Workspace is no instance: the stage stays out of it there.
+]]
+local function stageParent(): Instance?
+	return if typeof(Workspace) == "Instance" then Workspace else nil
+end
+
+local function ensureWorld(): HatchWorld.World
+	local made = world
+	if made then
+		return made
+	end
+	local parent = stageParent()
+	local new = HatchWorld.new({
+		Parent = parent,
+		-- (one move for the whole stage a frame; nothing listens for more than the CFrame. The specs'
+		-- Workspace is no instance: each part set on its own there)
+		Bulk = if parent
+			then function(parts: { BasePart }, frames: { CFrame })
+				local ok = pcall(function()
+					Workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+				end)
+				if not ok then
+					-- (a part that left the world mid-frame refuses the bulk move: each set on its own)
+					for i, part in parts do
+						part.CFrame = frames[i]
+					end
+				end
 			end
-			local effect = Instance.new("BlurEffect")
-			effect.Name = "TerraForgeOpeningBlur"
-			effect.Size = 0
-			effect.Parent = camera
-			blur = effect
-			made = effect
+			else nil,
+	})
+	world = new
+	return new
+end
+
+--[[
+	The camera this frame for the stage: as it is (after the shake: the stage
+	stays put on the screen with its names, as the viewport did, while the
+	world behind shakes), its view, its near clipping plane and how far its
+	focus, the player, is (the stage keeps nearer than the player: a camera
+	pushed in close by a wall pulls the stage in with it, HatchWorld.begin).
+]]
+local function stageView(): HatchStage.View
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return { Space = CFrame.new(), Fov = HatchFx.Fov }
+	end
+	local cf = camera.CFrame
+	return {
+		Space = cf,
+		Fov = camera.FieldOfView,
+		Near = math.abs(camera.NearPlaneZ),
+		Reach = (cf.Position - camera.Focus.Position).Magnitude,
+	}
+end
+
+--[[
+	The world behind softly out of focus while an opening plays (2026-11-15:
+	a blur would blur the 3D stage too): the Lighting's DepthOfFieldEffect
+	(WorldService makes it, off) is borrowed, its focus on the stage right
+	in front of the camera, everything further away soft; put back as it
+	was once the last opening's focus has eased out. In and out with sine
+	eases, the world melting away and coming back without a snap.
+]]
+-- (the starting focus; each frame of an opening sets it on the stage: up to its backdrop, HatchWorld.Back)
+CapsuleController.Focus = { FarIntensity = 0.65, FocusDistance = 1.3, InFocusRadius = 1.6, NearIntensity = 0 }
+CapsuleController.FocusIn = TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+CapsuleController.FocusOut = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+type FocusHome = { Enabled: boolean, FarIntensity: number, FocusDistance: number, InFocusRadius: number, NearIntensity: number }
+local focusDof: DepthOfFieldEffect? = nil
+local focusHome: FocusHome? = nil -- the effect as it was before the opening (put back when its focus is gone)
+local focusToken = 0
+local function setFocus(on: boolean)
+	if not Workspace.CurrentCamera then
+		return -- (no camera this moment: nothing draws; the next opening of the chain puts it on)
+	end
+	focusToken += 1
+	local token = focusToken
+	if on then
+		local dof = focusDof
+		if not dof or dof.Parent == nil then
+			local found = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
+			if not found then
+				local made = Instance.new("DepthOfFieldEffect")
+				made.Name = "TerraForgeOpeningFocus"
+				made.Enabled = false
+				made.Parent = Lighting
+				found = made
+			end
+			dof = found
+			focusDof = found
+			focusHome = nil
 		end
-		TweenService:Create(made :: BlurEffect, CapsuleController.BlurIn, { Size = CapsuleController.BlurSize }):Play()
-	elseif blur then
-		local effect = blur :: BlurEffect
-		blur = nil
-		local tween = TweenService:Create(effect, CapsuleController.BlurOut, { Size = 0 })
-		tween.Completed:Connect(function()
-			effect:Destroy()
+		local effect = dof :: DepthOfFieldEffect
+		if not focusHome then
+			focusHome = {
+				Enabled = effect.Enabled,
+				FarIntensity = effect.FarIntensity,
+				FocusDistance = effect.FocusDistance,
+				InFocusRadius = effect.InFocusRadius,
+				NearIntensity = effect.NearIntensity,
+			}
+			effect.FarIntensity = 0 -- (from sharp: it eases in)
+		end
+		local focus = CapsuleController.Focus
+		effect.FocusDistance = focus.FocusDistance
+		effect.InFocusRadius = focus.InFocusRadius
+		effect.NearIntensity = focus.NearIntensity
+		effect.Enabled = true
+		TweenService:Create(effect, CapsuleController.FocusIn, { FarIntensity = focus.FarIntensity }):Play()
+	else
+		local effect = focusDof
+		if not effect then
+			return
+		end
+		local function out()
+			if token ~= focusToken then
+				return -- (a new opening took it meanwhile)
+			end
+			local tween = TweenService:Create(effect, CapsuleController.FocusOut, { FarIntensity = 0 })
+			tween.Completed:Connect(function()
+				if token ~= focusToken then
+					return
+				end
+				local home = focusHome
+				focusHome = nil
+				focusDof = nil
+				if home then
+					effect.Enabled = home.Enabled
+					effect.FarIntensity = home.FarIntensity
+					effect.FocusDistance = home.FocusDistance
+					effect.InFocusRadius = home.InFocusRadius
+					effect.NearIntensity = home.NearIntensity
+				end
+			end)
+			tween:Play()
+		end
+		if autoOn then
+			task.delay(CapsuleController.AutoWait, out) -- (Auto: its next egg keeps it)
+		else
+			out()
+		end
+	end
+end
+
+--[[
+	(2026-11-15) The camera's view while openings play: it eases in to the
+	stage's own (HatchFx.Fov: the eggs keep the look they were made for, the
+	world behind draws in, out of focus) as the chain begins and back out to
+	the player's own after it (Sine InOut, ZoomIn / ZoomOut seconds); the
+	burst's breath on top (HatchFx.breathAt, the opening's frame sets it).
+	The stage follows the view every frame (HatchWorld.depthK), so the eggs
+	and golems never move on the screen while it does. Reduce motion keeps
+	the player's view. Only the view (FieldOfView) changes: the camera stays
+	the player's, its controls too.
+]]
+CapsuleController.ZoomIn = 0.7
+CapsuleController.ZoomOut = 0.55
+-- (Auto: the next egg's opening begins a moment after the last ends: the view and the focus wait this
+-- long before they go back, so they stay with the stage instead of pumping out and in between eggs)
+CapsuleController.AutoWait = 0.6
+local ZOOM_STEP = "TerraForgeHatchZoom"
+local HATCH_STEP = "TerraForgeHatchStage"
+type Zoom = { From: number, To: number, Start: number, Length: number, Home: number?, Bound: boolean, Breath: number }
+local zoom: Zoom = { From = 70, To = 70, Start = 0, Length = 0, Home = nil, Bound = false, Breath = 0 }
+
+-- The view the zoom asks for at `now` (os.clock()), the breath taken off it.
+local function zoomFov(now: number): number
+	local k = Ease.span(now, zoom.Start, zoom.Length, "Sine", "InOut")
+	return zoom.From + (zoom.To - zoom.From) * k - zoom.Breath
+end
+
+local function zoomTo(target: number, length: number, wait: number?)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	zoom.From = camera.FieldOfView + zoom.Breath -- (from where it is: never a jump)
+	zoom.To = target
+	zoom.Start = os.clock() + (wait or 0)
+	zoom.Length = length
+	if not zoom.Bound then
+		zoom.Bound = true
+		-- (before the stage's frame, Camera + 2, so the stage reads this frame's view)
+		RunService:BindToRenderStep(ZOOM_STEP, Enum.RenderPriority.Camera.Value + 1, function()
+			local cam = Workspace.CurrentCamera
+			local now = os.clock()
+			if cam then
+				cam.FieldOfView = zoomFov(now)
+			end
+			-- (back home and settled: the player's own view, no step bound)
+			local home = zoom.Home
+			if not playing and home and now >= zoom.Start + zoom.Length and zoom.Breath == 0 then
+				if cam then
+					cam.FieldOfView = home
+				end
+				zoom.Home = nil
+				zoom.Bound = false
+				RunService:UnbindFromRenderStep(ZOOM_STEP)
+			end
 		end)
-		tween:Play()
+	end
+end
+
+-- The chain begins: the view eases to the stage's (Reduce motion: the player's own stays).
+local function zoomIn()
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	if zoom.Home == nil then
+		zoom.Home = camera.FieldOfView
+	end
+	zoom.Breath = 0
+	zoomTo(if Motion.reduced() then zoom.Home :: number else HatchFx.Fov, CapsuleController.ZoomIn)
+end
+
+-- The chain ends: back out to the player's own view (Auto: after AutoWait, unless its next egg came).
+local function zoomOut()
+	local home = zoom.Home
+	zoom.Breath = 0
+	if home then
+		zoomTo(home, CapsuleController.ZoomOut, if autoOn then CapsuleController.AutoWait else 0)
 	end
 end
 
 --[[
 	(V2) The world behind an Epic or rarer reveal takes its colour for a
-	moment (a client ColorCorrectionEffect on the camera, only this
-	player's screen): a soft tint and a little more light, a Mythic's a
+	moment (2026-11-15: a soft veil of the colour on the stage's backdrop,
+	the opening's Mood: behind the golems, so it tints the world, never
+	them; a ColorCorrectionEffect tinted the golems too): a Mythic's a
 	little stronger. In at the burst, out with the flight; gone with the
-	blur (setMood(0)). Reduce motion: none.
+	focus (setMood(0)). Reduce motion: none.
 ]]
 CapsuleController.MoodFrom = 4 -- the best rarity's Order from which the world takes its colour
-local mood: ColorCorrectionEffect? = nil
-local function setMood(order: number, color: Color3, reduced: boolean, onCamera: Camera?)
-	local camera = onCamera or Workspace.CurrentCamera -- (onCamera: the specs' own)
-	local on = order >= CapsuleController.MoodFrom and not reduced and camera ~= nil
-	local made = mood
-	if on and camera then
-		if not made or made.Parent ~= camera then
-			if made then
-				made:Destroy()
-			end
-			local effect = Instance.new("ColorCorrectionEffect")
-			effect.Name = "TerraForgeOpeningMood"
-			effect.TintColor = Color3.new(1, 1, 1)
-			effect.Parent = camera
-			mood = effect
-			made = effect
+CapsuleController.MoodVeil = { 0.86, 0.8 } -- the veil's see-through: an Epic / Legendary's, a Mythic's
+local moodToken = 0
+local function setMood(order: number, color: Color3, reduced: boolean, onRefs: CapsuleView.OpenRefs?)
+	local o = onRefs or opening -- (onRefs: the specs' own)
+	if not o then
+		return
+	end
+	local veil = o.Mood
+	local on = order >= CapsuleController.MoodFrom and not reduced
+	moodToken += 1
+	local token = moodToken
+	if on then
+		veil.BackgroundColor3 = color
+		if not veil.Visible then
+			veil.BackgroundTransparency = 1
+			veil.Visible = true
 		end
 		local strong = order >= 6
-		TweenService:Create(made :: ColorCorrectionEffect, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-			TintColor = Color3.new(1, 1, 1):Lerp(color, if strong then 0.35 else 0.25),
-			Brightness = if strong then 0.08 else 0.05,
-			Saturation = if strong then 0.2 else 0.1,
+		TweenService:Create(veil, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundTransparency = CapsuleController.MoodVeil[if strong then 2 else 1],
 		}):Play()
-	elseif made then
-		mood = nil
-		local effect = made :: ColorCorrectionEffect
-		local tween = TweenService:Create(
-			effect,
-			TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-			{ TintColor = Color3.new(1, 1, 1), Brightness = 0, Saturation = 0 }
-		)
+	elseif veil.Visible then
+		local tween =
+			TweenService:Create(veil, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = 1 })
 		tween.Completed:Connect(function()
-			effect:Destroy()
+			if token == moodToken then -- (not tinted again meanwhile)
+				veil.Visible = false
+			end
 		end)
 		tween:Play()
 	end
@@ -1253,6 +1456,7 @@ function CapsuleController.hatchArgs(o: CapsuleView.OpenRefs, result: Result, ki
 		Wait = function(): number
 			return RevealKit.nextFlashAt() - os.clock()
 		end,
+		World = ensureWorld(), -- (2026-11-15: the eggs and golems in the 3D world in front of the camera)
 	}
 end
 
@@ -1268,7 +1472,9 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 	local revealedAt: number? = nil -- (os.clock() when the golems came out: MinShow counts from it)
 	local wantFly = false -- (a skip asked for the flight: it waits for MinShow)
 	local last, longest = start, 0
-	while true do
+	local finished = false
+	local failure: any = nil
+	local function frame()
 		local now = os.clock()
 		longest = math.max(longest, now - last)
 		last = now
@@ -1293,7 +1499,20 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 			end
 		end
 		local t = math.min(now - start + offset, tl.Total)
-		local events = HatchStage.pose(run, t)
+		-- (2026-11-15: the burst's breath: the camera's view narrows a little and eases back; the stage
+		-- keeps its spot, only the world behind breathes)
+		local camera = Workspace.CurrentCamera
+		zoom.Breath = HatchFx.breathAt(t, tl)
+		if camera and zoom.Bound then
+			camera.FieldOfView = zoomFov(now)
+		end
+		local events = HatchStage.pose(run, t, stageView())
+		-- (the focus on the stage: sharp up to its backdrop, the world behind soft)
+		local dof, stage = focusDof, world
+		if dof and stage then
+			dof.FocusDistance = stage.Back * 0.5
+			dof.InFocusRadius = stage.Back * 0.5 + 0.3
+		end
 		if table.find(events, "Reveal") then
 			revealedAt = now
 		end
@@ -1305,14 +1524,41 @@ local function hatch(o: CapsuleView.OpenRefs, result: Result, kinds: { string })
 			Sfx.loopPitch("CaseCharge", 0.85 + 0.4 * charge, 0.65 + 0.6 * charge)
 		end
 		if t >= tl.Total then
-			break
+			finished = true
 		end
-		task.wait()
 	end
+	-- (2026-11-15) One pose a frame, after everything that moves the camera (its scripts, the zoom, the
+	-- shake, a build camera: RenderPriority.Last), so the stage in front of it never trails it by a frame;
+	-- a step that fails ends the opening like a failing hatch did (play: openingFailed)
+	RunService:BindToRenderStep(HATCH_STEP, Enum.RenderPriority.Last.Value, function()
+		if finished then
+			return
+		end
+		local ok, err = pcall(function(): any
+			frame()
+			return nil
+		end)
+		if not ok then
+			failure = err
+			finished = true
+		end
+	end)
+	local waited = pcall(function()
+		while not finished do
+			task.wait()
+		end
+	end)
+	RunService:UnbindFromRenderStep(HATCH_STEP)
+	zoom.Breath = 0
 	currentRun = nil
 	Sfx.loop("CaseCharge", false)
 	if longest >= CapsuleController.LongFrame then
 		warn(`[CapsuleController] opening of {#kinds} {result.Capsule}: its longest frame took {math.floor(longest * 1000)} ms`)
+	end
+	if failure ~= nil then
+		error(failure, 0)
+	elseif not waited then
+		error("the opening's wait was stopped", 0)
 	end
 end
 
@@ -1396,7 +1642,11 @@ local function ensureOpening(): CapsuleView.OpenRefs
 		return existing
 	end
 	if existing then
-		-- (only between two openings: play() calls this before it starts)
+		-- (only between two openings: play() calls this before it starts; its pieces on the 3D stage's
+		-- backdrop go with it)
+		for _, piece in existing.Behind do
+			piece:Destroy()
+		end
 		existing.Gui:Destroy()
 		existing.Controls:Destroy()
 		opening = nil
@@ -1406,6 +1656,8 @@ local function ensureOpening(): CapsuleView.OpenRefs
 	local playerGui = player:WaitForChild("PlayerGui")
 	o.Gui.Parent = playerGui
 	o.Controls.Parent = playerGui
+	-- (2026-11-15: the pieces under the eggs and golems go on the 3D stage's backdrop, behind them)
+	CapsuleView.useBackdrop(o, ensureWorld().Surface)
 	for _, tap in { o.Tap, o.TapTop } do
 		tap.Activated:Connect(function()
 			if playing then
@@ -1475,7 +1727,7 @@ end
 --[[
 	The chain: every opening queued plays one after another under ONE hold
 	(beginChain .. endChain): the prompts suppressed, the HUD away, the
-	blur, the keys and the selection lock carry across them (a x50 pack's 5
+	focus, the keys and the selection lock carry across them (a x50 pack's 5
 	openings, and a result that came meanwhile after them) and come back
 	once, after the last opening, whatever happened (a failing opening, a
 	death: the openings are ResetOnSpawn off and play on).
@@ -1490,7 +1742,10 @@ local function beginChain(o: CapsuleView.OpenRefs)
 		tellPlaying(true)
 	end
 	hideHud(true)
-	setBlur(true)
+	setFocus(true)
+	-- (2026-11-15: the 3D stage in the world, the camera's view easing in to it)
+	HatchWorld.show(ensureWorld(), true)
+	zoomIn()
 	o.Gui.Enabled = true
 	o.Controls.Enabled = true
 	ContextActionService:BindActionAtPriority(
@@ -1523,7 +1778,7 @@ end
 	chain's thread, and a watch ends an opening that takes longer than
 	StuckAfter seconds. Each of these warns, so the console says what happened.
 ]]
-CapsuleController.StuckAfter = 15 -- seconds; the longest real opening (a Mythic's) is about 7
+CapsuleController.StuckAfter = 20 -- seconds; the longest real opening (a Mythic's of 10, 2026-11-15) is about 8.7
 
 local function safely(what: string, step: () -> ())
 	local ok, err = pcall(function(): any
@@ -1610,11 +1865,20 @@ local function endChain()
 			CapsuleView.setChain(o, nil, nil)
 		end)
 	end
-	safely("the blur", function()
-		setBlur(false)
+	safely("the focus", function()
+		setFocus(false)
 	end)
 	safely("the world's tint", function()
-		setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the blur, whatever was skipped)
+		setMood(0, Color3.new(1, 1, 1), true) -- (V2: the world's tint goes with the focus, whatever was skipped)
+	end)
+	safely("the 3D stage", function()
+		-- (2026-11-15: out of the world, the camera's view easing back to the player's own)
+		pcall(RunService.UnbindFromRenderStep, RunService, HATCH_STEP)
+		local made = world
+		if made then
+			HatchWorld.show(made, false)
+		end
+		zoomOut()
 	end)
 	safely("the HUD's return", function()
 		hideHud(false)
@@ -1638,8 +1902,12 @@ local function play(result: Result)
 	fitOpening(o)
 	skipStep = false
 	skipAll = false
-	setBlur(true) -- (kept on: a new camera since the last opening gets it too)
-	HatchStage.clear(o)
+	setFocus(true) -- (kept on: a camera that came since the last opening gets it too)
+	local stage = ensureWorld()
+	if not stage.Shown then
+		HatchWorld.show(stage, true)
+	end
+	HatchStage.clear(o, nil, stage)
 	refreshAuto(o)
 	-- (its own notice, or why Auto stopped, once: a notice still showing from the last opening stays)
 	if result.Note then
@@ -1669,20 +1937,23 @@ local function play(result: Result)
 		setMood(0, Color3.new(1, 1, 1), true)
 		pcall(Sfx.loop, "CaseCharge", false)
 	end
-	HatchStage.clear(o, stageGolems) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
+	HatchStage.clear(o, stageGolems, world) -- (the golems destroyed, the eggs back in the pool: phones keep nothing)
 	table.clear(stageGolems)
 end
 
 -- The clean-up after an opening that failed or never ended: nothing of it stays on the screen.
 local function clearAfter(o: CapsuleView.OpenRefs?)
 	currentRun = nil
+	-- (an opening stopped by the watch never got to unbind its frame: task.cancel ends it where it waits)
+	pcall(RunService.UnbindFromRenderStep, RunService, HATCH_STEP)
+	zoom.Breath = 0
 	safely("the world's tint", function()
 		setMood(0, Color3.new(1, 1, 1), true)
 	end)
 	pcall(Sfx.loop, "CaseCharge", false)
 	if o then
 		safely("clearing the stage", function()
-			HatchStage.clear(o, stageGolems)
+			HatchStage.clear(o, stageGolems, world)
 		end)
 	end
 	table.clear(stageGolems)
@@ -2014,9 +2285,12 @@ end
 
 -- The Lune specs (tests/EggPanel.spec.luau, tests/EggRedo.spec.luau) drive these, on fakes.
 CapsuleController._test = {
-	setMood = setMood, -- (V2: the world's tint, on a camera the spec gives)
-	mood = function(): ColorCorrectionEffect?
-		return mood
+	setMood = setMood, -- (V2: the world's tint, on the opening the spec gives)
+	world = function(): HatchWorld.World?
+		return world
+	end,
+	zoom = function(): Zoom
+		return zoom
 	end,
 	close = function()
 		playing, autoOn, autoNote = false, false, nil

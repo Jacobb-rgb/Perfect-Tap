@@ -390,9 +390,14 @@ return function(T, Loader)
 			-- streamed out / removed before its turn (Lune errors on reading a destroyed
 			-- part's Parent; Roblox gives nil, so unparenting stands in for Destroy)
 			gone.Parent = nil
-			-- (MinPerFrame parts a frame with no time budget: enough frames for all of them)
-			for _ = 1, math.ceil((#parts + 1) / StudStyleConfig.MinPerFrame) + 5 do
+			-- (MinPerFrame parts a frame with no time budget; Lune's scheduler may resume the slices less
+			-- often than this loop under load: wait until they're all done, at most a generous bound)
+			local slices = math.ceil((#parts + 1) / StudStyleConfig.MinPerFrame)
+			for _ = 1, slices * 20 + 50 do
 				task.wait()
+				if parts[#parts]:GetAttribute("StudStyle") then
+					break
+				end
 			end
 			for i, part in parts do
 				T.truthy(part:GetAttribute("StudStyle"), `part {i} styled in slices`)

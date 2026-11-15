@@ -47,6 +47,8 @@ local BrightTheme = require(Shared.Config.BrightTheme)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local HatchFx = require(script.Parent.HatchFx)
+local HatchRig = require(script.Parent.HatchRig)
+local HatchWorld = require(script.Parent.HatchWorld)
 local Confetti = require(script.Parent.Confetti)
 local CapsuleView = require(script.Parent.CapsuleView)
 local RevealKit = require(script.Parent.Parent.Effects.RevealKit)
@@ -83,6 +85,9 @@ function HatchStage.golemDepth(kind: string, height: number, s: HatchFx.Slot): n
 end
 
 HatchStage.SunSpin = 9 -- degrees a second (Reduce motion: still)
+-- A golem's pop at its biggest (HatchFx.golemPose: GolemFrom grown with Back Out, about 1.09): where its
+-- pill and the banner make room for it.
+HatchStage.PopPeak = 1.1
 
 export type Args = {
 	Refs: CapsuleView.OpenRefs,
@@ -99,9 +104,14 @@ export type Args = {
 	Wait: (() -> number)?, -- seconds until the next flash may (RevealKit.nextFlashAt): a refused flash waits, at most FlashGap
 	Deleted: { [number]: boolean }?, -- the result's golems the player auto-deletes (by index): greyed, they stay
 	Waiting: { [number]: boolean }?, -- won past the inventory's hard cap (a Robux pack's, by index): a note under the name
+	World: HatchWorld.World?, -- (2026-11-15) the 3D stage in front of the camera (nil: the viewport, the specs and previews)
 }
 
-type Standing = { Model: Model, Height: number, Root: number, Depth: number, Spot: Vector2, Turn: number }
+-- The camera of a frame on the 3D stage (HatchStage.pose): its CFrame and FieldOfView, its near clipping
+-- plane's distance and how far its focus (the player) is (nil: not known).
+export type View = { Space: CFrame, Fov: number, Near: number?, Reach: number? }
+
+type Standing = { Model: Model, Height: number, Root: number, Depth: number, Spot: Vector2, Turn: number, Rig: HatchRig.Rig }
 
 -- A rarity pill's plan for a run: its form ("Full" with the bonus, "Short" the rarity alone, nil none), its x.
 type PillPlan = { Form: string?, X: number, Text: number, Set: boolean }
@@ -126,7 +136,7 @@ export type Run = {
 	Layout: HatchFx.Layout,
 	EggDepth: { number },
 	Standing: { [number]: Standing },
-	Ready: { { Model: Model, Height: number, Root: number } }, -- the golems made ahead, by slot
+	Ready: { { Model: Model, Height: number, Root: number, Rig: HatchRig.Rig } }, -- the golems made ahead, by slot
 	Tier: HatchFx.Tier, -- the best KEPT golem's rarity cinematic (its Timeline's): an auto-deleted one is never celebrated
 	ShowOrder: number, -- that golem's Rarity order (1: none kept)
 	ShowRarity: string,
@@ -146,6 +156,9 @@ export type Run = {
 	FlashRetry: number?, -- t when a refused flash asks again (it waited for the shared gap)
 	Spin: number, -- the sunburst's turn
 	Last: number, -- the last pose's t
+	World: HatchWorld.World?, -- the 3D stage (nil: the viewport)
+	Holder: Instance, -- where the eggs and golems stand (the 3D stage's holder, or the viewport)
+	Farthest: number, -- the farthest model this frame (stage depth: the backdrop stays behind it)
 }
 
 -- The chance a golem had in this result: the odds it was rolled at (Triple Lucky's if it ran).
@@ -283,7 +296,8 @@ function HatchStage.new(args: Args): Run
 		Pieces = table.move(o.Confetti, 1, math.clamp(timeline.Tier.Confetti, 0, #o.Confetti), 1, {}),
 		Bonuses = {},
 		Badged = n <= CapsuleView.BadgeSlots,
-		MotesPer = math.min(motes, math.floor(#o.Motes / n)),
+		-- (the 3D stage streams real motes into the eggs: HatchWorld.energy)
+		MotesPer = if args.World then 0 else math.min(motes, math.floor(#o.Motes / n)),
 		OrbitsPer = HatchFx.OrbitCount,
 		EggPoses = {},
 		Fired = {},
@@ -291,6 +305,9 @@ function HatchStage.new(args: Args): Run
 		FlashRetry = nil,
 		Spin = 0,
 		Last = 0,
+		World = args.World,
+		Holder = if args.World then args.World.Holder else o.Stage,
+		Farthest = 0,
 	}
 	for slot = 1, n do
 		local kind = args.Kinds[order[slot]]
@@ -378,13 +395,21 @@ function HatchStage.dress(run: Run)
 	end
 end
 
--- Every piece hidden, the golems freed, the pooled eggs out of the stage (between two openings).
-function HatchStage.clear(o: CapsuleView.OpenRefs, golems: { Model }?)
-	for _, child in o.Stage:GetChildren() do
-		if child:GetAttribute("Pooled") == true then
-			child.Parent = nil
-		elseif child:IsA("Model") then
-			child:Destroy()
+-- Every piece hidden, the golems freed, the pooled eggs out of the stage (between two openings;
+-- `world`: the 3D stage's too, its particles stopped).
+function HatchStage.clear(o: CapsuleView.OpenRefs, golems: { Model }?, world: HatchWorld.World?)
+	local holders: { Instance } = { o.Stage }
+	if world then
+		table.insert(holders, world.Holder)
+		HatchWorld.clear(world)
+	end
+	for _, holder in holders do
+		for _, child in holder:GetChildren() do
+			if child:GetAttribute("Pooled") == true then
+				child.Parent = nil
+			elseif child:IsA("Model") then
+				child:Destroy()
+			end
 		end
 	end
 	if golems then
@@ -459,9 +484,59 @@ function HatchStage.golems(run: Run): { Model }
 	return out
 end
 
+--[[
+	A model's pose (stage space, HatchFx's camera at the origin): on the 3D
+	stage through the camera (HatchWorld.place), in the viewport as it is;
+	`top` / `bottom`: an egg's halves at the burst. On the 3D stage a pose
+	outside this frame's band (HatchWorld.begin: its middle past Most studs
+	from the camera, or its nearest part, by its rig's Reach, nearer than
+	Least; an egg coming in small, a golem growing out of its egg: their
+	size comes from their distance; the stage at a wide view) is drawn that
+	much smaller (or bigger) at the band's edge instead: on the same ray, so
+	the same on the screen, never cut by the camera's near plane, never
+	behind the backdrop or the player (the near side wins). `free`: a golem
+	flying to the player goes as far as its flight takes it.
+]]
+local function place(run: Run, rig: HatchRig.Rig, cf: CFrame, top: CFrame?, bottom: CFrame?, free: boolean?)
+	local world = run.World
+	local depth = -cf.Position.Z
+	if world then
+		-- (in the world's studs: its middle `live` away, its nearest part `live - reach`, both times `size`)
+		local live = depth * world.DepthK
+		local size = 1
+		if not free and live > world.Most then
+			size = world.Most / live
+		end
+		local room = live - rig.Reach
+		if room > 1e-3 and room * size < world.Least then
+			size = world.Least / room
+		end
+		local at, up, down = cf, top, bottom
+		if size ~= 1 then
+			at = cf - cf.Position + cf.Position * size
+			up = if top then top - top.Position + top.Position * size else nil
+			down = if bottom then bottom - bottom.Position + bottom.Position * size else nil
+			depth *= size
+		end
+		HatchWorld.place(world, rig, at, up, down, size)
+	else
+		HatchRig.place(rig, cf, top, bottom)
+	end
+	run.Farthest = math.max(run.Farthest, depth)
+end
+
+-- An egg's middle at its place now (stage space): its slot, its rise and bob, its depth.
+local function eggMiddle(run: Run, slot: number, aspect: number): (Vector3, number)
+	local s = run.Layout.Slots[slot]
+	local pose = run.EggPoses[slot]
+	local drop = if pose and pose.Shown then pose.Drop else 0
+	local scale = if pose and pose.Shown then pose.Scale else 1
+	local depth = run.EggDepth[slot] / scale
+	return HatchFx.at(s.Egg.X, s.Egg.Y + drop, depth, aspect), depth
+end
+
 local function poseEggs(run: Run, t: number, aspect: number)
 	local tl = run.Timeline
-	local o = run.Refs
 	for slot, rec in run.Args.Eggs do
 		local s = run.Layout.Slots[slot]
 		if not s then
@@ -470,20 +545,26 @@ local function poseEggs(run: Run, t: number, aspect: number)
 		local pose = HatchFx.eggPose(t, tl, slot, slot == run.Special)
 		run.EggPoses[slot] = pose
 		if pose.Shown then
-			if rec.Model.Parent ~= o.Stage then
-				rec.Model.Parent = o.Stage
+			if rec.Model.Parent ~= run.Holder then
+				rec.Model.Parent = run.Holder
 			end
+			-- (painted first: a crack running out or a chip flying moves its part in the egg's frame, which
+			-- the pose below puts in place)
+			HatchFx.paintEgg(rec, pose, run.Rarities[slot], t, tl)
 			-- (bigger by coming closer; it rises and bobs (Drop); it rocks about its foot; it faces the
-			-- camera, turned a little to the middle, and turns slowly (Yaw))
-			local depth = run.EggDepth[slot] / pose.Scale
-			local middle = HatchFx.at(s.Egg.X, s.Egg.Y + pose.Drop, depth, aspect)
+			-- camera, turned a little to the middle, and turns (Yaw))
+			local middle = eggMiddle(run, slot, aspect)
 			local foot = middle + Vector3.new(0, rec.Foot - rec.Mid, 0)
 			local cf = CFrame.new(foot)
 				* CFrame.Angles(0, 0, pose.Roll)
 				* CFrame.new(0, -rec.Foot, 0)
 				* CFrame.Angles(0, math.pi + (0.5 - s.Egg.X) * 0.5 + pose.Yaw, 0)
-			rec.Model:PivotTo(cf)
-			HatchFx.paintEgg(rec, pose, run.Rarities[slot], t)
+			-- (2026-11-15: the burst: its halves fly apart in the egg's own frame, glowing, fading)
+			local top, bottom
+			if pose.Break >= 0 then
+				top, bottom = HatchFx.halves(pose.Break, rec.Height, if slot % 2 == 0 then -1 else 1)
+			end
+			place(run, rec.Rig, cf, top, bottom)
 		elseif rec.Model.Parent then
 			rec.Model.Parent = nil
 		end
@@ -787,11 +868,24 @@ function HatchStage.retag(run: Run)
 end
 
 -- The golems are made ahead, one a frame while the eggs charge: ten at the reveal would all fall on one frame.
+-- (2026-11-15) On the 3D stage each is made a stage model (anchored, out of the way) and small: at most
+-- HatchWorld.GolemScale of its size, smaller where it would rest further than GolemDepth.
 local function makeAhead(run: Run)
 	local slot = #run.Ready + 1
 	if slot <= run.Count then
-		local model, height, root = run.Args.Golem(run.Kinds[slot])
-		run.Ready[slot] = { Model = model, Height = height, Root = root }
+		local kind = run.Kinds[slot]
+		local model, height, root = run.Args.Golem(kind)
+		if run.World then
+			HatchRig.prepare(model)
+			local s = run.Layout.Slots[slot]
+			local depth = if s then HatchStage.golemDepth(kind, height, s) else 1
+			local k = math.min(HatchWorld.GolemScale, HatchWorld.GolemDepth / math.max(0.01, depth))
+			HatchRig.scale(model, k)
+			model:SetAttribute("StageScale", k)
+			height *= k
+			root *= k
+		end
+		run.Ready[slot] = { Model = model, Height = height, Root = root, Rig = HatchRig.new(model) }
 	end
 end
 
@@ -811,6 +905,7 @@ local function reveal(run: Run, aspect: number)
 			Depth = HatchStage.golemDepth(kind, height, s),
 			Spot = s.Golem,
 			Turn = turnOf(s.Golem),
+			Rig = ready.Rig,
 		}
 		if run.Deleted[slot] then
 			HatchStage.grey(model)
@@ -849,9 +944,18 @@ local function poseGolems(run: Run, t: number, aspect: number)
 			spot, depth, spin = g.Spot, g.Depth / pose.Scale * (1 + 5 * pose.Fly * pose.Fly), 0
 		end
 		local middle = HatchFx.at(spot.X, spot.Y, depth, aspect) + Vector3.new(0, g.Height * pose.Lift, 0)
-		g.Model:PivotTo(CFrame.new(middle + Vector3.new(0, g.Root - g.Height / 2, 0)) * CFrame.Angles(0, math.pi + g.Turn + spin, 0))
-		if g.Model.Parent ~= o.Stage then
-			g.Model.Parent = o.Stage
+		-- (scaled by its pop round its pivot: the rig keeps its parts' places, so the size comes from the
+		-- distance, as before: bigger by coming closer)
+		place(
+			run,
+			g.Rig,
+			CFrame.new(middle + Vector3.new(0, g.Root - g.Height / 2, 0)) * CFrame.Angles(0, math.pi + g.Turn + spin, 0),
+			nil,
+			nil,
+			pose.Fly > 0
+		)
+		if g.Model.Parent ~= run.Holder then
+			g.Model.Parent = run.Holder
 		end
 		tag.Frame.Visible = pose.Name < 1
 		if tag.Frame.Visible then
@@ -865,13 +969,18 @@ local function poseGolems(run: Run, t: number, aspect: number)
 			CapsuleView.fadeMarks(tag, pose.Name) -- (DELETED and the waiting note fade with the name)
 		end
 	end
-	if tl.Reduced then
-		-- (Reduce motion: the golems fade in and out with the whole stage; the eggs fade part by part)
-		o.Stage.ImageTransparency = if t < tl.Burst then 0 else HatchFx.golemPose(t, tl, 1).Fade
+	-- (Reduce motion: the golems fade in and out; else, 2026-11-15, owner: "no sudden transitions": the
+	-- golems no longer vanish at a quarter of their size when the flight ends; they melt into the
+	-- player over its last part)
+	local fade = if tl.Reduced then (if t < tl.Burst then 0 else HatchFx.golemPose(t, tl, 1).Fade) else HatchStage.flightFade(t, tl)
+	if run.World then
+		-- (the 3D stage: each golem's parts fade, locally: their own see-through untouched)
+		for _, g in run.Standing do
+			HatchRig.fade(g.Rig, fade)
+		end
 	else
-		-- (2026-11-15, owner: "no sudden transitions": the golems no longer vanish at a quarter of
-		-- their size when the flight ends; they melt into the player over its last part)
-		o.Stage.ImageTransparency = HatchStage.flightFade(t, tl)
+		-- (the viewport: the golems fade with the whole stage; the eggs fade part by part)
+		o.Stage.ImageTransparency = fade
 	end
 end
 
@@ -923,7 +1032,7 @@ local function pillPlan(run: Run, slot: number, aspect: number): PillPlan
 	local rarity = run.Rarities[slot]
 	local pitch = run.Layout.Spacing * size.X * 0.96
 	local x, low, high = size.X / 2, math.huge, -math.huge
-	for _, scale in { 0.6, 1, 1.07 } do
+	for _, scale in { 0.6, 1, HatchStage.PopPeak } do
 		for _, lift in { -0.025, 0.025 } do
 			local middle = HatchFx.at(g.Spot.X, g.Spot.Y, g.Depth / scale, aspect) + Vector3.new(0, g.Height * lift, 0)
 			local head = HatchFx.project(middle + Vector3.new(0, g.Height / 2, 0), aspect)
@@ -1019,7 +1128,7 @@ function HatchStage.bannerFit(run: Run): number
 		local text = math.max(CapsuleView.TagMin, math.floor(s.Text * 0.62 + 0.5))
 		local w, h = CapsuleView.badgeSize(run.Rarities[slot], run.Bonuses[slot], text)
 		-- (at rest and through its pop's overshoot and its bob)
-		for _, scale in { 1, 1.07 } do
+		for _, scale in { 1, HatchStage.PopPeak } do
 			for _, lift in { -0.025, 0.025 } do
 				local middleAt = HatchFx.at(g.Spot.X, g.Spot.Y, g.Depth / scale, aspect) + Vector3.new(0, g.Height * lift, 0)
 				local head = HatchFx.project(middleAt + Vector3.new(0, g.Height / 2, 0), aspect)
@@ -1073,7 +1182,11 @@ local function poseRarity(run: Run, t: number)
 		end
 	end
 	local light = HatchFx.lightAt(t, tl)
-	if light > 0 then
+	local world = run.World
+	if world then
+		-- (the 3D stage: its key and rim lights lift and drift through the rainbow)
+		HatchWorld.setLight(world, light, (t * 0.15) % 1)
+	elseif light > 0 then
 		local hue = (t * 0.15) % 1
 		o.Stage.Ambient = CapsuleView.StageAmbient:Lerp(Color3.fromHSV(hue, 0.22, 1), light)
 		o.Stage.LightColor = CapsuleView.StageLight:Lerp(Color3.fromHSV((hue + 0.5) % 1, 0.3, 1), light * 0.8)
@@ -1122,16 +1235,67 @@ local function poseBits(run: Run, t: number)
 	end
 end
 
+-- (2026-11-15) The 3D stage's motes: each charging egg draws real motes in, more and brighter with the
+-- charge (fewer each for many eggs), in its energy colour; none once it bursts.
+HatchStage.MoteShare = { 1, 1, 1, 0.7, 0.6, 0.4, 0.4, 0.35, 0.35, 0.3 } -- by the eggs' count
+local function poseMotes3D(run: Run, t: number, aspect: number)
+	local world = run.World
+	if not world then
+		return
+	end
+	local tl = run.Timeline
+	local strength = HatchFx.energyAt(t, tl)
+	local share = HatchStage.MoteShare[run.Count] or 0.3
+	for slot, rec in run.Args.Eggs do
+		local pose = run.EggPoses[slot]
+		local rate = if pose and pose.Shown and pose.Break < 0 then HatchWorld.MoteRate * strength * share else 0
+		if rate > 0 then
+			local middle = eggMiddle(run, slot, aspect)
+			HatchWorld.energy(world, slot, CFrame.new(middle), rec.Height * 0.62 * pose.Scale, rate, energyOf(run, slot, t, 0.5))
+		else
+			HatchWorld.energy(world, slot, CFrame.new(), 0, 0, Color3.new(1, 1, 1))
+		end
+	end
+end
+
+-- (2026-11-15) The 3D stage's sparks at the burst: out of each egg in its golem's colour (more for the rarer).
+local function burstSparks(run: Run, aspect: number)
+	local world = run.World
+	if not world or run.Timeline.Reduced then
+		return
+	end
+	local many = run.Count > 5
+	for slot, rec in run.Args.Eggs do
+		local order = math.clamp(GolemConfig.order(run.Kinds[slot]), 1, 6)
+		local count = if many then 8 + 2 * order else 18 + 6 * order
+		local middle = eggMiddle(run, slot, aspect)
+		HatchWorld.burst(world, slot, CFrame.new(middle), rec.Height * 0.3, run.Colors[slot], count)
+	end
+end
+
 --[[
 	Poses everything at `t` seconds (see the header) and returns the events
-	since the last call, in order.
+	since the last call, in order. `view` (the 3D stage): the camera this
+	frame, so the stage stands in front of it (HatchWorld).
 ]]
-function HatchStage.pose(run: Run, t: number): { string }
+function HatchStage.pose(run: Run, t: number, view: View?): { string }
 	local tl = run.Timeline
 	local o = run.Refs
 	local events: { string } = {}
 	local dt = math.max(0, t - run.Last)
 	run.Last = t
+	local world = run.World
+	if world then
+		HatchWorld.begin(
+			world,
+			if view then view.Space else world.Space,
+			if view then view.Fov else world.Fov,
+			if view then view.Near else nil,
+			if view then view.Reach else nil
+		)
+		HatchWorld.canvas(world, run.Size)
+	end
+	run.Farthest = 0
 	local function once(name: string): boolean
 		if run.Fired[name] then
 			return false
@@ -1165,6 +1329,7 @@ function HatchStage.pose(run: Run, t: number): { string }
 		once("Step" .. step)
 	end
 	poseEggs(run, t, aspect)
+	poseMotes3D(run, t, aspect)
 	posePlatforms(run, t, aspect)
 	poseOrbits(run, t)
 	poseMotes(run, t)
@@ -1174,6 +1339,7 @@ function HatchStage.pose(run: Run, t: number): { string }
 	-- ONE flash in the best colour (RevealKit's, its one gap: refused, it waits for the next slot
 	-- (nextFlashAt, at most FlashGap); the reveal's timing never waits for it)
 	if t >= tl.Burst and once("Burst") and not tl.Reduced then
+		burstSparks(run, aspect)
 		o.Flash.BackgroundColor3 = HatchFx.crackColor(run.BestRarity, t, 0.3, 0)
 		if run.Args.Claim() then
 			run.FlashFrom = tl.Burst
@@ -1208,6 +1374,10 @@ function HatchStage.pose(run: Run, t: number): { string }
 	end
 	if t >= tl.Total then
 		once("End")
+	end
+	if world then
+		-- (everything posed this frame moves in one go; the backdrop stays behind the farthest model)
+		HatchWorld.flush(world, aspect, run.Farthest)
 	end
 	return events
 end

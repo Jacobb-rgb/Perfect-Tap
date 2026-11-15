@@ -3,9 +3,11 @@
 	unlocks everything for every player (blaster 10, the elevator, all
 	hoverboards, lots of coins). Used for HRA_K_TESTOVANI/*_TEST_vse_odemceno_*.rbxl.
 
-	lune run tools/lune/make_test_place.luau build/TerraForge.rbxl <out.rbxl> [trace]
+	lune run tools/lune/make_test_place.luau build/TerraForge.rbxl <out.rbxl> [trace] [eggtest]
 
 	"trace" also adds tools/lune/test_place/egg_trace.client.luau: a Studio-only panel that says what blocks the next egg.
+	"eggtest" also adds tools/lune/test_place/egg_selftest.client.luau: in Studio the egg opening plays itself
+	(1 / 3 / 10 eggs, a Legendary, a Mythic, a pack, Auto) and says [EGG TEST] PASS / FAIL for each in Output.
 ]]
 
 local fs = require("@lune/fs")
@@ -58,11 +60,18 @@ for _, player in Players:GetPlayers() do
 end
 ]]
 script.Parent = sss
-if process.args[3] == "trace" then
+local extras = { [process.args[3] or ""] = true, [process.args[4] or ""] = true }
+if extras.trace then
 	local trace = roblox.Instance.new("LocalScript")
 	trace.Name = "TEST_VejceStopa"
 	trace.Source = fs.readFile("tools/lune/test_place/egg_trace.client.luau")
 	trace.Parent = game:GetService("StarterPlayer"):FindFirstChildOfClass("StarterPlayerScripts")
+end
+if extras.eggtest then
+	local test = roblox.Instance.new("LocalScript")
+	test.Name = "TEST_VejceAutoTest"
+	test.Source = fs.readFile("tools/lune/test_place/egg_selftest.client.luau")
+	test.Parent = game:GetService("StarterPlayer"):FindFirstChildOfClass("StarterPlayerScripts")
 end
 fs.writeFile(dst, roblox.serializePlace(game))
 -- Lune drops the texture packs it can't read: put them back (tools/meshy/texture_packs.mjs)
