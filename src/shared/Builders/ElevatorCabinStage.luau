@@ -1141,7 +1141,7 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 	local flash = Stage.flashAt(plan, t, reduced)
 	local tint = if t >= plan.StopAt then smooth((t - plan.StopAt) / 0.3) else 0
 	local lightColor = WARM:Lerp(theme.Light:Lerp(WHITE, 0.35), tint)
-	stage.CeilingLight.Brightness = (2 * level + 2.4 * flash) * (1 - fade)
+	stage.CeilingLight.Brightness = (2 * level + 1.6 * flash) * (1 - fade)
 	stage.CeilingLight.Color = lightColor
 	setColor(stage.CeilingPanel, lightColor:Lerp(WHITE, math.min(flash, 1) * 0.5))
 	setTransparency(stage.CeilingPanel, if level < 0.5 then 0.6 else 0)

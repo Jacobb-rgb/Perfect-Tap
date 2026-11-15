@@ -440,7 +440,7 @@ local function lightSpecs(r: any, segment: string): { LightSpec }
 		end
 	else
 		cabin(r.StopAt, warm:Lerp(r.Theme.Light:Lerp(WHITE, 0.35), 1))
-		table.insert(list, { At = r.StopAt * Fx.Spot * CF.new(0, 4, 1.4), Color = r.Theme.Light, Range = 24, Brightness = 3 })
+		table.insert(list, { At = r.StopAt * Fx.Spot * CF.new(0, 4, 1.4), Color = r.Theme.Light, Range = 24, Brightness = 2 })
 		table.insert(list, { At = r.StopAt * CF.new(0, 7.5, 0.2), Color = C3.fromRGB(255, 236, 200), Range = 18, Brightness = 1.4 })
 	end
 	return list

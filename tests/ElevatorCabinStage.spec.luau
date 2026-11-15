@@ -272,7 +272,8 @@ return function(T, Loader)
 					end
 				end
 			end
-			T.truthy(peak > 2, floor.Id .. ": its light")
+			T.truthy(peak > 1.5, floor.Id .. ": its light")
+			T.le(peak, 3, floor.Id .. ": never washing the doorway out")
 			Fx.pose(fx, Config.ArrivalTime, false)
 			T.eq(fx.Light.Brightness, 0, floor.Id .. ": dark at the end")
 			for _, part in fx.Folder:GetDescendants() do

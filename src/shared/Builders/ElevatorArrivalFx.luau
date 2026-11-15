@@ -286,7 +286,8 @@ function Fx.pose(fx: Fx, since: number, reduced: boolean)
 	end
 	local spot = at * Fx.Spot
 	local level = ElevatorTravelConfig.arrivalLight(theme, since, reduced)
-	fx.Light.Brightness = 4.5 * level
+	-- (a PointLight without shadows shines into the cabin too: never so bright the doorway washes out)
+	fx.Light.Brightness = 3 * level
 	local fadeAll = 1 - smooth((since - 1.9) / 0.5)
 	-- small rocks tumble down in front of the doors and come to rest
 	if theme.Pebbles then
