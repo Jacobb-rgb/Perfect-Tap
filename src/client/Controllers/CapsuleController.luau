@@ -746,8 +746,20 @@ end
 	`note` (the odds changed under it): the note shows by the Auto button
 	while an opening is up.
 ]]
+-- (set below, once the view, the focus and the bloom are defined: Auto stopped between two eggs)
+local afterAutoStops: (() -> ())? = nil
+
 function CapsuleController.setAuto(on: boolean, note: string?)
+	local was = autoOn
 	autoOn = on
+	if was and not on and not playing then
+		-- (integrator review 2026-11-16: the view, the focus and the bloom waited AutoWait for Auto's next
+		-- egg; Auto stopped, they go back now)
+		local stop = afterAutoStops
+		if stop then
+			stop()
+		end
+	end
 	local o = opening
 	if o and playing then
 		-- (shown now, once: the next opening of the chain doesn't show it again)
@@ -1020,7 +1032,8 @@ type FocusHome = { Enabled: boolean, FarIntensity: number, FocusDistance: number
 local focusDof: DepthOfFieldEffect? = nil
 local focusHome: FocusHome? = nil -- the effect as it was before the opening (put back when its focus is gone)
 local focusToken = 0
-local function setFocus(on: boolean)
+-- `now` (off only): the player's own focus back at once, no ease (CapsuleController.settleView)
+local function setFocus(on: boolean, now: boolean?)
 	if not Workspace.CurrentCamera then
 		return -- (no camera this moment: nothing draws; the next opening of the chain puts it on)
 	end
@@ -1063,29 +1076,33 @@ local function setFocus(on: boolean)
 		if not effect then
 			return
 		end
+		local function restore()
+			local home = focusHome
+			focusHome = nil
+			focusDof = nil
+			if home then
+				effect.Enabled = home.Enabled
+				effect.FarIntensity = home.FarIntensity
+				effect.FocusDistance = home.FocusDistance
+				effect.InFocusRadius = home.InFocusRadius
+				effect.NearIntensity = home.NearIntensity
+			end
+		end
 		local function out()
 			if token ~= focusToken then
 				return -- (a new opening took it meanwhile)
 			end
 			local tween = TweenService:Create(effect, CapsuleController.FocusOut, { FarIntensity = 0 })
 			tween.Completed:Connect(function()
-				if token ~= focusToken then
-					return
-				end
-				local home = focusHome
-				focusHome = nil
-				focusDof = nil
-				if home then
-					effect.Enabled = home.Enabled
-					effect.FarIntensity = home.FarIntensity
-					effect.FocusDistance = home.FocusDistance
-					effect.InFocusRadius = home.InFocusRadius
-					effect.NearIntensity = home.NearIntensity
+				if token == focusToken then
+					restore()
 				end
 			end)
 			tween:Play()
 		end
-		if autoOn then
+		if now then
+			restore()
+		elseif autoOn then
 			task.delay(CapsuleController.AutoWait, out) -- (Auto: its next egg keeps it)
 		else
 			out()
@@ -1111,7 +1128,8 @@ type GlowHome = { Effect: BloomEffect, Enabled: boolean }
 local glowBloom: BloomEffect? = nil -- the opening's own (in the camera)
 local glowHome: GlowHome? = nil -- the zone's bloom it stands in for, and whether that was on
 local glowToken = 0
-local function setGlow(on: boolean)
+-- `now` (off only): the zone's bloom handed back at once, no ease (CapsuleController.settleView)
+local function setGlow(on: boolean, now: boolean?)
 	if typeof(Lighting) ~= "Instance" then
 		return -- (the specs' stand-ins: nothing draws)
 	end
@@ -1166,17 +1184,21 @@ local function setGlow(on: boolean)
 		if not bloom or not home then
 			return
 		end
+		local zone = home.Effect
+		local function handBack()
+			glowHome = nil
+			bloom.Enabled = false
+			if zone.Parent then
+				zone.Enabled = home.Enabled
+			end
+		end
+		if now then
+			handBack()
+			return
+		end
 		local function out()
 			if token ~= glowToken then
 				return -- (a new opening took it meanwhile)
-			end
-			local zone = home.Effect
-			local function handBack()
-				glowHome = nil
-				bloom.Enabled = false
-				if zone.Parent then
-					zone.Enabled = home.Enabled
-				end
 			end
 			if bloom.Parent == nil then
 				handBack() -- (its camera went, and it with it: nothing to ease)
@@ -1285,6 +1307,14 @@ local function zoomOut()
 	end
 end
 
+-- Auto stopped between two eggs (CapsuleController.setAuto): the view, the focus and the bloom that waited
+-- AutoWait for its next egg go back now (their tokens drop the waiting ones)
+afterAutoStops = function()
+	zoomOut()
+	setFocus(false)
+	setGlow(false)
+end
+
 --[[
 	The player's own view at once (integrator review 2026-11-16): the chain hands the game back
 	and only then eases the view home (ZoomOut; Auto after AutoWait), so a camera feature started in
@@ -1296,11 +1326,15 @@ end
 ]]
 function CapsuleController.settleView(): number?
 	local home = zoom.Home
+	if playing then
+		return if zoom.Bound then home else nil
+	end
+	-- (the focus and the opening's bloom, still easing out or waiting for Auto's next egg, go now too:
+	-- a ride's or the build view's first frames are the player's own)
+	setFocus(false, true)
+	setGlow(false, true)
 	if not zoom.Bound or home == nil then
 		return nil
-	end
-	if playing then
-		return home
 	end
 	pcall(function()
 		RunService:UnbindFromRenderStep(ZOOM_STEP)

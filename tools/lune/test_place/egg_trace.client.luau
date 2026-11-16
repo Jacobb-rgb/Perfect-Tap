@@ -173,14 +173,14 @@ local function look()
 			end
 		end
 	end
-	local camera = workspace.CurrentCamera
+	local glow = CC._test.glow() -- (the opening's own bloom; nil before the first opening)
 	return {
 		playing = tostring(CC._test.playing()),
 		held = tostring(CC._test.hudHidden()),
 		queue = tostring(CC._test.queued()),
 		-- (2026-11-15: the opening softens the world with the Lighting DepthOfFieldEffect and its own bloom
-		-- in the camera, TerraForgeOpeningGlow; the old blur is gone)
-		blur = tostring(camera ~= nil and camera:FindFirstChild("TerraForgeOpeningGlow") ~= nil),
+		-- in the camera, kept between openings and only switched off; the old blur is gone)
+		blur = tostring(glow ~= nil and glow.Enabled),
 		guis0 = tostring(zero),
 		guisOff = tostring(off),
 		owner = tostring(require(client.Util.PlayerControls).owner()),

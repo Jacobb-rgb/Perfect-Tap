@@ -173,7 +173,18 @@ for _, scenario in scenarios do
 	if scenario.Auto then
 		pcall(CC.setAuto, false)
 	end
-	task.wait(1.8) -- (the view eases back out, the focus goes; after Auto they wait AutoWait first)
+	-- (the view eases back out, the focus and the opening's bloom go; under Auto they wait AutoWait first,
+	-- unless Auto stops: wait until all of it has settled, at most AutoWait and a few seconds)
+	local settleBy = os.clock() + CC.AutoWait + 3
+	task.wait(0.2)
+	while os.clock() < settleBy do
+		local _, home = CC._test.glow()
+		local z = CC._test.zoom()
+		if not CC._test.playing() and not z.Bound and z.Home == nil and home == nil and dofState() == dofBefore then
+			break
+		end
+		task.wait(0.1)
+	end
 	if CC._test.playing() then
 		table.insert(problems, "still playing after 60 s")
 	end

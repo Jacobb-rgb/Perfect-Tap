@@ -759,9 +759,15 @@ return function(T, Loader)
 		local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
 		-- the view still easing home after a chain: a camera feature saving it now gets the player's own
 		local Workspace = Loader.game:GetService("Workspace")
+		local RunService = Loader.game:GetService("RunService")
 		local old = rawget(Workspace, "CurrentCamera")
+		local oldUnbind = rawget(RunService, "UnbindFromRenderStep")
 		local cam = { FieldOfView = 45 }
+		local unbound: { string } = {}
 		rawset(Workspace, "CurrentCamera", cam)
+		rawset(RunService, "UnbindFromRenderStep", function(_, name: string)
+			table.insert(unbound, name)
+		end)
 		local z = CC._test.zoom()
 		local ok, err = pcall(function()
 			CC._test.setPlaying(false)
@@ -769,20 +775,47 @@ return function(T, Loader)
 			T.eq(CC.settleView(), 70, "the player's own view")
 			T.eq(cam.FieldOfView, 70, "the camera back to it at once")
 			T.eq(z.Bound, false, "the view's step let go")
+			T.eq(unbound[1], "TerraForgeHatchZoom", "its render step unbound")
 			T.eq(z.Home, nil, "no home kept for the next opening")
 			T.eq(CC.settleView(), nil, "nothing easing: the camera's view is the player's")
 			-- while an opening plays its view stays; the player's own is still named (a ride sent meanwhile)
+			table.clear(unbound)
 			CC._test.setPlaying(true)
 			z.Bound, z.Home = true, 70
 			cam.FieldOfView = 40
 			T.eq(CC.settleView(), 70, "an opening plays: the player's own view named")
 			T.eq(cam.FieldOfView, 40, "the stage's view untouched")
 			T.eq(z.Bound, true, "its step kept")
+			T.eq(#unbound, 0, "its render step kept")
+			-- Auto stopped between two eggs: the view waiting AutoWait for the next egg eases back now
+			CC._test.setPlaying(false)
+			CC.setAuto(true)
+			z.Start = os.clock() + CC.AutoWait
+			CC.setAuto(false)
+			T.near(z.Start, os.clock(), 0.05, "Auto stopped: the view eases back now")
+			T.eq(z.To, 70, "to the player's own")
 		end)
 		CC._test.setPlaying(false)
+		pcall(CC.setAuto, false)
 		z.Bound, z.Home, z.Breath = false, nil, 0
 		rawset(Workspace, "CurrentCamera", old)
+		rawset(RunService, "UnbindFromRenderStep", oldUnbind)
 		assert(ok, err)
+		-- settleView puts the focus and the zone's bloom back at once too; Auto's stop sends all three out
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/CapsuleController.luau")
+		local code = string.gsub(controller, "%-%-[^\n]*", "")
+		local settle = string.match(code, "function CapsuleController%.settleView%(%).-\nend\n") or ""
+		T.truthy(
+			string.find(settle, "setFocus(false, true)", 1, true) and string.find(settle, "setGlow(false, true)", 1, true),
+			"settleView: the focus and the bloom back at once"
+		)
+		local stops = string.match(code, "afterAutoStops = function%(%).-\nend\n") or ""
+		T.truthy(
+			string.find(stops, "zoomOut()", 1, true)
+				and string.find(stops, "setFocus(false)", 1, true)
+				and string.find(stops, "setGlow(false)", 1, true),
+			"Auto stopped: the view, the focus and the bloom go back"
+		)
 		-- the features that save the view and put it back later save the player's own
 		local dir = Loader.root .. "/src/client/Controllers/"
 		local placement = fs.readFile(dir .. "PlacementController.luau")
