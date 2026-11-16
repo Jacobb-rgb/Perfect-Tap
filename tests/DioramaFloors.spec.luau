@@ -276,6 +276,32 @@ return function(T, Loader)
 						T.eq(slotWalls, 2, label .. " the door's slot lined on both sides")
 						T.eq(inWay, 0, label .. " nothing of the frame in the VIP way in")
 					end
+					-- (owner 2026-11-16: "no wall there, you can see behind the 3D object") the train band's
+					-- openings and the grotto tunnel lined with his mossy cliff: camera stops, clear of the
+					-- trains' way through the portals and of the way in to the VIP door
+					local linings = model:FindFirstChild("OpeningLinings")
+					T.truthy(linings ~= nil, label .. " the openings' linings")
+					if linings then
+						local chunks, inTrain, inDoor = 0, 0, 0
+						for _, d in linings:GetChildren() do
+							if d:IsA("BasePart") then
+								chunks += 1
+								T.truthy(d.CanCollide and d.CanQuery, label .. " a lining stops the camera")
+								local mn, mx = box(d)
+								-- (the quarry line at z 24, the portal mouths 8.6 wide, 11.4 high)
+								if math.abs(mx.X) > 58 and mn.Z < 28.6 and mx.Z > 19.4 and mn.Y < 11.4 then
+									inTrain += 1
+								end
+								-- (the tunnel to the VIP door, z -8 .. 4, a body's height)
+								if mx.X > 72 and mn.Z < 3.4 and mx.Z > -7.4 and mn.Y < 6.5 then
+									inDoor += 1
+								end
+							end
+						end
+						T.le(18, chunks, label .. " the band's sides, the portals' surrounds and the grotto tunnel lined")
+						T.eq(inTrain, 0, label .. " nothing of the linings in the trains' way")
+						T.eq(inDoor, 0, label .. " nothing of the linings in the way to the VIP door")
+					end
 					local keep = Floor.DioramaKeep
 					local fpLo, fpHi = Diorama.footprint(1)
 					local lineE = fpHi.X + Diorama.WallGap + Diorama.MeshSlabGap

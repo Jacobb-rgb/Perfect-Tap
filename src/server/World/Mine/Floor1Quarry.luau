@@ -832,6 +832,7 @@ Floor.DioramaFills = {
 Floor.VipColors = { Color3.fromRGB(70, 214, 224), Color3.fromRGB(44, 168, 204), Color3.fromRGB(16, 160, 182) }
 -- the slot's sides (local z), how far it runs (to Land's tunnel), its top (under the old lintel)
 Floor.VipSlot = { Z0 = DOOR_Z0 - 0.6, Z1 = DOOR_Z1 + 0.6, X1 = 72.5, Top = DOOR_H + 0.2 }
+Floor.VipSlotInset = 0.3 -- its lining's faces this far inside those sides
 -- a cluster's shards: along x (toward the pit: -), along z (away from the door), height, width,
 -- the way it leans (x, away from the door) and how far
 local VIP_CLUSTER: { { number } } = {
@@ -872,10 +873,13 @@ local function vipFrame(model: Model, origin: CFrame, lineE: number)
 	local function dir(x: number, z: number): Vector3
 		return origin:VectorToWorldSpace(Vector3.new(x, 0, z).Unit)
 	end
-	-- the slot's sides: the mossy cliff from in front of the wall to the tunnel
+	-- the slot's sides: the mossy cliff from in front of the wall to the tunnel, a little inside the
+	-- slot's edges (2026-11-16: the cut terraces' ends at doorS / doorN stood 0.1 in front of it and
+	-- showed as flat slate walls)
 	local x0 = lineE - 1.5
 	local xm = (x0 + slot.X1) / 2
-	for _, side in { { slot.Z0, 1 }, { slot.Z1, -1 } } do
+	local inset = Floor.VipSlotInset
+	for _, side in { { slot.Z0 + inset, 1 }, { slot.Z1 - inset, -1 } } do
 		local z, f = side[1], side[2]
 		local front = origin * CFrame.lookAt(Vector3.new(xm, -1, z), Vector3.new(xm, -1, z + f))
 		Diorama.meshFill(
@@ -931,6 +935,123 @@ local function vipFrame(model: Model, origin: CFrame, lineE: number)
 		local zEdge = if s < 0 then slot.Z0 - 1.5 else slot.Z1 + 1.5
 		for j, v in { { 0, 6.5, 1.7, 0.5 }, { 3.5, 4.8, 1.4, 0.75 }, { 7, 4, 1.2, 0.95 } } do
 			shard(m, p(lineE - 0.6, v[1], zEdge), dir(-0.6, s), v[4], v[2], v[3], cols[j % 2 + 1], cols[3])
+		end
+	end
+end
+
+--[[
+	(owner 2026-11-16, three Studio shots: "you can see there's no wall there, you can see behind the
+	3D object: put a wall there") Through the train band's two openings and the VIP door's slot the old
+	part-built pit still showed beside the diorama's painted rock: the side terraces' ends either side
+	of the band, the band's back wall and the light stone buttress round each tunnel portal, and the
+	grotto tunnel's flat walls up to the VIP door. They are faced with the owner's mossy cliff
+	(Diorama.meshFill: solid, so the camera stops there too); the portals' timber frames, mouths and
+	steel lintels and the VIP door stay in view. Per piece (east side; the west mirrors x): the front's
+	plane, which way it faces, its span and height, its depth behind the front. The band's sides stand
+	just in front of the side terraces' ends (BAND_Z0 / BAND_Z1: a lining behind them would stay
+	hidden), the back pieces in front of the buttress either side of the
+	frame (the frame: z 24 +-5.8 round the quarry line, Railway.portalFrame) and over its lintel, the
+	tunnel's in front of its walls (z -8 / 4, Land's grotto tunnel) up to the door (x 79.5).
+]]
+type Lining = { Axis: string, At: number, Facing: number, From: number, To: number, Y0: number, Y1: number, Depth: number }
+Floor.OpeningLinings = {
+	Band = {
+		{ Axis = "Z", At = BAND_Z0 + 0.3, Facing = 1, From = 58.45, To = 73.5, Y0 = -1, Y1 = 19, Depth = 4 },
+		{ Axis = "Z", At = BAND_Z1 - 0.3, Facing = -1, From = 58.45, To = 73.5, Y0 = -1, Y1 = 19, Depth = 4 },
+		{ Axis = "X", At = 64.3, Facing = -1, From = BAND_Z0 + 0.3, To = 18.35, Y0 = -1, Y1 = 19, Depth = 9.5 },
+		{ Axis = "X", At = 64.3, Facing = -1, From = 29.65, To = BAND_Z1 - 0.3, Y0 = -1, Y1 = 19, Depth = 9.5 },
+		{ Axis = "X", At = 65.8, Facing = -1, From = 18, To = 30, Y0 = 13, Y1 = 19, Depth = 8 },
+	} :: { Lining },
+	Tunnel = {
+		{ Axis = "Z", At = DOOR_Z0 + 0.3, Facing = 1, From = 72.3, To = 79.4, Y0 = -1, Y1 = 10.9, Depth = 4 },
+		{ Axis = "Z", At = DOOR_Z1 - 0.3, Facing = -1, From = 72.3, To = 79.4, Y0 = -1, Y1 = 10.9, Depth = 4 },
+	} :: { Lining },
+}
+
+local function openingLinings(model: Model, origin: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "OpeningLinings"
+	m.Parent = model
+	local rng = Rng.new("QuarryOpeningLinings")
+	local asset = Diorama.Floors.Quarry.WallMesh :: string
+	local function fill(l: Lining, mirror: number)
+		local mid = (l.From + l.To) / 2
+		local front, look
+		if l.Axis == "Z" then
+			front = Vector3.new(mid * mirror, l.Y0, l.At)
+			look = Vector3.new(0, 0, l.Facing)
+		else
+			front = Vector3.new(l.At * mirror, l.Y0, mid)
+			look = Vector3.new(l.Facing * mirror, 0, 0)
+		end
+		Diorama.meshFill(
+			m,
+			asset,
+			origin * CFrame.lookAt(front, front + look),
+			Vector3.new(l.To - l.From, l.Y1 - l.Y0, l.Depth),
+			rng,
+			{ Name = "OpeningLining" }
+		)
+	end
+	-- each lining's box (floor-local, a little round it): the rim's parts in it show through the mossy
+	-- cliff's gaps (its rock columns end at different heights)
+	local boxes: { { Vector3 } } = {}
+	local function addBox(l: Lining, mirror: number)
+		local back = l.At - l.Facing * l.Depth
+		local n0, n1 = math.min(l.At, back) - 0.6, math.max(l.At, back) + 0.6
+		local s0, s1 = l.From - 0.6, l.To + 0.6
+		local y0, y1 = l.Y0 - 1, l.Y1 + 3
+		if l.Axis == "Z" then
+			local x0, x1 = math.min(s0 * mirror, s1 * mirror), math.max(s0 * mirror, s1 * mirror)
+			table.insert(boxes, { Vector3.new(x0, y0, n0), Vector3.new(x1, y1, n1) })
+		else
+			local x0, x1 = math.min(n0 * mirror, n1 * mirror), math.max(n0 * mirror, n1 * mirror)
+			table.insert(boxes, { Vector3.new(x0, y0, s0), Vector3.new(x1, y1, s1) })
+		end
+	end
+	for _, mirror in { 1, -1 } do
+		for _, l in Floor.OpeningLinings.Band do
+			fill(l, mirror)
+			addBox(l, mirror)
+		end
+	end
+	for _, l in Floor.OpeningLinings.Tunnel do
+		fill(l, 1)
+		addBox(l, 1)
+	end
+	-- the slot's sides too (vipFrame lines them)
+	local slot = Floor.VipSlot
+	table.insert(boxes, { Vector3.new(57, -2, slot.Z0 - 4.6), Vector3.new(73, slot.Top + 3, slot.Z0 + 0.9) })
+	table.insert(boxes, { Vector3.new(57, -2, slot.Z1 - 0.9), Vector3.new(73, slot.Top + 3, slot.Z1 + 4.6) })
+	-- whatever of the rim shows through those gaps takes the room slab's dark lavender, smooth
+	-- (StudStyle skips NoStuds): it reads as the shadow between the rocks, never as old slate blocks
+	local look = Diorama.Floors.Quarry
+	local shade = if look.WallColors then look.WallColors[3] else Color3.fromRGB(128, 124, 160)
+	local rim = model:FindFirstChild("QuarryRim")
+	if not rim then
+		return
+	end
+	for _, d in rim:GetDescendants() do
+		if not d:IsA("BasePart") or d.Transparency >= 1 or d.Material == Enum.Material.Neon then
+			continue
+		end
+		local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+		for _, sx in { -1, 1 } do
+			for _, sy in { -1, 1 } do
+				for _, sz in { -1, 1 } do
+					local q = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(Vector3.new(sx, sy, sz) * d.Size / 2))
+					mn, mx = mn:Min(q), mx:Max(q)
+				end
+			end
+		end
+		for _, b in boxes do
+			local lo, hi = b[1], b[2]
+			if mx.X > lo.X and mn.X < hi.X and mx.Y > lo.Y and mn.Y < hi.Y and mx.Z > lo.Z and mn.Z < hi.Z then
+				d.Color = shade
+				d.Material = Enum.Material.Slate
+				d:AddTag("NoStuds")
+				break
+			end
 		end
 	end
 end
@@ -1024,6 +1145,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 			d:Destroy()
 		end
 		vipFrame(model, origin, lineE)
+		openingLinings(model, origin)
 	end
 	for _, fill in Floor.DioramaFills do
 		local size = fill.Max - fill.Min

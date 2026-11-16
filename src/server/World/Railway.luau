@@ -69,6 +69,7 @@ local Rng = require(Shared.Util.Rng)
 local BaseLayout = require(Shared.Config.BaseLayout)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local MineFloors = require(Shared.Config.MineFloors)
 
 local Railway = {}
 
@@ -78,6 +79,7 @@ Railway.RunLength = 24 -- longest rail part
 -- the coastal buffer stops' face this far past theirs (shared with the
 -- client, which hides and stops the trains there; see Railway.portalMouths).
 Railway.PortalInset = TrainConfig.PortalInset
+Railway.DioramaStone = Color3.fromRGB(128, 124, 160) -- the quarry diorama walls' slab (Mine/Diorama Quarry.WallColors[3])
 Railway.BufferGap = TrainConfig.BufferGap
 -- The space the trains need around a line (TrainBuilder: steam cylinders
 -- +-3.43, chimney top 9.31 above the line point); only rails, sleepers and
@@ -551,8 +553,14 @@ local function quarryPortal(parent: Instance, name: string, cf: CFrame, rng: Rng
 	local m = portalModel(parent, name)
 	local half = 5.55
 	local top = portalFrame(m, cf, half, MOUTH_W)
-	-- (a lighter stone than the wall's, so the portal stands out of its shadow)
+	-- (a lighter stone than the wall's, so the portal stands out of its shadow; in the owner's diorama
+	-- quarry the mossy cliff lines it and its stone shows only through the rock's gaps: the walls'
+	-- dark lavender, smooth, owner 2026-11-16 "you can see behind the 3D object")
+	local diorama = MineFloors.usesDiorama(1)
 	local function stone(): Color3
+		if diorama then
+			return Railway.DioramaStone
+		end
 		return Geo.vary(rng:pick({ C.Stone, C.Stone, C.StoneLight }), rng, 0.05)
 	end
 	box(m, "Rock", cf, Vector3.new(-8, 0, MOUTH_D), Vector3.new(8, top + 3.2, 7.5), stone(), nil, SOLID)
@@ -562,6 +570,14 @@ local function quarryPortal(parent: Instance, name: string, cf: CFrame, rng: Rng
 	end
 	-- the rock over the lintel: behind it, a step under the buttress top
 	box(m, "Rock", cf, Vector3.new(-7.4, top + 0.06, 0.55), Vector3.new(7.4, top + 2.8, 3), stone(), nil, SOLID)
+	if diorama then
+		for _, d in m:GetChildren() do
+			if d.Name == "Rock" and d:IsA("BasePart") then
+				d.Material = Enum.Material.Slate
+				d:AddTag("NoStuds")
+			end
+		end
+	end
 end
 
 --[[
