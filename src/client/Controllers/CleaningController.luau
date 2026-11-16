@@ -78,6 +78,7 @@ local HudController = require(script.Parent.HudController)
 local InteractController = require(script.Parent.InteractController)
 local MiningController = require(script.Parent.MiningController)
 local PromptController = require(script.Parent.PromptController)
+local CapsuleController = require(script.Parent.CapsuleController)
 
 local CleaningController = {}
 
@@ -367,7 +368,9 @@ local function enter(ctx: any)
 	local camera = ctx.Camera
 	-- a quick restart keeps the camera from before the first session (see restoreCF)
 	ctx.savedCameraCF = restoreCF or camera.CFrame
-	ctx.savedFov = restoreFov or camera.FieldOfView
+	-- (an egg opening's view still easing home: the player's own is saved)
+	local ownFov = CapsuleController.settleView()
+	ctx.savedFov = restoreFov or ownFov or camera.FieldOfView
 	restoreCF, restoreFov = ctx.savedCameraCF, ctx.savedFov
 	camera.CameraType = Enum.CameraType.Scriptable
 	local target, fov = fitCamera(ctx, scale, compact)

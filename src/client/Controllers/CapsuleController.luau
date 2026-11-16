@@ -1216,8 +1216,10 @@ end
 CapsuleController.ZoomIn = 0.7
 CapsuleController.ZoomOut = 0.55
 -- (Auto: the next egg's opening begins a moment after the last ends: the view and the focus wait this
--- long before they go back, so they stay with the stage instead of pumping out and in between eggs)
-CapsuleController.AutoWait = 0.6
+-- long before they go back, so they stay with the stage instead of pumping out and in between eggs;
+-- 2026-11-16 review: Auto buys again only after EggPanelController.LuckySettle (1 s) plus the server's
+-- answer, so 0.6 s let everything go out and back in between eggs)
+CapsuleController.AutoWait = 1.4
 local ZOOM_STEP = "TerraForgeHatchZoom"
 local HATCH_STEP = "TerraForgeHatchStage"
 type Zoom = { From: number, To: number, Start: number, Length: number, Home: number?, Bound: boolean, Breath: number }
@@ -1281,6 +1283,36 @@ local function zoomOut()
 	if home then
 		zoomTo(home, CapsuleController.ZoomOut, if autoOn then CapsuleController.AutoWait else 0)
 	end
+end
+
+--[[
+	The player's own view at once (integrator review 2026-11-16): the chain hands the game back
+	and only then eases the view home (ZoomOut; Auto after AutoWait), so a camera feature started in
+	that moment (building, an elevator ride, cleaning, the Vault's crate) saved the narrowed view as
+	the player's own, kept it for good and the next opening took it as home. Those features call
+	this before they save the view and save what it returns (the player's own view; nil: the
+	camera's is). While an opening plays it leaves the view alone and still names the player's own
+	(a ride the server sends meanwhile restores that one, never the stage's).
+]]
+function CapsuleController.settleView(): number?
+	local home = zoom.Home
+	if not zoom.Bound or home == nil then
+		return nil
+	end
+	if playing then
+		return home
+	end
+	pcall(function()
+		RunService:UnbindFromRenderStep(ZOOM_STEP)
+	end)
+	zoom.Bound = false
+	zoom.Home = nil
+	zoom.Breath = 0
+	local camera = Workspace.CurrentCamera
+	if camera then
+		camera.FieldOfView = home
+	end
+	return home
 end
 
 --[[

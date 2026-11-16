@@ -753,4 +753,76 @@ return function(T, Loader)
 		T.truthy(ons >= 2, "on as a chain begins and for each opening of it")
 		T.truthy(string.find(code, "setGlow(false)", 1, true), "off as the chain ends")
 	end)
+
+	-- (integrator review 2026-11-16)
+	T.test("EggWorld: the player's own view for other camera features, Auto's wait, few resizes", function()
+		local CC = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.CapsuleController")
+		-- the view still easing home after a chain: a camera feature saving it now gets the player's own
+		local Workspace = Loader.game:GetService("Workspace")
+		local old = rawget(Workspace, "CurrentCamera")
+		local cam = { FieldOfView = 45 }
+		rawset(Workspace, "CurrentCamera", cam)
+		local z = CC._test.zoom()
+		local ok, err = pcall(function()
+			CC._test.setPlaying(false)
+			z.Bound, z.Home, z.Breath = true, 70, 0.4
+			T.eq(CC.settleView(), 70, "the player's own view")
+			T.eq(cam.FieldOfView, 70, "the camera back to it at once")
+			T.eq(z.Bound, false, "the view's step let go")
+			T.eq(z.Home, nil, "no home kept for the next opening")
+			T.eq(CC.settleView(), nil, "nothing easing: the camera's view is the player's")
+			-- while an opening plays its view stays; the player's own is still named (a ride sent meanwhile)
+			CC._test.setPlaying(true)
+			z.Bound, z.Home = true, 70
+			cam.FieldOfView = 40
+			T.eq(CC.settleView(), 70, "an opening plays: the player's own view named")
+			T.eq(cam.FieldOfView, 40, "the stage's view untouched")
+			T.eq(z.Bound, true, "its step kept")
+		end)
+		CC._test.setPlaying(false)
+		z.Bound, z.Home, z.Breath = false, nil, 0
+		rawset(Workspace, "CurrentCamera", old)
+		assert(ok, err)
+		-- the features that save the view and put it back later save the player's own
+		local dir = Loader.root .. "/src/client/Controllers/"
+		local placement = fs.readFile(dir .. "PlacementController.luau")
+		T.truthy(
+			string.find(placement, "savedFov = CapsuleController.settleView() or cam.FieldOfView", 1, true),
+			"building saves the player's own view"
+		)
+		for file, save in
+			{
+				CleaningController = "ctx.savedFov = restoreFov or ownFov or camera.FieldOfView",
+				ElevatorTravelController = "SavedFov = ownFov or (if camera then camera.FieldOfView",
+				VaultController = "savedFov = ownFov or camera.FieldOfView",
+			}
+		do
+			local source = fs.readFile(dir .. file .. ".luau")
+			local settle = string.find(source, "local ownFov = CapsuleController.settleView()", 1, true)
+			local saved = string.find(source, save, 1, true)
+			T.truthy(settle ~= nil and saved ~= nil and settle < saved, file .. " saves the player's own view")
+		end
+		-- Auto: the view and the focus wait for its next egg (EggPanelController.LuckySettle and the answer)
+		local panel = fs.readFile(dir .. "EggPanelController.luau")
+		local settle = tonumber(string.match(panel, "EggPanelController%.LuckySettle = ([%d%.]+)"))
+		T.truthy(settle ~= nil and CC.AutoWait >= (settle :: number) + 0.3, "Auto's next egg comes before the view goes")
+		-- a drawn-smaller golem: its parts resized only once its size moved HatchRig.ResizeStep
+		local golem = GolemBuilder.build("CloudColossus")
+		local rig = HatchRig.new(golem)
+		local index = 1
+		while rig.Fixed[index] do
+			index += 1
+		end
+		local part = rig.Parts[index]
+		local own = rig.Sizes[index]
+		HatchRig.place(rig, CFrame.new(), nil, nil, nil, 0.5)
+		T.near(part.Size.X, own.X * 0.5, 1e-4, "drawn at half")
+		HatchRig.place(rig, CFrame.new(), nil, nil, nil, 0.51)
+		T.near(part.Size.X, own.X * 0.5, 1e-4, "a hair more: the last size holds")
+		T.eq(rig.Scaled, 0.5, "and the scale the places use")
+		HatchRig.place(rig, CFrame.new(), nil, nil, nil, 0.53)
+		T.near(part.Size.X, own.X * 0.53, 1e-4, "past the step: resized")
+		HatchRig.place(rig, CFrame.new())
+		T.near(part.Size.X, own.X, 1e-4, "back to its own size")
+	end)
 end

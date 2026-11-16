@@ -33,6 +33,9 @@
 
 local HatchRig = {}
 
+-- How far a drawn-smaller model's size may move before its parts are resized (a share of the last size).
+HatchRig.ResizeStep = 0.03
+
 export type Sink = { Parts: { BasePart }, Frames: { CFrame } }
 
 export type Rig = {
@@ -107,6 +110,12 @@ function HatchRig.place(rig: Rig, cf: CFrame, top: CFrame?, bottom: CFrame?, sin
 	local topCf = if top then cf * top else cf
 	local bottomCf = if bottom then cf * bottom else cf
 	local k = if size and size == size and math.abs(size - 1) > 1e-4 then math.max(1e-3, size) else 1
+	-- (a clamped golem's size moves a little every frame of its pop: its parts take a new size only
+	-- once it has moved 3 % from the last, or is back to its own; until then the last one holds, its
+	-- places too, so the parts stay together: a Size write costs far more than a move)
+	if k ~= 1 and rig.Scaled ~= 1 and math.abs(k - rig.Scaled) <= HatchRig.ResizeStep * rig.Scaled then
+		k = rig.Scaled
+	end
 	if k ~= rig.Scaled then
 		-- (drawn smaller round its pivot: its parts' sizes follow; back to their own when it's 1 again)
 		rig.Scaled = k

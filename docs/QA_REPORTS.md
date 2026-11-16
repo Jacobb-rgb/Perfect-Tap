@@ -1137,7 +1137,7 @@ Neon glow, no particles. The models themselves (parts, Sphere meshes, Neon) were
 What changed:
 - UI/HatchWorld: the eggs and golems are real models in the world right in front of the camera, small (the eggs
   at 0.08 of their size, a golem at most 0.25). The stage stands in a band worked out every frame: never nearer
-  than 0.8 studs nor 1.7 times the camera's near clipping plane (up to half a stud on some devices), never
+  than 0.55 studs nor 1.6 times the camera's near clipping plane (HatchWorld.DepthLeast / NearMargin) (up to half a stud on some devices), never
   further than 55 % of the way to the player (the camera's least zoom is 4 studs, but its popper pulls it in
   close in a tunnel or against a wall: the stage comes in with it) nor 4 studs; what a pose would put outside it
   is drawn that much smaller or bigger at its edge, on the same ray, so the screen shows exactly the same.
@@ -1167,14 +1167,23 @@ What changed:
   player's own and the world back into focus. Easing comes from TweenService itself (TweenService:GetValue in
   the game, the same curves worked out for the specs: Util/Ease).
 - Camera: only the view (FieldOfView) changes: it eases to the stage's 40 degrees as a chain begins (Sine InOut
-  0.7 s) and back out after it (0.55 s; under Auto after 0.6 s, so it stays in between eggs); the player keeps
+  0.7 s) and back out after it (0.55 s; under Auto after 1.4 s, so it stays in between eggs); the player keeps
   the camera and its controls. Reduce motion keeps the player's view.
 - Clean-up: the stage leaves the world when the chain ends, its holder empty, the particles cleared, the focus,
   the view and the HUD back; a stuck opening's frame is unbound by the watch's clean-up.
-Studio self-test: HRA_K_TESTOVANI/TerraForge_TEST_vajicka_3D_AUTOTEST_2026-11-15.rbxl (make_test_place.luau
-... eggtest) plays 1, 3 and 10 eggs, a Legendary, a Mythic, a pack of 20 and Auto by itself after Play and prints
+- The opening's polish under it (2026-11-15, landed with the stage): a smooth sway (no wave faster than the main
+  one), an anticipation beat (the egg draws in, then springs into the burst), the golems fade into the player at
+  the end of the flight, the charge hum climbs to the burst, smoother crown streams on the premium eggs.
+- The camera shake at a Legendary / Mythic burst is still main's (22 samples a second): the smooth jolt the owner
+  saw on fx/pro-polish (31722182, CameraShake.Speed 10) also changes rock breaks, machines and cleaning and waits
+  for his yes.
+- Another camera feature started while the view eases home after a chain (building, an elevator ride, cleaning,
+  the Vault's crate) saves the player's own view: CapsuleController.settleView() (review 2026-11-16).
+Studio self-test: a place made from the landed build (lune run tools/lune/make_test_place.luau
+build/TerraForge.rbxl <out.rbxl> eggtest; the 2026-11-15 TerraForge_TEST_vajicka_3D[_AUTOTEST] places were built on
+the Meshy branch) plays 1, 3 and 10 eggs, a Legendary, a Mythic, a pack of 20 and Auto by itself after Play and prints
 "[EGG TEST] PASS / FAIL" for each (nothing left on the stage, view / focus / HUD back, the stage in front of the
-camera, frame times) and "[EGG TEST] DONE ...". The plain test place is TerraForge_TEST_vajicka_3D_2026-11-15.rbxl.
+camera, frame times) and "[EGG TEST] DONE ...". Hands off while it runs: a click skips, a buy starts another opening.
 What to test in Studio:
 1. Open eggs at the temple (1, 3, 10): edges clean, the shells smooth and lit, the cracks glowing for real; the
    golems sharp. Nothing of the world in front of the eggs; the world behind soft.
@@ -1187,6 +1196,8 @@ What to test in Studio:
    a quarter of their size; if they look too smooth, they can stand further when the camera is far).
 7. The glows behind the stage (sunburst, platforms, auras): soft but even, not blurred more over the sky than
    over the ground (the depth of field reads depth; see-through things may take the blur of what's behind).
+8. Open 1, 3 and 10 eggs: the rock is smooth, the egg draws in just before it bursts, the golems fade into you.
+9. Right as an opening ends, press B (build) or open the elevator: the view is the normal one, and stays so after.
 
 ### Softer light: the egg opening and mine floors 3-6 (owner 2026-11-15 evening; tested on fx/pro-polish, landed
 without the Meshy floors from fx/egg-stage-light: owner 2026-11-16 "Ano, i světlo")
@@ -1215,7 +1226,8 @@ What changed:
   white; the 3D sparks 0.65 as many; RevealKit.poseRing's optional Alpha (other reveals unchanged).
 - HatchWorld: key light 0.9 -> 0.68, rim 0.75 -> 0.55 (Mythic's lift gentler), motes 46 -> 30 a second,
   LightEmission 1 -> 0.45, at most 70 % opaque, nearer their colour; sparks start a soft white.
-- Floors 3-6 (Lagoon, Palace, Storm, Core): the preset values the owner tested: exposure 0.3 / 0.45 / 0.3 /
+- Floors 3-6 (Lagoon, Palace, Storm, Core): the preset values the owner saw in his test place, where these
+  floors were the Meshy dioramas (fx/pro-polish), so about twice that branch's step here: exposure 0.3 / 0.45 / 0.3 /
   0.25 -> 0.12 / 0.24 / 0.14 / 0.08, bloom 0.25-0.28 / Size 16 / Threshold 1.4, EnvironmentSpecularScale
   1 -> 0.3 (white sky glints on the crystals), contrast +0.03. The dioramas' own lights (1.8 -> 1.4 ...) stay
   with art/meshy-models. Floors 1-2, the Grotto and the town are unchanged (tests/LessGlow.spec.luau pins

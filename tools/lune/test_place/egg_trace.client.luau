@@ -178,7 +178,9 @@ local function look()
 		playing = tostring(CC._test.playing()),
 		held = tostring(CC._test.hudHidden()),
 		queue = tostring(CC._test.queued()),
-		blur = tostring(camera ~= nil and camera:FindFirstChild("TerraForgeOpeningBlur") ~= nil),
+		-- (2026-11-15: the opening softens the world with the Lighting DepthOfFieldEffect and its own bloom
+		-- in the camera, TerraForgeOpeningGlow; the old blur is gone)
+		blur = tostring(camera ~= nil and camera:FindFirstChild("TerraForgeOpeningGlow") ~= nil),
 		guis0 = tostring(zero),
 		guisOff = tostring(off),
 		owner = tostring(require(client.Util.PlayerControls).owner()),

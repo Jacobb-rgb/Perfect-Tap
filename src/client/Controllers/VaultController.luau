@@ -61,6 +61,7 @@ local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
 local InteractController = require(script.Parent.InteractController)
 local MiningController = require(script.Parent.MiningController)
+local CapsuleController = require(script.Parent.CapsuleController)
 
 local VaultController = {}
 
@@ -624,6 +625,8 @@ function VaultController.play(level: number, oreId: string): boolean
 	MenuPanels.closeAll()
 	VaultController.close()
 	local camera = Workspace.CurrentCamera :: Camera
+	-- (an egg opening's view still easing home: the player's own is saved)
+	local ownFov = CapsuleController.settleView()
 	local folder = Instance.new("Folder")
 	folder.Name = "CrateOpening"
 	folder.Parent = Workspace
@@ -655,7 +658,7 @@ function VaultController.play(level: number, oreId: string): boolean
 		view = view,
 		folder = folder,
 		camera = camera,
-		savedFov = camera.FieldOfView,
+		savedFov = ownFov or camera.FieldOfView,
 		blur = blur,
 		idle = 0,
 		name = name,

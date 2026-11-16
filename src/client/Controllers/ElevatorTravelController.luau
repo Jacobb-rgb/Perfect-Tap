@@ -59,6 +59,7 @@ local LightingController = require(script.Parent.LightingController)
 local PromptController = require(script.Parent.PromptController)
 local InteractController = require(script.Parent.InteractController)
 local MiningController = require(script.Parent.MiningController)
+local CapsuleController = require(script.Parent.CapsuleController)
 
 local ElevatorTravelController = {}
 
@@ -982,6 +983,8 @@ function ElevatorTravelController.depart(payload: any)
 	stopFx()
 	local floor = MineFloors.ByIndex[floorIndex]
 	local camera = Workspace.CurrentCamera
+	-- (an egg opening's view still easing home: the player's own is saved)
+	local ownFov = CapsuleController.settleView()
 	local reduced = Motion.reduced()
 	local plan = ElevatorTravelConfig.plan(payload.From, floorIndex)
 	local stopCf = cframeOf(payload.StopAt)
@@ -1004,7 +1007,7 @@ function ElevatorTravelController.depart(payload: any)
 		-- the camera cuts behind a dip: at the way out with reduced motion, at the stop when it has no stop
 		CutAt = if not stopCf then plan.StopAt elseif reduced then plan.ExitAt else nil,
 		Taken = false,
-		SavedFov = if camera then camera.FieldOfView else ElevatorTravelConfig.Fov,
+		SavedFov = ownFov or (if camera then camera.FieldOfView else ElevatorTravelConfig.Fov),
 		SavedZoom = if camera then zoomNow(camera) else 12.5,
 		ExitZoom = nil,
 		Frozen = false,

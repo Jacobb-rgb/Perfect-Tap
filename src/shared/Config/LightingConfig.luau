@@ -134,8 +134,10 @@ local SUNSET_SKY = {
 --
 -- Owner 2026-11-15 evening (his Studio test, floor 3 nearly white: "from Location 3 to the last,
 -- slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast,
--- the original colours; keep Locations 1 and 2 unchanged"): the mine floors 3-6 (Lagoon, Palace,
--- Storm, Core) take the values he tested: exposure 0.08-0.24 (0.16-0.21 lower than before), a
+-- the original colours; keep Locations 1 and 2 unchanged"; 2026-11-16 "Ano, i světlo"): the mine
+-- floors 3-6 (Lagoon, Palace, Storm, Core) take the values he saw in his test place, where these
+-- floors were the Meshy dioramas (fx/pro-polish): exposure 0.08-0.24 (on these part-built floors
+-- 0.16-0.21 lower than before, about twice that branch's step; preview pictures sent to him), a
 -- softer, smaller bloom over a higher Threshold (crystals glow, they no longer flare), fewer white
 -- glints of the picture sky on the crystals (EnvironmentSpecularScale 1 -> 0.3) and a touch more
 -- contrast. Quarry and EmberCaves (Locations 1 and 2) stay as they are.
