@@ -1330,9 +1330,13 @@ function CapsuleController.settleView(): number?
 		return if zoom.Bound then home else nil
 	end
 	-- (the focus and the opening's bloom, still easing out or waiting for Auto's next egg, go now too:
-	-- a ride's or the build view's first frames are the player's own)
-	setFocus(false, true)
-	setGlow(false, true)
+	-- a ride's or the build view's first frames are the player's own; nothing to do once they're back)
+	if focusDof ~= nil then
+		setFocus(false, true)
+	end
+	if glowHome ~= nil then
+		setGlow(false, true)
+	end
 	if not zoom.Bound or home == nil then
 		return nil
 	end
