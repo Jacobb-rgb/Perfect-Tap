@@ -461,8 +461,15 @@ return function(T, Loader)
 		end
 		T.truthy(points(EventBoardView.Lines.Big[2]) >= 12, `the ore line {points(EventBoardView.Lines.Big[2])} pt`)
 		T.truthy(points(EventBoardView.Lines.Small[2]) >= 10, `the finder line {points(EventBoardView.Lines.Small[2])} pt`)
+		-- (the board's own iron counts too: the leaning board's leg and lamps mustn't hide it)
 		local near = {}
-		for _, d in parts do
+		local sight = table.clone(parts)
+		for _, d in board:GetDescendants() do
+			if d:IsA("BasePart") and d ~= screen then
+				table.insert(sight, d)
+			end
+		end
+		for _, d in sight do
 			local t = math.clamp((d.CFrame.Position - eye):Dot(span) / (length * length), 0, 1)
 			if (eye + span * t - d.CFrame.Position).Magnitude <= d.Size.Magnitude / 2 + 1 then
 				table.insert(near, d)
@@ -472,6 +479,73 @@ return function(T, Loader)
 			local at = eye + span * (k / 60)
 			for _, d in near do
 				T.falsy(inside(d, at), `{d:GetFullName()} hides the board from the spawn`)
+			end
+		end
+		-- the airship (owner 2026-11-12 "Ano, posunout"): from the spawn, the plaza and every plot the
+		-- leaning board hides at most a tenth of it, wherever its bob is
+		local function rayHitsBox(origin: any, target: any, cf: any, size: any): boolean
+			local o = cf:PointToObjectSpace(origin)
+			local d = cf:PointToObjectSpace(target) - o
+			local half = size / 2
+			local tmin, tmax = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local oa, da, h = o[axis], d[axis], half[axis]
+				if math.abs(da) < 1e-9 then
+					if math.abs(oa) > h then
+						return false
+					end
+				else
+					local t1, t2 = (-h - oa) / da, (h - oa) / da
+					if t1 > t2 then
+						t1, t2 = t2, t1
+					end
+					tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+					if tmin > tmax then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		local ship = map:FindFirstChild("Airship", true)
+		T.truthy(ship, "the airship is in the map")
+		local points = {}
+		for _, d in ship:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(points, d.CFrame.Position)
+				for k = 0, 7 do
+					local corner = roblox.Vector3.new(
+						(if k % 2 == 0 then -0.5 else 0.5) * d.Size.X,
+						(if k % 4 < 2 then -0.5 else 0.5) * d.Size.Y,
+						(if k < 4 then -0.5 else 0.5) * d.Size.Z
+					)
+					table.insert(points, (d.CFrame * roblox.CFrame.new(corner)).Position)
+				end
+			end
+		end
+		local iron = {}
+		for _, d in board:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				table.insert(iron, d)
+			end
+		end
+		local spots = { { "the spawn", eye }, { "the plaza", roblox.Vector3.new(0, 5, -30) } }
+		for _, plot in WorldLayout.Plots do
+			table.insert(spots, { `plot {plot.Id}`, plot.Center + roblox.Vector3.new(0, 5, 0) })
+		end
+		for _, spot in spots do
+			for _, bob in { -3, 0, 3 } do
+				local lift = roblox.Vector3.new(0, bob, 0)
+				local hidden = 0
+				for _, p in points do
+					for _, d in iron do
+						if rayHitsBox(spot[2], p + lift, d.CFrame, d.Size) then
+							hidden += 1
+							break
+						end
+					end
+				end
+				T.truthy(hidden <= #points / 10, `the board hides {hidden} of {#points} airship points from {spot[1]} (bob {bob})`)
 			end
 		end
 	end)
@@ -494,8 +568,28 @@ return function(T, Loader)
 		T.eq(#screens, 1, "one screen")
 		T.truthy(model:HasTag("NoStuds"), "iron, no studs")
 		local screen = screens[1]
+		-- (owner 2026-11-11) the leg rises straight, kinks 30 degrees forward at the board's lower
+		-- edge and the whole board leans with it, its face down toward the town
+		local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+		local leg = model:FindFirstChild("Leg")
+		T.near(leg.Size.Y, 12, 1e-6, "the leg stays 12 thick (owner 11-11)")
+		T.near(math.abs(leg.CFrame.RightVector.Y), 1, 1e-6, "the leg stands upright")
+		local neck = model:FindFirstChild("Neck")
+		T.truthy(neck, "the leaning top")
+		local axis = frame:VectorToObjectSpace(neck.CFrame.RightVector)
+		if axis.Y < 0 then
+			axis = -axis
+		end
+		T.near(axis.Y, math.cos(EventBoard.Tilt), 1e-3, "it leans 30 degrees")
+		T.truthy(axis.Z < 0, "forward, toward the town")
+		T.falsy(model:FindFirstChild("Hanger"), "no hook, no hanging rods")
+		local look = frame:VectorToObjectSpace(screen.CFrame.LookVector)
+		T.near(look.Y, -math.sin(EventBoard.Tilt), 1e-3, "the face looks down toward the town")
+		local up = frame:VectorToObjectSpace(screen.CFrame.UpVector)
+		T.truthy(up.Z < 0, "the board's top leans forward")
 		local facing = LobbyLayout.get("EventBoard").Facing.Unit
-		T.truthy(screen.CFrame.LookVector:Dot(facing) > 0.99, "its Front face looks where the piece faces")
+		local flat = roblox.Vector3.new(screen.CFrame.LookVector.X, 0, screen.CFrame.LookVector.Z).Unit
+		T.truthy(flat:Dot(facing) > 0.99, "its Front face looks where the piece faces")
 		-- the lamps: one SpotLight each, no shadows, aimed at the face and reaching it
 		T.eq(#lights, EventBoard.Lamps, "one light a lamp")
 		for _, light in lights do
@@ -510,14 +604,33 @@ return function(T, Loader)
 			T.truthy(math.abs(hit.X) <= EventBoard.Screen.X / 2 and math.abs(hit.Y) <= EventBoard.Screen.Y / 2, "aimed at the screen")
 			T.truthy(light.Range >= (hit - from).Magnitude, "its light reaches the face")
 		end
-		-- the leg and the beams are behind the screen; in front of it only the lamps, above its top edge
+		-- the beams are behind the screen; in front of its face only the lamps, above its top edge,
+		-- and (the board leans forward off the kink) the leg far under its lower edge
 		local top = EventBoard.Screen.Y / 2
+		-- (review 11-11: each part sampled through its whole volume every 2 studs, so a wide beam or
+		-- a tall rod across the face can't slip between its corners, while the leg that passes under
+		-- the leaning board's lower edge and on behind it still counts only where it really is)
+		local width = EventBoard.Screen.X / 2
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") and d ~= screen then
-				local l = screen.CFrame:PointToObjectSpace(d.CFrame.Position)
-				if l.Z < -0.5 and math.abs(l.X) < EventBoard.Screen.X / 2 then
-					T.truthy(l.Y > top, d.Name .. ": nothing hangs in front of the screen")
+				local n = { math.ceil(d.Size.X / 2) + 1, math.ceil(d.Size.Y / 2) + 1, math.ceil(d.Size.Z / 2) + 1 }
+				local clear = true
+				for i = 0, n[1] - 1 do
+					for j = 0, n[2] - 1 do
+						for k = 0, n[3] - 1 do
+							local at = roblox.Vector3.new(
+								(i / (n[1] - 1) - 0.5) * d.Size.X,
+								(j / (n[2] - 1) - 0.5) * d.Size.Y,
+								(k / (n[3] - 1) - 0.5) * d.Size.Z
+							)
+							local l = screen.CFrame:PointToObjectSpace((d.CFrame * roblox.CFrame.new(at)).Position)
+							if l.Z < -0.5 and math.abs(l.X) < width and math.abs(l.Y) <= top then
+								clear = false
+							end
+						end
+					end
 				end
+				T.truthy(clear, d.Name .. ": nothing hangs in front of the screen")
 			end
 		end
 		local mode = (model :: any).ModelStreamingMode

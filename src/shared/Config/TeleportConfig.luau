@@ -50,6 +50,7 @@ TeleportConfig.Reasons = {
 	NoBase = "Your base isn't ready yet.",
 	NotHere = "That place isn't open yet.",
 	Cleaning = "Finish cleaning first.",
+	Riding = "Wait until the elevator arrives.",
 	Dead = "You can't teleport right now.",
 }
 

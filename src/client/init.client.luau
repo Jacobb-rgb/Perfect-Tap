@@ -35,6 +35,7 @@ local ORDER = {
 	"TechShopController",
 	"MachineUpgradeController", -- a machine's upgrades at the machine (owner 2026-11-07)
 	"FeederController", -- the Ore Feeder's counter on its side (owner 2026-11-07)
+	"ElevatorTravelController", -- the elevator's travel cinematic (ElevatorController hands it the rides)
 	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
 	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board

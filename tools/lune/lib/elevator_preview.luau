@@ -1,9 +1,10 @@
 --[[
 	The mine elevator's UI over the Stormglass Rift (scene "elevator_ui" for
 	tools/lune/export_scene.luau, shots in tools/preview/mine_floor5_shots.json):
-	the ELEVATOR window (owner 2026-11-15, UI/ElevatorWindow) and the ride to
-	floor 5, drawn with the game's own ElevatorWindow / ElevatorRideView. The
-	floor area behind is the mine_floor scene of floor 5 (MineFloorScene).
+	the ELEVATOR window (owner 2026-11-15), drawn with the game's own
+	UI/ElevatorWindow (the ride is the travel cinematic, pictured by
+	tools/lune/export_elevator_travel.luau). The floor area behind is the
+	mine_floor scene of floor 5 (MineFloorScene).
 
 	UI overlays (build/preview/<name>.json), each rendered at 1600 x 900 px:
 	  ui_elevator_pc        PC (1280 x 720 design units), like the owner's picture: blaster 8 at
@@ -14,8 +15,6 @@
 	  ui_elevator_pc_bare   the PC window before the owner uploads the pictures (painted backdrops)
 	  ui_elevator_phone     a 667 x 375 pt phone (uiScale 0.62): 2 columns, the top of the list
 	  ui_elevator_phone_end the phone scrolled to the end (floors 5-6 and COMING SOON)
-	  ui_elevator_ride_pc   the ride from floor 1 down to floor 5, passing floor 5's shaft
-	  ui_elevator_banner_pc the arrival: "FLOOR 5 · STORMGLASS RIFT"
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -27,8 +26,6 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	require("./mine_floor_scene").build(Loader, workspace, 5)
 	local UI = "StarterPlayer.StarterPlayerScripts.Client.UI."
 	local ElevatorWindow = Loader.requirePath(UI .. "ElevatorWindow")
-	local RideView = Loader.requirePath(UI .. "ElevatorRideView")
-	local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 
@@ -59,30 +56,12 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		return UiExport.export({ refs.Gui })
 	end
 
-	local function ride(arrived: boolean): any
-		local refs = RideView.build()
-		refs.Gui.Enabled = true
-		RideView.layout(refs, PC, 36)
-		local name = MineFloors.get(5).Name
-		local r = RideView.newRide(1, 5, name, ElevatorService.rideTime(1, 5), ElevatorService.DoorsClose, false)
-		RideView.setRide(refs, r)
-		if arrived then
-			r.OpenAt = r.MinRide
-			RideView.pose(refs, r, r.OpenAt + RideView.Timing.BannerDelay + RideView.Timing.BannerIn + 0.2)
-		else
-			RideView.pose(refs, r, r.MinRide - 0.05)
-		end
-		return UiExport.export({ refs.Gui })
-	end
-
 	local exports = {
 		ui_elevator_pc = window(false, 8, 1, palace, riftPrice + 1.25e6),
 		ui_elevator_pc_poor = window(false, 8, 1, palace, math.floor(riftPrice * 0.6)),
 		ui_elevator_pc_new = window(false, 1, 1, {}, 250),
 		ui_elevator_phone = window(true, 8, 1, palace, riftPrice + 1.25e6),
 		ui_elevator_phone_end = window(true, 8, 1, palace, riftPrice + 1.25e6, true),
-		ui_elevator_ride_pc = ride(false),
-		ui_elevator_banner_pc = ride(true),
 	}
 	-- before the owner's upload of the pictures: the painted backdrops
 	local preview = IconAssets.ElevatorArt.Preview

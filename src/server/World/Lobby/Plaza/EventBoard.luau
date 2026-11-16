@@ -6,13 +6,19 @@
 	osvetlenej reflektory"): planted on the east shoulder of the forge
 	mountain, one very thick round leg, a big iron board on top facing the
 	town, three spotlights on arms over it shining down on its face.
+	2026-11-11: higher ("Ano, o 30 výš": the east islet no longer hides the
+	finder's line from plots 7-8), the airship up over it ("Ano, výš"), the
+	leg stays 12 thick and rises straight, then at the board's lower edge it
+	kinks 30 degrees forward and the whole board leans with it, its face
+	down toward the town (owner's pick "A, nakloněná tabule" in the evening;
+	the quarter-circle neck of the morning was not what he meant).
 
 	From the spawn and the town it stands right of the Great Forge, above
 	the mountain, clear of the golden dragon's sign in front and of the
-	planets (LobbySky specs); from the town it stands in front of the airship
-	(review 11-10: the owner's call). It is far (about 390 studs from the
-	spawn), so the model streams Persistent and its screen draws out to
-	EventBoardView.MaxDistance.
+	planets (LobbySky specs); the airship flies over it (Sky/Airship). It is
+	far (about 390 studs from the spawn, seen about 27 degrees up, so the
+	30 degree lean turns its face almost straight at the town), so the model
+	streams Persistent and its screen draws out to EventBoardView.MaxDistance.
 
 	Pure builder. The screen is one part, tag EventBoardScreen; the clients
 	draw on it (Controllers/EventBoardController, UI/EventBoardView).
@@ -29,10 +35,14 @@ local EventBoard = {}
 
 EventBoard.Width = 130 -- the iron board
 EventBoard.Height = 64
-EventBoard.Bottom = 132 -- its lower edge, over the mountain's shoulder and the sky islets in front
+-- its lower edge before the lean, over the mountain's shoulder and the sky islets in front
+-- (owner 11-11: up; the lean lowers the edge about 3.5 studs, still clear from plots 7-8)
+EventBoard.Bottom = 178
 EventBoard.Screen = Vector2.new(120, 54)
-EventBoard.Leg = 12 -- the round leg's diameter
+EventBoard.Leg = 12 -- the round leg's diameter (owner 11-11: keep 12)
 EventBoard.LegZ = 2.2 + EventBoard.Leg / 2 + 1 -- behind the board: its front face stays clear of the leg
+EventBoard.Kink = 4 -- the leg kinks this far above the board's lower edge, in the board's back
+EventBoard.Tilt = math.rad(30) -- the lean: the leg's top part and the whole board, forward
 EventBoard.Lamps = 3
 EventBoard.MaxParts = 60
 
@@ -46,7 +56,7 @@ local PLATE = Enum.Material.DiamondPlate
 local SMOOTH = Enum.Material.SmoothPlastic
 
 function EventBoard.build(parent: Instance): Model
-	local frame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
+	local legFrame = LobbyLayout.frame(LobbyLayout.get("EventBoard"))
 	local model = Instance.new("Model")
 	model.Name = "EventBoard"
 	model:AddTag("NoStuds") -- iron plate, no studs
@@ -54,6 +64,11 @@ function EventBoard.build(parent: Instance): Model
 	local w, h, bottom = EventBoard.Width, EventBoard.Height, EventBoard.Bottom
 	local top = bottom + h
 	local mid = bottom + h / 2
+	local legZ, leg = EventBoard.LegZ, EventBoard.Leg
+	local kinkY = bottom + EventBoard.Kink
+	-- the board's frame: the upright one turned forward round the kink (the top toward -Z)
+	local pivot = CFrame.new(0, kinkY, legZ)
+	local frame = legFrame * pivot * CFrame.Angles(-EventBoard.Tilt, 0, 0) * pivot:Inverse()
 
 	local function at(x: number, y: number, z: number): Vector3
 		return (frame * CFrame.new(x, y, z)).Position
@@ -61,28 +76,32 @@ function EventBoard.build(parent: Instance): Model
 	local function box(x: number, y: number, z: number, size: Vector3, color: Color3, material: Enum.Material?): BasePart
 		return Geo.block(model, frame * CFrame.new(x, y, z), size, color, material or METAL)
 	end
-	-- an upright cylinder (Geo stands it up) centred at (x, y, z)
+	-- an upright cylinder (Geo stands it up) centred at (x, y, z) of the leg's frame
 	local function column(x: number, y: number, z: number, height: number, diameter: number, color: Color3): BasePart
-		return Geo.cylinder(model, at(x, y, z), height, diameter, color, METAL)
+		return Geo.cylinder(model, (legFrame * CFrame.new(x, y, z)).Position, height, diameter, color, METAL)
+	end
+	-- a round rod from a to b (a Cylinder part's length runs along its X)
+	local function rod(a: Vector3, b: Vector3, diameter: number, color: Color3, name: string): BasePart
+		local cf = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.pi / 2, 0)
+		local part =
+			Geo.block(model, cf, Vector3.new((b - a).Magnitude, diameter, diameter), color, METAL, { Shape = Enum.PartType.Cylinder })
+		part.Name = name
+		return part
 	end
 
-	-- the very thick round leg, from deep in the mountain up behind the board, its collars and foot
-	local legZ = EventBoard.LegZ
-	local legTop = mid
-	column(0, legTop / 2, legZ, legTop, EventBoard.Leg, IRON_DARK).Name = "Leg"
-	for _, y in { 20, 60, 100 } do
-		column(0, y, legZ, 2.2, EventBoard.Leg + 2, IRON)
+	-- the leg (owner 11-11): upright from deep in the mountain to the kink, its collars and
+	-- foot, then the leaning top up the board's back with its cap
+	column(0, kinkY / 2, legZ, kinkY, leg, IRON_DARK).Name = "Leg"
+	for y = 20, kinkY - 20, 40 do
+		column(0, y, legZ, 2.2, leg + 2, IRON)
 	end
-	column(0, 2, legZ, 4, EventBoard.Leg + 10, Color3.fromRGB(96, 98, 104)).Name = "Foot"
-	-- the cross beam behind the board and two struts up to it
+	column(0, 2, legZ, 4, leg + 10, Color3.fromRGB(96, 98, 104)).Name = "Foot"
+	Geo.ball(model, at(0, kinkY, legZ), leg + 1, IRON_DARK, METAL).Name = "Kink"
+	rod(at(0, kinkY, legZ), at(0, top + 3, legZ), leg, IRON_DARK, "Neck")
+	rod(at(0, top + 2.2, legZ), at(0, top + 3.8, legZ), leg + 2, IRON, "NeckCap")
+	-- the cross beams behind the board, on the leaning top
 	box(0, mid, 3.8, Vector3.new(w - 8, 4, 3), IRON_DARK)
-	for _, side in { -1, 1 } do
-		local a = at(0, bottom - 24, legZ)
-		local b = at(side * (w / 2 - 10), mid, 3.8)
-		local dir = b - a
-		local strut = Geo.block(model, CFrame.lookAt((a + b) / 2, b), Vector3.new(2.4, 2.4, dir.Magnitude), IRON, METAL)
-		strut.Name = "Strut"
-	end
+	box(0, top - 10, 3.8, Vector3.new(w - 8, 4, 3), IRON_DARK)
 	-- the board, its heavy frame, the corner plates
 	box(0, mid, 1.2, Vector3.new(w, h, 2), IRON_DARK, PLATE)
 	box(0, top - 1.5, -0.6, Vector3.new(w + 3, 4, 2), IRON)

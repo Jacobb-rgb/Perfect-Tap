@@ -49,7 +49,7 @@ local CleaningController = require(script.Parent.CleaningController)
 
 local WeatherController = {}
 
-WeatherController.RideGui = "TerraForgeElevatorRide" -- ElevatorRideView's ScreenGui (enabled during the ride)
+WeatherController.RideGui = "TerraForgeElevatorTravel" -- ElevatorTravelView's ScreenGui (enabled during the elevator's travel cinematic)
 WeatherController.ZoneTag = "LightingZone" -- LightingController's interior boxes (the Blaster Vault)
 
 local player = Players.LocalPlayer

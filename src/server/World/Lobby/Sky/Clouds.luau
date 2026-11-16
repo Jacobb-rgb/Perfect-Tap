@@ -75,8 +75,8 @@ export type Spot = { Az: number, Dist: number, Y: number, Scale: number, Skirts:
 	(-Z), 270 = west (-X)), Dist = studs from the plaza, Y = base height,
 	Scale. The sun sits at bearing ~262, ~13 degrees up: the west bank stays
 	under it and beside it. The planets keep their windows clear (Planets.luau
-	Specs), the airship flies at ~20 degrees bearing ~17 degrees up over the
-	mountain and the balloon hangs at ~-27 bearing from the spawn.
+	Specs), the airship flies at ~51 degrees bearing ~38 degrees up right of
+	the event board and the balloon hangs at ~-27 bearing from the spawn.
 ]]
 -- (lobby fix round 3: 8 clusters instead of 11, higher and farther out; no
 -- glowing skirts on the high banks the spawn and plaza cameras look up at;
