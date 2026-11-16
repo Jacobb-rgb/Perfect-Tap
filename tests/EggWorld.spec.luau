@@ -787,7 +787,7 @@ return function(T, Loader)
 		local dir = Loader.root .. "/src/client/Controllers/"
 		local placement = fs.readFile(dir .. "PlacementController.luau")
 		T.truthy(
-			string.find(placement, "savedFov = CapsuleController.settleView() or cam.FieldOfView", 1, true),
+			string.find(placement, "savedFov = require(script.Parent.CapsuleController).settleView() or cam.FieldOfView", 1, true),
 			"building saves the player's own view"
 		)
 		for file, save in

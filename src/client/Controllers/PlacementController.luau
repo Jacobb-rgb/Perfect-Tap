@@ -120,7 +120,6 @@ local InteractController = require(script.Parent.InteractController)
 local MiningController = require(script.Parent.MiningController)
 local PromptController = require(script.Parent.PromptController)
 local CleaningController = require(script.Parent.CleaningController)
-local CapsuleController = require(script.Parent.CapsuleController)
 
 local PlacementController = {}
 
@@ -2414,8 +2413,9 @@ function PlacementController.enter()
 	-- camera flies to the overview
 	local cam = camera()
 	savedCF = cam.CFrame
-	-- (an egg opening's view still easing home: the player's own is saved)
-	savedFov = CapsuleController.settleView() or cam.FieldOfView
+	-- (an egg opening's view still easing home: the player's own is saved; required here, not at the top:
+	-- this module is at Luau's 200 locals)
+	savedFov = require(script.Parent.CapsuleController).settleView() or cam.FieldOfView
 	camCF = cam.CFrame
 	flyFrom = cam.CFrame
 	flyStart = os.clock()
