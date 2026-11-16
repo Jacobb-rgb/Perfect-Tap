@@ -824,9 +824,9 @@ Floor.DioramaFills = {
 	to Land's tunnel lined with the owner's mossy cliff (Diorama.meshFill; the part terraces
 	either side of it stand hidden behind) and giant shards in the grotto's colours, glassy with a
 	glowing heart (all neon read as white blobs): a cluster either side of the door leaning away
-	from it, a fan over the wall's top (the town sees it) and small ones round the doorway. The
-	shards are looks only (nothing to bump into, the way in stays clear); the slot's mossy walls are
-	solid, so the camera stops at them (Diorama.CameraStops, owner 2026-11-16).
+	from it, a fan over the wall's top (the town sees it) and small ones round the doorway. Looks
+	only: nothing to bump into, the way in stays clear (the cut rim behind the slot's mossy walls
+	stops the camera).
 ]]
 -- the shards' glass (two shades) and their glowing hearts
 Floor.VipColors = { Color3.fromRGB(70, 214, 224), Color3.fromRGB(44, 168, 204), Color3.fromRGB(16, 160, 182) }
@@ -945,7 +945,7 @@ end
 	part-built pit still showed beside the diorama's painted rock: the side terraces' ends either side
 	of the band, the band's back wall and the light stone buttress round each tunnel portal, and the
 	grotto tunnel's flat walls up to the VIP door. They are faced with the owner's mossy cliff
-	(Diorama.meshFill: solid, so the camera stops there too); the portals' timber frames, mouths and
+	(Diorama.meshFill, looks only: the solid parts right behind stop the camera); the portals' timber frames, mouths and
 	steel lintels and the VIP door stay in view. Per piece (east side; the west mirrors x): the front's
 	plane, which way it faces, its span and height, its depth behind the front. The band's sides stand
 	just in front of the side terraces' ends (BAND_Z0 / BAND_Z1: a lining behind them would stay

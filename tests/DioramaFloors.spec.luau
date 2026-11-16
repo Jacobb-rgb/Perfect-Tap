@@ -253,17 +253,12 @@ return function(T, Loader)
 						local shards, slotWalls, inWay = 0, 0, 0
 						for _, d in frame:GetDescendants() do
 							if d:IsA("BasePart") then
-								if d.Name == "SlotWall" then
-									-- (owner 2026-11-16: the camera swung through the slot's sides and showed
-									-- what's behind them) the slot's walls stop the camera (Diorama.CameraStops)
+								-- (the slot's mossy walls too: a solid chunk's box was an invisible wall, owner 2026-11-16)
+								T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
+								if d.Name == "Shard" then
+									shards += 1
+								elseif d.Name == "SlotWall" then
 									slotWalls += 1
-									T.truthy(d.CanCollide and d.CanQuery, label .. " the slot's walls stop the camera")
-									T.lt(d.Transparency, 0.25, label .. " the slot's walls are opaque to the camera")
-								else
-									T.eq(d.CanCollide, false, label .. " the VIP frame's shards are looks only")
-									if d.Name == "Shard" then
-										shards += 1
-									end
 								end
 								-- (the way in: the door's width, the ground to over head height, the wall to the tunnel)
 								local mn, mx = box(d)
@@ -277,7 +272,7 @@ return function(T, Loader)
 						T.eq(inWay, 0, label .. " nothing of the frame in the VIP way in")
 					end
 					-- (owner 2026-11-16: "no wall there, you can see behind the 3D object") the train band's
-					-- openings and the grotto tunnel lined with his mossy cliff: camera stops, clear of the
+					-- openings and the grotto tunnel lined with his mossy cliff: looks only, clear of the
 					-- trains' way through the portals and of the way in to the VIP door
 					local linings = model:FindFirstChild("OpeningLinings")
 					T.truthy(linings ~= nil, label .. " the openings' linings")
@@ -286,7 +281,7 @@ return function(T, Loader)
 						for _, d in linings:GetChildren() do
 							if d:IsA("BasePart") then
 								chunks += 1
-								T.truthy(d.CanCollide and d.CanQuery, label .. " a lining stops the camera")
+								T.eq(d.CanCollide, false, label .. " a lining is looks only (the rim right behind it is solid)")
 								local mn, mx = box(d)
 								-- (the quarry line at z 24, the portal mouths 8.6 wide, 11.4 high)
 								if math.abs(mx.X) > 58 and mn.Z < 28.6 and mx.Z > 19.4 and mn.Y < 11.4 then
@@ -539,8 +534,9 @@ return function(T, Loader)
 						for _, d in room:GetChildren() do
 							if d.Name == "MeshWall" then
 								T.eq(d:GetAttribute("Asset"), look.WallMesh, label .. " the wall chunks are the owner's model")
-								-- (owner 2026-11-16) the camera stops at the rock's face, never swings through it
-								T.truthy(d.CanCollide and d.CanQuery, label .. " the wall chunks stop the camera")
+								-- (owner 2026-11-16: a solid chunk's box stood where its ragged rock is not, "a wall
+								-- that's there but invisible": the slab behind is the wall and the camera's stop)
+								T.eq(d.CanCollide, false, label .. " the slab behind is the wall, not the chunks")
 								local p = origin:PointToObjectSpace(d.CFrame.Position)
 								local side = if math.abs(p.X) > math.abs(p.Z)
 									then (if p.X > 0 then "E" else "W")

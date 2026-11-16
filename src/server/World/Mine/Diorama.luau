@@ -241,10 +241,11 @@ Diorama.VeilThickness = 0.3
 	CanCollide, CanQuery and nearly opaque. The rooms' slabs, lintels and ceilings were CanQuery false
 	and the mossy cliff chunks (walls, the VIP door's slot) neither, so a camera swung toward a wall
 	(it zooms out to 70) went through it and showed the rim, the void and the backs of the models
-	behind. Every piece of a room's wall is a camera stop now: the chunks themselves (the camera halts
-	at the rock's face, never inside it) and the slab behind them as the backstop.
+	behind. The slabs, lintels and ceilings are camera stops now (queryable). The mossy cliff chunks are
+	not: made solid (2026-11-16) their collision box stood where the rock's ragged top and sides are
+	not, and the owner met "a wall that's there but invisible"; the slab behind them is the stop.
 ]]
-Diorama.CameraStops = { "MeshWall", "SlotWall", "WallSlab", "Lintel", "Ceiling" }
+Diorama.CameraStops = { "WallSlab", "Lintel", "Ceiling" }
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -376,13 +377,9 @@ function Diorama.meshFill(
 			local cf = turned
 				* CFrame.new(x, h / 2 + row * rowStep, -size.Z / 2 + (if k == 0 then 0.08 else -0.08))
 				* CFrame.Angles(0, rng:range(-0.04, 0.04), 0)
-			-- (solid and queryable: the player's camera stops at the wall's rock instead of
-			-- swinging through it, see Diorama.CameraStops)
-			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, {
-				Name = if opts and opts.Name then opts.Name else "MeshWall",
-				CanCollide = true,
-				CanQuery = true,
-			})
+			-- (looks only: its collision box would stand where the rock's ragged top and sides are not,
+			-- an invisible wall; the slab or rim behind it stops the camera, Diorama.CameraStops)
+			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, { Name = if opts and opts.Name then opts.Name else "MeshWall" })
 			if p then
 				p.Parent = parent
 				table.insert(out, p)
