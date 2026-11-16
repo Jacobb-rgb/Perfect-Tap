@@ -14,8 +14,16 @@
 #   zones: [{poly: [[x, z], ...], ymin}] a vertex in a polygon above ymin is pressed to the ground
 #          (heights kept at 1 %, so the top stays on top)
 #   keep: [[x0, y0, z0, x1, y1, z1], ...] vertices never pressed (the posts the rebuild ends in)
+#   keep_tubes: [[x0, y0, z0, x1, y1, z1, r, rc, pipe], ...] the same within r of a segment (x1..
+#        at the post): a kept pipe that runs into a rebuilt post, with the post's own wall round it.
+#        The mirror side's pipe there is not copied over it (faces whose normal runs across the
+#        segment; pipe 0: copied all the same), nor its wall within rc (default r; rc < r: the
+#        kept wall and the copied one overlap a little, no gap between them)
 #   add: {poly: [[x, z], ...]} the area rebuilt: every face above the floor whose mirror image lies
-#        in it (and not in a keep box) is copied from the mirror side, mirrored
+#        in it (and not in a keep box) is copied from the mirror side, mirrored. polys: several
+#        such areas; any_vertex: a face is copied when any corner's image lies in one (the copy
+#        then reaches one face past the edge and overlaps the cut there instead of leaving a gap);
+#        a number instead of true: only faces facing up at least that much (normal y)
 #   mirror_shifts, donors: where a pressed face takes the floor's texture from: its mirror point
 #        (shifted), else the same spot moved by a donor offset; the face's UVs continue that floor
 #        face's own mapping, else its colour
@@ -68,11 +76,25 @@ def inside(poly, x, z):
     return hit
 
 
+def in_box(x, y, z):
+    return any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in cfg.get("keep", []))
+
+
+def tube_at(x, y, z, pick=6):
+    # (the segment's unit direction, the tube) of the keep tube round the point (pick 6: within its
+    # keep radius; 7: within its copy radius rc, which is r unless given)
+    for t in cfg.get("keep_tubes", []):
+        a, b = Vector(t[0:3]), Vector(t[3:6])
+        ab = b - a
+        k = max(0.0, min(1.0, (Vector((x, y, z)) - a).dot(ab) / ab.dot(ab)))
+        r = t[6] if pick == 6 or len(t) <= 7 else t[7]
+        if (Vector((x, y, z)) - (a + ab * k)).length <= r:
+            return ab.normalized(), t
+    return None
+
+
 def in_keep(x, y, z):
-    for b in cfg.get("keep", []):
-        if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5]:
-            return True
-    return False
+    return in_box(x, y, z) or tube_at(x, y, z) is not None
 
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -103,6 +125,8 @@ uv = bm.loops.layers.uv.active
 orig = bm.faces.layers.int.new("sq_orig")
 flag = bm.faces.layers.int.new("sq_flag")
 was_floor = bm.faces.layers.int.new("sq_floor")
+# (a layer added later would cost the element references taken by then; see step 2)
+tube = bm.verts.layers.int.new("sq_tube")  # 1: kept for a keep_tubes pipe, whose torn end the rebuilt post closes
 for f in bm.faces:
     f[orig] = f.index
     f[flag] = 0
@@ -153,14 +177,36 @@ def is_floor(f):
 
 
 # 1. the rebuild: faces above the floor on the mirror side whose image lies in the add area
-add_poly = cfg["add"]["poly"]
+add_polys = cfg["add"].get("polys") or [cfg["add"]["poly"]]
+any_vertex = cfg["add"].get("any_vertex", False)
+
+
+def rebuilt_at(x, y, z):
+    mx = 2 * MC - x
+    return any(inside(p, mx, z) for p in add_polys) and not in_box(mx, y, z)
+
+
+def mirror_pipe(f, x, y, z):
+    # what of the mirror side is not copied round a kept pipe running into a rebuilt post: its own
+    # pipe there (faces going round it, normal across it) and the post's wall within the copy
+    # radius (the kept wall reaches out to the keep radius: the two overlap, no gap between them)
+    t = tube_at(2 * MC - x, y, z)
+    if t is not None and (len(t[1]) <= 8 or t[1][8]):
+        n = Vector((-f.normal.x, f.normal.z, -f.normal.y))  # Blender -> local, mirrored
+        if abs(n.dot(t[0])) < 0.7:
+            return True
+    return all(tube_at(2 * MC - lx, ly, lz, 7) is not None for lx, ly, lz in (local(v.co) for v in f.verts))
+
+
 src_faces = []
 for f in bm.faces:
     x, y, z = local(f.calc_center_median())
     if y < -0.08 or is_floor(f):
         continue
-    mx = 2 * MC - x
-    if inside(add_poly, mx, z) and not in_keep(mx, y, z):
+    reach = any_vertex is True or (any_vertex is not False and f.normal.z >= any_vertex)
+    # (never a long face: a pipe's top running far out of the area would lie over the kept one)
+    reach = reach and max(e.calc_length() for e in f.edges) <= 0.6 * stud
+    if (rebuilt_at(x, y, z) or (reach and any(rebuilt_at(*local(v.co)) for v in f.verts))) and not mirror_pipe(f, x, y, z):
         src_faces.append(f)
 dup = bmesh.ops.duplicate(bm, geom=src_faces)
 new_faces = [g for g in dup["geom"] if isinstance(g, bmesh.types.BMFace)]
@@ -181,6 +227,8 @@ for v in bm.verts:
     x, y, z = local(v.co)
     if in_keep(x, y, z):
         protected.add(v)
+        if not in_box(x, y, z):
+            v[tube] = 1
         continue
     for zi, zone in enumerate(cfg["zones"]):
         if y > zone["ymin"] and inside(zone["poly"], x, z):
@@ -201,6 +249,10 @@ for f in bm.faces:
         if max(zs) - min(zs) > limit:
             kill.append(f)
 bmesh.ops.delete(bm, geom=kill, context="FACES")
+bm.verts.ensure_lookup_table()
+bm.faces.ensure_lookup_table()
+bm.normal_update()
+
 bm.verts.ensure_lookup_table()
 bm.faces.ensure_lookup_table()
 bm.normal_update()
@@ -375,6 +427,38 @@ def donor(x, z, only=None):
     return None
 
 
+def texel(mi, uv_):
+    t = tex[mi]
+    if t is None:
+        return None
+    w, h, px = t
+    i = min(w - 1, max(0, int(uv_.x * w)))
+    j = min(h - 1, max(0, int(uv_.y * h)))
+    k = (j * w + i) * 4
+    return px[k], px[k + 1], px[k + 2]
+
+
+# the floor's usual colour (per channel median): a one-colour face takes the donor point nearest it,
+# not a dark joint between the slabs that happens to lie under its centre
+_cols = [c_ for c_ in (tint(f) for f in floor[:: max(1, len(floor) // 3000)]) if c_ is not None]
+usual = tuple(sorted(c_[i] for c_ in _cols)[len(_cols) // 2] for i in range(3)) if _cols else None
+
+
+def calm_donor(x, z):
+    best = None
+    for ci in range(len(cand_points(x, z))):
+        got_ = donor(x, z, ci)
+        if got_ is None:
+            continue
+        col = texel(got_[1], got_[0])
+        if col is None or usual is None:
+            continue
+        d = sum((col[i] - usual[i]) ** 2 for i in range(3))
+        if best is None or d < best[0]:
+            best = (d, got_)
+    return best[1] if best else None
+
+
 TOL = 0.004  # UV: about 4 texels of a 1024 texture
 
 
@@ -436,13 +520,15 @@ for f in squashed:
                     f.material_index = mi
                     done = True
             if not done:
-                # one colour: the floor's own under the face's centre
+                # one colour: the floor's own at a donor point near the face's centre, the one
+                # nearest the floor's usual colour
+                g2 = calm_donor(x, z) or got
                 mid = sum((l[uv].uv for l in f.loops), Vector((0.0, 0.0))) / len(f.loops)
                 ext = max(max(abs(l[uv].uv.x - mid.x), abs(l[uv].uv.y - mid.y)) for l in f.loops)
                 k = min(1.0, 0.0005 / ext) if ext > 0 else 1.0
                 for l in f.loops:
-                    l[uv].uv = got[0] + (l[uv].uv - mid) * k
-                f.material_index = got[1]
+                    l[uv].uv = g2[0] + (l[uv].uv - mid) * k
+                f.material_index = g2[1]
                 done = True
         if not done:
             _, i, _ = kd.find((c.x, c.y, 0.0))
@@ -483,7 +569,7 @@ if cfg.get("unlayer", True):
 
 # 4. close small holes the torn faces left in the kept posts
 bm.edges.ensure_lookup_table()
-live = [v for v in protected if v.is_valid]
+live = [v for v in protected if v.is_valid and not v[tube]]
 prot_pts = kdtree.KDTree(max(len(live), 1))
 for i, v in enumerate(live):
     prot_pts.insert(v.co, i)
@@ -535,9 +621,44 @@ for p in me.polygons:
         for li, oi in zip(p.loop_indices, src):
             normals[li] = old_normals[oi]
 me.normals_split_custom_set(normals)
+if cfg.get("debug_glb"):
+    # (a check copy: copied faces red, pressed blue, kept-pipe faces green, filled yellow, others grey)
+    dbg = ob.copy()
+    dbg.data = me.copy()
+    bpy.context.scene.collection.objects.link(dbg)
+    dm = dbg.data
+    dm.materials.clear()
+    for name, col in (("rest", (0.5, 0.5, 0.5, 1)), ("mirror", (0.9, 0.1, 0.1, 1)), ("pressed", (0.1, 0.2, 0.9, 1)),
+                      ("pipe", (0.1, 0.8, 0.1, 1)), ("fill", (0.9, 0.9, 0.1, 1))):
+        m = bpy.data.materials.new("dbg_" + name)
+        m.diffuse_color = col
+        m.use_nodes = True
+        m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = col
+        dm.materials.append(m)
+    fl = dm.attributes["sq_flag"].data
+    tb = dm.attributes["sq_tube"].data
+    for p_ in dm.polygons:
+        f_ = fl[p_.index].value
+        if f_ == 3:
+            p_.material_index = 1
+        elif f_ in (1, 4):
+            p_.material_index = 2
+        elif f_ == 2:
+            p_.material_index = 4
+        elif all(tb[i].value for i in p_.vertices):
+            p_.material_index = 3
+        else:
+            p_.material_index = 0
+    bpy.ops.object.select_all(action="DESELECT")
+    dbg.select_set(True)
+    bpy.context.view_layer.objects.active = dbg
+    bpy.ops.export_scene.gltf(filepath=cfg["debug_glb"], export_format="GLB", use_selection=True, export_apply=True,
+                              export_yup=True, export_materials="EXPORT", export_animations=False)
+    bpy.data.objects.remove(dbg, do_unlink=True)
 me.attributes.remove(me.attributes["sq_orig"])
 me.attributes.remove(me.attributes["sq_flag"])
 me.attributes.remove(me.attributes["sq_floor"])
+me.attributes.remove(me.attributes["sq_tube"])
 me.update()
 report.update({"mirror_src": len(src_faces), "moved": len(moved), "protected": len(protected), "torn": len(kill),
                "squashed": len(squashed), "cloned": cloned, "spotted": spotted, "filled": filled, "unlayered": unlayered,
