@@ -54,7 +54,6 @@ local function tweenTo(presetName: string, duration: number)
 		t:Cancel()
 	end
 	table.clear(activeTweens)
-	local info = TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 	local groups: { [string]: { [string]: any } } = {
 		Lighting = preset.Lighting,
 		Atmosphere = preset.Atmosphere,
@@ -62,6 +61,19 @@ local function tweenTo(presetName: string, duration: number)
 		Bloom = preset.Bloom,
 		SunRays = preset.SunRays,
 	}
+	-- (no time: the values at once, this frame; a portal's crossing)
+	if duration <= 0 then
+		for group, values in groups do
+			local target: any = effect(group)
+			if target then
+				for key, value in values do
+					target[key] = value
+				end
+			end
+		end
+		return
+	end
+	local info = TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 	for group, values in groups do
 		local target = effect(group)
 		if target and next(values) then
@@ -287,17 +299,110 @@ local function taggedZonePreset(position: Vector3): string?
 	return nil
 end
 
+--[[
+	Lighting portals (owner 2026-11-16, walking back out of the Ember Caves: "on the way back you
+	still see it"): a part tagged LightingController.PortalTag (a cave's veil, Mine/Diorama) with
+	string attributes Inside (the preset on its LookVector side) and Outside (the other side's).
+	Near one the light follows the side the CAMERA is on, not the character's zone, and changes at
+	once on the frame the camera passes through it: what lies beyond a veil is never seen in the
+	other side's light. (The zone, polled on the character every 0.4 s and tweened over
+	LightingConfig.TweenTime, left the quarry and the town in the caves' dark light, their sky black,
+	for a couple of seconds after the veil; and the camera trails the character through it.)
+]]
+LightingController.PortalTag = "LightingPortal"
+LightingController.PortalReach = 80 -- studs either side of a portal's plane where the camera decides (past the max zoom)
+LightingController.PortalMargin = 6 -- studs round its edges
+
+-- The preset of the side of `portal` that `position` is on, or nil away from it (or untagged
+-- presets).
+function LightingController.portalSide(portal: BasePart, position: Vector3): string?
+	local inside = portal:GetAttribute("Inside")
+	local outside = portal:GetAttribute("Outside")
+	if type(inside) ~= "string" or type(outside) ~= "string" then
+		return nil
+	end
+	local p = portal.CFrame:PointToObjectSpace(position)
+	local half = portal.Size / 2
+	local margin = LightingController.PortalMargin
+	if math.abs(p.X) > half.X + margin or math.abs(p.Y) > half.Y + margin or math.abs(p.Z) > LightingController.PortalReach then
+		return nil
+	end
+	-- (the LookVector side is -Z in the portal's own space)
+	local preset = if p.Z < 0 then inside else outside
+	return if LightingConfig.Presets[preset] then preset else nil
+end
+
+-- the tagged portals streamed in (kept by the tag's signals: no list built every frame)
+local portals: { BasePart } = {}
+local function trackPortals()
+	local tag = LightingController.PortalTag
+	local function add(instance: Instance)
+		if instance:IsA("BasePart") and not table.find(portals, instance) then
+			table.insert(portals, instance)
+		end
+	end
+	for _, instance in CollectionService:GetTagged(tag) do
+		add(instance)
+	end
+	CollectionService:GetInstanceAddedSignal(tag):Connect(add)
+	CollectionService:GetInstanceRemovedSignal(tag):Connect(function(instance: Instance)
+		local index = table.find(portals, instance :: any)
+		if index then
+			table.remove(portals, index)
+		end
+	end)
+end
+
+local function portalPreset(position: Vector3): string?
+	for _, portal in portals do
+		local preset = LightingController.portalSide(portal, position)
+		if preset then
+			return preset
+		end
+	end
+	return nil
+end
+
+-- The zone's preset: the camera's side near a portal, else the tagged zone or the world zone the
+-- character stands in (nil without a character).
+local function zonePreset(): string?
+	local camera = Workspace.CurrentCamera
+	local fromPortal = if camera then portalPreset(camera.CFrame.Position) else nil
+	if fromPortal then
+		return fromPortal
+	end
+	local character = player and player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return nil
+	end
+	local zone = WorldLayout.zoneAt(root.Position)
+	return taggedZonePreset(root.Position) or (if zone then zone.Lighting else "Surface")
+end
+
 function LightingController.start()
-	while true do
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if root then
-			local zone = WorldLayout.zoneAt(root.Position)
-			local preset = taggedZonePreset(root.Position) or (if zone then zone.Lighting else "Surface")
-			if preset ~= currentZonePreset then
-				currentZonePreset = preset
-				refresh()
+	trackPortals()
+	-- every frame after the camera moves: the frame it passes through a portal (or comes near one
+	-- in another zone's light), that side's light at once, a tween still on its way there too
+	local lastPortal: string? = nil
+	RunService:BindToRenderStep("LightingPortals", Enum.RenderPriority.Camera.Value + 1, function()
+		local camera = Workspace.CurrentCamera
+		local preset = if camera then portalPreset(camera.CFrame.Position) else nil
+		local crossed = preset ~= nil and lastPortal ~= nil and preset ~= lastPortal
+		lastPortal = preset
+		if preset and (crossed or preset ~= currentZonePreset) then
+			currentZonePreset = preset
+			if #overrides == 0 then
+				lastApplied = ""
 			end
+			refresh(0)
+		end
+	end)
+	while true do
+		local preset = zonePreset()
+		if preset and preset ~= currentZonePreset then
+			currentZonePreset = preset
+			refresh()
 		end
 		task.wait(0.4)
 	end
