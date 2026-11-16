@@ -283,10 +283,11 @@ end
 	one by one in the elevator, coins only, never gems or Robux; ElevatorService
 	sells it, saved in data.Upgrades.Floors). 0 for a floor you can walk to
 	(ViaElevator false: floors 1-3) and for an unknown index. An elevator-only
-	floor costs about 2/3 of the price of the blaster that opens it
-	(BlasterData.coins(MinBlaster)): a real goal before the floor (the balance
-	sim in docs/BALANCE_SIM.md), rounded to 2 significant digits. Floor 4
-	(blaster 7) costs what the whole elevator did: 87,000,000.
+	floor costs half of "2/3 of the price of the blaster that opens it"
+	(BlasterData.coins(MinBlaster), rounded to 2 significant digits, then
+	halved: the owner 2026-11-16 "zlevnil bych to vše tak o polovinu"), so
+	about 1/3 of that blaster: today 43,500,000 (floor 4, blaster 7, half the
+	old one-time elevator), 750,000,000 (floor 5) and 10,500,000,000 (floor 6).
 ]]
 function MineFloors.priceOf(index: number): number
 	local floor = MineFloors.ByIndex[index]
@@ -296,7 +297,7 @@ function MineFloors.priceOf(index: number): number
 	local scale = BlasterData.coins(floor.MinBlaster)
 	local raw = (if scale > 0 then scale else 3e6) * 2 / 3
 	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
-	return math.floor(raw / step + 0.5) * step
+	return math.floor(raw / step + 0.5) * step / 2
 end
 
 MineFloors.ByZone = {} :: { [string]: Floor }

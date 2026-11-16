@@ -1102,9 +1102,10 @@ What to test in Studio:
   Robux anywhere on it (a spec walks the window).
 - Real data: the floors, names, ore rarities and blaster gates are the game's (3/5/7/8/9; his picture's LV 12 does
   not exist: the top blaster is 10, so the game's gates stay). Floors you can walk to (1-3) cost nothing; the
-  elevator-only floors cost 2/3 of their gate's blaster in coins (MineFloors.priceOf): 4 Sunken Palace $87M (the
-  old one-time elevator price), 5 Stormglass Rift $1.5B, 6 Heartstone Core $21B. Bought floors go on a rebirth like
-  the elevator did; a save that owned the elevator owns all three (save v17).
+  elevator-only floors cost about 1/3 of their gate's blaster in coins (MineFloors.priceOf; the owner halved the
+  first 2/3 prices on 2026-11-16): 4 Sunken Palace $43.5M (half the old one-time elevator), 5 Stormglass Rift
+  $750M, 6 Heartstone Core $10.5B. Bought floors go on a rebirth like the elevator did; a save that owned the
+  elevator owns all three (save v17).
 - Motion (TweenService only; none with Reduce motion): it opens (dim, 0.94 -> 1, the header drops in, the X spins
   in, the cards pop in one after another), a hovered card rises with its edge and button brighter and its picture
   panning, a purchase flashes gold with coins flying out, the coin popping and the coins counting down (the card
