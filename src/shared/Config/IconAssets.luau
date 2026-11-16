@@ -654,14 +654,17 @@ end
 	../NAHRAJ_DO_ROBLOXU/ikony_vytah/vytah_patra.png (1024 px square, made
 	from the game's floors, tools/preview/elevator_art), cut by Cells
 	{ x, y, w, h } in px: a 512 x 288 cell per floor (MineFloors Id) and the
-	1024 x 160 banner. Id 0 = not uploaded: the cards keep their painted
-	backdrops in the floor's colours (UI/ElevatorWindow). The previews draw
-	build/preview/icons/elevator_<name>.png while Previewing and Preview are on.
+	1024 x 160 banner. Uploaded by the owner 2026-11-16 (id from him, the
+	file read by his Studio's import 5 s before the asset appeared). Id 0 =
+	not uploaded: the cards keep their painted backdrops in the floor's
+	colours (UI/ElevatorWindow; they stay under the pictures too, for the
+	minutes Roblox checks an upload). The previews draw
+	build/preview/icons/elevator_<name>.png.
 ]]
 IconAssets.ElevatorArt = {
 	File = "vytah_patra.png",
-	Id = 0,
-	Preview = true, -- (a preview of Studio before the upload sets it false)
+	Id = 103680480493166,
+	Preview = true, -- (the previews before the upload; unused once Id is set)
 	Cells = {
 		Quarry = { 0, 0, 512, 288 },
 		EmberCaves = { 512, 0, 512, 288 },

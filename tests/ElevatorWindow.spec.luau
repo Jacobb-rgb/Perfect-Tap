@@ -197,7 +197,9 @@ return function(T, Loader)
 				local floor = MineFloors.ByIndex[card.Index]
 				local cell = sheet.Cells[floor.Id]
 				T.truthy(cell ~= nil, floor.Id .. " has a cell")
-				T.truthy(card.Art.Visible and not card.Backdrop.Visible, "the picture")
+				T.truthy(card.Art.Visible, "the picture")
+				T.truthy(card.Backdrop.Visible, "the painted backdrop stays (while Roblox checks the upload)")
+				T.truthy(card.Backdrop.ZIndex < card.Art.ZIndex, "under the picture")
 				T.eq(card.Art.Image, "rbxassetid://123")
 				T.eq(card.Art.ImageRectOffset, Vector2.new(cell[1], cell[2]))
 				T.eq(card.Art.ImageRectSize, Vector2.new(cell[3], cell[4]))

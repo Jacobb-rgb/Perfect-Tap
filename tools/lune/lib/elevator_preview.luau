@@ -64,10 +64,12 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		ui_elevator_phone_end = window(true, 8, 1, palace, riftPrice + 1.25e6, true),
 	}
 	-- before the owner's upload of the pictures: the painted backdrops
-	local preview = IconAssets.ElevatorArt.Preview
+	local preview, id = IconAssets.ElevatorArt.Preview, IconAssets.ElevatorArt.Id
 	IconAssets.ElevatorArt.Preview = false
+	IconAssets.ElevatorArt.Id = 0
 	exports.ui_elevator_pc_bare = window(false, 8, 1, palace, riftPrice + 1.25e6)
 	IconAssets.ElevatorArt.Preview = preview
+	IconAssets.ElevatorArt.Id = id
 	return exports
 end
 

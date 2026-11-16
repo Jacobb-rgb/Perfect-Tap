@@ -902,9 +902,9 @@ local function newCard(grid: Instance, index: number, m: Metrics): Card
 	UIKit.corner(art, ElevatorWindow.CardCorner - 2)
 	art:SetAttribute("Cover", true) -- (the previews fill the card with it, like Crop)
 	if floor and IconAssets.elevatorArtShows(floor.Id) then
+		-- (the painted backdrop stays under it: seen while Roblox checks the upload or if it never loads)
 		IconAssets.applyElevatorArt(art, floor.Id)
 		art.Visible = true
-		back.Visible = false
 	end
 	-- dark shades: over the words at the top left and under the button
 	local shadeTop = frame(face, {

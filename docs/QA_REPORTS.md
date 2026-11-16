@@ -1095,7 +1095,7 @@ What to test in Studio:
   gold coin and a green + that opens the Robux Shop's coins); six floor cards, 3 x 2 on a PC (2 columns that scroll
   on phones, 72-unit buttons); the COMING SOON banner with a big ?, NEXT UPDATE and a clock.
 - Every card: its picture edge to edge (the owner's upload IconAssets.ElevatorArt, vytah_patra.png, cut per floor;
-  painted backdrops until then), the number on a shield in the floor's colour, the name on two lines, the rarity
+  uploaded 2026-11-16 as 103680480493166; the painted backdrop stays under it while Roblox checks it), the number on a shield in the floor's colour, the name on two lines, the rarity
   chips of its ores (real data), and one button: YOU ARE HERE (gold frame, halo, CURRENT LOCATION tag), TRAVEL and
   an arrow (the floor's colour), PURCHASE <price> with a basket and the gold coin (gold/orange; without the coins
   darker with NOT ENOUGH COINS over it), LOCKED (dark, a big lock, BLASTER LV. N REQUIRED). Coins only: no gem, no
