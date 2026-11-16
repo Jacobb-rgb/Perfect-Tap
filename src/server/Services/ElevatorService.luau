@@ -22,19 +22,22 @@
 	    { Action = "Go", Floor = n } owned, whole n in 1..#MineFloors.List,
 	                                 unlocked, a living character, not in a
 	                                 running cleaning session, at a stop but not
-	                                 that stop's own floor, not within Cooldown
-	                                 of the last ride. Then the ride:
+	                                 that stop's own floor, not riding (one ride
+	                                 at a time). Then the ride (the travel
+	                                 cinematic, ElevatorTravelConfig; see ride()):
 	                                 ElevatorRide "Depart" { Floor, From, Name,
-	                                 Duration, DoorsClose } starts the client's
-	                                 full-screen ride (doors slam shut, floor
-	                                 counter, ding, doors open); DoorsClose
-	                                 seconds later (the doors are shut by then)
-	                                 the area round the target is streamed in
-	                                 (StreamTimeout), the character moves to the
-	                                 target stop (on its plate in front of the
-	                                 cage, facing out) and ElevatorRide "Arrive"
-	                                 lets the client open the doors (after at
-	                                 least Duration seconds of ride).
+	                                 Duration, DoorsClose, FromAt, StopAt?,
+	                                 Target } starts it; DoorsClose seconds later
+	                                 (its doors are shut) the area round the
+	                                 target is streamed in (StreamTimeout) and the
+	                                 character moves to the target stop (on its
+	                                 plate in front of the cage, facing out):
+	                                 "Arrive" lets the client open the doors. A
+	                                 rider who left, died or respawned meanwhile
+	                                 is never moved ("Cancel"). The rider counts
+	                                 as riding (isRiding: no second ride,
+	                                 teleport, rebirth or hoverboard) until the
+	                                 cinematic is over.
 	  Refusals answer with a "Deny" Notify (bad input is ignored silently).
 	  Buying never yields between the coin check and the flag, so a double tap
 	  buys once.
@@ -124,6 +127,8 @@ local lastRide: { [Player]: number } = {}
 -- a rider is riding until this clock time (the travel cinematic), and their ride's number
 local rideUntil: { [Player]: number } = {}
 local rideTokens: { [Player]: number } = {}
+-- the ride whose move thread still runs (a server hitch may keep it past rideUntil)
+local inFlight: { [Player]: number } = {}
 local lastCatch: { [Player]: number } = {}
 local clock: () -> number = os.clock
 local mapOverride: Instance? = nil
@@ -134,6 +139,9 @@ local departCallbacks: { (Player) -> ...any } = {}
 -- True while the player is riding the elevator: from "Depart" until their travel cinematic is over
 -- (no second ride, teleport, rebirth or hoverboard meanwhile).
 function ElevatorService.isRiding(player: Player): boolean
+	if inFlight[player] ~= nil then
+		return true
+	end
 	local untilTime = rideUntil[player]
 	return untilTime ~= nil and clock() < untilTime
 end
@@ -343,6 +351,7 @@ local function ride(player: Player, here: Model, floorIndex: number, target: CFr
 	local departed = clock()
 	local token = (rideTokens[player] or 0) + 1
 	rideTokens[player] = token
+	inFlight[player] = token
 	-- riding until the move (at the latest after the stream wait) and the client's arrival after it
 	rideUntil[player] = departed + ElevatorService.DoorsClose + ElevatorService.StreamTimeout + ElevatorTravelConfig.arriveTail()
 	for _, callback in departCallbacks do
@@ -374,6 +383,9 @@ local function ride(player: Player, here: Model, floorIndex: number, target: CFr
 			if aboard(player, token, character) then
 				ok, arrived = pcall(teleport, player, target)
 			end
+		end
+		if inFlight[player] == token then
+			inFlight[player] = nil
 		end
 		if rideTokens[player] ~= token then
 			return -- (the player left: PlayerRemoving forgot them)
@@ -671,6 +683,7 @@ ElevatorService._test = {
 		table.clear(lastRide)
 		table.clear(rideUntil)
 		table.clear(rideTokens)
+		table.clear(inFlight)
 		table.clear(lastCatch)
 		for instance in hooked do
 			hooked[instance] = nil
@@ -689,6 +702,7 @@ function ElevatorService.init()
 		lastRide[player] = nil
 		rideUntil[player] = nil
 		rideTokens[player] = nil
+		inFlight[player] = nil
 		lastCatch[player] = nil
 	end)
 end

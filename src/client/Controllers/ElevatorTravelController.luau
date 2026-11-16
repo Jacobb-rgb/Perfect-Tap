@@ -53,6 +53,7 @@ local View = require(script.Parent.Parent.UI.ElevatorTravelView)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local HiddenScale = require(script.Parent.Parent.Util.HiddenScale)
 local HudController = require(script.Parent.HudController)
 local LightingController = require(script.Parent.LightingController)
 local PromptController = require(script.Parent.PromptController)
@@ -72,8 +73,15 @@ local LIGHTING = "ElevatorRide"
 local STREAM_GRACE = 1.2
 -- a stop matches a payload's floor center within this many studs
 local MATCH = 0.75
+-- where BackpackWearController and RoyalCapeController keep the worn packs and capes (welded to their
+-- wearers' torsos): the player's own go with the body while it is hidden
+local WORN_FOLDERS = { "ClientBackpacks", "ClientCapes" }
 
 type Hidden = { Saved: { [BasePart]: number }, Lights: { [Instance]: boolean }, Model: Model?, Added: RBXScriptConnection? }
+type HiddenGui = { Scale: UIScale, Wanted: number, Connection: RBXScriptConnection }
+-- (lists, not tables keyed by the instance: a rescan finds the same part again by ==)
+type WornPart = { Item: Instance, Saved: number }
+type WornFx = { Item: Instance, Was: boolean }
 
 type Trip = {
 	Plan: Plan,
@@ -103,8 +111,14 @@ type Trip = {
 	LampBrightness: number,
 	Character: { Instance }, -- the character's parts and decals (hidden in the cabin)
 	PopLighting: (() -> ())?,
-	Guis: { ScreenGui }, -- the guis put away
+	Guis: { [ScreenGui]: HiddenGui }, -- the game's guis put away (by their "Scale" UIScale)
+	GuiAdded: RBXScriptConnection?,
 	TouchWas: boolean?,
+	Pose: Stage.Pose, -- written in place every frame
+	CameraInfo: Stage.CameraInfo,
+	Worn: { WornPart }, -- the player's own worn pack and cape: their parts' modifiers before the ride
+	WornFx: { WornFx }, -- their lights / particles / beams: Enabled before the ride
+	WornScan: number, -- the plan time the worn things were last looked for
 	Removing: RBXScriptConnection?,
 	Done: boolean,
 }
@@ -289,6 +303,99 @@ local function setCharacter(list: { Instance }, modifier: number)
 	end
 end
 
+-- Is `model` welded to `character` (a worn backpack or cape)?
+local function wornBy(model: Instance, character: Model): boolean
+	for _, d in model:GetDescendants() do
+		if d:IsA("JointInstance") or d:IsA("WeldConstraint") then
+			local joint: any = d
+			local a, b = joint.Part0, joint.Part1
+			if (a and a:IsDescendantOf(character)) or (b and b:IsDescendantOf(character)) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local EFFECT_CLASSES = { "Light", "ParticleEmitter", "Beam", "Trail" }
+
+local function known(list: { any }, item: Instance): boolean
+	for _, entry in list do
+		if entry.Item == item then
+			return true
+		end
+	end
+	return false
+end
+
+-- Finds the player's own worn pack and cape (new ones too: a pack rebuilt meanwhile) and remembers
+-- how they were before the ride.
+local function collectWorn(t: Trip)
+	local character = player.Character
+	if not character then
+		return
+	end
+	for _, name in WORN_FOLDERS do
+		local folder = Workspace:FindFirstChild(name)
+		if folder then
+			for _, model in folder:GetChildren() do
+				if wornBy(model, character) then
+					for _, d in model:GetDescendants() do
+						if d:IsA("BasePart") or d:IsA("Decal") then
+							if not known(t.Worn, d) then
+								local target: any = d
+								table.insert(t.Worn, { Item = d, Saved = target.LocalTransparencyModifier })
+							end
+						else
+							for _, class in EFFECT_CLASSES do
+								if d:IsA(class) and not known(t.WornFx, d) then
+									local effect: any = d
+									table.insert(t.WornFx, { Item = d, Was = effect.Enabled == true })
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- The worn pack and cape as hidden as the body (`level` 1 = gone): their lights and particles are off
+-- while they are mostly hidden.
+local function setWorn(t: Trip, level: number)
+	for _, entry in t.Worn do
+		if entry.Item.Parent then
+			local target: any = entry.Item
+			target.LocalTransparencyModifier = entry.Saved + (1 - entry.Saved) * level
+		end
+	end
+	for _, entry in t.WornFx do
+		if entry.Item.Parent then
+			local effect: any = entry.Item
+			effect.Enabled = entry.Was and level < 0.5
+		end
+	end
+end
+
+-- The worn pack and cape exactly as they were.
+local function restoreWorn(t: Trip)
+	for _, entry in t.Worn do
+		if entry.Item.Parent then
+			local target: any = entry.Item
+			target.LocalTransparencyModifier = entry.Saved
+		end
+	end
+	for _, entry in t.WornFx do
+		if entry.Item.Parent then
+			local effect: any = entry.Item
+			effect.Enabled = entry.Was
+		end
+	end
+	table.clear(t.Worn)
+	table.clear(t.WornFx)
+end
+
 --[[
 	How far behind the player the camera can end on the way out: the player's
 	own zoom, or less where something stands behind them (a wall, the cage's
@@ -328,18 +435,57 @@ end
 
 ---------------------------------------------------------------- taking the game and giving it back
 
+--[[
+	The game's guis put away for the cinematic the way the egg opening does
+	(CapsuleController.hideHud): every TerraForge* ScreenGui with a "Scale"
+	UIScale (UIKit.screenGui: the HUD, the menus, the windows) goes to scale 0
+	and stays there (a scale written meanwhile, e.g. the HUD following a
+	resize, is kept for later); guis made during the ride too. Enabled is
+	never touched: an owner may close its gui meanwhile (a banner's timer) or
+	open one (it shows after the ride), and that stays theirs. A UIScale reads
+	0 back as 1e-07, hence HiddenScale.
+]]
+local function hideGui(t: Trip, gui: Instance)
+	local mine = view and view.Gui
+	if not gui:IsA("ScreenGui") or gui == mine or string.sub(gui.Name, 1, 10) ~= "TerraForge" then
+		return
+	end
+	local screen = gui :: ScreenGui
+	if t.Guis[screen] then
+		return
+	end
+	local scale = screen:FindFirstChild("Scale")
+	if not scale or not scale:IsA("UIScale") then
+		return -- (effect layers without the HUD's scale finish as they are)
+	end
+	local uiScale = scale :: UIScale
+	local entry: HiddenGui = { Scale = uiScale, Wanted = uiScale.Scale, Connection = nil :: any }
+	t.Guis[screen] = entry
+	uiScale.Scale = 0
+	entry.Connection = uiScale:GetPropertyChangedSignal("Scale"):Connect(function()
+		if not HiddenScale.is(uiScale.Scale) then
+			entry.Wanted = uiScale.Scale
+			uiScale.Scale = 0
+		end
+	end)
+end
+
 local function hideGuis(t: Trip)
 	local playerGui = player:FindFirstChildOfClass("PlayerGui")
-	local mine = view and view.Gui
 	if not playerGui then
 		return
 	end
 	for _, gui in playerGui:GetChildren() do
-		if gui:IsA("ScreenGui") and gui ~= mine and string.sub(gui.Name, 1, 10) == "TerraForge" and gui.Enabled then
-			gui.Enabled = false
-			table.insert(t.Guis, gui)
-		end
+		hideGui(t, gui)
 	end
+	t.GuiAdded = playerGui.ChildAdded:Connect(function(gui: Instance)
+		-- (a moment later: a new gui gets its "Scale" after it is parented)
+		task.defer(function()
+			if not t.Done and t.GuiAdded and gui.Parent then
+				hideGui(t, gui)
+			end
+		end)
+	end)
 	-- (a gamepad selection on a hidden button would press it unseen)
 	GuiService.SelectedObject = nil
 	local okTouch, touch = pcall(function(): any
@@ -354,13 +500,22 @@ local function hideGuis(t: Trip)
 end
 
 local function restoreGuis(t: Trip)
-	for _, gui in t.Guis do
-		-- (a gui someone switched back on meanwhile stays as it is)
-		if gui.Parent and not gui.Enabled then
-			gui.Enabled = true
-		end
+	local added = t.GuiAdded
+	t.GuiAdded = nil
+	if added then
+		added:Disconnect()
 	end
-	table.clear(t.Guis)
+	for gui, entry in t.Guis do
+		entry.Connection:Disconnect()
+		local scale = entry.Scale
+		if scale.Parent then
+			-- (a scale written after the last watch wins; a hidden one gets the HUD's own)
+			local now = scale.Scale
+			local wanted = if not HiddenScale.is(now) then now else entry.Wanted
+			scale.Scale = if not HiddenScale.is(wanted) then wanted else HudController.uiScale()
+		end
+		t.Guis[gui] = nil
+	end
 	if t.TouchWas ~= nil then
 		local was = t.TouchWas
 		t.TouchWas = nil
@@ -378,6 +533,7 @@ local function takeCamera(t: Trip)
 	t.Taken = true
 	camera.CameraType = Enum.CameraType.Scriptable
 	t.Character = characterParts()
+	collectWorn(t)
 	hideGuis(t)
 	t.PopLighting = LightingController.push(LIGHTING, 0.1)
 end
@@ -405,6 +561,7 @@ local function giveCamera(t: Trip, atTarget: boolean)
 	end
 	-- (first person keeps the character hidden, as Roblox's own camera does)
 	setCharacter(t.Character, if t.SavedZoom < 1.2 then 1 else 0)
+	restoreWorn(t)
 	restoreGuis(t)
 end
 
@@ -626,7 +783,7 @@ local function cues(t: Trip)
 			Sfx.play("ElevatorTick")
 		end
 	end
-	if c >= plan.BrakeAt and fire(t, "brake") then
+	if c > plan.BrakeAt and fire(t, "brake") then
 		Sfx.play("ElevatorBrake")
 	end
 	if c >= plan.StopAt and fire(t, "stop") then
@@ -703,14 +860,9 @@ local function frame(t: Trip)
 	local reduced = t.Reduced
 	-- the set
 	local set = ensureStage()
-	Stage.pose(set, plan, {
-		T = c,
-		Travel = t.Travel,
-		Speed = speed,
-		Reduced = reduced,
-		FromAt = t.FromAt,
-		StopAt = t.StopAt,
-	})
+	local pose = t.Pose
+	pose.T, pose.Travel, pose.Speed = c, t.Travel, speed
+	Stage.pose(set, plan, pose)
 	-- PHASE 1: the cage lamp turns up and the game's own camera shakes a little (position only)
 	local camera = Workspace.CurrentCamera
 	if c < plan.DipMid then
@@ -725,16 +877,9 @@ local function frame(t: Trip)
 	end
 	-- the scripted camera from the dip on; the character hidden until it fades back in on the way out
 	if t.Taken and camera then
-		local cf, fov = Stage.camera(plan, c, {
-			FromAt = t.FromAt,
-			StopAt = t.StopAt,
-			Target = t.Target,
-			Zoom = t.ExitZoom or t.SavedZoom,
-			Fov = t.SavedFov,
-			Reduced = reduced,
-			Speed = speed,
-			CutAt = t.CutAt,
-		})
+		local info = t.CameraInfo
+		info.Zoom, info.Speed = t.ExitZoom or t.SavedZoom, speed
+		local cf, fov = Stage.camera(plan, c, info)
 		if cf then
 			camera.CFrame = cf
 			-- (a scripted camera keeps its Focus: Roblox loads detail and lighting round it)
@@ -747,6 +892,17 @@ local function frame(t: Trip)
 			else math.clamp((c - plan.ExitAt) / 0.3, 0, 1)
 		local hiddenLevel = if t.SavedZoom < 1.2 then 1 else 1 - back
 		setCharacter(t.Character, hiddenLevel)
+		-- the player's own worn pack and cape go with the body (a pack rebuilt meanwhile is found too)
+		if back < 1 and c - t.WornScan >= 0.5 then
+			t.WornScan = c
+			collectWorn(t)
+		end
+		setWorn(t, 1 - back)
+		-- the target stop streamed in late (after the stop): its cage goes under the cabin as soon as it is here
+		local target = t.StopAt
+		if target and c >= plan.StopAt and c < plan.ExitAt and not t.Dest.Model then
+			hideStop(t.Dest, target)
+		end
 		-- the real cage fades back in as the cabin fades out
 		if c >= plan.ExitAt then
 			showStop(t.Dest, 1 - Stage.fadeAt(plan, c))
@@ -859,9 +1015,26 @@ function ElevatorTravelController.depart(payload: any)
 		Character = {},
 		PopLighting = nil,
 		Guis = {},
+		GuiAdded = nil,
+		Pose = nil :: any,
+		CameraInfo = nil :: any,
+		Worn = {},
+		WornFx = {},
+		WornScan = -1,
 		TouchWas = nil,
 		Removing = nil,
 		Done = false,
+	}
+	t.Pose = { T = 0, Travel = 0, Speed = 0, Reduced = reduced, FromAt = fromAt, StopAt = stopCf }
+	t.CameraInfo = {
+		FromAt = fromAt,
+		StopAt = stopCf,
+		Target = t.Target,
+		Zoom = t.SavedZoom,
+		Fov = t.SavedFov,
+		Reduced = reduced,
+		Speed = 0,
+		CutAt = t.CutAt,
 	}
 	trip = t
 	-- the character stands still from the first moment
@@ -945,6 +1118,17 @@ ElevatorTravelController._test = {
 
 function ElevatorTravelController.init() end
 
-function ElevatorTravelController.start() end
+-- The set and the arrival effects are built a little after the game starts (out of the world until a
+-- ride), so the first ride never waits for ~280 new parts.
+ElevatorTravelController.PrebuildDelay = 8
+
+function ElevatorTravelController.start()
+	task.delay(ElevatorTravelController.PrebuildDelay, function()
+		if not trip then
+			ensureStage()
+			ensureFx()
+		end
+	end)
+end
 
 return ElevatorTravelController

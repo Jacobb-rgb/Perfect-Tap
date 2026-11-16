@@ -62,10 +62,19 @@ limited 3/s), `ElevatorTravelServer` = `ElevatorService`, `ElevatorTravelClient`
 
 The end, `Cancel`, a respawn, no `Arrive` within 6 s of the brake (fail-safe), a failed move,
 a second `Depart`, an error inside a frame: camera `Custom` with the player's field of view,
-controls (PlayerControls lock "ElevatorTravel"), prompts, grab, the blaster, the HUD's
-`TerraForge*` guis (only those it put away), touch controls, the character's
-`LocalTransparencyModifier`, the real cages (their lights back on), the lighting push. Each
-restore step runs on its own (one failing never skips the others).
+controls (PlayerControls lock "ElevatorTravel"), prompts, grab, the blaster, the game's guis,
+touch controls, the character's `LocalTransparencyModifier` with the player's own worn pack and
+cape (ClientBackpacks / ClientCapes models welded to the character: their lights and particles
+too), the real cages (their lights back on), the lighting push. Each restore step runs on its
+own (one failing never skips the others).
+
+The guis go the egg opening's way (CapsuleController.hideHud): every `TerraForge*` ScreenGui with
+a "Scale" UIScale goes to scale 0 (`HiddenScale`), guis made during the ride too; `Enabled` is
+never touched, so a gui its owner closes during the ride (a banner's timer) stays closed and one
+it opens shows after the ride (pre-review 2026-11-16).
+
+Server: a rider counts as riding while the move thread runs (an in-flight marker, whatever the
+time bound says), and TeleportService checks `isRiding` again after its stream wait.
 
 Reduce motion (`UI/Motion.reduced`): no shake, jolt, flicker or light streaks, no flash (a soft
 swell), no electric arcs, fewer particles, fades instead of the camera's glide out.

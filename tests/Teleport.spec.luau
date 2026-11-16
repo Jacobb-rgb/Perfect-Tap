@@ -347,6 +347,22 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+		-- a ride that starts during the stream wait wins too: the teleport is refused after it
+		riding = false
+		rawset(TeleportService, "isRiding", function(p: any)
+			return p == w.player and riding
+		end)
+		w.player.RequestStreamAroundAsync = function()
+			riding = true -- (Go was accepted while this teleport waited for the area)
+		end
+		TeleportService._test.reset() -- (past the cooldown of the teleport just above)
+		local before = w.at()
+		local late = w.go("Lobby")
+		w.player.RequestStreamAroundAsync = nil
+		rawset(TeleportService, "isRiding", saved)
+		T.truthy(late and late.Ok == false, "refused after the wait")
+		T.eq(late.Reason, "Riding")
+		T.eq((w.at() - before).Magnitude, 0, "nobody moved")
 		-- the real check asks the elevator (nobody rides here)
 		T.falsy(TeleportService.isRiding(w.player), "not riding")
 		T.falsy(ElevatorService.isRiding(w.player), "the elevator agrees")

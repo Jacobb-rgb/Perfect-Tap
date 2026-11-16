@@ -379,6 +379,23 @@ return function(T, Loader)
 		T.eq(rides[2].Ok, true)
 	end)
 
+	withWorld("travel: a rider stays riding while the move is under way, however late it runs", function(w)
+		w.standAt(1)
+		local seen: boolean? = nil
+		w.onStream = function()
+			-- a long server hitch inside the stream wait: far past the ride's time bound
+			w.now += 60
+			seen = ElevatorService.isRiding(w.player)
+		end
+		T.truthy(w.go(2), "departed")
+		T.eq(seen, true, "still riding while the move thread runs")
+		T.eq(#w.player.pivots, 1, "moved")
+		-- once moved, the arrival's tail still counts (a late move pushes the end back)
+		T.truthy(ElevatorService.isRiding(w.player), "riding through the arrival")
+		w.now += Config.arriveTail() + 0.01
+		T.falsy(ElevatorService.isRiding(w.player), "free once the arrival is over")
+	end)
+
 	for _, case in { "respawned", "died", "left" } do
 		withWorld(`travel: a rider who {case} behind the shut doors is never moved`, function(w)
 			w.standAt(1)

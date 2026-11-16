@@ -64,14 +64,20 @@ return function(T, Loader)
 		local playerGui = Instance.new("Folder")
 		playerGui.Name = "PlayerGui"
 		-- two of the game's guis that the ride puts away (one is off already: it stays off)
-		local hud = Instance.new("ScreenGui")
-		hud.Name = "TerraForgeHud"
-		hud.Enabled = true
-		hud.Parent = playerGui
-		local shut = Instance.new("ScreenGui")
-		shut.Name = "TerraForgeShop"
-		shut.Enabled = false
-		shut.Parent = playerGui
+		local function screenGui(name: string, enabled: boolean): any
+			local made = Instance.new("ScreenGui")
+			made.Name = name
+			made.Enabled = enabled
+			local scale = Instance.new("UIScale")
+			scale.Name = "Scale"
+			scale.Scale = 0.62
+			scale.Parent = made
+			made.Parent = playerGui
+			return made
+		end
+		local hud = screenGui("TerraForgeHud", true)
+		local shut = screenGui("TerraForgeShop", false)
+		local banner = screenGui("TerraForgeArtifactBanner", true)
 		-- the character
 		local character = Instance.new("Model")
 		character.Name = "Rider"
@@ -86,6 +92,37 @@ return function(T, Loader)
 		local face = Instance.new("Decal")
 		face.Parent = head
 		character.Parent = workspace
+		local function worn(folderName: string, name: string, to: any): any
+			local folder = workspace:FindFirstChild(folderName)
+			if not folder then
+				folder = Instance.new("Folder")
+				folder.Name = folderName
+				folder.Parent = workspace
+			end
+			local model = Instance.new("Model")
+			model.Name = name
+			local body = Instance.new("Part")
+			body.Name = "Root"
+			body.Parent = model
+			local glow = Instance.new("PointLight")
+			glow.Enabled = true
+			glow.Parent = body
+			local sparkle = Instance.new("ParticleEmitter")
+			sparkle.Enabled = true
+			sparkle.Parent = body
+			local weld = Instance.new("Weld")
+			weld.Part0 = to
+			weld.Part1 = body
+			weld.Parent = body
+			model.Parent = folder
+			return model
+		end
+		local pack = worn("ClientBackpacks", "RookiePack", head)
+		local cape = worn("ClientCapes", "Rider_RoyalCape", root)
+		local someone = Instance.new("Part")
+		someone.Name = "SomeoneElsesTorso"
+		someone.Parent = workspace
+		local otherPack = worn("ClientBackpacks", "OtherPack", someone)
 		-- the real stops (MineKit.elevator), tagged like the game's
 		local stops = {}
 		for _, floorIndex in { FROM_FLOOR, TO_FLOOR } do
@@ -122,6 +159,11 @@ return function(T, Loader)
 			stops = stops,
 			hud = hud,
 			shut = shut,
+			banner = banner,
+			pack = pack,
+			cape = cape,
+			otherPack = otherPack,
+			hideTarget = false, -- the target stop not streamed in yet
 			playerGui = playerGui,
 			shakes = 0,
 			warns = {},
@@ -146,8 +188,8 @@ return function(T, Loader)
 						return {}
 					end
 					local out = {}
-					for _, model in stops do
-						if model.Parent then
+					for index, model in stops do
+						if model.Parent and not (index == TO_FLOOR and w.hideTarget) then
 							table.insert(out, model)
 						end
 					end
@@ -248,6 +290,12 @@ return function(T, Loader)
 				spawn = function(fn, ...)
 					fn(...)
 				end,
+				defer = function(fn, ...)
+					fn(...)
+				end,
+				delay = function(_, fn)
+					w.prebuild = fn
+				end,
 			},
 			require = function(node)
 				return stubs[rawget(node, "Name")] or Loader.require(node)
@@ -333,8 +381,18 @@ return function(T, Loader)
 			T.eq(w.claimed, nil, label .. ": the controls lock")
 			T.falsy(w.busy, label .. ": the blaster")
 			T.falsy(w.prompts, label .. ": the prompts")
-			T.truthy(hud.Enabled, label .. ": the HUD")
-			T.falsy(shut.Enabled, label .. ": a gui that was off stays off")
+			T.truthy(hud.Enabled, label .. ": the HUD (never switched off)")
+			T.near(hud.Scale.Scale, 0.62, 1e-6, label .. ": the HUD at its own scale again")
+			T.near(shut.Scale.Scale, 0.62, 1e-6, label .. ": every gui at its own scale again")
+			for _, thing in { pack, cape } do
+				for _, d in thing:GetDescendants() do
+					if d:IsA("BasePart") then
+						T.eq(d.LocalTransparencyModifier, 0, label .. ": " .. thing.Name .. " is seen again")
+					elseif d:IsA("PointLight") or d:IsA("ParticleEmitter") then
+						T.truthy(d.Enabled, label .. ": " .. thing.Name .. "'s " .. d.ClassName .. " back on")
+					end
+				end
+			end
 			T.truthy(gui.TouchControlsEnabled, label .. ": the touch controls")
 			T.eq(root.LocalTransparencyModifier, 0, label .. ": the character is seen")
 			T.eq(face.LocalTransparencyModifier, 0, label .. ": its face")
@@ -371,7 +429,7 @@ return function(T, Loader)
 		T.eq(w.phases[2], "Enter", "the floor window closes")
 		T.eq(w.camera.CameraType, Enum.CameraType.Scriptable, "the camera is in the cabin")
 		T.near(lamp.Brightness, 1.4, 1e-6, "the lamp as it was")
-		T.falsy(w.hud.Enabled, "the HUD is put away")
+		T.truthy(w.hud.Scale.Scale < 0.001, "the HUD is put away (by its scale)")
 		T.eq(w.pushes, 1, "the ride's lighting")
 		T.eq(w.character.Head.LocalTransparencyModifier, 1, "the character is hidden in the cabin")
 		local hidden, total = w.cageHidden(FROM_FLOOR)
@@ -437,6 +495,7 @@ return function(T, Loader)
 		w.run(plan.BrakeAt + 0.5)
 		T.truthy(C.isTraveling(), "the shaft keeps rushing while it waits for Arrive")
 		T.eq(w.phases[4], nil, "no stop without Arrive")
+		T.eq(w.sfx.ElevatorBrake, nil, "no brake screech while it still rushes")
 		w.run(Config.Timing.FailSafe + 0.2)
 		w.isBack("no Arrive (the fail-safe)")
 
@@ -488,5 +547,84 @@ return function(T, Loader)
 		C2.arrive({ Phase = "Arrive" })
 		C2.cancel({})
 		T.falsy(C2.isTraveling(), "still nothing")
+	end)
+
+	T.test("travel controller: the worn pack and cape go with the body; guis keep their owners' choices", function()
+		local C, w = controller(false)
+		local plan = Config.plan(FROM_FLOOR, TO_FLOOR)
+		local function packState(model: any): (number, boolean)
+			local level, on = 0, false
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					level = d.LocalTransparencyModifier
+				elseif d:IsA("PointLight") or d:IsA("ParticleEmitter") then
+					on = on or d.Enabled
+				end
+			end
+			return level, on
+		end
+		w.depart()
+		w.run(plan.DipMid + 0.1)
+		for _, thing in { w.pack, w.cape } do
+			local level, on = packState(thing)
+			T.eq(level, 1, thing.Name .. " hidden with the body in the cabin")
+			T.falsy(on, thing.Name .. ": its light and sparkles off")
+		end
+		local otherLevel, otherOn = packState(w.otherPack)
+		T.eq(otherLevel, 0, "someone else's pack is left alone")
+		T.truthy(otherOn, "and keeps its light")
+		-- the guis go by their scale, never by Enabled
+		T.truthy(w.hud.Enabled, "the HUD is never switched off ...")
+		T.truthy(w.hud.Scale.Scale < 0.001, "... it is put away by its scale")
+		T.truthy(w.shut.Scale.Scale < 0.001, "a closed gui is put away too (in case it opens meanwhile)")
+		-- meanwhile the owners do their own things: the banner's timer closes it, the shop opens
+		w.banner.Enabled = false
+		w.shut.Enabled = true
+		C.arrive({ Phase = "Arrive", Floor = TO_FLOOR, Ok = true })
+		w.run(plan.DoorsOpenAt + 0.3 - (plan.DipMid + 0.1))
+		local level = packState(w.pack)
+		T.eq(level, 1, "no pack floating in the doorway while the doors open")
+		T.truthy(w.shut.Scale.Scale < 0.001, "the gui opened in the ride stays out of the cinematic")
+		w.run(plan.EndAt - (plan.DoorsOpenAt + 0.3) + 0.1)
+		T.falsy(C.isTraveling(), "over")
+		T.falsy(w.banner.Enabled, "the banner its owner closed stays closed")
+		T.near(w.banner.Scale.Scale, 0.62, 1e-6, "(at its own scale for next time)")
+		T.truthy(w.shut.Enabled, "the gui opened in the ride shows now")
+		T.near(w.shut.Scale.Scale, 0.62, 1e-6, "at its own scale")
+		local backLevel, backOn = packState(w.pack)
+		T.eq(backLevel, 0, "the pack is back")
+		T.truthy(backOn, "with its light")
+	end)
+
+	T.test("travel controller: a target stop that streams in late still goes under the cabin", function()
+		local C, w = controller(false)
+		local plan = Config.plan(FROM_FLOOR, TO_FLOOR)
+		w.hideTarget = true
+		w.depart()
+		w.run(1.7)
+		C.arrive({ Phase = "Arrive", Floor = TO_FLOOR, Ok = true })
+		w.run(plan.StopAt - 1.7 + 0.05)
+		T.eq(w.phases[4], "Arrive", "the stop (the cabin did not wait forever for the stop)")
+		local hidden, total = w.cageHidden(TO_FLOOR)
+		T.eq(hidden, 0, "not streamed in: nothing to hide yet " .. total)
+		w.hideTarget = false -- (it streams in now)
+		w.run(0.05)
+		hidden, total = w.cageHidden(TO_FLOOR)
+		T.truthy(total > 0 and hidden == total, "its cage goes under the cabin at once")
+		w.run(plan.EndAt - plan.StopAt + 0.1)
+		w.isBack("a late stop")
+	end)
+
+	T.test("travel controller: the set is built ahead of the first ride", function()
+		local C, w = controller(false)
+		T.eq(C._test.stage(), nil, "nothing built at init")
+		C.start()
+		T.truthy(w.prebuild, "start() plans the build for a little later")
+		w.prebuild()
+		local set = C._test.stage()
+		T.truthy(set and C._test.fx(), "the set and the arrival effects are ready")
+		T.eq(set.Folder.Parent, nil, "and out of the world until a ride")
+		w.depart()
+		T.eq(C._test.stage(), set, "the first ride uses them")
 	end)
 end

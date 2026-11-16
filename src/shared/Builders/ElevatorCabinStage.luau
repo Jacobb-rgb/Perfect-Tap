@@ -39,7 +39,7 @@ local Stage = {}
 
 type Plan = ElevatorTravelConfig.Plan
 
-export type Group = { Parts: { BasePart }, Rest: { CFrame } }
+export type Group = { Parts: { BasePart }, Rest: { CFrame }, Frames: { CFrame } } -- (Frames: reused every move)
 
 export type Ring = {
 	Slot: number, -- 0-based: where the ring sits in the column at rest
@@ -91,7 +91,11 @@ export type Stage = {
 	BeaconShown: boolean,
 	FadeLevel: number,
 	BeaconAt: CFrame?,
-	RateKey: string,
+	ShaftParts: { BasePart }, -- every part that runs in the shaft, in the pose's order (made on the first ride)
+	ShaftFrames: { CFrame }, -- reused every frame
+	RateSpeed: number, -- the emitters' last speed step (-1 = quiet), floor and reduced flag
+	RateFloor: number,
+	RateReduced: boolean,
 }
 
 export type Pose = {
@@ -173,7 +177,7 @@ local function props(base: { [string]: any }, more: { [string]: any }?): { [stri
 end
 
 local function newGroup(): Group
-	return { Parts = {}, Rest = {} }
+	return { Parts = {}, Rest = {}, Frames = {} }
 end
 
 local function keep(group: Group, part: BasePart): BasePart
@@ -795,7 +799,11 @@ function Stage.build(): Stage
 		BeaconShown = false,
 		FadeLevel = 0,
 		BeaconAt = nil,
-		RateKey = "",
+		ShaftParts = {},
+		ShaftFrames = {},
+		RateSpeed = -1,
+		RateFloor = 0,
+		RateReduced = false,
 	}
 	buildCabin(stage, cabinFolder)
 	stage.DoorLeft = buildDoor(stage, cabinFolder, -1)
@@ -1006,7 +1014,7 @@ local function move(stage: Stage, parts: { BasePart }, frames: { CFrame })
 end
 
 local function placeGroup(stage: Stage, group: Group, at: CFrame)
-	local frames = table.create(#group.Rest)
+	local frames = group.Frames
 	for i, rest in group.Rest do
 		frames[i] = at * rest
 	end
@@ -1191,8 +1199,24 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 		local dirSign = if plan.Down then 1 else -1
 		local span = Stage.RingHeight * Stage.RingCount
 		local paintAhead = Stage.paintFloorAt(plan, t + 0.25)
-		local parts: { BasePart } = {}
-		local frames: { CFrame } = {}
+		local parts = stage.ShaftParts
+		if #parts == 0 then
+			for _, ring in stage.Rings do
+				for _, part in ring.Group.Parts do
+					table.insert(parts, part)
+				end
+			end
+			for _, group in { stage.Landing, stage.Streaks } do
+				for _, part in group.Parts do
+					table.insert(parts, part)
+				end
+			end
+			for _, holder in stage.EmitterParts do
+				table.insert(parts, holder)
+			end
+		end
+		local frames = stage.ShaftFrames
+		local n = 0
 		for _, ring in stage.Rings do
 			local raw = Stage.RingLow + Stage.RingHeight * (ring.Slot + 0.5) + dirSign * pose.Travel
 			local y = ((raw - Stage.RingLow) % span) + Stage.RingLow
@@ -1202,9 +1226,9 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 				paintRing(ring, paintAhead)
 			end
 			local ringCf = at * CFrame.new(0, y, 0)
-			for i, part in ring.Group.Parts do
-				table.insert(parts, part)
-				table.insert(frames, ringCf * ring.Group.Rest[i])
+			for _, rest in ring.Group.Rest do
+				n += 1
+				frames[n] = ringCf * rest
 			end
 		end
 		-- the landing band of the floor passed nearest to now (it runs with the walls)
@@ -1217,9 +1241,9 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 			end
 		end
 		local bandCf = at * CFrame.new(0, if math.abs(bandY - middle) < 24 then bandY else -400, 0)
-		for i, part in stage.Landing.Parts do
-			table.insert(parts, part)
-			table.insert(frames, bandCf * stage.Landing.Rest[i])
+		for _, rest in stage.Landing.Rest do
+			n += 1
+			frames[n] = bandCf * rest
 		end
 		local accent = Stage.floorGlow(paintAhead)
 		for _, strip in stage.LandingGlow do
@@ -1229,18 +1253,17 @@ function Stage.pose(stage: Stage, plan: Plan, pose: Pose)
 		for i, part in stage.Streaks.Parts do
 			local cycle = 30
 			local y = (((i * 7.3) + dirSign * pose.Travel * 1.5) % cycle) - 8
-			table.insert(parts, part)
-			table.insert(frames, at * CFrame.new(0, y, 0) * stage.Streaks.Rest[i])
+			n += 1
+			frames[n] = at * CFrame.new(0, y, 0) * stage.Streaks.Rest[i]
 			setTransparency(part, if reduced or pose.Speed < 0.55 then 1 else 0.35 + 0.65 * (1 - pose.Speed))
 			setColor(part, accent:Lerp(WHITE, 0.4))
 		end
 		-- the particle holders sit at the far end the walls come from
 		local holderY = if plan.Down then -2.5 else 12
 		local direction = if plan.Down then Enum.NormalId.Top else Enum.NormalId.Bottom
-		for i, holder in stage.EmitterParts do
-			local rest = stage.EmitterRest[i]
-			table.insert(parts, holder)
-			table.insert(frames, at * CFrame.new(rest.X, holderY, rest.Z))
+		for i, rest in stage.EmitterRest do
+			n += 1
+			frames[n] = at * CFrame.new(rest.X, holderY, rest.Z)
 			for k = 1, 3 do
 				local e = stage.Emitters[(i - 1) * 3 + k]
 				if e.EmissionDirection ~= direction then
@@ -1266,12 +1289,12 @@ end
 
 -- The shaft's particle rates for a speed (0..1); colours follow the floor being passed.
 function Stage.setRates(stage: Stage, speed: number, reduced: boolean, floorIndex: number)
-	local key = `{math.floor(speed * 20 + 0.5)}:{floorIndex}:{reduced}`
-	if key == stage.RateKey then
+	local step = math.floor(speed * 20 + 0.5)
+	if step == stage.RateSpeed and floorIndex == stage.RateFloor and reduced == stage.RateReduced then
 		return
 	end
-	local colorsChanged = string.match(stage.RateKey, ":(%d+):") ~= tostring(floorIndex)
-	stage.RateKey = key
+	local colorsChanged = floorIndex ~= stage.RateFloor
+	stage.RateSpeed, stage.RateFloor, stage.RateReduced = step, floorIndex, reduced
 	local list = MineFloors.List
 	local palette = list[math.clamp(floorIndex, 1, #list)].Palette
 	for i, e in stage.Emitters do
@@ -1299,7 +1322,7 @@ end
 
 -- Every emitter off (the ride is over or the shaft left the world).
 function Stage.quiet(stage: Stage)
-	stage.RateKey = ""
+	stage.RateSpeed, stage.RateFloor = -1, 0
 	for _, e in stage.Emitters do
 		e.Rate = 0
 	end

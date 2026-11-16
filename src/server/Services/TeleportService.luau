@@ -237,6 +237,11 @@ local function onTeleport(player: Player, destination: any)
 		reply(player, id, false, "Dead")
 		return
 	end
+	-- (an elevator ride may have started during the stream wait: it owns the character now)
+	if TeleportService.isRiding(player) then
+		reply(player, id, false, "Riding")
+		return
+	end
 	local seat = humanoid.SeatPart
 	if seat then
 		local weld = seat:FindFirstChild("SeatWeld")
