@@ -297,6 +297,30 @@ return function(T, Loader)
 						T.eq(inTrain, 0, label .. " nothing of the linings in the trains' way")
 						T.eq(inDoor, 0, label .. " nothing of the linings in the way to the VIP door")
 					end
+					-- (owner 2026-11-16: "board it up, an earth hill round it") an earth hill in each back
+					-- corner in front of the massif's waterfalls, clear of the rock spawns
+					local hills = model:FindFirstChild("CornerHills")
+					T.truthy(hills ~= nil, label .. " the back corners' earth hills")
+					if hills then
+						local cores = 0
+						for _, d in hills:GetChildren() do
+							if d.Name == "HillCore" and d:IsA("BasePart") then
+								cores += 1
+								T.truthy(d.CanCollide and d.CanQuery, label .. " a hill's core stops the camera")
+								local mn, mx = box(d)
+								-- (the waterfall's foot, |x| 39.3 .. 48.7 either side at z -52.9 .. -52, inside it)
+								local near, far = math.min(math.abs(mn.X), math.abs(mx.X)), math.max(math.abs(mn.X), math.abs(mx.X))
+								T.truthy(mn.X * mx.X > 0 and near <= 39.3 and far >= 48.7, label .. " a hill over its waterfall's width")
+								T.truthy(mn.Z <= -52.9 and mx.Z >= -52, label .. " a hill stands in front of its waterfall")
+								T.truthy(mx.Y >= 28, label .. " a hill as tall as the walls")
+								for _, spawn in DioramaData.Quarry.Spawns do
+									local inside = spawn[1] > mn.X and spawn[1] < mx.X and spawn[3] > mn.Z and spawn[3] < mx.Z
+									T.falsy(inside, label .. " no rock spawn under a hill")
+								end
+							end
+						end
+						T.eq(cores, 2, label .. " both back corners")
+					end
 					local keep = Floor.DioramaKeep
 					local fpLo, fpHi = Diorama.footprint(1)
 					local lineE = fpHi.X + Diorama.WallGap + Diorama.MeshSlabGap

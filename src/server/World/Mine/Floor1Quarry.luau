@@ -1019,6 +1019,9 @@ local function openingLinings(model: Model, origin: CFrame)
 		fill(l, 1)
 		addBox(l, 1)
 	end
+	-- the back wall's band too (Diorama.Floors.Quarry: N), where the rim's back terraces stand between
+	-- its mossy cliff and its slab
+	table.insert(boxes, { Vector3.new(-66, -2, -65), Vector3.new(66, 30, -57.5) })
 	-- the slot's sides too (vipFrame lines them)
 	local slot = Floor.VipSlot
 	table.insert(boxes, { Vector3.new(57, -2, slot.Z0 - 4.6), Vector3.new(73, slot.Top + 3, slot.Z0 + 0.9) })
@@ -1053,6 +1056,79 @@ local function openingLinings(model: Model, origin: CFrame)
 				break
 			end
 		end
+	end
+end
+
+--[[
+	(owner 2026-11-16, his shot down the west wall: "the gap's still there: board it up, build an
+	earth hill round it, a wall in front of it and nobody sees it") The massif's two waterfalls
+	(Lobby/Backdrop) come down into the quarry's back corners a little in front of its back wall
+	(z -52.9 .. -52, x 39 .. 48 either side): a flat light strip between the wall and the diorama's
+	back cliff that read as a gap. An earth hill in each back corner stands in front of them, a
+	little over the walls: a dark earth core (it shows in the mossy cliff's gaps like the walls'
+	slab, and stops the camera), the owner's mossy cliff on its two open faces, a grass top like the
+	walls'; the waterfalls fall in behind it. Clear of the floor's rock spawns (the last at z -36)
+	and of the DEPTHS portal (x -22 .. 22).
+]]
+Floor.CornerHills = { X0 = 33.5, Z1 = -47.5, Top = 30 }
+
+local function cornerHills(model: Model, origin: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "CornerHills"
+	m.Parent = model
+	local rng = Rng.new("QuarryCornerHills")
+	local hill = Floor.CornerHills
+	local look = Diorama.Floors.Quarry
+	local asset = look.WallMesh :: string
+	local earth = if look.WallColors then look.WallColors[3] else Color3.fromRGB(128, 124, 160)
+	local grass = look.WallCap or Color3.fromRGB(110, 170, 70)
+	local fpLo, fpHi = Diorama.footprint(Floor.Index)
+	-- (into the side wall and the back wall a little)
+	local x0, x1 = hill.X0, fpHi.X + Diorama.WallGap + 1
+	local z0, z1 = fpLo.Y - Diorama.WallGap - 2, hill.Z1
+	local y0, y1 = -2, hill.Top - 0.5
+	for _, s in { 1, -1 } do
+		-- the earth core, 1.5 behind the cliff's faces
+		local cx0, cz1 = x0 + 1.5, z1 - 1.5
+		local core = Geo.block(
+			m,
+			origin * CFrame.new(s * (cx0 + x1) / 2, (y0 + y1) / 2, (z0 + cz1) / 2),
+			Vector3.new(x1 - cx0, y1 - y0, cz1 - z0),
+			earth,
+			Enum.Material.Slate,
+			SOLID
+		)
+		core.Name = "HillCore"
+		core:AddTag("NoStuds")
+		-- the face toward the quarry, and the one toward the DEPTHS portal
+		local south = Vector3.new(s * (x0 + x1) / 2, -1, z1)
+		Diorama.meshFill(
+			m,
+			asset,
+			origin * CFrame.lookAt(south, south + Vector3.new(0, 0, 1)),
+			Vector3.new(x1 - x0, hill.Top + 1, 4),
+			rng,
+			{ Name = "HillCliff" }
+		)
+		local inner = Vector3.new(s * x0, -1, (z0 + z1) / 2)
+		Diorama.meshFill(
+			m,
+			asset,
+			origin * CFrame.lookAt(inner, inner + Vector3.new(-s, 0, 0)),
+			Vector3.new(z1 - z0, hill.Top + 1, 4),
+			rng,
+			{ Name = "HillCliff" }
+		)
+		-- the grass top over all of it
+		local top = Geo.block(
+			m,
+			origin * CFrame.new(s * (x0 + x1) / 2, hill.Top + 0.1, (z0 + z1) / 2),
+			Vector3.new(x1 - x0 + 0.6, 1.4, z1 - z0 + 0.6),
+			grass,
+			Enum.Material.Grass,
+			{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
+		)
+		top.Name = "HillTop"
 	end
 end
 
@@ -1146,6 +1222,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		end
 		vipFrame(model, origin, lineE)
 		openingLinings(model, origin)
+		cornerHills(model, origin)
 	end
 	for _, fill in Floor.DioramaFills do
 		local size = fill.Max - fill.Min

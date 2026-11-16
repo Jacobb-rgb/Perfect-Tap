@@ -86,9 +86,14 @@ Diorama.Floors = {
 		-- rim behind them: the sides up to the diorama's tallest rocks, the town side just over the
 		-- rim (the town still looks in), the back is the DEPTHS portal and the massif. Openings: the
 		-- ramp down from the town, the train band (a lintel over the trains' clearance) and the
-		-- grotto door.
-		Walls = { "E", "W", "S" },
-		WallTops = { E = 28, W = 28, S = 14 },
+		-- grotto door. (owner 2026-11-16, his shot down the side wall: "the gap's still there: board
+		-- it up, an earth hill round it, a wall in front and nobody sees it") the back too: the side
+		-- walls ended on the back line and the corners between them and the diorama's back cliff
+		-- showed the massif's waterfall and the rim; a back wall as tall as the sides, with the same
+		-- grass top, closes both corners and stops either side of the DEPTHS portal (Lobby/Backdrop
+		-- DepthsPortal: x -22..22, its own 40 tall block, the walkway x -9..9 through it).
+		Walls = { "N", "E", "W", "S" },
+		WallTops = { N = 28, E = 28, W = 28, S = 14 },
 		-- the town side stands in front of the town ground's edge at local z 58 (its flat face
 		-- showed once Land's cliff went) and stays thin, clear of the rim road
 		WallGaps = { S = -1.4 },
@@ -97,13 +102,15 @@ Diorama.Floors = {
 		-- cliff model (WallMesh, Diorama.MeshDepth deep chunks); the town side stays thin
 		WallDepths = { S = 2 },
 		WallMesh = "Prop_MossyCliff",
-		WallMeshSides = { "E", "W" },
+		WallMeshSides = { "N", "E", "W" },
 		WallGlow = false,
 		-- the diorama's lavender stone and its moss
 		WallColors = { Color3.fromRGB(150, 146, 184), Color3.fromRGB(184, 178, 214), Color3.fromRGB(128, 124, 160) },
 		WallCap = Color3.fromRGB(110, 170, 70),
 		Openings = {
 			{ Side = "S", From = -11, To = 11 },
+			-- (the DEPTHS portal's block, a little wider)
+			{ Side = "N", From = -22.4, To = 22.4 },
 			-- (over the train portals' frames and buttresses, the trains' clearance far below)
 			{ Side = "E", From = 13, To = 40, Top = 16.2 },
 			{ Side = "W", From = 13, To = 40, Top = 16.2 },
