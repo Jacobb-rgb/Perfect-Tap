@@ -1,14 +1,22 @@
 const path = require("path"), fs = require("fs");
-const M = "/Users/kuban/Desktop/Terra Forge Roblox game KIT/projekt";
-const W = M + "/.claude/worktrees/shop-v3";
-const { chromium } = require(M + "/tools/preview/node_modules/playwright");
 const here = __dirname;
+const W = path.resolve(here, "../../..");                       // the repo root (main checkout or worktree)
+// Paths from the repo root: this checkout's own file, else the main checkout's (a worktree three
+// levels below it shares its node_modules and preview shots).
+const MAIN = path.resolve(W, "../../..");
+function find(rel) {
+  for (const base of [W, MAIN]) {
+    if (fs.existsSync(base + "/" + rel)) return base + "/" + rel;
+  }
+  return W + "/" + rel;
+}
+const { chromium } = require(find("tools/preview/node_modules/playwright"));
 const enc = (p) => "file://" + p.split("/").map(encodeURIComponent).join("/");
 let html = fs.readFileSync(path.join(here, "shop.html"), "utf8")
   .replaceAll("FONTDIR", enc(W + "/tools/preview/fonts"))
-  .replaceAll("ICONS", enc(W + "/build/preview/icons"))
+  .replaceAll("ICONS", enc(find("build/preview/icons")))
   .replaceAll("TILES", enc(W + "/tools/preview/tile_art"))
-  .replaceAll("BG", enc(M + "/build/preview/shots/lobby_spawn.jpg"));
+  .replaceAll("BG", enc(find("build/preview/shots/lobby_spawn.jpg")));
 fs.writeFileSync(path.join(here, "shop_built.html"), html);
 (async () => {
   const browser = await chromium.launch({ args: ["--allow-file-access-from-files"] });

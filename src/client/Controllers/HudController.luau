@@ -246,7 +246,9 @@ local function syncDrift()
 		return
 	end
 	local step = stripes:GetAttribute("Step")
-	local want = not Motion.reduced() and type(step) == "number"
+	-- (only while the stripes show: an empty backpack hides the fill, HudBubble.setBackpack)
+	local shown = fill ~= nil and fill:IsA("GuiObject") and fill.Visible
+	local want = not Motion.reduced() and type(step) == "number" and shown
 	if want and not drift then
 		stripes.Position = UDim2.fromOffset(0, 0)
 		local tween = TweenService:Create(
@@ -269,6 +271,7 @@ local shownCount: number? = nil
 local function refreshBackpack()
 	local count = BackpackState.count()
 	HudView.setBackpack(refs, count, BackpackState.capacity())
+	syncDrift() -- (the stripes drift only while the fill shows)
 	if shownCount and count > shownCount then
 		bounceBackpack()
 	end

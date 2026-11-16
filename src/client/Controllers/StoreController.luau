@@ -762,11 +762,14 @@ local function ensureView(): StoreView.Refs
 	return build(w, h, compact)
 end
 
+local tickGen = 0 -- the banner timer's generation (tickBanner)
+
 function StoreController.close()
 	if not isOpen then
 		return
 	end
 	isOpen = false
+	tickGen += 1 -- (the banner's timer ends)
 	ContextActionService:UnbindAction(CLOSE_ACTION)
 	ContextActionService:UnbindAction(TABS_ACTION)
 	local view = refs
@@ -810,10 +813,13 @@ local function onClose(_: string, inputState: Enum.UserInputState): Enum.Context
 	return Enum.ContextActionResult.Sink
 end
 
--- The banner's quiet time left while the window is open (the edition ends: it goes).
+-- The banner's quiet time left while the window is open (the edition ends: it goes). One timer at a
+-- time: a quick close and reopen ends the old one (its generation is gone) instead of adding another.
 local function tickBanner()
+	tickGen += 1
+	local gen = tickGen
 	task.spawn(function()
-		while isOpen do
+		while isOpen and gen == tickGen do
 			local view = refs
 			if view and view.Banner then
 				local left = view.Banner.Edition.EndsAt - serverNow()
@@ -973,6 +979,14 @@ function StoreController.start()
 	if StateController.get() then
 		stateAt = serverNow()
 	end
+	-- Reduce motion turned on or off while the shop is open: its loops start over (stopMotion puts every
+	-- one back at rest; ShopFx.play gives none while the shop is quiet)
+	Motion.onReducedChanged(function()
+		local view = refs
+		if isOpen and view then
+			startMotion(view)
+		end
+	end)
 	-- a finished purchase (any Robux prompt in the game): a confetti burst over the screen
 	-- (the owner's UI pack reel, 2026-10-27); the grant itself still comes from the server.
 	-- One the shop asked for: its card flashes, pops and throws stars too (promptEnded).

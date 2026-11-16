@@ -1197,6 +1197,11 @@ local function inkRow(row: Instance, ink: Color3)
 	end
 end
 
+-- The resting colour of the line over a card's button (locked: the requirement; else NOT ENOUGH COINS).
+local function noteColor(entry: Entry?): Color3
+	return if entry and entry.State == "Locked" then hex("#e8ecff") else hex("#ff7a8a")
+end
+
 --[[
 	Shows `entry` on its card: the frame, halo and tag (here), the locked
 	shade and lock, the line over the button and the button itself.
@@ -1218,7 +1223,7 @@ function ElevatorWindow.setCard(card: Card, entry: Entry, m: Metrics)
 	card.Note.Visible = note ~= ""
 	card.NoteLock.Visible = locked
 	setRowText(card.NoteText, note)
-	card.NoteText.TextColor3 = if locked then hex("#e8ecff") else hex("#ff7a8a")
+	card.NoteText.TextColor3 = noteColor(entry)
 	-- the button
 	local style = ElevatorWindow.styleOf(entry)
 	paintFace(card.Button, style, m.Button)
@@ -2034,7 +2039,9 @@ end
 ]]
 function ElevatorWindow.playOpen(refs: Refs)
 	local pop = scaleOn(refs.Group, "OpenPop")
+	-- (a zero-time tween, not a plain set: it replaces a close's veil tween still running on a quick reopen)
 	refs.Veil.BackgroundTransparency = 1
+	tween(refs.Veil, 0, "Linear", "Out", { BackgroundTransparency = 1 })
 	for _, card in refs.Cards do
 		card.Fade.BackgroundTransparency = 1
 	end
@@ -2110,15 +2117,15 @@ end
 ]]
 function ElevatorWindow.shake(card: Card)
 	local note = card.NoteText
-	local rest = note.TextColor3
+	-- (the resting colour from the card's state, never read back: a second shake mid-flash would keep the flash)
 	note.TextColor3 = hex("#ffd84a")
 	if ShopFx.quiet() then
 		later(0.6, function()
-			note.TextColor3 = rest
+			note.TextColor3 = noteColor(card.Entry)
 		end)
 		return
 	end
-	tween(note, 0.6, "Quad", "In", { TextColor3 = rest }, 0.25)
+	tween(note, 0.6, "Quad", "In", { TextColor3 = noteColor(card.Entry) }, 0.25)
 	local base = card.Holder:GetAttribute("BasePosition")
 	if typeof(base) ~= "UDim2" then
 		base = card.Holder.Position

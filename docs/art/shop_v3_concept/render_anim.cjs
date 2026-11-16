@@ -3,16 +3,24 @@
 const path = require("path");
 const fs = require("fs");
 const HERE = __dirname;
-const W = path.resolve(HERE, "../../..");
-const M = path.resolve(W, "../../..");
-const { chromium } = require(M + "/tools/preview/node_modules/playwright");
+const W = path.resolve(HERE, "../../..");                       // the repo root (main checkout or worktree)
+// Paths from the repo root: this checkout's own file, else the main checkout's (a worktree three
+// levels below it shares its node_modules and preview shots).
+const MAIN = path.resolve(W, "../../..");
+function find(rel) {
+  for (const base of [W, MAIN]) {
+    if (fs.existsSync(base + "/" + rel)) return base + "/" + rel;
+  }
+  return W + "/" + rel;
+}
+const { chromium } = require(find("tools/preview/node_modules/playwright"));
 (async () => {
   const [out, page = "featured", fps = "20"] = process.argv.slice(2);
   const html = fs.readFileSync(HERE + "/shop_wow.html", "utf8")
     .replaceAll("FONTDIR", "file://" + W + "/tools/preview/fonts")
     .replaceAll("ICONS/", "file://" + W + "/build/preview/icons/")
     .replaceAll("TILES/", "file://" + W + "/tools/preview/tile_art/")
-    .replaceAll('url("BG")', 'url("file://' + M + '/build/preview/shots/lobby_spawn.jpg")')
+    .replaceAll('url("BG")', 'url("file://' + find("build/preview/shots/lobby_spawn.jpg") + '")')
     .replace('<script src="icons.js">', '<script src="file://' + HERE + '/icons.js">');
   const built = path.join(out, "shop_anim_built.html");
   fs.writeFileSync(built, html);

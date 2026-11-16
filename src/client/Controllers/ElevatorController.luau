@@ -60,6 +60,7 @@ local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local ElevatorView = require(script.Parent.Parent.UI.ElevatorView)
 local ElevatorWindow = require(script.Parent.Parent.UI.ElevatorWindow)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local ShopFx = require(script.Parent.Parent.UI.ShopFx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
@@ -644,6 +645,14 @@ function ElevatorController.init()
 			if view and view.Picked then
 				ElevatorWindow.unpick(view)
 			end
+		end
+	end)
+	-- Reduce motion turned on or off while the window is open: its loops start over (none when quiet)
+	Motion.onReducedChanged(function()
+		local view = refs
+		if view and isOpen then
+			stopLoops()
+			playLoops(view)
 		end
 	end)
 	StateController.onChanged(function()

@@ -46,10 +46,11 @@ limited 3/s), `ElevatorTravelServer` = `ElevatorService`, `ElevatorTravelClient`
 
 ## Server rules (unchanged where they worked)
 
-- `ElevatorAction { Action = "Go", Floor }`: a whole floor 1..#MineFloors.List, the elevator
-  owned (main: bought once; ui/elevator-v2-server: the floor's ticket bought), blaster level >=
-  the floor's `MinBlaster`, a living character, not cleaning, at a stop (16 studs), not its own
-  floor, not riding. Riding to a floor never spends coins (only Buy does, once).
+- `ElevatorAction { Action = "Go", Floor }`: a whole floor 1..#MineFloors.List, open to the
+  blaster (level >= the floor's `MinBlaster`) and either free (floors 1-3, walkable) or its ticket
+  bought (`Upgrades.Floors[Id]`), a living character, not cleaning, at a stop (16 studs), not its
+  own floor, not riding nor within the cooldown. Riding never spends coins: `{ Action = "Buy",
+  Floor }` charges `MineFloors.priceOf` once per floor (ui/elevator-v2, owner 2026-11-15/16).
 - `isRiding` covers the whole cinematic (`ElevatorTravelConfig.hold`, 0.35 s less than the
   client's end), so a second GO, a teleport, a rebirth or a hoverboard waits; a late move pushes
   the end back.
@@ -105,7 +106,9 @@ the cabin, the counter, Reduce motion, the camera, the arrival effects, the word
 1. Play, walk to the floor-1 elevator, E, pick an unlocked floor: preparation (pill, beacon,
    lamp, shake, sounds), the dip into the cabin, the doors close, the ride, the counter, the
    stop, ARRIVED!, the doors open on the right floor, the camera returns, you can walk.
-2. Ride to every floor (a test place with everything unlocked): each mine's arrival look.
+2. Ride to every floor (a test place with everything unlocked: blaster 10 and 1e15 coins, but
+   floors 4-6 still to buy): buy floors 4-6 in the ELEVATOR window first, then ride to each and
+   check each mine's arrival look.
 3. Tap a floor again during the ride: nothing happens; BASE/LOBBY/VAULT during the ride:
    "Wait until the elevator arrives."
 4. Reset the character (Esc > Reset) in the preparation and in the ride: the camera, the HUD

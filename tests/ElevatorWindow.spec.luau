@@ -318,6 +318,54 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("ElevatorWindow: a second shake mid-flash and a quick reopen mid-close end at rest (review 2026-11-16)", function()
+		local made: { { Instance: any, Goal: { [string]: any } } } = {}
+		-- tweens that never finish: each one only says where it would end
+		local function frozen(instance: any, _time: number, _style: string, _direction: string, goal: { [string]: any })
+			table.insert(made, { Instance = instance, Goal = goal })
+			return nil
+		end
+		local function lastGoal(instance: any, key: string): any
+			local found = nil
+			for _, t in made do
+				if t.Instance == instance and t.Goal[key] ~= nil then
+					found = t.Goal[key]
+				end
+			end
+			return found
+		end
+		ElevatorWindow.useTweens(frozen)
+		ShopFx.useTweens(frozen)
+		local ok, err = pcall(function()
+			local refs = ElevatorWindow.build(false)
+			ElevatorWindow.layout(refs, 1280, 684)
+			ElevatorWindow.setFloors(refs, ElevatorWindow.entries(8, 1, palaceOnly, 0))
+			local core = refs.Cards[CORE.Index]
+			T.eq(core.Entry.State, "Locked", "floor 6 locked at blaster 8")
+			local rest = core.NoteText.TextColor3
+			ElevatorWindow.shake(core)
+			ElevatorWindow.shake(core) -- again while the line still shows the flash's yellow
+			T.eq(lastGoal(core.NoteText, "TextColor3"), rest, "the second shake fades back to the resting colour")
+			local poor = refs.Cards[RIFT.Index]
+			T.eq(poor.Entry.State, "Buy", "floor 5 to buy, no coins")
+			local poorRest = poor.NoteText.TextColor3
+			ElevatorWindow.refuse(poor)
+			ElevatorWindow.refuse(poor)
+			T.eq(lastGoal(poor.NoteText, "TextColor3"), poorRest, "NOT ENOUGH COINS fades back to its red")
+			-- an animated close still running when it opens again: the open's own veil tween replaces it
+			table.clear(made)
+			ElevatorWindow.playClose(refs, function() end)
+			T.eq(lastGoal(refs.Veil, "BackgroundTransparency"), 0.25, "the close darkens the veil")
+			ElevatorWindow.playOpen(refs)
+			T.eq(lastGoal(refs.Veil, "BackgroundTransparency"), 1, "the open's newer tween ends clear")
+		end)
+		ElevatorWindow.useTweens(nil)
+		ShopFx.useTweens(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("ElevatorWindow: a few loops while it is open (shines, the halo, the glint, the ?, the clock)", function()
 		local refs = ElevatorWindow.build(false)
 		ElevatorWindow.setFloors(refs, ElevatorWindow.entries(8, 1, palaceOnly, riftPrice + 1))
