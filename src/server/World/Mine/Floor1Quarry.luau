@@ -824,8 +824,9 @@ Floor.DioramaFills = {
 	to Land's tunnel lined with the owner's mossy cliff (Diorama.meshFill; the part terraces
 	either side of it stand hidden behind) and giant shards in the grotto's colours, glassy with a
 	glowing heart (all neon read as white blobs): a cluster either side of the door leaning away
-	from it, a fan over the wall's top (the town sees it) and small ones round the doorway. Looks
-	only: nothing to bump into, the way in stays clear.
+	from it, a fan over the wall's top (the town sees it) and small ones round the doorway. The
+	shards are looks only (nothing to bump into, the way in stays clear); the slot's mossy walls are
+	solid, so the camera stops at them (Diorama.CameraStops, owner 2026-11-16).
 ]]
 -- the shards' glass (two shades) and their glowing hearts
 Floor.VipColors = { Color3.fromRGB(70, 214, 224), Color3.fromRGB(44, 168, 204), Color3.fromRGB(16, 160, 182) }

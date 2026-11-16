@@ -235,6 +235,16 @@ Diorama.MeshOut = 0.8
 Diorama.MeshPad = 0.4
 Diorama.MeshSlabGap = 4
 Diorama.VeilThickness = 0.3
+--[[
+	(owner 2026-11-16, three Studio shots of the quarry: "you can see there's no wall there, you can see
+	behind the 3D object: put a wall there") Roblox's camera (Poppercam) stops only at parts that are
+	CanCollide, CanQuery and nearly opaque. The rooms' slabs, lintels and ceilings were CanQuery false
+	and the mossy cliff chunks (walls, the VIP door's slot) neither, so a camera swung toward a wall
+	(it zooms out to 70) went through it and showed the rim, the void and the backs of the models
+	behind. Every piece of a room's wall is a camera stop now: the chunks themselves (the camera halts
+	at the rock's face, never inside it) and the slab behind them as the backstop.
+]]
+Diorama.CameraStops = { "MeshWall", "SlotWall", "WallSlab", "Lintel", "Ceiling" }
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -366,7 +376,13 @@ function Diorama.meshFill(
 			local cf = turned
 				* CFrame.new(x, h / 2 + row * rowStep, -size.Z / 2 + (if k == 0 then 0.08 else -0.08))
 				* CFrame.Angles(0, rng:range(-0.04, 0.04), 0)
-			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, { Name = if opts and opts.Name then opts.Name else "MeshWall" })
+			-- (solid and queryable: the player's camera stops at the wall's rock instead of
+			-- swinging through it, see Diorama.CameraStops)
+			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, {
+				Name = if opts and opts.Name then opts.Name else "MeshWall",
+				CanCollide = true,
+				CanQuery = true,
+			})
 			if p then
 				p.Parent = parent
 				table.insert(out, p)
@@ -414,7 +430,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		local top = if tops and tops[side] then tops[side] else ceilingY
 		return if closed then top + Diorama.CeilingThickness else top
 	end
-	local slabProps = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false }
+	-- (queryable: Diorama.CameraStops)
+	local slabProps = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false }
 	local walls: { string } = look.Walls or {}
 	local thin: { string } = look.Thin or {}
 	local openings: { Opening } = look.Openings or {}

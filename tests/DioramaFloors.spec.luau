@@ -253,11 +253,17 @@ return function(T, Loader)
 						local shards, slotWalls, inWay = 0, 0, 0
 						for _, d in frame:GetDescendants() do
 							if d:IsA("BasePart") then
-								T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
-								if d.Name == "Shard" then
-									shards += 1
-								elseif d.Name == "SlotWall" then
+								if d.Name == "SlotWall" then
+									-- (owner 2026-11-16: the camera swung through the slot's sides and showed
+									-- what's behind them) the slot's walls stop the camera (Diorama.CameraStops)
 									slotWalls += 1
+									T.truthy(d.CanCollide and d.CanQuery, label .. " the slot's walls stop the camera")
+									T.lt(d.Transparency, 0.25, label .. " the slot's walls are opaque to the camera")
+								else
+									T.eq(d.CanCollide, false, label .. " the VIP frame's shards are looks only")
+									if d.Name == "Shard" then
+										shards += 1
+									end
 								end
 								-- (the way in: the door's width, the ground to over head height, the wall to the tunnel)
 								local mn, mx = box(d)
@@ -365,6 +371,13 @@ return function(T, Loader)
 					for _, d in room:GetChildren() do
 						if d.Name == "WallSlab" or d.Name == "Lintel" then
 							table.insert(slabs, d)
+						end
+						-- (owner 2026-11-16, his quarry shots: "you can see behind the 3D object") Roblox's
+						-- camera stops only at parts that are CanCollide, CanQuery and near opaque: every
+						-- piece of the room's walls and its ceiling is such a stop
+						if table.find(Diorama.CameraStops, d.Name) and d:IsA("BasePart") then
+							T.truthy(d.CanCollide and d.CanQuery, label .. " " .. d.Name .. " stops the camera")
+							T.lt(d.Transparency, 0.25, label .. " " .. d.Name .. " is opaque to the camera")
 						end
 					end
 					local function covered(p): boolean
@@ -500,7 +513,8 @@ return function(T, Loader)
 						for _, d in room:GetChildren() do
 							if d.Name == "MeshWall" then
 								T.eq(d:GetAttribute("Asset"), look.WallMesh, label .. " the wall chunks are the owner's model")
-								T.eq(d.CanCollide, false, label .. " the slab behind is the wall, not the chunks")
+								-- (owner 2026-11-16) the camera stops at the rock's face, never swings through it
+								T.truthy(d.CanCollide and d.CanQuery, label .. " the wall chunks stop the camera")
 								local p = origin:PointToObjectSpace(d.CFrame.Position)
 								local side = if math.abs(p.X) > math.abs(p.Z)
 									then (if p.X > 0 then "E" else "W")
