@@ -533,7 +533,7 @@ IconAssets.ShopGolems = {
 ]]
 IconAssets.ShopItems = {
 	File = "obchod_predmety.png",
-	Id = 0,
+	Id = 83079493320751, -- (the owner's upload, 2026-11-16)
 	Cell = 256,
 	Columns = 3,
 	Preview = true,

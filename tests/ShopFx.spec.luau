@@ -640,6 +640,7 @@ return function(T, Loader)
 			T.eq(IconAssets.ShopGolems.File, "obchod_golemove.png")
 			T.eq(IconAssets.ShopItems.File, "obchod_predmety.png")
 			T.truthy(IconAssets.ShopGolems.Id > 0, "the golem stickers are uploaded (owner 2026-11-12)")
+			T.truthy(IconAssets.ShopItems.Id > 0, "the PASSES items' stickers are uploaded (owner 2026-11-16)")
 			local files: { [string]: boolean } = {}
 			for _, sheet in IconAssets.StickerSheets do
 				T.falsy(files[sheet.File], sheet.File .. ": one image each")
