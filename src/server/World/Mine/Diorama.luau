@@ -48,6 +48,9 @@ export type Look = {
 	Flatten: { { number } }?,
 	WallTops: { [string]: number }?,
 	WallGaps: { [string]: number }?,
+	-- a side's wall keeps in front of this floor-local coordinate (Z for N / S, X for E / W):
+	-- a neighbouring floor's wall stands there (Diorama.lines)
+	WallLimits: { [string]: number }?,
 	WallDepths: { [string]: number }?,
 	WallGlow: boolean?,
 	WallColors: { Color3 }?,
@@ -97,6 +100,11 @@ Diorama.Floors = {
 		-- the town side stands in front of the town ground's edge at local z 58 (its flat face
 		-- showed once Land's cliff went) and stays thin, clear of the rim road
 		WallGaps = { S = -1.4 },
+		-- (2026-11-17, the Meshy chat's review: the back wall's slab, grass top and mossy chunks, the
+		-- side walls' back ends and the corner hills stood up to 6 studs inside the Ember Caves, by
+		-- its way out) the Ember Caves' thin south wall faces the quarry at local z -59.97: the back
+		-- wall moves in until all of it stays in front (it lines up with the DEPTHS portal's front)
+		WallLimits = { N = -59.9 },
 		-- (owner 2026-11-14, his mossy cliff picture: "board it up with walls like these, so it
 		-- looks the same, only you can't see behind it") the side walls are faced with his mossy
 		-- cliff model (WallMesh, Diorama.MeshDepth deep chunks); the town side stays thin
@@ -232,6 +240,7 @@ Diorama.ThinGap = -0.1 -- ... its line this far out of the diorama's outline (ju
 Diorama.CeilingThickness = 0.5 -- its top at local 34: world 22 on the Ember Caves, the massif's foot
 Diorama.WallBottom = -6 -- the walls reach this far under the usual ground
 Diorama.CapHeight = 1.4 -- an open-air wall's grassy top
+Diorama.CapReach = 0.25 -- ... it overhangs its slab's back by this much
 Diorama.OpeningPad = 2.5 -- rock shards keep this far off an opening (theirs overhang a piece's ends)
 -- a mesh-faced wall (look.WallMesh): its chunks' size and depth (back past its slab, into the
 -- rim), how far their fronts stand out of the wall's line, how far they keep off an opening, and
@@ -241,6 +250,10 @@ Diorama.MeshDepth = 7
 Diorama.MeshOut = 0.8
 Diorama.MeshPad = 0.4
 Diorama.MeshSlabGap = 4
+-- each chunk turns up to this much (radians) about its upright, and every other one sits
+-- MeshStagger deeper or shallower: no two read as copies (their boxes' back corners move with it)
+Diorama.MeshYaw = 0.04
+Diorama.MeshStagger = 0.08
 Diorama.VeilThickness = 0.3
 --[[
 	(owner 2026-11-16, three Studio shots of the quarry: "you can see there's no wall there, you can see
@@ -248,17 +261,41 @@ Diorama.VeilThickness = 0.3
 	CanCollide, CanQuery and nearly opaque. The rooms' slabs, lintels and ceilings were CanQuery false
 	and the mossy cliff chunks (walls, the VIP door's slot) neither, so a camera swung toward a wall
 	(it zooms out to 70) went through it and showed the rim, the void and the backs of the models
-	behind. The slabs, lintels and ceilings are camera stops now (queryable). The mossy cliff chunks are
-	not: made solid (2026-11-16) their collision box stood where the rock's ragged top and sides are
-	not, and the owner met "a wall that's there but invisible"; the slab behind them is the stop.
+	behind. The slabs, lintels and ceilings are camera stops now (queryable). Made solid (2026-11-16)
+	the mossy cliff chunks' collision boxes stood where the rock's ragged top and sides are not, and
+	the owner met "a wall that's there but invisible".
+
+	(owner 2026-11-17, after his test: "the walls are still invisible ... make sure they are actually
+	visible") With the chunks looks only, the slab 4.8 behind their fronts was the only stop: a player
+	walked into the rock, and off a high terrace (its walk boxes end 1-3 studs short of the rock) fell
+	into the hollow inside the wall; the camera stopped at the slab, inside the rock, whose faces
+	(seen from behind) are not drawn, so the near wall vanished. Now, on a mesh-faced wall:
+	- its body: an invisible solid box from MeshBodyIn in front of the wall's line (at the chunks'
+	  fronts, the rock's front-most bumps; its usual face lies 0.7-1.6 behind them low down) back to
+	  its slab, from under the ground to the wall's top (WallBody). Nothing stands inside a chunk's
+	  box: the camera never looks out of one, and no line of sight that respects CanCollide (the
+	  pickup's, the beam's) ever meets one between two things in the room;
+	- the walk boxes that end within LedgeReach of a body run on to it (Diorama.ledges);
+	- every mossy chunk stops the camera and nothing else: solid and queryable, tagged CameraTag,
+	  which WorldService puts in the CameraGroup collision group (it collides with no group), so the
+	  camera halts at the rock's front while players and ore pass on to the body behind.
 ]]
 Diorama.CameraStops = { "WallSlab", "Lintel", "Ceiling" }
+Diorama.MeshBodyIn = Diorama.MeshOut
+Diorama.LedgeReach = 5
+Diorama.CameraGroup = "CameraOnly"
+Diorama.CameraTag = "CameraOnly"
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
 Diorama.BoxDepth = 6 -- collision boxes reach this far under their top (and below the lowest ground)
 
 local GROUND = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false, Transparency = 1 }
+-- a mesh-faced wall's body (Diorama.MeshBodyIn): solid, never seen, never clicked or shot
+local BODY = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
+-- a floor-level mesh-faced wall piece's body for Diorama.ledges: its side, its span along the wall,
+-- its front (local X on E / W, Z on N / S) and the piece's bottom
+export type Body = { Side: string, From: number, To: number, Front: number, Y0: number }
 -- a path ramp's turn by its DioramaData dir (rising toward +X, -X, +Z, -Z; a wedge rises toward +Z)
 local RAMP_TURN = { math.pi / 2, -math.pi / 2, 0, math.pi }
 local GLOW = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
@@ -382,18 +419,85 @@ function Diorama.meshFill(
 			local k = (row + col) % 2
 			local x = -size.X / 2 + w / 2 + col * colStep
 			local cf = turned
-				* CFrame.new(x, h / 2 + row * rowStep, -size.Z / 2 + (if k == 0 then 0.08 else -0.08))
-				* CFrame.Angles(0, rng:range(-0.04, 0.04), 0)
-			-- (looks only: its collision box would stand where the rock's ragged top and sides are not,
-			-- an invisible wall; the slab or rim behind it stops the camera, Diorama.CameraStops)
-			local p = MeshKit.part(asset, Vector3.new(w, h, size.Z), cf, { Name = if opts and opts.Name then opts.Name else "MeshWall" })
+				* CFrame.new(x, h / 2 + row * rowStep, -size.Z / 2 + (if k == 0 then Diorama.MeshStagger else -Diorama.MeshStagger))
+				* CFrame.Angles(0, rng:range(-Diorama.MeshYaw, Diorama.MeshYaw), 0)
+			-- (solid and queryable for the camera only, Diorama.CameraTag: its box stands where the rock's
+			-- ragged top and sides are not, so nobody else ever touches it)
+			local p = MeshKit.part(
+				asset,
+				Vector3.new(w, h, size.Z),
+				cf,
+				{ Name = if opts and opts.Name then opts.Name else "MeshWall", CanCollide = true, CanQuery = true }
+			)
 			if p then
+				p:AddTag(Diorama.CameraTag)
 				p.Parent = parent
 				table.insert(out, p)
 			end
 		end
 	end
 	return out
+end
+
+--[[
+	The room's lines (floor-local): lo = (the W side's x, the N side's z), hi = (E's x, S's z). Each
+	stands WallGap out of the diorama's outline (look.WallGaps; a thin wall's ThinGap, in front of
+	whatever stands right behind it: the DEPTHS portal's back), moved in where look.WallLimits keeps
+	all a side builds behind its line (its slab and grass top, its chunks, the walls running on along
+	it to close the corners) in front of a neighbouring floor's wall.
+]]
+function Diorama.lines(index: number): (Vector2, Vector2)
+	local floor = MineFloors.ByIndex[index]
+	local look: Look = Diorama.Floors[floor.Id] or { Light = Color3.new(1, 1, 1), Brightness = 0.8 }
+	local kind: { [string]: string } = {}
+	local walls: { string } = look.Walls or {}
+	local thin: { string } = look.Thin or {}
+	for _, side in walls do
+		kind[side] = "rock"
+	end
+	for _, side in thin do
+		kind[side] = "thin"
+	end
+	local function gapOf(side: string): number
+		local gaps = look.WallGaps
+		if gaps and gaps[side] then
+			return gaps[side]
+		end
+		return if kind[side] == "thin" then Diorama.ThinGap else Diorama.WallGap
+	end
+	-- how far behind its line a side builds (room(): behind(), plus the grass top's overhang; a
+	-- mesh-faced side's chunks)
+	local function reach(side: string): number
+		local depths = look.WallDepths
+		local r = if kind[side] == "rock"
+			then (if depths and depths[side] then depths[side] else Diorama.WallDepth) + 2
+			elseif kind[side] == "thin" then Diorama.ThinWall
+			else 0
+		r += Diorama.CapReach
+		if Diorama.meshWalls(look, side) then
+			-- (a chunk's box back to MeshDepth, its back corners turned out by up to MeshYaw)
+			local turn = Diorama.MeshChunk.X / 2 * math.sin(Diorama.MeshYaw) + Diorama.MeshStagger
+			r = math.max(r, Diorama.MeshDepth - Diorama.MeshOut + turn)
+		end
+		return r
+	end
+	local fpLo, fpHi = Diorama.footprint(index)
+	local w, n = fpLo.X - gapOf("W"), fpLo.Y - gapOf("N")
+	local e, s = fpHi.X + gapOf("E"), fpHi.Y + gapOf("S")
+	local limits: { [string]: number } = look.WallLimits or {}
+	if limits.W then
+		w = math.max(w, limits.W + reach("W"))
+	end
+	if limits.N then
+		n = math.max(n, limits.N + reach("N"))
+	end
+	if limits.E then
+		e = math.min(e, limits.E - reach("E"))
+	end
+	if limits.S then
+		s = math.min(s, limits.S - reach("S"))
+	end
+	return Vector2.new(w, n), Vector2.new(e, s)
 end
 
 --[[
@@ -405,7 +509,7 @@ end
 	side without one). Solid: nobody walks off the diorama's open front. Cutaway (the preview
 	pictures) leaves out the ceiling and the front (+Z) wall.
 ]]
-local function room(model: Model, index: number, origin: CFrame, look: Look, cutaway: boolean)
+local function room(model: Model, index: number, origin: CFrame, look: Look, cutaway: boolean): { Body }
 	local floor = MineFloors.ByIndex[index]
 	local pal = floor.Palette
 	-- (rock shards in these: Mid, Light, Dark; the slab behind in the last)
@@ -436,6 +540,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	end
 	-- (queryable: Diorama.CameraStops)
 	local slabProps = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false }
+	-- the mesh-faced pieces' bodies (Diorama.ledges runs the walk boxes on to them)
+	local bodies: { Body } = {}
 	local walls: { string } = look.Walls or {}
 	local thin: { string } = look.Thin or {}
 	local openings: { Opening } = look.Openings or {}
@@ -451,18 +557,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	local function behind(side: string): number
 		return if kind[side] == "rock" then reachOf(side) elseif kind[side] == "thin" then Diorama.ThinWall else 0
 	end
-	-- each side's line: WallGap out of the diorama's outline, a thin wall's ThinGap (in front of
-	-- whatever stands right behind it: the DEPTHS portal's back)
-	local fpLo, fpHi = Diorama.footprint(index)
-	local function gapOf(side: string): number
-		local gaps = look.WallGaps
-		if gaps and gaps[side] then
-			return gaps[side]
-		end
-		return if kind[side] == "thin" then Diorama.ThinGap else Diorama.WallGap
-	end
-	local lo = Vector2.new(fpLo.X - gapOf("W"), fpLo.Y - gapOf("N"))
-	local hi = Vector2.new(fpHi.X + gapOf("E"), fpHi.Y + gapOf("S"))
+	-- each side's line (Diorama.lines)
+	local lo, hi = Diorama.lines(index)
 
 	-- one wall piece from a to b along the side's line, from y0 up to y1
 	-- (padA / padB: the shards keep this far off a piece's end at an opening; theirs overhang it)
@@ -535,6 +631,22 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		local slab =
 			Geo.block(folder, at(origin, Vector3.new(mid.X, (y0 + y1) / 2, mid.Z)), size, slabColor, Enum.Material.Slate, slabProps)
 		slab.Name = if y0 <= bottom then "WallSlab" else "Lintel"
+		-- a mesh-faced piece's body (Diorama.MeshBodyIn): where its rock shows, nobody walks into it
+		if meshWall then
+			local depth = Diorama.MeshSlabGap + Diorama.MeshBodyIn
+			local bodyMid = (from + to) / 2 + face * (Diorama.MeshBodyIn - depth / 2)
+			local bodySize = if side == "N" or side == "S" then Vector3.new(along, y1 - y0, depth) else Vector3.new(depth, y1 - y0, along)
+			local body = Geo.block(folder, at(origin, Vector3.new(bodyMid.X, (y0 + y1) / 2, bodyMid.Z)), bodySize, slabColor, nil, BODY)
+			body.Name = "WallBody"
+			local front = from + face * Diorama.MeshBodyIn
+			table.insert(bodies, {
+				Side = side,
+				From = a,
+				To = b,
+				Front = if side == "N" or side == "S" then front.Z else front.X,
+				Y0 = y0,
+			})
+		end
 		-- an open-air wall's grassy top (the diorama's own cliffs end in grass)
 		if look.WallCap and not closed then
 			local capSize = if side == "N" or side == "S"
@@ -613,7 +725,7 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	end
 
 	if cutaway or not closed then
-		return
+		return bodies
 	end
 	-- the ceiling over the whole room and its walls
 	local x0, x1 = lo.X - behind("W"), hi.X + behind("E")
@@ -627,6 +739,61 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		slabProps
 	)
 	ceiling.Name = "Ceiling"
+	return bodies
+end
+
+--[[
+	(owner 2026-11-17: "the walls are still invisible") The diorama's terraces reach its mossy walls'
+	rock, but the walk boxes measured from it end 1-3 studs short: a player stepped off into the gap
+	and fell into the wall. Every walk box (quintuples x0, z0, x1, z1, top) whose edge toward a
+	floor-level mesh-faced piece ends within LedgeReach in front of the piece's body runs on to it,
+	alongside the piece only (never into an opening): one more box per such pair, from that edge to
+	the body's front at the walk box's top. Returns the new boxes as quintuples.
+]]
+function Diorama.ledges(walk: { number }, bodies: { Body }): { number }
+	local out: { number } = {}
+	for _, body in bodies do
+		if body.Y0 > Diorama.WallBottom then
+			continue
+		end
+		local alongX = body.Side == "N" or body.Side == "S"
+		for i = 1, #walk, 5 do
+			local x0, z0, x1, z1, top = walk[i], walk[i + 1], walk[i + 2], walk[i + 3], walk[i + 4]
+			local a0 = math.max(if alongX then x0 else z0, body.From)
+			local a1 = math.min(if alongX then x1 else z1, body.To)
+			if a1 - a0 <= 0.05 then
+				continue
+			end
+			-- (the box's edge toward the wall, and how far short of the body it ends)
+			local edge, gap
+			if body.Side == "E" then
+				edge, gap = x1, body.Front - x1
+			elseif body.Side == "W" then
+				edge, gap = x0, x0 - body.Front
+			elseif body.Side == "S" then
+				edge, gap = z1, body.Front - z1
+			else
+				edge, gap = z0, z0 - body.Front
+			end
+			if gap <= 0.01 or gap > Diorama.LedgeReach then
+				continue
+			end
+			local e0, e1 = math.min(edge, body.Front), math.max(edge, body.Front)
+			if alongX then
+				table.insert(out, a0)
+				table.insert(out, e0)
+				table.insert(out, a1)
+				table.insert(out, e1)
+			else
+				table.insert(out, e0)
+				table.insert(out, a0)
+				table.insert(out, e1)
+				table.insert(out, a1)
+			end
+			table.insert(out, top)
+		end
+	end
+	return out
 end
 
 function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
@@ -753,7 +920,22 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 
 	-- the cave floors' closed room up to the one ceiling height (the sky never shows in the caves)
 	if closed or look.Walls then
-		room(model, index, origin, look, opts ~= nil and opts.Cutaway == true)
+		local bodies = room(model, index, origin, look, opts ~= nil and opts.Cutaway == true)
+		-- the walk boxes that end just short of a mesh-faced wall run on to its body
+		local ledges = Diorama.ledges(walk, bodies)
+		for i = 1, #ledges, 5 do
+			local x0, z0, x1, z1, ledgeTop = ledges[i], ledges[i + 1], ledges[i + 2], ledges[i + 3], ledges[i + 4]
+			local bottom = math.min(ledgeTop - Diorama.BoxDepth, data.Bottom - Diorama.BoxDepth)
+			local box = Geo.block(
+				groundFolder,
+				at(origin, Vector3.new((x0 + x1) / 2, (ledgeTop + bottom) / 2, (z0 + z1) / 2)),
+				Vector3.new(x1 - x0, ledgeTop - bottom, z1 - z0),
+				floor.Palette.Ground,
+				nil,
+				GROUND
+			)
+			box.Name = "Ledge"
+		end
 	end
 
 	-- ambience: the floor's kinds on ground boxes spread over the floor

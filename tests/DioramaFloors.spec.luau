@@ -78,6 +78,63 @@ return function(T, Loader)
 		T.eq(low[5], 0.5, "ground under the floor stays")
 	end)
 
+	T.test("diorama floors: a walk box ending just short of a mesh-faced wall runs on to its body", function()
+		-- an E wall's floor-level piece z -10..10 with its body's front at x 50, a lintel piece over an
+		-- opening z 10..20 (no ledge under a lintel), and walk boxes: 2 short (a ledge), 7 short (none),
+		-- one reaching past the front (none), one beside the piece (none), one across its end (clipped)
+		local bodies = {
+			{ Side = "E", From = -10, To = 10, Front = 50, Y0 = Diorama.WallBottom },
+			{ Side = "E", From = 10, To = 20, Front = 50, Y0 = 16 },
+		}
+		local walk = {
+			40,
+			-4,
+			48,
+			4,
+			20, -- 2 short: x 48..50 at 20
+			30,
+			-4,
+			43,
+			4,
+			9, -- 7 short: nothing
+			44,
+			-9,
+			50.5,
+			-5,
+			3, -- reaches the body: nothing
+			40,
+			12,
+			48,
+			18,
+			6, -- beside the opening's lintel: nothing
+			40,
+			6,
+			48.5,
+			14,
+			12, -- across the piece's end: z 6..10 only
+		}
+		local out = Diorama.ledges(walk, bodies)
+		T.eq(#out, 10, "two ledges")
+		T.eq(out[1], 48)
+		T.eq(out[2], -4)
+		T.eq(out[3], 50)
+		T.eq(out[4], 4)
+		T.eq(out[5], 20)
+		T.eq(out[6], 48.5)
+		T.eq(out[7], 6)
+		T.eq(out[8], 50)
+		T.eq(out[9], 10)
+		T.eq(out[10], 12)
+		-- a W wall and an N wall mirror it
+		local w = Diorama.ledges({ -48, -4, -40, 4, 20 }, { { Side = "W", From = -10, To = 10, Front = -50, Y0 = Diorama.WallBottom } })
+		T.eq(w[1], -50, "W: from the body")
+		T.eq(w[3], -48, "W: to the box's edge")
+		local n = Diorama.ledges({ -4, -48, 4, -40, 20 }, { { Side = "N", From = -10, To = 10, Front = -50, Y0 = Diorama.WallBottom } })
+		T.eq(n[2], -50, "N: from the body")
+		T.eq(n[4], -48, "N: to the box's edge")
+		T.eq(n[1], -4, "N: along x")
+	end)
+
 	T.test("diorama floors: every floor has data and tiles in the catalog", function()
 		local fs = require("@lune/fs")
 		local serde = require("@lune/serde")
@@ -253,8 +310,16 @@ return function(T, Loader)
 						local shards, slotWalls, inWay = 0, 0, 0
 						for _, d in frame:GetDescendants() do
 							if d:IsA("BasePart") then
-								-- (the slot's mossy walls too: a solid chunk's box was an invisible wall, owner 2026-11-16)
-								T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
+								-- (the slot's mossy walls stop the camera only, Diorama.CameraTag: a chunk's box
+								-- that players met was an invisible wall, owner 2026-11-16)
+								if d.Name == "SlotWall" then
+									T.truthy(
+										d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
+										label .. " the slot's mossy walls stop the camera"
+									)
+								else
+									T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
+								end
 								if d.Name == "Shard" then
 									shards += 1
 								elseif d.Name == "SlotWall" then
@@ -281,7 +346,11 @@ return function(T, Loader)
 						for _, d in linings:GetChildren() do
 							if d:IsA("BasePart") then
 								chunks += 1
-								T.eq(d.CanCollide, false, label .. " a lining is looks only (the rim right behind it is solid)")
+								-- (the camera stops at it, players at the rim right behind it)
+								T.truthy(
+									d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
+									label .. " a lining stops the camera only"
+								)
 								local mn, mx = box(d)
 								-- (the quarry line at z 24, the portal mouths 8.6 wide, 11.4 high)
 								if math.abs(mx.X) > 58 and mn.Z < 28.6 and mx.Z > 19.4 and mn.Y < 11.4 then
@@ -320,7 +389,61 @@ return function(T, Loader)
 							end
 						end
 						T.eq(cores, 2, label .. " both back corners")
+						-- (owner 2026-11-17: "the walls are still invisible") nobody walks into a hill's
+						-- rock: its invisible body from both faces of its mossy cliff
+						local hillBodies = 0
+						local hill = Floor.CornerHills
+						for _, d in hills:GetChildren() do
+							if d.Name == "HillBody" and d:IsA("BasePart") then
+								hillBodies += 1
+								T.truthy(d.CanCollide, label .. " a hill's body is solid")
+								T.eq(d.Transparency, 1, label .. " a hill's body is never seen")
+								local mn, mx = box(d)
+								T.near(mx.Z, hill.Z1 - hill.BodyIn, 0.01, label .. " a hill's body behind its south face")
+								T.near(
+									math.min(math.abs(mn.X), math.abs(mx.X)),
+									hill.X0 + hill.BodyIn,
+									0.01,
+									label .. " a hill's body behind its inner face"
+								)
+							elseif d.Name == "HillCliff" then
+								T.truthy(
+									d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
+									label .. " a hill's cliff stops the camera only"
+								)
+							end
+						end
+						T.eq(hillBodies, 2, label .. " both hills' bodies")
 					end
+					-- (2026-11-17, the Meshy chat's review: the back wall, the side walls' back ends and
+					-- the hills stood up to 6 studs inside the Ember Caves, by its way out) nothing of the
+					-- quarry's room, hills, linings, VIP frame or ground reaches past the Ember Caves' thin
+					-- south wall, and nothing at all past its line, across the caves' width
+					local emberLo, emberHi = Diorama.lines(2)
+					local emberOrigin = MineFloors.Placement[2]
+					local line = origin:PointToObjectSpace(emberOrigin:PointToWorldSpace(V3.new(0, 0, emberHi.Y))).Z
+					local face = origin:PointToObjectSpace(emberOrigin:PointToWorldSpace(V3.new(0, 0, emberHi.Y + Diorama.ThinWall))).Z
+					local x0 = origin:PointToObjectSpace(emberOrigin:PointToWorldSpace(V3.new(emberLo.X, 0, 0))).X
+					local x1 = origin:PointToObjectSpace(emberOrigin:PointToWorldSpace(V3.new(emberHi.X, 0, 0))).X
+					local strict = { Room = true, CornerHills = true, OpeningLinings = true, VipFrame = true, Ground = true }
+					local intruders = 0
+					for _, d in model:GetDescendants() do
+						if d:IsA("BasePart") then
+							local mn, mx = box(d)
+							if mx.X > x0 and mn.X < x1 then
+								local top = d
+								while top.Parent and top.Parent ~= model do
+									top = top.Parent
+								end
+								local limit = if strict[top.Name] then face else line
+								-- (a hundredth: the rim's old top course ends on the caves' line)
+								if mn.Z < limit - 0.01 then
+									intruders += 1
+								end
+							end
+						end
+					end
+					T.eq(intruders, 0, label .. " nothing reaches into the Ember Caves")
 					local keep = Floor.DioramaKeep
 					local fpLo, fpHi = Diorama.footprint(1)
 					local lineE = fpHi.X + Diorama.WallGap + Diorama.MeshSlabGap
@@ -435,16 +558,25 @@ return function(T, Loader)
 						end
 						return false
 					end
-					-- each side's line out of the outline (look.WallGaps) and the probe just behind it
+					-- each side's line out of the outline (look.WallGaps, moved in by look.WallLimits:
+					-- Diorama.lines) and the probe just behind it
 					local lineGap = {}
 					local sides = {}
+					local lnLo, lnHi = Diorama.lines(index)
+					local function gapOut(side: string): number
+						return if side == "N"
+							then fpLo.Y - lnLo.Y
+							elseif side == "S" then lnHi.Y - fpHi.Y
+							elseif side == "W" then fpLo.X - lnLo.X
+							else lnHi.X - fpHi.X
+					end
 					for _, side in look.Walls or {} do
-						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.WallGap
+						lineGap[side] = gapOut(side)
 						-- (a wall faced with the owner's model has its slab further back)
 						sides[side] = lineGap[side] + (if Diorama.meshWalls(look, side) then Diorama.MeshSlabGap else 0) + 0.35
 					end
 					for _, side in look.Thin or {} do
-						lineGap[side] = if look.WallGaps and look.WallGaps[side] then look.WallGaps[side] else Diorama.ThinGap
+						lineGap[side] = gapOut(side)
 						sides[side] = lineGap[side] + 0.05
 					end
 					-- (a taller wall ends on a lower one's line at a corner: past that line, over the
@@ -559,8 +691,12 @@ return function(T, Loader)
 							if d.Name == "MeshWall" then
 								T.eq(d:GetAttribute("Asset"), look.WallMesh, label .. " the wall chunks are the owner's model")
 								-- (owner 2026-11-16: a solid chunk's box stood where its ragged rock is not, "a wall
-								-- that's there but invisible": the slab behind is the wall and the camera's stop)
-								T.eq(d.CanCollide, false, label .. " the slab behind is the wall, not the chunks")
+								-- that's there but invisible"; 2026-11-17: the camera looked out from inside the
+								-- rock) the chunks stop the camera and nothing else (WorldService's group)
+								T.truthy(
+									d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
+									label .. " a wall chunk stops the camera only"
+								)
 								local p = origin:PointToObjectSpace(d.CFrame.Position)
 								local side = if math.abs(p.X) > math.abs(p.Z)
 									then (if p.X > 0 then "E" else "W")
@@ -574,6 +710,173 @@ return function(T, Loader)
 								Diorama.meshWalls(look, side),
 								label .. " " .. side .. " wall faced with the owner's model"
 							)
+						end
+						-- (owner 2026-11-17: "the walls are still invisible": players walked into the rock
+						-- and fell into the wall) every mesh-faced side has its invisible body from the
+						-- chunks' fronts, from under the ground to its top, but in its openings
+						local bodyParts = {}
+						for _, d in room:GetChildren() do
+							if d.Name == "WallBody" then
+								table.insert(bodyParts, d)
+								T.truthy(d.CanCollide, label .. " a wall's body is solid")
+								T.eq(d.Transparency, 1, label .. " a wall's body is never seen")
+								T.eq(d.CanQuery, false, label .. " a wall's body takes no clicks or shots")
+							end
+						end
+						local function inBody(p): boolean
+							for _, body in bodyParts do
+								local q = body.CFrame:PointToObjectSpace(p)
+								local h = body.Size / 2
+								if math.abs(q.X) <= h.X + 0.01 and math.abs(q.Y) <= h.Y + 0.01 and math.abs(q.Z) <= h.Z + 0.01 then
+									return true
+								end
+							end
+							return false
+						end
+						-- (along a side: the room's span, inside the walls at its ends, where a lower one ends it)
+						local function span(side: string): (number, number)
+							local alongX = side == "N" or side == "S"
+							local a0 = if alongX then fpLo.X else fpLo.Y
+							local a1 = if alongX then fpHi.X else fpHi.Y
+							local s0, s1 = if alongX then "W" else "N", if alongX then "E" else "S"
+							if lineGap[s0] then
+								a0 = math.max(a0, (if alongX then fpLo.X else fpLo.Y) - lineGap[s0])
+							end
+							if lineGap[s1] then
+								a1 = math.min(a1, (if alongX then fpHi.X else fpHi.Y) + lineGap[s1])
+							end
+							return a0, a1
+						end
+						local bodyHoles, bodyAhead = 0, 0
+						for _, side in look.Walls or {} do
+							if not Diorama.meshWalls(look, side) then
+								continue
+							end
+							local alongX = side == "N" or side == "S"
+							local a0, a1 = span(side)
+							local line = if side == "N"
+								then fpLo.Y - lineGap[side]
+								elseif side == "S" then fpHi.Y + lineGap[side]
+								elseif side == "W" then fpLo.X - lineGap[side]
+								else fpHi.X + lineGap[side]
+							local inward = if side == "N" or side == "W" then 1 else -1
+							for t = a0, a1, 3 do
+								for _, y in { 0.5, 8, 16.5, 25 } do
+									if y >= topOf(side) then
+										continue
+									end
+									local open = false
+									for _, o in look.Openings or {} do
+										if o.Side == side and t > o.From - 0.05 and t < o.To + 0.05 and y < (o.Top or math.huge) then
+											open = true
+										end
+									end
+									if open then
+										continue
+									end
+									local function at3(across: number)
+										return origin:PointToWorldSpace(if alongX then V3.new(t, y, across) else V3.new(across, y, t))
+									end
+									-- (just behind its front: solid; just in front: free)
+									if not inBody(at3(line + inward * (Diorama.MeshBodyIn - 0.05))) then
+										bodyHoles += 1
+									end
+									-- (a stud off the corners, where the next side's body stands)
+									if t > a0 + 1 and t < a1 - 1 and inBody(at3(line + inward * (Diorama.MeshBodyIn + 0.05))) then
+										bodyAhead += 1
+									end
+								end
+							end
+						end
+						T.eq(bodyHoles, 0, label .. " the mesh-faced walls' bodies have no holes")
+						T.eq(bodyAhead, 0, label .. " the bodies stand at the rock's front")
+						-- and the walk boxes reach them: wherever the ground within LedgeReach of a body
+						-- is a terrace, the ground right at the body is at least as high (no gap to fall in)
+						local ground = model:FindFirstChild("Ground")
+						local boxes = {}
+						for _, d in ground:GetChildren() do
+							if d:IsA("Part") and (d.Name == "Ground" or d.Name == "Ledge") then
+								table.insert(boxes, d)
+							end
+						end
+						-- (a corner hill's body is ground too: the walls run on behind it)
+						local cornerHills = model:FindFirstChild("CornerHills")
+						if cornerHills then
+							for _, d in cornerHills:GetChildren() do
+								if d:IsA("Part") and d.Name == "HillBody" then
+									table.insert(boxes, d)
+								end
+							end
+						end
+						local function topAt(x: number, z: number): number
+							local best = -math.huge
+							for _, b in boxes do
+								local c = origin:PointToObjectSpace(b.CFrame.Position)
+								local h = b.Size / 2
+								if math.abs(x - c.X) <= h.X + 1e-3 and math.abs(z - c.Z) <= h.Z + 1e-3 then
+									best = math.max(best, c.Y + h.Y)
+								end
+							end
+							return best
+						end
+						local gaps = 0
+						for _, side in look.Walls or {} do
+							if not Diorama.meshWalls(look, side) then
+								continue
+							end
+							local alongX = side == "N" or side == "S"
+							local a0, a1 = span(side)
+							local front = if side == "N"
+								then fpLo.Y - lineGap[side] + Diorama.MeshBodyIn
+								elseif side == "S" then fpHi.Y + lineGap[side] - Diorama.MeshBodyIn
+								elseif side == "W" then fpLo.X - lineGap[side] + Diorama.MeshBodyIn
+								else fpHi.X + lineGap[side] - Diorama.MeshBodyIn
+							local inward = if side == "N" or side == "W" then 1 else -1
+							for t = a0 + 0.75, a1 - 0.75, 1.5 do
+								local open = false
+								for _, o in look.Openings or {} do
+									if o.Side == side and t > o.From - 1 and t < o.To + 1 then
+										open = true
+									end
+								end
+								if open then
+									continue
+								end
+								local function topIn(d: number): number
+									local across = front + inward * d
+									return if alongX then topAt(t, across) else topAt(across, t)
+								end
+								local near = topIn(0.2)
+								local far = -math.huge
+								for _, d in { 1, 2, 3, 4 } do
+									far = math.max(far, topIn(d))
+								end
+								if far > near + 0.01 then
+									gaps += 1
+								end
+							end
+						end
+						T.eq(gaps, 0, label .. " no gap between the terraces and the mossy walls")
+						-- the ledges keep out of the openings
+						for _, d in ground:GetChildren() do
+							if d.Name == "Ledge" then
+								local c = origin:PointToObjectSpace(d.CFrame.Position)
+								local h = d.Size / 2
+								for _, o in look.Openings or {} do
+									if Diorama.meshWalls(look, o.Side) then
+										local alongX = o.Side == "N" or o.Side == "S"
+										local m0 = (if alongX then c.X - h.X else c.Z - h.Z)
+										local m1 = (if alongX then c.X + h.X else c.Z + h.Z)
+										local inside = math.min(m1, o.To) - math.max(m0, o.From) > 0.05
+										local fpEdge = if o.Side == "N"
+											then c.Z - h.Z < fpLo.Y + Diorama.LedgeReach
+											elseif o.Side == "S" then c.Z + h.Z > fpHi.Y - Diorama.LedgeReach
+											elseif o.Side == "W" then c.X - h.X < fpLo.X + Diorama.LedgeReach
+											else c.X + h.X > fpHi.X - Diorama.LedgeReach
+										T.falsy(inside and fpEdge, label .. " no ledge in the " .. o.Side .. " opening")
+									end
+								end
+							end
 						end
 					end
 				end

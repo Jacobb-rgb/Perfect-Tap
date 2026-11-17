@@ -7,9 +7,13 @@
 	- NodeSpawn markers are moved to ServerStorage so clients never stream them.
 	- Lighting is set from LightingConfig.Surface (Technology must be set to
 	  Future in Studio: Lighting > Technology; default.project.json does it).
+	- The parts tagged Mine/Diorama.CameraTag (the quarry's mossy rock) go in the
+	  camera-only collision group: Roblox's camera stops at them, nothing touches them.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
@@ -17,6 +21,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LightingConfig = require(Shared.Config.LightingConfig)
 local WorldBuilder = require(script.Parent.Parent.World.WorldBuilder)
+local Diorama = require(script.Parent.Parent.World.Mine.Diorama)
 
 local WorldService = {}
 
@@ -88,6 +93,35 @@ local function ensureMap(): Model
 	return built
 end
 
+--[[
+	(owner 2026-11-17: "the walls are still invisible") The quarry's mossy rock (Mine/Diorama:
+	every chunk tagged Diorama.CameraTag) is solid and queryable so that Roblox's camera, which
+	stops only at such parts, halts at the rock's front instead of looking out from inside it; in
+	the camera-only group it never touches a player, an ore or anything else (WorldService.start).
+	The baked map leaves the parts in Default: the group is a runtime registration.
+]]
+local function cameraOnly()
+	local group = Diorama.CameraGroup
+	local ok, err = pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(group) then
+			PhysicsService:RegisterCollisionGroup(group)
+		end
+	end)
+	if not ok then
+		warn("[WorldService] camera group: " .. tostring(err))
+		return
+	end
+	local function join(part: Instance)
+		if part:IsA("BasePart") then
+			part.CollisionGroup = group
+		end
+	end
+	for _, part in CollectionService:GetTagged(Diorama.CameraTag) do
+		join(part)
+	end
+	CollectionService:GetInstanceAddedSignal(Diorama.CameraTag):Connect(join)
+end
+
 function WorldService.init()
 	applyPreset("Surface")
 	local map = ensureMap()
@@ -108,6 +142,32 @@ function WorldService.init()
 			local folder = Instance.new("Folder")
 			folder.Name = name
 			folder.Parent = Workspace
+		end
+	end
+
+	cameraOnly()
+end
+
+-- After every service's init registered its collision groups: the camera-only group collides with
+-- none of them (Default, the characters, the ore, the belts, itself).
+function WorldService.start()
+	local group = Diorama.CameraGroup
+	local ok, groups = pcall(function()
+		return PhysicsService:GetRegisteredCollisionGroups()
+	end)
+	if not ok then
+		warn("[WorldService] collision groups: " .. tostring(groups))
+		return
+	end
+	for _, info in groups do
+		local name = (info :: any).name
+		if type(name) == "string" then
+			local set, err = pcall(function()
+				PhysicsService:CollisionGroupSetCollidable(group, name, false)
+			end)
+			if not set then
+				warn("[WorldService] camera group vs " .. name .. ": " .. tostring(err))
+			end
 		end
 	end
 end

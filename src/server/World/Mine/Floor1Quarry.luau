@@ -1070,7 +1070,7 @@ end
 	walls'; the waterfalls fall in behind it. Clear of the floor's rock spawns (the last at z -36)
 	and of the DEPTHS portal (x -22 .. 22).
 ]]
-Floor.CornerHills = { X0 = 33.5, Z1 = -47.5, Top = 30 }
+Floor.CornerHills = { X0 = 33.5, Z1 = -47.5, Top = 30, BodyIn = 0 }
 
 local function cornerHills(model: Model, origin: CFrame)
 	local m = Instance.new("Model")
@@ -1082,10 +1082,11 @@ local function cornerHills(model: Model, origin: CFrame)
 	local asset = look.WallMesh :: string
 	local earth = if look.WallColors then look.WallColors[3] else Color3.fromRGB(128, 124, 160)
 	local grass = look.WallCap or Color3.fromRGB(110, 170, 70)
-	local fpLo, fpHi = Diorama.footprint(Floor.Index)
-	-- (into the side wall and the back wall a little)
-	local x0, x1 = hill.X0, fpHi.X + Diorama.WallGap + 1
-	local z0, z1 = fpLo.Y - Diorama.WallGap - 2, hill.Z1
+	-- (into the side wall and the back wall a little: Diorama.lines, the back wall clear of the Ember
+	-- Caves, Diorama.Floors.Quarry.WallLimits)
+	local lineLo, lineHi = Diorama.lines(Floor.Index)
+	local x0, x1 = hill.X0, lineHi.X + 1
+	local z0, z1 = lineLo.Y - 2, hill.Z1
 	local y0, y1 = -2, hill.Top - 0.5
 	for _, s in { 1, -1 } do
 		-- the earth core, 1.5 behind the cliff's faces
@@ -1100,6 +1101,18 @@ local function cornerHills(model: Model, origin: CFrame)
 		)
 		core.Name = "HillCore"
 		core:AddTag("NoStuds")
+		-- (owner 2026-11-17: "the walls are still invisible") its invisible body from the cliff's
+		-- faces, as the walls' (Diorama.MeshBodyIn): nobody walks into the rock or stands in a chunk
+		local bx0, bz1 = x0 + Floor.CornerHills.BodyIn, z1 - Floor.CornerHills.BodyIn
+		local body = Geo.block(
+			m,
+			origin * CFrame.new(s * (bx0 + x1) / 2, (y0 + y1) / 2, (z0 + bz1) / 2),
+			Vector3.new(x1 - bx0, y1 - y0, bz1 - z0),
+			earth,
+			nil,
+			{ CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
+		)
+		body.Name = "HillBody"
 		-- the face toward the quarry, and the one toward the DEPTHS portal
 		local south = Vector3.new(s * (x0 + x1) / 2, -1, z1)
 		Diorama.meshFill(
@@ -1166,9 +1179,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	-- back past the slab's front is cut to it (it still closes what lies behind, the grotto door's
 	-- old lintel over the slot), anything else goes
 	local look = Diorama.Floors.Quarry
-	local fpLo, fpHi = Diorama.footprint(Floor.Index)
-	local gaps: { [string]: number } = look.WallGaps or {}
-	local lineE, lineW = fpHi.X + (gaps.E or Diorama.WallGap), fpLo.X - (gaps.W or Diorama.WallGap)
+	local lineLo, lineHi = Diorama.lines(Floor.Index)
+	local lineE, lineW = lineHi.X, lineLo.X
 	if Diorama.meshWalls(look) then
 		local tops: { [string]: number } = look.WallTops or {}
 		local top = tops.E or 28
