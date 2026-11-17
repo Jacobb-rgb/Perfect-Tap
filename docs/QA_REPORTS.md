@@ -1152,7 +1152,8 @@ models, everything overexposed, eggs that look pixelated, lag. What changed:
 - Performance: stud restyle reads its 2 ms budget every 12 parts (was 50), StreamOutBehavior Opportunistic, the
   podium pedestal mesh casts no shadow, podium displays move in one BulkMoveTo, weather particles scale with
   graphics quality, the BACKPACKS shop builds 2 display packs a tick and the DROPPERS showroom comes in 40 parts a
-  frame (no one-frame hitches), the camera shake is a smooth jolt instead of a 22-a-second buzz.
+  frame (no one-frame hitches). (The smoother camera shake of that pass, 31722182, was taken back on 2026-11-17:
+  the owner's yes covers only a stronger meteor impact, which the meteor chat owns.)
 What to test in Studio:
 1. Open the new test place and play: the Output must show NO "Failed to upload TexturePack" line (the log in
    ~/Library/Logs/Roblox shows it too). Every mine floor shows its own textures (Ember: dark basalt with lava,
